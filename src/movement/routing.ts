@@ -1,6 +1,7 @@
 import { measureCreepIntent, measureCreepPathing } from "@/runtime/cpuPhaseProfiler";
 import { ensureCreepMovementState } from "@/movement/creepState";
 import { getTickContextService } from "@/runtime/runtimeServices";
+import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 import { getPosKey, isExitTile, isWalkableConstructionSite, isWalkableStructure, parseEncodedRouteRooms } from "@/movement/common";
 import { recordMovementMetric } from "@/movement/metrics";
 import { moveToTarget } from "@/movement/pathing";
@@ -27,13 +28,17 @@ const dynamicNextRoomCache: Record<string, DynamicRouteCacheEntry> = {};
 let liveRoomSafetyCacheTick = -1;
 let liveRoomSafetyCache: Record<string, boolean> = {};
 // 跨房旅行矩阵的静态部分（structures/sites/source containers/controller
-// 区域）按 tick 记忆化：同 tick 内房间布局不变，PathFinder 可能修改
-// roomCallback 返回的矩阵，因此每次返回 clone 再叠加 creep 位。
+// 区域）按拓扑指纹跨 tick 复用：指纹（RCL/结构/工地折叠/savedAt/远采容器）
+// 不变即命中；指纹变化或 TTL 到期重建。矩阵只含静态信息，PathFinder 可能
+// 修改 roomCallback 返回的矩阵，因此每次返回 clone 再叠加 creep 位。
 const TRAVEL_MATRIX_CACHE_MAX = 64;
+const TRAVEL_MATRIX_CACHE_TTL = 100;
 const travelMatrixCache = new Map<
   string,
-  { tick: number; matrix: CostMatrix }
+  { revision: string; builtAt: number; matrix: CostMatrix }
 >();
+// 仅供测试观测缓存重建次数，生产路径不读取。
+let travelMatrixBuildCount = 0;
 
 export function clearRoutingCachesForTest(): void {
   for (const key of Object.keys(dynamicNextRoomCache)) {
@@ -42,6 +47,11 @@ export function clearRoutingCachesForTest(): void {
   liveRoomSafetyCacheTick = -1;
   liveRoomSafetyCache = {};
   travelMatrixCache.clear();
+  travelMatrixBuildCount = 0;
+}
+
+export function getTravelMatrixBuildCountForTest(): number {
+  return travelMatrixBuildCount;
 }
 
 export function getCurrentColonizationRoute(targetRoom: string, fallbackEncodedRoute?: string): string | undefined {
@@ -223,7 +233,7 @@ export function moveToTargetRoom(
       }
 
       if (cachedTravelPath && travelState.stuckTicks < 2) {
-        const cachedPathResult = followCachedTravelPath(creep, cachedTravelPath);
+        const cachedPathResult = followCachedTravelPath(creep, travelState, cachedTravelPath);
         if (cachedPathResult === OK || cachedPathResult === ERR_TIRED) {
           invalidateMultiRoomSegment(travelState, creep.room.name);
           updateTravelState(creep, travelState);
@@ -475,8 +485,8 @@ function getUsableCachedTravelPath(
   return cachedPath as CachedTravelPath;
 }
 
-function followCachedTravelPath(creep: Creep, cachedPath: CachedTravelPath): ScreepsReturnCode {
-  return followStoredTravelPositions(creep, cachedPath.positions);
+function followCachedTravelPath(creep: Creep, travelState: TravelState, cachedPath: CachedTravelPath): ScreepsReturnCode {
+  return followStoredTravelPositions(creep, travelState, cachedPath.positions);
 }
 
 function followMultiRoomSegment(creep: Creep, segment: MultiRoomTravelSegment): ScreepsReturnCode {
@@ -501,8 +511,8 @@ function getMultiRoomSegmentTransition(
   return getValidatedRoomTransition(creep.room.name, creep.pos, nextStep);
 }
 
-function followStoredTravelPositions(creep: Creep, positions: StoredRoomPosition[]): ScreepsReturnCode {
-  const nextStep = getNextCachedTravelPathStep(creep.pos, positions);
+function followStoredTravelPositions(creep: Creep, travelState: TravelState, positions: StoredRoomPosition[]): ScreepsReturnCode {
+  const nextStep = getNextCachedTravelPathStep(creep.pos, travelState, positions);
   return nextStep ? followStoredTravelStep(creep, nextStep) : ERR_NO_PATH;
 }
 
@@ -527,9 +537,26 @@ function isReusableSegmentMoveResult(result: ScreepsReturnCode): boolean {
   return result === OK || result === ERR_TIRED || result === ERR_BUSY;
 }
 
-function getNextCachedTravelPathStep(pos: RoomPosition, positions: StoredRoomPosition[]): StoredRoomPosition | null {
+function getNextCachedTravelPathStep(
+  pos: RoomPosition,
+  travelState: TravelState,
+  positions: StoredRoomPosition[],
+): StoredRoomPosition | null {
+  // colonization 缓存路径对象跨 creep 共享，游标存在 creep 自己的 travelState 中；
+  // 正常前进只扫 cursor 窗口，未命中再回退全量扫描（推离/换房恢复）。
+  const cursor = Number.isInteger(travelState.cachedPathCursor) ? (travelState.cachedPathCursor as number) : -1;
+  const windowEnd = Math.min(positions.length, cursor + 3);
+  for (let index = Math.max(0, cursor); index < windowEnd; index += 1) {
+    const step = positions[index];
+    if (step.roomName === pos.roomName && step.x === pos.x && step.y === pos.y) {
+      travelState.cachedPathCursor = index;
+      return positions[index + 1] ?? null;
+    }
+  }
+
   const exactIndex = positions.findIndex((step) => step.roomName === pos.roomName && step.x === pos.x && step.y === pos.y);
   if (exactIndex >= 0) {
+    travelState.cachedPathCursor = exactIndex;
     return positions[exactIndex + 1] ?? null;
   }
 
@@ -767,12 +794,9 @@ function createMultiRoomTravelCallback(
 }
 
 function buildMultiRoomTravelMatrix(creep: Creep, roomName: string, options: MoveToTargetOptions): CostMatrix {
-  const firstEntry = travelMatrixCache.entries().next().value;
-  if (firstEntry !== undefined && firstEntry[1].tick !== Game.time) {
-    travelMatrixCache.clear();
-  }
+  const revision = getRoomTopologyRevision(roomName);
   let cached = travelMatrixCache.get(roomName);
-  if (!cached || cached.tick !== Game.time) {
+  if (!cached || cached.revision !== revision || Game.time - cached.builtAt > TRAVEL_MATRIX_CACHE_TTL) {
     const room = Game.rooms[roomName];
     const matrix = new PathFinder.CostMatrix();
     if (room) {
@@ -821,9 +845,21 @@ function buildMultiRoomTravelMatrix(creep: Creep, roomName: string, options: Mov
         }
       }
     }
-    cached = { tick: Game.time, matrix };
+    cached = { revision, builtAt: Game.time, matrix };
+    travelMatrixBuildCount += 1;
     if (travelMatrixCache.size >= TRAVEL_MATRIX_CACHE_MAX) {
-      travelMatrixCache.clear();
+      // 淘汰最旧条目而不是全清，保住其余房间的跨 tick 命中。
+      let oldestKey: string | null = null;
+      let oldestBuiltAt = Infinity;
+      for (const [key, entry] of travelMatrixCache.entries()) {
+        if (entry.builtAt < oldestBuiltAt) {
+          oldestBuiltAt = entry.builtAt;
+          oldestKey = key;
+        }
+      }
+      if (oldestKey !== null) {
+        travelMatrixCache.delete(oldestKey);
+      }
     }
     travelMatrixCache.set(roomName, cached);
   }

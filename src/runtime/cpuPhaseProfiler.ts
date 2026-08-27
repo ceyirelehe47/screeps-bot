@@ -95,6 +95,9 @@ export function createTickCpuProfiler(): TickCpuProfiler {
   const phases: Record<string, number> = {};
   const fixedActionCounts: Record<string, number> = {};
   const rooms: Record<string, CpuMonitorRoomSummary> = {};
+  // roomRoleAggregation=false 时不逐 creep 成对计时：顶层 creepWork phase
+  // 仍由 measure() 覆盖总开销，fixed action count 照常记录。
+  const perCreepTiming = config.roomRoleAggregation;
 
   function ensureRoom(roomName: string): CpuMonitorRoomSummary {
     if (!rooms[roomName]) {
@@ -129,6 +132,10 @@ export function createTickCpuProfiler(): TickCpuProfiler {
     },
 
     measureCreep(creep: Creep, fn: () => void): void {
+      if (!perCreepTiming) {
+        fn();
+        return;
+      }
       const start = Game.cpu.getUsed();
       try {
         fn();

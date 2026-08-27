@@ -134,17 +134,18 @@ function reserveCarrierPickupTarget(
       );
 }
 
-function getStoredResources(store: StoreDefinition): ResourceConstant[] {
-  return (Object.keys(store) as ResourceConstant[]).filter((resource) => store.getUsedCapacity(resource) > 0);
-}
-
 function getBestStoredResource(target: DeadStorePickupTarget): ResourceConstant | null {
-  const resources = getStoredResources(target.store);
-  if (resources.length === 0) {
-    return null;
+  // 单次循环取存量最大的资源；平局保留 Object.keys 的首个（与原稳定排序一致）。
+  let best: ResourceConstant | null = null;
+  let bestAmount = 0;
+  for (const resource of Object.keys(target.store) as ResourceConstant[]) {
+    const amount = target.store.getUsedCapacity(resource);
+    if (amount > bestAmount) {
+      best = resource;
+      bestAmount = amount;
+    }
   }
-
-  return resources.sort((left, right) => target.store.getUsedCapacity(right) - target.store.getUsedCapacity(left))[0];
+  return best;
 }
 
 function isTombstonePickupTarget(target: Resource | AnyStoreStructure | Tombstone | Ruin): target is Tombstone {
@@ -737,36 +738,43 @@ function isCarrierTaskStepRunnable(
 }
 
 function selectPickupStep(task: CarrierTask, creep: Creep): CarrierTaskStep | null {
+  // 单次循环维护最近的可取步骤；平局保留 steps 原顺序（与原稳定排序一致）。
   const assignedRoomName = getAssignedCarrierRoomName(creep);
-  const candidates = task.steps
-    .filter((step) =>
-      isCarrierTaskStepRunnable(step, assignedRoomName, task.type),
-    )
-    .sort((left, right) => {
-      const leftFrom = resolveTaskStructure(left.fromId);
-      const rightFrom = resolveTaskStructure(right.fromId);
-      const leftRange = leftFrom ? creep.pos.getRangeTo(leftFrom.pos) : 99;
-      const rightRange = rightFrom ? creep.pos.getRangeTo(rightFrom.pos) : 99;
-      return leftRange - rightRange;
-    });
-  return candidates.length > 0 ? candidates[0] : null;
+  let best: CarrierTaskStep | null = null;
+  let bestRange = Infinity;
+  for (const step of task.steps) {
+    if (!isCarrierTaskStepRunnable(step, assignedRoomName, task.type)) {
+      continue;
+    }
+    const from = resolveTaskStructure(step.fromId);
+    const range = from ? creep.pos.getRangeTo(from.pos) : 99;
+    if (range < bestRange) {
+      best = step;
+      bestRange = range;
+    }
+  }
+  return best;
 }
 
 function selectDeliveryStep(task: CarrierTask, creep: Creep): CarrierTaskStep | null {
-  const candidates = task.steps
-    .filter((step) => creep.store.getUsedCapacity(step.resource) > 0)
-    .filter((step) => {
-      const to = resolveTaskStructure(step.toId);
-      return !!to && to.store.getFreeCapacity(step.resource) > 0;
-    })
-    .sort((left, right) => {
-      const leftTo = resolveTaskStructure(left.toId);
-      const rightTo = resolveTaskStructure(right.toId);
-      const leftRange = leftTo ? creep.pos.getRangeTo(leftTo.pos) : 99;
-      const rightRange = rightTo ? creep.pos.getRangeTo(rightTo.pos) : 99;
-      return leftRange - rightRange;
-    });
-  return candidates.length > 0 ? candidates[0] : null;
+  // 单次循环维护最近的可送步骤；平局保留 steps 原顺序（与原稳定排序一致）。
+  let best: CarrierTaskStep | null = null;
+  let bestRange = Infinity;
+  for (const step of task.steps) {
+    if (creep.store.getUsedCapacity(step.resource) <= 0) {
+      continue;
+    }
+    const to = resolveTaskStructure(step.toId);
+    if (!to || to.store.getFreeCapacity(step.resource) <= 0) {
+      continue;
+    }
+    const range = creep.pos.getRangeTo(to.pos);
+    if (range < bestRange) {
+      best = step;
+      bestRange = range;
+    }
+  }
+  return best;
 }
 
 function isCarrierTaskRunnable(
@@ -1032,45 +1040,50 @@ function assignSynthesisCarrierTask(
       }
     }
 
-    const candidates = getSynthesisCarrierTaskEntries(assignedRoomName)
-      .filter((entry) => !taskFilter || taskFilter(entry.task))
-      .filter((entry) =>
-        isCarrierTaskRunnable(entry.task, assignedRoomName),
-      )
-      .map((entry) => ({
-        ref: entry.ref,
-        task: entry.task,
-        step: selectPickupStep(entry.task, creep),
-      }))
-      .filter((entry): entry is {
-        ref: CarrierDispatchRef;
-        task: CarrierTask;
-        step: CarrierTaskStep;
-      } => !!entry.step)
-      .sort((left, right) => {
-        if (left.task.priority !== right.task.priority) {
-          return right.task.priority - left.task.priority;
-        }
-        const leftFrom = resolveTaskStructure(left.step.fromId);
-        const rightFrom = resolveTaskStructure(right.step.fromId);
-        const leftRange = leftFrom ? creep.pos.getRangeTo(leftFrom.pos) : 99;
-        const rightRange = rightFrom ? creep.pos.getRangeTo(rightFrom.pos) : 99;
-        return leftRange - rightRange;
-    });
+    // 单次循环维护最佳候选：priority 降序 → from 距离升序 → 平局保留列表
+    // 原顺序（原实现为 filter→map→sort 后取 [0]，稳定排序等价于此规则）。
+    let best: {
+      ref: CarrierDispatchRef;
+      task: CarrierTask;
+      step: CarrierTaskStep;
+      priority: number;
+      fromRange: number;
+    } | null = null;
+    for (const entry of getSynthesisCarrierTaskEntries(assignedRoomName)) {
+      if (taskFilter && !taskFilter(entry.task)) {
+        continue;
+      }
+      if (!isCarrierTaskRunnable(entry.task, assignedRoomName)) {
+        continue;
+      }
+      const step = selectPickupStep(entry.task, creep);
+      if (!step) {
+        continue;
+      }
+      const from = resolveTaskStructure(step.fromId);
+      const fromRange = from ? creep.pos.getRangeTo(from.pos) : 99;
+      const priority = entry.task.priority;
+      if (
+        !best ||
+        priority > best.priority ||
+        (priority === best.priority && fromRange < best.fromRange)
+      ) {
+        best = { ref: entry.ref, task: entry.task, step, priority, fromRange };
+      }
+    }
 
-    if (candidates.length <= 0) {
+    if (!best) {
       if (clearWhenNoCandidate) {
         clearSynthesisCarrierTaskPlan(creep);
       }
       return null;
     }
 
-    const candidate = candidates[0];
     const currentRef = readCarrierDispatchBinding(creep.name);
     const bound = currentRef
-      ? bindCarrierDispatchBinding(creep.name, candidate.ref, currentRef)
-      : bindCarrierDispatchBinding(creep.name, candidate.ref);
-    return bound ? candidate : null;
+      ? bindCarrierDispatchBinding(creep.name, best.ref, currentRef)
+      : bindCarrierDispatchBinding(creep.name, best.ref);
+    return bound ? best : null;
   });
 }
 
@@ -1268,12 +1281,22 @@ function pickupOwnedRoomDeadStoreResource(creep: Creep): { picked: boolean; outO
       filter: (ruin) => ruin.store.getUsedCapacity() > 0,
     }) || []) as Ruin[];
 
-    const candidates = [...tombstones, ...ruins]
-      .map((target) => ({ target, resource: getBestStoredResource(target) }))
-      .filter((entry): entry is DeadStorePickupAssignment => !!entry.resource)
-      .sort((left, right) => creep.pos.getRangeTo(left.target.pos) - creep.pos.getRangeTo(right.target.pos));
-
-    return candidates[0] || null;
+    // 单次循环维护最近的非空死亡存储；平局保留 tombstones→ruins 拼接顺序
+    // （与原 map→filter→sort→[0] 的稳定排序一致）。
+    let best: DeadStorePickupAssignment | null = null;
+    let bestRange = Infinity;
+    for (const target of [...tombstones, ...ruins]) {
+      const resource = getBestStoredResource(target);
+      if (!resource) {
+        continue;
+      }
+      const range = creep.pos.getRangeTo(target.pos);
+      if (range < bestRange) {
+        best = { target, resource };
+        bestRange = range;
+      }
+    }
+    return best;
   });
 
   if (!assignment) {

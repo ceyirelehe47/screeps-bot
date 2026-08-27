@@ -35,6 +35,9 @@ export interface RoomTickContext {
   room: Room;
   getStructures(): Structure<StructureConstant>[];
   getMyStructures(): Structure<StructureConstant>[];
+  /** 单趟扫描构建的按 structureType 索引（惰性；同 tick 内所有 typed getter 共享）。 */
+  getStructuresByType(structureType: StructureConstant): Structure<StructureConstant>[];
+  getMyStructuresByType(structureType: StructureConstant): Structure<StructureConstant>[];
   getMyCreeps(): Creep[];
   getConstructionSites(): ConstructionSite[];
   getSources(): Source[];
@@ -55,6 +58,9 @@ export interface RoomTickContext {
 export interface TickContextService {
   getTick(): number;
   getMyRooms(): Room[];
+  /** 本 tick 的全部 spawn/creep 快照，避免主循环与各模块重复 Object.values。 */
+  getAllSpawns(): StructureSpawn[];
+  getAllCreeps(): Creep[];
   getPrimarySpawnByRoom(roomName: string): StructureSpawn | undefined;
   getSpawnsByRoom(roomName: string): StructureSpawn[];
   getCreepsByConfigName(configName: string): Creep[];
@@ -66,6 +72,8 @@ export interface TickContextService {
 interface TickContextSnapshot {
   tick: number;
   myRooms?: Room[];
+  allSpawns?: StructureSpawn[];
+  allCreeps?: Creep[];
   spawnsByRoom?: Map<string, StructureSpawn[]>;
   primarySpawnByRoom?: Map<string, StructureSpawn>;
   creepsByConfigName?: Map<string, Creep[]>;
@@ -74,9 +82,13 @@ interface TickContextSnapshot {
   roomContexts?: Map<string, RoomTickContext>;
 }
 
+const EMPTY_STRUCTURES: Structure<StructureConstant>[] = [];
+
 function createRoomTickContext(room: Room): RoomTickContext {
   let structures: Structure<StructureConstant>[] | undefined;
   let myStructures: Structure<StructureConstant>[] | undefined;
+  let structuresByType: Map<StructureConstant, Structure<StructureConstant>[]> | undefined;
+  let myStructuresByType: Map<StructureConstant, Structure<StructureConstant>[]> | undefined;
   let myCreeps: Creep[] | undefined;
   let constructionSites: ConstructionSite[] | undefined;
   let sources: Source[] | undefined;
@@ -93,6 +105,36 @@ function createRoomTickContext(room: Room): RoomTickContext {
   let energyTombstones: Tombstone[] | undefined;
   let energyRuins: Ruin[] | undefined;
 
+  function ensureStructuresByType(): Map<StructureConstant, Structure<StructureConstant>[]> {
+    if (!structuresByType) {
+      structuresByType = new Map();
+      for (const structure of this.getStructures()) {
+        const bucket = structuresByType.get(structure.structureType);
+        if (bucket) {
+          bucket.push(structure);
+        } else {
+          structuresByType.set(structure.structureType, [structure]);
+        }
+      }
+    }
+    return structuresByType;
+  }
+
+  function ensureMyStructuresByType(): Map<StructureConstant, Structure<StructureConstant>[]> {
+    if (!myStructuresByType) {
+      myStructuresByType = new Map();
+      for (const structure of this.getMyStructures()) {
+        const bucket = myStructuresByType.get(structure.structureType);
+        if (bucket) {
+          bucket.push(structure);
+        } else {
+          myStructuresByType.set(structure.structureType, [structure]);
+        }
+      }
+    }
+    return myStructuresByType;
+  }
+
   return {
     room,
     getStructures(): Structure<StructureConstant>[] {
@@ -106,6 +148,12 @@ function createRoomTickContext(room: Room): RoomTickContext {
         myStructures = room.find(FIND_MY_STRUCTURES);
       }
       return myStructures;
+    },
+    getStructuresByType(structureType: StructureConstant): Structure<StructureConstant>[] {
+      return ensureStructuresByType.call(this).get(structureType) || EMPTY_STRUCTURES;
+    },
+    getMyStructuresByType(structureType: StructureConstant): Structure<StructureConstant>[] {
+      return ensureMyStructuresByType.call(this).get(structureType) || EMPTY_STRUCTURES;
     },
     getMyCreeps(): Creep[] {
       if (!myCreeps) {
@@ -151,51 +199,36 @@ function createRoomTickContext(room: Room): RoomTickContext {
     },
     getTowers(): StructureTower[] {
       if (!towers) {
-        const myStructures = this.getMyStructures();
-        towers = myStructures.filter(
-          (structure: Structure<StructureConstant>): structure is StructureTower =>
-            structure.structureType === STRUCTURE_TOWER,
-        );
+        towers = ensureMyStructuresByType.call(this).get(STRUCTURE_TOWER) as StructureTower[] | undefined;
+        towers = towers ?? (EMPTY_STRUCTURES as unknown as StructureTower[]);
       }
       return towers;
     },
     getLinks(): StructureLink[] {
       if (!links) {
-        const myStructures = this.getMyStructures();
-        links = myStructures.filter(
-          (structure: Structure<StructureConstant>): structure is StructureLink =>
-            structure.structureType === STRUCTURE_LINK,
-        );
+        links = ensureMyStructuresByType.call(this).get(STRUCTURE_LINK) as StructureLink[] | undefined;
+        links = links ?? (EMPTY_STRUCTURES as unknown as StructureLink[]);
       }
       return links;
     },
     getLabs(): StructureLab[] {
       if (!labs) {
-        const myStructures = this.getMyStructures();
-        labs = myStructures.filter(
-          (structure: Structure<StructureConstant>): structure is StructureLab =>
-            structure.structureType === STRUCTURE_LAB,
-        );
+        labs = ensureMyStructuresByType.call(this).get(STRUCTURE_LAB) as StructureLab[] | undefined;
+        labs = labs ?? (EMPTY_STRUCTURES as unknown as StructureLab[]);
       }
       return labs;
     },
     getRamparts(): StructureRampart[] {
       if (!ramparts) {
-        const myStructures = this.getMyStructures();
-        ramparts = myStructures.filter(
-          (structure: Structure<StructureConstant>): structure is StructureRampart =>
-            structure.structureType === STRUCTURE_RAMPART,
-        );
+        ramparts = ensureMyStructuresByType.call(this).get(STRUCTURE_RAMPART) as StructureRampart[] | undefined;
+        ramparts = ramparts ?? (EMPTY_STRUCTURES as unknown as StructureRampart[]);
       }
       return ramparts;
     },
     getContainers(): StructureContainer[] {
       if (!containers) {
-        const roomStructures = this.getStructures();
-        containers = roomStructures.filter(
-          (structure: Structure<StructureConstant>): structure is StructureContainer =>
-            structure.structureType === STRUCTURE_CONTAINER,
-        );
+        containers = ensureStructuresByType.call(this).get(STRUCTURE_CONTAINER) as StructureContainer[] | undefined;
+        containers = containers ?? (EMPTY_STRUCTURES as unknown as StructureContainer[]);
       }
       return containers;
     },
@@ -245,6 +278,20 @@ export function createTickContextService(): TickContextService {
       current.myRooms = Object.values(Game.rooms).filter((room) => room.controller?.my);
     }
     return current.myRooms;
+  }
+
+  function ensureAllSpawns(current: TickContextSnapshot): StructureSpawn[] {
+    if (!current.allSpawns) {
+      current.allSpawns = Object.values(Game.spawns);
+    }
+    return current.allSpawns;
+  }
+
+  function ensureAllCreeps(current: TickContextSnapshot): Creep[] {
+    if (!current.allCreeps) {
+      current.allCreeps = Object.values(Game.creeps);
+    }
+    return current.allCreeps;
   }
 
   function ensureSpawnIndexes(current: TickContextSnapshot): void {
@@ -322,6 +369,16 @@ export function createTickContextService(): TickContextService {
     getMyRooms(): Room[] {
       const current = ensureCurrentTick();
       return ensureMyRooms(current);
+    },
+
+    getAllSpawns(): StructureSpawn[] {
+      const current = ensureCurrentTick();
+      return ensureAllSpawns(current);
+    },
+
+    getAllCreeps(): Creep[] {
+      const current = ensureCurrentTick();
+      return ensureAllCreeps(current);
     },
 
     getPrimarySpawnByRoom(roomName: string): StructureSpawn | undefined {

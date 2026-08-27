@@ -10,3 +10,4 @@ graphify-out/
 .sisyphus/
 .opencode/
 .worktrees/
+.env

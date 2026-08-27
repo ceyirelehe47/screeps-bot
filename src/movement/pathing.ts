@@ -2,6 +2,7 @@ import { measureCreepPathing } from "@/runtime/cpuPhaseProfiler";
 import { clearCreepMovementState, ensureCreepMovementState } from "@/movement/creepState";
 import { recordMovementMetric } from "@/movement/metrics";
 import { getTickContextService } from "@/runtime/runtimeServices";
+import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 import { isPositionAllowedForCreep, shouldRestrictToSafeZone } from "@/runtime/safeZoneHelpers";
 import {
   getPosKey,
@@ -16,9 +17,14 @@ import { getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstru
 import type { MovePathState, MoveToTargetOptions, RoomCostMatrixCacheEntry, WorkAnchor } from "@/movement/types";
 
 const MOVE_PATH_CACHE_TTL = 20;
+// 单次 ERR_BUSY 只累计 soft-stuck；连续多个 tick 无位置进展才重新寻路。
+const PATH_STUCK_REPATH_THRESHOLD = 3;
 const roomBaseCostMatrixCache = new Map<string, RoomCostMatrixCacheEntry>();
-const ROOM_BASE_COST_MATRIX_CACHE_TTL = 5;
+// 指纹正常情况下覆盖所有拓扑变化，TTL 仅作为指纹碰撞/漏检的兜底。
+const ROOM_BASE_COST_MATRIX_CACHE_TTL = 100;
 const ROOM_BASE_COST_MATRIX_CACHE_MAX = 100;
+// 仅供测试观测缓存重建次数，生产路径不读取。
+let roomBaseCostMatrixBuildCount = 0;
 
 export function clearMovementState(creep: Creep): void {
   recordMovementMetric("stateClears", creep.room.name);
@@ -72,7 +78,13 @@ export function moveToTarget(
   }
 
   const reusePath = options.reusePath ?? 5;
-  const ignoreCreeps = options.ignoreCreeps ?? true;
+  // 卡死恢复：连续无进展达到阈值后强制绕开 creep 重新寻路（与跨房 travel 的
+  // stuckTicks>=2 → ignoreCreeps:false 策略一致）。判定用"上一 tick 结束时的
+  // stuckTicks + 本次无进展即达阈值"的先行式：若本次实际恢复了位置，最多多
+  // 一次带 creep 避让的重寻路，语义不受影响。
+  const cachedState = movementState.movePathState;
+  const stuckNeedsRepath = !!cachedState && cachedState.stuckTicks + 1 >= PATH_STUCK_REPATH_THRESHOLD;
+  const ignoreCreeps = stuckNeedsRepath ? false : options.ignoreCreeps ?? true;
   // costCallback without cacheKey disables path caching to avoid stale safe-zone paths
   const noCacheReuse = !!options.costCallback && !options.cacheKey;
   const movePathKey = `${room.name}:${targetPos.roomName}:${targetPos.x}:${targetPos.y}:r${range}:i${
@@ -95,7 +107,7 @@ export function moveToTarget(
       movePathState.range === range &&
       movePathState.expiresAt > Game.time;
 
-    if (isMatchingState && movePathState.path) {
+    if (isMatchingState && movePathState && movePathState.steps.length > 0) {
       if (movePathState.lastPosKey === currentPosKey && (!isStandardCreep(creep) || creep.fatigue === 0)) {
         movePathState.stuckTicks += 1;
       } else {
@@ -103,13 +115,18 @@ export function moveToTarget(
       }
       movePathState.lastPosKey = currentPosKey;
 
-      const cachedMoveCode = followStoredRoomPath(creep, movePathState, targetPos, range);
-      if (cachedMoveCode === OK || cachedMoveCode === ERR_TIRED || cachedMoveCode === ERR_BUSY) {
-        recordMovementMetric("pathCacheHits", room.name);
-        return cachedMoveCode;
-      }
+      if (movePathState.stuckTicks >= PATH_STUCK_REPATH_THRESHOLD) {
+        // 位置连续多 tick 无进展：路径视为失效，落入下方重新寻路（ignoreCreeps 已被强制为 false）。
+        delete movementState.movePathState;
+      } else {
+        const cachedMoveCode = followStoredRoomPath(creep, movePathState, targetPos, range);
+        if (cachedMoveCode === OK || cachedMoveCode === ERR_TIRED || cachedMoveCode === ERR_BUSY) {
+          recordMovementMetric("pathCacheHits", room.name);
+          return cachedMoveCode;
+        }
 
-      delete movementState.movePathState;
+        delete movementState.movePathState;
+      }
     }
 
     recordMovementMetric("pathRepaths", room.name);
@@ -126,13 +143,12 @@ export function moveToTarget(
     );
 
     if (path.length > 0) {
-      const serializedPath = Room.serializePath(path);
       const steps = path.map((step) => ({ x: step.x, y: step.y }));
       const currentPosKey2 = getPosKey(creep.pos);
       movementState.movePathState = {
         key: movePathKey,
-        path: serializedPath,
         steps,
+        cursor: -1,
         targetRoom: targetPos.roomName,
         targetX: targetPos.x,
         targetY: targetPos.y,
@@ -277,8 +293,13 @@ function getCachedRoomBaseCostMatrix(
   const plainCost = options.plainCost ?? 1;
   const swampCost = options.swampCost ?? 5;
   const cacheKey = `${room.name}:p${plainCost}:s${swampCost}`;
+  // 拓扑指纹跨 tick 复用静态矩阵：结构/工地/RCL/planner 保存时间不变即命中，
+  // 指纹变化或 TTL 到期才重建。矩阵只含静态信息（terrain 由 fallbackMatrix
+  // 烘入，creep 等动态障碍由调用方在 clone 上叠加），PathFinder 可能修改
+  // 返回值，因此命中与新建都返回 clone，缓存原件永不外露。
+  const revision = getRoomTopologyRevision(room.name);
   const cached = roomBaseCostMatrixCache.get(cacheKey);
-  if (cached?.tick === Game.time) {
+  if (cached && cached.revision === revision && Game.time - cached.builtAt <= ROOM_BASE_COST_MATRIX_CACHE_TTL) {
     return cached.matrix.clone();
   }
 
@@ -310,9 +331,11 @@ function getCachedRoomBaseCostMatrix(
   }
 
   roomBaseCostMatrixCache.set(cacheKey, {
-    tick: Game.time,
+    revision,
+    builtAt: Game.time,
     matrix: baseMatrix,
   });
+  roomBaseCostMatrixBuildCount += 1;
   return baseMatrix.clone();
 }
 
@@ -326,26 +349,39 @@ function followStoredRoomPath(
     return OK;
   }
 
-  const nextPos = getNextStoredPathStep(creep, movePathState.steps);
+  const nextPos = getNextStoredPathStep(creep, movePathState);
   if (!nextPos) {
     delete ensureCreepMovementState(creep).movePathState;
     return ERR_NO_PATH;
   }
 
-  const moveCode = moveToAdjacentPosition(creep, nextPos);
-  if (moveCode === ERR_BUSY) {
-    delete ensureCreepMovementState(creep).movePathState;
-  }
-  return moveCode;
+  // ERR_BUSY 是暂时性阻塞（对位换位/推动失败），保留路径交由 stuckTicks
+  // 累计决定何时重新寻路；仅 ERR_NO_PATH 等真正失效才立即销毁。
+  return moveToAdjacentPosition(creep, nextPos);
 }
 
-function getNextStoredPathStep(creep: AnyCreep, steps: MovePathState["steps"]): RoomPosition | null {
+function getNextStoredPathStep(creep: AnyCreep, movePathState: MovePathState): RoomPosition | null {
+  const steps = movePathState.steps;
   if (!Array.isArray(steps) || steps.length === 0) {
     return null;
   }
 
+  // 正常前进时当前位置只会落在 cursor 或 cursor+1；被推离后先在小窗口内恢复，
+  // 再回退全量扫描（窗口 miss 且 off-path 时才发生）。
+  const cursor = Number.isInteger(movePathState.cursor) ? (movePathState.cursor as number) : -1;
+  const windowEnd = Math.min(steps.length, cursor + 3);
+  for (let index = Math.max(0, cursor); index < windowEnd; index += 1) {
+    const step = steps[index];
+    if (creep.pos.x === step.x && creep.pos.y === step.y) {
+      movePathState.cursor = index;
+      const nextStep = steps[index + 1];
+      return nextStep ? new RoomPosition(nextStep.x, nextStep.y, creep.pos.roomName) : null;
+    }
+  }
+
   const exactIndex = steps.findIndex((step) => creep.pos.x === step.x && creep.pos.y === step.y);
   if (exactIndex >= 0) {
+    movePathState.cursor = exactIndex;
     const nextStep = steps[exactIndex + 1];
     return nextStep ? new RoomPosition(nextStep.x, nextStep.y, creep.pos.roomName) : null;
   }
@@ -367,6 +403,7 @@ function getNextStoredPathStep(creep: AnyCreep, steps: MovePathState["steps"]): 
     return null;
   }
 
+  movePathState.cursor = bestIndex;
   const candidate = steps[bestIndex];
   if (bestRange <= 1) {
     return new RoomPosition(candidate.x, candidate.y, creep.pos.roomName);
@@ -386,7 +423,7 @@ function pruneRoomBaseCostMatrixCache(): void {
   }
 
   for (const [key, entry] of roomBaseCostMatrixCache.entries()) {
-    if (Game.time - entry.tick > ROOM_BASE_COST_MATRIX_CACHE_TTL) {
+    if (Game.time - entry.builtAt > ROOM_BASE_COST_MATRIX_CACHE_TTL) {
       roomBaseCostMatrixCache.delete(key);
     }
   }
@@ -395,7 +432,7 @@ function pruneRoomBaseCostMatrixCache(): void {
     return;
   }
 
-  const oldestEntries = [...roomBaseCostMatrixCache.entries()].sort((left, right) => left[1].tick - right[1].tick);
+  const oldestEntries = [...roomBaseCostMatrixCache.entries()].sort((left, right) => left[1].builtAt - right[1].builtAt);
   const overflow = roomBaseCostMatrixCache.size - ROOM_BASE_COST_MATRIX_CACHE_MAX;
   for (const [key] of oldestEntries.slice(0, overflow)) {
     roomBaseCostMatrixCache.delete(key);
@@ -406,6 +443,11 @@ export function getRoomBaseCostMatrixCacheSizeForTest(): number {
   return roomBaseCostMatrixCache.size;
 }
 
+export function getRoomBaseCostMatrixBuildCountForTest(): number {
+  return roomBaseCostMatrixBuildCount;
+}
+
 export function clearRoomBaseCostMatrixCacheForTest(): void {
   roomBaseCostMatrixCache.clear();
+  roomBaseCostMatrixBuildCount = 0;
 }

@@ -75,9 +75,112 @@ interface CarrierTaskRecord {
 interface CarrierTaskRoomStore {
   byOwner: Map<string, Map<string, CarrierTaskRecord>>;
   nextPublishOrder: number;
+  /**
+   * 结构 revision：所有经公共写 API 的变更（replace/remove/cleanup）都会
+   * 递增。测试直接向 raw Map 注入 fixture 时不保证递增，因此读取侧的
+   * 排序快照缓存还叠加生产者数/记录数指纹作为兜底校验。
+   */
+  revision: number;
 }
 
 type CarrierTaskBoardStore = Map<string, CarrierTaskRoomStore>;
+
+/**
+ * 每房间排序快照缓存：同一 room + revision + 结构指纹下，dispatch 序
+ * （priority/createdAt/publishOrder）与 publish 序只排序一次，后续读取
+ * 复用只读索引。索引持有 live record 引用，task 内容、优先级等字段始终
+ * 从 record 现场读取，不会被缓存固化。缓存为模块级（global reset 与
+ * __carrierTaskBoard 一同失效），容量以房间名为界自然有界。
+ */
+interface RoomOrderCacheEntry {
+  revision: number;
+  producerCount: number;
+  recordCount: number;
+  dispatchOrder: IndexedCarrierTaskRecord[];
+  publishOrder: IndexedCarrierTaskRecord[];
+}
+
+const roomOrderCache = new Map<string, RoomOrderCacheEntry>();
+// 全局单调 revision 源：空 store 被删除后重建时 revision 重新从 0 计数会与
+// 陈旧缓存条目碰撞，因此递增必须跨 store 生命周期单调。
+let carrierTaskBoardRevisionCounter = 0;
+// 仅供测试观测排序重建次数，生产路径不读取。
+let carrierTaskOrderRebuildCount = 0;
+
+export function getCarrierTaskOrderRebuildCountForTest(): number {
+  return carrierTaskOrderRebuildCount;
+}
+
+function bumpRoomRevision(roomStore: CarrierTaskRoomStore): void {
+  carrierTaskBoardRevisionCounter += 1;
+  roomStore.revision = carrierTaskBoardRevisionCounter;
+}
+
+function readRoomStructureFingerprint(
+  roomStore: CarrierTaskRoomStore,
+): { producerCount: number; recordCount: number } {
+  const byOwner = readCarrierOwnerIndex(roomStore);
+  if (!byOwner) return { producerCount: 0, recordCount: 0 };
+  let producerCount = 0;
+  let recordCount = 0;
+  for (const ownerTasks of nativeMapValues(byOwner)) {
+    if (!isNativeMap<string, CarrierTaskRecord>(ownerTasks)) continue;
+    producerCount += 1;
+    recordCount += nativeMapSize(ownerTasks);
+  }
+  return { producerCount, recordCount };
+}
+
+function isRoomOrderCacheEntryUsable(
+  cached: RoomOrderCacheEntry | undefined,
+  roomStore: CarrierTaskRoomStore,
+): boolean {
+  if (!cached) return false;
+  if (cached.revision !== ownDataProperty(roomStore, "revision")) return false;
+  const fingerprint = readRoomStructureFingerprint(roomStore);
+  return cached.producerCount === fingerprint.producerCount
+    && cached.recordCount === fingerprint.recordCount;
+}
+
+function getRoomDispatchOrder(
+  roomName: string,
+  roomStore: CarrierTaskRoomStore,
+): IndexedCarrierTaskRecord[] {
+  const cached = roomOrderCache.get(roomName);
+  if (isRoomOrderCacheEntryUsable(cached, roomStore)) {
+    return cached.dispatchOrder;
+  }
+  const dispatchOrder = listIndexedRecordsInRoom(roomName, roomStore).sort(compareCarrierTaskRecords);
+  const publishOrder = [...dispatchOrder].sort(compareCarrierPublishOrder);
+  carrierTaskOrderRebuildCount += 1;
+  roomOrderCache.set(roomName, {
+    revision: ownDataProperty(roomStore, "revision") as number,
+    ...readRoomStructureFingerprint(roomStore),
+    dispatchOrder,
+    publishOrder,
+  });
+  return dispatchOrder;
+}
+
+function getRoomPublishOrder(
+  roomName: string,
+  roomStore: CarrierTaskRoomStore,
+): IndexedCarrierTaskRecord[] {
+  const cached = roomOrderCache.get(roomName);
+  if (isRoomOrderCacheEntryUsable(cached, roomStore)) {
+    return cached.publishOrder;
+  }
+  const dispatchOrder = listIndexedRecordsInRoom(roomName, roomStore).sort(compareCarrierTaskRecords);
+  const publishOrder = [...dispatchOrder].sort(compareCarrierPublishOrder);
+  carrierTaskOrderRebuildCount += 1;
+  roomOrderCache.set(roomName, {
+    revision: ownDataProperty(roomStore, "revision") as number,
+    ...readRoomStructureFingerprint(roomStore),
+    dispatchOrder,
+    publishOrder,
+  });
+  return publishOrder;
+}
 
 export type CarrierTaskSnapshot = Readonly<Omit<CarrierTask, "steps">> & {
   readonly steps: readonly Readonly<CarrierTaskStep>[];
@@ -383,8 +486,7 @@ export function peekCarrierTaskBoard(): CarrierTaskBoardSnapshot {
     ) {
       continue;
     }
-    const roomEntries = listIndexedRecordsInRoom(roomName, rawRoomStore)
-      .sort(compareCarrierPublishOrder)
+    const roomEntries = getRoomPublishOrder(roomName, rawRoomStore)
       .map(({ ref, task }): CarrierTaskReadSnapshotEntry => ({
         ref: cloneCarrierDispatchRef(ref) as CarrierDispatchRef,
         task: cloneCarrierSnapshotValue(
@@ -406,8 +508,7 @@ export function peekCarrierTasksByRoom(
   const roomStore = nativeMapGet(board, roomName);
   if (!isCarrierTaskRoomStore(roomStore)) return [];
 
-  return listIndexedRecordsInRoom(roomName, roomStore)
-    .sort(compareCarrierPublishOrder)
+  return getRoomPublishOrder(roomName, roomStore)
     .map(({ ref, task }): CarrierTaskReadSnapshotEntry => ({
       ref: cloneCarrierDispatchRef(ref) as CarrierDispatchRef,
       task: cloneCarrierSnapshotValue(
@@ -435,9 +536,11 @@ function ensureRoomTaskStore(roomName: string): CarrierTaskRoomStore | undefined
     return existing;
   }
 
+  carrierTaskBoardRevisionCounter += 1;
   const created: CarrierTaskRoomStore = {
     byOwner: new Map(),
     nextPublishOrder: 0,
+    revision: carrierTaskBoardRevisionCounter,
   };
   nativeMapSet(board, roomName, created);
   return created;
@@ -457,6 +560,7 @@ function cleanupRoomTaskStoreIfEmpty(roomName: string): void {
     ) return;
   }
   nativeMapDelete(board, roomName);
+  roomOrderCache.delete(roomName);
 }
 
 /**
@@ -486,10 +590,14 @@ export function claimCarrierTaskStepAmount(
 export function listCarrierDispatchEntriesByRoom(
   roomName: string,
 ): readonly CarrierDispatchEntry[] {
-  const roomStore = ensureRoomTaskStore(roomName);
-  if (!roomStore) return [];
-  return listIndexedRecordsInRoom(roomName, roomStore)
-    .sort(compareCarrierTaskRecords)
+  // Peek 式读取：不因读取不存在的房间而创建 board/空 store。排序结果走
+  // revision 缓存，task 始终是 live 引用（调用方约定不改写）。
+  if (!isValidDispatchRoomName(roomName)) return [];
+  const board = runtimeGlobal.__carrierTaskBoard;
+  if (!isCarrierTaskBoardStore(board)) return [];
+  const roomStore = nativeMapGet(board, roomName);
+  if (!isCarrierTaskRoomStore(roomStore)) return [];
+  return getRoomDispatchOrder(roomName, roomStore)
     .map(({ ref, task }): CarrierDispatchEntry => ({
       ref,
       task: task as CarrierTask,
@@ -617,6 +725,7 @@ function removeCarrierTaskRecord(
   if (!record) return false;
   releaseUncommittedCarrierAmountSlices(ref);
   nativeMapDelete(ownerTasks, localId);
+  bumpRoomRevision(roomStore);
   if (nativeMapSize(ownerTasks) === 0) {
     const byOwner = readCarrierOwnerIndex(roomStore);
     if (byOwner && nativeMapGet(byOwner, producer) === ownerTasks) {
@@ -647,6 +756,7 @@ export function replaceCarrierTasksForProducerRoom(
   ) {
     return;
   }
+  bumpRoomRevision(roomStore);
   if (!isNativeMap<string, CarrierTaskRecord>(ownerTasks)) {
     ownerTasks = new Map();
     nativeMapSet(byOwner, producer, ownerTasks);
@@ -739,10 +849,12 @@ export function cleanupCarrierTaskBoard(
   for (const [roomName, rawRoomStore] of Array.from(nativeMapEntries(board))) {
     if (!isValidDispatchRoomName(roomName)) {
       nativeMapDelete(board, roomName);
+      roomOrderCache.delete(roomName);
       continue;
     }
     if (!isCarrierTaskRoomStore(rawRoomStore)) {
       nativeMapDelete(board, roomName);
+      roomOrderCache.delete(roomName);
       continue;
     }
 
@@ -750,6 +862,7 @@ export function cleanupCarrierTaskBoard(
     const byOwner = readCarrierOwnerIndex(rawRoomStore);
     if (!byOwner) {
       nativeMapDelete(board, roomName);
+      roomOrderCache.delete(roomName);
       continue;
     }
     for (const [producer, ownerTasks] of Array.from(nativeMapEntries(byOwner))) {
@@ -783,5 +896,8 @@ export function cleanupCarrierTaskBoard(
 
 export function clearCarrierTaskBoardForTest(): void {
   delete runtimeGlobal.__carrierTaskBoard;
+  roomOrderCache.clear();
+  carrierTaskBoardRevisionCounter = 0;
+  carrierTaskOrderRebuildCount = 0;
   clearCarrierAmountSlices();
 }

@@ -206,10 +206,25 @@ export function normalizeCpuMonitorConfig(raw: CpuMonitorRawConfig | undefined |
 
 // ─── Global store ─────────────────────────────────────────────────────────────
 
+/**
+ * 增量滚动统计：push 时累加新样本贡献，淘汰旧样本时减去其贡献，
+ * 避免 persist 时对完整 history 的 O(H×P) 重扫。窗口化的 max/min 无法
+ * 增量维护，仅做一次 O(H) 数值遍历（不触及 phase map）。
+ */
+export interface CpuMonitorRollingSummary {
+  ticks: number;
+  sumTotalUsed: number;
+  sumBucket: number;
+  sumUntracked: number;
+  phaseSums: Record<string, number>;
+  fixedActionSums: Record<string, number>;
+}
+
 interface CpuMonitorGlobalStore {
   history: CpuMonitorSnapshotV2[];
   emaTotalUsed: number;
   seeded: boolean;
+  rolling: CpuMonitorRollingSummary;
 }
 
 type GlobalWithCpuMonitor = typeof global & {
@@ -218,12 +233,43 @@ type GlobalWithCpuMonitor = typeof global & {
 
 const cpuMonitorGlobal: GlobalWithCpuMonitor = global;
 
+function createEmptyRollingSummary(): CpuMonitorRollingSummary {
+  return {
+    ticks: 0,
+    sumTotalUsed: 0,
+    sumBucket: 0,
+    sumUntracked: 0,
+    phaseSums: {},
+    fixedActionSums: {},
+  };
+}
+
+function applySnapshotToRollingSummary(
+  rolling: CpuMonitorRollingSummary,
+  snapshot: CpuMonitorSnapshotV2,
+  direction: 1 | -1,
+): void {
+  rolling.ticks += direction;
+  rolling.sumTotalUsed += direction * safeFinite(snapshot.totalUsed, 0);
+  rolling.sumBucket += direction * safeFinite(snapshot.bucket, 0);
+  rolling.sumUntracked += direction * safeFinite(snapshot.untracked, 0);
+  const phaseSums = rolling.phaseSums;
+  for (const [phase, used] of Object.entries(snapshot.phases)) {
+    phaseSums[phase] = (phaseSums[phase] || 0) + direction * safeFinite(used, 0);
+  }
+  const fixedActionSums = rolling.fixedActionSums;
+  for (const [action, count] of Object.entries(snapshot.fixedActionCounts)) {
+    fixedActionSums[action] = (fixedActionSums[action] || 0) + direction * safeFinite(count, 0);
+  }
+}
+
 function ensureCpuMonitorStore(): CpuMonitorGlobalStore {
   if (!cpuMonitorGlobal.__cpuMonitor) {
     cpuMonitorGlobal.__cpuMonitor = {
       history: [],
       emaTotalUsed: 0,
       seeded: false,
+      rolling: createEmptyRollingSummary(),
     };
   }
   return cpuMonitorGlobal.__cpuMonitor;
@@ -242,6 +288,7 @@ export function resetCpuMonitorStore(): void {
     history: [],
     emaTotalUsed: 0,
     seeded: false,
+    rolling: createEmptyRollingSummary(),
   };
 }
 
@@ -351,6 +398,59 @@ export function computeCpuMonitorSummary(history: CpuMonitorSnapshotV2[], emaTot
 
 // ─── Sample persistence ───────────────────────────────────────────────────────
 
+/**
+ * 由滚动统计导出与 computeCpuMonitorSummary 等价的 summary。
+ * 窗口化 max/min 做一次 O(H) 数值遍历；均值类字段全部来自增量累加。
+ */
+function buildRollingCpuMonitorSummary(
+  history: CpuMonitorSnapshotV2[],
+  rolling: CpuMonitorRollingSummary,
+  emaTotalUsed: number,
+): CpuMonitorSummaryV2 | null {
+  if (rolling.ticks <= 0 || history.length === 0) {
+    return null;
+  }
+
+  let maxTotalUsed = -Infinity;
+  let minBucket = Infinity;
+  let maxBucket = -Infinity;
+  for (const entry of history) {
+    const total = safeFinite(entry.totalUsed, 0);
+    const bucket = safeFinite(entry.bucket, 0);
+    if (total > maxTotalUsed) maxTotalUsed = total;
+    if (bucket < minBucket) minBucket = bucket;
+    if (bucket > maxBucket) maxBucket = bucket;
+  }
+
+  const ticks = rolling.ticks;
+  const avgPhases: Record<string, number> = {};
+  for (const [phase, sum] of Object.entries(rolling.phaseSums)) {
+    // 贡献值非负：sum 为 0 说明该 phase 的样本已被全部淘汰，与批量版的键集保持一致。
+    if (sum !== 0) {
+      avgPhases[phase] = sum / ticks;
+    }
+  }
+  const avgFixedActionCounts: Record<string, number> = {};
+  for (const [action, sum] of Object.entries(rolling.fixedActionSums)) {
+    if (sum !== 0) {
+      avgFixedActionCounts[action] = sum / ticks;
+    }
+  }
+
+  return {
+    ticks,
+    avgTotalUsed: rolling.sumTotalUsed / ticks,
+    maxTotalUsed,
+    minBucket,
+    maxBucket,
+    avgBucket: rolling.sumBucket / ticks,
+    avgUntracked: rolling.sumUntracked / ticks,
+    avgPhases,
+    avgFixedActionCounts,
+    emaTotalUsed: safeFinite(emaTotalUsed, 0),
+  };
+}
+
 export function persistCpuMonitorSample(
   snapshot: CpuMonitorSnapshotV2,
   config: CpuMonitorConfig,
@@ -363,12 +463,16 @@ export function persistCpuMonitorSample(
   snapshot.emaTotalUsed = store.emaTotalUsed;
 
   store.history.push(snapshot);
+  applySnapshotToRollingSummary(store.rolling, snapshot, 1);
   while (store.history.length > config.historyLimit) {
-    store.history.shift();
+    const evicted = store.history.shift();
+    if (evicted) {
+      applySnapshotToRollingSummary(store.rolling, evicted, -1);
+    }
   }
 
   const analytics = getMemoryService().ensureAnalytics();
-  const summary = computeCpuMonitorSummary(store.history, store.emaTotalUsed);
+  const summary = buildRollingCpuMonitorSummary(store.history, store.rolling, store.emaTotalUsed);
 
   analytics.cpuMonitor = {
     version: 2,

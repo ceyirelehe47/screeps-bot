@@ -100,22 +100,32 @@ function getDroppedEnergy(room: Room): number {
 
 function getContainerEnergy(room: Room): number {
   const roomContext = getTickContextService().getRoomContext(room);
-  const containers = (roomContext?.getStructures() || []).filter(
-    (structure): structure is StructureContainer =>
-      structure.structureType === STRUCTURE_CONTAINER &&
-      (structure as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0,
-  );
+  // 走单趟类型索引而非对全部结构 filter；无 context 的 mock 环境回退原路径。
+  const containers = roomContext
+    ? roomContext.getStructuresByType(STRUCTURE_CONTAINER)
+    : (room.find(FIND_STRUCTURES).filter(
+        (structure): structure is StructureContainer => structure.structureType === STRUCTURE_CONTAINER,
+      ));
 
-  return containers.reduce((sum, container) => sum + container.store.getUsedCapacity(RESOURCE_ENERGY), 0);
+  return containers.reduce((sum, container) => {
+    const energy = (container as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY);
+    return energy > 0 ? sum + energy : sum;
+  }, 0);
 }
 
 function getStructureEnergy(room: Room, structureType: StructureConstant): number {
   const roomContext = getTickContextService().getRoomContext(room);
-  const structures = (roomContext?.getStructures() || []).filter(
-    (structure): structure is AnyStoreStructure => structure.structureType === structureType,
-  );
+  const structures = roomContext
+    ? roomContext.getStructuresByType(structureType)
+    : (room.find(FIND_STRUCTURES).filter(
+        (structure): structure is AnyStoreStructure => structure.structureType === structureType,
+      ));
 
-  return structures.reduce((sum, structure) => sum + structure.store.getUsedCapacity(RESOURCE_ENERGY), 0);
+  return structures.reduce((sum, structure) => {
+    const storeStructure = structure as AnyStoreStructure;
+    const energy = storeStructure.store?.getUsedCapacity(RESOURCE_ENERGY);
+    return Number.isFinite(energy) ? sum + (energy as number) : sum;
+  }, 0);
 }
 
 function getRoleCount(room: Room, role: "worker" | "carrier" | "harvester"): number {
@@ -188,8 +198,9 @@ function pushSample(room: Room): void {
   const samples = sampleStore[room.name] || [];
   samples.push(createSample(room));
 
-  while (samples.length > MAX_SAMPLES) {
-    samples.shift();
+  // 单次 splice 截断代替逐条 shift（外部按数组顺序消费样本，保持形态不变）。
+  if (samples.length > MAX_SAMPLES) {
+    samples.splice(0, samples.length - MAX_SAMPLES);
   }
 
   sampleStore[room.name] = samples;

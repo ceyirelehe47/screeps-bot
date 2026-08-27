@@ -493,16 +493,18 @@ export function runTowerControl(): void {
   const rooms = tickContext.getMyRooms();
   for (const room of rooms) {
     const roomContext = tickContext.getRoomContext(room);
-    const emergencyRamparts = collectEmergencyRamparts(room);
     const hostiles = roomContext?.getHostileCreeps() || [];
     const towers = roomContext?.getTowers() || [];
+    // 没有 Tower 的房间立即跳过：应急路障 store 与受损扫描都只服务于 Tower。
+    if (towers.length === 0) {
+      continue;
+    }
+    const emergencyRamparts = collectEmergencyRamparts(room);
     const woundedCreeps = (roomContext?.getMyCreeps() || []).filter((creep) => creep.hits < creep.hitsMax);
-    const damagedStructures = (roomContext?.getStructures() || []).filter(
-      (structure) =>
-        structure.hits < structure.hitsMax &&
-        structure.structureType !== STRUCTURE_WALL &&
-        structure.structureType !== STRUCTURE_RAMPART,
-    );
+    // 普通受损结构扫描按房间 hash 错峰节流（战斗路径不消费该列表）；
+    // 缓存命中时逐 id 现场解析，目标被摧毁/修满立即从候选中消失，
+    // 候选全部耗尽时立即重扫，新损伤最迟在下一个扫描点被发现。
+    const damagedStructures = getTowerDamagedStructures(room, roomContext);
 
     if (runTowerCombat(room, towers, hostiles, woundedCreeps)) {
       continue;
@@ -519,4 +521,64 @@ export function runTowerControl(): void {
       runTowerPeaceFlow(tower, emergencyRamparts, woundedCreeps, damagedStructures);
     }
   }
+}
+
+interface TowerDamagedScanCacheEntry {
+  structureIds: Id<Structure>[];
+}
+
+const TOWER_DAMAGED_SCAN_INTERVAL = 10;
+const towerDamagedScanCache = new Map<string, TowerDamagedScanCacheEntry>();
+
+export function clearTowerDamagedScanCacheForTest(): void {
+  towerDamagedScanCache.clear();
+}
+
+function isTowerRepairableDamaged(structure: Structure<StructureConstant>): boolean {
+  return (
+    structure.hits < structure.hitsMax &&
+    structure.structureType !== STRUCTURE_WALL &&
+    structure.structureType !== STRUCTURE_RAMPART
+  );
+}
+
+function stableRoomNameHash(roomName: string): number {
+  let hash = 0;
+  for (let index = 0; index < roomName.length; index += 1) {
+    hash = (hash * 31 + roomName.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function resolveDamagedStructuresByIds(structureIds: Id<Structure>[]): Structure<StructureConstant>[] {
+  const resolved: Structure<StructureConstant>[] = [];
+  for (const structureId of structureIds) {
+    const structure = Game.getObjectById?.(structureId);
+    if (structure && isTowerRepairableDamaged(structure)) {
+      resolved.push(structure);
+    }
+  }
+  return resolved;
+}
+
+function getTowerDamagedStructures(
+  room: Room,
+  roomContext: ReturnType<ReturnType<typeof getTickContextService>["getRoomContext"]>,
+): Structure<StructureConstant>[] {
+  const interval = TOWER_DAMAGED_SCAN_INTERVAL;
+  const scanPhase = stableRoomNameHash(room.name) % interval;
+  const due = Game.time % interval === scanPhase;
+  const cached = towerDamagedScanCache.get(room.name);
+
+  if (cached && !due) {
+    const resolved = resolveDamagedStructuresByIds(cached.structureIds);
+    if (resolved.length > 0 || cached.structureIds.length === 0) {
+      return resolved;
+    }
+    // 缓存候选全部修满/失效：立即重扫而非等到下一个扫描点。
+  }
+
+  const damaged = (roomContext?.getStructures() || []).filter(isTowerRepairableDamaged);
+  towerDamagedScanCache.set(room.name, { structureIds: damaged.map((structure) => structure.id) });
+  return damaged;
 }

@@ -3,6 +3,7 @@ import { clearMovementState } from "@/roles/shared";
 import { decodeCrossShardTravelerName } from "@/runtime/crossShardNaming";
 import { measureCreepDecision } from "@/runtime/cpuPhaseProfiler";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
+import type { RoleFactory } from "@/types/system";
 
 function tryRestoreRoleFromName(creep: Creep): boolean {
   const traveler = decodeCrossShardTravelerName(creep.name);
@@ -29,19 +30,96 @@ function tryRestoreRoleFromName(creep: Creep): boolean {
   return true;
 }
 
+/**
+ * RoleLifecycle 实例缓存：所有 RoleFactory 均为无状态闭包（状态都在
+ * creep.memory 或 runtime 服务中），同一 config / role+args 签名的多个
+ * creep 可安全共享同一实例，避免每 creep 每 tick 重建对象和闭包。
+ *
+ * 失效条件：
+ * - config 路径：CreepConfigService.get 返回的 config 对象引用变化（upsert
+ *   在内容不变时保持对象引用不变）或 role/args 逐元素不一致（防御原地改写）；
+ * - memory 路径：签名 key 由当前 role+roleArgs 现场计算，天然随 memory 变化；
+ * - global reset：模块级缓存随代码重载一并消失。
+ *
+ * 容量：以 config 数量与 memory 角色签名数量为界，均由游戏内实体数天然限制。
+ */
+interface RoleLifecycleCacheEntry {
+  configRef?: unknown;
+  role: string;
+  args: readonly string[];
+  lifecycle: ReturnType<RoleFactory>;
+}
+
+const roleLifecycleCache = new Map<string, RoleLifecycleCacheEntry>();
+
+export function clearRoleLifecycleCacheForTest(): void {
+  roleLifecycleCache.clear();
+}
+
+function roleArgsSignature(args: readonly string[]): string {
+  return args.map((arg) => arg ?? "").join("");
+}
+
+function isCacheEntryCurrent(
+  entry: RoleLifecycleCacheEntry,
+  configRef: unknown | undefined,
+  role: string,
+  args: readonly string[],
+): boolean {
+  if (entry.role !== role || entry.args.length !== args.length) {
+    return false;
+  }
+  for (let index = 0; index < args.length; index += 1) {
+    if ((entry.args[index] ?? "") !== (args[index] ?? "")) {
+      return false;
+    }
+  }
+  return entry.configRef === configRef;
+}
+
+function getOrCreateRoleLifecycle(
+  cacheKey: string,
+  configRef: unknown | undefined,
+  role: string,
+  args: readonly string[],
+): ReturnType<RoleFactory> | null {
+  const roleFactory = roleRegistry[role as keyof typeof roleRegistry];
+  if (!roleFactory) {
+    roleLifecycleCache.delete(cacheKey);
+    return null;
+  }
+
+  const cached = roleLifecycleCache.get(cacheKey);
+  if (cached && isCacheEntryCurrent(cached, configRef, role, args)) {
+    return cached.lifecycle;
+  }
+
+  const lifecycle = roleFactory(...args);
+  roleLifecycleCache.set(cacheKey, {
+    ...(configRef === undefined ? {} : { configRef }),
+    role,
+    args: [...args],
+    lifecycle,
+  });
+  return lifecycle;
+}
+
 function resolveRoleLogic(creep: Creep): ReturnType<(typeof roleRegistry)[keyof typeof roleRegistry]> | null {
   const creepConfigs = getCreepConfigService();
   const configName = creep.memory.configName;
   if (configName) {
     const config = creepConfigs.get(configName);
     if (config) {
-      const roleFactory = roleRegistry[config.role];
-      if (!roleFactory) {
-        return null;
-      }
-
-      return roleFactory(...config.args);
+      // config 引用相等 + role/args 一致 ⇔ factory 输出等价，直接复用。
+      return getOrCreateRoleLifecycle(
+        `config:${configName}`,
+        config,
+        config.role,
+        config.args,
+      );
     }
+    // config 已被删除：清掉该 key 的陈旧实例，防止错误复用。
+    roleLifecycleCache.delete(`config:${configName}`);
   }
 
   const memoryRole = creep.memory.role;
@@ -49,20 +127,24 @@ function resolveRoleLogic(creep: Creep): ReturnType<(typeof roleRegistry)[keyof 
     if (tryRestoreRoleFromName(creep)) {
       const restoredRole = creep.memory.role;
       if (restoredRole) {
-        const restoredFactory = roleRegistry[restoredRole];
-        return restoredFactory(...(creep.memory.roleArgs || []));
+        return getOrCreateRoleLifecycle(
+          `memory:${restoredRole}|${roleArgsSignature(creep.memory.roleArgs || [])}`,
+          undefined,
+          restoredRole,
+          creep.memory.roleArgs || [],
+        );
       }
     }
 
     return null;
   }
 
-  const roleFactory = roleRegistry[memoryRole];
-  if (!roleFactory) {
-    return null;
-  }
-
-  return roleFactory(...(creep.memory.roleArgs || []));
+  return getOrCreateRoleLifecycle(
+    `memory:${memoryRole}|${roleArgsSignature(creep.memory.roleArgs || [])}`,
+    undefined,
+    memoryRole,
+    creep.memory.roleArgs || [],
+  );
 }
 
 export function mountCreep(): void {
