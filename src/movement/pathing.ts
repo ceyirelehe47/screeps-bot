@@ -4,15 +4,9 @@ import { recordMovementMetric } from "@/movement/metrics";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
 import { isPositionAllowedForCreep, shouldRestrictToSafeZone } from "@/runtime/safeZoneHelpers";
-import {
-  getPosKey,
-  getTargetPos,
-  isExitTile,
-  isStandardCreep,
-  isWalkableConstructionSite,
-  isWalkableStructure,
-} from "@/movement/common";
+import { getPosKey, getTargetPos, isExitTile, isStandardCreep } from "@/movement/common";
 import { moveOffExit, moveToAdjacentPosition } from "@/movement/traffic";
+import { buildStaticRoomCostMatrix, collectStaticRoomMatrixSources } from "@/movement/staticRoomMatrix";
 import { getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstruction";
 import type { MovePathState, MoveToTargetOptions, RoomCostMatrixCacheEntry, WorkAnchor } from "@/movement/types";
 
@@ -91,7 +85,7 @@ export function moveToTarget(
     ignoreCreeps ? 1 : 0
   }:s${options.swampCost ?? "d"}:p${options.plainCost ?? "d"}:m${options.maxRooms ?? "d"}:e${options.avoidExitTiles ? 1 : 0}:sc${
     options.allowSourceContainerTarget ? 1 : 0
-  }:c${options.cacheKey ?? ""}`;
+  }:pt${options.allowPortalTarget ? 1 : 0}:c${options.cacheKey ?? ""}`;
 
   {
     const currentPosKey = getPosKey(creep.pos);
@@ -212,8 +206,16 @@ function buildRoomCostMatrix(
 
   // fallbackMatrix（引擎传入的矩阵）在 ignoreCreeps=false 时已被引擎写入当
   // 前 creep/PowerCreep 障碍，绝不能作为跨 tick 缓存的输入；静态矩阵完全由
-  // 自行读取的 terrain + 结构/工地构成，动态 creep 障碍每 tick 在 clone 上叠加。
+  // 自行读取的 terrain + 自然对象（Source/Mineral/Deposit/Controller）+
+  // 结构/工地构成，动态 creep 障碍每 tick 在 clone 上叠加。
   const roomMatrix = getCachedRoomBaseCostMatrix(creepRoom, roomContext, options);
+
+  if (options.allowPortalTarget && targetPos.roomName === roomName) {
+    // Portal 按引擎默认语义在静态层置 0xff；显式以 Portal 为目标（range=0
+    // 踏上传送门）时豁免目标格，0 = 恢复引擎默认地形成本。豁免只作用于
+    // 返回的 clone，不污染静态缓存。
+    roomMatrix.set(targetPos.x, targetPos.y, 0);
+  }
 
   if (options.avoidExitTiles) {
     applyExitTileAvoidance(roomMatrix, targetPos, roomName);
@@ -310,30 +312,7 @@ function getCachedRoomBaseCostMatrix(
 
   pruneRoomBaseCostMatrixCache();
 
-  const baseMatrix = buildStaticTerrainMatrix(room.name);
-  for (const structure of roomContext.getStructures()) {
-    if (structure.structureType === STRUCTURE_ROAD) {
-      if (baseMatrix.get(structure.pos.x, structure.pos.y) < 0xfe) {
-        baseMatrix.set(structure.pos.x, structure.pos.y, 1);
-      }
-      continue;
-    }
-
-    if (!isWalkableStructure(structure)) {
-      baseMatrix.set(structure.pos.x, structure.pos.y, 0xff);
-    }
-  }
-
-  for (const site of roomContext.getConstructionSites()) {
-    if (!site.my) {
-      continue;
-    }
-    if (!isWalkableConstructionSite(site)) {
-      baseMatrix.set(site.pos.x, site.pos.y, 0xff);
-    } else if (site.structureType === STRUCTURE_ROAD && baseMatrix.get(site.pos.x, site.pos.y) < 0xfe) {
-      baseMatrix.set(site.pos.x, site.pos.y, 1);
-    }
-  }
+  const baseMatrix = buildStaticRoomCostMatrix(room.name, collectStaticRoomMatrixSources(room, roomContext));
 
   roomBaseCostMatrixCache.set(cacheKey, {
     revision,
@@ -420,21 +399,6 @@ function getNextStoredPathStep(creep: AnyCreep, movePathState: MovePathState): R
   }
 
   return new RoomPosition(nextStep.x, nextStep.y, creep.pos.roomName);
-}
-
-// 静态地形矩阵：wall 置 0xff，其余保持 0（0 表示沿用引擎的 plain/swamp
-// 默认成本）。terrain 是房间不可变数据，因此该矩阵可安全跨 tick 缓存。
-function buildStaticTerrainMatrix(roomName: string): CostMatrix {
-  const matrix = new PathFinder.CostMatrix();
-  const terrain = Game.map.getRoomTerrain(roomName);
-  for (let y = 0; y < 50; y += 1) {
-    for (let x = 0; x < 50; x += 1) {
-      if (terrain.get(x, y) & TERRAIN_MASK_WALL) {
-        matrix.set(x, y, 0xff);
-      }
-    }
-  }
-  return matrix;
 }
 
 function pruneRoomBaseCostMatrixCache(): void {  if (roomBaseCostMatrixCache.size === 0) {

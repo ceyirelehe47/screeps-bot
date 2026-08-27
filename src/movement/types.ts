@@ -38,6 +38,8 @@ export interface MoveToTargetOptions {
   ignoreCreeps?: boolean;
   avoidExitTiles?: boolean;
   allowSourceContainerTarget?: boolean;
+  /** Portal 在静态矩阵中默认阻挡；显式以 Portal 格为目标时豁免目标格（跨 shard 进入传送门）。 */
+  allowPortalTarget?: boolean;
   costCallback?: (roomName: string, matrix: PathFinder["CostMatrix"]) => PathFinder["CostMatrix"];
   cacheKey?: string;
 }

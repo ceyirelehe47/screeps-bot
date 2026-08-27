@@ -201,7 +201,7 @@ describe("role lifecycle cache", () => {
   });
 
   it("历史 memory 签名不会让缓存无限增长", () => {
-    const ROLE_LIFECYCLE_CACHE_MAX = 64;
+    const ROLE_LIFECYCLE_CACHE_MAX = 256;
     // 持续写入互不相同的 memory role 签名，模拟临时 fallback 角色。
     for (let index = 0; index < ROLE_LIFECYCLE_CACHE_MAX * 3; index += 1) {
       const creep = createCreep(`temp-${index}`, { role: "worker", roleArgs: [`sig-${index}`] });
@@ -210,5 +210,42 @@ describe("role lifecycle cache", () => {
 
     expect(getRoleLifecycleCacheSizeForTest()).toBeLessThanOrEqual(ROLE_LIFECYCLE_CACHE_MAX);
     expect(__factoryCallCounts.worker).toBe(ROLE_LIFECYCLE_CACHE_MAX * 3);
+  });
+
+  it("活跃 config 数量超过旧上限 64 时缓存不会抖动", () => {
+    const configCount = 100;
+    for (let index = 0; index < configCount; index += 1) {
+      installConfig(`W1N1:worker:${index}`, "worker", [`arg-${index}`]);
+    }
+    const creeps = Array.from({ length: configCount }, (_, index) =>
+      createCreep(`creep-${index}`, { configName: `W1N1:worker:${index}` }),
+    );
+
+    // 两个完整 tick 内全部 config 都保持活跃：每 config 的 factory 恰好执行
+    // 一次。若上限仍为 64，第二轮会触发淘汰重建（factory 次数 > configCount）。
+    for (const creep of creeps) {
+      work(creep);
+    }
+    Game.time += 1;
+    for (const creep of creeps) {
+      work(creep);
+    }
+
+    expect(__factoryCallCounts.worker).toBe(configCount);
+    expect(getRoleLifecycleCacheSizeForTest()).toBe(configCount);
+  });
+
+  it("roleArgs 签名编码无碰撞：含分隔符的参数不与拆分形式混用", () => {
+    const combined = createCreep("combined-worker", { role: "worker", roleArgs: ["room-a,extra"] });
+    const split = createCreep("split-worker", { role: "worker", roleArgs: ["room-a", "extra"] });
+
+    work(combined);
+    work(split);
+
+    // 旧 join("") 编码下两者签名相同，会错误共享同一 lifecycle；
+    // JSON 定界编码后必须各自创建。
+    expect(roleRegistry.worker).toHaveBeenNthCalledWith(1, "room-a,extra");
+    expect(roleRegistry.worker).toHaveBeenNthCalledWith(2, "room-a", "extra");
+    expect(__factoryCallCounts.worker).toBe(2);
   });
 });
