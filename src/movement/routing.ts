@@ -239,7 +239,7 @@ export function moveToTargetRoom(
       }
 
       if (cachedTravelPath && travelState.stuckTicks < 2) {
-        const cachedPathResult = followCachedTravelPath(creep, travelState, cachedTravelPath);
+        const cachedPathResult = followCachedTravelPath(creep, travelState, cachedTravelPath, targetRoom);
         if (cachedPathResult === OK || cachedPathResult === ERR_TIRED) {
           invalidateMultiRoomSegment(travelState, creep.room.name);
           updateTravelState(creep, travelState);
@@ -304,10 +304,15 @@ export function moveToTargetRoom(
   return result;
 }
 
+// 殖民持久路径的算法版本：路径生成语义变化（本次修复 = 生成回调改为复用
+// 引擎静态障碍矩阵）时递增，Memory 中旧版本生成的 cachedTravelPath 因 key
+// 前缀失配而自然失效，随后由正常生命周期重新搜索覆盖。
+export const COLONIZATION_TRAVEL_PATH_VERSION = 2;
+
 export function getColonizationTravelPathKey(sourceRoom: string, targetRoom: string, routeRooms: string[], dangerousRooms: string[]): string {
   const routePart = routeRooms.join(">");
   const dangerPart = [...new Set(dangerousRooms)].sort().join(">");
-  return `${sourceRoom}->${targetRoom}|r:${routePart}|d:${dangerPart}`;
+  return `v${COLONIZATION_TRAVEL_PATH_VERSION}:${sourceRoom}->${targetRoom}|r:${routePart}|d:${dangerPart}`;
 }
 
 function buildMultiRoomSegmentKey(
@@ -491,8 +496,48 @@ function getUsableCachedTravelPath(
   return cachedPath as CachedTravelPath;
 }
 
-function followCachedTravelPath(creep: Creep, travelState: TravelState, cachedPath: CachedTravelPath): ScreepsReturnCode {
-  return followStoredTravelPositions(creep, travelState, cachedPath.positions);
+function followCachedTravelPath(
+  creep: Creep,
+  travelState: TravelState,
+  cachedPath: CachedTravelPath,
+  targetRoom: string,
+): ScreepsReturnCode {
+  // 路径对象跨 creep 共享；key 变化（版本升级或参数变化后重新生成）时先
+  // 重置自己的游标，避免旧 cursor 错误定位新路径。
+  if (travelState.cachedPathKey !== cachedPath.key) {
+    travelState.cachedPathKey = cachedPath.key;
+    delete travelState.cachedPathCursor;
+  }
+
+  const nextStep = getNextCachedTravelPathStep(creep.pos, travelState, cachedPath.positions);
+  if (!nextStep) {
+    return ERR_NO_PATH;
+  }
+
+  if (isCachedTravelStepBlockedByStatic(creep, nextStep)) {
+    // 持久路径多在房间不可见时生成；进入可见房间后才发现下一步被静态
+    // 障碍（新建筑 / Source / Portal 等）挡住时，本次不提交该移动，失效
+    // 缓存路径并清游标，落回调用方下方的实时寻路流程。
+    const task = Memory.data?.colonization?.[targetRoom];
+    if (task && task.cachedTravelPath === cachedPath) {
+      delete task.cachedTravelPath;
+    }
+    delete travelState.cachedPathCursor;
+    delete travelState.cachedPathKey;
+    return ERR_NO_PATH;
+  }
+
+  return followStoredTravelStep(creep, nextStep);
+}
+
+// 仅当下一步位于当前可见房间时做局部验证：复用跨房静态矩阵缓存（拓扑
+// 指纹 + TTL 控制，不为验证额外构建矩阵）。0xfe 的 controller 区域与
+// source container 回避只是高成本不构成阻断；>= 0xff 才是静态障碍。
+function isCachedTravelStepBlockedByStatic(creep: Creep, nextStep: StoredRoomPosition): boolean {
+  if (nextStep.roomName !== creep.room.name || !Game.rooms[nextStep.roomName]) {
+    return false;
+  }
+  return getCachedStaticTravelMatrix(nextStep.roomName).get(nextStep.x, nextStep.y) >= 0xff;
 }
 
 function followMultiRoomSegment(creep: Creep, segment: MultiRoomTravelSegment): ScreepsReturnCode {
@@ -515,11 +560,6 @@ function getMultiRoomSegmentTransition(
     return null;
   }
   return getValidatedRoomTransition(creep.room.name, creep.pos, nextStep);
-}
-
-function followStoredTravelPositions(creep: Creep, travelState: TravelState, positions: StoredRoomPosition[]): ScreepsReturnCode {
-  const nextStep = getNextCachedTravelPathStep(creep.pos, travelState, positions);
-  return nextStep ? followStoredTravelStep(creep, nextStep) : ERR_NO_PATH;
 }
 
 function followStoredTravelStep(creep: Creep, nextStep: StoredRoomPosition): ScreepsReturnCode {
@@ -799,7 +839,11 @@ function createMultiRoomTravelCallback(
   };
 }
 
-function buildMultiRoomTravelMatrix(creep: Creep, roomName: string, options: MoveToTargetOptions): CostMatrix {
+// 跨房移动（buildMultiRoomTravelMatrix）与 colonization 持久路径生成
+// （createTravelPathRoomCallback）共用的静态旅行矩阵：共用静态障碍层 +
+// controller 周边回避 + source container 预留，按拓扑指纹跨 tick 复用。
+// 返回缓存中的原矩阵，仅供只读检查；传给 PathFinder 前必须 clone。
+export function getCachedStaticTravelMatrix(roomName: string): CostMatrix {
   const revision = getRoomTopologyRevision(roomName);
   let cached = travelMatrixCache.get(roomName);
   if (!cached || cached.revision !== revision || Game.time - cached.builtAt > TRAVEL_MATRIX_CACHE_TTL) {
@@ -833,7 +877,11 @@ function buildMultiRoomTravelMatrix(creep: Creep, roomName: string, options: Mov
     travelMatrixCache.set(roomName, cached);
   }
 
-  const result = cached.matrix.clone();
+  return cached.matrix;
+}
+
+function buildMultiRoomTravelMatrix(creep: Creep, roomName: string, options: MoveToTargetOptions): CostMatrix {
+  const result = getCachedStaticTravelMatrix(roomName).clone();
   if (options.ignoreCreeps ?? true) {
     return result;
   }

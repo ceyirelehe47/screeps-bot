@@ -59,6 +59,8 @@ export interface TravelState {
   multiRoomSegment?: MultiRoomTravelSegment;
   /** colonization 共享缓存路径的 per-creep 游标（路径对象本身跨 creep 共享，不能存游标）。 */
   cachedPathCursor?: number;
+  /** 上次跟随的 colonization 缓存路径 key；key 变化（版本升级或重新生成）时重置 cachedPathCursor。 */
+  cachedPathKey?: string;
 }
 
 export interface MovePathState {

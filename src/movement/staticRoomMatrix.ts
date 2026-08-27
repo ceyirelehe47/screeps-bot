@@ -50,7 +50,7 @@ export function collectStaticRoomMatrixSources(room: Room, roomContext: RoomTick
     constructionSites: roomContext?.getConstructionSites() ?? room.find(FIND_CONSTRUCTION_SITES),
     sources: roomContext?.getSources() ?? room.find(FIND_SOURCES),
     minerals: roomContext?.getMinerals() ?? room.find(FIND_MINERALS),
-    deposits: room.find(FIND_DEPOSITS),
+    deposits: roomContext?.getDeposits() ?? room.find(FIND_DEPOSITS),
     controller: room.controller,
   };
 }

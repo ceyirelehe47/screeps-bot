@@ -1,6 +1,7 @@
 import { ensureCreepMovementState, getCreepMovementState } from "@/movement/creepState";
 import { recordMovementMetric } from "@/movement/metrics";
 import { getTickContextService } from "@/runtime/runtimeServices";
+import type { RoomTickContext } from "@/runtime/tickContext";
 import {
   getPositionAtDirection,
   isExitTile,
@@ -231,6 +232,48 @@ function scoreYieldPosition(pos: RoomPosition, blocker: AnyCreep, pusher: AnyCre
   return score;
 }
 
+// Source / Mineral / Deposit / Controller 都是 OBSTACLE_OBJECT_TYPES；Portal
+// 格物理可站但站上即被随机传送。被动让位（push / yield / moveOffExit）绝不
+// 能把 creep 推上这些格子——主动进 Portal 只属于 crossShardTravel 的显式
+// 目标（allowPortalTarget）。索引按 tick 缓存，避免每个候选格重复扫描
+// （数量极少：每房 ≤2 source、≤1 mineral、≤1 deposit、≤1 controller）。
+let naturalObstacleCacheTick = -1;
+const naturalObstacleCache = new Map<string, Set<number>>();
+
+// Test-only reset of the per-tick natural obstacle index; not a runtime API.
+export function clearTrafficNaturalObstacleCacheForTest(): void {
+  naturalObstacleCache.clear();
+  naturalObstacleCacheTick = -1;
+}
+
+function isNaturalObstacleTile(roomContext: RoomTickContext, pos: RoomPosition): boolean {
+  if (naturalObstacleCacheTick !== Game.time) {
+    naturalObstacleCache.clear();
+    naturalObstacleCacheTick = Game.time;
+  }
+
+  let tiles = naturalObstacleCache.get(pos.roomName);
+  if (!tiles) {
+    tiles = new Set<number>();
+    const controller = roomContext.room.controller;
+    if (controller?.pos) {
+      tiles.add(controller.pos.y * 50 + controller.pos.x);
+    }
+    for (const source of roomContext.getSources()) {
+      tiles.add(source.pos.y * 50 + source.pos.x);
+    }
+    for (const mineral of roomContext.getMinerals()) {
+      tiles.add(mineral.pos.y * 50 + mineral.pos.x);
+    }
+    for (const deposit of roomContext.getDeposits()) {
+      tiles.add(deposit.pos.y * 50 + deposit.pos.x);
+    }
+    naturalObstacleCache.set(pos.roomName, tiles);
+  }
+
+  return tiles.has(pos.y * 50 + pos.x);
+}
+
 function isYieldTileWalkable(pos: RoomPosition, blocker: AnyCreep): boolean {
   const blockerRoom = blocker.room;
   if (!blockerRoom || pos.roomName !== blockerRoom.name) {
@@ -245,9 +288,20 @@ function isYieldTileWalkable(pos: RoomPosition, blocker: AnyCreep): boolean {
     return false;
   }
 
+  if (isNaturalObstacleTile(roomContext, pos)) {
+    return false;
+  }
+
   for (const structure of roomContext.getStructures()) {
-    if (structure.pos.x === pos.x && structure.pos.y === pos.y && !isWalkableStructure(structure)) {
-      return false;
+    if (structure.pos.x === pos.x && structure.pos.y === pos.y) {
+      // Portal 物理上可通行（isWalkableStructure=true），但被动让位把 creep
+      // 推上传送门等于将其随机传送，必须在结构可走判定之前显式拒绝。
+      if (structure.structureType === STRUCTURE_PORTAL) {
+        return false;
+      }
+      if (!isWalkableStructure(structure)) {
+        return false;
+      }
     }
   }
 
