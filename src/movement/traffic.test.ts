@@ -62,11 +62,11 @@ function makeCreep(name: string, x: number, y: number, roomName = "W1N1") {
 function planHeadOnStep(creep: Creep, target: RoomPosition): void {
   ensureCreepMovementState(creep).movePathState = {
     key: "head-on",
-    path: "",
     steps: [
       { x: creep.pos.x, y: creep.pos.y },
       { x: target.x, y: target.y },
     ],
+    cursor: -1,
     targetRoom: target.roomName,
     targetX: target.x,
     targetY: target.y,

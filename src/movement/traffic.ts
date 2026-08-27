@@ -132,8 +132,17 @@ function isHeadOnWarDuoSwap(attacker: AnyCreep, healer: AnyCreep): boolean {
 }
 
 function getPlannedNextStep(creep: AnyCreep): { x: number; y: number } | null {
-  const steps = getCreepMovementState(creep)?.movePathState?.steps;
+  const movePathState = getCreepMovementState(creep)?.movePathState;
+  const steps = movePathState?.steps;
   if (!steps || steps.length === 0) return null;
+
+  // 与 pathing.getNextStoredPathStep 相同的游标策略：正常前进只查 cursor 窗口。
+  const cursor = Number.isInteger(movePathState.cursor) ? (movePathState.cursor as number) : -1;
+  const windowEnd = Math.min(steps.length, cursor + 3);
+  for (let index = Math.max(0, cursor); index < windowEnd; index += 1) {
+    const step = steps[index];
+    if (step.x === creep.pos.x && step.y === creep.pos.y) return steps[index + 1] ?? null;
+  }
 
   const exactIndex = steps.findIndex((step) => step.x === creep.pos.x && step.y === creep.pos.y);
   if (exactIndex >= 0) return steps[exactIndex + 1] ?? null;

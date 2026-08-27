@@ -55,12 +55,15 @@ export interface TravelState {
   lastWasExit?: boolean;
   stuckTicks: number;
   multiRoomSegment?: MultiRoomTravelSegment;
+  /** colonization 共享缓存路径的 per-creep 游标（路径对象本身跨 creep 共享，不能存游标）。 */
+  cachedPathCursor?: number;
 }
 
 export interface MovePathState {
   key: string;
-  path: string;
   steps: StoredPathStep[];
+  /** 上次精确命中的 step 下标；正常前进只扫描 cursor 附近，偏离后回退全量恢复。 */
+  cursor: number;
   targetRoom: string;
   targetX: number;
   targetY: number;
@@ -76,7 +79,9 @@ export interface DynamicRouteCacheEntry {
 }
 
 export interface RoomCostMatrixCacheEntry {
-  tick: number;
+  /** 建立缓存时的房间拓扑指纹；变化即失效重建。 */
+  revision: string;
+  builtAt: number;
   matrix: CostMatrix;
 }
 
