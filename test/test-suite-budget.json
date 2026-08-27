@@ -1,26 +1,26 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "c2daef7",
-    "suites": 176,
-    "tests": 556,
-    "passed": 556,
+    "commit": "fd0ac8b",
+    "suites": 178,
+    "tests": 566,
+    "passed": 566,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 176,
-    "tests": 556,
-    "passed": 556,
+    "suites": 178,
+    "tests": 566,
+    "passed": 566,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 33,
-    "defaultFiles": 128
+    "highRiskFiles": 35,
+    "defaultFiles": 130
   },
   "files": {
     "scripts/monitor-service.test.ts": {
@@ -860,7 +860,7 @@
     },
     "src/mount/mountCreep.lifecycleCache.test.ts": {
       "baseline": 6,
-      "budget": 8,
+      "budget": 10,
       "tier": "high-risk"
     },
     "src/movement/pathing.crossTickCache.test.ts": {
@@ -895,10 +895,20 @@
     },
     "src/movement/roomTopologyRevision.test.ts": {
       "baseline": 0,
-      "budget": 3,
+      "budget": 4,
       "tier": "high-risk"
     },
     "src/movement/metrics.flush.test.ts": {
+      "baseline": 0,
+      "budget": 2,
+      "tier": "high-risk"
+    },
+    "src/movement/staticRoomMatrix.test.ts": {
+      "baseline": 0,
+      "budget": 5,
+      "tier": "high-risk"
+    },
+    "src/movement/routing.dynamicObstacles.test.ts": {
       "baseline": 0,
       "budget": 2,
       "tier": "high-risk"
