@@ -4,8 +4,9 @@ import { getTickContextService } from "@/runtime/runtimeServices";
 //
 // 指纹组成（全部是矩阵内容的输入，且获取成本远低于构建矩阵）：
 // - controller level / 所有权（RCL 变化会改变可建结构与 routing 的 controller 区域）；
-// - 结构类型+坐标折叠（矩阵中 road=1 / 非通行 0xff 的全部来源）；
-// - 自家工地类型+坐标折叠（矩阵屏蔽自家工地）；
+// - 结构：逐对象混合 structureType+x+y+可通行状态 后求和（顺序无关，但
+//   对象内部各字段先混合，两个结构交换位置时各自的 hash 都会改变）；
+// - 自家工地：同样的逐对象混合（矩阵屏蔽自家工地）；
 // - RoomPlanner savedAt（getSourceContainerPositionsForRoom 的布局输入）；
 // - 远程采矿任务的 containerPositions 折叠（无实际结构也会被矩阵标记 0xfe）。
 //
@@ -25,8 +26,25 @@ function getStructureTypeCode(structureType: string): number {
   return next;
 }
 
-function foldPosition(total: number, code: number, x: number, y: number): number {
-  return (total + code * 1013 + x * 5179 + y * 65537) | 0;
+// 影响 isWalkableStructure 判定的动态状态：Rampart 的 my/isPublic。
+function getStructureWalkState(structure: Structure<StructureConstant>): number {
+  if (structure.structureType === STRUCTURE_RAMPART) {
+    const rampart = structure as StructureRampart;
+    return (rampart.my ? 1 : 0) | (rampart.isPublic ? 2 : 0);
+  }
+  return 0;
+}
+
+// 逐对象 hash：type/x/y/walkState 先在对象内部混合（乘法散列 + xor），
+// 再累加进折叠和。若对 type、x、y 分别求和，两个不同类型结构交换坐标时
+// 折叠和不变，会漏检拓扑变化。
+function foldTopologyObject(total: number, code: number, x: number, y: number, walkState: number): number {
+  const objectHash =
+    Math.imul(code, 0x9e3779b1) ^
+    Math.imul(x + 1, 0x85ebca6b) ^
+    Math.imul(y + 1, 0xc2b2ae35) ^
+    Math.imul(walkState + 1, 0x27d4eb2f);
+  return (total + objectHash) | 0;
 }
 
 interface RoomTopologyRevisionCache {
@@ -59,7 +77,13 @@ export function getRoomTopologyRevision(roomName: string): string {
     const roomContext = getTickContextService().getRoomContext(room);
     const structures = roomContext?.getStructures() ?? room.find(FIND_STRUCTURES);
     for (const structure of structures) {
-      structureFold = foldPosition(structureFold, getStructureTypeCode(structure.structureType) * 2, structure.pos.x, structure.pos.y);
+      structureFold = foldTopologyObject(
+        structureFold,
+        getStructureTypeCode(structure.structureType) * 2,
+        structure.pos.x,
+        structure.pos.y,
+        getStructureWalkState(structure),
+      );
     }
 
     const sites = roomContext?.getConstructionSites() ?? room.find(FIND_CONSTRUCTION_SITES);
@@ -67,7 +91,13 @@ export function getRoomTopologyRevision(roomName: string): string {
       if (!site.my) {
         continue;
       }
-      siteFold = foldPosition(siteFold, getStructureTypeCode(site.structureType) * 2 + 1, site.pos.x, site.pos.y);
+      siteFold = foldTopologyObject(
+        siteFold,
+        getStructureTypeCode(site.structureType) * 2 + 1,
+        site.pos.x,
+        site.pos.y,
+        0,
+      );
     }
   }
 
@@ -84,7 +114,7 @@ export function getRoomTopologyRevision(roomName: string): string {
         if (pos.roomName !== roomName) {
           continue;
         }
-        remoteContainerFold = foldPosition(remoteContainerFold, 1, pos.x, pos.y);
+        remoteContainerFold = foldTopologyObject(remoteContainerFold, 1, pos.x, pos.y, 0);
       }
     }
   }

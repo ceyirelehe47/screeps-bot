@@ -501,14 +501,19 @@ export function runTowerControl(): void {
     }
     const emergencyRamparts = collectEmergencyRamparts(room);
     const woundedCreeps = (roomContext?.getMyCreeps() || []).filter((creep) => creep.hits < creep.hitsMax);
-    // 普通受损结构扫描按房间 hash 错峰节流（战斗路径不消费该列表）；
-    // 缓存命中时逐 id 现场解析，目标被摧毁/修满立即从候选中消失，
-    // 候选全部耗尽时立即重扫，新损伤最迟在下一个扫描点被发现。
-    const damagedStructures = getTowerDamagedStructures(room, roomContext);
 
     if (runTowerCombat(room, towers, hostiles, woundedCreeps)) {
       continue;
     }
+
+    // 普通受损结构扫描严格放在战斗分支之后：战斗 tick 完全不扫描、不解析。
+    // 扫描策略（无损伤负缓存优先）：
+    // - 上次扫描无损伤：缓存空候选，非扫描点直接返回空，零解析开销；
+    // - 上次扫描有候选：逐 id 现场解析（被摧毁/修满立即退出候选），并在
+    //   TOWER_DAMAGED_RESCAN_WHILE_CANDIDATES tick 内重扫，新受损关键结构
+    //   不会因旧候选存在而延迟多个 tick；
+    // - 候选全部耗尽时立即重扫。
+    const damagedStructures = getTowerDamagedStructures(room, roomContext);
 
     setTowerFocusFront(room.name, undefined);
     const state = ensureTowerCombatRoomState(room.name);
@@ -524,14 +529,25 @@ export function runTowerControl(): void {
 }
 
 interface TowerDamagedScanCacheEntry {
+  /** 最近一次全量扫描的 tick。 */
+  scannedAt: number;
   structureIds: Id<Structure>[];
 }
 
 const TOWER_DAMAGED_SCAN_INTERVAL = 10;
+// 上次扫描存在受损候选时改用更短的重扫间隔：旧候选存在期间，新受损的
+// 关键结构最迟 TOWER_DAMAGED_RESCAN_WHILE_CANDIDATES tick 内被发现。
+const TOWER_DAMAGED_RESCAN_WHILE_CANDIDATES = 2;
+const TOWER_DAMAGED_SCAN_CACHE_MAX = 30;
 const towerDamagedScanCache = new Map<string, TowerDamagedScanCacheEntry>();
 
 export function clearTowerDamagedScanCacheForTest(): void {
   towerDamagedScanCache.clear();
+}
+
+/** 仅供测试观测缓存条目数。 */
+export function getTowerDamagedScanCacheSizeForTest(): number {
+  return towerDamagedScanCache.size;
 }
 
 function isTowerRepairableDamaged(structure: Structure<StructureConstant>): boolean {
@@ -561,6 +577,36 @@ function resolveDamagedStructuresByIds(structureIds: Id<Structure>[]): Structure
   return resolved;
 }
 
+function scanDamagedStructures(
+  room: Room,
+  roomContext: ReturnType<ReturnType<typeof getTickContextService>["getRoomContext"]>,
+): Structure<StructureConstant>[] {
+  const damaged = (roomContext?.getStructures() || []).filter(isTowerRepairableDamaged);
+  towerDamagedScanCache.set(room.name, {
+    scannedAt: Game.time,
+    structureIds: damaged.map((structure) => structure.id),
+  });
+  pruneTowerDamagedScanCache();
+  return damaged;
+}
+
+function pruneTowerDamagedScanCache(): void {
+  if (towerDamagedScanCache.size <= TOWER_DAMAGED_SCAN_CACHE_MAX) {
+    return;
+  }
+  let oldestRoom: string | undefined;
+  let oldestScannedAt = Infinity;
+  for (const [roomName, entry] of towerDamagedScanCache.entries()) {
+    if (entry.scannedAt < oldestScannedAt) {
+      oldestScannedAt = entry.scannedAt;
+      oldestRoom = roomName;
+    }
+  }
+  if (oldestRoom !== undefined) {
+    towerDamagedScanCache.delete(oldestRoom);
+  }
+}
+
 function getTowerDamagedStructures(
   room: Room,
   roomContext: ReturnType<ReturnType<typeof getTickContextService>["getRoomContext"]>,
@@ -571,14 +617,21 @@ function getTowerDamagedStructures(
   const cached = towerDamagedScanCache.get(room.name);
 
   if (cached && !due) {
+    // 无损伤负缓存：空候选在下一个扫描点前直接短路，不做任何解析。
+    if (cached.structureIds.length === 0) {
+      return [];
+    }
     const resolved = resolveDamagedStructuresByIds(cached.structureIds);
-    if (resolved.length > 0 || cached.structureIds.length === 0) {
+    if (resolved.length > 0) {
+      // 旧候选仍在：最多延迟 TOWER_DAMAGED_RESCAN_WHILE_CANDIDATES tick 全量
+      // 重扫一次，保证期间出现的新损伤不被旧候选掩盖多个 tick。
+      if (Game.time - cached.scannedAt >= TOWER_DAMAGED_RESCAN_WHILE_CANDIDATES) {
+        return scanDamagedStructures(room, roomContext);
+      }
       return resolved;
     }
     // 缓存候选全部修满/失效：立即重扫而非等到下一个扫描点。
   }
 
-  const damaged = (roomContext?.getStructures() || []).filter(isTowerRepairableDamaged);
-  towerDamagedScanCache.set(room.name, { structureIds: damaged.map((structure) => structure.id) });
-  return damaged;
+  return scanDamagedStructures(room, roomContext);
 }

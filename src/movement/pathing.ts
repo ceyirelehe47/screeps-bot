@@ -210,7 +210,10 @@ function buildRoomCostMatrix(
     return matrix;
   }
 
-  const roomMatrix = getCachedRoomBaseCostMatrix(creepRoom, roomContext, matrix, options);
+  // fallbackMatrix（引擎传入的矩阵）在 ignoreCreeps=false 时已被引擎写入当
+  // 前 creep/PowerCreep 障碍，绝不能作为跨 tick 缓存的输入；静态矩阵完全由
+  // 自行读取的 terrain + 结构/工地构成，动态 creep 障碍每 tick 在 clone 上叠加。
+  const roomMatrix = getCachedRoomBaseCostMatrix(creepRoom, roomContext, options);
 
   if (options.avoidExitTiles) {
     applyExitTileAvoidance(roomMatrix, targetPos, roomName);
@@ -287,16 +290,18 @@ function applySourceContainerPositionAvoidance(
 function getCachedRoomBaseCostMatrix(
   room: Room,
   roomContext: ReturnType<ReturnType<typeof getTickContextService>["getRoomContext"]>,
-  fallbackMatrix: CostMatrix,
   options: MoveToTargetOptions,
 ): CostMatrix {
   const plainCost = options.plainCost ?? 1;
   const swampCost = options.swampCost ?? 5;
   const cacheKey = `${room.name}:p${plainCost}:s${swampCost}`;
   // 拓扑指纹跨 tick 复用静态矩阵：结构/工地/RCL/planner 保存时间不变即命中，
-  // 指纹变化或 TTL 到期才重建。矩阵只含静态信息（terrain 由 fallbackMatrix
-  // 烘入，creep 等动态障碍由调用方在 clone 上叠加），PathFinder 可能修改
-  // 返回值，因此命中与新建都返回 clone，缓存原件永不外露。
+  // 指纹变化或 TTL 到期才重建。矩阵只含静态信息（terrain 自行从
+  // Game.map.getRoomTerrain 读取，与引擎 fallbackMatrix 完全隔离——后者在
+  // ignoreCreeps=false 时被引擎写入当 tick 的 creep 障碍，缓存它会跨 tick
+  // 污染 ignoreCreeps=true 的请求），creep 等动态障碍由调用方在 clone 上
+  // 叠加，PathFinder 可能修改返回值，因此命中与新建都返回 clone，缓存原件
+  // 永不外露。
   const revision = getRoomTopologyRevision(room.name);
   const cached = roomBaseCostMatrixCache.get(cacheKey);
   if (cached && cached.revision === revision && Game.time - cached.builtAt <= ROOM_BASE_COST_MATRIX_CACHE_TTL) {
@@ -305,7 +310,7 @@ function getCachedRoomBaseCostMatrix(
 
   pruneRoomBaseCostMatrixCache();
 
-  const baseMatrix = fallbackMatrix.clone();
+  const baseMatrix = buildStaticTerrainMatrix(room.name);
   for (const structure of roomContext.getStructures()) {
     if (structure.structureType === STRUCTURE_ROAD) {
       if (baseMatrix.get(structure.pos.x, structure.pos.y) < 0xfe) {
@@ -417,8 +422,22 @@ function getNextStoredPathStep(creep: AnyCreep, movePathState: MovePathState): R
   return new RoomPosition(nextStep.x, nextStep.y, creep.pos.roomName);
 }
 
-function pruneRoomBaseCostMatrixCache(): void {
-  if (roomBaseCostMatrixCache.size === 0) {
+// 静态地形矩阵：wall 置 0xff，其余保持 0（0 表示沿用引擎的 plain/swamp
+// 默认成本）。terrain 是房间不可变数据，因此该矩阵可安全跨 tick 缓存。
+function buildStaticTerrainMatrix(roomName: string): CostMatrix {
+  const matrix = new PathFinder.CostMatrix();
+  const terrain = Game.map.getRoomTerrain(roomName);
+  for (let y = 0; y < 50; y += 1) {
+    for (let x = 0; x < 50; x += 1) {
+      if (terrain.get(x, y) & TERRAIN_MASK_WALL) {
+        matrix.set(x, y, 0xff);
+      }
+    }
+  }
+  return matrix;
+}
+
+function pruneRoomBaseCostMatrixCache(): void {  if (roomBaseCostMatrixCache.size === 0) {
     return;
   }
 

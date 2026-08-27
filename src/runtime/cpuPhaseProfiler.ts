@@ -52,15 +52,50 @@ export function measureCpuPhase<T>(phase: string, fn: () => T): T {
   return activeTickCpuProfiler.measure(phase, fn);
 }
 
+// 逐 creep 细分计时开关（每 tick memo）：与 createTickCpuProfiler 的采样
+// 判定保持一致。关闭（roomRoleAggregation=false / 未启用 / 非采样 tick）时，
+// 三个 creep 细分 helper 直接执行回调，绝不调用 Game.cpu.getUsed。
+let perCreepTimingCache: { tick: number; enabled: boolean } | undefined;
+
+export function isPerCreepPhaseTimingEnabled(): boolean {
+  if (!perCreepTimingCache || perCreepTimingCache.tick !== Game.time) {
+    const config = normalizeCpuMonitorConfig(Memory.cfg?.cpuProfiler);
+    perCreepTimingCache = {
+      tick: Game.time,
+      enabled: config.enabled && config.roomRoleAggregation && Game.time % config.sampleInterval === 0,
+    };
+  }
+  return perCreepTimingCache.enabled;
+}
+
+/** 仅供测试：同一 tick 内切换 Memory.cfg 后强制重算开关。 */
+export function resetPerCreepPhaseTimingCacheForTest(): void {
+  perCreepTimingCache = undefined;
+}
+
 export function measureCreepDecision<T>(fn: () => T): T {
+  if (!isPerCreepPhaseTimingEnabled()) {
+    return fn();
+  }
   return measureCpuPhase("creepWork:decision", fn);
 }
 
 export function measureCreepPathing<T>(fn: () => T): T {
+  if (!isPerCreepPhaseTimingEnabled()) {
+    return fn();
+  }
   return measureCpuPhase("creepWork:pathing", fn);
 }
 
 export function measureCreepIntent<T>(fn: () => T): T {
+  if (!isPerCreepPhaseTimingEnabled()) {
+    // fixed-action count 与计时无关，关闭细分计时时照常记录。
+    const result = fn();
+    if (result === OK) {
+      activeTickCpuProfiler.recordFixedAction("creepWork");
+    }
+    return result;
+  }
   return measureCpuPhase("creepWork:intent", () => {
     const result = fn();
     if (result === OK) {

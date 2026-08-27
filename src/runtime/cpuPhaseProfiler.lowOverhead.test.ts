@@ -4,7 +4,14 @@
  * - roomRoleAggregation=false 时不逐 creep 成对计时；
  * - rolling summary 与批量实现等价；history 上限正确；phase 动态增删正确。
  */
-import { createTickCpuProfiler, setActiveTickCpuProfiler } from "@/runtime/cpuPhaseProfiler";
+import {
+  createTickCpuProfiler,
+  measureCreepDecision,
+  measureCreepIntent,
+  measureCreepPathing,
+  resetPerCreepPhaseTimingCacheForTest,
+  setActiveTickCpuProfiler,
+} from "@/runtime/cpuPhaseProfiler";
 import {
   computeCpuMonitorSummary,
   getCpuMonitorHistory,
@@ -70,6 +77,7 @@ function makeSnapshot(tick: number, phases: Record<string, number>): CpuMonitorS
 describe("cpu profiler low-overhead guarantees", () => {
   beforeEach(() => {
     resetCpuMonitorStore();
+    resetPerCreepPhaseTimingCacheForTest();
     Memory.cfg = undefined;
     Memory.analytics = undefined;
     Game.time = 100;
@@ -146,6 +154,46 @@ describe("cpu profiler low-overhead guarantees", () => {
     // 3 个 creep × 每对 2 次 + 顶层与 flush 的计时。
     expect(getUsed.mock.calls.length).toBeGreaterThanOrEqual(6);
     expect(Object.keys(Memory.analytics?.cpuMonitor?.latest.rooms ?? {})).toContain("W1N1");
+  });
+
+  it("roomRoleAggregation=false 时三个 creep 细分 helper 不调用 Game.cpu.getUsed，fn 与 fixed-action 照常", () => {
+    profilerConfig({ roomRoleAggregation: false, sampleInterval: 1 });
+    Game.time = 100; // sample tick：顶层 measure 仍会计时
+    const { getUsed } = setupCpuMock();
+    const profiler = createTickCpuProfiler();
+    setActiveTickCpuProfiler(profiler);
+
+    const executed: string[] = [];
+    profiler.measure("creepWork", () => {
+      executed.push(measureCreepDecision(() => "decision"));
+      executed.push(measureCreepPathing(() => "pathing"));
+      executed.push(String(measureCreepIntent(() => OK)));
+    });
+    profiler.flush();
+
+    expect(executed).toEqual(["decision", "pathing", String(OK)]);
+    // loopStart(1) + creepWork 成对(2) + flush(1) = 4；三个细分 helper 未新增计时对。
+    expect(getUsed.mock.calls.length).toBe(4);
+    // intent fixed-action count 仍保留。
+    expect(Memory.analytics?.cpuMonitor?.latest.fixedActionCounts?.creepWork).toBe(1);
+  });
+
+  it("roomRoleAggregation=true 时三个 creep 细分 helper 正常计时（对照）", () => {
+    profilerConfig({ roomRoleAggregation: true, sampleInterval: 1 });
+    Game.time = 100;
+    const { getUsed } = setupCpuMock();
+    const profiler = createTickCpuProfiler();
+    setActiveTickCpuProfiler(profiler);
+
+    profiler.measure("creepWork", () => {
+      measureCreepDecision(() => 1);
+      measureCreepPathing(() => 1);
+      measureCreepIntent(() => OK);
+    });
+    profiler.flush();
+
+    // 3 个细分 helper 各贡献一对 getUsed。
+    expect(getUsed.mock.calls.length).toBeGreaterThanOrEqual(8);
   });
 });
 

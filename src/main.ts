@@ -33,7 +33,7 @@ import { runPowerSpawnControl } from "@/runtime/powerSpawnControl";
 import { runNukerControl } from "@/runtime/nukerControl";
 import { refreshWorkerTasks } from "@/runtime/workerTaskPool";
 import { createTickCpuProfiler, setActiveTickCpuProfiler } from "@/runtime/cpuPhaseProfiler";
-import { getMemoryService } from "@/runtime/runtimeServices";
+import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { runHubProgressAnalytics, renderHubProgressOverlays } from "@/runtime/hubProgress";
 import { runRemoteMining } from "@/runtime/remoteMining";
 import { runMarketSalePreflight } from "@/runtime/marketSaleAutomation";
@@ -61,6 +61,9 @@ export function addNumbers(num1: number, num2: number): number {
 function gameLoop(): void {
   const cpuProfiler = createTickCpuProfiler();
   setActiveTickCpuProfiler(cpuProfiler);
+  // 本 tick 的 spawn/creep 快照由 TickContext 统一维护，避免与各模块重复
+  // Object.values 扫描；快照在 tick 内不可变。
+  const tickContext = getTickContextService();
 
   cpuProfiler.measure("announceDeploy", announceDeploy);
   cpuProfiler.measure("marketSalePreflight", runMarketSalePreflight);
@@ -100,12 +103,12 @@ function gameLoop(): void {
   cpuProfiler.measure("scheduleSpawnTasks", scheduleSpawnTasks);
 
   cpuProfiler.measure("spawnWork", () => {
-    Object.values(Game.spawns).forEach((spawn) => {
+    tickContext.getAllSpawns().forEach((spawn) => {
       cpuProfiler.measureRoomPhase("spawnWork", spawn.room.name, () => spawn.work());
     });
   });
   cpuProfiler.measure("creepWork", () => {
-    Object.values(Game.creeps).forEach((creep) => {
+    tickContext.getAllCreeps().forEach((creep) => {
       cpuProfiler.measureCreep(creep, () => creep.work());
     });
   });
