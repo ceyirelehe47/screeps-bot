@@ -1,25 +1,25 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "fd0ac8b",
-    "suites": 178,
-    "tests": 566,
-    "passed": 566,
+    "commit": "f80818d",
+    "suites": 181,
+    "tests": 582,
+    "passed": 582,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 178,
-    "tests": 566,
-    "passed": 566,
+    "suites": 181,
+    "tests": 582,
+    "passed": 582,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 35,
+    "highRiskFiles": 38,
     "defaultFiles": 130
   },
   "files": {
@@ -911,6 +911,21 @@
     "src/movement/routing.dynamicObstacles.test.ts": {
       "baseline": 0,
       "budget": 2,
+      "tier": "high-risk"
+    },
+    "src/movement/routing.cachedPathValidation.test.ts": {
+      "baseline": 4,
+      "budget": 4,
+      "tier": "high-risk"
+    },
+    "src/movement/traffic.naturalObstacles.test.ts": {
+      "baseline": 5,
+      "budget": 5,
+      "tier": "high-risk"
+    },
+    "src/runtime/colonization.travelPath.test.ts": {
+      "baseline": 7,
+      "budget": 7,
       "tier": "high-risk"
     }
   }
