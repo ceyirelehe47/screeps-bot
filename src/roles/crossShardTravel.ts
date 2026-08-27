@@ -57,7 +57,14 @@ export function moveToCrossShardTarget(
       return false;
     }
 
-    moveToTarget(creep, portal, 0, { plainCost: 2, swampCost: 8, reusePath: 3, maxRooms: 1 });
+    // range=0 要求踏上 Portal 本体：静态矩阵默认把 Portal 当障碍，必须显式豁免目标格。
+    moveToTarget(creep, portal, 0, {
+      plainCost: 2,
+      swampCost: 8,
+      reusePath: 3,
+      maxRooms: 1,
+      allowPortalTarget: true,
+    });
     return false;
   }
 

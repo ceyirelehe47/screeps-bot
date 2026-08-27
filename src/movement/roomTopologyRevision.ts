@@ -7,6 +7,7 @@ import { getTickContextService } from "@/runtime/runtimeServices";
 // - 结构：逐对象混合 structureType+x+y+可通行状态 后求和（顺序无关，但
 //   对象内部各字段先混合，两个结构交换位置时各自的 hash 都会改变）；
 // - 自家工地：同样的逐对象混合（矩阵屏蔽自家工地）；
+// - Deposit：逐对象混合（会中途出现/消失，静态矩阵按 0xff 屏蔽）；
 // - RoomPlanner savedAt（getSourceContainerPositionsForRoom 的布局输入）；
 // - 远程采矿任务的 containerPositions 折叠（无实际结构也会被矩阵标记 0xfe）。
 //
@@ -67,6 +68,7 @@ export function getRoomTopologyRevision(roomName: string): string {
   const room = Game.rooms[roomName];
   let structureFold = 0;
   let siteFold = 0;
+  let depositFold = 0;
   let controllerLevel = -1;
   let controllerOwned = 0;
 
@@ -99,6 +101,20 @@ export function getRoomTopologyRevision(roomName: string): string {
         0,
       );
     }
+
+    // Deposit 会中途出现/消失（采空后冷却重生），静态矩阵按 0xff 屏蔽，
+    // 指纹必须覆盖其存在与位置。Source/Mineral/Controller 位置在房间生成
+    // 后恒定，首次可见构建后不会变化，无需进入指纹。Portal 是 Structure，
+    // 已随结构折叠覆盖出现/消失。
+    for (const deposit of room.find(FIND_DEPOSITS)) {
+      depositFold = foldTopologyObject(
+        depositFold,
+        getStructureTypeCode("deposit") * 2 + 1,
+        deposit.pos.x,
+        deposit.pos.y,
+        0,
+      );
+    }
   }
 
   const savedAt = Memory.data?.roomPlanner?.[roomName]?.savedAt ?? 0;
@@ -119,7 +135,7 @@ export function getRoomTopologyRevision(roomName: string): string {
     }
   }
 
-  const revision = `${controllerLevel}|${controllerOwned}|${structureFold}|${siteFold}|${savedAt}|${remoteContainerFold}`;
+  const revision = `${controllerLevel}|${controllerOwned}|${structureFold}|${siteFold}|${depositFold}|${savedAt}|${remoteContainerFold}`;
   revisionCache.revisions.set(roomName, revision);
   return revision;
 }

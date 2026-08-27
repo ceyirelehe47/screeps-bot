@@ -92,4 +92,36 @@ describe("getRoomTopologyRevision", () => {
     ]);
     expect(getRoomTopologyRevision("W1N1")).not.toBe(before);
   });
+
+  it("changes when a deposit appears, moves or disappears", () => {
+    let deposits: Array<{ pos: { x: number; y: number } }> = [];
+    const room = createRoom("W1N1");
+    room.find = jest.fn((findConstant: number) => {
+      if (findConstant === FIND_DEPOSITS) {
+        return deposits as unknown as Deposit[];
+      }
+      return [];
+    }) as unknown as Room["find"];
+
+    const withoutDeposit = getRoomTopologyRevision("W1N1");
+
+    Game.time += 1;
+    clearRoomTopologyRevisionCacheForTest();
+    deposits = [{ pos: { x: 10, y: 10 } }];
+    expect(getRoomTopologyRevision("W1N1")).not.toBe(withoutDeposit);
+
+    Game.time += 1;
+    clearRoomTopologyRevisionCacheForTest();
+    deposits = [{ pos: { x: 12, y: 12 } }];
+    const moved = getRoomTopologyRevision("W1N1");
+    expect(moved).not.toBe(withoutDeposit);
+
+    Game.time += 1;
+    clearRoomTopologyRevisionCacheForTest();
+    deposits = [];
+    const disappeared = getRoomTopologyRevision("W1N1");
+    expect(disappeared).not.toBe(moved);
+    // 折叠是确定性的：无 Deposit 状态恢复与最初一致的指纹。
+    expect(disappeared).toBe(withoutDeposit);
+  });
 });

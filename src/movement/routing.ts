@@ -2,10 +2,15 @@ import { measureCreepIntent, measureCreepPathing } from "@/runtime/cpuPhaseProfi
 import { ensureCreepMovementState } from "@/movement/creepState";
 import { getTickContextService } from "@/runtime/runtimeServices";
 import { getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
-import { getPosKey, isExitTile, isWalkableConstructionSite, isWalkableStructure, parseEncodedRouteRooms } from "@/movement/common";
+import { getPosKey, isExitTile, parseEncodedRouteRooms } from "@/movement/common";
 import { recordMovementMetric } from "@/movement/metrics";
 import { moveToTarget } from "@/movement/pathing";
 import { moveOffExit, moveToAdjacentPosition } from "@/movement/traffic";
+import {
+  TERRAIN_ONLY_ROOM_MATRIX_SOURCES,
+  buildStaticRoomCostMatrix,
+  collectStaticRoomMatrixSources,
+} from "@/movement/staticRoomMatrix";
 import { getSourceContainerPositionsForRoom } from "@/runtime/roomPlannerConstruction";
 import type {
   CachedTravelPath,
@@ -27,10 +32,11 @@ const MULTI_ROOM_SEGMENT_MAX_STEPS = 100;
 const dynamicNextRoomCache: Record<string, DynamicRouteCacheEntry> = {};
 let liveRoomSafetyCacheTick = -1;
 let liveRoomSafetyCache: Record<string, boolean> = {};
-// 跨房旅行矩阵的静态部分（structures/sites/source containers/controller
-// 区域）按拓扑指纹跨 tick 复用：指纹（RCL/结构/工地折叠/savedAt/远采容器）
-// 不变即命中；指纹变化或 TTL 到期重建。矩阵只含静态信息，PathFinder 可能
-// 修改 roomCallback 返回的矩阵，因此每次返回 clone 再叠加 creep 位。
+// 跨房旅行矩阵的静态部分（共用静态障碍层 + source containers/controller
+// 区域回避）按拓扑指纹跨 tick 复用：指纹（RCL/结构/工地折叠/Deposit 折叠/
+// savedAt/远采容器）不变即命中；指纹变化或 TTL 到期重建。矩阵只含静态信息，
+// PathFinder 可能修改 roomCallback 返回的矩阵，因此每次返回 clone 再叠加
+// ignoreCreeps=false 时的 creep/PowerCreep 动态障碍。
 const TRAVEL_MATRIX_CACHE_MAX = 64;
 const TRAVEL_MATRIX_CACHE_TTL = 100;
 const travelMatrixCache = new Map<
@@ -798,52 +804,15 @@ function buildMultiRoomTravelMatrix(creep: Creep, roomName: string, options: Mov
   let cached = travelMatrixCache.get(roomName);
   if (!cached || cached.revision !== revision || Game.time - cached.builtAt > TRAVEL_MATRIX_CACHE_TTL) {
     const room = Game.rooms[roomName];
-    const matrix = new PathFinder.CostMatrix();
+    // 与单房移动共用同一套静态障碍语义（terrain wall / Source / Mineral /
+    // Deposit / Controller / Portal / 不可通行结构与工地 / road 成本），
+    // 跨房矩阵在此基础上叠加 controller 周边回避与 source container 预留。
+    const matrix = room
+      ? buildStaticRoomCostMatrix(roomName, collectStaticRoomMatrixSources(room, getTickContextService().getRoomContext(room)))
+      : buildStaticRoomCostMatrix(roomName, TERRAIN_ONLY_ROOM_MATRIX_SOURCES);
     if (room) {
-      const roomContext = getTickContextService().getRoomContext(room);
-      const structures = roomContext?.getStructures() ?? room.find(FIND_STRUCTURES);
-      for (const structure of structures) {
-        if (structure.structureType === STRUCTURE_ROAD) {
-          matrix.set(structure.pos.x, structure.pos.y, 1);
-          continue;
-        }
-        if (!isWalkableStructure(structure)) {
-          matrix.set(structure.pos.x, structure.pos.y, 0xff);
-        }
-      }
-
-      const sites = roomContext?.getConstructionSites() ?? room.find(FIND_CONSTRUCTION_SITES);
-      for (const site of sites) {
-        if (!site.my) {
-          continue;
-        }
-        if (!isWalkableConstructionSite(site)) {
-          matrix.set(site.pos.x, site.pos.y, 0xff);
-        } else if (site.structureType === STRUCTURE_ROAD) {
-          matrix.set(site.pos.x, site.pos.y, 1);
-        }
-      }
-
-      for (const pos of getSourceContainerPositionsForRoom(roomName)) {
-        if (matrix.get(pos.x, pos.y) < 0xfe) {
-          matrix.set(pos.x, pos.y, 0xfe);
-        }
-      }
-
-      if (room.controller?.my) {
-        const cPos = room.controller.pos;
-        for (let dx = -3; dx <= 3; dx += 1) {
-          for (let dy = -3; dy <= 3; dy += 1) {
-            if (Math.max(Math.abs(dx), Math.abs(dy)) > 3) continue;
-            const x = cPos.x + dx;
-            const y = cPos.y + dy;
-            if (x < 1 || x > 48 || y < 1 || y > 48) continue;
-            if (matrix.get(x, y) < 0xfe) {
-              matrix.set(x, y, 0xfe);
-            }
-          }
-        }
-      }
+      applyControllerZoneAvoidance(matrix, room);
+      applySourceContainerAvoidance(matrix, roomName);
     }
     cached = { revision, builtAt: Game.time, matrix };
     travelMatrixBuildCount += 1;
@@ -869,19 +838,73 @@ function buildMultiRoomTravelMatrix(creep: Creep, roomName: string, options: Mov
     return result;
   }
 
+  return applyDynamicCreepObstacles(result, creep, roomName);
+}
+
+// controller 是我方时回避其周边区域，避免远行 creep 停在 controller 附近
+// 堵塞升级位（跨房矩阵特有叠加，单房移动不含）。
+function applyControllerZoneAvoidance(matrix: CostMatrix, room: Room): void {
+  if (!room.controller?.my) {
+    return;
+  }
+  const cPos = room.controller.pos;
+  for (let dx = -3; dx <= 3; dx += 1) {
+    for (let dy = -3; dy <= 3; dy += 1) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > 3) continue;
+      const x = cPos.x + dx;
+      const y = cPos.y + dy;
+      if (x < 1 || x > 48 || y < 1 || y > 48) continue;
+      if (matrix.get(x, y) < 0xfe) {
+        matrix.set(x, y, 0xfe);
+      }
+    }
+  }
+}
+
+function applySourceContainerAvoidance(matrix: CostMatrix, roomName: string): void {
+  for (const pos of getSourceContainerPositionsForRoom(roomName)) {
+    if (matrix.get(pos.x, pos.y) < 0xfe) {
+      matrix.set(pos.x, pos.y, 0xfe);
+    }
+  }
+}
+
+// ignoreCreeps=false：在 clone 上叠加当 tick全部动态障碍——己方/敌方普通
+// creep 与己方/敌方 PowerCreep。缓存中的静态矩阵绝不携带这些值，creep
+// 消失后下一 tick 的 clone 自动恢复正确静态成本。
+function applyDynamicCreepObstacles(matrix: CostMatrix, creep: Creep, roomName: string): CostMatrix {
   const room = Game.rooms[roomName];
   if (!room) {
-    return result;
+    return matrix;
   }
   const roomContext = getTickContextService().getRoomContext(room);
-  const creeps = roomContext?.getMyCreeps() ?? room.find(FIND_MY_CREEPS);
-  for (const otherCreep of creeps) {
+
+  const myCreeps = roomContext?.getMyCreeps() ?? room.find(FIND_MY_CREEPS);
+  for (const otherCreep of myCreeps) {
     if (otherCreep.name !== creep.name) {
-      result.set(otherCreep.pos.x, otherCreep.pos.y, 0xfe);
+      matrix.set(otherCreep.pos.x, otherCreep.pos.y, 0xfe);
     }
   }
 
-  return result;
+  const hostileCreeps = roomContext?.getHostileCreeps() ?? room.find(FIND_HOSTILE_CREEPS);
+  for (const hostileCreep of hostileCreeps) {
+    matrix.set(hostileCreep.pos.x, hostileCreep.pos.y, 0xfe);
+  }
+
+  const hostilePowerCreeps = roomContext?.getHostilePowerCreeps() ?? room.find(FIND_HOSTILE_POWER_CREEPS);
+  for (const hostilePowerCreep of hostilePowerCreeps) {
+    matrix.set(hostilePowerCreep.pos.x, hostilePowerCreep.pos.y, 0xfe);
+  }
+
+  // Game.powerCreeps 只含己方 PowerCreep（敌方走 FIND_HOSTILE_POWER_CREEPS）。
+  for (const otherPowerCreep of Object.values(Game.powerCreeps || {})) {
+    if (otherPowerCreep.name === creep.name || otherPowerCreep.ticksToLive == null || otherPowerCreep.room?.name !== roomName) {
+      continue;
+    }
+    matrix.set(otherPowerCreep.pos.x, otherPowerCreep.pos.y, 0xfe);
+  }
+
+  return matrix;
 }
 
 function getTravelState(creep: Creep, targetRoom: string): TravelState {

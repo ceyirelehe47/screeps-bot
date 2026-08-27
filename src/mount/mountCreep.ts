@@ -52,7 +52,7 @@ interface RoleLifecycleCacheEntry {
   lastUsedAt: number;
 }
 
-const ROLE_LIFECYCLE_CACHE_MAX = 64;
+const ROLE_LIFECYCLE_CACHE_MAX = 256;
 const roleLifecycleCache = new Map<string, RoleLifecycleCacheEntry>();
 
 export function clearRoleLifecycleCacheForTest(): void {
@@ -65,7 +65,9 @@ export function getRoleLifecycleCacheSizeForTest(): number {
 }
 
 function roleArgsSignature(args: readonly string[]): string {
-  return args.map((arg) => arg ?? "").join("");
+  // JSON 编码带元素定界，["a,b"] 与 ["a","b"] 等拼接碰撞对必须产生不同
+  // 签名；nullish 归一为空串，保证输入始终可序列化且稳定。
+  return JSON.stringify(args.map((arg) => arg ?? ""));
 }
 
 function isCacheEntryCurrent(entry: RoleLifecycleCacheEntry, role: string, args: readonly string[]): boolean {
