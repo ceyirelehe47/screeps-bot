@@ -35,37 +35,40 @@ function tryRestoreRoleFromName(creep: Creep): boolean {
  * creep.memory 或 runtime 服务中），同一 config / role+args 签名的多个
  * creep 可安全共享同一实例，避免每 creep 每 tick 重建对象和闭包。
  *
- * 失效条件：
- * - config 路径：CreepConfigService.get 返回的 config 对象引用变化（upsert
- *   在内容不变时保持对象引用不变）或 role/args 逐元素不一致（防御原地改写）；
+ * 失效条件（全部基于稳定的值签名，不依赖对象引用）：
+ * - config 路径：configName + role + args 逐元素比较（CreepConfig 只有
+ *   role/args/roomName 三个字段，factory 只消费 role/args；Memory 对象
+ *   每 tick 可能被替换为等价新引用，引用相等会漏命中）；
  * - memory 路径：签名 key 由当前 role+roleArgs 现场计算，天然随 memory 变化；
  * - global reset：模块级缓存随代码重载一并消失。
  *
- * 容量：以 config 数量与 memory 角色签名数量为界，均由游戏内实体数天然限制。
+ * 容量：ROLE_LIFECYCLE_CACHE_MAX 上限 + lastUsedAt LRU 淘汰，防止历史
+ * config / 临时 fallback 签名无限增长。
  */
 interface RoleLifecycleCacheEntry {
-  configRef?: unknown;
   role: string;
   args: readonly string[];
   lifecycle: ReturnType<RoleFactory>;
+  lastUsedAt: number;
 }
 
+const ROLE_LIFECYCLE_CACHE_MAX = 64;
 const roleLifecycleCache = new Map<string, RoleLifecycleCacheEntry>();
 
 export function clearRoleLifecycleCacheForTest(): void {
   roleLifecycleCache.clear();
 }
 
-function roleArgsSignature(args: readonly string[]): string {
-  return args.map((arg) => arg ?? "").join("");
+/** 仅供测试观测缓存条目数。 */
+export function getRoleLifecycleCacheSizeForTest(): number {
+  return roleLifecycleCache.size;
 }
 
-function isCacheEntryCurrent(
-  entry: RoleLifecycleCacheEntry,
-  configRef: unknown | undefined,
-  role: string,
-  args: readonly string[],
-): boolean {
+function roleArgsSignature(args: readonly string[]): string {
+  return args.map((arg) => arg ?? "").join("");
+}
+
+function isCacheEntryCurrent(entry: RoleLifecycleCacheEntry, role: string, args: readonly string[]): boolean {
   if (entry.role !== role || entry.args.length !== args.length) {
     return false;
   }
@@ -74,12 +77,28 @@ function isCacheEntryCurrent(
       return false;
     }
   }
-  return entry.configRef === configRef;
+  return true;
+}
+
+function evictLeastRecentlyUsedRoleLifecycles(): void {
+  while (roleLifecycleCache.size > ROLE_LIFECYCLE_CACHE_MAX) {
+    let oldestKey: string | undefined;
+    let oldestUsedAt = Infinity;
+    for (const [key, entry] of roleLifecycleCache.entries()) {
+      if (entry.lastUsedAt < oldestUsedAt) {
+        oldestUsedAt = entry.lastUsedAt;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey === undefined) {
+      break;
+    }
+    roleLifecycleCache.delete(oldestKey);
+  }
 }
 
 function getOrCreateRoleLifecycle(
   cacheKey: string,
-  configRef: unknown | undefined,
   role: string,
   args: readonly string[],
 ): ReturnType<RoleFactory> | null {
@@ -90,17 +109,19 @@ function getOrCreateRoleLifecycle(
   }
 
   const cached = roleLifecycleCache.get(cacheKey);
-  if (cached && isCacheEntryCurrent(cached, configRef, role, args)) {
+  if (cached && isCacheEntryCurrent(cached, role, args)) {
+    cached.lastUsedAt = Game.time;
     return cached.lifecycle;
   }
 
   const lifecycle = roleFactory(...args);
   roleLifecycleCache.set(cacheKey, {
-    ...(configRef === undefined ? {} : { configRef }),
     role,
     args: [...args],
     lifecycle,
+    lastUsedAt: Game.time,
   });
+  evictLeastRecentlyUsedRoleLifecycles();
   return lifecycle;
 }
 
@@ -110,10 +131,10 @@ function resolveRoleLogic(creep: Creep): ReturnType<(typeof roleRegistry)[keyof 
   if (configName) {
     const config = creepConfigs.get(configName);
     if (config) {
-      // config 引用相等 + role/args 一致 ⇔ factory 输出等价，直接复用。
+      // configName+role+args 值签名一致 ⇔ factory 输出等价，直接复用；
+      // 不比较对象引用（Memory 每 tick 重解析后引用不稳定）。
       return getOrCreateRoleLifecycle(
         `config:${configName}`,
-        config,
         config.role,
         config.args,
       );
@@ -129,7 +150,6 @@ function resolveRoleLogic(creep: Creep): ReturnType<(typeof roleRegistry)[keyof 
       if (restoredRole) {
         return getOrCreateRoleLifecycle(
           `memory:${restoredRole}|${roleArgsSignature(creep.memory.roleArgs || [])}`,
-          undefined,
           restoredRole,
           creep.memory.roleArgs || [],
         );
@@ -141,7 +161,6 @@ function resolveRoleLogic(creep: Creep): ReturnType<(typeof roleRegistry)[keyof 
 
   return getOrCreateRoleLifecycle(
     `memory:${memoryRole}|${roleArgsSignature(creep.memory.roleArgs || [])}`,
-    undefined,
     memoryRole,
     creep.memory.roleArgs || [],
   );

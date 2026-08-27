@@ -82,7 +82,7 @@ interface TickContextSnapshot {
   roomContexts?: Map<string, RoomTickContext>;
 }
 
-const EMPTY_STRUCTURES: Structure<StructureConstant>[] = [];
+const EMPTY_STRUCTURES: Structure<StructureConstant>[] = Object.freeze([]) as Structure<StructureConstant>[];
 
 function createRoomTickContext(room: Room): RoomTickContext {
   let structures: Structure<StructureConstant>[] | undefined;
@@ -302,7 +302,7 @@ export function createTickContextService(): TickContextService {
     const spawnsByRoom = new Map<string, StructureSpawn[]>();
     const primarySpawnByRoom = new Map<string, StructureSpawn>();
 
-    for (const spawn of Object.values(Game.spawns)) {
+    for (const spawn of ensureAllSpawns(current)) {
       const roomSpawns = spawnsByRoom.get(spawn.room.name);
       if (roomSpawns) {
         roomSpawns.push(spawn);
@@ -330,7 +330,7 @@ export function createTickContextService(): TickContextService {
     const creepsByRole = new Map<string, Creep[]>();
     const creepsByRoom = new Map<string, Creep[]>();
 
-    for (const creep of Object.values(Game.creeps)) {
+    for (const creep of ensureAllCreeps(current)) {
       const configName = creep.memory.configName;
       if (typeof configName === "string") {
         const byConfig = creepsByConfigName.get(configName);

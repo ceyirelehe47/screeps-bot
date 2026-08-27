@@ -4,7 +4,7 @@
  * config 变更/删除、fallback memory role、cross-shard 恢复均正确失效。
  */
 import { mountCreep } from "@/mount/mountCreep";
-import { clearRoleLifecycleCacheForTest } from "@/mount/mountCreep";
+import { clearRoleLifecycleCacheForTest, getRoleLifecycleCacheSizeForTest } from "@/mount/mountCreep";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { clearCreepMovementStateForTest } from "@/movement/creepState";
 import type { RoleName } from "@/types/system";
@@ -180,5 +180,35 @@ describe("role lifecycle cache", () => {
 
     work(traveler);
     expect(__factoryCallCounts.crossShardClaimer).toBe(1);
+  });
+
+  it("config 对象每 tick 被替换为等价新引用时仍命中缓存", () => {
+    installConfig("W1N1:worker:1", "worker", ["arg-a"]);
+    const creep = createCreep("creep-one", { configName: "W1N1:worker:1" });
+    work(creep);
+    expect(__factoryCallCounts.worker).toBe(1);
+
+    // 模拟 Memory 每 tick 重解析：重建 runtime 服务（等价于新的 Memory 对象
+    // 引用），config 内容不变但对象引用不同，缓存仍应命中。
+    resetRuntimeServices();
+    installConfig("W1N1:worker:1", "worker", ["arg-a"]);
+    Game.time += 1;
+    work(creep);
+    Game.time += 1;
+    work(creep);
+
+    expect(__factoryCallCounts.worker).toBe(1);
+  });
+
+  it("历史 memory 签名不会让缓存无限增长", () => {
+    const ROLE_LIFECYCLE_CACHE_MAX = 64;
+    // 持续写入互不相同的 memory role 签名，模拟临时 fallback 角色。
+    for (let index = 0; index < ROLE_LIFECYCLE_CACHE_MAX * 3; index += 1) {
+      const creep = createCreep(`temp-${index}`, { role: "worker", roleArgs: [`sig-${index}`] });
+      work(creep);
+    }
+
+    expect(getRoleLifecycleCacheSizeForTest()).toBeLessThanOrEqual(ROLE_LIFECYCLE_CACHE_MAX);
+    expect(__factoryCallCounts.worker).toBe(ROLE_LIFECYCLE_CACHE_MAX * 3);
   });
 });

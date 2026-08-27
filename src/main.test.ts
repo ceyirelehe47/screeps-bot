@@ -137,7 +137,7 @@ describe("main loop phase ordering", () => {
 
   function expectWrappedForEach(options: {
     phase: "spawnWork" | "creepWork";
-    collection: "spawns" | "creeps";
+    collectionExpression: string;
     entity: "spawn" | "creep";
     wrapper: "measureRoomPhase" | "measureCreep";
     wrapperPrefixArguments: string[];
@@ -158,9 +158,9 @@ describe("main loop phase ordering", () => {
       return;
     }
     const forEachCall = forEachStatement.expression;
-    expect(forEachCall.expression.getText(mainAst)).toBe(
-      `Object.values(Game.${options.collection}).forEach`,
-    );
+    // creepWork/spawnWork 遍历 TickContext 的本 tick 快照（getAllCreeps/
+    // getAllSpawns），而不是各自再扫一遍 Object.values(Game.*)。
+    expect(forEachCall.expression.getText(mainAst)).toBe(options.collectionExpression);
     expect(forEachCall.arguments).toHaveLength(1);
     const entityCallback = forEachCall.arguments[0];
     expect(ts.isArrowFunction(entityCallback)).toBe(true);
@@ -277,7 +277,7 @@ describe("main loop phase ordering", () => {
   it("spawnWork wraps each spawn.work() with measureRoomPhase", () => {
     expectWrappedForEach({
       phase: "spawnWork",
-      collection: "spawns",
+      collectionExpression: "tickContext.getAllSpawns().forEach",
       entity: "spawn",
       wrapper: "measureRoomPhase",
       wrapperPrefixArguments: ['"spawnWork"', "spawn.room.name"],
@@ -287,7 +287,7 @@ describe("main loop phase ordering", () => {
   it("creepWork wraps each creep.work() with measureCreep", () => {
     expectWrappedForEach({
       phase: "creepWork",
-      collection: "creeps",
+      collectionExpression: "tickContext.getAllCreeps().forEach",
       entity: "creep",
       wrapper: "measureCreep",
       wrapperPrefixArguments: ["creep"],

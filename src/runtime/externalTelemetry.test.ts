@@ -288,8 +288,10 @@ describe("runExternalTelemetryExport movement analytics", () => {
     recordMovementMetric("multiRoomSegmentHits", "W9N9", Number.POSITIVE_INFINITY);
     recordMovementMetric("multiRoomSegmentHits", "W9N9", Number.NaN);
 
-    expect(analytics.totals.multiRoomSegmentHits).toBe(Number.MAX_SAFE_INTEGER);
-    expect(analytics.rooms.W9N9.multiRoomSegmentHits).toBe(Number.MAX_SAFE_INTEGER);
+    // pending 跨 tick 聚合，同一 tick 内显式读取强制 flush 后观察。
+    const updated = getMovementAnalyticsForTest();
+    expect(updated.totals.multiRoomSegmentHits).toBe(Number.MAX_SAFE_INTEGER);
+    expect(updated.rooms.W9N9.multiRoomSegmentHits).toBe(Number.MAX_SAFE_INTEGER);
   });
 });
 
