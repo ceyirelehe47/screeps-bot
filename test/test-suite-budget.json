@@ -1,25 +1,25 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "32a6b98",
-    "suites": 174,
-    "tests": 542,
-    "passed": 542,
+    "commit": "c2daef7",
+    "suites": 176,
+    "tests": 556,
+    "passed": 556,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 174,
-    "tests": 542,
-    "passed": 542,
+    "suites": 176,
+    "tests": 556,
+    "passed": 556,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 31,
+    "highRiskFiles": 33,
     "defaultFiles": 128
   },
   "files": {
@@ -55,7 +55,7 @@
     },
     "src/movement/pathing.test.ts": {
       "baseline": 6,
-      "budget": 2,
+      "budget": 3,
       "tier": "default-max-2"
     },
     "src/movement/routing.segmentCache.test.ts": {
@@ -860,7 +860,7 @@
     },
     "src/mount/mountCreep.lifecycleCache.test.ts": {
       "baseline": 6,
-      "budget": 6,
+      "budget": 8,
       "tier": "high-risk"
     },
     "src/movement/pathing.crossTickCache.test.ts": {
@@ -880,7 +880,7 @@
     },
     "src/runtime/cpuPhaseProfiler.lowOverhead.test.ts": {
       "baseline": 6,
-      "budget": 6,
+      "budget": 8,
       "tier": "high-risk"
     },
     "src/runtime/tickContext.typedIndex.test.ts": {
@@ -890,6 +890,16 @@
     },
     "src/runtime/towerControl.scanThrottle.test.ts": {
       "baseline": 2,
+      "budget": 6,
+      "tier": "high-risk"
+    },
+    "src/movement/roomTopologyRevision.test.ts": {
+      "baseline": 0,
+      "budget": 3,
+      "tier": "high-risk"
+    },
+    "src/movement/metrics.flush.test.ts": {
+      "baseline": 0,
       "budget": 2,
       "tier": "high-risk"
     }
