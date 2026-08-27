@@ -4,7 +4,7 @@ import { isRcl3ExtensionBuildoutComplete } from "@/runtime/roomPlannerConstructi
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { clearWarRoomTask, isWarRoomClearDone, requestWarRoomClear } from "@/runtime/warControl";
 import { isDefenseMode } from "@/runtime/defenseMode";
-import { getColonizationTravelPathKey } from "@/movement/routing";
+import { getCachedStaticTravelMatrix, getColonizationTravelPathKey } from "@/movement/routing";
 import type { CachedTravelPath, StoredRoomPosition } from "@/movement/types";
 
 type ColonizationStatus = "claiming" | "clearing" | "waiting_plan" | "bootstrapping" | "managed";
@@ -545,7 +545,8 @@ function estimateRouteLengthInner(task: ColonizationTask, routeRooms: string[]):
           return false;
         }
 
-        return new PathFinder.CostMatrix();
+        // 与持久路径生成同一套静态矩阵，估算长度才会反映真实可走性。
+        return getCachedStaticTravelMatrix(roomName).clone();
       },
     },
   );
@@ -734,7 +735,12 @@ function createTravelPathRoomCallback(task: ColonizationTask, routeRooms: string
       return false;
     }
 
-    return new PathFinder.CostMatrix();
+    // 返回空 CostMatrix 不会让引擎补回默认障碍（Source/Mineral/Deposit/
+    // Controller/Portal/不可通行结构都会被穿过），持久路径必须与实时跨房
+    // 移动共用同一套静态矩阵。矩阵按拓扑指纹跨 tick 缓存且不含动态 creep
+    // （持久路径不能烘入当 tick 的 creep 位置）；不可见房间由其内部退化为
+    // terrain-only。PathFinder 可能改写返回的矩阵，因此传 clone。
+    return getCachedStaticTravelMatrix(roomName).clone();
   };
 }
 

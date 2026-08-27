@@ -42,6 +42,7 @@ export interface RoomTickContext {
   getConstructionSites(): ConstructionSite[];
   getSources(): Source[];
   getMinerals(): Mineral[];
+  getDeposits(): Deposit[];
   getHostileCreeps(): Creep[];
   getHostilePowerCreeps(): PowerCreep[];
   getHostileStructures(): Structure<StructureConstant>[];
@@ -93,6 +94,7 @@ function createRoomTickContext(room: Room): RoomTickContext {
   let constructionSites: ConstructionSite[] | undefined;
   let sources: Source[] | undefined;
   let minerals: Mineral[] | undefined;
+  let deposits: Deposit[] | undefined;
   let hostileCreeps: Creep[] | undefined;
   let hostilePowerCreeps: PowerCreep[] | undefined;
   let hostileStructures: Structure<StructureConstant>[] | undefined;
@@ -178,6 +180,12 @@ function createRoomTickContext(room: Room): RoomTickContext {
         minerals = room.find(FIND_MINERALS);
       }
       return minerals;
+    },
+    getDeposits(): Deposit[] {
+      if (!deposits) {
+        deposits = room.find(FIND_DEPOSITS);
+      }
+      return deposits;
     },
     getHostileCreeps(): Creep[] {
       if (!hostileCreeps) {
