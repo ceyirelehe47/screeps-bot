@@ -1,26 +1,26 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "47478c2",
-    "suites": 167,
-    "tests": 1491,
-    "passed": 1491,
+    "commit": "258c712",
+    "suites": 181,
+    "tests": 582,
+    "passed": 582,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 167,
-    "tests": 500,
-    "passed": 500,
+    "suites": 181,
+    "tests": 582,
+    "passed": 582,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 24,
-    "defaultFiles": 128
+    "highRiskFiles": 38,
+    "defaultFiles": 130
   },
   "files": {
     "scripts/monitor-service.test.ts": {
@@ -55,7 +55,7 @@
     },
     "src/movement/pathing.test.ts": {
       "baseline": 6,
-      "budget": 2,
+      "budget": 3,
       "tier": "default-max-2"
     },
     "src/movement/routing.segmentCache.test.ts": {
@@ -857,6 +857,76 @@
       "baseline": 3,
       "budget": 3,
       "tier": "protected-full"
+    },
+    "src/mount/mountCreep.lifecycleCache.test.ts": {
+      "baseline": 6,
+      "budget": 10,
+      "tier": "high-risk"
+    },
+    "src/movement/pathing.crossTickCache.test.ts": {
+      "baseline": 14,
+      "budget": 14,
+      "tier": "high-risk"
+    },
+    "src/roles/carrier.bestCandidate.test.ts": {
+      "baseline": 4,
+      "budget": 4,
+      "tier": "high-risk"
+    },
+    "src/runtime/carrierTaskBoard.revisionCache.test.ts": {
+      "baseline": 6,
+      "budget": 6,
+      "tier": "high-risk"
+    },
+    "src/runtime/cpuPhaseProfiler.lowOverhead.test.ts": {
+      "baseline": 6,
+      "budget": 8,
+      "tier": "high-risk"
+    },
+    "src/runtime/tickContext.typedIndex.test.ts": {
+      "baseline": 4,
+      "budget": 4,
+      "tier": "high-risk"
+    },
+    "src/runtime/towerControl.scanThrottle.test.ts": {
+      "baseline": 2,
+      "budget": 6,
+      "tier": "high-risk"
+    },
+    "src/movement/roomTopologyRevision.test.ts": {
+      "baseline": 0,
+      "budget": 4,
+      "tier": "high-risk"
+    },
+    "src/movement/metrics.flush.test.ts": {
+      "baseline": 0,
+      "budget": 2,
+      "tier": "high-risk"
+    },
+    "src/movement/staticRoomMatrix.test.ts": {
+      "baseline": 0,
+      "budget": 5,
+      "tier": "high-risk"
+    },
+    "src/movement/routing.dynamicObstacles.test.ts": {
+      "baseline": 0,
+      "budget": 2,
+      "tier": "high-risk"
+    },
+    "src/movement/routing.cachedPathValidation.test.ts": {
+      "baseline": 4,
+      "budget": 4,
+      "tier": "high-risk"
+    },
+    "src/movement/traffic.naturalObstacles.test.ts": {
+      "baseline": 5,
+      "budget": 5,
+      "tier": "high-risk"
+    },
+    "src/runtime/colonization.travelPath.test.ts": {
+      "baseline": 7,
+      "budget": 7,
+      "tier": "high-risk"
     }
   }
 }
