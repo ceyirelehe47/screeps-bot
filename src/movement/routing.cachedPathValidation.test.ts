@@ -11,6 +11,7 @@ import { clearCreepMovementStateForTest, ensureCreepMovementState, getCreepMovem
 import { clearMovementAnalyticsForTest } from "@/movement/metrics";
 import { clearRoomBaseCostMatrixCacheForTest } from "@/movement/pathing";
 import {
+  COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL,
   clearRoutingCachesForTest,
   getColonizationTravelPathKey,
   moveToTargetRoom,
@@ -136,6 +137,11 @@ describe("moveToTargetRoom cached travel path validation", () => {
     expect(creep.move).not.toHaveBeenCalledWith(BOTTOM);
     // 缓存路径整体失效（回退后由生命周期重新生成）。
     expect(Memory.data?.colonization?.W1N2?.cachedTravelPath).toBeUndefined();
+    // 失效同时设置重试节流：防止"删除→立即重生成→再被验证删除"的
+    // 逐 tick 重搜循环（colonization 系 CPU 放大器）。
+    expect(Memory.data?.colonization?.W1N2?.travelPathRetryAt).toBe(
+      Game.time + COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL,
+    );
     // 游标同步清理。
     expect(getCreepMovementState(creep.name)?.travelState?.cachedPathCursor).toBeUndefined();
     // 回退到实时跨房寻路。

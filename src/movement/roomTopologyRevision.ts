@@ -1,4 +1,5 @@
 import { getTickContextService } from "@/runtime/runtimeServices";
+import { recordMovementMetric } from "@/movement/metrics";
 
 // 房间拓扑指纹：为跨 tick CostMatrix 缓存提供失效信号。
 //
@@ -54,6 +55,11 @@ interface RoomTopologyRevisionCache {
 }
 
 let revisionCache: RoomTopologyRevisionCache = { tick: -1, revisions: new Map() };
+
+// 上一 tick 各房间的指纹值：跨 tick 比较检测"指纹变化"，为
+// topologyRevisionChanges 计数器提供观测（矩阵缓存因指纹变化而重建时
+// 才计数，正常稳定房间为 0）。条目数自然有界（见过的房间数）。
+const lastSeenRevisions = new Map<string, string>();
 
 export function getRoomTopologyRevision(roomName: string): string {
   if (revisionCache.tick !== Game.time) {
@@ -136,10 +142,16 @@ export function getRoomTopologyRevision(roomName: string): string {
   }
 
   const revision = `${controllerLevel}|${controllerOwned}|${structureFold}|${siteFold}|${depositFold}|${savedAt}|${remoteContainerFold}`;
+  const previousRevision = lastSeenRevisions.get(roomName);
+  if (previousRevision !== undefined && previousRevision !== revision) {
+    recordMovementMetric("topologyRevisionChanges", roomName);
+  }
+  lastSeenRevisions.set(roomName, revision);
   revisionCache.revisions.set(roomName, revision);
   return revision;
 }
 
 export function clearRoomTopologyRevisionCacheForTest(): void {
   revisionCache = { tick: -1, revisions: new Map() };
+  lastSeenRevisions.clear();
 }

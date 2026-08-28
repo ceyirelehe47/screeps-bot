@@ -308,6 +308,10 @@ export function moveToTargetRoom(
 // 引擎静态障碍矩阵）时递增，Memory 中旧版本生成的 cachedTravelPath 因 key
 // 前缀失配而自然失效，随后由正常生命周期重新搜索覆盖。
 export const COLONIZATION_TRAVEL_PATH_VERSION = 2;
+// 持久路径生成失败或被运行时验证删除后的重试间隔：路径 search 的成本
+// （maxOps 20000）远高于 findSafeRoute，节流窗口取更长，防止被真实阻断
+// 的任务退化为每 tick 重搜。
+export const COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL = 20;
 
 export function getColonizationTravelPathKey(sourceRoom: string, targetRoom: string, routeRooms: string[], dangerousRooms: string[]): string {
   const routePart = routeRooms.join(">");
@@ -517,10 +521,15 @@ function followCachedTravelPath(
   if (isCachedTravelStepBlockedByStatic(creep, nextStep)) {
     // 持久路径多在房间不可见时生成；进入可见房间后才发现下一步被静态
     // 障碍（新建筑 / Source / Portal 等）挡住时，本次不提交该移动，失效
-    // 缓存路径并清游标，落回调用方下方的实时寻路流程。
+    // 缓存路径并清游标，落回调用方下方的实时寻路流程。同时设置重试节流：
+    // 若无节流，processTask 下一 tick 立即重生成 20000-op 路径，若新
+    // 路径早期步骤同样被挡（生成时房间不可见、terrain-only 矩阵不含新
+    // 建筑），会形成"删除→重生成→再删除"的逐 tick 重搜循环。
     const task = Memory.data?.colonization?.[targetRoom];
     if (task && task.cachedTravelPath === cachedPath) {
       delete task.cachedTravelPath;
+      task.travelPathRetryAt = Game.time + COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL;
+      recordMovementMetric("colonizationPathBlockInvalidations", targetRoom);
     }
     delete travelState.cachedPathCursor;
     delete travelState.cachedPathKey;
@@ -875,6 +884,8 @@ export function getCachedStaticTravelMatrix(roomName: string): CostMatrix {
       }
     }
     travelMatrixCache.set(roomName, cached);
+  } else {
+    recordMovementMetric("staticMatrixCacheHits", roomName);
   }
 
   return cached.matrix;

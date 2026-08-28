@@ -30,6 +30,7 @@ jest.mock("@/runtime/roomPlannerConstruction", () => ({
 import { runColonizationByFlag } from "@/runtime/colonization";
 import { isDefenseMode } from "@/runtime/defenseMode";
 import {
+  COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL,
   COLONIZATION_TRAVEL_PATH_VERSION,
   clearRoutingCachesForTest,
   getColonizationTravelPathKey,
@@ -244,17 +245,48 @@ describe("colonization cachedTravelPath lifecycle", () => {
     );
   });
 
-  it("deletes the stale path on search failure and recovers on the next attempt", () => {
+  it("deletes the stale path on search failure and recovers after the retry interval", () => {
     setupWorld();
     seedTask({ cachedTravelPath: legacyCachedTravelPath() });
     (global as RuntimeGlobal).PathFinder!.search.mockReturnValueOnce({ incomplete: true, path: [] });
 
     runColonizationByFlag();
     expect(Memory.data?.colonization?.W1N2?.cachedTravelPath).toBeUndefined();
+    expect(Memory.data?.colonization?.W1N2?.travelPathRetryAt).toBe(
+      Game.time + COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL,
+    );
 
+    // 重试窗口内不重搜（被真实阻断的任务不再每 tick 执行 20000-op search）。
+    const searchesAfterFailure = ((global as RuntimeGlobal).PathFinder?.search as jest.Mock).mock.calls.length;
     Game.time += 1;
     runColonizationByFlag();
+    expect((global as RuntimeGlobal).PathFinder?.search).toHaveBeenCalledTimes(searchesAfterFailure);
+    expect(Memory.data?.colonization?.W1N2?.cachedTravelPath).toBeUndefined();
+
+    // 窗口过后恢复重试并成功生成。
+    Game.time += COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL;
+    runColonizationByFlag();
     expect(Memory.data?.colonization?.W1N2?.cachedTravelPath).toBeDefined();
+    expect(Memory.data?.colonization?.W1N2?.travelPathRetryAt).toBeUndefined();
+  });
+
+  it("bypasses the retry throttle when the expected path key changes", () => {
+    setupWorld();
+    seedTask({ cachedTravelPath: legacyCachedTravelPath() });
+    (global as RuntimeGlobal).PathFinder!.search.mockReturnValueOnce({ incomplete: true, path: [] });
+
+    runColonizationByFlag();
+    expect(Memory.data?.colonization?.W1N2?.travelPathRetryAt).toBeDefined();
+
+    // key 变化（路线/危险房/版本升级）必须立即重试，不受旧 key 节流限制。
+    const task = Memory.data!.colonization!.W1N2!;
+    task.scoutRouteRooms = ["W1N1", "W2N1", "W1N2"];
+    runColonizationByFlag();
+
+    expect(Memory.data?.colonization?.W1N2?.cachedTravelPath).toBeDefined();
+    expect(Memory.data?.colonization?.W1N2?.cachedTravelPath?.key).toBe(
+      getColonizationTravelPathKey("W1N1", "W1N2", ["W1N1", "W2N1", "W1N2"], []),
+    );
   });
 
   it("builds the persistent path with engine static obstacle semantics", () => {

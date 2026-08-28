@@ -3,6 +3,7 @@
  * 同时保持对列表顺序的不敏感性。
  */
 import { clearRoomTopologyRevisionCacheForTest, getRoomTopologyRevision } from "@/movement/roomTopologyRevision";
+import { clearMovementAnalyticsForTest, getMovementAnalyticsForTest } from "@/movement/metrics";
 import { createRoom, resetRuntimeServices } from "@mock/movement";
 
 interface StructureLike {
@@ -31,6 +32,7 @@ describe("getRoomTopologyRevision", () => {
   beforeEach(() => {
     resetRuntimeServices();
     clearRoomTopologyRevisionCacheForTest();
+    clearMovementAnalyticsForTest();
     Game.rooms = {};
     Game.time += 1;
   });
@@ -70,6 +72,23 @@ describe("getRoomTopologyRevision", () => {
     const after = getRoomTopologyRevision("W1N1");
 
     expect(after).not.toBe(before);
+  });
+
+  it("counts topologyRevisionChanges only when the revision actually changes across ticks", () => {
+    setupRoomWithStructures("W1N1", [makeStructure(STRUCTURE_ROAD, 10, 10)]);
+    getRoomTopologyRevision("W1N1");
+
+    // 拓扑不变：下一 tick（不清 lastSeenRevisions）不计数。
+    Game.time += 1;
+    setupRoomWithStructures("W1N1", [makeStructure(STRUCTURE_ROAD, 10, 10)]);
+    getRoomTopologyRevision("W1N1");
+    expect(getMovementAnalyticsForTest().rooms.W1N1?.topologyRevisionChanges ?? 0).toBe(0);
+
+    // 拓扑变化：计数 +1（矩阵缓存会因此重建）。
+    Game.time += 1;
+    setupRoomWithStructures("W1N1", [makeStructure(STRUCTURE_ROAD, 10, 10), makeStructure(STRUCTURE_WALL, 12, 12)]);
+    getRoomTopologyRevision("W1N1");
+    expect(getMovementAnalyticsForTest().rooms.W1N1?.topologyRevisionChanges).toBe(1);
   });
 
   it("changes when a rampart public/ownership state flips without moving", () => {

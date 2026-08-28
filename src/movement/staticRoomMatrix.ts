@@ -1,6 +1,7 @@
 import { getTickContextService } from "@/runtime/runtimeServices";
 import type { RoomTickContext } from "@/runtime/tickContext";
 import { isWalkableConstructionSite, isWalkableStructure } from "@/movement/common";
+import { recordMovementMetric } from "@/movement/metrics";
 
 /**
  * 单房移动（pathing 的 costCallback）与跨房移动（routing 的 roomCallback）
@@ -56,6 +57,9 @@ export function collectStaticRoomMatrixSources(room: Room, roomContext: RoomTick
 }
 
 export function buildStaticRoomCostMatrix(roomName: string, sources: StaticRoomMatrixSources): CostMatrix {
+  // 单房与跨房静态矩阵的唯一汇聚构建点：build 计数在此累加（缓存命中
+  // 计数由两个缓存层在命中分支记录），用于观测矩阵重建频率。
+  recordMovementMetric("staticMatrixBuilds", roomName);
   const matrix = buildStaticTerrainMatrix(roomName);
 
   // Source / Mineral / Deposit / Controller 都是 OBSTACLE_OBJECT_TYPES；

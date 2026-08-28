@@ -3,6 +3,7 @@ import { clearMovementState } from "@/roles/shared";
 import { decodeCrossShardTravelerName } from "@/runtime/crossShardNaming";
 import { measureCreepDecision } from "@/runtime/cpuPhaseProfiler";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
+import { recordMovementGauge, recordMovementMetric } from "@/movement/metrics";
 import type { RoleFactory } from "@/types/system";
 
 function tryRestoreRoleFromName(creep: Creep): boolean {
@@ -96,6 +97,7 @@ function evictLeastRecentlyUsedRoleLifecycles(): void {
       break;
     }
     roleLifecycleCache.delete(oldestKey);
+    recordMovementMetric("roleLifecycleEvictions");
   }
 }
 
@@ -113,6 +115,7 @@ function getOrCreateRoleLifecycle(
   const cached = roleLifecycleCache.get(cacheKey);
   if (cached && isCacheEntryCurrent(cached, role, args)) {
     cached.lastUsedAt = Game.time;
+    recordMovementMetric("roleLifecycleCacheHits");
     return cached.lifecycle;
   }
 
@@ -123,6 +126,8 @@ function getOrCreateRoleLifecycle(
     lifecycle,
     lastUsedAt: Game.time,
   });
+  recordMovementMetric("roleFactoryCreates");
+  recordMovementGauge("roleLifecycleCacheSize", roleLifecycleCache.size);
   evictLeastRecentlyUsedRoleLifecycles();
   return lifecycle;
 }

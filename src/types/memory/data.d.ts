@@ -246,6 +246,9 @@ declare global {
           positions: { x: number; y: number; roomName: string }[];
           generatedAt: number;
         };
+        /** 持久路径生成失败/被运行时验证删除后的重试节流（同一 key）。 */
+        travelPathRetryAt?: number;
+        travelPathRetryKey?: string;
         dangerousRooms?: string[];
         temporaryDangerousRooms?: Record<string, number>;
         permanentDangerousRooms?: string[];

@@ -10,7 +10,22 @@ type MovementMetricName =
   | "multiRoomSegmentHits"
   | "multiRoomSegmentInvalidations"
   | "exitRecoveries"
-  | "stateClears";
+  | "stateClears"
+  // 静态矩阵层（build/hit/指纹失效）：定位矩阵重建风暴的观测缺口。
+  | "staticMatrixBuilds"
+  | "staticMatrixCacheHits"
+  | "topologyRevisionChanges"
+  // 殖民持久路径层：重建次数 / 重试节流命中 / 运行时验证失效。
+  | "colonizationPathRebuilds"
+  | "colonizationPathRegeneratesThrottled"
+  | "colonizationPathBlockInvalidations"
+  // RoleLifecycle 实例缓存：验证生命周期缓存真实命中（无房间归属，仅 totals）。
+  | "roleFactoryCreates"
+  | "roleLifecycleCacheHits"
+  | "roleLifecycleEvictions";
+
+/** 瞬时值（非累计计数），flush 时覆盖写入 totals 旁边的 gauges。 */
+type MovementGaugeName = "roleLifecycleCacheSize";
 
 export interface MovementMetricBucket {
   pathRequests: number;
@@ -25,6 +40,15 @@ export interface MovementMetricBucket {
   multiRoomSegmentInvalidations: number;
   exitRecoveries: number;
   stateClears: number;
+  staticMatrixBuilds: number;
+  staticMatrixCacheHits: number;
+  topologyRevisionChanges: number;
+  colonizationPathRebuilds: number;
+  colonizationPathRegeneratesThrottled: number;
+  colonizationPathBlockInvalidations: number;
+  roleFactoryCreates: number;
+  roleLifecycleCacheHits: number;
+  roleLifecycleEvictions: number;
 }
 
 export interface MovementAnalyticsSnapshot {
@@ -33,6 +57,7 @@ export interface MovementAnalyticsSnapshot {
   totals: MovementMetricBucket;
   rooms: Record<string, MovementMetricBucket>;
   roomUpdatedAt: Record<string, number>;
+  gauges?: Partial<Record<MovementGaugeName, number>>;
 }
 
 type RuntimeGlobalWithMovementAnalytics = typeof global & {
@@ -58,6 +83,8 @@ interface PendingMovementMetrics {
   /** 无房间归属的计数；有房间归属的计数只进 rooms，flush 时一次调用同时落到 totals 与房间桶。 */
   noRoom: Map<MovementMetricName, number>;
   rooms: Map<string, Map<MovementMetricName, number>>;
+  /** 瞬时 gauge（覆盖语义）：与计数器同批 flush。 */
+  gauges: Map<MovementGaugeName, number>;
 }
 
 let pendingMovementMetrics: PendingMovementMetrics | null = null;
@@ -70,6 +97,7 @@ function ensurePendingMovementMetrics(): PendingMovementMetrics {
       tick: Game.time,
       noRoom: new Map(),
       rooms: new Map(),
+      gauges: new Map(),
     };
   }
   return pendingMovementMetrics;
@@ -111,6 +139,13 @@ function flushPendingMovementMetrics(): void {
       }
     }
   }
+  if (pending.gauges.size > 0) {
+    const movement = ensureMovementAnalytics();
+    movement.gauges = movement.gauges ?? {};
+    for (const [gauge, value] of pending.gauges) {
+      movement.gauges[gauge] = value;
+    }
+  }
 }
 
 function recordMovementMetricIntoSnapshot(
@@ -146,18 +181,24 @@ function createEmptyBucket(): MovementMetricBucket {
     multiRoomSegmentInvalidations: 0,
     exitRecoveries: 0,
     stateClears: 0,
+    staticMatrixBuilds: 0,
+    staticMatrixCacheHits: 0,
+    topologyRevisionChanges: 0,
+    colonizationPathRebuilds: 0,
+    colonizationPathRegeneratesThrottled: 0,
+    colonizationPathBlockInvalidations: 0,
+    roleFactoryCreates: 0,
+    roleLifecycleCacheHits: 0,
+    roleLifecycleEvictions: 0,
   };
 }
 
+// 旧快照（新计数器加入前生成）缺字段时补 0，保证读取方始终拿到完整 bucket。
 function ensureMultiRoomMetricShape(bucket: MovementMetricBucket): void {
-  if (!Number.isFinite(bucket.multiRoomSearches)) {
-    bucket.multiRoomSearches = 0;
-  }
-  if (!Number.isFinite(bucket.multiRoomSegmentHits)) {
-    bucket.multiRoomSegmentHits = 0;
-  }
-  if (!Number.isFinite(bucket.multiRoomSegmentInvalidations)) {
-    bucket.multiRoomSegmentInvalidations = 0;
+  for (const key of Object.keys(createEmptyBucket()) as MovementMetricName[]) {
+    if (!Number.isFinite(bucket[key])) {
+      bucket[key] = 0;
+    }
   }
 }
 
@@ -230,6 +271,16 @@ export function recordMovementMetric(metric: MovementMetricName, roomName?: stri
   if (Game.time % MOVEMENT_METRICS_FLUSH_INTERVAL === 0 && lastMovementMetricsFlushTick !== Game.time && pendingMovementMetrics) {
     flushPendingMovementMetrics();
   }
+}
+
+/** 瞬时 gauge：覆盖语义，flush 时写入 snapshot.gauges（不区分房间）。 */
+export function recordMovementGauge(gauge: MovementGaugeName, value: number): void {
+  if (!Number.isFinite(value)) {
+    return;
+  }
+  const pending = ensurePendingMovementMetrics();
+  pending.tick = Game.time;
+  pending.gauges.set(gauge, value);
 }
 
 export function getMovementAnalyticsForTest(): MovementAnalyticsSnapshot {

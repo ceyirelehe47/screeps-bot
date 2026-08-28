@@ -307,6 +307,7 @@ function getCachedRoomBaseCostMatrix(
   const revision = getRoomTopologyRevision(room.name);
   const cached = roomBaseCostMatrixCache.get(cacheKey);
   if (cached && cached.revision === revision && Game.time - cached.builtAt <= ROOM_BASE_COST_MATRIX_CACHE_TTL) {
+    recordMovementMetric("staticMatrixCacheHits", room.name);
     return cached.matrix.clone();
   }
 

@@ -4,7 +4,12 @@ import { isRcl3ExtensionBuildoutComplete } from "@/runtime/roomPlannerConstructi
 import { getCreepConfigService, getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { clearWarRoomTask, isWarRoomClearDone, requestWarRoomClear } from "@/runtime/warControl";
 import { isDefenseMode } from "@/runtime/defenseMode";
-import { getCachedStaticTravelMatrix, getColonizationTravelPathKey } from "@/movement/routing";
+import {
+  COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL,
+  getCachedStaticTravelMatrix,
+  getColonizationTravelPathKey,
+} from "@/movement/routing";
+import { recordMovementMetric } from "@/movement/metrics";
 import type { CachedTravelPath, StoredRoomPosition } from "@/movement/types";
 
 type ColonizationStatus = "claiming" | "clearing" | "waiting_plan" | "bootstrapping" | "managed";
@@ -20,6 +25,8 @@ interface ColonizationTask {
   scoutSafe?: boolean;
   scoutRouteRooms?: string[];
   cachedTravelPath?: CachedTravelPath;
+  travelPathRetryAt?: number;
+  travelPathRetryKey?: string;
   dangerousRooms?: string[];
   temporaryDangerousRooms?: Record<string, number>;
   permanentDangerousRooms?: string[];
@@ -755,6 +762,16 @@ function cacheColonizationTravelPath(task: ColonizationTask): void {
     return;
   }
 
+  // 生成失败 / 被运行时验证删除后的重试节流：同一 key 在窗口内不再执行
+  // 20000-op 的完整 search。路线被真实阻断的任务会持续 incomplete，若无
+  // 节流将每 tick 重搜（殖民系高 CPU 放大器）；节流命中期间 creep 走
+  // 实时寻路兜底。key 变化（路线/危险房/版本升级）立即重试。
+  const expectedKey = getExpectedTravelPathKey(task, routeRooms);
+  if (task.travelPathRetryKey === expectedKey && (task.travelPathRetryAt ?? 0) > Game.time) {
+    recordMovementMetric("colonizationPathRegeneratesThrottled", task.targetRoom);
+    return;
+  }
+
   const startPos = getColonizationStartPos(task);
   const targetPos = new RoomPosition(25, 25, task.targetRoom);
   const search = PathFinder.search(startPos, { pos: targetPos, range: 1 }, {
@@ -767,6 +784,8 @@ function cacheColonizationTravelPath(task: ColonizationTask): void {
 
   if (search.incomplete || search.path.length === 0) {
     delete task.cachedTravelPath;
+    task.travelPathRetryKey = expectedKey;
+    task.travelPathRetryAt = Game.time + COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL;
     return;
   }
 
@@ -775,17 +794,22 @@ function cacheColonizationTravelPath(task: ColonizationTask): void {
     .map((pos) => ({ x: pos.x, y: pos.y, roomName: pos.roomName }));
   if (positions.length === 0) {
     delete task.cachedTravelPath;
+    task.travelPathRetryKey = expectedKey;
+    task.travelPathRetryAt = Game.time + COLONIZATION_TRAVEL_PATH_RETRY_INTERVAL;
     return;
   }
 
   task.cachedTravelPath = {
-    key: getExpectedTravelPathKey(task, routeRooms),
+    key: expectedKey,
     sourceRoom: task.sourceRoom,
     targetRoom: task.targetRoom,
     routeRooms: [...routeRooms],
     positions,
     generatedAt: Game.time,
   };
+  task.travelPathRetryKey = undefined;
+  task.travelPathRetryAt = undefined;
+  recordMovementMetric("colonizationPathRebuilds", task.targetRoom);
 }
 
 function tryFindSafeRoute(task: ColonizationTask): string[] | null {
@@ -1468,6 +1492,8 @@ function upsertColonizationTask(flag: Flag): boolean {
     scoutSafe: existing?.scoutSafe ?? false,
     scoutRouteRooms: existing?.scoutRouteRooms,
     cachedTravelPath: existing?.sourceRoom === sourceRoom ? existing?.cachedTravelPath : undefined,
+    travelPathRetryAt: existing?.sourceRoom === sourceRoom ? existing?.travelPathRetryAt : undefined,
+    travelPathRetryKey: existing?.sourceRoom === sourceRoom ? existing?.travelPathRetryKey : undefined,
     dangerousRooms: existing?.dangerousRooms ?? [],
     temporaryDangerousRooms: existing?.temporaryDangerousRooms,
     permanentDangerousRooms: existing?.permanentDangerousRooms,

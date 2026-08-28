@@ -7,6 +7,7 @@ import { mountCreep } from "@/mount/mountCreep";
 import { clearRoleLifecycleCacheForTest, getRoleLifecycleCacheSizeForTest } from "@/mount/mountCreep";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { clearCreepMovementStateForTest } from "@/movement/creepState";
+import { clearMovementAnalyticsForTest, getMovementAnalyticsForTest } from "@/movement/metrics";
 import type { RoleName } from "@/types/system";
 
 jest.mock("@/roles", () => {
@@ -77,6 +78,7 @@ describe("role lifecycle cache", () => {
     resetRuntimeServices();
     clearRoleLifecycleCacheForTest();
     clearCreepMovementStateForTest();
+    clearMovementAnalyticsForTest();
     Game.time += 1;
     Game.creeps = {};
     Game.rooms = {};
@@ -105,6 +107,10 @@ describe("role lifecycle cache", () => {
     expect(__factoryCallCounts.worker).toBe(1);
     expect(roleRegistry.worker).toHaveBeenCalledTimes(1);
     expect(roleRegistry.worker).toHaveBeenCalledWith("arg-a");
+    // 诊断计数器：一次 factory 创建 + 一次缓存命中（第二个 creep）。
+    const totals = getMovementAnalyticsForTest().totals;
+    expect(totals.roleFactoryCreates).toBe(1);
+    expect(totals.roleLifecycleCacheHits).toBe(1);
   });
 
   it("下一 tick 配置未变化时仍复用", () => {
