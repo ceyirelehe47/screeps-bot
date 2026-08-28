@@ -1,26 +1,26 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "258c712",
-    "suites": 181,
-    "tests": 582,
-    "passed": 582,
+    "commit": "d0482bc",
+    "suites": 183,
+    "tests": 605,
+    "passed": 605,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 181,
-    "tests": 582,
-    "passed": 582,
+    "suites": 183,
+    "tests": 605,
+    "passed": 605,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 38,
-    "defaultFiles": 130
+    "highRiskFiles": 40,
+    "defaultFiles": 128
   },
   "files": {
     "scripts/monitor-service.test.ts": {
@@ -895,7 +895,7 @@
     },
     "src/movement/roomTopologyRevision.test.ts": {
       "baseline": 0,
-      "budget": 4,
+      "budget": 5,
       "tier": "high-risk"
     },
     "src/movement/metrics.flush.test.ts": {
@@ -925,7 +925,17 @@
     },
     "src/runtime/colonization.travelPath.test.ts": {
       "baseline": 7,
-      "budget": 7,
+      "budget": 8,
+      "tier": "high-risk"
+    },
+    "scripts/lib/deployGuard.test.ts": {
+      "baseline": 0,
+      "budget": 17,
+      "tier": "high-risk"
+    },
+    "src/runtime/deployAnnounce.test.ts": {
+      "baseline": 0,
+      "budget": 4,
       "tier": "high-risk"
     }
   }
