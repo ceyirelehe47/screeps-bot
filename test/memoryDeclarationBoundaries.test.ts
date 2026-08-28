@@ -34,7 +34,7 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    schemaFingerprint: "87e699ad2b4cc8504207669f9ab96109b46f4d0e5f26fd78086ef8ab4ea8ee1b",
+    schemaFingerprint: "2902adc63e9a0544dd0ff08f23bb005184953e0af82f9f3c804f3c6d51fe0985",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
@@ -47,6 +47,11 @@ const MEMORY_BRANCHES = {
     ],
     fields: [
       "lastDeployTag",
+      "lastDeployCommit",
+      "lastDeployTree",
+      "lastDeployBundleHash",
+      "lastDeployBranch",
+      "lastDeployAt",
       "energyPickup",
       "spawnPlanner",
       "roomPlannerBuild",
@@ -73,7 +78,7 @@ const MEMORY_BRANCHES = {
   data: {
     declaration: "src/types/memory/data.d.ts",
     interfaceName: "ScreepsMemoryData",
-    schemaFingerprint: "6dd4c88049dfdf31f86acb4d8095f219c068d9c0ccd735a283671d1dd9661bcb",
+    schemaFingerprint: "e67962e577670078cbfb6befb8446d02259d1fd20323d1e49c4cd9f40a1f03b7",
     imports: [
       "@/runtime/marketActionArbiter:MarketAccountClaim",
       "@/runtime/marketActionArbiter:MarketActionJournalEntry",

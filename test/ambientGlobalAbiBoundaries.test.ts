@@ -26,6 +26,11 @@ const BUILD_GLOBAL_CONSTANTS = new Set([
   "__BUILD_GIT_HASH__",
   "__BUILD_TIME__",
   "__BUILD_TAG__",
+  "__BUILD_COMMIT__",
+  "__BUILD_TREE__",
+  "__BUILD_BRANCH__",
+  "__BUILD_DIRTY__",
+  "__BUILD_DEPLOY_BRANCH__",
 ]);
 
 const EXPECTED_PRIVATE_GLOBAL_SLOTS = [...PRIVATE_GLOBAL_SLOTS].sort();

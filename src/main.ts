@@ -1,6 +1,6 @@
-import { BUILD_INFO } from "@/buildMeta";
 import { errorMapper } from "@/modules/errorMapper";
 import { mountAll } from "@/mount";
+import { announceDeploy } from "@/runtime/deployAnnounce";
 import { runMemoryCleanup } from "@/runtime/memoryCleanup";
 import { runInterShardControl } from "@/runtime/interShardControl";
 import { runCrossShardSignals } from "@/runtime/crossShardSignals";
@@ -43,16 +43,6 @@ mountAll();
 registerGlobalApi();
 registerConsoleCommands();
 registerProductionApi();
-
-function announceDeploy(): void {
-  const runtime = getMemoryService().ensureRuntime();
-  if (runtime.lastDeployTag === BUILD_INFO.tag) {
-    return;
-  }
-
-  runtime.lastDeployTag = BUILD_INFO.tag;
-  console.log(`[deploy] ${BUILD_INFO.tag}`);
-}
 
 export function addNumbers(num1: number, num2: number): number {
   return num1 + num2;

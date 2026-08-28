@@ -48,6 +48,11 @@ declare global {
   const __BUILD_GIT_HASH__: string;
   const __BUILD_TIME__: string;
   const __BUILD_TAG__: string;
+  const __BUILD_COMMIT__: string;
+  const __BUILD_TREE__: string;
+  const __BUILD_BRANCH__: string;
+  const __BUILD_DIRTY__: string;
+  const __BUILD_DEPLOY_BRANCH__: string;
 
   var creepApi: CreepApi;
   var __screepsMounted: boolean | undefined;

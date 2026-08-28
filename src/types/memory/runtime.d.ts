@@ -14,6 +14,12 @@ import type { MarketTerminalEnergyReadinessObservation } from "@/runtime/resourc
 declare global {
   interface ScreepsMemoryRuntime {
     lastDeployTag?: string;
+    /** 部署身份（阶段 B）：bundle 首个 tick 写入，仅 build 改变时更新。 */
+    lastDeployCommit?: string;
+    lastDeployTree?: string;
+    lastDeployBundleHash?: string;
+    lastDeployBranch?: string;
+    lastDeployAt?: number;
     energyPickup?: {
       terminalBootstrapRecovery?: Record<
         string,
