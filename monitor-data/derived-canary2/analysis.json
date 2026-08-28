@@ -1,0 +1,1634 @@
+{
+ "generatedAt": "2026-08-28T23:41:15.191Z",
+ "script": "monitor-data/analyze-canary2-v2.mjs",
+ "quantileAlgorithm": "Hyndman-Fan type-7 线性插值（h=(n-1)p）；nearest-rank 对照字段 p95nr",
+ "identity": {
+  "candidateCommit": "cac532ba425e9ae622e928570157ea83160864f7",
+  "candidateTree": "0229ea18f557784c1ba3e19228becfdd8a281b30",
+  "headCommit": "934ec74aeb252c13b69daa0ff07b3be839bddaf8",
+  "deployArtifact": {
+   "bundleSha256": "8f7856e396c39df6ca6ab7185cdb7d100f62d25c0d49f19dcd0794d45b03dd76",
+   "modulesSha256": "25e77207418e2ed87e3c792343483ec2dbee5044c7fa399c68e94d753004f0d0",
+   "method": "部署时 dist/main.js（修订重建前提取）：bundle 取产物尾部 __DEPLOY_BUNDLE_HASH__；modules 按 deployGuard.computeModulesHash 规范化（main\\0<content>\\0）重算；push 日志前缀两者均吻合"
+  },
+  "localRebuild": {
+   "bundleSha256": "14441cb5ec051a6a64cd2309466e025ec83f2e00b970216a93717770a5c5959c",
+   "modulesSha256": "84be17f8a9a8d43b9b25d29412d24e2bc4c901db5386e26e266b88a9334ee172",
+   "note": "当前工作树 dist/main.js 的哈希（修订期 npm run build 重建产物，含文档变更后的 dirty-tree 身份），非部署产物；部署产物见 deployArtifact"
+  }
+ },
+ "deploy": {
+  "deployTick": 73329650,
+  "warmupTicks": 50,
+  "formalBoundary": 73329700,
+  "warmupExcludedTicks": [
+   73329662,
+   73329669,
+   73329676,
+   73329683,
+   73329690,
+   73329697
+  ]
+ },
+ "windows": {
+  "baseline": {
+   "window": {
+    "start": 73328689,
+    "end": 73329585,
+    "inclusiveTicks": 897
+   },
+   "cpu": {
+    "n": 128,
+    "avg": 106.58,
+    "median": 99.07,
+    "p95": 168.76,
+    "p99": 216.13,
+    "max": 221.11,
+    "p95nr": 172.32
+   }
+  },
+  "canaryFormal": {
+   "window": {
+    "start": 73329704,
+    "end": 73331342,
+    "inclusiveTicks": 1639
+   },
+   "cpu": {
+    "n": 203,
+    "avg": 106.77,
+    "median": 99.03,
+    "p95": 169.32,
+    "p99": 194.49,
+    "max": 220.72,
+    "p95nr": 169.33
+   }
+  },
+  "note": "正式窗口 tick 数为闭区间长度 end-start+1"
+ },
+ "coverage": {
+  "baseline": {
+   "label": "baseline",
+   "window": {
+    "start": 73328689,
+    "end": 73329585,
+    "inclusiveTicks": 897
+   },
+   "gridPhase": 0,
+   "theoreticalSamples": 129,
+   "actualSamples": 128,
+   "coveragePct": 99.22,
+   "missingCount": 1,
+   "missingTicks": [
+    73329445
+   ],
+   "missingRuns": [
+    {
+     "from": 73329445,
+     "to": 73329445,
+     "count": 1
+    }
+   ]
+  },
+  "canaryFormal": {
+   "label": "canary-formal",
+   "window": {
+    "start": 73329704,
+    "end": 73331342,
+    "inclusiveTicks": 1639
+   },
+   "gridPhase": 0,
+   "theoreticalSamples": 235,
+   "actualSamples": 203,
+   "coveragePct": 86.38,
+   "missingCount": 32,
+   "missingTicks": [
+    73330509,
+    73330516,
+    73330523,
+    73330621,
+    73330628,
+    73330635,
+    73330642,
+    73330649,
+    73330656,
+    73330663,
+    73330670,
+    73330775,
+    73330782,
+    73330789,
+    73330796,
+    73330803,
+    73331027,
+    73331034,
+    73331041,
+    73331048,
+    73331055,
+    73331062,
+    73331069,
+    73331076,
+    73331083,
+    73331090,
+    73331097,
+    73331104,
+    73331111,
+    73331118,
+    73331125,
+    73331132
+   ],
+   "missingRuns": [
+    {
+     "from": 73330509,
+     "to": 73330523,
+     "count": 3
+    },
+    {
+     "from": 73330621,
+     "to": 73330670,
+     "count": 8
+    },
+    {
+     "from": 73330775,
+     "to": 73330803,
+     "count": 5
+    },
+    {
+     "from": 73331027,
+     "to": 73331132,
+     "count": 16
+    }
+   ]
+  },
+  "warmup": {
+   "samples": [
+    73329662,
+    73329669,
+    73329676,
+    73329683,
+    73329690,
+    73329697
+   ]
+  }
+ },
+ "missingAttribution": [
+  {
+   "run": [
+    73330509,
+    73330523
+   ],
+   "count": 3,
+   "cause": "采集端网络错误（collect-canary2.log 在 n=121@73330502 与 n=131@73330593 之间记录 3 次 TLS 断连；25s 轮询失败期间 cpuMonitor.latest 前进 2 个采样周期，跳过 1 个样本/次）"
+  },
+  {
+   "run": [
+    73330621,
+    73330670
+   ],
+   "count": 8,
+   "cause": "采集端网络错误（n=131@73330593 与 n=141@73330719 之间 8 次 TLS 断连 + 1 次 timeout）"
+  },
+  {
+   "run": [
+    73330775,
+    73330803
+   ],
+   "count": 5,
+   "cause": "采集端网络错误（n=141@73330719 与 n=151@73330824 之间 7 次 TLS 断连）"
+  },
+  {
+   "run": [
+    73331027,
+    73331132
+   ],
+   "count": 16,
+   "cause": "采集器停机（85min 定时采集 22:31:29 结束于 73331020，22:37:44 手动重启首样本 73331139；375s 采集空窗覆盖全部 16 个理论采样点）"
+  }
+ ],
+ "missingContext": [
+  {
+   "run": {
+    "from": 73330509,
+    "to": 73330523,
+    "count": 3
+   },
+   "bracketCpu": [
+    87.93,
+    174.79
+   ],
+   "bracketBucket": [
+    9791,
+    9613
+   ],
+   "bracketCpuVsWindow": [
+    "≤median",
+    ">p95"
+   ]
+  },
+  {
+   "run": {
+    "from": 73330621,
+    "to": 73330670,
+    "count": 8
+   },
+   "bracketCpu": [
+    87.58,
+    90.08
+   ],
+   "bracketBucket": [
+    10000,
+    10000
+   ],
+   "bracketCpuVsWindow": [
+    "≤median",
+    "≤median"
+   ]
+  },
+  {
+   "run": {
+    "from": 73330775,
+    "to": 73330803,
+    "count": 5
+   },
+   "bracketCpu": [
+    97.51,
+    88.57
+   ],
+   "bracketBucket": [
+    9883,
+    9944
+   ],
+   "bracketCpuVsWindow": [
+    "≤median",
+    "≤median"
+   ]
+  },
+  {
+   "run": {
+    "from": 73331027,
+    "to": 73331132,
+    "count": 16
+   },
+   "bracketCpu": [
+    72.67,
+    73.74
+   ],
+   "bracketBucket": [
+    9299,
+    9468
+   ],
+   "bracketCpuVsWindow": [
+    "≤median",
+    "≤median"
+   ]
+  }
+ ],
+ "gates": [
+  {
+   "ticks": 300,
+   "window": [
+    73329704,
+    73330003
+   ],
+   "samples": 43,
+   "cpu": {
+    "n": 43,
+    "avg": 108.52,
+    "median": 99.96,
+    "p95": 167.02,
+    "p99": 171.93,
+    "max": 173.85,
+    "p95nr": 167.11
+   },
+   "avgWithinLimit": true,
+   "p95WithinLimit": true
+  },
+  {
+   "ticks": 1000,
+   "window": [
+    73329704,
+    73330703
+   ],
+   "samples": 132,
+   "cpu": {
+    "n": 132,
+    "avg": 106.22,
+    "median": 97.5,
+    "p95": 168.09,
+    "p99": 188.66,
+    "max": 220.72,
+    "p95nr": 169.28
+   },
+   "avgWithinLimit": true,
+   "p95WithinLimit": true
+  },
+  {
+   "ticks": 1639,
+   "window": [
+    73329704,
+    73331342
+   ],
+   "samples": 203,
+   "cpu": {
+    "n": 203,
+    "avg": 106.77,
+    "median": 99.03,
+    "p95": 169.32,
+    "p99": 194.49,
+    "max": 220.72,
+    "p95nr": 169.33
+   },
+   "avgWithinLimit": true,
+   "p95WithinLimit": true
+  }
+ ],
+ "rolling": {
+  "summary": {
+   "algorithm": {
+    "window": "逐 tick 滑动（步长 1），窗口为闭区间 [t0, t0+width-1]",
+    "quantile": "type-7 线性插值（h=(n-1)p），nearest-rank 对照见 stats.p95nr"
+   },
+   "baselineThresholds": {
+    "avg": 106.58,
+    "avgLimit": 122.57,
+    "p95": 168.76,
+    "p95Limit": 210.95
+   },
+   "w200": {
+    "windows": 1440,
+    "minCoveragePct": 42.9,
+    "violatingAvgWindows": 0,
+    "violatingAvgTickRanges": [],
+    "violatingP95Windows": 0,
+    "violatingP95TickRanges": [],
+    "worstAvgWindow": {
+     "t0": 73330755,
+     "t1": 73330954,
+     "n": 23,
+     "coveragePct": 82.1,
+     "avg": 120.13,
+     "p95": 170.05,
+     "bucketSlopePerTick": -9.3646,
+     "bucketFirst": 9960,
+     "bucketLast": 8146
+    },
+    "worstP95Window": {
+     "t0": 73330475,
+     "t1": 73330674,
+     "n": 17,
+     "coveragePct": 60.7,
+     "avg": 108.09,
+     "p95": 183.98,
+     "bucketSlopePerTick": 1.4775,
+     "bucketFirst": 9813,
+     "bucketLast": 10000
+    }
+   },
+   "w300BucketSlope": {
+    "windows": 1340,
+    "mostNegative": {
+     "t0": 73330818,
+     "t1": 73331117,
+     "n": 29,
+     "coveragePct": 69,
+     "avg": 109.58,
+     "p95": 169.86,
+     "bucketSlopePerTick": -8.4854,
+     "bucketFirst": 9977,
+     "bucketLast": 9299
+    },
+    "mostPositive": {
+     "t0": 73330937,
+     "t1": 73331236,
+     "n": 26,
+     "coveragePct": 61.9,
+     "avg": 96.34,
+     "p95": 157.71,
+     "bucketSlopePerTick": 6.6181,
+     "bucketFirst": 8369,
+     "bucketLast": 9968
+    },
+    "negativeBelowMinus1": 400
+   }
+  },
+  "bucketTrajectory": {
+   "first": 8187,
+   "last": 9995,
+   "min": 7893,
+   "max": 10000,
+   "note": "bucket 在带内振荡（充放电循环），窗口首末无净衰减"
+  },
+  "lowestCoverageW200": [
+   {
+    "t0": 73330937,
+    "t1": 73331136,
+    "n": 12,
+    "coveragePct": 42.9,
+    "avg": 91.33,
+    "p95": 141.69,
+    "bucketSlopePerTick": 15.4081,
+    "bucketFirst": 8369,
+    "bucketLast": 9299
+   },
+   {
+    "t0": 73330944,
+    "t1": 73331143,
+    "n": 12,
+    "coveragePct": 42.9,
+    "avg": 87.56,
+    "p95": 129.07,
+    "bucketSlopePerTick": 8.3056,
+    "bucketFirst": 8146,
+    "bucketLast": 9468
+   },
+   {
+    "t0": 73330951,
+    "t1": 73331150,
+    "n": 12,
+    "coveragePct": 42.9,
+    "avg": 80.72,
+    "p95": 95.07,
+    "bucketSlopePerTick": 7.3968,
+    "bucketFirst": 7893,
+    "bucketLast": 9637
+   },
+   {
+    "t0": 73330958,
+    "t1": 73331157,
+    "n": 12,
+    "coveragePct": 42.9,
+    "avg": 82.19,
+    "p95": 99.51,
+    "bucketSlopePerTick": 6.7961,
+    "bucketFirst": 8094,
+    "bucketLast": 9805
+   },
+   {
+    "t0": 73330965,
+    "t1": 73331164,
+    "n": 12,
+    "coveragePct": 42.9,
+    "avg": 86.55,
+    "p95": 112.15,
+    "bucketSlopePerTick": 6.1725,
+    "bucketFirst": 8321,
+    "bucketLast": 9742
+   }
+  ],
+  "note": "完整逐窗口表见 rolling-w200.json / rolling-w300.json"
+ },
+ "matching": {
+  "spec": {
+   "method": "贪心最近邻匹配，无放回（每个基线样本至多使用一次）；canary 样本按 tick 升序处理，距离并列取最早基线样本",
+   "hardConstraints": {
+    "ownedRoomCount": "相等",
+    "e5Active": "相等",
+    "e6Active": "相等",
+    "|Δcreeps| ≤ 3": null,
+    "|ΔremoteCreeps| ≤ 2": null,
+    "|ΔwarLoad| ≤ 0.5": null,
+    "|ΔconstrLoad| ≤ 0.5": null,
+    "|ΔmarketLoad| ≤ 8": null
+   },
+   "distance": "|Δcreeps| + 2·|ΔremoteCreeps| + |ΔwarLoad| + |ΔconstrLoad| + |ΔmarketLoad|/4 + 100·[E5 active 不等] + 50·[E6 active 不等]",
+   "covariates": {
+    "ownedRooms": "有 spawn 角色的房间数（两窗口全程稳定为 8）",
+    "creeps": "全部角色 creep 计数总和",
+    "remoteTasks": "remoteDefender/remoteMiningCarrier/remoteMiningReserver/remoteWorker/colonizerHarvester 计数和",
+    "warHostile": "warControl+defenseMode+homeDefense+coreDefense 相位 CPU（战斗计数器 NOT OBSERVED，以相位负载代理）",
+    "constructionSites": "roomPlannerConstruction 相位 CPU（工地数量 NOT OBSERVED，代理；见报告 PARTIAL 声明）",
+    "marketActivity": "marketSaleAutomation+marketSalePreflight 相位 CPU（市场相位 v3-r3/observe 两窗口恒定，为采集期 console 记录，非离线可复核）",
+    "telemetryConfig": "两窗口完全相同：cfg.telemetry enabled / sampleInterval=7 / segment 90（segment-baseline2.jsonl 与 segment-canary2.jsonl 均存在同一计数器集为证）；externalTelemetryExport 相位开销两窗口分别为见 telemetryOverhead"
+   },
+   "e5e6ActiveDefinition": "E5 active=E5N59 存在 remoteMiningCarrier；E6 active=E6N59 存在 colonizerHarvester 或 remoteMiningReserver（角色在场=工作负载定义，与被解释变量 CPU 无关）"
+  },
+  "result": {
+   "matchedPairs": 111,
+   "canaryUnique": 111,
+   "baselineUnique": 111,
+   "baselineReuseMax": 1,
+   "baselineAvailable": 128,
+   "droppedCanary": {
+    "caliper": 90,
+    "hardConstraint": 2,
+    "byConstraint": {
+     "caliper:war": 1,
+     "caliper:remote": 15,
+     "caliper:e6": 60,
+     "caliper:creeps": 14,
+     "hard:e5": 2
+    }
+   },
+   "weights": "无（等权配对）；有效样本量 = 配对数（无放回，无复用）",
+   "distanceSummary": {
+    "avg": 3.14
+   },
+   "canary": {
+    "n": 111,
+    "avg": 102.18,
+    "median": 95.64,
+    "p95": 153.75,
+    "p99": 172.38,
+    "max": 173.85,
+    "p95nr": 154.31
+   },
+   "baseline": {
+    "n": 111,
+    "avg": 102.12,
+    "median": 97.32,
+    "p95": 144.85,
+    "p99": 174.4,
+    "max": 184.63,
+    "p95nr": 144.91
+   },
+   "pairedDiff": {
+    "avg": 0.06,
+    "median": -0.08,
+    "p95": 38.77,
+    "p99": 70.21
+   },
+   "meanDiffBootCI95": {
+    "lo": -6.935,
+    "hi": 7.256
+   },
+   "avgRatioBootCI95": {
+    "lo": 0.953,
+    "hi": 1.048
+   },
+   "canaryP95BootCI95": {
+    "lo": 133.255,
+    "hi": 169.283
+   },
+   "nonInferiority": {
+    "margin": "avg：配对均差 95% CI 上界 < +15%×基线配子集均值（与回滚阈值同口径）；p95：canary 配子集 p95 的 95% CI 上界 < 基线配子集 p95×1.25",
+    "avgVerdict": "PASS",
+    "p95Verdict": "PASS"
+   }
+  }
+ },
+ "e6n59Audit": {
+  "rawEvents": [
+   {
+    "tick": 73330229,
+    "roomTotal": 26,
+    "globalCpu": 118.9,
+    "roomSharePct": 21.9,
+    "roles": {
+     "carrier": {
+      "count": 1,
+      "used": 25.1
+     }
+    }
+   },
+   {
+    "tick": 73330313,
+    "roomTotal": 31.3,
+    "globalCpu": 194.9,
+    "roomSharePct": 16.05,
+    "roles": {
+     "colonizerHarvester": {
+      "count": 2,
+      "used": 30.1
+     }
+    }
+   },
+   {
+    "tick": 73330320,
+    "roomTotal": 25.4,
+    "globalCpu": 115.7,
+    "roomSharePct": 21.94,
+    "roles": {
+     "colonizerHarvester": {
+      "count": 2,
+      "used": 23
+     }
+    }
+   },
+   {
+    "tick": 73330327,
+    "roomTotal": 21.2,
+    "globalCpu": 110.2,
+    "roomSharePct": 19.27,
+    "roles": {
+     "colonizerHarvester": {
+      "count": 2,
+      "used": 20.2
+     }
+    }
+   },
+   {
+    "tick": 73330334,
+    "roomTotal": 29.6,
+    "globalCpu": 122,
+    "roomSharePct": 24.27,
+    "roles": {
+     "colonizerHarvester": {
+      "count": 2,
+      "used": 28.5
+     }
+    }
+   },
+   {
+    "tick": 73330341,
+    "roomTotal": 21.9,
+    "globalCpu": 107.4,
+    "roomSharePct": 20.41,
+    "roles": {
+     "colonizerHarvester": {
+      "count": 2,
+      "used": 20.4
+     }
+    }
+   },
+   {
+    "tick": 73330348,
+    "roomTotal": 21.8,
+    "globalCpu": 112,
+    "roomSharePct": 19.5,
+    "roles": {
+     "colonizerHarvester": {
+      "count": 2,
+      "used": 20.6
+     }
+    }
+   },
+   {
+    "tick": 73330355,
+    "roomTotal": 13.6,
+    "globalCpu": 134.3,
+    "roomSharePct": 10.15,
+    "roles": {
+     "colonizerHarvester": {
+      "count": 1,
+      "used": 12.5
+     }
+    }
+   },
+   {
+    "tick": 73330537,
+    "roomTotal": 13.8,
+    "globalCpu": 99.8,
+    "roomSharePct": 13.78,
+    "roles": {
+     "remoteMiningReserver": {
+      "count": 1,
+      "used": 12
+     }
+    }
+   },
+   {
+    "tick": 73330544,
+    "roomTotal": 33.9,
+    "globalCpu": 220.7,
+    "roomSharePct": 15.36,
+    "roles": {
+     "remoteMiningReserver": {
+      "count": 1,
+      "used": 33.1
+     }
+    }
+   },
+   {
+    "tick": 73330551,
+    "roomTotal": 15.2,
+    "globalCpu": 95.4,
+    "roomSharePct": 15.91,
+    "roles": {
+     "remoteMiningReserver": {
+      "count": 1,
+      "used": 13.9
+     }
+    }
+   },
+   {
+    "tick": 73330558,
+    "roomTotal": 13.6,
+    "globalCpu": 109.1,
+    "roomSharePct": 12.46,
+    "roles": {
+     "remoteMiningReserver": {
+      "count": 1,
+      "used": 12.8
+     }
+    }
+   },
+   {
+    "tick": 73330565,
+    "roomTotal": 12.6,
+    "globalCpu": 101,
+    "roomSharePct": 12.44,
+    "roles": {
+     "remoteMiningReserver": {
+      "count": 1,
+      "used": 11.5
+     }
+    }
+   }
+  ],
+  "eventColonizerHarvester": {
+   "range": [
+    73330313,
+    73330355
+   ],
+   "samples": 7,
+   "detail": "colonizerHarvester ×2（20.2–30.1 CPU/样本），73330355 收缩为 ×1（12.5）后消失"
+  },
+  "eventRemoteMiningReserver": {
+   "range": [
+    73330537,
+    73330565
+   ],
+   "samples": 5,
+   "detail": "remoteMiningReserver ×1（11.5–33.1 CPU/样本），73330572 起消失"
+  },
+  "eventCarrier": {
+   "tick": 73330229,
+   "detail": "carrier ×1 单样本 25.1（孤立尖峰）"
+  },
+  "peakSampleTick73330544": {
+   "global": 220.7,
+   "e5n59": {
+    "total": 45.7,
+    "roles": {
+     "remoteMiningCarrier": 43.9
+    }
+   },
+   "e6n59": {
+    "total": 33.9,
+    "roles": {
+     "remoteMiningReserver": 33.1
+    }
+   },
+   "correction": "73330544 的 E6N59=33.9 由 remoteMiningReserver(33.1) 驱动，不是 colonizerHarvester；colonizerHarvester 事件在 73330313–73330355。旧报告将两起事件混同。"
+  },
+  "colonizationCountersZero": {
+   "counters": [
+    "colonizationPathRebuilds",
+    "colonizationPathRegeneratesThrottled",
+    "colonizationPathBlockInvalidations"
+   ],
+   "value": 0,
+   "whatTheyCover": "殖民持久路径的重建/节流/块失效（矩阵层）",
+   "whatTheyDoNotCover": "creep 移动层是否跟随已有 cachedTravelPath / travelPathCache / multiRoomSegment（无对应计数器）",
+   "conclusion": "INSUFFICIENT_DATA——计数器全 0 不能排除事件 creep 跟随已有缓存路径；也不能确立“来自无固定路线 dynamic routing”。需新增 colonizationPathFollowAttempts/Hits/Fallbacks/KeyMisses 后方可判定。"
+  }
+ },
+ "counters": {
+  "formalVsBaseline": {
+   "denominators": "比例的分母为同窗口原始计数；窗口长度不同不影响比例",
+   "counters": {
+    "pathRequests": {
+     "raw": {
+      "baseline": 13647,
+      "canary": 27233
+     },
+     "perTick": {
+      "baseline": 17.2528,
+      "canary": 16.6258,
+      "relChangePct": -3.6
+     }
+    },
+    "pathCacheHits": {
+     "raw": {
+      "baseline": 10786,
+      "canary": 22356
+     },
+     "perTick": {
+      "baseline": 13.6359,
+      "canary": 13.6484,
+      "relChangePct": 0.1
+     }
+    },
+    "pathRepaths": {
+     "raw": {
+      "baseline": 2429,
+      "canary": 4148
+     },
+     "perTick": {
+      "baseline": 3.0708,
+      "canary": 2.5324,
+      "relChangePct": -17.5
+     }
+    },
+    "yieldPushes": {
+     "raw": {
+      "baseline": 168,
+      "canary": 413
+     },
+     "perTick": {
+      "baseline": 0.2124,
+      "canary": 0.2521,
+      "relChangePct": 18.7
+     }
+    },
+    "travelRequests": {
+     "raw": {
+      "baseline": 9783,
+      "canary": 16883
+     },
+     "perTick": {
+      "baseline": 12.3679,
+      "canary": 10.3071,
+      "relChangePct": -16.7
+     }
+    },
+    "travelFallbacks": {
+     "raw": {
+      "baseline": 0,
+      "canary": 0
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0,
+      "relChangePct": null
+     }
+    },
+    "travelRepaths": {
+     "raw": {
+      "baseline": 1841,
+      "canary": 2884
+     },
+     "perTick": {
+      "baseline": 2.3274,
+      "canary": 1.7607,
+      "relChangePct": -24.3
+     }
+    },
+    "multiRoomSearches": {
+     "raw": {
+      "baseline": 3185,
+      "canary": 5732
+     },
+     "perTick": {
+      "baseline": 4.0265,
+      "canary": 3.4994,
+      "relChangePct": -13.1
+     }
+    },
+    "multiRoomSegmentHits": {
+     "raw": {
+      "baseline": 4560,
+      "canary": 9210
+     },
+     "perTick": {
+      "baseline": 5.7649,
+      "canary": 5.6227,
+      "relChangePct": -2.5
+     }
+    },
+    "multiRoomSegmentInvalidations": {
+     "raw": {
+      "baseline": 37,
+      "canary": 76
+     },
+     "perTick": {
+      "baseline": 0.0468,
+      "canary": 0.0464,
+      "relChangePct": -0.9
+     }
+    },
+    "exitRecoveries": {
+     "raw": {
+      "baseline": 219,
+      "canary": 513
+     },
+     "perTick": {
+      "baseline": 0.2769,
+      "canary": 0.3132,
+      "relChangePct": 13.1
+     }
+    },
+    "stateClears": {
+     "raw": {
+      "baseline": 1993,
+      "canary": 4179
+     },
+     "perTick": {
+      "baseline": 2.5196,
+      "canary": 2.5513,
+      "relChangePct": 1.3
+     }
+    },
+    "staticMatrixBuilds": {
+     "raw": {
+      "baseline": 0,
+      "canary": 901
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0.5501,
+      "relChangePct": null
+     }
+    },
+    "staticMatrixCacheHits": {
+     "raw": {
+      "baseline": 0,
+      "canary": 50799
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 31.0128,
+      "relChangePct": null
+     }
+    },
+    "topologyRevisionChanges": {
+     "raw": {
+      "baseline": 0,
+      "canary": 126
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0.0769,
+      "relChangePct": null
+     }
+    },
+    "colonizationPathRebuilds": {
+     "raw": {
+      "baseline": 0,
+      "canary": 0
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0,
+      "relChangePct": null
+     }
+    },
+    "colonizationPathRegeneratesThrottled": {
+     "raw": {
+      "baseline": 0,
+      "canary": 0
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0,
+      "relChangePct": null
+     }
+    },
+    "colonizationPathBlockInvalidations": {
+     "raw": {
+      "baseline": 0,
+      "canary": 0
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0,
+      "relChangePct": null
+     }
+    },
+    "roleFactoryCreates": {
+     "raw": {
+      "baseline": 0,
+      "canary": 11
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0.0067,
+      "relChangePct": null
+     }
+    },
+    "roleLifecycleCacheHits": {
+     "raw": {
+      "baseline": 0,
+      "canary": 113931
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 69.5549,
+      "relChangePct": null
+     }
+    },
+    "roleLifecycleEvictions": {
+     "raw": {
+      "baseline": 0,
+      "canary": 0
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0,
+      "relChangePct": null
+     }
+    }
+   },
+   "derived": {
+    "pathRepaths/tick": {
+     "baseline": 3.0708,
+     "canary": 2.5324,
+     "relChangePct": -17.5
+    },
+    "pathRepaths/pathRequests %": {
+     "baseline": 17.8,
+     "canary": 15.23,
+     "relChangePct": -14.4
+    },
+    "pathCacheHits/pathRequests %": {
+     "baseline": 79.04,
+     "canary": 82.09,
+     "deltaPP": 3.05
+    },
+    "travelRequests/tick": {
+     "baseline": 12.3679,
+     "canary": 10.3071,
+     "relChangePct": -16.7
+    },
+    "travelRepaths/travelRequests %": {
+     "baseline": 18.82,
+     "canary": 17.08
+    },
+    "multiRoomSearches/travelRequests %": {
+     "baseline": 32.56,
+     "canary": 33.95,
+     "deltaPP": 1.39
+    },
+    "multiRoomSearches/tick": {
+     "baseline": 4.0265,
+     "canary": 3.4994,
+     "relChangePct": -13.1
+    }
+   }
+  },
+  "fullVsBaseline": {
+   "denominators": "比例的分母为同窗口原始计数；窗口长度不同不影响比例",
+   "counters": {
+    "pathRequests": {
+     "raw": {
+      "baseline": 13647,
+      "canary": 27861
+     },
+     "perTick": {
+      "baseline": 17.2528,
+      "canary": 16.5839,
+      "relChangePct": -3.9
+     }
+    },
+    "pathCacheHits": {
+     "raw": {
+      "baseline": 10786,
+      "canary": 22899
+     },
+     "perTick": {
+      "baseline": 13.6359,
+      "canary": 13.6304,
+      "relChangePct": 0
+     }
+    },
+    "pathRepaths": {
+     "raw": {
+      "baseline": 2429,
+      "canary": 4218
+     },
+     "perTick": {
+      "baseline": 3.0708,
+      "canary": 2.5107,
+      "relChangePct": -18.2
+     }
+    },
+    "yieldPushes": {
+     "raw": {
+      "baseline": 168,
+      "canary": 424
+     },
+     "perTick": {
+      "baseline": 0.2124,
+      "canary": 0.2524,
+      "relChangePct": 18.8
+     }
+    },
+    "travelRequests": {
+     "raw": {
+      "baseline": 9783,
+      "canary": 17286
+     },
+     "perTick": {
+      "baseline": 12.3679,
+      "canary": 10.2893,
+      "relChangePct": -16.8
+     }
+    },
+    "travelFallbacks": {
+     "raw": {
+      "baseline": 0,
+      "canary": 0
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0,
+      "relChangePct": null
+     }
+    },
+    "travelRepaths": {
+     "raw": {
+      "baseline": 1841,
+      "canary": 2894
+     },
+     "perTick": {
+      "baseline": 2.3274,
+      "canary": 1.7226,
+      "relChangePct": -26
+     }
+    },
+    "multiRoomSearches": {
+     "raw": {
+      "baseline": 3185,
+      "canary": 5809
+     },
+     "perTick": {
+      "baseline": 4.0265,
+      "canary": 3.4577,
+      "relChangePct": -14.1
+     }
+    },
+    "multiRoomSegmentHits": {
+     "raw": {
+      "baseline": 4560,
+      "canary": 9450
+     },
+     "perTick": {
+      "baseline": 5.7649,
+      "canary": 5.625,
+      "relChangePct": -2.4
+     }
+    },
+    "multiRoomSegmentInvalidations": {
+     "raw": {
+      "baseline": 37,
+      "canary": 78
+     },
+     "perTick": {
+      "baseline": 0.0468,
+      "canary": 0.0464,
+      "relChangePct": -0.9
+     }
+    },
+    "exitRecoveries": {
+     "raw": {
+      "baseline": 219,
+      "canary": 525
+     },
+     "perTick": {
+      "baseline": 0.2769,
+      "canary": 0.3125,
+      "relChangePct": 12.9
+     }
+    },
+    "stateClears": {
+     "raw": {
+      "baseline": 1993,
+      "canary": 4296
+     },
+     "perTick": {
+      "baseline": 2.5196,
+      "canary": 2.5571,
+      "relChangePct": 1.5
+     }
+    },
+    "staticMatrixBuilds": {
+     "raw": {
+      "baseline": 0,
+      "canary": 908
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0.5405,
+      "relChangePct": null
+     }
+    },
+    "staticMatrixCacheHits": {
+     "raw": {
+      "baseline": 0,
+      "canary": 51722
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 30.7869,
+      "relChangePct": null
+     }
+    },
+    "topologyRevisionChanges": {
+     "raw": {
+      "baseline": 0,
+      "canary": 128
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0.0762,
+      "relChangePct": null
+     }
+    },
+    "colonizationPathRebuilds": {
+     "raw": {
+      "baseline": 0,
+      "canary": 0
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0,
+      "relChangePct": null
+     }
+    },
+    "colonizationPathRegeneratesThrottled": {
+     "raw": {
+      "baseline": 0,
+      "canary": 0
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0,
+      "relChangePct": null
+     }
+    },
+    "colonizationPathBlockInvalidations": {
+     "raw": {
+      "baseline": 0,
+      "canary": 0
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0,
+      "relChangePct": null
+     }
+    },
+    "roleFactoryCreates": {
+     "raw": {
+      "baseline": 0,
+      "canary": 12
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0.0071,
+      "relChangePct": null
+     }
+    },
+    "roleLifecycleCacheHits": {
+     "raw": {
+      "baseline": 0,
+      "canary": 116755
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 69.497,
+      "relChangePct": null
+     }
+    },
+    "roleLifecycleEvictions": {
+     "raw": {
+      "baseline": 0,
+      "canary": 0
+     },
+     "perTick": {
+      "baseline": 0,
+      "canary": 0,
+      "relChangePct": null
+     }
+    }
+   },
+   "derived": {
+    "pathRepaths/tick": {
+     "baseline": 3.0708,
+     "canary": 2.5107,
+     "relChangePct": -18.2
+    },
+    "pathRepaths/pathRequests %": {
+     "baseline": 17.8,
+     "canary": 15.14,
+     "relChangePct": -14.9
+    },
+    "pathCacheHits/pathRequests %": {
+     "baseline": 79.04,
+     "canary": 82.19,
+     "deltaPP": 3.15
+    },
+    "travelRequests/tick": {
+     "baseline": 12.3679,
+     "canary": 10.2893,
+     "relChangePct": -16.8
+    },
+    "travelRepaths/travelRequests %": {
+     "baseline": 18.82,
+     "canary": 16.74
+    },
+    "multiRoomSearches/travelRequests %": {
+     "baseline": 32.56,
+     "canary": 33.61,
+     "deltaPP": 1.05
+    },
+    "multiRoomSearches/tick": {
+     "baseline": 4.0265,
+     "canary": 3.4577,
+     "relChangePct": -14.1
+    }
+   }
+  }
+ },
+ "e5n59RoomLevel": {
+  "cpuPerSample": {
+   "baseline": {
+    "n": 128,
+    "avg": 15.85,
+    "median": 14.75,
+    "p95": 36.56,
+    "p99": 50.19,
+    "max": 68.82,
+    "p95nr": 37.13
+   },
+   "canary": {
+    "n": 203,
+    "avg": 17.38,
+    "median": 15.52,
+    "p95": 35.41,
+    "p99": 47.66,
+    "max": 62.25,
+    "p95nr": 35.79
+   }
+  },
+  "cpuPerCreep": {
+   "baseline": 1.761,
+   "canary": 1.777
+  },
+  "roomCountersPerTick": {
+   "pathRequests": {
+    "baseline": 2.5297,
+    "canary": 2.8211
+   },
+   "travelRequests": {
+    "baseline": 1.0076,
+    "canary": 1.1245
+   },
+   "multiRoomSearches": {
+    "baseline": 1.0076,
+    "canary": 1.083
+   },
+   "pathRepaths": {
+    "baseline": 0.6473,
+    "canary": 0.6777
+   }
+  },
+  "cpuPerTravelRequest": {
+   "baseline": 15.731,
+   "canary": 15.452
+  }
+ },
+ "phasesCompare": {
+  "baseline": [
+   [
+    "creepWork",
+    40.28
+   ],
+   [
+    "marketSaleAutomation",
+    30.95
+   ],
+   [
+    "creepWork:pathing",
+    21.19
+   ],
+   [
+    "creepWork:intent",
+    11.89
+   ],
+   [
+    "marketSalePreflight",
+    9.45
+   ],
+   [
+    "externalTelemetryExport",
+    3.23
+   ],
+   [
+    "creepWork:decision",
+    3.23
+   ],
+   [
+    "remoteMining",
+    2.59
+   ]
+  ],
+  "canary": [
+   [
+    "creepWork",
+    41.86
+   ],
+   [
+    "marketSaleAutomation",
+    32.11
+   ],
+   [
+    "creepWork:pathing",
+    21.14
+   ],
+   [
+    "creepWork:intent",
+    11.85
+   ],
+   [
+    "marketSalePreflight",
+    8.4
+   ],
+   [
+    "creepWork:decision",
+    4.62
+   ],
+   [
+    "externalTelemetryExport",
+    3.67
+   ],
+   [
+    "remoteMining",
+    2.57
+   ]
+  ]
+ },
+ "cpuPerOwnedRoom": {
+  "baseline": 13.32,
+  "canary": 13.35
+ },
+ "telemetryOverhead": {
+  "config": "两窗口相同（见 MATCH_SPEC.covariates.telemetryConfig）",
+  "externalTelemetryExportAvg": {
+   "baseline": 3.23,
+   "canary": 3.67
+  },
+  "note": "该相位开销已包含在两侧 totalUsed 中，匹配对比不受配置差异影响"
+ },
+ "partialObservability": {
+  "towerControl": {
+   "phaseAvg": {
+    "baseline": 2.57,
+    "canary": 1.86
+   },
+   "fixedActionCountsPerTick": {
+    "baseline": 5,
+    "canary": 4.3
+   },
+   "status": "PARTIAL"
+  },
+  "carrierTaskBoard": {
+   "status": "NOT OBSERVED",
+   "reason": "无现成缓存结构可挂载，未引入生产计数器"
+  }
+ },
+ "roomAnomalies": {
+  "count": 30,
+  "byRoom": {
+   "E5N59": {
+    "count": 27,
+    "ticks": [
+     73329711,
+     73329718,
+     73329781,
+     73329795,
+     73329802,
+     73329809,
+     73329830,
+     73329879,
+     73329984,
+     73329998,
+     73330026,
+     73330068,
+     73330117,
+     73330187,
+     73330439,
+     73330446,
+     73330691,
+     73330726,
+     73330740,
+     73330768,
+     73330831,
+     73330985,
+     73331265,
+     73331272,
+     73331279,
+     73331286,
+     73331307
+    ]
+   },
+   "E1N57": {
+    "count": 1,
+    "ticks": [
+     73330061
+    ]
+   },
+   "E7N58": {
+    "count": 2,
+    "ticks": [
+     73330887,
+     73330901
+    ]
+   }
+  },
+  "sample": [
+   {
+    "tick": 73329711,
+    "room": "E5N59",
+    "roomCpu": 37.4,
+    "globalCpu": 137,
+    "topRoles": [
+     "remoteMiningCarrier:24.3",
+     "remoteMiningReserver:11.8"
+    ]
+   },
+   {
+    "tick": 73329718,
+    "room": "E5N59",
+    "roomCpu": 44.8,
+    "globalCpu": 166.2,
+    "topRoles": [
+     "remoteMiningCarrier:12.2",
+     "remoteMiningReserver:31.4"
+    ]
+   },
+   {
+    "tick": 73329781,
+    "room": "E5N59",
+    "roomCpu": 23,
+    "globalCpu": 90.1,
+    "topRoles": [
+     "remoteMiningCarrier:12.2",
+     "colonizerHarvester:10.3"
+    ]
+   },
+   {
+    "tick": 73329795,
+    "room": "E5N59",
+    "roomCpu": 47.7,
+    "globalCpu": 125.7,
+    "topRoles": [
+     "remoteMiningCarrier:34.5",
+     "colonizerHarvester:11.9"
+    ]
+   },
+   {
+    "tick": 73329802,
+    "room": "E5N59",
+    "roomCpu": 25.5,
+    "globalCpu": 100,
+    "topRoles": [
+     "remoteMiningCarrier:14.3",
+     "colonizerHarvester:10.3"
+    ]
+   },
+   {
+    "tick": 73329809,
+    "room": "E5N59",
+    "roomCpu": 23.4,
+    "globalCpu": 89.7,
+    "topRoles": [
+     "remoteMiningCarrier:11.8",
+     "colonizerHarvester:10.2"
+    ]
+   },
+   {
+    "tick": 73329830,
+    "room": "E5N59",
+    "roomCpu": 48.8,
+    "globalCpu": 154.3,
+    "topRoles": [
+     "remoteMiningCarrier:35.6",
+     "colonizerHarvester:11.8"
+    ]
+   },
+   {
+    "tick": 73329879,
+    "room": "E5N59",
+    "roomCpu": 25.9,
+    "globalCpu": 96.9,
+    "topRoles": [
+     "remoteMiningCarrier:24.9"
+    ]
+   },
+   {
+    "tick": 73329984,
+    "room": "E5N59",
+    "roomCpu": 62.2,
+    "globalCpu": 169.3,
+    "topRoles": [
+     "remoteMiningCarrier:61.1"
+    ]
+   },
+   {
+    "tick": 73329998,
+    "room": "E5N59",
+    "roomCpu": 25.9,
+    "globalCpu": 95,
+    "topRoles": [
+     "remoteMiningCarrier:24.5"
+    ]
+   },
+   {
+    "tick": 73330026,
+    "room": "E5N59",
+    "roomCpu": 25.2,
+    "globalCpu": 95.6,
+    "topRoles": [
+     "remoteMiningCarrier:24.1"
+    ]
+   },
+   {
+    "tick": 73330061,
+    "room": "E1N57",
+    "roomCpu": 48.2,
+    "globalCpu": 172.7,
+    "topRoles": [
+     "carrier:46.4"
+    ]
+   }
+  ]
+ }
+}

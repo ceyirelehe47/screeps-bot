@@ -1,0 +1,70 @@
+{
+ "generatedAt": "2026-08-28T23:35:50.170Z",
+ "script": "monitor-data/analyze-e5n59-era-metrics.mjs",
+ "note": "取代 rca-report 旧版无效归一化（pathing avg ÷ E5 活跃样本占比）的房间级单位负载指标；回滚后时期事件角色在场率下降且安静期更长，单位指标不可与前三窗口直接比较，仅作参考",
+ "eras": [
+  {
+   "label": "baseline-6fc4bf2",
+   "n": 65,
+   "tickRange": [
+    73326568,
+    73327016
+   ],
+   "e5n59": {
+    "avg": 18.13,
+    "median": 15.43,
+    "p95": 39.21,
+    "max": 56.04
+   },
+   "cpuPerCreep": 2.004,
+   "rmcPresentPct": 1,
+   "rmcUsedWhenActive": {
+    "avg": 15.3,
+    "max": 54.79
+   },
+   "globalPathingPerCreep": 0.243
+  },
+  {
+   "label": "canary-c51fffb",
+   "n": 50,
+   "tickRange": [
+    73327107,
+    73327450
+   ],
+   "e5n59": {
+    "avg": 17.45,
+    "median": 14.17,
+    "p95": 48.07,
+    "max": 53.28
+   },
+   "cpuPerCreep": 1.948,
+   "rmcPresentPct": 1,
+   "rmcUsedWhenActive": {
+    "avg": 15.32,
+    "max": 46.95
+   },
+   "globalPathingPerCreep": 0.248
+  },
+  {
+   "label": "rolledback-6fc4bf2",
+   "n": 55,
+   "tickRange": [
+    73327457,
+    73327835
+   ],
+   "e5n59": {
+    "avg": 13.07,
+    "median": 2.94,
+    "p95": 37.33,
+    "max": 72.2
+   },
+   "cpuPerCreep": 1.449,
+   "rmcPresentPct": 0.93,
+   "rmcUsedWhenActive": {
+    "avg": 12.1,
+    "max": 45.56
+   },
+   "globalPathingPerCreep": 0.159
+  }
+ ]
+}

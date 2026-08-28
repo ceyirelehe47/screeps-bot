@@ -1,0 +1,42 @@
+[collect] start 2026-08-28T21:06:29.869Z -> monitor-data/canary2-post-deploy.jsonl, duration 85min
+[collect] n=1 tick=73329662 cpu=88.1 bucket=7965 ema=88.2
+[collect] n=11 tick=73329732 cpu=80.1 bucket=8420 ema=111.9
+[collect] n=21 tick=73329802 cpu=100.0 bucket=9449 ema=104.7
+[collect] n=31 tick=73329872 cpu=167.1 bucket=9828 ema=114.4
+[collect] n=41 tick=73329942 cpu=97.4 bucket=9980 ema=106.6
+[collect] n=51 tick=73330012 cpu=95.2 bucket=9984 ema=107.3
+[collect] n=61 tick=73330082 cpu=103.2 bucket=9992 ema=113.3
+[collect] n=71 tick=73330152 cpu=114.7 bucket=9953 ema=101.2
+[collect] n=81 tick=73330222 cpu=148.5 bucket=10000 ema=98.2
+[collect] n=91 tick=73330292 cpu=90.2 bucket=10000 ema=94.4
+[collect] n=101 tick=73330362 cpu=91.1 bucket=9331 ema=108.9
+[collect] n=111 tick=73330432 cpu=92.6 bucket=9679 ema=114.9
+[collect] n=121 tick=73330502 cpu=87.9 bucket=9791 ema=104.7
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] n=131 tick=73330593 cpu=89.2 bucket=9845 ema=111.4
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] n=141 tick=73330719 cpu=139.8 bucket=10000 ema=109.1
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] n=151 tick=73330824 cpu=82.7 bucket=9977 ema=100.2
+[collect] n=161 tick=73330894 cpu=106.5 bucket=9390 ema=111.6
+[collect] n=171 tick=73330964 cpu=70.0 bucket=8094 ema=119.7
+[collect] done at 2026-08-28T22:31:29.875Z, samples=179, lastTick=73331020
+[collect] start 2026-08-28T22:37:44.894Z -> monitor-data/canary2-post-deploy.jsonl, duration 13min
+[collect] n=1 tick=73331139 cpu=73.7 bucket=9468 ema=107.1
+[collect] n=11 tick=73331209 cpu=115.6 bucket=10000 ema=107.6
+[collect] n=21 tick=73331279 cpu=102.1 bucket=9937 ema=103.4
+[collect] done at 2026-08-28T22:50:44.909Z, samples=30, lastTick=73331342

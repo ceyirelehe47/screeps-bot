@@ -1,0 +1,16 @@
+[collect] start 2026-08-28T20:05:52.736Z -> monitor-data/baseline2-pre-deploy.jsonl, duration 56.666666666666664min
+[collect] n=1 tick=73328689 cpu=89.0 bucket=10000 ema=93.4
+[collect] n=11 tick=73328759 cpu=99.6 bucket=10000 ema=96.2
+[collect] n=21 tick=73328829 cpu=103.6 bucket=9997 ema=97.6
+[collect] n=31 tick=73328899 cpu=133.6 bucket=8794 ema=127.4
+[collect] n=41 tick=73328969 cpu=120.1 bucket=8848 ema=112.8
+[collect] n=51 tick=73329039 cpu=129.0 bucket=9996 ema=104.2
+[collect] n=61 tick=73329109 cpu=82.2 bucket=10000 ema=97.7
+[collect] n=71 tick=73329179 cpu=98.5 bucket=9994 ema=89.9
+[collect] n=81 tick=73329249 cpu=95.8 bucket=10000 ema=93.3
+[collect] n=91 tick=73329319 cpu=99.2 bucket=9960 ema=105.3
+[collect] n=101 tick=73329389 cpu=101.9 bucket=10000 ema=100.4
+[collect] err: Client network socket disconnected before secure TLS connection was established
+[collect] n=111 tick=73329466 cpu=140.4 bucket=8947 ema=121.0
+[collect] n=121 tick=73329536 cpu=70.6 bucket=7446 ema=123.2
+[collect] done at 2026-08-28T21:02:32.752Z, samples=128, lastTick=73329585

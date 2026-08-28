@@ -1,0 +1,14 @@
+[segment-collect] start 2026-08-28T20:10:55.186Z -> monitor-data/segment-baseline2.jsonl, duration 50min
+[segment-collect] n=1 tick=73328766 mrs=4934 travelRepaths=3233 staticMatrixBuilds=n/a
+[segment-collect] n=11 tick=73328836 mrs=5110 travelRepaths=3354 staticMatrixBuilds=n/a
+[segment-collect] n=21 tick=73328906 mrs=5500 travelRepaths=3607 staticMatrixBuilds=n/a
+[segment-collect] n=31 tick=73328976 mrs=5945 travelRepaths=3942 staticMatrixBuilds=n/a
+[segment-collect] n=41 tick=73329046 mrs=6321 travelRepaths=4246 staticMatrixBuilds=n/a
+[segment-collect] n=51 tick=73329116 mrs=6602 travelRepaths=4451 staticMatrixBuilds=n/a
+[segment-collect] n=61 tick=73329186 mrs=6790 travelRepaths=4545 staticMatrixBuilds=n/a
+[segment-collect] n=71 tick=73329256 mrs=7025 travelRepaths=4679 staticMatrixBuilds=n/a
+[segment-collect] n=81 tick=73329326 mrs=7118 travelRepaths=4688 staticMatrixBuilds=n/a
+[segment-collect] n=91 tick=73329396 mrs=7260 travelRepaths=4726 staticMatrixBuilds=n/a
+[segment-collect] n=101 tick=73329466 mrs=7573 travelRepaths=4882 staticMatrixBuilds=n/a
+[segment-collect] n=111 tick=73329536 mrs=8038 travelRepaths=5032 staticMatrixBuilds=n/a
+[segment-collect] done 2026-08-28T21:00:55.203Z, samples=114, lastTick=73329557

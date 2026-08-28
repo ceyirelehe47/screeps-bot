@@ -2,7 +2,7 @@
 
 - 生成时间：2026-08-29
 - 数据来源：`baseline-pre-deploy.jsonl`（65 样本，tick 73326568–73327016，生产版 6fc4bf2）、`post-deploy.jsonl`（111 样本，含 canary 50 样本 tick 73327107–73327450 + 回滚后 55 样本 tick 73327457–73327835）、`snapshots.jsonl`（部署前 memory 快照）、`rollback-default-6fc4bf2.json`（回滚备份）
-- 分析脚本：`analyze-e5n59-rca.mjs`（可复核，输出 `e5n59-rca-20260829.json`）
+- 分析脚本：`analyze-e5n59-rca.mjs`（可复核，输出 `e5n59-rca-20260829.json`）；§4 房间级单位负载指标由 `analyze-e5n59-era-metrics.mjs` 重算（输出 `derived-canary2/e5n59-era-metrics.json`，本版修订新增，取代旧版无效归一化）
 - 采样机制：`cpuMonitor.latest` 每 7 tick 一个有效样本（sampleInterval=7，外部 25s 轮询去重），房间级数据按 `role × room` 聚合（`cpuPhaseProfiler.measureCreep` 包住整个 `creep.work()`）
 
 ## 1. 异常准确窗口
@@ -44,15 +44,24 @@ E5N59 异常窗口（39 个升高样本）role 分解：
 
 ## 4. 三对照窗口 + E6N59 次要事件
 
-### E5N59（三时期，单位 CPU/样本）
+### E5N59（三时期，单位 CPU/样本；分位数 type-7 线性插值，由 `monitor-data/analyze-e5n59-era-metrics.mjs` 重算）
 
 | 窗口 | n | avg | med | p95 | max | remoteMiningCarrier p50/p90/max |
 |---|---|---|---|---|---|---|
-| 基线（生产版） | 65 | 18.13 | 15.43 | 39.53 | 56.04 | 13.8 / 27.4 / 54.8 |
-| canary | 50 | 17.50 | 14.20 | — | 53.28 | 12.9 / 30.8 / 47.0 |
-| 回滚后（生产版） | 55 | 13.07 | 2.94 | 42.18 | **72.20** | 11.5 / 26.0 / 45.6 |
+| 基线（生产版） | 65 | 18.13 | 15.43 | 39.21 | 56.04 | 13.8 / 27.4 / 54.8 |
+| canary | 50 | 17.45 | 14.17 | 48.07 | 53.28 | 12.9 / 30.8 / 47.0 |
+| 回滚后（生产版） | 55 | 13.07 | 2.94 | 37.33 | **72.20** | 11.5 / 26.0 / 45.6 |
 
-**三时期分布一致，canary 中位数甚至略低**。负载归一化 pathing 成本（pathing avg ÷ E5N59 活跃样本占比）：基线 22.1/0.78≈28.3、canary 22.7/0.78≈29.1、回滚后 14.0/0.49≈28.6 —— 单位负载成本三版本相同，**候选无放大**。
+**三时期分布一致，canary 中位数甚至略低**。旧版此处曾用"pathing avg ÷ E5N59 活跃样本占比"做负载归一化（28.3/29.1/28.6），该计算**无效**（全局相位均值除以活跃样本占比不构成任何单位负载指标），已删除。替代的房间级单位负载指标（脚本 `analyze-e5n59-era-metrics.mjs`，输出 `derived-canary2/e5n59-era-metrics.json`）：
+
+| 单位指标 | 基线 | canary | 说明 |
+|---|---|---|---|
+| E5N59 CPU/creep | 2.004 | 1.948（−2.8%） | 房间 CPU 均值 ÷ 房间 creep 数均值 |
+| remoteMiningCarrier 在场率 | 100% | 100% | 三时期该 role 持续在场（回滚后 93%） |
+| active 期 remoteMiningCarrier used avg | 15.30 | 15.32（持平） | 仅取 used>0 样本 |
+| 全局 pathing/creep | 0.243 | 0.248（+2%） | 全局相位 CPU ÷ 全局 creep 数（对照项） |
+
+基线与 canary 的单位负载指标几乎相同（CPU/creep −2.8%、active 期 carrier 消耗持平、全局 pathing/creep +2%）。证据形态与"候选未放大该既有热点"一致；这是观察性窗口对照的**强提示而非确认**（无 per-travel 计数器，见 §5/§6）。回滚后时期单位指标更低（1.449）系事件角色在场率下降与安静期更长所致，不可跨期直接比较。
 
 ### E6N59 colonizerHarvester 事件（canary 尾段独有，无法完全归因）
 
@@ -75,10 +84,10 @@ E5N59 异常窗口（39 个升高样本）role 分解：
 
 | 异常 | 等级 | 依据 |
 |---|---|---|
-| **E5N59 主异常（触发回滚 p95 的最大贡献者）** | **C. EXOGENOUS_WORKLOAD** | 三时期（部署前/canary/回滚后，两个版本）强度分布一致；主导 role 为 remoteMiningCarrier 既有逐 tick 重寻路机制；负载归一化 pathing 成本相同；回滚后峰值（72.2）甚至高于 canary |
-| E6N59 colonizerHarvester 尾段事件（p95 超标的共因之一） | **D. INSUFFICIENT_DATA（疑似 CANDIDATE_AMPLIFIED）** | 同类事件基线存在但强度较低；候选 c51fffb 有已知"验证删除+重生成无节流"放大器；样本量不足 |
+| **E5N59 主异常（触发回滚 p95 的最大贡献者）** | **PRE_EXISTING_CODE_HOTSPOT / NOT_CANDIDATE_CAUSED** | 三时期（部署前/canary/回滚后，两个版本）强度分布一致；主导 role 为 remoteMiningCarrier 的既有逐 tick 重寻路代码热点（新版本共有代码路径，代码调查确认非候选引入）；房间级单位负载指标基线 vs canary 持平（CPU/creep −2.8%、active 期 carrier 消耗 15.30→15.32）；回滚后峰值（72.2）甚至高于 canary。旧版归类 EXOGENOUS_WORKLOAD 不准确——这是代码既有热点随周期负载波动，不是外部负载注入；"候选无放大"为证据强提示而非确认（见 §4） |
+| E6N59 colonizerHarvester 尾段事件（p95 超标的共因之一） | **D. INSUFFICIENT_DATA（疑似 CANDIDATE_AMPLIFIED）** | 同类事件基线存在但强度较低；候选 c51fffb 有已知"验证删除+重生成无节流"放大器；样本量不足。后续：放大器已在 7375f9f 修复（重生成重试节流），第二次 canary 中殖民路径矩阵层计数器全程为 0（但该计数器不能证明 creep 移动层路径跟随行为，见第二次 canary 报告 §8.2） |
 
-**回滚决策本身正确**（阈值即安全线，且当时无房间级对照数据可用）；本次复盘结论为：E5N59 事件不应再作为下一次 canary 的回滚依据格式（需房间级归因），E6N59 放大器必须在下次 canary 前修复并加计数器。
+**回滚决策本身正确**（阈值即安全线，且当时无房间级对照数据可用）。修订后的复盘结论：房间级归因用于解释性 RCA 与修复优先级排序，**不改变回滚判定规则**——单房事件样本仍计入全局 CPU 并受全局安全阈值约束，不建立单房免回滚例外；E6N59 放大器必须在下次 canary 前修复并加计数器（已执行，见上表）。
 
 ## 8. 后续动作（本次会话执行）
 

@@ -1,0 +1,138 @@
+{
+ "generatedAt": "2026-08-28T23:41:15.200Z",
+ "note": "monitor-data/ 原始文件 SHA-256；原始文件本身不入库（含线上运行数据与私有 Memory 快照）",
+ "files": {
+  "analyze-canary2-v2.mjs": {
+   "bytes": 35682,
+   "sha256": "d14c19a6021e5a379578ae59637975d38afd6b929091ea0b6b287a25a014da78"
+  },
+  "analyze-canary2.mjs": {
+   "bytes": 8830,
+   "sha256": "5385513e852212519aa7754407acccdeba8de0ab84e5cc97beaddd39613d66ed"
+  },
+  "analyze-e5n59-era-metrics.mjs": {
+   "bytes": 3349,
+   "sha256": "727ca47c74034b2a28e5c8d7851455195cc0d7ba7c778f52ab14a182012b9df7"
+  },
+  "analyze-e5n59-rca.mjs": {
+   "bytes": 9096,
+   "sha256": "2de5f4dc647c19160de258504ff527f0e7b080449ee7f95bcee7a65617be8521"
+  },
+  "analyze.mjs": {
+   "bytes": 1551,
+   "sha256": "6cfc903b074b695839af6714ef5cb09ae0fb9ea4b8dedfa26d5455e32aa6c6c0"
+  },
+  "apply-budget.mjs": {
+   "bytes": 1838,
+   "sha256": "192c36b3c4f97195a32372714462e0f6cf54c3b27a2cec53c0c804ef717588e6"
+  },
+  "baseline-pre-deploy-summary.json": {
+   "bytes": 2108,
+   "sha256": "7ae50b0debae3815f4670b6e70c42a94114ffb87d40bd49979987a7c11b0b7a0"
+  },
+  "baseline-pre-deploy.jsonl": {
+   "bytes": 349925,
+   "sha256": "30bfdbde021ac6a3ee06a246791f81a332c800dda902784bc2c012398bacf325"
+  },
+  "baseline2-pre-deploy.jsonl": {
+   "bytes": 694581,
+   "sha256": "87f1cf80d8c4837595432ccba52bd9b8178e0d2a47756c662d67bc6bbe0ee80f"
+  },
+  "canary2-analysis-output.json": {
+   "bytes": 5906,
+   "sha256": "9d714e2851db3346de4b0a5d7d1b2a968870aa0234e3a9f2526fba49f3b1f0c4"
+  },
+  "canary2-post-deploy.jsonl": {
+   "bytes": 1121245,
+   "sha256": "d655a1d7df3b906397132709d3ad263e42a50591bd041e43d6edc8ce57999001"
+  },
+  "canary2-report-20260829.md": {
+   "bytes": 25610,
+   "sha256": "6ea5d87acb3d71815884e56007235e7af60a78f7db7b6b5d8c9fddac33e9fb40"
+  },
+  "canary2-report.json": {
+   "bytes": 16769,
+   "sha256": "916fb255d882be57bbf6004c48d8fff5619c0d3ceeef57486cd0c5faacf74c68"
+  },
+  "collect-baseline.mjs": {
+   "bytes": 2176,
+   "sha256": "45f997f37b6377304bff6c40dc9737acfd7dd7a379b2aa613cd9ce79dcd7492b"
+  },
+  "collect-baseline2.log": {
+   "bytes": 1073,
+   "sha256": "cbd497e126f64a539996532d89bac83c73cdad379fbc6e9ac36962eec5660d18"
+  },
+  "collect-canary2.log": {
+   "bytes": 3238,
+   "sha256": "13d37114147d6a66f659b8ff1831b464c0f2568f2333e8b8e941ed425e9f472a"
+  },
+  "collect-segment-baseline2.log": {
+   "bytes": 1242,
+   "sha256": "ca96c7d0d52976d7b51d2a2ecfedc217ebecbbab4056779331d83de69fd9b72c"
+  },
+  "collect-segment-canary2.log": {
+   "bytes": 3875,
+   "sha256": "48c164393bb7b7457e1b81756b73ac7d5ee14046f1bbbcac56e8e915618d8bfa"
+  },
+  "collect-segment.mjs": {
+   "bytes": 2305,
+   "sha256": "9acca4c050d9dbd99a49341c5d22173c5623f16e5ae53258ad333e563104d5d4"
+  },
+  "deploy-report-20260829.json": {
+   "bytes": 1452,
+   "sha256": "bceccea3573ae29a1fd372e0f0667713c48f2514c6cd8bb07ffc9003db1f44f4"
+  },
+  "e5n59-rca-20260829.json": {
+   "bytes": 19665,
+   "sha256": "95aaa79987116eae10eb1deeb009c72940e8f87c92893116b01046ecff921080"
+  },
+  "jest-file-counts.json": {
+   "bytes": 8438,
+   "sha256": "5eb570b42c9dada6143a73b8f23efc5fd123aacf863e76a02b046bc1034d0f48"
+  },
+  "jest-full-results.json": {
+   "bytes": 275098,
+   "sha256": "6583f3bd4fef4de5f9a299b254069e5d1c28e5c9f2de14f5d963bea056707096"
+  },
+  "post-deploy.jsonl": {
+   "bytes": 585126,
+   "sha256": "a2c3149097163da037751e6a420777c94e1b05833305a7518f33dade2c599097"
+  },
+  "pre-canary2.mjs": {
+   "bytes": 3386,
+   "sha256": "fa721d77add495a0fc3f10e17ac516aa44e3115844da9caac77dfc8413d771a8"
+  },
+  "rca-report-20260829.md": {
+   "bytes": 10341,
+   "sha256": "4fd9eae260b7ebffaf3fbae2a278466a03e80f7e81cee763c12cc61d4bef2028"
+  },
+  "rollback-canary2.mjs": {
+   "bytes": 1587,
+   "sha256": "de82bc507b1166cd5bc003c8c72357672d671db4f30afcce6ccb67963a199b4e"
+  },
+  "rollback-default-6fc4bf2.json": {
+   "bytes": 4492882,
+   "sha256": "88aff34fd8f73b81af0675bea9508f61a4b3043efe280219893fa42cde4aa3ea"
+  },
+  "rollback-default-pre-canary2.json": {
+   "bytes": 4492938,
+   "sha256": "a43f924a5bf677f6fdc3618e4854068d4608cd0762f475cf95badc38f2152d84"
+  },
+  "segment-baseline2.jsonl": {
+   "bytes": 528713,
+   "sha256": "0a24dd660baf550e98f3f6f2079eeabc4aa1626843469b80455f92b2c2f7e29c"
+  },
+  "segment-canary2.jsonl": {
+   "bytes": 1901464,
+   "sha256": "2e39ee547c7d1281d295660e54a085cdcc772bcb59d01de4ca259d5e55c2a3ae"
+  },
+  "snapshots.jsonl": {
+   "bytes": 67749,
+   "sha256": "8345d4e7200f996b35d4383ec11b1825c7b16b6cd16c4bb66287dcdaee3a1afa"
+  },
+  "update-budget.mjs": {
+   "bytes": 1252,
+   "sha256": "bf73292809e03b67e9167ae3001dafde7ed20de75e05233bee037ebc8082a587"
+  }
+ }
+}

@@ -1,0 +1,42 @@
+[segment-collect] start 2026-08-28T21:06:29.866Z -> monitor-data/segment-canary2.jsonl, duration 85min
+[segment-collect] n=1 tick=73329662 mrs=27 travelRepaths=0 staticMatrixBuilds=49
+[segment-collect] n=11 tick=73329732 mrs=182 travelRepaths=16 staticMatrixBuilds=57
+[segment-collect] n=21 tick=73329802 mrs=424 travelRepaths=99 staticMatrixBuilds=116
+[segment-collect] n=31 tick=73329872 mrs=671 travelRepaths=177 staticMatrixBuilds=164
+[segment-collect] n=41 tick=73329942 mrs=836 travelRepaths=228 staticMatrixBuilds=183
+[segment-collect] n=51 tick=73330012 mrs=1011 travelRepaths=312 staticMatrixBuilds=227
+[segment-collect] n=61 tick=73330082 mrs=1222 travelRepaths=381 staticMatrixBuilds=273
+[segment-collect] n=71 tick=73330152 mrs=1406 travelRepaths=451 staticMatrixBuilds=289
+[segment-collect] n=81 tick=73330222 mrs=1659 travelRepaths=597 staticMatrixBuilds=332
+[segment-collect] n=91 tick=73330292 mrs=2020 travelRepaths=810 staticMatrixBuilds=371
+[segment-collect] n=101 tick=73330362 mrs=2331 travelRepaths=972 staticMatrixBuilds=401
+[segment-collect] n=111 tick=73330432 mrs=2701 travelRepaths=1271 staticMatrixBuilds=440
+[segment-collect] n=121 tick=73330502 mrs=3084 travelRepaths=1570 staticMatrixBuilds=471
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] n=131 tick=73330593 mrs=3540 travelRepaths=1831 staticMatrixBuilds=521
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: timeout
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] n=141 tick=73330719 mrs=3886 travelRepaths=2011 staticMatrixBuilds=576
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] err: Client network socket disconnected before secure TLS connection was established
+[segment-collect] n=151 tick=73330824 mrs=4199 travelRepaths=2177 staticMatrixBuilds=642
+[segment-collect] n=161 tick=73330894 mrs=4367 travelRepaths=2245 staticMatrixBuilds=744
+[segment-collect] n=171 tick=73330964 mrs=4771 travelRepaths=2380 staticMatrixBuilds=773
+[segment-collect] done 2026-08-28T22:31:29.875Z, samples=179, lastTick=73331020
+[segment-collect] start 2026-08-28T22:37:44.924Z -> monitor-data/segment-canary2.jsonl, duration 13min
+[segment-collect] n=1 tick=73331139 mrs=5296 travelRepaths=2668 staticMatrixBuilds=865
+[segment-collect] n=11 tick=73331209 mrs=5509 travelRepaths=2759 staticMatrixBuilds=903
+[segment-collect] n=21 tick=73331279 mrs=5666 travelRepaths=2815 staticMatrixBuilds=923
+[segment-collect] done 2026-08-28T22:50:44.940Z, samples=30, lastTick=73331342

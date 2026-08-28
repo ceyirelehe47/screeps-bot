@@ -1,0 +1,39 @@
+=== CMD: npm run typecheck ===
+
+
+> screeps@2026.8.29-2 typecheck:test
+> tsc -p tsconfig.json --noEmit
+
+EXIT=0
+=== CMD: npm test ===
+    console.log
+      LOCAL_DISPATCH_PERFORMANCE_BASELINE {"schema":"local-dispatch-performance-baseline/v2","implementation":"full-ref-local-dispatch","fixture":{"rooms":20,"tasksPerRoom":20,"totalTasksPerDomain":400,"actors":50},"protocol":{"clock":"process.hrtime.bigint","timingUnit":"milliseconds","warmupBatches":5,"measuredBatches":30,"iterationsPerBatch":100,"p95":"nearest-rank","timingPassFail":"observation-only; deployment CPU gate is the live same-shard window","complexityPassFail":"deterministic public-input/read-DTO counts"},"preChangeEvidence":{"source":"openspec/changes/local-dispatch-ownership/evidence/pre-change-baseline.md","commit":"df2e1af60a035fd99406888d69bba9903e8a7118","observation":{"workerCurrent":{"median":12.083,"p95":12.378},"workerRelease":{"median":39.879,"p95":40.633},"carrierList":{"median":13.476,"p95":14.086},"carrierClaim":{"median":12.937,"p95":13.586},"carrierReplace":{"median":61.892,"p95":66.713}}},"scenarios":{"workerCurrent":{"samples":[646.9118,937.9862,769.2929,706.5876,697.7635,726.5321,696.4742,770.1998,803.3995,818.1133,881.7406,831.6343,895.8246,822.2074,622.0857,483.3136,450.8264,448.1359,443.5345,427.3857,403.075,430.485,444.1267,379.3625,419.6287,419.0904,456.0127,381.114,402.9526,386.7582],"median":552.69965,"p95":895.8246,"min":379.3625,"max":937.9862,"relativeToPreChange":{"median":45.741923,"p95":72.372322}},"workerRelease":{"samples":[279.2373,318.4665,252.6618,291.903,300.031,318.3009,298.9637,265.7162,325.0258,258.6242,258.6174,243.1062,241.7517,228.9383,234.6383,223.8416,237.0674,233.6935,248.8543,241.7556,232.7221,257.9952,229.9441,247.0253,229.0322,229.9471,239.7334,256.3353,268.3714,239.7373],"median":247.9398,"p95":318.4665,"min":223.8416,"max":325.0258,"relativeToPreChange":{"median":6.217302,"p95":7.837632}},"carrierList":{"samples":[7.2081,6.3003,5.4561,5.3393,5.2804,5.9343,5.7734,5.1761,5.6498,5.6773,6.1921,5.1345,5.7481,6.3264,6.7523,5.5331,6.1258,7.187,8.7101,8.7151,4.8644,5.0995,5.0596,5.0227,6.2013,5.3367,5.4731,5.6931,5.5399,8.0048],"median":5.6852,"p95":8.7101,"min":4.8644,"max":8.7151,"relativeToPreChange":{"median":0.421876,"p95":0.618352}},"carrierClaim":{"samples":[46.4198,45.2307,49.6758,51.7978,56.0713,47.3616,46.5982,48.9738,48.2099,45.6008,50.2986,47.4391,52.0271,47.0511,59.1371,60.9832,56.6668,56.4268,51.4237,49.0227,49.1825,50.5469,47.9794,47.5262,44.5124,46.7105,52.8332,46.1993,62.243,47.5346],"median":48.99825,"p95":60.9832,"min":44.5124,"max":62.243,"relativeToPreChange":{"median":3.787451,"p95":4.48868}},"carrierReplace":{"samples":[103.4162,112.1978,103.6035,108.7733,159.1278,130.7441,125.5346,118.8956,105.378,110.8407,104.2762,112.3091,101.3407,112.3668,108.2038,116.8561,103.7542,121.3537,110.9024,131.586,119.1297,124.3227,108.9605,113.896,145.5758,156.0012,113.3673,101.1513,105.9473,110.1316],"median":112.25345,"p95":156.0012,"min":101.1513,"max":159.1278,"relativeToPreChange":{"median":1.813699,"p95":2.338393}}},"complexityGates":{"workerRelease":{"acquireCalls":5000,"releaseCalls":5000,"exactRoomDescriptorReads":5000,"exactTaskDescriptorReads":5000,"boardEnumerations":0},"workerAcquireReconcile":{"acquireCalls":50,"reconcileCalls":50,"assignedCreepsDescriptorReads":150},"carrier":{"exact":{"exactCalls":400,"exactResults":400,"refDescriptorReads":2400},"list":{"listCalls":20,"listResults":400},"replace":{"replaceCalls":2000,"replaceResults":40000,"draftIndexReads":40000,"stepIndexReads":40000},"claim":{"claimCalls":5000,"successfulClaims":5000,"releasedClaims":5000,"claimStepIndexReads":5000,"actorDescriptorReads":5000,"actorEnumerations":0},"readDto":{"snapshotCalls":1,"snapshotEntries":400,"stepArrayEnumerations":400,"stepEntryDescriptorReads":800}}},"limitations":["Node/Jest wall-clock is not Screeps CPU and old/current samples came from separate processes.","Relative old/current wall-clock ratios are observations, never pass/fail authorization.","Worker current starts bound; Carrier claim is the uncontended immediate-release path.","Carrier complexity probes observe public inputs/read DTOs and never the private Map hierarchy."]}
+
+      at Object.<anonymous> (test/localDispatchPerformanceBaseline.test.ts:761:13)
+
+PASS src/runtime/marketBaseResourcePermit.test.ts (92.323 s)
+
+Test Suites: 183 passed, 183 total
+Tests:       605 passed, 605 total
+Snapshots:   0 total
+Time:        97.388 s, estimated 109 s
+Ran all test suites.
+EXIT=0
+=== CMD: npm run test:budget ===
+
+Test Suites: 183 passed, 183 total
+Tests:       605 passed, 605 total
+Snapshots:   0 total
+Time:        198.917 s, estimated 594 s
+Ran all test suites.
+Test results written to: C:\Users\15027\AppData\Local\Temp\screeps-jest-budget-VYMytA\results.json
+{"status":"JEST_TEST_BUDGET=PASSED","suites":183,"tests":605,"manifest":"test/test-suite-budget.json"}
+EXIT=0
+=== CMD: npm run build ===
+[deploy-guard] warning: building from a dirty working tree; embedded identity is not a committed state.
+cleared:  D:\code\screeps\screeps-bot\dist
+[36m
+[1msrc/main.ts[22m → [1mdist/main.js[22m...[39m
+[deploy] bundle sha256: 14441cb5ec051a6a… (full in Memory.runtime.lastDeployBundleHash)
+[32mcreated [1mdist/main.js[22m in [1m15.6s[22m[39m
+EXIT=0

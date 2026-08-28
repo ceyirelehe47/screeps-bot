@@ -3,7 +3,19 @@ dist/
 .secret.json
 coverage/
 AGENTS.md
-monitor-data/
+# monitor-data 原始数据不入库（线上运行数据/私有 Memory 快照），仅白名单证据文件入库；
+# 原始文件以 derived-canary2/manifest-sha256.json 的 SHA-256 锚定
+monitor-data/*
+!monitor-data/analyze-canary2-v2.mjs
+!monitor-data/analyze-e5n59-era-metrics.mjs
+!monitor-data/collect-baseline.mjs
+!monitor-data/collect-segment.mjs
+!monitor-data/rollback-canary2.mjs
+!monitor-data/collect-baseline2.log
+!monitor-data/collect-canary2.log
+!monitor-data/collect-segment-baseline2.log
+!monitor-data/collect-segment-canary2.log
+!monitor-data/derived-canary2/
 graphify-out/
 .graphify*
 .DS_Store
