@@ -33,6 +33,7 @@ describe("getRoomTopologyRevision", () => {
     resetRuntimeServices();
     clearRoomTopologyRevisionCacheForTest();
     clearMovementAnalyticsForTest();
+    Memory.cfg = { movementMetrics: { mode: "rooms" } };
     Game.rooms = {};
     Game.time += 1;
   });

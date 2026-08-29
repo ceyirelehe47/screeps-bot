@@ -47,6 +47,7 @@ function setupBasicEnv() {
       sampleInterval: 1,
       segmentId: 42,
     },
+    movementMetrics: { mode: "rooms" },
   };
   clearMovementAnalyticsForTest();
   Game.rooms = {

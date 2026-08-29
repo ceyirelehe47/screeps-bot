@@ -177,6 +177,7 @@ describe("moveToTargetRoom multi-room segment cache", () => {
     Game.creeps = {};
     Game.powerCreeps = {};
     Game.spawns = {};
+    Memory.cfg = { movementMetrics: { mode: "rooms" } };
     Memory.data = undefined;
     (getSourceContainerPositionsForRoom as jest.Mock).mockReturnValue([]);
 

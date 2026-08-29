@@ -39,6 +39,12 @@ declare global {
       sampleInterval?: number;
       segmentId?: number;
     };
+    movementMetrics?: {
+      /** 显式观测模式：off（不记录）/ totals（默认，仅累计 totals）/ rooms（含房间分桶，定向诊断用）。 */
+      mode?: "off" | "totals" | "rooms";
+      /** @deprecated 旧开关，等价于 mode:"totals"；显式 mode 优先。 */
+      roomStats?: boolean;
+    };
     cpuProfiler?: {
       enabled?: boolean;
       sampleInterval?: number;

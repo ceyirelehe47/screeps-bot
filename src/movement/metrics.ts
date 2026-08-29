@@ -22,7 +22,12 @@ type MovementMetricName =
   // RoleLifecycle 实例缓存：验证生命周期缓存真实命中（无房间归属，仅 totals）。
   | "roleFactoryCreates"
   | "roleLifecycleCacheHits"
-  | "roleLifecycleEvictions";
+  | "roleLifecycleEvictions"
+  // 阶段 B 远采路由治理：同 tick 共享搜索命中 / 退避跳过的完整跨房搜索 /
+  // dynamic next-room 缓存命中（均无房间归属之外的额外分桶需求）。
+  | "sharedSearchHits"
+  | "fullSearchBackoffSkips"
+  | "dynamicRouteCacheHits";
 
 /** 瞬时值（非累计计数），flush 时覆盖写入 totals 旁边的 gauges。 */
 type MovementGaugeName = "roleLifecycleCacheSize";
@@ -49,6 +54,10 @@ export interface MovementMetricBucket {
   roleFactoryCreates: number;
   roleLifecycleCacheHits: number;
   roleLifecycleEvictions: number;
+  // 阶段 B 远采路由治理：完整跨房搜索的共享复用命中与退避跳过。
+  sharedSearchHits: number;
+  fullSearchBackoffSkips: number;
+  dynamicRouteCacheHits: number;
 }
 
 export interface MovementAnalyticsSnapshot {
@@ -77,6 +86,54 @@ let normalizedMovementAnalytics: MovementAnalyticsSnapshot | undefined;
 
 const MOVEMENT_METRICS_FLUSH_INTERVAL = 5;
 
+/**
+ * 显式观测模式：
+ * - "off"：记录路径直接返回，快照停留在最后一次 flush 的状态（生产静默）。
+ * - "totals"：只累计 totals（无房间分桶 Map）——默认，成本≈每事件一次
+ *   pending Map 计数。
+ * - "rooms"：totals + 按房间分桶（定向诊断 / 单房归因时短期开启）。
+ *
+ * 兼容旧配置：`Memory.cfg.movementMetrics.roomStats === false` 等价于
+ * "totals"；显式 `mode` 优先于 roomStats。默认 "totals"（生产低干扰基线），
+ * 房间明细仅在定向诊断时通过 `mode:"rooms"` 开启。模式每 tick 解析一次
+ * （memo），读取 Memory.cfg 不进热路径。
+ */
+export type MovementMetricsMode = "off" | "totals" | "rooms";
+
+interface MovementMetricsRuntimeConfig {
+  mode: MovementMetricsMode;
+}
+
+interface MovementMetricsRawConfig {
+  mode?: string;
+  roomStats?: boolean;
+}
+
+let movementMetricsModeCache: { tick: number; mode: MovementMetricsMode } | undefined;
+
+function normalizeMovementMetricsMode(raw: MovementMetricsRawConfig | undefined): MovementMetricsMode {
+  if (raw?.mode === "off" || raw?.mode === "totals" || raw?.mode === "rooms") {
+    return raw.mode;
+  }
+  if (raw && raw.roomStats === false) {
+    return "totals";
+  }
+  return "totals";
+}
+
+function getMovementMetricsMode(): MovementMetricsMode {
+  if (!movementMetricsModeCache || movementMetricsModeCache.tick !== Game.time) {
+    const raw = (Memory.cfg as { movementMetrics?: MovementMetricsRawConfig } | undefined)?.movementMetrics;
+    movementMetricsModeCache = { tick: Game.time, mode: normalizeMovementMetricsMode(raw) };
+  }
+  return movementMetricsModeCache.mode;
+}
+
+/** 仅供测试：同一 tick 内切换 Memory.cfg 后强制重算模式。 */
+export function resetMovementMetricsModeCacheForTest(): void {
+  movementMetricsModeCache = undefined;
+}
+
 interface PendingMovementMetrics {
   /** 最后一次事件发生的 tick。 */
   tick: number;
@@ -104,8 +161,7 @@ function ensurePendingMovementMetrics(): PendingMovementMetrics {
 }
 
 function isRoomMovementStatsEnabled(): boolean {
-  return (Memory.cfg as { movementMetrics?: { roomStats?: boolean } } | undefined)?.movementMetrics
-    ?.roomStats !== false;
+  return getMovementMetricsMode() === "rooms";
 }
 
 function bumpPendingCounter(
@@ -190,6 +246,9 @@ function createEmptyBucket(): MovementMetricBucket {
     roleFactoryCreates: 0,
     roleLifecycleCacheHits: 0,
     roleLifecycleEvictions: 0,
+    sharedSearchHits: 0,
+    fullSearchBackoffSkips: 0,
+    dynamicRouteCacheHits: 0,
   };
 }
 
@@ -253,6 +312,9 @@ export function recordMovementMetric(metric: MovementMetricName, roomName?: stri
   if (!Number.isFinite(count) || count <= 0) {
     return;
   }
+  if (getMovementMetricsMode() === "off") {
+    return;
+  }
 
   const pending = ensurePendingMovementMetrics();
   pending.tick = Game.time;
@@ -275,7 +337,7 @@ export function recordMovementMetric(metric: MovementMetricName, roomName?: stri
 
 /** 瞬时 gauge：覆盖语义，flush 时写入 snapshot.gauges（不区分房间）。 */
 export function recordMovementGauge(gauge: MovementGaugeName, value: number): void {
-  if (!Number.isFinite(value)) {
+  if (!Number.isFinite(value) || getMovementMetricsMode() === "off") {
     return;
   }
   const pending = ensurePendingMovementMetrics();
@@ -303,6 +365,7 @@ export function clearMovementAnalyticsForTest(): void {
   pendingMovementMetrics = null;
   lastMovementMetricsFlushTick = -1;
   movementMetricsFlushCount = 0;
+  movementMetricsModeCache = undefined;
 }
 
 /** 仅供测试观测 flush 次数（含显式读取触发的强制 flush）。 */

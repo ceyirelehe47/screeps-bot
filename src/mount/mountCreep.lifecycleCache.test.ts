@@ -107,10 +107,16 @@ describe("role lifecycle cache", () => {
     expect(__factoryCallCounts.worker).toBe(1);
     expect(roleRegistry.worker).toHaveBeenCalledTimes(1);
     expect(roleRegistry.worker).toHaveBeenCalledWith("arg-a");
-    // 诊断计数器：一次 factory 创建 + 一次缓存命中（第二个 creep）。
+    // 诊断计数器：factory 创建（低频）立即可见；cache hit 走 32-tick 批量
+    // buffer，非边界 tick 不产生任何 metrics 写入（观测税移除）。
     const totals = getMovementAnalyticsForTest().totals;
     expect(totals.roleFactoryCreates).toBe(1);
-    expect(totals.roleLifecycleCacheHits).toBe(1);
+    expect(totals.roleLifecycleCacheHits).toBe(0);
+
+    // 边界 tick 再命中一次：buffer 连同累计值整体落盘。
+    Game.time = (Math.floor(Game.time / 32) + 1) * 32;
+    work(second);
+    expect(getMovementAnalyticsForTest().totals.roleLifecycleCacheHits).toBe(2);
   });
 
   it("下一 tick 配置未变化时仍复用", () => {

@@ -1,7 +1,7 @@
 import { roleRegistry } from "@/roles";
 import { clearMovementState } from "@/roles/shared";
 import { decodeCrossShardTravelerName } from "@/runtime/crossShardNaming";
-import { measureCreepDecision } from "@/runtime/cpuPhaseProfiler";
+import { isPerCreepPhaseTimingEnabled, measureCpuPhase } from "@/runtime/cpuPhaseProfiler";
 import { getCreepConfigService } from "@/runtime/runtimeServices";
 import { recordMovementGauge, recordMovementMetric } from "@/movement/metrics";
 import type { RoleFactory } from "@/types/system";
@@ -56,8 +56,30 @@ interface RoleLifecycleCacheEntry {
 const ROLE_LIFECYCLE_CACHE_MAX = 256;
 const roleLifecycleCache = new Map<string, RoleLifecycleCacheEntry>();
 
+// roleLifecycleCacheHits 是唯一每 creep 每 tick 触发的高频计数（线上约
+// 69 次/tick）：走通用 movement metrics Map 路径的观测税与被测对象同量级。
+// 这里退化为模块级普通数字累加，仅在 32-tick 边界批量写入一次 metrics；
+// 模块级变量随代码重载（global reset）自然清零，无跨 reset 泄漏。
+const ROLE_LIFECYCLE_HIT_FLUSH_INTERVAL_TICKS = 32;
+let roleLifecycleCacheHitBuffer = 0;
+
+function flushBufferedRoleLifecycleCacheHits(): void {
+  if (roleLifecycleCacheHitBuffer > 0) {
+    recordMovementMetric("roleLifecycleCacheHits", undefined, roleLifecycleCacheHitBuffer);
+    roleLifecycleCacheHitBuffer = 0;
+  }
+}
+
+function bufferRoleLifecycleCacheHit(): void {
+  roleLifecycleCacheHitBuffer += 1;
+  if ((Game.time & (ROLE_LIFECYCLE_HIT_FLUSH_INTERVAL_TICKS - 1)) === 0) {
+    flushBufferedRoleLifecycleCacheHits();
+  }
+}
+
 export function clearRoleLifecycleCacheForTest(): void {
   roleLifecycleCache.clear();
+  roleLifecycleCacheHitBuffer = 0;
 }
 
 /** 仅供测试观测缓存条目数。 */
@@ -115,7 +137,7 @@ function getOrCreateRoleLifecycle(
   const cached = roleLifecycleCache.get(cacheKey);
   if (cached && isCacheEntryCurrent(cached, role, args)) {
     cached.lastUsedAt = Game.time;
-    recordMovementMetric("roleLifecycleCacheHits");
+    bufferRoleLifecycleCacheHit();
     return cached.lifecycle;
   }
 
@@ -187,7 +209,10 @@ export function mountCreep(): void {
       }
     }
 
-    const logic = measureCreepDecision(() => resolveRoleLogic(this));
+    // 非采样 tick 直接调用（不创建计时闭包）；采样 tick 才进入 phase 计时。
+    const logic = isPerCreepPhaseTimingEnabled()
+      ? measureCpuPhase("creepWork:decision", () => resolveRoleLogic(this))
+      : resolveRoleLogic(this);
     if (!logic) {
       clearMovementState(this);
       this.say("no-config");
@@ -195,7 +220,12 @@ export function mountCreep(): void {
     }
 
     if (!this.memory.ready) {
-      this.memory.ready = measureCreepDecision(() => (logic.prepare ? logic.prepare(this) : true));
+      const prepared = isPerCreepPhaseTimingEnabled()
+        ? measureCpuPhase("creepWork:decision", () => (logic.prepare ? logic.prepare(this) : true))
+        : logic.prepare
+          ? logic.prepare(this)
+          : true;
+      this.memory.ready = prepared;
       return;
     }
 
