@@ -24,9 +24,9 @@ const QUERY_CREDENTIAL_PATTERN = new RegExp(
   "gi",
 );
 
-// 形如 `Authorization: Bearer xxx` / `X-Token: xxx` 的头形式。
+// 形如 `Authorization: Bearer xxx` / `X-Token: xxx` 的头形式（scheme 词可选）。
 const HEADER_CREDENTIAL_PATTERN =
-  /\b(Authorization|X-Token|Proxy-Authorization)\s*[:=]\s*[^\s"'<>]+/gi;
+  /\b(Authorization|X-Token|Proxy-Authorization)\s*[:=]\s*(?:\S+\s+)?[^\s"'<>]+/gi;
 
 // JSON/对象 dump 形式：`"token": "value"`、`"apiKey":"value"`。
 const JSON_CREDENTIAL_FIELD_PATTERN = new RegExp(
