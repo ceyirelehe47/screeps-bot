@@ -1,18 +1,18 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "3f7d148",
+    "commit": "2b5291a",
     "suites": 193,
-    "tests": 666,
-    "passed": 666,
+    "tests": 670,
+    "passed": 670,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
     "suites": 193,
-    "tests": 666,
-    "passed": 666,
+    "tests": 670,
+    "passed": 670,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -955,7 +955,7 @@
     },
     "src/runtime/marketSaleSession.test.ts": {
       "baseline": 0,
-      "budget": 11,
+      "budget": 12,
       "tier": "high-risk"
     },
     "src/runtime/marketSalePlanningGate.test.ts": {
@@ -975,12 +975,12 @@
     },
     "src/runtime/empireInventoryIndex.test.ts": {
       "baseline": 0,
-      "budget": 10,
+      "budget": 11,
       "tier": "high-risk"
     },
     "src/runtime/empireInventoryShadow.test.ts": {
       "baseline": 0,
-      "budget": 5,
+      "budget": 7,
       "tier": "high-risk"
     },
     "src/runtime/empireInventoryBenchmark.test.ts": {
