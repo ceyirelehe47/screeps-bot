@@ -51,29 +51,32 @@ src/runtime/treasury/
 TreasuryEpoch = { scope: "shared" | "market-fresh"; epochSeq: 单调递增; observedAtTick: Game.time }
 ```
 
-- 同 tick 内 shared observation 至多构建一次，重复访问返回同一引用（缓存计数）。
-- `beginFreshObservation("market-fresh")` 每次调用独立扫描构建，不污染 shared 缓存——市场 fresh-read 语义（first/second read 隔离）的未来接入点。
-- 任何即时授权路径必须校验 `epoch.observedAtTick === Game.time`；stale epoch 只能用于审计视图，不得作为可支配资产。
+- 每 tick 恰好发行一个 shared epoch（beginTick）；重复访问返回同一引用（缓存计数）。
+- `beginFreshObservation()` 每次调用独立扫描构建并发行独立 epoch，不污染 shared 缓存——市场 fresh-read 语义（first/second read 隔离）的未来接入点。
+- **epoch 注册表**：每 tick 发行的全部 epoch（shared 1 + fresh N）登记进 facade 内注册表（每 tick 清空）。已接受动作登记必须携带决策所依据的 `TreasuryDecisionContext { scope, epochSeq, observedAtTick }` 并通过注册表校验；stale（旧 tick）、unknown（本 tick 未发行的序列号）、scope 混用（声明 scope 与注册表不符）一律拒绝。无绕过注册表校验的公开登记入口（convenience 单 posting 入口同样强制）。
+- stale epoch 只能用于审计视图，不得作为可支配资产。
 
-### 3.3 Journal 与幂等结算
+### 3.3 Transaction Journal 与幂等结算（第二迭代升级）
 
 ```
-TreasuryJournalEntry = { actionId（幂等键，调用方构造）; kind; roomName; locationKind; resource; delta; recordedAtTick; epochSeq; source }
+TreasuryTransactionInput = { transactionId（幂等键，格式受 Treasury 边界约束）; kind; source; decision; postings: Posting[] }
+TreasuryPosting = { roomName; locationKind; resource; delta（有限非零整数） }
 ```
 
-- `recordAcceptedAction(entry)`：
-  - epoch 过期（tick 不匹配）→ 拒绝（`stale_epoch`）；
-  - actionId 已结算（保留最近若干 tick 的 FIFO 集合）→ 拒绝（`already_settled`），不重复叠加；
-  - 通过 → journal 追加 + overlay 累加。
-- overlay 键为 `room:locationKind:resource`，查询 `projectedAmount = observed + overlay`。
-- reconciler 在下一 tick 构建时计算 `actual - (prevObserved + prevOverlay)`，非零差异计数并留存有限样本（环形缓冲），按流入/流出分类——差异是审计信号（物理世界同 tick 会有 creep 存取等合法变化），不是失败；但**不得静默丢弃**。
+- **原子性**：一个动作（terminal.send / market deal / 搬运 / lab / factory）= 一个 transaction + 一或多腿 posting。全部 posting 先整体验证（格式 → 同 transaction 内同 key 合并 → 物理可行性）再一次性写入（journal + overlay + heap 缓存 + Memory receipt）；任一 posting 非法则整笔回滚，零部分写入。
+- **输入验证**：transactionId 格式（`[A-Za-z0-9:_\-.]{1,128}`，推荐 `formatTreasuryTransactionId` 铸造）；kind/source 非空有限长；delta 非零有限整数（NaN/Infinity/0/非整数拒绝）；resource ∈ RESOURCES_ALL；房间已知、位置存在；交易后资源量非负（insufficient_amount）；交易后容量不越界（capacity_overflow，含同 tick 多笔累计口径）。
+- **幂等（三段）**：① 幂等检查优先于一切验证（重放无论 payload 一律 already_settled）；② heap 本 tick 缓存；③ `Memory.runtime.treasury.receipts`（跨 tick 与 global reset 权威）。receipt 只存 transactionId → 结算 tick，retention 5000 tick、cap 4096 条（按结算 tick 从老到新驱逐；当前 tick 的 receipt 绝不驱逐——宁超限不破坏本 tick 幂等；版本不兼容时冷启动重建）。
+- **projected capacity**：overlay 与容量投影同步推进（used/free 随该位置全部资源 delta 净变化）；验证层保证 projectedFree ∈ [0, physical]，读 API `projectedUsedCapacity`/`projectedFreeCapacity` 与 observed 口径分离。
+- **reconciler（key 并集）**：endTick 归档投影终态（含 structureId），下一 tick beginTick 对 previous-finals ∪ current-observed 全 key 对账；分类 inflow/outflow/new_resource/new_location/new_room/room_lost/location_lost/structure_replaced；tick gap（previousTick+1 ≠ currentTick）与 global reset（heap 丢失但 Memory lifecycle 存在）显式标记，差异为 gap 累积值，不静默；mismatch 样本携带相关 transaction id/kind 追溯（上一 tick journal 有界 heap 副本，cap 512）。
 
-### 3.4 承诺索引（每 tick 重建，读侧零写）
+### 3.4 承诺索引（每 tick 重建，读侧零写；第二迭代：点时快照 + revision 失效）
 
-- transfer tasks：复用 `createResourceTransferTaskAmountIndex()` 与 `isHealthyReceiverCapacityCommitment`/`countsResourceTransferTaskTowardDemand` canonical 谓词，提供 outgoing/pendingOutgoing/incoming/pendingIncoming/incomingTaskCount/route merge lookup。
-- production reservations：活跃（未过期）条目聚合 + holder 存在性检查（孤儿计数，不删除）。
-- receiver headroom（第一版口径）：`storageFree(observation) − healthy incoming task remaining`、`terminalFree − …`。**不含** safety reserve 与内存 ledger 的独立 reservation——完整语义在后续阶段由 `ReceiverCapacityLedger` 实例并入 Treasury 时提供，OpenSpec 任务表中登记。
-- owner-aware：子分配语义目前由 ReceiverCapacityLedger 持有；Treasury 承诺索引保证"同一 taskId 在同视角桶内只计一次"（Record 键唯一）并在 shadow 中检查重复计数。
+- **点时快照**：构建期一次性聚合为 primitive 值（不保留 task/reservation 对象引用；外部原地修改原对象不影响已构建索引）；receiver healthy incoming 构建期按房间预聚合（receiverCommitments 不回扫 live task store）；route merge 预构建 Map 索引（查询零线性扫描）。
+- **revision invalidation**：transfer tasks / production reservations 的全部 mutation 入口（创建/合并/取消/阻塞/解阻/进度/回收/清理/续租/释放/GC，及 resourceControl 任务字段直接写入的统一同步点 syncResourceControlTransferTask）调用 `bumpTreasuryCommitmentRevision()`（模块级计数，global reset 后与缓存同步归零，无需 global 槽）；facade 每次访问比对 revision，变化即重建。`treasuryCommitmentInvalidationBoundaries` 架构测试守护全部 mutation 入口，防止新写入口绕过。
+- transfer tasks：复用 canonical 谓词，提供 outgoing/pendingOutgoing/incoming/pendingIncoming/incomingTaskCount/route merge lookup。
+- production reservations：活跃（未过期且未孤儿）条目聚合 + holder 存在性检查（孤儿计数，不删除）。
+- receiver headroom（第一版口径）：`storageFree(observation) − healthy incoming task remaining`、`terminalFree − …`，observed 与 projected 双轨（projected = observed free 扣减本 tick 已结算 transaction 容量净变化）。**不含** safety reserve 与内存 ledger 的独立 reservation——完整语义在后续阶段由 `ReceiverCapacityLedger` 实例并入 Treasury 时提供，OpenSpec 任务表中登记。
+- owner-aware：查询可声明 `TreasuryQueryOwner { holderId, scope: "production-reservation" }`——排除自己持有的 production reservation、其他 owner 照常扣除；owner 非法（空/未知 scope）fail closed（spendable=0、overcommitted=true，不返回乐观可用量）。transfer task child reservation / receiver capacity owned reservation 的完整接入留待后续阶段，本轮接口语义固定。
 
 ### 3.5 Budget / Reservation / Contract 分离
 
@@ -90,19 +93,22 @@ TreasuryQueryContext = {
   resource; rooms?; locations?（默认 storage+terminal）;
   allowProjected?（默认 true）; allowIncoming?（默认 false）;
   subtractOutgoing?（默认 true）; subtractReservations?（默认 true）;
-  withhold?（调用方声明的策略保留量，如 market 保护/战略储备）
+  withhold?（调用方声明的策略保留量，如 market 保护/战略储备）;
+  owner?（TreasuryQueryOwner；合法时 reservedProduction 排除自身预留，非法 fail closed）
 }
-→ TreasuryBalanceView = { observed, projected, committed, incoming, spendable, overcommitted, epoch }
+→ TreasuryBalanceView = { observed, projected, committed, incoming, spendable, overcommitted, ownerStatus, epoch }
 ```
 
 视图映射：physical=observed（限定 rooms/locations）；accessible=限定 locations 的 observed；projected；committed；spendable=max(0, base−committed−withhold) 且当原始差值为负时 `overcommitted=true`（不静默钳制）；expected incoming/outgoing=承诺索引对应桶；transferable=locations=[terminal] 的 spendable。`production-feasible`/`sellable` 属于策略组合（配方知识、市场保护账本），由调用方以 withhold 参数表达，后续阶段再固化为专用视图。
 
-## 4. Tick 生命周期
+## 4. Tick 生命周期（第二迭代：显式 begin/end）
 
-1. **tick 开始（懒触发，首次访问 observation）**：新 epoch → reconcile 上一 tick journal/overlay → 重建稀疏 observation → 承诺索引按需构建。
-2. **规划阶段**：消费者经 facade 查询带上下文余额、读承诺索引；分配决策仍属各模块（后续阶段迁入 Allocation Planner）。
-3. **执行阶段**：执行器调用 Game API；成功后 `recordAcceptedAction()`；失败不写 journal。
-4. **tick 结束**：`runTreasuryShadowCheck()`（低频采样）输出审计指标并低频快照 `Memory.runtime.treasuryPerf`；只持久化指标，不持久化物理事实。
+1. **beginTick（显式，main.ts 固定挂载于一切市场预检/生产/物流/规划之前）**：幂等（同 tick 重复调用安全）；receipt 清理（retention/cap/当前 tick 保护）→ global reset 检测 → 归档补救（若上一 tick 缺 endTick 则显式计数并补救）→ 清空 epoch 注册表并发行本 tick shared epoch → 对账上一 tick 投影终态（key 并集）→ 写 `Memory.runtime.treasury.lifecycle.lastBeginTick`。
+2. **规划阶段**：消费者经 facade 查询带上下文余额、读承诺索引（revision 变化自动重建）；分配决策仍属各模块（后续阶段迁入 Allocation Planner）。
+3. **执行阶段**：执行器调用 Game API；成功后 `recordAcceptedTransaction()`（携带决策 epoch）；失败不写 journal。
+4. **endTick（显式，main.ts 固定挂载于 treasuryShadow 之后、最终 profiler flush 之前）**：幂等；归档投影终态（含 structureId）→ journal 转存有界追溯副本 → 关闭本 tick（此后登记一律拒绝 `tick_closed`）→ 写 `lastEndTick`。
+5. **懒兜底**：`observation()`/`commitments()`/`query()` 在未 begin 时仍可安全访问（自动懒初始化并计数 lifecycleLazyInitializations），但懒路径零写 Memory（不清理 receipt、不写 lifecycle）——main 挂载后业务模块不应再触发。
+6. 对账区分：正常相邻 tick（tickGap=false）/ tick gap（previousTick+1 ≠ currentTick，差异为 gap 累积值）/ global reset 恢复（heap 丢失但 Memory lifecycle 存在，afterGlobalReset=true、previousTick=null）/ 冷启动（无 Memory 记录）。market-fresh observation 不替代 shared 生命周期，只登记进同 tick 注册表供决策绑定。
 
 ## 5. Contract 生命周期（目标态，本轮部分落地）
 

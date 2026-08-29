@@ -42,8 +42,22 @@
 - [x] 6.4 Jest 预算治理：collect → apply-budget → verify 锚点更新 → `npm run test:budget`
 - [x] 6.5 市场安全相关既有测试保持通过（零市场代码改动）
 
-## 7. 上线门槛（后续阶段，非本轮）
+## 7. 审查修复轮（第二迭代：架构阻断项）
 
-- [ ] 7.1 Treasury shadow 连续 1000+ tick 零 mismatch 后迁移 resourceControl 热路径
-- [ ] 7.2 market-fresh epoch 接入前独立安全评审（不破坏 fresh floor/双读/CAS/WAL/permit）
-- [ ] 7.3 旧模块按删除清单分批退役，每批附 shadow 证据
+- [x] 7.1 显式 tick 生命周期：`beginTick()`/`endTick()` API + main.ts 固定挂载（treasuryBeginTick 在一切业务前 / treasuryEndTick 在 treasuryShadow 后 flush 前）+ phase 契约 39→41；懒初始化保留为安全兜底（零写、计数 lifecycleLazyInitializations）
+- [x] 7.2 原子 transaction journal：单腿 action 升级为多 posting transaction（recordAcceptedTransaction 权威入口 + recordAcceptedAction convenience）；全 posting 先验证后一次性写入（零部分写入）；同 transaction 内同 key 先合并再验证
+- [x] 7.3 幂等 receipt 持久化：Memory.runtime.treasury.receipts（version/retention 5000 tick/cap 4096/当前 tick 保护/版本不兼容冷启动）；heap 本 tick 缓存 + Memory 跨 tick 与 global reset 权威；>512 单 tick 洪峰无淘汰
+- [x] 7.4 decision epoch 绑定：epoch 注册表（shared 1 + fresh N/每 tick 清空）；登记必携 decision 上下文并校验（stale/unknown/scope_mismatch 拒绝，幂等优先）；无绕过 Gateway 的登记入口（convenience 同样强制）
+- [x] 7.5 reconciliation 完整性：previous-finals ∪ current-observed key 并集；分类 inflow/outflow/new_resource/new_location/new_room/room_lost/location_lost/structure_replaced；tick gap 与 global reset 显式标记；mismatch 样本携带 transactionId/kind 追溯（上一 tick journal 有界副本）
+- [x] 7.6 commitment 点时快照：primitive 化（无 task/reservation 对象引用）；route merge 预构建索引（零线性扫描）；receiver healthy incoming 构建期预聚合（不回扫 live store）；revision invalidation（bumpTreasuryCommitmentRevision + 架构边界测试守护全部 mutation 入口）
+- [x] 7.7 owner-aware 查询：TreasuryQueryOwner（holderId+scope）；自身 reservation 排除、其他 owner 保留、无 owner 保守、非法 fail closed（spendable=0/overcommitted）
+- [x] 7.8 projected capacity 与输入验证：projectedUsed/FreeCapacity；transaction 验证（transactionId 格式/kind/source/posting delta 整数非零/RESOURCES_ALL/位置存在/金额非负/容量不越界）；receiver headroom observed+projected 双轨
+- [x] 7.9 resetForTest 修复：journal/overlay/heap 幂等缓存/previousJournal/metrics 全清；只读快照冻结副本（journalSnapshot/reservationSnapshot/samples）；持久状态经 clearTreasuryPersistenceForTest 显式清理
+- [x] 7.10 metrics 与 Memory 类型化：全部计数器接线（含 commitmentIndexQueries/生命周期/epoch 拒绝/receipt 清理）；Memory.runtime.treasury（receipts/lifecycle）与 treasuryPerf 正式声明 + memoryDeclarationBoundaries 指纹更新
+- [x] 7.11 测试补齐：lifecycle（幂等/无消费者/tick_closed/缺 end 补救/gap/reset/冷启动/懒初始化）、transaction（两腿/三腿/中间非法回滚/NaN/容量/位置/格式/单 tick 601 笔/跨 tick/global reset 重放）、epoch（shared/fresh/stale×2/scope 混用/unknown/Facade 级）、reconciliation（key 并集全分类/追溯/有界）、commitments（快照不可变/revision 失效/零写/projected headroom）；新增 treasuryLifecycle.test.ts 与 treasuryCommitmentInvalidationBoundaries.test.ts
+
+## 8. 上线门槛（后续阶段，非本轮）
+
+- [ ] 8.1 Treasury shadow 连续 1000+ tick 零 mismatch 后迁移 resourceControl 热路径
+- [ ] 8.2 market-fresh epoch 接入前独立安全评审（不破坏 fresh floor/双读/CAS/WAL/permit）
+- [ ] 8.3 旧模块按删除清单分批退役，每批附 shadow 证据
