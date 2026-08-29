@@ -1,8 +1,10 @@
 /**
- * EmpireInventoryShadow 影子等价验证测试（Phase 1）：
- * - 一致数据：parityChecks>0 且 parityMismatches===0；
+ * EmpireInventoryShadow 影子等价验证测试（Phase 2）：
+ * - 一致数据：parityChecks>0 且 parityMismatches===0（覆盖 Core/帝国总量/
+ *   Production/Field/creep+power creep cargo 全部对账路径）；
  * - 人为制造 mismatch（索引与直读不一致）：记录 room/resource/field、
  *   有界样本、不改生产数据、console 只输出有界摘要；
+ * - 本次检查 mismatch 计数：零新增时不重复打印历史旧 mismatch；
  * - 低频节流（间隔内不重复执行）、force 旁路；
  * - global reset 后重建。
  */
@@ -12,7 +14,19 @@ import {
   runEmpireInventoryShadowCheck,
   EMPIRE_INVENTORY_SHADOW_INTERVAL_TICKS,
 } from "@/runtime/empireInventoryShadow";
-import { getEmpireInventoryCore } from "@/runtime/empireInventoryIndex";
+import {
+  getEmpireInventoryCore,
+  getEmpireInventoryCreepCargo,
+  getEmpireInventoryField,
+  getEmpireInventoryProduction,
+} from "@/runtime/empireInventoryIndex";
+
+// 测试直接清 runtimeServices 单例（先例：mountCreep.test.ts），确保
+// TickContext 的 tick 缓存不跨用例污染。
+type RuntimeGlobal = typeof global & { __runtimeServices?: unknown };
+function clearRuntimeServicesForTest(): void {
+  delete (global as RuntimeGlobal).__runtimeServices;
+}
 
 const storePrototype = {
   getUsedCapacity(resource?: ResourceConstant): number {
@@ -39,19 +53,33 @@ function makeStore(resources: Record<string, number>): StoreDefinition {
   return store;
 }
 
-function installRooms(
-  specs: {
-    name: string;
-    storage?: Record<string, number> | null;
-    terminal?: Record<string, number> | null;
-    cooldown?: number;
-  }[],
-): void {
+interface RoomSpec {
+  name: string;
+  storage?: Record<string, number> | null;
+  terminal?: Record<string, number> | null;
+  cooldown?: number;
+  structures?: { id: string; structureType: StructureConstant; resources?: Record<string, number> }[];
+  dropped?: { resourceType: ResourceConstant; amount: number }[];
+  controllerMy?: boolean;
+}
+
+interface InstalledRoom {
+  room: Room;
+  structures: { id: string; structureType: StructureConstant; store: StoreDefinition }[];
+}
+
+function installRooms(specs: RoomSpec[]): Record<string, InstalledRoom> {
   const rooms: Record<string, Room> = {};
+  const installed: Record<string, InstalledRoom> = {};
   for (const spec of specs) {
-    rooms[spec.name] = {
+    const structures = (spec.structures ?? []).map((structure) => ({
+      id: structure.id,
+      structureType: structure.structureType,
+      store: makeStore(structure.resources ?? {}),
+    }));
+    const room = {
       name: spec.name,
-      controller: { my: true, level: 8 } as StructureController,
+      controller: { my: spec.controllerMy ?? true, level: 8 } as StructureController,
       storage:
         spec.storage === null || spec.storage === undefined
           ? undefined
@@ -67,40 +95,117 @@ function installRooms(
               store: makeStore(spec.terminal),
               cooldown: spec.cooldown ?? 0,
             } as unknown as StructureTerminal),
-      find: () => [],
+      find: (
+        constant: FindConstant,
+        options?: { filter?: { structureType?: StructureConstant } },
+      ) => {
+        if (options?.filter?.structureType) {
+          return structures.filter(
+            (structure) => structure.structureType === options.filter?.structureType,
+          );
+        }
+        switch (constant) {
+          case FIND_MY_STRUCTURES:
+          case FIND_STRUCTURES:
+            return structures;
+          case FIND_DROPPED_RESOURCES:
+            return (spec.dropped ?? []).map((drop, index) => ({
+              id: `${spec.name}-drop-${index}` as Id<Resource>,
+              resourceType: drop.resourceType,
+              amount: drop.amount,
+            }));
+          default:
+            return [];
+        }
+      },
     } as unknown as Room;
+    rooms[spec.name] = room;
+    installed[spec.name] = { room, structures };
   }
   Game.rooms = rooms;
+  return installed;
+}
+
+function installCreeps(
+  entries: { name: string; room: Room; resources: Record<string, number> }[],
+): void {
+  const creeps: Record<string, Creep> = {};
+  for (const entry of entries) {
+    creeps[entry.name] = {
+      name: entry.name,
+      store: makeStore(entry.resources),
+      room: entry.room,
+    } as unknown as Creep;
+  }
+  Game.creeps = creeps;
 }
 
 describe("empireInventoryShadow 影子等价验证", () => {
   beforeEach(() => {
     Game.time = 10_000;
     clearEmpireInventoryShadowForTest();
+    clearRuntimeServicesForTest();
+    Game.creeps = {};
+    delete (Game as Game & { powerCreeps?: Record<string, PowerCreep> }).powerCreeps;
+    Memory.runtime = undefined;
   });
 
-  it("一致数据：checks 计数、零 mismatch、计数器快照落 Memory", () => {
-    installRooms([
+  it("一致数据：checks 计数、零 mismatch、计数器快照落 Memory（全层对账）", () => {
+    const installed = installRooms([
       {
         name: "W1N57",
         storage: { energy: 5000, U: 900 },
         terminal: { energy: 1200, X: 40 },
         cooldown: 11,
+        structures: [
+          { id: "f1", structureType: STRUCTURE_FACTORY, resources: { energy: 40 } },
+          { id: "l1", structureType: STRUCTURE_LAB, resources: { energy: 10 } },
+          { id: "l2", structureType: STRUCTURE_LAB, resources: { energy: 5 } },
+          { id: "p1", structureType: STRUCTURE_POWER_SPAWN, resources: { power: 50 } },
+          { id: "n1", structureType: STRUCTURE_NUKER, resources: { G: 30 } },
+          { id: "c1", structureType: STRUCTURE_CONTAINER, resources: { energy: 70 } },
+        ],
+        dropped: [{ resourceType: RESOURCE_ENERGY, amount: 25 }],
+      },
+      {
+        // remote 可见房间：进 Field 对账但不进 Core/Production。
+        name: "E2N56",
+        controllerMy: false,
+        structures: [
+          { id: "c2", structureType: STRUCTURE_CONTAINER, resources: { energy: 45 } },
+        ],
+        dropped: [{ resourceType: RESOURCE_UTRIUM, amount: 12 }],
       },
       { name: "E5N59", terminal: { energy: 300 } },
       { name: "E6N59", storage: { energy: 800, Z: 25 } },
     ]);
+    installCreeps([
+      { name: "home-hauler", room: installed.W1N57.room, resources: { energy: 30 } },
+      {
+        name: "E1N57:remoteMine:E2N56:miner1",
+        room: installed.E2N56.room,
+        resources: { energy: 20, U: 8 },
+      },
+    ]);
+    Game.powerCreeps = {
+      "pc-1": {
+        name: "pc-1",
+        store: makeStore({ ops: 60 }),
+        room: installed.W1N57.room,
+      } as unknown as PowerCreep,
+    };
     expect(runEmpireInventoryShadowCheck({ force: true })).toBe(true);
     const status = readEmpireInventoryShadowStatus();
     expect(status.parityChecks).toBeGreaterThan(0);
     expect(status.parityMismatches).toBe(0);
     expect(status.mismatchSamples).toHaveLength(0);
-    // 低频计数快照写入 Memory（小对象）。
+    // 低频计数快照写入 Memory（小对象）：本次检查 mismatch 数为 0。
     const perf = (Memory.runtime as { inventoryPerf?: Record<string, unknown> })
       .inventoryPerf;
     expect(perf).toMatchObject({
       parityChecks: status.parityChecks,
       parityMismatches: 0,
+      lastCheckMismatches: 0,
       committedAtTick: Game.time,
     });
   });
@@ -130,6 +235,89 @@ describe("empireInventoryShadow 影子等价验证", () => {
     expect(Memory.data).toBeUndefined();
     // 样本有界。
     expect(status.mismatchSamples.length).toBeLessThanOrEqual(32);
+  });
+
+  it("本次检查 mismatch 计数：零新增不重复打印历史旧 mismatch", () => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      installRooms([{ name: "W1N57", storage: { energy: 100 } }]);
+      // 第一轮：制造 mismatch（同 tick 移除直读 storage）。
+      getEmpireInventoryCore();
+      delete (Game.rooms.W1N57 as unknown as { storage?: unknown }).storage;
+      runEmpireInventoryShadowCheck({ force: true });
+      const afterFirst = readEmpireInventoryShadowStatus();
+      expect(afterFirst.parityMismatches).toBeGreaterThan(0);
+      const firstCalls = logSpy.mock.calls.length;
+      expect(firstCalls).toBeGreaterThan(0);
+      expect(logSpy.mock.calls[logSpy.mock.calls.length - 1][0]).toContain(
+        "+",
+      );
+
+      // 第二轮：数据恢复一致（重建索引 + 直读一致）→ 零新增，
+      // console 不再重复打印历史 mismatch，但累计 parityMismatches 保留。
+      Game.time += EMPIRE_INVENTORY_SHADOW_INTERVAL_TICKS;
+      installRooms([{ name: "W1N57", storage: { energy: 100 } }]);
+      expect(runEmpireInventoryShadowCheck({ force: true })).toBe(true);
+      expect(logSpy.mock.calls.length).toBe(firstCalls);
+      const afterSecond = readEmpireInventoryShadowStatus();
+      expect(afterSecond.parityMismatches).toBe(afterFirst.parityMismatches);
+      const perf = (Memory.runtime as { inventoryPerf?: Record<string, unknown> })
+        .inventoryPerf;
+      expect(perf).toMatchObject({
+        lastCheckMismatches: 0,
+        parityMismatches: afterFirst.parityMismatches,
+      });
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  it("Production/creep cargo 对账检出直读侧失配", () => {
+    const installed = installRooms([
+      {
+        name: "W1N57",
+        storage: { energy: 100 },
+        structures: [
+          { id: "f1", structureType: STRUCTURE_FACTORY, resources: { energy: 40 } },
+          { id: "c1", structureType: STRUCTURE_CONTAINER, resources: { energy: 70 } },
+        ],
+      },
+    ]);
+    installCreeps([
+      { name: "hauler", room: installed.W1N57.room, resources: { energy: 30 } },
+    ]);
+    // 同 tick：先建索引（Core/Production/Field/creep cargo 子层），
+    // 再破坏直读侧（删 factory、改 creep cargo）。
+    getEmpireInventoryCore();
+    getEmpireInventoryProduction();
+    getEmpireInventoryField();
+    getEmpireInventoryCreepCargo();
+    installed.W1N57.structures.splice(
+      installed.W1N57.structures.findIndex(
+        (structure) => structure.structureType === STRUCTURE_FACTORY,
+      ),
+      1,
+    );
+    Game.creeps["hauler"] = {
+      name: "hauler",
+      store: makeStore({ energy: 99 }),
+      room: installed.W1N57.room,
+    } as unknown as Creep;
+    runEmpireInventoryShadowCheck({ force: true });
+
+    const status = readEmpireInventoryShadowStatus();
+    expect(
+      status.mismatchSamples.find((sample) => sample.field === "factoryCount"),
+    ).toMatchObject({ indexValue: 1, directValue: 0 });
+    expect(
+      status.mismatchSamples.find((sample) => sample.field === "factoryAmount"),
+    ).toMatchObject({ resource: RESOURCE_ENERGY, indexValue: 40, directValue: 0 });
+    expect(
+      status.mismatchSamples.find((sample) => sample.field === "creepCargoTotal"),
+    ).toMatchObject({ resource: RESOURCE_ENERGY, indexValue: 30, directValue: 99 });
+    expect(
+      status.mismatchSamples.find((sample) => sample.field === "creepCargoRoom"),
+    ).toMatchObject({ roomName: "W1N57", indexValue: 30, directValue: 99 });
   });
 
   it("低频节流：间隔内不执行，到期/force 执行", () => {
