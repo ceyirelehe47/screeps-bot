@@ -1,4 +1,4 @@
-import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
+import { getMemoryService, getTickContextService, getTreasuryService } from "@/runtime/runtimeServices";
 
 const SAMPLE_INTERVAL = 5;
 const MAX_SAMPLES = 300;
@@ -134,6 +134,10 @@ function getRoleCount(room: Room, role: "worker" | "carrier" | "harvester"): num
 
 function createSample(room: Room): ProductionSample {
   const controller = room.controller;
+  // storage/terminal 能量读取迁移至 Treasury observation（统一稀疏索引；
+  // 同 tick 首次访问构建并缓存，不再逐房直读 store）。runProductionMonitor
+  // 只遍历 my rooms，与 Treasury observation 管辖范围一致。
+  const treasuryObservation = getTreasuryService().observation();
 
   return {
     tick: Game.time,
@@ -141,8 +145,8 @@ function createSample(room: Room): ProductionSample {
     energyCapacity: room.energyCapacityAvailable,
     droppedEnergy: getDroppedEnergy(room),
     containerEnergy: getContainerEnergy(room),
-    storageEnergy: room.storage ? room.storage.store.getUsedCapacity(RESOURCE_ENERGY) : 0,
-    terminalEnergy: room.terminal ? room.terminal.store.getUsedCapacity(RESOURCE_ENERGY) : 0,
+    storageEnergy: treasuryObservation.amount(room.name, "storage", RESOURCE_ENERGY),
+    terminalEnergy: treasuryObservation.amount(room.name, "terminal", RESOURCE_ENERGY),
     linkEnergy: getStructureEnergy(room, STRUCTURE_LINK),
     labEnergy: getStructureEnergy(room, STRUCTURE_LAB),
     factoryEnergy: getStructureEnergy(room, STRUCTURE_FACTORY),

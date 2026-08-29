@@ -1,5 +1,6 @@
 import { createRuntimeMemoryService, type RuntimeMemoryService } from "@/runtime/memoryService";
 import { createTickContextService, type TickContextService } from "@/runtime/tickContext";
+import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
 import type { CreepApi, CreepConfig, RoleName } from "@/types/system";
 
 export interface CreepConfigService extends CreepApi {
@@ -10,6 +11,8 @@ export interface RuntimeServices {
   memory: RuntimeMemoryService;
   creepConfigs: CreepConfigService;
   tickContext: TickContextService;
+  /** 帝国国库：资产观察/承诺索引/投影/对账的统一入口（Gateway）。 */
+  treasury: TreasuryService;
 }
 
 type RuntimeGlobalWithServices = typeof global & {
@@ -96,10 +99,14 @@ function createRuntimeServices(): RuntimeServices {
   const memory = createRuntimeMemoryService();
   const creepConfigs = createCreepConfigService(memory);
   const tickContext = createTickContextService();
+  // Treasury 的房间源注入 tickContext 快照（复用既有 myRooms 缓存，零 room.find）；
+  // 任务/预留源由 facade 默认直读 Memory 路径（查询零写，不 ensure）。
+  const treasury = createTreasuryService({ getRooms: () => tickContext.getMyRooms() });
   return {
     memory,
     creepConfigs,
     tickContext,
+    treasury,
   };
 }
 
@@ -124,4 +131,8 @@ export function getMemoryService(): RuntimeMemoryService {
 
 export function getTickContextService(): TickContextService {
   return getRuntimeServices().tickContext;
+}
+
+export function getTreasuryService(): TreasuryService {
+  return getRuntimeServices().treasury;
 }
