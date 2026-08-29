@@ -3,11 +3,13 @@
  *
  * 语义分层（详见 openspec/changes/empire-treasury-rearchitecture/design.md）：
  * - Observed：本 tick 观察到的物理事实（不可变，绝不持久化到 Memory）；
- * - Projected：Observed + 本 tick 已被 Game 接受的动作增量（journal 结算）；
+ * - Projected：Observed + 本 tick 已被 Game 接受的动作增量（transaction 结算）；
  * - Committed：未执行但已被任务/预留/合同占用（每 tick 从持久权威构建只读索引）。
  *
  * 依赖约束：treasury 模块不得 import runtimeServices（服务由其注入房间源），
- * 不得在查询路径写 Memory/Game（零隐藏写入）。
+ * 查询路径（observation/query/commitments/journal/reconciliation/metrics）
+ * 零写入 Memory 与 Game；只有生命周期（beginTick/endTick）与已接受动作
+ * 登记路径允许写最小 receipt/指标状态。
  */
 
 // ─── 物理位置 ───────────────────────────────────────────────────────────────
@@ -25,8 +27,10 @@ export type TreasuryObservationScope = "shared" | "market-fresh";
 
 /**
  * 观察纪元：同一 (scope, epochSeq) 的 Observed 不可变。
- * scope="shared" 每 tick 至多构建一次并缓存；"market-fresh" 每次独立构建、
- * 不进缓存（市场 fresh-read 语义的未来接入点，禁止复用共享 snapshot）。
+ * scope="shared" 每 tick 恰好发行一次（beginTick）；"market-fresh" 每次独立
+ * 构建、不进缓存（市场 fresh-read 语义的未来接入点，禁止复用共享 snapshot）。
+ * 每 tick 发行的 epoch（shared + 全部 fresh）登记进 facade 的 epoch 注册表；
+ * 已接受动作登记必须携带决策所依据的 epoch 并通过注册表校验。
  */
 export interface TreasuryEpoch {
   readonly scope: TreasuryObservationScope;
@@ -81,33 +85,102 @@ export interface TreasuryObservationView {
 
 // ─── Transaction Journal / Projected Overlay ────────────────────────────────
 
-/** 已被 Game 接受的动作（调用方在 API 返回 OK 后显式登记；禁止预登记失败动作）。 */
-export interface TreasuryJournalEntry {
-  readonly actionId: string;
-  readonly kind: string;
+/**
+ * 已被 Game 接受的动作的单腿记账：一个 (room, location, resource) 的整数增量。
+ * 一个动作（terminal.send / market deal / 搬运 / lab / factory）由一个
+ * transaction 的多个 posting 原子表达；不存在"半笔"transaction。
+ */
+export interface TreasuryPosting {
   readonly roomName: string;
   readonly locationKind: TreasuryLocationKind;
   readonly resource: string;
+  /** 有限非零整数；正=流入该位置，负=流出。 */
   readonly delta: number;
-  readonly recordedAtTick: number;
+}
+
+/** 调用方作出决策所依据的 observation epoch（decision binding）。 */
+export interface TreasuryDecisionContext {
+  readonly scope: TreasuryObservationScope;
   readonly epochSeq: number;
-  readonly source: string;
+  readonly observedAtTick: number;
 }
 
+/**
+ * 唯一权威登记入口的输入。transactionId 幂等键在 Treasury 边界受格式约束
+ * （见 formatTreasuryTransactionId / TREASURY_TRANSACTION_ID_MAX_LENGTH），
+ * 禁止调用方随意传入易碰撞的任意字符串。
+ */
+export interface TreasuryTransactionInput {
+  readonly transactionId: string;
+  readonly kind: string;
+  readonly source: string;
+  readonly decision: TreasuryDecisionContext;
+  readonly postings: readonly TreasuryPosting[];
+}
+
+/** 单 posting convenience 输入（内部转 transaction；decision 仍必填）。 */
 export interface TreasuryRecordActionInput {
-  readonly actionId: string;
+  readonly transactionId: string;
   readonly kind: string;
   readonly roomName: string;
   readonly locationKind: TreasuryLocationKind;
   readonly resource: string;
   readonly delta: number;
   readonly source: string;
+  readonly decision: TreasuryDecisionContext;
 }
 
-export type TreasuryRecordActionResult =
-  | { readonly status: "recorded"; readonly entry: TreasuryJournalEntry }
-  | { readonly status: "already_settled"; readonly actionId: string; readonly firstRecordedAtTick: number }
-  | { readonly status: "stale_epoch"; readonly observedAtTick: number };
+export type TreasuryRejectionReason =
+  | "invalid_transaction_id"
+  | "invalid_kind"
+  | "invalid_source"
+  | "no_postings"
+  | "invalid_posting_delta"
+  | "invalid_posting_resource"
+  | "invalid_posting_room"
+  | "unknown_room"
+  | "location_missing"
+  | "insufficient_amount"
+  | "capacity_overflow"
+  | "tick_closed"
+  | "stale_epoch"
+  | "unknown_epoch"
+  | "scope_mismatch";
+
+export type TreasurySettlementResult =
+  | { readonly status: "recorded"; readonly transactionId: string; readonly postings: number; readonly tick: number }
+  | { readonly status: "already_settled"; readonly transactionId: string; readonly firstRecordedAtTick: number }
+  | { readonly status: "rejected"; readonly reason: TreasuryRejectionReason; readonly detail?: string };
+
+/** 一笔已结算 transaction 的冻结 journal 条目（postings 全量保留在 heap）。 */
+export interface TreasuryJournalEntry {
+  readonly transactionId: string;
+  readonly kind: string;
+  readonly source: string;
+  readonly decisionScope: TreasuryObservationScope;
+  readonly epochSeq: number;
+  readonly recordedAtTick: number;
+  readonly postings: readonly TreasuryPosting[];
+}
+
+/** 上一 tick 归档的投影终态条目（含 structureId 供 incarnation 对账）。 */
+export interface TreasuryProjectedFinal {
+  readonly roomName: string;
+  readonly locationKind: TreasuryLocationKind;
+  readonly resource: string;
+  readonly amount: number;
+  readonly structureId: string | undefined;
+}
+
+export type TreasuryReconciliationCategory =
+  | "inflow"
+  | "outflow"
+  | "new_resource"
+  | "new_location"
+  | "new_room"
+  | "room_lost"
+  | "location_lost"
+  | "structure_replaced";
 
 export interface TreasuryReconciliationSample {
   readonly tick: number;
@@ -118,13 +191,25 @@ export interface TreasuryReconciliationSample {
   readonly observedNow: number;
   /** observedNow - projectedFinal：正=外部流入，负=外部流出。 */
   readonly diff: number;
+  readonly category: TreasuryReconciliationCategory;
+  readonly previousStructureId: string | undefined;
+  readonly currentStructureId: string | undefined;
+  /** 与该差异相关的上一 tick transaction 追溯（有界）。 */
+  readonly transactionIds: readonly string[];
+  readonly transactionKinds: readonly string[];
 }
 
 export interface TreasuryReconciliationSummary {
   readonly previousTick: number | null;
+  readonly currentTick: number;
+  /** previousTick + 1 !== currentTick（生命周期 gap，差异为 gap 累积值）。 */
+  readonly tickGap: boolean;
+  /** heap 丢失但 Memory 生命周期记录仍在（global reset 恢复，无严格对账基准）。 */
+  readonly afterGlobalReset: boolean;
   readonly checkedEntries: number;
   readonly inflowMismatches: number;
   readonly outflowMismatches: number;
+  readonly structuralChanges: number;
   readonly samples: readonly TreasuryReconciliationSample[];
 }
 
@@ -148,10 +233,14 @@ export interface TreasuryReceiverCommitments {
   readonly healthyIncomingTaskCount: number;
   readonly storageFreeCapacity: number;
   readonly terminalFreeCapacity: number;
-  /** free − healthyIncoming：可负（负值即超卖信号，不静默钳制）。 */
+  /** free − healthyIncoming：可负（负值即超卖信号，不静默钳制）。observed 口径。 */
   readonly storageHeadroom: number;
   readonly terminalHeadroom: number;
   readonly overcommitted: boolean;
+  /** projected 口径（observed free 减去本 tick 已结算 transaction 的容量净变化）。 */
+  readonly projectedStorageHeadroom: number;
+  readonly projectedTerminalHeadroom: number;
+  readonly projectedOvercommitted: boolean;
 }
 
 export interface TreasuryCommitmentMetrics {
@@ -164,8 +253,14 @@ export interface TreasuryCommitmentMetrics {
   readonly indexQueries: number;
 }
 
+/**
+ * 承诺统一索引：构建期一次性聚合为 primitive 快照（不保留 task/reservation
+ * 对象引用），构建后同一 revision 下所有查询结果一致。权威数据变更由
+ * mutation 侧 bumpTreasuryCommitmentRevision 通知 facade 失效重建。
+ */
 export interface TreasuryCommitmentIndex {
   readonly builtAtTick: number;
+  readonly revision: number;
   /** donor 侧承诺：pending 任务 remaining（全部 pending，不筛健康）。 */
   outgoing(roomName: string, resource: string): number;
   pendingOutgoing(roomName: string, resource: string, reasonPrefix?: string): number;
@@ -174,7 +269,7 @@ export interface TreasuryCommitmentIndex {
   pendingIncoming(roomName: string, resource: string): number;
   incomingTaskCount(roomName: string): number;
   outgoingTaskCount(roomName: string): number;
-  /** route merge：同 route/origin/reason 的可合并 pending 任务 id（等价旧 findMergeablePendingTask）。 */
+  /** route merge：同 route/origin/reason 的可合并 pending 任务 id（预构建索引，零线性扫描）。 */
   findMergeableTaskId(resource: string, fromRoomName: string, toRoomName: string, origin: "manual" | "automatic", reason?: string): string | null;
   /** 活跃（未过期且未孤儿）生产预留合计；excludeHolderId 用于 owner 自排除。 */
   reservedProduction(roomName: string, resource: string, excludeHolderId?: string): number;
@@ -184,6 +279,23 @@ export interface TreasuryCommitmentIndex {
 }
 
 // ─── 带上下文查询 ───────────────────────────────────────────────────────────
+
+/**
+ * owner 声明：调用方以固定身份持有 production reservation 时，可声明自身
+ * holderId 让查询排除自己已占用的部分（只排除自己，其他 owner 照常扣除）。
+ * 身份非法时 fail closed（不返回乐观可用量）。
+ */
+export type TreasuryOwnerScope = "production-reservation";
+
+export interface TreasuryQueryOwner {
+  readonly holderId: string;
+  readonly scope: TreasuryOwnerScope;
+}
+
+export type TreasuryOwnerStatus =
+  | "none"
+  | "excluded-own-reservations"
+  | "invalid_fail_closed";
 
 /**
  * 可用量查询上下文——禁止无上下文 available。
@@ -199,6 +311,8 @@ export interface TreasuryQueryContext {
   readonly subtractOutgoing?: boolean;
   readonly subtractReservations?: boolean;
   readonly withhold?: number;
+  /** owner-aware：合法时 reservedProduction 排除该 holder 自己的预留。 */
+  readonly owner?: TreasuryQueryOwner;
 }
 
 export interface TreasuryBalanceView {
@@ -209,6 +323,7 @@ export interface TreasuryBalanceView {
   readonly incoming: number;
   readonly spendable: number;
   readonly overcommitted: boolean;
+  readonly ownerStatus: TreasuryOwnerStatus;
   readonly epoch: TreasuryEpoch;
 }
 
@@ -226,16 +341,33 @@ export interface TreasuryMetrics {
   roomFindCalls: number;
   /** live store 回退读次数——必须恒为 0（观察冻结后不得回读 Game）。 */
   fallbackLiveReads: number;
+  lifecycleBeginTicks: number;
+  lifecycleEndTicks: number;
+  /** beginTick 之前业务访问触发的懒初始化兜底（main 固定挂载后应趋近 0）。 */
+  lifecycleLazyInitializations: number;
+  /** beginTick 发现上一 tick 缺少 endTick 的补救归档次数。 */
+  lifecycleMissingEndWarnings: number;
+  tickGapReconciles: number;
+  globalResetRecoveries: number;
   commitmentRebuilds: number;
   commitmentRecords: number;
   commitmentIndexQueries: number;
   expiredCommitmentsExcluded: number;
   orphanReservationsExcluded: number;
-  journalEntries: number;
+  transactionsRecorded: number;
+  postingsRecorded: number;
+  transactionsRejectedInvalid: number;
   duplicateSettlementsRejected: number;
   staleEpochRejections: number;
+  unknownEpochRejections: number;
+  epochScopeMismatches: number;
+  settlementsAfterEndRejected: number;
+  receiptsEvictedByRetention: number;
+  receiptsEvictedByCap: number;
+  receiptEvictionsBlocked: number;
   reconciliationInflowMismatches: number;
   reconciliationOutflowMismatches: number;
+  reconciliationStructuralChanges: number;
   reconciliationChecks: number;
 }
 
@@ -250,16 +382,31 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     resourceKeysEnumerated: 0,
     roomFindCalls: 0,
     fallbackLiveReads: 0,
+    lifecycleBeginTicks: 0,
+    lifecycleEndTicks: 0,
+    lifecycleLazyInitializations: 0,
+    lifecycleMissingEndWarnings: 0,
+    tickGapReconciles: 0,
+    globalResetRecoveries: 0,
     commitmentRebuilds: 0,
     commitmentRecords: 0,
     commitmentIndexQueries: 0,
     expiredCommitmentsExcluded: 0,
     orphanReservationsExcluded: 0,
-    journalEntries: 0,
+    transactionsRecorded: 0,
+    postingsRecorded: 0,
+    transactionsRejectedInvalid: 0,
     duplicateSettlementsRejected: 0,
     staleEpochRejections: 0,
+    unknownEpochRejections: 0,
+    epochScopeMismatches: 0,
+    settlementsAfterEndRejected: 0,
+    receiptsEvictedByRetention: 0,
+    receiptsEvictedByCap: 0,
+    receiptEvictionsBlocked: 0,
     reconciliationInflowMismatches: 0,
     reconciliationOutflowMismatches: 0,
+    reconciliationStructuralChanges: 0,
     reconciliationChecks: 0,
   };
 }

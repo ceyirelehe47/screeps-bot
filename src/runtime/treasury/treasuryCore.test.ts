@@ -1,320 +1,376 @@
 /**
- * Treasury Core 单元测试（observation + facade query + 服务挂载）：
+ * Treasury Core 单元测试（observation + facade query + owner + 服务挂载）：
  * - 稀疏枚举正确性与确定性操作计数（storeEnumerations/resourceKeys/
  *   roomFindCalls=0/fallbackLiveReads=0）；
  * - Observed 不可变（冻结数据写入抛错）、同 tick 引用复用、tick 切换重建；
  * - 帝国总量 = Σ位置桶；missing 位置 exists=false；
- * - fresh scope 与 shared 缓存隔离、stale epoch 判定；
+ * - fresh scope 与 shared 缓存隔离；
  * - 带上下文查询（observed/projected/committed/spendable/overcommitted/
  *   withhold/incoming/locations 过滤）；spendable 非负；
- * - RuntimeServices 挂载与 resetForTest。
+ * - owner-aware：自身预留排除、其他 owner 保留、无 owner 保守、非法 fail closed；
+ * - projected capacity 与 observed capacity 分离；
+ * - RuntimeServices 挂载与 resetForTest（journal/overlay/heap 幂等缓存全清）。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
 import { getRuntimeServices, getTreasuryService, registerRuntimeServices } from "@/runtime/runtimeServices";
+import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
+import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
+import { formatTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
+import { installRooms, type RoomSpec } from "@mock/treasury";
 
 type RuntimeGlobal = typeof global & { __runtimeServices?: unknown };
 function clearRuntimeServicesForTest(): void {
   delete (global as RuntimeGlobal).__runtimeServices;
 }
 
-const storePrototype = {
-  getUsedCapacity(resource?: ResourceConstant): number {
-    if (resource === undefined) {
-      let total = 0;
-      for (const key of Object.keys(this)) {
-        const value = (this as unknown as Record<string, unknown>)[key];
-        if (typeof value === "number") total += value;
-      }
-      return total;
-    }
-    return ((this as unknown as Record<string, number>)[resource] as number) || 0;
-  },
-  getFreeCapacity(): number {
-    return (this as unknown as { __freeCapacity: number }).__freeCapacity;
-  },
-} as unknown as StoreDefinition;
-
-function makeStore(resources: Record<string, number>, freeCapacity = 500_000): StoreDefinition {
-  const store = Object.create(storePrototype) as StoreDefinition;
-  for (const [resource, amount] of Object.entries(resources)) {
-    (store as unknown as Record<string, number>)[resource] = amount;
-  }
-  Object.defineProperty(store, "__freeCapacity", {
-    value: freeCapacity,
-    enumerable: false,
-    writable: true,
-  });
-  return store;
-}
-
-interface RoomSpec {
-  name: string;
-  storage?: { id: string; resources: Record<string, number>; freeCapacity?: number } | null;
-  terminal?: { id: string; resources: Record<string, number>; freeCapacity?: number } | null;
-}
-
-function installRooms(specs: RoomSpec[]): Record<string, Room> {
-  const rooms: Record<string, Room> = {};
-  for (const spec of specs) {
-    rooms[spec.name] = {
-      name: spec.name,
-      controller: { my: true, level: 8 },
-      storage:
-        spec.storage === null || !spec.storage
-          ? undefined
-          : ({
-              id: spec.storage.id,
-              store: makeStore(spec.storage.resources, spec.storage.freeCapacity ?? 500_000),
-            } as unknown as StructureStorage),
-      terminal:
-        spec.terminal === null || !spec.terminal
-          ? undefined
-          : ({
-              id: spec.terminal.id,
-              store: makeStore(spec.terminal.resources, spec.terminal.freeCapacity ?? 300_000),
-            } as unknown as StructureTerminal),
-    } as unknown as Room;
-  }
-  Game.rooms = rooms;
-  return rooms;
-}
-
-function makeService(rooms: Record<string, Room>): TreasuryService {
-  return createTreasuryService({ getRooms: () => Object.values(rooms) });
+interface ReservationSeed {
+  roomName: string;
+  resource: string;
+  holderId: string;
+  amount: number;
+  expiresAt: number;
 }
 
 const ROOM_SPECS: RoomSpec[] = [
   {
     name: "W1N57",
-    storage: { id: "stor-1", resources: { energy: 400_000, U: 5_000 } },
-    terminal: { id: "term-1", resources: { energy: 50_000, U: 2_000, OH: 300 } },
+    storage: { id: "stor-1", resources: { energy: 100_000, U: 2_000 } },
+    terminal: { id: "term-1", resources: { energy: 20_000, U: 500 } },
   },
   {
-    name: "E1N57",
-    storage: { id: "stor-2", resources: { energy: 200_000, K: 40_000 } },
+    name: "E5N59",
+    storage: { id: "stor-2", resources: { energy: 50_000 } },
     terminal: null,
   },
-  { name: "E3N59", storage: null, terminal: { id: "term-3", resources: { energy: 10_000 } } },
+  { name: "E6N59", storage: null, terminal: null },
 ];
+
+function makeService(options?: {
+  rooms?: RoomSpec[];
+  tasks?: Record<string, ResourceTransferTask>;
+  reservations?: Record<string, ReservationSeed>;
+  holderExists?: (holderId: string) => boolean;
+}): TreasuryService {
+  const rooms = installRooms(options?.rooms ?? ROOM_SPECS);
+  return createTreasuryService({
+    getRooms: () => Object.values(rooms),
+    ...(options?.tasks !== undefined ? { getTasks: () => options.tasks! } : {}),
+    ...(options?.reservations !== undefined ? { getReservations: () => options.reservations! } : {}),
+    ...(options?.holderExists !== undefined ? { holderExists: options.holderExists } : {}),
+  });
+}
+
+function pendingTask(overrides: Partial<ResourceTransferTask> & { id: string }): ResourceTransferTask {
+  return {
+    resource: RESOURCE_ENERGY,
+    fromRoomName: "W1N57",
+    toRoomName: "E5N59",
+    amount: 1_000,
+    remainingAmount: 800,
+    status: "pending",
+    createdAt: 1,
+    updatedAt: 1,
+    origin: "manual",
+    lastProgressAt: 1,
+    ...overrides,
+  } as ResourceTransferTask;
+}
+
+function decisionOf(service: TreasuryService): { scope: "shared" | "market-fresh"; epochSeq: number; observedAtTick: number } {
+  const epoch = service.observation().epoch;
+  return { scope: epoch.scope, epochSeq: epoch.epochSeq, observedAtTick: epoch.observedAtTick };
+}
 
 beforeEach(() => {
   clearRuntimeServicesForTest();
-  Game.time = 1000;
-  installRooms(ROOM_SPECS);
+  clearTreasuryPersistenceForTest();
+  resetTreasuryCommitmentRevisionForTest();
 });
 
 describe("Treasury observation 物理事实", () => {
   it("稀疏枚举每房间 storage/terminal 数值并保留缺失位置", () => {
-    const treasury = makeService(Game.rooms);
+    const treasury = makeService();
+    treasury.beginTick();
     const observation = treasury.observation();
-
-    expect(observation.amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(400_000);
-    expect(observation.amount("W1N57", "storage", "U")).toBe(5_000);
-    expect(observation.amount("W1N57", "terminal", "OH")).toBe(300);
-    expect(observation.amount("E1N57", "terminal", RESOURCE_ENERGY)).toBe(0);
-    expect(observation.locationExists("E1N57", "terminal")).toBe(false);
-    expect(observation.locationExists("E1N57", "storage")).toBe(true);
-    expect(observation.location("E1N57", "terminal").exists).toBe(false);
+    expect(observation.amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(100_000);
+    expect(observation.amount("W1N57", "storage", "U")).toBe(2_000);
+    expect(observation.amount("W1N57", "terminal", RESOURCE_ENERGY)).toBe(20_000);
+    expect(observation.amount("E5N59", "storage", RESOURCE_ENERGY)).toBe(50_000);
+    expect(observation.locationExists("E5N59", "terminal")).toBe(false);
+    expect(observation.location("E6N59", "storage").exists).toBe(false);
     expect(observation.location("W1N57", "storage").structureId).toBe("stor-1");
 
     const metrics = treasury.metrics();
-    // 3 房间 × 2 位置 = 6 次受管辖 Store 枚举（missing 不枚举 → 实际 4 个存在结构）。
-    expect(metrics.storeEnumerations).toBe(4);
-    // 非零 key：stor-1(2) + term-1(3) + stor-2(2) + term-3(1) = 8。
-    expect(metrics.resourceKeysEnumerated).toBe(8);
+    // 3 房间 × 2 位置，只对存在的 Store 计数枚举（missing 无枚举成本）。
+    expect(metrics.storeEnumerations).toBe(3);
+    // 非零 key：stor-1(2) + term-1(2) + stor-2(1) = 5。
+    expect(metrics.resourceKeysEnumerated).toBe(5);
     expect(metrics.roomFindCalls).toBe(0);
     expect(metrics.fallbackLiveReads).toBe(0);
   });
 
   it("帝国总量等于全部位置桶之和且资源并集正确", () => {
-    const treasury = makeService(Game.rooms);
+    const treasury = makeService();
+    treasury.beginTick();
     const observation = treasury.observation();
-
-    // energy: 400000+50000+200000+10000 = 660000；U: 5000+2000；K/OH 单点。
-    expect(observation.empireTotal(RESOURCE_ENERGY)).toBe(660_000);
-    expect(observation.empireTotal("U")).toBe(7_000);
-    expect(observation.empireTotal("K")).toBe(40_000);
-    expect(observation.empireTotal("OH")).toBe(300);
-    expect([...observation.empireResources()].sort()).toEqual(["OH", "U", "energy", "K"].sort());
-
-    // 手工重算 Σ桶 验证守恒。
-    let manualEnergy = 0;
-    for (const roomName of observation.roomNames()) {
-      manualEnergy += observation.amount(roomName, "storage", RESOURCE_ENERGY);
-      manualEnergy += observation.amount(roomName, "terminal", RESOURCE_ENERGY);
-    }
-    expect(observation.empireTotal(RESOURCE_ENERGY)).toBe(manualEnergy);
-
-    expect(observation.roomAmount("W1N57", "U")).toBe(7_000);
-    expect([...observation.roomResources("E3N59")]).toEqual(["energy"]);
+    expect(observation.empireTotal(RESOURCE_ENERGY)).toBe(170_000);
+    expect(observation.empireTotal("U")).toBe(2_500);
+    expect([...observation.empireResources()].sort()).toEqual(["U", "energy"]);
+    expect(observation.roomAmount("W1N57", "U")).toBe(2_500);
+    expect(observation.roomResources("E6N59")).toEqual([]);
   });
 
   it("Observed 数据不可变（写入冻结字段抛错）且同 tick 引用复用", () => {
-    const treasury = makeService(Game.rooms);
+    const treasury = makeService();
+    treasury.beginTick();
     const first = treasury.observation();
-    const second = treasury.observation();
-
-    expect(second).toBe(first);
+    expect(treasury.observation()).toBe(first);
+    expect(() => {
+      (first.data.rooms[0] as unknown as { storage: { amounts: Record<string, number> } }).storage.amounts[RESOURCE_ENERGY] = 1;
+    }).toThrow();
     expect(treasury.metrics().observationReuseHits).toBeGreaterThan(0);
-
-    const storage = first.data.rooms[0].storage;
-    expect(() => {
-      (storage.amounts as Record<string, number>).energy = 1;
-    }).toThrow();
-    expect(() => {
-      ((first.data as unknown) as { rooms: unknown[] }).rooms = [];
-    }).toThrow();
-    // 观察后修改 Game store 不影响已冻结观察。
-    (Game.rooms.W1N57.storage!.store as unknown as Record<string, number>).energy = 123;
-    expect(first.amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(400_000);
-
-    // 物理事实不持久化：构建/查询路径不向 Memory 写任何观察副本
-    // （Memory 仍只有 mock 初始字段，无 data/runtime/物理数值落盘）。
-    const memorySnapshot = JSON.stringify(Memory);
-    expect(memorySnapshot).toBe(JSON.stringify({ creeps: {}, rooms: {} }));
-    expect(Memory.data).toBeUndefined();
-    expect(Memory.runtime).toBeUndefined();
   });
 
   it("tick 切换重建 observation 且 epoch 单调递增", () => {
-    const treasury = makeService(Game.rooms);
+    const treasury = makeService();
+    treasury.beginTick();
     const first = treasury.observation();
-    const firstEpoch = first.epoch;
-
-    Game.time = 1001;
-    (Game.rooms.W1N57.storage!.store as unknown as Record<string, number>).energy = 410_000;
+    treasury.endTick();
+    Game.time += 1;
+    treasury.beginTick();
     const second = treasury.observation();
-
     expect(second).not.toBe(first);
-    expect(second.epoch.observedAtTick).toBe(1001);
-    expect(second.epoch.epochSeq).toBeGreaterThan(firstEpoch.epochSeq);
-    expect(second.amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(410_000);
-    // 旧 view 在新 tick 下判定 stale。
-    expect(first.isStale()).toBe(true);
-    expect(second.isStale()).toBe(false);
+    expect(second.epoch.epochSeq).toBeGreaterThan(first.epoch.epochSeq);
+    expect(second.epoch.observedAtTick).toBe(Game.time);
   });
 
   it("fresh observation 独立构建且不污染 shared 缓存", () => {
-    const treasury = makeService(Game.rooms);
+    const treasury = makeService();
+    treasury.beginTick();
     const shared = treasury.observation();
-
     const fresh = treasury.beginFreshObservation();
     expect(fresh.epoch.scope).toBe("market-fresh");
-    expect(fresh.epoch.epochSeq).toBeGreaterThan(shared.epoch.epochSeq);
-    expect(treasury.metrics().freshObservationBuilds).toBe(1);
-
-    // fresh 后 shared 仍是原引用（隔离不变量）。
+    expect(fresh.epoch.epochSeq).not.toBe(shared.epoch.epochSeq);
     expect(treasury.observation()).toBe(shared);
-    // fresh 数值与 shared 一致（同 tick 同世界）。
-    expect(fresh.amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(400_000);
-    expect(fresh.empireTotal("U")).toBe(shared.empireTotal("U"));
+    expect(treasury.metrics().freshObservationBuilds).toBe(1);
   });
 });
 
 describe("Treasury 带上下文查询", () => {
-  function seedTasks(tasks: Record<string, ResourceTransferTask>): void {
-    Memory.data = { resourceControl: { tasks, taskSchemaVersion: 2 } } as unknown as Memory["data"];
-  }
-
-  function makePendingTask(id: string, from: string, to: string, resource: string, remaining: number, origin: "manual" | "automatic" = "automatic", lastProgressAt = 1000): ResourceTransferTask {
-    return {
-      id,
-      resource: resource as ResourceConstant,
-      fromRoomName: from,
-      toRoomName: to,
-      amount: remaining,
-      remainingAmount: remaining,
-      status: "pending",
-      createdAt: 990,
-      updatedAt: 1000,
-      origin,
-      lastProgressAt,
-    } as ResourceTransferTask;
-  }
-
   it("query 聚合 observed/projected/committed/spendable 并按 locations/rooms 过滤", () => {
-    const treasury = createTreasuryService({
-      getRooms: () => Object.values(Game.rooms),
-      holderExists: () => true,
+    const treasury = makeService({
+      tasks: { "t1": pendingTask({ id: "t1", fromRoomName: "W1N57", toRoomName: "E5N59", remainingAmount: 800 }) },
     });
-    seedTasks({
-      "t1": makePendingTask("t1", "W1N57", "E1N57", "U", 3_000),
-    });
-    Memory.runtime = {
-      resourceReservations: {
-        "W1N57:U:lab-1": { roomName: "W1N57", resource: "U", holderId: "lab-1", amount: 1_500, updatedAt: 1000, expiresAt: 1200 },
-      },
-    } as unknown as Memory["runtime"];
+    treasury.beginTick();
+    const view = treasury.query({ resource: RESOURCE_ENERGY });
+    expect(view.observed).toBe(170_000);
+    expect(view.committed).toBe(800);
+    expect(view.spendable).toBe(120_000 + 50_000 - 800);
 
-    const view = treasury.query({ resource: "U", rooms: ["W1N57"] });
-    expect(view.observed).toBe(7_000);
-    expect(view.committed).toBe(4_500);
-    expect(view.spendable).toBe(2_500);
-    expect(view.overcommitted).toBe(false);
+    const storageOnly = treasury.query({ resource: RESOURCE_ENERGY, locations: ["storage"] });
+    expect(storageOnly.observed).toBe(150_000);
+    expect(storageOnly.committed).toBe(800);
 
-    // terminal-only 视图（transferable 语义）。
-    const terminalView = treasury.query({ resource: "U", rooms: ["W1N57"], locations: ["terminal"] });
-    expect(terminalView.observed).toBe(2_000);
-    expect(terminalView.committed).toBe(4_500);
-    expect(terminalView.spendable).toBe(0);
-    expect(terminalView.overcommitted).toBe(true);
-
-    // holder 不存在（未注入 holderExists 的默认服务）→ 孤儿预留排除。
-    const orphanExcluded = makeService(Game.rooms).query({ resource: "U", rooms: ["W1N57"] });
-    expect(orphanExcluded.committed).toBe(3_000);
+    const singleRoom = treasury.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
+    expect(singleRoom.observed).toBe(120_000);
+    expect(singleRoom.spendable).toBe(120_000 - 800);
   });
 
   it("withhold 策略保留与 allowIncoming 计入入站", () => {
-    const treasury = makeService(Game.rooms);
-    seedTasks({
-      "t2": makePendingTask("t2", "E3N59", "W1N57", "K", 10_000),
+    const treasury = makeService({
+      tasks: { "t1": pendingTask({ id: "t1", fromRoomName: "W1N57", toRoomName: "E5N59", remainingAmount: 800 }) },
     });
+    treasury.beginTick();
+    const withheld = treasury.query({ resource: RESOURCE_ENERGY, withhold: 10_000 });
+    expect(withheld.spendable).toBe(170_000 - 800 - 10_000);
 
-    const noIncoming = treasury.query({ resource: "K", rooms: ["W1N57"] });
-    expect(noIncoming.observed).toBe(0);
-    expect(noIncoming.spendable).toBe(0);
-
-    const withIncoming = treasury.query({ resource: "K", rooms: ["W1N57"], allowIncoming: true });
-    expect(withIncoming.incoming).toBe(10_000);
-    expect(withIncoming.spendable).toBe(10_000);
-
-    const withheld = treasury.query({ resource: "K", rooms: ["W1N57"], allowIncoming: true, withhold: 12_000 });
-    expect(withheld.spendable).toBe(0);
-    expect(withheld.overcommitted).toBe(true);
+    const withIncoming = treasury.query({ resource: RESOURCE_ENERGY, allowIncoming: true, subtractOutgoing: false, rooms: ["E5N59"] });
+    expect(withIncoming.incoming).toBe(800);
+    expect(withIncoming.spendable).toBe(50_000 + 800);
   });
 
-  it("projected 查询叠加 journal delta 而不修改 observed", () => {
-    const treasury = makeService(Game.rooms);
-    treasury.recordAcceptedAction({
-      actionId: "send-1",
+  it("projected 查询叠加 transaction delta 而不修改 observed", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    const decision = decisionOf(treasury);
+    const result = treasury.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("transfer", "stor-1", "term-1"),
       kind: "terminal.send",
-      roomName: "W1N57",
-      locationKind: "terminal",
-      resource: "U",
-      delta: -1_000,
       source: "test",
+      decision,
+      postings: [
+        { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -5_000 },
+        { roomName: "W1N57", locationKind: "terminal", resource: RESOURCE_ENERGY, delta: 5_000 },
+      ],
     });
+    expect(result.status).toBe("recorded");
 
-    const view = treasury.query({ resource: "U", rooms: ["W1N57"] });
-    expect(view.observed).toBe(7_000);
-    expect(view.projected).toBe(6_000);
+    const terminalView = treasury.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"], locations: ["terminal"] });
+    expect(terminalView.observed).toBe(20_000);
+    expect(terminalView.projected).toBe(25_000);
+    const storageView = treasury.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"], locations: ["storage"] });
+    expect(storageView.projected).toBe(95_000);
 
-    const observedOnly = treasury.query({ resource: "U", rooms: ["W1N57"], allowProjected: false, subtractOutgoing: false, subtractReservations: false });
-    expect(observedOnly.projected).toBe(7_000);
+    // observed 物理事实不变（Observed 不可变）。
+    expect(treasury.observation().amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(100_000);
+  });
+
+  it("projected capacity 随 posting 推进且与 observed capacity 分离", () => {
+    const treasury = makeService({
+      rooms: [
+        {
+          name: "W1N57",
+          storage: { id: "stor-1", resources: { energy: 100_000 }, freeCapacity: 10_000 },
+          terminal: { id: "term-1", resources: { energy: 20_000, U: 500 }, freeCapacity: 30_000 },
+        },
+      ],
+    });
+    treasury.beginTick();
+    expect(treasury.observation().usedCapacity("W1N57", "storage")).toBe(100_000);
+    expect(treasury.observation().freeCapacity("W1N57", "storage")).toBe(10_000);
+    expect(treasury.projectedUsedCapacity("W1N57", "storage")).toBe(100_000);
+    expect(treasury.projectedFreeCapacity("W1N57", "storage")).toBe(10_000);
+
+    const decision = decisionOf(treasury);
+    const result = treasury.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("send", 1),
+      kind: "terminal.send",
+      source: "test",
+      decision,
+      postings: [
+        { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -4_000 },
+        { roomName: "W1N57", locationKind: "terminal", resource: RESOURCE_ENERGY, delta: 4_000 },
+      ],
+    });
+    expect(result.status).toBe("recorded");
+
+    // 流出位置 used 降 free 升；流入位置反向；terminal 多资源聚合正确。
+    expect(treasury.projectedUsedCapacity("W1N57", "storage")).toBe(96_000);
+    expect(treasury.projectedFreeCapacity("W1N57", "storage")).toBe(14_000);
+    expect(treasury.projectedUsedCapacity("W1N57", "terminal")).toBe(24_500);
+    expect(treasury.projectedFreeCapacity("W1N57", "terminal")).toBe(26_000);
+    // observed 口径不受影响。
+    expect(treasury.observation().usedCapacity("W1N57", "storage")).toBe(100_000);
+    expect(treasury.observation().freeCapacity("W1N57", "terminal")).toBe(30_000);
+  });
+});
+
+describe("Treasury owner-aware 查询", () => {
+  const reservations = (): Record<string, ReservationSeed> => ({
+    "holder-A": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "holder-A", amount: 3_000, expiresAt: 9_999 },
+    "holder-B": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "holder-B", amount: 2_000, expiresAt: 9_999 },
+  });
+
+  it("无 owner 时保守扣除全部活跃 reservation", () => {
+    const treasury = makeService({ reservations: reservations(), holderExists: () => true });
+    treasury.beginTick();
+    const view = treasury.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
+    expect(view.ownerStatus).toBe("none");
+    expect(view.committed).toBe(5_000);
+  });
+
+  it("owner 查询自身时只排除自己的 reservation，其他 owner 照常扣除", () => {
+    const treasury = makeService({ reservations: reservations(), holderExists: () => true });
+    treasury.beginTick();
+    const view = treasury.query({
+      resource: RESOURCE_ENERGY,
+      rooms: ["W1N57"],
+      owner: { holderId: "holder-A", scope: "production-reservation" },
+    });
+    expect(view.ownerStatus).toBe("excluded-own-reservations");
+    expect(view.committed).toBe(2_000);
+    expect(view.spendable).toBe(120_000 - 2_000);
+  });
+
+  it("owner 非法（空 holderId / 未知 scope）时 fail closed", () => {
+    const treasury = makeService({ reservations: reservations(), holderExists: () => true });
+    treasury.beginTick();
+    const emptyHolder = treasury.query({
+      resource: RESOURCE_ENERGY,
+      owner: { holderId: "", scope: "production-reservation" },
+    });
+    expect(emptyHolder.ownerStatus).toBe("invalid_fail_closed");
+    expect(emptyHolder.spendable).toBe(0);
+    expect(emptyHolder.overcommitted).toBe(true);
+    // observed 物理事实仍如实返回，只是不给乐观可用量。
+    expect(emptyHolder.observed).toBe(170_000);
+
+    const wrongScope = treasury.query({
+      resource: RESOURCE_ENERGY,
+      owner: { holderId: "holder-A", scope: "market-order" as never },
+    });
+    expect(wrongScope.ownerStatus).toBe("invalid_fail_closed");
+    expect(wrongScope.spendable).toBe(0);
+  });
+
+  it("owner-aware 语义作用于多房间/多资源作用域", () => {
+    const treasury = makeService({
+      reservations: {
+        "r1": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "holder-A", amount: 1_000, expiresAt: 9_999 },
+        "r2": { roomName: "E5N59", resource: RESOURCE_ENERGY, holderId: "holder-A", amount: 500, expiresAt: 9_999 },
+        "r3": { roomName: "W1N57", resource: "U", holderId: "holder-B", amount: 200, expiresAt: 9_999 },
+      },
+      holderExists: () => true,
+    });
+    treasury.beginTick();
+    const energy = treasury.query({
+      resource: RESOURCE_ENERGY,
+      owner: { holderId: "holder-A", scope: "production-reservation" },
+    });
+    expect(energy.committed).toBe(0);
+    const mineral = treasury.query({
+      resource: "U",
+      owner: { holderId: "holder-A", scope: "production-reservation" },
+    });
+    expect(mineral.committed).toBe(200);
   });
 });
 
 describe("RuntimeServices 集成", () => {
-  it("treasury 服务经 runtimeServices 挂载并可 resetForTest", () => {
-    const services = registerRuntimeServices();
-    expect(getTreasuryService()).toBe(services.treasury);
-    expect(getRuntimeServices().treasury.observation().amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(400_000);
+  it("treasury 服务经 runtimeServices 挂载并可 resetForTest 清空投影状态", () => {
+    installRooms([{ name: "W1N57", storage: { id: "stor-1", resources: { energy: 1_000 } }, terminal: null }]);
+    registerRuntimeServices();
+    const services = getRuntimeServices();
+    services.treasury.beginTick();
+    const decision = decisionOf(services.treasury);
+    const recorded = services.treasury.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("send", "x"),
+      kind: "terminal.send",
+      source: "test",
+      decision,
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
+    });
+    expect(recorded.status).toBe("recorded");
+    expect(services.treasury.journal()).toHaveLength(1);
 
     services.treasury.resetForTest();
+    expect(services.treasury.journal()).toHaveLength(0);
     const metrics = services.treasury.metrics();
-    expect(metrics.observationRebuilds).toBe(0);
-    expect(metrics.storeEnumerations).toBe(0);
-    expect(services.treasury.observation().amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(400_000);
+    expect(metrics.transactionsRecorded).toBe(0);
+    expect(metrics.postingsRecorded).toBe(0);
+    // reset 后服务仍可正常重建。
+    services.treasury.beginTick();
+    expect(services.treasury.observation().amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(1_000);
+    expect(getTreasuryService()).toBe(services.treasury);
+  });
+
+  it("resetForTest 后 overlay 消失（测试隔离契约）", () => {
+    const treasury = makeService({
+      rooms: [{ name: "W1N57", storage: { id: "stor-1", resources: { energy: 1_000 } }, terminal: null }],
+    });
+    treasury.beginTick();
+    const decision = decisionOf(treasury);
+    treasury.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("send", "dup"),
+      kind: "send",
+      source: "test",
+      decision,
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
+    });
+    expect(treasury.projectedUsedCapacity("W1N57", "storage")).toBe(900);
+    treasury.resetForTest();
+    treasury.beginTick();
+    expect(treasury.projectedUsedCapacity("W1N57", "storage")).toBe(1_000);
   });
 });

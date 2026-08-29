@@ -57,6 +57,11 @@ function gameLoop(): void {
   // 本 tick 的 spawn/creep 快照由 TickContext 统一维护，避免与各模块重复
   // Object.values 扫描；快照在 tick 内不可变。
   const tickContext = getTickContextService();
+  // Treasury 生命周期起点：在任何市场预检、生产、物流、任务规划和执行之前
+  // 发行本 tick shared epoch 并完成对账；此后业务模块只读缓存。
+  cpuProfiler.measure("treasuryBeginTick", () => {
+    getTreasuryService().beginTick();
+  });
 
   cpuProfiler.measure("announceDeploy", announceDeploy);
   cpuProfiler.measure("marketSalePreflight", runMarketSalePreflight);
@@ -112,6 +117,11 @@ function gameLoop(): void {
   // 详见 treasury/shadow.ts 与 OpenSpec empire-treasury-rearchitecture。
   cpuProfiler.measure("treasuryShadow", () => {
     runTreasuryShadowCheck(getTreasuryService());
+  });
+  // Treasury 生命周期终点：本 tick 全部业务执行之后、最终 profiler flush
+  // 之前归档投影终态并关闭本 tick（此后登记一律拒绝）。
+  cpuProfiler.measure("treasuryEndTick", () => {
+    getTreasuryService().endTick();
   });
   cpuProfiler.flush();
 }

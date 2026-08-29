@@ -12,6 +12,8 @@ describe("main loop phase ordering", () => {
     ts.ScriptKind.TS,
   );
   const canonicalTickPhases = [
+    // Treasury 生命周期起点：任何市场预检/生产/物流/规划之前发行 shared epoch。
+    ["treasuryBeginTick", "<inline>"],
     ["announceDeploy", "announceDeploy"],
     ["marketSalePreflight", "runMarketSalePreflight"],
     ["pixelGenerator", "runPixelGenerator"],
@@ -51,6 +53,8 @@ describe("main loop phase ordering", () => {
     ["creepWork", "<inline>"],
     ["empireInventoryShadow", "runEmpireInventoryShadowCheck"],
     ["treasuryShadow", "<inline>"],
+    // Treasury 生命周期终点：全部业务执行之后、最终 flush 之前归档并关闭 tick。
+    ["treasuryEndTick", "<inline>"],
   ] as const;
 
   function getGameLoopDeclaration(): ts.FunctionDeclaration {
@@ -208,7 +212,7 @@ describe("main loop phase ordering", () => {
 
     expect(phaseContract).toEqual(canonicalTickPhases);
     expect(new Set(order).size).toBe(order.length);
-    expect(order).toHaveLength(39);
+    expect(order).toHaveLength(41);
   });
 
   it("keeps one-time registrations outside and before gameLoop", () => {
