@@ -8,7 +8,6 @@
  */
 import {
   clearMarketTickSessionForTest,
-  clearVerifiedMarketDataRootForTest,
   getMarketDataStateDeepRecoveriesForTest,
   runMarketSaleAutomation,
   runMarketSalePreflight,
@@ -166,96 +165,169 @@ describe("marketTickSession", () => {
     expect(diagnostics!.samples).toBe(2);
   });
 
-  it("skips full data-state recovery on the next tick when the verified root is unchanged", () => {
+  it("下一 tick 强制完整深恢复（跨 tick 快速路径已移除）", () => {
     expect(runMarketSalePreflight()).toBeDefined();
     const recoveriesAfterFirstTick = getMarketDataStateDeepRecoveriesForTest();
     expect(recoveriesAfterFirstTick).toBeGreaterThanOrEqual(1);
     flushMarketSaleDiagnostics();
 
-    // 下一 tick：根引用未变 → ensureDataState 走跨 tick 快速路径，
-    // 不再执行深恢复（业务逻辑仍可正常写 drain 等字段）。
+    // 下一 tick：即使根引用未变（测试环境 Memory 不重解析），也必须
+    // 重新执行完整深恢复——每 tick 一次逐条内容校验，不再有跨 tick
+    // 结构键快速命中。
     clearMarketTickSessionForTest();
     Game.time += 1;
     expect(runMarketSalePreflight()).toBeDefined();
     flushMarketSaleDiagnostics();
 
-    expect(getMarketDataStateDeepRecoveriesForTest()).toBe(recoveriesAfterFirstTick);
+    expect(getMarketDataStateDeepRecoveriesForTest()).toBe(
+      recoveriesAfterFirstTick + 1,
+    );
     const diagnostics = readMarketSaleDiagnosticsForTest();
     expect(diagnostics!.samples).toBe(2);
   });
 
-  it("JSON round-trip（生产 Memory 重解析形态）后仍命中 commitment 快速路径", () => {
+  it("JSON round-trip（生产 Memory 重解析形态）后每 tick 深恢复且内容无损", () => {
     // 生产环境每 tick Memory 经 JSON 序列化/重解析：对象引用必然全部
-    // 更换，旧的"引用相等"快速路径在线上永远无法命中。commitment 键
-    // （顶层键集合 + exposure 规模 + 迁移状态标量）跨 round-trip 稳定，
-    // 本用例锁定该语义。
+    // 更换。快速路径移除后，round-trip 后的每 tick 都必须走完整深恢复，
+    // 且深恢复本身幂等（顶层结构不丢字段）。
     expect(runMarketSalePreflight()).toBeDefined();
+    const topLevelKeys = Object.keys(
+      Memory.data!.marketSaleAutomation as unknown as Record<string, unknown>,
+    ).sort();
 
-    // 状态沉降：首个 tick 深恢复后 preflight 可能原地推进 drain 等字段
-    //（合法的每 tick 安全写入），连续 tick 直到恢复计数稳定。
-    let settledRecoveries = -1;
-    for (let i = 0; i < 8; i += 1) {
-      clearMarketTickSessionForTest();
-      Game.time += 1;
-      expect(runMarketSalePreflight()).toBeDefined();
-      const current = getMarketDataStateDeepRecoveriesForTest();
-      if (current === settledRecoveries) break;
-      settledRecoveries = current;
-    }
-
-    // 模拟引擎行为：整棵 Memory 树 JSON round-trip（引用全换）。
-    // 不清 verified 标记（模块级 commitment 状态跨 tick 保留，
-    // 仅对象身份更换）。
     clearMarketTickSessionForTest();
     Game.time += 1;
     Memory.data = JSON.parse(JSON.stringify(Memory.data));
     expect(runMarketSalePreflight()).toBeDefined();
 
-    // 引用已换但结构 commitment 未变：不再深恢复。
-    expect(getMarketDataStateDeepRecoveriesForTest()).toBe(settledRecoveries);
-    // 业务字段在 round-trip 后仍可用（返回的 data 即当前根）。
+    expect(getMarketDataStateDeepRecoveriesForTest()).toBeGreaterThanOrEqual(2);
+    // 幂等性：深恢复不损坏业务根（顶层键集合往返保持）。
+    expect(
+      Object.keys(
+        Memory.data!.marketSaleAutomation as unknown as Record<string, unknown>,
+      ).sort(),
+    ).toEqual(topLevelKeys);
     expect(Memory.data!.marketSaleAutomation).toBeDefined();
   });
 
-  it("commitment 快速路径对结构变化回退深恢复（exposure 规模变化）", () => {
+  it("同 tick 引用短路保留；跨 tick 同引用也强制深恢复", () => {
     expect(runMarketSalePreflight()).toBeDefined();
-    const recoveriesAfterFirstTick = getMarketDataStateDeepRecoveriesForTest();
+    const committedRoot = Memory.data!.marketSaleAutomation;
+    const recoveriesAfterCommit = getMarketDataStateDeepRecoveriesForTest();
 
-    // round-trip + 结构变化（新增 exposure 键）：commitment 键失配 →
-    // 完整深恢复（保守正确）。
+    // 同 tick：已验证/已 commit 的根引用原样放回 → 命中同 tick 短路，
+    // 不重复深恢复（保留的仅此一条快速途径）。
+    clearMarketTickSessionForTest();
+    Memory.data!.marketSaleAutomation = committedRoot;
+    expect(runMarketSalePreflight()).toBeDefined();
+    expect(getMarketDataStateDeepRecoveriesForTest()).toBe(recoveriesAfterCommit);
+
+    // 跨 tick：同一引用再次出现（生产永不发生，测试环境构造旧快速
+    // 路径的误命中形态）→ tick 失配，强制完整深恢复。
     clearMarketTickSessionForTest();
     Game.time += 1;
-    Memory.data = JSON.parse(JSON.stringify(Memory.data));
-    const marketData = Memory.data!.marketSaleAutomation as unknown as {
-      pendingDirectDeals: Record<string, unknown>;
-      directAutomation?: { pendingDirectDeals?: Record<string, unknown> };
-    };
-    marketData.pendingDirectDeals = {
-      "req-x": { roomName: "W1N1", resource: RESOURCE_ENERGY },
-    };
-    if (marketData.directAutomation) {
-      marketData.directAutomation.pendingDirectDeals =
-        marketData.pendingDirectDeals;
-    }
+    Memory.data!.marketSaleAutomation = committedRoot;
     expect(runMarketSalePreflight()).toBeDefined();
-    expect(getMarketDataStateDeepRecoveriesForTest()).toBeGreaterThan(
-      recoveriesAfterFirstTick,
+    expect(getMarketDataStateDeepRecoveriesForTest()).toBe(
+      recoveriesAfterCommit + 1,
     );
   });
 
-  it("runs full recovery again after an external field-level mutation is not detectable but root replacement is", () => {
+  it("同条目数但 managed order 内容损坏被逐条检出（quarantine）", () => {
     expect(runMarketSalePreflight()).toBeDefined();
-    flushMarketSaleDiagnostics();
 
-    // 外部替换根：引用失配 → 完整恢复（保守正确）。
+    // 注入一条字段级损坏的 managed order（price 为负；条目数不变，
+    // 旧 commitment 结构键对该形态不可见）。
     clearMarketTickSessionForTest();
     Game.time += 1;
-    Memory.data!.marketSaleAutomation = {
-      ...Memory.data!.marketSaleAutomation!,
-    } as NonNullable<Memory["data"]>["marketSaleAutomation"];
+    const marketData = Memory.data!.marketSaleAutomation as unknown as {
+      managedOrders: Record<string, unknown>;
+    };
+    marketData.managedOrders = {
+      "order-1": {
+        orderId: "order-1",
+        roomName: "W1N1",
+        resourceType: RESOURCE_ENERGY,
+        price: -0.5,
+        originalAmount: 1000,
+        lastRemainingAmount: 800,
+        remainingExposure: 800,
+        feeDebtMilli: 0,
+        createdAt: 1,
+        lastSeenAt: 1,
+        policyCancelAtTick: 0,
+        serverCreatedTick: 1,
+      },
+    };
     expect(runMarketSalePreflight()).toBeDefined();
-    flushMarketSaleDiagnostics();
-    expect(Memory.data!.marketSaleAutomation).toBeDefined();
+
+    // 深恢复逐条校验检出损坏：条目被移出 managedOrders，且 direct
+    // 进入受控 blocked 形态（quarantine 证据链落点随 direct 形态而变，
+    // 断言锁定"检出+受控"这一稳定行为）。
+    const recovered = Memory.data!.marketSaleAutomation as unknown as {
+      managedOrders: Record<string, unknown>;
+      directAutomation: { migrationBlockedReason?: string };
+    };
+    expect(Object.keys(recovered.managedOrders)).toHaveLength(0);
+    expect(recovered.directAutomation.migrationBlockedReason).toBeDefined();
+  });
+
+  it("同条目数但 pending mutation / fee ledger 内容损坏被检出（fail-safe）", () => {
+    expect(runMarketSalePreflight()).toBeDefined();
+
+    clearMarketTickSessionForTest();
+    Game.time += 1;
+    const marketData = Memory.data!.marketSaleAutomation as unknown as {
+      pendingMutations: Record<string, unknown>;
+      feeLedger: unknown;
+    };
+    // cancel 类 mutation 的 prospectiveFeeMilli 必须精确等于重算值 0；
+    // 同条目数但费用字段损坏 → 逐条检出。
+    marketData.pendingMutations = {
+      "order-2": {
+        orderId: "order-2",
+        kind: "cancel",
+        requestedAt: 1,
+        pre: { price: 0.5, totalAmount: 1000, remainingAmount: 800 },
+        requested: {},
+        prospectiveFeeMilli: 123,
+        conservativeExposure: 800,
+        status: "prepared",
+      },
+    };
+    marketData.feeLedger = {
+      feeEvents: [{ id: "evt-1", tick: 1, action: "create", feeMilli: -5 }],
+      sameTickReservations: [],
+      processedFills: [],
+      carriedFeeDebtMilli: {},
+    };
+    expect(runMarketSalePreflight()).toBeDefined();
+
+    const recovered = Memory.data!.marketSaleAutomation as unknown as {
+      pendingMutations: Record<string, unknown>;
+      feeLedger: { feeEvents: unknown[] };
+    };
+    expect(Object.keys(recovered.pendingMutations)).toHaveLength(0);
+    // fee ledger 损坏（feeMilli 为负）→ fail-safe 重置为空窗口。
+    expect(recovered.feeLedger.feeEvents).toHaveLength(0);
+
+    // 对照：同条目数、内容完好的 fee ledger 条目经每 tick 校验后保留。
+    clearMarketTickSessionForTest();
+    Game.time += 1;
+    const good = Memory.data!.marketSaleAutomation as unknown as {
+      feeLedger: Record<string, unknown>;
+    };
+    good.feeLedger = {
+      feeEvents: [{ id: "evt-2", tick: 1, action: "create", feeMilli: 500 }],
+      sameTickReservations: [],
+      processedFills: [],
+      carriedFeeDebtMilli: {},
+    };
+    expect(runMarketSalePreflight()).toBeDefined();
+    const kept = Memory.data!.marketSaleAutomation as unknown as {
+      feeLedger: { feeEvents: { id: string }[] };
+    };
+    expect(kept.feeLedger.feeEvents.map((e) => e.id)).toEqual(["evt-2"]);
   });
 
   it("runs full recovery again after a simulated global reset", () => {
@@ -263,13 +335,14 @@ describe("marketTickSession", () => {
     const recoveriesAfterFirstTick = getMarketDataStateDeepRecoveriesForTest();
     flushMarketSaleDiagnostics();
 
+    // global reset 后 Memory 树全新（引用全换）：无论模块级验证标记是否
+    // 幸存，下一 tick 都必须重新深恢复一次。
     clearMarketTickSessionForTest();
-    clearVerifiedMarketDataRootForTest();
     Game.time += 1;
+    Memory.data = JSON.parse(JSON.stringify(Memory.data));
     expect(runMarketSalePreflight()).toBeDefined();
     flushMarketSaleDiagnostics();
 
-    // global reset 清空验证标记后：下一 tick 必须重新深恢复一次。
     expect(getMarketDataStateDeepRecoveriesForTest()).toBeGreaterThan(recoveriesAfterFirstTick);
     expect(readMarketSaleDiagnosticsForTest()!.samples).toBe(2);
   });

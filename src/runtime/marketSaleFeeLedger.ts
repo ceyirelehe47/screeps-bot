@@ -282,6 +282,91 @@ function validateFillReceipt(receipt: ProcessedFillReceipt): void {
   );
 }
 
+function validateReconcileGap(gap: FeeLedgerReconcileGap): void {
+  const reasons: readonly FeeLedgerReconcileGap["reason"][] = [
+    "unknown_disappearance",
+    "external_order_mutation",
+    "server_expiry_refund_mismatch",
+    "fill_receipt_conflict",
+    "fill_receipt_capacity",
+  ];
+  assertBoundedIdentifier(gap.orderId, "reconcile gap orderId");
+  if (!reasons.includes(gap.reason)) {
+    throw new RangeError("reconcile gap reason is invalid");
+  }
+  assertNonNegativeSafeInteger(gap.observedAt, "reconcile gap observedAt");
+  if (gap.transactionId !== undefined) {
+    assertBoundedIdentifier(gap.transactionId, "reconcile gap transactionId");
+  }
+}
+
+/**
+ * 深恢复层的内容级校验（fail-safe）：对已持久化的 fee ledger 做逐条
+ * 校验（同条目数但字段损坏也能检出）。任一条目损坏/容器形状错误/
+ * 超出上限时返回新的空 ledger——费用窗口统计口径保守重来，不影响
+ * 资金安全（fee 账本只是窗口预算依据，不是余额本身）。
+ * 全部通过时原样返回传入引用，避免热路径无谓 clone。
+ */
+export function validateOrResetFeeLedger(
+  ledger: unknown,
+): MarketSaleFeeLedgerState {
+  if (ledger === undefined || ledger === null) {
+    return createEmptyMarketSaleFeeLedger();
+  }
+  try {
+    if (typeof ledger !== "object" || Array.isArray(ledger)) {
+      throw new RangeError("fee ledger is not a plain object");
+    }
+    const candidate = ledger as MarketSaleFeeLedgerState;
+    if (!Array.isArray(candidate.feeEvents)) {
+      throw new RangeError("feeEvents is not an array");
+    }
+    if (!Array.isArray(candidate.sameTickReservations)) {
+      throw new RangeError("sameTickReservations is not an array");
+    }
+    if (!Array.isArray(candidate.processedFills)) {
+      throw new RangeError("processedFills is not an array");
+    }
+    if (
+      candidate.feeEvents.length > MAX_FEE_EVENTS ||
+      candidate.sameTickReservations.length > MAX_SAME_TICK_FEE_RESERVATIONS ||
+      candidate.processedFills.length > MAX_PROCESSED_FILL_RECEIPTS
+    ) {
+      throw new RangeError("fee ledger container exceeds hard cap");
+    }
+    if (
+      candidate.carriedFeeDebtMilli === null ||
+      typeof candidate.carriedFeeDebtMilli !== "object" ||
+      Array.isArray(candidate.carriedFeeDebtMilli)
+    ) {
+      throw new RangeError("carriedFeeDebtMilli is not a plain object");
+    }
+    if (Object.keys(candidate.carriedFeeDebtMilli).length > MAX_CARRIED_FEE_RESOURCES) {
+      throw new RangeError("carriedFeeDebtMilli exceeds resource cap");
+    }
+    for (const value of Object.values(candidate.carriedFeeDebtMilli)) {
+      if (value === undefined) continue;
+      assertNonNegativeSafeInteger(
+        value,
+        "carriedFeeDebtMilli entry",
+      );
+    }
+    for (const event of candidate.feeEvents) validateFeeEvent(event);
+    for (const reservation of candidate.sameTickReservations) {
+      validateReservation(reservation);
+    }
+    for (const receipt of candidate.processedFills) {
+      validateFillReceipt(receipt);
+    }
+    if (candidate.reconcileGap !== undefined) {
+      validateReconcileGap(candidate.reconcileGap);
+    }
+    return candidate;
+  } catch {
+    return createEmptyMarketSaleFeeLedger();
+  }
+}
+
 export function createEmptyMarketSaleFeeLedger(): MarketSaleFeeLedgerState {
   return {
     feeEvents: [],

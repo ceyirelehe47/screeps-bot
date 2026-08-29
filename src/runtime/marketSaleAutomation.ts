@@ -157,6 +157,7 @@ import {
 import { collectLiveMarketSaleProtectionLedger } from "@/runtime/marketSaleProtectionAdapter";
 import {
   advanceFeeLedgerWindow,
+  validateOrResetFeeLedger,
   applyFillFeeDebt,
   commitProspectiveFeeReservation,
   createEmptyMarketSaleFeeLedger,
@@ -3303,64 +3304,13 @@ function registerMarketBaseResourceCanonicalRootThisTick(value: object): void {
   }
 }
 
-// 跨 tick 数据根快速验证状态：稳定 commitment 键 + 引用相等 + TTL 兜底。
-// 模块级变量随 global reset 一并清零。
-const MARKET_DEEP_AUDIT_INTERVAL = 500;
+// 数据根验证状态：仅支持"同 tick 引用短路"。生产 Memory 每 tick 经
+// JSON 重解析（对象引用必然变化），跨 tick 永远走完整深恢复——历史上的
+// commitment 结构键快速路径（顶层键集合 + exposure 规模 + 迁移标量）已
+// 移除：它对"同条目数但内容损坏"不可见，属高风险快速命中。模块级变量
+// 随 global reset 一并清零。
 let verifiedDataRoot: MarketSaleDataState | undefined;
 let verifiedDataRootTick = -1;
-let verifiedDataRootKey: string | undefined;
-
-/**
- * 数据根的稳定 commitment 键（有界开销，无大型 stringify）：
- * 顶层键名集合 + exposure 容器规模 + 少量状态标量。生产环境每 tick
- * Memory 都会经 JSON 重解析（对象引用必然变化），引用相等快速路径
- * 在线上永远无法命中——本键跨 JSON round-trip 稳定，作为生产快速路径
- * 的判定依据。检测能力：顶层结构/exposure 规模/迁移状态的变化；
- * 深层内容损坏不依赖本层（structuralMarketSaleWriteBlocker 与 V3
- * canonical 校验每 tick 在 reconcile 层执行，MARKET_DEEP_AUDIT_INTERVAL
- * 到期强制完整审计兜底）。
- */
-function marketDataRootCommitmentKey(
-  raw: Record<string, unknown>,
-): string {
-  const direct = isPlainRecord(raw.directAutomation)
-    ? raw.directAutomation
-    : undefined;
-  const exposureSize = (value: unknown): number =>
-    isPlainRecord(value) ? Object.keys(value).length : -1;
-  // JSON round-trip 会丢弃值为 undefined 的显式属性：按 JSON 语义归一，
-  // undefined 值键与缺席键等价，否则生产每 tick 重解析后键必然失配。
-  const topLevelKeys = Object.keys(raw)
-    .filter((key) => raw[key] !== undefined)
-    .sort();
-  return [
-    topLevelKeys.join(","),
-    exposureSize(raw.managedOrders),
-    exposureSize(raw.pendingMutations),
-    exposureSize(raw.pendingDirectDeals),
-    raw.pendingCreate === undefined ? 0 : 1,
-    isPlainRecord(raw.drain) ? String(raw.drain.phase) : "",
-    typeof direct?.migrationStatus === "string" ? direct.migrationStatus : "",
-    typeof direct?.migrationBlockedReason === "string"
-      ? direct.migrationBlockedReason
-      : "",
-  ].join("|");
-}
-
-/** 仅供测试：观测快速路径是否命中。 */
-export function isMarketDataRootFastPathArmedForTest(): boolean {
-  return verifiedDataRoot !== undefined;
-}
-
-/** 仅供测试：清除跨 tick 验证标记（模拟 global reset）。 */
-export function clearVerifiedMarketDataRootForTest(): void {
-  verifiedDataRoot = undefined;
-  verifiedDataRootTick = -1;
-  verifiedDataRootKey = undefined;
-}
-
-// 仅供测试/低频诊断：深恢复（完整 ensureDataState）执行次数；生产热路径
-// 不读取。跨 tick 快速路径命中的 tick 不递增。
 let marketDataStateDeepRecoveries = 0;
 
 export function getMarketDataStateDeepRecoveriesForTest(): number {
@@ -3379,30 +3329,16 @@ function ensureDataState(): MarketSaleDataState {
   ) {
     return rawMarketSaleAutomation as unknown as MarketSaleDataState;
   }
-  // ── 跨 tick 快速路径（提交 C + commitment 修订）─────────────────────────
-  // 两条命中途径，同一 TTL 兜底（MARKET_DEEP_AUDIT_INTERVAL 到期强制完整
-  // 恢复/审计；global reset 后模块变量清零 → 完整恢复）：
-  // - 引用相等：上一 tick 验证过的根对象引用仍 === Memory 当前根（测试
-  //   环境/同 tick 重建场景）；
-  // - commitment 键相等：生产环境每 tick Memory 重解析使引用必然失配，
-  //   改用有界开销的稳定结构键（顶层键集合 + exposure 规模 + 迁移状态
-  //   标量）判定"内容结构仍是已验证形态"。外部以同形异值替换根的窗口
-  //   由 500 tick 深审计兜底；损坏检测不依赖本层。
-  // 正常 planning commit 替换根后（内容已变），键失配 → 下一 tick 完整
-  // 恢复一次，属保守正确路径。
-  const rawIsRecord = isPlainRecord(rawMarketSaleAutomation);
-  const referenceMatch =
-    verifiedDataRoot !== undefined &&
-    verifiedDataRoot === rawMarketSaleAutomation;
-  const commitmentMatch =
-    !referenceMatch &&
-    rawIsRecord &&
-    verifiedDataRootKey !== undefined &&
-    marketDataRootCommitmentKey(rawMarketSaleAutomation as Record<string, unknown>) ===
-      verifiedDataRootKey;
+  // ── 同 tick 引用短路（跨 tick 快速路径已移除）─────────────────────────
+  // 生产环境每 tick Memory 经 JSON 重解析使引用必然失配 → 跨 tick 永远
+  // 走下方完整深恢复（含 managed order / pending mutation / pending
+  // create / fee ledger 的逐条内容校验）。仅当同 tick 内已验证/已 commit
+  // 的根对象引用再次出现（planning commit 后同 tick 直调、operator
+  // 命令重入）时，才跳过重复深恢复；tick 不匹配一律强制深恢复。
   if (
-    (referenceMatch || commitmentMatch) &&
-    Game.time - verifiedDataRootTick <= MARKET_DEEP_AUDIT_INTERVAL
+    verifiedDataRoot !== undefined &&
+    verifiedDataRootTick === Game.time &&
+    verifiedDataRoot === rawMarketSaleAutomation
   ) {
     bumpMarketPerformanceCounter("marketDataStateFastPathHits");
     return rawMarketSaleAutomation as MarketSaleDataState;
@@ -3466,7 +3402,10 @@ function ensureDataState(): MarketSaleDataState {
     recoveredPendingCreate = rawPendingCreate as OwnedPendingCreate | undefined;
   }
   data.feeEvents ||= [];
-  data.feeLedger ||= createEmptyMarketSaleFeeLedger();
+  // fee ledger 内容级校验（fail-safe）：同条目数但字段损坏的持久化账本
+  // 在此检出并重置为空窗口，不再静默放行（跨 tick 快速路径移除后，
+  // 该校验每 tick 执行）。
+  data.feeLedger = validateOrResetFeeLedger(data.feeLedger);
   data.carriedFeeDebtMilli ||= {};
   data.trustedFloors ||= {};
   data.processedTransactionKeys ||= [];
@@ -3577,12 +3516,10 @@ function ensureDataState(): MarketSaleDataState {
   Memory.data.marketSaleAutomation = committedData as unknown as NonNullable<
     NonNullable<Memory["data"]>["marketSaleAutomation"]
   >;
-  // 深恢复完成的原子 commit 即验证点：标记供后续 tick 快速路径复用。
+  // 深恢复完成的原子 commit 即验证点：标记仅供同 tick 引用短路复用，
+  // 跨 tick（Memory 重解析）一律重新深恢复。
   verifiedDataRoot = committedData;
   verifiedDataRootTick = Game.time;
-  verifiedDataRootKey = marketDataRootCommitmentKey(
-    committedData as unknown as Record<string, unknown>,
-  );
   marketDataStateDeepRecoveries += 1;
   bumpMarketPerformanceCounter("marketDataStateDeepRecoveries");
   // 保护账本和 carrier 仍读取兼容字段；正常返回时它与 Direct WAL
@@ -7202,13 +7139,10 @@ function commitMarketSaleDataSnapshot(data: MarketSaleDataState): void {
   Memory.data!.marketSaleAutomation = data as unknown as NonNullable<
     NonNullable<Memory["data"]>["marketSaleAutomation"]
   >;
-  // commit 的输入是已验证状态的受控变换，原子落盘即验证点：维持跨 tick
-  // 快速路径的引用标记，避免每次 planning commit 后退回全量恢复。
+  // commit 的输入是已验证状态的受控变换，原子落盘即验证点：标记仅供
+  // 同 tick 引用短路复用，跨 tick 一律重新深恢复。
   verifiedDataRoot = data;
   verifiedDataRootTick = Game.time;
-  verifiedDataRootKey = marketDataRootCommitmentKey(
-    data as unknown as Record<string, unknown>,
-  );
 }
 
 function commitContextMarketSaleData(
