@@ -1,25 +1,25 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "c3284cb",
-    "suites": 193,
-    "tests": 683,
-    "passed": 683,
+    "commit": "d3c0644",
+    "suites": 197,
+    "tests": 712,
+    "passed": 712,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 193,
-    "tests": 683,
-    "passed": 683,
+    "suites": 197,
+    "tests": 712,
+    "passed": 712,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 50,
+    "highRiskFiles": 54,
     "defaultFiles": 128
   },
   "files": {
@@ -986,6 +986,26 @@
     "src/runtime/empireInventoryBenchmark.test.ts": {
       "baseline": 0,
       "budget": 1,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryCore.test.ts": {
+      "baseline": 0,
+      "budget": 9,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryProjection.test.ts": {
+      "baseline": 0,
+      "budget": 8,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryCommitments.test.ts": {
+      "baseline": 0,
+      "budget": 6,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryShadow.test.ts": {
+      "baseline": 0,
+      "budget": 6,
       "tier": "high-risk"
     }
   }
