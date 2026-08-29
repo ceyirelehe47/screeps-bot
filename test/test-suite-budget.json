@@ -1,25 +1,25 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "38a6b43",
-    "suites": 188,
-    "tests": 632,
-    "passed": 632,
+    "commit": "3f7d148",
+    "suites": 193,
+    "tests": 666,
+    "passed": 666,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 188,
-    "tests": 632,
-    "passed": 632,
+    "suites": 193,
+    "tests": 666,
+    "passed": 666,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 45,
+    "highRiskFiles": 50,
     "defaultFiles": 128
   },
   "files": {
@@ -955,12 +955,37 @@
     },
     "src/runtime/marketSaleSession.test.ts": {
       "baseline": 0,
-      "budget": 6,
+      "budget": 11,
       "tier": "high-risk"
     },
     "src/runtime/marketSalePlanningGate.test.ts": {
       "baseline": 0,
-      "budget": 4,
+      "budget": 5,
+      "tier": "high-risk"
+    },
+    "scripts/lib/redactSecrets.test.ts": {
+      "baseline": 0,
+      "budget": 7,
+      "tier": "high-risk"
+    },
+    "src/runtime/marketSalePlanningAuthorization.test.ts": {
+      "baseline": 0,
+      "budget": 5,
+      "tier": "high-risk"
+    },
+    "src/runtime/empireInventoryIndex.test.ts": {
+      "baseline": 0,
+      "budget": 10,
+      "tier": "high-risk"
+    },
+    "src/runtime/empireInventoryShadow.test.ts": {
+      "baseline": 0,
+      "budget": 5,
+      "tier": "high-risk"
+    },
+    "src/runtime/empireInventoryBenchmark.test.ts": {
+      "baseline": 0,
+      "budget": 1,
       "tier": "high-risk"
     }
   }

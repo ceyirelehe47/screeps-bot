@@ -18,6 +18,7 @@ monitor-data/*
 !monitor-data/derived-canary2/
 !monitor-data/analyze-canary3.mjs
 !monitor-data/apply-budget-cpu3.mjs
+!monitor-data/apply-budget-inventory-shadow.mjs
 !monitor-data/collect-jest-counts.cjs
 !monitor-data/set-canary3-config.cjs
 !monitor-data/derived-canary3/
