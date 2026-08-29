@@ -1,18 +1,18 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "ba09ab3",
+    "commit": "1a86dda",
     "suites": 199,
-    "tests": 751,
-    "passed": 751,
+    "tests": 777,
+    "passed": 777,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
     "suites": 199,
-    "tests": 751,
-    "passed": 751,
+    "tests": 777,
+    "passed": 777,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -990,17 +990,17 @@
     },
     "src/runtime/treasury/treasuryCore.test.ts": {
       "baseline": 0,
-      "budget": 15,
+      "budget": 21,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryProjection.test.ts": {
       "baseline": 0,
-      "budget": 15,
+      "budget": 17,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryCommitments.test.ts": {
       "baseline": 0,
-      "budget": 12,
+      "budget": 13,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryShadow.test.ts": {
@@ -1010,12 +1010,12 @@
     },
     "src/runtime/treasury/treasuryLifecycle.test.ts": {
       "baseline": 0,
-      "budget": 18,
+      "budget": 32,
       "tier": "high-risk"
     },
     "test/treasuryCommitmentInvalidationBoundaries.test.ts": {
       "baseline": 0,
-      "budget": 2,
+      "budget": 5,
       "tier": "high-risk"
     }
   }
