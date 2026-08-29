@@ -3572,6 +3572,83 @@ function makeContext(): RunContext {
   };
 }
 
+// ─── MarketTickSession ────────────────────────────────────────────────────────
+// preflight 与 post-ResourceControl automation 复用同一 tick 的共享会话：
+// - context（config/data/runtime/liveOrders）在第一次市场调用时构建一次；
+// - v3Reconcile / persistentReconcile 以 context.data 引用为失效键——
+//   阶段之间的市场自身 commit 会替换 data 根（commit 函数同步 context.data），
+//   引用变化即自动重新 reconcile；ResourceControl 不写市场 data，
+//   因此两个阶段共享 context/reconcile 结果与现状语义等价；
+// - RC 之后才变化的事实（capacityState、库存、domain activity）不进
+//   session，由 automation 侧按现状自行读取；
+// - 仅存 global heap、以 Game.time 标识、global reset 自然重建。
+
+interface MarketTickSession {
+  context: RunContext;
+  /** reconcile 结果对应的 data 根引用；不匹配（根被替换）时重新执行。 */
+  baseResourceV3Data?: MarketSaleDataState;
+  baseResourceV3?: ReturnType<typeof reconcileBaseResourceV3State>;
+  persistentReconciledData?: MarketSaleDataState;
+  latchDone: boolean;
+}
+
+type GlobalWithMarketTickSession = typeof global & {
+  __marketTickSession?: { tick: number; session?: MarketTickSession };
+};
+
+const marketTickSessionGlobal: GlobalWithMarketTickSession = global;
+
+export function clearMarketTickSessionForTest(): void {
+  marketTickSessionGlobal.__marketTickSession = undefined;
+}
+
+function ensureMarketTickSession(): MarketTickSession {
+  const holder = marketTickSessionGlobal.__marketTickSession;
+  if (holder?.tick === Game.time && holder.session) {
+    return holder.session;
+  }
+  const session: MarketTickSession = {
+    context: makeContext(),
+    latchDone: false,
+  };
+  marketTickSessionGlobal.__marketTickSession = { tick: Game.time, session };
+  return session;
+}
+
+/**
+ * 阶段入口统一获取 session：data 引用仍指向 Memory 当前根时复用 context；
+ * 被未同步 session 的链路（operator commit、外部赋值）替换时原地重建
+ * context，reconcile memo 因 data 引用变化自动失效。
+ */
+function currentMarketTickSession(): MarketTickSession {
+  const session = ensureMarketTickSession();
+  if (session.context.data !== (Memory.data?.marketSaleAutomation as unknown as MarketSaleDataState | undefined)) {
+    session.context = makeContext();
+  }
+  return session;
+}
+
+function sessionReconcileBaseResourceV3(
+  session: MarketTickSession,
+  context: RunContext,
+): ReturnType<typeof reconcileBaseResourceV3State> {
+  if (session.baseResourceV3 && session.baseResourceV3Data === context.data) {
+    return session.baseResourceV3;
+  }
+  const result = measureMarketSubPhase("v3Reconcile", () => reconcileBaseResourceV3State(context));
+  session.baseResourceV3 = result;
+  session.baseResourceV3Data = context.data;
+  return result;
+}
+
+function sessionReconcilePersistent(session: MarketTickSession, context: RunContext): void {
+  if (session.persistentReconciledData === context.data) {
+    return;
+  }
+  measureMarketSubPhase("persistentReconcile", () => reconcilePersistentState(context));
+  session.persistentReconciledData = context.data;
+}
+
 function reject(context: RunContext, reason: string): void {
   context.rejectedByReason[reason] =
     (context.rejectedByReason[reason] || 0) + 1;
@@ -6227,11 +6304,15 @@ function registerOperatorControls(): void {
 }
 
 export function runMarketSalePreflight(): MarketSaleAutomationResult {
-  measureMarketSubPhase("latchAndControls", () => {
-    enforceLegacyMarketSafetyLatch();
-    registerOperatorControls();
-  });
-  const context = makeContext();
+  const session = currentMarketTickSession();
+  const context = session.context;
+  if (!session.latchDone) {
+    measureMarketSubPhase("latchAndControls", () => {
+      enforceLegacyMarketSafetyLatch();
+      registerOperatorControls();
+    });
+    session.latchDone = true;
+  }
   if (!context.marketDomainActivityValid) {
     reject(context, "market_domain_activity_invalid");
   }
@@ -6239,9 +6320,7 @@ export function runMarketSalePreflight(): MarketSaleAutomationResult {
   if (context.config.mode === "hybrid") {
     reject(context, "hybrid_not_implemented");
   }
-  const baseResourceV3 = measureMarketSubPhase("v3Reconcile", () =>
-    reconcileBaseResourceV3State(context),
-  );
+  const baseResourceV3 = sessionReconcileBaseResourceV3(session, context);
   const directState = context.data.directAutomation!;
   const v2DispatchConfig = frozenV2DispatchConfig(context.config);
   const inactiveMissingDirectState =
@@ -6279,7 +6358,7 @@ export function runMarketSalePreflight(): MarketSaleAutomationResult {
     updateDrain(context, "emergencyStop");
     return finalizeResult(context, context.config.mode, "emergencyStop");
   }
-  measureMarketSubPhase("persistentReconcile", () => reconcilePersistentState(context));
+  sessionReconcilePersistent(session, context);
   const makerForbidden = makerModePermanentlyForbidden(context.config);
   if (makerForbidden) {
     reject(context, "market_maker_hybrid_permanently_disabled");
@@ -6295,11 +6374,15 @@ export function runMarketSalePreflight(): MarketSaleAutomationResult {
 export function runMarketSaleAutomation(
   input: MarketSaleAutomationInput = {},
 ): MarketSaleAutomationResult {
-  measureMarketSubPhase("latchAndControls", () => {
-    enforceLegacyMarketSafetyLatch();
-    registerOperatorControls();
-  });
-  const context = makeContext();
+  const session = currentMarketTickSession();
+  const context = session.context;
+  if (!session.latchDone) {
+    measureMarketSubPhase("latchAndControls", () => {
+      enforceLegacyMarketSafetyLatch();
+      registerOperatorControls();
+    });
+    session.latchDone = true;
+  }
   if (input.stagingAmount !== undefined) {
     context.stagingAmount = nonNegativeInteger(input.stagingAmount);
   }
@@ -6319,9 +6402,7 @@ export function runMarketSaleAutomation(
   const cpuGetUsed = Game.cpu?.getUsed;
   const baseResourceV3CpuStartedAt =
     typeof cpuGetUsed === "function" ? cpuGetUsed.call(Game.cpu) : Number.NaN;
-  let baseResourceV3 = measureMarketSubPhase("v3Reconcile", () =>
-    reconcileBaseResourceV3State(context),
-  );
+  let baseResourceV3 = sessionReconcileBaseResourceV3(session, context);
   const structuralWriteBlocker = structuralMarketSaleWriteBlocker(
     context.data,
     context.config,
@@ -6331,7 +6412,7 @@ export function runMarketSaleAutomation(
     updateDrain(context, "emergencyStop");
     return finalizeResult(context, context.config.mode, "emergencyStop");
   }
-  measureMarketSubPhase("persistentReconcile", () => reconcilePersistentState(context));
+  sessionReconcilePersistent(session, context);
   const candidates = input.candidates || [];
   const configuredMode = effectiveMode(context.config);
   const makerForbidden = makerModePermanentlyForbidden(context.config);
