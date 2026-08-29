@@ -82,7 +82,7 @@ export function isMarketSaleDiagnosticsEnabled(): boolean {
 /** 仅供测试：强制丢弃窗口 memo（模拟 global reset 后的重新开启）。 */
 export function resetMarketSaleDiagnosticsForTest(): void {
   diagnosticsWindow = undefined;
-  runtimeGlobal.__marketSaleDiagnosticsPending = undefined;
+  delete runtimeGlobal.__marketSaleDiagnosticsPending;
 }
 
 function ensurePendingTickPhases(): PendingTickPhases {
@@ -130,7 +130,7 @@ export function measureMarketSubPhase<T>(phase: string, fn: () => T): T {
 /** tick 末尾（automation envelope 之后）调用：把本 tick pending 合入 Memory 聚合。 */
 export function flushMarketSaleDiagnostics(): void {
   const pending = runtimeGlobal.__marketSaleDiagnosticsPending;
-  runtimeGlobal.__marketSaleDiagnosticsPending = undefined;
+  delete runtimeGlobal.__marketSaleDiagnosticsPending;
   if (!pending || pending.phases.size === 0 || !diagnosticsWindow) {
     return;
   }

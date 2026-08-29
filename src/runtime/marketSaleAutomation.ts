@@ -3664,7 +3664,7 @@ type GlobalWithMarketTickSession = typeof global & {
 const marketTickSessionGlobal: GlobalWithMarketTickSession = global;
 
 export function clearMarketTickSessionForTest(): void {
-  marketTickSessionGlobal.__marketTickSession = undefined;
+  delete marketTickSessionGlobal.__marketTickSession;
 }
 
 function ensureMarketTickSession(): MarketTickSession {

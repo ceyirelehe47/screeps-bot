@@ -1820,13 +1820,61 @@ function toSources(
   };
 }
 
+// ── 同 tick 结果 memo（提交 D）─────────────────────────────────────────────
+// planning tick 的外层收集与 V3 full-read 的 fresh 收集使用完全相同的输入
+// （同 tick 的 config / managedOrders / canonical options 均为同一引用），
+// 而 toSources 的全部来源都是 Game/Memory 的纯读取——同 tick 内输出确定
+// 性相同。第二次调用直接复用只读 ledger，消除整段重复扫描。
+// 失效：Game.time 变化、任一输入引用变化；global reset 后自然重建。
+// 单槽缓存：重复读总是紧邻发生，无需多槽。
+interface ProtectionLedgerTickMemo {
+  tick: number;
+  config: MarketSaleAutomationConfig;
+  managedOrders: LiveManagedOrderCollection | undefined;
+  options: CollectLiveMarketSaleProtectionOptions;
+  ledger: MarketSaleProtectionLedger;
+}
+
+let protectionLedgerTickMemo: ProtectionLedgerTickMemo | undefined;
+
+export function clearProtectionLedgerTickMemoForTest(): void {
+  protectionLedgerTickMemo = undefined;
+  protectionLedgerMemoHits = 0;
+}
+
+export function getProtectionLedgerMemoHitsForTest(): number {
+  return protectionLedgerMemoHits;
+}
+
+let protectionLedgerMemoHits = 0;
+
+function recordProtectionLedgerMemoHit(): void {
+  protectionLedgerMemoHits += 1;
+  const globalWithCounter = global as typeof global & {
+    __marketPerformanceCounters?: Record<string, number>;
+  };
+  const counters = (globalWithCounter.__marketPerformanceCounters ??= {});
+  counters.duplicateProtectionReadsAvoided = (counters.duplicateProtectionReadsAvoided || 0) + 1;
+}
+
 export function collectLiveMarketSaleProtectionLedger(
   config: MarketSaleAutomationConfig,
   managedOrders?: LiveManagedOrderCollection,
   options: CollectLiveMarketSaleProtectionOptions = {},
 ): MarketSaleProtectionLedger {
+  const memo = protectionLedgerTickMemo;
+  if (
+    memo &&
+    memo.tick === Game.time &&
+    memo.config === config &&
+    memo.managedOrders === managedOrders &&
+    memo.options === options
+  ) {
+    recordProtectionLedgerMemoHit();
+    return memo.ledger;
+  }
   const candidates = resolveCandidates(config, options);
-  return buildMarketSaleProtectionLedger({
+  const ledger = buildMarketSaleProtectionLedger({
     currentTick: Game.time,
     revision: Game.time,
     observedAt: Game.time,
@@ -1834,4 +1882,12 @@ export function collectLiveMarketSaleProtectionLedger(
     candidates,
     sources: toSources(config, candidates, managedOrders, options),
   });
+  protectionLedgerTickMemo = {
+    tick: Game.time,
+    config,
+    managedOrders,
+    options,
+    ledger,
+  };
+  return ledger;
 }

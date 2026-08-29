@@ -1,3 +1,4 @@
+import { bumpMarketPerformanceCounter, snapshotMarketPerformanceCounters } from "@/runtime/marketPerformanceCounters";
 import {
   flushMarketSaleDiagnostics,
   markMarketSaleDiagnosticsPlanningTick,
@@ -883,8 +884,10 @@ export function runLiveMarketSaleAutomation(
     !data ||
     (!resourceControlCurrent && !hasExposureState)
   ) {
+    bumpMarketPerformanceCounter("marketFastPathTicks");
     const result = runAutomation(domainActivityInput);
     flushMarketSaleDiagnostics();
+    snapshotMarketPerformanceCounters();
     return result;
   }
 
@@ -901,10 +904,14 @@ export function runLiveMarketSaleAutomation(
     // 观测等）自动回到全量路径。
     const skipOuterCollection =
       !resourceControlCurrent && exposureCandidates.length === 0;
+    bumpMarketPerformanceCounter(
+      resourceControlCurrent ? "marketPlanningTicks" : "marketExposureTicks",
+    );
     const protection = skipOuterCollection
       ? undefined
-      : measureMarketSubPhase("protectionOuter", () =>
-          collectProtection(
+      : measureMarketSubPhase("protectionOuter", () => {
+          bumpMarketPerformanceCounter("protectionOuterCollections");
+          return collectProtection(
             config,
             isPlainRecord(data.managedOrders)
               ? data.managedOrders
@@ -912,8 +919,8 @@ export function runLiveMarketSaleAutomation(
             resourceControlCurrent
               ? canonicalContinuousProtection
               : { candidates: exposureCandidates },
-          ),
-        );
+          );
+        });
     const usesMarketBaseResourceSuccessor =
       config.directCapability === "continuous-v3";
     // V3 preflight 会递归冻结 canonical trustedFloors 以关闭 TOCTOU。
@@ -1042,6 +1049,7 @@ export function runLiveMarketSaleAutomation(
       }),
     );
     flushMarketSaleDiagnostics();
+    snapshotMarketPerformanceCounters();
     if (resourceControlCurrent && !pricingEvidenceFresh) {
       resetShadowQualification(pricingRejectionReason);
       result.rejectedByReason[pricingRejectionReason] =

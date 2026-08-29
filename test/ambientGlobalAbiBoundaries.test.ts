@@ -8,6 +8,9 @@ const GLOBAL_DECLARATION = resolve(SRC_ROOT, "global.d.ts");
 
 const PRIVATE_GLOBAL_SLOTS = new Set([
   "__runtimeServices",
+  "__marketTickSession",
+  "__marketSaleDiagnosticsPending",
+  "__marketPerformanceCounters",
   "__cpuMonitor",
   "__productionSamples",
   "__creepMovementState",
