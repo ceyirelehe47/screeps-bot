@@ -8,20 +8,22 @@
 |---|---|---|---|
 | 1 | `npm run typecheck` | **0** | build+test 双 tsconfig 0 错误 |
 | 2 | `npm run test` | **0** | 193 suites / **682 tests** 全过，135–146s |
-| 3 | `npm run test:budget` | **0** | `JEST_TEST_BUDGET=PASSED`（suites 193 / tests 682） |
-| 4 | `npm run build` | **0** | `dist/main.js` = **4,493,453 字节** |
+| 3 | `npm run test:budget` | **0** | `JEST_TEST_BUDGET=PASSED`（suites 193 / tests 683） |
+| 4 | `npm run build` | **0** | `dist/main.js` = **4,494,478 字节** |
 
-- 执行时 commit：`7a2dc3e7ff44833c89ad4f1d7301f1b3da09fbf4`（HEAD）
+- 执行时 commit（初版门禁）：`7a2dc3e`；终版门禁（typecheck 0 / test 683 / build 4,494,478 字节）：`f318a17`（clean）
 - 执行时 tree：**clean**（`git status --short` 无输出）
 - 构建嵌入校验：`dist/main.js` 含字符串 `7a2dc3e`（`__BUILD_COMMIT__` 注入）
-- baseline 锚点：`d09b140`（feature 提交）；budget 提交：`7a2dc3e`
+- baseline 锚点（终）：`c3284cb`（口径修复提交）；budget 提交：`f318a17`
 
 ## 本轮提交
 
 | commit | 内容 |
 |---|---|
 | `d09b140` | 四部分实现 + 测试（8 文件，+1282/−53） |
-| `7a2dc3e` | budget 锚点 193/682（基线 d09b140）+ 复演脚本 |
+| `7a2dc3e` | budget 锚点 193/682（基线 d09b140）+ 复演脚本（初版） |
+| `c3284cb` | oracle 总量口径修复（限定 store totalMode）+ shadow 12 例 |
+| `f318a17` | budget 重锚 193/683（基线 c3284cb） |
 
 ## 用例数变化（budget 同步）
 
@@ -30,7 +32,7 @@
 | `marketSaleFeeLedger.test.ts` | 2 | 7（fail-closed 五场景） |
 | `marketSaleSession.test.ts` | 12 | 14（接线：blocker 跨 tick / operator 修复） |
 | `empireInventoryIndex.test.ts` | 11 | 12（capacity 语义） |
-| `empireInventoryShadow.test.ts` | 7 | 11（轮转 / force flag / oracle 检出 / 低频） |
+| `empireInventoryShadow.test.ts` | 7 | 12（轮转 / force flag / oracle 检出 / 低频 / 限定 store 口径） |
 
 ## 四部分要点
 
