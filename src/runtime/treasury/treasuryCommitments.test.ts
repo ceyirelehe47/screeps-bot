@@ -5,11 +5,19 @@
  * - route merge lookup 与旧 findMergeablePendingTask 语义一致；
  * - production reservation：活跃聚合、holder 自排除、过期读侧排除（原记录
  *   不删除）、孤儿排除计数；
- * - receiver headroom 与超卖信号（healthyIncoming > free）；
+ * - receiver headroom 与超卖信号（healthyIncoming > free；observed 与
+ *   projected 双轨）；
+ * - 点时快照：构建后原 task/reservation 对象被修改不影响已构建索引；
+ *   receiver 查询不回扫 live task store；
+ * - revision invalidation：权威 mutation（bump）后 facade 下次查询重建；
  * - 查询零隐藏写入（Memory 快照前后一致）。
  */
 import { buildTreasuryCommitmentIndex } from "@/runtime/treasury/commitments";
 import { createTreasuryService } from "@/runtime/treasury/facade";
+import { bumpTreasuryCommitmentRevision, readTreasuryCommitmentRevision, resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
+import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
+import { formatTreasuryTransactionId } from "@/runtime/treasury/transactionId";
+import { reserveProductionResource } from "@/runtime/resourceReservation";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 
 type RuntimeGlobal = typeof global & { __runtimeServices?: unknown };
@@ -79,6 +87,8 @@ function makeTask(overrides: Partial<ResourceTransferTask> & { id: string }): Re
 beforeEach(() => {
   clearRuntimeServicesForTest();
   Game.time = 3000;
+  clearTreasuryPersistenceForTest();
+  resetTreasuryCommitmentRevisionForTest();
   installEmpire();
 });
 
@@ -267,5 +277,141 @@ describe("receiver capacity 承诺", () => {
     expect(tight.healthyIncomingAmount).toBe(900_000);
     expect(tight.storageHeadroom + tight.terminalHeadroom).toBeLessThan(0);
     expect(tight.overcommitted).toBe(true);
+  });
+
+  it("receiver headroom 提供 projected 口径（observed free 扣减本 tick 已结算容量净变化）", () => {
+    const tasks: Record<string, ResourceTransferTask> = {
+      "in-1": makeTask({ id: "in-1", toRoomName: "E1N57", remainingAmount: 50_000, origin: "automatic", lastProgressAt: 2999 }),
+    };
+    const treasury = createTreasuryService({ getRooms: () => Object.values(Game.rooms) });
+    treasury.beginTick();
+    // 本 tick 已结算：E1N57 storage 净流入 30_000（占掉 free）。
+    const epoch = treasury.observation().epoch;
+    expect(treasury.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("inflow", 1),
+      kind: "terminal.send",
+      source: "test",
+      decision: { scope: epoch.scope, epochSeq: epoch.epochSeq, observedAtTick: epoch.observedAtTick },
+      postings: [{ roomName: "E1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 30_000 }],
+    }).status).toBe("recorded");
+
+    const index = buildTreasuryCommitmentIndex({
+      tick: Game.time,
+      tasks,
+      reservations: {},
+      observation: treasury.observation(),
+      holderExists: () => true,
+      capacityDelta: (roomName, kind) =>
+        roomName === "E1N57" && kind === "storage" ? 30_000 : 0,
+    });
+    const receiver = index.receiverCommitments("E1N57");
+    // observed：free 850_000 − 50_000 = 800_000。
+    expect(receiver.storageHeadroom).toBe(800_000);
+    // projected：free 820_000 − 50_000 = 770_000。
+    expect(receiver.projectedStorageHeadroom).toBe(770_000);
+    expect(receiver.projectedOvercommitted).toBe(false);
+  });
+});
+
+describe("承诺索引点时快照（primitive 化）", () => {
+  it("构建后原 task 对象被修改，旧 snapshot 结果不变", () => {
+    const task = makeTask({ id: "t1", remainingAmount: 1_000, reason: "hub:import:U" });
+    const tasks: Record<string, ResourceTransferTask> = { "t1": task };
+    const observation = createTreasuryService({ getRooms: () => Object.values(Game.rooms) }).observation();
+    const index = buildTreasuryCommitmentIndex({
+      tick: Game.time,
+      tasks,
+      reservations: {},
+      observation,
+      holderExists: () => true,
+    });
+
+    // 外部原地修改原对象（模拟绕过 revision 的写法）。
+    task.remainingAmount = 9_999;
+    task.status = "done";
+
+    expect(index.outgoing("W1N57", "U")).toBe(1_000);
+    expect(index.outgoingTaskCount("W1N57")).toBe(1);
+    expect(index.findMergeableTaskId("U", "W1N57", "E1N57", "manual", "hub:import:U")).toBe("t1");
+  });
+
+  it("构建后向 live task store 添加新任务，receiverCommitments 不回扫（预聚合）", () => {
+    const tasks: Record<string, ResourceTransferTask> = {
+      "in-1": makeTask({ id: "in-1", toRoomName: "E1N57", remainingAmount: 50_000, origin: "automatic", lastProgressAt: 2999 }),
+    };
+    const observation = createTreasuryService({ getRooms: () => Object.values(Game.rooms) }).observation();
+    const index = buildTreasuryCommitmentIndex({
+      tick: Game.time,
+      tasks,
+      reservations: {},
+      observation,
+      holderExists: () => true,
+    });
+
+    // 构建后 store 出现新健康入站任务——旧索引不感知（点时快照语义）。
+    tasks["in-2"] = makeTask({ id: "in-2", toRoomName: "E1N57", remainingAmount: 123_456, origin: "automatic", lastProgressAt: Game.time });
+    const receiver = index.receiverCommitments("E1N57");
+    expect(receiver.healthyIncomingAmount).toBe(50_000);
+    expect(receiver.healthyIncomingTaskCount).toBe(1);
+  });
+
+  it("索引查询不保留可变任务引用：reservationSnapshot 冻结且返回副本", () => {
+    const reservations: Record<string, { roomName: string; resource: string; holderId: string; amount: number; expiresAt: number }> = {
+      "W1N57:U:lab-1": { roomName: "W1N57", resource: "U", holderId: "lab-1", amount: 400, expiresAt: 3200 },
+    };
+    const observation = createTreasuryService({ getRooms: () => Object.values(Game.rooms) }).observation();
+    const index = buildTreasuryCommitmentIndex({
+      tick: Game.time,
+      tasks: {},
+      reservations,
+      observation,
+      holderExists: () => true,
+    });
+
+    const snapshot = index.reservationSnapshot();
+    expect(() => {
+      (snapshot as unknown as unknown[]).push({} as never);
+    }).toThrow();
+    // 原 reservation 修改不影响快照。
+    reservations["W1N57:U:lab-1"].amount = 9_999;
+    expect(index.reservedProduction("W1N57", "U")).toBe(400);
+  });
+});
+
+describe("承诺索引 revision invalidation（facade 级）", () => {
+  it("mutation bump 后 commitments() 重建并看到新状态；查询仍零写", () => {
+    const treasury = createTreasuryService({
+      getRooms: () => Object.values(Game.rooms),
+      holderExists: () => true,
+    });
+    treasury.beginTick();
+    expect(treasury.commitments().reservedProduction("W1N57", "U")).toBe(0);
+    const rebuildsBefore = treasury.metrics().commitmentRebuilds;
+
+    // 权威 mutation（reserveProductionResource 内部 bump revision）。
+    Memory.runtime = { resourceReservations: {} } as unknown as Memory["runtime"];
+    reserveProductionResource("W1N57", "U" as ResourceConstant, 400, "lab-1");
+    expect(readTreasuryCommitmentRevision()).toBeGreaterThan(0);
+
+    const before = JSON.stringify(Memory.runtime);
+    const updated = treasury.commitments();
+    expect(treasury.metrics().commitmentRebuilds).toBeGreaterThan(rebuildsBefore);
+    expect(updated.reservedProduction("W1N57", "U")).toBe(400);
+    expect(updated.revision).toBe(readTreasuryCommitmentRevision());
+    // 查询零写。
+    treasury.query({ resource: "U", rooms: ["W1N57"] });
+    expect(JSON.stringify(Memory.runtime)).toBe(before);
+  });
+
+  it("无 bump 的重复查询复用缓存（revision 未变不重建）", () => {
+    const treasury = createTreasuryService({
+      getRooms: () => Object.values(Game.rooms),
+      holderExists: () => true,
+    });
+    treasury.beginTick();
+    const first = treasury.commitments();
+    const rebuilds = treasury.metrics().commitmentRebuilds;
+    expect(treasury.commitments()).toBe(first);
+    expect(treasury.metrics().commitmentRebuilds).toBe(rebuilds);
   });
 });

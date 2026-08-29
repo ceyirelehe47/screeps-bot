@@ -28,6 +28,7 @@ import {
   recordResourceTransferTaskProgress,
   type ResourceTransferTask,
 } from "@/runtime/logistics/resourceTransferTasks";
+import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import {
   DEFAULT_CAPACITY_HEADROOM_POLICY,
   getReceiverSafeCapacity,
@@ -1919,6 +1920,9 @@ function syncResourceControlTransferTask(
   context: ResourceControlTransferContext,
   task: ResourceTransferTask,
 ): void {
+  // 任务状态/数值在本 tick 内已变化：通知 Treasury 承诺索引失效重建
+  // （覆盖 resourceControl 对任务字段的全部直接写入路径）。
+  bumpTreasuryCommitmentRevision();
   if (!context.taskById.has(task.id)) {
     context.tasks.push(task);
   }

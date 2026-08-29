@@ -1,3 +1,5 @@
+import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
+
 const DEFAULT_TTL = 200;
 
 interface ReservationEntry {
@@ -43,6 +45,7 @@ export function reserveProductionResource(
     updatedAt: Game.time,
     expiresAt: Game.time + ttl,
   };
+  bumpTreasuryCommitmentRevision();
 }
 
 export function releaseProductionReservation(
@@ -53,6 +56,7 @@ export function releaseProductionReservation(
   if (!Memory.runtime?.resourceReservations) return;
   const key = makeKey(roomName, resource, holderId);
   delete Memory.runtime.resourceReservations[key];
+  bumpTreasuryCommitmentRevision();
 }
 
 export function renewProductionReservation(
@@ -74,6 +78,7 @@ export function renewProductionReservation(
     updatedAt: Game.time,
     expiresAt: Game.time + ttl,
   };
+  bumpTreasuryCommitmentRevision();
 }
 
 function isActive(entry: ReservationEntry): boolean {
@@ -116,11 +121,14 @@ export function getReservedProductionAmountExcludingHolder(
 export function gcProductionReservations(): void {
   if (!Memory.runtime?.resourceReservations) return;
   const store = Memory.runtime.resourceReservations;
+  let removed = 0;
   for (const [key, entry] of Object.entries(store)) {
     if (entry.expiresAt < Game.time) {
       delete store[key];
+      removed += 1;
     }
   }
+  if (removed > 0) bumpTreasuryCommitmentRevision();
 }
 
 export function listProductionReservations(): ReservationEntry[] {

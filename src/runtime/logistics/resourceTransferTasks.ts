@@ -1,4 +1,5 @@
 import { getMemoryService } from "@/runtime/runtimeServices";
+import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import {
   countsResourceTransferTaskTowardDemand,
   getResourceTransferTaskDemandCoverageExpirationReason,
@@ -226,6 +227,7 @@ function createResourceTransferTaskWithOrigin(
     mergeTarget.remainingAmount += normalizedAmount;
     mergeTarget.updatedAt = Game.time;
     mergeTarget.lastError = undefined;
+    bumpTreasuryCommitmentRevision();
     return {
       ok: true,
       task: mergeTarget,
@@ -248,6 +250,7 @@ function createResourceTransferTaskWithOrigin(
   };
 
   store[task.id] = task;
+  bumpTreasuryCommitmentRevision();
   return {
     ok: true,
     task,
@@ -287,6 +290,7 @@ export function cancelResourceTransferTask(taskId: string): CancelResourceTransf
   task.blockedReason = undefined;
   task.blockedSince = undefined;
   task.lastError = "cancelled_by_command";
+  bumpTreasuryCommitmentRevision();
 
   return {
     ok: true,
@@ -309,6 +313,7 @@ export function markResourceTransferTaskBlocked(
     task.updatedAt = Game.time;
   }
   task.lastError = undefined;
+  bumpTreasuryCommitmentRevision();
 }
 
 export function clearResourceTransferTaskBlocker(task: ResourceTransferTask): void {
@@ -319,6 +324,7 @@ export function clearResourceTransferTaskBlocker(task: ResourceTransferTask): vo
   task.blockedReason = undefined;
   task.blockedSince = undefined;
   task.updatedAt = Game.time;
+  bumpTreasuryCommitmentRevision();
 }
 
 export function recordResourceTransferTaskProgress(task: ResourceTransferTask): void {
@@ -327,12 +333,14 @@ export function recordResourceTransferTaskProgress(task: ResourceTransferTask): 
   task.lastProgressAt = Game.time;
   task.updatedAt = Game.time;
   task.lastError = undefined;
+  bumpTreasuryCommitmentRevision();
 }
 
 function cancelAutomaticTask(task: ResourceTransferTask, reason: string): void {
   task.status = "cancelled";
   task.updatedAt = Game.time;
   task.lastError = reason;
+  bumpTreasuryCommitmentRevision();
 }
 
 export function reconcileResourceTransferTasks(
@@ -556,5 +564,6 @@ export function cleanupResourceTransferTaskStore(
     }
   }
 
+  if (removed > 0) bumpTreasuryCommitmentRevision();
   return removed;
 }

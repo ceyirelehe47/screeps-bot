@@ -7,9 +7,14 @@
  *   过期/孤儿条目在读侧排除并计数，删除权保留在 owner/memoryCleanup；
  * - 健康/需求覆盖判定复用 resourceTransferTaskHealth 的 canonical 谓词，
  *   不得在 Treasury 内出现第二套解释；
- * - receiver headroom 为第一版总量口径（free − healthy incoming remaining），
- *   不含 ReceiverCapacityLedger 的 safety reserve 与独立 reservation——
- *   完整语义在该 ledger 并入 Treasury 时提供（见 OpenSpec 任务表）。
+ * - 索引是点时快照：构建期一次性聚合为 primitive 值（不保留 task/
+ *   reservation 对象引用，外部原地修改原对象不影响已构建快照）；
+ *   权威数据 mutation 由 bumpTreasuryCommitmentRevision 通知 facade 失效
+ *   重建，同 tick 后续查询读到新 revision 的快照；
+ * - receiver headroom 为第一版总量口径（free − healthy incoming remaining，
+ *   observed 与 projected 双轨），不含 ReceiverCapacityLedger 的 safety
+ *   reserve 与独立 reservation——完整语义在该 ledger 并入 Treasury 时提供
+ *   （见 OpenSpec 任务表）。
  */
 
 import {
@@ -21,10 +26,12 @@ import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferT
 import {
   type TreasuryCommitmentIndex,
   type TreasuryCommitmentMetrics,
+  type TreasuryLocationKind,
   type TreasuryObservationView,
   type TreasuryReceiverCommitments,
   type TreasuryReservationRecord,
 } from "@/runtime/treasury/types";
+import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 
 export interface TreasuryReservationInput {
   readonly roomName: string;
@@ -41,6 +48,8 @@ export interface TreasuryCommitmentBuildOptions {
   readonly observation: TreasuryObservationView;
   /** holder 存在性检查（生产=Game.getObjectById；测试可注入）。 */
   readonly holderExists?: (holderId: string) => boolean;
+  /** 本 tick 已结算 transaction 的位置容量净变化（facade overlay 注入）。 */
+  readonly capacityDelta?: (roomName: string, kind: TreasuryLocationKind) => number;
   readonly onExpiredExcluded?: () => void;
   readonly onOrphanExcluded?: () => void;
 }
@@ -55,12 +64,23 @@ type MutableCommitmentMetrics = {
   -readonly [K in keyof TreasuryCommitmentMetrics]: TreasuryCommitmentMetrics[K];
 };
 
+const taskKey = (roomName: string, resource: string) => `${roomName}\u0000${resource}`;
+const mergeKeyOf = (
+  resource: string,
+  fromRoomName: string,
+  toRoomName: string,
+  origin: string,
+  reason: string,
+) => `${resource}\u0000${fromRoomName}\u0000${toRoomName}\u0000${origin}\u0000${reason}`;
+
 export function buildTreasuryCommitmentIndex(
   options: TreasuryCommitmentBuildOptions,
 ): TreasuryCommitmentIndex {
   const tick = options.tick;
+  const revision = readTreasuryCommitmentRevision();
   const healthOptions = resolveResourceTransferTaskHealthOptions();
   const holderExists = options.holderExists ?? defaultHolderExists;
+  const capacityDelta = options.capacityDelta ?? (() => 0);
 
   const metrics: MutableCommitmentMetrics = {
     taskRecords: 0,
@@ -79,19 +99,21 @@ export function buildTreasuryCommitmentIndex(
   const incoming = new Map<string, number>();
   const incomingTaskCountByRoom = new Map<string, number>();
   const outgoingTaskCountByRoom = new Map<string, number>();
-  const mergeCandidates: ResourceTransferTask[] = [];
-
-  const taskKey = (roomName: string, resource: string) => `${roomName}\u0000${resource}`;
+  // route merge 预构建索引：mergeKey → taskId（查询零线性扫描）。
+  const mergeIndex = new Map<string, string>();
+  // receiver 维度预聚合：房间 → 健康入站合计/任务数（canonical 谓词）。
+  const healthyIncomingByRoom = new Map<string, number>();
+  const healthyIncomingCountByRoom = new Map<string, number>();
 
   metrics.taskRecords = Object.keys(options.tasks).length;
   for (const task of Object.values(options.tasks)) {
     if (task.status !== "pending") continue;
     metrics.pendingTaskRecords += 1;
+    const reason = task.reason || "";
 
     outgoingTaskCountByRoom.set(task.fromRoomName, (outgoingTaskCountByRoom.get(task.fromRoomName) ?? 0) + 1);
     const outKey = taskKey(task.fromRoomName, task.resource);
     outgoing.set(outKey, (outgoing.get(outKey) ?? 0) + task.remainingAmount);
-    const reason = task.reason || "";
     const byReason = outgoingByReason.get(outKey) ?? new Map<string, number>();
     byReason.set(reason, (byReason.get(reason) ?? 0) + task.remainingAmount);
     outgoingByReason.set(outKey, byReason);
@@ -100,16 +122,27 @@ export function buildTreasuryCommitmentIndex(
       taskKey(task.toRoomName, task.resource),
       (pendingIncoming.get(taskKey(task.toRoomName, task.resource)) ?? 0) + task.remainingAmount,
     );
-    if (countsResourceTransferTaskTowardDemand(task, healthOptions)) {
+
+    const countsTowardDemand = countsResourceTransferTaskTowardDemand(task, healthOptions);
+    if (countsTowardDemand) {
       const inKey = taskKey(task.toRoomName, task.resource);
       incoming.set(inKey, (incoming.get(inKey) ?? 0) + task.remainingAmount);
       incomingTaskCountByRoom.set(task.toRoomName, (incomingTaskCountByRoom.get(task.toRoomName) ?? 0) + 1);
     }
-    mergeCandidates.push(task);
+    if (task.origin === "manual" || countsTowardDemand) {
+      // 与旧 findMergeablePendingTask 语义一致：manual 无条件、automatic 需健康。
+      mergeIndex.set(
+        mergeKeyOf(task.resource, task.fromRoomName, task.toRoomName, task.origin, reason),
+        task.id,
+      );
+    }
+    if (isHealthyReceiverCapacityCommitment(task, healthOptions.automaticTaskNoProgressTtl)) {
+      healthyIncomingByRoom.set(task.toRoomName, (healthyIncomingByRoom.get(task.toRoomName) ?? 0) + task.remainingAmount);
+      healthyIncomingCountByRoom.set(task.toRoomName, (healthyIncomingCountByRoom.get(task.toRoomName) ?? 0) + 1);
+    }
   }
 
   // ── production reservation 索引（读侧排除过期/孤儿，不删除原记录）─────────
-  const activeReservations: TreasuryReservationRecord[] = [];
   const reservationSnapshot: TreasuryReservationRecord[] = [];
   const reservedByRoomResource = new Map<string, { total: number; byHolder: Map<string, number> }>();
   metrics.reservationRecords = Object.keys(options.reservations).length;
@@ -136,7 +169,6 @@ export function buildTreasuryCommitmentIndex(
       options.onOrphanExcluded?.();
       continue;
     }
-    activeReservations.push(record);
     metrics.activeReservationRecords += 1;
     const key = taskKey(entry.roomName, entry.resource);
     const bucket = reservedByRoomResource.get(key) ?? { total: 0, byHolder: new Map<string, number>() };
@@ -147,31 +179,9 @@ export function buildTreasuryCommitmentIndex(
 
   const receiverCache = new Map<string, TreasuryReceiverCommitments>();
 
-  function findMergeableTaskId(
-    resource: string,
-    fromRoomName: string,
-    toRoomName: string,
-    origin: "manual" | "automatic",
-    reason?: string,
-  ): string | null {
-    metrics.indexQueries += 1;
-    for (const task of mergeCandidates) {
-      if (
-        task.resource === resource &&
-        task.fromRoomName === fromRoomName &&
-        task.toRoomName === toRoomName &&
-        task.origin === origin &&
-        task.reason === reason &&
-        (origin === "manual" || countsResourceTransferTaskTowardDemand(task, healthOptions))
-      ) {
-        return task.id;
-      }
-    }
-    return null;
-  }
-
   const index: TreasuryCommitmentIndex = {
     builtAtTick: tick,
+    revision,
     outgoing(roomName, resource) {
       metrics.indexQueries += 1;
       return outgoing.get(taskKey(roomName, resource)) ?? 0;
@@ -201,7 +211,12 @@ export function buildTreasuryCommitmentIndex(
       metrics.indexQueries += 1;
       return outgoingTaskCountByRoom.get(roomName) ?? 0;
     },
-    findMergeableTaskId,
+    findMergeableTaskId(resource, fromRoomName, toRoomName, origin, reason) {
+      metrics.indexQueries += 1;
+      return (
+        mergeIndex.get(mergeKeyOf(resource, fromRoomName, toRoomName, origin, reason || "")) ?? null
+      );
+    },
     reservedProduction(roomName, resource, excludeHolderId) {
       metrics.indexQueries += 1;
       const bucket = reservedByRoomResource.get(taskKey(roomName, resource));
@@ -217,24 +232,16 @@ export function buildTreasuryCommitmentIndex(
       metrics.indexQueries += 1;
       const cached = receiverCache.get(roomName);
       if (cached) return cached;
-      let healthyIncomingAmount = 0;
-      let healthyIncomingTaskCount = 0;
-      for (const task of Object.values(options.tasks)) {
-        if (
-          task.status === "pending" &&
-          task.toRoomName === roomName &&
-          isHealthyReceiverCapacityCommitment(task, healthOptions.automaticTaskNoProgressTtl)
-        ) {
-          healthyIncomingAmount += task.remainingAmount;
-          healthyIncomingTaskCount += 1;
-        }
-      }
+      const healthyIncomingAmount = healthyIncomingByRoom.get(roomName) ?? 0;
       const storageFreeCapacity = options.observation.freeCapacity(roomName, "storage");
       const terminalFreeCapacity = options.observation.freeCapacity(roomName, "terminal");
+      // projected 口径：observed free 扣减本 tick 已结算 transaction 的容量净变化。
+      const projectedStorageFree = storageFreeCapacity - capacityDelta(roomName, "storage");
+      const projectedTerminalFree = terminalFreeCapacity - capacityDelta(roomName, "terminal");
       const result: TreasuryReceiverCommitments = Object.freeze({
         roomName,
         healthyIncomingAmount,
-        healthyIncomingTaskCount,
+        healthyIncomingTaskCount: healthyIncomingCountByRoom.get(roomName) ?? 0,
         storageFreeCapacity,
         terminalFreeCapacity,
         // 与旧 ReceiverCapacityLedger.getAvailability 的 min 语义一致：
@@ -244,6 +251,11 @@ export function buildTreasuryCommitmentIndex(
         overcommitted:
           healthyIncomingAmount > storageFreeCapacity ||
           healthyIncomingAmount > terminalFreeCapacity,
+        projectedStorageHeadroom: projectedStorageFree - healthyIncomingAmount,
+        projectedTerminalHeadroom: projectedTerminalFree - healthyIncomingAmount,
+        projectedOvercommitted:
+          healthyIncomingAmount > projectedStorageFree ||
+          healthyIncomingAmount > projectedTerminalFree,
       });
       receiverCache.set(roomName, result);
       return result;
