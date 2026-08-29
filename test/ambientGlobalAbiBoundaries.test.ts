@@ -20,6 +20,9 @@ const PRIVATE_GLOBAL_SLOTS = new Set([
   "__creepAssignmentState",
   "__pickupReservations",
   "__workerTaskBoard",
+  "__empireInventoryIndex",
+  "__empireInventoryCounters",
+  "__empireInventoryShadow",
   "colours",
   "roomPlanCache",
 ]);

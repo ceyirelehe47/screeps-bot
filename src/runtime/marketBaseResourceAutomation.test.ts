@@ -1556,9 +1556,6 @@ describe("Market Base V3 运行时重合同（高风险决策/WAL/证据隔离/o
     scenarioObserveProjection();
     scenarioObserveProjectionNoSelection();
     scenarioCandidateIsolation();
-  });
-
-  it("deferred tick（fullPlanningTick=false）不推进 V3 planning 状态", () => {
     scenarioDeferredTickNoPlanningProgress();
   });
 });
