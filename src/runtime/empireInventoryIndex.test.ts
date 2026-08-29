@@ -39,7 +39,14 @@ const storePrototype = {
     }
     return ((this as unknown as Record<string, number>)[resource] as number) || 0;
   },
-  getFreeCapacity(): number {
+  getFreeCapacity(resource?: ResourceConstant): number {
+    if (resource !== undefined) {
+      // 严格 per-resource 表：未声明的资源返回 0（限定 store 语义）。
+      return (
+        (this as unknown as { __freeByResource?: Record<string, number> })
+          .__freeByResource?.[resource] ?? 0
+      );
+    }
     return this.__freeCapacity ?? 0;
   },
 } as unknown as StoreDefinition;
@@ -47,6 +54,7 @@ const storePrototype = {
 function makeStore(
   resources: Partial<Record<ResourceConstant, number>>,
   freeCapacity = 1_000_000,
+  freeByResource?: Partial<Record<ResourceConstant, number>>,
 ): StoreDefinition {
   const store = Object.create(storePrototype) as StoreDefinition;
   for (const [resource, amount] of Object.entries(resources)) {
@@ -58,6 +66,13 @@ function makeStore(
     enumerable: false,
     writable: true,
   });
+  if (freeByResource) {
+    Object.defineProperty(store, "__freeByResource", {
+      value: freeByResource,
+      enumerable: false,
+      writable: true,
+    });
+  }
   return store;
 }
 
@@ -66,6 +81,7 @@ interface StructureSpec {
   structureType: StructureConstant;
   resources?: Partial<Record<ResourceConstant, number>>;
   freeCapacity?: number;
+  freeByResource?: Partial<Record<ResourceConstant, number>>;
 }
 
 interface RoomSpec {
@@ -85,7 +101,11 @@ function toStructure(spec: StructureSpec): AnyStoreStructure {
   return {
     id: spec.id,
     structureType: spec.structureType,
-    store: makeStore(spec.resources ?? {}, spec.freeCapacity ?? 0),
+    store: makeStore(
+      spec.resources ?? {},
+      spec.freeCapacity ?? 0,
+      spec.freeByResource,
+    ),
   } as unknown as AnyStoreStructure;
 }
 
@@ -510,5 +530,77 @@ describe("EmpireInventoryIndex 只读核心", () => {
     //（远小于 RESOURCES_ALL×2 的全量探测成本）。
     expect(counters.storeObjectsScanned).toBe(2);
     expect(counters.resourceKeysEnumerated).toBe(3);
+  });
+
+  it("Production capacity 语义：总量 used/free 与 resource-specific free", () => {
+    installRooms([
+      {
+        name: "W1N57",
+        structures: [
+          {
+            id: "f1",
+            structureType: STRUCTURE_FACTORY,
+            resources: { energy: 40 },
+            freeCapacity: 60,
+            freeByResource: { energy: 60 },
+          },
+          {
+            id: "l1",
+            structureType: STRUCTURE_LAB,
+            resources: { energy: 10, [RESOURCE_UTRIUM]: 500 },
+            freeCapacity: 1200,
+            freeByResource: { energy: 1990, [RESOURCE_UTRIUM]: 4500 },
+          },
+          {
+            id: "l2",
+            structureType: STRUCTURE_LAB,
+            resources: {},
+            freeCapacity: 1000,
+            freeByResource: { energy: 2000, [RESOURCE_ZYNTHIUM]: 5000 },
+          },
+          {
+            id: "p1",
+            structureType: STRUCTURE_POWER_SPAWN,
+            resources: { power: 50 },
+            freeCapacity: 950,
+            freeByResource: { energy: 5000, power: 4950 },
+          },
+          {
+            id: "n1",
+            structureType: STRUCTURE_NUKER,
+            resources: { energy: 1000 },
+            freeCapacity: 299000,
+            freeByResource: { energy: 299000, [RESOURCE_GHODIUM]: 5000 },
+          },
+        ],
+      },
+    ]);
+    const production = getEmpireInventoryProduction();
+    // 总量 used/free（每结构 getUsedCapacity()/getFreeCapacity() 之和）。
+    expect(production.factoryUsedCapacity("W1N57")).toBe(40);
+    expect(production.factoryFreeCapacity("W1N57")).toBe(60);
+    expect(production.labUsedCapacity("W1N57")).toBe(510);
+    expect(production.labFreeCapacity("W1N57")).toBe(2200);
+
+    // resource-specific（固定允许集 ∪ 已持有资源，逐结构实测之和）。
+    // lab energy：1990 + 2000；持有 mineral U：4500（l1 的 U 槽实测；
+    // l2 表未声明 U → 0）。
+    expect(production.labFreeCapacityFor("W1N57", RESOURCE_ENERGY)).toBe(3990);
+    expect(production.labFreeCapacityFor("W1N57", RESOURCE_UTRIUM)).toBe(4500);
+    // 未被任何结构持有的 mineral 不进探测集（空槽可接任意 mineral，
+    // 索引不给承诺值）。
+    expect(production.labFreeCapacityFor("W1N57", RESOURCE_ZYNTHIUM)).toBe(0);
+    expect(production.powerSpawnFreeCapacityFor("W1N57", RESOURCE_ENERGY)).toBe(5000);
+    expect(production.powerSpawnFreeCapacityFor("W1N57", RESOURCE_POWER)).toBe(4950);
+    expect(production.nukerFreeCapacityFor("W1N57", RESOURCE_GHODIUM)).toBe(5000);
+
+    // factory 通用 store：已探测资源取实测值。
+    expect(production.factoryFreeCapacityFor("W1N57", RESOURCE_ENERGY)).toBe(60);
+    // 未探测的非 power 资源按剩余总容量外推（引擎通用 store 语义）；
+    // power 恒 0（不可入 factory）。
+    expect(production.factoryFreeCapacityFor("W1N57", RESOURCE_SILICON)).toBe(60);
+    expect(production.factoryFreeCapacityFor("W1N57", RESOURCE_POWER)).toBe(0);
+    // lab 限定 store：未探测资源不外推。
+    expect(production.labFreeCapacityFor("W1N57", RESOURCE_LEMERGIUM)).toBe(0);
   });
 });

@@ -54,7 +54,31 @@ export interface MarketSaleFeeLedgerState {
   processedFills: ProcessedFillReceipt[];
   carriedFeeDebtMilli: Partial<Record<MarketResourceConstant, MilliCredits>>;
   reconcileGap?: FeeLedgerReconcileGap;
+  /**
+   * fail-closed blocker：持久化账本被内容级校验判定损坏后写入。
+   * 存在期间一切 fee-bearing 操作（create/extend/reprice）与账本写入
+   * 均被禁止；仅 operator 显式修复（resolveFeeLedgerInvalid）可清除。
+   */
+  invalid?: FeeLedgerInvalidMarker;
 }
+
+export interface FeeLedgerInvalidMarker {
+  /** 校验失败原因（validateFeeLedger 的 RangeError message）。 */
+  reason: string;
+  /** blocker 写入 tick。 */
+  observedAt: number;
+  /**
+   * 损坏账本的原始证据（有界 JSON 摘要）。证据随 ledger 自身持久化，
+   * 不依赖 direct quarantine 的合并行为；operator 修复时随 blocker 一并
+   * 清除（修复动作即证据处置决定，operatorAudit 保留 reason 摘要）。
+   */
+  rawEvidenceJson?: string;
+}
+
+/** 内容级校验结果：损坏时绝不静默替换为空账本（fail-closed）。 */
+export type FeeLedgerValidationResult =
+  | { status: "valid"; ledger: MarketSaleFeeLedgerState | undefined }
+  | { status: "invalid"; reason: string };
 
 export interface FeeLedgerLimits {
   feeWindowTicks: number;
@@ -93,6 +117,7 @@ export interface ProspectiveFeeGateInput {
 }
 
 export type ProspectiveFeeGateRejection =
+  | "fee_ledger_invalid"
   | "reconcile_gap"
   | "credit_reserve"
   | "rolling_fee_budget"
@@ -249,6 +274,8 @@ function cloneLedger(ledger: MarketSaleFeeLedgerState): MarketSaleFeeLedgerState
     processedFills: ledger.processedFills.map(receipt => ({ ...receipt })),
     carriedFeeDebtMilli: { ...ledger.carriedFeeDebtMilli },
     reconcileGap: ledger.reconcileGap ? { ...ledger.reconcileGap } : undefined,
+    // fail-closed blocker 随账本克隆传播，窗口推进/克隆不得洗掉。
+    invalid: ledger.invalid ? { ...ledger.invalid } : undefined,
   };
 }
 
@@ -300,18 +327,43 @@ function validateReconcileGap(gap: FeeLedgerReconcileGap): void {
   }
 }
 
+function validateInvalidMarker(
+  marker: FeeLedgerInvalidMarker | undefined,
+): void {
+  if (marker === undefined) return;
+  if (typeof marker !== "object" || Array.isArray(marker)) {
+    throw new RangeError("fee ledger invalid marker is not a plain object");
+  }
+  if (
+    typeof marker.reason !== "string" ||
+    marker.reason.length === 0 ||
+    marker.reason.length > 512
+  ) {
+    throw new RangeError("fee ledger invalid marker reason is malformed");
+  }
+  if (
+    marker.rawEvidenceJson !== undefined &&
+    typeof marker.rawEvidenceJson !== "string"
+  ) {
+    throw new RangeError("fee ledger invalid marker evidence is malformed");
+  }
+  assertNonNegativeSafeInteger(marker.observedAt, "invalid marker observedAt");
+}
+
 /**
- * 深恢复层的内容级校验（fail-safe）：对已持久化的 fee ledger 做逐条
- * 校验（同条目数但字段损坏也能检出）。任一条目损坏/容器形状错误/
- * 超出上限时返回新的空 ledger——费用窗口统计口径保守重来，不影响
- * 资金安全（fee 账本只是窗口预算依据，不是余额本身）。
- * 全部通过时原样返回传入引用，避免热路径无谓 clone。
+ * 深恢复层的内容级校验（fail-closed）：对已持久化的 fee ledger 做逐条
+ * 校验（同条目数但字段损坏也能检出）。损坏时返回 tagged invalid 结果
+ * 与原因——绝不静默替换为空账本，否则「预算已耗尽但记录损坏」会被
+ * 解释成「预算为零使用」。调用方负责隔离原始证据并写入
+ * createFeeLedgerBlocked 的不可绕过 blocker。
+ * 全部通过时原样返回传入引用（invalid blocker 形状合法的恢复中账本
+ * 同样通过校验，blocker 由 gate 层持续生效）。
  */
-export function validateOrResetFeeLedger(
+export function validateFeeLedger(
   ledger: unknown,
-): MarketSaleFeeLedgerState {
+): FeeLedgerValidationResult {
   if (ledger === undefined || ledger === null) {
-    return createEmptyMarketSaleFeeLedger();
+    return { status: "valid", ledger: undefined };
   }
   try {
     if (typeof ledger !== "object" || Array.isArray(ledger)) {
@@ -361,10 +413,80 @@ export function validateOrResetFeeLedger(
     if (candidate.reconcileGap !== undefined) {
       validateReconcileGap(candidate.reconcileGap);
     }
-    return candidate;
-  } catch {
-    return createEmptyMarketSaleFeeLedger();
+    validateInvalidMarker(candidate.invalid);
+    return { status: "valid", ledger: candidate };
+  } catch (error) {
+    return {
+      status: "invalid",
+      reason: error instanceof RangeError
+        ? error.message
+        : "fee ledger validation threw",
+    };
   }
+}
+
+/**
+ * 损坏账本的 fail-closed 替身：空窗口 + 不可绕过 invalid blocker（附
+ * 有界原始证据摘要）。空窗口只是「安全读取默认值」（gate 会因 blocker
+ * 拒绝一切费用操作），不是对预算状态的重新解释。
+ */
+export function createFeeLedgerBlocked(
+  reason: string,
+  observedAt: number,
+  rawEvidence?: unknown,
+): MarketSaleFeeLedgerState {
+  if (
+    typeof reason !== "string" ||
+    reason.length === 0 ||
+    reason.length > 512
+  ) {
+    throw new RangeError("fee ledger blocker reason is malformed");
+  }
+  assertNonNegativeSafeInteger(observedAt, "fee ledger blocker observedAt");
+  let rawEvidenceJson: string | undefined;
+  if (rawEvidence !== undefined) {
+    try {
+      rawEvidenceJson = JSON.stringify(rawEvidence);
+    } catch {
+      rawEvidenceJson = "\"<unserializable>\"";
+    }
+    // 有界：截断超长证据（损坏账本本身受容器上限约束，正常远小于此）。
+    if (rawEvidenceJson.length > 4096) {
+      rawEvidenceJson = rawEvidenceJson.slice(0, 4096);
+    }
+  }
+  return {
+    feeEvents: [],
+    sameTickReservations: [],
+    processedFills: [],
+    carriedFeeDebtMilli: {},
+    invalid: rawEvidenceJson === undefined
+      ? { reason, observedAt }
+      : { reason, observedAt, rawEvidenceJson },
+  };
+}
+
+/**
+ * Operator 显式修复：唯一清除 invalid blocker 的入口。原始损坏证据由
+ * 调用方隔离保存（不随本调用销毁）；修复后从空窗口重新累积费用统计。
+ */
+export function resolveFeeLedgerInvalid(input: {
+  ledger: MarketSaleFeeLedgerState;
+  expectedReason?: string;
+}): MarketSaleFeeLedgerState {
+  const marker = input.ledger.invalid;
+  if (!marker) {
+    throw new RangeError("fee ledger has no invalid blocker to resolve");
+  }
+  if (
+    input.expectedReason !== undefined &&
+    marker.reason !== input.expectedReason
+  ) {
+    throw new RangeError("fee ledger blocker reason does not match operator attestation");
+  }
+  const resolved = cloneLedger(input.ledger);
+  resolved.invalid = undefined;
+  return resolved;
 }
 
 export function createEmptyMarketSaleFeeLedger(): MarketSaleFeeLedgerState {
@@ -452,6 +574,7 @@ export function advanceFeeLedgerWindow(
     processedFills,
     carriedFeeDebtMilli: { ...ledger.carriedFeeDebtMilli },
     reconcileGap: ledger.reconcileGap ? { ...ledger.reconcileGap } : undefined,
+    invalid: ledger.invalid ? { ...ledger.invalid } : undefined,
   };
 }
 
@@ -514,6 +637,9 @@ function evaluateAdvancedFeeGate(
   }
 
   const reasons: ProspectiveFeeGateRejection[] = [];
+  // fail-closed：invalid blocker 存在即禁止一切 fee-bearing 操作，
+  // 优先级高于其余判定（空窗口不得被解释为「预算为零使用」）。
+  if (input.ledger.invalid) reasons.push("fee_ledger_invalid");
   if (input.ledger.reconcileGap) reasons.push("reconcile_gap");
   if (projectedCreditsMilli < input.creditReserveMilli) reasons.push("credit_reserve");
   if (projectedRollingFeeMilli > input.rollingFeeBudgetMilli) {
@@ -664,6 +790,9 @@ export function commitProspectiveFeeReservation(input: {
   assertBoundedIdentifier(input.reservationId, "reservationId");
   const limits = normalizeLimits(input.limits);
   const ledger = advanceFeeLedgerWindow(input.ledger, input.gameTime, input.limits);
+  if (ledger.invalid) {
+    throw new RangeError("cannot commit fee reservation while ledger is blocked");
+  }
   const index = ledger.sameTickReservations.findIndex(
     reservation => reservation.id === input.reservationId,
   );
@@ -757,6 +886,9 @@ export function markExternalOrderMutationFeeGap(input: {
 }): MarketSaleFeeLedgerState {
   assertNonNegativeSafeInteger(input.gameTime, "gameTime");
   assertBoundedIdentifier(input.orderId, "orderId");
+  // fail-closed：blocked 账本不再叠加新的 gap fence（invalid blocker 已
+  // 封锁全部 fee-bearing 操作），也不改动其余字段。
+  if (input.ledger.invalid) return cloneLedger(input.ledger);
   const existing = input.ledger.reconcileGap;
   if (
     existing &&
@@ -783,6 +915,10 @@ export function resolveExternalOrderMutationFeeGap(input: {
   resourceType: MarketResourceConstant;
   verifiedRemainingFeeDebtMilli: MilliCredits;
 }): MarketSaleFeeLedgerState {
+  // 不可绕过：blocked 账本上的 operator 收敛必须先修复 ledger blocker。
+  if (input.ledger.invalid) {
+    throw new RangeError("cannot resolve order mutation fee gap while ledger is blocked");
+  }
   assertBoundedIdentifier(input.orderId, "orderId");
   assertNonNegativeSafeInteger(
     input.verifiedRemainingFeeDebtMilli,
@@ -821,6 +957,16 @@ export function applyFillFeeDebt(input: {
   assertPositiveSafeInteger(input.preRemainingAmount, "preRemainingAmount");
   const limits = normalizeLimits(input.limits);
   const ledger = advanceFeeLedgerWindow(input.ledger, input.gameTime, input.limits);
+  // fail-closed：blocked 账本上不落任何 fill receipt——记录丢失好过在
+  // 无效窗口上伪造对账证据（operator 修复后凭 transaction 键防重放）。
+  if (ledger.invalid) {
+    return {
+      ledger,
+      applied: false,
+      duplicate: false,
+      reconcileGap: true,
+    };
+  }
   const key = buildProcessedFillKey(input.transactionId, input.orderId);
   const existing = ledger.processedFills.find(receipt => receipt.key === key);
   if (existing) {
@@ -916,6 +1062,9 @@ export function takeCarriedFeeDebt(
   ledger: MarketSaleFeeLedgerState,
   resourceType: MarketResourceConstant,
 ): { ledger: MarketSaleFeeLedgerState; feeDebtMilli: MilliCredits } {
+  if (ledger.invalid) {
+    throw new RangeError("cannot extract carried fee debt while ledger is blocked");
+  }
   const feeDebtMilli = ledger.carriedFeeDebtMilli[resourceType] ?? 0;
   assertNonNegativeSafeInteger(feeDebtMilli, "carried fee debt");
   const carriedFeeDebtMilli = { ...ledger.carriedFeeDebtMilli };
@@ -938,6 +1087,19 @@ export function reconcileDisappearedOrderFeeDebt(
     input.remainingFeeDebtMilli,
     "remainingFeeDebtMilli",
   );
+
+  // fail-closed：blocked 账本上不累积 carried debt、不写 gap——缺失的
+  // 债务记录由 managed order 侧证据保留，operator 修复后再收敛。
+  if (input.ledger.invalid) {
+    return {
+      ledger: cloneLedger(input.ledger),
+      resolved: false,
+      classification: "reconcile_gap",
+      refundedFeeDebtMilli: 0,
+      carriedFeeDebtMilli: 0,
+      preservedFeeDebtMilli: input.remainingFeeDebtMilli,
+    };
+  }
 
   if (input.reason === "unknown") {
     return {
@@ -1026,6 +1188,10 @@ export function resolveDisappearedOrderFeeGap(
     reason: Exclude<OrderDisappearanceReason, "unknown">;
   },
 ): ReconcileDisappearedOrderResult {
+  // 不可绕过：blocked 账本上的 operator 收敛必须先修复 ledger blocker。
+  if (input.ledger.invalid) {
+    throw new RangeError("cannot resolve order disappearance fee gap while ledger is blocked");
+  }
   const gap = input.ledger.reconcileGap;
   if (
     !gap ||

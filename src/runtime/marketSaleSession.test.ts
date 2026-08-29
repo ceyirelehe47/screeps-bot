@@ -13,6 +13,10 @@ import {
   runMarketSalePreflight,
 } from "@/runtime/marketSaleAutomation";
 import {
+  reserveProspectiveFee,
+  type MarketSaleFeeLedgerState,
+} from "@/runtime/marketSaleFeeLedger";
+import {
   flushMarketSaleDiagnostics,
   readMarketSaleDiagnosticsForTest,
   resetMarketSaleDiagnosticsForTest,
@@ -272,7 +276,7 @@ describe("marketTickSession", () => {
     expect(recovered.directAutomation.migrationBlockedReason).toBeDefined();
   });
 
-  it("同条目数但 pending mutation / fee ledger 内容损坏被检出（fail-safe）", () => {
+  it("同条目数但 pending mutation / fee ledger 内容损坏被检出（fail-closed）", () => {
     expect(runMarketSalePreflight()).toBeDefined();
 
     clearMarketTickSessionForTest();
@@ -305,13 +309,31 @@ describe("marketTickSession", () => {
 
     const recovered = Memory.data!.marketSaleAutomation as unknown as {
       pendingMutations: Record<string, unknown>;
-      feeLedger: { feeEvents: unknown[] };
+      feeLedger: {
+        feeEvents: unknown[];
+        invalid?: {
+          reason: string;
+          observedAt: number;
+          rawEvidenceJson?: string;
+        };
+      };
+      directAutomation: { migrationBlockedReason?: string };
     };
     expect(Object.keys(recovered.pendingMutations)).toHaveLength(0);
-    // fee ledger 损坏（feeMilli 为负）→ fail-safe 重置为空窗口。
+    // fee ledger 损坏（feeMilli 为负）→ fail-closed：原始证据以有界
+    // JSON 摘要随 ledger 自身隔离（不依赖 direct quarantine 落点，后者
+    // 会被 continuous blocked 形态整体重建），账本变为空窗口 +
+    // invalid blocker（不静默重置放行）。
     expect(recovered.feeLedger.feeEvents).toHaveLength(0);
+    expect(recovered.feeLedger.invalid).toMatchObject({
+      reason: expect.stringContaining("feeMilli"),
+      observedAt: Game.time,
+      rawEvidenceJson: expect.stringContaining("evt-1"),
+    });
+    expect(recovered.directAutomation.migrationBlockedReason).toBeDefined();
 
-    // 对照：同条目数、内容完好的 fee ledger 条目经每 tick 校验后保留。
+    // 对照：同条目数、内容完好的 fee ledger 条目经每 tick 校验后保留
+    // （且不写入 blocker）。
     clearMarketTickSessionForTest();
     Game.time += 1;
     const good = Memory.data!.marketSaleAutomation as unknown as {
@@ -325,9 +347,93 @@ describe("marketTickSession", () => {
     };
     expect(runMarketSalePreflight()).toBeDefined();
     const kept = Memory.data!.marketSaleAutomation as unknown as {
-      feeLedger: { feeEvents: { id: string }[] };
+      feeLedger: { feeEvents: { id: string }[]; invalid?: unknown };
     };
     expect(kept.feeLedger.feeEvents.map((e) => e.id)).toEqual(["evt-2"]);
+    expect(kept.feeLedger.invalid).toBeUndefined();
+  });
+
+  it("fee ledger blocker 跨 tick 持续：深恢复后 prospective fee gate 仍拒绝", () => {
+    // 注入损坏账本 → 深恢复写入 blocker。
+    expect(runMarketSalePreflight()).toBeDefined();
+    clearMarketTickSessionForTest();
+    Game.time += 1;
+    (Memory.data!.marketSaleAutomation as unknown as { feeLedger: unknown })
+      .feeLedger = {
+      feeEvents: [{ id: "evt-1", tick: 1, action: "create", feeMilli: -5 }],
+      sameTickReservations: [],
+      processedFills: [],
+      carriedFeeDebtMilli: {},
+    };
+    expect(runMarketSalePreflight()).toBeDefined();
+
+    // 模拟下一 tick 的 JSON round-trip 深恢复：blocker 必须持续存在，
+    // 不得被后续校验/窗口推进洗掉。
+    clearMarketTickSessionForTest();
+    Game.time += 1;
+    Memory.data = JSON.parse(JSON.stringify(Memory.data));
+    expect(runMarketSalePreflight()).toBeDefined();
+    const blockedLedger = (Memory.data!.marketSaleAutomation as unknown as {
+      feeLedger: { invalid?: { reason: string } };
+    }).feeLedger;
+    expect(blockedLedger.invalid?.reason).toBeTruthy();
+
+    // 恢复出的账本再喂 prospective fee gate：仍必须拒绝（不可绕过）。
+    const gated = reserveProspectiveFee({
+      ledger: blockedLedger as unknown as MarketSaleFeeLedgerState,
+      reservationId: "gate-probe",
+      gameTime: Game.time,
+      action: "create",
+      prospectiveFeeMilli: 1,
+      creditsMilli: 10_000_000,
+      creditReserveMilli: 0,
+      rollingFeeBudgetMilli: 1_000_000,
+      limits: { feeWindowTicks: 10, fillReceiptWindowTicks: 20 },
+    });
+    expect(gated.allowed).toBe(false);
+    expect(gated.reasons).toContain("fee_ledger_invalid");
+  });
+
+  it("operator 显式修复（Memory flag）后才清除 fee ledger blocker", () => {
+    // 建立损坏 → blocker 形态。
+    expect(runMarketSalePreflight()).toBeDefined();
+    clearMarketTickSessionForTest();
+    Game.time += 1;
+    (Memory.data!.marketSaleAutomation as unknown as { feeLedger: unknown })
+      .feeLedger = {
+      feeEvents: [{ id: "evt-1", tick: 1, action: "create", feeMilli: -5 }],
+      sameTickReservations: [],
+      processedFills: [],
+      carriedFeeDebtMilli: {},
+    };
+    expect(runMarketSalePreflight()).toBeDefined();
+    const before = Memory.data!.marketSaleAutomation as unknown as {
+      feeLedger: { invalid?: unknown };
+    };
+    expect(before.feeLedger.invalid).toBeDefined();
+
+    // operator 修复：console 写 Memory flag → 下一 tick 深恢复消费。
+    Memory.runtime = {
+      marketFeeLedgerRepair: true,
+    } as unknown as NonNullable<Memory["runtime"]>;
+    clearMarketTickSessionForTest();
+    Game.time += 1;
+    expect(runMarketSalePreflight()).toBeDefined();
+    const repaired = Memory.data!.marketSaleAutomation as unknown as {
+      feeLedger: { invalid?: unknown };
+      operatorAudit: { tick: number; action: string }[];
+    };
+    expect(repaired.feeLedger.invalid).toBeUndefined();
+    expect(
+      repaired.operatorAudit.some((entry) =>
+        entry.action.startsWith("fee_ledger_invalid_resolved:"),
+      ),
+    ).toBe(true);
+    // flag 幂等消费（不残留）。
+    expect(
+      (Memory.runtime as { marketFeeLedgerRepair?: boolean })
+        .marketFeeLedgerRepair,
+    ).toBeUndefined();
   });
 
   it("runs full recovery again after a simulated global reset", () => {

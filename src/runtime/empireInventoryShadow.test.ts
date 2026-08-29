@@ -13,6 +13,7 @@ import {
   readEmpireInventoryShadowStatus,
   runEmpireInventoryShadowCheck,
   EMPIRE_INVENTORY_SHADOW_INTERVAL_TICKS,
+  EMPIRE_INVENTORY_ORACLE_EVERY_N_CHECKS,
 } from "@/runtime/empireInventoryShadow";
 import {
   getEmpireInventoryCore,
@@ -354,5 +355,138 @@ describe("empireInventoryShadow 影子等价验证", () => {
     // 显式 0 值 key（terminal energy:0）两侧都是 0 → 无 mismatch。
     expect(readEmpireInventoryShadowStatus().parityMismatches).toBe(0);
     expect(getEmpireInventoryCore().empireTotal("ops" as ResourceConstant)).toBe(5);
+  });
+
+  it("子层轮转：默认单层检查，Production 失配只在 production 轮检出", () => {
+    // 影子对账检出的是「同 tick 内索引快照与直读分叉」（索引每 tick
+    // 重建会吸收跨 tick 破坏），因此每轮检查前同 tick 建索引并破坏。
+    const setupCorruptedFactory = (): {
+      room: Room;
+      structures: { id: string; structureType: StructureConstant; store: StoreDefinition }[];
+    } => {
+      const installed = installRooms([
+        {
+          name: "W1N57",
+          storage: { energy: 100 },
+          structures: [
+            { id: "f1", structureType: STRUCTURE_FACTORY, resources: { energy: 40 } },
+          ],
+        },
+      ]);
+      getEmpireInventoryCore();
+      getEmpireInventoryProduction();
+      installed.W1N57.structures.splice(0, 1);
+      return installed.W1N57;
+    };
+
+    // 第 1 次（core 轮）：不碰 Production → 无 factory 失配。
+    setupCorruptedFactory();
+    expect(runEmpireInventoryShadowCheck()).toBe(true);
+    let status = readEmpireInventoryShadowStatus();
+    expect(status.lastLayer).toBe("core");
+    expect(
+      status.mismatchSamples.find((s) => s.field === "factoryCount"),
+    ).toBeUndefined();
+
+    // 第 2 次（production 轮）：检出。
+    Game.time += EMPIRE_INVENTORY_SHADOW_INTERVAL_TICKS;
+    setupCorruptedFactory();
+    expect(runEmpireInventoryShadowCheck()).toBe(true);
+    status = readEmpireInventoryShadowStatus();
+    expect(status.lastLayer).toBe("production");
+    expect(
+      status.mismatchSamples.find((s) => s.field === "factoryCount"),
+    ).toMatchObject({ indexValue: 1, directValue: 0 });
+
+    // 第 3 次（field 轮）游标回绕。
+    Game.time += EMPIRE_INVENTORY_SHADOW_INTERVAL_TICKS;
+    installRooms([{ name: "W1N57", storage: { energy: 100 } }]);
+    expect(runEmpireInventoryShadowCheck()).toBe(true);
+    expect(readEmpireInventoryShadowStatus().lastLayer).toBe("field");
+  });
+
+  it("Memory force flag：全层 + oracle 执行，消费即清", () => {
+    const installed = installRooms([
+      {
+        name: "W1N57",
+        storage: { energy: 100 },
+        structures: [
+          { id: "f1", structureType: STRUCTURE_FACTORY, resources: { energy: 40 } },
+        ],
+      },
+    ]);
+    getEmpireInventoryCore();
+    getEmpireInventoryProduction();
+    installed.W1N57.structures.splice(0, 1);
+    // 轮转游标本该到 core 轮；Memory flag 旁路为全层。
+    Memory.runtime = {
+      inventoryShadowForce: true,
+    } as unknown as NonNullable<Memory["runtime"]>;
+    expect(runEmpireInventoryShadowCheck()).toBe(true);
+    const status = readEmpireInventoryShadowStatus();
+    expect(status.lastLayer).toBe("all");
+    expect(status.lastOracleRan).toBe(true);
+    expect(status.oracleChecks).toBeGreaterThan(0);
+    expect(
+      status.mismatchSamples.find((s) => s.field === "factoryCount"),
+    ).toBeDefined();
+    expect(
+      (Memory.runtime as { inventoryShadowForce?: boolean })
+        .inventoryShadowForce,
+    ).toBeUndefined();
+  });
+
+  it("独立 oracle：Object.keys 不可见但 getUsedCapacity 可读的资源必须检出", () => {
+    const installed = installRooms([
+      { name: "W1N57", storage: { energy: 100 } },
+    ]);
+    // 构造引擎式 store：silicon 有正数容量，但 Object.keys 不暴露该 key
+    //（索引 scanStoreKeys 与直读 directStoreKeys 同用 Object.keys，
+    // 两者都看不到 → 普通对账必然漏检，只有 RESOURCES_ALL 全枚举的
+    // oracle 能发现）。
+    const hiddenStore = makeStore({ energy: 100 });
+    Object.defineProperty(hiddenStore, "getUsedCapacity", {
+      value: (resource?: ResourceConstant) =>
+        resource === RESOURCE_SILICON
+          ? 42
+          : storePrototype.getUsedCapacity.call(hiddenStore, resource),
+      enumerable: false,
+    });
+    (installed.W1N57.room as unknown as { storage?: unknown }).storage = {
+      id: "W1N57-storage" as Id<StructureStorage>,
+      store: hiddenStore,
+    };
+
+    runEmpireInventoryShadowCheck({ force: true });
+    const status = readEmpireInventoryShadowStatus();
+    // 常规对账（storageAmount 等能量侧一致）无失配；oracle 检出
+    // silicon：索引 0 vs oracle 42。
+    expect(
+      status.mismatchSamples.find((s) => s.field === "storageAmount"),
+    ).toBeUndefined();
+    const oracleMismatch = status.mismatchSamples.find(
+      (sample) =>
+        sample.field === "oracleResourceAmount" &&
+        sample.resource === RESOURCE_SILICON,
+    );
+    expect(oracleMismatch).toMatchObject({
+      indexValue: 0,
+      directValue: 42,
+    });
+    expect(status.oracleMismatches).toBeGreaterThan(0);
+  });
+
+  it("oracle 低频：非 force 检查每 N 次执行一次", () => {
+    installRooms([{ name: "W1N57", storage: { energy: 10 } }]);
+    // 连续 5 次到期检查：第 5 次（checksSinceOracle 达到 N）才跑 oracle。
+    let oracleRounds = 0;
+    for (let i = 0; i < EMPIRE_INVENTORY_ORACLE_EVERY_N_CHECKS; i += 1) {
+      Game.time += EMPIRE_INVENTORY_SHADOW_INTERVAL_TICKS;
+      runEmpireInventoryShadowCheck();
+      if (readEmpireInventoryShadowStatus().lastOracleRan) oracleRounds += 1;
+    }
+    expect(oracleRounds).toBe(1);
+    expect(readEmpireInventoryShadowStatus().oracleChecks).toBe(1);
+    expect(readEmpireInventoryShadowStatus().oracleMismatches).toBe(0);
   });
 });

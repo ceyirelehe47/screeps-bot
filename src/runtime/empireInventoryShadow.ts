@@ -1,19 +1,28 @@
 /**
  * EmpireInventoryIndex 影子等价验证（Phase 2，只读观察者）：
- * - 每 40 tick（20–50 区间）低频比较新索引与"直接 Store 读取"的旧口径；
+ * - 每 40 tick（20–50 区间）低频执行一次「层检查」：默认按
+ *   Core→Production→Field 子层轮转（降低单次 CPU 峰值），operator
+ *   force（options.force 或 console 写 Memory.runtime.inventoryShadowForce
+ *   = true）时全层全量；
  * - Core：任一侧出现过的每个 room/resource 的 storage/terminal amount、
  *   total、used/free capacity、cooldown、结构存在性与 storageId/terminalId，
  *   外加帝国级 resource 总量对账；
- * - Production：Factory/Lab/PowerSpawn/Nuker 的数量与每资源量；
+ * - Production：Factory/Lab/PowerSpawn/Nuker 的数量、每资源量、
+ *   used/free capacity 总量与 resource-specific free capacity；
  * - Field：全部可见房间（owned + remote/走廊）的 Container、Dropped、
  *   Tombstone/Ruin，以及 Game.creeps 全量（含远采/殖民/战争单位，总量 +
  *   per-room）与 Game.powerCreeps 的 cargo；
+ * - 独立 Oracle（每 5 次检查一次，force 必做）：用 RESOURCES_ALL 全枚举
+ *   + store.getUsedCapacity(resource) 建立第三发现通道，验证
+ *   sum(索引 amounts) === store.getUsedCapacity()，并检出
+ *   index-only / oracle-only 资源——不与索引/直读侧共享任何 key 枚举
+ *   helper（Object.keys 的失败模式两侧同源，oracle 必须独立）；
  * - 任何 mismatch：不改生产行为，只记 room/resource/field + 有界样本
  *   （global heap 环形缓冲，cap 32），不把完整 Memory 写进日志；
  * - console 只报告本次检查新增的 mismatch，不重复打印历史旧 mismatch；
- * - 计数器为普通数字桶（parityChecks/parityMismatches/lastCheckMismatches
- *   追加在索引计数器旁），随 shadow 检查低频快照到
- *   Memory.runtime.inventoryPerf（小对象）。
+ * - 计数器为普通数字桶（parityChecks/parityMismatches/lastCheckMismatches/
+ *   oracleChecks/oracleMismatches 追加在索引计数器旁），随 shadow 检查
+ *   低频快照到 Memory.runtime.inventoryPerf（小对象）。
  *
  * 本模块不消费索引做任何生产决策；ResourceControl/Market/Hub 等仍直读
  * Store。Phase 2 迁移前以此为等价性证据。
@@ -48,12 +57,24 @@ export interface EmpireInventoryShadowMismatch {
     | "empireTotal"
     | "factoryCount"
     | "factoryAmount"
+    | "factoryUsedCapacity"
+    | "factoryFreeCapacity"
+    | "factoryFreeCapacityFor"
     | "labCount"
     | "labAmount"
+    | "labUsedCapacity"
+    | "labFreeCapacity"
+    | "labFreeCapacityFor"
     | "powerSpawnCount"
     | "powerSpawnAmount"
+    | "powerSpawnUsedCapacity"
+    | "powerSpawnFreeCapacity"
+    | "powerSpawnFreeCapacityFor"
     | "nukerCount"
     | "nukerAmount"
+    | "nukerUsedCapacity"
+    | "nukerFreeCapacity"
+    | "nukerFreeCapacityFor"
     | "containerCount"
     | "containerAmount"
     | "droppedAmount"
@@ -61,10 +82,20 @@ export interface EmpireInventoryShadowMismatch {
     | "ruinAmount"
     | "creepCargoTotal"
     | "creepCargoRoom"
-    | "powerCreepCargoTotal";
+    | "powerCreepCargoTotal"
+    | "oracleStoreTotal"
+    | "oracleResourceAmount";
   indexValue: number | boolean | string | undefined;
   directValue: number | boolean | string | undefined;
 }
+
+/** 轮转层（默认单层检查；force 全层）。 */
+export type EmpireInventoryShadowLayer = "core" | "production" | "field";
+const SHADOW_LAYERS: readonly EmpireInventoryShadowLayer[] = [
+  "core",
+  "production",
+  "field",
+];
 
 type GlobalWithShadow = typeof global & {
   __empireInventoryShadow?: {
@@ -72,6 +103,16 @@ type GlobalWithShadow = typeof global & {
     mismatchSamples: EmpireInventoryShadowMismatch[];
     parityChecks: number;
     parityMismatches: number;
+    /** 轮转游标（global reset 后从 core 层重来）。 */
+    rotationIndex: number;
+    /** 距下次 oracle 的倒计时（达到 N 次检查执行一次）。 */
+    checksSinceOracle: number;
+    oracleChecks: number;
+    oracleMismatches: number;
+    /** 最近一次检查实际执行的层（"all" 表示 force 全层）。 */
+    lastLayer: string;
+    /** 最近一次检查是否执行了 oracle。 */
+    lastOracleRan: boolean;
   };
 };
 
@@ -79,6 +120,8 @@ const shadowGlobal = global as GlobalWithShadow;
 
 /** 影子检查间隔（tick）；20–50 区间内取 40。 */
 export const EMPIRE_INVENTORY_SHADOW_INTERVAL_TICKS = 40;
+/** Oracle 频率：每 N 次检查执行一次（force 检查必做）。 */
+export const EMPIRE_INVENTORY_ORACLE_EVERY_N_CHECKS = 5;
 const MISMATCH_SAMPLE_CAP = 32;
 
 function shadowState() {
@@ -89,6 +132,12 @@ function shadowState() {
       mismatchSamples: [],
       parityChecks: 0,
       parityMismatches: 0,
+      rotationIndex: 0,
+      checksSinceOracle: 0,
+      oracleChecks: 0,
+      oracleMismatches: 0,
+      lastLayer: "",
+      lastOracleRan: false,
     };
     shadowGlobal.__empireInventoryShadow = state;
   }
@@ -100,6 +149,10 @@ export function readEmpireInventoryShadowStatus(): {
   lastCheckTick: number;
   parityChecks: number;
   parityMismatches: number;
+  oracleChecks: number;
+  oracleMismatches: number;
+  lastLayer: string;
+  lastOracleRan: boolean;
   mismatchSamples: readonly EmpireInventoryShadowMismatch[];
 } {
   const state = shadowState();
@@ -107,6 +160,10 @@ export function readEmpireInventoryShadowStatus(): {
     lastCheckTick: state.lastCheckTick,
     parityChecks: state.parityChecks,
     parityMismatches: state.parityMismatches,
+    oracleChecks: state.oracleChecks,
+    oracleMismatches: state.oracleMismatches,
+    lastLayer: state.lastLayer,
+    lastOracleRan: state.lastOracleRan,
     mismatchSamples: state.mismatchSamples.map((sample) => ({ ...sample })),
   };
 }
@@ -308,42 +365,82 @@ function compareProductionRoom(
   const entries: {
     fieldCount: EmpireInventoryShadowMismatch["field"];
     fieldAmount: EmpireInventoryShadowMismatch["field"];
+    fieldUsed: EmpireInventoryShadowMismatch["field"];
+    fieldFree: EmpireInventoryShadowMismatch["field"];
+    fieldFreeFor: EmpireInventoryShadowMismatch["field"];
     type: StructureConstant;
     indexCount: number;
     indexAmount: (resource: ResourceConstant) => number;
     indexResources: () => readonly ResourceConstant[];
+    indexUsedCapacity: number;
+    indexFreeCapacity: number;
+    indexFreeCapacityFor: (resource: ResourceConstant) => number;
+    /** resource-specific free 的固定允许集（与索引构建口径一致）。 */
+    fixedProbeResources: readonly ResourceConstant[];
   }[] = [
     {
       fieldCount: "factoryCount",
       fieldAmount: "factoryAmount",
+      fieldUsed: "factoryUsedCapacity",
+      fieldFree: "factoryFreeCapacity",
+      fieldFreeFor: "factoryFreeCapacityFor",
       type: STRUCTURE_FACTORY,
       indexCount: production.factoryCount(roomName),
       indexAmount: (resource) => production.factoryAmount(roomName, resource),
       indexResources: () => production.factoryResources(roomName),
+      indexUsedCapacity: production.factoryUsedCapacity(roomName),
+      indexFreeCapacity: production.factoryFreeCapacity(roomName),
+      indexFreeCapacityFor: (resource) =>
+        production.factoryFreeCapacityFor(roomName, resource),
+      fixedProbeResources: [],
     },
     {
       fieldCount: "labCount",
       fieldAmount: "labAmount",
+      fieldUsed: "labUsedCapacity",
+      fieldFree: "labFreeCapacity",
+      fieldFreeFor: "labFreeCapacityFor",
       type: STRUCTURE_LAB,
       indexCount: production.labCount(roomName),
       indexAmount: (resource) => production.labAmount(roomName, resource),
       indexResources: () => production.labResources(roomName),
+      indexUsedCapacity: production.labUsedCapacity(roomName),
+      indexFreeCapacity: production.labFreeCapacity(roomName),
+      indexFreeCapacityFor: (resource) =>
+        production.labFreeCapacityFor(roomName, resource),
+      fixedProbeResources: [RESOURCE_ENERGY],
     },
     {
       fieldCount: "powerSpawnCount",
       fieldAmount: "powerSpawnAmount",
+      fieldUsed: "powerSpawnUsedCapacity",
+      fieldFree: "powerSpawnFreeCapacity",
+      fieldFreeFor: "powerSpawnFreeCapacityFor",
       type: STRUCTURE_POWER_SPAWN,
       indexCount: production.powerSpawnCount(roomName),
       indexAmount: (resource) => production.powerSpawnAmount(roomName, resource),
       indexResources: () => production.powerSpawnResources(roomName),
+      indexUsedCapacity: production.powerSpawnUsedCapacity(roomName),
+      indexFreeCapacity: production.powerSpawnFreeCapacity(roomName),
+      indexFreeCapacityFor: (resource) =>
+        production.powerSpawnFreeCapacityFor(roomName, resource),
+      fixedProbeResources: [RESOURCE_ENERGY, RESOURCE_POWER],
     },
     {
       fieldCount: "nukerCount",
       fieldAmount: "nukerAmount",
+      fieldUsed: "nukerUsedCapacity",
+      fieldFree: "nukerFreeCapacity",
+      fieldFreeFor: "nukerFreeCapacityFor",
       type: STRUCTURE_NUKER,
       indexCount: production.nukerCount(roomName),
       indexAmount: (resource) => production.nukerAmount(roomName, resource),
       indexResources: () => production.nukerResources(roomName),
+      indexUsedCapacity: production.nukerUsedCapacity(roomName),
+      indexFreeCapacity: production.nukerFreeCapacity(roomName),
+      indexFreeCapacityFor: (resource) =>
+        production.nukerFreeCapacityFor(roomName, resource),
+      fixedProbeResources: [RESOURCE_ENERGY, RESOURCE_GHODIUM],
     },
   ];
   for (const entry of entries) {
@@ -383,6 +480,53 @@ function compareProductionRoom(
             directAmount,
           );
         }
+      }
+    }
+    // capacity 总量（used/free）对账。
+    const directUsedCapacity = direct.reduce(
+      (sum, structure) => sum + (structure.store.getUsedCapacity() || 0),
+      0,
+    );
+    state.parityChecks += 1;
+    if (entry.indexUsedCapacity !== directUsedCapacity) {
+      recordMismatch(
+        state, roomName, null, entry.fieldUsed,
+        entry.indexUsedCapacity, directUsedCapacity,
+      );
+    }
+    const directFreeCapacity = direct.reduce(
+      (sum, structure) => sum + (structure.store.getFreeCapacity() || 0),
+      0,
+    );
+    state.parityChecks += 1;
+    if (entry.indexFreeCapacity !== directFreeCapacity) {
+      recordMismatch(
+        state, roomName, null, entry.fieldFree,
+        entry.indexFreeCapacity, directFreeCapacity,
+      );
+    }
+    // resource-specific free：资源集 = 固定允许集 ∪ 索引持有资源（与索引
+    // 构建 probe 口径一致；未持有的 lab mineral 槽语义依赖运行时槽位，
+    // 双侧都不给承诺值）。
+    const freeProbeUnion = new Set<ResourceConstant>(
+      entry.fixedProbeResources,
+    );
+    for (const resource of entry.indexResources()) freeProbeUnion.add(resource);
+    for (const resource of freeProbeUnion) {
+      const directFreeFor = direct.reduce(
+        (sum, structure) => sum + (structure.store.getFreeCapacity(resource) || 0),
+        0,
+      );
+      state.parityChecks += 1;
+      if (entry.indexFreeCapacityFor(resource) !== directFreeFor) {
+        recordMismatch(
+          state,
+          roomName,
+          resource,
+          entry.fieldFreeFor,
+          entry.indexFreeCapacityFor(resource),
+          directFreeFor,
+        );
       }
     }
   }
@@ -577,16 +721,209 @@ function compareCreepCargo(
   }
 }
 
+// ─── 独立 Oracle：第三发现通道（不与索引/直读共享 key 枚举）──────────────
+
+/**
+ * 对一组 store 做 oracle 验证：
+ * - oracle 侧逐资源量 = 对 RESOURCES_ALL 全枚举调 getUsedCapacity(resource)
+ *   （独立通道：不经过 Object.keys，也不复用 directStoreKeys）；
+ * - 逐资源：oracle>0 ∪ 索引>0 的资源全集上比较（index-only 与
+ *   oracle-only 资源都记 mismatch）；
+ * - 总量：sum(索引 amounts) vs store.getUsedCapacity()（用户指定的
+ *   核心不变量）。
+ * 低频执行（每 N 次检查一次 / force 必做），可接受较重探测成本。
+ */
+function oracleVerifyStoreGroup(
+  state: ReturnType<typeof shadowState>,
+  roomName: string,
+  label: string,
+  stores: readonly ({ store: StoreDefinition } | undefined | null)[],
+  indexAmountOf: (resource: ResourceConstant) => number,
+  indexResourcesOf: () => readonly ResourceConstant[],
+): void {
+  const present = stores.filter(
+    (store): store is { store: StoreDefinition } => Boolean(store),
+  );
+  if (present.length === 0) return;
+  // oracle 侧资源发现：RESOURCES_ALL 全枚举（独立通道）。
+  const oracleAmounts = new Map<ResourceConstant, number>();
+  for (const resource of RESOURCES_ALL) {
+    let amount = 0;
+    for (const unit of present) {
+      amount += unit.store.getUsedCapacity(resource) || 0;
+    }
+    if (amount > 0) oracleAmounts.set(resource, amount);
+  }
+  // 索引侧资源发现：view 的冻结快照（源头是 Object.keys）。
+  const union = new Set<ResourceConstant>(oracleAmounts.keys());
+  for (const resource of indexResourcesOf()) {
+    if (indexAmountOf(resource) > 0) union.add(resource);
+  }
+  for (const resource of union) {
+    state.parityChecks += 1;
+    const oracleValue = oracleAmounts.get(resource) || 0;
+    const indexValue = indexAmountOf(resource);
+    if (indexValue !== oracleValue) {
+      state.oracleMismatches += 1;
+      recordMismatch(
+        state,
+        `${roomName}:${label}`,
+        resource,
+        "oracleResourceAmount",
+        indexValue,
+        oracleValue,
+      );
+    }
+  }
+  // 总量不变量：sum(索引 amounts) === store.getUsedCapacity()。
+  let indexSum = 0;
+  for (const resource of indexResourcesOf()) {
+    indexSum += indexAmountOf(resource);
+  }
+  let storeTotal = 0;
+  for (const unit of present) {
+    storeTotal += unit.store.getUsedCapacity() || 0;
+  }
+  state.parityChecks += 1;
+  if (indexSum !== storeTotal) {
+    state.oracleMismatches += 1;
+    recordMismatch(
+      state,
+      `${roomName}:${label}`,
+      null,
+      "oracleStoreTotal",
+      indexSum,
+      storeTotal,
+    );
+  }
+}
+
+/** 对当次激活层执行 oracle 验证（force 时全层）。 */
+function runOracleCheck(
+  state: ReturnType<typeof shadowState>,
+  layers: ReadonlySet<EmpireInventoryShadowLayer>,
+): void {
+  // Core 层：owned 房间 storage/terminal + creep/power creep cargo。
+  if (layers.has("core")) {
+    const core = getEmpireInventoryCore();
+    for (const roomName of core.roomNames) {
+      const room = Game.rooms[roomName];
+      oracleVerifyStoreGroup(
+        state, roomName, "storage", [room?.storage],
+        (resource) => core.storageAmount(roomName, resource),
+        () => core.roomResources(roomName),
+      );
+      oracleVerifyStoreGroup(
+        state, roomName, "terminal", [room?.terminal],
+        (resource) => core.terminalAmount(roomName, resource),
+        () => core.roomResources(roomName),
+      );
+    }
+    const cargo = getEmpireInventoryCreepCargo();
+    oracleVerifyStoreGroup(
+      state, "<creeps>", "cargo", Object.values(Game.creeps),
+      (resource) => cargo.total(resource),
+      () => cargo.resources(),
+    );
+    const powerCreeps = (Game as Game & {
+      powerCreeps?: Record<string, PowerCreep>;
+    }).powerCreeps;
+    if (powerCreeps) {
+      const powerCargo = getEmpireInventoryPowerCreepCargo();
+      oracleVerifyStoreGroup(
+        state, "<powerCreeps>", "cargo", Object.values(powerCreeps),
+        (resource) => powerCargo.total(resource),
+        () => powerCargo.resources(),
+      );
+    }
+  }
+  // Production 层：四类结构（按 room 聚合口径）。
+  if (layers.has("production")) {
+    const production = getEmpireInventoryProduction();
+    for (const roomName of getEmpireInventoryCore().roomNames) {
+      const room = Game.rooms[roomName];
+      const groups: {
+        label: string;
+        type: StructureConstant;
+        amount: (resource: ResourceConstant) => number;
+        resources: () => readonly ResourceConstant[];
+      }[] = [
+        {
+          label: "factory",
+          type: STRUCTURE_FACTORY,
+          amount: (resource) => production.factoryAmount(roomName, resource),
+          resources: () => production.factoryResources(roomName),
+        },
+        {
+          label: "lab",
+          type: STRUCTURE_LAB,
+          amount: (resource) => production.labAmount(roomName, resource),
+          resources: () => production.labResources(roomName),
+        },
+        {
+          label: "powerSpawn",
+          type: STRUCTURE_POWER_SPAWN,
+          amount: (resource) => production.powerSpawnAmount(roomName, resource),
+          resources: () => production.powerSpawnResources(roomName),
+        },
+        {
+          label: "nuker",
+          type: STRUCTURE_NUKER,
+          amount: (resource) => production.nukerAmount(roomName, resource),
+          resources: () => production.nukerResources(roomName),
+        },
+      ];
+      for (const group of groups) {
+        const directStores = room
+          ? (room.find(FIND_MY_STRUCTURES) as unknown as {
+              structureType: StructureConstant;
+              store?: StoreDefinition;
+            }[]).filter(
+              (structure): structure is { structureType: StructureConstant; store: StoreDefinition } =>
+                structure.structureType === group.type && Boolean(structure.store),
+            )
+          : [];
+        oracleVerifyStoreGroup(
+          state, roomName, group.label, directStores,
+          group.amount, group.resources,
+        );
+      }
+    }
+  }
+  // Field 层：containers（按 room 聚合口径）。
+  if (layers.has("field")) {
+    const field = getEmpireInventoryField();
+    for (const roomName of field.roomNames) {
+      const room = Game.rooms[roomName];
+      const containers = room
+        ? (room.find(FIND_STRUCTURES, {
+            filter: { structureType: STRUCTURE_CONTAINER },
+          }) as unknown as { store: StoreDefinition }[])
+        : [];
+      oracleVerifyStoreGroup(
+        state, roomName, "container", containers,
+        (resource) => field.containerAmount(roomName, resource),
+        () =>
+          getEmpireInventoryFieldContainers().containerResources(roomName),
+      );
+    }
+  }
+}
+
 function snapshotCountersToMemory(lastCheckMismatches: number): void {
   if (!Memory.runtime) Memory.runtime = {};
   const counters = readEmpireInventoryCounters();
   const state = shadowState();
-  (Memory.runtime as { inventoryPerf?: Record<string, number | number[]> })
+  (Memory.runtime as { inventoryPerf?: Record<string, number | number[] | string | boolean> })
     .inventoryPerf = {
     ...counters,
     parityChecks: state.parityChecks,
     parityMismatches: state.parityMismatches,
     lastCheckMismatches,
+    lastLayer: state.lastLayer,
+    lastOracleRan: state.lastOracleRan,
+    oracleChecks: state.oracleChecks,
+    oracleMismatches: state.oracleMismatches,
     mismatchSampleTicks: state.mismatchSamples
       .slice(-8)
       .map((sample) => sample.tick),
@@ -598,12 +935,23 @@ function snapshotCountersToMemory(lastCheckMismatches: number): void {
  * 影子检查入口（主循环低频调用）。返回 true 表示本 tick 执行了比较。
  * 只读：不改变任何生产状态；mismatch 仅记录与 console 摘要（只报告
  * 本次检查新增的 mismatch，不重复历史）。
+ * 默认按 Core→Production→Field 轮转单层检查（降低单次 CPU 峰值）；
+ * force（options.force 或 console 写 Memory.runtime.inventoryShadowForce
+ * = true）执行全层全量 + oracle。oracle 每 N 次检查一次（force 必做）。
  */
 export function runEmpireInventoryShadowCheck(options?: {
   force?: boolean;
 }): boolean {
   const state = shadowState();
-  if (!options?.force) {
+  // operator/观察者 force 入口：console 写 Memory flag，本 tick 全层全量，
+  // 消费即清（幂等）。
+  const runtimeMemory = Memory.runtime as
+    | { inventoryShadowForce?: boolean }
+    | undefined;
+  const memoryForced = runtimeMemory?.inventoryShadowForce === true;
+  if (memoryForced) delete runtimeMemory!.inventoryShadowForce;
+  const forced = options?.force === true || memoryForced;
+  if (!forced) {
     if (Game.time === state.lastCheckTick) return false;
     if (
       Number.isFinite(state.lastCheckTick) &&
@@ -615,30 +963,61 @@ export function runEmpireInventoryShadowCheck(options?: {
   state.lastCheckTick = Game.time;
   const mismatchesBefore = state.parityMismatches;
 
-  const core = getEmpireInventoryCore();
-  // Core 房间全集：索引侧 ∪ 直读侧（owned）。
-  const roomUnion = new Set<string>(core.roomNames);
-  for (const room of Object.values(Game.rooms)) {
-    if (room.controller?.my) roomUnion.add(room.name);
+  // 层选择：默认轮转单层；force 全层。
+  const layers = new Set<EmpireInventoryShadowLayer>();
+  if (forced) {
+    layers.add("core");
+    layers.add("production");
+    layers.add("field");
+    state.lastLayer = "all";
+  } else {
+    const layer = SHADOW_LAYERS[state.rotationIndex % SHADOW_LAYERS.length];
+    state.rotationIndex =
+      (state.rotationIndex + 1) % SHADOW_LAYERS.length;
+    layers.add(layer);
+    state.lastLayer = layer;
   }
-  for (const roomName of roomUnion) {
-    compareRoom(state, core, roomName);
+  // oracle 调度：每 N 次检查一次（force 必做）。
+  state.checksSinceOracle += 1;
+  const runOracle =
+    forced || state.checksSinceOracle >= EMPIRE_INVENTORY_ORACLE_EVERY_N_CHECKS;
+  if (runOracle) state.checksSinceOracle = 0;
+  state.lastOracleRan = runOracle;
+
+  if (layers.has("core")) {
+    const core = getEmpireInventoryCore();
+    // Core 房间全集：索引侧 ∪ 直读侧（owned）。
+    const roomUnion = new Set<string>(core.roomNames);
+    for (const room of Object.values(Game.rooms)) {
+      if (room.controller?.my) roomUnion.add(room.name);
+    }
+    for (const roomName of roomUnion) {
+      compareRoom(state, core, roomName);
+    }
+    compareEmpireTotals(state, core);
+    compareCreepCargo(state);
   }
-  compareEmpireTotals(state, core);
-  // Production 对账范围：owned core rooms（与索引层口径一致）。
-  for (const roomName of core.roomNames) {
-    compareProductionRoom(state, roomName);
+  if (layers.has("production")) {
+    // Production 对账范围：owned core rooms（与索引层口径一致）。
+    for (const roomName of getEmpireInventoryCore().roomNames) {
+      compareProductionRoom(state, roomName);
+    }
   }
-  // Field 对账范围：全部可见房间（owned + remote/走廊）。
-  const field = getEmpireInventoryField();
-  const fieldRoomUnion = new Set<string>(field.roomNames);
-  for (const room of Object.values(Game.rooms)) {
-    fieldRoomUnion.add(room.name);
+  if (layers.has("field")) {
+    // Field 对账范围：全部可见房间（owned + remote/走廊）。
+    const field = getEmpireInventoryField();
+    const fieldRoomUnion = new Set<string>(field.roomNames);
+    for (const room of Object.values(Game.rooms)) {
+      fieldRoomUnion.add(room.name);
+    }
+    for (const roomName of fieldRoomUnion) {
+      compareFieldRoom(state, roomName);
+    }
   }
-  for (const roomName of fieldRoomUnion) {
-    compareFieldRoom(state, roomName);
+  if (runOracle) {
+    runOracleCheck(state, layers);
+    state.oracleChecks += 1;
   }
-  compareCreepCargo(state);
 
   const mismatchesThisCheck = state.parityMismatches - mismatchesBefore;
   snapshotCountersToMemory(mismatchesThisCheck);

@@ -132,6 +132,13 @@ interface ProductionAggregate {
   resources: readonly ResourceConstant[];
   usedCapacity: number;
   freeCapacity: number;
+  /**
+   * resource-specific free capacity（每结构 getFreeCapacity(resource)
+   * 之和）：对「结构固定允许集 ∪ 已持有资源」在构建期实测。限定 store
+   * （lab/powerSpawn/nuker）的允许资源集与槽位语义互不相同，不可由
+   * aggregate freeCapacity 外推。
+   */
+  freeByResource: ResourceAmountMap;
 }
 
 /** creep/power creep cargo 子层：按当前所在房间分桶 + 帝国总量。 */
@@ -231,6 +238,7 @@ const EMPTY_RESOURCES: readonly ResourceConstant[] = Object.freeze([]);
 /** 聚合一组同类结构的 store（结构数量计入 count）。 */
 function aggregateStructures(
   structures: readonly AnyStoreStructure[],
+  probeResources: readonly ResourceConstant[] = [],
 ): ProductionAggregate | undefined {
   if (structures.length === 0) return undefined;
   const amounts: ResourceAmountMap = new Map();
@@ -242,12 +250,25 @@ function aggregateStructures(
     usedCapacity += scanned.usedCapacity;
     freeCapacity += scanned.freeCapacity;
   }
+  // resource-specific free：构建期逐结构实测（固定允许集 ∪ 已持有资源），
+  // 不做 RESOURCES_ALL 全枚举（低频影子 Oracle 才全枚举）。
+  const probe = new Set<ResourceConstant>(probeResources);
+  for (const resource of amounts.keys()) probe.add(resource);
+  const freeByResource: ResourceAmountMap = new Map();
+  for (const resource of probe) {
+    let resourceFree = 0;
+    for (const structure of structures) {
+      resourceFree += structure.store.getFreeCapacity(resource) || 0;
+    }
+    freeByResource.set(resource, resourceFree);
+  }
   return {
     count: structures.length,
     amounts,
     resources: Object.freeze([...amounts.keys()]) as readonly ResourceConstant[],
     usedCapacity,
     freeCapacity,
+    freeByResource,
   };
 }
 
@@ -326,14 +347,18 @@ function buildProductionLayer(
       factory: aggregateStructures(
         storedOf(roomContext.getMyStructuresByType(STRUCTURE_FACTORY)),
       ),
+      // lab：固定 energy 槽 + 运行时持有的 mineral 槽（构建期动态探测）。
       labs: aggregateStructures(
         storedOf(roomContext.getMyStructuresByType(STRUCTURE_LAB)),
+        [RESOURCE_ENERGY],
       ),
       powerSpawns: aggregateStructures(
         storedOf(roomContext.getMyStructuresByType(STRUCTURE_POWER_SPAWN)),
+        [RESOURCE_ENERGY, RESOURCE_POWER],
       ),
       nukers: aggregateStructures(
         storedOf(roomContext.getMyStructuresByType(STRUCTURE_NUKER)),
+        [RESOURCE_ENERGY, RESOURCE_GHODIUM],
       ),
     };
   });
@@ -679,6 +704,26 @@ export interface EmpireInventoryProductionView {
   labResources(roomName: string): readonly ResourceConstant[];
   powerSpawnResources(roomName: string): readonly ResourceConstant[];
   nukerResources(roomName: string): readonly ResourceConstant[];
+  /** 四类结构的 used capacity 总量（每结构 getUsedCapacity() 之和）。 */
+  factoryUsedCapacity(roomName: string): number;
+  labUsedCapacity(roomName: string): number;
+  powerSpawnUsedCapacity(roomName: string): number;
+  nukerUsedCapacity(roomName: string): number;
+  /** 四类结构的 total free capacity（每结构 getFreeCapacity() 之和）。 */
+  factoryFreeCapacity(roomName: string): number;
+  labFreeCapacity(roomName: string): number;
+  powerSpawnFreeCapacity(roomName: string): number;
+  nukerFreeCapacity(roomName: string): number;
+  /**
+   * resource-specific free capacity：构建期对「固定允许集 ∪ 已持有
+   * 资源」逐结构实测之和。factory 是通用 store，未探测的非 power
+   * 资源按剩余总容量外推（引擎语义 getFreeCapacity(r) === 无参值）；
+   * lab/powerSpawn/nuker 为限定 store，未探测资源返回 0（不可外推）。
+   */
+  factoryFreeCapacityFor(roomName: string, resource: ResourceConstant): number;
+  labFreeCapacityFor(roomName: string, resource: ResourceConstant): number;
+  powerSpawnFreeCapacityFor(roomName: string, resource: ResourceConstant): number;
+  nukerFreeCapacityFor(roomName: string, resource: ResourceConstant): number;
 }
 
 function createProductionAggregateAccessors(
@@ -705,6 +750,29 @@ function createProductionAggregateAccessors(
       const ordinal = roomOrdinal(core, roomName);
       if (ordinal < 0) return EMPTY_RESOURCES;
       return select(production.rooms[ordinal])?.resources ?? EMPTY_RESOURCES;
+    },
+    usedCapacity: (roomName: string): number => {
+      const ordinal = roomOrdinal(core, roomName);
+      return ordinal < 0
+        ? 0
+        : (select(production.rooms[ordinal])?.usedCapacity ?? 0);
+    },
+    freeCapacity: (roomName: string): number => {
+      const ordinal = roomOrdinal(core, roomName);
+      return ordinal < 0
+        ? 0
+        : (select(production.rooms[ordinal])?.freeCapacity ?? 0);
+    },
+    freeByResource: (
+      roomName: string,
+      resource: ResourceConstant,
+    ): number => {
+      const ordinal = roomOrdinal(core, roomName);
+      return ordinal < 0
+        ? 0
+        : frozenAmount(
+            select(production.rooms[ordinal])?.freeByResource.get(resource),
+          );
     },
   };
 }
@@ -752,6 +820,24 @@ export function getEmpireInventoryProduction(): EmpireInventoryProductionView {
       labResources: labs.resources,
       powerSpawnResources: powerSpawns.resources,
       nukerResources: nukers.resources,
+      factoryUsedCapacity: factory.usedCapacity,
+      labUsedCapacity: labs.usedCapacity,
+      powerSpawnUsedCapacity: powerSpawns.usedCapacity,
+      nukerUsedCapacity: nukers.usedCapacity,
+      factoryFreeCapacity: factory.freeCapacity,
+      labFreeCapacity: labs.freeCapacity,
+      powerSpawnFreeCapacity: powerSpawns.freeCapacity,
+      nukerFreeCapacity: nukers.freeCapacity,
+      // factory：通用 store——未探测的非 power 资源按剩余总容量外推；
+      // 限定 store 不外推（未探测资源 0）。
+      factoryFreeCapacityFor: (roomName, resource) =>
+        resource === RESOURCE_POWER
+          ? 0
+          : factory.freeByResource(roomName, resource) ||
+            factory.freeCapacity(roomName),
+      labFreeCapacityFor: labs.freeByResource,
+      powerSpawnFreeCapacityFor: powerSpawns.freeByResource,
+      nukerFreeCapacityFor: nukers.freeByResource,
     };
   }
   return index.productionView;

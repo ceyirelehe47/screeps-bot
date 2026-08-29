@@ -157,7 +157,9 @@ import {
 import { collectLiveMarketSaleProtectionLedger } from "@/runtime/marketSaleProtectionAdapter";
 import {
   advanceFeeLedgerWindow,
-  validateOrResetFeeLedger,
+  validateFeeLedger,
+  createFeeLedgerBlocked,
+  resolveFeeLedgerInvalid,
   applyFillFeeDebt,
   commitProspectiveFeeReservation,
   createEmptyMarketSaleFeeLedger,
@@ -3402,10 +3404,47 @@ function ensureDataState(): MarketSaleDataState {
     recoveredPendingCreate = rawPendingCreate as OwnedPendingCreate | undefined;
   }
   data.feeEvents ||= [];
-  // fee ledger 内容级校验（fail-safe）：同条目数但字段损坏的持久化账本
-  // 在此检出并重置为空窗口，不再静默放行（跨 tick 快速路径移除后，
+  // fee ledger 内容级校验（fail-closed）：损坏的持久化账本在此检出——
+  // 原始证据以有界 JSON 摘要随 ledger 自身隔离（不依赖 direct
+  // quarantine 的合并行为），账本替换为空窗口 + 不可绕过 invalid
+  // blocker（create/extend/reprice 与账本写入全部禁止，operator 显式
+  // 修复前不恢复）。绝不静默重置为空账本（跨 tick 快速路径移除后，
   // 该校验每 tick 执行）。
-  data.feeLedger = validateOrResetFeeLedger(data.feeLedger);
+  const feeLedgerValidation = validateFeeLedger(data.feeLedger);
+  if (feeLedgerValidation.status === "invalid") {
+    const corruptRawLedger = data.feeLedger ?? null;
+    quarantinedMarketState["__fee_ledger__"] = corruptRawLedger;
+    data.feeLedger = createFeeLedgerBlocked(
+      feeLedgerValidation.reason,
+      Game.time,
+      corruptRawLedger,
+    );
+  } else {
+    data.feeLedger =
+      feeLedgerValidation.ledger ?? createEmptyMarketSaleFeeLedger();
+  }
+  // operator 显式修复入口：console 写 Memory.runtime.marketFeeLedgerRepair
+  // = true（当 tick 生效，幂等清除）。修复只清除 blocker，隔离证据保留。
+  data.operatorAudit ||= [];
+  const runtimeMemory = Memory.runtime as
+    | { marketFeeLedgerRepair?: boolean }
+    | undefined;
+  if (runtimeMemory?.marketFeeLedgerRepair) {
+    delete runtimeMemory.marketFeeLedgerRepair;
+    if (data.feeLedger.invalid) {
+      const resolvedAt = Game.time;
+      const blockedReason = data.feeLedger.invalid.reason;
+      data.feeLedger = resolveFeeLedgerInvalid({ ledger: data.feeLedger });
+      boundedPush(
+        data.operatorAudit,
+        {
+          tick: resolvedAt,
+          action: `fee_ledger_invalid_resolved:${blockedReason}`,
+        },
+        MAX_FEE_EVENTS,
+      );
+    }
+  }
   data.carriedFeeDebtMilli ||= {};
   data.trustedFloors ||= {};
   data.processedTransactionKeys ||= [];
@@ -4078,9 +4117,10 @@ function toMarketBaseResourceRuntimeCandidates(
 function makerExposurePresent(context: RunContext): boolean {
   return Boolean(
     Object.keys(context.data.managedOrders).length > 0 ||
-    context.data.pendingCreate ||
-    Object.keys(context.data.pendingMutations).length > 0 ||
-    context.data.feeLedger?.reconcileGap ||
+      context.data.pendingCreate ||
+      Object.keys(context.data.pendingMutations).length > 0 ||
+      context.data.feeLedger?.invalid ||
+      context.data.feeLedger?.reconcileGap ||
     Object.values(context.data.managedOrders).some(
       (managed) =>
         managed.externalMutationGap !== undefined ||
@@ -4659,6 +4699,20 @@ function reconcilePendingMutationStates(context: RunContext): void {
     context.data.pendingMutations,
   )) {
     const live = context.liveOrderById.get(orderId);
+    // fail-closed：fee ledger blocker 存在时，费用承担型 mutation
+    // （extend/reprice）的确认会追加费用债务——一律停在 reconcile_gap，
+    // 不推进。cancel（撤单）不写 fee ledger，允许继续收敛。
+    if (
+      pending.kind !== "cancel" &&
+      context.data.feeLedger?.invalid
+    ) {
+      context.data.pendingMutations[orderId] = {
+        ...pending,
+        status: "reconcile_gap",
+      };
+      reject(context, "fee_ledger_invalid_fence");
+      continue;
+    }
     const result = reconcilePendingMutation({ pending, liveOrder: live });
     if (!result.confirmed) {
       if (result.pending)
@@ -5033,6 +5087,7 @@ function updateDrain(
     exposureAmount: totalExposure(context.data),
     reconcileGapCount:
       structuralMarketSaleWriteBlocker(context.data, context.config) ||
+      context.data.feeLedger?.invalid ||
       context.data.feeLedger?.reconcileGap ||
       Object.values(context.data.managedOrders).some(
         (managed) =>
@@ -5472,7 +5527,8 @@ function currentProtectionFailureReason(
 function hasFeeSensitiveFence(data: MarketSaleDataState): boolean {
   return Boolean(
     data.pendingCreate ||
-    data.feeLedger?.reconcileGap ||
+      data.feeLedger?.invalid ||
+      data.feeLedger?.reconcileGap ||
     Object.values(data.managedOrders).some(
       (managed) =>
         managed.externalMutationGap !== undefined ||
@@ -8053,6 +8109,7 @@ function marketBaseOperatorExposureBlocker(
     Object.keys(data.managedOrders).length > 0 ||
     data.pendingCreate ||
     Object.keys(data.pendingMutations).length > 0 ||
+    data.feeLedger?.invalid ||
     data.feeLedger?.reconcileGap ||
     activity.stagingAmount > 0 ||
     activity.reservationAmount > 0
