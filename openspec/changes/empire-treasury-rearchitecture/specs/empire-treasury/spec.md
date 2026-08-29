@@ -67,23 +67,49 @@ transaction 必须（MUST）由一或多腿 posting 原子表达：全部 postin
 
 ### Requirement: 幂等 receipt 最小持久化
 
-国库必须（MUST）将 transaction 幂等 receipt 持久化到 Memory（仅 transactionId → 结算 tick 的最小映射），使跨 tick 与 global reset 后的重放仍被拒绝。receipt 必须（MUST）有明确 retention 窗口、容量上限与清理规则；清理不得（MUST NOT）让仍可能重放的当前 tick receipt 被驱逐；不得（MUST NOT）持久化 overlay、observation、journal 或任何物理事实副本。
+国库必须（MUST）将 transaction 幂等 receipt 持久化到 Memory（仅 transactionId → 结算 tick 的最小映射），使跨 tick 与 global reset 后的重放仍被拒绝。不得（MUST NOT）持久化 overlay、observation、journal 或任何物理事实副本。
+
+receipt store 必须（MUST）满足安全驱逐契约：只自动回收超过 retention 窗口的条目；retention 窗口内的 receipt 绝不（MUST NOT）因容量压力被驱逐——未过期条目达硬容量且无过期可回收时，新 transaction 必须（MUST）在写入任何状态之前被拒绝（receipt_capacity_exhausted，独立指标可审计）；已结算 id 的重放必须（MUST）仍优先返回 already_settled，store 满不得改变幂等结果。admission 必须（MUST）O(1)（entryCount 计数），不得（MUST NOT）在每笔 transaction 上全表扫描。
+
+settled key 必须（MUST）前缀编码（"t:"+transactionId）——transactionId 字符集允许 `__proto__`/`constructor` 等危险字面量，裸键赋值普通对象会触发原型污染语义。版本变更必须（MUST）提供已知版本无损迁移（transactionId 与结算 tick 保留、只执行一次、指标记录）；未知/更高版本或 entryCount 与实际条目数不符（手工损坏）时必须（MUST）fail closed：原数据保留、拒绝一切新登记、有界诊断输出，不得（MUST NOT）删除后冷启动。
 
 #### Scenario: global reset 后重放被拒
 
 - **WHEN** 服务实例因 global reset 重建（heap 缓存丢失、Memory 保留）后重放已结算 transaction
-- **THEN** 凭 Memory receipt 拒绝重放（already_settled），不产生重复投影
+- **THEN** 凭 Memory receipt 拒绝重放（already_settled），不产生重复投影；容量与 entryCount 从 Memory 恢复
 
-#### Scenario: receipt 按规则回收
+#### Scenario: retention 内绝不因容量驱逐
 
-- **WHEN** receipt 结算 tick 早于 now−retention 窗口，或总量超过容量上限
-- **THEN** 按最老优先回收；驱逐遇到当前 tick 的 receipt 立即停止并计数（blocked）
+- **WHEN** 未过期 receipt 已达硬容量且无过期可回收，此时登记新 transaction 或重放最老 receipt
+- **THEN** 新登记被拒绝（receipt_capacity_exhausted，journal/overlay/receipt 零部分写入）；重放仍返回 already_settled
+
+#### Scenario: 过期回收后容量恢复
+
+- **WHEN** 满容 store 中的过期条目被回收（beginTick 清理或满容 admission 低频路径）
+- **THEN** 新 transaction 可再次接纳
+
+#### Scenario: v1 无损迁移
+
+- **WHEN** Memory 中存在 v1（裸键）receipt store 且首次加载
+- **THEN** 无损迁移到 v2（前缀键 + entryCount）：transactionId 与结算 tick 保留、迁移只执行一次并计数、迁移后幂等立即生效
+
+#### Scenario: 未知版本 fail closed
+
+- **WHEN** receipt store 版本未知/更高，或 entryCount 与实际条目数不符（手工损坏）
+- **THEN** 拒绝一切新登记（receipt_store_incompatible）、原数据不被删除、fail-closed 计数可审计
+
+#### Scenario: 危险字面量 id 的原型污染防护
+
+- **WHEN** transactionId 为 `__proto__`/`constructor` 等合法但危险的字面量
+- **THEN** 经 key 编码后只产生普通自有属性键，幂等读写命中且不污染原型
 
 ### Requirement: 带上下文的余额查询
 
 国库不得（MUST NOT）提供无上下文的可用量入口。任何可用量查询必须（MUST）声明资源、房间范围、位置范围、是否含投影、是否计入 incoming、是否扣除 outgoing/reservation 以及策略保留量。spendable 必须（MUST）非负；当物理-承诺-保留之差为负时必须（MUST）显式置位 overcommitted 而非静默钳制。stale observation 不得（MUST NOT）用于即时授权。
 
-查询必须（MUST）支持 owner 声明（holderId + scope）：合法 owner 查询时排除自己持有的 production reservation、其他 owner 照常扣除；owner 不存在或格式非法时必须（MUST）fail closed（spendable=0、overcommitted=true），不得（MUST NOT）返回乐观可用量。projected capacity 必须（MUST）与 observed capacity 分离暴露，且随 posting 推进（流入增 used 减 free、流出反向、多资源聚合）。
+查询必须（MUST）支持 owner 声明（holderId + roomName + scope）：holder 必须（MUST）真实存在（运行时解析）且声明房间与真实归属一致，否则 fail closed（spendable=0、overcommitted=true），不得（MUST NOT）返回乐观可用量；验证通过后只在该归属房间排除自己的 production reservation——查询多房间时其他房间照常全额扣除，其他 owner 一律照常扣除，不得（MUST NOT）仅凭知道 holderId 字符串就排除对方。projected capacity 必须（MUST）与 observed capacity 分离暴露，且随 posting 推进（流入增 used 减 free、流出反向、多资源聚合）。
+
+查询输入必须（MUST）fail-closed 规范化：非法资源、非法/重复房间、非法/重复位置（重复会双倍累计，绝不静默去重）、非有限非负 withhold（NaN/Infinity/负数）一律返回保守全零视图（contextStatus=invalid_fail_closed）并计数，不得（MUST NOT）报乐观可用量。
 
 #### Scenario: spendable 非负且超卖可见
 
@@ -95,10 +121,25 @@ transaction 必须（MUST）由一或多腿 posting 原子表达：全部 postin
 - **WHEN** 合法 owner 声明查询且自己持有同房间/资源的 production reservation
 - **THEN** committed 只扣除其他 owner 的预留；其他 owner 的预留照常扣除
 
+#### Scenario: owner 存在性与房间归属验证
+
+- **WHEN** owner 声明的 holder 不存在，或声明的 roomName 与运行时解析的 holder 真实归属房间不一致
+- **THEN** fail closed（spendable=0、overcommitted=true，observed 物理事实仍如实返回）
+
+#### Scenario: owner 多房间查询只排除归属房间
+
+- **WHEN** 合法 owner 查询多个房间且在其他房间也持有 reservation
+- **THEN** 只有其合法归属房间排除自己；其他房间（含该 owner 自己在他处的预留）照常全额扣除
+
 #### Scenario: owner 非法 fail closed
 
 - **WHEN** owner 声明 holderId 为空或 scope 未知
 - **THEN** spendable=0 且 overcommitted=true（observed 物理事实仍如实返回）
+
+#### Scenario: 查询输入非法 fail closed
+
+- **WHEN** 查询携带非法资源、重复房间/位置或 NaN withhold
+- **THEN** 返回保守全零视图（contextStatus=invalid_fail_closed）并计数 queryInvalidContexts
 
 #### Scenario: projected capacity 与 observed 分离
 
@@ -109,7 +150,7 @@ transaction 必须（MUST）由一或多腿 posting 原子表达：全部 postin
 
 国库必须（MUST）在每 tick 从既有持久权威（transfer tasks、production reservations）构建统一只读承诺视图，覆盖 outgoing/pendingOutgoing/incoming/pendingIncoming、receiver headroom（observed 与 projected 双轨）与 route merge lookup，且不得（MUST NOT）复制出第二套持久化任务数据。过期承诺必须（MUST）在读侧排除并计数；holder 已不存在的 reservation 必须（MUST）计为孤儿；原始记录的删除权必须（MUST）保留在其 owner。查询函数不得（MUST NOT）产生任何 Memory/Game 写入。
 
-索引必须（MUST）是点时快照：构建期聚合为 primitive 值，不保留可被外部原地修改的 task/reservation 对象引用；receiver 维度构建期预聚合（查询不回扫 live task store）；route merge 查询基于预构建索引。权威数据 mutation 后，下一次承诺查询必须（MUST）看到新状态（统一 revision 失效机制，架构测试守护全部 mutation 入口）。
+索引必须（MUST）是点时快照：构建期聚合为 primitive 值，不保留可被外部原地修改的 task/reservation 对象引用；receiver 维度构建期预聚合（查询不回扫 live task store）；route merge 查询基于预构建索引且同 route 重复 key 时返回第一个匹配（与旧 findMergeablePendingTask 语义一致）。权威数据 mutation（含 legacy schema 迁移）后，下一次承诺查询必须（MUST）看到新状态（统一 revision 失效机制，架构测试守护全部 mutation 入口）。receiver projected headroom 必须（MUST）每次查询动态组合静态承诺与当前 overlay 容量聚合——同 tick 结算 transaction 后的下一次查询立即反映最新投影，不得（MUST NOT）缓存依赖当前 overlay 的 projected 数值到旧结果；capacity delta 查询必须（MUST）O(1)（按位置聚合，不扫描资源 overlay）。
 
 #### Scenario: 过期预留被排除但不被删除
 
@@ -128,12 +169,17 @@ transaction 必须（MUST）由一或多腿 posting 原子表达：全部 postin
 
 #### Scenario: mutation 后失效重建
 
-- **WHEN** 权威 mutation（reserve/cancel/progress/GC 等）发生后再次访问承诺索引
+- **WHEN** 权威 mutation（reserve/cancel/progress/GC/legacy 迁移等）发生后再次访问承诺索引
 - **THEN** 索引按新 revision 重建并反映新状态，查询自身仍零写
+
+#### Scenario: receiver projected headroom 实时反映 overlay
+
+- **WHEN** 先查询 receiver headroom、再结算一笔流入该 receiver 的 transaction、随后再次查询
+- **THEN** projected headroom 立即减少（流出后恢复），observed 口径不变，且承诺 revision 未变时不重建整个索引
 
 ### Requirement: 跨 tick 对账不静默
 
-国库必须（MUST）在构建新 tick 观察时，将上一 tick 的投影终态与本 tick 观察按 key 并集对账（previous finals ∪ current observed）。任何非零差异必须（MUST）计入 reconciliation 计数并保留有限差异样本，不得（MUST NOT）静默丢弃。对账必须（MUST）显式分类：外部流入/流出、新资源/新位置/新房间首次出现、房间丢失/位置丢失、structureId 替换（incarnation 变化，金额一致也须记录）、tick gap（差异为 gap 累积值）与 global reset 恢复（无严格对账基准时显式标记）。mismatch 样本必须（MUST）可追溯至相关 transaction（id/kind）。
+国库必须（MUST）在构建新 tick 观察时执行两层对账：① manifest 结构层——endTick 归档房间/位置 manifest（owned 房间集合、每位置 exists/structureId/容量事实），下一 tick 与当前观察比对，空房间/空 storage/terminal 的出现与丢失、structureId 替换按位置各计一次（不随资源数重复）；② 资源 key union 层——previous finals ∪ current observed，数量差异按资源维度独立计数。任何非零差异必须（MUST）计入 reconciliation 计数并保留有限差异样本，不得（MUST NOT）静默丢弃。对账必须（MUST）显式分类：外部流入/流出、新资源、结构生命周期事件、tick gap（差异为 gap 累积值）与 global reset 恢复（无严格对账基准时显式标记）。mismatch 样本必须（MUST）可追溯至相关 transaction（id/kind）。
 
 #### Scenario: 投影与现实的差异被记录
 
@@ -144,6 +190,11 @@ transaction 必须（MUST）由一或多腿 posting 原子表达：全部 postin
 
 - **WHEN** 本 tick 出现上一 tick 不存在的资源/位置/房间，或 storage/terminal 被新建、摧毁、structureId 替换
 - **THEN** 对账产出对应分类（new_resource/new_location/new_room/location_lost/room_lost/structure_replaced），不静默
+
+#### Scenario: 零资源结构变化被 manifest 层发现
+
+- **WHEN** 空房间出现/丢失、空 storage/terminal 新建/摧毁或空结构 structureId 替换（稀疏资源枚举完全不可见）
+- **THEN** manifest 结构层产出对应事件（每位置至多一条）；资源维度 inflow/outflow 独立计数不与之重复
 
 #### Scenario: tick gap 与 global reset 显式标记
 
@@ -171,12 +222,27 @@ transaction 必须（MUST）由一或多腿 posting 原子表达：全部 postin
 
 ### Requirement: 共享快照与 fresh epoch 隔离
 
-国库必须（MUST）支持独立 fresh observation scope（如 market-fresh）。fresh 构建不得（MUST NOT）污染或替换 shared observation 缓存，也不得（MUST NOT）复用共享 snapshot 供需要新鲜读取的安全路径使用。
+国库必须（MUST）支持独立 fresh observation scope（如 market-fresh）。fresh 构建不得（MUST NOT）污染或替换 shared observation 缓存，也不得（MUST NOT）复用共享 snapshot 供需要新鲜读取的安全路径使用。epoch 注册表必须（MUST）保存每个 epoch 的 exact immutable observation：transaction 物理可行性验证必须（MUST）使用 decision 指向的那一次观察（数量/容量/结构存在性），不得（MUST NOT）回退 shared observation，同时必须（MUST）叠加本 tick overlay（跨 epoch 共享的已接受 intents）防同 tick 超卖。endTick 后必须（MUST NOT）再发行 fresh epoch。
 
 #### Scenario: fresh 构建不影响 shared 缓存
 
 - **WHEN** 调用 beginFreshObservation 构建 market-fresh 观察
 - **THEN** shared observation 引用与内容不变，后续 shared 访问仍复用原缓存
+
+#### Scenario: fresh exact 基线绑定
+
+- **WHEN** shared 基线较高而 fresh 观察（决策时点物理骤降后）较低，基于 fresh 的超量流出/容量溢出
+- **THEN** 以 fresh 基线拒绝（insufficient_amount/capacity_overflow），不得回退 shared 放行
+
+#### Scenario: overlay 跨 epoch 共享
+
+- **WHEN** fresh 发行前已有本 tick 已接受 transaction（overlay 占用）
+- **THEN** 基于 fresh 的后续 transaction 同样受 overlay 限制，不能借 fresh 基线超卖
+
+#### Scenario: endTick 后拒绝 fresh 发行
+
+- **WHEN** 本 tick 已 endTick 后调用 beginFreshObservation
+- **THEN** 返回 null（不再发行 fresh epoch）
 
 ### Requirement: Treasury Shadow 零行为写入
 

@@ -61,3 +61,16 @@
 - [ ] 8.1 Treasury shadow 连续 1000+ tick 零 mismatch 后迁移 resourceControl 热路径
 - [ ] 8.2 market-fresh epoch 接入前独立安全评审（不破坏 fresh floor/双读/CAS/WAL/permit）
 - [ ] 8.3 旧模块按删除清单分批退役，每批附 shadow 证据
+
+## 9. 第三轮数据安全修复（P1：receipt 驱逐 / fresh 基线 / receiver 缓存）
+
+- [x] 9.1 receipt 安全驱逐契约重做：store 升级 version 2（settled key "t:"+transactionId 前缀编码防原型污染 + entryCount 计数）；只自动回收 retention 过期条目，未过期条目绝不因容量驱逐；admission 预检（写入任何状态前）满容且无过期可回收时拒绝 receipt_capacity_exhausted（独立指标，零部分写入；已结算 id 仍优先 already_settled）；满容 admission 低频回收（O(1) 快路径）；v1→v2 无损迁移（只执行一次+指标）；未知版本/entryCount 损坏 fail closed（原数据保留、持续拒绝、有界诊断）
+- [x] 9.2 decision epoch 绑定 exact observation：epoch 注册表条目保存该 epoch 的 exact immutable observation 引用（heap-only 每 tick 清空）；recordAcceptedTransaction 物理验证（位置/数量/容量/incarnation）使用 decision 指向的观察，不回退 shared；overlay 跨 epoch 共享防同 tick 超卖（代码注释固定三层语义）；endTick 后 beginFreshObservation 返回 null
+- [x] 9.3 receiver projected headroom 实时化：projected 字段每次查询动态组合（静态承诺 + observed 容量 + 当前 overlay 容量聚合），不缓存依赖 overlay 的旧结果；locationCapacityDelta 改按位置 capacityDeltas 聚合 map（commit 原子更新/endTick/reset 清空/查询 O(1)）；单调 projectionRevision 暴露（缓存失效与诊断）
+- [x] 9.4 空结构/空房间两层对账：endTick 归档 room/location manifest（owned 房间集合、exists/structureId/容量事实）；reconcile 拆 manifest 结构层（new_room/room_lost/new_location/location_lost/structure_replaced，每位置至多一条）+ 资源 key union 层（inflow/outflow/new_resource 独立计数）；样本 dimension 标记结构/资源维度
+- [x] 9.5 owner 验证强化：TreasuryQueryOwner 增加 roomName；deps.resolveHolderRoom 运行时解析 holder 存在性与归属房间；声明不一致/不存在 fail closed；多房间查询只在其合法归属房间排除自己；不再接受"任意非空字符串即可排除"
+- [x] 9.6 查询输入 fail-closed 规范化：非法资源/非法或重复房间/非法或重复位置/NaN/Infinity/负 withhold → 保守全零视图（contextStatus=invalid_fail_closed）+ queryInvalidContexts 计数；合法路径 contextStatus=valid
+- [x] 9.7 receipt key 编码与 transactionId 语义：settled 一律 "t:" 前缀编码（__proto__/constructor 等合法 id 字面量恒为普通自有键）；新增 formatTreasuryStableTransactionId（无 tick 前缀，跨 tick 重试恒同 id，receipt 幂等跨 tick 生效）；tick 前缀 helper 文档限定为无重试语义的新动作
+- [x] 9.8 权威 mutation 覆盖补全：migrateResourceTransferTasksToV2（legacy schema 迁移改写任务）通知 commitment revision 失效；route merge 同 route 重复 key 恢复"第一个匹配"（旧 findMergeablePendingTask 语义）
+- [x] 9.9 Memory 类型与治理联动：runtime.d.ts receipts 类型升级 v2（前缀键/entryCount 注释含驱逐契约与 fail-closed 规则）；memoryDeclarationBoundaries 指纹重算；metrics 新增 receiptCapacityRejections/receiptStoreMigrationsExecuted/receiptStoreIncompatibleFailures/receiptsCorruptedEvicted/queryInvalidContexts（treasuryPerf 快照自动含新字段）
+- [x] 9.10 测试补齐：receipt admission（满容拒绝/最老保护/零部分写入/过期恢复/601 笔/reset 恢复/v1 迁移/未知版本/entryCount 损坏/__proto__ 防护）；fresh exact 绑定（低基线拒/小容量拒/journal 保留 scope/双 fresh 各自验证/overlay 防超卖/endTick 后拒/old-unknown-scope 拒）；receiver 实时性（同 tick transaction 后立即减少/observed 不变/流出恢复/多资源聚合/索引不重建）；manifest 两层（空房间/空 terminal/structureId 替换每位置一次）；owner（不存在/房间不符/多房间归属/无预留正常）；query 输入（非法资源/重复房间位置/NaN withhold）；稳定 id 跨 tick 幂等；merge 第一个匹配；性能边界架构断言（admission O(1)/capacityDelta O(1)/exact observation 不回退）
