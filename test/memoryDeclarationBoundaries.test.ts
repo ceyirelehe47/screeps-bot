@@ -10,7 +10,7 @@ const MEMORY_BRANCHES = {
   cfg: {
     declaration: "src/types/memory/cfg.d.ts",
     interfaceName: "ScreepsMemoryConfig",
-    schemaFingerprint: "028e00eab10b8507434e0fdb3c91a046015fde8080257c88db18f2cc9d2a5c40",
+    schemaFingerprint: "2387e78f2a0639ee822d599374c3c9c9c5d4ffd4d4e27bb872a0a3cdd960ef51",
     imports: ["@/types/system:RoomType"],
     fields: [
       "rooms",
@@ -22,6 +22,7 @@ const MEMORY_BRANCHES = {
       "crossShard",
       "telemetry",
       "movementMetrics",
+      "marketSaleDiagnostics",
       "cpuProfiler",
       "synthesisControl",
       "homeDefense",

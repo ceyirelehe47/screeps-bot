@@ -45,6 +45,11 @@ declare global {
       /** @deprecated 旧开关，等价于 mode:"totals"；显式 mode 优先。 */
       roomStats?: boolean;
     };
+    marketSaleDiagnostics?: {
+      /** 市场子 phase 临时诊断窗口（提交 A 测量用）：窗口到期自动关闭。 */
+      enabled?: boolean;
+      windowTicks?: number;
+    };
     cpuProfiler?: {
       enabled?: boolean;
       sampleInterval?: number;

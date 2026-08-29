@@ -1,3 +1,4 @@
+import { measureMarketSubPhase } from "@/runtime/marketSaleDiagnostics";
 import {
   executeCancelOrder,
   executeCreateOrder,
@@ -3548,11 +3549,13 @@ function orderFingerprint(order: MarketOrderSnapshot): string {
 }
 
 function makeContext(): RunContext {
-  const config = resolveMarketSaleAutomationConfig();
-  const data = ensureDataState();
-  const domainActivity = collectMarketSaleDomainActivity(data);
+  const config = measureMarketSubPhase("configResolve", () => resolveMarketSaleAutomationConfig());
+  const data = measureMarketSubPhase("ensureDataState", () => ensureDataState());
+  const domainActivity = measureMarketSubPhase("domainActivity", () =>
+    collectMarketSaleDomainActivity(data),
+  );
   const runtime = ensureRuntimeState();
-  const liveOrders = readLiveOrders();
+  const liveOrders = measureMarketSubPhase("liveOrdersSnapshot", () => readLiveOrders());
   return {
     config,
     data,
@@ -6224,8 +6227,10 @@ function registerOperatorControls(): void {
 }
 
 export function runMarketSalePreflight(): MarketSaleAutomationResult {
-  enforceLegacyMarketSafetyLatch();
-  registerOperatorControls();
+  measureMarketSubPhase("latchAndControls", () => {
+    enforceLegacyMarketSafetyLatch();
+    registerOperatorControls();
+  });
   const context = makeContext();
   if (!context.marketDomainActivityValid) {
     reject(context, "market_domain_activity_invalid");
@@ -6234,7 +6239,9 @@ export function runMarketSalePreflight(): MarketSaleAutomationResult {
   if (context.config.mode === "hybrid") {
     reject(context, "hybrid_not_implemented");
   }
-  const baseResourceV3 = reconcileBaseResourceV3State(context);
+  const baseResourceV3 = measureMarketSubPhase("v3Reconcile", () =>
+    reconcileBaseResourceV3State(context),
+  );
   const directState = context.data.directAutomation!;
   const v2DispatchConfig = frozenV2DispatchConfig(context.config);
   const inactiveMissingDirectState =
@@ -6245,15 +6252,17 @@ export function runMarketSalePreflight(): MarketSaleAutomationResult {
   if (!inactiveMissingDirectState && !baseResourceV3.activeV3Successor) {
     mergeDirectResult(
       context,
-      isContinuousDirectState(directState)
-        ? runMarketDirectContinuousPreflight(directState, {
-            tick: Game.time,
-            config: v2DispatchConfig,
-          })
-        : runDirectAutomationPreflight(directState, {
-            tick: Game.time,
-            config: context.config,
-          }),
+      measureMarketSubPhase("directPreflight", () =>
+        isContinuousDirectState(directState)
+          ? runMarketDirectContinuousPreflight(directState, {
+              tick: Game.time,
+              config: v2DispatchConfig,
+            })
+          : runDirectAutomationPreflight(directState, {
+              tick: Game.time,
+              config: context.config,
+            }),
+      ),
     );
   }
   context.data.pendingDirectDeals = directState.pendingDirectDeals;
@@ -6270,7 +6279,7 @@ export function runMarketSalePreflight(): MarketSaleAutomationResult {
     updateDrain(context, "emergencyStop");
     return finalizeResult(context, context.config.mode, "emergencyStop");
   }
-  reconcilePersistentState(context);
+  measureMarketSubPhase("persistentReconcile", () => reconcilePersistentState(context));
   const makerForbidden = makerModePermanentlyForbidden(context.config);
   if (makerForbidden) {
     reject(context, "market_maker_hybrid_permanently_disabled");
@@ -6286,8 +6295,10 @@ export function runMarketSalePreflight(): MarketSaleAutomationResult {
 export function runMarketSaleAutomation(
   input: MarketSaleAutomationInput = {},
 ): MarketSaleAutomationResult {
-  enforceLegacyMarketSafetyLatch();
-  registerOperatorControls();
+  measureMarketSubPhase("latchAndControls", () => {
+    enforceLegacyMarketSafetyLatch();
+    registerOperatorControls();
+  });
   const context = makeContext();
   if (input.stagingAmount !== undefined) {
     context.stagingAmount = nonNegativeInteger(input.stagingAmount);
@@ -6308,7 +6319,9 @@ export function runMarketSaleAutomation(
   const cpuGetUsed = Game.cpu?.getUsed;
   const baseResourceV3CpuStartedAt =
     typeof cpuGetUsed === "function" ? cpuGetUsed.call(Game.cpu) : Number.NaN;
-  let baseResourceV3 = reconcileBaseResourceV3State(context);
+  let baseResourceV3 = measureMarketSubPhase("v3Reconcile", () =>
+    reconcileBaseResourceV3State(context),
+  );
   const structuralWriteBlocker = structuralMarketSaleWriteBlocker(
     context.data,
     context.config,
@@ -6318,7 +6331,7 @@ export function runMarketSaleAutomation(
     updateDrain(context, "emergencyStop");
     return finalizeResult(context, context.config.mode, "emergencyStop");
   }
-  reconcilePersistentState(context);
+  measureMarketSubPhase("persistentReconcile", () => reconcilePersistentState(context));
   const candidates = input.candidates || [];
   const configuredMode = effectiveMode(context.config);
   const makerForbidden = makerModePermanentlyForbidden(context.config);

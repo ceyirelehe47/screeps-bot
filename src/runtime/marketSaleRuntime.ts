@@ -1,4 +1,9 @@
 import {
+  flushMarketSaleDiagnostics,
+  markMarketSaleDiagnosticsPlanningTick,
+  measureMarketSubPhase,
+} from "@/runtime/marketSaleDiagnostics";
+import {
   collectMarketSaleDomainActivity,
   runMarketSaleAutomation,
   type MarketSaleAutomationResult,
@@ -780,7 +785,9 @@ export function runLiveMarketSaleAutomation(
         NonNullable<Memory["data"]>["marketSaleAutomation"]
       >)
     : undefined;
-  const domainActivity = collectMarketSaleDomainActivity(rawData);
+  const domainActivity = measureMarketSubPhase("domainScan", () =>
+    collectMarketSaleDomainActivity(rawData),
+  );
   const domainActivityInput = {
     stagingAmount: domainActivity.stagingAmount,
     reservationAmount: domainActivity.reservationAmount,
@@ -876,7 +883,9 @@ export function runLiveMarketSaleAutomation(
     !data ||
     (!resourceControlCurrent && !hasExposureState)
   ) {
-    return runAutomation(domainActivityInput);
+    const result = runAutomation(domainActivityInput);
+    flushMarketSaleDiagnostics();
+    return result;
   }
 
   try {
@@ -894,14 +903,16 @@ export function runLiveMarketSaleAutomation(
       !resourceControlCurrent && exposureCandidates.length === 0;
     const protection = skipOuterCollection
       ? undefined
-      : collectProtection(
-          config,
-          isPlainRecord(data.managedOrders)
-            ? data.managedOrders
-            : undefined,
-          resourceControlCurrent
-            ? canonicalContinuousProtection
-            : { candidates: exposureCandidates },
+      : measureMarketSubPhase("protectionOuter", () =>
+          collectProtection(
+            config,
+            isPlainRecord(data.managedOrders)
+              ? data.managedOrders
+              : undefined,
+            resourceControlCurrent
+              ? canonicalContinuousProtection
+              : { candidates: exposureCandidates },
+          ),
         );
     const usesMarketBaseResourceSuccessor =
       config.directCapability === "continuous-v3";
@@ -940,7 +951,9 @@ export function runLiveMarketSaleAutomation(
       : "resource_control_cycle_stale";
     if (pricingAllowed) {
       try {
-        pricing = collectCachedPricing(config, pricingStore, collectPricing);
+        pricing = measureMarketSubPhase("pricingRefresh", () =>
+          collectCachedPricing(config, pricingStore, collectPricing),
+        );
         pricingEvidenceFresh =
           pricingResultCache !== undefined &&
           cacheStillFresh(
@@ -963,17 +976,20 @@ export function runLiveMarketSaleAutomation(
       pricingRejectionReason,
     };
     const candidates = protection
-      ? composeMarketSalePlanCandidates(
-          config,
-          protection,
-          pricing,
-          compositionContext,
+      ? measureMarketSubPhase("candidateComposition", () =>
+          composeMarketSalePlanCandidates(
+            config,
+            protection,
+            pricing,
+            compositionContext,
+          ),
         )
       : [];
     const readMarketBaseResourceCandidates =
       config.directCapability ===
       "continuous-v3"
-        ? () => {
+        ? () =>
+          measureMarketSubPhase("v3FreshProtectionRead", () => {
             // 每次 v3 full read 都重新采集 current production protection。
             // pricing history/energy snapshot 是本 planning tick 的已验证
             // resource-scoped 证据；BUY book 与 terminal 由 v3 planner另读。
@@ -993,7 +1009,7 @@ export function runLiveMarketSaleAutomation(
               pricing,
               compositionContext,
             );
-          }
+          })
         : undefined;
     const marketBaseResourceTrustedFloorSuccessor:
       | MarketBaseResourceTrustedFloorSuccessorInput
@@ -1008,18 +1024,24 @@ export function runLiveMarketSaleAutomation(
             trustedFloors: pricingStore.trustedFloors,
           }
         : undefined;
-    const result = runAutomation({
-      candidates,
-      ...(readMarketBaseResourceCandidates
-        ? {
-            readMarketBaseResourceCandidates,
-          }
-        : {}),
-      ...(marketBaseResourceTrustedFloorSuccessor
-        ? { marketBaseResourceTrustedFloorSuccessor }
-        : {}),
-      ...domainActivityInput,
-    });
+    if (resourceControlCurrent) {
+      markMarketSaleDiagnosticsPlanningTick();
+    }
+    const result = measureMarketSubPhase("automationEnvelope", () =>
+      runAutomation({
+        candidates,
+        ...(readMarketBaseResourceCandidates
+          ? {
+              readMarketBaseResourceCandidates,
+            }
+          : {}),
+        ...(marketBaseResourceTrustedFloorSuccessor
+          ? { marketBaseResourceTrustedFloorSuccessor }
+          : {}),
+        ...domainActivityInput,
+      }),
+    );
+    flushMarketSaleDiagnostics();
     if (resourceControlCurrent && !pricingEvidenceFresh) {
       resetShadowQualification(pricingRejectionReason);
       result.rejectedByReason[pricingRejectionReason] =
