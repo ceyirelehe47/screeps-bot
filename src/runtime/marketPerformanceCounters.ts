@@ -16,6 +16,8 @@ type MarketPerformanceCounterName =
   | "marketDeepAuditTicks"
   | "marketSessionReuseHits"
   | "marketSessionContextRebuilds"
+  | "marketDataStateDeepRecoveries"
+  | "marketDataStateFastPathHits"
   | "duplicateProtectionReadsAvoided"
   | "protectionOuterCollections"
   | "marketPerfSnapshotsCommitted";

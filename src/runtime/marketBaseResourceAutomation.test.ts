@@ -1500,6 +1500,55 @@ describe("Market Base V3 运行时重合同（高风险决策/WAL/证据隔离/o
     expect(zLaneBefore.stage).toBe("shadow");
   };
 
+  // deferred tick（fullPlanningTick=false）：外层未授权 planning 时 V3 只运行
+  // 每 tick 安全 preflight；不得推进 planning 状态、不得读全量候选、
+  // 不得产生 deal/commit。修复前该输入形态从未被直接测试过。
+  const scenarioDeferredTickNoPlanningProgress = () => {
+    const { state, deps, input } = v3RuntimeFixture();
+    const deferredInput = { ...input(), fullPlanningTick: false };
+    let candidateReads = 0;
+    const originalReadCandidates = deferredInput.readCandidates!;
+    deferredInput.readCandidates = () => {
+      candidateReads += 1;
+      return originalReadCandidates();
+    };
+    const planningOwnedBefore = JSON.stringify({
+      pricingRatchet: state.pricingRatchet,
+      dynamicFloorProjection: state.dynamicFloorProjection,
+      lastPlanningSnapshot: state.lastPlanningSnapshot,
+      laneStages: state.scope?.laneLifecycles?.map((lane) => lane.stage),
+      shadowEvidence: state.scope?.laneLifecycles?.map(
+        (lane) => lane.shadowEvidence,
+      ),
+      ledgerPending: state.ledger?.pending,
+    });
+
+    const result = runMarketBaseResourceAutomation(state, deferredInput, deps);
+
+    expect(result.planComplete).toBe(false);
+    expect(result.writes).toBe(0);
+    expect(result.rejectedByReason).toHaveProperty(
+      "market_base_v3_not_full_planning_tick",
+    );
+    // planning 独占的推进全部未发生：无候选读、无 prepared commit、无 deal。
+    expect(candidateReads).toBe(0);
+    expect(deps.commitPreparedState).not.toHaveBeenCalled();
+    expect(deps.claimPrepared).not.toHaveBeenCalled();
+    expect(deps.executePrepared).not.toHaveBeenCalled();
+    expect(
+      JSON.stringify({
+        pricingRatchet: state.pricingRatchet,
+        dynamicFloorProjection: state.dynamicFloorProjection,
+        lastPlanningSnapshot: state.lastPlanningSnapshot,
+        laneStages: state.scope?.laneLifecycles?.map((lane) => lane.stage),
+        shadowEvidence: state.scope?.laneLifecycles?.map(
+          (lane) => lane.shadowEvidence,
+        ),
+        ledgerPending: state.ledger?.pending,
+      }),
+    ).toBe(planningOwnedBefore);
+  };
+
   it("覆盖最高净价/二读 CAS/retirement、WAL CPU fallback 与证据生命周期、候选证据隔离与动态地板投影", () => {
     scenarioHighRisk();
     scenarioWalCpuCut();
@@ -1507,6 +1556,10 @@ describe("Market Base V3 运行时重合同（高风险决策/WAL/证据隔离/o
     scenarioObserveProjection();
     scenarioObserveProjectionNoSelection();
     scenarioCandidateIsolation();
+  });
+
+  it("deferred tick（fullPlanningTick=false）不推进 V3 planning 状态", () => {
+    scenarioDeferredTickNoPlanningProgress();
   });
 });
 

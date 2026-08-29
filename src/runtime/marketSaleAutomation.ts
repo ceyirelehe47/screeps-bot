@@ -1,4 +1,5 @@
 import { measureMarketSubPhase } from "@/runtime/marketSaleDiagnostics";
+import { bumpMarketPerformanceCounter } from "@/runtime/marketPerformanceCounters";
 import {
   executeCancelOrder,
   executeCreateOrder,
@@ -256,6 +257,16 @@ export interface MarketSaleAutomationInput {
   stagingAmount?: number;
   reservationAmount?: number;
   marketDomainActivityValid?: boolean;
+  /**
+   * 外层（runLiveMarketSaleAutomation）的显式 planning 授权：本 tick 是否为
+   * 市场 planning 周期（due）。内层不再从 ResourceControl.updatedAt 猜测
+   * planning 周期——RC 新鲜度仍叠加为新订单 planning 的硬门，但"是否 due"
+   * 只以本字段为准。未传或 false 视为 deferred tick：exposure 安全 reconcile、
+   * drain、latch、pending mutation/deal 仍每 tick 运行；candidate projection、
+   * V3 planning 推进（ratchet/permit/ledger/readiness/qualification）、
+   * canary/shadow 下单与 shadow qualification 计数不执行。
+   */
+  planningAuthorized?: boolean;
 }
 
 export interface MarketBaseResourceTrustedFloorSuccessorInput {
@@ -2591,6 +2602,8 @@ interface RunContext {
   runtime: MarketSaleRuntimeState;
   liveOrders: MarketOrderSnapshot[];
   liveOrderById: Map<string, MarketOrderSnapshot>;
+  /** liveOrders 是否已加载（懒标记：同 tick 至多读一次 Game.market.orders）。 */
+  liveOrdersLoaded: boolean;
   actions: string[];
   rejectedByReason: Record<string, number>;
   writes: number;
@@ -2599,6 +2612,13 @@ interface RunContext {
   reservationAmount: number;
   marketDomainActivityValid: boolean;
   marketBaseResourceCpuTrace?: MarketBaseResourceCpuTrace;
+  /**
+   * 本 tick 的合成 planning 判定（外层显式授权 && RC 新鲜度）。
+   * 由 runMarketSaleAutomation 在进入 planning 段前写入；内部组件
+   * （updateShadowCount 等）读此字段，不得再从 ResourceControl.updatedAt
+   * 自行推导。
+   */
+  planningCycleCurrent?: boolean;
 }
 
 type OperatorResult =
@@ -3283,11 +3303,49 @@ function registerMarketBaseResourceCanonicalRootThisTick(value: object): void {
   }
 }
 
-// 跨 tick 数据根快速验证状态（提交 C）：引用相等 + TTL 兜底，见
-// ensureDataState 内注释。模块级变量随 global reset 一并清零。
+// 跨 tick 数据根快速验证状态：稳定 commitment 键 + 引用相等 + TTL 兜底。
+// 模块级变量随 global reset 一并清零。
 const MARKET_DEEP_AUDIT_INTERVAL = 500;
 let verifiedDataRoot: MarketSaleDataState | undefined;
 let verifiedDataRootTick = -1;
+let verifiedDataRootKey: string | undefined;
+
+/**
+ * 数据根的稳定 commitment 键（有界开销，无大型 stringify）：
+ * 顶层键名集合 + exposure 容器规模 + 少量状态标量。生产环境每 tick
+ * Memory 都会经 JSON 重解析（对象引用必然变化），引用相等快速路径
+ * 在线上永远无法命中——本键跨 JSON round-trip 稳定，作为生产快速路径
+ * 的判定依据。检测能力：顶层结构/exposure 规模/迁移状态的变化；
+ * 深层内容损坏不依赖本层（structuralMarketSaleWriteBlocker 与 V3
+ * canonical 校验每 tick 在 reconcile 层执行，MARKET_DEEP_AUDIT_INTERVAL
+ * 到期强制完整审计兜底）。
+ */
+function marketDataRootCommitmentKey(
+  raw: Record<string, unknown>,
+): string {
+  const direct = isPlainRecord(raw.directAutomation)
+    ? raw.directAutomation
+    : undefined;
+  const exposureSize = (value: unknown): number =>
+    isPlainRecord(value) ? Object.keys(value).length : -1;
+  // JSON round-trip 会丢弃值为 undefined 的显式属性：按 JSON 语义归一，
+  // undefined 值键与缺席键等价，否则生产每 tick 重解析后键必然失配。
+  const topLevelKeys = Object.keys(raw)
+    .filter((key) => raw[key] !== undefined)
+    .sort();
+  return [
+    topLevelKeys.join(","),
+    exposureSize(raw.managedOrders),
+    exposureSize(raw.pendingMutations),
+    exposureSize(raw.pendingDirectDeals),
+    raw.pendingCreate === undefined ? 0 : 1,
+    isPlainRecord(raw.drain) ? String(raw.drain.phase) : "",
+    typeof direct?.migrationStatus === "string" ? direct.migrationStatus : "",
+    typeof direct?.migrationBlockedReason === "string"
+      ? direct.migrationBlockedReason
+      : "",
+  ].join("|");
+}
 
 /** 仅供测试：观测快速路径是否命中。 */
 export function isMarketDataRootFastPathArmedForTest(): boolean {
@@ -3298,6 +3356,7 @@ export function isMarketDataRootFastPathArmedForTest(): boolean {
 export function clearVerifiedMarketDataRootForTest(): void {
   verifiedDataRoot = undefined;
   verifiedDataRootTick = -1;
+  verifiedDataRootKey = undefined;
 }
 
 // 仅供测试/低频诊断：深恢复（完整 ensureDataState）执行次数；生产热路径
@@ -3320,23 +3379,33 @@ function ensureDataState(): MarketSaleDataState {
   ) {
     return rawMarketSaleAutomation as unknown as MarketSaleDataState;
   }
-  // ── 跨 tick 快速路径（提交 C）───────────────────────────────────────────
-  // 上一 tick 深恢复验证过的根对象引用仍 === Memory 当前根：期间没有任何
-  // 链路替换根（市场 commit 替换后自动失配，外部赋值同理），内容仍为已
-  // 验证的 canonical 状态，本 tick 跳过全量恢复。兜底：
-  // - MARKET_DEEP_AUDIT_INTERVAL 到期强制一次完整恢复/审计；
-  // - global reset 后模块变量清零 → 完整恢复；
-  // - 根被替换（含 CPU cut 后 Memory 重解析）→ 引用失配 → 完整恢复；
-  // - 损坏检测不依赖本层：structuralMarketSaleWriteBlocker 与 V3 canonical
-  //   校验在 reconcile 层每 tick 执行。
-  // 正常 planning commit 后的第一 tick 会完整恢复一次（引用已变），
-  // 属保守正确路径。
-  if (
+  // ── 跨 tick 快速路径（提交 C + commitment 修订）─────────────────────────
+  // 两条命中途径，同一 TTL 兜底（MARKET_DEEP_AUDIT_INTERVAL 到期强制完整
+  // 恢复/审计；global reset 后模块变量清零 → 完整恢复）：
+  // - 引用相等：上一 tick 验证过的根对象引用仍 === Memory 当前根（测试
+  //   环境/同 tick 重建场景）；
+  // - commitment 键相等：生产环境每 tick Memory 重解析使引用必然失配，
+  //   改用有界开销的稳定结构键（顶层键集合 + exposure 规模 + 迁移状态
+  //   标量）判定"内容结构仍是已验证形态"。外部以同形异值替换根的窗口
+  //   由 500 tick 深审计兜底；损坏检测不依赖本层。
+  // 正常 planning commit 替换根后（内容已变），键失配 → 下一 tick 完整
+  // 恢复一次，属保守正确路径。
+  const rawIsRecord = isPlainRecord(rawMarketSaleAutomation);
+  const referenceMatch =
     verifiedDataRoot !== undefined &&
-    verifiedDataRoot === rawMarketSaleAutomation &&
+    verifiedDataRoot === rawMarketSaleAutomation;
+  const commitmentMatch =
+    !referenceMatch &&
+    rawIsRecord &&
+    verifiedDataRootKey !== undefined &&
+    marketDataRootCommitmentKey(rawMarketSaleAutomation as Record<string, unknown>) ===
+      verifiedDataRootKey;
+  if (
+    (referenceMatch || commitmentMatch) &&
     Game.time - verifiedDataRootTick <= MARKET_DEEP_AUDIT_INTERVAL
   ) {
-    return verifiedDataRoot;
+    bumpMarketPerformanceCounter("marketDataStateFastPathHits");
+    return rawMarketSaleAutomation as MarketSaleDataState;
   }
   if (rawMarketSaleAutomation === undefined) {
     Memory.data.marketSaleAutomation =
@@ -3511,7 +3580,11 @@ function ensureDataState(): MarketSaleDataState {
   // 深恢复完成的原子 commit 即验证点：标记供后续 tick 快速路径复用。
   verifiedDataRoot = committedData;
   verifiedDataRootTick = Game.time;
+  verifiedDataRootKey = marketDataRootCommitmentKey(
+    committedData as unknown as Record<string, unknown>,
+  );
   marketDataStateDeepRecoveries += 1;
+  bumpMarketPerformanceCounter("marketDataStateDeepRecoveries");
   // 保护账本和 carrier 仍读取兼容字段；正常返回时它与 Direct WAL
   // 使用同一对象，写入顺序同时覆盖 CPU 截断恢复。
   return committedData;
@@ -3602,15 +3675,13 @@ function makeContext(): RunContext {
     collectMarketSaleDomainActivity(data),
   );
   const runtime = ensureRuntimeState();
-  const liveOrders = hasLiveOrderConsumers(data)
-    ? measureMarketSubPhase("liveOrdersSnapshot", () => readLiveOrders())
-    : [];
-  return {
+  const context: RunContext = {
     config,
     data,
     runtime,
-    liveOrders,
-    liveOrderById: new Map(liveOrders.map((order) => [order.id, order])),
+    liveOrders: [],
+    liveOrderById: new Map(),
+    liveOrdersLoaded: false,
     actions: [],
     rejectedByReason: {},
     writes: 0,
@@ -3619,12 +3690,35 @@ function makeContext(): RunContext {
     reservationAmount: domainActivity.reservationAmount,
     marketDomainActivityValid: domainActivity.valid,
   };
+  // 存在 managed/pending/drain exposure 时 preflight 立即加载对账所需订单；
+  // 否则保持未加载，由 automation 侧确认本 tick 真正 planning 后按需补载
+  //（preflight 先于 ResourceControl 运行，此刻的 RC 新鲜度判定必然过期，
+  // 不能作为加载依据——这是空订单快照时序缺陷的根因）。
+  if (hasLiveOrderConsumers(data)) {
+    ensureLiveOrdersLoaded(context);
+  }
+  return context;
+}
+
+/** 懒加载全量账号订单快照并建立 by-id 索引；同 tick 至多执行一次。 */
+function ensureLiveOrdersLoaded(context: RunContext): void {
+  if (context.liveOrdersLoaded) return;
+  context.liveOrders = measureMarketSubPhase("liveOrdersSnapshot", () =>
+    readLiveOrders(),
+  );
+  context.liveOrderById = new Map(
+    context.liveOrders.map((order) => [order.id, order]),
+  );
+  context.liveOrdersLoaded = true;
 }
 
 // liveOrders 全量快照（复制+排序全部 Game.market.orders）只服务于
 // managed/pending 对账、drain cancel 与 planning tick 的下单 slots/fingerprint
-// 基线。无这些消费者时（线上常态：无 exposure 的普通 tick）跳过读取；
-// 一旦出现 managed/pending（新 exposure）或进入 planning tick 自动恢复全量。
+// 基线。无这些消费者时（线上常态：无 exposure 的普通 tick）preflight 跳过
+// 读取；一旦出现 managed/pending（新 exposure）立即恢复全量；planning tick
+// 的订单视图由 automation 侧经 ensureLiveOrdersLoaded 显式补载。
+// 注意：不得在此引用 ResourceControl.updatedAt——preflight 先于 RC 运行，
+// 该判定在 preflight 时刻恒为 false，会把 planning tick 冻结成空快照。
 function hasLiveOrderConsumers(data: MarketSaleDataState): boolean {
   if (Object.keys(data.managedOrders).length > 0) return true;
   if (data.pendingCreate !== undefined) return true;
@@ -3632,14 +3726,15 @@ function hasLiveOrderConsumers(data: MarketSaleDataState): boolean {
   if (Object.keys(data.pendingDirectDeals).length > 0) return true;
   const drainPhase = data.drain?.phase;
   if (drainPhase === "requested" || drainPhase === "draining") return true;
-  // planning tick：fee gate 的 orderSlots 与 pendingCreate 的
-  // baselineOrderFingerprints 需要真实账号订单视图。
-  return Memory.runtime?.resourceControl?.updatedAt === Game.time;
+  return false;
 }
 
 // ─── MarketTickSession ────────────────────────────────────────────────────────
 // preflight 与 post-ResourceControl automation 复用同一 tick 的共享会话：
 // - context（config/data/runtime/liveOrders）在第一次市场调用时构建一次；
+//   liveOrders 懒加载：有 exposure 时构建即载，否则等 automation 侧确认
+//   planning 后补载（同 tick 至多读一次 Game.market.orders，见
+//   ensureLiveOrdersLoaded），root 替换重建 context 时懒标记一并复位；
 // - v3Reconcile / persistentReconcile 以 context.data 引用为失效键——
 //   阶段之间的市场自身 commit 会替换 data 根（commit 函数同步 context.data），
 //   引用变化即自动重新 reconcile；ResourceControl 不写市场 data，
@@ -5893,19 +5988,16 @@ function updateShadowCount(
   }
   const revision = context.config.configRevision;
   const signature = planningConfigSignature(context.config);
-  const freshResourceControlCycle =
-    Memory.runtime?.resourceControl?.updatedAt === Game.time;
+  // qualification 推进只看本 tick 合成 planning 判定（外层显式授权），
+  // 不再从 RC.updatedAt 自行推导（deferred tick 即使 RC 新鲜也不推进）。
+  const planningCycleCurrent = context.planningCycleCurrent === true;
   if (
     phase !== "shadow" ||
     !revision ||
-    !freshResourceControlCycle ||
+    !planningCycleCurrent ||
     !context.shadowPlanComplete
   ) {
-    if (
-      phase === "shadow" &&
-      freshResourceControlCycle &&
-      !context.shadowPlanComplete
-    ) {
+    if (phase === "shadow" && planningCycleCurrent && !context.shadowPlanComplete) {
       context.runtime.shadowConsecutiveCycles = 0;
       context.runtime.lastShadowCycleTick = Game.time;
     }
@@ -6501,8 +6593,23 @@ export function runMarketSaleAutomation(
     makerForbidden || protectionFailure || continuingProtectionDrain
       ? "emergencyStop"
       : configuredMode;
-  const planningCycleCurrent =
+  // planning 授权只来自外层显式输入（due 判定），内层不再从
+  // ResourceControl.updatedAt 自行猜测 planning 周期；RC 新鲜度仍作为
+  // 新订单 planning 的硬门叠加（v3-r3 observe 语义不变）。
+  // 修复前：deferred tick 上 RC 轻（readiness）路径推进 updatedAt 会让
+  // planningCycleCurrent 误真——candidate projection / shadow qualification
+  // / V3 planning 在未授权 tick 意外推进。
+  const resourceControlFresh =
     Memory.runtime?.resourceControl?.updatedAt === Game.time;
+  const planningCycleCurrent =
+    input.planningAuthorized === true && resourceControlFresh;
+  context.planningCycleCurrent = planningCycleCurrent;
+  if (planningCycleCurrent) {
+    // 本 tick 确认进入 planning：补载全量账号订单（fee gate 订单槽与
+    // pendingCreate baseline fingerprints 需要真实视图；无 exposure 的
+    // preflight 阶段尚未加载）。
+    ensureLiveOrdersLoaded(context);
+  }
   if (planningCycleCurrent && configuredMode === "maker") {
     // Preserve the more specific policy/floor rejection evidence on planning
     // ticks even when the current protection failure below also forces drain.
@@ -7099,6 +7206,9 @@ function commitMarketSaleDataSnapshot(data: MarketSaleDataState): void {
   // 快速路径的引用标记，避免每次 planning commit 后退回全量恢复。
   verifiedDataRoot = data;
   verifiedDataRootTick = Game.time;
+  verifiedDataRootKey = marketDataRootCommitmentKey(
+    data as unknown as Record<string, unknown>,
+  );
 }
 
 function commitContextMarketSaleData(

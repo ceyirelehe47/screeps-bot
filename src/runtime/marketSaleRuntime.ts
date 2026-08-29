@@ -41,25 +41,62 @@ import { collectLiveMarketSaleProtectionLedger } from "@/runtime/marketSaleProte
 const DEFAULT_MINIMUM_TERMINAL_FREE_CAPACITY = 50_000;
 const MINIMUM_PRICING_CPU_BUCKET = 5_000;
 // ── 市场规划分频（提交 E）────────────────────────────────────────────────
-// ResourceControl 的 runtime.updatedAt 每轻量任务 tick 都会推进，不能作为
+// ResourceControl 的 runtime.updatedAt 每 full planning tick 都会推进，不能作为
 // 市场 planning 触发条件（否则 observe 下每 tick 都做完整 planning：全量
 // protection + 定价 + 候选组合 + V3 规划）。常规 planning 每 N tick 一次；
-// 出现 exposure（managed/pending/direct pending）或 config revision 变化
-// 时立即恢复逐 tick 安全路径。preflight 的 latch/reconcile/drain 不受
-// 分频影响，仍然每 tick 执行。
+// 出现 exposure（managed/pending/direct pending）、config revision 或
+// migration 状态 revision 变化时立即恢复逐 tick 安全路径。preflight 的
+// latch/reconcile/drain 不受分频影响，仍然每 tick 执行。
+//
+// ── 显式 planning 授权 ────────────────────────────────────────────────────
+// 本层是唯一的 due 判定者，并通过 runAutomation 输入的 planningAuthorized
+// 显式下发给内层；内层不再从 ResourceControl.updatedAt 猜测 planning 周期
+//（RC 新鲜度在内层仍叠加为新订单 planning 硬门，语义不变）。
 const MARKET_PLANNING_INTERVAL_TICKS = 5;
 
-function readLastMarketPlanningCycle(): { tick?: number; configRevision?: string } {
+function readLastMarketPlanningCycle(): {
+  tick?: number;
+  configRevision?: string;
+  stateRevision?: string;
+} {
   const runtime = Memory.runtime?.marketSaleAutomation as
     | (NonNullable<NonNullable<Memory["runtime"]>["marketSaleAutomation"]> & {
         lastPlanningCycleTick?: number;
         lastPlanningConfigRevision?: string;
+        lastPlanningStateRevision?: string;
       })
     | undefined;
   return {
     tick: runtime?.lastPlanningCycleTick,
     configRevision: runtime?.lastPlanningConfigRevision,
+    stateRevision: runtime?.lastPlanningStateRevision,
   };
+}
+
+/**
+ * 供分频 due 判定的轻量状态 revision 标记：config revision 之外，再纳入
+ * direct 迁移状态机的可观测 revision（migrationStatus / migrationBlockedReason）。
+ * permit revision 的变更经 cfg 内容（configRevision）或 V3 preflight 的
+ * operator fingerprint 失配 fail-closed 路径显形，均会触发立即 planning 或
+ * 逐 tick 安全 reconcile。只做字符串拼接，不触碰 permit 哈希计算。
+ */
+function marketPlanningStateRevision(
+  config: { configRevision?: string },
+  rawData: unknown,
+): string {
+  const dataRecord = isPlainRecord(rawData) ? rawData : undefined;
+  const direct = isPlainRecord(dataRecord?.directAutomation)
+    ? dataRecord?.directAutomation
+    : undefined;
+  return [
+    config.configRevision ?? "",
+    typeof direct?.migrationStatus === "string"
+      ? direct.migrationStatus
+      : "",
+    typeof direct?.migrationBlockedReason === "string"
+      ? direct.migrationBlockedReason
+      : "",
+  ].join("|");
 }
 const ORDER_BOOK_REFRESH_TICKS = 100;
 const HISTORY_REFRESH_TICKS = 5_000;
@@ -898,12 +935,14 @@ export function runLiveMarketSaleAutomation(
   const exposureCandidates =
     exposureProtectionCandidates(rawData);
   const lastPlanningCycle = readLastMarketPlanningCycle();
+  const planningStateRevision = marketPlanningStateRevision(config, rawData);
   const marketPlanningDue =
     hasExposureState ||
     exposureCandidates.length > 0 ||
     typeof lastPlanningCycle.tick !== "number" ||
     Game.time - lastPlanningCycle.tick >= MARKET_PLANNING_INTERVAL_TICKS ||
-    lastPlanningCycle.configRevision !== config.configRevision;
+    lastPlanningCycle.configRevision !== config.configRevision ||
+    lastPlanningCycle.stateRevision !== planningStateRevision;
 
   if (
     !config.validForPlanning ||
@@ -919,23 +958,31 @@ export function runLiveMarketSaleAutomation(
         ? "marketPlanningDeferredTicks"
         : "marketFastPathTicks",
     );
-    const result = runAutomation(domainActivityInput);
+    // deferred tick：显式下发 planningAuthorized=false——内层的
+    // exposure 安全 reconcile/drain/latch/pending 照常，planning 不执行。
+    const result = runAutomation({
+      ...domainActivityInput,
+      planningAuthorized: false,
+    });
     flushMarketSaleDiagnostics();
     snapshotMarketPerformanceCounters();
     return result;
   }
   bumpMarketPerformanceCounter("marketPlanningDueTicks");
-  // 记录本 tick 为市场 planning 周期：config revision 一并锚定，revision
-  // 变化（operator 调整配置/permit）会立即触发下一次 planning。
+  // 记录本 tick 为市场 planning 周期：config revision 与 migration 状态
+  // revision 一并锚定，任一变化（operator 调整配置/permit/迁移状态跃迁）
+  // 会立即触发下一次 planning。
   const runtimeForPlanningCycle = Memory.runtime?.marketSaleAutomation as
     (NonNullable<NonNullable<Memory["runtime"]>["marketSaleAutomation"]> & {
       lastPlanningCycleTick?: number;
       lastPlanningConfigRevision?: string;
+      lastPlanningStateRevision?: string;
     })
     | undefined;
   if (runtimeForPlanningCycle) {
     runtimeForPlanningCycle.lastPlanningCycleTick = Game.time;
     runtimeForPlanningCycle.lastPlanningConfigRevision = config.configRevision;
+    runtimeForPlanningCycle.lastPlanningStateRevision = planningStateRevision;
   }
 
   try {
@@ -1084,6 +1131,8 @@ export function runLiveMarketSaleAutomation(
     const result = measureMarketSubPhase("automationEnvelope", () =>
       runAutomation({
         candidates,
+        // due tick：显式授权 full planning（内层仍叠加 RC 新鲜度硬门）。
+        planningAuthorized: true,
         ...(readMarketBaseResourceCandidates
           ? {
               readMarketBaseResourceCandidates,
@@ -1110,6 +1159,7 @@ export function runLiveMarketSaleAutomation(
       }`,
     );
     resetShadowQualification("live_adapter_failed");
-    return runAutomation(domainActivityInput);
+    // fail-closed 重试不带 planning 授权：只保留每 tick 安全语义。
+    return runAutomation({ ...domainActivityInput, planningAuthorized: false });
   }
 }

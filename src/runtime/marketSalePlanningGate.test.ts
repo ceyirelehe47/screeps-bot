@@ -169,6 +169,14 @@ function makeDependencies() {
     sources: {},
     complete: true,
   }));
+  const runAutomation = jest.fn(() => ({
+    requestedMode: "direct",
+    effectiveMode: "direct",
+    phase: "direct",
+    writes: 0,
+    actions: [],
+    rejectedByReason: {},
+  }));
   const dependencies: MarketSaleRuntimeDependencies = {
     collectProtection: collectProtection as never,
     collectPricing: jest.fn(() => ({
@@ -176,16 +184,9 @@ function makeDependencies() {
       asOfDate: "2026-08-29",
       snapshots: {},
     })) as never,
-    runAutomation: jest.fn(() => ({
-      requestedMode: "direct",
-      effectiveMode: "direct",
-      phase: "direct",
-      writes: 0,
-      actions: [],
-      rejectedByReason: {},
-    })) as never,
+    runAutomation: runAutomation as never,
   };
-  return { collectProtection, dependencies };
+  return { collectProtection, runAutomation, dependencies };
 }
 
 describe("market planning interval gate", () => {
@@ -198,26 +199,36 @@ describe("market planning interval gate", () => {
   });
 
   it("runs the full path once per interval and fast-exits in between", () => {
-    const { collectProtection, dependencies } = makeDependencies();
+    const { collectProtection, runAutomation, dependencies } = makeDependencies();
 
-    // 首个周期（无历史锚点）：完整 planning。
+    // 首个周期（无历史锚点）：完整 planning，显式授权下发。
     runLiveMarketSaleAutomation(dependencies);
     expect(collectProtection).toHaveBeenCalledTimes(1);
     const countersAfterFirst = readMarketPerformanceCounters();
     expect(countersAfterFirst.marketPlanningDueTicks).toBe(1);
+    expect(runAutomation).toHaveBeenLastCalledWith(
+      expect.objectContaining({ planningAuthorized: true }),
+    );
 
-    // 周期内（间隔 5 tick）：快速退出，不收集 protection。
+    // 周期内（间隔 5 tick）：快速退出，不收集 protection；
+    // deferred tick 必须显式下发 planningAuthorized=false。
     Game.time += 1;
     Memory.runtime!.resourceControl!.updatedAt = Game.time;
     runLiveMarketSaleAutomation(dependencies);
     expect(collectProtection).toHaveBeenCalledTimes(1);
     expect(readMarketPerformanceCounters().marketPlanningDeferredTicks).toBe(1);
+    expect(runAutomation).toHaveBeenLastCalledWith(
+      expect.objectContaining({ planningAuthorized: false }),
+    );
 
     // 周期到期：恢复完整 planning。
     Game.time += 5;
     Memory.runtime!.resourceControl!.updatedAt = Game.time;
     runLiveMarketSaleAutomation(dependencies);
     expect(collectProtection).toHaveBeenCalledTimes(2);
+    expect(runAutomation).toHaveBeenLastCalledWith(
+      expect.objectContaining({ planningAuthorized: true }),
+    );
   });
 
   it("bypasses the interval immediately when exposure appears", () => {
@@ -257,6 +268,28 @@ describe("market planning interval gate", () => {
       (Memory.runtime!.marketSaleAutomation as { lastPlanningConfigRevision?: string })
         .lastPlanningConfigRevision,
     ).toBe("market-base-resource-v3-r4");
+  });
+
+  it("re-plans immediately after a migration state revision change", () => {
+    const { collectProtection, dependencies } = makeDependencies();
+
+    runLiveMarketSaleAutomation(dependencies);
+    Game.time += 1;
+    Memory.runtime!.resourceControl!.updatedAt = Game.time;
+    // direct 迁移状态机 revision 变化（active → blocked + 原因）：
+    // 状态 revision 标记失配 → 无视分频立即完整路径。
+    const direct = Memory.data!.marketSaleAutomation!.directAutomation as {
+      migrationStatus?: string;
+      migrationBlockedReason?: string;
+    };
+    direct.migrationStatus = "blocked";
+    direct.migrationBlockedReason = "direct_state_missing";
+    runLiveMarketSaleAutomation(dependencies);
+    expect(collectProtection).toHaveBeenCalledTimes(2);
+    expect(
+      (Memory.runtime!.marketSaleAutomation as { lastPlanningStateRevision?: string })
+        .lastPlanningStateRevision,
+    ).toContain("blocked|direct_state_missing");
   });
 
   it("keeps preflight latch/reconcile running every tick regardless of the gate", () => {
