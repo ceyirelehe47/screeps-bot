@@ -1,19 +1,30 @@
 /**
- * EmpireInventoryIndex 只读核心单元测试（影子阶段 Phase 1）：
- * - Store 只枚举实际 key（不探测 RESOURCES_ALL）；
- * - 三层各自每 tick 至多 build 一次、多消费者复用；
- * - 只 energy / 多资源 / 0 库存 / 非基础商品（boost/G/ops）；
- * - 无 Storage / 无 Terminal / 结构摧毁重建 / ID 变化；
- * - global reset 重建、跨 tick 失效；
- * - 只读视图不可污染（冻结数组、全新数组）。
+ * EmpireInventoryIndex 只读核心单元测试（影子阶段 Phase 2）：
+ * - Store 只枚举实际 key（单次 Object.keys，不探测 RESOURCES_ALL）；
+ * - Core/Production 与 Field 各子层每 tick 至多 build 一次、多消费者复用；
+ * - 只读视图与 roomSummaries/roomResources/empireResources 同 tick 缓存；
+ * - Field 房间范围 = 全部可见房间（不限 owned core rooms）；
+ * - creep cargo 从 Game.creeps 全量建立（per-room 查询），power creep 独立；
+ * - 无 Storage / 无 Terminal / 结构摧毁重建 / ID 变化 / global reset；
+ * - 只读视图不可污染（冻结数组、缓存引用）。
  */
 import {
   clearEmpireInventoryForTest,
   getEmpireInventoryCore,
+  getEmpireInventoryCreepCargo,
   getEmpireInventoryField,
+  getEmpireInventoryFieldContainers,
+  getEmpireInventoryPowerCreepCargo,
   getEmpireInventoryProduction,
   readEmpireInventoryCounters,
 } from "@/runtime/empireInventoryIndex";
+
+// 测试直接清 runtimeServices 单例（先例：mountCreep.test.ts），确保
+// TickContext 的 tick 缓存不跨用例污染。
+type RuntimeGlobal = typeof global & { __runtimeServices?: unknown };
+function clearRuntimeServicesForTest(): void {
+  delete (global as RuntimeGlobal).__runtimeServices;
+}
 
 // store 方法放原型上：Object.keys(store) 只暴露资源 key（与引擎 Store 一致）。
 const storePrototype = {
@@ -80,6 +91,7 @@ function toStructure(spec: StructureSpec): AnyStoreStructure {
 
 function installRooms(specs: RoomSpec[]): void {
   const rooms: Record<string, Room> = {};
+  const creeps: Record<string, Creep> = {};
   for (const spec of specs) {
     const structures = (spec.structures ?? []).map(toStructure);
     const room = {
@@ -128,11 +140,6 @@ function installRooms(specs: RoomSpec[]): void {
               id: ruin.id,
               store: makeStore(ruin.resources ?? {}),
             }));
-          case FIND_MY_CREEPS:
-            return (spec.creeps ?? []).map((creep) => ({
-              name: creep.name,
-              store: makeStore(creep.resources),
-            }));
           default:
             return [];
         }
@@ -142,14 +149,25 @@ function installRooms(specs: RoomSpec[]): void {
       (room.terminal as StructureTerminal).cooldown = spec.cooldown ?? 0;
     }
     rooms[spec.name] = room;
+    // creep cargo 数据源是 Game.creeps 全量（按当前所在房间分桶）。
+    for (const creep of spec.creeps ?? []) {
+      creeps[creep.name] = {
+        name: creep.name,
+        store: makeStore(creep.resources),
+        room,
+      } as unknown as Creep;
+    }
   }
   Game.rooms = rooms;
+  Game.creeps = creeps;
 }
 
 describe("EmpireInventoryIndex 只读核心", () => {
   beforeEach(() => {
     Game.time = 5000;
     clearEmpireInventoryForTest();
+    clearRuntimeServicesForTest();
+    Game.creeps = {};
   });
 
   it("只有 energy 的最小帝国：storage/terminal 量、容量、帝国总量", () => {
@@ -262,7 +280,7 @@ describe("EmpireInventoryIndex 只读核心", () => {
     expect(core.empireTotal(RESOURCE_ENERGY)).toBe(0);
   });
 
-  it("同 tick 多消费者只 build 一次；production/field 各自一次", () => {
+  it("同 tick 多消费者只 build 一次；Field 子层各自懒构建一次", () => {
     installRooms([
       {
         name: "E1N57",
@@ -290,10 +308,17 @@ describe("EmpireInventoryIndex 只读核心", () => {
     const field = getEmpireInventoryField();
     getEmpireInventoryField();
 
+    // 入口阶段：Core/Production 各一次 build；Field 聚合入口不触发任何
+    // 子层 build（全部懒）；ensureIndex 复用 5 次（core2/production×2/
+    // field×2，首调用各自 build 1 次不计）。
     const counters = readEmpireInventoryCounters();
     expect(counters.coreLayerBuilds).toBe(1);
     expect(counters.productionLayerBuilds).toBe(1);
-    expect(counters.fieldLayerBuilds).toBe(1);
+    expect(counters.containerLayerBuilds).toBe(0);
+    expect(counters.looseResourceLayerBuilds).toBe(0);
+    expect(counters.deadStoreLayerBuilds).toBe(0);
+    expect(counters.creepCargoLayerBuilds).toBe(0);
+    expect(counters.powerCreepCargoLayerBuilds).toBe(0);
     expect(counters.inventoryReuseHits).toBe(5);
 
     expect(production.factoryCount("E1N57")).toBe(1);
@@ -313,6 +338,88 @@ describe("EmpireInventoryIndex 只读核心", () => {
     expect(core1.storageAmount("NOPE", RESOURCE_ENERGY)).toBe(0);
     expect(production.labCount("NOPE")).toBe(0);
     expect(field.creepTotal("G" as ResourceConstant)).toBe(0);
+
+    // 方法断言后：各子层恰好 build 一次（同 tick 多次调用复用）。
+    const after = readEmpireInventoryCounters();
+    expect(after.containerLayerBuilds).toBe(1);
+    expect(after.looseResourceLayerBuilds).toBe(1);
+    expect(after.deadStoreLayerBuilds).toBe(1);
+    expect(after.creepCargoLayerBuilds).toBe(1);
+    // power creep 子层未被触碰（creepTotal 不触发）。
+    expect(after.powerCreepCargoLayerBuilds).toBe(0);
+  });
+
+  it("Field 房间范围=全部可见房间；per-room creep cargo 与 power creep 独立子层", () => {
+    installRooms([
+      {
+        name: "E1N57",
+        controllerMy: true,
+        storage: { id: "s1", structureType: STRUCTURE_STORAGE, resources: { energy: 100 } },
+        structures: [
+          { id: "c1", structureType: STRUCTURE_CONTAINER, resources: { energy: 70 } },
+        ],
+        dropped: [{ resourceType: RESOURCE_ENERGY, amount: 25 }],
+        creeps: [{ name: "home-hauler", resources: { energy: 30 } }],
+      },
+      {
+        // remote 可见房间：非 owned，不进 Core，但必须进 Field。
+        name: "E2N56",
+        controllerMy: false,
+        structures: [
+          { id: "c2", structureType: STRUCTURE_CONTAINER, resources: { energy: 45 } },
+        ],
+        dropped: [{ resourceType: RESOURCE_UTRIUM, amount: 12 }],
+        creeps: [{ name: "E1N57:remoteMine:E2N56:miner1", resources: { energy: 20, [RESOURCE_UTRIUM]: 8 } }],
+      },
+    ]);
+    // 远采 creep 的 cargo 计入其当前所在房间（E2N56）。
+    Game.creeps["war-duo-1"] = {
+      name: "war-duo-1",
+      store: makeStore({ energy: 5 }),
+      room: Game.rooms["E2N56"],
+    } as unknown as Creep;
+    Game.powerCreeps = {
+      "pc-1": {
+        name: "pc-1",
+        store: makeStore({ ops: 60, energy: 10 }),
+        room: Game.rooms["E1N57"],
+      } as unknown as PowerCreep,
+    };
+
+    const core = getEmpireInventoryCore();
+    expect(core.roomNames).toEqual(["E1N57"]);
+
+    const field = getEmpireInventoryField();
+    // 非 owned 可见房间进 Field（containers/loose 均可见）。
+    expect(field.roomNames).toEqual(["E1N57", "E2N56"]);
+    expect(field.containerCount("E2N56")).toBe(1);
+    expect(field.containerAmount("E2N56", RESOURCE_ENERGY)).toBe(45);
+    expect(field.droppedAmount("E2N56", RESOURCE_UTRIUM)).toBe(12);
+
+    // creep cargo：Game.creeps 全量（含远采/战争单位），按所在房间分桶。
+    const cargo = getEmpireInventoryCreepCargo();
+    expect(cargo.unitsCounted()).toBe(3);
+    expect(cargo.total(RESOURCE_ENERGY)).toBe(55);
+    expect(cargo.roomAmount("E1N57", RESOURCE_ENERGY)).toBe(30);
+    expect(cargo.roomAmount("E2N56", RESOURCE_ENERGY)).toBe(25);
+    expect(cargo.roomAmount("E2N56", RESOURCE_UTRIUM)).toBe(8);
+    expect([...cargo.roomNames()].sort()).toEqual(["E1N57", "E2N56"]);
+    expect(field.creepRoomAmount("E2N56", RESOURCE_UTRIUM)).toBe(8);
+
+    // power creep cargo：独立子层、独立计数。
+    const powerCargo = getEmpireInventoryPowerCreepCargo();
+    expect(powerCargo.unitsCounted()).toBe(1);
+    expect(powerCargo.total("ops" as ResourceConstant)).toBe(60);
+    expect(powerCargo.roomAmount("E1N57", "ops" as ResourceConstant)).toBe(60);
+    expect(field.powerCreepTotal("ops" as ResourceConstant)).toBe(60);
+
+    const counters = readEmpireInventoryCounters();
+    expect(counters.creepCargoLayerBuilds).toBe(1);
+    expect(counters.powerCreepCargoLayerBuilds).toBe(1);
+    // Game.powerCreeps 缺失（global reset 形态）不抛错。
+    delete (Game as Game & { powerCreeps?: Record<string, PowerCreep> }).powerCreeps;
+    Game.time += 1;
+    expect(getEmpireInventoryPowerCreepCargo().unitsCounted()).toBe(0);
   });
 
   it("跨 tick 失效重建：结构摧毁/重建与新 ID 立即可见", () => {
@@ -357,7 +464,7 @@ describe("EmpireInventoryIndex 只读核心", () => {
     expect(getEmpireInventoryCore().empireTotal(RESOURCE_ENERGY)).toBe(999);
   });
 
-  it("调用方不能污染内部数据（冻结数组与全新数组）", () => {
+  it("调用方不能污染内部数据（冻结数组与缓存引用）", () => {
     installRooms([
       { name: "W1N57", storage: { id: "s1", structureType: STRUCTURE_STORAGE, resources: { energy: 10 } } },
     ]);
@@ -368,11 +475,24 @@ describe("EmpireInventoryIndex 只读核心", () => {
     expect(() =>
       (core.empireResources() as unknown as ResourceConstant[]).push(RESOURCE_CATALYST),
     ).toThrow();
-    // roomSummaries 每次返回全新数组，改浅拷贝不影响内部。
+    // roomSummaries：同 tick 缓存同一冻结引用，元素冻结不可改。
     const summaries = core.roomSummaries();
-    (summaries as { roomName: string }[]).length = 0;
-    expect(core.roomSummaries()).toHaveLength(1);
-    // 二次访问的冻结快照仍是同一引用且未被破坏。
+    expect(core.roomSummaries()).toBe(summaries);
+    expect(Object.isFrozen(summaries)).toBe(true);
+    expect(() =>
+      (summaries as unknown as { roomName: string }[]).push({
+        roomName: "HACKED",
+      }),
+    ).toThrow();
+    // roomResources / empireResources：同样缓存冻结快照。
+    const resources = core.roomResources("W1N57");
+    expect(core.roomResources("W1N57")).toBe(resources);
+    expect(resources).toEqual([RESOURCE_ENERGY]);
+    expect(() =>
+      (core.roomResources("W1N57") as unknown as ResourceConstant[]).push(
+        RESOURCE_CATALYST,
+      ),
+    ).toThrow();
     expect(getEmpireInventoryCore().roomNames).toEqual(["W1N57"]);
   });
 
