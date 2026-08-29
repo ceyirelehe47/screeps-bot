@@ -489,4 +489,56 @@ describe("empireInventoryShadow 影子等价验证", () => {
     expect(readEmpireInventoryShadowStatus().oracleChecks).toBe(1);
     expect(readEmpireInventoryShadowStatus().oracleMismatches).toBe(0);
   });
+
+  it("限定 store 总量口径：lab 无参 getUsedCapacity 不含专属槽，oracle 不误报", () => {
+    // 复现线上 tick 73346113 的引擎语义：限定 store（lab/powerSpawn/
+    // nuker）的无参 getUsedCapacity() 不含资源专属槽（lab 只含 energy
+    // 槽）。旧口径（一律无参）会把 mineral 槽持有量当失配；新口径下
+    // 限定 store 用 oracle 全枚举合计，零 mismatch。
+    const installed = installRooms([
+      {
+        name: "W1N57",
+        structures: [
+          {
+            id: "l1",
+            structureType: STRUCTURE_LAB,
+            resources: { energy: 2000, [RESOURCE_UTRIUM]: 5000 },
+          },
+          {
+            id: "p1",
+            structureType: STRUCTURE_POWER_SPAWN,
+            resources: { energy: 500, power: 50 },
+          },
+          {
+            id: "n1",
+            structureType: STRUCTURE_NUKER,
+            resources: { energy: 300000, [RESOURCE_GHODIUM]: 5000 },
+          },
+          { id: "f1", structureType: STRUCTURE_FACTORY, resources: { energy: 40 } },
+        ],
+      },
+    ]);
+    // 引擎式限定 store：覆写无参 getUsedCapacity（lab=energy 槽、
+    // powerSpawn/nuker=0）；factory 是通用 store，保持原型语义。
+    for (const structure of installed.W1N57.structures) {
+      if (structure.structureType === STRUCTURE_FACTORY) continue;
+      const store = structure.store;
+      const bare =
+        structure.structureType === STRUCTURE_LAB ? 2000 : 0;
+      Object.defineProperty(store, "getUsedCapacity", {
+        value: (resource?: ResourceConstant) =>
+          resource !== undefined
+            ? storePrototype.getUsedCapacity.call(store, resource)
+            : bare,
+        enumerable: false,
+      });
+    }
+    runEmpireInventoryShadowCheck({ force: true });
+    const status = readEmpireInventoryShadowStatus();
+    expect(status.parityMismatches).toBe(0);
+    expect(status.oracleMismatches).toBe(0);
+    expect(
+      status.mismatchSamples.find((s) => s.field === "oracleStoreTotal"),
+    ).toBeUndefined();
+  });
 });

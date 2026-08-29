@@ -729,8 +729,12 @@ function compareCreepCargo(
  *   （独立通道：不经过 Object.keys，也不复用 directStoreKeys）；
  * - 逐资源：oracle>0 ∪ 索引>0 的资源全集上比较（index-only 与
  *   oracle-only 资源都记 mismatch）；
- * - 总量：sum(索引 amounts) vs store.getUsedCapacity()（用户指定的
- *   核心不变量）。
+ * - 总量不变量：sum(索引 amounts) === store 总量。总量口径按 store 类型
+ *   区分（线上 tick 73346113 的首轮 oracle 证实引擎语义）：通用 store
+ *   （storage/terminal/container/factory/creep）的无参
+ *   getUsedCapacity() === 全资源合计；限定 store（lab/powerSpawn/nuker）
+ *   的无参值不含资源专属槽（lab 只含 energy 槽，powerSpawn/nuker 恒 0），
+ *   必须用 oracle 侧全枚举合计做总量。
  * 低频执行（每 N 次检查一次 / force 必做），可接受较重探测成本。
  */
 function oracleVerifyStoreGroup(
@@ -740,6 +744,7 @@ function oracleVerifyStoreGroup(
   stores: readonly ({ store: StoreDefinition } | undefined | null)[],
   indexAmountOf: (resource: ResourceConstant) => number,
   indexResourcesOf: () => readonly ResourceConstant[],
+  totalMode: "apiTotal" | "oracleTotal" = "apiTotal",
 ): void {
   const present = stores.filter(
     (store): store is { store: StoreDefinition } => Boolean(store),
@@ -775,14 +780,22 @@ function oracleVerifyStoreGroup(
       );
     }
   }
-  // 总量不变量：sum(索引 amounts) === store.getUsedCapacity()。
+  // 总量不变量：sum(索引 amounts) === store 总量（口径见函数注释）。
   let indexSum = 0;
   for (const resource of indexResourcesOf()) {
     indexSum += indexAmountOf(resource);
   }
   let storeTotal = 0;
-  for (const unit of present) {
-    storeTotal += unit.store.getUsedCapacity() || 0;
+  if (totalMode === "apiTotal") {
+    for (const unit of present) {
+      storeTotal += unit.store.getUsedCapacity() || 0;
+    }
+  } else {
+    // 限定 store：无参 API 不含资源专属槽，用 oracle 侧全枚举合计
+    //（仍独立于索引侧的 key 发现路径）。
+    for (const amount of oracleAmounts.values()) {
+      storeTotal += amount;
+    }
   }
   state.parityChecks += 1;
   if (indexSum !== storeTotal) {
@@ -883,9 +896,12 @@ function runOracleCheck(
                 structure.structureType === group.type && Boolean(structure.store),
             )
           : [];
+        // factory 是通用 store（无参总量口径成立）；lab/powerSpawn/nuker
+        // 是限定 store（无参不含专属槽），总量用 oracle 全枚举口径。
+        const totalMode = group.label === "factory" ? "apiTotal" : "oracleTotal";
         oracleVerifyStoreGroup(
           state, roomName, group.label, directStores,
-          group.amount, group.resources,
+          group.amount, group.resources, totalMode,
         );
       }
     }

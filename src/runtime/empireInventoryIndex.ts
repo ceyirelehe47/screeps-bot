@@ -704,7 +704,12 @@ export interface EmpireInventoryProductionView {
   labResources(roomName: string): readonly ResourceConstant[];
   powerSpawnResources(roomName: string): readonly ResourceConstant[];
   nukerResources(roomName: string): readonly ResourceConstant[];
-  /** 四类结构的 used capacity 总量（每结构 getUsedCapacity() 之和）。 */
+  /**
+   * 四类结构的 used capacity 总量（每结构 getUsedCapacity() 无参之和）。
+   * 引擎语义：通用 store（factory）的无参值=全资源合计；限定 store
+   * （lab/powerSpawn/nuker）的无参值不含资源专属槽（lab 只含 energy
+   * 槽，powerSpawn/nuker 恒 0）——逐资源真实持有量用 *Amount 查询。
+   */
   factoryUsedCapacity(roomName: string): number;
   labUsedCapacity(roomName: string): number;
   powerSpawnUsedCapacity(roomName: string): number;
