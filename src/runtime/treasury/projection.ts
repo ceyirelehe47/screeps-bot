@@ -132,13 +132,17 @@ export function createTreasuryProjectionController(options: {
       string,
       { roomName: string; locationKind: "storage" | "terminal"; resource: string; amount: number }
     >();
+    const seenKeys = new Set<string>();
+    // 第一遍：观察到的每位置/每非零资源 key 归档（base+delta）。
     for (const room of observation.data.rooms) {
       for (const location of [room.storage, room.terminal]) {
         for (const resource of Object.keys(location.amounts)) {
+          const key = overlayKey(location.roomName, location.kind, resource);
+          seenKeys.add(key);
           const base = location.amounts[resource] ?? 0;
-          const delta = state.overlay.get(overlayKey(location.roomName, location.kind, resource)) ?? 0;
+          const delta = state.overlay.get(key) ?? 0;
           if (base !== 0 || delta !== 0) {
-            finals.set(overlayKey(location.roomName, location.kind, resource), {
+            finals.set(key, {
               roomName: location.roomName,
               locationKind: location.kind,
               resource,
@@ -146,20 +150,25 @@ export function createTreasuryProjectionController(options: {
             });
           }
         }
-        // observed 为 0 但存在 overlay 的位置/资源也要归档（例如清空后的净流出）。
-        for (const [key, delta] of state.overlay) {
-          if (finals.has(key)) continue;
-          const [roomName, kind, resource] = key.split(":");
-          if (roomName === location.roomName && kind === location.kind && delta !== 0) {
-            finals.set(key, {
-              roomName,
-              locationKind: kind as "storage" | "terminal",
-              resource,
-              amount: (location.amounts[resource] ?? 0) + delta,
-            });
-          }
-        }
       }
+    }
+    // 第二遍（单次 overlay 遍历）：兜底归档观察未覆盖的 key——资源归零
+    // （base=0 不在稀疏 amounts）或房间/位置已丢失（物理归零，对账时
+    // observedNow=0 与 final 的差异即流出信号，保证对账无静默缺口）。
+    for (const [key, delta] of state.overlay) {
+      if (seenKeys.has(key) || delta === 0) continue;
+      const separator = key.indexOf(":");
+      const secondSeparator = key.indexOf(":", separator + 1);
+      const roomName = key.slice(0, separator);
+      const locationKind = key.slice(separator + 1, secondSeparator) as "storage" | "terminal";
+      const resource = key.slice(secondSeparator + 1);
+      const base = observation.location(roomName, locationKind).amounts[resource] ?? 0;
+      finals.set(key, {
+        roomName,
+        locationKind,
+        resource,
+        amount: base + delta,
+      });
     }
     return finals;
   }

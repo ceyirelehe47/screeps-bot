@@ -234,6 +234,16 @@ describe("Treasury 跨 tick 对账", () => {
     expect(second.previousTick).toBe(2001);
     expect(second.outflowMismatches).toBe(1);
     expect(second.samples[0].diff).toBe(-2_000);
+
+    // 再下一 tick：房间整体丢失（respawn/失守）→ 兜底归档保证对账不静默。
+    Game.time = 2003;
+    Game.rooms = {};
+    treasury.observation();
+    const third = treasury.lastReconciliation()!;
+    expect(third.previousTick).toBe(2002);
+    expect(third.outflowMismatches).toBe(1);
+    expect(third.samples[0].diff).toBe(-97_000);
+    expect(third.samples[0].roomName).toBe("W1N57");
   });
 
   it("首个 tick 无前序状态时不产生对账结论", () => {

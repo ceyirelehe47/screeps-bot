@@ -35,11 +35,19 @@ interface LocationScan {
   amounts: Record<string, number>;
   usedCapacity: number;
   freeCapacity: number;
+  nonZeroKeys: number;
 }
 
 function scanLocation(structure: StructureStorage | StructureTerminal | undefined): LocationScan {
   if (!structure) {
-    return { exists: false, structureId: undefined, amounts: {}, usedCapacity: 0, freeCapacity: 0 };
+    return {
+      exists: false,
+      structureId: undefined,
+      amounts: {},
+      usedCapacity: 0,
+      freeCapacity: 0,
+      nonZeroKeys: 0,
+    };
   }
   // 单次 Object.keys 稀疏枚举：store 本体即资源→数量记录（ts 类型上隐藏）。
   const record = structure.store as unknown as Record<string, unknown>;
@@ -58,6 +66,7 @@ function scanLocation(structure: StructureStorage | StructureTerminal | undefine
     amounts,
     usedCapacity: structure.store.getUsedCapacity(),
     freeCapacity: structure.store.getFreeCapacity(),
+    nonZeroKeys,
   };
 }
 
@@ -186,9 +195,10 @@ export function buildTreasuryObservation(
   for (const room of options.rooms) {
     const storageScan = scanLocation(room.storage ?? undefined);
     const terminalScan = scanLocation(room.terminal ?? undefined);
-    // 只对真实存在的 Store 计数枚举（missing 位置无枚举成本）。
-    if (storageScan.exists) options.onStoreScanned?.(Object.keys(storageScan.amounts).length);
-    if (terminalScan.exists) options.onStoreScanned?.(Object.keys(terminalScan.amounts).length);
+    // 只对真实存在的 Store 计数枚举（missing 位置无枚举成本）；
+    // nonZeroKeys 复用 scanLocation 的单次枚举结果。
+    if (storageScan.exists) options.onStoreScanned?.(storageScan.nonZeroKeys);
+    if (terminalScan.exists) options.onStoreScanned?.(terminalScan.nonZeroKeys);
 
     rooms.push(
       deepFreezeRoom({

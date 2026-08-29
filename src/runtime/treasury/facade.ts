@@ -14,7 +14,6 @@
 
 import {
   buildTreasuryObservation,
-  treasuryLocationBuckets,
 } from "@/runtime/treasury/observation";
 import {
   createTreasuryProjectionController,
@@ -162,12 +161,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       onStoreScanned: (nonZeroKeys) => {
         metrics.storeEnumerations += 1;
         metrics.resourceKeysEnumerated += nonZeroKeys;
+        metrics.nonZeroEntries += nonZeroKeys;
+        metrics.locationsScanned += 1;
       },
     });
-    metrics.locationsScanned += treasuryLocationBuckets(observation).length;
-    for (const bucket of treasuryLocationBuckets(observation)) {
-      metrics.nonZeroEntries += Object.keys(bucket.amounts).length;
-    }
     if (scope === "shared") {
       metrics.observationRebuilds += 1;
       // 对账必须用 shared 观察（fresh 不参与对账链路）。

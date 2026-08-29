@@ -168,6 +168,13 @@ describe("Treasury observation 物理事实", () => {
     // 观察后修改 Game store 不影响已冻结观察。
     (Game.rooms.W1N57.storage!.store as unknown as Record<string, number>).energy = 123;
     expect(first.amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(400_000);
+
+    // 物理事实不持久化：构建/查询路径不向 Memory 写任何观察副本
+    // （Memory 仍只有 mock 初始字段，无 data/runtime/物理数值落盘）。
+    const memorySnapshot = JSON.stringify(Memory);
+    expect(memorySnapshot).toBe(JSON.stringify({ creeps: {}, rooms: {} }));
+    expect(Memory.data).toBeUndefined();
+    expect(Memory.runtime).toBeUndefined();
   });
 
   it("tick 切换重建 observation 且 epoch 单调递增", () => {
