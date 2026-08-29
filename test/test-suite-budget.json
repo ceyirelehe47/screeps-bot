@@ -1,25 +1,25 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "d3c0644",
-    "suites": 197,
-    "tests": 712,
-    "passed": 712,
+    "commit": "ba09ab3",
+    "suites": 199,
+    "tests": 751,
+    "passed": 751,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 197,
-    "tests": 712,
-    "passed": 712,
+    "suites": 199,
+    "tests": 751,
+    "passed": 751,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 54,
+    "highRiskFiles": 56,
     "defaultFiles": 128
   },
   "files": {
@@ -990,22 +990,32 @@
     },
     "src/runtime/treasury/treasuryCore.test.ts": {
       "baseline": 0,
-      "budget": 9,
+      "budget": 15,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryProjection.test.ts": {
       "baseline": 0,
-      "budget": 8,
+      "budget": 15,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryCommitments.test.ts": {
       "baseline": 0,
-      "budget": 6,
+      "budget": 12,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryShadow.test.ts": {
       "baseline": 0,
       "budget": 6,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryLifecycle.test.ts": {
+      "baseline": 0,
+      "budget": 18,
+      "tier": "high-risk"
+    },
+    "test/treasuryCommitmentInvalidationBoundaries.test.ts": {
+      "baseline": 0,
+      "budget": 2,
       "tier": "high-risk"
     }
   }
