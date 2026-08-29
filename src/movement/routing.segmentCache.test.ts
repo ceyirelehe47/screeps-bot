@@ -464,9 +464,13 @@ describe("moveToTargetRoom multi-room segment cache", () => {
     expect(travel(first)).toBe(OK);
     expect(travel(second)).toBe(OK);
 
-    expect(search).toHaveBeenCalledTimes(2);
+    // 同 tick 单飞：第二个 creep 复用第一个的完整搜索（sharedSearchHits）并
+    // 建立自己的 segment，因此本 tick 只有 1 次搜索；下一 tick 两者均走
+    // segment 命中，搜索总数保持 1。
+    expect(search).toHaveBeenCalledTimes(1);
     expect(Game.map.getRoomStatus).toHaveBeenCalledTimes(1);
     expect(Game.map.getRoomStatus).toHaveBeenCalledWith("W1N2");
+    expect(getMovementAnalyticsForTest().totals.sharedSearchHits).toBe(1);
     expect(getMovementAnalyticsForTest().totals.multiRoomSegmentHits).toBe(2);
   });
 

@@ -61,6 +61,17 @@ export interface TravelState {
   cachedPathCursor?: number;
   /** 上次跟随的 colonization 缓存路径 key；key 变化（版本升级或重新生成）时重置 cachedPathCursor。 */
   cachedPathKey?: string;
+  /**
+   * 完整跨房搜索的退避状态（防 stuck 期逐 tick 10000-op 重搜）：
+   * - fullSearchBackoffUntil：下一次允许完整搜索的 tick；
+   * - fullSearchBackoffLevel：连续无进展的搜索级别，驱动 1/2/4/8/16 指数间隔；
+   * - fullSearchSignature：上次搜索的输入签名（route/danger/target/options 折叠），
+   *   变化（如危险房集合更新）时立即清零退避允许重试。
+   * creep 位置恢复移动（stuckTicks 归零）时整体清除。
+   */
+  fullSearchBackoffUntil?: number;
+  fullSearchBackoffLevel?: number;
+  fullSearchSignature?: string;
 }
 
 export interface MovePathState {

@@ -29,6 +29,17 @@ function getHomeRoomName(creep: Creep): string {
   return creep.memory.configName?.split(":")[0] || creep.room.name;
 }
 
+// 远采任务只接受基本方向相邻房（CARDINAL_EXIT_DIRECTIONS 约束），去程/
+// 回程路线由任务结构直接确定为两房序列，无需持久化或失效管理；传入错误
+// 序列（未来若放宽相邻约束）时 routing 层会自然回退到动态路线，安全。
+function getOutboundEncodedRoute(homeRoomName: string, targetRoom: string): string {
+  return `${homeRoomName}|${targetRoom}`;
+}
+
+function getRetreatEncodedRoute(homeRoomName: string, targetRoom: string): string {
+  return `${targetRoom}|${homeRoomName}`;
+}
+
 function isRemoteSuspendedOrDangerous(targetRoom: string): boolean {
   const tick = Game.time;
   if (safetyCacheTick !== tick) {
@@ -295,7 +306,7 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
 
       if (isRemoteSuspendedOrDangerous(targetRoom)) {
         if (creep.room.name !== homeRoomName) {
-          moveToTargetRoom(creep, homeRoomName, undefined, { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
+          moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
         }
         return false;
       }
@@ -306,7 +317,7 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
       }
 
       if (creep.room.name !== targetRoom) {
-        moveToTargetRoom(creep, targetRoom, undefined, { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
+        moveToTargetRoom(creep, targetRoom, getOutboundEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
         if (getCarriedEnergy(creep) > MAINTENANCE_RESERVE_ENERGY) {
           runMaintenance(creep);
         }
@@ -409,7 +420,7 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
       if (isEmpty(creep)) {
         if (suspended) {
           if (creep.room.name !== homeRoomName) {
-            moveToTargetRoom(creep, homeRoomName, undefined, { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
+            moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
           }
           return false;
         }
@@ -420,12 +431,12 @@ export const remoteMiningCarrierRole: RoleFactory = (targetRoom: string, sourceI
       }
 
       if (suspended && creep.room.name !== homeRoomName) {
-        moveToTargetRoom(creep, homeRoomName, undefined, { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
+        moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
         return false;
       }
 
       if (!suspended && creep.room.name !== homeRoomName) {
-        moveToTargetRoom(creep, homeRoomName, undefined, { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
+        moveToTargetRoom(creep, homeRoomName, getRetreatEncodedRoute(homeRoomName, targetRoom), { plainCost: 2, swampCost: 10, travelRange: 3, reusePath: 10 });
         if (getCarriedEnergy(creep) > MAINTENANCE_RESERVE_ENERGY) {
           runMaintenance(creep);
         }

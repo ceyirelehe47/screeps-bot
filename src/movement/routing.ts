@@ -29,6 +29,21 @@ const MULTI_ROOM_SEGMENT_MIN_REUSE_TTL = 20;
 const MULTI_ROOM_SEGMENT_MAX_REUSE_TTL = 50;
 const MULTI_ROOM_SEGMENT_HARD_TTL = 150;
 const MULTI_ROOM_SEGMENT_MAX_STEPS = 100;
+// 完整跨房搜索退避：stuck 期间同一输入的 10000-op PathFinder.search 按
+// 1/2/4/8/16 tick 指数间隔重试，跳过期间回落到出口方向的单房寻路 fallback。
+// 位置恢复移动或输入签名变化（危险房集合 / 路线更新）时立即清零。
+const FULL_SEARCH_BACKOFF_INTERVALS = [1, 2, 4, 8, 16];
+// 同 tick 相同输入（房间/目标/路线/避让/参数）的完整搜索结果共享：
+// 第二个及后续 creep 按最近位置对齐进入共享路径，不再各自触发搜索。
+// 仅存 global heap、每 tick 失效、容量上限防意外膨胀；global reset 自然重建。
+const SHARED_MULTI_ROOM_SEARCH_MAX = 32;
+interface SharedMultiRoomSearchEntry {
+  tick: number;
+  incomplete: boolean;
+  /** 只读共享：plain StoredRoomPosition 拷贝，共享方不得修改。 */
+  positions: StoredRoomPosition[];
+}
+const sharedMultiRoomSearchCache = new Map<string, SharedMultiRoomSearchEntry>();
 const dynamicNextRoomCache: Record<string, DynamicRouteCacheEntry> = {};
 let liveRoomSafetyCacheTick = -1;
 let liveRoomSafetyCache: Record<string, boolean> = {};
@@ -54,6 +69,77 @@ export function clearRoutingCachesForTest(): void {
   liveRoomSafetyCache = {};
   travelMatrixCache.clear();
   travelMatrixBuildCount = 0;
+  sharedMultiRoomSearchCache.clear();
+}
+
+/** 仅供测试观测同 tick 共享搜索缓存条目数。 */
+export function getSharedMultiRoomSearchCacheSizeForTest(): number {
+  return sharedMultiRoomSearchCache.size;
+}
+
+function getSharedMultiRoomSearch(key: string, tick: number): SharedMultiRoomSearchEntry | null {
+  const entry = sharedMultiRoomSearchCache.get(key);
+  if (!entry || entry.tick !== tick) {
+    return null;
+  }
+  return entry;
+}
+
+function storeSharedMultiRoomSearch(key: string, tick: number, search: PathFinderPath): void {
+  // 懒清理：tick 变化后首个写入方全清上一代条目，容量超限时淘汰首个（插入序）。
+  for (const [cachedKey, entry] of sharedMultiRoomSearchCache) {
+    if (entry.tick !== tick) {
+      sharedMultiRoomSearchCache.delete(cachedKey);
+    }
+  }
+  while (sharedMultiRoomSearchCache.size >= SHARED_MULTI_ROOM_SEARCH_MAX) {
+    const oldestKey = sharedMultiRoomSearchCache.keys().next().value;
+    if (oldestKey === undefined) {
+      break;
+    }
+    sharedMultiRoomSearchCache.delete(oldestKey);
+  }
+  sharedMultiRoomSearchCache.set(key, {
+    tick,
+    incomplete: search.incomplete,
+    positions: search.path.map((pos) => ({ x: pos.x, y: pos.y, roomName: pos.roomName })),
+  });
+}
+
+/** creep 按最近位置对齐进入只读共享路径，返回应踏出的下一步；对不上返回 null。 */
+function alignToSharedMultiRoomSearch(creep: Creep, shared: SharedMultiRoomSearchEntry): StoredRoomPosition | null {
+  if (shared.incomplete || shared.positions.length === 0) {
+    return null;
+  }
+  // 与 colonization 共享路径相同的恢复策略：先精确窗口/全量对齐，再回退到
+  // 距离 <=1 的最近 step；都不满足说明该 creep 不在共享走廊上，回落独立搜索。
+  const cursorState: TravelState = { targetRoom: "", stuckTicks: 0, cachedPathCursor: -1 };
+  return getNextCachedTravelPathStep(creep.pos, cursorState, shared.positions);
+}
+
+function resetFullSearchBackoff(travelState: TravelState): void {
+  if (travelState.fullSearchBackoffUntil !== undefined || travelState.fullSearchBackoffLevel !== undefined) {
+    delete travelState.fullSearchBackoffUntil;
+    delete travelState.fullSearchBackoffLevel;
+    delete travelState.fullSearchSignature;
+  }
+}
+
+/** 输入签名变化（路线/危险房/目标/关键参数）时清零退避，允许立即重试。 */
+function syncFullSearchSignature(travelState: TravelState, signature: string): void {
+  if (travelState.fullSearchSignature !== signature) {
+    travelState.fullSearchSignature = signature;
+    delete travelState.fullSearchBackoffUntil;
+    delete travelState.fullSearchBackoffLevel;
+  }
+}
+
+function scheduleFullSearchBackoff(travelState: TravelState): void {
+  const level = Math.min(travelState.fullSearchBackoffLevel ?? 0, FULL_SEARCH_BACKOFF_INTERVALS.length - 1);
+  travelState.fullSearchBackoffLevel = level + 1;
+  // interval = 搜索后跳过的 tick 数：T+1..T+interval 跳过，T+interval+1 起可重试。
+  travelState.fullSearchBackoffUntil =
+    Game.time + FULL_SEARCH_BACKOFF_INTERVALS[Math.min(level, FULL_SEARCH_BACKOFF_INTERVALS.length - 1)] + 1;
 }
 
 export function getTravelMatrixBuildCountForTest(): number {
@@ -118,7 +204,11 @@ export function moveToTargetRoom(
   if ((travelState.lastPosKey === currentPosKey || repeatedExitTransition) && creep.fatigue === 0) {
     travelState.stuckTicks += 1;
   } else {
-    travelState.stuckTicks = 0;
+    // 位置恢复移动（或疲劳恢复）：stuck 与完整搜索退避一并清零。
+    if (travelState.stuckTicks !== 0) {
+      travelState.stuckTicks = 0;
+    }
+    resetFullSearchBackoff(travelState);
   }
   travelState.lastPosKey = currentPosKey;
   travelState.lastWasExit = currentOnExit;
@@ -708,6 +798,41 @@ function getValidatedRoomTransition(
   return exits?.[transition.exitDirection] === nextStep.roomName ? transition : null;
 }
 
+function cacheMultiRoomSegmentFromPath(
+  creep: Creep,
+  travelState: TravelState,
+  positions: Array<Pick<RoomPosition, "x" | "y" | "roomName">>,
+  nextRoom: string,
+  options: MoveToTargetOptions,
+  segmentKey: string,
+  targetRoom: string,
+): void {
+  if (!canCacheMultiRoomSegment(options)) {
+    return;
+  }
+  const extracted = extractCurrentRoomSegment(positions, creep.pos, nextRoom);
+  if (!extracted || extracted.positions.length === 0) {
+    return;
+  }
+  // segment 对象（含 per-creep cursor）与 positions 数组均为本次提取的独立
+  // 拷贝，不与共享搜索结果或其他 creep 的 segment 共享可变状态。
+  const reuseTtl = getMultiRoomSegmentReuseTtl(options);
+  const segment: MultiRoomTravelSegment = {
+    key: segmentKey,
+    currentRoom: creep.room.name,
+    positions: extracted.positions,
+    transitionIndex: extracted.transitionIndex,
+    cursor: -1,
+    reuseTtl,
+    generatedAt: Game.time,
+    expiresAt: Game.time + reuseTtl,
+    hardExpiresAt: Game.time + MULTI_ROOM_SEGMENT_HARD_TTL,
+  };
+  if (isMultiRoomSegmentLiveSafe(segment, targetRoom)) {
+    travelState.multiRoomSegment = segment;
+  }
+}
+
 function moveAlongMultiRoomPath(
   creep: Creep,
   targetRoom: string,
@@ -719,6 +844,47 @@ function moveAlongMultiRoomPath(
   options: MoveToTargetOptions,
   travelState: TravelState,
 ): ScreepsReturnCode {
+  const searchKey = buildMultiRoomSegmentKey(
+    creep.room.name,
+    targetRoom,
+    nextRoom,
+    hasFixedRoute,
+    routeRooms,
+    dangerousRooms,
+    range,
+    options,
+  );
+  syncFullSearchSignature(travelState, searchKey);
+
+  // 同 tick 单飞：相同输入的完整搜索结果按最近位置对齐复用，后续 creep
+  // 不再触发各自 10000-op 搜索；对齐不上（不在共享走廊）则回落独立搜索。
+  const shared = getSharedMultiRoomSearch(searchKey, Game.time);
+  if (shared) {
+    const sharedNextStep = alignToSharedMultiRoomSearch(creep, shared);
+    if (sharedNextStep) {
+      // 共享命中同样为 creep 建立自己的 segment（独立拷贝），保证下一 tick
+      // 走 segment 复用而不是再次依赖共享缓存。
+      cacheMultiRoomSegmentFromPath(creep, travelState, shared.positions, nextRoom, options, searchKey, targetRoom);
+      const sharedResult = followStoredTravelStep(creep, sharedNextStep);
+      if (sharedResult === OK || sharedResult === ERR_TIRED || sharedResult === ERR_BUSY) {
+        recordMovementMetric("sharedSearchHits", creep.room.name);
+        return sharedResult;
+      }
+    }
+  }
+
+  // 退避：仅 stuck（无进展达到阈值）期间的重复完整搜索按指数间隔重试，
+  // 常规跨房移动不受影响；跳过时返回 ERR_NO_PATH 落入调用方的出口方向
+  // 单房寻路 fallback（局部恢复，成本一个量级更低）。
+  if (
+    travelState.stuckTicks >= 2 &&
+    travelState.fullSearchBackoffUntil !== undefined &&
+    Game.time < travelState.fullSearchBackoffUntil
+  ) {
+    recordMovementMetric("fullSearchBackoffSkips", creep.room.name);
+    return ERR_NO_PATH;
+  }
+
   const targetPos = new RoomPosition(25, 25, targetRoom);
   recordMovementMetric("multiRoomSearches", creep.room.name);
   const search = measureCreepPathing(() =>
@@ -734,45 +900,24 @@ function moveAlongMultiRoomPath(
       },
     ),
   );
+  // stuck 期的搜索已执行：无论成败都安排下一次重试间隔，防止被阻断的任务
+  // 退化为逐 tick 重搜（fallback 路径仍能维持局部移动）。
+  if (travelState.stuckTicks >= 2) {
+    scheduleFullSearchBackoff(travelState);
+  }
 
   if (search.incomplete || search.path.length === 0) {
     return ERR_NO_PATH;
   }
+
+  storeSharedMultiRoomSearch(searchKey, Game.time, search);
 
   const nextPos = search.path[0];
   if (nextPos.roomName !== creep.room.name || creep.pos.getRangeTo(nextPos) !== 1) {
     return ERR_NO_PATH;
   }
 
-  if (canCacheMultiRoomSegment(options)) {
-    const extracted = extractCurrentRoomSegment(search.path, creep.pos, nextRoom);
-    if (extracted && extracted.positions.length > 0) {
-      const reuseTtl = getMultiRoomSegmentReuseTtl(options);
-      const segment: MultiRoomTravelSegment = {
-        key: buildMultiRoomSegmentKey(
-          creep.room.name,
-          targetRoom,
-          nextRoom,
-          hasFixedRoute,
-          routeRooms,
-          dangerousRooms,
-          range,
-          options,
-        ),
-        currentRoom: creep.room.name,
-        positions: extracted.positions,
-        transitionIndex: extracted.transitionIndex,
-        cursor: -1,
-        reuseTtl,
-        generatedAt: Game.time,
-        expiresAt: Game.time + reuseTtl,
-        hardExpiresAt: Game.time + MULTI_ROOM_SEGMENT_HARD_TTL,
-      };
-      if (isMultiRoomSegmentLiveSafe(segment, targetRoom)) {
-        travelState.multiRoomSegment = segment;
-      }
-    }
-  }
+  cacheMultiRoomSegmentFromPath(creep, travelState, search.path, nextRoom, options, searchKey, targetRoom);
 
   return moveToAdjacentPosition(creep, nextPos);
 }
@@ -783,7 +928,7 @@ interface ExtractedMultiRoomSegment {
 }
 
 function extractCurrentRoomSegment(
-  path: RoomPosition[],
+  path: Array<Pick<RoomPosition, "x" | "y" | "roomName">>,
   origin: RoomPosition,
   expectedNextRoom: string,
 ): ExtractedMultiRoomSegment | null {
@@ -1111,6 +1256,7 @@ function findDynamicNextRoom(
   const cacheKey = buildDynamicRouteCacheKey(currentRoom, targetRoom, preferredRooms, avoidRooms);
   const cached = dynamicNextRoomCache[cacheKey];
   if (cached && cached.expiresAt > Game.time) {
+    recordMovementMetric("dynamicRouteCacheHits");
     return cached.nextRoom;
   }
 

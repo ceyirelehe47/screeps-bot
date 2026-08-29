@@ -1,5 +1,5 @@
 import { clearRemoteSafetyCacheForTest, remoteMiningCarrierRole } from "@/roles/remoteMiningCarrier";
-import { clearMovementState, moveToTarget } from "@/roles/shared";
+import { clearMovementState, moveToTarget, moveToTargetRoom } from "@/roles/shared";
 
 jest.mock("@/roles/shared", () => ({
   clearMovementState: jest.fn(),
@@ -215,5 +215,59 @@ describe("container approach behavior", () => {
     expect(containerCalls).toHaveLength(0);
     expect(clearMovementState).toHaveBeenCalledWith(creep);
     expect(creep.move).not.toHaveBeenCalled();
+  });
+});
+
+describe("stable cardinal route passing", () => {
+  function roomChangeCalls(): any[] {
+    return (moveToTargetRoom as jest.Mock).mock.calls;
+  }
+
+  beforeEach(() => {
+    Memory.data = {
+      remoteMining: {
+        W5N5: {
+          sourceRoom: "W1N1",
+          targetRoom: "W5N5",
+          status: "active",
+          sourceIds: ["src1"],
+          assignedAt: 50,
+          updatedAt: 50,
+        },
+      },
+    } as Memory["data"];
+  });
+
+  it("outbound travel passes the home->target two-room route", () => {
+    const homeRoom = makeRoom("W1N1");
+    const creep = makeCreep({ room: homeRoom, energy: 0 });
+
+    remoteMiningCarrierRole("W5N5", "src1").source?.(creep);
+
+    const calls = roomChangeCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0][1]).toBe("W5N5");
+    expect(calls[0][2]).toBe("W1N1|W5N5");
+  });
+
+  it("suspended task retreat passes the reversed target->home route from both phases", () => {
+    Memory.data!.remoteMining!.W5N5.status = "suspended";
+    const targetRoom = makeRoom("W5N5");
+    const creepInTarget = makeCreep({ room: targetRoom, energy: 0 });
+    const loadedCreep = makeCreep({
+      room: targetRoom,
+      energy: 400,
+      name: "rmc-loaded",
+    });
+
+    remoteMiningCarrierRole("W5N5", "src1").source?.(creepInTarget);
+    remoteMiningCarrierRole("W5N5", "src1").target?.(loadedCreep);
+
+    const calls = roomChangeCalls();
+    expect(calls).toHaveLength(2);
+    for (const call of calls) {
+      expect(call[1]).toBe("W1N1");
+      expect(call[2]).toBe("W5N5|W1N1");
+    }
   });
 });
