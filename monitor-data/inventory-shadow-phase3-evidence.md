@@ -48,3 +48,35 @@
    `*FreeCapacityFor`；构建期固定允许集 ∪ 已持有资源实测；shadow 同口径对账。
 4. **子层轮转**：默认 Core→Production→Field 单层；force（options 或
    `Memory.runtime.inventoryShadowForce`）全层 + oracle；oracle 每 5 次一次。
+
+## Canary 观察结果（06ffedb，2026-08-29）
+
+- **观察窗**：部署（global reset）后 ~73346470 → 73347913，共 **1,443 tick**（≥1000）。
+- **检查次数**：~39 次（36 次默认轮转 + 3 次 force；≥25）。
+- **parity**：parityChecks 累计 **22,982** 项；parityMismatches **0**；
+  lastCheckMismatches 每次检查均为 **0**。
+- **oracle**：oracleChecks **15** 轮（12 轮常规 + 3 次 force）；
+  oracleMismatches **0**。
+- **index counters（终值）**：inventoryBuilds 42、inventoryReuseHits 3,093、
+  storeObjectsScanned 4,646、resourceKeysEnumerated 20,115、
+  coreLayerBuilds 42、productionLayerBuilds 20、containerLayerBuilds 20、
+  looseResourceLayerBuilds 20、deadStoreLayerBuilds 19、
+  creepCargoLayerBuilds 20、powerCreepCargoLayerBuilds 20。
+- **Shadow CPU**：
+  - 默认轮转单层检查当拍：1.84 / 1.99 / 2.57（三个检查 tick 实测；
+    Phase 2 全量单次为 5.35–5.56）；
+  - force 全层 + 全层 oracle 当拍：17.23 / 29.09（operator 诊断路径，
+    不在默认线上节奏中）；
+  - empireInventoryShadow 摊平 EMA：**0.0816/tick**（Phase 2 为 0.124）；
+  - 全 tick 总 CPU（154 样本）：avg 68.1 / p95 104.4 / max 139.8
+    （p95/max 含 force 诊断 tick）。
+- **中途发现并修复（SHADOW_PARITY 排查）**：首部署（8bf7112）首轮 oracle
+  报 19 项 oracleStoreTotal（全部为 lab/powerSpawn/nuker）——逐资源
+  oracleResourceAmount 零失配证明索引口径正确，总量对照口径对限定 store
+  错用了无参 getUsedCapacity()。已修复（c3284cb：totalMode 按通用/限定
+  store 区分）并重部署（06ffedb）后从零复验，全窗零 mismatch。
+- **市场状态**：保持 v3-r3（未启用 r4）。marketPerf 每 tick 深恢复持续
+  推进（观察窗内 498→1,405），无 fee gate 异常拒绝，生产 fee ledger
+  完好未触发 fail-closed blocker。
+- 采集原始数据：monitor-data/collect-inventory-phase3{,-v2,-v3}.jsonl
+  （本地留存，不入库）。
