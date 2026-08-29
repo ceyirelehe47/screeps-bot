@@ -1,18 +1,18 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "d09b140",
+    "commit": "c3284cb",
     "suites": 193,
-    "tests": 682,
-    "passed": 682,
+    "tests": 683,
+    "passed": 683,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
     "suites": 193,
-    "tests": 682,
-    "passed": 682,
+    "tests": 683,
+    "passed": 683,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -980,7 +980,7 @@
     },
     "src/runtime/empireInventoryShadow.test.ts": {
       "baseline": 0,
-      "budget": 11,
+      "budget": 12,
       "tier": "high-risk"
     },
     "src/runtime/empireInventoryBenchmark.test.ts": {

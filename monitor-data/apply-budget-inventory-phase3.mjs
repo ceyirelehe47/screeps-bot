@@ -30,7 +30,7 @@ b.allocation = {
 };
 fs.writeFileSync(budgetPath, JSON.stringify(b, null, 2) + "\n");
 console.log("budget updated:", JSON.stringify({ baseline: NEW_BASELINE, suites, tests, allocation: b.allocation }));
-if (tests !== 682 || suites !== 193) {
-  console.error("MISMATCH: expected 193/682");
+XXX {
+  console.error("MISMATCH: expected 193/683");
   process.exit(1);
 }
