@@ -1,25 +1,25 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "56a7ba5",
-    "suites": 187,
-    "tests": 628,
-    "passed": 628,
+    "commit": "38a6b43",
+    "suites": 188,
+    "tests": 632,
+    "passed": 632,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 187,
-    "tests": 628,
-    "passed": 628,
+    "suites": 188,
+    "tests": 632,
+    "passed": 632,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 44,
+    "highRiskFiles": 45,
     "defaultFiles": 128
   },
   "files": {
@@ -956,6 +956,11 @@
     "src/runtime/marketSaleSession.test.ts": {
       "baseline": 0,
       "budget": 6,
+      "tier": "high-risk"
+    },
+    "src/runtime/marketSalePlanningGate.test.ts": {
+      "baseline": 0,
+      "budget": 4,
       "tier": "high-risk"
     }
   }
