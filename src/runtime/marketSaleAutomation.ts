@@ -3283,6 +3283,31 @@ function registerMarketBaseResourceCanonicalRootThisTick(value: object): void {
   }
 }
 
+// 跨 tick 数据根快速验证状态（提交 C）：引用相等 + TTL 兜底，见
+// ensureDataState 内注释。模块级变量随 global reset 一并清零。
+const MARKET_DEEP_AUDIT_INTERVAL = 500;
+let verifiedDataRoot: MarketSaleDataState | undefined;
+let verifiedDataRootTick = -1;
+
+/** 仅供测试：观测快速路径是否命中。 */
+export function isMarketDataRootFastPathArmedForTest(): boolean {
+  return verifiedDataRoot !== undefined;
+}
+
+/** 仅供测试：清除跨 tick 验证标记（模拟 global reset）。 */
+export function clearVerifiedMarketDataRootForTest(): void {
+  verifiedDataRoot = undefined;
+  verifiedDataRootTick = -1;
+}
+
+// 仅供测试/低频诊断：深恢复（完整 ensureDataState）执行次数；生产热路径
+// 不读取。跨 tick 快速路径命中的 tick 不递增。
+let marketDataStateDeepRecoveries = 0;
+
+export function getMarketDataStateDeepRecoveriesForTest(): number {
+  return marketDataStateDeepRecoveries;
+}
+
 function ensureDataState(): MarketSaleDataState {
   if (!Memory.data) Memory.data = {};
   const rawMarketSaleAutomation = Memory.data.marketSaleAutomation as unknown;
@@ -3294,6 +3319,24 @@ function ensureDataState(): MarketSaleDataState {
     Object.isFrozen(rawMarketSaleAutomation.directAutomation)
   ) {
     return rawMarketSaleAutomation as unknown as MarketSaleDataState;
+  }
+  // ── 跨 tick 快速路径（提交 C）───────────────────────────────────────────
+  // 上一 tick 深恢复验证过的根对象引用仍 === Memory 当前根：期间没有任何
+  // 链路替换根（市场 commit 替换后自动失配，外部赋值同理），内容仍为已
+  // 验证的 canonical 状态，本 tick 跳过全量恢复。兜底：
+  // - MARKET_DEEP_AUDIT_INTERVAL 到期强制一次完整恢复/审计；
+  // - global reset 后模块变量清零 → 完整恢复；
+  // - 根被替换（含 CPU cut 后 Memory 重解析）→ 引用失配 → 完整恢复；
+  // - 损坏检测不依赖本层：structuralMarketSaleWriteBlocker 与 V3 canonical
+  //   校验在 reconcile 层每 tick 执行。
+  // 正常 planning commit 后的第一 tick 会完整恢复一次（引用已变），
+  // 属保守正确路径。
+  if (
+    verifiedDataRoot !== undefined &&
+    verifiedDataRoot === rawMarketSaleAutomation &&
+    Game.time - verifiedDataRootTick <= MARKET_DEEP_AUDIT_INTERVAL
+  ) {
+    return verifiedDataRoot;
   }
   if (rawMarketSaleAutomation === undefined) {
     Memory.data.marketSaleAutomation =
@@ -3465,6 +3508,10 @@ function ensureDataState(): MarketSaleDataState {
   Memory.data.marketSaleAutomation = committedData as unknown as NonNullable<
     NonNullable<Memory["data"]>["marketSaleAutomation"]
   >;
+  // 深恢复完成的原子 commit 即验证点：标记供后续 tick 快速路径复用。
+  verifiedDataRoot = committedData;
+  verifiedDataRootTick = Game.time;
+  marketDataStateDeepRecoveries += 1;
   // 保护账本和 carrier 仍读取兼容字段；正常返回时它与 Direct WAL
   // 使用同一对象，写入顺序同时覆盖 CPU 截断恢复。
   return committedData;
@@ -3555,7 +3602,9 @@ function makeContext(): RunContext {
     collectMarketSaleDomainActivity(data),
   );
   const runtime = ensureRuntimeState();
-  const liveOrders = measureMarketSubPhase("liveOrdersSnapshot", () => readLiveOrders());
+  const liveOrders = hasLiveOrderConsumers(data)
+    ? measureMarketSubPhase("liveOrdersSnapshot", () => readLiveOrders())
+    : [];
   return {
     config,
     data,
@@ -3570,6 +3619,22 @@ function makeContext(): RunContext {
     reservationAmount: domainActivity.reservationAmount,
     marketDomainActivityValid: domainActivity.valid,
   };
+}
+
+// liveOrders 全量快照（复制+排序全部 Game.market.orders）只服务于
+// managed/pending 对账、drain cancel 与 planning tick 的下单 slots/fingerprint
+// 基线。无这些消费者时（线上常态：无 exposure 的普通 tick）跳过读取；
+// 一旦出现 managed/pending（新 exposure）或进入 planning tick 自动恢复全量。
+function hasLiveOrderConsumers(data: MarketSaleDataState): boolean {
+  if (Object.keys(data.managedOrders).length > 0) return true;
+  if (data.pendingCreate !== undefined) return true;
+  if (Object.keys(data.pendingMutations).length > 0) return true;
+  if (Object.keys(data.pendingDirectDeals).length > 0) return true;
+  const drainPhase = data.drain?.phase;
+  if (drainPhase === "requested" || drainPhase === "draining") return true;
+  // planning tick：fee gate 的 orderSlots 与 pendingCreate 的
+  // baselineOrderFingerprints 需要真实账号订单视图。
+  return Memory.runtime?.resourceControl?.updatedAt === Game.time;
 }
 
 // ─── MarketTickSession ────────────────────────────────────────────────────────
@@ -7030,6 +7095,10 @@ function commitMarketSaleDataSnapshot(data: MarketSaleDataState): void {
   Memory.data!.marketSaleAutomation = data as unknown as NonNullable<
     NonNullable<Memory["data"]>["marketSaleAutomation"]
   >;
+  // commit 的输入是已验证状态的受控变换，原子落盘即验证点：维持跨 tick
+  // 快速路径的引用标记，避免每次 planning commit 后退回全量恢复。
+  verifiedDataRoot = data;
+  verifiedDataRootTick = Game.time;
 }
 
 function commitContextMarketSaleData(
