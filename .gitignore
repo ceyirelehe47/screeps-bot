@@ -16,6 +16,14 @@ monitor-data/*
 !monitor-data/collect-segment-baseline2.log
 !monitor-data/collect-segment-canary2.log
 !monitor-data/derived-canary2/
+!monitor-data/analyze-canary3.mjs
+!monitor-data/apply-budget-cpu3.mjs
+!monitor-data/collect-jest-counts.cjs
+!monitor-data/set-canary3-config.cjs
+!monitor-data/derived-canary3/
+# collect-canary3.log 不再入库：Screeps 429 错误响应体内含带 token 的
+# noratelimit 链接（历史版本截断后泄露 token 前缀，已重写历史清除）；
+# 磁盘原始日志由 derived-canary3/log-summary.json 的 SHA-256 锚定。
 graphify-out/
 .graphify*
 .DS_Store

@@ -1,0 +1,17 @@
+{
+  "description": "collect-canary3.log 脱敏摘要：原始采集日志不入库，仅锚定哈希与派生统计",
+  "rawLogSha256": "ea61ef95b2af5bd896602bbd86a925b067a64598629763f8376abfa07d4318cb",
+  "rawLogBytes": 233388,
+  "lineCount": 447,
+  "errorLineCount": 36,
+  "sensitivePatternLineCount": 33,
+  "sensitiveKinds": [
+    "screeps.com /account/auth-tokens/noratelimit?token= URL（Screeps 429 响应体，仅截断前缀）"
+  ],
+  "redactedSamples": [
+    "[monitor][memory][error] HTTP 429 for /api/user/memory: Rate limit exceeded, retry after 36531905ms or disable rate limiting using this link: https://screeps.com/a/#!/account/auth-tokens/noratelimit?token=<redacted> | remaining=0",
+    "[monitor][memory][error] HTTP 429 for /api/user/memory: Rate limit exceeded, retry after 36506665ms or disable rate limiting using this link: https://screeps.com/a/#!/account/auth-tokens/noratelimit?token=<redacted> | remaining=0",
+    "[monitor][memory][error] HTTP 429 for /api/user/memory: Rate limit exceeded, retry after 36481864ms or disable rate limiting using this link: https://screeps.com/a/#!/account/auth-tokens/noratelimit?token=<redacted> | remaining=0"
+  ],
+  "note": "collector 已接入 scripts/lib/redactSecrets.cjs 统一脱敏；含敏感 URL 的原始日志永久留在本地磁盘（gitignore）。"
+}

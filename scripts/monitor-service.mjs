@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
 import { gunzipSync } from "node:zlib";
+import { redactErrorMessage, redactSensitiveText } from "./lib/redactSecrets.cjs";
 
 const DEFAULT_MEMORY_INTERVAL_MS = 60_000;
 const DEFAULT_SEGMENT_INTERVAL_MS = 10_000;
@@ -555,9 +556,10 @@ async function fetchApiJson(config, endpoint, params) {
   const rateLimit = extractRateLimit(response.headers);
 
   if (!response.ok) {
+    // 响应体可能含带 token 的链接（如 429 noratelimit），错误文本统一脱敏后再抛出。
     const bodyText = typeof payload === "string" ? payload : JSON.stringify(payload);
     throw new Error(
-      `HTTP ${response.status} for ${endpoint}: ${bodyText.slice(0, 300)} | remaining=${rateLimit.remaining ?? "?"}`,
+      `HTTP ${response.status} for ${endpoint}: ${redactSensitiveText(bodyText.slice(0, 300))} | remaining=${rateLimit.remaining ?? "?"}`,
     );
   }
 
@@ -6824,7 +6826,8 @@ async function runService(config) {
       });
       logMemorySnapshot(snapshot);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      // 错误消息统一脱敏后再入历史/控制台（Screeps 429 响应体含带 token 的链接）。
+      const message = redactErrorMessage(error);
       pushError(state, `[memory] ${message}`, config.historyLimit);
       console.error(`[monitor][memory][error] ${message}`);
     } finally {
@@ -6857,7 +6860,7 @@ async function runService(config) {
       );
       logSegmentSnapshot(snapshot);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = redactErrorMessage(error);
       pushError(state, `[segment] ${message}`, config.historyLimit);
       console.error(`[monitor][segment][error] ${message}`);
     } finally {
@@ -6926,7 +6929,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = redactErrorMessage(error);
   console.error(`[monitor][fatal] ${message}`);
   process.exit(1);
 });
