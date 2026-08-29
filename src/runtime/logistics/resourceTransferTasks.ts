@@ -129,6 +129,9 @@ function migrateResourceTransferTasksToV2(memory: ResourceTransferTaskStoreMemor
   }
 
   memory.taskSchemaVersion = RESOURCE_TRANSFER_TASK_SCHEMA_VERSION;
+  // 迁移改写了任务权威数据（origin/updatedAt/blockedReason），必须通知
+  // Treasury 承诺索引失效（一次性：版本提升后本分支不再进入）。
+  bumpTreasuryCommitmentRevision();
 }
 
 export function ensureResourceTransferTaskStore(): Record<string, ResourceTransferTask> {

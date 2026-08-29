@@ -335,6 +335,23 @@ describe("承诺索引点时快照（primitive 化）", () => {
     expect(index.findMergeableTaskId("U", "W1N57", "E1N57", "manual", "hub:import:U")).toBe("t1");
   });
 
+  it("route merge 重复 key 时返回第一个匹配（旧 findMergeablePendingTask 语义，不取最后写入）", () => {
+    // 同 route/origin/reason 两条 pending 任务：Object.values 插入顺序 t-first 在前。
+    const tasks: Record<string, ResourceTransferTask> = {
+      "t-first": makeTask({ id: "t-first", remainingAmount: 1_000, reason: "hub:import:U" }),
+      "t-second": makeTask({ id: "t-second", remainingAmount: 2_000, reason: "hub:import:U" }),
+    };
+    const observation = createTreasuryService({ getRooms: () => Object.values(Game.rooms) }).observation();
+    const index = buildTreasuryCommitmentIndex({
+      tick: Game.time,
+      tasks,
+      reservations: {},
+      observation,
+      holderExists: () => true,
+    });
+    expect(index.findMergeableTaskId("U", "W1N57", "E1N57", "manual", "hub:import:U")).toBe("t-first");
+  });
+
   it("构建后向 live task store 添加新任务，receiverCommitments 不回扫（预聚合）", () => {
     const tasks: Record<string, ResourceTransferTask> = {
       "in-1": makeTask({ id: "in-1", toRoomName: "E1N57", remainingAmount: 50_000, origin: "automatic", lastProgressAt: 2999 }),

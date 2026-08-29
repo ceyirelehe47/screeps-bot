@@ -14,15 +14,17 @@ import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/
 import {
   TREASURY_RECEIPT_MAX_ENTRIES,
   TREASURY_RECEIPT_RETENTION_TICKS,
-  cleanupTreasuryReceipts,
+  TREASURY_RECEIPT_VERSION,
   clearTreasuryPersistenceForTest,
+  encodeReceiptKey,
   ensureTreasuryReceiptStore,
   peekTreasuryLifecycle,
   peekTreasuryReceiptStore,
+  type TreasuryReceiptStore,
 } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { formatTreasuryTransactionId } from "@/runtime/treasury/transactionId";
-import { installRooms, type RoomSpec } from "@mock/treasury";
+import { installRooms, setStoreResources, type RoomSpec } from "@mock/treasury";
 
 type RuntimeGlobal = typeof global & { __runtimeServices?: unknown };
 function clearRuntimeServicesForTest(): void {
@@ -30,7 +32,11 @@ function clearRuntimeServicesForTest(): void {
 }
 
 const ROOMS: RoomSpec[] = [
-  { name: "W1N57", storage: { id: "stor-1", resources: { energy: 100_000 } }, terminal: { id: "term-1", resources: { energy: 20_000 } } },
+  {
+    name: "W1N57",
+    storage: { id: "stor-1", resources: { energy: 100_000, U: 50_000 } },
+    terminal: { id: "term-1", resources: { energy: 20_000 } },
+  },
 ];
 
 function makeService(): { service: TreasuryService; rooms: Record<string, Room> } {
@@ -41,6 +47,27 @@ function makeService(): { service: TreasuryService; rooms: Record<string, Room> 
 function decision(service: TreasuryService, epoch?: { scope: "shared" | "market-fresh"; epochSeq: number; observedAtTick: number }) {
   const source = epoch ?? service.observation().epoch;
   return { scope: source.scope, epochSeq: source.epochSeq, observedAtTick: source.observedAtTick };
+}
+
+/** 预置 n 张 receipt（结算于 settledAt；直写 v2 store 并同步 entryCount）。 */
+function seedReceipts(count: number, settledAt: number, prefix = "seed"): TreasuryReceiptStore {
+  const store = ensureTreasuryReceiptStore();
+  for (let index = 0; index < count; index += 1) {
+    store.settled[encodeReceiptKey(`${prefix}:${settledAt}:${index}`)] = settledAt;
+  }
+  store.entryCount = Object.keys(store.settled).length;
+  store.updatedAt = Game.time;
+  return store;
+}
+
+function send(service: TreasuryService, transactionId: string, delta = -100, kind = "terminal.send") {
+  return service.recordAcceptedTransaction({
+    transactionId,
+    kind,
+    source: "test",
+    decision: decision(service),
+    postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta }],
+  });
 }
 
 beforeEach(() => {
@@ -305,56 +332,330 @@ describe("Treasury 决策 epoch 绑定（Facade 级验证）", () => {
   });
 });
 
-describe("Treasury receipt retention/cap 清理边界", () => {
-  it("过期 receipt 按 retention 窗口回收", () => {
+describe("Treasury receipt admission 安全契约（retention 内绝不驱逐）", () => {
+  it("过期 receipt 按 retention 窗口回收（唯一合法的自动删除路径）", () => {
     const { service } = makeService();
     service.beginTick();
-    // 预置一张过期 receipt（结算于 RETENTION 之前）。
-    const store = ensureTreasuryReceiptStore();
-    store.settled["legacy:old"] = Game.time - TREASURY_RECEIPT_RETENTION_TICKS - 1;
-    store.settled["legacy:fresh"] = Game.time - 100;
+    const oldSettledAt = Game.time - TREASURY_RECEIPT_RETENTION_TICKS - 1;
+    const freshSettledAt = Game.time - 100;
+    seedReceipts(1, oldSettledAt, "legacy-old");
+    seedReceipts(1, freshSettledAt, "legacy-fresh");
 
     service.endTick();
     Game.time += 1;
     service.beginTick();
 
     const settled = peekTreasuryReceiptStore()?.settled ?? {};
-    expect(settled["legacy:old"]).toBeUndefined();
-    expect(settled["legacy:fresh"]).toBeDefined();
+    expect(settled[encodeReceiptKey(`legacy-old:${oldSettledAt}:0`)]).toBeUndefined();
+    expect(settled[encodeReceiptKey(`legacy-fresh:${freshSettledAt}:0`)]).toBeDefined();
     expect(service.metrics().receiptsEvictedByRetention).toBe(1);
   });
 
-  it("超容驱逐按最老优先：最老被回收、较新保留、总量回到上限", () => {
+  it("填满未过期 receipt 后新 transaction 被拒绝（receipt_capacity_exhausted）且零部分写入", () => {
     const { service } = makeService();
     service.beginTick();
-    const store = ensureTreasuryReceiptStore();
-    // 填满 MAX+100 张历史 receipt（全部早于当前 tick，越小越老）。
-    for (let index = 0; index < TREASURY_RECEIPT_MAX_ENTRIES + 100; index += 1) {
-      store.settled[`legacy:cap:${index}`] = Game.time - 500 - index;
-    }
+    const store = seedReceipts(TREASURY_RECEIPT_MAX_ENTRIES, Game.time - 100);
 
+    const result = send(service, "cap:rejected:1");
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") {
+      expect(result.reason).toBe("receipt_capacity_exhausted");
+      expect(result.detail).toContain("硬容量");
+    }
+    // 独立可审计指标。
+    expect(service.metrics().receiptCapacityRejections).toBe(1);
+    // 零部分写入：journal/overlay（projected 容量）/receipt 计数全部不变。
+    expect(service.journal()).toHaveLength(0);
+    expect(service.projectedFreeCapacity("W1N57", "storage")).toBe(500_000);
+    expect(store.entryCount).toBe(TREASURY_RECEIPT_MAX_ENTRIES);
+    expect(Object.keys(store.settled)).toHaveLength(TREASURY_RECEIPT_MAX_ENTRIES);
+  });
+
+  it("容量保护的最老 receipt 重放仍返回 already_settled（store 满不改变幂等结果）", () => {
+    const { service } = makeService();
+    service.beginTick();
+    const store = seedReceipts(TREASURY_RECEIPT_MAX_ENTRIES, Game.time - 100);
+    const oldestId = `seed:${Game.time - 100}:0`;
+
+    const replay = send(service, oldestId);
+    expect(replay.status).toBe("already_settled");
+    if (replay.status === "already_settled") {
+      expect(replay.firstRecordedAtTick).toBe(Game.time - 100);
+    }
+    // 重放不改变 store。
+    expect(store.entryCount).toBe(TREASURY_RECEIPT_MAX_ENTRIES);
+  });
+
+  it("满容但有过期条目：admission 内回收后可再接纳新 transaction", () => {
+    const { service } = makeService();
+    service.beginTick();
+    const store = seedReceipts(TREASURY_RECEIPT_MAX_ENTRIES, Game.time - TREASURY_RECEIPT_RETENTION_TICKS - 5, "expired");
+    // 满容且全部过期 → admission 慢路径回收后放行。
+    const result = send(service, "cap:recovered:1");
+    expect(result.status).toBe("recorded");
+    expect(store.entryCount).toBeLessThanOrEqual(TREASURY_RECEIPT_MAX_ENTRIES);
+    expect(peekTreasuryReceiptStore()?.settled[encodeReceiptKey("cap:recovered:1")]).toBe(Game.time);
+  });
+
+  it("单 tick 超过 512 笔但未达硬容量的 transaction 正常结算（entryCount 同步）", () => {
+    const { service } = makeService();
+    service.beginTick();
+    for (let index = 0; index < 601; index += 1) {
+      const result = send(service, formatTreasuryTransactionId("burst", index), -1);
+      if (result.status !== "recorded") throw new Error(`index=${index}: ${JSON.stringify(result)}`);
+    }
+    expect(service.metrics().transactionsRecorded).toBe(601);
+    expect(peekTreasuryReceiptStore()?.entryCount).toBe(601);
+  });
+
+  it("global reset 后容量与 entryCount 从 Memory 恢复（继续拒绝满容登记）", () => {
+    const { service, rooms } = makeService();
+    service.beginTick();
+    seedReceipts(TREASURY_RECEIPT_MAX_ENTRIES, Game.time - 100);
+    service.endTick();
+
+    Game.time += 1;
+    const revived = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    revived.beginTick();
+    const result = send(revived, "cap:after-reset:1");
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.reason).toBe("receipt_capacity_exhausted");
+    expect(peekTreasuryReceiptStore()?.entryCount).toBe(TREASURY_RECEIPT_MAX_ENTRIES);
+  });
+
+  it("v1（裸键）receipt 无损迁移到 v2：transactionId/结算 tick 保留、幂等命中、只执行一次", () => {
+    clearTreasuryPersistenceForTest();
+    Memory.runtime = Memory.runtime ?? {};
+    (Memory.runtime as { treasury?: { receipts?: unknown } }).treasury = {
+      receipts: { version: 1, settled: { "legacy:alpha": 1_234, "legacy:beta": 1_235 }, updatedAt: 1_234 },
+    };
+    const { service } = makeService();
+    service.beginTick(); // 生命周期路径触发加载与迁移
+
+    const store = peekTreasuryReceiptStore();
+    expect(store?.version).toBe(TREASURY_RECEIPT_VERSION);
+    expect(store?.settled[encodeReceiptKey("legacy:alpha")]).toBe(1_234);
+    expect(store?.settled[encodeReceiptKey("legacy:beta")]).toBe(1_235);
+    expect(store?.entryCount).toBe(2);
+    expect(service.metrics().receiptStoreMigrationsExecuted).toBe(1);
+
+    // 迁移后的 receipt 幂等立即生效（裸键时代 id 跨版本重放）。
+    const replay = send(service, "legacy:alpha");
+    expect(replay.status).toBe("already_settled");
+    if (replay.status === "already_settled") expect(replay.firstRecordedAtTick).toBe(1_234);
+
+    // 迁移只执行一次（版本已提升，再次加载不再迁移）。
     service.endTick();
     Game.time += 1;
     service.beginTick();
-    const settled = peekTreasuryReceiptStore()?.settled ?? {};
-    expect(Object.keys(settled).length).toBe(TREASURY_RECEIPT_MAX_ENTRIES);
-    // index 越大 tick 越早（越老）：最老的 100 张被驱逐，最新的保留。
-    expect(settled[`legacy:cap:${TREASURY_RECEIPT_MAX_ENTRIES + 99}`]).toBeUndefined();
-    expect(settled["legacy:cap:0"]).toBeDefined();
-    expect(service.metrics().receiptsEvictedByCap).toBe(100);
+    expect(service.metrics().receiptStoreMigrationsExecuted).toBe(1);
   });
 
-  it("cap 驱逐遇到当前 tick 的 receipt 立即停止（blocked 计数，宁超限不破坏本 tick 幂等）", () => {
-    // 直接驱动 cleanup：洪峰全部结算于清理时刻的当前 tick。
-    ensureTreasuryReceiptStore();
+  it("未知版本 fail closed：拒绝一切新登记且原数据不被删除", () => {
+    clearTreasuryPersistenceForTest();
+    Memory.runtime = Memory.runtime ?? {};
+    const hostile = { version: 99, settled: { keep: 1 }, updatedAt: 1 };
+    (Memory.runtime as { treasury?: { receipts?: unknown } }).treasury = { receipts: hostile };
+    const { service } = makeService();
+    service.beginTick();
+
+    const result = send(service, "v99:reject:1");
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.reason).toBe("receipt_store_incompatible");
+    expect(service.metrics().receiptStoreIncompatibleFailures).toBeGreaterThanOrEqual(1);
+    // 原数据原样保留（不冷启动重建、不删除）。
+    expect(peekTreasuryReceiptStore()).toBe(hostile as never);
+    expect(service.journal()).toHaveLength(0);
+  });
+
+  it("entryCount 手工损坏（与实际条目数不符）fail closed 而非放宽容量", () => {
+    clearTreasuryPersistenceForTest();
+    Memory.runtime = Memory.runtime ?? {};
+    (Memory.runtime as { treasury?: { receipts?: unknown } }).treasury = {
+      receipts: { version: TREASURY_RECEIPT_VERSION, settled: { "t:only": 5 }, updatedAt: 5, entryCount: 999 },
+    };
+    const { service } = makeService();
+    service.beginTick();
+    const result = send(service, "corrupt:reject:1");
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.reason).toBe("receipt_store_incompatible");
+    // 数据不动（人工修复前持续拒绝）。
+    expect(peekTreasuryReceiptStore()?.settled[encodeReceiptKey("only")]).toBe(5);
+  });
+
+  it("\"__proto__\" 等危险字面量 transactionId 经 key 编码后只产生普通自有键", () => {
+    const { service } = makeService();
+    service.beginTick();
+    expect(send(service, "__proto__").status).toBe("recorded");
     const store = peekTreasuryReceiptStore()!;
-    for (let index = 0; index < TREASURY_RECEIPT_MAX_ENTRIES + 50; index += 1) {
-      store.settled[`flood:${index}`] = Game.time;
-    }
-    const report = cleanupTreasuryReceipts(Game.time);
-    expect(report.retentionEvicted).toBe(0);
-    expect(report.capEvicted).toBe(0);
-    expect(report.evictionsBlocked).toBe(50);
-    expect(report.remaining).toBe(TREASURY_RECEIPT_MAX_ENTRIES + 50);
+    // 编码键是普通自有属性：若赋值走了原型污染语义，Object.keys 会为空。
+    expect(Object.keys(store.settled)).toEqual(["t:__proto__"]);
+    expect(Object.prototype.hasOwnProperty.call(store.settled, "t:__proto__")).toBe(true);
+    expect(store.entryCount).toBe(1);
+    // 幂等读取命中（编码键往返无损）。
+    expect(send(service, "__proto__").status).toBe("already_settled");
+  });
+});
+
+describe("Treasury fresh epoch 绑定 exact observation", () => {
+  function setStorageFree(rooms: Record<string, Room>, free: number): void {
+    (rooms["W1N57"].storage!.store as unknown as { __freeCapacity: number }).__freeCapacity = free;
+  }
+
+  it("shared 基线高、fresh 基线低：基于 fresh 的超量流出拒绝（不得回退 shared 救援）", () => {
+    const { service, rooms } = makeService();
+    service.beginTick();
+    // shared 观察：storage U 50_000（energy 撑起 used 容量，使金额检查独立触发）。
+    expect(service.observation().amount("W1N57", "storage", "U")).toBe(50_000);
+    // 决策前 U 骤降 → fresh 观察 100。
+    setStoreResources(rooms["W1N57"].storage, { energy: 100_000, U: 100 });
+    const fresh = service.beginFreshObservation()!;
+    expect(fresh.amount("W1N57", "storage", "U")).toBe(100);
+
+    const result = service.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("fresh-low", 1),
+      kind: "market.deal",
+      source: "test",
+      decision: decision(service, fresh.epoch),
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: "U", delta: -200 }],
+    });
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.reason).toBe("insufficient_amount");
+    expect(service.journal()).toHaveLength(0);
+  });
+
+  it("fresh 容量较小：基于 fresh 的容量溢出拒绝（shared 大容量不得放行）", () => {
+    const { service, rooms } = makeService();
+    service.beginTick();
+    // shared free 500_000；决策前收缩到 100。
+    setStorageFree(rooms, 100);
+    const fresh = service.beginFreshObservation()!;
+    expect(fresh.freeCapacity("W1N57", "storage")).toBe(100);
+
+    const result = service.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("fresh-cap", 1),
+      kind: "market.deal",
+      source: "test",
+      decision: decision(service, fresh.epoch),
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 200 }],
+    });
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.reason).toBe("capacity_overflow");
+  });
+
+  it("fresh transaction 成功时 journal 保留其 decision scope 与 epochSeq", () => {
+    const { service } = makeService();
+    service.beginTick();
+    const fresh = service.beginFreshObservation()!;
+    const result = service.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("fresh-journal", 1),
+      kind: "market.deal",
+      source: "test",
+      decision: decision(service, fresh.epoch),
+      postings: [{ roomName: "W1N57", locationKind: "terminal", resource: RESOURCE_ENERGY, delta: -100 }],
+    });
+    expect(result.status).toBe("recorded");
+    const entry = service.journal()[0];
+    expect(entry.decisionScope).toBe("market-fresh");
+    expect(entry.epochSeq).toBe(fresh.epoch.epochSeq);
+  });
+
+  it("两个 fresh epoch 观察值不同：各自 transaction 使用对应 observation 验证", () => {
+    const { service, rooms } = makeService();
+    service.beginTick();
+    const freshHigh = service.beginFreshObservation()!;
+    expect(freshHigh.amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(100_000);
+    setStoreResources(rooms["W1N57"].storage, { energy: 500 });
+    const freshLow = service.beginFreshObservation()!;
+    expect(freshLow.amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(500);
+
+    // 基于 freshHigh 的一笔合法流出（shared/freshHigh 基线足够）。
+    expect(service.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("dual", "high"),
+      kind: "market.deal",
+      source: "test",
+      decision: decision(service, freshHigh.epoch),
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -80_000 }],
+    }).status).toBe("recorded");
+    // 基于 freshLow 的同等流出拒绝（fresh 基线 500 不足）。
+    expect(service.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("dual", "low"),
+      kind: "market.deal",
+      source: "test",
+      decision: decision(service, freshLow.epoch),
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -80_000 }],
+    }).status).toBe("rejected");
+  });
+
+  it("fresh 发行后已有 overlay：后续 transaction 仍不能借 fresh 基线超卖", () => {
+    const { service, rooms } = makeService();
+    service.beginTick();
+    // shared 结算 energy -99_000（overlay 已占用；物理 store 尚未变化——
+    // overlay 语义是"已接受但未反映到物理事实的 intents"）。
+    expect(send(service, formatTreasuryTransactionId("overlay", 1), -99_000).status).toBe("recorded");
+    // fresh 独立观察（energy 90_000，比 shared 略低），overlay 是 tick 级共享
+    // ——fresh 决策同样受限，不得借 fresh 基线绕过已接受 intents。
+    setStoreResources(rooms["W1N57"].storage, { energy: 90_000, U: 50_000 });
+    const fresh = service.beginFreshObservation()!;
+    expect(fresh.amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(90_000);
+    const result = service.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("overlay", 2),
+      kind: "market.deal",
+      source: "test",
+      decision: decision(service, fresh.epoch),
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -2_000 }],
+    });
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.reason).toBe("insufficient_amount");
+  });
+
+  it("endTick 后 beginFreshObservation 被拒绝（返回 null，不再发行 fresh epoch）", () => {
+    const { service } = makeService();
+    service.beginTick();
+    service.endTick();
+    expect(service.beginFreshObservation()).toBeNull();
+  });
+
+  it("old fresh / unknown fresh / scope 伪造全部 fail closed", () => {
+    const { service } = makeService();
+    service.beginTick();
+    const fresh = service.beginFreshObservation()!;
+    service.endTick();
+    Game.time += 1;
+    service.beginTick();
+
+    // 上一 tick 的 fresh epoch：stale。
+    const stale = service.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("old-fresh", 1),
+      kind: "market.deal",
+      source: "test",
+      decision: decision(service, fresh.epoch),
+      postings: [{ roomName: "W1N57", locationKind: "terminal", resource: RESOURCE_ENERGY, delta: -100 }],
+    });
+    expect(stale.status).toBe("rejected");
+    if (stale.status === "rejected") expect(stale.reason).toBe("stale_epoch");
+
+    // 伪造 fresh scope 声明（epochSeq 实为 shared）。
+    const sharedEpoch = service.observation().epoch;
+    const forged = service.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("forge", 1),
+      kind: "market.deal",
+      source: "test",
+      decision: { scope: "market-fresh", epochSeq: sharedEpoch.epochSeq, observedAtTick: sharedEpoch.observedAtTick },
+      postings: [{ roomName: "W1N57", locationKind: "terminal", resource: RESOURCE_ENERGY, delta: -100 }],
+    });
+    expect(forged.status).toBe("rejected");
+    if (forged.status === "rejected") expect(forged.reason).toBe("scope_mismatch");
+
+    // 未注册的 fresh epochSeq。
+    const unknown = service.recordAcceptedTransaction({
+      transactionId: formatTreasuryTransactionId("unknown-fresh", 1),
+      kind: "market.deal",
+      source: "test",
+      decision: { scope: "market-fresh", epochSeq: 987_654, observedAtTick: Game.time },
+      postings: [{ roomName: "W1N57", locationKind: "terminal", resource: RESOURCE_ENERGY, delta: -100 }],
+    });
+    expect(unknown.status).toBe("rejected");
+    if (unknown.status === "rejected") expect(unknown.reason).toBe("unknown_epoch");
   });
 });

@@ -9,9 +9,13 @@
  *   structureId 替换/金额归零/外部流入流出全部显式分类，transaction 追溯保留。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
-import { clearTreasuryPersistenceForTest, peekTreasuryReceiptStore } from "@/runtime/treasury/receipts";
+import {
+  clearTreasuryPersistenceForTest,
+  encodeReceiptKey,
+  peekTreasuryReceiptStore,
+} from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
-import { formatTreasuryTransactionId } from "@/runtime/treasury/transactionId";
+import { formatTreasuryTransactionId, formatTreasuryStableTransactionId } from "@/runtime/treasury/transactionId";
 import { installRooms, makeStore, setStoreResources, type RoomSpec } from "@mock/treasury";
 
 type RuntimeGlobal = typeof global & { __runtimeServices?: unknown };
@@ -201,7 +205,7 @@ describe("Treasury 原子 transaction journal", () => {
     if (nextTick.status === "already_settled") {
       expect(nextTick.firstRecordedAtTick).toBe(Game.time - 1);
     }
-    expect(peekTreasuryReceiptStore()?.settled[transactionId]).toBe(Game.time - 1);
+    expect(peekTreasuryReceiptStore()?.settled[encodeReceiptKey(transactionId)]).toBe(Game.time - 1);
     // 不同 transactionId 不冲突。
     expect(tx(fixture, formatTreasuryTransactionId("idem", "b"), [
       { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1_000 },
@@ -274,6 +278,35 @@ describe("Treasury 原子 transaction journal", () => {
     ]);
     expect(replay.status).toBe("already_settled");
     expect(fixture.service.metrics().transactionsRecorded).toBe(601);
+  });
+
+  it("稳定 id helper：跨 tick 重试铸造相同 id，receipt 幂等跨 tick 生效", () => {
+    // 同一业务自然键（订单 order-777）在任意 tick 铸造恒相同。
+    const atTickOne = formatTreasuryStableTransactionId("market.deal", "order-777");
+    Game.time += 3;
+    const atTickFour = formatTreasuryStableTransactionId("market.deal", "order-777");
+    expect(atTickOne).toBe(atTickFour);
+    // tick 前缀 helper 每 tick 不同——跨 tick 重试语义下禁止使用。
+    expect(formatTreasuryTransactionId("deal", "order-777")).not.toBe(
+      `${Game.time - 3}:deal:order-777`,
+    );
+
+    // 首笔成功后，跨 tick 用稳定 id 重放命中 already_settled（不二次结算）。
+    const fixture = makeFixture();
+    const stableId = formatTreasuryStableTransactionId("market.deal", "order-777");
+    expect(tx(fixture, stableId, [
+      { roomName: "W1N57", locationKind: "terminal", resource: "U", delta: -200 },
+    ]).status).toBe("recorded");
+    fixture.service.endTick();
+    Game.time += 1;
+    fixture.service.beginTick();
+    const retry = tx(fixture, stableId, [
+      { roomName: "W1N57", locationKind: "terminal", resource: "U", delta: -200 },
+    ]);
+    expect(retry.status).toBe("already_settled");
+    if (retry.status === "already_settled") {
+      expect(retry.firstRecordedAtTick).toBe(Game.time - 1);
+    }
   });
 });
 
@@ -374,11 +407,19 @@ describe("Treasury 跨 tick 对账（key 并集）", () => {
     const lostRoom = fixture.service.lastReconciliation()?.samples.find(
       (entry) => entry.roomName === "E5N59" && entry.category === "room_lost",
     );
+    // manifest 结构层事件（每房一次）：无资源金额语义，diff 恒 0。
     expect(lostRoom).toBeDefined();
-    expect(lostRoom?.diff).toBe(-3_000);
+    expect(lostRoom?.dimension).toBe("structure");
+    expect(lostRoom?.diff).toBe(0);
+    // 资源维度独立计数：该房间全部资源消失计 outflow。
+    const lostRoomOutflow = fixture.service.lastReconciliation()?.samples.find(
+      (entry) => entry.roomName === "E5N59" && entry.resource === RESOURCE_ENERGY && entry.dimension === "resource",
+    );
+    expect(lostRoomOutflow?.category).toBe("outflow");
+    expect(lostRoomOutflow?.diff).toBe(-3_000);
   });
 
-  it("structureId 替换（incarnation 变化）即使金额一致也被记录", () => {
+  it("structureId 替换（incarnation 变化）即使金额一致也被记录（每位置一次）", () => {
     const fixture = makeFixture();
     advance(fixture);
     const rooms = fixture.rooms;
@@ -388,13 +429,77 @@ describe("Treasury 跨 tick 对账（key 并集）", () => {
     } as unknown as Room;
     advance(fixture);
 
+    // manifest 层按位置计一次：不因结构内有 energy/U 两个资源而重复计。
     const summary = fixture.service.lastReconciliation();
-    expect(summary?.structuralChanges).toBeGreaterThanOrEqual(2); // energy + U 两个 key
+    expect(summary?.structuralChanges).toBe(1);
     const sample = summary?.samples.find((entry) => entry.category === "structure_replaced");
+    expect(sample?.dimension).toBe("structure");
+    expect(sample?.locationKind).toBe("storage");
     expect(sample?.previousStructureId).toBe("stor-1");
     expect(sample?.currentStructureId).toBe("stor-1-rebuilt");
     expect(sample?.diff).toBe(0);
-    expect(fixture.service.metrics().reconciliationStructuralChanges).toBeGreaterThanOrEqual(2);
+    expect(fixture.service.metrics().reconciliationStructuralChanges).toBe(1);
+  });
+
+  it("空结构/空房间的结构生命周期对账（稀疏资源层不可见，manifest 层发现）", () => {
+    const fixture = makeFixture();
+    const rooms = fixture.rooms;
+    advance(fixture);
+
+    // 空 terminal 新建（零资源——稀疏枚举完全不可见）。
+    rooms["W1N59"] = {
+      name: "W1N59",
+      controller: { my: true, level: 6 },
+      storage: { id: "stor-9", store: makeStore({ resources: {} }) } as unknown as StructureStorage,
+      terminal: { id: "term-9", store: makeStore({ resources: {} }) } as unknown as StructureTerminal,
+    } as unknown as Room;
+    advance(fixture);
+    const newRoom = fixture.service.lastReconciliation()?.samples.find(
+      (entry) => entry.roomName === "W1N59" && entry.category === "new_room",
+    );
+    expect(newRoom).toBeDefined();
+    expect(newRoom?.dimension).toBe("structure");
+
+    // 空房间丢失。
+    delete rooms["W1N59"];
+    advance(fixture);
+    const lostEmptyRoom = fixture.service.lastReconciliation()?.samples.find(
+      (entry) => entry.roomName === "W1N59" && entry.category === "room_lost",
+    );
+    expect(lostEmptyRoom).toBeDefined();
+
+    // 空 terminal 摧毁（房间保留）。
+    rooms["E5N59"] = {
+      ...rooms["E5N59"],
+      terminal: { id: "term-5", store: makeStore({ resources: {} }) } as unknown as StructureTerminal,
+    } as unknown as Room;
+    advance(fixture);
+    const emptyTerminalNew = fixture.service.lastReconciliation()?.samples.find(
+      (entry) => entry.roomName === "E5N59" && entry.category === "new_location",
+    );
+    expect(emptyTerminalNew).toBeDefined();
+    rooms["E5N59"] = { ...rooms["E5N59"], terminal: undefined } as unknown as Room;
+    advance(fixture);
+    const emptyTerminalLost = fixture.service.lastReconciliation()?.samples.find(
+      (entry) => entry.roomName === "E5N59" && entry.category === "location_lost",
+    );
+    expect(emptyTerminalLost).toBeDefined();
+
+    // 空结构 structureId 替换（金额恒 0，纯 incarnation 变化）。
+    rooms["W1N57"] = {
+      ...rooms["W1N57"],
+      terminal: { id: "term-1-rebuilt", store: makeStore({ resources: {} }) } as unknown as StructureTerminal,
+    } as unknown as Room;
+    // W1N57 terminal 原有 energy 20_000/U 500——替换后清空，制造金额归零 + incarnation 变化。
+    advance(fixture);
+    const rebuilt = fixture.service.lastReconciliation()?.samples.find(
+      (entry) => entry.roomName === "W1N57" && entry.locationKind === "terminal" && entry.category === "structure_replaced",
+    );
+    expect(rebuilt).toBeDefined();
+    expect(rebuilt?.dimension).toBe("structure");
+    // 资源维度独立：energy/U 消失计 outflow。
+    const summary = fixture.service.lastReconciliation();
+    expect(summary?.outflowMismatches).toBeGreaterThanOrEqual(2);
   });
 
   it("一致时零 mismatch；样本有界（RECONCILIATION_SAMPLE_CAP）", () => {

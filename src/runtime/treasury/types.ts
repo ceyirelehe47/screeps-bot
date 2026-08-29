@@ -145,7 +145,9 @@ export type TreasuryRejectionReason =
   | "tick_closed"
   | "stale_epoch"
   | "unknown_epoch"
-  | "scope_mismatch";
+  | "scope_mismatch"
+  | "receipt_capacity_exhausted"
+  | "receipt_store_incompatible";
 
 export type TreasurySettlementResult =
   | { readonly status: "recorded"; readonly transactionId: string; readonly postings: number; readonly tick: number }
@@ -172,6 +174,35 @@ export interface TreasuryProjectedFinal {
   readonly structureId: string | undefined;
 }
 
+/**
+ * 位置结构 manifest 条目：与资源维度无关的结构生命周期事实（空 storage/
+ * terminal 的新建/摧毁、structureId 替换、无结构 owned 房间的出现/丢失）。
+ * 零资源结构在稀疏 amounts 中不可见——manifest 层独立对账。
+ */
+export interface TreasuryLocationManifestEntry {
+  readonly roomName: string;
+  readonly locationKind: TreasuryLocationKind;
+  readonly exists: boolean;
+  readonly structureId: string | undefined;
+  readonly usedCapacity: number;
+  readonly freeCapacity: number;
+}
+
+/** endTick 归档的房间/位置 manifest（对账基准的一部分，只在 heap）。 */
+export interface TreasuryTickManifest {
+  readonly tick: number;
+  /** 注入房间源的全部房间名（含无 storage/terminal 的房间）。 */
+  readonly rooms: readonly string[];
+  readonly locations: readonly TreasuryLocationManifestEntry[];
+}
+
+/** endTick 归档：资源投影终态 + 结构 manifest（下一 tick 对账的完整基准）。 */
+export interface TreasuryProjectedArchive {
+  readonly tick: number;
+  readonly finals: Map<string, TreasuryProjectedFinal>;
+  readonly manifest: TreasuryTickManifest;
+}
+
 export type TreasuryReconciliationCategory =
   | "inflow"
   | "outflow"
@@ -186,10 +217,11 @@ export interface TreasuryReconciliationSample {
   readonly tick: number;
   readonly roomName: string;
   readonly locationKind: TreasuryLocationKind;
+  /** 结构层样本无资源语义（空结构事件），填 ""。 */
   readonly resource: string;
   readonly projectedFinal: number;
   readonly observedNow: number;
-  /** observedNow - projectedFinal：正=外部流入，负=外部流出。 */
+  /** observedNow - projectedFinal：正=外部流入，负=外部流出（结构层恒 0）。 */
   readonly diff: number;
   readonly category: TreasuryReconciliationCategory;
   readonly previousStructureId: string | undefined;
@@ -197,6 +229,8 @@ export interface TreasuryReconciliationSample {
   /** 与该差异相关的上一 tick transaction 追溯（有界）。 */
   readonly transactionIds: readonly string[];
   readonly transactionKinds: readonly string[];
+  /** structure=manifest 结构层（每位置至多一条）；resource=资源数量层。 */
+  readonly dimension: "structure" | "resource";
 }
 
 export interface TreasuryReconciliationSummary {
@@ -282,20 +316,26 @@ export interface TreasuryCommitmentIndex {
 
 /**
  * owner 声明：调用方以固定身份持有 production reservation 时，可声明自身
- * holderId 让查询排除自己已占用的部分（只排除自己，其他 owner 照常扣除）。
- * 身份非法时 fail closed（不返回乐观可用量）。
+ * holderId 与归属房间让查询排除自己已占用的部分（只在自己合法归属房间内
+ * 排除自己，其他 owner 与其他房间照常扣除）。声明房间与运行时解析的
+ * holder 真实归属不一致、holder 不存在或身份格式非法时一律 fail closed。
  */
 export type TreasuryOwnerScope = "production-reservation";
 
 export interface TreasuryQueryOwner {
   readonly holderId: string;
   readonly scope: TreasuryOwnerScope;
+  /** 声明的 holder 归属房间（必须与运行时解析结果一致，否则 fail closed）。 */
+  readonly roomName: string;
 }
 
 export type TreasuryOwnerStatus =
   | "none"
   | "excluded-own-reservations"
   | "invalid_fail_closed";
+
+/** 查询上下文输入规范化结果：非法输入（非法资源/重复房间/重复位置/NaN withhold 等）fail closed。 */
+export type TreasuryQueryContextStatus = "valid" | "invalid_fail_closed";
 
 /**
  * 可用量查询上下文——禁止无上下文 available。
@@ -324,6 +364,8 @@ export interface TreasuryBalanceView {
   readonly spendable: number;
   readonly overcommitted: boolean;
   readonly ownerStatus: TreasuryOwnerStatus;
+  /** invalid_fail_closed 时全部数量字段为 0（保守结论，不报乐观可用量）。 */
+  readonly contextStatus: TreasuryQueryContextStatus;
   readonly epoch: TreasuryEpoch;
 }
 
@@ -363,8 +405,15 @@ export interface TreasuryMetrics {
   epochScopeMismatches: number;
   settlementsAfterEndRejected: number;
   receiptsEvictedByRetention: number;
-  receiptsEvictedByCap: number;
-  receiptEvictionsBlocked: number;
+  receiptsCorruptedEvicted: number;
+  /** 满容且无过期可回收导致的 admission 拒绝（独立可审计）。 */
+  receiptCapacityRejections: number;
+  /** v1→v2 等已知版本迁移执行次数（正常每次升级 ≤1）。 */
+  receiptStoreMigrationsExecuted: number;
+  /** 未知版本/手工损坏的 fail-closed 检出次数（持续拒绝登记直至人工处理）。 */
+  receiptStoreIncompatibleFailures: number;
+  /** 非法查询上下文（非法资源/重复房间/重复位置/NaN withhold）fail-closed 次数。 */
+  queryInvalidContexts: number;
   reconciliationInflowMismatches: number;
   reconciliationOutflowMismatches: number;
   reconciliationStructuralChanges: number;
@@ -402,8 +451,11 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     epochScopeMismatches: 0,
     settlementsAfterEndRejected: 0,
     receiptsEvictedByRetention: 0,
-    receiptsEvictedByCap: 0,
-    receiptEvictionsBlocked: 0,
+    receiptsCorruptedEvicted: 0,
+    receiptCapacityRejections: 0,
+    receiptStoreMigrationsExecuted: 0,
+    receiptStoreIncompatibleFailures: 0,
+    queryInvalidContexts: 0,
     reconciliationInflowMismatches: 0,
     reconciliationOutflowMismatches: 0,
     reconciliationStructuralChanges: 0,

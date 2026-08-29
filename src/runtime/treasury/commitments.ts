@@ -14,7 +14,9 @@
  * - receiver headroom 为第一版总量口径（free − healthy incoming remaining，
  *   observed 与 projected 双轨），不含 ReceiverCapacityLedger 的 safety
  *   reserve 与独立 reservation——完整语义在该 ledger 并入 Treasury 时提供
- *   （见 OpenSpec 任务表）。
+ *   （见 OpenSpec 任务表）。projected 字段每次查询动态组合（静态承诺 +
+ *   当前 overlay 容量聚合），同 tick transaction 后立即反映最新投影，
+ *   绝不缓存到旧结果。
  */
 
 import {
@@ -28,7 +30,6 @@ import {
   type TreasuryCommitmentMetrics,
   type TreasuryLocationKind,
   type TreasuryObservationView,
-  type TreasuryReceiverCommitments,
   type TreasuryReservationRecord,
 } from "@/runtime/treasury/types";
 import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
@@ -130,11 +131,13 @@ export function buildTreasuryCommitmentIndex(
       incomingTaskCountByRoom.set(task.toRoomName, (incomingTaskCountByRoom.get(task.toRoomName) ?? 0) + 1);
     }
     if (task.origin === "manual" || countsTowardDemand) {
-      // 与旧 findMergeablePendingTask 语义一致：manual 无条件、automatic 需健康。
-      mergeIndex.set(
-        mergeKeyOf(task.resource, task.fromRoomName, task.toRoomName, task.origin, reason),
-        task.id,
-      );
+      // 与旧 findMergeablePendingTask 语义一致：manual 无条件、automatic 需
+      // 健康；同 route 重复 key 时保留第一个匹配（Object.values 插入顺序），
+      // 不得用后写覆盖（那是"最后一个匹配"，会改变 merge 目标选择）。
+      const mergeKey = mergeKeyOf(task.resource, task.fromRoomName, task.toRoomName, task.origin, reason);
+      if (!mergeIndex.has(mergeKey)) {
+        mergeIndex.set(mergeKey, task.id);
+      }
     }
     if (isHealthyReceiverCapacityCommitment(task, healthOptions.automaticTaskNoProgressTtl)) {
       healthyIncomingByRoom.set(task.toRoomName, (healthyIncomingByRoom.get(task.toRoomName) ?? 0) + task.remainingAmount);
@@ -177,10 +180,7 @@ export function buildTreasuryCommitmentIndex(
     reservedByRoomResource.set(key, bucket);
   }
 
-  const receiverCache = new Map<string, TreasuryReceiverCommitments>();
-
-  const index: TreasuryCommitmentIndex = {
-    builtAtTick: tick,
+  const index: TreasuryCommitmentIndex = {    builtAtTick: tick,
     revision,
     outgoing(roomName, resource) {
       metrics.indexQueries += 1;
@@ -230,18 +230,20 @@ export function buildTreasuryCommitmentIndex(
     },
     receiverCommitments(roomName) {
       metrics.indexQueries += 1;
-      const cached = receiverCache.get(roomName);
-      if (cached) return cached;
+      // 每次动态组合：静态承诺（healthy incoming，点时快照）+ observed 容量
+      // （O(1) map 读）+ 当前 overlay 容量净变化（facade 注入的 O(1) 位置
+      // 聚合）。绝不缓存依赖当前 overlay 的 projected 字段——同 tick 结算
+      // 新 transaction 后的下一次查询必须立即反映最新投影。
       const healthyIncomingAmount = healthyIncomingByRoom.get(roomName) ?? 0;
+      const healthyIncomingTaskCount = healthyIncomingCountByRoom.get(roomName) ?? 0;
       const storageFreeCapacity = options.observation.freeCapacity(roomName, "storage");
       const terminalFreeCapacity = options.observation.freeCapacity(roomName, "terminal");
-      // projected 口径：observed free 扣减本 tick 已结算 transaction 的容量净变化。
       const projectedStorageFree = storageFreeCapacity - capacityDelta(roomName, "storage");
       const projectedTerminalFree = terminalFreeCapacity - capacityDelta(roomName, "terminal");
-      const result: TreasuryReceiverCommitments = Object.freeze({
+      return Object.freeze({
         roomName,
         healthyIncomingAmount,
-        healthyIncomingTaskCount: healthyIncomingCountByRoom.get(roomName) ?? 0,
+        healthyIncomingTaskCount,
         storageFreeCapacity,
         terminalFreeCapacity,
         // 与旧 ReceiverCapacityLedger.getAvailability 的 min 语义一致：
@@ -257,8 +259,6 @@ export function buildTreasuryCommitmentIndex(
           healthyIncomingAmount > projectedStorageFree ||
           healthyIncomingAmount > projectedTerminalFree,
       });
-      receiverCache.set(roomName, result);
-      return result;
     },
     metrics,
   };

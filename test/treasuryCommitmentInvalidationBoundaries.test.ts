@@ -16,7 +16,7 @@ const REPO_ROOT = resolve(__dirname, "..");
 interface FunctionRequirement {
   fileName: string;
   functionName: string;
-  kind: "mutation-required" | "sync-point-required";
+  kind: "mutation-required" | "sync-point-required" | "migration-required";
 }
 
 const MUTATION_FUNCTIONS: FunctionRequirement[] = [
@@ -35,6 +35,9 @@ const MUTATION_FUNCTIONS: FunctionRequirement[] = [
   { fileName: "src/runtime/resourceReservation.ts", functionName: "gcProductionReservations", kind: "mutation-required" },
   // resourceControl.ts：任务字段直接写入后的统一同步点。
   { fileName: "src/runtime/resourceControl.ts", functionName: "syncResourceControlTransferTask", kind: "sync-point-required" },
+  // resourceTransferTasks.ts：legacy schema 迁移改写任务权威数据（一次性，
+  // 但同样必须通知失效——迁移后索引不得继续用旧 origin/lastError 聚合）。
+  { fileName: "src/runtime/logistics/resourceTransferTasks.ts", functionName: "migrateResourceTransferTasksToV2", kind: "migration-required" },
 ];
 
 function extractFunctionBody(sourceText: string, functionName: string): string | null {
@@ -99,5 +102,53 @@ describe("Treasury commitment invalidation boundaries", () => {
     expect(tasksSource).toContain("bumpTreasuryCommitmentRevision");
     expect(reservationSource).toContain("bumpTreasuryCommitmentRevision");
     expect(resourceControlSource).toContain("bumpTreasuryCommitmentRevision");
+  });
+});
+
+describe("Treasury 性能与 exact-observation 边界", () => {
+  function functionBodyOf(fileName: string, functionName: string): string {
+    const sourceText = readFileSync(resolve(REPO_ROOT, fileName), "utf8");
+    const body = extractFunctionBody(sourceText, functionName);
+    if (body === null) {
+      throw new Error(`${fileName}: 找不到顶层函数 ${functionName}`);
+    }
+    return body;
+  }
+
+  test("receipt admission / 幂等读写快路径不扫描整个 receipt store（O(1)）", () => {
+    // admission 快路径必须 O(1)：不得每笔 transaction 执行 Object.keys /
+    // entries 全量扫描（满容时的有界回收在独立的 cleanupSettledEntries 内）。
+    const admissions = functionBodyOf("src/runtime/treasury/receipts.ts", "admitTreasuryReceipt");
+    expect(admissions).not.toContain("Object.keys");
+    expect(admissions).not.toContain("Object.entries");
+    const hasSettled = functionBodyOf("src/runtime/treasury/receipts.ts", "hasSettledReceipt");
+    expect(hasSettled).not.toContain("Object.keys");
+    const commit = functionBodyOf("src/runtime/treasury/receipts.ts", "commitSettledReceipt");
+    expect(commit).not.toContain("Object.keys");
+  });
+
+  test("locationCapacityDelta 查询 O(1)（不遍历资源 overlay）", () => {
+    // projection.ts 的 locationCapacityDelta 是闭包内函数（非顶层），用源码
+    // 文本断言：实现必须走 capacityDeltas 位置聚合 map。
+    const projectionSource = readFileSync(resolve(REPO_ROOT, "src/runtime/treasury/projection.ts"), "utf8");
+    expect(projectionSource).toMatch(
+      /function locationCapacityDelta\([\s\S]*?\):\s*number\s*\{[\s\S]*?capacityDeltas\.get/,
+    );
+    // 旧的"按位置前缀线性扫描 overlay"实现不得回归。
+    expect(projectionSource).not.toContain("key.startsWith(prefix)");
+  });
+
+  test("transaction 物理验证使用 decision 指向的 exact observation（不回退 shared）", () => {
+    const facadeSource = readFileSync(resolve(REPO_ROOT, "src/runtime/treasury/facade.ts"), "utf8");
+    // facade 必须把 epoch 注册表中的 exact observation 传给 projection。
+    expect(facadeSource).toContain("projection.recordTransaction(input, registered.observation)");
+    // 注册表条目必须持有 observation 引用（而非仅 scope/tick 元数据）。
+    expect(facadeSource).toMatch(/observation:\s*TreasuryObservationView/);
+    const projectionSource = readFileSync(resolve(REPO_ROOT, "src/runtime/treasury/projection.ts"), "utf8");
+    // projection 只用 decisionObservation 参数做物理验证，不得引用 shared。
+    expect(projectionSource).toContain("decisionObservation.hasRoom");
+    expect(projectionSource).toContain("decisionObservation.location(");
+    expect(projectionSource).toContain("decisionObservation.amount(");
+    expect(projectionSource).not.toContain("sharedObservation");
   });
 });

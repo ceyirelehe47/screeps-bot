@@ -6,32 +6,53 @@
  *   所有 posting 整体验证、一次性原子写入；任一 posting 非法则整笔回滚，
  *   绝不出现部分写入；
  * - 幂等三段：heap 本 tick 缓存 → Memory receipt（跨 tick / global reset
- *   权威）→ 已结算 id 一律拒绝重复叠加；
- * - Observed 数值永不修改：投影只叠加在 overlay 上，容量投影与资源投影
- *   同步推进（used/free 随 delta 净变化）；
- * - endTick 归档投影终态（含 structureId），下一 tick beginTick 用
- *   previous-finals 与 current-observed 的 key 并集对账：外部流入/流出、
- *   新资源/新位置/新房间、房间/位置丢失、结构 incarnation 替换、tick gap
- *   与 global reset 全部显式分类，不静默；
+ *   权威，v2 前缀键 + entryCount 计数）→ 已结算 id 一律拒绝重复叠加；
+ * - receipt admission 预检（满容 fail closed / 版本不兼容 fail closed）
+ *   在写入任何状态之前执行，admission 失败零部分写入；
+ * - 物理可行性验证使用 transaction decision 指向的 exact observation
+ *   （shared 或某次 market-fresh），绝不回退到 shared observation：
+ *   * decision observation 提供该决策时点的物理基线（数量/容量/结构存在性）；
+ *   * Treasury overlay 提供本 tick 已被接受但尚未反映到下一 tick 物理事实
+ *     的 intents（同 tick 多笔 transaction 依此防超卖同一资源/容量）；
+ *   * exact fresh observation 不能被 shared observation 替代（fresh read
+ *     的意义就在于决策时点的独立物理快照）；
+ * - Observed 数值永不修改：投影只叠加在 overlay 上；容量 delta 按位置
+ *   独立聚合（capacityDeltas），projectedUsed/Free 与 receiver headroom
+ *   查询 O(1)，不扫描资源 overlay；
+ * - 单调 projectionRevision 随每次成功提交递增：依赖 overlay 的派生缓存
+ *   （receiver projected headroom 等）以它判断失效，绝不把依赖当前 overlay
+ *   的 projected 数值缓存到旧结果里；
+ * - endTick 归档投影终态（资源 finals + 房间/位置 manifest，含
+ *   structureId），下一 tick beginTick 两层对账：
+ *   1. manifest 结构层（每位置至多一条）：空房间/空结构的新建、摧毁、
+ *      structureId 替换——零资源结构在稀疏 amounts 中不可见，只有 manifest
+ *      层能发现；
+ *   2. resource key union 层：数量差异按资源维度独立计数（inflow/outflow/
+ *      new_resource），结构事件不在此层重复计数；
+ *   tick gap 与 global reset 显式分类，不静默；
  * - journal（本 tick 明细 + 上一 tick 追溯副本）只在 heap，绝不持久化。
  */
 
 import {
   type TreasuryEpoch,
   type TreasuryJournalEntry,
+  type TreasuryLocationKind,
+  type TreasuryLocationManifestEntry,
   type TreasuryObservationView,
   type TreasuryPosting,
+  type TreasuryProjectedArchive,
   type TreasuryProjectedFinal,
   type TreasuryReconciliationCategory,
   type TreasuryReconciliationSample,
   type TreasuryReconciliationSummary,
   type TreasuryRejectionReason,
   type TreasurySettlementResult,
+  type TreasuryTickManifest,
   type TreasuryTransactionInput,
   treasuryLocationKey,
 } from "@/runtime/treasury/types";
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
-import { hasSettledReceipt, recordSettledReceipt } from "@/runtime/treasury/receipts";
+import { admitTreasuryReceipt, commitSettledReceipt, hasSettledReceipt } from "@/runtime/treasury/receipts";
 
 const RECONCILIATION_SAMPLE_CAP = 16;
 const RECONCILIATION_TRACE_TRANSACTION_CAP = 4;
@@ -46,6 +67,8 @@ export interface TreasuryProjectionState {
   journal: TreasuryJournalEntry[];
   /** locationKey:resource → 累计 delta（本 tick）。 */
   overlay: Map<string, number>;
+  /** locationKey → 该位置全部资源 delta 之和（容量净变化；O(1) 查询）。 */
+  capacityDeltas: Map<string, number>;
   /** 本 tick 已结算 transactionId → tick（heap 加速；跨 tick 权威在 Memory receipt）。 */
   settledThisTick: Map<string, number>;
   /** 上一 tick journal 有界副本（对账追溯用）。 */
@@ -53,7 +76,13 @@ export interface TreasuryProjectionState {
 }
 
 export function createTreasuryProjectionState(): TreasuryProjectionState {
-  return { journal: [], overlay: new Map(), settledThisTick: new Map(), previousJournal: [] };
+  return {
+    journal: [],
+    overlay: new Map(),
+    capacityDeltas: new Map(),
+    settledThisTick: new Map(),
+    previousJournal: [],
+  };
 }
 
 function overlayKey(roomName: string, locationKind: string, resource: string): string {
@@ -77,27 +106,32 @@ export interface TreasuryProjectionController {
   /** 幂等查询：返回首次结算 tick（heap 本 tick 缓存 → Memory receipt）。 */
   isSettled(transactionId: string): number | undefined;
   /**
-   * 原子登记：输入验证 → 物理可行性验证（金额非负/容量不越界）→ 一次性写入
-   * journal + overlay + heap 缓存 + Memory receipt。任一步失败零部分写入。
-   * epoch 校验（stale/unknown/scope）由 facade 的注册表负责，此处不再复核。
+   * 原子登记：输入验证 → receipt admission 预检 → 物理可行性验证（金额
+   * 非负/容量不越界）→ 一次性写入 journal + overlay + heap 缓存 + Memory
+   * receipt。任一步失败零部分写入。epoch 校验（stale/unknown/scope）由
+   * facade 的注册表负责；observation 参数必须是 decision 指向的 exact
+   * observation（由 facade 从 epoch 注册表解析），本函数不回退 shared。
    */
-  recordTransaction(input: TreasuryTransactionInput, observation: TreasuryObservationView): TreasurySettlementResult;
+  recordTransaction(input: TreasuryTransactionInput, decisionObservation: TreasuryObservationView): TreasurySettlementResult;
   /** 本 tick 累计投影 delta（无 delta 返回 0，不回读 Game）。 */
   projectedDelta(roomName: string, locationKind: "storage" | "terminal", resource: string): number;
-  /** 本 tick 该位置的容量净变化（Σ资源 delta；供 projected capacity）。 */
+  /** 本 tick 该位置的容量净变化（O(1) 位置聚合，不扫描资源 overlay）。 */
   locationCapacityDelta(roomName: string, locationKind: "storage" | "terminal"): number;
+  /** 单调投影版本：每次成功提交/归档/清空递增（派生缓存失效依据）。 */
+  projectionRevision(): number;
   journalSnapshot(): readonly TreasuryJournalEntry[];
   /**
-   * endTick 归档：返回 (observed+delta) 终态快照（含 structureId）供下一 tick
-   * 对账；同时把 journal 转存 previousJournal（有界）并清空 overlay。
+   * endTick 归档：返回资源投影终态（observed+delta，含 structureId）+ 房间/
+   * 位置 manifest（结构生命周期对账基准）；同时把 journal 转存
+   * previousJournal（有界）并清空 overlay/capacityDeltas。
    */
-  archiveProjectedFinal(observation: TreasuryObservationView): Map<string, TreasuryProjectedFinal>;
-  /** 下一 tick 对账：previous finals vs current observed 的 key 并集。 */
+  archiveProjectedFinal(observation: TreasuryObservationView): TreasuryProjectedArchive;
+  /** 下一 tick 两层对账：manifest 结构层 + resource key union 层。 */
   reconcile(
-    previous: { tick: number; finals: Map<string, TreasuryProjectedFinal> } | undefined,
+    previous: TreasuryProjectedArchive | undefined,
     current: TreasuryObservationView,
   ): TreasuryReconciliationSummary;
-  /** 仅供测试：清空全部投影状态（journal/overlay/heap 缓存/previousJournal）。 */
+  /** 仅供测试：清空全部投影状态（journal/overlay/容量聚合/heap 缓存/previousJournal）。 */
   resetForTest(): void;
 }
 
@@ -112,6 +146,7 @@ export function createTreasuryProjectionController(
   options: TreasuryProjectionCallbacks,
 ): TreasuryProjectionController {
   const state = createTreasuryProjectionState();
+  let revision = 0;
 
   function isSettled(transactionId: string): number | undefined {
     const heapTick = state.settledThisTick.get(transactionId);
@@ -131,17 +166,12 @@ export function createTreasuryProjectionController(
     roomName: string,
     locationKind: "storage" | "terminal",
   ): number {
-    const prefix = `${treasuryLocationKey(roomName, locationKind)}:`;
-    let total = 0;
-    for (const [key, delta] of state.overlay) {
-      if (key.startsWith(prefix)) total += delta;
-    }
-    return total;
+    return state.capacityDeltas.get(treasuryLocationKey(roomName, locationKind)) ?? 0;
   }
 
   function recordTransaction(
     input: TreasuryTransactionInput,
-    observation: TreasuryObservationView,
+    decisionObservation: TreasuryObservationView,
   ): TreasurySettlementResult {
     // ── 幂等优先于验证：已结算 id 的重放无论 payload 一律拒绝叠加 ──────────
     const settledAt = isSettled(input.transactionId);
@@ -166,6 +196,19 @@ export function createTreasuryProjectionController(
     }
     if (!Array.isArray(input.postings) || input.postings.length === 0) {
       return rejected("no_postings");
+    }
+
+    // ── receipt admission 预检：满容/版本不兼容时整笔拒绝，必须发生在写入
+    //    journal/overlay/heap 缓存/Memory receipt 任何状态之前 ──────────────
+    const admission = admitTreasuryReceipt(input.transactionId, Game.time);
+    if (admission.status === "already_settled") {
+      // migration 后 admission 才能看到的已结算 id（heap isSettled 未命中）。
+      options.onDuplicateRejected?.(input.transactionId);
+      return { status: "already_settled", transactionId: input.transactionId, firstRecordedAtTick: admission.firstSettledAtTick };
+    }
+    if (admission.status === "rejected") {
+      options.onInvalidRejected?.(admission.reason);
+      return { status: "rejected", reason: admission.reason, detail: admission.detail };
     }
 
     // ── postings 合并（同一 transaction 内同 key 多腿先合并再验证） ────────
@@ -202,7 +245,8 @@ export function createTreasuryProjectionController(
     }
     // 合并后净值为零的多腿（完全抵消）不再产生物理变化，但交易仍合法记账。
 
-    // ── 物理可行性验证（金额非负 / 位置存在 / 容量不越界） ──────────────────
+    // ── 物理可行性验证：基于 decision observation 的物理基线 + 本 tick
+    //    overlay（已接受 intents）。fresh 决策不得回退 shared 基线 ─────────
     const capacityDeltaByLocation = new Map<string, number>();
     for (const posting of merged.values()) {
       const locationKey = treasuryLocationKey(posting.roomName, posting.locationKind);
@@ -215,10 +259,10 @@ export function createTreasuryProjectionController(
       const separator = locationKey.indexOf(":");
       const roomName = locationKey.slice(0, separator);
       const locationKind = locationKey.slice(separator + 1) as "storage" | "terminal";
-      if (!observation.hasRoom(roomName)) {
+      if (!decisionObservation.hasRoom(roomName)) {
         return rejected("unknown_room", roomName);
       }
-      const location = observation.location(roomName, locationKind);
+      const location = decisionObservation.location(roomName, locationKind);
       if (!location.exists) {
         return rejected("location_missing", locationKey);
       }
@@ -233,7 +277,7 @@ export function createTreasuryProjectionController(
       }
     }
     for (const posting of merged.values()) {
-      const base = observation.amount(posting.roomName, posting.locationKind, posting.resource);
+      const base = decisionObservation.amount(posting.roomName, posting.locationKind, posting.resource);
       const existing = projectedDelta(posting.roomName, posting.locationKind, posting.resource);
       if (base + existing + posting.delta < 0) {
         return rejected(
@@ -243,7 +287,7 @@ export function createTreasuryProjectionController(
       }
     }
 
-    // ── 原子写入：journal + overlay + heap 缓存 + Memory receipt ────────────
+    // ── 原子写入：journal + overlay + 容量聚合 + heap 缓存 + Memory receipt ─
     const tick = Game.time;
     const frozenPostings: readonly TreasuryPosting[] = Object.freeze(
       input.postings.map((posting) =>
@@ -269,8 +313,12 @@ export function createTreasuryProjectionController(
       const key = overlayKey(posting.roomName, posting.locationKind, posting.resource);
       state.overlay.set(key, (state.overlay.get(key) ?? 0) + posting.delta);
     }
+    for (const [locationKey, delta] of capacityDeltaByLocation) {
+      state.capacityDeltas.set(locationKey, (state.capacityDeltas.get(locationKey) ?? 0) + delta);
+    }
     state.settledThisTick.set(input.transactionId, tick);
-    recordSettledReceipt(input.transactionId, tick);
+    commitSettledReceipt(input.transactionId, tick);
+    revision += 1;
     options.onRecorded?.(entry);
     return { status: "recorded", transactionId: input.transactionId, postings: frozenPostings.length, tick };
   }
@@ -279,7 +327,32 @@ export function createTreasuryProjectionController(
     return Object.freeze([...state.journal]);
   }
 
-  function archiveProjectedFinal(observation: TreasuryObservationView) {
+  function buildManifest(observation: TreasuryObservationView): TreasuryTickManifest {
+    const rooms: string[] = [];
+    const locations: TreasuryLocationManifestEntry[] = [];
+    for (const room of observation.data.rooms) {
+      rooms.push(room.roomName);
+      for (const location of [room.storage, room.terminal]) {
+        const delta = location.exists
+          ? state.capacityDeltas.get(treasuryLocationKey(location.roomName, location.kind)) ?? 0
+          : 0;
+        locations.push(
+          Object.freeze({
+            roomName: location.roomName,
+            locationKind: location.kind,
+            exists: location.exists,
+            structureId: location.structureId,
+            // manifest 容量为投影终态口径（observed ± 本 tick 已接受 delta）。
+            usedCapacity: location.exists ? location.usedCapacity + delta : 0,
+            freeCapacity: location.exists ? location.freeCapacity - delta : 0,
+          }),
+        );
+      }
+    }
+    return Object.freeze({ tick: Game.time, rooms: Object.freeze(rooms), locations: Object.freeze(locations) });
+  }
+
+  function archiveProjectedFinal(observation: TreasuryObservationView): TreasuryProjectedArchive {
     const finals = new Map<string, TreasuryProjectedFinal>();
     const seenKeys = new Set<string>();
     // 第一遍：观察到的每位置/每非零资源 key 归档（base+delta，含 structureId）。
@@ -319,15 +392,18 @@ export function createTreasuryProjectionController(
       });
     }
 
-    // journal 转存有界追溯副本；overlay/本 tick 缓存切换前清空。
+    const manifest = buildManifest(observation);
+    // journal 转存有界追溯副本；overlay/容量聚合/本 tick 缓存切换前清空。
     state.previousJournal =
       state.journal.length > PREVIOUS_JOURNAL_CAP
         ? Object.freeze(state.journal.slice(0, PREVIOUS_JOURNAL_CAP))
         : Object.freeze([...state.journal]);
     state.journal = [];
     state.overlay = new Map();
+    state.capacityDeltas = new Map();
     state.settledThisTick = new Map();
-    return finals;
+    revision += 1;
+    return { tick: Game.time, finals, manifest };
   }
 
   function traceTransactionsFor(key: string): { ids: string[]; kinds: string[] } {
@@ -352,7 +428,7 @@ export function createTreasuryProjectionController(
   }
 
   function reconcile(
-    previous: { tick: number; finals: Map<string, TreasuryProjectedFinal> } | undefined,
+    previous: TreasuryProjectedArchive | undefined,
     current: TreasuryObservationView,
   ): TreasuryReconciliationSummary {
     const currentTick = Game.time;
@@ -378,34 +454,116 @@ export function createTreasuryProjectionController(
     const samples: TreasuryReconciliationSample[] = [];
     const prev = previous;
 
-    const pushSample = (
+    const pushStructureSample = (
+      roomName: string,
+      locationKind: TreasuryLocationKind,
+      category: TreasuryReconciliationCategory,
+      previousStructureId: string | undefined,
+      currentStructureId: string | undefined,
+    ) => {
+      if (samples.length >= RECONCILIATION_SAMPLE_CAP) return;
+      samples.push(
+        Object.freeze({
+          tick: prev.tick,
+          roomName,
+          locationKind,
+          resource: "",
+          projectedFinal: 0,
+          observedNow: 0,
+          diff: 0,
+          category,
+          previousStructureId,
+          currentStructureId,
+          transactionIds: Object.freeze([]),
+          transactionKinds: Object.freeze([]),
+          dimension: "structure",
+        }),
+      );
+    };
+
+    const pushResourceSample = (
       key: string,
       final: TreasuryProjectedFinal | undefined,
       observedNow: number,
       category: TreasuryReconciliationCategory,
-      currentStructureId: string | undefined,
     ) => {
       if (samples.length >= RECONCILIATION_SAMPLE_CAP) return;
       const trace = traceTransactionsFor(key);
+      const parsed = parseOverlayKey(key);
       samples.push(
         Object.freeze({
           tick: prev.tick,
-          roomName: final?.roomName ?? parseOverlayKey(key)?.roomName ?? key,
-          locationKind: final?.locationKind ?? parseOverlayKey(key)?.locationKind ?? "storage",
-          resource: final?.resource ?? parseOverlayKey(key)?.resource ?? "",
+          roomName: final?.roomName ?? parsed?.roomName ?? key,
+          locationKind: final?.locationKind ?? parsed?.locationKind ?? "storage",
+          resource: final?.resource ?? parsed?.resource ?? "",
           projectedFinal: final?.amount ?? 0,
           observedNow,
           diff: observedNow - (final?.amount ?? 0),
           category,
           previousStructureId: final?.structureId,
-          currentStructureId,
+          currentStructureId: undefined,
           transactionIds: Object.freeze(trace.ids),
           transactionKinds: Object.freeze(trace.kinds),
+          dimension: "resource",
         }),
       );
     };
 
-    // key 并集：previous finals ∪ current observed 非零资源。
+    // ── 第一层：manifest 结构对账（每位置至多一条事件） ─────────────────────
+    const previousRooms = new Set<string>(prev.manifest.rooms);
+    const previousLocations = new Map<string, TreasuryLocationManifestEntry>();
+    for (const entry of prev.manifest.locations) {
+      previousLocations.set(treasuryLocationKey(entry.roomName, entry.locationKind), entry);
+    }
+    const currentRooms = new Set<string>(current.roomNames());
+    const currentLocations = new Map<string, { exists: boolean; structureId: string | undefined }>();
+    for (const room of current.data.rooms) {
+      for (const location of [room.storage, room.terminal]) {
+        currentLocations.set(
+          treasuryLocationKey(location.roomName, location.kind),
+          { exists: location.exists, structureId: location.structureId },
+        );
+      }
+    }
+    checkedEntries += previousLocations.size;
+
+    // 房间维度：丢失/新建（含无任何结构的空房间——稀疏资源层不可见）。
+    for (const roomName of previousRooms) {
+      if (!currentRooms.has(roomName)) {
+        structural += 1;
+        pushStructureSample(roomName, "storage", "room_lost", undefined, undefined);
+      }
+    }
+    for (const roomName of currentRooms) {
+      if (!previousRooms.has(roomName)) {
+        structural += 1;
+        pushStructureSample(roomName, "storage", "new_room", undefined, undefined);
+      }
+    }
+    // 位置维度（房间仍存在的位置变化；房间级事件已单独计数）。
+    for (const [locationKey, prevEntry] of previousLocations) {
+      if (!currentRooms.has(prevEntry.roomName)) continue; // 房间丢失已计
+      const currentEntry = currentLocations.get(locationKey);
+      const currentExists = currentEntry?.exists ?? false;
+      if (!prevEntry.exists && !currentExists) continue;
+      if (!prevEntry.exists && currentExists) {
+        structural += 1;
+        pushStructureSample(prevEntry.roomName, prevEntry.locationKind, "new_location", undefined, currentEntry?.structureId);
+        continue;
+      }
+      if (prevEntry.exists && !currentExists) {
+        structural += 1;
+        pushStructureSample(prevEntry.roomName, prevEntry.locationKind, "location_lost", prevEntry.structureId, undefined);
+        continue;
+      }
+      if (prevEntry.structureId !== currentEntry?.structureId) {
+        // 每位置计一次（金额一致也记录 incarnation 变化）；不随资源数重复。
+        structural += 1;
+        pushStructureSample(prevEntry.roomName, prevEntry.locationKind, "structure_replaced", prevEntry.structureId, currentEntry?.structureId);
+      }
+    }
+
+    // ── 第二层：resource key union 数量对账（按资源维度独立计数） ──────────
     const observedNow = new Map<string, number>();
     for (const room of current.data.rooms) {
       for (const location of [room.storage, room.terminal]) {
@@ -416,63 +574,30 @@ export function createTreasuryProjectionController(
     }
     const keyUnion = new Set<string>([...previous.finals.keys(), ...observedNow.keys()]);
 
-    const previousRooms = new Set<string>();
-    const previousLiveLocations = new Set<string>();
-    for (const final of previous.finals.values()) {
-      previousRooms.add(final.roomName);
-      if (final.structureId !== undefined) {
-        previousLiveLocations.add(treasuryLocationKey(final.roomName, final.locationKind));
-      }
-    }
-
     for (const key of keyUnion) {
       checkedEntries += 1;
       const final = previous.finals.get(key);
       const observed = observedNow.get(key);
-      const parsed = parseOverlayKey(key);
-      if (!parsed) continue;
-
-      const currentLocation = current.location(parsed.roomName, parsed.locationKind);
-      const currentStructureId = currentLocation.exists ? currentLocation.structureId : undefined;
-      const actual = observed ?? 0;
-      const diff = actual - (final?.amount ?? 0);
-      const structureChanged = (final?.structureId ?? "") !== (currentStructureId ?? "");
-
-      if (diff === 0 && !structureChanged) continue;
+      if (!parseOverlayKey(key)) continue;
 
       if (final === undefined) {
-        // previous 无此 key 且 observedNow 只含非零值：外部新增必然 diff>0。
-        const category: TreasuryReconciliationCategory = !previousRooms.has(parsed.roomName)
-          ? "new_room"
-          : !previousLiveLocations.has(treasuryLocationKey(parsed.roomName, parsed.locationKind))
-            ? "new_location"
-            : "new_resource";
+        // previous 无此资源 key：外部新增（新房间/新位置带来的结构事件由
+        // manifest 层负责，此处只按资源维度计一次流入）。
         inflow += 1;
-        pushSample(key, undefined, actual, category, currentStructureId);
+        pushResourceSample(key, undefined, observed ?? 0, "new_resource");
         continue;
       }
-
-      if (structureChanged) {
-        structural += 1;
-        pushSample(key, final, actual, "structure_replaced", currentStructureId);
-      }
-
+      const actual = observed ?? 0;
+      const diff = actual - final.amount;
       if (diff > 0) {
         inflow += 1;
-        pushSample(key, final, actual, "inflow", currentStructureId);
-        continue;
-      }
-      if (diff < 0) {
-        // 流出细分：房间丢失 / 位置丢失 / 资源减少（含归零）。
+        pushResourceSample(key, final, actual, "inflow");
+      } else if (diff < 0) {
+        // 结构丢失（位置摧毁/房间丢失）由 manifest 层计数；资源层只计数量差异。
         outflow += 1;
-        const category: TreasuryReconciliationCategory = !current.hasRoom(parsed.roomName)
-          ? "room_lost"
-          : !current.locationExists(parsed.roomName, parsed.locationKind)
-            ? "location_lost"
-            : "outflow";
-        pushSample(key, final, actual, category, currentStructureId);
+        pushResourceSample(key, final, actual, "outflow");
       }
-      // diff === 0 且 structureChanged：结构替换已显式记录，无金额差异。
+      // diff === 0：无资源维度事件。
     }
 
     const summary: TreasuryReconciliationSummary = Object.freeze({
@@ -493,8 +618,10 @@ export function createTreasuryProjectionController(
   function resetForTest(): void {
     state.journal = [];
     state.overlay = new Map();
+    state.capacityDeltas = new Map();
     state.settledThisTick = new Map();
     state.previousJournal = [];
+    revision += 1;
   }
 
   return {
@@ -502,6 +629,7 @@ export function createTreasuryProjectionController(
     recordTransaction,
     projectedDelta,
     locationCapacityDelta,
+    projectionRevision: () => revision,
     journalSnapshot,
     archiveProjectedFinal,
     reconcile,

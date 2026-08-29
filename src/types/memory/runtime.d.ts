@@ -584,10 +584,15 @@ declare global {
     >;
     /**
      * Treasury 最小持久状态（绝不持久化 observation/overlay/journal/物理事实）：
-     * - receipts：transaction 幂等 receipt（transactionId → 结算 tick）。
-     *   生命周期：beginTick 清理——结算 tick 早于 now-5000 回收；超 4096 条按
-     *   tick 从老到新驱逐，但绝不驱逐当前 tick 的 receipt；version 不兼容时
-     *   冷启动重建。上限 4096 条 × ≤128 字符 id。
+     * - receipts：transaction 幂等 receipt。key 为 "t:"+transactionId 编码
+     *   （防 "__proto__"/"constructor" 等合法 id 字面量的原型污染语义），
+     *   value 为结算 tick；entryCount 为 settled 自有键计数（admission
+     *   O(1) 权威，加载时校验）。
+     *   生命周期：只自动回收结算 tick 早于 now-5000 的过期条目；未过期
+     *   条目绝不因容量驱逐——满容（4096）且无过期可回收时新 transaction
+     *   拒绝（fail closed）。version 1 → 2 有已知无损迁移（只执行一次）；
+     * 未知/更高版本或 entryCount 与实际不符（手工损坏）时 fail closed：
+     *   原数据保留、拒绝一切新登记，直至人工处理。
      * - lifecycle：生命周期标记（lastBeginTick/lastEndTick），global reset
      *   检测与对账基准标记用。
      * - treasuryPerf：指标快照（确定性计数器 + shadow 状态），由 treasury
@@ -595,9 +600,10 @@ declare global {
      */
     treasury?: {
       receipts?: {
-        version: 1;
+        version: 2;
         settled: Record<string, number>;
         updatedAt: number;
+        entryCount: number;
       };
       lifecycle?: {
         lastBeginTick?: number;
