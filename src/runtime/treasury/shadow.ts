@@ -350,8 +350,9 @@ type TreasuryPerfMemory = NonNullable<Memory["runtime"]> & {
 function snapshotCountersToMemory(service: TreasuryService, state: TreasuryShadowState): void {
   // 与 empireInventoryShadow 的 inventoryPerf 先例一致：仅指标快照写入，
   // 不触碰任何任务/生产/市场状态；Memory.runtime 缺失时先补空对象。
+  // treasuryPerf 已在 types/memory/runtime.d.ts 正式类型化。
   if (!Memory.runtime) Memory.runtime = {};
-  const metrics = service.metrics();
+  const metrics = service.metrics() as unknown as Record<string, number>;
   const runtimeMemory = Memory.runtime as TreasuryPerfMemory;
   runtimeMemory.treasuryPerf = {
     ...metrics,

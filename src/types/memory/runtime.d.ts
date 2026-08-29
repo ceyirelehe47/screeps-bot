@@ -582,6 +582,29 @@ declare global {
         expiresAt: number;
       }
     >;
+    /**
+     * Treasury 最小持久状态（绝不持久化 observation/overlay/journal/物理事实）：
+     * - receipts：transaction 幂等 receipt（transactionId → 结算 tick）。
+     *   生命周期：beginTick 清理——结算 tick 早于 now-5000 回收；超 4096 条按
+     *   tick 从老到新驱逐，但绝不驱逐当前 tick 的 receipt；version 不兼容时
+     *   冷启动重建。上限 4096 条 × ≤128 字符 id。
+     * - lifecycle：生命周期标记（lastBeginTick/lastEndTick），global reset
+     *   检测与对账基准标记用。
+     * - treasuryPerf：指标快照（确定性计数器 + shadow 状态），由 treasury
+     *   shadow 低频写入，仅诊断用途。
+     */
+    treasury?: {
+      receipts?: {
+        version: 1;
+        settled: Record<string, number>;
+        updatedAt: number;
+      };
+      lifecycle?: {
+        lastBeginTick?: number;
+        lastEndTick?: number;
+      };
+    };
+    treasuryPerf?: Record<string, number | string>;
     powerBankBoost?: Record<
       string,
       {
