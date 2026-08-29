@@ -38,6 +38,7 @@ import { runHubProgressAnalytics, renderHubProgressOverlays } from "@/runtime/hu
 import { runRemoteMining } from "@/runtime/remoteMining";
 import { runMarketSalePreflight } from "@/runtime/marketSaleAutomation";
 import { runLiveMarketSaleAutomation } from "@/runtime/marketSaleRuntime";
+import { runEmpireInventoryShadowCheck } from "@/runtime/empireInventoryShadow";
 
 mountAll();
 registerGlobalApi();
@@ -102,6 +103,9 @@ function gameLoop(): void {
       cpuProfiler.measureCreep(creep, () => creep.work());
     });
   });
+  // 库存影子等价验证（Phase 1 只读观察者）：低频对账新索引与直读 Store，
+  // 不参与任何生产决策；详见 empireInventoryShadow.ts。
+  cpuProfiler.measure("empireInventoryShadow", runEmpireInventoryShadowCheck);
   cpuProfiler.flush();
 }
 

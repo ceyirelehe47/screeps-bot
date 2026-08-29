@@ -49,6 +49,7 @@ describe("main loop phase ordering", () => {
     ["scheduleSpawnTasks", "scheduleSpawnTasks"],
     ["spawnWork", "<inline>"],
     ["creepWork", "<inline>"],
+    ["empireInventoryShadow", "runEmpireInventoryShadowCheck"],
   ] as const;
 
   function getGameLoopDeclaration(): ts.FunctionDeclaration {
@@ -206,7 +207,7 @@ describe("main loop phase ordering", () => {
 
     expect(phaseContract).toEqual(canonicalTickPhases);
     expect(new Set(order).size).toBe(order.length);
-    expect(order).toHaveLength(37);
+    expect(order).toHaveLength(38);
   });
 
   it("keeps one-time registrations outside and before gameLoop", () => {
