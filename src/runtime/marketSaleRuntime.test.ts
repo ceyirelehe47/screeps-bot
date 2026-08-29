@@ -381,14 +381,22 @@ describe("market sale live composition", () => {
     (Memory.runtime!.resourceControl as { updatedAt: number }).updatedAt =
       Game.time;
     runLiveMarketSaleAutomation(dependencies);
+    // 市场规划分频（间隔 5 tick）：200 距上次 planning 周期（199）不足
+    // 间隔，走 fast path 不触碰 pricing；204 的下一个 planning 周期才在
+    // 100-tick 缓存过期后刷新。maker 缓存 TTL 语义本身不变。
     Game.time = 200;
+    (Memory.runtime!.resourceControl as { updatedAt: number }).updatedAt =
+      Game.time;
+    runLiveMarketSaleAutomation(dependencies);
+    expect(collectPricing).toHaveBeenCalledTimes(1);
+    Game.time = 204;
     (Memory.runtime!.resourceControl as { updatedAt: number }).updatedAt =
       Game.time;
     runLiveMarketSaleAutomation(dependencies);
 
     expect(collectPricing).toHaveBeenCalledTimes(2);
     expect(collectPricing.mock.results.map((result) => result.value.observedAt))
-      .toEqual([100, 200]);
+      .toEqual([100, 204]);
 
     // 非 planning tick 且无 exposure 待观测（quarantined-only 形态：
     // hasExposureState 为真但 exposureCandidates 为空）时跳过外层

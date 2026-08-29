@@ -40,6 +40,27 @@ import { collectLiveMarketSaleProtectionLedger } from "@/runtime/marketSaleProte
 
 const DEFAULT_MINIMUM_TERMINAL_FREE_CAPACITY = 50_000;
 const MINIMUM_PRICING_CPU_BUCKET = 5_000;
+// ── 市场规划分频（提交 E）────────────────────────────────────────────────
+// ResourceControl 的 runtime.updatedAt 每轻量任务 tick 都会推进，不能作为
+// 市场 planning 触发条件（否则 observe 下每 tick 都做完整 planning：全量
+// protection + 定价 + 候选组合 + V3 规划）。常规 planning 每 N tick 一次；
+// 出现 exposure（managed/pending/direct pending）或 config revision 变化
+// 时立即恢复逐 tick 安全路径。preflight 的 latch/reconcile/drain 不受
+// 分频影响，仍然每 tick 执行。
+const MARKET_PLANNING_INTERVAL_TICKS = 5;
+
+function readLastMarketPlanningCycle(): { tick?: number; configRevision?: string } {
+  const runtime = Memory.runtime?.marketSaleAutomation as
+    | (NonNullable<NonNullable<Memory["runtime"]>["marketSaleAutomation"]> & {
+        lastPlanningCycleTick?: number;
+        lastPlanningConfigRevision?: string;
+      })
+    | undefined;
+  return {
+    tick: runtime?.lastPlanningCycleTick,
+    configRevision: runtime?.lastPlanningConfigRevision,
+  };
+}
 const ORDER_BOOK_REFRESH_TICKS = 100;
 const HISTORY_REFRESH_TICKS = 5_000;
 const MAX_CACHED_RESOURCES = 8;
@@ -798,8 +819,7 @@ export function runLiveMarketSaleAutomation(
   };
   const resourceControlCurrent =
     Memory.runtime?.resourceControl?.updatedAt === Game.time;
-  const exposureCandidates =
-    exposureProtectionCandidates(rawData);
+
   const dataRecord = isPlainRecord(rawData)
     ? rawData
     : undefined;
@@ -875,6 +895,16 @@ export function runLiveMarketSaleAutomation(
               undefined))),
   );
 
+  const exposureCandidates =
+    exposureProtectionCandidates(rawData);
+  const lastPlanningCycle = readLastMarketPlanningCycle();
+  const marketPlanningDue =
+    hasExposureState ||
+    exposureCandidates.length > 0 ||
+    typeof lastPlanningCycle.tick !== "number" ||
+    Game.time - lastPlanningCycle.tick >= MARKET_PLANNING_INTERVAL_TICKS ||
+    lastPlanningCycle.configRevision !== config.configRevision;
+
   if (
     !config.validForPlanning ||
     (config.mode !== "shadow" &&
@@ -882,13 +912,30 @@ export function runLiveMarketSaleAutomation(
       config.mode !== "direct" &&
       config.mode !== "hybrid") ||
     !data ||
-    (!resourceControlCurrent && !hasExposureState)
+    !marketPlanningDue
   ) {
-    bumpMarketPerformanceCounter("marketFastPathTicks");
+    bumpMarketPerformanceCounter(
+      config.validForPlanning && data && !marketPlanningDue && hasExposureState === false
+        ? "marketPlanningDeferredTicks"
+        : "marketFastPathTicks",
+    );
     const result = runAutomation(domainActivityInput);
     flushMarketSaleDiagnostics();
     snapshotMarketPerformanceCounters();
     return result;
+  }
+  bumpMarketPerformanceCounter("marketPlanningDueTicks");
+  // 记录本 tick 为市场 planning 周期：config revision 一并锚定，revision
+  // 变化（operator 调整配置/permit）会立即触发下一次 planning。
+  const runtimeForPlanningCycle = Memory.runtime?.marketSaleAutomation as
+    (NonNullable<NonNullable<Memory["runtime"]>["marketSaleAutomation"]> & {
+      lastPlanningCycleTick?: number;
+      lastPlanningConfigRevision?: string;
+    })
+    | undefined;
+  if (runtimeForPlanningCycle) {
+    runtimeForPlanningCycle.lastPlanningCycleTick = Game.time;
+    runtimeForPlanningCycle.lastPlanningConfigRevision = config.configRevision;
   }
 
   try {

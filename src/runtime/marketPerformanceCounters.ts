@@ -9,6 +9,8 @@
  */
 type MarketPerformanceCounterName =
   | "marketFastPathTicks"
+  | "marketPlanningDeferredTicks"
+  | "marketPlanningDueTicks"
   | "marketExposureTicks"
   | "marketPlanningTicks"
   | "marketDeepAuditTicks"
