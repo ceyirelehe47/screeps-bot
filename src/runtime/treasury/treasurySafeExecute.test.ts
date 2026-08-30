@@ -288,3 +288,43 @@ describe("第六轮结果语义：Game 已执行与 Treasury 故障不可混淆"
     expect(readTreasuryQuarantineEntry("ts1_corrupt")).toBeDefined();
   });
 });
+
+describe("第六轮 runtime input 验证前置：malformed input 结构化拒绝（不抛出）", () => {
+  it.each([
+    ["null input", null as never],
+    ["undefined input", undefined as never],
+    ["postings 非数组", { transactionId: "x1", kind: "k", source: "s", decision: { scope: "shared", epochSeq: 1, observedAtTick: 1 }, postings: "nope" } as never],
+    ["postings 含 null 成员", { transactionId: "x2", kind: "k", source: "s", decision: { scope: "shared", epochSeq: 1, observedAtTick: 1 }, postings: [null] } as never],
+    ["decision 缺失", { transactionId: "x3", kind: "k", source: "s", postings: [] } as never],
+    ["decision 形状错误", { transactionId: "x4", kind: "k", source: "s", decision: "shared", postings: [] } as never],
+    ["decision.scope 非法", { transactionId: "x5", kind: "k", source: "s", decision: { scope: "bogus", epochSeq: 1, observedAtTick: 1 }, postings: [] } as never],
+    ["delta NaN", { transactionId: "x6", kind: "k", source: "s", decision: { scope: "shared", epochSeq: 1, observedAtTick: 1 }, postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: Number.NaN }] } as never],
+    ["delta Infinity", { transactionId: "x7", kind: "k", source: "s", decision: { scope: "shared", epochSeq: 1, observedAtTick: 1 }, postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: Number.POSITIVE_INFINITY }] } as never],
+    ["epochSeq 非整数", { transactionId: "x8", kind: "k", source: "s", decision: { scope: "shared", epochSeq: 1.5, observedAtTick: 1 }, postings: [] } as never],
+  ])("%s：结构化 rejected（invalid_input），零副作用、callback 零调用", (_label, malformed) => {
+    const service = makeService();
+    let invoked = 0;
+    const result = service.executePreparedAction(malformed, () => {
+      invoked += 1;
+      return { ok: true };
+    });
+    expect(result.status).toBe("prepare_rejected");
+    if (result.status === "prepare_rejected") {
+      expect(result.reason).toBe("invalid_input");
+      expect(typeof result.detail).toBe("string");
+    }
+    expect(invoked).toBe(0);
+    const metrics = service.metrics();
+    expect(metrics.preparedActive).toBe(0);
+    expect(metrics.tentativeCapacityKeys).toBe(0);
+    expect(metrics.transactionsRejectedInvalid).toBe(1);
+  });
+
+  it("低层 prepareTransaction 同样前置验证（不抛出）", () => {
+    const service = makeService();
+    expect(() => service.prepareTransaction(null as never)).not.toThrow();
+    const rejected = service.prepareTransaction(undefined as never);
+    expect(rejected.status).toBe("rejected");
+    if (rejected.status === "rejected") expect(rejected.reason).toBe("invalid_input");
+  });
+});

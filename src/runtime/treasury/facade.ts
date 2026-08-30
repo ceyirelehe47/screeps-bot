@@ -50,6 +50,7 @@ import {
 import {
   buildTreasuryCanonicalTransaction,
   computeTreasuryPayloadDigest,
+  validateTreasuryTransactionInputShape,
   type TreasuryCanonicalTransaction,
 } from "@/runtime/treasury/canonicalTransaction";
 import {
@@ -947,6 +948,13 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
 
     prepareTransaction(input: TreasuryTransactionInput): TreasuryPreparationResult {
+      // runtime input 形状验证（canonicalization 前置）：malformed input 结构化
+      // 拒绝（invalid_input）而非抛出中断 tick——零 tentative/零槽位/零 registry。
+      const inputShapeError = validateTreasuryTransactionInputShape(input);
+      if (inputShapeError !== null) {
+        metrics.transactionsRejectedInvalid += 1;
+        return { status: "rejected", reason: "invalid_input", detail: inputShapeError };
+      }
       const state = ensureTickState(true);
       // 幂等优先：已结算 id 的重放（含重复 prepare 已 commit 的 id）。
       const settledAt = projection.isSettled(input.transactionId);
@@ -1394,6 +1402,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
 
     /** @internal 单阶段兼容实现（勿直接调用）：经 treasury/compat 模块访问。 */
     recordAcceptedTransaction(input: TreasuryTransactionInput): TreasurySettlementResult {
+      const compatShapeError = validateTreasuryTransactionInputShape(input);
+      if (compatShapeError !== null) {
+        metrics.transactionsRejectedInvalid += 1;
+        return { status: "rejected", reason: "invalid_input", detail: compatShapeError };
+      }
       const state = ensureTickState(true);
       // 幂等优先于一切：已结算 id 的重放无论决策上下文一律 already_settled。
       const settledAt = projection.isSettled(input.transactionId);
