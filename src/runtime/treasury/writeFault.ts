@@ -44,7 +44,10 @@ export type TreasuryCommitFaultPhase =
   | "journal_publish"
   | "overlay_publish"
   | "handle_state"
-  | "commit_unexpected";
+  | "commit_unexpected"
+  /** 第九轮：intent ok_pending_commit 相恢复——已知 Game 返回 OK（事实单调：
+   * 不得退化为可能未执行，永不允许 not-executed resolution）。 */
+  | "ok_pending_commit_unresolved";
 
 /** execution-unknown 类 phase（Game 副作用未知）：配合显式证据可 resolution。 */
 export type TreasuryExecutionUnknownPhase =
@@ -64,6 +67,7 @@ export const TREASURY_WRITE_FAULT_PHASES: ReadonlySet<string> = new Set<string>(
   "overlay_publish",
   "handle_state",
   "commit_unexpected",
+  "ok_pending_commit_unresolved",
   "executing_at_end_tick",
   "action_threw_execution_unknown",
   "action_returned_non_ok_abort_failed",

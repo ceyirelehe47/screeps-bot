@@ -225,15 +225,45 @@ describe("global reset 恢复", () => {
     if (replay.status === "prepare_rejected") expect(replay.reason).toBe("transaction_quarantined");
   });
 
-  it("ok_pending_commit / execution_unknown 相同样保守转 quarantine（不区分乐观）", () => {
+  it("ok_pending_commit / execution_unknown / quarantined / resolution_pending 相恢复均转 quarantine（各按事实等级）", () => {
+    const expectedPhase: Record<string, string> = {
+      ok_pending_commit: "ok_pending_commit_unresolved", // 已知 Game OK——commit 类（不降级）
+      execution_unknown: "executing_at_end_tick",
+      quarantined: "executing_at_end_tick",
+      resolution_pending: "executing_at_end_tick",
+    };
     for (const phase of ["ok_pending_commit", "execution_unknown", "quarantined", "resolution_pending"] as const) {
       clearTreasuryPersistenceForTest();
       seedIntent("ti_reset_multi", phase);
       Game.time += 1;
       const next = makeService();
       next.beginTick();
-      expect(readTreasuryQuarantineEntry("ti_reset_multi")).toBeDefined();
+      const quarantined = readTreasuryQuarantineEntry("ti_reset_multi");
+      expect(quarantined).toBeDefined();
+      expect(quarantined?.phase).toBe(expectedPhase[phase]);
       expect(readTreasuryIntentEntry("ti_reset_multi")).toBeUndefined();
+    }
+  });
+
+  it("【第九轮 4.6】returned_non_ok 恢复保留'Game 已返回非 OK'事实（不当作 callback 仍在执行）", () => {
+    seedIntent("ti_rno", "returned_non_ok");
+    Game.time += 1;
+    const next = makeService();
+    next.beginTick();
+    const quarantined = readTreasuryQuarantineEntry("ti_rno");
+    expect(quarantined?.phase).toBe("action_returned_non_ok_abort_failed");
+    expect(readTreasuryIntentEntry("ti_rno")).toBeUndefined();
+  });
+
+  it("【第九轮 4.6】committed/aborted 终态残留幂等释放（不进 quarantine）", () => {
+    for (const phase of ["committed", "aborted"] as const) {
+      clearTreasuryPersistenceForTest();
+      seedIntent("ti_final_leftover", phase);
+      Game.time += 1;
+      const next = makeService();
+      next.beginTick();
+      expect(readTreasuryQuarantineEntry("ti_final_leftover")).toBeUndefined();
+      expect(readTreasuryIntentEntry("ti_final_leftover")).toBeUndefined();
     }
   });
 

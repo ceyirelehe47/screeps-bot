@@ -742,17 +742,27 @@ export interface TreasuryIntentRecoveryReport {
 }
 
 /**
- * tick 边界（beginTick 显式分支，先于一切 planner/writer）的 intent 恢复：
+ * tick 边界（beginTick 显式分支，先于一切 planner/writer）的 intent 恢复
+ * （第九轮 4.6 按 phase 事实等级分级——已知 Game 返回 OK 不降级为"可能未
+ * 执行"，事实单调性）：
  * - ready：协议保证 execution-started 标记先于 callback——持久化的 ready 即
  *   "Game API 从未被调用"，确认未执行关闭（释放 slot、不写 receipt、不进
  *   quarantine），计 intentRecoveries；
- * - 其余 phase（executing/returned_non_ok/ok_pending_commit/execution_
- *   unknown/quarantined/resolution_pending）：无法确认 action 是否执行——
- *   保守转 execution-unknown quarantine（postings 完整携带；幂等
- *   already_present 保留首条）后释放 intent（slot 守恒：quarantine +1、
- *   intent −1）；
+ * - returned_non_ok：Game 已明确返回非 OK——保留该事实转 quarantine
+ *   （phase=action_returned_non_ok_abort_failed，仍属 execution-unknown 类
+ *   ——abort 未完成或终态未落盘；不得当作 callback 仍在执行）；
+ * - ok_pending_commit：Game 已明确返回 OK——commit 类隔离
+ *   （phase=ok_pending_commit_unresolved；后续 resolution 只能
+ *   resolve-as-committed，永不允许 not-executed）；
+ * - executing / execution_unknown / quarantined / resolution_pending：无法
+ *   确认 action 是否执行——保守转 execution-unknown quarantine
+ *   （phase=executing_at_end_tick，postings 完整携带）；
+ * - committed / aborted：终态残留（正常路径随关闭即删）——幂等释放
+ *   （receipt/abort 已完成，事实明确）；
+ * 各等级转 quarantine 后释放 intent（slot 守恒：quarantine +1、intent −1）；
  * - quarantine 写失败（store fatal/容量分支）：intent **保留**（emergency
- *   intent authority——postings/风险占用/slot 不丢），下一 tick 重试；
+ *   intent authority——postings/风险占用/slot 不丢，phase 原样保留等价
+ *   参与等级），下一 tick 重试；
  * - store fatal：不删任何数据，report 携带诊断（writer 由 blockers 阻断）。
  * 恢复幂等（重复调用对已处理条目 no-op）。
  */
@@ -777,18 +787,35 @@ export function recoverTreasuryIntentsAtTickBoundary(): TreasuryIntentRecoveryRe
       }
       continue;
     }
+    if (entry.phase === "committed" || entry.phase === "aborted") {
+      // 终态残留（正常路径随关闭即删——receipt/abort 已完成）：幂等释放。
+      if (releaseTreasuryIntentEntry(entry.transactionId)) {
+        intentEvents.recoveries += 1;
+        report.recoveredNotExecuted += 1;
+      }
+      continue;
+    }
+    // 事实等级映射：保留"Game 已返回非 OK / OK"的事实（不降级为
+    // executing_at_end_tick 的模糊 unknown）。
+    const quarantinePhase =
+      entry.phase === "returned_non_ok"
+        ? ("action_returned_non_ok_abort_failed" as const)
+        : entry.phase === "ok_pending_commit"
+          ? ("ok_pending_commit_unresolved" as const)
+          : ("executing_at_end_tick" as const);
     const write = quarantineTreasuryTransaction({
       transactionId: entry.transactionId,
       digest: entry.digest,
       tick: entry.createdAtTick,
       kind: entry.kind,
       source: entry.source,
-      phase: "executing_at_end_tick",
+      phase: quarantinePhase,
       deltas: entry.postings.map((leg) => ({ ...leg })),
       recordedAt: entry.updatedAtTick,
     });
     if (write.status === "rejected") {
-      // emergency intent authority：保留 entry（postings/占用/slot 不丢）。
+      // emergency intent authority：保留 entry（postings/占用/slot 不丢，
+      // phase 原样保留——下一 tick 按同一等级重试）。
       intentEvents.emergencyRetentions += 1;
       report.retainedForAuthority += 1;
       continue;
