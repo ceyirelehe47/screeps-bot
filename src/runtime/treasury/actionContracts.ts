@@ -76,8 +76,17 @@ export interface TreasuryActionReconcilerFacts {
 export interface TreasuryActionStructureBinding {
   readonly roomName: string;
   readonly locationKind: "storage" | "terminal";
-  /** 快照 label（缺省 `${roomName}:${locationKind}`；须唯一）。 */
+  /** 快照 label（缺省 `${roomName}:${locationKind}`；仅诊断，不作权威 key）。 */
   readonly label?: string;
+  /**
+   * explicit game object ID binding（第十轮 3.12.11 受控种类之二）：提供时
+   * 按 game_object binding 验证（对象存在、可选 expectedType/expectedRoom
+   * 匹配；incarnation = 对象 id 本身）；roomName/locationKind 仍须提供
+   *（诊断与 room 归属声明）。
+   */
+  readonly objectId?: string;
+  readonly expectedType?: string;
+  readonly expectedRoom?: string;
 }
 
 /** adapter 提供的有界版本化 durable reconciliation payload。 */
@@ -311,11 +320,31 @@ function validateStructureBindings(
     if (candidate.locationKind !== "storage" && candidate.locationKind !== "terminal") {
       return `structureBinding.locationKind 非法（受控枚举 storage|terminal）: ${String(candidate.locationKind)}`;
     }
-    const label = candidate.label ?? `${candidate.roomName}:${candidate.locationKind}`;
+    // 受控 canonical identity（第十轮 3.12.11）：governed_location 或
+    // game_object（objectId 提供）；label 仅诊断不作权威 key。
+    if (candidate.objectId !== undefined) {
+      if (typeof candidate.objectId !== "string" || candidate.objectId.length === 0 || candidate.objectId.length > 48) {
+        return "structureBinding.objectId 非法（须为 1..48 字符）";
+      }
+      if (candidate.expectedType !== undefined && (typeof candidate.expectedType !== "string" || candidate.expectedType.length === 0)) {
+        return "structureBinding.expectedType 非法";
+      }
+      if (candidate.expectedRoom !== undefined && (typeof candidate.expectedRoom !== "string" || candidate.expectedRoom.length === 0)) {
+        return "structureBinding.expectedRoom 非法";
+      }
+    }
+    const label = candidate.label ?? (candidate.objectId !== undefined ? `obj:${candidate.objectId}` : `${candidate.roomName}:${candidate.locationKind}`);
     if (typeof label !== "string" || label.length === 0 || label.length > 48) return "structureBinding label 非法";
     if (seenLabels.has(label)) return `structureBinding label 重复: ${label}`;
     seenLabels.add(label);
-    typed.push({ roomName: candidate.roomName, locationKind: candidate.locationKind, label });
+    typed.push({
+      roomName: candidate.roomName,
+      locationKind: candidate.locationKind,
+      label,
+      ...(candidate.objectId !== undefined ? { objectId: candidate.objectId } : {}),
+      ...(candidate.expectedType !== undefined ? { expectedType: candidate.expectedType } : {}),
+      ...(candidate.expectedRoom !== undefined ? { expectedRoom: candidate.expectedRoom } : {}),
+    });
   }
   return typed;
 }
@@ -387,13 +416,35 @@ function canonicalStructuresText(structureSnapshots: Record<string, string | und
 }
 
 /**
+ * 构建 canonical action contract 的公开入口（第十轮 3.12.12 顶层异常边界）：
+ * 任何 runtime input 触发的反射异常已在 canonicalizeTreasuryActionArgs 结构化
+ * 拒绝；此处的 catch 防御**内部编程错误**（不吞掉后继续构建——返回明确
+ * canonicalization fault，registry/授权零变化）。
+ */
+export function buildTreasuryActionContract(
+  service: TreasuryService,
+  request: TreasuryActionContractRequest,
+): TreasuryActionContractResult {
+  try {
+    return buildTreasuryActionContractInner(service, request);
+  } catch (error) {
+    actionContractEvents.rejected += 1;
+    return {
+      status: "rejected",
+      reason: "contract_invalid",
+      detail: `canonicalization_fault: ${String(error instanceof Error ? error.message : error).slice(0, 128)}（内部编码边界——contract 未构建，registry/授权零变化）`,
+    };
+  }
+}
+
+/**
  * 构建 canonical action contract：canonicalize args → adapter 校验 →
  * derivePostings 确定性派生 → 结构 incarnation 快照（posting locations +
  * 受控 structureBindings）→ digest 绑定（AC2）→ 冻结 + 私有 registry 注册。
  * postings 与 Game API 参数同源（同一 canonical args 派生），两套事实通道
  * 不复存在。
  */
-export function buildTreasuryActionContract(
+function buildTreasuryActionContractInner(
   service: TreasuryService,
   request: TreasuryActionContractRequest,
 ): TreasuryActionContractResult {
@@ -435,18 +486,39 @@ export function buildTreasuryActionContract(
     return { status: "rejected", reason: "contract_invalid", detail: `derivePostings 输出非法: ${postingsError}` };
   }
   const observation = service.observation();
-  // 结构 incarnation 快照（第九轮 4.12）：posting 涉及的每个 location 的
-  // structureId + adapter 受控声明的额外结构（全部执行前重验）。
-  const structureSnapshots: Record<string, string | undefined> = {};
+  // 结构 incarnation 快照（第九轮 4.12 / 第十轮 3.12.11）：posting 涉及的
+  // 每个 location 的 structureId + adapter 受控声明的额外结构（全部执行前
+  // 重验）。null-prototype 容器：特殊 label（__proto__/constructor）不得
+  // 污染原型链——快照键一律自有属性。
+  const structureSnapshots: Record<string, string> = Object.create(null) as Record<string, string>;
   const bindingList: TreasuryActionStructureBinding[] = [];
+  const postingLocationKeys = new Map<string, string>(); // identity → label
   const locationSeen = new Set<string>();
   for (const posting of derived) {
     const key = `${posting.roomName}:${posting.locationKind}`;
     if (locationSeen.has(key)) continue;
     locationSeen.add(key);
-    structureSnapshots[key] = observation.hasRoom(posting.roomName)
-      ? observation.location(posting.roomName, posting.locationKind as "storage" | "terminal").structureId
-      : undefined;
+    // 【第十轮 3.12.11】required structure 构建时必须真实存在——undefined
+    // 一律拒绝（不允许 undefined===undefined 的伪验证）。
+    if (!observation.hasRoom(posting.roomName)) {
+      actionContractEvents.rejected += 1;
+      return {
+        status: "rejected",
+        reason: "contract_invalid",
+        detail: `posting 位置 ${key} 的房间不在管辖（required structure 不存在——拒绝 contract 构建）`,
+      };
+    }
+    const postingStructure = observation.location(posting.roomName, posting.locationKind as "storage" | "terminal").structureId;
+    if (postingStructure === undefined) {
+      actionContractEvents.rejected += 1;
+      return {
+        status: "rejected",
+        reason: "contract_invalid",
+        detail: `posting 位置 ${key} 的 required structure 不存在（incarnation 无法验证——拒绝 contract 构建）`,
+      };
+    }
+    structureSnapshots[key] = postingStructure;
+    postingLocationKeys.set(key, key);
     bindingList.push({ roomName: posting.roomName, locationKind: posting.locationKind as "storage" | "terminal", label: key });
   }
   if (adapter.structureBindings !== undefined) {
@@ -456,7 +528,61 @@ export function buildTreasuryActionContract(
       return { status: "rejected", reason: "contract_invalid", detail: `structureBindings 输出非法: ${bindings}` };
     }
     for (const binding of bindings) {
-      if (Object.prototype.hasOwnProperty.call(structureSnapshots, binding.label)) continue; // 与 posting location 重合
+      // canonical identity（第十轮 3.12.11）：governed_location = room:loc；
+      // game_object = obj:objectId（与 posting binding 天然不重合）。
+      const identityKey = binding.objectId !== undefined ? `obj:${binding.objectId}` : `${binding.roomName}:${binding.locationKind}`;
+      const postingLabels = new Set(postingLocationKeys.values());
+      if (postingLocationKeys.has(identityKey)) {
+        // 同 identity → 合并（posting binding 为 identity 权威；adapter 的
+        // 重复声明幂等跳过）。
+        continue;
+      }
+      // label 冲突：label 与某 posting binding 的 label 相同但 identity 不同
+      // → 拒绝（label 仅诊断，不得复用同 label 表达不同结构声明）。
+      if (binding.label !== undefined && postingLabels.has(binding.label)) {
+        actionContractEvents.rejected += 1;
+        return {
+          status: "rejected",
+          reason: "contract_invalid",
+          detail: `structureBinding label ${binding.label} 与 posting binding 冲突（同 label 不同 identity——拒绝）`,
+        };
+      }
+      if (binding.objectId !== undefined) {
+        // game_object binding：对象必须存在且与期望类型/room 归属匹配。
+        const object = (Game as unknown as { getObjectById<T extends object>(id: string): T | null }).getObjectById<{
+          id: string;
+          structureType?: string;
+          room?: { name: string };
+        }>(binding.objectId);
+        if (object === null || object === undefined) {
+          actionContractEvents.rejected += 1;
+          return {
+            status: "rejected",
+            reason: "contract_invalid",
+            detail: `structureBinding 对象 ${binding.objectId} 不存在（required structure 不存在——拒绝 contract 构建）`,
+          };
+        }
+        if (binding.expectedType !== undefined && object.structureType !== binding.expectedType) {
+          actionContractEvents.rejected += 1;
+          return {
+            status: "rejected",
+            reason: "contract_invalid",
+            detail: `structureBinding 对象 ${binding.objectId} 类型不匹配（期望 ${binding.expectedType}，实际 ${String(object.structureType)}）`,
+          };
+        }
+        const objectRoom = object.room?.name;
+        if (binding.expectedRoom !== undefined && objectRoom !== binding.expectedRoom) {
+          actionContractEvents.rejected += 1;
+          return {
+            status: "rejected",
+            reason: "contract_invalid",
+            detail: `structureBinding 对象 ${binding.objectId} room 归属不匹配（期望 ${binding.expectedRoom}，实际 ${String(objectRoom)}）`,
+          };
+        }
+        structureSnapshots[binding.label!] = binding.objectId;
+        bindingList.push(binding);
+        continue;
+      }
       // 声明的结构必须可验证：房间不在管辖或位置缺失 → 拒绝（不允许
       // "声明了但无法验证"）。
       if (!observation.hasRoom(binding.roomName)) {
@@ -467,7 +593,16 @@ export function buildTreasuryActionContract(
           detail: `structureBinding 声明房间 ${binding.roomName} 不在管辖（无法验证 incarnation——拒绝）`,
         };
       }
-      structureSnapshots[binding.label] = observation.location(binding.roomName, binding.locationKind).structureId;
+      const bindingStructure = observation.location(binding.roomName, binding.locationKind).structureId;
+      if (bindingStructure === undefined) {
+        actionContractEvents.rejected += 1;
+        return {
+          status: "rejected",
+          reason: "contract_invalid",
+          detail: `structureBinding 位置 ${identityKey} 的 required structure 不存在（拒绝 contract 构建）`,
+        };
+      }
+      structureSnapshots[binding.label!] = bindingStructure;
       bindingList.push(binding);
     }
   }
@@ -522,7 +657,7 @@ export function buildTreasuryActionContract(
     args: canonicalArgs,
     canonicalArgsText: canonicalized.text,
     postings: Object.freeze(sortedPostings.map((p) => Object.freeze({ ...p }))),
-    structureSnapshots: Object.freeze({ ...structureSnapshots }),
+    structureSnapshots: Object.freeze(Object.assign(Object.create(null), structureSnapshots)) as Record<string, string>,
     structureBindings: Object.freeze(sortedBindings.map((b) => Object.freeze({ ...b }))),
     digest,
     ...(durableFacts !== undefined ? { durableFacts: Object.freeze({ ...durableFacts }) } : {}),
@@ -644,10 +779,33 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
   }
   for (const binding of contract.structureBindings) {
     const label = binding.label ?? `${binding.roomName}:${binding.locationKind}`;
+    const snapshotId = contract.structureSnapshots[label];
+    if (binding.objectId !== undefined) {
+      // game_object binding 执行前重验（第十轮 3.12.11）：对象仍存在、类型与
+      // room 归属仍匹配（incarnation = 对象 id 本身——不存在即被替换语义）。
+      const object = (Game as unknown as { getObjectById<T extends object>(id: string): T | null }).getObjectById<{
+        id: string;
+        structureType?: string;
+        room?: { name: string };
+      }>(binding.objectId);
+      const objectMissing =
+        object === null ||
+        object === undefined ||
+        (binding.expectedType !== undefined && object.structureType !== binding.expectedType) ||
+        (binding.expectedRoom !== undefined && object.room?.name !== binding.expectedRoom);
+      if (objectMissing) {
+        actionContractEvents.rejected += 1;
+        return {
+          status: "prepare_rejected",
+          reason: "structure_replaced",
+          detail: `game object binding 失效（${label}: 对象不存在或类型/room 归属不匹配）——必须重新构建 contract`,
+        };
+      }
+      continue;
+    }
     const currentStructureId = freshObservation.hasRoom(binding.roomName)
       ? freshObservation.location(binding.roomName, binding.locationKind).structureId
       : undefined;
-    const snapshotId = contract.structureSnapshots[label];
     if (snapshotId !== currentStructureId) {
       actionContractEvents.rejected += 1;
       return {

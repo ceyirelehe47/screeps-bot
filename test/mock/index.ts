@@ -7,6 +7,12 @@ class GameMock {
   public rooms: Record<string, Room> = {};
   public spawns: Record<string, StructureSpawn> = {};
   public time = 1;
+  /** 测试注入的对象表（treasury object-ID binding 验证用；缺省返回 undefined）。 */
+  public objects: Record<string, { id: string; structureType?: string; room?: { name: string } }> = {};
+  public getObjectById<T extends { id: string }>(id: string): T | null {
+    const found = this.objects[id];
+    return (found as unknown as T) ?? null;
+  }
 }
 
 class MemoryMock {

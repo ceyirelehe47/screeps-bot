@@ -25,6 +25,7 @@ import {
   replaceTreasuryActionAdapterForTest,
   resetTreasuryTestAdapterSideEffectsForTest,
   type TreasuryActionContract,
+  type TreasuryActionStructureBinding,
   type TreasuryTestTransferArgs,
 } from "@/runtime/treasury/actionContracts";
 import type { TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
@@ -476,5 +477,118 @@ describe("contract digest AC3：durable reconciliation facts 绑定（第十轮 
     const built = buildTreasuryActionContract(service, { actionKind: "test.nofacts", transactionId: "ac3_nofacts", args: {} });
     expect(built.status).toBe("rejected");
     if (built.status === "rejected") expect(built.detail).toContain("durableFacts");
+  });
+});
+
+describe("structure binding canonical authority（第十轮 3.12.11）", () => {
+  function locationAdapter(extraBindings: TreasuryActionStructureBinding[], kind = "test.bindloc") {
+    return {
+      kind,
+      version: 1,
+      validate: (args: unknown): string | null => (args && typeof args === "object" ? null : "args 非对象"),
+      derivePostings: () => [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }],
+      execute: (): { ok: boolean } => ({ ok: true }),
+      structureBindings: () => extraBindings,
+      durableFacts: () => ({ version: 1, payload: "bind-fixture" }),
+      reconcile: () => "still_uncertain" as const,
+    };
+  }
+
+  it("label 与 posting binding 相同但 identity 声明冲突：contract 拒绝（不静默合并）", () => {
+    registerTreasuryActionAdapter(
+      locationAdapter([{ roomName: "W1N57", locationKind: "storage", label: "custom" }], "test.bind_a"),
+    );
+    const service = makeService();
+    const built = buildTreasuryActionContract(service, { actionKind: "test.bind_a", transactionId: "bind_a", args: {} });
+    expect(built.status).toBe("built"); // 同 identity（W1N57:storage）→ 合并合法
+    registerTreasuryActionAdapter(
+      locationAdapter(
+        [
+          { roomName: "W1N57", locationKind: "terminal", label: "W1N57:storage" }, // label 撞 posting 但 identity 不同
+        ],
+        "test.bind_b",
+      ),
+    );
+    const built2 = buildTreasuryActionContract(service, { actionKind: "test.bind_b", transactionId: "bind_b", args: {} });
+    expect(built2.status).toBe("rejected");
+    if (built2.status === "rejected") expect(built2.detail).toContain("冲突"); // label 撞 posting 且 identity 不同
+  });
+
+  it("required structure 构建时不存在（位置缺失）：contract 拒绝（不记录 undefined）", () => {
+    // E1N1 无 mock 房间 → posting 房间不在管辖 → 拒绝。
+    registerTreasuryActionAdapter(
+      locationAdapter([{ roomName: "E1N1", locationKind: "storage" }], "test.bind_c"),
+    );
+    const service = makeService();
+    const built = buildTreasuryActionContract(service, { actionKind: "test.bind_c", transactionId: "bind_c", args: {} });
+    expect(built.status).toBe("rejected");
+    if (built.status === "rejected") expect(built.detail).toContain("不在管辖");
+  });
+
+  it("__proto__ 类诊断 label 不污染结构快照（null-prototype 容器）", () => {
+    registerTreasuryActionAdapter(
+      locationAdapter([{ roomName: "W1N57", locationKind: "terminal", label: "__proto__" }], "test.bind_d"),
+    );
+    const service = makeService();
+    // terminal 位置缺失（ROOMS fixture 的 W1N57 无 terminal？——有（term-1）。构建成功且 __proto__ 为自有键。
+    const built = buildTreasuryActionContract(service, { actionKind: "test.bind_d", transactionId: "bind_d", args: {} });
+    expect(built.status).toBe("built");
+    if (built.status === "built") {
+      expect(Object.prototype.hasOwnProperty.call(built.contract.structureSnapshots, "__proto__")).toBe(true);
+      expect(Object.getPrototypeOf(built.contract.structureSnapshots)).toBe(null);
+    }
+  });
+
+  it("object-ID binding：对象类型或 room 归属错误时拒绝；正确时构建成功", () => {
+    registerTreasuryActionAdapter(
+      locationAdapter(
+        [{ roomName: "W1N57", locationKind: "storage", objectId: "lab-001", expectedType: "lab", expectedRoom: "W1N57" }],
+        "test.bind_e",
+      ),
+    );
+    (Game as unknown as { objects: Record<string, unknown> }).objects = {};
+    const service = makeService();
+    // 对象不存在 → 拒绝。
+    const missing = buildTreasuryActionContract(service, { actionKind: "test.bind_e", transactionId: "bind_e1", args: {} });
+    expect(missing.status).toBe("rejected");
+    if (missing.status === "rejected") expect(missing.detail).toContain("不存在");
+    // 类型不匹配 → 拒绝。
+    (Game as unknown as { objects: Record<string, unknown> }).objects = {
+      "lab-001": { id: "lab-001", structureType: "spawn", room: { name: "W1N57" } },
+    };
+    const wrongType = buildTreasuryActionContract(service, { actionKind: "test.bind_e", transactionId: "bind_e2", args: {} });
+    expect(wrongType.status).toBe("rejected");
+    if (wrongType.status === "rejected") expect(wrongType.detail).toContain("类型不匹配");
+    // room 归属不匹配 → 拒绝。
+    (Game as unknown as { objects: Record<string, unknown> }).objects = {
+      "lab-001": { id: "lab-001", structureType: "lab", room: { name: "E2N2" } },
+    };
+    const wrongRoom = buildTreasuryActionContract(service, { actionKind: "test.bind_e", transactionId: "bind_e3", args: {} });
+    expect(wrongRoom.status).toBe("rejected");
+    if (wrongRoom.status === "rejected") expect(wrongRoom.detail).toContain("room 归属不匹配");
+    // 全部匹配 → 构建成功且快照含 objectId。
+    (Game as unknown as { objects: Record<string, unknown> }).objects = {
+      "lab-001": { id: "lab-001", structureType: "lab", room: { name: "W1N57" } },
+    };
+    const ok = buildTreasuryActionContract(service, { actionKind: "test.bind_e", transactionId: "bind_e4", args: {} });
+    expect(ok.status).toBe("built");
+    if (ok.status === "built") {
+      expect(ok.contract.structureSnapshots["obj:lab-001"]).toBe("lab-001");
+    }
+  });
+
+  it("structure facts 变化导致 contract digest 变化", () => {
+    registerTreasuryActionAdapter(
+      locationAdapter([{ roomName: "W1N57", locationKind: "terminal", label: "extra" }], "test.bind_f"),
+    );
+    const service = makeService();
+    const first = buildTreasuryActionContract(service, { actionKind: "test.bind_f", transactionId: "bind_f", args: {} });
+    // 换一个声明（不同 label）→ digest 变化（replace 覆盖注册）。
+    replaceTreasuryActionAdapterForTest(
+      locationAdapter([{ roomName: "W1N57", locationKind: "terminal", label: "extra2" }], "test.bind_f"),
+    );
+    const second = buildTreasuryActionContract(service, { actionKind: "test.bind_f", transactionId: "bind_f", args: {} });
+    if (first.status !== "built" || second.status !== "built") throw new Error("build failed");
+    expect(first.contract.digest).not.toBe(second.contract.digest);
   });
 });
