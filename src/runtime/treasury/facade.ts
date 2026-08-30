@@ -61,6 +61,7 @@ import {
 import { buildTreasuryCommitmentIndex } from "@/runtime/treasury/commitments";
 import {
   cleanupTreasuryReceipts,
+  peekTreasuryReceiptHealth,
   readTreasuryLifecycle,
   readTreasuryReceiptEventCounters,
   releaseAllTreasuryReceiptReservations,
@@ -79,11 +80,13 @@ import {
 import {
   isTreasuryTransactionQuarantined,
   quarantineTreasuryTransaction,
+  treasuryQuarantineBlockers,
   treasuryQuarantineCapacityTotals,
   treasuryQuarantineOutflowTotals,
   type TreasuryQuarantineDeltas,
 } from "@/runtime/treasury/quarantine";
 import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
+import { isReservationOwnerMigrationComplete } from "@/runtime/resourceReservation";
 import {
   type TreasuryBalanceView,
   type TreasuryCommitmentIndex,
@@ -824,7 +827,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
 
     query(context: TreasuryQueryContext): TreasuryBalanceView {
-      const observation = this.observation();
+      const state = ensureTickState(true);
+      const observation = state.observation;
 
       // 输入规范化 fail closed：非法资源/非管辖或重复房间/空 scope/非法布尔
       // 开关/NaN withhold 等一律返回保守全零视图（不报乐观可用量），并计数。
@@ -843,6 +847,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           contextStatus: "invalid_fail_closed",
           commitmentStatus: "globally-incomplete",
           authorizationSafe: false,
+          authorizationBlockers: ["invalid_context"],
           epoch: observation.epoch,
         };
       }
@@ -931,6 +936,21 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const authorizable = ownerCheck.valid && commitmentComplete;
       const rawSpendable = authorizable ? base - committed - withhold : 0;
 
+      // authorizationSafe 联合判定（第六轮）：数值之外的全局阻断条件——
+      // 任一失败即 false；blockers 有界诊断指出主因；新条件不归零数量字段
+      // （数值保留供观察，授权信号明确失败，不以归零掩盖原因）。
+      const blockers: string[] = [];
+      if (!ownerCheck.valid && context.owner) blockers.push("invalid_owner");
+      if (!commitmentComplete) blockers.push("commitment_incomplete");
+      if (isTreasuryWriteAdmissionLocked()) blockers.push("write_fault");
+      if (treasuryQuarantineBlockers().blocking) blockers.push("quarantine_unresolved");
+      const receiptHealth = peekTreasuryReceiptHealth();
+      if (!receiptHealth.healthy) blockers.push("receipt_unhealthy");
+      if (state.ended) blockers.push("lifecycle_closed");
+      if (state.tick !== Game.time) blockers.push("stale_tick_state");
+      if (!isReservationOwnerMigrationComplete()) blockers.push("reservation_migration_incomplete");
+      const authorizationSafe = authorizable && blockers.length === 0;
+
       return {
         resource: context.resource,
         observed,
@@ -942,7 +962,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         ownerStatus,
         contextStatus: "valid",
         commitmentStatus,
-        authorizationSafe: authorizable,
+        authorizationSafe,
+        authorizationBlockers: Object.freeze(blockers),
         epoch: observation.epoch,
       };
     },

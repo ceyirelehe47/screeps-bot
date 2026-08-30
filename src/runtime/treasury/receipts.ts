@@ -149,6 +149,36 @@ export function peekTreasuryReceiptStore(): TreasuryReceiptStore | undefined {
   return branch?.receipts as TreasuryReceiptStore | undefined;
 }
 
+export interface TreasuryReceiptHealth {
+  readonly healthy: boolean;
+  readonly detail: string | null;
+}
+
+/**
+ * receipt store 健康探测（只读零写；authorizationSafe 的 receipt 条件）：
+ * - heap 缓存已 load 且 fatal → unhealthy（value 级损坏在 load 校验检出后
+ *   持续 fail closed）；
+ * - 未 load 时做轻量形状探测（version 可识别 / settled 对象 / entryCount
+ *   数字）——不做全表扫描（value 级损坏由下一次 load 校验显式检出）。
+ */
+export function peekTreasuryReceiptHealth(): TreasuryReceiptHealth {
+  if (heapStoreRuntime?.fatal) {
+    return { healthy: false, detail: heapStoreRuntime.fatal };
+  }
+  const store = peekTreasuryReceiptStore();
+  if (store === undefined) return { healthy: true, detail: null };
+  if (store.version !== TREASURY_RECEIPT_VERSION && store.version !== 1 && store.version !== 2) {
+    return { healthy: false, detail: `未知 receipt 版本 ${String(store.version)}（fail closed）` };
+  }
+  if (!store.settled || typeof store.settled !== "object") {
+    return { healthy: false, detail: "receipt settled 对象缺失" };
+  }
+  if (typeof store.entryCount !== "number" || !Number.isSafeInteger(store.entryCount) || store.entryCount < 0) {
+    return { healthy: false, detail: "receipt entryCount 非法" };
+  }
+  return { healthy: true, detail: null };
+}
+
 export function peekTreasuryLifecycle(): TreasuryLifecycleMemory | undefined {
   const branch = (Memory.runtime as RuntimeMemoryWithTreasury | undefined)?.treasury;
   return branch?.lifecycle;

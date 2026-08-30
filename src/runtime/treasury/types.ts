@@ -611,8 +611,15 @@ export interface TreasuryBalanceView {
   readonly contextStatus: TreasuryQueryContextStatus;
   /** 承诺视图 completeness（incomplete scope 的授权不得显示 authorization-safe）。 */
   readonly commitmentStatus: TreasuryCommitmentCompleteness;
-  /** 授权安全 = 上下文合法 + owner 合法 + 承诺视图完整。 */
+  /** 授权安全 = 上下文/owner 合法 + 承诺视图完整 + 无任何全局阻断（第六轮联合判定）。 */
   readonly authorizationSafe: boolean;
+  /**
+   * authorizationSafe 的主要阻断原因（有界诊断；空数组 = 无阻断）：
+   * write_fault / quarantine_unresolved / receipt_unhealthy /
+   * commitment_incomplete / lifecycle_closed / reservation_migration_incomplete /
+   * invalid_context。数值字段保留供观察——阻断时不得以归零掩盖原因。
+   */
+  readonly authorizationBlockers: readonly string[];
   readonly epoch: TreasuryEpoch;
 }
 

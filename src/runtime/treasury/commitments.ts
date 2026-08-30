@@ -77,6 +77,21 @@ function defaultHolderExists(holderId: string): boolean {
 
 const VALID_RESOURCES_FOR_COMMITMENT: ReadonlySet<string> = new Set<string>(RESOURCES_ALL);
 
+/** task status 合法枚举（与 ResourceTransferTaskStatus 权威一致）。 */
+const VALID_TASK_STATUSES: ReadonlySet<string> = new Set<string>([
+  "pending",
+  "done",
+  "cancelled",
+  "failed",
+]);
+
+/** blockedReason 合法枚举（与 ResourceTransferTaskBlockedReason 权威一致；缺省合法）。 */
+const VALID_TASK_BLOCKED_REASONS: ReadonlySet<string> = new Set<string>([
+  "receiver_capacity",
+  "source_depleted",
+  "insufficient_terminal_resource_or_fee",
+]);
+
 /** 数值字段完整有效性：有限、整数、安全整数、非负。 */
 function isNonNegativeSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
@@ -90,7 +105,9 @@ function isNonNegativeSafeInteger(value: unknown): value is number {
  */
 export function isValidTreasuryTransferTaskForCommitment(task: ResourceTransferTask): boolean {
   if (!task || typeof task !== "object") return false;
-  if (typeof task.status !== "string" || task.status.length === 0) return false;
+  // status 必须属于合法枚举——未知值（如 "pendng"）是损坏而非"普通非 pending"，
+  // 绝不静默跳过后继续授权。
+  if (typeof task.status !== "string" || !VALID_TASK_STATUSES.has(task.status)) return false;
   if (typeof task.resource !== "string" || !VALID_RESOURCES_FOR_COMMITMENT.has(task.resource)) return false;
   if (typeof task.fromRoomName !== "string" || task.fromRoomName.length === 0) return false;
   if (typeof task.toRoomName !== "string" || task.toRoomName.length === 0) return false;
@@ -101,13 +118,21 @@ export function isValidTreasuryTransferTaskForCommitment(task: ResourceTransferT
   if (!isNonNegativeSafeInteger(task.createdAt)) return false;
   if (!isNonNegativeSafeInteger(task.updatedAt)) return false;
   if (!isNonNegativeSafeInteger(task.lastProgressAt)) return false;
-  if (task.blockedReason !== undefined && typeof task.blockedReason !== "string") return false;
+  if (task.blockedReason !== undefined && !VALID_TASK_BLOCKED_REASONS.has(task.blockedReason as string)) {
+    return false; // 枚举外 blockedReason 是损坏，不是"未阻塞"
+  }
   if (task.blockedSince !== undefined && !isNonNegativeSafeInteger(task.blockedSince)) return false;
   return true;
 }
 
 function isValidScopePair(roomName: unknown, resource: unknown): roomName is string {
   return typeof roomName === "string" && roomName.length > 0 && typeof resource === "string" && resource.length > 0;
+}
+
+/** 聚合累加（多条合法安全整数相加后仍须为安全整数；溢出返回 null）。 */
+function addSafeInteger(current: number, addend: number): number | null {
+  const next = current + addend;
+  return Number.isSafeInteger(next) ? next : null;
 }
 
 /** production reservation 记录级验证（数值与 owner identity 形状）。 */
@@ -190,35 +215,61 @@ export function buildTreasuryCommitmentIndex(
       // scope incomplete；双侧都不可定位（连资源/房间都读不出）则全局
       // incomplete。绝不静默跳过后给出乐观 spendable，也绝不删除原记录。
       recordInvalid();
+      // scope 定位要求 (room, resource) 二元均合法：非法 resource（不在官方
+      // catalog）无法构成任何合法 scope——绝不能因"非法资源不会命中合法
+      // 查询"就静默跳过，直接全局 incomplete（一切授权 fail closed）。
       const resourceKnown =
         typeof task?.resource === "string" && VALID_RESOURCES_FOR_COMMITMENT.has(task.resource);
       const fromLocated = resourceKnown && typeof task?.fromRoomName === "string" && task.fromRoomName.length > 0;
       const toLocated = resourceKnown && typeof task?.toRoomName === "string" && task.toRoomName.length > 0;
       if (fromLocated) incompleteScopes.add(taskKey(task.fromRoomName, task.resource));
       if (toLocated) incompleteScopes.add(taskKey(task.toRoomName, task.resource));
-      if (!fromLocated && !toLocated) globalIncomplete = true;
+      if (!fromLocated || !toLocated) globalIncomplete = true;
       continue;
     }
     if (task.status !== "pending") continue;
     metrics.pendingTaskRecords += 1;
     const reason = task.reason || "";
 
-    outgoingTaskCountByRoom.set(task.fromRoomName, (outgoingTaskCountByRoom.get(task.fromRoomName) ?? 0) + 1);
+    // 聚合安全整数检查：多条合法安全整数相加后仍须安全——溢出即该 task
+    // 影响的全部 scope incomplete（数值不再作为授权依据），不静默丢弃。
     const outKey = taskKey(task.fromRoomName, task.resource);
-    outgoing.set(outKey, (outgoing.get(outKey) ?? 0) + task.remainingAmount);
+    const mergedOutgoing = addSafeInteger(outgoing.get(outKey) ?? 0, task.remainingAmount);
+    const mergedPendingIncoming = addSafeInteger(
+      pendingIncoming.get(taskKey(task.toRoomName, task.resource)) ?? 0,
+      task.remainingAmount,
+    );
+    if (mergedOutgoing === null || mergedPendingIncoming === null) {
+      recordInvalid();
+      incompleteScopes.add(outKey);
+      incompleteScopes.add(taskKey(task.toRoomName, task.resource));
+      continue;
+    }
+
+    outgoingTaskCountByRoom.set(task.fromRoomName, (outgoingTaskCountByRoom.get(task.fromRoomName) ?? 0) + 1);
+    outgoing.set(outKey, mergedOutgoing);
     const byReason = outgoingByReason.get(outKey) ?? new Map<string, number>();
-    byReason.set(reason, (byReason.get(reason) ?? 0) + task.remainingAmount);
+    const mergedByReason = addSafeInteger(byReason.get(reason) ?? 0, task.remainingAmount);
+    if (mergedByReason === null) {
+      recordInvalid();
+      incompleteScopes.add(outKey);
+      continue;
+    }
+    byReason.set(reason, mergedByReason);
     outgoingByReason.set(outKey, byReason);
 
-    pendingIncoming.set(
-      taskKey(task.toRoomName, task.resource),
-      (pendingIncoming.get(taskKey(task.toRoomName, task.resource)) ?? 0) + task.remainingAmount,
-    );
+    pendingIncoming.set(taskKey(task.toRoomName, task.resource), mergedPendingIncoming);
 
     const countsTowardDemand = countsResourceTransferTaskTowardDemand(task, healthOptions);
     if (countsTowardDemand) {
       const inKey = taskKey(task.toRoomName, task.resource);
-      incoming.set(inKey, (incoming.get(inKey) ?? 0) + task.remainingAmount);
+      const mergedIncoming = addSafeInteger(incoming.get(inKey) ?? 0, task.remainingAmount);
+      if (mergedIncoming === null) {
+        recordInvalid();
+        incompleteScopes.add(inKey);
+        continue;
+      }
+      incoming.set(inKey, mergedIncoming);
       incomingTaskCountByRoom.set(task.toRoomName, (incomingTaskCountByRoom.get(task.toRoomName) ?? 0) + 1);
     }
     if (task.origin === "manual" || countsTowardDemand) {
@@ -247,7 +298,9 @@ export function buildTreasuryCommitmentIndex(
     if (!isValidReservationForCommitment(entry)) {
       recordInvalid();
       const roomLocated = typeof entry?.roomName === "string" && entry.roomName.length > 0;
-      const resourceKnown = typeof entry?.resource === "string" && entry.resource.length > 0;
+      // resource 必须在官方 catalog 内才能构成合法 scope（与 task 同口径）。
+      const resourceKnown =
+        typeof entry?.resource === "string" && VALID_RESOURCES_FOR_COMMITMENT.has(entry.resource);
       if (roomLocated && resourceKnown) incompleteScopes.add(taskKey(entry.roomName, entry.resource));
       else globalIncomplete = true;
       continue;
@@ -294,9 +347,17 @@ export function buildTreasuryCommitmentIndex(
     metrics.activeReservationRecords += 1;
     const key = taskKey(entry.roomName, entry.resource);
     const bucket = reservedByRoomResource.get(key) ?? { total: 0, byOwner: new Map<string, number>() };
-    bucket.total += entry.amount;
+    // 聚合安全整数检查：溢出即该 (room,resource) scope incomplete。
+    const mergedTotal = addSafeInteger(bucket.total, entry.amount);
     const ownerKey = treasuryOwnerIdentityKey(owner);
-    bucket.byOwner.set(ownerKey, (bucket.byOwner.get(ownerKey) ?? 0) + entry.amount);
+    const mergedOwner = addSafeInteger(bucket.byOwner.get(ownerKey) ?? 0, entry.amount);
+    if (mergedTotal === null || mergedOwner === null) {
+      recordInvalid();
+      incompleteScopes.add(key);
+      continue;
+    }
+    bucket.total = mergedTotal;
+    bucket.byOwner.set(ownerKey, mergedOwner);
     reservedByRoomResource.set(key, bucket);
   }
 
