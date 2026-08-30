@@ -16,6 +16,11 @@ import { quarantineTreasuryTransaction, resetTreasuryQuarantineRuntimeForTest, t
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
 import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
+import { TREASURY_RECEIPT_MAX_ENTRIES, encodeReceiptKey, ensureTreasuryReceiptStore } from "@/runtime/treasury/receipts";
+import { buildTreasuryActionContract, makeTreasuryTestTransferAdapter, registerTreasuryActionAdapter } from "@/runtime/treasury/actionContracts";
+import { clearTreasuryPolicyResolversForTest, registerDefaultTreasuryTestPolicyForSetup } from "@/runtime/treasury/policyAuthority";
+
+registerTreasuryActionAdapter(makeTreasuryTestTransferAdapter());
 
 const ROOMS: RoomSpec[] = [
   { name: "W1N57", storage: { id: "stor-1", resources: { energy: 100_000 }, freeCapacity: 10_000 }, terminal: { id: "term-1", resources: { energy: 20_000 }, freeCapacity: 5_000 } },
@@ -157,3 +162,52 @@ describe("write admission readiness", () => {
     expect(view.writeAdmission.blockers).toEqual(["invalid_context"]);
   });
 });
+
+describe("统一 write readiness 权威（第十轮 3.12.10：query/authorization 同一评估器）", () => {
+  it("receipt 满载：query 与 contract authorization 返回同一核心 blocker；恢复后一致放行", () => {
+    const service = makeService();
+    // 铺满 receipt store（4096 条）→ receipt_capacity_exhausted。
+    const ancient = Game.time - 7_000;
+    const receiptStore = ensureTreasuryReceiptStore();
+    for (let i = 0; i < TREASURY_RECEIPT_MAX_ENTRIES; i += 1) {
+      receiptStore.settled[encodeReceiptKey(`rdy_full:${String(ancient)}:${String(i)}`)] = ancient;
+    }
+    receiptStore.entryCount = TREASURY_RECEIPT_MAX_ENTRIES;
+    const view = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
+    expect(view.writeAdmission.ready).toBe(false);
+    expect(view.writeAdmission.blockers).toContain("receipt_capacity_exhausted");
+    // authorization 同一 blocker（单一权威）。
+    const contract = buildTreasuryActionContract(service, { actionKind: "test.transfer", transactionId: "rdy_auth", args: transferArgs({ amount: 500 }) });
+    if (contract.status !== "built") throw new Error("build failed");
+    const rejected = service.authorizeTreasuryActionContract(contract.contract);
+    expect(rejected.status).toBe("rejected");
+    if (rejected.status === "rejected") {
+      expect(rejected.reason).toBe("write_admission_blocked");
+      expect(rejected.detail).toContain("receipt_capacity_exhausted");
+    }
+    // 清空后 blocker 消失：三处一致恢复。
+    clearTreasuryPersistenceForTest();
+    const recovered = makeService();
+    const recoveredView = recovered.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
+    expect(recoveredView.writeAdmission.ready).toBe(true);
+    const recoveredContract = buildTreasuryActionContract(recovered, { actionKind: "test.transfer", transactionId: "rdy_auth2", args: transferArgs({ amount: 500 }) });
+    if (recoveredContract.status !== "built") throw new Error("build2 failed");
+    const ok = recovered.authorizeTreasuryActionContract(recoveredContract.contract);
+    expect(ok.status).toBe("authorized");
+  });
+
+  it("policy 未就绪：query writeAdmission 含 policy_not_ready（authorization 前置单独 reason）", () => {
+    clearTreasuryPolicyResolversForTest();
+    try {
+      const service = makeService();
+      const view = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
+      expect(view.writeAdmission.blockers).toContain("policy_not_ready");
+    } finally {
+      registerDefaultTreasuryTestPolicyForSetup();
+    }
+  });
+});
+
+function transferArgs(overrides: { amount?: number } = {}): { fromRoom: string; fromLocation: "storage"; toRoom: string; toLocation: "terminal"; resource: string; amount: number } {
+  return { fromRoom: "W1N57", fromLocation: "storage", toRoom: "W1N57", toLocation: "terminal", resource: RESOURCE_ENERGY, amount: overrides.amount ?? 500 };
+}

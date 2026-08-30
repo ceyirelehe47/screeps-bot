@@ -153,6 +153,8 @@ import {
 import { TREASURY_WRITER_KERNEL, type TreasuryWriterKernel } from "@/runtime/treasury/kernelChannel";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 import { findTreasuryPolicyResolver } from "@/runtime/treasury/policyAuthority";
+import { treasuryPolicyAuthorityReady } from "@/runtime/treasury/policyAuthority";
+import { evaluateTreasuryWriteReadiness } from "@/runtime/treasury/writeReadiness";
 import {
   registerTreasuryResolutionKernelForService,
   resolveTreasuryQuarantinedTransactionAsCommitted,
@@ -1545,19 +1547,40 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (!reservationHealth.healthy) blockers.push("reservation_store_unhealthy");
       const authorizationSafe = authorizable && blockers.length === 0;
 
-      // write readiness 的额外准入条件（超出 authorizationSafe）：
-      // receipt 容量、统一 recovery slot、reservation store 损坏标志。
+      // ── write readiness 额外准入（第十轮 3.12.10）：统一评估器
+      //    evaluateTreasuryWriteReadiness（一套枚举/优先级/来源——authorize
+      //    前置与 prepare 复查共用；receipt 容量/recovery slot/reservation
+      //    corruption/resolution 面/policy/authorization capacity）。 ────────
       const receiptCounters = readTreasuryReceiptEventCounters();
+      const readiness = evaluateTreasuryWriteReadiness(
+        {
+          lifecycleClosed: state.ended,
+          staleTickState: state.tick !== Game.time,
+          writeFaultLocked: isTreasuryWriteAdmissionLocked(),
+          writeFaultUnhealthy: !writeFaultHealth.healthy,
+          invalidOwner: !ownerCheck.valid && Boolean(context.owner),
+          commitmentIncomplete: !commitmentComplete,
+          quarantineUnhealthy: !quarantineHealthForAuth.healthy,
+          quarantineUnresolved: quarantineBlock.blocking,
+          intentUnhealthy: !intentHealthForAuth.healthy,
+          intentUnresolved: intentBlock.blocking,
+          reservationMigrationIncomplete: !isReservationOwnerMigrationComplete(),
+          reservationStoreUnhealthy: !reservationHealth.healthy,
+          reservationStoreCorrupted: isReservationStoreCorrupted(),
+          receiptUnhealthy: !receiptHealth.healthy,
+          receiptCapacityExhausted: receiptCounters.slotsRemaining <= 0,
+          resolutionStoreUnhealthy: !peekTreasuryResolutionStoreHealth().healthy,
+          resolutionResolvingBlocker: peekTreasuryResolutionStoreHealth().inProgress > 0,
+          recoverySlotExhausted: recoverySlotsOccupied() >= TREASURY_QUARANTINE_MAX_ENTRIES,
+          policyNotReady: !treasuryPolicyAuthorityReady(),
+          authorizationCapacityExhausted: authorizationRecords.size >= TREASURY_AUTHORIZATION_ACTIVE_LIMIT,
+        },
+        "query",
+      );
       const writeAdmissionBlockers: string[] = [...blockers];
-      if (receiptCounters.slotsRemaining <= 0) writeAdmissionBlockers.push("receipt_capacity_exhausted");
-      if (
-        !quarantineHealthForAuth.healthy ||
-        !intentHealthForAuth.healthy ||
-        recoverySlotsOccupied() >= TREASURY_QUARANTINE_MAX_ENTRIES
-      ) {
-        writeAdmissionBlockers.push("quarantine_slot_exhausted");
+      for (const blocker of readiness.blockers) {
+        if (!writeAdmissionBlockers.includes(blocker)) writeAdmissionBlockers.push(blocker);
       }
-      if (isReservationStoreCorrupted()) writeAdmissionBlockers.push("reservation_store_corrupted");
 
       return {
         resource: context.resource,
@@ -1845,30 +1868,42 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         metrics.authorizationRejected += 1;
         return { status: "rejected", reason: "policy_not_ready", detail: "未注册 policy resolver（production 授权 fail closed——注册边界见 policyAuthority.ts）" };
       }
-      // write admission ready（比 authorizationSafe 更强的前置：write-fault
-      // lock + quarantine/intent 全局 blocker + store 健康——不满足时授权
-      // 本身拒绝，不留"已授权但 writer 阻断"的空转 token）。
+      // ── write admission ready（第十轮 3.12.10：与 query 的 writeAdmission
+      //    视图共用 evaluateTreasuryWriteReadiness 单一权威——一套 blocker
+      //    枚举/优先级/状态来源；不满足时授权本身拒绝，不留"已授权但
+      //    writer 阻断"的空转 token）。 ─────────────────────────────────────
       ensureTickState(true);
-      if (isTreasuryWriteAdmissionLocked()) {
-        metrics.authorizationRejected += 1;
-        return { status: "rejected", reason: "write_admission_blocked", detail: "存在 unresolved write-fault marker（显式 resolution 前禁止新授权）" };
-      }
-      const quarantineBlock = treasuryQuarantineBlockers();
-      if (quarantineBlock.blocking) {
+      const authorizeReadiness = evaluateTreasuryWriteReadiness(
+        {
+          lifecycleClosed: current?.ended === true,
+          staleTickState: (current?.tick ?? Game.time) !== Game.time,
+          writeFaultLocked: isTreasuryWriteAdmissionLocked(),
+          writeFaultUnhealthy: !peekTreasuryWriteFaultHealth().healthy,
+          invalidOwner: false,
+          commitmentIncomplete: false,
+          quarantineUnhealthy: !peekTreasuryQuarantineHealth().healthy,
+          quarantineUnresolved: treasuryQuarantineBlockers().blocking,
+          intentUnhealthy: !peekTreasuryIntentHealth().healthy,
+          intentUnresolved: treasuryIntentBlockers().blocking,
+          reservationMigrationIncomplete: !isReservationOwnerMigrationComplete(),
+          reservationStoreUnhealthy: !validateReservationStoreHealth().healthy,
+          reservationStoreCorrupted: isReservationStoreCorrupted(),
+          receiptUnhealthy: !peekTreasuryReceiptHealth().healthy,
+          receiptCapacityExhausted: readTreasuryReceiptEventCounters().slotsRemaining <= 0,
+          resolutionStoreUnhealthy: !peekTreasuryResolutionStoreHealth().healthy,
+          resolutionResolvingBlocker: peekTreasuryResolutionStoreHealth().inProgress > 0,
+          recoverySlotExhausted: recoverySlotsOccupied() >= TREASURY_QUARANTINE_MAX_ENTRIES,
+          policyNotReady: false, // policy 已在前置单独检查（携带专用 reason）
+          authorizationCapacityExhausted: authorizationRecords.size >= TREASURY_AUTHORIZATION_ACTIVE_LIMIT,
+        },
+        "authorize",
+      );
+      if (!authorizeReadiness.ready) {
         metrics.authorizationRejected += 1;
         return {
           status: "rejected",
           reason: "write_admission_blocked",
-          detail: `quarantine write blocker（${String(quarantineBlock.unresolvedCount)} 条 unresolved）——禁止新授权`,
-        };
-      }
-      const intentBlock = treasuryIntentBlockers();
-      if (intentBlock.blocking) {
-        metrics.authorizationRejected += 1;
-        return {
-          status: "rejected",
-          reason: "write_admission_blocked",
-          detail: `intent write blocker（${String(intentBlock.unresolvedCount)} 条未完成 durable intent）——禁止新授权`,
+          detail: `write readiness 未就绪（blockers: ${authorizeReadiness.blockers.join(",")}）——禁止新授权（与 query writeAdmission 同一权威）`,
         };
       }
       // 授权需求派生：每种负 posting 资源一个 token——amount = Σ|负 delta|、
