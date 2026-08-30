@@ -19,6 +19,7 @@ import { clearTreasuryPersistenceForTest, peekTreasuryReceiptStore } from "@/run
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import {
   readTreasuryWriteFault,
+  recordTreasuryWriteFault,
   setTreasuryCommitFaultInjectorForTest,
   type TreasuryWriteFaultPhase,
 } from "@/runtime/treasury/writeFault";
@@ -240,15 +241,20 @@ describe("第六轮结果语义：Game 已执行与 Treasury 故障不可混淆"
   it("Game 非 OK 且 abort 未确认：executed_abort_failed（不报告已正常 abort）", () => {
     const service = makeService();
     const result = service.executePreparedAction(freshInput(service, "ts1_abort_fail"), () => {
-      // callback 执行期间制造全局锁（另一笔 commit fault）：随后的自动 abort
-      // 会被 write_admission_locked 拒绝——abort 未确认。
-      const other = service.prepareTransaction(freshInput(service, "ts1_abort_trigger", -100));
-      expect(other.status).toBe("prepared");
-      injectOnce("receipt_publish");
-      if (other.status === "prepared") {
-        const triggered = service.commitPreparedTransaction(other.handle);
-        expect(triggered.status).toBe("rejected");
-      }
+      // callback 执行期间制造全局锁（直接写入另一笔 transaction 的
+      // write-fault marker——第八轮起 callback 内嵌套 prepare 会被
+      // intent_write_blocked 全局 blocker 拒绝，无法再借真实 commit 制锁）：
+      // 随后的自动 abort 会被 write_admission_locked 拒绝——abort 未确认。
+      recordTreasuryWriteFault({
+        transactionId: "ts1_abort_trigger",
+        digest: "0123456789abcdef",
+        tick: Game.time,
+        kind: "test",
+        source: "test",
+        phase: "receipt_publish",
+        status: "unresolved",
+        recordedAt: Game.time,
+      });
       return { ok: false, code: "NOT_ENOUGH_RESOURCES" as const };
     });
     expect(result.status).toBe("executed_abort_failed");
@@ -261,10 +267,10 @@ describe("第六轮结果语义：Game 已执行与 Treasury 故障不可混淆"
     const abortFailedEntry = readTreasuryQuarantineEntry("ts1_abort_fail");
     expect(abortFailedEntry).toBeDefined();
     expect(abortFailedEntry?.phase).toBe("action_returned_non_ok_abort_failed");
-    // 该 handle 的 tentative 未释放（abort 未确认）——active 数含 callback 内
-    // 制造锁的另一笔 faulted handle（ts1_abort_trigger）与被锁拒 abort 的
-    // ts1_abort_fail 本身，二者都保持占用等 tick 边界处理。
-    expect(service.metrics().preparedActive).toBe(2);
+    // 该 handle 的 tentative 未释放（abort 未确认）——active 数只含被锁拒
+    // abort 的 ts1_abort_fail 本身（第八轮：锁由直接写入的 marker 制造，
+    // 不再有 callback 内嵌套的 trigger handle）。
+    expect(service.metrics().preparedActive).toBe(1);
   });
 
   it("callback 抛错且全局锁已存在：rethrow 原始异常 + execution unknown quarantine（不尝试 abort）", () => {
@@ -272,19 +278,25 @@ describe("第六轮结果语义：Game 已执行与 Treasury 故障不可混淆"
     let rethrown: unknown = null;
     try {
       service.executePreparedAction(freshInput(service, "ts1_throw_locked"), () => {
-        const other = service.prepareTransaction(freshInput(service, "ts1_throw_trigger", -100));
-        expect(other.status).toBe("prepared");
-        injectOnce("receipt_publish");
-        if (other.status === "prepared") {
-          expect(service.commitPreparedTransaction(other.handle).status).toBe("rejected");
-        }
+        // 第八轮：callback 内嵌套 prepare 被 intent_write_blocked 阻断——
+        // 改为直接写入另一笔 transaction 的 marker 制造全局锁。
+        recordTreasuryWriteFault({
+          transactionId: "ts1_throw_trigger",
+          digest: "0123456789abcdef",
+          tick: Game.time,
+          kind: "test",
+          source: "test",
+          phase: "receipt_publish",
+          status: "unresolved",
+          recordedAt: Game.time,
+        });
         throw new Error("game api boom");
       });
     } catch (error) {
       rethrown = error;
     }
     expect((rethrown as Error).message).toBe("game api boom"); // 异常原样透传
-    // marker 只保留首个 unresolved 根因（callback 内 trigger 的 commit fault）；
+    // marker 只保留首个 unresolved 根因（callback 内直接写入的 trigger marker）；
     // 抛错 handle 自身进 durable quarantine（phase=action_threw_execution_unknown
     // ——第七轮：抛错不再走 abort，锁存在与否不影响 execution unknown 路径）。
     const marker = readTreasuryWriteFault();

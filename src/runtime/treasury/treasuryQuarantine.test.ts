@@ -321,13 +321,15 @@ describe("第七轮：quarantine fault-slot 预留（prepare admission）", () =
     });
     expect(faulted).toBe(true);
     expect(result.status).toBe("executed_unsettled");
-    // slot 转换：active faulted handle 的预留变成持久 entry（identity 可查；
-    // entry +1 与 active −1 同时发生，总量守恒）。
+    // slot 转换（第八轮统一计数）：faulted handle 的预留 slot 已物化为持久
+    // quarantine entry——active faulted handle 与 durable entry 不再计为两条
+    // 不同占用（intent 已随 quarantine 写入成功释放，active 侧经 intent-
+    // backed 集合排除），总量守恒 = 1。
     expect(readTreasuryQuarantineEntry("ts7_fault_convert")).toBeDefined();
     const metrics = service.metrics();
     expect(metrics.quarantineEntries).toBe(1);
-    expect(metrics.quarantineSlotsReserved).toBe(1); // faulted handle 仍 active（终态化在 tick 边界）
-    expect(metrics.quarantineSlotsRemaining).toBe(TREASURY_QUARANTINE_MAX_ENTRIES - 2);
+    expect(metrics.quarantineSlotsReserved).toBe(0); // handle 的 slot 已转换为持久 entry
+    expect(metrics.quarantineSlotsRemaining).toBe(TREASURY_QUARANTINE_MAX_ENTRIES - 1);
   });
 });
 

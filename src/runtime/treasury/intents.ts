@@ -1,0 +1,762 @@
+/**
+ * Treasury durable intent / WAL（第八轮）——Game API 调用前的最小持久权威。
+ *
+ * 动机：prepared handle 与 tentative ledger 主要在 heap。若 callback 已产生
+ * 副作用、但 receipt/quarantine 尚未落盘时发生执行中断（global reset），下一
+ * tick 会丢失这笔动作的身份与 postings。本模块在**调用 Game API 之前**把
+ * transaction identity、payload digest、action kind、canonical postings、
+ * 授权身份、执行 phase 持久化到 Memory.runtime.treasury.intents——它是
+ * recovery 与 quarantine 写失败时的最终保守权威（emergency intent
+ * authority）。
+ *
+ * 语义（不变量）：
+ * - **唯一安全顺序**（facade.executePreparedAction 与 contract 执行路径遵守）：
+ *   authorize → prepare tentative → 持久化 intent(phase=ready) → 读回验证 →
+ *   标记 execution-started(phase=executing) → 调用 adapter 恰好一次 →
+ *   非 OK：phase=returned_non_ok → 关闭 intent + abort；OK：phase=
+ *   ok_pending_commit → staged commit → finalize（删除 intent）；
+ * - **phase 状态机**必须区分"尚未调用 Game API"（ready）与"已进入 callback、
+ *   结果未知"（executing 及之后）——绝不混同；
+ * - **intent 写入失败**：callback 调用数必须为 0、tentative 与 receipt/
+ *   quarantine slot 释放、返回结构化拒绝（intent_store_unavailable）；
+ * - **删除仅限四种情形**：transaction 成功 settled / 确认 aborted /
+ *   quarantine 完整写入并验证（slot 转换完成）/ resolution 完整 finalized；
+ *   quarantine 写失败时 intent 保留完整 postings、继续参与风险占用、不释放
+ *   recovery slot；
+ * - **slot 统一计数**：一笔 transaction 恒占一个 recovery slot——
+ *   recoverySlots = quarantine entryCount + intent entryCount + 无 intent 的
+ *   active handle 数；intent 接管 prepare 预留的 slot、fault 时转换为
+ *   quarantine entry（quarantine +1、intent −1，守恒）、正常关闭释放；
+ * - **健康契约**：版本化（version 1）、entryCount、容量上限 64、key="i:"+
+ *   transactionId、entry 全形状校验（canonical postings/phase 枚举/安全整数/
+ *   聚合溢出）、global reset 首次 load 全量验证、heap health cache、损坏与
+ *   未知版本 fail closed（原数据不删、写入拒绝、writer 阻断、聚合空但
+ *   blockers 报 blocking）、显式 repair 并入 faultResolution；
+ * - **风险聚合**：unresolved intents 以 per-transaction 保守口径并入授权占用
+ *   （与 quarantine 同算法：transaction 内先合并，Σ max(0,−net) 流出 /
+ *   Σ max(0,net) 容量，跨 transaction 不抵消），聚合按 store revision 缓存；
+ * - 绝不持久化完整 observation、service、journal 或任意大 payload——
+ *   postings 是唯一资产事实副本。
+ */
+
+import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
+import { TREASURY_WRITE_FAULT_PHASES } from "@/runtime/treasury/writeFault";
+import { quarantineTreasuryTransaction } from "@/runtime/treasury/quarantine";
+
+export const TREASURY_INTENT_VERSION = 1 as const;
+/** 与 quarantine 同上限——recovery slot 统一计数的前提。 */
+export const TREASURY_INTENT_MAX_ENTRIES = 64;
+
+const INTENT_KEY_PREFIX = "i:";
+
+const INTENT_DIGEST_PATTERN = /^[0-9a-f]{16}$/;
+const INTENT_KIND_SOURCE_MAX = 128;
+const INTENT_POSTINGS_MAX = 64;
+const INTENT_STRUCTURE_ID_MAX = 48;
+const VALID_LOCATION_KINDS: ReadonlySet<string> = new Set<string>(["storage", "terminal"]);
+const VALID_RESOURCES: ReadonlySet<string> = new Set<string>(RESOURCES_ALL);
+
+/**
+ * durable intent 的执行 phase 状态机（heap-only 的 "authorized" 仅为状态机
+ * 语义完整性——持久化时至少为 ready；committed/aborted 为正常路径随关闭即删
+ * 的终态位，正常情况下不出现在 store 中）。
+ *
+ * 核心区分：ready（协议保证 execution-started 标记先于 callback——持久化的
+ * ready 即"Game API 从未被调用"）与 executing 及之后（结果未知/已离开）。
+ */
+export type TreasuryIntentPhase =
+  | "authorized"
+  | "ready"
+  | "executing"
+  | "returned_non_ok"
+  | "ok_pending_commit"
+  | "committed"
+  | "aborted"
+  | "execution_unknown"
+  | "quarantined"
+  | "resolution_pending";
+
+/** 持久化的 phase 全集（authorized 为 heap 瞬时态，不落盘）。 */
+export const TREASURY_INTENT_PERSISTED_PHASES: ReadonlySet<string> = new Set<string>([
+  "ready",
+  "executing",
+  "returned_non_ok",
+  "ok_pending_commit",
+  "committed",
+  "aborted",
+  "execution_unknown",
+  "quarantined",
+  "resolution_pending",
+]);
+
+/** 恢复语义：ready 相按协议确认未执行；其余保守转 execution unknown。 */
+export function isTreasuryIntentPhaseNotExecuted(phase: string): boolean {
+  return phase === "ready";
+}
+
+/** intent 的 canonical posting 事实（与 quarantine deltas 同形状）。 */
+export interface TreasuryIntentPosting {
+  readonly roomName: string;
+  readonly locationKind: string;
+  readonly resource: string;
+  readonly delta: number;
+}
+
+export interface TreasuryIntentEntry {
+  transactionId: string;
+  /** canonical payload digest（与 prepare 签发 digest 同源）。 */
+  digest: string;
+  /** action kind（contract 路径 = adapter kind；直接路径 = input.kind）。 */
+  actionKind: string;
+  kind: string;
+  source: string;
+  /** 授权 token 绑定 digest 快照（无授权的测试路径可缺省）。 */
+  authorizationDigest?: string;
+  /** contract identity（contract 路径必填；直接路径可缺省）。 */
+  contractId?: string;
+  /** canonical postings（merged；WAL 语义的唯一资产事实副本）。 */
+  postings: TreasuryIntentPosting[];
+  /** 状态机可变 phase（markTreasuryIntentPhase 迁移；对外读取走冻结快照）。 */
+  phase: string;
+  /** 必要的结构 incarnation（有界；contract 路径快照）。 */
+  structureId?: string;
+  /** 有界审计来源。 */
+  auditSource?: string;
+  createdAtTick: number;
+  updatedAtTick: number;
+}
+
+export interface TreasuryIntentStore {
+  version: 1;
+  entries: Record<string, TreasuryIntentEntry>;
+  entryCount: number;
+  updatedAt: number;
+}
+
+interface TreasuryIntentBranch {
+  intents?: TreasuryIntentStore;
+}
+
+type RuntimeMemoryWithIntents = NonNullable<Memory["runtime"]> & {
+  treasury?: TreasuryIntentBranch;
+};
+
+function intentBranch(): TreasuryIntentBranch {
+  if (!Memory.runtime) Memory.runtime = {};
+  const runtime = Memory.runtime as unknown as RuntimeMemoryWithIntents;
+  if (!runtime.treasury) runtime.treasury = {};
+  return runtime.treasury;
+}
+
+/** 只读读取原始 store（查询/门禁路径零写；不触发 load/校验）。 */
+export function peekTreasuryIntentStore(): TreasuryIntentStore | undefined {
+  return (Memory.runtime as unknown as RuntimeMemoryWithIntents | undefined)?.treasury?.intents;
+}
+
+function encodeIntentKey(transactionId: string): string {
+  return INTENT_KEY_PREFIX + transactionId;
+}
+
+// ── heap 运行态（health cache + 聚合 revision 缓存 + 事件计数） ─────────────
+
+interface IntentStoreRuntime {
+  store: TreasuryIntentStore;
+  /** 非 null = fail closed（原数据保留，一切写入/聚合拒绝）。 */
+  fatal: string | null;
+}
+
+let heapRuntime: IntentStoreRuntime | null = null;
+let storeRevision = 0;
+
+interface IntentAggregates {
+  revision: number;
+  outflow: Map<string, number>;
+  capacityOccupancy: Map<string, number>;
+}
+
+let aggregateCache: IntentAggregates | null = null;
+
+const intentEvents = {
+  fullScans: 0,
+  loadValidationEntries: 0,
+  writeFailures: 0,
+  writeRejections: 0,
+  recoveries: 0,
+  quarantineConversions: 0,
+  /** quarantine 写失败后保留 intent（emergency authority）的次数。 */
+  emergencyRetentions: 0,
+};
+
+export interface TreasuryIntentCounters {
+  readonly fullScans: number;
+  readonly loadValidationEntries: number;
+  readonly writeFailures: number;
+  readonly writeRejections: number;
+  readonly recoveries: number;
+  readonly quarantineConversions: number;
+  readonly emergencyRetentions: number;
+}
+
+export function readTreasuryIntentCounters(): TreasuryIntentCounters {
+  return { ...intentEvents };
+}
+
+function isSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value);
+}
+
+// ── 形状校验（写入前重验 + load 全量验证共用） ──────────────────────────────
+
+/**
+ * 单条 intent entry 的完整形状校验（返回 null = 合法，否则有界错误描述）。
+ * 写入路径对本函数重验调用方传入的 entry——绝不假设调用方传入的是 prepare
+ * 验证过的安全对象。
+ */
+export function validateTreasuryIntentEntryShape(entry: unknown): string | null {
+  if (!entry || typeof entry !== "object") return "intent entry 非对象";
+  const candidate = entry as Partial<TreasuryIntentEntry>;
+  if (typeof candidate.transactionId !== "string" || !isValidTreasuryTransactionId(candidate.transactionId)) {
+    return `transactionId 非法: ${String(candidate.transactionId).slice(0, 48)}`;
+  }
+  if (typeof candidate.digest !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.digest)) {
+    return `digest 非法（须为 16 小写 hex）: ${String(candidate.digest).slice(0, 32)}`;
+  }
+  for (const field of ["actionKind", "kind", "source"] as const) {
+    const value = candidate[field];
+    if (typeof value !== "string" || value.length === 0 || value.length > INTENT_KIND_SOURCE_MAX) {
+      return `${field} 非法（须为 1..128 字符）`;
+    }
+  }
+  if (candidate.authorizationDigest !== undefined) {
+    if (typeof candidate.authorizationDigest !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.authorizationDigest)) {
+      return "authorizationDigest 非法（须为 16 小写 hex）";
+    }
+  }
+  if (candidate.contractId !== undefined) {
+    if (typeof candidate.contractId !== "string" || candidate.contractId.length === 0 || candidate.contractId.length > 96) {
+      return "contractId 非法（须为 1..96 字符）";
+    }
+  }
+  if (typeof candidate.phase !== "string" || !TREASURY_INTENT_PERSISTED_PHASES.has(candidate.phase)) {
+    return `phase 非法（未知枚举）: ${String(candidate.phase).slice(0, 48)}`;
+  }
+  if (candidate.structureId !== undefined) {
+    if (typeof candidate.structureId !== "string" || candidate.structureId.length === 0 || candidate.structureId.length > INTENT_STRUCTURE_ID_MAX) {
+      return "structureId 非法（须为 1..48 字符）";
+    }
+  }
+  if (candidate.auditSource !== undefined) {
+    if (typeof candidate.auditSource !== "string" || candidate.auditSource.length === 0 || candidate.auditSource.length > INTENT_KIND_SOURCE_MAX) {
+      return "auditSource 非法（须为 1..128 字符）";
+    }
+  }
+  if (!isSafeInteger(candidate.createdAtTick) || candidate.createdAtTick < 0) return "createdAtTick 非安全整数";
+  if (!isSafeInteger(candidate.updatedAtTick) || candidate.updatedAtTick < 0) return "updatedAtTick 非安全整数";
+  if (!Array.isArray(candidate.postings) || candidate.postings.length === 0 || candidate.postings.length > INTENT_POSTINGS_MAX) {
+    return "postings 非数组/为空/超上限";
+  }
+  for (const posting of candidate.postings) {
+    if (!posting || typeof posting !== "object") return "posting 项非对象";
+    const leg = posting as Partial<TreasuryIntentPosting>;
+    if (typeof leg.roomName !== "string" || leg.roomName.length === 0 || leg.roomName.length > 16) {
+      return "posting.roomName 非法";
+    }
+    if (typeof leg.locationKind !== "string" || !VALID_LOCATION_KINDS.has(leg.locationKind)) {
+      return `posting.locationKind 非法: ${String(leg.locationKind).slice(0, 24)}`;
+    }
+    if (typeof leg.resource !== "string" || !VALID_RESOURCES.has(leg.resource)) {
+      return `posting.resource 不在 RESOURCES_ALL: ${String(leg.resource).slice(0, 24)}`;
+    }
+    if (!isSafeInteger(leg.delta) || leg.delta === 0) return "posting.delta 须为非零安全整数";
+  }
+  return null;
+}
+
+/** 聚合溢出预检（per-transaction 保守口径的每步安全整数）。 */
+function validateIntentAggregateOverflow(postings: readonly TreasuryIntentPosting[]): string | null {
+  const resourceTotals = new Map<string, number>();
+  const capacityTotals = new Map<string, number>();
+  for (const leg of postings) {
+    const resourceKey = `${leg.roomName}\u0000${leg.locationKind}\u0000${leg.resource}`;
+    const mergedResource = (resourceTotals.get(resourceKey) ?? 0) + leg.delta;
+    if (!Number.isSafeInteger(mergedResource)) return "intent 资源聚合安全整数溢出";
+    resourceTotals.set(resourceKey, mergedResource);
+    const capacityKey = `${leg.roomName}\u0000${leg.locationKind}`;
+    const mergedCapacity = (capacityTotals.get(capacityKey) ?? 0) + leg.delta;
+    if (!Number.isSafeInteger(mergedCapacity)) return "intent 容量聚合安全整数溢出";
+    capacityTotals.set(capacityKey, mergedCapacity);
+  }
+  return null;
+}
+
+/**
+ * store 完整形状自检（global reset 后首次 load 与 repair 共用；一次全表
+ * 扫描）：version、entries 对象、entryCount 一致、key 编码与 entry.
+ * transactionId 一致、逐 entry 形状、聚合安全整数、容量上限。
+ */
+function validateIntentStoreShape(store: TreasuryIntentStore): string | null {
+  if (store.version !== TREASURY_INTENT_VERSION) {
+    return `未知 intent store 版本 ${String(store.version)}`;
+  }
+  if (!store.entries || typeof store.entries !== "object") return "intent entries 非对象";
+  intentEvents.fullScans += 1;
+  const ownKeys = Object.keys(store.entries);
+  intentEvents.loadValidationEntries += ownKeys.length;
+  if (store.entryCount !== ownKeys.length) {
+    return `entryCount 校验失败: 声明 ${String(store.entryCount)} 实际 ${String(ownKeys.length)}`;
+  }
+  if (ownKeys.length > TREASURY_INTENT_MAX_ENTRIES) {
+    return `entries 超过上限 ${String(TREASURY_INTENT_MAX_ENTRIES)}（含 ${String(ownKeys.length)} 条）`;
+  }
+  const resourceTotals = new Map<string, number>();
+  const capacityTotals = new Map<string, number>();
+  for (const key of ownKeys) {
+    if (!key.startsWith(INTENT_KEY_PREFIX)) {
+      return `存储键格式非法（须为 "i:"+transactionId）: ${key.slice(0, 48)}`;
+    }
+    const entry = (store.entries as Record<string, unknown>)[key];
+    const shapeError = validateTreasuryIntentEntryShape(entry);
+    if (shapeError !== null) {
+      return `${shapeError}（key ${key.slice(0, 48)}）`;
+    }
+    const typed = entry as TreasuryIntentEntry;
+    if (encodeIntentKey(typed.transactionId) !== key) {
+      return `存储键与 entry.transactionId 不一致: ${key.slice(0, 48)}`;
+    }
+    // 跨 transaction 聚合溢出预检（与运行时聚合同 key）。
+    for (const leg of typed.postings) {
+      const resourceKey = `${leg.roomName}\u0000${leg.locationKind}\u0000${leg.resource}`;
+      const mergedResource = resourceTotals.get(resourceKey) === undefined ? leg.delta : (resourceTotals.get(resourceKey) as number) + leg.delta;
+      if (!Number.isSafeInteger(mergedResource)) return "intent 跨 transaction 资源聚合安全整数溢出";
+      resourceTotals.set(resourceKey, mergedResource);
+      const capacityKey = `${leg.roomName}\u0000${leg.locationKind}`;
+      const mergedCapacity = capacityTotals.get(capacityKey) === undefined ? leg.delta : (capacityTotals.get(capacityKey) as number) + leg.delta;
+      if (!Number.isSafeInteger(mergedCapacity)) return "intent 跨 transaction 容量聚合安全整数溢出";
+      capacityTotals.set(capacityKey, mergedCapacity);
+    }
+  }
+  return null;
+}
+
+function fatalRuntime(store: TreasuryIntentStore, reason: string): IntentStoreRuntime {
+  return { store, fatal: reason };
+}
+
+/**
+ * 加载（含校验）：写入/聚合路径专用（可能写 Memory——空 store 初始化）。
+ * 校验失败 → fatal fail closed：不删数据、写入拒绝、聚合空、blockers 报
+ * blocking，直至 faultResolution 的显式 repair 或人工处理。
+ */
+function loadIntentStoreRuntime(): IntentStoreRuntime {
+  if (heapRuntime) return heapRuntime;
+  const raw = intentBranch().intents as TreasuryIntentStore | undefined;
+  if (!raw) {
+    const created: TreasuryIntentStore = { version: TREASURY_INTENT_VERSION, entries: {}, entryCount: 0, updatedAt: Game.time };
+    intentBranch().intents = created;
+    heapRuntime = { store: created, fatal: null };
+    return heapRuntime;
+  }
+  const shapeError = validateIntentStoreShape(raw);
+  if (shapeError !== null) {
+    heapRuntime = fatalRuntime(raw, `${shapeError}（intent store fail closed，原数据保留）`);
+    return heapRuntime;
+  }
+  heapRuntime = { store: raw, fatal: null };
+  return heapRuntime;
+}
+
+export interface TreasuryIntentHealth {
+  readonly healthy: boolean;
+  readonly detail: string | null;
+  readonly entryCount: number;
+}
+
+/**
+ * intent store 健康探测（只读零写；prepare 门禁/readiness/blockers 用）：
+ * heap 已 load 且 fatal → unhealthy；未 load 时轻量形状探测（version 可识别/
+ * entries 对象/entryCount 数字）——entry 级损坏由下一次 load 显式检出。
+ */
+export function peekTreasuryIntentHealth(): TreasuryIntentHealth {
+  if (heapRuntime?.fatal) {
+    const keys = Object.keys(heapRuntime.store.entries ?? {});
+    return { healthy: false, detail: heapRuntime.fatal, entryCount: keys.length };
+  }
+  const store = peekTreasuryIntentStore();
+  if (store === undefined) return { healthy: true, detail: null, entryCount: 0 };
+  if (store.version !== TREASURY_INTENT_VERSION) {
+    return {
+      healthy: false,
+      detail: `未知 intent store 版本 ${String(store.version)}`,
+      entryCount: 0,
+    };
+  }
+  if (!store.entries || typeof store.entries !== "object") {
+    return { healthy: false, detail: "intent entries 非对象", entryCount: 0 };
+  }
+  if (!isSafeInteger(store.entryCount) || store.entryCount < 0) {
+    return { healthy: false, detail: "intent entryCount 非法", entryCount: 0 };
+  }
+  return { healthy: true, detail: null, entryCount: store.entryCount };
+}
+
+/** 显式触发 load 全量验证（写入/恢复路径用）：返回 fatal 描述（null = 可用）。 */
+export function ensureTreasuryIntentStoreValidated(): string | null {
+  const runtime = loadIntentStoreRuntime();
+  return runtime.fatal;
+}
+
+/** 冻结深拷贝的单条 entry（快照封闭——外部修改不影响内部权威）。 */
+function freezeIntentCopy(entry: TreasuryIntentEntry): Readonly<TreasuryIntentEntry> {
+  return Object.freeze({
+    ...entry,
+    postings: entry.postings.map((leg) => Object.freeze({ ...leg })),
+  }) as Readonly<TreasuryIntentEntry>;
+}
+
+/**
+ * 单条只读查询（O(1)；快照封闭）。fatal store 一律视为不可信；store 尚不
+ * 存在时零写返回 undefined——查询路径不隐式创建 store。
+ */
+export function readTreasuryIntentEntry(transactionId: string): Readonly<TreasuryIntentEntry> | undefined {
+  if (peekTreasuryIntentStore() === undefined) return undefined;
+  const runtime = loadIntentStoreRuntime();
+  if (runtime.fatal) return undefined;
+  const entry = runtime.store.entries[encodeIntentKey(transactionId)];
+  return entry === undefined ? undefined : freezeIntentCopy(entry);
+}
+
+/** 全部条目的冻结快照（诊断/resolution 枚举；fatal store 返回空）。 */
+export function listTreasuryIntentEntries(): readonly Readonly<TreasuryIntentEntry>[] {
+  if (peekTreasuryIntentStore() === undefined) return Object.freeze([]);
+  const runtime = loadIntentStoreRuntime();
+  if (runtime.fatal) return Object.freeze([]);
+  return Object.freeze(Object.values(runtime.store.entries).map(freezeIntentCopy));
+}
+
+export type TreasuryIntentWriteResult =
+  | { readonly status: "written" }
+  | { readonly status: "already_present" }
+  | {
+      readonly status: "rejected";
+      readonly reason: "store_fatal" | "capacity_exhausted" | "invalid_entry";
+      readonly detail: string;
+    };
+
+/**
+ * 写入 durable intent（Game API 调用前）。写入前对 entry **重新完整验证**
+ * （绝不假设调用方传入 prepare 验证过的安全对象）。同 id 重复写入幂等保留
+ * 首条；容量已满时 rejected（绝不丢 identity——prepare 的统一 slot admission
+ * 已保证此分支在正常路径不可达；防御性拒绝保持 store 不变，调用方阻断
+ * callback 并释放预留）。
+ */
+export function writeTreasuryIntentEntry(entry: TreasuryIntentEntry): TreasuryIntentWriteResult {
+  const shapeError = validateTreasuryIntentEntryShape(entry);
+  if (shapeError !== null) {
+    intentEvents.writeRejections += 1;
+    return { status: "rejected", reason: "invalid_entry", detail: shapeError };
+  }
+  const overflowError = validateIntentAggregateOverflow(entry.postings);
+  if (overflowError !== null) {
+    intentEvents.writeRejections += 1;
+    return { status: "rejected", reason: "invalid_entry", detail: overflowError };
+  }
+  const runtime = loadIntentStoreRuntime();
+  if (runtime.fatal) {
+    intentEvents.writeFailures += 1;
+    return { status: "rejected", reason: "store_fatal", detail: runtime.fatal };
+  }
+  const key = encodeIntentKey(entry.transactionId);
+  if (Object.prototype.hasOwnProperty.call(runtime.store.entries, key)) {
+    return { status: "already_present" };
+  }
+  if (runtime.store.entryCount >= TREASURY_INTENT_MAX_ENTRIES) {
+    intentEvents.writeFailures += 1;
+    return {
+      status: "rejected",
+      reason: "capacity_exhausted",
+      detail: `intent store 容量已满（${String(TREASURY_INTENT_MAX_ENTRIES)} 条；统一 slot admission 不变量被破坏，阻断 callback）`,
+    };
+  }
+  runtime.store.entries[key] = { ...entry, postings: entry.postings.map((leg) => ({ ...leg })) };
+  runtime.store.entryCount += 1;
+  runtime.store.updatedAt = Game.time;
+  storeRevision += 1;
+  return { status: "written" };
+}
+
+export type TreasuryIntentPhaseUpdateResult =
+  | { readonly status: "marked" }
+  | { readonly status: "rejected"; readonly reason: "not_found" | "store_fatal" | "invalid_phase"; readonly detail: string };
+
+/**
+ * 标记 intent phase（execution-started / 返回结果 / fault 等状态迁移）。
+ * O(1)；phase 枚举校验；不存在（已被释放）时 not_found——调用方按协议处理。
+ */
+export function markTreasuryIntentPhase(transactionId: string, phase: TreasuryIntentPhase): TreasuryIntentPhaseUpdateResult {
+  if (!TREASURY_INTENT_PERSISTED_PHASES.has(phase)) {
+    return { status: "rejected", reason: "invalid_phase", detail: `phase ${phase} 不可持久化` };
+  }
+  const runtime = loadIntentStoreRuntime();
+  if (runtime.fatal) {
+    return { status: "rejected", reason: "store_fatal", detail: runtime.fatal };
+  }
+  const key = encodeIntentKey(transactionId);
+  const entry = runtime.store.entries[key];
+  if (entry === undefined) {
+    return { status: "rejected", reason: "not_found", detail: "intent entry 不存在（已释放或从未写入）" };
+  }
+  entry.phase = phase;
+  entry.updatedAtTick = Game.time;
+  runtime.store.updatedAt = Game.time;
+  storeRevision += 1;
+  return { status: "marked" };
+}
+
+/**
+ * 释放单条 intent（返回是否确有条目被释放）。合法调用情形：transaction
+ * settled / 确认 aborted / quarantine 完整写入并验证 / resolution finalized。
+ */
+export function releaseTreasuryIntentEntry(transactionId: string): boolean {
+  const runtime = loadIntentStoreRuntime();
+  if (runtime.fatal) return false;
+  const key = encodeIntentKey(transactionId);
+  if (!Object.prototype.hasOwnProperty.call(runtime.store.entries, key)) return false;
+  delete runtime.store.entries[key];
+  runtime.store.entryCount -= 1;
+  runtime.store.updatedAt = Game.time;
+  storeRevision += 1;
+  return true;
+}
+
+export interface TreasuryIntentBlockers {
+  readonly blocking: boolean;
+  readonly unresolvedCount: number;
+  readonly unhealthyDetail: string | null;
+}
+
+/**
+ * 授权/写入阻断状态（authorizationSafe、write readiness 与 prepare 全局
+ * 门禁共用；只读零写——store 不存在时视为空且健康，不隐式创建）：blocking =
+ * 存在任一未完成 entry 或 store 损坏。未完成 intent 阻断一切新 writer。
+ */
+export function treasuryIntentBlockers(): TreasuryIntentBlockers {
+  if (heapRuntime?.fatal) {
+    const keys = Object.keys(heapRuntime.store.entries ?? {});
+    return { blocking: true, unresolvedCount: keys.length, unhealthyDetail: heapRuntime.fatal };
+  }
+  const health = peekTreasuryIntentHealth();
+  return {
+    blocking: !health.healthy || health.entryCount > 0,
+    unresolvedCount: health.entryCount,
+    unhealthyDetail: health.healthy ? null : health.detail,
+  };
+}
+
+// ── per-transaction 保守风险聚合（与 quarantine 同口径；revision 缓存） ─────
+
+function computeAggregates(): { outflow: Map<string, number>; capacityOccupancy: Map<string, number> } {
+  const outflow = new Map<string, number>();
+  const capacityOccupancy = new Map<string, number>();
+  for (const entry of listTreasuryIntentEntries()) {
+    // transaction 内先按 (room,location,resource) / (room,location) 合并。
+    const resourceNets = new Map<string, number>();
+    const capacityNets = new Map<string, number>();
+    for (const leg of entry.postings) {
+      const resourceKey = `${leg.roomName}\u0000${leg.locationKind}\u0000${leg.resource}`;
+      const mergedResource = (resourceNets.get(resourceKey) ?? 0) + leg.delta;
+      if (!Number.isSafeInteger(mergedResource)) return { outflow: new Map(), capacityOccupancy: new Map() };
+      resourceNets.set(resourceKey, mergedResource);
+      const capacityKey = `${leg.roomName}\u0000${leg.locationKind}`;
+      const mergedCapacity = (capacityNets.get(capacityKey) ?? 0) + leg.delta;
+      if (!Number.isSafeInteger(mergedCapacity)) return { outflow: new Map(), capacityOccupancy: new Map() };
+      capacityNets.set(capacityKey, mergedCapacity);
+    }
+    // 跨 transaction 保守求和：正流入不抵消另一笔负流出、流出只累计净流出。
+    for (const [key, net] of resourceNets) {
+      const occupied = Math.max(0, -net);
+      if (occupied === 0) continue;
+      const summed = (outflow.get(key) ?? 0) + occupied;
+      if (!Number.isSafeInteger(summed)) return { outflow: new Map(), capacityOccupancy: new Map() };
+      outflow.set(key, summed);
+    }
+    for (const [key, net] of capacityNets) {
+      const occupied = Math.max(0, net);
+      if (occupied === 0) continue;
+      const summed = (capacityOccupancy.get(key) ?? 0) + occupied;
+      if (!Number.isSafeInteger(summed)) return { outflow: new Map(), capacityOccupancy: new Map() };
+      capacityOccupancy.set(key, summed);
+    }
+  }
+  return { outflow, capacityOccupancy };
+}
+
+function ensureAggregates(): IntentAggregates | null {
+  if (aggregateCache && aggregateCache.revision === storeRevision) return aggregateCache;
+  const computed = computeAggregates();
+  aggregateCache = { revision: storeRevision, ...computed };
+  return aggregateCache;
+}
+
+/**
+ * unresolved intents 的资源流出占用（只读、per-transaction 保守、按 store
+ * revision 缓存）：(room,location,resource) → Σ_transactions max(0, −net)。
+ * 聚合溢出或 fatal store → 空 Map（消费方 blockers 已 fail closed，不以聚合
+ * 数值放宽）。返回新建 Map 快照——不泄漏内部缓存引用。
+ */
+export function treasuryIntentOutflowOccupancy(): ReadonlyMap<string, number> {
+  if (peekTreasuryIntentStore() === undefined) return new Map();
+  const runtime = loadIntentStoreRuntime();
+  if (runtime.fatal) return new Map();
+  const aggregates = ensureAggregates();
+  return aggregates === null ? new Map() : new Map(aggregates.outflow);
+}
+
+/**
+ * unresolved intents 的容量占用（只读、缓存、快照封闭）：
+ * (room,location) → Σ_transactions max(0, net)。零写契约同 outflow。
+ */
+export function treasuryIntentCapacityOccupancy(): ReadonlyMap<string, number> {
+  if (peekTreasuryIntentStore() === undefined) return new Map();
+  const runtime = loadIntentStoreRuntime();
+  if (runtime.fatal) return new Map();
+  const aggregates = ensureAggregates();
+  return aggregates === null ? new Map() : new Map(aggregates.capacityOccupancy);
+}
+
+// ── global reset / tick 边界恢复 ────────────────────────────────────────────
+
+export interface TreasuryIntentRecoveryReport {
+  /** ready 相按协议确认未执行而释放的条数。 */
+  recoveredNotExecuted: number;
+  /** 保守转 execution-unknown quarantine 的条数。 */
+  convertedToQuarantine: number;
+  /** quarantine 写失败而保留（emergency authority）的条数。 */
+  retainedForAuthority: number;
+  storeFatal: string | null;
+}
+
+/**
+ * tick 边界（beginTick 显式分支，先于一切 planner/writer）的 intent 恢复：
+ * - ready：协议保证 execution-started 标记先于 callback——持久化的 ready 即
+ *   "Game API 从未被调用"，确认未执行关闭（释放 slot、不写 receipt、不进
+ *   quarantine），计 intentRecoveries；
+ * - 其余 phase（executing/returned_non_ok/ok_pending_commit/execution_
+ *   unknown/quarantined/resolution_pending）：无法确认 action 是否执行——
+ *   保守转 execution-unknown quarantine（postings 完整携带；幂等
+ *   already_present 保留首条）后释放 intent（slot 守恒：quarantine +1、
+ *   intent −1）；
+ * - quarantine 写失败（store fatal/容量分支）：intent **保留**（emergency
+ *   intent authority——postings/风险占用/slot 不丢），下一 tick 重试；
+ * - store fatal：不删任何数据，report 携带诊断（writer 由 blockers 阻断）。
+ * 恢复幂等（重复调用对已处理条目 no-op）。
+ */
+export function recoverTreasuryIntentsAtTickBoundary(): TreasuryIntentRecoveryReport {
+  const report: TreasuryIntentRecoveryReport = {
+    recoveredNotExecuted: 0,
+    convertedToQuarantine: 0,
+    retainedForAuthority: 0,
+    storeFatal: null,
+  };
+  if (peekTreasuryIntentStore() === undefined) return report;
+  const runtime = loadIntentStoreRuntime();
+  if (runtime.fatal) {
+    report.storeFatal = runtime.fatal;
+    return report;
+  }
+  for (const entry of Object.values(runtime.store.entries)) {
+    if (isTreasuryIntentPhaseNotExecuted(entry.phase)) {
+      if (releaseTreasuryIntentEntry(entry.transactionId)) {
+        intentEvents.recoveries += 1;
+        report.recoveredNotExecuted += 1;
+      }
+      continue;
+    }
+    const write = quarantineTreasuryTransaction({
+      transactionId: entry.transactionId,
+      digest: entry.digest,
+      tick: entry.createdAtTick,
+      kind: entry.kind,
+      source: entry.source,
+      phase: "executing_at_end_tick",
+      deltas: entry.postings.map((leg) => ({ ...leg })),
+      recordedAt: entry.updatedAtTick,
+    });
+    if (write.status === "rejected") {
+      // emergency intent authority：保留 entry（postings/占用/slot 不丢）。
+      intentEvents.emergencyRetentions += 1;
+      report.retainedForAuthority += 1;
+      continue;
+    }
+    if (write.status === "written") {
+      intentEvents.quarantineConversions += 1;
+      report.convertedToQuarantine += 1;
+    }
+    releaseTreasuryIntentEntry(entry.transactionId);
+  }
+  return report;
+}
+
+/** 仅供测试：失效 heap 缓存与计数（clearTreasuryPersistenceForTest 调用）。 */
+export function resetTreasuryIntentRuntimeForTest(): void {
+  heapRuntime = null;
+  aggregateCache = null;
+  storeRevision = 0;
+  intentEvents.fullScans = 0;
+  intentEvents.loadValidationEntries = 0;
+  intentEvents.writeFailures = 0;
+  intentEvents.writeRejections = 0;
+  intentEvents.recoveries = 0;
+  intentEvents.quarantineConversions = 0;
+  intentEvents.emergencyRetentions = 0;
+}
+
+/**
+ * 显式 repair 内部实现（仅供 faultResolution 的 repair 入口调用）：全量验证
+ * 现存 entries 合法后修复 store 元数据（version/entryCount 重算）。任何
+ * entry 损坏 → 拒绝（原数据不动）。绝不删除任何 entry。
+ */
+export function repairTreasuryIntentStoreMetadataForResolution(): { status: "repaired" | "rejected"; detail: string } {
+  const raw = intentBranch().intents as TreasuryIntentStore | undefined;
+  if (!raw) return { status: "rejected", detail: "intent store 不存在（无需 repair）" };
+  if (!raw.entries || typeof raw.entries !== "object") {
+    return { status: "rejected", detail: "intent entries 非对象（人工处理）" };
+  }
+  const ownKeys = Object.keys(raw.entries);
+  intentEvents.fullScans += 1;
+  intentEvents.loadValidationEntries += ownKeys.length;
+  for (const key of ownKeys) {
+    const entry = (raw.entries as Record<string, unknown>)[key];
+    const shapeError = validateTreasuryIntentEntryShape(entry);
+    if (shapeError !== null) {
+      return { status: "rejected", detail: `${shapeError}（key ${key.slice(0, 48)}；原数据保留）` };
+    }
+    const typed = entry as TreasuryIntentEntry;
+    if (encodeIntentKey(typed.transactionId) !== key) {
+      return { status: "rejected", detail: `存储键与 entry.transactionId 不一致: ${key.slice(0, 48)}` };
+    }
+    const overflow = validateIntentAggregateOverflow(typed.postings);
+    if (overflow !== null) {
+      return { status: "rejected", detail: `${overflow}（key ${key.slice(0, 48)}；原数据保留）` };
+    }
+  }
+  if (ownKeys.length > TREASURY_INTENT_MAX_ENTRIES) {
+    return {
+      status: "rejected",
+      detail: `entries 超过上限 ${String(TREASURY_INTENT_MAX_ENTRIES)}（先 resolution 部分条目再 repair）`,
+    };
+  }
+  raw.version = TREASURY_INTENT_VERSION;
+  raw.entryCount = ownKeys.length;
+  raw.updatedAt = Game.time;
+  heapRuntime = { store: raw, fatal: null };
+  storeRevision += 1;
+  return { status: "repaired", detail: `intent store repair 完成（${String(ownKeys.length)} 条 entry 保留）` };
+}
+
+/** 诊断：合法 phase 集合是否包含给定值（测试与 guard 用）。 */
+export function isValidTreasuryIntentPhase(phase: string): phase is TreasuryIntentPhase {
+  return TREASURY_INTENT_PERSISTED_PHASES.has(phase);
+}
+
+/** 诊断导出：write-fault phase 合法集（与 quarantine 校验同一权威）。 */
+export const TREASURY_INTENT_FAULT_PHASES: ReadonlySet<string> = TREASURY_WRITE_FAULT_PHASES;

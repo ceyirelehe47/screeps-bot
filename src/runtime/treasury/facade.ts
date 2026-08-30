@@ -90,6 +90,18 @@ import {
   treasuryQuarantineOutflowTotals,
   type TreasuryQuarantineDeltas,
 } from "@/runtime/treasury/quarantine";
+import {
+  listTreasuryIntentEntries,
+  markTreasuryIntentPhase,
+  peekTreasuryIntentHealth,
+  readTreasuryIntentCounters,
+  recoverTreasuryIntentsAtTickBoundary,
+  releaseTreasuryIntentEntry,
+  treasuryIntentBlockers,
+  treasuryIntentCapacityOccupancy,
+  treasuryIntentOutflowOccupancy,
+  writeTreasuryIntentEntry,
+} from "@/runtime/treasury/intents";
 import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import { readTreasuryResolutionCounters } from "@/runtime/treasury/resolutionEvents";
 import {
@@ -180,6 +192,8 @@ interface PreparedTransaction {
   state: TreasuryPreparedHandleState;
   /** commit 写故障的 phase（faulted 后保留，tick 边界 quarantine 快照用）。 */
   faultPhase?: TreasuryWriteFaultPhase;
+  /** 已写入 durable intent（executePreparedAction/contract 路径；slot 由 intent 接管）。 */
+  intentWritten?: boolean;
 }
 
 /**
@@ -473,6 +487,24 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   const handleRecords = new WeakMap<TreasuryPreparedHandle, TreasuryHandleRecord>();
   const activeHandles = new Map<TreasuryPreparedHandle, PreparedTransaction>();
   const preparedById = new Map<string, PreparedTransaction>();
+  /**
+   * 已写入 durable intent 的 active handle transactionId 集合（第八轮 slot
+   * 统一计数）：这些 handle 的 recovery slot 已由 intent 接管，不得在
+   * "active handle" 形态上重复计入。handle 终态化时移除。
+   */
+  const intentBackedActiveIds = new Set<string>();
+
+  /**
+   * 统一 recovery slot 占用数（O(1)；第八轮 3.5）：一笔 transaction 恒占一个
+   * slot——quarantine entry + durable intent + 无 intent 的 active handle。
+   * fault 时 intent 转换为 quarantine entry（+1/−1 守恒）；正常 commit/abort
+   * 释放。prepare admission 用本计数保证第 65 条 fault 在 prepare 前被拒。
+   */
+  function recoverySlotsOccupied(): number {
+    const quarantineCount = peekTreasuryQuarantineHealth().entryCount;
+    const intentCount = peekTreasuryIntentHealth().entryCount;
+    return quarantineCount + intentCount + (activeHandles.size - intentBackedActiveIds.size);
+  }
 
   /** 终态化：active registry 删除 + WeakMap 替换为轻量 stub（丢大对象引用）。 */
   function finalizeHandleRecord(
@@ -480,6 +512,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     state: "committed" | "aborted" | "expired",
   ): void {
     activeHandles.delete(record.handle);
+    intentBackedActiveIds.delete(record.canonical.transactionId);
     handleRecords.set(record.handle, {
       transactionId: record.canonical.transactionId,
       digest: record.digest,
@@ -587,6 +620,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
    * fault 路径共用的立即隔离（第七轮）：faulted + write-fault marker（含
    * 有界 detail）+ durable quarantine 一次完成。写入被拒（store fatal /
    * 防御性容量分支）时保持 marker 锁定并计数——绝不静默丢失占用事实。
+   * 第八轮：quarantine 写入成功后释放对应 durable intent（slot 由 intent
+   * 形态转换为 quarantine entry，守恒）；写失败时 intent 保留（emergency
+   * intent authority——postings/占用/slot 不丢）。
    */
   function quarantineFaultedRecord(record: PreparedTransaction, detail?: string): void {
     record.state = "faulted";
@@ -614,7 +650,14 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     });
     if (write.status === "rejected") {
       // store 损坏或容量不变量破坏：marker 已锁全部 writer，此处只计数诊断。
+      // intent 保留为最终保守权威（emergency intent authority）。
       metrics.quarantineAdmissionRejections += 1;
+      return;
+    }
+    // quarantine 完整写入（written 或幂等 already_present）：释放 intent——
+    // 资产事实已由 quarantine entry 接管（slot 守恒转换）。
+    if (record.intentWritten) {
+      releaseTreasuryIntentEntry(record.canonical.transactionId);
     }
   }
 
@@ -632,7 +675,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     });
     if (write.status === "rejected") {
       // marker 已在 audit/故障路径写入（全局锁）；计数诊断，不静默。
+      // intent 保留（emergency intent authority：postings/占用/slot 不丢）。
       metrics.quarantineAdmissionRejections += 1;
+    } else if (record.intentWritten) {
+      releaseTreasuryIntentEntry(record.canonical.transactionId);
     }
     metrics.preparedQuarantinedAtBoundary += 1;
   }
@@ -727,6 +773,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (schemaGate.status === "rejected") {
         metrics.reservationSchemaActivationFailures += 1;
       }
+      // durable intent 恢复（第八轮 3.4）：先于一切 planner/writer 加载验证
+      // intent store——ready 相确认未执行关闭、其余保守转 execution-unknown
+      // quarantine（quarantine 写失败时 intent 保留为 emergency authority）。
+      // 恢复后仍存的未完成 intent 由 treasuryIntentBlockers 全局阻断新 writer。
+      recoverTreasuryIntentsAtTickBoundary();
     }
 
     // 跨 tick prepared handle 一律作废（observation 是 tick 级物理快照，
@@ -855,12 +906,14 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           reservations: (deps.getReservations ?? defaultGetReservations)(),
           observation: state.observation,
           holderExists: deps.holderExists,
-          // 容量口径（第七轮）：projected 变化 + quarantine 正净流入占用统一
-          // 扣减——receiver headroom 等派生口径与 projectedFreeCapacity 一致
-          // （可能已流入的资源必须减少 free capacity，负流出不增加）。
+          // 容量口径（第七/八轮 risk-adjusted）：projected 变化 + quarantine
+          // 与 unresolved intent 的正净流入占用统一扣减——receiver headroom 等
+          // 派生口径与 riskAdjustedFreeCapacity 一致（可能已流入的资源必须
+          // 减少 free capacity，负流出不增加）。
           capacityDelta: (roomName, kind) =>
             projection.locationCapacityDelta(roomName, kind) +
-            (treasuryQuarantineCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0),
+            (treasuryQuarantineCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0) +
+            (treasuryIntentCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0),
           onExpiredExcluded: () => {
             metrics.expiredCommitmentsExcluded += 1;
           },
@@ -955,14 +1008,20 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
               : undefined;
           committed += commitments.reservedProduction(roomName, context.resource, excludeOwner);
         }
-        // durable quarantine 占用（第六轮）：Game 结果未知/commit 故障未对账的
-        // transaction 的流出量计入 committed（保守——可能已执行；不进 projection）。
+        // durable quarantine + unresolved intent 占用（第六/八轮）：Game 结果
+        // 未知/未关闭 transaction 的流出量计入 committed（保守——可能已执行；
+        // 不进 projection；intent 为 per-transaction 正占用口径，quarantine
+        // 暂为净额口径（负=流出），第八轮聚合改造后统一为正占用）。
         const quarantineOutflows = treasuryQuarantineOutflowTotals();
-        if (quarantineOutflows.size > 0) {
+        const intentOutflows = treasuryIntentOutflowOccupancy();
+        if (quarantineOutflows.size > 0 || intentOutflows.size > 0) {
           for (const roomName of rooms) {
             for (const kind of kinds) {
-              const occupied = quarantineOutflows.get(`${roomName}\u0000${kind}\u0000${context.resource}`) ?? 0;
-              if (occupied < 0) committed += -occupied;
+              const resourceKey = `${roomName}\u0000${kind}\u0000${context.resource}`;
+              const quarantinedNet = quarantineOutflows.get(resourceKey) ?? 0;
+              const quarantinedOut = quarantinedNet < 0 ? -quarantinedNet : 0;
+              const intendedOut = intentOutflows.get(resourceKey) ?? 0;
+              if (quarantinedOut + intendedOut > 0) committed += quarantinedOut + intendedOut;
             }
           }
         }
@@ -1002,12 +1061,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const writeFaultHealth = peekTreasuryWriteFaultHealth();
       const quarantineHealthForAuth = peekTreasuryQuarantineHealth();
       const quarantineBlock = treasuryQuarantineBlockers();
+      const intentHealthForAuth = peekTreasuryIntentHealth();
+      const intentBlock = treasuryIntentBlockers();
       const blockers: string[] = [];
       if (!ownerCheck.valid && context.owner) blockers.push("invalid_owner");
       if (!commitmentComplete) blockers.push("commitment_incomplete");
       if (isTreasuryWriteAdmissionLocked() || !writeFaultHealth.healthy) blockers.push("write_fault");
       if (!quarantineHealthForAuth.healthy) blockers.push("quarantine_unhealthy");
       else if (quarantineBlock.blocking) blockers.push("quarantine_unresolved");
+      if (!intentHealthForAuth.healthy) blockers.push("intent_unhealthy");
+      else if (intentBlock.blocking) blockers.push("intent_unresolved");
       const receiptHealth = peekTreasuryReceiptHealth();
       if (!receiptHealth.healthy) blockers.push("receipt_unhealthy");
       if (state.ended) blockers.push("lifecycle_closed");
@@ -1016,13 +1079,14 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const authorizationSafe = authorizable && blockers.length === 0;
 
       // write readiness 的额外准入条件（超出 authorizationSafe）：
-      // receipt 容量、quarantine fault-slot、reservation store 损坏标志。
+      // receipt 容量、统一 recovery slot、reservation store 损坏标志。
       const receiptCounters = readTreasuryReceiptEventCounters();
       const writeAdmissionBlockers: string[] = [...blockers];
       if (receiptCounters.slotsRemaining <= 0) writeAdmissionBlockers.push("receipt_capacity_exhausted");
       if (
         !quarantineHealthForAuth.healthy ||
-        quarantineHealthForAuth.entryCount + activeHandles.size >= TREASURY_QUARANTINE_MAX_ENTRIES
+        !intentHealthForAuth.healthy ||
+        recoverySlotsOccupied() >= TREASURY_QUARANTINE_MAX_ENTRIES
       ) {
         writeAdmissionBlockers.push("quarantine_slot_exhausted");
       }
@@ -1096,6 +1160,28 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           detail: `存在 ${String(quarantineBlock.unresolvedCount)} 条 unresolved quarantine${quarantineBlock.overflowed ? "（含 legacy overflowed）" : ""}——全部解决前阻断新 prepare（callback 零调用）`,
         };
       }
+      // durable intent 全局 write blocker（第八轮）：存在任何未完成 intent
+      //（Game API 途中/未关闭/等待恢复）或 intent store 损坏时，一切新
+      // transaction 在 Game callback 之前拒绝——未完成动作的身份与 postings
+      // 必须先经恢复/隔离流程处置。
+      const intentHealth = peekTreasuryIntentHealth();
+      if (!intentHealth.healthy) {
+        metrics.transactionsRejectedInvalid += 1;
+        return {
+          status: "rejected",
+          reason: "intent_store_fatal",
+          detail: intentHealth.detail ?? "intent store 损坏（fail closed，显式 repair 前阻断一切新 prepare）",
+        };
+      }
+      const intentBlock = treasuryIntentBlockers();
+      if (intentBlock.blocking) {
+        metrics.transactionsRejectedInvalid += 1;
+        return {
+          status: "rejected",
+          reason: "intent_write_blocked",
+          detail: `存在 ${String(intentBlock.unresolvedCount)} 条未完成 durable intent——恢复（ready 关闭/转 quarantine/resolution）完成前阻断新 prepare（callback 零调用）`,
+        };
+      }
       // 相同 transactionId 的重复 prepare：canonical payload digest 比较——
       // digest 相同幂等返回同一 handle；不同则 prepare_conflict（同一 id 只
       // 能绑定一个 canonical payload，绝不能"ID 相同就无条件返回 prepared"）。
@@ -1164,18 +1250,21 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         metrics.transactionsRejectedInvalid += 1;
         return { status: "rejected", reason: validation.result.reason, detail: validation.result.detail };
       }
-      // quarantine fault-slot admission（第七轮，O(1)）：prepare 成功的前置
-      // 条件 = 最坏情况下仍有空间持久化该 transaction 的 quarantine——持久
-      // entryCount + active handle 数 < MAX。满则在 Game callback 之前拒绝
-      // （第 65 条 fault 在 prepare 前被阻止，溢出丢 identity 的路径不复存在）。
-      // 先于 receipt admission（同容量约束下 reason 指向 quarantine 语义）。
-      const slotHealth = peekTreasuryQuarantineHealth();
-      if (!slotHealth.healthy || slotHealth.entryCount + activeHandles.size >= TREASURY_QUARANTINE_MAX_ENTRIES) {
+      // 统一 recovery slot admission（第八轮 3.5 重构，O(1)）：prepare 成功的
+      // 前置条件 = 最坏情况下仍有空间承载该 transaction 的隔离/恢复记录——
+      // 持久 quarantine + 持久 intent + 无 intent 的 active handle 总数 < MAX
+      //（一笔 transaction 恒占一个 slot；durable intent 接管 prepare 预留、
+      // fault 转换为 quarantine entry，绝不双重计数）。满则在 Game callback
+      // 之前拒绝（第 65 条 fault 在 prepare 前被阻止）。先于 receipt admission
+      //（同容量约束下 reason 指向隔离/恢复语义）。
+      const quarantineSlotHealth = peekTreasuryQuarantineHealth();
+      const slotsOccupied = recoverySlotsOccupied();
+      if (!quarantineSlotHealth.healthy || !intentHealth.healthy || slotsOccupied >= TREASURY_QUARANTINE_MAX_ENTRIES) {
         metrics.quarantineAdmissionRejections += 1;
         return {
           status: "rejected",
           reason: "quarantine_capacity_exhausted",
-          detail: `quarantine fault-slot 已满（持久 ${String(slotHealth.entryCount)} + active ${String(activeHandles.size)} ≥ ${String(TREASURY_QUARANTINE_MAX_ENTRIES)}；释放或解决既有占用后恢复）`,
+          detail: `recovery slot 已满（quarantine ${String(quarantineSlotHealth.entryCount)} + intent ${String(intentHealth.entryCount)} + active ${String(activeHandles.size - intentBackedActiveIds.size)} ≥ ${String(TREASURY_QUARANTINE_MAX_ENTRIES)}；释放或解决既有占用后恢复）`,
         };
       }
       // admission 预留：成功即占一个容量槽（commit 兑现不再因容量被拒）。
@@ -1414,7 +1503,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         return { status: "already_settled", transactionId: prepared.transactionId, firstRecordedAtTick: prepared.firstRecordedAtTick };
       }
       if (prepared.status !== "prepared") {
-        // prepare 拒绝：Game callback 零调用（quarantine/锁/验证失败等）。
+        // prepare 拒绝：Game callback 零调用（quarantine/intent/锁/验证失败等）。
         return { status: "prepare_rejected", reason: prepared.reason, ...(prepared.detail !== undefined ? { detail: prepared.detail } : {}) };
       }
       const record = activeHandles.get(prepared.handle);
@@ -1422,11 +1511,67 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // 理论不可达（handle 刚签发）：按协议违规拒绝，不执行 Game API。
         return { status: "prepare_rejected", reason: "invalid_handle", detail: "签发后 handle 记录缺失（内部不一致）" };
       }
+      // ── durable intent / WAL（第八轮唯一安全顺序）：Game API 之前持久化
+      //    transaction identity + canonical postings——写入失败时 callback
+      //    零调用、tentative 与槽位释放、结构化拒绝。 ─────────────────────
+      const intentWrite = writeTreasuryIntentEntry({
+        transactionId: record.canonical.transactionId,
+        digest: record.digest,
+        actionKind: record.canonical.kind,
+        kind: record.canonical.kind,
+        source: record.canonical.source,
+        postings: record.shape.merged.map((posting) => ({
+          roomName: posting.roomName,
+          locationKind: posting.locationKind,
+          resource: posting.resource,
+          delta: posting.delta,
+        })),
+        phase: "ready",
+        auditSource: "execute-prepared-action",
+        createdAtTick: Game.time,
+        updatedAtTick: Game.time,
+      });
+      if (intentWrite.status === "rejected") {
+        // intent 写失败：绝不进入 Game callback——释放全部预留并终态化 handle
+        //（资产零占用、slot 回收），返回结构化拒绝。计数由 intents.ts 的
+        // writeFailures 权威承载（metrics 聚合，不在此重复累加）。
+        record.state = "aborted";
+        preparedById.delete(record.canonical.transactionId);
+        projection.tentativeRelease(record.tentativeKey);
+        releaseTreasuryReceiptReservation(record.canonical.transactionId);
+        finalizeHandleRecord(record, "aborted");
+        return {
+          status: "prepare_rejected",
+          reason: "intent_store_unavailable",
+          detail: `durable intent 写入失败（${intentWrite.reason}）：${intentWrite.detail}——Game callback 零调用，预留已释放`,
+        };
+      }
+      record.intentWritten = true;
+      intentBackedActiveIds.add(record.canonical.transactionId);
+      // 标记 execution-started（持久 phase=executing）：此后 callback 一旦
+      // 进入，恢复语义即为 execution unknown——ready 与 executing 绝不混同。
+      const started = markTreasuryIntentPhase(record.canonical.transactionId, "executing");
+      if (started.status === "rejected" && started.reason !== "not_found") {
+        // store 在写入与标记之间致命损坏：保守不进入 callback（宁可当作未执行
+        // 关闭——intent 仍在 store 中，下一 tick 恢复处置）。
+        metrics.intentWriteFailures += 1;
+        record.state = "expired";
+        preparedById.delete(record.canonical.transactionId);
+        projection.tentativeRelease(record.tentativeKey);
+        releaseTreasuryReceiptReservation(record.canonical.transactionId);
+        finalizeHandleRecord(record, "expired");
+        return {
+          status: "prepare_rejected",
+          reason: "intent_store_unavailable",
+          detail: `durable intent 状态标记失败（${started.detail}）——Game callback 零调用`,
+        };
+      }
       record.state = "executing";
       let actionResult: TAction;
       try {
-        // Game API 恰好执行一次（本包装器是唯一调用点）。callback 应是极窄的
-        // Game API adapter——在其中执行额外业务逻辑会放大 execution unknown。
+        // Game API 恰好执行一次（本包装器与注册 adapter 是仅有的调用点）。
+        // callback 应是极窄的 Game API adapter——在其中执行额外业务逻辑会
+        // 放大 execution unknown。
         actionResult = action();
       } catch (error) {
         // callback 抛错 = execution unknown（第七轮）：callback 内可能已经
@@ -1434,27 +1579,35 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // 占用的资源）——立即 faulted + write-fault marker（含有界异常摘要，
         // 绝不持久化完整 Error 对象）+ durable quarantine + 全局锁，然后
         // rethrow 原始异常（Treasury 状态完整，异常原样透传不吞）。
+        // intent：quarantine 写入成功时释放（slot 转换守恒）；失败时保留
+        //（emergency intent authority——postings/占用不丢）。
         record.faultPhase = "action_threw_execution_unknown";
         metrics.executionUnknownQuarantines += 1;
+        markTreasuryIntentPhase(record.canonical.transactionId, "execution_unknown");
         quarantineFaultedRecord(record, error instanceof Error ? error.message : String(error));
         throw error;
       }
       if (actionResult && actionResult.ok) {
+        markTreasuryIntentPhase(record.canonical.transactionId, "ok_pending_commit");
         const committed = this.commitPreparedTransaction(prepared.handle);
         if (committed.status === "committed") {
+          // settled：intent 关闭（WAL 完成）。
+          releaseTreasuryIntentEntry(record.canonical.transactionId);
           return { status: "executed_committed", handle: prepared.handle, actionResult, committedAtTick: committed.tick };
         }
         if (committed.status === "already_settled") {
+          releaseTreasuryIntentEntry(record.canonical.transactionId);
           return { status: "already_settled", transactionId: committed.transactionId, firstRecordedAtTick: committed.firstRecordedAtTick };
         }
         // Game callback 已成功，但 Treasury commit 失败/锁定/故障：Game 动作
         // 已发生——立即落 durable fault（faulted + marker + quarantine，不等
         // tick 边界；quarantine/marker 幂等），然后显式返回 executed_unsettled
-        // （绝不返回 prepare_rejected/aborted——那会暗示未执行、诱导自动重试）。
-        // （commit 内部可能已把 record 置为 faulted——比较须经宽类型收窄。）
+        //（绝不返回 prepare_rejected/aborted——那会暗示未执行、诱导自动重试）。
+        // intent 随 quarantine 写入成功释放（postings 由 quarantine 接管）。
         if ((record.state as TreasuryPreparedHandleState) !== "faulted") {
           record.faultPhase = "commit_unexpected";
         }
+        markTreasuryIntentPhase(record.canonical.transactionId, "execution_unknown");
         quarantineFaultedRecord(record);
         return {
           status: "executed_unsettled",
@@ -1467,12 +1620,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           retryForbidden: true,
         };
       }
+      // Game 正常返回非 OK：关闭 intent（确认未成功）→ 普通 abort。
+      markTreasuryIntentPhase(record.canonical.transactionId, "returned_non_ok");
       const aborted = this.abortPreparedTransaction(prepared.handle);
       if (aborted.status !== "aborted") {
-        // Game 正常返回非 OK（动作未成功），但 abort 未确认：资源仍被占用——
-        // 立即隔离（第七轮：phase=action_returned_non_ok_abort_failed，不等
-        // tick 边界），不得报告已正常 abort。
+        // abort 未确认：资源仍被占用——立即隔离（第七轮：phase=
+        // action_returned_non_ok_abort_failed，不等 tick 边界），不得报告已
+        // 正常 abort。intent 随 quarantine 写入成功释放、失败保留。
         record.faultPhase = "action_returned_non_ok_abort_failed";
+        markTreasuryIntentPhase(record.canonical.transactionId, "execution_unknown");
         quarantineFaultedRecord(record);
         return {
           status: "executed_abort_failed",
@@ -1482,6 +1638,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           ...(aborted.status === "rejected" && aborted.detail !== undefined ? { detail: aborted.detail } : {}),
         };
       }
+      // 确认 aborted：intent 关闭（slot 回收）。
+      releaseTreasuryIntentEntry(record.canonical.transactionId);
       return {
         status: "executed_aborted",
         handle: prepared.handle,
@@ -1568,14 +1726,18 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
 
     projectedFreeCapacity(roomName: string, kind: TreasuryLocationKind): number {
-      // quarantine 容量占用（第七轮保守口径）：该 location 的正净流入
-      // （可能已流入）必须减少 free capacity；负净流出（可能已流出）不得
-      // 假设空间已释放——occupancy = max(0, Σ deltas)，只减不增。
+      // quarantine + unresolved intent 容量占用（第七/八轮保守口径，risk-
+      // adjusted）：该 location 的正净流入（可能已流入）必须减少 free
+      // capacity；负净流出（可能已流出）不得假设空间已释放——occupancy =
+      // Σ max(0, net)（per-transaction，跨 transaction 不抵消），只减不增。
+      metrics.riskAdjustedCapacityLookups += 1;
       const quarantineOccupancy = treasuryQuarantineCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0;
+      const intentOccupancy = treasuryIntentCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0;
       return (
         this.observation().freeCapacity(roomName, kind) -
         projection.locationCapacityDelta(roomName, kind) -
-        quarantineOccupancy
+        quarantineOccupancy -
+        intentOccupancy
       );
     },
 
@@ -1591,6 +1753,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const quarantineCounters = readTreasuryQuarantineCounters();
       const quarantineHealth = peekTreasuryQuarantineHealth();
       const quarantineBlock = treasuryQuarantineBlockers();
+      const intentCounters = readTreasuryIntentCounters();
+      const intentHealth = peekTreasuryIntentHealth();
+      const slotsOccupied = recoverySlotsOccupied();
       return {
         ...metrics,
         commitmentIndexQueries: metrics.commitmentIndexQueries + liveQueries,
@@ -1612,11 +1777,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         receiptFatalInspectionEntries: receiptCounters.receiptFatalInspectionEntries,
         writeAdmissionLocked: isTreasuryWriteAdmissionLocked() ? 1 : 0,
         quarantineEntries: quarantineHealth.entryCount,
-        quarantineSlotsReserved: activeHandles.size,
-        quarantineSlotsRemaining: Math.max(
-          0,
-          TREASURY_QUARANTINE_MAX_ENTRIES - quarantineHealth.entryCount - activeHandles.size,
-        ),
+        quarantineSlotsReserved: activeHandles.size - intentBackedActiveIds.size,
+        quarantineSlotsRemaining: Math.max(0, TREASURY_QUARANTINE_MAX_ENTRIES - slotsOccupied),
         quarantineStoreHealthy: quarantineHealth.healthy,
         quarantineAdmissionRejections: metrics.quarantineAdmissionRejections + quarantineCounters.admissionRejections,
         unresolvedQuarantines: quarantineBlock.unresolvedCount,
@@ -1627,6 +1789,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         reservationSchemaActivationFailures:
           metrics.reservationSchemaActivationFailures + readReservationMutationCounters().schemaActivationFailures,
         reservationMutationRejections: readReservationMutationCounters().mutationRejections,
+        durableIntents: intentHealth.entryCount,
+        intentSlotsRemaining: Math.max(0, TREASURY_QUARANTINE_MAX_ENTRIES - slotsOccupied),
+        intentRecoveries: metrics.intentRecoveries + intentCounters.recoveries,
+        intentQuarantineConversions: metrics.intentQuarantineConversions + intentCounters.quarantineConversions,
+        intentStoreHealthy: intentHealth.healthy,
+        intentWriteFailures: metrics.intentWriteFailures + intentCounters.writeFailures,
       };
     },
 
@@ -1642,6 +1810,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       epochRegistry.clear();
       activeHandles.clear();
       preparedById.clear();
+      intentBackedActiveIds.clear();
       lastPreparedLeakAudit = Object.freeze({
         context: "end_tick",
         outstanding: 0,

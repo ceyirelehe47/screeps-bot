@@ -182,7 +182,26 @@ export type TreasuryRejectionReason =
   | "quarantine_capacity_exhausted"
   /** runtime input 形状非法（canonicalization 前置验证失败——结构化拒绝，
    *  绝不抛出中断 tick；零 tentative/零槽位/零 registry 污染）。 */
-  | "invalid_input";
+  | "invalid_input"
+  /** intent store 损坏（版本未知/entry 损坏）：fail closed，一切新 writer
+   *  阻断直至显式 repair（第八轮）。 */
+  | "intent_store_fatal"
+  /** 存在 unresolved durable intent（Game API 途中/未关闭）：全局 write
+   *  blocker——恢复完成前阻断新 prepare（第八轮）。 */
+  | "intent_write_blocked"
+  /** durable intent 写入失败（store fatal/容量满）：Game callback 零调用、
+   *  tentative 与槽位释放（第八轮唯一安全顺序的前置）。 */
+  | "intent_store_unavailable"
+  /** 授权 token 无效/失效/伪造/已被消费（第八轮）。 */
+  | "authorization_invalid"
+  /** action contract 非法（伪造/冻结校验失败/digest 不匹配）。 */
+  | "contract_invalid"
+  /** adapter 未注册（该 action kind 无注册 adapter）。 */
+  | "adapter_not_registered"
+  /** adapter kind 与 contract 不匹配。 */
+  | "adapter_kind_mismatch"
+  /** 结构 incarnation 已变化（contract 绑定的 structureId 不再匹配）。 */
+  | "structure_replaced";
 
 /** rejected 形状（验证/门禁/登记共用的具体拒绝结果）。 */
 export interface TreasuryRejectedResult {
@@ -775,6 +794,49 @@ export interface TreasuryMetrics {
   reservationSchemaActivationFailures: number;
   /** reservation mutation 结构化拒绝次数（非法输入/schema 未激活/corrupted；累计）。 */
   reservationMutationRejections: number;
+  /** ── 第八轮：durable intent / authorization / contract / staged resolution ── */
+  /** 当前未完成 durable intent 条数（gauge，O(1)）。 */
+  durableIntents: number;
+  /** recovery slot 剩余可预留数（quarantine + intent + 无 intent 的 active handle 统一口径；gauge）。 */
+  intentSlotsRemaining: number;
+  /** beginTick 恢复中确认未执行（ready 相）而释放的 intent 数（累计）。 */
+  intentRecoveries: number;
+  /** 恢复/故障路径 intent 成功转 quarantine 的次数（累计；slot 守恒转换）。 */
+  intentQuarantineConversions: number;
+  /** intent store 健康状态（gauge；false = fail closed）。 */
+  intentStoreHealthy: boolean;
+  /** intent 写入失败（store fatal/容量满——callback 零调用路径）次数（累计）。 */
+  intentWriteFailures: number;
+  /** 授权签发次数（累计）。 */
+  authorizationIssued: number;
+  /** 授权拒绝次数（累计）。 */
+  authorizationRejected: number;
+  /** 授权 token 失效（revision 变化/跨 tick/重复消费等）次数（累计）。 */
+  authorizationInvalidated: number;
+  /** 当前有效（已签发未消费）授权数（gauge）。 */
+  authorizationsActive: number;
+  /** action contract 构建次数（累计）。 */
+  actionContractsBuilt: number;
+  /** adapter kind 不匹配拒绝次数（累计）。 */
+  actionAdapterMismatches: number;
+  /** 授权 revision 不匹配失效次数（累计）。 */
+  authorizationRevisionMismatches: number;
+  /** staged resolution 进行中条数（resolving tombstone；gauge）。 */
+  resolutionInProgress: number;
+  /** staged resolution 阶段故障次数（累计；可恢复）。 */
+  resolutionFaulted: number;
+  /** staged resolution 恢复完成次数（global reset 后幂等恢复；累计）。 */
+  resolutionRecovered: number;
+  /** resolve-as-committed 刷新既有 receipt 的次数（累计）。 */
+  receiptRefreshes: number;
+  /** reconciliation capability 签发次数（累计）。 */
+  reconciliationCapabilitiesIssued: number;
+  /** reconciliation capability 拒绝次数（未注册 reconciler/伪造等；累计）。 */
+  reconciliationCapabilitiesRejected: number;
+  /** reservation store 完整健康状态（version=4 ≠ healthy；gauge）。 */
+  reservationStoreHealthy: boolean;
+  /** risk-adjusted 容量口径查询次数（累计）。 */
+  riskAdjustedCapacityLookups: number;
   reconciliationInflowMismatches: number;
   reconciliationOutflowMismatches: number;
   reconciliationStructuralChanges: number;
@@ -860,6 +922,27 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     queryInvalidContexts: 0,
     reservationSchemaActivationFailures: 0,
     reservationMutationRejections: 0,
+    durableIntents: 0,
+    intentSlotsRemaining: 0,
+    intentRecoveries: 0,
+    intentQuarantineConversions: 0,
+    intentStoreHealthy: false,
+    intentWriteFailures: 0,
+    authorizationIssued: 0,
+    authorizationRejected: 0,
+    authorizationInvalidated: 0,
+    authorizationsActive: 0,
+    actionContractsBuilt: 0,
+    actionAdapterMismatches: 0,
+    authorizationRevisionMismatches: 0,
+    resolutionInProgress: 0,
+    resolutionFaulted: 0,
+    resolutionRecovered: 0,
+    receiptRefreshes: 0,
+    reconciliationCapabilitiesIssued: 0,
+    reconciliationCapabilitiesRejected: 0,
+    reservationStoreHealthy: false,
+    riskAdjustedCapacityLookups: 0,
     reconciliationInflowMismatches: 0,
     reconciliationOutflowMismatches: 0,
     reconciliationStructuralChanges: 0,

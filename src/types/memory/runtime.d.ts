@@ -676,6 +676,50 @@ declare global {
         detail?: string;
       };
       /**
+       * durable intent / WAL（第八轮新增）：Game API 调用之前的最小持久权威
+       * ——transaction identity、payload digest、action kind、canonical
+       * postings（唯一资产事实副本）、授权身份、执行 phase、结构 incarnation
+       * 与有界审计来源。phase 状态机区分"尚未调用 Game API"（ready）与
+       * "已进入 callback、结果未知"（executing/returned_non_ok/ok_pending_
+       * commit/execution_unknown 等）。entry key 为 "i:"+transactionId；
+       * entryCount 为自有键计数（load 校验与统一 recovery slot admission 的
+       * O(1) 权威）；上限 64（与 quarantine 同上限——一笔 transaction 恒占一
+       * 个 recovery slot）。global reset 后首次 load 全量验证（key 编码/
+       * digest/phase 枚举/postings 逐腿/安全整数/聚合溢出）——损坏与未知版本
+       * fail closed；beginTick 恢复：ready 确认未执行关闭、其余保守转
+       * execution-unknown quarantine；quarantine 写失败时 intent 保留为
+       * 最终保守权威（emergency intent authority）。绝不持久化完整
+       * observation/service/journal/任意大 payload。
+       */
+      intents?: {
+        version: 1;
+        entries: Record<
+          string,
+          {
+            transactionId: string;
+            digest: string;
+            actionKind: string;
+            kind: string;
+            source: string;
+            authorizationDigest?: string;
+            contractId?: string;
+            postings: Array<{
+              roomName: string;
+              locationKind: string;
+              resource: string;
+              delta: number;
+            }>;
+            phase: string;
+            structureId?: string;
+            auditSource?: string;
+            createdAtTick: number;
+            updatedAtTick: number;
+          }
+        >;
+        entryCount: number;
+        updatedAt: number;
+      };
+      /**
        * durable quarantine（第六轮新增、第七轮升级版本化 schema v1）：
        * executing（Game 结果未知）或 commit-faulted 的 prepared transaction
        * 转入的持久隔离——跨 global reset 与 service 重建存活，继续占用
