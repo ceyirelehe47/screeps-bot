@@ -466,3 +466,96 @@ transactionId 铸造必须（MUST）基于版本化 canonical tuple 序列化（
 
 - **WHEN** 架构边界测试扫描生产 writer 模块与 compat 模块引用面
 - **THEN** 任何生产模块不引用单阶段入口/compat；compat 仅 Treasury 测试与迁移过渡可用；reservation store 直接写入仅限权威 mutation 模块
+
+
+### Requirement: typed owner 持久身份与原子迁移
+
+reservation 持久 key 必须（MUST）编码完整 typed owner identity（kind + namespace + id）：不同 kind、不同 namespace、相同 id 的 owner 不得（MUST NOT）在持久层碰撞；相同房间/资源/相同 id 不同 kind 或 namespace 的 owner 必须（MUST）可以同时存在且独立 release。ownerToken 与 store key 的构造必须（MUST）收敛到唯一权威 helper（ownerIdentity.ts / resourceReservation.ts），外部模块不得（MUST NOT）自行拼接持久 key。key 迁移必须（MUST）先在临时结构完成全部验证（形状完整、legacy key 与平铺字段一致、新 key 无碰撞），验证全部通过后一次性原子替换并推进版本 + bump commitment revision；任何 malformed 或 collision 必须（MUST）终止整个迁移：原数据不动、版本不推进、授权状态 fail closed；迁移必须（MUST）幂等可重复执行。
+
+#### Scenario: 同 id 不同 kind/namespace 共存与独立 release
+
+- **WHEN** 相同 room+resource+id 分别以 game-object 与 logical-service（或不同 namespace）身份 reserve，随后 release 其中一个
+- **THEN** 两条 reservation 同时存在（不同持久 key）；release 只删除被指定的 owner 条目，另一条完整保留并继续计入 committed
+
+#### Scenario: 迁移失败不部分覆盖、版本不推进
+
+- **WHEN** 迁移遍历中发现 malformed entry 或新 key collision
+- **THEN** 整个迁移终止：store 保持原样（无部分写入）、resourceReservationsOwnerVersion 不变、授权侧因 migration 未完成 fail closed；修复后重复执行迁移成功
+
+### Requirement: durable quarantine（executing/faulted 跨 tick 占用）
+
+tick 边界发现 executing（Game 结果未知）或 commit-faulted 的 prepared transaction 时必须（MUST）写入持久 quarantine（跨 global reset 与 service 重建存活），且不得（MUST NOT）将其 tentative 资源/容量当作普通 prepared 释放。quarantine 必须（MUST）继续占用资源、容量与 transaction identity（授权计算计入流出量），不得（MUST NOT）进入 committed projection；quarantine 未解决前同一 transactionId 的 prepare 必须（MUST）被拒绝。普通、确定未调用 Game API 的 prepared transaction 仍必须（MUST）在 tick 边界正常 expire 并释放。quarantine 存储必须（MUST）有界（上限条目数 + 溢出标志），且不得（MUST NOT）只依赖全局 write-admission lock 存活。
+
+#### Scenario: executing 跨 tick 进入 quarantine 且资源不释放
+
+- **WHEN** transaction 进入 executing 后 tick 结束（endTick）
+- **THEN** 该 transaction 出现在持久 quarantine；下一 tick（含模拟 global reset / 新 service 实例）同 id prepare 被拒；query 的 committed 计入其流出占用
+
+#### Scenario: 普通 prepared 跨 tick 正常释放
+
+- **WHEN** 普通未执行 prepared transaction 在 tick 边界作废
+- **THEN** tentative 资源/容量与 receipt 槽释放（不留 quarantine）；下一 tick 同 id 可重新 prepare
+
+### Requirement: safe execution 结果语义不可混淆
+
+安全执行包装器的返回必须（MUST）区分：prepare 拒绝（callback 零调用）、Game 非 OK 且 abort 已确认、Game 非 OK 且 abort 未确认、Game OK 且 commit 成功、**Game OK 但 Treasury commit 失败或进入 write fault**、已结算。Game callback 成功后的 Treasury 故障绝不能（MUST NOT）返回暗示未执行的状态（prepare_rejected/aborted）；该状态必须（MUST）保留原始 Game API 结果与 transaction/fault identity，并明确禁止自动重试；同一 transaction 的下一次调用必须（MUST）在 callback 前被拒绝且 callback 计数为零。callback 返回非 OK 后 abort 失败时不得（MUST NOT）报告已正常 abort。
+
+#### Scenario: Game OK 后 commit fault 的结果语义
+
+- **WHEN** Game callback 返回 ok:true 且随后 commit 注入写故障
+- **THEN** 返回 executed_unsettled（携带原始 actionResult 与 fault identity、retryForbidden）；transaction 进入 durable quarantine；下一次同 id 调用 callback 计数为零
+
+### Requirement: 显式 fault resolution（无无条件解锁入口）
+
+不得（MUST NOT）保留任何调用方可直接删除 fault marker 后继续写的入口。fault 解决必须（MUST）经显式 resolution 协议：resolve-as-committed 补全/确认 receipt（幂等、最多提交一次）、释放对应 quarantine、清除匹配的 write-fault marker、防后续重放、global reset 后仍可完成；resolve-as-not-executed 仅允许（MUST）在证据允许（Game 结果未确认的 phase）时执行：释放 quarantine、不生成 committed projection、明确是否允许重新 prepare。错误 transactionId/digest、已解决或不允许的 resolution 必须（MUST）被拒绝且 fault 不被删除。resolution 必须（MUST）幂等，且在完成前 write admission 持续锁定；生产 tick 不得（MUST NOT）自动调用 resolution。
+
+#### Scenario: resolve-as-committed 幂等且补全 settlement
+
+- **WHEN** 对 quarantined transaction 执行 resolve-as-committed（含模拟 global reset 后）并重复调用
+- **THEN** receipt 补全且只计账一次；quarantine 与对应 marker 清除；重复调用幂等返回；同 id 重新 prepare 命中 already_settled
+
+#### Scenario: 不允许的 resolution 被拒绝
+
+- **WHEN** 对 Game 已确认 OK 的 commit-fault transaction 执行 resolve-as-not-executed，或 digest 不匹配
+- **THEN** resolution 被拒绝；fault marker 与 quarantine 保持不变；write admission 仍锁定
+
+### Requirement: receipt corruption fail closed
+
+settled tick、undefined、corrupted 三态必须（MUST）在全路径保真：只有有效 settled tick 可解释为 already settled；corrupted 必须（MUST）立即 fail closed——不得（MUST NOT）被当作 already_settled、不得（MUST NOT）发布 committed heap projection；prepare 前发现 corruption 时 callback 必须（MUST）零调用；Game callback 成功后 commit 期间发现 corruption 必须（MUST）进入 durable fault/quarantine（已执行事实不丢失）。
+
+#### Scenario: prepare 后损坏 receipt 再 commit
+
+- **WHEN** prepare 成功后人为破坏 receipt store（value 损坏）再 commit
+- **THEN** commit 进入 faulted + durable quarantine，绝不返回 already_settled，绝不发布 heap projection
+
+### Requirement: prepared handle 生命周期有界
+
+prepared handle registry 必须（MUST）不形成长寿命 global heap 的无界强引用：只有 active（未清理）transaction 可被强引用；commit/abort/expire/fault 后必须（MUST）立即从 active strong registry 删除；terminal handle 在引用仍存在时可返回稳定幂等结果但不得（MUST NOT）形成全局无界强引用；tick 边界后不再需要的 canonical payload/observation/大对象引用必须（MUST）释放；heap-only handle 不得（MUST NOT）持久化到 Memory。
+
+#### Scenario: 大量终态 handle 不增长 active registry
+
+- **WHEN** 大量 prepare→abort / prepare→commit / prepare→expire 循环后
+- **THEN** active registry 计数回到 0（不随历史 transaction 数量增长）；仍被引用的 terminal handle 幂等判定可用
+
+### Requirement: runtime input 验证先于 canonicalization
+
+所有公开 Treasury writer 入口必须（MUST）在读取、遍历、digest 或 canonicalize 输入之前完成基本形状验证（null/undefined input、postings 非数组或含 null/错误类型、decision 缺失或形状错误、数值非 finite/非整数/非安全整数等）。malformed runtime input 必须（MUST）返回结构化 rejection/fault 而非抛出中断整个 tick；且不得（MUST NOT）创建 tentative reservation、不得占用 receipt slot、不得污染 active handle registry、callback 必须（MUST）零调用。
+
+#### Scenario: malformed input 结构化拒绝
+
+- **WHEN** 以 null input、非数组 postings、缺失 decision 等调用 prepareTransaction/executePreparedAction
+- **THEN** 返回结构化 rejected（invalid_input）不抛出；tentative/receipt 槽/handle registry 零变化；callback 零调用
+
+### Requirement: commitment completeness 与 authorizationSafe 联合判定
+
+commitment 索引必须（MUST）严格验证枚举字段（task status、blockedReason 属于合法集合）、resource（RESOURCES_ALL）、数值（finite/整数/安全）与聚合安全整数（溢出即 incomplete）；无法定位单一 scope 的损坏记录必须（MUST）使索引 globally incomplete；损坏记录不得（MUST NOT）被静默跳过后维持 authorizationSafe。authorizationSafe 必须（MUST）仅在以下条件全部满足时为 true：commitment complete、receipt store healthy、无 active write fault、无阻断性 unresolved quarantine、lifecycle open、service/tick 状态合法、必要持久 migration 已完成。任一失败时 authorizationSafe=false 且 diagnostics 指出主要阻断原因；不得（MUST NOT）以数值归零掩盖原因（新阻断条件不改变数量字段）。
+
+#### Scenario: 未知枚举/非法资源/聚合溢出 fail closed
+
+- **WHEN** task status 为未知值（如 pendng）、blockedReason 非法、resource 不在 RESOURCES_ALL、聚合溢出安全整数或损坏无法定位 scope
+- **THEN** 对应 scope（或全局）incomplete；受影响查询 authorizationSafe=false
+
+#### Scenario: 故障阻断下 authorizationSafe=false 且数值保留
+
+- **WHEN** 存在 write fault、receipt unhealthy、lifecycle closed（endTick 后）、migration 未完成或 quarantine unresolved
+- **THEN** authorizationSafe=false 且 authorizationBlockers 指出主因；observed/projected 等数量字段照常返回供观察
