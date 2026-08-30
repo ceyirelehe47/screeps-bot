@@ -150,6 +150,11 @@ export function readTreasuryQuarantineCounters(): TreasuryQuarantineCounters {
   return { ...quarantineEvents };
 }
 
+/** store 变更序号只读出口（第八轮授权 token 的 quarantine revision 绑定）。 */
+export function readTreasuryQuarantineRevision(): number {
+  return storeRevision;
+}
+
 // ── 形状校验（load 全量验证；entry 级供 repair 复用） ────────────────────────
 
 function isSafeInteger(value: unknown): value is number {

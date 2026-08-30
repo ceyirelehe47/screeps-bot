@@ -201,6 +201,11 @@ export function readTreasuryIntentCounters(): TreasuryIntentCounters {
   return { ...intentEvents };
 }
 
+/** store 变更序号只读出口（第八轮授权 token 的 intent revision 绑定）。 */
+export function readTreasuryIntentRevision(): number {
+  return storeRevision;
+}
+
 function isSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value);
 }

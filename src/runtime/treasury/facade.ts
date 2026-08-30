@@ -109,7 +109,24 @@ import {
   isReservationOwnerMigrationComplete,
   isReservationStoreCorrupted,
   readReservationMutationCounters,
+  readReservationStoreRevision,
 } from "@/runtime/resourceReservation";
+import {
+  canonicalTreasuryPolicyFingerprint,
+  postingsWithinAuthorizationScope,
+  TREASURY_AUTHORIZATION_ACTIVE_LIMIT,
+  treasuryAuthorizationOwnerKey,
+  validateTreasuryAuthorizationPolicy,
+  validateTreasuryAuthorizationRequest,
+  type TreasuryAuthorizationConsumeResult,
+  type TreasuryAuthorizationRequest,
+  type TreasuryAuthorizationResult,
+  type TreasuryAuthorizationRevisions,
+  type TreasuryAuthorizationToken,
+} from "@/runtime/treasury/authorization";
+import { readTreasuryQuarantineRevision } from "@/runtime/treasury/quarantine";
+import { readTreasuryIntentRevision } from "@/runtime/treasury/intents";
+import type { TreasuryPosting } from "@/runtime/treasury/types";
 import {
   type TreasuryBalanceView,
   type TreasuryCommitmentIndex,
@@ -236,6 +253,28 @@ export interface TreasuryService {
   commitments(): TreasuryCommitmentIndex;
   /** 带上下文余额查询（输入非法/owner 非法 fail closed）。 */
   query(context: TreasuryQueryContext): TreasuryBalanceView;
+  /**
+   * 资源授权（第八轮）：独立授权阶段——真实写动作的资源流出必须被授权
+   * 覆盖。计算 = exact observation + committed overlay − pending outgoing −
+   * production reservations（owner-aware）− quarantine/intent 风险 − policy
+   * withhold − 其它未消费授权预算；验证 completeness/store health/write
+   * readiness/容量/安全整数。成功签发 opaque token（heap-only、冻结、单次
+   * 使用、revision 绑定）并立即占用 authorization budget（防双授权超卖）。
+   */
+  authorizeResourceUse(request: TreasuryAuthorizationRequest): TreasuryAuthorizationResult;
+  /**
+   * 授权消费（第八轮）：对象身份 → generation → tick → revision 快照 →
+   * 单次使用 → transactionId 绑定 → postings 覆盖校验；成功释放该 token 的
+   * 预算（转为 prepare 的 tentative，互换不双算）。生产路径经
+   * executeTreasuryActionContract 自动消费；本原语供该入口与测试使用。
+   */
+  consumeTreasuryAuthorization(
+    token: TreasuryAuthorizationToken,
+    options?: {
+      transactionId?: string;
+      postings?: readonly TreasuryPosting[];
+    },
+  ): TreasuryAuthorizationConsumeResult;
   /**
    * 两阶段 prepare：在调用真实 Game 写动作之前完成全部 Treasury 侧验证
    * （幂等/digest 冲突/epoch/格式/tentative 感知物理可行性）并预留资源、
@@ -525,6 +564,49 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   }
   /** 服务实例代际：跨 service 实例的 handle 一律无效（global reset 防御）。 */
   const serviceGeneration = nextTreasuryServiceGeneration();
+
+  // ── 授权 ledger（第八轮）：token 防伪 + 预算占用（heap-only） ───────────
+  const authorizationRegistry = new WeakSet<TreasuryAuthorizationToken>();
+  const authorizationRecords = new Map<TreasuryAuthorizationToken, {
+    readonly outflowKeys: readonly string[];
+    readonly amount: number;
+    readonly capacityKey?: string;
+    readonly capacityAmount?: number;
+    consumed: boolean;
+  }>();
+  /** (room\u0000location\u0000resource) → 未消费授权的流出预算合计。 */
+  const authorizationOutflowTotals = new Map<string, number>();
+  /** (room\u0000location) → 未消费授权的容量预算合计。 */
+  const authorizationCapacityTotals = new Map<string, number>();
+  let authorizationLedgerRevisions: TreasuryAuthorizationRevisions | null = null;
+
+  function currentAuthorizationRevisions(): TreasuryAuthorizationRevisions {
+    return {
+      commitmentRevision: readTreasuryCommitmentRevision(),
+      projectionRevision: projection.projectionRevision(),
+      quarantineRevision: readTreasuryQuarantineRevision(),
+      intentRevision: readTreasuryIntentRevision(),
+      reservationStoreRevision: readReservationStoreRevision(),
+    };
+  }
+
+  function releaseAuthorizationBudget(
+    token: TreasuryAuthorizationToken,
+    record: { outflowKeys: readonly string[]; amount: number; capacityKey?: string; capacityAmount?: number; consumed: boolean },
+  ): void {
+    for (const key of record.outflowKeys) {
+      const remaining = (authorizationOutflowTotals.get(key) ?? 0) - record.amount;
+      if (remaining <= 0) authorizationOutflowTotals.delete(key);
+      else authorizationOutflowTotals.set(key, remaining);
+    }
+    if (record.capacityKey !== undefined && record.capacityAmount !== undefined) {
+      const remaining = (authorizationCapacityTotals.get(record.capacityKey) ?? 0) - record.capacityAmount;
+      if (remaining <= 0) authorizationCapacityTotals.delete(record.capacityKey);
+      else authorizationCapacityTotals.set(record.capacityKey, remaining);
+    }
+    record.consumed = true;
+    authorizationRecords.delete(token);
+  }
   /** 最近一次 tick 边界的 outstanding prepared 审计快照（有界样本）。 */
   let lastPreparedLeakAudit: TreasuryPreparedLeakAudit = Object.freeze({
     context: "end_tick",
@@ -1111,6 +1193,233 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         },
         epoch: observation.epoch,
       };
+    },
+
+    // ── 资源授权（第八轮） ────────────────────────────────────────────────
+    //
+    // authorization ledger：授权成功即占用预算（按 (room,location,resource)
+    // 记流出预留、capacityRequirement 记容量预留）——防止 A/B 双授权后各自
+    // prepare 超卖同一批资源；token 消费时预算释放（转由 prepare 的
+    // tentative 接管，互换不双算）。revision 变化时全部既有授权失效，预算
+    // 懒检测一并释放（授权消费侧按 token 绑定的 revision 快照拒绝）。
+    authorizeResourceUse(request: TreasuryAuthorizationRequest): TreasuryAuthorizationResult {
+      const state = ensureTickState(true);
+      const observation = state.observation;
+      const governedRooms = new Set(observation.roomNames());
+      const shapeError = validateTreasuryAuthorizationRequest(request, governedRooms);
+      if (shapeError !== null) {
+        metrics.authorizationRejected += 1;
+        return { status: "rejected", reason: "invalid_input", detail: shapeError };
+      }
+      const policyError = validateTreasuryAuthorizationPolicy(request);
+      if (policyError !== null) {
+        metrics.authorizationRejected += 1;
+        return { status: "rejected", reason: "authorization_policy_violation", detail: policyError };
+      }
+      // revision ledger 维护：任一相关 revision 变化 → 既有授权全部失效，
+      // 预算一并释放（不阻塞资源）。
+      const revisions = currentAuthorizationRevisions();
+      if (
+        authorizationLedgerRevisions === null ||
+        authorizationLedgerRevisions.commitmentRevision !== revisions.commitmentRevision ||
+        authorizationLedgerRevisions.projectionRevision !== revisions.projectionRevision ||
+        authorizationLedgerRevisions.quarantineRevision !== revisions.quarantineRevision ||
+        authorizationLedgerRevisions.intentRevision !== revisions.intentRevision ||
+        authorizationLedgerRevisions.reservationStoreRevision !== revisions.reservationStoreRevision
+      ) {
+        if (authorizationRecords.size > 0) {
+          metrics.authorizationInvalidated += authorizationRecords.size;
+        }
+        authorizationRecords.clear();
+        authorizationOutflowTotals.clear();
+        authorizationCapacityTotals.clear();
+        authorizationLedgerRevisions = revisions;
+      }
+      // 活跃授权上限（heap 有界）。
+      if (authorizationRecords.size >= TREASURY_AUTHORIZATION_ACTIVE_LIMIT) {
+        metrics.authorizationRejected += 1;
+        return {
+          status: "rejected",
+          reason: "authorization_capacity_exhausted",
+          detail: `活跃授权已达上限 ${String(TREASURY_AUTHORIZATION_ACTIVE_LIMIT)}（先消费或等待 revision 失效）`,
+        };
+      }
+      // 授权上下文安全：复用 query 全链（completeness/quarantine/intent/
+      // receipt/fault/lifecycle/migration/store corrupted 全条件），owner
+      // 映射为 TreasuryQueryOwner（kind 限 game-object/logical-service）。
+      const locations = request.locations ?? DEFAULT_LOCATION_KINDS;
+      const queryOwner =
+        request.owner !== undefined
+          ? {
+              ownerKind: request.owner.kind as "game-object" | "logical-service",
+              ownerId: request.owner.id,
+              ...(request.owner.namespace !== undefined ? { namespace: request.owner.namespace } : {}),
+              scope: "production-reservation" as const,
+              roomName: request.owner.roomName ?? request.rooms[0],
+            }
+          : undefined;
+      const view = this.query({
+        resource: request.resource,
+        rooms: [...request.rooms],
+        locations: [...locations],
+        ...(request.withhold !== undefined ? { withhold: request.withhold } : {}),
+        ...(queryOwner !== undefined ? { owner: queryOwner } : {}),
+        allowProjected: request.allowProjected !== false,
+        allowIncoming: false,
+        subtractOutgoing: true,
+        subtractReservations: true,
+      });
+      if (view.contextStatus !== "valid") {
+        metrics.authorizationRejected += 1;
+        return {
+          status: "rejected",
+          reason: "authorization_context_unsafe",
+          detail: "授权上下文非法（invalid_fail_closed）",
+        };
+      }
+      if (!view.authorizationSafe) {
+        metrics.authorizationRejected += 1;
+        return {
+          status: "rejected",
+          reason: "authorization_context_unsafe",
+          detail: `authorizationSafe=false（blockers: ${view.authorizationBlockers.join(",")}）——不得在上下文不安全时授权`,
+        };
+      }
+      // 授权计算：spendable（已净 committed——含 outgoing/reservations/
+      // quarantine/intent/withhold）再减其它未消费授权的预算占用。
+      // 多房间/多位置 scope 逐 key 全额保守占用（amount 可能从任一 key 流出）。
+      let budgetedOutflow = 0;
+      for (const roomName of request.rooms) {
+        for (const kind of locations) {
+          budgetedOutflow += authorizationOutflowTotals.get(`${roomName}\u0000${kind}\u0000${request.resource}`) ?? 0;
+        }
+      }
+      const available = view.spendable - budgetedOutflow;
+      if (!Number.isSafeInteger(available) || available < request.amount) {
+        metrics.authorizationRejected += 1;
+        return {
+          status: "rejected",
+          reason: "insufficient_amount",
+          detail: `可用 ${String(available)}（spendable ${String(view.spendable)} − 其它授权占用 ${String(budgetedOutflow)}）< 申请 ${String(request.amount)}`,
+        };
+      }
+      // 容量需求（可选）：risk-adjusted free 口径（含 quarantine/intent 占用）。
+      if (request.capacityRequirement !== undefined) {
+        const cap = request.capacityRequirement;
+        const capKey = `${cap.roomName}\u0000${cap.locationKind}`;
+        const budgetedCapacity = authorizationCapacityTotals.get(capKey) ?? 0;
+        const riskAdjustedFree = this.projectedFreeCapacity(cap.roomName, cap.locationKind) - budgetedCapacity;
+        if (!Number.isSafeInteger(riskAdjustedFree) || riskAdjustedFree < cap.amount) {
+          metrics.authorizationRejected += 1;
+          return {
+            status: "rejected",
+            reason: "capacity_overflow",
+            detail: `risk-adjusted free ${String(riskAdjustedFree)}（含其它授权容量占用 ${String(budgetedCapacity)}）< 需求 ${String(cap.amount)}（${capKey}）`,
+          };
+        }
+      }
+      // 签发 opaque token（冻结 + 私有 registry 对象身份）并占用预算。
+      const token: TreasuryAuthorizationToken = Object.freeze({
+        __brand: "treasury-authorization-token",
+        transactionId: request.transactionId,
+        actionKind: request.actionKind,
+        resource: request.resource,
+        rooms: Object.freeze([...request.rooms]),
+        locations: Object.freeze([...locations]),
+        amount: request.amount,
+        epoch: {
+          scope: observation.epoch.scope,
+          epochSeq: observation.epoch.epochSeq,
+          observedAtTick: observation.epoch.observedAtTick,
+        },
+        revisions,
+        policyFingerprint: canonicalTreasuryPolicyFingerprint(request),
+        ownerKey: treasuryAuthorizationOwnerKey(request.owner),
+        serviceGeneration,
+        ...(request.contractDigest !== undefined ? { contractDigest: request.contractDigest } : {}),
+        tick: Game.time,
+      });
+      authorizationRegistry.add(token);
+      const outflowKeys: string[] = [];
+      for (const roomName of request.rooms) {
+        for (const kind of locations) {
+          const key = `${roomName}\u0000${kind}\u0000${request.resource}`;
+          outflowKeys.push(key);
+          authorizationOutflowTotals.set(key, (authorizationOutflowTotals.get(key) ?? 0) + request.amount);
+        }
+      }
+      let capacityKey: string | undefined;
+      if (request.capacityRequirement !== undefined) {
+        capacityKey = `${request.capacityRequirement.roomName}\u0000${request.capacityRequirement.locationKind}`;
+        authorizationCapacityTotals.set(
+          capacityKey,
+          (authorizationCapacityTotals.get(capacityKey) ?? 0) + request.capacityRequirement.amount,
+        );
+      }
+      authorizationRecords.set(token, {
+        outflowKeys,
+        amount: request.amount,
+        ...(capacityKey !== undefined ? { capacityKey } : {}),
+        ...(request.capacityRequirement !== undefined ? { capacityAmount: request.capacityRequirement.amount } : {}),
+        consumed: false,
+      });
+      metrics.authorizationIssued += 1;
+      return { status: "authorized", token };
+    },
+
+    consumeTreasuryAuthorization(
+      token: TreasuryAuthorizationToken,
+      options?: {
+        transactionId?: string;
+        postings?: readonly TreasuryPosting[];
+      },
+    ): TreasuryAuthorizationConsumeResult {
+      if (!token || typeof token !== "object" || !authorizationRegistry.has(token)) {
+        return { status: "rejected", reason: "invalid_token", detail: "token 未在本服务实例签发（伪造对象/JSON 副本/跨实例一律无效）" };
+      }
+      const record = authorizationRecords.get(token);
+      if (record === undefined) {
+        return { status: "rejected", reason: "already_consumed", detail: "token 已消费或已随 revision 失效释放" };
+      }
+      if (token.serviceGeneration !== serviceGeneration) {
+        return { status: "rejected", reason: "cross_generation", detail: "token 签发的 service generation 已失效" };
+      }
+      if (token.tick !== Game.time) {
+        return { status: "rejected", reason: "cross_tick", detail: `token 于 tick ${String(token.tick)} 签发（当前 ${String(Game.time)}）——跨 tick 失效` };
+      }
+      const revisions = currentAuthorizationRevisions();
+      if (
+        token.revisions.commitmentRevision !== revisions.commitmentRevision ||
+        token.revisions.projectionRevision !== revisions.projectionRevision ||
+        token.revisions.quarantineRevision !== revisions.quarantineRevision ||
+        token.revisions.intentRevision !== revisions.intentRevision ||
+        token.revisions.reservationStoreRevision !== revisions.reservationStoreRevision
+      ) {
+        metrics.authorizationInvalidated += 1;
+        metrics.authorizationRevisionMismatches += 1;
+        // revision 变化即失效：释放该 token 预算。
+        releaseAuthorizationBudget(token, record);
+        return {
+          status: "rejected",
+          reason: "revision_mismatch",
+          detail: "token 绑定的 revision 快照已过期（commitment/projection/quarantine/intent/reservation store 任一变化）",
+        };
+      }
+      if (options?.transactionId !== undefined && options.transactionId !== token.transactionId) {
+        return {
+          status: "rejected",
+          reason: "transaction_mismatch",
+          detail: `token 绑定 transactionId ${token.transactionId}，请求 ${options.transactionId}`,
+        };
+      }
+      if (options?.postings !== undefined) {
+        const scopeError = postingsWithinAuthorizationScope(token, options.postings);
+        if (scopeError !== null) {
+          return { status: "rejected", reason: "scope_violation", detail: scopeError };
+        }
+      }
+      releaseAuthorizationBudget(token, record);
+      return { status: "ok" };
     },
 
     prepareTransaction(input: TreasuryTransactionInput): TreasuryPreparationResult {
@@ -1795,6 +2104,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         intentQuarantineConversions: metrics.intentQuarantineConversions + intentCounters.quarantineConversions,
         intentStoreHealthy: intentHealth.healthy,
         intentWriteFailures: metrics.intentWriteFailures + intentCounters.writeFailures,
+        authorizationsActive: authorizationRecords.size,
       };
     },
 
@@ -1811,6 +2121,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       activeHandles.clear();
       preparedById.clear();
       intentBackedActiveIds.clear();
+      authorizationRecords.clear();
+      authorizationOutflowTotals.clear();
+      authorizationCapacityTotals.clear();
+      authorizationLedgerRevisions = null;
       lastPreparedLeakAudit = Object.freeze({
         context: "end_tick",
         outstanding: 0,

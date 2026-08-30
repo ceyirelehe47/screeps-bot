@@ -82,6 +82,22 @@ const reservationEvents = {
   mutationRejections: 0,
 };
 
+/**
+ * reservation store 变更序号（第八轮授权 token 的 reservation store revision
+ * 绑定）：任何实际 mutation（reserve/renew/release/GC 删除/migration/schema
+ * activation/corrupted 标志置位与清除）时递增——revision 变化即旧授权失效。
+ */
+let reservationStoreRevision = 0;
+
+/** store 变更序号只读出口（授权 token 绑定；零写）。 */
+export function readReservationStoreRevision(): number {
+  return reservationStoreRevision;
+}
+
+function bumpReservationStoreRevision(): void {
+  reservationStoreRevision += 1;
+}
+
 export interface TreasuryReservationMutationCounters {
   readonly schemaActivationFailures: number;
   readonly mutationRejections: number;
@@ -174,6 +190,7 @@ export function ensureReservationSchemaActivated(): ReservationSchemaGate {
     ensureStore();
     if (!Memory.runtime) Memory.runtime = {};
     (Memory.runtime as NonNullable<typeof Memory.runtime>).resourceReservationsOwnerVersion = RESERVATION_OWNER_VERSION;
+    bumpReservationStoreRevision();
     return { status: "ready" };
   }
   // v1 语义 = version 字段缺失（undefined）且 store 非空——宽化为 number
@@ -187,6 +204,7 @@ export function ensureReservationSchemaActivated(): ReservationSchemaGate {
       reservationEvents.schemaActivationFailures += 1;
       return { status: "rejected", reason: "migration_failed", detail: migration.failure };
     }
+    bumpReservationStoreRevision();
     return { status: "ready" };
   }
   reservationEvents.schemaActivationFailures += 1;
@@ -257,6 +275,7 @@ export function reserveProductionResourceForOwner(
     owner,
   };
   bumpTreasuryCommitmentRevision(); // 实际 mutation：恰好一次
+  bumpReservationStoreRevision();
   return { status: "ok", mutated: true };
 }
 
@@ -276,6 +295,7 @@ export function releaseProductionReservationForOwner(
   }
   delete Memory.runtime.resourceReservations[key];
   bumpTreasuryCommitmentRevision(); // 实际删除：恰好一次
+  bumpReservationStoreRevision();
   return { status: "ok", mutated: true };
 }
 
@@ -303,6 +323,7 @@ export function renewProductionReservationForOwner(
     owner,
   };
   bumpTreasuryCommitmentRevision(); // 实际更新：恰好一次
+  bumpReservationStoreRevision();
   return { status: "ok", mutated: true };
 }
 
@@ -436,9 +457,13 @@ export function gcProductionReservations(): ReservationGcReport {
     const runtime = Memory.runtime as NonNullable<typeof Memory.runtime> & { resourceReservationsCorrupted?: string };
     if (runtime.resourceReservationsCorrupted === undefined) {
       runtime.resourceReservationsCorrupted = `gc 发现 ${String(report.corrupted)} 条 malformed reservation entry（原样保留，显式 repair 前全部 mutation/授权 fail closed）`;
+        bumpReservationStoreRevision();
     }
   }
-  if (removed > 0) bumpTreasuryCommitmentRevision();
+  if (removed > 0) {
+    bumpTreasuryCommitmentRevision();
+    bumpReservationStoreRevision();
+  }
   report.removed = removed;
   return report;
 }
@@ -609,6 +634,7 @@ export function migrateResourceReservationsForTypedOwner(): ReservationOwnerMigr
   if (!Memory.runtime) Memory.runtime = {};
   Memory.runtime.resourceReservations = rebuilt;
   Memory.runtime.resourceReservationsOwnerVersion = RESERVATION_OWNER_VERSION;
+  bumpReservationStoreRevision();
   if (entries.length > 0) bumpTreasuryCommitmentRevision();
   return { status: "ok", migrated, alreadyTyped, failure: null, version: RESERVATION_OWNER_VERSION };
 }
@@ -651,5 +677,6 @@ export function repairReservationStoreCorruptionForRepair(): { status: "repaired
     }
   }
   delete runtime.resourceReservationsCorrupted;
+  bumpReservationStoreRevision();
   return { status: "repaired", detail: "corrupted 标志已清除（全部 entry 验证通过）" };
 }
