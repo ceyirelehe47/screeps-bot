@@ -192,6 +192,9 @@ export type TreasuryRejectionReason =
   /** durable intent 写入失败（store fatal/容量满）：Game callback 零调用、
    *  tentative 与槽位释放（第八轮唯一安全顺序的前置）。 */
   | "intent_store_unavailable"
+  /** callback 已返回后 intent phase 落盘失败（第九轮）：已知 Game 结果不得
+   *  走普通 commit/abort——进入 durable emergency fault。 */
+  | "intent_phase_write_failed"
   /** 授权 token 无效/失效/伪造/已被消费（第八轮）。 */
   | "authorization_invalid"
   /** action contract 非法（伪造/冻结校验失败/digest 不匹配）。 */

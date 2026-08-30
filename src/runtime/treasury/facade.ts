@@ -93,12 +93,12 @@ import {
 } from "@/runtime/treasury/quarantine";
 import {
   listTreasuryIntentEntries,
-  markTreasuryIntentPhase,
   peekTreasuryIntentHealth,
   readTreasuryIntentCounters,
   readTreasuryIntentEntry,
   recoverTreasuryIntentsAtTickBoundary,
   releaseTreasuryIntentEntry,
+  transitionTreasuryIntentPhase,
   treasuryIntentBlockers,
   treasuryIntentCapacityOccupancy,
   treasuryIntentOutflowOccupancy,
@@ -2200,12 +2200,24 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       }
       record.intentWritten = true;
       intentBackedActiveIds.add(record.canonical.transactionId);
-      // 标记 execution-started（持久 phase=executing）：此后 callback 一旦
-      // 进入，恢复语义即为 execution unknown——ready 与 executing 绝不混同。
-      const started = markTreasuryIntentPhase(record.canonical.transactionId, "executing");
-      if (started.status === "rejected" && started.reason !== "not_found") {
-        // store 在写入与标记之间致命损坏：保守不进入 callback（宁可当作未执行
-        // 关闭——intent 仍在 store 中，下一 tick 恢复处置）。
+      // ── read-back 验证（第九轮 4.5）：写入后读回比对 transaction/digest/
+      //    contract/postings/phase——不一致按 store 不可信处理（callback 零
+      //    调用 + 保守关闭；intent 留 store 由下一 tick 恢复处置）。 ────────
+      const readBack = readTreasuryIntentEntry(record.canonical.transactionId);
+      const readBackConsistent =
+        readBack !== undefined &&
+        readBack.digest === record.digest &&
+        readBack.phase === "ready" &&
+        readBack.postings.length === record.shape.merged.length &&
+        readBack.postings.every(
+          (leg, index) =>
+            leg.roomName === record.shape.merged[index].roomName &&
+            leg.locationKind === record.shape.merged[index].locationKind &&
+            leg.resource === record.shape.merged[index].resource &&
+            leg.delta === record.shape.merged[index].delta,
+        ) &&
+        (execution?.intentContract === undefined || readBack.contractId === execution.intentContract.contractId);
+      if (!readBackConsistent) {
         metrics.intentWriteFailures += 1;
         record.state = "expired";
         preparedById.delete(record.canonical.transactionId);
@@ -2215,7 +2227,29 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         return {
           status: "prepare_rejected",
           reason: "intent_store_unavailable",
-          detail: `durable intent 状态标记失败（${started.detail}）——Game callback 零调用`,
+          detail: "durable intent read-back 验证失败（transaction/digest/contract/postings 与写入不一致——store 不可信）——Game callback 零调用",
+        };
+      }
+      // ── execution-started（ready → executing，严格迁移：期望前序 + digest
+      //    一致）：任何 rejected（含 not_found——第九轮修复：entry 缺失绝不能
+      //    无权威地执行 callback）都 callback 零调用、保守关闭。 ─────────────
+      const started = transitionTreasuryIntentPhase(record.canonical.transactionId, {
+        target: "executing",
+        from: ["ready"],
+        digest: record.digest,
+        ...(execution?.intentContract !== undefined ? { contractId: execution.intentContract.contractId } : {}),
+      });
+      if (started.status === "rejected") {
+        metrics.intentWriteFailures += 1;
+        record.state = "expired";
+        preparedById.delete(record.canonical.transactionId);
+        projection.tentativeRelease(record.tentativeKey);
+        releaseTreasuryReceiptReservation(record.canonical.transactionId);
+        finalizeHandleRecord(record, "expired");
+        return {
+          status: "prepare_rejected",
+          reason: "intent_store_unavailable",
+          detail: `durable intent 状态迁移失败（${started.reason}）: ${started.detail}——Game callback 零调用`,
         };
       }
       record.state = "executing";
@@ -2232,15 +2266,53 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // 绝不持久化完整 Error 对象）+ durable quarantine + 全局锁，然后
         // rethrow 原始异常（Treasury 状态完整，异常原样透传不吞）。
         // intent：quarantine 写入成功时释放（slot 转换守恒）；失败时保留
-        //（emergency intent authority——postings/占用不丢）。
+        //（emergency intent authority——postings/占用不丢）。phase 标记失败
+        // 不静默（计数），durable 权威由 quarantine/intent 保留兜底。
         record.faultPhase = "action_threw_execution_unknown";
         metrics.executionUnknownQuarantines += 1;
-        markTreasuryIntentPhase(record.canonical.transactionId, "execution_unknown");
+        const attempted = transitionTreasuryIntentPhase(record.canonical.transactionId, {
+          target: "execution_unknown",
+          from: ["executing", "returned_non_ok", "ok_pending_commit"],
+          digest: record.digest,
+        });
+        if (attempted.status === "rejected") metrics.intentWriteFailures += 1;
         quarantineFaultedRecord(record, error instanceof Error ? error.message : String(error));
         throw error;
       }
       if (actionResult && actionResult.ok) {
-        markTreasuryIntentPhase(record.canonical.transactionId, "ok_pending_commit");
+        // ── Game 已返回 OK：executing → ok_pending_commit 必须成功落盘后才
+        //    允许普通 commit（第九轮 4.5.6：写失败 = 已知 OK 事实不得走普通
+        //    commit，进入 durable emergency fault——executed_unsettled）。 ──
+        const marked = transitionTreasuryIntentPhase(record.canonical.transactionId, {
+          target: "ok_pending_commit",
+          from: ["executing"],
+          digest: record.digest,
+        });
+        if (marked.status === "rejected") {
+          metrics.intentWriteFailures += 1;
+          if ((record.state as TreasuryPreparedHandleState) !== "faulted") {
+            record.faultPhase = "commit_unexpected";
+          }
+          // 保守升级为 execution_unknown（尽力；失败已计数）后 quarantine
+          // 接管 durable 权威。
+          const escalated = transitionTreasuryIntentPhase(record.canonical.transactionId, {
+            target: "execution_unknown",
+            from: ["executing", "ok_pending_commit"],
+            digest: record.digest,
+          });
+          if (escalated.status === "rejected") metrics.intentWriteFailures += 1;
+          quarantineFaultedRecord(record);
+          return {
+            status: "executed_unsettled",
+            handle: prepared.handle,
+            actionResult,
+            transactionId: record.canonical.transactionId,
+            digest: record.digest,
+            faultReason: "intent_phase_write_failed",
+            detail: `Game 已返回 OK 但 ok_pending_commit 落盘失败（${marked.reason}）——不得普通 commit，已进入 durable fault`,
+            retryForbidden: true,
+          };
+        }
         const committed = this.commitPreparedTransaction(prepared.handle);
         if (committed.status === "committed") {
           // settled：intent 关闭（WAL 完成）。
@@ -2259,7 +2331,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         if ((record.state as TreasuryPreparedHandleState) !== "faulted") {
           record.faultPhase = "commit_unexpected";
         }
-        markTreasuryIntentPhase(record.canonical.transactionId, "execution_unknown");
+        const escalated = transitionTreasuryIntentPhase(record.canonical.transactionId, {
+          target: "execution_unknown",
+          from: ["executing", "ok_pending_commit"],
+          digest: record.digest,
+        });
+        if (escalated.status === "rejected") metrics.intentWriteFailures += 1;
         quarantineFaultedRecord(record);
         return {
           status: "executed_unsettled",
@@ -2272,15 +2349,44 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           retryForbidden: true,
         };
       }
-      // Game 正常返回非 OK：关闭 intent（确认未成功）→ 普通 abort。
-      markTreasuryIntentPhase(record.canonical.transactionId, "returned_non_ok");
+      // ── Game 正常返回非 OK：executing → returned_non_ok 必须成功落盘后才
+      //    允许普通 abort（第九轮 4.5.6：写失败 = 不得普通 abort——
+      //    executed_abort_failed + durable fault）。 ─────────────────────────
+      const markedNonOk = transitionTreasuryIntentPhase(record.canonical.transactionId, {
+        target: "returned_non_ok",
+        from: ["executing"],
+        digest: record.digest,
+      });
+      if (markedNonOk.status === "rejected") {
+        metrics.intentWriteFailures += 1;
+        record.faultPhase = "action_returned_non_ok_abort_failed";
+        const escalated = transitionTreasuryIntentPhase(record.canonical.transactionId, {
+          target: "execution_unknown",
+          from: ["executing", "returned_non_ok"],
+          digest: record.digest,
+        });
+        if (escalated.status === "rejected") metrics.intentWriteFailures += 1;
+        quarantineFaultedRecord(record);
+        return {
+          status: "executed_abort_failed",
+          handle: prepared.handle,
+          actionResult,
+          reason: "intent_phase_write_failed",
+          detail: `Game 已返回非 OK 但 returned_non_ok 落盘失败（${markedNonOk.reason}）——不得普通 abort，已进入 durable fault`,
+        };
+      }
       const aborted = this.abortPreparedTransaction(prepared.handle);
       if (aborted.status !== "aborted") {
         // abort 未确认：资源仍被占用——立即隔离（第七轮：phase=
         // action_returned_non_ok_abort_failed，不等 tick 边界），不得报告已
         // 正常 abort。intent 随 quarantine 写入成功释放、失败保留。
         record.faultPhase = "action_returned_non_ok_abort_failed";
-        markTreasuryIntentPhase(record.canonical.transactionId, "execution_unknown");
+        const escalated = transitionTreasuryIntentPhase(record.canonical.transactionId, {
+          target: "execution_unknown",
+          from: ["executing", "returned_non_ok"],
+          digest: record.digest,
+        });
+        if (escalated.status === "rejected") metrics.intentWriteFailures += 1;
         quarantineFaultedRecord(record);
         return {
           status: "executed_abort_failed",

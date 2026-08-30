@@ -25,7 +25,7 @@ import {
 } from "@/runtime/treasury/quarantine";
 import {
   listTreasuryIntentEntries,
-  markTreasuryIntentPhase,
+  transitionTreasuryIntentPhase,
   peekTreasuryIntentHealth,
   readTreasuryIntentEntry,
   resetTreasuryIntentRuntimeForTest,
@@ -38,6 +38,7 @@ import {
 } from "@/runtime/treasury/intents";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
+import * as intentsModule from "@/runtime/treasury/intents";
 
 const ROOMS: RoomSpec[] = [
   {
@@ -149,7 +150,7 @@ describe("唯一安全顺序与生命周期", () => {
     // health/blocker 检查放行（entryCount=0 不阻断），intent 写入触发 load 全量
     // 验证时 fatal——唯一确定性触达 intent 写失败分支的方式。
     Memory.runtime!.treasury!.intents = {
-      version: 1,
+      version: 2,
       entries: {
         "i:ghost": { transactionId: "ghost", digest: "bad", actionKind: "k", kind: "k", source: "s", postings: [], phase: "ready", createdAtTick: 1, updatedAtTick: 1 },
       },
@@ -349,7 +350,7 @@ describe("store 健康契约", () => {
     expect(health.healthy).toBe(true);
     expect(health.entryCount).toBe(1);
     const store = Memory.runtime!.treasury!.intents!;
-    expect(store.version).toBe(1);
+    expect(store.version).toBe(2);
     expect(store.entryCount).toBe(1);
     // 冻结快照：外部修改不生效。
     const snapshot = readTreasuryIntentEntry("ti_health")!;
@@ -426,7 +427,7 @@ describe("store 健康契约", () => {
       updatedAtTick: Game.time,
     });
     expect(bad2.status).toBe("rejected");
-    const bad3 = markTreasuryIntentPhase("ti_bad3", "authorized" as never);
+    const bad3 = transitionTreasuryIntentPhase("ti_bad3", { target: "authorized" as never, from: [] });
     expect(bad3.status).toBe("rejected");
     expect(Memory.runtime!.treasury!.intents!.entryCount).toBe(before);
   });
@@ -459,5 +460,223 @@ describe("风险聚合（per-transaction 保守口径）", () => {
     releaseTreasuryQuarantineEntry("ti_qq"); // 模拟 resolution 完成
     const view = next.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
     expect(view.committed).toBe(0);
+  });
+});
+
+describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () => {
+  it("transition 幂等仅在相同 digest/contract 下成立；不同 identity 拒绝", () => {
+    seedIntent("ti_idem", "executing");
+    // 同 identity 且已处于目标 phase 的合法前序迁移：executing→execution_unknown。
+    const first = transitionTreasuryIntentPhase("ti_idem", { target: "execution_unknown", from: ["executing"], digest: "0123456789abcdef" });
+    expect(first.status).toBe("marked");
+    // 幂等：再次迁移到同一目标（identity 相同）。
+    const again = transitionTreasuryIntentPhase("ti_idem", { target: "execution_unknown", from: ["executing"], digest: "0123456789abcdef" });
+    expect(again.status).toBe("marked");
+    // 不同 digest → identity_mismatch（绝不迁移）。
+    const wrongDigest = transitionTreasuryIntentPhase("ti_idem", { target: "quarantined", from: ["execution_unknown"], digest: "ffffffffffffffff" });
+    expect(wrongDigest.status).toBe("rejected");
+    if (wrongDigest.status === "rejected") expect(wrongDigest.reason).toBe("identity_mismatch");
+    expect(readTreasuryIntentEntry("ti_idem")?.phase).toBe("execution_unknown");
+  });
+
+  it("前序 phase 非法拒绝（ready→returned_non_ok 不可直达；ok_pending_commit 不得退化为 returned_non_ok）", () => {
+    seedIntent("ti_pred1", "ready");
+    const direct = transitionTreasuryIntentPhase("ti_pred1", { target: "returned_non_ok", from: ["executing"], digest: "0123456789abcdef" });
+    expect(direct.status).toBe("rejected");
+    if (direct.status === "rejected") expect(direct.reason).toBe("predecessor_mismatch");
+    seedIntent("ti_pred2", "ok_pending_commit");
+    // 已知 Game 返回 OK：不得退化为 returned_non_ok（事实单调性）。
+    const downgrade = transitionTreasuryIntentPhase("ti_pred2", { target: "returned_non_ok", from: ["executing"], digest: "0123456789abcdef" });
+    expect(downgrade.status).toBe("rejected");
+    if (downgrade.status === "rejected") expect(downgrade.reason).toBe("predecessor_mismatch");
+    expect(readTreasuryIntentEntry("ti_pred2")?.phase).toBe("ok_pending_commit");
+  });
+
+  it("ready→executing 返回 not_found 时 callback 零调用（第九轮修复：不再忽略）", () => {
+    const service = makeService();
+    // read-back 需通过、transition 返回 not_found：spy 迁移函数模拟 entry
+    // 在写入与迁移之间被外部移除（防御分支）。
+    const spy = jest.spyOn(intentsModule, "transitionTreasuryIntentPhase").mockReturnValue({
+      status: "rejected",
+      reason: "not_found",
+      detail: "intent entry 不存在（已释放或从未写入）",
+    });
+    let callbackCalls = 0;
+    try {
+      const result = service.executePreparedAction(freshInput(service, "ti_nf"), () => {
+        callbackCalls += 1;
+        return { ok: true as const };
+      });
+      expect(callbackCalls).toBe(0); // not_found → callback 零调用
+      expect(result.status).toBe("prepare_rejected");
+      if (result.status === "prepare_rejected") {
+        expect(result.reason).toBe("intent_store_unavailable");
+        expect(result.detail).toContain("not_found");
+      }
+    } finally {
+      spy.mockRestore();
+    }
+  });
+  it("read-back 验证不一致时 callback 零调用（写入后读回 digest 篡改）", () => {
+    const service = makeService();
+    // read-back 在同步实现下与写入同源（正常不可达）——该分支防御的是
+    // store 写入层缺陷/外部串改；用 spy 模拟读回被篡改的 entry（digest
+    // 与 record.digest 不同），验证 facade 在不一致时 callback 零调用。
+    let callbackCalls = 0;
+    const realReadTreasuryIntentEntry = intentsModule.readTreasuryIntentEntry;
+    const spy = jest.spyOn(intentsModule, "readTreasuryIntentEntry").mockImplementation((transactionId: string) => {
+      const entry = realReadTreasuryIntentEntry(transactionId);
+      if (entry === undefined || callbackCalls > 0 || entry.phase !== "ready") return entry;
+      // 只篡改首次 ready 读回（read-back 点）。
+      return Object.freeze({ ...entry, digest: "ffffffffffffffff" }) as typeof entry;
+    });
+    try {
+      const result = service.executePreparedAction(freshInput(service, "ti_rb"), () => {
+        callbackCalls += 1;
+        return { ok: true as const };
+      });
+      expect(callbackCalls).toBe(0);
+      expect(result.status).toBe("prepare_rejected");
+      if (result.status === "prepare_rejected") {
+        expect(result.reason).toBe("intent_store_unavailable");
+        expect(result.detail).toContain("read-back");
+      }
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("callback 返回 OK 但 ok_pending_commit 落盘失败：不得普通 commit（executed_unsettled + durable fault）", () => {
+    const service = makeService();
+    let callbackCalls = 0;
+    const result = service.executePreparedAction(freshInput(service, "ti_markfail"), () => {
+      callbackCalls += 1;
+      // callback 内破坏 store（version 置 99 + 失效 heap 缓存）：随后的
+      // executing→ok_pending_commit 迁移触发 load fatal。
+      (Memory.runtime!.treasury!.intents as { version: number }).version = 99;
+      resetTreasuryIntentRuntimeForTest();
+      return { ok: true as const };
+    });
+    expect(callbackCalls).toBe(1);
+    expect(result.status).toBe("executed_unsettled");
+    if (result.status === "executed_unsettled") {
+      expect(result.faultReason).toBe("intent_phase_write_failed");
+      expect(result.retryForbidden).toBe(true);
+    }
+    // durable fault：quarantine 接管权威（资产不释放）。
+    expect(readTreasuryQuarantineEntry("ti_markfail")).toBeDefined();
+  });
+
+  it("callback 返回非 OK 但 returned_non_ok 落盘失败：不得普通 abort（executed_abort_failed + durable fault）", () => {
+    const service = makeService();
+    let callbackCalls = 0;
+    const result = service.executePreparedAction(freshInput(service, "ti_markfail2"), () => {
+      callbackCalls += 1;
+      (Memory.runtime!.treasury!.intents as { version: number }).version = 99;
+      resetTreasuryIntentRuntimeForTest();
+      return { ok: false as const };
+    });
+    expect(callbackCalls).toBe(1);
+    expect(result.status).toBe("executed_abort_failed");
+    if (result.status === "executed_abort_failed") {
+      expect(result.reason).toBe("intent_phase_write_failed");
+    }
+    expect(readTreasuryQuarantineEntry("ti_markfail2")).toBeDefined();
+  });
+
+  it("contract 路径的 intent 绑定完整合同身份（contractId/digest/adapterVersion/durablePayload）", () => {
+    const service = makeService();
+    let captured: ReturnType<typeof readTreasuryIntentEntry> = undefined;
+    const result = service.executePreparedAction(
+      freshInput(service, "ti_contract"),
+      () => {
+        captured = readTreasuryIntentEntry("ti_contract");
+        return { ok: true as const };
+      },
+      {
+        intentContract: {
+          contractId: "ac:abcdef0123456789",
+          contractDigest: "abcdef0123456789",
+          adapterVersion: 3,
+          durablePayload: "transfer|W1N57:storage|W1N57:terminal|energy|500",
+          durablePayloadVersion: 1,
+        },
+      },
+    );
+    expect(result.status).toBe("executed_committed");
+    expect(captured?.contractId).toBe("ac:abcdef0123456789");
+    expect(captured?.contractDigest).toBe("abcdef0123456789");
+    expect(captured?.adapterVersion).toBe(3);
+    expect(captured?.durablePayload).toContain("transfer|");
+    expect(captured?.durablePayloadVersion).toBe(1);
+    expect(captured?.phase).toBe("executing");
+  });
+
+  it("intent contract identity 不匹配的 read-back 拒绝（contractId 不一致 → callback 零调用）", () => {
+    const service = makeService();
+    // spy 读回：ready 相的 entry 携带与 execution 声明不同的 contractId
+    //（模拟写入层缺陷/串改）→ read-back identity 校验拒绝。
+    let callbackCalls = 0;
+    const realReadTreasuryIntentEntry = intentsModule.readTreasuryIntentEntry;
+    const spy = jest.spyOn(intentsModule, "readTreasuryIntentEntry").mockImplementation((transactionId: string) => {
+      const entry = realReadTreasuryIntentEntry(transactionId);
+      if (entry === undefined || callbackCalls > 0 || entry.phase !== "ready") return entry;
+      return Object.freeze({ ...entry, contractId: "ac:ffffffffffffffff" }) as typeof entry;
+    });
+    try {
+      const result = service.executePreparedAction(
+        freshInput(service, "ti_cid"),
+        () => {
+          callbackCalls += 1;
+          return { ok: true as const };
+        },
+        {
+          intentContract: {
+            contractId: "ac:0000000000000000",
+            contractDigest: "0000000000000000",
+            adapterVersion: 1,
+          },
+        },
+      );
+      expect(callbackCalls).toBe(0);
+      expect(result.status).toBe("prepare_rejected");
+      if (result.status === "prepare_rejected") {
+        expect(result.reason).toBe("intent_store_unavailable");
+        expect(result.detail).toContain("read-back");
+      }
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("store v1 数据无损升级 v2（entries 原样保留，version 推进）", () => {
+    Memory.runtime = Memory.runtime ?? ({} as never);
+    Memory.runtime.treasury = Memory.runtime.treasury ?? ({} as never);
+    Memory.runtime.treasury.intents = {
+      version: 1,
+      entries: {
+        "i:ti_v1": {
+          transactionId: "ti_v1",
+          digest: "0123456789abcdef",
+          actionKind: "terminal.send",
+          kind: "terminal.send",
+          source: "test",
+          postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
+          phase: "ready",
+          createdAtTick: Game.time,
+          updatedAtTick: Game.time,
+        },
+      },
+      entryCount: 1,
+      updatedAt: Game.time,
+    } as never;
+    resetTreasuryIntentRuntimeForTest();
+    const health = peekTreasuryIntentHealth();
+    expect(health.healthy).toBe(true);
+    // 触发 load：read-back 或任何写路径访问 → v1 升级 v2。
+    const entry = readTreasuryIntentEntry("ti_v1");
+    expect(entry?.transactionId).toBe("ti_v1");
+    expect((Memory.runtime.treasury.intents as { version: number }).version).toBe(2);
+    expect(Memory.runtime.treasury.intents.entries["i:ti_v1"].digest).toBe("0123456789abcdef");
   });
 });

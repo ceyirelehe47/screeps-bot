@@ -43,7 +43,7 @@ import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import { TREASURY_WRITE_FAULT_PHASES } from "@/runtime/treasury/writeFault";
 import { quarantineTreasuryTransaction } from "@/runtime/treasury/quarantine";
 
-export const TREASURY_INTENT_VERSION = 1 as const;
+export const TREASURY_INTENT_VERSION = 2 as const;
 /** 与 quarantine 同上限——recovery slot 统一计数的前提。 */
 export const TREASURY_INTENT_MAX_ENTRIES = 64;
 
@@ -135,7 +135,7 @@ export interface TreasuryIntentEntry {
 }
 
 export interface TreasuryIntentStore {
-  version: 1;
+  version: 2;
   entries: Record<string, TreasuryIntentEntry>;
   entryCount: number;
   updatedAt: number;
@@ -380,9 +380,11 @@ function fatalRuntime(store: TreasuryIntentStore, reason: string): IntentStoreRu
 }
 
 /**
- * 加载（含校验）：写入/聚合路径专用（可能写 Memory——空 store 初始化）。
- * 校验失败 → fatal fail closed：不删数据、写入拒绝、聚合空、blockers 报
- * blocking，直至 faultResolution 的显式 repair 或人工处理。
+ * 加载（含校验）：写入/聚合路径专用（可能写 Memory——空 store 初始化或
+ * v1→v2 无损升级）。校验失败 → fatal fail closed：不删数据、写入拒绝、
+ * 聚合空、blockers 报 blocking，直至 faultResolution 的显式 repair 或人工
+ * 处理。v1（第九轮前，无 contractDigest/adapterVersion/durablePayload 字段）
+ * 全量验证通过后无损升级 v2（新字段全 optional，entries 原样保留）。
  */
 function loadIntentStoreRuntime(): IntentStoreRuntime {
   if (heapRuntime) return heapRuntime;
@@ -391,6 +393,19 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
     const created: TreasuryIntentStore = { version: TREASURY_INTENT_VERSION, entries: {}, entryCount: 0, updatedAt: Game.time };
     intentBranch().intents = created;
     heapRuntime = { store: created, fatal: null };
+    return heapRuntime;
+  }
+  if ((raw.version as number) === 1) {
+    // v1 无损升级：entry 形状校验（新字段 optional——v1 entries 自然通过）
+    // 后仅推进 version 标记，绝不改动任何 entry。
+    const upgraded: TreasuryIntentStore = { ...(raw as unknown as TreasuryIntentStore), version: TREASURY_INTENT_VERSION };
+    const shapeError = validateIntentStoreShape(upgraded);
+    if (shapeError !== null) {
+      heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `${shapeError}（v1 升级校验失败，intent store fail closed，原数据保留）`);
+      return heapRuntime;
+    }
+    intentBranch().intents = upgraded;
+    heapRuntime = { store: upgraded, fatal: null };
     return heapRuntime;
   }
   const shapeError = validateIntentStoreShape(raw);
@@ -420,7 +435,7 @@ export function peekTreasuryIntentHealth(): TreasuryIntentHealth {
   }
   const store = peekTreasuryIntentStore();
   if (store === undefined) return { healthy: true, detail: null, entryCount: 0 };
-  if (store.version !== TREASURY_INTENT_VERSION) {
+  if (store.version !== TREASURY_INTENT_VERSION && (store.version as number) !== 1) {
     return {
       healthy: false,
       detail: `未知 intent store 版本 ${String(store.version)}`,
@@ -523,15 +538,43 @@ export function writeTreasuryIntentEntry(entry: TreasuryIntentEntry): TreasuryIn
 
 export type TreasuryIntentPhaseUpdateResult =
   | { readonly status: "marked" }
-  | { readonly status: "rejected"; readonly reason: "not_found" | "store_fatal" | "invalid_phase"; readonly detail: string };
+  | {
+      readonly status: "rejected";
+      readonly reason: "not_found" | "store_fatal" | "invalid_phase" | "predecessor_mismatch" | "identity_mismatch";
+      readonly detail: string;
+    };
+
+/** phase 迁移请求（第九轮 4.5 严格状态机）：目标 + 合法前序 + identity。 */
+export interface TreasuryIntentPhaseTransition {
+  readonly target: TreasuryIntentPhase;
+  /** 合法前序集合（当前 phase 必须在其中，或已等于 target——幂等）。 */
+  readonly from: readonly TreasuryIntentPhase[];
+  /** identity 校验：提供时必须与 entry 的 digest 一致。 */
+  readonly digest?: string;
+  /** identity 校验：提供时必须与 entry 的 contractId 一致。 */
+  readonly contractId?: string;
+}
 
 /**
- * 标记 intent phase（execution-started / 返回结果 / fault 等状态迁移）。
- * O(1)；phase 枚举校验；不存在（已被释放）时 not_found——调用方按协议处理。
+ * 严格 phase 状态机迁移（第九轮 4.5）：验证期望前序状态与 digest/contract
+ * 一致——幂等仅限同一 transaction + 同一 digest + 同一 contract + 当前已
+ * 处于目标 phase；非法前序（predecessor_mismatch）/identity 不一致
+ * （identity_mismatch）/entry 不存在（not_found）/store 损坏（store_fatal）
+ * 一律拒绝——调用方（facade）在这些结果上必须 callback 零调用。
+ *
+ * 合法迁移表（由调用方以 from 集合表达，本函数只做校验）：
+ * ready→executing；executing→{returned_non_ok|ok_pending_commit|
+ * execution_unknown|quarantined}；returned_non_ok→{execution_unknown|
+ * quarantined|resolution_pending|aborted}；ok_pending_commit→{execution_
+ * unknown|quarantined|resolution_pending|committed}；execution_unknown→
+ * {quarantined|resolution_pending}；quarantined→resolution_pending。
  */
-export function markTreasuryIntentPhase(transactionId: string, phase: TreasuryIntentPhase): TreasuryIntentPhaseUpdateResult {
-  if (!TREASURY_INTENT_PERSISTED_PHASES.has(phase)) {
-    return { status: "rejected", reason: "invalid_phase", detail: `phase ${phase} 不可持久化` };
+export function transitionTreasuryIntentPhase(
+  transactionId: string,
+  transition: TreasuryIntentPhaseTransition,
+): TreasuryIntentPhaseUpdateResult {
+  if (!TREASURY_INTENT_PERSISTED_PHASES.has(transition.target)) {
+    return { status: "rejected", reason: "invalid_phase", detail: `phase ${transition.target} 不可持久化` };
   }
   const runtime = loadIntentStoreRuntime();
   if (runtime.fatal) {
@@ -542,7 +585,33 @@ export function markTreasuryIntentPhase(transactionId: string, phase: TreasuryIn
   if (entry === undefined) {
     return { status: "rejected", reason: "not_found", detail: "intent entry 不存在（已释放或从未写入）" };
   }
-  entry.phase = phase;
+  // identity 校验（digest/contract）先于前序校验。
+  if (transition.digest !== undefined && entry.digest !== transition.digest) {
+    return {
+      status: "rejected",
+      reason: "identity_mismatch",
+      detail: `intent digest ${entry.digest} 与迁移请求 ${transition.digest} 不一致（同 id 不得迁移不同 payload）`,
+    };
+  }
+  if (transition.contractId !== undefined && (entry.contractId ?? "") !== transition.contractId) {
+    return {
+      status: "rejected",
+      reason: "identity_mismatch",
+      detail: `intent contractId ${entry.contractId ?? "(无)"} 与迁移请求 ${transition.contractId} 不一致`,
+    };
+  }
+  if (entry.phase === transition.target) {
+    // 幂等：同 identity 且已处于目标 phase。
+    return { status: "marked" };
+  }
+  if (!(transition.from as readonly string[]).includes(entry.phase)) {
+    return {
+      status: "rejected",
+      reason: "predecessor_mismatch",
+      detail: `phase ${entry.phase} 不是 ${transition.target} 的合法前序（期望 ${transition.from.join("|")}）`,
+    };
+  }
+  entry.phase = transition.target;
   entry.updatedAtTick = Game.time;
   runtime.store.updatedAt = Game.time;
   storeRevision += 1;
