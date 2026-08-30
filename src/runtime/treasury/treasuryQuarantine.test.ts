@@ -78,6 +78,8 @@ function injectQuarantineEntry(transactionId: string, deltas: Array<{ roomName: 
     kind: "test",
     source: "test",
     phase: "executing_at_end_tick",
+    outcome: "started_unknown",
+    settlement: "quarantined",
     deltas,
     recordedAt: Game.time,
   });
@@ -299,6 +301,8 @@ describe("第七轮：quarantine fault-slot 预留（prepare admission）", () =
       kind: "test",
       source: "test",
       phase: "executing_at_end_tick",
+      outcome: "started_unknown",
+      settlement: "quarantined",
       deltas: [],
       recordedAt: Game.time,
     });

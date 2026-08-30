@@ -312,7 +312,7 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     const receiptTickBefore = Game.time;
     // 人为构造同一 id 的 quarantine entry（故障后对账场景的等价前置态；先
     // 建合法 store——正常 commit 路径不产生 quarantine）。
-    Memory.runtime!.treasury!.quarantine = { version: 1, entries: {}, entryCount: 0 };
+    Memory.runtime!.treasury!.quarantine = { version: 2, entries: {}, entryCount: 0 };
     const store = Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore;
     store.entries["q:ts1_refresh"] = {
       transactionId: "ts1_refresh",
@@ -321,6 +321,8 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
       kind: "terminal.send",
       source: "test",
       phase: "receipt_publish",
+      outcome: "returned_ok",
+      settlement: "quarantined",
       deltas: [],
       recordedAt: Game.time,
     };
@@ -754,6 +756,8 @@ describe("显式 repair（quarantine store 元数据/legacy 形状）", () => {
         kind: "test",
         source: "test",
         phase: "executing_at_end_tick",
+        outcome: "started_unknown",
+        settlement: "quarantined",
         deltas: [],
         recordedAt: Game.time,
       };
@@ -868,6 +872,8 @@ describe("unified unresolved authority（第九轮 4.7：intent-only 完整参�
       kind: "terminal.send",
       source: "test",
       phase: "executing_at_end_tick",
+      outcome: "started_unknown",
+      settlement: "quarantined",
       deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
       recordedAt: Game.time,
     });
@@ -894,6 +900,8 @@ describe("unified unresolved authority（第九轮 4.7：intent-only 完整参�
       kind: "terminal.send",
       source: "test",
       phase: "executing_at_end_tick",
+      outcome: "started_unknown",
+      settlement: "quarantined",
       // postings 不同（delta 不同）。
       deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -999 }],
       recordedAt: Game.time,

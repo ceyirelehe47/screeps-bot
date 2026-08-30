@@ -697,6 +697,20 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
         ...(contract.durableFacts !== undefined
           ? { durablePayload: contract.durableFacts.payload, durablePayloadVersion: contract.durableFacts.version }
           : {}),
+        ...(contract.structureBindings.length > 0
+          ? {
+              structureFacts: contract.structureBindings
+                .map((binding) => {
+                  const label = binding.label ?? `${binding.roomName}:${binding.locationKind}`;
+                  return {
+                    roomName: binding.roomName,
+                    locationKind: binding.locationKind,
+                    structureId: (contract.structureSnapshots as Record<string, string | undefined>)[label] ?? "",
+                  };
+                })
+                .filter((fact) => fact.structureId !== ""),
+            }
+          : {}),
       },
     },
   );

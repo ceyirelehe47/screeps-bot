@@ -42,6 +42,8 @@ import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
 import * as intentsModule from "@/runtime/treasury/intents";
 import * as quarantineModule from "@/runtime/treasury/quarantine";
+import { makeTreasuryTestTransferAdapter, registerTreasuryActionAdapter } from "@/runtime/treasury/actionContracts";
+const realReadTreasuryQuarantineEntry = quarantineModule.readTreasuryQuarantineEntry;
 
 const ROOMS: RoomSpec[] = [
   {
@@ -328,7 +330,7 @@ describe("emergency intent authority（quarantine 写失败）", () => {
     const service = makeService();
     seedIntent("ti_emergency", "executing", -800);
     // 损坏 quarantine store：未知版本使一切写入/读取 fatal（先建合法 store）。
-    Memory.runtime!.treasury!.quarantine = { version: 1, entries: {}, entryCount: 0 };
+    Memory.runtime!.treasury!.quarantine = { version: 2, entries: {}, entryCount: 0 };
     (Memory.runtime!.treasury!.quarantine as { version: number }).version = 99;
     resetTreasuryIntentRuntimeForTest();
     Game.time += 1;
@@ -355,7 +357,7 @@ describe("emergency intent authority（quarantine 写失败）", () => {
   it("quarantine 写失败后修复 store：下一 tick 恢复重试成功（intent→quarantine 转换完成）", () => {
     const service = makeService();
     seedIntent("ti_retry", "executing");
-    Memory.runtime!.treasury!.quarantine = { version: 1, entries: {}, entryCount: 0 };
+    Memory.runtime!.treasury!.quarantine = { version: 2, entries: {}, entryCount: 0 };
     (Memory.runtime!.treasury!.quarantine as { version: number }).version = 99;
     resetTreasuryIntentRuntimeForTest();
     Game.time += 1;
@@ -815,5 +817,222 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
     resetTreasuryIntentRuntimeForTest();
     expect(readTreasuryIntentEntry("ti_bad_phase")).toBeUndefined(); // fatal → 不可信
     expect(peekTreasuryIntentHealth().healthy).toBe(false);
+  });
+});
+
+describe("durable authority cohesion（第十轮 5.1：quarantine v2 完整合同事实）", () => {
+  /** contract 路径的 execution options（完整合同身份 fixture）。 */
+  const contractFacts = {
+    contractId: "ac:abcdef0123456789",
+    contractDigest: "abcdef0123456789",
+    adapterVersion: 2,
+    durablePayload: "transfer|W1N57:storage|W1N57:terminal|energy|500",
+    durablePayloadVersion: 1,
+    structureFacts: [
+      { roomName: "W1N57", locationKind: "storage", structureId: "stor-1" },
+      { roomName: "W1N57", locationKind: "terminal", structureId: "term-1" },
+    ],
+  };
+
+  it("contract-backed intent 转 quarantine 后完整合同事实保留；global reset 后仍可重建", () => {
+    const service = makeService();
+    injectOnce("receipt_publish");
+    const result = service.executePreparedAction(
+      freshInput(service, "dac_full"),
+      () => ({ ok: true as const }),
+      { intentContract: contractFacts },
+    );
+    expect(result.status).toBe("executed_unsettled");
+    const quarantined = readTreasuryQuarantineEntry("dac_full");
+    expect(quarantined).toBeDefined();
+    // v2 完整合同事实（不再依赖并存 intent）。
+    expect(quarantined?.contractId).toBe("ac:abcdef0123456789");
+    expect(quarantined?.contractDigest).toBe("abcdef0123456789");
+    expect(quarantined?.adapterVersion).toBe(2);
+    expect(quarantined?.durablePayload).toContain("transfer|");
+    expect(quarantined?.durablePayloadVersion).toBe(1);
+    expect(quarantined?.structureFacts).toEqual(contractFacts.structureFacts);
+    expect(quarantined?.outcome).toBe("returned_ok"); // OK 事实保留
+    expect(quarantined?.settlement).toBe("quarantined");
+    // global reset（新 service + 恢复）后事实仍完整（reconciler 输入可重建）。
+    Game.time += 1;
+    const next = makeService();
+    next.beginTick();
+    const rebuilt = readTreasuryQuarantineEntry("dac_full");
+    expect(rebuilt?.contractDigest).toBe("abcdef0123456789");
+    expect(rebuilt?.adapterVersion).toBe(2);
+    expect(rebuilt?.durablePayloadVersion).toBe(1);
+    expect(rebuilt?.outcome).toBe("returned_ok");
+    expect(readTreasuryIntentEntry("dac_full")).toBeUndefined(); // 事实已安全转移
+  });
+
+  it("事实转移读回不一致：intent 保留（emergency，绝不无验证释放）", () => {
+    const service = makeService();
+    void service;
+    seedIntent("dac_rb", "executing");
+    const spy = jest.spyOn(quarantineModule, "readTreasuryQuarantineEntry").mockImplementation((transactionId: string) => {
+      const entry = realReadTreasuryQuarantineEntry(transactionId);
+      // 篡改读回 digest（模拟 store 写入层缺陷）。
+      if (entry !== undefined && entry.transactionId === "dac_rb") {
+        return Object.freeze({ ...entry, digest: "ffffffffffffffff" }) as typeof entry;
+      }
+      return entry;
+    });
+    try {
+      Game.time += 1;
+      const next = makeService();
+      next.beginTick(); // 恢复：转移写入成功但读回不一致 → intent 保留
+      expect(readTreasuryIntentEntry("dac_rb")).toBeDefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("v1 quarantine 迁移 v2：并存 intent 合同事实合并；无并存 intent 标记 legacyV1", () => {
+    // 并存 intent（v3 直写，携带合同事实）。
+    const withIntent = writeTreasuryIntentEntry({
+      transactionId: "dac_mig1",
+      digest: "0123456789abcdef",
+      actionKind: "terminal.send",
+      kind: "terminal.send",
+      source: "test",
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+      outcome: "started_unknown",
+      settlement: "executing",
+      contractId: "ac:1111111111111111",
+      contractDigest: "1111111111111111",
+      adapterVersion: 3,
+      createdAtTick: Game.time,
+      updatedAtTick: Game.time,
+    });
+    expect(withIntent.status).toBe("written");
+    Memory.runtime = Memory.runtime ?? ({} as never);
+    Memory.runtime.treasury = Memory.runtime.treasury ?? ({} as never);
+    Memory.runtime.treasury.quarantine = {
+      version: 1,
+      entries: {
+        "q:dac_mig1": {
+          transactionId: "dac_mig1",
+          digest: "0123456789abcdef",
+          tick: Game.time,
+          kind: "terminal.send",
+          source: "test",
+          phase: "executing_at_end_tick",
+          deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+          recordedAt: Game.time,
+        },
+        "q:dac_mig2": {
+          transactionId: "dac_mig2",
+          digest: "0123456789abcdef",
+          tick: Game.time,
+          kind: "terminal.send",
+          source: "test",
+          phase: "ok_pending_commit_unresolved",
+          deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+          recordedAt: Game.time,
+        },
+      },
+      entryCount: 2,
+    } as never;
+    resetTreasuryQuarantineRuntimeForTest();
+    const merged = readTreasuryQuarantineEntry("dac_mig1");
+    expect(merged?.outcome).toBe("started_unknown"); // phase 单调推导
+    expect(merged?.settlement).toBe("quarantined");
+    expect(merged?.contractDigest).toBe("1111111111111111"); // 并存 intent 合并
+    expect(merged?.adapterVersion).toBe(3);
+    expect(merged?.legacyV1).toBeUndefined();
+    const legacy = readTreasuryQuarantineEntry("dac_mig2");
+    expect(legacy?.outcome).toBe("returned_ok"); // commit 类 phase → returned_ok
+    expect(legacy?.legacyV1).toBe(true); // 无并存 intent → legacy 标记
+    expect((Memory.runtime.treasury.quarantine as { version: number }).version).toBe(2);
+  });
+
+  it("recovery slot：同 ID 双权威（转移窗口残留）只占一个 slot", () => {
+    const service = makeService();
+    seedIntent("dac_dup", "executing");
+    // 直写同 id quarantine（模拟转移窗口/防御残留的双存在形态）。
+    const write = quarantineTreasuryTransaction({
+      transactionId: "dac_dup",
+      digest: "0123456789abcdef",
+      tick: Game.time,
+      kind: "terminal.send",
+      source: "test",
+      phase: "executing_at_end_tick",
+      outcome: "started_unknown",
+      settlement: "quarantined",
+      deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+      recordedAt: Game.time,
+    });
+    expect(write.status).toBe("written");
+    const metrics = service.metrics();
+    expect(metrics.durableIntents).toBe(1);
+    expect(metrics.quarantineEntries).toBe(1);
+    // 双存在同 ID 去重：只占一个 recovery slot。
+    expect(metrics.quarantineSlotsRemaining).toBe(TREASURY_INTENT_MAX_ENTRIES - 1);
+  });
+
+  it("双权威 contractDigest 不一致 fail closed（capability 签发拒绝）", () => {
+    // intent 携带 contractDigest A（直写）。
+    const intentWrite = writeTreasuryIntentEntry({
+      transactionId: "dac_conflict",
+      digest: "0123456789abcdef",
+      actionKind: "terminal.send",
+      kind: "terminal.send",
+      source: "test",
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+      outcome: "started_unknown",
+      settlement: "executing",
+      contractDigest: "1111111111111111",
+      createdAtTick: Game.time,
+      updatedAtTick: Game.time,
+    });
+    expect(intentWrite.status).toBe("written");
+    // 直写 v2 quarantine 携带不同 contractDigest（模拟双权威不一致）。
+    const qw = quarantineTreasuryTransaction({
+      transactionId: "dac_conflict",
+      digest: "0123456789abcdef",
+      tick: Game.time,
+      kind: "terminal.send",
+      source: "test",
+      phase: "executing_at_end_tick",
+      outcome: "started_unknown",
+      settlement: "quarantined",
+      contractDigest: "2222222222222222",
+      deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+      recordedAt: Game.time,
+    });
+    expect(qw.status).toBe("written");
+    Game.time += 1;
+    const next = makeService();
+    next.beginTick();
+    const issued = next.issueTreasuryReconciliationCapability({ transactionId: "dac_conflict" });
+    expect(issued.status).toBe("rejected");
+    if (issued.status === "rejected") expect(issued.reason).toBe("authority_inconsistent");
+  });
+
+  it("adapter v1 authority 在 registry 升级 v2 后：capability 签发拒绝（版本演进防护）", () => {
+    const intentWrite = writeTreasuryIntentEntry({
+      transactionId: "dac_ver",
+      digest: "0123456789abcdef",
+      actionKind: "test.transfer",
+      kind: "test.transfer",
+      source: "test",
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+      outcome: "started_unknown",
+      settlement: "executing",
+      adapterVersion: 1,
+      createdAtTick: Game.time,
+      updatedAtTick: Game.time,
+    });
+    expect(intentWrite.status).toBe("written");
+    Game.time += 1;
+    const next = makeService();
+    next.beginTick(); // 转 quarantine（adapterVersion=1 保留）
+    expect(readTreasuryQuarantineEntry("dac_ver")?.adapterVersion).toBe(1);
+    // registry 升级 v2（同 kind 覆盖注册）。
+    registerTreasuryActionAdapter({ ...makeTreasuryTestTransferAdapter(), version: 2 });
+    const issued = next.issueTreasuryReconciliationCapability({ transactionId: "dac_ver" });
+    expect(issued.status).toBe("rejected");
+    if (issued.status === "rejected") expect(issued.reason).toBe("adapter_version_mismatch");
   });
 });

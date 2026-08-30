@@ -25,7 +25,6 @@
 
 import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
-import { TREASURY_EXECUTION_UNKNOWN_PHASES } from "@/runtime/treasury/writeFault";
 
 /** 归一化 authority facts（签发/resolution/recovery/release 共用形状）。 */
 export interface TreasuryUnresolvedAuthority {
@@ -49,6 +48,8 @@ export interface TreasuryUnresolvedAuthority {
   readonly adapterVersion?: number;
   readonly durablePayload?: string;
   readonly durablePayloadVersion?: number;
+  /** authorization bundle digest（quarantine v2/intent contract 路径）。 */
+  readonly authorizationDigest?: string;
 }
 
 export type TreasuryUnresolvedAuthorityResolution =
@@ -62,11 +63,6 @@ export type TreasuryUnresolvedAuthorityResolution =
  * returned_ok；Game 已明确返回非 OK → returned_non_ok；其余 execution-
  * unknown 类 → started_unknown。
  */
-function outcomeOfQuarantinePhase(phase: string): string {
-  if (phase === "action_returned_non_ok_abort_failed") return "returned_non_ok";
-  if (TREASURY_EXECUTION_UNKNOWN_PHASES.has(phase)) return "started_unknown";
-  return "returned_ok";
-}
 
 function postingSignature(postings: readonly { roomName: string; locationKind: string; resource: string; delta: number }[]): string {
   return [...postings]
@@ -109,11 +105,32 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         detail: "同 id 双权威 postings 不一致（canonical 逐腿比较）——fail closed，不任选其一",
       };
     }
+    // 第十轮 5.1：合同字段一致性（双方都存在时比较——迁移残留与新旧形态
+    // 混合并存时的 fail closed 防线）。
+    if (
+      quarantined.contractDigest !== undefined &&
+      intended.contractDigest !== undefined &&
+      quarantined.contractDigest !== intended.contractDigest
+    ) {
+      return {
+        status: "inconsistent",
+        detail: `同 id 双权威 contractDigest 不一致（quarantine ${quarantined.contractDigest}，intent ${intended.contractDigest}）——fail closed`,
+      };
+    }
+    if (
+      quarantined.adapterVersion !== undefined &&
+      intended.adapterVersion !== undefined &&
+      quarantined.adapterVersion !== intended.adapterVersion
+    ) {
+      return {
+        status: "inconsistent",
+        detail: `同 id 双权威 adapterVersion 不一致（quarantine v${String(quarantined.adapterVersion)}，intent v${String(intended.adapterVersion)}）——fail closed`,
+      };
+    }
   }
   if (quarantined !== undefined) {
-    // quarantine 优先；contract 绑定事实从并存 intent 合并（quarantine entry
-    // 无 contract 字段）。
-    const contractSource = intended;
+    // quarantine 优先（v2 自带完整合同事实；并存 intent 时以 quarantine 为
+    // 权威形态，intent 的同名字段已在上文比对）。
     return {
       status: "ok",
       authority: {
@@ -121,18 +138,19 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         transactionId: quarantined.transactionId,
         digest: quarantined.digest,
         kind: quarantined.kind,
-        actionKind: quarantined.kind,
+        actionKind: quarantined.actionKind ?? quarantined.kind,
         phase: quarantined.phase,
-        outcome: outcomeOfQuarantinePhase(quarantined.phase),
-        settlement: "quarantined",
+        outcome: quarantined.outcome,
+        settlement: quarantined.settlement,
         recordedAt: quarantined.recordedAt,
         actionTick: quarantined.tick,
         postings: quarantined.deltas.map((leg) => ({ ...leg })),
-        ...(contractSource?.contractId !== undefined ? { contractId: contractSource.contractId } : {}),
-        ...(contractSource?.contractDigest !== undefined ? { contractDigest: contractSource.contractDigest } : {}),
-        ...(contractSource?.adapterVersion !== undefined ? { adapterVersion: contractSource.adapterVersion } : {}),
-        ...(contractSource?.durablePayload !== undefined ? { durablePayload: contractSource.durablePayload } : {}),
-        ...(contractSource?.durablePayloadVersion !== undefined ? { durablePayloadVersion: contractSource.durablePayloadVersion } : {}),
+        ...(quarantined.contractId !== undefined ? { contractId: quarantined.contractId } : {}),
+        ...(quarantined.contractDigest !== undefined ? { contractDigest: quarantined.contractDigest } : {}),
+        ...(quarantined.adapterVersion !== undefined ? { adapterVersion: quarantined.adapterVersion } : {}),
+        ...(quarantined.durablePayload !== undefined ? { durablePayload: quarantined.durablePayload } : {}),
+        ...(quarantined.durablePayloadVersion !== undefined ? { durablePayloadVersion: quarantined.durablePayloadVersion } : {}),
+        ...(quarantined.authorizationDigest !== undefined ? { authorizationDigest: quarantined.authorizationDigest } : {}),
       },
     };
   }
@@ -157,6 +175,7 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
       ...(intent.adapterVersion !== undefined ? { adapterVersion: intent.adapterVersion } : {}),
       ...(intent.durablePayload !== undefined ? { durablePayload: intent.durablePayload } : {}),
       ...(intent.durablePayloadVersion !== undefined ? { durablePayloadVersion: intent.durablePayloadVersion } : {}),
+      ...(intent.authorizationDigest !== undefined ? { authorizationDigest: intent.authorizationDigest } : {}),
     },
   };
 }

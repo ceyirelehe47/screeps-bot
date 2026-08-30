@@ -725,6 +725,13 @@ declare global {
             /** settlement workflow state（第十轮 v3：与 outcome 正交）。 */
             settlement: string;
             structureId?: string;
+            structureFacts?: Array<{
+              roomName: string;
+              locationKind: string;
+              structureId: string;
+            }>;
+            ownerIdentity?: string;
+            policyIdentity?: string;
             auditSource?: string;
             createdAtTick: number;
             updatedAtTick: number;
@@ -744,13 +751,21 @@ declare global {
        * active handle 数 < 64（第 65 条 fault 在 prepare 前被拒，不再产生
        * 溢出丢 identity 的路径）；overflowed 为第六轮 legacy 溢出标志
        * （存在即永久 fail closed，显式 repair 才可清除）。deltas 为单一
-       * canonical posting 事实（容量占用由其派生）。global reset 后首次
-       * load 全量验证（key 编码/digest/phase/locationKind/resource 枚举/
-       * 非零安全整数/聚合溢出）——损坏 fail closed（原数据不动、新 prepare
-       * 阻断、resolution 拒绝）。解除只有显式 fault resolution。
+       * canonical posting 事实（容量占用由其派生）。v2（第十轮 5.1 durable
+       * authority cohesion）：entry 保留完整合同事实（contract ID/digest、
+       * actionKind、adapterVersion、durable payload/version、authorization
+       * bundle digest、owner/policy identity、structure incarnation facts）
+       * 与 execution outcome（事实等级，单调）+ settlement（隔离态）——
+       * global reset 后可重建完整 action-specific reconciler 输入；v1 数据
+       * load 时原子迁移（phase 单调推导 outcome、并存 intent 合同事实合并、
+       * 无并存 intent 标记 legacyV1——不参与 contract-backed resolution）。
+       * global reset 后首次 load 全量验证（key 编码/digest/phase/outcome/
+       * settlement/合同字段枚举/非零安全整数/聚合溢出）——损坏 fail closed
+       * （原数据不动、新 prepare 阻断、resolution 拒绝）。解除只有显式
+       * fault resolution。
        */
       quarantine?: {
-        version: 1;
+        version: 2;
         entries: Record<
           string,
           {
@@ -767,6 +782,26 @@ declare global {
               delta: number;
             }>;
             recordedAt: number;
+            /** execution outcome（第十轮 v2：事实等级，单调不可回退）。 */
+            outcome: string;
+            /** settlement workflow state（隔离态恒 quarantined；resolving 由 staged resolution 驱动）。 */
+            settlement: string;
+            contractId?: string;
+            contractDigest?: string;
+            actionKind?: string;
+            adapterVersion?: number;
+            durablePayload?: string;
+            durablePayloadVersion?: number;
+            authorizationDigest?: string;
+            ownerIdentity?: string;
+            policyIdentity?: string;
+            structureFacts?: Array<{
+              roomName: string;
+              locationKind: string;
+              structureId: string;
+            }>;
+            /** v1 迁移且无并存 intent 补全（不参与 contract-backed resolution）。 */
+            legacyV1?: boolean;
           }
         >;
         entryCount: number;

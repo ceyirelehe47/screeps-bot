@@ -62,6 +62,8 @@ function validEntry(transactionId = "ts7_v1"): TreasuryQuarantineEntry {
     kind: "test",
     source: "test",
     phase: "executing_at_end_tick",
+    outcome: "started_unknown",
+    settlement: "quarantined",
     deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
     recordedAt: Game.time,
   };
@@ -84,11 +86,11 @@ beforeEach(() => {
   resetTreasuryCommitmentRevisionForTest();
 });
 
-describe("quarantine schema v1 元数据", () => {
-  it("首次写入自动初始化 v1：version/entryCount 元数据正确", () => {
+describe("quarantine schema v2 元数据", () => {
+  it("首次写入自动初始化 v2：version/entryCount 元数据正确", () => {
     expect(quarantineTreasuryTransaction(validEntry()).status).toBe("written");
     const store = Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore;
-    expect(store.version).toBe(1);
+    expect(store.version).toBe(2);
     expect(store.entryCount).toBe(1);
     expect(Object.keys(store.entries)).toEqual(["q:ts7_v1"]);
     const health = peekTreasuryQuarantineHealth();
@@ -172,7 +174,7 @@ describe("quarantine 损坏 fail closed（load 全量验证）", () => {
     Memory.runtime.treasury = { ...(Memory.runtime.treasury ?? {}), quarantine: { entries: {} } as never };
     resetTreasuryQuarantineRuntimeForTest();
     expect(quarantineTreasuryTransaction(validEntry()).status).toBe("written");
-    expect((Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore).version).toBe(1);
+    expect((Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore).version).toBe(2);
     // 非空 legacy store → fatal（显式 repair 处理）。
     clearTreasuryPersistenceForTest();
     corruptStore((store) => {
@@ -245,6 +247,8 @@ describe("第八轮 per-transaction 保守聚合", () => {
         kind: "test",
         source: "test",
         phase: "executing_at_end_tick",
+        outcome: "started_unknown",
+        settlement: "quarantined",
         deltas,
         recordedAt: Game.time,
       }).status,
@@ -302,6 +306,8 @@ describe("第八轮 per-transaction 保守聚合", () => {
       kind: "test",
       source: "test",
       phase: "executing_at_end_tick",
+      outcome: "started_unknown",
+      settlement: "quarantined",
       deltas: [{ roomName: "W1N57", locationKind: "storage", resource: "not-a-resource", delta: -1 }],
       recordedAt: Game.time,
     });
@@ -313,6 +319,8 @@ describe("第八轮 per-transaction 保守聚合", () => {
       kind: "test",
       source: "test",
       phase: "unknown-phase",
+      outcome: "started_unknown",
+      settlement: "quarantined",
       deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
       recordedAt: Game.time,
     });
@@ -332,6 +340,8 @@ describe("第八轮 per-transaction 保守聚合", () => {
       kind: "test",
       source: "test",
       phase: "executing_at_end_tick",
+      outcome: "started_unknown",
+      settlement: "quarantined",
       deltas: [
         { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: Number.MAX_SAFE_INTEGER - 10 },
       ],
@@ -344,6 +354,8 @@ describe("第八轮 per-transaction 保守聚合", () => {
       kind: "test",
       source: "test",
       phase: "executing_at_end_tick",
+      outcome: "started_unknown",
+      settlement: "quarantined",
       deltas: [
         { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: Number.MAX_SAFE_INTEGER - 10 },
       ],

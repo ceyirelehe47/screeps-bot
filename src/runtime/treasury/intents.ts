@@ -40,8 +40,13 @@
  */
 
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
-import { TREASURY_WRITE_FAULT_PHASES } from "@/runtime/treasury/writeFault";
-import { quarantineTreasuryTransaction } from "@/runtime/treasury/quarantine";
+import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
+import {
+  quarantineTreasuryTransaction,
+  readTreasuryQuarantineEntry,
+  outcomeOfTreasuryFaultPhase,
+  type TreasuryQuarantineEntry,
+} from "@/runtime/treasury/quarantine";
 
 export const TREASURY_INTENT_VERSION = 3 as const;
 /** 与 quarantine 同上限——recovery slot 统一计数的前提。 */
@@ -52,6 +57,7 @@ const INTENT_KEY_PREFIX = "i:";
 const INTENT_DIGEST_PATTERN = /^[0-9a-f]{16}$/;
 const INTENT_KIND_SOURCE_MAX = 128;
 const INTENT_POSTINGS_MAX = 64;
+const INTENT_STRUCTURE_FACTS_MAX = 16;
 const INTENT_STRUCTURE_ID_MAX = 48;
 const VALID_LOCATION_KINDS: ReadonlySet<string> = new Set<string>(["storage", "terminal"]);
 const VALID_RESOURCES: ReadonlySet<string> = new Set<string>(RESOURCES_ALL);
@@ -162,6 +168,13 @@ export interface TreasuryIntentPosting {
   readonly delta: number;
 }
 
+/** intent 携带的 structure incarnation fact（与 quarantine v2 同形状）。 */
+export interface TreasuryIntentStructureFact {
+  readonly roomName: string;
+  readonly locationKind: string;
+  readonly structureId: string;
+}
+
 export interface TreasuryIntentEntry {
   transactionId: string;
   /** canonical payload digest（与 prepare 签发 digest 同源）。 */
@@ -190,6 +203,12 @@ export interface TreasuryIntentEntry {
   settlement: string;
   /** 必要的结构 incarnation（有界；contract 路径快照）。 */
   structureId?: string;
+  /** structure incarnation facts（第十轮 v3：受控数组 ≤16，转移至 quarantine）。 */
+  structureFacts?: TreasuryIntentStructureFact[];
+  /** owner canonical identity（第十轮 v3：contract 路径）。 */
+  ownerIdentity?: string;
+  /** policy capability identity（第十轮 v3：contract 路径）。 */
+  policyIdentity?: string;
   /** 有界审计来源。 */
   auditSource?: string;
   createdAtTick: number;
@@ -345,6 +364,34 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
   if (candidate.structureId !== undefined) {
     if (typeof candidate.structureId !== "string" || candidate.structureId.length === 0 || candidate.structureId.length > INTENT_STRUCTURE_ID_MAX) {
       return "structureId 非法（须为 1..48 字符）";
+    }
+  }
+  if (candidate.structureFacts !== undefined) {
+    if (!Array.isArray(candidate.structureFacts) || candidate.structureFacts.length > INTENT_STRUCTURE_FACTS_MAX) {
+      return "structureFacts 非数组或超上限";
+    }
+    for (const fact of candidate.structureFacts) {
+      if (!fact || typeof fact !== "object") return "structureFact 项非对象";
+      const typed = fact as Partial<TreasuryIntentStructureFact>;
+      if (typeof typed.roomName !== "string" || typed.roomName.length === 0 || typed.roomName.length > 16) {
+        return "structureFact.roomName 非法";
+      }
+      if (typeof typed.locationKind !== "string" || !VALID_LOCATION_KINDS.has(typed.locationKind)) {
+        return `structureFact.locationKind 非法: ${String(typed.locationKind).slice(0, 24)}`;
+      }
+      if (typeof typed.structureId !== "string" || typed.structureId.length === 0 || typed.structureId.length > INTENT_STRUCTURE_ID_MAX) {
+        return "structureFact.structureId 非法（须为 1..48 字符）";
+      }
+    }
+  }
+  if (candidate.ownerIdentity !== undefined) {
+    if (typeof candidate.ownerIdentity !== "string" || candidate.ownerIdentity.length === 0 || candidate.ownerIdentity.length > INTENT_KIND_SOURCE_MAX) {
+      return "ownerIdentity 非法（须为 1..128 字符）";
+    }
+  }
+  if (candidate.policyIdentity !== undefined) {
+    if (typeof candidate.policyIdentity !== "string" || candidate.policyIdentity.length === 0 || candidate.policyIdentity.length > INTENT_KIND_SOURCE_MAX) {
+      return "policyIdentity 非法（须为 1..128 字符）";
     }
   }
   if (candidate.auditSource !== undefined) {
@@ -541,6 +588,9 @@ function freezeIntentCopy(entry: TreasuryIntentEntry): Readonly<TreasuryIntentEn
   return Object.freeze({
     ...entry,
     postings: entry.postings.map((leg) => Object.freeze({ ...leg })),
+    ...(entry.structureFacts !== undefined
+      ? { structureFacts: entry.structureFacts.map((fact) => Object.freeze({ ...fact })) }
+      : {}),
   }) as Readonly<TreasuryIntentEntry>;
 }
 
@@ -866,6 +916,80 @@ export interface TreasuryIntentRecoveryReport {
  * - store fatal：不删任何数据，report 携带诊断（writer 由 blockers 阻断）。
  * 恢复幂等（重复调用对已处理条目 no-op）。
  */
+/**
+ * intent → quarantine 的 durable 事实转移协议（第十轮 5.1）：将 entry 的
+ * 全部合同事实（contract ID/digest、actionKind、adapterVersion、durable
+ * payload/version、authorizationDigest、owner/policy identity、structure
+ * facts、execution outcome、settlement）原子写入 quarantine v2；**读回验证
+ * 一致后**才释放 intent slot——任何写入被拒或读回不一致都保留 intent
+ * （emergency authority，slot 守恒语义：转移完成前不删除源事实）。
+ *
+ * outcome 合并规则（单调，终态优先）：intent 已落盘的终态事实
+ * （returned_ok/returned_non_ok/aborted_final）优先保留；否则按 fault phase
+ * 单调推导（commit 类 → returned_ok——修复"OK 事实只存在于 faultPhase 而未
+ * 落盘"的窗口）。settlement 恒为 quarantined（隔离态语义）。
+ */
+export function transferTreasuryIntentToQuarantine(
+  entry: Readonly<TreasuryIntentEntry>,
+  quarantinePhase: TreasuryWriteFaultPhase,
+): { readonly status: "transferred" } | { readonly status: "retained"; readonly detail: string } {
+  const derived = outcomeOfTreasuryFaultPhase(quarantinePhase);
+  if (derived === null) {
+    return { status: "retained", detail: `未知 fault phase ${quarantinePhase}（outcome 无法单调推导）` };
+  }
+  const terminalOutcome =
+    entry.outcome === "returned_ok" || entry.outcome === "returned_non_ok" || entry.outcome === "aborted_final";
+  const outcome = terminalOutcome ? entry.outcome : derived;
+  const write = quarantineTreasuryTransaction({
+    transactionId: entry.transactionId,
+    digest: entry.digest,
+    tick: entry.createdAtTick,
+    kind: entry.kind,
+    source: entry.source,
+    phase: quarantinePhase,
+    deltas: entry.postings.map((leg) => ({ ...leg })),
+    recordedAt: entry.updatedAtTick,
+    outcome,
+    settlement: "quarantined",
+    ...(entry.contractId !== undefined ? { contractId: entry.contractId } : {}),
+    ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+    ...(entry.actionKind !== undefined ? { actionKind: entry.actionKind } : {}),
+    ...(entry.adapterVersion !== undefined ? { adapterVersion: entry.adapterVersion } : {}),
+    ...(entry.durablePayload !== undefined ? { durablePayload: entry.durablePayload } : {}),
+    ...(entry.durablePayloadVersion !== undefined ? { durablePayloadVersion: entry.durablePayloadVersion } : {}),
+    ...(entry.authorizationDigest !== undefined ? { authorizationDigest: entry.authorizationDigest } : {}),
+    ...(entry.ownerIdentity !== undefined ? { ownerIdentity: entry.ownerIdentity } : {}),
+    ...(entry.policyIdentity !== undefined ? { policyIdentity: entry.policyIdentity } : {}),
+    ...(entry.structureFacts !== undefined ? { structureFacts: entry.structureFacts.map((fact) => ({ ...fact })) } : {}),
+  } as TreasuryQuarantineEntry);
+  if (write.status === "rejected") {
+    return { status: "retained", detail: `quarantine 写入被拒（${write.reason}）: ${write.detail}` };
+  }
+  // 读回验证（事实安全转移的放行条件）：关键字段与写入声明一致才释放 intent。
+  const readBack = readTreasuryQuarantineEntry(entry.transactionId);
+  const consistent =
+    readBack !== undefined &&
+    readBack.digest === entry.digest &&
+    readBack.outcome === outcome &&
+    readBack.settlement === "quarantined" &&
+    readBack.deltas.length === entry.postings.length &&
+    readBack.deltas.every(
+      (leg, index) =>
+        leg.roomName === entry.postings[index].roomName &&
+        leg.locationKind === entry.postings[index].locationKind &&
+        leg.resource === entry.postings[index].resource &&
+        leg.delta === entry.postings[index].delta,
+    ) &&
+    (readBack.contractDigest ?? undefined) === entry.contractDigest &&
+    (readBack.adapterVersion ?? undefined) === entry.adapterVersion &&
+    (readBack.durablePayloadVersion ?? undefined) === entry.durablePayloadVersion;
+  if (!consistent) {
+    return { status: "retained", detail: "quarantine 读回验证不一致（store 不可信）——intent 保留为 emergency authority" };
+  }
+  releaseTreasuryIntentEntry(entry.transactionId);
+  return { status: "transferred" };
+}
+
 export function recoverTreasuryIntentsAtTickBoundary(): TreasuryIntentRecoveryReport {
   const report: TreasuryIntentRecoveryReport = {
     recoveredNotExecuted: 0,
@@ -903,28 +1027,16 @@ export function recoverTreasuryIntentsAtTickBoundary(): TreasuryIntentRecoveryRe
         : entry.outcome === "returned_ok"
           ? ("ok_pending_commit_unresolved" as const)
           : ("executing_at_end_tick" as const);
-    const write = quarantineTreasuryTransaction({
-      transactionId: entry.transactionId,
-      digest: entry.digest,
-      tick: entry.createdAtTick,
-      kind: entry.kind,
-      source: entry.source,
-      phase: quarantinePhase,
-      deltas: entry.postings.map((leg) => ({ ...leg })),
-      recordedAt: entry.updatedAtTick,
-    });
-    if (write.status === "rejected") {
+    const transferred = transferTreasuryIntentToQuarantine(entry, quarantinePhase);
+    if (transferred.status === "retained") {
       // emergency intent authority：保留 entry（postings/占用/slot 不丢，
       // phase 原样保留——下一 tick 按同一等级重试）。
       intentEvents.emergencyRetentions += 1;
       report.retainedForAuthority += 1;
       continue;
     }
-    if (write.status === "written") {
-      intentEvents.quarantineConversions += 1;
-      report.convertedToQuarantine += 1;
-    }
-    releaseTreasuryIntentEntry(entry.transactionId);
+    intentEvents.quarantineConversions += 1;
+    report.convertedToQuarantine += 1;
   }
   return report;
 }

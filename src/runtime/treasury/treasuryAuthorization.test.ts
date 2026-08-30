@@ -172,6 +172,8 @@ describe("授权计算", () => {
       kind: "test",
       source: "test",
       phase: "executing_at_end_tick",
+      outcome: "started_unknown",
+      settlement: "quarantined",
       deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -30_000 }],
       recordedAt: Game.time,
     });
@@ -297,6 +299,8 @@ describe("token 失效矩阵", () => {
       kind: "test",
       source: "test",
       phase: "executing_at_end_tick",
+      outcome: "started_unknown",
+      settlement: "quarantined",
       deltas: [],
       recordedAt: Game.time,
     });

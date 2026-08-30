@@ -41,6 +41,8 @@ function injectQuarantine(transactionId: string, delta: number): void {
     kind: "test",
     source: "test",
     phase: "executing_at_end_tick",
+    outcome: "started_unknown",
+    settlement: "quarantined",
     deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta }],
     recordedAt: Game.time,
   });

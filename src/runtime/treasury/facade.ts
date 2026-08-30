@@ -81,7 +81,9 @@ import {
 } from "@/runtime/treasury/writeFault";
 import {
   isTreasuryTransactionQuarantined,
+  outcomeOfTreasuryFaultPhase,
   peekTreasuryQuarantineHealth,
+  peekTreasuryQuarantineStore,
   quarantineTreasuryTransaction,
   readTreasuryQuarantineCounters,
   readTreasuryQuarantineEntry,
@@ -96,9 +98,11 @@ import {
   peekTreasuryIntentHealth,
   readTreasuryIntentCounters,
   readTreasuryIntentEntry,
+  peekTreasuryIntentStore,
   recoverTreasuryIntentsAtTickBoundary,
   releaseTreasuryIntentEntry,
   progressTreasuryIntent,
+  transferTreasuryIntentToQuarantine,
   treasuryIntentBlockers,
   treasuryIntentCapacityOccupancy,
   treasuryIntentOutflowOccupancy,
@@ -278,6 +282,8 @@ export interface TreasuryWriterKernelExecution {
     readonly authorizationDigest?: string;
     readonly durablePayload?: string;
     readonly durablePayloadVersion?: number;
+    /** structure incarnation facts（受控数组，≤16；转移至 quarantine v2）。 */
+    readonly structureFacts?: readonly { roomName: string; locationKind: string; structureId: string }[];
   };
 }
 
@@ -390,7 +396,7 @@ export interface TreasuryService {
     readonly digest?: string;
   }): { readonly status: "issued"; readonly capability: TreasuryReconciliationCapability } | {
     readonly status: "rejected";
-    readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation";
+    readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch";
     readonly detail: string;
   };
   /**
@@ -650,7 +656,21 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   function recoverySlotsOccupied(): number {
     const quarantineCount = peekTreasuryQuarantineHealth().entryCount;
     const intentCount = peekTreasuryIntentHealth().entryCount;
-    return quarantineCount + intentCount + (activeHandles.size - intentBackedActiveIds.size);
+    if (quarantineCount === 0 || intentCount === 0) {
+      // 快速路径：单一 store 非空时不可能有同 ID 重叠（O(1)，模块计数零扫描）。
+      return quarantineCount + intentCount + (activeHandles.size - intentBackedActiveIds.size);
+    }
+    // 慢速路径（事实转移窗口/防御残留的双存在）：按 ID 并集去重——一笔
+    // transaction 只占一个 recovery slot（第十轮 5.1）。两 store 各 ≤64，
+    // 此路径仅在实际重叠时进入。
+    const quarantineIds = new Set(
+      Object.keys(peekTreasuryQuarantineStore()?.entries ?? {}).map((key) => key.slice(2)),
+    );
+    let overlap = 0;
+    for (const key of Object.keys(peekTreasuryIntentStore()?.entries ?? {})) {
+      if (quarantineIds.has(key.slice(2))) overlap += 1;
+    }
+    return quarantineCount + intentCount - overlap + (activeHandles.size - intentBackedActiveIds.size);
   }
 
   /** 终态化：active registry 删除 + WeakMap 替换为轻量 stub（丢大对象引用）。 */
@@ -822,60 +842,66 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   function quarantineFaultedRecord(record: PreparedTransaction, detail?: string): void {
     record.state = "faulted";
     metrics.commitFaults += 1;
+    const faultPhase = record.faultPhase ?? "commit_unexpected";
     recordTreasuryWriteFault({
       transactionId: record.canonical.transactionId,
       digest: record.digest,
       tick: record.preparedAtTick,
       kind: record.canonical.kind,
       source: record.canonical.source,
-      phase: record.faultPhase ?? "commit_unexpected",
+      phase: faultPhase,
       status: "unresolved",
       recordedAt: Game.time,
       ...(detail !== undefined ? { detail: detail.slice(0, TREASURY_WRITE_FAULT_DETAIL_MAX) } : {}),
     });
-    const write = quarantineTreasuryTransaction({
-      transactionId: record.canonical.transactionId,
-      digest: record.digest,
-      tick: record.preparedAtTick,
-      kind: record.canonical.kind,
-      source: record.canonical.source,
-      phase: record.faultPhase ?? "commit_unexpected",
-      deltas: quarantineDeltasOf(record),
-      recordedAt: Game.time,
-    });
-    if (write.status === "rejected") {
-      // store 损坏或容量不变量破坏：marker 已锁全部 writer，此处只计数诊断。
-      // intent 保留为最终保守权威（emergency intent authority）。
-      metrics.quarantineAdmissionRejections += 1;
-      return;
-    }
-    // quarantine 完整写入（written 或幂等 already_present）：释放 intent——
-    // 资产事实已由 quarantine entry 接管（slot 守恒转换）。
-    if (record.intentWritten) {
-      releaseTreasuryIntentEntry(record.canonical.transactionId);
-    }
+    transferRecordToQuarantine(record, faultPhase);
   }
 
   /** executing/faulted handle → durable quarantine（tick 边界分类；幂等保留首条）。 */
   function quarantinePreparedRecord(record: PreparedTransaction): void {
+    const faultPhase = record.state === "executing" ? "executing_at_end_tick" : record.faultPhase ?? "commit_unexpected";
+    transferRecordToQuarantine(record, faultPhase);
+    metrics.preparedQuarantinedAtBoundary += 1;
+  }
+
+  /**
+   * durable 事实转移统一入口（第十轮 5.1）：优先走 intent → quarantine v2
+   * 转移协议（完整合同事实 + 读回验证后释放 intent slot）；intent 缺失的
+   * 防御分支按 fault phase 单调推导 outcome 直写最小 v2 entry。任何写入被
+   * 拒/读回不一致：marker 已锁全部 writer，计数诊断，intent（若在）保留为
+   * emergency authority——绝不静默丢失占用事实。
+   */
+  function transferRecordToQuarantine(record: PreparedTransaction, faultPhase: TreasuryWriteFaultPhase): void {
+    const intent = readTreasuryIntentEntry(record.canonical.transactionId);
+    if (intent !== undefined) {
+      const transferred = transferTreasuryIntentToQuarantine(intent, faultPhase);
+      if (transferred.status === "retained") {
+        metrics.quarantineAdmissionRejections += 1;
+      }
+      return;
+    }
+    // 防御分支（intent 已释放/不存在——正常路径 executePreparedAction 恒先写
+    // intent）：按 fault phase 推导 outcome 直写最小 v2 entry。
+    const derived = outcomeOfTreasuryFaultPhase(faultPhase);
+    if (derived === null) {
+      metrics.quarantineAdmissionRejections += 1;
+      return;
+    }
     const write = quarantineTreasuryTransaction({
       transactionId: record.canonical.transactionId,
       digest: record.digest,
       tick: record.preparedAtTick,
       kind: record.canonical.kind,
       source: record.canonical.source,
-      phase: record.state === "executing" ? "executing_at_end_tick" : record.faultPhase ?? "commit_unexpected",
+      phase: faultPhase,
       deltas: quarantineDeltasOf(record),
       recordedAt: Game.time,
+      outcome: derived,
+      settlement: "quarantined",
     });
     if (write.status === "rejected") {
-      // marker 已在 audit/故障路径写入（全局锁）；计数诊断，不静默。
-      // intent 保留（emergency intent authority：postings/占用/slot 不丢）。
       metrics.quarantineAdmissionRejections += 1;
-    } else if (record.intentWritten) {
-      releaseTreasuryIntentEntry(record.canonical.transactionId);
     }
-    metrics.preparedQuarantinedAtBoundary += 1;
   }
 
   /**
@@ -2191,6 +2217,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
               ...(execution.intentContract.durablePayloadVersion !== undefined
                 ? { durablePayloadVersion: execution.intentContract.durablePayloadVersion }
                 : {}),
+              ...(execution.intentContract.structureFacts !== undefined
+                ? { structureFacts: execution.intentContract.structureFacts.map((fact) => ({ ...fact })) }
+                : {}),
             }
           : {}),
         createdAtTick: Game.time,
@@ -2436,10 +2465,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       readonly digest?: string;
     }): { readonly status: "issued"; readonly capability: TreasuryReconciliationCapability } | {
       readonly status: "rejected";
-      readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation";
+      readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch";
       readonly detail: string;
     } {
-      const reject = (reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation", detail: string) => {
+      const reject = (reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch", detail: string) => {
         metrics.reconciliationCapabilitiesRejected += 1;
         return { status: "rejected" as const, reason, detail };
       };
@@ -2478,6 +2507,14 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       }
       if (adapter.reconcile === undefined) {
         return reject("no_registered_reconciler", `action kind ${actionKind} 的 adapter 未提供 reconciler（无法判定执行事实）`);
+      }
+      if (facts0.adapterVersion !== undefined && facts0.adapterVersion !== adapter.version) {
+        // 第十轮 5.1：authority 携带的 adapter version 与 registry 当前版本
+        // 不一致——不得用新 reconciler 解释旧 action（fail closed）。
+        return reject(
+          "adapter_version_mismatch",
+          `authority 记录 adapter v${String(facts0.adapterVersion)}，registry 当前 v${String(adapter.version)}——版本演进后旧 action 不可由新 reconciler 解释`,
+        );
       }
       // 结论只能来自注册 reconciler（调用者不可自填）。输入为完整
       // contract-specific durable facts（第九轮 4.8：不再使用

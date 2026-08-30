@@ -245,6 +245,8 @@ describe("第七轮：quarantine blocker 与 fault-slot admission 的确定性�
         kind: "perf",
         source: "perf",
         phase: "executing_at_end_tick",
+        outcome: "started_unknown",
+        settlement: "quarantined",
         deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
         recordedAt: Game.time,
       });

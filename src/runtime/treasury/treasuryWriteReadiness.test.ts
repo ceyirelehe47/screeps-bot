@@ -46,6 +46,8 @@ function injectQuarantineEntry(transactionId: string): void {
     kind: "test",
     source: "test",
     phase: "executing_at_end_tick",
+    outcome: "started_unknown",
+    settlement: "quarantined",
     deltas: [],
     recordedAt: Game.time,
   });

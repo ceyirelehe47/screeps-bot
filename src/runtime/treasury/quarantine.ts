@@ -54,7 +54,7 @@ export interface TreasuryQuarantineEntry {
   readonly tick: number;
   readonly kind: string;
   readonly source: string;
-  /** 故障 phase（write-fault phase 枚举：commit 类 / execution-unknown 类）。 */
+  /** 故障 phase（write-fault phase 枚举：commit 类 / execution-unknown 类；fault reason）。 */
   readonly phase: string;
   /**
    * 单一 canonical posting 事实（第七轮）：资源流向（正=预期流入、负=流出
@@ -62,11 +62,37 @@ export interface TreasuryQuarantineEntry {
    */
   readonly deltas: readonly TreasuryQuarantineDeltas[];
   readonly recordedAt: number;
+  // ── v2（第十轮 5.1 durable authority cohesion）：完整合同事实。 ─────────
+  /** execution outcome（事实等级，单调；v1 迁移按 phase 单调推导）。 */
+  readonly outcome: string;
+  /** settlement workflow state（隔离态恒为 quarantined）。 */
+  readonly settlement: string;
+  readonly contractId?: string;
+  readonly contractDigest?: string;
+  readonly actionKind?: string;
+  readonly adapterVersion?: number;
+  readonly durablePayload?: string;
+  readonly durablePayloadVersion?: number;
+  /** authorization bundle digest（contract 路径）。 */
+  readonly authorizationDigest?: string;
+  readonly ownerIdentity?: string;
+  readonly policyIdentity?: string;
+  /** structure incarnation facts（有界数组 ≤16）。 */
+  readonly structureFacts?: readonly TreasuryQuarantineStructureFact[];
+  /** v1 迁移且无并存 intent 补全合同事实（不参与 contract-backed resolution）。 */
+  readonly legacyV1?: boolean;
+}
+
+/** quarantine v2 的 structure incarnation fact（与 intent structureFacts 同形状）。 */
+export interface TreasuryQuarantineStructureFact {
+  readonly roomName: string;
+  readonly locationKind: string;
+  readonly structureId: string;
 }
 
 export interface TreasuryQuarantineStore {
-  /** schema 版本（当前 1；未知版本 fail closed）。 */
-  version: 1;
+  /** schema 版本（当前 2；未知版本 fail closed）。 */
+  version: 2;
   /** key = "q:"+transactionId（transactionId 字符集受限，前缀无边界歧义，防危险字面量）。 */
   entries: Record<string, TreasuryQuarantineEntry>;
   /** entries 自有键计数（load 校验与 fault-slot admission 的 O(1) 权威）。 */
@@ -75,7 +101,7 @@ export interface TreasuryQuarantineStore {
   overflowed?: boolean;
 }
 
-export const TREASURY_QUARANTINE_VERSION = 1 as const;
+export const TREASURY_QUARANTINE_VERSION = 2 as const;
 export const TREASURY_QUARANTINE_MAX_ENTRIES = 64;
 
 const QUARANTINE_KEY_PREFIX = "q:";
@@ -87,6 +113,30 @@ const VALID_QUARANTINE_RESOURCES: ReadonlySet<string> = new Set<string>(RESOURCE
 const QUARANTINE_DIGEST_PATTERN = /^[0-9a-f]{16}$/;
 const QUARANTINE_KIND_SOURCE_MAX = 128;
 const QUARANTINE_DELTAS_MAX = 64;
+const QUARANTINE_STRUCTURE_FACTS_MAX = 16;
+const QUARANTINE_OUTCOMES: ReadonlySet<string> = new Set<string>([
+  "not_started",
+  "started_unknown",
+  "returned_non_ok",
+  "returned_ok",
+  "aborted_final",
+]);
+const QUARANTINE_SETTLEMENTS: ReadonlySet<string> = new Set<string>(["quarantined", "resolving"]);
+
+/**
+ * write-fault phase → execution outcome 的单调推导（第十轮 3.12.1/5.1）：
+ * commit 类 phase 全部发生在 Game callback 已确认 OK 之后 → returned_ok；
+ * Game 已明确返回非 OK → returned_non_ok；其余 execution-unknown 类 →
+ * started_unknown。未知 phase → null（调用方 fail closed）。
+ */
+export function outcomeOfTreasuryFaultPhase(
+  phase: string,
+): "returned_ok" | "returned_non_ok" | "started_unknown" | null {
+  if (phase === "action_returned_non_ok_abort_failed") return "returned_non_ok";
+  if (phase === "executing_at_end_tick" || phase === "action_threw_execution_unknown") return "started_unknown";
+  if (TREASURY_WRITE_FAULT_PHASES.has(phase)) return "returned_ok";
+  return null;
+}
 
 interface TreasuryQuarantineBranch {
   quarantine?: TreasuryQuarantineStore;
@@ -189,6 +239,75 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
   }
   if (typeof candidate.phase !== "string" || !VALID_QUARANTINE_PHASES.has(candidate.phase)) {
     return `phase 非法（未知枚举）: ${String(candidate.phase).slice(0, 48)}`;
+  }
+  if (typeof candidate.outcome !== "string" || !QUARANTINE_OUTCOMES.has(candidate.outcome)) {
+    return `outcome 非法（未知枚举）: ${String(candidate.outcome).slice(0, 48)}`;
+  }
+  if (typeof candidate.settlement !== "string" || !QUARANTINE_SETTLEMENTS.has(candidate.settlement)) {
+    return `settlement 非法（隔离态允许 quarantined/resolving）: ${String(candidate.settlement).slice(0, 48)}`;
+  }
+  if (candidate.contractId !== undefined) {
+    if (typeof candidate.contractId !== "string" || candidate.contractId.length === 0 || candidate.contractId.length > 96) {
+      return "contractId 非法（须为 1..96 字符）";
+    }
+  }
+  if (candidate.contractDigest !== undefined) {
+    if (typeof candidate.contractDigest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.contractDigest)) {
+      return "contractDigest 非法（须为 16 小写 hex）";
+    }
+  }
+  if (candidate.actionKind !== undefined) {
+    if (typeof candidate.actionKind !== "string" || candidate.actionKind.length === 0 || candidate.actionKind.length > QUARANTINE_KIND_SOURCE_MAX) {
+      return "actionKind 非法（须为 1..128 字符）";
+    }
+  }
+  if (candidate.adapterVersion !== undefined) {
+    if (typeof candidate.adapterVersion !== "number" || !Number.isSafeInteger(candidate.adapterVersion) || candidate.adapterVersion <= 0) {
+      return "adapterVersion 须为正安全整数";
+    }
+  }
+  if (candidate.durablePayload !== undefined) {
+    if (typeof candidate.durablePayload !== "string" || candidate.durablePayload.length === 0 || candidate.durablePayload.length > 512) {
+      return "durablePayload 非法（须为 1..512 字符）";
+    }
+  }
+  if (candidate.durablePayloadVersion !== undefined) {
+    if (typeof candidate.durablePayloadVersion !== "number" || !Number.isSafeInteger(candidate.durablePayloadVersion) || candidate.durablePayloadVersion <= 0) {
+      return "durablePayloadVersion 须为正安全整数";
+    }
+  }
+  if (candidate.authorizationDigest !== undefined) {
+    if (typeof candidate.authorizationDigest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.authorizationDigest)) {
+      return "authorizationDigest 非法（须为 16 小写 hex）";
+    }
+  }
+  if (candidate.ownerIdentity !== undefined) {
+    if (typeof candidate.ownerIdentity !== "string" || candidate.ownerIdentity.length === 0 || candidate.ownerIdentity.length > QUARANTINE_KIND_SOURCE_MAX) {
+      return "ownerIdentity 非法（须为 1..128 字符）";
+    }
+  }
+  if (candidate.policyIdentity !== undefined) {
+    if (typeof candidate.policyIdentity !== "string" || candidate.policyIdentity.length === 0 || candidate.policyIdentity.length > QUARANTINE_KIND_SOURCE_MAX) {
+      return "policyIdentity 非法（须为 1..128 字符）";
+    }
+  }
+  if (candidate.structureFacts !== undefined) {
+    if (!Array.isArray(candidate.structureFacts) || candidate.structureFacts.length > QUARANTINE_STRUCTURE_FACTS_MAX) {
+      return "structureFacts 非数组或超上限";
+    }
+    for (const fact of candidate.structureFacts) {
+      if (!fact || typeof fact !== "object") return "structureFact 项非对象";
+      const typed = fact as Partial<TreasuryQuarantineStructureFact>;
+      if (typeof typed.roomName !== "string" || typed.roomName.length === 0 || typed.roomName.length > 16) {
+        return "structureFact.roomName 非法";
+      }
+      if (typeof typed.locationKind !== "string" || !VALID_QUARANTINE_LOCATION_KINDS.has(typed.locationKind)) {
+        return `structureFact.locationKind 非法: ${String(typed.locationKind).slice(0, 24)}`;
+      }
+      if (typeof typed.structureId !== "string" || typed.structureId.length === 0 || typed.structureId.length > 48) {
+        return "structureFact.structureId 非法（须为 1..48 字符）";
+      }
+    }
   }
   if (!Array.isArray(candidate.deltas) || candidate.deltas.length > QUARANTINE_DELTAS_MAX) {
     return "deltas 非数组或超上限";
@@ -309,6 +428,49 @@ function loadQuarantineStoreRuntime(): QuarantineStoreRuntime {
     heapRuntime = { store: raw, fatal: null };
     return heapRuntime;
   }
+  if ((raw.version as number) === 1) {
+    // v1 → v2 迁移（第十轮 5.1，原子）：逐 entry 将 phase 单调推导为
+    // (outcome, settlement=quarantined)；合同事实从并存 intent entry 合并
+    //（digest 不一致 → fatal）；无并存 intent → legacyV1 标记（不参与
+    // contract-backed capability 签发）。未知 phase → fatal（原数据保留）。
+    const intentsRaw = (Memory.runtime as { treasury?: { intents?: { entries?: Record<string, unknown> } } } | undefined)
+      ?.treasury?.intents?.entries;
+    const entries: Record<string, TreasuryQuarantineEntry> = {};
+    for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
+      const legacy = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as Partial<TreasuryQuarantineEntry>;
+      const derivedOutcome = outcomeOfTreasuryFaultPhase(String(legacy.phase));
+      if (derivedOutcome === null) {
+        heapRuntime = fatalRuntime(raw, `v1 phase 无法单调推导 outcome（${String(legacy.phase).slice(0, 48)}）——quarantine fail closed，原数据保留`);
+        return heapRuntime;
+      }
+      const intentRecord = intentsRaw?.["i:" + String(legacy.transactionId)] as Partial<TreasuryQuarantineEntry> | undefined;
+      if (intentRecord !== undefined && intentRecord.digest !== legacy.digest) {
+        heapRuntime = fatalRuntime(raw, `v1→v2 迁移：同 id 并存 intent digest 不一致（${String(legacy.transactionId).slice(0, 48)}）——fail closed，原数据保留`);
+        return heapRuntime;
+      }
+      entries[key] = {
+        ...(legacy as TreasuryQuarantineEntry),
+        outcome: derivedOutcome,
+        settlement: "quarantined",
+        ...(intentRecord?.contractId !== undefined ? { contractId: intentRecord.contractId } : {}),
+        ...(intentRecord?.contractDigest !== undefined ? { contractDigest: intentRecord.contractDigest } : {}),
+        ...(intentRecord?.adapterVersion !== undefined ? { adapterVersion: intentRecord.adapterVersion } : {}),
+        ...(intentRecord?.durablePayload !== undefined ? { durablePayload: intentRecord.durablePayload } : {}),
+        ...(intentRecord?.durablePayloadVersion !== undefined ? { durablePayloadVersion: intentRecord.durablePayloadVersion } : {}),
+        ...(intentRecord?.authorizationDigest !== undefined ? { authorizationDigest: intentRecord.authorizationDigest } : {}),
+        ...(intentRecord === undefined ? { legacyV1: true } : {}),
+      };
+    }
+    const upgraded: TreasuryQuarantineStore = { ...(raw as TreasuryQuarantineStore), version: TREASURY_QUARANTINE_VERSION, entries };
+    const shapeError = validateQuarantineStoreShape(upgraded);
+    if (shapeError !== null) {
+      heapRuntime = fatalRuntime(raw, `${shapeError}（v1→v2 升级校验失败，quarantine fail closed，原数据保留）`);
+      return heapRuntime;
+    }
+    quarantineBranch().quarantine = upgraded;
+    heapRuntime = { store: upgraded, fatal: null };
+    return heapRuntime;
+  }
   if (raw.version === undefined) {
     // 第六轮 legacy 无版本 store：空 entries 且无 overflowed → 无损升级 v1；
     // 非空 → 交显式 repair（不猜测迁移，不静默清空）。
@@ -402,6 +564,9 @@ function freezeQuarantineCopy(entry: TreasuryQuarantineEntry): Readonly<Treasury
   return Object.freeze({
     ...entry,
     deltas: entry.deltas.map((leg) => Object.freeze({ ...leg })),
+    ...(entry.structureFacts !== undefined
+      ? { structureFacts: entry.structureFacts.map((fact) => Object.freeze({ ...fact })) }
+      : {}),
   }) as Readonly<TreasuryQuarantineEntry>;
 }
 
