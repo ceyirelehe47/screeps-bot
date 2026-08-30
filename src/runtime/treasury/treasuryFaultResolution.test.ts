@@ -47,7 +47,8 @@ import {
   type TreasuryActionReconcilerConclusion,
 } from "@/runtime/treasury/actionContracts";
 import type { TreasuryReconciliationCapability } from "@/runtime/treasury/reconciliation";
-import { peekTreasuryQuarantineHealth } from "@/runtime/treasury/quarantine";
+import { peekTreasuryQuarantineHealth, quarantineTreasuryTransaction } from "@/runtime/treasury/quarantine";
+import { readTreasuryIntentEntry, writeTreasuryIntentEntry, type TreasuryIntentPhase } from "@/runtime/treasury/intents";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
 
@@ -750,5 +751,133 @@ describe("显式 repair（quarantine store 元数据/legacy 形状）", () => {
     expect(treasuryQuarantineBlockers().blocking).toBe(true);
     expect(repairTreasuryQuarantineStoreForResolution().status).toBe("rejected");
     expect(Object.keys(entries)).toHaveLength(TREASURY_QUARANTINE_MAX_ENTRIES);
+  });
+});
+
+describe("unified unresolved authority（第九轮 4.7：intent-only 完整参与 + 双权威一致性）", () => {
+  /** 直接构造 intent-only authority（quarantine 从未写入——emergency 场景）。 */
+  function seedIntentOnly(transactionId: string, phase: TreasuryIntentPhase): void {
+    const write = writeTreasuryIntentEntry({
+      transactionId,
+      digest: "0123456789abcdef",
+      actionKind: "terminal.send",
+      kind: "terminal.send",
+      source: "test",
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+      phase,
+      createdAtTick: Game.time,
+      updatedAtTick: Game.time,
+    });
+    expect(write.status).toBe("written");
+  }
+
+  it("intent-only authority（executing 相）可签发 capability 并 resolve-as-committed", () => {
+    const service = makeService();
+    seedIntentOnly("ua_intent_committed", "executing");
+    Game.time += 1;
+    const next = makeService();
+    next.beginTick();
+    const issued = issueCapability(next, "ua_intent_committed");
+    expect(issued.status).toBe("issued");
+    const resolved = resolveCommitted(next, "ua_intent_committed");
+    expect(resolved.status).toBe("resolved");
+    // intent 释放 + receipt 以 resolution tick 写入。
+    expect(readTreasuryQuarantineEntry("ua_intent_committed")).toBeUndefined();
+    expect(readTreasuryIntentEntry("ua_intent_committed")).toBeUndefined();
+    expect(hasSettledReceipt("ua_intent_committed")).toBe(Game.time);
+  });
+
+  it("intent-only authority phase 允许时（returned_non_ok）可 resolve-as-not-executed", () => {
+    const service = makeService();
+    seedIntentOnly("ua_intent_notexec", "returned_non_ok");
+    Game.time += 1;
+    const next = makeService();
+    next.beginTick();
+    reconcilerConclusion = "observed_not_executed";
+    const resolved = resolveNotExecuted(next, "ua_intent_notexec");
+    expect(resolved.status).toBe("resolved");
+    expect(readTreasuryIntentEntry("ua_intent_notexec")).toBeUndefined();
+  });
+
+  it("intent-only authority ok_pending_commit 拒绝 resolve-as-not-executed（事实单调）", () => {
+    const service = makeService();
+    seedIntentOnly("ua_intent_okphase", "ok_pending_commit");
+    Game.time += 1;
+    const next = makeService();
+    next.beginTick();
+    reconcilerConclusion = "observed_not_executed";
+    // beginTick 恢复将 ok_pending_commit 转为 commit 类 quarantine（事实等级
+    // 保留：ok_pending_commit_unresolved）。
+    expect(readTreasuryQuarantineEntry("ua_intent_okphase")?.phase).toBe("ok_pending_commit_unresolved");
+    const resolved = resolveNotExecuted(next, "ua_intent_okphase");
+    expect(resolved.status).toBe("rejected");
+    if (resolved.status === "rejected") expect(resolved.reason).toBe("resolution_not_allowed");
+    // authority 原样保留（quarantine 形态——事实单调不降级）。
+    expect(readTreasuryQuarantineEntry("ua_intent_okphase")).toBeDefined();
+    reconcilerConclusion = "observed_committed";
+  });
+
+  it("intent-only authority uncertain 保持隔离（intent 与占用保留）", () => {
+    const service = makeService();
+    seedIntentOnly("ua_intent_uncertain", "executing");
+    Game.time += 1;
+    const next = makeService();
+    next.beginTick();
+    reconcilerConclusion = "still_uncertain";
+    // beginTick 恢复转 quarantine（executing→executing_at_end_tick）后，
+    // uncertain 仍保持隔离（authority 与占用保留）。
+    const resolved = resolveCommitted(next, "ua_intent_uncertain");
+    expect(resolved.status).toBe("uncertain");
+    expect(readTreasuryQuarantineEntry("ua_intent_uncertain")).toBeDefined();
+    reconcilerConclusion = "observed_committed";
+  });
+
+  it("同 id 双权威 digest 不一致 fail closed（签发与 resolution 均拒绝）", () => {
+    // 双权威须并存到签发时点：先建 service（beginTick 恢复已过）再 seed
+    // 双权威，随后 tick+1（不再 beginTick——不触发恢复转换）。
+    const next = makeService();
+    seedIntentOnly("ua_conflict", "executing");
+    // 写入同 id 但 digest 不同的 quarantine entry。
+    quarantineTreasuryTransaction({
+      transactionId: "ua_conflict",
+      digest: "ffffffffffffffff",
+      tick: Game.time,
+      kind: "terminal.send",
+      source: "test",
+      phase: "executing_at_end_tick",
+      deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+      recordedAt: Game.time,
+    });
+    Game.time += 1;
+    const issued = issueCapability(next, "ua_conflict");
+    expect(issued.status).toBe("rejected");
+    if (issued.status === "rejected") expect(issued.reason).toBe("authority_inconsistent");
+    // resolution 无 capability 可用（签发 fail closed 即阻断）；即使绕过
+    // 签发直接 resolve，prevalidate 的 authority 校验同样拒绝。
+    const resolved = resolveCommitted(next, "ua_conflict");
+    expect(resolved.status).toBe("issuance_rejected");
+    // 两个权威原样保留（不任选其一）。
+    expect(readTreasuryQuarantineEntry("ua_conflict")).toBeDefined();
+    expect(readTreasuryIntentEntry("ua_conflict")).toBeDefined();
+  });
+
+  it("同 id 双权威 postings 不一致 fail closed", () => {
+    const next = makeService();
+    seedIntentOnly("ua_conflict2", "executing");
+    quarantineTreasuryTransaction({
+      transactionId: "ua_conflict2",
+      digest: "0123456789abcdef", // digest 一致
+      tick: Game.time,
+      kind: "terminal.send",
+      source: "test",
+      phase: "executing_at_end_tick",
+      // postings 不同（delta 不同）。
+      deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -999 }],
+      recordedAt: Game.time,
+    });
+    Game.time += 1;
+    const issued = issueCapability(next, "ua_conflict2");
+    expect(issued.status).toBe("rejected");
+    if (issued.status === "rejected") expect(issued.reason).toBe("authority_inconsistent");
   });
 });

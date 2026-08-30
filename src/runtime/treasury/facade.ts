@@ -112,6 +112,7 @@ import {
   readTreasuryResolutionStoreCounters,
   recoverStagedResolutions,
 } from "@/runtime/treasury/resolutionStore";
+import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
 import {
   registerTreasuryReconciliationCapability,
   type TreasuryReconciliationCapability,
@@ -389,7 +390,7 @@ export interface TreasuryService {
     readonly digest?: string;
   }): { readonly status: "issued"; readonly capability: TreasuryReconciliationCapability } | {
     readonly status: "rejected";
-    readonly reason: "not_found" | "digest_mismatch" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation";
+    readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation";
     readonly detail: string;
   };
   /** 当前 service generation（capability/resolve 调用方校验用）。 */
@@ -2414,10 +2415,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       readonly digest?: string;
     }): { readonly status: "issued"; readonly capability: TreasuryReconciliationCapability } | {
       readonly status: "rejected";
-      readonly reason: "not_found" | "digest_mismatch" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation";
+      readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation";
       readonly detail: string;
     } {
-      const reject = (reason: "not_found" | "digest_mismatch" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation", detail: string) => {
+      const reject = (reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation", detail: string) => {
         metrics.reconciliationCapabilitiesRejected += 1;
         return { status: "rejected" as const, reason, detail };
       };
@@ -2425,46 +2426,17 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         return reject("invalid_input", "transactionId 缺失或非法");
       }
       const state = ensureTickState(true);
-      // 目标 entry：quarantine 优先，其次 unresolved intent（emergency
-      // authority 场景——quarantine 写失败时 intent 是事实权威）。
-      const quarantined = readTreasuryQuarantineEntry(input.transactionId);
-      const intended = quarantined === undefined ? readTreasuryIntentEntry(input.transactionId) : undefined;
-      // 归一化双权威（quarantine 优先；intent 为 emergency authority 兜底）。
-      // contract 绑定事实（contractId/contractDigest/adapterVersion/durable
-      // payload）目前仅 intent 权威携带；quarantine entry 无 contract 字段。
-      const facts0 =
-        quarantined !== undefined
-          ? {
-              transactionId: quarantined.transactionId,
-              digest: quarantined.digest,
-              kind: quarantined.kind,
-              actionKind: quarantined.kind,
-              recordedAt: quarantined.recordedAt,
-              postings: quarantined.deltas as unknown as readonly { roomName: string; locationKind: string; resource: string; delta: number }[],
-              contractId: undefined as string | undefined,
-              contractDigest: undefined as string | undefined,
-              adapterVersion: undefined as number | undefined,
-              durablePayload: undefined as string | undefined,
-              durablePayloadVersion: undefined as number | undefined,
-            }
-          : intended !== undefined
-            ? {
-                transactionId: intended.transactionId,
-                digest: intended.digest,
-                kind: intended.kind,
-                actionKind: intended.actionKind,
-                recordedAt: intended.updatedAtTick,
-                postings: intended.postings as unknown as readonly { roomName: string; locationKind: string; resource: string; delta: number }[],
-                contractId: intended.contractId,
-                contractDigest: intended.contractDigest,
-                adapterVersion: intended.adapterVersion,
-                durablePayload: intended.durablePayload,
-                durablePayloadVersion: intended.durablePayloadVersion,
-              }
-            : undefined;
-      if (facts0 === undefined) {
+      // ── unified unresolved authority（第九轮 4.7）：签发与 resolution 共用
+      //    同一套 authority resolution——quarantine 优先 + intent emergency
+      //    兜底；同 id 双存在且身份不一致 → fail closed（不任选其一）。 ──
+      const authority = resolveTreasuryUnresolvedAuthority(input.transactionId);
+      if (authority.status === "not_found") {
         return reject("not_found", `transactionId ${input.transactionId.slice(0, 48)} 不在 quarantine/intent（可能已解决或从未隔离）`);
       }
+      if (authority.status === "inconsistent") {
+        return reject("authority_inconsistent", `${authority.detail}`);
+      }
+      const facts0 = authority.authority;
       if (input.digest !== undefined && facts0.digest !== input.digest) {
         return reject("digest_mismatch", `digest 不匹配（entry ${facts0.digest}，请求 ${input.digest}）`);
       }
