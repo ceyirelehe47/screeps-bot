@@ -333,6 +333,14 @@ function prevalidate(
         stop: { status: "rejected", reason: "reconciler_mismatch", detail: "contract-backed authority 的 adapter/reconciler version 必须双方存在且一致" },
       };
     }
+    // 【第十一轮 3.13.4】cohort digest 严格绑定：authority 携带 cohort 时
+    // capability 必须绑定同一 canonical authorizationCohortDigest。
+    if (authority.authorizationCohortDigest !== undefined && capability.authorizationCohortDigest !== authority.authorizationCohortDigest) {
+      countRejected();
+      return {
+        stop: { status: "rejected", reason: "reconciler_mismatch", detail: "contract-backed authority 的 authorization cohort digest 与 capability 绑定不一致" },
+      };
+    }
     if (authority.durablePayloadVersion !== undefined && capability.durablePayloadVersion !== authority.durablePayloadVersion) {
       countRejected();
       return {

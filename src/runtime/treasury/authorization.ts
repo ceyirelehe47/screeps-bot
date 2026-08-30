@@ -40,6 +40,7 @@
 
 import type { TreasuryLocationKind, TreasuryObservationScope } from "@/runtime/treasury/types";
 import { isValidTreasuryOwnerIdentity, treasuryReservationOwnerToken, type TreasuryOwnerIdentity } from "@/runtime/treasury/ownerIdentity";
+import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 
 const AUTHORIZATION_ACTION_KIND_MAX = 128;
 const AUTHORIZATION_ACTIVE_LIMIT = 64;
@@ -337,4 +338,91 @@ export function postingsWithinAuthorizationScope(
     }
   }
   return null;
+}
+
+// ── durable authorization cohort（第十一轮 3.13.4） ───────────────────────────
+
+/** cohort 可持久化的 revision 快照（与 TreasuryAuthorizationRevisions 同构）。 */
+export interface TreasuryCohortRevisions {
+  readonly commitmentRevision: number;
+  readonly projectionRevision: number;
+  readonly quarantineRevision: number;
+  readonly intentRevision: number;
+  readonly reservationStoreRevision: number;
+}
+
+/**
+ * bundle 完整 cohort 事实的有界 canonical 持久化形态：global reset 后系统
+ * 仍能回答——哪个 owner 获得授权、哪个 policy 决策被使用、是否 emergency
+ * override、exact epoch 与 revision cohort、哪些 authorization legs 覆盖
+ * postings、receiver capacity 摘要与 bundle identity。不持久化 heap token
+ * 对象（legs 只留 canonical 摘要）。
+ */
+export interface TreasuryAuthorizationCohortFacts {
+  readonly ownerIdentity: string;
+  readonly policyId: string;
+  readonly policyVersion: number;
+  readonly policyRegistrationId: string;
+  /** per-resource policy decision digest 排序拼接（Treasury 计算）。 */
+  readonly policyDecisionDigest: string;
+  readonly emergencyOverride: boolean;
+  readonly epochSeq: number;
+  readonly revisions: TreasuryCohortRevisions;
+  readonly adapterRegistrationId: string;
+  readonly contractId: string;
+  readonly contractDigest: string;
+  readonly transactionId: string;
+  /** 每 authorization leg 的 canonical 摘要（≤8；业务事实——不含 heap 身份）。 */
+  readonly authorizationLegDigests: readonly string[];
+  /** receiver capacity authorization 摘要（capacityRequirement canonical 或 "none"）。 */
+  readonly receiverCapacityDigest: string;
+  readonly issuedTick: number;
+  /** bundle identity（签发序号唯一化）。 */
+  readonly authorizationDigest: string;
+}
+
+/** authorization leg 的 canonical 摘要（resource/sorted rooms/sorted locations/amount）。 */
+export function canonicalTreasuryAuthorizationLegDigest(token: TreasuryAuthorizationToken): string {
+  return hashTreasuryCanonicalString(
+    `leg:r:${token.resource}:rm:${[...token.rooms].sort().join(",")}:lc:${[...token.locations].sort().join(",")}:n:${String(token.amount)}`,
+  );
+}
+
+/** receiver capacity authorization 摘要（无 capacityRequirement 为 "none"）。 */
+export function canonicalTreasuryReceiverCapacityDigest(capacity?: {
+  readonly roomName: string;
+  readonly locationKind: TreasuryLocationKind;
+  readonly amount: number;
+}): string {
+  if (capacity === undefined) return "none";
+  return hashTreasuryCanonicalString(`cap:${capacity.roomName}:${capacity.locationKind}:${String(capacity.amount)}`);
+}
+
+/** cohort facts 的 canonical 文本（全部字段长度前缀拼接）。 */
+export function canonicalTreasuryCohortText(facts: TreasuryAuthorizationCohortFacts): string {
+  return [
+    `o:${String(facts.ownerIdentity.length)}:${facts.ownerIdentity}`,
+    `p:${facts.policyId}@v${String(facts.policyVersion)}#${facts.policyRegistrationId}`,
+    `pd:${facts.policyDecisionDigest}`,
+    `eo:${facts.emergencyOverride ? "1" : "0"}`,
+    `e:${String(facts.epochSeq)}`,
+    `rv:${String(facts.revisions.commitmentRevision)}/${String(facts.revisions.projectionRevision)}/${String(facts.revisions.quarantineRevision)}/${String(facts.revisions.intentRevision)}/${String(facts.revisions.reservationStoreRevision)}`,
+    `ar:${facts.adapterRegistrationId}`,
+    `c:${facts.contractId}/${facts.contractDigest}`,
+    `t:${facts.transactionId}`,
+    `l:${facts.authorizationLegDigests.join(",")}`,
+    `rc:${facts.receiverCapacityDigest}`,
+    `k:${String(facts.issuedTick)}`,
+    `b:${facts.authorizationDigest}`,
+  ].join("|");
+}
+
+/**
+ * canonical authorizationCohortDigest（Treasury 权威计算）：owner/policy
+ * decision/emergency override/revision/authorization legs/receiver capacity/
+ * contract 任一变化 → digest 变化。digest 进入 intent、quarantine、
+ * unresolved authority、reconciliation capability 与 resolution prevalidation。
+ */
+export function computeTreasuryAuthorizationCohortDigest(facts: TreasuryAuthorizationCohortFacts): string {
+  return hashTreasuryCanonicalString(`cohort:${canonicalTreasuryCohortText(facts)}`);
 }

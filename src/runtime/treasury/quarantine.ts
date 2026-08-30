@@ -37,6 +37,7 @@
 
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
+import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
   TREASURY_STRUCTURE_BINDING_ROLES,
@@ -85,6 +86,10 @@ export interface TreasuryQuarantineEntry {
   readonly policyIdentity?: string;
   /** structure incarnation facts（有界数组 ≤16）。 */
   readonly structureFacts?: readonly TreasuryQuarantineStructureFact[];
+  /** durable authorization cohort 事实（第十一轮 3.13.4；intent 事实转移同源）。 */
+  readonly authorizationCohort?: TreasuryAuthorizationCohortFacts;
+  /** canonical cohort digest（Treasury 计算；capability/resolution 绑定）。 */
+  readonly authorizationCohortDigest?: string;
   /** v1 迁移且无并存 intent 补全合同事实（不参与 contract-backed resolution）。 */
   readonly legacyV1?: boolean;
 }
@@ -326,6 +331,24 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
       if (typed.version !== TREASURY_STRUCTURE_DESCRIPTOR_VERSION) {
         return `structureFact.version 非法（当前 ${String(TREASURY_STRUCTURE_DESCRIPTOR_VERSION)}）: ${String(typed.version)}`;
       }
+    }
+  }
+  if (candidate.authorizationCohortDigest !== undefined) {
+    if (typeof candidate.authorizationCohortDigest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.authorizationCohortDigest)) {
+      return "authorizationCohortDigest 非法（须为 16 小写 hex）";
+    }
+  }
+  if (candidate.authorizationCohort !== undefined) {
+    const cohort = candidate.authorizationCohort as Partial<TreasuryAuthorizationCohortFacts> | undefined;
+    if (!cohort || typeof cohort !== "object") return "authorizationCohort 非对象";
+    if (typeof cohort.transactionId !== "string" || cohort.transactionId !== candidate.transactionId) {
+      return "authorizationCohort.transactionId 与 entry 不一致";
+    }
+    if (typeof cohort.authorizationDigest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(cohort.authorizationDigest)) {
+      return "authorizationCohort.authorizationDigest 非法";
+    }
+    if (!Array.isArray(cohort.authorizationLegDigests) || cohort.authorizationLegDigests.length === 0 || cohort.authorizationLegDigests.length > 8) {
+      return "authorizationCohort.authorizationLegDigests 非法（1..8）";
     }
   }
   if (!Array.isArray(candidate.deltas) || candidate.deltas.length > QUARANTINE_DELTAS_MAX) {

@@ -36,7 +36,10 @@ import {
   makeEmergencyOverrideTreasuryPolicy,
   registerTreasuryPolicyResolver,
 } from "@/runtime/treasury/policyAuthority";
-import { registerDefaultTreasuryTestPolicyForSetup } from "@/runtime/treasury/policyAuthority";
+import { registerDefaultTreasuryTestPolicyForSetup, makeNoReserveTreasuryPolicy } from "@/runtime/treasury/policyAuthority";
+import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
+import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
+import { setTreasuryCommitFaultInjectorForTest } from "@/runtime/treasury/writeFault";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
 const ROOMS: RoomSpec[] = [
@@ -529,5 +532,108 @@ describe("Treasury-owned policy authority（第十轮 3.12.9）", () => {
     expect(issued.status).toBe("authorized"); // emergency policy 下仍可授权（identity 可审计）
     const ok = executeTreasuryActionContract(service, { contract, authorization: (issued as { bundle: TreasuryAuthorizationBundle }).bundle });
     expect(ok.status).toBe("executed_committed");
+  });
+});
+
+describe("durable authorization cohort（第十一轮 3.13.4）", () => {
+  function makeOwnedService(): TreasuryTestService {
+    const rooms = installRooms(ROOMS);
+    return treasuryTestService(
+      createTreasuryService({
+        getRooms: () => Object.values(rooms),
+        resolveHolder: (holderId: string) =>
+          holderId === "svc:logistics"
+            ? { kind: "logical", roomName: "W1N57", holderId }
+            : undefined,
+      }),
+    );
+  }
+
+  it("executed_unsettled 路径 cohort 进 quarantine 且 capability 绑定同一 cohort digest", () => {
+    const service = makeService();
+    const contract = build(service, "tx_cohort_unsettled", transferArgs({ amount: 250 }));
+    const bundle = authorizeBundle(service, contract);
+    setTreasuryCommitFaultInjectorForTest((candidate) => {
+      if (candidate === "receipt_publish") throw new Error("injected:receipt_publish");
+    });
+    const executed = executeTreasuryActionContract(service, { contract, authorization: bundle });
+    expect(executed.status).toBe("executed_unsettled");
+    const quarantined = readTreasuryQuarantineEntry("tx_cohort_unsettled");
+    expect(quarantined?.authorizationCohort).toBeDefined();
+    expect(quarantined?.authorizationCohortDigest).toBeDefined();
+    // capability 严格绑定同一 cohort digest（第十一轮 3.13.4）。
+    Game.time += 2;
+    service.beginTick();
+    const capability = service.issueTreasuryReconciliationCapability({ transactionId: "tx_cohort_unsettled" });
+    expect(capability.status).toBe("issued");
+    if (capability.status === "issued") {
+      expect(capability.capability.authorizationCohortDigest).toBe(quarantined?.authorizationCohortDigest);
+    }
+  });
+
+  it("fault 路径 cohort 持久化：owner/policy/epoch/revision/legs/capacity 全事实进 quarantine；global reset 后可读", () => {
+    const service = makeOwnedService();
+    service.beginTick();
+    const contract = build(service, "tx_cohort_fault", transferArgs({ amount: 300, outcome: "throw" }));
+    const bundle = authorizeBundle(service, contract);
+    expect(() => executeTreasuryActionContract(service, { contract, authorization: bundle })).toThrow();
+    const quarantined = readTreasuryQuarantineEntry("tx_cohort_fault");
+    expect(quarantined?.authorizationCohort).toBeDefined();
+    const cohort = quarantined?.authorizationCohort;
+    expect(cohort?.policyId).toBe("treasury.test.no-reserve");
+    expect(cohort?.policyVersion).toBe(1);
+    expect(cohort?.policyDecisionDigest.length).toBeGreaterThan(0);
+    expect(cohort?.emergencyOverride).toBe(false);
+    expect(cohort?.contractId).toBe(contract.contractId);
+    expect(cohort?.contractDigest).toBe(contract.digest);
+    expect(cohort?.transactionId).toBe("tx_cohort_fault");
+    expect(cohort?.adapterRegistrationId).toBe(contract.adapterRegistrationId);
+    expect(cohort?.authorizationLegDigests.length).toBe(1); // 单资源 energy
+    expect(typeof cohort?.epochSeq).toBe("number");
+    expect(cohort?.revisions).toMatchObject({
+      commitmentRevision: expect.any(Number),
+      projectionRevision: expect.any(Number),
+      quarantineRevision: expect.any(Number),
+      intentRevision: expect.any(Number),
+      reservationStoreRevision: expect.any(Number),
+    });
+    expect(cohort?.receiverCapacityDigest).toBe("none");
+    expect(quarantined?.authorizationCohortDigest).toBeDefined();
+    // global reset（新 service 实例）后 cohort 仍可读。
+    const next = makeOwnedService();
+    next.beginTick();
+    const afterReset = readTreasuryQuarantineEntry("tx_cohort_fault");
+    expect(afterReset?.authorizationCohort?.transactionId).toBe("tx_cohort_fault");
+    expect(afterReset?.authorizationCohortDigest).toBe(quarantined?.authorizationCohortDigest);
+  });
+
+  it("policy 决策变化 / receiver capacity 变化 / leg 事实变化 → cohort digest 变化", () => {
+    // 每步独立 store（unresolved quarantine 阻断后续执行——分步隔离）。
+    const step = (txId: string, amount: number, options?: Parameters<TreasuryService["authorizeTreasuryActionContract"]>[1]): string | undefined => {
+      clearTreasuryPersistenceForTest();
+      const service = makeService();
+      const contract = build(service, txId, transferArgs({ amount, outcome: "throw" }));
+      const authorized = service.authorizeTreasuryActionContract(contract, options);
+      expect(authorized.status).toBe("authorized");
+      if (authorized.status !== "authorized") throw new Error("unreachable");
+      expect(() => executeTreasuryActionContract(service, { contract, authorization: authorized.bundle })).toThrow();
+      return readTreasuryQuarantineEntry(txId)?.authorizationCohortDigest;
+    };
+    const digestA = step("tx_cohort_base", 500);
+    expect(digestA).toBeDefined();
+    // policy 决策变化（fixed-reserve 1_000）→ digest 变化。
+    registerTreasuryPolicyResolver(makeFixedReserveTreasuryPolicy(1_000));
+    const digestB = step("tx_cohort_policy", 500);
+    registerTreasuryPolicyResolver(makeNoReserveTreasuryPolicy());
+    expect(digestB).toBeDefined();
+    expect(digestB).not.toBe(digestA);
+    // receiver capacity 变化（capacityRequirement 声明）→ digest 变化。
+    const digestC = step("tx_cohort_cap", 500, { capacityRequirement: { roomName: "W1N57", locationKind: "terminal", amount: 100 } });
+    expect(digestC).toBeDefined();
+    expect(digestC).not.toBe(digestA);
+    // leg 事实变化（amount 进 leg digest）→ digest 变化。
+    const digestE = step("tx_cohort_amt", 778);
+    expect(digestE).toBeDefined();
+    expect(digestE).not.toBe(digestA);
   });
 });

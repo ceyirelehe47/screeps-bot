@@ -785,7 +785,7 @@ describe("完整 structure descriptor（第十一轮 3.13.9 / AC4）", () => {
       },
       entryCount: 1,
       updatedAt: Game.time,
-    } as unknown as TreasuryIntentStore;
+    } as unknown as NonNullable<NonNullable<typeof Memory.runtime>["treasury"]>["intents"];
     const migrated = readTreasuryIntentEntry("desc_legacy");
     expect(migrated?.structureFacts?.[0]).toMatchObject({
       bindingKind: "governed_location",

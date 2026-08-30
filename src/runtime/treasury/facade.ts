@@ -142,7 +142,11 @@ import {
   treasuryAuthorizationOwnerKey,
   validateTreasuryAuthorizationPolicy,
   validateTreasuryAuthorizationRequest,
+  canonicalTreasuryAuthorizationLegDigest,
+  canonicalTreasuryReceiverCapacityDigest,
+  computeTreasuryAuthorizationCohortDigest,
   type TreasuryAuthorizationBundle,
+  type TreasuryAuthorizationCohortFacts,
   type TreasuryAuthorizationConsumeResult,
   type TreasuryAuthorizationRequest,
   type TreasuryAuthorizationResult,
@@ -328,6 +332,10 @@ interface TreasuryAuthorizationBundleRecord {
   readonly tick: number;
   /** bundle 身份指纹（16 hex；intent 持久化的 authorizationDigest）。 */
   readonly authorizationDigest: string;
+  /** durable cohort 事实（第十一轮 3.13.4：redemption 成功时随 intent 持久化）。 */
+  readonly cohort?: TreasuryAuthorizationCohortFacts;
+  /** canonical cohort digest（Treasury 计算；capability/resolution 绑定用）。 */
+  readonly cohortDigest?: string;
   state: "active" | "redeemed";
 }
 
@@ -809,7 +817,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       readonly adapterVersion?: number;
       readonly postings: readonly TreasuryPosting[];
     },
-  ): { readonly status: "ok"; readonly authorizationDigest: string } | {
+  ): { readonly status: "ok"; readonly authorizationDigest: string; readonly cohort?: TreasuryAuthorizationCohortFacts; readonly cohortDigest?: string } | {
     readonly status: "rejected";
     readonly reason: string;
     readonly detail: string;
@@ -961,7 +969,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       metrics.authorizationInvalidated += 1;
       return reject("internal_authorization_fault", "原子 redemption 中断：全部预算/消费标记已回滚，internal_authorization_fault marker 已写入（阻断后续 writer）");
     }
-    return { status: "ok", authorizationDigest: record.authorizationDigest };
+    return {
+      status: "ok",
+      authorizationDigest: record.authorizationDigest,
+      ...(record.cohort !== undefined ? { cohort: record.cohort } : {}),
+      ...(record.cohortDigest !== undefined ? { cohortDigest: record.cohortDigest } : {}),
+    };
   }
 
   /**
@@ -2036,6 +2049,33 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const policyDecisionDigest = [...policyDecisions.values()].map((d) => d.digest).sort().join(",");
       // opaque bundle：生产调用者只拿到不可读句柄（legs/cohort 仅闭包可见）。
       const bundle: TreasuryAuthorizationBundle = Object.freeze({ __brand: "treasury-authorization-bundle" });
+      // 【第十一轮 3.13.4】durable cohort 事实（owner/policy/epoch/revision/
+      // legs/receiver capacity/bundle identity）与 canonical cohort digest。
+      const cohortFacts: TreasuryAuthorizationCohortFacts = {
+        ownerIdentity: ownerKey,
+        policyId: policyResolver.policyId,
+        policyVersion: policyResolver.policyVersion,
+        policyRegistrationId: policyResolver.registrationId,
+        policyDecisionDigest,
+        emergencyOverride: policyEmergencyOverride,
+        epochSeq: verifiedContract.epoch.epochSeq,
+        revisions: {
+          commitmentRevision: firstRevisions.commitmentRevision,
+          projectionRevision: firstRevisions.projectionRevision,
+          quarantineRevision: firstRevisions.quarantineRevision,
+          intentRevision: firstRevisions.intentRevision,
+          reservationStoreRevision: firstRevisions.reservationStoreRevision,
+        },
+        adapterRegistrationId: verifiedContract.adapterRegistrationId,
+        contractId: verifiedContract.contractId,
+        contractDigest: verifiedContract.digest,
+        transactionId: verifiedContract.transactionId,
+        authorizationLegDigests: issued.map((token) => canonicalTreasuryAuthorizationLegDigest(token)),
+        receiverCapacityDigest: canonicalTreasuryReceiverCapacityDigest(options?.capacityRequirement),
+        issuedTick: Game.time,
+        authorizationDigest,
+      };
+      const cohortDigest = computeTreasuryAuthorizationCohortDigest(cohortFacts);
       bundleRecords.set(bundle, {
         tokens: Object.freeze([...issued]),
         contractId: verifiedContract.contractId,
@@ -2053,6 +2093,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         serviceGeneration,
         tick: Game.time,
         authorizationDigest,
+        cohort: cohortFacts,
+        cohortDigest,
         state: "active",
       });
       metrics.authorizationIssued += 1;
@@ -2540,6 +2582,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // 理论不可达（handle 刚签发）：按协议违规拒绝，不执行 Game API。
         return { status: "prepare_rejected", reason: "invalid_handle", detail: "签发后 handle 记录缺失（内部不一致）" };
       }
+      let redeemedCohort: TreasuryAuthorizationCohortFacts | undefined;
       // ── 批量原子 redemption（第十轮 3.12.4）：tentative 已接管（prepare
       //    成功）、durable intent 写入与 Game callback 之前——全部 legs 一次
       //    性只读预验证 + staged 变更一次发布；任何注入故障前缀完整回滚或
@@ -2554,6 +2597,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           adapterVersion: execution.intentContract?.adapterVersion,
           postings: record.shape.merged as readonly TreasuryPosting[],
         });
+        // durable cohort（第十一轮 3.13.4）：redemption 成功的事实随 intent 持久化。
+        if (redeemed.status === "ok" && redeemed.cohort !== undefined) {
+          redeemedCohort = redeemed.cohort;
+        }
         if (redeemed.status === "rejected") {
           record.state = "aborted";
           preparedById.delete(record.canonical.transactionId);
@@ -2620,6 +2667,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
                 : {}),
               ...(execution.intentContract.structureFacts !== undefined
                 ? { structureFacts: execution.intentContract.structureFacts.map((fact) => ({ ...fact })) }
+                : {}),
+              ...(redeemedCohort !== undefined
+                ? {
+                    ownerIdentity: redeemedCohort.ownerIdentity === "" ? undefined : redeemedCohort.ownerIdentity,
+                    policyIdentity:
+                      redeemedCohort.policyId + "@v" + String(redeemedCohort.policyVersion) + ":" + redeemedCohort.policyDecisionDigest,
+                    authorizationCohort: { ...redeemedCohort, revisions: { ...redeemedCohort.revisions }, authorizationLegDigests: [...redeemedCohort.authorizationLegDigests] },
+                    authorizationCohortDigest: computeTreasuryAuthorizationCohortDigest(redeemedCohort),
+                  }
                 : {}),
             }
           : {}),
@@ -2973,6 +3029,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         ...(facts0.contractDigest !== undefined ? { contractDigest: facts0.contractDigest } : {}),
         ...(facts0.adapterVersion !== undefined ? { adapterVersion: facts0.adapterVersion } : {}),
         ...(facts0.durablePayloadVersion !== undefined ? { durablePayloadVersion: facts0.durablePayloadVersion } : {}),
+        ...(facts0.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: facts0.authorizationCohortDigest } : {}),
         postFaultEpoch: {
           scope: state.observation.epoch.scope,
           epochSeq: state.observation.epoch.epochSeq,

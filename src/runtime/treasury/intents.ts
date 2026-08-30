@@ -40,6 +40,7 @@
  */
 
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
+import type { TreasuryAuthorizationCohortFacts, TreasuryCohortRevisions } from "@/runtime/treasury/authorization";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
   TREASURY_STRUCTURE_BINDING_ROLES,
@@ -211,6 +212,10 @@ export interface TreasuryIntentEntry {
   ownerIdentity?: string;
   /** policy capability identity（第十轮 v3：contract 路径）。 */
   policyIdentity?: string;
+  /** durable authorization cohort 事实（第十一轮 3.13.4：bundle redemption 成功时持久化）。 */
+  authorizationCohort?: TreasuryAuthorizationCohortFacts;
+  /** canonical cohort digest（Treasury 计算；capability/resolution 绑定）。 */
+  authorizationCohortDigest?: string;
   /** 有界审计来源。 */
   auditSource?: string;
   createdAtTick: number;
@@ -409,6 +414,72 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
   if (candidate.policyIdentity !== undefined) {
     if (typeof candidate.policyIdentity !== "string" || candidate.policyIdentity.length === 0 || candidate.policyIdentity.length > INTENT_KIND_SOURCE_MAX) {
       return "policyIdentity 非法（须为 1..128 字符）";
+    }
+  }
+  if (candidate.authorizationCohortDigest !== undefined) {
+    if (typeof candidate.authorizationCohortDigest !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.authorizationCohortDigest)) {
+      return "authorizationCohortDigest 非法（须为 16 小写 hex）";
+    }
+  }
+  if (candidate.authorizationCohort !== undefined) {
+    const cohort = candidate.authorizationCohort as Partial<TreasuryAuthorizationCohortFacts> | undefined;
+    if (!cohort || typeof cohort !== "object") return "authorizationCohort 非对象";
+    if (typeof cohort.ownerIdentity !== "string" || cohort.ownerIdentity.length > INTENT_KIND_SOURCE_MAX) {
+      return "authorizationCohort.ownerIdentity 非法";
+    }
+    if (typeof cohort.policyId !== "string" || cohort.policyId.length === 0 || cohort.policyId.length > 96) {
+      return "authorizationCohort.policyId 非法";
+    }
+    if (!isSafeInteger(cohort.policyVersion) || cohort.policyVersion <= 0) {
+      return "authorizationCohort.policyVersion 须为正安全整数";
+    }
+    if (typeof cohort.policyRegistrationId !== "string" || !INTENT_DIGEST_PATTERN.test(cohort.policyRegistrationId)) {
+      return "authorizationCohort.policyRegistrationId 非法";
+    }
+    if (typeof cohort.policyDecisionDigest !== "string" || cohort.policyDecisionDigest.length === 0 || cohort.policyDecisionDigest.length > 512) {
+      return "authorizationCohort.policyDecisionDigest 非法";
+    }
+    if (typeof cohort.emergencyOverride !== "boolean") {
+      return "authorizationCohort.emergencyOverride 须为布尔";
+    }
+    if (!isSafeInteger(cohort.epochSeq) || cohort.epochSeq < 0) {
+      return "authorizationCohort.epochSeq 非法";
+    }
+    const revisions = cohort.revisions as Partial<TreasuryCohortRevisions> | undefined;
+    if (!revisions || typeof revisions !== "object") return "authorizationCohort.revisions 非对象";
+    for (const key of ["commitmentRevision", "projectionRevision", "quarantineRevision", "intentRevision", "reservationStoreRevision"] as const) {
+      if (!isSafeInteger(revisions[key]) || (revisions[key] as number) < 0) {
+        return `authorizationCohort.revisions.${key} 非法`;
+      }
+    }
+    if (typeof cohort.adapterRegistrationId !== "string" || !INTENT_DIGEST_PATTERN.test(cohort.adapterRegistrationId)) {
+      return "authorizationCohort.adapterRegistrationId 非法";
+    }
+    if (typeof cohort.contractId !== "string" || cohort.contractId.length === 0 || cohort.contractId.length > 96) {
+      return "authorizationCohort.contractId 非法";
+    }
+    if (typeof cohort.contractDigest !== "string" || !INTENT_DIGEST_PATTERN.test(cohort.contractDigest)) {
+      return "authorizationCohort.contractDigest 非法";
+    }
+    if (cohort.transactionId !== candidate.transactionId) {
+      return "authorizationCohort.transactionId 与 entry 不一致";
+    }
+    if (!Array.isArray(cohort.authorizationLegDigests) || cohort.authorizationLegDigests.length === 0 || cohort.authorizationLegDigests.length > 8) {
+      return "authorizationCohort.authorizationLegDigests 非法（1..8）";
+    }
+    for (const leg of cohort.authorizationLegDigests) {
+      if (typeof leg !== "string" || !INTENT_DIGEST_PATTERN.test(leg)) {
+        return "authorizationCohort.authorizationLegDigests 项非法";
+      }
+    }
+    if (typeof cohort.receiverCapacityDigest !== "string" || cohort.receiverCapacityDigest.length === 0 || cohort.receiverCapacityDigest.length > 96) {
+      return "authorizationCohort.receiverCapacityDigest 非法";
+    }
+    if (!isSafeInteger(cohort.issuedTick) || cohort.issuedTick < 0) {
+      return "authorizationCohort.issuedTick 非法";
+    }
+    if (typeof cohort.authorizationDigest !== "string" || !INTENT_DIGEST_PATTERN.test(cohort.authorizationDigest)) {
+      return "authorizationCohort.authorizationDigest 非法";
     }
   }
   if (candidate.auditSource !== undefined) {
@@ -658,6 +729,15 @@ function freezeIntentCopy(entry: TreasuryIntentEntry): Readonly<TreasuryIntentEn
     ...(entry.structureFacts !== undefined
       ? { structureFacts: entry.structureFacts.map((fact) => Object.freeze({ ...fact })) }
       : {}),
+    ...(entry.authorizationCohort !== undefined
+      ? {
+          authorizationCohort: Object.freeze({
+            ...entry.authorizationCohort,
+            revisions: Object.freeze({ ...entry.authorizationCohort.revisions }),
+            authorizationLegDigests: Object.freeze([...entry.authorizationCohort.authorizationLegDigests]),
+          }),
+        }
+      : {}),
   }) as Readonly<TreasuryIntentEntry>;
 }
 
@@ -725,7 +805,19 @@ export function writeTreasuryIntentEntry(entry: TreasuryIntentEntry): TreasuryIn
       detail: `intent store 容量已满（${String(TREASURY_INTENT_MAX_ENTRIES)} 条；统一 slot admission 不变量被破坏，阻断 callback）`,
     };
   }
-  runtime.store.entries[key] = { ...entry, postings: entry.postings.map((leg) => ({ ...leg })) };
+  runtime.store.entries[key] = {
+    ...entry,
+    postings: entry.postings.map((leg) => ({ ...leg })),
+    ...(entry.authorizationCohort !== undefined
+      ? {
+          authorizationCohort: {
+            ...entry.authorizationCohort,
+            revisions: { ...entry.authorizationCohort.revisions },
+            authorizationLegDigests: [...entry.authorizationCohort.authorizationLegDigests],
+          },
+        }
+      : {}),
+  };
   runtime.store.entryCount += 1;
   runtime.store.updatedAt = Game.time;
   storeRevision += 1;
@@ -1028,6 +1120,16 @@ export function transferTreasuryIntentToQuarantine(
     ...(entry.ownerIdentity !== undefined ? { ownerIdentity: entry.ownerIdentity } : {}),
     ...(entry.policyIdentity !== undefined ? { policyIdentity: entry.policyIdentity } : {}),
     ...(entry.structureFacts !== undefined ? { structureFacts: entry.structureFacts.map((fact) => ({ ...fact })) } : {}),
+    ...(entry.authorizationCohort !== undefined
+      ? {
+          authorizationCohort: {
+            ...entry.authorizationCohort,
+            revisions: { ...entry.authorizationCohort.revisions },
+            authorizationLegDigests: [...entry.authorizationCohort.authorizationLegDigests],
+          },
+        }
+      : {}),
+    ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
   } as TreasuryQuarantineEntry);
   if (write.status === "rejected") {
     return { status: "retained", detail: `quarantine 写入被拒（${write.reason}）: ${write.detail}` };

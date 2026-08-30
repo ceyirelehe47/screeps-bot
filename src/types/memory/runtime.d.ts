@@ -740,6 +740,33 @@ declare global {
             }>;
             ownerIdentity?: string;
             policyIdentity?: string;
+            /** durable authorization cohort 事实（第十一轮 3.13.4；结构见 TreasuryAuthorizationCohortFacts）。 */
+            authorizationCohort?: {
+              ownerIdentity: string;
+              policyId: string;
+              policyVersion: number;
+              policyRegistrationId: string;
+              policyDecisionDigest: string;
+              emergencyOverride: boolean;
+              epochSeq: number;
+              revisions: {
+                commitmentRevision: number;
+                projectionRevision: number;
+                quarantineRevision: number;
+                intentRevision: number;
+                reservationStoreRevision: number;
+              };
+              adapterRegistrationId: string;
+              contractId: string;
+              contractDigest: string;
+              transactionId: string;
+              authorizationLegDigests: string[];
+              receiverCapacityDigest: string;
+              issuedTick: number;
+              authorizationDigest: string;
+            };
+            /** canonical cohort digest（Treasury 计算）。 */
+            authorizationCohortDigest?: string;
             auditSource?: string;
             createdAtTick: number;
             updatedAtTick: number;
@@ -816,6 +843,33 @@ declare global {
               required: boolean;
               version: number;
             }>;
+            /** durable authorization cohort 事实（第十一轮 3.13.4；结构见 TreasuryAuthorizationCohortFacts）。 */
+            authorizationCohort?: {
+              ownerIdentity: string;
+              policyId: string;
+              policyVersion: number;
+              policyRegistrationId: string;
+              policyDecisionDigest: string;
+              emergencyOverride: boolean;
+              epochSeq: number;
+              revisions: {
+                commitmentRevision: number;
+                projectionRevision: number;
+                quarantineRevision: number;
+                intentRevision: number;
+                reservationStoreRevision: number;
+              };
+              adapterRegistrationId: string;
+              contractId: string;
+              contractDigest: string;
+              transactionId: string;
+              authorizationLegDigests: string[];
+              receiverCapacityDigest: string;
+              issuedTick: number;
+              authorizationDigest: string;
+            };
+            /** canonical cohort digest（Treasury 计算）。 */
+            authorizationCohortDigest?: string;
             /** v1 迁移且无并存 intent 补全（不参与 contract-backed resolution）。 */
             legacyV1?: boolean;
           }
