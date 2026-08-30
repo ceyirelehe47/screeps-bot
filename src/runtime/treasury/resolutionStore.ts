@@ -61,6 +61,8 @@ export interface TreasuryResolutionTombstone {
   resolvedAtTick: number;
   reconcilerKind?: string;
   source?: string;
+  /** pre-execution authorization fault 的 acknowledge-rolled-back resolution（第十一轮 3.13.1）。 */
+  preExecution?: boolean;
 }
 
 export interface TreasuryResolutionStore {

@@ -58,6 +58,7 @@ import { resetTreasuryQuarantineRuntimeForTest } from "@/runtime/treasury/quaran
 import { resetTreasuryResolutionEventsForTest } from "@/runtime/treasury/resolutionEvents";
 import { resetTreasuryIntentRuntimeForTest } from "@/runtime/treasury/intents";
 import { unsealTreasuryAdapterRegistryForTest } from "@/runtime/treasury/actionContracts";
+import { resetTreasuryAuthorizationFaultRuntimeForTest } from "@/runtime/treasury/authorizationFaults";
 
 export const TREASURY_RECEIPT_RETENTION_TICKS = 5_000;
 export const TREASURY_RECEIPT_MAX_ENTRIES = 4_096;
@@ -795,12 +796,14 @@ export function clearTreasuryPersistenceForTest(): void {
     delete branch.quarantine;
     delete branch.resolutions;
     delete branch.intents;
+    delete branch.authorizationFaults;
   }
   heapStoreRuntime = null;
   pendingAdmissions.clear();
   resetTreasuryQuarantineRuntimeForTest();
   resetTreasuryResolutionEventsForTest();
   resetTreasuryIntentRuntimeForTest();
+  resetTreasuryAuthorizationFaultRuntimeForTest();
   // 第十一轮：registry seal 测试隔离（treasuryCore 的 RuntimeServices 集成
   // 会 seal 生产 registry——后续测试的动态注册默认解除）。
   unsealTreasuryAdapterRegistryForTest();

@@ -32,6 +32,8 @@ export interface TreasuryWriteReadinessInputs {
   readonly recoverySlotExhausted: boolean;
   readonly policyNotReady: boolean;
   readonly authorizationCapacityExhausted: boolean;
+  /** pre-execution authorization fault 未解除（第十一轮 3.13.1：与 marker 同生命周期）。 */
+  readonly authorizationFaultUnresolved: boolean;
 }
 
 /** 评估结果（blockers 按优先级排序；ready = blockers 为空）。 */
@@ -62,6 +64,7 @@ const BLOCKER_PRIORITY: ReadonlyArray<{ readonly key: keyof TreasuryWriteReadine
   { key: "resolutionResolvingBlocker", blocker: "resolution_resolving" },
   { key: "recoverySlotExhausted", blocker: "quarantine_slot_exhausted" },
   { key: "authorizationCapacityExhausted", blocker: "authorization_capacity_exhausted" },
+  { key: "authorizationFaultUnresolved", blocker: "authorization_fault" },
 ] as const);
 
 /**

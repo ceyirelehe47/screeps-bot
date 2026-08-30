@@ -878,6 +878,44 @@ declare global {
         overflowed?: boolean;
       };
       /**
+       * pre-execution authorization fault authority（第十一轮新增 version 1）：
+       * internal_authorization_fault（Game callback 未调用且 authorization
+       * 已完整回滚）的可恢复 durable not-started authority——redemption 注入
+       * 故障回滚后、写 write-fault marker 前建立；acknowledge-rolled-back
+       * resolution（not-executed final tombstone + preExecution 标志）解除并
+       * 释放 marker 与 entry。entry key 为 "af:"+transactionId；上限 64；
+       * load 全量验证，未知版本/损坏 fail closed。不再形成无恢复路径的
+       * 永久全局锁。
+       */
+      authorizationFaults?: {
+        version: 1;
+        entries: Record<
+          string,
+          {
+            transactionId: string;
+            digest: string;
+            contractId?: string;
+            contractDigest?: string;
+            actionKind?: string;
+            authorizationDigest?: string;
+            authorizationCohortDigest?: string;
+            postings: Array<{
+              roomName: string;
+              locationKind: string;
+              resource: string;
+              delta: number;
+            }>;
+            faultTick: number;
+            outcome: "not_started";
+            rollbackConfirmed: true;
+            source: string;
+            detail?: string;
+          }
+        >;
+        entryCount: number;
+        updatedAt: number;
+      };
+      /**
        * resolution tombstone（第七轮新增、第八轮升级 version 2 + staged）：
        * 显式 fault resolution 的有界幂等记录与 staged 状态机载体——key 为
        * "r:"+transactionId，使 receipt retention 过期后的重复管理调用仍能

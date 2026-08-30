@@ -158,6 +158,19 @@ import { TREASURY_WRITER_KERNEL, type TreasuryWriterKernel } from "@/runtime/tre
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 import { computeTreasuryDurableIdentityDigest, treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
 import {
+  readTreasuryAuthorizationFaultEntry,
+  releaseTreasuryAuthorizationFaultEntry,
+  treasuryAuthorizationFaultBlockers,
+  writeTreasuryAuthorizationFaultEntry,
+  type TreasuryAuthorizationFaultEntry,
+} from "@/runtime/treasury/authorizationFaults";
+import {
+  writeTreasuryResolutionTombstone,
+  readTreasuryResolutionTombstone,
+  ensureTreasuryResolutionSlotAvailable,
+} from "@/runtime/treasury/resolutionStore";
+import { clearTreasuryWriteFaultMarkerForResolution } from "@/runtime/treasury/writeFault";
+import {
   computeTreasuryPolicyDecisionDigest,
   findTreasuryPolicyResolver,
   treasuryPolicyAuthorityReady,
@@ -441,6 +454,8 @@ export interface TreasuryService {
     readonly transactionId: string;
     readonly digest?: string;
     readonly capability: TreasuryReconciliationCapability;
+    /** pre-execution authorization fault 的显式确认（第十一轮 3.13.1；其他 fault 不适用）。 */
+    readonly acknowledgeRolledBack?: boolean;
   }): TreasuryFaultResolutionResult;
   /**
    * capability 校验并消费（第九轮 4.8，@internal——faultResolution 经窄接口
@@ -733,6 +748,83 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       ...(state === "committed" ? { committedAtTick: Game.time } : {}),
     });
   }
+  /**
+   * pre-execution authorization fault 的 acknowledge-rolled-back 恢复
+   *（第十一轮 3.13.1）：仅适用于 callback 未调用且 rollback 完整确认的
+   * internal_authorization_fault——验证完整 authority identity（digest）
+   * 后写 not-executed final tombstone（preExecution 标志）→ 清 marker →
+   * 删 authority；幂等（final tombstone 存在即 already_resolved 并补齐
+   * 清理）；global reset 后仍可完成（全部凭 durable state）；无任何无
+   * 条件 clear-marker 入口。
+   */
+  function resolvePreExecutionAuthorizationFaultClosure(
+    input: { readonly transactionId?: string; readonly digest?: string; readonly acknowledgeRolledBack?: boolean } | undefined,
+    fault: Readonly<TreasuryAuthorizationFaultEntry>,
+  ): TreasuryFaultResolutionResult {
+    // 幂等：final not-executed tombstone 已存在 → already_resolved（补齐
+    // marker/authority 清理——中断恢复语义）。
+    const existing = readTreasuryResolutionTombstone(fault.transactionId);
+    if (existing !== undefined && existing.stage === "final" && existing.resolution === "not-executed") {
+      clearTreasuryWriteFaultMarkerForResolution(fault.transactionId, fault.digest);
+      releaseTreasuryAuthorizationFaultEntry(fault.transactionId);
+      return { status: "already_resolved", resolution: "not-executed", transactionId: fault.transactionId };
+    }
+    // 显式确认必需（不允许静默/无条件解除）。
+    if (input?.acknowledgeRolledBack !== true) {
+      metrics.reconciliationCapabilitiesRejected += 1;
+      return {
+        status: "rejected",
+        reason: "invalid_input",
+        detail: "pre-execution authorization fault 需要 acknowledgeRolledBack: true（显式确认 callback 未调用且 rollback 完整——无任何无条件解除入口）",
+      };
+    }
+    // 完整 authority identity 验证（digest 匹配）。
+    if (input.digest !== undefined && fault.digest !== input.digest) {
+      metrics.reconciliationCapabilitiesRejected += 1;
+      return {
+        status: "rejected",
+        reason: "digest_mismatch",
+        detail: `pre-execution fault authority digest 不匹配（entry ${fault.digest}，请求 ${input.digest}）`,
+      };
+    }
+    // slot 预检（任何原状态变化之前）。
+    const slotError = ensureTreasuryResolutionSlotAvailable();
+    if (slotError !== null) {
+      return { status: "rejected", reason: "resolution_store_full", detail: slotError };
+    }
+    // staged：先写 final tombstone（可写性保证），再释放。
+    const finalWrite = writeTreasuryResolutionTombstone({
+      transactionId: fault.transactionId,
+      digest: fault.digest,
+      resolution: "not-executed",
+      stage: "final",
+      actionTick: fault.faultTick,
+      observationTick: Game.time,
+      resolvedAtTick: Game.time,
+      reconcilerKind: "pre-execution",
+      source: "acknowledge-rolled-back",
+      preExecution: true,
+    });
+    if (finalWrite.status === "rejected") {
+      return {
+        status: "rejected",
+        reason: "resolution_store_fatal",
+        detail: `final tombstone 写入失败（fault authority 保留，可重试）: ${finalWrite.detail}`,
+      };
+    }
+    clearTreasuryWriteFaultMarkerForResolution(fault.transactionId, fault.digest);
+    releaseTreasuryAuthorizationFaultEntry(fault.transactionId);
+    metrics.resolutionRecovered += 1;
+    return {
+      status: "resolved",
+      resolution: "not-executed",
+      transactionId: fault.transactionId,
+      receiptWritten: false,
+      reprepareAllowed: true,
+      actionTick: fault.faultTick,
+    };
+  }
+
   /** 服务实例代际：跨 service 实例的 handle 一律无效（global reset 防御）。 */
   const serviceGeneration = nextTreasuryServiceGeneration();
 
@@ -956,6 +1048,25 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       record.state = "redeemed";
     } catch (error) {
       rollbackApplied();
+      // 【第十一轮 3.13.1】先建立可恢复的 durable not-started authority
+      //（outcome=not_started、rollback 已确认、callback 未调用），再写
+      // marker——acknowledge-rolled-back 恢复协议据此解除（不再永久锁死）。
+      const faultWrite = writeTreasuryAuthorizationFaultEntry({
+        transactionId: context.transactionId,
+        digest: record.contractDigest,
+        ...(record.contractId !== undefined ? { contractId: record.contractId } : {}),
+        ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+        actionKind: context.actionKind,
+        ...(record.authorizationDigest !== undefined ? { authorizationDigest: record.authorizationDigest } : {}),
+        ...(record.cohortDigest !== undefined ? { authorizationCohortDigest: record.cohortDigest } : {}),
+        postings: context.postings.map((leg) => ({ roomName: leg.roomName, locationKind: leg.locationKind, resource: leg.resource, delta: leg.delta })),
+        faultTick: Game.time,
+        outcome: "not_started",
+        rollbackConfirmed: true,
+        source: "bundle-redemption",
+        detail: `原子 redemption 中断并回滚（${String(error instanceof Error ? error.message : error).slice(0, 128)}）——状态零变化`,
+      });
+      void faultWrite;
       // 状态已一致回滚，但发布序列中断本身按 internal authorization fault
       // 处理：写入 marker 阻断后续 writer（审计要求显式确认，不静默）。
       recordTreasuryWriteFault({
@@ -1603,6 +1714,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           resolutionStoreUnhealthy: !peekTreasuryResolutionStoreHealth().healthy,
           resolutionResolvingBlocker: peekTreasuryResolutionStoreHealth().inProgress > 0,
           recoverySlotExhausted: recoverySlotsOccupied() >= TREASURY_QUARANTINE_MAX_ENTRIES,
+          authorizationFaultUnresolved: treasuryAuthorizationFaultBlockers().blocking,
           policyNotReady: !treasuryPolicyAuthorityReady(),
           authorizationCapacityExhausted: authorizationRecords.size >= TREASURY_AUTHORIZATION_ACTIVE_LIMIT,
         },
@@ -1924,6 +2036,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           resolutionStoreUnhealthy: !peekTreasuryResolutionStoreHealth().healthy,
           resolutionResolvingBlocker: peekTreasuryResolutionStoreHealth().inProgress > 0,
           recoverySlotExhausted: recoverySlotsOccupied() >= TREASURY_QUARANTINE_MAX_ENTRIES,
+          authorizationFaultUnresolved: treasuryAuthorizationFaultBlockers().blocking,
           policyNotReady: false, // policy 已在前置单独检查（携带专用 reason）
           authorizationCapacityExhausted: authorizationRecords.size >= TREASURY_AUTHORIZATION_ACTIVE_LIMIT,
         },
@@ -3165,7 +3278,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       readonly transactionId: string;
       readonly digest?: string;
       readonly capability: TreasuryReconciliationCapability;
+      /** pre-execution authorization fault 的显式确认（第十一轮 3.13.1；其他 fault 不适用）。 */
+      readonly acknowledgeRolledBack?: boolean;
     }): TreasuryFaultResolutionResult {
+      // 【第十一轮 3.13.1】pre-execution authorization fault 专用恢复路由：
+      // durable authority 命中时不走 capability 路径（协议已证明 Game 未
+      // 执行——不需要 action reconciler）；要求显式 acknowledgeRolledBack。
+      const preExecutionFault = readTreasuryAuthorizationFaultEntry(input?.transactionId ?? "");
+      if (preExecutionFault !== undefined) {
+        return resolvePreExecutionAuthorizationFaultClosure(input, preExecutionFault);
+      }
       const conclusion = internalService.validateReconciliationCapability(input?.capability);
       if (conclusion.status === "valid" && conclusion.capability.conclusion === "observed_not_executed") {
         return resolveTreasuryQuarantinedTransactionAsNotExecuted(resolutionKernelAuthority, input);

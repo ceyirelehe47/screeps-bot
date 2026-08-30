@@ -39,6 +39,8 @@ import {
 import { registerDefaultTreasuryTestPolicyForSetup, makeNoReserveTreasuryPolicy } from "@/runtime/treasury/policyAuthority";
 import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
 import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
+import { readTreasuryAuthorizationFaultEntry } from "@/runtime/treasury/authorizationFaults";
+import { readTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
 import { setTreasuryCommitFaultInjectorForTest } from "@/runtime/treasury/writeFault";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
@@ -635,5 +637,117 @@ describe("durable authorization cohort（第十一轮 3.13.4）", () => {
     const digestE = step("tx_cohort_amt", 778);
     expect(digestE).toBeDefined();
     expect(digestE).not.toBe(digestA);
+  });
+});
+
+describe("pre-execution authorization fault 可恢复 authority（第十一轮 3.13.1）", () => {
+  function injectAndFault(txId: string): TreasuryTestService {
+    const service = makeService();
+    const contract = build(service, txId, transferArgs());
+    const bundle = authorizeBundle(service, contract);
+    setTreasuryRedemptionFaultInjectorForTest((stage) => {
+      if (stage === "before_bundle_state") throw new Error("injected:before_bundle_state");
+    });
+    const result = executeTreasuryActionContract(service, { contract, authorization: bundle });
+    expect(result.status).toBe("prepare_rejected");
+    if (result.status === "prepare_rejected") expect(result.reason).toBe("internal_authorization_fault");
+    setTreasuryRedemptionFaultInjectorForTest(null);
+    return service;
+  }
+
+  it("durable not-started authority 建立；global reset 后仍存在", () => {
+    const service = injectAndFault("pe_fault_durable");
+    void service;
+    const fault = readTreasuryAuthorizationFaultEntry("pe_fault_durable");
+    expect(fault).toBeDefined();
+    expect(fault?.outcome).toBe("not_started");
+    expect(fault?.rollbackConfirmed).toBe(true);
+    expect(fault?.actionKind).toBe("test.transfer");
+    expect(fault?.postings.length).toBe(2);
+    // global reset（新 service 实例、heap 全失）后 authority 仍在。
+    Game.time += 1;
+    const next = makeService();
+    void next;
+    expect(readTreasuryAuthorizationFaultEntry("pe_fault_durable")?.transactionId).toBe("pe_fault_durable");
+  });
+
+  it("acknowledge-rolled-back resolution 解除 fault：清 marker、删 authority、幂等；writer 恢复", () => {
+    const service = injectAndFault("pe_fault_resolve");
+    // 未显式 acknowledge → 拒绝（无任何无条件解除入口）。
+    const noAck = service.resolveUnresolvedTransaction({ transactionId: "pe_fault_resolve", capability: {} as never });
+    expect(noAck.status).toBe("rejected");
+    if (noAck.status === "rejected") {
+      expect(noAck.reason).toBe("invalid_input");
+      expect(noAck.detail).toContain("acknowledgeRolledBack");
+    }
+    // 显式 acknowledge → resolved not-executed。
+    const resolved = service.resolveUnresolvedTransaction({
+      transactionId: "pe_fault_resolve",
+      capability: {} as never,
+      acknowledgeRolledBack: true,
+    });
+    expect(resolved.status).toBe("resolved");
+    if (resolved.status === "resolved") {
+      expect(resolved.resolution).toBe("not-executed");
+      expect(resolved.reprepareAllowed).toBe(true);
+    }
+    // marker 与 authority 均清除；tombstone 记录 preExecution。
+    expect(readTreasuryAuthorizationFaultEntry("pe_fault_resolve")).toBeUndefined();
+    const tombstone = readTreasuryResolutionTombstone("pe_fault_resolve");
+    expect(tombstone?.preExecution).toBe(true);
+    expect(tombstone?.resolution).toBe("not-executed");
+    // writer 恢复（readiness 不再阻断）。
+    const after = build(service, "pe_fault_resolve_next", transferArgs());
+    const authorized = service.authorizeTreasuryActionContract(after);
+    expect(authorized.status).toBe("authorized");
+    // 重复 resolution 幂等。
+    const again = service.resolveUnresolvedTransaction({
+      transactionId: "pe_fault_resolve",
+      capability: {} as never,
+      acknowledgeRolledBack: true,
+    });
+    expect(again.status).toBe("already_resolved");
+  });
+
+  it("digest 不匹配的 acknowledge 拒绝；authority 保留", () => {
+    const service = injectAndFault("pe_fault_digest");
+    const mismatch = service.resolveUnresolvedTransaction({
+      transactionId: "pe_fault_digest",
+      digest: "ffffffffffffffff",
+      capability: {} as never,
+      acknowledgeRolledBack: true,
+    });
+    expect(mismatch.status).toBe("rejected");
+    if (mismatch.status === "rejected") expect(mismatch.reason).toBe("digest_mismatch");
+    expect(readTreasuryAuthorizationFaultEntry("pe_fault_digest")).toBeDefined();
+  });
+
+  it("其他 commit/execution fault 不能使用该通道（acknowledge 对 quarantine fault 无效）", () => {
+    const service = makeService();
+    const contract = build(service, "pe_other_fault", transferArgs({ outcome: "throw" }));
+    const bundle = authorizeBundle(service, contract);
+    expect(() => executeTreasuryActionContract(service, { contract, authorization: bundle })).toThrow();
+    // execution-unknown quarantine：无 pre-execution authority——acknowledge
+    // 输入不构成通道（capability 路径必需）。
+    const attempted = service.resolveUnresolvedTransaction({
+      transactionId: "pe_other_fault",
+      capability: {} as never,
+      acknowledgeRolledBack: true,
+    });
+    expect(attempted.status).toBe("rejected");
+    expect(readTreasuryQuarantineEntry("pe_other_fault")).toBeDefined();
+  });
+
+  it("global reset 后 acknowledge-rolled-back resolution 仍可完成（仅凭 durable state）", () => {
+    injectAndFault("pe_fault_reset");
+    Game.time += 1;
+    const next = makeService();
+    const resolved = next.resolveUnresolvedTransaction({
+      transactionId: "pe_fault_reset",
+      capability: {} as never,
+      acknowledgeRolledBack: true,
+    });
+    expect(resolved.status).toBe("resolved");
+    expect(readTreasuryAuthorizationFaultEntry("pe_fault_reset")).toBeUndefined();
   });
 });
