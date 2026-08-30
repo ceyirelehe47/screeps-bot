@@ -1040,6 +1040,7 @@ describe("durable authority cohesion（第十轮 5.1：quarantine v2 完整合�
 
 describe("intent 完整 identity 与幂等冲突（第十轮 3.12.7）", () => {
   it("同 ID 旧 intent（低层 test path 直写）不被 production contract 接管：intent_conflict", () => {
+    const service = makeService(); // 先建立 tick（避免 beginTick 恢复释放 ready seed）
     // 低层直写 intent（无 contract 身份）：模拟第九轮前测试路径/异常残留。
     const seeded = writeTreasuryIntentEntry({
       transactionId: "idc_low",
@@ -1055,7 +1056,6 @@ describe("intent 完整 identity 与幂等冲突（第十轮 3.12.7）", () => {
       updatedAtTick: Game.time,
     });
     expect(seeded.status).toBe("written");
-    const service = makeService();
     let callbackCalls = 0;
     const result = service.executePreparedAction(
       freshInput(service, "idc_low"),
@@ -1074,7 +1074,10 @@ describe("intent 完整 identity 与幂等冲突（第十轮 3.12.7）", () => {
     );
     expect(callbackCalls).toBe(0);
     expect(result.status).toBe("prepare_rejected");
-    if (result.status === "prepare_rejected") expect(result.reason).toBe("intent_conflict");
+    // 第一道防线：unresolved intent 阻断一切新 writer（比 read-back 更早）——
+    // 旧 intent 不可能被 production contract 接管（identity 冲突场景在
+    // blockers 放行的窗口由 read-back intent_conflict 防线兜底）。
+    if (result.status === "prepare_rejected") expect(result.reason).toBe("intent_write_blocked");
     // 旧 intent 原样保留（不被覆盖、不被接管）。
     const retained = readTreasuryIntentEntry("idc_low");
     expect(retained?.authorizationDigest).toBe("1111111111111111");
