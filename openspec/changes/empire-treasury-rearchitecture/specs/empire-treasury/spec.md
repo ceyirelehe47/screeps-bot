@@ -354,3 +354,115 @@ settled value 必须（MUST）是 [0, Game.time] 内的安全整数。任何损�
 
 - **WHEN** 测试调用 resetForTest
 - **THEN** observation/journal/overlay/承诺索引与指标全部清空并可重建
+
+### Requirement: Write admission 两阶段协议（tentative ledger + opaque handle + staged commit）
+
+Treasury 的写入授权必须（MUST）满足：prepare 成功即预留 transaction 所需的资源、容量与 receipt 槽（tentative ledger）；后续 prepare 与单阶段兼容路径的授权计算计入全部 tentative（同一 handle 自身预留不重复计算）；同一资产不得（MUST NOT）被两笔 prepared transaction 超额授权。public projected 只表示已 commit 的动作，tentative 不得（MUST NOT）混入。
+
+prepared handle 必须（MUST）是 heap 内不可伪造的冻结 capability：结构相同的普通对象、JSON round-trip 副本、其他 service generation 的 handle 一律 invalid_handle；handle 只在签发 tick 与 generation 内有效，commit/abort 自行校验（不依赖调用方先 beginTick）。prepare 保存深复制并规范冻结的 canonical transaction 与 payload digest；相同 transactionId、相同 digest 重复 prepare 幂等返回同一 handle，不同 digest 必须（MUST）返回 prepare_conflict。状态机 committed/aborted/faulted/expired 为终态：commit 只能成功一次（重复幂等 already_settled）、abort 只能一次（重复 already_finalized）、终态不可回退。
+
+commit 必须（MUST）执行 tentative → committed 兑现而非重新业务 admission：Game API 已返回 OK 后不得（MUST NOT）再因资源、容量、epoch 或 receipt 条件拒绝合法 handle（prepare_invalidated 正常路径删除）。abort 必须（MUST）原子释放 tentative 资源/容量/receipt 槽且零结算写入。
+
+commit 必须（MUST）staged 发布：receipt（Memory 权威，返回明确结果）→ heap（journal/overlay 分段）→ handle 状态。任一阶段意外失败进入 faulted 终态：不得（MUST NOT）当作普通 rejected/aborted，tentative 与槽位不释放，写入最小有界持久 write-fault marker，全部后续 writer fail closed（write_admission_locked）直至显式修复路径解除；global reset 后仍可发现 unresolved fault。endTick 遇到未决 prepared 必须（MUST）计数并保留有界样本（绝不静默当作正常 abort）；executing 状态视为严重异常并进入 write-fault。安全执行包装器必须（MUST）保证 prepare 失败不执行 Game API、callback 恰好一次、非 OK 自动 abort、抛错 abort 后 rethrow、OK 必走 commit。
+
+#### Scenario: 双 prepare 不得超额授权同一资产
+
+- **WHEN** 100k 资产上 A prepare -60k 成功后 B prepare -60k
+- **THEN** B 被 tentative 感知授权拒绝（insufficient_amount）；A abort 后 B 同量 prepare 成功
+
+#### Scenario: tentative 不进入 public projected
+
+- **WHEN** prepare 成功后查询 projected/容量口径
+- **THEN** projected 与 observed 容量不变（tentative 仅 gauge 可见）；commit 后 tentative 消失、committed projected 生效
+
+#### Scenario: commit 兑现不受他笔 transaction 影响
+
+- **WHEN** prepare -90k 成功后他人单阶段尝试流出同资产 95k
+- **THEN** 他人在其自身 admission 被拒；prepared handle 的 commit 仍 committed（不再返回 prepare_invalidated）
+
+#### Scenario: 伪造与跨上下文 handle 无效
+
+- **WHEN** 以结构相同的伪造对象、JSON 反序列化副本或另一 service 实例的 handle 调用 commit/abort
+- **THEN** 一律 invalid_handle；previous tick 的 handle 即使未先 beginTick 也 handle_expired
+
+#### Scenario: 相同 ID 不同 payload 冲突
+
+- **WHEN** 相同 transactionId 以不同 canonical payload 重复 prepare
+- **THEN** 返回 prepare_conflict（不再无条件返回 prepared）；相同 payload 幂等返回同一 handle
+
+#### Scenario: prepare 后修改原 input 不影响 canonical
+
+- **WHEN** prepare 成功后调用方原地篡改原 postings/kind
+- **THEN** Treasury 内部 canonical payload 不变，commit 兑现 prepare 时的数值
+
+#### Scenario: staged commit 故障进入显式 faulted 而非静默半提交
+
+- **WHEN** receipt/heap（journal/overlay）/handle 状态任一发布阶段发生意外故障
+- **THEN** handle 进入 faulted 终态、tentative 与 receipt 槽不释放、write-fault marker 持久记录 phase、后续全部 writer 被 write_admission_locked 阻断；marker 不随 tick 生命周期自动清除，只有显式修复路径解除
+
+#### Scenario: global reset 后仍可发现 unresolved write fault
+
+- **WHEN** 写故障发生后 heap 全失（新 service 实例、Memory 保留）
+- **THEN** 新实例凭 Memory marker 持续锁定全部 writer
+
+#### Scenario: endTick outstanding 审计与 executing 严重异常
+
+- **WHEN** endTick 时存在未决 prepared（未终态）
+- **THEN** 计数 outstanding、保留有界样本（transactionId/digest/preparedAtTick/kind/source）并累加 leak 指标；executing 状态写 write-fault marker 并全局锁；下一 tick 旧 handle 一律不可用
+
+#### Scenario: 安全执行包装器语义
+
+- **WHEN** 经 executePreparedAction 执行 prepare → Game API → 终态
+- **THEN** prepare 失败时 callback 不执行；callback 恰好一次；非 OK 自动 abort；抛错自动 abort 并 rethrow；OK 后必走 commit；正常完整执行后 outstanding prepared 为 0
+
+### Requirement: typed reservation owner 权威与保守占用
+
+production reservation 的 owner 必须（MUST）持久为 typed identity（kind: game-object/logical-service/task/contract/legacy-unresolved + 稳定 id + 可选 room scope/namespace/lifecycle 引用），平铺字段与 store key 保持既有格式（保护路径兼容）。安全默认：无法确证 owner 已失效的预留（active-unresolved/missing-owner）必须（MUST）保守全额计入 committed——只有 expiration 或显式 release 才能（MAY）解除占用；orphan 语义仅是诊断分类。自排除必须（MUST）比较完整 typed identity（同 kind + 同 id + 同 namespace）：同字符串不同 kind 不得（MUST NOT）互相排除；legacy-unresolved 不允许普通 owner declaration 排除；task/contract 暂无运行时存在性权威，声明即 fail closed。版本化迁移必须（MUST）无损（数值字段与 store key 不动、幂等版本标记、迁移后 bump commitment revision），损坏条目保持原样并显式计数，不得（MUST NOT）乐观忽略。
+
+#### Scenario: legacy 裸字符串无损迁移
+
+- **WHEN** 存量裸 holderId 条目首次迁移
+- **THEN** 按已知 namespace/object id/task/contract 形状分类补写 owner（其余 legacy-unresolved），room/resource/amount/expiresAt 与 store key 不变，revision 失效，版本标记幂等短路
+
+#### Scenario: owner 消失仍保守占用
+
+- **WHEN** game-object owner 的对象暂时不存在（或 legacy-unresolved）
+- **THEN** 预留继续全额计入 committed（missing ≠ 可重新支配）；只有 expiresAt 到期或显式 release 解除
+
+#### Scenario: 同字符串不同 kind 不互相排除
+
+- **WHEN** 某稳定 id 字符串同时作为 game-object 与 logical-service 存在，查询声明其一
+- **THEN** 只排除同 kind + 同 namespace 的预留；legacy-unresolved 的同字符串预留照常扣除
+
+### Requirement: commitment 数据验证与 completeness
+
+承诺索引必须（MUST）对 task 与 reservation 做记录级验证（字段形状与 remaining≤amount 等数值关系）。损坏记录不得（MUST NOT）进入聚合（负 amount 抬高 spendable、NaN 污染求和均禁止）、不得（MUST NOT）被读取路径删除；必须（MUST）标记受影响 scope：能定位 bucket 的标 (room,resource) incomplete，无法定位的标 globally-incomplete。incomplete scope 的 spendable 必须（MUST）为 0、overcommitted 为 true、authorizationSafe 为 false；unrelated scope 保持 complete。owner 缺失但数值合法的预留继续全额保守扣除（missing ≠ incomplete）。
+
+#### Scenario: 损坏数值不得提高 spendable
+
+- **WHEN** 某房间 reservation amount 为负或 NaN
+- **THEN** 该 (room,resource) scope incomplete、spendable=0、authorizationSafe=false；聚合值不含该记录；原始 Memory 不被删除
+
+#### Scenario: scope 粒度隔离
+
+- **WHEN** U 资源维度存在损坏记录
+- **THEN** 同房间 energy 查询与其他房间 U 查询保持 complete 且可正常授权
+
+#### Scenario: 授权不得只看 spendable
+
+- **WHEN** 查询覆盖的任一 scope incomplete 或全局 incomplete
+- **THEN** balance view 的 commitmentStatus 反映最差状态且 authorizationSafe=false
+
+### Requirement: canonical hashed transaction identity 与单阶段退役
+
+transactionId 铸造必须（MUST）基于版本化 canonical tuple 序列化（类型标签 + 长度前缀）：number 与 string、元组边界、字段顺序、attempt sequence 全部可区分；Unicode/空格/冒号/空串为合法业务字段；输出为稳定 hash 的定长合法 id（不依赖随机数、相同输入跨 tick 恒定）；stable 与 per-tick 命名空间使用不同且不可重叠的前缀；存量 id validator 保持兼容；固定 test vectors 锚定。正式生产 writer 不得（MUST NOT）调用单阶段登记入口：该入口必须（MUST）从公共 TreasuryService API 移除并隔离到 compat 模块（架构边界测试守护 terminal/market/factory/lab/carrier/ResourceControl 等生产模块禁用），未来 writer 一律经 prepare + 安全执行包装器 + commit/abort。
+
+#### Scenario: 类型与边界不碰撞
+
+- **WHEN** number 42 与 string "42"、("a","b:c") 与 ("a:b","c") 分别铸造
+- **THEN** 产出互不相同的 id；超长业务字段产出固定长度合法 id；固定 test vectors 跨实现版本稳定
+
+#### Scenario: 生产 writer 禁用单阶段入口
+
+- **WHEN** 架构边界测试扫描生产 writer 模块与 compat 模块引用面
+- **THEN** 任何生产模块不引用单阶段入口/compat；compat 仅 Treasury 测试与迁移过渡可用；reservation store 直接写入仅限权威 mutation 模块
