@@ -348,4 +348,38 @@ describe("Treasury write-admission 架构边界", () => {
     }
     expect(violations).toEqual([]);
   });
+
+  it("第九轮：capability registry 私有化——reconciliation.ts 不得导出注册/校验/消费入口", () => {
+    // reconciliation.ts 只承载类型与结论枚举；任何 register/validate/consume
+    // 导出都会让普通模块把自构对象加入 registry 或绕过 service 校验。
+    const source = readSource("src/runtime/treasury/reconciliation.ts");
+    const forbidden = [
+      /export function registerTreasuryReconciliationCapability/,
+      /export function validateTreasuryReconciliationCapability/,
+      /export function consumeTreasuryReconciliationCapability/,
+      /const capabilityRegistry/,
+      /const consumedCapabilities/,
+    ];
+    for (const pattern of forbidden) {
+      expect(pattern.test(source)).toBe(false);
+    }
+    // faultResolution 只能经窄接口（service.consumeReconciliationCapability）
+    // 消费 capability——不得自行构造 capability 或引用旧 validate/consume。
+    const frSource = readSource("src/runtime/treasury/faultResolution.ts");
+    expect(frSource).toContain("service.consumeReconciliationCapability(input.capability)");
+    expect(/registerTreasuryReconciliationCapability|validateTreasuryReconciliationCapability/.test(frSource)).toBe(false);
+    // 其它生产模块不得访问 capability 注册/消费内核（faultResolution 经窄
+    // 接口是唯一消费方）。
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      if (relative === "runtime/treasury/facade.ts" || relative === "runtime/treasury/faultResolution.ts" || relative === "runtime/treasury/reconciliation.ts") continue;
+      const fileSource = readFileSync(filePath, "utf8");
+      if (/consumeReconciliationCapability|registerTreasuryReconciliationCapability/.test(fileSource)) {
+        violations.push(`${relative} 访问 capability 注册/消费内核（仅 service 闭包与 faultResolution 窄接口）`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
 });

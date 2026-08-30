@@ -114,8 +114,8 @@ import {
 } from "@/runtime/treasury/resolutionStore";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
 import {
-  registerTreasuryReconciliationCapability,
   type TreasuryReconciliationCapability,
+  type TreasuryReconciliationCapabilityConsumption,
   type TreasuryReconciliationConclusion,
 } from "@/runtime/treasury/reconciliation";
 import {
@@ -393,6 +393,12 @@ export interface TreasuryService {
     readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation";
     readonly detail: string;
   };
+  /**
+   * capability 校验并消费（第九轮 4.8，@internal——faultResolution 经窄接口
+   * 调用）：对象身份 → 单次使用 → generation（闭包值，调用者不可提交）→
+   * tick；校验通过即标记消费（单次使用语义）。
+   */
+  consumeReconciliationCapability(capability: unknown): TreasuryReconciliationCapabilityConsumption;
   /** 当前 service generation（capability/resolve 调用方校验用）。 */
   treasuryServiceGeneration(): number;
   /** @deprecated 第七轮 guard 入口已被 capability 协议取代（保留只读诊断）。 */
@@ -681,6 +687,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   /** (room\u0000location) → 未消费授权的容量预算合计。 */
   const authorizationCapacityTotals = new Map<string, number>();
   let authorizationLedgerRevisions: TreasuryAuthorizationRevisions | null = null;
+
+  // ── reconciliation capability registry（第九轮 4.8：service 闭包私有——
+  //    reconciliation.ts 只留类型，无公开注册/校验/消费入口）。 ──────────
+  const capabilityRegistry = new WeakSet<TreasuryReconciliationCapability>();
+  const consumedCapabilities = new WeakSet<TreasuryReconciliationCapability>();
 
   function currentAuthorizationRevisions(): TreasuryAuthorizationRevisions {
     return {
@@ -2475,27 +2486,64 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (conclusion !== "observed_committed" && conclusion !== "observed_not_executed" && conclusion !== "still_uncertain") {
         return reject("invalid_input", `reconciler 返回非法结论: ${String(conclusion)}`);
       }
-      const capability = registerTreasuryReconciliationCapability(
-        Object.freeze({
-          __brand: "treasury-reconciliation-capability" as const,
-          transactionId: facts0.transactionId,
-          digest: facts0.digest,
-          actionKind,
-          conclusion,
-          postFaultEpoch: {
-            scope: state.observation.epoch.scope,
-            epochSeq: state.observation.epoch.epochSeq,
-            observedAtTick: state.observation.epoch.observedAtTick,
-          },
-          observationTick: Game.time,
-          reconcilerKind: actionKind,
-          reconcilerVersion: adapter.version,
-          serviceGeneration,
-          tick: Game.time,
-        }),
-      );
+      // 签发入 service 闭包私有 registry（第九轮 4.8：无公开注册入口）；
+      // capability 扩展绑定 authorityKind/contract 身份/adapter version/
+      // durable payload version。
+      const capability = Object.freeze({
+        __brand: "treasury-reconciliation-capability" as const,
+        transactionId: facts0.transactionId,
+        digest: facts0.digest,
+        authorityKind: facts0.authorityKind,
+        actionKind,
+        conclusion,
+        ...(facts0.contractId !== undefined ? { contractId: facts0.contractId } : {}),
+        ...(facts0.contractDigest !== undefined ? { contractDigest: facts0.contractDigest } : {}),
+        ...(facts0.adapterVersion !== undefined ? { adapterVersion: facts0.adapterVersion } : {}),
+        ...(facts0.durablePayloadVersion !== undefined ? { durablePayloadVersion: facts0.durablePayloadVersion } : {}),
+        postFaultEpoch: {
+          scope: state.observation.epoch.scope,
+          epochSeq: state.observation.epoch.epochSeq,
+          observedAtTick: state.observation.epoch.observedAtTick,
+        },
+        observationTick: Game.time,
+        reconcilerKind: actionKind,
+        reconcilerVersion: adapter.version,
+        serviceGeneration,
+        tick: Game.time,
+      }) as TreasuryReconciliationCapability;
+      capabilityRegistry.add(capability);
       metrics.reconciliationCapabilitiesIssued += 1;
       return { status: "issued", capability };
+    },
+
+    consumeReconciliationCapability(capability: unknown): TreasuryReconciliationCapabilityConsumption {
+      if (!capability || typeof capability !== "object" || !capabilityRegistry.has(capability as TreasuryReconciliationCapability)) {
+        return {
+          status: "rejected",
+          reason: "invalid_capability",
+          detail: "capability 未在本 service 实例签发（普通对象/JSON round-trip 副本/跨实例一律无效——结论只能来自注册 reconciler）",
+        };
+      }
+      const typed = capability as TreasuryReconciliationCapability;
+      if (consumedCapabilities.has(typed)) {
+        return { status: "rejected", reason: "already_used", detail: "capability 已消费（单次使用）" };
+      }
+      if (typed.serviceGeneration !== serviceGeneration) {
+        return {
+          status: "rejected",
+          reason: "cross_generation",
+          detail: "capability 由旧 Treasury service 签发（global reset 后必须由新 service 重新签发，不恢复旧 heap token）",
+        };
+      }
+      if (typed.tick !== Game.time) {
+        return {
+          status: "rejected",
+          reason: "cross_tick",
+          detail: `capability 于 tick ${String(typed.tick)} 签发（当前 ${String(Game.time)}）——跨 tick 失效`,
+        };
+      }
+      consumedCapabilities.add(typed);
+      return { status: "valid", capability: typed };
     },
 
     treasuryServiceGeneration(): number {

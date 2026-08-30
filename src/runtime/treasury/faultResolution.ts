@@ -68,10 +68,9 @@ import {
   readTreasuryResolutionTombstone,
   writeTreasuryResolutionTombstone,
 } from "@/runtime/treasury/resolutionStore";
-import {
-  consumeTreasuryReconciliationCapability,
-  validateTreasuryReconciliationCapability,
-  type TreasuryReconciliationCapability,
+import type {
+  TreasuryReconciliationCapability,
+  TreasuryReconciliationCapabilityAuthority,
 } from "@/runtime/treasury/reconciliation";
 import { recordTreasuryResolutionEvent } from "@/runtime/treasury/resolutionEvents";
 
@@ -84,8 +83,6 @@ export interface TreasuryFaultResolutionInput {
   readonly digest?: string;
   /** service 签发的 reconciliation capability（issueTreasuryReconciliationCapability）。 */
   readonly capability: TreasuryReconciliationCapability;
-  /** 当前 service generation（capability 校验用；由调用方从 service 上下文提供）。 */
-  readonly serviceGeneration: number;
 }
 
 export type TreasuryFaultResolutionResult =
@@ -155,9 +152,6 @@ function describeInvalidInput(input: TreasuryFaultResolutionInput): string | nul
   if (input.capability === undefined || input.capability === null || typeof input.capability !== "object") {
     return "capability 缺失（须经 service.issueTreasuryReconciliationCapability 签发）";
   }
-  if (typeof input.serviceGeneration !== "number" || !Number.isSafeInteger(input.serviceGeneration)) {
-    return "serviceGeneration 非安全整数";
-  }
   return null;
 }
 
@@ -168,6 +162,7 @@ function describeInvalidInput(input: TreasuryFaultResolutionInput): string | nul
  * reconciler 绑定。返回 entry+capability 或拒绝/uncertain 结果。
  */
 function prevalidate(
+  service: TreasuryReconciliationCapabilityAuthority,
   input: TreasuryFaultResolutionInput,
 ): { authority: TreasuryUnresolvedAuthority; capability: TreasuryReconciliationCapability } | { stop: TreasuryFaultResolutionResult } {
   const inputError = describeInvalidInput(input);
@@ -189,7 +184,10 @@ function prevalidate(
     }
   }
   // capability 防伪：对象身份/单次使用/generation/tick。
-  const capabilityCheck = validateTreasuryReconciliationCapability(input.capability, input.serviceGeneration);
+  // capability 校验并消费（第九轮 4.8：service 闭包校验——generation 由当前
+  // service 自身判定，调用者无法提交 serviceGeneration 数字绕过；校验通过
+  // 即标记单次使用）。
+  const capabilityCheck = service.consumeReconciliationCapability(input.capability);
   if (capabilityCheck.status !== "valid") {
     countRejected();
     return {
@@ -288,6 +286,35 @@ function prevalidate(
       },
     };
   }
+  // capability 扩展绑定匹配（第九轮 4.8）：authorityKind/contract digest/
+  // adapter version——capability 与不同 contract/reconciler version 的
+  // authority 不匹配时拒绝。
+  if (capability.authorityKind !== undefined && capability.authorityKind !== authority.authorityKind) {
+    countRejected();
+    return {
+      stop: {
+        status: "rejected",
+        reason: "reconciler_mismatch",
+        detail: `capability 的 authorityKind ${capability.authorityKind} 与实际 authority ${authority.authorityKind} 不一致`,
+      },
+    };
+  }
+  if (authority.contractDigest !== undefined && capability.contractDigest !== undefined && capability.contractDigest !== authority.contractDigest) {
+    countRejected();
+    return {
+      stop: { status: "rejected", reason: "reconciler_mismatch", detail: "capability 绑定的 contract digest 与 authority 不一致" },
+    };
+  }
+  if (authority.adapterVersion !== undefined && capability.reconcilerVersion !== authority.adapterVersion) {
+    countRejected();
+    return {
+      stop: {
+        status: "rejected",
+        reason: "reconciler_mismatch",
+        detail: `capability 的 reconciler version ${String(capability.reconcilerVersion)} 与 authority adapter version ${String(authority.adapterVersion)} 不一致`,
+      },
+    };
+  }
   // 时序：当前 tick 严格晚于故障 tick；capability 观察严格晚于故障 tick 且
   // 不晚于当前 tick（stale/未来观察均拒绝）。
   if (Game.time <= authority.recordedAt) {
@@ -332,9 +359,6 @@ function prevalidate(
       },
     };
   }
-  // capability 单次使用：校验全链通过即消费（拒绝路径不消费——修正诊断后
-  // 可重试；但 revision 型失效除外，见 validate 内部）。
-  consumeTreasuryReconciliationCapability(capability);
   return { authority, capability };
 }
 
@@ -345,9 +369,10 @@ function prevalidate(
  * 重放历史动作。
  */
 export function resolveTreasuryQuarantinedTransactionAsCommitted(
+  service: TreasuryReconciliationCapabilityAuthority,
   input: TreasuryFaultResolutionInput,
 ): TreasuryFaultResolutionResult {
-  const pre = prevalidate(input);
+  const pre = prevalidate(service, input);
   if ("stop" in pre) return pre.stop;
   const { authority, capability } = pre;
   if (capability.conclusion !== "observed_committed") {
@@ -434,9 +459,10 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
  * prepare"的中间态）。不写 receipt、不生成 committed projection。
  */
 export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
+  service: TreasuryReconciliationCapabilityAuthority,
   input: TreasuryFaultResolutionInput,
 ): TreasuryFaultResolutionResult {
-  const pre = prevalidate(input);
+  const pre = prevalidate(service, input);
   if ("stop" in pre) return pre.stop;
   const { authority, capability } = pre;
   if (capability.conclusion !== "observed_not_executed") {

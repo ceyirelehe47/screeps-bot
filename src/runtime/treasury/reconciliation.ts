@@ -1,33 +1,45 @@
 /**
- * Treasury service-issued reconciliation capability（第八轮）。
+ * Treasury reconciliation capability 类型定义（第八轮建立、第九轮 4.8 私有化）。
  *
  * 角色：resolution 结论的**唯一合法来源**是当前 Treasury service 基于 exact
  * post-fault observation 与受注册 action reconciler 的判定——普通调用者不得
- * 自行填写 conclusion/observationTick。本模块承载 capability 类型、模块级
- * 私有 registry（WeakSet 对象身份防伪）与签发/校验 helper：
+ * 自行填写 conclusion/observationTick。
  *
- * - facade.issueTreasuryReconciliationCapability 签发（绑定 transaction/
- *   digest/actionKind/conclusion/postFaultEpoch/incarnation/reconciler 版本/
- *   service generation/tick）；
- * - faultResolution 的两个 resolve 函数只接受 capability 并经本模块校验
- *  （普通对象伪造/JSON round-trip/旧 service（generation）/旧 epoch/
- *   单次使用全部失败）；
- * - 跨 global reset：旧 heap token 一律失效——新 service 依据持久
- *   intent/quarantine 与当前 observation 重新签发（不恢复旧 token）。
+ * 第九轮私有化：capability registry（签发/校验/消费）已全部移入
+ * createTreasuryService 闭包（facade.ts）——本模块**只承载类型与结论枚举**，
+ * 不再导出任何 register/validate/consume 入口（架构测试扫描导出面：普通
+ * 模块无法把自构对象加入 registry、无法绕过 service 校验）。generation 由
+ * 当前 service 闭包值校验（调用者提交的 serviceGeneration 数字不再接受）。
+ *
+ * capability 防伪契约（由 service 闭包保证）：
+ * - 对象身份（WeakSet——伪造/JSON round-trip 副本一律无效）；
+ * - 单次使用（已消费拒绝）；
+ * - cross-generation 失效（global reset 后由新 service 重新签发）；
+ * - cross-tick 失效。
  */
 
 import type { TreasuryObservationScope } from "@/runtime/treasury/types";
 
 export type TreasuryReconciliationConclusion = "observed_committed" | "observed_not_executed" | "still_uncertain";
 
-/** 不可伪造的 reconciliation capability（heap-only 冻结对象 + 私有 WeakSet）。 */
+/**
+ * 不可伪造的 reconciliation capability（heap-only 冻结对象 + service 闭包
+ * 私有 WeakSet）。第九轮扩展绑定：authorityKind/contract ID+digest/adapter
+ * kind+version/durable payload version。
+ */
 export interface TreasuryReconciliationCapability {
   readonly __brand: "treasury-reconciliation-capability";
   readonly transactionId: string;
   readonly digest: string;
+  /** unresolved authority 形态（quarantine | intent）。 */
+  readonly authorityKind: "quarantine" | "intent";
   readonly actionKind: string;
   /** 结论只能来自注册 reconciler 的判定（调用者不可自填）。 */
   readonly conclusion: TreasuryReconciliationConclusion;
+  readonly contractId?: string;
+  readonly contractDigest?: string;
+  readonly adapterVersion?: number;
+  readonly durablePayloadVersion?: number;
   readonly postFaultEpoch: {
     readonly scope: TreasuryObservationScope;
     readonly epochSeq: number;
@@ -40,24 +52,8 @@ export interface TreasuryReconciliationCapability {
   readonly tick: number;
 }
 
-/** 模块级私有 registry（对象身份防伪的唯一权威）。 */
-const capabilityRegistry = new WeakSet<TreasuryReconciliationCapability>();
-/** 单次使用：已消费的 capability（WeakSet；重复消费拒绝）。 */
-const consumedCapabilities = new WeakSet<TreasuryReconciliationCapability>();
-
-export function isTreasuryReconciliationCapabilityRegistered(capability: unknown): capability is TreasuryReconciliationCapability {
-  return capabilityRegistry.has(capability as TreasuryReconciliationCapability);
-}
-
-/** 注册签发的 capability（仅供签发路径调用——facade issue 方法）。 */
-export function registerTreasuryReconciliationCapability(
-  capability: TreasuryReconciliationCapability,
-): TreasuryReconciliationCapability {
-  capabilityRegistry.add(capability);
-  return capability;
-}
-
-export type TreasuryReconciliationCapabilityValidation =
+/** capability 校验/消费结果（service 闭包内实现，faultResolution 消费）。 */
+export type TreasuryReconciliationCapabilityConsumption =
   | { readonly status: "valid"; readonly capability: TreasuryReconciliationCapability }
   | {
       readonly status: "rejected";
@@ -66,44 +62,10 @@ export type TreasuryReconciliationCapabilityValidation =
     };
 
 /**
- * resolution 前的 capability 校验：对象身份（伪造/JSON 副本失败）→ 单次
- * 使用 → generation（旧 service 失败）→ tick（跨 tick 失败）。
- * transaction/digest/reconciler 匹配由调用方（faultResolution）依据目标
- * entry 继续校验。
+ * faultResolution 经此窄接口消费 capability（第九轮 4.8）：generation 由
+ * service 闭包值校验——调用者无法通过提交 serviceGeneration 数字绕过。
+ * TreasuryService 结构兼容本接口。
  */
-export function validateTreasuryReconciliationCapability(
-  capability: unknown,
-  currentServiceGeneration: number,
-): TreasuryReconciliationCapabilityValidation {
-  if (!capability || typeof capability !== "object" || !capabilityRegistry.has(capability as TreasuryReconciliationCapability)) {
-    return {
-      status: "rejected",
-      reason: "invalid_capability",
-      detail: "capability 未在本模块签发（普通对象/JSON round-trip 副本一律无效——结论只能来自注册 reconciler）",
-    };
-  }
-  const typed = capability as TreasuryReconciliationCapability;
-  if (consumedCapabilities.has(typed)) {
-    return { status: "rejected", reason: "already_used", detail: "capability 已消费（单次使用）" };
-  }
-  if (typed.serviceGeneration !== currentServiceGeneration) {
-    return {
-      status: "rejected",
-      reason: "cross_generation",
-      detail: "capability 由旧 Treasury service 签发（global reset 后必须由新 service 重新签发，不恢复旧 heap token）",
-    };
-  }
-  if (typed.tick !== Game.time) {
-    return {
-      status: "rejected",
-      reason: "cross_tick",
-      detail: `capability 于 tick ${String(typed.tick)} 签发（当前 ${String(Game.time)}）——跨 tick 失效`,
-    };
-  }
-  return { status: "valid", capability: typed };
-}
-
-/** 标记已消费（resolution 使用成功后；单次使用语义）。 */
-export function consumeTreasuryReconciliationCapability(capability: TreasuryReconciliationCapability): void {
-  consumedCapabilities.add(capability);
+export interface TreasuryReconciliationCapabilityAuthority {
+  consumeReconciliationCapability(capability: unknown): TreasuryReconciliationCapabilityConsumption;
 }

@@ -114,22 +114,20 @@ function issueCapability(service: TreasuryService, transactionId: string, digest
 function resolveCommitted(service: TreasuryService, transactionId: string, digest?: string) {
   const issued = issueCapability(service, transactionId, digest);
   if (issued.status === "rejected") return { status: "issuance_rejected" as const, reason: issued.reason, detail: issued.detail };
-  return resolveTreasuryQuarantinedTransactionAsCommitted({
+  return resolveTreasuryQuarantinedTransactionAsCommitted(service, {
     transactionId,
     ...(digest !== undefined ? { digest } : {}),
     capability: issued.capability,
-    serviceGeneration: service.treasuryServiceGeneration(),
   });
 }
 
 function resolveNotExecuted(service: TreasuryService, transactionId: string, digest?: string) {
   const issued = issueCapability(service, transactionId, digest);
   if (issued.status === "rejected") return { status: "issuance_rejected" as const, reason: issued.reason, detail: issued.detail };
-  return resolveTreasuryQuarantinedTransactionAsNotExecuted({
+  return resolveTreasuryQuarantinedTransactionAsNotExecuted(service, {
     transactionId,
     ...(digest !== undefined ? { digest } : {}),
     capability: issued.capability,
-    serviceGeneration: service.treasuryServiceGeneration(),
   });
 }
 
@@ -185,32 +183,29 @@ describe("capability 签发与防伪", () => {
     if (issued.status !== "issued") return;
     // 伪造：结构相同的普通对象。
     const forged: TreasuryReconciliationCapability = { ...issued.capability };
-    const forgedResult = resolveTreasuryQuarantinedTransactionAsCommitted({
+    const forgedResult = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
       transactionId: "cap_forge",
       digest,
       capability: forged,
-      serviceGeneration: next.treasuryServiceGeneration(),
     });
     expect(forgedResult.status).toBe("rejected");
     if (forgedResult.status === "rejected") expect(forgedResult.reason).toBe("invalid_capability");
     // JSON round-trip 副本。
     const roundTrip = JSON.parse(JSON.stringify(issued.capability)) as TreasuryReconciliationCapability;
-    const roundTripResult = resolveTreasuryQuarantinedTransactionAsCommitted({
+    const roundTripResult = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
       transactionId: "cap_forge",
       digest,
       capability: roundTrip,
-      serviceGeneration: next.treasuryServiceGeneration(),
     });
     expect(roundTripResult.status).toBe("rejected");
     // 跨 tick capability：下一 tick 的 resolve 拒绝（须重新签发）。
     Game.time += 1;
     const later = makeService();
     later.beginTick();
-    const crossTick = resolveTreasuryQuarantinedTransactionAsCommitted({
+    const crossTick = resolveTreasuryQuarantinedTransactionAsCommitted(later, {
       transactionId: "cap_forge",
       digest,
       capability: issued.capability,
-      serviceGeneration: later.treasuryServiceGeneration(),
     });
     expect(crossTick.status).toBe("rejected");
     if (crossTick.status === "rejected") expect(crossTick.reason).toBe("invalid_capability");
@@ -219,11 +214,10 @@ describe("capability 签发与防伪", () => {
     const newest = advanceTick();
     const reissued = issueCapability(newest, "cap_forge", digest);
     if (reissued.status === "issued") {
-      const crossGen = resolveTreasuryQuarantinedTransactionAsCommitted({
+      const crossGen = resolveTreasuryQuarantinedTransactionAsCommitted(later, {
         transactionId: "cap_forge",
         digest,
         capability: reissued.capability,
-        serviceGeneration: next.treasuryServiceGeneration(), // 旧 generation
       });
       expect(crossGen.status).toBe("rejected");
       if (crossGen.status === "rejected") expect(crossGen.reason).toBe("invalid_capability");
@@ -259,19 +253,17 @@ describe("capability 签发与防伪", () => {
     const issued = issueCapability(next, "cap_single", digest);
     expect(issued.status).toBe("issued");
     if (issued.status !== "issued") return;
-    const first = resolveTreasuryQuarantinedTransactionAsCommitted({
+    const first = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
       transactionId: "cap_single",
       digest,
       capability: issued.capability,
-      serviceGeneration: next.treasuryServiceGeneration(),
     });
     expect(first.status).toBe("resolved");
     // 已消费：同 capability 重复 resolve（entry 已释放 → not_found 幂等路径）。
-    const second = resolveTreasuryQuarantinedTransactionAsCommitted({
+    const second = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
       transactionId: "cap_single",
       digest,
       capability: issued.capability,
-      serviceGeneration: next.treasuryServiceGeneration(),
     });
     expect(second.status).toBe("already_resolved"); // 幂等（tombstone final）
   });
@@ -302,11 +294,10 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     // capability 校验——resolved 状态不因重复调用改变）。
     const issuedAgain = issueCapability(next, "ts1_res_c", digest);
     expect(issuedAgain.status).toBe("rejected"); // entry 已释放：签发不可得
-    const again = resolveTreasuryQuarantinedTransactionAsCommitted({
+    const again = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
       transactionId: "ts1_res_c",
       digest,
       capability: { __brand: "treasury-reconciliation-capability" } as never, // 快路径不消费
-      serviceGeneration: next.treasuryServiceGeneration(),
     });
     expect(again.status).toBe("already_resolved");
   });
@@ -375,11 +366,10 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     expect(replay.status).toBe("already_settled"); // tombstone 窗口内不当作全新动作
     expect(readTreasuryResolutionTombstone("ts1_horizon")?.resolution).toBe("committed");
     // 重复 resolution 幂等 already_resolved（快路径）。
-    const again = resolveTreasuryQuarantinedTransactionAsCommitted({
+    const again = resolveTreasuryQuarantinedTransactionAsCommitted(later, {
       transactionId: "ts1_horizon",
       digest,
       capability: { __brand: "treasury-reconciliation-capability" } as never,
-      serviceGeneration: later.treasuryServiceGeneration(),
     });
     expect(again.status).toBe("already_resolved");
   });
@@ -502,10 +492,9 @@ describe("参数校验与不可信 store", () => {
     if (mismatch.status === "rejected") expect(mismatch.reason).toBe("digest_mismatch");
     expect(readTreasuryQuarantineEntry("ts1_param")).toBeDefined();
     // resolve 侧：无 capability 的输入结构化拒绝。
-    const malformed = resolveTreasuryQuarantinedTransactionAsCommitted({
+    const malformed = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
       transactionId: "ts1_param",
       capability: undefined as never,
-      serviceGeneration: next.treasuryServiceGeneration(),
     });
     expect(malformed.status).toBe("rejected");
     if (malformed.status === "rejected") expect(malformed.reason).toBe("invalid_input");
@@ -520,11 +509,10 @@ describe("参数校验与不可信 store", () => {
     // 签发后损坏 store → resolve 显式 quarantine_store_fatal（防御分支）。
     (Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore).entryCount = 42;
     resetTreasuryQuarantineRuntimeForTest();
-    const rejected = resolveTreasuryQuarantinedTransactionAsCommitted({
+    const rejected = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
       transactionId: "ts1_corrupt_store",
       digest,
       capability: issued.capability,
-      serviceGeneration: next.treasuryServiceGeneration(),
     });
     expect(rejected.status).toBe("rejected");
     if (rejected.status === "rejected") expect(rejected.reason).toBe("quarantine_store_fatal");
@@ -543,11 +531,10 @@ describe("参数校验与不可信 store", () => {
       updatedAt: Game.time,
     } as never;
     resetTreasuryResolutionStoreForTest();
-    const rejected = resolveTreasuryQuarantinedTransactionAsCommitted({
+    const rejected = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
       transactionId: "ts1_res_store",
       digest,
       capability: issued.capability,
-      serviceGeneration: next.treasuryServiceGeneration(),
     });
     expect(rejected.status).toBe("rejected");
     if (rejected.status === "rejected") expect(rejected.reason).toBe("resolution_store_fatal");
@@ -577,11 +564,10 @@ describe("staged atomic（故障注入与恢复）", () => {
     const issued = issueCapability(next, "ts1_slot_full", digest);
     expect(issued.status).toBe("issued");
     if (issued.status !== "issued") return;
-    const rejected = resolveTreasuryQuarantinedTransactionAsCommitted({
+    const rejected = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
       transactionId: "ts1_slot_full",
       digest,
       capability: issued.capability,
-      serviceGeneration: next.treasuryServiceGeneration(),
     });
     expect(rejected.status).toBe("rejected");
     if (rejected.status === "rejected") expect(rejected.reason).toBe("resolution_store_full");
@@ -879,5 +865,56 @@ describe("unified unresolved authority（第九轮 4.7：intent-only 完整参�
     const issued = issueCapability(next, "ua_conflict2");
     expect(issued.status).toBe("rejected");
     if (issued.status === "rejected") expect(issued.reason).toBe("authority_inconsistent");
+  });
+});
+
+describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
+  function seedIntentOnly(transactionId: string, phase: TreasuryIntentPhase): void {
+    const write = writeTreasuryIntentEntry({
+      transactionId,
+      digest: "0123456789abcdef",
+      actionKind: "terminal.send",
+      kind: "terminal.send",
+      source: "test",
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+      phase,
+      createdAtTick: Game.time,
+      updatedAtTick: Game.time,
+    });
+    expect(write.status).toBe("written");
+  }
+
+  it("签发的 capability 携带 authorityKind 与完整绑定字段（intent-only 场景）", () => {
+    const service = makeService();
+    seedIntentOnly("cap_fields", "executing");
+    Game.time += 1;
+    const next = makeService();
+    next.beginTick();
+    const issued = issueCapability(next, "cap_fields");
+    expect(issued.status).toBe("issued");
+    if (issued.status !== "issued") return;
+    // 恢复已转 quarantine（intent 释放）——capability 的 authorityKind 反映
+    // 签发时点的 authority 形态。
+    expect(["quarantine", "intent"]).toContain(issued.capability.authorityKind);
+    expect(issued.capability.reconcilerKind).toBe("terminal.send");
+    expect(issued.capability.reconcilerVersion).toBeGreaterThan(0);
+  });
+
+  it("resolution 内核不再接受调用者提交的 serviceGeneration（签名封闭）", () => {
+    const service = makeService();
+    makeExecutingQuarantine("cap_nogen");
+    const next = advanceTick();
+    const issued = issueCapability(next, "cap_nogen");
+    expect(issued.status).toBe("issued");
+    if (issued.status !== "issued") return;
+    // 新签名：service 为第一参数；输入对象无 serviceGeneration 字段——
+    // capability 校验由 service 闭包执行（generation 取闭包值）。伪造的
+    // "自报 generation" 输入路径不存在（TS 类型层面已封闭）。
+    const resolved = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
+      transactionId: "cap_nogen",
+      capability: issued.capability,
+    });
+    expect(resolved.status).toBe("resolved");
+    void service;
   });
 });
