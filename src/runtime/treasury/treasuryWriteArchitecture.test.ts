@@ -130,7 +130,10 @@ describe("Treasury write-admission 架构边界", () => {
         relative === "runtime/treasury/resolutionStore.ts" ||
         // 第十轮：facade 是 service.resolveUnresolvedTransaction 管理入口的
         // 实现载体（经闭包 resolution kernel 调用，生产 tick 不自动调用）。
-        relative === "runtime/treasury/facade.ts";
+        relative === "runtime/treasury/facade.ts" ||
+        // 第十一轮 3.13.10：resolutionAuthority 是 service 闭包的 resolution
+        // 内部载体（pre-execution 恢复协议；生产 tick 不自动调用）。
+        relative === "runtime/treasury/resolutionAuthority.ts";
       // 定义处允许；writeFault 的受控 marker 清除仅供 faultResolution 调用。
       if (isAuthority) continue;
       const source = readFileSync(filePath, "utf8");
@@ -193,7 +196,10 @@ describe("Treasury write-admission 架构边界", () => {
     for (const filePath of listFilesRecursive(SRC_ROOT)) {
       const relative = filePath.split(/[\\/]/).slice(-3).join("/");
       const isTest = filePath.endsWith(".test.ts");
-      const isAuthority = relative === "runtime/treasury/faultResolution.ts" || relative === "runtime/treasury/facade.ts";
+      const isAuthority =
+        relative === "runtime/treasury/faultResolution.ts" ||
+        relative === "runtime/treasury/facade.ts" ||
+        relative === "runtime/treasury/resolutionAuthority.ts";
       if (isTest || isAuthority) continue;
       const source = readFileSync(filePath, "utf8");
       if (source.includes('from "@/runtime/treasury/faultResolution"')) {
@@ -338,7 +344,8 @@ describe("Treasury write-admission 架构边界", () => {
         relative === "runtime/treasury/facade.ts" ||
         relative === "runtime/treasury/faultResolution.ts" ||
         relative === "runtime/treasury/testHarness.ts" ||
-        relative === "runtime/treasury/resolutionKernelChannel.ts"
+        relative === "runtime/treasury/resolutionKernelChannel.ts" ||
+        relative === "runtime/treasury/resolutionAuthority.ts"
       ) continue;
       const source = readFileSync(filePath, "utf8");
       if (source.includes("resolutionKernelChannel") || source.includes("TREASURY_RESOLUTION_KERNEL")) {
@@ -435,6 +442,7 @@ describe("Treasury write-admission 架构边界", () => {
         relative === "runtime/treasury/faultResolution.ts" ||
         relative === "runtime/treasury/reconciliation.ts" ||
         relative === "runtime/treasury/resolutionKernelChannel.ts" ||
+        relative === "runtime/treasury/resolutionAuthority.ts" ||
         relative === "runtime/treasury/testHarness.ts"
       ) continue;
       const fileSource = readFileSync(filePath, "utf8");
