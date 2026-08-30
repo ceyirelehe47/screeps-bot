@@ -15,6 +15,11 @@
 
 import type { TreasuryService } from "@/runtime/treasury/facade";
 import { TREASURY_WRITER_KERNEL, type TreasuryKernelHolder } from "@/runtime/treasury/kernelChannel";
+import {
+  TREASURY_RESOLUTION_KERNEL,
+  type TreasuryResolutionKernelHolder,
+} from "@/runtime/treasury/resolutionKernelChannel";
+import type { TreasuryReconciliationCapabilityConsumption } from "@/runtime/treasury/reconciliation";
 import type {
   TreasuryAuthorizationConsumeResult,
   TreasuryAuthorizationRequest,
@@ -55,6 +60,9 @@ export type TreasuryTestService = TreasuryService & {
   abortPreparedTransaction(handle: TreasuryPreparedHandle): TreasuryPreparedAbortResult;
   recordAcceptedTransaction(input: TreasuryTransactionInput): TreasurySettlementResult;
   recordAcceptedAction(input: TreasuryRecordActionInput): TreasurySettlementResult;
+  /** resolution kernel 展开（第十一轮 3.13.8：capability 只读验证/消费——测试专用）。 */
+  validateReconciliationCapability(capability: unknown): TreasuryReconciliationCapabilityConsumption;
+  consumeReconciliationCapability(capability: unknown): TreasuryReconciliationCapabilityConsumption;
 };
 
 /**
@@ -85,6 +93,21 @@ export function treasuryTestService(service: TreasuryService): TreasuryTestServi
     enumerable: false,
     writable: false,
     configurable: false,
+  });
+  // resolution kernel（第十一轮 3.13.8）：service 必须持有（伪造对象无效）。
+  const resolutionKernel = (service as unknown as TreasuryResolutionKernelHolder)[TREASURY_RESOLUTION_KERNEL];
+  if (resolutionKernel === undefined) {
+    throw new Error("treasuryTestService: service 不持有 resolution kernel（非 createTreasuryService 产物）");
+  }
+  Object.defineProperty(view, TREASURY_RESOLUTION_KERNEL, {
+    value: resolutionKernel,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+  Object.assign(view, {
+    validateReconciliationCapability: resolutionKernel.validateReconciliationCapability,
+    consumeReconciliationCapability: resolutionKernel.consumeReconciliationCapability,
   });
   return view;
 }

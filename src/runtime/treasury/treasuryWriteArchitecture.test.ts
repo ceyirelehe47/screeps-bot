@@ -328,6 +328,30 @@ describe("Treasury write-admission 架构边界", () => {
     expect(violations).toEqual([]);
   });
 
+  it("【第十一轮 3.13.8】resolution kernel 通道封闭：仅 facade/faultResolution/testHarness 可引用 resolutionKernelChannel", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      const isTest = filePath.endsWith(".test.ts");
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      if (isTest) continue; // 规则针对生产源码（测试文件经 testHarness 视图访问）
+      if (
+        relative === "runtime/treasury/facade.ts" ||
+        relative === "runtime/treasury/faultResolution.ts" ||
+        relative === "runtime/treasury/testHarness.ts" ||
+        relative === "runtime/treasury/resolutionKernelChannel.ts"
+      ) continue;
+      const source = readFileSync(filePath, "utf8");
+      if (source.includes("resolutionKernelChannel") || source.includes("TREASURY_RESOLUTION_KERNEL")) {
+        violations.push(`${relative} 引用 resolution kernel 通道（仅 facade/faultResolution/testHarness 可达）`);
+      }
+    }
+    // 公共 TreasuryService 类型与运行时枚举不得再出现被移除的内部方法。
+    const facadeSource = readSource("src/runtime/treasury/facade.ts");
+    expect(facadeSource.includes("treasuryResolutionGuard")).toBe(false);
+    expect(facadeSource.includes("treasuryServiceGeneration")).toBe(false);
+    expect(violations).toEqual([]);
+  });
+
   it("第八轮：adapter registry 注册边界（仅 actionContracts.ts 自身与测试可注册）", () => {
     const violations: string[] = [];
     for (const filePath of listFilesRecursive(SRC_ROOT)) {
@@ -395,7 +419,10 @@ describe("Treasury write-admission 架构边界", () => {
     // faultResolution 只能经窄接口（service.consumeReconciliationCapability）
     // 消费 capability——不得自行构造 capability 或引用旧 validate/consume。
     const frSource = readSource("src/runtime/treasury/faultResolution.ts");
-    expect(frSource).toContain("service.consumeReconciliationCapability(input.capability)");
+    // 【第十一轮 3.13.8】kernel 通道形态：resolve 函数经 resolution kernel
+    // symbol 消费（模块级注册函数已删除）。
+    expect(frSource).toContain("kernel.consumeReconciliationCapability(input.capability)");
+    expect(frSource.includes("registerTreasuryResolutionKernelForService")).toBe(false);
     expect(/registerTreasuryReconciliationCapability|validateTreasuryReconciliationCapability/.test(frSource)).toBe(false);
     // 其它生产模块不得访问 capability 注册/消费内核（faultResolution 经窄
     // 接口是唯一消费方）。
@@ -403,7 +430,13 @@ describe("Treasury write-admission 架构边界", () => {
     for (const filePath of listFilesRecursive(SRC_ROOT)) {
       if (filePath.endsWith(".test.ts")) continue;
       const relative = filePath.split(/[\\/]/).slice(-3).join("/");
-      if (relative === "runtime/treasury/facade.ts" || relative === "runtime/treasury/faultResolution.ts" || relative === "runtime/treasury/reconciliation.ts") continue;
+      if (
+        relative === "runtime/treasury/facade.ts" ||
+        relative === "runtime/treasury/faultResolution.ts" ||
+        relative === "runtime/treasury/reconciliation.ts" ||
+        relative === "runtime/treasury/resolutionKernelChannel.ts" ||
+        relative === "runtime/treasury/testHarness.ts"
+      ) continue;
       const fileSource = readFileSync(filePath, "utf8");
       if (/consumeReconciliationCapability|registerTreasuryReconciliationCapability/.test(fileSource)) {
         violations.push(`${relative} 访问 capability 注册/消费内核（仅 service 闭包与 faultResolution 窄接口）`);

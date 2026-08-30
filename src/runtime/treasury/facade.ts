@@ -156,6 +156,10 @@ import {
   type TreasuryContractAuthorizationOptions,
 } from "@/runtime/treasury/authorization";
 import { TREASURY_WRITER_KERNEL, type TreasuryWriterKernel } from "@/runtime/treasury/kernelChannel";
+import {
+  TREASURY_RESOLUTION_KERNEL,
+  type TreasuryResolutionKernel,
+} from "@/runtime/treasury/resolutionKernelChannel";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 import { computeTreasuryDurableIdentityDigest, treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
 import {
@@ -180,7 +184,6 @@ import {
 } from "@/runtime/treasury/policyAuthority";
 import { evaluateTreasuryWriteReadiness } from "@/runtime/treasury/writeReadiness";
 import {
-  registerTreasuryResolutionKernelForService,
   resolveTreasuryQuarantinedTransactionAsCommitted,
   resolveTreasuryQuarantinedTransactionAsNotExecuted,
   type TreasuryFaultResolutionResult,
@@ -238,10 +241,10 @@ export const TREASURY_FRESH_EPOCH_LIMIT = 8;
 export const TREASURY_PREPARED_LEAK_SAMPLE_CAP = 8;
 
 /** 服务实例代际序号（模块级单调递增；跨实例 handle 一律无效）。 */
-let treasuryServiceGenerationSeq = 0;
+let serviceGenerationCounter = 0;
 function nextTreasuryServiceGeneration(): number {
-  treasuryServiceGenerationSeq += 1;
-  return treasuryServiceGenerationSeq;
+  serviceGenerationCounter += 1;
+  return serviceGenerationCounter;
 }
 
 export interface TreasuryServiceDeps {
@@ -458,19 +461,11 @@ export interface TreasuryService {
     /** pre-execution authorization fault 的显式确认（第十一轮 3.13.1；其他 fault 不适用）。 */
     readonly acknowledgeRolledBack?: boolean;
   }): TreasuryFaultResolutionResult;
-  /**
-   * capability 校验并消费（第九轮 4.8，@internal——faultResolution 经窄接口
-   * 调用）：对象身份 → 单次使用 → generation（闭包值，调用者不可提交）→
-   * tick；校验通过即标记消费（单次使用语义）。
-   */
-  consumeReconciliationCapability(capability: unknown): TreasuryReconciliationCapabilityConsumption;
-  /** 当前 service generation（capability/resolve 调用方校验用）。 */
-  treasuryServiceGeneration(): number;
-  /** @deprecated 第七轮 guard 入口已被 capability 协议取代（保留只读诊断）。 */
-  treasuryResolutionGuard(): {
-    readonly activeTransactionIds: ReadonlySet<string>;
-    readonly currentObservationTick: number;
-  };
+  // 【第十一轮 3.13.8】capability consume/validate、service generation、
+  // resolution guard 已从公共接口移除——resolution kernel 经
+  // TREASURY_RESOLUTION_KERNEL symbol 通道（facade 闭包挂载，
+  // faultResolution/testHarness 访问）；普通生产调用者类型与运行时枚举
+  // 均不可达（capability 消费仍只在 staged resolution 写入成功后）。
   /** 当前 tick journal 快照（冻结副本）。 */
   journal(): readonly TreasuryJournalEntry[];
   /** 最近一次跨 tick 对账结果。 */
@@ -3322,23 +3317,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       }
       const conclusion = internalService.validateReconciliationCapability(input?.capability);
       if (conclusion.status === "valid" && conclusion.capability.conclusion === "observed_not_executed") {
-        return resolveTreasuryQuarantinedTransactionAsNotExecuted(resolutionKernelAuthority, input);
+        return resolveTreasuryQuarantinedTransactionAsNotExecuted(service, input);
       }
-      return resolveTreasuryQuarantinedTransactionAsCommitted(resolutionKernelAuthority, input);
-    },
-
-    treasuryServiceGeneration(): number {
-      return serviceGeneration;
-    },
-
-    treasuryResolutionGuard(): {
-      readonly activeTransactionIds: ReadonlySet<string>;
-      readonly currentObservationTick: number;
-    } {
-      return {
-        activeTransactionIds: new Set(preparedById.keys()),
-        currentObservationTick: current?.tick ?? 0,
-      };
+      return resolveTreasuryQuarantinedTransactionAsCommitted(service, input);
     },
 
     /** @internal 单阶段兼容实现（勿直接调用）：经 treasury/compat 模块访问。 */
@@ -3541,15 +3522,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
   };
 
-  // ── resolution kernel authority（第十轮 3.12.8）：service 闭包私有对象，
-  //    经 faultResolution 的 WeakSet 注册——结构兼容的伪 service 无法通过
-  //    resolution kernel；对外管理入口是 resolveUnresolvedTransaction。 ────
-  const resolutionKernelAuthority = {
-    validateReconciliationCapability: (capability: unknown) => internalService.validateReconciliationCapability(capability),
-    consumeReconciliationCapability: (capability: unknown) => internalService.consumeReconciliationCapability(capability),
-  };
-  registerTreasuryResolutionKernelForService(resolutionKernelAuthority);
-
+  // ── resolution kernel（第十一轮 3.13.8）：以 non-enumerable symbol 挂载
+  //    于 service 运行时对象（模块级注册机制删除——faultResolution 直接
+  //    经 symbol 读取，伪造对象无该属性一律无效）。 ──────────────────────────
   // 单阶段入口不在公共 TreasuryService 接口上——经 compat 模块以内部
   // 形状访问（生产 writer 禁用；测试经 compatRecordAcceptedTransaction）。
   // ── writer kernel（第十轮 3.12.5）：唯一持有低层原语的内部对象，以
@@ -3584,10 +3559,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     query: internalService.query,
     authorizeTreasuryActionContract: internalService.authorizeTreasuryActionContract,
     issueTreasuryReconciliationCapability: internalService.issueTreasuryReconciliationCapability,
-    consumeReconciliationCapability: internalService.consumeReconciliationCapability,
     resolveUnresolvedTransaction: internalService.resolveUnresolvedTransaction,
-    treasuryServiceGeneration: internalService.treasuryServiceGeneration,
-    treasuryResolutionGuard: internalService.treasuryResolutionGuard,
     preparedLeakAudit: internalService.preparedLeakAudit,
     journal: internalService.journal,
     lastReconciliation: internalService.lastReconciliation,
@@ -3600,6 +3572,17 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     metrics: internalService.metrics,
     resetForTest: internalService.resetForTest,
   };
+  Object.defineProperty(service, TREASURY_RESOLUTION_KERNEL, {
+    value: Object.freeze({
+      validateReconciliationCapability: (capability: unknown) =>
+        internalService.validateReconciliationCapability(capability),
+      consumeReconciliationCapability: (capability: unknown) =>
+        internalService.consumeReconciliationCapability(capability),
+    } satisfies TreasuryResolutionKernel),
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
   Object.defineProperty(service, TREASURY_WRITER_KERNEL, {
     value: Object.freeze({
       ...writerKernel,

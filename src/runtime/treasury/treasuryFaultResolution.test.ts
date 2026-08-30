@@ -1099,7 +1099,7 @@ describe("service-private resolution（第十轮 3.12.8：闭包 kernel + capabi
     expect(rejected.status).toBe("rejected");
     if (rejected.status === "rejected") {
       expect(rejected.reason).toBe("invalid_input");
-      expect(rejected.detail).toContain("未在当前 Treasury service 闭包注册");
+      expect(rejected.detail).toContain("不持有 resolution kernel");
     }
     // 隔离不动。
     expect(readTreasuryQuarantineEntry("r10_fake")).toBeDefined();
@@ -1122,5 +1122,38 @@ describe("service-private resolution（第十轮 3.12.8：闭包 kernel + capabi
     resetTreasuryIntentRuntimeForTest();
     const retried = next.resolveUnresolvedTransaction({ transactionId: "r10_kept", digest, capability: issued.capability });
     expect(retried.status).toBe("resolved");
+  });
+});
+
+describe("resolution 内部封闭（第十一轮 3.13.8）", () => {
+  it("公共 service 类型与运行时枚举不存在 consume/generation/guard；普通对象无法提前消费 capability", () => {
+    // 未包装的生产 service（testHarness 视图有意展开测试原语——生产面
+    // 以 createTreasuryService 直接产物验证）。
+    const rooms = installRooms(ROOMS);
+    const production = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    // 运行时枚举：公共方法面不存在内部原语。
+    const publicService = production as unknown as Record<string, unknown>;
+    expect("consumeReconciliationCapability" in publicService).toBe(false);
+    expect("treasuryServiceGeneration" in publicService).toBe(false);
+    expect("treasuryResolutionGuard" in publicService).toBe(false);
+    // kernel symbol 为 non-enumerable（Object.keys 不可见）。
+    expect(Object.getOwnPropertySymbols(production).length).toBeGreaterThan(0);
+    expect(Object.keys(production).includes("TREASURY_RESOLUTION_KERNEL")).toBe(false);
+    // 普通对象（无 symbol kernel）无法消费 capability——resolution kernel 不可达。
+    const plain = { consumeReconciliationCapability: () => ({ status: "valid" }) };
+    expect(() =>
+      resolveTreasuryQuarantinedTransactionAsNotExecuted(plain as never, {
+        transactionId: "privacy_plain",
+        capability: {} as never,
+      }),
+    ).not.toThrow();
+    const rejected = resolveTreasuryQuarantinedTransactionAsNotExecuted(plain as never, {
+      transactionId: "privacy_plain",
+      capability: {} as never,
+    });
+    expect(rejected.status).toBe("rejected");
+    if (rejected.status === "rejected") {
+      expect(rejected.detail).toContain("不持有 resolution kernel");
+    }
   });
 });

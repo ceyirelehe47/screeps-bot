@@ -75,17 +75,19 @@ import type {
 import { recordTreasuryResolutionEvent } from "@/runtime/treasury/resolutionEvents";
 
 export type { TreasuryReconciliationConclusion } from "@/runtime/treasury/reconciliation";
+import {
+  TREASURY_RESOLUTION_KERNEL,
+  type TreasuryResolutionKernel,
+  type TreasuryResolutionKernelHolder,
+} from "@/runtime/treasury/resolutionKernelChannel";
 
-// ── resolution kernel token（第十轮 3.12.8） ────────────────────────────────
-// resolution kernel 只接受由当前 Treasury service 闭包注册的 authority 对象
-//（WeakSet 对象身份——结构兼容的伪 service 一律无效）。注册入口仅供 facade
-// 调用（架构测试守护生产模块不得引用）。
-const resolutionKernelRegistry = new WeakSet<object>();
-export function registerTreasuryResolutionKernelForService(authority: object): void {
-  resolutionKernelRegistry.add(authority);
-}
-function isRegisteredResolutionKernel(authority: object): boolean {
-  return resolutionKernelRegistry.has(authority);
+// ── resolution kernel 通道（第十一轮 3.13.8） ────────────────────────────────
+// 模块级 WeakSet 注册机制删除：resolve 函数只接受持有
+// TREASURY_RESOLUTION_KERNEL（non-enumerable symbol）的 service 运行时
+// 对象——伪造对象无该 symbol 属性一律无效（closure 直接调用，注册函数
+// 不复存在）。
+function resolutionKernelOf(service: object): TreasuryResolutionKernel | undefined {
+  return (service as Partial<TreasuryResolutionKernelHolder>)[TREASURY_RESOLUTION_KERNEL];
 }
 
 /** resolution 输入（第八轮）：capability 取代旧 evidence/guard 自由对象。 */
@@ -174,7 +176,7 @@ function describeInvalidInput(input: TreasuryFaultResolutionInput): string | nul
  * reconciler 绑定。返回 entry+capability 或拒绝/uncertain 结果。
  */
 function prevalidate(
-  service: TreasuryReconciliationCapabilityAuthority,
+  kernel: TreasuryResolutionKernel,
   input: TreasuryFaultResolutionInput,
 ): { authority: TreasuryUnresolvedAuthority; capability: TreasuryReconciliationCapability } | { stop: TreasuryFaultResolutionResult } {
   const inputError = describeInvalidInput(input);
@@ -199,7 +201,7 @@ function prevalidate(
   // generation/tick——零消费）。消费移至 staged resolution intent 写入之后：
   // staged 前的任何拒绝（store fatal/authority mismatch/evidence/slot）都
   // 不烧掉 capability（可重试）。
-  const capabilityCheck = service.validateReconciliationCapability(input.capability);
+  const capabilityCheck = kernel.validateReconciliationCapability(input.capability);
   if (capabilityCheck.status !== "valid") {
     countRejected();
     return {
@@ -416,14 +418,15 @@ function prevalidate(
  * 重放历史动作。
  */
 export function resolveTreasuryQuarantinedTransactionAsCommitted(
-  service: TreasuryReconciliationCapabilityAuthority,
+  serviceHolder: object,
   input: TreasuryFaultResolutionInput,
 ): TreasuryFaultResolutionResult {
-  if (!isRegisteredResolutionKernel(service)) {
+  const kernel = resolutionKernelOf(serviceHolder);
+  if (kernel === undefined) {
     countRejected();
-    return { status: "rejected", reason: "invalid_input", detail: "resolution kernel 未在当前 Treasury service 闭包注册（结构兼容的伪 service 无效——对外入口是 service.resolveUnresolvedTransaction）" };
+    return { status: "rejected", reason: "invalid_input", detail: "对象不持有 resolution kernel（non-enumerable symbol 通道——结构兼容的伪 service 无效；对外入口是 service.resolveUnresolvedTransaction）" };
   }
-  const pre = prevalidate(service, input);
+  const pre = prevalidate(kernel, input);
   if ("stop" in pre) return pre.stop;
   const { authority, capability } = pre;
   if (capability.conclusion !== "observed_committed") {
@@ -460,7 +463,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
   // 【第十轮 3.12.8】capability 消费时点：staged resolution intent（resolving
   // tombstone）写入成功后才消费——此前任何拒绝都不烧掉 capability；此后
   // 中断由 durable staged state 跨 reset 幂等恢复（不依赖旧 capability）。
-  const consumedNow = service.consumeReconciliationCapability(input.capability);
+  const consumedNow = kernel.consumeReconciliationCapability(input.capability);
   if (consumedNow.status !== "valid") {
     // 防御分支（validate 通过后同步窗口内无失效源）：回滚 tombstone。
     deleteTreasuryResolutionTombstone(authority.transactionId);
@@ -520,14 +523,15 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
  * prepare"的中间态）。不写 receipt、不生成 committed projection。
  */
 export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
-  service: TreasuryReconciliationCapabilityAuthority,
+  serviceHolder: object,
   input: TreasuryFaultResolutionInput,
 ): TreasuryFaultResolutionResult {
-  if (!isRegisteredResolutionKernel(service)) {
+  const kernel = resolutionKernelOf(serviceHolder);
+  if (kernel === undefined) {
     countRejected();
-    return { status: "rejected", reason: "invalid_input", detail: "resolution kernel 未在当前 Treasury service 闭包注册（结构兼容的伪 service 无效——对外入口是 service.resolveUnresolvedTransaction）" };
+    return { status: "rejected", reason: "invalid_input", detail: "对象不持有 resolution kernel（non-enumerable symbol 通道——结构兼容的伪 service 无效；对外入口是 service.resolveUnresolvedTransaction）" };
   }
-  const pre = prevalidate(service, input);
+  const pre = prevalidate(kernel, input);
   if ("stop" in pre) return pre.stop;
   const { authority, capability } = pre;
   if (capability.conclusion !== "observed_not_executed") {
@@ -569,7 +573,7 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
     return { status: "rejected", reason: "resolution_store_fatal", detail: `final tombstone 写入失败（quarantine 保留，可重试）: ${finalWrite.detail}` };
   }
   // 【第十轮 3.12.8】capability 消费时点：staged final tombstone 写入成功后。
-  const consumedNow = service.consumeReconciliationCapability(input.capability);
+  const consumedNow = kernel.consumeReconciliationCapability(input.capability);
   if (consumedNow.status !== "valid") {
     // 防御分支：tombstone 已 final（幂等 already_resolved），capability 未消费
     //（下次管理调用快路径返回 already_resolved——零资产影响）。
