@@ -11,6 +11,7 @@
  * - 单阶段登记不得绕过 tentative（不得抢占 prepared 预留）。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { installRooms, type RoomSpec } from "@mock/treasury";
@@ -153,7 +154,7 @@ describe("Treasury tentative capacity ledger", () => {
   it("单阶段登记同样不得抢占 prepared 容量预留", () => {
     const service = makeService(TIGHT_ROOMS);
     prepareOk(service, "ts1_aaa", 800);
-    const drain = service.recordAcceptedTransaction(
+    const drain = compatRecordAcceptedTransaction(service, 
       prepareInput(service, "ts1_single", [{ roomName: "W1N57", locationKind: "storage", resource: "U", delta: 800 }]),
     );
     expect(drain.status).toBe("rejected");

@@ -28,8 +28,11 @@
  * 成功 → commit 执行 tentative → committed 兑现（不做业务 admission，
  * 不再因资源/容量/receipt 条件拒绝；prepare_invalidated 正常路径已删除）。
  * 相同 transactionId、相同 digest 重复 prepare 幂等返回同一 handle；
- * 不同 digest 返回 prepare_conflict。单阶段 recordAcceptedTransaction
- * 保留为兼容入口（同样计入 tentative，不得抢占 prepared 预留）。
+ * 不同 digest 返回 prepare_conflict。单阶段 recordAcceptedTransaction/
+ * recordAcceptedAction 已从公共 writer API 退役：实现保留在服务对象上
+ * 仅经 compat 模块（compatRecordAcceptedTransaction）供既有测试与迁移
+ * 过渡使用，生产 writer 不得调用（treasuryWriteArchitecture.test.ts
+ * 架构边界守护）；兼容路径同样计入 tentative，不得抢占 prepared 预留。
  *
  * 门禁语义：不提供无上下文 available；查询输入（资源/房间/位置/withhold/
  * 布尔开关）非法或房间不在管辖集合（unknown/unowned room）时 fail closed；
@@ -195,10 +198,6 @@ export interface TreasuryService {
   ): TreasurySafeExecuteResult<TAction>;
   /** 最近一次 tick 边界的 outstanding prepared 审计快照（有界样本）。 */
   preparedLeakAudit(): TreasuryPreparedLeakAudit;
-  /** 唯一权威单阶段登记入口：多 posting 原子交易 + 决策 epoch 绑定 + 幂等。 */
-  recordAcceptedTransaction(input: TreasuryTransactionInput): TreasurySettlementResult;
-  /** 单 posting convenience（内部转 transaction；decision 与幂等语义相同）。 */
-  recordAcceptedAction(input: TreasuryRecordActionInput): TreasurySettlementResult;
   /** 当前 tick journal 快照（冻结副本）。 */
   journal(): readonly TreasuryJournalEntry[];
   /** 最近一次跨 tick 对账结果。 */
@@ -629,7 +628,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     return { registered };
   }
 
-  const service: TreasuryService = {
+  const service = {
     beginTick(): void {
       if (current && current.tick === Game.time) return; // 幂等
       performBeginTick(false);
@@ -1140,6 +1139,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       return lastPreparedLeakAudit;
     },
 
+    /** @internal 单阶段兼容实现（勿直接调用）：经 treasury/compat 模块访问。 */
     recordAcceptedTransaction(input: TreasuryTransactionInput): TreasurySettlementResult {
       const state = ensureTickState(true);
       // 幂等优先于一切：已结算 id 的重放无论决策上下文一律 already_settled。
@@ -1168,6 +1168,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       return projection.recordTransaction(input, registered.observation);
     },
 
+    /** @internal 单阶段兼容实现（勿直接调用）：经 treasury/compat 模块访问。 */
     recordAcceptedAction(input: TreasuryRecordActionInput): TreasurySettlementResult {
       return this.recordAcceptedTransaction({
         transactionId: input.transactionId,
@@ -1254,5 +1255,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
   };
 
-  return service;
+  // 单阶段入口不在公共 TreasuryService 接口上——经 compat 模块以内部
+  // 形状访问（生产 writer 禁用；测试经 compatRecordAcceptedTransaction）。
+  return service as TreasuryService;
 }

@@ -9,6 +9,7 @@
  *   structureId 替换/金额归零/外部流入流出全部显式分类，transaction 追溯保留。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
 import {
   clearTreasuryPersistenceForTest,
   encodeReceiptKey,
@@ -55,7 +56,7 @@ function makeFixture(roomSpecs: RoomSpec[] = DEFAULT_ROOMS): ServiceFixture {
 type Posting = { roomName: string; locationKind: "storage" | "terminal"; resource: string; delta: number };
 
 function tx(fixture: ServiceFixture, transactionId: string, postings: Posting[], kind = "terminal.send") {
-  return fixture.service.recordAcceptedTransaction({
+  return compatRecordAcceptedTransaction(fixture.service, {
     transactionId,
     kind,
     source: "test",
@@ -194,7 +195,7 @@ describe("Treasury 原子 transaction journal", () => {
     fixture.service.endTick();
     Game.time += 1;
     fixture.service.beginTick();
-    const nextTick = fixture.service.recordAcceptedTransaction({
+    const nextTick = compatRecordAcceptedTransaction(fixture.service, {
       transactionId,
       kind: "terminal.send",
       source: "test",
@@ -222,7 +223,7 @@ describe("Treasury 原子 transaction journal", () => {
       observedAtTick: first.observation().epoch.observedAtTick,
     };
     const transactionId = formatTreasuryTransactionId("reset-proof", "a");
-    expect(first.recordAcceptedTransaction({
+    expect(compatRecordAcceptedTransaction(first, {
       transactionId,
       kind: "terminal.send",
       source: "test",
@@ -235,7 +236,7 @@ describe("Treasury 原子 transaction journal", () => {
     Game.time += 1;
     const second = createTreasuryService({ getRooms: () => Object.values(rooms) });
     second.beginTick();
-    const replay = second.recordAcceptedTransaction({
+    const replay = compatRecordAcceptedTransaction(second, {
       transactionId,
       kind: "terminal.send",
       source: "test",

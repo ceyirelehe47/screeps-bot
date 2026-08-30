@@ -11,6 +11,7 @@
  * - receipt retention/cap 清理边界：过期回收、超容驱逐、当前 tick 保护。
  */
 import { createTreasuryService, TREASURY_FRESH_EPOCH_LIMIT, type TreasuryService } from "@/runtime/treasury/facade";
+import { compatRecordAcceptedAction, compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
 import {
   TREASURY_RECEIPT_MAX_ENTRIES,
   TREASURY_RECEIPT_RETENTION_TICKS,
@@ -76,7 +77,7 @@ function installLegacyReceipts(raw: unknown): void {
 }
 
 function send(service: TreasuryService, transactionId: string, delta = -100, kind = "terminal.send") {
-  return service.recordAcceptedTransaction({
+  return compatRecordAcceptedTransaction(service, {
     transactionId,
     kind,
     source: "test",
@@ -121,7 +122,7 @@ describe("Treasury 显式 tick 生命周期", () => {
     const { service } = makeService();
     service.beginTick();
     service.endTick();
-    const result = service.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("late", 1),
       kind: "terminal.send",
       source: "test",
@@ -134,7 +135,7 @@ describe("Treasury 显式 tick 生命周期", () => {
 
     Game.time += 1;
     service.beginTick();
-    const next = service.recordAcceptedTransaction({
+    const next = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("late", 2),
       kind: "terminal.send",
       source: "test",
@@ -148,7 +149,7 @@ describe("Treasury 显式 tick 生命周期", () => {
     const { service } = makeService();
     service.beginTick();
     const epoch = service.observation().epoch;
-    service.recordAcceptedTransaction({
+    compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("send", 1),
       kind: "terminal.send",
       source: "test",
@@ -217,7 +218,7 @@ describe("Treasury 决策 epoch 绑定（Facade 级验证）", () => {
   it("shared epoch 决策成功结算", () => {
     const { service } = makeService();
     service.beginTick();
-    const result = service.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("ep", "shared"),
       kind: "terminal.send",
       source: "test",
@@ -231,7 +232,7 @@ describe("Treasury 决策 epoch 绑定（Facade 级验证）", () => {
     const { service } = makeService();
     service.beginTick();
     const fresh = service.beginFreshObservation();
-    const result = service.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("ep", "fresh"),
       kind: "market.deal",
       source: "test",
@@ -249,7 +250,7 @@ describe("Treasury 决策 epoch 绑定（Facade 级验证）", () => {
     service.endTick();
     Game.time += 1;
     service.beginTick();
-    const result = service.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("ep", "stale-shared"),
       kind: "terminal.send",
       source: "test",
@@ -268,7 +269,7 @@ describe("Treasury 决策 epoch 绑定（Facade 级验证）", () => {
     service.endTick();
     Game.time += 1;
     service.beginTick();
-    const result = service.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("ep", "stale-fresh"),
       kind: "market.deal",
       source: "test",
@@ -280,7 +281,7 @@ describe("Treasury 决策 epoch 绑定（Facade 级验证）", () => {
 
     // 本 tick 新 fresh epoch 有效。
     const currentFresh = service.beginFreshObservation().epoch;
-    const good = service.recordAcceptedTransaction({
+    const good = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("ep", "fresh-ok"),
       kind: "market.deal",
       source: "test",
@@ -294,7 +295,7 @@ describe("Treasury 决策 epoch 绑定（Facade 级验证）", () => {
     const { service } = makeService();
     service.beginTick();
     const fresh = service.beginFreshObservation().epoch;
-    const result = service.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("ep", "scope"),
       kind: "terminal.send",
       source: "test",
@@ -309,7 +310,7 @@ describe("Treasury 决策 epoch 绑定（Facade 级验证）", () => {
   it("未知 epochSeq 拒绝（本 tick 从未发行）", () => {
     const { service } = makeService();
     service.beginTick();
-    const result = service.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("ep", "unknown"),
       kind: "terminal.send",
       source: "test",
@@ -324,7 +325,7 @@ describe("Treasury 决策 epoch 绑定（Facade 级验证）", () => {
   it("convenience 单 posting 入口同样强制 decision（无绕过 Gateway 的路径）", () => {
     const { service } = makeService();
     service.beginTick();
-    const noDecision = service.recordAcceptedAction({
+    const noDecision = compatRecordAcceptedAction(service, {
       transactionId: formatTreasuryTransactionId("ep", "single"),
       kind: "terminal.send",
       roomName: "W1N57",
@@ -337,7 +338,7 @@ describe("Treasury 决策 epoch 绑定（Facade 级验证）", () => {
     expect(noDecision.status).toBe("rejected");
     if (noDecision.status === "rejected") expect(noDecision.reason).toBe("stale_epoch");
 
-    const good = service.recordAcceptedAction({
+    const good = compatRecordAcceptedAction(service, {
       transactionId: formatTreasuryTransactionId("ep", "single-ok"),
       kind: "terminal.send",
       roomName: "W1N57",
@@ -699,7 +700,7 @@ describe("Treasury receipt admission 安全契约（retention 内绝不驱逐）
     const scansBefore = service.metrics().receiptFullScans;
     const visitedBefore = service.metrics().receiptEntriesVisited;
     expect(
-      service.recordAcceptedTransaction({
+      compatRecordAcceptedTransaction(service, {
         transactionId: formatTreasuryTransactionId("fast", 1),
         kind: "terminal.send",
         source: "test",
@@ -731,7 +732,7 @@ describe("Treasury fresh epoch 绑定 exact observation", () => {
     const fresh = service.beginFreshObservation()!;
     expect(fresh.amount("W1N57", "storage", "U")).toBe(100);
 
-    const result = service.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("fresh-low", 1),
       kind: "market.deal",
       source: "test",
@@ -751,7 +752,7 @@ describe("Treasury fresh epoch 绑定 exact observation", () => {
     const fresh = service.beginFreshObservation()!;
     expect(fresh.freeCapacity("W1N57", "storage")).toBe(100);
 
-    const result = service.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("fresh-cap", 1),
       kind: "market.deal",
       source: "test",
@@ -766,7 +767,7 @@ describe("Treasury fresh epoch 绑定 exact observation", () => {
     const { service } = makeService();
     service.beginTick();
     const fresh = service.beginFreshObservation()!;
-    const result = service.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("fresh-journal", 1),
       kind: "market.deal",
       source: "test",
@@ -789,7 +790,7 @@ describe("Treasury fresh epoch 绑定 exact observation", () => {
     expect(freshLow.amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(500);
 
     // 基于 freshHigh 的一笔合法流出（shared/freshHigh 基线足够）。
-    expect(service.recordAcceptedTransaction({
+    expect(compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("dual", "high"),
       kind: "market.deal",
       source: "test",
@@ -797,7 +798,7 @@ describe("Treasury fresh epoch 绑定 exact observation", () => {
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -80_000 }],
     }).status).toBe("recorded");
     // 基于 freshLow 的同等流出拒绝（fresh 基线 500 不足）。
-    expect(service.recordAcceptedTransaction({
+    expect(compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("dual", "low"),
       kind: "market.deal",
       source: "test",
@@ -817,7 +818,7 @@ describe("Treasury fresh epoch 绑定 exact observation", () => {
     setStoreResources(rooms["W1N57"].storage, { energy: 90_000, U: 50_000 });
     const fresh = service.beginFreshObservation()!;
     expect(fresh.amount("W1N57", "storage", RESOURCE_ENERGY)).toBe(90_000);
-    const result = service.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("overlay", 2),
       kind: "market.deal",
       source: "test",
@@ -874,7 +875,7 @@ describe("Treasury fresh epoch 绑定 exact observation", () => {
     service.beginTick();
 
     // 上一 tick 的 fresh epoch：stale。
-    const stale = service.recordAcceptedTransaction({
+    const stale = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("old-fresh", 1),
       kind: "market.deal",
       source: "test",
@@ -886,7 +887,7 @@ describe("Treasury fresh epoch 绑定 exact observation", () => {
 
     // 伪造 fresh scope 声明（epochSeq 实为 shared）。
     const sharedEpoch = service.observation().epoch;
-    const forged = service.recordAcceptedTransaction({
+    const forged = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("forge", 1),
       kind: "market.deal",
       source: "test",
@@ -897,7 +898,7 @@ describe("Treasury fresh epoch 绑定 exact observation", () => {
     if (forged.status === "rejected") expect(forged.reason).toBe("scope_mismatch");
 
     // 未注册的 fresh epochSeq。
-    const unknown = service.recordAcceptedTransaction({
+    const unknown = compatRecordAcceptedTransaction(service, {
       transactionId: formatTreasuryTransactionId("unknown-fresh", 1),
       kind: "market.deal",
       source: "test",

@@ -14,6 +14,7 @@
  */
 import { buildTreasuryCommitmentIndex } from "@/runtime/treasury/commitments";
 import { createTreasuryService } from "@/runtime/treasury/facade";
+import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
 import { bumpTreasuryCommitmentRevision, readTreasuryCommitmentRevision, resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { formatTreasuryTransactionId } from "@/runtime/treasury/transactionId";
@@ -296,7 +297,7 @@ describe("receiver capacity 承诺", () => {
     treasury.beginTick();
     // 本 tick 已结算：E1N57 storage 净流入 30_000（占掉 free）。
     const epoch = treasury.observation().epoch;
-    expect(treasury.recordAcceptedTransaction({
+    expect(compatRecordAcceptedTransaction(treasury, {
       transactionId: formatTreasuryTransactionId("inflow", 1),
       kind: "terminal.send",
       source: "test",

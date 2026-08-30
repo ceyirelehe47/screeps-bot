@@ -12,6 +12,7 @@
  * - RuntimeServices 挂载与 resetForTest（journal/overlay/heap 幂等缓存全清）。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
 import { getRuntimeServices, getTreasuryService, registerRuntimeServices } from "@/runtime/runtimeServices";
 import {
   clearTreasuryPersistenceForTest,
@@ -24,7 +25,7 @@ import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commi
 import { formatTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { installRooms, type RoomSpec } from "@mock/treasury";
-import type { TreasuryHolderResolution } from "@/runtime/treasury/types";
+import type { TreasuryHolderResolution, TreasuryTransactionInput } from "@/runtime/treasury/types";
 
 type RuntimeGlobal = typeof global & { __runtimeServices?: unknown };
 function clearRuntimeServicesForTest(): void {
@@ -203,7 +204,7 @@ describe("Treasury 带上下文查询", () => {
     const treasury = makeService();
     treasury.beginTick();
     const decision = decisionOf(treasury);
-    const result = treasury.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(treasury, {
       transactionId: formatTreasuryTransactionId("transfer", "stor-1", "term-1"),
       kind: "terminal.send",
       source: "test",
@@ -242,7 +243,7 @@ describe("Treasury 带上下文查询", () => {
     expect(treasury.projectedFreeCapacity("W1N57", "storage")).toBe(10_000);
 
     const decision = decisionOf(treasury);
-    const result = treasury.recordAcceptedTransaction({
+    const result = compatRecordAcceptedTransaction(treasury, {
       transactionId: formatTreasuryTransactionId("send", 1),
       kind: "terminal.send",
       source: "test",
@@ -326,7 +327,7 @@ describe("Treasury receiver projected headroom 实时性", () => {
 
     // 结算一笔流入 receiver storage 的 transaction。
     const decision = decisionOf(treasury);
-    expect(treasury.recordAcceptedTransaction({
+    expect(compatRecordAcceptedTransaction(treasury, {
       transactionId: formatTreasuryTransactionId("incoming", 1),
       kind: "terminal.send",
       source: "test",
@@ -344,7 +345,7 @@ describe("Treasury receiver projected headroom 实时性", () => {
     expect(after.storageHeadroom).toBe(200_000); // observed 口径 headroom 不变
 
     // 流出后 projected headroom 恢复。
-    expect(treasury.recordAcceptedTransaction({
+    expect(compatRecordAcceptedTransaction(treasury, {
       transactionId: formatTreasuryTransactionId("incoming", 2),
       kind: "terminal.send",
       source: "test",
@@ -368,7 +369,7 @@ describe("Treasury receiver projected headroom 实时性", () => {
     const decision = decisionOf(treasury);
     const index = treasury.commitments();
     for (const [resource, delta] of [[RESOURCE_ENERGY, 10_000], ["U", 5_000], [RESOURCE_ENERGY, 7_000]] as const) {
-      expect(treasury.recordAcceptedTransaction({
+      expect(compatRecordAcceptedTransaction(treasury, {
         transactionId: formatTreasuryTransactionId("multi", resource, delta),
         kind: "terminal.send",
         source: "test",
@@ -506,7 +507,7 @@ describe("RuntimeServices 集成", () => {
     const services = getRuntimeServices();
     services.treasury.beginTick();
     const decision = decisionOf(services.treasury);
-    const recorded = services.treasury.recordAcceptedTransaction({
+    const recorded = compatRecordAcceptedTransaction(services.treasury, {
       transactionId: formatTreasuryTransactionId("send", "x"),
       kind: "terminal.send",
       source: "test",
@@ -533,7 +534,7 @@ describe("RuntimeServices 集成", () => {
     });
     treasury.beginTick();
     const decision = decisionOf(treasury);
-    treasury.recordAcceptedTransaction({
+    compatRecordAcceptedTransaction(treasury, {
       transactionId: formatTreasuryTransactionId("send", "dup"),
       kind: "send",
       source: "test",
@@ -554,7 +555,7 @@ describe("Treasury 两阶段 prepare/commit/abort 协议", () => {
     treasury: TreasuryService,
     transactionId: string,
     delta = -500,
-  ): Parameters<TreasuryService["recordAcceptedTransaction"]>[0] {
+  ): TreasuryTransactionInput {
     return {
       transactionId,
       kind: "terminal.send",
@@ -564,7 +565,7 @@ describe("Treasury 两阶段 prepare/commit/abort 协议", () => {
     };
   }
 
-  function prepareOk(treasury: TreasuryService, input: Parameters<TreasuryService["recordAcceptedTransaction"]>[0]) {
+  function prepareOk(treasury: TreasuryService, input: TreasuryTransactionInput) {
     const prepared = treasury.prepareTransaction(input);
     expect(prepared.status).toBe("prepared");
     if (prepared.status !== "prepared") throw new Error("prepare 失败");
@@ -657,7 +658,7 @@ describe("Treasury 两阶段 prepare/commit/abort 协议", () => {
     const handle = prepareOk(treasury, twoPhaseInput(treasury, TX_ID));
     // 单阶段登记挤占最后一个槽位（admission 计入 pending 预留后仍剩 1）。
     expect(
-      treasury.recordAcceptedTransaction(twoPhaseInput(treasury, formatTreasuryTransactionId("fill", "1"))).status,
+      compatRecordAcceptedTransaction(treasury, twoPhaseInput(treasury, formatTreasuryTransactionId("fill", "1"))).status,
     ).toBe("recorded");
     // store 已满；prepared 槽位已预留——commit 兑现不因容量被拒。
     expect(treasury.commitPreparedTransaction(handle).status).toBe("committed");
@@ -669,7 +670,7 @@ describe("Treasury 两阶段 prepare/commit/abort 协议", () => {
     const handle = prepareOk(treasury, twoPhaseInput(treasury, TX_ID, -90_000));
     // 他人单阶段尝试把同一 storage energy 再流出 95_000：授权计算计入
     // tentative（100_000-90_000 剩 10_000 < 95_000）→ prepare 预留不被抢占。
-    const drain = treasury.recordAcceptedTransaction(
+    const drain = compatRecordAcceptedTransaction(treasury, 
       twoPhaseInput(treasury, formatTreasuryTransactionId("drain", "1"), -95_000),
     );
     expect(drain.status).toBe("rejected");

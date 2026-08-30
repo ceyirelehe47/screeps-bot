@@ -11,6 +11,7 @@
  * - 正常路径无故障时 marker 恒缺失。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import {
@@ -179,7 +180,7 @@ describe("staged commit 故障注入", () => {
     expect(other.status).toBe("rejected");
     if (other.status === "rejected") expect(other.reason).toBe("write_admission_locked");
     // 单阶段登记同样被锁。
-    const single = service.recordAcceptedTransaction({
+    const single = compatRecordAcceptedTransaction(service, {
       ...faulted,
       handle: undefined,
       transactionId: "ts1_single",
