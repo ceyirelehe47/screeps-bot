@@ -1,18 +1,18 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "11cdd6e",
+    "commit": "3401ea7",
     "suites": 219,
-    "tests": 1181,
-    "passed": 1181,
+    "tests": 1220,
+    "passed": 1220,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
     "suites": 219,
-    "tests": 1181,
-    "passed": 1181,
+    "tests": 1220,
+    "passed": 1220,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -1055,12 +1055,12 @@
     },
     "src/runtime/treasury/treasuryWriteArchitecture.test.ts": {
       "baseline": 0,
-      "budget": 16,
+      "budget": 17,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryWriteAdmissionPerformance.test.ts": {
       "baseline": 0,
-      "budget": 14,
+      "budget": 16,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryQuarantine.test.ts": {
@@ -1070,7 +1070,7 @@
     },
     "src/runtime/treasury/treasuryFaultResolution.test.ts": {
       "baseline": 0,
-      "budget": 37,
+      "budget": 39,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryQuarantineAuthority.test.ts": {
@@ -1085,12 +1085,12 @@
     },
     "src/runtime/treasury/treasuryWriteReadiness.test.ts": {
       "baseline": 0,
-      "budget": 7,
+      "budget": 9,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryActionContract.test.ts": {
       "baseline": 0,
-      "budget": 12,
+      "budget": 19,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryAuthorization.test.ts": {
@@ -1105,17 +1105,17 @@
     },
     "src/runtime/treasury/treasuryDurableIntent.test.ts": {
       "baseline": 0,
-      "budget": 32,
+      "budget": 41,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryCanonicalEncoding.test.ts": {
       "baseline": 0,
-      "budget": 11,
+      "budget": 18,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryContractAuthorization.test.ts": {
       "baseline": 0,
-      "budget": 14,
+      "budget": 23,
       "tier": "high-risk"
     }
   }
