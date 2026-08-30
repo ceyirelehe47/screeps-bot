@@ -42,7 +42,6 @@ import type { TreasuryLocationKind, TreasuryObservationScope } from "@/runtime/t
 import { isValidTreasuryOwnerIdentity, treasuryReservationOwnerToken, type TreasuryOwnerIdentity } from "@/runtime/treasury/ownerIdentity";
 
 const AUTHORIZATION_ACTION_KIND_MAX = 128;
-const AUTHORIZATION_POLICY_FINGERPRINT_MAX = 128;
 const AUTHORIZATION_ACTIVE_LIMIT = 64;
 const VALID_RESOURCES: ReadonlySet<string> = new Set<string>(RESOURCES_ALL);
 const VALID_LOCATION_KINDS: ReadonlySet<string> = new Set<string>(["storage", "terminal"]);
@@ -70,10 +69,8 @@ export interface TreasuryAuthorizationRequest {
   readonly amount: number;
   /** owner-aware 自排除（kind 限 game-object/logical-service）。 */
   readonly owner?: TreasuryOwnerIdentity;
-  /** 策略保留量（与 policyFingerprint 二选一或都缺省）。 */
+  /** 策略保留量（受控数值——第九轮起唯一的 policy authority 通道）。 */
   readonly withhold?: number;
-  /** 策略指纹（≤128；与 withhold 二选一）。 */
-  readonly policyFingerprint?: string;
   /** 是否允许计入投影（默认 true）。 */
   readonly allowProjected?: boolean;
   /** immediate write 硬策略：必须缺省/false——true 一律拒绝。 */
@@ -88,10 +85,42 @@ export interface TreasuryAuthorizationRequest {
     readonly locationKind: TreasuryLocationKind;
     readonly amount: number;
   };
-  /** 后续 action contract digest 绑定（可选）。 */
+  /** 后续 action contract digest 绑定（contract-first 授权必填）。 */
   readonly contractDigest?: string;
   /** adapter version 绑定（第九轮：contract-first 授权必填；版本演进失效）。 */
   readonly adapterVersion?: number;
+}
+
+/**
+ * contract 驱动授权的可选上下文（第九轮 4.1）：actionKind/rooms/locations/
+ * amount/contractDigest/adapterVersion 全部由 contract 派生——调用者只能
+ * 提供 owner/policy withhold/投影开关/容量需求。
+ */
+export interface TreasuryContractAuthorizationOptions {
+  readonly owner?: TreasuryOwnerIdentity;
+  /** 受控 withhold 数值（唯一的 policy authority 表达）。 */
+  readonly withhold?: number;
+  readonly allowProjected?: boolean;
+  readonly capacityRequirement?: {
+    readonly roomName: string;
+    readonly locationKind: TreasuryLocationKind;
+    readonly amount: number;
+  };
+}
+
+/**
+ * contract authorization bundle（第九轮）：contract-first 授权的原子产物——
+ * 每种负 posting 资源一个 token，全部绑定同一 contract identity/digest/
+ * adapter version；执行时整体只读预验证 + 原子消费。
+ */
+export interface TreasuryAuthorizationBundle {
+  readonly __brand: "treasury-authorization-bundle";
+  readonly tokens: readonly TreasuryAuthorizationToken[];
+  readonly contractId: string;
+  readonly contractDigest: string;
+  readonly transactionId: string;
+  readonly actionKind: string;
+  readonly adapterVersion: number;
 }
 
 /**
@@ -114,12 +143,12 @@ export interface TreasuryAuthorizationToken {
     readonly observedAtTick: number;
   };
   readonly revisions: TreasuryAuthorizationRevisions;
-  /** 规范化策略指纹（"wh:<n>" / "pf:<s>" / ""）。 */
   readonly policyFingerprint: string;
   /** canonical owner token（无 owner 为 ""；比较与持久 key 同一算法）。 */
   readonly ownerKey: string;
   readonly serviceGeneration: number;
   readonly tick: number;
+  /** contract digest 绑定（contract-first 授权恒有；旧 test-only 路径可缺省）。 */
   readonly contractDigest?: string;
   /** adapter version 绑定（第九轮：与 contract digest 同源派生）。 */
   readonly adapterVersion?: number;
@@ -149,10 +178,13 @@ export type TreasuryAuthorizationConsumeResult =
       readonly detail: string;
     };
 
-/** 规范化策略指纹（withhold 与 policyFingerprint 互斥表达）。 */
+/**
+ * 规范化策略表达（第九轮收紧）：受控 withhold 数值是唯一的 policy
+ * authority 通道（"wh:<n>"；无 withhold 为 ""）。旧 `pf:<s>` 自由字符串通道
+ * 已移除——调用者说"这是某个 policy"不再赋予任何语义。
+ */
 export function canonicalTreasuryPolicyFingerprint(request: TreasuryAuthorizationRequest): string {
   if (request.withhold !== undefined) return `wh:${String(request.withhold)}`;
-  if (request.policyFingerprint !== undefined) return `pf:${request.policyFingerprint}`;
   return "";
 }
 
@@ -217,13 +249,8 @@ export function validateTreasuryAuthorizationRequest(
       return `withhold 须为非负安全整数: ${String(request.withhold)}`;
     }
   }
-  if (request.policyFingerprint !== undefined) {
-    if (typeof request.policyFingerprint !== "string" || request.policyFingerprint.length === 0 || request.policyFingerprint.length > AUTHORIZATION_POLICY_FINGERPRINT_MAX) {
-      return "policyFingerprint 非法（须为 1..128 字符）";
-    }
-  }
-  if (request.withhold !== undefined && request.policyFingerprint !== undefined) {
-    return "withhold 与 policyFingerprint 互斥（不得双口径）";
+  if ("policyFingerprint" in request && (request as { policyFingerprint?: unknown }).policyFingerprint !== undefined) {
+    return "policyFingerprint 自由字符串通道已移除（第九轮：policy authority 只能是 Treasury 计算的受控 withhold 数值）";
   }
   if (request.allowIncoming !== undefined && typeof request.allowIncoming !== "boolean") {
     return "allowIncoming 必须为布尔";

@@ -37,7 +37,7 @@
  */
 
 import type { TreasuryService } from "@/runtime/treasury/facade";
-import type { TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
+import type { TreasuryAuthorizationBundle, TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
 import type { TreasurySafeExecuteResult, TreasuryObservationScope, TreasuryPosting } from "@/runtime/treasury/types";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 import { canonicalizeTreasuryActionArgs, TREASURY_CANONICAL_ENCODING_VERSION } from "@/runtime/treasury/canonicalEncoding";
@@ -231,6 +231,40 @@ export interface TreasuryActionContract {
 
 const contractRegistry = new WeakSet<TreasuryActionContract>();
 
+/**
+ * contract 防伪与时效校验（第九轮：facade 的 contract-first 授权入口用）：
+ * 对象身份（私有 registry——伪造/JSON 副本一律无效）+ 本 tick 构建 +
+ * registry 内 adapter 存在且 kind/version 一致。返回 contract+adapter 或
+ * 结构化拒绝（零抛出）。
+ */
+export function verifyTreasuryActionContractForAuthorization(
+  contract: unknown,
+): { readonly status: "ok"; readonly contract: TreasuryActionContract; readonly adapter: TreasuryActionAdapter } | {
+  readonly status: "rejected";
+  readonly reason: "contract_invalid" | "adapter_not_registered";
+  readonly detail: string;
+} {
+  if (!contract || typeof contract !== "object" || !contractRegistry.has(contract as TreasuryActionContract)) {
+    return { status: "rejected", reason: "contract_invalid", detail: "contract 未在本模块构建（伪造对象/JSON 副本一律无效）" };
+  }
+  const typed = contract as TreasuryActionContract;
+  if (typed.builtAtTick !== Game.time) {
+    return { status: "rejected", reason: "contract_invalid", detail: `contract 于 tick ${String(typed.builtAtTick)} 构建（当前 ${String(Game.time)}）——跨 tick 失效` };
+  }
+  const adapter = findTreasuryActionAdapter(typed.actionKind);
+  if (adapter === undefined) {
+    return { status: "rejected", reason: "adapter_not_registered", detail: `action kind ${typed.actionKind} 的 adapter 已被移除` };
+  }
+  if (adapter.kind !== typed.actionKind || adapter.version !== typed.adapterVersion) {
+    return {
+      status: "rejected",
+      reason: "contract_invalid",
+      detail: `adapter 已演进（contract v${String(typed.adapterVersion)}，registry 当前 v${String(adapter.version)}）——须重新构建 contract`,
+    };
+  }
+  return { status: "ok", contract: typed, adapter };
+}
+
 function postingKey(posting: { roomName: string; locationKind: string; resource: string }): string {
   return `${posting.roomName}\u0000${posting.locationKind}\u0000${posting.resource}`;
 }
@@ -311,9 +345,12 @@ export interface TreasuryActionContractRequest {
 
 /**
  * 执行请求：预构建 contract（伪造对象一律无效）或 actionKind/transactionId/
- * args 构建参数——二选一；authorization 为授权 token（单资源 action 一个；
- * 多资源 action 每种负 posting 资源各一个——匹配校验先于消费、执行时联合
- * 覆盖校验，实际动作不得超出授权 scope）。
+ * args 构建参数——二选一；authorization 为 contract authorization bundle
+ * （contract-first 授权产物，生产路径）或授权 token 数组（每资源一个；
+ * test-only 兼容路径）。执行顺序（第九轮 4.2）：contract/adapter/version
+ * 校验 → bundle/token 只读预验证（零消费）→ 结构 incarnation 校验（fresh
+ * 必需）→ prepare（tentative 接管）→ redeem（一次性消费）→ durable intent
+ * → adapter.execute 恰好一次 → commit/abort。
  */
 export interface TreasuryActionExecutionRequest {
   readonly contract?: TreasuryActionContract;
@@ -321,7 +358,7 @@ export interface TreasuryActionExecutionRequest {
   readonly transactionId?: string;
   readonly args?: unknown;
   readonly source?: string;
-  readonly authorization?: TreasuryAuthorizationToken | readonly TreasuryAuthorizationToken[];
+  readonly authorization?: TreasuryAuthorizationBundle | TreasuryAuthorizationToken | readonly TreasuryAuthorizationToken[];
 }
 
 export type TreasuryActionContractResult =
@@ -483,27 +520,6 @@ export function buildTreasuryActionContract(
   return { status: "built", contract };
 }
 
-/** 只读匹配校验（零消费）：token 与 contract 的全部绑定事实。 */
-function describeTokenContractMismatch(
-  token: TreasuryAuthorizationToken,
-  contract: TreasuryActionContract,
-  adapter: TreasuryActionAdapter,
-): string | null {
-  if (token.transactionId !== contract.transactionId) {
-    return `token 绑定 transactionId ${token.transactionId} 与 contract ${contract.transactionId} 不一致`;
-  }
-  if (token.actionKind !== contract.actionKind) {
-    return `token 绑定 actionKind ${token.actionKind} 与 contract ${contract.actionKind} 不一致`;
-  }
-  if (token.contractDigest !== undefined && token.contractDigest !== contract.digest) {
-    return "token 绑定的 contract digest 与实际 contract 不一致";
-  }
-  if (token.adapterVersion !== undefined && token.adapterVersion !== adapter.version) {
-    return `token 绑定 adapter version ${String(token.adapterVersion)} 与当前 ${String(adapter.version)} 不一致`;
-  }
-  return null;
-}
-
 /**
  * 执行 action contract（生产 writer 的唯一入口）：
  * 1. contract 防伪（私有 registry 对象身份——伪造/JSON 副本一律无效）、跨
@@ -563,46 +579,52 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
       detail: `adapter version 已演进（contract 构建于 v${String(contract.adapterVersion)}，registry 当前 v${String(adapter.version)}）——旧 contract 失效，须重新构建与授权`,
     };
   }
-  const authorizationTokens: readonly TreasuryAuthorizationToken[] =
-    request.authorization === undefined
-      ? []
-      : Array.isArray(request.authorization)
-        ? request.authorization
-        : [request.authorization];
-  if (authorizationTokens.length === 0) {
+  const authorization = request.authorization;
+  if (authorization === undefined) {
     actionContractEvents.rejected += 1;
     return {
       status: "prepare_rejected",
       reason: "authorization_invalid",
-      detail: "action contract 执行必须携带授权 token（真实写动作不得只凭物理可行性通过）",
+      detail: "action contract 执行必须携带授权（bundle 或 token——真实写动作不得只凭物理可行性通过）",
     };
   }
-  // 匹配预校验（零消费）：全部 token 的 digest/actionKind/transactionId 绑定
-  // 先于任何消费与结构校验。
-  for (const token of authorizationTokens) {
-    const mismatch = describeTokenContractMismatch(token, contract, adapter);
-    if (mismatch !== null) {
-      actionContractEvents.rejected += 1;
-      return { status: "prepare_rejected", reason: "contract_invalid", detail: `授权 token 与 contract 不匹配: ${mismatch}` };
-    }
-  }
-  // 联合覆盖校验（零消费）：每个负 posting 必须被至少一个 token 的 scope 覆盖。
-  for (const posting of contract.postings) {
-    if (posting.delta >= 0) continue;
-    const covered = authorizationTokens.some(
-      (token) =>
-        token.resource === posting.resource &&
-        token.rooms.includes(posting.roomName) &&
-        token.locations.includes(posting.locationKind),
-    );
-    if (!covered) {
+  const isBundle =
+    typeof authorization === "object" &&
+    authorization !== null &&
+    (authorization as { __brand?: string }).__brand === "treasury-authorization-bundle";
+  const bundle = isBundle ? (authorization as TreasuryAuthorizationBundle) : undefined;
+  const authorizationTokens: readonly TreasuryAuthorizationToken[] = bundle
+    ? bundle.tokens
+    : Array.isArray(authorization)
+      ? authorization
+      : [authorization as TreasuryAuthorizationToken];
+  if (bundle !== undefined) {
+    // bundle 与 contract 的身份匹配（零消费）。
+    if (bundle.contractDigest !== contract.digest || bundle.transactionId !== contract.transactionId || bundle.actionKind !== contract.actionKind || bundle.adapterVersion !== contract.adapterVersion || bundle.contractId !== contract.contractId) {
       actionContractEvents.rejected += 1;
       return {
         status: "prepare_rejected",
-        reason: "authorization_invalid",
-        detail: `posting ${posting.roomName}:${posting.locationKind}:${posting.resource} 的流出未被任何授权 token 覆盖`,
+        reason: "contract_invalid",
+        detail: "授权 bundle 与实际 contract 不匹配（contractId/digest/transactionId/actionKind/adapterVersion 任一不一致）",
       };
     }
+  }
+  // 全量只读预验证（第九轮 4.2：零消费、零状态变化——任一失败时前 N−1 个
+  // token 不受影响）：对象身份/generation/tick/revisions/transactionId/
+  // 重复 token/contract 匹配/postings 覆盖，全部通过才可能进入消费。
+  const prevalidated = service.validateTreasuryAuthorizationForRedeem(
+    authorizationTokens,
+    {
+      transactionId: contract.transactionId,
+      actionKind: contract.actionKind,
+      digest: contract.digest,
+      adapterVersion: contract.adapterVersion,
+    },
+    contract.postings,
+  );
+  if (prevalidated.status === "rejected") {
+    actionContractEvents.rejected += 1;
+    return { status: "prepare_rejected", reason: "authorization_invalid", detail: `授权预验证失败（${prevalidated.reason}）: ${prevalidated.detail}` };
   }
   // 结构 incarnation 校验（第九轮 4.12，先于消费）：fresh observation 必需
   // ——配额耗尽拒绝执行，不退回 shared observation 降低验证等级；对全部
@@ -631,20 +653,10 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
       };
     }
   }
-  // 逐 token 消费（匹配与覆盖已预校验——消费阶段的 scope 校验防御性兜底）：
-  // 每个 token 只校验自己 resource 的 postings（多资源 action 每种负 posting
-  // 资源分别授权）。
-  for (const token of authorizationTokens) {
-    const resourcePostings = contract.postings.filter((posting) => posting.resource === token.resource);
-    const consumed = service.consumeTreasuryAuthorization(token, {
-      transactionId: contract.transactionId,
-      postings: resourcePostings,
-    });
-    if (consumed.status !== "ok") {
-      actionContractEvents.rejected += 1;
-      return { status: "prepare_rejected", reason: "authorization_invalid", detail: `授权消费失败（${consumed.reason}）: ${consumed.detail}` };
-    }
-  }
+  // 经 writer kernel execution options 走原子 redemption：prepare（tentative
+  // 接管）→ redeem（一次性消费全部 token——预验证与消费在同一同步窗口，
+  // 中间无 revision 变化源；消费循环失败为内部不变量破坏，防御性拒绝并
+  // 释放 tentative）→ durable intent（绑定完整合同身份）→ callback。
   return service.executePreparedAction(
     {
       transactionId: contract.transactionId,
@@ -658,6 +670,35 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
       postings: contract.postings,
     },
     () => adapter.execute(contract.args) as TAction,
+    {
+      redeemAuthorization: () => {
+        for (const token of authorizationTokens) {
+          const resourcePostings = contract.postings.filter((posting) => posting.resource === token.resource);
+          const consumed = service.consumeTreasuryAuthorization(token, {
+            transactionId: contract.transactionId,
+            postings: resourcePostings,
+          });
+          if (consumed.status !== "ok") {
+            // 防御分支（预验证后理论不可达）：同步窗口内无 revision 变化源。
+            actionContractEvents.rejected += 1;
+            return {
+              status: "rejected" as const,
+              reason: "authorization_invalid" as string,
+              detail: `授权消费失败（${consumed.reason}）: ${consumed.detail}（内部不变量破坏——预验证后消费不应失败）`,
+            };
+          }
+        }
+        return { status: "ok" as const };
+      },
+      intentContract: {
+        contractId: contract.contractId,
+        contractDigest: contract.digest,
+        adapterVersion: contract.adapterVersion,
+        ...(contract.durableFacts !== undefined
+          ? { durablePayload: contract.durableFacts.payload, durablePayloadVersion: contract.durableFacts.version }
+          : {}),
+      },
+    },
   );
 }
 

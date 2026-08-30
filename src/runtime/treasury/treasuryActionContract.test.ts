@@ -1,15 +1,16 @@
 /**
- * Treasury action contract 与注册 adapter 测试（第八轮）：
+ * Treasury action contract 与注册 adapter 测试（第八轮建立、第九轮升级
+ * contract-first 授权与原子 bundle redemption）：
  * - contract 由 canonical args 确定性派生 postings（与 Game API 参数同源，
  *   两套事实通道不复存在）；调用者事后修改原 args 不影响 canonical；
  * - 伪造 contract（普通对象/JSON 副本）失败；跨 tick contract 失效；
- * - adapter 未注册 / kind 不匹配拒绝；重复注册拒绝；
- * - 执行必须携带授权 token；postings 覆盖校验（实际动作不得超出授权
- *   scope/amount）；授权 contractDigest 绑定；多资源 action 每资源分别
- *   授权（联合覆盖校验）；
- * - 结构 incarnation 变化拒绝；
- * - adapter.execute 恰好一次（副作用计数）；不同 payload 同 transactionId
- *   冲突拒绝。
+ * - adapter 未注册 / kind 不匹配拒绝；重复注册拒绝；version 演进后旧
+ *   contract 失效；
+ * - 执行走 contract-first bundle（authorizeTreasuryActionContract：授权需求
+ *   全部从 contract 派生）；test-only 裸 token 路径必须绑定 contractDigest；
+ * - postings 覆盖校验（实际动作不得超出授权 scope/amount）；
+ * - 结构 incarnation 变化拒绝；adapter.execute 恰好一次（副作用计数）；
+ * - 不同 payload 同 transactionId 冲突拒绝。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
@@ -57,18 +58,36 @@ function transferArgs(overrides: Partial<TreasuryTestTransferArgs> = {}): Treasu
   };
 }
 
-function authorize(
+/** 构建 contract 并签发 contract-first bundle（生产路径的测试镜像）。 */
+function buildAndAuthorize(
   service: TreasuryService,
+  transactionId: string,
+  args: TreasuryTestTransferArgs,
+): { contract: TreasuryActionContract; bundle: ReturnType<TreasuryService["authorizeTreasuryActionContract"]> } {
+  const built = buildTreasuryActionContract(service, { actionKind: "test.transfer", transactionId, args });
+  expect(built.status).toBe("built");
+  if (built.status !== "built") throw new Error("unreachable");
+  return { contract: built.contract, bundle: service.authorizeTreasuryActionContract(built.contract) };
+}
+
+/**
+ * test-only 裸 token（绑定 contract digest——预验证要求 token 恒绑 digest）：
+ * 用于构造"与 contract 不匹配/超范围"的坏授权。
+ */
+function rawToken(
+  service: TreasuryService,
+  contract: TreasuryActionContract,
   overrides: Partial<{ resource: string; amount: number; transactionId: string; contractDigest?: string; locations?: string[] }> = {},
 ): TreasuryAuthorizationToken {
   const result = service.authorizeResourceUse({
-    transactionId: overrides.transactionId ?? "ac_tx",
-    actionKind: "test.transfer",
+    transactionId: overrides.transactionId ?? contract.transactionId,
+    actionKind: contract.actionKind,
     resource: overrides.resource ?? RESOURCE_ENERGY,
     rooms: ["W1N57"],
-    locations: (overrides.locations ?? ["storage"]) as "storage"[],
+    locations: (overrides.locations ?? ["storage", "terminal"]) as "storage"[],
     amount: overrides.amount ?? 500,
-    ...(overrides.contractDigest !== undefined ? { contractDigest: overrides.contractDigest } : {}),
+    contractDigest: overrides.contractDigest ?? contract.digest,
+    adapterVersion: contract.adapterVersion,
   });
   expect(result.status).toBe("authorized");
   if (result.status === "authorized") return result.token;
@@ -153,136 +172,128 @@ describe("contract 构建与派生一致性", () => {
   });
 });
 
-describe("contract 执行", () => {
-  it("授权 + 执行：adapter 恰好一次、commit 完成、副作用计数为 1", () => {
+describe("contract 执行（contract-first bundle）", () => {
+  it("bundle 授权 + 执行：adapter 恰好一次、commit 完成、副作用计数为 1", () => {
     const service = makeService();
-    const token = authorize(service, { amount: 500, transactionId: "ac_exec_ok" });
-    const result = executeTreasuryActionContract(service, {
-      actionKind: "test.transfer",
-      transactionId: "ac_exec_ok",
-      args: transferArgs({ amount: 500 }),
-      authorization: token,
-    });
+    const { contract, bundle } = buildAndAuthorize(service, "ac_exec_ok", transferArgs({ amount: 500 }));
+    expect(bundle.status).toBe("authorized");
+    if (bundle.status !== "authorized") return;
+    const result = executeTreasuryActionContract(service, { contract, authorization: bundle.bundle });
     expect(result.status).toBe("executed_committed");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
     // 同 id 重放命中 already_settled（receipt 防重放），callback 零新增调用。
-    const replay = executeTreasuryActionContract(service, {
-      actionKind: "test.transfer",
-      transactionId: "ac_exec_ok",
-      args: transferArgs({ amount: 500 }),
-      authorization: authorize(service, { transactionId: "ac_exec_ok", amount: 500 }),
-    });
+    const reAuthorized = service.authorizeTreasuryActionContract(contract);
+    expect(reAuthorized.status).toBe("authorized");
+    const replay =
+      reAuthorized.status === "authorized"
+        ? executeTreasuryActionContract(service, { contract, authorization: reAuthorized.bundle })
+        : { status: "not_authorized" as const };
     expect(replay.status).toBe("already_settled");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
   });
 
-  it("无授权拒绝；不同 payload 同 transactionId 冲突拒绝", () => {
+  it("无授权拒绝；不同 payload 同 transactionId 已结算后重放 already_settled", () => {
     const service = makeService();
-    const noAuth = executeTreasuryActionContract(service, {
+    const built = buildTreasuryActionContract(service, {
       actionKind: "test.transfer",
       transactionId: "ac_noauth",
       args: transferArgs(),
     });
+    expect(built.status).toBe("built");
+    if (built.status !== "built") return;
+    const noAuth = executeTreasuryActionContract(service, { contract: built.contract });
     expect(noAuth.status).toBe("prepare_rejected");
     if (noAuth.status === "prepare_rejected") expect(noAuth.reason).toBe("authorization_invalid");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
 
-    // 同 id 不同 args（不同 canonical payload）→ prepare_conflict。
-    const first = executeTreasuryActionContract(service, {
-      actionKind: "test.transfer",
-      transactionId: "ac_conflict",
-      args: transferArgs({ amount: 100 }),
-      authorization: authorize(service, { transactionId: "ac_conflict", amount: 100 }),
-    });
-    expect(first.status).toBe("executed_committed");
+    const first = buildAndAuthorize(service, "ac_conflict", transferArgs({ amount: 100 }));
+    expect(first.bundle.status).toBe("authorized");
+    if (first.bundle.status !== "authorized") return;
+    const ok = executeTreasuryActionContract(service, { contract: first.contract, authorization: first.bundle.bundle });
+    expect(ok.status).toBe("executed_committed");
     // 同 id 已结算：幂等优先于 payload 冲突——不同 payload 的重放同样
     // already_settled（防重放保证；prepare_conflict 只在未结算仍 active 时
     // 由低层 prepare 语义触发）。
-    const conflict = executeTreasuryActionContract(service, {
+    const conflict = buildTreasuryActionContract(service, {
       actionKind: "test.transfer",
       transactionId: "ac_conflict",
       args: transferArgs({ amount: 200 }),
-      authorization: authorize(service, { transactionId: "ac_conflict", amount: 200 }),
     });
-    expect(conflict.status).toBe("already_settled");
+    expect(conflict.status).toBe("built");
+    if (conflict.status !== "built") return;
+    const conflictAuth = service.authorizeTreasuryActionContract(conflict.contract);
+    const conflictResult =
+      conflictAuth.status === "authorized"
+        ? executeTreasuryActionContract(service, { contract: conflict.contract, authorization: conflictAuth.bundle })
+        : { status: "not_authorized" as const };
+    expect(conflictResult.status).toBe("already_settled");
   });
 
-  it("postings 覆盖校验：流出超出授权 amount 拒绝、location 超出 scope 拒绝", () => {
+  it("postings 覆盖校验：流出超出授权 amount 拒绝、location 超出 scope 拒绝（token 零消费）", () => {
     const service = makeService();
-    const small = authorize(service, { amount: 100, transactionId: "ac_scope1" });
-    const over = executeTreasuryActionContract(service, {
+    const built = buildTreasuryActionContract(service, {
       actionKind: "test.transfer",
       transactionId: "ac_scope1",
       args: transferArgs({ amount: 500 }),
-      authorization: small,
     });
+    expect(built.status).toBe("built");
+    if (built.status !== "built") return;
+    const small = rawToken(service, built.contract, { amount: 100 });
+    const over = executeTreasuryActionContract(service, { contract: built.contract, authorization: small });
     expect(over.status).toBe("prepare_rejected");
     if (over.status === "prepare_rejected") expect(over.reason).toBe("authorization_invalid");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
 
-    // 授权 scope 只含 storage：从 terminal 流出（写入侧）不受流出约束——
-    // 但从 storage 流出到 terminal 需要流入腿合法；改从 terminal 流出且授权
-    // 仅 storage scope → 负 posting 的 location 不在 scope → 拒绝。
-    const storageOnly = authorize(service, { amount: 5_000, transactionId: "ac_scope2" });
-    const wrongLocation = executeTreasuryActionContract(service, {
+    // 授权 scope 只含 storage：负 posting 从 storage 流出在 scope——反向
+    // （从 terminal 流出且授权仅 storage scope）在 scope 校验拒绝。
+    const built2 = buildTreasuryActionContract(service, {
       actionKind: "test.transfer",
       transactionId: "ac_scope2",
       args: transferArgs({ amount: 1_000, fromLocation: "terminal", toLocation: "storage" }),
-      authorization: storageOnly,
     });
+    expect(built2.status).toBe("built");
+    if (built2.status !== "built") return;
+    const storageOnly = rawToken(service, built2.contract, { amount: 5_000, locations: ["storage"] });
+    const wrongLocation = executeTreasuryActionContract(service, { contract: built2.contract, authorization: storageOnly });
     expect(wrongLocation.status).toBe("prepare_rejected");
     if (wrongLocation.status === "prepare_rejected") expect(wrongLocation.reason).toBe("authorization_invalid");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
   });
 
-  it("多资源 action（U 转移 + energy 费用腿）：每资源分别授权、联合覆盖校验", () => {
+  it("多资源 action（U 转移 + energy 费用腿）：bundle 自动派生每资源授权", () => {
     const service = makeService();
-    const energyToken = authorize(service, {
-      resource: RESOURCE_ENERGY,
-      amount: 50,
-      transactionId: "ac_multi",
-      locations: ["storage", "terminal"],
-    });
-    const uToken = authorize(service, { resource: "U", amount: 3_000, transactionId: "ac_multi" });
-    // 缺 energy 授权 → energy 负腿未被覆盖 → 拒绝（uToken 在此被消费）。
-    const missing = executeTreasuryActionContract(service, {
-      actionKind: "test.transfer",
-      transactionId: "ac_multi",
-      args: transferArgs({ resource: "U", amount: 3_000, feeFromRoom: "W1N57", feeAmount: 50 }),
-      authorization: uToken,
-    });
+    const args = transferArgs({ resource: "U", amount: 3_000, feeFromRoom: "W1N57", feeAmount: 50 });
+    const { contract, bundle } = buildAndAuthorize(service, "ac_multi", args);
+    expect(bundle.status).toBe("authorized");
+    if (bundle.status !== "authorized") return;
+    expect(bundle.bundle.tokens).toHaveLength(2); // U 流出 + energy 费用腿
+    const ok = executeTreasuryActionContract(service, { contract, authorization: bundle.bundle });
+    expect(ok.status).toBe("executed_committed");
+    expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
+    // 缺一资源的裸 token 集合：energy 负腿未被覆盖 → 预验证拒绝（零消费）。
+    const rebuilt = buildTreasuryActionContract(service, { actionKind: "test.transfer", transactionId: "ac_multi2", args });
+    expect(rebuilt.status).toBe("built");
+    if (rebuilt.status !== "built") return;
+    const uOnly = rawToken(service, rebuilt.contract, { resource: "U", amount: 3_000 });
+    const missing = executeTreasuryActionContract(service, { contract: rebuilt.contract, authorization: [uOnly] });
     expect(missing.status).toBe("prepare_rejected");
     if (missing.status === "prepare_rejected") expect(missing.reason).toBe("authorization_invalid");
-    // 双 token 齐备（重新签发——授权单次使用）→ 执行成功。
-    const ok = executeTreasuryActionContract(service, {
-      actionKind: "test.transfer",
-      transactionId: "ac_multi",
-      args: transferArgs({ resource: "U", amount: 3_000, feeFromRoom: "W1N57", feeAmount: 50 }),
-      authorization: [
-        authorize(service, { resource: "U", amount: 3_000, transactionId: "ac_multi" }),
-        authorize(service, {
-          resource: RESOURCE_ENERGY,
-          amount: 50,
-          transactionId: "ac_multi",
-          locations: ["storage", "terminal"],
-        }),
-      ],
-    });
-    expect(ok.status).toBe("executed_committed");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
   });
 
-  it("授权 contractDigest 绑定不一致拒绝", () => {
+  it("授权 contractDigest 绑定不一致拒绝（token 未被消费）", () => {
     const service = makeService();
-    const bound = authorize(service, { amount: 500, transactionId: "ac_digest", contractDigest: "0123456789abcdef" });
-    const result = executeTreasuryActionContract(service, {
+    const built = buildTreasuryActionContract(service, {
       actionKind: "test.transfer",
       transactionId: "ac_digest",
       args: transferArgs({ amount: 500 }),
-      authorization: bound,
     });
+    expect(built.status).toBe("built");
+    if (built.status !== "built") return;
+    const bound = rawToken(service, built.contract, { amount: 500, contractDigest: "0123456789abcdef" });
+    const result = executeTreasuryActionContract(service, { contract: built.contract, authorization: bound });
     expect(result.status).toBe("prepare_rejected");
-    if (result.status === "prepare_rejected") expect(result.reason).toBe("contract_invalid");
+    if (result.status === "prepare_rejected") expect(result.reason).toBe("authorization_invalid");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
   });
 
@@ -291,20 +302,22 @@ describe("contract 执行", () => {
     const built = buildTreasuryActionContract(service, { actionKind: "test.transfer", transactionId: "ac_forge", args: transferArgs() });
     expect(built.status).toBe("built");
     if (built.status !== "built") return;
-    const token = authorize(service, { amount: 500, transactionId: "ac_forge" });
+    const authorized = service.authorizeTreasuryActionContract(built.contract);
+    expect(authorized.status).toBe("authorized");
+    if (authorized.status !== "authorized") return;
     const forged: TreasuryActionContract = { ...built.contract };
-    const forgedResult = executeTreasuryActionContract(service, { contract: forged, authorization: token });
+    const forgedResult = executeTreasuryActionContract(service, { contract: forged, authorization: authorized.bundle });
     expect(forgedResult.status).toBe("prepare_rejected");
     if (forgedResult.status === "prepare_rejected") expect(forgedResult.reason).toBe("contract_invalid");
-    // 跨 tick：contract 构建与执行不在同一 tick → 失效。
-    const token2 = authorize(service, { amount: 500, transactionId: "ac_forge2" });
+    // 跨 tick：contract 构建与执行不在同一 tick → 失效（授权亦失效）。
     const built2 = buildTreasuryActionContract(service, { actionKind: "test.transfer", transactionId: "ac_forge2", args: transferArgs() });
     expect(built2.status).toBe("built");
     Game.time += 1;
     service.beginTick();
+    const staleAuth = built2.status === "built" ? service.authorizeTreasuryActionContract(built2.contract) : undefined;
     const stale = executeTreasuryActionContract(service, {
       contract: built2.status === "built" ? built2.contract : undefined,
-      authorization: token2,
+      authorization: staleAuth !== undefined && staleAuth.status === "authorized" ? staleAuth.bundle : undefined,
     });
     expect(stale.status).toBe("prepare_rejected");
     if (stale.status === "prepare_rejected") expect(stale.reason).toBe("contract_invalid");
@@ -314,30 +327,12 @@ describe("contract 执行", () => {
     const rooms = installRooms(ROOMS);
     const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
     service.beginTick();
-    const token = authorize(service, { amount: 500, transactionId: "ac_struct" });
-    const built = buildTreasuryActionContract(service, {
-      actionKind: "test.transfer",
-      transactionId: "ac_struct",
-      args: transferArgs(),
-    });
-    expect(built.status).toBe("built");
-    // 结构替换（storage structureId 变化）。
-    Game.time += 1;
-    rooms.W1N57 = {
-      ...(rooms.W1N57 as unknown as Room),
-      storage: { ...(rooms.W1N57.storage as unknown as StructureStorage), id: "stor-NEW" },
-    } as unknown as Room;
-    service.beginTick();
-    const result = executeTreasuryActionContract(service, {
-      contract: built.status === "built" ? built.contract : undefined,
-      authorization: token,
-    });
-    expect(result.status).toBe("prepare_rejected");
-    if (result.status === "prepare_rejected") expect(result.reason).toBe("contract_invalid"); // 跨 tick contract 先失效
-    // 同 tick 内构建后立刻替换结构再执行 → structure_replaced。
+    const { contract, bundle } = buildAndAuthorize(service, "ac_struct", transferArgs());
+    expect(bundle.status).toBe("authorized");
+    // 同 tick 内构建后立刻替换结构再执行 → structure_replaced（fresh 必需，
+    // 不退回 shared observation）。
     const service2 = createTreasuryService({ getRooms: () => Object.values(rooms) });
     service2.beginTick();
-    const token2 = authorize(service2, { amount: 500, transactionId: "ac_struct2" });
     const built2 = buildTreasuryActionContract(service2, {
       actionKind: "test.transfer",
       transactionId: "ac_struct2",
@@ -348,26 +343,25 @@ describe("contract 执行", () => {
       ...(rooms.W1N57 as unknown as Room),
       storage: { ...(rooms.W1N57.storage as unknown as StructureStorage), id: "stor-NEW2" },
     } as unknown as Room;
-    const replaced = executeTreasuryActionContract(service2, {
-      contract: built2.status === "built" ? built2.contract : undefined,
-      authorization: token2,
-    });
+    const auth2 = service2.authorizeTreasuryActionContract(built2.status === "built" ? built2.contract : undefined);
+    const replaced =
+      auth2.status === "authorized" && built2.status === "built"
+        ? executeTreasuryActionContract(service2, { contract: built2.contract, authorization: auth2.bundle })
+        : { status: "not_authorized" as const };
     expect(replaced.status).toBe("prepare_rejected");
     if (replaced.status === "prepare_rejected") expect(replaced.reason).toBe("structure_replaced");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
+    void contract;
   });
 
   it("adapter execute 抛错 → execution unknown 隔离（intent/quarantine 状态机）", () => {
     const service = makeService();
-    const token = authorize(service, { amount: 500, transactionId: "ac_throw" });
+    const { contract, bundle } = buildAndAuthorize(service, "ac_throw", transferArgs({ outcome: "throw" }));
+    expect(bundle.status).toBe("authorized");
+    if (bundle.status !== "authorized") return;
     let rethrown: unknown = null;
     try {
-      executeTreasuryActionContract(service, {
-        actionKind: "test.transfer",
-        transactionId: "ac_throw",
-        args: transferArgs({ outcome: "throw" }),
-        authorization: token,
-      });
+      executeTreasuryActionContract(service, { contract, authorization: bundle.bundle });
     } catch (error) {
       rethrown = error;
     }
@@ -376,8 +370,8 @@ describe("contract 执行", () => {
     // durable quarantine 接管（execution unknown）。
     const quarantined = (service.metrics() as unknown as { quarantineEntries: number }).quarantineEntries;
     expect(quarantined).toBe(1);
-    // 同 id 重放被拒（callback 零新增）：隔离后 authorize 被 context 阻断
-    //（write_fault + quarantine_unresolved——正确行为），故在 prepare 层断言。
+    // 同 id 重放被拒（callback 零新增）：隔离后 authorize 被 write admission
+    // 阻断（正确行为），故在 prepare 层断言。
     const replay = service.prepareTransaction({
       transactionId: "ac_throw",
       kind: "test.transfer",
@@ -397,39 +391,29 @@ describe("contract 执行", () => {
   it("adapter version 演进后旧 contract 失效（同 kind 替换 v2 → 旧 v1 contract 拒绝）", () => {
     const service = makeService();
     expect(findTreasuryActionAdapter("test.transfer")).toBeDefined();
-    const token = authorize(service, { amount: 500, transactionId: "ac_mismatch" });
-    // 构建合法 contract 后替换 adapter 版本 → 旧 contract 失效（须重建+重新授权）。
-    const built = buildTreasuryActionContract(service, {
-      actionKind: "test.transfer",
-      transactionId: "ac_mismatch",
-      args: transferArgs(),
-    });
-    expect(built.status).toBe("built");
+    const { contract, bundle } = buildAndAuthorize(service, "ac_mismatch", transferArgs());
+    expect(bundle.status).toBe("authorized");
     replaceTreasuryActionAdapterForTest({
       ...makeTreasuryTestTransferAdapter(),
       kind: "test.transfer",
       version: 2,
     });
-    const result = executeTreasuryActionContract(service, {
-      contract: built.status === "built" ? built.contract : undefined,
-      authorization: token,
-    });
+    const result =
+      bundle.status === "authorized"
+        ? executeTreasuryActionContract(service, { contract, authorization: bundle.bundle })
+        : { status: "not_authorized" as const };
     expect(result.status).toBe("prepare_rejected");
     if (result.status === "prepare_rejected") {
       expect(result.reason).toBe("contract_invalid");
       expect(result.detail).toContain("adapter version");
     }
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
-    // v2 adapter 构建的新 contract 可正常执行（token 需重新签发——旧 token
-    // 尚未绑定 version 时同样因 contract 重建而重授权）。
-    const token2 = authorize(service, { amount: 500, transactionId: "ac_mismatch_v2" });
-    const fresh = executeTreasuryActionContract(service, {
-      actionKind: "test.transfer",
-      transactionId: "ac_mismatch_v2",
-      args: transferArgs(),
-      authorization: token2,
-    });
-    expect(fresh.status).toBe("executed_committed");
+    // v2 adapter 构建的新 contract 可正常执行（bundle 重新签发）。
+    const fresh = buildAndAuthorize(service, "ac_mismatch_v2", transferArgs());
+    expect(fresh.bundle.status).toBe("authorized");
+    if (fresh.bundle.status !== "authorized") return;
+    const ok = executeTreasuryActionContract(service, { contract: fresh.contract, authorization: fresh.bundle.bundle });
+    expect(ok.status).toBe("executed_committed");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
   });
 });

@@ -3,7 +3,8 @@
  * - 授权计算：物理−reservations−outgoing−withhold−quarantine/intent 风险−
  *   其它授权预算；commitment incomplete / store 损坏 / readiness 阻断拒绝；
  * - immediate write 硬策略：allowIncoming=true、subtractOutgoing=false、
- *   subtractReservations=false 一律拒绝；withhold 与 policyFingerprint 双口径拒绝；
+ *   subtractReservations=false 一律拒绝；自由字符串 policy fingerprint 通道
+ *   已移除（第九轮）——提交即结构化拒绝；
  * - owner-aware：owner 自身 reservation 合法排除、非法 owner fail closed；
  * - 防超卖：A 授权后 B 同批资源授权被拒（不等 prepare）；
  * - token 失效矩阵：commitment revision（task/reservation mutation）、
@@ -154,9 +155,12 @@ describe("授权计算", () => {
       expect(rejected.status).toBe("rejected");
       if (rejected.status === "rejected") expect(rejected.reason).toBe("authorization_policy_violation");
     }
-    // withhold 与 policyFingerprint 双口径拒绝。
-    const dual = service.authorizeResourceUse(authRequest({ withhold: 1, policyFingerprint: "pf" }));
-    expect(dual.status).toBe("rejected");
+    // 自由字符串 policy fingerprint 通道已移除（第九轮）：提交任意字符串即拒。
+    const freeform = service.authorizeResourceUse(
+      authRequest({ amount: 100, ...({ policyFingerprint: "caller-said-so" } as object) }),
+    );
+    expect(freeform.status).toBe("rejected");
+    if (freeform.status === "rejected") expect(freeform.reason).toBe("invalid_input");
   });
 
   it("存在 unresolved quarantine 时授权直接 fail closed（比风险扣减更保守）", () => {

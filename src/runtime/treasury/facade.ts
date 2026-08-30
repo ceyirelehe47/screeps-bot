@@ -117,7 +117,11 @@ import {
   type TreasuryReconciliationCapability,
   type TreasuryReconciliationConclusion,
 } from "@/runtime/treasury/reconciliation";
-import { findTreasuryActionAdapter, readTreasuryActionContractCounters } from "@/runtime/treasury/actionContracts";
+import {
+  findTreasuryActionAdapter,
+  readTreasuryActionContractCounters,
+  verifyTreasuryActionContractForAuthorization,
+} from "@/runtime/treasury/actionContracts";
 import {
   ensureReservationSchemaActivated,
   isReservationOwnerMigrationComplete,
@@ -133,11 +137,13 @@ import {
   treasuryAuthorizationOwnerKey,
   validateTreasuryAuthorizationPolicy,
   validateTreasuryAuthorizationRequest,
+  type TreasuryAuthorizationBundle,
   type TreasuryAuthorizationConsumeResult,
   type TreasuryAuthorizationRequest,
   type TreasuryAuthorizationResult,
   type TreasuryAuthorizationRevisions,
   type TreasuryAuthorizationToken,
+  type TreasuryContractAuthorizationOptions,
 } from "@/runtime/treasury/authorization";
 import { readTreasuryQuarantineRevision } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentRevision } from "@/runtime/treasury/intents";
@@ -252,6 +258,28 @@ function isTerminalRecord(record: TreasuryHandleRecord): record is TerminalHandl
   return !("canonical" in record);
 }
 
+/**
+ * Writer kernel execution options（第九轮 4.2/4.3，@internal——窄内部接口，
+ * actionContracts 经此访问 writer kernel；普通生产模块不得构造）：
+ * - redeemAuthorization：prepare 成功（tentative 接管）后、durable intent
+ *   写入前调用一次——授权预算 → tentative ledger 的**原子转移点**（先
+ *   prepare 后消费：prepare 拒绝时零消费；redeem 拒绝时 tentative 释放、
+ *   callback 零调用）；
+ * - intentContract：contract 执行路径的完整合同身份（durable intent 持久
+ *   化绑定的字段来源）。
+ */
+export interface TreasuryWriterKernelExecution {
+  redeemAuthorization?(): { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string; readonly detail: string };
+  intentContract?: {
+    readonly contractId: string;
+    readonly contractDigest: string;
+    readonly adapterVersion: number;
+    readonly authorizationDigest?: string;
+    readonly durablePayload?: string;
+    readonly durablePayloadVersion?: number;
+  };
+}
+
 export interface TreasuryService {
   /** tick 起点：发行 shared epoch + 对账 + receipt 清理（幂等，可重复调用）。 */
   beginTick(): void;
@@ -277,6 +305,33 @@ export interface TreasuryService {
    * 使用、revision 绑定）并立即占用 authorization budget（防双授权超卖）。
    */
   authorizeResourceUse(request: TreasuryAuthorizationRequest): TreasuryAuthorizationResult;
+  /**
+   * Contract-first 授权（第九轮 4.1，生产唯一授权入口）：授权需求全部从
+   * contract 的 canonical postings 与 adapter 元数据派生（actionKind/rooms/
+   * locations/每资源 amount/contractDigest/adapterVersion）——调用者只能
+   * 提供 owner/受控 withhold/投影开关/容量需求。原子签发：任一资源失败时
+   * 已签发 token 的预算全部回滚。要求 write admission ready（比
+   * authorizationSafe 更强的前置）。
+   */
+  authorizeTreasuryActionContract(
+    contract: unknown,
+    options?: TreasuryContractAuthorizationOptions,
+  ): { readonly status: "authorized"; readonly bundle: TreasuryAuthorizationBundle } | {
+    readonly status: "rejected";
+    readonly reason: "invalid_input" | "contract_invalid" | "adapter_not_registered" | "write_admission_blocked" | "authorization_policy_violation" | "authorization_context_unsafe" | "insufficient_amount" | "capacity_overflow" | "authorization_capacity_exhausted";
+    readonly detail: string;
+  };
+  /**
+   * 授权 bundle/token 的只读预验证（第九轮 4.2，@internal——writer kernel
+   * redemption 前置）：全部 token 一次性验证（对象身份/generation/tick/
+   * revisions/transactionId/重复 token/postings 覆盖），零状态变化、零消费。
+   * 原子性的可达性保证：预验证与消费在同一同步窗口，中间无 revision 变化源。
+   */
+  validateTreasuryAuthorizationForRedeem(
+    tokens: readonly TreasuryAuthorizationToken[],
+    contract: { readonly transactionId: string; readonly actionKind: string; readonly digest: string; readonly adapterVersion: number },
+    postings: readonly TreasuryPosting[],
+  ): { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string; readonly detail: string };
   /**
    * 授权消费（第八轮）：对象身份 → generation → tick → revision 快照 →
    * 单次使用 → transactionId 绑定 → postings 覆盖校验；成功释放该 token 的
@@ -312,6 +367,7 @@ export interface TreasuryService {
   executePreparedAction<TAction extends { ok: boolean }>(
     input: TreasuryTransactionInput,
     action: () => TAction,
+    execution?: TreasuryWriterKernelExecution,
   ): TreasurySafeExecuteResult<TAction>;
   /** 最近一次 tick 边界的 outstanding prepared 审计快照（有界样本）。 */
   preparedLeakAudit(): TreasuryPreparedLeakAudit;
@@ -1469,6 +1525,198 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       return { status: "ok" };
     },
 
+    /**
+     * Contract-first 授权（第九轮 4.1，生产唯一授权入口）：全部授权需求从
+     * contract 的 canonical postings 与 adapter 元数据派生；原子签发 bundle
+     * （任一资源失败 → 已签发 token 预算全部回滚）；前置 write admission
+     * ready（write-fault lock + quarantine/intent blockers）。
+     */
+    authorizeTreasuryActionContract(
+      contract: unknown,
+      options?: TreasuryContractAuthorizationOptions,
+    ): { readonly status: "authorized"; readonly bundle: TreasuryAuthorizationBundle } | {
+      readonly status: "rejected";
+      readonly reason: "invalid_input" | "contract_invalid" | "adapter_not_registered" | "write_admission_blocked" | "authorization_policy_violation" | "authorization_context_unsafe" | "insufficient_amount" | "capacity_overflow" | "authorization_capacity_exhausted";
+      readonly detail: string;
+    } {
+      if (options !== undefined && (!options || typeof options !== "object")) {
+        metrics.authorizationRejected += 1;
+        return { status: "rejected", reason: "invalid_input", detail: "授权 options 非法" };
+      }
+      const verified = verifyTreasuryActionContractForAuthorization(contract);
+      if (verified.status === "rejected") {
+        metrics.authorizationRejected += 1;
+        return { status: "rejected", reason: verified.reason, detail: verified.detail };
+      }
+      const verifiedContract = verified.contract;
+      // write admission ready（比 authorizationSafe 更强的前置：write-fault
+      // lock + quarantine/intent 全局 blocker + store 健康——不满足时授权
+      // 本身拒绝，不留"已授权但 writer 阻断"的空转 token）。
+      ensureTickState(true);
+      if (isTreasuryWriteAdmissionLocked()) {
+        metrics.authorizationRejected += 1;
+        return { status: "rejected", reason: "write_admission_blocked", detail: "存在 unresolved write-fault marker（显式 resolution 前禁止新授权）" };
+      }
+      const quarantineBlock = treasuryQuarantineBlockers();
+      if (quarantineBlock.blocking) {
+        metrics.authorizationRejected += 1;
+        return {
+          status: "rejected",
+          reason: "write_admission_blocked",
+          detail: `quarantine write blocker（${String(quarantineBlock.unresolvedCount)} 条 unresolved）——禁止新授权`,
+        };
+      }
+      const intentBlock = treasuryIntentBlockers();
+      if (intentBlock.blocking) {
+        metrics.authorizationRejected += 1;
+        return {
+          status: "rejected",
+          reason: "write_admission_blocked",
+          detail: `intent write blocker（${String(intentBlock.unresolvedCount)} 条未完成 durable intent）——禁止新授权`,
+        };
+      }
+      // 授权需求派生：每种负 posting 资源一个 token——amount = Σ|负 delta|、
+      // rooms/locations = 该资源负腿的实际位置集合（不得超出 contract 事实）。
+      const resourceOutflow = new Map<string, { amount: number; rooms: Set<string>; locations: Set<TreasuryLocationKind> }>();
+      for (const posting of verifiedContract.postings) {
+        if (posting.delta >= 0) continue;
+        const entry = resourceOutflow.get(posting.resource) ?? { amount: 0, rooms: new Set<string>(), locations: new Set<TreasuryLocationKind>() };
+        const summed = entry.amount + (-posting.delta);
+        if (!Number.isSafeInteger(summed)) {
+          metrics.authorizationRejected += 1;
+          return { status: "rejected", reason: "invalid_input", detail: `资源 ${posting.resource} 的授权流出聚合溢出安全整数` };
+        }
+        entry.amount = summed;
+        entry.rooms.add(posting.roomName);
+        entry.locations.add(posting.locationKind as TreasuryLocationKind);
+        resourceOutflow.set(posting.resource, entry);
+      }
+      if (resourceOutflow.size === 0) {
+        metrics.authorizationRejected += 1;
+        return { status: "rejected", reason: "contract_invalid", detail: "contract 无负 posting（无资源流出即无授权需求）——拒绝授权" };
+      }
+      // 原子签发：逐资源授权；任一失败回滚已签发 token 的全部预算。
+      const issued: TreasuryAuthorizationToken[] = [];
+      const rollbackIssued = (): void => {
+        for (const token of issued) {
+          const record = authorizationRecords.get(token);
+          if (record !== undefined) releaseAuthorizationBudget(token, record);
+        }
+      };
+      for (const [resource, need] of resourceOutflow) {
+        const result = this.authorizeResourceUse({
+          transactionId: verifiedContract.transactionId,
+          actionKind: verifiedContract.actionKind,
+          resource,
+          rooms: [...need.rooms],
+          locations: [...need.locations],
+          amount: need.amount,
+          contractDigest: verifiedContract.digest,
+          adapterVersion: verifiedContract.adapterVersion,
+          ...(options?.owner !== undefined ? { owner: options.owner } : {}),
+          ...(options?.withhold !== undefined ? { withhold: options.withhold } : {}),
+          ...(options?.allowProjected !== undefined ? { allowProjected: options.allowProjected } : {}),
+          ...(options?.capacityRequirement !== undefined ? { capacityRequirement: options.capacityRequirement } : {}),
+        });
+        if (result.status !== "authorized") {
+          rollbackIssued();
+          metrics.authorizationRejected += 1;
+          return { status: "rejected", reason: result.reason, detail: `资源 ${resource} 授权失败: ${result.detail}` };
+        }
+        issued.push(result.token);
+      }
+      const bundle: TreasuryAuthorizationBundle = Object.freeze({
+        __brand: "treasury-authorization-bundle",
+        tokens: Object.freeze(issued),
+        contractId: verifiedContract.contractId,
+        contractDigest: verifiedContract.digest,
+        transactionId: verifiedContract.transactionId,
+        actionKind: verifiedContract.actionKind,
+        adapterVersion: verifiedContract.adapterVersion,
+      });
+      metrics.authorizationIssued += 1;
+      return { status: "authorized", bundle };
+    },
+
+    /**
+     * 授权 bundle/token 只读预验证（第九轮 4.2，@internal）：全部 token 一次
+     * 性校验（身份/generation/tick/revisions/transactionId/重复/覆盖/
+     * contract 匹配）——零状态变化、零消费。原子消费的可达性基础：预验证
+     * 与消费在同一同步窗口，中间无 revision 变化源。
+     */
+    validateTreasuryAuthorizationForRedeem(
+      tokens: readonly TreasuryAuthorizationToken[],
+      contract: { readonly transactionId: string; readonly actionKind: string; readonly digest: string; readonly adapterVersion: number },
+      postings: readonly TreasuryPosting[],
+    ): { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string; readonly detail: string } {
+      if (!Array.isArray(tokens) || tokens.length === 0) {
+        return { status: "rejected", reason: "authorization_invalid", detail: "redemption 预验证须携带非空 token 集合" };
+      }
+      const seen = new Set<TreasuryAuthorizationToken>();
+      for (const token of tokens) {
+        if (!token || typeof token !== "object" || !authorizationRegistry.has(token)) {
+          return { status: "rejected", reason: "invalid_token", detail: "token 未在本服务实例签发（伪造对象/JSON 副本/跨实例一律无效）" };
+        }
+        if (seen.has(token)) {
+          return { status: "rejected", reason: "invalid_token", detail: "bundle 内出现重复 token（对象身份重复——拒绝）" };
+        }
+        seen.add(token);
+        const record = authorizationRecords.get(token);
+        if (record === undefined) {
+          return { status: "rejected", reason: "already_consumed", detail: "token 已消费或已随 revision 失效释放" };
+        }
+        if (token.serviceGeneration !== serviceGeneration) {
+          return { status: "rejected", reason: "cross_generation", detail: "token 签发的 service generation 已失效" };
+        }
+        if (token.tick !== Game.time) {
+          return { status: "rejected", reason: "cross_tick", detail: `token 于 tick ${String(token.tick)} 签发（当前 ${String(Game.time)}）——跨 tick 失效` };
+        }
+        const revisions = currentAuthorizationRevisions();
+        if (
+          token.revisions.commitmentRevision !== revisions.commitmentRevision ||
+          token.revisions.projectionRevision !== revisions.projectionRevision ||
+          token.revisions.quarantineRevision !== revisions.quarantineRevision ||
+          token.revisions.intentRevision !== revisions.intentRevision ||
+          token.revisions.reservationStoreRevision !== revisions.reservationStoreRevision
+        ) {
+          return { status: "rejected", reason: "revision_mismatch", detail: "token 绑定的 revision 快照已过期（commitment/projection/quarantine/intent/reservation store 任一变化）" };
+        }
+        // contract 绑定匹配（digest 必有——contract-first token 恒绑定）。
+        if (token.transactionId !== contract.transactionId) {
+          return { status: "rejected", reason: "transaction_mismatch", detail: `token 绑定 transactionId ${token.transactionId}，contract ${contract.transactionId}` };
+        }
+        if (token.actionKind !== contract.actionKind) {
+          return { status: "rejected", reason: "invalid_token", detail: `token 绑定 actionKind ${token.actionKind}，contract ${contract.actionKind}` };
+        }
+        if (token.contractDigest !== contract.digest) {
+          return { status: "rejected", reason: "invalid_token", detail: "token 绑定的 contract digest 与实际 contract 不一致" };
+        }
+        if (token.adapterVersion !== contract.adapterVersion) {
+          return { status: "rejected", reason: "invalid_token", detail: `token 绑定 adapter version ${String(token.adapterVersion)}，contract ${String(contract.adapterVersion)}` };
+        }
+        const scopeError = postingsWithinAuthorizationScope(token, postings);
+        if (scopeError !== null) {
+          return { status: "rejected", reason: "scope_violation", detail: scopeError };
+        }
+      }
+      // 联合覆盖：每个负 posting 必须被至少一个 token 覆盖（resource+room+
+      // location 精确匹配——不能只按"同资源存在一个 token"判断）。
+      for (const posting of postings) {
+        if (posting.delta >= 0) continue;
+        const covered = tokens.some(
+          (token) => token.resource === posting.resource && token.rooms.includes(posting.roomName) && token.locations.includes(posting.locationKind),
+        );
+        if (!covered) {
+          return {
+            status: "rejected",
+            reason: "scope_violation",
+            detail: `posting ${posting.roomName}:${posting.locationKind}:${posting.resource} 的流出未被任何 token 覆盖`,
+          };
+        }
+      }
+      return { status: "ok" };
+    },
+
     prepareTransaction(input: TreasuryTransactionInput): TreasuryPreparationResult {
       // runtime input 形状验证（canonicalization 前置）：malformed input 结构化
       // 拒绝（invalid_input）而非抛出中断 tick——零 tentative/零槽位/零 registry。
@@ -1856,6 +2104,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     executePreparedAction<TAction extends { ok: boolean }>(
       input: TreasuryTransactionInput,
       action: () => TAction,
+      execution?: TreasuryWriterKernelExecution,
     ): TreasurySafeExecuteResult<TAction> {
       const prepared = this.prepareTransaction(input);
       if (prepared.status === "already_settled") {
@@ -1870,9 +2119,31 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // 理论不可达（handle 刚签发）：按协议违规拒绝，不执行 Game API。
         return { status: "prepare_rejected", reason: "invalid_handle", detail: "签发后 handle 记录缺失（内部不一致）" };
       }
+      // ── 原子 redemption（第九轮 4.2）：tentative 已接管（prepare 成功）、
+      //    durable intent 写入与 Game callback 之前消费授权——预算向
+      //    tentative 的转移是一个原子点；redeem 拒绝时释放全部预留、
+      //    callback 零调用。 ─────────────────────────────────────────────
+      if (execution?.redeemAuthorization !== undefined) {
+        const redeemed = execution.redeemAuthorization();
+        if (redeemed.status === "rejected") {
+          record.state = "aborted";
+          preparedById.delete(record.canonical.transactionId);
+          projection.tentativeRelease(record.tentativeKey);
+          releaseTreasuryReceiptReservation(record.canonical.transactionId);
+          finalizeHandleRecord(record, "aborted");
+          metrics.authorizationRejected += 1;
+          return {
+            status: "prepare_rejected",
+            reason: "authorization_invalid",
+            detail: `授权 redemption 失败（${redeemed.reason}）: ${redeemed.detail}——tentative 已释放，Game callback 零调用`,
+          };
+        }
+      }
       // ── durable intent / WAL（第八轮唯一安全顺序）：Game API 之前持久化
       //    transaction identity + canonical postings——写入失败时 callback
-      //    零调用、tentative 与槽位释放、结构化拒绝。 ─────────────────────
+      //    零调用、tentative 与槽位释放、结构化拒绝。第九轮：contract 路径
+      //    经 execution.intentContract 绑定完整合同身份（contractId/digest/
+      //    adapterVersion/authorizationDigest/durable payload）。 ─────────
       const intentWrite = writeTreasuryIntentEntry({
         transactionId: record.canonical.transactionId,
         digest: record.digest,
@@ -1887,6 +2158,22 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         })),
         phase: "ready",
         auditSource: "execute-prepared-action",
+        ...(execution?.intentContract !== undefined
+          ? {
+              contractId: execution.intentContract.contractId,
+              contractDigest: execution.intentContract.contractDigest,
+              adapterVersion: execution.intentContract.adapterVersion,
+              ...(execution.intentContract.authorizationDigest !== undefined
+                ? { authorizationDigest: execution.intentContract.authorizationDigest }
+                : {}),
+              ...(execution.intentContract.durablePayload !== undefined
+                ? { durablePayload: execution.intentContract.durablePayload }
+                : {}),
+              ...(execution.intentContract.durablePayloadVersion !== undefined
+                ? { durablePayloadVersion: execution.intentContract.durablePayloadVersion }
+                : {}),
+            }
+          : {}),
         createdAtTick: Game.time,
         updatedAtTick: Game.time,
       });
