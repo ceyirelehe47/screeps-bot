@@ -35,7 +35,15 @@ function isPlainObjectPrototype(value: object): boolean {
   return Object.getPrototypeOf(value) === Object.prototype;
 }
 
-/** 数组/对象复合分支（ancestors 已由调用方维护；无 try/finally——TS 在 try 内 return 表达式上的类型收窄会退化为声明类型）。 */
+/**
+ * 有界异常描述（反射故障诊断——绝不持久化完整 Error/stack）。
+ */
+function boundedFaultDetail(error: unknown, op: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return `reflection_fault(${op}): ${message.slice(0, 96)}`;
+}
+
+/** 数组/对象复合分支（ancestors 已由调用方维护；反射异常由外层统一边界捕获）。 */
 function canonicalizeComposite(
   value: object,
   ancestors: object[],
@@ -57,11 +65,18 @@ function canonicalizeComposite(
     }
     const canonicalItems: unknown[] = [];
     const parts: string[] = [];
+    let index = 0;
     for (const item of value) {
-      const encoded = canonicalize(item, ancestors, depth + 1);
-      if (encoded.status === "rejected") return { status: "rejected" as const, detail: `数组元素非法: ${encoded.detail}` };
-      canonicalItems.push(encoded.canonical);
-      parts.push(encoded.text);
+      // 数组迭代（iterator trap）逐元素防护（第十轮 3.12.12）。
+      try {
+        const encoded = canonicalize(item, ancestors, depth + 1);
+        if (encoded.status === "rejected") return { status: "rejected" as const, detail: `数组元素非法: ${encoded.detail}` };
+        canonicalItems.push(encoded.canonical);
+        parts.push(encoded.text);
+      } catch (error) {
+        return { status: "rejected" as const, detail: boundedFaultDetail(error, `array_iterate[${String(index)}]`) };
+      }
+      index += 1;
     }
     const text = `a:${String(value.length)}[${parts.join("")}]`;
     return { status: "ok" as const, canonical: Object.freeze(canonicalItems), text };
@@ -78,7 +93,7 @@ function canonicalizeComposite(
   }
   const record = value as Record<string, unknown>;
   // accessor 检测先于值读取（getter 零副作用读取——多次读取产生不同值的
-  // 对象在源头拒绝）。
+  // 对象在源头拒绝；descriptor trap 异常由统一边界捕获）。
   for (const key of keys) {
     const descriptor = Object.getOwnPropertyDescriptor(record, key);
     if (descriptor === undefined || descriptor.get !== undefined || descriptor.set !== undefined) {
@@ -89,7 +104,13 @@ function canonicalizeComposite(
   const canonicalRecord: Record<string, unknown> = {};
   const parts: string[] = [];
   for (const key of sortedKeys) {
-    const encoded = canonicalize(record[key], ancestors, depth + 1);
+    // 属性值读取（get trap）逐属性防护（第十轮 3.12.12）。
+    let encoded: { status: "ok"; canonical: unknown; text: string } | { status: "rejected"; detail: string };
+    try {
+      encoded = canonicalize(record[key], ancestors, depth + 1);
+    } catch (error) {
+      return { status: "rejected" as const, detail: boundedFaultDetail(error, `read_property[${key.slice(0, 32)}]`) };
+    }
     if (encoded.status === "rejected") return { status: "rejected" as const, detail: `属性 ${key.slice(0, 32)} 非法: ${encoded.detail}` };
     canonicalRecord[key] = encoded.canonical;
     parts.push(`s:${String(key.length)}:${key}:${encoded.text}`);
@@ -137,8 +158,13 @@ function canonicalize(
     return { status: "rejected" as const, detail: "cyclic 结构不允许出现在 canonical args" };
   }
   ancestors.push(value);
-  const outcome = canonicalizeComposite(value, ancestors, depth);
-  ancestors.pop();
+  let outcome: { status: "ok"; canonical: unknown; text: string } | { status: "rejected"; detail: string };
+  try {
+    outcome = canonicalizeComposite(value, ancestors, depth);
+  } finally {
+    // 对称弹出（异常路径也恢复栈——反射 trap 抛错时 ancestors 不残留）。
+    ancestors.pop();
+  }
   return outcome;
 }
 
@@ -148,7 +174,16 @@ function canonicalize(
  * 拒绝（零抛出）。
  */
 export function canonicalizeTreasuryActionArgs(args: unknown): TreasuryCanonicalizationResult {
-  const encoded = canonicalize(args, [], 0);
+  // 统一反射异常边界（第十轮 3.12.12）：revoked Proxy / throwing ownKeys /
+  // getPrototypeOf / getOwnPropertyDescriptor / get trap 一律结构化拒绝
+  //（reflection_fault——不抛出、不中断 tick）；getter 仍零调用（descriptor
+  // 检查先于任何值读取）。
+  let encoded: { status: "ok"; canonical: unknown; text: string } | { status: "rejected"; detail: string };
+  try {
+    encoded = canonicalize(args, [], 0);
+  } catch (error) {
+    return { status: "rejected", detail: boundedFaultDetail(error, "canonicalize") };
+  }
   if (encoded.status === "rejected") {
     return { status: "rejected", detail: encoded.detail };
   }

@@ -143,3 +143,105 @@ describe("canonicalizeTreasuryActionArgs 拒绝集合（结构化拒绝零抛出
     }
   });
 });
+
+describe("canonicalization 反射异常边界（第十轮 3.12.12：Proxy trap 结构化拒绝）", () => {
+  it("revoked Proxy：结构化拒绝不抛出", () => {
+    const target: Record<string, unknown> = { a: 1 };
+    const revocable = Proxy.revocable(target, {});
+    revocable.revoke();
+    const result = canonicalizeTreasuryActionArgs(revocable.proxy);
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.detail).toContain("reflection_fault");
+  });
+
+  it("throwing ownKeys trap：结构化拒绝", () => {
+    const hostile = new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error("ownKeys hostile");
+        },
+      },
+    );
+    const result = canonicalizeTreasuryActionArgs(hostile);
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.detail).toContain("reflection_fault");
+  });
+
+  it("throwing getPrototypeOf trap：结构化拒绝", () => {
+    const hostile = new Proxy(
+      {},
+      {
+        getPrototypeOf() {
+          throw new Error("gop hostile");
+        },
+      },
+    );
+    const result = canonicalizeTreasuryActionArgs(hostile);
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.detail).toContain("reflection_fault");
+  });
+
+  it("throwing getOwnPropertyDescriptor trap：结构化拒绝（getter 零调用）", () => {
+    let getterCalls = 0;
+    const hostile = new Proxy(
+      { x: 1 },
+      {
+        getOwnPropertyDescriptor() {
+          throw new Error("gopd hostile");
+        },
+        get() {
+          getterCalls += 1;
+          return 1;
+        },
+      },
+    );
+    const result = canonicalizeTreasuryActionArgs(hostile);
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.detail).toContain("reflection_fault");
+    expect(getterCalls).toBe(0); // descriptor 检查先于值读取——getter 零调用
+  });
+
+  it("throwing get trap（descriptor 合法但值读取抛错）：结构化拒绝", () => {
+    const hostile = new Proxy(
+      { x: 1 },
+      {
+        get() {
+          throw new Error("get hostile");
+        },
+      },
+    );
+    const result = canonicalizeTreasuryActionArgs(hostile);
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.detail).toContain("read_property");
+  });
+
+  it("throwing iterator（数组 for..of trap）：结构化拒绝", () => {
+    const hostile = new Proxy([1, 2, 3], {
+      get(target, prop) {
+        if (prop === Symbol.iterator) {
+          throw new Error("iterator hostile");
+        }
+        return (target as unknown as Record<symbol, unknown>)[prop];
+      },
+    });
+    const result = canonicalizeTreasuryActionArgs(hostile);
+    expect(result.status).toBe("rejected");
+  });
+
+  it("rejection 零副作用：多次拒绝后正常输入仍可编码（无状态残留）", () => {
+    const hostile = new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error("registry hostile");
+        },
+      },
+    );
+    expect(canonicalizeTreasuryActionArgs(hostile).status).toBe("rejected");
+    expect(canonicalizeTreasuryActionArgs(hostile).status).toBe("rejected");
+    // 无栈/状态残留：正常对象仍可确定性编码。
+    const ok = canonicalizeTreasuryActionArgs({ a: 1 });
+    expect(ok.status).toBe("ok");
+  });
+});
