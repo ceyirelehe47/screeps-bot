@@ -174,18 +174,18 @@
 
 ## 16. 第十轮 Durable Authority Cohesion & Bundle Atomicity
 
-- [ ] 16.1 拆分 execution outcome 与 settlement state：intent v3 正交二元组、outcome 单调迁移表、旧 phase 保守迁移（未知值 fail closed）、恢复分级改造、facade 执行分支重写（callback 抛错/OK 后故障/非 OK 后故障全部只改 settlement）
-- [ ] 16.2 quarantine v2 完整合同事实：entry 字段扩展（contract/adapter/durable/bundle/owner/policy/structure facts/outcome/settlement）、事实转移协议（读回验证后才释放 intent）、recovery slot 按 ID 并集去重、v1 原子迁移（并存 intent 合并、legacy 标记、未知版本 fail closed）、runtime.d.ts 与声明边界指纹更新
-- [ ] 16.3 unified unresolved authority 升级：quarantine v2 为主、双权威身份校验扩展到合同字段、adapter version 演进防护
-- [ ] 16.4 opaque authorization bundle：类型收缩为不透明句柄、facade 闭包 bundleRegistry、cohort 原子校验（同 owner/policy/epoch/revision）、executeTreasuryActionContract 只接受 opaque bundle
-- [ ] 16.5 批量原子 redemption：staged ledger change 构造、一次发布、六类注入点（first/middle/last leg、budget publish 前、tentative handoff 前、bundle state 前）、前缀回滚与 internal_authorization_fault marker、重复 redeem 拒绝
-- [ ] 16.6 writer kernel 封闭：kernelChannel（unique symbol、non-enumerable 挂载）、公共 TreasuryService 类型移除低层方法、testHarness.ts 测试专用视图、架构测试全量扫描强化（kernel symbol/testHarness/低层方法引用）
-- [ ] 16.7 contract digest AC3：绑定 durablePayloadVersion/durable payload hash/reconciliation contract version、durable facts 变化 → digest 变化、固定 test vector
-- [ ] 16.8 intent 完整 identity：authorizationDigest/ownerIdentity/policyIdentity 持久化、already_present 完整元组比较、intent_conflict fail closed、read-back 全字段验证、低层 test path 旧 intent 不被 production contract 接管
-- [ ] 16.9 service-private resolution：resolve 入口成为 service 方法、capability 消费移至 staged resolution 写入后、contract-backed authority 全字段强匹配（弱 optional 检查删除）、跨 reset 仅凭 staged state 恢复、resolution 入口不被生产 tick 自动调用
-- [ ] 16.10 Treasury-owned policy authority：policyAuthority.ts 注册制 resolver、production 授权不接受调用方 withhold、bundle 绑定 policy identity/version/digest、policy 变化使旧 bundle 失效、无 resolver fail closed、emergency override 显式可审计
-- [ ] 16.11 统一 write readiness：evaluateTreasuryWriteReadiness 单一评估器（一套 blocker 枚举/优先级/状态来源）、query 视图/contract authorization/prepare 复查三处共用、prepare 独立复查防 TOCTOU
-- [ ] 16.12 structure binding 权威：受控 identity 判别联合（governed_location/game_object）、label 仅诊断、重合 binding 同 identity 合并/异 identity 拒绝、required structure 构建时必须存在、执行前 incarnation 重验、Map 容器防原型污染、object-ID binding 验证（存在/类型/room）
-- [ ] 16.13 canonicalization 反射异常边界：全部反射操作 try/catch、revoked/throwing Proxy 结构化拒绝、getter 零调用保持、canonicalization_fault 明确拒绝（callback/授权/registry 零变化）
-- [ ] 16.14 确定性测试全覆盖：durable authority cohesion、outcome 单调性、opaque bundle 防伪、atomic redemption 注入、digest 绑定、resolution closure、policy、write readiness、structure binding、Proxy、operation-count fixture
-- [ ] 16.15 验证与证据：五命令验证、真实 writer 文件零改动确认、evidence 文档（round10-durable-authority-bundle-atomicity-local-validation.md）、预算锚点更新
+- [x] 16.1 拆分 execution outcome 与 settlement state：intent v3 正交二元组、outcome 单调迁移表、旧 phase 保守迁移（未知值 fail closed）、恢复分级改造、facade 执行分支重写（callback 抛错/OK 后故障/非 OK 后故障全部只改 settlement）
+- [x] 16.2 quarantine v2 完整合同事实：entry 字段扩展（contract/adapter/durable/bundle/owner/policy/structure facts/outcome/settlement）、事实转移协议（读回验证后才释放 intent）、recovery slot 按 ID 并集去重、v1 原子迁移（并存 intent 合并、legacy 标记、未知版本 fail closed）、runtime.d.ts 与声明边界指纹更新
+- [x] 16.3 unified unresolved authority 升级：quarantine v2 为主、双权威身份校验扩展到合同字段、adapter version 演进防护
+- [x] 16.4 opaque authorization bundle：类型收缩为不透明句柄、facade 闭包 bundleRegistry、cohort 原子校验（同 owner/policy/epoch/revision）、executeTreasuryActionContract 只接受 opaque bundle
+- [x] 16.5 批量原子 redemption：staged ledger change 构造、一次发布、六类注入点（first/middle/last leg、budget publish 前、tentative handoff 前、bundle state 前）、前缀回滚与 internal_authorization_fault marker、重复 redeem 拒绝
+- [x] 16.6 writer kernel 封闭：kernelChannel（unique symbol、non-enumerable 挂载）、公共 TreasuryService 类型移除低层方法、testHarness.ts 测试专用视图、架构测试全量扫描强化（kernel symbol/testHarness/低层方法引用）
+- [x] 16.7 contract digest AC3：绑定 durablePayloadVersion/durable payload hash/reconciliation contract version、durable facts 变化 → digest 变化、固定 test vector
+- [x] 16.8 intent 完整 identity：authorizationDigest/ownerIdentity/policyIdentity 持久化、already_present 完整元组比较、intent_conflict fail closed、read-back 全字段验证、低层 test path 旧 intent 不被 production contract 接管
+- [x] 16.9 service-private resolution：resolve 入口成为 service 方法、capability 消费移至 staged resolution 写入后、contract-backed authority 全字段强匹配（弱 optional 检查删除）、跨 reset 仅凭 staged state 恢复、resolution 入口不被生产 tick 自动调用
+- [x] 16.10 Treasury-owned policy authority：policyAuthority.ts 注册制 resolver、production 授权不接受调用方 withhold、bundle 绑定 policy identity/version/digest、policy 变化使旧 bundle 失效、无 resolver fail closed、emergency override 显式可审计
+- [x] 16.11 统一 write readiness：evaluateTreasuryWriteReadiness 单一评估器（一套 blocker 枚举/优先级/状态来源）、query 视图/contract authorization/prepare 复查三处共用、prepare 独立复查防 TOCTOU
+- [x] 16.12 structure binding 权威：受控 identity 判别联合（governed_location/game_object）、label 仅诊断、重合 binding 同 identity 合并/异 identity 拒绝、required structure 构建时必须存在、执行前 incarnation 重验、Map 容器防原型污染、object-ID binding 验证（存在/类型/room）
+- [x] 16.13 canonicalization 反射异常边界：全部反射操作 try/catch、revoked/throwing Proxy 结构化拒绝、getter 零调用保持、canonicalization_fault 明确拒绝（callback/授权/registry 零变化）
+- [x] 16.14 确定性测试全覆盖：durable authority cohesion、outcome 单调性、opaque bundle 防伪、atomic redemption 注入、digest 绑定、resolution closure、policy、write readiness、structure binding、Proxy、operation-count fixture
+- [x] 16.15 验证与证据：五命令验证、真实 writer 文件零改动确认、evidence 文档（round10-durable-authority-bundle-atomicity-local-validation.md）、预算锚点更新
