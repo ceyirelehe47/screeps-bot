@@ -493,8 +493,25 @@ export function buildTreasuryActionContract(
     }
   }
   const sortedPostings = [...derived].sort((a, b) => (postingKey(a) < postingKey(b) ? -1 : postingKey(a) > postingKey(b) ? 1 : 0));
+  // 【第十轮 3.12.6/AC3】durable reconciliation facts 绑定进 contract identity：
+  // durable payload version 与内容的稳定 hash、reconciliation contract version
+  //（adapter 提供 reconciler 时 durable facts 必填）。durable facts 变化 →
+  // digest 变化 → 旧 bundle/授权全部失效（不得复用）。
+  if (adapter.reconcile !== undefined && durableFacts === undefined) {
+    actionContractEvents.rejected += 1;
+    return {
+      status: "rejected",
+      reason: "contract_invalid",
+      detail: "adapter 提供 reconciler 但未提供 durableFacts（production contract 的 durable reconciliation facts 必填）",
+    };
+  }
+  const durablePayloadHash = durableFacts !== undefined ? hashTreasuryCanonicalString(durableFacts.payload) : "";
+  const durableText =
+    durableFacts !== undefined
+      ? `:dfv:${String(durableFacts.version)}:dfh:${durablePayloadHash}:rcv:${String(durableFacts.version)}`
+      : ":df:none";
   const digest = hashTreasuryCanonicalString(
-    `AC2:ce:${String(TREASURY_CANONICAL_ENCODING_VERSION)}:k:${String(request.actionKind.length)}:${request.actionKind}:av:${String(adapter.version)}:t:${String(request.transactionId.length)}:${request.transactionId}:a:${String(canonicalized.text.length)}:${canonicalized.text}:p:${sortedPostings.map(canonicalPostingText).join(",")}:s:${canonicalStructuresText(structureSnapshots)}`,
+    `AC3:ce:${String(TREASURY_CANONICAL_ENCODING_VERSION)}:k:${String(request.actionKind.length)}:${request.actionKind}:av:${String(adapter.version)}:t:${String(request.transactionId.length)}:${request.transactionId}:a:${String(canonicalized.text.length)}:${canonicalized.text}:p:${sortedPostings.map(canonicalPostingText).join(",")}:s:${canonicalStructuresText(structureSnapshots)}${durableText}`,
   );
   const contract = Object.freeze({
     __brand: "treasury-action-contract",

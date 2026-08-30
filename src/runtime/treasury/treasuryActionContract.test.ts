@@ -418,3 +418,63 @@ describe("contract 执行（contract-first bundle）", () => {
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
   });
 });
+
+describe("contract digest AC3：durable reconciliation facts 绑定（第十轮 3.12.6）", () => {
+  /** 双腿 adapter（可变 durable payload 的固定 vector fixture）。 */
+  function vectorAdapter(payload: string, version = 1) {
+    return {
+      kind: "test.vec",
+      version,
+      validate: (args: unknown): string | null => (args && typeof args === "object" ? null : "args 非对象"),
+      derivePostings: () => [
+        { roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 },
+        { roomName: "W1N57", locationKind: "terminal", resource: "energy", delta: 100 },
+      ],
+      execute: (): { ok: boolean } => ({ ok: true }),
+      structureBindings: () => [],
+      durableFacts: () => ({ version, payload }),
+      reconcile: () => "still_uncertain" as const,
+    };
+  }
+
+  it("durable payload 变化 → digest 变化；version 变化 → digest 变化；相同 facts → 固定 digest（vector）", () => {
+    registerTreasuryActionAdapter(vectorAdapter("vec-payload-A"));
+    const service = makeService();
+    const a1 = buildTreasuryActionContract(service, { actionKind: "test.vec", transactionId: "ac3_fixed", args: {} });
+    const a2 = buildTreasuryActionContract(service, { actionKind: "test.vec", transactionId: "ac3_fixed", args: {} });
+    if (a1.status !== "built" || a2.status !== "built") throw new Error("build a failed");
+    expect(a1.contract.digest).toBe(a2.contract.digest); // 确定性（固定 vector）
+    const fixedDigest = a1.contract.digest;
+    // 同 adapter version、不同 payload → digest 变化。
+    replaceTreasuryActionAdapterForTest(vectorAdapter("vec-payload-B"));
+    const b = buildTreasuryActionContract(service, { actionKind: "test.vec", transactionId: "ac3_fixed", args: {} });
+    if (b.status !== "built") throw new Error("build b failed");
+    expect(b.contract.digest).not.toBe(fixedDigest);
+    // durable payload version 变化 → digest 变化（同 payload 文本）。
+    replaceTreasuryActionAdapterForTest(vectorAdapter("vec-payload-A", 2));
+    const c = buildTreasuryActionContract(service, { actionKind: "test.vec", transactionId: "ac3_fixed", args: {} });
+    if (c.status !== "built") throw new Error("build c failed");
+    expect(c.contract.digest).not.toBe(fixedDigest);
+    // 恢复 A/v1 → digest 回到固定值（编码无漂移）。
+    replaceTreasuryActionAdapterForTest(vectorAdapter("vec-payload-A"));
+    const a3 = buildTreasuryActionContract(service, { actionKind: "test.vec", transactionId: "ac3_fixed", args: {} });
+    if (a3.status !== "built") throw new Error("build a3 failed");
+    expect(a3.contract.digest).toBe(fixedDigest);
+  });
+
+  it("提供 reconciler 但无 durableFacts 的 adapter：contract 构建拒绝（durable facts 必填）", () => {
+    registerTreasuryActionAdapter({
+      kind: "test.nofacts",
+      version: 1,
+      validate: (args: unknown): string | null => (args && typeof args === "object" ? null : "args 非对象"),
+      derivePostings: () => [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }],
+      execute: (): { ok: boolean } => ({ ok: true }),
+      structureBindings: () => [],
+      reconcile: () => "still_uncertain" as const,
+    });
+    const service = makeService();
+    const built = buildTreasuryActionContract(service, { actionKind: "test.nofacts", transactionId: "ac3_nofacts", args: {} });
+    expect(built.status).toBe("rejected");
+    if (built.status === "rejected") expect(built.detail).toContain("durableFacts");
+  });
+});
