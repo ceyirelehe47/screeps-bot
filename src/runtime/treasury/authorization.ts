@@ -276,7 +276,11 @@ export function treasuryAuthorizationOwnerKey(owner: TreasuryOwnerIdentity | und
 /** 当前活跃授权数上限（heap 有界；超出拒绝新授权——授权预算是内存资源）。 */
 export const TREASURY_AUTHORIZATION_ACTIVE_LIMIT = AUTHORIZATION_ACTIVE_LIMIT;
 
-/** postings 覆盖校验：每个负 posting 在 token scope 内、累计流出 ≤ amount。 */
+/**
+ * postings 覆盖校验：token 只校验**自己 resource** 的负 posting（多资源
+ * action 每种资源分别授权——联合覆盖由执行入口保证）；该 resource 的每个
+ * 负 posting 在 room/location scope 内、累计流出 ≤ amount。
+ */
 export function postingsWithinAuthorizationScope(
   token: TreasuryAuthorizationToken,
   postings: readonly { roomName: string; locationKind: string; resource: string; delta: number }[],
@@ -286,9 +290,7 @@ export function postingsWithinAuthorizationScope(
   let totalOutflow = 0;
   for (const posting of postings) {
     if (posting.delta >= 0) continue; // 只约束流出（负 posting）
-    if (posting.resource !== token.resource) {
-      return `posting resource ${posting.resource} 不在授权 scope（${token.resource}）`;
-    }
+    if (posting.resource !== token.resource) continue; // 其它资源的腿由对应 token 覆盖
     if (!roomScope.has(posting.roomName)) {
       return `posting roomName ${posting.roomName} 不在授权 scope`;
     }
