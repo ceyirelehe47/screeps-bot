@@ -442,7 +442,7 @@ export interface TreasuryService {
     readonly digest?: string;
   }): { readonly status: "issued"; readonly capability: TreasuryReconciliationCapability } | {
     readonly status: "rejected";
-    readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault";
+    readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated";
     readonly detail: string;
   };
   /**
@@ -3118,10 +3118,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       readonly digest?: string;
     }): { readonly status: "issued"; readonly capability: TreasuryReconciliationCapability } | {
       readonly status: "rejected";
-      readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault";
+      readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated";
       readonly detail: string;
     } {
-      const reject = (reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault", detail: string) => {
+      const reject = (reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated", detail: string) => {
         metrics.reconciliationCapabilitiesRejected += 1;
         return { status: "rejected" as const, reason, detail };
       };
@@ -3151,6 +3151,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // 为故障后观察。
       if (Game.time <= facts0.recordedAt || state.tick <= facts0.recordedAt) {
         return reject("premature_observation", `尚未建立故障后 shared observation（当前 tick ${String(Game.time)}，故障 tick ${String(facts0.recordedAt)}）`);
+      }
+      // 【第十一轮 3.13.7】legacy authority 隔离：legacyV1（v1 迁移且无并存
+      // intent 补全合同事实）不得使用当前 adapter reconciler 解释——保持
+      // 隔离，只能显式人工 migration/reconciliation 处理。
+      if ((facts0 as { legacyV1?: boolean }).legacyV1 === true) {
+        return reject(
+          "legacy_authority_isolated",
+          `transactionId ${input.transactionId.slice(0, 48)} 为 legacy v1 quarantine（无完整 contract/cohort identity）——当前 adapter reconciler 不得解释，保持隔离（显式诊断：treasuryLegacyQuarantineDiagnostics）`,
+        );
       }
       // 注册 reconciler 边界：无注册 adapter 或 adapter 无 reconciler 拒绝。
       const actionKind = facts0.actionKind;

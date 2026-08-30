@@ -312,6 +312,14 @@ function prevalidate(
       },
     };
   }
+  // 【第十一轮 3.13.7】legacy authority 防御：legacyV1 quarantine 即使经
+  // 其它通道进入 resolution 也拒绝（隔离不因入口不同而失效）。
+  if ((authority as { legacyV1?: boolean }).legacyV1 === true) {
+    countRejected();
+    return {
+      stop: { status: "rejected", reason: "resolution_not_allowed", detail: "legacy v1 quarantine 不参与 resolution（无完整 contract/cohort identity——显式人工 migration/reconciliation 处理）" },
+    };
+  }
   const contractBacked =
     authority.contractId !== undefined || authority.contractDigest !== undefined || authority.adapterVersion !== undefined;
   if (contractBacked) {

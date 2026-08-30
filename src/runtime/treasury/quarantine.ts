@@ -683,6 +683,37 @@ export function readTreasuryQuarantineEntry(transactionId: string): Readonly<Tre
   return entry === undefined ? undefined : freezeQuarantineCopy(entry);
 }
 
+/**
+ * legacy quarantine 只读诊断（第十一轮 3.13.7）：列出 legacyV1 隔离 entry
+ * 的冻结快照（transactionId/phase/outcome/digest）——显式人工 migration/
+ * reconciliation 的输入；本函数零写入（entry 原样保留）。
+ */
+export interface TreasuryLegacyQuarantineDiagnostic {
+  readonly transactionId: string;
+  readonly digest: string;
+  readonly phase: string;
+  readonly outcome: string;
+  readonly recordedAt: number;
+}
+
+export function treasuryLegacyQuarantineDiagnostics(): readonly TreasuryLegacyQuarantineDiagnostic[] {
+  const store = peekTreasuryQuarantineStore();
+  if (store === undefined) return Object.freeze([]);
+  const diagnostics: TreasuryLegacyQuarantineDiagnostic[] = [];
+  for (const entry of Object.values(store.entries ?? {})) {
+    if ((entry as { legacyV1?: boolean }).legacyV1 === true) {
+      diagnostics.push({
+        transactionId: entry.transactionId,
+        digest: entry.digest,
+        phase: entry.phase,
+        outcome: entry.outcome,
+        recordedAt: entry.recordedAt,
+      });
+    }
+  }
+  return Object.freeze(diagnostics);
+}
+
 export function isTreasuryTransactionQuarantined(transactionId: string): boolean {
   return readTreasuryQuarantineEntry(transactionId) !== undefined;
 }
