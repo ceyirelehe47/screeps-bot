@@ -223,7 +223,108 @@ intent 删除仅限四种情形：transaction 成功 settled（receipt committed
 
 Treasury 机制覆盖：tick 内 reset 恢复（heap 丢失、Memory 完整）、commit 阶段异常、write-fault 检测、quarantine/resolution 状态机中断恢复（staged + 幂等）。**不保证**：Screeps 运行时硬 CPU 中断（tick 中途进程终止导致 Memory 未 flush——该 tick 的全部 Memory 写入一并丢失，intent 与副作用可能同时消失，恢复按"无持久记录"处理，风险由 quarantine slot 预留与保守恢复兜底）；Memory 序列化边界外的持久化介质故障。设计上不声称超出该模型的 exactly-once。
 
+### 3.11 Contract-Bound Authority & Recovery Closure（第九轮）
 
+#### 3.11.1 安全 canonical encoding（canonicalEncoding.ts）
+
+`canonicalizeTreasuryActionArgs(args)` 一次遍历完成"复制冻结 + 确定性文本编码"，输出 `{canonical（冻结深拷贝）, text}` 或结构化拒绝（绝不抛出中断 tick）：
+
+- **拒绝集合**：cyclic（祖先路径栈检测）；accessor 属性（descriptor.get/set 存在即拒——检测先于读取，getter 零副作用读取）；非普通对象 prototype（Object.prototype/Array.prototype 之外——涵盖 class instance/Date/Map/Set）；function/symbol/bigint/undefined（对象属性值或数组元素任一出现即拒）；NaN/±Infinity；稀疏数组（`Object.keys(arr).length !== arr.length` 或数组含 hole）；键为非 string/symbol-free 的数字键（数组外普通对象的整数键规范化为字符串后参与排序——语义等价编码）。
+- **确定性**：普通对象 key 经 `Object.keys` 枚举后**排序**再拼接（消除插入顺序差异）；数组保持元素顺序（顺序即语义）；文本编码沿用长度前缀风格（`t:<len>:<text>` / `n:<number>` / `b:true|false` / `n:null`），无 `{a:undefined}` vs `{}`、NaN vs null 的静默碰撞（undefined 压根不允许出现）。
+- **有界**：深度 ≤ 16、编码文本 ≤ 4096 字符、数组长度 ≤ 256、对象自有键 ≤ 64——超限结构化拒绝。
+- contract digest 改为 `AC2` 前缀：`AC2:ce:<encodingVersion>:k:<len>:<kind>:av:<adapterVersion>:t:<len>:<transactionId>:a:<len>:<canonicalArgsText>:p:<postings 长度前缀串>:s:<structures 长度前缀串>`。旧 AC1 digest 不再签发（无持久迁移需求——contract 是 heap-only 单 tick 对象）。
+
+#### 3.11.2 受控结构引用与完整 incarnation 验证
+
+adapter 的 `structureIds?(args): string[]`（任意字符串、收集不验证）替换为：
+
+```ts
+structureBindings?(args): readonly { roomName: string; locationKind: "storage" | "terminal"; label?: string }[]
+```
+
+- contract 构建时：`structureSnapshots` = posting 涉及的全部 (room,location) + `structureBindings` 声明的额外结构（label 缺省为 `${roomName}:${locationKind}`），每项捕获 structureId；adapter 声明的房间不在管辖/位置缺失 → contract 拒绝（不允许"声明了但无法验证"）。
+- 执行前：`beginFreshObservation()` 必须 succeed（配额耗尽 → `fresh_observation_unavailable` 拒绝执行——**不退回 shared observation**）；对全部快照逐项重验 structureId（disappeared/replaced → `structure_replaced`，callback 零调用、授权零消费、tentative 不变）。
+
+#### 3.11.3 Contract-first authorization 与原子 bundle
+
+- `service.authorizeTreasuryActionContract(contract, options)`：contract 必须为本 service 本 tick 构建的合法对象（registry 身份 + builtAtTick === Game.time）；从 canonical postings 派生每资源授权请求（amount = Σ|负 delta|、rooms = 去重房间集、locations、actionKind、contractDigest 必填、adapterVersion 绑定）；逐资源签发 token——任一失败时**已签发 token 的预算全部回滚**（原子签发）；全部成功返回 `TreasuryAuthorizationBundle {tokens, contractId, digest, transactionId, actionKind, adapterVersion}`。授权前置 write admission ready（writeFault lock + quarantine/intent blockers + readiness 基础条件）。
+- policy authority：`TreasuryAuthorizationRequest.policyFingerprint` 字段与 `pf:` 通道删除；token.policyFingerprint 值域收紧为 `"wh:<n>" | ""`（仅 Treasury 计算的受控 withhold）。
+- `authorizeResourceUse` 降级 @internal test-only（service 对象保留；架构测试禁止生产调用）。
+
+#### 3.11.4 原子 redemption 顺序（writer kernel execution options）
+
+`executePreparedAction(input, action, execution?)`，`execution = {redeemAuthorization?, intentContract?}`：
+
+```text
+contract 防伪/跨 tick/adapter 校验
+→ bundle 只读预验证（全部 token：身份/generation/tick/revisions/contract identity+digest/
+   actionKind/adapterVersion/transactionId/重复/coverage/累计 amount/capacity/policy）
+→ 结构 incarnation 重验（fresh 必需）
+→ prepareTransaction（全门禁；拒绝 = 零消费零 callback）
+→ redeemAuthorization()（tentative 已接管后、intent 前；失败 = 释放 tentative、零 callback）
+→ writeTreasuryIntentEntry(phase=ready, 绑定 contract identity + durable payload)
+→ read-back 验证（digest/contract/postings 一致，不一致 = 零 callback 保守关闭）
+→ transition ready→executing（任一失败含 not_found = 零 callback 保守关闭）
+→ adapter.execute 恰好一次
+→ OK: transition executing→ok_pending_commit（失败=不普通 commit→durable fault）
+→ 非 OK: transition executing→returned_non_ok（失败=不普通 abort→durable fault）
+→ 抛错: execution_unknown emergency authority（quarantine 写失败时 intent 保留）
+```
+
+消费点位于 tentative 接管之后 = "授权预算 → tentative ledger"的原子转移；prepare 拒绝时零消费。任一 token 预验证失败时前 N−1 个不被消费（预验证纯只读，消费只发生在 redeem 一次完成）。
+
+#### 3.11.5 intent 合同身份与严格 phase 状态机（intents v2）
+
+- `TreasuryIntentEntry` v2 新增 optional 字段：`contractDigest`（16hex）、`adapterVersion`（正整数）、`durablePayload`（≤512 字符，adapter.durableFacts(args) 的版本化有界对账事实——替代持久化完整 args）。v1 → v2 无损升级（新字段全 optional），未知版本 fail closed 不变。
+- `transitionTreasuryIntentPhase(transactionId, target, expect)`：`expect = {from?: readonly phase[], digest?, contractId?}`；entry 缺失 → not_found；identity 不匹配 → identity_mismatch；当前 phase 不在 expect.from 且 ≠ target → predecessor_mismatch；当前 phase === target 且 identity 匹配 → 幂等 marked。合法迁移表：`ready→executing`、`executing→{returned_non_ok|ok_pending_commit|execution_unknown|quarantined}`、`returned_non_ok→{execution_unknown|quarantined|resolution_pending}`、`ok_pending_commit→{execution_unknown|quarantined|resolution_pending|committed}`、`execution_unknown→{quarantined|resolution_pending}`、`quarantined→resolution_pending`。旧 `markTreasuryIntentPhase` 移除。
+- **read-back**：intent 写入后立即 `readTreasuryIntentEntry` 比对 transactionId/digest/contractId/postings——不一致按 store 不可信处理（callback 零调用 + 保守关闭）。
+
+#### 3.11.6 recovery phase 事实等级映射
+
+| intent phase | 恢复动作 | quarantine write-fault phase | not-executed resolution |
+|---|---|---|---|
+| ready | 确认未执行释放（协议保证 mark 先于 callback） | — | — |
+| executing / execution_unknown / quarantined / resolution_pending | 保守转 execution-unknown quarantine | executing_at_end_tick | 允许（unknown 类） |
+| returned_non_ok | 保留"Game 已返回非 OK"事实 | action_returned_non_ok_abort_failed | 允许（Game 明确未成功） |
+| ok_pending_commit | commit 类隔离（**事实单调**：已知 OK 不降级为可能未执行） | ok_pending_commit_unresolved（新增 commit 类枚举） | **拒绝**（只能 committed） |
+| committed / aborted | 终态残留：幂等释放（receipt/abort 已完成） | — | — |
+
+emergency intent（quarantine 写失败保留）phase 原样保留，等价参与 authority。
+
+#### 3.11.7 unified unresolved authority
+
+`resolveTreasuryUnresolvedAuthority(transactionId)`（faultResolution 私有，签发/恢复/释放共用）：
+
+- quarantine 与 intent 同 id 双存在 → digest/postings（规范逐腿比较）/kind 三者必须全等，否则 `authority_inconsistent` fail closed（不任选其一）；
+- 一致或单一存在 → 归一化 facts：`{authorityKind: "quarantine"|"intent", transactionId, digest, kind, actionKind, phase, recordedAt, postings, contractId?, contractDigest?, adapterVersion?, durablePayload?}`；
+- intent-only 的 not-executed 允许性：intent phase ∈ {executing, returned_non_ok, execution_unknown} 允许；ok_pending_commit 拒绝（事实单调）；quarantined/resolution_pending 保守允许（隔离中的 unknown）。
+
+resolution 成功释放路径：releaseTreasuryQuarantineEntry + releaseTreasuryIntentEntry（均幂等）+ clearTreasuryWriteFaultMarkerForResolution（digest 双匹配）；任一步失败不回滚 tombstone（恢复协议幂等补完成）。
+
+#### 3.11.8 私有 capability 与 service 校验
+
+- reconciliation.ts 的 registry/validate/consume 全部移入 facade 的 `createTreasuryService` 闭包（与 authorizationRegistry 同模式）；模块只保留类型与 conclusion 枚举。`registerTreasuryReconciliationCapability` 等符号不再导出——架构测试扫描导出面。
+- resolve 函数签名：`resolveTreasuryFaultAsCommitted(service, {transactionId, digest?, capability})`——`service.consumeReconciliationCapability(capability)` 承载"身份 + 单次 + generation + tick"校验并消费（generation 取闭包值，调用者无法提交）；resolve 不再接收 serviceGeneration。
+- capability 扩展绑定：authorityKind、contractId/contractDigest（authority 有绑定时必须匹配）、adapterVersion、durablePayloadVersion、结构 incarnation 摘要、reconcilerKind+Version。
+- reconciler 输入：完整 durable facts（actionKind/transactionId/contractDigest/postings 全量/durablePayload/adapterVersion）——移除 `postings[0].resource` 与单一负数 amount 汇总。
+
+#### 3.11.9 staged 恢复与 retention 规则（resolutionStore）
+
+- resolving committed 恢复判定：`receiptTick = hasSettledReceipt(id)`；finalize 当且仅当 `entry.settledAtTick !== undefined && receiptTick !== undefined && receiptTick >= entry.settledAtTick`。未达标（旧 action tick receipt / 无 receipt）→ 幂等续做 `refreshSettledReceiptForResolution(id, entry.settledAtTick)`（刷新到**原定** settledAtTick——不缩短 replay horizon）；refresh fatal → 保留 resolving + 报告 blocker（绝不直接 finalize、绝不回滚丢弃 resolution-intent）。
+- `evictExpiredTombstones` 只删除 `stage === "final"` 且超 retention 的条目；resolving 永不驱逐——满载且无可清理 final 项时 fail closed 拒绝新 resolution（与既有容量语义一致）。
+- final not-executed 恢复补完成：quarantine release + intent release + marker 清除（authority 双查，intent-only 场景同样补完成）。
+
+#### 3.11.10 架构封闭（writer kernel）
+
+架构测试从固定 PRODUCTION_WRITER_MODULES 列表升级为**全量扫描 src 下全部生产 .ts**（排除 treasury 协议实现白名单：facade.ts、actionContracts.ts、compat.ts、faultResolution.ts、resolutionStore.ts、intents.ts、quarantine.ts、receipts.ts、writeFault.ts、reconciliation.ts、authorization.ts、canonicalEncoding.ts、ownerIdentity.ts、commitmentRevision.ts、resolutionEvents.ts、transactionId.ts、shadow.ts、types.ts）：普通生产模块不得调用 `executePreparedAction`/`prepareTransaction`/`consumeTreasuryAuthorization`/`authorizeResourceUse`/`compatRecord*`/`registerTreasuryActionAdapter`，不得 import faultResolution；新增生产模块自动受约束。service 公共接口上这些方法标注 @internal（TS 类型保留，测试可用）。
+
+#### 3.11.11 性能与容量（第九轮）
+
+bundle 预验证复杂度 O(tokens + postings)（与历史 transaction 无关）；授权/prepare 快路径维持既有 operation-count 契约；无随历史 transaction 无界增长的 heap strong Map（capability/authorization registry 均 WeakSet/WeakMap 或 tick 级清空）；durablePayload ≤ 512 字符/entry、canonical args 编码 ≤ 4096、intent store 64、resolution store 256（resolving 不参与 GC——满载 fail closed 即上限）；structureSnapshots 受 structureBindings 声明数有界（≤ 16 项）。新增 operation-count 测试证明 bundle 预验证与 fresh 结构校验不退化为全表扫描。
+
+#### 3.11.12 非目标重申
+
+本轮不接任何真实生产 writer（ResourceControl/terminal/carrier/lab/factory/market/nuker/synthesis 零改动）；不部署、不合并 main；不声称 Screeps 硬 CPU 中断下的 exactly-once（3.10.11 边界继续有效）；自由字符串 policy 仍非 policy authority（通道已移除）。
 
 ## 4. Tick 生命周期（第二迭代：显式 begin/end）
 

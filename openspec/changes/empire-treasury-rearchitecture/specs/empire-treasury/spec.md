@@ -762,3 +762,137 @@ owner 的持久 token、比较 key、聚合 key、self-exclusion key、mutation 
 
 - **WHEN** 存在 quarantine 正流入风险 +1000
 - **THEN** strictProjectedUsed+Free = physical capacity（不含风险）；riskAdjustedFree 单独扣除 1000；receiver admission 采用 risk-adjusted 口径；旧名称返回文档标注的兼容语义
+
+### Requirement: contract-first authorization（第九轮）
+
+生产资源授权必须（MUST）以本 service 本 tick 构建的合法 action contract 为前提（authorizeTreasuryActionContract）；授权需求（actionKind/rooms/locations/每资源 amount/contractDigest/adapter version）必须（MUST）全部从 contract 的 canonical postings 与 adapter 元数据派生；token 的 contract digest 不得（MUST NOT）可选；授权阶段必须（MUST）要求 write admission ready；自由字符串 policyFingerprint 不得（MUST NOT）再赋予 policy authority（通道移除，仅受控 withhold 数值）；authorizeResourceUse 自填请求入口必须（MUST）降级为 test-only（生产禁用，架构测试守护）。
+
+#### Scenario: 授权绑定具体 contract
+
+- **WHEN** 为 action A 的 contract 签发 bundle 后尝试执行 action B 的 contract（或同 kind 不同 digest、不同 transactionId、不同 adapter version）
+- **THEN** 预验证拒绝且零 token 消费、零 callback；token 不得用于不同 action kind/adapter version/contract/transaction
+
+#### Scenario: 调用者自填 policy fingerprint 无 authority
+
+- **WHEN** 调用方在授权请求中携带任意字符串 policy fingerprint（或以任何方式提交自由字符串）
+- **THEN** 该请求结构化拒绝；token 的 policy 表达只可能来自 Treasury 计算的受控 withhold
+
+### Requirement: 原子 bundle redemption（第九轮）
+
+多 token 执行必须（MUST）全有或全无：全部 token 一次性只读预验证（身份/generation/tick/revisions/contract identity+digest/action kind/adapter version/transactionId/重复 token/exact posting coverage/每资源累计 amount/receiver capacity/policy binding）通过后才可消费；结构 incarnation 校验与 fresh observation 检查必须（MUST）先于消费（fresh 配额耗尽必须拒绝执行，不得退回 shared observation）；授权预算向 tentative ledger 的转移必须（MUST）是原子协议（prepare 成功 tentative 接管后、Game callback 前一次消费）；任一失败时必须（MUST）零 token 消费、authorization budget 不变、callback 零调用、tentative ledger 不变、无"授权已消费但 tentative 未接管"窗口。
+
+#### Scenario: 第 N 个 token 无效
+
+- **WHEN** 多资源 bundle 的第 N 个 token 预验证失败（重复/digest 不匹配/scope 超范围/revision 过期）
+- **THEN** 前 N−1 个 token 未被消费、预算不变、callback 零调用
+
+#### Scenario: incarnation mismatch 与 fresh 耗尽零消费
+
+- **WHEN** 执行前结构 incarnation 变化、或 fresh observation 配额耗尽
+- **THEN** 拒绝执行（structure_replaced / fresh_observation_unavailable）；token 不被消费、tentative 不变、callback 零调用
+
+### Requirement: writer kernel 封闭（第九轮）
+
+任意 callback 的 executePreparedAction、prepareTransaction、授权消费原语不得（MUST NOT）对普通生产模块公开（service 对象保留 @internal 实现）；架构边界测试必须（MUST）扫描全部生产 TypeScript 源码（而非固定文件清单）——新增生产模块自动受约束；actionContracts 必须（MUST）经窄内部接口（execution options）访问 writer kernel。
+
+#### Scenario: 新增生产模块自动受约束
+
+- **WHEN** 任何 src 下生产文件（treasury 协议实现白名单之外）调用 executePreparedAction/prepareTransaction/consumeTreasuryAuthorization/authorizeResourceUse/compatRecord*/registerTreasuryActionAdapter 或 import faultResolution
+- **THEN** 架构测试失败（无论文件是否在既有清单中）
+
+### Requirement: intent 完整合同身份与严格 phase 状态机（第九轮）
+
+contract 执行路径写入的 durable intent 必须（MUST）绑定 contractId/contractDigest/actionKind/adapterVersion/authorizationDigest/结构 incarnation/有界 durable payload（≤512，不持久化完整 args/observation）；phase 迁移必须（MUST）验证期望前序状态与 digest/contract 一致（幂等仅限同 identity 且已处目标 phase）；not_found/store fatal/非法前序/identity mismatch/read-back 不一致必须（MUST）callback 零调用；callback 返回后 phase 写入失败必须（MUST）按事实等级进入 durable fault（OK→不得普通 commit；非 OK→不得普通 abort；抛错→execution unknown），不得（MUST NOT）静默忽略 phase 写入结果。
+
+#### Scenario: not_found 与前序非法零 callback
+
+- **WHEN** ready→executing 迁移返回 not_found、或 entry 当前 phase 不在合法前序集合、或 read-back digest/contract/postings 不一致
+- **THEN** callback 零调用、预留释放、结构化拒绝（intent_store_unavailable / 内部不一致处置）
+
+#### Scenario: callback 后 phase 写失败
+
+- **WHEN** callback 返回 OK 但 ok_pending_commit 写入失败（或返回非 OK 但 returned_non_ok 写入失败）
+- **THEN** 不执行普通 commit/abort；进入 durable emergency fault（executed_unsettled / executed_abort_failed）；intent/quarantine 至少一个保留完整权威；阻断自动重试
+
+### Requirement: recovery phase 事实等级（第九轮）
+
+intent recovery 必须（MUST）保留事实等级：ready→确认未执行关闭；executing/execution_unknown→execution-unknown quarantine；returned_non_ok→保留"Game 已返回非 OK"事实；ok_pending_commit→commit 类隔离（ok_pending_commit_unresolved）且永不允许（MUST NOT）resolve-as-not-executed；committed/aborted 终态残留幂等释放。已知 Game 返回 OK 不得（MUST NOT）在恢复后退化为"可能未执行"。
+
+#### Scenario: ok_pending_commit 恢复不降级
+
+- **WHEN** intent 处于 ok_pending_commit 相发生 global reset 后 beginTick 恢复
+- **THEN** quarantine entry 的 phase 为 commit 类（ok_pending_commit_unresolved）；后续 not-executed resolution 被拒绝（只能 resolve-as-committed）
+
+#### Scenario: returned_non_ok 恢复保留事实
+
+- **WHEN** intent 处于 returned_non_ok 相恢复
+- **THEN** quarantine phase 为 action_returned_non_ok_abort_failed（不被当作 callback 仍在执行）；not-executed resolution 允许
+
+### Requirement: unified unresolved authority（第九轮）
+
+capability 签发、prevalidation、resolution、recovery、release 必须（MUST）使用同一套 authority resolution（durable quarantine entry 或 durable emergency intent entry）；同 id 双存在时 digest/postings/kind 不一致必须（MUST）fail closed；intent-only authority 必须（MUST）可签发 capability、resolve-as-committed、phase 允许时 resolve-as-not-executed（ok_pending_commit 拒绝）；resolution 不得（MUST NOT）因"没有 quarantine entry"拒绝已存在的 emergency intent；resolution 成功必须（MUST）幂等释放 quarantine+intent+匹配 marker，释放失败保持可恢复。
+
+#### Scenario: intent-only authority 完整参与
+
+- **WHEN** quarantine 写失败、emergency intent 保留（任意 unresolved phase）
+- **THEN** 可对其签发 reconciliation capability；resolve-as-committed 成功；phase 允许（executing/returned_non_ok/execution_unknown）时 resolve-as-not-executed 成功；ok_pending_commit 拒绝 not-executed
+
+#### Scenario: 双权威不一致 fail closed
+
+- **WHEN** 同一 transactionId 的 quarantine 与 intent entry 的 digest/postings/kind 任一不一致
+- **THEN** capability 签发与 resolution 均 fail closed 拒绝（不任选其一）
+
+### Requirement: 私有 reconciliation capability（第九轮）
+
+capability registry 必须（MUST）由 Treasury service 闭包控制（reconciliation 模块不得导出 register/validate/consume）；resolve 必须（MUST）接收当前 service 且 generation 由 service 自身校验（调用者提交的 serviceGeneration 数字不再接受）；capability 必须（MUST）绑定 authorityKind/contract ID+digest/adapter kind+version/durable payload version/post-fault epoch/结构 incarnation/reconciler version，保持对象身份防伪、单次使用、cross-tick/cross-generation 失效；reconciler 输入必须（MUST）是完整 contract-specific durable facts。
+
+#### Scenario: 公开注册与 generation 绕过不可得
+
+- **WHEN** 普通模块尝试调用 capability 注册入口（已不存在）、或通过提交任意 serviceGeneration 数字、或使用旧 service 签发的 capability
+- **THEN** 全部失败（导出面封闭 + service 闭包校验 + cross_generation 拒绝）；架构测试禁止其它生产模块访问 capability 注册/消费内核
+
+#### Scenario: capability 与 contract/reconciler 不匹配
+
+- **WHEN** capability 绑定的 contract digest/adapter version/reconciler kind 与目标 authority 不一致
+- **THEN** resolution 拒绝且 fault 不动
+
+### Requirement: staged receipt refresh recovery（第九轮）
+
+resolving committed tombstone 必须（MUST）记录预期 settlement tick（settledAtTick）；恢复只在 receipt tick ≥ settledAtTick 时 finalize；旧 action tick 的 receipt 不得（MUST NOT）被误判为已刷新；未刷新时必须（MUST）幂等续做 refresh（至原定 settledAtTick，不缩短 replay horizon）或保留 resolving（绝不直接 finalize）；refresh 与 finalize 中断后必须（MUST）可幂等恢复。
+
+#### Scenario: 旧 receipt 不误判
+
+- **WHEN** 旧 action tick 的 receipt 已存在 → 写 resolving tombstone → refresh 前 global reset → beginTick recovery
+- **THEN** 恢复检测 receipt tick < settledAtTick，不误 finalize；幂等续做 refresh 至 settledAtTick 后才 finalize
+
+### Requirement: resolving tombstone retention 与 recovery closure（第九轮）
+
+只有 stage=final 的 tombstone 才允许（MAY）按 retention 自动删除；stage=resolving 永不得（MUST NOT）被普通垃圾回收或容量压力驱逐（满载 fail closed）；超龄 resolving 必须（MUST）保持并进入诊断；final not-executed 的 recovery 必须（MUST）补完成 quarantine release + intent release + 匹配 marker 清除；receipt/store fatal 时 unresolved authority 不得（MUST NOT）释放。
+
+#### Scenario: 满载不驱逐 resolving
+
+- **WHEN** resolution store 满载且唯一可清理候选是超龄 resolving tombstone
+- **THEN** 不删除 resolving；新 resolution 拒绝（fail closed）
+
+#### Scenario: final not-executed 恢复补释放
+
+- **WHEN** final not-executed tombstone 已写但 quarantine/intent 未释放（中断窗口）后 beginTick recovery
+- **THEN** 补完成 quarantine release、intent release、marker 清除；重复调用幂等
+
+### Requirement: 安全 canonical contract encoding（第九轮）
+
+contract 构建必须（MUST）先 canonicalize 再 validate/derive/execute（adapter 三函数观察同一 canonical frozen args）；canonical 编码必须（MUST）确定性（key 排序、长度前缀、数组保序）；cyclic/getter/setter/自定义 prototype/class instance/function/symbol/bigint/undefined/NaN/±Infinity/稀疏数组/非普通对象必须（MUST）结构化拒绝（零抛出、getter 零副作用读取）；{a:undefined} 与 {}、NaN 与 null 不得（MUST NOT）静默碰撞；调用方构建 contract 后修改原 args 不得（MUST NOT）改变 postings/digest/执行参数；contract registry 保持对象身份防伪。
+
+#### Scenario: 编码确定性与碰撞拒绝
+
+- **WHEN** 相同语义、不同 key 插入顺序构建两个 contract；或不同语义 args
+- **THEN** 前者 digest 相同、后者 digest 不同；undefined/NaN/Infinity/function/symbol/class instance 输入被结构化拒绝
+
+### Requirement: 完整结构 incarnation 验证（第九轮）
+
+contract 构建必须（MUST）捕获全部 action-relevant 结构（posting locations + adapter 经受控 structureBindings 声明的额外结构——不得接受任意字符串 structureIds）；执行前必须（MUST）对全部声明结构重新验证；structure disappeared/replaced/room mismatch/kind mismatch 时必须（MUST）callback 零调用、授权零消费、tentative 不变；fresh observation 不可用时必须（MUST）fail closed 拒绝执行。
+
+#### Scenario: 额外声明结构被验证
+
+- **WHEN** adapter 声明额外结构（factory/lab/terminal 动作实体），构建后该结构被替换或消失
+- **THEN** 执行前校验拒绝；token 不被消费、callback 零调用
