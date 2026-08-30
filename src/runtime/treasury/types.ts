@@ -164,7 +164,14 @@ export type TreasuryRejectionReason =
   /** handle 所在 commit 发生意外内部故障（进入 faulted 终态，见 write fault）。 */
   | "handle_faulted"
   /** write admission 全局锁定（unresolved write fault；显式修复路径解除）。 */
-  | "write_admission_locked";
+  | "write_admission_locked"
+  /** transaction 处于 durable quarantine（Game 结果未知/commit 故障未对账，
+   *  跨 tick 持久占用资源与 transaction identity；显式 resolution 解除前
+   *  不得再次 prepare）。 */
+  | "transaction_quarantined"
+  /** runtime input 形状非法（canonicalization 前置验证失败——结构化拒绝，
+   *  绝不抛出中断 tick；零 tentative/零槽位/零 registry 污染）。 */
+  | "invalid_input";
 
 /** rejected 形状（验证/门禁/登记共用的具体拒绝结果）。 */
 export interface TreasuryRejectedResult {
@@ -663,6 +670,8 @@ export interface TreasuryMetrics {
   preparedOutstandingAtEnd: number;
   /** tick 边界处于 executing（Game API 结果未知）的 handle 数——严重故障信号。 */
   preparedExecutingAtEnd: number;
+  /** tick 边界转入 durable quarantine 的 handle 数（executing + faulted；累计）。 */
+  preparedQuarantinedAtBoundary: number;
   /** staged commit 意外写故障次数（每次记录 write-fault marker）。 */
   commitFaults: number;
   /** write admission 全局锁状态（1 = unresolved write fault 锁定中；gauge）。 */
@@ -742,6 +751,7 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     digestGenerations: 0,
     preparedOutstandingAtEnd: 0,
     preparedExecutingAtEnd: 0,
+    preparedQuarantinedAtBoundary: 0,
     commitFaults: 0,
     writeAdmissionLocked: 0,
     receiptEntriesVisited: 0,

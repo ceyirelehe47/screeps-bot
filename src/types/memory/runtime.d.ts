@@ -660,6 +660,45 @@ declare global {
         status: "unresolved";
         recordedAt: number;
       };
+      /**
+       * durable quarantine（第六轮新增）：executing（Game 结果未知）或
+       * commit-faulted 的 prepared transaction 在 tick 边界转入的持久隔离
+       * ——跨 global reset 与 service 重建存活，继续占用资源、容量与
+       * transaction identity（授权计算计入流出量），不进入 committed
+       * projection。条目 key 为 "q:"+transactionId（防危险字面量原型污染）；
+       * 上限 64 条，溢出置 overflowed（authorizationSafe 永久 fail closed
+       * 直至显式 resolution）。解除只有显式 fault resolution
+       * （faultResolution.ts）——不存在无条件清空入口。绝不持久化
+       * observation/canonical transaction 全量，只保存占用快照
+       * （merged 腿的 resourceDeltas/capacityDeltas）与根因标识。
+       */
+      quarantine?: {
+        entries: Record<
+          string,
+          {
+            transactionId: string;
+            digest: string;
+            tick: number;
+            kind: string;
+            source: string;
+            phase: string;
+            resourceDeltas: Array<{
+              roomName: string;
+              locationKind: string;
+              resource: string;
+              delta: number;
+            }>;
+            capacityDeltas: Array<{
+              roomName: string;
+              locationKind: string;
+              resource: string;
+              delta: number;
+            }>;
+            recordedAt: number;
+          }
+        >;
+        overflowed?: boolean;
+      };
     };
     treasuryPerf?: Record<string, number | string>;
     powerBankBoost?: Record<

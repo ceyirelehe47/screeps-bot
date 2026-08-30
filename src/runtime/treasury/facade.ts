@@ -73,7 +73,15 @@ import {
   recordTreasuryWriteFault,
   runTreasuryCommitFaultHook,
   TreasuryCommitFaultError,
+  type TreasuryWriteFaultPhase,
 } from "@/runtime/treasury/writeFault";
+import {
+  isTreasuryTransactionQuarantined,
+  quarantineTreasuryTransaction,
+  treasuryQuarantineCapacityTotals,
+  treasuryQuarantineOutflowTotals,
+  type TreasuryQuarantineDeltas,
+} from "@/runtime/treasury/quarantine";
 import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import {
   type TreasuryBalanceView,
@@ -155,6 +163,8 @@ interface PreparedTransaction {
   readonly preparedAtTick: number;
   readonly generation: number;
   state: TreasuryPreparedHandleState;
+  /** commit 写故障的 phase（faulted 后保留，tick 边界 quarantine 快照用）。 */
+  faultPhase?: TreasuryWriteFaultPhase;
 }
 
 export interface TreasuryService {
@@ -463,14 +473,24 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   }
 
   /**
-   * 作废全部未决 prepare（tick 边界）：handle 转 expired 终态，释放全部
-   * tentative 预留与 receipt 槽（零 journal 状态）。endTick 侧的审计
-   * （outstanding 计数/样本/executing 严重故障）在 facade.endTick 内联。
+   * 作废全部未决 prepare（tick 边界）——第六轮按 Game 结果分类：
+   * - prepared（确定未调用 Game API）：handle 转 expired 终态，释放全部
+   *   tentative 预留与 receipt 槽（零 journal 状态）；
+   * - executing（Game 结果未知）/ faulted（commit 写故障）：**不得**按普通
+   *   prepared 释放——先落 durable quarantine（持久占用资源/容量/
+   *   transaction identity，跨 global reset 存活），heap tentative 随 tick
+   *   清理（占用由 quarantine 接替）。executing 同时写 write-fault marker
+   *   并进入全局锁（既有语义）；faulted 的 marker 已在故障时写入。
+   * endTick 侧的审计（outstanding 计数/样本/executing 严重故障）在
+   * auditOutstandingPrepared 内联。
    */
   function invalidatePreparedTransactions(context: "end_tick" | "begin_tick_remedy"): void {
     if (preparedById.size === 0) return;
     auditOutstandingPrepared(context);
     for (const record of preparedById.values()) {
+      if (record.state === "executing" || record.state === "faulted") {
+        quarantinePreparedRecord(record);
+      }
       record.state = "expired";
     }
     preparedById.clear();
@@ -478,15 +498,60 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     releaseAllTreasuryReceiptReservations();
   }
 
+  /** record 的 merged postings → quarantine 占用快照（有界数组）。 */
+  function quarantineDeltasOf(record: PreparedTransaction): {
+    resourceDeltas: TreasuryQuarantineDeltas[];
+    capacityDeltas: TreasuryQuarantineDeltas[];
+  } {
+    const resourceDeltas: TreasuryQuarantineDeltas[] = record.shape.merged.map((posting) => ({
+      roomName: posting.roomName,
+      locationKind: posting.locationKind,
+      resource: posting.resource,
+      delta: posting.delta,
+    }));
+    const capacityDeltas: TreasuryQuarantineDeltas[] = [...record.shape.capacityDeltaByLocation.entries()].map(
+      ([locationKey, delta]) => {
+        const separator = locationKey.indexOf(":");
+        return {
+          roomName: separator > 0 ? locationKey.slice(0, separator) : locationKey,
+          locationKind: separator > 0 ? locationKey.slice(separator + 1) : "",
+          resource: "",
+          delta,
+        };
+      },
+    );
+    return { resourceDeltas, capacityDeltas };
+  }
+
+  /** executing/faulted handle → durable quarantine（幂等；溢出置 overflowed）。 */
+  function quarantinePreparedRecord(record: PreparedTransaction): void {
+    const { resourceDeltas, capacityDeltas } = quarantineDeltasOf(record);
+    quarantineTreasuryTransaction({
+      transactionId: record.canonical.transactionId,
+      digest: record.digest,
+      tick: record.preparedAtTick,
+      kind: record.canonical.kind,
+      source: record.canonical.source,
+      phase: record.state === "executing" ? "executing_at_end_tick" : record.faultPhase ?? "commit_unexpected",
+      resourceDeltas,
+      capacityDeltas,
+      recordedAt: Game.time,
+    });
+    metrics.preparedQuarantinedAtBoundary += 1;
+  }
+
   /**
    * outstanding prepared 审计（endTick / beginTick 补救共用）：绝不静默
    * 清空——计数 + 有界样本 + 指标；executing 状态视为严重异常，写入
    * write-fault marker 并进入全局锁（Game API 结果未知的动作必须显式对账）。
+   * faulted 计数不计入普通 outstanding（其 marker 已在故障时写入，占用转
+   * durable quarantine——不是泄漏，是未解决故障）。
    */
   function auditOutstandingPrepared(context: "end_tick" | "begin_tick_remedy"): void {
     if (preparedById.size === 0) return;
     let outstanding = 0;
     let executing = 0;
+    let faulted = 0;
     const samples: TreasuryPreparedLeakSample[] = [];
     for (const record of preparedById.values()) {
       if (record.state === "executing") {
@@ -502,6 +567,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           recordedAt: Game.time,
         });
         metrics.commitFaults += 1;
+        continue;
+      }
+      if (record.state === "faulted") {
+        faulted += 1;
         continue;
       }
       outstanding += 1;
@@ -773,6 +842,17 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
               : undefined;
           committed += commitments.reservedProduction(roomName, context.resource, excludeOwner);
         }
+        // durable quarantine 占用（第六轮）：Game 结果未知/commit 故障未对账的
+        // transaction 的流出量计入 committed（保守——可能已执行；不进 projection）。
+        const quarantineOutflows = treasuryQuarantineOutflowTotals();
+        if (quarantineOutflows.size > 0) {
+          for (const roomName of rooms) {
+            for (const kind of kinds) {
+              const occupied = quarantineOutflows.get(`${roomName}\u0000${kind}\u0000${context.resource}`) ?? 0;
+              if (occupied < 0) committed += -occupied;
+            }
+          }
+        }
       }
 
       const incoming = context.allowIncoming
@@ -823,6 +903,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (settledAt !== undefined) {
         metrics.duplicateSettlementsRejected += 1;
         return { status: "already_settled", transactionId: input.transactionId, firstRecordedAtTick: settledAt };
+      }
+      // durable quarantine 门禁：Game 结果未知/commit 故障未对账的 transaction
+      // 跨 tick 占用 identity——显式 resolution 解除前不得再次 prepare。
+      if (isTreasuryTransactionQuarantined(input.transactionId)) {
+        metrics.transactionsRejectedInvalid += 1;
+        return {
+          status: "rejected",
+          reason: "transaction_quarantined",
+          detail: "transaction 处于 durable quarantine（显式 fault resolution 解除前禁止重新 prepare/执行）",
+        };
       }
       // 相同 transactionId 的重复 prepare：canonical payload digest 比较——
       // digest 相同幂等返回同一 handle；不同则 prepare_conflict（同一 id 只
@@ -1008,6 +1098,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // 意外写故障（Game API 已 OK）：不得当作普通 rejected/aborted。
         const phase = error instanceof TreasuryCommitFaultError ? error.phase : "commit_unexpected";
         record.state = "faulted";
+        record.faultPhase = phase;
         metrics.commitFaults += 1;
         recordTreasuryWriteFault({
           transactionId: record.canonical.transactionId,
@@ -1199,7 +1290,13 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
 
     projectedFreeCapacity(roomName: string, kind: TreasuryLocationKind): number {
-      return this.observation().freeCapacity(roomName, kind) - projection.locationCapacityDelta(roomName, kind);
+      // durable quarantine 的负容量占用（流出可能已执行）保守扣减 free 容量。
+      const quarantineCapacity = treasuryQuarantineCapacityTotals().get(`${roomName}\u0000${kind}`) ?? 0;
+      return (
+        this.observation().freeCapacity(roomName, kind) -
+        projection.locationCapacityDelta(roomName, kind) +
+        Math.min(0, quarantineCapacity)
+      );
     },
 
     projectionRevision(): number {

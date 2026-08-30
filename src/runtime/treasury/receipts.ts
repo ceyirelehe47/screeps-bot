@@ -675,13 +675,14 @@ export function readTreasuryLifecycle(): TreasuryLifecycleMemory | undefined {
   return peekTreasuryLifecycle();
 }
 
-/** 仅供测试：清除 Treasury 持久状态（receipts + lifecycle + writeFault）并失效 heap 缓存。 */
+/** 仅供测试：清除 Treasury 持久状态（receipts + lifecycle + writeFault + quarantine）并失效 heap 缓存。 */
 export function clearTreasuryPersistenceForTest(): void {
   const branch = (Memory.runtime as RuntimeMemoryWithTreasury | undefined)?.treasury;
   if (branch) {
     delete branch.receipts;
     delete branch.lifecycle;
     delete branch.writeFault;
+    delete branch.quarantine;
   }
   heapStoreRuntime = null;
   pendingAdmissions.clear();
