@@ -152,6 +152,7 @@ import {
 } from "@/runtime/treasury/authorization";
 import { TREASURY_WRITER_KERNEL, type TreasuryWriterKernel } from "@/runtime/treasury/kernelChannel";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
+import { findTreasuryPolicyResolver } from "@/runtime/treasury/policyAuthority";
 import {
   registerTreasuryResolutionKernelForService,
   resolveTreasuryQuarantinedTransactionAsCommitted,
@@ -385,7 +386,7 @@ export interface TreasuryService {
     options?: TreasuryContractAuthorizationOptions,
   ): { readonly status: "authorized"; readonly bundle: TreasuryAuthorizationBundle } | {
     readonly status: "rejected";
-    readonly reason: "invalid_input" | "contract_invalid" | "adapter_not_registered" | "write_admission_blocked" | "authorization_policy_violation" | "authorization_context_unsafe" | "insufficient_amount" | "capacity_overflow" | "authorization_capacity_exhausted";
+    readonly reason: "invalid_input" | "contract_invalid" | "adapter_not_registered" | "write_admission_blocked" | "authorization_policy_violation" | "authorization_context_unsafe" | "insufficient_amount" | "capacity_overflow" | "authorization_capacity_exhausted" | "policy_not_ready";
     readonly detail: string;
   };
 
@@ -842,6 +843,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       record.revisions.reservationStoreRevision !== revisions.reservationStoreRevision
     ) {
       return reject("revision_mismatch", "bundle 绑定的 revision cohort 已过期（commitment/projection/quarantine/intent/reservation 任一变化——须重新授权）");
+    }
+    // 【第十轮 3.12.9】policy 失效校验：当前 policy authority 的 identity 与
+    // 决策摘要必须与 bundle 签发时一致（policy 变化使旧 bundle 失效）。
+    const currentPolicyResolver = findTreasuryPolicyResolver();
+    const currentPolicyIdentity =
+      currentPolicyResolver === undefined
+        ? null
+        : currentPolicyResolver.policyId + "@v" + String(currentPolicyResolver.policyVersion);
+    if (currentPolicyIdentity === null || !record.policyIdentity.startsWith(currentPolicyIdentity + ":")) {
+      return reject("policy_invalidated", `policy authority 已变化或缺失（bundle 绑定 ${record.policyIdentity.slice(0, 96)}，当前 ${String(currentPolicyIdentity)}）——须重新授权`);
     }
     // 只读预验证全部 legs（零状态变化；任一失败时前 N−1 个 leg 不受影响）。
     const prevalidated = internalService.validateTreasuryAuthorizationForRedeem(
@@ -1808,7 +1819,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       options?: TreasuryContractAuthorizationOptions,
     ): { readonly status: "authorized"; readonly bundle: TreasuryAuthorizationBundle } | {
       readonly status: "rejected";
-      readonly reason: "invalid_input" | "contract_invalid" | "adapter_not_registered" | "write_admission_blocked" | "authorization_policy_violation" | "authorization_context_unsafe" | "insufficient_amount" | "capacity_overflow" | "authorization_capacity_exhausted";
+      readonly reason: "invalid_input" | "contract_invalid" | "adapter_not_registered" | "write_admission_blocked" | "authorization_policy_violation" | "authorization_context_unsafe" | "insufficient_amount" | "capacity_overflow" | "authorization_capacity_exhausted" | "policy_not_ready";
       readonly detail: string;
     } {
       if (options !== undefined && (!options || typeof options !== "object")) {
@@ -1821,6 +1832,19 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         return { status: "rejected", reason: verified.reason, detail: verified.detail };
       }
       const verifiedContract = verified.contract;
+      // 【第十轮 3.12.9】policy authority 前置：调用方不得自带 withhold（自由
+      // 数值不再有 policy 权威）；strategic reserve/withhold/emergency
+      // override 由注册 policy resolver 计算（显式、可审计、版本化）——无
+      // 注册 resolver 时 fail closed。
+      if ("withhold" in (options ?? {})) {
+        metrics.authorizationRejected += 1;
+        return { status: "rejected", reason: "invalid_input", detail: "policy authority 拒绝调用方 withhold——额度扣减只能由注册 policy resolver 计算（删除 options.withhold）" };
+      }
+      const policyResolver = findTreasuryPolicyResolver();
+      if (policyResolver === undefined) {
+        metrics.authorizationRejected += 1;
+        return { status: "rejected", reason: "policy_not_ready", detail: "未注册 policy resolver（production 授权 fail closed——注册边界见 policyAuthority.ts）" };
+      }
       // write admission ready（比 authorizationSafe 更强的前置：write-fault
       // lock + quarantine/intent 全局 blocker + store 健康——不满足时授权
       // 本身拒绝，不留"已授权但 writer 阻断"的空转 token）。
@@ -1867,6 +1891,22 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         metrics.authorizationRejected += 1;
         return { status: "rejected", reason: "contract_invalid", detail: "contract 无负 posting（无资源流出即无授权需求）——拒绝授权" };
       }
+      // 【第十轮 3.12.9】per-resource policy 决策（注册 resolver 权威计算；
+      // bundle 绑定 policy identity 与决策摘要）。
+      const policyDecisions = new Map<string, { withhold: number; digest: string }>();
+      for (const [resource, need] of resourceOutflow) {
+        const decision = policyResolver.evaluate({ resource, rooms: [...need.rooms], tick: Game.time });
+        if ("status" in decision && decision.status === "rejected") {
+          metrics.authorizationRejected += 1;
+          return { status: "rejected", reason: "authorization_policy_violation", detail: `policy resolver 拒绝（资源 ${resource}）: ${decision.reason}` };
+        }
+        const typed = decision as { withhold: number; digest: string };
+        if (typeof typed.withhold !== "number" || !Number.isSafeInteger(typed.withhold) || typed.withhold < 0) {
+          metrics.authorizationRejected += 1;
+          return { status: "rejected", reason: "authorization_policy_violation", detail: `policy decision 非法（资源 ${resource}：withhold 须为非负安全整数）` };
+        }
+        policyDecisions.set(resource, { withhold: typed.withhold, digest: String(typed.digest) });
+      }
       // 原子签发：逐资源授权；任一失败回滚已签发 token 的全部预算。
       const issued: TreasuryAuthorizationToken[] = [];
       const rollbackIssued = (): void => {
@@ -1886,7 +1926,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           contractDigest: verifiedContract.digest,
           adapterVersion: verifiedContract.adapterVersion,
           ...(options?.owner !== undefined ? { owner: options.owner } : {}),
-          ...(options?.withhold !== undefined ? { withhold: options.withhold } : {}),
+          // policy resolver 决策的 withhold（内部计算——调用方无此通道）。
+          withhold: policyDecisions.get(resource)!.withhold,
           ...(options?.allowProjected !== undefined ? { allowProjected: options.allowProjected } : {}),
           ...(options?.capacityRequirement !== undefined ? { capacityRequirement: options.capacityRequirement } : {}),
         });
@@ -1927,7 +1968,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         actionKind: verifiedContract.actionKind,
         adapterVersion: verifiedContract.adapterVersion,
         ownerIdentity: options?.owner !== undefined ? String(treasuryAuthorizationOwnerKey(options.owner)) : "",
-        policyIdentity: "none",
+        policyIdentity:
+          policyResolver.policyId +
+          "@v" +
+          String(policyResolver.policyVersion) +
+          ":" +
+          [...policyDecisions.values()].map((d) => d.digest).sort().join(","),
         revisions: firstRevisions,
         serviceGeneration,
         tick: Game.time,

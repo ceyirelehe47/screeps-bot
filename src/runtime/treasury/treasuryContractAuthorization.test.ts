@@ -26,10 +26,17 @@ import {
   type TreasuryActionContract,
   type TreasuryTestTransferArgs,
 } from "@/runtime/treasury/actionContracts";
-import type { TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
+import type { TreasuryAuthorizationBundle, TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
 import { quarantineTreasuryTransaction } from "@/runtime/treasury/quarantine";
 import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 import { setTreasuryRedemptionFaultInjectorForTest } from "@/runtime/treasury/facade";
+import {
+  clearTreasuryPolicyResolversForTest,
+  makeFixedReserveTreasuryPolicy,
+  makeEmergencyOverrideTreasuryPolicy,
+  registerTreasuryPolicyResolver,
+} from "@/runtime/treasury/policyAuthority";
+import { registerDefaultTreasuryTestPolicyForSetup } from "@/runtime/treasury/policyAuthority";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
 const ROOMS: RoomSpec[] = [
@@ -207,7 +214,7 @@ describe("contract-first 授权绑定", () => {
     // 失败 → U token 预算必须回滚（后续授权可用满额）。
     const contract = build(service, "ca_tx_rollback", transferArgs({ resource: "U", amount: 3_000, feeFromRoom: "W1N57", feeAmount: 50 }));
     // 先占满 terminal energy：既有 transfer outgoing 20k。
-    const result = service.authorizeTreasuryActionContract(contract, { withhold: 0 });
+    const result = service.authorizeTreasuryActionContract(contract);
     expect(result.status).toBe("authorized"); // 正常路径可签发（storage energy 补 fee scope）
     if (result.status !== "authorized") return;
     const ok = executeTreasuryActionContract(service, { contract, authorization: result.bundle });
@@ -459,5 +466,68 @@ describe("批量原子 redemption 注入矩阵与 bundle 生命周期（第十�
     const result = executeTreasuryActionContract(second, { contract, authorization: bundle });
     expect(result.status).toBe("prepare_rejected");
     if (result.status === "prepare_rejected") expect(result.detail).toContain("闭包签发");
+  });
+});
+
+describe("Treasury-owned policy authority（第十轮 3.12.9）", () => {
+  afterEach(() => {
+    registerDefaultTreasuryTestPolicyForSetup();
+  });
+
+  it("writer 不能直接传 withhold：options.withhold 拒绝", () => {
+    const service = makeService();
+    const contract = build(service, "pol_wh", transferArgs());
+    const rejected = service.authorizeTreasuryActionContract(contract, { withhold: 0 } as never);
+    expect(rejected.status).toBe("rejected");
+    if (rejected.status === "rejected") {
+      expect(rejected.reason).toBe("invalid_input");
+      expect(rejected.detail).toContain("policy authority 拒绝调用方 withhold");
+    }
+  });
+
+  it("无注册 policy resolver：production 授权 fail closed（policy_not_ready）", () => {
+    clearTreasuryPolicyResolversForTest();
+    const service = makeService();
+    const contract = build(service, "pol_none", transferArgs());
+    const rejected = service.authorizeTreasuryActionContract(contract);
+    expect(rejected.status).toBe("rejected");
+    if (rejected.status === "rejected") expect(rejected.reason).toBe("policy_not_ready");
+  });
+
+  it("fixed-reserve policy 正确扣除（可用额度少 reserve）", () => {
+    registerTreasuryPolicyResolver(makeFixedReserveTreasuryPolicy(2_000));
+    const service = makeService();
+    const contract = build(service, "pol_fixed", transferArgs({ amount: 99_000 }));
+    // storage energy 100k − reserve 2k = 98k 可用：99k 超额 → insufficient。
+    const rejected = service.authorizeTreasuryActionContract(contract);
+    expect(rejected.status).toBe("rejected");
+    if (rejected.status === "rejected") expect(rejected.reason).toBe("insufficient_amount");
+    // 98k 恰好可用（no-reserve 下 99k 也应成功——对照）。
+    const contractOk = build(service, "pol_fixed_ok", transferArgs({ amount: 98_000 }));
+    const ok = service.authorizeTreasuryActionContract(contractOk);
+    expect(ok.status).toBe("authorized");
+  });
+
+  it("policy 变化（version bump）使旧 bundle 失效", () => {
+    const service = makeService();
+    const contract = build(service, "pol_change", transferArgs());
+    const bundle = authorizeBundle(service, contract);
+    // policy version 变化（no-reserve v1 → fixed-reserve v1）→ redemption 拒绝。
+    registerTreasuryPolicyResolver(makeFixedReserveTreasuryPolicy(1_000));
+    const result = executeTreasuryActionContract(service, { contract, authorization: bundle });
+    expect(result.status).toBe("prepare_rejected");
+    if (result.status === "prepare_rejected") {
+      expect(result.detail).toContain("policy_invalidated");
+    }
+  });
+
+  it("emergency override policy 有明确 identity 并写入 bundle", () => {
+    registerTreasuryPolicyResolver(makeEmergencyOverrideTreasuryPolicy());
+    const service = makeService();
+    const contract = build(service, "pol_emg", transferArgs());
+    const issued = service.authorizeTreasuryActionContract(contract);
+    expect(issued.status).toBe("authorized"); // emergency policy 下仍可授权（identity 可审计）
+    const ok = executeTreasuryActionContract(service, { contract, authorization: (issued as { bundle: TreasuryAuthorizationBundle }).bundle });
+    expect(ok.status).toBe("executed_committed");
   });
 });

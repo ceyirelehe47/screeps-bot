@@ -98,8 +98,6 @@ export interface TreasuryAuthorizationRequest {
  */
 export interface TreasuryContractAuthorizationOptions {
   readonly owner?: TreasuryOwnerIdentity;
-  /** 受控 withhold 数值（唯一的 policy authority 表达）。 */
-  readonly withhold?: number;
   readonly allowProjected?: boolean;
   readonly capacityRequirement?: {
     readonly roomName: string;
