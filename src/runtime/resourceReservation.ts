@@ -96,6 +96,7 @@ export function readReservationStoreRevision(): number {
 
 function bumpReservationStoreRevision(): void {
   reservationStoreRevision += 1;
+  reservationHealthCache = null; // 缓存失效（下次校验重算）
 }
 
 export interface TreasuryReservationMutationCounters {
@@ -217,18 +218,18 @@ export function ensureReservationSchemaActivated(): ReservationSchemaGate {
 
 // ── 结构化 mutation（第七轮：全验证 + gate + 单次 bump） ───────────────────
 
-/** mutation 公共前置：schema gate + 输入全验证（非法零写入）。 */
+/**
+ * mutation 公共前置（第八轮顺序）：**先验证本次输入**（room/resource/
+ * amount/ttl/owner 形状——非法调用不得因 schema gate 而先修改整份 store，
+ * 即不得触发 migration 写入）→ 再 schema gate → 再 store 完整健康
+ * （version=4 ≠ healthy）。全过才允许写入。
+ */
 function preflightMutation(
   roomName: string,
   resource: ResourceConstant,
   amountOrTtl: { amount?: number; ttl?: number },
   owner: TreasuryOwnerIdentity,
 ): ReservationMutationResult | { ready: true } {
-  const gate = ensureReservationSchemaActivated();
-  if (gate.status === "rejected") {
-    reservationEvents.mutationRejections += 1;
-    return { status: "rejected", reason: "schema_not_ready", detail: gate.detail };
-  }
   if (typeof roomName !== "string" || !ROOM_NAME_PATTERN.test(roomName)) {
     return rejected("invalid_room", `roomName 非法: ${String(roomName).slice(0, 24)}`);
   }
@@ -250,6 +251,16 @@ function preflightMutation(
   }
   if (!isValidTreasuryOwnerIdentity(owner)) {
     return rejected("invalid_owner", "owner 非法（kind-specific：logical-service 的 namespace 必填、其他 kind 禁止）");
+  }
+  const gate = ensureReservationSchemaActivated();
+  if (gate.status === "rejected") {
+    reservationEvents.mutationRejections += 1;
+    return { status: "rejected", reason: "schema_not_ready", detail: gate.detail };
+  }
+  const health = validateReservationStoreHealth();
+  if (!health.healthy) {
+    reservationEvents.mutationRejections += 1;
+    return { status: "rejected", reason: "store_corrupted", detail: health.detail ?? "reservation store 完整校验失败（fail closed）" };
   }
   return { ready: true };
 }
@@ -372,6 +383,9 @@ export function getReservedProductionAmount(roomName: string, resource: Resource
   if (!store) return 0;
   let total = 0;
   for (const entry of Object.values(store)) {
+    // 兼容读取不传播 NaN：非安全整数 amount 跳过（完备性由 facade 的 store
+    // health blocker 保障——deprecated 路径不承担 completeness 判定）。
+    if (!Number.isSafeInteger(entry.amount)) continue;
     if (entry.roomName === roomName && entry.resource === resource && isActive(entry)) {
       total += entry.amount;
     }
@@ -647,6 +661,113 @@ export function isReservationOwnerMigrationComplete(): boolean {
   return runtime?.resourceReservationsOwnerVersion === RESERVATION_OWNER_VERSION;
 }
 
+// ── store 完整 load validation（第八轮 10.2） ──────────────────────────────
+
+export interface ReservationStoreHealth {
+  readonly healthy: boolean;
+  readonly detail: string | null;
+  readonly entryCount: number;
+}
+
+interface ReservationHealthCache {
+  revision: number;
+  healthy: boolean;
+  detail: string | null;
+  entryCount: number;
+  liveKeyCount: number;
+}
+
+let reservationHealthCache: ReservationHealthCache | null = null;
+
+/**
+ * reservation store 完整健康校验（version=4 **不等于** healthy——必须经过
+ * 完整 load validation）：store 对象、每 key === makeReservationStoreKey
+ * （以验证过的 entry.owner 为权威）、owner shape（kind-specific）、
+ * roomName/resource/amount/updatedAt/expiresAt 全安全整数与语义、聚合溢出、
+ * 重复 identity（重建 key 集大小 === entryCount）、corrupted 标志。结果按
+ * store revision 缓存（mutation/schema/gc/repair bump 失效）。任何损坏：
+ * 原数据保留、mutation 拒绝、authorizationSafe 与 write readiness false。
+ */
+export function validateReservationStoreHealth(): ReservationStoreHealth {
+  const runtime = Memory.runtime as
+    | (NonNullable<typeof Memory.runtime> & { resourceReservationsCorrupted?: string })
+    | undefined;
+  if (runtime?.resourceReservationsCorrupted !== undefined) {
+    return { healthy: false, detail: runtime.resourceReservationsCorrupted, entryCount: 0 };
+  }
+  const store = runtime?.resourceReservations;
+  if (store === undefined || Object.keys(store).length === 0) {
+    return { healthy: true, detail: null, entryCount: 0 };
+  }
+  if (typeof store !== "object") {
+    return { healthy: false, detail: "resourceReservations store 非对象", entryCount: 0 };
+  }
+  // 缓存复用守卫：revision 未变**且** key 数未变才复用——架构上只有本模块
+  // 可写 store（全部路径 bump revision），key 数守卫是对外部直改的廉价
+  // 防御（测试直接重置 Memory 的场景；同数目的外部篡改由下一次 bump 后的
+  // 重扫检出）。
+  const liveKeyCount = Object.keys(store).length;
+  if (
+    reservationHealthCache &&
+    reservationHealthCache.revision === reservationStoreRevision &&
+    reservationHealthCache.liveKeyCount === liveKeyCount
+  ) {
+    return {
+      healthy: reservationHealthCache.healthy,
+      detail: reservationHealthCache.detail,
+      entryCount: reservationHealthCache.entryCount,
+    };
+  }
+  const entries = Object.entries(store);
+  const rebuiltKeys = new Set<string>();
+  const roomTotals = new Map<string, number>();
+  for (const [key, rawEntry] of entries) {
+    const shapeError = validateReservationEntryShape(rawEntry, key);
+    if (shapeError !== null) {
+      reservationHealthCache = { revision: reservationStoreRevision, healthy: false, detail: shapeError, entryCount: entries.length, liveKeyCount };
+      return { healthy: false, detail: shapeError, entryCount: entries.length };
+    }
+    const entry = rawEntry as ReservationEntry;
+    // owner 权威：持久字段合法则用之，否则按 holderId 无损分类（与迁移一致）。
+    let owner = coercePersistedOwner(entry.owner);
+    if (entry.owner !== undefined && owner === undefined) {
+      const fallback = classifyTreasuryHolderIdAsOwner(entry.holderId);
+      const candidate = entry.owner as Partial<TreasuryOwnerIdentity>;
+      if (candidate.kind === fallback.kind && typeof candidate.id === "string" && candidate.id === fallback.id) {
+        owner = fallback;
+      } else {
+        const detail = `owner 字段非法且不可无损补全（key ${key.slice(0, 64)}）`;
+        reservationHealthCache = { revision: reservationStoreRevision, healthy: false, detail, entryCount: entries.length, liveKeyCount };
+        return { healthy: false, detail, entryCount: entries.length };
+      }
+    }
+    if (owner === undefined) {
+      owner = classifyTreasuryHolderIdAsOwner(entry.holderId);
+    }
+    const expectedKey = makeReservationStoreKey(entry.roomName, entry.resource as ResourceConstant, owner);
+    if (key !== expectedKey) {
+      const detail = `store key 与 entry/owner 不一致（key ${key.slice(0, 64)}，期望 ${expectedKey.slice(0, 64)}）`;
+      reservationHealthCache = { revision: reservationStoreRevision, healthy: false, detail, entryCount: entries.length, liveKeyCount };
+      return { healthy: false, detail, entryCount: entries.length };
+    }
+    if (rebuiltKeys.has(expectedKey)) {
+      const detail = `重复 identity（key ${key.slice(0, 64)}）`;
+      reservationHealthCache = { revision: reservationStoreRevision, healthy: false, detail, entryCount: entries.length, liveKeyCount };
+      return { healthy: false, detail, entryCount: entries.length };
+    }
+    rebuiltKeys.add(expectedKey);
+    const roomTotal = (roomTotals.get(entry.roomName) ?? 0) + entry.amount;
+    if (!Number.isSafeInteger(roomTotal)) {
+      const detail = `room ${entry.roomName} 聚合安全整数溢出`;
+      reservationHealthCache = { revision: reservationStoreRevision, healthy: false, detail, entryCount: entries.length, liveKeyCount };
+      return { healthy: false, detail, entryCount: entries.length };
+    }
+    roomTotals.set(entry.roomName, roomTotal);
+  }
+  reservationHealthCache = { revision: reservationStoreRevision, healthy: true, detail: null, entryCount: entries.length, liveKeyCount };
+  return { healthy: true, detail: null, entryCount: entries.length };
+}
+
 /**
  * reservation store 损坏标志（第七轮）：GC/验证发现 malformed entry 时置
  * 位（entry 原样保留）——存在期间一切 mutation 拒绝、授权 fail closed，
@@ -678,5 +799,6 @@ export function repairReservationStoreCorruptionForRepair(): { status: "repaired
   }
   delete runtime.resourceReservationsCorrupted;
   bumpReservationStoreRevision();
+  reservationHealthCache = null;
   return { status: "repaired", detail: "corrupted 标志已清除（全部 entry 验证通过）" };
 }

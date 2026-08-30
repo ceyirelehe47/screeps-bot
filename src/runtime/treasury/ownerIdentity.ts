@@ -108,12 +108,15 @@ export function isValidTreasuryOwnerIdentity(owner: unknown): owner is TreasuryO
 }
 
 /**
- * owner identity 的规范比较键：kind + id + namespace 三元组（同字符串不同
- * kind / 不同 namespace 不得互相排除；roomName 由查询层校验归属一致性）。
- * identity 与 metadata 的边界：roomName/lifecycleRef 不参与本键（见接口注释）。
+ * owner identity 的规范比较键（第八轮统一）：与持久 key 使用**同一 canonical
+ * owner token 算法**（treasuryReservationOwnerToken 的 `ow2:` 长度前缀编码）
+ * ——聚合 key、self-exclusion、mutation 定位、migration collision 检测全部
+ * 复用同一函数，独立 NUL 分隔比较键已移除。token 相等 ⇔ (kind, namespace,
+ * id) 三元组相等——id/namespace 含 NUL、冒号、Unicode、空格均无边界歧义，
+ * 比较结果与持久 token 恒一致。roomName/lifecycleRef 不参与（metadata）。
  */
 export function treasuryOwnerIdentityKey(owner: TreasuryOwnerIdentity): string {
-  return `${owner.kind}\u0000${owner.id}\u0000${owner.namespace ?? ""}`;
+  return treasuryReservationOwnerToken(owner);
 }
 
 /** ownerToken 的 kind 代码注册表（不同 kind 代码互异 ⇒ token 永不跨 kind 碰撞）。 */

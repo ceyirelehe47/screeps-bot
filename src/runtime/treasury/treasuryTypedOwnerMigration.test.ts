@@ -25,6 +25,7 @@ import {
   listProductionReservations,
   makeReservationStoreKey,
   migrateResourceReservationsForTypedOwner,
+  validateReservationStoreHealth,
   releaseProductionReservationForOwner,
   renewProductionReservationForOwner,
   repairReservationStoreCorruptionForRepair,
@@ -37,6 +38,7 @@ import { createTreasuryService } from "@/runtime/treasury/facade";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import {
   isValidTreasuryOwnerIdentity,
+  treasuryOwnerIdentityKey,
   treasuryReservationOwnerToken,
   type TreasuryOwnerIdentity,
 } from "@/runtime/treasury/ownerIdentity";
@@ -483,5 +485,125 @@ describe("保守占用与 owner-aware 聚合", () => {
     });
     expect(view.ownerStatus).toBe("excluded-own-reservations");
     expect(view.committed).toBe(0);
+  });
+});
+
+describe("第八轮：owner 比较键与持久 token 统一", () => {
+  it("NUL/冒号/Unicode/空格不碰撞；比较 key 与持久 token 恒一致", () => {
+    const exotic1: TreasuryOwnerIdentity = { kind: "logical-service", id: "b\u0000c", namespace: "a" };
+    const exotic2: TreasuryOwnerIdentity = { kind: "logical-service", id: "c", namespace: "a\u0000b" };
+    expect(treasuryOwnerIdentityKey(exotic1)).not.toBe(treasuryOwnerIdentityKey(exotic2));
+    // 同一 owner：比较 key === 持久 token（同一算法）。
+    expect(treasuryOwnerIdentityKey(exotic1)).toBe(makeReservationStoreKey("W1N57", "energy", exotic1).split(":").slice(2).join(":"));
+    // Unicode/空格稳定性 + 同 id 不同 kind/namespace 区分。
+    const unicode: TreasuryOwnerIdentity = { kind: "logical-service", id: "载具 1", namespace: "ns" };
+    expect(treasuryOwnerIdentityKey(unicode)).toBe(treasuryOwnerIdentityKey({ ...unicode }));
+    const goId = "5d1ce7c3f2f0aa1";
+    expect(treasuryOwnerIdentityKey({ kind: "game-object", id: goId })).not.toBe(
+      treasuryOwnerIdentityKey({ kind: "task", id: goId }),
+    );
+    expect(treasuryOwnerIdentityKey({ kind: "logical-service", id: "x", namespace: "ns1" })).not.toBe(
+      treasuryOwnerIdentityKey({ kind: "logical-service", id: "x", namespace: "ns2" }),
+    );
+  });
+
+  it("持久层：NUL 含于 id 的 owner 可正常 reserve/release（token 无边界歧义）", () => {
+    const owner: TreasuryOwnerIdentity = { kind: "game-object", id: "5d1ce7c3f2f0aa\u0000x", roomName: "W1N57" };
+    expect(reserveProductionResourceForOwner("W1N57", "energy", 100, owner, 50).status).toBe("ok");
+    expect(releaseProductionReservationForOwner("W1N57", "energy", owner).status).toBe("ok");
+    expect(Object.keys(Memory.runtime!.resourceReservations!)).toHaveLength(0);
+  });
+});
+
+describe("第八轮：reservation store 完整健康（version=4 ≠ healthy）", () => {
+  function seedValidEntry(owner: TreasuryOwnerIdentity, key: string, amount = 100): void {
+    Memory.runtime = Memory.runtime ?? ({} as never);
+    Memory.runtime.resourceReservations = Memory.runtime.resourceReservations ?? ({} as never);
+    Memory.runtime.resourceReservationsOwnerVersion = 4;
+    Memory.runtime.resourceReservations[key] = {
+      roomName: "W1N57",
+      resource: "energy",
+      holderId: owner.id,
+      amount,
+      updatedAt: Game.time,
+      expiresAt: Game.time + 100,
+      owner,
+    };
+  }
+
+  it("合法 v4 store：健康；mutation 正常", () => {
+    const owner: TreasuryOwnerIdentity = { kind: "game-object", id: "5d1ce7c3f2f0aa1", roomName: "W1N57" };
+    seedValidEntry(owner, makeReservationStoreKey("W1N57", "energy", owner));
+    const health = validateReservationStoreHealth();
+    expect(health.healthy).toBe(true);
+    expect(health.entryCount).toBe(1);
+    expect(reserveProductionResourceForOwner("W1N57", "energy", 50, owner, 100).status).toBe("ok");
+  });
+
+  it("key 与 entry/owner 不一致：fail closed（mutation 拒绝、原数据保留）", () => {
+    const owner: TreasuryOwnerIdentity = { kind: "game-object", id: "5d1ce7c3f2f0aa1", roomName: "W1N57" };
+    seedValidEntry(owner, "W1N57:energy:ow2:go:0:WRONG-ID");
+    const health = validateReservationStoreHealth();
+    expect(health.healthy).toBe(false);
+    expect(health.detail).toContain("不一致");
+    const other: TreasuryOwnerIdentity = { kind: "game-object", id: "5d1ce7c3f2f0aa2", roomName: "W1N57" };
+    const result = reserveProductionResourceForOwner("W1N57", "energy", 50, other, 100);
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.reason).toBe("store_corrupted");
+    expect(Memory.runtime!.resourceReservations!["W1N57:energy:ow2:go:0:WRONG-ID"]).toBeDefined();
+  });
+
+  it("owner 非法（logical-service 缺 namespace 且不可无损补全）：fail closed", () => {
+    const owner = { kind: "logical-service", id: "unrelated:holder", roomName: "W1N57" } as never;
+    seedValidEntry(owner, "W1N57:energy:ow2:ls:0:unrelated:holder");
+    expect(validateReservationStoreHealth().healthy).toBe(false);
+  });
+
+  it("聚合溢出：fail closed", () => {
+    const first: TreasuryOwnerIdentity = { kind: "game-object", id: "5d1ce7c3f2f0aa1", roomName: "W1N57" };
+    const second: TreasuryOwnerIdentity = { kind: "game-object", id: "5d1ce7c3f2f0aa2", roomName: "W1N57" };
+    seedValidEntry(first, makeReservationStoreKey("W1N57", "energy", first), Number.MAX_SAFE_INTEGER);
+    seedValidEntry(second, makeReservationStoreKey("W1N57", "energy", second), Number.MAX_SAFE_INTEGER);
+    const health = validateReservationStoreHealth();
+    expect(health.healthy).toBe(false);
+    expect(health.detail).toContain("溢出");
+  });
+
+  it("非法 mutation 不触发 migration 写入（v1 store + 非法 amount → 版本不推进）", () => {
+    Memory.runtime = Memory.runtime ?? ({} as never);
+    Memory.runtime.resourceReservations = {
+      "W1N57:energy:legacy-holder": {
+        roomName: "W1N57",
+        resource: "energy",
+        holderId: "legacy-holder",
+        amount: 100,
+        updatedAt: 1,
+        expiresAt: Game.time + 500,
+      },
+    } as never;
+    delete Memory.runtime.resourceReservationsOwnerVersion;
+    const owner: TreasuryOwnerIdentity = { kind: "game-object", id: "5d1ce7c3f2f0aa1", roomName: "W1N57" };
+    // 非法 amount：在 schema gate（会触发 migration 写入）之前被拒。
+    const result = reserveProductionResourceForOwner("W1N57", "energy", -5, owner, 100);
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.reason).toBe("invalid_amount");
+    expect(Memory.runtime.resourceReservationsOwnerVersion).toBeUndefined();
+    expect(Memory.runtime.resourceReservations!["W1N57:energy:legacy-holder"]).toBeDefined();
+  });
+
+  it("facade 口径：store 不健康时 authorizationSafe=false + readiness blocker", () => {
+    const owner: TreasuryOwnerIdentity = { kind: "game-object", id: "5d1ce7c3f2f0aa1", roomName: "W1N57" };
+    seedValidEntry(owner, "W1N57:energy:ow2:go:0:MISMATCH");
+    const rooms = installRooms([
+      { name: "W1N57", storage: { id: "stor-1", resources: { energy: 100_000 }, freeCapacity: 10_000 } },
+    ] as never);
+    const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    service.beginTick();
+    const view = service.query({ resource: "energy", rooms: ["W1N57"] });
+    expect(view.authorizationSafe).toBe(false);
+    expect(view.authorizationBlockers).toContain("reservation_store_unhealthy");
+    expect(view.writeAdmission.ready).toBe(false);
+    expect(view.writeAdmission.blockers).toContain("reservation_store_unhealthy");
+    expect(service.metrics().reservationStoreHealthy).toBe(false);
   });
 });

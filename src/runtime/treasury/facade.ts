@@ -124,6 +124,7 @@ import {
   isReservationStoreCorrupted,
   readReservationMutationCounters,
   readReservationStoreRevision,
+  validateReservationStoreHealth,
 } from "@/runtime/resourceReservation";
 import {
   canonicalTreasuryPolicyFingerprint,
@@ -1187,6 +1188,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (state.ended) blockers.push("lifecycle_closed");
       if (state.tick !== Game.time) blockers.push("stale_tick_state");
       if (!isReservationOwnerMigrationComplete()) blockers.push("reservation_migration_incomplete");
+      const reservationHealth = validateReservationStoreHealth();
+      if (!reservationHealth.healthy) blockers.push("reservation_store_unhealthy");
       const authorizationSafe = authorizable && blockers.length === 0;
 
       // write readiness 的额外准入条件（超出 authorizationSafe）：
@@ -2250,6 +2253,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         receiptRefreshes: receiptCounters.receiptRefreshes,
         actionContractsBuilt: metrics.actionContractsBuilt + actionContractCounters.built,
         actionAdapterMismatches: metrics.actionAdapterMismatches + actionContractCounters.adapterMismatches,
+        reservationStoreHealthy: validateReservationStoreHealth().healthy,
       };
     },
 
