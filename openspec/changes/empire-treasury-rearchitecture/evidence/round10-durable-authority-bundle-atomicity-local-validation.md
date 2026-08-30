@@ -168,3 +168,7 @@ v2 entry 新增：outcome/settlement/contractId/contractDigest/actionKind/adapte
 ## 20. 阶段判断
 
 第十轮十二项断链全部关闭（验收条件 1-25 逐项满足：见 tasks.md 第 16 节与上文的用例映射）。**已具备进入"第一个低风险 writer 的 adapter 与 shadow 设计阶段"的条件**——建议 terminal.send（postings/fee/durable facts 语义已在 test.transfer fixture 中完整演练；前置条件：真实 reconciler 的 post-observation 差异判定与 shadow 期采样设计）。以本轮 HEAD 为基线。
+
+## 20. 第十一轮修正（2026-08-31）
+
+上一节"commit 7858477 的一次 amend 发生在推送前，用于移除误入的临时脚本文件"的陈述**不准确**：该次 amend 只移除了 newsrc-exec-redeem.txt 与 patch-bundle-*.cjs；一次性文本替换脚本 `src/runtime/treasury/fix-ac3.cjs`（写死本地 Windows 路径）当时**未被移除**并随 commit 7858477 进入远端，同类脚本 `src/runtime/treasury/fix-resolution.cjs` 亦在仓库中。两个文件已于第十一轮删除（见 round11 evidence 的清理记录）；历史提交事实不做任何篡改。
