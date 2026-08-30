@@ -167,6 +167,30 @@ interface PreparedTransaction {
   faultPhase?: TreasuryWriteFaultPhase;
 }
 
+/**
+ * 终态 stub（第六轮 handle 生命周期有界化）：committed/aborted/expired 后
+ * 从 active strong registry 移除、丢弃 canonical/observation/shape 等大对象
+ * 引用——只保留幂等判定所需的最小字段。仍被调用方引用的 handle 经
+ * WeakMap 取到 stub，返回稳定终态结果；handle 被 GC 回收即整体回收
+ * （长寿命 global 不累积终态 handle 的无界强引用）。
+ */
+interface TerminalHandleRecord {
+  readonly transactionId: string;
+  readonly digest: string;
+  readonly preparedAtTick: number;
+  readonly generation: number;
+  state: TreasuryPreparedHandleState;
+  faultPhase?: TreasuryWriteFaultPhase;
+  committedAtTick?: number;
+}
+
+/** handle 的全生命周期记录（active 完整记录或终态 stub）。 */
+type TreasuryHandleRecord = PreparedTransaction | TerminalHandleRecord;
+
+function isTerminalRecord(record: TreasuryHandleRecord): record is TerminalHandleRecord {
+  return !("canonical" in record);
+}
+
 export interface TreasuryService {
   /** tick 起点：发行 shared epoch + 对账 + receipt 清理（幂等，可重复调用）。 */
   beginTick(): void;
@@ -405,17 +429,42 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     { scope: "shared" | "market-fresh"; observedAtTick: number; observation: TreasuryObservationView }
   >();
   /**
-   * 两阶段 prepared handles（heap，tick 内有效）：
+   * 两阶段 prepared handles（heap，tick 内有效；第六轮生命周期有界化）：
    * - handleRegistry（WeakSet）是 handle 防伪权威——只有本服务实例签发
    *   （且经对象身份注册）的 handle 能通过 commit/abort 验证；调用方构造
    *   结构相同的普通对象或 JSON round-trip 副本不在集合内，一律 invalid；
-   * - preparedByHandle 保留全部 handle（含终态，供重复 commit/abort 幂等
-   *   判定）；preparedById 只保留未终态记录（同 id 新 prepare 合法）；
-   * - endTick/beginTick 全部作废（expired）并释放 tentative 与 receipt 预留。
+   * - handleRecords（WeakMap）承载全生命周期记录：active 期为完整记录
+   *   （canonical/observation/shape），终态（committed/aborted/expired）替换
+   *   为轻量 stub——handle 被 GC 回收即整体回收，长寿命 global 不随历史
+   *   transaction 数量累积无界强引用；
+   * - activeHandles（strong Map）只含未清理状态（prepared/executing/
+   *   committing/faulted）——commit/abort 成功即删除、tick 边界 stub 化；
+   *   preparedActive gauge 即其大小；
+   * - preparedById 只保留未终态记录（同 id 新 prepare 合法）；
+   * - endTick/beginTick 全部作废（expired）并释放 tentative 与 receipt 预留
+   *   （executing/faulted 先转 durable quarantine）。
    */
   const handleRegistry = new WeakSet<TreasuryPreparedHandle>();
-  const preparedByHandle = new Map<TreasuryPreparedHandle, PreparedTransaction>();
+  const handleRecords = new WeakMap<TreasuryPreparedHandle, TreasuryHandleRecord>();
+  const activeHandles = new Map<TreasuryPreparedHandle, PreparedTransaction>();
   const preparedById = new Map<string, PreparedTransaction>();
+
+  /** 终态化：active registry 删除 + WeakMap 替换为轻量 stub（丢大对象引用）。 */
+  function finalizeHandleRecord(
+    record: PreparedTransaction,
+    state: "committed" | "aborted" | "expired",
+  ): void {
+    activeHandles.delete(record.handle);
+    handleRecords.set(record.handle, {
+      transactionId: record.canonical.transactionId,
+      digest: record.digest,
+      preparedAtTick: record.preparedAtTick,
+      generation: record.generation,
+      state,
+      ...(record.faultPhase !== undefined ? { faultPhase: record.faultPhase } : {}),
+      ...(state === "committed" ? { committedAtTick: Game.time } : {}),
+    });
+  }
   /** 服务实例代际：跨 service 实例的 handle 一律无效（global reset 防御）。 */
   const serviceGeneration = nextTreasuryServiceGeneration();
   /** 最近一次 tick 边界的 outstanding prepared 审计快照（有界样本）。 */
@@ -492,6 +541,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         quarantinePreparedRecord(record);
       }
       record.state = "expired";
+      finalizeHandleRecord(record, "expired"); // stub 化：丢弃 canonical/observation/shape 引用
     }
     preparedById.clear();
     projection.tentativeReleaseAll();
@@ -1016,7 +1066,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         state: "prepared",
       };
       handleRegistry.add(handle);
-      preparedByHandle.set(handle, record);
+      handleRecords.set(handle, record);
+      activeHandles.set(handle, record);
       preparedById.set(input.transactionId, record);
       projection.tentativeHold(record.tentativeKey, validation.shape);
       metrics.transactionsPrepared += 1;
@@ -1031,7 +1082,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
 
     commitPreparedTransaction(handle: TreasuryPreparedHandle): TreasuryPreparedCommitResult {
       // handle 自行验证（不依赖调用方先 beginTick）：对象身份 → generation
-      // → 状态机 → 签发 tick（跨 tick 一律 expired）。
+      // → 状态机 → 签发 tick（跨 tick 一律 expired）。终态 handle 从 WeakMap
+      // 取轻量 stub（引用仍存在时返回稳定幂等结果，不形成全局强引用）。
       const invalid = (detail: string): TreasuryPreparedCommitResult => {
         metrics.invalidHandleRejections += 1;
         return { status: "rejected", reason: "invalid_handle", detail };
@@ -1039,7 +1091,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (!handle || typeof handle !== "object" || !handleRegistry.has(handle)) {
         return invalid("handle 未在本服务实例签发（伪造对象/JSON 副本/跨实例 handle 一律无效）");
       }
-      const record = preparedByHandle.get(handle);
+      const record = handleRecords.get(handle);
       if (!record || record.generation !== serviceGeneration) {
         return invalid("handle 代际不匹配");
       }
@@ -1051,9 +1103,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         };
       }
       if (record.state === "committed") {
-        const settledAt = projection.isSettled(record.canonical.transactionId);
+        const recordTransactionId = isTerminalRecord(record) ? record.transactionId : record.canonical.transactionId;
+        const settledAt = projection.isSettled(recordTransactionId);
         return settledAt !== undefined
-          ? { status: "already_settled", transactionId: record.canonical.transactionId, firstRecordedAtTick: settledAt }
+          ? { status: "already_settled", transactionId: recordTransactionId, firstRecordedAtTick: settledAt }
           : invalid("handle 已 committed 但 receipt 缺失（内部不一致）");
       }
       if (record.state === "aborted") {
@@ -1064,6 +1117,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       }
       if (record.state === "committing") {
         return invalid("handle 处于 committing 状态，不可重入");
+      }
+      if (isTerminalRecord(record)) {
+        return invalid("handle 记录处于不可用终态（内部不一致）");
       }
       // write admission 全局锁：unresolved write fault 期间阻断一切 commit。
       if (isTreasuryWriteAdmissionLocked()) {
@@ -1081,6 +1137,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         preparedById.delete(record.canonical.transactionId);
         projection.tentativeRelease(record.tentativeKey);
         releaseTreasuryReceiptReservation(record.canonical.transactionId);
+        finalizeHandleRecord(record, "committed");
         return {
           status: "already_settled",
           transactionId: record.canonical.transactionId,
@@ -1107,6 +1164,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         runTreasuryCommitFaultHook("handle_state");
         record.state = "committed";
         preparedById.delete(record.canonical.transactionId);
+        finalizeHandleRecord(record, "committed");
         metrics.preparedCommits += 1;
         return {
           status: "committed",
@@ -1116,6 +1174,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         };
       } catch (error) {
         // 意外写故障（Game API 已 OK）：不得当作普通 rejected/aborted。
+        // faulted 保留完整记录（shape 供 tick 边界 quarantine 快照）。
         const phase = error instanceof TreasuryCommitFaultError ? error.phase : "commit_unexpected";
         record.state = "faulted";
         record.faultPhase = phase;
@@ -1146,7 +1205,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (!handle || typeof handle !== "object" || !handleRegistry.has(handle)) {
         return invalid("handle 未在本服务实例签发（伪造对象/JSON 副本/跨实例 handle 一律无效）");
       }
-      const record = preparedByHandle.get(handle);
+      const record = handleRecords.get(handle);
       if (!record || record.generation !== serviceGeneration) {
         return invalid("handle 代际不匹配");
       }
@@ -1158,22 +1217,27 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         };
       }
       if (record.state === "committed") {
-        const settledAt = projection.isSettled(record.canonical.transactionId);
+        const recordTransactionId = isTerminalRecord(record) ? record.transactionId : record.canonical.transactionId;
+        const settledAt = projection.isSettled(recordTransactionId);
         return {
           status: "already_finalized",
-          transactionId: record.canonical.transactionId,
+          transactionId: recordTransactionId,
           finalizedAs: "committed",
           committedAtTick: settledAt ?? record.preparedAtTick,
         };
       }
       if (record.state === "aborted") {
-        return { status: "already_finalized", transactionId: record.canonical.transactionId, finalizedAs: "aborted" };
+        const recordTransactionId = isTerminalRecord(record) ? record.transactionId : record.canonical.transactionId;
+        return { status: "already_finalized", transactionId: recordTransactionId, finalizedAs: "aborted" };
       }
       if (record.state === "faulted") {
         return { status: "rejected", reason: "handle_faulted", detail: "faulted handle 的预留不释放（对账前保持占用）" };
       }
       if (record.state === "committing") {
         return invalid("handle 处于 committing 状态，不可 abort");
+      }
+      if (isTerminalRecord(record)) {
+        return invalid("handle 记录处于不可用终态（内部不一致）");
       }
       // write admission 全局锁：unresolved write fault 期间释放操作同样阻断
       // （保守——故障未对账前不改变任何预留面）。
@@ -1190,6 +1254,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       preparedById.delete(record.canonical.transactionId);
       projection.tentativeRelease(record.tentativeKey);
       releaseTreasuryReceiptReservation(record.canonical.transactionId);
+      finalizeHandleRecord(record, "aborted");
       metrics.transactionPreparesAborted += 1;
       return { status: "aborted", transactionId: record.canonical.transactionId };
     },
@@ -1206,7 +1271,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // prepare 拒绝：Game callback 零调用（quarantine/锁/验证失败等）。
         return { status: "prepare_rejected", reason: prepared.reason, ...(prepared.detail !== undefined ? { detail: prepared.detail } : {}) };
       }
-      const record = preparedByHandle.get(prepared.handle);
+      const record = activeHandles.get(prepared.handle);
       if (!record) {
         // 理论不可达（handle 刚签发）：按协议违规拒绝，不执行 Game API。
         return { status: "prepare_rejected", reason: "invalid_handle", detail: "签发后 handle 记录缺失（内部不一致）" };
@@ -1408,7 +1473,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       return {
         ...metrics,
         commitmentIndexQueries: metrics.commitmentIndexQueries + liveQueries,
-        preparedActive: preparedById.size,
+        preparedActive: activeHandles.size,
         tentativeResourceKeys: tentativeKeys.resourceKeys,
         tentativeCapacityKeys: tentativeKeys.capacityKeys,
         receiptStoreMigrationsExecuted: receiptCounters.migrationsExecuted,
@@ -1438,7 +1503,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       current = null;
       freshEpochsThisTick = 0;
       epochRegistry.clear();
-      preparedByHandle.clear();
+      activeHandles.clear();
       preparedById.clear();
       lastPreparedLeakAudit = Object.freeze({
         context: "end_tick",

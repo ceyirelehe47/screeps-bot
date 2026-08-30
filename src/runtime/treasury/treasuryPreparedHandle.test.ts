@@ -7,7 +7,10 @@
  * - canonical snapshot：prepare 后修改原 input 不影响 canonical payload；
  * - payload digest：相同 ID 相同 payload 幂等返回同一 handle、不同 payload
  *   prepare_conflict；
- * - 状态机：commit 一次/abort 一次、terminal 不回退。
+ * - 状态机：commit 一次/abort 一次、terminal 不回退；
+ * - 生命周期有界（第六轮）：大量 prepare→commit/abort/expire 循环后
+ *   active strong registry 回到 0（不随历史 transaction 数量增长）；
+ *   terminal handle 在引用仍存在时经 WeakMap 返回稳定幂等结果。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
@@ -190,5 +193,38 @@ describe("Treasury handle payload digest 与状态机", () => {
     expect(service.journal()).toHaveLength(0);
     // aborted id 可重新 prepare（id 未被 receipt 占用）。
     expect(service.prepareTransaction(input(service, "ts1_once")).status).toBe("prepared");
+  });
+});
+
+describe("handle 生命周期有界（第六轮）", () => {
+  it("大量 prepare→commit/abort/expire 循环后 active registry 回到 0，terminal handle 幂等可用", () => {
+    const service = makeService();
+    const retainedHandles: TreasuryPreparedHandle[] = [];
+    for (let index = 0; index < 200; index += 1) {
+      const handle = prepareOk(service, `ts1_life${index}`);
+      if (index % 2 === 0) {
+        expect(service.commitPreparedTransaction(handle).status).toBe("committed");
+      } else {
+        expect(service.abortPreparedTransaction(handle).status).toBe("aborted");
+      }
+      retainedHandles.push(handle); // 模拟调用方仍持有 terminal handle 引用
+    }
+    // active strong registry 回到 0：终态记录已替换为轻量 stub（WeakMap），
+    // 不随 200 笔历史 transaction 增长。
+    expect(service.metrics().preparedActive).toBe(0);
+    expect(service.metrics().tentativeCapacityKeys).toBe(0);
+
+    // terminal handle 在引用仍存在时返回稳定幂等结果（不形成全局强引用）。
+    const committedHandle = retainedHandles[0]!;
+    expect(service.commitPreparedTransaction(committedHandle).status).toBe("already_settled");
+    const abortedHandle = retainedHandles[1]!;
+    const reaborted = service.abortPreparedTransaction(abortedHandle);
+    expect(reaborted.status).toBe("already_finalized");
+
+    // expire 路径同样 stub 化：未决 handle 在 tick 边界后 active 计数归零。
+    prepareOk(service, "ts1_life_leak");
+    expect(service.metrics().preparedActive).toBe(1);
+    service.endTick();
+    expect(service.metrics().preparedActive).toBe(0);
   });
 });
