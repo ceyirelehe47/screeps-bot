@@ -29,6 +29,8 @@ import {
   makeTreasuryTestTransferAdapter,
   readTreasuryActionContractCounters,
   registerTreasuryActionAdapter,
+  findTreasuryActionAdapter,
+  readTreasuryAdapterRegistryRevision,
   unregisterTreasuryActionAdapterForTest,
 } from "@/runtime/treasury/actionContracts";
 import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
@@ -539,5 +541,52 @@ describe("第十轮 operation-count：原子 redemption 与统一 readiness", ()
     }
     expect(readTreasuryQuarantineCounters().fullScans).toBe(quarantineBefore);
     expect(readTreasuryIntentCounters().fullScans).toBe(intentBefore);
+  });
+});
+
+describe("第十一轮 immutable registries 与 durable cohort 的 operation-count fixture", () => {
+  it("r11：query/authorize/prepare 正常路径零 intent/quarantine 全扫；registry lookup/revision O(1)；cohort/identity 计算与 leg/posting 数线性", () => {
+    const rooms = installRooms(buildRoomSpecs());
+    const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
+    service.beginTick();
+    registerTreasuryActionAdapter(makeTreasuryTestTransferAdapter());
+    // registry revision 与 lookup：多次 find/revision 读取不产生任何 store 扫描。
+    const revisionBefore = readTreasuryAdapterRegistryRevision();
+    for (let index = 0; index < 32; index += 1) {
+      expect(findTreasuryActionAdapter("test.transfer")).toBeDefined();
+    }
+    expect(readTreasuryAdapterRegistryRevision()).toBe(revisionBefore);
+    // 正常写路径（build → authorize → execute committed）× 6：全程零全扫
+    //（cohort facts 构造/durable identity 计算只读 bounded facts——与
+    // leg/posting 数线性，无 store 迭代）。
+    const intentScansBefore = readTreasuryIntentCounters().fullScans;
+    const quarantineScansBefore = readTreasuryQuarantineCounters().fullScans;
+    for (let index = 0; index < 6; index += 1) {
+      const built = buildTreasuryActionContract(service, {
+        actionKind: "test.transfer",
+        transactionId: `perf_r11_${String(index)}`,
+        args: {
+          fromRoom: "W1N57",
+          fromLocation: "storage",
+          toRoom: "W1N57",
+          toLocation: "terminal",
+          resource: RESOURCE_ENERGY,
+          amount: 100,
+          outcome: "ok",
+        },
+      });
+      expect(built.status).toBe("built");
+      if (built.status !== "built") return;
+      const authorized = service.authorizeTreasuryActionContract(built.contract);
+      expect(authorized.status).toBe("authorized");
+      if (authorized.status !== "authorized") return;
+      expect(executeTreasuryActionContract(service, { contract: built.contract, authorization: authorized.bundle }).status).toBe("executed_committed");
+      // query 视图正常路径 readiness 亦零全扫（收集器经缓存 health 探测）。
+      const view = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
+      expect(view.writeAdmission.ready).toBe(true);
+    }
+    expect(readTreasuryIntentCounters().fullScans).toBe(intentScansBefore);
+    expect(readTreasuryQuarantineCounters().fullScans).toBe(quarantineScansBefore);
+    unregisterTreasuryActionAdapterForTest("test.transfer");
   });
 });
