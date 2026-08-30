@@ -115,9 +115,45 @@ export interface TreasuryActionAdapter<TArgs = unknown, TResult extends { ok: bo
   reconcile?(facts: TreasuryActionReconcilerFacts, observation: unknown): TreasuryActionReconcilerConclusion;
 }
 
-// ── registry ────────────────────────────────────────────────────────────────
+// ── registry（第十一轮 3.13.2：immutable registration records） ───────────────
 
-const adapterRegistry = new Map<string, TreasuryActionAdapter<never, never>>();
+/**
+ * 注册快照的公开视图（冻结）：调用方可见的 adapter 形状。函数引用在注册时
+ * 固定——调用方事后修改原 adapter 对象不影响 registry 内实现；读 API 不
+ * 泄漏内部 record（registry generation/registeredAtTick 仅闭包可见）。
+ */
+export interface TreasuryRegisteredActionAdapter<TArgs = unknown, TResult extends { ok: boolean } = { ok: boolean }> {
+  readonly kind: string;
+  readonly version: number;
+  /**
+   * registration identity 组成（第十一轮 3.13.2）：`hash(kind:version:seq)`
+   * ——每次合法注册唯一；同 version 不同实现的 test-only 替换（unregister 后
+   * 重注册）产生新 registrationId，旧 contract 因 identity 不匹配失效。
+   */
+  readonly registrationId: string;
+  validate(args: unknown): string | null;
+  derivePostings(args: TArgs): readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
+  execute(args: TArgs): TResult;
+  structureBindings?(args: TArgs): readonly TreasuryActionStructureBinding[];
+  durableFacts?(args: TArgs): TreasuryDurableFacts | null;
+  reconcile?(facts: TreasuryActionReconcilerFacts, observation: unknown): TreasuryActionReconcilerConclusion;
+}
+
+/** 内部 registration record（registry 闭包私有；公开视图 + 装配元数据）。 */
+interface TreasuryAdapterRegistrationRecord {
+  /** 冻结公开视图（find 返回值——不含装配元数据）。 */
+  readonly view: TreasuryRegisteredActionAdapter<never, never>;
+  readonly registryGeneration: number;
+  readonly registeredAtTick: number;
+}
+
+const adapterRegistry = new Map<string, TreasuryAdapterRegistrationRecord>();
+/** registrationId 种子（每次成功注册 +1；registration identity 的唯一性成分）。 */
+let adapterRegistrationSequence = 0;
+/** registry revision（成功注册/版本演进计数；诊断与 contract/bundle 间接绑定）。 */
+let adapterRegistryRevision = 0;
+/** seal 标志：生产装配完成后阻止运行中动态注册（第十一轮 3.13.2）。 */
+let adapterRegistrySealed = false;
 
 export type TreasuryAdapterRegistrationResult =
   | { readonly status: "registered" }
@@ -148,24 +184,80 @@ function validateAdapterShape(adapter: TreasuryActionAdapter): string | null {
 }
 
 /**
- * 注册 adapter（架构边界：仅 actionContracts.ts 与测试可调用——生产模块
- * 不得动态注册）。重复 kind 注册拒绝（一个 kind 一个权威实现）。
+ * 注册 adapter（immutable registration，第十一轮 3.13.2）：
+ * - 注册时快照固定全部函数引用并冻结 record——调用方修改原对象不影响
+ *   registry 内实现；execution 与 reconciliation 使用同一 record；
+ * - 同 kind + 同 version：同实现（全部函数引用相同）幂等，不同实现拒绝
+ *  （不得覆盖——替换实现必须使用更高 adapter version）；
+ * - 同 kind 更高 version：合法版本演进（registrationId 变化 → 旧 contract
+ *   因 registration identity 不匹配失效）；更低 version 拒绝（不可降级）；
+ * - seal 后一切动态注册拒绝（生产装配点调用 seal；架构测试守护）。
+ * 架构边界：仅 actionContracts.ts 与测试可调用（生产模块不得动态注册）。
  */
 export function registerTreasuryActionAdapter(
   adapter: TreasuryActionAdapter,
 ): TreasuryAdapterRegistrationResult {
   const shapeError = validateAdapterShape(adapter);
   if (shapeError !== null) return { status: "rejected", detail: shapeError };
-  if (adapterRegistry.has(adapter.kind)) {
-    return { status: "rejected", detail: `action kind ${adapter.kind} 已注册（一个 kind 一个权威 adapter）` };
+  if (adapterRegistrySealed) {
+    return { status: "rejected", detail: `adapter registry 已 seal（生产装配完成——运行中动态注册拒绝）` };
   }
-  adapterRegistry.set(adapter.kind, adapter as unknown as TreasuryActionAdapter<never, never>);
+  const existing = adapterRegistry.get(adapter.kind);
+  if (existing !== undefined) {
+    if (existing.view.version === adapter.version) {
+      const sameImplementation =
+        existing.view.validate === adapter.validate &&
+        existing.view.derivePostings === adapter.derivePostings &&
+        existing.view.execute === adapter.execute &&
+        existing.view.structureBindings === adapter.structureBindings &&
+        existing.view.durableFacts === adapter.durableFacts &&
+        existing.view.reconcile === adapter.reconcile;
+      if (!sameImplementation) {
+        return {
+          status: "rejected",
+          detail: `action kind ${adapter.kind} v${String(adapter.version)} 已注册不同实现（immutable registry——覆盖被拒，替换实现必须使用更高 adapter version）`,
+        };
+      }
+      return { status: "registered" };
+    }
+    if (adapter.version < existing.view.version) {
+      return {
+        status: "rejected",
+        detail: `action kind ${adapter.kind} 当前 v${String(existing.view.version)}，不可注册更低 v${String(adapter.version)}（版本只升不降）`,
+      };
+    }
+    // 更高 version：合法演进（旧 contract 因 version + registrationId 不匹配失效）。
+  }
+  adapterRegistrationSequence += 1;
+  const registrationId = hashTreasuryCanonicalString(
+    `adapter:${adapter.kind}:${String(adapter.version)}:${String(adapterRegistrationSequence)}`,
+  );
+  const view: TreasuryRegisteredActionAdapter = Object.freeze({
+    kind: adapter.kind,
+    version: adapter.version,
+    registrationId,
+    validate: adapter.validate,
+    derivePostings: adapter.derivePostings,
+    execute: adapter.execute,
+    ...(adapter.structureBindings !== undefined ? { structureBindings: adapter.structureBindings } : {}),
+    ...(adapter.durableFacts !== undefined ? { durableFacts: adapter.durableFacts } : {}),
+    ...(adapter.reconcile !== undefined ? { reconcile: adapter.reconcile } : {}),
+  });
+  const record: TreasuryAdapterRegistrationRecord = Object.freeze({
+    view: view as TreasuryRegisteredActionAdapter<never, never>,
+    registryGeneration: adapterRegistrationSequence,
+    registeredAtTick: Game.time,
+  });
+  adapterRegistry.set(adapter.kind, record);
+  adapterRegistryRevision += 1;
   return { status: "registered" };
 }
 
 /** 仅供测试：移除注册（测试隔离用；生产禁用——架构测试守护）。 */
 export function unregisterTreasuryActionAdapterForTest(kind: string): boolean {
-  return adapterRegistry.delete(kind);
+  const removed = adapterRegistry.delete(kind);
+  if (removed) adapterRegistryRevision += 1;
+  return removed;
 }
 
 /** 仅供测试：覆盖注册（同一 kind 重新配置；生产禁用）。 */
@@ -174,8 +266,33 @@ export function replaceTreasuryActionAdapterForTest(adapter: TreasuryActionAdapt
   return registerTreasuryActionAdapter(adapter);
 }
 
-export function findTreasuryActionAdapter(kind: string): TreasuryActionAdapter | undefined {
-  return adapterRegistry.get(kind) as TreasuryActionAdapter | undefined;
+/** 只读查找（无注册返回 undefined——调用方 fail closed）；返回冻结公开视图（内部装配元数据不泄漏）。 */
+export function findTreasuryActionAdapter(kind: string): TreasuryRegisteredActionAdapter | undefined {
+  return adapterRegistry.get(kind)?.view;
+}
+
+/** registry revision（成功注册/版本演进计数；诊断与 metrics）。 */
+export function readTreasuryAdapterRegistryRevision(): number {
+  return adapterRegistryRevision;
+}
+
+/**
+ * 生产装配 seal（第十一轮 3.13.2）：装配完成后阻止运行中动态注册。调用点
+ * 仅 runtimeServices.ts 生产装配路径（架构测试守护）；测试用 unseal 解除。
+ */
+export function sealTreasuryAdapterRegistryForProduction(): void {
+  adapterRegistrySealed = true;
+}
+
+/** 仅供测试：解除 seal（测试隔离用）。 */
+export function unsealTreasuryAdapterRegistryForTest(): void {
+  adapterRegistrySealed = false;
+}
+
+/** 仅供测试：清空 registry（模块级状态隔离；配合 unseal 使用）。 */
+export function clearTreasuryAdapterRegistryForTest(): void {
+  adapterRegistry.clear();
+  adapterRegistrySealed = false;
 }
 
 // ── 确定性计数（facade metrics 聚合） ───────────────────────────────────────
@@ -217,6 +334,8 @@ export interface TreasuryActionContract {
   readonly actionKind: string;
   /** 构建时的 adapter version（执行时 registry 必须仍为该 version）。 */
   readonly adapterVersion: number;
+  /** adapter registration identity（第十一轮 3.13.2：同 version 替换后旧 contract 失效）。 */
+  readonly adapterRegistrationId: string;
   readonly transactionId: string;
   /** canonical action args 的冻结深拷贝（validate/derive/execute 同源）。 */
   readonly args: unknown;
@@ -249,7 +368,7 @@ const contractRegistry = new WeakSet<TreasuryActionContract>();
  */
 export function verifyTreasuryActionContractForAuthorization(
   contract: unknown,
-): { readonly status: "ok"; readonly contract: TreasuryActionContract; readonly adapter: TreasuryActionAdapter } | {
+): { readonly status: "ok"; readonly contract: TreasuryActionContract; readonly adapter: TreasuryRegisteredActionAdapter } | {
   readonly status: "rejected";
   readonly reason: "contract_invalid" | "adapter_not_registered";
   readonly detail: string;
@@ -270,6 +389,15 @@ export function verifyTreasuryActionContractForAuthorization(
       status: "rejected",
       reason: "contract_invalid",
       detail: `adapter 已演进（contract v${String(typed.adapterVersion)}，registry 当前 v${String(adapter.version)}）——须重新构建 contract`,
+    };
+  }
+  // registration identity 绑定（第十一轮 3.13.2）：test-only 同 version 替换
+  // 产生新 registrationId——旧 contract 即使 digest 前缀相同也失效。
+  if (typed.adapterRegistrationId !== undefined && typed.adapterRegistrationId !== adapter.registrationId) {
+    return {
+      status: "rejected",
+      reason: "contract_invalid",
+      detail: `adapter registration identity 已变化（contract ${typed.adapterRegistrationId.slice(0, 12)}，registry ${adapter.registrationId.slice(0, 12)}）——须重新构建 contract`,
     };
   }
   return { status: "ok", contract: typed, adapter };
@@ -438,6 +566,23 @@ export function buildTreasuryActionContract(
 }
 
 /**
+ * adapter 函数异常边界（第十一轮 3.13.2）：validate/derivePostings/
+ * structureBindings/durableFacts 的任何抛错结构化拒绝（callback 零调用、
+ * registry/授权零变化）；execute 异常由 executePreparedAction 的 execution
+ * unknown 协议处置；reconcile 异常由 capability 签发入口处置。
+ */
+function adapterCall<T>(op: string, fn: () => T): { readonly status: "ok"; readonly value: T } | { readonly status: "fault"; readonly detail: string } {
+  try {
+    return { status: "ok", value: fn() };
+  } catch (error) {
+    return {
+      status: "fault",
+      detail: `adapter_fault(${op}): ${String(error instanceof Error ? error.message : error).slice(0, 96)}`,
+    };
+  }
+}
+
+/**
  * 构建 canonical action contract：canonicalize args → adapter 校验 →
  * derivePostings 确定性派生 → 结构 incarnation 快照（posting locations +
  * 受控 structureBindings）→ digest 绑定（AC2）→ 冻结 + 私有 registry 注册。
@@ -474,12 +619,21 @@ function buildTreasuryActionContractInner(
     return { status: "rejected", reason: "contract_invalid", detail: `args canonicalization 失败: ${canonicalized.detail}` };
   }
   const canonicalArgs = canonicalized.canonical;
-  const argsError = adapter.validate(canonicalArgs);
-  if (argsError !== null) {
+  const validated = adapterCall("validate", () => adapter.validate(canonicalArgs));
+  if (validated.status === "fault") {
     actionContractEvents.rejected += 1;
-    return { status: "rejected", reason: "contract_invalid", detail: `args 校验失败: ${argsError}` };
+    return { status: "rejected", reason: "contract_invalid", detail: validated.detail };
   }
-  const derived = adapter.derivePostings(canonicalArgs);
+  if (validated.value !== null) {
+    actionContractEvents.rejected += 1;
+    return { status: "rejected", reason: "contract_invalid", detail: `args 校验失败: ${validated.value}` };
+  }
+  const derivedCall = adapterCall("derivePostings", () => adapter.derivePostings(canonicalArgs));
+  if (derivedCall.status === "fault") {
+    actionContractEvents.rejected += 1;
+    return { status: "rejected", reason: "contract_invalid", detail: derivedCall.detail };
+  }
+  const derived = derivedCall.value;
   const postingsError = validateDerivedPostings(derived);
   if (postingsError !== null) {
     actionContractEvents.rejected += 1;
@@ -522,7 +676,12 @@ function buildTreasuryActionContractInner(
     bindingList.push({ roomName: posting.roomName, locationKind: posting.locationKind as "storage" | "terminal", label: key });
   }
   if (adapter.structureBindings !== undefined) {
-    const bindings = validateStructureBindings(adapter.structureBindings(canonicalArgs));
+    const bindingsCall = adapterCall("structureBindings", () => adapter.structureBindings!(canonicalArgs));
+    if (bindingsCall.status === "fault") {
+      actionContractEvents.rejected += 1;
+      return { status: "rejected", reason: "contract_invalid", detail: bindingsCall.detail };
+    }
+    const bindings = validateStructureBindings(bindingsCall.value);
     if (typeof bindings === "string") {
       actionContractEvents.rejected += 1;
       return { status: "rejected", reason: "contract_invalid", detail: `structureBindings 输出非法: ${bindings}` };
@@ -617,7 +776,12 @@ function buildTreasuryActionContractInner(
   const sortedBindings = [...bindingList].sort((a, b) => ((a.label ?? "") < (b.label ?? "") ? -1 : (a.label ?? "") > (b.label ?? "") ? 1 : 0));
   let durableFacts: TreasuryDurableFacts | undefined;
   if (adapter.durableFacts !== undefined) {
-    const facts = adapter.durableFacts(canonicalArgs);
+    const factsCall = adapterCall("durableFacts", () => adapter.durableFacts!(canonicalArgs));
+    if (factsCall.status === "fault") {
+      actionContractEvents.rejected += 1;
+      return { status: "rejected", reason: "contract_invalid", detail: factsCall.detail };
+    }
+    const facts = factsCall.value;
     if (facts !== null && facts !== undefined) {
       const factsError = validateDurableFacts(facts);
       if (factsError !== null) {
@@ -653,6 +817,7 @@ function buildTreasuryActionContractInner(
     contractId: `ac:${digest}`,
     actionKind: request.actionKind,
     adapterVersion: adapter.version,
+    adapterRegistrationId: adapter.registrationId,
     transactionId: request.transactionId,
     args: canonicalArgs,
     canonicalArgsText: canonicalized.text,
@@ -732,6 +897,14 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
       status: "prepare_rejected",
       reason: "contract_invalid",
       detail: `adapter version 已演进（contract 构建于 v${String(contract.adapterVersion)}，registry 当前 v${String(adapter.version)}）——旧 contract 失效，须重新构建与授权`,
+    };
+  }
+  if (contract.adapterRegistrationId !== undefined && contract.adapterRegistrationId !== adapter.registrationId) {
+    actionContractEvents.adapterMismatches += 1;
+    return {
+      status: "prepare_rejected",
+      reason: "contract_invalid",
+      detail: `adapter registration identity 已变化（contract ${contract.adapterRegistrationId.slice(0, 12)}，registry ${adapter.registrationId.slice(0, 12)}）——旧 contract 失效`,
     };
   }
   const authorization = request.authorization;

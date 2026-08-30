@@ -1,6 +1,8 @@
 import { createRuntimeMemoryService, type RuntimeMemoryService } from "@/runtime/memoryService";
 import { createTickContextService, type TickContextService } from "@/runtime/tickContext";
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import { sealTreasuryAdapterRegistryForProduction } from "@/runtime/treasury/actionContracts";
+import { sealTreasuryPolicyRegistryForProduction } from "@/runtime/treasury/policyAuthority";
 import type { CreepApi, CreepConfig, RoleName } from "@/types/system";
 
 export interface CreepConfigService extends CreepApi {
@@ -102,6 +104,10 @@ function createRuntimeServices(): RuntimeServices {
   // Treasury 的房间源注入 tickContext 快照（复用既有 myRooms 缓存，零 room.find）；
   // 任务/预留源由 facade 默认直读 Memory 路径（查询零写，不 ensure）。
   const treasury = createTreasuryService({ getRooms: () => tickContext.getMyRooms() });
+  // 生产装配完成：seal adapter/policy registry（第十一轮 3.13.2/3.13.3——
+  // 运行中动态注册拒绝；测试不经本装配路径，registry 状态隔离由测试自行管理）。
+  sealTreasuryAdapterRegistryForProduction();
+  sealTreasuryPolicyRegistryForProduction();
   return {
     memory,
     creepConfigs,

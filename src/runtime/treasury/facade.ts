@@ -152,8 +152,13 @@ import {
 } from "@/runtime/treasury/authorization";
 import { TREASURY_WRITER_KERNEL, type TreasuryWriterKernel } from "@/runtime/treasury/kernelChannel";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
-import { findTreasuryPolicyResolver } from "@/runtime/treasury/policyAuthority";
-import { treasuryPolicyAuthorityReady } from "@/runtime/treasury/policyAuthority";
+import {
+  computeTreasuryPolicyDecisionDigest,
+  findTreasuryPolicyResolver,
+  treasuryPolicyAuthorityReady,
+  validateTreasuryPolicyDecision,
+  type TreasuryPolicyDecision,
+} from "@/runtime/treasury/policyAuthority";
 import { evaluateTreasuryWriteReadiness } from "@/runtime/treasury/writeReadiness";
 import {
   registerTreasuryResolutionKernelForService,
@@ -310,8 +315,14 @@ interface TreasuryAuthorizationBundleRecord {
   readonly adapterVersion: number;
   /** owner canonical identity（"" = 无 owner 限定）。 */
   readonly ownerIdentity: string;
-  /** policy capability identity（本轮占位 "none"；policy authority 轮填充）。 */
+  /** policy capability identity（第十一轮 3.13.3：`policyId@v{version}:{decisionDigest 排序拼接}`）。 */
   readonly policyIdentity: string;
+  /** policy registration identity（exact——redemption 与 registrationId 比对，前缀比较已删除）。 */
+  readonly policyRegistrationId: string;
+  /** per-resource policy decision digest 排序拼接（Treasury 计算，非 resolver 自报）。 */
+  readonly policyDecisionDigest: string;
+  /** policy emergency override（任一资源决策为 true 即 true——显式进入 cohort 与审计）。 */
+  readonly policyEmergencyOverride: boolean;
   readonly revisions: TreasuryAuthorizationRevisions;
   readonly serviceGeneration: number;
   readonly tick: number;
@@ -406,7 +417,7 @@ export interface TreasuryService {
     readonly digest?: string;
   }): { readonly status: "issued"; readonly capability: TreasuryReconciliationCapability } | {
     readonly status: "rejected";
-    readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch";
+    readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault";
     readonly detail: string;
   };
   /**
@@ -846,15 +857,19 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     ) {
       return reject("revision_mismatch", "bundle 绑定的 revision cohort 已过期（commitment/projection/quarantine/intent/reservation 任一变化——须重新授权）");
     }
-    // 【第十轮 3.12.9】policy 失效校验：当前 policy authority 的 identity 与
-    // 决策摘要必须与 bundle 签发时一致（policy 变化使旧 bundle 失效）。
-    const currentPolicyResolver = findTreasuryPolicyResolver();
-    const currentPolicyIdentity =
-      currentPolicyResolver === undefined
-        ? null
-        : currentPolicyResolver.policyId + "@v" + String(currentPolicyResolver.policyVersion);
-    if (currentPolicyIdentity === null || !record.policyIdentity.startsWith(currentPolicyIdentity + ":")) {
-      return reject("policy_invalidated", `policy authority 已变化或缺失（bundle 绑定 ${record.policyIdentity.slice(0, 96)}，当前 ${String(currentPolicyIdentity)}）——须重新授权`);
+    // 【第十一轮 3.13.3】policy 失效校验：当前 policy registry 的 **exact
+    // registration identity** 必须与 bundle 签发时一致（registrationId 比对
+    // ——字符串前缀比较已删除：同 policyId@version 的 test-only 替换产生新
+    // registrationId，旧 bundle 失效）。
+    const currentPolicyRegistration = findTreasuryPolicyResolver();
+    if (
+      currentPolicyRegistration === undefined ||
+      currentPolicyRegistration.registrationId !== record.policyRegistrationId
+    ) {
+      return reject(
+        "policy_invalidated",
+        `policy authority 已变化或缺失（bundle 绑定 registration ${record.policyRegistrationId.slice(0, 12)}，当前 ${currentPolicyRegistration === undefined ? "无注册" : currentPolicyRegistration.registrationId.slice(0, 12)}）——须重新授权`,
+      );
     }
     // 只读预验证全部 legs（零状态变化；任一失败时前 N−1 个 leg 不受影响）。
     const prevalidated = internalService.validateTreasuryAuthorizationForRedeem(
@@ -1926,21 +1941,46 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         metrics.authorizationRejected += 1;
         return { status: "rejected", reason: "contract_invalid", detail: "contract 无负 posting（无资源流出即无授权需求）——拒绝授权" };
       }
-      // 【第十轮 3.12.9】per-resource policy 决策（注册 resolver 权威计算；
-      // bundle 绑定 policy identity 与决策摘要）。
+      // 【第十一轮 3.13.3】per-resource policy 决策（注册 resolver 权威计算；
+      // decision 由 Treasury 完整验证并**自行计算 digest**——resolver 自报
+      // digest 通道已删除；evaluate 抛错结构化 fail closed）。
+      const ownerKey = options?.owner !== undefined ? String(treasuryAuthorizationOwnerKey(options.owner)) : "";
       const policyDecisions = new Map<string, { withhold: number; digest: string }>();
+      let policyEmergencyOverride = false;
       for (const [resource, need] of resourceOutflow) {
-        const decision = policyResolver.evaluate({ resource, rooms: [...need.rooms], tick: Game.time });
+        const policyContext = {
+          contractId: verifiedContract.contractId,
+          contractDigest: verifiedContract.digest,
+          actionKind: verifiedContract.actionKind,
+          resource,
+          rooms: [...need.rooms],
+          ownerIdentity: ownerKey,
+          tick: Game.time,
+        };
+        let decision: ReturnType<typeof policyResolver.evaluate>;
+        try {
+          decision = policyResolver.evaluate(policyContext);
+        } catch (error) {
+          metrics.authorizationRejected += 1;
+          return {
+            status: "rejected",
+            reason: "authorization_policy_violation",
+            detail: `policy_fault: resolver evaluate 抛错（资源 ${resource}: ${String(error instanceof Error ? error.message : error).slice(0, 96)}）——fail closed`,
+          };
+        }
         if ("status" in decision && decision.status === "rejected") {
           metrics.authorizationRejected += 1;
           return { status: "rejected", reason: "authorization_policy_violation", detail: `policy resolver 拒绝（资源 ${resource}）: ${decision.reason}` };
         }
-        const typed = decision as { withhold: number; digest: string };
-        if (typeof typed.withhold !== "number" || !Number.isSafeInteger(typed.withhold) || typed.withhold < 0) {
+        const typed = decision as TreasuryPolicyDecision;
+        const decisionError = validateTreasuryPolicyDecision(typed);
+        if (decisionError !== null) {
           metrics.authorizationRejected += 1;
-          return { status: "rejected", reason: "authorization_policy_violation", detail: `policy decision 非法（资源 ${resource}：withhold 须为非负安全整数）` };
+          return { status: "rejected", reason: "authorization_policy_violation", detail: `policy decision 非法（资源 ${resource}）: ${decisionError}` };
         }
-        policyDecisions.set(resource, { withhold: typed.withhold, digest: String(typed.digest) });
+        const digest = computeTreasuryPolicyDecisionDigest(policyResolver, policyContext, typed);
+        if (typed.emergencyOverride) policyEmergencyOverride = true;
+        policyDecisions.set(resource, { withhold: typed.withhold, digest });
       }
       // 原子签发：逐资源授权；任一失败回滚已签发 token 的全部预算。
       const issued: TreasuryAuthorizationToken[] = [];
@@ -1993,6 +2033,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const authorizationDigest = hashTreasuryCanonicalString(
         `bundle:${verifiedContract.digest}:${verifiedContract.transactionId}:${String(bundleSequence)}:${String(serviceGeneration)}:${String(Game.time)}`,
       );
+      const policyDecisionDigest = [...policyDecisions.values()].map((d) => d.digest).sort().join(",");
       // opaque bundle：生产调用者只拿到不可读句柄（legs/cohort 仅闭包可见）。
       const bundle: TreasuryAuthorizationBundle = Object.freeze({ __brand: "treasury-authorization-bundle" });
       bundleRecords.set(bundle, {
@@ -2002,13 +2043,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         transactionId: verifiedContract.transactionId,
         actionKind: verifiedContract.actionKind,
         adapterVersion: verifiedContract.adapterVersion,
-        ownerIdentity: options?.owner !== undefined ? String(treasuryAuthorizationOwnerKey(options.owner)) : "",
+        ownerIdentity: ownerKey,
         policyIdentity:
-          policyResolver.policyId +
-          "@v" +
-          String(policyResolver.policyVersion) +
-          ":" +
-          [...policyDecisions.values()].map((d) => d.digest).sort().join(","),
+          policyResolver.policyId + "@v" + String(policyResolver.policyVersion) + ":" + policyDecisionDigest,
+        policyRegistrationId: policyResolver.registrationId,
+        policyDecisionDigest,
+        policyEmergencyOverride,
         revisions: firstRevisions,
         serviceGeneration,
         tick: Game.time,
@@ -2841,10 +2881,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       readonly digest?: string;
     }): { readonly status: "issued"; readonly capability: TreasuryReconciliationCapability } | {
       readonly status: "rejected";
-      readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch";
+      readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault";
       readonly detail: string;
     } {
-      const reject = (reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch", detail: string) => {
+      const reject = (reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault", detail: string) => {
         metrics.reconciliationCapabilitiesRejected += 1;
         return { status: "rejected" as const, reason, detail };
       };
@@ -2892,9 +2932,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           `authority 记录 adapter v${String(facts0.adapterVersion)}，registry 当前 v${String(adapter.version)}——版本演进后旧 action 不可由新 reconciler 解释`,
         );
       }
-      // 结论只能来自注册 reconciler（调用者不可自填）。输入为完整
-      // contract-specific durable facts（第九轮 4.8：不再使用
-      // postings[0].resource 或单一负数 amount 汇总这类过度简化事实）。
+      // 结论只能来自注册 reconciler（调用者不可自填）；reconcile 异常 =
+      // capability 签发拒绝、authority 保持隔离（第十一轮 3.13.2 异常边界）。
       const facts = {
         actionKind,
         transactionId: facts0.transactionId,
@@ -2905,7 +2944,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         ...(facts0.durablePayload !== undefined ? { durablePayload: facts0.durablePayload } : {}),
         ...(facts0.durablePayloadVersion !== undefined ? { durablePayloadVersion: facts0.durablePayloadVersion } : {}),
       };
-      const conclusion = adapter.reconcile(facts, state.observation) as TreasuryReconciliationConclusion;
+      let conclusion: TreasuryReconciliationConclusion;
+      try {
+        conclusion = adapter.reconcile(facts, state.observation) as TreasuryReconciliationConclusion;
+      } catch (error) {
+        return reject(
+          "reconciler_fault",
+          `reconciler 抛错（${String(error instanceof Error ? error.message : error).slice(0, 96)}）——capability 拒绝签发，authority 保持隔离`,
+        );
+      }
       if (conclusion !== "observed_committed" && conclusion !== "observed_not_executed" && conclusion !== "still_uncertain") {
         return reject("invalid_input", `reconciler 返回非法结论: ${String(conclusion)}`);
       }

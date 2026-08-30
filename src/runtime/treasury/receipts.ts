@@ -57,6 +57,7 @@ import type { TreasuryWriteFaultMarker } from "@/runtime/treasury/writeFault";
 import { resetTreasuryQuarantineRuntimeForTest } from "@/runtime/treasury/quarantine";
 import { resetTreasuryResolutionEventsForTest } from "@/runtime/treasury/resolutionEvents";
 import { resetTreasuryIntentRuntimeForTest } from "@/runtime/treasury/intents";
+import { unsealTreasuryAdapterRegistryForTest } from "@/runtime/treasury/actionContracts";
 
 export const TREASURY_RECEIPT_RETENTION_TICKS = 5_000;
 export const TREASURY_RECEIPT_MAX_ENTRIES = 4_096;
@@ -800,6 +801,9 @@ export function clearTreasuryPersistenceForTest(): void {
   resetTreasuryQuarantineRuntimeForTest();
   resetTreasuryResolutionEventsForTest();
   resetTreasuryIntentRuntimeForTest();
+  // 第十一轮：registry seal 测试隔离（treasuryCore 的 RuntimeServices 集成
+  // 会 seal 生产 registry——后续测试的动态注册默认解除）。
+  unsealTreasuryAdapterRegistryForTest();
   resolutionResetHook?.();
   receiptEvents.migrationsExecuted = 0;
   receiptEvents.incompatibleFailures = 0;

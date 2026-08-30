@@ -1,10 +1,14 @@
 import { refreshGlobalMock } from "@mock/index";
-import { registerDefaultTreasuryTestPolicyForSetup } from "@/runtime/treasury/policyAuthority";
+import { registerDefaultTreasuryTestPolicyForSetup, unsealTreasuryPolicyRegistryForTest } from "@/runtime/treasury/policyAuthority";
 
 // 第十轮：默认 test policy（无 reserve）——production 授权的 policy authority
 // 前置；显式 fail closed 用例自行 clearTreasuryPolicyResolversForTest。
+// 第十一轮：policy registry 默认 unseal（adapter registry 的 unseal 在
+// clearTreasuryPersistenceForTest——本文件顶层不得 import actionContracts：
+// 其模块体读取 RESOURCES_ALL，而常量在 refreshGlobalMock() 后才定义）。
 beforeEach(() => {
   registerDefaultTreasuryTestPolicyForSetup();
+  unsealTreasuryPolicyRegistryForTest();
 });
 
 const __resetRoomVisualCalls = (): void => {
