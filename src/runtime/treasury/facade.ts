@@ -84,6 +84,7 @@ import {
   peekTreasuryQuarantineHealth,
   quarantineTreasuryTransaction,
   readTreasuryQuarantineCounters,
+  readTreasuryQuarantineEntry,
   TREASURY_QUARANTINE_MAX_ENTRIES,
   treasuryQuarantineBlockers,
   treasuryQuarantineCapacityOccupancy,
@@ -95,6 +96,7 @@ import {
   markTreasuryIntentPhase,
   peekTreasuryIntentHealth,
   readTreasuryIntentCounters,
+  readTreasuryIntentEntry,
   recoverTreasuryIntentsAtTickBoundary,
   releaseTreasuryIntentEntry,
   treasuryIntentBlockers,
@@ -104,6 +106,18 @@ import {
 } from "@/runtime/treasury/intents";
 import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import { readTreasuryResolutionCounters } from "@/runtime/treasury/resolutionEvents";
+import {
+  committedResolutionSettledAtTick,
+  peekTreasuryResolutionStoreHealth,
+  readTreasuryResolutionStoreCounters,
+  recoverStagedResolutions,
+} from "@/runtime/treasury/resolutionStore";
+import {
+  registerTreasuryReconciliationCapability,
+  type TreasuryReconciliationCapability,
+  type TreasuryReconciliationConclusion,
+} from "@/runtime/treasury/reconciliation";
+import { findTreasuryActionAdapter, readTreasuryActionContractCounters } from "@/runtime/treasury/actionContracts";
 import {
   ensureReservationSchemaActivated,
   isReservationOwnerMigrationComplete,
@@ -301,11 +315,23 @@ export interface TreasuryService {
   /** 最近一次 tick 边界的 outstanding prepared 审计快照（有界样本）。 */
   preparedLeakAudit(): TreasuryPreparedLeakAudit;
   /**
-   * fault resolution 的 service-aware guard（第七轮，只读零写）：resolution
-   * 协议借此检查 transaction 是否仍属于当前 active handle registry、以及
-   * 系统是否已建立故障后的 shared observation（currentObservationTick =
-   * 当前 tick state 的 observation tick；未 begin 时为 0——resolution 拒绝）。
+   * 签发 reconciliation capability（第八轮 9.1）：resolution 结论的唯一合法
+   * 来源——基于当前 exact post-fault observation + **受注册 action
+   * reconciler**（actionContracts registry）判定 committed/not-executed/
+   * uncertain。opaque capability（对象身份防伪、单次使用、generation/tick
+   * 有界）；未注册 reconciler 的 action kind 拒绝；uncertain 保持隔离。
    */
+  issueTreasuryReconciliationCapability(input: {
+    readonly transactionId: string;
+    readonly digest?: string;
+  }): { readonly status: "issued"; readonly capability: TreasuryReconciliationCapability } | {
+    readonly status: "rejected";
+    readonly reason: "not_found" | "digest_mismatch" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation";
+    readonly detail: string;
+  };
+  /** 当前 service generation（capability/resolve 调用方校验用）。 */
+  treasuryServiceGeneration(): number;
+  /** @deprecated 第七轮 guard 入口已被 capability 协议取代（保留只读诊断）。 */
   treasuryResolutionGuard(): {
     readonly activeTransactionIds: ReadonlySet<string>;
     readonly currentObservationTick: number;
@@ -860,6 +886,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // quarantine（quarantine 写失败时 intent 保留为 emergency authority）。
       // 恢复后仍存的未完成 intent 由 treasuryIntentBlockers 全局阻断新 writer。
       recoverTreasuryIntentsAtTickBoundary();
+      // staged resolution 恢复（第八轮 8.2）：中断的 resolution 幂等完成/
+      // 回滚（resolving+receipt 已写 → finalize；无进展 → 回滚；final 未
+      // 释放 → 补完成）。
+      recoverStagedResolutions();
     }
 
     // 跨 tick prepared handle 一律作废（observation 是 tick 级物理快照，
@@ -1430,8 +1460,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         return { status: "rejected", reason: "invalid_input", detail: inputShapeError };
       }
       const state = ensureTickState(true);
-      // 幂等优先：已结算 id 的重放（含重复 prepare 已 commit 的 id）。
-      const settledAt = projection.isSettled(input.transactionId);
+      // 幂等优先：已结算 id 的重放（含重复 prepare 已 commit 的 id）。统一
+      // replay horizon（第八轮 8.3）：receipt 过期但 committed resolution
+      // tombstone 仍在窗口内（settledAtTick+retention，与 receipt 同一常量）
+      // 时同样视为已结算——prepare/receipt/resolution 不得各自使用不同规则。
+      const settledAt = projection.isSettled(input.transactionId) ?? committedResolutionSettledAtTick(input.transactionId);
       if (settledAt !== undefined) {
         metrics.duplicateSettlementsRejected += 1;
         return { status: "already_settled", transactionId: input.transactionId, firstRecordedAtTick: settledAt };
@@ -1959,6 +1992,110 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       return lastPreparedLeakAudit;
     },
 
+    issueTreasuryReconciliationCapability(input: {
+      readonly transactionId: string;
+      readonly digest?: string;
+    }): { readonly status: "issued"; readonly capability: TreasuryReconciliationCapability } | {
+      readonly status: "rejected";
+      readonly reason: "not_found" | "digest_mismatch" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation";
+      readonly detail: string;
+    } {
+      const reject = (reason: "not_found" | "digest_mismatch" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation", detail: string) => {
+        metrics.reconciliationCapabilitiesRejected += 1;
+        return { status: "rejected" as const, reason, detail };
+      };
+      if (!input || typeof input !== "object" || typeof input.transactionId !== "string" || input.transactionId.length === 0) {
+        return reject("invalid_input", "transactionId 缺失或非法");
+      }
+      const state = ensureTickState(true);
+      // 目标 entry：quarantine 优先，其次 unresolved intent（emergency
+      // authority 场景——quarantine 写失败时 intent 是事实权威）。
+      const quarantined = readTreasuryQuarantineEntry(input.transactionId);
+      const intended = quarantined === undefined ? readTreasuryIntentEntry(input.transactionId) : undefined;
+      // 归一化双权威（quarantine 优先；intent 为 emergency authority 兜底）。
+      const facts0 =
+        quarantined !== undefined
+          ? {
+              transactionId: quarantined.transactionId,
+              digest: quarantined.digest,
+              kind: quarantined.kind,
+              actionKind: quarantined.kind,
+              recordedAt: quarantined.recordedAt,
+              postings: quarantined.deltas as unknown as readonly { roomName: string; locationKind: string; resource: string; delta: number }[],
+            }
+          : intended !== undefined
+            ? {
+                transactionId: intended.transactionId,
+                digest: intended.digest,
+                kind: intended.kind,
+                actionKind: intended.actionKind,
+                recordedAt: intended.updatedAtTick,
+                postings: intended.postings as unknown as readonly { roomName: string; locationKind: string; resource: string; delta: number }[],
+              }
+            : undefined;
+      if (facts0 === undefined) {
+        return reject("not_found", `transactionId ${input.transactionId.slice(0, 48)} 不在 quarantine/intent（可能已解决或从未隔离）`);
+      }
+      if (input.digest !== undefined && facts0.digest !== input.digest) {
+        return reject("digest_mismatch", `digest 不匹配（entry ${facts0.digest}，请求 ${input.digest}）`);
+      }
+      // active handle：resolution 后 endTick 不得重新 quarantine。
+      if (preparedById.has(input.transactionId)) {
+        return reject("active_handle_present", "transaction 仍属于当前 active handle registry（须等 handle 终态化/服务重建）");
+      }
+      // post-fault observation：当前 tick 严格晚于故障 tick 且当前 observation
+      // 为故障后观察。
+      if (Game.time <= facts0.recordedAt || state.tick <= facts0.recordedAt) {
+        return reject("premature_observation", `尚未建立故障后 shared observation（当前 tick ${String(Game.time)}，故障 tick ${String(facts0.recordedAt)}）`);
+      }
+      // 注册 reconciler 边界：无注册 adapter 或 adapter 无 reconciler 拒绝。
+      const actionKind = facts0.actionKind;
+      const adapter = findTreasuryActionAdapter(actionKind);
+      if (adapter === undefined) {
+        return reject("no_registered_reconciler", `action kind ${actionKind} 无注册 adapter（capability 只能基于注册 reconciler 签发）`);
+      }
+      if (adapter.reconcile === undefined) {
+        return reject("no_registered_reconciler", `action kind ${actionKind} 的 adapter 未提供 reconciler（无法判定执行事实）`);
+      }
+      // 结论只能来自注册 reconciler（调用者不可自填）。
+      const facts = {
+        actionKind,
+        transactionId: facts0.transactionId,
+        resource: facts0.postings.length > 0 ? facts0.postings[0].resource : "",
+        amount: facts0.postings.reduce((sum, leg) => sum + Math.min(0, leg.delta), 0),
+        postings: facts0.postings.map((leg) => ({ ...leg })) as never,
+      };
+      const conclusion = adapter.reconcile(facts, state.observation) as TreasuryReconciliationConclusion;
+      if (conclusion !== "observed_committed" && conclusion !== "observed_not_executed" && conclusion !== "still_uncertain") {
+        return reject("invalid_input", `reconciler 返回非法结论: ${String(conclusion)}`);
+      }
+      const capability = registerTreasuryReconciliationCapability(
+        Object.freeze({
+          __brand: "treasury-reconciliation-capability" as const,
+          transactionId: facts0.transactionId,
+          digest: facts0.digest,
+          actionKind,
+          conclusion,
+          postFaultEpoch: {
+            scope: state.observation.epoch.scope,
+            epochSeq: state.observation.epoch.epochSeq,
+            observedAtTick: state.observation.epoch.observedAtTick,
+          },
+          observationTick: Game.time,
+          reconcilerKind: actionKind,
+          reconcilerVersion: adapter.version,
+          serviceGeneration,
+          tick: Game.time,
+        }),
+      );
+      metrics.reconciliationCapabilitiesIssued += 1;
+      return { status: "issued", capability };
+    },
+
+    treasuryServiceGeneration(): number {
+      return serviceGeneration;
+    },
+
     treasuryResolutionGuard(): {
       readonly activeTransactionIds: ReadonlySet<string>;
       readonly currentObservationTick: number;
@@ -2064,6 +2201,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const intentCounters = readTreasuryIntentCounters();
       const intentHealth = peekTreasuryIntentHealth();
       const slotsOccupied = recoverySlotsOccupied();
+      const resolutionHealth = peekTreasuryResolutionStoreHealth();
+      const resolutionStoreCounters = readTreasuryResolutionStoreCounters();
+      const actionContractCounters = readTreasuryActionContractCounters();
       return {
         ...metrics,
         commitmentIndexQueries: metrics.commitmentIndexQueries + liveQueries,
@@ -2104,6 +2244,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         intentStoreHealthy: intentHealth.healthy,
         intentWriteFailures: metrics.intentWriteFailures + intentCounters.writeFailures,
         authorizationsActive: authorizationRecords.size,
+        resolutionInProgress: resolutionHealth.inProgress,
+        resolutionFaulted: metrics.resolutionFaulted + resolutionStoreCounters.faulted,
+        resolutionRecovered: metrics.resolutionRecovered + resolutionStoreCounters.recovered,
+        receiptRefreshes: receiptCounters.receiptRefreshes,
+        actionContractsBuilt: metrics.actionContractsBuilt + actionContractCounters.built,
+        actionAdapterMismatches: metrics.actionAdapterMismatches + actionContractCounters.adapterMismatches,
       };
     },
 

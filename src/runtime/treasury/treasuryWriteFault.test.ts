@@ -20,6 +20,7 @@ import {
   type TreasuryWriteFaultPhase,
 } from "@/runtime/treasury/writeFault";
 import { resolveTreasuryQuarantinedTransactionAsCommitted } from "@/runtime/treasury/faultResolution";
+import { makeTreasuryTestTransferAdapter, replaceTreasuryActionAdapterForTest } from "@/runtime/treasury/actionContracts";
 import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
@@ -77,7 +78,24 @@ function injectOnce(phase: TreasuryWriteFaultPhase): void {
   });
 }
 
+/** 注册 terminal.send reconciler（capability 签发前置；结论恒 committed）。 */
+function registerReconciler(): void {
+  replaceTreasuryActionAdapterForTest({
+    ...makeTreasuryTestTransferAdapter(),
+    kind: "terminal.send",
+    reconcile: () => "observed_committed",
+  });
+}
+
+/** 从 service 签发 capability（断言成功并返回）。 */
+function issueCap(service: TreasuryService, transactionId: string) {
+  const issued = service.issueTreasuryReconciliationCapability({ transactionId });
+  if (issued.status !== "issued") throw new Error(`capability 签发失败: ${issued.reason}`);
+  return issued.capability;
+}
+
 beforeEach(() => {
+  registerReconciler();
   clearTreasuryPersistenceForTest();
   resetTreasuryCommitmentRevisionForTest();
   setTreasuryCommitFaultInjectorForTest(null);
@@ -135,8 +153,8 @@ describe("staged commit 故障注入", () => {
     service.beginTick();
     const resolved = resolveTreasuryQuarantinedTransactionAsCommitted({
       transactionId: "ts1_fault_heap",
-      evidence: { conclusion: "observed_committed", observationTick: Game.time, source: "test" },
-      guard: service.treasuryResolutionGuard(),
+      capability: issueCap(service, "ts1_fault_heap"),
+      serviceGeneration: service.treasuryServiceGeneration(),
     });
     expect(resolved.status).toBe("resolved");
     const replay = service.prepareTransaction({ ...prepared, handle: undefined } as unknown as TreasuryTransactionInput);
@@ -239,8 +257,8 @@ describe("staged commit 故障注入", () => {
     // 显式 resolution 路径解除（faulted 已在上一 endTick 转 quarantine）。
     const resolved = resolveTreasuryQuarantinedTransactionAsCommitted({
       transactionId: "ts1_repair",
-      evidence: { conclusion: "observed_committed", observationTick: Game.time, source: "test" },
-      guard: service.treasuryResolutionGuard(),
+      capability: issueCap(service, "ts1_repair"),
+      serviceGeneration: service.treasuryServiceGeneration(),
     });
     expect(resolved.status).toBe("resolved");
     expect(service.metrics().writeAdmissionLocked).toBe(0);

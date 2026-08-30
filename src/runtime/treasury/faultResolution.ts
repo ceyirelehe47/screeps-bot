@@ -1,58 +1,46 @@
 /**
- * Treasury 显式 fault resolution 协议（第六轮建立、第七轮重做为
- * post-observation 证据协议）。
+ * Treasury 显式 fault resolution 协议（第六轮建立、第七轮证据协议、第八轮
+ * 重做为 **staged atomic resolution + service-issued capability**）。
  *
- * 背景：write-fault marker / durable quarantine 只证明"Game 结果未知或
- * commit 未完成"，无法证明 Game 动作是否发生。直接删除 marker 解锁会让
- * 资源被错误释放、已执行动作可能被重放。因此解锁必须携带**证据语义**：
+ * 背景：write-fault marker / durable quarantine / durable intent 只证明
+ * "Game 结果未知或 commit 未完成"，无法证明 Game 动作是否发生。解锁必须
+ * 携带结论语义——而结论不得由普通调用者自填：
  *
- * - resolve-as-committed：依据故障后对账证据（evidence.conclusion =
- *   observed_committed）认定 Game 动作已发生——以 **resolution tick** 写
- *   settlement receipt（完整 5000 retention 窗口——延迟数千年 tick 后
- *   resolution 的 receipt 仍存活完整窗口，下一 tick cleanup 不删）、原
- *   action tick 保留在 resolution tombstone（审计，不缩短 retention）、
- *   释放对应 quarantine、清除匹配的 write-fault marker；防重放由新 receipt
- *   生效；不把历史动作写入当前 tick overlay/journal（避免与 observed 世界
- *   双算）。
- * - resolve-as-not-executed：仅在证据明确（conclusion =
- *   observed_not_executed）且 phase 属于 execution-unknown 类
- *   （action_returned_non_ok_abort_failed / action_threw_execution_unknown /
- *   executing_at_end_tick）时释放——不写 receipt、不生成 committed
- *   projection、显式返回允许重新 prepare。Game 确认 OK 后的 commit 类
- *   phase 一律拒绝（不允许伪造"未执行"——除非更强的外部证据，本轮不提供
- *   该通道）。
- * - still_uncertain：证据不足以判定——保持 quarantine，不解锁，零副作用。
+ * - **结论来源（第八轮）**：TreasuryService.issueTreasuryReconciliationCapability
+ *   基于当前 exact post-fault observation + **受注册 action reconciler**
+ *   （actionContracts registry）判定 committed / not-executed / uncertain，
+ *   签发 opaque capability（reconciliation.ts——对象身份防伪、单次使用、
+ *   generation/tick 有界）；resolve 函数只接受 capability（旧 evidence/
+ *   guard 自由对象入口已移除）。跨 global reset 由新 service 重新签发。
+ * - **staged atomic（第八轮 8.2）**：
+ *   resolve-as-committed：prevalidate → resolution slot 预检（满载在任何
+ *   原状态变化之前拒绝）→ 写 stage="resolving" tombstone（resolution-
+ *   intent 落盘）→ receipt **刷新**（既有 receipt 真正更新到 resolution
+ *   tick，见 receipts.refreshSettledReceiptForResolution；无则写入）→
+ *   释放 quarantine/intent → 清匹配 marker → finalize（stage="final"）。
+ *   resolve-as-not-executed：prevalidate → slot 预检 → 先写 **final**
+ *   tombstone（可写性保证）→ 再释放 quarantine/intent + 清 marker——
+ *   绝无"函数返回失败但 transaction 已可重新 prepare"的中间态。
+ *   任何阶段中断由 resolutionStore.recoverStagedResolutions 在 beginTick
+ *   幂等恢复（receipt 已写→继续 finalize；无进展→回滚 tombstone；
+ *   final 未释放→补完成）。
+ * - **时序前置**（第七轮保留）：transaction 不得仍属当前 active handle
+ *   registry；当前 tick > 故障 tick；系统已建立故障后 shared observation；
+ *   capability 的 observationTick 严格晚于故障 tick 且不晚于当前 tick。
+ * - **phase 允许性**：not-executed 仅 execution-unknown 类 phase
+ *   （executing_at_end_tick / action_threw_execution_unknown /
+ *   action_returned_non_ok_abort_failed）；commit 类 phase 一律拒绝（不
+ *   允许伪造"未执行"）。
+ * - still_uncertain：reconciler 结论不足——保持 quarantine/intent 与全部
+ *   占用，不解锁，零副作用。
+ * - 幂等：重复调用 already_resolved（tombstone final / receipt）；错误
+ *   transactionId / digest / capability / 时序 → 拒绝且 fault 不动。
  *
- * 第七轮新增的 resolution 前置检查（缺一拒绝且 fault 不动）：
- * - service-aware guard：transaction 不得仍属于当前 Treasury service 的
- *   active handle registry（active_handle_present）——resolution 后 endTick
- *   不得"刚 resolve 又重新 quarantine"；
- * - 当前 tick 必须大于故障 tick（entry.recordedAt）；
- * - 系统必须已建立至少一个故障发生后的 shared observation
- *   （guard.currentObservationTick > entry.recordedAt）；
- * - evidence.observationTick 必须严格晚于故障 tick（stale_observation 拒绝）
- *   且不晚于当前 tick（未来观察非法）。
- *
- * resolution tombstone（Memory.runtime.treasury.resolutions）：有界幂等
- * 记录（"r:"+transactionId）——receipt retention 过期后的重复管理调用仍能
- * 返回 already_resolved 而非模糊 not_found；写入时惰性清理过期项
- * （resolvedAtTick + 5000），超上限且无可清理时拒绝新 resolution（fail
- * closed，绝不丢弃已存 tombstone）。
- *
- * 安全边界（架构测试守护）：
- * - resolution 幂等（重复调用 already_resolved / 零副作用拒绝）；
- * - 错误 transactionId / digest 不匹配 / 不允许的 resolution → 拒绝且
- *   fault/quarantine 保持不变；
- * - resolution 完成前 write admission 持续锁定（本模块不清除不匹配的
- *   marker；全部 quarantine 解决前全局 blocker 持续）；
- * - 生产 tick 不得自动调用（仅显式管理/修复路径与测试可引用）；
- * - 显式 repair（quarantine store 元数据/legacy 形状修复）只在本模块提供。
+ * 安全边界（架构测试守护）：生产 tick 不得自动调用（仅显式管理/修复路径
+ * 与测试可引用）；显式 repair（quarantine/intent store 元数据）只在本模块。
  */
 
-import {
-  commitSettledReceipt,
-  hasSettledReceipt,
-} from "@/runtime/treasury/receipts";
+import { refreshSettledReceiptForResolution, hasSettledReceipt } from "@/runtime/treasury/receipts";
 import {
   clearTreasuryWriteFaultMarkerForResolution,
   readTreasuryWriteFault,
@@ -66,39 +54,33 @@ import {
   repairTreasuryQuarantineStoreMetadataForResolution,
   type TreasuryQuarantineEntry,
 } from "@/runtime/treasury/quarantine";
+import { releaseTreasuryIntentEntry } from "@/runtime/treasury/intents";
+import {
+  committedResolutionSettledAtTick,
+  deleteTreasuryResolutionTombstone,
+  ensureTreasuryResolutionSlotAvailable,
+  ensureTreasuryResolutionStoreValidated,
+  readTreasuryResolutionTombstone,
+  writeTreasuryResolutionTombstone,
+} from "@/runtime/treasury/resolutionStore";
+import {
+  consumeTreasuryReconciliationCapability,
+  validateTreasuryReconciliationCapability,
+  type TreasuryReconciliationCapability,
+} from "@/runtime/treasury/reconciliation";
 import { recordTreasuryResolutionEvent } from "@/runtime/treasury/resolutionEvents";
 
-export type TreasuryResolutionConclusion = "observed_committed" | "observed_not_executed" | "still_uncertain";
+export type { TreasuryReconciliationConclusion } from "@/runtime/treasury/reconciliation";
 
-/**
- * 显式 reconciliation evidence：管理员/对账工具基于**故障发生后**的观察
- * 得出的结论。本轮无真实 writer，不实现各 Game API 的业务对账器——evidence
- * 是可扩展协议（后续可携带结构化对账载荷）。
- */
-export interface TreasuryResolutionEvidence {
-  readonly conclusion: TreasuryResolutionConclusion;
-  /** 对账观察所在 tick（必须严格晚于故障 tick，不得晚于当前 tick）。 */
-  readonly observationTick: number;
-  /** 证据来源标识（有界 string，如 "manual-inspection" / "terminal-audit"）。 */
-  readonly source: string;
-}
-
-/**
- * service-aware guard（由 facade.treasuryResolutionGuard() 提供）：resolution
- * 不得作用于仍存活于当前 active handle registry 的 transaction；且系统必须
- * 已建立故障后的 shared observation。
- */
-export interface TreasuryResolutionGuard {
-  readonly activeTransactionIds: ReadonlySet<string>;
-  readonly currentObservationTick: number;
-}
-
+/** resolution 输入（第八轮）：capability 取代旧 evidence/guard 自由对象。 */
 export interface TreasuryFaultResolutionInput {
   readonly transactionId: string;
-  /** 可选 digest 核对（提供时必须与 quarantine entry 一致，否则拒绝）。 */
+  /** 可选 digest 核对（提供时必须与 entry/capability 一致，否则拒绝）。 */
   readonly digest?: string;
-  readonly evidence: TreasuryResolutionEvidence;
-  readonly guard: TreasuryResolutionGuard;
+  /** service 签发的 reconciliation capability（issueTreasuryReconciliationCapability）。 */
+  readonly capability: TreasuryReconciliationCapability;
+  /** 当前 service generation（capability 校验用；由调用方从 service 上下文提供）。 */
+  readonly serviceGeneration: number;
 }
 
 export type TreasuryFaultResolutionResult =
@@ -106,7 +88,7 @@ export type TreasuryFaultResolutionResult =
       readonly status: "resolved";
       readonly resolution: "committed" | "not-executed";
       readonly transactionId: string;
-      /** 本次调用是否实际写入 receipt（false = 幂等命中既有结算）。 */
+      /** 本次调用是否实际写入/刷新 receipt（false = 幂等命中既有结算）。 */
       readonly receiptWritten: boolean;
       /** resolution 后是否允许重新 prepare 该 transactionId。 */
       readonly reprepareAllowed: boolean;
@@ -121,7 +103,7 @@ export type TreasuryFaultResolutionResult =
       readonly transactionId: string;
     }
   | {
-      /** 证据结论为 still_uncertain：保持 quarantine，不解锁，零副作用。 */
+      /** reconciler 结论为 still_uncertain：保持隔离，不解锁，零副作用。 */
       readonly status: "uncertain";
       readonly transactionId: string;
       readonly detail: string;
@@ -131,10 +113,12 @@ export type TreasuryFaultResolutionResult =
       readonly reason:
         | "not_found"
         | "digest_mismatch"
+        | "invalid_capability"
         | "active_handle_present"
         | "resolution_not_allowed"
         | "stale_observation"
         | "evidence_mismatch"
+        | "reconciler_mismatch"
         | "receipt_store_fatal"
         | "quarantine_store_fatal"
         | "resolution_store_fatal"
@@ -152,138 +136,75 @@ function countRejected(): void {
   recordTreasuryResolutionEvent("rejected");
 }
 
-// ── resolution tombstone（有界幂等记录） ────────────────────────────────────
+// ── 输入形状验证 ────────────────────────────────────────────────────────────
 
-const RESOLUTION_KEY_PREFIX = "r:";
-export const TREASURY_RESOLUTION_MAX_ENTRIES = 256;
-const TREASURY_RESOLUTION_RETENTION_TICKS = 5_000;
-const RESOLUTION_SOURCE_MAX = 128;
-
-interface TreasuryResolutionTombstone {
-  transactionId: string;
-  digest: string;
-  resolution: "committed" | "not-executed";
-  actionTick: number;
-  settledAtTick?: number;
-  observationTick: number;
-  resolvedAtTick: number;
-}
-
-interface TreasuryResolutionBranch {
-  resolutions?: {
-    version: 1;
-    entries: Record<string, TreasuryResolutionTombstone>;
-    updatedAt: number;
-  };
-}
-
-type RuntimeMemoryWithResolutions = NonNullable<Memory["runtime"]> & {
-  treasury?: TreasuryResolutionBranch;
-};
-
-function resolutionStoreBranch(): NonNullable<TreasuryResolutionBranch["resolutions"]> {
-  if (!Memory.runtime) Memory.runtime = {};
-  const runtime = Memory.runtime as unknown as RuntimeMemoryWithResolutions;
-  if (!runtime.treasury) runtime.treasury = {};
-  if (!runtime.treasury.resolutions) runtime.treasury.resolutions = { version: 1, entries: {}, updatedAt: Game.time };
-  return runtime.treasury.resolutions;
-}
-
-function readResolutionTombstone(transactionId: string): TreasuryResolutionTombstone | undefined {
-  const store = (Memory.runtime as unknown as RuntimeMemoryWithResolutions | undefined)?.treasury?.resolutions;
-  if (!store || typeof store.entries !== "object") return undefined;
-  return store.entries[RESOLUTION_KEY_PREFIX + transactionId] as TreasuryResolutionTombstone | undefined;
-}
-
-/**
- * 写入 tombstone（写入时惰性清理超过 retention 的过期项；超上限且无可清理
- * → 拒绝新 resolution，fail closed，绝不丢弃已存记录）。
- */
-function writeResolutionTombstone(entry: TreasuryResolutionTombstone): { ok: true } | { fatal: string } {
-  const store = resolutionStoreBranch();
-  if (!store.entries || typeof store.entries !== "object") {
-    return { fatal: "resolution tombstone store 形状非法（人工处理）" };
-  }
-  const key = RESOLUTION_KEY_PREFIX + entry.transactionId;
-  if (!Object.prototype.hasOwnProperty.call(store.entries, key)) {
-    // 惰性清理：resolvedAtTick 超过 retention 的旧项（写入是低频事件，有界单扫）。
-    for (const [existingKey, existing] of Object.entries(store.entries)) {
-      const tombstone = existing as TreasuryResolutionTombstone | null;
-      if (
-        !tombstone ||
-        typeof tombstone !== "object" ||
-        typeof tombstone.resolvedAtTick !== "number" ||
-        tombstone.resolvedAtTick < Game.time - TREASURY_RESOLUTION_RETENTION_TICKS
-      ) {
-        delete store.entries[existingKey];
-      }
-    }
-    if (Object.keys(store.entries).length >= TREASURY_RESOLUTION_MAX_ENTRIES) {
-      return {
-        fatal: `resolution tombstone 已达上限 ${String(TREASURY_RESOLUTION_MAX_ENTRIES)} 且无可清理过期项（fail closed）`,
-      };
-    }
-  }
-  store.entries[key] = entry;
-  store.updatedAt = Game.time;
-  return { ok: true };
-}
-
-// ── 输入/evidence/guard 形状验证 ───────────────────────────────────────────
-
-function describeInvalidInput(
-  input: TreasuryFaultResolutionInput,
-): { rejection: TreasuryFaultResolutionResult } | { evidence: TreasuryResolutionEvidence; guard: TreasuryResolutionGuard } {
+function describeInvalidInput(input: TreasuryFaultResolutionInput): string | null {
   if (!input || typeof input !== "object" || typeof input.transactionId !== "string" || input.transactionId.length === 0) {
-    return { rejection: { status: "rejected", reason: "invalid_input", detail: "transactionId 缺失或非法" } };
+    return "transactionId 缺失或非法";
   }
   if (input.digest !== undefined && (typeof input.digest !== "string" || input.digest.length === 0)) {
-    return { rejection: { status: "rejected", reason: "invalid_input", detail: "digest 非法" } };
+    return "digest 非法";
   }
-  const evidence = input.evidence;
-  if (!evidence || typeof evidence !== "object") {
-    return { rejection: { status: "rejected", reason: "invalid_input", detail: "evidence 缺失" } };
+  if (input.capability === undefined || input.capability === null || typeof input.capability !== "object") {
+    return "capability 缺失（须经 service.issueTreasuryReconciliationCapability 签发）";
   }
-  if (
-    evidence.conclusion !== "observed_committed" &&
-    evidence.conclusion !== "observed_not_executed" &&
-    evidence.conclusion !== "still_uncertain"
-  ) {
-    return { rejection: { status: "rejected", reason: "invalid_input", detail: `evidence.conclusion 非法: ${String(evidence.conclusion)}` } };
+  if (typeof input.serviceGeneration !== "number" || !Number.isSafeInteger(input.serviceGeneration)) {
+    return "serviceGeneration 非安全整数";
   }
-  if (typeof evidence.observationTick !== "number" || !Number.isSafeInteger(evidence.observationTick) || evidence.observationTick < 0) {
-    return { rejection: { status: "rejected", reason: "invalid_input", detail: "evidence.observationTick 非安全整数" } };
-  }
-  if (typeof evidence.source !== "string" || evidence.source.length === 0 || evidence.source.length > RESOLUTION_SOURCE_MAX) {
-    return { rejection: { status: "rejected", reason: "invalid_input", detail: "evidence.source 非法（须为 1..128 字符）" } };
-  }
-  const guard = input.guard;
-  if (!guard || typeof guard !== "object" || !(guard.activeTransactionIds instanceof Set)) {
-    return { rejection: { status: "rejected", reason: "invalid_input", detail: "guard.activeTransactionIds 缺失（须经 facade.treasuryResolutionGuard() 提供）" } };
-  }
-  if (typeof guard.currentObservationTick !== "number" || !Number.isSafeInteger(guard.currentObservationTick) || guard.currentObservationTick < 0) {
-    return { rejection: { status: "rejected", reason: "invalid_input", detail: "guard.currentObservationTick 非安全整数" } };
-  }
-  return { evidence, guard };
+  return null;
 }
 
 /**
- * 共享前置验证链：形状 → quarantine health → 定位 entry（含 tombstone/receipt
- * 幂等）→ digest → active handle → tick 时序 → post-observation →
- * evidence 时序。返回 entry 或拒绝/uncertain 结果。
+ * 共享前置验证链：形状 → capability 防伪/单次/generation/tick → quarantine
+ * health（显式 load）→ 定位 entry（tombstone/receipt 幂等）→ digest →
+ * active handle → tick 时序 → post-observation → conclusion 匹配 →
+ * reconciler 绑定。返回 entry+capability 或拒绝/uncertain 结果。
  */
 function prevalidate(
   input: TreasuryFaultResolutionInput,
-): { entry: TreasuryQuarantineEntry; evidence: TreasuryResolutionEvidence } | { stop: TreasuryFaultResolutionResult } {
-  const parsed = describeInvalidInput(input);
-  if ("rejection" in parsed) {
+): { entry: TreasuryQuarantineEntry; capability: TreasuryReconciliationCapability } | { stop: TreasuryFaultResolutionResult } {
+  const inputError = describeInvalidInput(input);
+  if (inputError !== null) {
     countRejected();
-    return { stop: parsed.rejection };
+    return { stop: { status: "rejected", reason: "invalid_input", detail: inputError } };
   }
-  // resolution 是写路径：显式触发一次 load 全量验证（entry 级损坏在轻量
-  // health 探测下不可见，必须由 load 检出——不可信 store 上不得执行）。
-  const loadFatal = ensureTreasuryQuarantineStoreValidated();
-  const quarantineHealth = loadFatal !== null ? { healthy: false, detail: loadFatal } : peekTreasuryQuarantineHealth();
+  // 幂等快路径（重复管理调用稳定 already_resolved）：entry 已释放且 final
+  // tombstone / receipt / committed tombstone 窗口任一命中时直接幂等返回——
+  // 不经 capability 校验/消费（resolved 状态不因重复调用改变）。
+  const earlyEntry = readTreasuryQuarantineEntry(input.transactionId);
+  if (earlyEntry === undefined) {
+    const earlyTombstone = readTreasuryResolutionTombstone(input.transactionId);
+    if (earlyTombstone !== undefined && earlyTombstone.stage === "final") {
+      return { stop: { status: "already_resolved", resolution: earlyTombstone.resolution, transactionId: input.transactionId } };
+    }
+    if (hasSettledReceipt(input.transactionId) !== undefined || committedResolutionSettledAtTick(input.transactionId) !== undefined) {
+      return { stop: { status: "already_resolved", resolution: "committed", transactionId: input.transactionId } };
+    }
+  }
+  // capability 防伪：对象身份/单次使用/generation/tick。
+  const capabilityCheck = validateTreasuryReconciliationCapability(input.capability, input.serviceGeneration);
+  if (capabilityCheck.status !== "valid") {
+    countRejected();
+    return {
+      stop: {
+        status: "rejected",
+        reason: "invalid_capability",
+        detail: `capability 校验失败（${capabilityCheck.reason}）: ${capabilityCheck.detail}`,
+      },
+    };
+  }
+  const capability = capabilityCheck.capability;
+  // resolution 是写路径：显式触发 quarantine/intent store load 验证 + resolution
+  // store 验证（不可信 store 上不得执行）。
+  const quarantineFatal = ensureTreasuryQuarantineStoreValidated();
+  const resolutionFatal = ensureTreasuryResolutionStoreValidated();
+  if (resolutionFatal !== null) {
+    countRejected();
+    return {
+      stop: { status: "rejected", reason: "resolution_store_fatal", detail: `${resolutionFatal}（不可信 store 上不得执行 resolution）` },
+    };
+  }
+  const quarantineHealth = quarantineFatal !== null ? { healthy: false, detail: quarantineFatal } : peekTreasuryQuarantineHealth();
   if (!quarantineHealth.healthy) {
     countRejected();
     return {
@@ -296,14 +217,13 @@ function prevalidate(
   }
   const entry = readTreasuryQuarantineEntry(input.transactionId);
   if (entry === undefined) {
-    // 幂等：先查 tombstone（receipt retention 过期后仍可判定），再查 receipt。
-    const tombstone = readResolutionTombstone(input.transactionId);
-    if (tombstone !== undefined) {
-      return {
-        stop: { status: "already_resolved", resolution: tombstone.resolution, transactionId: input.transactionId },
-      };
+    // 幂等：先查 tombstone（receipt retention 过期后仍可判定），再查 receipt
+    // 与 committed tombstone 窗口。
+    const tombstone = readTreasuryResolutionTombstone(input.transactionId);
+    if (tombstone !== undefined && tombstone.stage === "final") {
+      return { stop: { status: "already_resolved", resolution: tombstone.resolution, transactionId: input.transactionId } };
     }
-    if (hasSettledReceipt(input.transactionId) !== undefined) {
+    if (hasSettledReceipt(input.transactionId) !== undefined || committedResolutionSettledAtTick(input.transactionId) !== undefined) {
       return { stop: { status: "already_resolved", resolution: "committed", transactionId: input.transactionId } };
     }
     countRejected();
@@ -315,26 +235,43 @@ function prevalidate(
       },
     };
   }
+  if (capability.transactionId !== input.transactionId) {
+    countRejected();
+    return {
+      stop: {
+        status: "rejected",
+        reason: "invalid_capability",
+        detail: `capability 绑定 transactionId ${capability.transactionId}，请求 ${input.transactionId}`,
+      },
+    };
+  }
+  if (capability.digest !== entry.digest) {
+    countRejected();
+    return {
+      stop: { status: "rejected", reason: "digest_mismatch", detail: `capability digest ${capability.digest} 与 entry ${entry.digest} 不一致` },
+    };
+  }
   if (input.digest !== undefined && entry.digest !== input.digest) {
     countRejected();
     return {
-      stop: {
-        status: "rejected",
-        reason: "digest_mismatch",
-        detail: `digest 不匹配（quarantine ${entry.digest}，请求 ${input.digest}）——拒绝以避免解决错误 transaction`,
-      },
+      stop: { status: "rejected", reason: "digest_mismatch", detail: `digest 不匹配（quarantine ${entry.digest}，请求 ${input.digest}）` },
     };
   }
-  if (parsed.guard.activeTransactionIds.has(input.transactionId)) {
+  // reconciler 绑定：capability 的 reconcilerKind 必须与 entry 的 action kind
+  // 一致（结论必须来自该 action 的注册 reconciler）。
+  const entryActionKind = entry.kind;
+  if (capability.reconcilerKind !== entryActionKind) {
     countRejected();
     return {
       stop: {
         status: "rejected",
-        reason: "active_handle_present",
-        detail: "transaction 仍属于当前 Treasury service 的 active handle registry（resolution 后 endTick 会重新 quarantine——必须等 handle 终态化/服务重建后再 resolution）",
+        reason: "reconciler_mismatch",
+        detail: `capability 的 reconciler kind ${capability.reconcilerKind} 与 entry action kind ${entryActionKind} 不一致`,
       },
     };
   }
+  // 时序：当前 tick 严格晚于故障 tick；capability 观察严格晚于故障 tick 且
+  // 不晚于当前 tick（stale/未来观察均拒绝）。
   if (Game.time <= entry.recordedAt) {
     countRejected();
     return {
@@ -345,122 +282,151 @@ function prevalidate(
       },
     };
   }
-  if (parsed.guard.currentObservationTick <= entry.recordedAt) {
+  if (capability.postFaultEpoch.observedAtTick <= entry.recordedAt) {
     countRejected();
     return {
       stop: {
         status: "rejected",
         reason: "resolution_not_allowed",
-        detail: `系统尚未建立故障后的 shared observation（当前 observation tick ${String(parsed.guard.currentObservationTick)} ≤ 故障 tick ${String(entry.recordedAt)}）`,
+        detail: `capability 基于 tick ${String(capability.postFaultEpoch.observedAtTick)} 的观察——尚未建立故障后 shared observation（故障 tick ${String(entry.recordedAt)}）`,
       },
     };
   }
-  if (parsed.evidence.observationTick <= entry.recordedAt) {
+  if (capability.observationTick <= entry.recordedAt) {
     countRejected();
     return {
-      stop: {
-        status: "rejected",
-        reason: "stale_observation",
-        detail: `evidence 观察 tick ${String(parsed.evidence.observationTick)} 不晚于故障 tick ${String(entry.recordedAt)}（必须基于故障后的对账观察）`,
-      },
+      stop: { status: "rejected", reason: "stale_observation", detail: `capability 观察 tick ${String(capability.observationTick)} 不晚于故障 tick ${String(entry.recordedAt)}` },
     };
   }
-  if (parsed.evidence.observationTick > Game.time) {
+  if (capability.observationTick > Game.time) {
     countRejected();
     return {
-      stop: {
-        status: "rejected",
-        reason: "invalid_input",
-        detail: `evidence 观察 tick ${String(parsed.evidence.observationTick)} 晚于当前 tick ${String(Game.time)}（未来观察非法）`,
-      },
+      stop: { status: "rejected", reason: "invalid_input", detail: `capability 观察 tick ${String(capability.observationTick)} 晚于当前 tick ${String(Game.time)}` },
     };
   }
-  if (parsed.evidence.conclusion === "still_uncertain") {
+  if (capability.conclusion === "still_uncertain") {
     recordTreasuryResolutionEvent("uncertain");
     return {
       stop: {
         status: "uncertain",
         transactionId: input.transactionId,
-        detail: "对账证据结论为 still_uncertain——保持 quarantine 与全部占用，不解锁",
+        detail: "reconciler 结论为 still_uncertain——保持 quarantine/intent 与全部占用，不解锁",
       },
     };
   }
-  return { entry, evidence: parsed.evidence };
-}
-
-/** 清除与本 transaction 匹配的 write-fault marker（不匹配的根因 marker 不动）。 */
-function clearMatchingMarker(transactionId: string, digest: string): void {
-  clearTreasuryWriteFaultMarkerForResolution(transactionId, digest);
+  // capability 单次使用：校验全链通过即消费（拒绝路径不消费——修正诊断后
+  // 可重试；但 revision 型失效除外，见 validate 内部）。
+  consumeTreasuryReconciliationCapability(capability);
+  return { entry, capability };
 }
 
 /**
- * resolve-as-committed：以 resolution tick 写 receipt（完整 retention 窗口）、
- * 原 action tick 保留在 tombstone、释放 quarantine、清除匹配 marker、防重放。
+ * resolve-as-committed（staged）：slot 预检 → resolving tombstone → receipt
+ * 刷新（resolution tick）→ 释放 quarantine/intent → 清 marker → finalize。
+ * 原 action tick 保留在 tombstone（审计）；不向当前 tick overlay/journal
+ * 重放历史动作。
  */
 export function resolveTreasuryQuarantinedTransactionAsCommitted(
   input: TreasuryFaultResolutionInput,
 ): TreasuryFaultResolutionResult {
   const pre = prevalidate(input);
   if ("stop" in pre) return pre.stop;
-  const { entry, evidence } = pre;
-  if (evidence.conclusion !== "observed_committed") {
+  const { entry, capability } = pre;
+  if (capability.conclusion !== "observed_committed") {
     countRejected();
     return {
       status: "rejected",
       reason: "evidence_mismatch",
-      detail: `resolve-as-committed 需要 observed_committed 证据（got ${evidence.conclusion}）`,
+      detail: `resolve-as-committed 需要 observed_committed 结论（got ${capability.conclusion}）`,
     };
   }
-  const receipt = commitSettledReceipt(entry.transactionId, Game.time);
-  if (receipt.status === "fatal") {
-    // receipt store 不可写（损坏/fail-closed）：拒绝，quarantine/marker 不动。
+  // staged 第 1 步：slot 预检（任何原状态变化之前）。
+  const slotError = ensureTreasuryResolutionSlotAvailable();
+  if (slotError !== null) {
     countRejected();
-    return { status: "rejected", reason: "receipt_store_fatal", detail: receipt.detail };
+    return { status: "rejected", reason: "resolution_store_full", detail: slotError };
   }
-  releaseTreasuryQuarantineEntry(entry.transactionId);
-  clearMatchingMarker(entry.transactionId, entry.digest);
-  const tombstoneWrite = writeResolutionTombstone({
+  // staged 第 2 步：resolving tombstone 落盘（resolution-intent）。
+  const resolvingWrite = writeTreasuryResolutionTombstone({
     transactionId: entry.transactionId,
     digest: entry.digest,
     resolution: "committed",
+    stage: "resolving",
     actionTick: entry.tick,
     settledAtTick: Game.time,
-    observationTick: evidence.observationTick,
+    observationTick: capability.observationTick,
     resolvedAtTick: Game.time,
+    reconcilerKind: capability.reconcilerKind,
+    source: "capability",
   });
-  if ("fatal" in tombstoneWrite) {
+  if (resolvingWrite.status === "rejected") {
     countRejected();
-    return { status: "rejected", reason: "resolution_store_full", detail: tombstoneWrite.fatal };
+    return { status: "rejected", reason: "resolution_store_fatal", detail: `resolving tombstone 写入失败: ${resolvingWrite.detail}` };
+  }
+  // staged 第 3 步：receipt 刷新（既有 receipt 真正更新到 resolution tick）。
+  const receipt = refreshSettledReceiptForResolution(entry.transactionId, Game.time);
+  if (receipt.status === "fatal") {
+    // receipt 不可写：回滚 tombstone（零原状态变化），quarantine/marker 不动。
+    deleteTreasuryResolutionTombstone(entry.transactionId);
+    countRejected();
+    return { status: "rejected", reason: "receipt_store_fatal", detail: receipt.detail };
+  }
+  // staged 第 4-6 步：释放 quarantine/intent → 清匹配 marker → finalize。
+  releaseTreasuryQuarantineEntry(entry.transactionId);
+  releaseTreasuryIntentEntry(entry.transactionId);
+  clearTreasuryWriteFaultMarkerForResolution(entry.transactionId, entry.digest);
+  const finalizeWrite = writeTreasuryResolutionTombstone({
+    transactionId: entry.transactionId,
+    digest: entry.digest,
+    resolution: "committed",
+    stage: "final",
+    actionTick: entry.tick,
+    settledAtTick: Game.time,
+    observationTick: capability.observationTick,
+    resolvedAtTick: Game.time,
+    reconcilerKind: capability.reconcilerKind,
+    source: "capability",
+  });
+  if (finalizeWrite.status === "rejected") {
+    // finalize 失败：保持 resolving（beginTick 恢复幂等完成——receipt 已写、
+    // quarantine 已释放），显式返回 faulted 语义（resolution_store_fatal）。
+    countRejected();
+    return {
+      status: "rejected",
+      reason: "resolution_store_fatal",
+      detail: `finalize 写入失败（恢复将在下一 beginTick 幂等完成）: ${finalizeWrite.detail}`,
+    };
   }
   recordTreasuryResolutionEvent("committed");
   return {
     status: "resolved",
     resolution: "committed",
     transactionId: entry.transactionId,
-    receiptWritten: receipt.status === "written",
-    reprepareAllowed: false, // receipt 已写入：同 id 重放命中 already_settled（防重放）
+    receiptWritten: true,
+    reprepareAllowed: false, // receipt 已刷新：同 id 重放命中 already_settled（防重放）
     actionTick: entry.tick,
     settledAtTick: Game.time,
   };
 }
 
 /**
- * resolve-as-not-executed：仅在证据明确（observed_not_executed）且 phase 属于
- * execution-unknown 类时释放——不写 receipt、不生成 committed projection、
- * 允许重新 prepare。Game 确认 OK 后的 commit 类 phase 一律拒绝。
+ * resolve-as-not-executed（staged）：先保证 final tombstone 可写（slot 预检
+ * + 写 final）再释放 quarantine/intent——失败时 quarantine 保留（函数返回
+ * rejected 但 transaction 仍被 transaction_quarantined 阻断，绝无"可重新
+ * prepare"的中间态）。不写 receipt、不生成 committed projection。
  */
 export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
   input: TreasuryFaultResolutionInput,
 ): TreasuryFaultResolutionResult {
   const pre = prevalidate(input);
   if ("stop" in pre) return pre.stop;
-  const { entry, evidence } = pre;
-  if (evidence.conclusion !== "observed_not_executed") {
+  const { entry, capability } = pre;
+  if (capability.conclusion !== "observed_not_executed") {
     countRejected();
     return {
       status: "rejected",
       reason: "evidence_mismatch",
-      detail: `resolve-as-not-executed 需要 observed_not_executed 证据（got ${evidence.conclusion}）`,
+      detail: `resolve-as-not-executed 需要 observed_not_executed 结论（got ${capability.conclusion}）`,
     };
   }
   if (!TREASURY_EXECUTION_UNKNOWN_PHASES.has(entry.phase)) {
@@ -471,20 +437,32 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
       detail: `phase ${entry.phase} 表示 Game callback 已确认成功（commit 路径故障）——不允许 resolve-as-not-executed；只能 resolve-as-committed`,
     };
   }
-  releaseTreasuryQuarantineEntry(entry.transactionId);
-  clearMatchingMarker(entry.transactionId, entry.digest);
-  const tombstoneWrite = writeResolutionTombstone({
+  // staged 第 1 步：slot 预检（任何原状态变化之前）。
+  const slotError = ensureTreasuryResolutionSlotAvailable();
+  if (slotError !== null) {
+    countRejected();
+    return { status: "rejected", reason: "resolution_store_full", detail: slotError };
+  }
+  // staged 第 2 步：**先写 final tombstone**（可写性保证），再释放。
+  const finalWrite = writeTreasuryResolutionTombstone({
     transactionId: entry.transactionId,
     digest: entry.digest,
     resolution: "not-executed",
+    stage: "final",
     actionTick: entry.tick,
-    observationTick: evidence.observationTick,
+    observationTick: capability.observationTick,
     resolvedAtTick: Game.time,
+    reconcilerKind: capability.reconcilerKind,
+    source: "capability",
   });
-  if ("fatal" in tombstoneWrite) {
+  if (finalWrite.status === "rejected") {
     countRejected();
-    return { status: "rejected", reason: "resolution_store_full", detail: tombstoneWrite.fatal };
+    return { status: "rejected", reason: "resolution_store_fatal", detail: `final tombstone 写入失败（quarantine 保留，可重试）: ${finalWrite.detail}` };
   }
+  // staged 第 3 步：释放 quarantine/intent + 清 marker（中断由恢复补完成）。
+  releaseTreasuryQuarantineEntry(entry.transactionId);
+  releaseTreasuryIntentEntry(entry.transactionId);
+  clearTreasuryWriteFaultMarkerForResolution(entry.transactionId, entry.digest);
   recordTreasuryResolutionEvent("notExecuted");
   return {
     status: "resolved",
@@ -497,9 +475,9 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
 }
 
 /**
- * 显式 repair（第七轮）：quarantine store 元数据/legacy 形状修复——全量验证
- * 现存 entries 合法后修复 version/entryCount、清除 legacy overflowed 标志；
- * 任何 entry 损坏 → 拒绝（原数据不动，交人工处理）。绝不删除任何 entry。
+ * 显式 repair（第七轮，quarantine 元数据 + 第八轮 intent 元数据）：全量
+ * 验证现存 entries 合法后修复 store 元数据；任何 entry 损坏 → 拒绝（原
+ * 数据不动，交人工处理）。绝不删除任何 entry。
  */
 export function repairTreasuryQuarantineStoreForResolution(): { status: "repaired" | "rejected"; detail: string } {
   return repairTreasuryQuarantineStoreMetadataForResolution();

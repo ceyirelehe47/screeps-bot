@@ -759,28 +759,38 @@ declare global {
         overflowed?: boolean;
       };
       /**
-       * resolution tombstone（第七轮新增）：显式 fault resolution 的有界
-       * 幂等记录——key 为 "r:"+transactionId，使 receipt retention 过期后的
-       * 重复管理调用仍能返回 already_resolved 而非模糊 not_found；actionTick
-       * 保留原始动作 tick 供审计（settledAtTick 才是 receipt retention 起点）。
-       * 上限 256 条；写入时惰性清理 resolvedAtTick 超过 5000 tick 的过期项；
-       * 超上限且无可清理时拒绝新 resolution（fail closed，绝不丢弃已存
-       * tombstone）。
+       * resolution tombstone（第七轮新增、第八轮升级 version 2 + staged）：
+       * 显式 fault resolution 的有界幂等记录与 staged 状态机载体——key 为
+       * "r:"+transactionId，使 receipt retention 过期后的重复管理调用仍能
+       * 返回 already_resolved 而非模糊 not_found。stage：resolving = staged
+       * resolution 进行中（中断后由 beginTick 的 recoverStagedResolutions
+       * 幂等恢复——receipt 已写则 finalize、无进展则回滚）；final = 完成。
+       * actionTick 保留原始动作 tick 供审计（settledAtTick 才是 receipt
+       * retention 起点——resolve-as-committed 会将既有 receipt 真正刷新到
+       * resolution tick）。reconcilerKind 记录结论来源的注册 reconciler。
+       * entryCount 为自有键计数（load 校验权威）；上限 256 条；写入时惰性
+       * 清理 resolvedAtTick 超过 5000 tick 的过期项；超上限且无可清理时在
+       * 任何原状态变化之前拒绝（fail closed，绝不丢弃已存 tombstone）。
+       * v1（无 entryCount/stage）无损升级；损坏/未知版本 fail closed。
        */
       resolutions?: {
-        version: 1;
+        version: 2;
         entries: Record<
           string,
           {
             transactionId: string;
             digest: string;
             resolution: "committed" | "not-executed";
+            stage: "resolving" | "final";
             actionTick: number;
             settledAtTick?: number;
             observationTick: number;
             resolvedAtTick: number;
+            reconcilerKind?: string;
+            source?: string;
           }
         >;
+        entryCount: number;
         updatedAt: number;
       };
     };

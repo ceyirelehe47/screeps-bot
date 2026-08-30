@@ -121,10 +121,14 @@ describe("Treasury write-admission 架构边界", () => {
     for (const filePath of listFilesRecursive(SRC_ROOT)) {
       if (filePath.endsWith(".test.ts")) continue;
       const relative = filePath.split(/[\\/]/).slice(-3).join("/");
-      // writeFault.ts 定义受控 marker 清除；faultResolution.ts 是协议唯一入口。
+      // writeFault.ts 定义受控 marker 清除；faultResolution.ts 是协议唯一
+      // 入口；resolutionStore.ts 是 staged 状态机的 store 级载体（beginTick
+      // 的幂等恢复 recoverStagedResolutions 属设计要求的自动恢复路径——
+      // 不是 resolve* 结算入口）。
       const isAuthority =
         relative === "runtime/treasury/faultResolution.ts" ||
-        relative === "runtime/treasury/writeFault.ts";
+        relative === "runtime/treasury/writeFault.ts" ||
+        relative === "runtime/treasury/resolutionStore.ts";
       // 定义处允许；writeFault 的受控 marker 清除仅供 faultResolution 调用。
       if (isAuthority) continue;
       const source = readFileSync(filePath, "utf8");

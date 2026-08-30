@@ -57,6 +57,7 @@ import type { TreasuryWriteFaultMarker } from "@/runtime/treasury/writeFault";
 import { resetTreasuryQuarantineRuntimeForTest } from "@/runtime/treasury/quarantine";
 import { resetTreasuryResolutionEventsForTest } from "@/runtime/treasury/resolutionEvents";
 import { resetTreasuryIntentRuntimeForTest } from "@/runtime/treasury/intents";
+import { resetTreasuryResolutionStoreForTest } from "@/runtime/treasury/resolutionStore";
 
 export const TREASURY_RECEIPT_RETENTION_TICKS = 5_000;
 export const TREASURY_RECEIPT_MAX_ENTRIES = 4_096;
@@ -212,6 +213,8 @@ const receiptEvents = {
   receiptExpiryCleanupEntries: 0,
   /** fatal-store 巡检（beginTick 清理在 fail-closed 下的剩余量统计）访问的条目数。 */
   receiptFatalInspectionEntries: 0,
+  /** resolve-as-committed 刷新既有 receipt 到 resolution tick 的次数（第八轮）。 */
+  receiptRefreshes: 0,
 };
 
 export interface TreasuryReceiptCounters {
@@ -226,6 +229,8 @@ export interface TreasuryReceiptCounters {
   readonly receiptLoadValidationEntries: number;
   readonly receiptExpiryCleanupEntries: number;
   readonly receiptFatalInspectionEntries: number;
+  /** resolve-as-committed 刷新既有 receipt 到 resolution tick 的次数（第八轮）。 */
+  readonly receiptRefreshes: number;
   /** 剩余可登记槽位（MAX − entryCount − pending 预留；查询路径 peek 只读）。 */
   readonly slotsRemaining: number;
   /** 下一次可能过期的 tick（null = 空表或 store 不可用）。 */
@@ -245,6 +250,58 @@ export function readTreasuryReceiptEventCounters(): TreasuryReceiptCounters {
     slotsRemaining,
     nextExpiryTick: storeUsable && typeof store.nextExpiryTick === "number" ? store.nextExpiryTick : null,
   };
+}
+
+export type TreasuryReceiptRefreshResult =
+  | { readonly status: "refreshed"; readonly previousTick: number }
+  | { readonly status: "written" }
+  | { readonly status: "fatal"; readonly detail: string };
+
+/**
+ * resolve-as-committed 的既有 receipt 刷新（第八轮 8.3）：own key 存在且
+ * value 有效时**更新 settled tick 至 resolution tick**（不是 already_settled
+ * 短路——原 action tick 的旧窗口不得缩短防重放），同步维护 updatedAt 与
+ * nextExpiryTick（单次有界重算：旧 tick 移除可能降低 min）；不存在时按新
+ * 条目写入（entryCount+1、nextExpiry min 收敛）。fatal store 拒绝。
+ */
+export function refreshSettledReceiptForResolution(transactionId: string, tick: number): TreasuryReceiptRefreshResult {
+  const runtime = loadReceiptStoreRuntime();
+  if (runtime.fatal) {
+    return { status: "fatal", detail: runtime.fatal };
+  }
+  const { store } = runtime;
+  const key = encodeReceiptKey(transactionId);
+  const existing = lookupSettled(store.settled, key, tick);
+  if (existing === "corrupted") {
+    return {
+      status: "fatal",
+      detail: `transactionId ${transactionId.slice(0, 48)} 对应 receipt value 损坏，无法安全刷新（fail closed）`,
+    };
+  }
+  if (existing !== undefined) {
+    if (existing === tick) {
+      receiptEvents.receiptRefreshes += 1;
+      return { status: "refreshed", previousTick: tick };
+    }
+    store.settled[key] = tick;
+    store.updatedAt = tick;
+    // nextExpiry 重算：旧 tick 移除可能使 min 下降（单次有界扫描；resolution
+    // 是低频管理事件）。
+    receiptEvents.receiptFullScans += 1;
+    receiptEvents.receiptEntriesVisited += Object.keys(store.settled).length;
+    store.nextExpiryTick = computeNextExpiryTick(store.settled);
+    receiptEvents.receiptRefreshes += 1;
+    return { status: "refreshed", previousTick: existing };
+  }
+  store.settled[key] = tick;
+  store.entryCount += 1;
+  store.updatedAt = tick;
+  pendingAdmissions.delete(transactionId);
+  const freshExpiry = tick + TREASURY_RECEIPT_RETENTION_TICKS + 1;
+  if (store.nextExpiryTick === null || freshExpiry < store.nextExpiryTick) {
+    store.nextExpiryTick = freshExpiry;
+  }
+  return { status: "written" };
 }
 
 /**
@@ -733,6 +790,7 @@ export function clearTreasuryPersistenceForTest(): void {
   resetTreasuryQuarantineRuntimeForTest();
   resetTreasuryResolutionEventsForTest();
   resetTreasuryIntentRuntimeForTest();
+  resetTreasuryResolutionStoreForTest();
   receiptEvents.migrationsExecuted = 0;
   receiptEvents.incompatibleFailures = 0;
   receiptEvents.receiptFullScans = 0;
@@ -744,6 +802,7 @@ export function clearTreasuryPersistenceForTest(): void {
   receiptEvents.receiptLoadValidationEntries = 0;
   receiptEvents.receiptExpiryCleanupEntries = 0;
   receiptEvents.receiptFatalInspectionEntries = 0;
+  receiptEvents.receiptRefreshes = 0;
 }
 
 /** 校验 receipt 键与 transactionId 规范一致（诊断/测试用）。 */
