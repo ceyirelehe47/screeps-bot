@@ -95,13 +95,12 @@ describe("write admission readiness", () => {
     if (rejected.status === "rejected") expect(rejected.reason).toBe("quarantine_capacity_exhausted");
   });
 
-  it("receipt 满载（pending 64）：ready=false（receipt_capacity_exhausted）", () => {
+  it("并发 prepared 满载（receipt pending 与 quarantine slot 同时到顶）：ready=false，abort 释放后恢复", () => {
     const service = makeService();
-    // 64 条 active prepared 同时占满 receipt pending 与 quarantine slot——
-    // 释放一条 quarantine slot（commit 一条）后 slot 空闲但 receipt pending
-    // 仍满：证明 receipt 容量是独立 blocker。commit 消耗 pending（转为 settled）……
-    // 直接注入 64 条 pending 不经过 prepare 不可行——改用满载后 release 一条
-    // 再断言 receipt 维度：此处验证满载时 readiness 同时列出两个 blocker。
+    // 64 条 active prepared 同时占满 receipt pending 上限与 quarantine
+    // fault-slot 预算（两上限同为 64）——readiness 列出 slot blocker；abort
+    // 一条同时释放双维度。prepare 路径的 receipt_capacity_exhausted 拒绝
+    // （单阶段登记挤满 pending）由 treasuryWriteAdmissionPerformance 覆盖。
     for (let index = 0; index < TREASURY_QUARANTINE_MAX_ENTRIES; index += 1) {
       expect(service.prepareTransaction(freshInput(service, `ts7_receipt${index}`)).status).toBe("prepared");
     }

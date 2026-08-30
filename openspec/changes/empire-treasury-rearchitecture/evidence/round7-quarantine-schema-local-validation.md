@@ -17,7 +17,7 @@
 
 | commit | 内容 |
 |---|---|
-| `1521d0d` | docs(openspec)：Round 7 规范先行（proposal Round 7 段、design 3.9 节、spec 8 个新 Requirement、tasks 第 13 节；顺带修复 design.md 遗留 NUL 字节） |
+| `1521d0d` | docs(openspec)：Round 7 规范先行（proposal Round 7 段、design 3.9 节、spec 9 个新 Requirement、tasks 第 13 节；顺带修复 design.md 遗留 NUL 字节） |
 | `23e1ddc` | fix(treasury)：quarantine 权威闭环——版本化 store v1 + 全局 write blocker + fault-slot 预留 + 容量保守方向 + callback-throw execution unknown 状态机 + writeAdmission 视图 + write-fault phase 拆分与 marker 形状契约 |
 | `605f56d` | refactor(treasury)：post-observation fault resolution 证据协议（evidence/guard、active handle 检查、resolution tick receipt、tombstone、显式 repair） |
 | `b785ade` | fix(reservations)：canonical owner identity v4 + schema activation gate + 结构化 mutation + 冻结 list + GC corrupted 标志；feat(treasury)：readiness 专测、性能 fixture、架构守卫 |
@@ -116,7 +116,7 @@ reservationSchemaActivationFailures / reservationMutationRejections。
 
 | 命令 | 结果 |
 |---|---|
-| `npx jest --config jest.config.cjs src/runtime/treasury/` | 19 suites / 334 tests 全过（含新增 authority/readiness/activation/resolution 重写） |
+| `npx jest --config jest.config.cjs src/runtime/treasury/` | 19 suites / 339 tests 全过（含新增 authority/readiness/activation/resolution 重写） |
 | `npx jest --config jest.config.cjs`（全量） | **213 suites / 1045 tests / 1045 passed / 0 failed / 0 pending / 0 todo**（97.6s） |
 | `npm run typecheck` | 0 error（build + test 两套 tsconfig） |
 | `npm run build` | 成功（dist/main.js 4,749,735 bytes；deploy bundle sha256 `2ac4736b…`；dist 未提交） |

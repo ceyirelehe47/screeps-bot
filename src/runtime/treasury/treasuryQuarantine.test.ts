@@ -30,6 +30,7 @@ import {
   TREASURY_QUARANTINE_MAX_ENTRIES,
 } from "@/runtime/treasury/quarantine";
 import { installRooms, type RoomSpec } from "@mock/treasury";
+import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
 
 const ROOMS: RoomSpec[] = [
@@ -234,16 +235,19 @@ describe("第七轮：全局 quarantine write blocker（marker 不是唯一锁�
 
   it("quarantine_write_blocked 优先级：同 id quarantined 返回精确 reason，已结算幂等不受影响", () => {
     const service = makeService();
+    // 先结算一笔 transaction（经 compat 单阶段登记 receipt），再制造全局
+    // quarantine 阻断——已结算 id 的幂等查询仍返回 already_settled（幂等
+    // 优先于全局阻断，全局语义不遗忘已结算事实）。
+    compatRecordAcceptedTransaction(service, freshInput(service, "ts7_settled"));
     injectQuarantineEntry("ts7_d");
+    const settledReplay = service.prepareTransaction(freshInput(service, "ts7_settled"));
+    expect(settledReplay.status).toBe("already_settled");
     const sameId = service.prepareTransaction(freshInput(service, "ts7_d"));
     expect(sameId.status).toBe("rejected");
     if (sameId.status === "rejected") expect(sameId.reason).toBe("transaction_quarantined");
     const other = service.prepareTransaction(freshInput(service, "ts7_e"));
     expect(other.status).toBe("rejected");
     if (other.status === "rejected") expect(other.reason).toBe("quarantine_write_blocked");
-    // 已结算 id 的幂等查询仍返回 already_settled（幂等优先于全局阻断）。
-    service.metrics(); // no-op（保持 service 引用使用）
-    expect(service.prepareTransaction(freshInput(service, "ts7_d")).status).toBe("rejected");
   });
 });
 
