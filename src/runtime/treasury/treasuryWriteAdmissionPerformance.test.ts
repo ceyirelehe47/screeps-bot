@@ -22,6 +22,8 @@ import {
   resetTreasuryQuarantineRuntimeForTest,
   treasuryQuarantineOutflowTotals,
 } from "@/runtime/treasury/quarantine";
+import { readTreasuryIntentCounters } from "@/runtime/treasury/intents";
+import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 
@@ -298,5 +300,82 @@ describe("第七轮：quarantine blocker 与 fault-slot admission 的确定性�
     }
     // 8 次查询：聚合 revision 缓存命中，零额外全扫。
     expect(readTreasuryQuarantineCounters().fullScans).toBe(scansAfterWarm);
+  });
+
+  it("第八轮：intent admission O(1)——64 笔 prepare/execute 不产生 intent store 全表扫描", () => {
+    const service = makeService();
+    service.beginTick();
+    for (let index = 0; index < 32; index += 1) {
+      const result = service.executePreparedAction(prepareInput(service, `perf_intent${index}`, -1_000, RESOURCE_ENERGY, "W1N57"), () => ({ ok: true }));
+      expect(result.status).toBe("executed_committed");
+    }
+    const baseline = readTreasuryIntentCounters();
+    expect(baseline.fullScans).toBe(0); // 全程 O(1) admission（无 load 全扫）
+    // 再 32 笔 low-level prepare（未执行路径）——仍零扫描。
+    for (let index = 0; index < 32; index += 1) {
+      expect(service.prepareTransaction(prepareInput(service, `perf_prepare${index}`, -1_000, RESOURCE_ENERGY, "W1N57")).status).toBe("prepared");
+    }
+    expect(readTreasuryIntentCounters().fullScans).toBe(0);
+  });
+
+  it("第八轮：authorize 不全扫 reservation/quarantine/intent——revision 未变时多次授权零索引重建", () => {
+    const service = makeService();
+    service.beginTick();
+    service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] }); // 预热（首次构建）
+    const rebuildsBefore = service.metrics().commitmentRebuilds;
+    for (let index = 0; index < 16; index += 1) {
+      const issued = service.authorizeResourceUse({
+        transactionId: `perf_auth${index}`,
+        actionKind: "test",
+        resource: RESOURCE_ENERGY,
+        rooms: ["W1N57"],
+        locations: ["storage"],
+        amount: 100,
+      });
+      expect(issued.status).toBe("authorized");
+      if (issued.status === "authorized") {
+        expect(service.consumeTreasuryAuthorization(issued.token, { transactionId: `perf_auth${index}` }).status).toBe("ok");
+      }
+    }
+    // revision 未变：授权/消费全程复用承诺索引与 ledger，零重建、零全扫。
+    expect(service.metrics().commitmentRebuilds).toBe(rebuildsBefore);
+    expect(readTreasuryIntentCounters().fullScans).toBe(0);
+    expect(readTreasuryQuarantineCounters().fullScans).toBe(0);
+  });
+
+  it("第八轮：token 消费校验 O(1)+postings 线性——32 腿 postings 消费不产生任何全扫", () => {
+    const service = makeService();
+    service.beginTick();
+    const postings = Array.from({ length: 32 }, (_, index) => ({
+      roomName: "W1N57",
+      locationKind: "storage" as const,
+      resource: RESOURCE_ENERGY,
+      delta: index === 0 ? -32_000 : -0 + 1, // 净额非零：1 条流入 + 1 条大流出
+    }));
+    // 修正为合法形状：1 条 -32000 流出 + 31 条 +1000 流入（净 -1000）。
+    postings.splice(0, postings.length,
+      { roomName: "W1N57", locationKind: "storage" as const, resource: RESOURCE_ENERGY, delta: -32_000 });
+    for (let index = 0; index < 31; index += 1) {
+      postings.push({ roomName: "W1N57", locationKind: "storage" as const, resource: RESOURCE_ENERGY, delta: 1_000 });
+    }
+    const issued = service.authorizeResourceUse({
+      transactionId: "perf_token",
+      actionKind: "test",
+      resource: RESOURCE_ENERGY,
+      rooms: ["W1N57"],
+      locations: ["storage"],
+      amount: 32_000,
+    });
+    expect(issued.status).toBe("authorized");
+    if (issued.status === "authorized") {
+      const consumed = service.consumeTreasuryAuthorization(issued.token, {
+        transactionId: "perf_token",
+        postings,
+      });
+      expect(consumed.status).toBe("ok"); // 流出 32000 ≤ amount
+    }
+    expect(readTreasuryIntentCounters().fullScans).toBe(0);
+    expect(readTreasuryQuarantineCounters().fullScans).toBe(0);
+    void bumpTreasuryCommitmentRevision; // import 引用（无操作）
   });
 });

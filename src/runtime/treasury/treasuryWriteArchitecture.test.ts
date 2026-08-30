@@ -271,4 +271,74 @@ describe("Treasury write-admission 架构边界", () => {
     expect(source).toContain('"unknown_version"');
     expect(source).toContain('"store_corrupted"');
   });
+
+  it("第八轮：生产 writer 候选禁用任意 callback 入口/直接 prepare/自构 postings（唯一生产路径 = 授权→contract→注册 adapter）", () => {
+    const violations: string[] = [];
+    for (const relative of PRODUCTION_WRITER_MODULES) {
+      const source = readSource(relative);
+      if (source.includes("executePreparedAction")) {
+        violations.push(`${relative} 引用任意 callback 入口 executePreparedAction（第八轮起为内部/test-only 原语）`);
+      }
+      if (source.includes("prepareTransaction")) {
+        violations.push(`${relative} 直接调用 prepareTransaction（生产必须经 executeTreasuryActionContract）`);
+      }
+      if (source.includes("consumeTreasuryAuthorization") || source.includes("authorizeResourceUse")) {
+        violations.push(`${relative} 直接消费授权原语（生产必须经 actionContracts 入口）`);
+      }
+      if (source.includes("buildTreasuryActionContract") || source.includes("executeTreasuryActionContract")) {
+        violations.push(`${relative} 直接构建/执行 contract（须经注册 adapter 的正式接入评审，本轮未接真实 writer）`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("第八轮：adapter registry 注册边界（仅 actionContracts.ts 自身与测试可注册）", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      if (relative === "runtime/treasury/actionContracts.ts") continue;
+      const source = readFileSync(filePath, "utf8");
+      for (const reference of [
+        "registerTreasuryActionAdapter",
+        "replaceTreasuryActionAdapterForTest",
+        "unregisterTreasuryActionAdapterForTest",
+      ]) {
+        if (source.includes(reference)) {
+          violations.push(`${relative} 调用 adapter 注册边界 ${reference}（注册只允许 actionContracts.ts 与测试）`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("第八轮：intent store 直写仅限 intents.ts（外部不得绕过权威模块）", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      if (relative === "runtime/treasury/intents.ts") continue;
+      const source = readFileSync(filePath, "utf8");
+      const intentWritePattern = /treasury\.intents\s*=|\.intents\.entries\[[^\]]*\]\s*=/;
+      if (intentWritePattern.test(source)) {
+        violations.push(`${relative} 直接写 intent store（权威写入只允许 intents.ts）`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("第八轮：resolution store 直写仅限 resolutionStore.ts（staged 状态机权威）", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      if (relative === "runtime/treasury/resolutionStore.ts") continue;
+      const source = readFileSync(filePath, "utf8");
+      const resolutionWritePattern = /treasury\.resolutions\s*=|\.resolutions\.entries\[[^\]]*\]\s*=/;
+      if (resolutionWritePattern.test(source)) {
+        violations.push(`${relative} 直接写 resolution store（权威写入只允许 resolutionStore.ts）`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
 });
