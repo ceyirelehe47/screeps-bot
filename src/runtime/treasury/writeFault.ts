@@ -24,7 +24,9 @@ export type TreasuryWriteFaultPhase =
   | "overlay_publish"
   | "handle_state"
   | "commit_unexpected"
-  | "executing_at_end_tick";
+  | "executing_at_end_tick"
+  /** Game callback 抛错且自动 abort 未确认（Game 副作用不可知，保守隔离）。 */
+  | "abort_failed";
 
 export interface TreasuryWriteFaultMarker {
   readonly transactionId: string;

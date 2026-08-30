@@ -549,6 +549,15 @@ export function commitSettledReceipt(transactionId: string, tick: number): Treas
   const { store } = runtime;
   const key = encodeReceiptKey(transactionId);
   const existing = lookupSettled(store.settled, key, tick);
+  if (existing === "corrupted") {
+    // 损坏绝不解释为 already_settled（第六轮）：该 id 的结算状态无法可靠
+    // 判断——fatal fail closed，调用方（commit/resolution）进入 write-fault
+    // 处理，绝不发布 committed heap projection。
+    return {
+      status: "fatal",
+      detail: `transactionId ${transactionId.slice(0, 48)} 对应 receipt value 损坏，无法安全写入结算（fail closed）`,
+    };
+  }
   if (existing !== undefined) {
     pendingAdmissions.delete(transactionId); // 双保险：不重复叠加，仍释放预留
     return { status: "already_settled" };

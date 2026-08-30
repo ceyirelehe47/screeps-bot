@@ -1,15 +1,28 @@
 /**
- * Treasury 安全执行包装器测试（第五轮）：
+ * Treasury 安全执行包装器测试（第五轮建立；第六轮扩展结果语义）：
  * - prepare 失败时 Game API callback 不得执行；
  * - fake Game API 返回非 OK → 自动 abort；返回 OK → commit；
  * - callback 抛错 → 自动 abort + rethrow 原始异常；
  * - callback 只调用一次；
  * - 正常完整执行后 outstanding prepared 恒为 0；
- * - tentative 预留在执行期间持续占用（他人 prepare 不得抢占）。
+ * - tentative 预留在执行期间持续占用（他人 prepare 不得抢占）；
+ * - 第六轮：Game OK 后 commit fault → executed_unsettled（Game 已执行、
+ *   Treasury 未提交、禁止自动重试、actionResult/fault identity 保留、
+ *   transaction 进 durable quarantine、同 id 下次 callback 零调用）；
+ * - Game 非 OK 且 abort 未确认 → executed_abort_failed（不报告已正常 abort）；
+ * - callback 抛错且 abort 未确认 → rethrow + abort_failed marker + quarantine；
+ * - prepare 后人为损坏 receipt 再 commit → faulted + durable quarantine
+ *   （corrupted 绝不解释为 already_settled）。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
-import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
+import { clearTreasuryPersistenceForTest, peekTreasuryReceiptStore } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
+import {
+  readTreasuryWriteFault,
+  setTreasuryCommitFaultInjectorForTest,
+  type TreasuryWriteFaultPhase,
+} from "@/runtime/treasury/writeFault";
+import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
 const ROOMS: RoomSpec[] = [
@@ -41,7 +54,22 @@ function freshInput(service: TreasuryService, transactionId: string, delta = -50
 beforeEach(() => {
   clearTreasuryPersistenceForTest();
   resetTreasuryCommitmentRevisionForTest();
+  setTreasuryCommitFaultInjectorForTest(null);
 });
+
+afterEach(() => {
+  setTreasuryCommitFaultInjectorForTest(null);
+});
+
+function injectOnce(phase: TreasuryWriteFaultPhase): void {
+  let fired = false;
+  setTreasuryCommitFaultInjectorForTest((candidate) => {
+    if (candidate === phase && !fired) {
+      fired = true;
+      throw new Error(`injected:${phase}`);
+    }
+  });
+}
 
 describe("Treasury 安全执行包装器 executePreparedAction", () => {
   it("prepare 失败时 fake Game API 不调用（stale epoch → prepare_rejected）", () => {
@@ -138,5 +166,125 @@ describe("Treasury 安全执行包装器 executePreparedAction", () => {
     });
     expect(outer.status).toBe("executed_committed");
     expect(service.journal()).toHaveLength(1);
+  });
+});
+
+describe("第六轮结果语义：Game 已执行与 Treasury 故障不可混淆", () => {
+  it("Game callback 成功后 commit fault：executed_unsettled（保留 Game 结果、禁止重试、进 quarantine）", () => {
+    const service = makeService();
+    let callbackCalls = 0;
+    // receipt_publish 段注入：receipt 尚未写入（幂等未成立），下次同 id 调用
+    // 必须经 write_admission_locked 在 callback 前被拒。
+    injectOnce("receipt_publish");
+    const first = service.executePreparedAction(freshInput(service, "ts1_unsettled"), () => {
+      callbackCalls += 1;
+      return { ok: true, code: "OK" as const };
+    });
+    // 绝不返回 prepare_rejected/aborted（那会暗示未执行、诱导自动重试）。
+    expect(first.status).toBe("executed_unsettled");
+    if (first.status === "executed_unsettled") {
+      expect(first.actionResult.code).toBe("OK"); // 原始 Game 结果保留
+      expect(first.retryForbidden).toBe(true);
+      expect(first.transactionId).toBe("ts1_unsettled");
+      expect(first.digest).toMatch(/^[0-9a-f]{16}$/);
+      expect(first.faultReason).toBe("handle_faulted");
+    }
+    // transaction 进入 durable fault（marker）+ quarantine；heap 零发布。
+    expect(readTreasuryWriteFault()?.transactionId).toBe("ts1_unsettled");
+    expect(service.journal()).toHaveLength(0);
+    // 同 id 下一次调用：callback 前被拒（faulted 记录优先于全局锁检出），
+    // 计数保持 1。
+    const second = service.executePreparedAction(freshInput(service, "ts1_unsettled"), () => {
+      callbackCalls += 1;
+      return { ok: true };
+    });
+    expect(second.status).toBe("prepare_rejected");
+    if (second.status === "prepare_rejected") {
+      expect(second.reason).toBe("handle_faulted");
+    }
+    expect(callbackCalls).toBe(1);
+  });
+
+  it("commit fault 后 endTick 将 faulted transaction 转 durable quarantine（跨 tick 占用）", () => {
+    const service = makeService();
+    injectOnce("receipt_publish");
+    const result = service.executePreparedAction(freshInput(service, "ts1_unsettled_q"), () => ({ ok: true }));
+    expect(result.status).toBe("executed_unsettled");
+    service.endTick();
+    const entry = readTreasuryQuarantineEntry("ts1_unsettled_q");
+    expect(entry).toBeDefined();
+    expect(entry?.phase).toBe("receipt_publish");
+  });
+
+  it("Game 非 OK 且 abort 未确认：executed_abort_failed（不报告已正常 abort）", () => {
+    const service = makeService();
+    const result = service.executePreparedAction(freshInput(service, "ts1_abort_fail"), () => {
+      // callback 执行期间制造全局锁（另一笔 commit fault）：随后的自动 abort
+      // 会被 write_admission_locked 拒绝——abort 未确认。
+      const other = service.prepareTransaction(freshInput(service, "ts1_abort_trigger", -100));
+      expect(other.status).toBe("prepared");
+      injectOnce("receipt_publish");
+      if (other.status === "prepared") {
+        const triggered = service.commitPreparedTransaction(other.handle);
+        expect(triggered.status).toBe("rejected");
+      }
+      return { ok: false, code: "NOT_ENOUGH_RESOURCES" as const };
+    });
+    expect(result.status).toBe("executed_abort_failed");
+    if (result.status === "executed_abort_failed") {
+      expect(result.reason).toBe("write_admission_locked");
+      expect(result.actionResult.code).toBe("NOT_ENOUGH_RESOURCES");
+    }
+    // 该 handle 的 tentative 未释放（abort 未确认）——active 数含 callback 内
+    // 制造锁的另一笔 faulted handle（ts1_abort_trigger）与被锁拒 abort 的
+    // ts1_abort_fail 本身，二者都保持占用等 tick 边界处理。
+    expect(service.metrics().preparedActive).toBe(2);
+  });
+
+  it("callback 抛错且 abort 未确认：rethrow 原始异常 + abort_failed marker + durable quarantine", () => {
+    const service = makeService();
+    let rethrown: unknown = null;
+    try {
+      service.executePreparedAction(freshInput(service, "ts1_throw_locked"), () => {
+        const other = service.prepareTransaction(freshInput(service, "ts1_throw_trigger", -100));
+        expect(other.status).toBe("prepared");
+        injectOnce("receipt_publish");
+        if (other.status === "prepared") {
+          expect(service.commitPreparedTransaction(other.handle).status).toBe("rejected");
+        }
+        throw new Error("game api boom");
+      });
+    } catch (error) {
+      rethrown = error;
+    }
+    expect((rethrown as Error).message).toBe("game api boom"); // 异常原样透传
+    // marker 只保留首个 unresolved 根因（callback 内 trigger 的 commit fault）；
+    // 抛错 handle 自身进 durable quarantine（phase=abort_failed）。
+    const marker = readTreasuryWriteFault();
+    expect(marker?.phase).toBe("receipt_publish");
+    expect(marker?.transactionId).toBe("ts1_throw_trigger");
+    const quarantined = readTreasuryQuarantineEntry("ts1_throw_locked");
+    expect(quarantined).toBeDefined();
+    expect(quarantined?.phase).toBe("abort_failed");
+  });
+
+  it("prepare 后人为损坏 receipt 再 commit：fatal fault + quarantine，绝不 already_settled", () => {
+    const service = makeService();
+    const prepared = service.prepareTransaction(freshInput(service, "ts1_corrupt"));
+    expect(prepared.status).toBe("prepared");
+    // 直接把已 load 的 store 中该 id 的 settled value 改为损坏值。
+    const store = peekTreasuryReceiptStore();
+    expect(store).toBeDefined();
+    (store!.settled as Record<string, number>)["t:ts1_corrupt"] = Number.NaN;
+    const committed = service.commitPreparedTransaction(
+      (prepared as { status: "prepared"; handle: import("@/runtime/treasury/types").TreasuryPreparedHandle }).handle,
+    );
+    expect(committed.status).toBe("rejected");
+    if (committed.status === "rejected") expect(committed.reason).toBe("handle_faulted");
+    expect(readTreasuryWriteFault()?.transactionId).toBe("ts1_corrupt");
+    // heap 零发布：损坏绝不触发 committed projection。
+    expect(service.journal()).toHaveLength(0);
+    service.endTick();
+    expect(readTreasuryQuarantineEntry("ts1_corrupt")).toBeDefined();
   });
 });

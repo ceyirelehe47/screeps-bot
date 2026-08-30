@@ -279,8 +279,11 @@ describe("endTick outstanding prepared 审计", () => {
         return { ok: true as const };
       },
     );
-    expect(inner.status).toBe("prepare_rejected");
-    if (inner.status === "prepare_rejected") expect(inner.reason).not.toBe("invalid_handle");
+    expect(inner.status).toBe("executed_unsettled");
+    if (inner.status === "executed_unsettled") {
+      expect(inner.faultReason).not.toBe("invalid_handle");
+      expect(inner.retryForbidden).toBe(true);
+    }
     const marker = readTreasuryWriteFault();
     expect(marker?.phase).toBe("executing_at_end_tick");
     expect(marker?.transactionId).toBe("ts1_executing_leak");

@@ -930,6 +930,26 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
             detail: `transactionId 已绑定不同 canonical payload（既有 digest ${existingPrepare.digest}，新 digest ${digest}）`,
           };
         }
+        // 幂等返回同一 handle 只允许 prepared 状态；executing/committing/
+        // faulted 的既有记录不得再发 handle——否则 executePreparedAction 会
+        // 对同一 transaction 再次调用 Game callback（协议违规：faulted 的
+        // Game 结果未对账，重复执行绝不安全）。
+        if (existingPrepare.state === "faulted") {
+          metrics.transactionsRejectedInvalid += 1;
+          return {
+            status: "rejected",
+            reason: "handle_faulted",
+            detail: "同 id transaction 已 faulted（Game 结果未对账/显式 resolution 前，禁止重新执行）",
+          };
+        }
+        if (existingPrepare.state === "executing" || existingPrepare.state === "committing") {
+          metrics.transactionsRejectedInvalid += 1;
+          return {
+            status: "rejected",
+            reason: "invalid_handle",
+            detail: `同 id transaction 处于 ${existingPrepare.state} 状态（不可重入）`,
+          };
+        }
         return {
           status: "prepared",
           handle: existingPrepare.handle,
@@ -1183,6 +1203,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         return { status: "already_settled", transactionId: prepared.transactionId, firstRecordedAtTick: prepared.firstRecordedAtTick };
       }
       if (prepared.status !== "prepared") {
+        // prepare 拒绝：Game callback 零调用（quarantine/锁/验证失败等）。
         return { status: "prepare_rejected", reason: prepared.reason, ...(prepared.detail !== undefined ? { detail: prepared.detail } : {}) };
       }
       const record = preparedByHandle.get(prepared.handle);
@@ -1196,9 +1217,40 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // Game API 恰好执行一次（本包装器是唯一调用点）。
         actionResult = action();
       } catch (error) {
-        // 抛错：自动 abort（零结算）后 rethrow 原始异常。
+        // 抛错路径：尝试 abort（零结算释放）；abort 确认 → rethrow 原始异常；
+        // abort 未确认（锁/故障/边界失效）→ Treasury 侧保守 faulted + durable
+        // quarantine（Game 是否已产生副作用不可知）后 rethrow——异常原样透传。
         record.state = "prepared"; // abort 允许从 prepared/executing 终态化
-        this.abortPreparedTransaction(prepared.handle);
+        const aborted = this.abortPreparedTransaction(prepared.handle);
+        if (aborted.status !== "aborted") {
+          // abort 未确认（锁/故障/边界失效）：保守 faulted——Game 是否已产生
+          // 副作用不可知，占用与 identity 必须保持（marker/quarantine 幂等）。
+          record.state = "faulted";
+          record.faultPhase = "abort_failed";
+          metrics.commitFaults += 1;
+          recordTreasuryWriteFault({
+            transactionId: record.canonical.transactionId,
+            digest: record.digest,
+            tick: record.preparedAtTick,
+            kind: record.canonical.kind,
+            source: record.canonical.source,
+            phase: "abort_failed",
+            status: "unresolved",
+            recordedAt: Game.time,
+          });
+          const { resourceDeltas, capacityDeltas } = quarantineDeltasOf(record);
+          quarantineTreasuryTransaction({
+            transactionId: record.canonical.transactionId,
+            digest: record.digest,
+            tick: record.preparedAtTick,
+            kind: record.canonical.kind,
+            source: record.canonical.source,
+            phase: "abort_failed",
+            resourceDeltas,
+            capacityDeltas,
+            recordedAt: Game.time,
+          });
+        }
         throw error;
       }
       if (actionResult && actionResult.ok) {
@@ -1209,20 +1261,36 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         if (committed.status === "already_settled") {
           return { status: "already_settled", transactionId: committed.transactionId, firstRecordedAtTick: committed.firstRecordedAtTick };
         }
-        // staged commit 意外故障（handle_faulted/write_admission_locked）：
-        // 向调用方显式暴露结构化失败——Game API 已成功但 Treasury 未结算。
+        // Game callback 已成功，但 Treasury commit 失败/锁定/故障：绝不返回
+        // prepare_rejected（那会暗示未执行、诱导自动重试）——显式
+        // executed_unsettled（Game 已执行、Treasury 未完成提交、禁止重试）。
         return {
-          status: "prepare_rejected",
-          reason: committed.reason,
-          detail: committed.detail !== undefined ? committed.detail : "commit 兑现失败（Game API 已成功）",
+          status: "executed_unsettled",
+          handle: prepared.handle,
+          actionResult,
+          transactionId: record.canonical.transactionId,
+          digest: record.digest,
+          faultReason: committed.reason,
+          ...(committed.detail !== undefined ? { detail: committed.detail } : {}),
+          retryForbidden: true,
         };
       }
       const aborted = this.abortPreparedTransaction(prepared.handle);
+      if (aborted.status !== "aborted") {
+        // Game 返回非 OK（动作未成功），但 abort 未确认：资源仍被占用——
+        // 不得报告已正常 abort。
+        return {
+          status: "executed_abort_failed",
+          handle: prepared.handle,
+          actionResult,
+          reason: aborted.status === "rejected" ? aborted.reason : "invalid_handle",
+          ...(aborted.status === "rejected" && aborted.detail !== undefined ? { detail: aborted.detail } : {}),
+        };
+      }
       return {
         status: "executed_aborted",
         handle: prepared.handle,
         actionResult,
-        ...(aborted.status !== "aborted" ? {} : {}),
       };
     },
 

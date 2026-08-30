@@ -270,9 +270,21 @@ export interface TreasuryPreparedLeakAudit {
 }
 
 /**
- * 安全执行包装器结果：prepare 失败 → Game API 不执行；action 返回
- * {ok:true} → commit；返回 {ok:false} → 自动 abort；action 抛错 →
- * 自动 abort 后 rethrow（调用方以异常感知失败）。callback 恰好执行一次。
+ * 安全执行包装器结果（第六轮语义重定义——状态不可混淆）：
+ * - prepare_rejected：prepare 阶段拒绝，Game callback 零调用（含
+ *   transaction_quarantined / write_admission_locked / invalid_input 等）；
+ * - executed_committed：Game callback 成功且 Treasury commit 成功；
+ * - executed_aborted：Game callback 返回非成功，abort 已确认（零结算释放）；
+ * - executed_abort_failed：Game callback 返回非成功，但 abort 未确认（资源
+ *   仍被占用/故障）——不得当作已正常 abort；
+ * - executed_unsettled：**Game callback 已成功但 Treasury commit 失败或进入
+ *   write fault**——Game 动作已发生，绝不暗示未执行，禁止调用者自动重试
+ *   （retryForbidden 恒 true）；携带原始 Game 结果与 fault identity 供诊断
+ *   与显式 reconciliation；transaction 已进 durable fault/quarantine；
+ * - already_settled：幂等命中（重放既有结算）。
+ * callback 抛错：abort 确认后 rethrow 原始异常；abort 未确认 → Treasury 侧
+ * faulted + durable quarantine 后 rethrow（调用方以异常感知，Treasury 保持
+ * 保守占用）。
  */
 export type TreasurySafeExecuteResult<TAction extends { ok: boolean }> =
   | {
@@ -285,6 +297,29 @@ export type TreasurySafeExecuteResult<TAction extends { ok: boolean }> =
       readonly status: "executed_aborted";
       readonly handle: TreasuryPreparedHandle;
       readonly actionResult: TAction;
+    }
+  | {
+      /** Game 非 OK 且 abort 未确认（write_admission_locked / handle 故障等）。
+       *  Game 未执行成功（ok=false），但预留未释放——不得报告已正常 abort。 */
+      readonly status: "executed_abort_failed";
+      readonly handle: TreasuryPreparedHandle;
+      readonly actionResult: TAction;
+      readonly reason: TreasuryRejectionReason;
+      readonly detail?: string;
+    }
+  | {
+      /** Game callback 已成功（actionResult 保留原样）但 Treasury commit 失败
+       *  或进入 write fault——Game 已执行、Treasury 未完成提交，禁止自动重试。 */
+      readonly status: "executed_unsettled";
+      readonly handle: TreasuryPreparedHandle;
+      readonly actionResult: TAction;
+      readonly transactionId: string;
+      readonly digest: string;
+      /** commit 失败的 reason/phase（write fault 时为 fault phase 语义）。 */
+      readonly faultReason: TreasuryRejectionReason;
+      readonly detail?: string;
+      /** 恒 true：显式标记禁止调用者自动重试（同 id 下次调用会在 callback 前被拒）。 */
+      readonly retryForbidden: true;
     }
   | { readonly status: "already_settled"; readonly transactionId: string; readonly firstRecordedAtTick: number }
   | { readonly status: "prepare_rejected"; readonly reason: TreasuryRejectionReason; readonly detail?: string };
