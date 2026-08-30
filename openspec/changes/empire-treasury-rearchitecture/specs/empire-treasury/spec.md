@@ -650,3 +650,115 @@ Treasury 对外必须（MUST）区分"余额视图完整"（authorizationSafe）
 
 - **WHEN** clean 系统查询 readiness；再分别构造 receipt 满载、quarantine slot 不足、unresolved quarantine、migration incomplete、quarantine/writeFault 损坏
 - **THEN** clean 时 ready=true；各故障场景 ready=false 且 blockers 指出对应原因；数值字段不受影响
+
+### Requirement: durable intent 先于 Game API（第八轮）
+
+任何进入 Game API 的写动作在调用开始之前必须（MUST）已持久化最小 durable intent（transaction identity、payload digest、action kind、canonical postings、authorization identity、创建 tick、执行 phase、必要结构身份、有界审计来源；不得持久化完整 observation/service/大 payload）。intent 写入失败时 Game callback 调用数必须（MUST）为 0，tentative 与 receipt/quarantine slot 释放，并返回结构化拒绝。intent 状态机必须（MUST）区分"尚未调用 Game API"（ready）与"已进入 callback、结果未知"（executing 及之后）——不得（MUST NOT）混同。intent 只有在 settled、确认 aborted、quarantine 完整写入并验证、或 resolution 完整 finalized 后才可（MAY）删除。
+
+intent store 必须（MUST）版本化并具备完整健康契约：version、entryCount、容量上限、key 与 transaction identity 一致、entry 完整形状校验（canonical postings/phase 枚举/安全整数/聚合溢出）、global reset 首次 load 全量验证、heap health cache、损坏与未知版本 fail closed、显式 repair 边界；prepare 必须（MUST） O(1)（不全表扫描）。
+
+global reset 后、任何 planner/writer 之前必须（MUST）加载验证 intent store：存在未完成 intent 时新 writer 阻断；ready 相按协议确认未执行关闭；其余保守转 execution-unknown quarantine（保留 canonical postings、幂等恢复）；无法确认 action 是否执行时保守进入 execution unknown；intent 成功转 quarantine 或 settlement 后才释放 intent slot。
+
+recovery slot 必须（MUST）统一计数：一笔 transaction 只有一个 recovery slot（prepare 预留；durable intent 接管；正常 abort/commit 释放；fault 从 intent 状态转 quarantine 不额外占第二个 slot；active faulted handle + durable quarantine 不得（MUST NOT）计为两条占用）；指标必须（MUST）能证明 slot 守恒。
+
+#### Scenario: intent 写失败 callback 零调用
+
+- **WHEN** intent store 处于损坏/满载状态时执行写动作
+- **THEN** Game callback 调用数为 0；tentative 与槽位释放；返回结构化拒绝（intent_store_unavailable）；无 intent entry 残留半写
+
+#### Scenario: intent 落盘后 callback 前 reset
+
+- **WHEN** intent 已持久化（phase=ready）、execution-started 标记前发生 global reset
+- **THEN** 下一 tick 恢复发现 ready intent：确认未执行关闭（不进 quarantine、不计 receipt）、释放 slot、新 writer 恢复；恢复幂等
+
+#### Scenario: execution-started 后 reset 转 execution unknown
+
+- **WHEN** phase=executing 时发生 global reset
+- **THEN** 下一 tick 该 transaction 转入 execution-unknown quarantine（postings 完整保留、资源/容量保守占用）；同 id 重新执行被拒
+
+#### Scenario: quarantine 写失败时 intent 保留权威
+
+- **WHEN** callback 已执行且 quarantine 写入失败（store 损坏）
+- **THEN** intent 保留完整 canonical postings、继续参与资源/容量风险占用、writer 全局锁定、recovery slot 不释放；global reset 后仍能恢复 transaction identity 与 postings 且不能重新执行
+
+#### Scenario: slot 转换守恒
+
+- **WHEN** 观察一笔 transaction 从 prepare → durable intent → fault → quarantine 的完整生命周期
+- **THEN** recoverySlots 总数每一步守恒（无双重计数）；正常 commit/abort 后 slot 回收
+
+### Requirement: 资源授权 token（第八轮）
+
+真实写动作不得（MUST NOT）只凭物理余额通过：每个资源流出必须（MUST）被 Treasury 签发的授权覆盖——授权计算必须（MUST）考虑 transfer outgoing commitments、production reservations（owner-aware）、policy withhold、commitment completeness、quarantine 与 unresolved intent 风险、tentative/其它授权占用、observation/projected、reservation store health、write readiness、位置容量与安全整数。immediate write 授权默认必须（MUST）不得把 pending incoming 当作可花费资产（allowIncoming=false、必扣 outgoing、必扣 reservations、commitment complete）；incoming 依赖只能由独立策略显式批准。多资源 action 的每个负 posting 必须（MUST）分别获得授权。
+
+授权成功必须（MUST）立即占用 authorization budget（防止 A/B 双授权后各自 prepare 超卖），不得（MUST NOT）等到 prepare 才防超卖。授权 token 必须（MUST）是 heap-only、冻结、对象身份验证的 opaque capability：不可 JSON round-trip 伪造、单次使用、跨 tick/generation 失效；必须（MUST）绑定 exact observation epoch、commitment revision、projection revision、reservation schema/store revision、quarantine revision、policy fingerprint、owner canonical identity、action kind、resource/location/amount scope、service generation、tick 与 payload/contract digest；任一相关 revision 变化后旧授权必须（MUST）失效。调用者不得（MUST NOT）自行声明授权或伪造授权上下文。
+
+#### Scenario: 授权扣除全部占用
+
+- **WHEN** 物理 100k、production reservation 80k，申请流出 60k
+- **THEN** 授权被拒（可用 20k）；owner 查询自身 reservation 时仅合法排除自身；pending outgoing 与 policy withhold 均被扣除；commitment incomplete 拒绝；immediate write 不能依赖 incoming
+
+#### Scenario: token 失效矩阵
+
+- **WHEN** 分别构造 transfer task mutation、reservation mutation、projection commit、quarantine revision 变化、owner 变化、policy fingerprint 变化、observation epoch 变化、跨 tick、跨 service、重复消费、伪造/JSON 复制 token
+- **THEN** 旧 token 一律失效/拒绝；授权在被消费前 revision 未变时保持有效
+
+### Requirement: action contract 与注册 adapter（第八轮）
+
+实际 Game API 参数必须（MUST）与 action contract 和 canonical postings 一致：contract 由 Treasury 或受注册 adapter 根据授权构造（action kind、业务身份、源/目标、resource、amount、费用、结构 incarnation、由参数确定性派生的 canonical postings、authorization digest、transaction identity）；调用者不得（MUST NOT）独立提供"Game API 参数"与"postings"两套可不一致事实——任意 callback 不得（MUST NOT）声称发送 1 单位却实际执行 10,000 单位。每个 action kind 的 adapter 契约（canonical args → validate → derive postings → execute exact Game API → classify result → reconcile）必须（MUST）经统一注册边界注册；本轮不接真实生产 writer（测试专用 mock adapter + 多 posting fixture），生产模块不得（MUST NOT）调用任意 callback 入口/compat/直接 prepareTransaction/自行构造 postings（架构测试守护）；executePreparedAction 降为内部/test-only 低层原语。
+
+#### Scenario: contract 派生一致性
+
+- **WHEN** 由 canonical args 构造 contract 并执行
+- **THEN** postings 与 action args 完全一致；调用者事后修改原 args 不影响 canonical contract；不同 payload 同 transactionId 冲突拒绝；伪造 contract 失败；adapter kind 不匹配拒绝；structureId 变化拒绝；实际动作不能超出 authorization scope
+
+### Requirement: quarantine 按 transaction 保守聚合（第八轮）
+
+uncertain 风险聚合必须（MUST）按 transaction 保守：每笔 transaction 内先合并同 key 腿，occupiedOutflow = Σ max(0, −net)（跨 transaction 求和），capacityOccupancy = Σ max(0, net)——不同 transaction 的正流入不得（MUST NOT）抵消另一笔负流出、不得（MUST NOT）增加 spendable。每步聚合必须（MUST）安全整数校验；无法聚合时 store unhealthy、write readiness false、不返回乐观数值。unresolved durable intents 必须（MUST）以同一口径并入风险占用。quarantine/风险读取 API 不得（MUST NOT）返回内部可变对象或 Map（冻结副本/只读 view）；写入前必须（MUST）重新完整验证 entry。
+
+#### Scenario: A/B 不互相抵消
+
+- **WHEN** quarantine A 含 +1000 流入、B 含 −500 流出（同 location）
+- **THEN** 容量风险占用为 1000（非 500）；资源流出占用为 500；同一 transaction 内部先净额合并；聚合溢出 fail closed
+
+### Requirement: staged atomic resolution 与 receipt 刷新（第八轮）
+
+resolution store 必须（MUST）具备版本化健康契约（version/entryCount/key 一致/entry 完整 shape/global reset 首次 load 验证/heap cache/未知版本 fail closed/损坏不自动删除/容量满时在任何原状态变化之前拒绝）；malformed 旧 tombstone 不得（MUST NOT）被当作可清理垃圾删除。resolution 必须（MUST）是可恢复的 staged 状态转换：预留 resolution slot → 写 durable resolving marker → 执行 receipt refresh 或 not-executed 结论 → finalize——不得（MUST NOT）先删除 quarantine 再尝试写 tombstone；任何阶段失败不得（MUST NOT）"返回 rejected 却已解锁"（quarantine/intent 保留、readiness false，或进入明确 resolution_fault 并在 global reset 后幂等恢复）；not-executed 失败时不得（MUST NOT）形成"函数失败但可重新 prepare"的状态；重复调用稳定 already_resolved；同一 transaction 的 intent/quarantine/receipt/resolution 最多结算一次。
+
+resolve-as-committed 时既有 receipt 必须（MUST）真正刷新到当前 resolution tick（同步维护 entryCount、nextExpiryTick 与 retention）；actionTick 只用于审计；不得（MUST NOT）向当前 tick overlay/journal 重放；receipt 过期但 committed tombstone 仍在时 prepare 不得（MUST NOT）将其当全新动作；prepare、receipt 与 resolution 必须（MUST）使用统一 replay horizon。
+
+#### Scenario: 既有 receipt 刷新
+
+- **WHEN** tick 1 receipt 已写后 heap 故障入 quarantine，tick 5001 resolve-as-committed
+- **THEN** 既有 receipt 实际刷新到 tick 5001（完整 retention 窗口）；下一 tick cleanup 不删除；同 id prepare 命中 already_settled/committed tombstone 而非全新动作
+
+#### Scenario: 阶段故障可恢复
+
+- **WHEN** 分别注入 resolution slot 满、resolving marker 写失败、receipt refresh 失败、quarantine release 失败、marker clear 失败、tombstone finalize 失败、以及各阶段后 global reset
+- **THEN** 每个场景可幂等恢复、不重复结算、不丢风险占用、不错误解锁
+
+### Requirement: service-issued reconciliation capability（第八轮）
+
+resolution 结论不得（MUST NOT）由普通调用者自行填写。当前 Treasury service 必须（MUST）基于 exact post-fault observation、durable intent/quarantine 与**受注册 action reconciler** 签发 opaque reconciliation capability（绑定 transaction/digest/action kind/contract/post-fault epoch/structure incarnation/reconciler 版本/conclusion/service generation/tick）。普通对象伪造、JSON round-trip、旧 service、旧 epoch 的 capability 必须（MUST）失败；未注册 reconciler 的 action kind 必须（MUST）拒绝；uncertain 保持隔离；resolution 只接受 capability（自由 evidence/guard 对象入口移除）；跨 global reset 由新 service 依据持久状态重新签发而非恢复旧 heap token。
+
+#### Scenario: capability 防伪与 reconciler 边界
+
+- **WHEN** 以普通对象/JSON 副本/旧 generation/旧 epoch 的 capability 调用 resolution，或对无注册 reconciler 的 action kind 申请 capability
+- **THEN** 一律拒绝；测试 reconciler 产生 committed/not-executed 结论并驱动 resolution 完成；uncertain 保持隔离；调用者不能自行改 conclusion
+
+### Requirement: owner identity 统一与 reservation store 完整健康（第八轮）
+
+owner 的持久 token、比较 key、聚合 key、self-exclusion key、mutation 定位 key 与 migration collision key 必须（MUST）全部使用同一 canonical identity 算法（不得保留独立的分隔符拼接比较键）；id/namespace 含 NUL、冒号、Unicode、空格时不得（MUST NOT）碰撞，比较结果与持久 token 恒一致。reservation store version 为当前值不等于健康——必须（MUST）经过完整 load validation（store 形状/version/key 与 entry 及 owner token 一致/owner shape/room/resource/amount/时间戳安全整数/聚合溢出/重复 identity/corrupted 标志/entryCount），验证结果以 heap cache/revision 复用；任何损坏时原数据保留、mutation 拒绝、authorizationSafe 与 write readiness false。非法 mutation input 必须（MUST）在任何 schema migration 或 Memory 写入之前被拒绝。只读 API 不得（MUST NOT）返回 live Memory 引用，旧兼容读取不得（MUST NOT）传播 NaN。
+
+#### Scenario: 比较 key 与持久 token 一致
+
+- **WHEN** id 与 namespace 分别含 NUL、冒号、Unicode，同 id 不同 kind/namespace
+- **THEN** canonical token 互不碰撞；比较 key 与持久 token 恒一致；v4 store key/entry 不一致或 owner 非法或聚合溢出时 fail closed；非法 mutation 不触发 migration 写入；只读 snapshot 修改不影响 Memory
+
+### Requirement: strict projected 与 risk-adjusted capacity 分立（第八轮）
+
+严格 projected（observed + committed overlay；used + free = physical capacity）与 risk-adjusted（另行扣除 quarantine/unresolved intent 正流入风险，用于 admission/headroom）必须（MUST）以独立 API 暴露（strictProjectedUsedCapacity/strictProjectedFreeCapacity/riskAdjustedFreeCapacity/riskAdjustedReceiverHeadroom）；旧名称若保留必须（MUST）明确标注兼容语义；receiver admission 必须（MUST）使用 risk-adjusted 口径；消费者不得（MUST NOT）再误把两个口径当作互补的同一口径。
+
+#### Scenario: 双口径分离
+
+- **WHEN** 存在 quarantine 正流入风险 +1000
+- **THEN** strictProjectedUsed+Free = physical capacity（不含风险）；riskAdjustedFree 单独扣除 1000；receiver admission 采用 risk-adjusted 口径；旧名称返回文档标注的兼容语义
