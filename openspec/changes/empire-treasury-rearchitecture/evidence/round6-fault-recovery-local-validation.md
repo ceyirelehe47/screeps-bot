@@ -9,15 +9,16 @@
 
 - 起始 HEAD：`876543543b120a725745d0c3991150493c836505`（第五轮 budget 锚点）
 - 本轮实现 commit（按依赖顺序）：
-  1. `2c63141` docs(openspec): Round 6 规范先行（proposal/design 3.8/spec 6 Requirement/tasks 12）
+  1. `2c63141` docs(openspec): Round 6 规范先行（proposal/design 3.8/spec 8 Requirement/tasks 12）
   2. `551e8a8` fix(treasury): reservation 持久 key 编码完整 typed owner identity（v3）+ 原子迁移
   3. `c748925` feat(treasury): durable quarantine——executing/faulted transaction 跨 tick 持久隔离
-  4. `b32f1ee` feat(treasury): safe execute 结果语义重定义 + receipt corruption fail closed
+  4. `482e590` feat(treasury): safe execute 结果语义重定义 + receipt corruption fail closed
   5. `f3055db` feat(treasury): 显式 fault resolution 协议替代无条件 clear fault
   6. `bd297ed` feat(treasury): prepared handle 生命周期有界化（WeakMap 全周期 + 有界 active registry）
-  7. `6573b71` feat(treasury): canonicalization 前的 runtime input 形状验证（防 throw 最小集）
-  8. `16190b8` feat(treasury): commitment completeness 补严 + authorizationSafe 多条件联合判定
-- 最终实现 commit 与 budget 锚点 commit 见 git log（本文档随第 9 个提交入库）。
+  7. `f32d797` feat(treasury): canonicalization 前的 runtime input 形状验证（第一版；入库时 3 个 treasury 测试失败，管道 exit code 未短路所致——随 `6573b71` 修正为防 throw 最小集，最终状态全绿）
+  8. `6573b71` feat(treasury): canonicalization 前的 runtime input 形状验证（防 throw 最小集）
+  9. `16190b8` feat(treasury): commitment completeness 补严 + authorizationSafe 多条件联合判定
+- budget 锚点 `requiredBaselineCommit` 指向 `16190b8`（含全部实现与测试）。
 
 ## 修改范围（关键文件）
 
