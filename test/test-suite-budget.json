@@ -1,18 +1,18 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "9232860",
-    "suites": 199,
-    "tests": 805,
-    "passed": 805,
+    "commit": "6c60e92",
+    "suites": 208,
+    "tests": 913,
+    "passed": 913,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 199,
-    "tests": 805,
-    "passed": 805,
+    "suites": 208,
+    "tests": 913,
+    "passed": 913,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -990,7 +990,7 @@
     },
     "src/runtime/treasury/treasuryCore.test.ts": {
       "baseline": 0,
-      "budget": 35,
+      "budget": 38,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryProjection.test.ts": {
@@ -1010,12 +1010,57 @@
     },
     "src/runtime/treasury/treasuryLifecycle.test.ts": {
       "baseline": 0,
-      "budget": 41,
+      "budget": 42,
       "tier": "high-risk"
     },
     "test/treasuryCommitmentInvalidationBoundaries.test.ts": {
       "baseline": 0,
       "budget": 5,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryTransactionIdVectors.test.ts": {
+      "baseline": 0,
+      "budget": 30,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryTentativeLedger.test.ts": {
+      "baseline": 0,
+      "budget": 12,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryPreparedHandle.test.ts": {
+      "baseline": 0,
+      "budget": 11,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryWriteFault.test.ts": {
+      "baseline": 0,
+      "budget": 12,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasurySafeExecute.test.ts": {
+      "baseline": 0,
+      "budget": 7,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryTypedOwnerMigration.test.ts": {
+      "baseline": 0,
+      "budget": 13,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryCommitmentCompleteness.test.ts": {
+      "baseline": 0,
+      "budget": 8,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryWriteArchitecture.test.ts": {
+      "baseline": 0,
+      "budget": 5,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryWriteAdmissionPerformance.test.ts": {
+      "baseline": 0,
+      "budget": 6,
       "tier": "high-risk"
     }
   }

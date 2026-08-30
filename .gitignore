@@ -25,6 +25,7 @@ monitor-data/*
 !monitor-data/apply-budget-treasury-review.mjs
 !monitor-data/apply-budget-treasury-round3.mjs
 !monitor-data/apply-budget-treasury-round4.mjs
+!monitor-data/apply-budget-treasury-round5.mjs
 !monitor-data/inventory-shadow-phase3-evidence.md
 !monitor-data/collect-jest-counts.cjs
 !monitor-data/set-canary3-config.cjs
