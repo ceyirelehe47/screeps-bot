@@ -605,8 +605,9 @@ describe("staged atomic（故障注入与恢复）", () => {
     expect(next.metrics().resolutionFaulted).toBe(0);
   });
 
-  it("resolving 无进展（receipt 未写）后 beginTick 回滚 tombstone（quarantine 保留可重试）", () => {
+  it("【第九轮 4.9】resolving 无 receipt：beginTick 幂等续做 refresh 至原定 settledAtTick 后 finalize（不回滚不缩短 horizon）", () => {
     const { digest } = makeCommittedFaultQuarantine("ts1_rollback");
+    const resolutionTick = Game.time;
     expect(
       writeTreasuryResolutionTombstone({
         transactionId: "ts1_rollback",
@@ -614,21 +615,54 @@ describe("staged atomic（故障注入与恢复）", () => {
         resolution: "committed",
         stage: "resolving",
         actionTick: Game.time,
-        settledAtTick: Game.time,
+        settledAtTick: resolutionTick,
         observationTick: Game.time,
         resolvedAtTick: Game.time,
         reconcilerKind: "terminal.send",
       }).status,
     ).not.toBe("rejected");
+    Game.time += 3; // 跨多个 tick 后恢复。
+    const next = makeService();
+    next.beginTick(); // 恢复：无 receipt → 幂等续做 refresh（至原定 settledAtTick）→ finalize
+    const tombstone = readTreasuryResolutionTombstone("ts1_rollback");
+    expect(tombstone?.stage).toBe("final");
+    // receipt 刷新到**原定** settledAtTick（不缩短 replay horizon）。
+    expect(hasSettledReceipt("ts1_rollback")).toBe(resolutionTick);
+    expect(readTreasuryQuarantineEntry("ts1_rollback")).toBeUndefined(); // authority 释放
+    expect(next.metrics().resolutionRecovered).toBeGreaterThanOrEqual(1);
+  });
+
+  it("【第九轮 4.9】旧 action tick 的 receipt 不被误判为已刷新（续做 refresh 后才 finalize）", () => {
+    // 场景：transaction 在故障前已有旧 tick receipt（如 heap_publish 相位），
+    // resolving tombstone 写入后 refresh 前 global reset——恢复必须检测
+    // receipt tick < settledAtTick 并续做刷新，不得直接 finalize。
+    const { digest } = makeCommittedFaultQuarantine("ts1_stale_receipt");
+    const { commitSettledReceipt } = jest.requireActual("@/runtime/treasury/receipts") as typeof import("@/runtime/treasury/receipts");
+    // 旧 receipt 写在故障 tick（早于 resolution tick）。
+    expect(commitSettledReceipt("ts1_stale_receipt", Game.time).status).toBe("written");
+    const staleTick = Game.time;
+    Game.time += 1;
+    const resolutionTick = Game.time;
+    expect(
+      writeTreasuryResolutionTombstone({
+        transactionId: "ts1_stale_receipt",
+        digest,
+        resolution: "committed",
+        stage: "resolving",
+        actionTick: staleTick,
+        settledAtTick: resolutionTick,
+        observationTick: Game.time,
+        resolvedAtTick: Game.time,
+        reconcilerKind: "terminal.send",
+      }).status,
+    ).not.toBe("rejected");
+    expect(hasSettledReceipt("ts1_stale_receipt")).toBe(staleTick); // 旧 receipt 仍在
     Game.time += 1;
     const next = makeService();
-    next.beginTick(); // 恢复：无 receipt → 回滚
-    expect(readTreasuryResolutionTombstone("ts1_rollback")).toBeUndefined();
-    expect(readTreasuryQuarantineEntry("ts1_rollback")).toBeDefined(); // 保留可重试
-    expect(next.metrics().resolutionFaulted).toBeGreaterThanOrEqual(1);
-    // 重试成功（重新签发 capability）。
-    const resolved = resolveCommitted(next, "ts1_rollback", digest);
-    expect(resolved.status).toBe("resolved");
+    next.beginTick(); // 恢复：receipt(staleTick) < settledAtTick → 续做 refresh
+    expect(readTreasuryResolutionTombstone("ts1_stale_receipt")?.stage).toBe("final");
+    expect(hasSettledReceipt("ts1_stale_receipt")).toBe(resolutionTick); // 刷新到位
+    expect(readTreasuryQuarantineEntry("ts1_stale_receipt")).toBeUndefined();
   });
 
   it("final not-executed 未完成释放：beginTick 补完成（幂等）", () => {
@@ -918,3 +952,110 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
     void service;
   });
 });
+
+  it("【第九轮 4.10】resolving tombstone 永不被 retention 清理（超龄保留；满载 fail closed）", () => {
+    // 构造：255 条超龄 final（可清理）+ 1 条超龄 resolving → 满载 256。
+    Game.time += 7_000;
+    const ancient = Game.time - 6_000;
+    for (let i = 0; i < 255; i += 1) {
+      expect(
+        writeTreasuryResolutionTombstone({
+          transactionId: `rt_final_${String(i)}`,
+          digest: "0123456789abcdef",
+          resolution: "not-executed",
+          stage: "final",
+          actionTick: ancient,
+          observationTick: ancient,
+          resolvedAtTick: ancient,
+        }).status,
+      ).not.toBe("rejected");
+    }
+    expect(
+      writeTreasuryResolutionTombstone({
+        transactionId: "rt_resolving_stale",
+        digest: "0123456789abcdef",
+        resolution: "committed",
+        stage: "resolving",
+        settledAtTick: ancient,
+        actionTick: ancient,
+        observationTick: ancient,
+        resolvedAtTick: ancient,
+      }).status,
+    ).not.toBe("rejected");
+    expect(peekTreasuryResolutionStoreHealth().entryCount).toBe(256);
+    // 写第 257 条触发满载惰性清理：超龄 final 被清、超龄 resolving 保留。
+    const write = writeTreasuryResolutionTombstone({
+      transactionId: "rt_new",
+      digest: "0123456789abcdef",
+      resolution: "not-executed",
+      stage: "final",
+      actionTick: Game.time,
+      observationTick: Game.time,
+      resolvedAtTick: Game.time,
+    });
+    expect(write.status).not.toBe("rejected");
+    expect(readTreasuryResolutionTombstone("rt_resolving_stale")).toBeDefined(); // resolving 保留
+    expect(readTreasuryResolutionTombstone("rt_final_0")).toBeUndefined(); // 超龄 final 被清
+  });
+
+  it("【第九轮 4.10】满载且全部为 resolving：新 resolution fail closed（不驱逐）", () => {
+    Game.time += 7_000;
+    const ancient = Game.time - 6_000;
+    for (let i = 0; i < 256; i += 1) {
+      expect(
+        writeTreasuryResolutionTombstone({
+          transactionId: `rt_res_${String(i)}`,
+          digest: "0123456789abcdef",
+          resolution: "committed",
+          stage: "resolving",
+          settledAtTick: ancient,
+          actionTick: ancient,
+          observationTick: ancient,
+          resolvedAtTick: ancient,
+        }).status,
+      ).not.toBe("rejected");
+    }
+    expect(peekTreasuryResolutionStoreHealth().entryCount).toBe(256);
+    const rejected = writeTreasuryResolutionTombstone({
+      transactionId: "rt_res_overflow",
+      digest: "0123456789abcdef",
+      resolution: "not-executed",
+      stage: "final",
+      actionTick: Game.time,
+      observationTick: Game.time,
+      resolvedAtTick: Game.time,
+    });
+    expect(rejected.status).toBe("rejected"); // fail closed：无可清理 final 项
+    expect(readTreasuryResolutionTombstone("rt_res_255")).toBeDefined();
+  });
+
+  it("【第九轮 4.10】final not-executed 恢复补释放 intent（intent-only authority 场景）", () => {
+    const intentWrite = writeTreasuryIntentEntry({
+      transactionId: "rt_intent_release",
+      digest: "0123456789abcdef",
+      actionKind: "terminal.send",
+      kind: "terminal.send",
+      source: "test",
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+      phase: "returned_non_ok",
+      createdAtTick: Game.time,
+      updatedAtTick: Game.time,
+    });
+    expect(intentWrite.status).toBe("written");
+    expect(
+      writeTreasuryResolutionTombstone({
+        transactionId: "rt_intent_release",
+        digest: "0123456789abcdef",
+        resolution: "not-executed",
+        stage: "final",
+        actionTick: Game.time,
+        observationTick: Game.time,
+        resolvedAtTick: Game.time,
+        reconcilerKind: "terminal.send",
+      }).status,
+    ).not.toBe("rejected");
+    Game.time += 1;
+    const next = makeService();
+    next.beginTick(); // 恢复：final not-executed + intent 残留 → 补完成释放
+    expect(readTreasuryIntentEntry("rt_intent_release")).toBeUndefined();
+  });

@@ -29,10 +29,12 @@ import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import {
   TREASURY_RECEIPT_RETENTION_TICKS,
   hasSettledReceipt,
+  refreshSettledReceiptForResolution,
   registerTreasuryResolutionResetHook,
 } from "@/runtime/treasury/receipts";
 import { clearTreasuryWriteFaultMarkerForResolution } from "@/runtime/treasury/writeFault";
 import { releaseTreasuryQuarantineEntry, readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
+import { readTreasuryIntentEntry, releaseTreasuryIntentEntry } from "@/runtime/treasury/intents";
 
 export const TREASURY_RESOLUTION_VERSION = 2 as const;
 export const TREASURY_RESOLUTION_MAX_ENTRIES = 256;
@@ -327,12 +329,15 @@ export function ensureTreasuryResolutionSlotAvailable(): string | null {
   return `resolution tombstone 已达上限 ${String(TREASURY_RESOLUTION_MAX_ENTRIES)} 且无可清理过期项（fail closed）`;
 }
 
-/** 惰性清理：只删除 resolvedAtTick 超过 retention 且形状完整的条目。 */
+/** 惰性清理：只删除 stage=final 且超过 retention 的形状完整条目（第九轮
+ *  4.10：stage=resolving 永不被普通垃圾回收驱逐——resolution-intent 丢弃
+ *  不可接受，满载 fail closed 由容量预检承担）。 */
 function evictExpiredTombstones(store: TreasuryResolutionStore): number {
   let removed = 0;
   resolutionStoreEvents.fullScans += 1;
   for (const [key, entry] of Object.entries(store.entries)) {
     if (validateTreasuryResolutionTombstoneShape(entry) !== null) continue; // 损坏不删除
+    if (entry.stage === "resolving") continue; // resolving 永不驱逐（第九轮 4.10）
     if (entry.resolvedAtTick < Game.time - TREASURY_RESOLUTION_RETENTION_TICKS) {
       delete store.entries[key];
       store.entryCount -= 1;
@@ -414,22 +419,32 @@ export function committedResolutionSettledAtTick(transactionId: string): number 
 // ── staged 恢复（beginTick 显式分支调用；幂等） ────────────────────────────
 
 export interface TreasuryResolutionRecoveryReport {
-  /** resolving-committed 且 receipt 已写 → 完成 finalize 的条数。 */
+  /** resolving-committed 且 receipt 已刷新至 settledAtTick → 完成 finalize 的条数。 */
   completed: number;
-  /** resolving 无进展（receipt 未写）→ 回滚删除 tombstone 的条数。 */
+  /** resolving 无进展且不可恢复（防御分支）→ 回滚删除 tombstone 的条数。 */
   rolledBack: number;
-  /** final not-executed 但 quarantine 仍存在 → 补完成释放的条数。 */
+  /** final not-executed 但 authority 仍存在 → 补完成释放的条数。 */
   completedRelease: number;
+  /** receipt 不可写：resolving 保留（刷新未完成，绝不 finalize——第九轮 4.9）。 */
+  refreshBlocked: number;
   storeFatal: string | null;
 }
 
 /**
- * staged resolution 恢复（global reset / 中断后）：
- * - stage=resolving + committed：receipt 已写 → 继续 finalize（释放
- *   quarantine + 清匹配 marker + stage=final）；receipt 未写 → 回滚删除
- *   tombstone（resolution 无进展，quarantine/marker 原样保留可重试）；
- * - stage=final + not-executed 且 quarantine 条目仍在 → 补完成释放
- *  （幂等：tombstone 已 final、释放未完成的窗口）；
+ * staged resolution 恢复（global reset / 中断后；第九轮 4.9 修复 receipt
+ * 刷新判定 + 4.10 final not-executed 补完成 intent 释放）：
+ * - stage=resolving + committed：**只在 receipt tick ≥ tombstone 的
+ *   settledAtTick 时才 finalize**——旧 action tick 的 receipt 不被误判为
+ *   已刷新（第九轮修复：不再只判 receipt 存在性）；未刷新（旧 receipt 或
+ *   无 receipt）→ 幂等续做 refresh 至**原定** settledAtTick（不缩短 replay
+ *   horizon），refresh 成功后 finalize；refresh fatal → 保留 resolving +
+ *   报告 blocker（unresolved authority 不释放——绝不直接 finalize、绝不
+ *   回滚丢弃 resolution-intent）；
+ * - stage=resolving 但无 settledAtTick / resolution 非 committed（防御：
+ *   正常 staged 流程不产生该形态）→ 回滚删除 tombstone（原状态未变，
+ *   resolution 可重试）；
+ * - stage=final + not-executed 且 authority（quarantine **或 intent**——
+ *   第九轮 4.10 补 intent 释放）仍存在 → 补完成释放（幂等）；
  * - store fatal：不删任何数据，报告诊断（resolution 路径拒绝）。
  */
 export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
@@ -437,6 +452,7 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
     completed: 0,
     rolledBack: 0,
     completedRelease: 0,
+    refreshBlocked: 0,
     storeFatal: null,
   };
   const runtime = loadResolutionStoreRuntime();
@@ -449,17 +465,32 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
   for (const [key, entry] of Object.entries(runtime.store.entries)) {
     if (entry.stage === "resolving") {
       resolutionStoreEvents.inProgressRecoveries += 1;
-      if (entry.resolution === "committed" && hasSettledReceipt(entry.transactionId) !== undefined) {
-        // receipt 已写：完成 finalize（幂等——quarantine 释放与 marker 清除
-        // 均为幂等操作）。
+      if (entry.resolution === "committed" && entry.settledAtTick !== undefined) {
+        const receiptTick = hasSettledReceipt(entry.transactionId);
+        if (receiptTick === undefined || receiptTick < entry.settledAtTick) {
+          // receipt 未刷新到位（旧 action tick 的 receipt 或不存在）：幂等
+          // 续做 refresh 至原定 settledAtTick——绝不把旧 receipt 误判为已
+          // 刷新、绝不缩短 replay horizon。
+          const refresh = refreshSettledReceiptForResolution(entry.transactionId, entry.settledAtTick);
+          if (refresh.status === "fatal") {
+            // receipt 不可写：保留 resolving（authority 不释放），报告 blocker。
+            resolutionStoreEvents.faulted += 1;
+            report.refreshBlocked += 1;
+            continue;
+          }
+        }
+        // receipt 已刷新至 settledAtTick：完成 finalize（幂等——authority
+        // 释放与 marker 清除均为幂等操作）。
         releaseTreasuryQuarantineEntry(entry.transactionId);
+        releaseTreasuryIntentEntry(entry.transactionId);
         clearTreasuryWriteFaultMarkerForResolution(entry.transactionId, entry.digest);
         entry.stage = "final";
         runtime.store.updatedAt = Game.time;
         resolutionStoreEvents.recovered += 1;
         report.completed += 1;
       } else {
-        // 无进展：回滚 tombstone（原状态未变，resolution 可重试）。
+        // 防御分支：resolving 无 settledAtTick 或非 committed——回滚
+        // tombstone（原状态未变，resolution 可重试）。
         delete runtime.store.entries[key];
         runtime.store.entryCount -= 1;
         resolutionStoreEvents.faulted += 1;
@@ -469,9 +500,12 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
     }
     if (entry.stage === "final" && entry.resolution === "not-executed") {
       const quarantined = readTreasuryQuarantineEntry(entry.transactionId);
-      if (quarantined !== undefined) {
-        // final tombstone 已写但释放未完成：补完成（幂等）。
+      const intended = quarantined === undefined ? readTreasuryIntentEntry(entry.transactionId) : undefined;
+      if (quarantined !== undefined || intended !== undefined) {
+        // final tombstone 已写但释放未完成：补完成（幂等；含 intent-only
+        // authority 场景——quarantine 与 intent 一并释放）。
         releaseTreasuryQuarantineEntry(entry.transactionId);
+        releaseTreasuryIntentEntry(entry.transactionId);
         clearTreasuryWriteFaultMarkerForResolution(entry.transactionId, entry.digest);
         resolutionStoreEvents.recovered += 1;
         report.completedRelease += 1;
