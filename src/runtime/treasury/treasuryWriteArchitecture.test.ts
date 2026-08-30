@@ -116,15 +116,67 @@ describe("Treasury write-admission 架构边界", () => {
     expect(violations).toEqual([]);
   });
 
-  it("writeFault 修复入口只存在于 writeFault 模块（不得被生产路径自动调用）", () => {
+  it("fault resolution 入口只存在于 faultResolution 模块（生产 tick 不得自动调用）", () => {
     const violations: string[] = [];
     for (const filePath of listFilesRecursive(SRC_ROOT)) {
       if (filePath.endsWith(".test.ts")) continue;
       const relative = filePath.split(/[\\/]/).slice(-3).join("/");
-      if (relative === "runtime/treasury/writeFault.ts") continue;
+      // writeFault.ts 定义受控 marker 清除；faultResolution.ts 是协议唯一入口。
+      const isAuthority =
+        relative === "runtime/treasury/faultResolution.ts" ||
+        relative === "runtime/treasury/writeFault.ts";
+      // 定义处允许；writeFault 的受控 marker 清除仅供 faultResolution 调用。
+      if (isAuthority) continue;
       const source = readFileSync(filePath, "utf8");
-      if (source.includes("clearTreasuryWriteFaultForRepair")) {
-        violations.push(`${relative} 引用了 write-fault 修复入口（仅显式管理路径）`);
+      const resolutionReferences = [
+        "resolveTreasuryQuarantinedTransactionAsCommitted",
+        "resolveTreasuryQuarantinedTransactionAsNotExecuted",
+        "clearTreasuryWriteFaultMarkerForResolution",
+      ];
+      for (const reference of resolutionReferences) {
+        if (source.includes(reference)) {
+          violations.push(`${relative} 引用了 fault resolution 入口（仅显式管理/修复路径）`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("无条件 clear write-fault 入口已移除（任何模块不得重新引入）", () => {
+    // 旧的"直接删除 marker"修复入口已在第六轮删除——扫描全部源码的**调用
+    // 形态**（标识符 + 调用括号），防止以同名路径回归；注释中的历史说明
+    // 不构成回归。
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      const source = readFileSync(filePath, "utf8");
+      if (/clearTreasuryWriteFaultForRepair\s*\(/.test(source)) {
+        violations.push(`${filePath.split(/[\\/]/).slice(-3).join("/")} 调用已移除的无条件 clear 入口`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("reservation store key 拼接只允许 resourceReservation/ownerIdentity 权威（外部不得自行拼接持久 key）", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      const isTest = filePath.endsWith(".test.ts");
+      const isAuthority =
+        relative === "src/runtime/resourceReservation.ts" ||
+        relative === "runtime/treasury/ownerIdentity.ts" ||
+        relative === "runtime/treasury/commitments.ts" || // 只读聚合（taskKey 为内存索引，非持久 key）
+        relative === "runtime/treasury/quarantine.ts" || // 自有 q: 前缀键（非 reservation store）
+        relative === "runtime/treasury/facade.ts" || // treasuryLocationKey（位置键，非 reservation store）
+        relative === "runtime/treasury/projection.ts" ||
+        relative === "runtime/treasury/shadow.ts" ||
+        relative === "runtime/treasury/receipts.ts" ||
+        relative === "runtime/treasury/writeFault.ts" ||
+        relative === "runtime/treasury/faultResolution.ts";
+      if (isTest || isAuthority) continue;
+      const source = readFileSync(filePath, "utf8");
+      // 持久 key 形状：`${room}:${resource}:` 前的显式拼接（reservation store 专用形状）。
+      if (/resourceReservations[^;]*`\$\{[^}]*\}\s*:\s*\$\{[^}]*\}\s*:/.test(source)) {
+        violations.push(`${relative} 自行拼接 reservation store 持久 key（须经 makeReservationStoreKey）`);
       }
     }
     expect(violations).toEqual([]);

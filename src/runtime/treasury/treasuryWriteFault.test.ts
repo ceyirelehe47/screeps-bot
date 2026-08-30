@@ -6,7 +6,7 @@
  * - faulted handle 的 tentative 预留与 receipt 槽不释放；
  * - write admission 全局锁阻断 prepare/commit/abort/单阶段；
  * - global reset（新 service 实例、Memory 保留）后仍能发现 unresolved
- *   write fault；修复流程必须显式（clearTreasuryWriteFaultForRepair），
+ *   write fault；修复流程必须显式（第六轮起为 fault resolution 协议），
  *   绝不自动清空；
  * - 正常路径无故障时 marker 恒缺失。
  */
@@ -15,11 +15,12 @@ import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import {
-  clearTreasuryWriteFaultForRepair,
   readTreasuryWriteFault,
   setTreasuryCommitFaultInjectorForTest,
   type TreasuryWriteFaultPhase,
 } from "@/runtime/treasury/writeFault";
+import { resolveTreasuryQuarantinedTransactionAsCommitted } from "@/runtime/treasury/faultResolution";
+import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
 
@@ -123,9 +124,14 @@ describe("staged commit 故障注入", () => {
     // heap 零写入：journal 空、投影不变。
     expect(service.journal()).toHaveLength(0);
     expect(service.projectedUsedCapacity("W1N57", "storage")).toBe(100_000);
-    // receipt 权威已写入：修复后同 id 重放命中 already_settled（幂等保住，
-    // 不会二次结算）——半提交状态显式可恢复，非静默。
-    clearTreasuryWriteFaultForRepair();
+    // receipt 权威已写入：tick 边界 faulted 转 quarantine 后，显式
+    // resolve-as-committed（幂等命中既有 receipt）解锁；同 id 重放命中
+    // already_settled（幂等保住，不会二次结算）——半提交状态显式可恢复。
+    service.endTick();
+    const quarantined = readTreasuryQuarantineEntry("ts1_fault_heap");
+    expect(quarantined).toBeDefined();
+    const resolved = resolveTreasuryQuarantinedTransactionAsCommitted({ transactionId: "ts1_fault_heap" });
+    expect(resolved.status).toBe("resolved");
     const replay = service.prepareTransaction({ ...prepared, handle: undefined } as unknown as TreasuryTransactionInput);
     expect(replay.status).toBe("already_settled");
   });
@@ -223,8 +229,9 @@ describe("staged commit 故障注入", () => {
     service.beginTick();
     expect(readTreasuryWriteFault()).toBeDefined();
     expect(service.metrics().writeAdmissionLocked).toBe(1);
-    // 显式修复路径解除。
-    expect(clearTreasuryWriteFaultForRepair()).toBe(true);
+    // 显式 resolution 路径解除（faulted 已在上一 endTick 转 quarantine）。
+    const resolved = resolveTreasuryQuarantinedTransactionAsCommitted({ transactionId: "ts1_repair" });
+    expect(resolved.status).toBe("resolved");
     expect(service.metrics().writeAdmissionLocked).toBe(0);
     const after = service.prepareTransaction(freshInput(service, "ts1_after_repair"));
     expect(after.status).toBe("prepared");

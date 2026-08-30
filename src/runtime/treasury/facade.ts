@@ -1261,9 +1261,38 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         if (committed.status === "already_settled") {
           return { status: "already_settled", transactionId: committed.transactionId, firstRecordedAtTick: committed.firstRecordedAtTick };
         }
-        // Game callback 已成功，但 Treasury commit 失败/锁定/故障：绝不返回
-        // prepare_rejected（那会暗示未执行、诱导自动重试）——显式
-        // executed_unsettled（Game 已执行、Treasury 未完成提交、禁止重试）。
+        // Game callback 已成功，但 Treasury commit 失败/锁定/故障：Game 动作
+        // 已发生——立即落 durable fault（faulted + marker + quarantine，不等
+        // tick 边界；quarantine/marker 幂等），然后显式返回 executed_unsettled
+        // （绝不返回 prepare_rejected/aborted——那会暗示未执行、诱导自动重试）。
+        // （commit 内部可能已把 record 置为 faulted——比较须经宽类型收窄。）
+        if ((record.state as TreasuryPreparedHandleState) !== "faulted") {
+          record.state = "faulted";
+          record.faultPhase = "commit_unexpected";
+        }
+        metrics.commitFaults += 1;
+        recordTreasuryWriteFault({
+          transactionId: record.canonical.transactionId,
+          digest: record.digest,
+          tick: record.preparedAtTick,
+          kind: record.canonical.kind,
+          source: record.canonical.source,
+          phase: record.faultPhase,
+          status: "unresolved",
+          recordedAt: Game.time,
+        });
+        const { resourceDeltas, capacityDeltas } = quarantineDeltasOf(record);
+        quarantineTreasuryTransaction({
+          transactionId: record.canonical.transactionId,
+          digest: record.digest,
+          tick: record.preparedAtTick,
+          kind: record.canonical.kind,
+          source: record.canonical.source,
+          phase: record.faultPhase,
+          resourceDeltas,
+          capacityDeltas,
+          recordedAt: Game.time,
+        });
         return {
           status: "executed_unsettled",
           handle: prepared.handle,

@@ -647,7 +647,7 @@ declare global {
        * 小、有界持久快照——只保留首个 unresolved 故障（根因），绝不持久化
        * 正常 transaction/journal/overlay。存在 unresolved marker 期间全部
        * Treasury writer fail closed（write_admission_locked），只有显式管理
-       * /修复路径（clearTreasuryWriteFaultForRepair）可解除；global reset
+       * /修复路径（显式 fault resolution 协议）可解除；global reset
        * 后凭本 marker 仍可发现 Treasury 曾发生 unresolved commit fault。
        */
       writeFault?: {

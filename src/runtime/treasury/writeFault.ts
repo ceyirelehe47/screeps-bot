@@ -12,9 +12,12 @@
  * 快照），global reset 后仍可发现 Treasury 曾发生 unresolved commit
  * fault。绝不持久化正常 transaction/journal/overlay 全量数据。
  *
- * 解除：只有显式管理/修复路径 clearTreasuryWriteFaultForRepair() 可以
- * 清除 marker（绝不自动清空安全故障）；测试用 clear 包含在
- * clearTreasuryPersistenceForTest。
+ * 解除：第六轮起只有显式 fault resolution 协议（treasury/faultResolution.ts）
+ * 可以清除 marker——resolve-as-committed / resolve-as-not-executed 经
+ * transactionId+digest 严格匹配（clearTreasuryWriteFaultMarkerForResolution，
+ * 仅供该模块调用）后随 resolution 一并解除；无条件删除 marker 的入口已
+ * 移除（marker 无法证明 Game 动作是否发生，直接解锁会错误释放资源并
+ * 可能重放已执行动作）；测试用清理包含在 clearTreasuryPersistenceForTest。
  */
 
 export type TreasuryWriteFaultPhase =
@@ -74,10 +77,18 @@ export function recordTreasuryWriteFault(marker: TreasuryWriteFaultMarker): void
   branch.writeFault = { ...marker, status: "unresolved" };
 }
 
-/** 显式管理/修复路径：清除 unresolved marker（返回是否确有 marker 被清除）。 */
-export function clearTreasuryWriteFaultForRepair(): boolean {
+/**
+ * 显式 fault resolution 的受控 marker 清除（第六轮，仅供 faultResolution
+ * 模块调用）：transactionId 与 digest **同时匹配**才删除——解决错误的
+ * transaction、或 marker 指向其它根因时一律不动。无条件删除 marker 的
+ * 入口已在第六轮移除：marker 无法证明 Game
+ * 动作是否发生，直接删除解锁会错误释放资源并可能重放已执行动作。
+ */
+export function clearTreasuryWriteFaultMarkerForResolution(transactionId: string, digest: string): boolean {
   const branch = (Memory.runtime as unknown as RuntimeMemoryWithTreasuryFault | undefined)?.treasury;
-  if (!branch?.writeFault) return false;
+  const marker = branch?.writeFault;
+  if (!marker || marker.status !== "unresolved") return false;
+  if (marker.transactionId !== transactionId || marker.digest !== digest) return false;
   delete branch.writeFault;
   return true;
 }

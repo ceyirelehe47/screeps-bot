@@ -192,15 +192,15 @@ describe("第六轮结果语义：Game 已执行与 Treasury 故障不可混淆"
     // transaction 进入 durable fault（marker）+ quarantine；heap 零发布。
     expect(readTreasuryWriteFault()?.transactionId).toBe("ts1_unsettled");
     expect(service.journal()).toHaveLength(0);
-    // 同 id 下一次调用：callback 前被拒（faulted 记录优先于全局锁检出），
-    // 计数保持 1。
+    // 同 id 下一次调用：callback 前被拒（executed_unsettled 已立即落 durable
+    // quarantine——门禁优先于一切），计数保持 1。
     const second = service.executePreparedAction(freshInput(service, "ts1_unsettled"), () => {
       callbackCalls += 1;
       return { ok: true };
     });
     expect(second.status).toBe("prepare_rejected");
     if (second.status === "prepare_rejected") {
-      expect(second.reason).toBe("handle_faulted");
+      expect(second.reason).toBe("transaction_quarantined");
     }
     expect(callbackCalls).toBe(1);
   });
