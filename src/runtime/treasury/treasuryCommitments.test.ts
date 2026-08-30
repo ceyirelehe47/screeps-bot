@@ -73,7 +73,7 @@ function makeTask(overrides: Partial<ResourceTransferTask> & { id: string }): Re
     resource: "U",
     fromRoomName: "W1N57",
     toRoomName: "E1N57",
-    amount: 1_000,
+    amount: 1_000_000,
     remainingAmount: 1_000,
     status: "pending",
     createdAt: 900,

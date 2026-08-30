@@ -75,6 +75,53 @@ function defaultHolderExists(holderId: string): boolean {
   return treasuryHolderExists(holderId);
 }
 
+const VALID_RESOURCES_FOR_COMMITMENT: ReadonlySet<string> = new Set<string>(RESOURCES_ALL);
+
+/** 数值字段完整有效性：有限、整数、安全整数、非负。 */
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+/**
+ * transfer task 记录级验证（第五轮 completeness）：status/resource/房间/
+ * amount/remainingAmount（remaining ≤ amount）/origin/tick 字段的形状与
+ * 数值关系。损坏记录不得进入聚合（负 amount 加进 committed、NaN 污染求和
+ * 都会提高 spendable），也不得被读取路径删除——只标记 scope incomplete。
+ */
+export function isValidTreasuryTransferTaskForCommitment(task: ResourceTransferTask): boolean {
+  if (!task || typeof task !== "object") return false;
+  if (typeof task.status !== "string" || task.status.length === 0) return false;
+  if (typeof task.resource !== "string" || !VALID_RESOURCES_FOR_COMMITMENT.has(task.resource)) return false;
+  if (typeof task.fromRoomName !== "string" || task.fromRoomName.length === 0) return false;
+  if (typeof task.toRoomName !== "string" || task.toRoomName.length === 0) return false;
+  if (!isNonNegativeSafeInteger(task.amount)) return false;
+  if (!isNonNegativeSafeInteger(task.remainingAmount)) return false;
+  if (task.remainingAmount > task.amount) return false;
+  if (task.origin !== "manual" && task.origin !== "automatic") return false;
+  if (!isNonNegativeSafeInteger(task.createdAt)) return false;
+  if (!isNonNegativeSafeInteger(task.updatedAt)) return false;
+  if (!isNonNegativeSafeInteger(task.lastProgressAt)) return false;
+  if (task.blockedReason !== undefined && typeof task.blockedReason !== "string") return false;
+  if (task.blockedSince !== undefined && !isNonNegativeSafeInteger(task.blockedSince)) return false;
+  return true;
+}
+
+function isValidScopePair(roomName: unknown, resource: unknown): roomName is string {
+  return typeof roomName === "string" && roomName.length > 0 && typeof resource === "string" && resource.length > 0;
+}
+
+/** production reservation 记录级验证（数值与 owner identity 形状）。 */
+function isValidReservationForCommitment(entry: TreasuryReservationInput): boolean {
+  if (!entry || typeof entry !== "object") return false;
+  if (typeof entry.roomName !== "string" || entry.roomName.length === 0) return false;
+  if (typeof entry.resource !== "string" || !VALID_RESOURCES_FOR_COMMITMENT.has(entry.resource)) return false;
+  if (!isNonNegativeSafeInteger(entry.amount)) return false;
+  if (!isNonNegativeSafeInteger(entry.expiresAt)) return false;
+  if (typeof entry.holderId !== "string" || entry.holderId.length === 0) return false;
+  if (entry.owner !== undefined && !isValidTreasuryOwnerIdentity(entry.owner)) return false;
+  return true;
+}
+
 /** 内部构建期可变副本；对外经 TreasuryCommitmentIndex.metrics 以 readonly 暴露。 */
 type MutableCommitmentMetrics = {
   -readonly [K in keyof TreasuryCommitmentMetrics]: TreasuryCommitmentMetrics[K];
@@ -107,6 +154,9 @@ export function buildTreasuryCommitmentIndex(
     missingOwnerStillCommitted: 0,
     typedOwnerResolved: 0,
     legacyUnresolvedOwners: 0,
+    invalidCommitmentRecords: 0,
+    incompleteCommitmentScopes: 0,
+    globallyIncomplete: false,
     indexQueries: 0,
   };
 
@@ -123,8 +173,32 @@ export function buildTreasuryCommitmentIndex(
   const healthyIncomingByRoom = new Map<string, number>();
   const healthyIncomingCountByRoom = new Map<string, number>();
 
+  // completeness（第五轮）：损坏记录不进聚合、不删原数据；能定位 bucket 的
+  // 标记 (room,resource) scope incomplete，连 scope 都无法确定的标记全局
+  // incomplete——incomplete scope 的 spendable/授权必须 fail closed。
+  const invalidCommitmentRecords = { count: 0 };
+  const incompleteScopes = new Set<string>();
+  let globalIncomplete = false;
+  const recordInvalid = (): void => {
+    invalidCommitmentRecords.count += 1;
+  };
+
   metrics.taskRecords = Object.keys(options.tasks).length;
   for (const task of Object.values(options.tasks)) {
+    if (!isValidTreasuryTransferTaskForCommitment(task)) {
+      // 损坏任务影响 donor 与 receiver 双侧 bucket：能定位哪侧就标记哪侧
+      // scope incomplete；双侧都不可定位（连资源/房间都读不出）则全局
+      // incomplete。绝不静默跳过后给出乐观 spendable，也绝不删除原记录。
+      recordInvalid();
+      const resourceKnown =
+        typeof task?.resource === "string" && VALID_RESOURCES_FOR_COMMITMENT.has(task.resource);
+      const fromLocated = resourceKnown && typeof task?.fromRoomName === "string" && task.fromRoomName.length > 0;
+      const toLocated = resourceKnown && typeof task?.toRoomName === "string" && task.toRoomName.length > 0;
+      if (fromLocated) incompleteScopes.add(taskKey(task.fromRoomName, task.resource));
+      if (toLocated) incompleteScopes.add(taskKey(task.toRoomName, task.resource));
+      if (!fromLocated && !toLocated) globalIncomplete = true;
+      continue;
+    }
     if (task.status !== "pending") continue;
     metrics.pendingTaskRecords += 1;
     const reason = task.reason || "";
@@ -170,6 +244,14 @@ export function buildTreasuryCommitmentIndex(
   const reservedByRoomResource = new Map<string, { total: number; byOwner: Map<string, number> }>();
   metrics.reservationRecords = Object.keys(options.reservations).length;
   for (const entry of Object.values(options.reservations)) {
+    if (!isValidReservationForCommitment(entry)) {
+      recordInvalid();
+      const roomLocated = typeof entry?.roomName === "string" && entry.roomName.length > 0;
+      const resourceKnown = typeof entry?.resource === "string" && entry.resource.length > 0;
+      if (roomLocated && resourceKnown) incompleteScopes.add(taskKey(entry.roomName, entry.resource));
+      else globalIncomplete = true;
+      continue;
+    }
     const expired = entry.expiresAt < tick;
     const owner: TreasuryOwnerIdentity = isValidTreasuryOwnerIdentity(entry.owner)
       ? entry.owner
@@ -218,8 +300,24 @@ export function buildTreasuryCommitmentIndex(
     reservedByRoomResource.set(key, bucket);
   }
 
+  metrics.invalidCommitmentRecords = invalidCommitmentRecords.count;
+  metrics.incompleteCommitmentScopes = incompleteScopes.size;
+  metrics.globallyIncomplete = globalIncomplete;
+  const completenessSnapshot = Object.freeze({
+    complete: invalidCommitmentRecords.count === 0,
+    globalIncomplete,
+    incompleteScopeCount: incompleteScopes.size,
+    invalidRecords: invalidCommitmentRecords.count,
+  });
+
   const index: TreasuryCommitmentIndex = {    builtAtTick: tick,
     revision,
+    completeness: completenessSnapshot,
+    commitmentCompleteness(roomName, resource) {
+      metrics.indexQueries += 1;
+      if (globalIncomplete) return "globally-incomplete";
+      return incompleteScopes.has(taskKey(roomName, resource)) ? "incomplete-scope" : "complete";
+    },
     outgoing(roomName, resource) {
       metrics.indexQueries += 1;
       return outgoing.get(taskKey(roomName, resource)) ?? 0;
@@ -270,6 +368,12 @@ export function buildTreasuryCommitmentIndex(
     },
     receiverCommitments(roomName) {
       metrics.indexQueries += 1;
+      let roomComplete = !globalIncomplete;
+      if (roomComplete) {
+        for (const scope of incompleteScopes) {
+          if (scope.startsWith(`${roomName} `)) { roomComplete = false; break; }
+        }
+      }
       // 每次动态组合：静态承诺（healthy incoming，点时快照）+ observed 容量
       // （O(1) map 读）+ 当前 overlay 容量净变化（facade 注入的 O(1) 位置
       // 聚合）。绝不缓存依赖当前 overlay 的 projected 字段——同 tick 结算
@@ -298,6 +402,8 @@ export function buildTreasuryCommitmentIndex(
         projectedOvercommitted:
           healthyIncomingAmount > projectedStorageFree ||
           healthyIncomingAmount > projectedTerminalFree,
+        // 承诺视图完整才可用于 receiver admission 授权。
+        commitmentComplete: roomComplete,
       });
     },
     metrics,

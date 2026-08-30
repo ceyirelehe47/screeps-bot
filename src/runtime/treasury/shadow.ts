@@ -19,6 +19,7 @@ import {
   type TreasuryLocationKind,
 } from "@/runtime/treasury/types";
 import { countsResourceTransferTaskTowardDemand, resolveResourceTransferTaskHealthOptions } from "@/runtime/logistics/resourceTransferTaskHealth";
+import { isValidTreasuryTransferTaskForCommitment } from "@/runtime/treasury/commitments";
 
 export const TREASURY_SHADOW_INTERVAL_TICKS = 40;
 const TREASURY_SHADOW_MISMATCH_SAMPLE_CAP = 32;
@@ -253,6 +254,9 @@ export function runTreasuryShadowCheck(
   const recomputedIncoming = new Map<string, number>();
   let pendingCount = 0;
   for (const task of Object.values(taskStore)) {
+    // 与索引同一记录级验证口径（损坏任务不进聚合——重算端同样跳过，
+    // 否则会产生假阳性 commitment_index_consistency mismatch）。
+    if (!isValidTreasuryTransferTaskForCommitment(task)) continue;
     if (task.status !== "pending") continue;
     pendingCount += 1;
     if (countsResourceTransferTaskTowardDemand(task, healthOptions)) {

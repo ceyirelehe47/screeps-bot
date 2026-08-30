@@ -416,6 +416,8 @@ export interface TreasuryReceiverCommitments {
   readonly projectedStorageHeadroom: number;
   readonly projectedTerminalHeadroom: number;
   readonly projectedOvercommitted: boolean;
+  /** 房间承诺视图是否完整（false 时 receiver admission 必须 fail closed）。 */
+  readonly commitmentComplete: boolean;
 }
 
 export interface TreasuryCommitmentMetrics {
@@ -430,6 +432,9 @@ export interface TreasuryCommitmentMetrics {
   readonly typedOwnerResolved: number;
   /** legacy-unresolved kind 的活跃预留数。 */
   readonly legacyUnresolvedOwners: number;
+  readonly invalidCommitmentRecords: number;
+  readonly incompleteCommitmentScopes: number;
+  readonly globallyIncomplete: boolean;
   readonly indexQueries: number;
 }
 
@@ -438,9 +443,28 @@ export interface TreasuryCommitmentMetrics {
  * 对象引用），构建后同一 revision 下所有查询结果一致。权威数据变更由
  * mutation 侧 bumpTreasuryCommitmentRevision 通知 facade 失效重建。
  */
+/**
+ * 承诺视图 completeness（第五轮）：损坏记录只污染可定位的 (room,resource)
+ * bucket（incomplete-scope）或全局（globally-incomplete）。授权者不得只看
+ * spendable 数字而忽略 completeness——incomplete scope 的 spendable 必须
+ * 为 0、authorizationSafe 必须为 false。
+ */
+export type TreasuryCommitmentCompleteness = "complete" | "incomplete-scope" | "globally-incomplete";
+
+export interface TreasuryCommitmentCompletenessSnapshot {
+  /** 无任何损坏记录。 */
+  readonly complete: boolean;
+  readonly globalIncomplete: boolean;
+  readonly incompleteScopeCount: number;
+  readonly invalidRecords: number;
+}
+
 export interface TreasuryCommitmentIndex {
   readonly builtAtTick: number;
   readonly revision: number;
+  readonly completeness: TreasuryCommitmentCompletenessSnapshot;
+  /** 指定 (room,resource) 的 completeness（global incomplete 优先）。 */
+  commitmentCompleteness(roomName: string, resource: string): TreasuryCommitmentCompleteness;
   /** donor 侧承诺：pending 任务 remaining（全部 pending，不筛健康）。 */
   outgoing(roomName: string, resource: string): number;
   pendingOutgoing(roomName: string, resource: string, reasonPrefix?: string): number;
@@ -543,6 +567,10 @@ export interface TreasuryBalanceView {
   readonly ownerStatus: TreasuryOwnerStatus;
   /** invalid_fail_closed 时全部数量字段为 0（保守结论，不报乐观可用量）。 */
   readonly contextStatus: TreasuryQueryContextStatus;
+  /** 承诺视图 completeness（incomplete scope 的授权不得显示 authorization-safe）。 */
+  readonly commitmentStatus: TreasuryCommitmentCompleteness;
+  /** 授权安全 = 上下文合法 + owner 合法 + 承诺视图完整。 */
+  readonly authorizationSafe: boolean;
   readonly epoch: TreasuryEpoch;
 }
 
@@ -578,6 +606,12 @@ export interface TreasuryMetrics {
   typedOwnerResolvedCount: number;
   /** legacy-unresolved kind 的活跃预留数。 */
   legacyUnresolvedOwnerCount: number;
+  /** 记录级验证失败的 commitment 记录数（不进聚合、不删原数据）。 */
+  invalidCommitmentRecords: number;
+  /** incomplete 的 (room,resource) scope 数（含全局污染时为全部口径）。 */
+  incompleteCommitmentScopes: number;
+  /** 是否存在无法定位 scope 的损坏记录（全局 incomplete）。 */
+  commitmentGloballyIncomplete: boolean;
   transactionsRecorded: number;
   postingsRecorded: number;
   transactionsRejectedInvalid: number;
@@ -675,6 +709,9 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     missingOwnerStillCommitted: 0,
     typedOwnerResolvedCount: 0,
     legacyUnresolvedOwnerCount: 0,
+    invalidCommitmentRecords: 0,
+    incompleteCommitmentScopes: 0,
+    commitmentGloballyIncomplete: false,
     transactionsRecorded: 0,
     postingsRecorded: 0,
     transactionsRejectedInvalid: 0,

@@ -81,6 +81,7 @@ import {
   type TreasuryLocationKind,
   type TreasuryMetrics,
   type TreasuryObservationView,
+  type TreasuryCommitmentCompleteness,
   type TreasuryOwnerIdentity,
   type TreasuryOwnerStatus,
   type TreasuryPreparedAbortResult,
@@ -301,8 +302,12 @@ function validateQueryContext(
     }
   }
   if (context.withhold !== undefined) {
-    if (typeof context.withhold !== "number" || !Number.isFinite(context.withhold) || context.withhold < 0) {
-      return `withhold 必须为有限非负数: ${String(context.withhold)}`;
+    if (
+      typeof context.withhold !== "number" ||
+      !Number.isSafeInteger(context.withhold) ||
+      context.withhold < 0
+    ) {
+      return `withhold 必须为非负安全整数: ${String(context.withhold)}`;
     }
   }
   return null;
@@ -692,6 +697,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           state.commitmentIndex.metrics.taskRecords + state.commitmentIndex.metrics.reservationRecords;
         metrics.typedOwnerResolvedCount = state.commitmentIndex.metrics.typedOwnerResolved;
         metrics.legacyUnresolvedOwnerCount = state.commitmentIndex.metrics.legacyUnresolvedOwners;
+        metrics.invalidCommitmentRecords = state.commitmentIndex.metrics.invalidCommitmentRecords;
+        metrics.incompleteCommitmentScopes = state.commitmentIndex.metrics.incompleteCommitmentScopes;
+        metrics.commitmentGloballyIncomplete = state.commitmentIndex.metrics.globallyIncomplete;
       }
       return state.commitmentIndex;
     },
@@ -714,12 +722,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           overcommitted: true,
           ownerStatus: context?.owner ? "invalid_fail_closed" : "none",
           contextStatus: "invalid_fail_closed",
+          commitmentStatus: "globally-incomplete",
+          authorizationSafe: false,
           epoch: observation.epoch,
         };
       }
 
-      const rooms = context.rooms ?? observation.roomNames();
-      const kinds = context.locations ?? DEFAULT_LOCATION_KINDS;
+      // 防御性快照：调用方查询后原地修改输入数组不得影响已完成查询。
+      const rooms = Object.freeze([...(context.rooms ?? observation.roomNames())]);
+      const kinds = Object.freeze([...(context.locations ?? DEFAULT_LOCATION_KINDS)]);
       const allowProjected = context.allowProjected !== false;
 
       let observed = 0;
@@ -769,10 +780,26 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         ? rooms.reduce((sum, roomName) => sum + commitments.incoming(roomName, context.resource), 0)
         : 0;
 
+      // 承诺视图 completeness：查询覆盖的任一 scope incomplete（或全局
+      // incomplete）→ 不可授权（spendable=0、overcommitted=true）。
+      let commitmentStatus: TreasuryCommitmentCompleteness = "complete";
+      if (commitments.completeness.globalIncomplete) {
+        commitmentStatus = "globally-incomplete";
+      } else {
+        for (const roomName of rooms) {
+          if (commitments.commitmentCompleteness(roomName, context.resource) !== "complete") {
+            commitmentStatus = "incomplete-scope";
+            break;
+          }
+        }
+      }
+      const commitmentComplete = commitmentStatus === "complete";
+
       const base = (allowProjected ? projected : observed) + incoming;
       const withhold = Math.max(0, context.withhold ?? 0);
-      // fail closed：owner 非法时不给乐观可用量，只报保守结论。
-      const rawSpendable = ownerCheck.valid ? base - committed - withhold : 0;
+      // fail closed：owner 非法或承诺视图不完整时不给乐观可用量。
+      const authorizable = ownerCheck.valid && commitmentComplete;
+      const rawSpendable = authorizable ? base - committed - withhold : 0;
 
       return {
         resource: context.resource,
@@ -780,10 +807,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         projected,
         committed,
         incoming,
-        spendable: ownerCheck.valid ? Math.max(0, rawSpendable) : 0,
-        overcommitted: !ownerCheck.valid || rawSpendable < 0,
+        spendable: authorizable ? Math.max(0, rawSpendable) : 0,
+        overcommitted: !authorizable || rawSpendable < 0,
         ownerStatus,
         contextStatus: "valid",
+        commitmentStatus,
+        authorizationSafe: authorizable,
         epoch: observation.epoch,
       };
     },
@@ -1206,7 +1235,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
 
     resetForTest(): void {
       const keys = Object.keys(metrics) as Array<keyof TreasuryMetrics>;
-      for (const key of keys) metrics[key] = 0;
+      for (const key of keys) {
+        (metrics as unknown as Record<string, number | boolean>)[key] = typeof metrics[key] === "boolean" ? false : 0;
+      }
       projection.resetForTest();
       epochSeq = 0;
       current = null;
