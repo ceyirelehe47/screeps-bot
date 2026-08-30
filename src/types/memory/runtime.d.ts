@@ -587,12 +587,19 @@ declare global {
      * - receipts：transaction 幂等 receipt。key 为 "t:"+transactionId 编码
      *   （防 "__proto__"/"constructor" 等合法 id 字面量的原型污染语义），
      *   value 为结算 tick；entryCount 为 settled 自有键计数（admission
-     *   O(1) 权威，加载时校验）。
-     *   生命周期：只自动回收结算 tick 早于 now-5000 的过期条目；未过期
-     *   条目绝不因容量驱逐——满容（4096）且无过期可回收时新 transaction
-     *   拒绝（fail closed）。version 1 → 2 有已知无损迁移（只执行一次）；
-     * 未知/更高版本或 entryCount 与实际不符（手工损坏）时 fail closed：
-     *   原数据保留、拒绝一切新登记，直至人工处理。
+     *   O(1) 权威，加载时校验）；nextExpiryTick 为过期调度元数据（空表
+     *   null；非空 = min(settledAt)+retention+1——未到该 tick 的一切
+     *   清理/满容回收路径零全表扫描）。
+     *   生命周期：只自动回收结算 tick 早于 now-5000 且 value 完整有效的
+     *   过期条目；未过期条目绝不因容量驱逐——满容（4096）且未到过期点时
+     *   新 transaction O(1) 拒绝（fail closed）。损坏 value（非
+     *   [0,Game.time] 安全整数）不迁移、不删除、整体阻断。version 1（裸键，
+     *   raw key 原样编码，`abc` 与 `t:abc` 不碰撞）→ 2（前缀键+entryCount）
+     *   → 3（+nextExpiryTick）有已知无损迁移（临时结构全量校验后原子替换，
+     *   只执行一次）；未知/更高版本、entryCount 不符、存储键格式非法、
+     *   value 损坏或元数据不一致（手工损坏）时 fail closed：原数据保留、
+     *   拒绝一切新登记，直至人工处理（已可靠识别的旧 id 查询仍返回
+     *   already_settled）。
      * - lifecycle：生命周期标记（lastBeginTick/lastEndTick），global reset
      *   检测与对账基准标记用。
      * - treasuryPerf：指标快照（确定性计数器 + shadow 状态），由 treasury
@@ -600,10 +607,11 @@ declare global {
      */
     treasury?: {
       receipts?: {
-        version: 2;
+        version: 3;
         settled: Record<string, number>;
         updatedAt: number;
         entryCount: number;
+        nextExpiryTick: number | null;
       };
       lifecycle?: {
         lastBeginTick?: number;

@@ -13,11 +13,18 @@
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
 import { getRuntimeServices, getTreasuryService, registerRuntimeServices } from "@/runtime/runtimeServices";
-import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
+import {
+  clearTreasuryPersistenceForTest,
+  encodeReceiptKey,
+  TREASURY_RECEIPT_MAX_ENTRIES,
+  TREASURY_RECEIPT_RETENTION_TICKS,
+} from "@/runtime/treasury/receipts";
+import { resolveTreasuryHolder } from "@/runtime/treasury/holderResolution";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { formatTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { installRooms, type RoomSpec } from "@mock/treasury";
+import type { TreasuryHolderResolution } from "@/runtime/treasury/types";
 
 type RuntimeGlobal = typeof global & { __runtimeServices?: unknown };
 function clearRuntimeServicesForTest(): void {
@@ -51,7 +58,7 @@ function makeService(options?: {
   tasks?: Record<string, ResourceTransferTask>;
   reservations?: Record<string, ReservationSeed>;
   holderExists?: (holderId: string) => boolean;
-  resolveHolderRoom?: (holderId: string) => string | undefined;
+  resolveHolder?: (holderId: string) => TreasuryHolderResolution | undefined;
 }): TreasuryService {
   const rooms = installRooms(options?.rooms ?? ROOM_SPECS);
   return createTreasuryService({
@@ -59,7 +66,7 @@ function makeService(options?: {
     ...(options?.tasks !== undefined ? { getTasks: () => options.tasks! } : {}),
     ...(options?.reservations !== undefined ? { getReservations: () => options.reservations! } : {}),
     ...(options?.holderExists !== undefined ? { holderExists: options.holderExists } : {}),
-    ...(options?.resolveHolderRoom !== undefined ? { resolveHolderRoom: options.resolveHolderRoom } : {}),
+    ...(options?.resolveHolder !== undefined ? { resolveHolder: options.resolveHolder } : {}),
   });
 }
 
@@ -380,13 +387,16 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
     "r1": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "holder-A", amount: 3_000, expiresAt: 9_999 },
     "r2": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "holder-B", amount: 2_000, expiresAt: 9_999 },
   });
-  /** holder 归属表：A/B 归属 W1N57，C 归属 E5N59。 */
-  const holderRooms = (holderId: string): string | undefined =>
-    holderId === "holder-A" || holderId === "holder-B" ? "W1N57" : holderId === "holder-C" ? "E5N59" : undefined;
+  /** holder 归属表：A/B 归属 W1N57，C 归属 E5N59（模拟 game-object holder）。 */
+  const holderRooms = (holderId: string): TreasuryHolderResolution | undefined => {
+    if (holderId === "holder-A" || holderId === "holder-B") return { kind: "game-object", roomName: "W1N57" };
+    if (holderId === "holder-C") return { kind: "game-object", roomName: "E5N59" };
+    return undefined;
+  };
   const ownerDeps = {
     reservations: reservations(),
     holderExists: () => true,
-    resolveHolderRoom: holderRooms,
+    resolveHolder: holderRooms,
   };
 
   it("无 owner 时保守扣除全部活跃 reservation", () => {
@@ -404,7 +414,7 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
     const view = treasury.query({
       resource: RESOURCE_ENERGY,
       rooms: ["W1N57"],
-      owner: { holderId: "holder-A", scope: "production-reservation", roomName: "W1N57" },
+      owner: { holderId: "holder-A", holderKind: "game-object", scope: "production-reservation", roomName: "W1N57" },
     });
     expect(view.ownerStatus).toBe("excluded-own-reservations");
     expect(view.committed).toBe(2_000);
@@ -416,7 +426,7 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
     treasury.beginTick();
     const missing = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "holder-ZZ", scope: "production-reservation", roomName: "W1N57" },
+      owner: { holderId: "holder-ZZ", holderKind: "game-object", scope: "production-reservation", roomName: "W1N57" },
     });
     expect(missing.ownerStatus).toBe("invalid_fail_closed");
     expect(missing.spendable).toBe(0);
@@ -425,25 +435,25 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
 
     const wrongRoom = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "holder-A", scope: "production-reservation", roomName: "E5N59" },
+      owner: { holderId: "holder-A", holderKind: "game-object", scope: "production-reservation", roomName: "E5N59" },
     });
     expect(wrongRoom.ownerStatus).toBe("invalid_fail_closed");
 
     const noRoom = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "holder-A", scope: "production-reservation", roomName: "" },
+      owner: { holderId: "holder-A", holderKind: "game-object", scope: "production-reservation", roomName: "" },
     });
     expect(noRoom.ownerStatus).toBe("invalid_fail_closed");
 
     const emptyHolder = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "", scope: "production-reservation", roomName: "W1N57" },
+      owner: { holderId: "", holderKind: "game-object", scope: "production-reservation", roomName: "W1N57" },
     });
     expect(emptyHolder.ownerStatus).toBe("invalid_fail_closed");
 
     const wrongScope = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "holder-A", scope: "market-order" as never, roomName: "W1N57" },
+      owner: { holderId: "holder-A", holderKind: "game-object", scope: "market-order" as never, roomName: "W1N57" },
     });
     expect(wrongScope.ownerStatus).toBe("invalid_fail_closed");
   });
@@ -456,12 +466,12 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
         "r3": { roomName: "E5N59", resource: RESOURCE_ENERGY, holderId: "holder-C", amount: 700, expiresAt: 9_999 },
       },
       holderExists: () => true,
-      resolveHolderRoom: holderRooms,
+      resolveHolder: holderRooms,
     });
     treasury.beginTick();
     const view = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "holder-A", scope: "production-reservation", roomName: "W1N57" },
+      owner: { holderId: "holder-A", holderKind: "game-object", scope: "production-reservation", roomName: "W1N57" },
     });
     expect(view.ownerStatus).toBe("excluded-own-reservations");
     // W1N57 的 r1（A 本人）被排除；E5N59 不是 A 的归属房间——r2（也是 A 的）
@@ -476,12 +486,12 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
         "r1": { roomName: "E5N59", resource: RESOURCE_ENERGY, holderId: "holder-C", amount: 700, expiresAt: 9_999 },
       },
       holderExists: () => true,
-      resolveHolderRoom: holderRooms,
+      resolveHolder: holderRooms,
     });
     treasury.beginTick();
     const view = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "holder-A", scope: "production-reservation", roomName: "W1N57" },
+      owner: { holderId: "holder-A", holderKind: "game-object", scope: "production-reservation", roomName: "W1N57" },
     });
     expect(view.ownerStatus).toBe("excluded-own-reservations");
     expect(view.committed).toBe(700);
@@ -536,3 +546,241 @@ describe("RuntimeServices 集成", () => {
     expect(treasury.projectedUsedCapacity("W1N57", "storage")).toBe(1_000);
   });
 });
+
+describe("Treasury 两阶段 prepare/commit/abort 协议", () => {
+  const TX_ID = "stable:send:W1N57:1";
+
+  function twoPhaseInput(
+    treasury: TreasuryService,
+    transactionId: string,
+    delta = -500,
+  ): Parameters<TreasuryService["recordAcceptedTransaction"]>[0] {
+    return {
+      transactionId,
+      kind: "terminal.send",
+      source: "test",
+      decision: decisionOf(treasury),
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta }],
+    };
+  }
+
+  it("prepare→commit 成功兑现：journal/overlay/receipt 全部生效", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    const prepared = treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID));
+    expect(prepared.status).toBe("prepared");
+    if (prepared.status !== "prepared") return;
+    expect(prepared.preparedAtTick).toBe(Game.time);
+    // prepare 本身零状态（无 journal/无投影）。
+    expect(treasury.journal()).toHaveLength(0);
+    expect(treasury.projectedUsedCapacity("W1N57", "storage")).toBe(102_000);
+
+    const committed = treasury.commitPreparedTransaction(TX_ID);
+    expect(committed.status).toBe("committed");
+    expect(treasury.journal()).toHaveLength(1);
+    expect(treasury.projectedUsedCapacity("W1N57", "storage")).toBe(101_500);
+    // 重复 commit 幂等 already_settled。
+    expect(treasury.commitPreparedTransaction(TX_ID).status).toBe("already_settled");
+  });
+
+  it("abort 零状态释放：无 journal/无投影/无 receipt，同 id 可重新 prepare", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    expect(treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID)).status).toBe("prepared");
+    expect(treasury.abortPreparedTransaction(TX_ID).status).toBe("aborted");
+    expect(treasury.journal()).toHaveLength(0);
+    expect(treasury.projectedUsedCapacity("W1N57", "storage")).toBe(102_000);
+    expect(treasury.metrics().transactionPreparesAborted).toBe(1);
+    // 重新 prepare→commit 成功（abort 后 id 未被 receipt 占用）。
+    expect(treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID)).status).toBe("prepared");
+    expect(treasury.commitPreparedTransaction(TX_ID).status).toBe("committed");
+  });
+
+  it("prepare 预留容量槽：此后他人填满 store，commit 兑现仍不被容量拒绝", () => {
+    // seed MAX-2 条 receipt → prepare 占 1 槽 → 单阶段填满最后槽位 → commit 仍成功。
+    Memory.runtime = Memory.runtime ?? {};
+    const settled: Record<string, number> = {};
+    for (let i = 0; i < TREASURY_RECEIPT_MAX_ENTRIES - 2; i += 1) {
+      settled[encodeReceiptKey(`seed:${i}`)] = Game.time;
+    }
+    Memory.runtime.treasury = {
+      receipts: {
+        version: 3,
+        settled,
+        updatedAt: Game.time,
+        entryCount: TREASURY_RECEIPT_MAX_ENTRIES - 2,
+        nextExpiryTick: Game.time + TREASURY_RECEIPT_RETENTION_TICKS + 1,
+      },
+    };
+    const treasury = makeService();
+    treasury.beginTick();
+    expect(treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID)).status).toBe("prepared");
+    // 单阶段登记挤占最后一个槽位（admission 计入 pending 预留后仍剩 1）。
+    expect(
+      treasury.recordAcceptedTransaction(twoPhaseInput(treasury, formatTreasuryTransactionId("fill", "1"))).status,
+    ).toBe("recorded");
+    // store 已满；prepared 槽位已预留——commit 兑现不因容量被拒。
+    expect(treasury.commitPreparedTransaction(TX_ID).status).toBe("committed");
+  });
+
+  it("prepare→commit 期间 overlay 被他人推进导致重验失败：prepare_invalidated 零写入", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    expect(treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID, -90_000)).status).toBe("prepared");
+    // 他人单阶段把 energy 流出（prepare 验证时 100_000-90_000 可行）。
+    expect(
+      treasury.recordAcceptedTransaction(twoPhaseInput(treasury, formatTreasuryTransactionId("drain", "1"), -95_000))
+        .status,
+    ).toBe("recorded");
+    // commit 重验：prepare 基线叠加他人 overlay 后不再可行 → 拒绝且零写入。
+    const result = treasury.commitPreparedTransaction(TX_ID);
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.reason).toBe("prepare_invalidated");
+    expect(treasury.journal()).toHaveLength(1); // 只有 drain 那笔
+    expect(treasury.metrics().prepareInvalidatedCommits).toBe(1);
+  });
+
+  it("跨 tick prepared handle 失效（unknown_prepare），须重新 prepare", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    expect(treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID)).status).toBe("prepared");
+    Game.time += 1;
+    treasury.beginTick();
+    const result = treasury.commitPreparedTransaction(TX_ID);
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.reason).toBe("unknown_prepare");
+  });
+
+  it("endTick 后 prepare 拒绝 tick_closed、未决 handle 全部作废", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    expect(treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID)).status).toBe("prepared");
+    treasury.endTick();
+    const after = treasury.prepareTransaction(twoPhaseInput(treasury, "stable:send:W1N57:2"));
+    expect(after.status).toBe("rejected");
+    if (after.status === "rejected") expect(after.reason).toBe("tick_closed");
+    // tick 边界作废：既有 handle 不可 commit/abort。
+    const committed = treasury.commitPreparedTransaction(TX_ID);
+    expect(committed.status).toBe("rejected");
+    if (committed.status === "rejected") expect(committed.reason).toBe("unknown_prepare");
+    expect(treasury.abortPreparedTransaction(TX_ID).status).toBe("unknown_prepare");
+  });
+
+  it("已 commit 的 handle 不可 abort（already_finalized 携带结算 tick）", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID));
+    expect(treasury.commitPreparedTransaction(TX_ID).status).toBe("committed");
+    const aborted = treasury.abortPreparedTransaction(TX_ID);
+    expect(aborted.status).toBe("already_finalized");
+    if (aborted.status === "already_finalized") expect(aborted.committedAtTick).toBe(Game.time);
+  });
+
+  it("重复 prepare 同 id 幂等（返回同一 preparedAtTick，不重复占槽）", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    const first = treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID));
+    const second = treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID));
+    expect(first.status).toBe("prepared");
+    expect(second.status).toBe("prepared");
+    if (first.status === "prepared" && second.status === "prepared") {
+      expect(second.preparedAtTick).toBe(first.preparedAtTick);
+    }
+    expect(treasury.metrics().transactionsPrepared).toBe(1);
+  });
+});
+
+describe("Treasury typed owner 与 logical holder 解析", () => {
+  function logicalDeps() {
+    return {
+      reservations: {
+        "r1": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "nuker:nk1:G", amount: 3_000, expiresAt: 9_999 },
+        "r2": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "holder-B", amount: 2_000, expiresAt: 9_999 },
+      } as Record<string, ReservationSeed>,
+      holderExists: () => true,
+      resolveHolder: (holderId: string): TreasuryHolderResolution | undefined =>
+        holderId === "nuker:nk1:G"
+          ? { kind: "logical", roomName: "W1N57" }
+          : holderId === "holder-B"
+            ? { kind: "game-object", roomName: "W1N57" }
+            : undefined,
+    };
+  }
+
+  it("logical holder（nuker 逻辑名）合法排除自己预留，不再被误判降级", () => {
+    const treasury = makeService(logicalDeps());
+    treasury.beginTick();
+    const view = treasury.query({
+      resource: RESOURCE_ENERGY,
+      rooms: ["W1N57"],
+      owner: { holderId: "nuker:nk1:G", holderKind: "logical", scope: "production-reservation", roomName: "W1N57" },
+    });
+    expect(view.ownerStatus).toBe("excluded-own-reservations");
+    expect(view.committed).toBe(2_000);
+  });
+
+  it("声明 holderKind 与运行时解析类型不一致 fail closed（不得冒充其他类型 owner）", () => {
+    const treasury = makeService(logicalDeps());
+    treasury.beginTick();
+    const view = treasury.query({
+      resource: RESOURCE_ENERGY,
+      rooms: ["W1N57"],
+      owner: { holderId: "nuker:nk1:G", holderKind: "game-object", scope: "production-reservation", roomName: "W1N57" },
+    });
+    expect(view.ownerStatus).toBe("invalid_fail_closed");
+    expect(view.spendable).toBe(0);
+    expect(view.overcommitted).toBe(true);
+  });
+
+  it("resolveTreasuryHolder 默认解析：nuker/synthesis 命名空间与裸 object id", () => {
+    installRooms(ROOM_SPECS);
+    const originalGetObjectById = Game.getObjectById;
+    Game.getObjectById = ((id: string) => (id === "nk1" ? { room: { name: "W1N57" } } : null)) as never;
+    try {
+      expect(resolveTreasuryHolder("nuker:nk1:G")).toEqual({ kind: "logical", roomName: "W1N57" });
+      expect(resolveTreasuryHolder("synthesis:W1N57:energy")).toEqual({ kind: "logical", roomName: "W1N57" });
+      expect(resolveTreasuryHolder("nk1")).toEqual({ kind: "game-object", roomName: "W1N57" });
+      // 无法确证存在：未知对象 / 非 owned 房间 / 空 id。
+      expect(resolveTreasuryHolder("nuker:gone:G")).toBeUndefined();
+      expect(resolveTreasuryHolder("synthesis:Z9Z9:energy")).toBeUndefined();
+      expect(resolveTreasuryHolder("")).toBeUndefined();
+    } finally {
+      Game.getObjectById = originalGetObjectById;
+    }
+  });
+});
+
+describe("Treasury 查询输入 fail-closed 补全（unknown room / 空 scope / 非法布尔）", () => {
+  it("非管辖房间（unknown/unowned）拒绝，不给跨管辖乐观可用量", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    const view = treasury.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57", "Z9Z9"] });
+    expect(view.contextStatus).toBe("invalid_fail_closed");
+    expect(view.spendable).toBe(0);
+    expect(view.overcommitted).toBe(true);
+    expect(treasury.metrics().queryInvalidContexts).toBe(1);
+  });
+
+  it("空 rooms / 空 locations scope 拒绝（不给合法零集错觉）", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    expect(treasury.query({ resource: RESOURCE_ENERGY, rooms: [] }).contextStatus).toBe("invalid_fail_closed");
+    expect(treasury.query({ resource: RESOURCE_ENERGY, locations: [] }).contextStatus).toBe("invalid_fail_closed");
+    expect(treasury.metrics().queryInvalidContexts).toBe(2);
+  });
+
+  it("非布尔开关字段拒绝（0/'true' 等真值不得静默当 true）", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    expect(
+      treasury.query({ resource: RESOURCE_ENERGY, allowProjected: 1 as unknown as boolean }).contextStatus,
+    ).toBe("invalid_fail_closed");
+    expect(
+      treasury.query({ resource: RESOURCE_ENERGY, subtractReservations: "true" as unknown as boolean }).contextStatus,
+    ).toBe("invalid_fail_closed");
+    // 合法布尔与缺省不受影响。
+    expect(treasury.query({ resource: RESOURCE_ENERGY, allowIncoming: true }).contextStatus).toBe("valid");
+    expect(treasury.query({ resource: RESOURCE_ENERGY }).contextStatus).toBe("valid");
+  });
+});
+

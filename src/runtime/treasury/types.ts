@@ -135,6 +135,7 @@ export type TreasuryRejectionReason =
   | "invalid_kind"
   | "invalid_source"
   | "no_postings"
+  | "no_op_transaction"
   | "invalid_posting_delta"
   | "invalid_posting_resource"
   | "invalid_posting_room"
@@ -147,12 +148,49 @@ export type TreasuryRejectionReason =
   | "unknown_epoch"
   | "scope_mismatch"
   | "receipt_capacity_exhausted"
-  | "receipt_store_incompatible";
+  | "receipt_store_incompatible"
+  | "unknown_prepare"
+  | "prepare_invalidated";
+
+/** rejected 形状（验证/门禁/登记共用的具体拒绝结果）。 */
+export interface TreasuryRejectedResult {
+  readonly status: "rejected";
+  readonly reason: TreasuryRejectionReason;
+  readonly detail?: string;
+}
 
 export type TreasurySettlementResult =
   | { readonly status: "recorded"; readonly transactionId: string; readonly postings: number; readonly tick: number }
   | { readonly status: "already_settled"; readonly transactionId: string; readonly firstRecordedAtTick: number }
+  | TreasuryRejectedResult;
+
+// ─── 两阶段 transaction 协议（prepare → Game API → commit/abort） ───────────
+
+/**
+ * prepare 阶段结果：完整验证（幂等/admission 预检/格式/物理可行性）通过并
+ * 预留 receipt 槽位——此后调用方执行真实 Game 写动作，成功则 commit、
+ * 失败则 abort，Treasury 不得再因自身状态（容量/epoch/损坏）拒绝兑现。
+ */
+export type TreasuryPreparationResult =
+  | { readonly status: "prepared"; readonly transactionId: string; readonly preparedAtTick: number }
+  | { readonly status: "already_settled"; readonly transactionId: string; readonly firstRecordedAtTick: number }
   | { readonly status: "rejected"; readonly reason: TreasuryRejectionReason; readonly detail?: string };
+
+/**
+ * commit 兑现结果：prepared（已预留）唯一安全终态。重复 commit 返回
+ * already_settled；prepare→commit 期间 overlay 被其他 transaction 改变
+ * 导致物理重验失败时拒绝（prepare_invalidated，不产生任何状态）。
+ */
+export type TreasuryPreparedCommitResult =
+  | { readonly status: "committed"; readonly transactionId: string; readonly postings: number; readonly tick: number }
+  | { readonly status: "already_settled"; readonly transactionId: string; readonly firstRecordedAtTick: number }
+  | { readonly status: "rejected"; readonly reason: TreasuryRejectionReason; readonly detail?: string };
+
+/** abort 结果：释放 prepare 预留，零状态；已 commit 的 prepare 不可 abort。 */
+export type TreasuryPreparedAbortResult =
+  | { readonly status: "aborted"; readonly transactionId: string }
+  | { readonly status: "already_finalized"; readonly transactionId: string; readonly committedAtTick: number }
+  | { readonly status: "unknown_prepare"; readonly transactionId: string };
 
 /** 一笔已结算 transaction 的冻结 journal 条目（postings 全量保留在 heap）。 */
 export interface TreasuryJournalEntry {
@@ -320,10 +358,27 @@ export interface TreasuryCommitmentIndex {
  * 排除自己，其他 owner 与其他房间照常扣除）。声明房间与运行时解析的
  * holder 真实归属不一致、holder 不存在或身份格式非法时一律 fail closed。
  */
+/**
+ * holder 身份类型：game-object（真实 Game 对象 id，如 factory 结构 id）或
+ * logical（逻辑名 holder，如 `nuker:<id>:<resource>` / `synthesis:<room>:<resource>`）。
+ * production reservation 的 holderId 两种形态并存——owner 声明必须与运行时
+ * 解析出的类型一致（声明 game-object 但实为逻辑名 → fail closed），杜绝
+ * "知道 holderId 字符串就能冒充任意类型 owner"。
+ */
+export type TreasuryHolderKind = "game-object" | "logical";
+
+/** holder 运行时解析结果：身份类型 + 归属房间（存在性即"可解析出"）。 */
+export interface TreasuryHolderResolution {
+  readonly kind: TreasuryHolderKind;
+  readonly roomName: string;
+}
+
 export type TreasuryOwnerScope = "production-reservation";
 
 export interface TreasuryQueryOwner {
   readonly holderId: string;
+  /** holder 身份类型（必须与运行时解析结果一致，否则 fail closed）。 */
+  readonly holderKind: TreasuryHolderKind;
   readonly scope: TreasuryOwnerScope;
   /** 声明的 holder 归属房间（必须与运行时解析结果一致，否则 fail closed）。 */
   readonly roomName: string;
@@ -405,14 +460,33 @@ export interface TreasuryMetrics {
   epochScopeMismatches: number;
   settlementsAfterEndRejected: number;
   receiptsEvictedByRetention: number;
-  receiptsCorruptedEvicted: number;
   /** 满容且无过期可回收导致的 admission 拒绝（独立可审计）。 */
   receiptCapacityRejections: number;
-  /** v1→v2 等已知版本迁移执行次数（正常每次升级 ≤1）。 */
+  /** v1/v2→v3 等已知版本迁移执行次数（正常每次升级 ≤1）。 */
   receiptStoreMigrationsExecuted: number;
   /** 未知版本/手工损坏的 fail-closed 检出次数（持续拒绝登记直至人工处理）。 */
   receiptStoreIncompatibleFailures: number;
-  /** 非法查询上下文（非法资源/重复房间/重复位置/NaN withhold）fail-closed 次数。 */
+  /** receipt 全表扫描次数（load 校验/迁移/到期清理；正常路径不随操作数增长）。 */
+  receiptFullScans: number;
+  /** 未触发扫描即得出结论的 admission 次数（快路径）。 */
+  receiptAdmissionFastPaths: number;
+  /** 满容 O(1) 拒绝次数（未到过期点不做全表扫描）。 */
+  receiptAdmissionFullStoreBlocked: number;
+  /** 到达过期点触发的清理扫描次数。 */
+  receiptExpiryCleanupScans: number;
+  /** 剩余可登记槽位（MAX − entryCount − pending 预留；gauge）。 */
+  receiptSlotsRemaining: number;
+  /** 下一次可能过期的 tick（null = 空表/store 不可用；gauge）。 */
+  receiptNextExpiryTick: number | null;
+  /** 非 fresh epoch 数量达到上限后的拒绝次数（CPU 保护）。 */
+  freshEpochLimitRejections: number;
+  /** 两阶段 prepare 成功次数。 */
+  transactionsPrepared: number;
+  /** 两阶段 abort 次数（零状态释放）。 */
+  transactionPreparesAborted: number;
+  /** prepare→commit 期间物理重验失败的兑现拒绝次数（竞态信号）。 */
+  prepareInvalidatedCommits: number;
+  /** 非法查询上下文（非法资源/重复房间/重复位置/NaN withhold 等）fail-closed 次数。 */
   queryInvalidContexts: number;
   reconciliationInflowMismatches: number;
   reconciliationOutflowMismatches: number;
@@ -451,10 +525,19 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     epochScopeMismatches: 0,
     settlementsAfterEndRejected: 0,
     receiptsEvictedByRetention: 0,
-    receiptsCorruptedEvicted: 0,
     receiptCapacityRejections: 0,
     receiptStoreMigrationsExecuted: 0,
     receiptStoreIncompatibleFailures: 0,
+    receiptFullScans: 0,
+    receiptAdmissionFastPaths: 0,
+    receiptAdmissionFullStoreBlocked: 0,
+    receiptExpiryCleanupScans: 0,
+    receiptSlotsRemaining: 0,
+    receiptNextExpiryTick: null,
+    freshEpochLimitRejections: 0,
+    transactionsPrepared: 0,
+    transactionPreparesAborted: 0,
+    prepareInvalidatedCommits: 0,
     queryInvalidContexts: 0,
     reconciliationInflowMismatches: 0,
     reconciliationOutflowMismatches: 0,

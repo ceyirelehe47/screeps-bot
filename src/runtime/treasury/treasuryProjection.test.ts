@@ -308,6 +308,57 @@ describe("Treasury 原子 transaction journal", () => {
       expect(retry.firstRecordedAtTick).toBe(Game.time - 1);
     }
   });
+
+  it("no-op transaction：同 key 两腿完全抵消整笔拒绝（不占用幂等/容量语义）", () => {
+    const fixture = makeFixture();
+    const result = tx(fixture, formatTreasuryTransactionId("noop", 1), [
+      { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 500 },
+      { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 },
+    ]);
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") expect(result.reason).toBe("no_op_transaction");
+    expect(fixture.service.journal()).toHaveLength(0);
+    expect(peekTreasuryReceiptStore()?.entryCount).toBe(0);
+  });
+
+  it("非安全整数 delta（2^53）与合并溢出（MAX_SAFE_INTEGER 两腿）拒绝", () => {
+    const fixture = makeFixture();
+    const unsafe = tx(fixture, formatTreasuryTransactionId("unsafe", 1), [
+      { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 2 ** 53 },
+    ]);
+    expect(unsafe.status).toBe("rejected");
+    if (unsafe.status === "rejected") expect(unsafe.reason).toBe("invalid_posting_delta");
+
+    const overflow = tx(fixture, formatTreasuryTransactionId("overflow", 1), [
+      { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: Number.MAX_SAFE_INTEGER },
+      { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 1 },
+    ]);
+    expect(overflow.status).toBe("rejected");
+    if (overflow.status === "rejected") expect(overflow.reason).toBe("invalid_posting_delta");
+    expect(fixture.service.journal()).toHaveLength(0);
+    expect(fixture.service.metrics().transactionsRecorded).toBe(0);
+  });
+});
+
+describe("Treasury transactionId 铸造成分校验（防 tuple 边界碰撞）", () => {
+  it("成分含冒号/空串/非法字符/非法数字抛错（不得静默铸造歧义 id）", () => {
+    expect(() => formatTreasuryStableTransactionId("a:b", "c")).toThrow();
+    expect(() => formatTreasuryStableTransactionId("a", "b:c")).toThrow();
+    expect(() => formatTreasuryStableTransactionId("kind", "")).toThrow();
+    expect(() => formatTreasuryStableTransactionId("kind", "has space")).toThrow();
+    expect(() => formatTreasuryStableTransactionId("kind", Number.NaN)).toThrow();
+    expect(() => formatTreasuryStableTransactionId("kind", -1)).toThrow();
+    expect(() => formatTreasuryStableTransactionId("only-kind")).toThrow(); // 至少一个 discriminator
+    expect(() => formatTreasuryTransactionId("a:b", "c")).toThrow();
+  });
+
+  it("合法成分铸造无碰撞：kind 与 discriminator 边界不产生歧义 id", () => {
+    expect(formatTreasuryStableTransactionId("deal", "order-1")).toBe("deal:order-1");
+    expect(formatTreasuryStableTransactionId("deal", 42)).toBe("deal:42");
+    // 含冒号的分解一律抛错——合法成分空间内 join(":") 可逆，无歧义分解。
+    expect(formatTreasuryStableTransactionId("a", "b", "c")).toBe("a:b:c");
+    expect(formatTreasuryStableTransactionId("mkt", "W1N57", "order-9", 7)).toBe("mkt:W1N57:order-9:7");
+  });
 });
 
 describe("Treasury 跨 tick 对账（key 并集）", () => {

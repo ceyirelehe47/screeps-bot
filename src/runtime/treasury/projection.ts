@@ -45,6 +45,7 @@ import {
   type TreasuryReconciliationCategory,
   type TreasuryReconciliationSample,
   type TreasuryReconciliationSummary,
+  type TreasuryRejectedResult,
   type TreasuryRejectionReason,
   type TreasurySettlementResult,
   type TreasuryTickManifest,
@@ -52,7 +53,12 @@ import {
   treasuryLocationKey,
 } from "@/runtime/treasury/types";
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
-import { admitTreasuryReceipt, commitSettledReceipt, hasSettledReceipt } from "@/runtime/treasury/receipts";
+import {
+  admitTreasuryReceipt,
+  commitSettledReceipt,
+  hasSettledReceipt,
+  releaseAllTreasuryReceiptReservations,
+} from "@/runtime/treasury/receipts";
 
 const RECONCILIATION_SAMPLE_CAP = 16;
 const RECONCILIATION_TRACE_TRANSACTION_CAP = 4;
@@ -61,6 +67,21 @@ const PREVIOUS_JOURNAL_CAP = 512;
 
 const VALID_RESOURCES: ReadonlySet<string> = new Set<string>(RESOURCES_ALL);
 const VALID_LOCATION_KINDS: ReadonlySet<string> = new Set<string>(["storage", "terminal"]);
+
+/** 验证通过的交易形状：合并腿（净零腿已剔除）+ 位置容量聚合。 */
+interface ValidatedTransactionShape {
+  readonly merged: ReadonlyArray<{
+    roomName: string;
+    locationKind: "storage" | "terminal";
+    resource: string;
+    delta: number;
+  }>;
+  readonly capacityDeltaByLocation: ReadonlyMap<string, number>;
+}
+
+type TransactionValidation =
+  | { readonly status: "valid"; readonly shape: ValidatedTransactionShape }
+  | { readonly status: "invalid"; readonly result: TreasuryRejectedResult };
 
 export interface TreasuryProjectionState {
   /** 本 tick journal（endTick 归档时转存 previousJournal 并清空）。 */
@@ -106,6 +127,15 @@ export interface TreasuryProjectionController {
   /** 幂等查询：返回首次结算 tick（heap 本 tick 缓存 → Memory receipt）。 */
   isSettled(transactionId: string): number | undefined;
   /**
+   * 完整验证（格式 → 合并 → 物理可行性），零写入。两阶段 prepare 与单阶段
+   * recordTransaction 共用；epoch 校验（stale/unknown/scope）由 facade 的
+   * 注册表负责；observation 参数必须是 decision 指向的 exact observation。
+   */
+  validateTransaction(
+    input: TreasuryTransactionInput,
+    decisionObservation: TreasuryObservationView,
+  ): { status: "valid" } | { status: "invalid"; result: TreasuryRejectedResult };
+  /**
    * 原子登记：输入验证 → receipt admission 预检 → 物理可行性验证（金额
    * 非负/容量不越界）→ 一次性写入 journal + overlay + heap 缓存 + Memory
    * receipt。任一步失败零部分写入。epoch 校验（stale/unknown/scope）由
@@ -113,6 +143,13 @@ export interface TreasuryProjectionController {
    * observation（由 facade 从 epoch 注册表解析），本函数不回退 shared。
    */
   recordTransaction(input: TreasuryTransactionInput, decisionObservation: TreasuryObservationView): TreasurySettlementResult;
+  /**
+   * 两阶段 commit 兑现：prepare 已通过完整验证并预留 receipt 槽位，此处
+   * 重验物理可行性（prepare→commit 期间 overlay 可能被其他 transaction
+   * 改变，重验失败拒绝 prepare_invalidated、零写入）后原子写入。不再走
+   * admission（槽位已预留，兑现不可能因容量/兼容性被拒）。
+   */
+  commitPreparedTransaction(input: TreasuryTransactionInput, decisionObservation: TreasuryObservationView): TreasurySettlementResult;
   /** 本 tick 累计投影 delta（无 delta 返回 0，不回读 Game）。 */
   projectedDelta(roomName: string, locationKind: "storage" | "terminal", resource: string): number;
   /** 本 tick 该位置的容量净变化（O(1) 位置聚合，不扫描资源 overlay）。 */
@@ -169,22 +206,19 @@ export function createTreasuryProjectionController(
     return state.capacityDeltas.get(treasuryLocationKey(roomName, locationKind)) ?? 0;
   }
 
-  function recordTransaction(
+  /**
+   * 完整验证（零写入）：格式 → 同 transaction 合并（安全整数/合并溢出拒绝、
+   * 净零腿剔除、全抵消 no-op 拒绝）→ 物理可行性（容量/金额，含结果安全
+   * 整数边界）。物理基线 = decision observation + 本 tick overlay。
+   */
+  function validateTransaction(
     input: TreasuryTransactionInput,
     decisionObservation: TreasuryObservationView,
-  ): TreasurySettlementResult {
-    // ── 幂等优先于验证：已结算 id 的重放无论 payload 一律拒绝叠加 ──────────
-    const settledAt = isSettled(input.transactionId);
-    if (settledAt !== undefined) {
-      options.onDuplicateRejected?.(input.transactionId);
-      return { status: "already_settled", transactionId: input.transactionId, firstRecordedAtTick: settledAt };
-    }
-
-    // ── 输入格式验证（零写入，失败即返回） ──────────────────────────────────
-    const rejected = (reason: TreasuryRejectionReason, detail?: string): TreasurySettlementResult => {
-      options.onInvalidRejected?.(reason);
-      return { status: "rejected", reason, detail };
-    };
+  ): TransactionValidation {
+    const rejected = (reason: TreasuryRejectionReason, detail?: string): TransactionValidation => ({
+      status: "invalid",
+      result: { status: "rejected", reason, detail },
+    });
     if (!isValidTreasuryTransactionId(input.transactionId)) {
       return rejected("invalid_transaction_id", `transactionId 不符合 Treasury 边界规范: ${String(input.transactionId)}`);
     }
@@ -198,21 +232,10 @@ export function createTreasuryProjectionController(
       return rejected("no_postings");
     }
 
-    // ── receipt admission 预检：满容/版本不兼容时整笔拒绝，必须发生在写入
-    //    journal/overlay/heap 缓存/Memory receipt 任何状态之前 ──────────────
-    const admission = admitTreasuryReceipt(input.transactionId, Game.time);
-    if (admission.status === "already_settled") {
-      // migration 后 admission 才能看到的已结算 id（heap isSettled 未命中）。
-      options.onDuplicateRejected?.(input.transactionId);
-      return { status: "already_settled", transactionId: input.transactionId, firstRecordedAtTick: admission.firstSettledAtTick };
-    }
-    if (admission.status === "rejected") {
-      options.onInvalidRejected?.(admission.reason);
-      return { status: "rejected", reason: admission.reason, detail: admission.detail };
-    }
-
     // ── postings 合并（同一 transaction 内同 key 多腿先合并再验证） ────────
-    const merged = new Map<string, { roomName: string; locationKind: "storage" | "terminal"; resource: string; delta: number }>();
+    // delta 一律非零安全整数（NaN/Infinity/非整数/非安全整数拒绝）；
+    // 合并结果超出安全整数即溢出拒绝。
+    const mergedMap = new Map<string, { roomName: string; locationKind: "storage" | "terminal"; resource: string; delta: number }>();
     for (const posting of input.postings) {
       if (!posting || typeof posting !== "object") {
         return rejected("invalid_posting_delta", "posting 非对象");
@@ -227,15 +250,19 @@ export function createTreasuryProjectionController(
         return rejected("invalid_posting_resource", `resource 非法: ${String(posting.resource)}`);
       }
       const delta = posting.delta;
-      if (typeof delta !== "number" || !Number.isInteger(delta) || delta === 0) {
-        return rejected("invalid_posting_delta", `delta 必须为非零有限整数: ${String(delta)}`);
+      if (typeof delta !== "number" || !Number.isSafeInteger(delta) || delta === 0) {
+        return rejected("invalid_posting_delta", `delta 必须为非零安全整数: ${String(delta)}`);
       }
       const key = overlayKey(posting.roomName, posting.locationKind, posting.resource);
-      const existing = merged.get(key);
+      const existing = mergedMap.get(key);
       if (existing) {
-        existing.delta += delta;
+        const combined = existing.delta + delta;
+        if (!Number.isSafeInteger(combined)) {
+          return rejected("invalid_posting_delta", `合并后 delta 溢出安全整数: ${String(existing.delta)}+${String(delta)}`);
+        }
+        existing.delta = combined;
       } else {
-        merged.set(key, {
+        mergedMap.set(key, {
           roomName: posting.roomName,
           locationKind: posting.locationKind as "storage" | "terminal",
           resource: posting.resource,
@@ -243,17 +270,23 @@ export function createTreasuryProjectionController(
         });
       }
     }
-    // 合并后净值为零的多腿（完全抵消）不再产生物理变化，但交易仍合法记账。
+    // 净零腿剔除（同 key 多腿完全抵消无物理意义）；全部抵消 → no-op
+    // transaction 整笔拒绝——无物理效果的登记不得占用幂等/容量语义。
+    const merged = [...mergedMap.values()].filter((posting) => posting.delta !== 0);
+    if (merged.length === 0) {
+      return rejected("no_op_transaction", "全部 postings 合并后净值为零（no-op transaction）");
+    }
 
     // ── 物理可行性验证：基于 decision observation 的物理基线 + 本 tick
     //    overlay（已接受 intents）。fresh 决策不得回退 shared 基线 ─────────
     const capacityDeltaByLocation = new Map<string, number>();
-    for (const posting of merged.values()) {
+    for (const posting of merged) {
       const locationKey = treasuryLocationKey(posting.roomName, posting.locationKind);
-      capacityDeltaByLocation.set(
-        locationKey,
-        (capacityDeltaByLocation.get(locationKey) ?? 0) + posting.delta,
-      );
+      const combined = (capacityDeltaByLocation.get(locationKey) ?? 0) + posting.delta;
+      if (!Number.isSafeInteger(combined)) {
+        return rejected("invalid_posting_delta", "位置容量聚合溢出安全整数");
+      }
+      capacityDeltaByLocation.set(locationKey, combined);
     }
     for (const [locationKey, transactionCapacityDelta] of capacityDeltaByLocation) {
       const separator = locationKey.indexOf(":");
@@ -269,25 +302,36 @@ export function createTreasuryProjectionController(
       const existingCapacityDelta = locationCapacityDelta(roomName, locationKind);
       const projectedUsed = location.usedCapacity + existingCapacityDelta + transactionCapacityDelta;
       const physicalCapacity = location.usedCapacity + location.freeCapacity;
-      if (projectedUsed < 0 || projectedUsed > physicalCapacity) {
+      if (
+        !Number.isSafeInteger(projectedUsed) ||
+        projectedUsed < 0 ||
+        projectedUsed > physicalCapacity
+      ) {
         return rejected(
           "capacity_overflow",
           `${locationKey}: projectedUsed=${projectedUsed} physical=${physicalCapacity}`,
         );
       }
     }
-    for (const posting of merged.values()) {
+    for (const posting of merged) {
       const base = decisionObservation.amount(posting.roomName, posting.locationKind, posting.resource);
       const existing = projectedDelta(posting.roomName, posting.locationKind, posting.resource);
-      if (base + existing + posting.delta < 0) {
+      const projected = base + existing + posting.delta;
+      if (!Number.isSafeInteger(projected) || projected < 0) {
         return rejected(
           "insufficient_amount",
-          `${posting.roomName}:${posting.locationKind}:${posting.resource} projected=${base + existing + posting.delta}`,
+          `${posting.roomName}:${posting.locationKind}:${posting.resource} projected=${projected}`,
         );
       }
     }
+    return { status: "valid", shape: { merged, capacityDeltaByLocation } };
+  }
 
-    // ── 原子写入：journal + overlay + 容量聚合 + heap 缓存 + Memory receipt ─
+  /** 原子写入段（验证已通过）：journal + overlay + 容量聚合 + heap 缓存 + receipt。 */
+  function writeAcceptedTransaction(
+    input: TreasuryTransactionInput,
+    shape: ValidatedTransactionShape,
+  ): TreasurySettlementResult {
     const tick = Game.time;
     const frozenPostings: readonly TreasuryPosting[] = Object.freeze(
       input.postings.map((posting) =>
@@ -309,11 +353,11 @@ export function createTreasuryProjectionController(
       postings: frozenPostings,
     });
     state.journal.push(entry);
-    for (const posting of merged.values()) {
+    for (const posting of shape.merged) {
       const key = overlayKey(posting.roomName, posting.locationKind, posting.resource);
       state.overlay.set(key, (state.overlay.get(key) ?? 0) + posting.delta);
     }
-    for (const [locationKey, delta] of capacityDeltaByLocation) {
+    for (const [locationKey, delta] of shape.capacityDeltaByLocation) {
       state.capacityDeltas.set(locationKey, (state.capacityDeltas.get(locationKey) ?? 0) + delta);
     }
     state.settledThisTick.set(input.transactionId, tick);
@@ -321,6 +365,70 @@ export function createTreasuryProjectionController(
     revision += 1;
     options.onRecorded?.(entry);
     return { status: "recorded", transactionId: input.transactionId, postings: frozenPostings.length, tick };
+  }
+
+  function recordTransaction(
+    input: TreasuryTransactionInput,
+    decisionObservation: TreasuryObservationView,
+  ): TreasurySettlementResult {
+    // ── 幂等优先于一切：已结算 id 的重放无论 payload 一律拒绝叠加 ──────────
+    const settledAt = isSettled(input.transactionId);
+    if (settledAt !== undefined) {
+      options.onDuplicateRejected?.(input.transactionId);
+      return { status: "already_settled", transactionId: input.transactionId, firstRecordedAtTick: settledAt };
+    }
+
+    // ── receipt admission 预检：满容/版本不兼容时整笔拒绝，必须发生在写入
+    //    journal/overlay/heap 缓存/Memory receipt 任何状态之前 ──────────────
+    const admission = admitTreasuryReceipt(input.transactionId, Game.time);
+    if (admission.status === "already_settled") {
+      // migration 后 admission 才能看到的已结算 id（heap isSettled 未命中）。
+      options.onDuplicateRejected?.(input.transactionId);
+      return { status: "already_settled", transactionId: input.transactionId, firstRecordedAtTick: admission.firstSettledAtTick };
+    }
+    if (admission.status === "rejected") {
+      options.onInvalidRejected?.(admission.reason);
+      return { status: "rejected", reason: admission.reason, detail: admission.detail };
+    }
+
+    const validation = validateTransaction(input, decisionObservation);
+    if (validation.status === "invalid") {
+      options.onInvalidRejected?.(validation.result.reason);
+      return validation.result;
+    }
+    return writeAcceptedTransaction(input, validation.shape);
+  }
+
+  function commitPreparedTransaction(
+    input: TreasuryTransactionInput,
+    decisionObservation: TreasuryObservationView,
+  ): TreasurySettlementResult {
+    // 幂等仍优先：prepare→commit 之间被同 id 单阶段登记结算是合法竞态。
+    const settledAt = isSettled(input.transactionId);
+    if (settledAt !== undefined) {
+      options.onDuplicateRejected?.(input.transactionId);
+      return { status: "already_settled", transactionId: input.transactionId, firstRecordedAtTick: settledAt };
+    }
+    // 物理重验：prepare 之后 overlay 可能已被其他 transaction 推进，重验
+    // 失败 = 世界已变的超卖信号——拒绝（prepare_invalidated）且零写入，
+    // 比记录与事实不符的投影更安全。格式类失败在 prepare 已拦截，此处仅
+    // 防御性透传（同一 input 的格式不会翻转）。
+    const validation = validateTransaction(input, decisionObservation);
+    if (validation.status === "invalid") {
+      const physical =
+        validation.result.reason === "insufficient_amount" ||
+        validation.result.reason === "capacity_overflow" ||
+        validation.result.reason === "unknown_room" ||
+        validation.result.reason === "location_missing";
+      const reason: TreasuryRejectionReason = physical ? "prepare_invalidated" : validation.result.reason;
+      options.onInvalidRejected?.(reason);
+      return {
+        status: "rejected",
+        reason,
+        detail: `prepare→commit 重验失败: ${validation.result.detail ?? validation.result.reason}`,
+      };
+    }
+    return writeAcceptedTransaction(input, validation.shape);
   }
 
   function journalSnapshot(): readonly TreasuryJournalEntry[] {
@@ -621,12 +729,15 @@ export function createTreasuryProjectionController(
     state.capacityDeltas = new Map();
     state.settledThisTick = new Map();
     state.previousJournal = [];
+    releaseAllTreasuryReceiptReservations();
     revision += 1;
   }
 
   return {
     isSettled,
+    validateTransaction,
     recordTransaction,
+    commitPreparedTransaction,
     projectedDelta,
     locationCapacityDelta,
     projectionRevision: () => revision,

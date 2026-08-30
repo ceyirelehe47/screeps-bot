@@ -33,6 +33,7 @@ import {
   type TreasuryReservationRecord,
 } from "@/runtime/treasury/types";
 import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
+import { treasuryHolderExists } from "@/runtime/treasury/holderResolution";
 
 export interface TreasuryReservationInput {
   readonly roomName: string;
@@ -47,7 +48,11 @@ export interface TreasuryCommitmentBuildOptions {
   readonly tasks: Record<string, ResourceTransferTask>;
   readonly reservations: Record<string, TreasuryReservationInput>;
   readonly observation: TreasuryObservationView;
-  /** holder 存在性检查（生产=Game.getObjectById；测试可注入）。 */
+  /**
+   * holder 存在性检查（默认走 typed 解析：`nuker:`/`synthesis:` 逻辑名
+   * 命名空间 + 裸 Game object id——logical holder 不再被误判 orphan；
+   * 测试可注入）。
+   */
   readonly holderExists?: (holderId: string) => boolean;
   /** 本 tick 已结算 transaction 的位置容量净变化（facade overlay 注入）。 */
   readonly capacityDelta?: (roomName: string, kind: TreasuryLocationKind) => number;
@@ -56,8 +61,7 @@ export interface TreasuryCommitmentBuildOptions {
 }
 
 function defaultHolderExists(holderId: string): boolean {
-  const resolved = Game.getObjectById?.(holderId as Id<Structure>);
-  return resolved != null;
+  return treasuryHolderExists(holderId);
 }
 
 /** 内部构建期可变副本；对外经 TreasuryCommitmentIndex.metrics 以 readonly 暴露。 */

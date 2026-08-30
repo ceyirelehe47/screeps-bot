@@ -432,3 +432,34 @@ describe("承诺索引 revision invalidation（facade 级）", () => {
     expect(treasury.metrics().commitmentRebuilds).toBe(rebuilds);
   });
 });
+
+describe("holder 存在性默认解析（logical 命名空间不再误判 orphan）", () => {
+  it("默认 holderExists：`nuker:` 逻辑名与裸 object id 判活，未知 id 才 orphan", () => {
+    installEmpire();
+    const originalGetObjectById = Game.getObjectById;
+    Game.getObjectById = ((id: string) =>
+      id === "nuker-real" ? { room: { name: "W1N57" } } : null) as never;
+    try {
+      const observation = createTreasuryService({ getRooms: () => Object.values(Game.rooms) }).observation();
+      // nuker 逻辑名（生产写入形态 `nuker:<nukerId>:<resource>`）：嵌入 id
+      // 存在 → 不 orphan，committed 照常扣除（不得低估）。
+      // 裸 game object id 存在 → 不 orphan。
+      // 确证不存在的 id → orphan 读侧排除并计数。
+      const index = buildTreasuryCommitmentIndex({
+        tick: Game.time,
+        tasks: {},
+        reservations: {
+          "k1": { roomName: "W1N57", resource: "G", holderId: "nuker:nuker-real:G", amount: 100, expiresAt: Game.time + 100 },
+          "k2": { roomName: "W1N57", resource: "G", holderId: "nuker-real", amount: 50, expiresAt: Game.time + 100 },
+          "k3": { roomName: "W1N57", resource: "G", holderId: "gone-id", amount: 25, expiresAt: Game.time + 100 },
+        },
+        observation,
+      });
+      expect(index.reservedProduction("W1N57", "G")).toBe(150);
+      expect(index.metrics.orphanReservationsExcluded).toBe(1);
+      expect(index.metrics.activeReservationRecords).toBe(2);
+    } finally {
+      Game.getObjectById = originalGetObjectById;
+    }
+  });
+});
