@@ -103,7 +103,14 @@ describe("contract 构建与派生一致性", () => {
       { roomName: "W1N57", locationKind: "terminal", resource: "U", delta: 3_000 },
     ]);
     expect(built.contract.contractId).toBe(`ac:${built.contract.digest}`);
-    expect(built.contract.structureIds).toContain("W1N57:storage");
+    // 受控结构快照（第九轮）：posting locations + structureBindings 声明。
+    expect(Object.keys(built.contract.structureSnapshots)).toContain("W1N57:storage");
+    expect(built.contract.structureBindings.map((b) => `${b.roomName}:${b.locationKind}`)).toEqual(
+      expect.arrayContaining(["W1N57:storage", "W1N57:terminal"]),
+    );
+    // durableFacts 有界对账事实（intent 持久化来源）。
+    expect(built.contract.durableFacts?.version).toBe(1);
+    expect(built.contract.durableFacts?.payload).toContain("transfer|");
   });
 
   it("调用者事后修改原 args 不影响 canonical contract（冻结深拷贝）", () => {
@@ -387,11 +394,11 @@ describe("contract 执行", () => {
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
   });
 
-  it("adapter kind 不匹配拒绝（registry 被替换为不同 kind 的实现）", () => {
+  it("adapter version 演进后旧 contract 失效（同 kind 替换 v2 → 旧 v1 contract 拒绝）", () => {
     const service = makeService();
     expect(findTreasuryActionAdapter("test.transfer")).toBeDefined();
     const token = authorize(service, { amount: 500, transactionId: "ac_mismatch" });
-    // 构建合法 contract 后注销 adapter → 执行拒绝。
+    // 构建合法 contract 后替换 adapter 版本 → 旧 contract 失效（须重建+重新授权）。
     const built = buildTreasuryActionContract(service, {
       actionKind: "test.transfer",
       transactionId: "ac_mismatch",
@@ -407,7 +414,22 @@ describe("contract 执行", () => {
       contract: built.status === "built" ? built.contract : undefined,
       authorization: token,
     });
-    expect(result.status).toBe("executed_committed"); // 同 kind 替换仍可执行（版本演进）
+    expect(result.status).toBe("prepare_rejected");
+    if (result.status === "prepare_rejected") {
+      expect(result.reason).toBe("contract_invalid");
+      expect(result.detail).toContain("adapter version");
+    }
+    expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
+    // v2 adapter 构建的新 contract 可正常执行（token 需重新签发——旧 token
+    // 尚未绑定 version 时同样因 contract 重建而重授权）。
+    const token2 = authorize(service, { amount: 500, transactionId: "ac_mismatch_v2" });
+    const fresh = executeTreasuryActionContract(service, {
+      actionKind: "test.transfer",
+      transactionId: "ac_mismatch_v2",
+      args: transferArgs(),
+      authorization: token2,
+    });
+    expect(fresh.status).toBe("executed_committed");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
   });
 });

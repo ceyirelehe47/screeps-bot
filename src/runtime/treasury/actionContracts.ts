@@ -1,5 +1,7 @@
 /**
- * Treasury canonical action contract 与注册 adapter registry（第八轮）。
+ * Treasury canonical action contract 与注册 adapter registry（第八轮建立、
+ * 第九轮升级安全 canonical encoding + adapter version 绑定 + 完整结构
+ * incarnation 验证）。
  *
  * 动机：executePreparedAction(input, arbitraryCallback) 仍允许"postings 声称
  * 一种行为、callback 实际执行另一种行为"（声称发送 1 单位实发 10,000）。
@@ -11,45 +13,84 @@
  * - **adapter 契约**（每个 action kind 注册一次）：
  *   canonical action args → validate → derive postings → execute exact
  *   Game API（恰好一次）→ classify result → reconcile from post-observation；
+ * - **canonical encoding（第九轮 4.11）**：args 先经 canonicalEncoding
+ *   canonicalize（冻结深拷贝 + 确定性文本），validate/derivePostings/execute
+ *   与 digest 全部观察同一 canonical frozen args；digest 为 AC2 前缀（绑定
+ *   encoding version + adapter version + canonical args + canonical postings
+ *   + 结构身份），消除 JSON.stringify 的键序敏感与 undefined/NaN 静默碰撞；
+ * - **adapter version 绑定（第九轮）**：contract 绑定构建时的 adapter
+ *   version；执行时 registry 内 adapter version 必须一致（版本演进后旧
+ *   contract 一律失效，须重新构建与授权）；
+ * - **结构 incarnation（第九轮 4.12）**：受控 structureBindings 接口
+ *   （roomName + locationKind 受控枚举——不接受任意字符串）；contract 快照
+ *   覆盖 posting locations + 全部声明结构；执行前 fresh observation 必需
+ *   （配额耗尽拒绝执行——不退回 shared 降低验证等级）并逐结构重验；
  * - **注册边界**：registerTreasuryActionAdapter 仅 actionContracts.ts 自身
  *   与测试可调用（架构测试守护）；重复 kind 注册拒绝；
- * - **执行入口** executeTreasuryActionContract：adapter 存在且 kind 匹配 →
- *   contract 冻结校验（调用方事后修改原 args 不影响 canonical）→ 授权
- *   token 消费（postings 覆盖校验——实际动作不超出授权 scope）→ 结构
- *   incarnation 校验（变化拒绝）→ 经 executePreparedAction 走第八轮唯一
- *   安全顺序（durable intent → executing → adapter.execute 恰好一次 →
- *   commit/abort）；
- * - **executePreparedAction 降级为内部/test-only 低层原语**：生产模块不得
- *   以任意 callback 调用（架构测试守护）——真实生产模块未来只能消费
- *   Treasury 签发的 action contract；
+ * - **执行入口** executeTreasuryActionContract：adapter 存在/kind/version
+ *   匹配 → contract 冻结校验 → 结构 incarnation 校验（fresh）→ 授权 token
+ *   匹配预校验（digest/transactionId/覆盖——先于消费）→ 消费 → 经
+ *   executePreparedAction 走第八轮唯一安全顺序（durable intent →
+ *   executing → adapter.execute 恰好一次 → commit/abort）；
  * - 本轮不接任何真实生产 writer：内置测试 adapter（多 posting fixture +
- *   可配置副作用与 reconciler 结论）。
+ *   可编排副作用与 reconciler 结论）。
  */
 
 import type { TreasuryService } from "@/runtime/treasury/facade";
 import type { TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
 import type { TreasurySafeExecuteResult, TreasuryObservationScope, TreasuryPosting } from "@/runtime/treasury/types";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
+import { canonicalizeTreasuryActionArgs, TREASURY_CANONICAL_ENCODING_VERSION } from "@/runtime/treasury/canonicalEncoding";
 
 const ACTION_KIND_MAX = 128;
 const VALID_LOCATION_KINDS: ReadonlySet<string> = new Set<string>(["storage", "terminal"]);
 const VALID_RESOURCES: ReadonlySet<string> = new Set<string>(RESOURCES_ALL);
+/** contract 可声明的结构快照上限（posting locations + structureBindings）。 */
+const STRUCTURE_SNAPSHOT_MAX = 16;
+/** durable reconciliation payload 的有界上限（有界对账事实，不持久化完整 args）。 */
+const DURABLE_FACTS_PAYLOAD_MAX = 512;
+const DURABLE_FACTS_VERSION_MAX = 1_000_000;
 
 /** adapter 对账结论（与 faultResolution 的 resolution conclusion 同语义）。 */
 export type TreasuryActionReconcilerConclusion = "observed_committed" | "observed_not_executed" | "still_uncertain";
 
+/**
+ * reconciler 输入（第九轮完整化）：完整 contract-specific durable facts——
+ * 不再使用 `postings[0].resource` 或单一负数 amount 汇总这类过度简化事实。
+ */
 export interface TreasuryActionReconcilerFacts {
   readonly actionKind: string;
   readonly transactionId: string;
-  readonly resource: string;
-  readonly amount: number;
+  readonly contractId?: string;
+  readonly contractDigest?: string;
+  readonly adapterVersion?: number;
+  /** canonical postings 全量（reconciler 自行派生所需聚合）。 */
   readonly postings: readonly TreasuryPosting[];
+  /** adapter.durableFacts 的版本化有界对账事实（authority 携带时）。 */
+  readonly durablePayload?: string;
+  readonly durablePayloadVersion?: number;
+}
+
+/** 受控结构引用（第九轮）：adapter 声明额外 action-relevant 结构的唯一形状。 */
+export interface TreasuryActionStructureBinding {
+  readonly roomName: string;
+  readonly locationKind: "storage" | "terminal";
+  /** 快照 label（缺省 `${roomName}:${locationKind}`；须唯一）。 */
+  readonly label?: string;
+}
+
+/** adapter 提供的有界版本化 durable reconciliation payload。 */
+export interface TreasuryDurableFacts {
+  readonly version: number;
+  readonly payload: string;
 }
 
 /**
  * 受注册的 action adapter 契约。execute 必须恰好调用对应 Game API 一次并
  * 返回 {ok, ...}；reconcile 依据 post-fault observation 判定动作是否已发生
- * （未提供 reconcile 的 kind 不可签发 reconciliation capability）。
+ * （未提供 reconcile 的 kind 不可签发 reconciliation capability）。validate/
+ * derivePostings/structureBindings/durableFacts/execute 观察同一个 canonical
+ * frozen args（第九轮）。
  */
 export interface TreasuryActionAdapter<TArgs = unknown, TResult extends { ok: boolean } = { ok: boolean }> {
   readonly kind: string;
@@ -57,7 +98,10 @@ export interface TreasuryActionAdapter<TArgs = unknown, TResult extends { ok: bo
   validate(args: unknown): string | null;
   derivePostings(args: TArgs): readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
   execute(args: TArgs): TResult;
-  structureIds?(args: TArgs): readonly string[];
+  /** 额外 action-relevant 结构（受控形状；执行前全部重验 incarnation）。 */
+  structureBindings?(args: TArgs): readonly TreasuryActionStructureBinding[];
+  /** 有界版本化对账事实（持久 intent 的 durable payload 来源）。 */
+  durableFacts?(args: TArgs): TreasuryDurableFacts | null;
   reconcile?(facts: TreasuryActionReconcilerFacts, observation: unknown): TreasuryActionReconcilerConclusion;
 }
 
@@ -81,8 +125,11 @@ function validateAdapterShape(adapter: TreasuryActionAdapter): string | null {
   if (typeof adapter.validate !== "function") return "adapter.validate 缺失";
   if (typeof adapter.derivePostings !== "function") return "adapter.derivePostings 缺失";
   if (typeof adapter.execute !== "function") return "adapter.execute 缺失";
-  if (adapter.structureIds !== undefined && typeof adapter.structureIds !== "function") {
-    return "adapter.structureIds 须为函数";
+  if (adapter.structureBindings !== undefined && typeof adapter.structureBindings !== "function") {
+    return "adapter.structureBindings 须为函数";
+  }
+  if (adapter.durableFacts !== undefined && typeof adapter.durableFacts !== "function") {
+    return "adapter.durableFacts 须为函数";
   }
   if (adapter.reconcile !== undefined && typeof adapter.reconcile !== "function") {
     return "adapter.reconcile 须为函数";
@@ -148,21 +195,32 @@ export function resetTreasuryActionContractCountersForTest(): void {
 
 // ── contract ────────────────────────────────────────────────────────────────
 
-/** 不可伪造的 action contract（heap-only 冻结 capability；WeakSet 防伪）。 */
+/**
+ * 不可伪造的 action contract（heap-only 冻结 capability；WeakSet 防伪）。
+ * 第九轮：canonical args 与确定性文本同源（digest 输入）；adapter version
+ * 与结构快照绑定；durableFacts 为有界对账事实。
+ */
 export interface TreasuryActionContract {
   readonly __brand: "treasury-action-contract";
   /** "ac:"+digest 定长 identity。 */
   readonly contractId: string;
   readonly actionKind: string;
+  /** 构建时的 adapter version（执行时 registry 必须仍为该 version）。 */
+  readonly adapterVersion: number;
   readonly transactionId: string;
-  /** canonical action args 的冻结深拷贝（调用方事后修改原对象不影响）。 */
+  /** canonical action args 的冻结深拷贝（validate/derive/execute 同源）。 */
   readonly args: unknown;
-  /** adapter.derivePostings(args) 确定性派生（规范排序冻结）。 */
+  /** canonical args 的确定性文本（digest 输入；不持久化）。 */
+  readonly canonicalArgsText: string;
+  /** adapter.derivePostings(canonical) 确定性派生（规范排序冻结）。 */
   readonly postings: readonly TreasuryPosting[];
-  /** 构建时点的结构 incarnation 快照（locationKey → structureId）。 */
+  /** 全部 action-relevant 结构快照（label → structureId；含声明结构）。 */
   readonly structureSnapshots: Readonly<Record<string, string | undefined>>;
-  readonly structureIds: readonly string[];
+  /** 快照对应的 binding 集（label → room/location 受控映射；排序冻结）。 */
+  readonly structureBindings: readonly Readonly<TreasuryActionStructureBinding>[];
   readonly digest: string;
+  /** adapter.durableFacts(canonical) 的有界对账事实（intent 持久化来源）。 */
+  readonly durableFacts?: Readonly<TreasuryDurableFacts>;
   readonly epoch: {
     readonly scope: TreasuryObservationScope;
     readonly epochSeq: number;
@@ -172,21 +230,6 @@ export interface TreasuryActionContract {
 }
 
 const contractRegistry = new WeakSet<TreasuryActionContract>();
-
-/** 冻结深拷贝（canonical args——原始对象与数组逐层复制冻结）。 */
-function freezeCanonical(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return Object.freeze(value.map(freezeCanonical));
-  }
-  if (value && typeof value === "object") {
-    const copy: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>)) {
-      copy[key] = freezeCanonical((value as Record<string, unknown>)[key]);
-    }
-    return Object.freeze(copy);
-  }
-  return value;
-}
 
 function postingKey(posting: { roomName: string; locationKind: string; resource: string }): string {
   return `${posting.roomName}\u0000${posting.locationKind}\u0000${posting.resource}`;
@@ -214,6 +257,51 @@ function validateDerivedPostings(postings: unknown): string | null {
   return null;
 }
 
+/** structureBindings 输出的受控校验（adapter 输出不可信——逐项验证）。 */
+function validateStructureBindings(
+  bindings: unknown,
+): readonly TreasuryActionStructureBinding[] | string {
+  if (!Array.isArray(bindings)) return "structureBindings 输出须为数组";
+  if (bindings.length > STRUCTURE_SNAPSHOT_MAX) {
+    return `structureBindings 超过上限 ${String(STRUCTURE_SNAPSHOT_MAX)}`;
+  }
+  const seenLabels = new Set<string>();
+  const typed: TreasuryActionStructureBinding[] = [];
+  for (const binding of bindings) {
+    if (!binding || typeof binding !== "object") return "structureBinding 非对象";
+    const candidate = binding as Partial<TreasuryActionStructureBinding>;
+    if (typeof candidate.roomName !== "string" || candidate.roomName.length === 0 || candidate.roomName.length > 16) {
+      return "structureBinding.roomName 非法";
+    }
+    if (candidate.locationKind !== "storage" && candidate.locationKind !== "terminal") {
+      return `structureBinding.locationKind 非法（受控枚举 storage|terminal）: ${String(candidate.locationKind)}`;
+    }
+    const label = candidate.label ?? `${candidate.roomName}:${candidate.locationKind}`;
+    if (typeof label !== "string" || label.length === 0 || label.length > 48) return "structureBinding label 非法";
+    if (seenLabels.has(label)) return `structureBinding label 重复: ${label}`;
+    seenLabels.add(label);
+    typed.push({ roomName: candidate.roomName, locationKind: candidate.locationKind, label });
+  }
+  return typed;
+}
+
+/** durableFacts 输出的受控校验（有界、版本化；调用方先行判空）。 */
+function validateDurableFacts(facts: TreasuryDurableFacts): string | null {
+  if (!facts || typeof facts !== "object") return "durableFacts 输出非对象";
+  if (
+    typeof facts.version !== "number" ||
+    !Number.isSafeInteger(facts.version) ||
+    facts.version <= 0 ||
+    facts.version > DURABLE_FACTS_VERSION_MAX
+  ) {
+    return "durableFacts.version 须为正安全整数";
+  }
+  if (typeof facts.payload !== "string" || facts.payload.length === 0 || facts.payload.length > DURABLE_FACTS_PAYLOAD_MAX) {
+    return `durableFacts.payload 须为 1..${String(DURABLE_FACTS_PAYLOAD_MAX)} 字符`;
+  }
+  return null;
+}
+
 export interface TreasuryActionContractRequest {
   readonly actionKind: string;
   readonly transactionId: string;
@@ -224,8 +312,8 @@ export interface TreasuryActionContractRequest {
 /**
  * 执行请求：预构建 contract（伪造对象一律无效）或 actionKind/transactionId/
  * args 构建参数——二选一；authorization 为授权 token（单资源 action 一个；
- * 多资源 action 每种负 posting 资源各一个——执行时逐个消费并做联合覆盖
- * 校验，实际动作不得超出授权 scope）。
+ * 多资源 action 每种负 posting 资源各一个——匹配校验先于消费、执行时联合
+ * 覆盖校验，实际动作不得超出授权 scope）。
  */
 export interface TreasuryActionExecutionRequest {
   readonly contract?: TreasuryActionContract;
@@ -244,12 +332,28 @@ export type TreasuryActionContractResult =
       readonly detail: string;
     };
 
+/** 单条 posting 的长度前缀 canonical 文本（digest 输入）。 */
+function canonicalPostingText(posting: TreasuryPosting): string {
+  return `s:${String(posting.roomName.length)}:${posting.roomName}:s:${String(posting.locationKind.length)}:${posting.locationKind}:s:${String(posting.resource.length)}:${posting.resource}:n:${String(posting.delta)}`;
+}
 
+/** 结构快照的长度前缀 canonical 文本（label 排序确定）。 */
+function canonicalStructuresText(structureSnapshots: Record<string, string | undefined>): string {
+  return [...Object.keys(structureSnapshots).sort()]
+    .map((label) => {
+      const structureId = structureSnapshots[label];
+      const value = structureId === undefined ? "-" : structureId;
+      return `s:${String(label.length)}:${label}:s:${String(value.length)}:${value}`;
+    })
+    .join(",");
+}
 
 /**
- * 构建 canonical action contract：adapter 校验 args → derivePostings 确定性
- * 派生 → 结构 incarnation 快照 → digest 绑定 → 冻结 + 私有 registry 注册。
- * posts 与 Game API 参数同源（同一 args 派生），两套事实通道不复存在。
+ * 构建 canonical action contract：canonicalize args → adapter 校验 →
+ * derivePostings 确定性派生 → 结构 incarnation 快照（posting locations +
+ * 受控 structureBindings）→ digest 绑定（AC2）→ 冻结 + 私有 registry 注册。
+ * postings 与 Game API 参数同源（同一 canonical args 派生），两套事实通道
+ * 不复存在。
  */
 export function buildTreasuryActionContract(
   service: TreasuryService,
@@ -272,47 +376,101 @@ export function buildTreasuryActionContract(
       detail: `action kind ${request.actionKind} 无注册 adapter（真实生产动作必须经注册 adapter 执行）`,
     };
   }
-  const argsError = adapter.validate(request.args);
+  // 安全 canonical encoding（第九轮 4.11）：先 canonicalize，validate/
+  // derivePostings/structureBindings/durableFacts/execute 与 digest 全部观察
+  // 同一 canonical frozen args。
+  const canonicalized = canonicalizeTreasuryActionArgs(request.args);
+  if (canonicalized.status === "rejected") {
+    actionContractEvents.rejected += 1;
+    return { status: "rejected", reason: "contract_invalid", detail: `args canonicalization 失败: ${canonicalized.detail}` };
+  }
+  const canonicalArgs = canonicalized.canonical;
+  const argsError = adapter.validate(canonicalArgs);
   if (argsError !== null) {
     actionContractEvents.rejected += 1;
     return { status: "rejected", reason: "contract_invalid", detail: `args 校验失败: ${argsError}` };
   }
-  const derived = adapter.derivePostings(request.args);
+  const derived = adapter.derivePostings(canonicalArgs);
   const postingsError = validateDerivedPostings(derived);
   if (postingsError !== null) {
     actionContractEvents.rejected += 1;
     return { status: "rejected", reason: "contract_invalid", detail: `derivePostings 输出非法: ${postingsError}` };
   }
   const observation = service.observation();
-  // 结构 incarnation 快照：posting 涉及的每个 location 的 structureId。
+  // 结构 incarnation 快照（第九轮 4.12）：posting 涉及的每个 location 的
+  // structureId + adapter 受控声明的额外结构（全部执行前重验）。
   const structureSnapshots: Record<string, string | undefined> = {};
+  const bindingList: TreasuryActionStructureBinding[] = [];
   const locationSeen = new Set<string>();
   for (const posting of derived) {
     const key = `${posting.roomName}:${posting.locationKind}`;
     if (locationSeen.has(key)) continue;
     locationSeen.add(key);
-    if (observation.hasRoom(posting.roomName)) {
-      structureSnapshots[key] = observation.location(posting.roomName, posting.locationKind as "storage" | "terminal").structureId;
+    structureSnapshots[key] = observation.hasRoom(posting.roomName)
+      ? observation.location(posting.roomName, posting.locationKind as "storage" | "terminal").structureId
+      : undefined;
+    bindingList.push({ roomName: posting.roomName, locationKind: posting.locationKind as "storage" | "terminal", label: key });
+  }
+  if (adapter.structureBindings !== undefined) {
+    const bindings = validateStructureBindings(adapter.structureBindings(canonicalArgs));
+    if (typeof bindings === "string") {
+      actionContractEvents.rejected += 1;
+      return { status: "rejected", reason: "contract_invalid", detail: `structureBindings 输出非法: ${bindings}` };
+    }
+    for (const binding of bindings) {
+      if (Object.prototype.hasOwnProperty.call(structureSnapshots, binding.label)) continue; // 与 posting location 重合
+      // 声明的结构必须可验证：房间不在管辖或位置缺失 → 拒绝（不允许
+      // "声明了但无法验证"）。
+      if (!observation.hasRoom(binding.roomName)) {
+        actionContractEvents.rejected += 1;
+        return {
+          status: "rejected",
+          reason: "contract_invalid",
+          detail: `structureBinding 声明房间 ${binding.roomName} 不在管辖（无法验证 incarnation——拒绝）`,
+        };
+      }
+      structureSnapshots[binding.label] = observation.location(binding.roomName, binding.locationKind).structureId;
+      bindingList.push(binding);
     }
   }
-  const structureIds = adapter.structureIds ? [...adapter.structureIds(request.args)] : [];
+  if (bindingList.length > STRUCTURE_SNAPSHOT_MAX) {
+    actionContractEvents.rejected += 1;
+    return {
+      status: "rejected",
+      reason: "contract_invalid",
+      detail: `结构快照超过上限 ${String(STRUCTURE_SNAPSHOT_MAX)}（posting locations + structureBindings 合计）`,
+    };
+  }
+  const sortedBindings = [...bindingList].sort((a, b) => ((a.label ?? "") < (b.label ?? "") ? -1 : (a.label ?? "") > (b.label ?? "") ? 1 : 0));
+  let durableFacts: TreasuryDurableFacts | undefined;
+  if (adapter.durableFacts !== undefined) {
+    const facts = adapter.durableFacts(canonicalArgs);
+    if (facts !== null && facts !== undefined) {
+      const factsError = validateDurableFacts(facts);
+      if (factsError !== null) {
+        actionContractEvents.rejected += 1;
+        return { status: "rejected", reason: "contract_invalid", detail: `durableFacts 输出非法: ${factsError}` };
+      }
+      durableFacts = { version: facts.version, payload: facts.payload };
+    }
+  }
   const sortedPostings = [...derived].sort((a, b) => (postingKey(a) < postingKey(b) ? -1 : postingKey(a) > postingKey(b) ? 1 : 0));
-  const canonicalArgs = JSON.stringify(request.args);
   const digest = hashTreasuryCanonicalString(
-    `AC1:s:${String(request.actionKind.length)}:${request.actionKind}:s:${String(request.transactionId.length)}:${request.transactionId}:s:${String(canonicalArgs.length)}:${canonicalArgs}:${sortedPostings
-      .map((p) => `${p.roomName}|${p.locationKind}|${p.resource}|${String(p.delta)}`)
-      .join(",")}`,
+    `AC2:ce:${String(TREASURY_CANONICAL_ENCODING_VERSION)}:k:${String(request.actionKind.length)}:${request.actionKind}:av:${String(adapter.version)}:t:${String(request.transactionId.length)}:${request.transactionId}:a:${String(canonicalized.text.length)}:${canonicalized.text}:p:${sortedPostings.map(canonicalPostingText).join(",")}:s:${canonicalStructuresText(structureSnapshots)}`,
   );
   const contract = Object.freeze({
     __brand: "treasury-action-contract",
     contractId: `ac:${digest}`,
     actionKind: request.actionKind,
+    adapterVersion: adapter.version,
     transactionId: request.transactionId,
-    args: freezeCanonical(request.args),
+    args: canonicalArgs,
+    canonicalArgsText: canonicalized.text,
     postings: Object.freeze(sortedPostings.map((p) => Object.freeze({ ...p }))),
     structureSnapshots: Object.freeze({ ...structureSnapshots }),
-    structureIds: Object.freeze([...structureIds]),
+    structureBindings: Object.freeze(sortedBindings.map((b) => Object.freeze({ ...b }))),
     digest,
+    ...(durableFacts !== undefined ? { durableFacts: Object.freeze({ ...durableFacts }) } : {}),
     epoch: {
       scope: observation.epoch.scope,
       epochSeq: observation.epoch.epochSeq,
@@ -325,14 +483,38 @@ export function buildTreasuryActionContract(
   return { status: "built", contract };
 }
 
+/** 只读匹配校验（零消费）：token 与 contract 的全部绑定事实。 */
+function describeTokenContractMismatch(
+  token: TreasuryAuthorizationToken,
+  contract: TreasuryActionContract,
+  adapter: TreasuryActionAdapter,
+): string | null {
+  if (token.transactionId !== contract.transactionId) {
+    return `token 绑定 transactionId ${token.transactionId} 与 contract ${contract.transactionId} 不一致`;
+  }
+  if (token.actionKind !== contract.actionKind) {
+    return `token 绑定 actionKind ${token.actionKind} 与 contract ${contract.actionKind} 不一致`;
+  }
+  if (token.contractDigest !== undefined && token.contractDigest !== contract.digest) {
+    return "token 绑定的 contract digest 与实际 contract 不一致";
+  }
+  if (token.adapterVersion !== undefined && token.adapterVersion !== adapter.version) {
+    return `token 绑定 adapter version ${String(token.adapterVersion)} 与当前 ${String(adapter.version)} 不一致`;
+  }
+  return null;
+}
+
 /**
  * 执行 action contract（生产 writer 的唯一入口）：
- * 1. contract 防伪（私有 registry 对象身份——伪造/JSON 副本一律无效）与
- *    adapter kind 匹配（mismatch 拒绝）；
- * 2. 授权 token 消费（transactionId 绑定 + postings 覆盖校验——实际动作
- *    不超出授权 scope；无授权的执行一律拒绝）；
- * 3. 结构 incarnation 校验（contract 快照 vs 当前 observation，变化拒绝）；
- * 4. 经 executePreparedAction 走第八轮唯一安全顺序（durable intent →
+ * 1. contract 防伪（私有 registry 对象身份——伪造/JSON 副本一律无效）、跨
+ *    tick 失效、adapter kind 与 version 匹配（版本演进后旧 contract 失效）；
+ * 2. 结构 incarnation 校验（第九轮前置到消费之前）：fresh observation 必需
+ *    （配额耗尽拒绝执行——不退回 shared 降低验证等级），对全部声明结构
+ *    重新验证；
+ * 3. 授权 token 匹配预校验（digest/actionKind/transactionId/覆盖——零消费）；
+ * 4. 逐 token 消费（posting coverage 由消费内部校验；多资源 action 每种负
+ *    posting 资源分别授权、联合覆盖）；
+ * 5. 经 executePreparedAction 走第八轮唯一安全顺序（durable intent →
  *    executing → adapter.execute 恰好一次 → commit/abort/fault 隔离）。
  */
 export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
@@ -373,6 +555,14 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
     actionContractEvents.adapterMismatches += 1;
     return { status: "prepare_rejected", reason: "adapter_kind_mismatch", detail: `adapter kind ${adapter.kind} 与 contract ${contract.actionKind} 不匹配` };
   }
+  if (adapter.version !== contract.adapterVersion) {
+    actionContractEvents.adapterMismatches += 1;
+    return {
+      status: "prepare_rejected",
+      reason: "contract_invalid",
+      detail: `adapter version 已演进（contract 构建于 v${String(contract.adapterVersion)}，registry 当前 v${String(adapter.version)}）——旧 contract 失效，须重新构建与授权`,
+    };
+  }
   const authorizationTokens: readonly TreasuryAuthorizationToken[] =
     request.authorization === undefined
       ? []
@@ -387,24 +577,16 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
       detail: "action contract 执行必须携带授权 token（真实写动作不得只凭物理可行性通过）",
     };
   }
-  // 逐 token 消费：每个 token 只校验自己 resource 的 postings（多资源
-  // action 每种负 posting 资源分别授权）。
+  // 匹配预校验（零消费）：全部 token 的 digest/actionKind/transactionId 绑定
+  // 先于任何消费与结构校验。
   for (const token of authorizationTokens) {
-    const resourcePostings = contract.postings.filter((posting) => posting.resource === token.resource);
-    const consumed = service.consumeTreasuryAuthorization(token, {
-      transactionId: contract.transactionId,
-      postings: resourcePostings,
-    });
-    if (consumed.status !== "ok") {
+    const mismatch = describeTokenContractMismatch(token, contract, adapter);
+    if (mismatch !== null) {
       actionContractEvents.rejected += 1;
-      return { status: "prepare_rejected", reason: "authorization_invalid", detail: `授权消费失败（${consumed.reason}）: ${consumed.detail}` };
-    }
-    if (token.contractDigest !== undefined && token.contractDigest !== contract.digest) {
-      actionContractEvents.rejected += 1;
-      return { status: "prepare_rejected", reason: "contract_invalid", detail: "授权绑定的 contract digest 与实际 contract 不一致" };
+      return { status: "prepare_rejected", reason: "contract_invalid", detail: `授权 token 与 contract 不匹配: ${mismatch}` };
     }
   }
-  // 联合覆盖校验：每个负 posting 必须被至少一个已消费 token 的 scope 覆盖。
+  // 联合覆盖校验（零消费）：每个负 posting 必须被至少一个 token 的 scope 覆盖。
   for (const posting of contract.postings) {
     if (posting.delta >= 0) continue;
     const covered = authorizationTokens.some(
@@ -422,24 +604,45 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
       };
     }
   }
-  // 结构 incarnation 校验：contract 快照 vs 执行时点的结构现实。shared
-  // observation 是 tick 级不可变快照（同 tick 内恒等），故优先用一次 fresh
-  // 观察重扫结构（额度耗尽时退回 shared——prepare 的物理验证仍兜底位置
-  // 存在性与容量）。
+  // 结构 incarnation 校验（第九轮 4.12，先于消费）：fresh observation 必需
+  // ——配额耗尽拒绝执行，不退回 shared observation 降低验证等级；对全部
+  // 声明结构（posting locations + structureBindings）逐项重验。
   const freshObservation = service.beginFreshObservation();
-  const observation = freshObservation ?? service.observation();
-  for (const posting of contract.postings) {
-    const key = `${posting.roomName}:${posting.locationKind}`;
-    const currentStructureId = observation.hasRoom(posting.roomName)
-      ? observation.location(posting.roomName, posting.locationKind as "storage" | "terminal").structureId
+  if (freshObservation === null) {
+    actionContractEvents.rejected += 1;
+    return {
+      status: "prepare_rejected",
+      reason: "fresh_observation_unavailable",
+      detail: "fresh observation 配额耗尽——无法在不降低验证等级的前提下确认结构 incarnation（fail closed，拒绝执行）",
+    };
+  }
+  for (const binding of contract.structureBindings) {
+    const label = binding.label ?? `${binding.roomName}:${binding.locationKind}`;
+    const currentStructureId = freshObservation.hasRoom(binding.roomName)
+      ? freshObservation.location(binding.roomName, binding.locationKind).structureId
       : undefined;
-    if (contract.structureSnapshots[key] !== currentStructureId) {
+    const snapshotId = contract.structureSnapshots[label];
+    if (snapshotId !== currentStructureId) {
       actionContractEvents.rejected += 1;
       return {
         status: "prepare_rejected",
         reason: "structure_replaced",
-        detail: `结构 incarnation 已变化（${key}: ${String(contract.structureSnapshots[key])} → ${String(currentStructureId)}）——必须重新构建 contract`,
+        detail: `结构 incarnation 已变化（${label}: ${String(snapshotId)} → ${String(currentStructureId)}）——必须重新构建 contract`,
       };
+    }
+  }
+  // 逐 token 消费（匹配与覆盖已预校验——消费阶段的 scope 校验防御性兜底）：
+  // 每个 token 只校验自己 resource 的 postings（多资源 action 每种负 posting
+  // 资源分别授权）。
+  for (const token of authorizationTokens) {
+    const resourcePostings = contract.postings.filter((posting) => posting.resource === token.resource);
+    const consumed = service.consumeTreasuryAuthorization(token, {
+      transactionId: contract.transactionId,
+      postings: resourcePostings,
+    });
+    if (consumed.status !== "ok") {
+      actionContractEvents.rejected += 1;
+      return { status: "prepare_rejected", reason: "authorization_invalid", detail: `授权消费失败（${consumed.reason}）: ${consumed.detail}` };
     }
   }
   return service.executePreparedAction(
@@ -533,8 +736,17 @@ export function makeTreasuryTestTransferAdapter(
       if (args.outcome === "throw") throw new Error("test.transfer: injected execution failure");
       return { ok: args.outcome !== "non-ok" };
     },
-    structureIds(args: TreasuryTestTransferArgs): readonly string[] {
-      return [`${args.fromRoom}:${args.fromLocation}`, `${args.toRoom}:${args.toLocation}`];
+    structureBindings(args: TreasuryTestTransferArgs): readonly TreasuryActionStructureBinding[] {
+      return [
+        { roomName: args.fromRoom, locationKind: args.fromLocation },
+        { roomName: args.toRoom, locationKind: args.toLocation },
+      ];
+    },
+    durableFacts(args: TreasuryTestTransferArgs): TreasuryDurableFacts {
+      return {
+        version: 1,
+        payload: `transfer|${args.fromRoom}:${args.fromLocation}|${args.toRoom}:${args.toLocation}|${args.resource}|${String(args.amount)}`.slice(0, DURABLE_FACTS_PAYLOAD_MAX),
+      };
     },
     reconcile(): TreasuryActionReconcilerConclusion {
       return reconcileConclusion;

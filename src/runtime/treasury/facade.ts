@@ -1383,6 +1383,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         ownerKey: treasuryAuthorizationOwnerKey(request.owner),
         serviceGeneration,
         ...(request.contractDigest !== undefined ? { contractDigest: request.contractDigest } : {}),
+        ...(request.adapterVersion !== undefined ? { adapterVersion: request.adapterVersion } : {}),
         tick: Game.time,
       });
       authorizationRegistry.add(token);
@@ -2030,6 +2031,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const quarantined = readTreasuryQuarantineEntry(input.transactionId);
       const intended = quarantined === undefined ? readTreasuryIntentEntry(input.transactionId) : undefined;
       // 归一化双权威（quarantine 优先；intent 为 emergency authority 兜底）。
+      // contract 绑定事实（contractId/contractDigest/adapterVersion/durable
+      // payload）目前仅 intent 权威携带；quarantine entry 无 contract 字段。
       const facts0 =
         quarantined !== undefined
           ? {
@@ -2039,6 +2042,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
               actionKind: quarantined.kind,
               recordedAt: quarantined.recordedAt,
               postings: quarantined.deltas as unknown as readonly { roomName: string; locationKind: string; resource: string; delta: number }[],
+              contractId: undefined as string | undefined,
+              contractDigest: undefined as string | undefined,
+              adapterVersion: undefined as number | undefined,
+              durablePayload: undefined as string | undefined,
+              durablePayloadVersion: undefined as number | undefined,
             }
           : intended !== undefined
             ? {
@@ -2048,6 +2056,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
                 actionKind: intended.actionKind,
                 recordedAt: intended.updatedAtTick,
                 postings: intended.postings as unknown as readonly { roomName: string; locationKind: string; resource: string; delta: number }[],
+                contractId: intended.contractId,
+                contractDigest: intended.contractDigest,
+                adapterVersion: intended.adapterVersion,
+                durablePayload: intended.durablePayload,
+                durablePayloadVersion: intended.durablePayloadVersion,
               }
             : undefined;
       if (facts0 === undefined) {
@@ -2074,13 +2087,18 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (adapter.reconcile === undefined) {
         return reject("no_registered_reconciler", `action kind ${actionKind} 的 adapter 未提供 reconciler（无法判定执行事实）`);
       }
-      // 结论只能来自注册 reconciler（调用者不可自填）。
+      // 结论只能来自注册 reconciler（调用者不可自填）。输入为完整
+      // contract-specific durable facts（第九轮 4.8：不再使用
+      // postings[0].resource 或单一负数 amount 汇总这类过度简化事实）。
       const facts = {
         actionKind,
         transactionId: facts0.transactionId,
-        resource: facts0.postings.length > 0 ? facts0.postings[0].resource : "",
-        amount: facts0.postings.reduce((sum, leg) => sum + Math.min(0, leg.delta), 0),
+        ...(facts0.contractId !== undefined ? { contractId: facts0.contractId } : {}),
+        ...(facts0.contractDigest !== undefined ? { contractDigest: facts0.contractDigest } : {}),
+        ...(facts0.adapterVersion !== undefined ? { adapterVersion: facts0.adapterVersion } : {}),
         postings: facts0.postings.map((leg) => ({ ...leg })) as never,
+        ...(facts0.durablePayload !== undefined ? { durablePayload: facts0.durablePayload } : {}),
+        ...(facts0.durablePayloadVersion !== undefined ? { durablePayloadVersion: facts0.durablePayloadVersion } : {}),
       };
       const conclusion = adapter.reconcile(facts, state.observation) as TreasuryReconciliationConclusion;
       if (conclusion !== "observed_committed" && conclusion !== "observed_not_executed" && conclusion !== "still_uncertain") {

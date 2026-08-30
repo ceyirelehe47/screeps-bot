@@ -90,6 +90,8 @@ export interface TreasuryAuthorizationRequest {
   };
   /** 后续 action contract digest 绑定（可选）。 */
   readonly contractDigest?: string;
+  /** adapter version 绑定（第九轮：contract-first 授权必填；版本演进失效）。 */
+  readonly adapterVersion?: number;
 }
 
 /**
@@ -119,6 +121,8 @@ export interface TreasuryAuthorizationToken {
   readonly serviceGeneration: number;
   readonly tick: number;
   readonly contractDigest?: string;
+  /** adapter version 绑定（第九轮：与 contract digest 同源派生）。 */
+  readonly adapterVersion?: number;
 }
 
 export type TreasuryAuthorizationRejectionReason =
@@ -249,6 +253,11 @@ export function validateTreasuryAuthorizationRequest(
   if (request.contractDigest !== undefined) {
     if (typeof request.contractDigest !== "string" || !/^[0-9a-f]{16}$/.test(request.contractDigest)) {
       return "contractDigest 非法（须为 16 小写 hex）";
+    }
+  }
+  if (request.adapterVersion !== undefined) {
+    if (typeof request.adapterVersion !== "number" || !Number.isSafeInteger(request.adapterVersion) || request.adapterVersion <= 0) {
+      return "adapterVersion 须为正安全整数";
     }
   }
   return null;

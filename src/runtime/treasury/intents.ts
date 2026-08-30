@@ -114,6 +114,14 @@ export interface TreasuryIntentEntry {
   authorizationDigest?: string;
   /** contract identity（contract 路径必填；直接路径可缺省）。 */
   contractId?: string;
+  /** contract digest（第九轮 v2：contract 路径的完整合同身份）。 */
+  contractDigest?: string;
+  /** adapter version（第九轮 v2：与 contract 同源派生）。 */
+  adapterVersion?: number;
+  /** 有界 durable reconciliation payload（第九轮 v2：adapter.durableFacts）。 */
+  durablePayload?: string;
+  /** durable payload 的版本（第九轮 v2：capability 绑定用）。 */
+  durablePayloadVersion?: number;
   /** canonical postings（merged；WAL 语义的唯一资产事实副本）。 */
   postings: TreasuryIntentPosting[];
   /** 状态机可变 phase（markTreasuryIntentPhase 迁移；对外读取走冻结快照）。 */
@@ -240,6 +248,30 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
   if (candidate.contractId !== undefined) {
     if (typeof candidate.contractId !== "string" || candidate.contractId.length === 0 || candidate.contractId.length > 96) {
       return "contractId 非法（须为 1..96 字符）";
+    }
+  }
+  if (candidate.contractDigest !== undefined) {
+    if (typeof candidate.contractDigest !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.contractDigest)) {
+      return "contractDigest 非法（须为 16 小写 hex）";
+    }
+  }
+  if (candidate.adapterVersion !== undefined) {
+    if (typeof candidate.adapterVersion !== "number" || !Number.isSafeInteger(candidate.adapterVersion) || candidate.adapterVersion <= 0) {
+      return "adapterVersion 须为正安全整数";
+    }
+  }
+  if (candidate.durablePayload !== undefined) {
+    if (typeof candidate.durablePayload !== "string" || candidate.durablePayload.length === 0 || candidate.durablePayload.length > 512) {
+      return "durablePayload 非法（须为 1..512 字符）";
+    }
+  }
+  if (candidate.durablePayloadVersion !== undefined) {
+    if (
+      typeof candidate.durablePayloadVersion !== "number" ||
+      !Number.isSafeInteger(candidate.durablePayloadVersion) ||
+      candidate.durablePayloadVersion <= 0
+    ) {
+      return "durablePayloadVersion 须为正安全整数";
     }
   }
   if (typeof candidate.phase !== "string" || !TREASURY_INTENT_PERSISTED_PHASES.has(candidate.phase)) {
