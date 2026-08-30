@@ -340,24 +340,25 @@ describe("Treasury 原子 transaction journal", () => {
   });
 });
 
-describe("Treasury transactionId 铸造成分校验（防 tuple 边界碰撞）", () => {
-  it("成分含冒号/空串/非法字符/非法数字抛错（不得静默铸造歧义 id）", () => {
-    expect(() => formatTreasuryStableTransactionId("a:b", "c")).toThrow();
-    expect(() => formatTreasuryStableTransactionId("a", "b:c")).toThrow();
-    expect(() => formatTreasuryStableTransactionId("kind", "")).toThrow();
-    expect(() => formatTreasuryStableTransactionId("kind", "has space")).toThrow();
+describe("Treasury transactionId 铸造（canonical hashed identity，v2）", () => {
+  it("非法数字成分抛错（负数/NaN/非安全整数）；业务字段可为任意字符串", () => {
     expect(() => formatTreasuryStableTransactionId("kind", Number.NaN)).toThrow();
     expect(() => formatTreasuryStableTransactionId("kind", -1)).toThrow();
-    expect(() => formatTreasuryStableTransactionId("only-kind")).toThrow(); // 至少一个 discriminator
-    expect(() => formatTreasuryTransactionId("a:b", "c")).toThrow();
+    expect(() => formatTreasuryTransactionId("kind", -1)).toThrow();
+    // v2：冒号/空串/空格/Unicode 是合法业务字段（canonical 编码消除歧义）。
+    expect(() => formatTreasuryStableTransactionId("a:b", "c")).not.toThrow();
+    expect(() => formatTreasuryStableTransactionId("a", "b:c")).not.toThrow();
+    expect(() => formatTreasuryStableTransactionId("kind", "")).not.toThrow();
+    expect(() => formatTreasuryStableTransactionId("kind", "has space")).not.toThrow();
   });
 
-  it("合法成分铸造无碰撞：kind 与 discriminator 边界不产生歧义 id", () => {
-    expect(formatTreasuryStableTransactionId("deal", "order-1")).toBe("deal:order-1");
-    expect(formatTreasuryStableTransactionId("deal", 42)).toBe("deal:42");
-    // 含冒号的分解一律抛错——合法成分空间内 join(":") 可逆，无歧义分解。
-    expect(formatTreasuryStableTransactionId("a", "b", "c")).toBe("a:b:c");
-    expect(formatTreasuryStableTransactionId("mkt", "W1N57", "order-9", 7)).toBe("mkt:W1N57:order-9:7");
+  it("合法成分铸造无碰撞：hash 定长输出且元组边界无歧义（vectors 见专用文件）", () => {
+    const id = formatTreasuryStableTransactionId("deal", "order-1");
+    expect(id).toMatch(/^ts1_[0-9a-f]{16}$/);
+    // 元组边界/类型/顺序差异 → 不同 id（canonical 编码保证）。
+    expect(formatTreasuryStableTransactionId("a", "b:c")).not.toBe(formatTreasuryStableTransactionId("a:b", "c"));
+    expect(formatTreasuryStableTransactionId("deal", 42)).not.toBe(formatTreasuryStableTransactionId("deal", "42"));
+    expect(formatTreasuryStableTransactionId("mkt", "W1N57", "order-9", 7)).toMatch(/^ts1_[0-9a-f]{16}$/);
   });
 });
 
