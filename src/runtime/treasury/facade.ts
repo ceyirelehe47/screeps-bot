@@ -1402,7 +1402,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
 
     /** @internal 单阶段兼容实现（勿直接调用）：经 treasury/compat 模块访问。 */
     recordAcceptedTransaction(input: TreasuryTransactionInput): TreasurySettlementResult {
-      const compatShapeError = validateTreasuryTransactionInputShape(input);
+      const compatShapeError = validateTreasuryTransactionInputShape(input, "record");
       if (compatShapeError !== null) {
         metrics.transactionsRejectedInvalid += 1;
         return { status: "rejected", reason: "invalid_input", detail: compatShapeError };

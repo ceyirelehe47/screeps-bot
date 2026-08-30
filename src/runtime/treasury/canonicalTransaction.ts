@@ -23,13 +23,31 @@ import type {
 
 /**
  * runtime input 形状验证（第六轮）：在读取、遍历、digest 或 canonicalize
- * 输入**之前**执行——TypeScript 类型在 Screeps runtime 中不构成实际防线，
- * malformed input（null/undefined、postings 非数组或含 null、decision 缺失
- * 或形状错误、数值非有限整数等）若直接进入 canonical builder 会抛出
- * TypeError 中断整个 tick。返回 null = 形状合法；否则有界静态错误描述
- * （调用方转结构化 rejection，绝不 rethrow）。
+ * 输入**之前**执行——TypeScript 类型在 Screeps runtime 中不构成实际防线。
+ *
+ * 防卫范围（最小防 throw 集）：只拦截会让后续读取/canonicalize **抛出
+ * TypeError** 的形状（input 非对象、transactionId/kind/source 非字符串、
+ * decision 缺失或非对象或 scope 非字符串、postings 非数组、posting 非对象）。
+ * 字段值语义（transactionId 边界字符、resource 合法性、delta 非零安全整数、
+ * decision 数值关系等）仍由既有 deep validation / epoch 注册表结构化拒绝
+ * （invalid_transaction_id / invalid_posting_* / stale_epoch 等 reason 保持
+ * 兼容——前置层不吞并更精确的语义 reason）。
+ *
+ * mode：
+ * - "prepare"（默认）：两阶段 prepare/executePreparedAction——canonical
+ *   builder 会读取 decision.scope，缺失/非字符串会 throw，必须前置拦截；
+ * - "record"：单阶段兼容入口——decision 语义校验由 facade epoch 注册表
+ *   负责（缺失 → stale_epoch 既有语义），前置只拦其余防 throw 项。
+ *
+ * 返回 null = 形状合法；否则有界静态错误描述（调用方转结构化 rejection，
+ * 绝不 rethrow）。
  */
-export function validateTreasuryTransactionInputShape(input: unknown): string | null {
+export type TreasuryInputGuardMode = "prepare" | "record";
+
+export function validateTreasuryTransactionInputShape(
+  input: unknown,
+  mode: TreasuryInputGuardMode = "prepare",
+): string | null {
   if (input === null || input === undefined || typeof input !== "object") {
     return "input 缺失或非对象";
   }
@@ -40,62 +58,30 @@ export function validateTreasuryTransactionInputShape(input: unknown): string | 
     decision?: unknown;
     postings?: unknown;
   };
-  if (typeof candidate.transactionId !== "string" || candidate.transactionId.length === 0) {
-    return "transactionId 缺失或非字符串";
+  if (typeof candidate.transactionId !== "string") {
+    return "transactionId 非字符串";
   }
-  if (typeof candidate.kind !== "string" || candidate.kind.length === 0) {
-    return "kind 缺失或非字符串";
+  if (typeof candidate.kind !== "string") {
+    return "kind 非字符串";
   }
-  if (typeof candidate.source !== "string" || candidate.source.length === 0) {
-    return "source 缺失或非字符串";
+  if (typeof candidate.source !== "string") {
+    return "source 非字符串";
   }
-  const decision = candidate.decision as
-    | { scope?: unknown; epochSeq?: unknown; observedAtTick?: unknown }
-    | null
-    | undefined;
-  if (decision === null || decision === undefined || typeof decision !== "object") {
-    return "decision 缺失或非对象";
+  if (mode === "prepare") {
+    const decision = candidate.decision as { scope?: unknown } | null | undefined;
+    if (decision === null || decision === undefined || typeof decision !== "object") {
+      return "decision 缺失或非对象";
+    }
+    if (typeof decision.scope !== "string") {
+      return "decision.scope 非字符串";
+    }
   }
-  if (decision.scope !== "shared" && decision.scope !== "market-fresh") {
-    return "decision.scope 非法";
-  }
-  if (
-    typeof decision.epochSeq !== "number" ||
-    !Number.isSafeInteger(decision.epochSeq) ||
-    decision.epochSeq <= 0
-  ) {
-    return "decision.epochSeq 非法（须为正安全整数）";
-  }
-  if (
-    typeof decision.observedAtTick !== "number" ||
-    !Number.isSafeInteger(decision.observedAtTick) ||
-    decision.observedAtTick < 0
-  ) {
-    return "decision.observedAtTick 非法（须为非负安全整数）";
-  }
-  if (!Array.isArray(candidate.postings) || candidate.postings.length === 0) {
-    return "postings 缺失或非非空数组";
+  if (!Array.isArray(candidate.postings)) {
+    return "postings 非数组";
   }
   for (const posting of candidate.postings as unknown[]) {
     if (posting === null || posting === undefined || typeof posting !== "object") {
       return "posting 为 null/非对象";
-    }
-    const p = posting as { roomName?: unknown; locationKind?: unknown; resource?: unknown; delta?: unknown };
-    if (typeof p.roomName !== "string" || p.roomName.length === 0) {
-      return "posting.roomName 缺失或非字符串";
-    }
-    if (p.locationKind !== "storage" && p.locationKind !== "terminal") {
-      return "posting.locationKind 非法";
-    }
-    if (typeof p.resource !== "string" || p.resource.length === 0) {
-      return "posting.resource 缺失或非字符串";
-    }
-    if (
-      typeof p.delta !== "number" ||
-      !Number.isFinite(p.delta) ||
-      !Number.isInteger(p.delta)
-    ) {
-      return "posting.delta 非有限整数";
     }
   }
   return null;

@@ -293,14 +293,13 @@ describe("第六轮 runtime input 验证前置：malformed input 结构化拒绝
   it.each([
     ["null input", null as never],
     ["undefined input", undefined as never],
+    ["transactionId 非字符串", { transactionId: 42, kind: "k", source: "s", decision: { scope: "shared", epochSeq: 1, observedAtTick: 1 }, postings: [] } as never],
+    ["kind 非字符串", { transactionId: "x0", kind: 7, source: "s", decision: { scope: "shared", epochSeq: 1, observedAtTick: 1 }, postings: [] } as never],
     ["postings 非数组", { transactionId: "x1", kind: "k", source: "s", decision: { scope: "shared", epochSeq: 1, observedAtTick: 1 }, postings: "nope" } as never],
     ["postings 含 null 成员", { transactionId: "x2", kind: "k", source: "s", decision: { scope: "shared", epochSeq: 1, observedAtTick: 1 }, postings: [null] } as never],
     ["decision 缺失", { transactionId: "x3", kind: "k", source: "s", postings: [] } as never],
-    ["decision 形状错误", { transactionId: "x4", kind: "k", source: "s", decision: "shared", postings: [] } as never],
-    ["decision.scope 非法", { transactionId: "x5", kind: "k", source: "s", decision: { scope: "bogus", epochSeq: 1, observedAtTick: 1 }, postings: [] } as never],
-    ["delta NaN", { transactionId: "x6", kind: "k", source: "s", decision: { scope: "shared", epochSeq: 1, observedAtTick: 1 }, postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: Number.NaN }] } as never],
-    ["delta Infinity", { transactionId: "x7", kind: "k", source: "s", decision: { scope: "shared", epochSeq: 1, observedAtTick: 1 }, postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: Number.POSITIVE_INFINITY }] } as never],
-    ["epochSeq 非整数", { transactionId: "x8", kind: "k", source: "s", decision: { scope: "shared", epochSeq: 1.5, observedAtTick: 1 }, postings: [] } as never],
+    ["decision 非对象", { transactionId: "x4", kind: "k", source: "s", decision: "shared", postings: [] } as never],
+    ["decision.scope 非字符串", { transactionId: "x5", kind: "k", source: "s", decision: { scope: 9, epochSeq: 1, observedAtTick: 1 }, postings: [] } as never],
   ])("%s：结构化 rejected（invalid_input），零副作用、callback 零调用", (_label, malformed) => {
     const service = makeService();
     let invoked = 0;
@@ -326,5 +325,27 @@ describe("第六轮 runtime input 验证前置：malformed input 结构化拒绝
     const rejected = service.prepareTransaction(undefined as never);
     expect(rejected.status).toBe("rejected");
     if (rejected.status === "rejected") expect(rejected.reason).toBe("invalid_input");
+  });
+
+  it("值语义 malformed（NaN/Infinity delta、非法 decision 数值）由 deep validation 精确拒绝（同样不 throw）", () => {
+    const service = makeService();
+    const epoch = service.observation().epoch;
+    const base = { kind: "terminal.send", source: "test", decision: { scope: epoch.scope, epochSeq: epoch.epochSeq, observedAtTick: epoch.observedAtTick } };
+    const nanDelta = service.prepareTransaction({
+      ...base,
+      transactionId: "ts1_nan_delta",
+      postings: [{ roomName: "W1N57", locationKind: "storage" as const, resource: RESOURCE_ENERGY, delta: Number.NaN }],
+    } as never);
+    expect(nanDelta.status).toBe("rejected");
+    if (nanDelta.status === "rejected") expect(nanDelta.reason).toBe("invalid_posting_delta");
+    const staleDecision = service.prepareTransaction({
+      transactionId: "ts1_stale_decision",
+      kind: "terminal.send",
+      source: "test",
+      decision: { scope: epoch.scope, epochSeq: 1.5, observedAtTick: epoch.observedAtTick },
+      postings: [{ roomName: "W1N57", locationKind: "storage" as const, resource: RESOURCE_ENERGY, delta: -100 }],
+    } as never);
+    expect(staleDecision.status).toBe("rejected"); // unknown_epoch（注册表未命中非整数 seq）
+    expect(service.metrics().preparedActive).toBe(0);
   });
 });
