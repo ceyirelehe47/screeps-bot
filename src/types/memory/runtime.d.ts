@@ -580,8 +580,24 @@ declare global {
         amount: number;
         updatedAt: number;
         expiresAt: number;
+        /**
+         * 持久 typed owner identity（第五轮新增，附加于平铺字段之上——
+         * holderId 保留为兼容读口径，store key `${room}:${resource}:
+         * ${holderId}` 不变）。kind: game-object / logical-service / task /
+         * contract / legacy-unresolved；legacy-unresolved 与暂时无法解析的
+         * owner 一律保守计入 committed，只有 expiresAt 或显式 release 解除。
+         */
+        owner?: {
+          kind: string;
+          id: string;
+          roomName?: string;
+          namespace?: string;
+          lifecycleRef?: string;
+        };
       }
     >;
+    /** reservation owner 迁移版本标记（2 = 裸 holderId 已补写 typed owner）。 */
+    resourceReservationsOwnerVersion?: 2;
     /**
      * Treasury 最小持久状态（绝不持久化 observation/overlay/journal/物理事实）：
      * - receipts：transaction 幂等 receipt。key 为 "t:"+transactionId 编码

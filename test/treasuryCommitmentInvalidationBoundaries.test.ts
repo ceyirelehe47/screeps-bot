@@ -28,11 +28,17 @@ const MUTATION_FUNCTIONS: FunctionRequirement[] = [
   { fileName: "src/runtime/logistics/resourceTransferTasks.ts", functionName: "recordResourceTransferTaskProgress", kind: "mutation-required" },
   { fileName: "src/runtime/logistics/resourceTransferTasks.ts", functionName: "cancelAutomaticTask", kind: "mutation-required" },
   { fileName: "src/runtime/logistics/resourceTransferTasks.ts", functionName: "cleanupResourceTransferTaskStore", kind: "mutation-required" },
-  // resourceReservation.ts：创建/释放/续租/GC。
+  // resourceReservation.ts：typed mutation（第五轮新增，唯一新写入口）。
+  { fileName: "src/runtime/resourceReservation.ts", functionName: "reserveProductionResourceForOwner", kind: "mutation-required" },
+  { fileName: "src/runtime/resourceReservation.ts", functionName: "releaseProductionReservationForOwner", kind: "mutation-required" },
+  { fileName: "src/runtime/resourceReservation.ts", functionName: "renewProductionReservationForOwner", kind: "mutation-required" },
+  // 旧字符串入口：deprecated 兼容 adapter（内部转调 typed mutation）。
   { fileName: "src/runtime/resourceReservation.ts", functionName: "reserveProductionResource", kind: "mutation-required" },
   { fileName: "src/runtime/resourceReservation.ts", functionName: "releaseProductionReservation", kind: "mutation-required" },
   { fileName: "src/runtime/resourceReservation.ts", functionName: "renewProductionReservation", kind: "mutation-required" },
   { fileName: "src/runtime/resourceReservation.ts", functionName: "gcProductionReservations", kind: "mutation-required" },
+  // 裸 holderId → typed owner 的版本化迁移（改写权威数据后必须通知失效）。
+  { fileName: "src/runtime/resourceReservation.ts", functionName: "migrateResourceReservationsForTypedOwner", kind: "mutation-required" },
   // resourceControl.ts：任务字段直接写入后的统一同步点。
   { fileName: "src/runtime/resourceControl.ts", functionName: "syncResourceControlTransferTask", kind: "sync-point-required" },
   // resourceTransferTasks.ts：legacy schema 迁移改写任务权威数据（一次性，

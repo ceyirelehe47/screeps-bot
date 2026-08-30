@@ -28,7 +28,7 @@ import {
 } from "@/runtime/carrierTaskBoard";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { getCreepAssignmentState } from "@/runtime/creepAssignmentState";
-import { getReservedProductionAmountExcludingHolder } from "@/runtime/resourceReservation";
+import { getReservedProductionAmountExcludingOwner } from "@/runtime/resourceReservation";
 import { getActivePowerBankBoostLabIds } from "@/runtime/powerBankBoostMemory";
 import { normalizeBoolean, normalizeNumber, normalizeRoomNameList } from "@/runtime/configNormalize";
 import { getProductReagents, roundUpReactionAmount } from "@/runtime/reactionMap";
@@ -585,8 +585,12 @@ function selectDonor(
     const total = roomResourceAmount(room, resource);
     const reserve = getResourceReserve(room.name, resource);
     const outgoing = transferTasks.getOutgoingAmount(room.name, resource);
-    const holderId = `synthesis:${targetRoom.name}:${resource}`;
-    const reserved = getReservedProductionAmountExcludingHolder(room.name, resource, holderId);
+    const reserved = getReservedProductionAmountExcludingOwner(room.name, resource, {
+      kind: "logical-service",
+      id: `synthesis:${targetRoom.name}:${resource}`,
+      namespace: "synthesis",
+      roomName: targetRoom.name,
+    });
     const exportable = Math.max(0, total - reserve - outgoing - reserved);
     if (exportable <= 0) {
       continue;

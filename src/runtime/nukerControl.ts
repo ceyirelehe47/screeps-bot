@@ -21,11 +21,13 @@ import {
   type ResourceControlSnapshot,
 } from "@/runtime/resourceControl";
 import {
-  getReservedProductionAmountExcludingHolder,
+  getReservedProductionAmountExcludingOwner,
+  getReservationEntryOwner,
   listProductionReservations,
-  releaseProductionReservation,
-  reserveProductionResource,
+  releaseProductionReservationForOwner,
+  reserveProductionResourceForOwner,
 } from "@/runtime/resourceReservation";
+import type { TreasuryOwnerIdentity } from "@/runtime/treasury/ownerIdentity";
 import { resolveRoomEnergyPolicy } from "@/runtime/roomEnergyPolicy";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
@@ -68,6 +70,20 @@ function getReservationHolderId(
   resource: ResourceConstant,
 ): string {
   return `${NUKER_RESERVATION_PREFIX}${nuker.id}:${resource}`;
+}
+
+/** nuker 预留的 typed owner（logical-service，namespace=nuker；id 与既有 holderId 同串，store key 不变）。 */
+function getReservationOwner(
+  nuker: StructureNuker,
+  resource: ResourceConstant,
+  roomName: string,
+): TreasuryOwnerIdentity {
+  return {
+    kind: "logical-service",
+    id: getReservationHolderId(nuker, resource),
+    namespace: "nuker",
+    roomName,
+  };
 }
 
 export function getOwnedNuker(room: Room): StructureNuker | null {
@@ -206,12 +222,11 @@ function buildGhodiumDraft(
     room.name,
     RESOURCE_GHODIUM,
   );
-  const holderId = getReservationHolderId(nuker, RESOURCE_GHODIUM);
   const protectedAmount =
-    getReservedProductionAmountExcludingHolder(
+    getReservedProductionAmountExcludingOwner(
       room.name,
       RESOURCE_GHODIUM,
-      holderId,
+      getReservationOwner(nuker, RESOURCE_GHODIUM, room.name),
     ) +
     createResourceTransferTaskAmountIndex().getOutgoing(
       room.name,
@@ -280,10 +295,10 @@ function buildEnergyDraft(
     room.name,
     RESOURCE_ENERGY,
   );
-  const otherReservations = getReservedProductionAmountExcludingHolder(
+  const otherReservations = getReservedProductionAmountExcludingOwner(
     room.name,
     RESOURCE_ENERGY,
-    holderId,
+    getReservationOwner(nuker, RESOURCE_ENERGY, room.name),
   );
 
   const storageEnergy = room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
@@ -433,11 +448,11 @@ function publishRoomPlan(plan: RoomNukerPlan, actions: string[]): Set<string> {
       RESOURCE_GHODIUM,
     );
     validHolders.add(holderId);
-    reserveProductionResource(
+    reserveProductionResourceForOwner(
       plan.room.name,
       RESOURCE_GHODIUM,
       amount,
-      holderId,
+      getReservationOwner(plan.nuker, RESOURCE_GHODIUM, plan.room.name),
       NUKER_RESERVATION_TTL,
     );
     actions.push(`local-ghodium:${plan.room.name}:${amount}`);
@@ -453,11 +468,11 @@ function publishRoomPlan(plan: RoomNukerPlan, actions: string[]): Set<string> {
     );
     const holderId = getReservationHolderId(plan.nuker, RESOURCE_ENERGY);
     validHolders.add(holderId);
-    reserveProductionResource(
+    reserveProductionResourceForOwner(
       plan.room.name,
       RESOURCE_ENERGY,
       amount,
-      holderId,
+      getReservationOwner(plan.nuker, RESOURCE_ENERGY, plan.room.name),
       NUKER_RESERVATION_TTL,
     );
     actions.push(`local-energy:${plan.room.name}:${amount}`);
@@ -474,10 +489,10 @@ function cleanupReservations(validHolderIds: Set<string>): void {
     ) {
       continue;
     }
-    releaseProductionReservation(
+    releaseProductionReservationForOwner(
       reservation.roomName,
       reservation.resource,
-      reservation.holderId,
+      getReservationEntryOwner(reservation.holderId, reservation.owner),
     );
   }
 }
@@ -500,20 +515,15 @@ function getDonorAvailableGhodium(
   pendingOutgoing: number,
 ): number {
   const ownPlan = planByRoom.get(snapshot.roomName);
-  const ownHolderId = ownPlan
-    ? getReservationHolderId(ownPlan.nuker, RESOURCE_GHODIUM)
-    : "";
-  const otherReservations = ownHolderId
-    ? getReservedProductionAmountExcludingHolder(
-        snapshot.roomName,
-        RESOURCE_GHODIUM,
-        ownHolderId,
-      )
-    : getReservedProductionAmountExcludingHolder(
-        snapshot.roomName,
-        RESOURCE_GHODIUM,
-        "",
-      );
+  const otherReservations = getReservedProductionAmountExcludingOwner(
+    snapshot.roomName,
+    RESOURCE_GHODIUM,
+    // 无 own plan 时排除一个不可能匹配的 owner（kind=legacy-unresolved 且
+    // 空 id 不落库）——语义与旧空串排除一致：全部活跃预留照常扣除。
+    ownPlan
+      ? getReservationOwner(ownPlan.nuker, RESOURCE_GHODIUM, snapshot.roomName)
+      : { kind: "legacy-unresolved", id: "" },
+  );
   const commitments = getOtherCarrierCommitments(
     snapshot.roomName,
     RESOURCE_GHODIUM,

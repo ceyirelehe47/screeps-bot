@@ -9,7 +9,7 @@
  */
 
 import { normalizeBoolean, normalizeNumber } from "@/runtime/configNormalize";
-import { getReservedProductionAmountExcludingHolder } from "@/runtime/resourceReservation";
+import { getReservedProductionAmountExcludingOwner } from "@/runtime/resourceReservation";
 import {
   replaceCarrierTasksForProducerRoom,
   type CarrierTaskDraft,
@@ -359,7 +359,12 @@ function computeSurplus(
   holderId: string,
 ): number {
   const stock = getRoomStock(room, resource);
-  const reserved = getReservedProductionAmountExcludingHolder(room.name, resource, holderId);
+  // factory 自排除：holderId 恒为自身 factory.id（game-object owner）。
+  const reserved = getReservedProductionAmountExcludingOwner(room.name, resource, {
+    kind: "game-object",
+    id: holderId,
+    roomName: room.name,
+  });
   return Math.max(0, stock - floor - reserved);
 }
 

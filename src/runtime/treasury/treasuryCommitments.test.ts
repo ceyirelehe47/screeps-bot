@@ -177,36 +177,45 @@ describe("transfer task 承诺聚合", () => {
 });
 
 describe("production reservation 承诺", () => {
+  const GO_LAB1 = "a1b2c3d4e5f6a7b8c9d0e1f2";
+  const GO_LAB2 = "b2c3d4e5f6a7b8c9d0e1f2a1";
+  const GO_GONE = "c3d4e5f6a7b8c9d0e1f2a1b2";
+  const GO_EXPIRED = "d4e5f6a7b8c9d0e1f2a1b2c3";
+
   function makeReservations(): Record<string, { roomName: string; resource: string; holderId: string; amount: number; expiresAt: number }> {
     return {
-      "W1N57:U:lab-1": { roomName: "W1N57", resource: "U", holderId: "lab-1", amount: 400, expiresAt: 3200 },
-      "W1N57:U:lab-2": { roomName: "W1N57", resource: "U", holderId: "lab-2", amount: 250, expiresAt: 3200 },
-      "W1N57:U:lab-expired": { roomName: "W1N57", resource: "U", holderId: "lab-expired", amount: 999, expiresAt: 2999 },
-      "W1N57:K:lab-gone": { roomName: "W1N57", resource: "K", holderId: "lab-gone", amount: 500, expiresAt: 3200 },
+      "W1N57:U:lab-1": { roomName: "W1N57", resource: "U", holderId: GO_LAB1, amount: 400, expiresAt: 3200 },
+      "W1N57:U:lab-2": { roomName: "W1N57", resource: "U", holderId: GO_LAB2, amount: 250, expiresAt: 3200 },
+      "W1N57:U:lab-expired": { roomName: "W1N57", resource: "U", holderId: GO_EXPIRED, amount: 999, expiresAt: 2999 },
+      "W1N57:K:lab-gone": { roomName: "W1N57", resource: "K", holderId: GO_GONE, amount: 500, expiresAt: 3200 },
     };
   }
 
-  it("活跃聚合、holder 自排除、过期与孤儿排除计数", () => {
+  it("活跃聚合、typed owner 自排除、过期排除与 missing-owner 保守计入", () => {
     const observation = createTreasuryService({ getRooms: () => Object.values(Game.rooms) }).observation();
     const index = buildTreasuryCommitmentIndex({
       tick: Game.time,
       tasks: {},
       reservations: makeReservations(),
       observation,
-      holderExists: (holderId) => holderId !== "lab-gone",
+      holderExists: (holderId) => holderId !== GO_GONE,
     });
 
     expect(index.reservedProduction("W1N57", "U")).toBe(650);
-    expect(index.reservedProduction("W1N57", "U", "lab-1")).toBe(250);
-    expect(index.reservedProduction("W1N57", "K")).toBe(0);
+    // typed owner 自排除（完整 identity 比较）。
+    expect(index.reservedProduction("W1N57", "U", { kind: "game-object", id: GO_LAB1 })).toBe(250);
+    // owner 消失的活跃预留保守计入 committed（不得当作可重新支配）。
+    expect(index.reservedProduction("W1N57", "K")).toBe(500);
     expect(index.metrics.reservationRecords).toBe(4);
-    expect(index.metrics.activeReservationRecords).toBe(2);
+    expect(index.metrics.activeReservationRecords).toBe(3);
     expect(index.metrics.expiredReservationsExcluded).toBe(1);
-    expect(index.metrics.orphanReservationsExcluded).toBe(1);
+    expect(index.metrics.typedOwnerResolved).toBe(2);
+    expect(index.metrics.missingOwnerStillCommitted).toBe(1);
 
     const snapshot = index.reservationSnapshot();
-    expect(snapshot.find((entry) => entry.holderId === "lab-expired")?.expired).toBe(true);
-    expect(snapshot.find((entry) => entry.holderId === "lab-gone")?.orphan).toBe(true);
+    expect(snapshot.find((entry) => entry.holderId === GO_EXPIRED)?.expired).toBe(true);
+    expect(snapshot.find((entry) => entry.holderId === GO_GONE)?.ownerStatus).toBe("active-unresolved");
+    expect(snapshot.find((entry) => entry.holderId === GO_LAB1)?.ownerStatus).toBe("active-resolved");
   });
 
   it("过期预留被排除但原始 Memory 记录不被删除（零隐藏写入）", () => {
@@ -455,9 +464,11 @@ describe("holder 存在性默认解析（logical 命名空间不再误判 orphan
         },
         observation,
       });
-      expect(index.reservedProduction("W1N57", "G")).toBe(150);
-      expect(index.metrics.orphanReservationsExcluded).toBe(1);
-      expect(index.metrics.activeReservationRecords).toBe(2);
+      // owner 无法确证失效（gone-id）保守计入 committed；只有到期解除。
+      expect(index.reservedProduction("W1N57", "G")).toBe(175);
+      expect(index.metrics.missingOwnerStillCommitted).toBe(2);
+      expect(index.metrics.typedOwnerResolved).toBe(1);
+      expect(index.metrics.activeReservationRecords).toBe(3);
     } finally {
       Game.getObjectById = originalGetObjectById;
     }

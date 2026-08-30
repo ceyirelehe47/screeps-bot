@@ -30,10 +30,18 @@ import {
   type TreasuryCommitmentMetrics,
   type TreasuryLocationKind,
   type TreasuryObservationView,
+  type TreasuryReservationOwnerStatus,
   type TreasuryReservationRecord,
 } from "@/runtime/treasury/types";
 import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import { treasuryHolderExists } from "@/runtime/treasury/holderResolution";
+import {
+  classifyTreasuryHolderIdAsOwner,
+  isValidTreasuryOwnerIdentity,
+  treasuryOwnerIdentityKey,
+  type TreasuryOwnerIdentity,
+} from "@/runtime/treasury/ownerIdentity";
+
 
 export interface TreasuryReservationInput {
   readonly roomName: string;
@@ -41,6 +49,8 @@ export interface TreasuryReservationInput {
   readonly holderId: string;
   readonly amount: number;
   readonly expiresAt: number;
+  /** 持久 typed owner（缺省/非法时按 holderId 保守分类——读侧零写）。 */
+  readonly owner?: unknown;
 }
 
 export interface TreasuryCommitmentBuildOptions {
@@ -57,7 +67,8 @@ export interface TreasuryCommitmentBuildOptions {
   /** 本 tick 已结算 transaction 的位置容量净变化（facade overlay 注入）。 */
   readonly capacityDelta?: (roomName: string, kind: TreasuryLocationKind) => number;
   readonly onExpiredExcluded?: () => void;
-  readonly onOrphanExcluded?: () => void;
+  /** 诊断回调：owner 无法确证失效但保守计入 committed 的 reservation。 */
+  readonly onMissingOwnerCommitted?: () => void;
 }
 
 function defaultHolderExists(holderId: string): boolean {
@@ -93,7 +104,9 @@ export function buildTreasuryCommitmentIndex(
     reservationRecords: 0,
     activeReservationRecords: 0,
     expiredReservationsExcluded: 0,
-    orphanReservationsExcluded: 0,
+    missingOwnerStillCommitted: 0,
+    typedOwnerResolved: 0,
+    legacyUnresolvedOwners: 0,
     indexQueries: 0,
   };
 
@@ -149,21 +162,38 @@ export function buildTreasuryCommitmentIndex(
     }
   }
 
-  // ── production reservation 索引（读侧排除过期/孤儿，不删除原记录）─────────
+  // ── production reservation 索引（保守 committed：只有 expiresAt 到期或
+  //    显式 release 解除占用；owner 无法确证失效一律继续全额扣除）──────────
+  //    orphan 语义修正（第五轮）：missing/active-unresolved owner 只是诊断
+  //    分类，不代表库存可重新支配——绝不从 committed 排除。
   const reservationSnapshot: TreasuryReservationRecord[] = [];
-  const reservedByRoomResource = new Map<string, { total: number; byHolder: Map<string, number> }>();
+  const reservedByRoomResource = new Map<string, { total: number; byOwner: Map<string, number> }>();
   metrics.reservationRecords = Object.keys(options.reservations).length;
   for (const entry of Object.values(options.reservations)) {
     const expired = entry.expiresAt < tick;
-    const orphan = !expired && !holderExists(entry.holderId);
+    const owner: TreasuryOwnerIdentity = isValidTreasuryOwnerIdentity(entry.owner)
+      ? entry.owner
+      : classifyTreasuryHolderIdAsOwner(entry.holderId);
+    const runtimeResolved =
+      !expired &&
+      (owner.kind === "game-object" || owner.kind === "logical-service") &&
+      holderExists(owner.id);
+    const ownerStatus: TreasuryReservationOwnerStatus = expired
+      ? "expired"
+      : owner.kind === "legacy-unresolved"
+        ? "missing-owner"
+        : runtimeResolved
+          ? "active-resolved"
+          : "active-unresolved";
     const record: TreasuryReservationRecord = Object.freeze({
       roomName: entry.roomName,
       resource: entry.resource,
       holderId: entry.holderId,
+      owner,
       amount: entry.amount,
       expiresAt: entry.expiresAt,
       expired,
-      orphan,
+      ownerStatus,
     });
     reservationSnapshot.push(record);
     if (expired) {
@@ -171,16 +201,20 @@ export function buildTreasuryCommitmentIndex(
       options.onExpiredExcluded?.();
       continue;
     }
-    if (orphan) {
-      metrics.orphanReservationsExcluded += 1;
-      options.onOrphanExcluded?.();
-      continue;
+    // 活跃预留（含 owner 无法确证失效的）全部计入 committed。
+    if (ownerStatus !== "active-resolved") {
+      metrics.missingOwnerStillCommitted += 1;
+      options.onMissingOwnerCommitted?.();
+    } else {
+      metrics.typedOwnerResolved += 1;
     }
+    if (owner.kind === "legacy-unresolved") metrics.legacyUnresolvedOwners += 1;
     metrics.activeReservationRecords += 1;
     const key = taskKey(entry.roomName, entry.resource);
-    const bucket = reservedByRoomResource.get(key) ?? { total: 0, byHolder: new Map<string, number>() };
+    const bucket = reservedByRoomResource.get(key) ?? { total: 0, byOwner: new Map<string, number>() };
     bucket.total += entry.amount;
-    bucket.byHolder.set(entry.holderId, (bucket.byHolder.get(entry.holderId) ?? 0) + entry.amount);
+    const ownerKey = treasuryOwnerIdentityKey(owner);
+    bucket.byOwner.set(ownerKey, (bucket.byOwner.get(ownerKey) ?? 0) + entry.amount);
     reservedByRoomResource.set(key, bucket);
   }
 
@@ -221,12 +255,14 @@ export function buildTreasuryCommitmentIndex(
         mergeIndex.get(mergeKeyOf(resource, fromRoomName, toRoomName, origin, reason || "")) ?? null
       );
     },
-    reservedProduction(roomName, resource, excludeHolderId) {
+    reservedProduction(roomName, resource, excludeOwner) {
       metrics.indexQueries += 1;
       const bucket = reservedByRoomResource.get(taskKey(roomName, resource));
       if (!bucket) return 0;
-      if (!excludeHolderId) return bucket.total;
-      return bucket.total - (bucket.byHolder.get(excludeHolderId) ?? 0);
+      if (!excludeOwner) return bucket.total;
+      // 完整 typed identity 比较：同 kind + 同 id + 同 namespace 才排除；
+      // 同字符串不同 kind / legacy-unresolved 不互相排除。
+      return bucket.total - (bucket.byOwner.get(treasuryOwnerIdentityKey(excludeOwner)) ?? 0);
     },
     reservationSnapshot() {
       metrics.indexQueries += 1;

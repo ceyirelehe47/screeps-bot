@@ -12,6 +12,10 @@
  * 登记路径允许写最小 receipt/指标状态。
  */
 
+import type { TreasuryOwnerIdentity } from "@/runtime/treasury/ownerIdentity";
+
+export type { TreasuryOwnerIdentity };
+
 // ─── 物理位置 ───────────────────────────────────────────────────────────────
 
 /** 第一阶段受管辖位置；后续扩展 labs/factory/powerSpawn/nuker/container/creep 等。 */
@@ -373,15 +377,28 @@ export interface TreasuryReconciliationSummary {
 
 // ─── Commitments ────────────────────────────────────────────────────────────
 
-/** production reservation 只读投影（权威在 Memory.runtime.resourceReservations）。 */
+/**
+ * production reservation 只读投影（权威在 Memory.runtime.resourceReservations）。
+ * owner 语义（第五轮）：active-unresolved / missing-owner 一律保守计入
+ * committed——ownerStatus 是诊断分类，绝不代表库存可重新支配；只有
+ * expired（或显式 release）才解除占用。
+ */
+export type TreasuryReservationOwnerStatus =
+  | "active-resolved"
+  | "active-unresolved"
+  | "missing-owner"
+  | "expired"
+  | "invalid";
+
 export interface TreasuryReservationRecord {
   readonly roomName: string;
   readonly resource: string;
   readonly holderId: string;
+  readonly owner: TreasuryOwnerIdentity;
   readonly amount: number;
   readonly expiresAt: number;
   readonly expired: boolean;
-  readonly orphan: boolean;
+  readonly ownerStatus: TreasuryReservationOwnerStatus;
 }
 
 export interface TreasuryReceiverCommitments {
@@ -407,7 +424,12 @@ export interface TreasuryCommitmentMetrics {
   readonly reservationRecords: number;
   readonly activeReservationRecords: number;
   readonly expiredReservationsExcluded: number;
-  readonly orphanReservationsExcluded: number;
+  /** owner 无法确证失效、保守计入 committed 的活跃预留数（诊断）。 */
+  readonly missingOwnerStillCommitted: number;
+  /** owner 已解析存在的活跃预留数。 */
+  readonly typedOwnerResolved: number;
+  /** legacy-unresolved kind 的活跃预留数。 */
+  readonly legacyUnresolvedOwners: number;
   readonly indexQueries: number;
 }
 
@@ -429,8 +451,12 @@ export interface TreasuryCommitmentIndex {
   outgoingTaskCount(roomName: string): number;
   /** route merge：同 route/origin/reason 的可合并 pending 任务 id（预构建索引，零线性扫描）。 */
   findMergeableTaskId(resource: string, fromRoomName: string, toRoomName: string, origin: "manual" | "automatic", reason?: string): string | null;
-  /** 活跃（未过期且未孤儿）生产预留合计；excludeHolderId 用于 owner 自排除。 */
-  reservedProduction(roomName: string, resource: string, excludeHolderId?: string): number;
+  /**
+   * 活跃生产预留合计（含 owner 无法确证失效的保守全额扣除）。
+   * excludeOwner 为完整 typed identity 比较：同 kind + id + namespace 才排除
+   * （同字符串不同 kind / legacy-unresolved 不互相排除）。
+   */
+  reservedProduction(roomName: string, resource: string, excludeOwner?: TreasuryOwnerIdentity): number;
   reservationSnapshot(): readonly TreasuryReservationRecord[];
   receiverCommitments(roomName: string): TreasuryReceiverCommitments;
   readonly metrics: TreasuryCommitmentMetrics;
@@ -461,12 +487,22 @@ export interface TreasuryHolderResolution {
 
 export type TreasuryOwnerScope = "production-reservation";
 
+/**
+ * owner 声明（typed identity）：调用方以固定身份持有 production reservation
+ * 时声明自身完整 typed identity，让查询排除自己已占用的部分。
+ * ownerKind 只接受可运行时验证的 kind（game-object / logical-service）；
+ * legacy-unresolved 不允许普通调用者冒充排除；task / contract 暂无运行时
+ * 存在性权威，同样拒绝（fail closed）。同字符串不同 kind 不得互相排除。
+ */
 export interface TreasuryQueryOwner {
-  readonly holderId: string;
-  /** holder 身份类型（必须与运行时解析结果一致，否则 fail closed）。 */
-  readonly holderKind: TreasuryHolderKind;
+  /** 声明的 owner 身份类型（与运行时解析一致，否则 fail closed）。 */
+  readonly ownerKind: "game-object" | "logical-service";
+  /** 稳定身份串（game-object id / 逻辑服务名）。 */
+  readonly ownerId: string;
+  /** 逻辑服务 namespace（logical-service 时必填且与解析一致）。 */
+  readonly namespace?: string;
   readonly scope: TreasuryOwnerScope;
-  /** 声明的 holder 归属房间（必须与运行时解析结果一致，否则 fail closed）。 */
+  /** 声明的归属房间（必须与运行时解析结果一致，否则 fail closed）。 */
   readonly roomName: string;
 }
 
@@ -536,7 +572,12 @@ export interface TreasuryMetrics {
   commitmentRecords: number;
   commitmentIndexQueries: number;
   expiredCommitmentsExcluded: number;
-  orphanReservationsExcluded: number;
+  /** owner 无法确证失效但保守计入 committed 的预留数（诊断，非可支配）。 */
+  missingOwnerStillCommitted: number;
+  /** owner 已解析存在的预留数。 */
+  typedOwnerResolvedCount: number;
+  /** legacy-unresolved kind 的活跃预留数。 */
+  legacyUnresolvedOwnerCount: number;
   transactionsRecorded: number;
   postingsRecorded: number;
   transactionsRejectedInvalid: number;
@@ -631,7 +672,9 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     commitmentRecords: 0,
     commitmentIndexQueries: 0,
     expiredCommitmentsExcluded: 0,
-    orphanReservationsExcluded: 0,
+    missingOwnerStillCommitted: 0,
+    typedOwnerResolvedCount: 0,
+    legacyUnresolvedOwnerCount: 0,
     transactionsRecorded: 0,
     postingsRecorded: 0,
     transactionsRejectedInvalid: 0,

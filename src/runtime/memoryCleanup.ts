@@ -9,7 +9,10 @@ import { cleanupResourceTransferTaskStore } from "@/runtime/logistics/resourceTr
 import { cleanupLogisticsControlStore } from "@/runtime/logistics/logisticsControl";
 import { pruneLinkNetworkRuntime } from "@/runtime/linkNetworkMemory";
 import { cleanupWorkerTaskBoard } from "@/runtime/workerTaskPool";
-import { gcProductionReservations } from "@/runtime/resourceReservation";
+import {
+  gcProductionReservations,
+  migrateResourceReservationsForTypedOwner,
+} from "@/runtime/resourceReservation";
 import { cleanupTerminalBootstrapRecoveryRuntime } from "@/runtime/terminalBootstrapRecovery";
 import { releaseWarTaskOwner } from "@/runtime/warControl";
 import { isRoleName } from "@/types/roleCatalog";
@@ -684,6 +687,9 @@ export function runMemoryCleanup(): void {
   cleanupPowerBankBoostMemory();
   cleanupPickupReservationStore(ownedRooms);
   cleanupTerminalBootstrapRecoveryRuntime();
+  // reservation owner 版本化迁移（幂等：版本标记短路；mutation 上下文执行，
+  // 迁移后 bump revision 使 commitment 索引按 typed 口径重建）。
+  migrateResourceReservationsForTypedOwner();
   gcProductionReservations();
   cleanupWarMemory(ownedRooms);
   cleanupInterShardPortalMemory();

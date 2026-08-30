@@ -384,13 +384,13 @@ describe("Treasury receiver projected headroom 实时性", () => {
 
 describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）", () => {
   const reservations = (): Record<string, ReservationSeed> => ({
-    "r1": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "holder-A", amount: 3_000, expiresAt: 9_999 },
-    "r2": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "holder-B", amount: 2_000, expiresAt: 9_999 },
+    "r1": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "aa1b2c3d4e5f6a7b8c9d0e1f", amount: 3_000, expiresAt: 9_999 },
+    "r2": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "bb2c3d4e5f6a7b8c9d0e1f2a", amount: 2_000, expiresAt: 9_999 },
   });
   /** holder 归属表：A/B 归属 W1N57，C 归属 E5N59（模拟 game-object holder）。 */
   const holderRooms = (holderId: string): TreasuryHolderResolution | undefined => {
-    if (holderId === "holder-A" || holderId === "holder-B") return { kind: "game-object", roomName: "W1N57" };
-    if (holderId === "holder-C") return { kind: "game-object", roomName: "E5N59" };
+    if (holderId === "aa1b2c3d4e5f6a7b8c9d0e1f" || holderId === "bb2c3d4e5f6a7b8c9d0e1f2a") return { kind: "game-object", roomName: "W1N57" };
+    if (holderId === "cc3d4e5f6a7b8c9d0e1f2a1b") return { kind: "game-object", roomName: "E5N59" };
     return undefined;
   };
   const ownerDeps = {
@@ -414,7 +414,7 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
     const view = treasury.query({
       resource: RESOURCE_ENERGY,
       rooms: ["W1N57"],
-      owner: { holderId: "holder-A", holderKind: "game-object", scope: "production-reservation", roomName: "W1N57" },
+      owner: { ownerKind: "game-object", ownerId: "aa1b2c3d4e5f6a7b8c9d0e1f", scope: "production-reservation", roomName: "W1N57" },
     });
     expect(view.ownerStatus).toBe("excluded-own-reservations");
     expect(view.committed).toBe(2_000);
@@ -426,7 +426,7 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
     treasury.beginTick();
     const missing = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "holder-ZZ", holderKind: "game-object", scope: "production-reservation", roomName: "W1N57" },
+      owner: { ownerKind: "game-object", ownerId: "zz9e5f6a7b8c9d0e1f2a1b2c", scope: "production-reservation", roomName: "W1N57" },
     });
     expect(missing.ownerStatus).toBe("invalid_fail_closed");
     expect(missing.spendable).toBe(0);
@@ -435,25 +435,25 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
 
     const wrongRoom = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "holder-A", holderKind: "game-object", scope: "production-reservation", roomName: "E5N59" },
+      owner: { ownerKind: "game-object", ownerId: "aa1b2c3d4e5f6a7b8c9d0e1f", scope: "production-reservation", roomName: "E5N59" },
     });
     expect(wrongRoom.ownerStatus).toBe("invalid_fail_closed");
 
     const noRoom = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "holder-A", holderKind: "game-object", scope: "production-reservation", roomName: "" },
+      owner: { ownerKind: "game-object", ownerId: "aa1b2c3d4e5f6a7b8c9d0e1f", scope: "production-reservation", roomName: "" },
     });
     expect(noRoom.ownerStatus).toBe("invalid_fail_closed");
 
     const emptyHolder = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "", holderKind: "game-object", scope: "production-reservation", roomName: "W1N57" },
+      owner: { ownerKind: "game-object", ownerId: "", scope: "production-reservation", roomName: "W1N57" },
     });
     expect(emptyHolder.ownerStatus).toBe("invalid_fail_closed");
 
     const wrongScope = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "holder-A", holderKind: "game-object", scope: "market-order" as never, roomName: "W1N57" },
+      owner: { ownerKind: "game-object", ownerId: "aa1b2c3d4e5f6a7b8c9d0e1f", scope: "market-order" as never, roomName: "W1N57" },
     });
     expect(wrongScope.ownerStatus).toBe("invalid_fail_closed");
   });
@@ -461,9 +461,9 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
   it("owner 查询多房间：只在其合法归属房间排除自己，其他房间不能排除", () => {
     const treasury = makeService({
       reservations: {
-        "r1": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "holder-A", amount: 1_000, expiresAt: 9_999 },
-        "r2": { roomName: "E5N59", resource: RESOURCE_ENERGY, holderId: "holder-A", amount: 500, expiresAt: 9_999 },
-        "r3": { roomName: "E5N59", resource: RESOURCE_ENERGY, holderId: "holder-C", amount: 700, expiresAt: 9_999 },
+        "r1": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "aa1b2c3d4e5f6a7b8c9d0e1f", amount: 1_000, expiresAt: 9_999 },
+        "r2": { roomName: "E5N59", resource: RESOURCE_ENERGY, holderId: "aa1b2c3d4e5f6a7b8c9d0e1f", amount: 500, expiresAt: 9_999 },
+        "r3": { roomName: "E5N59", resource: RESOURCE_ENERGY, holderId: "cc3d4e5f6a7b8c9d0e1f2a1b", amount: 700, expiresAt: 9_999 },
       },
       holderExists: () => true,
       resolveHolder: holderRooms,
@@ -471,7 +471,7 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
     treasury.beginTick();
     const view = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "holder-A", holderKind: "game-object", scope: "production-reservation", roomName: "W1N57" },
+      owner: { ownerKind: "game-object", ownerId: "aa1b2c3d4e5f6a7b8c9d0e1f", scope: "production-reservation", roomName: "W1N57" },
     });
     expect(view.ownerStatus).toBe("excluded-own-reservations");
     // W1N57 的 r1（A 本人）被排除；E5N59 不是 A 的归属房间——r2（也是 A 的）
@@ -483,7 +483,7 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
   it("owner 没有对应 reservation 时查询正常返回且不排除其他记录", () => {
     const treasury = makeService({
       reservations: {
-        "r1": { roomName: "E5N59", resource: RESOURCE_ENERGY, holderId: "holder-C", amount: 700, expiresAt: 9_999 },
+        "r1": { roomName: "E5N59", resource: RESOURCE_ENERGY, holderId: "cc3d4e5f6a7b8c9d0e1f2a1b", amount: 700, expiresAt: 9_999 },
       },
       holderExists: () => true,
       resolveHolder: holderRooms,
@@ -491,7 +491,7 @@ describe("Treasury owner-aware 查询（holder 存在性 + 房间归属验证）
     treasury.beginTick();
     const view = treasury.query({
       resource: RESOURCE_ENERGY,
-      owner: { holderId: "holder-A", holderKind: "game-object", scope: "production-reservation", roomName: "W1N57" },
+      owner: { ownerKind: "game-object", ownerId: "aa1b2c3d4e5f6a7b8c9d0e1f", scope: "production-reservation", roomName: "W1N57" },
     });
     expect(view.ownerStatus).toBe("excluded-own-reservations");
     expect(view.committed).toBe(700);
@@ -770,13 +770,13 @@ describe("Treasury typed owner 与 logical holder 解析", () => {
     return {
       reservations: {
         "r1": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "nuker:nk1:G", amount: 3_000, expiresAt: 9_999 },
-        "r2": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "holder-B", amount: 2_000, expiresAt: 9_999 },
+        "r2": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "bb2c3d4e5f6a7b8c9d0e1f2a", amount: 2_000, expiresAt: 9_999 },
       } as Record<string, ReservationSeed>,
       holderExists: () => true,
       resolveHolder: (holderId: string): TreasuryHolderResolution | undefined =>
         holderId === "nuker:nk1:G"
           ? { kind: "logical", roomName: "W1N57" }
-          : holderId === "holder-B"
+          : holderId === "bb2c3d4e5f6a7b8c9d0e1f2a"
             ? { kind: "game-object", roomName: "W1N57" }
             : undefined,
     };
@@ -788,7 +788,7 @@ describe("Treasury typed owner 与 logical holder 解析", () => {
     const view = treasury.query({
       resource: RESOURCE_ENERGY,
       rooms: ["W1N57"],
-      owner: { holderId: "nuker:nk1:G", holderKind: "logical", scope: "production-reservation", roomName: "W1N57" },
+      owner: { ownerKind: "logical-service", ownerId: "nuker:nk1:G", namespace: "nuker", scope: "production-reservation", roomName: "W1N57" },
     });
     expect(view.ownerStatus).toBe("excluded-own-reservations");
     expect(view.committed).toBe(2_000);
@@ -800,7 +800,7 @@ describe("Treasury typed owner 与 logical holder 解析", () => {
     const view = treasury.query({
       resource: RESOURCE_ENERGY,
       rooms: ["W1N57"],
-      owner: { holderId: "nuker:nk1:G", holderKind: "game-object", scope: "production-reservation", roomName: "W1N57" },
+      owner: { ownerKind: "game-object", ownerId: "nuker:nk1:G", scope: "production-reservation", roomName: "W1N57" },
     });
     expect(view.ownerStatus).toBe("invalid_fail_closed");
     expect(view.spendable).toBe(0);

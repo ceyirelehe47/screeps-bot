@@ -81,6 +81,7 @@ import {
   type TreasuryLocationKind,
   type TreasuryMetrics,
   type TreasuryObservationView,
+  type TreasuryOwnerIdentity,
   type TreasuryOwnerStatus,
   type TreasuryPreparedAbortResult,
   type TreasuryPreparedCommitResult,
@@ -308,35 +309,49 @@ function validateQueryContext(
 }
 
 /**
- * owner 声明强化验证（typed，fail closed）：
- * - 格式（scope/holderKind/holderId/roomName）；
- * - holder 真实存在（运行时解析，logical 名走命名空间、game-object 走
- *   getObjectById）；
- * - 声明 holderKind 与运行时解析类型一致（防字符串冒充其他类型 owner）；
- * - 声明房间与 holder 真实归属一致。
- * 通过后返回归属房间——查询多房间时只在该房间排除该 holder 的预留。
+ * owner 声明强化验证（typed identity，fail closed）：
+ * - 格式（scope/ownerKind/ownerId/roomName）；
+ * - holder 真实存在（运行时解析：game-object 走 getObjectById、
+ *   logical-service 走 namespace 注册表）；
+ * - 声明 ownerKind 与运行时解析类型一致（防字符串冒充其他类型 owner）；
+ * - 声明房间与 holder 真实归属一致；
+ * - legacy-unresolved / task / contract 无运行时存在性权威——不接受
+ *   （fail closed），杜绝"知道字符串就排除任何预留"。
+ * 通过后返回完整 typed identity 与归属房间——自排除使用 identity key
+ * 比较（同字符串不同 kind 不互相排除）。
  */
 function resolveOwnerStatus(
   owner: TreasuryQueryOwner | undefined,
   resolveHolder: (holderId: string) => TreasuryHolderResolution | undefined,
-): { valid: boolean; ownerRoom: string | undefined } {
-  if (!owner) return { valid: true, ownerRoom: undefined };
-  if (typeof owner !== "object") return { valid: false, ownerRoom: undefined };
-  if (owner.scope !== "production-reservation") return { valid: false, ownerRoom: undefined };
-  if (typeof owner.holderKind !== "string" || !VALID_HOLDER_KINDS.has(owner.holderKind)) {
-    return { valid: false, ownerRoom: undefined };
+): { valid: boolean; ownerRoom: string | undefined; ownerIdentity: TreasuryOwnerIdentity | undefined } {
+  if (!owner) return { valid: true, ownerRoom: undefined, ownerIdentity: undefined };
+  if (typeof owner !== "object") return { valid: false, ownerRoom: undefined, ownerIdentity: undefined };
+  if (owner.scope !== "production-reservation") return { valid: false, ownerRoom: undefined, ownerIdentity: undefined };
+  if (owner.ownerKind !== "game-object" && owner.ownerKind !== "logical-service") {
+    return { valid: false, ownerRoom: undefined, ownerIdentity: undefined };
   }
-  if (typeof owner.holderId !== "string" || owner.holderId.length === 0 || owner.holderId.length > 64) {
-    return { valid: false, ownerRoom: undefined };
+  if (typeof owner.ownerId !== "string" || owner.ownerId.length === 0 || owner.ownerId.length > 128) {
+    return { valid: false, ownerRoom: undefined, ownerIdentity: undefined };
   }
   if (typeof owner.roomName !== "string" || owner.roomName.length === 0) {
-    return { valid: false, ownerRoom: undefined };
+    return { valid: false, ownerRoom: undefined, ownerIdentity: undefined };
   }
-  const resolved = resolveHolder(owner.holderId);
-  if (resolved === undefined) return { valid: false, ownerRoom: undefined };
-  if (resolved.kind !== owner.holderKind) return { valid: false, ownerRoom: undefined };
-  if (resolved.roomName !== owner.roomName) return { valid: false, ownerRoom: undefined };
-  return { valid: true, ownerRoom: owner.roomName };
+  if (owner.namespace !== undefined && (typeof owner.namespace !== "string" || owner.namespace.length === 0)) {
+    return { valid: false, ownerRoom: undefined, ownerIdentity: undefined };
+  }
+  const resolved = resolveHolder(owner.ownerId);
+  if (resolved === undefined) return { valid: false, ownerRoom: undefined, ownerIdentity: undefined };
+  const runtimeKind = resolved.kind === "game-object" ? "game-object" : "logical-service";
+  if (runtimeKind !== owner.ownerKind) return { valid: false, ownerRoom: undefined, ownerIdentity: undefined };
+  if (resolved.roomName !== owner.roomName) return { valid: false, ownerRoom: undefined, ownerIdentity: undefined };
+  if (owner.namespace !== undefined && owner.ownerId.startsWith(`${owner.namespace}:`) === false) {
+    return { valid: false, ownerRoom: undefined, ownerIdentity: undefined };
+  }
+  const ownerIdentity: TreasuryOwnerIdentity =
+    owner.ownerKind === "logical-service"
+      ? { kind: "logical-service", id: owner.ownerId, namespace: owner.namespace ?? owner.ownerId.split(":")[0], roomName: owner.roomName }
+      : { kind: "game-object", id: owner.ownerId, roomName: owner.roomName };
+  return { valid: true, ownerRoom: owner.roomName, ownerIdentity };
 }
 
 export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryService {
@@ -666,8 +681,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           onExpiredExcluded: () => {
             metrics.expiredCommitmentsExcluded += 1;
           },
-          onOrphanExcluded: () => {
-            metrics.orphanReservationsExcluded += 1;
+          onMissingOwnerCommitted: () => {
+            metrics.missingOwnerStillCommitted += 1;
           },
         });
         state.commitmentBuiltRevision = revision;
@@ -675,6 +690,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         metrics.commitmentIndexQueries += queriesBefore;
         metrics.commitmentRecords =
           state.commitmentIndex.metrics.taskRecords + state.commitmentIndex.metrics.reservationRecords;
+        metrics.typedOwnerResolvedCount = state.commitmentIndex.metrics.typedOwnerResolved;
+        metrics.legacyUnresolvedOwnerCount = state.commitmentIndex.metrics.legacyUnresolvedOwners;
       }
       return state.commitmentIndex;
     },
@@ -739,11 +756,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (context.subtractReservations !== false) {
         for (const roomName of rooms) {
           // owner 自排除只发生在其合法归属房间；其他房间照常扣除全部预留。
-          const excludeHolder =
-            ownerCheck.valid && context.owner && roomName === ownerCheck.ownerRoom
-              ? context.owner.holderId
+          // 排除使用完整 typed identity 比较（同字符串不同 kind 不互相排除）。
+          const excludeOwner =
+            ownerCheck.valid && ownerCheck.ownerIdentity && roomName === ownerCheck.ownerRoom
+              ? ownerCheck.ownerIdentity
               : undefined;
-          committed += commitments.reservedProduction(roomName, context.resource, excludeHolder);
+          committed += commitments.reservedProduction(roomName, context.resource, excludeOwner);
         }
       }
 
