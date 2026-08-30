@@ -35,11 +35,14 @@ export interface TreasuryOwnerIdentity {
   readonly kind: TreasuryReservationOwnerKind;
   /** 稳定身份串（与既有 holderId 同源；store key 与排除比较的权威）。 */
   readonly id: string;
-  /** owner 归属房间 scope（可选——自排除时必须与查询房间一致）。 */
+  /**
+   * owner 归属房间 scope（metadata：store key 外层已表达 room——不参与
+   * identity 比较，仅自排除时由查询层校验归属一致性）。
+   */
   readonly roomName?: string;
-  /** 逻辑服务 namespace（nuker / synthesis 等）。 */
+  /** 逻辑服务 namespace（identity：logical-service 必填，其他 kind 禁止）。 */
   readonly namespace?: string;
-  /** 可选 lifecycle 引用（任务 id / 合同 id 等）。 */
+  /** lifecycle 引用（metadata：不参与 identity 比较与持久 key）。 */
   readonly lifecycleRef?: string;
 }
 
@@ -59,31 +62,62 @@ const LEGACY_OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/;
 /** 新式 Screeps object id：16 位 base62-ish。 */
 const NEW_OBJECT_ID_PATTERN = /^[A-Za-z0-9]{16}$/;
 
+const OWNER_ID_MAX = 128;
+const OWNER_NAMESPACE_MIN = 1;
+const OWNER_NAMESPACE_MAX = 64;
+const OWNER_ROOM_NAME_MAX = 32;
+const OWNER_LIFECYCLE_REF_MAX = 128;
+
+/**
+ * owner identity 的完整形状校验（kind-specific，第七轮收紧）：
+ * - logical-service 的 namespace **必填**（1..64 字符）——namespace 参与
+ *   身份与持久 key，缺失即身份不完整；
+ * - 非 logical-service 的 namespace 必须缺省——禁止"允许携带又在 token 中
+ *   忽略"的双口径；
+ * - id（1..128）参与身份；roomName/lifecycleRef 只是 metadata（长度有界）。
+ */
 export function isValidTreasuryOwnerIdentity(owner: unknown): owner is TreasuryOwnerIdentity {
   if (!owner || typeof owner !== "object") return false;
   const candidate = owner as Partial<TreasuryOwnerIdentity>;
   if (typeof candidate.kind !== "string" || !VALID_OWNER_KINDS.has(candidate.kind)) return false;
-  if (typeof candidate.id !== "string" || candidate.id.length === 0 || candidate.id.length > 128) return false;
-  if (candidate.roomName !== undefined && (typeof candidate.roomName !== "string" || candidate.roomName.length === 0)) {
+  if (typeof candidate.id !== "string" || candidate.id.length === 0 || candidate.id.length > OWNER_ID_MAX) return false;
+  if (candidate.kind === "logical-service") {
+    if (
+      typeof candidate.namespace !== "string" ||
+      candidate.namespace.length < OWNER_NAMESPACE_MIN ||
+      candidate.namespace.length > OWNER_NAMESPACE_MAX
+    ) {
+      return false;
+    }
+  } else if (candidate.namespace !== undefined) {
     return false;
   }
-  if (candidate.namespace !== undefined && (typeof candidate.namespace !== "string" || candidate.namespace.length === 0)) {
+  if (
+    candidate.roomName !== undefined &&
+    (typeof candidate.roomName !== "string" || candidate.roomName.length === 0 || candidate.roomName.length > OWNER_ROOM_NAME_MAX)
+  ) {
     return false;
   }
-  if (candidate.lifecycleRef !== undefined && typeof candidate.lifecycleRef !== "string") return false;
+  if (
+    candidate.lifecycleRef !== undefined &&
+    (typeof candidate.lifecycleRef !== "string" || candidate.lifecycleRef.length > OWNER_LIFECYCLE_REF_MAX)
+  ) {
+    return false;
+  }
   return true;
 }
 
 /**
  * owner identity 的规范比较键：kind + id + namespace 三元组（同字符串不同
  * kind / 不同 namespace 不得互相排除；roomName 由查询层校验归属一致性）。
+ * identity 与 metadata 的边界：roomName/lifecycleRef 不参与本键（见接口注释）。
  */
 export function treasuryOwnerIdentityKey(owner: TreasuryOwnerIdentity): string {
   return `${owner.kind}\u0000${owner.id}\u0000${owner.namespace ?? ""}`;
 }
 
-/** ownerToken 的 kind 前缀注册表（不同 kind 起始前缀互不相同 ⇒ token 永不跨 kind 碰撞）。 */
-const OWNER_KIND_TOKEN_PREFIXES: Readonly<Record<TreasuryReservationOwnerKind, string>> = {
+/** ownerToken 的 kind 代码注册表（不同 kind 代码互异 ⇒ token 永不跨 kind 碰撞）。 */
+const OWNER_KIND_TOKEN_CODES: Readonly<Record<TreasuryReservationOwnerKind, string>> = {
   "game-object": "go",
   "logical-service": "ls",
   task: "tk",
@@ -92,20 +126,35 @@ const OWNER_KIND_TOKEN_PREFIXES: Readonly<Record<TreasuryReservationOwnerKind, s
 };
 
 /**
- * 持久 ownerToken（第六轮）：完整 typed identity 的无歧义编码——
- * `<kind 前缀>:<namespace 段(仅 logical-service)>:<id>`。
+ * 持久 ownerToken（第七轮 v4，长度前缀 canonical 编码）：
+ * `ow2:<kindCode>:<nsLen>:<namespace><id>`。
  *
- * 唯一性论证：token 以 kind 前缀开头且各 kind 前缀互不相同，不同 kind 的
- * token 起始即不同；logical-service 的 namespace 段来自本仓库注册表（不含
- * 冒号），token 边界无歧义；id 段可含任意字符（含冒号），不影响 token 间
- * 的两两不等性（id 是尾段，token 相等 ⇔ 各前缀段与尾段完全一致）。
- * 该 token 参与 reservation store key——同 id 不同 kind / 不同 namespace 的
- * owner 由此在持久层彻底分离，绝不再互相覆盖。
+ * 唯一性论证（严格无碰撞）：前三段以冒号定界且 ow2/kindCode/nsLen 均不含
+ * 冒号；剩余串 = namespace 原文 + id 原文直接拼接，nsLen（UTF-16 code unit
+ * 数）唯一决定切分点。token 相等 ⇔ kindCode、nsLen、拼接串全等 ⇔
+ * (kind, namespace, id) 三元组全等——Unicode、冒号、空格、空串在 namespace
+ * 与 id 中均不产生边界歧义（v3 的 `ls:<ns>:<id>` 依赖 namespace 无冒号的
+ * 隐含约定，v4 消除该约定）。id ≤128、namespace ≤64 保证 token 长度有界；
+ * 纯函数无随机数，同输入跨 tick 恒定。identity 字段 = kind + namespace +
+ * id；roomName 由 store key 外层表达、lifecycleRef 是 metadata——均不进
+ * token。该 token 参与 reservation store key（makeReservationStoreKey 的
+ * 唯一拼接权威），mutation/migration/release/renew/query 自排除全部经
+ * 同一 helper。
  */
 export function treasuryReservationOwnerToken(owner: TreasuryOwnerIdentity): string {
-  const kindPrefix = OWNER_KIND_TOKEN_PREFIXES[owner.kind];
+  const kindCode = OWNER_KIND_TOKEN_CODES[owner.kind];
+  const namespace = owner.kind === "logical-service" ? owner.namespace ?? "" : "";
+  return `ow2:${kindCode}:${String(namespace.length)}:${namespace}${owner.id}`;
+}
+
+/**
+ * legacy v3 ownerToken（第六轮格式 `go:<id>` / `ls:<ns>:<id>` / …）：仅供
+ * v3→v4 迁移的旧 key 一致性核验——以经过完整验证的 entry.owner 为权威重算
+ * 新 key，绝不解析 token 字符串反推 identity。生产 mutation 不得使用。
+ */
+export function treasuryReservationOwnerTokenV3(owner: TreasuryOwnerIdentity): string {
+  const kindPrefix = owner.kind === "logical-service" ? "ls" : OWNER_KIND_TOKEN_CODES[owner.kind];
   if (owner.kind === "logical-service") {
-    // namespace 缺失时回退 id 自带前缀（nuker:xxx → nuker），保证 token 确定。
     const namespace = owner.namespace ?? owner.id.split(":")[0] ?? "";
     return `${kindPrefix}:${namespace}:${owner.id}`;
   }

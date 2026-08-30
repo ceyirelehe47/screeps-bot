@@ -16,7 +16,7 @@ const REPO_ROOT = resolve(__dirname, "..");
 interface FunctionRequirement {
   fileName: string;
   functionName: string;
-  kind: "mutation-required" | "sync-point-required" | "migration-required";
+  kind: "mutation-required" | "sync-point-required" | "migration-required" | "adapter-forward";
 }
 
 const MUTATION_FUNCTIONS: FunctionRequirement[] = [
@@ -32,10 +32,11 @@ const MUTATION_FUNCTIONS: FunctionRequirement[] = [
   { fileName: "src/runtime/resourceReservation.ts", functionName: "reserveProductionResourceForOwner", kind: "mutation-required" },
   { fileName: "src/runtime/resourceReservation.ts", functionName: "releaseProductionReservationForOwner", kind: "mutation-required" },
   { fileName: "src/runtime/resourceReservation.ts", functionName: "renewProductionReservationForOwner", kind: "mutation-required" },
-  // 旧字符串入口：deprecated 兼容 adapter（内部转调 typed mutation）。
-  { fileName: "src/runtime/resourceReservation.ts", functionName: "reserveProductionResource", kind: "mutation-required" },
-  { fileName: "src/runtime/resourceReservation.ts", functionName: "releaseProductionReservation", kind: "mutation-required" },
-  { fileName: "src/runtime/resourceReservation.ts", functionName: "renewProductionReservation", kind: "mutation-required" },
+  // 旧字符串入口：deprecated 兼容 adapter（第七轮起必须转发 typed mutation——
+  // 与 ForOwner 同一实现（schema gate + 单次 bump），不得自行 bump 二次）。
+  { fileName: "src/runtime/resourceReservation.ts", functionName: "reserveProductionResource", kind: "adapter-forward" },
+  { fileName: "src/runtime/resourceReservation.ts", functionName: "releaseProductionReservation", kind: "adapter-forward" },
+  { fileName: "src/runtime/resourceReservation.ts", functionName: "renewProductionReservation", kind: "adapter-forward" },
   { fileName: "src/runtime/resourceReservation.ts", functionName: "gcProductionReservations", kind: "mutation-required" },
   // 裸 holderId → typed owner 的版本化迁移（改写权威数据后必须通知失效）。
   { fileName: "src/runtime/resourceReservation.ts", functionName: "migrateResourceReservationsForTypedOwner", kind: "mutation-required" },
@@ -86,6 +87,20 @@ describe("Treasury commitment invalidation boundaries", () => {
       const body = bodies.get(requirement.functionName);
       if (body === null) {
         violations.push(`${requirement.fileName}: 找不到顶层函数 ${requirement.functionName}`);
+        continue;
+      }
+      if (requirement.kind === "adapter-forward") {
+        // deprecated adapter 必须转发 typed 入口（preflight gate + 单次 bump
+        // 都在 ForOwner 内）——不得自行 bump（第七轮修复双重 bump 缺陷）。
+        const forwarded =
+          body.includes("reserveProductionResourceForOwner(") ||
+          body.includes("releaseProductionReservationForOwner(") ||
+          body.includes("renewProductionReservationForOwner(");
+        if (!forwarded || body.includes("bumpTreasuryCommitmentRevision")) {
+          violations.push(
+            `${requirement.fileName}: ${requirement.functionName} 必须转发 typed mutation（单次 bump 在 ForOwner 内；adapter 不得自行 bump）`,
+          );
+        }
         continue;
       }
       if (!body.includes("bumpTreasuryCommitmentRevision")) {

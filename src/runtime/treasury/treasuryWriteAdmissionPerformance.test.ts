@@ -16,6 +16,12 @@ import {
 } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
+import {
+  quarantineTreasuryTransaction,
+  readTreasuryQuarantineCounters,
+  resetTreasuryQuarantineRuntimeForTest,
+  treasuryQuarantineOutflowTotals,
+} from "@/runtime/treasury/quarantine";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 
@@ -215,5 +221,82 @@ describe("write-admission 确定性性能 fixture", () => {
     expect(after.receiptFullScans).toBe(scansBefore);
     expect(after.commitmentRebuilds).toBe(rebuildsBefore);
     expect(after.commitmentIndexQueries).toBeGreaterThanOrEqual(16 * 3);
+  });
+});
+
+describe("第七轮：quarantine blocker 与 fault-slot admission 的确定性性能 fixture", () => {
+  /** 注入 N 条持久 quarantine（合法形状）并预热 load/聚合缓存。 */
+  function seedQuarantine(count: number): void {
+    for (let index = 0; index < count; index += 1) {
+      const write = quarantineTreasuryTransaction({
+        transactionId: `ts7_perf${index}`,
+        digest: "0123456789abcdef",
+        tick: Game.time,
+        kind: "perf",
+        source: "perf",
+        phase: "executing_at_end_tick",
+        deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
+        recordedAt: Game.time,
+      });
+      if (write.status !== "written") throw new Error(`seed 失败: ${JSON.stringify(write)}`);
+    }
+  }
+
+  it("quarantine blocker 检查 O(1)：unresolved 条数不放大 prepare 拒绝路径的扫描数", () => {
+    const scenarios = [1, 32, 63];
+    const scanCounts: number[] = [];
+    for (const count of scenarios) {
+      clearTreasuryPersistenceForTest();
+      resetTreasuryCommitmentRevisionForTest();
+      seedQuarantine(count);
+      resetTreasuryQuarantineRuntimeForTest(); // 模拟 global reset：预热一次 load（验证扫描）
+      treasuryQuarantineOutflowTotals();
+      const service = makeService();
+      service.beginTick();
+      const scansAfterLoad = readTreasuryQuarantineCounters().fullScans;
+      const rejected = service.prepareTransaction(prepareInput(service, `ts7_blocked_${count}`, -1_000, RESOURCE_ENERGY, "W1N57"));
+      expect(rejected.status).toBe("rejected");
+      if (rejected.status === "rejected") expect(rejected.reason).toBe("quarantine_write_blocked");
+      // 拒绝路径的 blocker 检查零额外扫描（health cache + entryCount O(1)）。
+      expect(readTreasuryQuarantineCounters().fullScans).toBe(scansAfterLoad);
+      scanCounts.push(readTreasuryQuarantineCounters().fullScans - scansAfterLoad);
+    }
+    expect(scanCounts).toEqual([0, 0, 0]);
+  });
+
+  it("quarantine slot admission O(1)：active 数不放大第 64/65 个 prepare 的检查", () => {
+    const service = makeService();
+    service.beginTick();
+    for (let index = 0; index < 63; index += 1) {
+      expect(service.prepareTransaction(prepareInput(service, `ts7_slot_perf${index}`, -1_000, RESOURCE_ENERGY, ROOM_NAMES[index % 8])).status).toBe("prepared");
+    }
+    const scansAfterWarm = readTreasuryQuarantineCounters().fullScans;
+    // 第 64 个：0 持久 + 63 active < 64 → 通过（slot admission O(1)，零扫描）。
+    const prepared = service.prepareTransaction(prepareInput(service, "ts7_slot_last", -1_000, RESOURCE_ENERGY, "W1N57"));
+    expect(prepared.status).toBe("prepared");
+    expect(readTreasuryQuarantineCounters().fullScans).toBe(scansAfterWarm);
+    // 第 65 个：0 持久 + 64 active = MAX → 拒绝（O(1)，零扫描）。
+    const rejected = service.prepareTransaction(prepareInput(service, "ts7_slot_over", -1_000, RESOURCE_ENERGY, "W1N57"));
+    expect(rejected.status).toBe("rejected");
+    if (rejected.status === "rejected") expect(rejected.reason).toBe("quarantine_capacity_exhausted");
+    expect(readTreasuryQuarantineCounters().fullScans).toBe(scansAfterWarm);
+  });
+
+  it("query 的 quarantine 聚合 revision 缓存：unresolved 条数不放大重复查询", () => {
+    seedQuarantine(16);
+    resetTreasuryQuarantineRuntimeForTest();
+    const service = makeService();
+    service.beginTick();
+    // 预热（首次 load + 聚合一次）。
+    const warm = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
+    expect(warm.committed).toBe(16); // 16 条 -1 流出占用
+    const scansAfterWarm = readTreasuryQuarantineCounters().fullScans;
+    for (let round = 0; round < 8; round += 1) {
+      const view = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
+      expect(view.committed).toBe(16);
+      expect(view.writeAdmission.ready).toBe(false);
+    }
+    // 8 次查询：聚合 revision 缓存命中，零额外全扫。
+    expect(readTreasuryQuarantineCounters().fullScans).toBe(scansAfterWarm);
   });
 });

@@ -313,12 +313,16 @@ describe("第六轮 authorizationSafe 联合判定与 blockers", () => {
     expect(view.observed).toBe(120_000); // 观察数值仍可用
   });
 
-  it("reservation migration 未完成（store 非空且版本缺失）：authorizationSafe=false", () => {
+  it("reservation migration 失败（malformed entry 阻断激活）：authorizationSafe=false，修复后恢复", () => {
+    // 第七轮：beginTick 的 schema activation gate 会自动迁移 legacy store
+    // （version 缺失 + 数据合法 → 成功激活）——migration blocker 只在迁移
+    // 失败（malformed entry / 未知版本）时持续。构造 malformed entry 使
+    // gate 失败：原数据不动、授权 fail closed。
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.resourceReservations = {
       "W1N57:energy:legacy-holder": {
         roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: "legacy-holder",
-        amount: 100, updatedAt: 1, expiresAt: Game.time + 500,
+        amount: -100, updatedAt: 1, expiresAt: Game.time + 500, // 负 amount：malformed
       },
     } as never;
     const service = makeService();
@@ -326,7 +330,10 @@ describe("第六轮 authorizationSafe 联合判定与 blockers", () => {
     const view = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
     expect(view.authorizationSafe).toBe(false);
     expect(view.authorizationBlockers).toContain("reservation_migration_incomplete");
-    // 迁移完成后恢复。
+    // writeAdmission 同口径阻断（schema 未激活）。
+    expect(view.writeAdmission.ready).toBe(false);
+    expect(service.metrics().reservationSchemaActivationFailures).toBeGreaterThan(0);
+    // 修复数据后恢复（迁移成功 + commitment 重建）。
     Memory.runtime!.resourceReservations = {};
     const migrated = makeService();
     migrated.beginTick();

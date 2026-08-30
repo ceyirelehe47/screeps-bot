@@ -181,4 +181,90 @@ describe("Treasury write-admission 架构边界", () => {
     }
     expect(violations).toEqual([]);
   });
+
+  it("生产模块不得 import faultResolution（协议只允许显式管理/修复路径与测试引用）", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      const isTest = filePath.endsWith(".test.ts");
+      const isAuthority = relative === "runtime/treasury/faultResolution.ts";
+      if (isTest || isAuthority) continue;
+      const source = readFileSync(filePath, "utf8");
+      if (source.includes('from "@/runtime/treasury/faultResolution"')) {
+        violations.push(`${relative} import 了 faultResolution（生产禁用——metrics 聚合走 resolutionEvents）`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("ForRepair/ForResolution 修复入口生产禁调（仅 faultResolution 定义处与测试可引用）", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      const isTest = filePath.endsWith(".test.ts");
+      // 定义处：resourceReservation.ts 定义 repairReservationStoreCorruptionForRepair；
+      // faultResolution.ts 定义并转发 repairTreasuryQuarantineStoreForResolution。
+      const isAuthority =
+        relative === "src/runtime/resourceReservation.ts" ||
+        relative === "runtime/treasury/faultResolution.ts" ||
+        relative === "runtime/treasury/quarantine.ts"; // repair 底层实现（仅供 faultResolution 调用）
+      if (isTest || isAuthority) continue;
+      const source = readFileSync(filePath, "utf8");
+      const repairCallPatterns = [
+        /repairReservationStoreCorruptionForRepair\s*\(/,
+        /repairTreasuryQuarantineStoreForResolution\s*\(/,
+        /repairTreasuryQuarantineStoreMetadataForResolution\s*\(/,
+      ];
+      for (const pattern of repairCallPatterns) {
+        if (pattern.test(source)) {
+          violations.push(`${relative} 调用显式 repair 入口（仅显式管理/修复路径与测试可用）`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("quarantine store 直接写入只允许 quarantine.ts（版本化权威唯一写入方）", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      const isTest = filePath.endsWith(".test.ts");
+      // 权威：quarantine.ts（写入/释放/repair）。receipts.ts 的测试清理
+      // (clearTreasuryPersistenceForTest) 使用 delete（非赋值形态，不命中）。
+      const isAuthority = relative === "runtime/treasury/quarantine.ts";
+      if (isTest || isAuthority) continue;
+      const source = readFileSync(filePath, "utf8");
+      const writePatterns = [
+        /\.treasury\.quarantine\s*=\s*[^=]/,
+        /treasury\.quarantine\[[^\]]*\]\s*=/,
+        /quarantine\.entries\[[^\]]*\]\s*=[^=]/,
+        /quarantine\.entryCount\s*=[^=]/,
+      ];
+      for (const pattern of writePatterns) {
+        if (pattern.test(source)) {
+          violations.push(`${relative} 直接写入 quarantine store（须经 quarantine.ts 权威 API）`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("reservation mutation 必须经 schema activation gate（全部入口共用 preflight）", () => {
+    const source = readSource("src/runtime/resourceReservation.ts");
+    // 三个 typed mutation 入口（reserve/renew/release ForOwner）各自调用
+    // preflightMutation（内含 ensureReservationSchemaActivated + 全字段验证）；
+    // deprecated adapter 只经 typed 入口转发（不二次绕过）。
+    expect(source).toMatch(/export function reserveProductionResourceForOwner[\s\S]*?preflightMutation\(/);
+    expect(source).toMatch(/export function releaseProductionReservationForOwner[\s\S]*?preflightMutation\(/);
+    expect(source).toMatch(/export function renewProductionReservationForOwner[\s\S]*?preflightMutation\(/);
+    // deprecated adapter 必须转发 ForOwner（不自行实现写入）。
+    expect(source).toMatch(/export function reserveProductionResource\([\s\S]*?return reserveProductionResourceForOwner\(/);
+    expect(source).toMatch(/export function releaseProductionReservation\([\s\S]*?return releaseProductionReservationForOwner\(/);
+    expect(source).toMatch(/export function renewProductionReservation\([\s\S]*?return renewProductionReservationForOwner\(/);
+    // gate 本身必须存在且 fail closed 三分支。
+    expect(source).toContain("export function ensureReservationSchemaActivated");
+    expect(source).toContain('"migration_failed"');
+    expect(source).toContain('"unknown_version"');
+    expect(source).toContain('"store_corrupted"');
+  });
 });

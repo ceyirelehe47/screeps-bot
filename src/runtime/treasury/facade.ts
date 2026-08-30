@@ -92,7 +92,12 @@ import {
 } from "@/runtime/treasury/quarantine";
 import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import { readTreasuryResolutionCounters } from "@/runtime/treasury/resolutionEvents";
-import { isReservationOwnerMigrationComplete, isReservationStoreCorrupted } from "@/runtime/resourceReservation";
+import {
+  ensureReservationSchemaActivated,
+  isReservationOwnerMigrationComplete,
+  isReservationStoreCorrupted,
+  readReservationMutationCounters,
+} from "@/runtime/resourceReservation";
 import {
   type TreasuryBalanceView,
   type TreasuryCommitmentIndex,
@@ -714,6 +719,14 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     if (!lazy) {
       const cleanup = cleanupTreasuryReceipts(Game.time);
       metrics.receiptsEvictedByRetention += cleanup.retentionEvicted;
+      // reservation schema activation gate（第七轮 bootstrap phase）：显式
+      // beginTick 先于全部 planner/reservation writer 完成激活（空店初始化/
+      // legacy 迁移/失败计数——失败不写数据，mutation 与授权侧 fail closed）。
+      // 每个 mutation 入口另自检（双保险），memoryCleanup 保留幂等兜底。
+      const schemaGate = ensureReservationSchemaActivated();
+      if (schemaGate.status === "rejected") {
+        metrics.reservationSchemaActivationFailures += 1;
+      }
     }
 
     // 跨 tick prepared handle 一律作废（observation 是 tick 级物理快照，
@@ -1611,6 +1624,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         resolutionNotExecuted: readTreasuryResolutionCounters().notExecuted,
         resolutionUncertain: readTreasuryResolutionCounters().uncertain,
         resolutionRejected: readTreasuryResolutionCounters().rejected,
+        reservationSchemaActivationFailures:
+          metrics.reservationSchemaActivationFailures + readReservationMutationCounters().schemaActivationFailures,
+        reservationMutationRejections: readReservationMutationCounters().mutationRejections,
       };
     },
 
