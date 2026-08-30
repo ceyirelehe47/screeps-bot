@@ -1,31 +1,19 @@
 /**
- * Treasury write-admission 架构边界测试（第五轮）：
- * - 单阶段入口退役：terminal/market/factory/lab/carrier/ResourceControl 等
- *   生产 writer 模块不得调用 recordAcceptedTransaction/recordAcceptedAction
- *   或 compat 兼容入口；
+ * Treasury write-admission 架构边界测试（第五轮建立、第九轮升级全量扫描）：
+ * - 全部规则扫描 src 下全部生产 .ts（测试豁免）——新增生产模块自动受约束；
+ * - 单阶段入口退役：生产模块不得调用 recordAcceptedTransaction/
+ *   recordAcceptedAction 或 compat 兼容入口；
  * - compat 模块只允许 Treasury 自身测试引用，任何 src 生产模块不得 import；
  * - 故障注入器（setTreasuryCommitFaultInjectorForTest）只允许测试引用；
- * - reservation store 的直接写入只允许发生在 resourceReservation.ts
- *   （typed mutation 是唯一新写入口；外部不得绕过权威 mutation）。
+ * - writer kernel 封闭（第九轮）：executePreparedAction/prepareTransaction/
+ *   授权消费原语/contract 入口只允许 treasury 协议栈内部与测试；
+ * - reservation/quarantine/intent/resolution store 直写只允许各自权威模块。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = join(__dirname, "..", "..", "..");
 const SRC_ROOT = join(REPO_ROOT, "src");
-
-/** 生产 writer 模块（未来真实 Game 写动作的候选承载方）。 */
-const PRODUCTION_WRITER_MODULES: readonly string[] = [
-  "src/runtime/resourceControl.ts",
-  "src/runtime/marketDirectContinuousAutomation.ts",
-  "src/runtime/marketSaleProtection.ts",
-  "src/runtime/marketSaleProtectionAdapter.ts",
-  "src/runtime/hubPlanner.ts",
-  "src/runtime/factoryControl.ts",
-  "src/runtime/synthesisControl.ts",
-  "src/runtime/nukerControl.ts",
-  "src/runtime/terminalActionEnergyOwnership.ts",
-];
 
 const SINGLE_STAGE_REFERENCES = [
   "recordAcceptedTransaction",
@@ -52,13 +40,20 @@ function listFilesRecursive(dir: string): string[] {
 }
 
 describe("Treasury write-admission 架构边界", () => {
-  it("生产 writer 模块不得调用单阶段入口（必须走 prepare/execute/commit）", () => {
+  it("单阶段入口退役（全量扫描）：生产模块不得调用 recordAccepted*/compat 兼容入口", () => {
     const violations: string[] = [];
-    for (const modulePath of PRODUCTION_WRITER_MODULES) {
-      const source = readSource(modulePath);
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      const isTest = filePath.endsWith(".test.ts");
+      // facade.ts 是 recordAccepted* 的对象实现载体；compat.ts 是退役隔离
+      // 模块自身——两者之外（含第九轮新增的任何生产模块）一律禁止。
+      const isAuthority =
+        relative === "runtime/treasury/facade.ts" || relative === "runtime/treasury/compat.ts";
+      if (isTest || isAuthority) continue;
+      const source = readFileSync(filePath, "utf8");
       for (const reference of SINGLE_STAGE_REFERENCES) {
         if (source.includes(reference)) {
-          violations.push(`${modulePath} 引用了单阶段入口 ${reference}`);
+          violations.push(`${relative} 引用了单阶段入口 ${reference}`);
         }
       }
     }
@@ -272,21 +267,33 @@ describe("Treasury write-admission 架构边界", () => {
     expect(source).toContain('"store_corrupted"');
   });
 
-  it("第八轮：生产 writer 候选禁用任意 callback 入口/直接 prepare/自构 postings（唯一生产路径 = 授权→contract→注册 adapter）", () => {
+  it("第九轮：writer kernel 封闭（全量扫描——新增生产模块自动受约束）", () => {
+    // 低层写原语（任意 callback 执行/直接 prepare/授权消费/自填授权）只
+    // 允许 treasury 协议栈内部（协议实现互相引用）与测试使用——任何新增
+    // 生产模块自动受本规则约束（不再依赖固定文件清单）。真实生产 writer
+    // 的未来接入 = executeTreasuryActionContract（须经注册 adapter 的正式
+    // 接入评审，本轮未接任何真实 writer）。
     const violations: string[] = [];
-    for (const relative of PRODUCTION_WRITER_MODULES) {
-      const source = readSource(relative);
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      if (relative.startsWith("runtime/treasury/")) continue; // 协议栈内部
+      const source = readFileSync(filePath, "utf8");
       if (source.includes("executePreparedAction")) {
-        violations.push(`${relative} 引用任意 callback 入口 executePreparedAction（第八轮起为内部/test-only 原语）`);
+        violations.push(`${relative} 引用任意 callback 入口 executePreparedAction（writer kernel 内部原语）`);
       }
       if (source.includes("prepareTransaction")) {
         violations.push(`${relative} 直接调用 prepareTransaction（生产必须经 executeTreasuryActionContract）`);
       }
       if (source.includes("consumeTreasuryAuthorization") || source.includes("authorizeResourceUse")) {
-        violations.push(`${relative} 直接消费授权原语（生产必须经 actionContracts 入口）`);
+        violations.push(`${relative} 直接消费授权原语（生产必须经 authorizeTreasuryActionContract + actionContracts 入口）`);
       }
-      if (source.includes("buildTreasuryActionContract") || source.includes("executeTreasuryActionContract")) {
-        violations.push(`${relative} 直接构建/执行 contract（须经注册 adapter 的正式接入评审，本轮未接真实 writer）`);
+      if (
+        source.includes("buildTreasuryActionContract") ||
+        source.includes("executeTreasuryActionContract") ||
+        source.includes("authorizeTreasuryActionContract")
+      ) {
+        violations.push(`${relative} 直接构建/授权/执行 contract（须经注册 adapter 的正式接入评审，本轮未接真实 writer）`);
       }
     }
     expect(violations).toEqual([]);

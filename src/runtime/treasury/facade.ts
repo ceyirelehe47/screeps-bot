@@ -304,6 +304,12 @@ export interface TreasuryService {
    * readiness/容量/安全整数。成功签发 opaque token（heap-only、冻结、单次
    * 使用、revision 绑定）并立即占用 authorization budget（防双授权超卖）。
    */
+  /**
+   * @internal test-only 旧授权入口（第九轮 4.1 起）：生产授权必须经
+   * authorizeTreasuryActionContract（contract-first——授权需求全部从
+   * contract 派生）。本入口保留供既有测试与协议栈内部（bundle 派生）使用；
+   * 架构测试全量扫描守护生产模块不得调用。
+   */
   authorizeResourceUse(request: TreasuryAuthorizationRequest): TreasuryAuthorizationResult;
   /**
    * Contract-first 授权（第九轮 4.1，生产唯一授权入口）：授权需求全部从
@@ -333,10 +339,9 @@ export interface TreasuryService {
     postings: readonly TreasuryPosting[],
   ): { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string; readonly detail: string };
   /**
-   * 授权消费（第八轮）：对象身份 → generation → tick → revision 快照 →
-   * 单次使用 → transactionId 绑定 → postings 覆盖校验；成功释放该 token 的
-   * 预算（转为 prepare 的 tentative，互换不双算）。生产路径经
-   * executeTreasuryActionContract 自动消费；本原语供该入口与测试使用。
+   * @internal writer kernel 原语（第九轮 4.3）：授权消费只发生在
+   * executeTreasuryActionContract 的原子 redemption（tentative 接管后）；
+   * 普通生产模块不得直接调用（架构测试全量扫描守护）。
    */
   consumeTreasuryAuthorization(
     token: TreasuryAuthorizationToken,
@@ -346,9 +351,9 @@ export interface TreasuryService {
     },
   ): TreasuryAuthorizationConsumeResult;
   /**
-   * 两阶段 prepare：在调用真实 Game 写动作之前完成全部 Treasury 侧验证
-   * （幂等/digest 冲突/epoch/格式/tentative 感知物理可行性）并预留资源、
-   * 容量与 receipt 槽位。返回不可伪造的 prepared handle。
+   * @internal writer kernel 原语（第九轮 4.3）：prepare 是
+   * executePreparedAction/executeTreasuryActionContract 的内部阶段；普通
+   * 生产模块不得直接调用（架构测试全量扫描守护）。
    */
   prepareTransaction(input: TreasuryTransactionInput): TreasuryPreparationResult;
   /**
@@ -360,9 +365,10 @@ export interface TreasuryService {
   /** 两阶段 abort：原子释放 tentative 资源/容量/receipt 槽与 handle，零结算写入。 */
   abortPreparedTransaction(handle: TreasuryPreparedHandle): TreasuryPreparedAbortResult;
   /**
-   * 安全执行包装器（生产 writer 的唯一推荐入口）：prepare → 调用 Game
-   * API 恰好一次 → ok=true commit / ok=false abort / 抛错 abort+rethrow。
-   * prepare 失败时 Game API 不执行；正常完整执行后 outstanding 恒为 0。
+   * @internal writer kernel 核心（第九轮 4.3）：任意 callback 的执行入口只
+   * 允许 actionContracts（经 execution options 窄接口）与测试 harness 使用；
+   * 普通生产模块不得直接调用（架构测试全量扫描守护）——真实写动作的唯一
+   * 生产入口是 executeTreasuryActionContract。
    */
   executePreparedAction<TAction extends { ok: boolean }>(
     input: TreasuryTransactionInput,
