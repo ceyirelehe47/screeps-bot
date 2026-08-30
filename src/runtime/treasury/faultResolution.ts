@@ -76,6 +76,18 @@ import { recordTreasuryResolutionEvent } from "@/runtime/treasury/resolutionEven
 
 export type { TreasuryReconciliationConclusion } from "@/runtime/treasury/reconciliation";
 
+// ── resolution kernel token（第十轮 3.12.8） ────────────────────────────────
+// resolution kernel 只接受由当前 Treasury service 闭包注册的 authority 对象
+//（WeakSet 对象身份——结构兼容的伪 service 一律无效）。注册入口仅供 facade
+// 调用（架构测试守护生产模块不得引用）。
+const resolutionKernelRegistry = new WeakSet<object>();
+export function registerTreasuryResolutionKernelForService(authority: object): void {
+  resolutionKernelRegistry.add(authority);
+}
+function isRegisteredResolutionKernel(authority: object): boolean {
+  return resolutionKernelRegistry.has(authority);
+}
+
 /** resolution 输入（第八轮）：capability 取代旧 evidence/guard 自由对象。 */
 export interface TreasuryFaultResolutionInput {
   readonly transactionId: string;
@@ -183,11 +195,11 @@ function prevalidate(
       return { stop: { status: "already_resolved", resolution: "committed", transactionId: input.transactionId } };
     }
   }
-  // capability 防伪：对象身份/单次使用/generation/tick。
-  // capability 校验并消费（第九轮 4.8：service 闭包校验——generation 由当前
-  // service 自身判定，调用者无法提交 serviceGeneration 数字绕过；校验通过
-  // 即标记单次使用）。
-  const capabilityCheck = service.consumeReconciliationCapability(input.capability);
+  // capability 防伪（第十轮 3.12.8）：**只读验证**（对象身份/单次未用/
+  // generation/tick——零消费）。消费移至 staged resolution intent 写入之后：
+  // staged 前的任何拒绝（store fatal/authority mismatch/evidence/slot）都
+  // 不烧掉 capability（可重试）。
+  const capabilityCheck = service.validateReconciliationCapability(input.capability);
   if (capabilityCheck.status !== "valid") {
     countRejected();
     return {
@@ -286,9 +298,10 @@ function prevalidate(
       },
     };
   }
-  // capability 扩展绑定匹配（第九轮 4.8）：authorityKind/contract digest/
-  // adapter version——capability 与不同 contract/reconciler version 的
-  // authority 不匹配时拒绝。
+  // capability 绑定强匹配（第十轮 3.12.8）：contract-backed authority（携带
+  // 合同事实）的全部绑定字段必须**双方都存在且完全一致**——弱 optional 检查
+  //（双方都存在才比）删除：authority 有 contract/adapter 事实而 capability
+  // 缺失对应绑定即为不匹配。
   if (capability.authorityKind !== undefined && capability.authorityKind !== authority.authorityKind) {
     countRejected();
     return {
@@ -299,21 +312,33 @@ function prevalidate(
       },
     };
   }
-  if (authority.contractDigest !== undefined && capability.contractDigest !== undefined && capability.contractDigest !== authority.contractDigest) {
-    countRejected();
-    return {
-      stop: { status: "rejected", reason: "reconciler_mismatch", detail: "capability 绑定的 contract digest 与 authority 不一致" },
-    };
-  }
-  if (authority.adapterVersion !== undefined && capability.reconcilerVersion !== authority.adapterVersion) {
-    countRejected();
-    return {
-      stop: {
-        status: "rejected",
-        reason: "reconciler_mismatch",
-        detail: `capability 的 reconciler version ${String(capability.reconcilerVersion)} 与 authority adapter version ${String(authority.adapterVersion)} 不一致`,
-      },
-    };
+  const contractBacked =
+    authority.contractId !== undefined || authority.contractDigest !== undefined || authority.adapterVersion !== undefined;
+  if (contractBacked) {
+    if (capability.contractId === undefined || authority.contractId === undefined || capability.contractId !== authority.contractId) {
+      countRejected();
+      return {
+        stop: { status: "rejected", reason: "reconciler_mismatch", detail: "contract-backed authority 的 contractId 必须双方存在且一致（capability 绑定缺失即不匹配）" },
+      };
+    }
+    if (capability.contractDigest === undefined || authority.contractDigest === undefined || capability.contractDigest !== authority.contractDigest) {
+      countRejected();
+      return {
+        stop: { status: "rejected", reason: "reconciler_mismatch", detail: "contract-backed authority 的 contractDigest 必须双方存在且一致" },
+      };
+    }
+    if (authority.adapterVersion === undefined || capability.reconcilerVersion !== authority.adapterVersion) {
+      countRejected();
+      return {
+        stop: { status: "rejected", reason: "reconciler_mismatch", detail: "contract-backed authority 的 adapter/reconciler version 必须双方存在且一致" },
+      };
+    }
+    if (authority.durablePayloadVersion !== undefined && capability.durablePayloadVersion !== authority.durablePayloadVersion) {
+      countRejected();
+      return {
+        stop: { status: "rejected", reason: "reconciler_mismatch", detail: "contract-backed authority 的 durable payload version 与 capability 绑定不一致" },
+      };
+    }
   }
   // 时序：当前 tick 严格晚于故障 tick；capability 观察严格晚于故障 tick 且
   // 不晚于当前 tick（stale/未来观察均拒绝）。
@@ -372,6 +397,10 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
   service: TreasuryReconciliationCapabilityAuthority,
   input: TreasuryFaultResolutionInput,
 ): TreasuryFaultResolutionResult {
+  if (!isRegisteredResolutionKernel(service)) {
+    countRejected();
+    return { status: "rejected", reason: "invalid_input", detail: "resolution kernel 未在当前 Treasury service 闭包注册（结构兼容的伪 service 无效——对外入口是 service.resolveUnresolvedTransaction）" };
+  }
   const pre = prevalidate(service, input);
   if ("stop" in pre) return pre.stop;
   const { authority, capability } = pre;
@@ -405,6 +434,16 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
   if (resolvingWrite.status === "rejected") {
     countRejected();
     return { status: "rejected", reason: "resolution_store_fatal", detail: `resolving tombstone 写入失败: ${resolvingWrite.detail}` };
+  }
+  // 【第十轮 3.12.8】capability 消费时点：staged resolution intent（resolving
+  // tombstone）写入成功后才消费——此前任何拒绝都不烧掉 capability；此后
+  // 中断由 durable staged state 跨 reset 幂等恢复（不依赖旧 capability）。
+  const consumedNow = service.consumeReconciliationCapability(input.capability);
+  if (consumedNow.status !== "valid") {
+    // 防御分支（validate 通过后同步窗口内无失效源）：回滚 tombstone。
+    deleteTreasuryResolutionTombstone(authority.transactionId);
+    countRejected();
+    return { status: "rejected", reason: "invalid_capability", detail: `capability 消费失败（${consumedNow.reason}）: ${consumedNow.detail}` };
   }
   // staged 第 3 步：receipt 刷新（既有 receipt 真正更新到 resolution tick）。
   const receipt = refreshSettledReceiptForResolution(authority.transactionId, Game.time);
@@ -462,6 +501,10 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
   service: TreasuryReconciliationCapabilityAuthority,
   input: TreasuryFaultResolutionInput,
 ): TreasuryFaultResolutionResult {
+  if (!isRegisteredResolutionKernel(service)) {
+    countRejected();
+    return { status: "rejected", reason: "invalid_input", detail: "resolution kernel 未在当前 Treasury service 闭包注册（结构兼容的伪 service 无效——对外入口是 service.resolveUnresolvedTransaction）" };
+  }
   const pre = prevalidate(service, input);
   if ("stop" in pre) return pre.stop;
   const { authority, capability } = pre;
@@ -502,6 +545,14 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
   if (finalWrite.status === "rejected") {
     countRejected();
     return { status: "rejected", reason: "resolution_store_fatal", detail: `final tombstone 写入失败（quarantine 保留，可重试）: ${finalWrite.detail}` };
+  }
+  // 【第十轮 3.12.8】capability 消费时点：staged final tombstone 写入成功后。
+  const consumedNow = service.consumeReconciliationCapability(input.capability);
+  if (consumedNow.status !== "valid") {
+    // 防御分支：tombstone 已 final（幂等 already_resolved），capability 未消费
+    //（下次管理调用快路径返回 already_resolved——零资产影响）。
+    countRejected();
+    return { status: "rejected", reason: "invalid_capability", detail: `capability 消费失败（${consumedNow.reason}）: ${consumedNow.detail}` };
   }
   // staged 第 3 步：释放 quarantine/intent + 清 marker（中断由恢复补完成）。
   releaseTreasuryQuarantineEntry(authority.transactionId);

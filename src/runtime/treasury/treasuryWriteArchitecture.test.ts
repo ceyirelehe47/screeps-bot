@@ -127,7 +127,10 @@ describe("Treasury write-admission 架构边界", () => {
       const isAuthority =
         relative === "runtime/treasury/faultResolution.ts" ||
         relative === "runtime/treasury/writeFault.ts" ||
-        relative === "runtime/treasury/resolutionStore.ts";
+        relative === "runtime/treasury/resolutionStore.ts" ||
+        // 第十轮：facade 是 service.resolveUnresolvedTransaction 管理入口的
+        // 实现载体（经闭包 resolution kernel 调用，生产 tick 不自动调用）。
+        relative === "runtime/treasury/facade.ts";
       // 定义处允许；writeFault 的受控 marker 清除仅供 faultResolution 调用。
       if (isAuthority) continue;
       const source = readFileSync(filePath, "utf8");
@@ -190,7 +193,7 @@ describe("Treasury write-admission 架构边界", () => {
     for (const filePath of listFilesRecursive(SRC_ROOT)) {
       const relative = filePath.split(/[\\/]/).slice(-3).join("/");
       const isTest = filePath.endsWith(".test.ts");
-      const isAuthority = relative === "runtime/treasury/faultResolution.ts";
+      const isAuthority = relative === "runtime/treasury/faultResolution.ts" || relative === "runtime/treasury/facade.ts";
       if (isTest || isAuthority) continue;
       const source = readFileSync(filePath, "utf8");
       if (source.includes('from "@/runtime/treasury/faultResolution"')) {

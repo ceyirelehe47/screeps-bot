@@ -49,6 +49,7 @@ import {
 import type { TreasuryReconciliationCapability } from "@/runtime/treasury/reconciliation";
 import { peekTreasuryQuarantineHealth, quarantineTreasuryTransaction } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentEntry, writeTreasuryIntentEntry, migrateTreasuryLegacyIntentPhase } from "@/runtime/treasury/intents";
+import { resetTreasuryIntentRuntimeForTest } from "@/runtime/treasury/intents";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
 import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
@@ -115,7 +116,7 @@ function issueCapability(service: TreasuryTestService, transactionId: string, di
 function resolveCommitted(service: TreasuryTestService, transactionId: string, digest?: string) {
   const issued = issueCapability(service, transactionId, digest);
   if (issued.status === "rejected") return { status: "issuance_rejected" as const, reason: issued.reason, detail: issued.detail };
-  return resolveTreasuryQuarantinedTransactionAsCommitted(service, {
+  return service.resolveUnresolvedTransaction({
     transactionId,
     ...(digest !== undefined ? { digest } : {}),
     capability: issued.capability,
@@ -125,7 +126,7 @@ function resolveCommitted(service: TreasuryTestService, transactionId: string, d
 function resolveNotExecuted(service: TreasuryTestService, transactionId: string, digest?: string) {
   const issued = issueCapability(service, transactionId, digest);
   if (issued.status === "rejected") return { status: "issuance_rejected" as const, reason: issued.reason, detail: issued.detail };
-  return resolveTreasuryQuarantinedTransactionAsNotExecuted(service, {
+  return service.resolveUnresolvedTransaction({
     transactionId,
     ...(digest !== undefined ? { digest } : {}),
     capability: issued.capability,
@@ -184,7 +185,7 @@ describe("capability 签发与防伪", () => {
     if (issued.status !== "issued") return;
     // 伪造：结构相同的普通对象。
     const forged: TreasuryReconciliationCapability = { ...issued.capability };
-    const forgedResult = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
+    const forgedResult = next.resolveUnresolvedTransaction({
       transactionId: "cap_forge",
       digest,
       capability: forged,
@@ -193,7 +194,7 @@ describe("capability 签发与防伪", () => {
     if (forgedResult.status === "rejected") expect(forgedResult.reason).toBe("invalid_capability");
     // JSON round-trip 副本。
     const roundTrip = JSON.parse(JSON.stringify(issued.capability)) as TreasuryReconciliationCapability;
-    const roundTripResult = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
+    const roundTripResult = next.resolveUnresolvedTransaction({
       transactionId: "cap_forge",
       digest,
       capability: roundTrip,
@@ -203,7 +204,7 @@ describe("capability 签发与防伪", () => {
     Game.time += 1;
     const later = makeService();
     later.beginTick();
-    const crossTick = resolveTreasuryQuarantinedTransactionAsCommitted(later, {
+    const crossTick = later.resolveUnresolvedTransaction({
       transactionId: "cap_forge",
       digest,
       capability: issued.capability,
@@ -215,7 +216,7 @@ describe("capability 签发与防伪", () => {
     const newest = advanceTick();
     const reissued = issueCapability(newest, "cap_forge", digest);
     if (reissued.status === "issued") {
-      const crossGen = resolveTreasuryQuarantinedTransactionAsCommitted(later, {
+      const crossGen = later.resolveUnresolvedTransaction({
         transactionId: "cap_forge",
         digest,
         capability: reissued.capability,
@@ -254,14 +255,14 @@ describe("capability 签发与防伪", () => {
     const issued = issueCapability(next, "cap_single", digest);
     expect(issued.status).toBe("issued");
     if (issued.status !== "issued") return;
-    const first = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
+    const first = next.resolveUnresolvedTransaction({
       transactionId: "cap_single",
       digest,
       capability: issued.capability,
     });
     expect(first.status).toBe("resolved");
     // 已消费：同 capability 重复 resolve（entry 已释放 → not_found 幂等路径）。
-    const second = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
+    const second = next.resolveUnresolvedTransaction({
       transactionId: "cap_single",
       digest,
       capability: issued.capability,
@@ -295,7 +296,7 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     // capability 校验——resolved 状态不因重复调用改变）。
     const issuedAgain = issueCapability(next, "ts1_res_c", digest);
     expect(issuedAgain.status).toBe("rejected"); // entry 已释放：签发不可得
-    const again = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
+    const again = next.resolveUnresolvedTransaction({
       transactionId: "ts1_res_c",
       digest,
       capability: { __brand: "treasury-reconciliation-capability" } as never, // 快路径不消费
@@ -369,7 +370,7 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     expect(replay.status).toBe("already_settled"); // tombstone 窗口内不当作全新动作
     expect(readTreasuryResolutionTombstone("ts1_horizon")?.resolution).toBe("committed");
     // 重复 resolution 幂等 already_resolved（快路径）。
-    const again = resolveTreasuryQuarantinedTransactionAsCommitted(later, {
+    const again = later.resolveUnresolvedTransaction({
       transactionId: "ts1_horizon",
       digest,
       capability: { __brand: "treasury-reconciliation-capability" } as never,
@@ -447,10 +448,13 @@ describe("resolve-as-not-executed（staged：final tombstone 先行）", () => {
     const rejected = resolveNotExecuted(next, "ts1_commit_phase", digest);
     expect(rejected.status).toBe("rejected");
     if (rejected.status === "rejected") expect(rejected.reason).toBe("resolution_not_allowed");
-    // conclusion 与 resolution 类型不匹配：committed 函数 + not-executed 结论。
+    // 【第十轮 3.12.8】service 单入口按 conclusion 自动路由：not-executed
+    // 结论 + commit 类 authority → not-executed 路径被 outcome 事实拒绝
+    //（evidence_mismatch 的显式错配调用不再是生产路径——路由保证结论与
+    // resolution 类型恒匹配）。
     const mismatch = resolveCommitted(next, "ts1_commit_phase", digest);
     expect(mismatch.status).toBe("rejected");
-    if (mismatch.status === "rejected") expect(mismatch.reason).toBe("evidence_mismatch");
+    if (mismatch.status === "rejected") expect(mismatch.reason).toBe("resolution_not_allowed");
     // fault 保持不动。
     expect(readTreasuryQuarantineEntry("ts1_commit_phase")).toBeDefined();
     expect(readTreasuryWriteFault()?.transactionId).toBe("ts1_commit_phase");
@@ -495,7 +499,7 @@ describe("参数校验与不可信 store", () => {
     if (mismatch.status === "rejected") expect(mismatch.reason).toBe("digest_mismatch");
     expect(readTreasuryQuarantineEntry("ts1_param")).toBeDefined();
     // resolve 侧：无 capability 的输入结构化拒绝。
-    const malformed = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
+    const malformed = next.resolveUnresolvedTransaction({
       transactionId: "ts1_param",
       capability: undefined as never,
     });
@@ -512,7 +516,7 @@ describe("参数校验与不可信 store", () => {
     // 签发后损坏 store → resolve 显式 quarantine_store_fatal（防御分支）。
     (Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore).entryCount = 42;
     resetTreasuryQuarantineRuntimeForTest();
-    const rejected = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
+    const rejected = next.resolveUnresolvedTransaction({
       transactionId: "ts1_corrupt_store",
       digest,
       capability: issued.capability,
@@ -534,7 +538,7 @@ describe("参数校验与不可信 store", () => {
       updatedAt: Game.time,
     } as never;
     resetTreasuryResolutionStoreForTest();
-    const rejected = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
+    const rejected = next.resolveUnresolvedTransaction({
       transactionId: "ts1_res_store",
       digest,
       capability: issued.capability,
@@ -567,7 +571,7 @@ describe("staged atomic（故障注入与恢复）", () => {
     const issued = issueCapability(next, "ts1_slot_full", digest);
     expect(issued.status).toBe("issued");
     if (issued.status !== "issued") return;
-    const rejected = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
+    const rejected = next.resolveUnresolvedTransaction({
       transactionId: "ts1_slot_full",
       digest,
       capability: issued.capability,
@@ -959,7 +963,7 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
     // 新签名：service 为第一参数；输入对象无 serviceGeneration 字段——
     // capability 校验由 service 闭包执行（generation 取闭包值）。伪造的
     // "自报 generation" 输入路径不存在（TS 类型层面已封闭）。
-    const resolved = resolveTreasuryQuarantinedTransactionAsCommitted(next, {
+    const resolved = next.resolveUnresolvedTransaction({
       transactionId: "cap_nogen",
       capability: issued.capability,
     });
@@ -1075,3 +1079,48 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
     next.beginTick(); // 恢复：final not-executed + intent 残留 → 补完成释放
     expect(readTreasuryIntentEntry("rt_intent_release")).toBeUndefined();
   });
+
+describe("service-private resolution（第十轮 3.12.8：闭包 kernel + capability 消费时点）", () => {
+  it("结构兼容的伪 service 无法调用 resolution kernel", () => {
+    makeExecutingQuarantine("r10_fake");
+    const next = advanceTick();
+    const issued = issueCapability(next, "r10_fake");
+    expect(issued.status).toBe("issued");
+    if (issued.status !== "issued") return;
+    const fakeAuthority = {
+      validateReconciliationCapability: next.consumeReconciliationCapability.bind(next),
+      consumeReconciliationCapability: next.consumeReconciliationCapability.bind(next),
+    };
+    const rejected = resolveTreasuryQuarantinedTransactionAsCommitted(fakeAuthority, {
+      transactionId: "r10_fake",
+      digest: readTreasuryQuarantineEntry("r10_fake")!.digest,
+      capability: issued.capability,
+    });
+    expect(rejected.status).toBe("rejected");
+    if (rejected.status === "rejected") {
+      expect(rejected.reason).toBe("invalid_input");
+      expect(rejected.detail).toContain("未在当前 Treasury service 闭包注册");
+    }
+    // 隔离不动。
+    expect(readTreasuryQuarantineEntry("r10_fake")).toBeDefined();
+  });
+
+  it("capability 在前置检查失败时不被消费（staged 写入前拒绝可重试）", () => {
+    // 构造 store fatal：issue 后破坏 intent store → resolve 拒绝 → capability 未烧。
+    const { digest } = makeExecutingQuarantine("r10_kept");
+    const next = advanceTick();
+    const issued = issueCapability(next, "r10_kept");
+    expect(issued.status).toBe("issued");
+    if (issued.status !== "issued") return;
+    (Memory.runtime!.treasury!.intents as { version: number }).version = 99;
+    resetTreasuryIntentRuntimeForTest();
+    const rejected = next.resolveUnresolvedTransaction({ transactionId: "r10_kept", digest, capability: issued.capability });
+    expect(rejected.status).toBe("rejected");
+    if (rejected.status === "rejected") expect(rejected.reason).toBe("intent_store_fatal");
+    // capability 未被消费（validate 只读）——修复 store 后同 capability 可重试成功。
+    (Memory.runtime!.treasury!.intents as { version: number }).version = 3;
+    resetTreasuryIntentRuntimeForTest();
+    const retried = next.resolveUnresolvedTransaction({ transactionId: "r10_kept", digest, capability: issued.capability });
+    expect(retried.status).toBe("resolved");
+  });
+});

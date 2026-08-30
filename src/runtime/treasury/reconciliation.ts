@@ -67,5 +67,11 @@ export type TreasuryReconciliationCapabilityConsumption =
  * TreasuryService 结构兼容本接口。
  */
 export interface TreasuryReconciliationCapabilityAuthority {
+  /**
+   * 只读验证（第十轮 3.12.8）：对象身份 → 单次未用 → generation → tick——
+   * 零消费（消费移至 staged resolution 写入之后；staged 前的任何拒绝不得
+   * 烧掉 capability）。
+   */
+  validateReconciliationCapability(capability: unknown): TreasuryReconciliationCapabilityConsumption;
   consumeReconciliationCapability(capability: unknown): TreasuryReconciliationCapabilityConsumption;
 }

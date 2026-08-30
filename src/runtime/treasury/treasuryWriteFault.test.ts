@@ -152,7 +152,7 @@ describe("staged commit 故障注入", () => {
     // 第七轮：resolution 需故障后 observation（下一 tick）+ 显式证据。
     Game.time += 1;
     service.beginTick();
-    const resolved = resolveTreasuryQuarantinedTransactionAsCommitted(service, {
+    const resolved = service.resolveUnresolvedTransaction({
       transactionId: "ts1_fault_heap",
       capability: issueCap(service, "ts1_fault_heap"),
     });
@@ -255,7 +255,7 @@ describe("staged commit 故障注入", () => {
     expect(readTreasuryWriteFault()).toBeDefined();
     expect(service.metrics().writeAdmissionLocked).toBe(1);
     // 显式 resolution 路径解除（faulted 已在上一 endTick 转 quarantine）。
-    const resolved = resolveTreasuryQuarantinedTransactionAsCommitted(service, {
+    const resolved = service.resolveUnresolvedTransaction({
       transactionId: "ts1_repair",
       capability: issueCap(service, "ts1_repair"),
     });

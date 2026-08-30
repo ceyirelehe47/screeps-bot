@@ -152,6 +152,12 @@ import {
 } from "@/runtime/treasury/authorization";
 import { TREASURY_WRITER_KERNEL, type TreasuryWriterKernel } from "@/runtime/treasury/kernelChannel";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
+import {
+  registerTreasuryResolutionKernelForService,
+  resolveTreasuryQuarantinedTransactionAsCommitted,
+  resolveTreasuryQuarantinedTransactionAsNotExecuted,
+  type TreasuryFaultResolutionResult,
+} from "@/runtime/treasury/faultResolution";
 import { readTreasuryQuarantineRevision } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentRevision } from "@/runtime/treasury/intents";
 import type { TreasuryPosting } from "@/runtime/treasury/types";
@@ -400,6 +406,17 @@ export interface TreasuryService {
     readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch";
     readonly detail: string;
   };
+  /**
+   * 对外 resolution 管理入口（第十轮 3.12.8）：fault resolution 的唯一生产
+   * 调用面——内部经 service 闭包注册的 resolution kernel 执行（结构兼容的
+   * 伪 service 无法进入）；capability 在全部前置检查通过且 staged resolution
+   * 写入成功后才消费。不得被生产 tick 自动调用（架构测试守护）。
+   */
+  resolveUnresolvedTransaction(input: {
+    readonly transactionId: string;
+    readonly digest?: string;
+    readonly capability: TreasuryReconciliationCapability;
+  }): TreasuryFaultResolutionResult;
   /**
    * capability 校验并消费（第九轮 4.8，@internal——faultResolution 经窄接口
    * 调用）：对象身份 → 单次使用 → generation（闭包值，调用者不可提交）→
@@ -2841,6 +2858,40 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       return { status: "issued", capability };
     },
 
+    /**
+     * 只读验证（第十轮 3.12.8）：与 consume 相同的校验链（对象身份/单次未用/
+     * generation/tick）但**不标记消费**——faultResolution 的 prevalidate 用；
+     * 消费发生在 staged resolution intent 写入之后。
+     */
+    validateReconciliationCapability(capability: unknown): TreasuryReconciliationCapabilityConsumption {
+      if (!capability || typeof capability !== "object" || !capabilityRegistry.has(capability as TreasuryReconciliationCapability)) {
+        return {
+          status: "rejected",
+          reason: "invalid_capability",
+          detail: "capability 未在本 service 实例签发（普通对象/JSON round-trip 副本/跨实例一律无效——结论只能来自注册 reconciler）",
+        };
+      }
+      const typed = capability as TreasuryReconciliationCapability;
+      if (consumedCapabilities.has(typed)) {
+        return { status: "rejected", reason: "already_used", detail: "capability 已消费（单次使用）" };
+      }
+      if (typed.serviceGeneration !== serviceGeneration) {
+        return {
+          status: "rejected",
+          reason: "cross_generation",
+          detail: "capability 由旧 Treasury service 签发（global reset 后必须由新 service 重新签发，不恢复旧 heap token）",
+        };
+      }
+      if (typed.tick !== Game.time) {
+        return {
+          status: "rejected",
+          reason: "cross_tick",
+          detail: `capability 于 tick ${String(typed.tick)} 签发（当前 ${String(Game.time)}）——跨 tick 失效`,
+        };
+      }
+      return { status: "valid", capability: typed };
+    },
+
     consumeReconciliationCapability(capability: unknown): TreasuryReconciliationCapabilityConsumption {
       if (!capability || typeof capability !== "object" || !capabilityRegistry.has(capability as TreasuryReconciliationCapability)) {
         return {
@@ -2869,6 +2920,23 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       }
       consumedCapabilities.add(typed);
       return { status: "valid", capability: typed };
+    },
+
+    /**
+     * 对外 resolution 管理入口（第十轮 3.12.8）：capability 结论路由
+     * committed/not-executed（staged 协议见 faultResolution）；内部经闭包
+     * 注册的 resolution kernel 执行——伪 service 无法进入。
+     */
+    resolveUnresolvedTransaction(input: {
+      readonly transactionId: string;
+      readonly digest?: string;
+      readonly capability: TreasuryReconciliationCapability;
+    }): TreasuryFaultResolutionResult {
+      const conclusion = internalService.validateReconciliationCapability(input?.capability);
+      if (conclusion.status === "valid" && conclusion.capability.conclusion === "observed_not_executed") {
+        return resolveTreasuryQuarantinedTransactionAsNotExecuted(resolutionKernelAuthority, input);
+      }
+      return resolveTreasuryQuarantinedTransactionAsCommitted(resolutionKernelAuthority, input);
     },
 
     treasuryServiceGeneration(): number {
@@ -3085,6 +3153,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
   };
 
+  // ── resolution kernel authority（第十轮 3.12.8）：service 闭包私有对象，
+  //    经 faultResolution 的 WeakSet 注册——结构兼容的伪 service 无法通过
+  //    resolution kernel；对外管理入口是 resolveUnresolvedTransaction。 ────
+  const resolutionKernelAuthority = {
+    validateReconciliationCapability: (capability: unknown) => internalService.validateReconciliationCapability(capability),
+    consumeReconciliationCapability: (capability: unknown) => internalService.consumeReconciliationCapability(capability),
+  };
+  registerTreasuryResolutionKernelForService(resolutionKernelAuthority);
+
   // 单阶段入口不在公共 TreasuryService 接口上——经 compat 模块以内部
   // 形状访问（生产 writer 禁用；测试经 compatRecordAcceptedTransaction）。
   // ── writer kernel（第十轮 3.12.5）：唯一持有低层原语的内部对象，以
@@ -3120,6 +3197,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     authorizeTreasuryActionContract: internalService.authorizeTreasuryActionContract,
     issueTreasuryReconciliationCapability: internalService.issueTreasuryReconciliationCapability,
     consumeReconciliationCapability: internalService.consumeReconciliationCapability,
+    resolveUnresolvedTransaction: internalService.resolveUnresolvedTransaction,
     treasuryServiceGeneration: internalService.treasuryServiceGeneration,
     treasuryResolutionGuard: internalService.treasuryResolutionGuard,
     preparedLeakAudit: internalService.preparedLeakAudit,
