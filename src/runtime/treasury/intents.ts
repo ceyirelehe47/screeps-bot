@@ -43,7 +43,7 @@ import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import { TREASURY_WRITE_FAULT_PHASES } from "@/runtime/treasury/writeFault";
 import { quarantineTreasuryTransaction } from "@/runtime/treasury/quarantine";
 
-export const TREASURY_INTENT_VERSION = 2 as const;
+export const TREASURY_INTENT_VERSION = 3 as const;
 /** 与 quarantine 同上限——recovery slot 统一计数的前提。 */
 export const TREASURY_INTENT_MAX_ENTRIES = 64;
 
@@ -57,41 +57,101 @@ const VALID_LOCATION_KINDS: ReadonlySet<string> = new Set<string>(["storage", "t
 const VALID_RESOURCES: ReadonlySet<string> = new Set<string>(RESOURCES_ALL);
 
 /**
- * durable intent 的执行 phase 状态机（heap-only 的 "authorized" 仅为状态机
- * 语义完整性——持久化时至少为 ready；committed/aborted 为正常路径随关闭即删
- * 的终态位，正常情况下不出现在 store 中）。
+ * execution outcome（第十轮 3.12.1）：Game API 调用的**事实等级**——单调、
+ * 不可回退。已返回 OK 永不退化为 unknown；已返回 non-OK 永不变 OK；故障、
+ * 恢复、quarantine 转换与 commit fault 只改 settlement，绝不改 outcome。
  *
- * 核心区分：ready（协议保证 execution-started 标记先于 callback——持久化的
- * ready 即"Game API 从未被调用"）与 executing 及之后（结果未知/已离开）。
+ * - not_started：callback 从未被调用（协议保证 execution-started 标记先于
+ *   callback——持久化的 not_started 即"Game API 从未被调用"）；
+ * - started_unknown：callback 已开始但结果未知（执行中/抛错/中断）；
+ * - returned_non_ok / returned_ok：Game 已明确返回的结果事实；
+ * - aborted_final：终态专用（仅用于旧 phase "aborted" 的无歧义迁移——
+ *   正常 abort 完成不落盘即释放，运行时不产生此值；不冒充任何执行事实）。
  */
-export type TreasuryIntentPhase =
-  | "authorized"
+export type TreasuryExecutionOutcome =
+  | "not_started"
+  | "started_unknown"
+  | "returned_non_ok"
+  | "returned_ok"
+  | "aborted_final";
+
+/**
+ * settlement workflow state（第十轮 3.12.1）：Treasury 工作流状态（与
+ * execution outcome 正交）：ready→executing→pending_abort/pending_commit→
+ * finalized 的正常主线；faulted（执行事实未知或已知的故障待隔离）→
+ * quarantined（durable 权威转移完成）→resolving（staged resolution）→
+ * finalized。
+ */
+export type TreasurySettlementState =
   | "ready"
   | "executing"
-  | "returned_non_ok"
-  | "ok_pending_commit"
-  | "committed"
-  | "aborted"
-  | "execution_unknown"
+  | "pending_abort"
+  | "pending_commit"
   | "quarantined"
-  | "resolution_pending";
+  | "resolving"
+  | "finalized"
+  | "faulted";
 
-/** 持久化的 phase 全集（authorized 为 heap 瞬时态，不落盘）。 */
-export const TREASURY_INTENT_PERSISTED_PHASES: ReadonlySet<string> = new Set<string>([
+/** 持久化 settlement 全集。 */
+export const TREASURY_INTENT_SETTLEMENTS: ReadonlySet<string> = new Set<string>([
   "ready",
   "executing",
-  "returned_non_ok",
-  "ok_pending_commit",
-  "committed",
-  "aborted",
-  "execution_unknown",
+  "pending_abort",
+  "pending_commit",
   "quarantined",
-  "resolution_pending",
+  "resolving",
+  "finalized",
+  "faulted",
 ]);
 
-/** 恢复语义：ready 相按协议确认未执行；其余保守转 execution unknown。 */
-export function isTreasuryIntentPhaseNotExecuted(phase: string): boolean {
-  return phase === "ready";
+/** 持久化 outcome 全集。 */
+export const TREASURY_INTENT_OUTCOMES: ReadonlySet<string> = new Set<string>([
+  "not_started",
+  "started_unknown",
+  "returned_non_ok",
+  "returned_ok",
+  "aborted_final",
+]);
+
+/**
+ * outcome 单调迁移表（唯一合法边；aborted_final 仅由旧数据迁移产生）：
+ * not_started→started_unknown（execution started）；started_unknown→
+ * returned_ok|returned_non_ok（callback 正常返回）。其余一切边非法。
+ */
+const TREASURY_OUTCOME_PROGRESSION: Readonly<Record<string, readonly string[]>> = {
+  not_started: ["started_unknown"],
+  started_unknown: ["returned_ok", "returned_non_ok"],
+  returned_ok: [],
+  returned_non_ok: [],
+  aborted_final: [],
+};
+
+/**
+ * 旧 phase（v1/v2 单一枚举）→ (outcome, settlement) 保守单调迁移表（第十轮
+ * 3.12.1）：ok_pending_commit→returned_ok（事实保留）；aborted→aborted_final
+ * （无法无歧义区分 not-started abort 与 non-ok abort——显式终态，不冒充事
+ * 实）；未知 phase 值不在表中 → store fatal fail closed。
+ */
+const TREASURY_LEGACY_PHASE_MIGRATION: Readonly<Record<string, { readonly outcome: TreasuryExecutionOutcome; readonly settlement: TreasurySettlementState }>> = {
+  ready: { outcome: "not_started", settlement: "ready" },
+  executing: { outcome: "started_unknown", settlement: "executing" },
+  returned_non_ok: { outcome: "returned_non_ok", settlement: "pending_abort" },
+  ok_pending_commit: { outcome: "returned_ok", settlement: "pending_commit" },
+  committed: { outcome: "returned_ok", settlement: "finalized" },
+  aborted: { outcome: "aborted_final", settlement: "finalized" },
+  execution_unknown: { outcome: "started_unknown", settlement: "faulted" },
+  quarantined: { outcome: "started_unknown", settlement: "quarantined" },
+  resolution_pending: { outcome: "started_unknown", settlement: "resolving" },
+};
+
+/** 旧 phase 迁移表只读出口（quarantine v1 phase → outcome 推导等测试/迁移用）。 */
+export function migrateTreasuryLegacyIntentPhase(phase: string): { readonly outcome: TreasuryExecutionOutcome; readonly settlement: TreasurySettlementState } | null {
+  return TREASURY_LEGACY_PHASE_MIGRATION[phase] ?? null;
+}
+
+/** 恢复语义：outcome=not_started 按协议确认未执行；其余保守处置。 */
+export function isTreasuryIntentOutcomeNotExecuted(outcome: string): boolean {
+  return outcome === "not_started";
 }
 
 /** intent 的 canonical posting 事实（与 quarantine deltas 同形状）。 */
@@ -124,8 +184,10 @@ export interface TreasuryIntentEntry {
   durablePayloadVersion?: number;
   /** canonical postings（merged；WAL 语义的唯一资产事实副本）。 */
   postings: TreasuryIntentPosting[];
-  /** 状态机可变 phase（markTreasuryIntentPhase 迁移；对外读取走冻结快照）。 */
-  phase: string;
+  /** execution outcome（事实等级，单调不可回退；progressTreasuryIntent 迁移）。 */
+  outcome: string;
+  /** settlement workflow state（Treasury 工作流；与 outcome 正交）。 */
+  settlement: string;
   /** 必要的结构 incarnation（有界；contract 路径快照）。 */
   structureId?: string;
   /** 有界审计来源。 */
@@ -135,7 +197,7 @@ export interface TreasuryIntentEntry {
 }
 
 export interface TreasuryIntentStore {
-  version: 2;
+  version: 3;
   entries: Record<string, TreasuryIntentEntry>;
   entryCount: number;
   updatedAt: number;
@@ -274,8 +336,11 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
       return "durablePayloadVersion 须为正安全整数";
     }
   }
-  if (typeof candidate.phase !== "string" || !TREASURY_INTENT_PERSISTED_PHASES.has(candidate.phase)) {
-    return `phase 非法（未知枚举）: ${String(candidate.phase).slice(0, 48)}`;
+  if (typeof candidate.outcome !== "string" || !TREASURY_INTENT_OUTCOMES.has(candidate.outcome)) {
+    return `outcome 非法（未知枚举）: ${String(candidate.outcome).slice(0, 48)}`;
+  }
+  if (typeof candidate.settlement !== "string" || !TREASURY_INTENT_SETTLEMENTS.has(candidate.settlement)) {
+    return `settlement 非法（未知枚举）: ${String(candidate.settlement).slice(0, 48)}`;
   }
   if (candidate.structureId !== undefined) {
     if (typeof candidate.structureId !== "string" || candidate.structureId.length === 0 || candidate.structureId.length > INTENT_STRUCTURE_ID_MAX) {
@@ -395,13 +460,27 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
     heapRuntime = { store: created, fatal: null };
     return heapRuntime;
   }
-  if ((raw.version as number) === 1) {
-    // v1 无损升级：entry 形状校验（新字段 optional——v1 entries 自然通过）
-    // 后仅推进 version 标记，绝不改动任何 entry。
-    const upgraded: TreasuryIntentStore = { ...(raw as unknown as TreasuryIntentStore), version: TREASURY_INTENT_VERSION };
+  const rawVersion = raw.version as number;
+  if (rawVersion === 1 || rawVersion === 2) {
+    // v1/v2 → v3 迁移（第十轮 3.12.1，原子）：逐 entry 将旧 phase 按保守
+    // 单调表映射为 (outcome, settlement) 并删除 phase 字段；未知 phase 值
+    // → fatal fail closed（原数据保留）。v1 entry 的 contract 字段全
+    // optional，形状校验自然通过。
+    const entries: Record<string, TreasuryIntentEntry> = {};
+    for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
+      const legacy = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as Partial<TreasuryIntentEntry> & { phase?: string };
+      const mapped = typeof legacy.phase === "string" ? TREASURY_LEGACY_PHASE_MIGRATION[legacy.phase] : undefined;
+      if (mapped === undefined) {
+        heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `旧 phase 无法无歧义迁移（${String(legacy.phase).slice(0, 48)}）——intent store fail closed，原数据保留`);
+        return heapRuntime;
+      }
+      const { phase: _dropped, ...rest } = legacy as Partial<TreasuryIntentEntry> & { phase: string };
+      entries[key] = { ...(rest as TreasuryIntentEntry), outcome: mapped.outcome, settlement: mapped.settlement };
+    }
+    const upgraded: TreasuryIntentStore = { version: TREASURY_INTENT_VERSION, entries, entryCount: Object.keys(entries).length, updatedAt: Game.time };
     const shapeError = validateIntentStoreShape(upgraded);
     if (shapeError !== null) {
-      heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `${shapeError}（v1 升级校验失败，intent store fail closed，原数据保留）`);
+      heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `${shapeError}（v${String(rawVersion)} 升级校验失败，intent store fail closed，原数据保留）`);
       return heapRuntime;
     }
     intentBranch().intents = upgraded;
@@ -435,7 +514,7 @@ export function peekTreasuryIntentHealth(): TreasuryIntentHealth {
   }
   const store = peekTreasuryIntentStore();
   if (store === undefined) return { healthy: true, detail: null, entryCount: 0 };
-  if (store.version !== TREASURY_INTENT_VERSION && (store.version as number) !== 1) {
+  if (store.version !== TREASURY_INTENT_VERSION && (store.version as number) !== 1 && (store.version as number) !== 2) {
     return {
       healthy: false,
       detail: `未知 intent store 版本 ${String(store.version)}`,
@@ -540,15 +619,18 @@ export type TreasuryIntentPhaseUpdateResult =
   | { readonly status: "marked" }
   | {
       readonly status: "rejected";
-      readonly reason: "not_found" | "store_fatal" | "invalid_phase" | "predecessor_mismatch" | "identity_mismatch";
+      readonly reason: "not_found" | "store_fatal" | "invalid_phase" | "predecessor_mismatch" | "identity_mismatch" | "outcome_regression";
       readonly detail: string;
     };
 
-/** phase 迁移请求（第九轮 4.5 严格状态机）：目标 + 合法前序 + identity。 */
-export interface TreasuryIntentPhaseTransition {
-  readonly target: TreasuryIntentPhase;
-  /** 合法前序集合（当前 phase 必须在其中，或已等于 target——幂等）。 */
-  readonly from: readonly TreasuryIntentPhase[];
+/** intent 进展迁移请求（第十轮 3.12.1）：目标两轴 + settlement 合法前序 + identity。 */
+export interface TreasuryIntentProgression {
+  /** 目标 execution outcome（单调表内建校验）。 */
+  readonly outcome: TreasuryExecutionOutcome;
+  /** 目标 settlement workflow state。 */
+  readonly settlement: TreasurySettlementState;
+  /** settlement 合法前序集合（当前 settlement 必须在其中，或已等于目标——幂等）。 */
+  readonly fromSettlement?: readonly TreasurySettlementState[];
   /** identity 校验：提供时必须与 entry 的 digest 一致。 */
   readonly digest?: string;
   /** identity 校验：提供时必须与 entry 的 contractId 一致。 */
@@ -556,25 +638,25 @@ export interface TreasuryIntentPhaseTransition {
 }
 
 /**
- * 严格 phase 状态机迁移（第九轮 4.5）：验证期望前序状态与 digest/contract
- * 一致——幂等仅限同一 transaction + 同一 digest + 同一 contract + 当前已
- * 处于目标 phase；非法前序（predecessor_mismatch）/identity 不一致
- * （identity_mismatch）/entry 不存在（not_found）/store 损坏（store_fatal）
- * 一律拒绝——调用方（facade）在这些结果上必须 callback 零调用。
- *
- * 合法迁移表（由调用方以 from 集合表达，本函数只做校验）：
- * ready→executing；executing→{returned_non_ok|ok_pending_commit|
- * execution_unknown|quarantined}；returned_non_ok→{execution_unknown|
- * quarantined|resolution_pending|aborted}；ok_pending_commit→{execution_
- * unknown|quarantined|resolution_pending|committed}；execution_unknown→
- * {quarantined|resolution_pending}；quarantined→resolution_pending。
+ * intent 进展迁移（第十轮 3.12.1）：**一次原子写入** outcome + settlement
+ * 两轴——outcome 走内建单调表（not_started→started_unknown→{returned_ok|
+ * returned_non_ok}；已记录的执行事实绝不回退），settlement 走调用方声明的
+ * 合法前序集合。identity 校验（digest/contractId）先于前序校验；幂等仅限
+ * 同 identity 且 outcome/settlement 均已处于目标；非法前序
+ * （predecessor_mismatch）/outcome 非单调（outcome_regression）/identity
+ * 不一致（identity_mismatch）/entry 不存在（not_found）/store 损坏
+ * （store_fatal）一律拒绝——调用方（facade）在这些结果上必须按分支语义
+ * 处置（callback 零调用或保留事实进入 fault）。
  */
-export function transitionTreasuryIntentPhase(
+export function progressTreasuryIntent(
   transactionId: string,
-  transition: TreasuryIntentPhaseTransition,
+  progression: TreasuryIntentProgression,
 ): TreasuryIntentPhaseUpdateResult {
-  if (!TREASURY_INTENT_PERSISTED_PHASES.has(transition.target)) {
-    return { status: "rejected", reason: "invalid_phase", detail: `phase ${transition.target} 不可持久化` };
+  if (!TREASURY_INTENT_OUTCOMES.has(progression.outcome)) {
+    return { status: "rejected", reason: "invalid_phase", detail: `outcome ${progression.outcome} 未知` };
+  }
+  if (!TREASURY_INTENT_SETTLEMENTS.has(progression.settlement)) {
+    return { status: "rejected", reason: "invalid_phase", detail: `settlement ${progression.settlement} 未知` };
   }
   const runtime = loadIntentStoreRuntime();
   if (runtime.fatal) {
@@ -586,32 +668,50 @@ export function transitionTreasuryIntentPhase(
     return { status: "rejected", reason: "not_found", detail: "intent entry 不存在（已释放或从未写入）" };
   }
   // identity 校验（digest/contract）先于前序校验。
-  if (transition.digest !== undefined && entry.digest !== transition.digest) {
+  if (progression.digest !== undefined && entry.digest !== progression.digest) {
     return {
       status: "rejected",
       reason: "identity_mismatch",
-      detail: `intent digest ${entry.digest} 与迁移请求 ${transition.digest} 不一致（同 id 不得迁移不同 payload）`,
+      detail: `intent digest ${entry.digest} 与迁移请求 ${progression.digest} 不一致（同 id 不得迁移不同 payload）`,
     };
   }
-  if (transition.contractId !== undefined && (entry.contractId ?? "") !== transition.contractId) {
+  if (progression.contractId !== undefined && (entry.contractId ?? "") !== progression.contractId) {
     return {
       status: "rejected",
       reason: "identity_mismatch",
-      detail: `intent contractId ${entry.contractId ?? "(无)"} 与迁移请求 ${transition.contractId} 不一致`,
+      detail: `intent contractId ${entry.contractId ?? "(无)"} 与迁移请求 ${progression.contractId} 不一致`,
     };
   }
-  if (entry.phase === transition.target) {
-    // 幂等：同 identity 且已处于目标 phase。
+  const outcomeSettled = entry.outcome === progression.outcome;
+  const settlementSettled = entry.settlement === progression.settlement;
+  if (outcomeSettled && settlementSettled) {
+    // 幂等：同 identity 且两轴均已处于目标。
     return { status: "marked" };
   }
-  if (!(transition.from as readonly string[]).includes(entry.phase)) {
-    return {
-      status: "rejected",
-      reason: "predecessor_mismatch",
-      detail: `phase ${entry.phase} 不是 ${transition.target} 的合法前序（期望 ${transition.from.join("|")}）`,
-    };
+  // outcome 单调校验（内建表）：目标必须是当前 outcome 的合法后继（或已相等）。
+  if (!outcomeSettled) {
+    const allowed = TREASURY_OUTCOME_PROGRESSION[entry.outcome] ?? [];
+    if (!allowed.includes(progression.outcome)) {
+      return {
+        status: "rejected",
+        reason: "outcome_regression",
+        detail: `outcome ${entry.outcome} → ${progression.outcome} 非法（执行事实单调不可回退；合法后继：${allowed.length > 0 ? allowed.join("|") : "无（终态）"}）`,
+      };
+    }
   }
-  entry.phase = transition.target;
+  // settlement 前序校验（调用方声明的合法前序集合）。
+  if (!settlementSettled) {
+    const fromSettlement = progression.fromSettlement ?? [];
+    if (!(fromSettlement as readonly string[]).includes(entry.settlement)) {
+      return {
+        status: "rejected",
+        reason: "predecessor_mismatch",
+        detail: `settlement ${entry.settlement} 不是 ${progression.settlement} 的合法前序（期望 ${fromSettlement.length > 0 ? fromSettlement.join("|") : "(无)"}）`,
+      };
+    }
+  }
+  entry.outcome = progression.outcome;
+  entry.settlement = progression.settlement;
   entry.updatedAtTick = Game.time;
   runtime.store.updatedAt = Game.time;
   storeRevision += 1;
@@ -743,22 +843,22 @@ export interface TreasuryIntentRecoveryReport {
 
 /**
  * tick 边界（beginTick 显式分支，先于一切 planner/writer）的 intent 恢复
- * （第九轮 4.6 按 phase 事实等级分级——已知 Game 返回 OK 不降级为"可能未
- * 执行"，事实单调性）：
- * - ready：协议保证 execution-started 标记先于 callback——持久化的 ready 即
- *   "Game API 从未被调用"，确认未执行关闭（释放 slot、不写 receipt、不进
- *   quarantine），计 intentRecoveries；
- * - returned_non_ok：Game 已明确返回非 OK——保留该事实转 quarantine
+ * （第十轮 3.12.1 按 (outcome, settlement) 事实等级分级——已知 Game 返回
+ * OK 不降级为"可能未执行"，事实单调性）：
+ * - (not_started, ready)：协议保证 execution-started 标记先于 callback——
+ *   持久化的 not_started 即"Game API 从未被调用"，确认未执行关闭（释放
+ *   slot、不写 receipt、不进 quarantine），计 intentRecoveries；
+ * - outcome=returned_non_ok：Game 已明确返回非 OK——保留该事实转 quarantine
  *   （phase=action_returned_non_ok_abort_failed，仍属 execution-unknown 类
  *   ——abort 未完成或终态未落盘；不得当作 callback 仍在执行）；
- * - ok_pending_commit：Game 已明确返回 OK——commit 类隔离
+ * - outcome=returned_ok：Game 已明确返回 OK——commit 类隔离
  *   （phase=ok_pending_commit_unresolved；后续 resolution 只能
  *   resolve-as-committed，永不允许 not-executed）；
- * - executing / execution_unknown / quarantined / resolution_pending：无法
- *   确认 action 是否执行——保守转 execution-unknown quarantine
- *   （phase=executing_at_end_tick，postings 完整携带）；
- * - committed / aborted：终态残留（正常路径随关闭即删）——幂等释放
- *   （receipt/abort 已完成，事实明确）；
+ * - 其余（started_unknown 各 settlement）：无法确认 action 是否执行——
+ *   保守转 execution-unknown quarantine（phase=executing_at_end_tick，
+ *   postings 完整携带）；
+ * - settlement=finalized（outcome=returned_ok/aborted_final）：终态残留
+ *   （正常路径随关闭即删）——幂等释放（receipt/abort 已完成，事实明确）；
  * 各等级转 quarantine 后释放 intent（slot 守恒：quarantine +1、intent −1）；
  * - quarantine 写失败（store fatal/容量分支）：intent **保留**（emergency
  *   intent authority——postings/风险占用/slot 不丢，phase 原样保留等价
@@ -780,14 +880,14 @@ export function recoverTreasuryIntentsAtTickBoundary(): TreasuryIntentRecoveryRe
     return report;
   }
   for (const entry of Object.values(runtime.store.entries)) {
-    if (isTreasuryIntentPhaseNotExecuted(entry.phase)) {
+    if (entry.outcome === "not_started" && entry.settlement === "ready") {
       if (releaseTreasuryIntentEntry(entry.transactionId)) {
         intentEvents.recoveries += 1;
         report.recoveredNotExecuted += 1;
       }
       continue;
     }
-    if (entry.phase === "committed" || entry.phase === "aborted") {
+    if (entry.settlement === "finalized") {
       // 终态残留（正常路径随关闭即删——receipt/abort 已完成）：幂等释放。
       if (releaseTreasuryIntentEntry(entry.transactionId)) {
         intentEvents.recoveries += 1;
@@ -795,12 +895,12 @@ export function recoverTreasuryIntentsAtTickBoundary(): TreasuryIntentRecoveryRe
       }
       continue;
     }
-    // 事实等级映射：保留"Game 已返回非 OK / OK"的事实（不降级为
+    // 事实等级映射：保留"Game 已返回非 OK / OK"的 outcome 事实（不降级为
     // executing_at_end_tick 的模糊 unknown）。
     const quarantinePhase =
-      entry.phase === "returned_non_ok"
+      entry.outcome === "returned_non_ok"
         ? ("action_returned_non_ok_abort_failed" as const)
-        : entry.phase === "ok_pending_commit"
+        : entry.outcome === "returned_ok"
           ? ("ok_pending_commit_unresolved" as const)
           : ("executing_at_end_tick" as const);
     const write = quarantineTreasuryTransaction({
@@ -886,9 +986,14 @@ export function repairTreasuryIntentStoreMetadataForResolution(): { status: "rep
   return { status: "repaired", detail: `intent store repair 完成（${String(ownKeys.length)} 条 entry 保留）` };
 }
 
-/** 诊断：合法 phase 集合是否包含给定值（测试与 guard 用）。 */
-export function isValidTreasuryIntentPhase(phase: string): phase is TreasuryIntentPhase {
-  return TREASURY_INTENT_PERSISTED_PHASES.has(phase);
+/** 诊断：合法 settlement 集合是否包含给定值（测试与 guard 用）。 */
+export function isValidTreasuryIntentSettlement(settlement: string): settlement is TreasurySettlementState {
+  return TREASURY_INTENT_SETTLEMENTS.has(settlement);
+}
+
+/** 诊断：合法 outcome 集合是否包含给定值（测试与 guard 用）。 */
+export function isValidTreasuryIntentOutcome(outcome: string): outcome is TreasuryExecutionOutcome {
+  return TREASURY_INTENT_OUTCOMES.has(outcome);
 }
 
 /** 诊断导出：write-fault phase 合法集（与 quarantine 校验同一权威）。 */

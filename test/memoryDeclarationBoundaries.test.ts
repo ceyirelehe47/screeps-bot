@@ -36,7 +36,7 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    schemaFingerprint: "bb7ceec1e90d6c72ed6259c29711528c83c39483bcb12328b21e0f248e240412",
+    schemaFingerprint: "d2b6af81c8f88546efeb7839230c920aacd19493c587d298f43a5bc67df5a105",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",

@@ -48,7 +48,7 @@ import {
 } from "@/runtime/treasury/actionContracts";
 import type { TreasuryReconciliationCapability } from "@/runtime/treasury/reconciliation";
 import { peekTreasuryQuarantineHealth, quarantineTreasuryTransaction } from "@/runtime/treasury/quarantine";
-import { readTreasuryIntentEntry, writeTreasuryIntentEntry, type TreasuryIntentPhase } from "@/runtime/treasury/intents";
+import { readTreasuryIntentEntry, writeTreasuryIntentEntry, migrateTreasuryLegacyIntentPhase } from "@/runtime/treasury/intents";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
 
@@ -776,7 +776,9 @@ describe("显式 repair（quarantine store 元数据/legacy 形状）", () => {
 
 describe("unified unresolved authority（第九轮 4.7：intent-only 完整参与 + 双权威一致性）", () => {
   /** 直接构造 intent-only authority（quarantine 从未写入——emergency 场景）。 */
-  function seedIntentOnly(transactionId: string, phase: TreasuryIntentPhase): void {
+  function seedIntentOnly(transactionId: string, legacyPhase: string): void {
+    const mapped = migrateTreasuryLegacyIntentPhase(legacyPhase);
+    if (mapped === null) throw new Error(`seedIntentOnly: 未知 legacy phase ${legacyPhase}`);
     const write = writeTreasuryIntentEntry({
       transactionId,
       digest: "0123456789abcdef",
@@ -784,7 +786,8 @@ describe("unified unresolved authority（第九轮 4.7：intent-only 完整参�
       kind: "terminal.send",
       source: "test",
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
-      phase,
+      outcome: mapped.outcome,
+      settlement: mapped.settlement,
       createdAtTick: Game.time,
       updatedAtTick: Game.time,
     });
@@ -903,7 +906,9 @@ describe("unified unresolved authority（第九轮 4.7：intent-only 完整参�
 });
 
 describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
-  function seedIntentOnly(transactionId: string, phase: TreasuryIntentPhase): void {
+  function seedIntentOnly(transactionId: string, legacyPhase: string): void {
+    const mapped = migrateTreasuryLegacyIntentPhase(legacyPhase);
+    if (mapped === null) throw new Error(`seedIntentOnly: 未知 legacy phase ${legacyPhase}`);
     const write = writeTreasuryIntentEntry({
       transactionId,
       digest: "0123456789abcdef",
@@ -911,7 +916,8 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
       kind: "terminal.send",
       source: "test",
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
-      phase,
+      outcome: mapped.outcome,
+      settlement: mapped.settlement,
       createdAtTick: Game.time,
       updatedAtTick: Game.time,
     });
@@ -1037,7 +1043,8 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
       kind: "terminal.send",
       source: "test",
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
-      phase: "returned_non_ok",
+      outcome: "returned_non_ok",
+      settlement: "pending_abort",
       createdAtTick: Game.time,
       updatedAtTick: Game.time,
     });

@@ -689,16 +689,17 @@ declare global {
        * key 为 "i:"+transactionId；entryCount 为自有键计数（load 校验与统一
        * recovery slot admission 的 O(1) 权威）；上限 64（与 quarantine 同
        * 上限——一笔 transaction 恒占一个 recovery slot）。global reset 后首次
-       * load 全量验证（key 编码/digest/phase 枚举/postings 逐腿/安全整数/
-       * 聚合溢出）——损坏与未知版本 fail closed；v1 数据无损升级（新字段全
-       * optional）。beginTick 恢复按 phase 事实等级分级（第九轮：ready 确认
-       * 未执行关闭；returned_non_ok/ok_pending_commit 保留事实等级；其余保守
-       * 转 execution-unknown）；quarantine 写失败时 intent 保留为最终保守权威
-       * （emergency intent authority）。绝不持久化完整 observation/service/
-       * journal/任意大 payload。
+       * load 全量验证（key 编码/digest/outcome 与 settlement 枚举/postings
+       * 逐腿/安全整数/聚合溢出）——损坏与未知版本 fail closed；v1/v2 数据
+       * 按保守单调表原子迁移（旧 phase → (outcome, settlement)；未知 phase
+       * fail closed）。beginTick 恢复按 (outcome, settlement) 事实等级分级
+       * （第十轮：not_started+ready 确认未执行关闭；returned_non_ok/
+       * returned_ok 保留事实等级；其余保守转 execution-unknown）；quarantine
+       * 写失败时 intent 保留为最终保守权威（emergency intent authority）。
+       * 绝不持久化完整 observation/service/journal/任意大 payload。
        */
       intents?: {
-        version: 2;
+        version: 3;
         entries: Record<
           string,
           {
@@ -719,7 +720,10 @@ declare global {
               resource: string;
               delta: number;
             }>;
-            phase: string;
+            /** execution outcome（第十轮 v3：事实等级，单调不可回退）。 */
+            outcome: string;
+            /** settlement workflow state（第十轮 v3：与 outcome 正交）。 */
+            settlement: string;
             structureId?: string;
             auditSource?: string;
             createdAtTick: number;

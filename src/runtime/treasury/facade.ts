@@ -98,7 +98,7 @@ import {
   readTreasuryIntentEntry,
   recoverTreasuryIntentsAtTickBoundary,
   releaseTreasuryIntentEntry,
-  transitionTreasuryIntentPhase,
+  progressTreasuryIntent,
   treasuryIntentBlockers,
   treasuryIntentCapacityOccupancy,
   treasuryIntentOutflowOccupancy,
@@ -2174,7 +2174,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           resource: posting.resource,
           delta: posting.delta,
         })),
-        phase: "ready",
+        outcome: "not_started",
+        settlement: "ready",
         auditSource: "execute-prepared-action",
         ...(execution?.intentContract !== undefined
           ? {
@@ -2219,7 +2220,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const readBackConsistent =
         readBack !== undefined &&
         readBack.digest === record.digest &&
-        readBack.phase === "ready" &&
+        readBack.outcome === "not_started" &&
+        readBack.settlement === "ready" &&
         readBack.postings.length === record.shape.merged.length &&
         readBack.postings.every(
           (leg, index) =>
@@ -2245,9 +2247,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // ── execution-started（ready → executing，严格迁移：期望前序 + digest
       //    一致）：任何 rejected（含 not_found——第九轮修复：entry 缺失绝不能
       //    无权威地执行 callback）都 callback 零调用、保守关闭。 ─────────────
-      const started = transitionTreasuryIntentPhase(record.canonical.transactionId, {
-        target: "executing",
-        from: ["ready"],
+      const started = progressTreasuryIntent(record.canonical.transactionId, {
+        outcome: "started_unknown",
+        settlement: "executing",
+        fromSettlement: ["ready"],
         digest: record.digest,
         ...(execution?.intentContract !== undefined ? { contractId: execution.intentContract.contractId } : {}),
       });
@@ -2282,9 +2285,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // 不静默（计数），durable 权威由 quarantine/intent 保留兜底。
         record.faultPhase = "action_threw_execution_unknown";
         metrics.executionUnknownQuarantines += 1;
-        const attempted = transitionTreasuryIntentPhase(record.canonical.transactionId, {
-          target: "execution_unknown",
-          from: ["executing", "returned_non_ok", "ok_pending_commit"],
+        const attempted = progressTreasuryIntent(record.canonical.transactionId, {
+          outcome: "started_unknown",
+          settlement: "faulted",
+          fromSettlement: ["executing", "pending_abort", "pending_commit"],
           digest: record.digest,
         });
         if (attempted.status === "rejected") metrics.intentWriteFailures += 1;
@@ -2295,9 +2299,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // ── Game 已返回 OK：executing → ok_pending_commit 必须成功落盘后才
         //    允许普通 commit（第九轮 4.5.6：写失败 = 已知 OK 事实不得走普通
         //    commit，进入 durable emergency fault——executed_unsettled）。 ──
-        const marked = transitionTreasuryIntentPhase(record.canonical.transactionId, {
-          target: "ok_pending_commit",
-          from: ["executing"],
+        const marked = progressTreasuryIntent(record.canonical.transactionId, {
+          outcome: "returned_ok",
+          settlement: "pending_commit",
+          fromSettlement: ["executing"],
           digest: record.digest,
         });
         if (marked.status === "rejected") {
@@ -2307,9 +2312,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           }
           // 保守升级为 execution_unknown（尽力；失败已计数）后 quarantine
           // 接管 durable 权威。
-          const escalated = transitionTreasuryIntentPhase(record.canonical.transactionId, {
-            target: "execution_unknown",
-            from: ["executing", "ok_pending_commit"],
+          const escalated = progressTreasuryIntent(record.canonical.transactionId, {
+            outcome: "returned_ok",
+            settlement: "faulted",
+            fromSettlement: ["executing", "pending_commit"],
             digest: record.digest,
           });
           if (escalated.status === "rejected") metrics.intentWriteFailures += 1;
@@ -2343,9 +2349,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         if ((record.state as TreasuryPreparedHandleState) !== "faulted") {
           record.faultPhase = "commit_unexpected";
         }
-        const escalated = transitionTreasuryIntentPhase(record.canonical.transactionId, {
-          target: "execution_unknown",
-          from: ["executing", "ok_pending_commit"],
+        const escalated = progressTreasuryIntent(record.canonical.transactionId, {
+          outcome: "returned_ok",
+          settlement: "faulted",
+          fromSettlement: ["executing", "pending_commit"],
           digest: record.digest,
         });
         if (escalated.status === "rejected") metrics.intentWriteFailures += 1;
@@ -2364,17 +2371,19 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // ── Game 正常返回非 OK：executing → returned_non_ok 必须成功落盘后才
       //    允许普通 abort（第九轮 4.5.6：写失败 = 不得普通 abort——
       //    executed_abort_failed + durable fault）。 ─────────────────────────
-      const markedNonOk = transitionTreasuryIntentPhase(record.canonical.transactionId, {
-        target: "returned_non_ok",
-        from: ["executing"],
+      const markedNonOk = progressTreasuryIntent(record.canonical.transactionId, {
+        outcome: "returned_non_ok",
+        settlement: "pending_abort",
+        fromSettlement: ["executing"],
         digest: record.digest,
       });
       if (markedNonOk.status === "rejected") {
         metrics.intentWriteFailures += 1;
         record.faultPhase = "action_returned_non_ok_abort_failed";
-        const escalated = transitionTreasuryIntentPhase(record.canonical.transactionId, {
-          target: "execution_unknown",
-          from: ["executing", "returned_non_ok"],
+        const escalated = progressTreasuryIntent(record.canonical.transactionId, {
+          outcome: "returned_non_ok",
+          settlement: "faulted",
+          fromSettlement: ["executing", "pending_abort"],
           digest: record.digest,
         });
         if (escalated.status === "rejected") metrics.intentWriteFailures += 1;
@@ -2393,9 +2402,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // action_returned_non_ok_abort_failed，不等 tick 边界），不得报告已
         // 正常 abort。intent 随 quarantine 写入成功释放、失败保留。
         record.faultPhase = "action_returned_non_ok_abort_failed";
-        const escalated = transitionTreasuryIntentPhase(record.canonical.transactionId, {
-          target: "execution_unknown",
-          from: ["executing", "returned_non_ok"],
+        const escalated = progressTreasuryIntent(record.canonical.transactionId, {
+          outcome: "returned_non_ok",
+          settlement: "faulted",
+          fromSettlement: ["executing", "pending_abort"],
           digest: record.digest,
         });
         if (escalated.status === "rejected") metrics.intentWriteFailures += 1;

@@ -19,13 +19,15 @@ import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { setTreasuryCommitFaultInjectorForTest, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
 import {
+  quarantineTreasuryTransaction,
   readTreasuryQuarantineEntry,
   releaseTreasuryQuarantineEntry,
   resetTreasuryQuarantineRuntimeForTest,
 } from "@/runtime/treasury/quarantine";
 import {
   listTreasuryIntentEntries,
-  transitionTreasuryIntentPhase,
+  progressTreasuryIntent,
+  migrateTreasuryLegacyIntentPhase,
   peekTreasuryIntentHealth,
   readTreasuryIntentEntry,
   resetTreasuryIntentRuntimeForTest,
@@ -39,6 +41,7 @@ import {
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
 import * as intentsModule from "@/runtime/treasury/intents";
+import * as quarantineModule from "@/runtime/treasury/quarantine";
 
 const ROOMS: RoomSpec[] = [
   {
@@ -76,8 +79,13 @@ function injectOnce(phase: TreasuryWriteFaultPhase): void {
   });
 }
 
-/** 构造一条合法 intent entry（store 直写，恢复/权威测试用）。 */
-function seedIntent(transactionId: string, phase: TreasuryIntentEntry["phase"], delta = -500): void {
+/**
+ * 构造一条合法 intent entry（store 直写，恢复/权威测试用）。phase 参数沿用
+ * 旧（v1/v2）phase 名——经保守单调迁移表映射为 v3 (outcome, settlement)。
+ */
+function seedIntent(transactionId: string, legacyPhase: string, delta = -500): void {
+  const mapped = migrateTreasuryLegacyIntentPhase(legacyPhase);
+  if (mapped === null) throw new Error(`seedIntent: 未知 legacy phase ${legacyPhase}`);
   const write = writeTreasuryIntentEntry({
     transactionId,
     digest: "0123456789abcdef",
@@ -85,7 +93,8 @@ function seedIntent(transactionId: string, phase: TreasuryIntentEntry["phase"], 
     kind: "terminal.send",
     source: "test",
     postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta }],
-    phase,
+    outcome: mapped.outcome,
+    settlement: mapped.settlement,
     createdAtTick: Game.time,
     updatedAtTick: Game.time,
   });
@@ -112,7 +121,7 @@ describe("唯一安全顺序与生命周期", () => {
       // callback 执行时 intent 必须已在 store（phase=executing）。
       const entry = readTreasuryIntentEntry("ti_ok");
       expect(entry).toBeDefined();
-      observedPhase = entry?.phase ?? "";
+      observedPhase = entry?.settlement ?? "";
       return { ok: true as const };
     });
     expect(callbackCalls).toBe(1);
@@ -127,6 +136,42 @@ describe("唯一安全顺序与生命周期", () => {
     const result = service.executePreparedAction(freshInput(service, "ti_non_ok"), () => ({ ok: false as const }));
     expect(result.status).toBe("executed_aborted");
     expect(readTreasuryIntentEntry("ti_non_ok")).toBeUndefined();
+  });
+
+  it("【第十轮 3.12.1】Game OK 后 commit fault 且 quarantine 写失败：intent-only authority 保留 returned_ok（永不降级）", () => {
+    // spy 注入 quarantine 写失败（store fatal 语义）：fault 路径的 quarantine
+    // 写入被拒 → intent 保留为 emergency authority——第十轮断链 2 核心场景。
+    const spy = jest.spyOn(quarantineModule, "quarantineTreasuryTransaction").mockReturnValue({
+      status: "rejected",
+      reason: "capacity_exhausted",
+      detail: "注入：quarantine 写入失败",
+    });
+    try {
+      const service = makeService();
+      injectOnce("receipt_publish");
+      const result = service.executePreparedAction(freshInput(service, "ti_ok_qfail"), () => ({ ok: true as const }));
+      expect(result.status).toBe("executed_unsettled");
+      // quarantine 写失败 → intent 保留（emergency authority），且 outcome 保留
+      // returned_ok 事实（绝不降级为 started_unknown/可能未执行）。
+      const retained = readTreasuryIntentEntry("ti_ok_qfail");
+      expect(retained).toBeDefined();
+      expect(retained?.outcome).toBe("returned_ok");
+      expect(retained?.settlement).toBe("faulted");
+      expect(readTreasuryQuarantineEntry("ti_ok_qfail")).toBeUndefined();
+      // 下一 tick 恢复：quarantine 仍写不进 → intent 继续保留 returned_ok。
+      Game.time += 1;
+      const next = makeService();
+      next.beginTick();
+      const stillRetained = readTreasuryIntentEntry("ti_ok_qfail");
+      expect(stillRetained?.outcome).toBe("returned_ok");
+      // 跨多次 recovery 事实保持单调。
+      Game.time += 1;
+      const third = makeService();
+      third.beginTick();
+      expect(readTreasuryIntentEntry("ti_ok_qfail")?.outcome).toBe("returned_ok");
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("Game OK 后 commit fault：intent 转 execution_unknown 且随 quarantine 写入成功释放（slot 守恒）", () => {
@@ -156,7 +201,7 @@ describe("唯一安全顺序与生命周期", () => {
       },
       entryCount: 0,
       updatedAt: 1,
-    };
+    } as never;
     let callbackCalls = 0;
     const result = service.executePreparedAction(freshInput(service, "ti_blocked"), () => {
       callbackCalls += 1;
@@ -380,14 +425,14 @@ describe("store 健康契约", () => {
     expect(health.healthy).toBe(true);
     expect(health.entryCount).toBe(1);
     const store = Memory.runtime!.treasury!.intents!;
-    expect(store.version).toBe(2);
+    expect(store.version).toBe(3);
     expect(store.entryCount).toBe(1);
     // 冻结快照：外部修改不生效。
     const snapshot = readTreasuryIntentEntry("ti_health")!;
     expect(() => {
-      (snapshot as unknown as { phase: string }).phase = "committed";
+      (snapshot as unknown as { settlement: string }).settlement = "finalized";
     }).toThrow();
-    const before = store.entries["i:ti_health"].phase;
+    const before = store.entries["i:ti_health"].settlement;
     expect(before).toBe("ready");
   });
 
@@ -406,7 +451,8 @@ describe("store 健康契约", () => {
       kind: "k",
       source: "s",
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
-      phase: "ready",
+      outcome: "not_started",
+      settlement: "ready",
       createdAtTick: Game.time,
       updatedAtTick: Game.time,
     });
@@ -440,7 +486,8 @@ describe("store 健康契约", () => {
       kind: "k",
       source: "s",
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
-      phase: "ready",
+      outcome: "not_started",
+      settlement: "ready",
       createdAtTick: Game.time,
       updatedAtTick: Game.time,
     });
@@ -452,12 +499,13 @@ describe("store 健康契约", () => {
       kind: "k",
       source: "s",
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 0 }],
-      phase: "ready",
+      outcome: "not_started",
+      settlement: "ready",
       createdAtTick: Game.time,
       updatedAtTick: Game.time,
     });
     expect(bad2.status).toBe("rejected");
-    const bad3 = transitionTreasuryIntentPhase("ti_bad3", { target: "authorized" as never, from: [] });
+    const bad3 = progressTreasuryIntent("ti_bad3", { outcome: "started_unknown", settlement: "authorized" as never });
     expect(bad3.status).toBe("rejected");
     expect(Memory.runtime!.treasury!.intents!.entryCount).toBe(before);
   });
@@ -494,39 +542,49 @@ describe("风险聚合（per-transaction 保守口径）", () => {
 });
 
 describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () => {
-  it("transition 幂等仅在相同 digest/contract 下成立；不同 identity 拒绝", () => {
+  it("progress 幂等仅在相同 digest/contract 下成立；不同 identity 拒绝", () => {
     seedIntent("ti_idem", "executing");
-    // 同 identity 且已处于目标 phase 的合法前序迁移：executing→execution_unknown。
-    const first = transitionTreasuryIntentPhase("ti_idem", { target: "execution_unknown", from: ["executing"], digest: "0123456789abcdef" });
+    // 同 identity 且已处于目标两轴的合法迁移：executing→faulted。
+    const first = progressTreasuryIntent("ti_idem", { outcome: "started_unknown", settlement: "faulted", fromSettlement: ["executing"], digest: "0123456789abcdef" });
     expect(first.status).toBe("marked");
     // 幂等：再次迁移到同一目标（identity 相同）。
-    const again = transitionTreasuryIntentPhase("ti_idem", { target: "execution_unknown", from: ["executing"], digest: "0123456789abcdef" });
+    const again = progressTreasuryIntent("ti_idem", { outcome: "started_unknown", settlement: "faulted", fromSettlement: ["executing"], digest: "0123456789abcdef" });
     expect(again.status).toBe("marked");
     // 不同 digest → identity_mismatch（绝不迁移）。
-    const wrongDigest = transitionTreasuryIntentPhase("ti_idem", { target: "quarantined", from: ["execution_unknown"], digest: "ffffffffffffffff" });
+    const wrongDigest = progressTreasuryIntent("ti_idem", { outcome: "started_unknown", settlement: "quarantined", fromSettlement: ["faulted"], digest: "ffffffffffffffff" });
     expect(wrongDigest.status).toBe("rejected");
     if (wrongDigest.status === "rejected") expect(wrongDigest.reason).toBe("identity_mismatch");
-    expect(readTreasuryIntentEntry("ti_idem")?.phase).toBe("execution_unknown");
+    expect(readTreasuryIntentEntry("ti_idem")?.settlement).toBe("faulted");
+    expect(readTreasuryIntentEntry("ti_idem")?.outcome).toBe("started_unknown");
   });
 
-  it("前序 phase 非法拒绝（ready→returned_non_ok 不可直达；ok_pending_commit 不得退化为 returned_non_ok）", () => {
+  it("前序 settlement 非法拒绝（ready→faulted 不可直达）；outcome 非单调拒绝（outcome_regression）", () => {
     seedIntent("ti_pred1", "ready");
-    const direct = transitionTreasuryIntentPhase("ti_pred1", { target: "returned_non_ok", from: ["executing"], digest: "0123456789abcdef" });
+    const direct = progressTreasuryIntent("ti_pred1", { outcome: "started_unknown", settlement: "faulted", fromSettlement: ["executing"], digest: "0123456789abcdef" });
     expect(direct.status).toBe("rejected");
     if (direct.status === "rejected") expect(direct.reason).toBe("predecessor_mismatch");
+    // ready 相直接请求 returned_ok（跳过 started_unknown）→ outcome 单调拒绝。
+    const skipOutcome = progressTreasuryIntent("ti_pred1", { outcome: "returned_ok", settlement: "pending_commit", fromSettlement: ["executing"], digest: "0123456789abcdef" });
+    expect(skipOutcome.status).toBe("rejected");
+    if (skipOutcome.status === "rejected") expect(skipOutcome.reason).toBe("outcome_regression");
     seedIntent("ti_pred2", "ok_pending_commit");
-    // 已知 Game 返回 OK：不得退化为 returned_non_ok（事实单调性）。
-    const downgrade = transitionTreasuryIntentPhase("ti_pred2", { target: "returned_non_ok", from: ["executing"], digest: "0123456789abcdef" });
+    // 已知 Game 返回 OK：outcome 事实不得退化为 returned_non_ok（第十轮单调表内建）。
+    const downgrade = progressTreasuryIntent("ti_pred2", { outcome: "returned_non_ok", settlement: "faulted", fromSettlement: ["executing", "pending_commit"], digest: "0123456789abcdef" });
     expect(downgrade.status).toBe("rejected");
-    if (downgrade.status === "rejected") expect(downgrade.reason).toBe("predecessor_mismatch");
-    expect(readTreasuryIntentEntry("ti_pred2")?.phase).toBe("ok_pending_commit");
+    if (downgrade.status === "rejected") expect(downgrade.reason).toBe("outcome_regression");
+    expect(readTreasuryIntentEntry("ti_pred2")?.settlement).toBe("pending_commit");
+    expect(readTreasuryIntentEntry("ti_pred2")?.outcome).toBe("returned_ok");
+    // started_unknown 也不得在 OK 后回退。
+    const toUnknown = progressTreasuryIntent("ti_pred2", { outcome: "started_unknown", settlement: "faulted", fromSettlement: ["pending_commit"], digest: "0123456789abcdef" });
+    expect(toUnknown.status).toBe("rejected");
+    if (toUnknown.status === "rejected") expect(toUnknown.reason).toBe("outcome_regression");
   });
 
   it("ready→executing 返回 not_found 时 callback 零调用（第九轮修复：不再忽略）", () => {
     const service = makeService();
     // read-back 需通过、transition 返回 not_found：spy 迁移函数模拟 entry
     // 在写入与迁移之间被外部移除（防御分支）。
-    const spy = jest.spyOn(intentsModule, "transitionTreasuryIntentPhase").mockReturnValue({
+    const spy = jest.spyOn(intentsModule, "progressTreasuryIntent").mockReturnValue({
       status: "rejected",
       reason: "not_found",
       detail: "intent entry 不存在（已释放或从未写入）",
@@ -556,7 +614,7 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
     const realReadTreasuryIntentEntry = intentsModule.readTreasuryIntentEntry;
     const spy = jest.spyOn(intentsModule, "readTreasuryIntentEntry").mockImplementation((transactionId: string) => {
       const entry = realReadTreasuryIntentEntry(transactionId);
-      if (entry === undefined || callbackCalls > 0 || entry.phase !== "ready") return entry;
+      if (entry === undefined || callbackCalls > 0 || entry.settlement !== "ready") return entry;
       // 只篡改首次 ready 读回（read-back 点）。
       return Object.freeze({ ...entry, digest: "ffffffffffffffff" }) as typeof entry;
     });
@@ -639,7 +697,8 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
     expect(captured?.adapterVersion).toBe(3);
     expect(captured?.durablePayload).toContain("transfer|");
     expect(captured?.durablePayloadVersion).toBe(1);
-    expect(captured?.phase).toBe("executing");
+    expect(captured?.settlement).toBe("executing");
+    expect(captured?.outcome).toBe("started_unknown");
   });
 
   it("intent contract identity 不匹配的 read-back 拒绝（contractId 不一致 → callback 零调用）", () => {
@@ -650,7 +709,7 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
     const realReadTreasuryIntentEntry = intentsModule.readTreasuryIntentEntry;
     const spy = jest.spyOn(intentsModule, "readTreasuryIntentEntry").mockImplementation((transactionId: string) => {
       const entry = realReadTreasuryIntentEntry(transactionId);
-      if (entry === undefined || callbackCalls > 0 || entry.phase !== "ready") return entry;
+      if (entry === undefined || callbackCalls > 0 || entry.settlement !== "ready") return entry;
       return Object.freeze({ ...entry, contractId: "ac:ffffffffffffffff" }) as typeof entry;
     });
     try {
@@ -679,7 +738,7 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
     }
   });
 
-  it("store v1 数据无损升级 v2（entries 原样保留，version 推进）", () => {
+  it("store v1 数据迁移 v3（旧 phase → outcome/settlement 保守单调映射，version 推进）", () => {
     Memory.runtime = Memory.runtime ?? ({} as never);
     Memory.runtime.treasury = Memory.runtime.treasury ?? ({} as never);
     Memory.runtime.treasury.intents = {
@@ -703,10 +762,58 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
     resetTreasuryIntentRuntimeForTest();
     const health = peekTreasuryIntentHealth();
     expect(health.healthy).toBe(true);
-    // 触发 load：read-back 或任何写路径访问 → v1 升级 v2。
+    // 触发 load：read-back 或任何写路径访问 → v1 迁移 v3。
     const entry = readTreasuryIntentEntry("ti_v1");
     expect(entry?.transactionId).toBe("ti_v1");
-    expect((Memory.runtime.treasury.intents as { version: number }).version).toBe(2);
+    expect((Memory.runtime.treasury.intents as { version: number }).version).toBe(3);
     expect(Memory.runtime.treasury.intents.entries["i:ti_v1"].digest).toBe("0123456789abcdef");
+    // 旧 phase "ready" → (not_started, ready)。
+    expect(entry?.outcome).toBe("not_started");
+    expect(entry?.settlement).toBe("ready");
+    expect("phase" in (entry as object)).toBe(false); // 旧字段不残留
+  });
+
+  it("【第十轮 3.12.1】旧 phase 全集映射与未知 phase fail closed", () => {
+    const expectations: Record<string, { outcome: string; settlement: string }> = {
+      ready: { outcome: "not_started", settlement: "ready" },
+      executing: { outcome: "started_unknown", settlement: "executing" },
+      returned_non_ok: { outcome: "returned_non_ok", settlement: "pending_abort" },
+      ok_pending_commit: { outcome: "returned_ok", settlement: "pending_commit" },
+      committed: { outcome: "returned_ok", settlement: "finalized" },
+      aborted: { outcome: "aborted_final", settlement: "finalized" },
+      execution_unknown: { outcome: "started_unknown", settlement: "faulted" },
+      quarantined: { outcome: "started_unknown", settlement: "quarantined" },
+      resolution_pending: { outcome: "started_unknown", settlement: "resolving" },
+    };
+    for (const [legacy, expected] of Object.entries(expectations)) {
+      const mapped = migrateTreasuryLegacyIntentPhase(legacy)!;
+      expect(mapped.outcome).toBe(expected.outcome);
+      expect(mapped.settlement).toBe(expected.settlement);
+    }
+    expect(migrateTreasuryLegacyIntentPhase("mystery_phase")).toBeNull();
+    // 未知 phase 的 v2 store：load fail closed（原数据保留）。
+    Memory.runtime = Memory.runtime ?? ({} as never);
+    Memory.runtime.treasury = Memory.runtime.treasury ?? ({} as never);
+    Memory.runtime.treasury.intents = {
+      version: 2,
+      entries: {
+        "i:ti_bad_phase": {
+          transactionId: "ti_bad_phase",
+          digest: "0123456789abcdef",
+          actionKind: "terminal.send",
+          kind: "terminal.send",
+          source: "test",
+          postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
+          phase: "mystery_phase",
+          createdAtTick: Game.time,
+          updatedAtTick: Game.time,
+        },
+      },
+      entryCount: 1,
+      updatedAt: Game.time,
+    } as never;
+    resetTreasuryIntentRuntimeForTest();
+    expect(readTreasuryIntentEntry("ti_bad_phase")).toBeUndefined(); // fatal → 不可信
+    expect(peekTreasuryIntentHealth().healthy).toBe(false);
   });
 });
