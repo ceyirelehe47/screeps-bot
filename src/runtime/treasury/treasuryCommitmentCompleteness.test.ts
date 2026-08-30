@@ -283,7 +283,7 @@ describe("第六轮 authorizationSafe 联合判定与 blockers", () => {
     quarantineTreasuryTransaction({
       transactionId: "ts1_q_blocker", digest: "0000000000000000", tick: Game.time,
       kind: "test", source: "test", phase: "executing_at_end_tick",
-      resourceDeltas: [], capacityDeltas: [], recordedAt: Game.time,
+      deltas: [], recordedAt: Game.time,
     });
     const view = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
     expect(view.authorizationSafe).toBe(false);

@@ -397,3 +397,12 @@ export function isReservationOwnerMigrationComplete(): boolean {
   if (!store || Object.keys(store).length === 0) return true; // 无可迁移数据
   return runtime?.resourceReservationsOwnerVersion === RESERVATION_OWNER_VERSION;
 }
+
+/**
+ * reservation store 损坏标志（第七轮）：GC/验证发现 malformed entry 时置
+ * 位（entry 原样保留）——存在期间一切 mutation 拒绝、授权 fail closed，
+ * 只有显式 repair 可清除。只读零写。
+ */
+export function isReservationStoreCorrupted(): boolean {
+  return (Memory.runtime as { resourceReservationsCorrupted?: unknown } | undefined)?.resourceReservationsCorrupted !== undefined;
+}

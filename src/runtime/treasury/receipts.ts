@@ -54,6 +54,7 @@ import {
   isValidTreasuryTransactionId,
 } from "@/runtime/treasury/transactionId";
 import type { TreasuryWriteFaultMarker } from "@/runtime/treasury/writeFault";
+import { resetTreasuryQuarantineRuntimeForTest } from "@/runtime/treasury/quarantine";
 
 export const TREASURY_RECEIPT_RETENTION_TICKS = 5_000;
 export const TREASURY_RECEIPT_MAX_ENTRIES = 4_096;
@@ -714,17 +715,19 @@ export function readTreasuryLifecycle(): TreasuryLifecycleMemory | undefined {
   return peekTreasuryLifecycle();
 }
 
-/** 仅供测试：清除 Treasury 持久状态（receipts + lifecycle + writeFault + quarantine）并失效 heap 缓存。 */
+/** 仅供测试：清除 Treasury 持久状态（receipts + lifecycle + writeFault + quarantine + resolutions）并失效 heap 缓存。 */
 export function clearTreasuryPersistenceForTest(): void {
-  const branch = (Memory.runtime as RuntimeMemoryWithTreasury | undefined)?.treasury;
+  const branch = (Memory.runtime as unknown as RuntimeMemoryWithTreasury | undefined)?.treasury;
   if (branch) {
     delete branch.receipts;
     delete branch.lifecycle;
     delete branch.writeFault;
     delete branch.quarantine;
+    delete branch.resolutions;
   }
   heapStoreRuntime = null;
   pendingAdmissions.clear();
+  resetTreasuryQuarantineRuntimeForTest();
   receiptEvents.migrationsExecuted = 0;
   receiptEvents.incompatibleFailures = 0;
   receiptEvents.receiptFullScans = 0;

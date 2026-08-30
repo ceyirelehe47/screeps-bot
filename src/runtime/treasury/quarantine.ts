@@ -1,27 +1,44 @@
 /**
- * Treasury durable quarantine（第六轮）——executing / commit-faulted
- * transaction 的跨 tick 持久隔离。
+ * Treasury durable quarantine（第六轮建立、第七轮升级为版本化持久权威）。
  *
  * 语义（不变量）：
- * - Game 结果未知（endTick 时 executing）或 commit 写故障（faulted）的
- *   prepared transaction 在 tick 边界**不得**按普通 prepared 释放——先落
- *   durable quarantine（Memory 持久，跨 global reset 与 service 重建存活），
- *   再清理 heap tentative（占用由持久 quarantine 接替）；
+ * - Game 结果未知（endTick 时 executing、callback 抛错、非 OK 后 abort 失败）
+ *   或 commit 写故障（faulted）的 prepared transaction 在 tick 边界**不得**按
+ *   普通 prepared 释放——先落 durable quarantine（Memory 持久，跨 global
+ *   reset 与 service 重建存活），再清理 heap tentative（占用由持久
+ *   quarantine 接替）；
  * - quarantine 继续占用资源、容量与 transaction identity：授权计算计入其
- *   流出量（facade.query / projectedFreeCapacity），同一 transactionId 在
- *   quarantine 未解决前不得再次 prepare（transaction_quarantined）；
+ *   流出量（facade.query committed），容量按保守方向占用（正净流入减少
+ *   free capacity，负流出不增加），同一 transactionId 在 quarantine 未解决
+ *   前不得再次 prepare（transaction_quarantined）；
+ * - **全局 write blocker（第七轮）**：存在任何 unresolved entry 或 legacy
+ *   overflowed 标志时，一切新 transaction 的 prepare 在 Game callback 之前
+ *   被拒（quarantine_write_blocked）——write-fault marker 不是唯一锁来源；
+ * - **fault-slot 预留（第七轮）**：prepare admission 保证 持久 entryCount +
+ *   active handle 数 < MAX——第 65 条 fault 在它 prepare 时已被拒绝，本模块
+ *   的写入路径在正常情况下永不触达容量上限（防御分支返回 rejected 并保持
+ *   store 不变，绝不"置 overflowed 但不保存 entry"）；
  * - quarantine 不进入 committed projection（不写 journal/overlay/receipt）；
- * - 有界：条目上限 TREASURY_QUARANTINE_MAX_ENTRIES；溢出置持久 overflowed
- *   标志（authorizationSafe 永久 fail closed 直至显式 resolution 清理）；
- * - 全局 write-admission lock（writeFault marker）继续使用，但 quarantine
- *   独立存活——管理路径误删 marker 不丢失占用事实；
+ * - **版本化健康契约（第七轮，schema v1）**：store 携带 version/entryCount
+ *   元数据；global reset 后首次 load 全量验证（key 编码与 transactionId
+ *   一致、digest/phase/locationKind/resource 枚举、delta 非零安全整数、
+ *   聚合防溢出）——任何损坏 fatal fail closed（原数据不删、health
+ *   unhealthy、新 prepare 阻断、resolution 拒绝、聚合返回空但 blockers 报
+ *   blocking）；后续读取走 heap health cache（O(1)）；
+ * - **单一 canonical deltas 事实**：entry 只持久化 resource posting deltas
+ *   （roomName/locationKind/resource/delta），容量占用由其派生（per
+ *   location 净流入 Σ delta，占用 = max(0, net)）——不存在第二份容量权威；
  * - 解除只有显式 fault resolution（faultResolution.ts）：resolve-as-
  *   committed（补 receipt 后释放）或 resolve-as-not-executed（证据允许时
- *   释放）；本模块不提供任何无条件清空入口（clearTreasuryPersistenceForTest
+ *   释放）；legacy overflowed 与无版本 store 只有该模块的显式 repair 可
+ *   恢复；本模块不提供任何无条件清空入口（clearTreasuryPersistenceForTest
  *   仅测试）。
  */
 
-/** 单条 quarantine 的占用快照（合并腿；有界——prepare 验证过的 merged postings）。 */
+import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
+import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
+
+/** 单条 quarantine 的 canonical posting 事实（合并腿；prepare 验证过的 merged postings）。 */
 export interface TreasuryQuarantineDeltas {
   readonly roomName: string;
   readonly locationKind: string;
@@ -31,29 +48,45 @@ export interface TreasuryQuarantineDeltas {
 
 export interface TreasuryQuarantineEntry {
   readonly transactionId: string;
+  /** canonical payload digest（16 小写 hex，与 prepare 签发 digest 同源）。 */
   readonly digest: string;
   /** quarantine 建立时所处 tick（prepared/故障发生 tick）。 */
   readonly tick: number;
   readonly kind: string;
   readonly source: string;
+  /** 故障 phase（write-fault phase 枚举：commit 类 / execution-unknown 类）。 */
   readonly phase: string;
-  /** 资源占用（正=预期流入、负=流出占用；授权只按流出保守计入）。 */
-  readonly resourceDeltas: readonly TreasuryQuarantineDeltas[];
-  /** 容量占用（负值占用容量）。 */
-  readonly capacityDeltas: readonly TreasuryQuarantineDeltas[];
+  /**
+   * 单一 canonical posting 事实（第七轮）：资源流向（正=预期流入、负=流出
+   * 占用）。容量占用由此派生，不再持久化独立的 capacityDeltas。
+   */
+  readonly deltas: readonly TreasuryQuarantineDeltas[];
   readonly recordedAt: number;
 }
 
 export interface TreasuryQuarantineStore {
-  /** key = "q:"+transactionId（防 "__proto__" 等危险字面量的原型污染语义）。 */
+  /** schema 版本（当前 1；未知版本 fail closed）。 */
+  version: 1;
+  /** key = "q:"+transactionId（transactionId 字符集受限，前缀无边界歧义，防危险字面量）。 */
   entries: Record<string, TreasuryQuarantineEntry>;
-  /** 条目超限后置位（持久；authorizationSafe fail closed 直至 resolution 清理）。 */
+  /** entries 自有键计数（load 校验与 fault-slot admission 的 O(1) 权威）。 */
+  entryCount: number;
+  /** legacy 溢出标志（第六轮遗留）：存在即永久 fail closed，显式 repair 才可清除。 */
   overflowed?: boolean;
 }
 
+export const TREASURY_QUARANTINE_VERSION = 1 as const;
 export const TREASURY_QUARANTINE_MAX_ENTRIES = 64;
 
 const QUARANTINE_KEY_PREFIX = "q:";
+
+const VALID_QUARANTINE_PHASES: ReadonlySet<string> = TREASURY_WRITE_FAULT_PHASES;
+
+const VALID_QUARANTINE_LOCATION_KINDS: ReadonlySet<string> = new Set<string>(["storage", "terminal"]);
+const VALID_QUARANTINE_RESOURCES: ReadonlySet<string> = new Set<string>(RESOURCES_ALL);
+const QUARANTINE_DIGEST_PATTERN = /^[0-9a-f]{16}$/;
+const QUARANTINE_KIND_SOURCE_MAX = 128;
+const QUARANTINE_DELTAS_MAX = 64;
 
 interface TreasuryQuarantineBranch {
   quarantine?: TreasuryQuarantineStore;
@@ -63,15 +96,14 @@ type RuntimeMemoryWithQuarantine = NonNullable<Memory["runtime"]> & {
   treasury?: TreasuryQuarantineBranch;
 };
 
-function quarantineStoreBranch(): TreasuryQuarantineStore {
+function quarantineBranch(): TreasuryQuarantineBranch {
   if (!Memory.runtime) Memory.runtime = {};
   const runtime = Memory.runtime as unknown as RuntimeMemoryWithQuarantine;
   if (!runtime.treasury) runtime.treasury = {};
-  if (!runtime.treasury.quarantine) runtime.treasury.quarantine = { entries: {} };
-  return runtime.treasury.quarantine;
+  return runtime.treasury;
 }
 
-/** 只读读取（查询/门禁路径零写）。 */
+/** 只读读取原始 store（查询/门禁路径零写；不触发 load/校验）。 */
 export function peekTreasuryQuarantineStore(): TreasuryQuarantineStore | undefined {
   return (Memory.runtime as unknown as RuntimeMemoryWithQuarantine | undefined)?.treasury?.quarantine;
 }
@@ -80,100 +112,474 @@ function encodeQuarantineKey(transactionId: string): string {
   return QUARANTINE_KEY_PREFIX + transactionId;
 }
 
-/** 单条只读查询（O(1)；prepare 门禁用）。 */
-export function readTreasuryQuarantineEntry(transactionId: string): TreasuryQuarantineEntry | undefined {
+// ── heap 运行态（health cache + 聚合 revision 缓存） ────────────────────────
+
+interface QuarantineStoreRuntime {
+  store: TreasuryQuarantineStore;
+  /** 非 null = fail closed（原数据保留，一切写入/聚合拒绝）。 */
+  fatal: string | null;
+}
+
+let heapRuntime: QuarantineStoreRuntime | null = null;
+
+/** store 变更序号（写入/释放 bump；聚合缓存按此失效，query 复用不全扫）。 */
+let storeRevision = 0;
+
+interface QuarantineAggregates {
+  revision: number;
+  outflow: Map<string, number>;
+  capacityOccupancy: Map<string, number>;
+}
+
+let aggregateCache: QuarantineAggregates | null = null;
+
+/** 确定性操作计数（heap，global reset 归零；facade metrics 聚合）。 */
+const quarantineEvents = {
+  fullScans: 0,
+  loadValidationEntries: 0,
+  admissionRejections: 0,
+};
+
+export interface TreasuryQuarantineCounters {
+  readonly fullScans: number;
+  readonly loadValidationEntries: number;
+  readonly admissionRejections: number;
+}
+
+export function readTreasuryQuarantineCounters(): TreasuryQuarantineCounters {
+  return { ...quarantineEvents };
+}
+
+// ── 形状校验（load 全量验证；entry 级供 repair 复用） ────────────────────────
+
+function isSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value);
+}
+
+/** 单条 entry 的完整形状校验（返回 null = 合法，否则有界错误描述）。 */
+export function validateTreasuryQuarantineEntryShape(entry: unknown): string | null {
+  if (!entry || typeof entry !== "object") return "entry 非对象";
+  const candidate = entry as Partial<TreasuryQuarantineEntry> & {
+    deltas?: unknown;
+  };
+  if (typeof candidate.transactionId !== "string" || !isValidTreasuryTransactionId(candidate.transactionId)) {
+    return `transactionId 非法: ${String(candidate.transactionId).slice(0, 48)}`;
+  }
+  if (typeof candidate.digest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.digest)) {
+    return `digest 非法（须为 16 小写 hex）: ${String(candidate.digest).slice(0, 32)}`;
+  }
+  if (!isSafeInteger(candidate.tick) || candidate.tick < 0) return "tick 非安全整数";
+  if (!isSafeInteger(candidate.recordedAt) || candidate.recordedAt < 0) return "recordedAt 非安全整数";
+  if (
+    typeof candidate.kind !== "string" || candidate.kind.length === 0 || candidate.kind.length > QUARANTINE_KIND_SOURCE_MAX
+  ) {
+    return "kind 非法（须为 1..128 字符）";
+  }
+  if (
+    typeof candidate.source !== "string" ||
+    candidate.source.length === 0 ||
+    candidate.source.length > QUARANTINE_KIND_SOURCE_MAX
+  ) {
+    return "source 非法（须为 1..128 字符）";
+  }
+  if (typeof candidate.phase !== "string" || !VALID_QUARANTINE_PHASES.has(candidate.phase)) {
+    return `phase 非法（未知枚举）: ${String(candidate.phase).slice(0, 48)}`;
+  }
+  if (!Array.isArray(candidate.deltas) || candidate.deltas.length > QUARANTINE_DELTAS_MAX) {
+    return "deltas 非数组或超上限";
+  }
+  for (const delta of candidate.deltas) {
+    if (!delta || typeof delta !== "object") return "delta 项非对象";
+    const leg = delta as Partial<TreasuryQuarantineDeltas>;
+    if (typeof leg.roomName !== "string" || leg.roomName.length === 0 || leg.roomName.length > 16) {
+      return "delta.roomName 非法";
+    }
+    if (typeof leg.locationKind !== "string" || !VALID_QUARANTINE_LOCATION_KINDS.has(leg.locationKind)) {
+      return `delta.locationKind 非法: ${String(leg.locationKind).slice(0, 24)}`;
+    }
+    if (typeof leg.resource !== "string" || !VALID_QUARANTINE_RESOURCES.has(leg.resource)) {
+      return `delta.resource 不在 RESOURCES_ALL: ${String(leg.resource).slice(0, 24)}`;
+    }
+    if (!isSafeInteger(leg.delta) || leg.delta === 0) return "delta.delta 须为非零安全整数";
+  }
+  return null;
+}
+
+/**
+ * store 完整形状自检（global reset 后首次 load 与 repair 共用；一次全表
+ * 扫描）：version、entries 对象、entryCount 一致、key 编码与 entry.
+ * transactionId 一致、逐 entry 形状、聚合安全整数。返回 null = 合法。
+ */
+function validateQuarantineStoreShape(store: TreasuryQuarantineStore): string | null {
+  if (store.version !== TREASURY_QUARANTINE_VERSION) {
+    return `未知 quarantine 版本 ${String(store.version)}`;
+  }
+  if (!store.entries || typeof store.entries !== "object") return "entries 非对象";
+  quarantineEvents.fullScans += 1;
+  const ownKeys = Object.keys(store.entries);
+  quarantineEvents.loadValidationEntries += ownKeys.length;
+  if (store.entryCount !== ownKeys.length) {
+    return `entryCount 校验失败: 声明 ${String(store.entryCount)} 实际 ${String(ownKeys.length)}`;
+  }
+  const resourceTotals = new Map<string, number>();
+  const capacityTotals = new Map<string, number>();
+  for (const key of ownKeys) {
+    if (!key.startsWith(QUARANTINE_KEY_PREFIX)) {
+      return `存储键格式非法（须为 "q:"+transactionId）: ${key.slice(0, 48)}`;
+    }
+    const entry = (store.entries as Record<string, unknown>)[key];
+    const shapeError = validateTreasuryQuarantineEntryShape(entry);
+    if (shapeError !== null) {
+      return `${shapeError}（key ${key.slice(0, 48)}）`;
+    }
+    const typed = entry as TreasuryQuarantineEntry;
+    if (encodeQuarantineKey(typed.transactionId) !== key) {
+      return `存储键与 entry.transactionId 不一致: ${key.slice(0, 48)}`;
+    }
+    // 聚合安全整数（资源 (room,loc,res) 与容量 (room,loc) 双口径预检）。
+    for (const leg of typed.deltas) {
+      const resourceKey = `${leg.roomName}\u0000${leg.locationKind}\u0000${leg.resource}`;
+      const mergedResource = (resourceTotals.get(resourceKey) ?? 0) + leg.delta;
+      if (!Number.isSafeInteger(mergedResource)) return "资源聚合安全整数溢出";
+      resourceTotals.set(resourceKey, mergedResource);
+      const capacityKey = `${leg.roomName}\u0000${leg.locationKind}`;
+      const mergedCapacity = (capacityTotals.get(capacityKey) ?? 0) + leg.delta;
+      if (!Number.isSafeInteger(mergedCapacity)) return "容量聚合安全整数溢出";
+      capacityTotals.set(capacityKey, mergedCapacity);
+    }
+  }
+  if (ownKeys.length > TREASURY_QUARANTINE_MAX_ENTRIES) {
+    return `entries 超过上限 ${String(TREASURY_QUARANTINE_MAX_ENTRIES)}（含 ${String(ownKeys.length)} 条）`;
+  }
+  return null;
+}
+
+function fatalRuntime(store: TreasuryQuarantineStore, reason: string): QuarantineStoreRuntime {
+  return { store, fatal: reason };
+}
+
+/**
+ * 加载（含校验）：写入/聚合路径专用（可能写 Memory——空 store 初始化）。
+ * 校验失败（版本未知/元数据不符/entry 损坏/聚合溢出）→ fatal fail closed：
+ * 不删数据、写入拒绝、聚合空、blockers 报 blocking，直至 faultResolution
+ * 的显式 repair 或人工处理。
+ */
+function loadQuarantineStoreRuntime(): QuarantineStoreRuntime {
+  if (heapRuntime) return heapRuntime;
+  const raw = quarantineBranch().quarantine as TreasuryQuarantineStore | undefined;
+  if (!raw) {
+    const created: TreasuryQuarantineStore = { version: TREASURY_QUARANTINE_VERSION, entries: {}, entryCount: 0 };
+    quarantineBranch().quarantine = created;
+    heapRuntime = { store: created, fatal: null };
+    return heapRuntime;
+  }
+  if (raw.version === TREASURY_QUARANTINE_VERSION) {
+    const shapeError = validateQuarantineStoreShape(raw);
+    if (shapeError !== null) {
+      heapRuntime = fatalRuntime(raw, `${shapeError}（quarantine fail closed，原数据保留）`);
+      return heapRuntime;
+    }
+    heapRuntime = { store: raw, fatal: null };
+    return heapRuntime;
+  }
+  if (raw.version === undefined) {
+    // 第六轮 legacy 无版本 store：空 entries 且无 overflowed → 无损升级 v1；
+    // 非空 → 交显式 repair（不猜测迁移，不静默清空）。
+    if (
+      raw.entries &&
+      typeof raw.entries === "object" &&
+      Object.keys(raw.entries).length === 0 &&
+      raw.overflowed !== true
+    ) {
+      const upgraded: TreasuryQuarantineStore = {
+        version: TREASURY_QUARANTINE_VERSION,
+        entries: raw.entries,
+        entryCount: 0,
+      };
+      quarantineBranch().quarantine = upgraded;
+      heapRuntime = { store: upgraded, fatal: null };
+      return heapRuntime;
+    }
+    heapRuntime = fatalRuntime(raw, "legacy quarantine store 缺失 version 且非空（显式 repair 处理，原数据保留）");
+    return heapRuntime;
+  }
+  heapRuntime = fatalRuntime(raw, `未知 quarantine 版本 ${String(raw.version)}（原数据保留，fail closed）`);
+  return heapRuntime;
+}
+
+export interface TreasuryQuarantineHealth {
+  readonly healthy: boolean;
+  readonly detail: string | null;
+  /** 已验证的持久条目数（fatal 时为实际条目数的尽力计数；未 load 时轻量探测）。 */
+  readonly entryCount: number;
+  readonly overflowed: boolean;
+}
+
+/**
+ * quarantine store 健康探测（只读零写；prepare 门禁/readiness/blockers 用）：
+ * - heap 已 load 且 fatal → unhealthy；
+ * - 未 load 时轻量形状探测（version 可识别 / entries 对象 / entryCount 数字 /
+ *   overflowed 标志）——不做全表扫描（entry 级损坏由下一次 load 显式检出）；
+ * - legacy overflowed=true 一律 unhealthy（显式 repair 才可清除）。
+ */
+export function peekTreasuryQuarantineHealth(): TreasuryQuarantineHealth {
+  if (heapRuntime?.fatal) {
+    const keys = Object.keys(heapRuntime.store.entries ?? {});
+    return {
+      healthy: false,
+      detail: heapRuntime.fatal,
+      entryCount: keys.length,
+      overflowed: heapRuntime.store.overflowed === true,
+    };
+  }
   const store = peekTreasuryQuarantineStore();
-  if (!store) return undefined;
-  return store.entries[encodeQuarantineKey(transactionId)] as TreasuryQuarantineEntry | undefined;
+  if (store === undefined) return { healthy: true, detail: null, entryCount: 0, overflowed: false };
+  if (store.version !== TREASURY_QUARANTINE_VERSION) {
+    if (store.version === undefined) {
+      const count = store.entries && typeof store.entries === "object" ? Object.keys(store.entries).length : 0;
+      const overflowed = store.overflowed === true;
+      if (count === 0 && !overflowed) return { healthy: true, detail: null, entryCount: 0, overflowed: false };
+      return {
+        healthy: false,
+        detail: "legacy quarantine store 缺失 version 且非空（fail closed）",
+        entryCount: count,
+        overflowed,
+      };
+    }
+    return {
+      healthy: false,
+      detail: `未知 quarantine 版本 ${String(store.version)}`,
+      entryCount: 0,
+      overflowed: store.overflowed === true,
+    };
+  }
+  if (!store.entries || typeof store.entries !== "object") {
+    return { healthy: false, detail: "quarantine entries 非对象", entryCount: 0, overflowed: store.overflowed === true };
+  }
+  if (!isSafeInteger(store.entryCount) || store.entryCount < 0) {
+    return {
+      healthy: false,
+      detail: "quarantine entryCount 非法",
+      entryCount: 0,
+      overflowed: store.overflowed === true,
+    };
+  }
+  if (store.overflowed === true) {
+    return { healthy: false, detail: "legacy quarantine overflowed 标志存在（显式 repair 前永久阻断）", entryCount: store.entryCount, overflowed: true };
+  }
+  return { healthy: true, detail: null, entryCount: store.entryCount, overflowed: false };
+}
+
+/**
+ * 单条只读查询（O(1)；prepare 同 id 门禁用；fatal store 一律视为不可信；
+ * store 尚不存在时零写返回 undefined——查询路径不隐式创建 store）。
+ */
+export function readTreasuryQuarantineEntry(transactionId: string): TreasuryQuarantineEntry | undefined {
+  if (peekTreasuryQuarantineStore() === undefined) return undefined;
+  const runtime = loadQuarantineStoreRuntime();
+  if (runtime.fatal) return undefined;
+  return runtime.store.entries[encodeQuarantineKey(transactionId)] as TreasuryQuarantineEntry | undefined;
 }
 
 export function isTreasuryTransactionQuarantined(transactionId: string): boolean {
   return readTreasuryQuarantineEntry(transactionId) !== undefined;
 }
 
+export type TreasuryQuarantineWriteResult =
+  | { readonly status: "written" }
+  | { readonly status: "already_present" }
+  | {
+      readonly status: "rejected";
+      readonly reason: "store_fatal" | "capacity_exhausted";
+      readonly detail: string;
+    };
+
 /**
- * 写入 durable quarantine（tick 边界 executing/faulted 分类路径专用）。
+ * 写入 durable quarantine（tick 边界分类路径与立即隔离路径专用）。
  * 同 id 重复写入幂等保留首条（根因快照语义与 write-fault marker 一致）；
- * 条目超上限时保留前 MAX 条并置 overflowed（占用事实绝不丢失，授权侧
- * 永久 fail closed 直至显式 resolution）。
+ * 容量已满时返回 rejected（**绝不**置 overflowed 丢 identity——prepare 的
+ * fault-slot admission 已保证此分支在正常路径不可达；防御性拒绝保持 store
+ * 不变，调用方维持 write-fault marker 锁定并计数）。
  */
-export function quarantineTreasuryTransaction(entry: TreasuryQuarantineEntry): void {
-  const store = quarantineStoreBranch();
-  const key = encodeQuarantineKey(entry.transactionId);
-  if (Object.prototype.hasOwnProperty.call(store.entries, key)) return;
-  if (Object.keys(store.entries).length >= TREASURY_QUARANTINE_MAX_ENTRIES) {
-    store.overflowed = true;
-    return;
+export function quarantineTreasuryTransaction(entry: TreasuryQuarantineEntry): TreasuryQuarantineWriteResult {
+  const runtime = loadQuarantineStoreRuntime();
+  if (runtime.fatal) {
+    return { status: "rejected", reason: "store_fatal", detail: runtime.fatal };
   }
-  store.entries[key] = entry;
+  const key = encodeQuarantineKey(entry.transactionId);
+  if (Object.prototype.hasOwnProperty.call(runtime.store.entries, key)) return { status: "already_present" };
+  if (runtime.store.entryCount >= TREASURY_QUARANTINE_MAX_ENTRIES) {
+    quarantineEvents.admissionRejections += 1;
+    return {
+      status: "rejected",
+      reason: "capacity_exhausted",
+      detail: `quarantine 容量已满（${String(TREASURY_QUARANTINE_MAX_ENTRIES)} 条；fault-slot admission 不变量被破坏，保持 marker 锁定）`,
+    };
+  }
+  runtime.store.entries[key] = entry;
+  runtime.store.entryCount += 1;
+  storeRevision += 1;
+  return { status: "written" };
 }
 
 /** 显式 resolution 路径：释放单条 quarantine（返回是否确有条目被释放）。 */
 export function releaseTreasuryQuarantineEntry(transactionId: string): boolean {
-  const store = peekTreasuryQuarantineStore();
-  if (!store) return false;
+  const runtime = loadQuarantineStoreRuntime();
+  if (runtime.fatal) return false;
   const key = encodeQuarantineKey(transactionId);
-  if (!Object.prototype.hasOwnProperty.call(store.entries, key)) return false;
-  delete store.entries[key];
+  if (!Object.prototype.hasOwnProperty.call(runtime.store.entries, key)) return false;
+  delete runtime.store.entries[key];
+  runtime.store.entryCount -= 1;
+  storeRevision += 1;
   return true;
 }
 
-/** 全部条目（诊断/resolution 枚举；顺序为插入序）。 */
+/** 全部条目（诊断/resolution 枚举；顺序为插入序；fatal store 返回空）。 */
 export function listTreasuryQuarantineEntries(): TreasuryQuarantineEntry[] {
-  const store = peekTreasuryQuarantineStore();
-  if (!store) return [];
-  return Object.values(store.entries) as TreasuryQuarantineEntry[];
+  const runtime = loadQuarantineStoreRuntime();
+  if (runtime.fatal) return [];
+  return Object.values(runtime.store.entries) as TreasuryQuarantineEntry[];
 }
 
-/**
- * 授权阻断状态（authorizationSafe 的 quarantine 条件；只读零写）：
- * blocking = 存在任一未解决条目或 overflowed 标志。
- */
-export function treasuryQuarantineBlockers(): {
+export interface TreasuryQuarantineBlockers {
   readonly blocking: boolean;
   readonly unresolvedCount: number;
   readonly overflowed: boolean;
-} {
-  const store = peekTreasuryQuarantineStore();
-  if (!store) return { blocking: false, unresolvedCount: 0, overflowed: false };
-  const unresolvedCount = Object.keys(store.entries).length;
-  return {
-    blocking: unresolvedCount > 0 || store.overflowed === true,
-    unresolvedCount,
-    overflowed: store.overflowed === true,
-  };
+  /** store 损坏（fail closed）时不为 null。 */
+  readonly unhealthyDetail: string | null;
 }
 
 /**
- * quarantine 的授权占用聚合（只读）：(room,location,resource) → 净 delta。
- * 只统计负 delta（流出占用——保守口径：可能已执行的动作占用的资源不得
- * 再授权他人；正流入不乐观计入 spendable）。
+ * 授权/写入阻断状态（authorizationSafe、write admission readiness 与 prepare
+ * 全局门禁共用；只读零写——store 不存在时视为空且健康，不隐式创建）：
+ * blocking = 存在任一未解决条目、legacy overflowed 或 store 损坏。
+ * write-fault marker 不是唯一锁来源——本判定独立于 marker。
  */
-export function treasuryQuarantineOutflowTotals(): Map<string, number> {
-  const totals = new Map<string, number>();
-  for (const entry of listTreasuryQuarantineEntries()) {
-    if (!Array.isArray(entry.resourceDeltas)) continue;
-    for (const delta of entry.resourceDeltas) {
-      if (!delta || typeof delta !== "object") continue;
-      if (typeof delta.delta !== "number" || delta.delta >= 0) continue;
-      const key = `${String(delta.roomName)}\u0000${String(delta.locationKind)}\u0000${String(delta.resource)}`;
-      totals.set(key, (totals.get(key) ?? 0) + delta.delta);
-    }
+export function treasuryQuarantineBlockers(): TreasuryQuarantineBlockers {
+  if (heapRuntime?.fatal) {
+    const keys = Object.keys(heapRuntime.store.entries ?? {});
+    return {
+      blocking: true,
+      unresolvedCount: keys.length,
+      overflowed: heapRuntime.store.overflowed === true,
+      unhealthyDetail: heapRuntime.fatal,
+    };
   }
-  return totals;
+  const health = peekTreasuryQuarantineHealth();
+  return {
+    blocking: !health.healthy || health.entryCount > 0,
+    unresolvedCount: health.entryCount,
+    overflowed: health.overflowed,
+    unhealthyDetail: health.healthy ? null : health.detail,
+  };
 }
 
-/** quarantine 的容量占用（只读）：locationKey → 净容量 delta（负值占用）。 */
-export function treasuryQuarantineCapacityTotals(): Map<string, number> {
-  const totals = new Map<string, number>();
+function computeAggregates(): { outflow: Map<string, number>; capacityOccupancy: Map<string, number> } {
+  const outflow = new Map<string, number>();
+  const capacityOccupancy = new Map<string, number>();
   for (const entry of listTreasuryQuarantineEntries()) {
-    if (!Array.isArray(entry.capacityDeltas)) continue;
-    for (const delta of entry.capacityDeltas) {
-      if (!delta || typeof delta !== "object") continue;
-      if (typeof delta.delta !== "number") continue;
-      const key = `${String(delta.roomName)}\u0000${String(delta.locationKind)}`;
-      totals.set(key, (totals.get(key) ?? 0) + delta.delta);
+    for (const leg of entry.deltas) {
+      const resourceKey = `${leg.roomName}\u0000${leg.locationKind}\u0000${leg.resource}`;
+      outflow.set(resourceKey, (outflow.get(resourceKey) ?? 0) + leg.delta);
+      const capacityKey = `${leg.roomName}\u0000${leg.locationKind}`;
+      capacityOccupancy.set(capacityKey, (capacityOccupancy.get(capacityKey) ?? 0) + leg.delta);
     }
   }
-  return totals;
+  return { outflow, capacityOccupancy };
+}
+
+function ensureAggregates(): void {
+  if (aggregateCache && aggregateCache.revision === storeRevision) return;
+  aggregateCache = { revision: storeRevision, ...computeAggregates() };
+}
+
+/**
+ * quarantine 的授权占用聚合（只读、按 store revision 缓存）：
+ * (room,location,resource) → 净 delta。消费方只统计负 delta（流出占用——
+ * 可能已执行的动作占用的资源不得再授权他人；正流入不乐观计入 spendable）。
+ * 零写契约：store 尚不存在（从未有过 quarantine）直接返回空 Map，不隐式
+ * 创建；store 存在时执行验证性 load（fatal → 空 Map，blockers 已 fail
+ * closed，不再以聚合数值放宽）。
+ */
+export function treasuryQuarantineOutflowTotals(): Map<string, number> {
+  if (peekTreasuryQuarantineStore() === undefined) return new Map();
+  const runtime = loadQuarantineStoreRuntime();
+  if (runtime.fatal) return new Map();
+  ensureAggregates();
+  return aggregateCache.outflow;
+}
+
+/**
+ * quarantine 的容量占用（只读、缓存）：(room,location) → 正净流入量。
+ * 保守口径（第七轮）：可能已流入的资源必须减少 free capacity（占用 =
+ * max(0, Σ deltas)）；可能已流出的部分不得假设空间已释放（负净额不增加
+ * free capacity）。零写契约同 outflow。
+ */
+export function treasuryQuarantineCapacityOccupancy(): Map<string, number> {
+  if (peekTreasuryQuarantineStore() === undefined) return new Map();
+  const runtime = loadQuarantineStoreRuntime();
+  if (runtime.fatal) return new Map();
+  ensureAggregates();
+  const occupancy = new Map<string, number>();
+  for (const [key, net] of aggregateCache.capacityOccupancy) {
+    occupancy.set(key, Math.max(0, net));
+  }
+  return occupancy;
+}
+
+/** 仅供测试/repair：失效 heap 缓存（clearTreasuryPersistenceForTest 调用）。 */
+export function resetTreasuryQuarantineRuntimeForTest(): void {
+  heapRuntime = null;
+  aggregateCache = null;
+  storeRevision = 0;
+  quarantineEvents.fullScans = 0;
+  quarantineEvents.loadValidationEntries = 0;
+  quarantineEvents.admissionRejections = 0;
+}
+
+/**
+ * 显式 repair 内部实现（仅供 faultResolution 的 repair 入口调用）：
+ * 全量验证现存 entries 合法后修复 store 元数据——
+ * - legacy 无版本 store → 补 version/entryCount（v1）；
+ * - entryCount 漂移 → 重算；
+ * - legacy overflowed=true → 验证通过且条目数在上限内后清除标志。
+ * 任何 entry 损坏 → 拒绝（原数据不动）。绝不删除任何 entry。
+ */
+export function repairTreasuryQuarantineStoreMetadataForResolution(): { status: "repaired" | "rejected"; detail: string } {
+  const raw = quarantineBranch().quarantine as TreasuryQuarantineStore | undefined;
+  if (!raw) return { status: "rejected", detail: "quarantine store 不存在（无需 repair）" };
+  if (!raw.entries || typeof raw.entries !== "object") {
+    return { status: "rejected", detail: "quarantine entries 非对象（人工处理）" };
+  }
+  const ownKeys = Object.keys(raw.entries);
+  quarantineEvents.fullScans += 1;
+  quarantineEvents.loadValidationEntries += ownKeys.length;
+  for (const key of ownKeys) {
+    const entry = (raw.entries as Record<string, unknown>)[key];
+    const shapeError = validateTreasuryQuarantineEntryShape(entry);
+    if (shapeError !== null) {
+      return { status: "rejected", detail: `${shapeError}（key ${key.slice(0, 48)}；原数据保留）` };
+    }
+    const typed = entry as TreasuryQuarantineEntry;
+    if (encodeQuarantineKey(typed.transactionId) !== key) {
+      return { status: "rejected", detail: `存储键与 entry.transactionId 不一致: ${key.slice(0, 48)}` };
+    }
+  }
+  if (ownKeys.length > TREASURY_QUARANTINE_MAX_ENTRIES) {
+    return {
+      status: "rejected",
+      detail: `entries 超过上限 ${String(TREASURY_QUARANTINE_MAX_ENTRIES)}（先 resolution 部分条目再 repair）`,
+    };
+  }
+  raw.version = TREASURY_QUARANTINE_VERSION;
+  raw.entryCount = ownKeys.length;
+  delete raw.overflowed;
+  heapRuntime = { store: raw, fatal: null };
+  storeRevision += 1;
+  return { status: "repaired", detail: `repair 完成（${String(ownKeys.length)} 条 entry 保留）` };
+}
+
+/** 诊断：合法 phase 集合是否包含给定值（测试与 guard 用）。 */
+export function isValidTreasuryQuarantinePhase(phase: string): phase is TreasuryWriteFaultPhase {
+  return VALID_QUARANTINE_PHASES.has(phase);
 }

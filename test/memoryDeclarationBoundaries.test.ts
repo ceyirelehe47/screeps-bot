@@ -36,7 +36,7 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    schemaFingerprint: "9e5e446c4fbd8dd22dcc83ed353dcaf254268ee0f555a9a7597f01cf7a2665d4",
+    schemaFingerprint: "10a90ab4ff92b84637889130ac2b9c84c2ebee06d925a740a52586681b2e9328",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
@@ -70,6 +70,7 @@ const MEMORY_BRANCHES = {
       "hub",
       "nukerControl",
       "resourceReservations",
+      "resourceReservationsCorrupted",
       "resourceReservationsOwnerVersion",
       "treasury",
       "treasuryPerf",

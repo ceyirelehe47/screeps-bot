@@ -600,12 +600,21 @@ declare global {
      * reservation owner 迁移版本标记：
      * - 2 = 裸 holderId 已补写 typed owner 字段（第五轮，store key 仍为
      *   `${room}:${resource}:${holderId}`）；
-     * - 3 = store key 已重编码完整 ownerToken（kind 前缀 + logical-service
-     *   namespace 段 + id）——同 id 不同 kind/namespace 的 owner 持久层分离。
-     * 版本低于 3 且 store 非空时授权侧 fail closed（authorizationSafe 的
-     * migration 条件），直至 migrateResourceReservationsForTypedOwner 成功推进。
+     * - 3 = store key 已重编码 ownerToken v3（第六轮，kind 前缀 +
+     *   logical-service namespace 段 + id）；
+     * - 4 = store key 重编码 canonical owner token v4（第七轮，长度前缀
+     *   `ow2:<kindCode>:<nsLen>:<namespace><id>`——字段边界无歧义）。
+     * 版本低于 4 且 store 非空时授权侧 fail closed；schema activation
+     * gate（ensureReservationSchemaActivated）在一切 mutation 前推进迁移。
      */
-    resourceReservationsOwnerVersion?: 2 | 3;
+    resourceReservationsOwnerVersion?: 2 | 3 | 4;
+    /**
+     * reservation store 损坏标志（第七轮）：GC/验证发现 malformed entry 时
+     * 写入有界描述（该 entry 原样保留不删除）——存在期间一切 reservation
+     * mutation 拒绝、authorizationSafe/write readiness fail closed，只有
+     * 显式 repair（验证全 store 合法后清除）可解除。
+     */
+    resourceReservationsCorrupted?: string;
     /**
      * Treasury 最小持久状态（绝不持久化 observation/overlay/journal/物理事实）：
      * - receipts：transaction 幂等 receipt。key 为 "t:"+transactionId 编码
@@ -642,13 +651,18 @@ declare global {
         lastEndTick?: number;
       };
       /**
-       * write-fault marker（第五轮新增）：staged commit 意外写故障（receipt/
-       * heap/handle 状态发布失败、endTick 时 handle 仍 executing 等）的最
-       * 小、有界持久快照——只保留首个 unresolved 故障（根因），绝不持久化
-       * 正常 transaction/journal/overlay。存在 unresolved marker 期间全部
-       * Treasury writer fail closed（write_admission_locked），只有显式管理
-       * /修复路径（显式 fault resolution 协议）可解除；global reset
-       * 后凭本 marker 仍可发现 Treasury 曾发生 unresolved commit fault。
+       * write-fault marker（第五轮新增、第七轮补严形状契约）：staged commit
+       * 意外写故障（receipt/heap/handle 状态发布失败、endTick 时 handle 仍
+       * executing 等）的最小、有界持久快照——只保留首个 unresolved 故障
+       * （根因），绝不持久化正常 transaction/journal/overlay。phase 分为
+       * commit 类（receipt_publish/heap_publish/journal_publish/
+       * overlay_publish/handle_state/commit_unexpected——Game 已 OK）与
+       * execution-unknown 类（executing_at_end_tick/
+       * action_threw_execution_unknown/action_returned_non_ok_abort_failed）
+       * ——resolution 的允许性依赖该分类。detail 为 ≤192 字符有界异常摘要。
+       * 存在 unresolved marker（含形状损坏的 marker——一律视为存在 fault，
+       * fail closed）期间全部 Treasury writer 阻断，只有显式 fault
+       * resolution 协议可解除。
        */
       writeFault?: {
         transactionId: string;
@@ -659,20 +673,26 @@ declare global {
         phase: string;
         status: "unresolved";
         recordedAt: number;
+        detail?: string;
       };
       /**
-       * durable quarantine（第六轮新增）：executing（Game 结果未知）或
-       * commit-faulted 的 prepared transaction 在 tick 边界转入的持久隔离
-       * ——跨 global reset 与 service 重建存活，继续占用资源、容量与
-       * transaction identity（授权计算计入流出量），不进入 committed
-       * projection。条目 key 为 "q:"+transactionId（防危险字面量原型污染）；
-       * 上限 64 条，溢出置 overflowed（authorizationSafe 永久 fail closed
-       * 直至显式 resolution）。解除只有显式 fault resolution
-       * （faultResolution.ts）——不存在无条件清空入口。绝不持久化
-       * observation/canonical transaction 全量，只保存占用快照
-       * （merged 腿的 resourceDeltas/capacityDeltas）与根因标识。
+       * durable quarantine（第六轮新增、第七轮升级版本化 schema v1）：
+       * executing（Game 结果未知）或 commit-faulted 的 prepared transaction
+       * 转入的持久隔离——跨 global reset 与 service 重建存活，继续占用
+       * 资源、容量与 transaction identity（授权计入流出量、正净流入占用
+       * free capacity），不进入 committed projection。entry key 为
+       * "q:"+transactionId；entryCount 为自有键计数（load 校验与 fault-slot
+       * admission 的 O(1) 权威）；prepare admission 保证 持久条目数 +
+       * active handle 数 < 64（第 65 条 fault 在 prepare 前被拒，不再产生
+       * 溢出丢 identity 的路径）；overflowed 为第六轮 legacy 溢出标志
+       * （存在即永久 fail closed，显式 repair 才可清除）。deltas 为单一
+       * canonical posting 事实（容量占用由其派生）。global reset 后首次
+       * load 全量验证（key 编码/digest/phase/locationKind/resource 枚举/
+       * 非零安全整数/聚合溢出）——损坏 fail closed（原数据不动、新 prepare
+       * 阻断、resolution 拒绝）。解除只有显式 fault resolution。
        */
       quarantine?: {
+        version: 1;
         entries: Record<
           string,
           {
@@ -682,13 +702,7 @@ declare global {
             kind: string;
             source: string;
             phase: string;
-            resourceDeltas: Array<{
-              roomName: string;
-              locationKind: string;
-              resource: string;
-              delta: number;
-            }>;
-            capacityDeltas: Array<{
+            deltas: Array<{
               roomName: string;
               locationKind: string;
               resource: string;
@@ -697,7 +711,33 @@ declare global {
             recordedAt: number;
           }
         >;
+        entryCount: number;
         overflowed?: boolean;
+      };
+      /**
+       * resolution tombstone（第七轮新增）：显式 fault resolution 的有界
+       * 幂等记录——key 为 "r:"+transactionId，使 receipt retention 过期后的
+       * 重复管理调用仍能返回 already_resolved 而非模糊 not_found；actionTick
+       * 保留原始动作 tick 供审计（settledAtTick 才是 receipt retention 起点）。
+       * 上限 256 条；写入时惰性清理 resolvedAtTick 超过 5000 tick 的过期项；
+       * 超上限且无可清理时拒绝新 resolution（fail closed，绝不丢弃已存
+       * tombstone）。
+       */
+      resolutions?: {
+        version: 1;
+        entries: Record<
+          string,
+          {
+            transactionId: string;
+            digest: string;
+            resolution: "committed" | "not-executed";
+            actionTick: number;
+            settledAtTick?: number;
+            observationTick: number;
+            resolvedAtTick: number;
+          }
+        >;
+        updatedAt: number;
       };
     };
     treasuryPerf?: Record<string, number | string>;

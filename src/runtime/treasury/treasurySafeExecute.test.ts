@@ -96,22 +96,43 @@ describe("Treasury 安全执行包装器 executePreparedAction", () => {
     expect(metrics.transactionPreparesAborted).toBe(1);
   });
 
-  it("fake Game API 抛错：自动 abort 并 rethrow 原始异常", () => {
+  it("fake Game API 抛错：execution unknown（不 abort）+ durable quarantine + rethrow 原始异常", () => {
     const service = makeService();
     let rethrown: unknown = null;
+    let sideEffect = 0;
     try {
       service.executePreparedAction(freshInput(service, "ts1_throw"), () => {
+        sideEffect += 1; // callback 内可能已产生部分 Game 副作用
         throw new Error("game api boom");
       });
     } catch (error) {
       rethrown = error;
     }
+    // 异常原样透传（Treasury 状态完整，不吞异常）。
     expect(rethrown).toBeInstanceOf(Error);
     expect((rethrown as Error).message).toBe("game api boom");
     expect(service.journal()).toHaveLength(0);
+    // 第七轮语义：抛错默认 execution unknown——绝不普通 abort（那会错误
+    // 释放可能已被占用的资源）；立即 faulted + marker（含有界异常摘要）+
+    // durable quarantine + write admission 锁定。
+    const quarantined = readTreasuryQuarantineEntry("ts1_throw");
+    expect(quarantined).toBeDefined();
+    expect(quarantined?.phase).toBe("action_threw_execution_unknown");
+    expect(readTreasuryWriteFault()?.phase).toBe("action_threw_execution_unknown");
+    expect(readTreasuryWriteFault()?.detail).toContain("game api boom"); // 有界诊断
     const metrics = service.metrics();
-    expect(metrics.preparedActive).toBe(0);
-    expect(metrics.transactionPreparesAborted).toBe(1);
+    expect(metrics.preparedActive).toBe(1); // faulted handle 仍占用（终态化在 tick 边界）
+    expect(metrics.transactionPreparesAborted).toBe(0); // 未 abort
+    expect(metrics.executionUnknownQuarantines).toBe(1);
+    expect(sideEffect).toBe(1);
+    // 同 id 再执行：callback 零调用（faulted handle 拒绝重入）。
+    let secondCall = 0;
+    const second = service.executePreparedAction(freshInput(service, "ts1_throw"), () => {
+      secondCall += 1;
+      return { ok: true };
+    });
+    expect(second.status).toBe("prepare_rejected");
+    expect(secondCall).toBe(0);
   });
 
   it("fake Game API 返回 OK：commit 生效（journal/overlay/receipt）", () => {
@@ -235,13 +256,18 @@ describe("第六轮结果语义：Game 已执行与 Treasury 故障不可混淆"
       expect(result.reason).toBe("write_admission_locked");
       expect(result.actionResult.code).toBe("NOT_ENOUGH_RESOURCES");
     }
+    // 第七轮：Game 非 OK 且 abort 未确认 → 立即隔离（phase 与 callback 抛错
+    // 的 action_threw_execution_unknown 严格区分），不等 tick 边界。
+    const abortFailedEntry = readTreasuryQuarantineEntry("ts1_abort_fail");
+    expect(abortFailedEntry).toBeDefined();
+    expect(abortFailedEntry?.phase).toBe("action_returned_non_ok_abort_failed");
     // 该 handle 的 tentative 未释放（abort 未确认）——active 数含 callback 内
     // 制造锁的另一笔 faulted handle（ts1_abort_trigger）与被锁拒 abort 的
     // ts1_abort_fail 本身，二者都保持占用等 tick 边界处理。
     expect(service.metrics().preparedActive).toBe(2);
   });
 
-  it("callback 抛错且 abort 未确认：rethrow 原始异常 + abort_failed marker + durable quarantine", () => {
+  it("callback 抛错且全局锁已存在：rethrow 原始异常 + execution unknown quarantine（不尝试 abort）", () => {
     const service = makeService();
     let rethrown: unknown = null;
     try {
@@ -259,13 +285,14 @@ describe("第六轮结果语义：Game 已执行与 Treasury 故障不可混淆"
     }
     expect((rethrown as Error).message).toBe("game api boom"); // 异常原样透传
     // marker 只保留首个 unresolved 根因（callback 内 trigger 的 commit fault）；
-    // 抛错 handle 自身进 durable quarantine（phase=abort_failed）。
+    // 抛错 handle 自身进 durable quarantine（phase=action_threw_execution_unknown
+    // ——第七轮：抛错不再走 abort，锁存在与否不影响 execution unknown 路径）。
     const marker = readTreasuryWriteFault();
     expect(marker?.phase).toBe("receipt_publish");
     expect(marker?.transactionId).toBe("ts1_throw_trigger");
     const quarantined = readTreasuryQuarantineEntry("ts1_throw_locked");
     expect(quarantined).toBeDefined();
-    expect(quarantined?.phase).toBe("abort_failed");
+    expect(quarantined?.phase).toBe("action_threw_execution_unknown");
   });
 
   it("prepare 后人为损坏 receipt 再 commit：fatal fault + quarantine，绝不 already_settled", () => {

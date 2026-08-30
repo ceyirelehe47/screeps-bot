@@ -169,6 +169,17 @@ export type TreasuryRejectionReason =
    *  跨 tick 持久占用资源与 transaction identity；显式 resolution 解除前
    *  不得再次 prepare）。 */
   | "transaction_quarantined"
+  /** 全局 quarantine write blocker（第七轮）：存在任意 unresolved
+   *  quarantine / legacy overflowed——新 transaction 一律拒绝（callback
+   *  零调用）；write-fault marker 不是唯一锁来源。 */
+  | "quarantine_write_blocked"
+  /** quarantine store 损坏（版本未知/entry 损坏/聚合溢出）：fail closed，
+   *  新 transaction 一律拒绝直至显式 repair。 */
+  | "quarantine_store_fatal"
+  /** quarantine fault-slot 预留失败（第七轮）：持久 quarantine 数 + active
+   *  prepared 数已达上限——prepare 在 Game callback 之前拒绝（第 65 条
+   *  fault 在 prepare 前被阻止）。 */
+  | "quarantine_capacity_exhausted"
   /** runtime input 形状非法（canonicalization 前置验证失败——结构化拒绝，
    *  绝不抛出中断 tick；零 tentative/零槽位/零 registry 污染）。 */
   | "invalid_input";
@@ -620,6 +631,17 @@ export interface TreasuryBalanceView {
    * invalid_context。数值字段保留供观察——阻断时不得以归零掩盖原因。
    */
   readonly authorizationBlockers: readonly string[];
+  /**
+   * write admission readiness（第七轮，与余额完整分立）：当前是否确实允许
+   * 开始新的 Game write——独立于 authorizationSafe（承诺视图完整但 receipt
+   * 满/quarantine slot 耗尽/schema 未激活时余额可信而写入未就绪）。
+   * blockers 有界诊断；ready=false 不影响数值字段；prepare 对各条件独立
+   * 复查，绝不只信调用方读过 readiness。
+   */
+  readonly writeAdmission: {
+    readonly ready: boolean;
+    readonly blockers: readonly string[];
+  };
   readonly epoch: TreasuryEpoch;
 }
 
@@ -714,10 +736,29 @@ export interface TreasuryMetrics {
   preparedExecutingAtEnd: number;
   /** tick 边界转入 durable quarantine 的 handle 数（executing + faulted；累计）。 */
   preparedQuarantinedAtBoundary: number;
+  /** action callback 抛错进入 execution unknown 的次数（第七轮：默认隔离不 abort）。 */
+  executionUnknownQuarantines: number;
   /** staged commit 意外写故障次数（每次记录 write-fault marker）。 */
   commitFaults: number;
   /** write admission 全局锁状态（1 = unresolved write fault 锁定中；gauge）。 */
   writeAdmissionLocked: number;
+  /** 持久 quarantine 条目数（validated store entryCount；gauge，O(1)）。 */
+  quarantineEntries: number;
+  /** quarantine fault-slot 预留数 = active handle 数（gauge；含 prepared/executing/committing/faulted）。 */
+  quarantineSlotsReserved: number;
+  /** quarantine 剩余可预留 slot 数（MAX − entryCount − active；gauge，O(1)）。 */
+  quarantineSlotsRemaining: number;
+  /** quarantine store 健康状态（gauge；false = fail closed）。 */
+  quarantineStoreHealthy: boolean;
+  /** prepare 被 quarantine 全局 blocker/slot admission 拒绝的次数（含防御分支）。 */
+  quarantineAdmissionRejections: number;
+  /** 当前 unresolved quarantine 条目数（gauge；含 legacy overflowed 语义上的阻断）。 */
+  unresolvedQuarantines: number;
+  /** resolution committed / not-executed / uncertain / rejected 次数（faultResolution heap 计数聚合）。 */
+  resolutionCommitted: number;
+  resolutionNotExecuted: number;
+  resolutionUncertain: number;
+  resolutionRejected: number;
   /** receipt 全部扫描上下文访问的条目总数。 */
   receiptEntriesVisited: number;
   /** 迁移扫描次数（源遍历 + 迁移自检）。 */
@@ -730,6 +771,10 @@ export interface TreasuryMetrics {
   receiptFatalInspectionEntries: number;
   /** 非法查询上下文（非法资源/重复房间/重复位置/NaN withhold 等）fail-closed 次数。 */
   queryInvalidContexts: number;
+  /** reservation schema activation 失败次数（migration 失败/未知版本/corrupted；累计）。 */
+  reservationSchemaActivationFailures: number;
+  /** reservation mutation 结构化拒绝次数（非法输入/schema 未激活/corrupted；累计）。 */
+  reservationMutationRejections: number;
   reconciliationInflowMismatches: number;
   reconciliationOutflowMismatches: number;
   reconciliationStructuralChanges: number;
@@ -794,14 +839,27 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     preparedOutstandingAtEnd: 0,
     preparedExecutingAtEnd: 0,
     preparedQuarantinedAtBoundary: 0,
+    executionUnknownQuarantines: 0,
     commitFaults: 0,
     writeAdmissionLocked: 0,
+    quarantineEntries: 0,
+    quarantineSlotsReserved: 0,
+    quarantineSlotsRemaining: 0,
+    quarantineStoreHealthy: false,
+    quarantineAdmissionRejections: 0,
+    unresolvedQuarantines: 0,
+    resolutionCommitted: 0,
+    resolutionNotExecuted: 0,
+    resolutionUncertain: 0,
+    resolutionRejected: 0,
     receiptEntriesVisited: 0,
     receiptMigrationScans: 0,
     receiptLoadValidationEntries: 0,
     receiptExpiryCleanupEntries: 0,
     receiptFatalInspectionEntries: 0,
     queryInvalidContexts: 0,
+    reservationSchemaActivationFailures: 0,
+    reservationMutationRejections: 0,
     reconciliationInflowMismatches: 0,
     reconciliationOutflowMismatches: 0,
     reconciliationStructuralChanges: 0,
