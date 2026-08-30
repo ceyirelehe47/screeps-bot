@@ -39,11 +39,26 @@
 8. **commitment completeness 静默跳过**：未知 status（"pendng"）被当普通非 pending 跳过、聚合溢出不检查、receiver 房间 completeness 判定因分隔符 bug 恒真。补严：status/blockedReason 枚举、聚合安全整数、无法定位 scope 的损坏全局 incomplete、authorizationSafe fail closed。
 9. **authorizationSafe 语义过弱**：只看 commitment completeness。重定义为多条件联合（commitment complete + receipt healthy + 无 write fault + 无 unresolved quarantine + lifecycle open + service/tick 合法 + 持久 migration 完成），数值保留供观察但授权信号 fail closed，diagnostics 指出主要阻断原因。
 
+## Round 7 — Quarantine Closure & Schema Activation（第七轮范围补充）
+
+第六轮交付的 quarantine/fault-resolution/reservation schema 仍存在最后一批权威漏洞，第七轮在既有基础上修复（不重写前六轮基础、不接入任何真实 Game writer、不部署）：
+
+1. **unresolved quarantine 可被绕过**：prepare 只检查同 transactionId 的 quarantine 与 write-fault marker——存在其它 unresolved quarantine 时新 transaction 仍可 prepare。改为全局 write blocker：任意 unresolved quarantine / quarantine store overflow 或 corruption 期间，一切新 prepare 在 Game callback 之前拒绝（已结算幂等查询与同 id 的 transaction_quarantined 精确拒绝保留）；write-fault marker 不再是唯一锁来源。
+2. **quarantine 溢出丢失 transaction identity**：条目达到 64 上限后只置 overflowed 不保存 entry。改为 prepare 时的 fault-slot 预留——持久 quarantine 数 + active prepared 数达上限即在 admission 拒绝（第 65 条 fault 在 prepare 前被阻止）；commit/确认 abort 释放 slot；fault 将预留 slot 原子转换为持久 entry；legacy overflowed 标志 fail closed 且只有显式 repair 可清除。
+3. **quarantine 无版本与健康契约**：直接信任任意 Memory 形状。升级为版本化持久权威（version/entryCount 元数据、key 编码与 transactionId 一致、phase/locationKind/resource/delta 全枚举与安全整数校验、聚合防溢出、单一 canonical deltas 事实并由其派生容量占用）；global reset 后首次 load 全量验证 + heap health cache；损坏 fail closed（原数据不动、新 prepare 全部阻断、resolution 拒绝、有界诊断）；write-fault marker 同样严格 shape validation。
+4. **quarantine 容量方向错误**：正容量 delta（可能已流入）未占用 free capacity、负 delta 被乐观计入。修正为保守口径：正净流入减少 free capacity（receiver headroom 同口径），负流出不增加 free capacity；正资源 delta 不乐观计入 spendable、负流出继续计入 committed。
+5. **fault resolution 证据不足**：只凭 transactionId/digest/phase 即可解决，且可与仍存活的 active faulted handle 冲突、receipt retention 从旧 action tick 起算。重做协议：resolution 前 active handle 检查 + 当前 tick > 故障 tick + 故障后 shared observation 已建立；显式 reconciliation evidence（conclusion/observationTick/source，与 digest 匹配）；phase 拆分（action_returned_non_ok_abort_failed / action_threw_execution_unknown / executing_at_end_tick / commit 类）且 not-executed 只允许 execution-unknown 类配合 observed_not_executed 证据；resolve-as-committed 的 receipt 使用 resolution tick（完整 retention 窗口）而原 action tick 保留在 resolution tombstone（有界、幂等 already_resolved、retention 后惰性清理）。
+6. **callback 抛错被当作未执行**：当前先尝试普通 abort。改为 execution unknown 默认——不 abort、立即 faulted + write-fault marker（含有界异常诊断）+ durable quarantine + write admission 锁定后 rethrow；同 transaction 再执行 callback 零调用；只有 callback 正常返回明确非 OK 才走普通 abort（其 abort 失败也立即隔离，phase=action_returned_non_ok_abort_failed）。
+7. **reservation schema 激活顺序漏洞**：typed mutation 可直接写新 key 而 migration 只在 17 tick memory cleanup 执行——可能形成混合版本 store。建立 schema activation gate：空 store 原子初始化当前版本；legacy store 必须迁移成功后才允许 mutation（失败返回结构化拒绝、原数据不动、授权 fail closed）；gate 挂到 beginTick bootstrap 且每个 mutation 入口自检，memoryCleanup 保留为幂等兜底而非唯一路径；schema 版本升级到 v4（canonical owner token 重编码）。
+8. **owner token 仍有字段边界歧义**：`ls:<ns>:<id>` 依赖 namespace 无冒号的隐含约定。重做为真正 canonical 的长度前缀编码（`ow2:<kindCode>:<nsLen>:<namespace><id>`——token 相等当且仅当 tuple 相等，Unicode/冒号/空格/空串无歧义、长度有界、跨 tick 稳定）；identity 字段明确（kind+namespace+id；roomName 由 store key 外层表达、lifecycleRef 只是 metadata，均不参与身份）；kind-specific validation 收紧（logical-service 的 namespace 必填、非 logical-service 禁止 namespace）；migration v1/v2/v3→v4 以验证过的 entry.owner 为权威重建全部 key。
+9. **reservation mutation 权威不足**：静默 void 返回、非法输入零报告、list 返回 Memory live 引用、GC 删除损坏 entry 后恢复乐观授权。全部 mutation 改结构化结果（room/resource/amount/ttl/expiresAt 溢出/owner/schema gate/store 健康全验证；非法与 migration 失败零写入；只有实际 mutation 才 bump revision 且不重复 bump）；listProductionReservations 返回冻结深拷贝快照；GC 发现损坏 entry 不删除、置持久 corrupted 标志（显式 repair 才可清除）并使授权 fail closed。
+10. **余额完整与写入就绪不分**：authorizationSafe 为 true 时 receipt 可能已满或 quarantine slot 耗尽。新增独立 write admission readiness 视图（writeAdmission.ready/blockers）：context/commitment/migration/receipt health+slot/quarantine health+slot/unresolved quarantine/write fault/lifecycle/tick 全条件；prepare 独立复查不信任调用方读过 readiness。
+
 ## Capabilities
 
 ### New Capabilities
 
-- `empire-treasury`: 帝国国库的物理观察不可变性、三层余额语义（Observed/Projected/Committed）、带上下文查询、journal 幂等结算、对账不静默、承诺统一索引与零隐藏写入不变量；第六轮起含故障恢复（durable quarantine、显式 fault resolution、fail-closed corruption 处理）与权威完整性（typed owner 持久身份、bounded handle 生命周期、runtime input 验证、多条件 authorizationSafe）。
+- `empire-treasury`: 帝国国库的物理观察不可变性、三层余额语义（Observed/Projected/Committed）、带上下文查询、journal 幂等结算、对账不静默、承诺统一索引与零隐藏写入不变量；第六轮起含故障恢复（durable quarantine、显式 fault resolution、fail-closed corruption 处理）与权威完整性（typed owner 持久身份、bounded handle 生命周期、runtime input 验证、多条件 authorizationSafe）；第七轮起含 quarantine 闭环（全局 write blocker、fault-slot 预留、版本化健康契约、保守容量方向）、post-observation fault resolution 证据协议、callback-throw execution-unknown 状态机、reservation schema activation gate 与 canonical owner identity v4、结构化 reservation mutation 与独立 write admission readiness。
 
 ### Modified Capabilities
 

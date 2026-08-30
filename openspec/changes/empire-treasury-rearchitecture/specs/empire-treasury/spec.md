@@ -559,3 +559,94 @@ commitment 索引必须（MUST）严格验证枚举字段（task status、blocke
 
 - **WHEN** 存在 write fault、receipt unhealthy、lifecycle closed（endTick 后）、migration 未完成或 quarantine unresolved
 - **THEN** authorizationSafe=false 且 authorizationBlockers 指出主因；observed/projected 等数量字段照常返回供观察
+
+### Requirement: unresolved quarantine 为全局 write blocker（第七轮）
+
+存在任何 unresolved quarantine、quarantine store overflow 或 corruption 时，一切新的 Game write callback 必须（MUST）被阻止在开始之前：新 transaction 的 prepare 在 callback 前被拒（同 id 已 quarantined 的返回 transaction_quarantined，其余返回明确的 quarantine/write-admission blocker）；已结算 transaction 的幂等查询仍可（MAY）返回 already_settled。write-fault marker 不得（MUST NOT）是唯一锁来源：marker 被解决但仍有其它 unresolved quarantine 时，write admission 与 readiness 必须（MUST）继续阻断。overflowed 状态不得（MUST NOT）通过简单删除 marker 恢复。
+
+#### Scenario: 双 quarantine 逐个解决期间持续阻断
+
+- **WHEN** A、B 两笔 quarantine 共存，先解决 A（root marker 随之清除）后新 transaction C prepare
+- **THEN** C 在 callback 前被拒且 callback 零调用；解决 B 后 write admission 与 readiness 恢复
+
+### Requirement: prepare 预留 durable quarantine fault slot（第七轮）
+
+prepare 成功前必须（MUST）保证最坏情况下仍有空间持久化该 transaction 的 quarantine：持久 quarantine 数 + active prepared 数达到上限时，prepare 必须（MUST）在 Game callback 之前拒绝。正常 commit 或确认 abort 后 fault slot 必须（MUST）释放；transaction fault/execution unknown 时预留 slot 必须（MUST）原子转换为持久 entry；不得（MUST NOT）出现"达到上限后只置 overflowed 但不保存 entry"的路径。legacy overflowed 标志必须（MUST）fail closed 且只有显式 repair 可清除。
+
+#### Scenario: 63 条 quarantine + 1 条 prepared 后拒绝新 prepare
+
+- **WHEN** 持久 quarantine 已有 63 条且存在 1 条 active prepared，再 prepare 新 transaction
+- **THEN** 新 prepare 在 callback 前被拒；abort/commit 释放 slot 后可恢复；fault 将 slot 转换为持久 entry 且 transactionId 可查
+
+### Requirement: quarantine 版本化与健康契约（第七轮）
+
+quarantine store 必须（MUST）是版本化持久权威：version、entryCount 元数据与 entries 形状（key 编码与 transactionId 一致、transactionId/digest 合法、tick 安全整数、phase/locationKind/resource 枚举、delta 非零安全整数、聚合不溢出）在 global reset 后首次 load 全量验证，后续读取使用 heap health cache。损坏时必须（MUST）fail closed：原数据不删、新 prepare 全部阻断、authorization/write readiness 为 false、fault resolution 拒绝、提供有界诊断。不得（MUST NOT）在未验证 store 上直接聚合。write-fault marker 同样必须（MUST）严格 shape validation，损坏 marker 不得（MUST NOT）被当作"没有 fault"。canonical posting 事实必须（MUST）单一持久来源，容量占用由其派生（或双字段严格一致校验）。
+
+#### Scenario: quarantine store 损坏 fail closed
+
+- **WHEN** entries 为 null、version 未知、delta 非法、resource/location 非法或聚合溢出
+- **THEN** 结构化 fail closed：新 prepare 拒绝（callback 零调用）、readiness false、resolution 拒绝、原数据保留
+
+### Requirement: quarantine 资源与容量保守方向（第七轮）
+
+unresolved 负资源 delta（可能已流出）必须（MUST）继续占用对应资源；unresolved 正资源 delta（可能已流入）不得（MUST NOT）乐观计入 spendable；quarantine 不进入 committed projection/journal。对某 location 的 unresolved 正净容量 delta 必须（MUST）减少 free capacity（含 receiver headroom 口径）；负净容量 delta 不得（MUST NOT）增加 free capacity；多资源 posting 按 location 净额聚合。
+
+#### Scenario: 容量方向
+
+- **WHEN** quarantine 含 +1000 流入 posting（同 location）与另一条 -500 流出 posting
+- **THEN** 该 location free capacity 因 +1000 减少而不因 -500 增加；observed/projected 基础数值不被 quarantine 冒充修改
+
+### Requirement: callback 抛异常为 execution unknown（第七轮）
+
+action callback 一旦抛出异常，默认必须（MUST）视为 execution unknown：不得（MUST NOT）执行普通安全 abort；transaction 必须（MUST）进入 durable quarantine（receipt/fault slot/identity 保留）；write admission 必须（MUST）锁定；原始异常信息保留为有界诊断（不持久化完整 Error 对象）后 rethrow 或返回结构化 execution-unknown 结果。同 transaction 再执行时 callback 必须（MUST）零调用。只有 callback 正常返回明确非 OK 才可（MAY）走普通 abort；其 abort 失败必须（MUST）立即隔离（phase 与 callback throw 区分）。phase 枚举必须（MUST）区分 action_returned_non_ok_abort_failed / action_threw_execution_unknown / executing_at_end_tick / commit 类，且 not-executed resolution 的允许性按此区分。
+
+#### Scenario: callback 抛错进入 execution unknown
+
+- **WHEN** callback 内产生模拟副作用计数后抛出 Error
+- **THEN** 副作用计数只增加一次；transaction 进入 quarantine 且 tentative 不释放为可重用资产；下一次执行 callback 零调用；无证据时 resolve-as-not-executed 被拒
+
+### Requirement: post-observation fault resolution 证据协议（第七轮）
+
+fault resolution 不得（MUST NOT）在 transaction 仍属于当前 active handle registry 时执行；不得（MUST NOT）在当前 tick 不大于故障 tick、或尚未建立故障后 shared observation 时执行。resolution 必须（MUST）携带显式 reconciliation evidence（结论、post-action observation tick、证据来源）并与 transaction/digest 匹配：evidence 观察早于或等于故障 tick、或 stale/非法时拒绝；still uncertain 保持 quarantine 不解锁；commit 类 phase 不允许 not-executed resolution（除非更强显式证据）。resolve-as-committed 必须（MUST）以 resolution/settlement 当前 tick 写 receipt（完整 retention 窗口），原 action tick 保留用于审计但不缩短 retention；not-executed resolution 应（SHOULD）拥有有界幂等 tombstone 使重复调用返回 already_resolved。resolution 必须（MUST）幂等且不得（MUST NOT）在 endTick 重新 quarantine 刚解决的 transaction。
+
+#### Scenario: 延迟 5001 tick 后 resolve-as-committed
+
+- **WHEN** fault 后延迟超过 5000 tick 才执行 resolve-as-committed
+- **THEN** receipt 使用 resolution tick（下一 tick cleanup 不删除）；action tick 保留在审计记录；重复调用幂等
+
+#### Scenario: active handle 与证据校验
+
+- **WHEN** 对仍存在于当前 service active registry 的 faulted handle 执行 resolution，或 evidence 不匹配/观察早于故障 tick
+- **THEN** resolution 拒绝；quarantine/marker/receipt 不变；下一 tick 建立 post-observation 后合法 resolution 可完成且 endTick 不重新 quarantine
+
+### Requirement: reservation schema 激活先于一切 mutation（第七轮）
+
+任何 reservation mutation（typed 与 deprecated adapter）之前必须（MUST）完成 schema activation：空 store 原子初始化为当前版本；legacy store 必须先迁移成功才允许 mutation；migration 失败时 mutation 必须（MUST）返回结构化拒绝（零写入）且 authorization/write readiness fail closed。不得（MUST NOT）出现混合版本 store（legacy key 与新 key 并存、version 缺失 + 新 key、migration 运行中继续 mutation）。schema 版本必须（MUST）升级到 canonical owner token 版本，迁移覆盖 legacy v1 / owner v2 / token v3 / 新 canonical 版本，以验证过的 entry.owner 为权威重建全部 key 并检测碰撞。
+
+#### Scenario: bootstrap activation 与失败拒绝
+
+- **WHEN** 空 store 首次 mutation、legacy store mutation 前、migration 失败后 mutation
+- **THEN** 空店自动激活新版本；legacy 先迁移成功后 mutation 生效且无混合 key；失败时 mutation 结构化拒绝、原数据不动、授权 fail closed；memoryCleanup 不是唯一激活路径
+
+### Requirement: canonical owner identity 与 mutation 权威（第七轮）
+
+owner 持久 identity 的比较键与持久 key 必须（MUST）使用同一套无歧义 canonical 编码（字段边界无歧义、kind/namespace/id 参与身份、长度有界、同输入稳定、不同 tuple 于已知边界不碰撞）；identity 与 metadata 必须明确区分（roomName 由 store key 外层表达、lifecycleRef 不参与身份）。kind-specific validation 必须（MUST）一致（logical-service namespace 必填、非 logical-service 禁止 namespace）。mutation API 必须（MUST）返回结构化结果并验证 roomName/resource/amount/ttl/expiresAt 溢出/owner/schema gate；非法输入与 migration 失败零写入；实际 mutation 成功才 bump revision 且不重复 bump；list 必须（MUST）返回冻结快照（外部修改不影响 Memory）；GC 遇损坏 entry 不得（MUST NOT）删除后恢复乐观授权（置持久 corrupted 标志 fail closed，显式 repair 解除）。
+
+#### Scenario: 冒号边界与身份区分
+
+- **WHEN** namespace "a" + id "b:c" 与 namespace "a:b" + id "c"（及同 id 不同 kind/namespace）
+- **THEN** canonical token 互不相同且 store key 不碰撞；排除比较使用同一 canonical identity
+
+#### Scenario: mutation 验证与快照
+
+- **WHEN** NaN/Infinity/零/负 amount、非法 resource、NaN/负 TTL、expiresAt 溢出、修改 list 返回值
+- **THEN** 结构化拒绝且零写入、revision 只在实际 mutation 时增加一次；修改 list 快照不影响 Memory
+
+### Requirement: write admission readiness 与余额完整分立（第七轮）
+
+Treasury 对外必须（MUST）区分"余额视图完整"（authorizationSafe）与"当前确实允许开始新的 Game write"（write admission readiness）：readiness 为 false 当 receipt 已满、quarantine slot 不足、schema 未激活、store 损坏、存在 unresolved quarantine/write fault、lifecycle closed、tick stale、context/owner/commitment 非法等任一条件；blockers 必须（MUST）明确指出原因；readiness 判定不得（MUST NOT）归零余额数值字段；prepare 必须（MUST）独立复查全部条件，不得只信调用方读过 readiness。
+
+#### Scenario: readiness 全条件
+
+- **WHEN** clean 系统查询 readiness；再分别构造 receipt 满载、quarantine slot 不足、unresolved quarantine、migration incomplete、quarantine/writeFault 损坏
+- **THEN** clean 时 ready=true；各故障场景 ready=false 且 blockers 指出对应原因；数值字段不受影响
