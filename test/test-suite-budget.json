@@ -1,18 +1,18 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "6c60e92",
-    "suites": 208,
-    "tests": 913,
-    "passed": 913,
+    "commit": "16190b8",
+    "suites": 210,
+    "tests": 964,
+    "passed": 964,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 208,
-    "tests": 913,
-    "passed": 913,
+    "suites": 210,
+    "tests": 964,
+    "passed": 964,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -1030,7 +1030,7 @@
     },
     "src/runtime/treasury/treasuryPreparedHandle.test.ts": {
       "baseline": 0,
-      "budget": 11,
+      "budget": 12,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryWriteFault.test.ts": {
@@ -1040,27 +1040,37 @@
     },
     "src/runtime/treasury/treasurySafeExecute.test.ts": {
       "baseline": 0,
-      "budget": 7,
+      "budget": 23,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryTypedOwnerMigration.test.ts": {
       "baseline": 0,
-      "budget": 13,
+      "budget": 19,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryCommitmentCompleteness.test.ts": {
       "baseline": 0,
-      "budget": 8,
+      "budget": 19,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryWriteArchitecture.test.ts": {
       "baseline": 0,
-      "budget": 5,
+      "budget": 7,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryWriteAdmissionPerformance.test.ts": {
       "baseline": 0,
       "budget": 6,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryQuarantine.test.ts": {
+      "baseline": 0,
+      "budget": 6,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryFaultResolution.test.ts": {
+      "baseline": 0,
+      "budget": 9,
       "tier": "high-risk"
     }
   }
