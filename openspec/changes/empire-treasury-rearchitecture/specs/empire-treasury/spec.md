@@ -23,7 +23,44 @@
 
 国库必须（MUST）区分 Observed（观察到的物理资产）、Projected（Observed + 本 tick 已被 Game 接受的动作增量）与 Committed（已被任务/预留/合同占用但未执行）。计划、reservation 与 pending task 不得（MUST NOT）修改 Observed。只有调用方在 Game API 返回成功后显式登记的已接受 transaction 才产生投影增量，且每笔必须（MUST）携带幂等 transactionId 与可追踪 kind/source。
 
-transaction 必须（MUST）由一或多腿 posting 原子表达：全部 posting 整体验证通过后一次性写入 journal/overlay/receipt；任一 posting 非法时整笔回滚，不得（MUST NOT）出现部分写入。posting 的 delta 必须（MUST）为非零有限整数；resource 必须（MUST）合法；交易后资源量与容量不得（MUST NOT）越界（负量拒绝、超物理容量拒绝，含同 tick 多笔累计口径）。
+transaction 必须（MUST）由一或多腿 posting 原子表达：全部 posting 整体验证通过后一次性写入 journal/overlay/receipt；任一 posting 非法时整笔回滚，不得（MUST NOT）出现部分写入。posting 的 delta 必须（MUST）为非零安全整数（NaN/±Infinity/0/非整数/非安全整数拒绝；同 key 多腿合并结果溢出安全整数拒绝）；resource 必须（MUST）合法；全部 postings 合并后净值为零的 no-op transaction 必须（MUST）整笔拒绝；交易后资源量与容量不得（MUST NOT）越界（负量拒绝、超物理容量拒绝、结果须为安全整数，含同 tick 多笔累计口径）。
+
+真实 Game 写动作的执行必须（MUST）支持两阶段协议：prepare 在动作执行前完成全部 Treasury 侧验证并预留 receipt 容量槽（有界 pending，其余 admission 计入预留数）；Game API 失败 → abort 释放（零状态）；成功 → commit 重验物理后原子写入，兑现不得（MUST NOT）再因容量/版本/兼容性被拒；prepare→commit 期间世界变化导致重验失败时必须（MUST）拒绝（prepare_invalidated）且零写入。prepared handle 是 tick 内资源：endTick/beginTick 全部作废，跨 tick 必须（MUST）重新 prepare；重复 prepare 同 id 幂等；重复 commit 返回 already_settled；已 commit 不得（MUST NOT）被 abort。
+
+#### Scenario: 两阶段 prepare→commit 成功兑现
+
+- **WHEN** prepare 成功后真实动作成功并 commit
+- **THEN** journal/overlay/receipt 全部生效；prepare 本身零状态
+
+#### Scenario: abort 零状态
+
+- **WHEN** prepare 成功后 Game API 失败并 abort
+- **THEN** journal/overlay/receipt 零写入，预留释放，同 id 可重新 prepare
+
+#### Scenario: prepare 预留容量槽
+
+- **WHEN** prepare 成功后其他 transaction 把 receipt store 填满硬容量
+- **THEN** 该 prepared handle 的 commit 兑现仍成功（槽位已预留，不因容量被拒）
+
+#### Scenario: commit 重验失败零写入
+
+- **WHEN** prepare 之后其他 transaction 推进 overlay 使 prepare 基线不再可行，然后 commit
+- **THEN** 拒绝（prepare_invalidated）且零写入，可审计计数
+
+#### Scenario: 跨 tick prepared handle 失效
+
+- **WHEN** prepare 后进入下一 tick（endTick/beginTick 边界）再 commit
+- **THEN** 拒绝（unknown_prepare），必须重新 prepare
+
+#### Scenario: no-op transaction 拒绝
+
+- **WHEN** 一笔 transaction 的全部 postings 合并后净值为零（完全抵消）
+- **THEN** 整笔拒绝（no_op_transaction），不占用幂等/容量语义
+
+#### Scenario: 非安全整数与合并溢出拒绝
+
+- **WHEN** posting delta 为非安全整数（如 2^53），或同 key 多腿合并结果溢出安全整数
+- **THEN** 整笔拒绝（invalid_posting_delta），零写入
 
 #### Scenario: 投影不回写观察
 
@@ -65,13 +102,19 @@ transaction 必须（MUST）由一或多腿 posting 原子表达：全部 postin
 - **WHEN** 本 tick 已调用 endTick 后再登记 transaction
 - **THEN** 登记被拒绝（tick_closed），下一 tick 恢复正常
 
-### Requirement: 幂等 receipt 最小持久化
+### Requirement: 幂等 receipt 最小持久化（version 3）
 
 国库必须（MUST）将 transaction 幂等 receipt 持久化到 Memory（仅 transactionId → 结算 tick 的最小映射），使跨 tick 与 global reset 后的重放仍被拒绝。不得（MUST NOT）持久化 overlay、observation、journal 或任何物理事实副本。
 
-receipt store 必须（MUST）满足安全驱逐契约：只自动回收超过 retention 窗口的条目；retention 窗口内的 receipt 绝不（MUST NOT）因容量压力被驱逐——未过期条目达硬容量且无过期可回收时，新 transaction 必须（MUST）在写入任何状态之前被拒绝（receipt_capacity_exhausted，独立指标可审计）；已结算 id 的重放必须（MUST）仍优先返回 already_settled，store 满不得改变幂等结果。admission 必须（MUST）O(1)（entryCount 计数），不得（MUST NOT）在每笔 transaction 上全表扫描。
+store 格式必须（MUST）为 version 3：settled key 一律 `"t:"+transactionId` 前缀编码（transactionId 字符集允许 `__proto__`/`constructor` 等危险字面量，裸键赋值普通对象会触发原型污染语义；前缀编码后恒为普通自有键）；entryCount 计数（admission 快路径 O(1) 权威，加载时与实际自有键数校验）；nextExpiryTick 过期调度元数据（空表 null；非空 = min(settledAt)+retention+1）。
 
-settled key 必须（MUST）前缀编码（"t:"+transactionId）——transactionId 字符集允许 `__proto__`/`constructor` 等危险字面量，裸键赋值普通对象会触发原型污染语义。版本变更必须（MUST）提供已知版本无损迁移（transactionId 与结算 tick 保留、只执行一次、指标记录）；未知/更高版本或 entryCount 与实际条目数不符（手工损坏）时必须（MUST）fail closed：原数据保留、拒绝一切新登记、有界诊断输出，不得（MUST NOT）删除后冷启动。
+安全驱逐契约必须（MUST）保持：只自动回收超过 retention 窗口**且 value 完整验证通过**的条目；retention 窗口内的 receipt 绝不（MUST NOT）因容量压力被驱逐——未过期条目达硬容量且未到过期点时，新 transaction 必须（MUST）在写入任何状态之前被 O(1) 拒绝（receipt_capacity_exhausted，独立指标可审计，不做全表扫描）；已结算 id 的重放必须（MUST）仍优先返回 already_settled，store 满不得改变幂等结果。
+
+settled value 必须（MUST）是 [0, Game.time] 内的安全整数。任何损坏 value（非 number/NaN/±Infinity/非整数/非安全整数/负数/未来 tick）不得（MUST NOT）在迁移中被跳过、不得（MUST NOT）在 cleanup 中被删除，必须（MUST）使整个 admission 进入 fail-closed（receipt_store_incompatible）：原数据不动、拒绝一切新 transaction、有界诊断与指标，直至显式管理修复；已能可靠识别的旧 transaction（自有键存在且 value 有效）查询仍必须（MUST）返回 already_settled——store 损坏不得让幂等保证期内的 id 被遗忘；value 损坏的 id 本身无法可靠判断，必须（MUST）整体阻断不乐观放行。
+
+版本迁移必须（MUST）无损且原子：v1（裸键）的 raw key **原样**作为 transactionId 输入安全编码（`abc` 与 `t:abc` 是两个不同且都合法的 transactionId，decode 再 encode 会碰撞）；v2（前缀键 + entryCount）补 nextExpiryTick；迁移在临时结构完成全部校验（transactionId 格式 / settled tick 完整有效性 / 编码碰撞防御）并自检（own key 数 / entryCount / 存储键格式 / 每个 settled tick / 元数据一致性）通过后一次性替换原 store；发现碰撞、非法 key 或非法 value 时原 store 保持不变并 fail closed；迁移只执行一次；未知/更高版本 fail closed（原数据保留、不冷启动重建）。
+
+过期调度必须（MUST）避免正常路径全表扫描：Game.time 未到 nextExpiryTick 时 beginTick 清理零扫描、满容 admission 直接 O(1) 拒绝（不反复全表扫描）；到达过期点执行一次清理并重算 nextExpiryTick；插入/迁移/清理后元数据必须（MUST）保持一致；global reset 后对元数据做一次完整验证，损坏即 fail closed 不放宽容量。必须（MUST）提供确定性操作计数（receipt full scans / admission fast-path / admission full-store blocked / expiry cleanup scans / store incompatible / migration count / slots remaining / next expiry tick），并以可运行的次数断言测试（不得只靠源码字符串检查证明性能）。
 
 #### Scenario: global reset 后重放被拒
 
@@ -85,17 +128,37 @@ settled key 必须（MUST）前缀编码（"t:"+transactionId）——transactio
 
 #### Scenario: 过期回收后容量恢复
 
-- **WHEN** 满容 store 中的过期条目被回收（beginTick 清理或满容 admission 低频路径）
-- **THEN** 新 transaction 可再次接纳
+- **WHEN** 满容 store 中的过期条目被回收（到达 nextExpiryTick 后的一次清理）
+- **THEN** 新 transaction 可再次接纳，过期点被重算
 
-#### Scenario: v1 无损迁移
+#### Scenario: v1 迁移不碰撞
 
-- **WHEN** Memory 中存在 v1（裸键）receipt store 且首次加载
-- **THEN** 无损迁移到 v2（前缀键 + entryCount）：transactionId 与结算 tick 保留、迁移只执行一次并计数、迁移后幂等立即生效
+- **WHEN** v1（裸键）store 同时含 `abc` 与 `t:abc`（不同且都合法的 transactionId）及 `__proto__`/`constructor` 等危险字面量
+- **THEN** 迁移到 v3 后分别成为不同的编码存储键，全部 transactionId 与结算 tick 无损、都能通过原 id 命中幂等、迁移只执行一次并计数
+
+#### Scenario: v2 迁移补元数据
+
+- **WHEN** Memory 中存在 v2（前缀键 + entryCount）store
+- **THEN** 无损迁移到 v3 并补齐 nextExpiryTick，幂等立即生效
+
+#### Scenario: 迁移遇损坏 fail closed
+
+- **WHEN** v1/v2 store 含损坏 settled tick（NaN/负数/未来 tick）或非法 transactionId key
+- **THEN** 原 store 保持不变、拒绝一切新登记（receipt_store_incompatible），不静默跳过或删除任何条目
+
+#### Scenario: v3 value 损坏整体阻断但可靠 id 仍幂等
+
+- **WHEN** v3 store 某条目 value 损坏
+- **THEN** 新 transaction 与损坏 id 均被拒绝（receipt_store_incompatible）；value 仍有效的旧 id 查询返回 already_settled；原数据不被修正或删除
+
+#### Scenario: 元数据损坏 fail closed
+
+- **WHEN** entryCount 与实际自有键数不符，或 nextExpiryTick 与实际 min(settledAt)+retention+1 不一致
+- **THEN** fail closed（不放宽容量、不静默重建），原数据保留
 
 #### Scenario: 未知版本 fail closed
 
-- **WHEN** receipt store 版本未知/更高，或 entryCount 与实际条目数不符（手工损坏）
+- **WHEN** receipt store 版本未知/更高
 - **THEN** 拒绝一切新登记（receipt_store_incompatible）、原数据不被删除、fail-closed 计数可审计
 
 #### Scenario: 危险字面量 id 的原型污染防护
@@ -103,13 +166,18 @@ settled key 必须（MUST）前缀编码（"t:"+transactionId）——transactio
 - **WHEN** transactionId 为 `__proto__`/`constructor` 等合法但危险的字面量
 - **THEN** 经 key 编码后只产生普通自有属性键，幂等读写命中且不污染原型
 
+#### Scenario: 过期调度零扫描（可运行操作计数）
+
+- **WHEN** Game.time 未到 nextExpiryTick 时执行 beginTick 清理或满载下反复 admission
+- **THEN** 全表扫描计数不增长（满容拒绝 O(1)）；到达过期点后恰好一次清理扫描并重算过期点
+
 ### Requirement: 带上下文的余额查询
 
 国库不得（MUST NOT）提供无上下文的可用量入口。任何可用量查询必须（MUST）声明资源、房间范围、位置范围、是否含投影、是否计入 incoming、是否扣除 outgoing/reservation 以及策略保留量。spendable 必须（MUST）非负；当物理-承诺-保留之差为负时必须（MUST）显式置位 overcommitted 而非静默钳制。stale observation 不得（MUST NOT）用于即时授权。
 
-查询必须（MUST）支持 owner 声明（holderId + roomName + scope）：holder 必须（MUST）真实存在（运行时解析）且声明房间与真实归属一致，否则 fail closed（spendable=0、overcommitted=true），不得（MUST NOT）返回乐观可用量；验证通过后只在该归属房间排除自己的 production reservation——查询多房间时其他房间照常全额扣除，其他 owner 一律照常扣除，不得（MUST NOT）仅凭知道 holderId 字符串就排除对方。projected capacity 必须（MUST）与 observed capacity 分离暴露，且随 posting 推进（流入增 used 减 free、流出反向、多资源聚合）。
+查询必须（MUST）支持 typed owner 声明（holderId + holderKind: "game-object" | "logical" + roomName + scope）：holderId 的两种形态并存（真实 Game object id 与 `nuker:`/`synthesis:` 等逻辑名）——运行时必须（MUST）以 typed 统一解析入口识别两种形态（逻辑名解析内嵌对象/房间归属，不得统一按 Game object id 解释而把逻辑名 holder 误判 orphan 导致 committed 低估）；holder 必须真实存在、声明 holderKind 必须（MUST）与运行时解析类型一致（不得仅凭知道 holderId 字符串冒充其他类型 owner）、声明房间必须与真实归属一致，任一不满足即 fail closed（spendable=0、overcommitted=true），不得（MUST NOT）返回乐观可用量；验证通过后只在该归属房间排除自己的 production reservation——查询多房间时其他房间照常全额扣除，其他 owner 一律照常扣除。projected capacity 必须（MUST）与 observed capacity 分离暴露，且随 posting 推进（流入增 used 减 free、流出反向、多资源聚合）。
 
-查询输入必须（MUST）fail-closed 规范化：非法资源、非法/重复房间、非法/重复位置（重复会双倍累计，绝不静默去重）、非有限非负 withhold（NaN/Infinity/负数）一律返回保守全零视图（contextStatus=invalid_fail_closed）并计数，不得（MUST NOT）报乐观可用量。
+查询输入必须（MUST）fail-closed 规范化：非法资源、非法/重复/**非管辖（unknown 或 unowned）**房间、**空 rooms / 空 locations scope**、非法/重复位置（重复会双倍累计，绝不静默去重）、**非布尔开关字段**（0/"true" 等真值不得静默当 true）、非有限非负 withhold（NaN/Infinity/负数）一律返回保守全零视图（contextStatus=invalid_fail_closed）并计数，不得（MUST NOT）报乐观可用量。
 
 #### Scenario: spendable 非负且超卖可见
 
@@ -133,12 +201,22 @@ settled key 必须（MUST）前缀编码（"t:"+transactionId）——transactio
 
 #### Scenario: owner 非法 fail closed
 
-- **WHEN** owner 声明 holderId 为空或 scope 未知
+- **WHEN** owner 声明 holderId 为空、holderKind 非法或 scope 未知
 - **THEN** spendable=0 且 overcommitted=true（observed 物理事实仍如实返回）
+
+#### Scenario: holderKind 冒充拒绝
+
+- **WHEN** owner 声明 holderKind="game-object" 但 holderId 运行时解析为 logical 形态（或反之）
+- **THEN** fail closed（spendable=0、overcommitted=true）——不得仅凭知道 holderId 字符串冒充其他类型 owner
+
+#### Scenario: logical holder 不被误判 orphan
+
+- **WHEN** production reservation 的 holderId 为 `nuker:<id>:<resource>` 等逻辑名且内嵌对象真实存在
+- **THEN** 该预留照常计入 committed（不 orphan 排除、不低估承诺）；只有确证不存在的 holder 才计为孤儿
 
 #### Scenario: 查询输入非法 fail closed
 
-- **WHEN** 查询携带非法资源、重复房间/位置或 NaN withhold
+- **WHEN** 查询携带非法资源、重复房间/位置、非管辖（unknown/unowned）房间、空 rooms/locations scope、非布尔开关字段（如 allowProjected=1）或 NaN withhold
 - **THEN** 返回保守全零视图（contextStatus=invalid_fail_closed）并计数 queryInvalidContexts
 
 #### Scenario: projected capacity 与 observed 分离
@@ -222,7 +300,7 @@ settled key 必须（MUST）前缀编码（"t:"+transactionId）——transactio
 
 ### Requirement: 共享快照与 fresh epoch 隔离
 
-国库必须（MUST）支持独立 fresh observation scope（如 market-fresh）。fresh 构建不得（MUST NOT）污染或替换 shared observation 缓存，也不得（MUST NOT）复用共享 snapshot 供需要新鲜读取的安全路径使用。epoch 注册表必须（MUST）保存每个 epoch 的 exact immutable observation：transaction 物理可行性验证必须（MUST）使用 decision 指向的那一次观察（数量/容量/结构存在性），不得（MUST NOT）回退 shared observation，同时必须（MUST）叠加本 tick overlay（跨 epoch 共享的已接受 intents）防同 tick 超卖。endTick 后必须（MUST NOT）再发行 fresh epoch。
+国库必须（MUST）支持独立 fresh observation scope（如 market-fresh）。fresh 构建不得（MUST NOT）污染或替换 shared observation 缓存，也不得（MUST NOT）复用共享 snapshot 供需要新鲜读取的安全路径使用。epoch 注册表必须（MUST）保存每个 epoch 的 exact immutable observation：transaction 物理可行性验证必须（MUST）使用 decision 指向的那一次观察（数量/容量/结构存在性），不得（MUST NOT）回退 shared observation，同时必须（MUST）叠加本 tick overlay（跨 epoch 共享的已接受 intents）防同 tick 超卖。endTick 后必须（MUST NOT）再发行 fresh epoch。每 tick fresh 发行数必须（MUST）有硬上限（fresh 观察是全房间扫描，无上限即无界 CPU 风险）：超限拒绝并计数，下一 tick 恢复额度。epochSeq 必须（MUST）单点递增——每发行一个 epoch 恰好 +1（shared 与 fresh 连续编号无空洞），与实现注释一致。
 
 #### Scenario: fresh 构建不影响 shared 缓存
 
@@ -243,6 +321,16 @@ settled key 必须（MUST）前缀编码（"t:"+transactionId）——transactio
 
 - **WHEN** 本 tick 已 endTick 后调用 beginFreshObservation
 - **THEN** 返回 null（不再发行 fresh epoch）
+
+#### Scenario: fresh 每 tick 数量上限
+
+- **WHEN** 本 tick fresh 发行数已达硬上限后继续调用 beginFreshObservation
+- **THEN** 返回 null 并计数（freshEpochLimitRejections）；下一 tick 额度恢复
+
+#### Scenario: epochSeq 单点递增无空洞
+
+- **WHEN** 依次发行 shared、多个 fresh、下一 tick shared
+- **THEN** epochSeq 连续 +1（1、2、3…），无重复递增造成的空洞
 
 ### Requirement: Treasury Shadow 零行为写入
 
