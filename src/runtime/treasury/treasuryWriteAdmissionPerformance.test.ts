@@ -23,6 +23,14 @@ import {
   treasuryQuarantineOutflowTotals,
 } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentCounters } from "@/runtime/treasury/intents";
+import {
+  buildTreasuryActionContract,
+  executeTreasuryActionContract,
+  makeTreasuryTestTransferAdapter,
+  readTreasuryActionContractCounters,
+  registerTreasuryActionAdapter,
+  unregisterTreasuryActionAdapterForTest,
+} from "@/runtime/treasury/actionContracts";
 import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
@@ -379,3 +387,93 @@ describe("第七轮：quarantine blocker 与 fault-slot admission 的确定性�
     void bumpTreasuryCommitmentRevision; // import 引用（无操作）
   });
 });
+
+  it("第九轮：bundle 预验证与 token/posting 数线性——多资源执行不产生任何全表扫描", () => {
+    const rooms = installRooms(buildRoomSpecs());
+    const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    service.beginTick();
+    registerTreasuryActionAdapter(makeTreasuryTestTransferAdapter());
+    // 单资源 bundle（1 token、2 postings）与多资源 bundle（2 token、3
+    // postings）各执行 8 次：预验证复杂度与 token/posting 数线性，零全扫。
+    for (let index = 0; index < 3; index += 1) {
+      const built = buildTreasuryActionContract(service, {
+        actionKind: "test.transfer",
+        transactionId: `perf_bundle_single${String(index)}`,
+        args: {
+          fromRoom: "W1N57",
+          fromLocation: "storage",
+          toRoom: "W1N57",
+          toLocation: "terminal",
+          resource: RESOURCE_ENERGY,
+          amount: 100,
+          outcome: "ok",
+        },
+      });
+      expect(built.status).toBe("built");
+      if (built.status !== "built") return;
+      const authorized = service.authorizeTreasuryActionContract(built.contract);
+      expect(authorized.status).toBe("authorized");
+      if (authorized.status !== "authorized") return;
+      expect(executeTreasuryActionContract(service, { contract: built.contract, authorization: authorized.bundle }).status).toBe("executed_committed");
+    }
+    for (let index = 0; index < 3; index += 1) {
+      const built = buildTreasuryActionContract(service, {
+        actionKind: "test.transfer",
+        transactionId: `perf_bundle_multi${String(index)}`,
+        args: {
+          fromRoom: "W1N57",
+          fromLocation: "storage",
+          toRoom: "W1N57",
+          toLocation: "terminal",
+          resource: "U",
+          amount: 100,
+          feeFromRoom: "W1N57",
+          feeAmount: 10,
+          outcome: "ok",
+        },
+      });
+      expect(built.status).toBe("built");
+      if (built.status !== "built") return;
+      const authorized = service.authorizeTreasuryActionContract(built.contract);
+      expect(authorized.status).toBe("authorized");
+      if (authorized.status !== "authorized") return;
+      expect(executeTreasuryActionContract(service, { contract: built.contract, authorization: authorized.bundle }).status).toBe("executed_committed");
+    }
+    expect(readTreasuryIntentCounters().fullScans).toBe(0);
+    expect(readTreasuryQuarantineCounters().fullScans).toBe(0);
+    expect(readTreasuryActionContractCounters().built).toBe(6);
+    unregisterTreasuryActionAdapterForTest("test.transfer");
+  });
+
+  it("第九轮：contract-first 授权在大量既有 receipt 下零扫描（派生授权 O(tokens)）", () => {
+    const service = makeService();
+    service.beginTick();
+    // 预置 512 条 receipt（历史结算规模）。
+    const { commitSettledReceipt } = jest.requireActual("@/runtime/treasury/receipts") as typeof import("@/runtime/treasury/receipts");
+    for (let index = 0; index < 512; index += 1) {
+      expect(commitSettledReceipt(`perf_hist${String(index)}`, Game.time).status).toBe("written");
+    }
+    registerTreasuryActionAdapter(makeTreasuryTestTransferAdapter());
+    const scansBefore = readTreasuryIntentCounters().fullScans + readTreasuryQuarantineCounters().fullScans;
+    for (let index = 0; index < 16; index += 1) {
+      const built = buildTreasuryActionContract(service, {
+        actionKind: "test.transfer",
+        transactionId: `perf_cf_auth${String(index)}`,
+        args: {
+          fromRoom: "W1N57",
+          fromLocation: "storage",
+          toRoom: "W1N57",
+          toLocation: "terminal",
+          resource: RESOURCE_ENERGY,
+          amount: 100,
+          outcome: "ok",
+        },
+      });
+      expect(built.status).toBe("built");
+      if (built.status !== "built") return;
+      const authorized = service.authorizeTreasuryActionContract(built.contract);
+      expect(authorized.status).toBe("authorized");
+    }
+    expect(readTreasuryIntentCounters().fullScans + readTreasuryQuarantineCounters().fullScans).toBe(scansBefore);
+    unregisterTreasuryActionAdapterForTest("test.transfer");
+  });
