@@ -82,6 +82,36 @@ export function treasuryOwnerIdentityKey(owner: TreasuryOwnerIdentity): string {
   return `${owner.kind}\u0000${owner.id}\u0000${owner.namespace ?? ""}`;
 }
 
+/** ownerToken 的 kind 前缀注册表（不同 kind 起始前缀互不相同 ⇒ token 永不跨 kind 碰撞）。 */
+const OWNER_KIND_TOKEN_PREFIXES: Readonly<Record<TreasuryReservationOwnerKind, string>> = {
+  "game-object": "go",
+  "logical-service": "ls",
+  task: "tk",
+  contract: "ct",
+  "legacy-unresolved": "lu",
+};
+
+/**
+ * 持久 ownerToken（第六轮）：完整 typed identity 的无歧义编码——
+ * `<kind 前缀>:<namespace 段(仅 logical-service)>:<id>`。
+ *
+ * 唯一性论证：token 以 kind 前缀开头且各 kind 前缀互不相同，不同 kind 的
+ * token 起始即不同；logical-service 的 namespace 段来自本仓库注册表（不含
+ * 冒号），token 边界无歧义；id 段可含任意字符（含冒号），不影响 token 间
+ * 的两两不等性（id 是尾段，token 相等 ⇔ 各前缀段与尾段完全一致）。
+ * 该 token 参与 reservation store key——同 id 不同 kind / 不同 namespace 的
+ * owner 由此在持久层彻底分离，绝不再互相覆盖。
+ */
+export function treasuryReservationOwnerToken(owner: TreasuryOwnerIdentity): string {
+  const kindPrefix = OWNER_KIND_TOKEN_PREFIXES[owner.kind];
+  if (owner.kind === "logical-service") {
+    // namespace 缺失时回退 id 自带前缀（nuker:xxx → nuker），保证 token 确定。
+    const namespace = owner.namespace ?? owner.id.split(":")[0] ?? "";
+    return `${kindPrefix}:${namespace}:${owner.id}`;
+  }
+  return `${kindPrefix}:${owner.id}`;
+}
+
 /**
  * legacy 裸 holderId 的保守分类（迁移与读侧兜底用）：
  * - `nuker:` / `synthesis:` 前缀 → logical-service（namespace 同名）；

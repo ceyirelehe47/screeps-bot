@@ -1,10 +1,12 @@
 /**
- * Treasury typed reservation owner 权威测试（第五轮）：
- * - 持久化与聚合：game-object / logical-service owner 正常落库、键格式
- *   不变（marketSaleProtectionAdapter 兼容）、typed 聚合正确；
- * - 版本化迁移：legacy 裸 holderId → legacy-unresolved/已知 kind、
- *   room/resource/amount/expiresAt 不动、迁移后 revision bump、版本标记
- *   幂等短路、损坏条目不乐观忽略；
+ * Treasury typed reservation owner 权威测试（第五轮建立、第六轮 v3 重做）：
+ * - 持久化与聚合：game-object / logical-service owner 正常落库，store key
+ *   编码完整 ownerToken（kind 前缀 + namespace 段 + id）；typed 聚合正确；
+ * - 同 id 不同 kind / 不同 namespace 的 owner 在持久层彻底分离（v3 核心）：
+ *   共存、独立 release、互不覆盖；
+ * - 版本化原子迁移（v3）：临时结构全量验证 → 一次性引用切换 + version=3 +
+ *   revision bump；数值字段不动；幂等短路；malformed / 新 key collision /
+ *   key 与平铺字段不一致一律终止整个迁移（原数据不动、版本不推进）；
  * - 保守占用：legacy-unresolved 与暂时找不到的 game-object 都继续全额
  *   计入 committed，只有 expiresAt 或显式 release 解除；
  * - 自排除：完整 typed identity 比较（同字符串不同 kind 不互相排除）、
@@ -14,10 +16,12 @@
 import {
   getReservedProductionAmountExcludingOwner,
   listProductionReservations,
+  makeReservationStoreKey,
   migrateResourceReservationsForTypedOwner,
   releaseProductionReservationForOwner,
   renewProductionReservationForOwner,
   reserveProductionResourceForOwner,
+  type ReservationOwnerMigrationReport,
 } from "@/runtime/resourceReservation";
 import { resetTreasuryCommitmentRevisionForTest, readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import { buildTreasuryCommitmentIndex } from "@/runtime/treasury/commitments";
@@ -39,6 +43,13 @@ function observation() {
   return createTreasuryService({ getRooms: () => Object.values(rooms) }).observation();
 }
 
+function seedLegacyEntry(
+  key: string,
+  entry: { roomName: string; resource: string; holderId: string; amount: number; updatedAt: number; expiresAt: number; owner?: { kind: string; id: string; roomName?: string; namespace?: string } },
+): void {
+  Memory.runtime!.resourceReservations![key] = entry as never;
+}
+
 beforeEach(() => {
   clearTreasuryPersistenceForTest();
   resetTreasuryCommitmentRevisionForTest();
@@ -46,22 +57,23 @@ beforeEach(() => {
   Memory.runtime.resourceReservations = {};
 });
 
-describe("typed owner 持久化与聚合", () => {
-  it("game-object owner 正常持久化：store key/平铺字段不变，owner 字段落库", () => {
+describe("typed owner 持久化与聚合（v3 key 编码完整 identity）", () => {
+  it("game-object owner 持久化：store key 编码 ownerToken，平铺字段与 owner 字段落库", () => {
     reserveProductionResourceForOwner("W1N57", "energy", 500, { kind: "game-object", id: GO_FACTORY, roomName: "W1N57" }, 100);
     const store = Memory.runtime!.resourceReservations!;
-    expect(Object.keys(store)).toEqual([`W1N57:energy:${GO_FACTORY}`]); // 键格式不变（adapter 兼容）
-    const entry = store[`W1N57:energy:${GO_FACTORY}`]!;
+    expect(Object.keys(store)).toEqual([`W1N57:energy:go:${GO_FACTORY}`]);
+    const entry = store[`W1N57:energy:go:${GO_FACTORY}`]!;
     expect(entry.holderId).toBe(GO_FACTORY);
     expect(entry.amount).toBe(500);
     expect(entry.owner).toEqual({ kind: "game-object", id: GO_FACTORY, roomName: "W1N57" });
     expect(entry.expiresAt).toBe(Game.time + 100);
   });
 
-  it("logical-service owner 正常持久化并聚合", () => {
+  it("logical-service owner 持久化：token 含 namespace 段并正常聚合", () => {
     reserveProductionResourceForOwner("W1N57", "energy", 300, { kind: "logical-service", id: NUKE_LOGICAL, namespace: "nuker", roomName: "W1N57" });
+    const store = Memory.runtime!.resourceReservations!;
+    expect(Object.keys(store)).toEqual([`W1N57:energy:ls:nuker:${NUKE_LOGICAL}`]);
     const entries = listProductionReservations();
-    expect(entries).toHaveLength(1);
     expect(entries[0].owner?.kind).toBe("logical-service");
     expect(entries[0].owner?.namespace).toBe("nuker");
   });
@@ -84,66 +96,140 @@ describe("typed owner 持久化与聚合", () => {
   });
 });
 
-describe("legacy 迁移（版本化）", () => {
-  it("legacy 未知字符串迁移为 legacy-unresolved；已知形状迁移为对应 kind；数值字段不动", () => {
-    const store = Memory.runtime!.resourceReservations!;
-    store["W1N57:energy:carrier1"] = { roomName: "W1N57", resource: "energy", holderId: "carrier1", amount: 100, updatedAt: 1, expiresAt: Game.time + 100 };
-    store[`W1N57:energy:${GO_FACTORY}`] = { roomName: "W1N57", resource: "energy", holderId: GO_FACTORY, amount: 200, updatedAt: 1, expiresAt: Game.time + 100 };
-    store[`W1N57:G:${NUKE_LOGICAL}`] = { roomName: "W1N57", resource: "G" as ResourceConstant, holderId: NUKE_LOGICAL, amount: 300, updatedAt: 1, expiresAt: Game.time + 100 };
+describe("同 id 不同 kind / namespace 的持久层隔离（v3 核心不变量）", () => {
+  it("相同 id、不同 owner kind 共存且互不覆盖", () => {
+    const sameId = GO_FACTORY;
+    reserveProductionResourceForOwner("W1N57", "energy", 500, { kind: "game-object", id: sameId, roomName: "W1N57" });
+    reserveProductionResourceForOwner("W1N57", "energy", 300, { kind: "legacy-unresolved", id: sameId });
+    expect(listProductionReservations()).toHaveLength(2);
+    expect(getReservedProductionAmountExcludingOwner("W1N57", "energy", { kind: "game-object", id: sameId })).toBe(300);
+    expect(getReservedProductionAmountExcludingOwner("W1N57", "energy", { kind: "legacy-unresolved", id: sameId })).toBe(500);
+  });
+
+  it("相同 id、不同 namespace 的 logical-service 共存且互不覆盖", () => {
+    reserveProductionResourceForOwner("W1N57", "energy", 100, { kind: "logical-service", id: "svc:x", namespace: "nuker", roomName: "W1N57" });
+    reserveProductionResourceForOwner("W1N57", "energy", 200, { kind: "logical-service", id: "svc:x", namespace: "synthesis", roomName: "W1N57" });
+    expect(listProductionReservations()).toHaveLength(2);
+    expect(getReservedProductionAmountExcludingOwner("W1N57", "energy", { kind: "logical-service", id: "svc:x", namespace: "nuker" })).toBe(200);
+    expect(getReservedProductionAmountExcludingOwner("W1N57", "energy", { kind: "logical-service", id: "svc:x", namespace: "synthesis" })).toBe(100);
+  });
+
+  it("release 一个 owner 不影响另一个（同 id 不同 kind）", () => {
+    const sameId = GO_OTHER;
+    reserveProductionResourceForOwner("W1N57", "energy", 500, { kind: "game-object", id: sameId, roomName: "W1N57" });
+    reserveProductionResourceForOwner("W1N57", "energy", 300, { kind: "legacy-unresolved", id: sameId });
+    releaseProductionReservationForOwner("W1N57", "energy", { kind: "game-object", id: sameId });
+    const remaining = listProductionReservations();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].amount).toBe(300);
+    expect(remaining[0].owner?.kind).toBe("legacy-unresolved");
+    // 聚合维度只剩未被 release 的 owner。
+    expect(getReservedProductionAmountExcludingOwner("W1N57", "energy", { kind: "legacy-unresolved", id: sameId })).toBe(0);
+  });
+
+  it("store key 拼接唯一权威：makeReservationStoreKey 与 mutation API 一致", () => {
+    const owner: TreasuryOwnerIdentity = { kind: "logical-service", id: NUKE_LOGICAL, namespace: "nuker" };
+    const expected = makeReservationStoreKey("W1N57", "G", owner);
+    reserveProductionResourceForOwner("W1N57", "G", 100, owner);
+    expect(Object.keys(Memory.runtime!.resourceReservations!)).toEqual([expected]);
+  });
+});
+
+describe("版本化原子迁移（v3：key 重编码完整 ownerToken）", () => {
+  it("legacy 迁移成功：未知字符串→legacy-unresolved、已知形状→对应 kind；key 重编码、数值不动、version=3", () => {
+    seedLegacyEntry("W1N57:energy:carrier1", { roomName: "W1N57", resource: "energy", holderId: "carrier1", amount: 100, updatedAt: 1, expiresAt: Game.time + 100 });
+    seedLegacyEntry(`W1N57:energy:${GO_FACTORY}`, { roomName: "W1N57", resource: "energy", holderId: GO_FACTORY, amount: 200, updatedAt: 1, expiresAt: Game.time + 100 });
+    seedLegacyEntry(`W1N57:G:${NUKE_LOGICAL}`, { roomName: "W1N57", resource: "G", holderId: NUKE_LOGICAL, amount: 300, updatedAt: 1, expiresAt: Game.time + 100 });
 
     const report = migrateResourceReservationsForTypedOwner();
+    expect(report.status).toBe("ok");
+    expect(report.failure).toBeNull();
     expect(report.migrated).toBe(3);
-    expect(report.damaged).toBe(0);
-    expect(Memory.runtime!.resourceReservationsOwnerVersion).toBe(2);
+    expect(Memory.runtime!.resourceReservationsOwnerVersion).toBe(3);
 
     const migrated = Memory.runtime!.resourceReservations!;
-    expect(migrated["W1N57:energy:carrier1"]!.owner).toEqual({ kind: "legacy-unresolved", id: "carrier1" });
-    expect(migrated[`W1N57:energy:${GO_FACTORY}`]!.owner).toEqual({ kind: "game-object", id: GO_FACTORY });
-    expect(migrated[`W1N57:G:${NUKE_LOGICAL}`]!.owner).toEqual({ kind: "logical-service", id: NUKE_LOGICAL, namespace: "nuker" });
-    // room/resource/amount/expiresAt 保持不变；store key 不变。
-    expect(migrated["W1N57:energy:carrier1"]!.amount).toBe(100);
-    expect(migrated["W1N57:energy:carrier1"]!.expiresAt).toBe(Game.time + 100);
-    expect(Object.keys(migrated).sort()).toEqual(["W1N57:G:nuker:a1b2c3d4e5f6a7b8c9d0e1f2:G".slice(0, 0) + `W1N57:G:${NUKE_LOGICAL}`, `W1N57:energy:${GO_FACTORY}`, "W1N57:energy:carrier1"].sort());
+    expect(migrated["W1N57:energy:lu:carrier1"]!.owner).toEqual({ kind: "legacy-unresolved", id: "carrier1" });
+    expect(migrated[`W1N57:energy:go:${GO_FACTORY}`]!.owner).toEqual({ kind: "game-object", id: GO_FACTORY });
+    expect(migrated[`W1N57:G:ls:nuker:${NUKE_LOGICAL}`]!.owner).toEqual({ kind: "logical-service", id: NUKE_LOGICAL, namespace: "nuker" });
+    // room/resource/amount/expiresAt 保持不变。
+    expect(migrated["W1N57:energy:lu:carrier1"]!.amount).toBe(100);
+    expect(migrated["W1N57:energy:lu:carrier1"]!.expiresAt).toBe(Game.time + 100);
+    expect(Object.keys(migrated).sort()).toEqual(
+      [`W1N57:G:ls:nuker:${NUKE_LOGICAL}`, `W1N57:energy:go:${GO_FACTORY}`, "W1N57:energy:lu:carrier1"].sort(),
+    );
   });
 
   it("迁移 bump commitment revision（索引不得按旧口径继续聚合）", () => {
     const revisionBefore = readTreasuryCommitmentRevision();
-    Memory.runtime!.resourceReservations!["W1N57:energy:carrier1"] = {
-      roomName: "W1N57", resource: "energy", holderId: "carrier1", amount: 100, updatedAt: 1, expiresAt: Game.time + 100,
-    };
+    seedLegacyEntry("W1N57:energy:carrier1", { roomName: "W1N57", resource: "energy", holderId: "carrier1", amount: 100, updatedAt: 1, expiresAt: Game.time + 100 });
     migrateResourceReservationsForTypedOwner();
     expect(readTreasuryCommitmentRevision()).toBeGreaterThan(revisionBefore);
   });
 
   it("迁移幂等：版本标记短路（二次执行零迁移零 bump）", () => {
-    Memory.runtime!.resourceReservations!["W1N57:energy:carrier1"] = {
-      roomName: "W1N57", resource: "energy", holderId: "carrier1", amount: 100, updatedAt: 1, expiresAt: Game.time + 100,
-    };
+    seedLegacyEntry("W1N57:energy:carrier1", { roomName: "W1N57", resource: "energy", holderId: "carrier1", amount: 100, updatedAt: 1, expiresAt: Game.time + 100 });
     const first = migrateResourceReservationsForTypedOwner();
     expect(first.migrated).toBe(1);
     const revisionAfterFirst = readTreasuryCommitmentRevision();
     const second = migrateResourceReservationsForTypedOwner();
+    expect(second.status).toBe("already-migrated");
     expect(second.migrated).toBe(0);
     expect(readTreasuryCommitmentRevision()).toBe(revisionAfterFirst);
   });
 
-  it("损坏条目（holderId 非字符串）不乐观忽略：原样保留计入 damaged", () => {
-    Memory.runtime!.resourceReservations!["broken"] = {
-      roomName: "W1N57", resource: "energy", holderId: 42 as never, amount: 100, updatedAt: 1, expiresAt: Game.time + 100,
-    };
+  it("迁移中途发现新 key collision：整个迁移终止、数据不部分修改、版本不推进", () => {
+    // 两个不同 legacy holderId 携带相同 owner.id（v2 数据可能存在的重复声明）
+    // → 重编码后新 key 相同 → collision。
+    seedLegacyEntry("W1N57:energy:holder-a", { roomName: "W1N57", resource: "energy", holderId: "holder-a", amount: 100, updatedAt: 1, expiresAt: Game.time + 100, owner: { kind: "game-object", id: GO_FACTORY } });
+    seedLegacyEntry("W1N57:energy:holder-b", { roomName: "W1N57", resource: "energy", holderId: "holder-b", amount: 200, updatedAt: 1, expiresAt: Game.time + 100, owner: { kind: "game-object", id: GO_FACTORY } });
+    const before = JSON.stringify(Memory.runtime!.resourceReservations);
+
     const report = migrateResourceReservationsForTypedOwner();
+    expect(report.status).toBe("ok");
+    expect(report.failure).toContain("碰撞");
     expect(report.migrated).toBe(0);
-    expect(report.damaged).toBe(1);
-    expect(Memory.runtime!.resourceReservations!.broken!.holderId).toBe(42 as never);
+    expect(Memory.runtime!.resourceReservationsOwnerVersion).toBeUndefined();
+    // 原数据保持不动（零部分写入）。
+    expect(JSON.stringify(Memory.runtime!.resourceReservations)).toBe(before);
+  });
+
+  it("迁移中途发现 malformed record：终止且不乐观忽略；修复后重复执行成功", () => {
+    seedLegacyEntry("W1N57:energy:carrier1", { roomName: "W1N57", resource: "energy", holderId: "carrier1", amount: 100, updatedAt: 1, expiresAt: Game.time + 100 });
+    seedLegacyEntry("W1N57:energy:broken", { roomName: "W1N57", resource: "energy", holderId: 42 as never, amount: 100, updatedAt: 1, expiresAt: Game.time + 100 });
+    const before = JSON.stringify(Memory.runtime!.resourceReservations);
+
+    const failed = migrateResourceReservationsForTypedOwner();
+    expect(failed.failure).toContain("malformed");
+    expect(Memory.runtime!.resourceReservationsOwnerVersion).toBeUndefined();
+    expect(JSON.stringify(Memory.runtime!.resourceReservations)).toBe(before);
+
+    // 修复方式 = 人工移除损坏条目（修复 key/holderId 不一致同样有效）；
+    // 之后重复执行迁移成功（可重试）。
+    delete Memory.runtime!.resourceReservations!["W1N57:energy:broken"];
+    const repaired = migrateResourceReservationsForTypedOwner();
+    expect(repaired.failure).toBeNull();
+    expect(Memory.runtime!.resourceReservationsOwnerVersion).toBe(3);
+  });
+
+  it("迁移发现非法 owner 字段形状或 key 与平铺字段不一致：同样终止", () => {
+    seedLegacyEntry("W1N57:energy:weird", { roomName: "W1N57", resource: "energy", holderId: "weird", amount: 100, updatedAt: 1, expiresAt: Game.time + 100, owner: { kind: 7 } as never });
+    expect(migrateResourceReservationsForTypedOwner().failure).toContain("非法 owner");
+
+    Memory.runtime!.resourceReservations = {};
+    // key 与 entry 平铺字段不一致（外部篡改信号）。
+    seedLegacyEntry("W0N0:energy:mismatch", { roomName: "W1N57", resource: "energy", holderId: "mismatch", amount: 100, updatedAt: 1, expiresAt: Game.time + 100 });
+    const report: ReservationOwnerMigrationReport = migrateResourceReservationsForTypedOwner();
+    expect(report.failure).toContain("不一致");
+    expect(Memory.runtime!.resourceReservationsOwnerVersion).toBeUndefined();
   });
 });
 
 describe("保守占用与 owner-aware 聚合", () => {
   function seedMixedStore(): void {
     const store = Memory.runtime!.resourceReservations!;
-    store["W1N57:energy:carrier-legacy"] = { roomName: "W1N57", resource: "energy", holderId: "carrier-legacy", amount: 100, updatedAt: 1, expiresAt: Game.time + 100, owner: { kind: "legacy-unresolved", id: "carrier-legacy" } };
-    store[`W1N57:energy:${GO_FACTORY}`] = { roomName: "W1N57", resource: "energy", holderId: GO_FACTORY, amount: 200, updatedAt: 1, expiresAt: Game.time + 100, owner: { kind: "game-object", id: GO_FACTORY } };
-    store[`W1N57:energy:${GO_OTHER}`] = { roomName: "W1N57", resource: "energy", holderId: GO_OTHER, amount: 400, updatedAt: 1, expiresAt: Game.time + 100, owner: { kind: "game-object", id: GO_OTHER } };
+    store["W1N57:energy:lu:carrier-legacy"] = { roomName: "W1N57", resource: "energy", holderId: "carrier-legacy", amount: 100, updatedAt: 1, expiresAt: Game.time + 100, owner: { kind: "legacy-unresolved", id: "carrier-legacy" } };
+    store[`W1N57:energy:go:${GO_FACTORY}`] = { roomName: "W1N57", resource: "energy", holderId: GO_FACTORY, amount: 200, updatedAt: 1, expiresAt: Game.time + 100, owner: { kind: "game-object", id: GO_FACTORY } };
+    store[`W1N57:energy:go:${GO_OTHER}`] = { roomName: "W1N57", resource: "energy", holderId: GO_OTHER, amount: 400, updatedAt: 1, expiresAt: Game.time + 100, owner: { kind: "game-object", id: GO_OTHER } };
   }
 
   it("legacy-unresolved 与找不到的 game-object 都全额计入 committed（missing ≠ 可支配）", () => {
@@ -162,7 +248,7 @@ describe("保守占用与 owner-aware 聚合", () => {
 
   it("只有 expiresAt 到期（或显式 release）解除：到期条目不计入", () => {
     seedMixedStore();
-    Memory.runtime!.resourceReservations![`W1N57:energy:${GO_OTHER}`]!.expiresAt = Game.time - 1;
+    Memory.runtime!.resourceReservations![`W1N57:energy:go:${GO_OTHER}`]!.expiresAt = Game.time - 1;
     const index = buildTreasuryCommitmentIndex({
       tick: Game.time,
       tasks: {},
@@ -211,7 +297,7 @@ describe("保守占用与 owner-aware 聚合", () => {
 
   it("logical owner 查询自身可精确排除", () => {
     const rooms = installRooms(ROOMS);
-    Memory.runtime!.resourceReservations![`W1N57:G:${NUKE_LOGICAL}`] = {
+    Memory.runtime!.resourceReservations![`W1N57:G:ls:nuker:${NUKE_LOGICAL}`] = {
       roomName: "W1N57", resource: "G" as ResourceConstant, holderId: NUKE_LOGICAL, amount: 150, updatedAt: 1, expiresAt: Game.time + 100,
       owner: { kind: "logical-service", id: NUKE_LOGICAL, namespace: "nuker" },
     };

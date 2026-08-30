@@ -581,11 +581,11 @@ declare global {
         updatedAt: number;
         expiresAt: number;
         /**
-         * 持久 typed owner identity（第五轮新增，附加于平铺字段之上——
-         * holderId 保留为兼容读口径，store key `${room}:${resource}:
-         * ${holderId}` 不变）。kind: game-object / logical-service / task /
-         * contract / legacy-unresolved；legacy-unresolved 与暂时无法解析的
-         * owner 一律保守计入 committed，只有 expiresAt 或显式 release 解除。
+         * 持久 typed owner identity（第五轮新增，附加于平铺字段之上；
+         * 第六轮起 store key 编码完整 ownerToken）。kind: game-object /
+         * logical-service / task / contract / legacy-unresolved；
+         * legacy-unresolved 与暂时无法解析的 owner 一律保守计入
+         * committed，只有 expiresAt 或显式 release 解除。
          */
         owner?: {
           kind: string;
@@ -596,8 +596,16 @@ declare global {
         };
       }
     >;
-    /** reservation owner 迁移版本标记（2 = 裸 holderId 已补写 typed owner）。 */
-    resourceReservationsOwnerVersion?: 2;
+    /**
+     * reservation owner 迁移版本标记：
+     * - 2 = 裸 holderId 已补写 typed owner 字段（第五轮，store key 仍为
+     *   `${room}:${resource}:${holderId}`）；
+     * - 3 = store key 已重编码完整 ownerToken（kind 前缀 + logical-service
+     *   namespace 段 + id）——同 id 不同 kind/namespace 的 owner 持久层分离。
+     * 版本低于 3 且 store 非空时授权侧 fail closed（authorizationSafe 的
+     * migration 条件），直至 migrateResourceReservationsForTypedOwner 成功推进。
+     */
+    resourceReservationsOwnerVersion?: 2 | 3;
     /**
      * Treasury 最小持久状态（绝不持久化 observation/overlay/journal/物理事实）：
      * - receipts：transaction 幂等 receipt。key 为 "t:"+transactionId 编码

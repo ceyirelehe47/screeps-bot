@@ -331,7 +331,7 @@ describe("runMemoryCleanup", () => {
 
   it("collects expired reservations, stale recovery entries, and orphaned power-bank boost state", () => {
     reserveProductionResource("W1N1", "energy" as ResourceConstant, 500, "expiredCarrier");
-    Memory.runtime!.resourceReservations!["W1N1:energy:expiredCarrier"].expiresAt = Game.time - 1;
+    Memory.runtime!.resourceReservations!["W1N1:energy:lu:expiredCarrier"].expiresAt = Game.time - 1;
     reserveProductionResource("W1N1", "energy" as ResourceConstant, 300, "activeCarrier");
     Memory.cfg = {
       energyPickup: { terminalBootstrapRecoveryRooms: { W1N1: true, W2N2: false } },

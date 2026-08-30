@@ -3,6 +3,7 @@ import {
   classifyTreasuryHolderIdAsOwner,
   isValidTreasuryOwnerIdentity,
   treasuryOwnerIdentityKey,
+  treasuryReservationOwnerToken,
   type TreasuryOwnerIdentity,
 } from "@/runtime/treasury/ownerIdentity";
 
@@ -11,12 +12,16 @@ const DEFAULT_TTL = 200;
 /**
  * production reservation 权威 store（Memory.runtime.resourceReservations）。
  *
- * 第五轮起 entry 携带持久 typed owner identity（owner 字段，附加于既有平铺
- * 字段之上——holderId 保留为兼容读口径，store key `${room}:${resource}:
- * ${holderId}` 不变，marketSaleProtectionAdapter 的 stableKey 兼容）。
- * 新写入口一律使用 *ForOwner 系列 typed mutation；旧字符串入口保留为
- * deprecated 兼容 adapter（自动分类为 legacy-unresolved 或已知 typed kind，
- * 不再生成含义不明的新记录）。
+ * 第六轮起 store key 编码完整 typed owner identity：
+ * `${room}:${resource}:${ownerToken}`（ownerToken = kind 前缀 +
+ * logical-service namespace 段 + id，见 ownerIdentity.treasuryReservationOwnerToken）
+ * ——同 id 不同 kind / 不同 namespace 的 owner 在持久层彻底分离，不再互相
+ * 覆盖；entry 平铺字段（roomName/resource/holderId/amount/updatedAt/
+ * expiresAt）与 owner 字段保持不变（读侧按 value 聚合的消费者零改动；
+ * marketSaleProtectionAdapter 的 stableKey 直接内嵌 store key 字符串，无
+ * key 解析依赖）。新写入口一律使用 *ForOwner 系列 typed mutation；旧字符串
+ * 入口保留为 deprecated 兼容 adapter。持久 key 的拼接唯一权威在本文件
+ * （makeReservationStoreKey）——外部模块不得自行拼接。
  */
 interface ReservationEntry {
   roomName: string;
@@ -41,8 +46,15 @@ export function getReservationEntryOwner(holderId: string, persistedOwner: unkno
 
 type ReservationStore = Record<string, ReservationEntry>;
 
-/** typed owner store 版本标记（迁移完成后置 2；损坏时不乐观忽略）。 */
-const RESERVATION_OWNER_VERSION = 2;
+/**
+ * typed owner store 版本标记：
+ * - 1/undefined：裸 holderId 旧格式（key 不含 kind 编码、entry 无 owner）；
+ * - 2：owner 字段已补写（第五轮），key 仍为 `${room}:${res}:${holderId}`；
+ * - 3：key 已重编码完整 ownerToken（第六轮，当前版本）。
+ * 版本低于 3 且 store 非空时授权侧 fail closed（见 facade authorizationSafe
+ * 的 migration 条件），直至 migrateResourceReservationsForTypedOwner 成功推进。
+ */
+const RESERVATION_OWNER_VERSION = 3;
 
 function ensureStore(): ReservationStore {
   if (!Memory.runtime) {
@@ -54,13 +66,16 @@ function ensureStore(): ReservationStore {
   return Memory.runtime.resourceReservations;
 }
 
-function makeKey(roomName: string, resource: ResourceConstant, holderId: string): string {
-  return `${roomName}:${resource}:${holderId}`;
-}
-
-function ownerKeyString(owner: TreasuryOwnerIdentity): string {
-  // owner.id 即既有 holderId 口径（store key 与既有数据完全兼容）。
-  return owner.id;
+/**
+ * 持久 key 的唯一拼接权威：编码完整 typed identity（room + resource +
+ * ownerToken）。外部模块不得自行拼接 reservation store key。
+ */
+export function makeReservationStoreKey(
+  roomName: string,
+  resource: ResourceConstant,
+  owner: TreasuryOwnerIdentity,
+): string {
+  return `${roomName}:${resource}:${treasuryReservationOwnerToken(owner)}`;
 }
 
 export function reserveProductionResourceForOwner(
@@ -73,11 +88,11 @@ export function reserveProductionResourceForOwner(
   if (amount <= 0) return;
   if (!isValidTreasuryOwnerIdentity(owner)) return; // 非法 owner 不落库（fail closed）
   const store = ensureStore();
-  const key = makeKey(roomName, resource, ownerKeyString(owner));
+  const key = makeReservationStoreKey(roomName, resource, owner);
   store[key] = {
     roomName,
     resource,
-    holderId: ownerKeyString(owner),
+    holderId: owner.id,
     amount,
     updatedAt: Game.time,
     expiresAt: Game.time + ttl,
@@ -92,7 +107,7 @@ export function releaseProductionReservationForOwner(
   owner: TreasuryOwnerIdentity,
 ): void {
   if (!Memory.runtime?.resourceReservations) return;
-  const key = makeKey(roomName, resource, ownerKeyString(owner));
+  const key = makeReservationStoreKey(roomName, resource, owner);
   delete Memory.runtime.resourceReservations[key];
   bumpTreasuryCommitmentRevision();
 }
@@ -106,13 +121,13 @@ export function renewProductionReservationForOwner(
 ): void {
   if (!isValidTreasuryOwnerIdentity(owner)) return;
   const store = ensureStore();
-  const key = makeKey(roomName, resource, ownerKeyString(owner));
+  const key = makeReservationStoreKey(roomName, resource, owner);
   const existing = store[key];
   if (!existing) return;
   store[key] = {
     roomName,
     resource,
-    holderId: ownerKeyString(owner),
+    holderId: owner.id,
     amount,
     updatedAt: Game.time,
     expiresAt: Game.time + ttl,
@@ -240,46 +255,145 @@ export function listProductionReservations(): ReservationEntry[] {
 }
 
 export interface ReservationOwnerMigrationReport {
-  /** 本次从裸 holderId 分类并写入 owner 字段的条数。 */
+  /** 迁移执行状态：ok=本次成功推进到当前版本；already-migrated=版本已是当前值。 */
+  status: "ok" | "already-migrated";
+  /** 本次重编码 store key 并补写 owner 字段的条数。 */
   migrated: number;
-  /** 已携带合法 owner、无需迁移的条数。 */
+  /** 已是 v3 形状（key 含 ownerToken 且 owner 字段合法）无需变更的条数。 */
   alreadyTyped: number;
-  /** 发现损坏（holderId 非字符串/owner 非法形状）——保持原样、不乐观忽略。 */
-  damaged: number;
-  /** 迁移执行时记录的版本标记（幂等短路后为当前标记值）。 */
+  /** 发现损坏（malformed entry / legacy key 与平铺字段不一致 / 新 key 碰撞）——
+   * 整个迁移终止：原数据保持不动、版本不推进、授权侧 fail closed。 */
+  failure: string | null;
+  /** 迁移执行后记录的版本标记（失败时保持原值）。 */
   version: number;
 }
 
 /**
- * 版本化迁移：为存量裸 holderId 条目补写 typed owner（room/resource/
- * amount/expiresAt 一概不动，store key 不变）；完成后写入版本标记
- * resourceReservationsOwnerVersion=2 并 bump commitment revision（迁移后
- * 索引不得继续按旧口径聚合）。损坏条目保持原样并计入 damaged——绝不乐观
- * 忽略或猜测分类。
+ * 版本化原子迁移（第六轮 v3）：裸/半 typed reservation store → key 编码完整
+ * typed owner identity。两阶段执行：
+ * 1. 临时结构完成全部验证——entry 形状完整（roomName/resource/holderId/
+ *    amount/updatedAt/expiresAt）、legacy key 与平铺字段严格一致
+ *    （`${roomName}:${resource}:${holderId}`）、owner 字段合法或可由
+ *    holderId 无损分类、新 key 无碰撞。任何 malformed/collision 立即终止，
+ *    原 store 不动（零部分写入）；
+ * 2. 全部通过后一次性引用切换替换 store、写 resourceReservationsOwnerVersion=3
+ *    并 bump commitment revision（迁移后索引不得继续按旧 key 口径聚合）。
+ * 幂等：版本已是 3 直接短路；失败后修复数据可重复执行。数值字段
+ * （amount/updatedAt/expiresAt）一律不改写。
  */
 export function migrateResourceReservationsForTypedOwner(): ReservationOwnerMigrationReport {
   const runtime = Memory.runtime;
-  if (runtime?.resourceReservationsOwnerVersion === RESERVATION_OWNER_VERSION) {
-    return { migrated: 0, alreadyTyped: 0, damaged: 0, version: RESERVATION_OWNER_VERSION };
+  const currentVersion = runtime?.resourceReservationsOwnerVersion ?? (runtime?.resourceReservations ? 1 : RESERVATION_OWNER_VERSION);
+  if (currentVersion === RESERVATION_OWNER_VERSION) {
+    return { status: "already-migrated", migrated: 0, alreadyTyped: 0, failure: null, version: RESERVATION_OWNER_VERSION };
+  }
+  if (currentVersion !== 1 && currentVersion !== 2) {
+    return {
+      status: "ok",
+      migrated: 0,
+      alreadyTyped: 0,
+      failure: `未知 resourceReservationsOwnerVersion ${String(currentVersion)}（支持 1/2 → ${String(RESERVATION_OWNER_VERSION)}；原数据保留，授权 fail closed）`,
+      version: currentVersion,
+    };
   }
   const store = runtime?.resourceReservations ?? {};
+  if (!store || typeof store !== "object") {
+    return {
+      status: "ok",
+      migrated: 0,
+      alreadyTyped: 0,
+      failure: "resourceReservations store 非对象（原数据保留，授权 fail closed）",
+      version: currentVersion,
+    };
+  }
+
+  // ── 阶段 1：临时结构全量验证（零写入） ───────────────────────────────────
+  const entries = Object.entries(store);
+  const rebuilt: ReservationStore = {};
   let migrated = 0;
   let alreadyTyped = 0;
-  let damaged = 0;
-  for (const entry of Object.values(store)) {
-    if (isValidTreasuryOwnerIdentity(entry?.owner)) {
+  for (const [legacyKey, rawEntry] of entries) {
+    const entry = rawEntry as ReservationEntry | null | undefined;
+    if (!entry || typeof entry !== "object") {
+      return {
+        status: "ok",
+        migrated: 0,
+        alreadyTyped: 0,
+        failure: `迁移发现非对象 entry（key ${legacyKey.slice(0, 64)}；原 store 保持不变）`,
+        version: currentVersion,
+      };
+    }
+    if (
+      typeof entry.roomName !== "string" || entry.roomName.length === 0 ||
+      typeof entry.resource !== "string" || entry.resource.length === 0 ||
+      typeof entry.holderId !== "string" || entry.holderId.length === 0 ||
+      typeof entry.amount !== "number" || !Number.isSafeInteger(entry.amount) || entry.amount < 0 ||
+      typeof entry.updatedAt !== "number" || !Number.isSafeInteger(entry.updatedAt) || entry.updatedAt < 0 ||
+      typeof entry.expiresAt !== "number" || !Number.isSafeInteger(entry.expiresAt) || entry.expiresAt < 0
+    ) {
+      return {
+        status: "ok",
+        migrated: 0,
+        alreadyTyped: 0,
+        failure: `迁移发现 malformed entry（key ${legacyKey.slice(0, 64)}；原 store 保持不变）`,
+        version: currentVersion,
+      };
+    }
+    // owner 字段：合法则用之（v2 已补写）；非法形状不乐观忽略——终止迁移。
+    let owner: TreasuryOwnerIdentity | undefined = coercePersistedOwner(entry.owner);
+    if (entry.owner !== undefined && owner === undefined) {
+      return {
+        status: "ok",
+        migrated: 0,
+        alreadyTyped: 0,
+        failure: `迁移发现非法 owner 字段（key ${legacyKey.slice(0, 64)}；原 store 保持不变）`,
+        version: currentVersion,
+      };
+    }
+    if (owner === undefined) {
+      owner = classifyTreasuryHolderIdAsOwner(entry.holderId);
+    }
+    const newKey = makeReservationStoreKey(entry.roomName, entry.resource as ResourceConstant, owner);
+    if (Object.prototype.hasOwnProperty.call(rebuilt, newKey)) {
+      return {
+        status: "ok",
+        migrated: 0,
+        alreadyTyped: 0,
+        failure: `迁移发现新 key 碰撞（${newKey.slice(0, 96)}；原 store 保持不变）`,
+        version: currentVersion,
+      };
+    }
+    // legacy key 一致性：key 必须与其 entry 平铺字段一致（本迁移只用 value 字段
+    // 重建，不一致说明数据已被外部篡改/损坏——不得猜测重排。
+    if (legacyKey !== `${entry.roomName}:${entry.resource}:${entry.holderId}`) {
+      return {
+        status: "ok",
+        migrated: 0,
+        alreadyTyped: 0,
+        failure: `迁移发现 store key 与 entry 平铺字段不一致（key ${legacyKey.slice(0, 64)}；原 store 保持不变）`,
+        version: currentVersion,
+      };
+    }
+    rebuilt[newKey] = { ...entry, holderId: owner.id, owner };
+    if (newKey === legacyKey && coercePersistedOwner(entry.owner) !== undefined) {
       alreadyTyped += 1;
-      continue;
+    } else {
+      migrated += 1;
     }
-    if (typeof entry?.holderId !== "string" || entry.holderId.length === 0) {
-      damaged += 1; // 无法识别身份来源：原样保留，等待权威 owner/GC/人工修复
-      continue;
-    }
-    entry.owner = classifyTreasuryHolderIdAsOwner(entry.holderId);
-    migrated += 1;
   }
+
+  // ── 阶段 2：原子替换（引用切换）+ 版本推进 + revision bump ────────────────
   if (!Memory.runtime) Memory.runtime = {};
+  Memory.runtime.resourceReservations = rebuilt;
   Memory.runtime.resourceReservationsOwnerVersion = RESERVATION_OWNER_VERSION;
-  if (migrated > 0) bumpTreasuryCommitmentRevision();
-  return { migrated, alreadyTyped, damaged, version: RESERVATION_OWNER_VERSION };
+  if (entries.length > 0) bumpTreasuryCommitmentRevision();
+  return { status: "ok", migrated, alreadyTyped, failure: null, version: RESERVATION_OWNER_VERSION };
+}
+
+/** 迁移健康检查（authorizationSafe 的 migration 条件；只读零写）。 */
+export function isReservationOwnerMigrationComplete(): boolean {
+  const runtime = Memory.runtime;
+  const store = runtime?.resourceReservations;
+  if (!store || Object.keys(store).length === 0) return true; // 无可迁移数据
+  return runtime?.resourceReservationsOwnerVersion === RESERVATION_OWNER_VERSION;
 }
