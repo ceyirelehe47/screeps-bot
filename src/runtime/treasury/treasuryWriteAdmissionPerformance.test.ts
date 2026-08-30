@@ -480,3 +480,64 @@ describe("第七轮：quarantine blocker 与 fault-slot admission 的确定性�
     expect(readTreasuryIntentCounters().fullScans + readTreasuryQuarantineCounters().fullScans).toBe(scansBefore);
     unregisterTreasuryActionAdapterForTest("test.transfer");
   });
+
+describe("第十轮 operation-count：原子 redemption 与统一 readiness", () => {
+  it("批量原子 redemption 与 leg 数线性：多资源执行零全表扫描（bundle 路径）", () => {
+    const rooms = installRooms(buildRoomSpecs());
+    const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
+    service.beginTick();
+    registerTreasuryActionAdapter(makeTreasuryTestTransferAdapter());
+    const quarantineBefore = readTreasuryQuarantineCounters().fullScans;
+    const intentBefore = readTreasuryIntentCounters().fullScans;
+    const receiptBefore = service.metrics().receiptFullScans;
+    for (let index = 0; index < 3; index += 1) {
+      const built = buildTreasuryActionContract(service, {
+        actionKind: "test.transfer",
+        transactionId: `r10_perf_multi${String(index)}`,
+        args: {
+          fromRoom: "W1N57",
+          fromLocation: "storage",
+          toRoom: "W1N57",
+          toLocation: "terminal",
+          resource: "U",
+          amount: 100,
+          feeFromRoom: "W1N57",
+          feeAmount: 10,
+          outcome: "ok",
+        },
+      });
+      if (built.status !== "built") throw new Error("build failed");
+      const issued = service.authorizeTreasuryActionContract(built.contract);
+      if (issued.status !== "authorized") throw new Error("authorize failed");
+      const result = executeTreasuryActionContract(service, { contract: built.contract, authorization: issued.bundle });
+      if (result.status !== "executed_committed") throw new Error(`execute failed: ${JSON.stringify(result).slice(0, 96)}`);
+    }
+    // 原子 redemption（staged 发布 + 回滚能力）不引入任何全表扫描。
+    expect(readTreasuryQuarantineCounters().fullScans).toBe(quarantineBefore);
+    expect(readTreasuryIntentCounters().fullScans).toBe(intentBefore);
+    expect(service.metrics().receiptFullScans).toBe(receiptBefore);
+  });
+
+  it("统一 write readiness：query/authorize 双向评估零全表扫描（O(1) 基于缓存 counters）", () => {
+    const rooms = installRooms(buildRoomSpecs());
+    const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
+    service.beginTick();
+    registerTreasuryActionAdapter(makeTreasuryTestTransferAdapter());
+    const quarantineBefore = readTreasuryQuarantineCounters().fullScans;
+    const intentBefore = readTreasuryIntentCounters().fullScans;
+    for (let index = 0; index < 5; index += 1) {
+      const view = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
+      expect(view.writeAdmission.ready).toBe(true);
+      const built = buildTreasuryActionContract(service, {
+        actionKind: "test.transfer",
+        transactionId: `r10_perf_ready${String(index)}`,
+        args: { fromRoom: "W1N57", fromLocation: "storage", toRoom: "W1N57", toLocation: "terminal", resource: RESOURCE_ENERGY, amount: 50, outcome: "ok" },
+      });
+      if (built.status !== "built") throw new Error("build failed");
+      const issued = service.authorizeTreasuryActionContract(built.contract);
+      if (issued.status !== "authorized") throw new Error("authorize failed（readiness 误报 blocker）");
+    }
+    expect(readTreasuryQuarantineCounters().fullScans).toBe(quarantineBefore);
+    expect(readTreasuryIntentCounters().fullScans).toBe(intentBefore);
+  });
+});
