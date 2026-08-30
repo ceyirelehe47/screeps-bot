@@ -39,7 +39,13 @@
 import type { TreasuryService } from "@/runtime/treasury/facade";
 import type { TreasuryAuthorizationBundle, TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
 import { TREASURY_WRITER_KERNEL, type TreasuryKernelHolder } from "@/runtime/treasury/kernelChannel";
-import type { TreasurySafeExecuteResult, TreasuryObservationScope, TreasuryPosting } from "@/runtime/treasury/types";
+import type {
+  TreasurySafeExecuteResult,
+  TreasuryObservationScope,
+  TreasuryPosting,
+  TreasuryStructureBindingDescriptor,
+} from "@/runtime/treasury/types";
+import { TREASURY_STRUCTURE_DESCRIPTOR_VERSION } from "@/runtime/treasury/types";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 import { canonicalizeTreasuryActionArgs, TREASURY_CANONICAL_ENCODING_VERSION } from "@/runtime/treasury/canonicalEncoding";
 
@@ -70,12 +76,27 @@ export interface TreasuryActionReconcilerFacts {
   /** adapter.durableFacts 的版本化有界对账事实（authority 携带时）。 */
   readonly durablePayload?: string;
   readonly durablePayloadVersion?: number;
+  /** 完整 structure descriptors（第十一轮 3.13.9：reconciler 获得完整声明）。 */
+  readonly structureDescriptors?: readonly TreasuryStructureBindingDescriptor[];
 }
 
-/** 受控结构引用（第九轮）：adapter 声明额外 action-relevant 结构的唯一形状。 */
+/**
+ * 受控结构引用（第九轮建立、第十一轮 3.13.9 升级完整 descriptor）：adapter
+ * 声明额外 action-relevant 结构的唯一形状。bindingKind 缺省按 objectId 推导
+ *（有 objectId → game_object，否则 governed_location）；role 缺省
+ * auxiliary（posting 自动 binding 的 role 由 Treasury 派生：负腿 source、
+ * 正腿 target）；required 缺省 true。全部字段进入 AC4 digest 与 durable
+ * authority（同结构不同 role 不静默合并）。
+ */
 export interface TreasuryActionStructureBinding {
   readonly roomName: string;
   readonly locationKind: "storage" | "terminal";
+  /** binding kind 显式声明（缺省按 objectId 推导）。 */
+  readonly bindingKind?: "governed_location" | "game_object";
+  /** action-specific role（受控枚举；缺省 auxiliary）。 */
+  readonly role?: "source" | "target" | "fee_source" | "production_structure" | "auxiliary";
+  /** required/optional 语义（缺省 true——required 结构缺失构建拒绝）。 */
+  readonly required?: boolean;
   /** 快照 label（缺省 `${roomName}:${locationKind}`；仅诊断，不作权威 key）。 */
   readonly label?: string;
   /**
@@ -347,6 +368,8 @@ export interface TreasuryActionContract {
   readonly structureSnapshots: Readonly<Record<string, string | undefined>>;
   /** 快照对应的 binding 集（label → room/location 受控映射；排序冻结）。 */
   readonly structureBindings: readonly Readonly<TreasuryActionStructureBinding>[];
+  /** 完整 canonical descriptor 集（第十一轮 3.13.9；AC4 digest 同源、intent/quarantine 持久化形状）。 */
+  readonly structureDescriptors: readonly Readonly<TreasuryStructureBindingDescriptor>[];
   readonly digest: string;
   /** adapter.durableFacts(canonical) 的有界对账事实（intent 持久化来源）。 */
   readonly durableFacts?: Readonly<TreasuryDurableFacts>;
@@ -450,6 +473,26 @@ function validateStructureBindings(
     }
     // 受控 canonical identity（第十轮 3.12.11）：governed_location 或
     // game_object（objectId 提供）；label 仅诊断不作权威 key。
+    if (
+      candidate.bindingKind !== undefined &&
+      candidate.bindingKind !== "governed_location" &&
+      candidate.bindingKind !== "game_object"
+    ) {
+      return `structureBinding.bindingKind 非法（受控枚举）: ${String(candidate.bindingKind)}`;
+    }
+    if (
+      candidate.role !== undefined &&
+      candidate.role !== "source" &&
+      candidate.role !== "target" &&
+      candidate.role !== "fee_source" &&
+      candidate.role !== "production_structure" &&
+      candidate.role !== "auxiliary"
+    ) {
+      return `structureBinding.role 非法（受控枚举）: ${String(candidate.role)}`;
+    }
+    if (candidate.required !== undefined && typeof candidate.required !== "boolean") {
+      return "structureBinding.required 须为布尔";
+    }
     if (candidate.objectId !== undefined) {
       if (typeof candidate.objectId !== "string" || candidate.objectId.length === 0 || candidate.objectId.length > 48) {
         return "structureBinding.objectId 非法（须为 1..48 字符）";
@@ -461,13 +504,19 @@ function validateStructureBindings(
         return "structureBinding.expectedRoom 非法";
       }
     }
-    const label = candidate.label ?? (candidate.objectId !== undefined ? `obj:${candidate.objectId}` : `${candidate.roomName}:${candidate.locationKind}`);
+    // 默认 label 带 role 后缀（第十一轮 3.13.9）：同结构多 role 声明（不合并）
+    // 的默认诊断 label 天然不冲突；显式 label 冲突仍拒绝。
+    const roleSuffix = candidate.role !== undefined ? `:${candidate.role}` : "";
+    const label = candidate.label ?? (candidate.objectId !== undefined ? `obj:${candidate.objectId}${roleSuffix}` : `${candidate.roomName}:${candidate.locationKind}${roleSuffix}`);
     if (typeof label !== "string" || label.length === 0 || label.length > 48) return "structureBinding label 非法";
     if (seenLabels.has(label)) return `structureBinding label 重复: ${label}`;
     seenLabels.add(label);
     typed.push({
       roomName: candidate.roomName,
       locationKind: candidate.locationKind,
+      ...(candidate.bindingKind !== undefined ? { bindingKind: candidate.bindingKind } : {}),
+      ...(candidate.role !== undefined ? { role: candidate.role } : {}),
+      ...(candidate.required !== undefined ? { required: candidate.required } : {}),
       label,
       ...(candidate.objectId !== undefined ? { objectId: candidate.objectId } : {}),
       ...(candidate.expectedType !== undefined ? { expectedType: candidate.expectedType } : {}),
@@ -532,7 +581,7 @@ function canonicalPostingText(posting: TreasuryPosting): string {
   return `s:${String(posting.roomName.length)}:${posting.roomName}:s:${String(posting.locationKind.length)}:${posting.locationKind}:s:${String(posting.resource.length)}:${posting.resource}:n:${String(posting.delta)}`;
 }
 
-/** 结构快照的长度前缀 canonical 文本（label 排序确定）。 */
+/** 结构快照的长度前缀 canonical 文本（label 排序确定；执行重验快照——AC4 起不再进 digest）。 */
 function canonicalStructuresText(structureSnapshots: Record<string, string | undefined>): string {
   return [...Object.keys(structureSnapshots).sort()]
     .map((label) => {
@@ -541,6 +590,37 @@ function canonicalStructuresText(structureSnapshots: Record<string, string | und
       return `s:${String(label.length)}:${label}:s:${String(value.length)}:${value}`;
     })
     .join(",");
+}
+
+/**
+ * 完整 structure descriptor 的 canonical 文本（第十一轮 3.13.9 / AC4 digest
+ * 输入）：bindingKind/role/room/locationKind/objectId/expectedType/
+ * expectedRoom/required/incarnation 全字段——任一变化 → digest 变化。
+ */
+function canonicalStructureDescriptorText(descriptor: TreasuryStructureBindingDescriptor): string {
+  const objectId = descriptor.objectId ?? "-";
+  const expectedType = descriptor.expectedType ?? "-";
+  const expectedRoom = descriptor.expectedRoom ?? "-";
+  return `dv${String(descriptor.version)}:k:${descriptor.bindingKind}:r:${descriptor.role}:rm:${String(descriptor.roomName.length)}:${descriptor.roomName}:lc:${descriptor.locationKind}:ob:${String(objectId.length)}:${objectId}:et:${String(expectedType.length)}:${expectedType}:er:${String(expectedRoom.length)}:${expectedRoom}:rq:${descriptor.required ? "1" : "0"}:inc:${String(descriptor.structureId.length)}:${descriptor.structureId}`;
+}
+
+/** binding（heap 形态）+ incarnation id → 完整 durable descriptor。 */
+function toStructureDescriptor(
+  binding: TreasuryActionStructureBinding,
+  incarnationId: string,
+): TreasuryStructureBindingDescriptor {
+  return {
+    bindingKind: binding.bindingKind ?? (binding.objectId !== undefined ? "game_object" : "governed_location"),
+    role: binding.role ?? "auxiliary",
+    roomName: binding.roomName,
+    locationKind: binding.locationKind,
+    structureId: incarnationId,
+    ...(binding.objectId !== undefined ? { objectId: binding.objectId } : {}),
+    ...(binding.expectedType !== undefined ? { expectedType: binding.expectedType } : {}),
+    ...(binding.expectedRoom !== undefined ? { expectedRoom: binding.expectedRoom } : {}),
+    required: binding.required ?? true,
+    version: TREASURY_STRUCTURE_DESCRIPTOR_VERSION,
+  };
 }
 
 /**
@@ -646,12 +726,17 @@ function buildTreasuryActionContractInner(
   // 污染原型链——快照键一律自有属性。
   const structureSnapshots: Record<string, string> = Object.create(null) as Record<string, string>;
   const bindingList: TreasuryActionStructureBinding[] = [];
-  const postingLocationKeys = new Map<string, string>(); // identity → label
-  const locationSeen = new Set<string>();
+  // identity → 该 identity 已派生的 role 集（同结构不同 role 保留两条 descriptor）。
+  const postingLocationRoles = new Map<string, Set<string>>();
+  const postingLabels = new Set<string>();
   for (const posting of derived) {
+    // 【第十一轮 3.13.9】role 由 posting 符号派生：负腿 source、正腿 target。
+    const postingRole = posting.delta < 0 ? "source" : "target";
     const key = `${posting.roomName}:${posting.locationKind}`;
-    if (locationSeen.has(key)) continue;
-    locationSeen.add(key);
+    const roles = postingLocationRoles.get(key) ?? new Set<string>();
+    if (roles.has(postingRole)) continue;
+    roles.add(postingRole);
+    postingLocationRoles.set(key, roles);
     // 【第十轮 3.12.11】required structure 构建时必须真实存在——undefined
     // 一律拒绝（不允许 undefined===undefined 的伪验证）。
     if (!observation.hasRoom(posting.roomName)) {
@@ -671,9 +756,15 @@ function buildTreasuryActionContractInner(
         detail: `posting 位置 ${key} 的 required structure 不存在（incarnation 无法验证——拒绝 contract 构建）`,
       };
     }
-    structureSnapshots[key] = postingStructure;
-    postingLocationKeys.set(key, key);
-    bindingList.push({ roomName: posting.roomName, locationKind: posting.locationKind as "storage" | "terminal", label: key });
+    const label = `${key}:${postingRole}`;
+    structureSnapshots[label] = postingStructure;
+    postingLabels.add(label);
+    bindingList.push({
+      roomName: posting.roomName,
+      locationKind: posting.locationKind as "storage" | "terminal",
+      role: postingRole,
+      label,
+    });
   }
   if (adapter.structureBindings !== undefined) {
     const bindingsCall = adapterCall("structureBindings", () => adapter.structureBindings!(canonicalArgs));
@@ -686,24 +777,38 @@ function buildTreasuryActionContractInner(
       actionContractEvents.rejected += 1;
       return { status: "rejected", reason: "contract_invalid", detail: `structureBindings 输出非法: ${bindings}` };
     }
+    const seenAdapterDescriptorKeys = new Set<string>();
     for (const binding of bindings) {
       // canonical identity（第十轮 3.12.11）：governed_location = room:loc；
       // game_object = obj:objectId（与 posting binding 天然不重合）。
       const identityKey = binding.objectId !== undefined ? `obj:${binding.objectId}` : `${binding.roomName}:${binding.locationKind}`;
-      const postingLabels = new Set(postingLocationKeys.values());
-      if (postingLocationKeys.has(identityKey)) {
-        // 同 identity → 合并（posting binding 为 identity 权威；adapter 的
-        // 重复声明幂等跳过）。
+      // 【第十一轮 3.13.9】descriptor 唯一性 key = (identity, role)：同结构
+      // 不同 role 不静默合并（各自进 digest 与 durable authority）；adapter
+      // 重复声明（同 identity 同 role）幂等跳过（posting binding 为权威）。
+      const bindingRole = binding.role ?? "auxiliary";
+      const descriptorKey = `${identityKey}:${bindingRole}`;
+      if (seenAdapterDescriptorKeys.has(descriptorKey)) {
+        actionContractEvents.rejected += 1;
+        return {
+          status: "rejected",
+          reason: "contract_invalid",
+          detail: `structureBinding 重复声明同一 (identity, role) ${descriptorKey.slice(0, 48)}（descriptor 级重复——拒绝）`,
+        };
+      }
+      seenAdapterDescriptorKeys.add(descriptorKey);
+      if (postingLocationRoles.get(identityKey)?.has(bindingRole)) {
+        // 同 identity + 同 role → 合并（posting binding 为 identity 权威；
+        // adapter 的重复声明幂等跳过）。
         continue;
       }
-      // label 冲突：label 与某 posting binding 的 label 相同但 identity 不同
-      // → 拒绝（label 仅诊断，不得复用同 label 表达不同结构声明）。
+      // label 冲突：label 与某 posting binding 的 label 相同但 (identity,
+      // role) 不同 → 拒绝（label 仅诊断，不得复用同 label 表达不同声明）。
       if (binding.label !== undefined && postingLabels.has(binding.label)) {
         actionContractEvents.rejected += 1;
         return {
           status: "rejected",
           reason: "contract_invalid",
-          detail: `structureBinding label ${binding.label} 与 posting binding 冲突（同 label 不同 identity——拒绝）`,
+          detail: `structureBinding label ${binding.label} 与 posting binding 冲突（同 label 不同 (identity, role)——拒绝）`,
         };
       }
       if (binding.objectId !== undefined) {
@@ -714,6 +819,10 @@ function buildTreasuryActionContractInner(
           room?: { name: string };
         }>(binding.objectId);
         if (object === null || object === undefined) {
+          if (binding.required === false) {
+            // optional binding 缺失：跳过（不进 descriptor 集与快照）。
+            continue;
+          }
           actionContractEvents.rejected += 1;
           return {
             status: "rejected",
@@ -742,8 +851,15 @@ function buildTreasuryActionContractInner(
         bindingList.push(binding);
         continue;
       }
-      // 声明的结构必须可验证：房间不在管辖或位置缺失 → 拒绝（不允许
-      // "声明了但无法验证"）。
+      // 声明的结构必须可验证：房间不在管辖或位置缺失 → required 拒绝；
+      // optional（required=false）缺失 → 跳过（不进 descriptor 集与快照）。
+      const optionalMissing =
+        binding.required === false &&
+        (!observation.hasRoom(binding.roomName) ||
+          observation.location(binding.roomName, binding.locationKind).structureId === undefined);
+      if (optionalMissing) {
+        continue;
+      }
       if (!observation.hasRoom(binding.roomName)) {
         actionContractEvents.rejected += 1;
         return {
@@ -792,6 +908,20 @@ function buildTreasuryActionContractInner(
     }
   }
   const sortedPostings = [...derived].sort((a, b) => (postingKey(a) < postingKey(b) ? -1 : postingKey(a) > postingKey(b) ? 1 : 0));
+  // 【第十一轮 3.13.9】完整 descriptor 集（排序确定）：AC4 digest 输入与
+  // intent/quarantine durable facts 的同源事实——同结构不同 role 各占一条。
+  const sortedDescriptors = [...bindingList]
+    .map((binding) =>
+      toStructureDescriptor(
+        binding,
+        binding.objectId !== undefined ? binding.objectId : structureSnapshots[binding.label ?? `${binding.roomName}:${binding.locationKind}`] ?? "",
+      ),
+    )
+    .sort((a, b) => {
+      const left = canonicalStructureDescriptorText(a);
+      const right = canonicalStructureDescriptorText(b);
+      return left < right ? -1 : left > right ? 1 : 0;
+    });
   // 【第十轮 3.12.6/AC3】durable reconciliation facts 绑定进 contract identity：
   // durable payload version 与内容的稳定 hash、reconciliation contract version
   //（adapter 提供 reconciler 时 durable facts 必填）。durable facts 变化 →
@@ -810,7 +940,7 @@ function buildTreasuryActionContractInner(
       ? `:dfv:${String(durableFacts.version)}:dfh:${durablePayloadHash}:rcv:${String(durableFacts.version)}`
       : ":df:none";
   const digest = hashTreasuryCanonicalString(
-    `AC3:ce:${String(TREASURY_CANONICAL_ENCODING_VERSION)}:k:${String(request.actionKind.length)}:${request.actionKind}:av:${String(adapter.version)}:t:${String(request.transactionId.length)}:${request.transactionId}:a:${String(canonicalized.text.length)}:${canonicalized.text}:p:${sortedPostings.map(canonicalPostingText).join(",")}:s:${canonicalStructuresText(structureSnapshots)}${durableText}`,
+    `AC4:ce:${String(TREASURY_CANONICAL_ENCODING_VERSION)}:k:${String(request.actionKind.length)}:${request.actionKind}:av:${String(adapter.version)}:ar:${String(adapter.registrationId.length)}:${adapter.registrationId}:t:${String(request.transactionId.length)}:${request.transactionId}:a:${String(canonicalized.text.length)}:${canonicalized.text}:p:${sortedPostings.map(canonicalPostingText).join(",")}:sd:${sortedDescriptors.map(canonicalStructureDescriptorText).join(",")}${durableText}`,
   );
   const contract = Object.freeze({
     __brand: "treasury-action-contract",
@@ -824,6 +954,7 @@ function buildTreasuryActionContractInner(
     postings: Object.freeze(sortedPostings.map((p) => Object.freeze({ ...p }))),
     structureSnapshots: Object.freeze(Object.assign(Object.create(null), structureSnapshots)) as Record<string, string>,
     structureBindings: Object.freeze(sortedBindings.map((b) => Object.freeze({ ...b }))),
+    structureDescriptors: Object.freeze(sortedDescriptors.map((d) => Object.freeze({ ...d }))),
     digest,
     ...(durableFacts !== undefined ? { durableFacts: Object.freeze({ ...durableFacts }) } : {}),
     epoch: {
@@ -1016,18 +1147,11 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
         ...(contract.durableFacts !== undefined
           ? { durablePayload: contract.durableFacts.payload, durablePayloadVersion: contract.durableFacts.version }
           : {}),
-        ...(contract.structureBindings.length > 0
+        ...(contract.structureDescriptors.length > 0
           ? {
-              structureFacts: contract.structureBindings
-                .map((binding) => {
-                  const label = binding.label ?? `${binding.roomName}:${binding.locationKind}`;
-                  return {
-                    roomName: binding.roomName,
-                    locationKind: binding.locationKind,
-                    structureId: (contract.structureSnapshots as Record<string, string | undefined>)[label] ?? "",
-                  };
-                })
-                .filter((fact) => fact.structureId !== ""),
+              // 完整 canonical descriptor（第十一轮 3.13.9）——bindingKind/role/
+              // object identity/type/room/required/version 全字段进 durable intent。
+              structureFacts: contract.structureDescriptors.map((descriptor) => ({ ...descriptor })),
             }
           : {}),
       },

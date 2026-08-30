@@ -37,6 +37,12 @@
 
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
+import {
+  TREASURY_STRUCTURE_BINDING_KINDS,
+  TREASURY_STRUCTURE_BINDING_ROLES,
+  TREASURY_STRUCTURE_DESCRIPTOR_VERSION,
+  type TreasuryStructureBindingDescriptor,
+} from "@/runtime/treasury/types";
 
 /** 单条 quarantine 的 canonical posting 事实（合并腿；prepare 验证过的 merged postings）。 */
 export interface TreasuryQuarantineDeltas {
@@ -83,16 +89,12 @@ export interface TreasuryQuarantineEntry {
   readonly legacyV1?: boolean;
 }
 
-/** quarantine v2 的 structure incarnation fact（与 intent structureFacts 同形状）。 */
-export interface TreasuryQuarantineStructureFact {
-  readonly roomName: string;
-  readonly locationKind: string;
-  readonly structureId: string;
-}
+/** quarantine v3 的完整 structure descriptor（第十一轮 3.13.9；与 intent structureFacts 同形状）。 */
+export type TreasuryQuarantineStructureFact = TreasuryStructureBindingDescriptor;
 
 export interface TreasuryQuarantineStore {
-  /** schema 版本（当前 2；未知版本 fail closed）。 */
-  version: 2;
+  /** schema 版本（当前 3；未知版本 fail closed）。 */
+  version: 3;
   /** key = "q:"+transactionId（transactionId 字符集受限，前缀无边界歧义，防危险字面量）。 */
   entries: Record<string, TreasuryQuarantineEntry>;
   /** entries 自有键计数（load 校验与 fault-slot admission 的 O(1) 权威）。 */
@@ -101,7 +103,7 @@ export interface TreasuryQuarantineStore {
   overflowed?: boolean;
 }
 
-export const TREASURY_QUARANTINE_VERSION = 2 as const;
+export const TREASURY_QUARANTINE_VERSION = 3 as const;
 export const TREASURY_QUARANTINE_MAX_ENTRIES = 64;
 
 const QUARANTINE_KEY_PREFIX = "q:";
@@ -300,6 +302,12 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
     for (const fact of candidate.structureFacts) {
       if (!fact || typeof fact !== "object") return "structureFact 项非对象";
       const typed = fact as Partial<TreasuryQuarantineStructureFact>;
+      if (typeof typed.bindingKind !== "string" || !TREASURY_STRUCTURE_BINDING_KINDS.has(typed.bindingKind)) {
+        return `structureFact.bindingKind 非法: ${String(typed.bindingKind).slice(0, 24)}`;
+      }
+      if (typeof typed.role !== "string" || !TREASURY_STRUCTURE_BINDING_ROLES.has(typed.role)) {
+        return `structureFact.role 非法: ${String(typed.role).slice(0, 24)}`;
+      }
       if (typeof typed.roomName !== "string" || typed.roomName.length === 0 || typed.roomName.length > 16) {
         return "structureFact.roomName 非法";
       }
@@ -308,6 +316,15 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
       }
       if (typeof typed.structureId !== "string" || typed.structureId.length === 0 || typed.structureId.length > 48) {
         return "structureFact.structureId 非法（须为 1..48 字符）";
+      }
+      if (typed.objectId !== undefined && (typeof typed.objectId !== "string" || typed.objectId.length === 0 || typed.objectId.length > 48)) {
+        return "structureFact.objectId 非法（须为 1..48 字符）";
+      }
+      if (typeof typed.required !== "boolean") {
+        return "structureFact.required 须为布尔";
+      }
+      if (typed.version !== TREASURY_STRUCTURE_DESCRIPTOR_VERSION) {
+        return `structureFact.version 非法（当前 ${String(TREASURY_STRUCTURE_DESCRIPTOR_VERSION)}）: ${String(typed.version)}`;
       }
     }
   }
@@ -407,6 +424,31 @@ function fatalRuntime(store: TreasuryQuarantineStore, reason: string): Quarantin
 }
 
 /**
+ * 旧 structureFacts（v2 及更早三元组形状）补全为完整 descriptor（第十一轮
+ * 3.13.9）：缺省 governed_location/auxiliary/required/v1——不伪造缺失字段
+ *（由升级后形状校验检出 fatal）。
+ */
+function upgradeLegacyStructureFacts(entry: { structureFacts?: unknown }): void {
+  const legacyFacts = entry.structureFacts;
+  if (!Array.isArray(legacyFacts)) return;
+  (entry as { structureFacts?: unknown }).structureFacts = legacyFacts.map((fact) => {
+    const typed = fact as Partial<TreasuryQuarantineStructureFact>;
+    return {
+      bindingKind: typed.bindingKind ?? "governed_location",
+      role: typed.role ?? "auxiliary",
+      roomName: typed.roomName,
+      locationKind: typed.locationKind,
+      structureId: typed.structureId,
+      ...(typed.objectId !== undefined ? { objectId: typed.objectId } : {}),
+      ...(typed.expectedType !== undefined ? { expectedType: typed.expectedType } : {}),
+      ...(typed.expectedRoom !== undefined ? { expectedRoom: typed.expectedRoom } : {}),
+      required: typed.required ?? true,
+      version: typed.version ?? TREASURY_STRUCTURE_DESCRIPTOR_VERSION,
+    } as TreasuryQuarantineStructureFact;
+  });
+}
+
+/**
  * 加载（含校验）：写入/聚合路径专用（可能写 Memory——空 store 初始化）。
  * 校验失败（版本未知/元数据不符/entry 损坏/聚合溢出）→ fatal fail closed：
  * 不删数据、写入拒绝、聚合空、blockers 报 blocking，直至 faultResolution
@@ -462,6 +504,7 @@ function loadQuarantineStoreRuntime(): QuarantineStoreRuntime {
         ...(intentRecord?.authorizationDigest !== undefined ? { authorizationDigest: intentRecord.authorizationDigest } : {}),
         ...(intentRecord === undefined ? { legacyV1: true } : {}),
       };
+      upgradeLegacyStructureFacts(entries[key] as Partial<TreasuryQuarantineEntry>);
     }
     const upgraded: TreasuryQuarantineStore = { ...(raw as TreasuryQuarantineStore), version: TREASURY_QUARANTINE_VERSION, entries };
     const shapeError = validateQuarantineStoreShape(upgraded);
@@ -471,6 +514,25 @@ function loadQuarantineStoreRuntime(): QuarantineStoreRuntime {
     }
     quarantineBranch().quarantine = upgraded;
     heapRuntime = { store: upgraded, fatal: null };
+    return heapRuntime;
+  }
+  if ((raw.version as number) === 2) {
+    // v2 → v3 迁移（第十一轮 3.13.9，原子）：structureFacts 三元组补全为
+    // 完整 descriptor；损坏字段由升级后校验检出 fatal（原数据保留）。
+    const entries: Record<string, TreasuryQuarantineEntry> = {};
+    for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
+      const legacy = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as Partial<TreasuryQuarantineEntry>;
+      upgradeLegacyStructureFacts(legacy);
+      entries[key] = legacy as TreasuryQuarantineEntry;
+    }
+    const upgradedV2: TreasuryQuarantineStore = { ...(raw as TreasuryQuarantineStore), version: TREASURY_QUARANTINE_VERSION, entries };
+    const shapeErrorV2 = validateQuarantineStoreShape(upgradedV2);
+    if (shapeErrorV2 !== null) {
+      heapRuntime = fatalRuntime(raw, `${shapeErrorV2}（v2→v3 升级校验失败，quarantine fail closed，原数据保留）`);
+      return heapRuntime;
+    }
+    quarantineBranch().quarantine = upgradedV2;
+    heapRuntime = { store: upgradedV2, fatal: null };
     return heapRuntime;
   }
   if (raw.version === undefined) {

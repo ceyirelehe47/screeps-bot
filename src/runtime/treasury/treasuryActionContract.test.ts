@@ -30,6 +30,9 @@ import {
 } from "@/runtime/treasury/actionContracts";
 import type { TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
 import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
+import { readTreasuryIntentEntry, type TreasuryIntentStore } from "@/runtime/treasury/intents";
+import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
+import { registerTreasuryPolicyResolver } from "@/runtime/treasury/policyAuthority";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
 const ROOMS: RoomSpec[] = [
@@ -456,11 +459,17 @@ describe("contract digest AC3：durable reconciliation facts 绑定（第十轮 
     const c = buildTreasuryActionContract(service, { actionKind: "test.vec", transactionId: "ac3_fixed", args: {} });
     if (c.status !== "built") throw new Error("build c failed");
     expect(c.contract.digest).not.toBe(fixedDigest);
-    // 恢复 A/v1 → digest 回到固定值（编码无漂移）。
+    // 【第十一轮 AC4】digest 绑定 adapter registration identity：test-only
+    // replace（同 kind/version/同 payload）产生新 registrationId → digest
+    // 变化（旧 contract 因 registration identity 不匹配失效）；新
+    // registration 下重构建仍确定性（连续两次相同）。
     replaceTreasuryActionAdapterForTest(vectorAdapter("vec-payload-A"));
     const a3 = buildTreasuryActionContract(service, { actionKind: "test.vec", transactionId: "ac3_fixed", args: {} });
     if (a3.status !== "built") throw new Error("build a3 failed");
-    expect(a3.contract.digest).toBe(fixedDigest);
+    expect(a3.contract.digest).not.toBe(fixedDigest);
+    const a4 = buildTreasuryActionContract(service, { actionKind: "test.vec", transactionId: "ac3_fixed", args: {} });
+    if (a4.status !== "built") throw new Error("build a4 failed");
+    expect(a4.contract.digest).toBe(a3.contract.digest);
   });
 
   it("提供 reconciler 但无 durableFacts 的 adapter：contract 构建拒绝（durable facts 必填）", () => {
@@ -504,7 +513,7 @@ describe("structure binding canonical authority（第十轮 3.12.11）", () => {
     registerTreasuryActionAdapter(
       locationAdapter(
         [
-          { roomName: "W1N57", locationKind: "terminal", label: "W1N57:storage" }, // label 撞 posting 但 identity 不同
+          { roomName: "W1N57", locationKind: "terminal", label: "W1N57:storage:source" }, // label 撞 posting（role 后缀）但 identity 不同
         ],
         "test.bind_b",
       ),
@@ -590,5 +599,201 @@ describe("structure binding canonical authority（第十轮 3.12.11）", () => {
     const second = buildTreasuryActionContract(service, { actionKind: "test.bind_f", transactionId: "bind_f", args: {} });
     if (first.status !== "built" || second.status !== "built") throw new Error("build failed");
     expect(first.contract.digest).not.toBe(second.contract.digest);
+  });
+});
+
+describe("完整 structure descriptor（第十一轮 3.13.9 / AC4）", () => {
+  interface DescriptorAdapterOverrides {
+    readonly bindings?: TreasuryActionStructureBinding[];
+    readonly kind?: string;
+  }
+  function descriptorAdapter(overrides: DescriptorAdapterOverrides = {}) {
+    return {
+      kind: overrides.kind ?? "test.desc",
+      version: 1,
+      validate: (args: unknown): string | null => (args && typeof args === "object" ? null : "args 非对象"),
+      derivePostings: () => [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }],
+      execute: (): { ok: boolean } => ({ ok: true }),
+      structureBindings: () => overrides.bindings ?? [],
+      durableFacts: () => ({ version: 1, payload: "desc-fixture" }),
+      reconcile: () => "still_uncertain" as const,
+    };
+  }
+
+  it("role 变化 → digest 变化；同结构不同 role 不被合并（双 descriptor 保留）", () => {
+    registerTreasuryActionAdapter(descriptorAdapter({ kind: "test.desc_role", bindings: [{ roomName: "W1N57", locationKind: "terminal", role: "fee_source" }] }));
+    const service = makeService();
+    const feeSource = buildTreasuryActionContract(service, { actionKind: "test.desc_role", transactionId: "desc_role", args: {} });
+    if (feeSource.status !== "built") throw new Error("build fee_source failed");
+    // posting binding（W1N57:storage, source）+ adapter 声明（W1N57:terminal, fee_source）两条 descriptor。
+    const roles = feeSource.contract.structureDescriptors.map((d) => d.role).sort();
+    expect(roles).toEqual(["fee_source", "source"]);
+    // 换 role（production_structure）→ digest 变化。
+    replaceTreasuryActionAdapterForTest(
+      descriptorAdapter({ kind: "test.desc_role", bindings: [{ roomName: "W1N57", locationKind: "terminal", role: "production_structure" }] }),
+    );
+    const prod = buildTreasuryActionContract(service, { actionKind: "test.desc_role", transactionId: "desc_role", args: {} });
+    if (prod.status !== "built") throw new Error("build prod failed");
+    expect(prod.contract.digest).not.toBe(feeSource.contract.digest);
+    // 同一结构（W1N57:terminal）以两个 role 同时声明 → 保留两条（不静默合并）。
+    replaceTreasuryActionAdapterForTest(
+      descriptorAdapter({
+        kind: "test.desc_role",
+        bindings: [
+          { roomName: "W1N57", locationKind: "terminal", role: "fee_source" },
+          { roomName: "W1N57", locationKind: "terminal", role: "production_structure" },
+        ],
+      }),
+    );
+    const dual = buildTreasuryActionContract(service, { actionKind: "test.desc_role", transactionId: "desc_role", args: {} });
+    if (dual.status !== "built") throw new Error("build dual failed");
+    const terminalRoles = dual.contract.structureDescriptors.filter((d) => d.roomName === "W1N57" && d.locationKind === "terminal").map((d) => d.role).sort();
+    expect(terminalRoles).toEqual(["fee_source", "production_structure"]);
+  });
+
+  it("expectedType / expectedRoom / objectId 变化 → digest 变化（game_object 全字段进 digest）", () => {
+    (Game as unknown as { objects: Record<string, unknown> }).objects = {
+      "lab-001": { id: "lab-001", structureType: "lab", room: { name: "W1N57" } },
+      "lab-002": { id: "lab-002", structureType: "lab", room: { name: "W1N57" } },
+    };
+    const service = makeService();
+    registerTreasuryActionAdapter(
+      descriptorAdapter({ kind: "test.desc_obj", bindings: [{ roomName: "W1N57", locationKind: "storage", objectId: "lab-001", expectedType: "lab", expectedRoom: "W1N57" }] }),
+    );
+    const base = buildTreasuryActionContract(service, { actionKind: "test.desc_obj", transactionId: "desc_obj", args: {} });
+    if (base.status !== "built") throw new Error("build base failed");
+    const objectIdDescriptor = base.contract.structureDescriptors.find((d) => d.bindingKind === "game_object");
+    expect(objectIdDescriptor).toMatchObject({ objectId: "lab-001", expectedType: "lab", expectedRoom: "W1N57", structureId: "lab-001" });
+    // objectId 变化 → digest 变化。
+    replaceTreasuryActionAdapterForTest(
+      descriptorAdapter({ kind: "test.desc_obj", bindings: [{ roomName: "W1N57", locationKind: "storage", objectId: "lab-002", expectedType: "lab", expectedRoom: "W1N57" }] }),
+    );
+    const byObject = buildTreasuryActionContract(service, { actionKind: "test.desc_obj", transactionId: "desc_obj", args: {} });
+    if (byObject.status !== "built") throw new Error("build byObject failed");
+    expect(byObject.contract.digest).not.toBe(base.contract.digest);
+    // expectedRoom 声明变化（改为 E2N2——对象不匹配会拒绝，因此用省略 vs 存在比较）：
+    replaceTreasuryActionAdapterForTest(
+      descriptorAdapter({ kind: "test.desc_obj", bindings: [{ roomName: "W1N57", locationKind: "storage", objectId: "lab-001", expectedType: "lab" }] }),
+    );
+    const noRoom = buildTreasuryActionContract(service, { actionKind: "test.desc_obj", transactionId: "desc_obj", args: {} });
+    if (noRoom.status !== "built") throw new Error("build noRoom failed");
+    expect(noRoom.contract.digest).not.toBe(base.contract.digest);
+    // expectedType 省略 → digest 变化。
+    replaceTreasuryActionAdapterForTest(
+      descriptorAdapter({ kind: "test.desc_obj", bindings: [{ roomName: "W1N57", locationKind: "storage", objectId: "lab-001", expectedRoom: "W1N57" }] }),
+    );
+    const noType = buildTreasuryActionContract(service, { actionKind: "test.desc_obj", transactionId: "desc_obj", args: {} });
+    if (noType.status !== "built") throw new Error("build noType failed");
+    expect(noType.contract.digest).not.toBe(base.contract.digest);
+  });
+
+  it("required 缺失拒绝；optional（required=false）缺失跳过不进 descriptor", () => {
+    registerTreasuryActionAdapter(
+      descriptorAdapter({ kind: "test.desc_req", bindings: [{ roomName: "E1N1", locationKind: "storage" }] }),
+    );
+    const service = makeService();
+    const missing = buildTreasuryActionContract(service, { actionKind: "test.desc_req", transactionId: "desc_req", args: {} });
+    expect(missing.status).toBe("rejected");
+    // optional 声明同一缺失结构 → 跳过（构建成功，descriptor 集不含该声明）。
+    replaceTreasuryActionAdapterForTest(
+      descriptorAdapter({ kind: "test.desc_req", bindings: [{ roomName: "E1N1", locationKind: "storage", required: false }] }),
+    );
+    const optional = buildTreasuryActionContract(service, { actionKind: "test.desc_req", transactionId: "desc_req", args: {} });
+    expect(optional.status).toBe("built");
+    if (optional.status === "built") {
+      expect(optional.contract.structureDescriptors.every((d) => d.roomName !== "E1N1")).toBe(true);
+      expect(optional.contract.structureDescriptors.every((d) => d.required === true)).toBe(true);
+    }
+  });
+
+  it("完整 descriptor 进入 durable intent，global reset 后仍可读取；reconciler 收到完整 descriptor", () => {
+    (Game as unknown as { objects: Record<string, unknown> }).objects = {
+      "lab-001": { id: "lab-001", structureType: "lab", room: { name: "W1N57" } },
+    };
+    let observedFacts: { structureDescriptors?: unknown } | null = null;
+    registerTreasuryActionAdapter({
+      kind: "test.desc_durable",
+      version: 1,
+      validate: (args: unknown): string | null => (args && typeof args === "object" ? null : "args 非对象"),
+      derivePostings: () => [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }],
+      execute: (): { ok: boolean } => {
+        throw new Error("desc-durable: execution unknown fixture");
+      },
+      structureBindings: () => [
+        { roomName: "W1N57", locationKind: "terminal", role: "fee_source" },
+        { roomName: "W1N57", locationKind: "storage", objectId: "lab-001", expectedType: "lab", role: "production_structure" },
+      ],
+      durableFacts: () => ({ version: 1, payload: "durable-fixture" }),
+      reconcile: (facts: { structureDescriptors?: unknown }): "observed_not_executed" => {
+        observedFacts = { structureDescriptors: facts.structureDescriptors };
+        return "observed_not_executed";
+      },
+    });
+    const service = makeService();
+    const built = buildTreasuryActionContract(service, { actionKind: "test.desc_durable", transactionId: "desc_durable", args: {} });
+    if (built.status !== "built") throw new Error("build failed");
+    const authorized = service.authorizeTreasuryActionContract(built.contract);
+    expect(authorized.status).toBe("authorized");
+    if (authorized.status !== "authorized") throw new Error("unreachable");
+    expect(() => executeTreasuryActionContract(service, { contract: built.contract, authorization: authorized.bundle })).toThrow();
+    // execution unknown → durable quarantine 保留完整 descriptor（governed +
+    // game_object 两种 binding；intent 随事实转移释放）。
+    const entry = readTreasuryQuarantineEntry("desc_durable");
+    expect(entry?.structureFacts).toBeDefined();
+    const facts = entry?.structureFacts ?? [];
+    expect(facts.some((f) => f.bindingKind === "governed_location" && f.role === "source")).toBe(true);
+    expect(facts.some((f) => f.bindingKind === "governed_location" && f.role === "fee_source")).toBe(true);
+    expect(facts.some((f) => f.bindingKind === "game_object" && f.role === "production_structure" && f.objectId === "lab-001")).toBe(true);
+    expect(facts.every((f) => f.version === 1 && typeof f.required === "boolean")).toBe(true);
+    // global reset（重建 service）后 descriptor 仍在 durable authority 中。
+    const next = makeService();
+    void next;
+    const entryAfterReset = readTreasuryQuarantineEntry("desc_durable");
+    expect(entryAfterReset?.structureFacts?.length).toBe(facts.length);
+    // reconciler 收到完整 descriptor。
+    Game.time += 2;
+    const postService = makeService();
+    const capability = postService.issueTreasuryReconciliationCapability({ transactionId: "desc_durable" });
+    expect(capability.status).toBe("issued");
+    expect(observedFacts).not.toBeNull();
+    const reconcilerDescriptors = (observedFacts as { structureDescriptors?: { objectId?: string; role: string }[] } | null)?.structureDescriptors ?? [];
+    expect(reconcilerDescriptors.some((d) => d.objectId === "lab-001" && d.role === "production_structure")).toBe(true);
+  });
+
+  it("v3 简化三元组 structureFacts 迁移为完整 descriptor（governed/auxiliary/required/v1）", () => {
+    // 构造 v3 intent store（旧三元组 facts）→ load 迁移 → 读出完整 descriptor。
+    const boot = makeService();
+    void boot;
+    Memory.runtime!.treasury!.intents = {
+      version: 3,
+      entries: {
+        "i:desc_legacy": {
+          transactionId: "desc_legacy",
+          digest: "0123456789abcdef",
+          actionKind: "legacy.kind",
+          kind: "legacy.kind",
+          source: "test",
+          postings: [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }],
+          outcome: "started_unknown",
+          settlement: "executing",
+          structureFacts: [
+            { roomName: "W1N57", locationKind: "storage", structureId: "stor-1" },
+          ] as unknown as TreasuryIntentStore["entries"][string]["structureFacts"],
+          createdAtTick: Game.time,
+          updatedAtTick: Game.time,
+        },
+      },
+      entryCount: 1,
+      updatedAt: Game.time,
+    } as unknown as TreasuryIntentStore;
+    const migrated = readTreasuryIntentEntry("desc_legacy");
+    expect(migrated?.structureFacts?.[0]).toMatchObject({
+      bindingKind: "governed_location",
+      role: "auxiliary",
+      required: true,
+      version: 1,
+      structureId: "stor-1",
+    });
+    expect((Memory.runtime!.treasury!.intents as { version: number }).version).toBe(4);
   });
 });

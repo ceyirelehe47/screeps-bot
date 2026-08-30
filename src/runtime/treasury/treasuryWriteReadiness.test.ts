@@ -143,7 +143,7 @@ describe("write admission readiness", () => {
 
   it("quarantine store 损坏与 writeFault marker 损坏：ready=false", () => {
     injectQuarantineEntry("ts7_ready_corrupt");
-    (Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore).entryCount = 77;
+    (Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore).entryCount = 77;
     // 轻量 health 探测只查元数据形状；entry 级损坏由 load 显式检出（与
     // receipt 契约一致）——模拟 global reset 后首次访问触发 load。
     resetTreasuryQuarantineRuntimeForTest();

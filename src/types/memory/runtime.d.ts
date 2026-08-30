@@ -699,7 +699,7 @@ declare global {
        * 绝不持久化完整 observation/service/journal/任意大 payload。
        */
       intents?: {
-        version: 3;
+        version: 4;
         entries: Record<
           string,
           {
@@ -725,10 +725,18 @@ declare global {
             /** settlement workflow state（第十轮 v3：与 outcome 正交）。 */
             settlement: string;
             structureId?: string;
+            /** 完整 structure descriptor（第十一轮 v4：bindingKind/role/identity/type/room/incarnation/required/version）。 */
             structureFacts?: Array<{
+              bindingKind: string;
+              role: string;
               roomName: string;
               locationKind: string;
               structureId: string;
+              objectId?: string;
+              expectedType?: string;
+              expectedRoom?: string;
+              required: boolean;
+              version: number;
             }>;
             ownerIdentity?: string;
             policyIdentity?: string;
@@ -765,7 +773,7 @@ declare global {
        * fault resolution。
        */
       quarantine?: {
-        version: 2;
+        version: 3;
         entries: Record<
           string,
           {
@@ -795,10 +803,18 @@ declare global {
             authorizationDigest?: string;
             ownerIdentity?: string;
             policyIdentity?: string;
+            /** 完整 structure descriptor（第十一轮 v3：与 intent structureFacts 同形状）。 */
             structureFacts?: Array<{
+              bindingKind: string;
+              role: string;
               roomName: string;
               locationKind: string;
               structureId: string;
+              objectId?: string;
+              expectedType?: string;
+              expectedRoom?: string;
+              required: boolean;
+              version: number;
             }>;
             /** v1 迁移且无并存 intent 补全（不参与 contract-backed resolution）。 */
             legacyV1?: boolean;

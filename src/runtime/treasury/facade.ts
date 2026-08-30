@@ -168,7 +168,7 @@ import {
 } from "@/runtime/treasury/faultResolution";
 import { readTreasuryQuarantineRevision } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentRevision } from "@/runtime/treasury/intents";
-import type { TreasuryPosting } from "@/runtime/treasury/types";
+import type { TreasuryPosting, TreasuryStructureBindingDescriptor } from "@/runtime/treasury/types";
 import {
   type TreasuryBalanceView,
   type TreasuryCommitmentIndex,
@@ -350,7 +350,7 @@ export interface TreasuryWriterKernelExecution {
     readonly durablePayload?: string;
     readonly durablePayloadVersion?: number;
     /** structure incarnation facts（受控数组，≤16；转移至 quarantine v2）。 */
-    readonly structureFacts?: readonly { roomName: string; locationKind: string; structureId: string }[];
+    readonly structureFacts?: readonly TreasuryStructureBindingDescriptor[];
   };
 }
 
@@ -2943,6 +2943,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         postings: facts0.postings.map((leg) => ({ ...leg })) as never,
         ...(facts0.durablePayload !== undefined ? { durablePayload: facts0.durablePayload } : {}),
         ...(facts0.durablePayloadVersion !== undefined ? { durablePayloadVersion: facts0.durablePayloadVersion } : {}),
+        ...(facts0.structureFacts !== undefined
+          ? { structureDescriptors: facts0.structureFacts.map((fact) => ({ ...fact })) as unknown as TreasuryStructureBindingDescriptor[] }
+          : {}),
       };
       let conclusion: TreasuryReconciliationConclusion;
       try {

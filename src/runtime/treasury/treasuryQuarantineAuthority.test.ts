@@ -74,7 +74,7 @@ function validEntry(transactionId = "ts7_v1"): TreasuryQuarantineEntry {
 function corruptStore(mutate: (store: TreasuryQuarantineStore) => void): void {
   const write = quarantineTreasuryTransaction(validEntry());
   if (write.status !== "written") throw new Error(`setup 写入失败: ${JSON.stringify(write)}`);
-  const store = Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore;
+  const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
   mutate(store);
   resetTreasuryQuarantineRuntimeForTest();
   // 模拟 global reset 后的首次访问（load 全量验证在此发生；轻量 health 探测
@@ -90,8 +90,8 @@ beforeEach(() => {
 describe("quarantine schema v2 元数据", () => {
   it("首次写入自动初始化 v2：version/entryCount 元数据正确", () => {
     expect(quarantineTreasuryTransaction(validEntry()).status).toBe("written");
-    const store = Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore;
-    expect(store.version).toBe(2);
+    const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
+    expect(store.version).toBe(3);
     expect(store.entryCount).toBe(1);
     expect(Object.keys(store.entries)).toEqual(["q:ts7_v1"]);
     const health = peekTreasuryQuarantineHealth();
@@ -102,7 +102,7 @@ describe("quarantine schema v2 元数据", () => {
   it("同 id 重复写入幂等保留首条（entryCount 不虚增）", () => {
     expect(quarantineTreasuryTransaction(validEntry()).status).toBe("written");
     expect(quarantineTreasuryTransaction(validEntry()).status).toBe("already_present");
-    expect((Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore).entryCount).toBe(1);
+    expect((Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore).entryCount).toBe(1);
   });
 });
 
@@ -117,7 +117,7 @@ describe("quarantine 损坏 fail closed（load 全量验证）", () => {
     expect(quarantineTreasuryTransaction(validEntry("ts7_after")).status).toBe("rejected");
     expect(treasuryQuarantineOutflowTotals().size).toBe(0); // 未验证 store 不聚合
     // 原数据保留（零删除）。
-    const store = Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore;
+    const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
     expect(Object.keys(store.entries)).toHaveLength(1);
     // prepare 被全局阻断：quarantine_store_fatal，callback 零调用。
     const service = makeService();
@@ -165,7 +165,7 @@ describe("quarantine 损坏 fail closed（load 全量验证）", () => {
     expect(peekTreasuryQuarantineHealth().healthy).toBe(false);
     expect(treasuryQuarantineBlockers().blocking).toBe(true);
     expect(quarantineTreasuryTransaction(validEntry("ts7_post")).status).toBe("rejected");
-    const store = Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore;
+    const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
     expect(store.entries).toBeDefined(); // 零删除
   });
 
@@ -175,7 +175,7 @@ describe("quarantine 损坏 fail closed（load 全量验证）", () => {
     Memory.runtime.treasury = { ...(Memory.runtime.treasury ?? {}), quarantine: { entries: {} } as never };
     resetTreasuryQuarantineRuntimeForTest();
     expect(quarantineTreasuryTransaction(validEntry()).status).toBe("written");
-    expect((Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore).version).toBe(2);
+    expect((Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore).version).toBe(3);
     // 非空 legacy store → fatal（显式 repair 处理）。
     clearTreasuryPersistenceForTest();
     corruptStore((store) => {
@@ -203,7 +203,7 @@ describe("quarantine 损坏 fail closed（load 全量验证）", () => {
     delete Memory.runtime!.treasury!.writeFault;
     expect(service.prepareTransaction(freshInput(service, "ts7_overflow_blocked")).status).toBe("rejected");
     // 自动路径绝不清除 overflowed（store 原样保留）。
-    expect((Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore).overflowed).toBe(true);
+    expect((Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore).overflowed).toBe(true);
   });
 });
 

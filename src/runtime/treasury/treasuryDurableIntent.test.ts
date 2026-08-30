@@ -198,7 +198,7 @@ describe("唯一安全顺序与生命周期", () => {
     // health/blocker 检查放行（entryCount=0 不阻断），intent 写入触发 load 全量
     // 验证时 fatal——唯一确定性触达 intent 写失败分支的方式。
     Memory.runtime!.treasury!.intents = {
-      version: 2,
+      version: 2 as unknown as 3,
       entries: {
         "i:ghost": { transactionId: "ghost", digest: "bad", actionKind: "k", kind: "k", source: "s", postings: [], phase: "ready", createdAtTick: 1, updatedAtTick: 1 },
       },
@@ -331,7 +331,7 @@ describe("emergency intent authority（quarantine 写失败）", () => {
     const service = makeService();
     seedIntent("ti_emergency", "executing", -800);
     // 损坏 quarantine store：未知版本使一切写入/读取 fatal（先建合法 store）。
-    Memory.runtime!.treasury!.quarantine = { version: 2, entries: {}, entryCount: 0 };
+    Memory.runtime!.treasury!.quarantine = { version: 2 as unknown as 3, entries: {}, entryCount: 0 };
     (Memory.runtime!.treasury!.quarantine as { version: number }).version = 99;
     resetTreasuryIntentRuntimeForTest();
     Game.time += 1;
@@ -358,7 +358,7 @@ describe("emergency intent authority（quarantine 写失败）", () => {
   it("quarantine 写失败后修复 store：下一 tick 恢复重试成功（intent→quarantine 转换完成）", () => {
     const service = makeService();
     seedIntent("ti_retry", "executing");
-    Memory.runtime!.treasury!.quarantine = { version: 2, entries: {}, entryCount: 0 };
+    Memory.runtime!.treasury!.quarantine = { version: 2 as unknown as 3, entries: {}, entryCount: 0 };
     (Memory.runtime!.treasury!.quarantine as { version: number }).version = 99;
     resetTreasuryIntentRuntimeForTest();
     Game.time += 1;
@@ -428,7 +428,7 @@ describe("store 健康契约", () => {
     expect(health.healthy).toBe(true);
     expect(health.entryCount).toBe(1);
     const store = Memory.runtime!.treasury!.intents!;
-    expect(store.version).toBe(3);
+    expect(store.version).toBe(4);
     expect(store.entryCount).toBe(1);
     // 冻结快照：外部修改不生效。
     const snapshot = readTreasuryIntentEntry("ti_health")!;
@@ -768,7 +768,7 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
     // 触发 load：read-back 或任何写路径访问 → v1 迁移 v3。
     const entry = readTreasuryIntentEntry("ti_v1");
     expect(entry?.transactionId).toBe("ti_v1");
-    expect((Memory.runtime.treasury.intents as { version: number }).version).toBe(3);
+    expect((Memory.runtime.treasury.intents as { version: number }).version).toBe(4);
     expect(Memory.runtime.treasury.intents.entries["i:ti_v1"].digest).toBe("0123456789abcdef");
     // 旧 phase "ready" → (not_started, ready)。
     expect(entry?.outcome).toBe("not_started");
@@ -798,7 +798,7 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
     Memory.runtime = Memory.runtime ?? ({} as never);
     Memory.runtime.treasury = Memory.runtime.treasury ?? ({} as never);
     Memory.runtime.treasury.intents = {
-      version: 2,
+      version: 2 as unknown as 3,
       entries: {
         "i:ti_bad_phase": {
           transactionId: "ti_bad_phase",
@@ -823,15 +823,15 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
 
 describe("durable authority cohesion（第十轮 5.1：quarantine v2 完整合同事实）", () => {
   /** contract 路径的 execution options（完整合同身份 fixture）。 */
-  const contractFacts = {
+  const contractFacts: NonNullable<Parameters<TreasuryTestService["executePreparedAction"]>[2]>["intentContract"] = {
     contractId: "ac:abcdef0123456789",
     contractDigest: "abcdef0123456789",
     adapterVersion: 2,
     durablePayload: "transfer|W1N57:storage|W1N57:terminal|energy|500",
     durablePayloadVersion: 1,
     structureFacts: [
-      { roomName: "W1N57", locationKind: "storage", structureId: "stor-1" },
-      { roomName: "W1N57", locationKind: "terminal", structureId: "term-1" },
+      { bindingKind: "governed_location", role: "source", roomName: "W1N57", locationKind: "storage", structureId: "stor-1", required: true, version: 1 },
+      { bindingKind: "governed_location", role: "target", roomName: "W1N57", locationKind: "terminal", structureId: "term-1", required: true, version: 1 },
     ],
   };
 
@@ -945,7 +945,7 @@ describe("durable authority cohesion（第十轮 5.1：quarantine v2 完整合�
     const legacy = readTreasuryQuarantineEntry("dac_mig2");
     expect(legacy?.outcome).toBe("returned_ok"); // commit 类 phase → returned_ok
     expect(legacy?.legacyV1).toBe(true); // 无并存 intent → legacy 标记
-    expect((Memory.runtime.treasury.quarantine as { version: number }).version).toBe(2);
+    expect((Memory.runtime.treasury.quarantine as { version: number }).version).toBe(3);
   });
 
   it("recovery slot：同 ID 双权威（转移窗口残留）只占一个 slot", () => {

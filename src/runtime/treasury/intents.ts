@@ -40,6 +40,12 @@
  */
 
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
+import {
+  TREASURY_STRUCTURE_BINDING_KINDS,
+  TREASURY_STRUCTURE_BINDING_ROLES,
+  TREASURY_STRUCTURE_DESCRIPTOR_VERSION,
+  type TreasuryStructureBindingDescriptor,
+} from "@/runtime/treasury/types";
 import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
 import {
   quarantineTreasuryTransaction,
@@ -48,7 +54,7 @@ import {
   type TreasuryQuarantineEntry,
 } from "@/runtime/treasury/quarantine";
 
-export const TREASURY_INTENT_VERSION = 3 as const;
+export const TREASURY_INTENT_VERSION = 4 as const;
 /** 与 quarantine 同上限——recovery slot 统一计数的前提。 */
 export const TREASURY_INTENT_MAX_ENTRIES = 64;
 
@@ -168,12 +174,8 @@ export interface TreasuryIntentPosting {
   readonly delta: number;
 }
 
-/** intent 携带的 structure incarnation fact（与 quarantine v2 同形状）。 */
-export interface TreasuryIntentStructureFact {
-  readonly roomName: string;
-  readonly locationKind: string;
-  readonly structureId: string;
-}
+/** intent 携带的完整 structure descriptor（第十一轮 3.13.9；与 quarantine v3 同形状）。 */
+export type TreasuryIntentStructureFact = TreasuryStructureBindingDescriptor;
 
 export interface TreasuryIntentEntry {
   transactionId: string;
@@ -216,7 +218,7 @@ export interface TreasuryIntentEntry {
 }
 
 export interface TreasuryIntentStore {
-  version: 3;
+  version: 4;
   entries: Record<string, TreasuryIntentEntry>;
   entryCount: number;
   updatedAt: number;
@@ -373,6 +375,12 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
     for (const fact of candidate.structureFacts) {
       if (!fact || typeof fact !== "object") return "structureFact 项非对象";
       const typed = fact as Partial<TreasuryIntentStructureFact>;
+      if (typeof typed.bindingKind !== "string" || !TREASURY_STRUCTURE_BINDING_KINDS.has(typed.bindingKind)) {
+        return `structureFact.bindingKind 非法: ${String(typed.bindingKind).slice(0, 24)}`;
+      }
+      if (typeof typed.role !== "string" || !TREASURY_STRUCTURE_BINDING_ROLES.has(typed.role)) {
+        return `structureFact.role 非法: ${String(typed.role).slice(0, 24)}`;
+      }
       if (typeof typed.roomName !== "string" || typed.roomName.length === 0 || typed.roomName.length > 16) {
         return "structureFact.roomName 非法";
       }
@@ -381,6 +389,15 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
       }
       if (typeof typed.structureId !== "string" || typed.structureId.length === 0 || typed.structureId.length > INTENT_STRUCTURE_ID_MAX) {
         return "structureFact.structureId 非法（须为 1..48 字符）";
+      }
+      if (typed.objectId !== undefined && (typeof typed.objectId !== "string" || typed.objectId.length === 0 || typed.objectId.length > INTENT_STRUCTURE_ID_MAX)) {
+        return "structureFact.objectId 非法（须为 1..48 字符）";
+      }
+      if (typeof typed.required !== "boolean") {
+        return "structureFact.required 须为布尔";
+      }
+      if (typed.version !== TREASURY_STRUCTURE_DESCRIPTOR_VERSION) {
+        return `structureFact.version 非法（当前 ${String(TREASURY_STRUCTURE_DESCRIPTOR_VERSION)}）: ${String(typed.version)}`;
       }
     }
   }
@@ -492,6 +509,31 @@ function fatalRuntime(store: TreasuryIntentStore, reason: string): IntentStoreRu
 }
 
 /**
+ * 旧 structureFacts（v3 及更早的三元组形状）补全为完整 descriptor（第十一轮
+ * 3.13.9）：缺省 bindingKind=governed_location、role=auxiliary、required=true、
+ * version=1——不伪造 object identity（缺失字段由升级后形状校验检出 fatal）。
+ */
+function upgradeLegacyStructureFacts(entry: { structureFacts?: unknown }): void {
+  const legacyFacts = entry.structureFacts;
+  if (!Array.isArray(legacyFacts)) return;
+  (entry as { structureFacts?: unknown }).structureFacts = legacyFacts.map((fact) => {
+    const typed = fact as Partial<TreasuryIntentStructureFact>;
+    return {
+      bindingKind: typed.bindingKind ?? "governed_location",
+      role: typed.role ?? "auxiliary",
+      roomName: typed.roomName,
+      locationKind: typed.locationKind,
+      structureId: typed.structureId,
+      ...(typed.objectId !== undefined ? { objectId: typed.objectId } : {}),
+      ...(typed.expectedType !== undefined ? { expectedType: typed.expectedType } : {}),
+      ...(typed.expectedRoom !== undefined ? { expectedRoom: typed.expectedRoom } : {}),
+      required: typed.required ?? true,
+      version: typed.version ?? TREASURY_STRUCTURE_DESCRIPTOR_VERSION,
+    } as TreasuryIntentStructureFact;
+  });
+}
+
+/**
  * 加载（含校验）：写入/聚合路径专用（可能写 Memory——空 store 初始化或
  * v1→v2 无损升级）。校验失败 → fatal fail closed：不删数据、写入拒绝、
  * 聚合空、blockers 报 blocking，直至 faultResolution 的显式 repair 或人工
@@ -522,6 +564,7 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
         return heapRuntime;
       }
       const { phase: _dropped, ...rest } = legacy as Partial<TreasuryIntentEntry> & { phase: string };
+      upgradeLegacyStructureFacts(rest);
       entries[key] = { ...(rest as TreasuryIntentEntry), outcome: mapped.outcome, settlement: mapped.settlement };
     }
     const upgraded: TreasuryIntentStore = { version: TREASURY_INTENT_VERSION, entries, entryCount: Object.keys(entries).length, updatedAt: Game.time };
@@ -532,6 +575,25 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
     }
     intentBranch().intents = upgraded;
     heapRuntime = { store: upgraded, fatal: null };
+    return heapRuntime;
+  }
+  if ((rawVersion as number) === 3) {
+    // v3 → v4 迁移（第十一轮 3.13.9，原子）：structureFacts 三元组补全为
+    // 完整 descriptor；损坏字段由升级后校验检出 fatal（原数据保留）。
+    const entries: Record<string, TreasuryIntentEntry> = {};
+    for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
+      const legacy = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as Partial<TreasuryIntentEntry>;
+      upgradeLegacyStructureFacts(legacy);
+      entries[key] = legacy as TreasuryIntentEntry;
+    }
+    const upgradedV3: TreasuryIntentStore = { ...(raw as TreasuryIntentStore), version: TREASURY_INTENT_VERSION, entries, updatedAt: Game.time };
+    const shapeErrorV3 = validateIntentStoreShape(upgradedV3);
+    if (shapeErrorV3 !== null) {
+      heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `${shapeErrorV3}（v3 升级校验失败，intent store fail closed，原数据保留）`);
+      return heapRuntime;
+    }
+    intentBranch().intents = upgradedV3;
+    heapRuntime = { store: upgradedV3, fatal: null };
     return heapRuntime;
   }
   const shapeError = validateIntentStoreShape(raw);
@@ -561,7 +623,12 @@ export function peekTreasuryIntentHealth(): TreasuryIntentHealth {
   }
   const store = peekTreasuryIntentStore();
   if (store === undefined) return { healthy: true, detail: null, entryCount: 0 };
-  if (store.version !== TREASURY_INTENT_VERSION && (store.version as number) !== 1 && (store.version as number) !== 2) {
+  if (
+    store.version !== TREASURY_INTENT_VERSION &&
+    (store.version as number) !== 1 &&
+    (store.version as number) !== 2 &&
+    (store.version as number) !== 3
+  ) {
     return {
       healthy: false,
       detail: `未知 intent store 版本 ${String(store.version)}`,

@@ -314,8 +314,8 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     const receiptTickBefore = Game.time;
     // 人为构造同一 id 的 quarantine entry（故障后对账场景的等价前置态；先
     // 建合法 store——正常 commit 路径不产生 quarantine）。
-    Memory.runtime!.treasury!.quarantine = { version: 2, entries: {}, entryCount: 0 };
-    const store = Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore;
+    Memory.runtime!.treasury!.quarantine = { version: 2 as unknown as 3, entries: {}, entryCount: 0 };
+    const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
     store.entries["q:ts1_refresh"] = {
       transactionId: "ts1_refresh",
       digest: "0123456789abcdef",
@@ -514,7 +514,7 @@ describe("参数校验与不可信 store", () => {
     expect(issued.status).toBe("issued");
     if (issued.status !== "issued") return;
     // 签发后损坏 store → resolve 显式 quarantine_store_fatal（防御分支）。
-    (Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore).entryCount = 42;
+    (Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore).entryCount = 42;
     resetTreasuryQuarantineRuntimeForTest();
     const rejected = next.resolveUnresolvedTransaction({
       transactionId: "ts1_corrupt_store",
@@ -725,7 +725,7 @@ describe("staged atomic（故障注入与恢复）", () => {
 describe("显式 repair（quarantine store 元数据/legacy 形状）", () => {
   it("legacy 无版本 + overflowed：repair 验证后恢复健康", () => {
     makeExecutingQuarantine("ts1_repair");
-    const store = Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore;
+    const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
     delete (store as { version?: number }).version;
     store.overflowed = true;
     resetTreasuryQuarantineRuntimeForTest();
@@ -741,14 +741,14 @@ describe("显式 repair（quarantine store 元数据/legacy 形状）", () => {
 
   it("repair 发现损坏 entry：拒绝且原数据不动", () => {
     makeExecutingQuarantine("ts1_repair_bad");
-    const store = Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore;
+    const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
     delete (store as { version?: number }).version;
     (store.entries["q:ts1_repair_bad"] as { digest: string }).digest = "broken";
     resetTreasuryQuarantineRuntimeForTest();
     makeService();
     const rejected = repairTreasuryQuarantineStoreForResolution();
     expect(rejected.status).toBe("rejected");
-    expect((Memory.runtime!.treasury!.quarantine as TreasuryQuarantineStore).entries["q:ts1_repair_bad"]).toBeDefined();
+    expect((Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore).entries["q:ts1_repair_bad"]).toBeDefined();
   });
 
   it("repair 满载 + overflowed：拒绝（先 resolution 再 repair，不掩盖丢 identity）", () => {

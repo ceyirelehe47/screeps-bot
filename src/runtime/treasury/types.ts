@@ -967,3 +967,51 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     reconciliationChecks: 0,
   };
 }
+
+// ── 完整 structure binding descriptor（第十一轮 3.13.9 / AC4） ───────────────
+
+/** descriptor 版本（字段集演进时递增——旧 descriptor 数据按版本解释）。 */
+export const TREASURY_STRUCTURE_DESCRIPTOR_VERSION = 1;
+
+/** binding kind（受控枚举）：governed location 或 explicit game object。 */
+export type TreasuryStructureBindingKind = "governed_location" | "game_object";
+
+/** action-specific role（受控枚举；同结构不同 role 不得静默合并）。 */
+export type TreasuryStructureBindingRole = "source" | "target" | "fee_source" | "production_structure" | "auxiliary";
+
+export const TREASURY_STRUCTURE_BINDING_KINDS: ReadonlySet<string> = new Set<string>([
+  "governed_location",
+  "game_object",
+]);
+
+export const TREASURY_STRUCTURE_BINDING_ROLES: ReadonlySet<string> = new Set<string>([
+  "source",
+  "target",
+  "fee_source",
+  "production_structure",
+  "auxiliary",
+]);
+
+/**
+ * 完整 canonical structure descriptor（durable fact 形态）：进入 contract
+ * digest（AC4）、intent/quarantine 与 durable authority identity。posting
+ * 自动 binding 的 role 由 Treasury 派生（负腿 source、正腿 target）；
+ * structureId 为 incarnation（governed location = structure 实例 id、
+ * game object = 对象 id 本身）。
+ */
+export interface TreasuryStructureBindingDescriptor {
+  readonly bindingKind: TreasuryStructureBindingKind;
+  readonly role: TreasuryStructureBindingRole;
+  readonly roomName: string;
+  readonly locationKind: string;
+  /** incarnation id（governed = structure 实例；game_object = 对象 id）。 */
+  readonly structureId: string;
+  /** game object binding 的对象 id（bindingKind=game_object 时存在）。 */
+  readonly objectId?: string;
+  readonly expectedType?: string;
+  readonly expectedRoom?: string;
+  /** required descriptor 的结构缺失 → 构建拒绝 / 执行前重验（默认 true）。 */
+  readonly required: boolean;
+  /** descriptor 版本（当前恒 1）。 */
+  readonly version: number;
+}

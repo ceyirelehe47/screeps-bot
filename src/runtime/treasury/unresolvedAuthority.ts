@@ -50,6 +50,10 @@ export interface TreasuryUnresolvedAuthority {
   readonly durablePayloadVersion?: number;
   /** authorization bundle digest（quarantine v2/intent contract 路径）。 */
   readonly authorizationDigest?: string;
+  /** 完整 structure descriptors（第十一轮 3.13.9；reconciler 输入）。 */
+  readonly structureFacts?: readonly { readonly [key: string]: unknown }[];
+  /** legacy v1 quarantine 标记（第十一轮 3.13.7：隔离诊断用）。 */
+  readonly legacyV1?: boolean;
 }
 
 export type TreasuryUnresolvedAuthorityResolution =
@@ -151,6 +155,10 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         ...(quarantined.durablePayload !== undefined ? { durablePayload: quarantined.durablePayload } : {}),
         ...(quarantined.durablePayloadVersion !== undefined ? { durablePayloadVersion: quarantined.durablePayloadVersion } : {}),
         ...(quarantined.authorizationDigest !== undefined ? { authorizationDigest: quarantined.authorizationDigest } : {}),
+        ...(quarantined.structureFacts !== undefined
+          ? { structureFacts: quarantined.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
+          : {}),
+        ...(quarantined.legacyV1 !== undefined ? { legacyV1: quarantined.legacyV1 } : {}),
       },
     };
   }
@@ -176,6 +184,9 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
       ...(intent.durablePayload !== undefined ? { durablePayload: intent.durablePayload } : {}),
       ...(intent.durablePayloadVersion !== undefined ? { durablePayloadVersion: intent.durablePayloadVersion } : {}),
       ...(intent.authorizationDigest !== undefined ? { authorizationDigest: intent.authorizationDigest } : {}),
+      ...(intent.structureFacts !== undefined
+        ? { structureFacts: intent.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
+        : {}),
     },
   };
 }
