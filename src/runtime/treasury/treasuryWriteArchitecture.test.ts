@@ -48,7 +48,11 @@ describe("Treasury write-admission 架构边界", () => {
       // facade.ts 是 recordAccepted* 的对象实现载体；compat.ts 是退役隔离
       // 模块自身——两者之外（含第九轮新增的任何生产模块）一律禁止。
       const isAuthority =
-        relative === "runtime/treasury/facade.ts" || relative === "runtime/treasury/compat.ts";
+        relative === "runtime/treasury/facade.ts" ||
+        relative === "runtime/treasury/compat.ts" ||
+        // 第十轮：kernel 通道（类型签名提及 compat 入口）与测试 harness 白名单。
+        relative === "runtime/treasury/kernelChannel.ts" ||
+        relative === "runtime/treasury/testHarness.ts";
       if (isTest || isAuthority) continue;
       const source = readFileSync(filePath, "utf8");
       for (const reference of SINGLE_STAGE_REFERENCES) {
@@ -294,6 +298,28 @@ describe("Treasury write-admission 架构边界", () => {
         source.includes("authorizeTreasuryActionContract")
       ) {
         violations.push(`${relative} 直接构建/授权/执行 contract（须经注册 adapter 的正式接入评审，本轮未接真实 writer）`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("【第十轮 3.12.5】kernel 通道与 test harness 边界：非 treasury 协议栈生产模块不得引用 kernelChannel/testHarness", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      const isTest = filePath.endsWith(".test.ts");
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      if (relative.startsWith("runtime/treasury/")) continue; // 协议栈内部（kernelChannel/testHarness 互引合法）
+      const source = readFileSync(filePath, "utf8");
+      if (isTest) {
+        // 测试文件允许显式 test harness；但不得直接引用 kernelChannel symbol
+        //（低层原语一律经 testHarness 视图）。
+        if (source.includes("kernelChannel")) {
+          violations.push(`${relative}（测试）直接引用 kernel 通道——应经 testHarness`);
+        }
+        continue;
+      }
+      if (source.includes("kernelChannel") || source.includes("testHarness") || source.includes("TREASURY_WRITER_KERNEL")) {
+        violations.push(`${relative} 引用 writer kernel 通道或测试 harness（生产不可达）`);
       }
     }
     expect(violations).toEqual([]);

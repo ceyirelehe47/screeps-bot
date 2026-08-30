@@ -21,6 +21,7 @@ import { releaseProductionReservationForOwner, reserveProductionResourceForOwner
 import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import type { TreasuryAuthorizationRequest, TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
 const ROOMS: RoomSpec[] = [
@@ -31,11 +32,11 @@ const ROOMS: RoomSpec[] = [
   },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
 function authRequest(overrides: Partial<TreasuryAuthorizationRequest> = {}): TreasuryAuthorizationRequest {

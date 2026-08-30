@@ -47,7 +47,10 @@ export type TreasuryCommitFaultPhase =
   | "commit_unexpected"
   /** 第九轮：intent ok_pending_commit 相恢复——已知 Game 返回 OK（事实单调：
    * 不得退化为可能未执行，永不允许 not-executed resolution）。 */
-  | "ok_pending_commit_unresolved";
+  | "ok_pending_commit_unresolved"
+  /** 第十轮：原子 bundle redemption 中断（状态已一致回滚；marker 阻断后续
+   * writer 直至显式确认——发生在 Game callback 之前，动作确定未执行）。 */
+  | "internal_authorization_fault";
 
 /** execution-unknown 类 phase（Game 副作用未知）：配合显式证据可 resolution。 */
 export type TreasuryExecutionUnknownPhase =
@@ -68,6 +71,7 @@ export const TREASURY_WRITE_FAULT_PHASES: ReadonlySet<string> = new Set<string>(
   "handle_state",
   "commit_unexpected",
   "ok_pending_commit_unresolved",
+  "internal_authorization_fault",
   "executing_at_end_tick",
   "action_threw_execution_unknown",
   "action_returned_non_ok_abort_failed",

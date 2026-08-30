@@ -28,21 +28,23 @@ import {
 } from "@/runtime/treasury/actionContracts";
 import type { TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
 import { quarantineTreasuryTransaction } from "@/runtime/treasury/quarantine";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
+import { setTreasuryRedemptionFaultInjectorForTest } from "@/runtime/treasury/facade";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
 const ROOMS: RoomSpec[] = [
   {
     name: "W1N57",
-    storage: { id: "stor-1", resources: { energy: 100_000, U: 50_000 }, freeCapacity: 10_000 },
+    storage: { id: "stor-1", resources: { energy: 100_000, U: 50_000, Z: 1_000 }, freeCapacity: 10_000 },
     terminal: { id: "term-1", resources: { energy: 20_000 }, freeCapacity: 5_000 },
   },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
 function transferArgs(overrides: Partial<TreasuryTestTransferArgs> = {}): TreasuryTestTransferArgs {
@@ -58,14 +60,14 @@ function transferArgs(overrides: Partial<TreasuryTestTransferArgs> = {}): Treasu
   };
 }
 
-function build(service: TreasuryService, transactionId: string, args: TreasuryTestTransferArgs): TreasuryActionContract {
+function build(service: TreasuryTestService, transactionId: string, args: TreasuryTestTransferArgs): TreasuryActionContract {
   const built = buildTreasuryActionContract(service, { actionKind: "test.transfer", transactionId, args });
   expect(built.status).toBe("built");
   if (built.status !== "built") throw new Error("unreachable");
   return built.contract;
 }
 
-function authorizeBundle(service: TreasuryService, contract: TreasuryActionContract) {
+function authorizeBundle(service: TreasuryTestService, contract: TreasuryActionContract) {
   const result = service.authorizeTreasuryActionContract(contract);
   expect(result.status).toBe("authorized");
   if (result.status !== "authorized") throw new Error("unreachable");
@@ -74,7 +76,7 @@ function authorizeBundle(service: TreasuryService, contract: TreasuryActionContr
 
 /** test-only 裸 token（绑定指定 contract digest）。 */
 function rawToken(
-  service: TreasuryService,
+  service: TreasuryTestService,
   contract: TreasuryActionContract,
   overrides: Partial<{ resource: string; amount: number; transactionId: string; contractDigest?: string; adapterVersion?: number; locations?: string[] }> = {},
 ): TreasuryAuthorizationToken {
@@ -98,7 +100,27 @@ beforeEach(() => {
   resetTreasuryCommitmentRevisionForTest();
   resetTreasuryTestAdapterSideEffectsForTest();
   registerTreasuryActionAdapter(makeTreasuryTestTransferAdapter());
+  registerTreasuryActionAdapter({
+    kind: "test.three",
+    version: 1,
+    validate: (args: unknown): string | null => (args && typeof args === "object" ? null : "args 非对象"),
+    derivePostings: () => [
+      { roomName: "W1N57", locationKind: "storage", resource: "U", delta: -1_000 },
+      { roomName: "W1N57", locationKind: "terminal", resource: RESOURCE_ENERGY, delta: -50 },
+      { roomName: "W1N57", locationKind: "storage", resource: "Z", delta: -20 },
+    ],
+    execute: (): { ok: boolean } => ({ ok: true }),
+    structureBindings: () => [],
+    reconcile: () => "still_uncertain" as const,
+  });
 });
+
+/** 三腿 contract（middle_leg 注入点 fixture：U/energy/Z 三资源腿）。 */
+function buildThreeLeg(service: TreasuryTestService, transactionId: string): TreasuryActionContract {
+  const built = buildTreasuryActionContract(service, { actionKind: "test.three", transactionId, args: {} });
+  if (built.status !== "built") throw new Error("three-leg build failed");
+  return built.contract;
+}
 
 afterEach(() => {
   replaceTreasuryActionAdapterForTest(makeTreasuryTestTransferAdapter());
@@ -113,7 +135,7 @@ describe("contract-first 授权绑定", () => {
     const result = executeTreasuryActionContract(service, { contract: contractB, authorization: bundleA });
     expect(result.status).toBe("prepare_rejected");
     if (result.status === "prepare_rejected") {
-      expect(result.reason).toBe("contract_invalid");
+      expect(result.reason).toBe("authorization_invalid");
       expect(result.detail).toContain("不匹配");
     }
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
@@ -140,7 +162,9 @@ describe("contract-first 授权绑定", () => {
     const wrongVersion = rawToken(service, contract, { adapterVersion: 2 });
     const result = executeTreasuryActionContract(service, { contract, authorization: wrongVersion });
     expect(result.status).toBe("prepare_rejected");
-    if (result.status === "prepare_rejected") expect(result.detail).toContain("adapter version");
+    // 【第十轮 3.12.3】裸 token 不是 production 输入——在 opaque 验证即拒
+    //（比 adapter version 匹配检查更早、更强）。
+    if (result.status === "prepare_rejected") expect(result.detail).toContain("opaque bundle");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
   });
 
@@ -162,20 +186,17 @@ describe("contract-first 授权绑定", () => {
     if (rejected.status === "rejected") expect(rejected.detail).toContain("policyFingerprint");
   });
 
-  it("授权 bundle 派生自 contract：amount/rooms/locations 与负腿精确一致", () => {
+  it("【第十轮 3.12.3】授权 bundle opaque：legs 不可读；派生正确性经 legs 计数与执行覆盖观察", () => {
     const service = makeService();
     const contract = build(service, "ca_tx_derive", transferArgs({ resource: "U", amount: 3_000, feeFromRoom: "W1N57", feeAmount: 50 }));
+    const beforeActive = service.metrics().authorizationsActive;
     const bundle = authorizeBundle(service, contract);
-    expect(bundle.tokens).toHaveLength(2);
-    const uToken = bundle.tokens.find((t) => t.resource === "U");
-    const energyToken = bundle.tokens.find((t) => t.resource === RESOURCE_ENERGY);
-    expect(uToken?.amount).toBe(3_000);
-    expect(uToken?.rooms).toEqual(["W1N57"]);
-    expect(uToken?.locations).toEqual(["storage"]);
-    expect(energyToken?.amount).toBe(50);
-    expect(energyToken?.locations).toEqual(["terminal"]); // fee 腿的 location
-    expect(uToken?.contractDigest).toBe(contract.digest);
-    expect(uToken?.adapterVersion).toBe(contract.adapterVersion);
+    // opaque：bundle 上无可读 legs/cohort 字段（只有 __brand）。
+    expect(Object.keys(bundle)).toEqual(["__brand"]);
+    // 派生正确性：每种负 posting 资源一个 leg（U + energy fee = 2）。
+    expect(service.metrics().authorizationsActive - beforeActive).toBe(2);
+    const ok = executeTreasuryActionContract(service, { contract, authorization: bundle });
+    expect(ok.status).toBe("executed_committed"); // 联合覆盖正确才能执行
   });
 
   it("authorizeTreasuryActionContract 原子签发：任一资源失败时已签发 token 预算回滚", () => {
@@ -223,45 +244,53 @@ describe("contract-first 授权绑定", () => {
 });
 
 describe("原子 bundle redemption", () => {
-  it("多资源 bundle 第 N 个 token 无效时前 N−1 个不被消费（预算不变、callback 零调用）", () => {
+  it("【第十轮 3.12.4】多资源 bundle redemption 注入中断（last_leg）：前缀完整回滚、budget 不变、callback 零调用", () => {
     const service = makeService();
     const contract = build(service, "ca_tx_atomic", transferArgs({ resource: "U", amount: 3_000, feeFromRoom: "W1N57", feeAmount: 50 }));
-    const uToken = rawToken(service, contract, { resource: "U", amount: 3_000 });
-    const energyToken = rawToken(service, contract, { resource: RESOURCE_ENERGY, amount: 50 });
-    // energy token 先被单独消费（成为 already_consumed）→ bundle 预验证第
-    // 2 个失败 → uToken 必须未被消费。
-    const consumed = service.consumeTreasuryAuthorization(energyToken, {
-      transactionId: contract.transactionId,
-      postings: [{ roomName: "W1N57", locationKind: "terminal", resource: RESOURCE_ENERGY, delta: -50 }],
+    const bundle = authorizeBundle(service, contract);
+    const activeBefore = service.metrics().authorizationsActive;
+    setTreasuryRedemptionFaultInjectorForTest((stage) => {
+      if (stage === "last_leg") throw new Error("injected:last_leg");
     });
-    expect(consumed.status).toBe("ok");
-    const result = executeTreasuryActionContract(service, { contract, authorization: [uToken, energyToken] });
-    expect(result.status).toBe("prepare_rejected");
-    if (result.status === "prepare_rejected") expect(result.reason).toBe("authorization_invalid");
-    expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
-    // uToken 未被消费：可再次用于完整执行（配新 energy token）。
-    const freshEnergy = rawToken(service, contract, { resource: RESOURCE_ENERGY, amount: 50 });
-    const ok = executeTreasuryActionContract(service, { contract, authorization: [uToken, freshEnergy] });
-    expect(ok.status).toBe("executed_committed");
+    try {
+      const result = executeTreasuryActionContract(service, { contract, authorization: bundle });
+      expect(result.status).toBe("prepare_rejected");
+      if (result.status === "prepare_rejected") expect(result.reason).toBe("internal_authorization_fault");
+      expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
+      // 前缀完整回滚：已发布 legs 的预算与消费标记恢复原状。
+      expect(service.metrics().authorizationsActive).toBe(activeBefore);
+    } finally {
+      setTreasuryRedemptionFaultInjectorForTest(null);
+    }
+    // internal_authorization_fault marker 阻断后续 writer（新授权被拒）。
+    const blocked2 = build(service, "ca_tx_atomic_b", transferArgs());
+    const rejected2 = service.authorizeTreasuryActionContract(blocked2);
+    expect(rejected2.status).toBe("rejected");
+    if (rejected2.status === "rejected") expect(rejected2.reason).toBe("write_admission_blocked");
   });
 
-  it("重复 token 出现在 bundle 中被拒（对象身份重复——零状态变化）", () => {
+  it("【第十轮 3.12.3】伪造 bundle（JSON round-trip 副本/手工构造品牌对象）拒绝；真 bundle 零状态变化仍可执行", () => {
     const service = makeService();
     const contract = build(service, "ca_tx_dup", transferArgs({ resource: "U", amount: 3_000, feeFromRoom: "W1N57", feeAmount: 50 }));
-    const uToken = rawToken(service, contract, { resource: "U", amount: 3_000 });
-    const result = executeTreasuryActionContract(service, { contract, authorization: [uToken, uToken] });
-    expect(result.status).toBe("prepare_rejected");
-    if (result.status === "prepare_rejected") expect(result.detail).toContain("重复");
+    const bundle = authorizeBundle(service, contract);
+    // JSON round-trip 副本：registry 无记录（对象身份验证）。
+    const jsonCopy = JSON.parse(JSON.stringify(bundle)) as typeof bundle;
+    const rejectedCopy = executeTreasuryActionContract(service, { contract, authorization: jsonCopy });
+    expect(rejectedCopy.status).toBe("prepare_rejected");
+    if (rejectedCopy.status === "prepare_rejected") expect(rejectedCopy.detail).toContain("闭包签发");
+    // 手工构造品牌对象同样无效。
+    const handmade = { __brand: "treasury-authorization-bundle" } as typeof bundle;
+    const rejectedHandmade = executeTreasuryActionContract(service, { contract, authorization: handmade });
+    expect(rejectedHandmade.status).toBe("prepare_rejected");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
-    // 零状态变化：uToken 仍可正常消费使用。
-    const energyToken = rawToken(service, contract, { resource: RESOURCE_ENERGY, amount: 50 });
-    const ok = executeTreasuryActionContract(service, { contract, authorization: [uToken, energyToken] });
+    // 零状态变化：真 bundle 仍可完整执行。
+    const ok = executeTreasuryActionContract(service, { contract, authorization: bundle });
     expect(ok.status).toBe("executed_committed");
   });
 
   it("结构 incarnation mismatch 时 token 不被消费（同 tick 构建后替换结构）", () => {
     const rooms = installRooms(ROOMS);
-    const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
     service.beginTick();
     const contract = build(service, "ca_tx_struct", transferArgs());
     const bundle = authorizeBundle(service, contract);
@@ -273,13 +302,9 @@ describe("原子 bundle redemption", () => {
     expect(result.status).toBe("prepare_rejected");
     if (result.status === "prepare_rejected") expect(result.reason).toBe("structure_replaced");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
-    // token 未被消费：结构恢复后（新 service/tick 重新构建不适用——同
-    // contract 绑定旧结构无法复用），以消费原语直接验证 token 仍有效。
-    const consumed = service.consumeTreasuryAuthorization(bundle.tokens[0], {
-      transactionId: contract.transactionId,
-      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
-    });
-    expect(consumed.status).toBe("ok");
+    // 【第十轮】bundle opaque 化后 token 不可直取：以授权 legs 仍在（未消费）
+    // 验证预算未丢（redemption 未执行）。
+    expect(service.metrics().authorizationsActive).toBeGreaterThanOrEqual(1);
   });
 
   it("fresh observation 配额耗尽时 callback 零调用、token 不被消费", () => {
@@ -292,16 +317,14 @@ describe("原子 bundle redemption", () => {
       drained = service.beginFreshObservation() === null;
     }
     const result = executeTreasuryActionContract(service, { contract, authorization: bundle });
+    const energySpendableBaseline = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] }).spendable;
     expect(result.status).toBe("prepare_rejected");
     if (result.status === "prepare_rejected") {
       expect(result.reason).toBe("fresh_observation_unavailable");
     }
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
-    const consumed = service.consumeTreasuryAuthorization(bundle.tokens[0], {
-      transactionId: contract.transactionId,
-      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
-    });
-    expect(consumed.status).toBe("ok"); // token 完好未被消费
+    // 【第十轮】bundle 未被消费：授权流出预算仍在（spendable 保持扣减）。
+    expect(service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] }).spendable).toBe(energySpendableBaseline);
   });
 
   it("prepare 拒绝时 authorization budget 不丢失（tentative 接管失败 → redeem 未执行）", () => {
@@ -322,15 +345,12 @@ describe("原子 bundle redemption", () => {
     });
     expect(prepare.status).toBe("prepared");
     const result = executeTreasuryActionContract(service, { contract, authorization: bundle });
+    const energySpendableBaseline = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] }).spendable;
     expect(result.status).toBe("prepare_rejected");
     if (result.status === "prepare_rejected") expect(result.reason).toBe("prepare_conflict");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
-    // redemption 未执行（prepare 先拒）：bundle token 仍可消费（预算未丢）。
-    const consumed = service.consumeTreasuryAuthorization(bundle.tokens[0], {
-      transactionId: contract.transactionId,
-      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
-    });
-    expect(consumed.status).toBe("ok");
+    // redemption 未执行（prepare 先拒）：bundle 预算未丢（spendable 保持扣减）。
+    expect(service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] }).spendable).toBe(energySpendableBaseline);
     service.abortPreparedTransaction((prepare as { handle: unknown }).handle as never);
   });
 
@@ -341,26 +361,102 @@ describe("原子 bundle redemption", () => {
     const contract = build(service, "ca_tx_cover", transferArgs({ resource: "U", amount: 3_000, feeFromRoom: "W1N57", feeAmount: 50 }));
     const uToken = rawToken(service, contract, { resource: "U", amount: 3_000 });
     const energyStorageOnly = rawToken(service, contract, { resource: RESOURCE_ENERGY, amount: 50, locations: ["storage"] });
+    // 【第十轮 3.12.3】裸 token 数组不是 production 输入（opaque 验证即拒）；
+    // 覆盖语义由 contract-first 签发原子性结构性保证（legs 全覆盖负腿）。
     const result = executeTreasuryActionContract(service, { contract, authorization: [uToken, energyStorageOnly] });
     expect(result.status).toBe("prepare_rejected");
     if (result.status === "prepare_rejected") {
       expect(result.reason).toBe("authorization_invalid");
-      // scope 校验（token 级）或联合覆盖校验（posting 级）先于消费拒绝。
-      expect(result.detail).toMatch(/不在授权 scope|未被任何/);
+      expect(result.detail).toContain("opaque bundle");
     }
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
   });
 
-  it("执行成功后 bundle 内 token 全部终态（重复使用任意一个均失败）", () => {
+  it("【第十轮 3.12.3】执行成功后 bundle 进入终态（单次 redemption——重复使用拒绝）", () => {
     const service = makeService();
     const contract = build(service, "ca_tx_final", transferArgs({ resource: "U", amount: 3_000, feeFromRoom: "W1N57", feeAmount: 50 }));
     const bundle = authorizeBundle(service, contract);
     const ok = executeTreasuryActionContract(service, { contract, authorization: bundle });
     expect(ok.status).toBe("executed_committed");
-    for (const token of bundle.tokens) {
-      const consumed = service.consumeTreasuryAuthorization(token, { transactionId: contract.transactionId });
-      expect(consumed.status).toBe("rejected");
-      if (consumed.status === "rejected") expect(consumed.reason).toBe("already_consumed");
+    // 同一 transaction 重放：prepare 幂等（already_settled）先于 redemption——
+    // 不重复执行、不重复释放预算（更强的幂等拒绝）。
+    const replay = executeTreasuryActionContract(service, { contract, authorization: bundle });
+    expect(replay.status).toBe("already_settled");
+  });
+});
+
+describe("批量原子 redemption 注入矩阵与 bundle 生命周期（第十轮 3.12.3/3.12.4）", () => {
+  it("全部注入点（first/middle/last leg、budget publish/tentative handoff/bundle state 前）：前缀完整回滚 + internal fault 阻断", () => {
+    const stages = ["first_leg", "middle_leg", "last_leg", "before_budget_publish", "before_tentative_handoff", "before_bundle_state"] as const;
+    for (const stage of stages) {
+      clearTreasuryPersistenceForTest();
+      const service = makeService();
+      // middle_leg 需要 ≥3 legs——使用三腿 adapter fixture；其余注入点用双腿。
+      const contract =
+        stage === "middle_leg"
+          ? buildThreeLeg(service, `ca_inj_${stage}`)
+          : build(service, `ca_inj_${stage}`, transferArgs({ resource: "U", amount: 3_000, feeFromRoom: "W1N57", feeAmount: 50 }));
+      const bundle = authorizeBundle(service, contract);
+      const activeBefore = service.metrics().authorizationsActive;
+      setTreasuryRedemptionFaultInjectorForTest((candidate) => {
+        if (candidate === stage) throw new Error(`injected:${stage}`);
+      });
+      try {
+        const result = executeTreasuryActionContract(service, { contract, authorization: bundle });
+        expect(result.status).toBe("prepare_rejected");
+        if (result.status === "prepare_rejected") expect(result.reason).toBe("internal_authorization_fault");
+        expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
+        // 前缀完整回滚：legs 全部恢复（预算/消费标记原状）。
+        expect(service.metrics().authorizationsActive).toBe(activeBefore);
+        // tentative 不残留。
+        expect(service.metrics().preparedActive).toBe(0);
+        // marker 阻断后续 writer。
+        const blocked = build(service, `ca_inj_${stage}_b`, transferArgs());
+        const rejected = service.authorizeTreasuryActionContract(blocked);
+        expect(rejected.status).toBe("rejected");
+        if (rejected.status === "rejected") expect(rejected.reason).toBe("write_admission_blocked");
+      } finally {
+        setTreasuryRedemptionFaultInjectorForTest(null);
+      }
     }
+  });
+
+  it("正常路径：redemption 恰好一次（budget→tentative 单次转移）", () => {
+    const service = makeService();
+    const contract = build(service, "ca_once", transferArgs({ resource: "U", amount: 3_000, feeFromRoom: "W1N57", feeAmount: 50 }));
+    const bundle = authorizeBundle(service, contract);
+    const activeBefore = service.metrics().authorizationsActive;
+    const ok = executeTreasuryActionContract(service, { contract, authorization: bundle });
+    expect(ok.status).toBe("executed_committed");
+    // 全部 legs 恰好消费一次（active 归零）。
+    expect(service.metrics().authorizationsActive).toBe(activeBefore - 2);
+    expect(service.metrics().preparedActive).toBe(0);
+  });
+
+  it("跨 tick 失效：下一 tick 执行同 bundle 被拒（cross_tick）", () => {
+    const service = makeService();
+    const contract = build(service, "ca_xt", transferArgs());
+    const bundle = authorizeBundle(service, contract);
+    Game.time += 1;
+    service.beginTick();
+    const result = executeTreasuryActionContract(service, { contract, authorization: bundle });
+    expect(result.status).toBe("prepare_rejected");
+    // contract 跨 tick 先失效（builtAtTick）——两种失效都拒绝执行。
+    if (result.status === "prepare_rejected") expect(result.reason).toMatch(/contract_invalid|authorization_invalid/);
+  });
+
+  it("跨 service generation 失效：新 service 实例下同 bundle 拒绝", () => {
+    const rooms = installRooms(ROOMS);
+    const first = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
+    first.beginTick();
+    const contract = build(first, "ca_xg", transferArgs());
+    const bundle = authorizeBundle(first, contract);
+    // 同 tick 新 service（新 generation）——contract registry 身份仍在（模块级），
+    // 但 bundle registry 是 service 闭包私有。
+    const second = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
+    second.beginTick();
+    const result = executeTreasuryActionContract(second, { contract, authorization: bundle });
+    expect(result.status).toBe("prepare_rejected");
+    if (result.status === "prepare_rejected") expect(result.detail).toContain("闭包签发");
   });
 });

@@ -51,6 +51,7 @@ import { peekTreasuryQuarantineHealth, quarantineTreasuryTransaction } from "@/r
 import { readTreasuryIntentEntry, writeTreasuryIntentEntry, migrateTreasuryLegacyIntentPhase } from "@/runtime/treasury/intents";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 
 const ROOMS: RoomSpec[] = [
   {
@@ -60,14 +61,14 @@ const ROOMS: RoomSpec[] = [
   },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
-function freshInput(service: TreasuryService, transactionId: string, delta = -500): TreasuryTransactionInput {
+function freshInput(service: TreasuryTestService, transactionId: string, delta = -500): TreasuryTransactionInput {
   const epoch = service.observation().epoch;
   return {
     transactionId,
@@ -100,7 +101,7 @@ function registerTerminalSendReconciler(): void {
 }
 
 /** 从 service 签发 capability（结论由 reconcilerConclusion 编排）。 */
-function issueCapability(service: TreasuryService, transactionId: string, digest?: string):
+function issueCapability(service: TreasuryTestService, transactionId: string, digest?: string):
   | { status: "issued"; capability: TreasuryReconciliationCapability }
   | { status: "rejected"; reason: string; detail: string } {
   const issued = service.issueTreasuryReconciliationCapability({
@@ -111,7 +112,7 @@ function issueCapability(service: TreasuryService, transactionId: string, digest
   return { status: "rejected", reason: issued.reason, detail: issued.detail };
 }
 
-function resolveCommitted(service: TreasuryService, transactionId: string, digest?: string) {
+function resolveCommitted(service: TreasuryTestService, transactionId: string, digest?: string) {
   const issued = issueCapability(service, transactionId, digest);
   if (issued.status === "rejected") return { status: "issuance_rejected" as const, reason: issued.reason, detail: issued.detail };
   return resolveTreasuryQuarantinedTransactionAsCommitted(service, {
@@ -121,7 +122,7 @@ function resolveCommitted(service: TreasuryService, transactionId: string, diges
   });
 }
 
-function resolveNotExecuted(service: TreasuryService, transactionId: string, digest?: string) {
+function resolveNotExecuted(service: TreasuryTestService, transactionId: string, digest?: string) {
   const issued = issueCapability(service, transactionId, digest);
   if (issued.status === "rejected") return { status: "issuance_rejected" as const, reason: issued.reason, detail: issued.detail };
   return resolveTreasuryQuarantinedTransactionAsNotExecuted(service, {
@@ -155,7 +156,7 @@ function makeExecutingQuarantine(transactionId: string): { digest: string } {
   return { digest: entry!.digest };
 }
 
-function advanceTick(): TreasuryService {
+function advanceTick(): TreasuryTestService {
   Game.time += 1;
   const next = makeService();
   next.beginTick();

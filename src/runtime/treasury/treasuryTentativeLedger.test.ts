@@ -16,6 +16,7 @@ import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryPreparedHandle, TreasuryTransactionInput } from "@/runtime/treasury/types";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 
 const ROOMS: RoomSpec[] = [
   {
@@ -37,15 +38,15 @@ const TIGHT_ROOMS: RoomSpec[] = [
   },
 ];
 
-function makeService(roomSpecs: RoomSpec[] = ROOMS): TreasuryService {
+function makeService(roomSpecs: RoomSpec[] = ROOMS): TreasuryTestService {
   const rooms = installRooms(roomSpecs);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
 function prepareInput(
-  service: TreasuryService,
+  service: TreasuryTestService,
   transactionId: string,
   postings: Array<{ roomName: string; locationKind: "storage" | "terminal"; resource: string; delta: number }>,
 ): TreasuryTransactionInput {
@@ -59,7 +60,7 @@ function prepareInput(
   };
 }
 
-function prepareOk(service: TreasuryService, transactionId: string, delta: number, resource: ResourceConstant = RESOURCE_ENERGY, roomName = "W1N57", locationKind: "storage" | "terminal" = "storage"): TreasuryPreparedHandle {
+function prepareOk(service: TreasuryTestService, transactionId: string, delta: number, resource: ResourceConstant = RESOURCE_ENERGY, roomName = "W1N57", locationKind: "storage" | "terminal" = "storage"): TreasuryPreparedHandle {
   const prepared = service.prepareTransaction(
     prepareInput(service, transactionId, [{ roomName, locationKind, resource, delta }]),
   );

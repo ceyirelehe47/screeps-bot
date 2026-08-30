@@ -43,6 +43,7 @@ import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
 import * as intentsModule from "@/runtime/treasury/intents";
 import * as quarantineModule from "@/runtime/treasury/quarantine";
 import { makeTreasuryTestTransferAdapter, registerTreasuryActionAdapter } from "@/runtime/treasury/actionContracts";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 const realReadTreasuryQuarantineEntry = quarantineModule.readTreasuryQuarantineEntry;
 
 const ROOMS: RoomSpec[] = [
@@ -53,14 +54,14 @@ const ROOMS: RoomSpec[] = [
   },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
-function freshInput(service: TreasuryService, transactionId: string, delta = -500): TreasuryTransactionInput {
+function freshInput(service: TreasuryTestService, transactionId: string, delta = -500): TreasuryTransactionInput {
   const epoch = service.observation().epoch;
   return {
     transactionId,

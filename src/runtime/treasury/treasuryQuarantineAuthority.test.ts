@@ -27,6 +27,7 @@ import {
 } from "@/runtime/treasury/quarantine";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 
 const ROOMS: RoomSpec[] = [
   {
@@ -36,14 +37,14 @@ const ROOMS: RoomSpec[] = [
   },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
-function freshInput(service: TreasuryService, transactionId: string): TreasuryTransactionInput {
+function freshInput(service: TreasuryTestService, transactionId: string): TreasuryTransactionInput {
   const epoch = service.observation().epoch;
   return {
     transactionId,

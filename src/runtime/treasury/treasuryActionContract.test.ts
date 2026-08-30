@@ -28,6 +28,7 @@ import {
   type TreasuryTestTransferArgs,
 } from "@/runtime/treasury/actionContracts";
 import type { TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
 const ROOMS: RoomSpec[] = [
@@ -38,11 +39,11 @@ const ROOMS: RoomSpec[] = [
   },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
 function transferArgs(overrides: Partial<TreasuryTestTransferArgs> = {}): TreasuryTestTransferArgs {
@@ -60,7 +61,7 @@ function transferArgs(overrides: Partial<TreasuryTestTransferArgs> = {}): Treasu
 
 /** 构建 contract 并签发 contract-first bundle（生产路径的测试镜像）。 */
 function buildAndAuthorize(
-  service: TreasuryService,
+  service: TreasuryTestService,
   transactionId: string,
   args: TreasuryTestTransferArgs,
 ): { contract: TreasuryActionContract; bundle: ReturnType<TreasuryService["authorizeTreasuryActionContract"]> } {
@@ -75,7 +76,7 @@ function buildAndAuthorize(
  * 用于构造"与 contract 不匹配/超范围"的坏授权。
  */
 function rawToken(
-  service: TreasuryService,
+  service: TreasuryTestService,
   contract: TreasuryActionContract,
   overrides: Partial<{ resource: string; amount: number; transactionId: string; contractDigest?: string; locations?: string[] }> = {},
 ): TreasuryAuthorizationToken {
@@ -266,7 +267,7 @@ describe("contract 执行（contract-first bundle）", () => {
     const { contract, bundle } = buildAndAuthorize(service, "ac_multi", args);
     expect(bundle.status).toBe("authorized");
     if (bundle.status !== "authorized") return;
-    expect(bundle.bundle.tokens).toHaveLength(2); // U 流出 + energy 费用腿
+    // 多资源派生正确性（U + energy fee 腿）经执行成功与下述"缺一资源拒绝"验证。
     const ok = executeTreasuryActionContract(service, { contract, authorization: bundle.bundle });
     expect(ok.status).toBe("executed_committed");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
@@ -325,13 +326,13 @@ describe("contract 执行（contract-first bundle）", () => {
 
   it("结构 incarnation 变化拒绝（structureId 快照 vs 当前 observation）", () => {
     const rooms = installRooms(ROOMS);
-    const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
     service.beginTick();
     const { contract, bundle } = buildAndAuthorize(service, "ac_struct", transferArgs());
     expect(bundle.status).toBe("authorized");
     // 同 tick 内构建后立刻替换结构再执行 → structure_replaced（fresh 必需，
     // 不退回 shared observation）。
-    const service2 = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    const service2 = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
     service2.beginTick();
     const built2 = buildTreasuryActionContract(service2, {
       actionKind: "test.transfer",

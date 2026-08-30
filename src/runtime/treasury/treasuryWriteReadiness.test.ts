@@ -15,19 +15,20 @@ import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commi
 import { quarantineTreasuryTransaction, resetTreasuryQuarantineRuntimeForTest, treasuryQuarantineOutflowTotals, TREASURY_QUARANTINE_MAX_ENTRIES, type TreasuryQuarantineStore } from "@/runtime/treasury/quarantine";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 
 const ROOMS: RoomSpec[] = [
   { name: "W1N57", storage: { id: "stor-1", resources: { energy: 100_000 }, freeCapacity: 10_000 }, terminal: { id: "term-1", resources: { energy: 20_000 }, freeCapacity: 5_000 } },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
-function freshInput(service: TreasuryService, transactionId: string, delta = -500): TreasuryTransactionInput {
+function freshInput(service: TreasuryTestService, transactionId: string, delta = -500): TreasuryTransactionInput {
   const epoch = service.observation().epoch;
   return {
     transactionId,

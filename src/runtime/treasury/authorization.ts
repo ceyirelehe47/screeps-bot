@@ -109,18 +109,17 @@ export interface TreasuryContractAuthorizationOptions {
 }
 
 /**
- * contract authorization bundle（第九轮）：contract-first 授权的原子产物——
- * 每种负 posting 资源一个 token，全部绑定同一 contract identity/digest/
- * adapter version；执行时整体只读预验证 + 原子消费。
+
+/**
+ * contract authorization bundle（第十轮 3.12.3 opaque 化）：service 闭包
+ * registry 签发的**不透明句柄**——生产调用者只能持有与传递引用；legs 与
+ * cohort（owner/policy/contract/epoch/revisions/generation/tick）仅闭包
+ * 可见，不可读取或重组。验证只认对象身份：JSON round-trip 副本、手工构造
+ * 对象、品牌字段伪装一律无效。单次 redemption；跨 tick/generation/revision
+ * 变化即失效。
  */
 export interface TreasuryAuthorizationBundle {
   readonly __brand: "treasury-authorization-bundle";
-  readonly tokens: readonly TreasuryAuthorizationToken[];
-  readonly contractId: string;
-  readonly contractDigest: string;
-  readonly transactionId: string;
-  readonly actionKind: string;
-  readonly adapterVersion: number;
 }
 
 /**

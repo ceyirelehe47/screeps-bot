@@ -15,6 +15,7 @@
 import { buildTreasuryCommitmentIndex } from "@/runtime/treasury/commitments";
 import { createTreasuryService } from "@/runtime/treasury/facade";
 import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
+import { treasuryTestService } from "@/runtime/treasury/testHarness";
 import { bumpTreasuryCommitmentRevision, readTreasuryCommitmentRevision, resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { formatTreasuryTransactionId } from "@/runtime/treasury/transactionId";
@@ -227,10 +228,10 @@ describe("production reservation 承诺", () => {
     } as unknown as Memory["runtime"];
     const before = JSON.stringify(Memory.runtime);
 
-    const treasury = createTreasuryService({
+    const treasury = treasuryTestService(createTreasuryService({
       getRooms: () => Object.values(Game.rooms),
       holderExists: () => true,
-    });
+    }));
     const commitments = treasury.commitments();
     expect(commitments.reservedProduction("W1N57", "U")).toBe(0);
     expect(commitments.metrics.expiredReservationsExcluded).toBe(1);
@@ -293,7 +294,7 @@ describe("receiver capacity 承诺", () => {
     const tasks: Record<string, ResourceTransferTask> = {
       "in-1": makeTask({ id: "in-1", toRoomName: "E1N57", remainingAmount: 50_000, origin: "automatic", lastProgressAt: 2999 }),
     };
-    const treasury = createTreasuryService({ getRooms: () => Object.values(Game.rooms) });
+    const treasury = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(Game.rooms) }));
     treasury.beginTick();
     // 本 tick 已结算：E1N57 storage 净流入 30_000（占掉 free）。
     const epoch = treasury.observation().epoch;
@@ -407,10 +408,10 @@ describe("承诺索引点时快照（primitive 化）", () => {
 
 describe("承诺索引 revision invalidation（facade 级）", () => {
   it("mutation bump 后 commitments() 重建并看到新状态；查询仍零写", () => {
-    const treasury = createTreasuryService({
+    const treasury = treasuryTestService(createTreasuryService({
       getRooms: () => Object.values(Game.rooms),
       holderExists: () => true,
-    });
+    }));
     treasury.beginTick();
     expect(treasury.commitments().reservedProduction("W1N57", "U")).toBe(0);
     const rebuildsBefore = treasury.metrics().commitmentRebuilds;
@@ -431,10 +432,10 @@ describe("承诺索引 revision invalidation（facade 级）", () => {
   });
 
   it("无 bump 的重复查询复用缓存（revision 未变不重建）", () => {
-    const treasury = createTreasuryService({
+    const treasury = treasuryTestService(createTreasuryService({
       getRooms: () => Object.values(Game.rooms),
       holderExists: () => true,
-    });
+    }));
     treasury.beginTick();
     const first = treasury.commitments();
     const rebuilds = treasury.metrics().commitmentRebuilds;

@@ -32,6 +32,7 @@ import {
   unregisterTreasuryActionAdapterForTest,
 } from "@/runtime/treasury/actionContracts";
 import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 
@@ -55,15 +56,15 @@ function buildRoomSpecs(): RoomSpec[] {
   }));
 }
 
-function makeService(roomSpecs: RoomSpec[] = buildRoomSpecs(), tasks?: Record<string, ResourceTransferTask>): TreasuryService {
+function makeService(roomSpecs: RoomSpec[] = buildRoomSpecs(), tasks?: Record<string, ResourceTransferTask>): TreasuryTestService {
   const rooms = installRooms(roomSpecs);
-  return createTreasuryService({
+  return treasuryTestService(createTreasuryService({
     getRooms: () => Object.values(rooms),
     ...(tasks !== undefined ? { getTasks: () => tasks } : {}),
-  });
+  }));
 }
 
-function prepareInput(service: TreasuryService, transactionId: string, delta: number, resource: ResourceConstant, roomName: string, locationKind: "storage" | "terminal" = "storage") {
+function prepareInput(service: TreasuryTestService, transactionId: string, delta: number, resource: ResourceConstant, roomName: string, locationKind: "storage" | "terminal" = "storage") {
   const epoch = service.observation().epoch;
   return {
     transactionId,
@@ -392,7 +393,7 @@ describe("第七轮：quarantine blocker 与 fault-slot admission 的确定性�
 
   it("第九轮：bundle 预验证与 token/posting 数线性——多资源执行不产生任何全表扫描", () => {
     const rooms = installRooms(buildRoomSpecs());
-    const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
     service.beginTick();
     registerTreasuryActionAdapter(makeTreasuryTestTransferAdapter());
     // 单资源 bundle（1 token、2 postings）与多资源 bundle（2 token、3

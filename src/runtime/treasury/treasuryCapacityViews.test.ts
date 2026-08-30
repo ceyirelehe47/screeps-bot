@@ -15,6 +15,7 @@ import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commi
 import { quarantineTreasuryTransaction } from "@/runtime/treasury/quarantine";
 import { writeTreasuryIntentEntry } from "@/runtime/treasury/intents";
 import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
 const ROOMS: RoomSpec[] = [
@@ -26,11 +27,11 @@ const ROOMS: RoomSpec[] = [
   },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
 function injectQuarantine(transactionId: string, delta: number): void {

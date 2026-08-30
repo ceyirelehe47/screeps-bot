@@ -131,9 +131,11 @@ const QUARANTINE_SETTLEMENTS: ReadonlySet<string> = new Set<string>(["quarantine
  */
 export function outcomeOfTreasuryFaultPhase(
   phase: string,
-): "returned_ok" | "returned_non_ok" | "started_unknown" | null {
+): "returned_ok" | "returned_non_ok" | "started_unknown" | "not_started" | null {
   if (phase === "action_returned_non_ok_abort_failed") return "returned_non_ok";
   if (phase === "executing_at_end_tick" || phase === "action_threw_execution_unknown") return "started_unknown";
+  // 原子 redemption 中断发生在 Game callback 之前——动作确定未执行。
+  if (phase === "internal_authorization_fault") return "not_started";
   if (TREASURY_WRITE_FAULT_PHASES.has(phase)) return "returned_ok";
   return null;
 }

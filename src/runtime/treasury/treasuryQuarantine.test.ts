@@ -32,6 +32,7 @@ import {
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 
 const ROOMS: RoomSpec[] = [
   {
@@ -41,14 +42,14 @@ const ROOMS: RoomSpec[] = [
   },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
-function freshInput(service: TreasuryService, transactionId: string, delta = -500): TreasuryTransactionInput {
+function freshInput(service: TreasuryTestService, transactionId: string, delta = -500): TreasuryTransactionInput {
   const epoch = service.observation().epoch;
   return {
     transactionId,
@@ -158,7 +159,7 @@ describe("quarantine 跨 tick / 跨 service generation / global reset", () => {
     // 模拟 global reset：heap 全失（新 service 实例/新 generation），Memory 保留。
     Game.time += 1;
     const rooms = installRooms(ROOMS);
-    const second = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    const second = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
     second.beginTick();
     const rejected = second.prepareTransaction(freshInput(second, "ts1_reset_exec"));
     expect(rejected.status).toBe("rejected");
@@ -178,7 +179,7 @@ describe("quarantine 跨 tick / 跨 service generation / global reset", () => {
     });
     Game.time += 1;
     const rooms = installRooms(ROOMS);
-    const second = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    const second = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
     second.beginTick();
     const view = second.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"], locations: ["storage"] });
     // 500 被 quarantine 流出占用（保守计入 committed；未进 projection）。
@@ -202,7 +203,7 @@ describe("第七轮：全局 quarantine write blocker（marker 不是唯一锁�
 
     Game.time += 1;
     const rooms = installRooms(ROOMS);
-    const next = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    const next = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
     next.beginTick();
     // 新 transaction C：全局阻断（quarantine_write_blocked），callback 零调用。
     let callbacks = 0;

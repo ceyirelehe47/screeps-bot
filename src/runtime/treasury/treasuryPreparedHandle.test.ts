@@ -17,6 +17,7 @@ import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryPreparedHandle, TreasuryTransactionInput } from "@/runtime/treasury/types";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 
 const ROOMS: RoomSpec[] = [
   {
@@ -26,14 +27,14 @@ const ROOMS: RoomSpec[] = [
   },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
-function input(service: TreasuryService, transactionId: string, delta = -500): TreasuryTransactionInput {
+function input(service: TreasuryTestService, transactionId: string, delta = -500): TreasuryTransactionInput {
   const epoch = service.observation().epoch;
   return {
     transactionId,
@@ -44,7 +45,7 @@ function input(service: TreasuryService, transactionId: string, delta = -500): T
   };
 }
 
-function prepareOk(service: TreasuryService, transactionId: string, delta = -500): TreasuryPreparedHandle {
+function prepareOk(service: TreasuryTestService, transactionId: string, delta = -500): TreasuryPreparedHandle {
   const prepared = service.prepareTransaction(input(service, transactionId, delta));
   expect(prepared.status).toBe("prepared");
   if (prepared.status !== "prepared") throw new Error("prepare 失败");

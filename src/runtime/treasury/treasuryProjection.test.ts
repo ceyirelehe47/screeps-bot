@@ -9,6 +9,7 @@
  *   structureId 替换/金额归零/外部流入流出全部显式分类，transaction 追溯保留。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import { treasuryTestService } from "@/runtime/treasury/testHarness";
 import { compatRecordAcceptedTransaction } from "@/runtime/treasury/compat";
 import {
   clearTreasuryPersistenceForTest,
@@ -41,7 +42,7 @@ interface ServiceFixture {
 
 function makeFixture(roomSpecs: RoomSpec[] = DEFAULT_ROOMS): ServiceFixture {
   const rooms = installRooms(roomSpecs);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
   return {
     service,
@@ -215,7 +216,7 @@ describe("Treasury 原子 transaction journal", () => {
 
   it("global reset（服务重建 + heap 丢失）后凭 Memory receipt 拒绝重放", () => {
     const rooms = installRooms(DEFAULT_ROOMS);
-    const first = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    const first = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
     first.beginTick();
     const decision = {
       scope: first.observation().epoch.scope,
@@ -234,7 +235,7 @@ describe("Treasury 原子 transaction journal", () => {
 
     // global reset：新服务实例（heap 幂等缓存清零），Memory 保留。
     Game.time += 1;
-    const second = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    const second = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
     second.beginTick();
     const replay = compatRecordAcceptedTransaction(second, {
       transactionId,

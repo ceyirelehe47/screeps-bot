@@ -24,6 +24,7 @@ import { makeTreasuryTestTransferAdapter, replaceTreasuryActionAdapterForTest } 
 import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 
 const ROOMS: RoomSpec[] = [
   {
@@ -33,14 +34,14 @@ const ROOMS: RoomSpec[] = [
   },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
-function prepareOk(service: TreasuryService, transactionId: string): TreasuryTransactionInput & { handle: import("@/runtime/treasury/types").TreasuryPreparedHandle } {
+function prepareOk(service: TreasuryTestService, transactionId: string): TreasuryTransactionInput & { handle: import("@/runtime/treasury/types").TreasuryPreparedHandle } {
   const epoch = service.observation().epoch;
   const input: TreasuryTransactionInput = {
     transactionId,
@@ -56,7 +57,7 @@ function prepareOk(service: TreasuryService, transactionId: string): TreasuryTra
 }
 
 /** 构造基于 service 当前 shared epoch 的输入（跨 tick 重试须重建 decision）。 */
-function freshInput(service: TreasuryService, transactionId: string): TreasuryTransactionInput {
+function freshInput(service: TreasuryTestService, transactionId: string): TreasuryTransactionInput {
   const epoch = service.observation().epoch;
   return {
     transactionId,
@@ -88,7 +89,7 @@ function registerReconciler(): void {
 }
 
 /** 从 service 签发 capability（断言成功并返回）。 */
-function issueCap(service: TreasuryService, transactionId: string) {
+function issueCap(service: TreasuryTestService, transactionId: string) {
   const issued = service.issueTreasuryReconciliationCapability({ transactionId });
   if (issued.status !== "issued") throw new Error(`capability 签发失败: ${issued.reason}`);
   return issued.capability;
@@ -226,7 +227,7 @@ describe("staged commit 故障注入", () => {
     expect(first.commitPreparedTransaction(prepared.handle).status).toBe("rejected");
     // 模拟 global reset：heap 全失，Memory 保留——直接重建 service 实例。
     const rooms = installRooms(ROOMS);
-    const second = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    const second = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
     second.beginTick();
     expect(second.metrics().writeAdmissionLocked).toBe(1);
     expect(readTreasuryWriteFault()?.transactionId).toBe("ts1_reset_fault");

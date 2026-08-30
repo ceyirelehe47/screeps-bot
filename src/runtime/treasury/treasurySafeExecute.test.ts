@@ -24,6 +24,7 @@ import {
   type TreasuryWriteFaultPhase,
 } from "@/runtime/treasury/writeFault";
 import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
 const ROOMS: RoomSpec[] = [
@@ -34,14 +35,14 @@ const ROOMS: RoomSpec[] = [
   },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
-function freshInput(service: TreasuryService, transactionId: string, delta = -500) {
+function freshInput(service: TreasuryTestService, transactionId: string, delta = -500) {
   const epoch = service.observation().epoch;
   return {
     transactionId,

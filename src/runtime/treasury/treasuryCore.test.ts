@@ -26,6 +26,7 @@ import { formatTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryHolderResolution, TreasuryTransactionInput } from "@/runtime/treasury/types";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 
 type RuntimeGlobal = typeof global & { __runtimeServices?: unknown };
 function clearRuntimeServicesForTest(): void {
@@ -60,15 +61,15 @@ function makeService(options?: {
   reservations?: Record<string, ReservationSeed>;
   holderExists?: (holderId: string) => boolean;
   resolveHolder?: (holderId: string) => TreasuryHolderResolution | undefined;
-}): TreasuryService {
+}): TreasuryTestService {
   const rooms = installRooms(options?.rooms ?? ROOM_SPECS);
-  return createTreasuryService({
+  return treasuryTestService(createTreasuryService({
     getRooms: () => Object.values(rooms),
     ...(options?.tasks !== undefined ? { getTasks: () => options.tasks! } : {}),
     ...(options?.reservations !== undefined ? { getReservations: () => options.reservations! } : {}),
     ...(options?.holderExists !== undefined ? { holderExists: options.holderExists } : {}),
     ...(options?.resolveHolder !== undefined ? { resolveHolder: options.resolveHolder } : {}),
-  });
+  }));
 }
 
 function pendingTask(overrides: Partial<ResourceTransferTask> & { id: string }): ResourceTransferTask {
@@ -507,7 +508,7 @@ describe("RuntimeServices 集成", () => {
     const services = getRuntimeServices();
     services.treasury.beginTick();
     const decision = decisionOf(services.treasury);
-    const recorded = compatRecordAcceptedTransaction(services.treasury, {
+    const recorded = compatRecordAcceptedTransaction(treasuryTestService(services.treasury), {
       transactionId: formatTreasuryTransactionId("send", "x"),
       kind: "terminal.send",
       source: "test",
@@ -552,7 +553,7 @@ describe("Treasury 两阶段 prepare/commit/abort 协议", () => {
   const TX_ID = "stable:send:W1N57:1";
 
   function twoPhaseInput(
-    treasury: TreasuryService,
+    treasury: TreasuryTestService,
     transactionId: string,
     delta = -500,
   ): TreasuryTransactionInput {
@@ -565,7 +566,7 @@ describe("Treasury 两阶段 prepare/commit/abort 协议", () => {
     };
   }
 
-  function prepareOk(treasury: TreasuryService, input: TreasuryTransactionInput) {
+  function prepareOk(treasury: TreasuryTestService, input: TreasuryTransactionInput) {
     const prepared = treasury.prepareTransaction(input);
     expect(prepared.status).toBe("prepared");
     if (prepared.status !== "prepared") throw new Error("prepare 失败");

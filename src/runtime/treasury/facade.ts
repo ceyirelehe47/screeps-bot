@@ -150,6 +150,8 @@ import {
   type TreasuryAuthorizationToken,
   type TreasuryContractAuthorizationOptions,
 } from "@/runtime/treasury/authorization";
+import { TREASURY_WRITER_KERNEL, type TreasuryWriterKernel } from "@/runtime/treasury/kernelChannel";
+import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 import { readTreasuryQuarantineRevision } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentRevision } from "@/runtime/treasury/intents";
 import type { TreasuryPosting } from "@/runtime/treasury/types";
@@ -186,6 +188,17 @@ import {
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 
 /** 每 tick market-fresh epoch 发行上限（shared 不占额；CPU 保护）。 */
+export /**
+ * redemption 故障注入器（模块级，测试专用，第十轮 3.12.4）：注入点 stage ∈
+ * first_leg/middle_leg/last_leg/before_budget_publish/before_tentative_handoff/
+ * before_bundle_state——触发即前缀回滚 + internal_authorization_fault marker。
+ * 架构测试守护生产模块不得调用（setTreasuryRedemptionFaultInjectorForTest）。
+ */
+let treasuryRedemptionFaultInjector: ((stage: string) => void) | null = null;
+export function setTreasuryRedemptionFaultInjectorForTest(injector: ((stage: string) => void) | null): void {
+  treasuryRedemptionFaultInjector = injector;
+}
+
 export const TREASURY_FRESH_EPOCH_LIMIT = 8;
 
 /** tick 边界 outstanding prepared 审计的样本上限（有界）。 */
@@ -273,7 +286,41 @@ function isTerminalRecord(record: TreasuryHandleRecord): record is TerminalHandl
  * - intentContract：contract 执行路径的完整合同身份（durable intent 持久
  *   化绑定的字段来源）。
  */
+/**
+ * service 闭包私有 bundle 记录（第十轮 3.12.3）：全部授权 legs 与统一
+ * cohort（owner/policy/contract/epoch/revisions/generation/tick）。同一
+ * bundle 的 legs 在签发时原子校验——不同 owner/policy/revision cohort 不得
+ * 组成一个 bundle。
+ */
+interface TreasuryAuthorizationBundleRecord {
+  readonly tokens: readonly TreasuryAuthorizationToken[];
+  readonly contractId: string;
+  readonly contractDigest: string;
+  readonly transactionId: string;
+  readonly actionKind: string;
+  readonly adapterVersion: number;
+  /** owner canonical identity（"" = 无 owner 限定）。 */
+  readonly ownerIdentity: string;
+  /** policy capability identity（本轮占位 "none"；policy authority 轮填充）。 */
+  readonly policyIdentity: string;
+  readonly revisions: TreasuryAuthorizationRevisions;
+  readonly serviceGeneration: number;
+  readonly tick: number;
+  /** bundle 身份指纹（16 hex；intent 持久化的 authorizationDigest）。 */
+  readonly authorizationDigest: string;
+  state: "active" | "redeemed";
+}
+
 export interface TreasuryWriterKernelExecution {
+  /**
+   * opaque service-issued authorization bundle（第十轮 3.12.3/3.12.4）：
+   * prepare 成功（tentative 接管）后、durable intent 写入前执行**批量原子
+   * redemption**（全部 legs 一次性验证、staged 变更一次发布；任何注入故障
+   * 前缀回滚或进入 internal authorization fault）。bundle 为 service 闭包
+   * registry 签发的对象——裸 token/token 数组不是 production 输入。
+   */
+  authorizationBundle?: TreasuryAuthorizationBundle;
+  /** @deprecated 第九轮兼容 hook（测试注入用；production 路径已改 authorizationBundle）。 */
   redeemAuthorization?(): { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string; readonly detail: string };
   intentContract?: {
     readonly contractId: string;
@@ -312,12 +359,13 @@ export interface TreasuryService {
    * 使用、revision 绑定）并立即占用 authorization budget（防双授权超卖）。
    */
   /**
-   * @internal test-only 旧授权入口（第九轮 4.1 起）：生产授权必须经
-   * authorizeTreasuryActionContract（contract-first——授权需求全部从
-   * contract 派生）。本入口保留供既有测试与协议栈内部（bundle 派生）使用；
-   * 架构测试全量扫描守护生产模块不得调用。
+   * 低层 writer 原语已从公共接口移除（第十轮 3.12.5 writer kernel 封闭）：
+   * authorizeResourceUse / validateTreasuryAuthorizationForRedeem /
+   * consumeTreasuryAuthorization / prepareTransaction / executePreparedAction /
+   * commitPreparedTransaction / abortPreparedTransaction 只经
+   * TREASURY_WRITER_KERNEL symbol 通道（treasury 协议栈内部与 testHarness）
+   * 访问——生产调用者类型与运行时枚举均不可达。
    */
-  authorizeResourceUse(request: TreasuryAuthorizationRequest): TreasuryAuthorizationResult;
   /**
    * Contract-first 授权（第九轮 4.1，生产唯一授权入口）：授权需求全部从
    * contract 的 canonical postings 与 adapter 元数据派生（actionKind/rooms/
@@ -334,54 +382,7 @@ export interface TreasuryService {
     readonly reason: "invalid_input" | "contract_invalid" | "adapter_not_registered" | "write_admission_blocked" | "authorization_policy_violation" | "authorization_context_unsafe" | "insufficient_amount" | "capacity_overflow" | "authorization_capacity_exhausted";
     readonly detail: string;
   };
-  /**
-   * 授权 bundle/token 的只读预验证（第九轮 4.2，@internal——writer kernel
-   * redemption 前置）：全部 token 一次性验证（对象身份/generation/tick/
-   * revisions/transactionId/重复 token/postings 覆盖），零状态变化、零消费。
-   * 原子性的可达性保证：预验证与消费在同一同步窗口，中间无 revision 变化源。
-   */
-  validateTreasuryAuthorizationForRedeem(
-    tokens: readonly TreasuryAuthorizationToken[],
-    contract: { readonly transactionId: string; readonly actionKind: string; readonly digest: string; readonly adapterVersion: number },
-    postings: readonly TreasuryPosting[],
-  ): { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string; readonly detail: string };
-  /**
-   * @internal writer kernel 原语（第九轮 4.3）：授权消费只发生在
-   * executeTreasuryActionContract 的原子 redemption（tentative 接管后）；
-   * 普通生产模块不得直接调用（架构测试全量扫描守护）。
-   */
-  consumeTreasuryAuthorization(
-    token: TreasuryAuthorizationToken,
-    options?: {
-      transactionId?: string;
-      postings?: readonly TreasuryPosting[];
-    },
-  ): TreasuryAuthorizationConsumeResult;
-  /**
-   * @internal writer kernel 原语（第九轮 4.3）：prepare 是
-   * executePreparedAction/executeTreasuryActionContract 的内部阶段；普通
-   * 生产模块不得直接调用（架构测试全量扫描守护）。
-   */
-  prepareTransaction(input: TreasuryTransactionInput): TreasuryPreparationResult;
-  /**
-   * 两阶段 commit：handle 验证（registry 对象身份 + generation + tick，
-   * 不依赖调用方先 beginTick）后执行 tentative → committed 兑现——不做
-   * 业务 admission，Game API 已返回 OK 后不再因业务条件拒绝。
-   */
-  commitPreparedTransaction(handle: TreasuryPreparedHandle): TreasuryPreparedCommitResult;
-  /** 两阶段 abort：原子释放 tentative 资源/容量/receipt 槽与 handle，零结算写入。 */
-  abortPreparedTransaction(handle: TreasuryPreparedHandle): TreasuryPreparedAbortResult;
-  /**
-   * @internal writer kernel 核心（第九轮 4.3）：任意 callback 的执行入口只
-   * 允许 actionContracts（经 execution options 窄接口）与测试 harness 使用；
-   * 普通生产模块不得直接调用（架构测试全量扫描守护）——真实写动作的唯一
-   * 生产入口是 executeTreasuryActionContract。
-   */
-  executePreparedAction<TAction extends { ok: boolean }>(
-    input: TreasuryTransactionInput,
-    action: () => TAction,
-    execution?: TreasuryWriterKernelExecution,
-  ): TreasurySafeExecuteResult<TAction>;
+
   /** 最近一次 tick 边界的 outstanding prepared 审计快照（有界样本）。 */
   preparedLeakAudit(): TreasuryPreparedLeakAudit;
   /**
@@ -702,6 +703,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     readonly capacityAmount?: number;
     consumed: boolean;
   }>();
+  /**
+   * service 闭包私有 bundle registry（第十轮 3.12.3）：opaque bundle 对象
+   * 身份 → 完整 legs 与 cohort 事实。生产调用者只能持有 bundle 引用——
+   * JSON round-trip 副本/手工构造对象在 registry 无记录，一律无效。
+   */
+  const bundleRecords = new WeakMap<object, TreasuryAuthorizationBundleRecord>();
+  /** bundle 签发序号（authorizationDigest 的唯一性成分）。 */
+  let bundleSequence = 0;
+
   /** (room\u0000location\u0000resource) → 未消费授权的流出预算合计。 */
   const authorizationOutflowTotals = new Map<string, number>();
   /** (room\u0000location) → 未消费授权的容量预算合计。 */
@@ -739,6 +749,205 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     }
     record.consumed = true;
     authorizationRecords.delete(token);
+  }
+
+  /**
+   * 批量原子 bundle redemption（第十轮 3.12.4，闭包私有——只经
+   * executePreparedAction 的 execution.authorizationBundle 调用）：
+   * 1. 只读预验证：bundle registry 对象身份 + cohort（contract 匹配/
+   *    generation/tick/revisions）+ 全部 legs 逐项校验 + 联合 posting
+   *    coverage——零状态变化；
+   * 2. staged 发布：逐 leg 预算减少与消费按序发布；注入点（first_leg/
+   *    middle_leg/last_leg/before_budget_publish/before_tentative_handoff/
+   *    before_bundle_state）任一触发即**前缀完整回滚**（预算/容量/消费标记
+   *    恢复原状、bundle 保持 active、tentative 不残留）并写入
+   *    internal_authorization_fault marker（阻断后续 writer——审计要求显式
+   *    确认，即使状态已一致回滚）；
+   * 3. 成功：bundle 进入 redeemed 终态（单次 redemption；重复拒绝且不重复
+   *    释放预算）。
+   * 不再依赖"预验证后理论不会失败"——apply 阶段的任何异常同样回滚并进入
+   * internal fault。
+   */
+  function redeemAuthorizationBundleAtomic(
+    bundle: TreasuryAuthorizationBundle,
+    context: {
+      readonly transactionId: string;
+      readonly actionKind: string;
+      readonly contractId?: string;
+      readonly contractDigest?: string;
+      readonly adapterVersion?: number;
+      readonly postings: readonly TreasuryPosting[];
+    },
+  ): { readonly status: "ok"; readonly authorizationDigest: string } | {
+    readonly status: "rejected";
+    readonly reason: string;
+    readonly detail: string;
+  } {
+    const reject = (reason: string, detail: string): { readonly status: "rejected"; readonly reason: string; readonly detail: string } => ({
+      status: "rejected" as const,
+      reason,
+      detail,
+    });
+    const record = bundleRecords.get(bundle);
+    if (record === undefined) {
+      return reject("invalid_bundle", "bundle 未在本 service 闭包签发（伪造对象/JSON round-trip 副本/跨实例一律无效）");
+    }
+    if (record.state !== "active") {
+      return reject("bundle_redeemed", `bundle 已消费（单次 redemption；authorizationDigest ${record.authorizationDigest}）`);
+    }
+    if (record.transactionId !== context.transactionId) {
+      return reject("transaction_mismatch", `bundle 绑定 transactionId ${record.transactionId}，执行 ${context.transactionId}`);
+    }
+    if (record.actionKind !== context.actionKind) {
+      return reject("action_kind_mismatch", `bundle 绑定 actionKind ${record.actionKind}，执行 ${context.actionKind}`);
+    }
+    if (context.contractId !== undefined && record.contractId !== context.contractId) {
+      return reject("contract_mismatch", `bundle contractId ${record.contractId} 与执行声明 ${context.contractId} 不一致`);
+    }
+    if (context.contractDigest !== undefined && record.contractDigest !== context.contractDigest) {
+      return reject("contract_mismatch", "bundle contractDigest 与执行声明不一致");
+    }
+    if (context.adapterVersion !== undefined && record.adapterVersion !== context.adapterVersion) {
+      return reject("contract_mismatch", `bundle adapterVersion v${String(record.adapterVersion)} 与执行声明 v${String(context.adapterVersion)} 不一致`);
+    }
+    if (record.serviceGeneration !== serviceGeneration) {
+      return reject("cross_generation", "bundle 由旧 Treasury service 签发（global reset 后必须重新授权）");
+    }
+    if (record.tick !== Game.time) {
+      return reject("cross_tick", `bundle 于 tick ${String(record.tick)} 签发（当前 ${String(Game.time)}）——跨 tick 失效`);
+    }
+    const revisions = currentAuthorizationRevisions();
+    if (
+      record.revisions.commitmentRevision !== revisions.commitmentRevision ||
+      record.revisions.projectionRevision !== revisions.projectionRevision ||
+      record.revisions.quarantineRevision !== revisions.quarantineRevision ||
+      record.revisions.intentRevision !== revisions.intentRevision ||
+      record.revisions.reservationStoreRevision !== revisions.reservationStoreRevision
+    ) {
+      return reject("revision_mismatch", "bundle 绑定的 revision cohort 已过期（commitment/projection/quarantine/intent/reservation 任一变化——须重新授权）");
+    }
+    // 只读预验证全部 legs（零状态变化；任一失败时前 N−1 个 leg 不受影响）。
+    const prevalidated = internalService.validateTreasuryAuthorizationForRedeem(
+      record.tokens,
+      {
+        transactionId: record.transactionId,
+        actionKind: record.actionKind,
+        digest: record.contractDigest,
+        adapterVersion: record.adapterVersion,
+      },
+      context.postings,
+    );
+    if (prevalidated.status === "rejected") {
+      return reject(prevalidated.reason, `legs 预验证失败: ${prevalidated.detail}`);
+    }
+    // staged 发布（注入点边界 + 前缀回滚）。
+    interface AppliedLeg {
+      readonly token: TreasuryAuthorizationToken;
+      readonly outflowKeys: readonly string[];
+      readonly amount: number;
+      readonly capacityKey?: string;
+      readonly capacityAmount?: number;
+    }
+    const applied: AppliedLeg[] = [];
+    const guard = (stage: string): void => {
+      if (treasuryRedemptionFaultInjector !== null) treasuryRedemptionFaultInjector(stage);
+    };
+    const rollbackApplied = (): void => {
+      // 前缀完整回滚：预算/容量恢复、消费标记与 record 注册恢复。
+      for (const leg of applied) {
+        for (const key of leg.outflowKeys) {
+          authorizationOutflowTotals.set(key, (authorizationOutflowTotals.get(key) ?? 0) + leg.amount);
+        }
+        if (leg.capacityKey !== undefined && leg.capacityAmount !== undefined) {
+          authorizationCapacityTotals.set(leg.capacityKey, (authorizationCapacityTotals.get(leg.capacityKey) ?? 0) + leg.capacityAmount);
+        }
+        const legacy = authorizationRecords.get(leg.token) as
+          | { outflowKeys: readonly string[]; amount: number; capacityKey?: string; capacityAmount?: number; consumed: boolean }
+          | undefined;
+        if (legacy === undefined) {
+          authorizationRecords.set(leg.token, {
+            outflowKeys: leg.outflowKeys,
+            amount: leg.amount,
+            ...(leg.capacityKey !== undefined ? { capacityKey: leg.capacityKey } : {}),
+            ...(leg.capacityAmount !== undefined ? { capacityAmount: leg.capacityAmount } : {}),
+            consumed: false,
+          });
+        } else {
+          legacy.consumed = false;
+        }
+      }
+    };
+    try {
+      for (let index = 0; index < record.tokens.length; index += 1) {
+        const token = record.tokens[index];
+        const tokenRecord = authorizationRecords.get(token);
+        if (tokenRecord === undefined) {
+          throw new Error(`leg ${String(index)} authorization record 缺失（内部不一致）`);
+        }
+        applied.push({
+          token,
+          outflowKeys: tokenRecord.outflowKeys,
+          amount: tokenRecord.amount,
+          ...(tokenRecord.capacityKey !== undefined ? { capacityKey: tokenRecord.capacityKey } : {}),
+          ...(tokenRecord.capacityAmount !== undefined ? { capacityAmount: tokenRecord.capacityAmount } : {}),
+        });
+        releaseAuthorizationBudget(token, tokenRecord);
+        guard(index === 0 ? "first_leg" : index === record.tokens.length - 1 ? "last_leg" : "middle_leg");
+      }
+      guard("before_budget_publish");
+      guard("before_tentative_handoff");
+      guard("before_bundle_state");
+      record.state = "redeemed";
+    } catch (error) {
+      rollbackApplied();
+      // 状态已一致回滚，但发布序列中断本身按 internal authorization fault
+      // 处理：写入 marker 阻断后续 writer（审计要求显式确认，不静默）。
+      recordTreasuryWriteFault({
+        transactionId: context.transactionId,
+        digest: record.contractDigest,
+        tick: Game.time,
+        kind: context.actionKind,
+        source: "bundle-redemption",
+        phase: "internal_authorization_fault",
+        status: "unresolved",
+        recordedAt: Game.time,
+        detail: `原子 redemption 中断并回滚（${String(error instanceof Error ? error.message : error).slice(0, TREASURY_WRITE_FAULT_DETAIL_MAX)}）——状态零变化，marker 阻断后续 writer`,
+      });
+      metrics.authorizationInvalidated += 1;
+      return reject("internal_authorization_fault", "原子 redemption 中断：全部预算/消费标记已回滚，internal_authorization_fault marker 已写入（阻断后续 writer）");
+    }
+    return { status: "ok", authorizationDigest: record.authorizationDigest };
+  }
+
+  /**
+   * opaque bundle 只读解析（第十轮 3.12.3）：registry 对象身份 + contract
+   * 匹配校验，返回 authorizationDigest（intent 持久化用）。零状态变化、
+   * 零消费——redemption 时 redeemAuthorizationBundleAtomic 独立重验。
+   */
+  function resolveAuthorizationBundleReadOnly(
+    bundle: unknown,
+    contract: { readonly transactionId: string; readonly actionKind: string; readonly digest: string; readonly adapterVersion: number },
+  ): { readonly status: "ok"; readonly authorizationDigest: string; readonly contractId: string } | {
+    readonly status: "rejected";
+    readonly reason: string;
+    readonly detail: string;
+  } {
+    if (!bundle || typeof bundle !== "object" || (bundle as { __brand?: string }).__brand !== "treasury-authorization-bundle") {
+      return { status: "rejected", reason: "authorization_invalid", detail: "authorization 必须是 service 签发的 opaque bundle（裸 token/token 数组/手工构造对象不是 production 输入）" };
+    }
+    const record = bundleRecords.get(bundle);
+    if (record === undefined) {
+      return { status: "rejected", reason: "authorization_invalid", detail: "bundle 未在本 service 闭包签发（伪造对象/JSON round-trip 副本一律无效）" };
+    }
+    if (
+      record.contractDigest !== contract.digest ||
+      record.transactionId !== contract.transactionId ||
+      record.actionKind !== contract.actionKind ||
+      record.adapterVersion !== contract.adapterVersion
+    ) {
+      return { status: "rejected", reason: "contract_mismatch", detail: "授权 bundle 与实际 contract 不匹配（contractDigest/transactionId/actionKind/adapterVersion 任一不一致）" };
+    }
+    return { status: "ok", authorizationDigest: record.authorizationDigest, contractId: record.contractId };
   }
   /** 最近一次 tick 边界的 outstanding prepared 审计快照（有界样本）。 */
   let lastPreparedLeakAudit: TreasuryPreparedLeakAudit = Object.freeze({
@@ -1078,7 +1287,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     return { registered };
   }
 
-  const service = {
+  // 内部完整实现载体（含低层 writer 原语——第十轮 3.12.5 起**不**作为公共
+  // service 的可枚举属性暴露；kernel 经 symbol 通道引用）。
+  const internalService = {
     beginTick(): void {
       if (current && current.tick === Game.time) return; // 幂等
       performBeginTick(false);
@@ -1218,7 +1429,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           ? "excluded-own-reservations"
           : "invalid_fail_closed";
 
-      const commitments = this.commitments();
+      const commitments = internalService.commitments();
       let committed = 0;
       if (context.subtractOutgoing !== false) {
         for (const roomName of rooms) {
@@ -1404,7 +1615,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
               roomName: request.owner.roomName ?? request.rooms[0],
             }
           : undefined;
-      const view = this.query({
+      const view = internalService.query({
         resource: request.resource,
         rooms: [...request.rooms],
         locations: [...locations],
@@ -1454,7 +1665,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         const cap = request.capacityRequirement;
         const capKey = `${cap.roomName}\u0000${cap.locationKind}`;
         const budgetedCapacity = authorizationCapacityTotals.get(capKey) ?? 0;
-        const riskAdjustedFree = this.projectedFreeCapacity(cap.roomName, cap.locationKind) - budgetedCapacity;
+        const riskAdjustedFree = internalService.projectedFreeCapacity(cap.roomName, cap.locationKind) - budgetedCapacity;
         if (!Number.isSafeInteger(riskAdjustedFree) || riskAdjustedFree < cap.amount) {
           metrics.authorizationRejected += 1;
           return {
@@ -1648,7 +1859,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         }
       };
       for (const [resource, need] of resourceOutflow) {
-        const result = this.authorizeResourceUse({
+        const result = internalService.authorizeResourceUse({
           transactionId: verifiedContract.transactionId,
           actionKind: verifiedContract.actionKind,
           resource,
@@ -1669,14 +1880,42 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         }
         issued.push(result.token);
       }
-      const bundle: TreasuryAuthorizationBundle = Object.freeze({
-        __brand: "treasury-authorization-bundle",
-        tokens: Object.freeze(issued),
+      // 全部 legs 同源签发（同一同步循环、同 revision 快照、同 generation/
+      // tick）——cohort 一致性由签发路径结构性保证；防御性校验 revision 单一。
+      const firstRevisions = issued[0].revisions;
+      const cohortConsistent = issued.every(
+        (token) =>
+          token.revisions.commitmentRevision === firstRevisions.commitmentRevision &&
+          token.revisions.projectionRevision === firstRevisions.projectionRevision &&
+          token.revisions.quarantineRevision === firstRevisions.quarantineRevision &&
+          token.revisions.intentRevision === firstRevisions.intentRevision &&
+          token.revisions.reservationStoreRevision === firstRevisions.reservationStoreRevision,
+      );
+      if (!cohortConsistent) {
+        rollbackIssued();
+        metrics.authorizationRejected += 1;
+        return { status: "rejected", reason: "invalid_input", detail: "bundle legs 的 revision cohort 不一致（内部不变量破坏——拒绝签发）" };
+      }
+      bundleSequence += 1;
+      const authorizationDigest = hashTreasuryCanonicalString(
+        `bundle:${verifiedContract.digest}:${verifiedContract.transactionId}:${String(bundleSequence)}:${String(serviceGeneration)}:${String(Game.time)}`,
+      );
+      // opaque bundle：生产调用者只拿到不可读句柄（legs/cohort 仅闭包可见）。
+      const bundle: TreasuryAuthorizationBundle = Object.freeze({ __brand: "treasury-authorization-bundle" });
+      bundleRecords.set(bundle, {
+        tokens: Object.freeze([...issued]),
         contractId: verifiedContract.contractId,
         contractDigest: verifiedContract.digest,
         transactionId: verifiedContract.transactionId,
         actionKind: verifiedContract.actionKind,
         adapterVersion: verifiedContract.adapterVersion,
+        ownerIdentity: options?.owner !== undefined ? String(treasuryAuthorizationOwnerKey(options.owner)) : "",
+        policyIdentity: "none",
+        revisions: firstRevisions,
+        serviceGeneration,
+        tick: Game.time,
+        authorizationDigest,
+        state: "active",
       });
       metrics.authorizationIssued += 1;
       return { status: "authorized", bundle };
@@ -2150,7 +2389,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       action: () => TAction,
       execution?: TreasuryWriterKernelExecution,
     ): TreasurySafeExecuteResult<TAction> {
-      const prepared = this.prepareTransaction(input);
+      const prepared = internalService.prepareTransaction(input);
       if (prepared.status === "already_settled") {
         return { status: "already_settled", transactionId: prepared.transactionId, firstRecordedAtTick: prepared.firstRecordedAtTick };
       }
@@ -2163,11 +2402,35 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // 理论不可达（handle 刚签发）：按协议违规拒绝，不执行 Game API。
         return { status: "prepare_rejected", reason: "invalid_handle", detail: "签发后 handle 记录缺失（内部不一致）" };
       }
-      // ── 原子 redemption（第九轮 4.2）：tentative 已接管（prepare 成功）、
-      //    durable intent 写入与 Game callback 之前消费授权——预算向
-      //    tentative 的转移是一个原子点；redeem 拒绝时释放全部预留、
-      //    callback 零调用。 ─────────────────────────────────────────────
-      if (execution?.redeemAuthorization !== undefined) {
+      // ── 批量原子 redemption（第十轮 3.12.4）：tentative 已接管（prepare
+      //    成功）、durable intent 写入与 Game callback 之前——全部 legs 一次
+      //    性只读预验证 + staged 变更一次发布；任何注入故障前缀完整回滚或
+      //    进入 internal authorization fault（阻断 writer）；redeem 拒绝时
+      //    释放全部预留、callback 零调用。 ─────────────────────────────────
+      if (execution?.authorizationBundle !== undefined) {
+        const redeemed = redeemAuthorizationBundleAtomic(execution.authorizationBundle, {
+          transactionId: record.canonical.transactionId,
+          actionKind: record.canonical.kind,
+          contractId: execution.intentContract?.contractId,
+          contractDigest: execution.intentContract?.contractDigest,
+          adapterVersion: execution.intentContract?.adapterVersion,
+          postings: record.shape.merged as readonly TreasuryPosting[],
+        });
+        if (redeemed.status === "rejected") {
+          record.state = "aborted";
+          preparedById.delete(record.canonical.transactionId);
+          projection.tentativeRelease(record.tentativeKey);
+          releaseTreasuryReceiptReservation(record.canonical.transactionId);
+          finalizeHandleRecord(record, "aborted");
+          metrics.authorizationRejected += 1;
+          return {
+            status: "prepare_rejected",
+            reason: redeemed.reason === "internal_authorization_fault" ? "internal_authorization_fault" : "authorization_invalid",
+            detail: `授权 redemption 失败（${redeemed.reason}）: ${redeemed.detail}——tentative 已释放，Game callback 零调用`,
+          };
+        }
+      } else if (execution?.redeemAuthorization !== undefined) {
+        // 兼容 hook（测试注入；production 路径已改 authorizationBundle）。
         const redeemed = execution.redeemAuthorization();
         if (redeemed.status === "rejected") {
           record.state = "aborted";
@@ -2360,7 +2623,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
             retryForbidden: true,
           };
         }
-        const committed = this.commitPreparedTransaction(prepared.handle);
+        const committed = internalService.commitPreparedTransaction(prepared.handle);
         if (committed.status === "committed") {
           // settled：intent 关闭（WAL 完成）。
           releaseTreasuryIntentEntry(record.canonical.transactionId);
@@ -2425,7 +2688,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           detail: `Game 已返回非 OK 但 returned_non_ok 落盘失败（${markedNonOk.reason}）——不得普通 abort，已进入 durable fault`,
         };
       }
-      const aborted = this.abortPreparedTransaction(prepared.handle);
+      const aborted = internalService.abortPreparedTransaction(prepared.handle);
       if (aborted.status !== "aborted") {
         // abort 未确认：资源仍被占用——立即隔离（第七轮：phase=
         // action_returned_non_ok_abort_failed，不等 tick 边界），不得报告已
@@ -2643,7 +2906,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
 
     /** @internal 单阶段兼容实现（勿直接调用）：经 treasury/compat 模块访问。 */
     recordAcceptedAction(input: TreasuryRecordActionInput): TreasurySettlementResult {
-      return this.recordAcceptedTransaction({
+      return internalService.recordAcceptedTransaction({
         transactionId: input.transactionId,
         kind: input.kind,
         source: input.source,
@@ -2669,18 +2932,18 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
 
     projectedUsedCapacity(roomName: string, kind: TreasuryLocationKind): number {
       // @deprecated 兼容别名（严格口径）——新代码使用 strictProjectedUsedCapacity。
-      return this.strictProjectedUsedCapacity(roomName, kind);
+      return internalService.strictProjectedUsedCapacity(roomName, kind);
     },
 
     strictProjectedUsedCapacity(roomName: string, kind: TreasuryLocationKind): number {
       // 严格口径：observed.used + 本 tick overlay 净变化（不含风险扣减）。
-      return this.observation().usedCapacity(roomName, kind) + projection.locationCapacityDelta(roomName, kind);
+      return internalService.observation().usedCapacity(roomName, kind) + projection.locationCapacityDelta(roomName, kind);
     },
 
     strictProjectedFreeCapacity(roomName: string, kind: TreasuryLocationKind): number {
       // 严格口径：observed.free − overlay 净变化——与 strictProjectedUsed
       // 互补（两者之和 = physical capacity，不含任何风险扣减）。
-      return this.observation().freeCapacity(roomName, kind) - projection.locationCapacityDelta(roomName, kind);
+      return internalService.observation().freeCapacity(roomName, kind) - projection.locationCapacityDelta(roomName, kind);
     },
 
     riskAdjustedFreeCapacity(roomName: string, kind: TreasuryLocationKind): number {
@@ -2690,7 +2953,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const quarantineOccupancy = treasuryQuarantineCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0;
       const intentOccupancy = treasuryIntentCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0;
       return (
-        this.observation().freeCapacity(roomName, kind) -
+        internalService.observation().freeCapacity(roomName, kind) -
         projection.locationCapacityDelta(roomName, kind) -
         quarantineOccupancy -
         intentOccupancy
@@ -2706,7 +2969,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const quarantineOccupancy = treasuryQuarantineCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0;
       const intentOccupancy = treasuryIntentCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0;
       return (
-        this.observation().freeCapacity(roomName, kind) -
+        internalService.observation().freeCapacity(roomName, kind) -
         projection.locationCapacityDelta(roomName, kind) -
         quarantineOccupancy -
         intentOccupancy
@@ -2809,5 +3072,63 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
 
   // 单阶段入口不在公共 TreasuryService 接口上——经 compat 模块以内部
   // 形状访问（生产 writer 禁用；测试经 compatRecordAcceptedTransaction）。
-  return service as TreasuryService;
+  // ── writer kernel（第十轮 3.12.5）：唯一持有低层原语的内部对象，以
+  //    unique symbol、non-enumerable 挂载——普通生产模块的类型与运行时
+  //    枚举均不可达；treasury 协议栈（actionContracts）与 testHarness 经
+  //    kernelChannel 访问。 ──────────────────────────────────────────────────
+  const writerKernel: TreasuryWriterKernel = {
+    authorizeResourceUse: (request) => internalService.authorizeResourceUse(request),
+    consumeTreasuryAuthorization: (token, options) => internalService.consumeTreasuryAuthorization(token, options),
+    validateTreasuryAuthorizationForRedeem: (tokens, contract, postings) =>
+      internalService.validateTreasuryAuthorizationForRedeem(tokens, contract, postings),
+    prepareTransaction: (input) => internalService.prepareTransaction(input),
+    executePreparedAction: (input, action, execution) =>
+      internalService.executePreparedAction(input, action, execution),
+    commitPreparedTransaction: (handle) => internalService.commitPreparedTransaction(handle),
+      abortPreparedTransaction: (handle) => internalService.abortPreparedTransaction(handle),
+      /**
+       * opaque bundle 只读解析（第十轮 3.12.3，actionContracts 执行前调用）：
+       * 对象身份验证 + contract 匹配 + digest 返回（零状态变化、零消费）。
+       */
+      resolveAuthorizationBundle: (bundle, contract) =>
+        resolveAuthorizationBundleReadOnly(bundle, contract),
+    };
+
+  // 公共 service：白名单方法（低层原语不在其上——运行时枚举零暴露）。
+  const service: TreasuryService = {
+    beginTick: internalService.beginTick,
+    endTick: internalService.endTick,
+    observation: internalService.observation,
+    beginFreshObservation: internalService.beginFreshObservation,
+    commitments: internalService.commitments,
+    query: internalService.query,
+    authorizeTreasuryActionContract: internalService.authorizeTreasuryActionContract,
+    issueTreasuryReconciliationCapability: internalService.issueTreasuryReconciliationCapability,
+    consumeReconciliationCapability: internalService.consumeReconciliationCapability,
+    treasuryServiceGeneration: internalService.treasuryServiceGeneration,
+    treasuryResolutionGuard: internalService.treasuryResolutionGuard,
+    preparedLeakAudit: internalService.preparedLeakAudit,
+    journal: internalService.journal,
+    lastReconciliation: internalService.lastReconciliation,
+    projectedUsedCapacity: internalService.projectedUsedCapacity,
+    projectedFreeCapacity: internalService.projectedFreeCapacity,
+    strictProjectedUsedCapacity: internalService.strictProjectedUsedCapacity,
+    strictProjectedFreeCapacity: internalService.strictProjectedFreeCapacity,
+    riskAdjustedFreeCapacity: internalService.riskAdjustedFreeCapacity,
+    projectionRevision: internalService.projectionRevision,
+    metrics: internalService.metrics,
+    resetForTest: internalService.resetForTest,
+  };
+  Object.defineProperty(service, TREASURY_WRITER_KERNEL, {
+    value: Object.freeze({
+      ...writerKernel,
+      // compat 单阶段入口（测试专用；treasuryCore 等经 testHarness 访问）。
+      recordAcceptedTransaction: internalService.recordAcceptedTransaction,
+      recordAcceptedAction: internalService.recordAcceptedAction,
+    } satisfies TreasuryWriterKernel & Record<string, unknown>),
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+  return service;
 }

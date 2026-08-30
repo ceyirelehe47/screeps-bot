@@ -11,6 +11,7 @@
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 import { reserveProductionResourceForOwner } from "@/runtime/resourceReservation";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
@@ -18,11 +19,11 @@ const ROOMS: RoomSpec[] = [
   { name: "W1N57", storage: { id: "stor-1", resources: { energy: 100_000 }, freeCapacity: 10_000 }, terminal: null },
 ];
 
-function makeService(): TreasuryService {
+function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
   service.beginTick();
-  return service;
+  return treasuryTestService(service);
 }
 
 beforeEach(() => {

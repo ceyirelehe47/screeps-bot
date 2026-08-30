@@ -26,6 +26,7 @@ import {
 } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { formatTreasuryTransactionId } from "@/runtime/treasury/transactionId";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 import { installRooms, setStoreResources, type RoomSpec } from "@mock/treasury";
 
 type RuntimeGlobal = typeof global & { __runtimeServices?: unknown };
@@ -41,12 +42,12 @@ const ROOMS: RoomSpec[] = [
   },
 ];
 
-function makeService(): { service: TreasuryService; rooms: Record<string, Room> } {
+function makeService(): { service: TreasuryTestService; rooms: Record<string, Room> } {
   const rooms = installRooms(ROOMS);
-  return { service: createTreasuryService({ getRooms: () => Object.values(rooms) }), rooms };
+  return { service: treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) })), rooms };
 }
 
-function decision(service: TreasuryService, epoch?: { scope: "shared" | "market-fresh"; epochSeq: number; observedAtTick: number }) {
+function decision(service: TreasuryTestService, epoch?: { scope: "shared" | "market-fresh"; epochSeq: number; observedAtTick: number }) {
   const source = epoch ?? service.observation().epoch;
   return { scope: source.scope, epochSeq: source.epochSeq, observedAtTick: source.observedAtTick };
 }
@@ -76,7 +77,7 @@ function installLegacyReceipts(raw: unknown): void {
   (Memory.runtime as { treasury?: { receipts?: unknown } }).treasury = { receipts: raw };
 }
 
-function send(service: TreasuryService, transactionId: string, delta = -100, kind = "terminal.send") {
+function send(service: TreasuryTestService, transactionId: string, delta = -100, kind = "terminal.send") {
   return compatRecordAcceptedTransaction(service, {
     transactionId,
     kind,
@@ -186,7 +187,7 @@ describe("Treasury 显式 tick 生命周期", () => {
     // global reset：新服务实例，Memory 保留。
     Game.time += 1;
     const rooms = installRooms(ROOMS);
-    const revived = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    const revived = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
     revived.beginTick();
     const summary = revived.lastReconciliation();
     expect(summary?.afterGlobalReset).toBe(true);
@@ -435,7 +436,7 @@ describe("Treasury receipt admission 安全契约（retention 内绝不驱逐）
     service.endTick();
 
     Game.time += 1;
-    const revived = createTreasuryService({ getRooms: () => Object.values(rooms) });
+    const revived = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
     revived.beginTick();
     const result = send(revived, "cap:after-reset:1");
     expect(result.status).toBe("rejected");

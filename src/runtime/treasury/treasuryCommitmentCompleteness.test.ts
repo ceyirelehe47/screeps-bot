@@ -23,6 +23,7 @@ import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
 import { recordTreasuryWriteFault } from "@/runtime/treasury/writeFault";
 import { quarantineTreasuryTransaction } from "@/runtime/treasury/quarantine";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
 
 const ROOMS: RoomSpec[] = [
   {
@@ -40,15 +41,15 @@ const ROOMS: RoomSpec[] = [
 function makeService(options?: {
   tasks?: Record<string, ResourceTransferTask>;
   reservations?: Record<string, unknown>;
-}): TreasuryService {
+}): TreasuryTestService {
   const rooms = installRooms(ROOMS);
-  return createTreasuryService({
+  return treasuryTestService(createTreasuryService({
     getRooms: () => Object.values(rooms),
     ...(options?.tasks !== undefined ? { getTasks: () => options.tasks! } : {}),
     ...(options?.reservations !== undefined
       ? { getReservations: () => options.reservations as never }
       : {}),
-  });
+  }));
 }
 
 function makeTask(overrides: Partial<ResourceTransferTask> & { id: string }): ResourceTransferTask {

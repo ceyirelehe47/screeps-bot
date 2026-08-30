@@ -38,6 +38,7 @@
 
 import type { TreasuryService } from "@/runtime/treasury/facade";
 import type { TreasuryAuthorizationBundle, TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
+import { TREASURY_WRITER_KERNEL, type TreasuryKernelHolder } from "@/runtime/treasury/kernelChannel";
 import type { TreasurySafeExecuteResult, TreasuryObservationScope, TreasuryPosting } from "@/runtime/treasury/types";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 import { canonicalizeTreasuryActionArgs, TREASURY_CANONICAL_ENCODING_VERSION } from "@/runtime/treasury/canonicalEncoding";
@@ -524,14 +525,16 @@ export function buildTreasuryActionContract(
  * 执行 action contract（生产 writer 的唯一入口）：
  * 1. contract 防伪（私有 registry 对象身份——伪造/JSON 副本一律无效）、跨
  *    tick 失效、adapter kind 与 version 匹配（版本演进后旧 contract 失效）；
- * 2. 结构 incarnation 校验（第九轮前置到消费之前）：fresh observation 必需
- *    （配额耗尽拒绝执行——不退回 shared 降低验证等级），对全部声明结构
- *    重新验证；
- * 3. 授权 token 匹配预校验（digest/actionKind/transactionId/覆盖——零消费）；
- * 4. 逐 token 消费（posting coverage 由消费内部校验；多资源 action 每种负
- *    posting 资源分别授权、联合覆盖）；
- * 5. 经 executePreparedAction 走第八轮唯一安全顺序（durable intent →
- *    executing → adapter.execute 恰好一次 → commit/abort/fault 隔离）。
+ * 2. opaque authorization bundle 验证（第十轮 3.12.3）：只接受 service 闭包
+ *    registry 签发的 bundle（对象身份）——裸 token、token 数组、手工构造
+ *    对象与 JSON 副本一律 authorization_invalid（零消费、零 tentative）；
+ * 3. 结构 incarnation 校验（fresh observation 必需——配额耗尽拒绝执行，
+ *    不退回 shared 降低验证等级），对全部声明结构重新验证；
+ * 4. 经 writer kernel 的 executePreparedAction + authorizationBundle 走
+ *    **批量原子 redemption**（全部 legs 一次验证、staged 变更一次发布——
+ *    见 facade.redeemAuthorizationBundleAtomic）与第八轮唯一安全顺序
+ *    （durable intent → executing → adapter.execute 恰好一次 →
+ *    commit/abort/fault 隔离）。
  */
 export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
   service: TreasuryService,
@@ -585,46 +588,30 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
     return {
       status: "prepare_rejected",
       reason: "authorization_invalid",
-      detail: "action contract 执行必须携带授权（bundle 或 token——真实写动作不得只凭物理可行性通过）",
+      detail: "action contract 执行必须携带授权（opaque service-issued bundle——真实写动作不得只凭物理可行性通过）",
     };
   }
-  const isBundle =
-    typeof authorization === "object" &&
-    authorization !== null &&
-    (authorization as { __brand?: string }).__brand === "treasury-authorization-bundle";
-  const bundle = isBundle ? (authorization as TreasuryAuthorizationBundle) : undefined;
-  const authorizationTokens: readonly TreasuryAuthorizationToken[] = bundle
-    ? bundle.tokens
-    : Array.isArray(authorization)
-      ? authorization
-      : [authorization as TreasuryAuthorizationToken];
-  if (bundle !== undefined) {
-    // bundle 与 contract 的身份匹配（零消费）。
-    if (bundle.contractDigest !== contract.digest || bundle.transactionId !== contract.transactionId || bundle.actionKind !== contract.actionKind || bundle.adapterVersion !== contract.adapterVersion || bundle.contractId !== contract.contractId) {
-      actionContractEvents.rejected += 1;
-      return {
-        status: "prepare_rejected",
-        reason: "contract_invalid",
-        detail: "授权 bundle 与实际 contract 不匹配（contractId/digest/transactionId/actionKind/adapterVersion 任一不一致）",
-      };
-    }
-  }
-  // 全量只读预验证（第九轮 4.2：零消费、零状态变化——任一失败时前 N−1 个
-  // token 不受影响）：对象身份/generation/tick/revisions/transactionId/
-  // 重复 token/contract 匹配/postings 覆盖，全部通过才可能进入消费。
-  const prevalidated = service.validateTreasuryAuthorizationForRedeem(
-    authorizationTokens,
-    {
-      transactionId: contract.transactionId,
-      actionKind: contract.actionKind,
-      digest: contract.digest,
-      adapterVersion: contract.adapterVersion,
-    },
-    contract.postings,
-  );
-  if (prevalidated.status === "rejected") {
+  // ── opaque bundle 验证（第十轮 3.12.3）：只认 service 闭包 registry 的
+  //    对象身份；裸 token / token 数组 / 手工构造对象 / JSON 副本一律拒绝。
+  //    低层 token 路径仅供 test harness（kernelChannel），不在此处。 ──────
+  const kernel = (service as unknown as TreasuryKernelHolder)[TREASURY_WRITER_KERNEL];
+  if (kernel === undefined) {
     actionContractEvents.rejected += 1;
-    return { status: "prepare_rejected", reason: "authorization_invalid", detail: `授权预验证失败（${prevalidated.reason}）: ${prevalidated.detail}` };
+    return {
+      status: "prepare_rejected",
+      reason: "authorization_invalid",
+      detail: "service 不持有 writer kernel（非 treasury 协议栈通道——拒绝执行）",
+    };
+  }
+  const resolvedBundle = kernel.resolveAuthorizationBundle(authorization, {
+    transactionId: contract.transactionId,
+    actionKind: contract.actionKind,
+    digest: contract.digest,
+    adapterVersion: contract.adapterVersion,
+  });
+  if (resolvedBundle.status === "rejected") {
+    actionContractEvents.rejected += 1;
+    return { status: "prepare_rejected", reason: "authorization_invalid", detail: `授权 bundle 验证失败（${resolvedBundle.reason}）: ${resolvedBundle.detail}` };
   }
   // 结构 incarnation 校验（第九轮 4.12，先于消费）：fresh observation 必需
   // ——配额耗尽拒绝执行，不退回 shared observation 降低验证等级；对全部
@@ -653,11 +640,12 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
       };
     }
   }
-  // 经 writer kernel execution options 走原子 redemption：prepare（tentative
-  // 接管）→ redeem（一次性消费全部 token——预验证与消费在同一同步窗口，
-  // 中间无 revision 变化源；消费循环失败为内部不变量破坏，防御性拒绝并
-  // 释放 tentative）→ durable intent（绑定完整合同身份）→ callback。
-  return service.executePreparedAction(
+  // 经 writer kernel execution options 走批量原子 redemption（第十轮
+  // 3.12.4）：prepare（tentative 接管）→ redeemAuthorizationBundleAtomic
+  //（全部 legs 一次性只读预验证 + staged 变更一次发布；注入故障前缀回滚或
+  // internal authorization fault）→ durable intent（绑定完整合同身份与
+  // bundle digest）→ callback。
+  return kernel.executePreparedAction(
     {
       transactionId: contract.transactionId,
       kind: contract.actionKind,
@@ -671,29 +659,12 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
     },
     () => adapter.execute(contract.args) as TAction,
     {
-      redeemAuthorization: () => {
-        for (const token of authorizationTokens) {
-          const resourcePostings = contract.postings.filter((posting) => posting.resource === token.resource);
-          const consumed = service.consumeTreasuryAuthorization(token, {
-            transactionId: contract.transactionId,
-            postings: resourcePostings,
-          });
-          if (consumed.status !== "ok") {
-            // 防御分支（预验证后理论不可达）：同步窗口内无 revision 变化源。
-            actionContractEvents.rejected += 1;
-            return {
-              status: "rejected" as const,
-              reason: "authorization_invalid" as string,
-              detail: `授权消费失败（${consumed.reason}）: ${consumed.detail}（内部不变量破坏——预验证后消费不应失败）`,
-            };
-          }
-        }
-        return { status: "ok" as const };
-      },
+      authorizationBundle: authorization as TreasuryAuthorizationBundle,
       intentContract: {
         contractId: contract.contractId,
         contractDigest: contract.digest,
         adapterVersion: contract.adapterVersion,
+        authorizationDigest: resolvedBundle.authorizationDigest,
         ...(contract.durableFacts !== undefined
           ? { durablePayload: contract.durableFacts.payload, durablePayloadVersion: contract.durableFacts.version }
           : {}),
