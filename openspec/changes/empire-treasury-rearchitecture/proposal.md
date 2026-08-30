@@ -87,6 +87,24 @@
 11. **安全 canonical contract encoding**：先 canonicalize 再 validate/derive/execute——adapter 三个函数观察同一个 canonical frozen args；digest 基于 canonical encoding version 2（长度前缀、key 排序确定、数组保序），拒绝 cyclic/getter/setter/自定义 prototype/class instance/function/symbol/bigint/undefined/NaN/Infinity/稀疏数组/非普通对象（结构化拒绝，不抛出中断 tick；getter 不被多次副作用读取）；{a:undefined} 与 {}、NaN 与 null 等不再静默碰撞；调用方构建 contract 后修改原 args 不影响 postings/digest/执行参数；contract registry 保持对象身份防伪。
 12. **完整结构 incarnation 验证**：contract 构建时捕获全部 action-relevant 结构（posting 涉及的 storage/terminal + adapter 经受控 structureBindings 接口声明的额外结构——不再接受任意字符串 structureIds）；执行前对全部声明结构重新验证（structure disappeared/replaced/room mismatch/kind mismatch → callback 零调用、授权零消费、tentative 不变）；fresh observation 配额耗尽时拒绝执行（不退回 shared 降低验证等级）。
 
+
+## Round 10 — Durable Authority Cohesion & Bundle Atomicity（第十轮范围补充）
+
+第九轮交付了 contract-first authorization、durable intent v2、unified unresolved authority 与私有 reconciliation capability，但仍有核心断链：正常 intent → quarantine 转换会丢失 contract/adapter/durable reconciliation facts（quarantine entry 只有最小 delta 事实）；Game 已明确返回 OK 后的故障路径仍可能把 intent 降级为 execution unknown（`ok_pending_commit → execution_unknown` 升级链丢失 returned-ok 事实）；execution outcome 与 settlement workflow 混在同一个 phase 枚举；production contract execution 仍接受裸 token、token 数组与仅凭 `__brand` 的普通 bundle（非 service 签发对象）；bundle redemption 逐 token 消费（非真正批量原子）；低层 `authorizeResourceUse`/`prepareTransaction`/`executePreparedAction` 仍在公共 TreasuryService 类型上；contract digest 未绑定 durable reconciliation facts；intent `already_present` 只看 transactionId；reconciliation capability 在 fault resolution 完整前置检查前就被消费；fault resolution 仍是可接受结构兼容伪 service 的公开函数；policy withhold 由调用方自选；write readiness 在 query/authorization/prepare 三处各自拼装；structure binding 对 label 冲突、必需结构缺失与原型污染处理不完整；canonicalization 对异常 Proxy trap 仍会抛错。第十轮关闭这些断链（仍不接任何真实生产 writer、不部署）：
+
+1. **durable authority cohesion**：quarantine 升级 v2，每条 entry 保留完整 contract identity（contractId/digest、actionKind、adapterVersion）、canonical postings、durable payload/version、authorization bundle digest、owner/policy identity、structure incarnation facts、execution outcome 与 settlement state；intent → quarantine 事实转移在读回验证前不释放 intent；同 ID 双权威不一致 fail closed；一笔 transaction 只占一个 recovery slot；v1 迁移原子且无歧义映射，未知版本 fail closed。
+2. **execution outcome 与 settlement state 拆分**：intent v3 以正交二元组 `(outcome, settlement)` 取代混合 phase——outcome ∈ {not_started, started_unknown, returned_non_ok, returned_ok, aborted_final} 单调不可回退（已返回 OK 永不退化为 unknown；已返回 non-OK 永不变 OK）；settlement ∈ {ready, executing, pending_abort, pending_commit, quarantined, resolving, finalized, faulted} 表达 Treasury 工作流。故障、恢复、quarantine 转换与 commit fault 只改 settlement 不改 outcome。
+3. **opaque authorization bundle**：production bundle 由 Treasury service 闭包 registry 签发（对象身份验证——JSON round-trip、手工构造、普通品牌字段一律失败）；bundle 不向生产调用者暴露 token 数组；executeTreasuryActionContract 只接受 opaque bundle；裸 token/token 数组仅经 test harness。
+4. **批量原子 redemption**：只读预验证全部 legs → 构造 staged ledger change（授权预算减少、bundle 终态、tentative 接管关系、capacity 变化）→ 一次发布；任何注入故障零状态变化或进入明确 internal authorization fault 并阻断 writer；不存在半消费。
+5. **writer kernel 封闭**：公共 TreasuryService 类型移除低层方法（raw authorize/token consume/validate redeem/prepare/execute prepared/direct commit-abort/capability kernel）；kernel 经模块内 unique symbol 通道挂载（non-enumerable）；test harness 单独建立；架构测试全量扫描 src/**/*.ts。
+6. **contract digest 绑定 durable facts**：AC3 digest 绑定 durable payload version/内容 hash、reconciliation contract version、structure bindings/snapshots；durable facts 变化 → digest 变化；固定 test vector 防编码漂移。
+7. **intent 完整 identity**：already_present 幂等仅限完整 identity（transactionId/digest、contract、bundle digest、owner、policy、postings、structure facts、durable payload、outcome、settlement）全部一致；任一不同 → intent_conflict fail closed。
+8. **service-private resolution**：resolution 对外入口成为 Treasury service 方法（闭包 authority）；capability 消费移到全部前置检查通过且 staged resolution 写入之后；contract-backed authority 的绑定字段必须全部存在并完全匹配（弱 optional 检查删除）。
+9. **Treasury-owned policy authority**：production contract authorization 不接受调用方 withhold；注册 policy resolver 计算 strategic reserve/resource floor/withhold/emergency override；bundle 绑定 policy identity/version/digest；无 resolver 时 fail closed。
+10. **统一 write readiness**：单一内部评估器（一套 blocker 枚举、优先级与状态来源）服务 query 视图、contract authorization 与 prepare 复查。
+11. **structure binding 权威**：受控 canonical identity（governed location / explicit game object ID）；label 仅诊断；posting 与 adapter binding 重合时同 identity 合并、异 identity 拒绝；required structure 构建时必须存在、执行前 incarnation 一致；原型污染键防护；structure facts 进入 digest 与 durable authority。
+12. **canonicalization 反射异常边界**：所有反射操作（getPrototypeOf/getOwnPropertyDescriptor/keys/symbols/value 读取/数组迭代）置于统一异常边界——revoked/throwing Proxy 结构化拒绝不中断 tick；getter 仍零调用；rejection 时授权/registry/callback 零变化。
+
 ## Capabilities
 
 ### New Capabilities

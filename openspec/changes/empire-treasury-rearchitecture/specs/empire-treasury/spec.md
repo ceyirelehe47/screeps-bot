@@ -896,3 +896,167 @@ contract 构建必须（MUST）捕获全部 action-relevant 结构（posting loc
 
 - **WHEN** adapter 声明额外结构（factory/lab/terminal 动作实体），构建后该结构被替换或消失
 - **THEN** 执行前校验拒绝；token 不被消费、callback 零调用
+
+### Requirement: execution outcome 与 settlement state 正交拆分（第十轮）
+
+durable intent 必须（MUST）以正交二元组记录执行事实与工作流状态：outcome ∈ {not_started, started_unknown, returned_non_ok, returned_ok, aborted_final} 单调不可回退（not_started→started_unknown→{returned_ok|returned_non_ok} 为唯一合法边）；settlement ∈ {ready, executing, pending_abort, pending_commit, quarantined, resolving, finalized, faulted}。故障、恢复、quarantine 转换、intent 写失败与 commit fault 必须（MUST NOT）只改 settlement、不得（MUST NOT）改变已记录的 outcome；已返回 OK 永不退化为 unknown、已返回 non-OK 永不变 OK。旧 phase 迁移必须（MUST）保守单调，未知 phase 值必须（MUST）fail closed。
+
+#### Scenario: OK 后故障不降级
+
+- **WHEN** callback 返回 OK 后 commit 故障且 quarantine 写入失败（intent-only authority）
+- **THEN** intent 保留 outcome=returned_ok（settlement=faulted）；not-executed resolution 永久拒绝；跨多次 recovery 仍保持 returned_ok
+
+#### Scenario: 非 OK 与抛错的 outcome 保持
+
+- **WHEN** callback 返回非 OK 后 abort 未确认、或 callback 抛错
+- **THEN** 权威分别保留 outcome=returned_non_ok 与 started_unknown；returned_non_ok 不会变成 started_unknown
+
+### Requirement: durable authority 完整合同事实（第十轮）
+
+quarantine entry（v2）必须（MUST）保留完整 contract identity 与 reconciliation facts（contractId/contractDigest/actionKind/adapterVersion、canonical postings、durable payload/version、authorization bundle digest、owner/policy identity、structure incarnation facts、execution outcome、settlement state、action tick、recorded tick、source、fault reason）；intent → quarantine 事实转移必须（MUST）在读回验证一致后才释放 intent；一笔 transaction 双存在时必须（MUST）只占一个 recovery slot；同 ID 双权威合同字段不一致必须（MUST）fail closed；v1 迁移必须（MUST）原子（无歧义映射、并存 intent 合并、legacy 标记不参与 contract-backed resolution），未知版本必须（MUST）fail closed；adapter version 演进后不得（MUST NOT）用新 reconciler 解释旧 action。
+
+#### Scenario: contract-backed intent 转 quarantine 后事实完整
+
+- **WHEN** contract 执行路径的 intent 发生 fault 并成功转 quarantine
+- **THEN** quarantine entry 仍携带 contract ID/digest、adapter version 与 durable payload；global reset 后可重建完整 action-specific reconciler 输入
+
+#### Scenario: 双权威合同字段不一致 fail closed
+
+- **WHEN**同 ID 的 quarantine 与 intent entry 的 contractDigest/adapterVersion 任一不一致
+- **THEN** capability 签发与 resolution fail closed
+
+#### Scenario: adapter version 演进防护
+
+- **WHEN** adapter v1 的 unresolved authority 在 registry 升级 v2 后请求 capability
+- **THEN** 拒绝（不得用 v2 reconciler 解释 v1 action）
+
+### Requirement: opaque service-issued authorization bundle（第十轮）
+
+production contract execution 只接受（MUST）Treasury service 闭包 registry 签发的 opaque authorization bundle；普通对象伪造、JSON round-trip 副本、品牌字段伪装必须（MUST）失败；bundle 不得（MUST NOT）向生产调用者暴露可重组的 token 数组；bundle 必须（MUST）统一绑定 owner/policy/contract/action kind/adapter version/epoch/revisions/service generation/tick——同 bundle 禁止混用不同 owner、不同 policy 或不同 revision cohort；bundle 只能（MUST）redeem 一次；裸 token 与 token 数组不得（MUST NOT）进入 production 执行入口（仅 test harness）。
+
+#### Scenario: 伪造与 round-trip 失败
+
+- **WHEN** 以手工构造对象、JSON.parse(JSON.stringify(bundle)) 或裸 token/token 数组调用 executeTreasuryActionContract
+- **THEN** 一律 authorization_invalid 拒绝（零消费、零 tentative）
+
+#### Scenario: cohort 混用拒绝
+
+- **WHEN** 组成 bundle 的 legs 存在不同 owner/policy/revision cohort
+- **THEN** bundle 签发整体拒绝（原子，无部分签发）
+
+#### Scenario: 单次 redemption
+
+- **WHEN** 同一 bundle 第二次进入 redemption
+- **THEN** 拒绝；budget 不重复释放
+
+### Requirement: 批量原子 bundle redemption（第十轮）
+
+bundle redemption 必须（MUST）先只读预验证全部 legs，再以 staged ledger change 一次发布全部变更（授权预算减少、bundle 终态、tentative 接管关系、capacity 变化）；任何注入故障（首腿/中间腿/末腿后、budget publish 前、tentative handoff 前、bundle state 更新前）必须（MUST）零状态变化（前缀完整回滚）或进入明确 internal authorization fault 并阻断 writer；不得（MUST NOT）出现部分 token 被消费、tentative 已接管但 bundle 仍可用、bundle 已消费但 tentative 未接管、budget 总量与 active bundle 记录不一致。
+
+#### Scenario: 注入点全量回滚
+
+- **WHEN** 在任一注入点触发故障
+- **THEN** 全部 authorization budget/capacity 保持原值；bundle 未消费；tentative 不残留；internal_authorization_fault marker 阻断后续 writer
+
+#### Scenario: 正常路径恰好一次
+
+- **WHEN** 正常 redemption
+- **THEN** budget→tentative 转移恰好发生一次；重复 redeem 不重复释放
+
+### Requirement: writer kernel 类型与运行时封闭（第十轮）
+
+公共 TreasuryService 类型必须（MUST NOT）不再包含低层方法（raw authorize、token consume、validate redeem、prepare、execute prepared、direct commit/abort、capability register/consume kernel）；运行时对象必须（MUST NOT）以普通可枚举属性暴露 kernel（unique symbol non-enumerable 挂载，treasury 协议栈内部经 kernelChannel 访问）；test harness 必须（MUST）独立于生产导出面；架构测试必须（MUST）全量扫描 src/**/*.ts——非 Treasury 内部模块不得引用 kernel/testHarness（新文件自动受约束，不依赖 @internal 注释）。
+
+#### Scenario: 低层方法不可达
+
+- **WHEN** 生产模块（非 treasury 协议栈、非测试）尝试调用 prepareTransaction/executePreparedAction/authorizeResourceUse/consumeTreasuryAuthorization 或 import kernelChannel/testHarness
+- **THEN** 架构测试失败（类型层与扫描层双重守护）
+
+### Requirement: contract digest 绑定 durable facts（第十轮）
+
+contract identity（AC3）必须（MUST）绑定 canonical encoding version、action kind、adapter version、transactionId、canonical args、canonical postings、structure bindings/snapshots、durable payload version 与内容 hash、reconciliation contract version；durable facts 变化必须（MUST）导致 digest 变化；同 adapter version 下 payload 变化不得（MUST NOT）复用旧授权；contractId 与 digest 必须（MUST）一一对应；production adapter 提供 reconciler 时 durable facts 必须（MUST）必填；固定 test vector 必须（MUST）防止编码无意漂移。
+
+#### Scenario: durable facts 变化改变 digest
+
+- **WHEN** 同一 args 但 durable payload 或其 version 变化
+- **THEN** contract digest 变化；旧 bundle 因 digest 绑定失效
+
+### Requirement: intent 完整 identity 与幂等冲突（第十轮）
+
+intent already_present 幂等必须（MUST）覆盖完整 identity（transactionId/digest、contract ID/digest、action kind、adapter version、authorization bundle digest、owner identity、policy identity、canonical postings、structure facts、durable payload/version、execution outcome、settlement）；任一字段不同必须（MUST）返回 intent_conflict（fail closed，不静默接受不同 contract）；authorization bundle digest 必须（MUST）实际写入 contract 路径 intent（不再 optional 永缺失）；低层 test path 写入的同 ID 旧 intent 不得（MUST NOT）被 production contract 接管。
+
+#### Scenario: already_present 身份冲突
+
+- **WHEN** 同 transactionID 但 contract ID 或 bundle digest 不同
+- **THEN** intent_conflict 拒绝（prepare 阶段 fail closed）
+
+### Requirement: service-private resolution 与 capability 消费时点（第十轮）
+
+fault resolution 的对外入口必须（MUST）是当前 Treasury service 的方法（闭包 authority，不接受结构兼容伪 service，service generation 完全内部）；capability 处理顺序必须（MUST）为：只读身份验证→只读 tick/generation/未使用验证→stores 健康验证→authority 解析→完整 contract/bundle/outcome identity 强匹配（contract-backed authority 的 contractId/contractDigest/adapterVersion/durablePayloadVersion/actionKind/executionOutcome/authorityKind/reconcilerVersion 全部必存在且完全匹配——弱 optional 检查删除）→observation/evidence 校验→resolution slot 校验→写 staged resolution intent→此时才消费 capability→执行状态转换；staged 写入前的任何拒绝不得（MUST NOT）烧掉 capability；staged 写入后必须（MUST）仅凭 durable staged state 跨 reset 恢复；resolution 管理入口不得（MUST NOT）被生产 tick 自动调用。
+
+#### Scenario: 前置失败不消费 capability
+
+- **WHEN** store health 检查失败或 authority identity 不匹配
+- **THEN** capability 未被消费（可重试）；拒绝结构化返回
+
+#### Scenario: 伪 service 无法调用 resolution
+
+- **WHEN** 构造结构兼容的伪 authority 对象尝试 resolution
+- **THEN** 无法通过任何公开入口执行（kernel 仅 service 闭包内可达）
+
+#### Scenario: staged 后跨 reset 恢复
+
+- **WHEN** staged resolution intent 写入后发生 global reset
+- **THEN** 恢复仅凭 durable staged state 完成（不依赖旧 capability 对象）
+
+### Requirement: Treasury-owned policy authority（第十轮）
+
+production contract authorization 不得（MUST NOT）接受调用方直接提供的 withhold；strategic reserve/resource floor/action-specific withhold/emergency override 必须（MUST）由注册 policy resolver 计算（显式、可审计、版本化）；authorization bundle 必须（MUST）绑定 policy ID/version/digest 与计算结果；policy 变化必须（MUST）使旧 bundle 失效；无注册 resolver 时 production 授权必须（MUST）fail closed；writer 不得（MUST NOT）通过省略参数或传 0 绕过；自由字符串 policy name 不赋予权威。
+
+#### Scenario: writer 不能自选 withhold
+
+- **WHEN** production contract authorization 请求携带 withhold 字段
+- **THEN** 拒绝（invalid_input）；额度只由 policy resolver 决定
+
+#### Scenario: policy 变化使 bundle 失效
+
+- **WHEN** bundle 签发后 policy version/digest 变化再执行 redemption
+- **THEN** bundle 失效拒绝
+
+#### Scenario: 无 resolver fail closed
+
+- **WHEN** 未注册任何 policy resolver
+- **THEN** production contract authorization 拒绝（policy_not_ready）
+
+### Requirement: 统一 write readiness 权威（第十轮）
+
+query 的 writeAdmission 视图、contract authorization 与 prepare/execute 复查必须（MUST）使用同一内部评估器（一套 blocker 枚举、一套优先级、一套状态来源）；contract authorization 只在 readiness=true 时签发 bundle；prepare 必须（MUST）独立复查（防 TOCTOU）；blocker 消失后 readiness 必须（MUST）恢复；正常路径评估必须（MUST）O(1) 或基于已缓存 health/counters。
+
+#### Scenario: 三处同一 blocker
+
+- **WHEN** 任一阻断条件成立（如 receipt 满载、resolution store fatal、resolving tombstone、policy 未就绪）
+- **THEN** query/authorization/prepare 返回同一核心 blocker；blocker 消失后三处一致恢复
+
+### Requirement: structure binding canonical authority（第十轮）
+
+structure binding 必须（MUST）使用受控 canonical identity（governed location / explicit game object ID）——label 仅诊断不作唯一身份；posting 自动 binding 与 adapter 声明 binding 重合时同 identity 合并、label 相同但 identity 不同必须（MUST）拒绝 contract；required structure 构建时必须（MUST）真实存在（undefined 拒绝，不得 undefined===undefined 视为通过）；执行前必须（MUST）仍存在且 incarnation 一致；object-ID binding 必须（MUST）验证对象存在、类型与 room 归属；容器必须（MUST）防原型污染（特殊 label 不污染结构快照）；structure facts 必须（MUST）进入 contract digest 与 durable authority。
+
+#### Scenario: label 碰撞但身份不同
+
+- **WHEN** adapter binding 与 posting binding 的 label 相同但 room/location/object identity 不同
+- **THEN** contract 构建拒绝
+
+#### Scenario: required structure 缺失/被替换
+
+- **WHEN** 构建时 required structure 不存在、或执行前被替换（incarnation 变化）
+- **THEN** 分别在构建/执行期拒绝；执行期拒绝时 bundle 不消费
+
+### Requirement: canonicalization 反射异常边界（第十轮）
+
+public contract build 入口不得（MUST NOT）因任意 runtime input 抛错而中断 tick；Object.getPrototypeOf/getOwnPropertyDescriptor/keys/getOwnPropertySymbols/property value 读取/array iteration 必须（MUST）置于统一异常边界——revoked Proxy、throwing trap、异常 descriptor 均返回结构化 rejection（不抛出）；getter 仍必须（MUST）零调用；内部编程错误必须（MUST）返回明确 canonicalization fault（callback 零调用、授权与 contract registry 零变化）。
+
+#### Scenario: 异常 Proxy 结构化拒绝
+
+- **WHEN** args 含 revoked Proxy、throwing ownKeys/getPrototypeOf trap 或异常 descriptor
+- **THEN** build 返回结构化 rejection（不抛出）；授权、contract registry、callback 零变化
+

@@ -326,6 +326,100 @@ bundle 预验证复杂度 O(tokens + postings)（与历史 transaction 无关）
 
 本轮不接任何真实生产 writer（ResourceControl/terminal/carrier/lab/factory/market/nuker/synthesis 零改动）；不部署、不合并 main；不声称 Screeps 硬 CPU 中断下的 exactly-once（3.10.11 边界继续有效）；自由字符串 policy 仍非 policy authority（通道已移除）。
 
+
+### 3.12 Durable Authority Cohesion & Bundle Atomicity（第十轮）
+
+#### 3.12.1 Execution outcome 与 settlement state 拆分
+
+intent v3 的 entry 以正交二元组取代单一 `phase` 字符串：
+
+- `outcome: TreasuryExecutionOutcome` —— Game API 调用的**事实等级**（单调、不可回退）：
+  - `not_started`：callback 从未被调用（协议保证 execution-started 标记先于 callback）；
+  - `started_unknown`：callback 已开始但结果未知（执行中/抛错/中断）；
+  - `returned_non_ok`：Game 已明确返回非 OK；
+  - `returned_ok`：Game 已明确返回 OK；
+  - `aborted_final`：终态专用（正常 abort 完成不落盘；仅用于旧 phase `aborted` 的无歧义迁移——不冒充任何执行事实）。
+- `settlement: TreasurySettlementState` —— Treasury 工作流状态：
+  `ready | executing | pending_abort | pending_commit | quarantined | resolving | finalized | faulted`。
+
+outcome 单调迁移表（唯一合法边）：`not_started → started_unknown`（execution started 标记时）、`started_unknown → returned_ok | returned_non_ok`（callback 正常返回时）。故障、恢复、quarantine 转换、intent 写失败、commit fault 一律**只改 settlement**：callback 抛错 = `(started_unknown, faulted)`；OK 后 commit 故障 = `(returned_ok, faulted)`（事实不再丢失）；OK 后 quarantine 写失败 = intent 保留 `(returned_ok, faulted)`（intent-only authority 仍携带 returned-ok）。
+
+resolution eligibility 只依据 outcome：`returned_ok` 只能 resolve-as-committed 或 still-uncertain（永不 not-executed）；`not_started` 才可无证据安全关闭；`returned_non_ok` 完成 abort 收尾；`started_unknown` 必须真实 reconciliation。
+
+旧 phase → `(outcome, settlement)` 迁移表（load 时一次性、保守单调）：`ready→(not_started,ready)`、`executing→(started_unknown,executing)`、`returned_non_ok→(returned_non_ok,pending_abort)`、`ok_pending_commit→(returned_ok,pending_commit)`、`committed→(returned_ok,finalized)`、`aborted→(aborted_final,finalized)`、`execution_unknown→(started_unknown,faulted)`、`quarantined→(started_unknown,quarantined)`、`resolution_pending→(started_unknown,resolving)`；未知 phase 值 fail closed（store fatal）。
+
+#### 3.12.2 Durable authority cohesion（quarantine v2）
+
+quarantine store 升级 version 2，entry 在 v1 最小事实（transactionId/digest/tick/kind/source/phase/deltas/recordedAt）之上新增完整合同与权威字段：`outcome`、`settlement`、`contractId`、`contractDigest`、`actionKind`、`adapterVersion`、`durablePayload`（≤512）、`durablePayloadVersion`、`authorizationDigest`（bundle digest）、`ownerIdentity`、`policyIdentity`、`structureFacts`（有界数组：roomName/locationKind/structureId，≤16）。`phase` 保留为 fault reason（write-fault 枚举）。
+
+事实转移协议（intent → quarantine）：quarantine v2 写入（携带 intent 的全部合同事实）**并读回验证一致后**才释放 intent；写失败或读回不一致 → intent 保留为 emergency authority（slot 守恒语义不变）。双权威并存窗口内 `resolveTreasuryUnresolvedAuthority` 以 quarantine 为主、intent 补充校验，身份不一致 fail closed。recovery slot 计数按 `|intentIds ∪ quarantineIds|` 去重（同 ID 双存在只占一 slot）。
+
+迁移：v1 → v2 在 load 时原子执行——outcome/settlement 按 3.12.1 表从 phase 推导；若同 ID 并存 intent 则合并合同字段（digest 不一致 → store fatal）；无并存 intent 的 legacy entry 合同字段留空并标记 `legacyV1: true`（不参与 contract-backed capability 签发——fail closed，不冒充完整权威）。未知 version → store fatal。
+
+adapter version 演进后，resolution 校验 authority.adapterVersion 与当前注册 adapter/reconciler version——不得用新 reconciler 解释旧 action。
+
+#### 3.12.3 Opaque authorization bundle
+
+production bundle 改为 service 闭包签发的 opaque capability：
+
+- 类型 `TreasuryAuthorizationBundle` 收缩为仅 `__brand` 的不透明句柄——生产调用者只能持有与传递引用，无法读取或重组 token 数组；
+- facade 闭包 `bundleRegistry: WeakMap<object, BundleRecord>` 保存 legs 与 cohort（owner canonical identity、policy identity/version/digest、contractId/contractDigest、transactionId、actionKind、adapterVersion、epoch、全部 revision、service generation、tick、签发时各 leg 授权额度）；
+- 同一 bundle 的全部 legs 必须同 owner、同 policy、同 epoch、同 revision cohort——签发时原子校验，任一不符整体拒绝；
+- 验证只认对象身份（registry 命中）——JSON round-trip 副本、手工构造对象、品牌字段伪装一律失败；
+- bundle 生命周期：`active → redeemed`（一次性）——成功交给 tentative 后终态；tick/service generation/相关 revision 变化后失效。
+
+`executeTreasuryActionContract` 只接受 opaque bundle：裸 token 与 token 数组返回 `authorization_invalid`；test-only token 路径经独立 test harness（不在生产 service 接口上）。
+
+#### 3.12.4 批量原子 redemption
+
+kernel 方法 `redeemAuthorizationBundle`（executePreparedAction 的 redemption 阶段调用）：
+
+1. 只读预验证：bundle registry 身份 + cohort 一致性（contract 匹配/tick/generation/revisions/policy digest 与当前 resolver 一致）+ 全部 legs 逐项校验 + 联合 posting coverage——零状态变化；
+2. 构造 staged change（纯数据）：每 leg 的授权预算减少、capacity 预算减少、bundle registry 终态、tentative 接管关系；
+3. 一次发布：按序 apply 全部 staged 项。注入点（测试 fault injector）：`first_leg`/`middle_leg`/`last_leg`/`before_budget_publish`/`before_tentative_handoff`/`before_bundle_state`——任一触发即回滚已 apply 前缀（budget/capacity 恢复、bundle 保持 active、tentative 不残留），并写入 `internal_authorization_fault` write-fault marker（阻断后续 writer）；
+4. 成功路径 budget→tentative 恰好一次；重复 redeem 被终态拒绝，不重复释放。
+
+不再循环调用单 token consume；不依赖"预验证后理论不会失败"——apply 阶段的任何异常同样回滚并进入 internal fault。
+
+#### 3.12.5 Writer kernel 双边界
+
+- 生产可见 `TreasuryService`：beginTick/endTick、observation 系列、commitments、query、authorizeTreasuryActionContract、executeTreasuryActionContract（actionContracts 模块函数）、issueTreasuryReconciliationCapability、service-private resolution 方法（3.12.8）、metrics/审计/容量视图。
+- 内部 `TreasuryWriterKernel`（raw authorize、token consume、bundle redeem、prepare、execute prepared、direct commit/abort、capability register/consume kernel）：经 `kernelChannel.ts` 导出的 unique symbol `TREASURY_WRITER_KERNEL` 以 non-enumerable 属性挂载在 service 运行时对象上；公共类型不含该成员；treasury 协议栈内部模块（actionContracts 等）经 symbol 取得。
+- `testHarness.ts`（测试专用，架构扫描白名单）：`treasuryTestService(service)` 返回公共方法 + 低层 kernel 方法的联合视图，供既有测试与协议实验使用；不在生产导出面。
+- 架构测试全量扫描 `src/**/*.ts`：非 treasury 生产模块不得 import kernelChannel/testHarness 或引用 kernel symbol；新文件自动受约束；不依赖 @internal 注释作为边界。
+
+#### 3.12.6 Contract digest AC3
+
+AC3 在 AC2 成分（canonical encoding version、action kind、adapter version、transactionId、canonical args、canonical postings、canonical structures）之上绑定：`durablePayloadVersion`、`durablePayload` 的稳定 hash、`reconciliationContractVersion`（adapter 提供 reconciler 时必填 durable facts）。durable facts 变化 → digest 变化；同 adapter version 下 payload 变化不得复用旧授权（digest 已变）；contractId 与 digest 一一对应。固定 test vector（treasuryTransactionIdVectors）防编码无意漂移。
+
+#### 3.12.7 Intent 完整 identity 与幂等冲突
+
+intent v3 新增 `authorizationDigest`（bundle digest，contract 路径必填——不再 optional 永缺失）、`ownerIdentity`、`policyIdentity`。`already_present` 判定从 transactionId 单键升级为完整 identity 元组：transactionId、digest、contractId/contractDigest、actionKind、adapterVersion、authorizationDigest、ownerIdentity、policyIdentity、canonical postings、structure facts、durable payload/version、outcome、settlement——全部一致才幂等；任一不同 → `intent_conflict`（fail closed，不静默接受不同 contract）。read-back 验证覆盖全部 identity 字段；低层 test path 写入的同 ID 旧 intent 不被 production contract 接管。
+
+#### 3.12.8 Service-private resolution
+
+resolution 对外入口成为 service 方法（`resolveUnresolvedTransaction`，按 evidence 结论路由 committed/not-executed/uncertain）；kernel 不再公开接受结构兼容 authority——resolve 逻辑在 service 闭包内执行，generation 完全内部。capability 处理顺序重排：
+
+只读验证对象身份 → 只读验证 tick/generation/未使用 → 验证 stores 健康 → 解析 unresolved authority → 校验完整 contract/bundle/outcome identity（contract-backed authority 的 contractId/contractDigest/adapterVersion/durablePayloadVersion/actionKind/executionOutcome/authorityKind/reconcilerVersion **全部必存在且完全匹配**——弱 optional 检查删除）→ 校验 observation/evidence → 校验 resolution slot → 写 staged resolution intent → **此时才消费 capability** → 执行 resolution 状态转换。
+
+staged resolution intent 写入前发生任何拒绝，capability 不被烧掉；staged 写入后即使 capability 已消费，跨 global reset 仅凭 durable staged state 恢复。resolution 管理入口不得被生产 tick 自动调用（架构测试守护）。
+
+#### 3.12.9 Treasury-owned policy authority
+
+`policyAuthority.ts`：注册制 policy resolver（`policyId`/`policyVersion`/`evaluate(context) → decision{strategicReserve, resourceFloor, withhold, emergencyOverride, digest}`）；注册边界集中管理（架构测试守护）。production contract authorization 不接受调用方 withhold——每资源授权额度由 resolver 决策计算；bundle 绑定 policy identity/version/digest 与计算结果摘要；redemption 预验证比较当前 resolver digest（policy 变化 → 旧 bundle 失效）。无注册 resolver 时 production 授权 fail closed（`policy_not_ready`）。emergency override 必须显式、可审计、版本化。自由字符串 policy name 不赋予权威。完整 Budget Service 明确延期。
+
+#### 3.12.10 统一 write readiness
+
+单一内部评估器 `evaluateTreasuryWriteReadiness(purpose)`：一套 blocker 枚举（lifecycle/staleness/write-fault marker/reservation 面/receipt 面/intent 面/quarantine 面/resolution 面/recovery slot/policy/authorization 容量）、一套优先级、一套状态来源（store health cache + 计数器，O(1) 或已缓存）。使用方：query 的 writeAdmission 视图、contract authorization 前置、prepare/execute 的独立复查（TOCTOU 防护）、metrics diagnostics。三处不再各自拼装条件。
+
+#### 3.12.11 Structure binding canonical authority
+
+binding identity 为受控判别联合：`{kind:"governed_location", roomName, locationKind}` 与 `{kind:"game_object", objectId, expectedType?, expectedRoom?}`；label 降级为纯诊断字段（不作为权威 key）。构建期：posting 自动 binding 与 adapter 声明 binding 重合时——identity 完全相同则合并，label 相同但 identity 不同则拒绝 contract；所有 required structure 构建时必须真实存在（`undefined` 一律拒绝，不存在 `undefined === undefined` 通过）；object-ID binding 验证对象存在、类型、room 归属。执行期：fresh observation 重验全部 required structure 存在且 incarnation 一致，不存在或被替换 → 拒绝（bundle 不消费）。快照容器使用 Map + 序列化为数组（`__proto__`/`constructor` 等特殊 label 不污染原型链）。structure facts 进入 contract digest（3.12.6）与 durable authority（3.12.2）。
+
+#### 3.12.12 Canonicalization 反射异常边界
+
+canonicalEncoding 的全部反射操作（`Object.getPrototypeOf`/`getOwnPropertyDescriptor`/`keys`/`getOwnPropertySymbols`/property value 读取/array iteration）置于统一 try/catch 边界：revoked Proxy、throwing trap、异常 descriptor 一律返回结构化 rejection（`reflection_fault` detail），不抛出、不中断 tick；getter 仍然零调用（descriptor 检查先于任何 value 读取）。public contract build 入口整体异常安全：内部编程错误（非反射类）同样捕获并返回明确 `canonicalization_fault` rejection——callback 零调用、授权与 contract registry 零变化。
+
 ## 4. Tick 生命周期（第二迭代：显式 begin/end）
 
 1. **beginTick（显式，main.ts 固定挂载于一切市场预检/生产/物流/规划之前）**：幂等（同 tick 重复调用安全）；receipt 清理（只回收 retention 过期条目——未过期条目绝不因容量驱逐）→ global reset 检测 → 归档补救（若上一 tick 缺 endTick 则显式计数并补救）→ 清空 epoch 注册表并发行本 tick shared epoch（注册 exact observation 引用）→ 对账上一 tick 投影终态（manifest 结构层 + 资源 key union 层）→ 写 `Memory.runtime.treasury.lifecycle.lastBeginTick`。
