@@ -55,6 +55,7 @@ import {
 } from "@/runtime/treasury/transactionId";
 import type { TreasuryWriteFaultMarker } from "@/runtime/treasury/writeFault";
 import { resetTreasuryQuarantineRuntimeForTest } from "@/runtime/treasury/quarantine";
+import { resetTreasuryResolutionEventsForTest } from "@/runtime/treasury/resolutionEvents";
 
 export const TREASURY_RECEIPT_RETENTION_TICKS = 5_000;
 export const TREASURY_RECEIPT_MAX_ENTRIES = 4_096;
@@ -728,6 +729,7 @@ export function clearTreasuryPersistenceForTest(): void {
   heapStoreRuntime = null;
   pendingAdmissions.clear();
   resetTreasuryQuarantineRuntimeForTest();
+  resetTreasuryResolutionEventsForTest();
   receiptEvents.migrationsExecuted = 0;
   receiptEvents.incompatibleFailures = 0;
   receiptEvents.receiptFullScans = 0;

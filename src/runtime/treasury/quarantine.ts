@@ -385,6 +385,16 @@ export function isTreasuryTransactionQuarantined(transactionId: string): boolean
   return readTreasuryQuarantineEntry(transactionId) !== undefined;
 }
 
+/**
+ * 显式触发 load 全量验证（resolution 等写路径用）：返回 fatal 描述
+ * （null = 健康或 store 不存在——不存在时零写，不隐式创建）。
+ */
+export function ensureTreasuryQuarantineStoreValidated(): string | null {
+  if (peekTreasuryQuarantineStore() === undefined) return null;
+  const runtime = loadQuarantineStoreRuntime();
+  return runtime.fatal;
+}
+
 export type TreasuryQuarantineWriteResult =
   | { readonly status: "written" }
   | { readonly status: "already_present" }
@@ -569,6 +579,14 @@ export function repairTreasuryQuarantineStoreMetadataForResolution(): { status: 
     return {
       status: "rejected",
       detail: `entries 超过上限 ${String(TREASURY_QUARANTINE_MAX_ENTRIES)}（先 resolution 部分条目再 repair）`,
+    };
+  }
+  if (raw.overflowed === true && ownKeys.length >= TREASURY_QUARANTINE_MAX_ENTRIES) {
+    // 满载 + legacy overflowed：曾有 entry 被丢弃的可能无法排除——清除标志
+    // 会掩盖丢 identity 的事实。先 resolution 降到上限以下再 repair。
+    return {
+      status: "rejected",
+      detail: `满载（${String(ownKeys.length)} 条）且存在 legacy overflowed 标志——先 resolution 部分条目再 repair（不得掩盖可能丢失的 identity）`,
     };
   }
   raw.version = TREASURY_QUARANTINE_VERSION;

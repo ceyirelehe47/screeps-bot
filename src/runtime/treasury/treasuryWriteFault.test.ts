@@ -130,7 +130,14 @@ describe("staged commit 故障注入", () => {
     service.endTick();
     const quarantined = readTreasuryQuarantineEntry("ts1_fault_heap");
     expect(quarantined).toBeDefined();
-    const resolved = resolveTreasuryQuarantinedTransactionAsCommitted({ transactionId: "ts1_fault_heap" });
+    // 第七轮：resolution 需故障后 observation（下一 tick）+ 显式证据。
+    Game.time += 1;
+    service.beginTick();
+    const resolved = resolveTreasuryQuarantinedTransactionAsCommitted({
+      transactionId: "ts1_fault_heap",
+      evidence: { conclusion: "observed_committed", observationTick: Game.time, source: "test" },
+      guard: service.treasuryResolutionGuard(),
+    });
     expect(resolved.status).toBe("resolved");
     const replay = service.prepareTransaction({ ...prepared, handle: undefined } as unknown as TreasuryTransactionInput);
     expect(replay.status).toBe("already_settled");
@@ -230,7 +237,11 @@ describe("staged commit 故障注入", () => {
     expect(readTreasuryWriteFault()).toBeDefined();
     expect(service.metrics().writeAdmissionLocked).toBe(1);
     // 显式 resolution 路径解除（faulted 已在上一 endTick 转 quarantine）。
-    const resolved = resolveTreasuryQuarantinedTransactionAsCommitted({ transactionId: "ts1_repair" });
+    const resolved = resolveTreasuryQuarantinedTransactionAsCommitted({
+      transactionId: "ts1_repair",
+      evidence: { conclusion: "observed_committed", observationTick: Game.time, source: "test" },
+      guard: service.treasuryResolutionGuard(),
+    });
     expect(resolved.status).toBe("resolved");
     expect(service.metrics().writeAdmissionLocked).toBe(0);
     const after = service.prepareTransaction(freshInput(service, "ts1_after_repair"));

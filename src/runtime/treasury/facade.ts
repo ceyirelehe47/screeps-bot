@@ -91,6 +91,7 @@ import {
   type TreasuryQuarantineDeltas,
 } from "@/runtime/treasury/quarantine";
 import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
+import { readTreasuryResolutionCounters } from "@/runtime/treasury/resolutionEvents";
 import { isReservationOwnerMigrationComplete, isReservationStoreCorrupted } from "@/runtime/resourceReservation";
 import {
   type TreasuryBalanceView,
@@ -1606,6 +1607,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         quarantineStoreHealthy: quarantineHealth.healthy,
         quarantineAdmissionRejections: metrics.quarantineAdmissionRejections + quarantineCounters.admissionRejections,
         unresolvedQuarantines: quarantineBlock.unresolvedCount,
+        resolutionCommitted: readTreasuryResolutionCounters().committed,
+        resolutionNotExecuted: readTreasuryResolutionCounters().notExecuted,
+        resolutionUncertain: readTreasuryResolutionCounters().uncertain,
+        resolutionRejected: readTreasuryResolutionCounters().rejected,
       };
     },
 
