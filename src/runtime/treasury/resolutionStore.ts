@@ -26,7 +26,11 @@
  */
 
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
-import { TREASURY_RECEIPT_RETENTION_TICKS, hasSettledReceipt } from "@/runtime/treasury/receipts";
+import {
+  TREASURY_RECEIPT_RETENTION_TICKS,
+  hasSettledReceipt,
+  registerTreasuryResolutionResetHook,
+} from "@/runtime/treasury/receipts";
 import { clearTreasuryWriteFaultMarkerForResolution } from "@/runtime/treasury/writeFault";
 import { releaseTreasuryQuarantineEntry, readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 
@@ -113,7 +117,10 @@ export function readTreasuryResolutionStoreCounters(): TreasuryResolutionStoreCo
   return { fullScans, loadValidationEntries, recovered, faulted };
 }
 
-/** 仅供测试：清零（clearTreasuryPersistenceForTest 调用）。 */
+/**
+ * 仅供测试：清零（经 receipts 的注册钩子随 clearTreasuryPersistenceForTest
+ * 调用——模块加载时自注册，避免 receipts ↔ resolutionStore 循环依赖）。
+ */
 export function resetTreasuryResolutionStoreForTest(): void {
   heapRuntime = null;
   resolutionStoreEvents.fullScans = 0;
@@ -122,6 +129,8 @@ export function resetTreasuryResolutionStoreForTest(): void {
   resolutionStoreEvents.recovered = 0;
   resolutionStoreEvents.faulted = 0;
 }
+
+registerTreasuryResolutionResetHook(resetTreasuryResolutionStoreForTest);
 
 function isSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value);

@@ -57,7 +57,6 @@ import type { TreasuryWriteFaultMarker } from "@/runtime/treasury/writeFault";
 import { resetTreasuryQuarantineRuntimeForTest } from "@/runtime/treasury/quarantine";
 import { resetTreasuryResolutionEventsForTest } from "@/runtime/treasury/resolutionEvents";
 import { resetTreasuryIntentRuntimeForTest } from "@/runtime/treasury/intents";
-import { resetTreasuryResolutionStoreForTest } from "@/runtime/treasury/resolutionStore";
 
 export const TREASURY_RECEIPT_RETENTION_TICKS = 5_000;
 export const TREASURY_RECEIPT_MAX_ENTRIES = 4_096;
@@ -774,6 +773,17 @@ export function readTreasuryLifecycle(): TreasuryLifecycleMemory | undefined {
   return peekTreasuryLifecycle();
 }
 
+/**
+ * resolution store 的测试清理钩子（第八轮）：resolutionStore 依赖本模块
+ *（receipt 查询/retention 常量），为避免循环依赖，其测试 reset 经此注册
+ * ——resolutionStore 模块加载时自注册；未加载（无 resolution 消费的测试）
+ * 时无需清理。
+ */
+let resolutionResetHook: (() => void) | null = null;
+export function registerTreasuryResolutionResetHook(hook: (() => void) | null): void {
+  resolutionResetHook = hook;
+}
+
 /** 仅供测试：清除 Treasury 持久状态（receipts + lifecycle + writeFault + quarantine + resolutions + intents）并失效 heap 缓存。 */
 export function clearTreasuryPersistenceForTest(): void {
   const branch = (Memory.runtime as unknown as RuntimeMemoryWithTreasury | undefined)?.treasury;
@@ -790,7 +800,7 @@ export function clearTreasuryPersistenceForTest(): void {
   resetTreasuryQuarantineRuntimeForTest();
   resetTreasuryResolutionEventsForTest();
   resetTreasuryIntentRuntimeForTest();
-  resetTreasuryResolutionStoreForTest();
+  resolutionResetHook?.();
   receiptEvents.migrationsExecuted = 0;
   receiptEvents.incompatibleFailures = 0;
   receiptEvents.receiptFullScans = 0;
