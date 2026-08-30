@@ -52,6 +52,8 @@ export interface TreasuryUnresolvedAuthority {
   readonly authorizationDigest?: string;
   /** canonical authorization cohort digest（第十一轮 3.13.4）。 */
   readonly authorizationCohortDigest?: string;
+  /** 统一 durable action identity digest（第十一轮 3.13.5）。 */
+  readonly durableIdentityDigest?: string;
   /** 完整 structure descriptors（第十一轮 3.13.9；reconciler 输入）。 */
   readonly structureFacts?: readonly { readonly [key: string]: unknown }[];
   /** legacy v1 quarantine 标记（第十一轮 3.13.7：隔离诊断用）。 */
@@ -133,6 +135,18 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         detail: `同 id 双权威 adapterVersion 不一致（quarantine v${String(quarantined.adapterVersion)}，intent v${String(intended.adapterVersion)}）——fail closed`,
       };
     }
+    // 【第十一轮 3.13.5】统一 durable identity：双权威都携带时必须一致
+    //（空对空的 legacy 形态由既有逐字段比较兜底）。
+    if (
+      quarantined.durableIdentityDigest !== undefined &&
+      intended.durableIdentityDigest !== undefined &&
+      quarantined.durableIdentityDigest !== intended.durableIdentityDigest
+    ) {
+      return {
+        status: "inconsistent",
+        detail: `同 id 双权威 durable identity 不一致（quarantine ${quarantined.durableIdentityDigest.slice(0, 16)}，intent ${intended.durableIdentityDigest.slice(0, 16)}）——fail closed`,
+      };
+    }
   }
   if (quarantined !== undefined) {
     // quarantine 优先（v2 自带完整合同事实；并存 intent 时以 quarantine 为
@@ -157,6 +171,7 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         ...(quarantined.durablePayload !== undefined ? { durablePayload: quarantined.durablePayload } : {}),
         ...(quarantined.durablePayloadVersion !== undefined ? { durablePayloadVersion: quarantined.durablePayloadVersion } : {}),
         ...(quarantined.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: quarantined.authorizationCohortDigest } : {}),
+        ...(quarantined.durableIdentityDigest !== undefined ? { durableIdentityDigest: quarantined.durableIdentityDigest } : {}),
         ...(quarantined.authorizationDigest !== undefined ? { authorizationDigest: quarantined.authorizationDigest } : {}),
         ...(quarantined.structureFacts !== undefined
           ? { structureFacts: quarantined.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
@@ -187,6 +202,7 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
       ...(intent.durablePayload !== undefined ? { durablePayload: intent.durablePayload } : {}),
       ...(intent.durablePayloadVersion !== undefined ? { durablePayloadVersion: intent.durablePayloadVersion } : {}),
       ...(intent.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: intent.authorizationCohortDigest } : {}),
+      ...(intent.durableIdentityDigest !== undefined ? { durableIdentityDigest: intent.durableIdentityDigest } : {}),
       ...(intent.authorizationDigest !== undefined ? { authorizationDigest: intent.authorizationDigest } : {}),
       ...(intent.structureFacts !== undefined
         ? { structureFacts: intent.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }

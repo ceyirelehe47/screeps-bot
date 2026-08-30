@@ -1143,6 +1143,7 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
         contractId: contract.contractId,
         contractDigest: contract.digest,
         adapterVersion: contract.adapterVersion,
+        adapterRegistrationId: contract.adapterRegistrationId,
         authorizationDigest: resolvedBundle.authorizationDigest,
         ...(contract.durableFacts !== undefined
           ? { durablePayload: contract.durableFacts.payload, durablePayloadVersion: contract.durableFacts.version }

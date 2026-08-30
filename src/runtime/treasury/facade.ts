@@ -156,6 +156,7 @@ import {
 } from "@/runtime/treasury/authorization";
 import { TREASURY_WRITER_KERNEL, type TreasuryWriterKernel } from "@/runtime/treasury/kernelChannel";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
+import { computeTreasuryDurableIdentityDigest, treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
 import {
   computeTreasuryPolicyDecisionDigest,
   findTreasuryPolicyResolver,
@@ -354,6 +355,8 @@ export interface TreasuryWriterKernelExecution {
     readonly contractId: string;
     readonly contractDigest: string;
     readonly adapterVersion: number;
+    /** adapter registration identity（第十一轮 3.13.5：durable identity 输入）。 */
+    readonly adapterRegistrationId?: string;
     readonly authorizationDigest?: string;
     readonly durablePayload?: string;
     readonly durablePayloadVersion?: number;
@@ -2631,6 +2634,45 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           };
         }
       }
+      // 【第十一轮 3.13.5】统一 durable action identity：全 store 幂等/
+      // read-back/转移/双权威比较的唯一 digest（outcome/settlement 不进）。
+      const durableIdentity = computeTreasuryDurableIdentityDigest({
+        transactionId: record.canonical.transactionId,
+        digest: record.digest,
+        actionKind: record.canonical.kind,
+        postings: record.shape.merged.map((leg) => ({ ...leg })),
+        source: record.canonical.source,
+        ...(execution?.intentContract !== undefined
+          ? {
+              contractId: execution.intentContract.contractId,
+              contractDigest: execution.intentContract.contractDigest,
+              ...(execution.intentContract.adapterRegistrationId !== undefined
+                ? { adapterRegistrationId: execution.intentContract.adapterRegistrationId }
+                : {}),
+              ...(execution.intentContract.durablePayload !== undefined
+                ? { durablePayload: execution.intentContract.durablePayload }
+                : {}),
+              ...(execution.intentContract.durablePayloadVersion !== undefined
+                ? { durablePayloadVersion: execution.intentContract.durablePayloadVersion }
+                : {}),
+              ...(execution.intentContract.structureFacts !== undefined
+                ? { structureFacts: execution.intentContract.structureFacts }
+                : {}),
+            }
+          : {}),
+        ...(redeemedCohort !== undefined
+          ? { authorizationCohortDigest: computeTreasuryAuthorizationCohortDigest(redeemedCohort) }
+          : {}),
+        ...(redeemedCohort !== undefined && redeemedCohort.ownerIdentity !== ""
+          ? { ownerIdentity: redeemedCohort.ownerIdentity }
+          : {}),
+        ...(redeemedCohort !== undefined
+          ? {
+              policyIdentity:
+                redeemedCohort.policyId + "@v" + String(redeemedCohort.policyVersion) + ":" + redeemedCohort.policyDecisionDigest,
+            }
+          : {}),
+      });
       // ── durable intent / WAL（第八轮唯一安全顺序）：Game API 之前持久化
       //    transaction identity + canonical postings——写入失败时 callback
       //    零调用、tentative 与槽位释放、结构化拒绝。第九轮：contract 路径
@@ -2651,6 +2693,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         outcome: "not_started",
         settlement: "ready",
         auditSource: "execute-prepared-action",
+        durableIdentityDigest: durableIdentity,
         ...(execution?.intentContract !== undefined
           ? {
               contractId: execution.intentContract.contractId,
@@ -2708,8 +2751,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const readBack = readTreasuryIntentEntry(record.canonical.transactionId);
       const identityOptionalMatches = (actual: string | number | undefined, declared: string | number | undefined): boolean =>
         actual === declared || (actual === undefined && declared === undefined);
+      const readBackIdentityConsistent = treasuryDurableIdentitiesMatch(readBack?.durableIdentityDigest, durableIdentity);
       const readBackConsistent =
         readBack !== undefined &&
+        readBackIdentityConsistent &&
         readBack.digest === record.digest &&
         readBack.outcome === "not_started" &&
         readBack.settlement === "ready" &&
@@ -2741,8 +2786,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         finalizeHandleRecord(record, "expired");
         return {
           status: "prepare_rejected",
-          reason: "intent_conflict",
-          detail: "durable intent read-back 完整 identity 验证失败（同 id 已存在不同 contract/bundle/digest/outcome 的 intent，或 store 不可信）——fail closed，不静默接受不同 contract——Game callback 零调用",
+          reason: "identity_conflict",
+          detail: "durable intent read-back 统一 identity 验证失败（同 id 已存在不同 contract/bundle/cohort/descriptor/digest 的 intent，或 store 不可信）——fail closed，不静默接受不同 durable identity——Game callback 零调用",
         };
       }
       // ── execution-started（ready → executing，严格迁移：期望前序 + digest
@@ -3030,6 +3075,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         ...(facts0.adapterVersion !== undefined ? { adapterVersion: facts0.adapterVersion } : {}),
         ...(facts0.durablePayloadVersion !== undefined ? { durablePayloadVersion: facts0.durablePayloadVersion } : {}),
         ...(facts0.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: facts0.authorizationCohortDigest } : {}),
+        ...(facts0.durableIdentityDigest !== undefined ? { durableIdentityDigest: facts0.durableIdentityDigest } : {}),
         postFaultEpoch: {
           scope: state.observation.epoch.scope,
           epochSeq: state.observation.epoch.epochSeq,

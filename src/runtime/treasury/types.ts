@@ -137,6 +137,8 @@ export interface TreasuryRecordActionInput {
 export type TreasuryRejectionReason =
   | "internal_authorization_fault"
   | "intent_conflict"
+  /** 统一 durable action identity 冲突（第十一轮 3.13.5：同 ID 不同 identity——store 原数据不动）。 */
+  | "identity_conflict"
   | "invalid_transaction_id"
   | "invalid_kind"
   | "invalid_source"

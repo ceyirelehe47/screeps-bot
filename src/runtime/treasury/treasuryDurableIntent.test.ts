@@ -629,7 +629,7 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
       expect(callbackCalls).toBe(0);
       expect(result.status).toBe("prepare_rejected");
       if (result.status === "prepare_rejected") {
-        expect(result.reason).toBe("intent_conflict");
+        expect(result.reason).toBe("identity_conflict");
         expect(result.detail).toContain("read-back");
       }
     } finally {
@@ -733,7 +733,7 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
       expect(callbackCalls).toBe(0);
       expect(result.status).toBe("prepare_rejected");
       if (result.status === "prepare_rejected") {
-        expect(result.reason).toBe("intent_conflict");
+        expect(result.reason).toBe("identity_conflict");
         expect(result.detail).toContain("read-back");
       }
     } finally {

@@ -38,6 +38,7 @@
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
+import { treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
   TREASURY_STRUCTURE_BINDING_ROLES,
@@ -90,6 +91,8 @@ export interface TreasuryQuarantineEntry {
   readonly authorizationCohort?: TreasuryAuthorizationCohortFacts;
   /** canonical cohort digest（Treasury 计算；capability/resolution 绑定）。 */
   readonly authorizationCohortDigest?: string;
+  /** 统一 durable action identity digest（第十一轮 3.13.5：全 store 幂等/一致性比较）。 */
+  readonly durableIdentityDigest?: string;
   /** v1 迁移且无并存 intent 补全合同事实（不参与 contract-backed resolution）。 */
   readonly legacyV1?: boolean;
 }
@@ -336,6 +339,11 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
   if (candidate.authorizationCohortDigest !== undefined) {
     if (typeof candidate.authorizationCohortDigest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.authorizationCohortDigest)) {
       return "authorizationCohortDigest 非法（须为 16 小写 hex）";
+    }
+  }
+  if (candidate.durableIdentityDigest !== undefined) {
+    if (typeof candidate.durableIdentityDigest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.durableIdentityDigest)) {
+      return "durableIdentityDigest 非法（须为 16 小写 hex）";
     }
   }
   if (candidate.authorizationCohort !== undefined) {
@@ -689,7 +697,7 @@ export type TreasuryQuarantineWriteResult =
   | { readonly status: "already_present" }
   | {
       readonly status: "rejected";
-      readonly reason: "store_fatal" | "capacity_exhausted";
+      readonly reason: "store_fatal" | "capacity_exhausted" | "identity_conflict";
       readonly detail: string;
     };
 
@@ -713,7 +721,19 @@ export function quarantineTreasuryTransaction(entry: TreasuryQuarantineEntry): T
     return { status: "rejected", reason: "store_fatal", detail: runtime.fatal };
   }
   const key = encodeQuarantineKey(entry.transactionId);
-  if (Object.prototype.hasOwnProperty.call(runtime.store.entries, key)) return { status: "already_present" };
+  if (Object.prototype.hasOwnProperty.call(runtime.store.entries, key)) {
+    // 【第十一轮 3.13.5】同 ID 幂等仅限统一 durable identity 一致。
+    const existing = runtime.store.entries[key];
+    if (!treasuryDurableIdentitiesMatch(existing.durableIdentityDigest, entry.durableIdentityDigest)) {
+      quarantineEvents.admissionRejections += 1;
+      return {
+        status: "rejected",
+        reason: "identity_conflict",
+        detail: `同 id 已存在不同 durable identity 的 quarantine entry（既有 ${String(existing.durableIdentityDigest ?? "(legacy 空)").slice(0, 16)}，新 ${String(entry.durableIdentityDigest ?? "(legacy 空)").slice(0, 16)}）——fail closed，原数据不动`,
+      };
+    }
+    return { status: "already_present" };
+  }
   if (runtime.store.entryCount >= TREASURY_QUARANTINE_MAX_ENTRIES) {
     quarantineEvents.admissionRejections += 1;
     return {

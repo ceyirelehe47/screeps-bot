@@ -41,6 +41,7 @@
 
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import type { TreasuryAuthorizationCohortFacts, TreasuryCohortRevisions } from "@/runtime/treasury/authorization";
+import { computeTreasuryDurableIdentityDigest, treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
   TREASURY_STRUCTURE_BINDING_ROLES,
@@ -216,6 +217,8 @@ export interface TreasuryIntentEntry {
   authorizationCohort?: TreasuryAuthorizationCohortFacts;
   /** canonical cohort digest（Treasury 计算；capability/resolution 绑定）。 */
   authorizationCohortDigest?: string;
+  /** 统一 durable action identity digest（第十一轮 3.13.5：全 store 幂等/一致性比较的唯一权威）。 */
+  durableIdentityDigest?: string;
   /** 有界审计来源。 */
   auditSource?: string;
   createdAtTick: number;
@@ -419,6 +422,11 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
   if (candidate.authorizationCohortDigest !== undefined) {
     if (typeof candidate.authorizationCohortDigest !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.authorizationCohortDigest)) {
       return "authorizationCohortDigest 非法（须为 16 小写 hex）";
+    }
+  }
+  if (candidate.durableIdentityDigest !== undefined) {
+    if (typeof candidate.durableIdentityDigest !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.durableIdentityDigest)) {
+      return "durableIdentityDigest 非法（须为 16 小写 hex）";
     }
   }
   if (candidate.authorizationCohort !== undefined) {
@@ -766,7 +774,7 @@ export type TreasuryIntentWriteResult =
   | { readonly status: "already_present" }
   | {
       readonly status: "rejected";
-      readonly reason: "store_fatal" | "capacity_exhausted" | "invalid_entry";
+      readonly reason: "store_fatal" | "capacity_exhausted" | "invalid_entry" | "identity_conflict";
       readonly detail: string;
     };
 
@@ -795,6 +803,18 @@ export function writeTreasuryIntentEntry(entry: TreasuryIntentEntry): TreasuryIn
   }
   const key = encodeIntentKey(entry.transactionId);
   if (Object.prototype.hasOwnProperty.call(runtime.store.entries, key)) {
+    // 【第十一轮 3.13.5】同 ID 幂等仅限完整 durable identity 一致——统一
+    // digest 比较（legacy entry 空对空匹配；不同 identity → identity_conflict，
+    // store 原数据不动、writer fail closed）。
+    const existing = runtime.store.entries[key];
+    if (!treasuryDurableIdentitiesMatch(existing.durableIdentityDigest, entry.durableIdentityDigest)) {
+      intentEvents.writeRejections += 1;
+      return {
+        status: "rejected",
+        reason: "identity_conflict",
+        detail: `同 id 已存在不同 durable identity 的 intent（既有 identity ${String(existing.durableIdentityDigest ?? "(legacy 空)").slice(0, 16)}，新 identity ${String(entry.durableIdentityDigest ?? "(legacy 空)").slice(0, 16)}）——fail closed，原数据不动`,
+      };
+    }
     return { status: "already_present" };
   }
   if (runtime.store.entryCount >= TREASURY_INTENT_MAX_ENTRIES) {
@@ -1130,6 +1150,7 @@ export function transferTreasuryIntentToQuarantine(
         }
       : {}),
     ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+    ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
   } as TreasuryQuarantineEntry);
   if (write.status === "rejected") {
     return { status: "retained", detail: `quarantine 写入被拒（${write.reason}）: ${write.detail}` };
@@ -1151,7 +1172,8 @@ export function transferTreasuryIntentToQuarantine(
     ) &&
     (readBack.contractDigest ?? undefined) === entry.contractDigest &&
     (readBack.adapterVersion ?? undefined) === entry.adapterVersion &&
-    (readBack.durablePayloadVersion ?? undefined) === entry.durablePayloadVersion;
+    (readBack.durablePayloadVersion ?? undefined) === entry.durablePayloadVersion &&
+    treasuryDurableIdentitiesMatch(readBack.durableIdentityDigest, entry.durableIdentityDigest);
   if (!consistent) {
     return { status: "retained", detail: "quarantine 读回验证不一致（store 不可信）——intent 保留为 emergency authority" };
   }

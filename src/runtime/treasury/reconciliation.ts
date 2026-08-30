@@ -42,6 +42,8 @@ export interface TreasuryReconciliationCapability {
   readonly durablePayloadVersion?: number;
   /** canonical authorization cohort digest（第十一轮 3.13.4；resolution 强匹配）。 */
   readonly authorizationCohortDigest?: string;
+  /** 统一 durable action identity digest（第十一轮 3.13.5；resolution 强匹配）。 */
+  readonly durableIdentityDigest?: string;
   readonly postFaultEpoch: {
     readonly scope: TreasuryObservationScope;
     readonly epochSeq: number;
