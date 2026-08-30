@@ -2505,10 +2505,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       }
       record.intentWritten = true;
       intentBackedActiveIds.add(record.canonical.transactionId);
-      // ── read-back 验证（第九轮 4.5）：写入后读回比对 transaction/digest/
-      //    contract/postings/phase——不一致按 store 不可信处理（callback 零
-      //    调用 + 保守关闭；intent 留 store 由下一 tick 恢复处置）。 ────────
+      // ── read-back 完整 identity 验证（第十轮 3.12.7）：already_present 幂等
+      //    只允许完整 identity 一致——transaction/digest/contract（ID+digest）/
+      //    adapterVersion/authorizationDigest（bundle digest）/durable payload/
+      //    postings/outcome/settlement 任一不同 → intent_conflict（fail
+      //    closed，不静默接受不同 contract；低层 test path 写入的同 id 旧
+      //    intent 不被 production contract 接管）。 ─────────────────────────────
       const readBack = readTreasuryIntentEntry(record.canonical.transactionId);
+      const identityOptionalMatches = (actual: string | number | undefined, declared: string | number | undefined): boolean =>
+        actual === declared || (actual === undefined && declared === undefined);
       const readBackConsistent =
         readBack !== undefined &&
         readBack.digest === record.digest &&
@@ -2522,7 +2527,17 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
             leg.resource === record.shape.merged[index].resource &&
             leg.delta === record.shape.merged[index].delta,
         ) &&
-        (execution?.intentContract === undefined || readBack.contractId === execution.intentContract.contractId);
+        (execution?.intentContract === undefined || readBack.contractId === execution.intentContract.contractId) &&
+        (execution?.intentContract === undefined ||
+          identityOptionalMatches(readBack.contractDigest, execution.intentContract.contractDigest)) &&
+        (execution?.intentContract === undefined ||
+          identityOptionalMatches(readBack.adapterVersion, execution.intentContract.adapterVersion)) &&
+        (execution?.intentContract === undefined ||
+          identityOptionalMatches(readBack.authorizationDigest, execution.intentContract.authorizationDigest)) &&
+        (execution?.intentContract === undefined ||
+          identityOptionalMatches(readBack.durablePayload, execution.intentContract.durablePayload)) &&
+        (execution?.intentContract === undefined ||
+          identityOptionalMatches(readBack.durablePayloadVersion, execution.intentContract.durablePayloadVersion));
       if (!readBackConsistent) {
         metrics.intentWriteFailures += 1;
         record.state = "expired";
@@ -2532,8 +2547,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         finalizeHandleRecord(record, "expired");
         return {
           status: "prepare_rejected",
-          reason: "intent_store_unavailable",
-          detail: "durable intent read-back 验证失败（transaction/digest/contract/postings 与写入不一致——store 不可信）——Game callback 零调用",
+          reason: "intent_conflict",
+          detail: "durable intent read-back 完整 identity 验证失败（同 id 已存在不同 contract/bundle/digest/outcome 的 intent，或 store 不可信）——fail closed，不静默接受不同 contract——Game callback 零调用",
         };
       }
       // ── execution-started（ready → executing，严格迁移：期望前序 + digest

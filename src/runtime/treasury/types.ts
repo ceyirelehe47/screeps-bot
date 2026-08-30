@@ -136,6 +136,7 @@ export interface TreasuryRecordActionInput {
 
 export type TreasuryRejectionReason =
   | "internal_authorization_fault"
+  | "intent_conflict"
   | "invalid_transaction_id"
   | "invalid_kind"
   | "invalid_source"

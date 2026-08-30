@@ -629,7 +629,7 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
       expect(callbackCalls).toBe(0);
       expect(result.status).toBe("prepare_rejected");
       if (result.status === "prepare_rejected") {
-        expect(result.reason).toBe("intent_store_unavailable");
+        expect(result.reason).toBe("intent_conflict");
         expect(result.detail).toContain("read-back");
       }
     } finally {
@@ -733,7 +733,7 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
       expect(callbackCalls).toBe(0);
       expect(result.status).toBe("prepare_rejected");
       if (result.status === "prepare_rejected") {
-        expect(result.reason).toBe("intent_store_unavailable");
+        expect(result.reason).toBe("intent_conflict");
         expect(result.detail).toContain("read-back");
       }
     } finally {
@@ -1035,5 +1035,48 @@ describe("durable authority cohesion（第十轮 5.1：quarantine v2 完整合�
     const issued = next.issueTreasuryReconciliationCapability({ transactionId: "dac_ver" });
     expect(issued.status).toBe("rejected");
     if (issued.status === "rejected") expect(issued.reason).toBe("adapter_version_mismatch");
+  });
+});
+
+describe("intent 完整 identity 与幂等冲突（第十轮 3.12.7）", () => {
+  it("同 ID 旧 intent（低层 test path 直写）不被 production contract 接管：intent_conflict", () => {
+    // 低层直写 intent（无 contract 身份）：模拟第九轮前测试路径/异常残留。
+    const seeded = writeTreasuryIntentEntry({
+      transactionId: "idc_low",
+      digest: "0123456789abcdef",
+      actionKind: "terminal.send",
+      kind: "terminal.send",
+      source: "test",
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+      outcome: "not_started",
+      settlement: "ready",
+      authorizationDigest: "1111111111111111", // 与后续 execution 声明不同的 bundle digest
+      createdAtTick: Game.time,
+      updatedAtTick: Game.time,
+    });
+    expect(seeded.status).toBe("written");
+    const service = makeService();
+    let callbackCalls = 0;
+    const result = service.executePreparedAction(
+      freshInput(service, "idc_low"),
+      () => {
+        callbackCalls += 1;
+        return { ok: true as const };
+      },
+      {
+        intentContract: {
+          contractId: "ac:abcdef0123456789",
+          contractDigest: "abcdef0123456789",
+          adapterVersion: 1,
+          authorizationDigest: "2222222222222222", // 与旧 intent 不同
+        },
+      },
+    );
+    expect(callbackCalls).toBe(0);
+    expect(result.status).toBe("prepare_rejected");
+    if (result.status === "prepare_rejected") expect(result.reason).toBe("intent_conflict");
+    // 旧 intent 原样保留（不被覆盖、不被接管）。
+    const retained = readTreasuryIntentEntry("idc_low");
+    expect(retained?.authorizationDigest).toBe("1111111111111111");
   });
 });

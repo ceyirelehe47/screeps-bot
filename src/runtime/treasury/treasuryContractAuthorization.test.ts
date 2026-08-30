@@ -111,6 +111,7 @@ beforeEach(() => {
     ],
     execute: (): { ok: boolean } => ({ ok: true }),
     structureBindings: () => [],
+    durableFacts: () => ({ version: 1, payload: "three-leg-fixture" }),
     reconcile: () => "still_uncertain" as const,
   });
 });
