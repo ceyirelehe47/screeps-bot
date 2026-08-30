@@ -1,18 +1,18 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "a231e69",
-    "suites": 217,
-    "tests": 1130,
-    "passed": 1130,
+    "commit": "11cdd6e",
+    "suites": 219,
+    "tests": 1181,
+    "passed": 1181,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 217,
-    "tests": 1130,
-    "passed": 1130,
+    "suites": 219,
+    "tests": 1181,
+    "passed": 1181,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -1055,12 +1055,12 @@
     },
     "src/runtime/treasury/treasuryWriteArchitecture.test.ts": {
       "baseline": 0,
-      "budget": 15,
+      "budget": 16,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryWriteAdmissionPerformance.test.ts": {
       "baseline": 0,
-      "budget": 12,
+      "budget": 14,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryQuarantine.test.ts": {
@@ -1070,7 +1070,7 @@
     },
     "src/runtime/treasury/treasuryFaultResolution.test.ts": {
       "baseline": 0,
-      "budget": 25,
+      "budget": 37,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryQuarantineAuthority.test.ts": {
@@ -1105,7 +1105,17 @@
     },
     "src/runtime/treasury/treasuryDurableIntent.test.ts": {
       "baseline": 0,
-      "budget": 21,
+      "budget": 32,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryCanonicalEncoding.test.ts": {
+      "baseline": 0,
+      "budget": 11,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryContractAuthorization.test.ts": {
+      "baseline": 0,
+      "budget": 14,
       "tier": "high-risk"
     }
   }
