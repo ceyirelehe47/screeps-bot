@@ -1092,18 +1092,17 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         }
         // durable quarantine + unresolved intent 占用（第六/八轮）：Game 结果
         // 未知/未关闭 transaction 的流出量计入 committed（保守——可能已执行；
-        // 不进 projection；intent 为 per-transaction 正占用口径，quarantine
-        // 暂为净额口径（负=流出），第八轮聚合改造后统一为正占用）。
+        // 不进 projection；双口径统一为 per-transaction 正占用 Σmax(0,−net)，
+        // 跨 transaction 不抵消）。
         const quarantineOutflows = treasuryQuarantineOutflowTotals();
         const intentOutflows = treasuryIntentOutflowOccupancy();
         if (quarantineOutflows.size > 0 || intentOutflows.size > 0) {
           for (const roomName of rooms) {
             for (const kind of kinds) {
-              const resourceKey = `${roomName}\u0000${kind}\u0000${context.resource}`;
-              const quarantinedNet = quarantineOutflows.get(resourceKey) ?? 0;
-              const quarantinedOut = quarantinedNet < 0 ? -quarantinedNet : 0;
-              const intendedOut = intentOutflows.get(resourceKey) ?? 0;
-              if (quarantinedOut + intendedOut > 0) committed += quarantinedOut + intendedOut;
+              const resourceKey = `${roomName} ${kind} ${context.resource}`;
+              const occupied =
+                (quarantineOutflows.get(resourceKey) ?? 0) + (intentOutflows.get(resourceKey) ?? 0);
+              if (occupied > 0) committed += occupied;
             }
           }
         }

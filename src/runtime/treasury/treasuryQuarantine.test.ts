@@ -343,8 +343,8 @@ describe("第七轮：quarantine 容量保守方向", () => {
       { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 },
     ]);
     const service = makeService();
-    // 同 location 净额 = +500 → free capacity 减少 500（不是 1000 也不是 0）。
-    expect(service.projectedFreeCapacity("W1N57", "storage")).toBe(10_000 - 500);
+    // 1000（流出腿 -500 不抵消它、也不释放空间）→ free capacity 减少 1000。
+    expect(service.projectedFreeCapacity("W1N57", "storage")).toBe(10_000 - 1_000);
     // 正资源 delta 不乐观计入 spendable（observed/projected 不被冒充修改）。
     const view = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"], locations: ["storage"] });
     expect(view.observed).toBe(100_000);

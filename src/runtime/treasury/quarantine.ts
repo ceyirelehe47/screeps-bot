@@ -228,6 +228,8 @@ function validateQuarantineStoreShape(store: TreasuryQuarantineStore): string | 
   }
   const resourceTotals = new Map<string, number>();
   const capacityTotals = new Map<string, number>();
+  const conservativeResourceOutflow = new Map<string, number>();
+  const conservativeCapacityOccupancy = new Map<string, number>();
   for (const key of ownKeys) {
     if (!key.startsWith(QUARANTINE_KEY_PREFIX)) {
       return `存储键格式非法（须为 "q:"+transactionId）: ${key.slice(0, 48)}`;
@@ -241,7 +243,9 @@ function validateQuarantineStoreShape(store: TreasuryQuarantineStore): string | 
     if (encodeQuarantineKey(typed.transactionId) !== key) {
       return `存储键与 entry.transactionId 不一致: ${key.slice(0, 48)}`;
     }
-    // 聚合安全整数（资源 (room,loc,res) 与容量 (room,loc) 双口径预检）。
+    // 聚合安全整数（资源 (room,loc,res) 与容量 (room,loc) 双口径预检）：
+    // 净额方向与保守方向（第八轮 per-transaction：Σmax(0,−net) 流出 /
+    // Σmax(0,net) 容量——保守和可能在大额混合下溢出而净额不溢出）双侧检查。
     for (const leg of typed.deltas) {
       const resourceKey = `${leg.roomName}\u0000${leg.locationKind}\u0000${leg.resource}`;
       const mergedResource = (resourceTotals.get(resourceKey) ?? 0) + leg.delta;
@@ -251,6 +255,24 @@ function validateQuarantineStoreShape(store: TreasuryQuarantineStore): string | 
       const mergedCapacity = (capacityTotals.get(capacityKey) ?? 0) + leg.delta;
       if (!Number.isSafeInteger(mergedCapacity)) return "容量聚合安全整数溢出";
       capacityTotals.set(capacityKey, mergedCapacity);
+    }
+    const resourceNet = new Map<string, number>();
+    const capacityNet = new Map<string, number>();
+    for (const leg of typed.deltas) {
+      const resourceKey = `${leg.roomName}\u0000${leg.locationKind}\u0000${leg.resource}`;
+      resourceNet.set(resourceKey, (resourceNet.get(resourceKey) ?? 0) + leg.delta);
+      const capacityKey = `${leg.roomName}\u0000${leg.locationKind}`;
+      capacityNet.set(capacityKey, (capacityNet.get(capacityKey) ?? 0) + leg.delta);
+    }
+    for (const [key, net] of resourceNet) {
+      const conservativeOutflow = (conservativeResourceOutflow.get(key) ?? 0) + Math.max(0, -net);
+      if (!Number.isSafeInteger(conservativeOutflow)) return "资源保守聚合（Σmax(0,−net)）安全整数溢出";
+      conservativeResourceOutflow.set(key, conservativeOutflow);
+    }
+    for (const [key, net] of capacityNet) {
+      const conservativeCapacity = (conservativeCapacityOccupancy.get(key) ?? 0) + Math.max(0, net);
+      if (!Number.isSafeInteger(conservativeCapacity)) return "容量保守聚合（Σmax(0,net)）安全整数溢出";
+      conservativeCapacityOccupancy.set(key, conservativeCapacity);
     }
   }
   if (ownKeys.length > TREASURY_QUARANTINE_MAX_ENTRIES) {
@@ -375,15 +397,25 @@ export function peekTreasuryQuarantineHealth(): TreasuryQuarantineHealth {
   return { healthy: true, detail: null, entryCount: store.entryCount, overflowed: false };
 }
 
+/** 冻结深拷贝的单条 entry（快照封闭——外部修改不影响内部权威）。 */
+function freezeQuarantineCopy(entry: TreasuryQuarantineEntry): Readonly<TreasuryQuarantineEntry> {
+  return Object.freeze({
+    ...entry,
+    deltas: entry.deltas.map((leg) => Object.freeze({ ...leg })),
+  }) as Readonly<TreasuryQuarantineEntry>;
+}
+
 /**
  * 单条只读查询（O(1)；prepare 同 id 门禁用；fatal store 一律视为不可信；
  * store 尚不存在时零写返回 undefined——查询路径不隐式创建 store）。
+ * 快照封闭：返回冻结深拷贝，绝不泄漏 store 内部对象。
  */
-export function readTreasuryQuarantineEntry(transactionId: string): TreasuryQuarantineEntry | undefined {
+export function readTreasuryQuarantineEntry(transactionId: string): Readonly<TreasuryQuarantineEntry> | undefined {
   if (peekTreasuryQuarantineStore() === undefined) return undefined;
   const runtime = loadQuarantineStoreRuntime();
   if (runtime.fatal) return undefined;
-  return runtime.store.entries[encodeQuarantineKey(transactionId)] as TreasuryQuarantineEntry | undefined;
+  const entry = runtime.store.entries[encodeQuarantineKey(transactionId)];
+  return entry === undefined ? undefined : freezeQuarantineCopy(entry);
 }
 
 export function isTreasuryTransactionQuarantined(transactionId: string): boolean {
@@ -417,6 +449,13 @@ export type TreasuryQuarantineWriteResult =
  * 不变，调用方维持 write-fault marker 锁定并计数）。
  */
 export function quarantineTreasuryTransaction(entry: TreasuryQuarantineEntry): TreasuryQuarantineWriteResult {
+  // 写入前重新完整验证 entry（快照封闭配套——不假设调用方传入 prepare
+  // 验证过的安全对象）。
+  const shapeError = validateTreasuryQuarantineEntryShape(entry);
+  if (shapeError !== null) {
+    quarantineEvents.admissionRejections += 1;
+    return { status: "rejected", reason: "store_fatal", detail: `拒绝写入非法 entry: ${shapeError}` };
+  }
   const runtime = loadQuarantineStoreRuntime();
   if (runtime.fatal) {
     return { status: "rejected", reason: "store_fatal", detail: runtime.fatal };
@@ -449,11 +488,11 @@ export function releaseTreasuryQuarantineEntry(transactionId: string): boolean {
   return true;
 }
 
-/** 全部条目（诊断/resolution 枚举；顺序为插入序；fatal store 返回空）。 */
-export function listTreasuryQuarantineEntries(): TreasuryQuarantineEntry[] {
+/** 全部条目的冻结快照（诊断/resolution 枚举；fatal store 返回空）。 */
+export function listTreasuryQuarantineEntries(): readonly Readonly<TreasuryQuarantineEntry>[] {
   const runtime = loadQuarantineStoreRuntime();
-  if (runtime.fatal) return [];
-  return Object.values(runtime.store.entries) as TreasuryQuarantineEntry[];
+  if (runtime.fatal) return Object.freeze([]);
+  return Object.freeze(Object.values(runtime.store.entries).map(freezeQuarantineCopy));
 }
 
 export interface TreasuryQuarantineBlockers {
@@ -489,15 +528,43 @@ export function treasuryQuarantineBlockers(): TreasuryQuarantineBlockers {
   };
 }
 
+/**
+ * per-transaction 保守聚合（第八轮）：每笔 transaction 内先合并同
+ * (room,location,resource) / (room,location) 腿得 net，再跨 transaction
+ * 保守求和——outflow(rk) = Σ_tx max(0, −net_tx)、capacity(lk) =
+ * Σ_tx max(0, net_tx)。不同 transaction 的正流入不得抵消另一笔负流出、
+ * 不得增加 spendable。任一求和步溢出安全整数 → 返回空聚合（fail closed，
+ * 不返回乐观数值；load 校验已前置拦截，此为运行时防御）。
+ */
 function computeAggregates(): { outflow: Map<string, number>; capacityOccupancy: Map<string, number> } {
   const outflow = new Map<string, number>();
   const capacityOccupancy = new Map<string, number>();
   for (const entry of listTreasuryQuarantineEntries()) {
+    const resourceNets = new Map<string, number>();
+    const capacityNets = new Map<string, number>();
     for (const leg of entry.deltas) {
       const resourceKey = `${leg.roomName}\u0000${leg.locationKind}\u0000${leg.resource}`;
-      outflow.set(resourceKey, (outflow.get(resourceKey) ?? 0) + leg.delta);
+      const mergedResource = (resourceNets.get(resourceKey) ?? 0) + leg.delta;
+      if (!Number.isSafeInteger(mergedResource)) return { outflow: new Map(), capacityOccupancy: new Map() };
+      resourceNets.set(resourceKey, mergedResource);
       const capacityKey = `${leg.roomName}\u0000${leg.locationKind}`;
-      capacityOccupancy.set(capacityKey, (capacityOccupancy.get(capacityKey) ?? 0) + leg.delta);
+      const mergedCapacity = (capacityNets.get(capacityKey) ?? 0) + leg.delta;
+      if (!Number.isSafeInteger(mergedCapacity)) return { outflow: new Map(), capacityOccupancy: new Map() };
+      capacityNets.set(capacityKey, mergedCapacity);
+    }
+    for (const [key, net] of resourceNets) {
+      const occupied = Math.max(0, -net);
+      if (occupied === 0) continue;
+      const summed = (outflow.get(key) ?? 0) + occupied;
+      if (!Number.isSafeInteger(summed)) return { outflow: new Map(), capacityOccupancy: new Map() };
+      outflow.set(key, summed);
+    }
+    for (const [key, net] of capacityNets) {
+      const occupied = Math.max(0, net);
+      if (occupied === 0) continue;
+      const summed = (capacityOccupancy.get(key) ?? 0) + occupied;
+      if (!Number.isSafeInteger(summed)) return { outflow: new Map(), capacityOccupancy: new Map() };
+      capacityOccupancy.set(key, summed);
     }
   }
   return { outflow, capacityOccupancy };
@@ -509,37 +576,35 @@ function ensureAggregates(): void {
 }
 
 /**
- * quarantine 的授权占用聚合（只读、按 store revision 缓存）：
- * (room,location,resource) → 净 delta。消费方只统计负 delta（流出占用——
- * 可能已执行的动作占用的资源不得再授权他人；正流入不乐观计入 spendable）。
+ * quarantine 的授权占用聚合（只读、按 store revision 缓存、快照封闭）：
+ * (room,location,resource) → Σ_transactions max(0, −net)（**正**流出占用
+ * ——可能已执行的动作占用的资源不得再授权他人；正流入不乐观计入
+ * spendable、也不抵消另一笔的流出）。返回新建 Map 快照，不泄漏缓存引用。
  * 零写契约：store 尚不存在（从未有过 quarantine）直接返回空 Map，不隐式
- * 创建；store 存在时执行验证性 load（fatal → 空 Map，blockers 已 fail
- * closed，不再以聚合数值放宽）。
+ * 创建；store 存在时执行验证性 load（fatal/聚合溢出 → 空 Map，blockers 已
+ * fail closed，不再以聚合数值放宽）。
  */
-export function treasuryQuarantineOutflowTotals(): Map<string, number> {
+export function treasuryQuarantineOutflowTotals(): ReadonlyMap<string, number> {
   if (peekTreasuryQuarantineStore() === undefined) return new Map();
   const runtime = loadQuarantineStoreRuntime();
   if (runtime.fatal) return new Map();
   ensureAggregates();
-  return aggregateCache.outflow;
+  return new Map(aggregateCache.outflow);
 }
 
 /**
- * quarantine 的容量占用（只读、缓存）：(room,location) → 正净流入量。
- * 保守口径（第七轮）：可能已流入的资源必须减少 free capacity（占用 =
- * max(0, Σ deltas)）；可能已流出的部分不得假设空间已释放（负净额不增加
- * free capacity）。零写契约同 outflow。
+ * quarantine 的容量占用（只读、缓存、快照封闭）：(room,location) →
+ * Σ_transactions max(0, net)。保守口径（第七轮方向、第八轮 per-transaction
+ * 口径）：可能已流入的资源必须减少 free capacity；可能已流出的部分不得
+ * 假设空间已释放；不同 transaction 的流入流出不互相抵消。零写契约同
+ * outflow。
  */
-export function treasuryQuarantineCapacityOccupancy(): Map<string, number> {
+export function treasuryQuarantineCapacityOccupancy(): ReadonlyMap<string, number> {
   if (peekTreasuryQuarantineStore() === undefined) return new Map();
   const runtime = loadQuarantineStoreRuntime();
   if (runtime.fatal) return new Map();
   ensureAggregates();
-  const occupancy = new Map<string, number>();
-  for (const [key, net] of aggregateCache.capacityOccupancy) {
-    occupancy.set(key, Math.max(0, net));
-  }
-  return occupancy;
+  return new Map(aggregateCache.capacityOccupancy);
 }
 
 /** 仅供测试/repair：失效 heap 缓存（clearTreasuryPersistenceForTest 调用）。 */

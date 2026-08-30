@@ -19,6 +19,7 @@ import {
   readTreasuryQuarantineEntry,
   resetTreasuryQuarantineRuntimeForTest,
   treasuryQuarantineBlockers,
+  treasuryQuarantineCapacityOccupancy,
   treasuryQuarantineOutflowTotals,
   TREASURY_QUARANTINE_MAX_ENTRIES,
   type TreasuryQuarantineEntry,
@@ -220,7 +221,7 @@ describe("聚合 revision 缓存（性能契约）", () => {
     // 缓存失效走 revision 而非重新验证）。
     expect(quarantineTreasuryTransaction(validEntry("ts7_cache_new")).status).toBe("written");
     const merged = treasuryQuarantineOutflowTotals();
-    expect(merged.get(`W1N57\u0000storage\u0000${RESOURCE_ENERGY}`)).toBe(-500 * 9);
+    expect(merged.get(`W1N57\u0000storage\u0000${RESOURCE_ENERGY}`)).toBe(500 * 9); // 正占用口径（第八轮 per-transaction Σmax(0,−net)）
     expect(readTreasuryQuarantineCounters().fullScans).toBe(after.fullScans);
   });
 
@@ -231,5 +232,130 @@ describe("聚合 revision 缓存（性能契约）", () => {
     resetTreasuryQuarantineRuntimeForTest();
     expect(peekTreasuryQuarantineHealth().healthy).toBe(true);
     expect(treasuryQuarantineBlockers().unresolvedCount).toBe(TREASURY_QUARANTINE_MAX_ENTRIES);
+  });
+});
+
+describe("第八轮 per-transaction 保守聚合", () => {
+  function entryWith(transactionId: string, deltas: Array<{ roomName: string; locationKind: string; resource: string; delta: number }>): void {
+    expect(
+      quarantineTreasuryTransaction({
+        transactionId,
+        digest: "0123456789abcdef",
+        tick: Game.time,
+        kind: "test",
+        source: "test",
+        phase: "executing_at_end_tick",
+        deltas,
+        recordedAt: Game.time,
+      }).status,
+    ).toBe("written");
+  }
+
+  it("A:+1000 / B:−500：容量占用 1000（非 500）、资源流出占用 500——不互相抵消", () => {
+    entryWith("agg_a", [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 1_000 }]);
+    entryWith("agg_b", [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }]);
+    expect(treasuryQuarantineCapacityOccupancy().get("W1N57 storage")).toBe(1_000);
+    expect(treasuryQuarantineOutflowTotals().get(`W1N57 storage ${RESOURCE_ENERGY}`)).toBe(500);
+  });
+
+  it("同一 transaction 内先净额合并（+1000 与 −600 同 transaction → 流出 0、容量 400）", () => {
+    entryWith("agg_merge", [
+      { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 1_000 },
+      { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -600 },
+    ]);
+    expect(treasuryQuarantineOutflowTotals().get(`W1N57 storage ${RESOURCE_ENERGY}`)).toBeUndefined();
+    expect(treasuryQuarantineCapacityOccupancy().get("W1N57 storage")).toBe(400);
+  });
+
+  it("跨 transaction 混合：A(+1000/−400 双腿) + B(−500) → 容量 600、流出 500", () => {
+    entryWith("agg_mix_a", [
+      { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 1_000 },
+      { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -400 },
+    ]);
+    entryWith("agg_mix_b", [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }]);
+    expect(treasuryQuarantineCapacityOccupancy().get("W1N57 storage")).toBe(600); // A 净 +600
+    expect(treasuryQuarantineOutflowTotals().get(`W1N57 storage ${RESOURCE_ENERGY}`)).toBe(500); // B 500（A 净额为正无流出）
+  });
+
+  it("快照封闭：修改返回的 entry/list/聚合 Map 不影响内部权威", () => {
+    entryWith("agg_freeze", [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -777 }]);
+    const snapshot = readTreasuryQuarantineEntry("agg_freeze")!;
+    expect(() => {
+      (snapshot as unknown as { tick: number }).tick = 1;
+    }).toThrow();
+    const store = Memory.runtime!.treasury!.quarantine!;
+    const internal = store.entries["q:agg_freeze"];
+    expect(internal.tick).toBe(Game.time);
+    // 聚合快照是新建 Map：写入不影响缓存。
+    const agg = treasuryQuarantineOutflowTotals() as Map<string, number>;
+    agg.set("hacked", 1);
+    expect(treasuryQuarantineOutflowTotals().has("hacked")).toBe(false);
+  });
+
+  it("写入前重验：非法 entry（非法 resource/phase）结构化拒绝且 store 不变", () => {
+    entryWith("agg_pre", []);
+    const before = Memory.runtime!.treasury!.quarantine!.entryCount;
+    const badResource = quarantineTreasuryTransaction({
+      transactionId: "agg_bad",
+      digest: "0123456789abcdef",
+      tick: Game.time,
+      kind: "test",
+      source: "test",
+      phase: "executing_at_end_tick",
+      deltas: [{ roomName: "W1N57", locationKind: "storage", resource: "not-a-resource", delta: -1 }],
+      recordedAt: Game.time,
+    });
+    expect(badResource.status).toBe("rejected");
+    const badPhase = quarantineTreasuryTransaction({
+      transactionId: "agg_bad2",
+      digest: "0123456789abcdef",
+      tick: Game.time,
+      kind: "test",
+      source: "test",
+      phase: "unknown-phase",
+      deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
+      recordedAt: Game.time,
+    });
+    expect(badPhase.status).toBe("rejected");
+    expect(Memory.runtime!.treasury!.quarantine!.entryCount).toBe(before);
+  });
+
+  it("聚合溢出 fail closed：同 location 双大额 entry 在 load 校验 fatal、聚合空、blocker 持续", () => {
+    entryWith("agg_of_seed", []); // 初始化 store
+    const store = Memory.runtime!.treasury!.quarantine!;
+    delete store.entries["q:agg_of_seed"];
+    store.entryCount = 0;
+    store.entries["q:agg_of_3"] = {
+      transactionId: "agg_of_3",
+      digest: "0123456789abcdef",
+      tick: Game.time,
+      kind: "test",
+      source: "test",
+      phase: "executing_at_end_tick",
+      deltas: [
+        { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: Number.MAX_SAFE_INTEGER - 10 },
+      ],
+      recordedAt: Game.time,
+    };
+    store.entries["q:agg_of_4"] = {
+      transactionId: "agg_of_4",
+      digest: "0123456789abcdef",
+      tick: Game.time,
+      kind: "test",
+      source: "test",
+      phase: "executing_at_end_tick",
+      deltas: [
+        { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: Number.MAX_SAFE_INTEGER - 10 },
+      ],
+      recordedAt: Game.time,
+    };
+    store.entryCount = 2;
+    resetTreasuryQuarantineRuntimeForTest();
+    // load 校验：净额方向溢出（2×MAX-10）→ fatal fail closed；聚合空但
+    // blockers 报 blocking（不返回乐观数值）。
+    const outflow = treasuryQuarantineOutflowTotals();
+    expect(outflow.size).toBe(0);
+    expect(treasuryQuarantineBlockers().blocking).toBe(true);
+    expect(treasuryQuarantineBlockers().unhealthyDetail).toContain("溢出");
   });
 });
