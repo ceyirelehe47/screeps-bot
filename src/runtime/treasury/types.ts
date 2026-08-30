@@ -149,8 +149,18 @@ export type TreasuryRejectionReason =
   | "scope_mismatch"
   | "receipt_capacity_exhausted"
   | "receipt_store_incompatible"
-  | "unknown_prepare"
-  | "prepare_invalidated";
+  /** 两阶段：相同 transactionId 绑定了不同 canonical payload（digest 不一致）。 */
+  | "prepare_conflict"
+  /** handle 非法：伪造对象/结构相同的普通对象/JSON 副本/其他 service 签发。 */
+  | "invalid_handle"
+  /** handle 已过期：tick 边界作废（endTick/beginTick/跨 tick 未 begin）。 */
+  | "handle_expired"
+  /** handle 已终态（committed/aborted 后再次 abort 等不允许的状态迁移）。 */
+  | "handle_finalized"
+  /** handle 所在 commit 发生意外内部故障（进入 faulted 终态，见 write fault）。 */
+  | "handle_faulted"
+  /** write admission 全局锁定（unresolved write fault；显式修复路径解除）。 */
+  | "write_admission_locked";
 
 /** rejected 形状（验证/门禁/登记共用的具体拒绝结果）。 */
 export interface TreasuryRejectedResult {
@@ -167,30 +177,69 @@ export type TreasurySettlementResult =
 // ─── 两阶段 transaction 协议（prepare → Game API → commit/abort） ───────────
 
 /**
- * prepare 阶段结果：完整验证（幂等/admission 预检/格式/物理可行性）通过并
- * 预留 receipt 槽位——此后调用方执行真实 Game 写动作，成功则 commit、
- * 失败则 abort，Treasury 不得再因自身状态（容量/epoch/损坏）拒绝兑现。
+ * 不可伪造的 prepared handle（heap-only capability）：冻结对象，仅经
+ * TreasuryService prepare 签发。运行时验证依赖服务实例私有 registry 的
+ * 对象身份（WeakSet）——调用方自行构造结构相同的普通对象、或 JSON 序列化
+ * 再反序列化的副本一律无效；handle 只在签发它的 service generation 与
+ * 签发 tick 内有效（commit/abort 自行校验，不依赖调用方先 beginTick）。
+ */
+export interface TreasuryPreparedHandle {
+  /** 结构性 brand（真实防伪在服务私有 registry，勿以此字段判定）。 */
+  readonly __brand: "treasury-prepared-handle";
+  readonly transactionId: string;
+  /** canonical payload digest（16 hex；prepare_conflict 判定与审计样本用）。 */
+  readonly digest: string;
+}
+
+/** handle 状态机：prepared →（executing）→ committing → committed / aborted；意外内部故障 → faulted；tick 边界 → expired。 */
+export type TreasuryPreparedHandleState =
+  | "prepared"
+  | "executing"
+  | "committing"
+  | "committed"
+  | "aborted"
+  | "faulted"
+  | "expired";
+
+/**
+ * prepare 阶段结果：完整验证（幂等/digest 冲突/格式/tentative 感知物理
+ * 可行性）通过并预留资源、容量与 receipt 槽位——此后调用方执行真实
+ * Game 写动作，成功则 commit、失败则 abort，Treasury 不得再因自身状态
+ * （容量/epoch/损坏）拒绝兑现。相同 transactionId、相同 digest 的重复
+ * prepare 幂等返回同一 handle；digest 不同返回 prepare_conflict。
  */
 export type TreasuryPreparationResult =
-  | { readonly status: "prepared"; readonly transactionId: string; readonly preparedAtTick: number }
+  | {
+      readonly status: "prepared";
+      readonly handle: TreasuryPreparedHandle;
+      readonly transactionId: string;
+      readonly preparedAtTick: number;
+      readonly digest: string;
+    }
   | { readonly status: "already_settled"; readonly transactionId: string; readonly firstRecordedAtTick: number }
   | { readonly status: "rejected"; readonly reason: TreasuryRejectionReason; readonly detail?: string };
 
 /**
- * commit 兑现结果：prepared（已预留）唯一安全终态。重复 commit 返回
- * already_settled；prepare→commit 期间 overlay 被其他 transaction 改变
- * 导致物理重验失败时拒绝（prepare_invalidated，不产生任何状态）。
+ * commit 兑现结果：prepare 已预留（资源/容量/receipt 槽）唯一安全终态。
+ * commit 执行 tentative → committed 兑现而非重新 admission——Game API 已
+ * 返回 OK 后不再因资源、容量或 receipt 条件拒绝；重复 commit 幂等返回
+ * already_settled。仅存 handle 非法/过期/终态/故障类拒绝。
  */
 export type TreasuryPreparedCommitResult =
   | { readonly status: "committed"; readonly transactionId: string; readonly postings: number; readonly tick: number }
   | { readonly status: "already_settled"; readonly transactionId: string; readonly firstRecordedAtTick: number }
   | { readonly status: "rejected"; readonly reason: TreasuryRejectionReason; readonly detail?: string };
 
-/** abort 结果：释放 prepare 预留，零状态；已 commit 的 prepare 不可 abort。 */
+/**
+ * abort 结果：原子释放 tentative 资源/容量/receipt 槽与 handle，零结算
+ * 状态写入。已 committed 的 handle 不可 abort；已 aborted 的 handle 重复
+ * abort 幂等返回 already_finalized。
+ */
 export type TreasuryPreparedAbortResult =
   | { readonly status: "aborted"; readonly transactionId: string }
-  | { readonly status: "already_finalized"; readonly transactionId: string; readonly committedAtTick: number }
-  | { readonly status: "unknown_prepare"; readonly transactionId: string };
+  | { readonly status: "already_finalized"; readonly transactionId: string; finalizedAs: "committed"; readonly committedAtTick: number }
+  | { readonly status: "already_finalized"; readonly transactionId: string; finalizedAs: "aborted" }
+  | { readonly status: "rejected"; readonly reason: TreasuryRejectionReason; readonly detail?: string };
 
 /** 一笔已结算 transaction 的冻结 journal 条目（postings 全量保留在 heap）。 */
 export interface TreasuryJournalEntry {
@@ -484,8 +533,20 @@ export interface TreasuryMetrics {
   transactionsPrepared: number;
   /** 两阶段 abort 次数（零状态释放）。 */
   transactionPreparesAborted: number;
-  /** prepare→commit 期间物理重验失败的兑现拒绝次数（竞态信号）。 */
-  prepareInvalidatedCommits: number;
+  /** 相同 transactionId、不同 canonical payload 的 prepare 冲突次数。 */
+  prepareConflicts: number;
+  /** 当前活跃（未终态）prepared handle 数（gauge）。 */
+  preparedActive: number;
+  /** tentative 资源预留 key 数（gauge；不进入 public projected）。 */
+  tentativeResourceKeys: number;
+  /** tentative 容量预留 key 数（gauge）。 */
+  tentativeCapacityKeys: number;
+  /** prepared handle 成功 commit（tentative→committed）次数。 */
+  preparedCommits: number;
+  /** 非法 handle（伪造/跨 generation/JSON 副本）提交尝试被拒次数。 */
+  invalidHandleRejections: number;
+  /** canonical payload digest 生成次数（prepare 与冲突判定）。 */
+  digestGenerations: number;
   /** 非法查询上下文（非法资源/重复房间/重复位置/NaN withhold 等）fail-closed 次数。 */
   queryInvalidContexts: number;
   reconciliationInflowMismatches: number;
@@ -537,7 +598,13 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     freshEpochLimitRejections: 0,
     transactionsPrepared: 0,
     transactionPreparesAborted: 0,
-    prepareInvalidatedCommits: 0,
+    prepareConflicts: 0,
+    preparedActive: 0,
+    tentativeResourceKeys: 0,
+    tentativeCapacityKeys: 0,
+    preparedCommits: 0,
+    invalidHandleRejections: 0,
+    digestGenerations: 0,
     queryInvalidContexts: 0,
     reconciliationInflowMismatches: 0,
     reconciliationOutflowMismatches: 0,

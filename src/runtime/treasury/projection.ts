@@ -38,6 +38,7 @@ import {
   type TreasuryJournalEntry,
   type TreasuryLocationKind,
   type TreasuryLocationManifestEntry,
+  type TreasuryObservationScope,
   type TreasuryObservationView,
   type TreasuryPosting,
   type TreasuryProjectedArchive,
@@ -53,6 +54,7 @@ import {
   treasuryLocationKey,
 } from "@/runtime/treasury/types";
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
+import type { TreasuryCanonicalTransaction } from "@/runtime/treasury/canonicalTransaction";
 import {
   admitTreasuryReceipt,
   commitSettledReceipt,
@@ -69,7 +71,7 @@ const VALID_RESOURCES: ReadonlySet<string> = new Set<string>(RESOURCES_ALL);
 const VALID_LOCATION_KINDS: ReadonlySet<string> = new Set<string>(["storage", "terminal"]);
 
 /** 验证通过的交易形状：合并腿（净零腿已剔除）+ 位置容量聚合。 */
-interface ValidatedTransactionShape {
+export interface TreasuryValidatedTransactionShape {
   readonly merged: ReadonlyArray<{
     roomName: string;
     locationKind: "storage" | "terminal";
@@ -80,7 +82,7 @@ interface ValidatedTransactionShape {
 }
 
 type TransactionValidation =
-  | { readonly status: "valid"; readonly shape: ValidatedTransactionShape }
+  | { readonly status: "valid"; readonly shape: TreasuryValidatedTransactionShape }
   | { readonly status: "invalid"; readonly result: TreasuryRejectedResult };
 
 export interface TreasuryProjectionState {
@@ -94,6 +96,20 @@ export interface TreasuryProjectionState {
   settledThisTick: Map<string, number>;
   /** 上一 tick journal 有界副本（对账追溯用）。 */
   previousJournal: readonly TreasuryJournalEntry[];
+  /**
+   * tentative ledger（第五轮新增）：prepared transaction 的资源/容量预留。
+   * 与 committed overlay 分离——public projected 只含 committed，后续
+   * prepare 的授权计算计入 tentative（防多笔 prepare 超卖同一资产）。
+   */
+  tentativeByReservation: Map<string, TentativeReservation>;
+  tentativeResourceTotals: Map<string, number>;
+  tentativeCapacityTotals: Map<string, number>;
+}
+
+/** 单笔 prepared transaction 的 tentative 预留。 */
+export interface TentativeReservation {
+  readonly resourceDeltas: Map<string, number>;
+  readonly capacityDeltas: Map<string, number>;
 }
 
 export function createTreasuryProjectionState(): TreasuryProjectionState {
@@ -103,6 +119,9 @@ export function createTreasuryProjectionState(): TreasuryProjectionState {
     capacityDeltas: new Map(),
     settledThisTick: new Map(),
     previousJournal: [],
+    tentativeByReservation: new Map(),
+    tentativeResourceTotals: new Map(),
+    tentativeCapacityTotals: new Map(),
   };
 }
 
@@ -127,29 +146,47 @@ export interface TreasuryProjectionController {
   /** 幂等查询：返回首次结算 tick（heap 本 tick 缓存 → Memory receipt）。 */
   isSettled(transactionId: string): number | undefined;
   /**
-   * 完整验证（格式 → 合并 → 物理可行性），零写入。两阶段 prepare 与单阶段
-   * recordTransaction 共用；epoch 校验（stale/unknown/scope）由 facade 的
-   * 注册表负责；observation 参数必须是 decision 指向的 exact observation。
+   * 完整验证（格式 → 合并 → tentative 感知物理可行性），零写入。两阶段
+   * prepare 与单阶段 recordTransaction 共用；epoch 校验（stale/unknown/
+   * scope）由 facade 的注册表负责；observation 参数必须是 decision 指向
+   * 的 exact observation。物理基线 = decision observation + committed
+   * overlay + 全部 tentative 预留（excludeTentativeKey 指定的那笔自身
+   * 预留除外——同一 handle 的重复校验不得重复计算自己的 tentative）。
    */
   validateTransaction(
     input: TreasuryTransactionInput,
     decisionObservation: TreasuryObservationView,
-  ): { status: "valid" } | { status: "invalid"; result: TreasuryRejectedResult };
+    excludeTentativeKey?: string,
+  ): { status: "valid"; shape: TreasuryValidatedTransactionShape } | { status: "invalid"; result: TreasuryRejectedResult };
+  /**
+   * tentative ledger 预留：prepare 验证通过后登记该 handle 的资源/容量
+   * tentative delta（后续 prepare/单阶段登记的授权计算都会计入）。
+   */
+  tentativeHold(reservationKey: string, shape: TreasuryValidatedTransactionShape): void;
+  /** abort：原子释放该 handle 的全部 tentative 预留（返回是否确有预留）。 */
+  tentativeRelease(reservationKey: string): boolean;
+  /** tentative key 数（gauge：资源 key 数与容量 key 数）。 */
+  tentativeKeyCounts(): { resourceKeys: number; capacityKeys: number };
+  /** 生命周期兜底：释放全部 tentative 预留（tick 边界作废；不动 committed 状态）。 */
+  tentativeReleaseAll(): number;
   /**
    * 原子登记：输入验证 → receipt admission 预检 → 物理可行性验证（金额
-   * 非负/容量不越界）→ 一次性写入 journal + overlay + heap 缓存 + Memory
-   * receipt。任一步失败零部分写入。epoch 校验（stale/unknown/scope）由
-   * facade 的注册表负责；observation 参数必须是 decision 指向的 exact
+   * 非负/容量不越界，含 tentative 感知）→ 一次性写入 journal + overlay +
+   * heap 缓存 + Memory receipt。任一步失败零部分写入。epoch 校验由 facade
+   * 的注册表负责；observation 参数必须是 decision 指向的 exact
    * observation（由 facade 从 epoch 注册表解析），本函数不回退 shared。
    */
   recordTransaction(input: TreasuryTransactionInput, decisionObservation: TreasuryObservationView): TreasurySettlementResult;
   /**
-   * 两阶段 commit 兑现：prepare 已通过完整验证并预留 receipt 槽位，此处
-   * 重验物理可行性（prepare→commit 期间 overlay 可能被其他 transaction
-   * 改变，重验失败拒绝 prepare_invalidated、零写入）后原子写入。不再走
-   * admission（槽位已预留，兑现不可能因容量/兼容性被拒）。
+   * 两阶段 commit 兑现：tentative → committed。不做任何业务 admission
+   * （资源/容量/receipt 槽位已在 prepare 预留并保持有效——Game API 已
+   * 返回 OK 后不得再因业务条件拒绝）；幂等检查后直接原子写入。
    */
-  commitPreparedTransaction(input: TreasuryTransactionInput, decisionObservation: TreasuryObservationView): TreasurySettlementResult;
+  commitPreparedTransaction(
+    canonical: TreasuryCanonicalTransaction,
+    shape: TreasuryValidatedTransactionShape,
+    reservationKey: string,
+  ): TreasurySettlementResult;
   /** 本 tick 累计投影 delta（无 delta 返回 0，不回读 Game）。 */
   projectedDelta(roomName: string, locationKind: "storage" | "terminal", resource: string): number;
   /** 本 tick 该位置的容量净变化（O(1) 位置聚合，不扫描资源 overlay）。 */
@@ -207,13 +244,80 @@ export function createTreasuryProjectionController(
   }
 
   /**
+   * tentative 总量读取（授权计算用）：全部 prepared 预留之和，可排除指定
+   * handle 自己的预留（同一 handle 重复校验不得重复计算自己的 tentative）。
+   */
+  function effectiveTentativeResourceDelta(overlayResourceKey: string, excludeKey?: string): number {
+    const total = state.tentativeResourceTotals.get(overlayResourceKey) ?? 0;
+    if (total === 0 || excludeKey === undefined) return total;
+    const own = state.tentativeByReservation.get(excludeKey)?.resourceDeltas.get(overlayResourceKey) ?? 0;
+    return total - own;
+  }
+
+  function effectiveTentativeCapacityDelta(locationKey: string, excludeKey?: string): number {
+    const total = state.tentativeCapacityTotals.get(locationKey) ?? 0;
+    if (total === 0 || excludeKey === undefined) return total;
+    const own = state.tentativeByReservation.get(excludeKey)?.capacityDeltas.get(locationKey) ?? 0;
+    return total - own;
+  }
+
+  function tentativeHold(reservationKey: string, shape: TreasuryValidatedTransactionShape): void {
+    const resourceDeltas = new Map<string, number>();
+    for (const posting of shape.merged) {
+      const key = overlayKey(posting.roomName, posting.locationKind, posting.resource);
+      resourceDeltas.set(key, (resourceDeltas.get(key) ?? 0) + posting.delta);
+      state.tentativeResourceTotals.set(key, (state.tentativeResourceTotals.get(key) ?? 0) + posting.delta);
+    }
+    const capacityDeltas = new Map<string, number>();
+    for (const [locationKey, delta] of shape.capacityDeltaByLocation) {
+      capacityDeltas.set(locationKey, delta);
+      state.tentativeCapacityTotals.set(locationKey, (state.tentativeCapacityTotals.get(locationKey) ?? 0) + delta);
+    }
+    state.tentativeByReservation.set(reservationKey, { resourceDeltas, capacityDeltas });
+  }
+
+  function tentativeRelease(reservationKey: string): boolean {
+    const reservation = state.tentativeByReservation.get(reservationKey);
+    if (!reservation) return false;
+    for (const [key, delta] of reservation.resourceDeltas) {
+      const remaining = (state.tentativeResourceTotals.get(key) ?? 0) - delta;
+      if (remaining === 0) state.tentativeResourceTotals.delete(key);
+      else state.tentativeResourceTotals.set(key, remaining);
+    }
+    for (const [key, delta] of reservation.capacityDeltas) {
+      const remaining = (state.tentativeCapacityTotals.get(key) ?? 0) - delta;
+      if (remaining === 0) state.tentativeCapacityTotals.delete(key);
+      else state.tentativeCapacityTotals.set(key, remaining);
+    }
+    state.tentativeByReservation.delete(reservationKey);
+    return true;
+  }
+
+  function tentativeKeyCounts(): { resourceKeys: number; capacityKeys: number } {
+    return {
+      resourceKeys: state.tentativeResourceTotals.size,
+      capacityKeys: state.tentativeCapacityTotals.size,
+    };
+  }
+
+  function tentativeReleaseAll(): number {
+    const released = state.tentativeByReservation.size;
+    state.tentativeByReservation = new Map();
+    state.tentativeResourceTotals = new Map();
+    state.tentativeCapacityTotals = new Map();
+    return released;
+  }
+
+  /**
    * 完整验证（零写入）：格式 → 同 transaction 合并（安全整数/合并溢出拒绝、
-   * 净零腿剔除、全抵消 no-op 拒绝）→ 物理可行性（容量/金额，含结果安全
-   * 整数边界）。物理基线 = decision observation + 本 tick overlay。
+   * 净零腿剔除、全抵消 no-op 拒绝）→ tentative 感知物理可行性（容量/金额，
+   * 含结果安全整数边界）。物理基线 = decision observation + 本 tick
+   * committed overlay + 全部 tentative 预留（excludeTentativeKey 自身除外）。
    */
   function validateTransaction(
     input: TreasuryTransactionInput,
     decisionObservation: TreasuryObservationView,
+    excludeTentativeKey?: string,
   ): TransactionValidation {
     const rejected = (reason: TreasuryRejectionReason, detail?: string): TransactionValidation => ({
       status: "invalid",
@@ -299,7 +403,9 @@ export function createTreasuryProjectionController(
       if (!location.exists) {
         return rejected("location_missing", locationKey);
       }
-      const existingCapacityDelta = locationCapacityDelta(roomName, locationKind);
+      const existingCapacityDelta =
+        locationCapacityDelta(roomName, locationKind) +
+        effectiveTentativeCapacityDelta(locationKey, excludeTentativeKey);
       const projectedUsed = location.usedCapacity + existingCapacityDelta + transactionCapacityDelta;
       const physicalCapacity = location.usedCapacity + location.freeCapacity;
       if (
@@ -315,7 +421,12 @@ export function createTreasuryProjectionController(
     }
     for (const posting of merged) {
       const base = decisionObservation.amount(posting.roomName, posting.locationKind, posting.resource);
-      const existing = projectedDelta(posting.roomName, posting.locationKind, posting.resource);
+      const existing =
+        projectedDelta(posting.roomName, posting.locationKind, posting.resource) +
+        effectiveTentativeResourceDelta(
+          overlayKey(posting.roomName, posting.locationKind, posting.resource),
+          excludeTentativeKey,
+        );
       const projected = base + existing + posting.delta;
       if (!Number.isSafeInteger(projected) || projected < 0) {
         return rejected(
@@ -327,14 +438,25 @@ export function createTreasuryProjectionController(
     return { status: "valid", shape: { merged, capacityDeltaByLocation } };
   }
 
-  /** 原子写入段（验证已通过）：journal + overlay + 容量聚合 + heap 缓存 + receipt。 */
+  /**
+   * 原子写入段（验证已通过/槽位已预留）：journal + overlay + 容量聚合 +
+   * heap 缓存 + receipt；tentativeKey 存在时同步完成 tentative → committed
+   * 兑现（该预留从 tentative ledger 移除、数值并入 committed overlay）。
+   */
   function writeAcceptedTransaction(
-    input: TreasuryTransactionInput,
-    shape: ValidatedTransactionShape,
+    fields: {
+      transactionId: string;
+      kind: string;
+      source: string;
+      decisionScope: TreasuryObservationScope;
+      epochSeq: number;
+    },
+    shape: TreasuryValidatedTransactionShape,
+    tentativeKey?: string,
   ): TreasurySettlementResult {
     const tick = Game.time;
     const frozenPostings: readonly TreasuryPosting[] = Object.freeze(
-      input.postings.map((posting) =>
+      shape.merged.map((posting) =>
         Object.freeze({
           roomName: posting.roomName,
           locationKind: posting.locationKind,
@@ -344,11 +466,11 @@ export function createTreasuryProjectionController(
       ),
     );
     const entry: TreasuryJournalEntry = Object.freeze({
-      transactionId: input.transactionId,
-      kind: input.kind,
-      source: input.source,
-      decisionScope: input.decision.scope,
-      epochSeq: input.decision.epochSeq,
+      transactionId: fields.transactionId,
+      kind: fields.kind,
+      source: fields.source,
+      decisionScope: fields.decisionScope,
+      epochSeq: fields.epochSeq,
       recordedAtTick: tick,
       postings: frozenPostings,
     });
@@ -360,11 +482,12 @@ export function createTreasuryProjectionController(
     for (const [locationKey, delta] of shape.capacityDeltaByLocation) {
       state.capacityDeltas.set(locationKey, (state.capacityDeltas.get(locationKey) ?? 0) + delta);
     }
-    state.settledThisTick.set(input.transactionId, tick);
-    commitSettledReceipt(input.transactionId, tick);
+    state.settledThisTick.set(fields.transactionId, tick);
+    if (tentativeKey !== undefined) tentativeRelease(tentativeKey);
+    commitSettledReceipt(fields.transactionId, tick);
     revision += 1;
     options.onRecorded?.(entry);
-    return { status: "recorded", transactionId: input.transactionId, postings: frozenPostings.length, tick };
+    return { status: "recorded", transactionId: fields.transactionId, postings: frozenPostings.length, tick };
   }
 
   function recordTransaction(
@@ -379,7 +502,7 @@ export function createTreasuryProjectionController(
     }
 
     // ── receipt admission 预检：满容/版本不兼容时整笔拒绝，必须发生在写入
-    //    journal/overlay/heap 缓存/Memory receipt 任何状态之前 ──────────────
+    //    journal/overlay/heap 缓存/Memory receipt 任何状态之前 ─────────────
     const admission = admitTreasuryReceipt(input.transactionId, Game.time);
     if (admission.status === "already_settled") {
       // migration 后 admission 才能看到的已结算 id（heap isSettled 未命中）。
@@ -391,44 +514,52 @@ export function createTreasuryProjectionController(
       return { status: "rejected", reason: admission.reason, detail: admission.detail };
     }
 
+    // 单阶段路径的物理验证计入全部 tentative 预留——不得抢占已被 prepared
+    // transaction 预留的资源或容量（admission 的满容判定同样计入 pending）。
     const validation = validateTransaction(input, decisionObservation);
     if (validation.status === "invalid") {
       options.onInvalidRejected?.(validation.result.reason);
       return validation.result;
     }
-    return writeAcceptedTransaction(input, validation.shape);
+    return writeAcceptedTransaction(
+      {
+        transactionId: input.transactionId,
+        kind: input.kind,
+        source: input.source,
+        decisionScope: input.decision.scope,
+        epochSeq: input.decision.epochSeq,
+      },
+      validation.shape,
+    );
   }
 
   function commitPreparedTransaction(
-    input: TreasuryTransactionInput,
-    decisionObservation: TreasuryObservationView,
+    canonical: TreasuryCanonicalTransaction,
+    shape: TreasuryValidatedTransactionShape,
+    reservationKey: string,
   ): TreasurySettlementResult {
-    // 幂等仍优先：prepare→commit 之间被同 id 单阶段登记结算是合法竞态。
-    const settledAt = isSettled(input.transactionId);
+    // 幂等仍优先：prepare→commit 之间被同 id 单阶段登记结算是合法竞态
+    // （该路径已计入 tentative，不会超卖），handle 终态化交由 facade。
+    const settledAt = isSettled(canonical.transactionId);
     if (settledAt !== undefined) {
-      options.onDuplicateRejected?.(input.transactionId);
-      return { status: "already_settled", transactionId: input.transactionId, firstRecordedAtTick: settledAt };
+      options.onDuplicateRejected?.(canonical.transactionId);
+      return { status: "already_settled", transactionId: canonical.transactionId, firstRecordedAtTick: settledAt };
     }
-    // 物理重验：prepare 之后 overlay 可能已被其他 transaction 推进，重验
-    // 失败 = 世界已变的超卖信号——拒绝（prepare_invalidated）且零写入，
-    // 比记录与事实不符的投影更安全。格式类失败在 prepare 已拦截，此处仅
-    // 防御性透传（同一 input 的格式不会翻转）。
-    const validation = validateTransaction(input, decisionObservation);
-    if (validation.status === "invalid") {
-      const physical =
-        validation.result.reason === "insufficient_amount" ||
-        validation.result.reason === "capacity_overflow" ||
-        validation.result.reason === "unknown_room" ||
-        validation.result.reason === "location_missing";
-      const reason: TreasuryRejectionReason = physical ? "prepare_invalidated" : validation.result.reason;
-      options.onInvalidRejected?.(reason);
-      return {
-        status: "rejected",
-        reason,
-        detail: `prepare→commit 重验失败: ${validation.result.detail ?? validation.result.reason}`,
-      };
-    }
-    return writeAcceptedTransaction(input, validation.shape);
+    // tentative → committed 兑现：不做任何业务 admission——资源/容量/
+    // receipt 槽位在 prepare 时已验证并预留，此后其他 transaction 只能在
+    // tentative 感知授权下行动，不可能侵吞本预留（Game API 已返回 OK 后
+    // 不得再因业务条件拒绝）。
+    return writeAcceptedTransaction(
+      {
+        transactionId: canonical.transactionId,
+        kind: canonical.kind,
+        source: canonical.source,
+        decisionScope: canonical.decisionScope,
+        epochSeq: canonical.decisionEpochSeq,
+      },
+      shape,
+      reservationKey,
+    );
   }
 
   function journalSnapshot(): readonly TreasuryJournalEntry[] {
@@ -729,6 +860,9 @@ export function createTreasuryProjectionController(
     state.capacityDeltas = new Map();
     state.settledThisTick = new Map();
     state.previousJournal = [];
+    state.tentativeByReservation = new Map();
+    state.tentativeResourceTotals = new Map();
+    state.tentativeCapacityTotals = new Map();
     releaseAllTreasuryReceiptReservations();
     revision += 1;
   }
@@ -736,6 +870,10 @@ export function createTreasuryProjectionController(
   return {
     isSettled,
     validateTransaction,
+    tentativeHold,
+    tentativeRelease,
+    tentativeKeyCounts,
+    tentativeReleaseAll,
     recordTransaction,
     commitPreparedTransaction,
     projectedDelta,

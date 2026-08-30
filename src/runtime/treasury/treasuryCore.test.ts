@@ -564,36 +564,76 @@ describe("Treasury 两阶段 prepare/commit/abort 协议", () => {
     };
   }
 
-  it("prepare→commit 成功兑现：journal/overlay/receipt 全部生效", () => {
+  function prepareOk(treasury: TreasuryService, input: Parameters<TreasuryService["recordAcceptedTransaction"]>[0]) {
+    const prepared = treasury.prepareTransaction(input);
+    expect(prepared.status).toBe("prepared");
+    if (prepared.status !== "prepared") throw new Error("prepare 失败");
+    return prepared.handle;
+  }
+
+  it("prepare→commit 成功兑现：journal/overlay/receipt 全部生效，tentative 转 committed", () => {
     const treasury = makeService();
     treasury.beginTick();
     const prepared = treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID));
     expect(prepared.status).toBe("prepared");
-    if (prepared.status !== "prepared") return;
+    if (prepared.status !== "prepared") throw new Error("prepare 失败");
+    const handle = prepared.handle;
     expect(prepared.preparedAtTick).toBe(Game.time);
-    // prepare 本身零状态（无 journal/无投影）。
+    // prepare 本身零 committed 状态（无 journal/无投影），tentative 已预留。
     expect(treasury.journal()).toHaveLength(0);
     expect(treasury.projectedUsedCapacity("W1N57", "storage")).toBe(102_000);
+    expect(treasury.metrics().tentativeCapacityKeys).toBe(1);
 
-    const committed = treasury.commitPreparedTransaction(TX_ID);
+    const committed = treasury.commitPreparedTransaction(handle);
     expect(committed.status).toBe("committed");
     expect(treasury.journal()).toHaveLength(1);
     expect(treasury.projectedUsedCapacity("W1N57", "storage")).toBe(101_500);
+    // commit 后 tentative 清零。
+    expect(treasury.metrics().tentativeCapacityKeys).toBe(0);
     // 重复 commit 幂等 already_settled。
-    expect(treasury.commitPreparedTransaction(TX_ID).status).toBe("already_settled");
+    expect(treasury.commitPreparedTransaction(handle).status).toBe("already_settled");
   });
 
   it("abort 零状态释放：无 journal/无投影/无 receipt，同 id 可重新 prepare", () => {
     const treasury = makeService();
     treasury.beginTick();
-    expect(treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID)).status).toBe("prepared");
-    expect(treasury.abortPreparedTransaction(TX_ID).status).toBe("aborted");
+    const handle = prepareOk(treasury, twoPhaseInput(treasury, TX_ID));
+    expect(treasury.abortPreparedTransaction(handle).status).toBe("aborted");
     expect(treasury.journal()).toHaveLength(0);
     expect(treasury.projectedUsedCapacity("W1N57", "storage")).toBe(102_000);
+    expect(treasury.metrics().tentativeCapacityKeys).toBe(0);
     expect(treasury.metrics().transactionPreparesAborted).toBe(1);
-    // 重新 prepare→commit 成功（abort 后 id 未被 receipt 占用）。
-    expect(treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID)).status).toBe("prepared");
-    expect(treasury.commitPreparedTransaction(TX_ID).status).toBe("committed");
+    // abort 后同 id 重新 prepare→commit 成功（id 未被 receipt 占用）。
+    const rehandle = prepareOk(treasury, twoPhaseInput(treasury, TX_ID));
+    expect(treasury.commitPreparedTransaction(rehandle).status).toBe("committed");
+  });
+
+  it("abort 后 commit 拒绝（handle_finalized）；重复 abort 幂等 already_finalized", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    const handle = prepareOk(treasury, twoPhaseInput(treasury, TX_ID));
+    expect(treasury.abortPreparedTransaction(handle).status).toBe("aborted");
+    const committed = treasury.commitPreparedTransaction(handle);
+    expect(committed.status).toBe("rejected");
+    if (committed.status === "rejected") expect(committed.reason).toBe("handle_finalized");
+    const reabort = treasury.abortPreparedTransaction(handle);
+    expect(reabort.status).toBe("already_finalized");
+    if (reabort.status === "already_finalized") expect(reabort.finalizedAs).toBe("aborted");
+    expect(treasury.journal()).toHaveLength(0);
+  });
+
+  it("commit 后 abort 不改变结果（already_finalized finalizedAs=committed）", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    const handle = prepareOk(treasury, twoPhaseInput(treasury, TX_ID));
+    expect(treasury.commitPreparedTransaction(handle).status).toBe("committed");
+    const aborted = treasury.abortPreparedTransaction(handle);
+    expect(aborted.status).toBe("already_finalized");
+    if (aborted.status === "already_finalized" && aborted.finalizedAs === "committed") {
+      expect(aborted.committedAtTick).toBe(Game.time);
+    }
+    // 结算事实不受 abort 影响。
+    expect(treasury.journal()).toHaveLength(1);
   });
 
   it("prepare 预留容量槽：此后他人填满 store，commit 兑现仍不被容量拒绝", () => {
@@ -614,69 +654,80 @@ describe("Treasury 两阶段 prepare/commit/abort 协议", () => {
     };
     const treasury = makeService();
     treasury.beginTick();
-    expect(treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID)).status).toBe("prepared");
+    const handle = prepareOk(treasury, twoPhaseInput(treasury, TX_ID));
     // 单阶段登记挤占最后一个槽位（admission 计入 pending 预留后仍剩 1）。
     expect(
       treasury.recordAcceptedTransaction(twoPhaseInput(treasury, formatTreasuryTransactionId("fill", "1"))).status,
     ).toBe("recorded");
     // store 已满；prepared 槽位已预留——commit 兑现不因容量被拒。
-    expect(treasury.commitPreparedTransaction(TX_ID).status).toBe("committed");
+    expect(treasury.commitPreparedTransaction(handle).status).toBe("committed");
   });
 
-  it("prepare→commit 期间 overlay 被他人推进导致重验失败：prepare_invalidated 零写入", () => {
+  it("tentative 预留使他人无法抢占：drain 在其自身 admission 被拒，commit 仍 committed", () => {
     const treasury = makeService();
     treasury.beginTick();
-    expect(treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID, -90_000)).status).toBe("prepared");
-    // 他人单阶段把 energy 流出（prepare 验证时 100_000-90_000 可行）。
-    expect(
-      treasury.recordAcceptedTransaction(twoPhaseInput(treasury, formatTreasuryTransactionId("drain", "1"), -95_000))
-        .status,
-    ).toBe("recorded");
-    // commit 重验：prepare 基线叠加他人 overlay 后不再可行 → 拒绝且零写入。
-    const result = treasury.commitPreparedTransaction(TX_ID);
-    expect(result.status).toBe("rejected");
-    if (result.status === "rejected") expect(result.reason).toBe("prepare_invalidated");
-    expect(treasury.journal()).toHaveLength(1); // 只有 drain 那笔
-    expect(treasury.metrics().prepareInvalidatedCommits).toBe(1);
+    const handle = prepareOk(treasury, twoPhaseInput(treasury, TX_ID, -90_000));
+    // 他人单阶段尝试把同一 storage energy 再流出 95_000：授权计算计入
+    // tentative（100_000-90_000 剩 10_000 < 95_000）→ prepare 预留不被抢占。
+    const drain = treasury.recordAcceptedTransaction(
+      twoPhaseInput(treasury, formatTreasuryTransactionId("drain", "1"), -95_000),
+    );
+    expect(drain.status).toBe("rejected");
+    // 拒绝即可证明 tentative 隔离（该房间无垫底资源，流出超量同时触发
+    // used 非负与资源非负两类物理校验，先命中 capacity_overflow）。
+    if (drain.status === "rejected") {
+      expect(["insufficient_amount", "capacity_overflow"]).toContain(drain.reason);
+    }
+    expect(treasury.journal()).toHaveLength(0);
+    // Game API 已 OK 的 prepared handle：commit 兑现不再因业务条件被拒
+    // （prepare_invalidated 正常路径已删除）。
+    expect(treasury.commitPreparedTransaction(handle).status).toBe("committed");
+    expect(treasury.journal()).toHaveLength(1);
   });
 
-  it("跨 tick prepared handle 失效（unknown_prepare），须重新 prepare", () => {
+  it("跨 tick prepared handle 失效（handle_expired），须重新 prepare", () => {
     const treasury = makeService();
     treasury.beginTick();
-    expect(treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID)).status).toBe("prepared");
+    const handle = prepareOk(treasury, twoPhaseInput(treasury, TX_ID));
     Game.time += 1;
     treasury.beginTick();
-    const result = treasury.commitPreparedTransaction(TX_ID);
+    const result = treasury.commitPreparedTransaction(handle);
     expect(result.status).toBe("rejected");
-    if (result.status === "rejected") expect(result.reason).toBe("unknown_prepare");
+    if (result.status === "rejected") expect(result.reason).toBe("handle_expired");
+  });
+
+  it("跨 tick 未 beginTick 时旧 handle 仍自行拒绝（不依赖调用方先 beginTick）", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    const handle = prepareOk(treasury, twoPhaseInput(treasury, TX_ID));
+    Game.time += 1;
+    // 不调用 beginTick，直接 commit/abort 旧 handle：tick 自校验拒绝。
+    const committed = treasury.commitPreparedTransaction(handle);
+    expect(committed.status).toBe("rejected");
+    if (committed.status === "rejected") expect(committed.reason).toBe("handle_expired");
+    const aborted = treasury.abortPreparedTransaction(handle);
+    expect(aborted.status).toBe("rejected");
+    if (aborted.status === "rejected") expect(aborted.reason).toBe("handle_expired");
   });
 
   it("endTick 后 prepare 拒绝 tick_closed、未决 handle 全部作废", () => {
     const treasury = makeService();
     treasury.beginTick();
-    expect(treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID)).status).toBe("prepared");
+    const handle = prepareOk(treasury, twoPhaseInput(treasury, TX_ID));
     treasury.endTick();
     const after = treasury.prepareTransaction(twoPhaseInput(treasury, "stable:send:W1N57:2"));
     expect(after.status).toBe("rejected");
     if (after.status === "rejected") expect(after.reason).toBe("tick_closed");
     // tick 边界作废：既有 handle 不可 commit/abort。
-    const committed = treasury.commitPreparedTransaction(TX_ID);
+    const committed = treasury.commitPreparedTransaction(handle);
     expect(committed.status).toBe("rejected");
-    if (committed.status === "rejected") expect(committed.reason).toBe("unknown_prepare");
-    expect(treasury.abortPreparedTransaction(TX_ID).status).toBe("unknown_prepare");
+    if (committed.status === "rejected") expect(committed.reason).toBe("handle_expired");
+    const aborted = treasury.abortPreparedTransaction(handle);
+    expect(aborted.status).toBe("rejected");
+    if (aborted.status === "rejected") expect(aborted.reason).toBe("handle_expired");
   });
 
-  it("已 commit 的 handle 不可 abort（already_finalized 携带结算 tick）", () => {
-    const treasury = makeService();
-    treasury.beginTick();
-    treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID));
-    expect(treasury.commitPreparedTransaction(TX_ID).status).toBe("committed");
-    const aborted = treasury.abortPreparedTransaction(TX_ID);
-    expect(aborted.status).toBe("already_finalized");
-    if (aborted.status === "already_finalized") expect(aborted.committedAtTick).toBe(Game.time);
-  });
-
-  it("重复 prepare 同 id 幂等（返回同一 preparedAtTick，不重复占槽）", () => {
+  it("相同 ID、相同 payload 幂等返回同一 handle；不同 payload 返回 prepare_conflict", () => {
     const treasury = makeService();
     treasury.beginTick();
     const first = treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID));
@@ -684,9 +735,33 @@ describe("Treasury 两阶段 prepare/commit/abort 协议", () => {
     expect(first.status).toBe("prepared");
     expect(second.status).toBe("prepared");
     if (first.status === "prepared" && second.status === "prepared") {
+      expect(second.handle).toBe(first.handle); // 同一对象（幂等）
       expect(second.preparedAtTick).toBe(first.preparedAtTick);
+      expect(second.digest).toBe(first.digest);
     }
     expect(treasury.metrics().transactionsPrepared).toBe(1);
+    // 不同 payload（delta 不同 → digest 不同）→ prepare_conflict。
+    const conflict = treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID, -600));
+    expect(conflict.status).toBe("rejected");
+    if (conflict.status === "rejected") expect(conflict.reason).toBe("prepare_conflict");
+    expect(treasury.metrics().prepareConflicts).toBe(1);
+  });
+
+  it("prepare 后修改原 input 不影响 canonical payload（digest 与后续 commit）", () => {
+    const treasury = makeService();
+    treasury.beginTick();
+    const input = twoPhaseInput(treasury, TX_ID);
+    const handle = prepareOk(treasury, input);
+    // 调用方原地篡改原 postings/kind——Treasury 内部 canonical 不受影响。
+    (input.postings[0] as { delta: number }).delta = -999_999;
+    (input as { kind: string }).kind = "mutated";
+    // 相同业务输入（重新构造同 payload）仍幂等命中同一 handle。
+    const again = treasury.prepareTransaction(twoPhaseInput(treasury, TX_ID));
+    expect(again.status).toBe("prepared");
+    if (again.status === "prepared") expect(again.handle).toBe(handle);
+    // commit 兑现的是 prepare 时的 canonical（-500），不是被篡改的 -999_999。
+    expect(treasury.commitPreparedTransaction(handle).status).toBe("committed");
+    expect(treasury.projectedUsedCapacity("W1N57", "storage")).toBe(101_500);
   });
 });
 
