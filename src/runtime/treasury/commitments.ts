@@ -64,8 +64,13 @@ export interface TreasuryCommitmentBuildOptions {
    * 测试可注入）。
    */
   readonly holderExists?: (holderId: string) => boolean;
-  /** 本 tick 已结算 transaction 的位置容量净变化（facade overlay 注入）。 */
+  /**
+   * 位置容量净变化（**risk-adjusted** 口径：overlay + quarantine/intent 正流入
+   * 占用；receiver admission 用）。facade overlay 注入。
+   */
   readonly capacityDelta?: (roomName: string, kind: TreasuryLocationKind) => number;
+  /** 严格口径容量净变化（仅本 tick overlay；不含风险占用）。 */
+  readonly strictCapacityDelta?: (roomName: string, kind: TreasuryLocationKind) => number;
   readonly onExpiredExcluded?: () => void;
   /** 诊断回调：owner 无法确证失效但保守计入 committed 的 reservation。 */
   readonly onMissingOwnerCommitted?: () => void;
@@ -169,6 +174,7 @@ export function buildTreasuryCommitmentIndex(
   const healthOptions = resolveResourceTransferTaskHealthOptions();
   const holderExists = options.holderExists ?? defaultHolderExists;
   const capacityDelta = options.capacityDelta ?? (() => 0);
+  const strictCapacityDelta = options.strictCapacityDelta ?? (() => 0);
 
   const metrics: MutableCommitmentMetrics = {
     taskRecords: 0,
@@ -445,6 +451,9 @@ export function buildTreasuryCommitmentIndex(
       const terminalFreeCapacity = options.observation.freeCapacity(roomName, "terminal");
       const projectedStorageFree = storageFreeCapacity - capacityDelta(roomName, "storage");
       const projectedTerminalFree = terminalFreeCapacity - capacityDelta(roomName, "terminal");
+      // 严格口径（不含 quarantine/intent 风险占用）。
+      const strictStorageFree = storageFreeCapacity - strictCapacityDelta(roomName, "storage");
+      const strictTerminalFree = terminalFreeCapacity - strictCapacityDelta(roomName, "terminal");
       return Object.freeze({
         roomName,
         healthyIncomingAmount,
@@ -461,6 +470,16 @@ export function buildTreasuryCommitmentIndex(
         projectedStorageHeadroom: projectedStorageFree - healthyIncomingAmount,
         projectedTerminalHeadroom: projectedTerminalFree - healthyIncomingAmount,
         projectedOvercommitted:
+          healthyIncomingAmount > projectedStorageFree ||
+          healthyIncomingAmount > projectedTerminalFree,
+        strictStorageHeadroom: strictStorageFree - healthyIncomingAmount,
+        strictTerminalHeadroom: strictTerminalFree - healthyIncomingAmount,
+        strictOvercommitted:
+          healthyIncomingAmount > strictStorageFree ||
+          healthyIncomingAmount > strictTerminalFree,
+        riskAdjustedStorageHeadroom: projectedStorageFree - healthyIncomingAmount,
+        riskAdjustedTerminalHeadroom: projectedTerminalFree - healthyIncomingAmount,
+        riskAdjustedOvercommitted:
           healthyIncomingAmount > projectedStorageFree ||
           healthyIncomingAmount > projectedTerminalFree,
         // 承诺视图完整才可用于 receiver admission 授权。

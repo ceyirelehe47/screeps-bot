@@ -484,10 +484,23 @@ export interface TreasuryReceiverCommitments {
   readonly storageHeadroom: number;
   readonly terminalHeadroom: number;
   readonly overcommitted: boolean;
-  /** projected 口径（observed free 减去本 tick 已结算 transaction 的容量净变化）。 */
+  /**
+   * projected 口径（**risk-adjusted**：observed free − 本 tick overlay 容量净
+   * 变化 − quarantine/unresolved intent 正流入占用；第七轮起的语义，第八轮
+   * 显式标注——receiver admission 使用该口径）。prefer 显式字段
+   * riskAdjustedStorageHeadroom/riskAdjustedTerminalHeadroom（同值）。
+   */
   readonly projectedStorageHeadroom: number;
   readonly projectedTerminalHeadroom: number;
   readonly projectedOvercommitted: boolean;
+  /** 严格口径（observed free − 本 tick overlay 净变化；不含任何风险扣减）。 */
+  readonly strictStorageHeadroom: number;
+  readonly strictTerminalHeadroom: number;
+  readonly strictOvercommitted: boolean;
+  /** risk-adjusted 口径（= projected* 字段；额外扣除 quarantine/intent 占用）。 */
+  readonly riskAdjustedStorageHeadroom: number;
+  readonly riskAdjustedTerminalHeadroom: number;
+  readonly riskAdjustedOvercommitted: boolean;
   /** 房间承诺视图是否完整（false 时 receiver admission 必须 fail closed）。 */
   readonly commitmentComplete: boolean;
 }

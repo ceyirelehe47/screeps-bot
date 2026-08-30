@@ -341,9 +341,21 @@ export interface TreasuryService {
   journal(): readonly TreasuryJournalEntry[];
   /** 最近一次跨 tick 对账结果。 */
   lastReconciliation(): TreasuryReconciliationSummary | null;
-  /** projected 口径容量（observed ± 本 tick 已结算净变化；只读）。 */
+  /**
+   * @deprecated 兼容别名：projectedUsedCapacity = strictProjectedUsedCapacity
+   *（严格口径）；projectedFreeCapacity = riskAdjustedFreeCapacity（第七轮起
+   * 语义即 risk-adjusted——可能已流入的 uncertain 资源占用空间）。新代码
+   * 使用下方显式命名的双口径 API。
+   */
   projectedUsedCapacity(roomName: string, kind: TreasuryLocationKind): number;
+  /** @deprecated 见 projectedUsedCapacity。 */
   projectedFreeCapacity(roomName: string, kind: TreasuryLocationKind): number;
+  /** 严格口径 used = observed.used + 本 tick overlay 净变化（不含风险扣减）。 */
+  strictProjectedUsedCapacity(roomName: string, kind: TreasuryLocationKind): number;
+  /** 严格口径 free = observed.free − overlay 净变化（used + free = physical）。 */
+  strictProjectedFreeCapacity(roomName: string, kind: TreasuryLocationKind): number;
+  /** risk-adjusted free = 严格 free − quarantine/unresolved intent 正流入占用（admission 口径）。 */
+  riskAdjustedFreeCapacity(roomName: string, kind: TreasuryLocationKind): number;
   /** 单调投影版本（本 tick 已接受 transaction 数驱动；诊断/缓存失效用）。 */
   projectionRevision(): number;
   metrics(): TreasuryMetrics;
@@ -1019,14 +1031,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           reservations: (deps.getReservations ?? defaultGetReservations)(),
           observation: state.observation,
           holderExists: deps.holderExists,
-          // 容量口径（第七/八轮 risk-adjusted）：projected 变化 + quarantine
-          // 与 unresolved intent 的正净流入占用统一扣减——receiver headroom 等
-          // 派生口径与 riskAdjustedFreeCapacity 一致（可能已流入的资源必须
-          // 减少 free capacity，负流出不增加）。
+          // 容量口径（第七/八轮）：capacityDelta = **risk-adjusted**（overlay +
+          // quarantine/unresolved intent 正净流入占用——receiver admission 用，
+          // 与 riskAdjustedFreeCapacity 同口径）；strictCapacityDelta = 仅
+          // overlay 的严格口径（可能已流入的资源必须减少 free capacity，
+          // 负流出不增加——只有 risk 口径做该保守扣减）。
           capacityDelta: (roomName, kind) =>
             projection.locationCapacityDelta(roomName, kind) +
             (treasuryQuarantineCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0) +
             (treasuryIntentCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0),
+          strictCapacityDelta: (roomName, kind) => projection.locationCapacityDelta(roomName, kind),
           onExpiredExcluded: () => {
             metrics.expiredCommitmentsExcluded += 1;
           },
@@ -2170,7 +2184,33 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
 
     projectedUsedCapacity(roomName: string, kind: TreasuryLocationKind): number {
+      // @deprecated 兼容别名（严格口径）——新代码使用 strictProjectedUsedCapacity。
+      return this.strictProjectedUsedCapacity(roomName, kind);
+    },
+
+    strictProjectedUsedCapacity(roomName: string, kind: TreasuryLocationKind): number {
+      // 严格口径：observed.used + 本 tick overlay 净变化（不含风险扣减）。
       return this.observation().usedCapacity(roomName, kind) + projection.locationCapacityDelta(roomName, kind);
+    },
+
+    strictProjectedFreeCapacity(roomName: string, kind: TreasuryLocationKind): number {
+      // 严格口径：observed.free − overlay 净变化——与 strictProjectedUsed
+      // 互补（两者之和 = physical capacity，不含任何风险扣减）。
+      return this.observation().freeCapacity(roomName, kind) - projection.locationCapacityDelta(roomName, kind);
+    },
+
+    riskAdjustedFreeCapacity(roomName: string, kind: TreasuryLocationKind): number {
+      // risk-adjusted：严格 free 再扣 quarantine/unresolved intent 正流入
+      // 占用（可能已流入的 uncertain 资源占用空间；receiver admission 用）。
+      metrics.riskAdjustedCapacityLookups += 1;
+      const quarantineOccupancy = treasuryQuarantineCapacityOccupancy().get(`${roomName} ${kind}`) ?? 0;
+      const intentOccupancy = treasuryIntentCapacityOccupancy().get(`${roomName} ${kind}`) ?? 0;
+      return (
+        this.observation().freeCapacity(roomName, kind) -
+        projection.locationCapacityDelta(roomName, kind) -
+        quarantineOccupancy -
+        intentOccupancy
+      );
     },
 
     projectedFreeCapacity(roomName: string, kind: TreasuryLocationKind): number {
