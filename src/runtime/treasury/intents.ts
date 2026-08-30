@@ -42,6 +42,7 @@
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import type { TreasuryAuthorizationCohortFacts, TreasuryCohortRevisions } from "@/runtime/treasury/authorization";
 import { computeTreasuryDurableIdentityDigest, treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
+import { intentSemanticViolation } from "@/runtime/treasury/semanticMatrix";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
   TREASURY_STRUCTURE_BINDING_ROLES,
@@ -370,6 +371,10 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
   }
   if (typeof candidate.settlement !== "string" || !TREASURY_INTENT_SETTLEMENTS.has(candidate.settlement)) {
     return `settlement 非法（未知枚举）: ${String(candidate.settlement).slice(0, 48)}`;
+  }
+  const semanticError = intentSemanticViolation(candidate.outcome, candidate.settlement);
+  if (semanticError !== null) {
+    return `语义矩阵违规: ${semanticError}`;
   }
   if (candidate.structureId !== undefined) {
     if (typeof candidate.structureId !== "string" || candidate.structureId.length === 0 || candidate.structureId.length > INTENT_STRUCTURE_ID_MAX) {
@@ -887,6 +892,13 @@ export function progressTreasuryIntent(
   if (!TREASURY_INTENT_SETTLEMENTS.has(progression.settlement)) {
     return { status: "rejected", reason: "invalid_phase", detail: `settlement ${progression.settlement} 未知` };
   }
+  // 【第十一轮 3.13.6】语义矩阵：目标 (outcome, settlement) 组合必须合法
+  //（如 returned_ok 不得进入 pending_abort、not_started 不得进入
+  // pending_commit——损坏数据/错误调用在迁移入口即拒）。
+  const semanticError = intentSemanticViolation(progression.outcome, progression.settlement);
+  if (semanticError !== null) {
+    return { status: "rejected", reason: "invalid_phase", detail: `语义矩阵拒绝: ${semanticError}` };
+  }
   const runtime = loadIntentStoreRuntime();
   if (runtime.fatal) {
     return { status: "rejected", reason: "store_fatal", detail: runtime.fatal };
@@ -1181,7 +1193,9 @@ export function transferTreasuryIntentToQuarantine(
   return { status: "transferred" };
 }
 
-export function recoverTreasuryIntentsAtTickBoundary(): TreasuryIntentRecoveryReport {
+export function recoverTreasuryIntentsAtTickBoundary(
+  proofChecker: (transactionId: string, outcome: string) => string | null,
+): TreasuryIntentRecoveryReport {
   const report: TreasuryIntentRecoveryReport = {
     recoveredNotExecuted: 0,
     convertedToQuarantine: 0,
@@ -1203,7 +1217,15 @@ export function recoverTreasuryIntentsAtTickBoundary(): TreasuryIntentRecoveryRe
       continue;
     }
     if (entry.settlement === "finalized") {
-      // 终态残留（正常路径随关闭即删——receipt/abort 已完成）：幂等释放。
+      // 【第十一轮 3.13.6】cross-store finalized proof：finalized 不再直接
+      // 释放——returned_ok 须 settled receipt 或 committed tombstone；其余
+      // 须 not-executed/rolled-back tombstone。proof 缺失 → semantic store
+      // fault（entry 保留，fail closed）。
+      const proofError = proofChecker(entry.transactionId, entry.outcome);
+      if (proofError !== null) {
+        report.storeFatal = `finalized proof 缺失: ${proofError}`;
+        break;
+      }
       if (releaseTreasuryIntentEntry(entry.transactionId)) {
         intentEvents.recoveries += 1;
         report.recoveredNotExecuted += 1;

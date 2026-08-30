@@ -68,6 +68,7 @@ import {
   releaseTreasuryReceiptReservation,
   reserveTreasuryReceiptAdmission,
   writeTreasuryLifecycle,
+  hasSettledReceipt,
 } from "@/runtime/treasury/receipts";
 import { resolveTreasuryHolder } from "@/runtime/treasury/holderResolution";
 import {
@@ -757,6 +758,28 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
    * 清理）；global reset 后仍可完成（全部凭 durable state）；无任何无
    * 条件 clear-marker 入口。
    */
+  /**
+   * finalized intent 的 cross-store proof（第十一轮 3.13.6）：returned_ok
+   * 须 settled receipt 或 final committed tombstone；其余须 final
+   * not-executed/rolled-back tombstone。proof 缺失 → 恢复路径 semantic
+   * fault（entry 保留不释放、fail closed）。
+   */
+  function checkTreasuryFinalizedProof(transactionId: string, outcome: string): string | null {
+    if (outcome === "returned_ok") {
+      if (hasSettledReceipt(transactionId) !== undefined) return null;
+      const tombstone = readTreasuryResolutionTombstone(transactionId);
+      if (tombstone !== undefined && tombstone.stage === "final" && tombstone.resolution === "committed") {
+        return null;
+      }
+      return `settled receipt 或 committed resolution proof 缺失（${transactionId.slice(0, 48)}）`;
+    }
+    const tombstone = readTreasuryResolutionTombstone(transactionId);
+    if (tombstone !== undefined && tombstone.stage === "final" && tombstone.resolution === "not-executed") {
+      return null;
+    }
+    return `not-executed/rolled-back resolution proof 缺失（${transactionId.slice(0, 48)}）`;
+  }
+
   function resolvePreExecutionAuthorizationFaultClosure(
     input: { readonly transactionId?: string; readonly digest?: string; readonly acknowledgeRolledBack?: boolean } | undefined,
     fault: Readonly<TreasuryAuthorizationFaultEntry>,
@@ -1379,7 +1402,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // intent store——ready 相确认未执行关闭、其余保守转 execution-unknown
       // quarantine（quarantine 写失败时 intent 保留为 emergency authority）。
       // 恢复后仍存的未完成 intent 由 treasuryIntentBlockers 全局阻断新 writer。
-      recoverTreasuryIntentsAtTickBoundary();
+      recoverTreasuryIntentsAtTickBoundary(checkTreasuryFinalizedProof);
       // staged resolution 恢复（第八轮 8.2）：中断的 resolution 幂等完成/
       // 回滚（resolving+receipt 已写 → finalize；无进展 → 回滚；final 未
       // 释放 → 补完成）。

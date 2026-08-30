@@ -15,7 +15,8 @@
  *   writer 阻断、聚合空）、load 全量验证计数、entry 冻结快照封闭。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
-import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
+import { clearTreasuryPersistenceForTest, commitSettledReceipt } from "@/runtime/treasury/receipts";
+import { writeTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { setTreasuryCommitFaultInjectorForTest, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
 import {
@@ -303,16 +304,44 @@ describe("global reset 恢复", () => {
     expect(readTreasuryIntentEntry("ti_rno")).toBeUndefined();
   });
 
-  it("【第九轮 4.6】committed/aborted 终态残留幂等释放（不进 quarantine）", () => {
-    for (const phase of ["committed", "aborted"] as const) {
-      clearTreasuryPersistenceForTest();
-      seedIntent("ti_final_leftover", phase);
-      Game.time += 1;
-      const next = makeService();
-      next.beginTick();
-      expect(readTreasuryQuarantineEntry("ti_final_leftover")).toBeUndefined();
-      expect(readTreasuryIntentEntry("ti_final_leftover")).toBeUndefined();
-    }
+  it("【第十一轮 3.13.6】finalized 终态残留：proof 存在才释放；proof 缺失保留（semantic fault）", () => {
+    // committed（returned_ok + finalized）：settled receipt proof 存在 → 释放。
+    clearTreasuryPersistenceForTest();
+    seedIntent("ti_final_ok_proof", "committed");
+    expect(commitSettledReceipt("ti_final_ok_proof", Game.time).status).not.toBe("fatal");
+    Game.time += 1;
+    makeService().beginTick();
+    expect(readTreasuryQuarantineEntry("ti_final_ok_proof")).toBeUndefined();
+    expect(readTreasuryIntentEntry("ti_final_ok_proof")).toBeUndefined();
+    // committed 但 proof 缺失 → 不得释放（semantic store fault，entry 保留）。
+    clearTreasuryPersistenceForTest();
+    seedIntent("ti_final_ok_noproof", "committed");
+    Game.time += 1;
+    makeService().beginTick();
+    expect(readTreasuryQuarantineEntry("ti_final_ok_noproof")).toBeUndefined();
+    expect(readTreasuryIntentEntry("ti_final_ok_noproof")).toBeDefined();
+    // aborted（aborted_final + finalized）：not-executed tombstone proof → 释放。
+    clearTreasuryPersistenceForTest();
+    seedIntent("ti_final_aborted_proof", "aborted");
+    writeTreasuryResolutionTombstone({
+      transactionId: "ti_final_aborted_proof",
+      digest: "0123456789abcdef",
+      resolution: "not-executed",
+      stage: "final",
+      actionTick: Game.time,
+      observationTick: Game.time,
+      resolvedAtTick: Game.time,
+      source: "test",
+    });
+    Game.time += 1;
+    makeService().beginTick();
+    expect(readTreasuryIntentEntry("ti_final_aborted_proof")).toBeUndefined();
+    // aborted 且 proof 缺失 → 保留。
+    clearTreasuryPersistenceForTest();
+    seedIntent("ti_final_aborted_noproof", "aborted");
+    Game.time += 1;
+    makeService().beginTick();
+    expect(readTreasuryIntentEntry("ti_final_aborted_noproof")).toBeDefined();
   });
 
   it("恢复幂等：重复 beginTick 不重复转换/计数", () => {

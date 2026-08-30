@@ -39,6 +39,7 @@ import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import { treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
+import { quarantineSemanticViolation } from "@/runtime/treasury/semanticMatrix";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
   TREASURY_STRUCTURE_BINDING_ROLES,
@@ -257,6 +258,10 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
   }
   if (typeof candidate.settlement !== "string" || !QUARANTINE_SETTLEMENTS.has(candidate.settlement)) {
     return `settlement 非法（隔离态允许 quarantined/resolving）: ${String(candidate.settlement).slice(0, 48)}`;
+  }
+  const semanticError = quarantineSemanticViolation(outcomeOfTreasuryFaultPhase(candidate.phase), candidate.outcome);
+  if (semanticError !== null) {
+    return `语义矩阵违规: ${semanticError}`;
   }
   if (candidate.contractId !== undefined) {
     if (typeof candidate.contractId !== "string" || candidate.contractId.length === 0 || candidate.contractId.length > 96) {
