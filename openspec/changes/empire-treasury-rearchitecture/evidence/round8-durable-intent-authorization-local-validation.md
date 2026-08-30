@@ -84,7 +84,7 @@ runtime 指纹：`b6807812592d7fe578c2ad32635af3e04419a80bea1d2c57dda283c543b2a8
 |---|---|
 | `npm run typecheck` | 0 错误 |
 | `npm run build` | 成功（dist/main.js 4,856,762 bytes；rollup 无循环依赖告警） |
-| `npx jest --config jest.config.cjs src/runtime/treasury/` | 23 suites / 417 tests 全过 |
+| `npx jest --config jest.config.cjs src/runtime/treasury/` | 23 suites / 424 tests 全过 |
 | `npx jest --config jest.config.cjs`（全量） | **217 suites / 1130 tests / 1130 passed / 0 failed** |
 | `node scripts/verify-jest-budget.mjs` | 见第 8 节（预算锚点提交后 PASSED） |
 
@@ -101,7 +101,7 @@ runtime 指纹：`b6807812592d7fe578c2ad32635af3e04419a80bea1d2c57dda283c543b2a8
 
 - 基线（第七轮终点）：213 suites / 1045 tests。
 - 本轮终点：**217 suites / 1130 tests**（+4 suites / +85 tests；无删陋试试）。
-- 预算治理：`monitor-data/apply-budget-treasury-round8.mjs`（21 个 treasury 文件 budget=实际数；校验 217/1130）→ `test/test-suite-budget.json` → `scripts/verify-jest-budget.mjs`（requiredBaselineCommit 指向含全部实现与测试的 `868088e`，requiredTarget 217/1130）。锚点提交独立于实现提交（正式流程）。
+- 预算治理：`monitor-data/apply-budget-treasury-round8.mjs`（21 个 treasury 文件 budget=实际数；校验 217/1130）→ `test/test-suite-budget.json` → `scripts/verify-jest-budget.mjs`（requiredBaselineCommit 指向含全部实现与测试的 `a231e69`，requiredTarget 217/1130）。锚点提交独立于实现提交（正式流程）。
 
 ## 9. 未部署声明
 

@@ -1144,7 +1144,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         if (quarantineOutflows.size > 0 || intentOutflows.size > 0) {
           for (const roomName of rooms) {
             for (const kind of kinds) {
-              const resourceKey = `${roomName} ${kind} ${context.resource}`;
+              const resourceKey = `${roomName}\u0000${kind}\u0000${context.resource}`;
               const occupied =
                 (quarantineOutflows.get(resourceKey) ?? 0) + (intentOutflows.get(resourceKey) ?? 0);
               if (occupied > 0) committed += occupied;
@@ -2203,8 +2203,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // risk-adjusted：严格 free 再扣 quarantine/unresolved intent 正流入
       // 占用（可能已流入的 uncertain 资源占用空间；receiver admission 用）。
       metrics.riskAdjustedCapacityLookups += 1;
-      const quarantineOccupancy = treasuryQuarantineCapacityOccupancy().get(`${roomName} ${kind}`) ?? 0;
-      const intentOccupancy = treasuryIntentCapacityOccupancy().get(`${roomName} ${kind}`) ?? 0;
+      const quarantineOccupancy = treasuryQuarantineCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0;
+      const intentOccupancy = treasuryIntentCapacityOccupancy().get(`${roomName}\u0000${kind}`) ?? 0;
       return (
         this.observation().freeCapacity(roomName, kind) -
         projection.locationCapacityDelta(roomName, kind) -
