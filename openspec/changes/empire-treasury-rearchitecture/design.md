@@ -420,6 +420,61 @@ binding identity 为受控判别联合：`{kind:"governed_location", roomName, l
 
 canonicalEncoding 的全部反射操作（`Object.getPrototypeOf`/`getOwnPropertyDescriptor`/`keys`/`getOwnPropertySymbols`/property value 读取/array iteration）置于统一 try/catch 边界：revoked Proxy、throwing trap、异常 descriptor 一律返回结构化 rejection（`reflection_fault` detail），不抛出、不中断 tick；getter 仍然零调用（descriptor 检查先于任何 value 读取）。public contract build 入口整体异常安全：内部编程错误（非反射类）同样捕获并返回明确 `canonicalization_fault` rejection——callback 零调用、授权与 contract registry 零变化。
 
+### 3.13 第十一轮：Immutable Registries & Durable Cohort Closure
+
+#### 3.13.1 Pre-execution authorization fault authority
+
+`internal_authorization_fault` 的固定事实：execution outcome = `not_started`、authorization 状态已完整回滚（预算/容量/消费标记原样恢复、bundle 保持 active）、Game callback 未调用。当前只写全局 write-fault marker——marker 锁定全部 writer，但该 transaction 无 quarantine/intent entry，现有 fault resolution 协议（authority 来自 quarantine/intent）对其 `not_found`，marker 永不解除 → 永久锁死。
+
+修复：`Memory.runtime.treasury.authorizationFaults`（version 1，entry key `"af:"+transactionId`，上限 64，load 全量验证，未知版本/损坏 fail closed）。redemption 注入故障回滚后、写 marker 前写入 entry：transactionId、contractId/contractDigest、actionKind、authorizationCohortDigest（有 cohort 时）、authorizationDigest、canonical postings（≤32 腿）、faultTick、`outcome:"not_started"`、`rollbackConfirmed:true`、source、有界 detail。恢复协议：`resolveUnresolvedTransaction` 的 unified authority 纳入 authorizationFaults 第三来源（`authorityKind:"pre_execution_authorization_fault"`）；该 kind 不需要 reconciliation capability（协议已证明 Game 未执行）——要求显式 `acknowledgeRolledBack:true`；验证完整 identity（digest + cohort digest）后写 not-executed final tombstone（`preExecution:true` 标志，进 cross-store proof 语义）→ 清 marker → 删 entry（幂等：tombstone 存在即 already_resolved）。其他 fault phase 的 authority 走 capability 路径不变；capability 路径遇到 pre-execution authority 拒绝；无任何无条件 clear-marker 入口。
+
+#### 3.13.2 Immutable adapter registry
+
+注册时快照化：`registerTreasuryActionAdapter` 提取固定函数引用（validate/derivePostings/execute/structureBindings/durableFacts/reconcile）+ 受控元数据，构造冻结 registration record——registry 不保存调用方可变对象；`findTreasuryActionAdapter` 返回冻结视图（结构兼容、内部 record 不泄漏）。每次合法注册生成 `registrationId = hash("adapter:"+kind+":"+version+":"+seq)` 与递增 registry generation；registration identity = `kind@v{version}:{registrationId}`。同 kind+同 version 重注册：同实现（全部函数引用相同）幂等，不同实现拒绝；替换须更高 version（contract 绑定 registration identity + version，演进后旧 contract 失效）。`sealTreasuryAdapterRegistryForProduction()` 后一切动态注册拒绝（生产装配点 runtimeServices.ts 调用；架构测试守护 seal 只在生产装配模块）。adapter 函数异常边界：validate/derivePostings/structureBindings/durableFacts 抛错 → `adapter_fault(op)` 结构化 contract 拒绝（callback 零调用）；execute 抛错 → 既有 execution unknown 协议；reconcile 抛错 → capability 签发拒绝（`reconciler_fault`）、authority 保持隔离。registry revision（成功注册计数）进入 write readiness（诊断）、contract 与 bundle cohort。
+
+#### 3.13.3 Immutable policy registry + Treasury-computed decision digest
+
+policy 注册快照化：policyId（非空字符串）、policyVersion（正安全整数）、evaluate 函数引用固定，record 冻结；同 policyId+version 不同 evaluate 实现拒绝；替换须提升 version 或换 policyId；可 seal。decision 输入接口删除 resolver 自报 digest——resolver 只返回业务事实 `{withhold, strategicReserve, emergencyOverride, auditReason?}`；Treasury 完整验证每字段（withhold/strategicReserve 非负安全整数、emergencyOverride 布尔）后自行计算 decision digest：`hash("policy-decision:"+registrationId+":"+canonicalContext+":"+withhold+":"+strategicReserve+":"+emergencyOverride)`，canonical context 绑定 contractId/contractDigest/actionKind/resource/sorted rooms/ownerIdentity/tick/policy registration identity。evaluate 抛错 → `policy_fault` fail closed。bundle 绑定 policyRegistrationId + 每 digest 的 cohort 串；redemption 验证 exact registration identity（当前 registry record 的 registrationId 相同）而非字符串前缀。
+
+#### 3.13.4 Durable authorization cohort
+
+bundle record 内的 cohort 事实持久化为有界 canonical `TreasuryAuthorizationCohortFacts`：ownerIdentity、policyId/policyVersion/policyRegistrationId/policyDecisionDigest（排序拼接 hash）、emergencyOverride、epochSeq、五元 revisions、adapterRegistrationId、contractId/contractDigest、transactionId、每 leg canonical 摘要（resource/sorted rooms/sorted locations/amount 长度前缀文本的 hash，≤8）、receiver capacity 摘要（capacityRequirement canonical 文本或 "none"）、issuedTick、authorizationDigest。`authorizationCohortDigest = hash("cohort:"+全字段 canonical 文本)`——owner/policy decision/emergency override/revision/leg/receiver capacity/contract 任一变化即变化。cohort facts（≤~400 字符）持久化进 intent/quarantine entry；unresolved authority、reconciliation capability、resolution prevalidation 均携带并比较 cohortDigest。不持久化 heap token 对象。
+
+#### 3.13.5 统一 durable action identity
+
+`durableAuthorityIdentityDigest = hash("durable-identity:"+transactionId+":"+canonicalDigest+":"+contractId+":"+contractDigest+":"+adapterRegistrationId+":"+actionKind+":"+canonicalPostings+":"+structureDescriptors+":"+durablePayloadText+":"+cohortDigest+":"+ownerIdentity+":"+policyIdentity+":"+source)`——全部为不可变事实；outcome/settlement 是可变 workflow 事实不进 identity（由语义矩阵与单调状态机保护）。intent v4/quarantine v3 entry 携带该 digest；intent 首写同 ID 比较变为 identity 比较（相同 → already_present 幂等；不同 → `identity_conflict`，store 原数据不动）；read-back、intent→quarantine 转移、quarantine 幂等、双权威一致性、capability 签发、resolution prevalidation、global reset recovery 全部以该 digest 为唯一权威比较。legacy entry（迁移时无法补全 cohort/descriptor 字段）identity digest 为空——空对空才匹配，且 legacy authority 不参与 contract-backed 路径。
+
+#### 3.13.6 Outcome/settlement/phase 语义矩阵 + cross-store finalized proof
+
+单一矩阵权威（semanticMatrix.ts）：每 outcome 的合法 settlement 集合——`not_started ∈ {ready, faulted(仅 pre-execution authorization fault), finalized}`、`started_unknown ∈ {executing, faulted, quarantined, resolving, finalized}`、`returned_non_ok ∈ {pending_abort, faulted, quarantined, resolving, finalized}`、`returned_ok ∈ {pending_commit, faulted, quarantined, resolving, finalized}`、`aborted_final` 仅 legacy 终态；quarantine phase→outcome 映射表（commit 类 → returned_ok、abort-failed → returned_non_ok、execution-unknown 类 → started_unknown、internal_authorization_fault → not_started）。progressTreasuryIntent 的目标组合必须过矩阵；intent/quarantine load 全量验证含矩阵检查——非法组合 → store unhealthy（fatal）→ authority 不可签发、resolution 拒绝、write readiness=false。cross-store finalized proof（recovery/semantic coordinator 在 load 与 beginTick 恢复时执行）：`finalized+returned_ok` 必须存在 settled receipt 或 final committed tombstone；`finalized+returned_non_ok/not_started` 必须存在 final not-executed/rolled-back tombstone（pre-execution tombstone 计入）；proof 缺失 → semantic store fault（fail closed，entry 保留不自动删除）；看到 finalized 不再直接释放 entry。
+
+#### 3.13.7 Legacy quarantine 隔离
+
+quarantine v3 entry 保留 `legacyV1` 标记（v1 迁移且无并存 intent 补全）。`issueTreasuryReconciliationCapability` 遇 legacyV1（或缺 contract/actionKind 完整事实）的 authority → `legacy_authority_isolated` 拒绝（不用当前 adapter reconciler 解释旧动作）；显式诊断 API `treasuryLegacyQuarantineDiagnostics()`（只读冻结快照）列出隔离 entry 摘要；entry 保持不动，只能显式人工 migration/reconciliation 处理；新 adapter version 不解释 legacy action（version mismatch 语义不变）；legacy migration 不伪造缺失的 contract/cohort identity。
+
+#### 3.13.8 Resolution kernel 封闭
+
+resolutionKernelChannel.ts（类比 writer kernel）：unique symbol `TREURY_RESOLUTION_KERNEL` non-enumerable 挂载于 service 运行时对象；kernel 接口含 capability validate/consume 与 staged resolution 内部操作。faultResolution 的两个 resolve 函数改为从持有对象读取 symbol kernel（伪造对象无 non-enumerable symbol 属性一律拒绝）；模块级 WeakSet 注册机制删除（`registerTreasuryResolutionKernelForService` 移除）。公共 TreasuryService 类型删除 `consumeReconciliationCapability`/`treasuryServiceGeneration`/`treasuryResolutionGuard`；testHarness 视图重挂两个 kernel symbol（嵌套包装支持）。架构测试：resolutionKernelChannel 的 import 白名单仅 facade/faultResolution/testHarness/架构测试自身；生产源码不得引用。capability 消费仍只在 staged resolution 写入成功后。
+
+#### 3.13.9 完整 structure descriptor（AC4）
+
+`TreasuryActionStructureBinding` 升级为完整 canonical descriptor：`bindingKind: "governed_location"|"game_object"`、`role: "source"|"target"|"fee_source"|"production_structure"|"auxiliary"`（受控枚举）、roomName、locationKind、objectId?、expectedType?、expectedRoom?、label?（仅诊断）、`required: boolean`（默认 true）、descriptor version（常量 1）。posting 自动 binding：负腿 role=source、正腿 role=target（同 location 双向时两条 descriptor）；adapter 显式 binding 声明 role。descriptor canonical 文本（全部字段长度前缀）进入 AC4 digest（替换 AC3 的 label→structureId 快照文本）；同 (identity, role) 去重、同结构不同 role 保留两条（不静默合并）、同 label 不同 descriptor 拒绝；required descriptor 的结构构建时必须存在、执行前 incarnation 重验（语义不变）。intent v4/quarantine v3 的 structureFacts 升级为完整 descriptor 数组（≤16，v3 简化三元组迁移为 governed_location/auxiliary/required）；descriptor 进入 durableAuthorityIdentityDigest；reconciler facts 携带完整 descriptor。
+
+#### 3.13.10 facade 职责拆分（行为保持）
+
+四个内部模块从 facade 抽出（依赖方向单向、无新循环依赖；actionContracts 对 facade 是 type-only import）：
+
+- **authorizationLedger.ts**：authorization registry/budget（token WeakSet/Map、流出与容量预算）、bundle registry 与签发（authorizeTreasuryActionContract 主体：readiness 前置、policy 决策与 Treasury digest、cohort 构造、原子签发与回滚）、批量原子 redemption（staged 发布/前缀回滚/pre-execution fault authority 写入）、只读 bundle 解析、legs 预验证。
+- **resolutionAuthority.ts**：capability registry（WeakSet）、validate/consume、resolution kernel 组装与挂载、resolveUnresolvedTransaction 的 capability 结论路由（含 pre-execution acknowledge 路由）。
+- **recoveryCoordinator.ts**：intent↔quarantine 事实转移、semantic matrix 校验接入、cross-store finalized proof、pre-execution fault authority store 读写与恢复、beginTick 恢复分级。
+- **readinessCollector.ts**：从各 store 收集 write-readiness 状态输入并调用 evaluateTreasuryWriteReadiness（query/authorize/prepare 三处共用同一收集器）。
+
+facade.ts 保留生命周期编排（beginTick/endTick/epoch/observation）、prepared handle registry、executePreparedAction 执行顺序编排、公共 read/query facade 与模块组装；不再直接持有 bundle Maps/capability WeakSets/resolution kernel 细节。公开行为与错误语义保持兼容（现有测试不改断言通过）。
+
+#### 3.13.11 临时脚本清理与 evidence 修正
+
+删除 `src/runtime/treasury/fix-ac3.cjs` 与 `src/runtime/treasury/fix-resolution.cjs`（Round 10 开发期的一次性文本替换脚本，写死本地 Windows 路径，不属于运行时代码）。Round 10 evidence 的"已移除临时脚本"陈述修正为如实记录：fix-ac3.cjs 当时未被移除并误入提交，于第十一轮删除；历史提交事实不篡改。Round 11 evidence 明确记录该修正与删除的 commit。
+
 ## 4. Tick 生命周期（第二迭代：显式 begin/end）
 
 1. **beginTick（显式，main.ts 固定挂载于一切市场预检/生产/物流/规划之前）**：幂等（同 tick 重复调用安全）；receipt 清理（只回收 retention 过期条目——未过期条目绝不因容量驱逐）→ global reset 检测 → 归档补救（若上一 tick 缺 endTick 则显式计数并补救）→ 清空 epoch 注册表并发行本 tick shared epoch（注册 exact observation 引用）→ 对账上一 tick 投影终态（manifest 结构层 + 资源 key union 层）→ 写 `Memory.runtime.treasury.lifecycle.lastBeginTick`。

@@ -1060,3 +1060,152 @@ public contract build 入口不得（MUST NOT）因任意 runtime input 抛错�
 - **WHEN** args 含 revoked Proxy、throwing ownKeys/getPrototypeOf trap 或异常 descriptor
 - **THEN** build 返回结构化 rejection（不抛出）；授权、contract registry、callback 零变化
 
+
+### Requirement: pre-execution authorization fault 可恢复 authority（第十一轮）
+
+internal_authorization_fault（Game callback 未调用且 authorization 状态已完整回滚）必须（MUST）在写全局 marker 前建立有界 durable authority（version 化 store、load 全量验证、未知版本 fail closed），保存 transaction/contract/cohort 身份、canonical postings、fault tick、outcome=not_started、rollback 确认事实；必须（MUST）提供专用恢复协议：仅适用于该类 fault（其他 commit/execution fault 不得使用）、不需要 action reconciler（协议已证明 Game 未执行）、验证完整 authority identity、解决后释放 marker 与 authority、幂等、global reset 后仍可完成；不得（MUST NOT）存在任何无条件 clear-marker 入口；该 fault 不得（MUST NOT）再形成无恢复路径的永久全局锁。
+
+#### Scenario: 注入故障后可恢复
+
+- **WHEN** bundle redemption 注入故障，状态完整回滚、callback 零调用
+- **THEN** durable not-started authority 建立；global reset 后仍存在；专用 rolled-back resolution 可解除；解除后 marker 与 authority 均清除；重复 resolution 幂等
+
+#### Scenario: 其他 fault 不可使用该通道
+
+- **WHEN** commit 类或 execution unknown fault 尝试 acknowledge-rolled-back 路径
+- **THEN** 拒绝（只能走 capability resolution）
+
+### Requirement: immutable adapter registry（第十一轮）
+
+adapter 注册必须（MUST）快照固定全部函数引用并冻结 registration record（不保存调用方可变对象；读 API 不泄漏内部可变 record）；每次合法注册必须（MUST）生成稳定 registration identity（kind+version+registry generation+implementation ID）并绑定进 contract；同 kind+同 version 的不同实现必须（MUST）拒绝（替换须更高 version）；注册后调用方修改原对象不得（MUST NOT）影响 registry 内实现；execution 与 reconciliation 必须（MUST）使用同一 registration record；registry 必须（MUST）可 seal（生产装配后动态注册拒绝）；全部 adapter 函数调用（validate/derivePostings/structureBindings/durableFacts/execute/reconcile）必须（MUST）有异常边界（执行前异常结构化拒绝零 callback；execute 异常走 execution unknown；reconcile 异常 capability 签发拒绝且 authority 保持隔离）。
+
+#### Scenario: 原对象修改不影响 registry
+
+- **WHEN** 注册后修改原 adapter 对象的 execute/reconcile 属性再执行 contract
+- **THEN** registry 仍按注册时快照的函数执行
+
+#### Scenario: 同 kind/version 不同实现被拒
+
+- **WHEN** 同 kind+version 注册函数引用不同的新实现
+- **THEN** 注册拒绝（fail closed）
+
+#### Scenario: seal 后动态注册拒绝
+
+- **WHEN** 生产装配 seal 后调用注册
+- **THEN** 拒绝动态注册
+
+### Requirement: immutable policy registry 与 Treasury 计算 decision digest（第十一轮）
+
+policy 注册必须（MUST）快照固定 evaluate 引用并冻结 record；policyVersion 必须（MUST）为正安全整数；同 policyId+version 的不同实现必须（MUST）拒绝；policy decision digest 必须（MUST）由 Treasury 根据 canonical context（contract ID/digest、actionKind、resource、rooms、owner identity、tick、policy registration identity）与 validated decision 自行计算——不得（MUST NOT）信任 resolver 自报 digest；evaluate 抛错必须（MUST）结构化 fail closed；emergency override 必须（MUST）显式进入 cohort 与审计；bundle redemption 必须（MUST）验证 exact policy registration identity 与 decision digest（不得使用字符串前缀比较）。
+
+#### Scenario: 自报 digest 不可信
+
+- **WHEN** resolver 返回不同决策但自报相同 digest
+- **THEN** Treasury 计算的 digest 不同（policy identity 变化、旧 bundle 失效）
+
+#### Scenario: evaluate 抛错 fail closed
+
+- **WHEN** 注册 resolver 的 evaluate 抛出异常
+- **THEN** 授权结构化拒绝（policy_fault），无 bundle 签发
+
+### Requirement: durable authorization cohort（第十一轮）
+
+authorization bundle 的完整 cohort 事实（owner canonical identity、policy ID/version/registration identity/decision digest、withhold/strategic reserve/emergency override、exact observation epoch、五元 revision cohort、adapter registration identity、contract ID/digest、transaction ID、每 authorization leg canonical 摘要、receiver capacity 摘要、service/tick 签发信息、bundle identity）必须（MUST）以有界 canonical 形式持久化进 intent 与 quarantine；Treasury 必须（MUST）计算 canonical authorizationCohortDigest（owner/policy decision/emergency override/revision/authorization legs/receiver capacity/contract 任一变化 → digest 变化）；cohort digest 必须（MUST）进入 unresolved authority、reconciliation capability 与 resolution prevalidation 的绑定比较；不得（MUST NOT）持久化 heap token 对象。
+
+#### Scenario: cohort 变化可辨别
+
+- **WHEN** owner、policy 决策、authorization leg 或 receiver capacity 变化
+- **THEN** cohort digest 变化（旧 bundle/cohort 失效）
+
+#### Scenario: global reset 后 cohort 可读
+
+- **WHEN** 授权执行后发生 global reset
+- **THEN** intent/quarantine 中完整 cohort 事实仍可读取（哪个 owner、哪个 policy 决策、是否 emergency override、exact epoch 与 revision、哪些 legs 覆盖哪些 postings）
+
+### Requirement: 统一 immutable durable action identity（第十一轮）
+
+系统必须（MUST）定义单一 durableAuthorityIdentityDigest，绑定 transaction identity、canonical transaction digest、contract ID/digest、adapter registration identity、action kind、canonical postings、完整 structure descriptor、durable payload/version、authorization cohort digest、owner/policy identity 与 immutable action metadata（execution outcome 与 settlement 为可变 workflow 事实、不得进入 identity）；intent 首次写入、同 ID 幂等、read-back、intent→quarantine 事实转移、quarantine 同 ID 幂等、intent/quarantine 双权威一致性、capability 签发、resolution prevalidation 与 global reset recovery 必须（MUST）全部比较同一 identity digest；同 transaction ID 但 identity digest 不同必须（MUST）返回 identity_conflict（store 原数据不动、writer fail closed、callback 零调用）、永远不得（MUST NOT）作为 already_present 幂等通过。
+
+#### Scenario: 同 ID 不同 identity 冲突
+
+- **WHEN** 同 transaction ID 但 owner/policy/structure descriptor/durable payload 任一不同
+- **THEN** identity_conflict（intent 与 quarantine 两 store 均如此）
+
+#### Scenario: 完整 identity 幂等
+
+- **WHEN** 同 ID 且完整 identity digest 相同重试
+- **THEN** 幂等成功（already_present 语义）
+
+### Requirement: outcome/settlement/phase 语义矩阵与 cross-store finalized proof（第十一轮）
+
+系统必须（MUST）建立单一语义矩阵权威（每 outcome 的合法 settlement 集合；quarantine fault phase 与 outcome 的强制映射）；progressTreasuryIntent 的目标组合、intent 与 quarantine 的 load 全量验证必须（MUST）执行矩阵检查；非法组合必须（MUST）使 store unhealthy（authority 不可签发、resolution 拒绝、write readiness=false）；returned_ok 不得（MUST NOT）通过损坏数据或错误组合退化为可 not-executed；finalized+returned_ok 必须（MUST）存在 settled receipt 或 final committed resolution tombstone、finalized+returned_non_ok/not_started 必须（MUST）存在 final not-executed/rolled-back tombstone——proof 缺失必须（MUST）转为 semantic store fault（fail closed，不得自动删除 entry、不得见到 finalized 就直接释放）。
+
+#### Scenario: 非法组合 fail closed
+
+- **WHEN** 损坏数据产生 commit phase + started_unknown、returned_ok + pending_abort 等非法组合
+- **THEN** store unhealthy、write readiness=false、authority 签发与 resolution 拒绝
+
+#### Scenario: finalized proof 强制
+
+- **WHEN** finalized intent 无对应 receipt/tombstone
+- **THEN** 不释放、semantic fault fail closed；proof 存在时恢复幂等
+
+### Requirement: legacy authority 版本化隔离（第十一轮）
+
+legacyV1（或缺乏完整 adapter/contract facts）的 quarantine authority 不得（MUST NOT）使用当前 adapter reconciler 解释；普通 issueTreasuryReconciliationCapability 遇 legacy authority 必须（MUST）拒绝（明确诊断）；legacy entry 必须（MUST）保持隔离不动（只能显式人工 migration/reconciliation 处理）；新 adapter version 不得（MUST NOT）解释 legacy action；legacy migration 不得（MUST NOT）伪造缺失的 contract/cohort identity。
+
+#### Scenario: legacy 拒绝当前 reconciler
+
+- **WHEN** legacyV1 quarantine 尝试经当前 adapter reconciler 签发 capability 或 resolution
+- **THEN** legacy_authority_isolated 拒绝；entry 原样保留；显式诊断可读
+
+### Requirement: resolution 内部完全封闭（第十一轮）
+
+生产 TreasuryService 公开接口必须（MUST）只保留 issueTreasuryReconciliationCapability 与 resolveUnresolvedTransaction（capability consume/validate、service generation、resolution guard、kernel registration 不得出现在公共面或公开模块边界）；resolution kernel 必须（MUST）经内部 unique symbol 通道由 service closure 直接调用（模块级注册函数移除）；capability 消费必须（MUST）仍只在 staged resolution 写入成功之后；test-only 低层入口必须（MUST）独立于生产面；架构测试必须（MUST）扫描全部生产源码禁止普通模块引用 resolution 内部模块。
+
+#### Scenario: 公共面不存在内部方法
+
+- **WHEN** 检查公共 TreasuryService 类型与运行时枚举
+- **THEN** 无 consumeReconciliationCapability/treasuryServiceGeneration/treasuryResolutionGuard；普通对象无法提前消费 capability
+
+#### Scenario: 正常 resolution 不受影响
+
+- **WHEN** 经 service.resolveUnresolvedTransaction 以合法 capability resolution
+- **THEN** 正常完成（staged 写入后才消费）
+
+### Requirement: 完整 structure binding descriptor（第十一轮）
+
+structure binding 必须（MUST）升级为完整 canonical descriptor（binding kind：governed location/explicit game object；action-specific role：source/target/fee source/production structure/受控扩展；room；location kind；object ID；expected structure type；expected room；snapshot/incarnation ID；required/optional 语义；descriptor version）并全部进入 contract digest（AC4）、intent、quarantine 与 durable authority identity；同结构不同 role 不得（MUST NOT）静默合并；label 仅诊断；required descriptor 的结构缺失必须（MUST）构建拒绝；reconciler 必须（MUST）获得完整 descriptor；global reset 后必须（MUST）仍能按原 descriptor 解释动作；descriptor 数组必须（MUST）有界。
+
+#### Scenario: descriptor 字段变化改变 digest
+
+- **WHEN** role/expectedType/expectedRoom/object ID 任一变化
+- **THEN** contract digest 变化（旧 bundle 失效）
+
+#### Scenario: 同结构不同 role 不合并
+
+- **WHEN** 同一结构被声明为 source 与 fee_source 两个 role
+- **THEN** 保留两条 descriptor（各自进 digest 与 durable authority）
+
+### Requirement: facade 职责拆分（第十一轮）
+
+facade 必须（MUST）将 authorization ledger（registry/budget/bundle 签发/atomic redemption/policy-cohort 处理）、resolution authority（capability registry/issuance/consume/staged resolution 调用）、recovery coordinator（intent/quarantine 转移、semantic matrix、cross-store finalized proof、pre-execution fault recovery）与 write-readiness state collector（状态收集+单一评估器）拆分为内部模块；facade 只保留生命周期编排、公开 read/query facade 与模块组合，不得（MUST NOT）再直接持有 bundle Maps、capability WeakSets 或 resolution kernel 细节；模块依赖方向必须（MUST）清晰且无新循环依赖；拆分必须（MUST）行为保持（现有公开行为兼容）；不得（MUST NOT）借拆分接入真实 writer 或大改业务策略。
+
+#### Scenario: 拆分行为保持
+
+- **WHEN** 拆分后运行全部既有 treasury 测试
+- **THEN** 公开 API 行为不变（既有断言不改即通过）
+
+#### Scenario: 架构边界阻止绕过
+
+- **WHEN** 新模块尝试绕过 kernel/store 边界
+- **THEN** 架构测试失败（全量生产源码扫描）
+
+### Requirement: 临时脚本清理与 evidence 一致性（第十一轮）
+
+`src/runtime/treasury/fix-ac3.cjs` 与同类一次性 patch 脚本必须（MUST）从 git tree 删除；Round 10 evidence 必须（MUST）修正为如实记录（不声称该文件已移除、如实说明于第十一轮删除、不篡改历史提交事实）；git tree 中不得（MUST NOT）存在写死开发者本地绝对路径的临时修补脚本。
+
+#### Scenario: 清理后仓库一致
+
+- **WHEN** 检索 fix-ac3.cjs 与写死本地路径的临时 patch 脚本
+- **THEN** 均不存在；evidence 陈述与仓库实际一致
