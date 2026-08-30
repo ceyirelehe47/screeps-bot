@@ -53,6 +53,7 @@ import {
   TREASURY_TRANSACTION_ID_MAX_LENGTH,
   isValidTreasuryTransactionId,
 } from "@/runtime/treasury/transactionId";
+import type { TreasuryWriteFaultMarker } from "@/runtime/treasury/writeFault";
 
 export const TREASURY_RECEIPT_RETENTION_TICKS = 5_000;
 export const TREASURY_RECEIPT_MAX_ENTRIES = 4_096;
@@ -88,6 +89,8 @@ interface TreasuryMemoryBranch {
     nextExpiryTick?: number | null;
   };
   lifecycle?: TreasuryLifecycleMemory;
+  /** staged commit 意外故障的最小持久 marker（详见 writeFault.ts）。 */
+  writeFault?: TreasuryWriteFaultMarker;
 }
 
 type RuntimeMemoryWithTreasury = NonNullable<Memory["runtime"]> & {
@@ -153,8 +156,9 @@ export function peekTreasuryLifecycle(): TreasuryLifecycleMemory | undefined {
 
 /**
  * 确定性操作计数（heap，global reset 归零；facade metrics 聚合）。
- * fullScans = Object.keys 全表扫描次数（load 校验 / 迁移 / 到点清理）；
- * admissionFastPaths = 未触发任何扫描即得出结论的 admission 调用；
+ * fullScans = Object.keys 全表扫描次数（load 校验 / 迁移 / 到点清理 /
+ * fatal-store 巡检）；entriesVisited = 全部扫描上下文实际访问的条目数；
+ * admissionFastPaths = 未触发任何扫描即得出结论的 admission 次数；
  * admissionFullStoreBlocked = 满容 O(1) 拒绝（含回收后仍满的拒绝）；
  * expiryCleanupScans = 到达过期点触发的清理扫描次数。
  */
@@ -165,6 +169,16 @@ const receiptEvents = {
   admissionFastPaths: 0,
   admissionFullStoreBlocked: 0,
   expiryCleanupScans: 0,
+  /** 全部扫描上下文（load 校验/迁移/过期清理/fatal 巡检）访问的条目总数。 */
+  receiptEntriesVisited: 0,
+  /** 迁移扫描次数（源 store 遍历 + 迁移自检各计一次）。 */
+  receiptMigrationScans: 0,
+  /** load 校验（v3 形状自检）访问的条目数。 */
+  receiptLoadValidationEntries: 0,
+  /** 到期清理访问的条目数（清理与 nextExpiry 重算已合并为单次遍历）。 */
+  receiptExpiryCleanupEntries: 0,
+  /** fatal-store 巡检（beginTick 清理在 fail-closed 下的剩余量统计）访问的条目数。 */
+  receiptFatalInspectionEntries: 0,
 };
 
 export interface TreasuryReceiptCounters {
@@ -174,6 +188,11 @@ export interface TreasuryReceiptCounters {
   readonly admissionFastPaths: number;
   readonly admissionFullStoreBlocked: number;
   readonly expiryCleanupScans: number;
+  readonly receiptEntriesVisited: number;
+  readonly receiptMigrationScans: number;
+  readonly receiptLoadValidationEntries: number;
+  readonly receiptExpiryCleanupEntries: number;
+  readonly receiptFatalInspectionEntries: number;
   /** 剩余可登记槽位（MAX − entryCount − pending 预留；查询路径 peek 只读）。 */
   readonly slotsRemaining: number;
   /** 下一次可能过期的 tick（null = 空表或 store 不可用）。 */
@@ -233,15 +252,19 @@ function computeNextExpiryTick(settled: Record<string, number>): number | null {
  * v3 store 完整形状自检（迁移写回前与 load 校验共用；一次全表扫描）：
  * own key 数、entryCount、每个存储键格式、每个 settled tick、
  * nextExpiryTick 与实际 min 的一致性。返回 null = 合法，否则有界错误描述。
+ * context 决定 entries 计数归属（load 校验 / 迁移自检）。
  */
 function validateReceiptStoreShape(
   store: TreasuryReceiptStore,
   nowTick: number,
+  context: "load" | "migration",
 ): string | null {
   receiptEvents.receiptFullScans += 1;
   const settled = store.settled;
   if (!settled || typeof settled !== "object") return "settled 非对象";
   const ownKeys = Object.keys(settled);
+  receiptEvents.receiptEntriesVisited += ownKeys.length;
+  if (context === "load") receiptEvents.receiptLoadValidationEntries += ownKeys.length;
   if (store.entryCount !== ownKeys.length) {
     return `entryCount 校验失败: 声明 ${String(store.entryCount)} 实际 ${String(ownKeys.length)}`;
   }
@@ -280,7 +303,11 @@ function migrateLegacyReceiptStore(
   }
   const settled: Record<string, number> = {};
   let entryCount = 0;
-  for (const rawKey of Object.keys(source)) {
+  receiptEvents.receiptFullScans += 1;
+  receiptEvents.receiptMigrationScans += 1;
+  const sourceKeys = Object.keys(source);
+  receiptEvents.receiptEntriesVisited += sourceKeys.length;
+  for (const rawKey of sourceKeys) {
     // v1 裸键原样作为 transactionId（不 decode——`abc` 与 `t:abc` 不碰撞）；
     // v2 键已是编码形态，decode 后按 transactionId 重新走同一编码管道。
     const transactionId =
@@ -317,7 +344,7 @@ function migrateLegacyReceiptStore(
   };
   // 迁移成功后立即验证：own key 数 / entry count / 存储键格式 / settled tick
   // / 元数据一致性（validateReceiptStoreShape 即该自检）。
-  const shapeError = validateReceiptStoreShape(candidate, nowTick);
+  const shapeError = validateReceiptStoreShape(candidate, nowTick, "migration");
   if (shapeError !== null) {
     return fatalRuntime(raw, `v${String(fromVersion)} 迁移自检失败（原 store 保持不变）: ${shapeError}`);
   }
@@ -350,7 +377,7 @@ function loadReceiptStoreRuntime(): ReceiptStoreRuntime {
     const candidate = raw as unknown as TreasuryReceiptStore;
     // global reset 后的元数据验证：entryCount/键格式/value/nextExpiryTick
     // 一次全量校验（每 heap 生命周期一次），损坏即 fail closed。
-    const shapeError = validateReceiptStoreShape(candidate, Game.time);
+    const shapeError = validateReceiptStoreShape(candidate, Game.time, "load");
     if (shapeError !== null) {
       heapStoreRuntime = fatalRuntime(raw, `${shapeError}（手工损坏，拒绝登记直至人工清理）`);
       return heapStoreRuntime;
@@ -503,15 +530,28 @@ export function releaseAllTreasuryReceiptReservations(): number {
 }
 
 /** 结算写入（admission 通过/预留兑现后的原子提交段调用）。 */
-export function commitSettledReceipt(transactionId: string, tick: number): void {
+/** 结算写入结果：written=已写入；already_settled=幂等命中；fatal=store 不可写。 */
+export type TreasuryReceiptWriteResult =
+  | { readonly status: "written" }
+  | { readonly status: "already_settled" }
+  | { readonly status: "fatal"; readonly detail: string };
+
+/**
+ * 结算写入（admission 通过/预留兑现后的 staged commit 段调用）。返回明确
+ * 结果——fatal 时调用方必须进入 write-fault 处理，不得静默 no-op 后继续
+ * 返回 committed。
+ */
+export function commitSettledReceipt(transactionId: string, tick: number): TreasuryReceiptWriteResult {
   const runtime = loadReceiptStoreRuntime();
-  if (runtime.fatal) return; // admission 已拦截；防御性 no-op
+  if (runtime.fatal) {
+    return { status: "fatal", detail: runtime.fatal };
+  }
   const { store } = runtime;
   const key = encodeReceiptKey(transactionId);
   const existing = lookupSettled(store.settled, key, tick);
   if (existing !== undefined) {
     pendingAdmissions.delete(transactionId); // 双保险：不重复叠加，仍释放预留
-    return;
+    return { status: "already_settled" };
   }
   store.settled[key] = tick;
   store.entryCount += 1;
@@ -523,6 +563,7 @@ export function commitSettledReceipt(transactionId: string, tick: number): void 
   if (store.nextExpiryTick === null || freshExpiry < store.nextExpiryTick) {
     store.nextExpiryTick = freshExpiry;
   }
+  return { status: "written" };
 }
 
 interface CleanupAccumulator {
@@ -532,28 +573,38 @@ interface CleanupAccumulator {
 }
 
 /**
- * 到期清理：只删除**经过完整验证且超过 retention** 的正常 receipt（一次
- * 全表扫描），完成后重算 nextExpiryTick。损坏 value 绝不删除（保留计数）。
+ * 到期清理：只删除**经过完整验证且超过 retention** 的正常 receipt。单次
+ * 遍历同时完成删除与 nextExpiryTick 重算（幸存条目 min 就地维护，不再
+ * 二次全表扫描）；损坏 value 绝不删除（保留计数）。
  */
 function runExpiryCleanup(store: TreasuryReceiptStore, nowTick: number): CleanupAccumulator {
   const acc: CleanupAccumulator = { retentionEvicted: 0, corruptedSkipped: 0 };
   receiptEvents.receiptFullScans += 1;
   receiptEvents.expiryCleanupScans += 1;
+  const keys = Object.keys(store.settled);
+  receiptEvents.receiptEntriesVisited += keys.length;
+  receiptEvents.receiptExpiryCleanupEntries += keys.length;
   let mutated = false;
-  for (const key of Object.keys(store.settled)) {
+  let minSurvivor: number | null = null;
+  for (const key of keys) {
     const settledAt = (store.settled as Record<string, unknown>)[key];
     if (!isValidSettledTick(settledAt, nowTick)) {
       acc.corruptedSkipped += 1;
+      // 损坏条目不会被删除：min 计算视为 0（保守最早过期点，宁早扫描不漏删）。
+      minSurvivor = 0;
       continue;
     }
-    if (settledAt >= nowTick - TREASURY_RECEIPT_RETENTION_TICKS) continue;
+    if (settledAt >= nowTick - TREASURY_RECEIPT_RETENTION_TICKS) {
+      if (minSurvivor === null || settledAt < minSurvivor) minSurvivor = settledAt;
+      continue;
+    }
     delete store.settled[key];
     store.entryCount -= 1;
     acc.retentionEvicted += 1;
     mutated = true;
   }
   if (mutated) store.updatedAt = nowTick;
-  store.nextExpiryTick = computeNextExpiryTick(store.settled);
+  store.nextExpiryTick = minSurvivor === null ? null : minSurvivor + TREASURY_RECEIPT_RETENTION_TICKS + 1;
   return acc;
 }
 
@@ -578,7 +629,11 @@ export interface TreasuryReceiptCleanupReport {
 export function cleanupTreasuryReceipts(nowTick: number): TreasuryReceiptCleanupReport {
   const runtime = loadReceiptStoreRuntime();
   if (runtime.fatal) {
-    const remaining = Object.keys(runtime.store.settled ?? {}).length;
+    receiptEvents.receiptFullScans += 1;
+    const fatalKeys = Object.keys(runtime.store.settled ?? {});
+    receiptEvents.receiptEntriesVisited += fatalKeys.length;
+    receiptEvents.receiptFatalInspectionEntries += fatalKeys.length;
+    const remaining = fatalKeys.length;
     return {
       retentionEvicted: 0,
       corruptedSkipped: 0,
@@ -620,12 +675,13 @@ export function readTreasuryLifecycle(): TreasuryLifecycleMemory | undefined {
   return peekTreasuryLifecycle();
 }
 
-/** 仅供测试：清除 Treasury 持久状态（receipts + lifecycle）并失效 heap 缓存。 */
+/** 仅供测试：清除 Treasury 持久状态（receipts + lifecycle + writeFault）并失效 heap 缓存。 */
 export function clearTreasuryPersistenceForTest(): void {
   const branch = (Memory.runtime as RuntimeMemoryWithTreasury | undefined)?.treasury;
   if (branch) {
     delete branch.receipts;
     delete branch.lifecycle;
+    delete branch.writeFault;
   }
   heapStoreRuntime = null;
   pendingAdmissions.clear();
@@ -635,6 +691,11 @@ export function clearTreasuryPersistenceForTest(): void {
   receiptEvents.admissionFastPaths = 0;
   receiptEvents.admissionFullStoreBlocked = 0;
   receiptEvents.expiryCleanupScans = 0;
+  receiptEvents.receiptEntriesVisited = 0;
+  receiptEvents.receiptMigrationScans = 0;
+  receiptEvents.receiptLoadValidationEntries = 0;
+  receiptEvents.receiptExpiryCleanupEntries = 0;
+  receiptEvents.receiptFatalInspectionEntries = 0;
 }
 
 /** 校验 receipt 键与 transactionId 规范一致（诊断/测试用）。 */

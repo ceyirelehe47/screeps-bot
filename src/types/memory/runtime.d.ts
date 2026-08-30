@@ -617,6 +617,25 @@ declare global {
         lastBeginTick?: number;
         lastEndTick?: number;
       };
+      /**
+       * write-fault marker（第五轮新增）：staged commit 意外写故障（receipt/
+       * heap/handle 状态发布失败、endTick 时 handle 仍 executing 等）的最
+       * 小、有界持久快照——只保留首个 unresolved 故障（根因），绝不持久化
+       * 正常 transaction/journal/overlay。存在 unresolved marker 期间全部
+       * Treasury writer fail closed（write_admission_locked），只有显式管理
+       * /修复路径（clearTreasuryWriteFaultForRepair）可解除；global reset
+       * 后凭本 marker 仍可发现 Treasury 曾发生 unresolved commit fault。
+       */
+      writeFault?: {
+        transactionId: string;
+        digest: string;
+        tick: number;
+        kind: string;
+        source: string;
+        phase: string;
+        status: "unresolved";
+        recordedAt: number;
+      };
     };
     treasuryPerf?: Record<string, number | string>;
     powerBankBoost?: Record<

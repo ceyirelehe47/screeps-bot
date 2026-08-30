@@ -60,6 +60,7 @@ import {
   commitSettledReceipt,
   hasSettledReceipt,
   releaseAllTreasuryReceiptReservations,
+  type TreasuryReceiptWriteResult,
 } from "@/runtime/treasury/receipts";
 
 const RECONCILIATION_SAMPLE_CAP = 16;
@@ -178,15 +179,22 @@ export interface TreasuryProjectionController {
    */
   recordTransaction(input: TreasuryTransactionInput, decisionObservation: TreasuryObservationView): TreasurySettlementResult;
   /**
-   * 两阶段 commit 兑现：tentative → committed。不做任何业务 admission
-   * （资源/容量/receipt 槽位已在 prepare 预留并保持有效——Game API 已
-   * 返回 OK 后不得再因业务条件拒绝）；幂等检查后直接原子写入。
+   * staged commit 第 1 段——receipt 发布（Memory 权威，先于 heap）：返回
+   * 明确结果；fatal 时调用方必须进入 write-fault 处理（不得静默 no-op
+   * 后继续返回 committed）。
    */
-  commitPreparedTransaction(
+  publishPreparedReceipt(transactionId: string, tick: number): TreasuryReceiptWriteResult;
+  /**
+   * staged commit 第 2 段——heap 发布：journal + committed overlay + 容量
+   * 聚合 + heap 幂等缓存 + tentative 兑换。faultHook 在 journal 应用前与
+   * overlay 应用前调用（write-fault 注入点；抛错由调用方统一捕获）。
+   */
+  publishPreparedHeapState(
     canonical: TreasuryCanonicalTransaction,
     shape: TreasuryValidatedTransactionShape,
-    reservationKey: string,
-  ): TreasurySettlementResult;
+    tentativeKey: string,
+    faultHook?: (phase: "journal_publish" | "overlay_publish") => void,
+  ): { readonly postings: number };
   /** 本 tick 累计投影 delta（无 delta 返回 0，不回读 Game）。 */
   projectedDelta(roomName: string, locationKind: "storage" | "terminal", resource: string): number;
   /** 本 tick 该位置的容量净变化（O(1) 位置聚合，不扫描资源 overlay）。 */
@@ -443,6 +451,34 @@ export function createTreasuryProjectionController(
    * heap 缓存 + receipt；tentativeKey 存在时同步完成 tentative → committed
    * 兑现（该预留从 tentative ledger 移除、数值并入 committed overlay）。
    */
+  /** heap 发布段：journal + committed overlay + 容量聚合 + 幂等缓存 + tentative 兑换。 */
+  function applyCommittedHeapState(
+    entry: TreasuryJournalEntry,
+    shape: TreasuryValidatedTransactionShape,
+    tentativeKey?: string,
+    faultHook?: (phase: "journal_publish" | "overlay_publish") => void,
+  ): number {
+    faultHook?.("journal_publish");
+    state.journal.push(entry);
+    faultHook?.("overlay_publish");
+    for (const posting of shape.merged) {
+      const key = overlayKey(posting.roomName, posting.locationKind, posting.resource);
+      state.overlay.set(key, (state.overlay.get(key) ?? 0) + posting.delta);
+    }
+    for (const [locationKey, delta] of shape.capacityDeltaByLocation) {
+      state.capacityDeltas.set(locationKey, (state.capacityDeltas.get(locationKey) ?? 0) + delta);
+    }
+    state.settledThisTick.set(entry.transactionId, entry.recordedAtTick);
+    if (tentativeKey !== undefined) tentativeRelease(tentativeKey);
+    revision += 1;
+    options.onRecorded?.(entry);
+    return entry.postings.length;
+  }
+
+  /**
+   * 原子写入段（单阶段路径；验证已通过）：receipt 先行（fatal → 整笔拒绝、
+   * 零 heap 写入），成功后一次性发布 heap 状态。
+   */
   function writeAcceptedTransaction(
     fields: {
       transactionId: string;
@@ -474,20 +510,13 @@ export function createTreasuryProjectionController(
       recordedAtTick: tick,
       postings: frozenPostings,
     });
-    state.journal.push(entry);
-    for (const posting of shape.merged) {
-      const key = overlayKey(posting.roomName, posting.locationKind, posting.resource);
-      state.overlay.set(key, (state.overlay.get(key) ?? 0) + posting.delta);
+    const receipt = commitSettledReceipt(fields.transactionId, tick);
+    if (receipt.status === "fatal") {
+      // admission 已拦截 fatal store，此处防御性拒绝（零 heap 写入）。
+      return { status: "rejected", reason: "receipt_store_incompatible", detail: receipt.detail };
     }
-    for (const [locationKey, delta] of shape.capacityDeltaByLocation) {
-      state.capacityDeltas.set(locationKey, (state.capacityDeltas.get(locationKey) ?? 0) + delta);
-    }
-    state.settledThisTick.set(fields.transactionId, tick);
-    if (tentativeKey !== undefined) tentativeRelease(tentativeKey);
-    commitSettledReceipt(fields.transactionId, tick);
-    revision += 1;
-    options.onRecorded?.(entry);
-    return { status: "recorded", transactionId: fields.transactionId, postings: frozenPostings.length, tick };
+    const postings = applyCommittedHeapState(entry, shape, tentativeKey);
+    return { status: "recorded", transactionId: fields.transactionId, postings, tick };
   }
 
   function recordTransaction(
@@ -533,33 +562,39 @@ export function createTreasuryProjectionController(
     );
   }
 
-  function commitPreparedTransaction(
+  /** staged commit 第 1 段：receipt 发布（Memory 权威，先于 heap）。 */
+  function publishPreparedReceipt(transactionId: string, tick: number): TreasuryReceiptWriteResult {
+    return commitSettledReceipt(transactionId, tick);
+  }
+
+  /** staged commit 第 2 段：heap 发布（faultHook 为 write-fault 注入点）。 */
+  function publishPreparedHeapState(
     canonical: TreasuryCanonicalTransaction,
     shape: TreasuryValidatedTransactionShape,
-    reservationKey: string,
-  ): TreasurySettlementResult {
-    // 幂等仍优先：prepare→commit 之间被同 id 单阶段登记结算是合法竞态
-    // （该路径已计入 tentative，不会超卖），handle 终态化交由 facade。
-    const settledAt = isSettled(canonical.transactionId);
-    if (settledAt !== undefined) {
-      options.onDuplicateRejected?.(canonical.transactionId);
-      return { status: "already_settled", transactionId: canonical.transactionId, firstRecordedAtTick: settledAt };
-    }
-    // tentative → committed 兑现：不做任何业务 admission——资源/容量/
-    // receipt 槽位在 prepare 时已验证并预留，此后其他 transaction 只能在
-    // tentative 感知授权下行动，不可能侵吞本预留（Game API 已返回 OK 后
-    // 不得再因业务条件拒绝）。
-    return writeAcceptedTransaction(
-      {
-        transactionId: canonical.transactionId,
-        kind: canonical.kind,
-        source: canonical.source,
-        decisionScope: canonical.decisionScope,
-        epochSeq: canonical.decisionEpochSeq,
-      },
-      shape,
-      reservationKey,
+    tentativeKey: string,
+    faultHook?: (phase: "journal_publish" | "overlay_publish") => void,
+  ): { readonly postings: number } {
+    const frozenPostings: readonly TreasuryPosting[] = Object.freeze(
+      shape.merged.map((posting) =>
+        Object.freeze({
+          roomName: posting.roomName,
+          locationKind: posting.locationKind,
+          resource: posting.resource,
+          delta: posting.delta,
+        }),
+      ),
     );
+    const entry: TreasuryJournalEntry = Object.freeze({
+      transactionId: canonical.transactionId,
+      kind: canonical.kind,
+      source: canonical.source,
+      decisionScope: canonical.decisionScope,
+      epochSeq: canonical.decisionEpochSeq,
+      recordedAtTick: Game.time,
+      postings: frozenPostings,
+    });
+    const postings = applyCommittedHeapState(entry, shape, tentativeKey, faultHook);
+    return { postings };
   }
 
   function journalSnapshot(): readonly TreasuryJournalEntry[] {
@@ -875,7 +910,8 @@ export function createTreasuryProjectionController(
     tentativeKeyCounts,
     tentativeReleaseAll,
     recordTransaction,
-    commitPreparedTransaction,
+    publishPreparedReceipt,
+    publishPreparedHeapState,
     projectedDelta,
     locationCapacityDelta,
     projectionRevision: () => revision,

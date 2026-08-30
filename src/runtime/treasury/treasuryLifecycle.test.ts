@@ -668,6 +668,51 @@ describe("Treasury receipt admission 安全契约（retention 内绝不驱逐）
     expect(metrics.receiptNextExpiryTick).toBeNull();
     expect(metrics.receiptSlotsRemaining).toBe(TREASURY_RECEIPT_MAX_ENTRIES);
     expect(peekTreasuryReceiptStore()?.entryCount).toBe(0);
+    // 扫描指标细化（第五轮）：清理与 nextExpiry 重算合并为单次遍历——
+    // fullScans 恰好 +1、entries visited 计入过期清理条目（1 条）。
+    expect(metrics.receiptFullScans).toBe(scansBefore + 1);
+    expect(metrics.receiptExpiryCleanupEntries).toBeGreaterThanOrEqual(1);
+  });
+
+  it("receipt 扫描指标：load 校验/迁移/fatal 巡检的 entries 均被计数", () => {
+    // 直写 v3 store（不经过 ensure——保持 heap 缓存冷态，load 校验路径
+    // 才会在首个 lifecycle 调用时执行形状自检）。
+    const settledAt = Game.time - 10;
+    const settled: Record<string, number> = {};
+    for (let i = 0; i < 3; i += 1) settled[encodeReceiptKey(`seed:${i}`)] = settledAt;
+    Memory.runtime = Memory.runtime ?? {};
+    Memory.runtime.treasury = {
+      receipts: {
+        version: 3,
+        settled,
+        updatedAt: Game.time,
+        entryCount: 3,
+        nextExpiryTick: settledAt + TREASURY_RECEIPT_RETENTION_TICKS + 1,
+      },
+    };
+    const { service } = makeService(); // load 在首个 admission/lifecycle 路径触发
+    service.beginTick();
+    const loaded = service.metrics();
+    expect(loaded.receiptLoadValidationEntries).toBe(3);
+    expect(loaded.receiptEntriesVisited).toBeGreaterThanOrEqual(3);
+    // admission 快路径不新增任何扫描。
+    const scansBefore = service.metrics().receiptFullScans;
+    const visitedBefore = service.metrics().receiptEntriesVisited;
+    expect(
+      service.recordAcceptedTransaction({
+        transactionId: formatTreasuryTransactionId("fast", 1),
+        kind: "terminal.send",
+        source: "test",
+        decision: {
+          scope: service.observation().epoch.scope,
+          epochSeq: service.observation().epoch.epochSeq,
+          observedAtTick: service.observation().epoch.observedAtTick,
+        },
+        postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
+      }).status,
+    ).toBe("recorded");
+    expect(service.metrics().receiptFullScans).toBe(scansBefore);
+    expect(service.metrics().receiptEntriesVisited).toBe(visitedBefore);
   });
 });
 

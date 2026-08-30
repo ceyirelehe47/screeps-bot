@@ -65,6 +65,12 @@ import {
   writeTreasuryLifecycle,
 } from "@/runtime/treasury/receipts";
 import { resolveTreasuryHolder } from "@/runtime/treasury/holderResolution";
+import {
+  isTreasuryWriteAdmissionLocked,
+  recordTreasuryWriteFault,
+  runTreasuryCommitFaultHook,
+  TreasuryCommitFaultError,
+} from "@/runtime/treasury/writeFault";
 import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
 import {
   type TreasuryBalanceView,
@@ -80,7 +86,10 @@ import {
   type TreasuryPreparedCommitResult,
   type TreasuryPreparedHandle,
   type TreasuryPreparedHandleState,
+  type TreasuryPreparedLeakAudit,
+  type TreasuryPreparedLeakSample,
   type TreasuryPreparationResult,
+  type TreasurySafeExecuteResult,
   type TreasuryProjectedArchive,
   type TreasuryQueryContext,
   type TreasuryQueryOwner,
@@ -95,6 +104,9 @@ import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferT
 
 /** 每 tick market-fresh epoch 发行上限（shared 不占额；CPU 保护）。 */
 export const TREASURY_FRESH_EPOCH_LIMIT = 8;
+
+/** tick 边界 outstanding prepared 审计的样本上限（有界）。 */
+export const TREASURY_PREPARED_LEAK_SAMPLE_CAP = 8;
 
 /** 服务实例代际序号（模块级单调递增；跨实例 handle 一律无效）。 */
 let treasuryServiceGenerationSeq = 0;
@@ -170,6 +182,17 @@ export interface TreasuryService {
   commitPreparedTransaction(handle: TreasuryPreparedHandle): TreasuryPreparedCommitResult;
   /** 两阶段 abort：原子释放 tentative 资源/容量/receipt 槽与 handle，零结算写入。 */
   abortPreparedTransaction(handle: TreasuryPreparedHandle): TreasuryPreparedAbortResult;
+  /**
+   * 安全执行包装器（生产 writer 的唯一推荐入口）：prepare → 调用 Game
+   * API 恰好一次 → ok=true commit / ok=false abort / 抛错 abort+rethrow。
+   * prepare 失败时 Game API 不执行；正常完整执行后 outstanding 恒为 0。
+   */
+  executePreparedAction<TAction extends { ok: boolean }>(
+    input: TreasuryTransactionInput,
+    action: () => TAction,
+  ): TreasurySafeExecuteResult<TAction>;
+  /** 最近一次 tick 边界的 outstanding prepared 审计快照（有界样本）。 */
+  preparedLeakAudit(): TreasuryPreparedLeakAudit;
   /** 唯一权威单阶段登记入口：多 posting 原子交易 + 决策 epoch 绑定 + 幂等。 */
   recordAcceptedTransaction(input: TreasuryTransactionInput): TreasurySettlementResult;
   /** 单 posting convenience（内部转 transaction；decision 与幂等语义相同）。 */
@@ -366,6 +389,13 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   const preparedById = new Map<string, PreparedTransaction>();
   /** 服务实例代际：跨 service 实例的 handle 一律无效（global reset 防御）。 */
   const serviceGeneration = nextTreasuryServiceGeneration();
+  /** 最近一次 tick 边界的 outstanding prepared 审计快照（有界样本）。 */
+  let lastPreparedLeakAudit: TreasuryPreparedLeakAudit = Object.freeze({
+    context: "end_tick",
+    outstanding: 0,
+    executing: 0,
+    samples: Object.freeze([]),
+  });
 
   /**
    * epochSeq 单点递增（每发行恰好 +1，无空洞——issueEpoch 只登记不递增）。
@@ -418,14 +448,64 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
    * tentative 预留与 receipt 槽（零 journal 状态）。endTick 侧的审计
    * （outstanding 计数/样本/executing 严重故障）在 facade.endTick 内联。
    */
-  function invalidatePreparedTransactions(): void {
+  function invalidatePreparedTransactions(context: "end_tick" | "begin_tick_remedy"): void {
     if (preparedById.size === 0) return;
+    auditOutstandingPrepared(context);
     for (const record of preparedById.values()) {
       record.state = "expired";
     }
     preparedById.clear();
     projection.tentativeReleaseAll();
     releaseAllTreasuryReceiptReservations();
+  }
+
+  /**
+   * outstanding prepared 审计（endTick / beginTick 补救共用）：绝不静默
+   * 清空——计数 + 有界样本 + 指标；executing 状态视为严重异常，写入
+   * write-fault marker 并进入全局锁（Game API 结果未知的动作必须显式对账）。
+   */
+  function auditOutstandingPrepared(context: "end_tick" | "begin_tick_remedy"): void {
+    if (preparedById.size === 0) return;
+    let outstanding = 0;
+    let executing = 0;
+    const samples: TreasuryPreparedLeakSample[] = [];
+    for (const record of preparedById.values()) {
+      if (record.state === "executing") {
+        executing += 1;
+        recordTreasuryWriteFault({
+          transactionId: record.canonical.transactionId,
+          digest: record.digest,
+          tick: record.preparedAtTick,
+          kind: record.canonical.kind,
+          source: record.canonical.source,
+          phase: "executing_at_end_tick",
+          status: "unresolved",
+          recordedAt: Game.time,
+        });
+        metrics.commitFaults += 1;
+        continue;
+      }
+      outstanding += 1;
+      if (samples.length < TREASURY_PREPARED_LEAK_SAMPLE_CAP) {
+        samples.push(
+          Object.freeze({
+            transactionId: record.canonical.transactionId,
+            digest: record.digest,
+            preparedAtTick: record.preparedAtTick,
+            kind: record.canonical.kind,
+            source: record.canonical.source,
+          }),
+        );
+      }
+    }
+    metrics.preparedOutstandingAtEnd += outstanding;
+    metrics.preparedExecutingAtEnd += executing;
+    lastPreparedLeakAudit = Object.freeze({
+      context,
+      outstanding,
+      executing,
+      samples: Object.freeze(samples),
+    });
   }
 
   /** beginTick 的实际执行体（显式调用与懒兜底共享；调用方保证幂等检查）。 */
@@ -458,7 +538,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
 
     // 跨 tick prepared handle 一律作废（observation 是 tick 级物理快照，
     // 世界已变，必须重新 prepare）；fresh 计数随注册表一起重置。
-    invalidatePreparedTransactions();
+    invalidatePreparedTransactions("begin_tick_remedy");
     epochRegistry.clear();
     freshEpochsThisTick = 0;
     const sharedEpochSeq = nextEpochSeq();
@@ -539,9 +619,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (!current || current.tick !== Game.time || current.ended) return; // 幂等
       current.archived = projection.archiveProjectedFinal(current.observation);
       current.ended = true;
-      // tick 关闭：未决 prepare 全部作废（Game API 结果未知的动作留待
-      // 对账发现；绝不跨 tick 保留 handle）。
-      invalidatePreparedTransactions();
+      // tick 关闭：未决 prepare 审计（计数/样本/executing 严重故障）后全部
+      // 作废（Game API 结果未知的动作留待对账/修复发现；绝不跨 tick 保留
+      // handle，绝不静默当作正常 abort）。
+      invalidatePreparedTransactions("end_tick");
       metrics.lifecycleEndTicks += 1;
       writeTreasuryLifecycle({ lastEndTick: Game.time });
     },
@@ -725,6 +806,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         metrics.settlementsAfterEndRejected += 1;
         return { status: "rejected", reason: "tick_closed", detail: `tick ${Game.time} 已 endTick` };
       }
+      // write admission 全局锁：unresolved write fault 期间阻断新 prepare。
+      if (isTreasuryWriteAdmissionLocked()) {
+        metrics.transactionsRejectedInvalid += 1;
+        return {
+          status: "rejected",
+          reason: "write_admission_locked",
+          detail: "存在 unresolved write fault（显式修复路径解除前阻断全部 writer）",
+        };
+      }
       const decision = resolveDecisionEpoch(input.decision);
       if ("rejection" in decision) {
         return { status: "rejected", reason: decision.rejection.reason, detail: decision.rejection.detail };
@@ -816,35 +906,79 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (record.state === "faulted") {
         return { status: "rejected", reason: "handle_faulted", detail: "handle 所在 commit 发生意外的内部写故障" };
       }
-      if (record.state === "executing" || record.state === "committing") {
-        return invalid(`handle 处于 ${record.state} 状态，不可重入`);
+      if (record.state === "committing") {
+        return invalid("handle 处于 committing 状态，不可重入");
       }
-      // tentative → committed 兑现（无业务 admission；资源/容量/槽位已预留）。
-      record.state = "committing";
-      const result = projection.commitPreparedTransaction(
-        record.canonical,
-        record.shape,
-        record.tentativeKey,
-      );
-      if (result.status === "recorded") {
-        record.state = "committed";
-        preparedById.delete(record.canonical.transactionId);
-        metrics.preparedCommits += 1;
-        return { status: "committed", transactionId: result.transactionId, postings: result.postings, tick: result.tick };
+      // write admission 全局锁：unresolved write fault 期间阻断一切 commit。
+      if (isTreasuryWriteAdmissionLocked()) {
+        return {
+          status: "rejected",
+          reason: "write_admission_locked",
+          detail: "存在 unresolved write fault（显式修复路径解除前阻断全部 writer）",
+        };
       }
-      if (result.status === "already_settled") {
-        // prepare→commit 之间被同 id 结算（合法竞态）：handle 终态化并释放
-        // tentative 预留（该 id 的结算事实已存在）。
+      // 幂等防御：prepare→commit 之间被同 id 结算（合法竞态，该路径已计入
+      // tentative 不会超卖）——handle 终态化。
+      const settledBeforeCommit = projection.isSettled(record.canonical.transactionId);
+      if (settledBeforeCommit !== undefined) {
         record.state = "committed";
         preparedById.delete(record.canonical.transactionId);
         projection.tentativeRelease(record.tentativeKey);
         releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        return result;
+        return {
+          status: "already_settled",
+          transactionId: record.canonical.transactionId,
+          firstRecordedAtTick: settledBeforeCommit,
+        };
       }
-      // 理论不可达（commit 路径无业务 admission）：按内部故障处理。
-      record.state = "faulted";
-      metrics.transactionsRejectedInvalid += 1;
-      return { status: "rejected", reason: "handle_faulted", detail: result.detail };
+      // ── staged commit：所有可预期失败已在 prepare 前置，此处只做发布。
+      //    任一阶段意外失败 → faulted 终态 + Memory write-fault marker +
+      //    全局锁；tentative 与 receipt 槽绝不释放 ─────────────────────────
+      record.state = "committing";
+      try {
+        runTreasuryCommitFaultHook("receipt_publish");
+        const receipt = projection.publishPreparedReceipt(record.canonical.transactionId, Game.time);
+        if (receipt.status === "fatal") {
+          throw new TreasuryCommitFaultError("receipt_publish", receipt.detail);
+        }
+        runTreasuryCommitFaultHook("heap_publish");
+        const heap = projection.publishPreparedHeapState(
+          record.canonical,
+          record.shape,
+          record.tentativeKey,
+          (phase) => runTreasuryCommitFaultHook(phase),
+        );
+        runTreasuryCommitFaultHook("handle_state");
+        record.state = "committed";
+        preparedById.delete(record.canonical.transactionId);
+        metrics.preparedCommits += 1;
+        return {
+          status: "committed",
+          transactionId: record.canonical.transactionId,
+          postings: heap.postings,
+          tick: Game.time,
+        };
+      } catch (error) {
+        // 意外写故障（Game API 已 OK）：不得当作普通 rejected/aborted。
+        const phase = error instanceof TreasuryCommitFaultError ? error.phase : "commit_unexpected";
+        record.state = "faulted";
+        metrics.commitFaults += 1;
+        recordTreasuryWriteFault({
+          transactionId: record.canonical.transactionId,
+          digest: record.digest,
+          tick: Game.time,
+          kind: record.canonical.kind,
+          source: record.canonical.source,
+          phase,
+          status: "unresolved",
+          recordedAt: Game.time,
+        });
+        return {
+          status: "rejected",
+          reason: "handle_faulted",
+          detail: `commit 在 ${phase} 阶段发生写故障（已记录 write-fault marker，阻断后续 writer 直至修复）`,
+        };
+      }
     },
 
     abortPreparedTransaction(handle: TreasuryPreparedHandle): TreasuryPreparedAbortResult {
@@ -881,8 +1015,17 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (record.state === "faulted") {
         return { status: "rejected", reason: "handle_faulted", detail: "faulted handle 的预留不释放（对账前保持占用）" };
       }
-      if (record.state === "executing" || record.state === "committing") {
-        return invalid(`handle 处于 ${record.state} 状态，不可 abort`);
+      if (record.state === "committing") {
+        return invalid("handle 处于 committing 状态，不可 abort");
+      }
+      // write admission 全局锁：unresolved write fault 期间释放操作同样阻断
+      // （保守——故障未对账前不改变任何预留面）。
+      if (isTreasuryWriteAdmissionLocked()) {
+        return {
+          status: "rejected",
+          reason: "write_admission_locked",
+          detail: "存在 unresolved write fault（显式修复路径解除前阻断全部 writer）",
+        };
       }
       // 原子释放：tentative 资源/容量 + receipt 槽 + handle 终态；不写
       // settled receipt / committed journal / overlay / projected capacity。
@@ -892,6 +1035,62 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       releaseTreasuryReceiptReservation(record.canonical.transactionId);
       metrics.transactionPreparesAborted += 1;
       return { status: "aborted", transactionId: record.canonical.transactionId };
+    },
+
+    executePreparedAction<TAction extends { ok: boolean }>(
+      input: TreasuryTransactionInput,
+      action: () => TAction,
+    ): TreasurySafeExecuteResult<TAction> {
+      const prepared = this.prepareTransaction(input);
+      if (prepared.status === "already_settled") {
+        return { status: "already_settled", transactionId: prepared.transactionId, firstRecordedAtTick: prepared.firstRecordedAtTick };
+      }
+      if (prepared.status !== "prepared") {
+        return { status: "prepare_rejected", reason: prepared.reason, ...(prepared.detail !== undefined ? { detail: prepared.detail } : {}) };
+      }
+      const record = preparedByHandle.get(prepared.handle);
+      if (!record) {
+        // 理论不可达（handle 刚签发）：按协议违规拒绝，不执行 Game API。
+        return { status: "prepare_rejected", reason: "invalid_handle", detail: "签发后 handle 记录缺失（内部不一致）" };
+      }
+      record.state = "executing";
+      let actionResult: TAction;
+      try {
+        // Game API 恰好执行一次（本包装器是唯一调用点）。
+        actionResult = action();
+      } catch (error) {
+        // 抛错：自动 abort（零结算）后 rethrow 原始异常。
+        record.state = "prepared"; // abort 允许从 prepared/executing 终态化
+        this.abortPreparedTransaction(prepared.handle);
+        throw error;
+      }
+      if (actionResult && actionResult.ok) {
+        const committed = this.commitPreparedTransaction(prepared.handle);
+        if (committed.status === "committed") {
+          return { status: "executed_committed", handle: prepared.handle, actionResult, committedAtTick: committed.tick };
+        }
+        if (committed.status === "already_settled") {
+          return { status: "already_settled", transactionId: committed.transactionId, firstRecordedAtTick: committed.firstRecordedAtTick };
+        }
+        // staged commit 意外故障（handle_faulted/write_admission_locked）：
+        // 向调用方显式暴露结构化失败——Game API 已成功但 Treasury 未结算。
+        return {
+          status: "prepare_rejected",
+          reason: committed.reason,
+          detail: committed.detail !== undefined ? committed.detail : "commit 兑现失败（Game API 已成功）",
+        };
+      }
+      const aborted = this.abortPreparedTransaction(prepared.handle);
+      return {
+        status: "executed_aborted",
+        handle: prepared.handle,
+        actionResult,
+        ...(aborted.status !== "aborted" ? {} : {}),
+      };
+    },
+
+    preparedLeakAudit(): TreasuryPreparedLeakAudit {
+      return lastPreparedLeakAudit;
     },
 
     recordAcceptedTransaction(input: TreasuryTransactionInput): TreasurySettlementResult {
@@ -905,6 +1104,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (state.ended) {
         metrics.settlementsAfterEndRejected += 1;
         return { status: "rejected", reason: "tick_closed", detail: `tick ${Game.time} 已 endTick` };
+      }
+      // write admission 全局锁：unresolved write fault 期间阻断单阶段登记。
+      if (isTreasuryWriteAdmissionLocked()) {
+        metrics.transactionsRejectedInvalid += 1;
+        return {
+          status: "rejected",
+          reason: "write_admission_locked",
+          detail: "存在 unresolved write fault（显式修复路径解除前阻断全部 writer）",
+        };
       }
       const decision = resolveDecisionEpoch(input.decision);
       if ("rejection" in decision) return decision.rejection;
@@ -969,6 +1177,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         receiptExpiryCleanupScans: receiptCounters.expiryCleanupScans,
         receiptSlotsRemaining: receiptCounters.slotsRemaining,
         receiptNextExpiryTick: receiptCounters.nextExpiryTick,
+        receiptEntriesVisited: receiptCounters.receiptEntriesVisited,
+        receiptMigrationScans: receiptCounters.receiptMigrationScans,
+        receiptLoadValidationEntries: receiptCounters.receiptLoadValidationEntries,
+        receiptExpiryCleanupEntries: receiptCounters.receiptExpiryCleanupEntries,
+        receiptFatalInspectionEntries: receiptCounters.receiptFatalInspectionEntries,
+        writeAdmissionLocked: isTreasuryWriteAdmissionLocked() ? 1 : 0,
       };
     },
 
@@ -982,6 +1196,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       epochRegistry.clear();
       preparedByHandle.clear();
       preparedById.clear();
+      lastPreparedLeakAudit = Object.freeze({
+        context: "end_tick",
+        outstanding: 0,
+        executing: 0,
+        samples: Object.freeze([]),
+      });
     },
   };
 

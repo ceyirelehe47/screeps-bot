@@ -241,6 +241,43 @@ export type TreasuryPreparedAbortResult =
   | { readonly status: "already_finalized"; readonly transactionId: string; finalizedAs: "aborted" }
   | { readonly status: "rejected"; readonly reason: TreasuryRejectionReason; readonly detail?: string };
 
+/** tick 边界 outstanding prepared 的有界审计样本。 */
+export interface TreasuryPreparedLeakSample {
+  readonly transactionId: string;
+  readonly digest: string;
+  readonly preparedAtTick: number;
+  readonly kind: string;
+  readonly source: string;
+}
+
+/** 最近一次 tick 边界审计快照（有界；executing>0 即视为严重异常）。 */
+export interface TreasuryPreparedLeakAudit {
+  readonly context: "end_tick" | "begin_tick_remedy";
+  readonly outstanding: number;
+  readonly executing: number;
+  readonly samples: readonly TreasuryPreparedLeakSample[];
+}
+
+/**
+ * 安全执行包装器结果：prepare 失败 → Game API 不执行；action 返回
+ * {ok:true} → commit；返回 {ok:false} → 自动 abort；action 抛错 →
+ * 自动 abort 后 rethrow（调用方以异常感知失败）。callback 恰好执行一次。
+ */
+export type TreasurySafeExecuteResult<TAction extends { ok: boolean }> =
+  | {
+      readonly status: "executed_committed";
+      readonly handle: TreasuryPreparedHandle;
+      readonly actionResult: TAction;
+      readonly committedAtTick: number;
+    }
+  | {
+      readonly status: "executed_aborted";
+      readonly handle: TreasuryPreparedHandle;
+      readonly actionResult: TAction;
+    }
+  | { readonly status: "already_settled"; readonly transactionId: string; readonly firstRecordedAtTick: number }
+  | { readonly status: "prepare_rejected"; readonly reason: TreasuryRejectionReason; readonly detail?: string };
+
 /** 一笔已结算 transaction 的冻结 journal 条目（postings 全量保留在 heap）。 */
 export interface TreasuryJournalEntry {
   readonly transactionId: string;
@@ -547,6 +584,24 @@ export interface TreasuryMetrics {
   invalidHandleRejections: number;
   /** canonical payload digest 生成次数（prepare 与冲突判定）。 */
   digestGenerations: number;
+  /** tick 边界仍 outstanding（prepared 未终态）的 handle 数（累计）。 */
+  preparedOutstandingAtEnd: number;
+  /** tick 边界处于 executing（Game API 结果未知）的 handle 数——严重故障信号。 */
+  preparedExecutingAtEnd: number;
+  /** staged commit 意外写故障次数（每次记录 write-fault marker）。 */
+  commitFaults: number;
+  /** write admission 全局锁状态（1 = unresolved write fault 锁定中；gauge）。 */
+  writeAdmissionLocked: number;
+  /** receipt 全部扫描上下文访问的条目总数。 */
+  receiptEntriesVisited: number;
+  /** 迁移扫描次数（源遍历 + 迁移自检）。 */
+  receiptMigrationScans: number;
+  /** load 校验（v3 形状自检）访问的条目数。 */
+  receiptLoadValidationEntries: number;
+  /** 到期清理访问的条目数（清理与 nextExpiry 重算单次遍历）。 */
+  receiptExpiryCleanupEntries: number;
+  /** fatal-store 巡检访问的条目数。 */
+  receiptFatalInspectionEntries: number;
   /** 非法查询上下文（非法资源/重复房间/重复位置/NaN withhold 等）fail-closed 次数。 */
   queryInvalidContexts: number;
   reconciliationInflowMismatches: number;
@@ -605,6 +660,15 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     preparedCommits: 0,
     invalidHandleRejections: 0,
     digestGenerations: 0,
+    preparedOutstandingAtEnd: 0,
+    preparedExecutingAtEnd: 0,
+    commitFaults: 0,
+    writeAdmissionLocked: 0,
+    receiptEntriesVisited: 0,
+    receiptMigrationScans: 0,
+    receiptLoadValidationEntries: 0,
+    receiptExpiryCleanupEntries: 0,
+    receiptFatalInspectionEntries: 0,
     queryInvalidContexts: 0,
     reconciliationInflowMismatches: 0,
     reconciliationOutflowMismatches: 0,
