@@ -54,7 +54,9 @@ function injectQuarantineEntry(transactionId: string): void {
     phase: "executing_at_end_tick",
     outcome: "started_unknown",
     settlement: "quarantined",
-    deltas: [],
+    // 【第十四轮】低层严格矩阵要求 deltas 非空（空数组写入被拒，quarantine
+    // 无法建立——本组用例只验证 readiness blocker，容量/committed 语义不断言）。
+    deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
     recordedAt: Game.time,
   });
 }

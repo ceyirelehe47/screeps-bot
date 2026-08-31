@@ -52,8 +52,14 @@ function makeService(): TreasuryTestService {
   return treasuryTestService(service);
 }
 
+/**
+ * 【第十四轮】低层 fixture 的 durable identity 由事实真实派生（写入前
+ * identity 重算校验——假 digest 会被拒绝）。覆盖事实字段（如 source）即
+ * 派生不同的合法 identity；显式覆盖 durableIdentityDigest 仍保留（构造
+ * 与事实不一致的篡改形态——写入被拒）。
+ */
 function baseIntent(overrides: Partial<TreasuryIntentEntry> = {}): TreasuryIntentEntry {
-  return {
+  const base: TreasuryIntentEntry = {
     authorityLevel: "lowlevel",
     transactionId: "id_tx",
     digest: "0123456789abcdef",
@@ -63,15 +69,23 @@ function baseIntent(overrides: Partial<TreasuryIntentEntry> = {}): TreasuryInten
     postings: [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }],
     outcome: "not_started",
     settlement: "ready",
-    durableIdentityDigest: "aaaa00000000bbbb",
     createdAtTick: Game.time,
     updatedAtTick: Game.time,
+    durableIdentityDigest: computeTreasuryDurableIdentityDigest({
+      transactionId: overrides.transactionId ?? "id_tx",
+      digest: overrides.digest ?? "0123456789abcdef",
+      actionKind: overrides.actionKind ?? "test.transfer",
+      postings: (overrides.postings ?? [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }]).map((leg) => ({ ...leg })),
+      source: overrides.source ?? "test",
+    }),
     ...overrides,
   };
+  return base;
 }
 
+/** 【第十四轮】quarantine fixture 的 durable identity 同样由事实真实派生（写入前重算校验）。 */
 function baseQuarantine(overrides: Partial<TreasuryQuarantineEntry> = {}): TreasuryQuarantineEntry {
-  return {
+  const base = {
     transactionId: "id_tx",
     digest: "0123456789abcdef",
     tick: Game.time,
@@ -82,9 +96,16 @@ function baseQuarantine(overrides: Partial<TreasuryQuarantineEntry> = {}): Treas
     recordedAt: Game.time,
     outcome: "started_unknown",
     settlement: "quarantined",
-    durableIdentityDigest: "aaaa00000000bbbb",
+    durableIdentityDigest: computeTreasuryDurableIdentityDigest({
+      transactionId: overrides.transactionId ?? "id_tx",
+      digest: overrides.digest ?? "0123456789abcdef",
+      actionKind: overrides.kind ?? "test.transfer",
+      postings: (overrides.deltas ?? [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }]).map((leg) => ({ ...leg })),
+      source: overrides.source ?? "test",
+    }),
     ...overrides,
   } as TreasuryQuarantineEntry;
+  return base;
 }
 
 beforeEach(() => {
@@ -100,44 +121,48 @@ describe("统一 durable action identity（第十一轮 3.13.5）", () => {
     expect(first.status).toBe("written");
     // 同完整 identity 重试 → already_present 幂等。
     expect(writeTreasuryIntentEntry(baseIntent()).status).toBe("already_present");
-    // 不同 durable identity（同 txId）→ identity_conflict，store 原数据不动。
-    const conflict = writeTreasuryIntentEntry(baseIntent({ durableIdentityDigest: "cccc11111111dddd" }));
+    // 不同 durable identity（同 txId、不同 source 事实 → 合法不同 identity）→
+    // identity_conflict，store 原数据不动（【第十四轮】假 digest 会被写入前
+    // 重算拒绝——conflict 只在两个合法 identity 之间判定）。
+    const conflict = writeTreasuryIntentEntry(baseIntent({ source: "test-alt" }));
     expect(conflict.status).toBe("rejected");
     if (conflict.status === "rejected") {
       expect(conflict.reason).toBe("identity_conflict");
       expect(conflict.detail).toContain("durable identity");
     }
     const stored = readTreasuryIntentEntry("id_tx");
-    expect(stored?.durableIdentityDigest).toBe("aaaa00000000bbbb");
+    expect(stored?.durableIdentityDigest).toBe(baseIntent().durableIdentityDigest);
   });
 
   it("quarantine 同 ID 不同 identity → identity_conflict；legacy 空对空匹配", () => {
     expect(quarantineTreasuryTransaction(baseQuarantine()).status).toBe("written");
-    const conflict = quarantineTreasuryTransaction(baseQuarantine({ durableIdentityDigest: "eeee22222222ffff" }));
+    const conflict = quarantineTreasuryTransaction(baseQuarantine({ source: "test-alt" }));
     expect(conflict.status).toBe("rejected");
     if (conflict.status === "rejected") {
       expect(conflict.reason).toBe("identity_conflict");
     }
-    expect(readTreasuryQuarantineEntry("id_tx")?.durableIdentityDigest).toBe("aaaa00000000bbbb");
-    // legacy 空 identity 对空 identity 匹配（迁移残留双写幂等）。
+    expect(readTreasuryQuarantineEntry("id_tx")?.durableIdentityDigest).toBe(baseQuarantine().durableIdentityDigest);
+    // 【第十四轮】legacy 空 identity 形态由显式 legacy 等级表达（运行时
+    // lowlevel 恒携带派生 durable identity）：空对空匹配（迁移残留双写幂等）。
     clearTreasuryPersistenceForTest();
-    expect(quarantineTreasuryTransaction(baseQuarantine({ durableIdentityDigest: undefined })).status).toBe("written");
-    expect(quarantineTreasuryTransaction(baseQuarantine({ durableIdentityDigest: undefined })).status).toBe("already_present");
-    // 空 vs 非空 → conflict（保守）。
-    expect(quarantineTreasuryTransaction(baseQuarantine({ durableIdentityDigest: "aaaa00000000bbbb" })).status).toBe("rejected");
+    const legacyBase = { ...baseQuarantine(), authorityLevel: "legacy" as const, durableIdentityDigest: undefined };
+    expect(quarantineTreasuryTransaction(legacyBase).status).toBe("written");
+    expect(quarantineTreasuryTransaction(legacyBase).status).toBe("already_present");
+    // 空（legacy）vs 非空（lowlevel 派生）→ conflict（保守）。
+    expect(quarantineTreasuryTransaction(baseQuarantine()).status).toBe("rejected");
   });
 
   it("intent/quarantine 双权威 durable identity 不一致 → inconsistent fail closed", () => {
     writeTreasuryIntentEntry(
-      baseIntent({ outcome: "started_unknown", settlement: "faulted", durableIdentityDigest: "aaaa00000000bbbb" }),
+      baseIntent({ outcome: "started_unknown", settlement: "faulted" }),
     );
     quarantineTreasuryTransaction(
-      baseQuarantine({ durableIdentityDigest: "9999888877776666" }),
+      baseQuarantine({ source: "test-alt" }),
     );
     const authority = resolveTreasuryUnresolvedAuthority("id_tx");
     expect(authority.status).toBe("inconsistent");
     if (authority.status === "inconsistent") {
-      expect(authority.detail).toContain("durable identity 不一致");
+      expect(authority.detail).toContain("durableIdentityDigest 不完整或不一致");
     }
   });
 

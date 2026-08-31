@@ -302,7 +302,8 @@ describe("token 失效矩阵", () => {
       phase: "executing_at_end_tick",
       outcome: "started_unknown",
       settlement: "quarantined",
-      deltas: [],
+      // 【第十四轮】低层矩阵要求 postings 非空（空 deltas 写入被拒——revision 不会推进）。
+      deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
       recordedAt: Game.time,
     });
     if (a.status === "authorized") {

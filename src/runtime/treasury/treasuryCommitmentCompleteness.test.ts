@@ -286,7 +286,8 @@ describe("第六轮 authorizationSafe 联合判定与 blockers", () => {
       kind: "test", source: "test", phase: "executing_at_end_tick",
       outcome: "started_unknown",
       settlement: "quarantined",
-      deltas: [], recordedAt: Game.time,
+      // 【第十四轮】低层矩阵要求 postings 非空（空 deltas 写入被拒）。
+      deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }], recordedAt: Game.time,
     });
     const view = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });
     expect(view.authorizationSafe).toBe(false);

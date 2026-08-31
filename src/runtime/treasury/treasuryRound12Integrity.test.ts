@@ -160,9 +160,12 @@ describe("authorization fault publication（第十二轮 3.1/3.2）", () => {
   it("store 满载：authority 写入被拒 → 不发布无 authority 的普通 marker，发布 forensic marker；writer 可解释阻断", () => {
     const service = makeService();
     // 预填满 fault store（经合法写入路径 seed——同时确保 store 已创建）。
+    // 【第十四轮】低层 seed 须满足严格低层矩阵：actionKind 必填（缺省
+    // durableIdentityDigest 由事实自动派生）。
     const seedEntry = {
       transactionId: "seed",
       digest: "0123456789abcdef",
+      actionKind: "test.transfer",
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
       faultTick: Game.time,
       outcome: "not_started" as const,
@@ -192,6 +195,7 @@ describe("authorization fault publication（第十二轮 3.1/3.2）", () => {
           const seed = writeTreasuryAuthorizationFaultEntry({
             transactionId: `window_full:${i}`,
             digest: "0123456789abcdef",
+            actionKind: "test.transfer", // 【第十四轮】低层矩阵 actionKind 必填
             postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
             faultTick: Game.time,
             outcome: "not_started",
@@ -234,6 +238,7 @@ describe("authorization fault publication（第十二轮 3.1/3.2）", () => {
         const boot = writeTreasuryAuthorizationFaultEntry({
           transactionId: "fatal_boot",
           digest: "0123456789abcdef",
+          actionKind: "test.transfer", // 【第十四轮】低层矩阵 actionKind 必填
           postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
           faultTick: Game.time,
           outcome: "not_started",
@@ -302,6 +307,7 @@ describe("authorization fault publication（第十二轮 3.1/3.2）", () => {
     const seed = {
       transactionId: "seed",
       digest: "0123456789abcdef",
+      actionKind: "test.transfer", // 【第十四轮】低层矩阵 actionKind 必填
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
       faultTick: Game.time,
       outcome: "not_started" as const,
@@ -357,6 +363,7 @@ describe("tombstone / finalized proof identity（第十二轮 3.3/3.4）", () =>
       digest: "1111111111111111",
       resolution: "not-executed",
       stage: "final",
+      proofLevel: "lowlevel",
       actionTick: Game.time,
       observationTick: Game.time,
       resolvedAtTick: Game.time,
@@ -626,29 +633,60 @@ describe("digest 重算验证（第十二轮 3.6）", () => {
     };
   }
 
+  /**
+   * 【第十四轮】modern intent seed：显式 authorityLevel="modern" + required
+   * 字段矩阵全齐（contractId/contractDigest/adapterVersion/adapterRegistration
+   * /adapterSemanticIdentity/durablePayload(+Version)/structureFacts/cohort
+   * facts+digest/ownerIdentity/policyIdentity/postings）；durableIdentityDigest
+   * 由全部持久事实真实派生（写入前 identity 重算校验——低层携带 cohort 等
+   * modern 字段会被立即拒绝 invalid_entry）。
+   */
   function seedModernIntent(transactionId: string): void {
     const cohort = cohortFacts(transactionId);
+    const cohortDigest = computeTreasuryAuthorizationCohortDigest(cohort);
+    const postings = [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -80 }];
+    const structureFacts = [
+      { bindingKind: "governed_location" as const, role: "source" as const, roomName: "W1N57", locationKind: "storage", structureId: "stor-1", required: true, version: 1 },
+    ];
     const identity = computeTreasuryDurableIdentityDigest({
       transactionId,
       digest: "6666666666666666",
       actionKind: "test.transfer",
-      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -80 }],
+      postings: postings.map((leg) => ({ ...leg })),
       source: "test",
-      authorizationCohortDigest: computeTreasuryAuthorizationCohortDigest(cohort),
-      adapterSemanticIdentity: "test.transfer@reconciler-semantics-v1",
+      contractId: cohort.contractId,
+      contractDigest: cohort.contractDigest,
+      adapterRegistrationId: cohort.adapterRegistrationId,
+      adapterSemanticIdentity: cohort.adapterSemanticIdentity,
+      durablePayload: "dp",
+      durablePayloadVersion: 1,
+      structureFacts: structureFacts.map((fact) => ({ ...fact })),
+      authorizationCohortDigest: cohortDigest,
+      ownerIdentity: cohort.ownerIdentity,
+      policyIdentity: "p@v1:dd-1",
     });
     const write = writeTreasuryIntentEntry({
       transactionId,
+      authorityLevel: "modern",
       digest: "6666666666666666",
       actionKind: "test.transfer",
       kind: "test.transfer",
       source: "test",
-      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -80 }],
+      postings,
       outcome: "not_started",
       settlement: "ready",
+      contractId: cohort.contractId,
+      contractDigest: cohort.contractDigest,
+      adapterVersion: 1,
+      adapterRegistrationId: cohort.adapterRegistrationId,
+      adapterSemanticIdentity: cohort.adapterSemanticIdentity,
+      durablePayload: "dp",
+      durablePayloadVersion: 1,
+      structureFacts,
+      ownerIdentity: cohort.ownerIdentity,
+      policyIdentity: "p@v1:dd-1",
       authorizationCohort: cohort,
-      authorizationCohortDigest: computeTreasuryAuthorizationCohortDigest(cohort),
-      adapterSemanticIdentity: "test.transfer@reconciler-semantics-v1",
+      authorizationCohortDigest: cohortDigest,
       durableIdentityDigest: identity,
       createdAtTick: Game.time,
       updatedAtTick: Game.time,
@@ -887,6 +925,7 @@ describe("authorization fault store health 与边界回归（第十二轮 3.9/3.
     const boot = writeTreasuryAuthorizationFaultEntry({
       transactionId: "boot",
       digest: "0123456789abcdef",
+      actionKind: "test.transfer", // 【第十四轮】低层矩阵 actionKind 必填
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
       faultTick: Game.time,
       outcome: "not_started",
@@ -895,13 +934,14 @@ describe("authorization fault store health 与边界回归（第十二轮 3.9/3.
     });
     expect(boot.status).toBe("written");
     const store = Memory.runtime!.treasury!.authorizationFaults!;
-    store.version = 99 as unknown as 3;
+    store.version = 99 as unknown as 4;
     resetTreasuryAuthorizationFaultRuntimeForTest();
     expect(treasuryAuthorizationFaultBlockers().blocking).toBe(true);
     const written = writeTreasuryAuthorizationFaultEntry({
       transactionId: "ver_fail",
       authorityLevel: "lowlevel",
       digest: "0123456789abcdef",
+      actionKind: "test.transfer", // 【第十四轮】低层矩阵 actionKind 必填
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
       faultTick: Game.time,
       outcome: "not_started",
@@ -916,7 +956,7 @@ describe("authorization fault store health 与边界回归（第十二轮 3.9/3.
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = Memory.runtime.treasury ?? {};
     Memory.runtime!.treasury!.authorizationFaults = {
-      version: 1 as unknown as 3,
+      version: 1 as unknown as 4,
       entries: {
         "af:legacy_v1": {
           transactionId: "legacy_v1",
@@ -935,7 +975,7 @@ describe("authorization fault store health 与边界回归（第十二轮 3.9/3.
     const entry = readTreasuryAuthorizationFaultEntry("legacy_v1");
     expect(entry).toBeDefined();
     expect((entry as { legacyV1?: boolean }).legacyV1).toBe(true);
-    expect(Memory.runtime!.treasury!.authorizationFaults!.version).toBe(3);
+    expect(Memory.runtime!.treasury!.authorizationFaults!.version).toBe(4); // 【第十四轮】authorizationFaults v4
   });
 
   it("正常 contract → bundle → intent → callback OK → commit 路径与 non-OK → abort 路径保持通过", () => {

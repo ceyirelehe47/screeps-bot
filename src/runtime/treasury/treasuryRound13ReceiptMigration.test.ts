@@ -375,6 +375,7 @@ describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节
       digest: identity.digest,
       resolution: "committed",
       stage: "resolving",
+      proofLevel: "lowlevel",
       actionTick: Game.time,
       settledAtTick: Game.time + 10,
       observationTick: Game.time,
@@ -401,6 +402,7 @@ describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节
       digest: identity.digest,
       resolution: "committed",
       stage: "resolving",
+      proofLevel: "lowlevel",
       actionTick: Game.time,
       settledAtTick: Game.time + 10,
       observationTick: Game.time,
@@ -424,6 +426,7 @@ describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节
       digest: identity.digest,
       resolution: "committed",
       stage: "resolving",
+      proofLevel: "lowlevel",
       actionTick: Game.time,
       settledAtTick: Game.time,
       observationTick: Game.time,
@@ -453,7 +456,7 @@ describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节
       recordedAt: Game.time,
       outcome: "started_unknown",
       settlement: "quarantined",
-      durableIdentityDigest: "fedcba0987654321",
+      // 【第十四轮】低层 durable identity 由事实自动派生（假 digest 会被写入前重算拒绝）。
       adapterSemanticIdentity: "test.transfer@reconciler-semantics-v1",
     });
     expect(quarantineWrite.status).not.toBe("rejected");
@@ -463,6 +466,7 @@ describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节
       digest: "1234567890abcdef",
       resolution: "not-executed",
       stage: "final",
+      proofLevel: "legacy",
       actionTick: Game.time,
       observationTick: Game.time,
       resolvedAtTick: Game.time,
@@ -487,6 +491,7 @@ describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节
         digest: "1234567890abcdef",
         resolution: "committed",
         stage: "resolving",
+        proofLevel: "forensic",
         actionTick: Game.time,
         settledAtTick: Game.time + 10,
         observationTick: Game.time,

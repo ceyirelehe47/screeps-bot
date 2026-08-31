@@ -800,6 +800,6 @@ describe("完整 structure descriptor（第十一轮 3.13.9 / AC4）", () => {
       version: 1,
       structureId: "stor-1",
     });
-    expect((Memory.runtime!.treasury!.intents as { version: number }).version).toBe(5);
+    expect((Memory.runtime!.treasury!.intents as { version: number }).version).toBe(6);
   });
 });

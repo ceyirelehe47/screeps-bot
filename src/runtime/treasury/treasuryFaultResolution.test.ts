@@ -21,6 +21,7 @@
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
 import { clearTreasuryPersistenceForTest, hasSettledReceipt, peekTreasuryReceiptStore, readTreasurySettlementProof } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
+import { computeTreasuryDurableIdentityDigest } from "@/runtime/treasury/durableIdentity";
 import {
   readTreasuryWriteFault,
   setTreasuryCommitFaultInjectorForTest,
@@ -331,7 +332,7 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     const receiptTickBefore = Game.time;
     // 人为构造同一 id 的 quarantine entry（故障后对账场景的等价前置态；先
     // 建合法 store——正常 commit 路径不产生 quarantine）。
-    Memory.runtime!.treasury!.quarantine = { version: 4, entries: {}, entryCount: 0 };
+    Memory.runtime!.treasury!.quarantine = { version: 5, entries: {}, entryCount: 0 };
     const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
     // 【第十三轮】fixture 的 digest 与既有 modern receipt proof 一致
     //（identity-aware refresh：authority 为 digest-only legacy attempt 时按
@@ -342,6 +343,20 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     store.entries["q:ts1_refresh"] = {
       transactionId: "ts1_refresh",
       authorityLevel: "lowlevel",
+      // 【第十四轮】低层矩阵：durableIdentityDigest 由事实派生 + lowlevelSource
+      // 来源标记 + postings 非空（deltas 为空不再可写）。
+      // 【第十四轮】低层矩阵：durableIdentityDigest 由事实派生（事实与原
+      // transaction 的 freshInput 一致——与既有 receipt proof 的身份匹配）
+      // + lowlevelSource 来源标记 + postings 非空（deltas 为空不再可写）。
+      lowlevelSource: "runtime-lowlevel@v1",
+      durableIdentityDigest: computeTreasuryDurableIdentityDigest({
+        transactionId: "ts1_refresh",
+        digest: refreshDigest,
+        actionKind: "terminal.send",
+        postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+        source: "test",
+        adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
+      }),
       digest: refreshDigest,
       tick: Game.time,
       kind: "terminal.send",
@@ -350,7 +365,7 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
       phase: "receipt_publish",
       outcome: "returned_ok",
       settlement: "quarantined",
-      deltas: [],
+      deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
       recordedAt: Game.time,
     };
     store.entryCount += 1;
@@ -585,6 +600,7 @@ describe("staged atomic（故障注入与恢复）", () => {
         digest: "0123456789abcdef",
         resolution: "committed",
         stage: "final",
+        proofLevel: "legacy",
         actionTick: Game.time,
         settledAtTick: Game.time,
         observationTick: Game.time,
@@ -629,6 +645,17 @@ describe("staged atomic（故障注入与恢复）", () => {
         ...(contractDigest !== undefined ? { contractDigest } : {}),
         ...(authorizationCohortDigest !== undefined ? { authorizationCohortDigest } : {}),
         ...(durableIdentityDigest !== undefined ? { durableIdentityDigest } : {}),
+        // 【第十四轮】运行时视角的 proof class 推导（与迁移规则不同——迁移对
+        // 历史数据保守 forensic，运行时按 authority 事实）：全身份 → identity-
+        // bound；durable-only → lowlevel；无身份 → legacy；其余部分 → forensic。
+        proofLevel:
+          contractDigest !== undefined && authorizationCohortDigest !== undefined && durableIdentityDigest !== undefined
+            ? "identity-bound"
+            : durableIdentityDigest !== undefined
+              ? "lowlevel"
+              : contractDigest === undefined && authorizationCohortDigest === undefined
+                ? "legacy"
+                : "forensic",
       }).status,
     ).not.toBe("rejected");
     const { commitSettledReceipt } = jest.requireActual("@/runtime/treasury/receipts") as typeof import("@/runtime/treasury/receipts");
@@ -666,6 +693,17 @@ describe("staged atomic（故障注入与恢复）", () => {
         ...(contractDigest !== undefined ? { contractDigest } : {}),
         ...(authorizationCohortDigest !== undefined ? { authorizationCohortDigest } : {}),
         ...(durableIdentityDigest !== undefined ? { durableIdentityDigest } : {}),
+        // 【第十四轮】运行时视角的 proof class 推导（与迁移规则不同——迁移对
+        // 历史数据保守 forensic，运行时按 authority 事实）：全身份 → identity-
+        // bound；durable-only → lowlevel；无身份 → legacy；其余部分 → forensic。
+        proofLevel:
+          contractDigest !== undefined && authorizationCohortDigest !== undefined && durableIdentityDigest !== undefined
+            ? "identity-bound"
+            : durableIdentityDigest !== undefined
+              ? "lowlevel"
+              : contractDigest === undefined && authorizationCohortDigest === undefined
+                ? "legacy"
+                : "forensic",
       }).status,
     ).not.toBe("rejected");
     Game.time += 3; // 跨多个 tick 后恢复。
@@ -711,6 +749,17 @@ describe("staged atomic（故障注入与恢复）", () => {
         ...(contractDigest !== undefined ? { contractDigest } : {}),
         ...(authorizationCohortDigest !== undefined ? { authorizationCohortDigest } : {}),
         ...(durableIdentityDigest !== undefined ? { durableIdentityDigest } : {}),
+        // 【第十四轮】运行时视角的 proof class 推导（与迁移规则不同——迁移对
+        // 历史数据保守 forensic，运行时按 authority 事实）：全身份 → identity-
+        // bound；durable-only → lowlevel；无身份 → legacy；其余部分 → forensic。
+        proofLevel:
+          contractDigest !== undefined && authorizationCohortDigest !== undefined && durableIdentityDigest !== undefined
+            ? "identity-bound"
+            : durableIdentityDigest !== undefined
+              ? "lowlevel"
+              : contractDigest === undefined && authorizationCohortDigest === undefined
+                ? "legacy"
+                : "forensic",
       }).status,
     ).not.toBe("rejected");
     expect(hasSettledReceipt("ts1_stale_receipt")).toBe(staleTick); // 旧 receipt 仍在
@@ -742,6 +791,12 @@ describe("staged atomic（故障注入与恢复）", () => {
         ...(releaseAuthority.durableIdentityDigest !== undefined
           ? { durableIdentityDigest: releaseAuthority.durableIdentityDigest }
           : {}),
+        proofLevel:
+          releaseAuthority.authorityLevel === "modern"
+            ? "identity-bound"
+            : releaseAuthority.authorityLevel === "lowlevel"
+              ? "lowlevel"
+              : "forensic",
       }).status,
     ).not.toBe("rejected");
     expect(readTreasuryQuarantineEntry("ts1_release")).toBeDefined(); // 释放未完成
@@ -775,7 +830,7 @@ describe("staged atomic（故障注入与恢复）", () => {
     const health = peekTreasuryResolutionStoreHealth();
     expect(health.healthy).toBe(true);
     expect(readTreasuryResolutionTombstone("legacy1")?.stage).toBe("final");
-    expect(Memory.runtime.treasury.resolutions?.version).toBe(3);
+    expect(Memory.runtime.treasury.resolutions?.version).toBe(4);
     expect(Memory.runtime.treasury.resolutions?.entryCount).toBe(1);
   });
 });
@@ -1044,6 +1099,7 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
           digest: "0123456789abcdef",
           resolution: "not-executed",
           stage: "final",
+          proofLevel: "legacy",
           actionTick: ancient,
           observationTick: ancient,
           resolvedAtTick: ancient,
@@ -1056,6 +1112,7 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
         digest: "0123456789abcdef",
         resolution: "committed",
         stage: "resolving",
+        proofLevel: "legacy",
         settledAtTick: ancient,
         actionTick: ancient,
         observationTick: ancient,
@@ -1069,6 +1126,7 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
       digest: "0123456789abcdef",
       resolution: "not-executed",
       stage: "final",
+      proofLevel: "legacy",
       actionTick: Game.time,
       observationTick: Game.time,
       resolvedAtTick: Game.time,
@@ -1088,6 +1146,7 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
           digest: "0123456789abcdef",
           resolution: "committed",
           stage: "resolving",
+          proofLevel: "legacy",
           settledAtTick: ancient,
           actionTick: ancient,
           observationTick: ancient,
@@ -1101,6 +1160,7 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
       digest: "0123456789abcdef",
       resolution: "not-executed",
       stage: "final",
+      proofLevel: "legacy",
       actionTick: Game.time,
       observationTick: Game.time,
       resolvedAtTick: Game.time,
@@ -1130,6 +1190,7 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
         digest: "0123456789abcdef",
         resolution: "not-executed",
         stage: "final",
+        proofLevel: "legacy",
         actionTick: Game.time,
         observationTick: Game.time,
         resolvedAtTick: Game.time,

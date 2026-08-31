@@ -41,6 +41,7 @@ import {
 } from "@/runtime/treasury/intents";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
+import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import * as intentsModule from "@/runtime/treasury/intents";
 import * as quarantineModule from "@/runtime/treasury/quarantine";
 import { makeTreasuryTestTransferAdapter, registerTreasuryActionAdapter } from "@/runtime/treasury/actionContracts";
@@ -308,7 +309,15 @@ describe("global reset 恢复", () => {
     // committed（returned_ok + finalized）：settled receipt proof 存在 → 释放。
     clearTreasuryPersistenceForTest();
     seedIntent("ti_final_ok_proof", "committed");
-    expect(commitSettledReceipt("ti_final_ok_proof", Game.time).status).not.toBe("fatal");
+    // 【第十四轮】低层 intent 现携带派生 durable identity——receipt proof
+    // 须绑定完整身份（legacy receipt 无身份 → insufficient 不释放）。
+    const seededProof = readTreasuryIntentEntry("ti_final_ok_proof");
+    expect(
+      commitSettledReceipt("ti_final_ok_proof", Game.time, {
+        digest: "0123456789abcdef",
+        durableIdentityDigest: seededProof?.durableIdentityDigest,
+      }).status,
+    ).not.toBe("fatal");
     Game.time += 1;
     makeService().beginTick();
     expect(readTreasuryQuarantineEntry("ti_final_ok_proof")).toBeUndefined();
@@ -323,15 +332,22 @@ describe("global reset 恢复", () => {
     // aborted（aborted_final + finalized）：not-executed tombstone proof → 释放。
     clearTreasuryPersistenceForTest();
     seedIntent("ti_final_aborted_proof", "aborted");
+    // 【第十四轮】低层 attempt 携带派生 durable identity——proof 须绑定同一
+    // 身份（proofLevel=lowlevel），否则 insufficient 不释放。
+    const abortedSeed = readTreasuryIntentEntry("ti_final_aborted_proof");
     writeTreasuryResolutionTombstone({
       transactionId: "ti_final_aborted_proof",
       digest: "0123456789abcdef",
       resolution: "not-executed",
       stage: "final",
+      proofLevel: "lowlevel",
       actionTick: Game.time,
       observationTick: Game.time,
       resolvedAtTick: Game.time,
       source: "test",
+      ...(abortedSeed?.durableIdentityDigest !== undefined
+        ? { durableIdentityDigest: abortedSeed.durableIdentityDigest }
+        : {}),
     });
     Game.time += 1;
     makeService().beginTick();
@@ -360,7 +376,7 @@ describe("emergency intent authority（quarantine 写失败）", () => {
     const service = makeService();
     seedIntent("ti_emergency", "executing", -800);
     // 损坏 quarantine store：未知版本使一切写入/读取 fatal（先建合法 store）。
-    Memory.runtime!.treasury!.quarantine = { version: 3 as unknown as 4, entries: {}, entryCount: 0 };
+    Memory.runtime!.treasury!.quarantine = { version: 3 as unknown as 5, entries: {}, entryCount: 0 };
     (Memory.runtime!.treasury!.quarantine as { version: number }).version = 99;
     resetTreasuryIntentRuntimeForTest();
     Game.time += 1;
@@ -387,7 +403,7 @@ describe("emergency intent authority（quarantine 写失败）", () => {
   it("quarantine 写失败后修复 store：下一 tick 恢复重试成功（intent→quarantine 转换完成）", () => {
     const service = makeService();
     seedIntent("ti_retry", "executing");
-    Memory.runtime!.treasury!.quarantine = { version: 3 as unknown as 4, entries: {}, entryCount: 0 };
+    Memory.runtime!.treasury!.quarantine = { version: 3 as unknown as 5, entries: {}, entryCount: 0 };
     (Memory.runtime!.treasury!.quarantine as { version: number }).version = 99;
     resetTreasuryIntentRuntimeForTest();
     Game.time += 1;
@@ -457,7 +473,7 @@ describe("store 健康契约", () => {
     expect(health.healthy).toBe(true);
     expect(health.entryCount).toBe(1);
     const store = Memory.runtime!.treasury!.intents!;
-    expect(store.version).toBe(5);
+    expect(store.version).toBe(6);
     expect(store.entryCount).toBe(1);
     // 冻结快照：外部修改不生效。
     const snapshot = readTreasuryIntentEntry("ti_health")!;
@@ -718,9 +734,16 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
           contractId: "ac:abcdef0123456789",
           contractDigest: "abcdef0123456789",
           adapterVersion: 3,
+          adapterRegistrationId: "2222222222222222",
+          adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
           durablePayload: "transfer|W1N57:storage|W1N57:terminal|energy|500",
           durablePayloadVersion: 1,
+          structureFacts: [
+            { bindingKind: "governed_location", role: "source", roomName: "W1N57", locationKind: "storage", structureId: "stor-1", required: true, version: 1 },
+          ],
         },
+        // 【第十四轮】modern 定级成对不变量：contract 路径携带 cohort redemption。
+        redeemAuthorization: () => ({ status: "ok" as const, cohort: contractCohort("ti_contract", "ac:abcdef0123456789", "abcdef0123456789") }),
       },
     );
     expect(result.status).toBe("executed_committed");
@@ -756,7 +779,16 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
             contractId: "ac:0000000000000000",
             contractDigest: "0000000000000000",
             adapterVersion: 1,
+            adapterRegistrationId: "2222222222222222",
+            adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
+            durablePayload: "dp",
+            durablePayloadVersion: 1,
+            structureFacts: [
+              { bindingKind: "governed_location", role: "source", roomName: "W1N57", locationKind: "storage", structureId: "stor-1", required: true, version: 1 },
+            ],
           },
+          // 【第十四轮】modern 定级成对不变量：contract 路径携带 cohort redemption。
+          redeemAuthorization: () => ({ status: "ok" as const, cohort: contractCohort("ti_cid", "ac:0000000000000000", "0000000000000000") }),
         },
       );
       expect(callbackCalls).toBe(0);
@@ -797,7 +829,7 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
     // 触发 load：read-back 或任何写路径访问 → v1 迁移 v3。
     const entry = readTreasuryIntentEntry("ti_v1");
     expect(entry?.transactionId).toBe("ti_v1");
-    expect((Memory.runtime.treasury.intents as { version: number }).version).toBe(5);
+    expect((Memory.runtime.treasury.intents as { version: number }).version).toBe(6);
     expect(Memory.runtime.treasury.intents.entries["i:ti_v1"].digest).toBe("0123456789abcdef");
     // 旧 phase "ready" → (not_started, ready)。
     expect(entry?.outcome).toBe("not_started");
@@ -850,12 +882,43 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
   });
 });
 
+/** 【第十四轮】contract 路径测试注入的 cohort facts（与 intentContract 事实一致——modern 定级的成对不变量）。 */
+function contractCohort(transactionId: string, contractId: string, contractDigest: string): TreasuryAuthorizationCohortFacts {
+  return {
+    ownerIdentity: "game-object:stor-1",
+    policyId: "no-reserve",
+    policyVersion: 1,
+    policyRegistrationId: "1111111111111111",
+    policyDecisionDigest: "allow",
+    emergencyOverride: false,
+    epochSeq: 1,
+    revisions: {
+      commitmentRevision: 1,
+      projectionRevision: 1,
+      quarantineRevision: 0,
+      intentRevision: 0,
+      reservationStoreRevision: 1,
+    },
+    adapterRegistrationId: "2222222222222222",
+    adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
+    contractId,
+    contractDigest,
+    transactionId,
+    authorizationLegDigests: ["4444444444444444"],
+    receiverCapacityDigest: "none",
+    issuedTick: Game.time,
+    authorizationDigest: "5555555555555555",
+  };
+}
+
 describe("durable authority cohesion（第十轮 5.1：quarantine v2 完整合同事实）", () => {
-  /** contract 路径的 execution options（完整合同身份 fixture）。 */
+  /** contract 路径的 execution options（完整合同身份 fixture；【第十四轮】补齐 modern 矩阵字段 + cohort redemption hook）。 */
   const contractFacts: NonNullable<Parameters<TreasuryTestService["executePreparedAction"]>[2]>["intentContract"] = {
     contractId: "ac:abcdef0123456789",
     contractDigest: "abcdef0123456789",
     adapterVersion: 2,
+    adapterRegistrationId: "2222222222222222",
+    adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
     durablePayload: "transfer|W1N57:storage|W1N57:terminal|energy|500",
     durablePayloadVersion: 1,
     structureFacts: [
@@ -870,7 +933,11 @@ describe("durable authority cohesion（第十轮 5.1：quarantine v2 完整合�
     const result = service.executePreparedAction(
       freshInput(service, "dac_full"),
       () => ({ ok: true as const }),
-      { intentContract: contractFacts },
+      {
+        intentContract: contractFacts,
+        // 【第十四轮】modern 定级成对不变量：contract 路径携带 cohort redemption。
+        redeemAuthorization: () => ({ status: "ok" as const, cohort: contractCohort("dac_full", contractFacts.contractId, contractFacts.contractDigest) }),
+      },
     );
     expect(result.status).toBe("executed_unsettled");
     const quarantined = readTreasuryQuarantineEntry("dac_full");
@@ -919,25 +986,33 @@ describe("durable authority cohesion（第十轮 5.1：quarantine v2 完整合�
   });
 
   it("v1 quarantine 迁移 v2：并存 intent 合同事实合并；无并存 intent 标记 legacyV1", () => {
-    // 并存 intent（v3 直写，携带合同事实）。
-    const withIntent = writeTreasuryIntentEntry({
-      transactionId: "dac_mig1",
-      digest: "0123456789abcdef",
-      actionKind: "terminal.send",
-      kind: "terminal.send",
-      source: "test",
-      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
-      outcome: "started_unknown",
-      settlement: "executing",
-      contractId: "ac:1111111111111111",
-      contractDigest: "1111111111111111",
-      adapterVersion: 3,
-      createdAtTick: Game.time,
-      updatedAtTick: Game.time,
-    });
-    expect(withIntent.status).toBe("written");
+    // 【第十四轮】运行时写入不再接受 partial-modern（contractId 无 cohort）——
+    // 并存 intent 以 v3 旧 store 数据表达（迁移输入，绕过运行时矩阵）。
     Memory.runtime = Memory.runtime ?? ({} as never);
     Memory.runtime.treasury = Memory.runtime.treasury ?? ({} as never);
+    Memory.runtime.treasury.intents = {
+      version: 3,
+      entries: {
+        "i:dac_mig1": {
+          transactionId: "dac_mig1",
+          digest: "0123456789abcdef",
+          actionKind: "terminal.send",
+          kind: "terminal.send",
+          source: "test",
+          postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
+          outcome: "started_unknown",
+          settlement: "executing",
+          contractId: "ac:1111111111111111",
+          contractDigest: "1111111111111111",
+          adapterVersion: 3,
+          createdAtTick: Game.time,
+          updatedAtTick: Game.time,
+        },
+      },
+      entryCount: 1,
+      updatedAt: Game.time,
+    } as never;
+    resetTreasuryIntentRuntimeForTest();
     Memory.runtime.treasury.quarantine = {
       version: 1,
       entries: {
@@ -971,10 +1046,14 @@ describe("durable authority cohesion（第十轮 5.1：quarantine v2 完整合�
     expect(merged?.contractDigest).toBe("1111111111111111"); // 并存 intent 合并
     expect(merged?.adapterVersion).toBe(3);
     expect(merged?.legacyV1).toBeUndefined();
+    // 【第十四轮第十节】合并后为 partial-modern（contract 事实无 cohort）——
+    // forensic 隔离（不再可用 modern/lowlevel reconciler）。
+    expect(merged?.authorityLevel).toBe("forensic");
     const legacy = readTreasuryQuarantineEntry("dac_mig2");
     expect(legacy?.outcome).toBe("returned_ok"); // commit 类 phase → returned_ok
     expect(legacy?.legacyV1).toBe(true); // 无并存 intent → legacy 标记
-    expect((Memory.runtime.treasury.quarantine as { version: number }).version).toBe(4);
+    expect(legacy?.authorityLevel).toBe("legacy");
+    expect((Memory.runtime.treasury.quarantine as { version: number }).version).toBe(5);
   });
 
   it("recovery slot：同 ID 双权威（转移窗口残留）只占一个 slot", () => {
@@ -1002,7 +1081,10 @@ describe("durable authority cohesion（第十轮 5.1：quarantine v2 完整合�
   });
 
   it("双权威 contractDigest 不一致 fail closed（capability 签发拒绝）", () => {
-    // intent 携带 contractDigest A（直写）。
+    // 【第十四轮】低层 authority 禁止携带 contractDigest（partial-modern）——
+    // 双权威不一致场景以纯低层形态构造：intent 与 quarantine 的事实不同
+    //（source 不同 → 派生 durable identity 不同）→ 同等级 durable 不一致
+    // fail closed（语义等价：双权威 identity 不一致不得签发）。
     const intentWrite = writeTreasuryIntentEntry({
       transactionId: "dac_conflict",
       digest: "0123456789abcdef",
@@ -1012,22 +1094,20 @@ describe("durable authority cohesion（第十轮 5.1：quarantine v2 完整合�
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
       outcome: "started_unknown",
       settlement: "executing",
-      contractDigest: "1111111111111111",
       createdAtTick: Game.time,
       updatedAtTick: Game.time,
     });
     expect(intentWrite.status).toBe("written");
-    // 直写 v2 quarantine 携带不同 contractDigest（模拟双权威不一致）。
+    // 直写同 id quarantine（source 不同 → 不同 durable identity，模拟双权威不一致）。
     const qw = quarantineTreasuryTransaction({
       transactionId: "dac_conflict",
       digest: "0123456789abcdef",
       tick: Game.time,
       kind: "terminal.send",
-      source: "test",
+      source: "test-alt",
       phase: "executing_at_end_tick",
       outcome: "started_unknown",
       settlement: "quarantined",
-      contractDigest: "2222222222222222",
       deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
       recordedAt: Game.time,
     });
@@ -1071,6 +1151,9 @@ describe("intent 完整 identity 与幂等冲突（第十轮 3.12.7）", () => {
   it("同 ID 旧 intent（低层 test path 直写）不被 production contract 接管：intent_conflict", () => {
     const service = makeService(); // 先建立 tick（避免 beginTick 恢复释放 ready seed）
     // 低层直写 intent（无 contract 身份）：模拟第九轮前测试路径/异常残留。
+    // 【第十四轮】低层 authority 禁止携带 authorizationDigest（partial-modern
+    // 来源不可判定——bundle digest 属于 modern 通道）；旧 intent 的残留形态
+    // 以纯低层事实表达，与新 contract execution 的 durable identity 天然不同。
     const seeded = writeTreasuryIntentEntry({
       transactionId: "idc_low",
       digest: "0123456789abcdef",
@@ -1080,7 +1163,6 @@ describe("intent 完整 identity 与幂等冲突（第十轮 3.12.7）", () => {
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
       outcome: "not_started",
       settlement: "ready",
-      authorizationDigest: "1111111111111111", // 与后续 execution 声明不同的 bundle digest
       createdAtTick: Game.time,
       updatedAtTick: Game.time,
     });
@@ -1109,6 +1191,8 @@ describe("intent 完整 identity 与幂等冲突（第十轮 3.12.7）", () => {
     if (result.status === "prepare_rejected") expect(result.reason).toBe("intent_write_blocked");
     // 旧 intent 原样保留（不被覆盖、不被接管）。
     const retained = readTreasuryIntentEntry("idc_low");
-    expect(retained?.authorizationDigest).toBe("1111111111111111");
+    // 【第十四轮】旧 intent 原样保留（纯低层事实 + 派生 durable identity）。
+    expect(retained?.contractId).toBeUndefined();
+    expect(retained?.durableIdentityDigest).toBeDefined();
   });
 });

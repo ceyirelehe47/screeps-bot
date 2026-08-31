@@ -29,6 +29,7 @@ import { registerTreasuryPolicyResolver, makeNoReserveTreasuryPolicy } from "@/r
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import { writeTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
 import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
+import { computeTreasuryDurableIdentityDigest } from "@/runtime/treasury/durableIdentity";
 
 const ROOMS: RoomSpec[] = [
   {
@@ -64,9 +65,20 @@ function seedExecutingIntent(transactionId: string): void {
 function seedCorruptIntentEntry(outcome: string, settlement: string): void {
   // 懒初始化：先写合法 entry 创建 store，再覆盖损坏组合 entry。
   seedExecutingIntent("sm_seed_init");
+  // 【第十四轮】手塞的低层 entry 须满足严格低层矩阵（lowlevelSource 来源
+  // 标记 + 由事实真实派生的 durableIdentityDigest）——否则损坏先被
+  // authority 矩阵抓到（测不到本用例针对的语义矩阵违规）。
   (Memory.runtime!.treasury!.intents as unknown as { entries: Record<string, unknown> }).entries["i:sm_corrupt"] = {
     transactionId: "sm_corrupt",
     authorityLevel: "lowlevel",
+    lowlevelSource: "runtime-lowlevel@v1",
+    durableIdentityDigest: computeTreasuryDurableIdentityDigest({
+      transactionId: "sm_corrupt",
+      digest: "0123456789abcdef",
+      actionKind: "test.transfer",
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }],
+      source: "test",
+    }),
     digest: "0123456789abcdef",
     actionKind: "test.transfer",
     kind: "test.transfer",
@@ -196,11 +208,16 @@ describe("outcome/settlement/phase 语义矩阵（第十一轮 3.13.6）", () =>
     makeService().beginTick();
     expect(readTreasuryIntentEntry("sm_final_proof")).toBeDefined();
     // 补 proof（not-executed tombstone）→ 下次恢复释放；再重复幂等。
+    // 【第十四轮】intent 为低层 authority（写入时自动派生 durableIdentityDigest），
+    // legacy proof 不释放低层——tombstone 须为 proofLevel="lowlevel" 并绑定
+    // 同一 durableIdentityDigest（仅 durable identity，禁止 contract/cohort）。
     const tombWrite = writeTreasuryResolutionTombstone({
       transactionId: "sm_final_proof",
       digest: "0123456789abcdef",
       resolution: "not-executed",
       stage: "final",
+      proofLevel: "lowlevel",
+      durableIdentityDigest: readTreasuryIntentEntry("sm_final_proof")!.durableIdentityDigest!,
       actionTick: Game.time,
       observationTick: Game.time,
       resolvedAtTick: Game.time,

@@ -34,6 +34,7 @@ import {
   ensureTreasuryIntentStoreValidated,
   peekTreasuryIntentStore,
   readTreasuryIntentEntry,
+  resetTreasuryIntentRuntimeForTest,
   writeTreasuryIntentEntry,
   type TreasuryIntentEntry,
 } from "@/runtime/treasury/intents";
@@ -150,8 +151,29 @@ function fullCohort(transactionId: string): TreasuryAuthorizationCohortFacts {
   };
 }
 
-/** modern intent 全字段 fixture（矩阵全齐）。 */
+/**
+ * modern intent 全字段 fixture（矩阵全齐）。
+ *
+ * 【第十四轮】durableIdentityDigest 由全部持久事实真实派生（写入前
+ * identity 重算校验——显式携带与事实不一致的假 digest 会被拒绝
+ * invalid_entry；参照 treasuryDurableIdentity.test.ts 的改造模式）。
+ */
 function modernIntentEntry(transactionId: string, cohort: TreasuryAuthorizationCohortFacts): TreasuryIntentEntry {
+  const cohortDigest = computeTreasuryAuthorizationCohortDigest(cohort);
+  const postings: TreasuryIntentEntry["postings"] = [
+    { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 },
+  ];
+  const structureFacts: NonNullable<TreasuryIntentEntry["structureFacts"]> = [
+    {
+      bindingKind: "governed_location",
+      role: "source",
+      roomName: "W1N57",
+      locationKind: "storage",
+      structureId: "stor-1",
+      required: true,
+      version: 1,
+    },
+  ];
   return {
     transactionId,
     authorityLevel: "modern" as const,
@@ -166,25 +188,31 @@ function modernIntentEntry(transactionId: string, cohort: TreasuryAuthorizationC
     adapterSemanticIdentity: cohort.adapterSemanticIdentity,
     durablePayload: "dp",
     durablePayloadVersion: 1,
-    postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
+    postings,
     outcome: "not_started",
     settlement: "ready",
-    structureFacts: [
-      {
-        bindingKind: "governed_location",
-        role: "source",
-        roomName: "W1N57",
-        locationKind: "storage",
-        structureId: "stor-1",
-        required: true,
-        version: 1,
-      },
-    ],
+    structureFacts,
     ownerIdentity: cohort.ownerIdentity,
     policyIdentity: "no-reserve@v1:allow",
     authorizationCohort: cohort,
-    authorizationCohortDigest: computeTreasuryAuthorizationCohortDigest(cohort),
-    durableIdentityDigest: "fedcba0987654321",
+    authorizationCohortDigest: cohortDigest,
+    durableIdentityDigest: computeTreasuryDurableIdentityDigest({
+      transactionId,
+      digest: "1234567890abcdef",
+      actionKind: "test.transfer",
+      postings: postings.map((leg) => ({ ...leg })),
+      source: "test",
+      contractId: cohort.contractId,
+      contractDigest: cohort.contractDigest,
+      adapterRegistrationId: cohort.adapterRegistrationId,
+      adapterSemanticIdentity: cohort.adapterSemanticIdentity,
+      durablePayload: "dp",
+      durablePayloadVersion: 1,
+      structureFacts: structureFacts.map((fact) => ({ ...fact })),
+      authorizationCohortDigest: cohortDigest,
+      ownerIdentity: cohort.ownerIdentity,
+      policyIdentity: "no-reserve@v1:allow",
+    }),
     createdAtTick: Game.time,
     updatedAtTick: Game.time,
   };
@@ -353,7 +381,7 @@ describe("proof levels：modern required 字段矩阵（第十三轮第八节）
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = Memory.runtime.treasury ?? {};
     Memory.runtime.treasury.intents = {
-      version: 4 as unknown as 5,
+      version: 4 as unknown as 6, // 【第十四轮】cast 更新到新 store 版本（实际 seed 旧 v4 触发迁移）
       entries: {
         "i:pl_legacy": {
           transactionId: "pl_legacy",
@@ -374,7 +402,7 @@ describe("proof levels：modern required 字段矩阵（第十三轮第八节）
     // 显式触发 load（不经 beginTick 恢复——(not_started, ready) 会被恢复
     // 语义确认未执行关闭，与本测试无关）。
     expect(ensureTreasuryIntentStoreValidated()).toBeNull();
-    expect(peekTreasuryIntentStore()!.version).toBe(5);
+    expect(peekTreasuryIntentStore()!.version).toBe(6); // 【第十四轮】intent store v6
     const entry = readTreasuryIntentEntry("pl_legacy");
     expect(entry?.authorityLevel).toBe("legacy");
   });
@@ -405,19 +433,32 @@ describe("proof levels：modern required 字段矩阵（第十三轮第八节）
     if (issued.status === "rejected") expect(issued.reason).toBe("legacy_authority_isolated");
   });
 
-  it("authorityLevel 缺失（新版本 store 手工篡改）：写入拒绝、签发拒绝", () => {
+  it("authorityLevel 缺失（新版本 store 手工篡改）：写入缺省 lowlevel、篡改后 load fail closed 且签发拒绝", () => {
     const service = makeService();
     void service;
-    const cohort = fullCohort("pl_missing");
-    const entry = modernIntentEntry("pl_missing", cohort);
-    const { authorityLevel: _level, ...withoutLevel } = entry;
-    void _level;
-    // 显式传 undefined（等级缺失）——API 层缺省会补 lowlevel；直写篡改由
-    // load/写入校验拒绝。这里验证 modern 矩阵在 lowlevel 下不强制、但篡改
-    // store 的 undefined 等级会在签发侧被拒。
-    const write = writeTreasuryIntentEntry({ ...withoutLevel, authorityLevel: undefined });
+    // 【第十四轮】authorityLevel 缺省（含显式 undefined）→ 写入侧按 lowlevel
+    // 定级并从事实自动派生 durable identity（低层矩阵：不携带任何 modern
+    // contract/authorization 字段）。
+    const write = writeTreasuryIntentEntry({
+      transactionId: "pl_missing",
+      digest: "0123456789abcdef",
+      actionKind: "test.transfer",
+      kind: "test.transfer",
+      source: "test",
+      postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
+      outcome: "not_started",
+      settlement: "ready",
+      createdAtTick: Game.time,
+      updatedAtTick: Game.time,
+      authorityLevel: undefined,
+    });
     expect(write.status).toBe("written");
+    expect(readTreasuryIntentEntry("pl_missing")?.authorityLevel).toBe("lowlevel");
+    // 手工篡改新版本 store：删除 authorityLevel（等级缺失不得由字段推断）→
+    // 失效 heap 缓存后下一次 load 全量校验 fail closed。
     (peekTreasuryIntentStore()!.entries["i:pl_missing"] as { authorityLevel?: string }).authorityLevel = undefined;
+    resetTreasuryIntentRuntimeForTest();
+    expect(ensureTreasuryIntentStoreValidated()).toContain("authorityLevel 非法");
     Game.time += 2;
     const next = makeService();
     const issued = next.issueTreasuryReconciliationCapability({ transactionId: "pl_missing" });
@@ -465,12 +506,33 @@ describe("cohort validation（第十三轮第九节）", () => {
     const service = makeService();
     void service;
     const cohort = fullCohort("cv_5");
-    const originalDigest = computeTreasuryAuthorizationCohortDigest(cohort);
-    // 篡改 revision 而保留 digest → identity 重算不一致 → 写入拒绝。
-    const tampered = { ...cohort, revisions: { ...cohort.revisions, intentRevision: 99 } };
+    const cohortDigest = computeTreasuryAuthorizationCohortDigest(cohort);
+    // 【第十四轮】低层写入禁止携带 cohort 等 modern 字段（写入即拒）——
+    // 改为先写入合法 modern quarantine entry（durable identity 由事实真实
+    // 派生），再直接篡改 Memory 中的 cohort 事实并保留旧 digest。
+    const durable = recomputeTreasuryDurableIdentityDigest({
+      transactionId: "cv_5",
+      digest: "1234567890abcdef",
+      actionKind: "test.transfer",
+      kind: "test.transfer",
+      source: "test",
+      deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
+      contractId: cohort.contractId,
+      contractDigest: cohort.contractDigest,
+      adapterRegistrationId: cohort.adapterRegistrationId,
+      adapterSemanticIdentity: cohort.adapterSemanticIdentity,
+      durablePayload: "dp",
+      durablePayloadVersion: 1,
+      structureFacts: [
+        { bindingKind: "governed_location", role: "source", roomName: "W1N57", locationKind: "storage", structureId: "stor-1", required: true, version: 1 },
+      ],
+      authorizationCohortDigest: cohortDigest,
+      ownerIdentity: cohort.ownerIdentity,
+      policyIdentity: "no-reserve@v1:allow",
+    });
     const write = quarantineTreasuryTransaction({
       transactionId: "cv_5",
-      authorityLevel: "lowlevel",
+      authorityLevel: "modern",
       digest: "1234567890abcdef",
       tick: Game.time,
       kind: "test.transfer",
@@ -480,12 +542,30 @@ describe("cohort validation（第十三轮第九节）", () => {
       recordedAt: Game.time,
       outcome: "started_unknown",
       settlement: "quarantined",
-      authorizationCohort: tampered,
-      authorizationCohortDigest: originalDigest,
+      contractId: cohort.contractId,
+      contractDigest: cohort.contractDigest,
+      actionKind: "test.transfer",
+      adapterVersion: 1,
+      adapterRegistrationId: cohort.adapterRegistrationId,
+      adapterSemanticIdentity: cohort.adapterSemanticIdentity,
+      durablePayload: "dp",
+      durablePayloadVersion: 1,
+      ownerIdentity: cohort.ownerIdentity,
+      policyIdentity: "no-reserve@v1:allow",
+      durableIdentityDigest: durable,
+      structureFacts: [
+        { bindingKind: "governed_location", role: "source", roomName: "W1N57", locationKind: "storage", structureId: "stor-1", required: true, version: 1 },
+      ],
+      authorizationCohort: cohort,
+      authorizationCohortDigest: cohortDigest,
     });
-    // 写入成功（写入方 digest 的最终一致性由 load 承载）→ 下一次 load 校验
-    // 检出重算不一致 → store unhealthy（原数据保留，repair 不覆盖 digest）。
     expect(write.status).toBe("written");
+    // 篡改 revision 而保留 digest → 下一次 load 校验检出 cohort digest 重算
+    // 不一致 → store unhealthy（原数据保留，repair 不覆盖 digest）。
+    const stored = peekTreasuryQuarantineStore()!.entries["q:cv_5"] as {
+      authorizationCohort?: { revisions?: { intentRevision?: number } };
+    };
+    stored.authorizationCohort!.revisions!.intentRevision = 99;
     resetTreasuryQuarantineRuntimeForTest();
     const fatal = ensureTreasuryQuarantineStoreValidated();
     expect(fatal).toContain("重算不一致");
@@ -590,12 +670,15 @@ describe("forensic attempt identity（第十三轮第十一节）", () => {
     const service = makeService();
     const { contract, bundle } = buildAndAuthorize(service, "fi_marker");
     // 预填满 fault store 使 authority 写入失败 → forensic marker。
+    // 【第十四轮】低层 seed 须满足严格低层矩阵：actionKind 必填（缺省
+    // durableIdentityDigest 由事实自动派生）。
     for (let index = 0; index < TREASURY_AUTHORIZATION_FAULT_MAX_ENTRIES; index += 1) {
       expect(
         writeTreasuryAuthorizationFaultEntry({
           transactionId: `fi_fill_${index}`,
           authorityLevel: "lowlevel",
           digest: `00000000000000${String(index).padStart(2, "0")}`.slice(-16),
+          actionKind: "test.transfer",
           postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
           faultTick: Game.time,
           outcome: "not_started",
@@ -680,6 +763,7 @@ describe("forensic attempt identity（第十三轮第十一节）", () => {
         digest: "1234567890abcdef",
         resolution: "not-executed",
         stage: "final",
+        proofLevel: "forensic",
         actionTick: Game.time,
         observationTick: Game.time,
         resolvedAtTick: Game.time,
@@ -715,6 +799,7 @@ describe("forensic attempt identity（第十三轮第十一节）", () => {
         digest: "1234567890abcdef",
         resolution: "not-executed",
         stage: "final",
+        proofLevel: "forensic",
         actionTick: Game.time,
         observationTick: Game.time,
         resolvedAtTick: Game.time,

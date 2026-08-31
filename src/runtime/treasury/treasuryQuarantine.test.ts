@@ -71,7 +71,14 @@ function injectOnce(phase: TreasuryWriteFaultPhase): void {
 }
 
 /** 直接注入一条合法持久 quarantine entry（绕过 facade，构造 blocker 前置态）。 */
-function injectQuarantineEntry(transactionId: string, deltas: Array<{ roomName: string; locationKind: string; resource: string; delta: number }> = []): void {
+function injectQuarantineEntry(
+  // 【第十四轮】低层严格矩阵要求 postings/deltas 非空（空数组写入被拒），
+  // 缺省给一条最小占用腿（仅构造 blocker 前置态，容量语义由显式传参的用例覆盖）。
+  transactionId: string,
+  deltas: Array<{ roomName: string; locationKind: string; resource: string; delta: number }> = [
+    { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 },
+  ],
+): void {
   quarantineTreasuryTransaction({
     transactionId,
     digest: "0123456789abcdef",
@@ -295,6 +302,7 @@ describe("第七轮：quarantine fault-slot 预留（prepare admission）", () =
     expect(rejected.status).toBe("rejected");
     if (rejected.status === "rejected") expect(rejected.reason).toBe("quarantine_write_blocked");
     // 满载写入路径不再产生 overflowed 丢 identity：返回 rejected 且 store 不变。
+    // 【第十四轮】低层矩阵要求 deltas 非空（否则先被形状校验拒绝而非容量分支）。
     const overflowWrite = quarantineTreasuryTransaction({
       transactionId: "ts7_overflow_attempt",
       digest: "0123456789abcdef",
@@ -304,7 +312,7 @@ describe("第七轮：quarantine fault-slot 预留（prepare admission）", () =
       phase: "executing_at_end_tick",
       outcome: "started_unknown",
       settlement: "quarantined",
-      deltas: [],
+      deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
       recordedAt: Game.time,
     });
     expect(overflowWrite.status).toBe("rejected");

@@ -28,6 +28,9 @@ import {
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import type { TreasuryTransactionInput } from "@/runtime/treasury/types";
 import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
+// 【第十四轮】手塞低层 entry 的 durableIdentityDigest 须由事实真实派生
+//（load 会重算校验——假 digest 直接 fatal）。
+import { computeTreasuryDurableIdentityDigest } from "@/runtime/treasury/durableIdentity";
 
 const ROOMS: RoomSpec[] = [
   {
@@ -92,7 +95,8 @@ describe("quarantine schema v2 元数据", () => {
   it("首次写入自动初始化 v2：version/entryCount 元数据正确", () => {
     expect(quarantineTreasuryTransaction(validEntry()).status).toBe("written");
     const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
-    expect(store.version).toBe(4);
+    // 【第十四轮】quarantine store schema v5（lowlevel 严格矩阵 + 完整发布协议）。
+    expect(store.version).toBe(5);
     expect(store.entryCount).toBe(1);
     expect(Object.keys(store.entries)).toEqual(["q:ts7_v1"]);
     const health = peekTreasuryQuarantineHealth();
@@ -157,9 +161,31 @@ describe("quarantine 损坏 fail closed（load 全量验证）", () => {
       (store.entries["q:ts7_v1"].deltas[0] as { locationKind: string }).locationKind = "lab";
     }],
     ["聚合安全整数溢出", (store: TreasuryQuarantineStore) => {
+      // 【第十四轮】低层 entry 的 durableIdentityDigest 由事实派生——篡改
+      // delta 后须同步按篡改后事实重算，load 校验才能越过 identity 重算
+      // 到达聚合溢出检查（否则先以"digest 重算不一致"fatal，测不到溢出）。
       (store.entries["q:ts7_v1"].deltas[0] as { delta: number }).delta = Number.MAX_SAFE_INTEGER;
+      (store.entries["q:ts7_v1"] as { durableIdentityDigest?: string }).durableIdentityDigest = computeTreasuryDurableIdentityDigest({
+        transactionId: "ts7_v1",
+        digest: "0123456789abcdef",
+        actionKind: "test",
+        postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: Number.MAX_SAFE_INTEGER }],
+        source: "test",
+      });
       store.entryCount = 2;
-      store.entries["q:ts7_v2"] = { ...validEntry("ts7_v2"), deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 1 }] };
+      store.entries["q:ts7_v2"] = {
+        ...validEntry("ts7_v2"),
+        // 【第十四轮】手塞低层 entry 须带 lowlevelSource + 事实派生 digest。
+        lowlevelSource: "runtime-lowlevel@v1",
+        durableIdentityDigest: computeTreasuryDurableIdentityDigest({
+          transactionId: "ts7_v2",
+          digest: "0123456789abcdef",
+          actionKind: "test",
+          postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 1 }],
+          source: "test",
+        }),
+        deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 1 }],
+      };
     }],
   ])("%s：load 校验 fatal，原数据保留", (_label, mutate) => {
     corruptStore(mutate);
@@ -176,7 +202,8 @@ describe("quarantine 损坏 fail closed（load 全量验证）", () => {
     Memory.runtime.treasury = { ...(Memory.runtime.treasury ?? {}), quarantine: { entries: {} } as never };
     resetTreasuryQuarantineRuntimeForTest();
     expect(quarantineTreasuryTransaction(validEntry()).status).toBe("written");
-    expect((Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore).version).toBe(4);
+    // 【第十四轮】legacy 空 store 无损升级目标为 v5。
+    expect((Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore).version).toBe(5);
     // 非空 legacy store → fatal（显式 repair 处理）。
     clearTreasuryPersistenceForTest();
     corruptStore((store) => {
@@ -260,8 +287,8 @@ describe("第八轮 per-transaction 保守聚合", () => {
   it("A:+1000 / B:−500：容量占用 1000（非 500）、资源流出占用 500——不互相抵消", () => {
     entryWith("agg_a", [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 1_000 }]);
     entryWith("agg_b", [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }]);
-    expect(treasuryQuarantineCapacityOccupancy().get("W1N57 storage")).toBe(1_000);
-    expect(treasuryQuarantineOutflowTotals().get(`W1N57 storage ${RESOURCE_ENERGY}`)).toBe(500);
+    expect(treasuryQuarantineCapacityOccupancy().get("W1N57\x00storage")).toBe(1_000);
+    expect(treasuryQuarantineOutflowTotals().get(`W1N57\x00storage\x00${RESOURCE_ENERGY}`)).toBe(500);
   });
 
   it("同一 transaction 内先净额合并（+1000 与 −600 同 transaction → 流出 0、容量 400）", () => {
@@ -269,8 +296,8 @@ describe("第八轮 per-transaction 保守聚合", () => {
       { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: 1_000 },
       { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -600 },
     ]);
-    expect(treasuryQuarantineOutflowTotals().get(`W1N57 storage ${RESOURCE_ENERGY}`)).toBeUndefined();
-    expect(treasuryQuarantineCapacityOccupancy().get("W1N57 storage")).toBe(400);
+    expect(treasuryQuarantineOutflowTotals().get(`W1N57\x00storage\x00${RESOURCE_ENERGY}`)).toBeUndefined();
+    expect(treasuryQuarantineCapacityOccupancy().get("W1N57\x00storage")).toBe(400);
   });
 
   it("跨 transaction 混合：A(+1000/−400 双腿) + B(−500) → 容量 600、流出 500", () => {
@@ -279,8 +306,8 @@ describe("第八轮 per-transaction 保守聚合", () => {
       { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -400 },
     ]);
     entryWith("agg_mix_b", [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }]);
-    expect(treasuryQuarantineCapacityOccupancy().get("W1N57 storage")).toBe(600); // A 净 +600
-    expect(treasuryQuarantineOutflowTotals().get(`W1N57 storage ${RESOURCE_ENERGY}`)).toBe(500); // B 500（A 净额为正无流出）
+    expect(treasuryQuarantineCapacityOccupancy().get("W1N57\x00storage")).toBe(600); // A 净 +600
+    expect(treasuryQuarantineOutflowTotals().get(`W1N57\x00storage\x00${RESOURCE_ENERGY}`)).toBe(500); // B 500（A 净额为正无流出）
   });
 
   it("快照封闭：修改返回的 entry/list/聚合 Map 不影响内部权威", () => {
@@ -299,7 +326,9 @@ describe("第八轮 per-transaction 保守聚合", () => {
   });
 
   it("写入前重验：非法 entry（非法 resource/phase）结构化拒绝且 store 不变", () => {
-    entryWith("agg_pre", []);
+    // 【第十四轮】低层矩阵要求 deltas 非空（空数组先被矩阵拒而非本用例的
+    // 非法 resource/phase 分支）。
+    entryWith("agg_pre", [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }]);
     const before = Memory.runtime!.treasury!.quarantine!.entryCount;
     const badResource = quarantineTreasuryTransaction({
       transactionId: "agg_bad",
@@ -331,13 +360,26 @@ describe("第八轮 per-transaction 保守聚合", () => {
   });
 
   it("聚合溢出 fail closed：同 location 双大额 entry 在 load 校验 fatal、聚合空、blocker 持续", () => {
-    entryWith("agg_of_seed", []); // 初始化 store
+    // 【第十四轮】低层矩阵要求 deltas 非空（seed entry 仅用于初始化 store，
+    // 随即被删除并由下方两条大额 entry 替换）。
+    entryWith("agg_of_seed", [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }]);
     const store = Memory.runtime!.treasury!.quarantine!;
     delete store.entries["q:agg_of_seed"];
     store.entryCount = 0;
+    // 【第十四轮】手塞低层 entry 须满足严格低层矩阵（lowlevelSource 来源
+    // 标记 + 由各自事实真实派生的 durableIdentityDigest）——校验才能到达
+    // 聚合溢出检查。
     store.entries["q:agg_of_3"] = {
       transactionId: "agg_of_3",
       authorityLevel: "lowlevel",
+      lowlevelSource: "runtime-lowlevel@v1",
+      durableIdentityDigest: computeTreasuryDurableIdentityDigest({
+        transactionId: "agg_of_3",
+        digest: "0123456789abcdef",
+        actionKind: "test",
+        postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: Number.MAX_SAFE_INTEGER - 10 }],
+        source: "test",
+      }),
       digest: "0123456789abcdef",
       tick: Game.time,
       kind: "test",
@@ -353,6 +395,14 @@ describe("第八轮 per-transaction 保守聚合", () => {
     store.entries["q:agg_of_4"] = {
       transactionId: "agg_of_4",
       authorityLevel: "lowlevel",
+      lowlevelSource: "runtime-lowlevel@v1",
+      durableIdentityDigest: computeTreasuryDurableIdentityDigest({
+        transactionId: "agg_of_4",
+        digest: "0123456789abcdef",
+        actionKind: "test",
+        postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: Number.MAX_SAFE_INTEGER - 10 }],
+        source: "test",
+      }),
       digest: "0123456789abcdef",
       tick: Game.time,
       kind: "test",
