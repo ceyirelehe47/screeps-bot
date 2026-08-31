@@ -1209,3 +1209,106 @@ facade 必须（MUST）将 authorization ledger（registry/budget/bundle 签发/
 
 - **WHEN** 检索 fix-ac3.cjs 与写死本地路径的临时 patch 脚本
 - **THEN** 均不存在；evidence 陈述与仓库实际一致
+
+### Requirement: 统一 normalized receipt lookup 与 v5 显式 proof 等级（第十三轮）
+
+Treasury 必须（MUST）提供单一 normalized receipt lookup 语义，其结果至少区分 absent、valid legacy committed proof、valid modern committed proof、corrupted 与 incompatible store；hasSettledReceipt、readTreasurySettlementProof、admitTreasuryReceipt、reserveTreasuryReceiptAdmission、commitSettledReceipt、refreshSettledReceiptForResolution、cleanup/migration、projection.isSettled、prepareTransaction 与 finalized proof 路径必须（MUST）复用该语义，不得（MUST NOT）在不同路径使用互不一致的 already-settled 判定（如一处 `typeof === "number"`、另一处只认对象）。receipt store 必须（MUST）升级至 v5：settlement proof 携带显式 `level`（modern 必填 digest 与 durableIdentityDigest；legacy 不得（MUST NOT）携带身份字段）。
+
+#### Scenario: v3 数字 receipt 的零写识别
+
+- **WHEN** Memory 中存在未迁移的 v1/v2/v3 receipt store 且某 transactionId 对应合法数字 value
+- **THEN** 只读查询（hasSettledReceipt / readTreasurySettlementProof）将其识别为已结算（legacy committed）且 Memory 零写入；合法数字不得（MUST NOT）被当作 corrupted
+
+#### Scenario: admission 在迁移后命中 already-settled
+
+- **WHEN** v3 store 经 admission/load 触发 v5 迁移后同 transactionId 再次 admission
+- **THEN** 返回 already_settled（无论显式 legacy 还是 modern proof）；receipt slot、recovery slot、tentative、intent 与 authorization bundle 均不被消费；Game callback 保持零调用
+
+#### Scenario: 迁移原子、幂等、fail closed
+
+- **WHEN** v3/v4 → v5 迁移遇到编码碰撞、损坏 value 或无法安全定级的部分身份字段
+- **THEN** 原 store 保持不变并 fail closed（拒绝登记）；重复运行已完成的迁移幂等；迁移后的 legacy proof 显式标记 level=legacy，modern proof 保留完整 attempt identity
+
+### Requirement: already_settled 是零发布终态（第十三轮）
+
+compat 单阶段路径遇到 already_settled 结果时必须（MUST）零发布：不写 journal、不写 overlay、不写 capacity delta、不写 heap settled cache、不触发 onRecorded、不修改 projectionRevision、不修改 tentative。prepared/contract 路径在 Game callback 之前的历史 receipt 必须（MUST）令 prepare/execution 返回 already_settled（bundle 不 redeem、intent 不写入、adapter.execute 零调用）；Game callback 之后的防御路径必须（MUST）读取完整 settlement proof 并按 attempt identity 区分：完全 match 可按幂等结算处理（不重复 heap 发布）、legacy/insufficient 不得（MUST NOT）假装属于当前 modern attempt、conflict 进入明确 internal settlement fault——后两种不得（MUST NOT）发布 heap committed state 且必须（MUST）保留 intent/quarantine 并阻断自动重试。receipt 写入结果必须（MUST）细化区分 written、already-settled-match、already-settled-legacy/insufficient、identity-conflict 与 corrupted/fatal，不得（MUST NOT）把所有 existing proof 折叠成无法判断身份的单一 already_settled。
+
+#### Scenario: compat 路径零 heap 状态变化
+
+- **WHEN** compat 单阶段登记遇到 already_settled 结果
+- **THEN** journal、overlay、capacity delta、heap settled cache、projectionRevision、tentative 全部零变化
+
+#### Scenario: post-callback identity conflict 不发布 heap
+
+- **WHEN** Game callback 已返回 OK 后 commit 段发现同 ID existing modern proof 与当前 attempt identity conflict
+- **THEN** 不发布 heap committed state；intent/quarantine 保留；进入明确 internal settlement fault 并阻断自动重试
+
+### Requirement: receipt refresh 与 staged recovery 的 identity 严格性（第十三轮）
+
+refreshSettledReceiptForResolution 必须（MUST）身份感知：absent → 可写 modern proof；existing modern proof 且 identity 完全 match → 仅刷新 settledAtTick；identity conflict → 拒绝刷新并保持 resolving authority（write readiness 继续阻断）；existing legacy/insufficient proof → 不得（MUST NOT）自动升级或覆盖（保持隔离、要求显式人工处理）；corrupted → fatal fail closed；resolution tick 只在成功 identity 验证后更新。recoverStagedResolutions 及一切同类 staged 恢复逻辑必须（MUST）以 identity relation 等于 "match" 作为唯一释放许可；conflict 与 insufficient 都不得（MUST NOT）释放 intent、quarantine、marker 或其他 authority，且必须有（MUST）独立诊断与计数，不得（MUST NOT）再以 `relation !== "conflict"` 作为释放条件。
+
+#### Scenario: legacy receipt 阻断 refresh 覆盖
+
+- **WHEN** resolving 状态的 modern attempt 遇到同 ID legacy receipt
+- **THEN** 不覆盖 proof、不 finalize、authority 保留并报告 legacy/insufficient blocker
+
+#### Scenario: insufficient 与 conflict 同样保持隔离
+
+- **WHEN** staged committed recovery 的 receipt proof 对当前 attempt 为 insufficient 或 conflict
+- **THEN** quarantine/intent/marker 全部保留，不释放；两者分别计数与诊断
+
+### Requirement: 显式 proof / authority 等级与 modern required 字段矩阵（第十三轮）
+
+intent、quarantine、authorization-fault 持久记录必须（MUST）携带显式 authorityLevel（modern contract authority、legacy migrated authority、forensic incomplete authority、low-level 四级），不得（MUST NOT）再由 optional 字段存在性隐式推断。modern authority 的 required 字段矩阵（contractId/contractDigest、actionKind、adapterVersion、adapterRegistrationId、stable adapter semantic identity、canonical postings、完整 structure descriptors、authorization cohort facts 与 cohort digest 成对、durableIdentityDigest、policyIdentity、必要 durable reconciliation facts）任一缺失时必须（MUST）判定 store unhealthy 或显式隔离为 forensic：capability 不得（MUST NOT）签发、resolution 不得（MUST NOT）自动执行，绝不（MUST NOT）自动视为 legacy。legacy 只能（MUST）来自版本化 migration 的显式标记且不得（MUST NOT）伪造缺失现代事实；legacy proof 可保守阻止同 transaction ID 重放但不得（MUST NOT）证明或释放 modern authority。forensic 必须（MUST）继续阻断 writer、不签发普通 capability、不走普通 resolution。同 ID 一方 modern、一方 legacy 的双 authority 必须（MUST）判 inconsistent，不得（MUST NOT）任选一方。
+
+#### Scenario: 删除现代事实不得降级
+
+- **WHEN** modern intent/quarantine 的任一 required 字段（cohort facts、cohort digest、durable identity、stable semantic identity、structure descriptors 等）被删除
+- **THEN** 该 store unhealthy（或显式 forensic 隔离），不得（MUST NOT）降级为 legacy 兼容记录
+
+#### Scenario: cohort facts 与 digest 成对
+
+- **WHEN** modern 记录只有 cohort facts 或只有 cohort digest
+- **THEN** store unhealthy（不再自动当 legacy）
+
+### Requirement: 集中异常安全 cohort validator（第十三轮）
+
+必须（MUST）存在唯一的 cohort facts validator（语义上 validateTreasuryAuthorizationCohortFacts），覆盖普通对象形状、owner identity、policy ID/version/registration identity、policy decision digest、emergency override、epoch、全部 revisions、adapter registration 与 stable semantic identity、contract ID/digest、transactionId、authorization leg digests、receiver capacity digest、issued tick、authorization digest、数组上限、字符串上限、安全整数、nested object 与 transaction/entry 交叉一致性；intent、quarantine、authorization-fault 必须（MUST）共用该 validator。cohort 重算必须（MUST）返回 Result 不得（MUST NOT）抛出：缺字段、null、错误类型、throwing Proxy 等一律返回有界结构化错误。store load、write、read-back、migration、repair、transfer、capability issuance 与 resolution prevalidation 均不得（MUST NOT）让异常逃逸并中断 tick。
+
+#### Scenario: throwing Proxy 不逃逸
+
+- **WHEN** cohort facts 为对属性访问抛错的 Proxy 对象
+- **THEN** validator/重算返回结构化错误，不抛出异常、不中断 tick
+
+#### Scenario: 篡改事实保留旧 digest
+
+- **WHEN** 篡改 policy/owner/revision 而 digest 未同步变化
+- **THEN** store unhealthy；repair 不得（MUST NOT）自动覆盖 digest
+
+### Requirement: 统一持久 structure descriptor 校验（第十三轮）
+
+必须（MUST）存在唯一共享的 structure descriptor validator 供 action contract canonicalization、intent、quarantine、authorization-fault、durable identity 重算、capability 签发与 reconciler 输入共同使用。governed_location 必须（MUST）禁止 objectId、expectedType、expectedRoom 且 room/location 受控、structureId 语义合法；game_object 必须（MUST）要求 objectId 必填、expectedType/expectedRoom 按规则校验、structureId 与 objectId 语义一致、room 与对象归属一致、required/role/version 合法。分支权威必须（MUST）单一（只按 bindingKind 分支），不得（MUST NOT）一处看 bindingKind、另一处看 objectId 是否存在。持久 Memory 中出现矛盾 descriptor 时必须（MUST）判 store unhealthy。
+
+#### Scenario: 持久 governed_location 携带 objectId
+
+- **WHEN** 持久 intent/quarantine 的 descriptor 为 governed_location 且携带 objectId（或 expectedType）
+- **THEN** store unhealthy
+
+#### Scenario: 同一 validator、同结构异 role
+
+- **WHEN** contract、intent、quarantine 与 reconciler 输入使用同一 descriptor 形状
+- **THEN** 使用同一 validator 判定；同一结构不同 role 仍产生不同 descriptor
+
+### Requirement: forensic marker 与 tombstone 绑定 attempt identity（第十三轮）
+
+forensic authorization-fault marker 必须（MUST）在既有事实允许时保存 redemption 故障前已计算的完整 attempt identity（contract digest、authorization cohort digest、durable identity digest 或专门 forensic attempt identity）；forensic resolution tombstone 必须（MUST）携带同一 identity；already_resolved 必须（MUST）比较完整 identity——同 ID、同普通 digest 但不同 owner/policy/cohort 的 attempt 不得（MUST NOT）共享 forensic tombstone。真正缺失 identity 的旧 marker 必须（MUST）显式按 legacy forensic proof 处理（不得（MUST NOT）证明 modern attempt）。acknowledgeRolledBack 显式管理要求必须（MUST）保留；不得（MUST NOT）新增无条件 clear marker 接口。forensic resolution 重复调用只在完整 identity 相同时幂等。
+
+#### Scenario: 旧 forensic proof 不解决新 attempt
+
+- **WHEN** 同 ID、同 contract digest 但不同 cohort 的第二次 forensic attempt 遇到旧 tombstone
+- **THEN** 旧 tombstone 不能解决新 attempt（fail closed）
+
+#### Scenario: marker 携带完整 identity
+
+- **WHEN** 原子 bundle redemption 故障发布 forensic marker
+- **THEN** marker 保存故障前已计算的完整 attempt identity；后续 forensic resolution 的 tombstone 绑定同一 identity

@@ -588,3 +588,47 @@ facade.ts 保留生命周期编排（beginTick/endTick/epoch/observation）、pr
 #### 3.14.6 structure binding union
 
 bindingKind 在 validateStructureBindings 唯一推导并显式写入 binding；governed_location 禁止 objectId/expectedType/expectedRoom；game_object 必须携带 objectId；构建期验证、执行前 revalidation、descriptor 派生、reconciler 输入全部按同一 discriminant 分支。
+
+### 3.15 第十三轮：Receipt Migration Safety & Modern Proof Strictness
+
+#### 3.15.1 normalized receipt lookup 与 receipt v5
+
+- 单一 lookup 结果类型（absent / legacy_committed / modern_committed / corrupted / incompatible）成为 receipt 一切读写路径的判定入口；`typeof value === "number"` 与"只认对象"的分裂判定全部移除。
+- receipt store v4 → v5：TreasurySettlementProof 增加显式 `level: "modern" | "legacy"`；modern 必填 digest 与 durableIdentityDigest（16 hex），可选 contractDigest/authorizationCohortDigest；legacy 禁携带任何身份字段。
+- v3/v4 → v5 迁移定级规则（一次性、版本化）：数字 value → 显式 legacy committed proof；完整身份（digest + durableIdentityDigest）→ modern（保留全部身份字段）；部分身份字段 → 无法安全定级 → 迁移 fail closed（原 store 保留）。迁移临时结构全量校验（key/transactionId/value/entryCount/nextExpiryTick/编码碰撞）后一次性原子替换；重复运行幂等。
+- 未迁移 v1/v2/v3 store 的只读查询：合法数字 value 零写识别为 legacy committed（不再判 corrupted）；v1 裸键以 raw key + 编码 key 双探测保持 O(1)；unknown version 仍 fail closed。
+
+#### 3.15.2 already_settled 零发布与 commit 结果细化
+
+- commitSettledReceipt 结果细化为 written / already_settled_match / already_settled_insufficient / identity_conflict / fatal；identity 未提供（compat 单阶段）时 existing 一律按已结算拒绝（零发布）。
+- compat 单阶段（writeAcceptedTransaction）：非 written 结果 → 返回 already_settled，零 journal/overlay/capacity delta/heap settled cache/onRecorded/projectionRevision/tentative。
+- staged commit 的 receipt 发布段：fatal/identity_conflict/insufficient → TreasuryCommitFaultError（receipt_publish，不发布 heap）；already_settled_match → 幂等继续（heap 首次发布）。
+- post-callback 防御段（commitPreparedTransaction 的 settled-before-commit 检查）升级为完整 proof identity 比较：match → 幂等 already_settled（不重复 heap 发布、释放 intent）；legacy/insufficient / conflict → 返回明确拒绝 reason（settlement_proof_insufficient / identity_conflict）→ 上层 executed_unsettled 路径 quarantine 接管 authority、retryForbidden 阻断自动重试，不发布 heap committed state。
+
+#### 3.15.3 identity-aware refresh 与 staged recovery 严格化
+
+- refreshSettledReceiptForResolution：absent → 写 modern proof；modern+match → 仅刷新 settledAtTick（保留身份字段）；modern+conflict → blocked（保持 resolving authority）；legacy/insufficient → blocked（不覆盖、显式人工处理）；corrupted → fatal。blocked 与 fatal 都保留 authority、递延 finalize。
+- recoverStagedResolutions 全部分支以 relation === "match" 为唯一释放许可；conflict 与 insufficient 独立计数（identityConflicts / identityInsufficientBlockers）与诊断，不再使用 !== "conflict"。
+
+#### 3.15.4 显式 authorityLevel 与 modern required 矩阵
+
+- intent v5 / quarantine v4 / authorization-fault v3 entry 携带显式 `authorityLevel: "modern" | "legacy" | "forensic" | "lowlevel"`。
+- 版本化迁移一次性定级：modern 矩阵全齐 → modern；forensic 标志 → forensic；legacyV1 → legacy；仅 durableIdentityDigest（无完整 contract 事实）→ lowlevel；完全无现代身份事实 → legacy；定级后 load 不再推断。
+- modern required 矩阵：contractId、contractDigest、actionKind、adapterVersion、adapterRegistrationId、adapterSemanticIdentity、durablePayload、durablePayloadVersion、structureFacts（每项过共享 descriptor validator）、authorizationCohort 与 authorizationCohortDigest 成对、durableIdentityDigest、policyIdentity、postings。任一缺失 → store unhealthy（fail closed，绝不降级 legacy）；authorityLevel 缺失/未知枚举（新版本 store）→ unhealthy。
+- capability 签发拒绝 legacy/forensic authority（既有 legacyV1/forensic/semanticIdentity 检查保留，authorityLevel 作为显式第一道判定）。
+
+#### 3.15.5 共享 validator 模块
+
+- cohortValidation.ts：唯一 validateTreasuryAuthorizationCohortFacts（全字段 + 上限 + 安全整数 + nested + transaction/entry 交叉一致性），intent/quarantine/authorization-fault 三 store 共用；canonical 重算（recomputeTreasuryCohortDigest / verifyTreasuryEntryIdentity）全部经 try/catch Result 化——throwing Proxy/缺字段/null 返回结构化错误，永不中断 tick。
+- structureDescriptorValidation.ts：唯一 descriptor validator（governed_location 禁 objectId/expectedType/expectedRoom；game_object 必填 objectId + structureId/objectId 语义一致）；intent/quarantine/authorization-fault 的持久 structureFacts 校验、durable identity 重算的 structureFacts 前置校验、actionContracts 的 descriptor 语义共用；分支权威唯一（bindingKind）。
+
+#### 3.15.6 forensic attempt identity
+
+- write-fault marker 扩展可选 attemptIdentity（contractDigest / authorizationCohortDigest / durableIdentityDigest）——原子 redemption 故障发布 forensic marker 时携带故障前已计算的完整 identity。
+- forensic resolution tombstone 写入绑定 marker.attemptIdentity；already_resolved 幂等比较 treasuryAttemptIdentityRelation（完整 identity）；marker 无 identity（旧数据）→ legacy forensic proof，遇现代 tombstone/attempt 判 insufficient/conflict 不得 already_resolved。
+- acknowledgeRolledBack 必填保留；无新增无条件 clear 接口。
+
+#### 3.15.7 性能与可观测性
+
+- legacy receipt 只读识别 O(1)（双键探测）；receipt 迁移每 heap 生命周期至多一次；正常 admission O(1)；identity relation 与 proof-level 校验 O(1) 或与单条 cohort/descriptor 线性；staged recovery 对单条 insufficient 仅计数跳过（不重扫 receipt 全表）。
+- 新增 counters：receipt legacyLookups、identityMatchResults / identityConflictResults / identityInsufficientResults、proofLevelRejections；cohortValidation cohortValidationFailures；resolutionStore identityConflicts / identityInsufficientBlockers。
