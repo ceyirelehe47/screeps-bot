@@ -10,6 +10,7 @@
  * - finalized proof 两态（有 proof 释放/幂等；无 proof 保留 semantic fault）。
  */
 import { createTreasuryService } from "@/runtime/treasury/facade";
+import { TREASURY_LOWLEVEL_SOURCE_RUNTIME } from "@/runtime/treasury/authorityLevel";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import {
@@ -217,6 +218,7 @@ describe("outcome/settlement/phase 语义矩阵（第十一轮 3.13.6）", () =>
       resolution: "not-executed",
       stage: "final",
       proofLevel: "lowlevel",
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
       durableIdentityDigest: readTreasuryIntentEntry("sm_final_proof")!.durableIdentityDigest!,
       actionTick: Game.time,
       observationTick: Game.time,

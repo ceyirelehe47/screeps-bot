@@ -246,6 +246,7 @@ function seedResolvingTombstone(transactionId: string, digest: string, identity:
     resolution: "committed",
     stage: "resolving",
     proofLevel: "lowlevel",
+    lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
     durableIdentityDigest: identity,
     actionTick: settledAtTick,
     settledAtTick,
@@ -264,6 +265,7 @@ function seedFinalNotExecutedTombstone(transactionId: string, digest: string, id
     resolution: "not-executed",
     stage: "final",
     proofLevel: "lowlevel",
+    lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
     durableIdentityDigest: identity,
     actionTick: Game.time,
     observationTick: Game.time,
@@ -462,11 +464,12 @@ describe("cross-store authority recovery（第十五轮第五节）", () => {
     expect(seedMatchingIntent("rc_consistent", digest)).toBe(identity);
     seedResolvingTombstone("rc_consistent", digest, identity, Game.time);
     expect(resolveTreasuryUnresolvedAuthority("rc_consistent").status).toBe("ok");
-    // receipt 先行写入（identity-aware）。
+    // receipt 先行写入（identity-aware——lowlevel provenance 随行绑定）。
     expect(
       commitSettledReceipt("rc_consistent", Game.time, {
         digest,
         durableIdentityDigest: identity,
+        lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
       }).status,
     ).toBe("written");
 
@@ -484,7 +487,7 @@ describe("cross-store authority recovery（第十五轮第五节）", () => {
     const identity = lowlevelIdentity("rc_released", digest);
     seedResolvingTombstone("rc_released", digest, identity, Game.time);
     expect(
-      commitSettledReceipt("rc_released", Game.time, { digest, durableIdentityDigest: identity }).status,
+      commitSettledReceipt("rc_released", Game.time, { digest, durableIdentityDigest: identity, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }).status,
     ).toBe("written");
     expect(resolveTreasuryUnresolvedAuthority("rc_released").status).toBe("not_found");
 
@@ -507,6 +510,7 @@ describe("resolution tombstone 状态机（第十五轮第六节）", () => {
       resolution: "committed" as const,
       stage: "resolving" as const,
       proofLevel: "lowlevel" as const,
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
       durableIdentityDigest: identity,
       actionTick: 10,
       settledAtTick: 12,
@@ -699,7 +703,7 @@ describe("resolving capability gate（第十五轮第七节）", () => {
     const digest = "0123456789abcdef";
     const identity = seedLowlevelQuarantine("gate_after", digest);
     seedResolvingTombstone("gate_after", digest, identity, Game.time);
-    expect(commitSettledReceipt("gate_after", Game.time, { digest, durableIdentityDigest: identity }).status).toBe("written");
+    expect(commitSettledReceipt("gate_after", Game.time, { digest, durableIdentityDigest: identity, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }).status).toBe("written");
     const report = recoverStagedResolutions();
     expect(report.completed).toBe(1);
 
@@ -812,7 +816,7 @@ describe("immediate committed verifier（第十五轮第十三节）", () => {
     // recovery 路径。
     const identityR = seedLowlevelQuarantine("iv_shared_r", digest);
     seedResolvingTombstone("iv_shared_r", digest, identityR, Game.time);
-    expect(commitSettledReceipt("iv_shared_r", Game.time, { digest, durableIdentityDigest: identityR }).status).toBe("written");
+    expect(commitSettledReceipt("iv_shared_r", Game.time, { digest, durableIdentityDigest: identityR, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }).status).toBe("written");
     recoverStagedResolutions();
     expect(verifierSpy).toHaveBeenCalledTimes(1);
     // normal（immediate）路径。
@@ -901,7 +905,7 @@ describe("resolution health 版本兼容（第十五轮第十节）", () => {
     seedResolvingTombstone("hv_blocker", digest, identity, Game.time);
     expect(treasuryResolutionResolvingInProgress()).toBe(true);
     // finalize 后 blocker 解除。
-    expect(commitSettledReceipt("hv_blocker", Game.time, { digest, durableIdentityDigest: identity }).status).toBe("written");
+    expect(commitSettledReceipt("hv_blocker", Game.time, { digest, durableIdentityDigest: identity, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }).status).toBe("written");
     recoverStagedResolutions();
     expect(treasuryResolutionResolvingInProgress()).toBe(false);
   });

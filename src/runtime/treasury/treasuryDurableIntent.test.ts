@@ -15,6 +15,7 @@
  *   writer 阻断、聚合空）、load 全量验证计数、entry 冻结快照封闭。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import { TREASURY_LOWLEVEL_SOURCE_RUNTIME } from "@/runtime/treasury/authorityLevel";
 import { clearTreasuryPersistenceForTest, commitSettledReceipt } from "@/runtime/treasury/receipts";
 import { writeTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
@@ -341,6 +342,7 @@ describe("global reset 恢复", () => {
       resolution: "not-executed",
       stage: "final",
       proofLevel: "lowlevel",
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
       actionTick: Game.time,
       observationTick: Game.time,
       resolvedAtTick: Game.time,

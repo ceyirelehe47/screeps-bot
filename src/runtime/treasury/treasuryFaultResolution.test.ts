@@ -50,6 +50,7 @@ import {
 } from "@/runtime/treasury/actionContracts";
 import type { TreasuryReconciliationCapability } from "@/runtime/treasury/reconciliation";
 import { peekTreasuryQuarantineHealth, quarantineTreasuryTransaction } from "@/runtime/treasury/quarantine";
+import { TREASURY_LOWLEVEL_SOURCE_RUNTIME } from "@/runtime/treasury/authorityLevel";
 import { readTreasuryIntentEntry, writeTreasuryIntentEntry, migrateTreasuryLegacyIntentPhase } from "@/runtime/treasury/intents";
 import { resetTreasuryIntentRuntimeForTest } from "@/runtime/treasury/intents";
 import { installRooms, type RoomSpec } from "@mock/treasury";
@@ -299,7 +300,7 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     if (resolved.status === "resolved") {
       expect(resolved.resolution).toBe("committed");
       expect(resolved.receiptWritten).toBe(true); // receipt_publish 故障：receipt 未写，本次补全
-      expect(resolved.reprepareAllowed).toBe(false);
+      expect(resolved.sameIdRetryAllowed).toBe(false);
       expect(resolved.actionTick).toBe(faultTick); // 原 action tick 审计保留
       expect(resolved.settledAtTick).toBe(Game.time); // retention 起点 = resolution tick
     }
@@ -328,49 +329,18 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     // tick1 receipt 已写（正常 commit）后人为入隔离（模拟后续对账争议场景：
     // 直接构造 entry + 既有 receipt 的组合）。
     const service = makeService();
+    // receipt 已写（receipt_publish 成功）后 heap_publish 故障入隔离——真实
+    // 的"既有 receipt + modern quarantine"场景。【第十六轮第十一节】不再
+    // 手工拼 lowlevel quarantine fixture 配 modern receipt：lowlevel
+    // provenance 三方绑定后 modern proof 不能释放 lowlevel authority（隔离）。
+    injectOnce("heap_publish");
     const committed = service.executePreparedAction(freshInput(service, "ts1_refresh"), () => ({ ok: true }));
-    expect(committed.status).toBe("executed_committed");
+    expect(committed.status).toBe("executed_unsettled");
     expect(hasSettledReceipt("ts1_refresh")).toBe(Game.time); // tick1
     const receiptTickBefore = Game.time;
-    // 人为构造同一 id 的 quarantine entry（故障后对账场景的等价前置态；先
-    // 建合法 store——正常 commit 路径不产生 quarantine）。
-    Memory.runtime!.treasury!.quarantine = { version: 5, entries: {}, entryCount: 0 };
-    const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
-    // 【第十三轮】fixture 的 digest 与既有 modern receipt proof 一致
-    //（identity-aware refresh：authority 为 digest-only legacy attempt 时按
-    // digest 匹配 relation=match 即可刷新；proof 身份保留不降级）。
-    const settledProof = readTreasurySettlementProof("ts1_refresh");
-    expect(settledProof).toBeDefined();
-    const refreshDigest = settledProof!.digest ?? "0123456789abcdef";
-    store.entries["q:ts1_refresh"] = {
-      transactionId: "ts1_refresh",
-      authorityLevel: "lowlevel",
-      // 【第十四轮】低层矩阵：durableIdentityDigest 由事实派生 + lowlevelSource
-      // 来源标记 + postings 非空（deltas 为空不再可写）。
-      // 【第十四轮】低层矩阵：durableIdentityDigest 由事实派生（事实与原
-      // transaction 的 freshInput 一致——与既有 receipt proof 的身份匹配）
-      // + lowlevelSource 来源标记 + postings 非空（deltas 为空不再可写）。
-      lowlevelSource: "runtime-lowlevel@v1",
-      durableIdentityDigest: computeTreasuryDurableIdentityDigest({
-        transactionId: "ts1_refresh",
-        digest: refreshDigest,
-        actionKind: "terminal.send",
-        postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
-        source: "test",
-        adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
-      }),
-      digest: refreshDigest,
-      tick: Game.time,
-      kind: "terminal.send",
-      adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
-      source: "test",
-      phase: "receipt_publish",
-      outcome: "returned_ok",
-      settlement: "quarantined",
-      deltas: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
-      recordedAt: Game.time,
-    };
-    store.entryCount += 1;
+    const entry = readTreasuryQuarantineEntry("ts1_refresh");
+    expect(entry).toBeDefined();
+    const refreshDigest = entry!.digest;
     Game.time += 5_000;
     const next = makeService();
     next.beginTick();
@@ -454,13 +424,24 @@ describe("resolve-as-not-executed（staged：final tombstone 先行）", () => {
     if (resolved.status === "resolved") {
       expect(resolved.resolution).toBe("not-executed");
       expect(resolved.receiptWritten).toBe(false);
-      expect(resolved.reprepareAllowed).toBe(true);
+      expect(resolved.sameIdRetryAllowed).toBe(false);
+      expect(typeof resolved.rearmChildTransactionId).toBe("string");
     }
     expect(hasSettledReceipt("ts1_ne")).toBeUndefined();
     expect(readTreasuryQuarantineEntry("ts1_ne")).toBeUndefined();
     expect(readTreasuryResolutionTombstone("ts1_ne")?.stage).toBe("final");
-    const reprepared = next.prepareTransaction(freshInput(next, "ts1_ne"));
-    expect(reprepared.status).toBe("prepared");
+    // 【第十六轮第五节】同 ID 不可直接重新执行（一个 transaction ID 只标识
+    // 一个执行 attempt）——prepare 拒绝并返回 rearm-required 语义。
+    const sameId = next.prepareTransaction(freshInput(next, "ts1_ne"));
+    expect(sameId.status).toBe("rejected");
+    if (sameId.status === "rejected") expect(sameId.reason).toBe("rearm_required");
+    // 显式 rearm 后 child ID 可正常 prepare（新 attempt 生命周期）。
+    const rearmed = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "ts1_ne" });
+    expect(rearmed.status).toBe("rearmed");
+    if (rearmed.status === "rearmed") {
+      const childPrepared = next.prepareTransaction(freshInput(next, rearmed.childTransactionId));
+      expect(childPrepared.status).toBe("prepared");
+    }
   });
 
   it("callback 抛错（action_threw_execution_unknown）：uncertain 保持；observed_not_executed 可释放", () => {
@@ -661,6 +642,9 @@ describe("staged atomic（故障注入与恢复）", () => {
         ...(contractDigest !== undefined ? { contractDigest } : {}),
         ...(authorizationCohortDigest !== undefined ? { authorizationCohortDigest } : {}),
         ...(durableIdentityDigest !== undefined ? { durableIdentityDigest } : {}),
+        ...(durableIdentityDigest !== undefined && (contractDigest === undefined || authorizationCohortDigest === undefined)
+          ? { lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }
+          : {}),
         // 【第十四轮】运行时视角的 proof class 推导（与迁移规则不同——迁移对
         // 历史数据保守 forensic，运行时按 authority 事实）：全身份 → identity-
         // bound；durable-only → lowlevel；无身份 → legacy；其余部分 → forensic。
@@ -679,7 +663,15 @@ describe("staged atomic（故障注入与恢复）", () => {
       commitSettledReceipt(
         "ts1_recover",
         Game.time,
-        durableIdentityDigest !== undefined ? { digest, durableIdentityDigest } : undefined,
+        durableIdentityDigest !== undefined
+          ? {
+              digest,
+              durableIdentityDigest,
+              ...(contractDigest === undefined || authorizationCohortDigest === undefined
+                ? { lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }
+                : {}),
+            }
+          : undefined,
       ).status,
     ).toBe("written");
     expect(readTreasuryQuarantineEntry("ts1_recover")).toBeDefined();
@@ -709,6 +701,9 @@ describe("staged atomic（故障注入与恢复）", () => {
         ...(contractDigest !== undefined ? { contractDigest } : {}),
         ...(authorizationCohortDigest !== undefined ? { authorizationCohortDigest } : {}),
         ...(durableIdentityDigest !== undefined ? { durableIdentityDigest } : {}),
+        ...(durableIdentityDigest !== undefined && (contractDigest === undefined || authorizationCohortDigest === undefined)
+          ? { lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }
+          : {}),
         // 【第十四轮】运行时视角的 proof class 推导（与迁移规则不同——迁移对
         // 历史数据保守 forensic，运行时按 authority 事实）：全身份 → identity-
         // bound；durable-only → lowlevel；无身份 → legacy；其余部分 → forensic。
@@ -745,7 +740,15 @@ describe("staged atomic（故障注入与恢复）", () => {
       commitSettledReceipt(
         "ts1_stale_receipt",
         Game.time,
-        durableIdentityDigest !== undefined ? { digest, durableIdentityDigest } : undefined,
+        durableIdentityDigest !== undefined
+          ? {
+              digest,
+              durableIdentityDigest,
+              ...(contractDigest === undefined || authorizationCohortDigest === undefined
+                ? { lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }
+                : {}),
+            }
+          : undefined,
       ).status,
     ).toBe("written");
     const staleTick = Game.time;
@@ -765,6 +768,9 @@ describe("staged atomic（故障注入与恢复）", () => {
         ...(contractDigest !== undefined ? { contractDigest } : {}),
         ...(authorizationCohortDigest !== undefined ? { authorizationCohortDigest } : {}),
         ...(durableIdentityDigest !== undefined ? { durableIdentityDigest } : {}),
+        ...(durableIdentityDigest !== undefined && (contractDigest === undefined || authorizationCohortDigest === undefined)
+          ? { lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }
+          : {}),
         // 【第十四轮】运行时视角的 proof class 推导（与迁移规则不同——迁移对
         // 历史数据保守 forensic，运行时按 authority 事实）：全身份 → identity-
         // bound；durable-only → lowlevel；无身份 → legacy；其余部分 → forensic。
@@ -806,6 +812,9 @@ describe("staged atomic（故障注入与恢复）", () => {
           : {}),
         ...(releaseAuthority.durableIdentityDigest !== undefined
           ? { durableIdentityDigest: releaseAuthority.durableIdentityDigest }
+          : {}),
+        ...(releaseAuthority.authorityLevel === "lowlevel"
+          ? { lowlevelSource: releaseAuthority.lowlevelSource ?? TREASURY_LOWLEVEL_SOURCE_RUNTIME }
           : {}),
         proofLevel:
           releaseAuthority.authorityLevel === "modern"
@@ -1128,7 +1137,11 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
         digest: "0123456789abcdef",
         resolution: "committed",
         stage: "resolving",
-        proofLevel: "legacy",
+        // 【第十六轮第九节】resolving 只允许普通自动 resolution 等级——legacy
+        // resolving 是非法持久状态（load 语义矩阵 fail closed）。
+        proofLevel: "lowlevel",
+        lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+        durableIdentityDigest: "0123456789abcdee",
         settledAtTick: ancient,
         actionTick: ancient,
         observationTick: ancient,
@@ -1162,7 +1175,11 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
           digest: "0123456789abcdef",
           resolution: "committed",
           stage: "resolving",
-          proofLevel: "legacy",
+          // 【第十六轮第九节】resolving 只允许普通自动 resolution 等级——
+          // legacy resolving 是非法持久状态。
+          proofLevel: "lowlevel",
+          lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+          durableIdentityDigest: "0123456789abcdee",
           settledAtTick: ancient,
           actionTick: ancient,
           observationTick: ancient,

@@ -12,6 +12,7 @@
  * - 3.9/3.10 authorization fault store health 与 production 类型边界回归。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import { TREASURY_LOWLEVEL_SOURCE_RUNTIME } from "@/runtime/treasury/authorityLevel";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import {
@@ -364,6 +365,7 @@ describe("tombstone / finalized proof identity（第十二轮 3.3/3.4）", () =>
       resolution: "not-executed",
       stage: "final",
       proofLevel: "lowlevel",
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
       actionTick: Game.time,
       observationTick: Game.time,
       resolvedAtTick: Game.time,
@@ -432,7 +434,7 @@ describe("tombstone / finalized proof identity（第十二轮 3.3/3.4）", () =>
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = Memory.runtime.treasury ?? {};
     Memory.runtime.treasury.receipts = Memory.runtime.treasury.receipts ?? {
-      version: 5,
+      version: 6,
       settled: {},
       updatedAt: Game.time,
       entryCount: 0,
@@ -479,7 +481,7 @@ describe("tombstone / finalized proof identity（第十二轮 3.3/3.4）", () =>
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = Memory.runtime.treasury ?? {};
     Memory.runtime.treasury.receipts = Memory.runtime.treasury.receipts ?? {
-      version: 5,
+      version: 6,
       settled: {},
       updatedAt: Game.time,
       entryCount: 0,

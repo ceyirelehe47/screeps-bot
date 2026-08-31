@@ -98,13 +98,14 @@ describe("staged recovery operation count（第十四轮第十六节）", () => 
     expect(quarantineWrite.status).toBe("written");
     // receipt 已在 required tick（tick 充分——恢复不得跳过 identity 校验，
     // 也不得因此全表扫描 receipt）。
-    expect(commitSettledReceipt(transactionId, Game.time, { digest, durableIdentityDigest: identity }).status).toBe("written");
+    expect(commitSettledReceipt(transactionId, Game.time, { digest, durableIdentityDigest: identity, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }).status).toBe("written");
     const tombWrite = writeTreasuryResolutionTombstone({
       transactionId,
       digest,
       resolution: "committed",
       stage: "resolving",
       proofLevel: "lowlevel",
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
       durableIdentityDigest: identity,
       actionTick: Game.time,
       settledAtTick: Game.time,

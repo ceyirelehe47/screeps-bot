@@ -15,6 +15,7 @@
  *   finalize、match 可 finalize、insufficient 不释放、独立计数。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import { TREASURY_LOWLEVEL_SOURCE_RUNTIME } from "@/runtime/treasury/authorityLevel";
 import {
   clearTreasuryPersistenceForTest,
   commitSettledReceipt,
@@ -309,7 +310,7 @@ describe("receipt v3 → v5 migration（第十三轮 4.4）", () => {
 // ── 5.2/5.3 existing proof 的 identity-aware commit ─────────────────────────
 
 describe("existing proof 的 identity-aware commit（第十三轮 5.2/5.3）", () => {
-  const identity = { digest: "1234567890abcdef", durableIdentityDigest: "fedcba0987654321" };
+  const identity = { digest: "1234567890abcdef", durableIdentityDigest: "fedcba0987654321", lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME };
 
   it("match：already_settled_match（幂等——不重复写入）", () => {
     const service = makeService();
@@ -363,7 +364,7 @@ describe("existing proof 的 identity-aware commit（第十三轮 5.2/5.3）", (
 // ── 第六/七节 identity-aware refresh 与 staged recovery ─────────────────────
 
 describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节）", () => {
-  const identity = { digest: "1234567890abcdef", durableIdentityDigest: "fedcba0987654321" };
+  const identity = { digest: "1234567890abcdef", durableIdentityDigest: "fedcba0987654321", lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME };
 
   it("resolving modern attempt 遇 legacy receipt：不覆盖、不 finalize、authority 保留", () => {
     const service = makeService();
@@ -376,6 +377,7 @@ describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节
       resolution: "committed",
       stage: "resolving",
       proofLevel: "lowlevel",
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
       actionTick: Game.time,
       settledAtTick: Game.time + 10,
       observationTick: Game.time,
@@ -403,6 +405,7 @@ describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节
       resolution: "committed",
       stage: "resolving",
       proofLevel: "lowlevel",
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
       actionTick: Game.time,
       settledAtTick: Game.time + 10,
       observationTick: Game.time,
@@ -427,6 +430,7 @@ describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节
       resolution: "committed",
       stage: "resolving",
       proofLevel: "lowlevel",
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
       actionTick: Game.time,
       settledAtTick: Game.time,
       observationTick: Game.time,
@@ -484,14 +488,15 @@ describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节
     const service = makeService();
     void service;
     expect(commitSettledReceipt("rr_staged", Game.time, identity).status).toBe("written");
-    // resolving tombstone（无现代身份——legacy proof 对 modern receipt）。
+    // resolving tombstone（【第十六轮第九节】forensic/legacy 不得处于普通
+    // resolving——用 identity-bound 全身份 + receipt 缺 cohort 制造 insufficient）。
     expect(
       writeTreasuryResolutionTombstone({
         transactionId: "rr_staged",
         digest: "1234567890abcdef",
         resolution: "committed",
         stage: "resolving",
-        proofLevel: "forensic",
+        proofLevel: "identity-bound",
         actionTick: Game.time,
         settledAtTick: Game.time + 10,
         observationTick: Game.time,
@@ -500,6 +505,7 @@ describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节
         // attempt 携带 cohort digest 而 receipt proof 无 → relation=insufficient。
         durableIdentityDigest: identity.durableIdentityDigest,
         authorizationCohortDigest: "aaaaaaaaaaaaaaaa",
+        contractDigest: "cccccccccccccccc",
       }).status,
     ).not.toBe("rejected");
     Game.time += 20;

@@ -138,6 +138,7 @@ describe("第十五轮 operation-count", () => {
         resolution: "committed",
         stage: "resolving",
         proofLevel: "lowlevel",
+        lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
         durableIdentityDigest: identity,
         actionTick: Game.time,
         settledAtTick: Game.time,
@@ -154,10 +155,11 @@ describe("第十五轮 operation-count", () => {
     const report = recoverStagedResolutions();
     expect(report.authorityInconsistent).toBe(1);
     // intent/quarantine store 零新增全表扫描（resolver 只做单条 entry 读取，
-    // 经 heap 缓存的已验证 store）；resolution store 自身迭代恰 +1。
+    // 经 heap 缓存的已验证 store）；【第十六轮第十三节】resolution store 亦
+    // 零新增全表扫描——pending 恢复只遍历索引 ID（O(1) 快路径/索引定位）。
     expect(readTreasuryIntentCounters().fullScans).toBe(intentScansBefore);
     expect(readTreasuryQuarantineCounters().fullScans).toBe(quarantineScansBefore);
-    expect(readTreasuryResolutionStoreCounters().fullScans).toBe(resolutionScansBefore + 1);
+    expect(readTreasuryResolutionStoreCounters().fullScans).toBe(resolutionScansBefore);
   });
 
   it("resolving capability gate O(1)：满表 resolution store 上签发不触发额外扫描", () => {
@@ -199,6 +201,7 @@ describe("第十五轮 operation-count", () => {
         resolution: "committed",
         stage: "resolving",
         proofLevel: "lowlevel",
+        lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
         durableIdentityDigest: identity,
         actionTick: Game.time,
         settledAtTick: Game.time,

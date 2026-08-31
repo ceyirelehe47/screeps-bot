@@ -152,6 +152,7 @@ function seedResolvingTombstone(
     resolution: "committed",
     stage: "resolving",
     proofLevel: "lowlevel",
+    lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
     durableIdentityDigest,
     actionTick: Game.time,
     settledAtTick,
@@ -202,7 +203,7 @@ describe("staged committed proof closure（第十四轮第五节）", () => {
     seedResolvingTombstone("pc_eq_conflict", digest, tombstoneIdentity, Game.time);
     // receipt（modern proof）绑定 authority 的 durable——与 tombstone 冲突。
     expect(
-      commitSettledReceipt("pc_eq_conflict", Game.time, { digest, durableIdentityDigest: authorityIdentity }).status,
+      commitSettledReceipt("pc_eq_conflict", Game.time, { digest, durableIdentityDigest: authorityIdentity, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }).status,
     ).toBe("written");
     const before = readTreasuryResolutionStoreCounters();
     makeService().beginTick();
@@ -254,7 +255,7 @@ describe("staged committed proof closure（第十四轮第五节）", () => {
     const digest = "0123456789abcdef";
     const identity = lowlevelIdentity("pc_match_equal", digest);
     seedResolvingTombstone("pc_match_equal", digest, identity, Game.time);
-    expect(commitSettledReceipt("pc_match_equal", Game.time, { digest, durableIdentityDigest: identity }).status).toBe("written");
+    expect(commitSettledReceipt("pc_match_equal", Game.time, { digest, durableIdentityDigest: identity, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }).status).toBe("written");
     Game.time += 1;
     makeService().beginTick();
     expect(readTreasuryResolutionTombstone("pc_match_equal")?.stage).toBe("final");
@@ -306,7 +307,7 @@ describe("staged committed proof closure（第十四轮第五节）", () => {
     const identity = lowlevelIdentity("pc_released_match", digest);
     // 不 seed quarantine（前一 global 已释放、finalize 写入前中断的形态）。
     seedResolvingTombstone("pc_released_match", digest, identity, Game.time);
-    expect(commitSettledReceipt("pc_released_match", Game.time, { digest, durableIdentityDigest: identity }).status).toBe("written");
+    expect(commitSettledReceipt("pc_released_match", Game.time, { digest, durableIdentityDigest: identity, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }).status).toBe("written");
     Game.time += 1;
     makeService().beginTick();
     expect(readTreasuryResolutionTombstone("pc_released_match")?.stage).toBe("final");
@@ -1200,6 +1201,7 @@ describe("resolution proof level（第十四轮第十一节）", () => {
         resolution: "committed",
         stage: "final",
         proofLevel: "lowlevel",
+        lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
         durableIdentityDigest: identity,
         actionTick: Game.time,
         settledAtTick: Game.time,

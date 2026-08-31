@@ -690,7 +690,8 @@ describe("pre-execution authorization fault 可恢复 authority（第十一轮 3
     expect(resolved.status).toBe("resolved");
     if (resolved.status === "resolved") {
       expect(resolved.resolution).toBe("not-executed");
-      expect(resolved.reprepareAllowed).toBe(true);
+      expect(resolved.sameIdRetryAllowed).toBe(false);
+      expect(typeof resolved.rearmChildTransactionId).toBe("string");
     }
     // marker 与 authority 均清除；tombstone 记录 preExecution。
     expect(readTreasuryAuthorizationFaultEntry("pe_fault_resolve")).toBeUndefined();

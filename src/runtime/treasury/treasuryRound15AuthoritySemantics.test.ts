@@ -465,7 +465,8 @@ describe("forensic provenance（第十五轮第八节）", () => {
       forensic: { reason: "intent_missing_fallback", detail: "test fixture" },
     });
     expect(forensicWrite.status).toBe("written");
-    // migration-derived forensic tombstone（无 provenance）。
+    // 【第十六轮第九节】forensic 不得处于普通 resolving——migration-derived
+    // forensic resolving 是非法持久状态（写入被语义矩阵拒绝）。
     const tombstoneWrite = writeTreasuryResolutionTombstone({
       transactionId: "fp_migrated",
       digest,
@@ -480,15 +481,15 @@ describe("forensic provenance（第十五轮第八节）", () => {
       reconcilerKind: "terminal.send",
       source: "test",
     });
-    expect(tombstoneWrite.status).toBe("written");
-    expect(commitSettledReceipt("fp_migrated", Game.time, { digest, durableIdentityDigest: identity }).status).toBe("written");
+    expect(tombstoneWrite.status).toBe("rejected"); // forensic resolving 非法持久状态
 
+    // forensic resolving 写入被拒（无 tombstone）→ recovery 无待处理项；
+    // forensic authority 不被任何自动路径释放（O(1) 空闲快路径）。
     const report = recoverStagedResolutions();
+    expect(report.idleFastPath).toBe(true);
     expect(report.completed).toBe(0);
     expect(readTreasuryQuarantineEntry("fp_migrated")).toBeDefined();
-    expect(readTreasuryResolutionTombstone("fp_migrated")?.stage).toBe("resolving");
-    // 阻断计入 insufficient（proof level 自动释放矩阵不允许 forensic）。
-    expect(report.identityInsufficient).toBeGreaterThanOrEqual(1);
+    expect(readTreasuryResolutionTombstone("fp_migrated")).toBeUndefined();
   });
 
   it("legacy proof 不释放 legacy authority（普通自动 recovery 释放矩阵收敛）", () => {
