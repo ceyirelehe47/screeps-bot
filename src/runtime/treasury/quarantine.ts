@@ -47,7 +47,8 @@ import {
   TREASURY_LOWLEVEL_SOURCE_RUNTIME,
   type TreasuryAuthorityLevel,
 } from "@/runtime/treasury/authorityLevel";
-import { treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
+import { compareTreasuryAuthoritySameIdIdentity } from "@/runtime/treasury/authorityIdempotence";
+import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
 import {
   verifyTreasuryEntryIdentity,
   recomputeTreasuryDurableIdentityDigest,
@@ -770,14 +771,18 @@ export function peekTreasuryQuarantineHealth(): TreasuryQuarantineHealth {
   return { healthy: true, detail: null, entryCount: store.entryCount, overflowed: false };
 }
 
-/** 冻结深拷贝的单条 entry（快照封闭——外部修改不影响内部权威）。 */
+/**
+ * 冻结深拷贝的单条 entry（快照封闭——外部修改不影响内部权威）。
+ * 【第十五轮第十一节】嵌套 authorizationCohort（含 revisions / leg digests）
+ * 与 forensic provenance 一并有界深冻结——不再泄漏 Memory 引用。
+ */
 function freezeQuarantineCopy(entry: TreasuryQuarantineEntry): Readonly<TreasuryQuarantineEntry> {
-  return Object.freeze({
+  return treasuryBoundedDeepFreezeSnapshot({
     ...entry,
-    deltas: entry.deltas.map((leg) => Object.freeze({ ...leg })),
-    ...(entry.structureFacts !== undefined
-      ? { structureFacts: entry.structureFacts.map((fact) => Object.freeze({ ...fact })) }
-      : {}),
+    deltas: entry.deltas.map((leg) => ({ ...leg })),
+    ...(entry.structureFacts !== undefined ? { structureFacts: entry.structureFacts.map((fact) => ({ ...fact })) } : {}),
+    ...(entry.authorizationCohort !== undefined ? { authorizationCohort: { ...entry.authorizationCohort } } : {}),
+    ...(entry.forensic !== undefined ? { forensic: { ...entry.forensic } } : {}),
   }) as Readonly<TreasuryQuarantineEntry>;
 }
 
@@ -950,12 +955,20 @@ export function quarantineTreasuryTransaction(
     if (existingIdentityError !== null) {
       return { status: "rejected", reason: "store_fatal", detail: existingIdentityError };
     }
-    if (!treasuryDurableIdentitiesMatch(existing.durableIdentityDigest, entry.durableIdentityDigest)) {
+    // 【第十五轮第九节】按 authority class 的 same-ID 幂等（含 forensic
+    // reason/provenance、phase/outcome 与 legacy signature 比较——不再以
+    // durable digest 空对空为通用幂等证明）。
+    const sameId = compareTreasuryAuthoritySameIdIdentity(
+      { ...existing, postings: existing.deltas },
+      { ...entry, postings: entry.deltas },
+      `quarantine 同 id（${entry.transactionId.slice(0, 48)}）`,
+    );
+    if (sameId.verdict !== "same") {
       quarantineEvents.admissionRejections += 1;
       return {
         status: "rejected",
         reason: "identity_conflict",
-        detail: `同 id 已存在不同 durable identity 的 quarantine entry（既有 ${String(existing.durableIdentityDigest ?? "(legacy 空)").slice(0, 16)}，新 ${String(entry.durableIdentityDigest ?? "(legacy 空)").slice(0, 16)}）——fail closed，原数据不动`,
+        detail: `${sameId.detail}——fail closed，原数据不动`,
       };
     }
     return { status: "already_present" };
@@ -973,10 +986,18 @@ export function quarantineTreasuryTransaction(
   storeRevision += 1;
   // 【第十四轮第十二节】发布后 read-back：从持久副本重算 + 完整身份字段
   // 比较——不一致回滚本次写入（entryCount/revision 恢复）。
+  // 【第十五轮第十节】注入 quarantine 的 store-specific 语义校验（phase/
+  // outcome/settlement 语义矩阵、forensic provenance、legacy 标记、deltas、
+  // contract/cohort/descriptor 事实全量重验——检出"phase 被篡改但 digest
+  // 未变"一类语义矛盾）。
   const readBackError = verifyTreasuryDurablePublicationReadBack(
     runtime.store.entries[key],
-    entry,
+    { ...entry, postings: entry.deltas } as unknown as Parameters<typeof verifyTreasuryDurablePublicationReadBack>[1],
     `quarantine 发布（${entry.transactionId.slice(0, 48)}）`,
+    (persisted, label) => {
+      const shapeError = validateTreasuryQuarantineEntryShape(persisted);
+      return shapeError === null ? null : `${label}: ${shapeError}`;
+    },
   );
   if (readBackError !== null) {
     quarantineEvents.admissionRejections += 1;

@@ -37,7 +37,8 @@ import {
   verifyTreasuryDurableCandidateForPublication,
   verifyTreasuryDurablePublicationReadBack,
 } from "@/runtime/treasury/durablePublication";
-import { treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
+import { compareTreasuryAuthoritySameIdIdentity } from "@/runtime/treasury/authorityIdempotence";
+import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
 import type { TreasuryStructureBindingDescriptor } from "@/runtime/treasury/types";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
@@ -502,13 +503,32 @@ export function writeTreasuryAuthorizationFaultEntry(
   if (Object.prototype.hasOwnProperty.call(runtime.store.entries, key)) {
     // 【第十二轮 3.2】同 ID 幂等仅限完整 durable identity 一致；identity
     // 不同 → identity_conflict（原数据不动）。
+    // 【第十五轮第九节】按 authority class 的 same-ID 幂等（含 faultTick、
+    // legacy signature、forensic facts——不再以 durable digest 空对空为通用
+    // 幂等证明）；既有非 legacy entry 自身 identity 不可重算 → store fatal
+    // （与 intent/quarantine 对齐——被篡改的既有 entry 不得吞掉新写入）。
     const existing = runtime.store.entries[key];
-    if (!treasuryDurableIdentitiesMatch(existing.durableIdentityDigest, entry.durableIdentityDigest)) {
+    if (existing.legacyV1 !== true) {
+      const existingIdentityError = verifyTreasuryDurableCandidateForPublication(
+        existing,
+        `authorization fault 既有 entry（${key.slice(0, 48)}）`,
+      );
+      if (existingIdentityError !== null) {
+        faultEvents.writeFailures += 1;
+        return { status: "rejected", reason: "store_fatal", detail: existingIdentityError };
+      }
+    }
+    const sameId = compareTreasuryAuthoritySameIdIdentity(
+      { ...existing, postings: existing.postings },
+      { ...entry, postings: entry.postings },
+      `authorization fault 同 id（${key.slice(0, 48)}）`,
+    );
+    if (sameId.verdict !== "same") {
       faultEvents.writeRejections += 1;
       return {
         status: "rejected",
         reason: "identity_conflict",
-        detail: `同 id 已存在不同 durable identity 的 authorization fault（既有 ${String(existing.durableIdentityDigest ?? "(legacy 空)").slice(0, 16)}，新 ${String(entry.durableIdentityDigest ?? "(legacy 空)").slice(0, 16)}）——fail closed，原数据不动`,
+        detail: `${sameId.detail}——fail closed，原数据不动`,
       };
     }
     return { status: "already_present" };
@@ -535,6 +555,7 @@ export function writeTreasuryAuthorizationFaultEntry(
         }
       : {}),
   };
+  const previousUpdatedAt = runtime.store.updatedAt;
   runtime.store.entryCount += 1;
   runtime.store.updatedAt = Game.time;
   // 【第十二轮 3.1.8 / 第十四轮第十二节】read-back 验证升级为完整身份比较：
@@ -542,20 +563,28 @@ export function writeTreasuryAuthorizationFaultEntry(
   //（不再只是 digest/durableIdentityDigest/cohortDigest/transactionId 四项）
   // ——不一致视为 store 不可信（回退写入并恢复 entryCount/updatedAt，不得
   // 发布 marker）。
+  // 【第十五轮第十节】注入 authorization-fault 的 store-specific 语义校验
+  //（outcome 恒 not_started、rollbackConfirmed 恒 true、faultTick、source、
+  // detail 边界、authority 矩阵）+ 回滚恢复原 updatedAt（不再错写
+  // Game.time）。
   const readBackError = verifyTreasuryDurablePublicationReadBack(
     runtime.store.entries[key],
     entry,
     `authorization fault 发布（${key.slice(0, 48)}）`,
+    (persisted, label) => {
+      const shapeError = validateFaultEntryShape(persisted);
+      return shapeError === null ? null : `${label}: ${shapeError}`;
+    },
   );
   if (readBackError !== null) {
     faultEvents.writeFailures += 1;
     delete runtime.store.entries[key];
     runtime.store.entryCount -= 1;
-    runtime.store.updatedAt = Game.time;
+    runtime.store.updatedAt = previousUpdatedAt;
     return {
       status: "rejected",
       reason: "store_fatal",
-      detail: `${readBackError}——写入已回退，不得发布 marker`,
+      detail: `${readBackError}——写入已回退（updatedAt 恢复原值），不得发布 marker`,
     };
   }
   return { status: "written" };
@@ -573,13 +602,24 @@ export function ensureTreasuryAuthorizationFaultStoreValidated(): string | null 
   return loadFaultStoreRuntime().fatal;
 }
 
-/** 单条只读查询（O(1)；fatal store 视为不可信返回 undefined）。 */
+/**
+ * 单条只读查询（O(1)；fatal store 视为不可信返回 undefined）。
+ * 【第十五轮第十一节】有界深冻结快照——structureFacts、authorizationCohort
+ * （含 revisions / leg digests）等嵌套对象同样封闭，不再泄漏 Memory 引用。
+ */
 export function readTreasuryAuthorizationFaultEntry(transactionId: string): Readonly<TreasuryAuthorizationFaultEntry> | undefined {
   if (peekTreasuryAuthorizationFaultStore() === undefined) return undefined;
   const runtime = loadFaultStoreRuntime();
   if (runtime.fatal) return undefined;
   const entry = runtime.store.entries[encodeFaultKey(transactionId)];
-  return entry === undefined ? undefined : Object.freeze({ ...entry, postings: entry.postings.map((leg) => Object.freeze({ ...leg })) });
+  return entry === undefined
+    ? undefined
+    : (treasuryBoundedDeepFreezeSnapshot({
+        ...entry,
+        postings: entry.postings.map((leg) => ({ ...leg })),
+        ...(entry.structureFacts !== undefined ? { structureFacts: entry.structureFacts.map((fact) => ({ ...fact })) } : {}),
+        ...(entry.authorizationCohort !== undefined ? { authorizationCohort: { ...entry.authorizationCohort } } : {}),
+      }) as Readonly<TreasuryAuthorizationFaultEntry>);
 }
 
 /** resolution 路径：释放单条 fault authority（tombstone 写入成功后调用）。 */

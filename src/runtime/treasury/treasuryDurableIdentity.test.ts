@@ -128,7 +128,9 @@ describe("统一 durable action identity（第十一轮 3.13.5）", () => {
     expect(conflict.status).toBe("rejected");
     if (conflict.status === "rejected") {
       expect(conflict.reason).toBe("identity_conflict");
-      expect(conflict.detail).toContain("durable identity");
+      // 【第十五轮】class-specific 幂等比较——source 属于公共前置事实，
+      // 先于 durable identity 报告（两身份成分都不同，conflict 结论不变）。
+      expect(conflict.detail).toContain("不一致");
     }
     const stored = readTreasuryIntentEntry("id_tx");
     expect(stored?.durableIdentityDigest).toBe(baseIntent().durableIdentityDigest);

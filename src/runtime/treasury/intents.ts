@@ -43,8 +43,9 @@ import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import { validateTreasuryAuthorizationCohortFacts } from "@/runtime/treasury/cohortValidation";
 import { validateTreasuryStructureDescriptorArray } from "@/runtime/treasury/structureDescriptorValidation";
-import { computeTreasuryDurableIdentityDigest, treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
+import { computeTreasuryDurableIdentityDigest } from "@/runtime/treasury/durableIdentity";
 import { verifyTreasuryEntryIdentity, recomputeTreasuryDurableIdentityDigest, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
+import { compareTreasuryAuthoritySameIdIdentity } from "@/runtime/treasury/authorityIdempotence";
 import { intentSemanticViolation } from "@/runtime/treasury/semanticMatrix";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
@@ -822,12 +823,20 @@ export function writeTreasuryIntentEntry(
       intentEvents.writeFailures += 1;
       return { status: "rejected", reason: "store_fatal", detail: existingIdentityError };
     }
-    if (!treasuryDurableIdentitiesMatch(existing.durableIdentityDigest, entry.durableIdentityDigest)) {
+    // 【第十五轮第九节】按 authority class 的 same-ID 幂等：不再以"durable
+    // digest 空对空"为通用幂等证明——legacy 需完整受控 signature，modern/
+    // lowlevel/forensic 各按 class 矩阵比较（跨等级永远冲突）。
+    const sameId = compareTreasuryAuthoritySameIdIdentity(
+      { ...existing, postings: existing.postings },
+      { ...entry, postings: entry.postings },
+      `intent 同 id（${entry.transactionId.slice(0, 48)}）`,
+    );
+    if (sameId.verdict !== "same") {
       intentEvents.writeRejections += 1;
       return {
         status: "rejected",
         reason: "identity_conflict",
-        detail: `同 id 已存在不同 durable identity 的 intent（既有 identity ${String(existing.durableIdentityDigest ?? "(legacy 空)").slice(0, 16)}，新 identity ${String(entry.durableIdentityDigest ?? "(legacy 空)").slice(0, 16)}）——fail closed，原数据不动`,
+        detail: `${sameId.detail}——fail closed，原数据不动`,
       };
     }
     return { status: "already_present" };
@@ -859,10 +868,17 @@ export function writeTreasuryIntentEntry(
   storeRevision += 1;
   // 【第十四轮第十二节】发布后 read-back：从持久副本重算 + 完整身份字段
   // 比较——不一致回滚本次写入（entryCount/revision/updatedAt 恢复）。
+  // 【第十五轮第十节】注入 intent 的 store-specific 语义校验（authority
+  // level 矩阵、outcome/settlement 语义、lowlevel provenance、modern
+  // required、cohort/descriptor 全量重验）。
   const readBackError = verifyTreasuryDurablePublicationReadBack(
     runtime.store.entries[key],
     entry,
     `intent 发布（${entry.transactionId.slice(0, 48)}）`,
+    (persisted, label) => {
+      const shapeError = validateTreasuryIntentEntryShape(persisted);
+      return shapeError === null ? null : `${label}: ${shapeError}`;
+    },
   );
   if (readBackError !== null) {
     intentEvents.writeFailures += 1;
@@ -1212,14 +1228,27 @@ export function transferTreasuryIntentToQuarantine(
   // payload/version、structure descriptors、canonical postings、execution
   // outcome、settlement、source 全部一致（compareTreasuryAuthorityPublicationReadBack
   // 的完整字段比较——不再是比较 digest 字符串子集）。
+  // 【第十五轮第十节】比较字段集扩展后，quarantine 侧审计事实（phase、tick、
+  // recordedAt）与 intent 侧命名（无 phase、createdAtTick/updatedAtTick）按
+  // 同事实归一化（转移写入即用这些值），不引入跨 store 命名歧义。
   const readBack = readTreasuryQuarantineEntry(entry.transactionId);
+  const { createdAtTick: intentCreatedAtTick, ...intentIdentityFacts } = entry as typeof entry & { createdAtTick: number };
+  const expectedTransferView = {
+    ...intentIdentityFacts,
+    postings: entry.postings,
+    settlement: "quarantined" as const,
+    outcome,
+    phase: quarantinePhase,
+    tick: intentCreatedAtTick,
+    recordedAt: entry.updatedAtTick,
+  };
   const readBackConsistent =
     readBack !== undefined &&
     readBack.authorityLevel === entry.authorityLevel &&
     (readBack.source ?? undefined) === (entry.source ?? undefined) &&
     compareTreasuryAuthorityPublicationReadBack(
       { ...readBack, postings: readBack.deltas } as unknown as Parameters<typeof compareTreasuryAuthorityPublicationReadBack>[0],
-      { ...entry, postings: entry.postings, settlement: "quarantined", outcome } as unknown as Parameters<typeof compareTreasuryAuthorityPublicationReadBack>[1],
+      expectedTransferView as unknown as Parameters<typeof compareTreasuryAuthorityPublicationReadBack>[1],
       `intent→quarantine 转移（${entry.transactionId.slice(0, 48)}）`,
     ) === null;
   if (!readBackConsistent) {
