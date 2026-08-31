@@ -1,25 +1,25 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "5aa098b",
-    "suites": 226,
-    "tests": 1348,
-    "passed": 1348,
+    "commit": "e740fb2",
+    "suites": 228,
+    "tests": 1407,
+    "passed": 1407,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 226,
-    "tests": 1348,
-    "passed": 1348,
+    "suites": 228,
+    "tests": 1407,
+    "passed": 1407,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 84,
+    "highRiskFiles": 86,
     "defaultFiles": 127
   },
   "files": {
@@ -1151,6 +1151,16 @@
     "src/runtime/treasury/treasuryRound13ProofStrictness.test.ts": {
       "baseline": 25,
       "budget": 25,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound14ResolutionProof.test.ts": {
+      "baseline": 56,
+      "budget": 56,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound14OperationCount.test.ts": {
+      "baseline": 3,
+      "budget": 3,
       "tier": "high-risk"
     }
   }
