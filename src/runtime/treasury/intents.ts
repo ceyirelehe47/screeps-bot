@@ -40,7 +40,8 @@
  */
 
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
-import type { TreasuryAuthorizationCohortFacts, TreasuryCohortRevisions } from "@/runtime/treasury/authorization";
+import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
+import { validateTreasuryAuthorizationCohortFacts } from "@/runtime/treasury/cohortValidation";
 import { computeTreasuryDurableIdentityDigest, treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
 import { verifyTreasuryEntryIdentity, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
 import { intentSemanticViolation } from "@/runtime/treasury/semanticMatrix";
@@ -450,65 +451,9 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
     }
   }
   if (candidate.authorizationCohort !== undefined) {
-    const cohort = candidate.authorizationCohort as Partial<TreasuryAuthorizationCohortFacts> | undefined;
-    if (!cohort || typeof cohort !== "object") return "authorizationCohort 非对象";
-    if (typeof cohort.ownerIdentity !== "string" || cohort.ownerIdentity.length > INTENT_KIND_SOURCE_MAX) {
-      return "authorizationCohort.ownerIdentity 非法";
-    }
-    if (typeof cohort.policyId !== "string" || cohort.policyId.length === 0 || cohort.policyId.length > 96) {
-      return "authorizationCohort.policyId 非法";
-    }
-    if (!isSafeInteger(cohort.policyVersion) || cohort.policyVersion <= 0) {
-      return "authorizationCohort.policyVersion 须为正安全整数";
-    }
-    if (typeof cohort.policyRegistrationId !== "string" || !INTENT_DIGEST_PATTERN.test(cohort.policyRegistrationId)) {
-      return "authorizationCohort.policyRegistrationId 非法";
-    }
-    if (typeof cohort.policyDecisionDigest !== "string" || cohort.policyDecisionDigest.length === 0 || cohort.policyDecisionDigest.length > 512) {
-      return "authorizationCohort.policyDecisionDigest 非法";
-    }
-    if (typeof cohort.emergencyOverride !== "boolean") {
-      return "authorizationCohort.emergencyOverride 须为布尔";
-    }
-    if (!isSafeInteger(cohort.epochSeq) || cohort.epochSeq < 0) {
-      return "authorizationCohort.epochSeq 非法";
-    }
-    const revisions = cohort.revisions as Partial<TreasuryCohortRevisions> | undefined;
-    if (!revisions || typeof revisions !== "object") return "authorizationCohort.revisions 非对象";
-    for (const key of ["commitmentRevision", "projectionRevision", "quarantineRevision", "intentRevision", "reservationStoreRevision"] as const) {
-      if (!isSafeInteger(revisions[key]) || (revisions[key] as number) < 0) {
-        return `authorizationCohort.revisions.${key} 非法`;
-      }
-    }
-    if (typeof cohort.adapterRegistrationId !== "string" || !INTENT_DIGEST_PATTERN.test(cohort.adapterRegistrationId)) {
-      return "authorizationCohort.adapterRegistrationId 非法";
-    }
-    if (typeof cohort.contractId !== "string" || cohort.contractId.length === 0 || cohort.contractId.length > 96) {
-      return "authorizationCohort.contractId 非法";
-    }
-    if (typeof cohort.contractDigest !== "string" || !INTENT_DIGEST_PATTERN.test(cohort.contractDigest)) {
-      return "authorizationCohort.contractDigest 非法";
-    }
-    if (cohort.transactionId !== candidate.transactionId) {
-      return "authorizationCohort.transactionId 与 entry 不一致";
-    }
-    if (!Array.isArray(cohort.authorizationLegDigests) || cohort.authorizationLegDigests.length === 0 || cohort.authorizationLegDigests.length > 8) {
-      return "authorizationCohort.authorizationLegDigests 非法（1..8）";
-    }
-    for (const leg of cohort.authorizationLegDigests) {
-      if (typeof leg !== "string" || !INTENT_DIGEST_PATTERN.test(leg)) {
-        return "authorizationCohort.authorizationLegDigests 项非法";
-      }
-    }
-    if (typeof cohort.receiverCapacityDigest !== "string" || cohort.receiverCapacityDigest.length === 0 || cohort.receiverCapacityDigest.length > 96) {
-      return "authorizationCohort.receiverCapacityDigest 非法";
-    }
-    if (!isSafeInteger(cohort.issuedTick) || cohort.issuedTick < 0) {
-      return "authorizationCohort.issuedTick 非法";
-    }
-    if (typeof cohort.authorizationDigest !== "string" || !INTENT_DIGEST_PATTERN.test(cohort.authorizationDigest)) {
-      return "authorizationCohort.authorizationDigest 非法";
-    }
+    // 【第十三轮第九节】共享 cohort validator（唯一权威——全字段 + 异常边界）。
+    const cohortError = validateTreasuryAuthorizationCohortFacts(candidate.authorizationCohort, candidate.transactionId);
+    if (cohortError !== null) return cohortError;
   }
   if (candidate.auditSource !== undefined) {
     if (typeof candidate.auditSource !== "string" || candidate.auditSource.length === 0 || candidate.auditSource.length > INTENT_KIND_SOURCE_MAX) {

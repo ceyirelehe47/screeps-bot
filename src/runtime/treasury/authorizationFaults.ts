@@ -18,6 +18,7 @@
  */
 
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
+import { validateTreasuryAuthorizationCohortFacts } from "@/runtime/treasury/cohortValidation";
 import {
   verifyTreasuryEntryIdentity,
   type TreasuryIdentityFactsEntry,
@@ -209,17 +210,10 @@ function validateFaultEntryShape(entry: unknown): string | null {
     }
   }
   if (candidate.authorizationCohort !== undefined) {
-    const cohort = candidate.authorizationCohort as Partial<TreasuryAuthorizationCohortFacts> | undefined;
-    if (!cohort || typeof cohort !== "object") return "authorizationCohort 非对象";
-    if (typeof cohort.transactionId !== "string" || cohort.transactionId !== candidate.transactionId) {
-      return "authorizationCohort.transactionId 与 entry 不一致";
-    }
-    if (typeof cohort.authorizationDigest !== "string" || !FAULT_DIGEST_PATTERN.test(cohort.authorizationDigest)) {
-      return "authorizationCohort.authorizationDigest 非法";
-    }
-    if (!Array.isArray(cohort.authorizationLegDigests) || cohort.authorizationLegDigests.length === 0 || cohort.authorizationLegDigests.length > 8) {
-      return "authorizationCohort.authorizationLegDigests 非法（1..8）";
-    }
+    // 【第十三轮第九节】共享 cohort validator（唯一权威——全字段 + 异常边界；
+    // 替代此前仅 3 项的私有近似副本）。
+    const cohortError = validateTreasuryAuthorizationCohortFacts(candidate.authorizationCohort, candidate.transactionId);
+    if (cohortError !== null) return cohortError;
   }
   if (!Number.isSafeInteger(candidate.faultTick) || (candidate.faultTick as number) < 0) return "faultTick 非安全整数";
   if (candidate.outcome !== "not_started") {

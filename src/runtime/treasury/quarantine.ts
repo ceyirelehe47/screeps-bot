@@ -38,6 +38,7 @@
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
+import { validateTreasuryAuthorizationCohortFacts } from "@/runtime/treasury/cohortValidation";
 import { treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
 import { verifyTreasuryEntryIdentity, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
 import { quarantineSemanticViolation } from "@/runtime/treasury/semanticMatrix";
@@ -374,17 +375,10 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
     }
   }
   if (candidate.authorizationCohort !== undefined) {
-    const cohort = candidate.authorizationCohort as Partial<TreasuryAuthorizationCohortFacts> | undefined;
-    if (!cohort || typeof cohort !== "object") return "authorizationCohort 非对象";
-    if (typeof cohort.transactionId !== "string" || cohort.transactionId !== candidate.transactionId) {
-      return "authorizationCohort.transactionId 与 entry 不一致";
-    }
-    if (typeof cohort.authorizationDigest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(cohort.authorizationDigest)) {
-      return "authorizationCohort.authorizationDigest 非法";
-    }
-    if (!Array.isArray(cohort.authorizationLegDigests) || cohort.authorizationLegDigests.length === 0 || cohort.authorizationLegDigests.length > 8) {
-      return "authorizationCohort.authorizationLegDigests 非法（1..8）";
-    }
+    // 【第十三轮第九节】共享 cohort validator（唯一权威——全字段 + 异常边界；
+    // 替代此前仅 3 项的私有近似副本）。
+    const cohortError = validateTreasuryAuthorizationCohortFacts(candidate.authorizationCohort, candidate.transactionId);
+    if (cohortError !== null) return cohortError;
   }
   if (candidate.forensic !== undefined) {
     const forensic = candidate.forensic as Partial<{ reason: string; detail: string }> | undefined;

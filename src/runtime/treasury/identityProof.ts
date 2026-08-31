@@ -55,39 +55,51 @@ export interface TreasuryIdentityFactsEntry {
  * 的 durableIdentityDigest；postings 缺失时返回 null——无法重算即无法证明）。
  */
 export function recomputeTreasuryDurableIdentityDigest(entry: TreasuryIdentityFactsEntry): string | null {
-  const postings = entry.postings ?? entry.deltas;
-  if (postings === undefined) return null;
-  const input: TreasuryDurableIdentityInput = {
-    transactionId: entry.transactionId,
-    digest: entry.digest,
-    actionKind: entry.actionKind ?? entry.kind ?? "",
-    postings: postings.map((leg) => ({ ...leg })),
-    source: entry.source ?? "",
-    ...(entry.contractId !== undefined ? { contractId: entry.contractId } : {}),
-    ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
-    ...(entry.adapterRegistrationId !== undefined ? { adapterRegistrationId: entry.adapterRegistrationId } : {}),
-    ...(entry.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: entry.adapterSemanticIdentity } : {}),
-    ...(entry.durablePayload !== undefined ? { durablePayload: entry.durablePayload } : {}),
-    ...(entry.durablePayloadVersion !== undefined ? { durablePayloadVersion: entry.durablePayloadVersion } : {}),
-    ...(entry.structureFacts !== undefined
-      ? { structureFacts: entry.structureFacts as readonly TreasuryStructureBindingDescriptor[] }
-      : {}),
-    ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
-    ...(entry.ownerIdentity !== undefined ? { ownerIdentity: entry.ownerIdentity } : {}),
-    ...(entry.policyIdentity !== undefined ? { policyIdentity: entry.policyIdentity } : {}),
-  };
-  if (input.actionKind === "" || input.source === "") return null;
-  return computeTreasuryDurableIdentityDigest(input);
+  // 【第十三轮第九节】重算异常边界：malformed/throwing facts（含
+  // structureFacts 的脏 descriptor——canonical 文本直接解引用字段）一律
+  // 返回 null（身份不可证明），绝不抛出中断 tick。
+  try {
+    const postings = entry.postings ?? entry.deltas;
+    if (postings === undefined) return null;
+    const input: TreasuryDurableIdentityInput = {
+      transactionId: entry.transactionId,
+      digest: entry.digest,
+      actionKind: entry.actionKind ?? entry.kind ?? "",
+      postings: postings.map((leg) => ({ ...leg })),
+      source: entry.source ?? "",
+      ...(entry.contractId !== undefined ? { contractId: entry.contractId } : {}),
+      ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+      ...(entry.adapterRegistrationId !== undefined ? { adapterRegistrationId: entry.adapterRegistrationId } : {}),
+      ...(entry.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: entry.adapterSemanticIdentity } : {}),
+      ...(entry.durablePayload !== undefined ? { durablePayload: entry.durablePayload } : {}),
+      ...(entry.durablePayloadVersion !== undefined ? { durablePayloadVersion: entry.durablePayloadVersion } : {}),
+      ...(entry.structureFacts !== undefined
+        ? { structureFacts: entry.structureFacts as readonly TreasuryStructureBindingDescriptor[] }
+        : {}),
+      ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+      ...(entry.ownerIdentity !== undefined ? { ownerIdentity: entry.ownerIdentity } : {}),
+      ...(entry.policyIdentity !== undefined ? { policyIdentity: entry.policyIdentity } : {}),
+    };
+    if (input.actionKind === "" || input.source === "") return null;
+    return computeTreasuryDurableIdentityDigest(input);
+  } catch {
+    return null;
+  }
 }
 
 /**
  * 从持久化的 canonical cohort facts 重算 cohort digest（不重新执行 policy
  * resolver、不信任 entry 自带的 authorizationCohortDigest）。cohort facts
- * 缺失时返回 null。
+ * 缺失或重算异常（throwing Proxy/malformed——canonical 文本直接解引用全部
+ * 字段）都返回 null——重算永不抛出（【第十三轮第九节】异常边界）。
  */
 export function recomputeTreasuryCohortDigest(entry: TreasuryIdentityFactsEntry): string | null {
   if (entry.authorizationCohort === undefined) return null;
-  return computeTreasuryAuthorizationCohortDigest(entry.authorizationCohort);
+  try {
+    return computeTreasuryAuthorizationCohortDigest(entry.authorizationCohort);
+  } catch {
+    return null;
+  }
 }
 
 /**
