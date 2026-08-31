@@ -549,3 +549,42 @@ facade.ts 保留生命周期编排（beginTick/endTick/epoch/observation）、pr
 `Memory.runtime.treasuryPerf`（低频快照）：rebuildCount/reuseHits/locationsScanned/nonZeroEntries/storeEnumerations/roomFindCalls（必须为 0）/fallbackLiveReads（必须为 0）/commitmentRecords/commitmentIndexQueries/expiredCommitmentsExcluded/orphanReservations/journalEntries/duplicateSettlementRejected/reconciliationMismatches（流入/流出分桶）/shadowChecks/shadowMismatches。
 
 验证方式：fixture 确定性操作次数断言（沿用 empireInventoryBenchmark 模式）+ 新旧扫描路径调用数对比，不依赖 wall-clock。
+
+### 3.14 第十二轮：Durable Integrity Proof & Stable Reconciler Identity
+
+#### 3.14.1 持久不变量（新增）
+
+1. write-fault marker（internal_authorization_fault）发布前必须存在可读回且完整身份一致（可重算）的 durable authority；authority 写入失败时发布显式 forensic phase marker（internal_authorization_fault_forensic），只能经显式 forensic acknowledge 通道解除——不存在"marker 存在但 authority 不存在"且不可解释的状态。
+2. 同 transaction ID 的不同 action attempt 不得共享旧 tombstone / receipt settlement proof / finalized proof：一切 already_resolved 与 finalized 释放路径都按完整 attempt identity（digest + contractDigest + cohortDigest + durableIdentityDigest）匹配；proof 缺少现代身份事实（legacy proof）对现代 attempt 判定 insufficient（fail closed）。
+3. digest 是持久事实的派生证明而非独立可信事实：cohort digest 与 durable identity 一律由持久事实重算（单一 identityProof helper）；篡改事实而未同步 digest → store unhealthy / authority inconsistent / identity_conflict；repair 绝不覆盖 digest。
+4. global reset 后 reconciler 语义不漂移：authority 绑定的 stable semantic identity 与当前 registry 不一致（或缺失）→ 不得由当前 reconciler 解释（隔离）。
+5. 不完整 authority 明确隔离：legacyV1（v1 迁移残留）与 forensic（intent 缺失防御性直写）是可区分的两种隔离来源，均不参与普通 capability/resolution。
+
+#### 3.14.2 store 版本与迁移
+
+| store | 版本 | 迁移行为 |
+|---|---|---|
+| authorizationFaults | v1 → v2 | v1 entry 身份事实不完整 → 原子迁移标记 legacyV1（仅按 digest 匹配的旧协议解除）；损坏 fatal 原数据保留 |
+| resolutions | v2 → v3 | entries 原样保留；identity 字段缺省 = legacy proof（不得证明现代 attempt） |
+| receipts | v1/v2/v3 → v4 | 纯数字 value → { settledAtTick }（无身份 legacy proof）；v4 写入绑定 attempt 身份 |
+| intents / quarantine | 不升版本 | 新增可选字段（adapterRegistrationId/adapterSemanticIdentity/forensic）校验兼容缺省——additive 且不改既有字段语义 |
+
+#### 3.14.3 stable adapter/reconciler identity 语义
+
+- `semanticIdentity` 为 adapter 作者显式声明的稳定字符串（1..128），随代码版本化，注册时冻结；语义演进必须升级 adapter version（同 kind/version 不同语义身份被 registry 拒绝）。
+- 不得以函数源码字符串/对象地址/注册序号充当；per-global registrationId 保留用于阻止当前 global 内动态替换（与 Round 11 一致）。
+- 绑定点：AC4 contract digest（asi 段）、authorization cohort facts 与 cohortDigest、durableIdentityDigest（asi 段）、intent/quarantine/authorization-fault entry、reconciliation capability 签发校验。低层（非 contract）路径在 intent 写入时从当前 registry 绑定（与 contract 路径同一 durable identity 输入源）。
+
+#### 3.14.4 legacy 与 forensic isolation 的区别
+
+- legacyV1：v1 quarantine/fault store 迁移残留——历史 schema 的数据，缺合同事实；诊断 treasuryLegacyQuarantineDiagnostics。
+- forensic：recovery coordinator 在 intent 缺失时防御性直写的最小 quarantine——正常运行不应出现的内部不变量破坏痕迹（两阶段 commit fault 亦归此类）；诊断 treasuryForensicQuarantineDiagnostics（reason=intent_missing_fallback）。
+- 两者共用隔离机制（不签发普通 capability、不自动 resolve）但诊断原因可区分，不得互相冒充。
+
+#### 3.14.5 digest 重算位置
+
+新 entry 写入前（fault store / intent / quarantine 幂等与转移）；写入后 read-back（fault store）；global reset 首次 load 全量验证（intent/quarantine/authorization-fault store shape 校验）；capability 签发（resolveTreasuryUnresolvedAuthority 事实校验）；resolution prevalidation；intent→quarantine 转移；显式 repair（重算失败拒绝且不覆盖）。
+
+#### 3.14.6 structure binding union
+
+bindingKind 在 validateStructureBindings 唯一推导并显式写入 binding；governed_location 禁止 objectId/expectedType/expectedRoom；game_object 必须携带 objectId；构建期验证、执行前 revalidation、descriptor 派生、reconciler 输入全部按同一 discriminant 分支。

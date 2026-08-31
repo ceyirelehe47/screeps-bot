@@ -1,18 +1,18 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "b94c086",
-    "suites": 223,
-    "tests": 1268,
-    "passed": 1268,
+    "commit": "7ebd7d7",
+    "suites": 224,
+    "tests": 1299,
+    "passed": 1299,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 223,
-    "tests": 1268,
-    "passed": 1268,
+    "suites": 224,
+    "tests": 1299,
+    "passed": 1299,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -1001,6 +1001,11 @@
     "src/runtime/treasury/treasuryCommitments.test.ts": {
       "baseline": 0,
       "budget": 14,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound12Integrity.test.ts": {
+      "baseline": 31,
+      "budget": 31,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryShadow.test.ts": {
