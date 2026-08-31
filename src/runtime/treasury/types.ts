@@ -139,6 +139,8 @@ export type TreasuryRejectionReason =
   | "intent_conflict"
   /** 统一 durable action identity 冲突（第十一轮 3.13.5：同 ID 不同 identity——store 原数据不动）。 */
   | "identity_conflict"
+  /** 【第十四轮第九节 9.4】production 定级不变量破坏（partial-modern 不得写 lowlevel authority——callback 零调用 fail closed）。 */
+  | "authority_invariant_violation"
   | "invalid_transaction_id"
   | "invalid_kind"
   | "invalid_source"
@@ -853,6 +855,10 @@ export interface TreasuryMetrics {
   resolutionFaulted: number;
   /** staged resolution 恢复完成次数（global reset 后幂等恢复；累计）。 */
   resolutionRecovered: number;
+  /** 【第十四轮】staged recovery identity conflict 阻断次数（累计；conflict 与 insufficient 独立计数）。 */
+  resolutionIdentityConflicts: number;
+  /** 【第十四轮】staged recovery identity 不足（legacy/insufficient proof）阻断次数（累计）。 */
+  resolutionIdentityInsufficient: number;
   /** resolve-as-committed 刷新既有 receipt 的次数（累计）。 */
   receiptRefreshes: number;
   /** reconciliation capability 签发次数（累计）。 */
@@ -964,6 +970,8 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     resolutionInProgress: 0,
     resolutionFaulted: 0,
     resolutionRecovered: 0,
+    resolutionIdentityConflicts: 0,
+    resolutionIdentityInsufficient: 0,
     receiptRefreshes: 0,
     reconciliationCapabilitiesIssued: 0,
     reconciliationCapabilitiesRejected: 0,

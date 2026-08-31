@@ -19,6 +19,7 @@ import { postingsWithinAuthorizationScope, TREASURY_AUTHORIZATION_ACTIVE_LIMIT }
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import { recordTreasuryWriteFault, TREASURY_WRITE_FAULT_DETAIL_MAX } from "@/runtime/treasury/writeFault";
 import { writeTreasuryAuthorizationFaultEntry } from "@/runtime/treasury/authorizationFaults";
+import type { TreasuryAuthorityLevel } from "@/runtime/treasury/authorityLevel";
 import { computeTreasuryDurableIdentityDigest } from "@/runtime/treasury/durableIdentity";
 import { findTreasuryPolicyResolver } from "@/runtime/treasury/policyAuthority";
 import type { TreasuryPosting, TreasuryMetrics } from "@/runtime/treasury/types";
@@ -429,9 +430,12 @@ export function createTreasuryAuthorizationLedger(deps: TreasuryAuthorizationLed
         ...(record.policyIdentity !== "" ? { policyIdentity: record.policyIdentity } : {}),
         source: "bundle-redemption",
       });
-      // 【第十三轮】显式 authorityLevel：cohort 成对存在（redemption 故障前的
-      // 完整授权事实）→ modern（fault 矩阵校验通过才写入）；否则 lowlevel。
-      const faultAuthorityLevel = record.cohort !== undefined && record.cohortDigest !== undefined ? "modern" : "lowlevel";
+      // 【第十四轮第九节 9.4】production 定级边界：bundle-redemption 是
+      // contract 路径——cohort 成对存在（redemption 故障前的完整授权事实）
+      // → modern（fault 矩阵校验通过才写入）；**cohort 缺失（partial-
+      // modern）→ forensic 隔离（内部不变量破坏，不得写 lowlevel）**。
+      const faultAuthorityLevel: TreasuryAuthorityLevel =
+        record.cohort !== undefined && record.cohortDigest !== undefined ? "modern" : "forensic";
       const faultWrite = writeTreasuryAuthorizationFaultEntry({
         transactionId: context.transactionId,
         authorityLevel: faultAuthorityLevel,

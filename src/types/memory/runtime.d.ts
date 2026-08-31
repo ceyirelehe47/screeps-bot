@@ -722,14 +722,20 @@ declare global {
        * 绝不持久化完整 observation/service/journal/任意大 payload。
        */
       intents?: {
-        /** v5（第十三轮）：entry 携带显式 authorityLevel（modern/legacy/lowlevel）。 */
-        version: 5;
+        /**
+         * v6（第十四轮）：显式 authorityLevel + lowlevel 严格矩阵
+         * （lowlevelSource 来源标记必填；迁移定级不再把 partial-modern
+         * 归入 lowlevel——部分现代事实一律 forensic 隔离）。
+         */
+        version: 6;
         entries: Record<
           string,
           {
             transactionId: string;
             /** 【第十三轮】显式 authority 等级（不得由 optional 字段推断）。 */
-            authorityLevel: "modern" | "legacy" | "lowlevel";
+            authorityLevel: "modern" | "legacy" | "forensic" | "lowlevel";
+            /** 【第十四轮】lowlevel 显式来源标记（lowlevel 等级必填）。 */
+            lowlevelSource?: string;
             digest: string;
             actionKind: string;
             kind: string;
@@ -832,13 +838,19 @@ declare global {
        * fault resolution。
        */
       quarantine?: {
-        /** v4（第十三轮）：entry 携带显式 authorityLevel（modern/legacy/forensic/lowlevel）。 */
-        version: 4;
+        /**
+         * v5（第十四轮）：lowlevel 严格矩阵（lowlevelSource 来源标记必填；
+         * 迁移定级不再把 partial-modern 归入 lowlevel——部分现代事实一律
+         * forensic 隔离）。
+         */
+        version: 5;
         entries: Record<
           string,
           {
             /** 【第十三轮】显式 authority 等级（不得由 optional 字段推断）。 */
             authorityLevel: "modern" | "legacy" | "forensic" | "lowlevel";
+            /** 【第十四轮】lowlevel 显式来源标记（lowlevel 等级必填）。 */
+            lowlevelSource?: string;
             transactionId: string;
             digest: string;
             tick: number;
@@ -931,13 +943,18 @@ declare global {
        * 永久全局锁。
        */
       authorizationFaults?: {
-        /** v3（第十三轮）：entry 携带显式 authorityLevel（modern/legacy/lowlevel）。 */
-        version: 3;
+        /**
+         * v4（第十四轮）：lowlevel 严格矩阵（lowlevelSource 来源标记必填）+
+         * health probe metadata 门禁 + read-back 完整身份比较。
+         */
+        version: 4;
         entries: Record<
           string,
           {
             /** 【第十三轮】显式 authority 等级（不得由 optional 字段推断）。 */
-            authorityLevel: "modern" | "legacy" | "lowlevel";
+            authorityLevel: "modern" | "legacy" | "forensic" | "lowlevel";
+            /** 【第十四轮】lowlevel 显式来源标记（lowlevel 等级必填）。 */
+            lowlevelSource?: string;
             transactionId: string;
             digest: string;
             contractId?: string;
@@ -988,8 +1005,13 @@ declare global {
        * v1（无 entryCount/stage）无损升级；损坏/未知版本 fail closed。
        */
       resolutions?: {
-        /** v3（第十二轮 3.3）：tombstone 绑定完整 attempt identity。 */
-        version: 3;
+        /**
+         * v4（第十四轮第十一节）：显式 proof class（identity-bound/lowlevel/
+         * legacy/forensic——required/forbidden 身份字段矩阵由 proofLevel 声明，
+         * 不再由 optional 字段存在性隐式猜测；v3 迁移：全身份 → identity-
+         * bound、全缺 → legacy、部分 → forensic 隔离）。
+         */
+        version: 4;
         entries: Record<
           string,
           {
@@ -997,6 +1019,8 @@ declare global {
             digest: string;
             resolution: "committed" | "not-executed";
             stage: "resolving" | "final";
+            /** 【第十四轮】显式 proof class。 */
+            proofLevel: "identity-bound" | "lowlevel" | "legacy" | "forensic";
             actionTick: number;
             settledAtTick?: number;
             observationTick: number;

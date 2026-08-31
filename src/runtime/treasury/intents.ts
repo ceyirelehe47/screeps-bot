@@ -44,7 +44,7 @@ import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/author
 import { validateTreasuryAuthorizationCohortFacts } from "@/runtime/treasury/cohortValidation";
 import { validateTreasuryStructureDescriptorArray } from "@/runtime/treasury/structureDescriptorValidation";
 import { computeTreasuryDurableIdentityDigest, treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
-import { verifyTreasuryEntryIdentity, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
+import { verifyTreasuryEntryIdentity, recomputeTreasuryDurableIdentityDigest, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
 import { intentSemanticViolation } from "@/runtime/treasury/semanticMatrix";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
@@ -54,10 +54,17 @@ import {
 } from "@/runtime/treasury/types";
 import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
 import {
-  classifyTreasuryAuthorityLevel,
+  classifyTreasuryAuthorityLevelForMigration,
+  treasuryMigrationLevelAnnotations,
   validateTreasuryAuthorityLevelConsistency,
+  TREASURY_LOWLEVEL_SOURCE_RUNTIME,
   type TreasuryAuthorityLevel,
 } from "@/runtime/treasury/authorityLevel";
+import {
+  compareTreasuryAuthorityPublicationReadBack,
+  verifyTreasuryDurableCandidateForPublication,
+  verifyTreasuryDurablePublicationReadBack,
+} from "@/runtime/treasury/durablePublication";
 import {
   quarantineTreasuryTransaction,
   readTreasuryQuarantineEntry,
@@ -65,8 +72,11 @@ import {
   type TreasuryQuarantineEntry,
 } from "@/runtime/treasury/quarantine";
 
-/** 【第十三轮】intent v5：entry 携带显式 authorityLevel（modern/legacy/lowlevel）。 */
-export const TREASURY_INTENT_VERSION = 5 as const;
+/**
+ * 【第十四轮】intent v6：entry 携带显式 authorityLevel + lowlevel 严格矩阵
+ * （lowlevelSource 来源标记必填；迁移定级不再把 partial-modern 归入 lowlevel）。
+ */
+export const TREASURY_INTENT_VERSION = 6 as const;
 /** 与 quarantine 同上限——recovery slot 统一计数的前提。 */
 export const TREASURY_INTENT_MAX_ENTRIES = 64;
 
@@ -193,6 +203,8 @@ export interface TreasuryIntentEntry {
   transactionId: string;
   /** 【第十三轮】显式 authority 等级（modern/legacy/lowlevel——不得由字段推断）。 */
   authorityLevel: TreasuryAuthorityLevel;
+  /** 【第十四轮第九节】lowlevel 显式来源标记（lowlevel 等级必填；modern/legacy/forensic 禁止）。 */
+  lowlevelSource?: string;
   /** canonical payload digest（与 prepare 签发 digest 同源）。 */
   digest: string;
   /** action kind（contract 路径 = adapter kind；直接路径 = input.kind）。 */
@@ -242,7 +254,7 @@ export interface TreasuryIntentEntry {
 }
 
 export interface TreasuryIntentStore {
-  version: 5;
+  version: 6;
   entries: Record<string, TreasuryIntentEntry>;
   entryCount: number;
   updatedAt: number;
@@ -585,13 +597,18 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
     return heapRuntime;
   }
   const rawVersion = raw.version as number;
-  if (rawVersion === 1 || rawVersion === 2 || rawVersion === 3 || rawVersion === 4) {
-    // v1/v2/v3/v4 → v5 迁移（原子；【第十三轮第八节】显式 authorityLevel
-    // 定级）：v1/v2 先将旧 phase 按保守单调表映射为 (outcome, settlement)
-    // 并删除 phase 字段（未知 phase → fatal）；v3 及更早补全 structureFacts
-    // descriptor；随后逐 entry 一次性定级（modern 矩阵全齐 → modern；
-    // durable identity → lowlevel；完全无现代身份事实 → legacy；cohort
-    // facts/digest 不成对 → fatal 原数据保留）。
+  if (rawVersion === 1 || rawVersion === 2 || rawVersion === 3 || rawVersion === 4 || rawVersion === 5) {
+    // v1..v5 → v6 迁移（原子；【第十四轮第十节】迁移定级重构）：v1/v2 先将
+    // 旧 phase 按保守单调表映射为 (outcome, settlement) 并删除 phase 字段
+    //（未知 phase → fatal）；v3 及更早补全 structureFacts descriptor；随后
+    // 逐 entry 一次性定级：
+    // - v5 entry（已有显式 authorityLevel）按 priorLevel 规则复验——modern
+    //   矩阵缺失 → forensic 隔离（不得变 lowlevel）；显式 lowlevel 满足严格
+    //   低层矩阵 → lowlevel（补 migrated 来源标记），否则 forensic；
+    // - v1..v4（无显式等级）：modern 矩阵全齐且重算一致 → modern；完全无
+    //   现代身份事实 → legacy；**部分现代事实 → forensic 隔离（绝不
+    //   lowlevel——无法证明由当前低层路径产生）**；cohort facts/digest 不成
+    //   对或 digest 与事实重算矛盾 → fatal 原数据保留。
     const entries: Record<string, TreasuryIntentEntry> = {};
     for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
       const legacy = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as Partial<TreasuryIntentEntry> & { phase?: string };
@@ -605,7 +622,10 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
       }
       const { phase: _dropped, ...rest } = legacy as Partial<TreasuryIntentEntry> & { phase: string };
       upgradeLegacyStructureFacts(rest);
-      const [level, classifyError] = classifyTreasuryAuthorityLevel(rest as unknown as Parameters<typeof classifyTreasuryAuthorityLevel>[0]);
+      const [level, classifyError] = classifyTreasuryAuthorityLevelForMigration({
+        ...(rest as Record<string, unknown>),
+        priorAuthorityLevel: rest.authorityLevel,
+      } as unknown as Parameters<typeof classifyTreasuryAuthorityLevelForMigration>[0]);
       if (classifyError !== null || level === null) {
         heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `v${String(rawVersion)} → v${String(TREASURY_INTENT_VERSION)} 迁移定级失败（${classifyError ?? "未知"}）——intent store fail closed，原数据保留`);
         return heapRuntime;
@@ -613,6 +633,7 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
       entries[key] = {
         ...(rest as TreasuryIntentEntry),
         authorityLevel: level,
+        ...treasuryMigrationLevelAnnotations(level),
         ...(mapped !== undefined ? { outcome: mapped.outcome, settlement: mapped.settlement } : {}),
       };
     }
@@ -658,7 +679,8 @@ export function peekTreasuryIntentHealth(): TreasuryIntentHealth {
     (store.version as number) !== 1 &&
     (store.version as number) !== 2 &&
     (store.version as number) !== 3 &&
-    (store.version as number) !== 4
+    (store.version as number) !== 4 &&
+    (store.version as number) !== 5
   ) {
     return {
       healthy: false,
@@ -736,13 +758,35 @@ export type TreasuryIntentWriteResult =
  * 首条；容量已满时 rejected（绝不丢 identity——prepare 的统一 slot admission
  * 已保证此分支在正常路径不可达；防御性拒绝保持 store 不变，调用方阻断
  * callback 并释放预留）。
+ *
+ * 【第十四轮第十二节】完整 durable 发布协议：
+ * - 写入前：shape + 聚合溢出 + cohort/durable identity 从候选事实重算一致
+ *   （verifyTreasuryDurableCandidateForPublication）；
+ * - 发布后：从 Memory 持久副本再次重算并执行完整身份字段 read-back 比较
+ *   （verifyTreasuryDurablePublicationReadBack）——不一致回滚本次写入并
+ *   恢复 entryCount/revision/updatedAt，返回 store fatal（调用方不得继续
+ *   执行 callback）。
  */
 export function writeTreasuryIntentEntry(
   entryInput: Omit<TreasuryIntentEntry, "authorityLevel"> & { authorityLevel?: TreasuryAuthorityLevel },
 ): TreasuryIntentWriteResult {
-  // 【第十三轮】authorityLevel 缺省 lowlevel（低层/未声明路径的显式等级）；
-  // production contract 路径由 facade 显式声明 modern（矩阵校验通过才写入）。
-  const entry: TreasuryIntentEntry = { ...entryInput, authorityLevel: entryInput.authorityLevel ?? "lowlevel" };
+  // 【第十四轮第九节】authorityLevel 缺省 lowlevel（低层/未声明路径的显式
+  // 等级 + runtime 来源标记）；production contract 路径由 facade 显式声明
+  // modern（矩阵校验通过才写入）——contract 路径不得写入 lowlevel。
+  // 低层 durable identity 为事实的确定性派生（与 facade 生产路径同源）——
+  // 调用方未携带时由 store 在写入前从候选事实派生（【9.2】低层 required
+  // 完整 lowlevel durable identity）。
+  const declaredLowlevel = entryInput.authorityLevel === undefined || entryInput.authorityLevel === "lowlevel";
+  const derivedLowlevelIdentity =
+    declaredLowlevel && entryInput.durableIdentityDigest === undefined
+      ? recomputeTreasuryDurableIdentityDigest(entryInput as unknown as TreasuryIdentityFactsEntry)
+      : null;
+  const entry: TreasuryIntentEntry = {
+    ...entryInput,
+    authorityLevel: entryInput.authorityLevel ?? "lowlevel",
+    ...(declaredLowlevel ? { lowlevelSource: entryInput.lowlevelSource ?? TREASURY_LOWLEVEL_SOURCE_RUNTIME } : {}),
+    ...(derivedLowlevelIdentity !== null ? { durableIdentityDigest: derivedLowlevelIdentity } : {}),
+  };
   const shapeError = validateTreasuryIntentEntryShape(entry);
   if (shapeError !== null) {
     intentEvents.writeRejections += 1;
@@ -752,6 +796,13 @@ export function writeTreasuryIntentEntry(
   if (overflowError !== null) {
     intentEvents.writeRejections += 1;
     return { status: "rejected", reason: "invalid_entry", detail: overflowError };
+  }
+  // 【第十四轮第十二节】写入前 identity 重算：自带 cohort/durable digest
+  // 必须能由候选持久事实重算一致——不一致（篡改/损坏）拒绝发布。
+  const candidateError = verifyTreasuryDurableCandidateForPublication(entry, `intent 候选（${entry.transactionId.slice(0, 48)}）`);
+  if (candidateError !== null) {
+    intentEvents.writeRejections += 1;
+    return { status: "rejected", reason: "invalid_entry", detail: candidateError };
   }
   const runtime = loadIntentStoreRuntime();
   if (runtime.fatal) {
@@ -763,7 +814,14 @@ export function writeTreasuryIntentEntry(
     // 【第十一轮 3.13.5】同 ID 幂等仅限完整 durable identity 一致——统一
     // digest 比较（legacy entry 空对空匹配；不同 identity → identity_conflict，
     // store 原数据不动、writer fail closed）。
+    // 【第十四轮第十二节】既有 entry 自身 identity 不可重算 → 不返回
+    // already_present（store 不可信形态，按 store fatal 处理）。
     const existing = runtime.store.entries[key];
+    const existingIdentityError = verifyTreasuryDurableCandidateForPublication(existing, `intent 既有 entry（${entry.transactionId.slice(0, 48)}）`);
+    if (existingIdentityError !== null) {
+      intentEvents.writeFailures += 1;
+      return { status: "rejected", reason: "store_fatal", detail: existingIdentityError };
+    }
     if (!treasuryDurableIdentitiesMatch(existing.durableIdentityDigest, entry.durableIdentityDigest)) {
       intentEvents.writeRejections += 1;
       return {
@@ -782,6 +840,7 @@ export function writeTreasuryIntentEntry(
       detail: `intent store 容量已满（${String(TREASURY_INTENT_MAX_ENTRIES)} 条；统一 slot admission 不变量被破坏，阻断 callback）`,
     };
   }
+  const previousUpdatedAt = runtime.store.updatedAt;
   runtime.store.entries[key] = {
     ...entry,
     postings: entry.postings.map((leg) => ({ ...leg })),
@@ -798,6 +857,21 @@ export function writeTreasuryIntentEntry(
   runtime.store.entryCount += 1;
   runtime.store.updatedAt = Game.time;
   storeRevision += 1;
+  // 【第十四轮第十二节】发布后 read-back：从持久副本重算 + 完整身份字段
+  // 比较——不一致回滚本次写入（entryCount/revision/updatedAt 恢复）。
+  const readBackError = verifyTreasuryDurablePublicationReadBack(
+    runtime.store.entries[key],
+    entry,
+    `intent 发布（${entry.transactionId.slice(0, 48)}）`,
+  );
+  if (readBackError !== null) {
+    intentEvents.writeFailures += 1;
+    delete runtime.store.entries[key];
+    runtime.store.entryCount -= 1;
+    runtime.store.updatedAt = previousUpdatedAt;
+    storeRevision -= 1;
+    return { status: "rejected", reason: "store_fatal", detail: readBackError };
+  }
   return { status: "written" };
 }
 
@@ -1092,8 +1166,11 @@ export function transferTreasuryIntentToQuarantine(
   const write = quarantineTreasuryTransaction({
     transactionId: entry.transactionId,
     digest: entry.digest,
-    /** 【第十三轮】等级随事实原子转移（authority 语义不变）。 */
+    /** 【第十三轮】等级随事实原子转移（authority 语义不变）；【第十四轮】lowlevel 来源标记随行。 */
     authorityLevel: entry.authorityLevel,
+    ...(entry.authorityLevel === "lowlevel"
+      ? { lowlevelSource: entry.lowlevelSource ?? TREASURY_LOWLEVEL_SOURCE_RUNTIME }
+      : {}),
     tick: entry.createdAtTick,
     kind: entry.kind,
     source: entry.source,
@@ -1129,27 +1206,24 @@ export function transferTreasuryIntentToQuarantine(
   if (write.status === "rejected") {
     return { status: "retained", detail: `quarantine 写入被拒（${write.reason}）: ${write.detail}` };
   }
-  // 读回验证（事实安全转移的放行条件）：关键字段与写入声明一致才释放 intent。
+  // 【第十四轮第十三节】读回验证（释放 intent 的唯一放行条件）：从 quarantine
+  // 持久副本重新证明完整身份——authority level、durable identity（重算）、
+  // cohort identity、contract identity、adapter semantic identity、durable
+  // payload/version、structure descriptors、canonical postings、execution
+  // outcome、settlement、source 全部一致（compareTreasuryAuthorityPublicationReadBack
+  // 的完整字段比较——不再是比较 digest 字符串子集）。
   const readBack = readTreasuryQuarantineEntry(entry.transactionId);
-  const consistent =
+  const readBackConsistent =
     readBack !== undefined &&
-    readBack.digest === entry.digest &&
-    readBack.outcome === outcome &&
-    readBack.settlement === "quarantined" &&
-    readBack.deltas.length === entry.postings.length &&
-    readBack.deltas.every(
-      (leg, index) =>
-        leg.roomName === entry.postings[index].roomName &&
-        leg.locationKind === entry.postings[index].locationKind &&
-        leg.resource === entry.postings[index].resource &&
-        leg.delta === entry.postings[index].delta,
-    ) &&
-    (readBack.contractDigest ?? undefined) === entry.contractDigest &&
-    (readBack.adapterVersion ?? undefined) === entry.adapterVersion &&
-    (readBack.durablePayloadVersion ?? undefined) === entry.durablePayloadVersion &&
-    treasuryDurableIdentitiesMatch(readBack.durableIdentityDigest, entry.durableIdentityDigest);
-  if (!consistent) {
-    return { status: "retained", detail: "quarantine 读回验证不一致（store 不可信）——intent 保留为 emergency authority" };
+    readBack.authorityLevel === entry.authorityLevel &&
+    (readBack.source ?? undefined) === (entry.source ?? undefined) &&
+    compareTreasuryAuthorityPublicationReadBack(
+      { ...readBack, postings: readBack.deltas } as unknown as Parameters<typeof compareTreasuryAuthorityPublicationReadBack>[0],
+      { ...entry, postings: entry.postings, settlement: "quarantined", outcome } as unknown as Parameters<typeof compareTreasuryAuthorityPublicationReadBack>[1],
+      `intent→quarantine 转移（${entry.transactionId.slice(0, 48)}）`,
+    ) === null;
+  if (!readBackConsistent) {
+    return { status: "retained", detail: "quarantine 读回验证不一致（完整身份比较失败——store 不可信）——intent 保留为 emergency authority" };
   }
   releaseTreasuryIntentEntry(entry.transactionId);
   return { status: "transferred" };

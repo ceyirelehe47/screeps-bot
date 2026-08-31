@@ -41,12 +41,22 @@ import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/author
 import { validateTreasuryAuthorizationCohortFacts } from "@/runtime/treasury/cohortValidation";
 import { validateTreasuryStructureDescriptorArray } from "@/runtime/treasury/structureDescriptorValidation";
 import {
-  classifyTreasuryAuthorityLevel,
+  classifyTreasuryAuthorityLevelForMigration,
   validateTreasuryAuthorityLevelConsistency,
+  TREASURY_LOWLEVEL_SOURCE_MIGRATED,
+  TREASURY_LOWLEVEL_SOURCE_RUNTIME,
   type TreasuryAuthorityLevel,
 } from "@/runtime/treasury/authorityLevel";
 import { treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
-import { verifyTreasuryEntryIdentity, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
+import {
+  verifyTreasuryEntryIdentity,
+  recomputeTreasuryDurableIdentityDigest,
+  type TreasuryIdentityFactsEntry,
+} from "@/runtime/treasury/identityProof";
+import {
+  verifyTreasuryDurableCandidateForPublication,
+  verifyTreasuryDurablePublicationReadBack,
+} from "@/runtime/treasury/durablePublication";
 import { quarantineSemanticViolation } from "@/runtime/treasury/semanticMatrix";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
@@ -67,6 +77,8 @@ export interface TreasuryQuarantineEntry {
   readonly transactionId: string;
   /** 【第十三轮】显式 authority 等级（modern/legacy/forensic/lowlevel——不得由字段推断）。 */
   authorityLevel: TreasuryAuthorityLevel;
+  /** 【第十四轮第九节】lowlevel 显式来源标记（lowlevel 等级必填）。 */
+  lowlevelSource?: string;
   /** canonical payload digest（16 小写 hex，与 prepare 签发 digest 同源）。 */
   readonly digest: string;
   /** quarantine 建立时所处 tick（prepared/故障发生 tick）。 */
@@ -123,8 +135,8 @@ export interface TreasuryQuarantineEntry {
 export type TreasuryQuarantineStructureFact = TreasuryStructureBindingDescriptor;
 
 export interface TreasuryQuarantineStore {
-  /** schema 版本（当前 4；未知版本 fail closed）。 */
-  version: 4;
+  /** schema 版本（当前 5；未知版本 fail closed）。 */
+  version: 5;
   /** key = "q:"+transactionId（transactionId 字符集受限，前缀无边界歧义，防危险字面量）。 */
   entries: Record<string, TreasuryQuarantineEntry>;
   /** entries 自有键计数（load 校验与 fault-slot admission 的 O(1) 权威）。 */
@@ -133,7 +145,8 @@ export interface TreasuryQuarantineStore {
   overflowed?: boolean;
 }
 
-export const TREASURY_QUARANTINE_VERSION = 4 as const;
+/** 【第十四轮】quarantine v5：lowlevel 严格矩阵（lowlevelSource 来源标记）。 */
+export const TREASURY_QUARANTINE_VERSION = 5 as const;
 export const TREASURY_QUARANTINE_MAX_ENTRIES = 64;
 
 const QUARANTINE_KEY_PREFIX = "q:";
@@ -473,18 +486,29 @@ function fatalRuntime(store: TreasuryQuarantineStore, reason: string): Quarantin
 }
 
 /**
- * 【第十三轮第八节】迁移定级（v1/v2/v3 → v4 一次性）：forensic 标志 →
- * forensic；legacyV1 → legacy；modern 矩阵全齐 → modern；durable identity →
- * lowlevel；完全无现代身份事实 → legacy；cohort 不成对 → 原地返回错误
- * （迁移层 fatal，原数据保留）。
+ * 【第十四轮第十节】迁移定级（v1/v2/v3/v4 → v5 一次性）：
+ * - v4 entry（已有显式 authorityLevel）按 priorLevel 规则复验——显式
+ *   lowlevel 满足严格低层矩阵 → lowlevel（补 migrated 来源标记），否则
+ *   forensic；显式 modern 矩阵缺失 → forensic 隔离（不得变 lowlevel）；
+ * - v1/v2/v3（无显式等级）：forensic 标志 → forensic；legacyV1 → legacy；
+ *   modern 矩阵全齐且重算一致 → modern；完全无现代身份事实 → legacy；
+ *   **部分现代事实 → forensic 隔离（绝不 lowlevel）**；
+ * - cohort 不成对或 digest 与事实重算矛盾 → 原地返回错误（迁移层 fatal，
+ *   原数据保留）。
  */
 function classifyQuarantineEntriesForMigration(entries: Record<string, TreasuryQuarantineEntry>): string | null {
   for (const [key, entry] of Object.entries(entries)) {
-    const [level, error] = classifyTreasuryAuthorityLevel(entry as unknown as Parameters<typeof classifyTreasuryAuthorityLevel>[0]);
+    const [level, error] = classifyTreasuryAuthorityLevelForMigration({
+      ...(entry as unknown as Record<string, unknown>),
+      priorAuthorityLevel: entry.authorityLevel,
+    } as unknown as Parameters<typeof classifyTreasuryAuthorityLevelForMigration>[0]);
     if (error !== null || level === null) {
       return `v→v${String(TREASURY_QUARANTINE_VERSION)} 迁移定级失败（key ${key.slice(0, 48)}）: ${error ?? "未知"}`;
     }
     entry.authorityLevel = level;
+    if (level === "lowlevel") {
+      entry.lowlevelSource = TREASURY_LOWLEVEL_SOURCE_MIGRATED;
+    }
   }
   return null;
 }
@@ -612,8 +636,9 @@ function loadQuarantineStoreRuntime(): QuarantineStoreRuntime {
     return heapRuntime;
   }
   if ((raw.version as number) === 3) {
-    // v3 → v4 迁移（【第十三轮第八节】显式 authorityLevel 定级，原子）：
-    // entries 原样保留，一次性定级；损坏由升级后校验检出 fatal（原数据保留）。
+    // v3 → v5 迁移（【第十三轮第八节】显式 authorityLevel 定级 + 【第十四轮】
+    // strict lowlevel 重构，原子）：entries 原样保留，一次性定级（partial-modern
+    // → forensic 隔离，不再 lowlevel）；损坏由升级后校验检出 fatal（原数据保留）。
     const entries: Record<string, TreasuryQuarantineEntry> = {};
     for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
       entries[key] = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as TreasuryQuarantineEntry;
@@ -623,7 +648,7 @@ function loadQuarantineStoreRuntime(): QuarantineStoreRuntime {
       heapRuntime = fatalRuntime(raw, `${classifyErrorV3}——quarantine fail closed，原数据保留`);
       return heapRuntime;
     }
-    const upgradedV3: TreasuryQuarantineStore = { ...(raw as TreasuryQuarantineStore), version: TREASURY_QUARANTINE_VERSION, entries };
+    const upgradedV3: TreasuryQuarantineStore = { ...(raw as unknown as TreasuryQuarantineStore), version: TREASURY_QUARANTINE_VERSION, entries };
     const shapeErrorV3 = validateQuarantineStoreShape(upgradedV3);
     if (shapeErrorV3 !== null) {
       heapRuntime = fatalRuntime(raw, `${shapeErrorV3}（v3→v${String(TREASURY_QUARANTINE_VERSION)} 升级校验失败，quarantine fail closed，原数据保留）`);
@@ -631,6 +656,30 @@ function loadQuarantineStoreRuntime(): QuarantineStoreRuntime {
     }
     quarantineBranch().quarantine = upgradedV3;
     heapRuntime = { store: upgradedV3, fatal: null };
+    return heapRuntime;
+  }
+  if ((raw.version as number) === 4) {
+    // v4 → v5 迁移（【第十四轮第九/十节】strict lowlevel 矩阵，原子）：按
+    // 显式 priorAuthorityLevel 复验——显式 lowlevel 满足严格矩阵 → lowlevel
+    //（补 migrated 来源标记）；不满足或 modern 矩阵缺失 → forensic 隔离；
+    // 重算矛盾 → fatal（原数据保留）。
+    const entries: Record<string, TreasuryQuarantineEntry> = {};
+    for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
+      entries[key] = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as TreasuryQuarantineEntry;
+    }
+    const classifyErrorV4 = classifyQuarantineEntriesForMigration(entries);
+    if (classifyErrorV4 !== null) {
+      heapRuntime = fatalRuntime(raw, `${classifyErrorV4}——quarantine fail closed，原数据保留`);
+      return heapRuntime;
+    }
+    const upgradedV4: TreasuryQuarantineStore = { ...(raw as unknown as TreasuryQuarantineStore), version: TREASURY_QUARANTINE_VERSION, entries };
+    const shapeErrorV4 = validateQuarantineStoreShape(upgradedV4);
+    if (shapeErrorV4 !== null) {
+      heapRuntime = fatalRuntime(raw, `${shapeErrorV4}（v4→v${String(TREASURY_QUARANTINE_VERSION)} 升级校验失败，quarantine fail closed，原数据保留）`);
+      return heapRuntime;
+    }
+    quarantineBranch().quarantine = upgradedV4;
+    heapRuntime = { store: upgradedV4, fatal: null };
     return heapRuntime;
   }
   if (raw.version === undefined) {
@@ -840,21 +889,49 @@ export type TreasuryQuarantineWriteResult =
  * 容量已满时返回 rejected（**绝不**置 overflowed 丢 identity——prepare 的
  * fault-slot admission 已保证此分支在正常路径不可达；防御性拒绝保持 store
  * 不变，调用方维持 write-fault marker 锁定并计数）。
+ *
+ * 【第十四轮第十二节】完整 durable 发布协议：写入前从候选事实重算 cohort/
+ * durable identity（不再由"下次 global reset 的 load 校验"承载）；发布后从
+ * Memory 持久副本重算 + 完整身份字段 read-back 比较——不一致回滚本次写入并
+ * 返回 store fatal（当前 global 即不可信，不得等下一次 reset 才发现）。
  */
 export function quarantineTreasuryTransaction(
   entryInput: Omit<TreasuryQuarantineEntry, "authorityLevel"> & { authorityLevel?: TreasuryAuthorityLevel },
 ): TreasuryQuarantineWriteResult {
-  // 【第十三轮】authorityLevel 缺省 lowlevel（低层/未声明路径的显式等级——
-  // 非 modern contract authority；生产 contract 路径由调用方显式声明）。
-  const entry: TreasuryQuarantineEntry = { ...entryInput, authorityLevel: entryInput.authorityLevel ?? "lowlevel" };
+  // 【第十四轮第九节】authorityLevel 缺省 lowlevel（低层/未声明路径的显式
+  // 等级 + runtime 来源标记——非 modern contract authority；production
+  // contract 路径由调用方显式声明 modern）。低层 durable identity 为事实的
+  // 确定性派生——调用方未携带时由 store 在写入前从候选事实派生（低层
+  // required 完整 lowlevel durable identity）。
+  const declaredLowlevel = entryInput.authorityLevel === undefined || entryInput.authorityLevel === "lowlevel";
+  const derivedLowlevelIdentity =
+    declaredLowlevel && entryInput.durableIdentityDigest === undefined
+      ? recomputeTreasuryDurableIdentityDigest(
+          { ...entryInput, postings: entryInput.deltas } as unknown as TreasuryIdentityFactsEntry,
+        )
+      : null;
+  const entry: TreasuryQuarantineEntry = {
+    ...entryInput,
+    authorityLevel: entryInput.authorityLevel ?? "lowlevel",
+    ...(declaredLowlevel ? { lowlevelSource: entryInput.lowlevelSource ?? TREASURY_LOWLEVEL_SOURCE_RUNTIME } : {}),
+    ...(derivedLowlevelIdentity !== null ? { durableIdentityDigest: derivedLowlevelIdentity } : {}),
+  };
   // 写入前重新完整验证 entry（快照封闭配套——不假设调用方传入 prepare
-  // 验证过的安全对象）。identity 重算（cohort/durable digest 与持久事实
-  // 一致）由 load 全量校验与 repair 承载（写入方 digest 的最终一致性在
-  // 读取路径 fail closed——与 intent 同款边界）。
+  // 验证过的安全对象）。
   const shapeError = validateTreasuryQuarantineEntryShape(entry);
   if (shapeError !== null) {
     quarantineEvents.admissionRejections += 1;
     return { status: "rejected", reason: "store_fatal", detail: `拒绝写入非法 entry: ${shapeError}` };
+  }
+  // 【第十四轮第十二节】写入前 identity 重算：自带 digest 必须能由候选
+  // 持久事实重算一致——不一致拒绝发布。
+  const candidateError = verifyTreasuryDurableCandidateForPublication(
+    { ...entry, postings: entry.deltas } as unknown as Parameters<typeof verifyTreasuryDurableCandidateForPublication>[0],
+    `quarantine 候选（${entry.transactionId.slice(0, 48)}）`,
+  );
+  if (candidateError !== null) {
+    quarantineEvents.admissionRejections += 1;
+    return { status: "rejected", reason: "store_fatal", detail: candidateError };
   }
   const runtime = loadQuarantineStoreRuntime();
   if (runtime.fatal) {
@@ -863,7 +940,16 @@ export function quarantineTreasuryTransaction(
   const key = encodeQuarantineKey(entry.transactionId);
   if (Object.prototype.hasOwnProperty.call(runtime.store.entries, key)) {
     // 【第十一轮 3.13.5】同 ID 幂等仅限统一 durable identity 一致。
+    // 【第十四轮第十二节】既有 entry 自身 identity 不可重算 → 不返回
+    // already_present（store 不可信形态）。
     const existing = runtime.store.entries[key];
+    const existingIdentityError = verifyTreasuryDurableCandidateForPublication(
+      { ...existing, postings: existing.deltas } as unknown as Parameters<typeof verifyTreasuryDurableCandidateForPublication>[0],
+      `quarantine 既有 entry（${entry.transactionId.slice(0, 48)}）`,
+    );
+    if (existingIdentityError !== null) {
+      return { status: "rejected", reason: "store_fatal", detail: existingIdentityError };
+    }
     if (!treasuryDurableIdentitiesMatch(existing.durableIdentityDigest, entry.durableIdentityDigest)) {
       quarantineEvents.admissionRejections += 1;
       return {
@@ -882,9 +968,23 @@ export function quarantineTreasuryTransaction(
       detail: `quarantine 容量已满（${String(TREASURY_QUARANTINE_MAX_ENTRIES)} 条；fault-slot admission 不变量被破坏，保持 marker 锁定）`,
     };
   }
-  runtime.store.entries[key] = entry;
+  runtime.store.entries[key] = { ...entry, deltas: entry.deltas.map((leg) => ({ ...leg })) };
   runtime.store.entryCount += 1;
   storeRevision += 1;
+  // 【第十四轮第十二节】发布后 read-back：从持久副本重算 + 完整身份字段
+  // 比较——不一致回滚本次写入（entryCount/revision 恢复）。
+  const readBackError = verifyTreasuryDurablePublicationReadBack(
+    runtime.store.entries[key],
+    entry,
+    `quarantine 发布（${entry.transactionId.slice(0, 48)}）`,
+  );
+  if (readBackError !== null) {
+    quarantineEvents.admissionRejections += 1;
+    delete runtime.store.entries[key];
+    runtime.store.entryCount -= 1;
+    storeRevision -= 1;
+    return { status: "rejected", reason: "store_fatal", detail: readBackError };
+  }
   return { status: "written" };
 }
 
