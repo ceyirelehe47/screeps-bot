@@ -1,0 +1,220 @@
+/**
+ * 【第十六轮第七节】final not-executed 残留 marker 安全补完成测试。
+ *
+ * 覆盖：
+ * - final not-executed + authority 已释放 + matching marker：beginTick 清
+ *   marker（幂等）；
+ * - marker contract/digest identity conflict / cohort insufficient / 属于另
+ *   一 attempt：不清除（markerCleanupBlocked）；
+ * - marker 不存在：pending-release 完成；
+ * - marker 清除后 rearm 才允许；
+ * - marker 读取深冻结（不泄漏 attemptIdentity 引用）。
+ */
+import { createTreasuryService } from "@/runtime/treasury/facade";
+import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
+import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
+import { quarantineTreasuryTransaction, readTreasuryQuarantineEntry, releaseTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
+import {
+  readTreasuryResolutionTombstone,
+  readTreasuryResolutionStoreCounters,
+  recoverStagedResolutions,
+  resetTreasuryResolutionStoreForTest,
+  writeTreasuryResolutionTombstone,
+} from "@/runtime/treasury/resolutionStore";
+import { recordTreasuryWriteFault, readTreasuryWriteFault } from "@/runtime/treasury/writeFault";
+import { rearmResolvedNotExecutedAttempt } from "@/runtime/treasury/attemptRearm";
+import { TREASURY_LOWLEVEL_SOURCE_RUNTIME } from "@/runtime/treasury/authorityLevel";
+import {
+  makeTreasuryTestTransferAdapter,
+  replaceTreasuryActionAdapterForTest,
+} from "@/runtime/treasury/actionContracts";
+import { installRooms, type RoomSpec } from "@mock/treasury";
+import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
+
+const ROOMS: RoomSpec[] = [
+  {
+    name: "W1N57",
+    storage: { id: "stor-1", resources: { energy: 100_000 }, freeCapacity: 10_000 },
+    terminal: { id: "term-1", resources: { energy: 20_000 }, freeCapacity: 5_000 },
+  },
+];
+
+const BASE_POSTINGS = [{ roomName: "W1N57", locationKind: "storage" as const, resource: "energy" as const, delta: -500 }];
+const SEMANTIC = "terminal.send@reconciler-semantics-v1";
+const DIGEST = "0123456789abcdef";
+
+function makeService(): TreasuryTestService {
+  const rooms = installRooms(ROOMS);
+  const service = treasuryTestService(createTreasuryService({ getRooms: () => Object.values(rooms) }));
+  service.beginTick();
+  return treasuryTestService(service);
+}
+
+function seedQuarantineThenRelease(transactionId: string): string {
+  const write = quarantineTreasuryTransaction({
+    transactionId,
+    authorityLevel: "lowlevel",
+    lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+    digest: DIGEST,
+    tick: Game.time,
+    kind: "terminal.send",
+    actionKind: "terminal.send",
+    source: "test",
+    adapterSemanticIdentity: SEMANTIC,
+    phase: "executing_at_end_tick",
+    outcome: "started_unknown",
+    settlement: "quarantined",
+    deltas: BASE_POSTINGS.map((leg) => ({ ...leg })),
+    recordedAt: Game.time,
+  });
+  expect(write.status).toBe("written");
+  const identity = readTreasuryQuarantineEntry(transactionId)?.durableIdentityDigest;
+  expect(identity).toBeDefined();
+  // 模拟"释放已完成、marker 残留"的中断窗口。
+  expect(releaseTreasuryQuarantineEntry(transactionId)).toBe(true);
+  return identity as string;
+}
+
+function seedFinalNotExecuted(transactionId: string, identity: string): void {
+  const write = writeTreasuryResolutionTombstone({
+    transactionId,
+    digest: DIGEST,
+    resolution: "not-executed",
+    stage: "final",
+    proofLevel: "lowlevel",
+    lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+    durableIdentityDigest: identity,
+    actionTick: Game.time,
+    observationTick: Game.time,
+    resolvedAtTick: Game.time,
+    reconcilerKind: "terminal.send",
+    source: "test",
+  });
+  expect(write.status).not.toBe("rejected");
+}
+
+
+function seedMarker(overrides: { digest?: string; attemptIdentity?: { durableIdentityDigest?: string } } = {}): void {
+  recordTreasuryWriteFault({
+    transactionId: "mc_tx",
+    digest: overrides.digest ?? DIGEST,
+    tick: Game.time,
+    kind: "terminal.send",
+    source: "test",
+    phase: "executing_at_end_tick",
+    status: "unresolved",
+    recordedAt: Game.time,
+    ...(overrides.attemptIdentity !== undefined ? { attemptIdentity: overrides.attemptIdentity } : {}),
+  });
+}
+
+beforeEach(() => {
+  clearTreasuryPersistenceForTest();
+  resetTreasuryCommitmentRevisionForTest();
+  resetTreasuryResolutionStoreForTest();
+  replaceTreasuryActionAdapterForTest({
+    ...makeTreasuryTestTransferAdapter(),
+    kind: "terminal.send",
+    semanticIdentity: SEMANTIC,
+    reconcile: () => "observed_not_executed" as const,
+  });
+});
+
+describe("marker 补完成（第十六轮第七节）", () => {
+  it("final not-executed + authority 已释放 + matching marker：beginTick 清 marker（幂等）", () => {
+    const identity = seedQuarantineThenRelease("mc_tx");
+    seedFinalNotExecuted("mc_tx", identity);
+    seedMarker({ attemptIdentity: { durableIdentityDigest: identity } });
+    expect(readTreasuryWriteFault()).toBeDefined();
+    const report = recoverStagedResolutions();
+    expect(report.completedRelease).toBe(1);
+    expect(readTreasuryWriteFault()).toBeUndefined();
+    // 幂等：再次 beginTick 无待处理项。
+    const again = recoverStagedResolutions();
+    expect(again.idleFastPath).toBe(true);
+    expect(again.completedRelease).toBe(0);
+  });
+
+  it("marker digest 冲突（属于另一 attempt）：不清除", () => {
+    const identity = seedQuarantineThenRelease("mc_tx");
+    seedFinalNotExecuted("mc_tx", identity);
+    seedMarker({ digest: "ffffffffffffffff", attemptIdentity: { durableIdentityDigest: identity } });
+    const report = recoverStagedResolutions();
+    expect(report.markerCleanupBlocked).toBeGreaterThanOrEqual(1);
+    expect(report.completedRelease).toBe(0);
+    expect(readTreasuryWriteFault()).toBeDefined();
+    expect(readTreasuryResolutionTombstone("mc_tx")?.stage).toBe("final");
+  });
+
+  it("marker attemptIdentity 与 tombstone conflict：不清除", () => {
+    const identity = seedQuarantineThenRelease("mc_tx");
+    seedFinalNotExecuted("mc_tx", identity);
+    seedMarker({ attemptIdentity: { durableIdentityDigest: "aaaaaaaaaaaaaaaa" } });
+    const report = recoverStagedResolutions();
+    expect(report.markerCleanupBlocked).toBeGreaterThanOrEqual(1);
+    expect(readTreasuryWriteFault()).toBeDefined();
+  });
+
+  it("marker 缺 attemptIdentity（旧 proof insufficient）：不清除", () => {
+    const identity = seedQuarantineThenRelease("mc_tx");
+    seedFinalNotExecuted("mc_tx", identity);
+    seedMarker();
+    const report = recoverStagedResolutions();
+    expect(report.markerCleanupBlocked).toBeGreaterThanOrEqual(1);
+    expect(readTreasuryWriteFault()).toBeDefined();
+  });
+
+  it("marker 属于另一 transaction：不清除（write readiness 继续阻断）", () => {
+    const identity = seedQuarantineThenRelease("mc_tx");
+    seedFinalNotExecuted("mc_tx", identity);
+    recordTreasuryWriteFault({
+      transactionId: "mc_other_tx",
+      digest: DIGEST,
+      tick: Game.time,
+      kind: "terminal.send",
+      source: "test",
+      phase: "executing_at_end_tick",
+      status: "unresolved",
+      recordedAt: Game.time,
+    });
+    const report = recoverStagedResolutions();
+    expect(report.markerCleanupBlocked).toBeGreaterThanOrEqual(1);
+    expect(readTreasuryWriteFault()).toBeDefined();
+    expect((readTreasuryWriteFault() as { transactionId: string }).transactionId).toBe("mc_other_tx");
+  });
+
+  it("marker 不存在：pending-release 完成（索引移出）", () => {
+    const identity = seedQuarantineThenRelease("mc_tx");
+    seedFinalNotExecuted("mc_tx", identity);
+    expect(readTreasuryWriteFault()).toBeUndefined();
+    const report = recoverStagedResolutions();
+    expect(report.completedRelease).toBe(0);
+    expect(report.markerCleanupBlocked).toBe(0);
+    expect(report.idleFastPath).toBe(false); // 处理了 pending-release 项（无 marker 直接完成）
+  });
+
+  it("marker 清除后 rearm 才允许；未清除时 rearm 拒绝", () => {
+    const identity = seedQuarantineThenRelease("mc_tx");
+    seedFinalNotExecuted("mc_tx", identity);
+    seedMarker({ attemptIdentity: { durableIdentityDigest: identity } });
+    // 直接调协议入口（零写、不依赖 service 闭包）——不经 beginTick 恢复，
+    // marker 保持 pending 状态。
+    const blocked = rearmResolvedNotExecutedAttempt({ parentTransactionId: "mc_tx" });
+    expect(blocked.status).toBe("rejected");
+    if (blocked.status === "rejected") expect(blocked.reason).toBe("marker_cleanup_pending");
+    const report = recoverStagedResolutions();
+    expect(report.completedRelease).toBe(1);
+    const allowed = rearmResolvedNotExecutedAttempt({ parentTransactionId: "mc_tx" });
+    expect(allowed.status).toBe("rearmed");
+  });
+
+  it("marker 读取返回深冻结快照（不泄漏 attemptIdentity 引用）", () => {
+    const identity = seedQuarantineThenRelease("mc_tx");
+    seedFinalNotExecuted("mc_tx", identity);
+    seedMarker({ attemptIdentity: { durableIdentityDigest: identity } });
+    const marker = readTreasuryWriteFault();
+    expect(marker).toBeDefined();
+    expect(Object.isFrozen(marker)).toBe(true);
+    expect(Object.isFrozen((marker as { attemptIdentity?: object }).attemptIdentity)).toBe(true);
+  });
+});
