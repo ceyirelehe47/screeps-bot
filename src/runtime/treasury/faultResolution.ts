@@ -65,10 +65,12 @@ import {
   deleteTreasuryResolutionTombstone,
   ensureTreasuryResolutionSlotAvailable,
   ensureTreasuryResolutionStoreValidated,
+  markTreasuryPendingReleaseCompleted,
   readTreasuryResolutionTombstone,
   writeTreasuryResolutionTombstone,
   type TreasuryResolutionProofLevel,
 } from "@/runtime/treasury/resolutionStore";
+import { deriveTreasuryRearmChildTransactionId } from "@/runtime/treasury/attemptRearm";
 import { verifyTreasuryCommittedResolutionProof } from "@/runtime/treasury/committedProofVerifier";
 import type {
   TreasuryReconciliationCapability,
@@ -113,12 +115,21 @@ export type TreasuryFaultResolutionResult =
       readonly transactionId: string;
       /** 本次调用是否实际写入/刷新 receipt（false = 幂等命中既有结算）。 */
       readonly receiptWritten: boolean;
-      /** resolution 后是否允许重新 prepare 该 transactionId。 */
-      readonly reprepareAllowed: boolean;
+      /**
+       * 【第十六轮第五节】同 transaction ID 不可再次执行（一个 transaction ID
+       * 永远只标识一个执行 attempt——旧 reprepareAllowed=true 语义已删除）。
+       */
+      readonly sameIdRetryAllowed: false;
       /** 原 action tick（审计保留；receipt retention 从 settlement tick 起算）。 */
       readonly actionTick: number;
       /** receipt 结算 tick（resolve-as-committed 时存在 = resolution tick）。 */
       readonly settledAtTick?: number;
+      /**
+       * 【第十六轮第五节】not-executed 时的确定性 rearm child attempt ID
+       * （重试必须显式 rearm——调用方以 child ID 重新构建 contract 与
+       * authorization，不得直接重用 parent ID）。
+       */
+      readonly rearmChildTransactionId?: string;
     }
   | {
       readonly status: "already_resolved";
@@ -146,6 +157,8 @@ export type TreasuryFaultResolutionResult =
         | "quarantine_store_fatal"
         | "intent_store_fatal"
         | "authority_inconsistent"
+        /** 【第十六轮第八节】intent/quarantine store fatal（resolver store_unhealthy）。 */
+        | "authority_store_unhealthy"
         | "resolution_store_fatal"
         | "resolution_store_full"
         | "invalid_input"
@@ -289,6 +302,14 @@ function prevalidate(
     };
   }
   const authorityResolution = resolveTreasuryUnresolvedAuthority(input.transactionId);
+  if (authorityResolution.status === "store_unhealthy") {
+    // 【第十六轮第八节】intent/quarantine store fatal → 零副作用拒绝（不
+    // refresh receipt、不释放 authority、不清 marker、不 finalize、不签发）。
+    countRejected();
+    return {
+      stop: { status: "rejected", reason: "authority_store_unhealthy", detail: authorityResolution.detail },
+    };
+  }
   if (authorityResolution.status === "not_found") {
     // 【第十二轮 3.3/3.4】幂等快路径必须验证完整 attempt identity：以
     // capability 绑定的 identity 与 tombstone / settlement proof 比较——
@@ -299,6 +320,7 @@ function prevalidate(
       ...(capability.contractDigest !== undefined ? { contractDigest: capability.contractDigest } : {}),
       ...(capability.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: capability.authorizationCohortDigest } : {}),
       ...(capability.durableIdentityDigest !== undefined ? { durableIdentityDigest: capability.durableIdentityDigest } : {}),
+      ...(capability.lowlevelSource !== undefined ? { lowlevelSource: capability.lowlevelSource } : {}),
     };
     const tombstone = readTreasuryResolutionTombstone(input.transactionId);
     if (tombstone !== undefined && tombstone.stage === "final") {
@@ -469,6 +491,30 @@ function prevalidate(
       };
     }
   }
+  // 【第十六轮第十一节】lowlevel provenance 强绑定：lowlevel authority 的
+  // capability 必须携带相同 lowlevelSource（runtime 与 migrated 不能互相
+  // 证明）；authority 无 lowlevel 来源而 capability 携带 → conflict。
+  if (authority.authorityLevel === "lowlevel") {
+    if (capability.lowlevelSource === undefined || authority.lowlevelSource === undefined || capability.lowlevelSource !== authority.lowlevelSource) {
+      countRejected();
+      return {
+        stop: {
+          status: "rejected",
+          reason: "reconciler_mismatch",
+          detail: `lowlevel authority 的 capability lowlevelSource 绑定不一致（capability ${String(capability.lowlevelSource)}，authority ${String(authority.lowlevelSource)}）——runtime 与 migrated 不能互相证明`,
+        },
+      };
+    }
+  } else if (capability.lowlevelSource !== undefined) {
+    countRejected();
+    return {
+      stop: {
+        status: "rejected",
+        reason: "reconciler_mismatch",
+        detail: `非 lowlevel authority（${String(authority.authorityLevel)}）的 capability 不得携带 lowlevelSource（低层 proof 不能证明非低层 attempt）`,
+      },
+    };
+  }
   // 时序：当前 tick 严格晚于故障 tick；capability 观察严格晚于故障 tick 且
   // 不晚于当前 tick（stale/未来观察均拒绝）。
   if (Game.time <= authority.recordedAt) {
@@ -590,6 +636,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
     ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
     ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+    ...(resolvingProofLevel === "lowlevel" && authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
   });
   if (resolvingWrite.status === "rejected") {
     countRejected();
@@ -616,6 +663,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
       ? { authorizationCohortDigest: authority.authorizationCohortDigest }
       : {}),
     ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+    ...(authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
   });
   if (receipt.status === "fatal") {
     // receipt 不可写：回滚 tombstone（零原状态变化），quarantine/marker 不动。
@@ -650,6 +698,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
       ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
       ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
       ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+      ...(resolvingProofLevel === "lowlevel" && authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
     },
     authorityResolution: postRefreshAuthority,
     receiptProof: readBackProof,
@@ -660,9 +709,11 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
       status: "rejected",
       reason: committedVerdict.status === "authority_inconsistent"
         ? "authority_inconsistent"
-        : committedVerdict.status === "conflict"
-          ? "settlement_identity_conflict"
-          : "settlement_proof_insufficient",
+        : committedVerdict.status === "authority_store_unhealthy"
+          ? "authority_store_unhealthy"
+          : committedVerdict.status === "conflict"
+            ? "settlement_identity_conflict"
+            : "settlement_proof_insufficient",
       detail: `committed proof 三方验证失败（${committedVerdict.status}）: ${committedVerdict.detail}——authority 与 resolving tombstone 保留（beginTick 恢复幂等重验）`,
     };
   }
@@ -685,6 +736,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
     ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
     ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+    ...(resolvingProofLevel === "lowlevel" && authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
   });
   if (finalizeWrite.status === "rejected") {
     // finalize 失败：保持 resolving（beginTick 恢复幂等完成——receipt 已写、
@@ -702,17 +754,25 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     resolution: "committed",
     transactionId: authority.transactionId,
     receiptWritten: true,
-    reprepareAllowed: false, // receipt 已刷新：同 id 重放命中 already_settled（防重放）
+    sameIdRetryAllowed: false, // receipt 已刷新：同 id 重放命中 already_settled（防重放）
     actionTick: authority.actionTick,
     settledAtTick: Game.time,
   };
 }
 
 /**
- * resolve-as-not-executed（staged）：先保证 final tombstone 可写（slot 预检
- * + 写 final）再释放 quarantine/intent——失败时 quarantine 保留（函数返回
- * rejected 但 transaction 仍被 transaction_quarantined 阻断，绝无"可重新
- * prepare"的中间态）。不写 receipt、不生成 committed projection。
+ * resolve-as-not-executed（staged）：【第十六轮第十二节】安全顺序——完整
+ * prevalidate → resolution slot 预检 → **consume capability** → 写 final
+ * not-executed tombstone → 释放 quarantine/intent → 清 marker：
+ * - consume 失败：不写 tombstone、authority 保留、marker 保留（返回
+ *   invalid_capability，beginTick 无 proof 可自动释放——不存在"未成功消费
+ *   capability 却已持久化可自动释放 authority 的 final proof"）；
+ * - consume 成功、tombstone 写失败：authority 保留、不释放（本 tick 旧
+ *   capability 已消费；后续 tick 或新 service 可重新签发 capability 重试，
+ *   不形成错误终态）；
+ * - tombstone 成功、释放前中断：final tombstone 作为持久 proof，beginTick
+ *   pending-release 补完成（满足身份验证后释放 authority 和 marker）。
+ * 不写 receipt、不生成 committed projection。
  */
 export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
   serviceHolder: object,
@@ -748,8 +808,7 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
     countRejected();
     return { status: "rejected", reason: "resolution_store_full", detail: slotError };
   }
-  // staged 第 2 步：**先写 final tombstone**（可写性保证），再释放。
-  // 【第十四轮第十一节】显式 proof class（与 committed 路径同一映射）。
+  // 【第十六轮第十二节】显式 proof class（与 committed 路径同一映射）。
   const finalProofLevel = resolutionProofLevelOfAuthority(authority);
   if (finalProofLevel === null) {
     countRejected();
@@ -759,6 +818,17 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
       detail: `authority 等级 ${String(authority.authorityLevel)} 不参与普通 staged resolution（无对应 proof class——显式 forensic/legacy 流程处理）`,
     };
   }
+  // staged 第 2 步【第十六轮第十二节】：**先 consume capability**——final
+  // tombstone 不可回滚（状态机只允许 exact idempotent），必须保证"final
+  // proof 存在即表示 capability 消费阶段已完成"。consume 失败时零持久副
+  // 作用（不写 tombstone、authority 保留、marker 保留）。
+  const consumedNow = kernel.consumeReconciliationCapability(input.capability);
+  if (consumedNow.status !== "valid") {
+    countRejected();
+    return { status: "rejected", reason: "invalid_capability", detail: `capability 消费失败（${consumedNow.reason}）: ${consumedNow.detail}——未产生 final tombstone，authority 与 marker 均保留` };
+  }
+  // staged 第 3 步：写 final tombstone（capability 已消费——此后任何中断都
+  // 由 beginTick pending-release 补完成，不存在可自动释放但未消费的 proof）。
   const finalWrite = writeTreasuryResolutionTombstone({
     transactionId: authority.transactionId,
     digest: authority.digest,
@@ -773,31 +843,36 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
     ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
     ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
     ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+    ...(finalProofLevel === "lowlevel" && authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
   });
   if (finalWrite.status === "rejected") {
+    // consume 成功但 tombstone 写失败：authority 保留（本 tick capability 已
+    // 消费；后续 tick 重新签发 capability 重试——不形成错误终态）。
     countRejected();
-    return { status: "rejected", reason: "resolution_store_fatal", detail: `final tombstone 写入失败（quarantine 保留，可重试）: ${finalWrite.detail}` };
+    return { status: "rejected", reason: "resolution_store_fatal", detail: `final tombstone 写入失败（capability 已消费，authority 保留，后续 tick 可重新签发重试）: ${finalWrite.detail}` };
   }
-  // 【第十轮 3.12.8】capability 消费时点：staged final tombstone 写入成功后。
-  const consumedNow = kernel.consumeReconciliationCapability(input.capability);
-  if (consumedNow.status !== "valid") {
-    // 防御分支：tombstone 已 final（幂等 already_resolved），capability 未消费
-    //（下次管理调用快路径返回 already_resolved——零资产影响）。
-    countRejected();
-    return { status: "rejected", reason: "invalid_capability", detail: `capability 消费失败（${consumedNow.reason}）: ${consumedNow.detail}` };
-  }
-  // staged 第 3 步：释放 quarantine/intent + 清 marker（中断由恢复补完成）。
+  // staged 第 4 步：释放 quarantine/intent + 清 marker（中断由恢复补完成）。
   releaseTreasuryQuarantineEntry(authority.transactionId);
   releaseTreasuryIntentEntry(authority.transactionId);
   clearTreasuryWriteFaultMarkerForResolution(authority.transactionId, authority.digest);
+  markTreasuryPendingReleaseCompleted(authority.transactionId);
   recordTreasuryResolutionEvent("notExecuted");
   return {
     status: "resolved",
     resolution: "not-executed",
     transactionId: authority.transactionId,
     receiptWritten: false, // 绝不写 receipt / committed projection
-    reprepareAllowed: true, // Game 未执行：允许以同 id 重新 prepare
+    sameIdRetryAllowed: false, // 【第十六轮第五节】同 ID 永不可直接重新执行
     actionTick: authority.actionTick,
+    // 确定性 rearm child attempt ID（重试必须显式 rearm——不得直接重用 parent ID）。
+    rearmChildTransactionId: deriveTreasuryRearmChildTransactionId({
+      transactionId: authority.transactionId,
+      digest: authority.digest,
+      ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+      ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
+      ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+      ...(finalProofLevel === "lowlevel" && authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+    }),
   };
 }
 

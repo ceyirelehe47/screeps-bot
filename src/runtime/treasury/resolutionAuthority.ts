@@ -32,6 +32,7 @@ import {
   readTreasuryResolutionTombstone,
   writeTreasuryResolutionTombstone,
 } from "@/runtime/treasury/resolutionStore";
+import { deriveTreasuryRearmChildTransactionId } from "@/runtime/treasury/attemptRearm";
 import type { TreasuryResolutionKernel } from "@/runtime/treasury/resolutionKernelChannel";
 import type { TreasuryMetrics } from "@/runtime/treasury/types";
 
@@ -200,8 +201,18 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       resolution: "not-executed",
       transactionId: fault.transactionId,
       receiptWritten: false,
-      reprepareAllowed: true,
+      sameIdRetryAllowed: false, // 【第十六轮第五节】同 ID 永不可直接重新执行（显式 rearm）
       actionTick: fault.faultTick,
+      rearmChildTransactionId: faultProofLevel === "identity-bound" || faultProofLevel === "lowlevel"
+        ? deriveTreasuryRearmChildTransactionId({
+            transactionId: fault.transactionId,
+            digest: fault.digest,
+            ...(fault.contractDigest !== undefined ? { contractDigest: fault.contractDigest } : {}),
+            ...(fault.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fault.authorizationCohortDigest } : {}),
+            ...(fault.durableIdentityDigest !== undefined ? { durableIdentityDigest: fault.durableIdentityDigest } : {}),
+            ...(faultProofLevel === "lowlevel" && fault.lowlevelSource !== undefined ? { lowlevelSource: fault.lowlevelSource } : {}),
+          })
+        : undefined,
     };
   };
 
@@ -315,8 +326,9 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       resolution: "not-executed",
       transactionId: marker.transactionId,
       receiptWritten: false,
-      reprepareAllowed: true,
+      sameIdRetryAllowed: false, // 【第十六轮第五节】同 ID 永不可直接重新执行（显式 rearm）
       actionTick: marker.tick,
+      // forensic proof 等级不可 rearm（无完整可验证 attempt identity）——不返回 child ID。
     };
   };
 

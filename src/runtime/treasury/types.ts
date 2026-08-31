@@ -175,6 +175,10 @@ export type TreasuryRejectionReason =
    *  跨 tick 持久占用资源与 transaction identity；显式 resolution 解除前
    *  不得再次 prepare）。 */
   | "transaction_quarantined"
+  /** 【第十六轮第五节】同 ID 已 final not-executed：一个 transaction ID
+   *  永远只标识一个执行 attempt——重试必须显式 rearm 生成 child attempt
+   *  ID（rearmResolvedNotExecutedAttempt），不得直接重用 parent ID。 */
+  | "rearm_required"
   /** 全局 quarantine write blocker（第七轮）：存在任意 unresolved
    *  quarantine / legacy overflowed——新 transaction 一律拒绝（callback
    *  零调用）；write-fault marker 不是唯一锁来源。 */

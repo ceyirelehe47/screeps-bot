@@ -126,6 +126,11 @@ import {
   recoverStagedResolutions,
   treasuryResolutionResolvingInProgress,
 } from "@/runtime/treasury/resolutionStore";
+import {
+  rearmResolvedNotExecutedAttempt as performTreasuryAttemptRearm,
+  type TreasuryAttemptRearmResult,
+  type TreasuryRearmParentIdentity,
+} from "@/runtime/treasury/attemptRearm";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
 import {
   type TreasuryReconciliationCapability,
@@ -211,7 +216,7 @@ import {
 } from "@/runtime/treasury/faultResolution";
 import { readTreasuryQuarantineRevision } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentRevision } from "@/runtime/treasury/intents";
-import type { TreasuryAuthorityLevel } from "@/runtime/treasury/authorityLevel";
+import { TREASURY_LOWLEVEL_SOURCE_RUNTIME, type TreasuryAuthorityLevel } from "@/runtime/treasury/authorityLevel";
 import type { TreasuryPosting, TreasuryStructureBindingDescriptor } from "@/runtime/treasury/types";
 import {
   type TreasuryBalanceView,
@@ -443,9 +448,21 @@ export interface TreasuryService {
     readonly transactionId: string;
   } | {
     readonly status: "rejected";
-    readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated" | "resolution_in_progress" | "resolution_identity_conflict" | "resolution_store_fatal";
+    readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "authority_store_unhealthy" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated" | "resolution_in_progress" | "resolution_identity_conflict" | "resolution_store_fatal";
     readonly detail: string;
   };
+  /**
+   * 【第十六轮第五节】显式 attempt rearm：final not-executed 后重试的唯一
+   * 合法通道——确定性派生 child transaction ID（同 parent 幂等、跨 global
+   * reset 一致；A→B→C 链式，每个 attempt 最多一个直接 child）。零写（纯
+   * 前置校验 + 派生）；parent proof 不阻断 child ID，也不能证明 child
+   * attempt。Production writer 重试只能：resolve parent as not-executed →
+   * 本入口 rearm → 使用 child ID 重新构建 contract 与 authorization。
+   */
+  rearmResolvedNotExecutedAttempt(input: {
+    readonly parentTransactionId: string;
+    readonly expectedParentIdentity?: TreasuryRearmParentIdentity;
+  }): TreasuryAttemptRearmResult;
   /**
    * 对外 resolution 管理入口（第十轮 3.12.8）：fault resolution 的唯一生产
    * 调用面——内部经 service 闭包注册的 resolution kernel 执行（结构兼容的
@@ -1919,6 +1936,23 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           detail: "transaction 处于 durable quarantine（显式 fault resolution 解除前禁止重新 prepare/执行）",
         };
       }
+      // 【第十六轮第五节】same-ID 不可重试：同 ID 存在 final not-executed
+      // tombstone（authority 已释放的完成态）时拒绝直接 prepare——一个
+      // transaction ID 永远只标识一个执行 attempt，重试必须显式 rearm 生成
+      // child attempt ID（rearmResolvedNotExecutedAttempt）。resolving/
+      // committed 形态由其它门禁承载（resolving → transaction_quarantined/
+      // resolution_in_progress；committed → already_settled）。
+      if (peekTreasuryResolutionStoreEntry() !== undefined) {
+        const notExecutedTombstone = readTreasuryResolutionTombstone(input.transactionId);
+        if (notExecutedTombstone !== undefined && notExecutedTombstone.stage === "final" && notExecutedTombstone.resolution === "not-executed") {
+          metrics.transactionsRejectedInvalid += 1;
+          return {
+            status: "rejected",
+            reason: "rearm_required",
+            detail: `transactionId ${input.transactionId.slice(0, 48)} 已 final not-executed（同 ID 只标识一个执行 attempt）——重试必须显式 rearm 生成 child attempt ID（service.rearmResolvedNotExecutedAttempt），不得直接重用 parent ID`,
+          };
+        }
+      }
       // 全局 quarantine write blocker（第七轮）：存在任何 unresolved quarantine
       // 或 store 损坏时，一切新 transaction 在 Game callback 之前拒绝——
       // write-fault marker 不是唯一锁来源（marker 已解决但仍有其它 quarantine
@@ -2216,6 +2250,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
                 ...(record.authorizationCohortDigest !== undefined
                   ? { authorizationCohortDigest: record.authorizationCohortDigest }
                   : {}),
+                // 【第十六轮第十一节】低层路径（无 contract——intent authority
+                // 为 lowlevel）的 receipt 绑定 runtime provenance：runtime 与
+                // migrated 不能互相证明；缺 provenance 的旧 receipt 是隔离态。
+                ...(record.contractDigest === undefined ? { lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME } : {}),
               }
             : undefined,
         );
@@ -2816,10 +2854,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       readonly transactionId: string;
     } | {
       readonly status: "rejected";
-      readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated" | "resolution_in_progress" | "resolution_identity_conflict" | "resolution_store_fatal";
+      readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "authority_store_unhealthy" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated" | "resolution_in_progress" | "resolution_identity_conflict" | "resolution_store_fatal";
       readonly detail: string;
     } {
-      const reject = (reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated" | "resolution_in_progress" | "resolution_identity_conflict" | "resolution_store_fatal", detail: string) => {
+      const reject = (reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "authority_store_unhealthy" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated" | "resolution_in_progress" | "resolution_identity_conflict" | "resolution_store_fatal", detail: string) => {
         metrics.reconciliationCapabilitiesRejected += 1;
         return { status: "rejected" as const, reason, detail };
       };
@@ -2836,6 +2874,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       }
       if (authority.status === "inconsistent") {
         return reject("authority_inconsistent", `${authority.detail}`);
+      }
+      if (authority.status === "store_unhealthy") {
+        // 【第十六轮第八节】intent/quarantine store fatal：reconciler 零调用、
+        // 不签发 capability（不得把 store 损坏当作 authority 已释放/不存在）。
+        return reject("authority_store_unhealthy", `${authority.detail}`);
       }
       const facts0 = authority.authority;
       if (input.digest !== undefined && facts0.digest !== input.digest) {
@@ -2859,6 +2902,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           ...(facts0.contractDigest !== undefined ? { contractDigest: facts0.contractDigest } : {}),
           ...(facts0.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: facts0.authorizationCohortDigest } : {}),
           ...(facts0.durableIdentityDigest !== undefined ? { durableIdentityDigest: facts0.durableIdentityDigest } : {}),
+          ...(facts0.lowlevelSource !== undefined ? { lowlevelSource: facts0.lowlevelSource } : {}),
         };
         const resolutionRelation = treasuryAttemptIdentityRelation(existingResolution, resolutionAttempt);
         if (resolutionRelation !== "match") {
@@ -2998,6 +3042,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         ...(facts0.durablePayloadVersion !== undefined ? { durablePayloadVersion: facts0.durablePayloadVersion } : {}),
         ...(facts0.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: facts0.authorizationCohortDigest } : {}),
         ...(facts0.durableIdentityDigest !== undefined ? { durableIdentityDigest: facts0.durableIdentityDigest } : {}),
+        ...(facts0.lowlevelSource !== undefined ? { lowlevelSource: facts0.lowlevelSource } : {}),
         postFaultEpoch: {
           scope: state.observation.epoch.scope,
           epochSeq: state.observation.epoch.epochSeq,
@@ -3080,6 +3125,18 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       return resolveTreasuryQuarantinedTransactionAsCommitted(service, input);
     },
 
+    /**
+     * 【第十六轮第五节】显式 attempt rearm（受控 service 方法；零写）：
+     * 委托 attemptRearm 模块的唯一协议实现——final not-executed 后重试的
+     * 唯一合法通道。同 ID 直接重试已在 prepare 门禁（rearm_required）封死。
+     */
+    rearmResolvedNotExecutedAttempt(input: {
+      readonly parentTransactionId: string;
+      readonly expectedParentIdentity?: TreasuryRearmParentIdentity;
+    }): TreasuryAttemptRearmResult {
+      return performTreasuryAttemptRearm(input);
+    },
+
     /** @internal 单阶段兼容实现（勿直接调用）：经 treasury/compat 模块访问。 */
     recordAcceptedTransaction(input: TreasuryTransactionInput): TreasurySettlementResult {
       const compatShapeError = validateTreasuryTransactionInputShape(input, "record");
@@ -3093,6 +3150,18 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (settledAt !== undefined) {
         metrics.duplicateSettlementsRejected += 1;
         return { status: "already_settled", transactionId: input.transactionId, firstRecordedAtTick: settledAt };
+      }
+      // 【第十六轮第五节】same-ID 不可重试（单阶段 compat 入口同样封死）。
+      if (peekTreasuryResolutionStoreEntry() !== undefined) {
+        const notExecutedTombstone = readTreasuryResolutionTombstone(input.transactionId);
+        if (notExecutedTombstone !== undefined && notExecutedTombstone.stage === "final" && notExecutedTombstone.resolution === "not-executed") {
+          metrics.transactionsRejectedInvalid += 1;
+          return {
+            status: "rejected",
+            reason: "rearm_required",
+            detail: `transactionId ${input.transactionId.slice(0, 48)} 已 final not-executed——重试必须显式 rearm（同 ID 只标识一个执行 attempt）`,
+          };
+        }
       }
       if (state.ended) {
         metrics.settlementsAfterEndRejected += 1;
@@ -3317,6 +3386,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     authorizeTreasuryActionContract: internalService.authorizeTreasuryActionContract,
     issueTreasuryReconciliationCapability: internalService.issueTreasuryReconciliationCapability,
     resolveUnresolvedTransaction: internalService.resolveUnresolvedTransaction,
+    rearmResolvedNotExecutedAttempt: internalService.rearmResolvedNotExecutedAttempt,
     preparedLeakAudit: internalService.preparedLeakAudit,
     journal: internalService.journal,
     lastReconciliation: internalService.lastReconciliation,
