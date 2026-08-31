@@ -122,6 +122,8 @@ export interface TreasuryQuarantineEntry {
   readonly authorizationCohortDigest?: string;
   /** 统一 durable action identity digest（第十一轮 3.13.5：全 store 幂等/一致性比较）。 */
   readonly durableIdentityDigest?: string;
+  /** 【第十七轮第十一节】tr1_ rearm child 的 lineage/rearm binding digest（从 intent 事实转移继承；initial attempt 不携带）。 */
+  readonly lineageBindingDigest?: string;
   /** v1 迁移且无并存 intent 补全合同事实（不参与 contract-backed resolution）。 */
   readonly legacyV1?: boolean;
   /**
@@ -372,6 +374,11 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
   if (candidate.durableIdentityDigest !== undefined) {
     if (typeof candidate.durableIdentityDigest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.durableIdentityDigest)) {
       return "durableIdentityDigest 非法（须为 16 小写 hex）";
+    }
+  }
+  if (candidate.lineageBindingDigest !== undefined) {
+    if (typeof candidate.lineageBindingDigest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.lineageBindingDigest)) {
+      return "lineageBindingDigest 非法（须为 16 小写 hex）";
     }
   }
   if (candidate.authorizationCohort !== undefined) {

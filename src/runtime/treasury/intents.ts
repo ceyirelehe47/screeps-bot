@@ -249,6 +249,8 @@ export interface TreasuryIntentEntry {
   authorizationCohortDigest?: string;
   /** 统一 durable action identity digest（第十一轮 3.13.5：全 store 幂等/一致性比较的唯一权威）。 */
   durableIdentityDigest?: string;
+  /** 【第十七轮第十一节】tr1_ rearm child 的 lineage/rearm binding digest（quarantine/receipt/tombstone proof 链继承；initial attempt 不携带）。 */
+  lineageBindingDigest?: string;
   /** 有界审计来源。 */
   auditSource?: string;
   createdAtTick: number;
@@ -449,6 +451,11 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
   if (candidate.durableIdentityDigest !== undefined) {
     if (typeof candidate.durableIdentityDigest !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.durableIdentityDigest)) {
       return "durableIdentityDigest 非法（须为 16 小写 hex）";
+    }
+  }
+  if (candidate.lineageBindingDigest !== undefined) {
+    if (typeof candidate.lineageBindingDigest !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.lineageBindingDigest)) {
+      return "lineageBindingDigest 非法（须为 16 小写 hex）";
     }
   }
   if (candidate.authorizationCohort !== undefined) {
@@ -1210,6 +1217,9 @@ export function transferTreasuryIntentToQuarantine(
       : {}),
     ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
     ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+    // 【第十七轮第十一节】lineage binding 随 intent 事实转移继承（child
+    // quarantine/receipt/tombstone 携带同一 binding）。
+    ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
   } as TreasuryQuarantineEntry);
   if (write.status === "rejected") {
     return { status: "retained", detail: `quarantine 写入被拒（${write.reason}）: ${write.detail}` };

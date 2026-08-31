@@ -83,6 +83,8 @@ import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSna
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { validateTreasuryResolutionTombstoneState } from "@/runtime/treasury/resolutionStateSemantics";
 import { validateTreasuryLowlevelSourceField } from "@/runtime/treasury/authorityLevel";
+import { classAwareIdentityOfAttempt } from "@/runtime/treasury/markerAttemptIdentity";
+import { lookupTreasuryAttemptLineageByAttemptId } from "@/runtime/treasury/attemptLineage";
 
 /**
  * 【第十六轮第十一节】resolution tombstone v6（lowlevel proof 绑定显式
@@ -224,6 +226,8 @@ const resolutionStoreEvents = {
   markerCleanupBlockers: 0,
   /** 【第十六轮第十三节】beginTick O(1) 空闲快路径命中计数。 */
   idleFastPaths: 0,
+  /** 【第十七轮第十三节】final not-executed 因 lineage replacement 未完整而被 pin 的计数。 */
+  retentionPins: 0,
 };
 
 export interface TreasuryResolutionStoreCounters {
@@ -666,8 +670,14 @@ export function ensureTreasuryResolutionSlotAvailable(): string | null {
 
 /** 惰性清理：只删除 stage=final 且超过 retention 的形状完整条目（第九轮
  *  4.10：stage=resolving 永不被普通垃圾回收驱逐——resolution-intent 丢弃
- *  不可接受，满载 fail closed 由容量预检承担）。【第十六轮第十三节】同步
- *  维护 pending 恢复索引（retention 删除不得遗留幽灵索引项）。 */
+ * 不可接受，满载 fail closed 由容量预检承担）。【第十六轮第十三节】同步
+ *  维护 pending 恢复索引（retention 删除不得遗留幽灵索引项）。
+ * 【第十七轮第十三节】final not-executed 的驱逐资格：必须存在已持久化且
+ * 完整的 lineage replacement（retirement 三段全部完成、状态允许其承担
+ * 永久 retirement 门禁）——无 replacement（Round 16 遗留 / backfill 未完成
+ * /publication pending）或任一 pending/cleanup 未完成 → **pin 永不驱逐**
+ * （O(1) 索引查询，不扫描全部 lineage）。驱逐删除 tombstone 与 pending
+ * 索引项，但绝不触碰 lineage record（durable 永久退休权威）。 */
 function evictExpiredTombstones(store: TreasuryResolutionStore, indexes?: { resolvingIds: Set<string>; pendingReleaseIds: Set<string> }): number {
   let removed = 0;
   resolutionStoreEvents.fullScans += 1;
@@ -675,6 +685,26 @@ function evictExpiredTombstones(store: TreasuryResolutionStore, indexes?: { reso
     if (validateTreasuryResolutionTombstoneShape(entry) !== null) continue; // 损坏不删除
     if (entry.stage === "resolving") continue; // resolving 永不驱逐（第九轮 4.10）
     if (entry.resolvedAtTick < Game.time - TREASURY_RESOLUTION_RETENTION_TICKS) {
+      if (entry.resolution === "not-executed") {
+        // 驱逐资格 = lineage replacement 完整接管永久 retirement 门禁。
+        const lineage = lookupTreasuryAttemptLineageByAttemptId(entry.transactionId);
+        if (lineage === undefined || !lineage.retirement.lineagePublished || !lineage.retirement.authorityReleased || !lineage.retirement.markerCleaned) {
+          resolutionStoreEvents.retentionPins += 1;
+          continue;
+        }
+        if (
+          lineage.state !== "rearm_ready" &&
+          lineage.state !== "capability_issued" &&
+          lineage.state !== "child_intent_pending" &&
+          lineage.state !== "child_active" &&
+          lineage.state !== "chain_committed" &&
+          lineage.state !== "non_rearmable_retired"
+        ) {
+          // retiring（staged 进行中）/forensic_isolated：门禁未就绪 → pin。
+          resolutionStoreEvents.retentionPins += 1;
+          continue;
+        }
+      }
       delete store.entries[key];
       store.entryCount -= 1;
       removed += 1;
@@ -786,6 +816,16 @@ export function deleteTreasuryResolutionTombstone(transactionId: string): boolea
 export function markTreasuryPendingReleaseCompleted(transactionId: string): void {
   if (heapRuntime === null) return;
   heapRuntime.pendingReleaseIds.delete(transactionId);
+}
+
+/**
+ * 【第十七轮第五节】pending-release 索引只读快照（attemptLineage 的
+ * beginTick backfill 用——检测无 lineage record 的 final not-executed）。
+ * 索引只是定位器；调用方必须以 Memory tombstone 为权威复核。
+ */
+export function listTreasuryPendingReleaseIds(): readonly string[] {
+  if (heapRuntime === null) return [];
+  return [...heapRuntime.pendingReleaseIds];
 }
 
 // ── 统一 replay horizon（prepare 幂等与 receipt 同一规则） ─────────────────
@@ -1072,7 +1112,17 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
       //    均为幂等操作；finalize 经状态机校验）。
       releaseTreasuryQuarantineEntry(transactionId);
       releaseTreasuryIntentEntry(transactionId);
-      clearTreasuryWriteFaultMarkerForResolution(transactionId, entry.digest);
+      clearTreasuryWriteFaultMarkerForResolution(
+        classAwareIdentityOfAttempt({
+          transactionId,
+          digest: entry.digest,
+          authorityLevel: entry.proofLevel === "lowlevel" ? "lowlevel" : entry.proofLevel === "identity-bound" ? "modern" : undefined,
+          contractDigest: entry.contractDigest,
+          authorizationCohortDigest: entry.authorizationCohortDigest,
+          durableIdentityDigest: entry.durableIdentityDigest,
+          lowlevelSource: entry.lowlevelSource,
+        }),
+      );
       const finalEntry: TreasuryResolutionTombstone = { ...entry, stage: "final" };
       const transition = validateTreasuryResolutionTombstoneTransition(entry, finalEntry);
       if (transition.status !== "allowed_finalize") {
@@ -1131,7 +1181,17 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
         resolutionStoreEvents.markerCleanupBlockers += 1;
         continue;
       }
-      clearTreasuryWriteFaultMarkerForResolution(entry.transactionId, entry.digest);
+      clearTreasuryWriteFaultMarkerForResolution(
+        classAwareIdentityOfAttempt({
+          transactionId: entry.transactionId,
+          digest: entry.digest,
+          authorityLevel: entry.proofLevel === "lowlevel" ? "lowlevel" : entry.proofLevel === "identity-bound" ? "modern" : undefined,
+          contractDigest: entry.contractDigest,
+          authorizationCohortDigest: entry.authorizationCohortDigest,
+          durableIdentityDigest: entry.durableIdentityDigest,
+          lowlevelSource: entry.lowlevelSource,
+        }),
+      );
       runtime.pendingReleaseIds.delete(transactionId);
       resolutionStoreEvents.recovered += 1;
       report.completedRelease += 1;
@@ -1186,7 +1246,17 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
     // quarantine 与 intent 身份一致，一并释放安全）。
     releaseTreasuryQuarantineEntry(transactionId);
     releaseTreasuryIntentEntry(transactionId);
-    clearTreasuryWriteFaultMarkerForResolution(transactionId, entry.digest);
+    clearTreasuryWriteFaultMarkerForResolution(
+      classAwareIdentityOfAttempt({
+        transactionId,
+        digest: entry.digest,
+        authorityLevel: authority.authorityLevel,
+        contractDigest: authority.contractDigest,
+        authorizationCohortDigest: authority.authorizationCohortDigest,
+        durableIdentityDigest: authority.durableIdentityDigest,
+        lowlevelSource: authority.lowlevelSource,
+      }),
+    );
     runtime.pendingReleaseIds.delete(transactionId);
     resolutionStoreEvents.recovered += 1;
     report.completedRelease += 1;
