@@ -7,7 +7,7 @@
  * 检查（receipts + resolution tombstone 组合——beginTick 恢复注入）。
  */
 
-import { recordTreasuryWriteFault, TREASURY_WRITE_FAULT_DETAIL_MAX, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
+import { recordTreasuryWriteFault, classAwareMarkerFieldsOfFacts, TREASURY_WRITE_FAULT_DETAIL_MAX, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
 import {
   outcomeOfTreasuryFaultPhase,
   quarantineTreasuryTransaction,
@@ -34,6 +34,10 @@ export interface TreasuryRecoveryRecord {
   readonly digest: string;
   readonly preparedAtTick: number;
   readonly faultPhase?: TreasuryWriteFaultPhase;
+  /** 【第十七轮】class-aware marker / proof 链继承字段（facade 注入）。 */
+  readonly contractDigest?: string;
+  readonly lineageBindingDigest?: string;
+  readonly lineageGeneration?: number;
   state: string;
 }
 
@@ -74,6 +78,14 @@ export function createTreasuryRecoveryCoordinator(deps: TreasuryRecoveryCoordina
       status: "unresolved",
       recordedAt: Game.time,
       ...(detail !== undefined ? { detail: detail.slice(0, TREASURY_WRITE_FAULT_DETAIL_MAX) } : {}),
+      // 【第十七轮第十四节】class-aware attempt identity（contract →
+      // identity-bound；纯低层 → lowlevel + runtime 来源；binding/generation
+      // 由 tr1_ 接管路径注入）。
+      ...classAwareMarkerFieldsOfFacts({
+        ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+        ...(record.lineageBindingDigest !== undefined ? { lineageBindingDigest: record.lineageBindingDigest } : {}),
+        ...(record.lineageGeneration !== undefined ? { lineageGeneration: record.lineageGeneration } : {}),
+      }),
     });
     transferRecordToQuarantine(record, faultPhase);
   };

@@ -32,7 +32,19 @@ import {
   readTreasuryResolutionTombstone,
   writeTreasuryResolutionTombstone,
 } from "@/runtime/treasury/resolutionStore";
-import { deriveTreasuryRearmChildTransactionId } from "@/runtime/treasury/attemptRearm";
+import {
+  createTreasuryAttemptLineageRecord,
+  lookupTreasuryAttemptLineageByAttemptId,
+  updateTreasuryAttemptLineageRecord,
+  type TreasuryAttemptLineageIdentity,
+} from "@/runtime/treasury/attemptLineage";
+import {
+  computeTreasuryModernRetrySemanticDigest,
+  computeTreasuryLowlevelRetrySemanticDigest,
+  modernRetrySemanticFactsOfEntry,
+  lowlevelRetrySemanticFactsOfEntry,
+} from "@/runtime/treasury/retrySemanticIdentity";
+import { classAwareIdentityOfAttempt } from "@/runtime/treasury/markerAttemptIdentity";
 import type { TreasuryResolutionKernel } from "@/runtime/treasury/resolutionKernelChannel";
 import type { TreasuryMetrics } from "@/runtime/treasury/types";
 
@@ -60,6 +72,98 @@ export interface TreasuryResolutionAuthority {
   resolveForensicAuthorizationFaultMarker(
     input: { readonly transactionId?: string; readonly digest?: string; readonly acknowledgeRolledBack?: boolean } | undefined,
   ): TreasuryFaultResolutionResult;
+}
+
+/**
+ * 【第十七轮第六节】immediate（pre-execution）not-executed 的 lineage
+ * publication：retirement 权威建立。identity-bound/lowlevel 且 retry facts
+ * 可计算 → rearmable retiring；legacy/forensic 或 facts 不足 →
+ * non-rearmable retired（永久阻断 parent ID，不签发 capability）。lineage
+ * 写失败 → pending（beginTick backfill 重试；不猜测）。
+ */
+function publishImmediateNotExecutedLineage(
+  fault: Readonly<TreasuryAuthorizationFaultEntry>,
+  faultProofLevel: "identity-bound" | "lowlevel" | "legacy" | "forensic",
+): "published" | "pending" {
+  const modernClass = faultProofLevel === "identity-bound";
+  const lowlevelClass = faultProofLevel === "lowlevel";
+  const retrySemanticDigest = (() => {
+    if (modernClass) {
+      const facts = modernRetrySemanticFactsOfEntry({
+        actionKind: fault.actionKind,
+        kind: fault.actionKind,
+        adapterVersion: fault.adapterVersion,
+        adapterRegistrationId: fault.adapterRegistrationId,
+        adapterSemanticIdentity: fault.adapterSemanticIdentity,
+        postings: fault.postings,
+        structureFacts: fault.structureFacts,
+        source: fault.source,
+        ownerIdentity: fault.ownerIdentity,
+      });
+      return facts === null ? null : computeTreasuryModernRetrySemanticDigest(facts);
+    }
+    if (lowlevelClass) {
+      const facts = lowlevelRetrySemanticFactsOfEntry({
+        kind: fault.actionKind ?? "",
+        source: fault.source,
+        postings: fault.postings,
+        lowlevelSource: fault.lowlevelSource ?? "",
+      });
+      return facts === null ? null : computeTreasuryLowlevelRetrySemanticDigest(facts);
+    }
+    return null;
+  })();
+  const identity: TreasuryAttemptLineageIdentity = {
+    digest: fault.digest,
+    ...(fault.contractDigest !== undefined ? { contractDigest: fault.contractDigest } : {}),
+    ...(fault.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fault.authorizationCohortDigest } : {}),
+    ...(fault.durableIdentityDigest !== undefined ? { durableIdentityDigest: fault.durableIdentityDigest } : {}),
+    ...(lowlevelClass && fault.lowlevelSource !== undefined ? { lowlevelSource: fault.lowlevelSource } : {}),
+  };
+  const rearmable = retrySemanticDigest !== null;
+  const existing = lookupTreasuryAttemptLineageByAttemptId(fault.transactionId);
+  if (existing !== undefined) {
+    const updated = updateTreasuryAttemptLineageRecord(existing.lineageId, (current) => ({
+      ...current,
+      resolutionState: "not_executed" as const,
+      state: "retiring" as const,
+      rearmable: rearmable && current.rearmable,
+      ...(rearmable && current.rearmable ? {} : { nonRearmReason: retrySemanticDigest === null ? "retry semantic facts 不足" : current.nonRearmReason ?? "non-rearmable" }),
+      retirement: { lineagePublished: true, authorityReleased: false, markerCleaned: false },
+      updatedAtTick: Game.time,
+      recordRevision: current.recordRevision + 1,
+    }));
+    return updated.status === "rejected" ? "pending" : "published";
+  }
+  const created = createTreasuryAttemptLineageRecord({
+    rootTransactionId: fault.transactionId,
+    rootIdentity: identity,
+    actionKind: fault.actionKind ?? fault.digest.slice(0, 8),
+    ...(fault.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: fault.adapterSemanticIdentity } : {}),
+    ...(fault.ownerIdentity !== undefined ? { ownerIdentity: fault.ownerIdentity } : {}),
+    authorityClass: lowlevelClass ? "lowlevel" : "identity-bound",
+    ...(lowlevelClass && fault.lowlevelSource !== undefined ? { lowlevelSource: fault.lowlevelSource } : {}),
+    rearmable,
+    ...(retrySemanticDigest !== null ? { retrySemanticDigest } : {}),
+    ...(rearmable ? {} : { nonRearmReason: retrySemanticDigest === null ? "retry semantic facts 不足（immediate authority 无完整 action 语义）" : "non-rearmable" }),
+  });
+  return created.status === "rejected" ? "pending" : "published";
+}
+
+/** 【第十七轮第六节】immediate not-executed 的 retirement 三段完成收敛。 */
+function completeImmediateNotExecutedRetirement(transactionId: string): void {
+  const lineage = lookupTreasuryAttemptLineageByAttemptId(transactionId);
+  if (lineage === undefined) return;
+  // 调用时机即三段完成（publication + release + marker 清除均已在上文确认）。
+  if (lineage.state === "retiring") {
+    void updateTreasuryAttemptLineageRecord(lineage.lineageId, (current) => ({
+      ...current,
+      state: current.rearmable ? "rearm_ready" : "non_rearmable_retired",
+      retirement: { lineagePublished: true, authorityReleased: true, markerCleaned: true },
+      updatedAtTick: Game.time,
+      recordRevision: current.recordRevision + 1,
+    }));
+  }
 }
 
 /**
@@ -125,7 +229,6 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
         digest: fault.digest,
         ...(fault.contractDigest !== undefined ? { contractDigest: fault.contractDigest } : {}),
         ...(fault.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fault.authorizationCohortDigest } : {}),
-        ...(fault.durableIdentityDigest !== undefined ? { durableIdentityDigest: fault.durableIdentityDigest } : {}),
       };
       if (treasuryAttemptIdentityRelation(existing, attempt) !== "match") {
         deps.metrics.reconciliationCapabilitiesRejected += 1;
@@ -135,7 +238,17 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
           detail: `既有 not-executed tombstone 与该 fault authority 的 attempt identity 不一致（${fault.transactionId.slice(0, 48)}）——不得以旧 proof 解决新 attempt（fail closed）`,
         };
       }
-      clearTreasuryWriteFaultMarkerForResolution(fault.transactionId, fault.digest);
+      clearTreasuryWriteFaultMarkerForResolution(
+        classAwareIdentityOfAttempt({
+          transactionId: fault.transactionId,
+          digest: fault.digest,
+          authorityLevel: fault.authorityLevel,
+          contractDigest: fault.contractDigest,
+          authorizationCohortDigest: fault.authorizationCohortDigest,
+          durableIdentityDigest: fault.durableIdentityDigest,
+          lowlevelSource: fault.lowlevelSource,
+        }),
+      );
       releaseTreasuryAuthorizationFaultEntry(fault.transactionId);
       return { status: "already_resolved", resolution: "not-executed", transactionId: fault.transactionId };
     }
@@ -193,9 +306,30 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
         detail: `final tombstone 写入失败（fault authority 保留，可重试）: ${finalWrite.detail}`,
       };
     }
-    clearTreasuryWriteFaultMarkerForResolution(fault.transactionId, fault.digest);
+    // 【第十七轮第六节/第十四节】immediate not-executed 同样建立 lineage
+    // replacement（retirement 权威）并按 class-aware marker 清除结果决定
+    // pending-release 是否真正完成。retry semantic facts 从 fault authority
+    //（释放前的完整事实）计算；facts 不足 → non-rearmable retired。
+    const lineagePublished = publishImmediateNotExecutedLineage(fault, faultProofLevel);
+    const markerCleared = clearTreasuryWriteFaultMarkerForResolution(
+      classAwareIdentityOfAttempt({
+        transactionId: fault.transactionId,
+        digest: fault.digest,
+        authorityLevel: fault.authorityLevel,
+        contractDigest: fault.contractDigest,
+        authorizationCohortDigest: fault.authorizationCohortDigest,
+        durableIdentityDigest: fault.durableIdentityDigest,
+        lowlevelSource: fault.lowlevelSource,
+      }),
+    );
+    const marker = readTreasuryWriteFault();
+    const markerAbsent = marker === undefined || marker.transactionId !== fault.transactionId;
     releaseTreasuryAuthorizationFaultEntry(fault.transactionId);
+    if (markerCleared || markerAbsent) {
+      completeImmediateNotExecutedRetirement(fault.transactionId);
+    }
     deps.metrics.resolutionRecovered += 1;
+    const retrySemanticReady = faultProofLevel === "identity-bound" || faultProofLevel === "lowlevel";
     return {
       status: "resolved",
       resolution: "not-executed",
@@ -203,16 +337,15 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       receiptWritten: false,
       sameIdRetryAllowed: false, // 【第十六轮第五节】同 ID 永不可直接重新执行（显式 rearm）
       actionTick: fault.faultTick,
-      rearmChildTransactionId: faultProofLevel === "identity-bound" || faultProofLevel === "lowlevel"
-        ? deriveTreasuryRearmChildTransactionId({
-            transactionId: fault.transactionId,
-            digest: fault.digest,
-            ...(fault.contractDigest !== undefined ? { contractDigest: fault.contractDigest } : {}),
-            ...(fault.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fault.authorizationCohortDigest } : {}),
-            ...(fault.durableIdentityDigest !== undefined ? { durableIdentityDigest: fault.durableIdentityDigest } : {}),
-            ...(faultProofLevel === "lowlevel" && fault.lowlevelSource !== undefined ? { lowlevelSource: fault.lowlevelSource } : {}),
-          })
-        : undefined,
+      // 【第十七轮第六节】retirement 状态（child ID 只经 opaque capability
+      // 交付——不再返回 rearmChildTransactionId 字符串）。
+      retirement: !markerCleared && !markerAbsent
+        ? "pending_cleanup"
+        : lineagePublished === "pending"
+          ? "pending_publication"
+          : retrySemanticReady
+            ? "complete_rearm_ready"
+            : "complete_non_rearmable",
     };
   };
 
@@ -280,7 +413,21 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
         };
       }
       if (treasuryAttemptIdentityRelation(existing, markerAttempt) === "match") {
-        clearTreasuryWriteFaultMarkerForResolution(marker.transactionId, marker.digest);
+        clearTreasuryWriteFaultMarkerForResolution({
+          transactionId: marker.transactionId,
+          digest: marker.digest,
+          ...(marker.authorityClass !== undefined ? { authorityClass: marker.authorityClass } : {}),
+          ...(marker.attemptIdentity?.contractDigest !== undefined ? { contractDigest: marker.attemptIdentity.contractDigest } : {}),
+          ...(marker.attemptIdentity?.authorizationCohortDigest !== undefined
+            ? { authorizationCohortDigest: marker.attemptIdentity.authorizationCohortDigest }
+            : {}),
+          ...(marker.attemptIdentity?.durableIdentityDigest !== undefined
+            ? { durableIdentityDigest: marker.attemptIdentity.durableIdentityDigest }
+            : {}),
+          ...(marker.lowlevelSource !== undefined ? { lowlevelSource: marker.lowlevelSource } : {}),
+          ...(marker.lineageBindingDigest !== undefined ? { lineageBindingDigest: marker.lineageBindingDigest } : {}),
+          ...(marker.attemptGeneration !== undefined ? { attemptGeneration: marker.attemptGeneration } : {}),
+        });
         return { status: "already_resolved", resolution: "not-executed", transactionId: marker.transactionId };
       }
       deps.metrics.reconciliationCapabilitiesRejected += 1;
@@ -319,7 +466,21 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
     if (finalWrite.status === "rejected") {
       return { status: "rejected", reason: "resolution_store_fatal", detail: `final tombstone 写入失败（forensic marker 保留，可重试）: ${finalWrite.detail}` };
     }
-    clearTreasuryWriteFaultMarkerForResolution(marker.transactionId, marker.digest);
+    clearTreasuryWriteFaultMarkerForResolution({
+      transactionId: marker.transactionId,
+      digest: marker.digest,
+      ...(marker.authorityClass !== undefined ? { authorityClass: marker.authorityClass } : {}),
+      ...(marker.attemptIdentity?.contractDigest !== undefined ? { contractDigest: marker.attemptIdentity.contractDigest } : {}),
+      ...(marker.attemptIdentity?.authorizationCohortDigest !== undefined
+        ? { authorizationCohortDigest: marker.attemptIdentity.authorizationCohortDigest }
+        : {}),
+      ...(marker.attemptIdentity?.durableIdentityDigest !== undefined
+        ? { durableIdentityDigest: marker.attemptIdentity.durableIdentityDigest }
+        : {}),
+      ...(marker.lowlevelSource !== undefined ? { lowlevelSource: marker.lowlevelSource } : {}),
+      ...(marker.lineageBindingDigest !== undefined ? { lineageBindingDigest: marker.lineageBindingDigest } : {}),
+      ...(marker.attemptGeneration !== undefined ? { attemptGeneration: marker.attemptGeneration } : {}),
+    });
     deps.metrics.resolutionRecovered += 1;
     return {
       status: "resolved",
