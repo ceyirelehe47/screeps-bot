@@ -641,25 +641,24 @@ declare global {
     treasury?: {
       receipts?: {
         /**
-         * v6（第十六轮第十一节）：lowlevel attempt 的显式 provenance
-         * （lowlevelSource 受控枚举——runtime 与 migrated 不能互相证明；
-         * v5 及更早 receipt 无此字段 = 来源不可证明的旧 proof，隔离不释放）。
-         * v5（第十三轮）：value 为显式等级 settlement proof（结算 tick +
-         * level + attempt 身份绑定；modern 必填 digest+durableIdentityDigest、
-         * legacy 禁携带身份字段）。v1-v5 由版本化迁移定级（数字/无身份对象
-         * → legacy；完整身份 → modern；部分身份 fail closed 原store保留）。
+         * v7（第十七轮第十五节）：proof level 显式三级——identity-bound
+         * （完整 modern 身份、禁携带 lowlevelSource）/ lowlevel（digest +
+         * durableIdentityDigest + 受控 lowlevelSource、禁 modern contract/
+         * cohort 字段）/ legacy（无身份、只作 replay blocker）。v6 及更早
+         * 的 "modern" 由版本化迁移归级（无 lowlevelSource → identity-bound、
+         * 有合法 lowlevelSource → lowlevel、矛盾 fail closed 原数据保留）。
          */
-        version: 6;
+        version: 7;
         settled: Record<
           string,
           | {
-              level: "modern" | "legacy";
+              level: "identity-bound" | "lowlevel" | "legacy";
               settledAtTick: number;
               digest?: string;
               contractDigest?: string;
               authorizationCohortDigest?: string;
               durableIdentityDigest?: string;
-              /** 【第十六轮 v6】lowlevel provenance（受控枚举；legacy proof 禁携带）。 */
+              /** 【第十六轮 v6】lowlevel provenance（仅 lowlevel proof 携带；受控枚举）。 */
               lowlevelSource?: string;
             }
           | number
@@ -702,6 +701,17 @@ declare global {
           authorizationCohortDigest?: string;
           durableIdentityDigest?: string;
         };
+        /**
+         * 【第十七轮第十四节 v2】class-aware attempt identity：authority
+         * class、lowlevelSource、lineage/rearm binding digest、parent/child
+         * generation。缺失（v1 marker）= class 不可证明——class-aware 清除
+         * 按 insufficient 保守处理（绝不猜测 class）。
+         */
+        markerVersion?: 2;
+        authorityClass?: "identity-bound" | "lowlevel" | "legacy" | "forensic";
+        lowlevelSource?: string;
+        lineageBindingDigest?: string;
+        attemptGeneration?: number;
       };
       /**
        * durable intent / WAL（第八轮新增、第九轮升级 v2）：Game API 调用
@@ -810,6 +820,8 @@ declare global {
             authorizationCohortDigest?: string;
             /** 统一 durable action identity digest（第十一轮 3.13.5；第十二轮 load 重算验证）。 */
             durableIdentityDigest?: string;
+            /** 【第十七轮第十一节】tr1_ rearm child 的 lineage/rearm binding digest（initial attempt 不携带）。 */
+            lineageBindingDigest?: string;
             auditSource?: string;
             createdAtTick: number;
             updatedAtTick: number;
@@ -928,6 +940,8 @@ declare global {
             authorizationCohortDigest?: string;
             /** 统一 durable action identity digest（第十二轮 load 重算验证）。 */
             durableIdentityDigest?: string;
+            /** 【第十七轮第十一节】tr1_ rearm child 的 lineage binding（从 intent 事实转移继承）。 */
+            lineageBindingDigest?: string;
             /** v1 迁移且无并存 intent 补全（不参与 contract-backed resolution）。 */
             legacyV1?: boolean;
             /** forensic incomplete authority（第十二轮 3.8：intent 缺失时的防御性直写，隔离不自动解释）。 */
@@ -976,6 +990,8 @@ declare global {
             policyIdentity?: string;
             structureFacts?: Array<Record<string, unknown>>;
             durableIdentityDigest?: string;
+            /** 【第十七轮第十一节】tr1_ rearm child 的 lineage binding（从 intent 事实转移继承）。 */
+            lineageBindingDigest?: string;
             /** v1 迁移 entry（身份事实不完整——仅按 digest 匹配的旧协议解除）。 */
             legacyV1?: boolean;
             postings: Array<{
@@ -1059,6 +1075,76 @@ declare global {
               source: string;
               allowAutomaticCompletion: boolean;
             };
+          }
+        >;
+        entryCount: number;
+        updatedAt: number;
+      };
+      /**
+       * 【第十七轮第五节】durable attempt lineage / retired-attempt store（v1）：
+       * 每条业务重试链一个有界 record——root/current attempt ID 与完整
+       * identity、generation、状态机（retiring → rearm_ready → capability_
+       * issued → child_intent_pending → child_active → chain_committed；或
+       * non_rearmable_retired / forensic_isolated）、next child、retry
+       * semantic digest、authority class、retirement 三段完成标志。
+       * entry key 为 "l:"+rootTransactionId；硬容量 64（满载 fail closed，
+       * 不驱逐——普通运行不得自动删除 record）；root/current/next-child
+       * O(1) 索引（global reset 首次 load 一次全表验证重建；索引只是定位
+       * 器、Memory record 是权威）。root attempt ID 只要存在 lineage record
+       * 即永久 retired（final not-executed tombstone 按普通 retention 驱逐
+       * 后仍阻断同 ID 直接 prepare——驱逐资格 = lineage replacement 完整）。
+       */
+      attemptLineage?: {
+        version: 1;
+        entries: Record<
+          string,
+          {
+            lineageId: string;
+            rootTransactionId: string;
+            rootIdentity: {
+              digest: string;
+              contractDigest?: string;
+              authorizationCohortDigest?: string;
+              durableIdentityDigest?: string;
+              lowlevelSource?: string;
+            };
+            currentTransactionId: string;
+            currentIdentity: {
+              digest: string;
+              contractDigest?: string;
+              authorizationCohortDigest?: string;
+              durableIdentityDigest?: string;
+              lowlevelSource?: string;
+            };
+            actionKind: string;
+            adapterSemanticIdentity?: string;
+            ownerIdentity?: string;
+            generation: number;
+            state:
+              | "retiring"
+              | "rearm_ready"
+              | "capability_issued"
+              | "child_intent_pending"
+              | "child_active"
+              | "chain_committed"
+              | "non_rearmable_retired"
+              | "forensic_isolated";
+            resolutionState: "unresolved" | "not_executed" | "committed";
+            nextChildTransactionId?: string;
+            retrySemanticDigest?: string;
+            authorityClass: "identity-bound" | "lowlevel";
+            lowlevelSource?: string;
+            bindingDigest?: string;
+            rearmable: boolean;
+            nonRearmReason?: string;
+            retirement: {
+              lineagePublished: boolean;
+              authorityReleased: boolean;
+              markerCleaned: boolean;
+            };
+            recordRevision: number;
+            createdAtTick: number;
+            updatedAtTick: number;
           }
         >;
         entryCount: number;

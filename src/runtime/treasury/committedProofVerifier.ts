@@ -140,11 +140,31 @@ export function verifyTreasuryCommittedResolutionProof(input: {
       detail: `receipt tick 不足（proof ${String(receiptProof.settledAtTick)} < tombstone settledAt ${String(tombstone.settledAtTick)}）`,
     };
   }
-  if (receiptProof.level !== "modern") {
+  if (receiptProof.level === "legacy") {
     return {
       status: "insufficient",
-      detail: `receipt proof level 为 ${String(receiptProof.level)}（须 modern——legacy/未知 proof 不能证明当前 attempt 的 committed 结论）`,
+      detail: `receipt proof level 为 legacy（不能证明当前 attempt 的 committed 结论——legacy 只作 replay blocker 与历史诊断）`,
     };
+  }
+  // 【第十七轮第十五节】显式 proof class：identity-bound / lowlevel 三级释放
+  // 矩阵——identity-bound 不释放 lowlevel authority、lowlevel 不释放 modern
+  // authority（下方 treasuryProofLevelAutoReleasesAuthorityLevel 按 tombstone
+  // proofLevel 判定；receipt class 与 authority 等级的错配在此拦截）。
+  const receiptIsLowlevelClass = receiptProof.level === "lowlevel";
+  if (authorityResolution.status === "ok") {
+    const authorityLevelForClass = authorityResolution.authority.authorityLevel;
+    if (receiptIsLowlevelClass && authorityLevelForClass !== "lowlevel") {
+      return {
+        status: "insufficient",
+        detail: `receipt proof class 为 lowlevel，不得证明/释放 ${String(authorityLevelForClass)} authority（跨 proof class 不互相释放）`,
+      };
+    }
+    if (!receiptIsLowlevelClass && authorityLevelForClass === "lowlevel") {
+      return {
+        status: "insufficient",
+        detail: "receipt proof class 为 identity-bound，不得证明/释放 lowlevel authority（跨 proof class 不互相释放）",
+      };
+    }
   }
   const tombstoneAttempt = attemptIdentityOf(tombstone);
   const receiptRelation = treasuryAttemptIdentityRelation(attemptIdentityOf(receiptProof), tombstoneAttempt);

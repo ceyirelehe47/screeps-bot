@@ -79,17 +79,30 @@ import { validateTreasuryLowlevelSourceField } from "@/runtime/treasury/authorit
 
 export const TREASURY_RECEIPT_RETENTION_TICKS = 5_000;
 export const TREASURY_RECEIPT_MAX_ENTRIES = 4_096;
-export const TREASURY_RECEIPT_VERSION = 6 as const;
+export const TREASURY_RECEIPT_VERSION = 7 as const;
 
 const RECEIPT_KEY_PREFIX = "t:";
 
 /**
- * 【第十三轮】receipt proof 的显式等级：modern = 携带完整 attempt 身份
- * （digest + durableIdentityDigest 必填）的结算证明；legacy = 无身份的
- * 历史/compat 结算证明（v1-v3 数字迁移或无 identity 的单阶段写入）。
- * 等级是持久化显式语义——不得由身份字段存在性隐式推断。
+ * 【第十三轮】receipt proof 的显式等级（第十三轮建立 modern/legacy、
+ * 【第十七轮第十五节 v7】拆分为显式三级）：identity-bound = 携带完整
+ * modern contract attempt 身份（digest + durableIdentityDigest 必填）的
+ * 结算证明，禁携带 lowlevelSource；lowlevel = 低层 attempt 的结算证明
+ * （digest + durableIdentityDigest + 受控 lowlevelSource 必填，禁 modern
+ * contract/cohort 字段）；legacy = 无身份的历史/compat 结算证明（只作
+ * replay blocker 与历史诊断——不得释放 modern/lowlevel authority、不得
+ * rearm、不得证明 child attempt）。等级是持久化显式语义——不得由身份
+ * 字段存在性隐式推断；不同 proof class 不能互相释放 authority。
  */
-export type TreasuryReceiptProofLevel = "modern" | "legacy";
+export type TreasuryReceiptProofLevel = "identity-bound" | "lowlevel" | "legacy";
+
+/**
+ * v6 历史 "modern" 等级的读取归一化（v7 写入侧不再产生 "modern"）：
+ * modern 无 lowlevelSource → identity-bound；modern 有合法 lowlevelSource →
+ * lowlevel。lookup/迁移按归一化等级解释；字段矛盾（modern + lowlevelSource
+ * + contractDigest 并存）→ fail closed 不猜测。
+ */
+export type TreasuryLegacyReceiptProofLevel = "modern" | "legacy";
 
 /**
  * 【第十二轮 3.4 / 第十三轮 v5 / 第十六轮 v6】settlement proof：结算 tick +
@@ -183,14 +196,15 @@ function isValidSettledTick(value: unknown, nowTick: number): value is number {
  * 已可靠识别的 id 仍返回结算 tick（幂等保证不因 store 损坏而遗忘）。
  */
 /**
- * v5 value 形状校验（显式等级语义）：对象含合法 settledAtTick 与 level；
- * level=modern 时 digest 与 durableIdentityDigest 必填（16 hex），
+ * v5/v6 value 形状校验（显式等级语义，读取兼容——v7 store 已迁移，但
+ * lookup 的宽松视图可能读到未迁移的 v6）：对象含合法 settledAtTick 与
+ * level；level=modern 时 digest 与 durableIdentityDigest 必填（16 hex），
  * contractDigest/authorizationCohortDigest 可选（16 hex）；level=legacy 时
  * 不得携带任何身份字段。
  */
-function isValidSettlementProof(value: unknown, nowTick: number): value is TreasurySettlementProof {
+function isValidV6SettlementProof(value: unknown, nowTick: number): value is TreasurySettlementProof {
   if (!value || typeof value !== "object") return false;
-  const typed = value as Partial<TreasurySettlementProof> & { level?: unknown };
+  const typed = value as Partial<Omit<TreasurySettlementProof, "level">> & { level?: string };
   if (!isValidSettledTick(typed.settledAtTick, nowTick)) return false;
   if (typed.level !== "modern" && typed.level !== "legacy") return false;
   const identityFields = ["digest", "contractDigest", "authorizationCohortDigest", "durableIdentityDigest"] as const;
@@ -214,6 +228,67 @@ function isValidSettlementProof(value: unknown, nowTick: number): value is Treas
   }
   if (typed.lowlevelSource !== undefined) return false;
   return true;
+}
+
+/**
+ * 【第十七轮第十五节 v7】value 形状校验（显式三级 proof class）：
+ * - identity-bound：digest + durableIdentityDigest 必填；contractDigest/
+ *   authorizationCohortDigest 可选；**禁携带 lowlevelSource**；
+ * - lowlevel：digest + durableIdentityDigest + lowlevelSource（受控枚举）
+ *   必填；**禁携带 modern contract/cohort 字段**；
+ * - legacy：禁一切身份字段。
+ */
+function isValidSettlementProof(value: unknown, nowTick: number): value is TreasurySettlementProof {
+  if (!value || typeof value !== "object") return false;
+  const typed = value as Partial<TreasurySettlementProof> & { level?: unknown };
+  if (!isValidSettledTick(typed.settledAtTick, nowTick)) return false;
+  if (typed.level !== "identity-bound" && typed.level !== "lowlevel" && typed.level !== "legacy") return false;
+  const identityFields = ["digest", "contractDigest", "authorizationCohortDigest", "durableIdentityDigest"] as const;
+  for (const field of identityFields) {
+    const fieldValue = typed[field];
+    if (fieldValue !== undefined && (typeof fieldValue !== "string" || !/^[0-9a-f]{16}$/.test(fieldValue))) {
+      return false;
+    }
+  }
+  if (typed.lowlevelSource !== undefined && validateTreasuryLowlevelSourceField(typed.lowlevelSource) !== null) {
+    return false;
+  }
+  if (typed.level === "identity-bound") {
+    if (typed.digest === undefined || typed.durableIdentityDigest === undefined) return false;
+    if (typed.lowlevelSource !== undefined) return false;
+    return true;
+  }
+  if (typed.level === "lowlevel") {
+    if (typed.digest === undefined || typed.durableIdentityDigest === undefined) return false;
+    if (typed.lowlevelSource === undefined) return false;
+    if (typed.contractDigest !== undefined || typed.authorizationCohortDigest !== undefined) return false;
+    return true;
+  }
+  // legacy proof 禁携带身份字段。
+  for (const field of identityFields) {
+    if (typed[field] !== undefined) return false;
+  }
+  if (typed.lowlevelSource !== undefined) return false;
+  return true;
+}
+
+/**
+ * 【第十七轮第十五节】写入侧 level 计算单一权威：有受控 lowlevelSource →
+ * lowlevel（禁 modern contract/cohort 字段——写入时剥离）；有完整身份
+ *（digest + durableIdentityDigest）→ identity-bound；否则 legacy。
+ */
+function receiptProofLevelOfIdentity(identity: {
+  readonly digest?: string;
+  readonly durableIdentityDigest?: string;
+  readonly lowlevelSource?: string;
+} | undefined): TreasuryReceiptProofLevel {
+  if (identity?.lowlevelSource !== undefined && validateTreasuryLowlevelSourceField(identity.lowlevelSource) === null) {
+    return "lowlevel";
+  }
+  if (identity?.digest !== undefined && identity?.durableIdentityDigest !== undefined) {
+    return "identity-bound";
+  }
+  return "legacy";
 }
 
 /**
@@ -284,20 +359,26 @@ function lookupNormalizedReceipt(
   let key: string;
   if (version === 1) {
     key = transactionId; // v1 裸键 = transactionId 本身
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7) {
     key = encodeReceiptKey(transactionId);
   } else {
     // 未知/更高版本：store 整体 fail closed（admission/登记拒绝），但已能
     // 可靠解释的合法条目不得被遗忘（【第十三轮 4.2】幂等保证不因版本未知
     // 丢失）——按 v2+ 前缀键形态探测：合法数字 = legacy committed；合法
-    // v5/v4 proof 按等级分流；无法解释 = incompatible。
+    // v7/v6/v5 proof 按等级分流；无法解释 = incompatible。
     key = encodeReceiptKey(transactionId);
     if (!Object.prototype.hasOwnProperty.call(settled, key)) return { status: "incompatible" };
     const unknownValue = settled[key];
     if (isValidSettledTick(unknownValue, nowTick)) return { status: "legacy_committed", settledAtTick: unknownValue };
     if (isValidSettlementProof(unknownValue, nowTick)) {
       const proof = unknownValue as TreasurySettlementProof;
-      return proof.level === "modern"
+      return proof.level === "legacy"
+        ? { status: "legacy_committed", settledAtTick: proof.settledAtTick }
+        : { status: "modern_committed", proof };
+    }
+    if (isValidV6SettlementProof(unknownValue, nowTick)) {
+      const proof = unknownValue as TreasurySettlementProof;
+      return (proof as { level: string }).level === "modern"
         ? { status: "modern_committed", proof }
         : { status: "legacy_committed", settledAtTick: proof.settledAtTick };
     }
@@ -306,7 +387,7 @@ function lookupNormalizedReceipt(
       if (typed.durableIdentityDigest !== undefined) {
         return {
           status: "modern_committed",
-          proof: { level: "modern", settledAtTick: typed.settledAtTick, digest: typed.digest, durableIdentityDigest: typed.durableIdentityDigest },
+          proof: { level: "identity-bound", settledAtTick: typed.settledAtTick, digest: typed.digest, durableIdentityDigest: typed.durableIdentityDigest },
         };
       }
       return { status: "legacy_committed", settledAtTick: typed.settledAtTick };
@@ -327,17 +408,25 @@ function lookupNormalizedReceipt(
     if (typed.durableIdentityDigest !== undefined) {
       return {
         status: "modern_committed",
-        proof: { level: "modern", settledAtTick: typed.settledAtTick, digest: typed.digest, durableIdentityDigest: typed.durableIdentityDigest },
+        proof: { level: "identity-bound", settledAtTick: typed.settledAtTick, digest: typed.digest, durableIdentityDigest: typed.durableIdentityDigest },
       };
     }
     return { status: "legacy_committed", settledAtTick: typed.settledAtTick };
   }
-  // version === 5
+  if (version === 5 || version === 6) {
+    // v6 = v5 + 可选 lowlevelSource（读取兼容——"modern" 归一化解释）。
+    if (!isValidV6SettlementProof(value, nowTick)) return { status: "corrupted" };
+    const proof = value as TreasurySettlementProof;
+    return (proof as { level: string }).level === "modern"
+      ? { status: "modern_committed", proof }
+      : { status: "legacy_committed", settledAtTick: proof.settledAtTick };
+  }
+  // version === 7【第十七轮第十五节】显式三级 proof class。
   if (!isValidSettlementProof(value, nowTick)) return { status: "corrupted" };
   const proof = value as TreasurySettlementProof;
-  return proof.level === "modern"
-    ? { status: "modern_committed", proof }
-    : { status: "legacy_committed", settledAtTick: proof.settledAtTick };
+  return proof.level === "legacy"
+    ? { status: "legacy_committed", settledAtTick: proof.settledAtTick }
+    : { status: "modern_committed", proof };
 }
 
 /** 只读查询入口（零写；query/门禁路径共用）。 */
@@ -579,18 +668,30 @@ export function refreshSettledReceiptForResolution(
     }
     receiptEvents.receiptIdentityMatches += 1;
     // match：保留既有 proof 身份（identity 成分一致——含 lowlevel provenance），
-    // 仅刷新 settledAtTick。
-    const nextProof: TreasurySettlementProof = {
-      level: "modern",
-      settledAtTick: tick,
-      digest: existing.proof.digest ?? attempt.digest,
-      durableIdentityDigest: existing.proof.durableIdentityDigest ?? attempt.durableIdentityDigest,
-      ...(existing.proof.contractDigest !== undefined ? { contractDigest: existing.proof.contractDigest } : {}),
-      ...(existing.proof.authorizationCohortDigest !== undefined
-        ? { authorizationCohortDigest: existing.proof.authorizationCohortDigest }
-        : {}),
-      ...(existing.proof.lowlevelSource !== undefined ? { lowlevelSource: existing.proof.lowlevelSource } : {}),
-    };
+    // 仅刷新 settledAtTick。【第十七轮第十五节 v7】level 按事实重算（identity-
+    // bound / lowlevel / legacy 三级显式——不再写 "modern"）。
+    const refreshedLevel = receiptProofLevelOfIdentity(existing.proof);
+    const nextProof: TreasurySettlementProof =
+      refreshedLevel === "lowlevel"
+        ? {
+            level: "lowlevel",
+            settledAtTick: tick,
+            digest: existing.proof.digest ?? attempt.digest,
+            durableIdentityDigest: existing.proof.durableIdentityDigest ?? attempt.durableIdentityDigest,
+            ...(existing.proof.lowlevelSource !== undefined ? { lowlevelSource: existing.proof.lowlevelSource } : {}),
+          }
+        : refreshedLevel === "identity-bound"
+          ? {
+              level: "identity-bound",
+              settledAtTick: tick,
+              digest: existing.proof.digest ?? attempt.digest,
+              durableIdentityDigest: existing.proof.durableIdentityDigest ?? attempt.durableIdentityDigest,
+              ...(existing.proof.contractDigest !== undefined ? { contractDigest: existing.proof.contractDigest } : {}),
+              ...(existing.proof.authorizationCohortDigest !== undefined
+                ? { authorizationCohortDigest: existing.proof.authorizationCohortDigest }
+                : {}),
+            }
+          : { level: "legacy", settledAtTick: tick };
     if (existingTick === tick) {
       receiptEvents.receiptRefreshes += 1;
       return { status: "refreshed", previousTick: tick };
@@ -605,22 +706,33 @@ export function refreshSettledReceiptForResolution(
     receiptEvents.receiptRefreshes += 1;
     return { status: "refreshed", previousTick: existingTick };
   }
-  // absent：identity 完整 → modern proof；否则（低层 authority resolve）显式
-  // legacy proof——不冒充现代证明。【第十六轮第十一节】lowlevel attempt 的
-  // provenance 一并写入 proof（runtime 与 migrated 不能互相证明）。
-  const nextProof: TreasurySettlementProof = identityComplete
-    ? {
-        level: "modern",
-        settledAtTick: tick,
-        digest: identity?.digest,
-        durableIdentityDigest: identity?.durableIdentityDigest,
-        ...(identity?.contractDigest !== undefined ? { contractDigest: identity.contractDigest } : {}),
-        ...(identity?.authorizationCohortDigest !== undefined
-          ? { authorizationCohortDigest: identity.authorizationCohortDigest }
-          : {}),
-        ...(identity?.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
-      }
-    : { level: "legacy", settledAtTick: tick };
+  // absent：identity 完整 → identity-bound/lowlevel proof；否则（低层
+  // authority resolve）显式 legacy proof——不冒充现代证明。【第十六轮第十
+  // 一节】lowlevel attempt 的 provenance 一并写入 proof（runtime 与
+  // migrated 不能互相证明）。【第十七轮第十五节 v7】显式三级——lowlevel
+  // 禁携带 modern contract/cohort 字段。
+  const absentLevel = receiptProofLevelOfIdentity(identity);
+  const nextProof: TreasurySettlementProof =
+    absentLevel === "lowlevel"
+      ? {
+          level: "lowlevel",
+          settledAtTick: tick,
+          digest: identity?.digest,
+          durableIdentityDigest: identity?.durableIdentityDigest,
+          ...(identity?.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
+        }
+      : absentLevel === "identity-bound"
+        ? {
+            level: "identity-bound",
+            settledAtTick: tick,
+            digest: identity?.digest,
+            durableIdentityDigest: identity?.durableIdentityDigest,
+            ...(identity?.contractDigest !== undefined ? { contractDigest: identity.contractDigest } : {}),
+            ...(identity?.authorizationCohortDigest !== undefined
+              ? { authorizationCohortDigest: identity.authorizationCohortDigest }
+              : {}),
+          }
+        : { level: "legacy", settledAtTick: tick };
   store.settled[key] = nextProof;
   store.entryCount += 1;
   store.updatedAt = tick;
@@ -741,7 +853,7 @@ function migrateReceiptValue(
   const hasDigest = typed.digest !== undefined;
   const hasDurable = typed.durableIdentityDigest !== undefined;
   if (hasDigest && hasDurable) {
-    return [{ level: "modern", settledAtTick: typed.settledAtTick, digest: typed.digest, durableIdentityDigest: typed.durableIdentityDigest }, null];
+    return [{ level: "identity-bound", settledAtTick: typed.settledAtTick, digest: typed.digest, durableIdentityDigest: typed.durableIdentityDigest }, null];
   }
   if (!hasDigest && !hasDurable) {
     return [{ level: "legacy", settledAtTick: typed.settledAtTick }, null];
@@ -856,14 +968,75 @@ function loadReceiptStoreRuntime(): ReceiptStoreRuntime {
     heapStoreRuntime = { store: candidate, fatal: null };
     return heapStoreRuntime;
   }
-  if (raw.version === 5) {
-    // v5 → v6 无损升级（【第十六轮第十一节】新增可选 lowlevelSource 字段
-    // ——既有 proof 无 provenance = 来源不可证明的旧 proof，隔离不释放，
-    // 不猜测 runtime 来源）；损坏 → fatal。
-    const upgraded: TreasuryReceiptStore = { ...(raw as unknown as TreasuryReceiptStore), version: TREASURY_RECEIPT_VERSION, updatedAt: Game.time };
-    const shapeError = validateReceiptStoreShape(upgraded, Game.time, "load");
+  if (raw.version === 5 || raw.version === 6) {
+    // 【第十七轮第十五节】v5/v6 → v7：proof level 拆分显式三级——
+    // modern 无 lowlevelSource → identity-bound；modern 有合法 lowlevelSource
+    // → lowlevel（禁携带 modern contract/cohort 字段——矛盾组合 fatal 原
+    // 数据保留，不猜测）；legacy → legacy；部分身份/矛盾 → fatal。
+    const source = raw.settled;
+    if (!source || typeof source !== "object") {
+      heapStoreRuntime = fatalRuntime(raw, `v${String(raw.version)} receipt store 缺失 settled 对象（原数据保留，拒绝登记）`);
+      return heapStoreRuntime;
+    }
+    receiptEvents.receiptFullScans += 1;
+    receiptEvents.receiptMigrationScans += 1;
+    const sourceKeys = Object.keys(source);
+    receiptEvents.receiptEntriesVisited += sourceKeys.length;
+    const migrated: Record<string, TreasurySettlementProof> = {};
+    for (const key of sourceKeys) {
+      const value = (source as Record<string, unknown>)[key];
+      if (!isValidV6SettlementProof(value, Game.time)) {
+        receiptEvents.receiptProofLevelRejections += 1;
+        heapStoreRuntime = fatalRuntime(
+          raw,
+          `v${String(raw.version)}→v7 迁移发现损坏 settled proof（原 store 保持不变）: ${key.slice(0, 48)}`,
+        );
+        return heapStoreRuntime;
+      }
+      const proof = value as TreasurySettlementProof;
+      if (proof.level === "legacy") {
+        migrated[key] = { level: "legacy", settledAtTick: proof.settledAtTick };
+        continue;
+      }
+      if (proof.lowlevelSource !== undefined) {
+        // modern + lowlevelSource（v6 形态）→ lowlevel；携带 contract/cohort
+        // 字段 = 等级矛盾 → fail closed 不猜测。
+        if (proof.contractDigest !== undefined || proof.authorizationCohortDigest !== undefined) {
+          receiptEvents.receiptProofLevelRejections += 1;
+          heapStoreRuntime = fatalRuntime(
+            raw,
+            `v${String(raw.version)}→v7 迁移发现等级矛盾（lowlevel proof 携带 modern contract/cohort 字段；不猜测缺失来源，原 store 保持不变）: ${key.slice(0, 48)}`,
+          );
+          return heapStoreRuntime;
+        }
+        migrated[key] = {
+          level: "lowlevel",
+          settledAtTick: proof.settledAtTick,
+          digest: proof.digest,
+          durableIdentityDigest: proof.durableIdentityDigest,
+          lowlevelSource: proof.lowlevelSource,
+        };
+        continue;
+      }
+      migrated[key] = {
+        level: "identity-bound",
+        settledAtTick: proof.settledAtTick,
+        digest: proof.digest,
+        durableIdentityDigest: proof.durableIdentityDigest,
+        ...(proof.contractDigest !== undefined ? { contractDigest: proof.contractDigest } : {}),
+        ...(proof.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: proof.authorizationCohortDigest } : {}),
+      };
+    }
+    const upgraded: TreasuryReceiptStore = {
+      version: TREASURY_RECEIPT_VERSION,
+      settled: migrated,
+      updatedAt: Game.time,
+      entryCount: sourceKeys.length,
+      nextExpiryTick: computeNextExpiryTick(migrated),
+    };
+    const shapeError = validateReceiptStoreShape(upgraded, Game.time, "migration");
     if (shapeError !== null) {
-      heapStoreRuntime = fatalRuntime(raw, `${shapeError}（v5→v6 升级校验失败，原数据保留）`);
+      heapStoreRuntime = fatalRuntime(raw, `${shapeError}（v${String(raw.version)}→v7 升级校验失败，原数据保留）`);
       return heapStoreRuntime;
     }
     treasuryBranch().receipts = upgraded;
@@ -1144,9 +1317,10 @@ export function commitSettledReceipt(
     return { status: "already_settled_insufficient", settledAtTick, relation: "insufficient" };
   }
   // 【第十二轮 3.4 / 第十三轮 v5】结算写入绑定 attempt 身份并显式定级：
-  // identity 完整（digest + durableIdentityDigest 成对）→ modern proof；
-  // identity 缺省（compat 单阶段/低层路径）→ legacy proof；部分提供 →
-  // 无法安全定级 → fatal（编程错误防御，store 不变）。
+  // identity 完整（digest + durableIdentityDigest 成对）→ identity-bound/
+  // lowlevel proof（【第十七轮第十五节 v7】三级显式——lowlevel 禁携带
+  // modern contract/cohort 字段）；identity 缺省（compat 单阶段/低层路径）
+  // → legacy proof；部分提供 → 无法安全定级 → fatal（编程错误防御，store 不变）。
   const identityComplete = identity?.digest !== undefined && identity?.durableIdentityDigest !== undefined;
   const identityPartial =
     !identityComplete && (identity?.digest !== undefined || identity?.durableIdentityDigest !== undefined);
@@ -1157,18 +1331,27 @@ export function commitSettledReceipt(
       detail: `transactionId ${transactionId.slice(0, 48)} 的结算 identity 须 digest 与 durableIdentityDigest 成对提供（部分提供无法安全定级 proof 等级）`,
     };
   }
-  const proof: TreasurySettlementProof = identityComplete
-    ? {
-        level: "modern",
-        settledAtTick: tick,
-        digest: identity?.digest,
-        durableIdentityDigest: identity?.durableIdentityDigest,
-        ...(identity?.contractDigest !== undefined ? { contractDigest: identity.contractDigest } : {}),
-        ...(identity?.authorizationCohortDigest !== undefined
-          ? { authorizationCohortDigest: identity.authorizationCohortDigest }
-          : {}),
-        ...(identity?.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
-      }
+  const commitLevel = receiptProofLevelOfIdentity(identity);
+  const proof: TreasurySettlementProof =
+    identityComplete && commitLevel === "lowlevel"
+      ? {
+          level: "lowlevel",
+          settledAtTick: tick,
+          digest: identity?.digest,
+          durableIdentityDigest: identity?.durableIdentityDigest,
+          ...(identity?.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
+        }
+      : identityComplete
+        ? {
+            level: "identity-bound",
+            settledAtTick: tick,
+            digest: identity?.digest,
+            durableIdentityDigest: identity?.durableIdentityDigest,
+            ...(identity?.contractDigest !== undefined ? { contractDigest: identity.contractDigest } : {}),
+            ...(identity?.authorizationCohortDigest !== undefined
+              ? { authorizationCohortDigest: identity.authorizationCohortDigest }
+              : {}),
+          }
     : { level: "legacy", settledAtTick: tick };
   store.settled[key] = proof;
   store.entryCount += 1;
@@ -1300,8 +1483,14 @@ export function readTreasuryLifecycle(): TreasuryLifecycleMemory | undefined {
  * 时无需清理。
  */
 let resolutionResetHook: (() => void) | null = null;
+let lineageResetHook: (() => void) | null = null;
 export function registerTreasuryResolutionResetHook(hook: (() => void) | null): void {
   resolutionResetHook = hook;
+}
+
+/** 【第十七轮】attemptLineage 的 heap 复位 hook 注册（避免模块循环依赖）。 */
+export function registerTreasuryLineageResetHook(hook: (() => void) | null): void {
+  lineageResetHook = hook;
 }
 
 /** 仅供测试：清除 Treasury 持久状态（receipts + lifecycle + writeFault + quarantine + resolutions + intents）并失效 heap 缓存。 */
@@ -1315,6 +1504,8 @@ export function clearTreasuryPersistenceForTest(): void {
     delete branch.resolutions;
     delete branch.intents;
     delete branch.authorizationFaults;
+    // 【第十七轮】durable attempt lineage 一并清理（含 heap 运行态复位）。
+    delete (branch as { attemptLineage?: unknown }).attemptLineage;
   }
   heapStoreRuntime = null;
   pendingAdmissions.clear();
@@ -1322,10 +1513,9 @@ export function clearTreasuryPersistenceForTest(): void {
   resetTreasuryResolutionEventsForTest();
   resetTreasuryIntentRuntimeForTest();
   resetTreasuryAuthorizationFaultRuntimeForTest();
-  // 第十一轮：registry seal 测试隔离（treasuryCore 的 RuntimeServices 集成
-  // 会 seal 生产 registry——后续测试的动态注册默认解除）。
   unsealTreasuryAdapterRegistryForTest();
   resolutionResetHook?.();
+  lineageResetHook?.();
   receiptEvents.migrationsExecuted = 0;
   receiptEvents.incompatibleFailures = 0;
   receiptEvents.receiptFullScans = 0;
