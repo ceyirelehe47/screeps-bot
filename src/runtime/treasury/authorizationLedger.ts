@@ -58,6 +58,18 @@ export interface TreasuryAuthorizationBundleRecord {
   readonly cohort?: TreasuryAuthorizationCohortFacts;
   /** canonical cohort digest（Treasury 计算）。 */
   readonly cohortDigest?: string;
+  /**
+   * 【第十七轮第十节】rearm capability 绑定（tr1_ child contract 专属）：
+   * capability binding digest、lineage digest、child ID、retry semantic
+   * digest、parent identity——redemption 验证与 marker class-aware 身份用。
+   */
+  readonly rearmBindingDigest?: string;
+  readonly rearmLineageId?: string;
+  readonly rearmChildTransactionId?: string;
+  readonly rearmRetrySemanticDigest?: string;
+  readonly rearmParentTransactionId?: string;
+  readonly rearmLineageBindingDigest?: string;
+  readonly rearmAttemptGeneration?: number;
   state: "active" | "redeemed";
 }
 
@@ -102,6 +114,8 @@ export interface TreasuryAuthorizationLedger {
   restoreAuthorizationRecord(token: TreasuryAuthorizationToken, record: TreasuryIssuedBudget): void;
   // ── bundle registry 与 redemption ─────────────────────────────────────
   registerBundle(bundle: TreasuryAuthorizationBundle, record: TreasuryAuthorizationBundleRecord): void;
+  /** 【第十七轮第十二节】transactionId 是否存在 active bundle（child 占用检测）。 */
+  hasActiveBundleFor(transactionId: string): boolean;
   redeemAuthorizationBundleAtomic(
     bundle: TreasuryAuthorizationBundle,
     context: {
@@ -141,6 +155,8 @@ export function createTreasuryAuthorizationLedger(deps: TreasuryAuthorizationLed
   const authorizationCapacityTotals = new Map<string, number>();
   let authorizationLedgerRevisions: TreasuryAuthorizationRevisions | null = null;
   const bundleRecords = new WeakMap<object, TreasuryAuthorizationBundleRecord>();
+  /** active bundle 的 transactionId 集合（child 占用检测 O(1) 视图）。 */
+  const activeBundleTransactionIds = new Set<string>();
   let bundleSequence = 0;
 
   const registerIssuedToken = (token: TreasuryAuthorizationToken, budget: Omit<TreasuryIssuedBudget, "consumed">): void => {
@@ -488,6 +504,13 @@ export function createTreasuryAuthorizationLedger(deps: TreasuryAuthorizationLed
               },
             }
           : {}),
+        // 【第十七轮第十四节】bundle redemption 是 contract 路径——marker 携带
+        // class-aware 身份（identity-bound；binding/generation 由 rearm bundle
+        // record 注入）。
+        markerVersion: 2,
+        authorityClass: "identity-bound",
+        ...(record.rearmLineageBindingDigest !== undefined ? { lineageBindingDigest: record.rearmLineageBindingDigest } : {}),
+        ...(record.rearmAttemptGeneration !== undefined ? { attemptGeneration: record.rearmAttemptGeneration } : {}),
         detail: authorityPublished
           ? `原子 redemption 中断并回滚（${String(error instanceof Error ? error.message : error).slice(0, TREASURY_WRITE_FAULT_DETAIL_MAX)}）——状态零变化，marker 阻断后续 writer`
           : `原子 redemption 中断并回滚，但 durable fault authority 写入失败（${faultWriteDetail}）——forensic fail closed：authority 缺失，仅显式 forensic 通道可解除`,
@@ -554,7 +577,11 @@ export function createTreasuryAuthorizationLedger(deps: TreasuryAuthorizationLed
     restoreAuthorizationRecord,
     registerBundle: (bundle, record) => {
       bundleRecords.set(bundle, record);
+      // 【第十七轮第十二节】child 占用检测的 heap 侧视图（active bundle 的
+      // transactionId 集合——O(1) 查询）。
+      activeBundleTransactionIds.add(record.transactionId);
     },
+    hasActiveBundleFor: (transactionId: string) => activeBundleTransactionIds.has(transactionId),
     redeemAuthorizationBundleAtomic,
     resolveAuthorizationBundleReadOnly,
     validateTreasuryAuthorizationForRedeem,

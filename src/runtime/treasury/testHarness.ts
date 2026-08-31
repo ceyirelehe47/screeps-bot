@@ -50,7 +50,10 @@ export type TreasuryTestService = TreasuryService & {
     token: TreasuryAuthorizationToken,
     options?: { transactionId?: string; postings?: readonly TreasuryPosting[] },
   ): TreasuryAuthorizationConsumeResult;
-  prepareTransaction(input: TreasuryTransactionInput): TreasuryPreparationResult;
+  prepareTransaction(input: TreasuryTransactionInput, prepareOptions?: {
+    /** 【第十七轮第八节】tr1_ rearm child 的 opaque capability（kernel 内部通道）。 */
+    readonly rearmCapability?: unknown;
+  }): TreasuryPreparationResult;
   executePreparedAction<TAction extends { ok: boolean }>(
     input: TreasuryTransactionInput,
     action: () => TAction,

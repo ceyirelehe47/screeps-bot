@@ -105,6 +105,12 @@ export interface TreasuryContractAuthorizationOptions {
     readonly locationKind: TreasuryLocationKind;
     readonly amount: number;
   };
+  /**
+   * 【第十七轮第十节】tr1_ rearm child 的 opaque rearm capability（child
+   * contract 授权必填——验证 capability 与 contract 的完整绑定并重算
+   * retry semantic digest；授权失败 capability 不消费、lineage 保持 ready）。
+   */
+  readonly rearmCapability?: unknown;
 }
 
 /**

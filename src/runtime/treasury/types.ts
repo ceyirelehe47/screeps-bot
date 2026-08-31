@@ -179,6 +179,21 @@ export type TreasuryRejectionReason =
    *  永远只标识一个执行 attempt——重试必须显式 rearm 生成 child attempt
    *  ID（rearmResolvedNotExecutedAttempt），不得直接重用 parent ID。 */
   | "rearm_required"
+  /** 【第十七轮第五节】root/current attempt ID 存在于 durable lineage
+   *  record——永久 retired（tombstone 驱逐后仍不可直接 prepare）。 */
+  | "retired_attempt"
+  /** 【第十七轮第八节】tr1_ 保留命名空间：必须携带匹配 opaque rearm
+   *  capability（initial attempt 不得使用 tr1_；手工拼接/无 capability 一律拒绝）。 */
+  | "rearm_capability_required"
+  /** 【第十七轮第八节】rearm capability 无效（未签发/已消费/跨 tick/跨
+   *  service/绑定不匹配/lineage revision 变化/retry 语义不匹配）。 */
+  | "rearm_capability_invalid"
+  /** 【第十七轮第十二节】child ID 已被任一 durable store 或其它 lineage 占用。 */
+  | "child_identity_occupied"
+  /** 【第十七轮第十二节】parent 同时存在 not-executed 与 committed proof。 */
+  | "proof_conflict"
+  /** 【第十七轮第五节】attempt lineage store 损坏或容量满载（fail closed）。 */
+  | "lineage_store_fatal"
   /** 全局 quarantine write blocker（第七轮）：存在任意 unresolved
    *  quarantine / legacy overflowed——新 transaction 一律拒绝（callback
    *  零调用）；write-fault marker 不是唯一锁来源。 */

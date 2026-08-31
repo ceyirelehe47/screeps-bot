@@ -623,6 +623,12 @@ export interface TreasuryActionExecutionRequest {
    * production 业务模块误用。
    */
   readonly authorization?: TreasuryAuthorizationBundle;
+  /**
+   * 【第十七轮第八节/第十节】tr1_ rearm child 的 opaque rearm capability
+   *（tr1_ contract 必填——经 authorizeTreasuryActionContract 的 options 与
+   * 执行请求透传；Game callback 之前的接管协议验证并消费）。
+   */
+  readonly rearmCapability?: unknown;
 }
 
 export type TreasuryActionContractResult =
@@ -1208,6 +1214,9 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
     () => adapter.execute(contract.args) as TAction,
     {
       authorizationBundle: authorization as TreasuryAuthorizationBundle,
+      // 【第十七轮第八节】tr1_ rearm capability 透传（kernel 内部通道——
+      // prepare 门禁与接管协议验证）。
+      ...(request.rearmCapability !== undefined ? { rearmCapability: request.rearmCapability } : {}),
       intentContract: {
         contractId: contract.contractId,
         contractDigest: contract.digest,
@@ -1215,6 +1224,7 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
         adapterRegistrationId: contract.adapterRegistrationId,
         adapterSemanticIdentity: contract.adapterSemanticIdentity,
         authorizationDigest: resolvedBundle.authorizationDigest,
+        ...(contract.canonicalArgsText !== undefined ? { canonicalArgsText: contract.canonicalArgsText } : {}),
         ...(contract.durableFacts !== undefined
           ? { durablePayload: contract.durableFacts.payload, durablePayloadVersion: contract.durableFacts.version }
           : {}),
