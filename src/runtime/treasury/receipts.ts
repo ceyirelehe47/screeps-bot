@@ -16,14 +16,26 @@
  * - key 编码：settled 普通对象的键一律为 "t:"+transactionId——transactionId
  *   字符集允许 "__proto__"/"constructor" 等危险字面量，前缀编码保证它们
  *   只会成为普通自有属性键，永不触发原型污染语义；
- * - 版本契约（第四轮升级到 v3）：
+ * - 版本契约（第十三轮升级到 v5）：
  *   * v1（裸键）→ v3：v1 raw key 一律**原样**作为 transactionId 输入安全
  *     编码（绝不调用 decode——v1 中 `abc` 与 `t:abc` 是两个不同且都合法的
  *     transactionId，decode 再 encode 会让它们碰撞）；
  *   * v2（前缀键 + entryCount）→ v3：补 nextExpiryTick 过期调度元数据；
+ *   * v3/v4（数字 / 无等级对象 proof）→ v5：显式 proof 等级定级——数字与
+ *     无身份对象 → 显式 legacy committed proof（不伪造身份）；digest 与
+ *     durableIdentityDigest 成对 → modern（保留完整 attempt identity）；
+ *     部分身份字段 → 无法安全定级 → fail closed（原 store 保留）；
+ *   * 【第十三轮】统一 normalized receipt lookup：单一 lookup 结果（absent /
+ *     legacy_committed / modern_committed / corrupted / incompatible）供
+ *     query/admission/commit/refresh/cleanup/migration/projection/prepare/
+ *     finalized proof 全部路径复用——不再存在一处 typeof === "number"、
+ *     另一处只认对象的分裂判定；未迁移 v1/v2/v3 store 的合法数字 value
+ *     在只读查询中被零写识别为已结算（合法数字不判 corrupted；v1 裸键
+ *     raw-key 单探测保持 O(1)）；
  *   * 迁移先在临时结构完成全部校验（transactionId 格式 / settled tick
- *     完整有效性 / 编码碰撞防御），自检通过后一次性原子替换原 store；
- *     任何碰撞/非法 key/非法 value 都使原 store 保持不变并 fail closed；
+ *     完整有效性 / proof 等级定级 / 编码碰撞防御），自检通过后一次性原子
+ *     替换原 store；任何碰撞/非法 key/非法 value 都使原 store 保持不变并
+ *     fail closed；
  *   * 只执行一次（version 提升后不再进入迁移分支）；
  *   * 未知/更高/无法解析版本 → fail closed：原数据保留、拒绝新登记，
  *     不冷启动重建、不静默丢弃；
@@ -62,18 +74,30 @@ import { resetTreasuryAuthorizationFaultRuntimeForTest } from "@/runtime/treasur
 
 export const TREASURY_RECEIPT_RETENTION_TICKS = 5_000;
 export const TREASURY_RECEIPT_MAX_ENTRIES = 4_096;
-export const TREASURY_RECEIPT_VERSION = 4 as const;
+export const TREASURY_RECEIPT_VERSION = 5 as const;
 
 const RECEIPT_KEY_PREFIX = "t:";
 
 /**
- * 【第十二轮 3.4】settlement proof：结算 tick + 该次 action attempt 的身份
- * 绑定（canonical digest / durableIdentityDigest）。v3 及更早的纯数字 value
- * 迁移为无身份的 legacy proof——不得证明携带现代身份的新 attempt。
+ * 【第十三轮】receipt proof 的显式等级：modern = 携带完整 attempt 身份
+ * （digest + durableIdentityDigest 必填）的结算证明；legacy = 无身份的
+ * 历史/compat 结算证明（v1-v3 数字迁移或无 identity 的单阶段写入）。
+ * 等级是持久化显式语义——不得由身份字段存在性隐式推断。
+ */
+export type TreasuryReceiptProofLevel = "modern" | "legacy";
+
+/**
+ * 【第十二轮 3.4 / 第十三轮 v5】settlement proof：结算 tick + 该次 action
+ * attempt 的身份绑定（canonical digest / durableIdentityDigest，可选
+ * contractDigest / authorizationCohortDigest）+ 显式 proof 等级。legacy
+ * proof 无身份字段——不得证明携带现代身份的新 attempt。
  */
 export interface TreasurySettlementProof {
+  readonly level: TreasuryReceiptProofLevel;
   readonly settledAtTick: number;
   readonly digest?: string;
+  readonly contractDigest?: string;
+  readonly authorizationCohortDigest?: string;
   readonly durableIdentityDigest?: string;
 }
 
@@ -148,27 +172,138 @@ function isValidSettledTick(value: unknown, nowTick: number): value is number {
  * "corrupted"；不存在返回 undefined。不依赖 store 版本——fatal/旧格式上
  * 已可靠识别的 id 仍返回结算 tick（幂等保证不因 store 损坏而遗忘）。
  */
-/** v4 value 形状校验：对象含合法 settledAtTick（可选身份字段为 16 hex）。 */
+/**
+ * v5 value 形状校验（显式等级语义）：对象含合法 settledAtTick 与 level；
+ * level=modern 时 digest 与 durableIdentityDigest 必填（16 hex），
+ * contractDigest/authorizationCohortDigest 可选（16 hex）；level=legacy 时
+ * 不得携带任何身份字段。
+ */
 function isValidSettlementProof(value: unknown, nowTick: number): value is TreasurySettlementProof {
   if (!value || typeof value !== "object") return false;
-  const typed = value as Partial<TreasurySettlementProof>;
+  const typed = value as Partial<TreasurySettlementProof> & { level?: unknown };
+  if (!isValidSettledTick(typed.settledAtTick, nowTick)) return false;
+  if (typed.level !== "modern" && typed.level !== "legacy") return false;
+  const identityFields = ["digest", "contractDigest", "authorizationCohortDigest", "durableIdentityDigest"] as const;
+  for (const field of identityFields) {
+    const fieldValue = typed[field];
+    if (fieldValue !== undefined && (typeof fieldValue !== "string" || !/^[0-9a-f]{16}$/.test(fieldValue))) {
+      return false;
+    }
+  }
+  if (typed.level === "modern") {
+    if (typed.digest === undefined || typed.durableIdentityDigest === undefined) return false;
+    return true;
+  }
+  // legacy proof 禁携带身份字段（显式等级——不得与隐式推断并存）。
+  for (const field of identityFields) {
+    if (typed[field] !== undefined) return false;
+  }
+  return true;
+}
+
+/**
+ * v4 value 形状校验（第十二轮 schema，无 level 字段）：对象含合法
+ * settledAtTick；digest/durableIdentityDigest 可选（16 hex）；出现 v4 之后
+ * 引入的字段（level/contractDigest/authorizationCohortDigest）视为损坏。
+ */
+function isValidV4SettlementProofShape(
+  value: unknown,
+  nowTick: number,
+): value is { settledAtTick: number; digest?: string; durableIdentityDigest?: string } {
+  if (!value || typeof value !== "object") return false;
+  const typed = value as Record<string, unknown> & { settledAtTick?: unknown };
   if (!isValidSettledTick(typed.settledAtTick, nowTick)) return false;
   if (typed.digest !== undefined && (typeof typed.digest !== "string" || !/^[0-9a-f]{16}$/.test(typed.digest))) return false;
-  if (typed.durableIdentityDigest !== undefined && (typeof typed.durableIdentityDigest !== "string" || !/^[0-9a-f]{16}$/.test(typed.durableIdentityDigest))) {
+  if (
+    typed.durableIdentityDigest !== undefined &&
+    (typeof typed.durableIdentityDigest !== "string" || !/^[0-9a-f]{16}$/.test(typed.durableIdentityDigest))
+  ) {
+    return false;
+  }
+  if (typed.level !== undefined || typed.contractDigest !== undefined || typed.authorizationCohortDigest !== undefined) {
     return false;
   }
   return true;
 }
 
-function lookupSettled(
-  settled: Record<string, number | TreasurySettlementProof> | undefined,
-  encodedKey: string,
+/**
+ * 【第十三轮 4.1】统一 normalized receipt lookup 结果：所有 receipt 读写
+ * 路径（query/admission/commit/refresh/cleanup/migration/projection/prepare/
+ * finalized proof）的唯一判定语义。
+ * - absent：own key 不存在；
+ * - incompatible：store 不存在/版本未知/settled 非对象；
+ * - corrupted：own key 存在但 value 无法按其 store 版本可靠解释；
+ * - legacy_committed：合法无身份历史证明（v1-v3 数字或显式 legacy proof）；
+ * - modern_committed：合法现代证明（显式 modern proof；v4 未迁移 store 按
+ *   durableIdentityDigest 存在性只读推断——仅查询展示，定级权威在迁移）。
+ */
+export type TreasuryReceiptLookupResult =
+  | { readonly status: "absent" }
+  | { readonly status: "incompatible" }
+  | { readonly status: "corrupted" }
+  | { readonly status: "legacy_committed"; readonly settledAtTick: number }
+  | { readonly status: "modern_committed"; readonly proof: Readonly<TreasurySettlementProof> };
+
+/** lookup 使用的宽松 store 视图（任意受支持版本；零写——绝不触发迁移）。 */
+type AnyReceiptStoreView = {
+  readonly version?: unknown;
+  readonly settled?: unknown;
+};
+
+/**
+ * 统一 lookup（O(1)：版本判定 + 单次 own-key 探测）：按 store 版本解释
+ * value——v1 裸键用 raw key、v2/v3 前缀键与 v4/v5 用编码 key（v1 裸键中
+ * `abc` 与 `t:abc` 是两个不同 transactionId，不得 decode 混淆）。
+ */
+function lookupNormalizedReceipt(
+  store: AnyReceiptStoreView | undefined,
+  transactionId: string,
   nowTick: number,
-): TreasurySettlementProof | "corrupted" | undefined {
-  if (!settled || !Object.prototype.hasOwnProperty.call(settled, encodedKey)) return undefined;
-  const value = (settled as Record<string, unknown>)[encodedKey];
-  if (isValidSettlementProof(value, nowTick)) return value;
-  return "corrupted";
+): TreasuryReceiptLookupResult {
+  if (!store || typeof store !== "object") return { status: "incompatible" };
+  const version = store.version;
+  const settled = store.settled as Record<string, unknown> | undefined;
+  if (typeof version !== "number") return { status: "incompatible" };
+  if (!settled || typeof settled !== "object") return { status: "incompatible" };
+  let key: string;
+  if (version === 1) {
+    key = transactionId; // v1 裸键 = transactionId 本身
+  } else if (version === 2 || version === 3 || version === 4 || version === 5) {
+    key = encodeReceiptKey(transactionId);
+  } else {
+    return { status: "incompatible" };
+  }
+  if (!Object.prototype.hasOwnProperty.call(settled, key)) return { status: "absent" };
+  const value = settled[key];
+  if (version === 1 || version === 2 || version === 3) {
+    // v1-v3 为纯数字版本：合法数字 = legacy committed（零写识别——query 不
+    // 不得隐式迁移）；对象 value 在 v3 及更早 schema 中不可靠解释 → corrupted。
+    if (isValidSettledTick(value, nowTick)) return { status: "legacy_committed", settledAtTick: value };
+    return { status: "corrupted" };
+  }
+  if (version === 4) {
+    if (!isValidV4SettlementProofShape(value, nowTick)) return { status: "corrupted" };
+    const typed = value as { settledAtTick: number; digest?: string; durableIdentityDigest?: string };
+    if (typed.durableIdentityDigest !== undefined) {
+      return {
+        status: "modern_committed",
+        proof: { level: "modern", settledAtTick: typed.settledAtTick, digest: typed.digest, durableIdentityDigest: typed.durableIdentityDigest },
+      };
+    }
+    return { status: "legacy_committed", settledAtTick: typed.settledAtTick };
+  }
+  // version === 5
+  if (!isValidSettlementProof(value, nowTick)) return { status: "corrupted" };
+  const proof = value as TreasurySettlementProof;
+  return proof.level === "modern"
+    ? { status: "modern_committed", proof }
+    : { status: "legacy_committed", settledAtTick: proof.settledAtTick };
+}
+
+/** 只读查询入口（零写；query/门禁路径共用）。 */
+export function lookupTreasurySettledReceipt(transactionId: string): TreasuryReceiptLookupResult {
+  const raw = (Memory.runtime as RuntimeMemoryWithTreasury | undefined)?.treasury?.receipts;
+  return lookupNormalizedReceipt(raw, transactionId, Game.time);
 }
 
 /** 读取（不创建）：查询侧零写路径使用。 */
@@ -195,7 +330,13 @@ export function peekTreasuryReceiptHealth(): TreasuryReceiptHealth {
   }
   const store = peekTreasuryReceiptStore();
   if (store === undefined) return { healthy: true, detail: null };
-  if (store.version !== TREASURY_RECEIPT_VERSION && store.version !== 1 && store.version !== 2 && store.version !== 3) {
+  if (
+    store.version !== TREASURY_RECEIPT_VERSION &&
+    store.version !== 1 &&
+    store.version !== 2 &&
+    store.version !== 3 &&
+    store.version !== 4
+  ) {
     return { healthy: false, detail: `未知 receipt 版本 ${String(store.version)}（fail closed）` };
   }
   if (!store.settled || typeof store.settled !== "object") {
@@ -239,6 +380,14 @@ const receiptEvents = {
   receiptFatalInspectionEntries: 0,
   /** resolve-as-committed 刷新既有 receipt 到 resolution tick 的次数（第八轮）。 */
   receiptRefreshes: 0,
+  /** 【第十三轮】只读路径识别 legacy committed receipt 的次数（零写识别）。 */
+  receiptLegacyLookups: 0,
+  /** 【第十三轮】identity relation 判定计数（match / conflict / insufficient）。 */
+  receiptIdentityMatches: 0,
+  receiptIdentityConflicts: 0,
+  receiptIdentityInsufficient: 0,
+  /** 【第十三轮】proof 等级拒绝计数（modern proof 必填身份缺失等）。 */
+  receiptProofLevelRejections: 0,
 };
 
 export interface TreasuryReceiptCounters {
@@ -255,6 +404,13 @@ export interface TreasuryReceiptCounters {
   readonly receiptFatalInspectionEntries: number;
   /** resolve-as-committed 刷新既有 receipt 到 resolution tick 的次数（第八轮）。 */
   readonly receiptRefreshes: number;
+  /** 【第十三轮】只读路径识别 legacy committed receipt 的次数（零写识别）。 */
+  readonly receiptLegacyLookups: number;
+  readonly receiptIdentityMatches: number;
+  readonly receiptIdentityConflicts: number;
+  readonly receiptIdentityInsufficient: number;
+  /** 【第十三轮】proof 等级拒绝计数（modern proof 必填身份缺失等）。 */
+  readonly receiptProofLevelRejections: number;
   /** 剩余可登记槽位（MAX − entryCount − pending 预留；查询路径 peek 只读）。 */
   readonly slotsRemaining: number;
   /** 下一次可能过期的 tick（null = 空表或 store 不可用）。 */
@@ -291,7 +447,12 @@ export type TreasuryReceiptRefreshResult =
 export function refreshSettledReceiptForResolution(
   transactionId: string,
   tick: number,
-  identity?: { readonly digest?: string; readonly durableIdentityDigest?: string },
+  identity?: {
+    readonly digest?: string;
+    readonly contractDigest?: string;
+    readonly authorizationCohortDigest?: string;
+    readonly durableIdentityDigest?: string;
+  },
 ): TreasuryReceiptRefreshResult {
   const runtime = loadReceiptStoreRuntime();
   if (runtime.fatal) {
@@ -299,25 +460,51 @@ export function refreshSettledReceiptForResolution(
   }
   const { store } = runtime;
   const key = encodeReceiptKey(transactionId);
-  const existing = lookupSettled(store.settled, key, tick);
-  if (existing === "corrupted") {
+  const existing = lookupNormalizedReceipt(store, transactionId, tick);
+  if (existing.status === "corrupted" || existing.status === "incompatible") {
     return {
       status: "fatal",
       detail: `transactionId ${transactionId.slice(0, 48)} 对应 receipt value 损坏，无法安全刷新（fail closed）`,
     };
   }
-  // 【第十二轮 3.4】刷新至 resolution tick 时绑定/保留 attempt 身份。
-  const nextProof: TreasurySettlementProof = {
-    settledAtTick: tick,
-    ...(identity?.digest !== undefined ? { digest: identity.digest } : existing !== undefined && existing.digest !== undefined ? { digest: existing.digest } : {}),
-    ...(identity?.durableIdentityDigest !== undefined
-      ? { durableIdentityDigest: identity.durableIdentityDigest }
-      : existing !== undefined && existing.durableIdentityDigest !== undefined
-        ? { durableIdentityDigest: existing.durableIdentityDigest }
-        : {}),
-  };
-  if (existing !== undefined) {
-    if (existing.settledAtTick === tick) {
+  // 【第十二轮 3.4 / 第十三轮 v5】刷新至 resolution tick 时绑定/保留 attempt
+  // 身份并显式定级：identity 完整（digest + durableIdentityDigest）→ modern；
+  // 否则保留既有等级（existing modern 保留身份；legacy 不因刷新获得身份）。
+  const identityComplete = identity?.digest !== undefined && identity?.durableIdentityDigest !== undefined;
+  const existingProof = existing.status === "modern_committed" ? existing.proof : undefined;
+  // legacy proof 禁携带身份字段（显式等级语义）：非 modern 定级时一律纯
+  // {level, settledAtTick}——部分 identity 或既有 legacy 均不得混入身份。
+  const resolvedLevel: TreasuryReceiptProofLevel = identityComplete ? "modern" : (existingProof?.level ?? "legacy");
+  const nextProof: TreasurySettlementProof =
+    resolvedLevel === "legacy"
+      ? { level: "legacy", settledAtTick: tick }
+      : {
+          level: "modern",
+          settledAtTick: tick,
+          ...(identity?.digest !== undefined
+            ? { digest: identity.digest }
+            : existingProof?.digest !== undefined
+              ? { digest: existingProof.digest }
+              : {}),
+          ...(identity?.durableIdentityDigest !== undefined
+            ? { durableIdentityDigest: identity.durableIdentityDigest }
+            : existingProof?.durableIdentityDigest !== undefined
+              ? { durableIdentityDigest: existingProof.durableIdentityDigest }
+              : {}),
+          ...(identity?.contractDigest !== undefined
+            ? { contractDigest: identity.contractDigest }
+            : existingProof?.contractDigest !== undefined
+              ? { contractDigest: existingProof.contractDigest }
+              : {}),
+          ...(identity?.authorizationCohortDigest !== undefined
+            ? { authorizationCohortDigest: identity.authorizationCohortDigest }
+            : existingProof?.authorizationCohortDigest !== undefined
+              ? { authorizationCohortDigest: existingProof.authorizationCohortDigest }
+              : {}),
+        };
+  if (existing.status !== "absent") {
+    const existingTick = existing.status === "legacy_committed" ? existing.settledAtTick : existing.proof.settledAtTick;
+    if (existingTick === tick) {
       receiptEvents.receiptRefreshes += 1;
       return { status: "refreshed", previousTick: tick };
     }
@@ -329,7 +516,7 @@ export function refreshSettledReceiptForResolution(
     receiptEvents.receiptEntriesVisited += Object.keys(store.settled).length;
     store.nextExpiryTick = computeNextExpiryTick(store.settled);
     receiptEvents.receiptRefreshes += 1;
-    return { status: "refreshed", previousTick: existing.settledAtTick };
+    return { status: "refreshed", previousTick: existingTick };
   }
   store.settled[key] = nextProof;
   store.entryCount += 1;
@@ -378,8 +565,8 @@ function computeNextExpiryTick(settled: Record<string, number | TreasurySettleme
 }
 
 /**
- * v3 store 完整形状自检（迁移写回前与 load 校验共用；一次全表扫描）：
- * own key 数、entryCount、每个存储键格式、每个 settled tick、
+ * v5 store 完整形状自检（迁移写回前与 load 校验共用；一次全表扫描）：
+ * own key 数、entryCount、每个存储键格式、每个 proof（显式等级语义）、
  * nextExpiryTick 与实际 min 的一致性。返回 null = 合法，否则有界错误描述。
  * context 决定 entries 计数归属（load 校验 / 迁移自检）。
  */
@@ -404,10 +591,17 @@ function validateReceiptStoreShape(
       return `存储键格式非法（须为 "t:"+合法 transactionId）: ${key.slice(0, TREASURY_TRANSACTION_ID_MAX_LENGTH + 8)}`;
     }
     const value = (settled as Record<string, unknown>)[key];
-    const tick = typeof value === "number" ? value : (value as Partial<TreasurySettlementProof>).settledAtTick;
-    if (!isValidSettledTick(tick, nowTick) || (typeof value === "object" && !isValidSettlementProof(value, nowTick))) {
-      return `settled proof 损坏（settledAtTick 须为 [0, ${String(nowTick)}] 安全整数）: ${transactionId.slice(0, 32)}=${String(value)}`;
+    // 【第十三轮 v5】value 必须为显式等级 proof 对象（数字 value 在 v5 schema
+    // 中即损坏——v1-v3 数字只存在于迁移输入，迁移后一律为 legacy proof）。
+    if (typeof value === "number" || !isValidSettlementProof(value, nowTick)) {
+      const settledAtTick = typeof value === "number" ? value : (value as Partial<TreasurySettlementProof>).settledAtTick;
+      if (!isValidSettledTick(settledAtTick, nowTick)) {
+        return `settled proof 损坏（settledAtTick 须为 [0, ${String(nowTick)}] 安全整数）: ${transactionId.slice(0, 32)}=${String(value)}`;
+      }
+      receiptEvents.receiptProofLevelRejections += 1;
+      return `settled proof 等级语义损坏（v5 须为显式 level 对象；modern 须携带 digest+durableIdentityDigest、legacy 禁携带身份字段）: ${transactionId.slice(0, 32)}`;
     }
+    const tick = (value as TreasurySettlementProof).settledAtTick;
     if (minSettledAt === null || tick < minSettledAt) minSettledAt = tick;
   }
   const expectedNextExpiry = minSettledAt === null ? null : minSettledAt + TREASURY_RECEIPT_RETENTION_TICKS + 1;
@@ -418,9 +612,47 @@ function validateReceiptStoreShape(
 }
 
 /**
- * legacy 迁移（v1 裸键 / v2 前缀键 → v3）：临时结构完成全部校验，自检
- * 通过后一次性原子替换原 store；任何非法 key/value/碰撞都返回 fatal，
- * 原 store 保持不变（fail closed，绝不静默跳过损坏条目）。
+ * 迁移 value → v5 显式等级 proof 的单一权威定级（v1-v4 输入共用）：
+ * - 纯数字（v1/v2/v3）→ 显式 legacy committed proof（无身份——不得伪造）；
+ * - v4 对象 proof：digest 与 durableIdentityDigest 成对存在 → modern（保留
+ *   完整 attempt 身份）；全部缺省 → legacy；部分存在 → 无法安全定级 →
+ *   null（迁移 fail closed——绝不让删除字段的 modern 记录静默降级 legacy，
+ *   也绝不让半身份记录冒充 modern）。
+ * 返回 [proof, error]：error 非 null 时 proof 为 null。
+ */
+function migrateReceiptValue(
+  rawKey: string,
+  value: unknown,
+  nowTick: number,
+): [TreasurySettlementProof | null, string | null] {
+  if (typeof value === "number") {
+    if (!isValidSettledTick(value, nowTick)) {
+      return [null, `迁移发现损坏 settled 数字 value（不得跳过；原 store 保持不变）: ${rawKey.slice(0, 48)}=${String(value)}`];
+    }
+    return [{ level: "legacy", settledAtTick: value }, null];
+  }
+  if (!isValidV4SettlementProofShape(value, nowTick)) {
+    return [null, `迁移发现损坏 settled value（不得跳过；原 store 保持不变）: ${rawKey.slice(0, 48)}=${String(value)}`];
+  }
+  const typed = value as { settledAtTick: number; digest?: string; durableIdentityDigest?: string };
+  const hasDigest = typed.digest !== undefined;
+  const hasDurable = typed.durableIdentityDigest !== undefined;
+  if (hasDigest && hasDurable) {
+    return [{ level: "modern", settledAtTick: typed.settledAtTick, digest: typed.digest, durableIdentityDigest: typed.durableIdentityDigest }, null];
+  }
+  if (!hasDigest && !hasDurable) {
+    return [{ level: "legacy", settledAtTick: typed.settledAtTick }, null];
+  }
+  receiptEvents.receiptProofLevelRejections += 1;
+  return [null, `迁移发现部分身份字段的 proof（digest 与 durableIdentityDigest 须成对；无法安全定级，原 store 保持不变）: ${rawKey.slice(0, 48)}`];
+}
+
+/**
+ * legacy 迁移（v1 裸键 / v2 前缀键 / v3 / v4 对象 proof → v5 显式等级）：
+ * 临时结构完成全部校验（key/transactionId/value/entryCount/nextExpiryTick/
+ * 编码碰撞），自检通过后一次性原子替换原 store；任何非法 key/value/碰撞/
+ * 无法安全定级都返回 fatal，原 store 保持不变（fail closed，绝不静默跳过
+ * 损坏条目）。
  */
 function migrateLegacyReceiptStore(
   raw: NonNullable<TreasuryMemoryBranch["receipts"]>,
@@ -439,7 +671,7 @@ function migrateLegacyReceiptStore(
   receiptEvents.receiptEntriesVisited += sourceKeys.length;
   for (const rawKey of sourceKeys) {
     // v1 裸键原样作为 transactionId（不 decode——`abc` 与 `t:abc` 不碰撞）；
-    // v2 键已是编码形态，decode 后按 transactionId 重新走同一编码管道。
+    // v2+ 键已是编码形态，decode 后按 transactionId 重新走同一编码管道。
     const transactionId =
       fromVersion === 1 ? rawKey : decodeValidStorageKey(rawKey) ?? `@invalid:${rawKey.slice(0, 24)}`;
     if (!isValidTreasuryTransactionId(transactionId)) {
@@ -450,17 +682,17 @@ function migrateLegacyReceiptStore(
     }
     const encodedKey = encodeReceiptKey(transactionId);
     const value = (source as Record<string, unknown>)[rawKey];
-    // v4：纯数字（v1/v2/v3）→ 无身份 legacy proof；对象 value 须为合法 proof。
-    if (typeof value === "number" && isValidSettledTick(value, nowTick)) {
-      settled[encodedKey] = { settledAtTick: value };
-      entryCount += 1;
-      continue;
-    }
-    if (!isValidSettlementProof(value, nowTick)) {
+    // 【第十三轮】v4 store 中出现数字 value 属 schema 损坏（v4 起全对象）。
+    if (fromVersion === 4 && typeof value === "number") {
+      receiptEvents.receiptProofLevelRejections += 1;
       return fatalRuntime(
         raw,
-        `v${String(fromVersion)} 迁移发现损坏 settled value（不得跳过；原 store 保持不变）: ${rawKey.slice(0, 48)}=${String(value)}`,
+        `v4 迁移发现数字 value（v4 schema 全对象 proof；原 store 保持不变）: ${rawKey.slice(0, 48)}=${String(value)}`,
       );
+    }
+    const [proof, migrateError] = migrateReceiptValue(rawKey, value, nowTick);
+    if (migrateError !== null || proof === null) {
+      return fatalRuntime(raw, `v${String(fromVersion)} ${migrateError ?? "未知迁移错误"}`);
     }
     if (Object.prototype.hasOwnProperty.call(settled, encodedKey)) {
       return fatalRuntime(
@@ -468,7 +700,7 @@ function migrateLegacyReceiptStore(
         `v${String(fromVersion)} 迁移发现编码碰撞（原 store 保持不变）: ${transactionId.slice(0, 48)}`,
       );
     }
-    settled[encodedKey] = value as TreasurySettlementProof;
+    settled[encodedKey] = proof;
     entryCount += 1;
   }
   const candidate: TreasuryReceiptStore = {
@@ -478,8 +710,8 @@ function migrateLegacyReceiptStore(
     entryCount,
     nextExpiryTick: computeNextExpiryTick(settled),
   };
-  // 迁移成功后立即验证：own key 数 / entry count / 存储键格式 / settled tick
-  // / 元数据一致性（validateReceiptStoreShape 即该自检）。
+  // 迁移成功后立即验证：own key 数 / entry count / 存储键格式 / proof 等级
+  // 语义 / 元数据一致性（validateReceiptStoreShape 即该自检）。
   const shapeError = validateReceiptStoreShape(candidate, nowTick, "migration");
   if (shapeError !== null) {
     return fatalRuntime(raw, `v${String(fromVersion)} 迁移自检失败（原 store 保持不变）: ${shapeError}`);
@@ -521,7 +753,7 @@ function loadReceiptStoreRuntime(): ReceiptStoreRuntime {
     heapStoreRuntime = { store: candidate, fatal: null };
     return heapStoreRuntime;
   }
-  if (raw.version === 1 || raw.version === 2 || raw.version === 3) {
+  if (raw.version === 1 || raw.version === 2 || raw.version === 3 || raw.version === 4) {
     heapStoreRuntime = migrateLegacyReceiptStore(raw, raw.version, Game.time);
     return heapStoreRuntime;
   }
@@ -543,29 +775,41 @@ export function ensureTreasuryReceiptStore(): TreasuryReceiptStore {
 }
 
 /**
- * 幂等查询（只读）：已可靠识别（own key 存在且 settled tick 有效）返回
- * 结算 tick；损坏/不存在/版本不可解析返回 undefined。store fail-closed
- * 期间仍尽力回答——幂等保证期内的 id 不因 store 损坏被遗忘。
+ * 幂等查询（只读，【第十三轮】统一 normalized lookup）：已可靠识别的合法
+ * committed proof（legacy 数字或显式对象 proof——任何受支持版本的 store）
+ * 返回结算 tick；损坏/不存在/版本不可解析返回 undefined。store fail-closed
+ * 期间仍尽力回答——幂等保证期内的 id 不因 store 损坏被遗忘。零 Memory 写入
+ * （不隐式迁移）。
  */
 export function hasSettledReceipt(transactionId: string): number | undefined {
-  const store = peekTreasuryReceiptStore();
-  if (store === undefined) return undefined;
-  const found = lookupSettled(store.settled, encodeReceiptKey(transactionId), Game.time);
-  if (found === undefined || found === "corrupted") return undefined;
-  return found.settledAtTick;
+  const found = lookupTreasurySettledReceipt(transactionId);
+  if (found.status === "legacy_committed") {
+    receiptEvents.receiptLegacyLookups += 1;
+    return found.settledAtTick;
+  }
+  if (found.status === "modern_committed") {
+    return found.proof.settledAtTick;
+  }
+  return undefined;
 }
 
 /**
- * 【第十二轮 3.4】读取 settlement proof（attempt identity 绑定；只读）：
- * own key 存在且 value 有效时返回完整 proof（含身份字段；legacy proof 无
- * 身份字段——不能证明携带现代身份的 attempt）。损坏/不存在返回 undefined。
+ * 【第十二轮 3.4 / 第十三轮】读取 settlement proof（attempt identity 绑定；
+ * 只读，统一 normalized lookup）：own key 存在且 value 有效时返回完整 proof
+ * （v1-v3 数字与未迁移 v4 对象按等级语义归一为显式 level 的快照——查询
+ * 零写，定级权威在迁移）；legacy proof 无身份字段——不能证明携带现代身份
+ * 的 attempt。损坏/不存在/版本不可解析返回 undefined。
  */
 export function readTreasurySettlementProof(transactionId: string): Readonly<TreasurySettlementProof> | undefined {
-  const store = peekTreasuryReceiptStore();
-  if (store === undefined) return undefined;
-  const found = lookupSettled(store.settled, encodeReceiptKey(transactionId), Game.time);
-  if (found === undefined || found === "corrupted") return undefined;
-  return Object.freeze({ ...found });
+  const found = lookupTreasurySettledReceipt(transactionId);
+  if (found.status === "legacy_committed") {
+    receiptEvents.receiptLegacyLookups += 1;
+    return Object.freeze({ level: "legacy", settledAtTick: found.settledAtTick });
+  }
+  if (found.status === "modern_committed") {
+    return Object.freeze({ ...found.proof });
+  }
+  return undefined;
 }
 
 export type TreasuryReceiptAdmission =
@@ -595,16 +839,21 @@ function capacityExhausted(store: TreasuryReceiptStore): boolean {
 export function admitTreasuryReceipt(transactionId: string, nowTick: number): TreasuryReceiptAdmission {
   const runtime = loadReceiptStoreRuntime();
   const { store } = runtime;
-  const existing = lookupSettled(store.settled, encodeReceiptKey(transactionId), nowTick);
-  if (typeof existing === "number") {
+  // 【第十三轮 4.3】统一 normalized lookup：任意合法 committed proof（显式
+  // legacy 或 modern——含迁移后对象 proof）都命中 already_settled（replay
+  // blocker 语义）；不再以 typeof existing === "number" 判定（该判定在
+  // lookup 归一后恒不命中，迁移后的已结算 id 会被错误 admitted）。
+  const existing = lookupNormalizedReceipt(runtime.fatal ? (runtime.store as unknown as AnyReceiptStoreView) : (store as unknown as AnyReceiptStoreView), transactionId, nowTick);
+  if (existing.status === "legacy_committed" || existing.status === "modern_committed") {
     receiptEvents.admissionFastPaths += 1;
-    return { status: "already_settled", firstSettledAtTick: existing };
+    const firstSettledAtTick = existing.status === "legacy_committed" ? existing.settledAtTick : existing.proof.settledAtTick;
+    return { status: "already_settled", firstSettledAtTick };
   }
   if (runtime.fatal) {
     // 损坏 store：可靠识别的 id 已在上面返回 already_settled，其余整体阻断。
     return { status: "rejected", reason: "receipt_store_incompatible", detail: runtime.fatal };
   }
-  if (existing === "corrupted") {
+  if (existing.status === "corrupted") {
     return {
       status: "rejected",
       reason: "receipt_store_incompatible",
@@ -695,7 +944,12 @@ export type TreasuryReceiptWriteResult =
 export function commitSettledReceipt(
   transactionId: string,
   tick: number,
-  identity?: { readonly digest?: string; readonly durableIdentityDigest?: string },
+  identity?: {
+    readonly digest?: string;
+    readonly contractDigest?: string;
+    readonly authorizationCohortDigest?: string;
+    readonly durableIdentityDigest?: string;
+  },
 ): TreasuryReceiptWriteResult {
   const runtime = loadReceiptStoreRuntime();
   if (runtime.fatal) {
@@ -703,8 +957,8 @@ export function commitSettledReceipt(
   }
   const { store } = runtime;
   const key = encodeReceiptKey(transactionId);
-  const existing = lookupSettled(store.settled, key, tick);
-  if (existing === "corrupted") {
+  const existing = lookupNormalizedReceipt(store as unknown as AnyReceiptStoreView, transactionId, tick);
+  if (existing.status === "corrupted") {
     // 损坏绝不解释为 already_settled（第六轮）：该 id 的结算状态无法可靠
     // 判断——fatal fail closed，调用方（commit/resolution）进入 write-fault
     // 处理，绝不发布 committed heap projection。
@@ -713,16 +967,37 @@ export function commitSettledReceipt(
       detail: `transactionId ${transactionId.slice(0, 48)} 对应 receipt value 损坏，无法安全写入结算（fail closed）`,
     };
   }
-  if (existing !== undefined) {
+  if (existing.status !== "absent") {
     pendingAdmissions.delete(transactionId); // 双保险：不重复叠加，仍释放预留
     return { status: "already_settled" };
   }
-  // 【第十二轮 3.4】结算写入绑定 attempt 身份（contract 路径携带）。
-  store.settled[key] = {
-    settledAtTick: tick,
-    ...(identity?.digest !== undefined ? { digest: identity.digest } : {}),
-    ...(identity?.durableIdentityDigest !== undefined ? { durableIdentityDigest: identity.durableIdentityDigest } : {}),
-  };
+  // 【第十二轮 3.4 / 第十三轮 v5】结算写入绑定 attempt 身份并显式定级：
+  // identity 完整（digest + durableIdentityDigest 成对）→ modern proof；
+  // identity 缺省（compat 单阶段/低层路径）→ legacy proof；部分提供 →
+  // 无法安全定级 → fatal（编程错误防御，store 不变）。
+  const identityComplete = identity?.digest !== undefined && identity?.durableIdentityDigest !== undefined;
+  const identityPartial =
+    !identityComplete && (identity?.digest !== undefined || identity?.durableIdentityDigest !== undefined);
+  if (identityPartial) {
+    receiptEvents.receiptProofLevelRejections += 1;
+    return {
+      status: "fatal",
+      detail: `transactionId ${transactionId.slice(0, 48)} 的结算 identity 须 digest 与 durableIdentityDigest 成对提供（部分提供无法安全定级 proof 等级）`,
+    };
+  }
+  const proof: TreasurySettlementProof = identityComplete
+    ? {
+        level: "modern",
+        settledAtTick: tick,
+        digest: identity?.digest,
+        durableIdentityDigest: identity?.durableIdentityDigest,
+        ...(identity?.contractDigest !== undefined ? { contractDigest: identity.contractDigest } : {}),
+        ...(identity?.authorizationCohortDigest !== undefined
+          ? { authorizationCohortDigest: identity.authorizationCohortDigest }
+          : {}),
+      }
+    : { level: "legacy", settledAtTick: tick };
+  store.settled[key] = proof;
   store.entryCount += 1;
   store.updatedAt = tick;
   pendingAdmissions.delete(transactionId);
@@ -890,6 +1165,11 @@ export function clearTreasuryPersistenceForTest(): void {
   receiptEvents.receiptExpiryCleanupEntries = 0;
   receiptEvents.receiptFatalInspectionEntries = 0;
   receiptEvents.receiptRefreshes = 0;
+  receiptEvents.receiptLegacyLookups = 0;
+  receiptEvents.receiptIdentityMatches = 0;
+  receiptEvents.receiptIdentityConflicts = 0;
+  receiptEvents.receiptIdentityInsufficient = 0;
+  receiptEvents.receiptProofLevelRejections = 0;
 }
 
 /** 校验 receipt 键与 transactionId 规范一致（诊断/测试用）。 */

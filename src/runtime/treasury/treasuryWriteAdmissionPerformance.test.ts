@@ -161,7 +161,7 @@ describe("write-admission 确定性性能 fixture", () => {
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = {
       receipts: {
-        version: 3 as unknown as 4,
+        version: 3 as unknown as 5,
         settled,
         updatedAt: Game.time,
         entryCount: TREASURY_RECEIPT_MAX_ENTRIES - 1,

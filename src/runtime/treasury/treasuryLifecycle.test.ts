@@ -56,7 +56,7 @@ function decision(service: TreasuryTestService, epoch?: { scope: "shared" | "mar
 function seedReceipts(count: number, settledAt: number, prefix = "seed"): TreasuryReceiptStore {
   const store = ensureTreasuryReceiptStore();
   for (let index = 0; index < count; index += 1) {
-    store.settled[encodeReceiptKey(`${prefix}:${settledAt}:${index}`)] = { settledAtTick: settledAt };
+    store.settled[encodeReceiptKey(`${prefix}:${settledAt}:${index}`)] = { level: "legacy", settledAtTick: settledAt };
   }
   store.entryCount = Object.keys(store.settled).length;
   store.updatedAt = Game.time;
@@ -544,10 +544,10 @@ describe("Treasury receipt admission 安全契约（retention 内绝不驱逐）
   it("v3 settled value 损坏整体阻断：新 transaction 拒、可靠旧 id 仍 already_settled、数据不动", () => {
     installLegacyReceipts({
       version: TREASURY_RECEIPT_VERSION,
-      // 【第十二轮 v4】value 为 settlement proof；损坏项为非法 settledAtTick。
+      // 【第十三轮 v5】value 为显式等级 proof；损坏项为非法 settledAtTick。
       settled: {
-        [encodeReceiptKey("ok:1")]: { settledAtTick: 100 },
-        [encodeReceiptKey("bad:1")]: { settledAtTick: Number.NaN },
+        [encodeReceiptKey("ok:1")]: { level: "legacy", settledAtTick: 100 },
+        [encodeReceiptKey("bad:1")]: { level: "legacy", settledAtTick: Number.NaN },
       },
       updatedAt: 100,
       entryCount: 2,
@@ -684,8 +684,8 @@ describe("Treasury receipt admission 安全契约（retention 内绝不驱逐）
     // 直写 v3 store（不经过 ensure——保持 heap 缓存冷态，load 校验路径
     // 才会在首个 lifecycle 调用时执行形状自检）。
     const settledAt = Game.time - 10;
-    const settled: Record<string, { settledAtTick: number }> = {};
-    for (let i = 0; i < 3; i += 1) settled[encodeReceiptKey(`seed:${i}`)] = { settledAtTick: settledAt };
+    const settled: Record<string, { level: "legacy"; settledAtTick: number }> = {};
+    for (let i = 0; i < 3; i += 1) settled[encodeReceiptKey(`seed:${i}`)] = { level: "legacy", settledAtTick: settledAt };
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = {
       receipts: {

@@ -2130,10 +2130,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       record.state = "committing";
       try {
         runTreasuryCommitFaultHook("receipt_publish");
-        const receipt = projection.publishPreparedReceipt(record.canonical.transactionId, Game.time, {
-          ...(record.digest !== undefined ? { digest: record.digest } : {}),
-          ...(record.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.durableIdentityDigest } : {}),
-        });
+        // 【第十三轮】modern proof 的 attempt identity 须完整（digest 与
+        // durableIdentityDigest 成对）——低层两阶段路径（无 durable identity）
+        // 写显式 legacy proof（replay blocker 保留；不冒充现代证明）。
+        const receipt = projection.publishPreparedReceipt(
+          record.canonical.transactionId,
+          Game.time,
+          record.durableIdentityDigest !== undefined
+            ? { digest: record.digest, durableIdentityDigest: record.durableIdentityDigest }
+            : undefined,
+        );
         if (receipt.status === "fatal") {
           throw new TreasuryCommitFaultError("receipt_publish", receipt.detail);
         }

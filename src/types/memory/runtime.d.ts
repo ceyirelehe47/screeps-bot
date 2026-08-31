@@ -640,9 +640,25 @@ declare global {
      */
     treasury?: {
       receipts?: {
-        /** v4（第十二轮 3.4）：value 为 settlement proof（结算 tick + attempt 身份绑定）。 */
-        version: 4;
-        settled: Record<string, { settledAtTick: number; digest?: string; durableIdentityDigest?: string } | number>;
+        /**
+         * v5（第十三轮）：value 为显式等级 settlement proof（结算 tick +
+         * level + attempt 身份绑定；modern 必填 digest+durableIdentityDigest、
+         * legacy 禁携带身份字段）。v1-v4 由版本化迁移定级（数字/无身份对象
+         * → legacy；完整身份 → modern；部分身份 fail closed 原store保留）。
+         */
+        version: 5;
+        settled: Record<
+          string,
+          | {
+              level: "modern" | "legacy";
+              settledAtTick: number;
+              digest?: string;
+              contractDigest?: string;
+              authorizationCohortDigest?: string;
+              durableIdentityDigest?: string;
+            }
+          | number
+        >;
         updatedAt: number;
         entryCount: number;
         nextExpiryTick: number | null;

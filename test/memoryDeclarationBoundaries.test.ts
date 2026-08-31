@@ -36,7 +36,9 @@ const MEMORY_BRANCHES = {
   runtime: {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
-    schemaFingerprint: "f4309dfec47a9ea0b0bf1792fd32b60b711a42829c8f20c16033d00fcd5296be",
+    // 【第十三轮】receipt store v5（显式 proof 等级 + contractDigest/
+    // authorizationCohortDigest 身份字段）后的 schema 指纹。
+    schemaFingerprint: "462258c486b7ff77a2c4753469364ad64ec5750a462e942d931d4f192a9d9370",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
