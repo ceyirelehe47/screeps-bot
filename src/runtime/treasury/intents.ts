@@ -42,6 +42,7 @@
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import type { TreasuryAuthorizationCohortFacts, TreasuryCohortRevisions } from "@/runtime/treasury/authorization";
 import { computeTreasuryDurableIdentityDigest, treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
+import { verifyTreasuryEntryIdentity, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
 import { intentSemanticViolation } from "@/runtime/treasury/semanticMatrix";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
@@ -196,6 +197,10 @@ export interface TreasuryIntentEntry {
   contractDigest?: string;
   /** adapter version（第九轮 v2：与 contract 同源派生）。 */
   adapterVersion?: number;
+  /** adapter registration identity（第十二轮：durable identity 重算输入）。 */
+  adapterRegistrationId?: string;
+  /** 稳定 adapter/reconciler 语义身份（第十二轮 3.5；durable identity 重算输入）。 */
+  adapterSemanticIdentity?: string;
   /** 有界 durable reconciliation payload（第九轮 v2：adapter.durableFacts）。 */
   durablePayload?: string;
   /** durable payload 的版本（第九轮 v2：capability 绑定用）。 */
@@ -350,6 +355,16 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
   if (candidate.adapterVersion !== undefined) {
     if (typeof candidate.adapterVersion !== "number" || !Number.isSafeInteger(candidate.adapterVersion) || candidate.adapterVersion <= 0) {
       return "adapterVersion 须为正安全整数";
+    }
+  }
+  if (candidate.adapterRegistrationId !== undefined) {
+    if (typeof candidate.adapterRegistrationId !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.adapterRegistrationId)) {
+      return "adapterRegistrationId 非法（16 hex）";
+    }
+  }
+  if (candidate.adapterSemanticIdentity !== undefined) {
+    if (typeof candidate.adapterSemanticIdentity !== "string" || candidate.adapterSemanticIdentity.length === 0 || candidate.adapterSemanticIdentity.length > INTENT_KIND_SOURCE_MAX) {
+      return "adapterSemanticIdentity 非法（1..128 字符）";
     }
   }
   if (candidate.durablePayload !== undefined) {
@@ -573,6 +588,10 @@ function validateIntentStoreShape(store: TreasuryIntentStore): string | null {
     if (encodeIntentKey(typed.transactionId) !== key) {
       return `存储键与 entry.transactionId 不一致: ${key.slice(0, 48)}`;
     }
+    // 【第十二轮 3.6】identity 重算验证：cohort/durable digest 必须能由持久
+    // 事实重算一致（篡改事实而未同步 digest → unhealthy fail closed）。
+    const identityError = verifyTreasuryEntryIdentity(typed as TreasuryIdentityFactsEntry, `intent（${key.slice(0, 48)}）`);
+    if (identityError !== null) return identityError;
     // 跨 transaction 聚合溢出预检（与运行时聚合同 key）。
     for (const leg of typed.postings) {
       const resourceKey = `${leg.roomName}\u0000${leg.locationKind}\u0000${leg.resource}`;
@@ -1124,6 +1143,12 @@ export function transferTreasuryIntentToQuarantine(
   entry: Readonly<TreasuryIntentEntry>,
   quarantinePhase: TreasuryWriteFaultPhase,
 ): { readonly status: "transferred" } | { readonly status: "retained"; readonly detail: string } {
+  // 【第十二轮 3.6】转移前 identity 重算：源 intent 的 digest 必须能由持久
+  // 事实重算一致——不一致（篡改/损坏）→ 拒绝转移、保留原 authority。
+  const identityError = verifyTreasuryEntryIdentity(entry as unknown as TreasuryIdentityFactsEntry, "intent 转移前重算");
+  if (identityError !== null) {
+    return { status: "retained", detail: identityError };
+  }
   const derived = outcomeOfTreasuryFaultPhase(quarantinePhase);
   if (derived === null) {
     return { status: "retained", detail: `未知 fault phase ${quarantinePhase}（outcome 无法单调推导）` };
@@ -1146,6 +1171,8 @@ export function transferTreasuryIntentToQuarantine(
     ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
     ...(entry.actionKind !== undefined ? { actionKind: entry.actionKind } : {}),
     ...(entry.adapterVersion !== undefined ? { adapterVersion: entry.adapterVersion } : {}),
+    ...(entry.adapterRegistrationId !== undefined ? { adapterRegistrationId: entry.adapterRegistrationId } : {}),
+    ...(entry.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: entry.adapterSemanticIdentity } : {}),
     ...(entry.durablePayload !== undefined ? { durablePayload: entry.durablePayload } : {}),
     ...(entry.durablePayloadVersion !== undefined ? { durablePayloadVersion: entry.durablePayloadVersion } : {}),
     ...(entry.authorizationDigest !== undefined ? { authorizationDigest: entry.authorizationDigest } : {}),
@@ -1194,7 +1221,11 @@ export function transferTreasuryIntentToQuarantine(
 }
 
 export function recoverTreasuryIntentsAtTickBoundary(
-  proofChecker: (transactionId: string, outcome: string) => string | null,
+  proofChecker: (
+    transactionId: string,
+    outcome: string,
+    attempt: { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string },
+  ) => string | null,
 ): TreasuryIntentRecoveryReport {
   const report: TreasuryIntentRecoveryReport = {
     recoveredNotExecuted: 0,
@@ -1217,11 +1248,16 @@ export function recoverTreasuryIntentsAtTickBoundary(
       continue;
     }
     if (entry.settlement === "finalized") {
-      // 【第十一轮 3.13.6】cross-store finalized proof：finalized 不再直接
-      // 释放——returned_ok 须 settled receipt 或 committed tombstone；其余
-      // 须 not-executed/rolled-back tombstone。proof 缺失 → semantic store
-      // fault（entry 保留，fail closed）。
-      const proofError = proofChecker(entry.transactionId, entry.outcome);
+      // 【第十一轮 3.13.6 / 第十二轮 3.4】cross-store finalized proof：按完整
+      // attempt identity 校验——returned_ok 须 identity 匹配的 committed
+      // proof；其余须 identity 匹配的 not-executed tombstone。proof 缺失或
+      // identity 不一致 → semantic store fault（entry 保留，fail closed）。
+      const proofError = proofChecker(entry.transactionId, entry.outcome, {
+        digest: entry.digest,
+        ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+        ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+        ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+      });
       if (proofError !== null) {
         report.storeFatal = `finalized proof 缺失: ${proofError}`;
         break;
@@ -1291,6 +1327,11 @@ export function repairTreasuryIntentStoreMetadataForResolution(): { status: "rep
     const typed = entry as TreasuryIntentEntry;
     if (encodeIntentKey(typed.transactionId) !== key) {
       return { status: "rejected", detail: `存储键与 entry.transactionId 不一致: ${key.slice(0, 48)}` };
+    }
+    // 【第十二轮 3.6】repair 不自动覆盖不一致 digest：identity 重算失败 → 拒绝。
+    const repairIdentityError = verifyTreasuryEntryIdentity(typed as TreasuryIdentityFactsEntry, `intent repair（${key.slice(0, 48)}）`);
+    if (repairIdentityError !== null) {
+      return { status: "rejected", detail: `${repairIdentityError}（原数据保留，不覆盖 digest）` };
     }
     const overflow = validateIntentAggregateOverflow(typed.postings);
     if (overflow !== null) {

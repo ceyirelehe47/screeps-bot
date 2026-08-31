@@ -183,7 +183,11 @@ export interface TreasuryProjectionController {
    * 明确结果；fatal 时调用方必须进入 write-fault 处理（不得静默 no-op
    * 后继续返回 committed）。
    */
-  publishPreparedReceipt(transactionId: string, tick: number): TreasuryReceiptWriteResult;
+  publishPreparedReceipt(
+    transactionId: string,
+    tick: number,
+    identity?: { readonly digest?: string; readonly durableIdentityDigest?: string },
+  ): TreasuryReceiptWriteResult;
   /**
    * staged commit 第 2 段——heap 发布：journal + committed overlay + 容量
    * 聚合 + heap 幂等缓存 + tentative 兑换。faultHook 在 journal 应用前与
@@ -563,8 +567,12 @@ export function createTreasuryProjectionController(
   }
 
   /** staged commit 第 1 段：receipt 发布（Memory 权威，先于 heap）。 */
-  function publishPreparedReceipt(transactionId: string, tick: number): TreasuryReceiptWriteResult {
-    return commitSettledReceipt(transactionId, tick);
+  function publishPreparedReceipt(
+    transactionId: string,
+    tick: number,
+    identity?: { readonly digest?: string; readonly durableIdentityDigest?: string },
+  ): TreasuryReceiptWriteResult {
+    return commitSettledReceipt(transactionId, tick, identity);
   }
 
   /** staged commit 第 2 段：heap 发布（faultHook 为 write-fault 注入点）。 */

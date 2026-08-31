@@ -25,6 +25,7 @@
 
 import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
+import { verifyTreasuryEntryIdentity, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
 
 /** 归一化 authority facts（签发/resolution/recovery/release 共用形状）。 */
 export interface TreasuryUnresolvedAuthority {
@@ -58,6 +59,10 @@ export interface TreasuryUnresolvedAuthority {
   readonly structureFacts?: readonly { readonly [key: string]: unknown }[];
   /** legacy v1 quarantine 标记（第十一轮 3.13.7：隔离诊断用）。 */
   readonly legacyV1?: boolean;
+  /** 稳定 adapter/reconciler 语义身份（第十二轮 3.5；缺省 = 无法验证语义一致性）。 */
+  readonly adapterSemanticIdentity?: string;
+  /** forensic incomplete authority 标记（第十二轮 3.8）。 */
+  readonly forensic?: { readonly reason: string; readonly detail: string };
 }
 
 export type TreasuryUnresolvedAuthorityResolution =
@@ -149,6 +154,12 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
     }
   }
   if (quarantined !== undefined) {
+    // 【第十二轮 3.6】authority 事实身份重算：digest 必须能由持久事实重算
+    // 一致——不一致 = authority inconsistent（fail closed）。
+    const quarantineIdentityError = verifyTreasuryEntryIdentity(quarantined as unknown as TreasuryIdentityFactsEntry, `quarantine authority（${quarantined.transactionId.slice(0, 48)}）`);
+    if (quarantineIdentityError !== null) {
+      return { status: "inconsistent", detail: quarantineIdentityError };
+    }
     // quarantine 优先（v2 自带完整合同事实；并存 intent 时以 quarantine 为
     // 权威形态，intent 的同名字段已在上文比对）。
     return {
@@ -177,11 +188,17 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
           ? { structureFacts: quarantined.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
           : {}),
         ...(quarantined.legacyV1 !== undefined ? { legacyV1: quarantined.legacyV1 } : {}),
+        ...(quarantined.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: quarantined.adapterSemanticIdentity } : {}),
+        ...(quarantined.forensic !== undefined ? { forensic: { ...quarantined.forensic } } : {}),
       },
     };
   }
   // intent-only（emergency authority）：完整参与签发与 resolution。
   const intent = intended as NonNullable<typeof intended>;
+  const intentIdentityError = verifyTreasuryEntryIdentity(intent as unknown as TreasuryIdentityFactsEntry, `intent authority（${intent.transactionId.slice(0, 48)}）`);
+  if (intentIdentityError !== null) {
+    return { status: "inconsistent", detail: intentIdentityError };
+  }
   return {
     status: "ok",
     authority: {
@@ -207,6 +224,7 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
       ...(intent.structureFacts !== undefined
         ? { structureFacts: intent.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
         : {}),
+      ...(intent.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: intent.adapterSemanticIdentity } : {}),
     },
   };
 }

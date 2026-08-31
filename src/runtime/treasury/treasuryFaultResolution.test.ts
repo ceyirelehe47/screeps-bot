@@ -97,6 +97,8 @@ function registerTerminalSendReconciler(): void {
   replaceTreasuryActionAdapterForTest({
     ...makeTreasuryTestTransferAdapter(),
     kind: "terminal.send",
+    // 【第十二轮 3.5】语义身份与 kind 一致（authority 写入时绑定的是 registry 当前值）。
+    semanticIdentity: "terminal.send@reconciler-semantics-v1",
     reconcile: () => reconcilerConclusion,
   });
 }
@@ -267,7 +269,9 @@ describe("capability 签发与防伪", () => {
       digest,
       capability: issued.capability,
     });
-    expect(second.status).toBe("already_resolved"); // 幂等（tombstone final）
+    // 【第十二轮 3.3】重复调用携带已消费 capability——无法证明 attempt
+    // identity（tombstone 为现代 identity 绑定）→ fail closed 拒绝（不幂等）。
+    expect(second.status).toBe("rejected");
   });
 });
 
@@ -299,9 +303,10 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     const again = next.resolveUnresolvedTransaction({
       transactionId: "ts1_res_c",
       digest,
-      capability: { __brand: "treasury-reconciliation-capability" } as never, // 快路径不消费
+      capability: { __brand: "treasury-reconciliation-capability" } as never,
     });
-    expect(again.status).toBe("already_resolved");
+    // 【第十二轮 3.3】伪造 capability 无法证明 attempt identity → 拒绝。
+    expect(again.status).toBe("rejected");
   });
 
   it("既有 receipt 真正刷新到 resolution tick（不是 already_settled 短路）", () => {
@@ -321,6 +326,7 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
       digest: "0123456789abcdef",
       tick: Game.time,
       kind: "terminal.send",
+      adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
       source: "test",
       phase: "receipt_publish",
       outcome: "returned_ok",
@@ -357,7 +363,7 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     later.beginTick();
     const store = peekTreasuryReceiptStore();
     if (store) {
-      delete (store.settled as Record<string, number>)["t:ts1_horizon"];
+      delete (store.settled as unknown as Record<string, number>)["t:ts1_horizon"];
       store.entryCount -= 1;
     }
     expect(hasSettledReceipt("ts1_horizon")).toBeUndefined();
@@ -369,13 +375,14 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     const replay = later.prepareTransaction(freshInput(later, "ts1_horizon"));
     expect(replay.status).toBe("already_settled"); // tombstone 窗口内不当作全新动作
     expect(readTreasuryResolutionTombstone("ts1_horizon")?.resolution).toBe("committed");
-    // 重复 resolution 幂等 already_resolved（快路径）。
+    // 【第十二轮 3.3】伪造 capability 无法证明 attempt identity（现代
+    // tombstone 绑定 durable identity）→ 重复 resolution fail closed 拒绝。
     const again = later.resolveUnresolvedTransaction({
       transactionId: "ts1_horizon",
       digest,
       capability: { __brand: "treasury-reconciliation-capability" } as never,
     });
-    expect(again.status).toBe("already_resolved");
+    expect(again.status).toBe("rejected");
   });
 
   it("延迟 5001 tick 后 resolve-as-committed：receipt 仍存活完整 retention 窗口", () => {
@@ -717,7 +724,7 @@ describe("staged atomic（故障注入与恢复）", () => {
     const health = peekTreasuryResolutionStoreHealth();
     expect(health.healthy).toBe(true);
     expect(readTreasuryResolutionTombstone("legacy1")?.stage).toBe("final");
-    expect(Memory.runtime.treasury.resolutions?.version).toBe(2);
+    expect(Memory.runtime.treasury.resolutions?.version).toBe(3);
     expect(Memory.runtime.treasury.resolutions?.entryCount).toBe(1);
   });
 });
@@ -793,6 +800,7 @@ describe("unified unresolved authority（第九轮 4.7：intent-only 完整参�
       digest: "0123456789abcdef",
       actionKind: "terminal.send",
       kind: "terminal.send",
+      adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
       source: "test",
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
       outcome: mapped.outcome,
@@ -927,6 +935,7 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
       digest: "0123456789abcdef",
       actionKind: "terminal.send",
       kind: "terminal.send",
+      adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
       source: "test",
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
       outcome: mapped.outcome,
@@ -1054,6 +1063,7 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
       digest: "0123456789abcdef",
       actionKind: "terminal.send",
       kind: "terminal.send",
+      adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
       source: "test",
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -500 }],
       outcome: "returned_non_ok",

@@ -62,14 +62,25 @@ import { resetTreasuryAuthorizationFaultRuntimeForTest } from "@/runtime/treasur
 
 export const TREASURY_RECEIPT_RETENTION_TICKS = 5_000;
 export const TREASURY_RECEIPT_MAX_ENTRIES = 4_096;
-export const TREASURY_RECEIPT_VERSION = 3 as const;
+export const TREASURY_RECEIPT_VERSION = 4 as const;
 
 const RECEIPT_KEY_PREFIX = "t:";
 
+/**
+ * 【第十二轮 3.4】settlement proof：结算 tick + 该次 action attempt 的身份
+ * 绑定（canonical digest / durableIdentityDigest）。v3 及更早的纯数字 value
+ * 迁移为无身份的 legacy proof——不得证明携带现代身份的新 attempt。
+ */
+export interface TreasurySettlementProof {
+  readonly settledAtTick: number;
+  readonly digest?: string;
+  readonly durableIdentityDigest?: string;
+}
+
 export interface TreasuryReceiptStore {
   version: typeof TREASURY_RECEIPT_VERSION;
-  /** key = encodeReceiptKey(transactionId)；value = 结算 tick。 */
-  settled: Record<string, number>;
+  /** key = encodeReceiptKey(transactionId)；value = settlement proof（v4）。 */
+  settled: Record<string, TreasurySettlementProof>;
   updatedAt: number;
   /** settled 自有键计数（加载时校验；admission 快路径的权威计数）。 */
   entryCount: number;
@@ -88,7 +99,7 @@ export interface TreasuryLifecycleMemory {
 interface TreasuryMemoryBranch {
   receipts?: {
     version?: number;
-    settled?: Record<string, number>;
+    settled?: Record<string, number | TreasurySettlementProof>;
     updatedAt?: number;
     entryCount?: number;
     nextExpiryTick?: number | null;
@@ -137,14 +148,26 @@ function isValidSettledTick(value: unknown, nowTick: number): value is number {
  * "corrupted"；不存在返回 undefined。不依赖 store 版本——fatal/旧格式上
  * 已可靠识别的 id 仍返回结算 tick（幂等保证不因 store 损坏而遗忘）。
  */
+/** v4 value 形状校验：对象含合法 settledAtTick（可选身份字段为 16 hex）。 */
+function isValidSettlementProof(value: unknown, nowTick: number): value is TreasurySettlementProof {
+  if (!value || typeof value !== "object") return false;
+  const typed = value as Partial<TreasurySettlementProof>;
+  if (!isValidSettledTick(typed.settledAtTick, nowTick)) return false;
+  if (typed.digest !== undefined && (typeof typed.digest !== "string" || !/^[0-9a-f]{16}$/.test(typed.digest))) return false;
+  if (typed.durableIdentityDigest !== undefined && (typeof typed.durableIdentityDigest !== "string" || !/^[0-9a-f]{16}$/.test(typed.durableIdentityDigest))) {
+    return false;
+  }
+  return true;
+}
+
 function lookupSettled(
-  settled: Record<string, number> | undefined,
+  settled: Record<string, number | TreasurySettlementProof> | undefined,
   encodedKey: string,
   nowTick: number,
-): number | "corrupted" | undefined {
+): TreasurySettlementProof | "corrupted" | undefined {
   if (!settled || !Object.prototype.hasOwnProperty.call(settled, encodedKey)) return undefined;
   const value = (settled as Record<string, unknown>)[encodedKey];
-  if (isValidSettledTick(value, nowTick)) return value;
+  if (isValidSettlementProof(value, nowTick)) return value;
   return "corrupted";
 }
 
@@ -172,7 +195,7 @@ export function peekTreasuryReceiptHealth(): TreasuryReceiptHealth {
   }
   const store = peekTreasuryReceiptStore();
   if (store === undefined) return { healthy: true, detail: null };
-  if (store.version !== TREASURY_RECEIPT_VERSION && store.version !== 1 && store.version !== 2) {
+  if (store.version !== TREASURY_RECEIPT_VERSION && store.version !== 1 && store.version !== 2 && store.version !== 3) {
     return { healthy: false, detail: `未知 receipt 版本 ${String(store.version)}（fail closed）` };
   }
   if (!store.settled || typeof store.settled !== "object") {
@@ -265,7 +288,11 @@ export type TreasuryReceiptRefreshResult =
  * nextExpiryTick（单次有界重算：旧 tick 移除可能降低 min）；不存在时按新
  * 条目写入（entryCount+1、nextExpiry min 收敛）。fatal store 拒绝。
  */
-export function refreshSettledReceiptForResolution(transactionId: string, tick: number): TreasuryReceiptRefreshResult {
+export function refreshSettledReceiptForResolution(
+  transactionId: string,
+  tick: number,
+  identity?: { readonly digest?: string; readonly durableIdentityDigest?: string },
+): TreasuryReceiptRefreshResult {
   const runtime = loadReceiptStoreRuntime();
   if (runtime.fatal) {
     return { status: "fatal", detail: runtime.fatal };
@@ -279,12 +306,22 @@ export function refreshSettledReceiptForResolution(transactionId: string, tick: 
       detail: `transactionId ${transactionId.slice(0, 48)} 对应 receipt value 损坏，无法安全刷新（fail closed）`,
     };
   }
+  // 【第十二轮 3.4】刷新至 resolution tick 时绑定/保留 attempt 身份。
+  const nextProof: TreasurySettlementProof = {
+    settledAtTick: tick,
+    ...(identity?.digest !== undefined ? { digest: identity.digest } : existing !== undefined && existing.digest !== undefined ? { digest: existing.digest } : {}),
+    ...(identity?.durableIdentityDigest !== undefined
+      ? { durableIdentityDigest: identity.durableIdentityDigest }
+      : existing !== undefined && existing.durableIdentityDigest !== undefined
+        ? { durableIdentityDigest: existing.durableIdentityDigest }
+        : {}),
+  };
   if (existing !== undefined) {
-    if (existing === tick) {
+    if (existing.settledAtTick === tick) {
       receiptEvents.receiptRefreshes += 1;
       return { status: "refreshed", previousTick: tick };
     }
-    store.settled[key] = tick;
+    store.settled[key] = nextProof;
     store.updatedAt = tick;
     // nextExpiry 重算：旧 tick 移除可能使 min 下降（单次有界扫描；resolution
     // 是低频管理事件）。
@@ -292,9 +329,9 @@ export function refreshSettledReceiptForResolution(transactionId: string, tick: 
     receiptEvents.receiptEntriesVisited += Object.keys(store.settled).length;
     store.nextExpiryTick = computeNextExpiryTick(store.settled);
     receiptEvents.receiptRefreshes += 1;
-    return { status: "refreshed", previousTick: existing };
+    return { status: "refreshed", previousTick: existing.settledAtTick };
   }
-  store.settled[key] = tick;
+  store.settled[key] = nextProof;
   store.entryCount += 1;
   store.updatedAt = tick;
   pendingAdmissions.delete(transactionId);
@@ -329,12 +366,13 @@ function decodeValidStorageKey(key: string): string | null {
 }
 
 /** 重算过期调度元数据：空表 null；非空 = min(settledAt)+retention+1。 */
-function computeNextExpiryTick(settled: Record<string, number>): number | null {
+function computeNextExpiryTick(settled: Record<string, number | TreasurySettlementProof>): number | null {
   let minSettledAt: number | null = null;
   for (const key of Object.keys(settled)) {
     const value = settled[key];
-    if (typeof value !== "number") continue;
-    if (minSettledAt === null || value < minSettledAt) minSettledAt = value;
+    const tick = typeof value === "number" ? value : (value as Partial<TreasurySettlementProof>).settledAtTick;
+    if (typeof tick !== "number") continue;
+    if (minSettledAt === null || tick < minSettledAt) minSettledAt = tick;
   }
   return minSettledAt === null ? null : minSettledAt + TREASURY_RECEIPT_RETENTION_TICKS + 1;
 }
@@ -366,10 +404,11 @@ function validateReceiptStoreShape(
       return `存储键格式非法（须为 "t:"+合法 transactionId）: ${key.slice(0, TREASURY_TRANSACTION_ID_MAX_LENGTH + 8)}`;
     }
     const value = (settled as Record<string, unknown>)[key];
-    if (!isValidSettledTick(value, nowTick)) {
-      return `settled tick 损坏（须为 [0, ${String(nowTick)}] 安全整数）: ${transactionId.slice(0, 32)}=${String(value)}`;
+    const tick = typeof value === "number" ? value : (value as Partial<TreasurySettlementProof>).settledAtTick;
+    if (!isValidSettledTick(tick, nowTick) || (typeof value === "object" && !isValidSettlementProof(value, nowTick))) {
+      return `settled proof 损坏（settledAtTick 须为 [0, ${String(nowTick)}] 安全整数）: ${transactionId.slice(0, 32)}=${String(value)}`;
     }
-    if (minSettledAt === null || value < minSettledAt) minSettledAt = value;
+    if (minSettledAt === null || tick < minSettledAt) minSettledAt = tick;
   }
   const expectedNextExpiry = minSettledAt === null ? null : minSettledAt + TREASURY_RECEIPT_RETENTION_TICKS + 1;
   if (store.nextExpiryTick !== expectedNextExpiry) {
@@ -392,7 +431,7 @@ function migrateLegacyReceiptStore(
   if (!source || typeof source !== "object") {
     return fatalRuntime(raw, `v${String(fromVersion)} receipt store 缺失 settled 对象（原数据保留，拒绝登记）`);
   }
-  const settled: Record<string, number> = {};
+  const settled: Record<string, TreasurySettlementProof> = {};
   let entryCount = 0;
   receiptEvents.receiptFullScans += 1;
   receiptEvents.receiptMigrationScans += 1;
@@ -409,21 +448,27 @@ function migrateLegacyReceiptStore(
         `v${String(fromVersion)} 迁移发现非法 transactionId key（原 store 保持不变）: ${rawKey.slice(0, 48)}`,
       );
     }
+    const encodedKey = encodeReceiptKey(transactionId);
     const value = (source as Record<string, unknown>)[rawKey];
-    if (!isValidSettledTick(value, nowTick)) {
+    // v4：纯数字（v1/v2/v3）→ 无身份 legacy proof；对象 value 须为合法 proof。
+    if (typeof value === "number" && isValidSettledTick(value, nowTick)) {
+      settled[encodedKey] = { settledAtTick: value };
+      entryCount += 1;
+      continue;
+    }
+    if (!isValidSettlementProof(value, nowTick)) {
       return fatalRuntime(
         raw,
-        `v${String(fromVersion)} 迁移发现损坏 settled tick（不得跳过；原 store 保持不变）: ${rawKey.slice(0, 48)}=${String(value)}`,
+        `v${String(fromVersion)} 迁移发现损坏 settled value（不得跳过；原 store 保持不变）: ${rawKey.slice(0, 48)}=${String(value)}`,
       );
     }
-    const encodedKey = encodeReceiptKey(transactionId);
     if (Object.prototype.hasOwnProperty.call(settled, encodedKey)) {
       return fatalRuntime(
         raw,
         `v${String(fromVersion)} 迁移发现编码碰撞（原 store 保持不变）: ${transactionId.slice(0, 48)}`,
       );
     }
-    settled[encodedKey] = value;
+    settled[encodedKey] = value as TreasurySettlementProof;
     entryCount += 1;
   }
   const candidate: TreasuryReceiptStore = {
@@ -476,7 +521,7 @@ function loadReceiptStoreRuntime(): ReceiptStoreRuntime {
     heapStoreRuntime = { store: candidate, fatal: null };
     return heapStoreRuntime;
   }
-  if (raw.version === 1 || raw.version === 2) {
+  if (raw.version === 1 || raw.version === 2 || raw.version === 3) {
     heapStoreRuntime = migrateLegacyReceiptStore(raw, raw.version, Game.time);
     return heapStoreRuntime;
   }
@@ -504,8 +549,23 @@ export function ensureTreasuryReceiptStore(): TreasuryReceiptStore {
  */
 export function hasSettledReceipt(transactionId: string): number | undefined {
   const store = peekTreasuryReceiptStore();
-  const found = store && lookupSettled(store.settled, encodeReceiptKey(transactionId), Game.time);
-  return typeof found === "number" ? found : undefined;
+  if (store === undefined) return undefined;
+  const found = lookupSettled(store.settled, encodeReceiptKey(transactionId), Game.time);
+  if (found === undefined || found === "corrupted") return undefined;
+  return found.settledAtTick;
+}
+
+/**
+ * 【第十二轮 3.4】读取 settlement proof（attempt identity 绑定；只读）：
+ * own key 存在且 value 有效时返回完整 proof（含身份字段；legacy proof 无
+ * 身份字段——不能证明携带现代身份的 attempt）。损坏/不存在返回 undefined。
+ */
+export function readTreasurySettlementProof(transactionId: string): Readonly<TreasurySettlementProof> | undefined {
+  const store = peekTreasuryReceiptStore();
+  if (store === undefined) return undefined;
+  const found = lookupSettled(store.settled, encodeReceiptKey(transactionId), Game.time);
+  if (found === undefined || found === "corrupted") return undefined;
+  return Object.freeze({ ...found });
 }
 
 export type TreasuryReceiptAdmission =
@@ -632,7 +692,11 @@ export type TreasuryReceiptWriteResult =
  * 结果——fatal 时调用方必须进入 write-fault 处理，不得静默 no-op 后继续
  * 返回 committed。
  */
-export function commitSettledReceipt(transactionId: string, tick: number): TreasuryReceiptWriteResult {
+export function commitSettledReceipt(
+  transactionId: string,
+  tick: number,
+  identity?: { readonly digest?: string; readonly durableIdentityDigest?: string },
+): TreasuryReceiptWriteResult {
   const runtime = loadReceiptStoreRuntime();
   if (runtime.fatal) {
     return { status: "fatal", detail: runtime.fatal };
@@ -653,7 +717,12 @@ export function commitSettledReceipt(transactionId: string, tick: number): Treas
     pendingAdmissions.delete(transactionId); // 双保险：不重复叠加，仍释放预留
     return { status: "already_settled" };
   }
-  store.settled[key] = tick;
+  // 【第十二轮 3.4】结算写入绑定 attempt 身份（contract 路径携带）。
+  store.settled[key] = {
+    settledAtTick: tick,
+    ...(identity?.digest !== undefined ? { digest: identity.digest } : {}),
+    ...(identity?.durableIdentityDigest !== undefined ? { durableIdentityDigest: identity.durableIdentityDigest } : {}),
+  };
   store.entryCount += 1;
   store.updatedAt = tick;
   pendingAdmissions.delete(transactionId);
@@ -687,7 +756,8 @@ function runExpiryCleanup(store: TreasuryReceiptStore, nowTick: number): Cleanup
   let mutated = false;
   let minSurvivor: number | null = null;
   for (const key of keys) {
-    const settledAt = (store.settled as Record<string, unknown>)[key];
+    const raw = (store.settled as Record<string, unknown>)[key];
+    const settledAt = typeof raw === "number" ? raw : (raw as Partial<TreasurySettlementProof>).settledAtTick;
     if (!isValidSettledTick(settledAt, nowTick)) {
       acc.corruptedSkipped += 1;
       // 损坏条目不会被删除：min 计算视为 0（保守最早过期点，宁早扫描不漏删）。

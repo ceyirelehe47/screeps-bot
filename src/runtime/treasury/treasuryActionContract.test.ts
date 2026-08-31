@@ -244,7 +244,7 @@ describe("contract 执行（contract-first bundle）", () => {
     expect(built.status).toBe("built");
     if (built.status !== "built") return;
     const small = rawToken(service, built.contract, { amount: 100 });
-    const over = executeTreasuryActionContract(service, { contract: built.contract, authorization: small });
+    const over = executeTreasuryActionContract(service, { contract: built.contract, authorization: small as unknown as import("@/runtime/treasury/authorization").TreasuryAuthorizationBundle });
     expect(over.status).toBe("prepare_rejected");
     if (over.status === "prepare_rejected") expect(over.reason).toBe("authorization_invalid");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
@@ -259,7 +259,7 @@ describe("contract 执行（contract-first bundle）", () => {
     expect(built2.status).toBe("built");
     if (built2.status !== "built") return;
     const storageOnly = rawToken(service, built2.contract, { amount: 5_000, locations: ["storage"] });
-    const wrongLocation = executeTreasuryActionContract(service, { contract: built2.contract, authorization: storageOnly });
+    const wrongLocation = executeTreasuryActionContract(service, { contract: built2.contract, authorization: storageOnly as unknown as import("@/runtime/treasury/authorization").TreasuryAuthorizationBundle });
     expect(wrongLocation.status).toBe("prepare_rejected");
     if (wrongLocation.status === "prepare_rejected") expect(wrongLocation.reason).toBe("authorization_invalid");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
@@ -280,7 +280,7 @@ describe("contract 执行（contract-first bundle）", () => {
     expect(rebuilt.status).toBe("built");
     if (rebuilt.status !== "built") return;
     const uOnly = rawToken(service, rebuilt.contract, { resource: "U", amount: 3_000 });
-    const missing = executeTreasuryActionContract(service, { contract: rebuilt.contract, authorization: [uOnly] });
+    const missing = executeTreasuryActionContract(service, { contract: rebuilt.contract, authorization: [uOnly] as unknown as import("@/runtime/treasury/authorization").TreasuryAuthorizationBundle });
     expect(missing.status).toBe("prepare_rejected");
     if (missing.status === "prepare_rejected") expect(missing.reason).toBe("authorization_invalid");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
@@ -296,7 +296,7 @@ describe("contract 执行（contract-first bundle）", () => {
     expect(built.status).toBe("built");
     if (built.status !== "built") return;
     const bound = rawToken(service, built.contract, { amount: 500, contractDigest: "0123456789abcdef" });
-    const result = executeTreasuryActionContract(service, { contract: built.contract, authorization: bound });
+    const result = executeTreasuryActionContract(service, { contract: built.contract, authorization: bound as unknown as import("@/runtime/treasury/authorization").TreasuryAuthorizationBundle });
     expect(result.status).toBe("prepare_rejected");
     if (result.status === "prepare_rejected") expect(result.reason).toBe("authorization_invalid");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
@@ -401,6 +401,7 @@ describe("contract 执行（contract-first bundle）", () => {
     replaceTreasuryActionAdapterForTest({
       ...makeTreasuryTestTransferAdapter(),
       kind: "test.transfer",
+      semanticIdentity: "test.transfer@test-adapter-semantics-v1",
       version: 2,
     });
     const result =
@@ -428,6 +429,7 @@ describe("contract digest AC3：durable reconciliation facts 绑定（第十轮 
   function vectorAdapter(payload: string, version = 1) {
     return {
       kind: "test.vec",
+      semanticIdentity: "test.vec@test-adapter-semantics-v1",
       version,
       validate: (args: unknown): string | null => (args && typeof args === "object" ? null : "args 非对象"),
       derivePostings: () => [
@@ -475,6 +477,7 @@ describe("contract digest AC3：durable reconciliation facts 绑定（第十轮 
   it("提供 reconciler 但无 durableFacts 的 adapter：contract 构建拒绝（durable facts 必填）", () => {
     registerTreasuryActionAdapter({
       kind: "test.nofacts",
+      semanticIdentity: "test.nofacts@test-adapter-semantics-v1",
       version: 1,
       validate: (args: unknown): string | null => (args && typeof args === "object" ? null : "args 非对象"),
       derivePostings: () => [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }],
@@ -493,6 +496,7 @@ describe("structure binding canonical authority（第十轮 3.12.11）", () => {
   function locationAdapter(extraBindings: TreasuryActionStructureBinding[], kind = "test.bindloc") {
     return {
       kind,
+      semanticIdentity: `${kind}@test-adapter-semantics-v1`,
       version: 1,
       validate: (args: unknown): string | null => (args && typeof args === "object" ? null : "args 非对象"),
       derivePostings: () => [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }],
@@ -610,6 +614,7 @@ describe("完整 structure descriptor（第十一轮 3.13.9 / AC4）", () => {
   function descriptorAdapter(overrides: DescriptorAdapterOverrides = {}) {
     return {
       kind: overrides.kind ?? "test.desc",
+      semanticIdentity: `${overrides.kind ?? "test.desc"}@test-adapter-semantics-v1`,
       version: 1,
       validate: (args: unknown): string | null => (args && typeof args === "object" ? null : "args 非对象"),
       derivePostings: () => [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }],
@@ -713,6 +718,7 @@ describe("完整 structure descriptor（第十一轮 3.13.9 / AC4）", () => {
     let observedFacts: { structureDescriptors?: unknown } | null = null;
     registerTreasuryActionAdapter({
       kind: "test.desc_durable",
+      semanticIdentity: "test.desc_durable@test-adapter-semantics-v1",
       version: 1,
       validate: (args: unknown): string | null => (args && typeof args === "object" ? null : "args 非对象"),
       derivePostings: () => [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -100 }],

@@ -641,13 +641,13 @@ describe("Treasury 两阶段 prepare/commit/abort 协议", () => {
   it("prepare 预留容量槽：此后他人填满 store，commit 兑现仍不被容量拒绝", () => {
     // seed MAX-2 条 receipt → prepare 占 1 槽 → 单阶段填满最后槽位 → commit 仍成功。
     Memory.runtime = Memory.runtime ?? {};
-    const settled: Record<string, number> = {};
+    const settled: Record<string, { settledAtTick: number }> = {};
     for (let i = 0; i < TREASURY_RECEIPT_MAX_ENTRIES - 2; i += 1) {
-      settled[encodeReceiptKey(`seed:${i}`)] = Game.time;
+      settled[encodeReceiptKey(`seed:${i}`)] = { settledAtTick: Game.time };
     }
     Memory.runtime.treasury = {
       receipts: {
-        version: 3,
+        version: 3 as unknown as 4,
         settled,
         updatedAt: Game.time,
         entryCount: TREASURY_RECEIPT_MAX_ENTRIES - 2,

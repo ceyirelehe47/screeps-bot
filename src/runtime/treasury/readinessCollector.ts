@@ -31,6 +31,8 @@ export interface TreasuryReadinessStateSources {
   readonly resolutionResolvingBlocker: () => boolean;
   readonly recoverySlotExhausted: () => boolean;
   readonly authorizationFaultUnresolved: () => boolean;
+  /** 【第十二轮 3.1.6】fault authority 容量前置 admission（满载阻断新 writer）。 */
+  readonly authorizationFaultCapacityExhausted: () => boolean;
   readonly policyNotReady: () => boolean;
   readonly authorizationCapacityExhausted: () => boolean;
 }
@@ -63,6 +65,7 @@ export function collectTreasuryWriteReadinessInputs(
     resolutionResolvingBlocker: sources.resolutionResolvingBlocker(),
     recoverySlotExhausted: sources.recoverySlotExhausted(),
     authorizationFaultUnresolved: sources.authorizationFaultUnresolved(),
+    authorizationFaultCapacityExhausted: sources.authorizationFaultCapacityExhausted(),
     ...(overrides?.policyNotReady !== undefined ? { policyNotReady: overrides.policyNotReady } : { policyNotReady: sources.policyNotReady() }),
     authorizationCapacityExhausted: sources.authorizationCapacityExhausted(),
   };

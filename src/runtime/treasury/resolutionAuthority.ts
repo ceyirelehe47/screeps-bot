@@ -21,7 +21,12 @@ import {
 } from "@/runtime/treasury/authorizationFaults";
 import {
   clearTreasuryWriteFaultMarkerForResolution,
+  readTreasuryWriteFault,
 } from "@/runtime/treasury/writeFault";
+import {
+  treasuryAttemptIdentityRelation,
+  type TreasuryAttemptIdentity,
+} from "@/runtime/treasury/identityProof";
 import {
   ensureTreasuryResolutionSlotAvailable,
   readTreasuryResolutionTombstone,
@@ -49,6 +54,10 @@ export interface TreasuryResolutionAuthority {
   resolvePreExecutionAuthorizationFault(
     input: { readonly transactionId?: string; readonly digest?: string; readonly acknowledgeRolledBack?: boolean } | undefined,
     fault: Readonly<TreasuryAuthorizationFaultEntry>,
+  ): TreasuryFaultResolutionResult;
+  /** 【第十二轮 3.1.7】forensic fault marker 的显式确认解除（authority 写入失败兜底）。 */
+  resolveForensicAuthorizationFaultMarker(
+    input: { readonly transactionId?: string; readonly digest?: string; readonly acknowledgeRolledBack?: boolean } | undefined,
   ): TreasuryFaultResolutionResult;
 }
 
@@ -109,6 +118,22 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
   ): TreasuryFaultResolutionResult => {
     const existing = readTreasuryResolutionTombstone(fault.transactionId);
     if (existing !== undefined && existing.stage === "final" && existing.resolution === "not-executed") {
+      // 【第十二轮 3.3】幂等仅在完整 attempt identity 一致时成立：旧
+      // tombstone 不得解决同 ID 的新 attempt。
+      const attempt: TreasuryAttemptIdentity = {
+        digest: fault.digest,
+        ...(fault.contractDigest !== undefined ? { contractDigest: fault.contractDigest } : {}),
+        ...(fault.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fault.authorizationCohortDigest } : {}),
+        ...(fault.durableIdentityDigest !== undefined ? { durableIdentityDigest: fault.durableIdentityDigest } : {}),
+      };
+      if (treasuryAttemptIdentityRelation(existing, attempt) !== "match") {
+        deps.metrics.reconciliationCapabilitiesRejected += 1;
+        return {
+          status: "rejected",
+          reason: "digest_mismatch",
+          detail: `既有 not-executed tombstone 与该 fault authority 的 attempt identity 不一致（${fault.transactionId.slice(0, 48)}）——不得以旧 proof 解决新 attempt（fail closed）`,
+        };
+      }
       clearTreasuryWriteFaultMarkerForResolution(fault.transactionId, fault.digest);
       releaseTreasuryAuthorizationFaultEntry(fault.transactionId);
       return { status: "already_resolved", resolution: "not-executed", transactionId: fault.transactionId };
@@ -144,6 +169,9 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       reconcilerKind: "pre-execution",
       source: "acknowledge-rolled-back",
       preExecution: true,
+      ...(fault.contractDigest !== undefined ? { contractDigest: fault.contractDigest } : {}),
+      ...(fault.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fault.authorizationCohortDigest } : {}),
+      ...(fault.durableIdentityDigest !== undefined ? { durableIdentityDigest: fault.durableIdentityDigest } : {}),
     });
     if (finalWrite.status === "rejected") {
       return {
@@ -165,6 +193,73 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
     };
   };
 
+  /**
+   * 【第十二轮 3.1.7】forensic fault marker 的显式确认解除：internal
+   * authorization fault 的 authority 写入失败（store fatal/容量/identity
+   * conflict/read-back 不一致）时发布的 forensic marker 没有 durable fault
+   * authority——rollback 已完整、callback 零调用的事实由 marker 本身与本次
+   * 显式 acknowledge 承载。写 not-executed final tombstone（绑定 marker
+   * digest；无现代 identity 字段 = legacy 级 proof）→ 清 marker。幂等。
+   */
+  const resolveForensicAuthorizationFaultMarker = (
+    input: { readonly transactionId?: string; readonly digest?: string; readonly acknowledgeRolledBack?: boolean } | undefined,
+  ): TreasuryFaultResolutionResult => {
+    const marker = readTreasuryWriteFault();
+    if (
+      marker === undefined ||
+      marker.transactionId !== input?.transactionId ||
+      marker.phase !== "internal_authorization_fault_forensic"
+    ) {
+      return { status: "rejected", reason: "not_found", detail: "不存在匹配的 forensic authorization fault marker" };
+    }
+    if (input.acknowledgeRolledBack !== true) {
+      deps.metrics.reconciliationCapabilitiesRejected += 1;
+      return {
+        status: "rejected",
+        reason: "invalid_input",
+        detail: "forensic authorization fault 需要 acknowledgeRolledBack: true（显式确认 callback 未调用且 rollback 完整）",
+      };
+    }
+    if (input.digest !== undefined && marker.digest !== input.digest) {
+      deps.metrics.reconciliationCapabilitiesRejected += 1;
+      return { status: "rejected", reason: "digest_mismatch", detail: `forensic marker digest 不匹配（marker ${marker.digest}，请求 ${input.digest}）` };
+    }
+    const existing = readTreasuryResolutionTombstone(marker.transactionId);
+    if (existing !== undefined && existing.stage === "final" && existing.resolution === "not-executed" && existing.digest === marker.digest) {
+      clearTreasuryWriteFaultMarkerForResolution(marker.transactionId, marker.digest);
+      return { status: "already_resolved", resolution: "not-executed", transactionId: marker.transactionId };
+    }
+    const slotError = ensureTreasuryResolutionSlotAvailable();
+    if (slotError !== null) {
+      return { status: "rejected", reason: "resolution_store_full", detail: slotError };
+    }
+    const finalWrite = writeTreasuryResolutionTombstone({
+      transactionId: marker.transactionId,
+      digest: marker.digest,
+      resolution: "not-executed",
+      stage: "final",
+      actionTick: marker.tick,
+      observationTick: Game.time,
+      resolvedAtTick: Game.time,
+      reconcilerKind: "pre-execution",
+      source: "acknowledge-rolled-back-forensic",
+      preExecution: true,
+    });
+    if (finalWrite.status === "rejected") {
+      return { status: "rejected", reason: "resolution_store_fatal", detail: `final tombstone 写入失败（forensic marker 保留，可重试）: ${finalWrite.detail}` };
+    }
+    clearTreasuryWriteFaultMarkerForResolution(marker.transactionId, marker.digest);
+    deps.metrics.resolutionRecovered += 1;
+    return {
+      status: "resolved",
+      resolution: "not-executed",
+      transactionId: marker.transactionId,
+      receiptWritten: false,
+      reprepareAllowed: true,
+      actionTick: marker.tick,
+    };
+  };
+
   return {
     registerCapability: (capability) => {
       capabilityRegistry.add(capability);
@@ -176,5 +271,6 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       consumeReconciliationCapability: consume,
     } satisfies TreasuryResolutionKernel),
     resolvePreExecutionAuthorizationFault,
+    resolveForensicAuthorizationFaultMarker,
   };
 }

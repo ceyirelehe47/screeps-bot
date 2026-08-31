@@ -50,7 +50,14 @@ export type TreasuryCommitFaultPhase =
   | "ok_pending_commit_unresolved"
   /** 第十轮：原子 bundle redemption 中断（状态已一致回滚；marker 阻断后续
    * writer 直至显式确认——发生在 Game callback 之前，动作确定未执行）。 */
-  | "internal_authorization_fault";
+  | "internal_authorization_fault"
+  /** 【第十二轮 3.1.7】internal authorization fault 的 forensic fail-closed
+   * 状态：authorization 已完整回滚（动作确定未执行），但 durable fault
+   * authority 写入失败（store fatal / 容量耗尽 / identity conflict / read-back
+   * 不一致）——不满足"marker 发布前必须有完整 authority"的正常协议，以
+   * 显式 forensic phase 阻断 writer，只能经 acknowledge-rolled-back 的
+   * forensic 通道或人工修复解除。 */
+  | "internal_authorization_fault_forensic";
 
 /** execution-unknown 类 phase（Game 副作用未知）：配合显式证据可 resolution。 */
 export type TreasuryExecutionUnknownPhase =
@@ -72,6 +79,7 @@ export const TREASURY_WRITE_FAULT_PHASES: ReadonlySet<string> = new Set<string>(
   "commit_unexpected",
   "ok_pending_commit_unresolved",
   "internal_authorization_fault",
+  "internal_authorization_fault_forensic",
   "executing_at_end_tick",
   "action_threw_execution_unknown",
   "action_returned_non_ok_abort_failed",

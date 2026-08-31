@@ -56,14 +56,14 @@ function decision(service: TreasuryTestService, epoch?: { scope: "shared" | "mar
 function seedReceipts(count: number, settledAt: number, prefix = "seed"): TreasuryReceiptStore {
   const store = ensureTreasuryReceiptStore();
   for (let index = 0; index < count; index += 1) {
-    store.settled[encodeReceiptKey(`${prefix}:${settledAt}:${index}`)] = settledAt;
+    store.settled[encodeReceiptKey(`${prefix}:${settledAt}:${index}`)] = { settledAtTick: settledAt };
   }
   store.entryCount = Object.keys(store.settled).length;
   store.updatedAt = Game.time;
   // 与实现同口径重算过期调度元数据（min(settledAt)+retention+1；空表 null）。
   let minSettledAt: number | null = null;
   for (const key of Object.keys(store.settled)) {
-    const value = store.settled[key];
+    const value = store.settled[key].settledAtTick;
     if (minSettledAt === null || value < minSettledAt) minSettledAt = value;
   }
   store.nextExpiryTick = minSettledAt === null ? null : minSettledAt + TREASURY_RECEIPT_RETENTION_TICKS + 1;
@@ -415,7 +415,7 @@ describe("Treasury receipt admission 安全契约（retention 内绝不驱逐）
     const result = send(service, "cap:recovered:1");
     expect(result.status).toBe("recorded");
     expect(store.entryCount).toBeLessThanOrEqual(TREASURY_RECEIPT_MAX_ENTRIES);
-    expect(peekTreasuryReceiptStore()?.settled[encodeReceiptKey("cap:recovered:1")]).toBe(Game.time);
+    expect(peekTreasuryReceiptStore()?.settled[encodeReceiptKey("cap:recovered:1")]?.settledAtTick).toBe(Game.time);
   });
 
   it("单 tick 超过 512 笔但未达硬容量的 transaction 正常结算（entryCount 同步）", () => {
@@ -469,9 +469,9 @@ describe("Treasury receipt admission 安全契约（retention 内绝不驱逐）
       "t:t:abc",
     ]);
     expect(store?.entryCount).toBe(4);
-    expect(store?.settled[encodeReceiptKey("abc")]).toBe(t0);
-    expect(store?.settled[encodeReceiptKey("t:abc")]).toBe(t0 + 1);
-    expect(store?.settled[encodeReceiptKey("__proto__")]).toBe(t0 + 2);
+    expect(store?.settled[encodeReceiptKey("abc")]?.settledAtTick).toBe(t0);
+    expect(store?.settled[encodeReceiptKey("t:abc")]?.settledAtTick).toBe(t0 + 1);
+    expect(store?.settled[encodeReceiptKey("__proto__")]?.settledAtTick).toBe(t0 + 2);
     expect(store?.nextExpiryTick).toBe(t0 + TREASURY_RECEIPT_RETENTION_TICKS + 1);
     expect(service.metrics().receiptStoreMigrationsExecuted).toBe(1);
 
@@ -503,7 +503,7 @@ describe("Treasury receipt admission 安全契约（retention 内绝不驱逐）
 
     const store = peekTreasuryReceiptStore();
     expect(store?.version).toBe(TREASURY_RECEIPT_VERSION);
-    expect(store?.settled[encodeReceiptKey("legacy:one")]).toBe(t0);
+    expect(store?.settled[encodeReceiptKey("legacy:one")]?.settledAtTick).toBe(t0);
     expect(store?.entryCount).toBe(1);
     expect(store?.nextExpiryTick).toBe(t0 + TREASURY_RECEIPT_RETENTION_TICKS + 1);
     expect(service.metrics().receiptStoreMigrationsExecuted).toBe(1);
@@ -544,11 +544,15 @@ describe("Treasury receipt admission 安全契约（retention 内绝不驱逐）
   it("v3 settled value 损坏整体阻断：新 transaction 拒、可靠旧 id 仍 already_settled、数据不动", () => {
     installLegacyReceipts({
       version: TREASURY_RECEIPT_VERSION,
-      settled: { [encodeReceiptKey("ok:1")]: 100, [encodeReceiptKey("bad:1")]: Number.NaN },
+      // 【第十二轮 v4】value 为 settlement proof；损坏项为非法 settledAtTick。
+      settled: {
+        [encodeReceiptKey("ok:1")]: { settledAtTick: 100 },
+        [encodeReceiptKey("bad:1")]: { settledAtTick: Number.NaN },
+      },
       updatedAt: 100,
       entryCount: 2,
       nextExpiryTick: 100 + TREASURY_RECEIPT_RETENTION_TICKS + 1,
-    });
+    } as never);
     const { service } = makeService();
     service.beginTick();
 
@@ -565,8 +569,8 @@ describe("Treasury receipt admission 安全契约（retention 内绝不驱逐）
     if (corrupted.status === "rejected") expect(corrupted.reason).toBe("receipt_store_incompatible");
     // 原数据不动（无静默修正/删除）。
     const settled = peekTreasuryReceiptStore()?.settled ?? {};
-    expect(settled[encodeReceiptKey("bad:1")]).toBeNaN();
-    expect(settled[encodeReceiptKey("ok:1")]).toBe(100);
+    expect((settled[encodeReceiptKey("bad:1")] as { settledAtTick: number }).settledAtTick).toBeNaN();
+    expect((settled[encodeReceiptKey("ok:1")] as { settledAtTick: number }).settledAtTick).toBe(100);
   });
 
   it("nextExpiryTick 元数据损坏（与实际 min 不一致）fail closed 而非放宽", () => {
@@ -680,12 +684,12 @@ describe("Treasury receipt admission 安全契约（retention 内绝不驱逐）
     // 直写 v3 store（不经过 ensure——保持 heap 缓存冷态，load 校验路径
     // 才会在首个 lifecycle 调用时执行形状自检）。
     const settledAt = Game.time - 10;
-    const settled: Record<string, number> = {};
-    for (let i = 0; i < 3; i += 1) settled[encodeReceiptKey(`seed:${i}`)] = settledAt;
+    const settled: Record<string, { settledAtTick: number }> = {};
+    for (let i = 0; i < 3; i += 1) settled[encodeReceiptKey(`seed:${i}`)] = { settledAtTick: settledAt };
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = {
       receipts: {
-        version: 3,
+        version: TREASURY_RECEIPT_VERSION,
         settled,
         updatedAt: Game.time,
         entryCount: 3,

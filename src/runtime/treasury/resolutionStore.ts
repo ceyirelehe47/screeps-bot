@@ -35,8 +35,12 @@ import {
 import { clearTreasuryWriteFaultMarkerForResolution } from "@/runtime/treasury/writeFault";
 import { releaseTreasuryQuarantineEntry, readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentEntry, releaseTreasuryIntentEntry } from "@/runtime/treasury/intents";
+import {
+  treasuryAttemptIdentityRelation,
+  type TreasuryAttemptIdentity,
+} from "@/runtime/treasury/identityProof";
 
-export const TREASURY_RESOLUTION_VERSION = 2 as const;
+export const TREASURY_RESOLUTION_VERSION = 3 as const;
 export const TREASURY_RESOLUTION_MAX_ENTRIES = 256;
 const TREASURY_RESOLUTION_RETENTION_TICKS = 5_000;
 const RESOLUTION_KEY_PREFIX = "r:";
@@ -63,10 +67,16 @@ export interface TreasuryResolutionTombstone {
   source?: string;
   /** pre-execution authorization fault 的 acknowledge-rolled-back resolution（第十一轮 3.13.1）。 */
   preExecution?: boolean;
+  // ── v3（第十二轮 3.3：tombstone 绑定完整 action attempt identity——
+  //    同 transaction ID 的不同 attempt 不得共享旧 proof）。缺省 = legacy
+  //    proof（不得证明携带现代身份事实的新 attempt）。 ────────────────────
+  readonly contractDigest?: string;
+  readonly authorizationCohortDigest?: string;
+  readonly durableIdentityDigest?: string;
 }
 
 export interface TreasuryResolutionStore {
-  version: 2;
+  version: 3;
   entries: Record<string, TreasuryResolutionTombstone>;
   entryCount: number;
   updatedAt: number;
@@ -172,6 +182,13 @@ export function validateTreasuryResolutionTombstoneShape(entry: unknown): string
       return "source 非法（须为 1..128 字符）";
     }
   }
+  // 【第十二轮 3.3】attempt identity 绑定字段（可选；存在须为 16 hex）。
+  for (const field of ["contractDigest", "authorizationCohortDigest", "durableIdentityDigest"] as const) {
+    const value = candidate[field];
+    if (value !== undefined && (typeof value !== "string" || !RESOLUTION_DIGEST_PATTERN.test(value))) {
+      return `${field} 非法（须为 16 小写 hex）`;
+    }
+  }
   return null;
 }
 
@@ -235,6 +252,19 @@ function loadResolutionStoreRuntime(): ResolutionStoreRuntime {
     heapRuntime = { store: candidate, fatal: null };
     return heapRuntime;
   }
+  if (raw.version === 2) {
+    // v2 → v3 无损升级（第十二轮 3.3）：entries 原样保留（identity 字段
+    // 缺省 = legacy proof——不得证明现代 attempt）；损坏 → fatal。
+    const upgraded: TreasuryResolutionStore = { ...(raw as unknown as TreasuryResolutionStore), version: TREASURY_RESOLUTION_VERSION, updatedAt: Game.time };
+    const shapeError = validateResolutionStoreShape(upgraded);
+    if (shapeError !== null) {
+      heapRuntime = fatalRuntime(raw as unknown as TreasuryResolutionStore, `${shapeError}（v2→v3 升级校验失败，原数据保留）`);
+      return heapRuntime;
+    }
+    resolutionBranch().resolutions = upgraded;
+    heapRuntime = { store: upgraded, fatal: null };
+    return heapRuntime;
+  }
   if (raw.version === 1) {
     // v1 无损升级：全量验证 → 补 entryCount/stage=final → 原子替换。
     const entries: Record<string, TreasuryResolutionTombstone> = {};
@@ -284,7 +314,7 @@ export function peekTreasuryResolutionStoreHealth(): TreasuryResolutionStoreHeal
   }
   const raw = (Memory.runtime as unknown as RuntimeMemoryWithResolutions | undefined)?.treasury?.resolutions;
   if (raw === undefined) return { healthy: true, detail: null, inProgress: 0, entryCount: 0 };
-  if (raw.version !== TREASURY_RESOLUTION_VERSION && raw.version !== 1) {
+  if (raw.version !== TREASURY_RESOLUTION_VERSION && raw.version !== 1 && raw.version !== 2) {
     return { healthy: false, detail: `未知 resolution store 版本 ${String(raw.version)}`, inProgress: 0, entryCount: 0 };
   }
   if (!raw.entries || typeof raw.entries !== "object") {
@@ -449,6 +479,21 @@ export interface TreasuryResolutionRecoveryReport {
  *   第九轮 4.10 补 intent 释放）仍存在 → 补完成释放（幂等）；
  * - store fatal：不删任何数据，报告诊断（resolution 路径拒绝）。
  */
+/** authority entry → attempt identity 视图（tombstone 释放前的 identity 比较）。 */
+function attemptIdentityOf(authority: {
+  readonly digest: string;
+  readonly contractDigest?: string;
+  readonly authorizationCohortDigest?: string;
+  readonly durableIdentityDigest?: string;
+}): TreasuryAttemptIdentity {
+  return {
+    digest: authority.digest,
+    ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+    ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
+    ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+  };
+}
+
 export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
   const report: TreasuryResolutionRecoveryReport = {
     completed: 0,
@@ -482,7 +527,21 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
           }
         }
         // receipt 已刷新至 settledAtTick：完成 finalize（幂等——authority
-        // 释放与 marker 清除均为幂等操作）。
+        // 释放与 marker 清除均为幂等操作）。【第十二轮 3.3】释放前必须验证
+        // authority 与 tombstone 的 attempt identity 一致——旧 tombstone 不
+        // 得释放同 ID 新 attempt 的 authority。
+        const committedAuthority = readTreasuryQuarantineEntry(entry.transactionId) ?? readTreasuryIntentEntry(entry.transactionId);
+        const committedIdentityMismatch =
+          committedAuthority !== undefined &&
+          treasuryAttemptIdentityRelation(
+            entry,
+            attemptIdentityOf(committedAuthority as { digest: string; durableIdentityDigest?: string; authorizationCohortDigest?: string; contractDigest?: string }),
+          ) === "conflict";
+        if (committedIdentityMismatch) {
+          resolutionStoreEvents.faulted += 1;
+          report.refreshBlocked += 1;
+          continue;
+        }
         releaseTreasuryQuarantineEntry(entry.transactionId);
         releaseTreasuryIntentEntry(entry.transactionId);
         clearTreasuryWriteFaultMarkerForResolution(entry.transactionId, entry.digest);
@@ -504,6 +563,18 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
       const quarantined = readTreasuryQuarantineEntry(entry.transactionId);
       const intended = quarantined === undefined ? readTreasuryIntentEntry(entry.transactionId) : undefined;
       if (quarantined !== undefined || intended !== undefined) {
+        // 【第十二轮 3.3】补完成释放前验证 attempt identity：旧 tombstone
+        // （同 ID 不同 attempt）不得释放当前 authority——identity 冲突时
+        // 保留 authority 并报告（fail closed，显式处理）。
+        const authority = quarantined ?? intended;
+        const relation = treasuryAttemptIdentityRelation(
+          entry,
+          attemptIdentityOf(authority as { digest: string; durableIdentityDigest?: string; authorizationCohortDigest?: string; contractDigest?: string }),
+        );
+        if (relation === "conflict") {
+          resolutionStoreEvents.faulted += 1;
+          continue;
+        }
         // final tombstone 已写但释放未完成：补完成（幂等；含 intent-only
         // authority 场景——quarantine 与 intent 一并释放）。
         releaseTreasuryQuarantineEntry(entry.transactionId);

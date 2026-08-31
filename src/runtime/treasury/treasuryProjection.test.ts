@@ -207,7 +207,7 @@ describe("Treasury 原子 transaction journal", () => {
     if (nextTick.status === "already_settled") {
       expect(nextTick.firstRecordedAtTick).toBe(Game.time - 1);
     }
-    expect(peekTreasuryReceiptStore()?.settled[encodeReceiptKey(transactionId)]).toBe(Game.time - 1);
+    expect(peekTreasuryReceiptStore()?.settled[encodeReceiptKey(transactionId)]?.settledAtTick).toBe(Game.time - 1);
     // 不同 transactionId 不冲突。
     expect(tx(fixture, formatTreasuryTransactionId("idem", "b"), [
       { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1_000 },

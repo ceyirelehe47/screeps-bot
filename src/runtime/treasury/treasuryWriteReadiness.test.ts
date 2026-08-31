@@ -170,7 +170,7 @@ describe("统一 write readiness 权威（第十轮 3.12.10：query/authorizatio
     const ancient = Game.time - 7_000;
     const receiptStore = ensureTreasuryReceiptStore();
     for (let i = 0; i < TREASURY_RECEIPT_MAX_ENTRIES; i += 1) {
-      receiptStore.settled[encodeReceiptKey(`rdy_full:${String(ancient)}:${String(i)}`)] = ancient;
+      receiptStore.settled[encodeReceiptKey(`rdy_full:${String(ancient)}:${String(i)}`)] = { settledAtTick: ancient };
     }
     receiptStore.entryCount = TREASURY_RECEIPT_MAX_ENTRIES;
     const view = service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] });

@@ -114,6 +114,7 @@ beforeEach(() => {
   registerTreasuryActionAdapter(makeTreasuryTestTransferAdapter());
   registerTreasuryActionAdapter({
     kind: "test.three",
+    semanticIdentity: "test.three@test-adapter-semantics-v1",
     version: 1,
     validate: (args: unknown): string | null => (args && typeof args === "object" ? null : "args 非对象"),
     derivePostings: () => [
@@ -163,7 +164,7 @@ describe("contract-first 授权绑定", () => {
     const c2 = build(service, "ca_tx_c2", transferArgs({ amount: 300 }));
     const tokenForC1 = rawToken(service, c1);
     // digest 属于 c1，执行 c2：transactionId 与 digest 均不匹配。
-    const result = executeTreasuryActionContract(service, { contract: c2, authorization: tokenForC1 });
+    const result = executeTreasuryActionContract(service, { contract: c2, authorization: tokenForC1 as unknown as import("@/runtime/treasury/authorization").TreasuryAuthorizationBundle });
     expect(result.status).toBe("prepare_rejected");
     if (result.status === "prepare_rejected") expect(result.reason).toBe("authorization_invalid");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
@@ -173,7 +174,7 @@ describe("contract-first 授权绑定", () => {
     const service = makeService();
     const contract = build(service, "ca_tx_ver", transferArgs());
     const wrongVersion = rawToken(service, contract, { adapterVersion: 2 });
-    const result = executeTreasuryActionContract(service, { contract, authorization: wrongVersion });
+    const result = executeTreasuryActionContract(service, { contract, authorization: wrongVersion as unknown as import("@/runtime/treasury/authorization").TreasuryAuthorizationBundle });
     expect(result.status).toBe("prepare_rejected");
     // 【第十轮 3.12.3】裸 token 不是 production 输入——在 opaque 验证即拒
     //（比 adapter version 匹配检查更早、更强）。
@@ -376,7 +377,7 @@ describe("原子 bundle redemption", () => {
     const energyStorageOnly = rawToken(service, contract, { resource: RESOURCE_ENERGY, amount: 50, locations: ["storage"] });
     // 【第十轮 3.12.3】裸 token 数组不是 production 输入（opaque 验证即拒）；
     // 覆盖语义由 contract-first 签发原子性结构性保证（legs 全覆盖负腿）。
-    const result = executeTreasuryActionContract(service, { contract, authorization: [uToken, energyStorageOnly] });
+    const result = executeTreasuryActionContract(service, { contract, authorization: [uToken, energyStorageOnly] as unknown as import("@/runtime/treasury/authorization").TreasuryAuthorizationBundle });
     expect(result.status).toBe("prepare_rejected");
     if (result.status === "prepare_rejected") {
       expect(result.reason).toBe("authorization_invalid");
@@ -700,9 +701,10 @@ describe("pre-execution authorization fault 可恢复 authority（第十一轮 3
     const after = build(service, "pe_fault_resolve_next", transferArgs());
     const authorized = service.authorizeTreasuryActionContract(after);
     expect(authorized.status).toBe("authorized");
-    // 重复 resolution 幂等。
+    // 重复 resolution 幂等（第十二轮 3.3：须携带 digest 证明 attempt identity）。
     const again = service.resolveUnresolvedTransaction({
       transactionId: "pe_fault_resolve",
+      digest: tombstone?.digest,
       capability: {} as never,
       acknowledgeRolledBack: true,
     });

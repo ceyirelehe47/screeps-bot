@@ -369,6 +369,8 @@ export interface TreasuryAuthorizationCohortFacts {
   readonly epochSeq: number;
   readonly revisions: TreasuryCohortRevisions;
   readonly adapterRegistrationId: string;
+  /** 【第十二轮 3.5】稳定 adapter/reconciler 语义身份（签发时绑定；缺省 = 旧事实）。 */
+  readonly adapterSemanticIdentity?: string;
   readonly contractId: string;
   readonly contractDigest: string;
   readonly transactionId: string;
@@ -408,6 +410,7 @@ export function canonicalTreasuryCohortText(facts: TreasuryAuthorizationCohortFa
     `e:${String(facts.epochSeq)}`,
     `rv:${String(facts.revisions.commitmentRevision)}/${String(facts.revisions.projectionRevision)}/${String(facts.revisions.quarantineRevision)}/${String(facts.revisions.intentRevision)}/${String(facts.revisions.reservationStoreRevision)}`,
     `ar:${facts.adapterRegistrationId}`,
+    `asi:${facts.adapterSemanticIdentity === undefined ? "-" : `${String(facts.adapterSemanticIdentity.length)}:${facts.adapterSemanticIdentity}`}`,
     `c:${facts.contractId}/${facts.contractDigest}`,
     `t:${facts.transactionId}`,
     `l:${facts.authorizationLegDigests.join(",")}`,

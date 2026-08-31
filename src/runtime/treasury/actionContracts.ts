@@ -37,7 +37,7 @@
  */
 
 import type { TreasuryService } from "@/runtime/treasury/facade";
-import type { TreasuryAuthorizationBundle, TreasuryAuthorizationToken } from "@/runtime/treasury/authorization";
+import type { TreasuryAuthorizationBundle } from "@/runtime/treasury/authorization";
 import { TREASURY_WRITER_KERNEL, type TreasuryKernelHolder } from "@/runtime/treasury/kernelChannel";
 import type {
   TreasurySafeExecuteResult,
@@ -126,6 +126,17 @@ export interface TreasuryDurableFacts {
 export interface TreasuryActionAdapter<TArgs = unknown, TResult extends { ok: boolean } = { ok: boolean }> {
   readonly kind: string;
   readonly version: number;
+  /**
+   * 【第十二轮 3.5】稳定的 adapter/reconciler 语义身份（显式声明、随代码
+   * 版本化）：不依赖当前 global 的注册顺序（registrationId 含 global 内
+   * 注册序号，只能证明同一 global 内实现未替换，无法跨 global reset 证明
+   * reconciler 语义一致）。语义变化时必须显式更换该字符串；声明不变即
+   * 作者承诺 reconcile/derive/validate 语义与旧 global 一致——global reset
+   * 后同 kind/version 但 stable semantic identity 不同的一切旧 authority
+   * 不得由当前 reconciler 解释。不得以函数源码字符串/对象地址/注册序号等
+   * 不稳定值充当。
+   */
+  readonly semanticIdentity: string;
   validate(args: unknown): string | null;
   derivePostings(args: TArgs): readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
   execute(args: TArgs): TResult;
@@ -146,6 +157,8 @@ export interface TreasuryActionAdapter<TArgs = unknown, TResult extends { ok: bo
 export interface TreasuryRegisteredActionAdapter<TArgs = unknown, TResult extends { ok: boolean } = { ok: boolean }> {
   readonly kind: string;
   readonly version: number;
+  /** 稳定语义身份（注册时显式声明并冻结；跨 global reset 有效的 reconciler 语义锚点）。 */
+  readonly semanticIdentity: string;
   /**
    * registration identity 组成（第十一轮 3.13.2）：`hash(kind:version:seq)`
    * ——每次合法注册唯一；同 version 不同实现的 test-only 替换（unregister 后
@@ -189,6 +202,9 @@ function validateAdapterShape(adapter: TreasuryActionAdapter): string | null {
   if (typeof adapter.version !== "number" || !Number.isSafeInteger(adapter.version) || adapter.version <= 0) {
     return "adapter.version 须为正安全整数";
   }
+  if (typeof adapter.semanticIdentity !== "string" || adapter.semanticIdentity.length === 0 || adapter.semanticIdentity.length > 128) {
+    return "adapter.semanticIdentity 非法（须为 1..128 字符的显式稳定语义身份）";
+  }
   if (typeof adapter.validate !== "function") return "adapter.validate 缺失";
   if (typeof adapter.derivePostings !== "function") return "adapter.derivePostings 缺失";
   if (typeof adapter.execute !== "function") return "adapter.execute 缺失";
@@ -227,6 +243,7 @@ export function registerTreasuryActionAdapter(
   if (existing !== undefined) {
     if (existing.view.version === adapter.version) {
       const sameImplementation =
+        existing.view.semanticIdentity === adapter.semanticIdentity &&
         existing.view.validate === adapter.validate &&
         existing.view.derivePostings === adapter.derivePostings &&
         existing.view.execute === adapter.execute &&
@@ -234,6 +251,12 @@ export function registerTreasuryActionAdapter(
         existing.view.durableFacts === adapter.durableFacts &&
         existing.view.reconcile === adapter.reconcile;
       if (!sameImplementation) {
+        if (existing.view.semanticIdentity !== adapter.semanticIdentity) {
+          return {
+            status: "rejected",
+            detail: `action kind ${adapter.kind} v${String(adapter.version)} 已注册不同 stable semantic identity（${existing.view.semanticIdentity} → ${adapter.semanticIdentity}——语义演进必须升级 adapter version 后注册）`,
+          };
+        }
         return {
           status: "rejected",
           detail: `action kind ${adapter.kind} v${String(adapter.version)} 已注册不同实现（immutable registry——覆盖被拒，替换实现必须使用更高 adapter version）`,
@@ -256,6 +279,7 @@ export function registerTreasuryActionAdapter(
   const view: TreasuryRegisteredActionAdapter = Object.freeze({
     kind: adapter.kind,
     version: adapter.version,
+    semanticIdentity: adapter.semanticIdentity,
     registrationId,
     validate: adapter.validate,
     derivePostings: adapter.derivePostings,
@@ -357,6 +381,8 @@ export interface TreasuryActionContract {
   readonly adapterVersion: number;
   /** adapter registration identity（第十一轮 3.13.2：同 version 替换后旧 contract 失效）。 */
   readonly adapterRegistrationId: string;
+  /** 【第十二轮 3.5】稳定语义身份（跨 global reset 的 reconciler 语义锚点；AC4 digest 成分）。 */
+  readonly adapterSemanticIdentity: string;
   readonly transactionId: string;
   /** canonical action args 的冻结深拷贝（validate/derive/execute 同源）。 */
   readonly args: unknown;
@@ -423,6 +449,16 @@ export function verifyTreasuryActionContractForAuthorization(
       detail: `adapter registration identity 已变化（contract ${typed.adapterRegistrationId.slice(0, 12)}，registry ${adapter.registrationId.slice(0, 12)}）——须重新构建 contract`,
     };
   }
+  // 【第十二轮 3.5】稳定语义身份绑定：contract 声明的 semanticIdentity 必须
+  // 与 registry 当前一致（global reset 后同 kind/version 但语义身份不同的
+  // 旧 contract 一律失效）。
+  if (typed.adapterSemanticIdentity !== undefined && typed.adapterSemanticIdentity !== adapter.semanticIdentity) {
+    return {
+      status: "rejected",
+      reason: "contract_invalid",
+      detail: `adapter stable semantic identity 不一致（contract ${typed.adapterSemanticIdentity.slice(0, 48)}，registry ${adapter.semanticIdentity.slice(0, 48)}）——reconciler 语义已变化，须重新构建 contract`,
+    };
+  }
   return { status: "ok", contract: typed, adapter };
 }
 
@@ -480,6 +516,20 @@ function validateStructureBindings(
     ) {
       return `structureBinding.bindingKind 非法（受控枚举）: ${String(candidate.bindingKind)}`;
     }
+    // 【第十二轮】discriminated union 唯一 canonicalization 点：bindingKind
+    // 缺省仅在此推导一次，此后全部代码按已确定的 discriminant 分支（不得
+    // 再以 objectId !== undefined 判定 kind）。
+    const bindingKind: "governed_location" | "game_object" =
+      candidate.bindingKind ?? (candidate.objectId !== undefined ? "game_object" : "governed_location");
+    if (bindingKind === "governed_location" && candidate.objectId !== undefined) {
+      return "structureBinding 矛盾（governed_location 不允许携带 objectId）";
+    }
+    if (bindingKind === "governed_location" && (candidate.expectedType !== undefined || candidate.expectedRoom !== undefined)) {
+      return "structureBinding 矛盾（governed_location 不允许携带 game-object 专属 expectedType/expectedRoom）";
+    }
+    if (bindingKind === "game_object" && candidate.objectId === undefined) {
+      return "structureBinding 矛盾（game_object 必须携带 objectId）";
+    }
     if (
       candidate.role !== undefined &&
       candidate.role !== "source" &&
@@ -514,7 +564,8 @@ function validateStructureBindings(
     typed.push({
       roomName: candidate.roomName,
       locationKind: candidate.locationKind,
-      ...(candidate.bindingKind !== undefined ? { bindingKind: candidate.bindingKind } : {}),
+      // canonicalization 后 bindingKind 恒显式（后续判定不再看 objectId）。
+      bindingKind,
       ...(candidate.role !== undefined ? { role: candidate.role } : {}),
       ...(candidate.required !== undefined ? { required: candidate.required } : {}),
       label,
@@ -565,7 +616,13 @@ export interface TreasuryActionExecutionRequest {
   readonly transactionId?: string;
   readonly args?: unknown;
   readonly source?: string;
-  readonly authorization?: TreasuryAuthorizationBundle | TreasuryAuthorizationToken | readonly TreasuryAuthorizationToken[];
+  /**
+   * 【第十二轮 3.10】production 执行入口只接受 opaque authorization bundle
+   * （service 闭包签发对象）。裸 token / token 数组只能出现在明确 test
+   * harness 边界（kernelChannel 的 test-only 低层通道）——类型层即拒绝
+   * production 业务模块误用。
+   */
+  readonly authorization?: TreasuryAuthorizationBundle;
 }
 
 export type TreasuryActionContractResult =
@@ -610,6 +667,8 @@ function toStructureDescriptor(
   incarnationId: string,
 ): TreasuryStructureBindingDescriptor {
   return {
+    // 【第十二轮】bindingKind 已在 canonicalization 阶段唯一确定（恒存在，
+    // 不再以 objectId 推导）。
     bindingKind: binding.bindingKind ?? (binding.objectId !== undefined ? "game_object" : "governed_location"),
     role: binding.role ?? "auxiliary",
     roomName: binding.roomName,
@@ -762,6 +821,7 @@ function buildTreasuryActionContractInner(
     bindingList.push({
       roomName: posting.roomName,
       locationKind: posting.locationKind as "storage" | "terminal",
+      bindingKind: "governed_location",
       role: postingRole,
       label,
     });
@@ -781,7 +841,7 @@ function buildTreasuryActionContractInner(
     for (const binding of bindings) {
       // canonical identity（第十轮 3.12.11）：governed_location = room:loc；
       // game_object = obj:objectId（与 posting binding 天然不重合）。
-      const identityKey = binding.objectId !== undefined ? `obj:${binding.objectId}` : `${binding.roomName}:${binding.locationKind}`;
+      const identityKey = binding.bindingKind === "game_object" ? `obj:${binding.objectId}` : `${binding.roomName}:${binding.locationKind}`;
       // 【第十一轮 3.13.9】descriptor 唯一性 key = (identity, role)：同结构
       // 不同 role 不静默合并（各自进 digest 与 durable authority）；adapter
       // 重复声明（同 identity 同 role）幂等跳过（posting binding 为权威）。
@@ -811,7 +871,7 @@ function buildTreasuryActionContractInner(
           detail: `structureBinding label ${binding.label} 与 posting binding 冲突（同 label 不同 (identity, role)——拒绝）`,
         };
       }
-      if (binding.objectId !== undefined) {
+      if (binding.bindingKind === "game_object") {
         // game_object binding：对象必须存在且与期望类型/room 归属匹配。
         const object = (Game as unknown as { getObjectById<T extends object>(id: string): T | null }).getObjectById<{
           id: string;
@@ -914,7 +974,7 @@ function buildTreasuryActionContractInner(
     .map((binding) =>
       toStructureDescriptor(
         binding,
-        binding.objectId !== undefined ? binding.objectId : structureSnapshots[binding.label ?? `${binding.roomName}:${binding.locationKind}`] ?? "",
+        binding.bindingKind === "game_object" ? binding.objectId! : structureSnapshots[binding.label ?? `${binding.roomName}:${binding.locationKind}`] ?? "",
       ),
     )
     .sort((a, b) => {
@@ -940,7 +1000,7 @@ function buildTreasuryActionContractInner(
       ? `:dfv:${String(durableFacts.version)}:dfh:${durablePayloadHash}:rcv:${String(durableFacts.version)}`
       : ":df:none";
   const digest = hashTreasuryCanonicalString(
-    `AC4:ce:${String(TREASURY_CANONICAL_ENCODING_VERSION)}:k:${String(request.actionKind.length)}:${request.actionKind}:av:${String(adapter.version)}:ar:${String(adapter.registrationId.length)}:${adapter.registrationId}:t:${String(request.transactionId.length)}:${request.transactionId}:a:${String(canonicalized.text.length)}:${canonicalized.text}:p:${sortedPostings.map(canonicalPostingText).join(",")}:sd:${sortedDescriptors.map(canonicalStructureDescriptorText).join(",")}${durableText}`,
+    `AC4:ce:${String(TREASURY_CANONICAL_ENCODING_VERSION)}:k:${String(request.actionKind.length)}:${request.actionKind}:av:${String(adapter.version)}:ar:${String(adapter.registrationId.length)}:${adapter.registrationId}:asi:${String(adapter.semanticIdentity.length)}:${adapter.semanticIdentity}:t:${String(request.transactionId.length)}:${request.transactionId}:a:${String(canonicalized.text.length)}:${canonicalized.text}:p:${sortedPostings.map(canonicalPostingText).join(",")}:sd:${sortedDescriptors.map(canonicalStructureDescriptorText).join(",")}${durableText}`,
   );
   const contract = Object.freeze({
     __brand: "treasury-action-contract",
@@ -948,6 +1008,7 @@ function buildTreasuryActionContractInner(
     actionKind: request.actionKind,
     adapterVersion: adapter.version,
     adapterRegistrationId: adapter.registrationId,
+    adapterSemanticIdentity: adapter.semanticIdentity,
     transactionId: request.transactionId,
     args: canonicalArgs,
     canonicalArgsText: canonicalized.text,
@@ -1038,6 +1099,14 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
       detail: `adapter registration identity 已变化（contract ${contract.adapterRegistrationId.slice(0, 12)}，registry ${adapter.registrationId.slice(0, 12)}）——旧 contract 失效`,
     };
   }
+  if (contract.adapterSemanticIdentity !== undefined && contract.adapterSemanticIdentity !== adapter.semanticIdentity) {
+    actionContractEvents.adapterMismatches += 1;
+    return {
+      status: "prepare_rejected",
+      reason: "contract_invalid",
+      detail: `adapter stable semantic identity 不一致（contract ${contract.adapterSemanticIdentity.slice(0, 48)}，registry ${adapter.semanticIdentity.slice(0, 48)}）——reconciler 语义已变化，旧 contract 失效`,
+    };
+  }
   const authorization = request.authorization;
   if (authorization === undefined) {
     actionContractEvents.rejected += 1;
@@ -1084,7 +1153,7 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
   for (const binding of contract.structureBindings) {
     const label = binding.label ?? `${binding.roomName}:${binding.locationKind}`;
     const snapshotId = contract.structureSnapshots[label];
-    if (binding.objectId !== undefined) {
+    if (binding.bindingKind === "game_object") {
       // game_object binding 执行前重验（第十轮 3.12.11）：对象仍存在、类型与
       // room 归属仍匹配（incarnation = 对象 id 本身——不存在即被替换语义）。
       const object = (Game as unknown as { getObjectById<T extends object>(id: string): T | null }).getObjectById<{
@@ -1144,6 +1213,7 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
         contractDigest: contract.digest,
         adapterVersion: contract.adapterVersion,
         adapterRegistrationId: contract.adapterRegistrationId,
+        adapterSemanticIdentity: contract.adapterSemanticIdentity,
         authorizationDigest: resolvedBundle.authorizationDigest,
         ...(contract.durableFacts !== undefined
           ? { durablePayload: contract.durableFacts.payload, durablePayloadVersion: contract.durableFacts.version }
@@ -1201,6 +1271,7 @@ export function makeTreasuryTestTransferAdapter(
   return {
     kind: "test.transfer",
     version: 1,
+    semanticIdentity: "test.transfer@reconciler-semantics-v1",
     validate(args: unknown): string | null {
       if (!args || typeof args !== "object") return "args 非对象";
       const candidate = args as Partial<TreasuryTestTransferArgs>;

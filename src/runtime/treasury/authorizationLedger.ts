@@ -19,6 +19,7 @@ import { postingsWithinAuthorizationScope, TREASURY_AUTHORIZATION_ACTIVE_LIMIT }
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import { recordTreasuryWriteFault, TREASURY_WRITE_FAULT_DETAIL_MAX } from "@/runtime/treasury/writeFault";
 import { writeTreasuryAuthorizationFaultEntry } from "@/runtime/treasury/authorizationFaults";
+import { computeTreasuryDurableIdentityDigest } from "@/runtime/treasury/durableIdentity";
 import { findTreasuryPolicyResolver } from "@/runtime/treasury/policyAuthority";
 import type { TreasuryPosting, TreasuryMetrics } from "@/runtime/treasury/types";
 
@@ -33,6 +34,10 @@ export interface TreasuryAuthorizationBundleRecord {
   readonly transactionId: string;
   readonly actionKind: string;
   readonly adapterVersion: number;
+  /** adapter registration identity（第十二轮：fault authority 完整身份输入）。 */
+  readonly adapterRegistrationId?: string;
+  /** 稳定 adapter/reconciler 语义身份（第十二轮 3.5）。 */
+  readonly adapterSemanticIdentity?: string;
   /** owner canonical identity（"" = 无 owner 限定）。 */
   readonly ownerIdentity: string;
   /** policy capability identity（第十一轮 3.13.3）。 */
@@ -402,24 +407,55 @@ export function createTreasuryAuthorizationLedger(deps: TreasuryAuthorizationLed
       record.state = "redeemed";
     } catch (error) {
       rollbackApplied();
-      // 【第十一轮 3.13.1】先建立可恢复的 durable not-started authority，
-      // 再写 marker——acknowledge-rolled-back 恢复协议据此解除。
+      // 【第十一轮 3.13.1 / 第十二轮 3.1】staged publication 协议：先建立
+      // 可读回且完整身份一致的 durable not-started authority，再发布
+      // write-fault marker。authority 写入结果**不得忽略**：
+      // - written / already_present（完整 identity 一致）：发布正常
+      //   internal_authorization_fault marker（acknowledge-rolled-back 可解除）；
+      // - rejected（store_fatal / capacity_exhausted / identity_conflict /
+      //   invalid_entry）：绝不发布无 authority 的普通 marker——发布显式
+      //   forensic phase marker（fail closed，仅显式 forensic 通道可解除）。
+      const faultIdentity = computeTreasuryDurableIdentityDigest({
+        transactionId: context.transactionId,
+        digest: record.contractDigest,
+        ...(record.contractId !== undefined ? { contractId: record.contractId } : {}),
+        ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+        ...(record.adapterRegistrationId !== undefined ? { adapterRegistrationId: record.adapterRegistrationId } : {}),
+        ...(record.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: record.adapterSemanticIdentity } : {}),
+        actionKind: context.actionKind,
+        postings: context.postings.map((leg) => ({ roomName: leg.roomName, locationKind: leg.locationKind, resource: leg.resource, delta: leg.delta })),
+        ...(record.cohortDigest !== undefined ? { authorizationCohortDigest: record.cohortDigest } : {}),
+        ...(record.ownerIdentity !== "" ? { ownerIdentity: record.ownerIdentity } : {}),
+        ...(record.policyIdentity !== "" ? { policyIdentity: record.policyIdentity } : {}),
+        source: "bundle-redemption",
+      });
       const faultWrite = writeTreasuryAuthorizationFaultEntry({
         transactionId: context.transactionId,
         digest: record.contractDigest,
         ...(record.contractId !== undefined ? { contractId: record.contractId } : {}),
         ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
         actionKind: context.actionKind,
+        ...(record.adapterVersion !== undefined ? { adapterVersion: record.adapterVersion } : {}),
+        ...(record.adapterRegistrationId !== undefined ? { adapterRegistrationId: record.adapterRegistrationId } : {}),
+        ...(record.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: record.adapterSemanticIdentity } : {}),
         ...(record.authorizationDigest !== undefined ? { authorizationDigest: record.authorizationDigest } : {}),
+        ...(record.cohort !== undefined ? { authorizationCohort: { ...record.cohort, revisions: { ...record.cohort.revisions }, authorizationLegDigests: [...record.cohort.authorizationLegDigests] } } : {}),
         ...(record.cohortDigest !== undefined ? { authorizationCohortDigest: record.cohortDigest } : {}),
+        ...(record.ownerIdentity !== "" ? { ownerIdentity: record.ownerIdentity } : {}),
+        ...(record.policyIdentity !== "" ? { policyIdentity: record.policyIdentity } : {}),
         postings: context.postings.map((leg) => ({ roomName: leg.roomName, locationKind: leg.locationKind, resource: leg.resource, delta: leg.delta })),
         faultTick: Game.time,
         outcome: "not_started",
         rollbackConfirmed: true,
         source: "bundle-redemption",
+        durableIdentityDigest: faultIdentity,
         detail: `原子 redemption 中断并回滚（${String(error instanceof Error ? error.message : error).slice(0, 128)}）——状态零变化`,
       });
-      void faultWrite;
+      const authorityPublished = faultWrite.status === "written" || faultWrite.status === "already_present";
+      const faultWriteDetail =
+        faultWrite.status === "rejected"
+          ? `${faultWrite.reason}: ${faultWrite.detail}`
+          : `unexpected status: ${faultWrite.status}`;
       // 状态已一致回滚，但发布序列中断本身按 internal authorization fault
       // 处理：写入 marker 阻断后续 writer（审计要求显式确认，不静默）。
       recordTreasuryWriteFault({
@@ -428,13 +464,20 @@ export function createTreasuryAuthorizationLedger(deps: TreasuryAuthorizationLed
         tick: Game.time,
         kind: context.actionKind,
         source: "bundle-redemption",
-        phase: "internal_authorization_fault",
+        phase: authorityPublished ? "internal_authorization_fault" : "internal_authorization_fault_forensic",
         status: "unresolved",
         recordedAt: Game.time,
-        detail: `原子 redemption 中断并回滚（${String(error instanceof Error ? error.message : error).slice(0, TREASURY_WRITE_FAULT_DETAIL_MAX)}）——状态零变化，marker 阻断后续 writer`,
+        detail: authorityPublished
+          ? `原子 redemption 中断并回滚（${String(error instanceof Error ? error.message : error).slice(0, TREASURY_WRITE_FAULT_DETAIL_MAX)}）——状态零变化，marker 阻断后续 writer`
+          : `原子 redemption 中断并回滚，但 durable fault authority 写入失败（${faultWriteDetail}）——forensic fail closed：authority 缺失，仅显式 forensic 通道可解除`,
       });
       deps.metrics.authorizationInvalidated += 1;
-      return reject("internal_authorization_fault", "原子 redemption 中断：全部预算/消费标记已回滚，internal_authorization_fault marker 已写入（阻断后续 writer）");
+      return reject(
+        "internal_authorization_fault",
+        authorityPublished
+          ? "原子 redemption 中断：全部预算/消费标记已回滚，durable fault authority 已建立，internal_authorization_fault marker 已写入（阻断后续 writer）"
+          : "原子 redemption 中断：全部预算/消费标记已回滚，但 durable fault authority 写入失败——forensic marker 已写入（显式 forensic 解除通道处理）",
+      );
     }
     return {
       status: "ok",

@@ -16,8 +16,12 @@ import {
   readTreasuryIntentEntry,
   transferTreasuryIntentToQuarantine,
 } from "@/runtime/treasury/intents";
-import { hasSettledReceipt } from "@/runtime/treasury/receipts";
+import { hasSettledReceipt, readTreasurySettlementProof } from "@/runtime/treasury/receipts";
 import { readTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
+import {
+  treasuryAttemptIdentityRelation,
+  type TreasuryAttemptIdentity,
+} from "@/runtime/treasury/identityProof";
 import type { TreasuryMetrics } from "@/runtime/treasury/types";
 
 /** 恢复协调所需的 prepared record 事实（facade 内部 PreparedTransaction 的窄视图）。 */
@@ -51,8 +55,8 @@ export interface TreasuryRecoveryCoordinator {
   quarantinePreparedRecord(record: TreasuryRecoveryRecord): void;
   /** durable 事实转移统一入口（intent → quarantine 优先，防御分支直写最小 v2）。 */
   transferRecordToQuarantine(record: TreasuryRecoveryRecord, faultPhase: TreasuryWriteFaultPhase): void;
-  /** finalized intent 的 cross-store proof（beginTick 恢复注入）。 */
-  checkTreasuryFinalizedProof(transactionId: string, outcome: string): string | null;
+  /** finalized intent 的 cross-store proof（beginTick 恢复注入；attempt identity 绑定）。 */
+  checkTreasuryFinalizedProof(transactionId: string, outcome: string, attempt: TreasuryAttemptIdentity): string | null;
 }
 
 export function createTreasuryRecoveryCoordinator(deps: TreasuryRecoveryCoordinatorDeps): TreasuryRecoveryCoordinator {
@@ -90,7 +94,12 @@ export function createTreasuryRecoveryCoordinator(deps: TreasuryRecoveryCoordina
       return;
     }
     // 防御分支（intent 已释放/不存在——正常路径 executePreparedAction 恒先写
-    // intent）：按 fault phase 推导 outcome 直写最小 v2 entry。
+    // intent）：按 fault phase 推导 outcome 直写最小 entry。【第十二轮 3.8】
+    // 该 entry 缺少现代完整 identity 事实（无 contract/cohort/descriptor 输入）
+    // ——显式标记 forensic incomplete authority：继续阻断 writer 并保留
+    // postings，但不得被当前 adapter reconciler 解释、不得签发普通
+    // capability、不得自动 resolve；只能经显式人工修复/迁移或专门 forensic
+    // resolution 流程处理（诊断：treasuryForensicQuarantineDiagnostics）。
     const derived = outcomeOfTreasuryFaultPhase(faultPhase);
     if (derived === null) {
       deps.metrics.quarantineAdmissionRejections += 1;
@@ -107,7 +116,11 @@ export function createTreasuryRecoveryCoordinator(deps: TreasuryRecoveryCoordina
       recordedAt: Game.time,
       outcome: derived,
       settlement: "quarantined",
-    });
+      forensic: {
+        reason: "intent_missing_fallback",
+        detail: "recovery coordinator 在 intent 缺失时防御性直写（无 contract/cohort/descriptor 身份事实）——forensic 隔离，不得自动解释或 resolve",
+      },
+    } as Parameters<typeof quarantineTreasuryTransaction>[0]);
     if (write.status === "rejected") {
       deps.metrics.quarantineAdmissionRejections += 1;
     }
@@ -119,20 +132,37 @@ export function createTreasuryRecoveryCoordinator(deps: TreasuryRecoveryCoordina
    * not-executed/rolled-back tombstone。proof 缺失 → 恢复路径 semantic
    * fault（entry 保留不释放、fail closed）。
    */
-  const checkTreasuryFinalizedProof = (transactionId: string, outcome: string): string | null => {
+  /**
+   * 【第十二轮 3.4】finalized proof 按完整 attempt identity 校验：
+   * - returned_ok：只能由与该 attempt identity 完全匹配的 committed proof
+   *   （settlement receipt 或 final committed tombstone）证明；
+   * - 其余 outcome：只能由 identity 匹配的 final not-executed tombstone 证明；
+   * - 旧 attempt 的 receipt/tombstone（identity 不同或缺失现代身份事实）
+   *   不得释放新 attempt 的 intent（conflict/insufficient 均 fail closed）。
+   */
+  const checkTreasuryFinalizedProof = (transactionId: string, outcome: string, attempt: TreasuryAttemptIdentity): string | null => {
     if (outcome === "returned_ok") {
-      if (hasSettledReceipt(transactionId) !== undefined) return null;
-      const tombstone = readTreasuryResolutionTombstone(transactionId);
-      if (tombstone !== undefined && tombstone.stage === "final" && tombstone.resolution === "committed") {
+      const settlement = readTreasurySettlementProof(transactionId);
+      if (
+        settlement !== undefined &&
+        treasuryAttemptIdentityRelation(
+          { digest: settlement.digest ?? attempt.digest, durableIdentityDigest: settlement.durableIdentityDigest },
+          attempt,
+        ) === "match"
+      ) {
         return null;
       }
-      return `settled receipt 或 committed resolution proof 缺失（${transactionId.slice(0, 48)}）`;
+      const tombstone = readTreasuryResolutionTombstone(transactionId);
+      if (tombstone !== undefined && tombstone.stage === "final" && tombstone.resolution === "committed") {
+        if (treasuryAttemptIdentityRelation(tombstone, attempt) === "match") return null;
+      }
+      return `settled receipt 或 committed resolution proof 缺失或 attempt identity 不匹配（${transactionId.slice(0, 48)}）`;
     }
     const tombstone = readTreasuryResolutionTombstone(transactionId);
     if (tombstone !== undefined && tombstone.stage === "final" && tombstone.resolution === "not-executed") {
-      return null;
+      if (treasuryAttemptIdentityRelation(tombstone, attempt) === "match") return null;
     }
-    return `not-executed/rolled-back resolution proof 缺失（${transactionId.slice(0, 48)}）`;
+    return `not-executed/rolled-back resolution proof 缺失或 attempt identity 不匹配（${transactionId.slice(0, 48)}）`;
   };
 
   return {

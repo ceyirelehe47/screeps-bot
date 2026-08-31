@@ -17,13 +17,27 @@
  * 该通道；无任何无条件 clear-marker 入口。
  */
 
-const AUTHORIZATION_FAULT_VERSION = 1 as const;
+import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
+import {
+  verifyTreasuryEntryIdentity,
+  type TreasuryIdentityFactsEntry,
+} from "@/runtime/treasury/identityProof";
+import { treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
+import type { TreasuryStructureBindingDescriptor } from "@/runtime/treasury/types";
+import {
+  TREASURY_STRUCTURE_BINDING_KINDS,
+  TREASURY_STRUCTURE_BINDING_ROLES,
+  TREASURY_STRUCTURE_DESCRIPTOR_VERSION,
+} from "@/runtime/treasury/types";
+
+const AUTHORIZATION_FAULT_VERSION = 2 as const;
 export const TREASURY_AUTHORIZATION_FAULT_MAX_ENTRIES = 64;
 const AUTHORIZATION_FAULT_KEY_PREFIX = "af:";
 const FAULT_DIGEST_PATTERN = /^[0-9a-f]{16}$/;
 const FAULT_KIND_SOURCE_MAX = 128;
 const FAULT_DETAIL_MAX = 192;
 const FAULT_POSTINGS_MAX = 32;
+const FAULT_VALID_RESOURCES: ReadonlySet<string> = new Set<string>(RESOURCES_ALL);
 
 /** pre-execution authorization fault 的 durable authority entry。 */
 export interface TreasuryAuthorizationFaultEntry {
@@ -37,6 +51,21 @@ export interface TreasuryAuthorizationFaultEntry {
   readonly authorizationDigest?: string;
   /** canonical authorization cohort digest（有 cohort 时）。 */
   readonly authorizationCohortDigest?: string;
+  // ── v2（第十二轮 3.2：完整 durable identity 事实——identity 可由持久事实重算）。 ──
+  /** 完整 cohort facts（重算 cohort digest 与 durable identity 的输入）。 */
+  readonly authorizationCohort?: TreasuryAuthorizationCohortFacts;
+  readonly adapterVersion?: number;
+  readonly adapterRegistrationId?: string;
+  /** 稳定 adapter/reconciler 语义身份（contract 路径）。 */
+  readonly adapterSemanticIdentity?: string;
+  readonly ownerIdentity?: string;
+  readonly policyIdentity?: string;
+  /** structure incarnation facts（有界 ≤16）。 */
+  readonly structureFacts?: readonly TreasuryStructureBindingDescriptor[];
+  /** 统一 durable action identity digest（由上述事实重算验证）。 */
+  readonly durableIdentityDigest?: string;
+  /** v1 迁移 entry（身份事实不完整——仅按 digest 匹配的旧协议解除）。 */
+  readonly legacyV1?: boolean;
   /** canonical postings（有界 ≤32；资产事实快照）。 */
   readonly postings: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
   readonly faultTick: number;
@@ -49,7 +78,7 @@ export interface TreasuryAuthorizationFaultEntry {
 }
 
 export interface TreasuryAuthorizationFaultStore {
-  version: 1;
+  version: 2;
   entries: Record<string, TreasuryAuthorizationFaultEntry>;
   entryCount: number;
   updatedAt: number;
@@ -134,8 +163,63 @@ function validateFaultEntryShape(entry: unknown): string | null {
     if (typeof leg.locationKind !== "string" || (leg.locationKind !== "storage" && leg.locationKind !== "terminal")) {
       return `posting.locationKind 非法: ${String(leg.locationKind).slice(0, 24)}`;
     }
-    if (typeof leg.resource !== "string" || leg.resource.length === 0) return "posting.resource 非法";
+    if (typeof leg.resource !== "string" || !FAULT_VALID_RESOURCES.has(leg.resource)) {
+      return `posting.resource 不在 RESOURCES_ALL: ${String(leg.resource).slice(0, 24)}`;
+    }
     if (typeof leg.delta !== "number" || !Number.isSafeInteger(leg.delta) || leg.delta === 0) return "posting.delta 须为非零安全整数";
+  }
+  if (candidate.adapterVersion !== undefined && (typeof candidate.adapterVersion !== "number" || !Number.isSafeInteger(candidate.adapterVersion) || candidate.adapterVersion <= 0)) {
+    return "adapterVersion 须为正安全整数";
+  }
+  if (candidate.adapterRegistrationId !== undefined && (typeof candidate.adapterRegistrationId !== "string" || !FAULT_DIGEST_PATTERN.test(candidate.adapterRegistrationId))) {
+    return "adapterRegistrationId 非法（16 hex）";
+  }
+  if (candidate.adapterSemanticIdentity !== undefined && (typeof candidate.adapterSemanticIdentity !== "string" || candidate.adapterSemanticIdentity.length === 0 || candidate.adapterSemanticIdentity.length > 128)) {
+    return "adapterSemanticIdentity 非法（1..128 字符）";
+  }
+  if (candidate.ownerIdentity !== undefined && (typeof candidate.ownerIdentity !== "string" || candidate.ownerIdentity.length === 0 || candidate.ownerIdentity.length > 128)) {
+    return "ownerIdentity 非法";
+  }
+  if (candidate.policyIdentity !== undefined && (typeof candidate.policyIdentity !== "string" || candidate.policyIdentity.length === 0 || candidate.policyIdentity.length > 128)) {
+    return "policyIdentity 非法";
+  }
+  if (candidate.durableIdentityDigest !== undefined && (typeof candidate.durableIdentityDigest !== "string" || !FAULT_DIGEST_PATTERN.test(candidate.durableIdentityDigest))) {
+    return "durableIdentityDigest 非法（16 hex）";
+  }
+  if (candidate.structureFacts !== undefined) {
+    if (!Array.isArray(candidate.structureFacts) || candidate.structureFacts.length > 16) {
+      return "structureFacts 非数组或超上限";
+    }
+    for (const fact of candidate.structureFacts) {
+      if (!fact || typeof fact !== "object") return "structureFact 项非对象";
+      const typed = fact as Partial<TreasuryStructureBindingDescriptor>;
+      if (typeof typed.bindingKind !== "string" || !TREASURY_STRUCTURE_BINDING_KINDS.has(typed.bindingKind)) {
+        return `structureFact.bindingKind 非法: ${String(typed.bindingKind).slice(0, 24)}`;
+      }
+      if (typeof typed.role !== "string" || !TREASURY_STRUCTURE_BINDING_ROLES.has(typed.role)) {
+        return `structureFact.role 非法: ${String(typed.role).slice(0, 24)}`;
+      }
+      if (typeof typed.roomName !== "string" || typed.roomName.length === 0 || typed.roomName.length > 16) return "structureFact.roomName 非法";
+      if (typeof typed.locationKind !== "string" || (typed.locationKind !== "storage" && typed.locationKind !== "terminal")) {
+        return "structureFact.locationKind 非法";
+      }
+      if (typeof typed.structureId !== "string" || typed.structureId.length === 0 || typed.structureId.length > 48) return "structureFact.structureId 非法";
+      if (typeof typed.required !== "boolean") return "structureFact.required 须为布尔";
+      if (typed.version !== TREASURY_STRUCTURE_DESCRIPTOR_VERSION) return "structureFact.version 非法";
+    }
+  }
+  if (candidate.authorizationCohort !== undefined) {
+    const cohort = candidate.authorizationCohort as Partial<TreasuryAuthorizationCohortFacts> | undefined;
+    if (!cohort || typeof cohort !== "object") return "authorizationCohort 非对象";
+    if (typeof cohort.transactionId !== "string" || cohort.transactionId !== candidate.transactionId) {
+      return "authorizationCohort.transactionId 与 entry 不一致";
+    }
+    if (typeof cohort.authorizationDigest !== "string" || !FAULT_DIGEST_PATTERN.test(cohort.authorizationDigest)) {
+      return "authorizationCohort.authorizationDigest 非法";
+    }
+    if (!Array.isArray(cohort.authorizationLegDigests) || cohort.authorizationLegDigests.length === 0 || cohort.authorizationLegDigests.length > 8) {
+      return "authorizationCohort.authorizationLegDigests 非法（1..8）";
+    }
   }
   if (!Number.isSafeInteger(candidate.faultTick) || (candidate.faultTick as number) < 0) return "faultTick 非安全整数";
   if (candidate.outcome !== "not_started") {
@@ -187,6 +271,12 @@ function validateFaultStoreShape(store: TreasuryAuthorizationFaultStore): string
     if (encodeFaultKey(typed.transactionId) !== key) {
       return `存储键与 entry.transactionId 不一致: ${key.slice(0, 48)}`;
     }
+    // 【第十二轮 3.6】identity 重算验证：现代 entry 的 cohort/durable digest
+    // 必须能由持久事实重算一致（legacy v1 entry 无 digest 事实，跳过）。
+    if (typed.legacyV1 !== true) {
+      const identityError = verifyTreasuryEntryIdentity(typed as TreasuryIdentityFactsEntry, `authorization fault（${key.slice(0, 48)}）`);
+      if (identityError !== null) return identityError;
+    }
   }
   return null;
 }
@@ -203,6 +293,35 @@ function loadFaultStoreRuntime(): FaultStoreRuntime {
     };
     faultBranch().authorizationFaults = created;
     heapFaultRuntime = { store: created, fatal: null };
+    return heapFaultRuntime;
+  }
+  if ((raw.version as number) === 1) {
+    // v1 → v2 迁移（第十二轮 3.2，原子）：v1 entry 身份事实不完整——标记
+    // legacyV1（仅按 digest 匹配的旧协议解除，不参与现代 identity 幂等）；
+    // 任何形状损坏 → fatal（原数据保留，人工处理）。
+    const entries: Record<string, TreasuryAuthorizationFaultEntry> = {};
+    faultEvents.fullScans += 1;
+    for (const [key, value] of Object.entries((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
+      const shapeError = validateFaultEntryShape(value);
+      if (shapeError !== null) {
+        heapFaultRuntime = { store: raw, fatal: `${shapeError}（v1 fault entry 损坏，人工处理；key ${key.slice(0, 48)}）` };
+        return heapFaultRuntime;
+      }
+      const typed = value as TreasuryAuthorizationFaultEntry;
+      if (encodeFaultKey(typed.transactionId) !== key) {
+        heapFaultRuntime = { store: raw, fatal: `v1 存储键与 transactionId 不一致: ${key.slice(0, 48)}（原数据保留）` };
+        return heapFaultRuntime;
+      }
+      entries[key] = { ...typed, legacyV1: true };
+    }
+    const upgraded: TreasuryAuthorizationFaultStore = { version: AUTHORIZATION_FAULT_VERSION, entries, entryCount: Object.keys(entries).length, updatedAt: Game.time };
+    const upgradedError = validateFaultStoreShape(upgraded);
+    if (upgradedError !== null) {
+      heapFaultRuntime = { store: raw, fatal: `${upgradedError}（v1→v2 升级自检失败，authorizationFaults fail closed，原数据保留）` };
+      return heapFaultRuntime;
+    }
+    faultBranch().authorizationFaults = upgraded;
+    heapFaultRuntime = { store: upgraded, fatal: null };
     return heapFaultRuntime;
   }
   const shapeError = validateFaultStoreShape(raw);
@@ -228,7 +347,7 @@ export function peekTreasuryAuthorizationFaultHealth(): TreasuryAuthorizationFau
   }
   const store = peekTreasuryAuthorizationFaultStore();
   if (store === undefined) return { healthy: true, detail: null, entryCount: 0 };
-  if (store.version !== AUTHORIZATION_FAULT_VERSION) {
+  if (store.version !== AUTHORIZATION_FAULT_VERSION && store.version !== 1) {
     return { healthy: false, detail: `未知 authorizationFaults 版本 ${String(store.version)}`, entryCount: 0 };
   }
   return { healthy: true, detail: null, entryCount: store.entryCount };
@@ -254,6 +373,14 @@ export function writeTreasuryAuthorizationFaultEntry(entry: TreasuryAuthorizatio
     faultEvents.writeRejections += 1;
     return { status: "rejected", reason: "invalid_entry", detail: shapeError };
   }
+  // 【第十二轮 3.6】写入前重算：自带 digest 必须与持久事实重算一致。
+  if (entry.legacyV1 !== true) {
+    const identityError = verifyTreasuryEntryIdentity(entry as TreasuryIdentityFactsEntry, "authorization fault 写入前重算");
+    if (identityError !== null) {
+      faultEvents.writeRejections += 1;
+      return { status: "rejected", reason: "invalid_entry", detail: identityError };
+    }
+  }
   const runtime = loadFaultStoreRuntime();
   if (runtime.fatal) {
     faultEvents.writeFailures += 1;
@@ -261,6 +388,17 @@ export function writeTreasuryAuthorizationFaultEntry(entry: TreasuryAuthorizatio
   }
   const key = encodeFaultKey(entry.transactionId);
   if (Object.prototype.hasOwnProperty.call(runtime.store.entries, key)) {
+    // 【第十二轮 3.2】同 ID 幂等仅限完整 durable identity 一致；identity
+    // 不同 → identity_conflict（原数据不动）。
+    const existing = runtime.store.entries[key];
+    if (!treasuryDurableIdentitiesMatch(existing.durableIdentityDigest, entry.durableIdentityDigest)) {
+      faultEvents.writeRejections += 1;
+      return {
+        status: "rejected",
+        reason: "identity_conflict",
+        detail: `同 id 已存在不同 durable identity 的 authorization fault（既有 ${String(existing.durableIdentityDigest ?? "(legacy 空)").slice(0, 16)}，新 ${String(entry.durableIdentityDigest ?? "(legacy 空)").slice(0, 16)}）——fail closed，原数据不动`,
+      };
+    }
     return { status: "already_present" };
   }
   if (runtime.store.entryCount >= TREASURY_AUTHORIZATION_FAULT_MAX_ENTRIES) {
@@ -274,9 +412,39 @@ export function writeTreasuryAuthorizationFaultEntry(entry: TreasuryAuthorizatio
   runtime.store.entries[key] = {
     ...entry,
     postings: entry.postings.map((leg) => ({ ...leg })),
+    ...(entry.structureFacts !== undefined ? { structureFacts: entry.structureFacts.map((fact) => ({ ...fact })) } : {}),
+    ...(entry.authorizationCohort !== undefined
+      ? {
+          authorizationCohort: {
+            ...entry.authorizationCohort,
+            revisions: { ...entry.authorizationCohort.revisions },
+            authorizationLegDigests: [...entry.authorizationCohort.authorizationLegDigests],
+          },
+        }
+      : {}),
   };
   runtime.store.entryCount += 1;
   runtime.store.updatedAt = Game.time;
+  // 【第十二轮 3.1.8】read-back 验证：写入后的持久副本必须与声明 entry 的
+  // 完整身份一致——不一致视为 store 不可信（回退写入，不得发布 marker）。
+  const readBack = runtime.store.entries[key];
+  const readBackConsistent =
+    readBack !== undefined &&
+    readBack.digest === entry.digest &&
+    readBack.durableIdentityDigest === entry.durableIdentityDigest &&
+    readBack.authorizationCohortDigest === entry.authorizationCohortDigest &&
+    readBack.transactionId === entry.transactionId;
+  if (!readBackConsistent) {
+    faultEvents.writeFailures += 1;
+    delete runtime.store.entries[key];
+    runtime.store.entryCount -= 1;
+    runtime.store.updatedAt = Game.time;
+    return {
+      status: "rejected",
+      reason: "store_fatal",
+      detail: `authorization fault read-back 身份不一致（${key.slice(0, 48)}）——写入已回退，不得发布 marker`,
+    };
+  }
   return { status: "written" };
 }
 

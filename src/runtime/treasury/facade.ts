@@ -168,13 +168,15 @@ import {
   treasuryAuthorizationFaultBlockers,
   writeTreasuryAuthorizationFaultEntry,
   type TreasuryAuthorizationFaultEntry,
+  peekTreasuryAuthorizationFaultHealth,
+  TREASURY_AUTHORIZATION_FAULT_MAX_ENTRIES,
 } from "@/runtime/treasury/authorizationFaults";
 import {
   writeTreasuryResolutionTombstone,
   readTreasuryResolutionTombstone,
   ensureTreasuryResolutionSlotAvailable,
 } from "@/runtime/treasury/resolutionStore";
-import { clearTreasuryWriteFaultMarkerForResolution } from "@/runtime/treasury/writeFault";
+import { clearTreasuryWriteFaultMarkerForResolution, readTreasuryWriteFault } from "@/runtime/treasury/writeFault";
 import {
   computeTreasuryPolicyDecisionDigest,
   findTreasuryPolicyResolver,
@@ -285,6 +287,8 @@ interface PreparedTransaction {
   faultPhase?: TreasuryWriteFaultPhase;
   /** 已写入 durable intent（executePreparedAction/contract 路径；slot 由 intent 接管）。 */
   intentWritten?: boolean;
+  /** 统一 durable identity（第十二轮 3.4：receipt settlement proof 绑定）。 */
+  durableIdentityDigest?: string;
 }
 
 /**
@@ -345,6 +349,8 @@ export interface TreasuryWriterKernelExecution {
     readonly adapterVersion: number;
     /** adapter registration identity（第十一轮 3.13.5：durable identity 输入）。 */
     readonly adapterRegistrationId?: string;
+    /** 稳定 adapter/reconciler 语义身份（第十二轮 3.5：durable identity 输入）。 */
+    readonly adapterSemanticIdentity?: string;
     readonly authorizationDigest?: string;
     readonly durablePayload?: string;
     readonly durablePayloadVersion?: number;
@@ -716,93 +722,20 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     });
   }
   /**
-   * pre-execution authorization fault 的 acknowledge-rolled-back 恢复
-   *（第十一轮 3.13.1）：仅适用于 callback 未调用且 rollback 完整确认的
-   * internal_authorization_fault——验证完整 authority identity（digest）
-   * 后写 not-executed final tombstone（preExecution 标志）→ 清 marker →
-   * 删 authority；幂等（final tombstone 存在即 already_resolved 并补齐
-   * 清理）；global reset 后仍可完成（全部凭 durable state）；无任何无
-   * 条件 clear-marker 入口。
+   * finalized intent 的 cross-store proof（第十一轮 3.13.6 / 第十二轮 3.4）：
+   * 按完整 attempt identity 校验——returned_ok 须 identity 匹配的 committed
+   * proof；其余须 identity 匹配的 not-executed tombstone。proof 缺失或
+   * identity 不一致 → 恢复路径 semantic fault（entry 保留不释放）。
    */
-  /**
-   * finalized intent 的 cross-store proof（第十一轮 3.13.6）：returned_ok
-   * 须 settled receipt 或 final committed tombstone；其余须 final
-   * not-executed/rolled-back tombstone。proof 缺失 → 恢复路径 semantic
-   * fault（entry 保留不释放、fail closed）。
-   */
-  function checkTreasuryFinalizedProof(transactionId: string, outcome: string): string | null {
-    return recoveryCoordinator.checkTreasuryFinalizedProof(transactionId, outcome);
+  function checkTreasuryFinalizedProof(
+    transactionId: string,
+    outcome: string,
+    attempt: { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string },
+  ): string | null {
+    return recoveryCoordinator.checkTreasuryFinalizedProof(transactionId, outcome, attempt);
   }
 
-  function resolvePreExecutionAuthorizationFaultClosure(
-    input: { readonly transactionId?: string; readonly digest?: string; readonly acknowledgeRolledBack?: boolean } | undefined,
-    fault: Readonly<TreasuryAuthorizationFaultEntry>,
-  ): TreasuryFaultResolutionResult {
-    // 幂等：final not-executed tombstone 已存在 → already_resolved（补齐
-    // marker/authority 清理——中断恢复语义）。
-    const existing = readTreasuryResolutionTombstone(fault.transactionId);
-    if (existing !== undefined && existing.stage === "final" && existing.resolution === "not-executed") {
-      clearTreasuryWriteFaultMarkerForResolution(fault.transactionId, fault.digest);
-      releaseTreasuryAuthorizationFaultEntry(fault.transactionId);
-      return { status: "already_resolved", resolution: "not-executed", transactionId: fault.transactionId };
-    }
-    // 显式确认必需（不允许静默/无条件解除）。
-    if (input?.acknowledgeRolledBack !== true) {
-      metrics.reconciliationCapabilitiesRejected += 1;
-      return {
-        status: "rejected",
-        reason: "invalid_input",
-        detail: "pre-execution authorization fault 需要 acknowledgeRolledBack: true（显式确认 callback 未调用且 rollback 完整——无任何无条件解除入口）",
-      };
-    }
-    // 完整 authority identity 验证（digest 匹配）。
-    if (input.digest !== undefined && fault.digest !== input.digest) {
-      metrics.reconciliationCapabilitiesRejected += 1;
-      return {
-        status: "rejected",
-        reason: "digest_mismatch",
-        detail: `pre-execution fault authority digest 不匹配（entry ${fault.digest}，请求 ${input.digest}）`,
-      };
-    }
-    // slot 预检（任何原状态变化之前）。
-    const slotError = ensureTreasuryResolutionSlotAvailable();
-    if (slotError !== null) {
-      return { status: "rejected", reason: "resolution_store_full", detail: slotError };
-    }
-    // staged：先写 final tombstone（可写性保证），再释放。
-    const finalWrite = writeTreasuryResolutionTombstone({
-      transactionId: fault.transactionId,
-      digest: fault.digest,
-      resolution: "not-executed",
-      stage: "final",
-      actionTick: fault.faultTick,
-      observationTick: Game.time,
-      resolvedAtTick: Game.time,
-      reconcilerKind: "pre-execution",
-      source: "acknowledge-rolled-back",
-      preExecution: true,
-    });
-    if (finalWrite.status === "rejected") {
-      return {
-        status: "rejected",
-        reason: "resolution_store_fatal",
-        detail: `final tombstone 写入失败（fault authority 保留，可重试）: ${finalWrite.detail}`,
-      };
-    }
-    clearTreasuryWriteFaultMarkerForResolution(fault.transactionId, fault.digest);
-    releaseTreasuryAuthorizationFaultEntry(fault.transactionId);
-    metrics.resolutionRecovered += 1;
-    return {
-      status: "resolved",
-      resolution: "not-executed",
-      transactionId: fault.transactionId,
-      receiptWritten: false,
-      reprepareAllowed: true,
-      actionTick: fault.faultTick,
-    };
-  }
-
-  /** 服务实例代际：跨 service 实例的 handle 一律无效（global reset 防御）。 */
+/** 服务实例代际：跨 service 实例的 handle 一律无效（global reset 防御）。 */
   const serviceGeneration = nextTreasuryServiceGeneration();
 
   // ── 内部权威模块（第十一轮 3.13.10 自 facade 抽出；facade 保留生命周期
@@ -844,6 +777,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     resolutionResolvingBlocker: () => peekTreasuryResolutionStoreHealth().inProgress > 0,
     recoverySlotExhausted: () => recoverySlotsOccupied() >= TREASURY_QUARANTINE_MAX_ENTRIES,
     authorizationFaultUnresolved: () => treasuryAuthorizationFaultBlockers().blocking,
+    // 【第十二轮 3.1.6】fault authority 容量前置 admission：满载时阻断新
+    // writer——不得等 redemption 故障发生后才发现 fault store 已满。
+    authorizationFaultCapacityExhausted: () => peekTreasuryAuthorizationFaultHealth().entryCount >= TREASURY_AUTHORIZATION_FAULT_MAX_ENTRIES,
     policyNotReady: () => !treasuryPolicyAuthorityReady(),
     authorizationCapacityExhausted: () => authorizationLedger.activeCount() >= TREASURY_AUTHORIZATION_ACTIVE_LIMIT,
   };
@@ -1868,6 +1804,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           reservationStoreRevision: firstRevisions.reservationStoreRevision,
         },
         adapterRegistrationId: verifiedContract.adapterRegistrationId,
+        ...(verifiedContract.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: verifiedContract.adapterSemanticIdentity } : {}),
         contractId: verifiedContract.contractId,
         contractDigest: verifiedContract.digest,
         transactionId: verifiedContract.transactionId,
@@ -1884,6 +1821,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         transactionId: verifiedContract.transactionId,
         actionKind: verifiedContract.actionKind,
         adapterVersion: verifiedContract.adapterVersion,
+        adapterRegistrationId: verifiedContract.adapterRegistrationId,
+        ...(verifiedContract.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: verifiedContract.adapterSemanticIdentity } : {}),
         ownerIdentity: ownerKey,
         policyIdentity:
           policyResolver.policyId + "@v" + String(policyResolver.policyVersion) + ":" + policyDecisionDigest,
@@ -2191,7 +2130,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       record.state = "committing";
       try {
         runTreasuryCommitFaultHook("receipt_publish");
-        const receipt = projection.publishPreparedReceipt(record.canonical.transactionId, Game.time);
+        const receipt = projection.publishPreparedReceipt(record.canonical.transactionId, Game.time, {
+          ...(record.digest !== undefined ? { digest: record.digest } : {}),
+          ...(record.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.durableIdentityDigest } : {}),
+        });
         if (receipt.status === "fatal") {
           throw new TreasuryCommitFaultError("receipt_publish", receipt.detail);
         }
@@ -2367,6 +2309,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           };
         }
       }
+      // 【第十二轮 3.5】低层（非 contract）路径同样绑定稳定语义身份：intent
+      // 写入时从当前 registry 读取该 kind 的 adapter semanticIdentity（同一
+      // registry 的 reconciler 语义锚点；contract 路径以 contract 携带值为准）。
+      const intentAdapterSemanticIdentity =
+        execution?.intentContract?.adapterSemanticIdentity ??
+        findTreasuryActionAdapter(record.canonical.kind)?.semanticIdentity;
       // 【第十一轮 3.13.5】统一 durable action identity：全 store 幂等/
       // read-back/转移/双权威比较的唯一 digest（outcome/settlement 不进）。
       const durableIdentity = computeTreasuryDurableIdentityDigest({
@@ -2375,12 +2323,19 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         actionKind: record.canonical.kind,
         postings: record.shape.merged.map((leg) => ({ ...leg })),
         source: record.canonical.source,
+        ...(intentAdapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: intentAdapterSemanticIdentity } : {}),
         ...(execution?.intentContract !== undefined
           ? {
               contractId: execution.intentContract.contractId,
               contractDigest: execution.intentContract.contractDigest,
               ...(execution.intentContract.adapterRegistrationId !== undefined
                 ? { adapterRegistrationId: execution.intentContract.adapterRegistrationId }
+                : {}),
+              ...(execution.intentContract.adapterRegistrationId !== undefined
+                ? { adapterRegistrationId: execution.intentContract.adapterRegistrationId }
+                : {}),
+              ...(execution.intentContract.adapterSemanticIdentity !== undefined
+                ? { adapterSemanticIdentity: execution.intentContract.adapterSemanticIdentity }
                 : {}),
               ...(execution.intentContract.durablePayload !== undefined
                 ? { durablePayload: execution.intentContract.durablePayload }
@@ -2406,6 +2361,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
             }
           : {}),
       });
+      record.durableIdentityDigest = durableIdentity;
       // ── durable intent / WAL（第八轮唯一安全顺序）：Game API 之前持久化
       //    transaction identity + canonical postings——写入失败时 callback
       //    零调用、tentative 与槽位释放、结构化拒绝。第九轮：contract 路径
@@ -2427,6 +2383,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         settlement: "ready",
         auditSource: "execute-prepared-action",
         durableIdentityDigest: durableIdentity,
+        ...(intentAdapterSemanticIdentity !== undefined
+          ? { adapterSemanticIdentity: intentAdapterSemanticIdentity }
+          : {}),
         ...(execution?.intentContract !== undefined
           ? {
               contractId: execution.intentContract.contractId,
@@ -2434,6 +2393,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
               adapterVersion: execution.intentContract.adapterVersion,
               ...(execution.intentContract.authorizationDigest !== undefined
                 ? { authorizationDigest: execution.intentContract.authorizationDigest }
+                : {}),
+              ...(execution.intentContract.adapterRegistrationId !== undefined
+                ? { adapterRegistrationId: execution.intentContract.adapterRegistrationId }
+                : {}),
+              ...(execution.intentContract.adapterSemanticIdentity !== undefined
+                ? { adapterSemanticIdentity: execution.intentContract.adapterSemanticIdentity }
                 : {}),
               ...(execution.intentContract.durablePayload !== undefined
                 ? { durablePayload: execution.intentContract.durablePayload }
@@ -2758,6 +2723,14 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           `transactionId ${input.transactionId.slice(0, 48)} 为 legacy v1 quarantine（无完整 contract/cohort identity）——当前 adapter reconciler 不得解释，保持隔离（显式诊断：treasuryLegacyQuarantineDiagnostics）`,
         );
       }
+      // 【第十二轮 3.8】forensic incomplete authority 隔离：intent 缺失时
+      // recovery 防御性直写的最小 quarantine 不得被当前 reconciler 解释。
+      if ((facts0 as { forensic?: unknown }).forensic !== undefined) {
+        return reject(
+          "legacy_authority_isolated",
+          `transactionId ${input.transactionId.slice(0, 48)} 为 forensic incomplete authority（intent 缺失时的防御性直写，缺少 contract/cohort/descriptor 身份事实）——不得签发普通 reconciliation capability（诊断：treasuryForensicQuarantineDiagnostics；显式 forensic 流程处理）`,
+        );
+      }
       // 注册 reconciler 边界：无注册 adapter 或 adapter 无 reconciler 拒绝。
       const actionKind = facts0.actionKind;
       const adapter = findTreasuryActionAdapter(actionKind);
@@ -2773,6 +2746,22 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         return reject(
           "adapter_version_mismatch",
           `authority 记录 adapter v${String(facts0.adapterVersion)}，registry 当前 v${String(adapter.version)}——版本演进后旧 action 不可由新 reconciler 解释`,
+        );
+      }
+      // 【第十二轮 3.5】稳定 reconciler 语义身份验证：global reset 后同
+      // kind/version 但 stable semantic identity 不同 → 不得调用当前
+      // reconciler 解释旧 authority；authority 缺少语义身份（旧数据/低层
+      // 路径）→ 无法验证 → 隔离（不猜测当前 identity）。
+      if (facts0.adapterSemanticIdentity === undefined) {
+        return reject(
+          "legacy_authority_isolated",
+          `transactionId ${input.transactionId.slice(0, 48)} 的 authority 缺少 stable adapter semantic identity（跨 global reset 无法验证 reconciler 语义一致性）——保持隔离，不猜测当前 identity`,
+        );
+      }
+      if (facts0.adapterSemanticIdentity !== adapter.semanticIdentity) {
+        return reject(
+          "adapter_version_mismatch",
+          `authority 绑定 stable semantic identity ${facts0.adapterSemanticIdentity.slice(0, 48)}，registry 当前 ${adapter.semanticIdentity.slice(0, 48)}——global reset 后 reconciler 语义已变化，旧 authority 不得由当前 reconciler 解释`,
         );
       }
       // 结论只能来自注册 reconciler（调用者不可自填）；reconcile 异常 =
@@ -2865,6 +2854,33 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const preExecutionFault = readTreasuryAuthorizationFaultEntry(input?.transactionId ?? "");
       if (preExecutionFault !== undefined) {
         return resolutionAuthorityInternal.resolvePreExecutionAuthorizationFault(input, preExecutionFault);
+      }
+      // 【第十二轮 3.3】pre-execution 通道的解除后幂等：authority 已释放但
+      // final not-executed tombstone（preExecution 标志）存在且调用方提供的
+      // digest 与 tombstone 一致 → already_resolved（digest 是该通道的
+      // attempt identity 绑定——同 ID 新 attempt 的 contract digest 必然
+      // 不同，不匹配即拒绝）。
+      if (preExecutionFault === undefined && input?.acknowledgeRolledBack === true && input.digest !== undefined) {
+        const resolvedTombstone = readTreasuryResolutionTombstone(input.transactionId ?? "");
+        if (
+          resolvedTombstone !== undefined &&
+          resolvedTombstone.stage === "final" &&
+          resolvedTombstone.resolution === "not-executed" &&
+          resolvedTombstone.preExecution === true &&
+          resolvedTombstone.digest === input.digest
+        ) {
+          return { status: "already_resolved", resolution: "not-executed", transactionId: input.transactionId ?? "" };
+        }
+      }
+      // 【第十二轮 3.1.7】forensic marker（authority 写入失败的兜底）专用通道。
+      const forensicMarker = readTreasuryWriteFault();
+      if (
+        preExecutionFault === undefined &&
+        forensicMarker !== undefined &&
+        forensicMarker.transactionId === input?.transactionId &&
+        forensicMarker.phase === "internal_authorization_fault_forensic"
+      ) {
+        return resolutionAuthorityInternal.resolveForensicAuthorizationFaultMarker(input);
       }
       const conclusion = internalService.validateReconciliationCapability(input?.capability);
       if (conclusion.status === "valid" && conclusion.capability.conclusion === "observed_not_executed") {

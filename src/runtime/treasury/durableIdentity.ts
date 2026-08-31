@@ -28,6 +28,8 @@ export interface TreasuryDurableIdentityInput {
   readonly contractId?: string;
   readonly contractDigest?: string;
   readonly adapterRegistrationId?: string;
+  /** 【第十二轮 3.5】稳定 adapter/reconciler 语义身份（contract 路径携带）。 */
+  readonly adapterSemanticIdentity?: string;
   readonly actionKind: string;
   readonly postings: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
   readonly structureFacts?: readonly TreasuryStructureBindingDescriptor[];
@@ -58,6 +60,7 @@ export function computeTreasuryDurableIdentityDigest(input: TreasuryDurableIdent
     `cid:${input.contractId === undefined ? "-" : `${String(input.contractId.length)}:${input.contractId}`}`,
     `cd:${input.contractDigest === undefined ? "-" : input.contractDigest}`,
     `ar:${input.adapterRegistrationId === undefined ? "-" : input.adapterRegistrationId}`,
+    `asi:${input.adapterSemanticIdentity === undefined ? "-" : `${String(input.adapterSemanticIdentity.length)}:${input.adapterSemanticIdentity}`}`,
     `k:${String(input.actionKind.length)}:${input.actionKind}`,
     `p:${input.postings
       .map((leg) => `${leg.roomName}\u0000${leg.locationKind}\u0000${leg.resource}\u0000${String(leg.delta)}`)

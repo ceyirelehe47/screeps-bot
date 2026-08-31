@@ -39,6 +39,7 @@ import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import { treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
+import { verifyTreasuryEntryIdentity, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
 import { quarantineSemanticViolation } from "@/runtime/treasury/semanticMatrix";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
@@ -80,6 +81,10 @@ export interface TreasuryQuarantineEntry {
   readonly contractDigest?: string;
   readonly actionKind?: string;
   readonly adapterVersion?: number;
+  /** adapter registration identity（第十二轮：durable identity 重算输入）。 */
+  readonly adapterRegistrationId?: string;
+  /** 稳定 adapter/reconciler 语义身份（第十二轮 3.5）。 */
+  readonly adapterSemanticIdentity?: string;
   readonly durablePayload?: string;
   readonly durablePayloadVersion?: number;
   /** authorization bundle digest（contract 路径）。 */
@@ -96,6 +101,13 @@ export interface TreasuryQuarantineEntry {
   readonly durableIdentityDigest?: string;
   /** v1 迁移且无并存 intent 补全合同事实（不参与 contract-backed resolution）。 */
   readonly legacyV1?: boolean;
+  /**
+   * 【第十二轮 3.8】forensic incomplete authority：intent 缺失时 recovery
+   * coordinator 防御性直写的最小 quarantine——缺少现代完整 identity 事实，
+   * 不得被当前 adapter reconciler 解释、不得签发普通 capability、不得自动
+   * resolve。与 legacyV1（v1 迁移残留）是不同故障来源，诊断必须可区分。
+   */
+  readonly forensic?: { readonly reason: "intent_missing_fallback"; readonly detail: string };
 }
 
 /** quarantine v3 的完整 structure descriptor（第十一轮 3.13.9；与 intent structureFacts 同形状）。 */
@@ -146,7 +158,7 @@ export function outcomeOfTreasuryFaultPhase(
   if (phase === "action_returned_non_ok_abort_failed") return "returned_non_ok";
   if (phase === "executing_at_end_tick" || phase === "action_threw_execution_unknown") return "started_unknown";
   // 原子 redemption 中断发生在 Game callback 之前——动作确定未执行。
-  if (phase === "internal_authorization_fault") return "not_started";
+  if (phase === "internal_authorization_fault" || phase === "internal_authorization_fault_forensic") return "not_started";
   if (TREASURY_WRITE_FAULT_PHASES.has(phase)) return "returned_ok";
   return null;
 }
@@ -283,6 +295,16 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
       return "adapterVersion 须为正安全整数";
     }
   }
+  if (candidate.adapterRegistrationId !== undefined) {
+    if (typeof candidate.adapterRegistrationId !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.adapterRegistrationId)) {
+      return "adapterRegistrationId 非法（16 hex）";
+    }
+  }
+  if (candidate.adapterSemanticIdentity !== undefined) {
+    if (typeof candidate.adapterSemanticIdentity !== "string" || candidate.adapterSemanticIdentity.length === 0 || candidate.adapterSemanticIdentity.length > QUARANTINE_KIND_SOURCE_MAX) {
+      return "adapterSemanticIdentity 非法（1..128 字符）";
+    }
+  }
   if (candidate.durablePayload !== undefined) {
     if (typeof candidate.durablePayload !== "string" || candidate.durablePayload.length === 0 || candidate.durablePayload.length > 512) {
       return "durablePayload 非法（须为 1..512 字符）";
@@ -364,6 +386,15 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
       return "authorizationCohort.authorizationLegDigests 非法（1..8）";
     }
   }
+  if (candidate.forensic !== undefined) {
+    const forensic = candidate.forensic as Partial<{ reason: string; detail: string }> | undefined;
+    if (!forensic || typeof forensic !== "object" || forensic.reason !== "intent_missing_fallback") {
+      return "forensic 标记非法（reason 须为 intent_missing_fallback）";
+    }
+    if (typeof forensic.detail !== "string" || forensic.detail.length === 0 || forensic.detail.length > 192) {
+      return "forensic.detail 非法（1..192 字符）";
+    }
+  }
   if (!Array.isArray(candidate.deltas) || candidate.deltas.length > QUARANTINE_DELTAS_MAX) {
     return "deltas 非数组或超上限";
   }
@@ -417,6 +448,9 @@ function validateQuarantineStoreShape(store: TreasuryQuarantineStore): string | 
     if (encodeQuarantineKey(typed.transactionId) !== key) {
       return `存储键与 entry.transactionId 不一致: ${key.slice(0, 48)}`;
     }
+    // 【第十二轮 3.6】identity 重算验证（篡改事实而未同步 digest → fatal）。
+    const identityError = verifyTreasuryEntryIdentity(typed as TreasuryIdentityFactsEntry, `quarantine（${key.slice(0, 48)}）`);
+    if (identityError !== null) return identityError;
     // 聚合安全整数（资源 (room,loc,res) 与容量 (room,loc) 双口径预检）：
     // 净额方向与保守方向（第八轮 per-transaction：Σmax(0,−net) 流出 /
     // Σmax(0,net) 容量——保守和可能在大额混合下溢出而净额不溢出）双侧检查。
@@ -714,6 +748,41 @@ export function treasuryLegacyQuarantineDiagnostics(): readonly TreasuryLegacyQu
   return Object.freeze(diagnostics);
 }
 
+/**
+ * 【第十二轮 3.8】forensic incomplete authority 只读诊断：列出被隔离的
+ * 防御性最小 quarantine（authority 来源 / 缺少的证明 / 隔离原因）。零写入。
+ */
+export interface TreasuryForensicQuarantineDiagnostic {
+  readonly transactionId: string;
+  readonly digest: string;
+  readonly phase: string;
+  readonly outcome: string;
+  readonly recordedAt: number;
+  readonly reason: string;
+  readonly detail: string;
+}
+
+export function treasuryForensicQuarantineDiagnostics(): readonly TreasuryForensicQuarantineDiagnostic[] {
+  const store = peekTreasuryQuarantineStore();
+  if (store === undefined) return Object.freeze([]);
+  const diagnostics: TreasuryForensicQuarantineDiagnostic[] = [];
+  for (const entry of Object.values(store.entries ?? {})) {
+    if ((entry as { forensic?: { reason: string; detail: string } }).forensic !== undefined) {
+      const forensic = (entry as { forensic: { reason: string; detail: string } }).forensic;
+      diagnostics.push({
+        transactionId: entry.transactionId,
+        digest: entry.digest,
+        phase: entry.phase,
+        outcome: entry.outcome,
+        recordedAt: entry.recordedAt,
+        reason: forensic.reason,
+        detail: forensic.detail,
+      });
+    }
+  }
+  return Object.freeze(diagnostics);
+}
+
 export function isTreasuryTransactionQuarantined(transactionId: string): boolean {
   return readTreasuryQuarantineEntry(transactionId) !== undefined;
 }
@@ -951,6 +1020,11 @@ export function repairTreasuryQuarantineStoreMetadataForResolution(): { status: 
     const typed = entry as TreasuryQuarantineEntry;
     if (encodeQuarantineKey(typed.transactionId) !== key) {
       return { status: "rejected", detail: `存储键与 entry.transactionId 不一致: ${key.slice(0, 48)}` };
+    }
+    // 【第十二轮 3.6】repair 不自动覆盖不一致 digest：identity 重算失败 → 拒绝。
+    const repairIdentityError = verifyTreasuryEntryIdentity(typed as TreasuryIdentityFactsEntry, `quarantine repair（${key.slice(0, 48)}）`);
+    if (repairIdentityError !== null) {
+      return { status: "rejected", detail: `${repairIdentityError}（原数据保留，不覆盖 digest）` };
     }
   }
   if (ownKeys.length > TREASURY_QUARANTINE_MAX_ENTRIES) {

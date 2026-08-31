@@ -84,6 +84,7 @@ function registerReconciler(): void {
   replaceTreasuryActionAdapterForTest({
     ...makeTreasuryTestTransferAdapter(),
     kind: "terminal.send",
+    semanticIdentity: "terminal.send@reconciler-semantics-v1",
     reconcile: () => "observed_committed",
   });
 }
@@ -143,20 +144,25 @@ describe("staged commit 故障注入", () => {
     // heap 零写入：journal 空、投影不变。
     expect(service.journal()).toHaveLength(0);
     expect(service.projectedUsedCapacity("W1N57", "storage")).toBe(100_000);
-    // receipt 权威已写入：tick 边界 faulted 转 quarantine 后，显式
-    // resolve-as-committed（幂等命中既有 receipt）解锁；同 id 重放命中
-    // already_settled（幂等保住，不会二次结算）——半提交状态显式可恢复。
+    // 【第十二轮 3.8】两阶段 prepare/commit（无 durable intent）路径的
+    // commit fault 转 quarantine 时缺现代完整 identity → forensic incomplete
+    // authority：不得被普通 reconciler 解释、不得签发普通 capability——
+    // 半提交状态保持 fail closed（显式 forensic 流程处理）。
     service.endTick();
     const quarantined = readTreasuryQuarantineEntry("ts1_fault_heap");
     expect(quarantined).toBeDefined();
+    expect((quarantined as { forensic?: unknown }).forensic).toBeDefined();
     // 第七轮：resolution 需故障后 observation（下一 tick）+ 显式证据。
     Game.time += 1;
     service.beginTick();
+    const issued = service.issueTreasuryReconciliationCapability({ transactionId: "ts1_fault_heap" });
+    expect(issued.status).toBe("rejected");
+    if (issued.status === "rejected") expect(issued.reason).toBe("legacy_authority_isolated");
     const resolved = service.resolveUnresolvedTransaction({
       transactionId: "ts1_fault_heap",
-      capability: issueCap(service, "ts1_fault_heap"),
+      capability: { __brand: "treasury-reconciliation-capability" } as never,
     });
-    expect(resolved.status).toBe("resolved");
+    expect(resolved.status).toBe("rejected");
     const replay = service.prepareTransaction({ ...prepared, handle: undefined } as unknown as TreasuryTransactionInput);
     expect(replay.status).toBe("already_settled");
   });
@@ -254,15 +260,11 @@ describe("staged commit 故障注入", () => {
     service.beginTick();
     expect(readTreasuryWriteFault()).toBeDefined();
     expect(service.metrics().writeAdmissionLocked).toBe(1);
-    // 显式 resolution 路径解除（faulted 已在上一 endTick 转 quarantine）。
-    const resolved = service.resolveUnresolvedTransaction({
-      transactionId: "ts1_repair",
-      capability: issueCap(service, "ts1_repair"),
-    });
-    expect(resolved.status).toBe("resolved");
-    expect(service.metrics().writeAdmissionLocked).toBe(0);
-    const after = service.prepareTransaction(freshInput(service, "ts1_after_repair"));
-    expect(after.status).toBe("prepared");
+    // 【第十二轮 3.8】无 intent 的两阶段 commit fault → forensic authority：
+    // 普通 capability 签发拒绝（marker/隔离保持，显式 forensic 流程处理）。
+    const issued = service.issueTreasuryReconciliationCapability({ transactionId: "ts1_repair" });
+    expect(issued.status).toBe("rejected");
+    if (issued.status === "rejected") expect(issued.reason).toBe("legacy_authority_isolated");
   });
 
   it("正常路径无故障时 marker 恒缺失", () => {

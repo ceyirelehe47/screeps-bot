@@ -315,7 +315,7 @@ describe("第六轮结果语义：Game 已执行与 Treasury 故障不可混淆"
     // 直接把已 load 的 store 中该 id 的 settled value 改为损坏值。
     const store = peekTreasuryReceiptStore();
     expect(store).toBeDefined();
-    (store!.settled as Record<string, number>)["t:ts1_corrupt"] = Number.NaN;
+    (store!.settled as unknown as Record<string, number>)["t:ts1_corrupt"] = Number.NaN;
     const committed = service.commitPreparedTransaction(
       (prepared as { status: "prepared"; handle: import("@/runtime/treasury/types").TreasuryPreparedHandle }).handle,
     );

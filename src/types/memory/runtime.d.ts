@@ -640,8 +640,9 @@ declare global {
      */
     treasury?: {
       receipts?: {
-        version: 3;
-        settled: Record<string, number>;
+        /** v4（第十二轮 3.4）：value 为 settlement proof（结算 tick + attempt 身份绑定）。 */
+        version: 4;
+        settled: Record<string, { settledAtTick: number; digest?: string; durableIdentityDigest?: string } | number>;
         updatedAt: number;
         entryCount: number;
         nextExpiryTick: number | null;
@@ -712,6 +713,10 @@ declare global {
             contractId?: string;
             contractDigest?: string;
             adapterVersion?: number;
+            /** adapter registration identity（第十二轮：durable identity 重算输入）。 */
+            adapterRegistrationId?: string;
+            /** 稳定 adapter/reconciler 语义身份（第十二轮 3.5）。 */
+            adapterSemanticIdentity?: string;
             durablePayload?: string;
             durablePayloadVersion?: number;
             postings: Array<{
@@ -767,6 +772,8 @@ declare global {
             };
             /** canonical cohort digest（Treasury 计算）。 */
             authorizationCohortDigest?: string;
+            /** 统一 durable action identity digest（第十一轮 3.13.5；第十二轮 load 重算验证）。 */
+            durableIdentityDigest?: string;
             auditSource?: string;
             createdAtTick: number;
             updatedAtTick: number;
@@ -825,6 +832,10 @@ declare global {
             contractDigest?: string;
             actionKind?: string;
             adapterVersion?: number;
+            /** adapter registration identity（第十二轮：durable identity 重算输入）。 */
+            adapterRegistrationId?: string;
+            /** 稳定 adapter/reconciler 语义身份（第十二轮 3.5）。 */
+            adapterSemanticIdentity?: string;
             durablePayload?: string;
             durablePayloadVersion?: number;
             authorizationDigest?: string;
@@ -870,8 +881,12 @@ declare global {
             };
             /** canonical cohort digest（Treasury 计算）。 */
             authorizationCohortDigest?: string;
+            /** 统一 durable action identity digest（第十二轮 load 重算验证）。 */
+            durableIdentityDigest?: string;
             /** v1 迁移且无并存 intent 补全（不参与 contract-backed resolution）。 */
             legacyV1?: boolean;
+            /** forensic incomplete authority（第十二轮 3.8：intent 缺失时的防御性直写，隔离不自动解释）。 */
+            forensic?: { reason: "intent_missing_fallback"; detail: string };
           }
         >;
         entryCount: number;
@@ -888,7 +903,8 @@ declare global {
        * 永久全局锁。
        */
       authorizationFaults?: {
-        version: 1;
+        /** v2（第十二轮 3.2）：entry 携带完整 durable identity 事实（可重算验证）。 */
+        version: 2;
         entries: Record<
           string,
           {
@@ -899,6 +915,17 @@ declare global {
             actionKind?: string;
             authorizationDigest?: string;
             authorizationCohortDigest?: string;
+            /** 完整 cohort facts（第十二轮 3.2；结构见 TreasuryAuthorizationCohortFacts）。 */
+            authorizationCohort?: Record<string, unknown>;
+            adapterVersion?: number;
+            adapterRegistrationId?: string;
+            adapterSemanticIdentity?: string;
+            ownerIdentity?: string;
+            policyIdentity?: string;
+            structureFacts?: Array<Record<string, unknown>>;
+            durableIdentityDigest?: string;
+            /** v1 迁移 entry（身份事实不完整——仅按 digest 匹配的旧协议解除）。 */
+            legacyV1?: boolean;
             postings: Array<{
               roomName: string;
               locationKind: string;
@@ -931,7 +958,8 @@ declare global {
        * v1（无 entryCount/stage）无损升级；损坏/未知版本 fail closed。
        */
       resolutions?: {
-        version: 2;
+        /** v3（第十二轮 3.3）：tombstone 绑定完整 attempt identity。 */
+        version: 3;
         entries: Record<
           string,
           {
@@ -945,6 +973,10 @@ declare global {
             resolvedAtTick: number;
             reconcilerKind?: string;
             source?: string;
+            preExecution?: boolean;
+            contractDigest?: string;
+            authorizationCohortDigest?: string;
+            durableIdentityDigest?: string;
           }
         >;
         entryCount: number;
