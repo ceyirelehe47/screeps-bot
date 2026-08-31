@@ -12,11 +12,11 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const manifestPath = path.join(repoRoot, "test", "test-suite-budget.json");
 const jestEntrypoint = path.join(repoRoot, "node_modules", "jest", "bin", "jest.js");
 const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data", "node_modules"]);
-const requiredBaselineCommit = "7ebd7d7";
+const requiredBaselineCommit = "5aa098b";
 const requiredTarget = Object.freeze({
-  suites: 224,
-  tests: 1299,
-  passed: 1299,
+  suites: 226,
+  tests: 1348,
+  passed: 1348,
   failed: 0,
   pending: 0,
   todo: 0,
