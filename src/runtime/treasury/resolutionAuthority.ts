@@ -158,11 +158,23 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
     if (slotError !== null) {
       return { status: "rejected", reason: "resolution_store_full", detail: slotError };
     }
+    // 【第十四轮第十一节】pre-execution fault authority 等级 → 显式 proof
+    // class（modern → identity-bound；lowlevel → lowlevel；legacy → legacy；
+    // forensic → forensic——禁止由 optional 字段隐式猜测）。
+    const faultProofLevel =
+      fault.authorityLevel === "modern"
+        ? ("identity-bound" as const)
+        : fault.authorityLevel === "lowlevel"
+          ? ("lowlevel" as const)
+          : fault.authorityLevel === "legacy"
+            ? ("legacy" as const)
+            : ("forensic" as const);
     const finalWrite = writeTreasuryResolutionTombstone({
       transactionId: fault.transactionId,
       digest: fault.digest,
       resolution: "not-executed",
       stage: "final",
+      proofLevel: faultProofLevel,
       actionTick: fault.faultTick,
       observationTick: Game.time,
       resolvedAtTick: Game.time,
@@ -276,6 +288,8 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       digest: marker.digest,
       resolution: "not-executed",
       stage: "final",
+      /** 【第十四轮第十一节】forensic 管理协议的显式 proof class（允许部分身份字段）。 */
+      proofLevel: "forensic",
       actionTick: marker.tick,
       observationTick: Game.time,
       resolvedAtTick: Game.time,

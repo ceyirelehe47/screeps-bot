@@ -67,6 +67,7 @@ import {
   ensureTreasuryResolutionStoreValidated,
   readTreasuryResolutionTombstone,
   writeTreasuryResolutionTombstone,
+  type TreasuryResolutionProofLevel,
 } from "@/runtime/treasury/resolutionStore";
 import type {
   TreasuryReconciliationCapability,
@@ -294,8 +295,20 @@ function prevalidate(
     if (hasSettledReceipt(input.transactionId) !== undefined || committedResolutionSettledAtTick(input.transactionId) !== undefined) {
       const proof = readTreasurySettlementProof(input.transactionId);
       const committedTombstone = readTreasuryResolutionTombstone(input.transactionId);
+      // 【第十四轮第七节】receipt proof 视图完整传递全部身份字段——不再只传
+      // digest+durableIdentityDigest 子集（cohort/contract 不同即 conflict）。
       const relation = proof !== undefined
-        ? treasuryAttemptIdentityRelation({ digest: proof.digest ?? attempt.digest, durableIdentityDigest: proof.durableIdentityDigest }, attempt)
+        ? treasuryAttemptIdentityRelation(
+            {
+              digest: proof.digest ?? attempt.digest,
+              ...(proof.contractDigest !== undefined ? { contractDigest: proof.contractDigest } : {}),
+              ...(proof.authorizationCohortDigest !== undefined
+                ? { authorizationCohortDigest: proof.authorizationCohortDigest }
+                : {}),
+              ...(proof.durableIdentityDigest !== undefined ? { durableIdentityDigest: proof.durableIdentityDigest } : {}),
+            },
+            attempt,
+          )
         : committedTombstone !== undefined
           ? treasuryAttemptIdentityRelation(committedTombstone, attempt)
           : "insufficient" as const;
@@ -483,6 +496,21 @@ function prevalidate(
 }
 
 /**
+ * 【第十四轮第十一节】authority 显式等级 → tombstone proof class 映射：
+ * modern → identity-bound（完整 contract/cohort/durable 身份矩阵由 authority
+ * 等级保证）；lowlevel → lowlevel（durable-only）；legacy/forensic/缺失 →
+ * null（不得走普通 staged resolution——capability 签发等级门禁已挡，此处
+ * 防御性拒绝）。
+ */
+function resolutionProofLevelOfAuthority(
+  authority: TreasuryUnresolvedAuthority,
+): TreasuryResolutionProofLevel | null {
+  if (authority.authorityLevel === "modern") return "identity-bound";
+  if (authority.authorityLevel === "lowlevel") return "lowlevel";
+  return null;
+}
+
+/**
  * resolve-as-committed（staged）：slot 预检 → resolving tombstone → receipt
  * 刷新（resolution tick）→ 释放 quarantine/intent → 清 marker → finalize。
  * 原 action tick 保留在 tombstone（审计）；不向当前 tick overlay/journal
@@ -515,11 +543,23 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     return { status: "rejected", reason: "resolution_store_full", detail: slotError };
   }
   // staged 第 2 步：resolving tombstone 落盘（resolution-intent）。
+  // 【第十四轮第十一节】显式 proof class（modern → identity-bound；
+  // lowlevel → lowlevel；其余等级防御拒绝——不得隐式降级 legacy）。
+  const resolvingProofLevel = resolutionProofLevelOfAuthority(authority);
+  if (resolvingProofLevel === null) {
+    countRejected();
+    return {
+      status: "rejected",
+      reason: "resolution_not_allowed",
+      detail: `authority 等级 ${String(authority.authorityLevel)} 不参与普通 staged resolution（无对应 proof class——显式 forensic/legacy 流程处理）`,
+    };
+  }
   const resolvingWrite = writeTreasuryResolutionTombstone({
     transactionId: authority.transactionId,
     digest: authority.digest,
     resolution: "committed",
     stage: "resolving",
+    proofLevel: resolvingProofLevel,
     actionTick: authority.actionTick,
     settledAtTick: Game.time,
     observationTick: capability.observationTick,
@@ -580,6 +620,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     digest: authority.digest,
     resolution: "committed",
     stage: "final",
+    proofLevel: resolvingProofLevel,
     actionTick: authority.actionTick,
     settledAtTick: Game.time,
     observationTick: capability.observationTick,
@@ -653,11 +694,22 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
     return { status: "rejected", reason: "resolution_store_full", detail: slotError };
   }
   // staged 第 2 步：**先写 final tombstone**（可写性保证），再释放。
+  // 【第十四轮第十一节】显式 proof class（与 committed 路径同一映射）。
+  const finalProofLevel = resolutionProofLevelOfAuthority(authority);
+  if (finalProofLevel === null) {
+    countRejected();
+    return {
+      status: "rejected",
+      reason: "resolution_not_allowed",
+      detail: `authority 等级 ${String(authority.authorityLevel)} 不参与普通 staged resolution（无对应 proof class——显式 forensic/legacy 流程处理）`,
+    };
+  }
   const finalWrite = writeTreasuryResolutionTombstone({
     transactionId: authority.transactionId,
     digest: authority.digest,
     resolution: "not-executed",
     stage: "final",
+    proofLevel: finalProofLevel,
     actionTick: authority.actionTick,
     observationTick: capability.observationTick,
     resolvedAtTick: Game.time,

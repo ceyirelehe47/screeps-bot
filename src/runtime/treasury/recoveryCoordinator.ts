@@ -16,7 +16,7 @@ import {
   readTreasuryIntentEntry,
   transferTreasuryIntentToQuarantine,
 } from "@/runtime/treasury/intents";
-import { hasSettledReceipt, readTreasurySettlementProof } from "@/runtime/treasury/receipts";
+import { readTreasurySettlementProof } from "@/runtime/treasury/receipts";
 import { readTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
 import {
   treasuryAttemptIdentityRelation,
@@ -142,13 +142,28 @@ export function createTreasuryRecoveryCoordinator(deps: TreasuryRecoveryCoordina
    * - 旧 attempt 的 receipt/tombstone（identity 不同或缺失现代身份事实）
    *   不得释放新 attempt 的 intent（conflict/insufficient 均 fail closed）。
    */
+  /**
+   * 【第十四轮第七节】receipt proof 视图完整传递全部身份字段（digest /
+   * contractDigest / authorizationCohortDigest / durableIdentityDigest）——
+   * 不再只传 digest+durableIdentityDigest 子集（cohort/contract 不同即
+   * conflict，缺失即 insufficient）。
+   */
   const checkTreasuryFinalizedProof = (transactionId: string, outcome: string, attempt: TreasuryAttemptIdentity): string | null => {
     if (outcome === "returned_ok") {
       const settlement = readTreasurySettlementProof(transactionId);
       if (
         settlement !== undefined &&
         treasuryAttemptIdentityRelation(
-          { digest: settlement.digest ?? attempt.digest, durableIdentityDigest: settlement.durableIdentityDigest },
+          {
+            digest: settlement.digest ?? attempt.digest,
+            ...(settlement.contractDigest !== undefined ? { contractDigest: settlement.contractDigest } : {}),
+            ...(settlement.authorizationCohortDigest !== undefined
+              ? { authorizationCohortDigest: settlement.authorizationCohortDigest }
+              : {}),
+            ...(settlement.durableIdentityDigest !== undefined
+              ? { durableIdentityDigest: settlement.durableIdentityDigest }
+              : {}),
+          },
           attempt,
         ) === "match"
       ) {
