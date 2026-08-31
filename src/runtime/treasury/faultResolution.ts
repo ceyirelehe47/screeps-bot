@@ -146,7 +146,11 @@ export type TreasuryFaultResolutionResult =
         | "authority_inconsistent"
         | "resolution_store_fatal"
         | "resolution_store_full"
-        | "invalid_input";
+        | "invalid_input"
+        /** 【第十三轮】同 id 既有 receipt proof 与当前 attempt identity 冲突。 */
+        | "settlement_identity_conflict"
+        /** 【第十三轮】既有 receipt proof（legacy/身份不足）不能证明当前 attempt。 */
+        | "settlement_proof_insufficient";
       readonly detail: string;
     };
 
@@ -541,8 +545,15 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     return { status: "rejected", reason: "invalid_capability", detail: `capability 消费失败（${consumedNow.reason}）: ${consumedNow.detail}` };
   }
   // staged 第 3 步：receipt 刷新（既有 receipt 真正更新到 resolution tick）。
+  // 【第十三轮第六节】identity-aware：携带完整 attempt 身份；blocked（同 id
+  // 既有 proof 为 legacy/与当前 attempt 冲突/证明不足）不得覆盖——回滚
+  // tombstone（零原状态变化），quarantine/marker 不动，authority 保持。
   const receipt = refreshSettledReceiptForResolution(authority.transactionId, Game.time, {
     ...(authority.digest !== undefined ? { digest: authority.digest } : {}),
+    ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+    ...(authority.authorizationCohortDigest !== undefined
+      ? { authorizationCohortDigest: authority.authorizationCohortDigest }
+      : {}),
     ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
   });
   if (receipt.status === "fatal") {
@@ -550,6 +561,15 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     deleteTreasuryResolutionTombstone(authority.transactionId);
     countRejected();
     return { status: "rejected", reason: "receipt_store_fatal", detail: receipt.detail };
+  }
+  if (receipt.status === "blocked") {
+    deleteTreasuryResolutionTombstone(authority.transactionId);
+    countRejected();
+    return {
+      status: "rejected",
+      reason: receipt.reason === "identity_conflict" ? "settlement_identity_conflict" : "settlement_proof_insufficient",
+      detail: `receipt 刷新被身份验证阻断（${receipt.reason}）: ${receipt.detail}——authority 保持，显式处理`,
+    };
   }
   // staged 第 4-6 步：释放 quarantine/intent → 清匹配 marker → finalize。
   releaseTreasuryQuarantineEntry(authority.transactionId);

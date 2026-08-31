@@ -19,7 +19,7 @@
  * - 显式 repair（quarantine 元数据）。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
-import { clearTreasuryPersistenceForTest, hasSettledReceipt, peekTreasuryReceiptStore } from "@/runtime/treasury/receipts";
+import { clearTreasuryPersistenceForTest, hasSettledReceipt, peekTreasuryReceiptStore, readTreasurySettlementProof } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import {
   readTreasuryWriteFault,
@@ -136,7 +136,9 @@ function resolveNotExecuted(service: TreasuryTestService, transactionId: string,
 }
 
 /** 制造一笔 commit-fault 后跨 tick 的 quarantine（Game 确认 OK 的故障）。 */
-function makeCommittedFaultQuarantine(transactionId = "ts1_res_c"): { faultTick: number; digest: string } {
+function makeCommittedFaultQuarantine(
+  transactionId = "ts1_res_c",
+): { faultTick: number; digest: string; contractDigest?: string; authorizationCohortDigest?: string; durableIdentityDigest?: string } {
   const service = makeService();
   injectOnce("receipt_publish");
   const result = service.executePreparedAction(freshInput(service, transactionId), () => ({ ok: true }));
@@ -144,7 +146,17 @@ function makeCommittedFaultQuarantine(transactionId = "ts1_res_c"): { faultTick:
   service.endTick();
   const entry = readTreasuryQuarantineEntry(transactionId);
   expect(entry).toBeDefined();
-  return { faultTick: Game.time, digest: entry!.digest };
+  // 【第十三轮】返回完整 attempt identity——staged tombstone/receipt fixture
+  // 须与 authority 身份一致（identity match 才能释放/刷新）。
+  return {
+    faultTick: Game.time,
+    digest: entry!.digest,
+    ...(entry!.contractDigest !== undefined ? { contractDigest: entry!.contractDigest } : {}),
+    ...(entry!.authorizationCohortDigest !== undefined
+      ? { authorizationCohortDigest: entry!.authorizationCohortDigest }
+      : {}),
+    ...(entry!.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry!.durableIdentityDigest } : {}),
+  };
 }
 
 /** 制造一笔 executing 边界 quarantine（Game 结果未知）。 */
@@ -321,9 +333,15 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     // 建合法 store——正常 commit 路径不产生 quarantine）。
     Memory.runtime!.treasury!.quarantine = { version: 2 as unknown as 3, entries: {}, entryCount: 0 };
     const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
+    // 【第十三轮】fixture 的 digest 与既有 modern receipt proof 一致
+    //（identity-aware refresh：authority 为 digest-only legacy attempt 时按
+    // digest 匹配 relation=match 即可刷新；proof 身份保留不降级）。
+    const settledProof = readTreasurySettlementProof("ts1_refresh");
+    expect(settledProof).toBeDefined();
+    const refreshDigest = settledProof!.digest ?? "0123456789abcdef";
     store.entries["q:ts1_refresh"] = {
       transactionId: "ts1_refresh",
-      digest: "0123456789abcdef",
+      digest: refreshDigest,
       tick: Game.time,
       kind: "terminal.send",
       adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
@@ -338,7 +356,7 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     Game.time += 5_000;
     const next = makeService();
     next.beginTick();
-    const resolved = resolveCommitted(next, "ts1_refresh", "0123456789abcdef");
+    const resolved = resolveCommitted(next, "ts1_refresh", refreshDigest);
     expect(resolved.status).toBe("resolved");
     // receipt 刷新到 resolution tick（旧 tick1 窗口不残留）。
     expect(hasSettledReceipt("ts1_refresh")).toBe(Game.time);
@@ -592,8 +610,10 @@ describe("staged atomic（故障注入与恢复）", () => {
   });
 
   it("resolving 中断（receipt 已写）后 beginTick 幂等恢复 finalize", () => {
-    const { digest } = makeCommittedFaultQuarantine("ts1_recover");
-    // 手工构造 staged 中断态：resolving tombstone + receipt 已写 + quarantine 仍在。
+    const { digest, contractDigest, authorizationCohortDigest, durableIdentityDigest } = makeCommittedFaultQuarantine("ts1_recover");
+    // 手工构造 staged 中断态：resolving tombstone + receipt 已写 + quarantine 仍在
+    //（【第十三轮】tombstone 绑定 authority 的完整 attempt identity——
+    // identity match 才能释放）。
     expect(
       writeTreasuryResolutionTombstone({
         transactionId: "ts1_recover",
@@ -605,10 +625,19 @@ describe("staged atomic（故障注入与恢复）", () => {
         observationTick: Game.time,
         resolvedAtTick: Game.time,
         reconcilerKind: "terminal.send",
+        ...(contractDigest !== undefined ? { contractDigest } : {}),
+        ...(authorizationCohortDigest !== undefined ? { authorizationCohortDigest } : {}),
+        ...(durableIdentityDigest !== undefined ? { durableIdentityDigest } : {}),
       }).status,
     ).not.toBe("rejected");
     const { commitSettledReceipt } = jest.requireActual("@/runtime/treasury/receipts") as typeof import("@/runtime/treasury/receipts");
-    expect(commitSettledReceipt("ts1_recover", Game.time).status).toBe("written");
+    expect(
+      commitSettledReceipt(
+        "ts1_recover",
+        Game.time,
+        durableIdentityDigest !== undefined ? { digest, durableIdentityDigest } : undefined,
+      ).status,
+    ).toBe("written");
     expect(readTreasuryQuarantineEntry("ts1_recover")).toBeDefined();
     Game.time += 1;
     const next = makeService();
@@ -620,7 +649,7 @@ describe("staged atomic（故障注入与恢复）", () => {
   });
 
   it("【第九轮 4.9】resolving 无 receipt：beginTick 幂等续做 refresh 至原定 settledAtTick 后 finalize（不回滚不缩短 horizon）", () => {
-    const { digest } = makeCommittedFaultQuarantine("ts1_rollback");
+    const { digest, contractDigest, authorizationCohortDigest, durableIdentityDigest } = makeCommittedFaultQuarantine("ts1_rollback");
     const resolutionTick = Game.time;
     expect(
       writeTreasuryResolutionTombstone({
@@ -633,6 +662,9 @@ describe("staged atomic（故障注入与恢复）", () => {
         observationTick: Game.time,
         resolvedAtTick: Game.time,
         reconcilerKind: "terminal.send",
+        ...(contractDigest !== undefined ? { contractDigest } : {}),
+        ...(authorizationCohortDigest !== undefined ? { authorizationCohortDigest } : {}),
+        ...(durableIdentityDigest !== undefined ? { durableIdentityDigest } : {}),
       }).status,
     ).not.toBe("rejected");
     Game.time += 3; // 跨多个 tick 后恢复。
@@ -650,10 +682,17 @@ describe("staged atomic（故障注入与恢复）", () => {
     // 场景：transaction 在故障前已有旧 tick receipt（如 heap_publish 相位），
     // resolving tombstone 写入后 refresh 前 global reset——恢复必须检测
     // receipt tick < settledAtTick 并续做刷新，不得直接 finalize。
-    const { digest } = makeCommittedFaultQuarantine("ts1_stale_receipt");
+    const { digest, contractDigest, authorizationCohortDigest, durableIdentityDigest } = makeCommittedFaultQuarantine("ts1_stale_receipt");
     const { commitSettledReceipt } = jest.requireActual("@/runtime/treasury/receipts") as typeof import("@/runtime/treasury/receipts");
-    // 旧 receipt 写在故障 tick（早于 resolution tick）。
-    expect(commitSettledReceipt("ts1_stale_receipt", Game.time).status).toBe("written");
+    // 旧 receipt 写在故障 tick（早于 resolution tick；携带该 attempt 的完整
+    // 身份——现代 commit 产物为 modern proof）。
+    expect(
+      commitSettledReceipt(
+        "ts1_stale_receipt",
+        Game.time,
+        durableIdentityDigest !== undefined ? { digest, durableIdentityDigest } : undefined,
+      ).status,
+    ).toBe("written");
     const staleTick = Game.time;
     Game.time += 1;
     const resolutionTick = Game.time;
@@ -668,6 +707,9 @@ describe("staged atomic（故障注入与恢复）", () => {
         observationTick: Game.time,
         resolvedAtTick: Game.time,
         reconcilerKind: "terminal.send",
+        ...(contractDigest !== undefined ? { contractDigest } : {}),
+        ...(authorizationCohortDigest !== undefined ? { authorizationCohortDigest } : {}),
+        ...(durableIdentityDigest !== undefined ? { durableIdentityDigest } : {}),
       }).status,
     ).not.toBe("rejected");
     expect(hasSettledReceipt("ts1_stale_receipt")).toBe(staleTick); // 旧 receipt 仍在
@@ -681,16 +723,24 @@ describe("staged atomic（故障注入与恢复）", () => {
 
   it("final not-executed 未完成释放：beginTick 补完成（幂等）", () => {
     makeExecutingQuarantine("ts1_release");
+    const releaseAuthority = readTreasuryQuarantineEntry("ts1_release")!;
     expect(
       writeTreasuryResolutionTombstone({
         transactionId: "ts1_release",
-        digest: readTreasuryQuarantineEntry("ts1_release")!.digest,
+        digest: releaseAuthority.digest,
         resolution: "not-executed",
         stage: "final",
         actionTick: Game.time,
         observationTick: Game.time,
         resolvedAtTick: Game.time,
         reconcilerKind: "terminal.send",
+        ...(releaseAuthority.contractDigest !== undefined ? { contractDigest: releaseAuthority.contractDigest } : {}),
+        ...(releaseAuthority.authorizationCohortDigest !== undefined
+          ? { authorizationCohortDigest: releaseAuthority.authorizationCohortDigest }
+          : {}),
+        ...(releaseAuthority.durableIdentityDigest !== undefined
+          ? { durableIdentityDigest: releaseAuthority.durableIdentityDigest }
+          : {}),
       }).status,
     ).not.toBe("rejected");
     expect(readTreasuryQuarantineEntry("ts1_release")).toBeDefined(); // 释放未完成

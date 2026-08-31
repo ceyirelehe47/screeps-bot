@@ -117,6 +117,9 @@ const resolutionStoreEvents = {
   inProgressRecoveries: 0,
   recovered: 0,
   faulted: 0,
+  /** 【第十三轮】staged recovery 的 identity relation 独立计数（conflict 与 insufficient 分离）。 */
+  identityConflicts: 0,
+  identityInsufficientBlockers: 0,
 };
 
 export interface TreasuryResolutionStoreCounters {
@@ -124,11 +127,13 @@ export interface TreasuryResolutionStoreCounters {
   readonly loadValidationEntries: number;
   readonly recovered: number;
   readonly faulted: number;
+  readonly identityConflicts: number;
+  readonly identityInsufficientBlockers: number;
 }
 
 export function readTreasuryResolutionStoreCounters(): TreasuryResolutionStoreCounters {
-  const { fullScans, loadValidationEntries, recovered, faulted } = resolutionStoreEvents;
-  return { fullScans, loadValidationEntries, recovered, faulted };
+  const { fullScans, loadValidationEntries, recovered, faulted, identityConflicts, identityInsufficientBlockers } = resolutionStoreEvents;
+  return { fullScans, loadValidationEntries, recovered, faulted, identityConflicts, identityInsufficientBlockers };
 }
 
 /**
@@ -142,6 +147,8 @@ export function resetTreasuryResolutionStoreForTest(): void {
   resolutionStoreEvents.inProgressRecoveries = 0;
   resolutionStoreEvents.recovered = 0;
   resolutionStoreEvents.faulted = 0;
+  resolutionStoreEvents.identityConflicts = 0;
+  resolutionStoreEvents.identityInsufficientBlockers = 0;
 }
 
 registerTreasuryResolutionResetHook(resetTreasuryResolutionStoreForTest);
@@ -459,6 +466,10 @@ export interface TreasuryResolutionRecoveryReport {
   completedRelease: number;
   /** receipt 不可写：resolving 保留（刷新未完成，绝不 finalize——第九轮 4.9）。 */
   refreshBlocked: number;
+  /** 【第十三轮】identity conflict 保留 authority 的条数（独立诊断/计数）。 */
+  identityConflicts: number;
+  /** 【第十三轮】legacy/insufficient proof 保留 authority 的条数（独立诊断/计数）。 */
+  identityInsufficient: number;
   storeFatal: string | null;
 }
 
@@ -500,6 +511,8 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
     rolledBack: 0,
     completedRelease: 0,
     refreshBlocked: 0,
+    identityConflicts: 0,
+    identityInsufficient: 0,
     storeFatal: null,
   };
   const runtime = loadResolutionStoreRuntime();
@@ -517,30 +530,53 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
         if (receiptTick === undefined || receiptTick < entry.settledAtTick) {
           // receipt 未刷新到位（旧 action tick 的 receipt 或不存在）：幂等
           // 续做 refresh 至原定 settledAtTick——绝不把旧 receipt 误判为已
-          // 刷新、绝不缩短 replay horizon。
-          const refresh = refreshSettledReceiptForResolution(entry.transactionId, entry.settledAtTick);
-          if (refresh.status === "fatal") {
-            // receipt 不可写：保留 resolving（authority 不释放），报告 blocker。
+          // 刷新、绝不缩短 replay horizon。【第十三轮第六节】refresh 携带
+          // tombstone 绑定的完整 attempt identity；blocked（legacy/冲突/
+          // 证明不足）与 fatal 同样保留 resolving + authority（fail closed）。
+          const refresh = refreshSettledReceiptForResolution(entry.transactionId, entry.settledAtTick, {
+            digest: entry.digest,
+            ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+            ...(entry.authorizationCohortDigest !== undefined
+              ? { authorizationCohortDigest: entry.authorizationCohortDigest }
+              : {}),
+            ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+          });
+          if (refresh.status === "fatal" || refresh.status === "blocked") {
+            // receipt 不可写或身份不可证明：保留 resolving（authority 不释放），
+            // 报告 blocker（blocked 的 reason 区分 conflict 与不足）。
             resolutionStoreEvents.faulted += 1;
             report.refreshBlocked += 1;
+            if (refresh.status === "blocked" && refresh.reason === "identity_conflict") {
+              report.identityConflicts += 1;
+              resolutionStoreEvents.identityConflicts += 1;
+            } else if (refresh.status === "blocked") {
+              report.identityInsufficient += 1;
+              resolutionStoreEvents.identityInsufficientBlockers += 1;
+            }
             continue;
           }
         }
         // receipt 已刷新至 settledAtTick：完成 finalize（幂等——authority
-        // 释放与 marker 清除均为幂等操作）。【第十二轮 3.3】释放前必须验证
-        // authority 与 tombstone 的 attempt identity 一致——旧 tombstone 不
-        // 得释放同 ID 新 attempt 的 authority。
+        // 释放与 marker 清除均为幂等操作）。【第十三轮第七节】释放的唯一
+        // 许可是 identity relation === "match"——conflict 与 insufficient
+        // （legacy proof 对现代 attempt）都保留全部 authority 并独立计数。
         const committedAuthority = readTreasuryQuarantineEntry(entry.transactionId) ?? readTreasuryIntentEntry(entry.transactionId);
-        const committedIdentityMismatch =
-          committedAuthority !== undefined &&
-          treasuryAttemptIdentityRelation(
+        if (committedAuthority !== undefined) {
+          const relation = treasuryAttemptIdentityRelation(
             entry,
             attemptIdentityOf(committedAuthority as { digest: string; durableIdentityDigest?: string; authorizationCohortDigest?: string; contractDigest?: string }),
-          ) === "conflict";
-        if (committedIdentityMismatch) {
-          resolutionStoreEvents.faulted += 1;
-          report.refreshBlocked += 1;
-          continue;
+          );
+          if (relation !== "match") {
+            resolutionStoreEvents.faulted += 1;
+            if (relation === "conflict") {
+              report.identityConflicts += 1;
+              resolutionStoreEvents.identityConflicts += 1;
+            } else {
+              report.identityInsufficient += 1;
+              resolutionStoreEvents.identityInsufficientBlockers += 1;
+            }
+            continue;
+          }
         }
         releaseTreasuryQuarantineEntry(entry.transactionId);
         releaseTreasuryIntentEntry(entry.transactionId);
@@ -563,16 +599,24 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
       const quarantined = readTreasuryQuarantineEntry(entry.transactionId);
       const intended = quarantined === undefined ? readTreasuryIntentEntry(entry.transactionId) : undefined;
       if (quarantined !== undefined || intended !== undefined) {
-        // 【第十二轮 3.3】补完成释放前验证 attempt identity：旧 tombstone
-        // （同 ID 不同 attempt）不得释放当前 authority——identity 冲突时
-        // 保留 authority 并报告（fail closed，显式处理）。
+        // 【第十三轮第七节】补完成释放前验证完整 attempt identity：旧
+        // tombstone（同 ID 不同 attempt）不得释放当前 authority——identity
+        // conflict 保留 authority 并报告（fail closed）；legacy/insufficient
+        // proof 同样不得释放（不得再以 !== "conflict" 作为释放许可）。
         const authority = quarantined ?? intended;
         const relation = treasuryAttemptIdentityRelation(
           entry,
           attemptIdentityOf(authority as { digest: string; durableIdentityDigest?: string; authorizationCohortDigest?: string; contractDigest?: string }),
         );
-        if (relation === "conflict") {
+        if (relation !== "match") {
           resolutionStoreEvents.faulted += 1;
+          if (relation === "conflict") {
+            report.identityConflicts += 1;
+            resolutionStoreEvents.identityConflicts += 1;
+          } else {
+            report.identityInsufficient += 1;
+            resolutionStoreEvents.identityInsufficientBlockers += 1;
+          }
           continue;
         }
         // final tombstone 已写但释放未完成：补完成（幂等；含 intent-only

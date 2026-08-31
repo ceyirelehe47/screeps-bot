@@ -439,14 +439,29 @@ export function readTreasuryReceiptEventCounters(): TreasuryReceiptCounters {
 export type TreasuryReceiptRefreshResult =
   | { readonly status: "refreshed"; readonly previousTick: number }
   | { readonly status: "written" }
+  | {
+      /** 既有 proof 与当前 attempt 不匹配/不可证明——拒绝覆盖（authority 保持，显式处理）。 */
+      readonly status: "blocked";
+      readonly reason: "identity_conflict" | "legacy_proof" | "identity_unavailable" | "insufficient_proof";
+      readonly detail: string;
+    }
   | { readonly status: "fatal"; readonly detail: string };
 
 /**
- * resolve-as-committed 的既有 receipt 刷新（第八轮 8.3）：own key 存在且
- * value 有效时**更新 settled tick 至 resolution tick**（不是 already_settled
- * 短路——原 action tick 的旧窗口不得缩短防重放），同步维护 updatedAt 与
- * nextExpiryTick（单次有界重算：旧 tick 移除可能降低 min）；不存在时按新
- * 条目写入（entryCount+1、nextExpiry min 收敛）。fatal store 拒绝。
+ * resolve-as-committed 的既有 receipt 刷新（第八轮 8.3 / 【第十三轮第六节】
+ * identity-aware）：own key 存在且 value 有效时**更新 settled tick 至
+ * resolution tick**（不是 already_settled 短路——原 action tick 的旧窗口
+ * 不得缩短防重放）。身份规则：
+ * - 无 receipt：可写当前 modern proof（identity 完整时）；
+ * - existing modern proof 且 identity 完全 match：仅刷新 settledAtTick；
+ * - existing modern proof 且 identity conflict：拒绝刷新（保持 resolving
+ *   authority、write readiness 继续阻断）；
+ * - existing legacy/insufficient proof：不得自动升级成当前 modern attempt、
+ *   不得覆盖（保持隔离，显式人工处理）；
+ * - identity 未提供且存在既有 proof：无法验证 → 拒绝（blocked）；
+ * - corrupted proof：fatal fail closed。
+ * resolution tick 只在成功 identity 验证后更新；同步维护 updatedAt 与
+ * nextExpiryTick（单次有界重算）。fatal store 拒绝。
  */
 export function refreshSettledReceiptForResolution(
   transactionId: string,
@@ -471,43 +486,69 @@ export function refreshSettledReceiptForResolution(
       detail: `transactionId ${transactionId.slice(0, 48)} 对应 receipt value 损坏，无法安全刷新（fail closed）`,
     };
   }
-  // 【第十二轮 3.4 / 第十三轮 v5】刷新至 resolution tick 时绑定/保留 attempt
-  // 身份并显式定级：identity 完整（digest + durableIdentityDigest）→ modern；
-  // 否则保留既有等级（existing modern 保留身份；legacy 不因刷新获得身份）。
   const identityComplete = identity?.digest !== undefined && identity?.durableIdentityDigest !== undefined;
-  const existingProof = existing.status === "modern_committed" ? existing.proof : undefined;
-  // legacy proof 禁携带身份字段（显式等级语义）：非 modern 定级时一律纯
-  // {level, settledAtTick}——部分 identity 或既有 legacy 均不得混入身份。
-  const resolvedLevel: TreasuryReceiptProofLevel = identityComplete ? "modern" : (existingProof?.level ?? "legacy");
-  const nextProof: TreasurySettlementProof =
-    resolvedLevel === "legacy"
-      ? { level: "legacy", settledAtTick: tick }
-      : {
-          level: "modern",
-          settledAtTick: tick,
-          ...(identity?.digest !== undefined
-            ? { digest: identity.digest }
-            : existingProof?.digest !== undefined
-              ? { digest: existingProof.digest }
-              : {}),
-          ...(identity?.durableIdentityDigest !== undefined
-            ? { durableIdentityDigest: identity.durableIdentityDigest }
-            : existingProof?.durableIdentityDigest !== undefined
-              ? { durableIdentityDigest: existingProof.durableIdentityDigest }
-              : {}),
-          ...(identity?.contractDigest !== undefined
-            ? { contractDigest: identity.contractDigest }
-            : existingProof?.contractDigest !== undefined
-              ? { contractDigest: existingProof.contractDigest }
-              : {}),
-          ...(identity?.authorizationCohortDigest !== undefined
-            ? { authorizationCohortDigest: identity.authorizationCohortDigest }
-            : existingProof?.authorizationCohortDigest !== undefined
-              ? { authorizationCohortDigest: existingProof.authorizationCohortDigest }
-              : {}),
-        };
   if (existing.status !== "absent") {
     const existingTick = existing.status === "legacy_committed" ? existing.settledAtTick : existing.proof.settledAtTick;
+    // 【第十三轮第六节】identity-aware 刷新：旧 receipt 不能因 transaction ID
+    // 相同就被重新标注为当前 attempt。
+    if (existing.status === "legacy_committed") {
+      // legacy proof 无身份事实——不得自动升级成当前 modern attempt、不得覆盖。
+      receiptEvents.receiptIdentityInsufficient += 1;
+      return {
+        status: "blocked",
+        reason: "legacy_proof",
+        detail: `transactionId ${transactionId.slice(0, 48)} 存在 legacy receipt proof（无身份事实）——不得覆盖或升级为当前 attempt（显式人工处理；settledAtTick ${String(existingTick)}）`,
+      };
+    }
+    if (identity?.digest === undefined) {
+      // 调用方未携带 attempt digest——无法验证属于当前 attempt，拒绝覆盖。
+      receiptEvents.receiptIdentityInsufficient += 1;
+      return {
+        status: "blocked",
+        reason: "identity_unavailable",
+        detail: `transactionId ${transactionId.slice(0, 48)} 存在既有 modern receipt proof 但刷新请求未携带 attempt digest——不得覆盖（settledAtTick ${String(existingTick)}）`,
+      };
+    }
+    const attempt: TreasuryAttemptIdentity = {
+      digest: identity.digest,
+      ...(identity.contractDigest !== undefined ? { contractDigest: identity.contractDigest } : {}),
+      ...(identity.authorizationCohortDigest !== undefined
+        ? { authorizationCohortDigest: identity.authorizationCohortDigest }
+    : {}),
+      ...(identity.durableIdentityDigest !== undefined ? { durableIdentityDigest: identity.durableIdentityDigest } : {}),
+    };
+    const relation = treasuryAttemptIdentityRelation(
+      { ...existing.proof, digest: existing.proof.digest ?? attempt.digest },
+      attempt,
+    );
+    if (relation === "conflict") {
+      receiptEvents.receiptIdentityConflicts += 1;
+      return {
+        status: "blocked",
+        reason: "identity_conflict",
+        detail: `transactionId ${transactionId.slice(0, 48)} 既有 modern receipt proof 与当前 attempt identity 冲突——拒绝刷新（保持 resolving authority；settledAtTick ${String(existingTick)}）`,
+      };
+    }
+    if (relation === "insufficient") {
+      receiptEvents.receiptIdentityInsufficient += 1;
+      return {
+        status: "blocked",
+        reason: "insufficient_proof",
+        detail: `transactionId ${transactionId.slice(0, 48)} 既有 modern receipt proof 缺少当前 attempt 携带的身份事实——不得重新标注为当前 attempt（settledAtTick ${String(existingTick)}）`,
+      };
+    }
+    receiptEvents.receiptIdentityMatches += 1;
+    // match：保留既有 proof 身份（identity 成分一致），仅刷新 settledAtTick。
+    const nextProof: TreasurySettlementProof = {
+      level: "modern",
+      settledAtTick: tick,
+      digest: existing.proof.digest ?? attempt.digest,
+      durableIdentityDigest: existing.proof.durableIdentityDigest ?? attempt.durableIdentityDigest,
+      ...(existing.proof.contractDigest !== undefined ? { contractDigest: existing.proof.contractDigest } : {}),
+      ...(existing.proof.authorizationCohortDigest !== undefined
+        ? { authorizationCohortDigest: existing.proof.authorizationCohortDigest }
+        : {}),
+    };
     if (existingTick === tick) {
       receiptEvents.receiptRefreshes += 1;
       return { status: "refreshed", previousTick: tick };
@@ -522,6 +563,20 @@ export function refreshSettledReceiptForResolution(
     receiptEvents.receiptRefreshes += 1;
     return { status: "refreshed", previousTick: existingTick };
   }
+  // absent：identity 完整 → modern proof；否则（低层 authority resolve）显式
+  // legacy proof——不冒充现代证明。
+  const nextProof: TreasurySettlementProof = identityComplete
+    ? {
+        level: "modern",
+        settledAtTick: tick,
+        digest: identity?.digest,
+        durableIdentityDigest: identity?.durableIdentityDigest,
+        ...(identity?.contractDigest !== undefined ? { contractDigest: identity.contractDigest } : {}),
+        ...(identity?.authorizationCohortDigest !== undefined
+          ? { authorizationCohortDigest: identity.authorizationCohortDigest }
+          : {}),
+      }
+    : { level: "legacy", settledAtTick: tick };
   store.settled[key] = nextProof;
   store.entryCount += 1;
   store.updatedAt = tick;
