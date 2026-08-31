@@ -691,6 +691,12 @@ declare global {
         status: "unresolved";
         recordedAt: number;
         detail?: string;
+        /** 【第十三轮】forensic marker 绑定的完整 attempt identity（缺失 = legacy forensic proof）。 */
+        attemptIdentity?: {
+          contractDigest?: string;
+          authorizationCohortDigest?: string;
+          durableIdentityDigest?: string;
+        };
       };
       /**
        * durable intent / WAL（第八轮新增、第九轮升级 v2）：Game API 调用

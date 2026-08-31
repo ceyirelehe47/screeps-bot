@@ -37,8 +37,9 @@ const MEMORY_BRANCHES = {
     declaration: "src/types/memory/runtime.d.ts",
     interfaceName: "ScreepsMemoryRuntime",
     // 【第十三轮】receipt v5 + intent v5 / quarantine v4 / authorization-fault v3
-    // （显式 authorityLevel + receipt proof 等级字段）后的 schema 指纹。
-    schemaFingerprint: "96f19bb0c78c05e6c318ddfd454e2b77ce65c54713ac787dd972caee9602111b",
+    // （显式 authorityLevel + receipt proof 等级 + forensic marker attemptIdentity）
+    // 后的 schema 指纹。
+    schemaFingerprint: "b202ed36196074fd73e732787b3383e77b566de32bc7bc4782e4711af8d855c0",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",

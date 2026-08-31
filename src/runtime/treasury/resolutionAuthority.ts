@@ -224,10 +224,34 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       deps.metrics.reconciliationCapabilitiesRejected += 1;
       return { status: "rejected", reason: "digest_mismatch", detail: `forensic marker digest 不匹配（marker ${marker.digest}，请求 ${input.digest}）` };
     }
+    // 【第十三轮第十一节】marker 携带的完整 attempt identity（redemption
+    // 故障前已计算）；缺失（旧 marker）= legacy forensic proof。
+    const markerAttempt: TreasuryAttemptIdentity = {
+      digest: marker.digest,
+      ...(marker.attemptIdentity?.contractDigest !== undefined ? { contractDigest: marker.attemptIdentity.contractDigest } : {}),
+      ...(marker.attemptIdentity?.authorizationCohortDigest !== undefined
+        ? { authorizationCohortDigest: marker.attemptIdentity.authorizationCohortDigest }
+        : {}),
+      ...(marker.attemptIdentity?.durableIdentityDigest !== undefined
+        ? { durableIdentityDigest: marker.attemptIdentity.durableIdentityDigest }
+        : {}),
+    };
     const existing = readTreasuryResolutionTombstone(marker.transactionId);
-    if (existing !== undefined && existing.stage === "final" && existing.resolution === "not-executed" && existing.digest === marker.digest) {
-      clearTreasuryWriteFaultMarkerForResolution(marker.transactionId, marker.digest);
-      return { status: "already_resolved", resolution: "not-executed", transactionId: marker.transactionId };
+    if (existing !== undefined && existing.stage === "final" && existing.resolution === "not-executed") {
+      // already_resolved 必须比较完整 attempt identity——同 id、同普通 digest
+      // 但不同 owner/policy/cohort 的 attempt 不得共享 forensic tombstone
+      //（marker 缺 identity 字段时为 legacy forensic proof：遇携带现代身份的
+      // tombstone 判 insufficient/conflict，不得 already_resolved）。
+      if (treasuryAttemptIdentityRelation(existing, markerAttempt) === "match") {
+        clearTreasuryWriteFaultMarkerForResolution(marker.transactionId, marker.digest);
+        return { status: "already_resolved", resolution: "not-executed", transactionId: marker.transactionId };
+      }
+      deps.metrics.reconciliationCapabilitiesRejected += 1;
+      return {
+        status: "rejected",
+        reason: "digest_mismatch",
+        detail: `既有 not-executed tombstone 与 forensic marker 的 attempt identity 不一致（${marker.transactionId.slice(0, 48)}）——不得以旧 proof 解决新 attempt 或共享 tombstone（fail closed，显式处理）`,
+      };
     }
     const slotError = ensureTreasuryResolutionSlotAvailable();
     if (slotError !== null) {
@@ -244,6 +268,14 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       reconcilerKind: "pre-execution",
       source: "acknowledge-rolled-back-forensic",
       preExecution: true,
+      // tombstone 与 marker 绑定同一 attempt identity。
+      ...(marker.attemptIdentity?.contractDigest !== undefined ? { contractDigest: marker.attemptIdentity.contractDigest } : {}),
+      ...(marker.attemptIdentity?.authorizationCohortDigest !== undefined
+        ? { authorizationCohortDigest: marker.attemptIdentity.authorizationCohortDigest }
+        : {}),
+      ...(marker.attemptIdentity?.durableIdentityDigest !== undefined
+        ? { durableIdentityDigest: marker.attemptIdentity.durableIdentityDigest }
+        : {}),
     });
     if (finalWrite.status === "rejected") {
       return { status: "rejected", reason: "resolution_store_fatal", detail: `final tombstone 写入失败（forensic marker 保留，可重试）: ${finalWrite.detail}` };

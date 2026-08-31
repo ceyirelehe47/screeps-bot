@@ -109,6 +109,17 @@ export interface TreasuryWriteFaultMarker {
   readonly recordedAt: number;
   /** 有界异常/故障摘要（可选；绝不持久化完整 Error/stack 对象）。 */
   readonly detail?: string;
+  /**
+   * 【第十三轮第十一节】forensic marker 绑定的完整 attempt identity
+   * （redemption 故障前已计算的事实）：contract digest / authorization
+   * cohort digest / durable identity digest。缺失（旧 marker）= legacy
+   * forensic proof——不得证明携带现代身份的新 attempt。
+   */
+  readonly attemptIdentity?: {
+    readonly contractDigest?: string;
+    readonly authorizationCohortDigest?: string;
+    readonly durableIdentityDigest?: string;
+  };
 }
 
 interface TreasuryWriteFaultBranch {
@@ -181,6 +192,17 @@ export function validateTreasuryWriteFaultMarkerShape(marker: unknown): string |
     (typeof candidate.detail !== "string" || candidate.detail.length > TREASURY_WRITE_FAULT_DETAIL_MAX)
   ) {
     return "marker.detail 非法（须为 ≤192 字符）";
+  }
+  // 【第十三轮第十一节】attempt identity 绑定字段（可选；存在须为 16 hex）。
+  if (candidate.attemptIdentity !== undefined) {
+    const identity = candidate.attemptIdentity as Partial<NonNullable<TreasuryWriteFaultMarker["attemptIdentity"]>> | undefined;
+    if (!identity || typeof identity !== "object") return "marker.attemptIdentity 非对象";
+    for (const field of ["contractDigest", "authorizationCohortDigest", "durableIdentityDigest"] as const) {
+      const value = identity[field];
+      if (value !== undefined && (typeof value !== "string" || !WRITE_FAULT_DIGEST_PATTERN.test(value))) {
+        return `marker.attemptIdentity.${field} 非法（须为 16 小写 hex）`;
+      }
+    }
   }
   return null;
 }
