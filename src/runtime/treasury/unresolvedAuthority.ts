@@ -26,6 +26,7 @@
 import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
 import { verifyTreasuryEntryIdentity, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
+import { treasuryAuthorityLevelPairCompatibility } from "@/runtime/treasury/authorityCompatibility";
 
 /** 归一化 authority facts（签发/resolution/recovery/release 共用形状）。 */
 export interface TreasuryUnresolvedAuthority {
@@ -89,11 +90,23 @@ function postingSignature(postings: readonly { roomName: string; locationKind: s
 /**
  * 解析 transactionId 的 unresolved authority（唯一入口——capability 签发
  * 与 faultResolution 的 prevalidate 均经本函数）：
- * - 同 id 双存在：digest/kind/postings（规范逐腿比较）必须全等，否则
- *   inconsistent fail closed；
- * - 一致：取 quarantine（contract 绑定事实从 intent 合并；outcome 以
- *   quarantine phase 推导为准——事实转移完成后 quarantine 是权威形态）；
- * - 单一存在：直接使用；均无：not_found。
+ * - 同 id 双存在【第十四轮第八节】：
+ *   1. 先分别独立验证：shape/等级矩阵（read 路径 load 校验承载）+ 各自从
+ *      持久事实重算 identity（verifyTreasuryEntryIdentity）——任一失败 →
+ *      inconsistent（不任选另一条）；
+ *   2. 显式比较 authorityLevel：**任何跨等级组合（modern+legacy /
+ *      modern+lowlevel / modern+forensic / lowlevel+legacy / lowlevel+
+ *      forensic …）→ inconsistent fail closed**；同等级才继续；
+ *   3. modern+modern：完整 durable identity 一致（durableIdentityDigest、
+ *      authorizationCohortDigest 双方完整存在且相等——一方缺失即
+ *      inconsistent，不退回 optional 字段子集比较）、contractId/
+ *      contractDigest、adapterSemanticIdentity、digest/kind/postings 全等；
+ *   4. lowlevel+lowlevel：digest/kind/postings/durableIdentityDigest 严格
+ *      比较；legacy+legacy：digest/kind/postings 受控比较；forensic+
+ *      forensic：同一隔离记录（digest/kind/postings）才可合并；
+ *   5. 全部一致 → quarantine 优先（contract 绑定事实从 intent 合并；outcome
+ *      以 quarantine phase 推导为准——事实转移完成后 quarantine 是权威形态）；
+ * - 单一存在：直接使用（identity 重算失败 → inconsistent）；均无：not_found。
  */
 export function resolveTreasuryUnresolvedAuthority(transactionId: string): TreasuryUnresolvedAuthorityResolution {
   const quarantined = readTreasuryQuarantineEntry(transactionId);
@@ -102,6 +115,31 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
     return { status: "not_found" };
   }
   if (quarantined !== undefined && intended !== undefined) {
+    // 【第十四轮 8.1】先独立验证：任一 authority 的 identity 无法从持久
+    // 事实重算 → 整体 inconsistent（durable digest 字符串相同也不信任）。
+    const quarantineIdentityError = verifyTreasuryEntryIdentity(
+      quarantined as unknown as TreasuryIdentityFactsEntry,
+      `quarantine authority（${quarantined.transactionId.slice(0, 48)}）`,
+    );
+    if (quarantineIdentityError !== null) {
+      return { status: "inconsistent", detail: quarantineIdentityError };
+    }
+    const intentIdentityError = verifyTreasuryEntryIdentity(
+      intended as unknown as TreasuryIdentityFactsEntry,
+      `intent authority（${intended.transactionId.slice(0, 48)}）`,
+    );
+    if (intentIdentityError !== null) {
+      return { status: "inconsistent", detail: intentIdentityError };
+    }
+    // 【第十四轮 8.2】显式 authority-level 兼容矩阵：跨等级双 authority 一律
+    // inconsistent——modern authority 永不被低等级并存记录合并/替代。
+    const levelCompatibility = treasuryAuthorityLevelPairCompatibility(quarantined.authorityLevel, intended.authorityLevel);
+    if (levelCompatibility === "incompatible") {
+      return {
+        status: "inconsistent",
+        detail: `同 id 双权威 authorityLevel 跨等级（quarantine ${String(quarantined.authorityLevel)}，intent ${String(intended.authorityLevel)}）——inconsistent fail closed，不任选其一`,
+      };
+    }
     if (quarantined.digest !== intended.digest) {
       return {
         status: "inconsistent",
@@ -120,40 +158,60 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         detail: "同 id 双权威 postings 不一致（canonical 逐腿比较）——fail closed，不任选其一",
       };
     }
-    // 第十轮 5.1：合同字段一致性（双方都存在时比较——迁移残留与新旧形态
-    // 混合并存时的 fail closed 防线）。
-    if (
-      quarantined.contractDigest !== undefined &&
-      intended.contractDigest !== undefined &&
-      quarantined.contractDigest !== intended.contractDigest
-    ) {
-      return {
-        status: "inconsistent",
-        detail: `同 id 双权威 contractDigest 不一致（quarantine ${quarantined.contractDigest}，intent ${intended.contractDigest}）——fail closed`,
-      };
+    const sharedLevel = quarantined.authorityLevel;
+    if (sharedLevel === "modern") {
+      // 【第十四轮 8.3】modern 双 authority：完整 durable identity 一致——
+      // cohort digest 与 durable identity digest 双方**完整存在**且相等（一方
+      // 缺失即 inconsistent——不退回 optional 字段子集比较）；contract
+      // identity 与 adapter semantic identity 也必须一致。
+      if (quarantined.durableIdentityDigest === undefined || intended.durableIdentityDigest === undefined) {
+        return {
+          status: "inconsistent",
+          detail: "modern 双权威 durableIdentityDigest 不完整（一方缺失即 identity 不可证明）——fail closed",
+        };
+      }
+      if (quarantined.durableIdentityDigest !== intended.durableIdentityDigest) {
+        return {
+          status: "inconsistent",
+          detail: `同 id 双权威 durable identity 不一致（quarantine ${quarantined.durableIdentityDigest.slice(0, 16)}，intent ${intended.durableIdentityDigest.slice(0, 16)}）——fail closed`,
+        };
+      }
+      const cohortPairConsistent =
+        quarantined.authorizationCohortDigest !== undefined &&
+        intended.authorizationCohortDigest !== undefined &&
+        quarantined.authorizationCohortDigest === intended.authorizationCohortDigest;
+      if (!cohortPairConsistent) {
+        return {
+          status: "inconsistent",
+          detail: "modern 双权威 authorizationCohortDigest 不完整或不一致（完整 cohort identity 必须双方存在且相等）——fail closed",
+        };
+      }
+      if ((quarantined.contractId ?? undefined) !== (intended.contractId ?? undefined)) {
+        return { status: "inconsistent", detail: "modern 双权威 contractId 不一致（含一方缺失）——fail closed" };
+      }
+      if ((quarantined.contractDigest ?? undefined) !== (intended.contractDigest ?? undefined)) {
+        return { status: "inconsistent", detail: "modern 双权威 contractDigest 不一致（含一方缺失）——fail closed" };
+      }
+      if ((quarantined.adapterSemanticIdentity ?? undefined) !== (intended.adapterSemanticIdentity ?? undefined)) {
+        return { status: "inconsistent", detail: "modern 双权威 adapterSemanticIdentity 不一致（含一方缺失）——fail closed" };
+      }
+    } else if (sharedLevel === "lowlevel") {
+      // 【第十四轮 8.2】低层双 authority：严格低层 identity（durable 双方
+      // 完整存在且相等）——低层矩阵保证 durableIdentityDigest 存在，缺失即
+      // 损坏形态。
+      if (
+        quarantined.durableIdentityDigest === undefined ||
+        intended.durableIdentityDigest === undefined ||
+        quarantined.durableIdentityDigest !== intended.durableIdentityDigest
+      ) {
+        return {
+          status: "inconsistent",
+          detail: "lowlevel 双权威 durableIdentityDigest 不完整或不一致——fail closed",
+        };
+      }
     }
-    if (
-      quarantined.adapterVersion !== undefined &&
-      intended.adapterVersion !== undefined &&
-      quarantined.adapterVersion !== intended.adapterVersion
-    ) {
-      return {
-        status: "inconsistent",
-        detail: `同 id 双权威 adapterVersion 不一致（quarantine v${String(quarantined.adapterVersion)}，intent v${String(intended.adapterVersion)}）——fail closed`,
-      };
-    }
-    // 【第十一轮 3.13.5】统一 durable identity：双权威都携带时必须一致
-    //（空对空的 legacy 形态由既有逐字段比较兜底）。
-    if (
-      quarantined.durableIdentityDigest !== undefined &&
-      intended.durableIdentityDigest !== undefined &&
-      quarantined.durableIdentityDigest !== intended.durableIdentityDigest
-    ) {
-      return {
-        status: "inconsistent",
-        detail: `同 id 双权威 durable identity 不一致（quarantine ${quarantined.durableIdentityDigest.slice(0, 16)}，intent ${intended.durableIdentityDigest.slice(0, 16)}）——fail closed`,
-      };
-    }
+    // legacy+legacy：digest/kind/postings 受控比较（上文已完成）；forensic+
+    // forensic：同一隔离记录（digest/kind/postings 相同）——上文完成。
   }
   if (quarantined !== undefined) {
     // 【第十二轮 3.6】authority 事实身份重算：digest 必须能由持久事实重算

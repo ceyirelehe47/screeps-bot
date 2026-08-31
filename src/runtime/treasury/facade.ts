@@ -172,6 +172,7 @@ import {
   releaseTreasuryAuthorizationFaultEntry,
   treasuryAuthorizationFaultBlockers,
   writeTreasuryAuthorizationFaultEntry,
+  ensureTreasuryAuthorizationFaultStoreValidated,
   type TreasuryAuthorizationFaultEntry,
   peekTreasuryAuthorizationFaultHealth,
   TREASURY_AUTHORIZATION_FAULT_MAX_ENTRIES,
@@ -350,8 +351,12 @@ export interface TreasuryWriterKernelExecution {
    * registry 签发的对象——裸 token/token 数组不是 production 输入。
    */
   authorizationBundle?: TreasuryAuthorizationBundle;
-  /** @deprecated 第九轮兼容 hook（测试注入用；production 路径已改 authorizationBundle）。 */
-  redeemAuthorization?(): { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string; readonly detail: string };
+  /**
+   * @deprecated 第九轮兼容 hook（测试注入用；production 路径已改 authorizationBundle）。
+   * 【第十四轮】返回值可选携带 cohort facts——intentContract（contract 路径）
+   * 的测试注入用它满足 modern 定级的成对不变量（contract + cohort）。
+   */
+  redeemAuthorization?(): { readonly status: "ok"; readonly cohort?: TreasuryAuthorizationCohortFacts } | { readonly status: "rejected"; readonly reason: string; readonly detail: string };
   intentContract?: {
     readonly contractId: string;
     readonly contractDigest: string;
@@ -785,7 +790,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     resolutionStoreUnhealthy: () => !peekTreasuryResolutionStoreHealth().healthy,
     resolutionResolvingBlocker: () => peekTreasuryResolutionStoreHealth().inProgress > 0,
     recoverySlotExhausted: () => recoverySlotsOccupied() >= TREASURY_QUARANTINE_MAX_ENTRIES,
-    authorizationFaultUnresolved: () => treasuryAuthorizationFaultBlockers().blocking,
+    // 【第十四轮第十四节】authorization-fault 完整 validation 门禁：在真正
+    // 准备 production action 之前（readiness 收集即 admission 输入）触发
+    // load 全量验证（首次有界全表扫描，heap 缓存后 O(1)）——损坏 entry 不得
+    // 等 redemption fault 后才发现；store 不存在时零写不隐式创建。
+    authorizationFaultUnresolved: () => {
+      const validationFatal = ensureTreasuryAuthorizationFaultStoreValidated();
+      if (validationFatal !== null) return true;
+      return treasuryAuthorizationFaultBlockers().blocking;
+    },
     // 【第十二轮 3.1.6】fault authority 容量前置 admission：满载时阻断新
     // writer——不得等 redemption 故障发生后才发现 fault store 已满。
     authorizationFaultCapacityExhausted: () => peekTreasuryAuthorizationFaultHealth().entryCount >= TREASURY_AUTHORIZATION_FAULT_MAX_ENTRIES,
@@ -1368,6 +1381,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (!isReservationOwnerMigrationComplete()) blockers.push("reservation_migration_incomplete");
       const reservationHealth = validateReservationStoreHealth();
       if (!reservationHealth.healthy) blockers.push("reservation_store_unhealthy");
+      // 【第十四轮第十四节】authorization-fault store 损坏（完整 load 验证
+      // 检出）→ 授权上下文不安全（readiness fail closed 的 authorizationSafe
+      // 对应维度——损坏 entry 不得等 redemption fault 后才发现）。
+      const authorizationFaultFatal = ensureTreasuryAuthorizationFaultStoreValidated();
+      if (authorizationFaultFatal !== null) blockers.push("authorization_fault_unhealthy");
       const authorizationSafe = authorizable && blockers.length === 0;
 
       // ── write readiness 额外准入（第十轮 3.12.10）：统一评估器
@@ -2367,6 +2385,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         }
       } else if (execution?.redeemAuthorization !== undefined) {
         // 兼容 hook（测试注入；production 路径已改 authorizationBundle）。
+        // 【第十四轮】hook 可携带 cohort facts（contract 路径测试注入的
+        // modern 定级成对输入）。
         const redeemed = execution.redeemAuthorization();
         if (redeemed.status === "rejected") {
           record.state = "aborted";
@@ -2380,6 +2400,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
             reason: "authorization_invalid",
             detail: `授权 redemption 失败（${redeemed.reason}）: ${redeemed.detail}——tentative 已释放，Game callback 零调用`,
           };
+        }
+        if (redeemed.cohort !== undefined) {
+          redeemedCohort = redeemed.cohort;
         }
       }
       // 【第十二轮 3.5】低层（非 contract）路径同样绑定稳定语义身份：intent
@@ -2444,12 +2467,28 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       //    transaction identity + canonical postings——写入失败时 callback
       //    零调用、tentative 与槽位释放、结构化拒绝。第九轮：contract 路径
       //    经 execution.intentContract 绑定完整合同身份（contractId/digest/
-      //    adapterVersion/authorizationDigest/durable payload）。【第十三轮】
-      //    显式 authorityLevel：contract + bundle redemption（cohort 成对）
-      //    → modern（写入前矩阵校验，不齐则拒绝——fail closed）；低层/无
-      //    bundle 路径 → lowlevel。 ─────────────────────────────────────
-      const intentAuthorityLevel: TreasuryAuthorityLevel =
-        execution?.intentContract !== undefined && redeemedCohort !== undefined ? "modern" : "lowlevel";
+      //    adapterVersion/authorizationDigest/durable payload）。【第十四轮
+      //    第九节 9.4】production 定级边界：contract + bundle redemption
+      //    （cohort 成对）→ modern；纯低层（无 contract 且无 cohort）→
+      //    lowlevel；**partial-modern（有 contract 无 cohort 或反之）→ 内部
+      //    不变量破坏——拒绝执行、callback 零调用、fail closed（绝不写
+      //    lowlevel）**。 ─────────────────────────────────────────────────
+      const hasIntentContract = execution?.intentContract !== undefined;
+      const hasRedeemedCohort = redeemedCohort !== undefined;
+      if (hasIntentContract !== hasRedeemedCohort) {
+        record.state = "aborted";
+        preparedById.delete(record.canonical.transactionId);
+        projection.tentativeRelease(record.tentativeKey);
+        releaseTreasuryReceiptReservation(record.canonical.transactionId);
+        finalizeHandleRecord(record, "aborted");
+        metrics.authorizationRejected += 1;
+        return {
+          status: "prepare_rejected",
+          reason: "authority_invariant_violation",
+          detail: `production 定级不变量破坏（intentContract=${String(hasIntentContract)}，redeemedCohort=${String(hasRedeemedCohort)}——partial-modern 不得写 lowlevel authority）——Game callback 零调用，预留已释放，fail closed`,
+        };
+      }
+      const intentAuthorityLevel: TreasuryAuthorityLevel = hasIntentContract ? "modern" : "lowlevel";
       const intentWrite = writeTreasuryIntentEntry({
         authorityLevel: intentAuthorityLevel,
         transactionId: record.canonical.transactionId,
@@ -3153,6 +3192,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         resolutionInProgress: resolutionHealth.inProgress,
         resolutionFaulted: metrics.resolutionFaulted + resolutionStoreCounters.faulted,
         resolutionRecovered: metrics.resolutionRecovered + resolutionStoreCounters.recovered,
+        resolutionIdentityConflicts: resolutionStoreCounters.identityConflicts,
+        resolutionIdentityInsufficient: resolutionStoreCounters.identityInsufficientBlockers,
         receiptRefreshes: receiptCounters.receiptRefreshes,
         actionContractsBuilt: metrics.actionContractsBuilt + actionContractCounters.built,
         actionAdapterMismatches: metrics.actionAdapterMismatches + actionContractCounters.adapterMismatches,
