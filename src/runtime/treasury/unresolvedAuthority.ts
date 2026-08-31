@@ -21,12 +21,35 @@
  *   ——永不允许 not-executed；action_returned_non_ok_abort_failed →
  *   returned_non_ok；其余 execution-unknown 类 → started_unknown）；
  *   not-executed 允许性按 outcome 判定，不再按混合 phase 字符串猜测。
+ *
+ * 【第十六轮第六节】双 authority 归一化在 immutable identity 之上新增
+ * execution-fact cohesion（唯一权威：executionFactCohesion.ts）——outcome /
+ * settlement / phase 组合不兼容 → inconsistent（零释放、两份 authority 全
+ * 保留）；归一化 authority 的 execution facts 经明确合并规则（outcome=共同
+ * 值、settlement=更进展一方、phase=quarantine 权威）。
+ *
+ * 【第十六轮第八节】resolver 区分 not_found 与 store_unhealthy：readEntry
+ * 返回 undefined 既可能是"entry 不存在"也可能是"store fatal"——本模块先
+ * 检查两个 store 的 health（对已存在 store 触发必要 load validation），只有
+ * 两个 store 均可信且都确实无 entry 时才返回 not_found；任一 store fatal →
+ * store_unhealthy（零 release / 零 refresh / 零 marker clear / 零 stage 变化 /
+ * 零 reconciler，绝不折叠成 not_found，也绝不选 healthy 一侧）。
  */
 
-import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
-import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
+import {
+  ensureTreasuryQuarantineStoreValidated,
+  peekTreasuryQuarantineHealth,
+  peekTreasuryQuarantineStore,
+  readTreasuryQuarantineEntry,
+} from "@/runtime/treasury/quarantine";
+import {
+  ensureTreasuryIntentStoreValidated,
+  peekTreasuryIntentStore,
+  readTreasuryIntentEntry,
+} from "@/runtime/treasury/intents";
 import { verifyTreasuryEntryIdentity, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
 import { treasuryAuthorityLevelPairCompatibility } from "@/runtime/treasury/authorityCompatibility";
+import { compareTreasuryExecutionFactCohesion } from "@/runtime/treasury/executionFactCohesion";
 
 /** 归一化 authority facts（签发/resolution/recovery/release 共用形状）。 */
 export interface TreasuryUnresolvedAuthority {
@@ -60,6 +83,8 @@ export interface TreasuryUnresolvedAuthority {
   readonly structureFacts?: readonly { readonly [key: string]: unknown }[];
   /** 【第十三轮】显式 authority 等级（modern/legacy/forensic/lowlevel）。 */
   readonly authorityLevel?: string;
+  /** 【第十六轮第十一节】lowlevel provenance（attempt identity 的组成部分——proof 链绑定）。 */
+  readonly lowlevelSource?: string;
   /** legacy v1 quarantine 标记（第十一轮 3.13.7：隔离诊断用）。 */
   readonly legacyV1?: boolean;
   /** 稳定 adapter/reconciler 语义身份（第十二轮 3.5；缺省 = 无法验证语义一致性）。 */
@@ -71,7 +96,14 @@ export interface TreasuryUnresolvedAuthority {
 export type TreasuryUnresolvedAuthorityResolution =
   | { readonly status: "ok"; readonly authority: TreasuryUnresolvedAuthority }
   | { readonly status: "not_found" }
-  | { readonly status: "inconsistent"; readonly detail: string };
+  | { readonly status: "inconsistent"; readonly detail: string }
+  | {
+      /** 【第十六轮第八节】intent/quarantine store fatal——不得折叠成 not_found。 */
+      readonly status: "store_unhealthy";
+      readonly detail: string;
+      readonly quarantineStoreError?: string;
+      readonly intentStoreError?: string;
+    };
 
 /**
  * quarantine v1 write-fault phase → execution outcome 的单调推导（第十轮
@@ -88,9 +120,30 @@ function postingSignature(postings: readonly { roomName: string; locationKind: s
 }
 
 /**
+ * 【第十六轮第八节】store health 感知读取前置：对已存在的 store 触发必要
+ * load validation 并返回 fatal 描述（null = 可信或 store 不存在）。store 不
+ * 存在 = 合法的"无 entry"来源（查询路径零写、不隐式创建 store），不算
+ * unhealthy。
+ */
+function quarantineStoreError(): string | undefined {
+  if (peekTreasuryQuarantineStore() === undefined) return undefined;
+  const fatal = ensureTreasuryQuarantineStoreValidated();
+  if (fatal !== null) return fatal;
+  return peekTreasuryQuarantineHealth().healthy ? undefined : (peekTreasuryQuarantineHealth().detail ?? "quarantine store 损坏");
+}
+
+function intentStoreError(): string | undefined {
+  if (peekTreasuryIntentStore() === undefined) return undefined;
+  const fatal = ensureTreasuryIntentStoreValidated();
+  return fatal ?? undefined;
+}
+
+/**
  * 解析 transactionId 的 unresolved authority（唯一入口——capability 签发
  * 与 faultResolution 的 prevalidate 均经本函数）：
- * - 同 id 双存在【第十四轮第八节】：
+ * - store health 前置（第十六轮）：任一已存在 store fatal → store_unhealthy
+ *   （附各 store 有界诊断），零副作用；
+ * - 同 id 双存在【第十四轮第八节 / 第十六轮第六节】：
  *   1. 先分别独立验证：shape/等级矩阵（read 路径 load 校验承载）+ 各自从
  *      持久事实重算 identity（verifyTreasuryEntryIdentity）——任一失败 →
  *      inconsistent（不任选另一条）；
@@ -102,13 +155,28 @@ function postingSignature(postings: readonly { roomName: string; locationKind: s
  *      inconsistent，不退回 optional 字段子集比较）、contractId/
  *      contractDigest、adapterSemanticIdentity、digest/kind/postings 全等；
  *   4. lowlevel+lowlevel：digest/kind/postings/durableIdentityDigest 严格
- *      比较；legacy+legacy：digest/kind/postings 受控比较；forensic+
- *      forensic：同一隔离记录（digest/kind/postings）才可合并；
- *   5. 全部一致 → quarantine 优先（contract 绑定事实从 intent 合并；outcome
- *      以 quarantine phase 推导为准——事实转移完成后 quarantine 是权威形态）；
+ *      比较 + lowlevelSource 一致（runtime 与 migrated 不能互相归一）；
+ *      legacy+legacy：digest/kind/postings 受控比较；forensic+forensic：
+ *      同一隔离记录（digest/kind/postings）才可合并；
+ *   5. execution-fact cohesion（第十六轮）：outcome 对等 + phase/settlement
+ *      workflow 矩阵——不兼容 → inconsistent（两份全保留，绝不"选择更强
+ *      事实"掩盖持久记录不一致）；
+ *   6. 全部一致 → quarantine 优先（contract 绑定事实从 intent 合并；execution
+ *      facts 经 cohesion 明确合并规则——outcome=共同值、settlement=更进展
+ *      一方、phase=quarantine 权威）；
  * - 单一存在：直接使用（identity 重算失败 → inconsistent）；均无：not_found。
  */
 export function resolveTreasuryUnresolvedAuthority(transactionId: string): TreasuryUnresolvedAuthorityResolution {
+  const quarantineError = quarantineStoreError();
+  const intentError = intentStoreError();
+  if (quarantineError !== undefined || intentError !== undefined) {
+    return {
+      status: "store_unhealthy",
+      detail: `unresolved authority store unhealthy（quarantine: ${quarantineError ?? "ok"}；intent: ${intentError ?? "ok"}）——零 release/refresh/marker-clear/stage 变化`,
+      ...(quarantineError !== undefined ? { quarantineStoreError: quarantineError } : {}),
+      ...(intentError !== undefined ? { intentStoreError: intentError } : {}),
+    };
+  }
   const quarantined = readTreasuryQuarantineEntry(transactionId);
   const intended = readTreasuryIntentEntry(transactionId);
   if (quarantined === undefined && intended === undefined) {
@@ -210,8 +278,58 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         };
       }
     }
+    // 【第十六轮第六节】execution-fact cohesion：immutable identity 相同不
+    // 代表 execution facts 自动相同——outcome 对等 + workflow/phase 矩阵
+    // 全部成立才允许归一化（returned_ok 永不被 started_unknown 覆盖）。
+    const cohesion = compareTreasuryExecutionFactCohesion({
+      quarantine: {
+        outcome: quarantined.outcome,
+        settlement: quarantined.settlement,
+        phase: quarantined.phase,
+      },
+      intent: {
+        outcome: intended.outcome,
+        settlement: intended.settlement,
+      },
+    });
+    if (cohesion.status === "inconsistent") {
+      return { status: "inconsistent", detail: `同 id 双权威 execution fact 不一致: ${cohesion.detail}` };
+    }
+    const mergedFacts = cohesion.merged;
     // legacy+legacy：digest/kind/postings 受控比较（上文已完成）；forensic+
     // forensic：同一隔离记录（digest/kind/postings 相同）——上文完成。
+    return {
+      status: "ok",
+      authority: {
+        authorityKind: "quarantine",
+        transactionId: quarantined.transactionId,
+        digest: quarantined.digest,
+        kind: quarantined.kind,
+        actionKind: quarantined.actionKind ?? quarantined.kind,
+        phase: mergedFacts.phase,
+        outcome: mergedFacts.outcome,
+        settlement: mergedFacts.settlement,
+        recordedAt: quarantined.recordedAt,
+        actionTick: quarantined.tick,
+        postings: quarantined.deltas.map((leg) => ({ ...leg })),
+        ...(quarantined.contractId !== undefined ? { contractId: quarantined.contractId } : {}),
+        ...(quarantined.contractDigest !== undefined ? { contractDigest: quarantined.contractDigest } : {}),
+        ...(quarantined.adapterVersion !== undefined ? { adapterVersion: quarantined.adapterVersion } : {}),
+        ...(quarantined.durablePayload !== undefined ? { durablePayload: quarantined.durablePayload } : {}),
+        ...(quarantined.durablePayloadVersion !== undefined ? { durablePayloadVersion: quarantined.durablePayloadVersion } : {}),
+        ...(quarantined.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: quarantined.authorizationCohortDigest } : {}),
+        ...(quarantined.durableIdentityDigest !== undefined ? { durableIdentityDigest: quarantined.durableIdentityDigest } : {}),
+        ...(quarantined.authorizationDigest !== undefined ? { authorizationDigest: quarantined.authorizationDigest } : {}),
+        ...(quarantined.structureFacts !== undefined
+          ? { structureFacts: quarantined.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
+          : {}),
+        ...(quarantined.authorityLevel !== undefined ? { authorityLevel: quarantined.authorityLevel } : {}),
+        ...(quarantined.lowlevelSource !== undefined ? { lowlevelSource: quarantined.lowlevelSource } : {}),
+        ...(quarantined.legacyV1 !== undefined ? { legacyV1: quarantined.legacyV1 } : {}),
+        ...(quarantined.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: quarantined.adapterSemanticIdentity } : {}),
+        ...(quarantined.forensic !== undefined ? { forensic: { ...quarantined.forensic } } : {}),
+      },
+    };
   }
   if (quarantined !== undefined) {
     // 【第十二轮 3.6】authority 事实身份重算：digest 必须能由持久事实重算
@@ -248,6 +366,7 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
           ? { structureFacts: quarantined.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
           : {}),
         ...(quarantined.authorityLevel !== undefined ? { authorityLevel: quarantined.authorityLevel } : {}),
+        ...(quarantined.lowlevelSource !== undefined ? { lowlevelSource: quarantined.lowlevelSource } : {}),
         ...(quarantined.legacyV1 !== undefined ? { legacyV1: quarantined.legacyV1 } : {}),
         ...(quarantined.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: quarantined.adapterSemanticIdentity } : {}),
         ...(quarantined.forensic !== undefined ? { forensic: { ...quarantined.forensic } } : {}),
@@ -287,6 +406,7 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         : {}),
       ...(intent.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: intent.adapterSemanticIdentity } : {}),
       ...(intent.authorityLevel !== undefined ? { authorityLevel: intent.authorityLevel } : {}),
+      ...(intent.lowlevelSource !== undefined ? { lowlevelSource: intent.lowlevelSource } : {}),
     },
   };
 }
