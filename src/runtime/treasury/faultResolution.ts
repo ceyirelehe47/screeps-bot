@@ -165,6 +165,26 @@ function countRejected(): void {
   recordTreasuryResolutionEvent("rejected");
 }
 
+// ── 【第十五轮第十三节】test-only 故障注入：receipt refresh 成功之后、统一
+//    三方 verifier 读取持久 proof 之前（模拟"refresh 返回成功但持久副本被
+//    篡改 / 双 authority 变 inconsistent / proof 变 legacy"窗口——证明不得
+//    仅凭 refresh 返回成功释放）。生产路径恒不注册。 ─────────────────────────
+type TreasuryImmediateResolutionFaultPhase = "after_refresh_before_read_back";
+let immediateResolutionFaultInjector: ((phase: TreasuryImmediateResolutionFaultPhase) => void) | null = null;
+
+/** 仅供测试：注册 immediate resolution 故障注入（null 清除）。 */
+export function setTreasuryImmediateResolutionFaultForTest(
+  injector: ((phase: TreasuryImmediateResolutionFaultPhase) => void) | null,
+): void {
+  immediateResolutionFaultInjector = injector;
+}
+
+function runImmediateResolutionFaultInjector(): void {
+  if (immediateResolutionFaultInjector !== null) {
+    immediateResolutionFaultInjector("after_refresh_before_read_back");
+  }
+}
+
 // ── 输入形状验证 ────────────────────────────────────────────────────────────
 
 function describeInvalidInput(input: TreasuryFaultResolutionInput): string | null {
@@ -618,6 +638,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
   // 成功后 receipt 被篡改、双 authority 变 inconsistent、proof 变 legacy/
   // insufficient 都在此 fail closed（authority 与 resolving tombstone 保留，
   // 由 beginTick 恢复继续阻断）。
+  runImmediateResolutionFaultInjector();
   const readBackProof = readTreasurySettlementProof(authority.transactionId);
   const postRefreshAuthority = resolveTreasuryUnresolvedAuthority(authority.transactionId);
   const committedVerdict = verifyTreasuryCommittedResolutionProof({

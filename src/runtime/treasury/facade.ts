@@ -2854,12 +2854,6 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       }
       const existingResolution = readTreasuryResolutionTombstone(input.transactionId);
       if (existingResolution !== undefined) {
-        if (existingResolution.stage === "resolving") {
-          return reject(
-            "resolution_in_progress",
-            `transactionId ${input.transactionId.slice(0, 48)} 已有 stage=resolving 的 resolution tombstone（结论 ${existingResolution.resolution}）——不重跑 reconciler、不签发第二份 capability，等待 staged recovery 继续原结论`,
-          );
-        }
         const resolutionAttempt = {
           digest: facts0.digest,
           ...(facts0.contractDigest !== undefined ? { contractDigest: facts0.contractDigest } : {}),
@@ -2867,19 +2861,27 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           ...(facts0.durableIdentityDigest !== undefined ? { durableIdentityDigest: facts0.durableIdentityDigest } : {}),
         };
         const resolutionRelation = treasuryAttemptIdentityRelation(existingResolution, resolutionAttempt);
-        if (resolutionRelation === "match") {
-          return {
-            status: "already_resolved",
-            resolution: existingResolution.resolution,
-            transactionId: input.transactionId,
-          };
+        if (resolutionRelation !== "match") {
+          // identity conflict / proof insufficient（含 resolving 形态的 identity
+          // 冲突）→ fail closed：不调用 reconciler、不签发。
+          return reject(
+            "resolution_identity_conflict",
+            resolutionRelation === "conflict"
+              ? `既有 resolution tombstone（stage=${existingResolution.stage}）与当前 authority attempt identity 冲突（${input.transactionId.slice(0, 48)}）——不重跑 reconciler（fail closed）`
+              : `既有 resolution tombstone（stage=${existingResolution.stage}）的 proof 不足以证明当前 authority attempt（${input.transactionId.slice(0, 48)}）——不重跑 reconciler（fail closed）`,
+          );
         }
-        return reject(
-          "resolution_identity_conflict",
-          resolutionRelation === "conflict"
-            ? `既有 final tombstone 与当前 authority attempt identity 冲突（${input.transactionId.slice(0, 48)}）——不重跑 reconciler（fail closed）`
-            : `既有 final tombstone 的 proof 不足以证明当前 authority attempt（${input.transactionId.slice(0, 48)}）——不重跑 reconciler（fail closed）`,
-        );
+        if (existingResolution.stage === "resolving") {
+          return reject(
+            "resolution_in_progress",
+            `transactionId ${input.transactionId.slice(0, 48)} 已有 stage=resolving 的 resolution tombstone（结论 ${existingResolution.resolution}）——不重跑 reconciler、不签发第二份 capability，等待 staged recovery 继续原结论`,
+          );
+        }
+        return {
+          status: "already_resolved",
+          resolution: existingResolution.resolution,
+          transactionId: input.transactionId,
+        };
       }
       // active handle：resolution 后 endTick 不得重新 quarantine。
       if (preparedById.has(input.transactionId)) {

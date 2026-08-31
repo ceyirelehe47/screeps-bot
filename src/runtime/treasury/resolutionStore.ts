@@ -772,7 +772,18 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
     if (entry.stage === "resolving") {
       resolutionStoreEvents.inProgressRecoveries += 1;
       if (entry.resolution === "committed" && entry.settledAtTick !== undefined) {
-        // ── 第 1 步：读取完整 receipt proof（tick 足够与否都读——identity
+        // ── 第 1 步【第十五轮第五节】：先统一 unresolved authority resolver
+        //    （不再 quarantine ?? intent——双 authority 不一致在此拦截）。
+        //    inconsistent → 立即零副作用保留（不执行任何 release、不执行
+        //    receipt refresh、不改变 tombstone stage），独立计数。
+        const authorityResolution = resolveTreasuryUnresolvedAuthority(entry.transactionId);
+        if (authorityResolution.status === "inconsistent") {
+          resolutionStoreEvents.faulted += 1;
+          report.authorityInconsistent += 1;
+          resolutionStoreEvents.authorityInconsistentBlockers += 1;
+          continue;
+        }
+        // ── 第 2 步：读取完整 receipt proof（tick 足够与否都读——identity
         //    校验不以 tick 充分为由跳过）。
         let receiptProof = readTreasurySettlementProof(entry.transactionId);
         if (receiptProof === undefined || receiptProof.settledAtTick < entry.settledAtTick) {
@@ -803,12 +814,9 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
           // refresh 成功：重新读取持久 proof（不信任 refresh 返回值本身）。
           receiptProof = readTreasurySettlementProof(entry.transactionId);
         }
-        // ── 第 2 步：【第十五轮第五节】统一 unresolved authority resolver
-        //    （不再 quarantine ?? intent——双 authority 不一致在此拦截）+
-        //    共用三方 verifier（receipt 时间证明、modern level、receipt ↔
-        //    tombstone、proof level 自动释放矩阵、tombstone/receipt ↔
-        //    authority 全部由此承载）。
-        const authorityResolution = resolveTreasuryUnresolvedAuthority(entry.transactionId);
+        // ── 第 3 步：共用三方 verifier（receipt 时间证明、modern level、
+        //    receipt ↔ tombstone、proof level 自动释放矩阵、tombstone/receipt
+        //    ↔ authority 全部由此承载）。
         const verdict = verifyTreasuryCommittedResolutionProof({
           tombstone: entry,
           authorityResolution,
