@@ -1,6 +1,8 @@
 /**
  * Treasury resolution tombstone store（第八轮建立 staged 状态；第十五轮升级
- * version 5 + 不可逆状态机 + 统一 authority resolver）。
+ * version 5 + 不可逆状态机 + 统一 authority resolver；【第十六轮】升级
+ * version 6：lowlevel provenance 绑定 + 持久状态语义矩阵 + pending 恢复
+ * O(1) 索引 + final not-executed 残留 marker 安全补完成）。
  *
  * 角色：显式 fault resolution 的有界幂等记录与 staged 状态机载体。独立成
  * 模块（而非内嵌 faultResolution.ts）的原因：facade 需要（a）统一 replay
@@ -10,18 +12,24 @@
  * store 级语义供两侧共享。
  *
  * 健康契约（与 receipt/quarantine/intent 同款）：
- * - version 5：version/entryCount 元数据 + key="r:"+transactionId + entry
+ * - version 6：version/entryCount 元数据 + key="r:"+transactionId + entry
  *   完整形状校验（resolution/stage 枚举、digest 16hex、安全整数、有界
- *   string、forensic provenance 形状）+ 容量上限 256（满时在**任何原状态
- *   变化之前**拒绝）+ 未知版本 fail closed（原数据保留）+ global reset 首次
- *   load 全量验证 + heap cache（含 resolving 计数——轻量 probe 不再全表
- *   扫描）；
- * - v1/v2/v3/v4：受支持的可迁移版本（loader 支持集合与轻量 health probe
+ *   string、forensic provenance 形状、lowlevel provenance 受控枚举）+
+ *   **持久状态语义矩阵**（resolutionStateSemantics——stage × resolution ×
+ *   proofLevel × provenance × tick 的内在状态合法性）+ 容量上限 256（满时
+ *   在**任何原状态变化之前**拒绝）+ 未知版本 fail closed（原数据保留）+
+ *   global reset 首次 load 全量验证 + heap cache（含 resolving / pending-
+ *   release 索引——轻量 probe 不再全表扫描）；
+ * - v1/v2/v3/v4/v5：受支持的可迁移版本（loader 支持集合与轻量 health probe
  *   一致——supported migration pending，不误报 unknown fatal）；迁移原子
- *   替换、幂等；损坏 fatal（malformed 旧 tombstone 绝不当可清理垃圾删除
- *   ——人工处理）；
+ *   替换、幂等；v2-v4 无 stage 的历史 entry 迁移补终态 stage=final；损坏
+ *   （含语义非法持久状态）fatal（malformed 旧 tombstone 绝不当可清理垃圾
+ *   删除——人工处理）；
  * - 惰性清理只删除 resolvedAtTick 超过 retention（5000）的完整验证条目；
- *   损坏条目不删除；stage=resolving 永不驱逐。
+ *   损坏条目不删除；stage=resolving 永不驱逐；
+ * - 【第十六轮第九节】语义非法持久状态（resolving not-executed、final
+ *   committed 缺 settledAtTick、provenance/proof 矛盾等）→ store unhealthy
+ *   ——recovery 不再自动删除（删除非法持久状态不是 repair）。
  *
  * 【第十五轮第六节】写入全部经 resolutionStateMachine（不可逆状态机）判定：
  * absent 只能创建 resolving committed / final not-executed；resolving
@@ -32,6 +40,15 @@
  * resolveTreasuryUnresolvedAuthority（`quarantine ?? intent` 旁路删除）；
  * committed 三方 proof 验证统一经 committedProofVerifier（与 immediate
  * resolve-as-committed 复用同一 verifier）。
+ *
+ * 【第十六轮第八节】resolver store_unhealthy → 零副作用（不 refresh receipt、
+ * 不释放 authority、不清 marker、不 finalize、不回滚）。
+ *
+ * 【第十六轮第十三节】heap 运行态索引（resolving transaction IDs + final
+ * not-executed pending-release IDs）：Memory tombstone 仍是权威；索引仅用于
+ * 定位待处理项（beginTick 无待处理项时 O(1) 直接返回，不扫描历史 final
+ * proof）；global reset 首次 load 重建（一次有界全表扫描）；索引缺失/损坏
+ * 不得导致 authority 被错误释放。
  */
 
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
@@ -41,7 +58,11 @@ import {
   refreshSettledReceiptForResolution,
   registerTreasuryResolutionResetHook,
 } from "@/runtime/treasury/receipts";
-import { clearTreasuryWriteFaultMarkerForResolution } from "@/runtime/treasury/writeFault";
+import {
+  clearTreasuryWriteFaultMarkerForResolution,
+  readTreasuryWriteFault,
+  TREASURY_EXECUTION_UNKNOWN_PHASES,
+} from "@/runtime/treasury/writeFault";
 import { releaseTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { releaseTreasuryIntentEntry } from "@/runtime/treasury/intents";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
@@ -59,9 +80,15 @@ import {
   type TreasuryForensicProvenance,
 } from "@/runtime/treasury/forensicProvenance";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
+import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
+import { validateTreasuryResolutionTombstoneState } from "@/runtime/treasury/resolutionStateSemantics";
+import { validateTreasuryLowlevelSourceField } from "@/runtime/treasury/authorityLevel";
 
-/** 【第十五轮第六节】resolution tombstone v5（新增可选 forensic provenance）。 */
-export const TREASURY_RESOLUTION_VERSION = 5 as const;
+/**
+ * 【第十六轮第十一节】resolution tombstone v6（lowlevel proof 绑定显式
+ * provenance——runtime 与 migrated 来源不能互相证明）。
+ */
+export const TREASURY_RESOLUTION_VERSION = 6 as const;
 export const TREASURY_RESOLUTION_MAX_ENTRIES = 256;
 const TREASURY_RESOLUTION_RETENTION_TICKS = 5_000;
 const RESOLUTION_KEY_PREFIX = "r:";
@@ -114,6 +141,14 @@ export interface TreasuryResolutionTombstone {
    * beginTick 自动释放）。
    */
   readonly forensicProvenance?: TreasuryForensicProvenance;
+  /**
+   * 【第十六轮第十一节 v6】lowlevel proof 的显式 provenance（受控枚举
+   * runtime-lowlevel@v1|migrated-lowlevel@v1——attempt identity 的组成
+   * 部分：runtime 与 migrated 来源不能互相证明；v5 及更早的低层 tombstone
+   * 无此字段 = 来源不可证明的隔离态，不得自动释放当前 lowlevel authority，
+   * 也不得猜测为 runtime 来源）。只允许 proofLevel=lowlevel 携带。
+   */
+  readonly lowlevelSource?: string;
   /** 原 action tick（审计保留；receipt retention 从 settledAtTick 起算）。 */
   actionTick: number;
   /** receipt 结算 tick（resolve-as-committed = resolution tick）。 */
@@ -128,7 +163,7 @@ export interface TreasuryResolutionTombstone {
 }
 
 export interface TreasuryResolutionStore {
-  version: 5;
+  version: 6;
   entries: Record<string, TreasuryResolutionTombstone>;
   entryCount: number;
   updatedAt: number;
@@ -159,8 +194,15 @@ function resolutionBranch(): TreasuryResolutionBranch {
 interface ResolutionStoreRuntime {
   store: TreasuryResolutionStore;
   fatal: string | null;
-  /** 【第十五轮第十节】resolving 计数 heap 缓存（轻量 probe 不再全表扫描）。 */
-  inProgress: number;
+  /**
+   * 【第十六轮第十三节】pending 恢复 O(1) 索引（heap 运行态；Memory 才是
+   * 权威）：resolving transaction IDs 与 final not-executed pending-release
+   * IDs——beginTick 无待处理项时 O(1) 直接返回，有待处理项时只遍历索引
+   * 中的 ID，不扫描全部历史 final proof。global reset 首次 load 一次有界
+   * 全表扫描重建；索引只用于定位待处理项，不得作为安全 proof。
+   */
+  resolvingIds: Set<string>;
+  pendingReleaseIds: Set<string>;
 }
 
 let heapRuntime: ResolutionStoreRuntime | null = null;
@@ -176,6 +218,12 @@ const resolutionStoreEvents = {
   identityInsufficientBlockers: 0,
   /** 【第十五轮第五节】双 authority inconsistent 的独立阻断计数。 */
   authorityInconsistentBlockers: 0,
+  /** 【第十六轮第八节】store_unhealthy 零副作用阻断计数（resolver 与 marker 补完成）。 */
+  storeUnhealthyBlockers: 0,
+  /** 【第十六轮第七节】final not-executed 残留 marker 无法安全清除的独立计数。 */
+  markerCleanupBlockers: 0,
+  /** 【第十六轮第十三节】beginTick O(1) 空闲快路径命中计数。 */
+  idleFastPaths: 0,
 };
 
 export interface TreasuryResolutionStoreCounters {
@@ -186,11 +234,14 @@ export interface TreasuryResolutionStoreCounters {
   readonly identityConflicts: number;
   readonly identityInsufficientBlockers: number;
   readonly authorityInconsistentBlockers: number;
+  readonly storeUnhealthyBlockers: number;
+  readonly markerCleanupBlockers: number;
+  readonly idleFastPaths: number;
 }
 
 export function readTreasuryResolutionStoreCounters(): TreasuryResolutionStoreCounters {
-  const { fullScans, loadValidationEntries, recovered, faulted, identityConflicts, identityInsufficientBlockers, authorityInconsistentBlockers } = resolutionStoreEvents;
-  return { fullScans, loadValidationEntries, recovered, faulted, identityConflicts, identityInsufficientBlockers, authorityInconsistentBlockers };
+  const { fullScans, loadValidationEntries, recovered, faulted, identityConflicts, identityInsufficientBlockers, authorityInconsistentBlockers, storeUnhealthyBlockers, markerCleanupBlockers, idleFastPaths } = resolutionStoreEvents;
+  return { fullScans, loadValidationEntries, recovered, faulted, identityConflicts, identityInsufficientBlockers, authorityInconsistentBlockers, storeUnhealthyBlockers, markerCleanupBlockers, idleFastPaths };
 }
 
 /**
@@ -207,6 +258,9 @@ export function resetTreasuryResolutionStoreForTest(): void {
   resolutionStoreEvents.identityConflicts = 0;
   resolutionStoreEvents.identityInsufficientBlockers = 0;
   resolutionStoreEvents.authorityInconsistentBlockers = 0;
+  resolutionStoreEvents.storeUnhealthyBlockers = 0;
+  resolutionStoreEvents.markerCleanupBlockers = 0;
+  resolutionStoreEvents.idleFastPaths = 0;
 }
 
 registerTreasuryResolutionResetHook(resetTreasuryResolutionStoreForTest);
@@ -264,6 +318,17 @@ export function validateTreasuryResolutionTombstoneShape(entry: unknown): string
     const provenanceError = validateTreasuryForensicProvenanceShape(candidate.forensicProvenance);
     if (provenanceError !== null) {
       return provenanceError;
+    }
+  }
+  // 【第十六轮第十一节 v6】lowlevel provenance：存在须为受控枚举，且只允许
+  // proofLevel=lowlevel 携带（modern/legacy/forensic proof 不携带低层来源）。
+  if (candidate.lowlevelSource !== undefined) {
+    const sourceError = validateTreasuryLowlevelSourceField(candidate.lowlevelSource);
+    if (sourceError !== null) {
+      return sourceError;
+    }
+    if (candidate.proofLevel !== "lowlevel") {
+      return `lowlevelSource 只允许 lowlevel proof 携带（当前 ${String(candidate.proofLevel)}）`;
     }
   }
   // 【第十四轮第十一节】proof class required/forbidden 矩阵。
@@ -346,27 +411,42 @@ function validateResolutionStoreShape(store: TreasuryResolutionStore): string | 
     if (RESOLUTION_KEY_PREFIX + typed.transactionId !== key) {
       return `存储键与 entry.transactionId 不一致: ${key.slice(0, 48)}`;
     }
+    // 【第十六轮第九节】持久状态语义矩阵：形状合法但内在状态非法
+    // （resolving not-executed / final committed 缺 settledAtTick /
+    // provenance 与 proof 矛盾等）→ store unhealthy（不删除 entry）。
+    const stateError = validateTreasuryResolutionTombstoneState(typed, "load");
+    if (stateError !== null) {
+      return `${stateError}（key ${key.slice(0, 48)}）`;
+    }
   }
   return null;
 }
 
 function fatalRuntime(store: TreasuryResolutionStore, reason: string): ResolutionStoreRuntime {
-  return { store, fatal: reason, inProgress: 0 };
-}
-
-/** resolving 计数（load 后缓存；轻量 probe / readiness O(1) 读取）。 */
-function countResolvingEntries(store: TreasuryResolutionStore): number {
-  let inProgress = 0;
-  for (const entry of Object.values(store.entries)) {
-    if (entry.stage === "resolving") inProgress += 1;
-  }
-  return inProgress;
+  return { store, fatal: reason, resolvingIds: new Set<string>(), pendingReleaseIds: new Set<string>() };
 }
 
 /**
- * 加载（含校验与版本化迁移）：写路径专用。v1/v2/v3/v4 均为受支持的可迁移
- * 版本（与轻量 health probe 的受支持集合一致）；任何损坏 → fatal fail
- * closed（原数据不删、写入拒绝、恢复拒绝）。
+ * 【第十六轮第十三节】load 后构建 pending 恢复索引（一次有界全表扫描）：
+ * resolving transaction IDs 与 final not-executed pending-release IDs。
+ */
+function buildRecoveryIndexes(store: TreasuryResolutionStore): { resolvingIds: Set<string>; pendingReleaseIds: Set<string> } {
+  const resolvingIds = new Set<string>();
+  const pendingReleaseIds = new Set<string>();
+  for (const entry of Object.values(store.entries)) {
+    if (entry.stage === "resolving") {
+      resolvingIds.add(entry.transactionId);
+    } else if (entry.stage === "final" && entry.resolution === "not-executed") {
+      pendingReleaseIds.add(entry.transactionId);
+    }
+  }
+  return { resolvingIds, pendingReleaseIds };
+}
+
+/**
+ * 加载（含校验与版本化迁移）：写路径专用。v1/v2/v3/v4/v5 均为受支持的可
+ * 迁移版本（与轻量 health probe 的受支持集合一致）；任何损坏（含语义非法
+ * 持久状态）→ fatal fail closed（原数据不删、写入拒绝、恢复拒绝）。
  */
 function loadResolutionStoreRuntime(): ResolutionStoreRuntime {
   if (heapRuntime) return heapRuntime;
@@ -374,7 +454,7 @@ function loadResolutionStoreRuntime(): ResolutionStoreRuntime {
   if (!raw) {
     const created: TreasuryResolutionStore = { version: TREASURY_RESOLUTION_VERSION, entries: {}, entryCount: 0, updatedAt: Game.time };
     resolutionBranch().resolutions = created;
-    heapRuntime = { store: created, fatal: null, inProgress: 0 };
+    heapRuntime = { store: created, fatal: null, resolvingIds: new Set<string>(), pendingReleaseIds: new Set<string>() };
     return heapRuntime;
   }
   if ((raw.version as number) === TREASURY_RESOLUTION_VERSION) {
@@ -384,60 +464,82 @@ function loadResolutionStoreRuntime(): ResolutionStoreRuntime {
       heapRuntime = fatalRuntime(candidate, `${shapeError}（resolution store fail closed，原数据保留）`);
       return heapRuntime;
     }
-    heapRuntime = { store: candidate, fatal: null, inProgress: countResolvingEntries(candidate) };
+    heapRuntime = { store: candidate, fatal: null, ...buildRecoveryIndexes(candidate) };
     return heapRuntime;
   }
-  if (raw.version === 4) {
-    // v4 → v5 无损升级（【第十五轮第八节】新增可选 forensic provenance 字段
-    // ——既有 entry 无 provenance = migration-derived，语义不变）；损坏 → fatal。
+  if (raw.version === 5) {
+    // v5 → v6 无损升级（【第十六轮第十一节】新增可选 lowlevelSource 字段
+    // ——既有 lowlevel entry 无 provenance = 来源不可证明的隔离态，语义不变，
+    // 不猜测 runtime 来源）；损坏 → fatal。
     const upgraded: TreasuryResolutionStore = { ...(raw as unknown as TreasuryResolutionStore), version: TREASURY_RESOLUTION_VERSION, updatedAt: Game.time };
     const shapeError = validateResolutionStoreShape(upgraded);
     if (shapeError !== null) {
-      heapRuntime = fatalRuntime(raw as unknown as TreasuryResolutionStore, `${shapeError}（v4→v5 升级校验失败，原数据保留）`);
+      heapRuntime = fatalRuntime(raw as unknown as TreasuryResolutionStore, `${shapeError}（v5→v6 升级校验失败，原数据保留）`);
       return heapRuntime;
     }
     resolutionBranch().resolutions = upgraded;
-    heapRuntime = { store: upgraded, fatal: null, inProgress: countResolvingEntries(upgraded) };
+    heapRuntime = { store: upgraded, fatal: null, ...buildRecoveryIndexes(upgraded) };
+    return heapRuntime;
+  }
+  if (raw.version === 4) {
+    // v4 → v6 无损升级（v5 forensic provenance / v6 lowlevelSource 均为可选
+    // 新字段——既有 entry 无新字段 = 隔离/迁移语义不变）；历史无 stage 的
+    // entry 补终态 stage=final；损坏 → fatal。
+    const entries: Record<string, TreasuryResolutionTombstone> = {};
+    resolutionStoreEvents.fullScans += 1;
+    for (const [key, value] of Object.entries((raw as { entries?: Record<string, TreasuryResolutionTombstone> }).entries ?? {})) {
+      entries[key] = { ...value, ...(value.stage === undefined ? { stage: "final" as const } : {}) };
+    }
+    const upgraded: TreasuryResolutionStore = { ...(raw as unknown as TreasuryResolutionStore), version: TREASURY_RESOLUTION_VERSION, entries, updatedAt: Game.time };
+    const shapeError = validateResolutionStoreShape(upgraded);
+    if (shapeError !== null) {
+      heapRuntime = fatalRuntime(raw as unknown as TreasuryResolutionStore, `${shapeError}（v4→v6 升级校验失败，原数据保留）`);
+      return heapRuntime;
+    }
+    resolutionBranch().resolutions = upgraded;
+    heapRuntime = { store: upgraded, fatal: null, ...buildRecoveryIndexes(upgraded) };
     return heapRuntime;
   }
   if (raw.version === 3) {
-    // v3 → v5 升级（【第十四轮第十一节】显式 proof class 定级，原子）：
+    // v3 → v6 升级（【第十四轮第十一节】显式 proof class 定级，原子）：
     // 三身份字段全在 → identity-bound；全缺 → legacy；部分 → forensic 隔离
-    //（不得"尽力猜 modern"）；升级后矩阵校验失败 → fatal（原数据保留）。
+    //（不得"尽力猜 modern"）；历史无 stage 的 entry 补终态 stage=final；
+    // 升级后矩阵校验失败 → fatal（原数据保留）。
     const entries: Record<string, TreasuryResolutionTombstone> = {};
     resolutionStoreEvents.fullScans += 1;
     for (const [key, value] of Object.entries((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
       entries[key] = {
         ...(value as TreasuryResolutionTombstone),
         proofLevel: migrateResolutionProofLevel(value as TreasuryResolutionTombstone),
+        ...((value as TreasuryResolutionTombstone).stage === undefined ? { stage: "final" as const } : {}),
       };
     }
     const upgraded: TreasuryResolutionStore = { ...(raw as unknown as TreasuryResolutionStore), version: TREASURY_RESOLUTION_VERSION, entries, updatedAt: Game.time };
     const shapeError = validateResolutionStoreShape(upgraded);
     if (shapeError !== null) {
-      heapRuntime = fatalRuntime(raw as unknown as TreasuryResolutionStore, `${shapeError}（v3→v5 升级校验失败，原数据保留）`);
+      heapRuntime = fatalRuntime(raw as unknown as TreasuryResolutionStore, `${shapeError}（v3→v6 升级校验失败，原数据保留）`);
       return heapRuntime;
     }
     resolutionBranch().resolutions = upgraded;
-    heapRuntime = { store: upgraded, fatal: null, inProgress: countResolvingEntries(upgraded) };
+    heapRuntime = { store: upgraded, fatal: null, ...buildRecoveryIndexes(upgraded) };
     return heapRuntime;
   }
   if (raw.version === 2) {
-    // v2 → v5 无损升级（无身份字段 → legacy proof——不得证明现代 attempt）；
-    // 损坏 → fatal。
+    // v2 → v6 无损升级（无身份字段 → legacy proof——不得证明现代 attempt；
+    // 历史无 stage 的 entry 补终态 stage=final）；损坏 → fatal。
     const entries: Record<string, TreasuryResolutionTombstone> = {};
     resolutionStoreEvents.fullScans += 1;
     for (const [key, value] of Object.entries((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
-      entries[key] = { ...(value as TreasuryResolutionTombstone), proofLevel: "legacy" };
+      entries[key] = { ...(value as TreasuryResolutionTombstone), proofLevel: "legacy", stage: "final" };
     }
     const upgraded: TreasuryResolutionStore = { ...(raw as unknown as TreasuryResolutionStore), version: TREASURY_RESOLUTION_VERSION, entries, updatedAt: Game.time };
     const shapeError = validateResolutionStoreShape(upgraded);
     if (shapeError !== null) {
-      heapRuntime = fatalRuntime(raw as unknown as TreasuryResolutionStore, `${shapeError}（v2→v5 升级校验失败，原数据保留）`);
+      heapRuntime = fatalRuntime(raw as unknown as TreasuryResolutionStore, `${shapeError}（v2→v6 升级校验失败，原数据保留）`);
       return heapRuntime;
     }
     resolutionBranch().resolutions = upgraded;
-    heapRuntime = { store: upgraded, fatal: null, inProgress: countResolvingEntries(upgraded) };
+    heapRuntime = { store: upgraded, fatal: null, ...buildRecoveryIndexes(upgraded) };
     return heapRuntime;
   }
   if (raw.version === 1) {
@@ -460,11 +562,11 @@ function loadResolutionStoreRuntime(): ResolutionStoreRuntime {
     }
     const upgraded: TreasuryResolutionStore = { version: TREASURY_RESOLUTION_VERSION, entries, entryCount, updatedAt: Game.time };
     if (validateResolutionStoreShape(upgraded) !== null) {
-      heapRuntime = fatalRuntime(raw as unknown as TreasuryResolutionStore, "v1→v5 升级自检失败（原数据保留）");
+      heapRuntime = fatalRuntime(raw as unknown as TreasuryResolutionStore, "v1→v6 升级自检失败（原数据保留）");
       return heapRuntime;
     }
     resolutionBranch().resolutions = upgraded;
-    heapRuntime = { store: upgraded, fatal: null, inProgress: countResolvingEntries(upgraded) };
+    heapRuntime = { store: upgraded, fatal: null, ...buildRecoveryIndexes(upgraded) };
     return heapRuntime;
   }
   heapRuntime = fatalRuntime(
@@ -483,7 +585,7 @@ export interface TreasuryResolutionStoreHealth {
 }
 
 /** 轻量 probe 的受支持版本集合（与 loader 一致——supported migration pending）。 */
-const TREASURY_RESOLUTION_SUPPORTED_VERSIONS: ReadonlySet<number> = new Set([TREASURY_RESOLUTION_VERSION, 4, 3, 2, 1]);
+const TREASURY_RESOLUTION_SUPPORTED_VERSIONS: ReadonlySet<number> = new Set([TREASURY_RESOLUTION_VERSION, 5, 4, 3, 2, 1]);
 
 /**
  * 健康探测（只读零写；轻量——**未 load 时不全表扫描**，resolving 计数走
@@ -495,7 +597,7 @@ export function peekTreasuryResolutionStoreHealth(): TreasuryResolutionStoreHeal
     return {
       healthy: heapRuntime.fatal === null,
       detail: heapRuntime.fatal,
-      inProgress: heapRuntime.inProgress,
+      inProgress: heapRuntime.resolvingIds.size,
       entryCount: Object.keys(heapRuntime.store.entries ?? {}).length,
     };
   }
@@ -523,7 +625,7 @@ export function treasuryResolutionResolvingInProgress(): boolean {
   }
   const runtime = loadResolutionStoreRuntime();
   if (runtime.fatal) return true; // store 损坏 → fail closed 阻断
-  return runtime.inProgress > 0;
+  return runtime.resolvingIds.size > 0;
 }
 
 /** 显式触发 load 验证（写路径）：返回 fatal 描述（null = 可用）。 */
@@ -555,19 +657,18 @@ export function peekTreasuryResolutionStoreEntry(): { readonly version?: number 
 export function ensureTreasuryResolutionSlotAvailable(): string | null {
   const runtime = loadResolutionStoreRuntime();
   if (runtime.fatal) return runtime.fatal;
-  const key = RESOLUTION_KEY_PREFIX; // 通用预检（不含具体 id 时按新条目判断）
-  void key;
   if (runtime.store.entryCount < TREASURY_RESOLUTION_MAX_ENTRIES) return null;
   // 满载：尝试惰性清理过期项后重判。
-  evictExpiredTombstones(runtime.store);
+  evictExpiredTombstones(runtime.store, runtime);
   if (runtime.store.entryCount < TREASURY_RESOLUTION_MAX_ENTRIES) return null;
   return `resolution tombstone 已达上限 ${String(TREASURY_RESOLUTION_MAX_ENTRIES)} 且无可清理过期项（fail closed）`;
 }
 
 /** 惰性清理：只删除 stage=final 且超过 retention 的形状完整条目（第九轮
  *  4.10：stage=resolving 永不被普通垃圾回收驱逐——resolution-intent 丢弃
- *  不可接受，满载 fail closed 由容量预检承担）。 */
-function evictExpiredTombstones(store: TreasuryResolutionStore): number {
+ *  不可接受，满载 fail closed 由容量预检承担）。【第十六轮第十三节】同步
+ *  维护 pending 恢复索引（retention 删除不得遗留幽灵索引项）。 */
+function evictExpiredTombstones(store: TreasuryResolutionStore, indexes?: { resolvingIds: Set<string>; pendingReleaseIds: Set<string> }): number {
   let removed = 0;
   resolutionStoreEvents.fullScans += 1;
   for (const [key, entry] of Object.entries(store.entries)) {
@@ -577,6 +678,7 @@ function evictExpiredTombstones(store: TreasuryResolutionStore): number {
       delete store.entries[key];
       store.entryCount -= 1;
       removed += 1;
+      if (indexes !== undefined) indexes.pendingReleaseIds.delete(entry.transactionId);
     }
   }
   if (removed > 0) store.updatedAt = Game.time;
@@ -598,11 +700,22 @@ export type TreasuryResolutionTombstoneWriteResult =
  * - final（与 resolving 的幂等重复写）只允许全部安全关键字段完全一致的
  *   exact idempotent 重复写（非覆盖写）；
  * - 其余一切转换拒绝且原 tombstone 完全不变。
+ *
+ * 【第十六轮第九节】写入候选额外经持久状态语义矩阵（write 上下文——新
+ * lowlevel proof 必须携带 lowlevelSource）。
+ *
+ * 【第十六轮第十节】写入 Memory 前构造完全独立的有界深拷贝（含嵌套
+ * forensicProvenance / lowlevelSource）——调用方输入与 Memory 无任何共享
+ * 可变引用。
  */
 export function writeTreasuryResolutionTombstone(entry: TreasuryResolutionTombstone): TreasuryResolutionTombstoneWriteResult {
   const shapeError = validateTreasuryResolutionTombstoneShape(entry);
   if (shapeError !== null) {
     return { status: "rejected", detail: `拒绝写入非法 tombstone: ${shapeError}` };
+  }
+  const stateError = validateTreasuryResolutionTombstoneState(entry, "write");
+  if (stateError !== null) {
+    return { status: "rejected", detail: `拒绝写入语义非法 tombstone: ${stateError}` };
   }
   const runtime = loadResolutionStoreRuntime();
   if (runtime.fatal) {
@@ -620,7 +733,7 @@ export function writeTreasuryResolutionTombstone(entry: TreasuryResolutionTombst
     return { status: "idempotent" };
   }
   if (existing === undefined && runtime.store.entryCount >= TREASURY_RESOLUTION_MAX_ENTRIES) {
-    evictExpiredTombstones(runtime.store);
+    evictExpiredTombstones(runtime.store, runtime);
     if (runtime.store.entryCount >= TREASURY_RESOLUTION_MAX_ENTRIES) {
       return {
         status: "rejected",
@@ -628,15 +741,18 @@ export function writeTreasuryResolutionTombstone(entry: TreasuryResolutionTombst
       };
     }
   }
-  runtime.store.entries[key] = { ...entry };
+  // 【第十六轮第十节】发布顺序：clone 输入 →（形状/状态已验证）→ Memory 写入
+  // clone——不存调用方对象引用（嵌套 forensicProvenance 一并深拷贝）。
+  runtime.store.entries[key] = cloneTreasuryDurableValue(entry);
   runtime.store.updatedAt = Game.time;
   if (transition.status === "allowed_create") {
     runtime.store.entryCount += 1;
-    if (entry.stage === "resolving") runtime.inProgress += 1;
+    if (entry.stage === "resolving") runtime.resolvingIds.add(entry.transactionId);
+    if (entry.stage === "final" && entry.resolution === "not-executed") runtime.pendingReleaseIds.add(entry.transactionId);
     return { status: "written" };
   }
   // allowed_finalize：resolving committed → final committed。
-  runtime.inProgress = Math.max(0, runtime.inProgress - 1);
+  runtime.resolvingIds.delete(entry.transactionId);
   return { status: "updated" };
 }
 
@@ -657,9 +773,19 @@ export function deleteTreasuryResolutionTombstone(transactionId: string): boolea
   }
   delete runtime.store.entries[key];
   runtime.store.entryCount -= 1;
-  runtime.inProgress = Math.max(0, runtime.inProgress - 1);
+  runtime.resolvingIds.delete(transactionId);
   runtime.store.updatedAt = Game.time;
   return true;
+}
+
+/**
+ * 【第十六轮第十三节】final not-executed 补完成收尾：immediate resolution
+ * 路径成功释放 authority + 清 marker 后将 transactionId 移出 pending-release
+ * 索引（幂等；Memory tombstone 仍是权威——索引只用于定位待处理项）。
+ */
+export function markTreasuryPendingReleaseCompleted(transactionId: string): void {
+  if (heapRuntime === null) return;
+  heapRuntime.pendingReleaseIds.delete(transactionId);
 }
 
 // ── 统一 replay horizon（prepare 幂等与 receipt 同一规则） ─────────────────
@@ -684,7 +810,7 @@ export function committedResolutionSettledAtTick(transactionId: string): number 
 export interface TreasuryResolutionRecoveryReport {
   /** resolving-committed 且 receipt 已刷新至 settledAtTick → 完成 finalize 的条数。 */
   completed: number;
-  /** resolving 无进展且不可恢复（防御分支）→ 回滚删除 tombstone 的条数。 */
+  /** 【第十六轮第九节】resolving 无进展/防御分支：保留 tombstone 的阻断条数（不再自动删除）。 */
   rolledBack: number;
   /** final not-executed 但 authority 仍存在 → 补完成释放的条数。 */
   completedRelease: number;
@@ -696,6 +822,12 @@ export interface TreasuryResolutionRecoveryReport {
   identityInsufficient: number;
   /** 【第十五轮第五节】双 authority inconsistent 零释放保留的条数（独立计数）。 */
   authorityInconsistent: number;
+  /** 【第十六轮第八节】store_unhealthy 零副作用阻断的条数（intent/quarantine store fatal）。 */
+  storeUnhealthy: number;
+  /** 【第十六轮第七节】final not-executed 残留 marker 无法安全清除的条数（conflict/insufficient/他属）。 */
+  markerCleanupBlocked: number;
+  /** 【第十六轮第十三节】beginTick O(1) 空闲快路径命中（无 resolving 且无 pending-release）。 */
+  idleFastPath: boolean;
   storeFatal: string | null;
 }
 
@@ -710,12 +842,22 @@ export interface TreasuryResolutionRecoveryReport {
  *   resolution tombstone           ├── 三方严格 match 才能释放 authority
  *   settlement receipt proof ──────┘
  *
+ * 【第十六轮第十三节】O(1) 空闲快路径：无 resolving 且无 pending-release
+ * 索引项时直接返回（不扫描 resolution entries）；有待处理项时只遍历索引
+ * 中的 transaction ID，不扫描全部历史 final proof。索引由 load 一次有界
+ * 全表扫描重建、由写入/补完成/retention 删除维护；Memory 仍是权威——索引
+ * 中的 ID 在 Memory 已不存在/状态已变时直接清理（不作为安全 proof）。
+ *
  * - **authority inconsistent**：intent / quarantine / tombstone / marker 全
  *   保留，authorityInconsistent 独立计数，write readiness 保持阻断，零
  *   release、零 receipt refresh、零 stage 变化（不任选其一）；
+ * - **store_unhealthy**（第十六轮第八节）：intent/quarantine store fatal →
+ *   零副作用保留（不 refresh receipt、不释放 authority、不清 marker、不
+ *   finalize、不回滚），独立计数——store 损坏绝不当作 authority 已释放；
  * - **authority not_found**（前一阶段已释放、finalize 前中断）：committed
  *   仍须 receipt ↔ tombstone identity match 且 tick 足够才补完成 finalize
- *   （不伪造新 authority）；final not-executed 视为释放已完成（跳过）；
+ *   （不伪造新 authority）；final not-executed 走【第十六轮第七节】marker
+ *   补完成（见 validatePendingReleaseMarkerCompletion）；
  * - **receipt 时间证明**：receipt.settledAtTick ≥ tombstone.settledAtTick
  *   （tick 足够 ≠ receipt 属于当前 attempt——两个独立条件）；
  * - **receipt ↔ tombstone identity**：无论 tick 是否足够都读取完整 receipt
@@ -730,24 +872,85 @@ export interface TreasuryResolutionRecoveryReport {
  * - 全部成立才：释放 quarantine + intent、清除匹配 marker、经状态机校验后
  *   finalize（stage=final）；read-back mismatch 保留 resolving tombstone 与
  *   全部 authority；
- * - stage=resolving 但无 settledAtTick / 非 committed（防御）→ 回滚删除
- *   tombstone（原状态未变，resolution 可重试）；
+ * - stage=resolving 但无 settledAtTick / 非 committed（防御分支，load 语义
+ *   矩阵后理论不可达）：【第十六轮第九节】**保留 tombstone 与计数阻断，
+ *   不再自动删除**（删除非法持久状态不是 repair）；
  * - store fatal：不删任何数据，报告诊断（resolution 路径拒绝）。
  */
 
-/** authority entry → attempt identity 视图（final not-executed 补完成比较）。 */
+/** authority entry → attempt identity 视图（final not-executed 补完成比较；
+ *  【第十六轮第十一节】lowlevelSource 一并进入 attempt identity 视图）。 */
 function attemptIdentityOf(authority: {
   readonly digest: string;
   readonly contractDigest?: string;
   readonly authorizationCohortDigest?: string;
   readonly durableIdentityDigest?: string;
+  readonly lowlevelSource?: string;
 }): TreasuryAttemptIdentity {
   return {
     digest: authority.digest,
     ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
     ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
     ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+    ...(authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
   };
+}
+
+/**
+ * 【第十六轮第七节】final not-executed + authority 已释放时残留 marker 的
+ * 安全补完成判定（返回 null = 可安全清除 marker，否则有界阻断原因）：
+ * - marker 不存在：释放与清理均已完成；
+ * - transaction/attempt ID 匹配 + digest 匹配 + attemptIdentity 完整且与
+ *   tombstone identity relation=match + phase 与 not-executed 结论兼容
+ *   （preExecution 矩阵）+ tombstone proof level 与 marker identity 兼容，
+ *   才可清除；
+ * - marker 属于另一 attempt / identity conflict / identity insufficient /
+ *   phase 不兼容：保留 marker + 保留 tombstone、write readiness 继续阻断、
+ *   记录独立诊断、不伪造 authority。
+ */
+function validatePendingReleaseMarkerCompletion(
+  marker: { readonly transactionId: string; readonly digest: string; readonly phase: string; readonly attemptIdentity?: { readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string } },
+  entry: TreasuryResolutionTombstone,
+): string | null {
+  if (marker.transactionId !== entry.transactionId || marker.digest !== entry.digest) {
+    return `marker 属于另一 attempt（marker ${marker.transactionId.slice(0, 48)}/${marker.digest.slice(0, 16)}，tombstone ${entry.transactionId.slice(0, 48)}/${entry.digest.slice(0, 16)}）`;
+  }
+  if (marker.attemptIdentity === undefined) {
+    return "marker 缺少 attemptIdentity（旧 proof 证明不足——不得据以清除）";
+  }
+  const markerAttempt: TreasuryAttemptIdentity = {
+    digest: marker.digest,
+    ...(marker.attemptIdentity.contractDigest !== undefined ? { contractDigest: marker.attemptIdentity.contractDigest } : {}),
+    ...(marker.attemptIdentity.authorizationCohortDigest !== undefined
+      ? { authorizationCohortDigest: marker.attemptIdentity.authorizationCohortDigest }
+      : {}),
+    ...(marker.attemptIdentity.durableIdentityDigest !== undefined ? { durableIdentityDigest: marker.attemptIdentity.durableIdentityDigest } : {}),
+  };
+  const relation = treasuryAttemptIdentityRelation(entry, markerAttempt);
+  if (relation !== "match") {
+    return `marker attemptIdentity 与 tombstone ${relation}（contract/cohort/durable identity 关系不满足 match）`;
+  }
+  // phase 与 not-executed 结论兼容矩阵：preExecution tombstone 只配
+  // internal authorization fault 类 phase；普通 not-executed 只配
+  // execution-unknown 类 phase（commit 类 phase 与 not-executed 结论矛盾）。
+  const phaseCompatible = entry.preExecution === true
+    ? marker.phase === "internal_authorization_fault" || marker.phase === "internal_authorization_fault_forensic"
+    : TREASURY_EXECUTION_UNKNOWN_PHASES.has(marker.phase);
+  if (!phaseCompatible) {
+    return `marker phase ${marker.phase} 与 not-executed 结论不兼容（preExecution=${String(entry.preExecution === true)} 的合法 phase 类不匹配）`;
+  }
+  // tombstone proof level 与 marker identity 兼容：marker 携带完整现代身份
+  // （contract+cohort+durable）时 tombstone 须为 identity-bound；仅 durable 时
+  // 须为 lowlevel 或 identity-bound（relation match 已保证身份一致，此处防
+  // 御 proof level 降级冒充）。
+  const markerModernComplete =
+    marker.attemptIdentity.contractDigest !== undefined &&
+    marker.attemptIdentity.authorizationCohortDigest !== undefined &&
+    marker.attemptIdentity.durableIdentityDigest !== undefined;
+  if (markerModernComplete && entry.proofLevel !== "identity-bound") {
+    return `marker 携带完整现代 attempt identity 而 tombstone proof level 为 ${String(entry.proofLevel)}（proof 等级不兼容）`;
+  }
+  return null;
 }
 
 export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
@@ -759,6 +962,9 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
     identityConflicts: 0,
     identityInsufficient: 0,
     authorityInconsistent: 0,
+    storeUnhealthy: 0,
+    markerCleanupBlocked: 0,
+    idleFastPath: false,
     storeFatal: null,
   };
   const runtime = loadResolutionStoreRuntime();
@@ -767,150 +973,223 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
     resolutionStoreEvents.faulted += 1;
     return report;
   }
-  resolutionStoreEvents.fullScans += 1;
-  for (const [key, entry] of Object.entries(runtime.store.entries)) {
-    if (entry.stage === "resolving") {
-      resolutionStoreEvents.inProgressRecoveries += 1;
-      if (entry.resolution === "committed" && entry.settledAtTick !== undefined) {
-        // ── 第 1 步【第十五轮第五节】：先统一 unresolved authority resolver
-        //    （不再 quarantine ?? intent——双 authority 不一致在此拦截）。
-        //    inconsistent → 立即零副作用保留（不执行任何 release、不执行
-        //    receipt refresh、不改变 tombstone stage），独立计数。
-        const authorityResolution = resolveTreasuryUnresolvedAuthority(entry.transactionId);
-        if (authorityResolution.status === "inconsistent") {
-          resolutionStoreEvents.faulted += 1;
-          report.authorityInconsistent += 1;
-          resolutionStoreEvents.authorityInconsistentBlockers += 1;
-          continue;
-        }
-        // ── 第 2 步：读取完整 receipt proof（tick 足够与否都读——identity
-        //    校验不以 tick 充分为由跳过）。
-        let receiptProof = readTreasurySettlementProof(entry.transactionId);
-        if (receiptProof === undefined || receiptProof.settledAtTick < entry.settledAtTick) {
-          // receipt 未刷新到位（旧 action tick 的 receipt 或不存在）：幂等
-          // 续做 identity-aware refresh 至原定 settledAtTick——绝不缩短
-          // replay horizon。blocked（legacy/冲突/证明不足）与 fatal 同样
-          // 保留 resolving + authority（fail closed）。
-          const refresh = refreshSettledReceiptForResolution(entry.transactionId, entry.settledAtTick, {
-            digest: entry.digest,
-            ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
-            ...(entry.authorizationCohortDigest !== undefined
-              ? { authorizationCohortDigest: entry.authorizationCohortDigest }
-              : {}),
-            ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
-          });
-          if (refresh.status === "fatal" || refresh.status === "blocked") {
-            resolutionStoreEvents.faulted += 1;
-            report.refreshBlocked += 1;
-            if (refresh.status === "blocked" && refresh.reason === "identity_conflict") {
-              report.identityConflicts += 1;
-              resolutionStoreEvents.identityConflicts += 1;
-            } else if (refresh.status === "blocked") {
-              report.identityInsufficient += 1;
-              resolutionStoreEvents.identityInsufficientBlockers += 1;
-            }
-            continue;
-          }
-          // refresh 成功：重新读取持久 proof（不信任 refresh 返回值本身）。
-          receiptProof = readTreasurySettlementProof(entry.transactionId);
-        }
-        // ── 第 3 步：共用三方 verifier（receipt 时间证明、modern level、
-        //    receipt ↔ tombstone、proof level 自动释放矩阵、tombstone/receipt
-        //    ↔ authority 全部由此承载）。
-        const verdict = verifyTreasuryCommittedResolutionProof({
-          tombstone: entry,
-          authorityResolution,
-          receiptProof,
-        });
-        if (verdict.status !== "verified") {
-          resolutionStoreEvents.faulted += 1;
-          if (verdict.status === "authority_inconsistent") {
-            report.authorityInconsistent += 1;
-            resolutionStoreEvents.authorityInconsistentBlockers += 1;
-          } else if (verdict.status === "conflict") {
-            report.identityConflicts += 1;
-            resolutionStoreEvents.identityConflicts += 1;
-          } else if (verdict.status === "receipt_absent" || verdict.status === "receipt_stale") {
-            report.refreshBlocked += 1;
-          } else {
-            report.identityInsufficient += 1;
-            resolutionStoreEvents.identityInsufficientBlockers += 1;
-          }
-          continue;
-        }
-        // ── 第 3 步：三方 match（或 authority 已释放且 receipt ↔ tombstone
-        //    match）→ 释放 + finalize（幂等——authority 释放与 marker 清除
-        //    均为幂等操作；finalize 经状态机校验）。
-        releaseTreasuryQuarantineEntry(entry.transactionId);
-        releaseTreasuryIntentEntry(entry.transactionId);
-        clearTreasuryWriteFaultMarkerForResolution(entry.transactionId, entry.digest);
-        const finalEntry: TreasuryResolutionTombstone = { ...entry, stage: "final" };
-        const transition = validateTreasuryResolutionTombstoneTransition(entry, finalEntry);
-        if (transition.status !== "allowed_finalize") {
-          // 防御：resolving entry 自身形态与 finalize 目标矛盾（不应发生——
-          // load 已校验形状）：保留原状态，计数阻断。
-          resolutionStoreEvents.faulted += 1;
-          report.identityInsufficient += 1;
-          resolutionStoreEvents.identityInsufficientBlockers += 1;
-          continue;
-        }
-        runtime.store.entries[key] = finalEntry;
-        runtime.inProgress = Math.max(0, runtime.inProgress - 1);
-        runtime.store.updatedAt = Game.time;
-        resolutionStoreEvents.recovered += 1;
-        report.completed += 1;
-      } else {
-        // 防御分支：resolving 无 settledAtTick 或非 committed——回滚
-        // tombstone（原状态未变，resolution 可重试）。
-        delete runtime.store.entries[key];
-        runtime.store.entryCount -= 1;
-        runtime.inProgress = Math.max(0, runtime.inProgress - 1);
-        resolutionStoreEvents.faulted += 1;
-        report.rolledBack += 1;
-      }
+  // 【第十六轮第十三节】O(1) 空闲快路径：无待处理项时不扫描 resolution
+  // entries（不遍历历史 final proof）。
+  if (runtime.resolvingIds.size === 0 && runtime.pendingReleaseIds.size === 0) {
+    report.idleFastPath = true;
+    resolutionStoreEvents.idleFastPaths += 1;
+    return report;
+  }
+  // 只遍历索引中的 transaction ID（Memory 权威；索引中的 ID 若已不存在或
+  // 状态已变则清理索引项——索引不是安全 proof）。
+  for (const transactionId of runtime.resolvingIds) {
+    const key = RESOLUTION_KEY_PREFIX + transactionId;
+    const entry = runtime.store.entries[key];
+    if (entry === undefined || entry.stage !== "resolving") {
+      runtime.resolvingIds.delete(transactionId);
       continue;
     }
-    if (entry.stage === "final" && entry.resolution === "not-executed") {
-      // 【第十五轮第五节】补完成释放同样统一经 resolver：inconsistent → 零
-      // 释放全保留；not_found → 释放已完成（跳过）。
-      const authorityResolution = resolveTreasuryUnresolvedAuthority(entry.transactionId);
-      if (authorityResolution.status === "not_found") continue;
+    resolutionStoreEvents.inProgressRecoveries += 1;
+    if (entry.resolution === "committed" && entry.settledAtTick !== undefined) {
+      // ── 第 1 步【第十五轮第五节】：先统一 unresolved authority resolver
+      //    （不再 quarantine ?? intent——双 authority 不一致在此拦截）。
+      //    inconsistent → 立即零副作用保留；store_unhealthy（第十六轮）→
+      //    同样零副作用保留（独立计数）。
+      const authorityResolution = resolveTreasuryUnresolvedAuthority(transactionId);
       if (authorityResolution.status === "inconsistent") {
         resolutionStoreEvents.faulted += 1;
         report.authorityInconsistent += 1;
         resolutionStoreEvents.authorityInconsistentBlockers += 1;
         continue;
       }
-      const authority = authorityResolution.authority;
-      // 【第十五轮第八节】proof level 自动释放矩阵：legacy / forensic 不自动
-      // 释放（普通自动 recovery 只允许 identity-bound → modern、lowlevel →
-      // lowlevel——forensic 无显式 provenance 永久隔离）。
-      if (!treasuryProofLevelAutoReleasesAuthorityLevel(entry.proofLevel, authority.authorityLevel)) {
+      if (authorityResolution.status === "store_unhealthy") {
         resolutionStoreEvents.faulted += 1;
-        report.identityInsufficient += 1;
-        resolutionStoreEvents.identityInsufficientBlockers += 1;
+        report.storeUnhealthy += 1;
+        resolutionStoreEvents.storeUnhealthyBlockers += 1;
         continue;
       }
-      const relation = treasuryAttemptIdentityRelation(entry, attemptIdentityOf(authority));
-      if (relation !== "match") {
+      // ── 第 2 步：读取完整 receipt proof（tick 足够与否都读——identity
+      //    校验不以 tick 充分为由跳过）。
+      let receiptProof = readTreasurySettlementProof(transactionId);
+      if (receiptProof === undefined || receiptProof.settledAtTick < entry.settledAtTick) {
+        // receipt 未刷新到位（旧 action tick 的 receipt 或不存在）：幂等
+        // 续做 identity-aware refresh 至原定 settledAtTick——绝不缩短
+        // replay horizon。blocked（legacy/冲突/证明不足）与 fatal 同样
+        // 保留 resolving + authority（fail closed）。
+        const refresh = refreshSettledReceiptForResolution(transactionId, entry.settledAtTick, {
+          digest: entry.digest,
+          ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+          ...(entry.authorizationCohortDigest !== undefined
+            ? { authorizationCohortDigest: entry.authorizationCohortDigest }
+            : {}),
+          ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+          ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+        });
+        if (refresh.status === "fatal" || refresh.status === "blocked") {
+          resolutionStoreEvents.faulted += 1;
+          report.refreshBlocked += 1;
+          if (refresh.status === "blocked" && refresh.reason === "identity_conflict") {
+            report.identityConflicts += 1;
+            resolutionStoreEvents.identityConflicts += 1;
+          } else if (refresh.status === "blocked") {
+            report.identityInsufficient += 1;
+            resolutionStoreEvents.identityInsufficientBlockers += 1;
+          }
+          continue;
+        }
+        // refresh 成功：重新读取持久 proof（不信任 refresh 返回值本身）。
+        receiptProof = readTreasurySettlementProof(transactionId);
+      }
+      // ── 第 3 步：共用三方 verifier（receipt 时间证明、modern level、
+      //    receipt ↔ tombstone、proof level 自动释放矩阵、tombstone/receipt
+      //    ↔ authority 全部由此承载）。
+      const verdict = verifyTreasuryCommittedResolutionProof({
+        tombstone: entry,
+        authorityResolution,
+        receiptProof,
+      });
+      if (verdict.status !== "verified") {
         resolutionStoreEvents.faulted += 1;
-        if (relation === "conflict") {
+        if (verdict.status === "authority_inconsistent") {
+          report.authorityInconsistent += 1;
+          resolutionStoreEvents.authorityInconsistentBlockers += 1;
+        } else if (verdict.status === "authority_store_unhealthy") {
+          report.storeUnhealthy += 1;
+          resolutionStoreEvents.storeUnhealthyBlockers += 1;
+        } else if (verdict.status === "conflict") {
           report.identityConflicts += 1;
           resolutionStoreEvents.identityConflicts += 1;
+        } else if (verdict.status === "receipt_absent" || verdict.status === "receipt_stale") {
+          report.refreshBlocked += 1;
         } else {
           report.identityInsufficient += 1;
           resolutionStoreEvents.identityInsufficientBlockers += 1;
         }
         continue;
       }
-      // final tombstone 已写但释放未完成：补完成（幂等——resolver 判 ok 时
-      // quarantine 与 intent 身份一致，一并释放安全）。
-      releaseTreasuryQuarantineEntry(entry.transactionId);
-      releaseTreasuryIntentEntry(entry.transactionId);
+      // ── 第 4 步：三方 match（或 authority 已释放且 receipt ↔ tombstone
+      //    match）→ 释放 + finalize（幂等——authority 释放与 marker 清除
+      //    均为幂等操作；finalize 经状态机校验）。
+      releaseTreasuryQuarantineEntry(transactionId);
+      releaseTreasuryIntentEntry(transactionId);
+      clearTreasuryWriteFaultMarkerForResolution(transactionId, entry.digest);
+      const finalEntry: TreasuryResolutionTombstone = { ...entry, stage: "final" };
+      const transition = validateTreasuryResolutionTombstoneTransition(entry, finalEntry);
+      if (transition.status !== "allowed_finalize") {
+        // 防御：resolving entry 自身形态与 finalize 目标矛盾（不应发生——
+        // load 已校验形状与语义）：保留原状态，计数阻断。
+        resolutionStoreEvents.faulted += 1;
+        report.identityInsufficient += 1;
+        resolutionStoreEvents.identityInsufficientBlockers += 1;
+        continue;
+      }
+      runtime.store.entries[key] = finalEntry;
+      runtime.resolvingIds.delete(transactionId);
+      runtime.store.updatedAt = Game.time;
+      resolutionStoreEvents.recovered += 1;
+      report.completed += 1;
+    } else {
+      // 防御分支【第十六轮第九节】：resolving 无 settledAtTick 或非
+      // committed——load 持久状态语义矩阵后理论不可达；保留 tombstone 与
+      // 独立计数阻断（**不再自动删除**——删除非法持久状态不是 repair，
+      // 原 entry 交人工处理）。
+      resolutionStoreEvents.faulted += 1;
+      report.rolledBack += 1;
+    }
+  }
+  // ── final not-executed pending-release 补完成【第十五轮第五节 / 第十六轮
+  //    第七节】：authority 仍存在 → 校验后补释放；authority not_found →
+  //    检查 write-fault marker（不存在=完成；存在且 match=清除；conflict/
+  //    insufficient=保留阻断）。
+  for (const transactionId of runtime.pendingReleaseIds) {
+    const key = RESOLUTION_KEY_PREFIX + transactionId;
+    const entry = runtime.store.entries[key];
+    if (entry === undefined || entry.stage !== "final" || entry.resolution !== "not-executed") {
+      runtime.pendingReleaseIds.delete(transactionId);
+      continue;
+    }
+    const authorityResolution = resolveTreasuryUnresolvedAuthority(transactionId);
+    if (authorityResolution.status === "store_unhealthy") {
+      resolutionStoreEvents.faulted += 1;
+      report.storeUnhealthy += 1;
+      resolutionStoreEvents.storeUnhealthyBlockers += 1;
+      continue;
+    }
+    if (authorityResolution.status === "not_found") {
+      // 【第十六轮第七节】authority 已释放：检查 write-fault marker 的安全
+      // 补完成——marker 不存在=释放与清理均完成；存在且全部匹配才清除；
+      // conflict/insufficient/他属一律保留（write readiness 继续阻断）。
+      const marker = readTreasuryWriteFault();
+      if (marker === undefined) {
+        runtime.pendingReleaseIds.delete(transactionId);
+        continue;
+      }
+      const markerBlock = validatePendingReleaseMarkerCompletion(marker, entry);
+      if (markerBlock !== null) {
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
       clearTreasuryWriteFaultMarkerForResolution(entry.transactionId, entry.digest);
+      runtime.pendingReleaseIds.delete(transactionId);
       resolutionStoreEvents.recovered += 1;
       report.completedRelease += 1;
+      continue;
     }
+    if (authorityResolution.status === "inconsistent") {
+      resolutionStoreEvents.faulted += 1;
+      report.authorityInconsistent += 1;
+      resolutionStoreEvents.authorityInconsistentBlockers += 1;
+      continue;
+    }
+    const authority = authorityResolution.authority;
+    // 【第十五轮第八节】proof level 自动释放矩阵：legacy / forensic 不自动
+    // 释放（普通自动 recovery 只允许 identity-bound → modern、lowlevel →
+    // lowlevel——forensic 无显式 provenance 永久隔离）。
+    if (!treasuryProofLevelAutoReleasesAuthorityLevel(entry.proofLevel, authority.authorityLevel)) {
+      resolutionStoreEvents.faulted += 1;
+      report.identityInsufficient += 1;
+      resolutionStoreEvents.identityInsufficientBlockers += 1;
+      continue;
+    }
+    // 【第十六轮第十一节】lowlevel provenance 严格绑定：tombstone 缺
+    // lowlevelSource（v5 及更早的旧 proof）→ 来源不可证明 → 隔离不释放；
+    // 来源不同（runtime vs migrated）→ conflict 不释放。
+    if (entry.proofLevel === "lowlevel" && authority.authorityLevel === "lowlevel") {
+      if (entry.lowlevelSource === undefined) {
+        resolutionStoreEvents.faulted += 1;
+        report.identityInsufficient += 1;
+        resolutionStoreEvents.identityInsufficientBlockers += 1;
+        continue;
+      }
+      if (authority.lowlevelSource !== undefined && entry.lowlevelSource !== authority.lowlevelSource) {
+        resolutionStoreEvents.faulted += 1;
+        report.identityConflicts += 1;
+        resolutionStoreEvents.identityConflicts += 1;
+        continue;
+      }
+    }
+    const relation = treasuryAttemptIdentityRelation(entry, attemptIdentityOf(authority));
+    if (relation !== "match") {
+      resolutionStoreEvents.faulted += 1;
+      if (relation === "conflict") {
+        report.identityConflicts += 1;
+        resolutionStoreEvents.identityConflicts += 1;
+      } else {
+        report.identityInsufficient += 1;
+        resolutionStoreEvents.identityInsufficientBlockers += 1;
+      }
+      continue;
+    }
+    // final tombstone 已写但释放未完成：补完成（幂等——resolver 判 ok 时
+    // quarantine 与 intent 身份一致，一并释放安全）。
+    releaseTreasuryQuarantineEntry(transactionId);
+    releaseTreasuryIntentEntry(transactionId);
+    clearTreasuryWriteFaultMarkerForResolution(transactionId, entry.digest);
+    runtime.pendingReleaseIds.delete(transactionId);
+    resolutionStoreEvents.recovered += 1;
+    report.completedRelease += 1;
   }
   return report;
 }

@@ -37,6 +37,9 @@
  * 可能重放已执行动作）；测试用清理包含在 clearTreasuryPersistenceForTest。
  */
 
+import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
+import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
+
 /** commit 类 phase（Game callback 已确认 OK）：不允许 not-executed resolution。 */
 export type TreasuryCommitFaultPhase =
   | "receipt_publish"
@@ -137,9 +140,14 @@ function treasuryBranch(): TreasuryWriteFaultBranch {
   return runtime.treasury;
 }
 
-/** 只读读取原始 marker（查询/门禁路径零写；不校验形状——校验见 health）。 */
+/**
+ * 只读读取 marker 快照（查询/门禁路径零写；不校验形状——校验见 health）。
+ * 【第十六轮 7.2】返回有界深冻结快照——不泄漏嵌套 attemptIdentity 的
+ * Memory 引用（调用方原地改写无法污染权威 marker）。
+ */
 export function readTreasuryWriteFault(): TreasuryWriteFaultMarker | undefined {
-  return (Memory.runtime as unknown as RuntimeMemoryWithTreasuryFault | undefined)?.treasury?.writeFault;
+  const marker = (Memory.runtime as unknown as RuntimeMemoryWithTreasuryFault | undefined)?.treasury?.writeFault;
+  return marker === undefined ? undefined : (treasuryBoundedDeepFreezeSnapshot(marker) as TreasuryWriteFaultMarker);
 }
 
 /**
@@ -245,8 +253,11 @@ export function recordTreasuryWriteFault(marker: TreasuryWriteFaultMarker): void
   const branch = treasuryBranch();
   if (branch.writeFault?.status === "unresolved") return;
   const detail = marker.detail !== undefined ? marker.detail.slice(0, TREASURY_WRITE_FAULT_DETAIL_MAX) : undefined;
-  branch.writeFault =
-    detail !== undefined ? { ...marker, status: "unresolved", detail } : { ...marker, status: "unresolved" };
+  // 【第十六轮第十节】写入 Memory 前构造完全独立的有界深拷贝（嵌套
+  // attemptIdentity 一并隔离——调用方后续修改输入不影响权威 marker）。
+  branch.writeFault = cloneTreasuryDurableValue(
+    detail !== undefined ? { ...marker, status: "unresolved", detail } : { ...marker, status: "unresolved" },
+  );
 }
 
 /**
