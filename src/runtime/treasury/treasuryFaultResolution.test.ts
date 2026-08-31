@@ -425,7 +425,9 @@ describe("resolve-as-not-executed（staged：final tombstone 先行）", () => {
       expect(resolved.resolution).toBe("not-executed");
       expect(resolved.receiptWritten).toBe(false);
       expect(resolved.sameIdRetryAllowed).toBe(false);
-      expect(typeof resolved.rearmChildTransactionId).toBe("string");
+      // 【第十七轮第六节】不再返回 child ID 字符串——retirement 状态。
+      expect((resolved as { rearmChildTransactionId?: string }).rearmChildTransactionId).toBeUndefined();
+      expect(resolved.retirement).toBe("complete_rearm_ready");
     }
     expect(hasSettledReceipt("ts1_ne")).toBeUndefined();
     expect(readTreasuryQuarantineEntry("ts1_ne")).toBeUndefined();
@@ -435,12 +437,16 @@ describe("resolve-as-not-executed（staged：final tombstone 先行）", () => {
     const sameId = next.prepareTransaction(freshInput(next, "ts1_ne"));
     expect(sameId.status).toBe("rejected");
     if (sameId.status === "rejected") expect(sameId.reason).toBe("rearm_required");
-    // 显式 rearm 后 child ID 可正常 prepare（新 attempt 生命周期）。
-    const rearmed = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "ts1_ne" });
-    expect(rearmed.status).toBe("rearmed");
-    if (rearmed.status === "rearmed") {
+    // 【第十七轮第八节】issue capability 后 child ID 受 tr1_ 命名空间门禁
+    //（无 capability 的直接 prepare 拒绝——经 capability 接管执行）。
+    const rearmed = next.issueTreasuryRearmCapability({ parentTransactionId: "ts1_ne" });
+    expect(rearmed.status).toBe("issued");
+    if (rearmed.status === "issued") {
       const childPrepared = next.prepareTransaction(freshInput(next, rearmed.childTransactionId));
-      expect(childPrepared.status).toBe("prepared");
+      expect(childPrepared.status).toBe("rejected");
+      if (childPrepared.status === "rejected") {
+        expect(childPrepared.reason).toBe("rearm_capability_required");
+      }
     }
   });
 
@@ -1113,8 +1119,9 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
   });
 });
 
-  it("【第九轮 4.10】resolving tombstone 永不被 retention 清理（超龄保留；满载 fail closed）", () => {
-    // 构造：255 条超龄 final（可清理）+ 1 条超龄 resolving → 满载 256。
+  it("【第九轮 4.10/第十七轮第十三节】resolving 与无 lineage replacement 的超龄 final not-executed 均不被 retention 清理（满载 fail closed）", () => {
+    // 构造：255 条超龄 final not-executed（legacy proof、无 lineage replacement）
+    // + 1 条超龄 resolving → 满载 256。
     Game.time += 7_000;
     const ancient = Game.time - 6_000;
     for (let i = 0; i < 255; i += 1) {
@@ -1149,7 +1156,9 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
       }).status,
     ).not.toBe("rejected");
     expect(peekTreasuryResolutionStoreHealth().entryCount).toBe(256);
-    // 写第 257 条触发满载惰性清理：超龄 final 被清、超龄 resolving 保留。
+    // 【第十七轮第十三节】写第 257 条：超龄 final not-executed 无 lineage
+    // replacement（永久 retirement 门禁未由 lineage 承担）→ pin 不驱逐 →
+    // 满载 fail closed（新写入拒绝——不驱逐安全事实）。
     const write = writeTreasuryResolutionTombstone({
       transactionId: "rt_new",
       digest: "0123456789abcdef",
@@ -1160,9 +1169,9 @@ describe("capability 私有化与 generation 校验（第九轮 4.8）", () => {
       observationTick: Game.time,
       resolvedAtTick: Game.time,
     });
-    expect(write.status).not.toBe("rejected");
+    expect(write.status).toBe("rejected");
     expect(readTreasuryResolutionTombstone("rt_resolving_stale")).toBeDefined(); // resolving 保留
-    expect(readTreasuryResolutionTombstone("rt_final_0")).toBeUndefined(); // 超龄 final 被清
+    expect(readTreasuryResolutionTombstone("rt_final_0")).toBeDefined(); // 无 lineage replacement 的超龄 final 被 pin
   });
 
   it("【第九轮 4.10】满载且全部为 resolving：新 resolution fail closed（不驱逐）", () => {

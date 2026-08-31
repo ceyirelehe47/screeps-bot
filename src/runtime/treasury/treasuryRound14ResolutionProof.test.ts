@@ -274,7 +274,9 @@ describe("staged committed proof closure（第十四轮第五节）", () => {
     expect(readTreasuryQuarantineEntry("pc_no_receipt")).toBeUndefined();
     const proof = readTreasurySettlementProof("pc_no_receipt");
     // refresh 写入的目标 tick 是 tombstone 的原定 settledAtTick（不缩短/不漂移）。
-    expect(proof?.level).toBe("modern");
+    // 【第十七轮第十五节 v7】低层 attempt（无 contract）的 receipt proof class
+    // 显式为 lowlevel（携带 runtime provenance）——不再是 "modern"。
+    expect(proof?.level).toBe("lowlevel");
     expect(proof?.settledAtTick).toBe(readTreasuryResolutionTombstone("pc_no_receipt")?.settledAtTick);
     expect(treasuryDurableIdentitiesMatch(proof?.durableIdentityDigest, identity)).toBe(true);
   });

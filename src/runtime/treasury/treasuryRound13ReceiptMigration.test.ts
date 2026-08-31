@@ -259,7 +259,7 @@ describe("receipt v3 → v5 migration（第十三轮 4.4）", () => {
     const service = makeService();
     expect(ensureTreasuryReceiptStore().version).toBe(TREASURY_RECEIPT_VERSION);
     expect(readTreasurySettlementProof("rm_v4_mod")).toMatchObject({
-      level: "modern",
+      level: "identity-bound",
       digest: "1111111111111111",
       durableIdentityDigest: "2222222222222222",
     });
@@ -535,7 +535,9 @@ describe("identity-aware refresh 与 staged recovery（第十三轮第六/七节
     const refreshed = refreshSettledReceiptForResolution("rr_ok", Game.time, identity);
     expect(refreshed.status).toBe("refreshed");
     expect(readTreasurySettlementProof("rr_ok")).toMatchObject({
-      level: "modern",
+      // 【第十七轮第十五节 v7】identity 携带受控 lowlevelSource → proof class
+      // 显式为 lowlevel（禁 modern contract/cohort 字段——三级释放矩阵）。
+      level: "lowlevel",
       settledAtTick: Game.time,
       durableIdentityDigest: identity.durableIdentityDigest,
     });

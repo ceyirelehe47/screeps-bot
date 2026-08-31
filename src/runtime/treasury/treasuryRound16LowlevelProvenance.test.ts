@@ -144,7 +144,7 @@ describe("lowlevel provenance proof 链（第十六轮第十一节）", () => {
           authorityLevel: "lowlevel", durableIdentityDigest: IDENTITY, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_MIGRATED,
         },
       },
-      receiptProof: { level: "modern", settledAtTick: Game.time, digest: DIGEST, durableIdentityDigest: IDENTITY, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME },
+      receiptProof: { level: "lowlevel", settledAtTick: Game.time, digest: DIGEST, durableIdentityDigest: IDENTITY, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME },
     });
     expect(reverse.status).toBe("conflict");
   });

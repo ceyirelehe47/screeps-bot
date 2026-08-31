@@ -121,18 +121,24 @@ describe("attempt rearm（第十六轮第五节）", () => {
     expect(executeCalls).toBe(0);
   });
 
-  it("resolve 结果语义：sameIdRetryAllowed 恒 false 且返回确定性 rearm child ID（旧 reprepareAllowed 已删除）", () => {
+  it("resolve 结果语义：sameIdRetryAllowed 恒 false、retirement 状态、child ID 只经 capability 交付（旧 reprepareAllowed/rearmChildTransactionId 已删除）", () => {
     makeExecutingQuarantine("rearm_semantics");
     const next = advanceTick();
     const resolved = resolveNotExecuted(next, "rearm_semantics");
     expect(resolved.status).toBe("resolved");
     if (resolved.status === "resolved") {
       expect(resolved.sameIdRetryAllowed).toBe(false);
-      expect(typeof resolved.rearmChildTransactionId).toBe("string");
+      // 【第十七轮第六节】不再返回 child ID 字符串——retirement 状态表达
+      // 退休完整性（capability 是唯一交付通道）。
+      expect((resolved as { rearmChildTransactionId?: string }).rearmChildTransactionId).toBeUndefined();
       expect((resolved as { reprepareAllowed?: boolean }).reprepareAllowed).toBeUndefined();
-      // 与独立派生的 child ID 一致（确定性）。
+      expect(resolved.retirement).toBe("complete_rearm_ready");
+      // capability 签发的 child ID 与独立派生一致（确定性）。
+      const issued = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_semantics" });
+      expect(issued.status).toBe("issued");
+      if (issued.status !== "issued") return;
       const tombstone = readTreasuryResolutionTombstone("rearm_semantics")!;
-      expect(resolved.rearmChildTransactionId).toBe(
+      expect(issued.childTransactionId).toBe(
         deriveTreasuryRearmChildTransactionId({
           transactionId: "rearm_semantics",
           digest: tombstone.digest,
@@ -143,23 +149,30 @@ describe("attempt rearm（第十六轮第五节）", () => {
     }
   });
 
-  it("显式 rearm 生成合法 child ID；同 parent 重复 rearm 幂等；global reset 后一致", () => {
+  it("issueTreasuryRearmCapability 签发合法 child ID；同 tick 重复 issue 幂等；global reset 后重签发一致", () => {
     makeExecutingQuarantine("rearm_idem");
     const next = advanceTick();
     expect(resolveNotExecuted(next, "rearm_idem").status).toBe("resolved");
-    const first = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_idem" });
-    expect(first.status).toBe("rearmed");
-    if (first.status !== "rearmed") return;
+    const first = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_idem" });
+    expect(first.status).toBe("issued");
+    if (first.status !== "issued") return;
     expect(first.childTransactionId).toMatch(/^tr1_[0-9a-f]{16}$/);
     expect(first.childTransactionId.length).toBeLessThanOrEqual(128);
-    const second = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_idem" });
-    expect(second.status).toBe("rearmed");
-    if (second.status === "rearmed") expect(second.childTransactionId).toBe(first.childTransactionId);
-    // global reset（新 service 实例）后派生一致。
+    const second = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_idem" });
+    expect(second.status).toBe("rejected");
+    if (second.status === "rejected") {
+      // 同 tick 已 issue（lineage capability_issued）——不产生两个可同时
+      // 消费的 capability（重复 issue 拒绝；首个 capability 仍有效）。
+      expect(second.reason).toBe("lineage_not_rearm_ready");
+    }
+    // global reset（新 service 实例）后重签发：child ID 一致、新 capability 对象。
     const afterReset = advanceTick();
-    const third = afterReset.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_idem" });
-    expect(third.status).toBe("rearmed");
-    if (third.status === "rearmed") expect(third.childTransactionId).toBe(first.childTransactionId);
+    const third = afterReset.issueTreasuryRearmCapability({ parentTransactionId: "rearm_idem" });
+    expect(third.status).toBe("issued");
+    if (third.status === "issued") {
+      expect(third.childTransactionId).toBe(first.childTransactionId);
+      expect(third.capability).not.toBe(first.capability);
+    }
   });
 
   it("不同 parent / 不同 parent identity 得到不同 child ID", () => {
@@ -170,11 +183,11 @@ describe("attempt rearm（第十六轮第五节）", () => {
     makeExecutingQuarantine("rearm_pb");
     const next = advanceTick();
     expect(resolveNotExecuted(next, "rearm_pb").status).toBe("resolved");
-    const a = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_pa" });
-    const b = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_pb" });
-    expect(a.status).toBe("rearmed");
-    expect(b.status).toBe("rearmed");
-    if (a.status === "rearmed" && b.status === "rearmed") {
+    const a = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_pa" });
+    const b = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_pb" });
+    expect(a.status).toBe("issued");
+    expect(b.status).toBe("issued");
+    if (a.status === "issued" && b.status === "issued") {
       expect(a.childTransactionId).not.toBe(b.childTransactionId);
     }
     // 纯函数维度：不同 parent identity（digest）派生不同 child。
@@ -186,10 +199,10 @@ describe("attempt rearm（第十六轮第五节）", () => {
   it("parent 仍有 authority 时 rearm 拒绝", () => {
     makeExecutingQuarantine("rearm_auth_present");
     const next = advanceTick();
-    // 不 resolve——authority 仍在。
-    const rearmed = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_auth_present" });
+    // 不 resolve——authority 仍在（retirement 未建立）。
+    const rearmed = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_auth_present" });
     expect(rearmed.status).toBe("rejected");
-    if (rearmed.status === "rejected") expect(rearmed.reason).toBe("parent_not_resolved");
+    if (rearmed.status === "rejected") expect(rearmed.reason).toBe("lineage_record_missing");
   });
 
   it("parent 仍有 marker 时 rearm 拒绝（7.3 marker 清理前置）", () => {
@@ -207,9 +220,9 @@ describe("attempt rearm（第十六轮第五节）", () => {
     });
     // 写 final not-executed tombstone 但保留 marker 与 authority 的组合无法直接
     // 经正常路径产生——用纯协议入口验证 marker 阻断：authority 已在场时先被
-    // parent_not_resolved 拦截，这里验证 marker 匹配 parent 时同样拒绝。
+    // lineage retirement 缺失拦截，这里验证 marker 匹配 parent 时同样拒绝。
     const next = advanceTick();
-    const rearmed = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_marker_pending" });
+    const rearmed = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_marker_pending" });
     expect(rearmed.status).toBe("rejected");
   });
 
@@ -231,9 +244,9 @@ describe("attempt rearm（第十六轮第五节）", () => {
     });
     const next = makeService();
     next.beginTick();
-    const rearmed = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_resolving" });
+    const rearmed = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_resolving" });
     expect(rearmed.status).toBe("rejected");
-    if (rearmed.status === "rejected") expect(rearmed.reason).toBe("parent_not_resolved");
+    if (rearmed.status === "rejected") expect(rearmed.reason).toBe("lineage_record_missing");
   });
 
   it("legacy/forensic 不足 proof 不能 rearm", () => {
@@ -259,99 +272,97 @@ describe("attempt rearm（第十六轮第五节）", () => {
     });
     const next = makeService();
     next.beginTick();
-    const legacyRearm = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_legacy" });
+    const legacyRearm = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_legacy" });
     expect(legacyRearm.status).toBe("rejected");
-    if (legacyRearm.status === "rejected") expect(legacyRearm.reason).toBe("parent_proof_insufficient");
-    const forensicRearm = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_forensic" });
+    if (legacyRearm.status === "rejected") expect(legacyRearm.reason).toBe("lineage_not_rearmable");
+    const forensicRearm = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_forensic" });
     expect(forensicRearm.status).toBe("rejected");
-    if (forensicRearm.status === "rejected") expect(forensicRearm.reason).toBe("parent_proof_insufficient");
+    if (forensicRearm.status === "rejected") expect(forensicRearm.reason).toBe("lineage_not_rearmable");
   });
 
-  it("expectedParentIdentity 不匹配时 rearm 拒绝", () => {
+  it("capability 绑定 parent identity：issue 结果与 lineage record 一致", () => {
     makeExecutingQuarantine("rearm_expected");
     const next = advanceTick();
     expect(resolveNotExecuted(next, "rearm_expected").status).toBe("resolved");
-    const mismatch = next.rearmResolvedNotExecutedAttempt({
-      parentTransactionId: "rearm_expected",
-      expectedParentIdentity: { transactionId: "rearm_expected", digest: "ffffffffffffffff" },
-    });
-    expect(mismatch.status).toBe("rejected");
-    if (mismatch.status === "rejected") expect(mismatch.reason).toBe("parent_identity_mismatch");
-    const tombstone = readTreasuryResolutionTombstone("rearm_expected")!;
-    const match = next.rearmResolvedNotExecutedAttempt({
-      parentTransactionId: "rearm_expected",
-      expectedParentIdentity: {
-        transactionId: "rearm_expected",
-        digest: tombstone.digest,
-        ...(tombstone.durableIdentityDigest !== undefined ? { durableIdentityDigest: tombstone.durableIdentityDigest } : {}),
-        ...(tombstone.lowlevelSource !== undefined ? { lowlevelSource: tombstone.lowlevelSource } : {}),
-      },
-    });
-    expect(match.status).toBe("rearmed");
+    const mismatch = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_expected" });
+    expect(mismatch.status).toBe("issued");
+    if (mismatch.status !== "issued") return;
+    expect(mismatch.capability.binding.parentTransactionId).toBe("rearm_expected");
+    expect(mismatch.capability.binding.childTransactionId).toBe(mismatch.childTransactionId);
+    expect(mismatch.capability.binding.retrySemanticDigest).toMatch(/^[0-9a-f]{16}$/);
   });
 
-  it("child 使用新 transaction identity：prepare/contract 绑定 child ID；parent proof 不能解决 child authority", () => {
+  it("child 使用新 transaction identity：tr1_ 无 capability 直接 prepare 拒绝；parent proof 不能解决 child authority", () => {
     makeExecutingQuarantine("rearm_lineage_a");
     const next = advanceTick();
     expect(resolveNotExecuted(next, "rearm_lineage_a").status).toBe("resolved");
-    const rearmed = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_lineage_a" });
-    expect(rearmed.status).toBe("rearmed");
-    if (rearmed.status !== "rearmed") return;
+    const rearmed = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_lineage_a" });
+    expect(rearmed.status).toBe("issued");
+    if (rearmed.status !== "issued") return;
     const child = rearmed.childTransactionId;
-    // child 是全新 transaction 生命周期（正常 prepare）。
+    // 【第十七轮第八节】tr1_ 无 capability 的直接 prepare 拒绝（命名空间门禁）。
     const prepared = next.prepareTransaction(freshInput(next, child));
-    expect(prepared.status).toBe("prepared");
+    expect(prepared.status).toBe("rejected");
+    if (prepared.status === "rejected") expect(prepared.reason).toBe("rearm_capability_required");
     // parent 的 capability 无法对 child 签发（child 无 authority——child 尚未故障）。
     const issued = next.issueTreasuryReconciliationCapability({ transactionId: child });
     expect(issued.status).toBe("rejected");
   });
 
   it("child 故障后可独立 resolution；child not-executed 后可继续 rearm 生成孙代（A→B→C）", () => {
-    // A：not-executed → rearm → child B。
+    // A：not-executed → 同 tick issue capability → child B 经 tr1_ 接管执行
+    //（capability 跨 tick 失效——issue 与 execute 必须同一 service 同一 tick）。
     makeExecutingQuarantine("rearm_chain_a");
     const t1 = advanceTick();
     expect(resolveNotExecuted(t1, "rearm_chain_a").status).toBe("resolved");
-    const aRearm = t1.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_chain_a" });
-    expect(aRearm.status).toBe("rearmed");
-    if (aRearm.status !== "rearmed") return;
+    const aRearm = t1.issueTreasuryRearmCapability({ parentTransactionId: "rearm_chain_a" });
+    expect(aRearm.status).toBe("issued");
+    if (aRearm.status !== "issued") return;
     const childB = aRearm.childTransactionId;
-    // B：独立故障（executing 边界）→ 独立 not-executed resolution。
-    const t2 = advanceTick();
-    t2.executePreparedAction(freshInput(t2, childB), () => {
-      t2.endTick();
-      return { ok: false as const };
-    });
+    // B：经 capability 接管执行（同 tick 同 service——接管协议消费 capability）。
+    const bExecuted = t1.executePreparedAction(
+      freshInput(t1, childB),
+      () => {
+        t1.endTick();
+        return { ok: false as const };
+      },
+      { rearmCapability: aRearm.capability },
+    );
+    expect(bExecuted.status).not.toBe("prepare_rejected");
+    if (bExecuted.status === "prepare_rejected") return;
     expect(readTreasuryQuarantineEntry(childB)).toBeDefined();
+    // B：独立 not-executed resolution（lineage 同 record 推进）。
     const t3 = advanceTick();
     const bResolved = resolveNotExecuted(t3, childB);
     expect(bResolved.status).toBe("resolved");
     if (bResolved.status === "resolved") {
       expect(bResolved.sameIdRetryAllowed).toBe(false);
-      expect(typeof bResolved.rearmChildTransactionId).toBe("string");
-      // B 的 rearm child（孙代 C）与 B 不同、也与 A 不同。
-      expect(bResolved.rearmChildTransactionId).not.toBe(childB);
-      expect(bResolved.rearmChildTransactionId).not.toBe("rearm_chain_a");
+      expect((bResolved as { rearmChildTransactionId?: string }).rearmChildTransactionId).toBeUndefined();
     }
-    // B 的 rearm child 与 A 的直接 child（B）不同——每一 attempt 最多一个直接
-    // child 且链式派生。
-    const bRearm = t3.rearmResolvedNotExecutedAttempt({ parentTransactionId: childB });
-    expect(bRearm.status).toBe("rearmed");
-    if (bRearm.status === "rearmed") {
+    // B 的 rearm child（孙代 C）与 B 不同、也与 A 不同。
+    const bRearm = t3.issueTreasuryRearmCapability({ parentTransactionId: childB });
+    expect(bRearm.status).toBe("issued");
+    if (bRearm.status === "issued") {
       expect(bRearm.childTransactionId).not.toBe(childB);
+      expect(bRearm.childTransactionId).not.toBe("rearm_chain_a");
       const t4 = advanceTick();
       const cPrepared = t4.prepareTransaction(freshInput(t4, bRearm.childTransactionId));
-      expect(cPrepared.status).toBe("prepared");
+      expect(cPrepared.status).toBe("rejected");
+      if (cPrepared.status === "rejected") {
+        // 孙代 C 同样受 tr1_ 命名空间门禁（无 capability 拒绝）。
+        expect(cPrepared.reason).toBe("rearm_capability_required");
+      }
     }
   });
 
-  it("无效输入与 store fatal：rearm 拒绝", () => {
+  it("无效输入与缺失 lineage：rearm 拒绝", () => {
     const next = makeService();
     next.beginTick();
-    const invalid = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "" });
+    const invalid = next.issueTreasuryRearmCapability({ parentTransactionId: "" });
     expect(invalid.status).toBe("rejected");
     if (invalid.status === "rejected") expect(invalid.reason).toBe("invalid_input");
-    const absent = next.rearmResolvedNotExecutedAttempt({ parentTransactionId: "rearm_absent" });
+    const absent = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_absent" });
     expect(absent.status).toBe("rejected");
-    if (absent.status === "rejected") expect(absent.reason).toBe("parent_not_resolved");
+    if (absent.status === "rejected") expect(absent.reason).toBe("lineage_record_missing");
   });
 });

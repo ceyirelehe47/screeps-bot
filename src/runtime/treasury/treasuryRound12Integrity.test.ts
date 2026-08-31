@@ -434,7 +434,7 @@ describe("tombstone / finalized proof identity（第十二轮 3.3/3.4）", () =>
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = Memory.runtime.treasury ?? {};
     Memory.runtime.treasury.receipts = Memory.runtime.treasury.receipts ?? {
-      version: 6,
+      version: 7,
       settled: {},
       updatedAt: Game.time,
       entryCount: 0,
@@ -481,14 +481,14 @@ describe("tombstone / finalized proof identity（第十二轮 3.3/3.4）", () =>
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = Memory.runtime.treasury ?? {};
     Memory.runtime.treasury.receipts = Memory.runtime.treasury.receipts ?? {
-      version: 6,
+      version: 7,
       settled: {},
       updatedAt: Game.time,
       entryCount: 0,
       nextExpiryTick: null,
     };
     const store = Memory.runtime!.treasury!.receipts!;
-    store.settled["t:proof_ok"] = { level: "modern", settledAtTick: Game.time - 1, digest: "4444444444444444", durableIdentityDigest: identity };
+    store.settled["t:proof_ok"] = { level: "identity-bound" as const, settledAtTick: Game.time - 1, digest: "4444444444444444", durableIdentityDigest: identity };
     const write = writeTreasuryIntentEntry({
       transactionId: "proof_ok",
       digest: "4444444444444444",
