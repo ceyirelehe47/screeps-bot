@@ -39,15 +39,25 @@ export const TREASURY_AUTHORITY_LEVELS: ReadonlySet<string> = new Set<string>([
 ]);
 
 /**
- * 【第十四轮第九节】lowlevel 的显式来源标记（required）：
+ * 【第十四轮第九节/第十五轮第十二节】lowlevel 的显式受控来源（严格枚举，
+ * 不再接受任意非空字符串）：
  * - runtime-lowlevel@v1：当前运行时低层路径写入（非 contract 内部/测试
- *   两阶段路径——由写入方缺省声明）；
+ *   两阶段路径——只能由 store 内部写入路径缺省声明）；
  * - migrated-lowlevel@v1：迁移认定的受支持旧 lowlevel schema（仅限旧
  *   store entry 已携带显式 authorityLevel="lowlevel" 且通过严格低层矩阵
- *   验证——第十三轮运行时显式声明的低层来源可被信任）。
+ *   验证——只能由 migration 生成）；
+ * - test-lowlevel@v1：test-only 来源（仅测试通道引用——生产 bundle /
+ *   contract 路径与 store 校验一律不接受）。
  */
 export const TREASURY_LOWLEVEL_SOURCE_RUNTIME = "runtime-lowlevel@v1" as const;
 export const TREASURY_LOWLEVEL_SOURCE_MIGRATED = "migrated-lowlevel@v1" as const;
+export const TREASURY_LOWLEVEL_SOURCE_TEST = "test-lowlevel@v1" as const;
+
+/** 生产受控来源集合（store 写入与 load 校验的唯一权威集合）。 */
+const TREASURY_LOWLEVEL_PRODUCTION_SOURCES: ReadonlySet<string> = new Set<string>([
+  TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+  TREASURY_LOWLEVEL_SOURCE_MIGRATED,
+]);
 
 /** 等级校验失败的确定性计数（heap；facade metrics 聚合）。 */
 const authorityLevelEvents = {
@@ -75,12 +85,22 @@ export function validateTreasuryAuthorityLevelField(level: unknown): string | nu
   return null;
 }
 
-/** lowlevelSource 字段的形状校验（存在须为非空有界字符串）。 */
+/**
+ * lowlevelSource 字段的形状校验。【第十五轮第十二节】收敛为严格受控枚举：
+ * 只接受生产受控来源集合（runtime-lowlevel@v1 / migrated-lowlevel@v1），
+ * 任意其它字符串（含 test-only 来源）一律拒绝——production 代码不得自行
+ * 传任意字符串；test-only 来源只能经测试通道（不进 store 校验）。
+ */
 export function validateTreasuryLowlevelSourceField(source: unknown): string | null {
-  if (typeof source !== "string" || source.length === 0 || source.length > 64) {
-    return `lowlevelSource 非法（须为 1..64 字符的显式来源标记）: ${String(source).slice(0, 24)}`;
+  if (typeof source !== "string" || !TREASURY_LOWLEVEL_PRODUCTION_SOURCES.has(source)) {
+    return `lowlevelSource 非法（须为受控枚举 runtime-lowlevel@v1|migrated-lowlevel@v1——不接受任意字符串，test-only 来源不得进入 production store）: ${String(source).slice(0, 24)}`;
   }
   return null;
+}
+
+/** 仅供测试通道判断：来源是否为 test-only 枚举（生产校验不接受）。 */
+export function isTreasuryLowlevelTestSource(source: unknown): boolean {
+  return source === TREASURY_LOWLEVEL_SOURCE_TEST;
 }
 
 /** 定级与矩阵校验的 entry 视图（intent/quarantine/authorization-fault 共用形状）。 */
@@ -325,6 +345,11 @@ export function classifyTreasuryAuthorityLevelForMigration(
       return forbidden.length === 0 ? ["legacy", null, null] : ["forensic", null, null];
     }
     // priorLevel === "lowlevel"：受支持的旧 lowlevel schema——严格矩阵复验。
+    // 【第十五轮第十二节】来源必须是受控枚举：旧任意字符串 source 无法证明
+    // 来源 → forensic 隔离（不得直接信任）；缺失则按 migrated 认定。
+    if (entry.lowlevelSource !== undefined && validateTreasuryLowlevelSourceField(entry.lowlevelSource) !== null) {
+      return ["forensic", null, null];
+    }
     const missing = lowlevelMatrixMissingFields({ ...entry, lowlevelSource: entry.lowlevelSource ?? TREASURY_LOWLEVEL_SOURCE_MIGRATED } as TreasuryAuthorityLevelEntryView);
     const forbidden = lowlevelForbiddenModernFields(entry as TreasuryAuthorityLevelEntryView);
     return missing.length === 0 && forbidden.length === 0

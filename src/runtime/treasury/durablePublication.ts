@@ -30,7 +30,28 @@ export interface TreasuryDurablePublicationFacts extends TreasuryIdentityFactsEn
   readonly authorizationDigest?: string;
   readonly outcome?: string;
   readonly settlement?: string;
+  /** 【第十五轮第十节】store-specific 安全关键不可变事实（quarantine / authorization-fault）。 */
+  readonly phase?: string;
+  readonly legacyV1?: boolean;
+  readonly forensic?: { readonly reason?: string; readonly detail?: string } | undefined;
+  readonly faultTick?: number;
+  readonly rollbackConfirmed?: boolean;
+  readonly tick?: number;
+  readonly recordedAt?: number;
+  readonly createdAtTick?: number;
+  readonly detail?: string;
 }
+
+/**
+ * 【第十五轮第十节】store-specific 语义 validator：read-back 在通用 identity
+ * 重算与字段比较之上，重新执行该 store 的完整 shape 与语义校验（level 矩阵、
+ * outcome/settlement 语义、forensic provenance、legacy 标记、固定事实——
+ * 必须能检出"phase 被篡改但 digest 未变"一类语义矛盾）。返回 null = 通过。
+ */
+export type TreasuryDurablePublicationSemanticValidator = (
+  persisted: TreasuryDurablePublicationFacts,
+  label: string,
+) => string | null;
 
 type PublicationFaultPhase = "after_publish_before_read_back";
 
@@ -125,7 +146,9 @@ export function compareTreasuryAuthorityPublicationReadBack(
     publicationEvents.readBackFaults += 1;
     return identityError;
   }
-  // 2. 完整结构化身份字段比较。
+  // 2. 完整结构化身份字段比较（【第十五轮第十节】补齐 phase / forensic /
+  //    legacyV1 / faultTick / rollbackConfirmed / tick / recordedAt /
+  //    createdAtTick / detail 等安全关键不可变字段）。
   const fieldChecks: readonly (readonly [string, boolean])[] = [
     ["transactionId", optionalEqual(published.transactionId, expected.transactionId)],
     ["digest", optionalEqual(published.digest, expected.digest)],
@@ -148,6 +171,15 @@ export function compareTreasuryAuthorityPublicationReadBack(
     ["durableIdentityDigest", optionalEqual(published.durableIdentityDigest, expected.durableIdentityDigest)],
     ["outcome", optionalEqual(published.outcome, expected.outcome)],
     ["settlement", optionalEqual(published.settlement, expected.settlement)],
+    ["phase", optionalEqual(published.phase, expected.phase)],
+    ["legacyV1", optionalEqual(published.legacyV1, expected.legacyV1)],
+    ["forensic", boundedDeepEqual(published.forensic, expected.forensic, 0)],
+    ["faultTick", optionalEqual(published.faultTick, expected.faultTick)],
+    ["rollbackConfirmed", optionalEqual(published.rollbackConfirmed, expected.rollbackConfirmed)],
+    ["tick", optionalEqual(published.tick, expected.tick)],
+    ["recordedAt", optionalEqual(published.recordedAt, expected.recordedAt)],
+    ["createdAtTick", optionalEqual(published.createdAtTick, expected.createdAtTick)],
+    ["detail", optionalEqual(published.detail, expected.detail)],
     ["postings", boundedDeepEqual(published.postings ?? published.deltas, expected.postings ?? expected.deltas, 0)],
     ["structureFacts", boundedDeepEqual(published.structureFacts, expected.structureFacts, 0)],
     ["authorizationCohort", boundedDeepEqual(published.authorizationCohort, expected.authorizationCohort, 0)],
@@ -165,12 +197,27 @@ export function compareTreasuryAuthorityPublicationReadBack(
  * store 私有 bookkeeping，由调用方在 fault 返回时执行）：
  * 调用方在 store 写入完成后调用本函数，返回 null = 发布验证通过；
  * 否则调用方执行回滚并返回结构化 store fault。
+ * 【第十五轮第十节】可注入 store-specific 语义 validator——通用比较通过后
+ * 对持久副本重新执行该 store 的完整 shape 与语义校验（phase/outcome/
+ * settlement 矩阵、forensic provenance、legacy 标记、固定事实）。
  */
 export function verifyTreasuryDurablePublicationReadBack(
   published: TreasuryDurablePublicationFacts,
   expected: TreasuryDurablePublicationFacts,
   label: string,
+  semanticValidator?: TreasuryDurablePublicationSemanticValidator,
 ): string | null {
   runPublicationFaultInjector();
-  return compareTreasuryAuthorityPublicationReadBack(published, expected, label);
+  const compareError = compareTreasuryAuthorityPublicationReadBack(published, expected, label);
+  if (compareError !== null) {
+    return compareError;
+  }
+  if (semanticValidator !== undefined) {
+    const semanticError = semanticValidator(published, `${label} store-specific 语义校验`);
+    if (semanticError !== null) {
+      publicationEvents.readBackFaults += 1;
+      return semanticError;
+    }
+  }
+  return null;
 }
