@@ -3,7 +3,7 @@
 - 日期：2026-09-01
 - 分支：`refactor/empire-treasury-rearchitecture`
 - 起始 HEAD：`428d5bbdb3cb51ce6b1c7d7705985bd0e24139af`（Round 15 终态，本地 = 远端）
-- 最终 HEAD：`<budget 提交后回填>`（见下方 commit 列表）
+- 最终 HEAD：`6dd9ce4`（budget 提交；见下方 commit 列表）
 - GitHub 仓库无 CI —— 本文档只记录**本地实际运行**的验证，不声称 CI passed。
 
 ## 1. Commit 列表（本轮全部）
@@ -18,8 +18,8 @@
 | `d5416ab` | fix(treasury): deep-clone durable authority inputs before publication |
 | `9447f78` | test(treasury): cover round 16 rearm and authority invariants |
 | `5f89263` | test(treasury): adapt existing fixtures to round 16 semantics |
-| (evidence) | docs(evidence): record round 16 local validation |
-| (budget) | chore(test-budget): update verified round 16 budget |
+| `f169405` | docs(evidence): record round 16 local validation |
+| `6dd9ce4` | chore(test-budget): update verified round 16 budget |
 
 `requiredBaselineCommit = 5f89263`（包含全部实现与测试、位于 budget 提交之前）。
 
