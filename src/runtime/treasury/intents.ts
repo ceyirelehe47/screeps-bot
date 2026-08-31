@@ -42,6 +42,7 @@
 import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import { validateTreasuryAuthorizationCohortFacts } from "@/runtime/treasury/cohortValidation";
+import { validateTreasuryStructureDescriptorArray } from "@/runtime/treasury/structureDescriptorValidation";
 import { computeTreasuryDurableIdentityDigest, treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
 import { verifyTreasuryEntryIdentity, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
 import { intentSemanticViolation } from "@/runtime/treasury/semanticMatrix";
@@ -398,37 +399,11 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
     }
   }
   if (candidate.structureFacts !== undefined) {
-    if (!Array.isArray(candidate.structureFacts) || candidate.structureFacts.length > INTENT_STRUCTURE_FACTS_MAX) {
-      return "structureFacts 非数组或超上限";
-    }
-    for (const fact of candidate.structureFacts) {
-      if (!fact || typeof fact !== "object") return "structureFact 项非对象";
-      const typed = fact as Partial<TreasuryIntentStructureFact>;
-      if (typeof typed.bindingKind !== "string" || !TREASURY_STRUCTURE_BINDING_KINDS.has(typed.bindingKind)) {
-        return `structureFact.bindingKind 非法: ${String(typed.bindingKind).slice(0, 24)}`;
-      }
-      if (typeof typed.role !== "string" || !TREASURY_STRUCTURE_BINDING_ROLES.has(typed.role)) {
-        return `structureFact.role 非法: ${String(typed.role).slice(0, 24)}`;
-      }
-      if (typeof typed.roomName !== "string" || typed.roomName.length === 0 || typed.roomName.length > 16) {
-        return "structureFact.roomName 非法";
-      }
-      if (typeof typed.locationKind !== "string" || !VALID_LOCATION_KINDS.has(typed.locationKind)) {
-        return `structureFact.locationKind 非法: ${String(typed.locationKind).slice(0, 24)}`;
-      }
-      if (typeof typed.structureId !== "string" || typed.structureId.length === 0 || typed.structureId.length > INTENT_STRUCTURE_ID_MAX) {
-        return "structureFact.structureId 非法（须为 1..48 字符）";
-      }
-      if (typed.objectId !== undefined && (typeof typed.objectId !== "string" || typed.objectId.length === 0 || typed.objectId.length > INTENT_STRUCTURE_ID_MAX)) {
-        return "structureFact.objectId 非法（须为 1..48 字符）";
-      }
-      if (typeof typed.required !== "boolean") {
-        return "structureFact.required 须为布尔";
-      }
-      if (typed.version !== TREASURY_STRUCTURE_DESCRIPTOR_VERSION) {
-        return `structureFact.version 非法（当前 ${String(TREASURY_STRUCTURE_DESCRIPTOR_VERSION)}）: ${String(typed.version)}`;
-      }
-    }
+    // 【第十三轮第十节】共享 descriptor validator（discriminated union 矛盾
+    // ——governed_location 携带 objectId / game_object 缺 objectId 或
+    // structureId 不一致——在持久层即拒绝）。
+    const descriptorError = validateTreasuryStructureDescriptorArray(candidate.structureFacts, INTENT_STRUCTURE_FACTS_MAX);
+    if (descriptorError !== null) return descriptorError;
   }
   if (candidate.ownerIdentity !== undefined) {
     if (typeof candidate.ownerIdentity !== "string" || candidate.ownerIdentity.length === 0 || candidate.ownerIdentity.length > INTENT_KIND_SOURCE_MAX) {

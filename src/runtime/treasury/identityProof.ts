@@ -23,6 +23,7 @@ import {
   type TreasuryAuthorizationCohortFacts,
 } from "@/runtime/treasury/authorization";
 import type { TreasuryStructureBindingDescriptor } from "@/runtime/treasury/types";
+import { validateTreasuryStructureDescriptorArray } from "@/runtime/treasury/structureDescriptorValidation";
 
 /** intent / quarantine / authorization-fault entry 的共同身份事实视图。 */
 export interface TreasuryIdentityFactsEntry {
@@ -61,6 +62,11 @@ export function recomputeTreasuryDurableIdentityDigest(entry: TreasuryIdentityFa
   try {
     const postings = entry.postings ?? entry.deltas;
     if (postings === undefined) return null;
+    // 【第十三轮第十节】structureFacts 前置共享 descriptor 校验：脏
+    // descriptor（union 矛盾/缺字段）不得进入 identity 计算——无法重算。
+    if (entry.structureFacts !== undefined && validateTreasuryStructureDescriptorArray(entry.structureFacts, 16) !== null) {
+      return null;
+    }
     const input: TreasuryDurableIdentityInput = {
       transactionId: entry.transactionId,
       digest: entry.digest,

@@ -19,6 +19,7 @@
 
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import { validateTreasuryAuthorizationCohortFacts } from "@/runtime/treasury/cohortValidation";
+import { validateTreasuryStructureDescriptorArray } from "@/runtime/treasury/structureDescriptorValidation";
 import {
   verifyTreasuryEntryIdentity,
   type TreasuryIdentityFactsEntry,
@@ -188,26 +189,11 @@ function validateFaultEntryShape(entry: unknown): string | null {
     return "durableIdentityDigest 非法（16 hex）";
   }
   if (candidate.structureFacts !== undefined) {
-    if (!Array.isArray(candidate.structureFacts) || candidate.structureFacts.length > 16) {
-      return "structureFacts 非数组或超上限";
-    }
-    for (const fact of candidate.structureFacts) {
-      if (!fact || typeof fact !== "object") return "structureFact 项非对象";
-      const typed = fact as Partial<TreasuryStructureBindingDescriptor>;
-      if (typeof typed.bindingKind !== "string" || !TREASURY_STRUCTURE_BINDING_KINDS.has(typed.bindingKind)) {
-        return `structureFact.bindingKind 非法: ${String(typed.bindingKind).slice(0, 24)}`;
-      }
-      if (typeof typed.role !== "string" || !TREASURY_STRUCTURE_BINDING_ROLES.has(typed.role)) {
-        return `structureFact.role 非法: ${String(typed.role).slice(0, 24)}`;
-      }
-      if (typeof typed.roomName !== "string" || typed.roomName.length === 0 || typed.roomName.length > 16) return "structureFact.roomName 非法";
-      if (typeof typed.locationKind !== "string" || (typed.locationKind !== "storage" && typed.locationKind !== "terminal")) {
-        return "structureFact.locationKind 非法";
-      }
-      if (typeof typed.structureId !== "string" || typed.structureId.length === 0 || typed.structureId.length > 48) return "structureFact.structureId 非法";
-      if (typeof typed.required !== "boolean") return "structureFact.required 须为布尔";
-      if (typed.version !== TREASURY_STRUCTURE_DESCRIPTOR_VERSION) return "structureFact.version 非法";
-    }
+    // 【第十三轮第十节】共享 descriptor validator（此前缺 objectId 校验且不
+    // 校验 discriminated union 矛盾——governed_location 携带 objectId 现在
+    // 在持久层即拒绝）。
+    const descriptorError = validateTreasuryStructureDescriptorArray(candidate.structureFacts, 16);
+    if (descriptorError !== null) return descriptorError;
   }
   if (candidate.authorizationCohort !== undefined) {
     // 【第十三轮第九节】共享 cohort validator（唯一权威——全字段 + 异常边界；
