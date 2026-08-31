@@ -75,10 +75,11 @@ import { resetTreasuryResolutionEventsForTest } from "@/runtime/treasury/resolut
 import { resetTreasuryIntentRuntimeForTest } from "@/runtime/treasury/intents";
 import { unsealTreasuryAdapterRegistryForTest } from "@/runtime/treasury/actionContracts";
 import { resetTreasuryAuthorizationFaultRuntimeForTest } from "@/runtime/treasury/authorizationFaults";
+import { validateTreasuryLowlevelSourceField } from "@/runtime/treasury/authorityLevel";
 
 export const TREASURY_RECEIPT_RETENTION_TICKS = 5_000;
 export const TREASURY_RECEIPT_MAX_ENTRIES = 4_096;
-export const TREASURY_RECEIPT_VERSION = 5 as const;
+export const TREASURY_RECEIPT_VERSION = 6 as const;
 
 const RECEIPT_KEY_PREFIX = "t:";
 
@@ -91,10 +92,14 @@ const RECEIPT_KEY_PREFIX = "t:";
 export type TreasuryReceiptProofLevel = "modern" | "legacy";
 
 /**
- * 【第十二轮 3.4 / 第十三轮 v5】settlement proof：结算 tick + 该次 action
- * attempt 的身份绑定（canonical digest / durableIdentityDigest，可选
- * contractDigest / authorizationCohortDigest）+ 显式 proof 等级。legacy
- * proof 无身份字段——不得证明携带现代身份的新 attempt。
+ * 【第十二轮 3.4 / 第十三轮 v5 / 第十六轮 v6】settlement proof：结算 tick +
+ * 该次 action attempt 的身份绑定（canonical digest / durableIdentityDigest，
+ * 可选 contractDigest / authorizationCohortDigest）+ 显式 proof 等级。
+ * legacy proof 无身份字段——不得证明携带现代身份的新 attempt。
+ * 【第十六轮第十一节 v6】lowlevelSource：lowlevel attempt 的显式 provenance
+ * （受控枚举——runtime 与 migrated 不能互相证明；modern proof 可携带以绑定
+ * 低层结算，legacy proof 禁携带；v5 及更早 receipt 无此字段 = 来源不可证明
+ * 的旧 proof，隔离不释放）。
  */
 export interface TreasurySettlementProof {
   readonly level: TreasuryReceiptProofLevel;
@@ -103,6 +108,7 @@ export interface TreasurySettlementProof {
   readonly contractDigest?: string;
   readonly authorizationCohortDigest?: string;
   readonly durableIdentityDigest?: string;
+  readonly lowlevelSource?: string;
 }
 
 export interface TreasuryReceiptStore {
@@ -194,6 +200,10 @@ function isValidSettlementProof(value: unknown, nowTick: number): value is Treas
       return false;
     }
   }
+  // 【第十六轮第十一节 v6】lowlevel provenance：存在须为受控枚举。
+  if (typed.lowlevelSource !== undefined && validateTreasuryLowlevelSourceField(typed.lowlevelSource) !== null) {
+    return false;
+  }
   if (typed.level === "modern") {
     if (typed.digest === undefined || typed.durableIdentityDigest === undefined) return false;
     return true;
@@ -202,6 +212,7 @@ function isValidSettlementProof(value: unknown, nowTick: number): value is Treas
   for (const field of identityFields) {
     if (typed[field] !== undefined) return false;
   }
+  if (typed.lowlevelSource !== undefined) return false;
   return true;
 }
 
@@ -227,6 +238,7 @@ function isValidV4SettlementProofShape(
   if (typed.level !== undefined || typed.contractDigest !== undefined || typed.authorizationCohortDigest !== undefined) {
     return false;
   }
+  if (typed.lowlevelSource !== undefined) return false;
   return true;
 }
 
@@ -272,7 +284,7 @@ function lookupNormalizedReceipt(
   let key: string;
   if (version === 1) {
     key = transactionId; // v1 裸键 = transactionId 本身
-  } else if (version === 2 || version === 3 || version === 4 || version === 5) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6) {
     key = encodeReceiptKey(transactionId);
   } else {
     // 未知/更高版本：store 整体 fail closed（admission/登记拒绝），但已能
@@ -363,7 +375,8 @@ export function peekTreasuryReceiptHealth(): TreasuryReceiptHealth {
     store.version !== 1 &&
     store.version !== 2 &&
     store.version !== 3 &&
-    store.version !== 4
+    store.version !== 4 &&
+    store.version !== 5
   ) {
     return { healthy: false, detail: `未知 receipt 版本 ${String(store.version)}（fail closed）` };
   }
@@ -495,6 +508,8 @@ export function refreshSettledReceiptForResolution(
     readonly contractDigest?: string;
     readonly authorizationCohortDigest?: string;
     readonly durableIdentityDigest?: string;
+    /** 【第十六轮第十一节】lowlevel attempt 的显式 provenance（proof 链绑定）。 */
+    readonly lowlevelSource?: string;
   },
 ): TreasuryReceiptRefreshResult {
   const runtime = loadReceiptStoreRuntime();
@@ -540,6 +555,7 @@ export function refreshSettledReceiptForResolution(
         ? { authorizationCohortDigest: identity.authorizationCohortDigest }
     : {}),
       ...(identity.durableIdentityDigest !== undefined ? { durableIdentityDigest: identity.durableIdentityDigest } : {}),
+      ...(identity.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
     };
     const relation = treasuryAttemptIdentityRelation(
       { ...existing.proof, digest: existing.proof.digest ?? attempt.digest },
@@ -562,7 +578,8 @@ export function refreshSettledReceiptForResolution(
       };
     }
     receiptEvents.receiptIdentityMatches += 1;
-    // match：保留既有 proof 身份（identity 成分一致），仅刷新 settledAtTick。
+    // match：保留既有 proof 身份（identity 成分一致——含 lowlevel provenance），
+    // 仅刷新 settledAtTick。
     const nextProof: TreasurySettlementProof = {
       level: "modern",
       settledAtTick: tick,
@@ -572,6 +589,7 @@ export function refreshSettledReceiptForResolution(
       ...(existing.proof.authorizationCohortDigest !== undefined
         ? { authorizationCohortDigest: existing.proof.authorizationCohortDigest }
         : {}),
+      ...(existing.proof.lowlevelSource !== undefined ? { lowlevelSource: existing.proof.lowlevelSource } : {}),
     };
     if (existingTick === tick) {
       receiptEvents.receiptRefreshes += 1;
@@ -588,7 +606,8 @@ export function refreshSettledReceiptForResolution(
     return { status: "refreshed", previousTick: existingTick };
   }
   // absent：identity 完整 → modern proof；否则（低层 authority resolve）显式
-  // legacy proof——不冒充现代证明。
+  // legacy proof——不冒充现代证明。【第十六轮第十一节】lowlevel attempt 的
+  // provenance 一并写入 proof（runtime 与 migrated 不能互相证明）。
   const nextProof: TreasurySettlementProof = identityComplete
     ? {
         level: "modern",
@@ -599,6 +618,7 @@ export function refreshSettledReceiptForResolution(
         ...(identity?.authorizationCohortDigest !== undefined
           ? { authorizationCohortDigest: identity.authorizationCohortDigest }
           : {}),
+        ...(identity?.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
       }
     : { level: "legacy", settledAtTick: tick };
   store.settled[key] = nextProof;
@@ -836,6 +856,20 @@ function loadReceiptStoreRuntime(): ReceiptStoreRuntime {
     heapStoreRuntime = { store: candidate, fatal: null };
     return heapStoreRuntime;
   }
+  if (raw.version === 5) {
+    // v5 → v6 无损升级（【第十六轮第十一节】新增可选 lowlevelSource 字段
+    // ——既有 proof 无 provenance = 来源不可证明的旧 proof，隔离不释放，
+    // 不猜测 runtime 来源）；损坏 → fatal。
+    const upgraded: TreasuryReceiptStore = { ...(raw as unknown as TreasuryReceiptStore), version: TREASURY_RECEIPT_VERSION, updatedAt: Game.time };
+    const shapeError = validateReceiptStoreShape(upgraded, Game.time, "load");
+    if (shapeError !== null) {
+      heapStoreRuntime = fatalRuntime(raw, `${shapeError}（v5→v6 升级校验失败，原数据保留）`);
+      return heapStoreRuntime;
+    }
+    treasuryBranch().receipts = upgraded;
+    heapStoreRuntime = { store: upgraded, fatal: null };
+    return heapStoreRuntime;
+  }
   if (raw.version === 1 || raw.version === 2 || raw.version === 3 || raw.version === 4) {
     heapStoreRuntime = migrateLegacyReceiptStore(raw, raw.version, Game.time);
     return heapStoreRuntime;
@@ -1039,6 +1073,8 @@ export function commitSettledReceipt(
     readonly contractDigest?: string;
     readonly authorizationCohortDigest?: string;
     readonly durableIdentityDigest?: string;
+    /** 【第十六轮第十一节】lowlevel attempt 的显式 provenance（proof 链绑定）。 */
+    readonly lowlevelSource?: string;
   },
 ): TreasuryReceiptWriteResult {
   const runtime = loadReceiptStoreRuntime();
@@ -1080,6 +1116,7 @@ export function commitSettledReceipt(
               ? { authorizationCohortDigest: identity.authorizationCohortDigest }
               : {}),
             durableIdentityDigest: identity.durableIdentityDigest,
+            ...(identity.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
           }
         : undefined;
     if (existing.status === "legacy_committed") {
@@ -1130,6 +1167,7 @@ export function commitSettledReceipt(
         ...(identity?.authorizationCohortDigest !== undefined
           ? { authorizationCohortDigest: identity.authorizationCohortDigest }
           : {}),
+        ...(identity?.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
       }
     : { level: "legacy", settledAtTick: tick };
   store.settled[key] = proof;

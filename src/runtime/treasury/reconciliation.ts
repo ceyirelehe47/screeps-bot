@@ -44,6 +44,9 @@ export interface TreasuryReconciliationCapability {
   readonly authorizationCohortDigest?: string;
   /** 统一 durable action identity digest（第十一轮 3.13.5；resolution 强匹配）。 */
   readonly durableIdentityDigest?: string;
+  /** 【第十六轮第十一节】lowlevel attempt 的显式 provenance（capability 绑定
+   *  ——runtime 与 migrated 不能互相证明；modern capability 不携带）。 */
+  readonly lowlevelSource?: string;
   readonly postFaultEpoch: {
     readonly scope: TreasuryObservationScope;
     readonly epochSeq: number;

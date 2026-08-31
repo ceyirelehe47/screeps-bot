@@ -8,12 +8,21 @@
  * recovery、finalize 补完成与 already-resolved 检查共同复用。
  *
  * 输入：resolution tombstone、unified unresolved authority 解析结果（status
- * ok / inconsistent / not_found——**不信任调用方缓存的旧 authority**，调用
- * 方必须在验证前重新解析）、持久 receipt proof（调用方从 Memory 重新读取，
- * 不信任 refresh 返回值）。
+ * ok / inconsistent / not_found / store_unhealthy——**不信任调用方缓存的旧
+ * authority**，调用方必须在验证前重新解析）、持久 receipt proof（调用方从
+ * Memory 重新读取，不信任 refresh 返回值）。
  *
  * 输出：verified（唯一释放许可）/ conflict / insufficient /
- * authority_inconsistent / receipt_absent / receipt_stale。
+ * authority_inconsistent / authority_store_unhealthy / receipt_absent /
+ * receipt_stale。
+ *
+ * 【第十六轮第八节】authority store_unhealthy 不归入 authority not_found
+ * （或任何 verified 变体）——store fatal 时零释放、零结论。
+ *
+ * 【第十六轮第十一节】lowlevel provenance 进入完整 proof 链：lowlevel
+ * tombstone / receipt / authority 三方的 lowlevelSource 必须一致（缺失 =
+ * insufficient 隔离；不同 = conflict）；modern proof 不得释放 lowlevel
+ * authority（自动释放矩阵承载）。
  */
 
 import {
@@ -31,6 +40,8 @@ export interface TreasuryCommittedReceiptProofView {
   readonly contractDigest?: string;
   readonly authorizationCohortDigest?: string;
   readonly durableIdentityDigest?: string;
+  /** 【第十六轮第十一节 v6】lowlevel provenance（受控枚举）。 */
+  readonly lowlevelSource?: string;
 }
 
 export type TreasuryCommittedProofVerdict =
@@ -38,6 +49,7 @@ export type TreasuryCommittedProofVerdict =
   | { readonly status: "conflict"; readonly detail: string }
   | { readonly status: "insufficient"; readonly detail: string }
   | { readonly status: "authority_inconsistent"; readonly detail: string }
+  | { readonly status: "authority_store_unhealthy"; readonly detail: string }
   | { readonly status: "receipt_absent"; readonly detail: string }
   | { readonly status: "receipt_stale"; readonly detail: string };
 
@@ -47,12 +59,14 @@ function attemptIdentityOf(source: {
   readonly contractDigest?: string;
   readonly authorizationCohortDigest?: string;
   readonly durableIdentityDigest?: string;
+  readonly lowlevelSource?: string;
 }): TreasuryAttemptIdentity {
   return {
     digest: source.digest ?? "",
     ...(source.contractDigest !== undefined ? { contractDigest: source.contractDigest } : {}),
     ...(source.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: source.authorizationCohortDigest } : {}),
     ...(source.durableIdentityDigest !== undefined ? { durableIdentityDigest: source.durableIdentityDigest } : {}),
+    ...(source.lowlevelSource !== undefined ? { lowlevelSource: source.lowlevelSource } : {}),
   };
 }
 
@@ -74,16 +88,19 @@ export function treasuryProofLevelAutoReleasesAuthorityLevel(
 /**
  * 三方 committed proof 验证（唯一权威；normal 与 recovery 共用）：
  * 1. authority inconsistent → 整体阻断（零释放，全部证据保留）；
- * 2. receipt 缺失 / tick 不足（settledAtTick < tombstone.settledAtTick）→
+ * 2. authority store_unhealthy（第十六轮）→ 整体阻断（store fatal 不得被
+ *    解释为 authority absent——零释放、零结论，独立 verdict）；
+ * 3. receipt 缺失 / tick 不足（settledAtTick < tombstone.settledAtTick）→
  *    receipt_absent / receipt_stale（调用方走 identity-aware refresh 后重读
  *    再验证，不得凭 refresh 返回值释放）；
- * 3. receipt proof 非 modern level → insufficient（legacy proof 不能证明
+ * 4. receipt proof 非 modern level → insufficient（legacy proof 不能证明
  *    当前 attempt 的 committed 结论、更不能释放 authority）；
- * 4. receipt ↔ tombstone 完整 attempt identity relation：match 才继续，
- *    conflict / insufficient 分别返回；
- * 5. authority 仍存在（status ok）：proof level ↔ authority 等级自动释放
- *    矩阵 + tombstone ↔ authority、receipt ↔ authority 双 relation match；
- * 6. authority 已不存在（not_found）：receipt ↔ tombstone match 且 tick 足够
+ * 5. receipt ↔ tombstone 完整 attempt identity relation（含 lowlevel
+ *    provenance 维度）：match 才继续，conflict / insufficient 分别返回；
+ * 6. authority 仍存在（status ok）：proof level ↔ authority 等级自动释放
+ *    矩阵 + tombstone ↔ authority、receipt ↔ authority 双 relation match
+ *    （含 lowlevel provenance——runtime 与 migrated 不能互相证明）；
+ * 7. authority 已不存在（not_found）：receipt ↔ tombstone match 且 tick 足够
  *    即为补完成 finalize 的许可（不伪造新 authority）。
  */
 export function verifyTreasuryCommittedResolutionProof(input: {
@@ -96,6 +113,7 @@ export function verifyTreasuryCommittedResolutionProof(input: {
     | "contractDigest"
     | "authorizationCohortDigest"
     | "durableIdentityDigest"
+    | "lowlevelSource"
   >;
   readonly authorityResolution: TreasuryUnresolvedAuthorityResolution;
   readonly receiptProof: TreasuryCommittedReceiptProofView | undefined;
@@ -105,6 +123,12 @@ export function verifyTreasuryCommittedResolutionProof(input: {
     return {
       status: "authority_inconsistent",
       detail: `同 id 双 authority inconsistent（${authorityResolution.detail}）——零释放，全部证据保留`,
+    };
+  }
+  if (authorityResolution.status === "store_unhealthy") {
+    return {
+      status: "authority_store_unhealthy",
+      detail: `unresolved authority store unhealthy（${authorityResolution.detail}）——零释放零结论（store fatal 不得解释为 authority absent）`,
     };
   }
   if (receiptProof === undefined) {
@@ -127,7 +151,7 @@ export function verifyTreasuryCommittedResolutionProof(input: {
   if (receiptRelation !== "match") {
     return receiptRelation === "conflict"
       ? { status: "conflict", detail: "receipt ↔ tombstone 完整 attempt identity conflict——不同 attempt 的 proof 不得释放当前 authority" }
-      : { status: "insufficient", detail: "receipt ↔ tombstone identity 证明不足（proof 缺少当前 attempt 的身份事实）" };
+      : { status: "insufficient", detail: "receipt ↔ tombstone identity 证明不足（proof 缺少当前 attempt 的身份事实——含 lowlevel provenance 缺失）" };
   }
   if (authorityResolution.status === "not_found") {
     // authority 已在前一阶段释放、finalize 前中断：receipt ↔ tombstone match
@@ -140,6 +164,24 @@ export function verifyTreasuryCommittedResolutionProof(input: {
       status: "insufficient",
       detail: `proof level ${tombstone.proofLevel} 不得自动释放 authority 等级 ${String(authority.authorityLevel)}（普通自动 recovery 只允许 identity-bound → modern、lowlevel → lowlevel；legacy/forensic 永久隔离）`,
     };
+  }
+  // 【第十六轮第十一节】lowlevel provenance 严格绑定：lowlevel proof 链上
+  // tombstone 缺 lowlevelSource（v5 及更早旧 proof）→ insufficient（来源
+  // 不可证明，隔离不释放）；tombstone 有而 authority 缺 / 两者不等 →
+  // conflict（runtime 与 migrated 不能互相证明）。
+  if (tombstone.proofLevel === "lowlevel") {
+    if (tombstone.lowlevelSource === undefined) {
+      return {
+        status: "insufficient",
+        detail: "lowlevel tombstone 缺 lowlevelSource（旧 proof 来源不可证明——隔离不释放，不得猜测 runtime 来源）",
+      };
+    }
+    if (authority.lowlevelSource === undefined || tombstone.lowlevelSource !== authority.lowlevelSource) {
+      return {
+        status: "conflict",
+        detail: `lowlevel provenance conflict（tombstone ${String(tombstone.lowlevelSource)}，authority ${String(authority.lowlevelSource)}）——runtime-lowlevel 与 migrated-lowlevel 不能互相证明`,
+      };
+    }
   }
   const authorityAttempt = attemptIdentityOf(authority);
   const tombstoneAuthorityRelation = treasuryAttemptIdentityRelation(tombstoneAttempt, authorityAttempt);

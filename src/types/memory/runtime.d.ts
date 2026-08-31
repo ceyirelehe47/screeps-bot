@@ -641,12 +641,15 @@ declare global {
     treasury?: {
       receipts?: {
         /**
+         * v6（第十六轮第十一节）：lowlevel attempt 的显式 provenance
+         * （lowlevelSource 受控枚举——runtime 与 migrated 不能互相证明；
+         * v5 及更早 receipt 无此字段 = 来源不可证明的旧 proof，隔离不释放）。
          * v5（第十三轮）：value 为显式等级 settlement proof（结算 tick +
          * level + attempt 身份绑定；modern 必填 digest+durableIdentityDigest、
-         * legacy 禁携带身份字段）。v1-v4 由版本化迁移定级（数字/无身份对象
+         * legacy 禁携带身份字段）。v1-v5 由版本化迁移定级（数字/无身份对象
          * → legacy；完整身份 → modern；部分身份 fail closed 原store保留）。
          */
-        version: 5;
+        version: 6;
         settled: Record<
           string,
           | {
@@ -656,6 +659,8 @@ declare global {
               contractDigest?: string;
               authorizationCohortDigest?: string;
               durableIdentityDigest?: string;
+              /** 【第十六轮 v6】lowlevel provenance（受控枚举；legacy proof 禁携带）。 */
+              lowlevelSource?: string;
             }
           | number
         >;
@@ -1006,12 +1011,17 @@ declare global {
        */
       resolutions?: {
         /**
+         * v6（第十六轮）：lowlevel proof 绑定显式 provenance（lowlevelSource
+         * 受控枚举；v5 及更早的低层 tombstone 无此字段 = 来源不可证明的隔离
+         * 态，不自动释放）；v5（第十五轮第八节）：显式 forensic 管理
+         * provenance（forensicProvenance——migration-derived forensic 无此
+         * 字段 → 永久隔离）。
          * v4（第十四轮第十一节）：显式 proof class（identity-bound/lowlevel/
          * legacy/forensic——required/forbidden 身份字段矩阵由 proofLevel 声明，
          * 不再由 optional 字段存在性隐式猜测；v3 迁移：全身份 → identity-
          * bound、全缺 → legacy、部分 → forensic 隔离）。
          */
-        version: 4;
+        version: 6;
         entries: Record<
           string,
           {
@@ -1031,6 +1041,24 @@ declare global {
             contractDigest?: string;
             authorizationCohortDigest?: string;
             durableIdentityDigest?: string;
+            /** 【第十六轮 v6】lowlevel provenance（仅 proofLevel=lowlevel 携带）。 */
+            lowlevelSource?: string;
+            /** 【第十五轮 v5】显式 forensic 管理 provenance（仅 proofLevel=forensic 携带）。 */
+            forensicProvenance?: {
+              protocol: string;
+              acknowledgement: "explicit_management";
+              confirmedBy?: string;
+              capabilityDigest?: string;
+              attempt: {
+                digest: string;
+                contractDigest?: string;
+                authorizationCohortDigest?: string;
+                durableIdentityDigest?: string;
+              };
+              confirmedAtTick: number;
+              source: string;
+              allowAutomaticCompletion: boolean;
+            };
           }
         >;
         entryCount: number;

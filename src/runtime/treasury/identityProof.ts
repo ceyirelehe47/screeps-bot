@@ -134,12 +134,18 @@ export function verifyTreasuryEntryIdentity(entry: TreasuryIdentityFactsEntry, l
   return null;
 }
 
-/** attempt identity（tombstone / receipt settlement proof / finalized proof 的绑定形状）。 */
+/**
+ * attempt identity（tombstone / receipt settlement proof / finalized proof 的绑定形状）。
+ * 【第十六轮第十一节】lowlevelSource 是 lowlevel attempt identity 的组成
+ * 部分：runtime-lowlevel 与 migrated-lowlevel 不能互相证明。
+ */
 export interface TreasuryAttemptIdentity {
   readonly digest: string;
   readonly contractDigest?: string;
   readonly authorizationCohortDigest?: string;
   readonly durableIdentityDigest?: string;
+  /** lowlevel provenance（受控枚举；modern attempt 不携带）。 */
+  readonly lowlevelSource?: string;
 }
 
 /**
@@ -149,12 +155,23 @@ export interface TreasuryAttemptIdentity {
  * mismatch = "conflict"（同 id 不同 attempt，不得 already_resolved / 释放）；
  * "insufficient" = proof 缺少现代身份事实（legacy proof，不能证明现代
  * attempt）；null = 匹配。
+ *
+ * 【第十六轮第十一节】lowlevel provenance 绑定（单向）：attempt 携带
+ * lowlevelSource 时 proof 必须同样携带且相等（缺失 = insufficient——旧
+ * proof 来源不可证明，隔离不释放；不等 = conflict——runtime 与 migrated
+ * 不能互相证明）；attempt 不携带时不比较该维度（marker attemptIdentity
+ * 等部分身份视图无 provenance 字段——proof 更完整不构成矛盾；低层 proof
+ * 不得证明非低层 attempt由 capability prevalidate 的显式等级校验承载）。
  */
 export function treasuryAttemptIdentityRelation(
-  proof: { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string },
+  proof: { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string; readonly lowlevelSource?: string },
   attempt: TreasuryAttemptIdentity,
 ): "match" | "conflict" | "insufficient" {
   if (proof.digest !== attempt.digest) return "conflict";
+  if (attempt.lowlevelSource !== undefined) {
+    if (proof.lowlevelSource === undefined) return "insufficient";
+    if (proof.lowlevelSource !== attempt.lowlevelSource) return "conflict";
+  }
   const attemptModern =
     attempt.durableIdentityDigest !== undefined || attempt.authorizationCohortDigest !== undefined;
   if (!attemptModern) {

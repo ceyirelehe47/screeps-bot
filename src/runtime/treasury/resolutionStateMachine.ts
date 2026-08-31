@@ -49,6 +49,7 @@ const TREASURY_RESOLUTION_INVARIANT_FIELDS: readonly (readonly [
     | "contractDigest"
     | "authorizationCohortDigest"
     | "durableIdentityDigest"
+    | "lowlevelSource"
     | "actionTick"
     | "settledAtTick"
     | "observationTick"
@@ -65,6 +66,7 @@ const TREASURY_RESOLUTION_INVARIANT_FIELDS: readonly (readonly [
   ["contractDigest", "attempt identity（contractDigest）"],
   ["authorizationCohortDigest", "attempt identity（authorizationCohortDigest）"],
   ["durableIdentityDigest", "attempt identity（durableIdentityDigest）"],
+  ["lowlevelSource", "lowlevel provenance（lowlevelSource）"],
   ["actionTick", "action tick"],
   ["settledAtTick", "settledAtTick"],
   ["observationTick", "observation tick"],
