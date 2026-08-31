@@ -855,3 +855,124 @@ heap 索引：resolvingIds / pendingReleaseIds（Set<string>）
 - receipts v6：新增可选 lowlevelSource（modern proof 可携带、legacy 禁带；v5→v6 无损）；低层两阶段路径（无 contract）的 commit/refresh 随 attempt 携带 runtime 来源。
 - intent（v6）/quarantine（v5）/authorization-fault（v4）版本不变：本轮只改写入深拷贝与读取快照行为，无持久 schema 变化。
 - write-fault marker：无版本变化（写入深拷贝 attemptIdentity、读取深冻结快照）。
+
+## 13. 第十七轮设计：Durable Attempt Lineage & Rearm Capability
+
+### 13.1 新增模块与职责边界
+
+| 模块 | 职责 |
+| --- | --- |
+| attemptLineage.ts | durable attempt lineage store（Memory 持久、版本 v1、硬容量 64、root/current/next O(1) 索引、状态机、retirement 三段、恢复） |
+| retrySemanticIdentity.ts | retry semantic digest 单一权威（modern contract 版 + lowlevel 版；排除 tick/epoch/revision/policy/bundle 事实） |
+| lineageBinding.ts | lineage/rearm binding digest 派生与比较（进 intent/quarantine/auth-fault/marker/receipt/tombstone proof 链） |
+| rearmCapability.ts | service-issued opaque rearm capability authority（WeakSet 防伪、单次消费、generation/tick 绑定） |
+| attemptOccupancy.ts | rearm 前的 parent 相反 proof 与 child 占用集中检查（各 store 单 key lookup） |
+| markerAttemptIdentity.ts | class-aware marker attempt relation（authority class + lowlevelSource + lineage binding + generation 维度比较） |
+
+Lineage store 不内联进 facade.ts；capability registry 与 consume 内核在 service closure 私有模块；retry semantic identity 与 tr1_ namespace gate 各只有一个权威实现（retrySemanticIdentity.ts / transactionId.ts 的 isTreasuryRearmAttemptId）；production service 不暴露 child derive 函数（架构扫描守护）。
+
+### 13.2 lineage record schema（v1）
+
+```text
+Memory.runtime.treasury.attemptLineage = {
+  version: 1,
+  entries: { "l:<rootTransactionId>": record },
+  entryCount, updatedAt
+}
+
+record = {
+  lineageId            // 16hex：rootTransactionId + root identity 派生
+  rootTransactionId, rootIdentity        // 尝试链起点（initial attempt，普通命名空间）
+  currentTransactionId, currentIdentity  // 链上最新 attempt
+  generation            // 非负安全整数；root=0；child 接管完成时 +1
+  state                 // retiring|rearm_ready|capability_issued|child_intent_pending
+                        // |child_active|chain_committed|non_rearmable_retired|forensic_isolated
+  resolutionState       // unresolved|not_executed|committed（current 的 resolution）
+  nextChildTransactionId?  // rearm 派生的确定性 child（capability 签发时写入）
+  retrySemanticDigest?  // 当前 current 的重试语义（non-rearmable 缺失）
+  authorityClass        // identity-bound|lowlevel
+  lowlevelSource?       // authorityClass=lowlevel 时必填
+  bindingDigest?        // 当前 current 为 rearm child 时的 lineage binding
+  rearmable, nonRearmReason?
+  retirement: { lineagePublished, authorityReleased, markerCleaned }
+  recordRevision        // 每次写入 +1（capability lineage revision 绑定）
+  createdAtTick, updatedAtTick
+}
+```
+
+状态机（单调）：
+
+```text
+(创建) retiring ──三段完成──▶ rearm_ready ──issue capability──▶ capability_issued
+  ▲                              ▲   │(tick 结束/global reset 恢复：heap capability 失效)     │
+  │                              │   ◀────────────────────────┘        │begin 接管
+  │                              │                                      ▼
+  │                              │                              child_intent_pending
+  │                              │(beginTick 回滚：intent 缺失/一致 not_started、释放 intent)
+  │                              │   ◀──────────────────────────────┘        │intent read-back 一致 + consume capability
+  │                              │                                           ▼
+  │                              │                                     child_active（current 推进、generation+1）
+  │                              │                                    ╱          ╲
+  │                              └──(child not-executed：退休)── retiring            chain_committed（child committed：终态）
+  non_rearmable_retired（创建即定：只有 retirement proof、无 retry 语义）
+  forensic_isolated（identity 冲突/不可证明）
+```
+
+禁止：chain_committed 回退；同 generation 不同 child；child_active 再签第二个 child；改变 root/语义身份/class；复用旧 generation。
+
+### 13.3 staged 顺序与故障矩阵
+
+not-executed resolution（改造后）：prevalidate → resolution slot + lineage 容量预检 → consume reconciliation capability → 写 final tombstone → 写 lineage candidate + read-back → 释放 intent/quarantine → class-aware 清 marker → 三段完成 → rearm_ready。
+
+| 中断点 | 恢复 |
+| --- | --- |
+| tombstone 写后、lineage 写前中断 | authority/marker 保留；beginTick 经 pendingRelease 索引重试 lineage publication |
+| lineage 写后、release 前中断 | beginTick 补完成 release（lineage 已是持久 proof） |
+| release 后、marker 清理前中断 | beginTick 用 class-aware relation 补清 marker；conflict/insufficient → cleanup_pending 保留 |
+
+tr1_ child 接管（executePreparedAction）：capability 只读验证 + retry semantic 重算比较 → lineage → child_intent_pending → 写 intent（带 bindingDigest）→ read-back 一致 → consume capability → lineage → child_active（current 推进）→ Game callback。
+
+| 中断点 | 处置 |
+| --- | --- |
+| child_intent_pending 后、intent 写前 | callback 零调用；beginTick：intent 缺失 → 回滚 rearm_ready（capability 作废可重签） |
+| intent 写后、read-back/consume 前 | callback 零调用；beginTick：一致 not_started → 释放 intent + 回滚 rearm_ready；不一致 → forensic_isolated |
+| child_active 后 | child 由 intent/quarantine/receipt/resolution 正常接管（无特殊恢复） |
+
+### 13.4 capability 生命周期
+
+```text
+issue（facade.issueTreasuryRearmCapability）
+  前置：cross-store parent 检查（occupancy 模块）+ child 占用全零 + lineage rearm_ready
+  产物：冻结 capability 对象（WeakSet 注册；同 tick 同 lineage 幂等返回同一对象）
+  durable 副作用：lineage rearm_ready → capability_issued（recordRevision+1）
+validate / consume（service 闭包私有）
+  对象身份 → 未消费 → serviceGeneration → tick → lineage revision 与 Memory record 一致
+  consume：一次性（WeakSet consumed）——接管协议在 intent read-back 一致后调用
+tick 结束 / global reset
+  heap capability 全部失效；durable lineage capability_issued → beginTick 回退 rearm_ready
+  新 service 重签发：child ID 确定性不变
+接管完成（child_active）
+  该 generation 永不可再签发（lineage 状态门禁）
+```
+
+### 13.5 tr1_ 门禁点与拒绝路径
+
+单一权威 `isTreasuryRearmAttemptId`（transactionId.ts）。门禁点：prepareTransaction（无 capability 的 tr1_ → rearm_capability_required；root/current 索引命中的普通 ID → retired_attempt/rearm_required）、authorizeTreasuryActionContract（options.rearmCapability 必填 + retry semantic digest 重算比较）、redeemAuthorizationBundleAtomic（bundle record 内 rearm binding 校验）、executePreparedAction tr1_ 接管协议、compat recordAcceptedTransaction/recordAcceptedAction（tr1_ 无 binding 拒绝）、commit receipt（tr1_ intent 必须携带 bindingDigest）。全部拒绝路径 bundle 零签发、预算零变化、intent 零创建、callback 零调用。
+
+### 13.6 tombstone retention 资格（O(1)）
+
+evictExpiredTombstones 对 final not-executed 逐条：`lineageByAttemptId(tombstone.transactionId)` O(1) 命中且 retirement 三段全部完成且 state ∈ {rearm_ready, capability_issued, child_intent_pending, child_active, chain_committed, non_rearmable_retired}（即 lineage 已接管永久门禁）→ 允许按普通 retention 驱逐；未命中（无 lineage replacement——Round 16 遗留或 backfill 未完成）或任一 pending → pin。驱逐删除 tombstone 与 pendingRelease 索引项，但绝不触碰 lineage record。
+
+### 13.7 marker v2 与 receipt proof class
+
+marker 新增可选持久字段：authorityClass、lowlevelSource、lineageBindingDigest、attemptGeneration、markerVersion（=2）；旧 v1 marker（无这些字段）按 legacy identity 处理——class-aware 清除时 insufficient（不猜 class），保留 pending。清除 API 升级为接收完整 class-aware identity（markerAttemptIdentity.ts 的 relation 判定 match 才清除）。
+
+receipts v7：proof level 三级 identity-bound/lowlevel/legacy（不再用 modern+lowlevelSource 隐式表达）；v6→v7 迁移按 modern±lowlevelSource/legacy 归类，矛盾 fail closed；identity-bound 禁 lowlevelSource、lowlevel 必带受控 lowlevelSource 且禁 contract/cohort 字段；释放矩阵 identity-bound→modern authority、lowlevel→lowlevel authority（runtime/migrated 不互证）、legacy 不释放任何 authority。
+
+### 13.8 store 版本与容量
+
+- attemptLineage v1（新增）：硬容量 64 条 chain；满载新 root 拒绝（fail closed）、同 chain 推进不占新 slot、普通 retention 永不删除 lineage record。
+- resolutions 保持 v6：驱逐资格规则变化（lineage replacement 检查）不改变 entry schema。
+- receipts v6 → v7：proof level 枚举扩展 + lowlevel class 字段矩阵。
+- intents（v6）/quarantine（v5）：新增可选 lineageBindingDigest 字段（向后兼容，验证矩阵更新）。
+- write-fault marker：新增 v2 可选字段（向后兼容读取）。

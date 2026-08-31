@@ -1602,3 +1602,152 @@ resolve-as-not-executed 的安全顺序必须是：完整 prevalidate → resolu
 
 - **WHEN** 无 resolving 且无 pending-release 索引项
 - **THEN** recoverStagedResolutions 直接返回（idleFastPath）；不扫描 resolution entries；有待处理项时只遍历索引 ID
+
+## Requirement: 第十七轮——durable attempt lineage store（版本化、有界、fail closed）
+
+每条业务重试链在 Memory.runtime.treasury.attemptLineage（v1，key `l:<rootAttemptId>`，entryCount，硬容量）持久保存一个有界 lineage record：lineageId、root/current attempt ID 与完整 identity、attempt generation、状态、resolution 状态、next child ID、retry semantic digest、authority/proof class、lowlevelSource、parent/child 绑定摘要、rearmable 与 nonRearmReason、retirement 三段完成标志（lineagePublished/authorityReleased/markerCleaned）、创建/更新时间。状态机单调：retiring → rearm_ready → capability_issued → child_intent_pending → child_active → chain_committed（或 non_rearmable_retired / forensic_isolated）；禁止已完成 chain 回退为 ready、同一 generation 生成不同 child、child active 时签发第二个 child、改变 root attempt、改变 retry semantic identity、改变 authority class、复用旧 generation。新 root chain 占一个 slot；同 chain 的代际推进更新同一 record 不新增 slot；普通运行不得自动删除 record；满载时新 not-executed resolution 在消费 capability 与释放 authority 前拒绝（原 authority 保持、不产生无 lineage replacement proof 的 final 终态）；不得通过驱逐旧 record 恢复容量。root/current/next-child 维护 O(1) 可验证索引：global reset 首次 load 允许一次有界全表验证和索引重建；正常 lookup O(1)；index 不是安全 proof、Memory record 是权威；index 与 record 不一致时 store unhealthy。root attempt ID 只要存在 lineage record 即永久视为 retired（tombstone 过期后 prepare 仍返回 retired_attempt/rearm_required 语义）。
+
+#### Scenario: 满载 fail closed
+
+- **WHEN** lineage store 已达硬容量且存在新的 final not-executed resolution
+- **THEN** 在消费 capability 与释放 authority 之前拒绝（结构化 lineage 满载拒绝）；原 authority 保持；不写 lineage；不驱逐任何既有 record
+
+#### Scenario: 同 chain 推进不新增 slot
+
+- **WHEN** A not-executed → rearm B → B not-executed → rearm C
+- **THEN** 三代同用一个 lineage record（entryCount 不变）；generation 单调递增；旧 ID A、B 都不能再直接重用
+
+#### Scenario: 索引是定位器不是 proof
+
+- **WHEN** 索引项指向的 Memory record 不存在或 identity 不一致
+- **THEN** store unhealthy（fail closed）；恢复/签发/门禁路径零副作用；不以索引为准修复 record
+
+## Requirement: 第十七轮——final not-executed 的 lineage replacement staged 协议与结果语义
+
+resolve-as-not-executed 的安全顺序必须是：完整 prevalidate → lineage 容量与占用预检 → consume reconciliation capability → 写 final not-executed tombstone → 写 lineage candidate 并 read-back 验证 → 释放 intent/quarantine → identity-aware 清 marker → 标记 pending release 与 lineage publication 均完成。lineage 容量不足时 capability 不消费、tombstone 不写、authority 不释放；final tombstone 已写但 lineage 写失败时 authority 与 marker 保留、beginTick 能重试 lineage publication；lineage 写成功但 authority release 前中断时 beginTick 补完成 release；authority release 完成但 marker cleanup 前中断时 beginTick 补完成 marker 清理；只有 lineage、release、marker 三项均完成 parent 才进入 rearm-ready、pending 索引移除、tombstone 才具备普通 retention 驱逐资格。not-executed 结果不得向 production 暴露 rearmChildTransactionId 字符串——结果表达 same-ID 不可重试、retirement 是否完整、rearm 是否可申请、cleanup 是否 pending；真正的 child ID 只在成功签发 opaque rearm capability 时交付。
+
+#### Scenario: lineage 写失败后恢复
+
+- **WHEN** final tombstone 已写入而 lineage candidate 写入失败（注入）
+- **THEN** authority 与 marker 保留；不签发 rearm capability；beginTick 重试 lineage publication 并最终补完成三段
+
+#### Scenario: 结果不再携带 child 字符串
+
+- **WHEN** resolve-as-not-executed 成功
+- **THEN** 结果不含 rearmChildTransactionId 字符串字段；调用方只能经 issueTreasuryRearmCapability 获取 child ID
+
+## Requirement: 第十七轮——service-issued opaque rearm capability
+
+rearm capability 是不可伪造的 heap-only 能力对象：冻结、私有 WeakSet 验证对象身份、JSON 复制失效、单次使用、跨 tick/跨 service/跨 parent/跨 child/lineage revision 变化后失效。capability 绑定 lineage ID、lineage revision、parent attempt ID 与 identity、child attempt ID、attempt generation、retry semantic digest、action kind、adapter 语义身份、owner 或 lowlevelSource、service generation、tick、nonce。Production 公开接口只暴露 issueTreasuryRearmCapability → { capability, childTransactionId }；纯 derive helper 模块私有或 test-only（架构测试禁止 production 源码导入）。capability 未使用而 tick 结束/global reset → heap capability 失效但 durable lineage 保持 ready、新 service 重签发新 capability、child ID 一致；capability 已成功接管 child durable intent 后该 generation 不得重新签发；同 tick 重复 issuance 幂等返回同一 capability（不得产生两个可同时消费的 capability）。
+
+#### Scenario: 防伪矩阵
+
+- **WHEN** JSON round-trip 副本、手工构造普通对象、跨 service/跨 tick/已消费/绑定其它 parent 或 child 的 capability 进入验证
+- **THEN** 全部拒绝（invalid/已消费/跨代等结构化 reason）；零 lineage mutation；零 callback
+
+#### Scenario: global reset 后重签发
+
+- **WHEN** capability 签发后未使用即发生 global reset
+- **THEN** 新 service 重新 issue 得到新 capability 且 childTransactionId 与旧签发一致
+
+## Requirement: 第十七轮——tr1_ 保留命名空间强制 capability 门禁
+
+tr1_ 是 Treasury 保留的 rearm attempt 命名空间：任何 production transaction ID 以 tr1_ 开头都必须绑定匹配的 service-issued opaque rearm capability/binding——contract authorization、bundle redemption、prepare、durable intent publication、compat/lowlevel production 路径、receipt commit 全部检查。手工拼接 tr1_ ID、调用公开 hash helper 得到 child ID、无 capability 的 child contract、capability 属于另一 parent/另一 child/已消费/过期/与 contract retry 语义不匹配，全部拒绝且 bundle 零签发、authorization 预算零变化、intent 零创建、callback 零调用。initial attempt 不得使用 tr1_ 命名空间（继续使用 stable/per-tick 命名空间）。
+
+#### Scenario: 手工构造 tr1_ 被拒
+
+- **WHEN** 调用方手工拼接 tr1_deadbeef00000000 且无 capability 进入 prepare/authorization
+- **THEN** 拒绝（rearm capability required/invalid）；callback 零调用
+
+#### Scenario: 正确 capability + 正确 contract 放行
+
+- **WHEN** capability 与 lineage、child ID、retry semantic digest 全部匹配
+- **THEN** child contract 可进入 authorization 与执行协议
+
+## Requirement: 第十七轮——retry semantic identity（child 必须是 parent 动作的语义重试）
+
+retry semantic digest 是稳定、确定性、版本化的单一权威实现（retrySemanticIdentity.ts）：modern contract 版绑定 action kind、adapter version、adapter registration/稳定语义身份、canonical action args 业务语义、canonical postings、structure descriptors 与角色、durable reconciliation payload/version、source、owner identity；排除 parent/child transaction ID、tick、observation epoch、当前 commitment/projection revision、policy decision digest、authorization bundle ID（child 必须重新经过当前状态授权，但实际 Game 动作语义必须与 parent 一致）。lowlevel 版绑定 kind、source、canonical postings、受控 lowlevelSource、durable payload 或等价语义事实——旧 lowlevel proof 缺少受控 source 或 retry facts 时 non-rearmable、不签发 capability。child contract 构建后 Treasury 重新计算 digest 并与 capability 绑定值比较：资源、数量、room、source/target、action kind、adapter 语义、structure role/object、durable payload 语义任一变化拒绝；相同 Game 动作不同 child transaction ID digest 一致；policy revision 变化但当前 policy 重新授权通过允许（不复用旧 policy）；owner 变化默认拒绝。
+
+#### Scenario: 语义漂移拒绝
+
+- **WHEN** child contract 的资源/数量/room/target/action kind/adapter 语义/structure/durable payload 与 capability 绑定不一致
+- **THEN** 拒绝（retry semantic mismatch）；capability 不消费；零 callback
+
+#### Scenario: 排除事实不参与
+
+- **WHEN** 相同 Game 动作语义、不同 child transaction ID、不同 tick/epoch/policy revision/bundle ID
+- **THEN** retry semantic digest 一致；child 重新授权后可执行
+
+## Requirement: 第十七轮——capability 与 authorization bundle / durable intent 原子接管
+
+child contract authorization 验证 opaque rearm capability；bundle 私有 record 绑定 capability identity、lineage digest、child ID、retry semantic digest、parent identity。policy 与资源授权失败时 capability 不消费、lineage 保持 ready（同 tick 修正后重试或下 tick 重新签发）。Game callback 之前：child intent 已持久化且携带 lineage/rearm binding、lineage 已确认 child 为当前 active attempt、两者 read-back identity 一致；capability 消费早于 callback、晚于全部 contract/authorization/readiness 检查、与 child durable 接管原子或可恢复。任一写入失败 callback 零调用、不留下半 active child 或留下明确 staged 状态供 beginTick 恢复：child_intent_pending 且 intent 缺失或一致 not_started → 回滚 lineage ready 并释放 intent（capability 未消费或作废，可重签）；intent identity 不一致 → forensic 隔离。global reset 发生在 intent 与 lineage 接管之间时不产生第二个 child。一旦 Game callback 开始，lineage generation 不可重新签发 capability，child 后续由 intent/quarantine/receipt/resolution 接管。
+
+#### Scenario: intent 写失败零 callback
+
+- **WHEN** child durable intent 写入失败（注入）
+- **THEN** callback 零调用；lineage 不进入 child-active 终态；可恢复（重签或回滚）
+
+#### Scenario: 接管中断恢复
+
+- **WHEN** intent 写入后、lineage 确认前发生 global reset
+- **THEN** beginTick 对一致 not_started intent 回滚 lineage 至 ready 并释放 intent（或补完成一致接管）；不产生第二个 child
+
+## Requirement: 第十七轮——lineage binding 进入全部 durable proof 链
+
+lineage/rearm binding digest（lineageId + generation + parent/child ID 派生）必须进入 child contract、authorization bundle、durable intent、quarantine、authorization-fault、write-fault marker、receipt、resolution tombstone、reconciliation capability、committed proof verifier 与 attempt identity relation。tr1_ attempt 缺少 lineage binding → modern/lowlevel store unhealthy 或 forensic，不得自动解释成普通 attempt；不同 lineage、不同 generation 或不同 parent 的 proof 不能互相证明；parent proof 不能证明 child、child proof 不能证明 parent；同 child ID 但 lineage digest 不同 → identity conflict；initial 非 rearm attempt 不得携带 lineage binding。
+
+#### Scenario: binding 继承一致
+
+- **WHEN** child 经 intent 故障转 quarantine、resolution 写 tombstone、commit 写 receipt
+- **THEN** 三者携带的 lineage binding digest 与 lineage record 一致；跨 lineage/generation 比较判 conflict
+
+## Requirement: 第十七轮——rearm 前的 parent 相反 proof 与 child 占用检查
+
+rearm capability 签发前完成完整 cross-store 检查（attemptOccupancy.ts 集中管理，各 store 单 key lookup）。parent 侧：lineage store 健康、retirement record 存在、not-executed proof 完整、authority 已释放、marker 已清理、pending cleanup 完成、receipt store 健康、不存在 committed receipt、不存在 committed final tombstone、不存在 resolving committed tombstone、无 identity 冲突、authority class 允许 rearm、lowlevelSource 完整、retry semantic facts 完整。同时存在 final not-executed + committed receipt / committed tombstone → proof_conflict（零 capability、零 lineage mutation、不删除任何 proof、write readiness fail closed 或 lineage 隔离）。child 侧：child ID 在 receipt、resolution tombstone、intent、quarantine、authorization-fault、write-fault marker、当前 prepared handle、当前 authorization bundle、其它 lineage 的 root/current/next 索引全部不存在才可签发；任一占用 → child_identity_occupied（不签发、不生成第二个 child）。任一相关 store unhealthy → 零 capability、零 lineage mutation、零 callback、明确诊断。
+
+#### Scenario: parent 相反 proof 冲突
+
+- **WHEN** parent 同时存在 final not-executed tombstone 与 committed receipt（或 committed/resolving tombstone）
+- **THEN** proof_conflict；零 capability；不删除任何 proof；fail closed
+
+#### Scenario: child 占用拒绝
+
+- **WHEN** child ID 已存在于任一 store（receipt/tombstone/intent/quarantine/auth-fault/marker/prepared handle/bundle/其它 lineage）
+- **THEN** child_identity_occupied；零签发；零 lineage mutation
+
+## Requirement: 第十七轮——final tombstone retention 与 lineage replacement 联动
+
+final not-executed tombstone 只有在 lineage replacement record 已持久化并验证、lineage 状态允许其承担永久 retirement 门禁、authority release 完成、marker cleanup 完成、pending-release 索引已完成、无 proof conflict 时才具备普通 retention 驱逐资格（驱逐资格检查只做 O(1) 索引查询，不扫描全部 lineage）。lineage publication pending、authority release pending、marker cleanup pending、proof conflict、store unhealthy、forensic/legacy isolation、lineage record 不完整、current child 接管尚未完成任一存在时 tombstone 永不普通驱逐（pin）。tombstone 驱逐后 parent root ID 仍由 lineage store 永久阻断、rearm 仍可从 lineage record 签发、child ID 保持确定性、parent proof 不被遗忘。Round 16 旧 tombstone backfill：identity 事实足够构建 rearmable lineage；只有 attempt proof 缺 retry 语义 → non-rearmable retired lineage（永久阻断 parent ID 重用、不签发 rearm capability）；partial identity 或矛盾 → pin 并 forensic 隔离；lineage 容量不足 → pin tombstone 不驱逐 fail closed。
+
+#### Scenario: 无 replacement 不驱逐
+
+- **WHEN** final not-executed tombstone 超过 retention 但无 lineage replacement（或任一 pending/cleanup 未完成）
+- **THEN** tombstone 保持 pin 不驱逐；parent ID 永久不可直接执行
+
+#### Scenario: 驱逐后仍可 rearm
+
+- **WHEN** lineage replacement 完整且 tombstone 已按普通 retention 驱逐
+- **THEN** rearm capability 仍可从 lineage record 签发；child ID 与驱逐前一致；parent ID prepare 仍被永久拒绝
+
+## Requirement: 第十七轮——write-fault marker v2（class-aware attempt identity）
+
+marker 持久语义升级：绑定 marker schema/version、transactionId、digest、authority/proof class、contract digest、cohort digest、durable identity digest、lowlevelSource、lineage/rearm binding digest、parent/child generation、fault phase、source/kind、recorded tick。marker 清除必须使用完整 class-aware attempt relation（markerAttemptIdentity.ts 集中管理）——不得只依赖 transactionId+digest 或缺少 lowlevelSource 的部分 identity；runtime-lowlevel marker 不得清 migrated-lowlevel tombstone、parent marker 不得清 child proof、不同 lineage marker 不得互相清除、modern marker 不得被 lowlevel/legacy proof 清除、legacy marker 不得自动清 modern attempt。immediate not-executed 路径必须检查 marker 清除结果：只有 marker 不存在或 matching marker 成功清除才标记 pending-release 完成、lineage 进入 rearm-ready、返回 rearm-capability 可申请；marker conflict/insufficient 时 tombstone 与 pending 索引保留、lineage 保持 cleanup-pending、返回结构化 resolved_pending_cleanup 状态、不签发 rearm capability。malformed marker 时 rearm 结构化拒绝不抛异常；marker 读取的嵌套 identity 无法修改 Memory。
+
+#### Scenario: class-aware 清理矩阵
+
+- **WHEN** 清除方与 marker 的 authority class、lowlevelSource、lineage binding、generation 任一不匹配
+- **THEN** 清除失败（conflict/insufficient）；marker 保留；pending 索引保留；rearm 不可申请
+
+## Requirement: 第十七轮——receipt proof class 显式三级（identity-bound / lowlevel / legacy）
+
+receipt settlement proof 的 level 显式三级：identity-bound（拥有 modern contract attempt 需要的完整 identity，禁携带 lowlevelSource）；lowlevel（拥有 digest、durable identity、受控 lowlevelSource、可选 lineage binding；禁携带 modern contract/cohort 字段）；legacy（不携带现代身份，只能 replay blocker 与历史诊断，不得释放 modern/lowlevel authority、不得 rearm、不得证明 child attempt）。v6 迁移：modern 且无 lowlevelSource → identity-bound；modern 且有合法 lowlevelSource → lowlevel；legacy → legacy；字段矛盾 → fail closed 不猜测缺失 lowlevelSource。lookup、commit、refresh、finalized proof、committed verifier、migration、cleanup、metrics 全部更新；identity-bound proof 不能释放 lowlevel authority、lowlevel proof 不能释放 modern authority、runtime-lowlevel receipt 不能证明 migrated-lowlevel authority；所有合法 proof 仍作为 replay blocker。
+
+#### Scenario: 迁移矩阵
+
+- **WHEN** v6 receipt（modern 无 source / modern 有 runtime source / legacy）首次 load
+- **THEN** 分别迁移为 identity-bound / lowlevel / legacy；矛盾组合 fail closed（原数据不动）
+
+#### Scenario: 跨 class 不互相释放
+
+- **WHEN** identity-bound proof 试图释放 lowlevel authority（或反之、或跨 runtime/migrated 来源）
+- **THEN** 释放矩阵拒绝；authority 保持；零副作用
