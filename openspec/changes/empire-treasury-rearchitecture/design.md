@@ -632,3 +632,58 @@ bindingKind 在 validateStructureBindings 唯一推导并显式写入 binding；
 
 - legacy receipt 只读识别 O(1)（双键探测）；receipt 迁移每 heap 生命周期至多一次；正常 admission O(1)；identity relation 与 proof-level 校验 O(1) 或与单条 cohort/descriptor 线性；staged recovery 对单条 insufficient 仅计数跳过（不重扫 receipt 全表）。
 - 新增 counters：receipt legacyLookups、identityMatchResults / identityConflictResults / identityInsufficientResults、proofLevelRejections；cohortValidation cohortValidationFailures；resolutionStore identityConflicts / identityInsufficientBlockers。
+
+
+### 3.16 第十四轮：Resolution Proof Closure & Authority-Level Integrity
+
+#### 3.16.1 三方 committed proof 闭环（recoverStagedResolutions）
+
+释放条件从"receipt tick 足够 + tombstone↔authority match"升级为三方严格 match：
+
+```text
+durable authority ──┐
+resolution tombstone ├── 三方 match + receipt.settledAtTick ≥ tombstone.settledAtTick
+settlement receipt ──┘        才释放 authority / 清 marker / finalize
+```
+
+- tick 与 identity 是两个独立条件：receipt tick 充分不证明 receipt 属于当前 attempt（旧 attempt 在更晚 tick 写入的 proof / legacy proof 均 fail closed）。
+- 无论 tick 是否充分，恢复第一步读取完整 receipt proof（readTreasurySettlementProof，O(1)）并按 tombstone 完整 attempt identity 验证 relation；receipt 不存在或 tick 不足才走 identity-aware refresh，成功后重新读取持久 proof 再验证。
+- authority 已不存在（前一 global 已释放、finalize 前中断）：receipt ↔ tombstone match + tick 足够即补完成 finalize；conflict/legacy/insufficient 保持 resolving、write readiness 阻断。
+- proof class ↔ authority 等级释放权限：identity-bound 只释放 modern、lowlevel 只释放 lowlevel、legacy/forensic 不释放 modern/lowlevel（错配 insufficient 阻断并计数）。
+
+#### 3.16.2 authority level 兼容矩阵与 lowlevel 严格语义
+
+| 组合 | 判定 |
+|---|---|
+| modern + modern | 允许继续比较完整 durable identity（durable/cohort digest 双方完整存在且相等、contract/adapterSemantic 一致） |
+| lowlevel + lowlevel | 严格低层 identity（durable 完整且相等） |
+| legacy + legacy | 受控 legacy 比较（digest/kind/postings） |
+| forensic + forensic | 同一隔离记录才可合并 |
+| 任何跨等级 | inconsistent fail closed |
+
+lowlevel 不再是"modern 矩阵未通过的其余情况"：required（digest/kind/source/postings + durableIdentityDigest + lowlevelSource 来源标记）与 forbidden 现代字段（contractId/contractDigest/cohort(+digest)/authorizationDigest/adapterRegistrationId/ownerIdentity/policyIdentity）双向矩阵；运行时低层写入的 durable identity 由事实确定性派生（与 facade 同源）；production contract 路径的 partial-modern（contract 与 cohort 不成对）以 authority_invariant_violation 拒绝（callback 零调用）。
+
+#### 3.16.3 迁移定级（classifyTreasuryAuthorityLevelForMigration）
+
+- 带显式 authorityLevel 的上一版 entry（intent v5 / quarantine v4 / fault v3）：按 priorLevel 复验——显式 lowlevel 满足严格矩阵 → lowlevel（补 migrated-lowlevel@v1）；显式 modern 矩阵缺失 → forensic（残缺 modern 不得变 lowlevel）；显式 legacy 携带现代字段 → forensic；forensic 保留。
+- 更旧版本（无显式等级）：forensic 标志 → forensic；legacyV1 → legacy；modern 矩阵完整且重算一致 → modern；完全无现代事实 → legacy；**其余 partial-modern → forensic（绝不 lowlevel）**。
+- cohort XOR / digest 与事实重算矛盾 → fatal（原 store 保留）；迁移临时 entries 全量验证后原子替换、幂等。
+
+#### 3.16.4 tombstone 显式 proof level（resolutions v4）
+
+proofLevel ∈ { identity-bound, lowlevel, legacy, forensic }，required/forbidden 矩阵：
+
+- identity-bound：required digest + contractDigest + cohortDigest + durable（modern contract authority 的完整绑定；唯一可释放 modern authority 的 class）；
+- lowlevel：required digest + durable，禁止 contract/cohort digest；
+- legacy：禁止任何现代身份字段（replay-only）；
+- forensic：允许部分字段（显式隔离协议，不参与普通 capability resolution）。
+
+同 id 覆盖（resolving → final）只允许保持同一 proof level 与完整 identity；v3 迁移按字段完整性定级（部分 → forensic，不"尽力猜 modern"）。
+
+#### 3.16.5 durable 发布协议（durablePublication.ts）
+
+三个 authority store 一致使用：写入前候选 identity 重算（不一致拒绝、bookkeeping 不变）→ Memory 发布 → read-back 从持久副本重算 + 23 项完整身份字段深度比较（等级/来源标记/digest 族/cohort/descriptors/postings/outcome/settlement/source）→ 不一致回滚写入并恢复 entryCount/revision/updatedAt（当前 global 即不可信，不等下次 reset 的 load）。intent → quarantine 转移的 read-back 同一比较器 + lowlevelSource 随事实转移。
+
+#### 3.16.6 authorization-fault 健康门禁
+
+轻量 probe O(1) 检查 metadata 矛盾（version 集合/entries 对象/entryCount 非负安全整数且不超容量/updatedAt 合法）；write readiness 的 fault source 与 authorizationSafe 联合判定升级为完整 validation（ensureTreasuryAuthorizationFaultStoreValidated：首次有界全表扫描、heap 缓存后 O(1)、store 不存在零写）——损坏 entry 不得等 redemption fault 后才发现，授权与 callback 在损坏期间零发生。

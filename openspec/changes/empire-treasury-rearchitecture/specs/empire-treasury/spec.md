@@ -1312,3 +1312,60 @@ forensic authorization-fault marker 必须（MUST）在既有事实允许时保�
 
 - **WHEN** 原子 bundle redemption 故障发布 forensic marker
 - **THEN** marker 保存故障前已计算的完整 attempt identity；后续 forensic resolution 的 tombstone 绑定同一 identity
+
+
+### Requirement: 第十四轮 Resolution Proof Closure & Authority-Level Integrity
+
+staged committed resolution 的 authority 释放必须（MUST）以 receipt、tombstone、authority 三方完整 attempt identity 严格 match 为唯一许可——receipt settledAtTick 满足 tombstone 要求只是独立的时间条件，不得（MUST NOT）替代 identity 验证；receipt proof 必须在 tick 充分时同样被完整读取并按 tombstone 的完整 attempt identity（digest / contractDigest / authorizationCohortDigest / durableIdentityDigest）验证。authority 已被释放（前一 global 已释放、finalize 写入前中断）时，恢复仍必须（MUST）证明 receipt 与 tombstone identity match 后才可补完成 finalize。
+
+#### Scenario: receipt tick 充分但 identity 冲突
+
+- **WHEN** resolving committed tombstone 对应的 receipt settledAtTick 等于或晚于 tombstone 要求，但 receipt 绑定的 durable identity 与 tombstone/authority 不一致
+- **THEN** 不 finalize、不释放 authority、不清 marker（conflict 独立计数）
+
+#### Scenario: authority 已释放后 receipt 冲突
+
+- **WHEN** resolving committed tombstone 的 authority 已不存在，receipt 与 tombstone identity conflict / 为 legacy / insufficient
+- **THEN** tombstone 保持 resolving、write readiness 保持阻断（不伪造 authority）
+
+#### Scenario: refresh 成功但持久 proof 与声明不符
+
+- **WHEN** identity-aware refresh 返回成功，但重新读取的持久 receipt proof 与 tombstone identity 不匹配
+- **THEN** 保留 resolving tombstone 与全部 authority（不凭 refresh 返回值释放）
+
+同 id 双 authority（intent + quarantine 并存）必须（MUST）先分别从持久事实重算 identity（任一失败 → 整体 inconsistent），再显式比较 authorityLevel：任何跨等级组合（modern+legacy / modern+lowlevel / modern+forensic / lowlevel+legacy / lowlevel+forensic / legacy+forensic 等）必须（MUST）inconsistent fail closed——不得任选其一、不得退回 optional 字段子集比较。modern+modern 只有 durableIdentityDigest 与 authorizationCohortDigest 双方完整存在且相等、contractId/contractDigest/adapterSemanticIdentity 一致时才可（MAY）合并（quarantine 优先）。双 authority 不一致时 capability 签发与 resolution 必须（MUST）零副作用。
+
+#### Scenario: 跨等级双 authority
+
+- **WHEN** 同 id 的 quarantine 与 intent 显式等级不同（即使 durable digest 字符串相同）
+- **THEN** authority inconsistent——capability 拒绝签发、resolution 拒绝执行、两份 authority 原样保留
+
+lowlevel authority 必须（MUST）满足严格矩阵：required（canonical digest、action kind、source、canonical postings 非空、durableIdentityDigest 可由事实重算一致、显式 lowlevelSource 来源标记）且不得（MUST NOT）携带任何 modern contract/authorization 字段（contractId/contractDigest、authorizationCohort(+Digest)、authorizationDigest、adapterRegistrationId、ownerIdentity、policyIdentity）。production contract 路径在 contract 事实与 cohort redemption 不成对（partial-modern）时必须（MUST）拒绝执行（authority_invariant_violation、Game callback 零调用），不得（MUST NOT）写 lowlevel authority。
+
+#### Scenario: production contract 路径不写 lowlevel
+
+- **WHEN** executePreparedAction 收到 intentContract 但无对应 cohort redemption（或反之）
+- **THEN** 结构化拒绝 authority_invariant_violation，callback 零调用、预留释放
+
+旧版本 entry 迁移定级必须（MUST）保守：partial-modern（携带部分现代事实但 modern 矩阵不齐）一律 forensic 隔离，不得（MUST NOT）自动定级 lowlevel；只有携带显式 authorityLevel="lowlevel" 的受支持上一版 entry（intent v5 / quarantine v4 / fault v3）在满足严格低层矩阵（无 forbidden 字段 + durable 可重算）时才可（MAY）迁移为 lowlevel 并补 migrated 来源标记；cohort facts 与 digest 不成对或 digest 与事实重算矛盾必须（MUST）fatal（原 store 保留）；迁移必须（MUST）先构造临时结构全量验证后原子替换且幂等。
+
+#### Scenario: 残缺 modern 旧 entry 不得变 lowlevel
+
+- **WHEN** 旧 entry 显式 modern 但 cohort 字段被删除（残留 contract/adapter 字段）
+- **THEN** 迁移定级 forensic 隔离（不得使用当前 reconciler）
+
+resolution tombstone 必须（MUST）携带显式 proof class（identity-bound / lowlevel / legacy / forensic）且按 class 的 required/forbidden 身份字段矩阵校验：identity-bound 缺任一 required 身份字段必须（MUST）store unhealthy（绝不降级 legacy）；legacy proof 禁止携带部分现代身份字段；forensic proof 不参与普通 capability resolution 且不得（MUST NOT）释放 modern/lowlevel authority。同 id 覆盖（resolving → final）必须（MUST）保持同一 proof class 与完整 attempt identity。
+
+#### Scenario: legacy proof 不释放 lowlevel authority
+
+- **WHEN** final not-executed tombstone 为 legacy/forensic proof class 而仍存在的 authority 为 lowlevel
+- **THEN** 释放被阻断（insufficient 计数、authority 保留）
+
+intent / quarantine / authorization-fault 的写入必须（MUST）在发布前从候选事实重算 cohort 与 durable identity（不一致拒绝且 bookkeeping 不变），并在发布后从 Memory 持久副本再次重算并比较完整身份字段集（等级、来源标记、digest 族、cohort、structure descriptors、canonical postings、outcome、settlement、source 等）——read-back 不一致必须（MUST）回滚本次写入并恢复 entryCount/revision/updatedAt。intent → quarantine 转移只有目标持久副本完整证明与源 authority 一致（含 authorityLevel 与 lowlevelSource）后才可（MAY）删除源 intent；同 id 既有 entry 自身 identity 不可重算时不得（MUST NOT）返回 already_present。
+
+#### Scenario: 发布后 read-back 被篡改
+
+- **WHEN** store 写入后、read-back 验证前 Memory 中的身份字段被篡改
+- **THEN** 写入回滚、entryCount/revision/updatedAt 恢复、调用方收到结构化 store fault
+
+authorization-fault store 的轻量健康探测必须（MUST）检查 metadata 矛盾（version 受支持集合、entries 普通对象、entryCount 非负安全整数且不超硬容量、updatedAt 合法安全整数）且不扫描 entries 全表；write readiness 与 authorization 联合判定在 store 存在时必须（MUST）触发完整 load 验证（首次有界全表扫描、heap 缓存后 O(1)）——损坏期间授权拒绝、Game callback 零调用。
