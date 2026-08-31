@@ -1,25 +1,26 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "a04c4ee",
-    "suites": 231,
-    "tests": 1471,
-    "passed": 1471,
+    "commit": "5f89263",
+    "suites": 238,
+    "tests": 1540,
+    "passed": 1540,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 231,
-    "tests": 1471,
-    "passed": 1471,
+    "commit": "5f89263",
+    "suites": 238,
+    "tests": 1540,
+    "passed": 1540,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 89,
+    "highRiskFiles": 96,
     "defaultFiles": 127
   },
   "files": {
@@ -1176,6 +1177,41 @@
     "src/runtime/treasury/treasuryRound15OperationCount.test.ts": {
       "baseline": 3,
       "budget": 3,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound16AttemptRearm.test.ts": {
+      "baseline": 12,
+      "budget": 12,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound16ExecutionFacts.test.ts": {
+      "baseline": 12,
+      "budget": 12,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound16LowlevelProvenance.test.ts": {
+      "baseline": 11,
+      "budget": 11,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound16MarkerCompletion.test.ts": {
+      "baseline": 8,
+      "budget": 8,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound16OperationCount.test.ts": {
+      "baseline": 6,
+      "budget": 6,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound16ResolutionStateMatrix.test.ts": {
+      "baseline": 13,
+      "budget": 13,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound16StoreHealth.test.ts": {
+      "baseline": 7,
+      "budget": 7,
       "tier": "high-risk"
     }
   }
