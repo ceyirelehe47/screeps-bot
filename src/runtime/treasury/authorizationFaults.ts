@@ -37,6 +37,7 @@ import {
   verifyTreasuryDurableCandidateForPublication,
   verifyTreasuryDurablePublicationReadBack,
 } from "@/runtime/treasury/durablePublication";
+import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { compareTreasuryAuthoritySameIdIdentity } from "@/runtime/treasury/authorityIdempotence";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
 import type { TreasuryStructureBindingDescriptor } from "@/runtime/treasury/types";
@@ -541,20 +542,10 @@ export function writeTreasuryAuthorizationFaultEntry(
       detail: `authorizationFaults 容量已满（${String(TREASURY_AUTHORIZATION_FAULT_MAX_ENTRIES)} 条）`,
     };
   }
-  runtime.store.entries[key] = {
-    ...entry,
-    postings: entry.postings.map((leg) => ({ ...leg })),
-    ...(entry.structureFacts !== undefined ? { structureFacts: entry.structureFacts.map((fact) => ({ ...fact })) } : {}),
-    ...(entry.authorizationCohort !== undefined
-      ? {
-          authorizationCohort: {
-            ...entry.authorizationCohort,
-            revisions: { ...entry.authorizationCohort.revisions },
-            authorizationLegDigests: [...entry.authorizationCohort.authorizationLegDigests],
-          },
-        }
-      : {}),
-  };
+  // 【第十六轮第十节】写入 Memory 前构造完全独立的有界深拷贝（postings /
+  // structureFacts / authorizationCohort（revisions + leg digests）等嵌套
+  // 对象一并隔离——调用方后续修改输入不影响权威副本）。
+  runtime.store.entries[key] = cloneTreasuryDurableValue(entry);
   const previousUpdatedAt = runtime.store.updatedAt;
   runtime.store.entryCount += 1;
   runtime.store.updatedAt = Game.time;

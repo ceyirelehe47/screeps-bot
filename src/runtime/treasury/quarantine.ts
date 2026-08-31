@@ -58,6 +58,7 @@ import {
   verifyTreasuryDurableCandidateForPublication,
   verifyTreasuryDurablePublicationReadBack,
 } from "@/runtime/treasury/durablePublication";
+import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { quarantineSemanticViolation } from "@/runtime/treasury/semanticMatrix";
 import {
   TREASURY_STRUCTURE_BINDING_KINDS,
@@ -981,7 +982,10 @@ export function quarantineTreasuryTransaction(
       detail: `quarantine 容量已满（${String(TREASURY_QUARANTINE_MAX_ENTRIES)} 条；fault-slot admission 不变量被破坏，保持 marker 锁定）`,
     };
   }
-  runtime.store.entries[key] = { ...entry, deltas: entry.deltas.map((leg) => ({ ...leg })) };
+  // 【第十六轮第十节】写入 Memory 前构造完全独立的有界深拷贝（deltas /
+  // structureFacts / authorizationCohort（revisions + leg digests）/ forensic
+  // provenance 等嵌套对象一并隔离——调用方后续修改输入不影响权威副本）。
+  runtime.store.entries[key] = cloneTreasuryDurableValue(entry);
   runtime.store.entryCount += 1;
   storeRevision += 1;
   // 【第十四轮第十二节】发布后 read-back：从持久副本重算 + 完整身份字段

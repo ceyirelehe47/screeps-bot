@@ -66,6 +66,7 @@ import {
   verifyTreasuryDurableCandidateForPublication,
   verifyTreasuryDurablePublicationReadBack,
 } from "@/runtime/treasury/durablePublication";
+import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import {
   quarantineTreasuryTransaction,
   readTreasuryQuarantineEntry,
@@ -850,19 +851,10 @@ export function writeTreasuryIntentEntry(
     };
   }
   const previousUpdatedAt = runtime.store.updatedAt;
-  runtime.store.entries[key] = {
-    ...entry,
-    postings: entry.postings.map((leg) => ({ ...leg })),
-    ...(entry.authorizationCohort !== undefined
-      ? {
-          authorizationCohort: {
-            ...entry.authorizationCohort,
-            revisions: { ...entry.authorizationCohort.revisions },
-            authorizationLegDigests: [...entry.authorizationCohort.authorizationLegDigests],
-          },
-        }
-      : {}),
-  };
+  // 【第十六轮第十节】写入 Memory 前构造完全独立的有界深拷贝（postings /
+  // authorizationCohort（revisions + leg digests）/ structureFacts /
+  // attemptIdentity 等嵌套对象一并隔离——调用方后续修改输入不影响权威副本）。
+  runtime.store.entries[key] = cloneTreasuryDurableValue(entry);
   runtime.store.entryCount += 1;
   runtime.store.updatedAt = Game.time;
   storeRevision += 1;
