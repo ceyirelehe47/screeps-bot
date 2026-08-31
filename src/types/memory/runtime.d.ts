@@ -716,11 +716,14 @@ declare global {
        * 绝不持久化完整 observation/service/journal/任意大 payload。
        */
       intents?: {
-        version: 4;
+        /** v5（第十三轮）：entry 携带显式 authorityLevel（modern/legacy/lowlevel）。 */
+        version: 5;
         entries: Record<
           string,
           {
             transactionId: string;
+            /** 【第十三轮】显式 authority 等级（不得由 optional 字段推断）。 */
+            authorityLevel: "modern" | "legacy" | "lowlevel";
             digest: string;
             actionKind: string;
             kind: string;
@@ -823,10 +826,13 @@ declare global {
        * fault resolution。
        */
       quarantine?: {
-        version: 3;
+        /** v4（第十三轮）：entry 携带显式 authorityLevel（modern/legacy/forensic/lowlevel）。 */
+        version: 4;
         entries: Record<
           string,
           {
+            /** 【第十三轮】显式 authority 等级（不得由 optional 字段推断）。 */
+            authorityLevel: "modern" | "legacy" | "forensic" | "lowlevel";
             transactionId: string;
             digest: string;
             tick: number;
@@ -919,11 +925,13 @@ declare global {
        * 永久全局锁。
        */
       authorizationFaults?: {
-        /** v2（第十二轮 3.2）：entry 携带完整 durable identity 事实（可重算验证）。 */
-        version: 2;
+        /** v3（第十三轮）：entry 携带显式 authorityLevel（modern/legacy/lowlevel）。 */
+        version: 3;
         entries: Record<
           string,
           {
+            /** 【第十三轮】显式 authority 等级（不得由 optional 字段推断）。 */
+            authorityLevel: "modern" | "legacy" | "lowlevel";
             transactionId: string;
             digest: string;
             contractId?: string;

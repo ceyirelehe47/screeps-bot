@@ -19,6 +19,12 @@
 
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import { validateTreasuryAuthorizationCohortFacts } from "@/runtime/treasury/cohortValidation";
+import {
+  classifyTreasuryAuthorityLevel,
+  validateTreasuryAuthorityLevelConsistency,
+  type TreasuryAuthorityLevel,
+  type TreasuryAuthorityMatrixOptions,
+} from "@/runtime/treasury/authorityLevel";
 import { validateTreasuryStructureDescriptorArray } from "@/runtime/treasury/structureDescriptorValidation";
 import {
   verifyTreasuryEntryIdentity,
@@ -32,7 +38,8 @@ import {
   TREASURY_STRUCTURE_DESCRIPTOR_VERSION,
 } from "@/runtime/treasury/types";
 
-const AUTHORIZATION_FAULT_VERSION = 2 as const;
+/** 【第十三轮】authorization-fault v3：entry 携带显式 authorityLevel。 */
+const AUTHORIZATION_FAULT_VERSION = 3 as const;
 export const TREASURY_AUTHORIZATION_FAULT_MAX_ENTRIES = 64;
 const AUTHORIZATION_FAULT_KEY_PREFIX = "af:";
 const FAULT_DIGEST_PATTERN = /^[0-9a-f]{16}$/;
@@ -44,6 +51,8 @@ const FAULT_VALID_RESOURCES: ReadonlySet<string> = new Set<string>(RESOURCES_ALL
 /** pre-execution authorization fault 的 durable authority entry。 */
 export interface TreasuryAuthorizationFaultEntry {
   readonly transactionId: string;
+  /** 【第十三轮】显式 authority 等级（modern/legacy/lowlevel——不得由字段推断）。 */
+  authorityLevel: TreasuryAuthorityLevel;
   /** canonical payload digest（contract digest 同源）。 */
   readonly digest: string;
   readonly contractId?: string;
@@ -80,7 +89,7 @@ export interface TreasuryAuthorizationFaultEntry {
 }
 
 export interface TreasuryAuthorizationFaultStore {
-  version: 2;
+  version: 3;
   entries: Record<string, TreasuryAuthorizationFaultEntry>;
   entryCount: number;
   updatedAt: number;
@@ -140,6 +149,14 @@ function validateFaultEntryShape(entry: unknown): string | null {
   if (typeof candidate.digest !== "string" || !FAULT_DIGEST_PATTERN.test(candidate.digest)) {
     return "digest 非法（须为 16 小写 hex）";
   }
+  // 【第十三轮第八节】显式 authorityLevel 一致性（fault 矩阵：pre-execution
+  // authority 无 durable payload / 独立 structure descriptors——结构事实由
+  // contract digest 绑定；cohort facts 与 digest 成对）。
+  const levelError = validateTreasuryAuthorityLevelConsistency(
+    candidate as unknown as Parameters<typeof validateTreasuryAuthorityLevelConsistency>[0],
+    { requireDurablePayload: false, requireStructureFacts: false } satisfies TreasuryAuthorityMatrixOptions,
+  );
+  if (levelError !== null) return levelError;
   if (candidate.contractId !== undefined && (typeof candidate.contractId !== "string" || candidate.contractId.length === 0 || candidate.contractId.length > 96)) {
     return "contractId 非法";
   }
@@ -282,22 +299,53 @@ function loadFaultStoreRuntime(): FaultStoreRuntime {
     const entries: Record<string, TreasuryAuthorizationFaultEntry> = {};
     faultEvents.fullScans += 1;
     for (const [key, value] of Object.entries((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
-      const shapeError = validateFaultEntryShape(value);
-      if (shapeError !== null) {
-        heapFaultRuntime = { store: raw, fatal: `${shapeError}（v1 fault entry 损坏，人工处理；key ${key.slice(0, 48)}）` };
-        return heapFaultRuntime;
-      }
       const typed = value as TreasuryAuthorizationFaultEntry;
       if (encodeFaultKey(typed.transactionId) !== key) {
         heapFaultRuntime = { store: raw, fatal: `v1 存储键与 transactionId 不一致: ${key.slice(0, 48)}（原数据保留）` };
         return heapFaultRuntime;
       }
-      entries[key] = { ...typed, legacyV1: true };
+      // v1 entry 无 authorityLevel（v3 起必填）——补显式 legacy 等级后按目标
+      // 形状校验（其余字段损坏 → fatal 原数据保留）。
+      const candidate: TreasuryAuthorizationFaultEntry = { ...typed, authorityLevel: "legacy", legacyV1: true };
+      const shapeError = validateFaultEntryShape(candidate);
+      if (shapeError !== null) {
+        heapFaultRuntime = { store: raw, fatal: `${shapeError}（v1 fault entry 损坏，人工处理；key ${key.slice(0, 48)}）` };
+        return heapFaultRuntime;
+      }
+      entries[key] = candidate;
     }
     const upgraded: TreasuryAuthorizationFaultStore = { version: AUTHORIZATION_FAULT_VERSION, entries, entryCount: Object.keys(entries).length, updatedAt: Game.time };
     const upgradedError = validateFaultStoreShape(upgraded);
     if (upgradedError !== null) {
       heapFaultRuntime = { store: raw, fatal: `${upgradedError}（v1→v2 升级自检失败，authorizationFaults fail closed，原数据保留）` };
+      return heapFaultRuntime;
+    }
+    faultBranch().authorizationFaults = upgraded;
+    heapFaultRuntime = { store: upgraded, fatal: null };
+    return heapFaultRuntime;
+  }
+  if ((raw.version as number) === 2) {
+    // v2 → v3 迁移（【第十三轮第八节】显式 authorityLevel 定级，原子）：
+    // legacyV1 → legacy；矩阵全齐（fault 矩阵）→ modern；durable identity →
+    // lowlevel；无现代身份事实 → legacy；cohort 不成对 → fatal 原数据保留。
+    const entries: Record<string, TreasuryAuthorizationFaultEntry> = {};
+    faultEvents.fullScans += 1;
+    for (const [key, value] of Object.entries((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
+      const typed = value as TreasuryAuthorizationFaultEntry;
+      const [level, error] = classifyTreasuryAuthorityLevel(
+        typed as unknown as Parameters<typeof classifyTreasuryAuthorityLevel>[0],
+        { requireDurablePayload: false, requireStructureFacts: false },
+      );
+      if (error !== null || level === null) {
+        heapFaultRuntime = { store: raw, fatal: `v2→v3 迁移定级失败（key ${key.slice(0, 48)}）: ${error ?? "未知"}（原数据保留）` };
+        return heapFaultRuntime;
+      }
+      entries[key] = { ...typed, authorityLevel: level };
+    }
+    const upgraded: TreasuryAuthorizationFaultStore = { version: AUTHORIZATION_FAULT_VERSION, entries, entryCount: Object.keys(entries).length, updatedAt: Game.time };
+    const upgradedError = validateFaultStoreShape(upgraded);
+    if (upgradedError !== null) {
+      heapFaultRuntime = { store: raw, fatal: `${upgradedError}（v2→v3 升级自检失败，authorizationFaults fail closed，原数据保留）` };
       return heapFaultRuntime;
     }
     faultBranch().authorizationFaults = upgraded;
@@ -327,7 +375,7 @@ export function peekTreasuryAuthorizationFaultHealth(): TreasuryAuthorizationFau
   }
   const store = peekTreasuryAuthorizationFaultStore();
   if (store === undefined) return { healthy: true, detail: null, entryCount: 0 };
-  if (store.version !== AUTHORIZATION_FAULT_VERSION && store.version !== 1) {
+  if (store.version !== AUTHORIZATION_FAULT_VERSION && store.version !== 1 && store.version !== 2) {
     return { healthy: false, detail: `未知 authorizationFaults 版本 ${String(store.version)}`, entryCount: 0 };
   }
   return { healthy: true, detail: null, entryCount: store.entryCount };
@@ -347,7 +395,12 @@ export type TreasuryAuthorizationFaultWriteResult =
  * marker 前）。同 id 已存在 → already_present（幂等重放；durable identity
  * 由 digest/cohort 唯一化，重放同 fault 不产生新 entry）。
  */
-export function writeTreasuryAuthorizationFaultEntry(entry: TreasuryAuthorizationFaultEntry): TreasuryAuthorizationFaultWriteResult {
+export function writeTreasuryAuthorizationFaultEntry(
+  entryInput: Omit<TreasuryAuthorizationFaultEntry, "authorityLevel"> & { authorityLevel?: TreasuryAuthorityLevel },
+): TreasuryAuthorizationFaultWriteResult {
+  // 【第十三轮】authorityLevel 缺省 lowlevel；生产 contract redemption 路径
+  // 由 authorizationLedger 显式声明（矩阵校验通过才允许 modern）。
+  const entry: TreasuryAuthorizationFaultEntry = { ...entryInput, authorityLevel: entryInput.authorityLevel ?? "lowlevel" };
   const shapeError = validateFaultEntryShape(entry);
   if (shapeError !== null) {
     faultEvents.writeRejections += 1;

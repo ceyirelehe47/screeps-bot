@@ -66,6 +66,7 @@ function seedCorruptIntentEntry(outcome: string, settlement: string): void {
   seedExecutingIntent("sm_seed_init");
   (Memory.runtime!.treasury!.intents as unknown as { entries: Record<string, unknown> }).entries["i:sm_corrupt"] = {
     transactionId: "sm_corrupt",
+    authorityLevel: "lowlevel",
     digest: "0123456789abcdef",
     actionKind: "test.transfer",
     kind: "test.transfer",

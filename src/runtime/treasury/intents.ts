@@ -54,13 +54,19 @@ import {
 } from "@/runtime/treasury/types";
 import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
 import {
+  classifyTreasuryAuthorityLevel,
+  validateTreasuryAuthorityLevelConsistency,
+  type TreasuryAuthorityLevel,
+} from "@/runtime/treasury/authorityLevel";
+import {
   quarantineTreasuryTransaction,
   readTreasuryQuarantineEntry,
   outcomeOfTreasuryFaultPhase,
   type TreasuryQuarantineEntry,
 } from "@/runtime/treasury/quarantine";
 
-export const TREASURY_INTENT_VERSION = 4 as const;
+/** 【第十三轮】intent v5：entry 携带显式 authorityLevel（modern/legacy/lowlevel）。 */
+export const TREASURY_INTENT_VERSION = 5 as const;
 /** 与 quarantine 同上限——recovery slot 统一计数的前提。 */
 export const TREASURY_INTENT_MAX_ENTRIES = 64;
 
@@ -185,6 +191,8 @@ export type TreasuryIntentStructureFact = TreasuryStructureBindingDescriptor;
 
 export interface TreasuryIntentEntry {
   transactionId: string;
+  /** 【第十三轮】显式 authority 等级（modern/legacy/lowlevel——不得由字段推断）。 */
+  authorityLevel: TreasuryAuthorityLevel;
   /** canonical payload digest（与 prepare 签发 digest 同源）。 */
   digest: string;
   /** action kind（contract 路径 = adapter kind；直接路径 = input.kind）。 */
@@ -234,7 +242,7 @@ export interface TreasuryIntentEntry {
 }
 
 export interface TreasuryIntentStore {
-  version: 4;
+  version: 5;
   entries: Record<string, TreasuryIntentEntry>;
   entryCount: number;
   updatedAt: number;
@@ -333,6 +341,10 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
   if (typeof candidate.digest !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.digest)) {
     return `digest 非法（须为 16 小写 hex）: ${String(candidate.digest).slice(0, 32)}`;
   }
+  // 【第十三轮第八节】显式 authorityLevel 一致性（modern required 字段矩阵 /
+  // cohort facts 与 digest 成对；缺失或矩阵不全 → 拒绝——绝不降级 legacy）。
+  const levelError = validateTreasuryAuthorityLevelConsistency(candidate as unknown as Parameters<typeof validateTreasuryAuthorityLevelConsistency>[0]);
+  if (levelError !== null) return levelError;
   for (const field of ["actionKind", "kind", "source"] as const) {
     const value = candidate[field];
     if (typeof value !== "string" || value.length === 0 || value.length > INTENT_KIND_SOURCE_MAX) {
@@ -573,22 +585,36 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
     return heapRuntime;
   }
   const rawVersion = raw.version as number;
-  if (rawVersion === 1 || rawVersion === 2) {
-    // v1/v2 → v3 迁移（第十轮 3.12.1，原子）：逐 entry 将旧 phase 按保守
-    // 单调表映射为 (outcome, settlement) 并删除 phase 字段；未知 phase 值
-    // → fatal fail closed（原数据保留）。v1 entry 的 contract 字段全
-    // optional，形状校验自然通过。
+  if (rawVersion === 1 || rawVersion === 2 || rawVersion === 3 || rawVersion === 4) {
+    // v1/v2/v3/v4 → v5 迁移（原子；【第十三轮第八节】显式 authorityLevel
+    // 定级）：v1/v2 先将旧 phase 按保守单调表映射为 (outcome, settlement)
+    // 并删除 phase 字段（未知 phase → fatal）；v3 及更早补全 structureFacts
+    // descriptor；随后逐 entry 一次性定级（modern 矩阵全齐 → modern；
+    // durable identity → lowlevel；完全无现代身份事实 → legacy；cohort
+    // facts/digest 不成对 → fatal 原数据保留）。
     const entries: Record<string, TreasuryIntentEntry> = {};
     for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
       const legacy = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as Partial<TreasuryIntentEntry> & { phase?: string };
-      const mapped = typeof legacy.phase === "string" ? TREASURY_LEGACY_PHASE_MIGRATION[legacy.phase] : undefined;
-      if (mapped === undefined) {
-        heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `旧 phase 无法无歧义迁移（${String(legacy.phase).slice(0, 48)}）——intent store fail closed，原数据保留`);
-        return heapRuntime;
+      let mapped: { outcome: TreasuryIntentEntry["outcome"]; settlement: TreasuryIntentEntry["settlement"] } | undefined;
+      if (rawVersion === 1 || rawVersion === 2) {
+        mapped = typeof legacy.phase === "string" ? TREASURY_LEGACY_PHASE_MIGRATION[legacy.phase] : undefined;
+        if (mapped === undefined) {
+          heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `旧 phase 无法无歧义迁移（${String(legacy.phase).slice(0, 48)}）——intent store fail closed，原数据保留`);
+          return heapRuntime;
+        }
       }
       const { phase: _dropped, ...rest } = legacy as Partial<TreasuryIntentEntry> & { phase: string };
       upgradeLegacyStructureFacts(rest);
-      entries[key] = { ...(rest as TreasuryIntentEntry), outcome: mapped.outcome, settlement: mapped.settlement };
+      const [level, classifyError] = classifyTreasuryAuthorityLevel(rest as unknown as Parameters<typeof classifyTreasuryAuthorityLevel>[0]);
+      if (classifyError !== null || level === null) {
+        heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `v${String(rawVersion)} → v${String(TREASURY_INTENT_VERSION)} 迁移定级失败（${classifyError ?? "未知"}）——intent store fail closed，原数据保留`);
+        return heapRuntime;
+      }
+      entries[key] = {
+        ...(rest as TreasuryIntentEntry),
+        authorityLevel: level,
+        ...(mapped !== undefined ? { outcome: mapped.outcome, settlement: mapped.settlement } : {}),
+      };
     }
     const upgraded: TreasuryIntentStore = { version: TREASURY_INTENT_VERSION, entries, entryCount: Object.keys(entries).length, updatedAt: Game.time };
     const shapeError = validateIntentStoreShape(upgraded);
@@ -598,25 +624,6 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
     }
     intentBranch().intents = upgraded;
     heapRuntime = { store: upgraded, fatal: null };
-    return heapRuntime;
-  }
-  if ((rawVersion as number) === 3) {
-    // v3 → v4 迁移（第十一轮 3.13.9，原子）：structureFacts 三元组补全为
-    // 完整 descriptor；损坏字段由升级后校验检出 fatal（原数据保留）。
-    const entries: Record<string, TreasuryIntentEntry> = {};
-    for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
-      const legacy = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as Partial<TreasuryIntentEntry>;
-      upgradeLegacyStructureFacts(legacy);
-      entries[key] = legacy as TreasuryIntentEntry;
-    }
-    const upgradedV3: TreasuryIntentStore = { ...(raw as TreasuryIntentStore), version: TREASURY_INTENT_VERSION, entries, updatedAt: Game.time };
-    const shapeErrorV3 = validateIntentStoreShape(upgradedV3);
-    if (shapeErrorV3 !== null) {
-      heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `${shapeErrorV3}（v3 升级校验失败，intent store fail closed，原数据保留）`);
-      return heapRuntime;
-    }
-    intentBranch().intents = upgradedV3;
-    heapRuntime = { store: upgradedV3, fatal: null };
     return heapRuntime;
   }
   const shapeError = validateIntentStoreShape(raw);
@@ -650,7 +657,8 @@ export function peekTreasuryIntentHealth(): TreasuryIntentHealth {
     store.version !== TREASURY_INTENT_VERSION &&
     (store.version as number) !== 1 &&
     (store.version as number) !== 2 &&
-    (store.version as number) !== 3
+    (store.version as number) !== 3 &&
+    (store.version as number) !== 4
   ) {
     return {
       healthy: false,
@@ -729,7 +737,12 @@ export type TreasuryIntentWriteResult =
  * 已保证此分支在正常路径不可达；防御性拒绝保持 store 不变，调用方阻断
  * callback 并释放预留）。
  */
-export function writeTreasuryIntentEntry(entry: TreasuryIntentEntry): TreasuryIntentWriteResult {
+export function writeTreasuryIntentEntry(
+  entryInput: Omit<TreasuryIntentEntry, "authorityLevel"> & { authorityLevel?: TreasuryAuthorityLevel },
+): TreasuryIntentWriteResult {
+  // 【第十三轮】authorityLevel 缺省 lowlevel（低层/未声明路径的显式等级）；
+  // production contract 路径由 facade 显式声明 modern（矩阵校验通过才写入）。
+  const entry: TreasuryIntentEntry = { ...entryInput, authorityLevel: entryInput.authorityLevel ?? "lowlevel" };
   const shapeError = validateTreasuryIntentEntryShape(entry);
   if (shapeError !== null) {
     intentEvents.writeRejections += 1;
@@ -1079,6 +1092,8 @@ export function transferTreasuryIntentToQuarantine(
   const write = quarantineTreasuryTransaction({
     transactionId: entry.transactionId,
     digest: entry.digest,
+    /** 【第十三轮】等级随事实原子转移（authority 语义不变）。 */
+    authorityLevel: entry.authorityLevel,
     tick: entry.createdAtTick,
     kind: entry.kind,
     source: entry.source,

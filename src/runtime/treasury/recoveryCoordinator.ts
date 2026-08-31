@@ -107,6 +107,8 @@ export function createTreasuryRecoveryCoordinator(deps: TreasuryRecoveryCoordina
     }
     const write = quarantineTreasuryTransaction({
       transactionId: record.canonical.transactionId,
+      /** 【第十三轮】forensic incomplete authority 的显式等级。 */
+      authorityLevel: "forensic",
       digest: record.digest,
       tick: record.preparedAtTick,
       kind: record.canonical.kind,

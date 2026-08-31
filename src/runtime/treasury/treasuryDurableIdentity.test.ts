@@ -54,6 +54,7 @@ function makeService(): TreasuryTestService {
 
 function baseIntent(overrides: Partial<TreasuryIntentEntry> = {}): TreasuryIntentEntry {
   return {
+    authorityLevel: "lowlevel",
     transactionId: "id_tx",
     digest: "0123456789abcdef",
     actionKind: "test.transfer",

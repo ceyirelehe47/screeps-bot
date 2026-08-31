@@ -895,11 +895,12 @@ describe("authorization fault store health 与边界回归（第十二轮 3.9/3.
     });
     expect(boot.status).toBe("written");
     const store = Memory.runtime!.treasury!.authorizationFaults!;
-    store.version = 99 as unknown as 2;
+    store.version = 99 as unknown as 3;
     resetTreasuryAuthorizationFaultRuntimeForTest();
     expect(treasuryAuthorizationFaultBlockers().blocking).toBe(true);
     const written = writeTreasuryAuthorizationFaultEntry({
       transactionId: "ver_fail",
+      authorityLevel: "lowlevel",
       digest: "0123456789abcdef",
       postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
       faultTick: Game.time,
@@ -915,10 +916,11 @@ describe("authorization fault store health 与边界回归（第十二轮 3.9/3.
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = Memory.runtime.treasury ?? {};
     Memory.runtime!.treasury!.authorizationFaults = {
-      version: 1 as unknown as 2,
+      version: 1 as unknown as 3,
       entries: {
         "af:legacy_v1": {
           transactionId: "legacy_v1",
+          authorityLevel: "lowlevel",
           digest: "0123456789abcdef",
           postings: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
           faultTick: Game.time,
@@ -933,7 +935,7 @@ describe("authorization fault store health 与边界回归（第十二轮 3.9/3.
     const entry = readTreasuryAuthorizationFaultEntry("legacy_v1");
     expect(entry).toBeDefined();
     expect((entry as { legacyV1?: boolean }).legacyV1).toBe(true);
-    expect(Memory.runtime!.treasury!.authorizationFaults!.version).toBe(2);
+    expect(Memory.runtime!.treasury!.authorizationFaults!.version).toBe(3);
   });
 
   it("正常 contract → bundle → intent → callback OK → commit 路径与 non-OK → abort 路径保持通过", () => {

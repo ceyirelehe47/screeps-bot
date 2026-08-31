@@ -51,6 +51,8 @@ function seedLegacyQuarantine(transactionId: string, adapterVersion?: number): v
     outcome: "returned_ok",
     settlement: "quarantined",
     ...(adapterVersion !== undefined ? { adapterVersion } : {}),
+    // legacyV1 标志检查走既有隔离分支（显式 legacy 等级拦截由 Round 13 测试覆盖）。
+    authorityLevel: "lowlevel",
     legacyV1: true,
   } as TreasuryQuarantineEntry);
   expect(write.status).toBe("written");
@@ -94,6 +96,7 @@ describe("legacy quarantine 版本化隔离（第十一轮 3.13.7）", () => {
       settlement: "quarantined",
       actionKind: "test.transfer",
       adapterVersion: 99,
+      authorityLevel: "lowlevel",
     } as TreasuryQuarantineEntry);
     expect(write.status).toBe("written");
     Game.time += 2;

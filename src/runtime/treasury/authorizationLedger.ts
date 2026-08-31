@@ -429,8 +429,12 @@ export function createTreasuryAuthorizationLedger(deps: TreasuryAuthorizationLed
         ...(record.policyIdentity !== "" ? { policyIdentity: record.policyIdentity } : {}),
         source: "bundle-redemption",
       });
+      // 【第十三轮】显式 authorityLevel：cohort 成对存在（redemption 故障前的
+      // 完整授权事实）→ modern（fault 矩阵校验通过才写入）；否则 lowlevel。
+      const faultAuthorityLevel = record.cohort !== undefined && record.cohortDigest !== undefined ? "modern" : "lowlevel";
       const faultWrite = writeTreasuryAuthorizationFaultEntry({
         transactionId: context.transactionId,
+        authorityLevel: faultAuthorityLevel,
         digest: record.contractDigest,
         ...(record.contractId !== undefined ? { contractId: record.contractId } : {}),
         ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),

@@ -58,6 +58,7 @@ function freshInput(service: TreasuryTestService, transactionId: string): Treasu
 function validEntry(transactionId = "ts7_v1"): TreasuryQuarantineEntry {
   return {
     transactionId,
+    authorityLevel: "lowlevel",
     digest: "0123456789abcdef",
     tick: Game.time,
     kind: "test",
@@ -91,7 +92,7 @@ describe("quarantine schema v2 元数据", () => {
   it("首次写入自动初始化 v2：version/entryCount 元数据正确", () => {
     expect(quarantineTreasuryTransaction(validEntry()).status).toBe("written");
     const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
-    expect(store.version).toBe(3);
+    expect(store.version).toBe(4);
     expect(store.entryCount).toBe(1);
     expect(Object.keys(store.entries)).toEqual(["q:ts7_v1"]);
     const health = peekTreasuryQuarantineHealth();
@@ -175,7 +176,7 @@ describe("quarantine 损坏 fail closed（load 全量验证）", () => {
     Memory.runtime.treasury = { ...(Memory.runtime.treasury ?? {}), quarantine: { entries: {} } as never };
     resetTreasuryQuarantineRuntimeForTest();
     expect(quarantineTreasuryTransaction(validEntry()).status).toBe("written");
-    expect((Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore).version).toBe(3);
+    expect((Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore).version).toBe(4);
     // 非空 legacy store → fatal（显式 repair 处理）。
     clearTreasuryPersistenceForTest();
     corruptStore((store) => {
@@ -336,6 +337,7 @@ describe("第八轮 per-transaction 保守聚合", () => {
     store.entryCount = 0;
     store.entries["q:agg_of_3"] = {
       transactionId: "agg_of_3",
+      authorityLevel: "lowlevel",
       digest: "0123456789abcdef",
       tick: Game.time,
       kind: "test",
@@ -350,6 +352,7 @@ describe("第八轮 per-transaction 保守聚合", () => {
     };
     store.entries["q:agg_of_4"] = {
       transactionId: "agg_of_4",
+      authorityLevel: "lowlevel",
       digest: "0123456789abcdef",
       tick: Game.time,
       kind: "test",

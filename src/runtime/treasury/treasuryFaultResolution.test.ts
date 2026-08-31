@@ -331,7 +331,7 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     const receiptTickBefore = Game.time;
     // 人为构造同一 id 的 quarantine entry（故障后对账场景的等价前置态；先
     // 建合法 store——正常 commit 路径不产生 quarantine）。
-    Memory.runtime!.treasury!.quarantine = { version: 2 as unknown as 3, entries: {}, entryCount: 0 };
+    Memory.runtime!.treasury!.quarantine = { version: 4, entries: {}, entryCount: 0 };
     const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
     // 【第十三轮】fixture 的 digest 与既有 modern receipt proof 一致
     //（identity-aware refresh：authority 为 digest-only legacy attempt 时按
@@ -341,6 +341,7 @@ describe("resolve-as-committed（resolution tick 时间协议 + receipt 刷新�
     const refreshDigest = settledProof!.digest ?? "0123456789abcdef";
     store.entries["q:ts1_refresh"] = {
       transactionId: "ts1_refresh",
+      authorityLevel: "lowlevel",
       digest: refreshDigest,
       tick: Game.time,
       kind: "terminal.send",
@@ -813,6 +814,7 @@ describe("显式 repair（quarantine store 元数据/legacy 形状）", () => {
     for (let index = 0; index < TREASURY_QUARANTINE_MAX_ENTRIES; index += 1) {
       entries[`q:ts1_rp${index}`] = {
         transactionId: `ts1_rp${index}`,
+        authorityLevel: "lowlevel",
         digest: "0123456789abcdef",
         tick: Game.time,
         kind: "test",

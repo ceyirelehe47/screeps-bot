@@ -57,6 +57,8 @@ export interface TreasuryUnresolvedAuthority {
   readonly durableIdentityDigest?: string;
   /** 完整 structure descriptors（第十一轮 3.13.9；reconciler 输入）。 */
   readonly structureFacts?: readonly { readonly [key: string]: unknown }[];
+  /** 【第十三轮】显式 authority 等级（modern/legacy/forensic/lowlevel）。 */
+  readonly authorityLevel?: string;
   /** legacy v1 quarantine 标记（第十一轮 3.13.7：隔离诊断用）。 */
   readonly legacyV1?: boolean;
   /** 稳定 adapter/reconciler 语义身份（第十二轮 3.5；缺省 = 无法验证语义一致性）。 */
@@ -187,6 +189,7 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         ...(quarantined.structureFacts !== undefined
           ? { structureFacts: quarantined.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
           : {}),
+        ...(quarantined.authorityLevel !== undefined ? { authorityLevel: quarantined.authorityLevel } : {}),
         ...(quarantined.legacyV1 !== undefined ? { legacyV1: quarantined.legacyV1 } : {}),
         ...(quarantined.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: quarantined.adapterSemanticIdentity } : {}),
         ...(quarantined.forensic !== undefined ? { forensic: { ...quarantined.forensic } } : {}),
@@ -225,6 +228,7 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         ? { structureFacts: intent.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
         : {}),
       ...(intent.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: intent.adapterSemanticIdentity } : {}),
+      ...(intent.authorityLevel !== undefined ? { authorityLevel: intent.authorityLevel } : {}),
     },
   };
 }

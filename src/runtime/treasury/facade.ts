@@ -207,6 +207,7 @@ import {
 } from "@/runtime/treasury/faultResolution";
 import { readTreasuryQuarantineRevision } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentRevision } from "@/runtime/treasury/intents";
+import type { TreasuryAuthorityLevel } from "@/runtime/treasury/authorityLevel";
 import type { TreasuryPosting, TreasuryStructureBindingDescriptor } from "@/runtime/treasury/types";
 import {
   type TreasuryBalanceView,
@@ -2443,8 +2444,14 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       //    transaction identity + canonical postings——写入失败时 callback
       //    零调用、tentative 与槽位释放、结构化拒绝。第九轮：contract 路径
       //    经 execution.intentContract 绑定完整合同身份（contractId/digest/
-      //    adapterVersion/authorizationDigest/durable payload）。 ─────────
+      //    adapterVersion/authorizationDigest/durable payload）。【第十三轮】
+      //    显式 authorityLevel：contract + bundle redemption（cohort 成对）
+      //    → modern（写入前矩阵校验，不齐则拒绝——fail closed）；低层/无
+      //    bundle 路径 → lowlevel。 ─────────────────────────────────────
+      const intentAuthorityLevel: TreasuryAuthorityLevel =
+        execution?.intentContract !== undefined && redeemedCohort !== undefined ? "modern" : "lowlevel";
       const intentWrite = writeTreasuryIntentEntry({
+        authorityLevel: intentAuthorityLevel,
         transactionId: record.canonical.transactionId,
         digest: record.digest,
         actionKind: record.canonical.kind,
@@ -2790,6 +2797,19 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // 为故障后观察。
       if (Game.time <= facts0.recordedAt || state.tick <= facts0.recordedAt) {
         return reject("premature_observation", `尚未建立故障后 shared observation（当前 tick ${String(Game.time)}，故障 tick ${String(facts0.recordedAt)}）`);
+      }
+      // 【第十三轮第八节】显式 authorityLevel 第一道判定：legacy / forensic
+      // 等级的 authority 不签发普通 reconciliation capability（等级为持久
+      // 事实，不再由 optional 字段存在性推断；modern/lowlevel 继续走既有
+      // 完整检查链——semantic identity / reconciler 注册等）。
+      const authorityLevel = (facts0 as { authorityLevel?: unknown }).authorityLevel;
+      if (authorityLevel === "legacy" || authorityLevel === "forensic" || authorityLevel === undefined) {
+        return reject(
+          "legacy_authority_isolated",
+          authorityLevel === "forensic"
+            ? `transactionId ${input.transactionId.slice(0, 48)} 为显式 forensic authority（不完整/不变量破坏痕迹）——不得签发普通 reconciliation capability（显式 forensic 流程处理）`
+            : `transactionId ${input.transactionId.slice(0, 48)} 为显式 legacy authority（版本化迁移标记，无完整现代身份事实）或等级缺失（store unhealthy）——不得签发普通 capability`,
+        );
       }
       // 【第十一轮 3.13.7】legacy authority 隔离：legacyV1（v1 迁移且无并存
       // intent 补全合同事实）不得使用当前 adapter reconciler 解释——保持

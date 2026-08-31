@@ -40,6 +40,11 @@ import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/run
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import { validateTreasuryAuthorizationCohortFacts } from "@/runtime/treasury/cohortValidation";
 import { validateTreasuryStructureDescriptorArray } from "@/runtime/treasury/structureDescriptorValidation";
+import {
+  classifyTreasuryAuthorityLevel,
+  validateTreasuryAuthorityLevelConsistency,
+  type TreasuryAuthorityLevel,
+} from "@/runtime/treasury/authorityLevel";
 import { treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
 import { verifyTreasuryEntryIdentity, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
 import { quarantineSemanticViolation } from "@/runtime/treasury/semanticMatrix";
@@ -60,6 +65,8 @@ export interface TreasuryQuarantineDeltas {
 
 export interface TreasuryQuarantineEntry {
   readonly transactionId: string;
+  /** 【第十三轮】显式 authority 等级（modern/legacy/forensic/lowlevel——不得由字段推断）。 */
+  authorityLevel: TreasuryAuthorityLevel;
   /** canonical payload digest（16 小写 hex，与 prepare 签发 digest 同源）。 */
   readonly digest: string;
   /** quarantine 建立时所处 tick（prepared/故障发生 tick）。 */
@@ -116,8 +123,8 @@ export interface TreasuryQuarantineEntry {
 export type TreasuryQuarantineStructureFact = TreasuryStructureBindingDescriptor;
 
 export interface TreasuryQuarantineStore {
-  /** schema 版本（当前 3；未知版本 fail closed）。 */
-  version: 3;
+  /** schema 版本（当前 4；未知版本 fail closed）。 */
+  version: 4;
   /** key = "q:"+transactionId（transactionId 字符集受限，前缀无边界歧义，防危险字面量）。 */
   entries: Record<string, TreasuryQuarantineEntry>;
   /** entries 自有键计数（load 校验与 fault-slot admission 的 O(1) 权威）。 */
@@ -126,7 +133,7 @@ export interface TreasuryQuarantineStore {
   overflowed?: boolean;
 }
 
-export const TREASURY_QUARANTINE_VERSION = 3 as const;
+export const TREASURY_QUARANTINE_VERSION = 4 as const;
 export const TREASURY_QUARANTINE_MAX_ENTRIES = 64;
 
 const QUARANTINE_KEY_PREFIX = "q:";
@@ -250,6 +257,10 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
   if (typeof candidate.digest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.digest)) {
     return `digest 非法（须为 16 小写 hex）: ${String(candidate.digest).slice(0, 32)}`;
   }
+  // 【第十三轮第八节】显式 authorityLevel 一致性（modern required 字段矩阵 /
+  // cohort facts 与 digest 成对；缺失或矩阵不全 → 拒绝——绝不降级 legacy）。
+  const levelError = validateTreasuryAuthorityLevelConsistency(candidate as unknown as Parameters<typeof validateTreasuryAuthorityLevelConsistency>[0]);
+  if (levelError !== null) return levelError;
   if (!isSafeInteger(candidate.tick) || candidate.tick < 0) return "tick 非安全整数";
   if (!isSafeInteger(candidate.recordedAt) || candidate.recordedAt < 0) return "recordedAt 非安全整数";
   if (
@@ -462,6 +473,23 @@ function fatalRuntime(store: TreasuryQuarantineStore, reason: string): Quarantin
 }
 
 /**
+ * 【第十三轮第八节】迁移定级（v1/v2/v3 → v4 一次性）：forensic 标志 →
+ * forensic；legacyV1 → legacy；modern 矩阵全齐 → modern；durable identity →
+ * lowlevel；完全无现代身份事实 → legacy；cohort 不成对 → 原地返回错误
+ * （迁移层 fatal，原数据保留）。
+ */
+function classifyQuarantineEntriesForMigration(entries: Record<string, TreasuryQuarantineEntry>): string | null {
+  for (const [key, entry] of Object.entries(entries)) {
+    const [level, error] = classifyTreasuryAuthorityLevel(entry as unknown as Parameters<typeof classifyTreasuryAuthorityLevel>[0]);
+    if (error !== null || level === null) {
+      return `v→v${String(TREASURY_QUARANTINE_VERSION)} 迁移定级失败（key ${key.slice(0, 48)}）: ${error ?? "未知"}`;
+    }
+    entry.authorityLevel = level;
+  }
+  return null;
+}
+
+/**
  * 旧 structureFacts（v2 及更早三元组形状）补全为完整 descriptor（第十一轮
  * 3.13.9）：缺省 governed_location/auxiliary/required/v1——不伪造缺失字段
  *（由升级后形状校验检出 fatal）。
@@ -544,6 +572,11 @@ function loadQuarantineStoreRuntime(): QuarantineStoreRuntime {
       };
       upgradeLegacyStructureFacts(entries[key] as Partial<TreasuryQuarantineEntry>);
     }
+    const classifyErrorV1 = classifyQuarantineEntriesForMigration(entries);
+    if (classifyErrorV1 !== null) {
+      heapRuntime = fatalRuntime(raw, `${classifyErrorV1}——quarantine fail closed，原数据保留`);
+      return heapRuntime;
+    }
     const upgraded: TreasuryQuarantineStore = { ...(raw as TreasuryQuarantineStore), version: TREASURY_QUARANTINE_VERSION, entries };
     const shapeError = validateQuarantineStoreShape(upgraded);
     if (shapeError !== null) {
@@ -555,22 +588,49 @@ function loadQuarantineStoreRuntime(): QuarantineStoreRuntime {
     return heapRuntime;
   }
   if ((raw.version as number) === 2) {
-    // v2 → v3 迁移（第十一轮 3.13.9，原子）：structureFacts 三元组补全为
-    // 完整 descriptor；损坏字段由升级后校验检出 fatal（原数据保留）。
+    // v2 → v4 迁移（第十一轮 3.13.9 descriptor 补全 + 【第十三轮】显式
+    // authorityLevel 定级，原子）：损坏字段由升级后校验检出 fatal（原数据保留）。
     const entries: Record<string, TreasuryQuarantineEntry> = {};
     for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
       const legacy = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as Partial<TreasuryQuarantineEntry>;
       upgradeLegacyStructureFacts(legacy);
       entries[key] = legacy as TreasuryQuarantineEntry;
     }
+    const classifyErrorV2 = classifyQuarantineEntriesForMigration(entries);
+    if (classifyErrorV2 !== null) {
+      heapRuntime = fatalRuntime(raw, `${classifyErrorV2}——quarantine fail closed，原数据保留`);
+      return heapRuntime;
+    }
     const upgradedV2: TreasuryQuarantineStore = { ...(raw as TreasuryQuarantineStore), version: TREASURY_QUARANTINE_VERSION, entries };
     const shapeErrorV2 = validateQuarantineStoreShape(upgradedV2);
     if (shapeErrorV2 !== null) {
-      heapRuntime = fatalRuntime(raw, `${shapeErrorV2}（v2→v3 升级校验失败，quarantine fail closed，原数据保留）`);
+      heapRuntime = fatalRuntime(raw, `${shapeErrorV2}（v2→v${String(TREASURY_QUARANTINE_VERSION)} 升级校验失败，quarantine fail closed，原数据保留）`);
       return heapRuntime;
     }
     quarantineBranch().quarantine = upgradedV2;
     heapRuntime = { store: upgradedV2, fatal: null };
+    return heapRuntime;
+  }
+  if ((raw.version as number) === 3) {
+    // v3 → v4 迁移（【第十三轮第八节】显式 authorityLevel 定级，原子）：
+    // entries 原样保留，一次性定级；损坏由升级后校验检出 fatal（原数据保留）。
+    const entries: Record<string, TreasuryQuarantineEntry> = {};
+    for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
+      entries[key] = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as TreasuryQuarantineEntry;
+    }
+    const classifyErrorV3 = classifyQuarantineEntriesForMigration(entries);
+    if (classifyErrorV3 !== null) {
+      heapRuntime = fatalRuntime(raw, `${classifyErrorV3}——quarantine fail closed，原数据保留`);
+      return heapRuntime;
+    }
+    const upgradedV3: TreasuryQuarantineStore = { ...(raw as TreasuryQuarantineStore), version: TREASURY_QUARANTINE_VERSION, entries };
+    const shapeErrorV3 = validateQuarantineStoreShape(upgradedV3);
+    if (shapeErrorV3 !== null) {
+      heapRuntime = fatalRuntime(raw, `${shapeErrorV3}（v3→v${String(TREASURY_QUARANTINE_VERSION)} 升级校验失败，quarantine fail closed，原数据保留）`);
+      return heapRuntime;
+    }
+    quarantineBranch().quarantine = upgradedV3;
+    heapRuntime = { store: upgradedV3, fatal: null };
     return heapRuntime;
   }
   if (raw.version === undefined) {
@@ -781,7 +841,12 @@ export type TreasuryQuarantineWriteResult =
  * fault-slot admission 已保证此分支在正常路径不可达；防御性拒绝保持 store
  * 不变，调用方维持 write-fault marker 锁定并计数）。
  */
-export function quarantineTreasuryTransaction(entry: TreasuryQuarantineEntry): TreasuryQuarantineWriteResult {
+export function quarantineTreasuryTransaction(
+  entryInput: Omit<TreasuryQuarantineEntry, "authorityLevel"> & { authorityLevel?: TreasuryAuthorityLevel },
+): TreasuryQuarantineWriteResult {
+  // 【第十三轮】authorityLevel 缺省 lowlevel（低层/未声明路径的显式等级——
+  // 非 modern contract authority；生产 contract 路径由调用方显式声明）。
+  const entry: TreasuryQuarantineEntry = { ...entryInput, authorityLevel: entryInput.authorityLevel ?? "lowlevel" };
   // 写入前重新完整验证 entry（快照封闭配套——不假设调用方传入 prepare
   // 验证过的安全对象）。
   const shapeError = validateTreasuryQuarantineEntryShape(entry);
