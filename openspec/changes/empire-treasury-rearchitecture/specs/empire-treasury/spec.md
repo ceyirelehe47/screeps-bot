@@ -1485,3 +1485,120 @@ resolution store 轻量 health probe 的受支持版本集合必须与 loader �
 
 - **WHEN** 持久 resolution store 版本为未知值（如 99）
 - **THEN** 轻量 probe 报 unhealthy（fail closed）
+
+### Requirement: 第十六轮——显式 attempt rearm（same-ID 不可重试）
+
+同一个 transaction ID 永远只对应一个执行 attempt。resolve-as-not-executed 不得返回任何"同 ID 可重新执行"语义（`sameIdRetryAllowed` 恒为 false）；同 ID 存在 final not-executed tombstone 时 prepare（两阶段与单阶段 compat）必须拒绝（reason=rearm_required，Game callback 零调用）。重试的唯一合法通道是受控 service 方法 rearmResolvedNotExecutedAttempt：零写、纯确定性派生 child transaction ID（canonical tuple 绑定 rearm 协议版本 + parent ID + parent attempt identity 全部成分含 lowlevelSource；输出满足现有 transaction ID validator、长度有界、不依赖随机数、跨 global reset 恒定、同 parent 幂等、不同 parent identity 得到不同 child；A→B→C 链式，每个 attempt 最多一个直接 child，不持久化无界 attempt sequence 表）。rearm 前置校验：parent final not-executed tombstone 存在、proofLevel 为 identity-bound/lowlevel（legacy/forensic 不足 proof 不能 rearm）、expectedParentIdentity（可选）完整 match、parent durable authority 已释放（resolver not_found）、parent marker 清理已完成、各 store 健康。parent tombstone 继续证明 parent attempt 已结束、不阻断 child ID、不能证明或释放 child attempt；child 的 contract/bundle/intents 全部绑定 child transaction ID，故障后独立签发 capability、resolution 与 receipt。
+
+#### Scenario: 同 ID 直接 prepare 被拒
+
+- **WHEN** transaction 已 final not-executed（authority 已释放）且调用方以相同 transaction ID 再次 prepare
+- **THEN** prepare 返回 rejected（reason=rearm_required）、Game callback 零调用；不存在"未 rearm 先执行"路径
+
+#### Scenario: 显式 rearm 幂等且跨 reset 稳定
+
+- **WHEN** 同一 parent（final not-executed、marker 已清、authority 已释放）重复调用 rearm，或 global reset 后再次调用
+- **THEN** 返回同一 child transaction ID（纯确定性派生）；不同 parent 或不同 parent identity 得到不同 child
+
+#### Scenario: rearm 前置阻断
+
+- **WHEN** parent 仍有 unresolved authority、或 marker 未清理、或 tombstone 为 resolving/committed、或 proofLevel 为 legacy/forensic、或任一 store fatal
+- **THEN** rearm 拒绝并返回对应 reason；不生成 child attempt、零副作用
+
+#### Scenario: parent proof 不能证明 child
+
+- **WHEN** child attempt 独立发生故障并请求 resolution
+- **THEN** parent 的 tombstone/receipt/marker/capability 均不得证明或释放 child authority；child 可独立 rearm 生成孙代
+
+### Requirement: 第十六轮——跨 store execution-fact cohesion
+
+双 authority 归一化必须在 immutable identity 之上比较 execution facts（唯一权威模块 executionFactCohesion.ts）：outcome 必须完全相同（returned_ok 单侧存在、aborted_final 与运行时事实并存、任意不同 outcome 组合 → inconsistent，绝不"选择更强事实"）；quarantine phase 类别必须与共同 outcome 严格对应（returned_ok 只配 commit 类、returned_non_ok 只配 abort-failed、started_unknown 只配 execution-unknown 类中副作用未知的 phase、not_started 只配 internal authorization fault 类——跨类上探并存禁止）；intent settlement 必须属于共同 outcome 的并存集合（ready/finalized 不得与 unresolved quarantine 并存）；归一化 authority 的 execution facts 经明确合并规则（outcome=共同值、settlement=双方向更进展一方、phase=quarantine 权威）。cohesion 不一致 → resolver 返回 inconsistent、两份 authority 全保留、not-executed capability 不签发、recovery 零 release 零 refresh。
+
+#### Scenario: returned_ok 永不被 started_unknown 覆盖
+
+- **WHEN** intent.outcome=returned_ok 而 quarantine.outcome=started_unknown（immutable identity 相同）
+- **THEN** resolver 返回 inconsistent；returned_ok 事实保留；not-executed capability 不签发
+
+#### Scenario: 相同 outcome 合法组合归一化
+
+- **WHEN** 双 authority outcome 均为 returned_ok 且 intent.settlement=faulted、quarantine phase 为 commit 类、settlement=quarantined
+- **THEN** 归一化成功；execution facts 为明确合并结果（outcome=returned_ok、settlement 取更进展一方、phase=quarantine 权威）
+
+### Requirement: 第十六轮——final not-executed 残留 marker 安全补完成
+
+final not-executed tombstone 已写、authority 已释放、marker 尚未清除时（中断窗口），beginTick recovery 不得因 authority not_found 直接跳过：必须检查 write-fault marker——不存在视为释放与清理均完成；存在且 transaction/attempt ID 匹配 + digest 匹配 + marker attemptIdentity 完整且与 tombstone identity relation=match + phase 与 not-executed 结论兼容（preExecution 矩阵）+ tombstone proof level 与 marker identity 兼容，才可清除 marker；marker 属于另一 attempt、identity conflict/insufficient、phase 不兼容 → 保留 marker 与 tombstone、write readiness 继续阻断、独立诊断计数、不伪造 authority。marker 读取必须返回有界深冻结快照（不泄漏嵌套 attemptIdentity 引用）。marker 未完成清理前 rearm 必须拒绝。
+
+#### Scenario: matching marker 补清
+
+- **WHEN** final not-executed + authority 已释放 + marker 与 tombstone 完整匹配
+- **THEN** beginTick 清除 marker 并将 transactionId 移出 pending-release 索引；补完成幂等
+
+#### Scenario: conflict/insufficient marker 保持锁定
+
+- **WHEN** marker 属于另一 attempt、或 identity conflict/insufficient、或 phase 与结论不兼容
+- **THEN** marker 保留、write readiness 保持阻断、独立计数；不得清除或伪造 authority
+
+### Requirement: 第十六轮——resolver 四态语义（store_unhealthy）
+
+resolveTreasuryUnresolvedAuthority 必须区分 ok / not_found / inconsistent / store_unhealthy：先检查 intent 与 quarantine store health（对已存在 store 触发必要 load validation）；store 不存在是合法的"无 entry"来源；只有两个 store 均可信且都确实无 entry 时才返回 not_found；任一 store fatal → store_unhealthy（附各 store 有界诊断），固定零副作用（不 refresh receipt、不释放 authority、不清 marker、不 finalize、不签发 capability、零 reconciler），绝不折叠成 not_found 也绝不选 healthy 一侧。capability 签发、normal resolution prevalidate、staged resolution recovery、final not-executed 补完成、committed proof verifier（authority_store_unhealthy 独立 verdict，不归入 authority not_found）、rearm、readiness diagnostics 全部路径必须处理 store_unhealthy。
+
+#### Scenario: store fatal 不是 not_found
+
+- **WHEN** intent store fatal 而 quarantine store 不存在（或任一组合）
+- **THEN** resolver 返回 store_unhealthy（附 store 错误）；不是 not_found
+
+#### Scenario: 一侧 healthy 一侧 fatal
+
+- **WHEN** 一侧 store healthy 且有 authority、另一侧 store fatal
+- **THEN** resolver 返回 store_unhealthy；不选择 healthy 一侧；零副作用
+
+### Requirement: 第十六轮——resolution 持久状态语义矩阵
+
+resolution store 必须有单一内在状态 validator（resolutionStateSemantics.ts，与形状校验、转换校验职责分离）供 load 全量校验、migration、写入候选、read-back、repair 共同使用：stage 必须显式（v1-v4 迁移补终态 stage=final）；resolving 只能 committed（resolving not-executed 非法）、settledAtTick 必填（staged 目标 tick）、proofLevel 只能 identity-bound/lowlevel、不携带 forensic provenance 与 preExecution；final committed 必须有 settledAtTick、不携带 preExecution；final not-executed 不得携带 settledAtTick、preExecution 与来源一致（source 为 acknowledge-rolled-back 受控通道）；forensic provenance 只配 forensic proof level；final 终态 settledAtTick/observationTick 不得晚于 resolvedAtTick。发现非法持久状态 → store unhealthy（fatal 原数据保留、write readiness=false、recovery 不删除 entry）；recovery 的"防御分支删除 tombstone"路径废除。写入上下文追加：proofLevel=lowlevel 的新写入必须携带 lowlevelSource（旧数据缺失为隔离态，不猜测 runtime 来源）；identity-bound 禁止携带 lowlevelSource。
+
+#### Scenario: resolving not-executed 持久 entry
+
+- **WHEN** 持久 store 出现 stage=resolving 且 resolution=not-executed（或 resolving 缺 settledAtTick、resolving forensic/legacy、final committed 缺 settledAtTick、provenance 与 proof 矛盾）
+- **THEN** load 校验判 store unhealthy（原 entry 保留）；recovery 不自动删除
+
+#### Scenario: 合法历史版本迁移继续通过
+
+- **WHEN** v1-v5 resolution store 数据合法
+- **THEN** 迁移至 v6 成功（v2-v4 无 stage 的历史 entry 补终态 stage=final）；原数据语义不变
+
+### Requirement: 第十六轮——authority 写入输入别名隔离
+
+intent / quarantine / authorization-fault / resolution tombstone / write-fault marker 的全部写入口在写入 Memory 前必须构造完全独立的有界深拷贝（durableClone.ts 唯一 helper；普通对象/数组/嵌套 revisions/authorization leg digests/structure descriptors/forensic provenance/attemptIdentity）；发布顺序统一为 clone 输入 → 验证 clone → 重算 clone identity → Memory 写入 clone → read-back 验证。写入成功后调用方修改原输入的任何嵌套字段，Memory 必须完全不变、store revision 不发生隐式变化。
+
+#### Scenario: 写入后修改原输入
+
+- **WHEN** quarantine 写入成功后调用方原地修改原输入的 cohort.revisions / authorizationLegDigests / structureFacts / forensic / attemptIdentity
+- **THEN** Memory 权威副本完全不变；store revision 不变
+
+### Requirement: 第十六轮——lowlevel provenance 进入完整 proof 链
+
+lowlevelSource 是 lowlevel attempt identity 的组成部分：attempt identity 视图与 relation 比较纳入 lowlevelSource 维度（attempt 携带时 proof 必须同样携带且相等：缺失=insufficient、不等=conflict；attempt 不带而 proof 带=conflict）；capability 绑定 authority 的 lowlevelSource（prevalidate 强校验：lowlevel authority 双方一致携带、非 lowlevel 禁携带）；resolution tombstone v6 携带 lowlevelSource（仅 proofLevel=lowlevel、新写入必须携带、v5 旧数据为来源不可证明的隔离态不自动释放不猜测来源）；receipt v6 携带 lowlevelSource（modern proof 可携带、legacy 禁带、commit 与 refresh 随低层 attempt 写入）；committed proof verifier 三方比较 lowlevel provenance（tombstone 缺=insufficient、与 authority 不同=conflict）；runtime-lowlevel 与 migrated-lowlevel 不能互相证明；modern proof 不能释放 lowlevel authority。
+
+#### Scenario: 不同来源不能互相证明
+
+- **WHEN** lowlevel authority 来源为 runtime-lowlevel@v1 而 tombstone/receipt proof 来源为 migrated-lowlevel@v1（或反之）
+- **THEN** relation=conflict；authority 不释放；零副作用
+
+#### Scenario: 旧 proof 缺来源隔离
+
+- **WHEN** v5 旧 lowlevel tombstone 无 lowlevelSource
+- **THEN** verifier 判 insufficient（来源不可证明）；隔离不释放；不猜测为 runtime 来源
+
+### Requirement: 第十六轮——not-executed capability 消费顺序与 pending 恢复 O(1) 索引
+
+resolve-as-not-executed 的安全顺序必须是：完整 prevalidate → resolution slot 预检 → consume capability → 写 final not-executed tombstone → 释放 authority → 清 marker。consume 失败不得写 tombstone（authority 与 marker 保留，beginTick 无 proof 可自动释放——不存在"未成功消费 capability 却已持久化可自动释放 authority 的 final proof"）；consume 成功但 tombstone 写失败 → authority 保留（后续 tick 重新签发 capability 重试）；tombstone 成功后释放前中断 → beginTick pending-release 补完成。resolution store 运行态必须维护 pending 恢复索引（resolving transaction IDs 与 final not-executed pending-release IDs）：global reset 首次 load 一次有界全表扫描重建；写入/删除/retention/补完成同步维护；beginTick 无待处理项时 O(1) 直接返回（不扫描 resolution entries）；有待处理项时只遍历索引 ID（不扫描历史 final proof）；Memory tombstone 仍是权威（索引仅用于定位待处理项，索引 ID 失效即清理，不得作为安全 proof）。
+
+#### Scenario: consume 失败零持久副作用
+
+- **WHEN** capability 消费失败（已消费/跨 tick 等同步窗口失效）
+- **THEN** 不产生 final tombstone；authority 保留；marker 保留；不存在可自动释放的 final proof
+
+#### Scenario: 空闲 beginTick O(1)
+
+- **WHEN** 无 resolving 且无 pending-release 索引项
+- **THEN** recoverStagedResolutions 直接返回（idleFastPath）；不扫描 resolution entries；有待处理项时只遍历索引 ID

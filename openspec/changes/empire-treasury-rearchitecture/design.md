@@ -762,3 +762,96 @@ resolveTreasuryUnresolvedAuthority(tx)
 ### 11.7 committed verifier 复用路径
 
 normal resolve-as-committed、beginTick staged recovery、finalize 补完成、already-resolved 检查 → 同一 `verifyTreasuryCommittedResolutionProof({tombstone, authorityResolution, receiptProof})`。immediate 流程：写 resolving → refresh → **重读持久 proof** → verifier → 通过才释放 → finalize；verifier 失败时 authority 与 resolving tombstone 保留（fail closed，恢复路径继续阻断）。
+
+## 12. 第十六轮设计：attempt rearming 与 execution-fact cohesion
+
+### 12.1 新增窄职责模块
+
+```
+src/runtime/treasury/
+  attemptRearm.ts              显式 attempt rearm 协议（确定性 child ID 派生 + 受控前置校验；零写）
+  executionFactCohesion.ts     跨 store execution-fact 唯一权威比较器（outcome/phase/settlement 矩阵 + 归一化合并）
+  resolutionStateSemantics.ts  resolution tombstone 内在持久状态语义矩阵（load/migration/write/read-back/repair 共用）
+  durableClone.ts              authority 写入候选的有界深拷贝 helper（写入侧；读取侧见 durableSnapshot）
+```
+
+依赖方向（无循环）：attemptRearm → { resolutionStore, unresolvedAuthority, writeFault, identityProof, transactionId }；unresolvedAuthority → executionFactCohesion → { quarantine, writeFault }；resolutionStore → { resolutionStateSemantics, durableClone }；faultResolution → attemptRearm（仅 child ID 派生）；facade → attemptRearm（rearm 入口委托壳）。rearm 协议与 ID 派生不内联在 facade.ts；execution fact 兼容矩阵只有一个权威模块；resolver 的 health-aware 读取集中在 unresolvedAuthority；resolution store 的内在状态 validator 与 transition validator 职责分离。
+
+### 12.2 attempt rearm 状态图（same-ID 不可重试）
+
+```text
+business action
+   ├─ attempt A（transaction ID A）
+   │    ├─ committed → A 终结（receipt + final committed tombstone；同 ID 重放 → already_settled）
+   │    └─ not-executed → final not-executed tombstone A（sameIdRetryAllowed=false）
+   │                        │ authority 释放 + marker 清理完成后
+   │                        └─ 显式 rearm（受控 service 方法，零写）
+   │                              └─ child transaction ID B = tr1_<hash(协议版本 ‖ A ‖ A 的 attempt identity 全成分)>
+   └─ attempt B（新 transaction identity；contract/bundle/intents 全部绑定 B）
+        ├─ B 故障 → 独立 capability/resolution/receipt 生命周期（A 的 proof 不能证明 B）
+        └─ B not-executed → 再 rearm → C（A→B→C 链式；每 attempt 最多一个直接 child）
+
+同 ID 直接 prepare：final not-executed tombstone 存在 → rejected(rearm_required) + callback 零调用
+rearm 前置：final not-executed tombstone ∈ {identity-bound, lowlevel} + authority not_found + marker 已清 + store 健康
+```
+
+child ID 生成是 O(1) 纯函数（现有 canonical tuple + 双 lane FNV-1a hash 基础设施；tr1_ 前缀独立命名空间）；不持久化无界 attempt sequence 表——同 parent 幂等由确定性派生天然保证；跨 global reset 结果恒定。
+
+### 12.3 execution-fact cohesion 矩阵
+
+```text
+outcome 对等（任一不满足 → inconsistent，两份全保留）：
+  not_started+not_started / started_unknown+started_unknown / returned_non_ok+returned_non_ok / returned_ok+returned_ok
+  禁止：returned_ok 与任何非 returned_ok / returned_non_ok 与 started_unknown|not_started /
+        started_unknown 与 not_started / aborted_final 与任何运行时事实
+
+phase 类别严格对应（共同 outcome 下）：
+  returned_ok   ∈ {receipt_publish, heap_publish, journal_publish, overlay_publish, handle_state, commit_unexpected, ok_pending_commit_unresolved}
+  returned_non_ok = action_returned_non_ok_abort_failed
+  started_unknown ∈ {executing_at_end_tick, action_threw_execution_unknown}
+  not_started   ∈ {internal_authorization_fault, internal_authorization_fault_forensic}
+
+intent settlement 并存集合：
+  not_started     ∈ {quarantined, resolving, faulted}
+  started_unknown ∈ {executing, quarantined, resolving, faulted}
+  returned_non_ok ∈ {pending_abort, quarantined, resolving, faulted}
+  returned_ok     ∈ {pending_commit, quarantined, resolving, faulted}
+  （ready / finalized 不得与 unresolved quarantine 并存）
+
+归一化合并：outcome=共同值；settlement=双方向更进展一方（ready<executing<pending_*=2<quarantined|faulted=3<resolving=4<finalized=5）；phase=quarantine（write-fault 权威）
+```
+
+### 12.4 resolver 四态与 marker 补完成流程
+
+```text
+resolveTreasuryUnresolvedAuthority(tx)
+  ├─ store health 前置：已存在的 intent/quarantine store 触发 load validation
+  │    └─ 任一 fatal → store_unhealthy（附各 store 错误）→ 零副作用（不折叠成 not_found、不选 healthy 一侧）
+  ├─ not_found ─▶ final not-executed 补完成分支：
+  │      marker 不存在 → 释放与清理均完成（移出 pending-release 索引）
+  │      marker 存在 → transaction/digest/attemptIdentity relation=match/phase 矩阵/proof level 全匹配 → 清 marker
+  │                → 他属|conflict|insufficient|phase 不兼容 → 保留（markerCleanupBlocked 计数）
+  ├─ ok(normalized authority，execution facts 经合并规则) ─▶ 三方 verifier
+  └─ inconsistent（identity 或 cohesion）─▶ 零释放全保留 + 独立计数
+```
+
+### 12.5 not-executed capability 发布顺序与恢复索引
+
+```text
+prevalidate → slot 预检 → consume capability → 写 final not-executed tombstone → 释放 authority → 清 marker → 移出索引
+  consume 失败：零持久副作用（无 tombstone、authority/marker 保留）
+  consume 成功 + tombstone 写失败：authority 保留（后续 tick 重签发 capability）
+  tombstone 成功 + 释放前中断：beginTick pending-release 补完成（12.4）
+
+heap 索引：resolvingIds / pendingReleaseIds（Set<string>）
+  load 一次全表重建 → 写入/删除/retention/补完成同步维护
+  beginTick：两索引皆空 → O(1) 直接返回（idleFastPath 计数）
+  有待处理项 → 只遍历索引 ID；Memory 权威（索引 ID 失效即清理，不作安全 proof）
+```
+
+### 12.6 store 版本与迁移
+
+- resolutions v6：新增可选 lowlevelSource（仅 proofLevel=lowlevel；新写入必须携带——v5 及更早的旧低层 tombstone 无此字段为来源不可证明的隔离态）；v2-v4 无 stage 的历史 entry 迁移补终态 stage=final；load 校验接入持久状态语义矩阵（语义非法 → fatal 原数据保留）。
+- receipts v6：新增可选 lowlevelSource（modern proof 可携带、legacy 禁带；v5→v6 无损）；低层两阶段路径（无 contract）的 commit/refresh 随 attempt 携带 runtime 来源。
+- intent（v6）/quarantine（v5）/authorization-fault（v4）版本不变：本轮只改写入深拷贝与读取快照行为，无持久 schema 变化。
+- write-fault marker：无版本变化（写入深拷贝 attemptIdentity、读取深冻结快照）。
