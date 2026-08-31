@@ -36,6 +36,7 @@ import {
   encodeTreasuryCanonicalTuple,
   hashTreasuryCanonicalString,
   isValidTreasuryTransactionId,
+  TREASURY_REARM_ID_PREFIX as REARM_ID_PREFIX,
 } from "@/runtime/treasury/transactionId";
 import {
   ensureTreasuryResolutionStoreValidated,
@@ -50,9 +51,6 @@ import {
 
 /** rearm 协议版本（child ID 派生的 canonical 成分；协议升级时递增）。 */
 export const TREASURY_ATTEMPT_REARM_PROTOCOL = "treasury-attempt-rearm@v1";
-
-/** rearm child ID 命名空间前缀（与 ts1_/tt1_ 不可重叠——独立 ID 空间）。 */
-const REARM_ID_PREFIX = "tr1_";
 
 /** parent attempt identity 的完整视图（child ID 派生输入）。 */
 export interface TreasuryRearmParentIdentity {
@@ -90,6 +88,12 @@ export type TreasuryAttemptRearmResult =
  * reset 恒定）：`tr1_<hash16>`，hash 输入为 canonical tuple（协议版本 +
  * parent ID + parent attempt identity 全部成分）。同 parent 重复 rearm 得到
  * 同一 child；不同 parent / 不同 parent identity 得到不同 child。
+ *
+ * 【第十七轮第七节】**test-only 边界**：production 源码（非 .test.ts / 非
+ * testHarness）不得 import 本函数（架构扫描守护）——child ID 只能经
+ * service.issueTreasuryRearmCapability 签发 opaque capability 时交付
+ *（production 权威派生在 attemptLineage.deriveTreasuryLineageNextChild
+ * TransactionId，同一 canonical 编码）。
  */
 export function deriveTreasuryRearmChildTransactionId(parent: TreasuryRearmParentIdentity): string {
   const canonical = encodeTreasuryCanonicalTuple([

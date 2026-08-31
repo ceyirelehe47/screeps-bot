@@ -37,11 +37,23 @@ const TRANSACTION_ID_PATTERN = /^[A-Za-z0-9:_\-.]{1,128}$/;
 const STABLE_ID_PREFIX = "ts1_";
 /** per-tick 命名空间前缀。 */
 const TICK_ID_PREFIX = "tt1_";
+const REARM_ID_PREFIX = "tr1_";
+/**
+ * 【第十七轮第八节】Treasury 保留的 rearm attempt 命名空间前缀（单一
+ * 权威）：任何 production tr1_ ID 都必须绑定匹配的 service-issued opaque
+ * rearm capability——手工拼接/公开 hash/普通字符串不可绕过。
+ */
+export const TREASURY_REARM_ID_PREFIX = REARM_ID_PREFIX;
 /** canonical 编码版本头（格式升级时递增，保证新旧编码不碰撞）。 */
 const CANONICAL_VERSION_HEAD = "V2";
 
 export function isValidTreasuryTransactionId(transactionId: string): boolean {
   return typeof transactionId === "string" && TRANSACTION_ID_PATTERN.test(transactionId);
+}
+
+/** 【第十七轮第八节】tr1_ 保留命名空间判定的唯一权威实现。 */
+export function isTreasuryRearmAttemptId(transactionId: string): boolean {
+  return typeof transactionId === "string" && transactionId.startsWith(REARM_ID_PREFIX);
 }
 
 /**

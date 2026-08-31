@@ -39,6 +39,7 @@
 
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
+import { treasuryClassAwareMarkerRelation } from "@/runtime/treasury/markerAttemptIdentity";
 
 /** commit 类 phase（Game callback 已确认 OK）：不允许 not-executed resolution。 */
 export type TreasuryCommitFaultPhase =
@@ -123,6 +124,17 @@ export interface TreasuryWriteFaultMarker {
     readonly authorizationCohortDigest?: string;
     readonly durableIdentityDigest?: string;
   };
+  /**
+   * 【第十七轮第十四节】marker v2 class-aware attempt identity：authority
+   * class、lowlevelSource、lineage/rearm binding digest、parent/child
+   * generation。缺失（v1 marker）= class 不可证明——class-aware 清除按
+   * insufficient 保守处理（绝不猜测 class）。
+   */
+  readonly markerVersion?: 2;
+  readonly authorityClass?: "identity-bound" | "lowlevel" | "legacy" | "forensic";
+  readonly lowlevelSource?: string;
+  readonly lineageBindingDigest?: string;
+  readonly attemptGeneration?: number;
 }
 
 interface TreasuryWriteFaultBranch {
@@ -212,6 +224,32 @@ export function validateTreasuryWriteFaultMarkerShape(marker: unknown): string |
       }
     }
   }
+  // 【第十七轮第十四节】marker v2 class-aware 字段（可选；存在即校验）。
+  if (candidate.markerVersion !== undefined && candidate.markerVersion !== 2) {
+    return `marker.markerVersion 非法（期望 2）: ${String(candidate.markerVersion).slice(0, 16)}`;
+  }
+  if (
+    candidate.authorityClass !== undefined &&
+    !["identity-bound", "lowlevel", "legacy", "forensic"].includes(candidate.authorityClass)
+  ) {
+    return `marker.authorityClass 非法枚举: ${String(candidate.authorityClass).slice(0, 32)}`;
+  }
+  if (candidate.lowlevelSource !== undefined && (typeof candidate.lowlevelSource !== "string" || candidate.lowlevelSource.length === 0)) {
+    return "marker.lowlevelSource 非法";
+  }
+  if (candidate.lineageBindingDigest !== undefined && (typeof candidate.lineageBindingDigest !== "string" || !WRITE_FAULT_DIGEST_PATTERN.test(candidate.lineageBindingDigest))) {
+    return "marker.lineageBindingDigest 非法（须为 16 小写 hex）";
+  }
+  if (candidate.attemptGeneration !== undefined && (typeof candidate.attemptGeneration !== "number" || !Number.isSafeInteger(candidate.attemptGeneration) || candidate.attemptGeneration < 0)) {
+    return "marker.attemptGeneration 非安全非负整数";
+  }
+  // v2 一致性：identity-bound 禁 lowlevelSource；lowlevel 必带。
+  if (candidate.authorityClass === "identity-bound" && candidate.lowlevelSource !== undefined) {
+    return "marker.identity-bound 携带 lowlevelSource（class 矛盾）";
+  }
+  if (candidate.authorityClass === "lowlevel" && candidate.lowlevelSource === undefined) {
+    return "marker.lowlevel 缺少 lowlevelSource（class 矛盾）";
+  }
   return null;
 }
 
@@ -266,14 +304,120 @@ export function recordTreasuryWriteFault(marker: TreasuryWriteFaultMarker): void
  * transaction、或 marker 指向其它根因时一律不动。无条件删除 marker 的
  * 入口已在第六轮移除：marker 无法证明 Game 动作是否发生，直接删除解锁
  * 会错误释放资源并可能重放已执行动作。
+ *
+ * 【第十七轮第十四节】升级为 **class-aware**（v2）：marker 携带 class-aware
+ * 身份（authorityClass/lowlevelSource/lineageBindingDigest/attemptGeneration
+ * 任一存在）时，proof 必须与 marker 的完整 class-aware attempt relation
+ * 判定 match 才删除——runtime-lowlevel marker 不清 migrated-lowlevel proof、
+ * parent marker 不被 child proof 清除、不同 lineage 互不清除、modern marker
+ * 不被 lowlevel/legacy proof 清除。v1 marker（无 class 字段）保持
+ * transactionId+digest 精确匹配的既有语义（历史数据兼容——写入侧全部
+ * 已升级 v2）。
  */
-export function clearTreasuryWriteFaultMarkerForResolution(transactionId: string, digest: string): boolean {
+export function clearTreasuryWriteFaultMarkerForResolution(
+  proof:
+    | {
+        readonly transactionId: string;
+        readonly digest: string;
+        readonly authorityClass?: "identity-bound" | "lowlevel" | "legacy" | "forensic";
+        readonly contractDigest?: string;
+        readonly authorizationCohortDigest?: string;
+        readonly durableIdentityDigest?: string;
+        readonly lowlevelSource?: string;
+        readonly lineageBindingDigest?: string;
+        readonly attemptGeneration?: number;
+      }
+    | string,
+  legacyDigest?: string,
+): boolean {
   const branch = (Memory.runtime as unknown as RuntimeMemoryWithTreasuryFault | undefined)?.treasury;
   const marker = branch?.writeFault;
   if (!marker || marker.status !== "unresolved") return false;
-  if (marker.transactionId !== transactionId || marker.digest !== digest) return false;
-  delete branch.writeFault;
+  // 兼容旧签名（transactionId, digest）：仅在 v1 marker 上等价。
+  const typedProof = (typeof proof === "string"
+    ? { transactionId: proof, digest: legacyDigest ?? "" }
+    : proof) as {
+    transactionId: string;
+    digest: string;
+    authorityClass?: "identity-bound" | "lowlevel" | "legacy" | "forensic";
+    contractDigest?: string;
+    authorizationCohortDigest?: string;
+    durableIdentityDigest?: string;
+    lowlevelSource?: string;
+    lineageBindingDigest?: string;
+    attemptGeneration?: number;
+  };
+  if (marker.transactionId !== typedProof.transactionId || marker.digest !== typedProof.digest) return false;
+  const markerIsV2 =
+    marker.markerVersion === 2 ||
+    marker.authorityClass !== undefined ||
+    marker.lowlevelSource !== undefined ||
+    marker.lineageBindingDigest !== undefined ||
+    marker.attemptGeneration !== undefined;
+  if (markerIsV2) {
+    // class-aware relation（markerAttemptIdentity 单一权威）：marker 视图 =
+    // 顶层 class 字段 + attemptIdentity 的现代 digest；proof 视图 = 调用方
+    // 提供的完整身份。
+    const markerView = {
+      transactionId: marker.transactionId,
+      digest: marker.digest,
+      ...(marker.authorityClass !== undefined ? { authorityClass: marker.authorityClass } : {}),
+      ...(marker.lowlevelSource !== undefined ? { lowlevelSource: marker.lowlevelSource } : {}),
+      ...(marker.lineageBindingDigest !== undefined ? { lineageBindingDigest: marker.lineageBindingDigest } : {}),
+      ...(marker.attemptGeneration !== undefined ? { attemptGeneration: marker.attemptGeneration } : {}),
+      ...(marker.attemptIdentity?.contractDigest !== undefined ? { contractDigest: marker.attemptIdentity.contractDigest } : {}),
+      ...(marker.attemptIdentity?.authorizationCohortDigest !== undefined
+        ? { authorizationCohortDigest: marker.attemptIdentity.authorizationCohortDigest }
+        : {}),
+      ...(marker.attemptIdentity?.durableIdentityDigest !== undefined
+        ? { durableIdentityDigest: marker.attemptIdentity.durableIdentityDigest }
+        : {}),
+    };
+    const proofView = {
+      transactionId: typedProof.transactionId,
+      digest: typedProof.digest,
+      ...(typedProof.authorityClass !== undefined ? { authorityClass: typedProof.authorityClass } : {}),
+      ...(typedProof.lowlevelSource !== undefined ? { lowlevelSource: typedProof.lowlevelSource } : {}),
+      ...(typedProof.lineageBindingDigest !== undefined ? { lineageBindingDigest: typedProof.lineageBindingDigest } : {}),
+      ...(typedProof.attemptGeneration !== undefined ? { attemptGeneration: typedProof.attemptGeneration } : {}),
+      ...(typedProof.contractDigest !== undefined ? { contractDigest: typedProof.contractDigest } : {}),
+      ...(typedProof.authorizationCohortDigest !== undefined
+        ? { authorizationCohortDigest: typedProof.authorizationCohortDigest }
+        : {}),
+      ...(typedProof.durableIdentityDigest !== undefined ? { durableIdentityDigest: typedProof.durableIdentityDigest } : {}),
+    };
+    const relation = treasuryClassAwareMarkerRelation(markerView, proofView);
+    if (relation !== "match") return false;
+  }
+  delete branch!.writeFault;
   return true;
+}
+
+/**
+ * 【第十七轮第十四节】从 attempt 事实构造 marker 的 class-aware 字段
+ * （写入调用方共用）：contractDigest 存在 → identity-bound；否则 lowlevel
+ * （runtime 来源——低层两阶段路径的内部写入）；binding/generation 由
+ * tr1_ 接管路径注入。
+ */
+export function classAwareMarkerFieldsOfFacts(facts: {
+  readonly contractDigest?: string;
+  readonly lineageBindingDigest?: string;
+  readonly lineageGeneration?: number;
+}): {
+  readonly markerVersion: 2;
+  readonly authorityClass: "identity-bound" | "lowlevel";
+  readonly lowlevelSource?: string;
+  readonly lineageBindingDigest?: string;
+  readonly attemptGeneration?: number;
+} {
+  const authorityClass: "identity-bound" | "lowlevel" = facts.contractDigest !== undefined ? "identity-bound" : "lowlevel";
+  return {
+    markerVersion: 2,
+    authorityClass,
+    ...(authorityClass === "lowlevel" ? { lowlevelSource: "runtime-lowlevel@v1" } : {}),
+    ...(facts.lineageBindingDigest !== undefined ? { lineageBindingDigest: facts.lineageBindingDigest } : {}),
+    ...(facts.lineageGeneration !== undefined ? { attemptGeneration: facts.lineageGeneration } : {}),
+  };
 }
 
 /**
