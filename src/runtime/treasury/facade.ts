@@ -118,9 +118,13 @@ import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRev
 import { readTreasuryResolutionCounters } from "@/runtime/treasury/resolutionEvents";
 import {
   committedResolutionSettledAtTick,
+  ensureTreasuryResolutionStoreValidated,
+  peekTreasuryResolutionStoreEntry,
   peekTreasuryResolutionStoreHealth,
   readTreasuryResolutionStoreCounters,
+  readTreasuryResolutionTombstone,
   recoverStagedResolutions,
+  treasuryResolutionResolvingInProgress,
 } from "@/runtime/treasury/resolutionStore";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
 import {
@@ -179,7 +183,6 @@ import {
 } from "@/runtime/treasury/authorizationFaults";
 import {
   writeTreasuryResolutionTombstone,
-  readTreasuryResolutionTombstone,
   ensureTreasuryResolutionSlotAvailable,
 } from "@/runtime/treasury/resolutionStore";
 import { clearTreasuryWriteFaultMarkerForResolution, readTreasuryWriteFault } from "@/runtime/treasury/writeFault";
@@ -435,8 +438,12 @@ export interface TreasuryService {
     readonly transactionId: string;
     readonly digest?: string;
   }): { readonly status: "issued"; readonly capability: TreasuryReconciliationCapability } | {
+    readonly status: "already_resolved";
+    readonly resolution: "committed" | "not-executed";
+    readonly transactionId: string;
+  } | {
     readonly status: "rejected";
-    readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated";
+    readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated" | "resolution_in_progress" | "resolution_identity_conflict" | "resolution_store_fatal";
     readonly detail: string;
   };
   /**
@@ -788,7 +795,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     receiptUnhealthy: () => !peekTreasuryReceiptHealth().healthy,
     receiptCapacityExhausted: () => readTreasuryReceiptEventCounters().slotsRemaining <= 0,
     resolutionStoreUnhealthy: () => !peekTreasuryResolutionStoreHealth().healthy,
-    resolutionResolvingBlocker: () => peekTreasuryResolutionStoreHealth().inProgress > 0,
+    // 【第十五轮第十节】resolving blocker 改经缓存计数：store 存在时触发完整
+    // load/migration 后读取 heap 缓存（轻量 probe 未 load 时不再全表扫描）。
+    resolutionResolvingBlocker: () => treasuryResolutionResolvingInProgress(),
     recoverySlotExhausted: () => recoverySlotsOccupied() >= TREASURY_QUARANTINE_MAX_ENTRIES,
     // 【第十四轮第十四节】authorization-fault 完整 validation 门禁：在真正
     // 准备 production action 之前（readiness 收集即 admission 输入）触发
@@ -2802,11 +2811,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       readonly transactionId: string;
       readonly digest?: string;
     }): { readonly status: "issued"; readonly capability: TreasuryReconciliationCapability } | {
+      readonly status: "already_resolved";
+      readonly resolution: "committed" | "not-executed";
+      readonly transactionId: string;
+    } | {
       readonly status: "rejected";
-      readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated";
+      readonly reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated" | "resolution_in_progress" | "resolution_identity_conflict" | "resolution_store_fatal";
       readonly detail: string;
     } {
-      const reject = (reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated", detail: string) => {
+      const reject = (reason: "not_found" | "digest_mismatch" | "authority_inconsistent" | "active_handle_present" | "no_registered_reconciler" | "invalid_input" | "premature_observation" | "adapter_version_mismatch" | "reconciler_fault" | "legacy_authority_isolated" | "resolution_in_progress" | "resolution_identity_conflict" | "resolution_store_fatal", detail: string) => {
         metrics.reconciliationCapabilitiesRejected += 1;
         return { status: "rejected" as const, reason, detail };
       };
@@ -2827,6 +2840,46 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const facts0 = authority.authority;
       if (input.digest !== undefined && facts0.digest !== input.digest) {
         return reject("digest_mismatch", `digest 不匹配（entry ${facts0.digest}，请求 ${input.digest}）`);
+      }
+      // ── 【第十五轮第七节】resolution tombstone 门禁：reconciler 只在"无
+      //    现有 resolution intent"时运行——resolving 期间不重跑对账、不签发
+      //    第二份普通 capability（等待 staged recovery 继续原结论）；final
+      //    且 identity match → already-resolved；identity conflict / proof
+      //    insufficient → fail closed（reconciler 零调用）。──
+      if (peekTreasuryResolutionStoreEntry() !== undefined) {
+        const resolutionFatal = ensureTreasuryResolutionStoreValidated();
+        if (resolutionFatal !== null) {
+          return reject("resolution_store_fatal", `resolution store 损坏（不可信 store 上不得签发 capability）: ${resolutionFatal}`);
+        }
+      }
+      const existingResolution = readTreasuryResolutionTombstone(input.transactionId);
+      if (existingResolution !== undefined) {
+        if (existingResolution.stage === "resolving") {
+          return reject(
+            "resolution_in_progress",
+            `transactionId ${input.transactionId.slice(0, 48)} 已有 stage=resolving 的 resolution tombstone（结论 ${existingResolution.resolution}）——不重跑 reconciler、不签发第二份 capability，等待 staged recovery 继续原结论`,
+          );
+        }
+        const resolutionAttempt = {
+          digest: facts0.digest,
+          ...(facts0.contractDigest !== undefined ? { contractDigest: facts0.contractDigest } : {}),
+          ...(facts0.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: facts0.authorizationCohortDigest } : {}),
+          ...(facts0.durableIdentityDigest !== undefined ? { durableIdentityDigest: facts0.durableIdentityDigest } : {}),
+        };
+        const resolutionRelation = treasuryAttemptIdentityRelation(existingResolution, resolutionAttempt);
+        if (resolutionRelation === "match") {
+          return {
+            status: "already_resolved",
+            resolution: existingResolution.resolution,
+            transactionId: input.transactionId,
+          };
+        }
+        return reject(
+          "resolution_identity_conflict",
+          resolutionRelation === "conflict"
+            ? `既有 final tombstone 与当前 authority attempt identity 冲突（${input.transactionId.slice(0, 48)}）——不重跑 reconciler（fail closed）`
+            : `既有 final tombstone 的 proof 不足以证明当前 authority attempt（${input.transactionId.slice(0, 48)}）——不重跑 reconciler（fail closed）`,
+        );
       }
       // active handle：resolution 后 endTick 不得重新 quarantine。
       if (preparedById.has(input.transactionId)) {

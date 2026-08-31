@@ -1190,7 +1190,9 @@ describe("resolution proof level（第十四轮第十一节）", () => {
         resolvedAtTick: Game.time,
       }).status,
     ).toBe("rejected");
-    // 同 proof level + 同 identity → 允许 finalize。
+    // 同 proof level + 同 identity + 同观察/reconciler 身份 → 允许 finalize
+    //（【第十五轮】finalize 必须保持全部安全关键字段——含 reconcilerKind 与
+    // source，仅 stage 与 resolvedAtTick 可推进）。
     expect(
       writeTreasuryResolutionTombstone({
         transactionId: "tp_level_change",
@@ -1203,6 +1205,8 @@ describe("resolution proof level（第十四轮第十一节）", () => {
         settledAtTick: Game.time,
         observationTick: Game.time,
         resolvedAtTick: Game.time,
+        reconcilerKind: "terminal.send",
+        source: "test",
       }).status,
     ).toBe("updated");
   });

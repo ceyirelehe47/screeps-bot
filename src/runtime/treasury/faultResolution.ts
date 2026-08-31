@@ -69,6 +69,7 @@ import {
   writeTreasuryResolutionTombstone,
   type TreasuryResolutionProofLevel,
 } from "@/runtime/treasury/resolutionStore";
+import { verifyTreasuryCommittedResolutionProof } from "@/runtime/treasury/committedProofVerifier";
 import type {
   TreasuryReconciliationCapability,
   TreasuryReconciliationCapabilityAuthority,
@@ -611,7 +612,40 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
       detail: `receipt 刷新被身份验证阻断（${receipt.reason}）: ${receipt.detail}——authority 保持，显式处理`,
     };
   }
-  // staged 第 4-6 步：释放 quarantine/intent → 清匹配 marker → finalize。
+  // staged 第 4 步【第十五轮第十三节】：重新读取持久 receipt proof + 重新
+  // 解析 unified authority → 统一三方 committed proof verifier（与 staged
+  // recovery 复用同一 verifier）。不得仅凭 refresh 返回成功释放——refresh
+  // 成功后 receipt 被篡改、双 authority 变 inconsistent、proof 变 legacy/
+  // insufficient 都在此 fail closed（authority 与 resolving tombstone 保留，
+  // 由 beginTick 恢复继续阻断）。
+  const readBackProof = readTreasurySettlementProof(authority.transactionId);
+  const postRefreshAuthority = resolveTreasuryUnresolvedAuthority(authority.transactionId);
+  const committedVerdict = verifyTreasuryCommittedResolutionProof({
+    tombstone: {
+      transactionId: authority.transactionId,
+      digest: authority.digest,
+      proofLevel: resolvingProofLevel,
+      settledAtTick: Game.time,
+      ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+      ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
+      ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+    },
+    authorityResolution: postRefreshAuthority,
+    receiptProof: readBackProof,
+  });
+  if (committedVerdict.status !== "verified") {
+    countRejected();
+    return {
+      status: "rejected",
+      reason: committedVerdict.status === "authority_inconsistent"
+        ? "authority_inconsistent"
+        : committedVerdict.status === "conflict"
+          ? "settlement_identity_conflict"
+          : "settlement_proof_insufficient",
+      detail: `committed proof 三方验证失败（${committedVerdict.status}）: ${committedVerdict.detail}——authority 与 resolving tombstone 保留（beginTick 恢复幂等重验）`,
+    };
+  }
+  // staged 第 5-7 步：释放 quarantine/intent → 清匹配 marker → finalize。
   releaseTreasuryQuarantineEntry(authority.transactionId);
   releaseTreasuryIntentEntry(authority.transactionId);
   clearTreasuryWriteFaultMarkerForResolution(authority.transactionId, authority.digest);

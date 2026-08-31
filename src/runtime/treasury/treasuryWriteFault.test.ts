@@ -92,7 +92,8 @@ function registerReconciler(): void {
 /** 从 service 签发 capability（断言成功并返回）。 */
 function issueCap(service: TreasuryTestService, transactionId: string) {
   const issued = service.issueTreasuryReconciliationCapability({ transactionId });
-  if (issued.status !== "issued") throw new Error(`capability 签发失败: ${issued.reason}`);
+  if (issued.status === "rejected") throw new Error(`capability 签发失败: ${issued.reason}`);
+  if (issued.status === "already_resolved") throw new Error(`capability 签发命中 already_resolved（${issued.resolution}）`);
   return issued.capability;
 }
 

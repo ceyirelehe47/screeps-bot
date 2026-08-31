@@ -40,6 +40,7 @@ import {
   resetTreasuryResolutionStoreForTest,
   writeTreasuryResolutionTombstone,
   TREASURY_RESOLUTION_MAX_ENTRIES,
+  TREASURY_RESOLUTION_VERSION,
 } from "@/runtime/treasury/resolutionStore";
 import {
   makeTreasuryTestTransferAdapter,
@@ -113,6 +114,7 @@ function issueCapability(service: TreasuryTestService, transactionId: string, di
     ...(digest !== undefined ? { digest } : {}),
   });
   if (issued.status === "issued") return { status: "issued", capability: issued.capability };
+  if (issued.status === "already_resolved") return { status: "rejected", reason: "already_resolved", detail: `capability 签发命中 already_resolved（${issued.resolution}）` };
   return { status: "rejected", reason: issued.reason, detail: issued.detail };
 }
 
@@ -593,9 +595,15 @@ describe("参数校验与不可信 store", () => {
 describe("staged atomic（故障注入与恢复）", () => {
   it("resolution slot 满：在任何原状态变化之前拒绝（quarantine/marker/receipt 全不动）", () => {
     const { digest } = makeCommittedFaultQuarantine("ts1_slot_full");
-    // 预填满 resolution store（无可清理过期项）。
+    // 预填满 resolution store（无可清理过期项）。【第十五轮】写入口已禁止直接
+    // 创建 final committed（状态机：absent 只能创建 resolving committed /
+    // final not-executed）——容量 fixture 直接持久化历史 final 形态（load 校验
+    // 认可，模拟既有满载 store）。
+    Memory.runtime = Memory.runtime ?? {};
+    Memory.runtime.treasury = Memory.runtime.treasury ?? {};
+    const fillerEntries: Record<string, unknown> = {};
     for (let index = 0; index < TREASURY_RESOLUTION_MAX_ENTRIES; index += 1) {
-      const write = writeTreasuryResolutionTombstone({
+      fillerEntries[`r:filler${index}`] = {
         transactionId: `filler${index}`,
         digest: "0123456789abcdef",
         resolution: "committed",
@@ -606,9 +614,17 @@ describe("staged atomic（故障注入与恢复）", () => {
         observationTick: Game.time,
         resolvedAtTick: Game.time,
         reconcilerKind: "terminal.send",
-      });
-      expect(write.status).not.toBe("rejected");
+      };
     }
+    Memory.runtime.treasury.resolutions = {
+      version: TREASURY_RESOLUTION_VERSION,
+      entries: fillerEntries,
+      entryCount: TREASURY_RESOLUTION_MAX_ENTRIES,
+      updatedAt: Game.time,
+    } as never;
+    // 直写 Memory 后丢弃 heap 缓存，强制下一次访问从持久副本重新 load。
+    resetTreasuryResolutionStoreForTest();
+    expect(ensureTreasuryResolutionStoreValidated()).toBeNull();
     const next = advanceTick();
     const issued = issueCapability(next, "ts1_slot_full", digest);
     expect(issued.status).toBe("issued");
@@ -830,7 +846,7 @@ describe("staged atomic（故障注入与恢复）", () => {
     const health = peekTreasuryResolutionStoreHealth();
     expect(health.healthy).toBe(true);
     expect(readTreasuryResolutionTombstone("legacy1")?.stage).toBe("final");
-    expect(Memory.runtime.treasury.resolutions?.version).toBe(4);
+    expect(Memory.runtime.treasury.resolutions?.version).toBe(TREASURY_RESOLUTION_VERSION);
     expect(Memory.runtime.treasury.resolutions?.entryCount).toBe(1);
   });
 });

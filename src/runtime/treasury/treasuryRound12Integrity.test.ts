@@ -417,10 +417,13 @@ describe("tombstone / finalized proof identity（第十二轮 3.3/3.4）", () =>
         }),
       }));
     }
-    expect(issued.status).toBe("issued");
-    if (issued.status === "issued") {
-      const resolved = next.resolveUnresolvedTransaction({ transactionId: "attempt_shared", capability: issued.capability });
-      expect(resolved.status).not.toBe("already_resolved");
+    // 【第十五轮第七节】capability gate 在签发前读取 resolution tombstone：
+    // A 的 final not-executed tombstone 与 B 的 attempt identity 冲突 →
+    // 不重跑 reconciler、不签发（比 resolve 侧拒绝更早 fail closed——B 依旧
+    // 无法被 A 的 tombstone 解决）。
+    expect(issued.status).toBe("rejected");
+    if (issued.status === "rejected") {
+      expect(issued.reason).toBe("resolution_identity_conflict");
     }
   });
 
