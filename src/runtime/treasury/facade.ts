@@ -64,12 +64,17 @@ import {
   peekTreasuryReceiptHealth,
   readTreasuryLifecycle,
   readTreasuryReceiptEventCounters,
+  readTreasurySettlementProof,
   releaseAllTreasuryReceiptReservations,
   releaseTreasuryReceiptReservation,
   reserveTreasuryReceiptAdmission,
   writeTreasuryLifecycle,
   hasSettledReceipt,
 } from "@/runtime/treasury/receipts";
+import {
+  treasuryAttemptIdentityRelation,
+  type TreasuryAttemptIdentity,
+} from "@/runtime/treasury/identityProof";
 import { resolveTreasuryHolder } from "@/runtime/treasury/holderResolution";
 import {
   isTreasuryWriteAdmissionLocked,
@@ -289,6 +294,9 @@ interface PreparedTransaction {
   intentWritten?: boolean;
   /** 统一 durable identity（第十二轮 3.4：receipt settlement proof 绑定）。 */
   durableIdentityDigest?: string;
+  /** 【第十三轮】commit 段 receipt proof 绑定的完整 attempt 身份（contract 路径）。 */
+  contractDigest?: string;
+  authorizationCohortDigest?: string;
 }
 
 /**
@@ -2110,9 +2118,44 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         };
       }
       // 幂等防御：prepare→commit 之间被同 id 结算（合法竞态，该路径已计入
-      // tentative 不会超卖）——handle 终态化。
+      // tentative 不会超卖）——handle 终态化。【第十三轮 5.2】现代路径按完整
+      // attempt identity 区分：match 才幂等终态化（不重复 heap 发布、上层
+      // 释放 intent）；legacy/insufficient proof 不得假装属于当前 modern
+      // attempt、conflict 为明确 identity 冲突——两者不发布 heap committed
+      // state、返回明确拒绝（上层 executed_unsettled 分支 quarantine 接管
+      // authority 并阻断自动重试）。低层路径（无 durable identity）保持
+      // replay-blocker 幂等语义。
       const settledBeforeCommit = projection.isSettled(record.canonical.transactionId);
       if (settledBeforeCommit !== undefined) {
+        if (record.durableIdentityDigest !== undefined) {
+          const proof = readTreasurySettlementProof(record.canonical.transactionId);
+          const attempt: TreasuryAttemptIdentity = {
+            digest: record.digest,
+            ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+            ...(record.authorizationCohortDigest !== undefined
+              ? { authorizationCohortDigest: record.authorizationCohortDigest }
+              : {}),
+            durableIdentityDigest: record.durableIdentityDigest,
+          };
+          const relation =
+            proof === undefined || proof.level === "legacy"
+              ? ("insufficient" as const)
+              : treasuryAttemptIdentityRelation(
+                  { ...proof, digest: proof.digest ?? record.digest },
+                  attempt,
+                );
+          if (relation !== "match") {
+            metrics.duplicateSettlementsRejected += 1;
+            return {
+              status: "rejected",
+              reason: relation === "conflict" ? "settlement_identity_conflict" : "settlement_proof_insufficient",
+              detail:
+                relation === "conflict"
+                  ? `同 id 既有 receipt proof 与当前 attempt identity 冲突（prepare→commit 窗口；settledAtTick ${String(settledBeforeCommit)}）——不发布 heap，保留 authority 待 resolution（fail closed）`
+                  : `同 id 既有 receipt proof 无法证明当前 modern attempt（${proof === undefined ? "proof 不可读" : "legacy/身份不足 proof"}；settledAtTick ${String(settledBeforeCommit)}）——不冒充当前 attempt，保留 authority 待 resolution（fail closed）`,
+            };
+          }
+        }
         record.state = "committed";
         preparedById.delete(record.canonical.transactionId);
         projection.tentativeRelease(record.tentativeKey);
@@ -2131,18 +2174,41 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       try {
         runTreasuryCommitFaultHook("receipt_publish");
         // 【第十三轮】modern proof 的 attempt identity 须完整（digest 与
-        // durableIdentityDigest 成对）——低层两阶段路径（无 durable identity）
-        // 写显式 legacy proof（replay blocker 保留；不冒充现代证明）。
+        // durableIdentityDigest 成对 + contract/cohort digest 同源携带）——
+        // 低层两阶段路径（无 durable identity）写显式 legacy proof（replay
+        // blocker 保留；不冒充现代证明）。
         const receipt = projection.publishPreparedReceipt(
           record.canonical.transactionId,
           Game.time,
           record.durableIdentityDigest !== undefined
-            ? { digest: record.digest, durableIdentityDigest: record.durableIdentityDigest }
+            ? {
+                digest: record.digest,
+                durableIdentityDigest: record.durableIdentityDigest,
+                ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+                ...(record.authorizationCohortDigest !== undefined
+                  ? { authorizationCohortDigest: record.authorizationCohortDigest }
+                  : {}),
+              }
             : undefined,
         );
         if (receipt.status === "fatal") {
           throw new TreasuryCommitFaultError("receipt_publish", receipt.detail);
         }
+        if (receipt.status === "identity_conflict" || receipt.status === "already_settled_insufficient") {
+          // 【第十三轮 5.2】post-callback 防御：既有 committed proof 与当前
+          // attempt identity 冲突或证明不足（legacy proof）——不得发布 heap
+          // committed state、不得覆盖既有 proof；进入明确 settlement fault
+          //（上层 executed_unsettled 分支 quarantine 接管 authority 并阻断
+          // 自动重试）。
+          throw new TreasuryCommitFaultError(
+            "receipt_publish",
+            receipt.status === "identity_conflict"
+              ? `同 id 既有 modern receipt proof 与当前 attempt identity 冲突（settledAtTick ${String(receipt.settledAtTick)}）——fail closed，不发布 heap`
+              : `同 id 既有 receipt proof 无法证明当前 attempt（${receipt.relation}；settledAtTick ${String(receipt.settledAtTick)}）——不得冒充当前 modern attempt，不发布 heap`,
+          );
+        }
+        // already_settled_match：既有 proof 与当前 attempt 完全一致——幂等
+        // 结算（heap 本 tick 缓存未记录该 id，继续完成首次 heap 发布）。
         runTreasuryCommitFaultHook("heap_publish");
         const heap = projection.publishPreparedHeapState(
           record.canonical,
@@ -2368,6 +2434,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           : {}),
       });
       record.durableIdentityDigest = durableIdentity;
+      // 【第十三轮】commit 段 receipt proof 绑定完整 attempt 身份（与
+      // durable identity 同源派生；低层路径无 contract 时缺省）。
+      record.contractDigest = execution?.intentContract?.contractDigest;
+      record.authorizationCohortDigest =
+        redeemedCohort !== undefined ? computeTreasuryAuthorizationCohortDigest(redeemedCohort) : undefined;
       // ── durable intent / WAL（第八轮唯一安全顺序）：Game API 之前持久化
       //    transaction identity + canonical postings——写入失败时 callback
       //    零调用、tentative 与槽位释放、结构化拒绝。第九轮：contract 路径

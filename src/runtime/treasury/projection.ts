@@ -519,6 +519,19 @@ export function createTreasuryProjectionController(
       // admission 已拦截 fatal store，此处防御性拒绝（零 heap 写入）。
       return { status: "rejected", reason: "receipt_store_incompatible", detail: receipt.detail };
     }
+    if (receipt.status !== "written") {
+      // 【第十三轮 5.1】already_settled 是零发布终态：commit 段发现既有
+      // committed proof（match/insufficient/conflict——compat 单阶段无 identity
+      // 无法证明属于本次 attempt）时零 journal/overlay/capacity delta/heap
+      // settled cache/onRecorded/projectionRevision/tentative 写入——
+      // 绝不二次应用 heap 状态。
+      options.onDuplicateRejected?.(fields.transactionId);
+      return {
+        status: "already_settled",
+        transactionId: fields.transactionId,
+        firstRecordedAtTick: receipt.settledAtTick,
+      };
+    }
     const postings = applyCommittedHeapState(entry, shape, tentativeKey);
     return { status: "recorded", transactionId: fields.transactionId, postings, tick };
   }
@@ -570,7 +583,12 @@ export function createTreasuryProjectionController(
   function publishPreparedReceipt(
     transactionId: string,
     tick: number,
-    identity?: { readonly digest?: string; readonly durableIdentityDigest?: string },
+    identity?: {
+      readonly digest?: string;
+      readonly contractDigest?: string;
+      readonly authorizationCohortDigest?: string;
+      readonly durableIdentityDigest?: string;
+    },
   ): TreasuryReceiptWriteResult {
     return commitSettledReceipt(transactionId, tick, identity);
   }

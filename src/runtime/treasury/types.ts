@@ -208,7 +208,13 @@ export type TreasuryRejectionReason =
   /** adapter kind 与 contract 不匹配。 */
   | "adapter_kind_mismatch"
   /** 结构 incarnation 已变化（contract 绑定的 structureId 不再匹配）。 */
-  | "structure_replaced";
+  | "structure_replaced"
+  /** 【第十三轮】同 id 既有 receipt proof 与当前 attempt identity 冲突
+   *  （post-callback 防御：不发布 heap、保留 authority 待 resolution）。 */
+  | "settlement_identity_conflict"
+  /** 【第十三轮】同 id 既有 receipt proof 无法证明当前 modern attempt
+   *  （legacy/insufficient proof：不发布 heap、不覆盖 proof、保持隔离）。 */
+  | "settlement_proof_insufficient";
 
 /** rejected 形状（验证/门禁/登记共用的具体拒绝结果）。 */
 export interface TreasuryRejectedResult {

@@ -66,6 +66,10 @@ import {
   isValidTreasuryTransactionId,
 } from "@/runtime/treasury/transactionId";
 import type { TreasuryWriteFaultMarker } from "@/runtime/treasury/writeFault";
+import {
+  treasuryAttemptIdentityRelation,
+  type TreasuryAttemptIdentity,
+} from "@/runtime/treasury/identityProof";
 import { resetTreasuryQuarantineRuntimeForTest } from "@/runtime/treasury/quarantine";
 import { resetTreasuryResolutionEventsForTest } from "@/runtime/treasury/resolutionEvents";
 import { resetTreasuryIntentRuntimeForTest } from "@/runtime/treasury/intents";
@@ -930,10 +934,17 @@ export function releaseAllTreasuryReceiptReservations(): number {
 }
 
 /** 结算写入（admission 通过/预留兑现后的原子提交段调用）。 */
-/** 结算写入结果：written=已写入；already_settled=幂等命中；fatal=store 不可写。 */
+/** 结算写入结果：written=已写入；其余=既有 committed proof 命中（细分见类型）；fatal=store 不可写。 */
 export type TreasuryReceiptWriteResult =
   | { readonly status: "written" }
-  | { readonly status: "already_settled" }
+  | { readonly status: "already_settled_match"; readonly settledAtTick: number }
+  | {
+      /** legacy proof 或 proof 缺少当前 attempt 携带的身份事实——不能证明现代 attempt（replay blocker 保留）。 */
+      readonly status: "already_settled_insufficient";
+      readonly settledAtTick: number;
+      readonly relation: "legacy" | "insufficient";
+    }
+  | { readonly status: "identity_conflict"; readonly settledAtTick: number }
   | { readonly status: "fatal"; readonly detail: string };
 
 /**
@@ -969,7 +980,52 @@ export function commitSettledReceipt(
   }
   if (existing.status !== "absent") {
     pendingAdmissions.delete(transactionId); // 双保险：不重复叠加，仍释放预留
-    return { status: "already_settled" };
+    // 【第十三轮 5.3】细化既有 committed proof 的身份判定：identity 完整时
+    // 与 modern proof 做完整 attempt identity 比较（match/conflict）；legacy
+    // proof 或 proof 缺少 attempt 携带的身份事实 → insufficient（replay
+    // blocker 保留——绝不覆盖既有 proof）；identity 未提供（compat 单阶段）
+    // 无法证明属于本次 attempt → 保守 insufficient。
+    if (existing.status === "incompatible") {
+      return {
+        status: "fatal",
+        detail: `transactionId ${transactionId.slice(0, 48)} 的 receipt store 版本不可识别（fail closed）`,
+      };
+    }
+    const settledAtTick = existing.status === "legacy_committed" ? existing.settledAtTick : existing.proof.settledAtTick;
+    const attempt: TreasuryAttemptIdentity | undefined =
+      identity?.digest !== undefined && identity.durableIdentityDigest !== undefined
+        ? {
+            digest: identity.digest,
+            ...(identity.contractDigest !== undefined ? { contractDigest: identity.contractDigest } : {}),
+            ...(identity.authorizationCohortDigest !== undefined
+              ? { authorizationCohortDigest: identity.authorizationCohortDigest }
+              : {}),
+            durableIdentityDigest: identity.durableIdentityDigest,
+          }
+        : undefined;
+    if (existing.status === "legacy_committed") {
+      receiptEvents.receiptIdentityInsufficient += 1;
+      return { status: "already_settled_insufficient", settledAtTick, relation: "legacy" };
+    }
+    // existing 为 modern proof（v5 矩阵保证 digest 与 durableIdentityDigest 存在）
+    if (attempt === undefined) {
+      receiptEvents.receiptIdentityInsufficient += 1;
+      return { status: "already_settled_insufficient", settledAtTick, relation: "insufficient" };
+    }
+    const relation = treasuryAttemptIdentityRelation(
+      { ...existing.proof, digest: existing.proof.digest ?? attempt.digest },
+      attempt,
+    );
+    if (relation === "match") {
+      receiptEvents.receiptIdentityMatches += 1;
+      return { status: "already_settled_match", settledAtTick };
+    }
+    if (relation === "conflict") {
+      receiptEvents.receiptIdentityConflicts += 1;
+      return { status: "identity_conflict", settledAtTick };
+    }
+    receiptEvents.receiptIdentityInsufficient += 1;
+    return { status: "already_settled_insufficient", settledAtTick, relation: "insufficient" };
   }
   // 【第十二轮 3.4 / 第十三轮 v5】结算写入绑定 attempt 身份并显式定级：
   // identity 完整（digest + durableIdentityDigest 成对）→ modern proof；
