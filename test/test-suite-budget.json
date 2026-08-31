@@ -1,25 +1,25 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "e740fb2",
-    "suites": 228,
-    "tests": 1407,
-    "passed": 1407,
+    "commit": "a04c4ee",
+    "suites": 231,
+    "tests": 1471,
+    "passed": 1471,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 228,
-    "tests": 1407,
-    "passed": 1407,
+    "suites": 231,
+    "tests": 1471,
+    "passed": 1471,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 86,
+    "highRiskFiles": 89,
     "defaultFiles": 127
   },
   "files": {
@@ -1159,6 +1159,21 @@
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryRound14OperationCount.test.ts": {
+      "baseline": 3,
+      "budget": 3,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound15ResolutionMonotonicity.test.ts": {
+      "baseline": 31,
+      "budget": 31,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound15AuthoritySemantics.test.ts": {
+      "baseline": 30,
+      "budget": 30,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound15OperationCount.test.ts": {
       "baseline": 3,
       "budget": 3,
       "tier": "high-risk"
