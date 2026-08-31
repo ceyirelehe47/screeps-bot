@@ -687,3 +687,78 @@ proofLevel ∈ { identity-bound, lowlevel, legacy, forensic }，required/forbidd
 #### 3.16.6 authorization-fault 健康门禁
 
 轻量 probe O(1) 检查 metadata 矛盾（version 集合/entries 对象/entryCount 非负安全整数且不超容量/updatedAt 合法）；write readiness 的 fault source 与 authorizationSafe 联合判定升级为完整 validation（ensureTreasuryAuthorizationFaultStoreValidated：首次有界全表扫描、heap 缓存后 O(1)、store 不存在零写）——损坏 entry 不得等 redemption fault 后才发现，授权与 callback 在损坏期间零发生。
+
+## 11. 第十五轮设计：resolution 单调性与跨 store authority 释放
+
+### 11.1 新增窄职责模块
+
+```
+src/runtime/treasury/
+  resolutionStateMachine.ts   tombstone 不可逆状态机（纯函数，唯一权威）
+  committedProofVerifier.ts   三方 committed proof verifier（纯函数；normal/recovery 共用）
+  authorityIdempotence.ts     authority-class same-ID 幂等比较器（三 store 唯一权威）
+  forensicProvenance.ts       显式 forensic provenance 语义与形状校验
+  durableSnapshot.ts          有界深冻结快照 helper（普通对象/数组、有界深度与键数）
+```
+
+依赖方向（无循环）：resolutionStore → { resolutionStateMachine, committedProofVerifier, unresolvedAuthority, forensicProvenance, durableSnapshot }；faultResolution → { committedProofVerifier, unresolvedAuthority }；三 store → { authorityIdempotence, durablePublication }；facade → resolutionStore（capability gate 只读单条 tombstone）。facade 不新增内联协议逻辑；resolutionStore 只承载持久 state 与迁移，不重复实现 authority 解析。
+
+### 11.2 resolution 状态机（resolutions v5）
+
+```text
+absent ──create──▶ resolving committed ──finalize(保 identity/结论)──▶ final committed
+   │                                            │
+   └────────create────────▶ final not-executed   └─(禁止: → final not-executed / → resolving not-executed)
+
+final committed / final not-executed：只允许 exact idempotent 重复写；任何字段差异 = conflict（原数据不动）
+final → resolving：拒绝；同 ID 改 digest/proofLevel/attempt identity/actionTick/结论：拒绝；settledAtTick 降低：拒绝
+```
+
+- 写入口 `writeTreasuryResolutionTombstone` 内部全部经 `validateTreasuryResolutionTombstoneTransition` 判定（任意调用者无法构造自由状态更新）；recovery 的 finalize 同样先经状态机校验再原地推进 stage。
+- v5 新增可选 `forensicProvenance`（显式管理协议证明）；migration-derived forensic（v3 partial / forensic 定级）无 provenance → 永久隔离。
+- `deleteTreasuryResolutionTombstone` 收敛为仅 resolving 回滚（final 不可删除；retention 清理仍走独立的 evictExpiredTombstones 通道）。
+
+### 11.3 cross-store authority 状态图
+
+```text
+resolveTreasuryUnresolvedAuthority(tx)
+  ├─ not_found ─▶ 补完成分支：committed 须 receipt↔tombstone match（verifier）；not-executed 视为释放已完成
+  ├─ ok(normalized authority) ─▶ 三方 verifier（tombstone + authority + receipt proof）
+  └─ inconsistent ─▶ 零释放：intent 保留 / quarantine 保留 / tombstone 保留 / marker 保留 /
+                      authorityInconsistent 计数 / readiness 阻断 / 零 refresh / 零 stage 变化
+```
+
+### 11.4 proof level → authority 自动释放矩阵（普通自动 recovery）
+
+| proof level \ authority | modern | lowlevel | legacy | forensic |
+|---|---|---|---|---|
+| identity-bound | 释放 | 阻断 | 阻断 | 阻断 |
+| lowlevel | 阻断 | 释放 | 阻断 | 阻断 |
+| legacy | 阻断 | 阻断 | 阻断（replay blocker 保留） | 阻断 |
+| forensic | 阻断 | 阻断 | 阻断 | 阻断（仅显式 provenance 流程） |
+
+### 11.5 authority class same-ID 幂等矩阵
+
+| class | same 判定（全部成立） | 任一不成立 |
+|---|---|---|
+| modern | level 相同；durableIdentityDigest 双方完整且相等；cohort digest 双方完整且相等；contractId/contractDigest 一致 | conflict |
+| lowlevel | level 相同；受控 lowlevelSource 相同；durableIdentityDigest 双方完整且相等 | conflict |
+| legacy | 完整 legacy signature：transactionId/digest/kind/actionKind/canonical postings/source/legacyV1 全等 | conflict（不再空对空幂等） |
+| forensic | forensic reason/provenance 相同；已知 attempt facts 逐字段相等；digest/postings/source/phase/outcome 全等 | conflict / isolated（provenance 不足） |
+| 跨等级 | —（永远 conflict） | conflict |
+
+公共前置（全 class）：transactionId、digest、kind、actionKind、canonical postings、source 相等。
+
+### 11.6 durable publication store-specific 验证矩阵
+
+| store | 注入的语义 validator | 共享比较新增字段 |
+|---|---|---|
+| intent | validateTreasuryIntentEntryShape（含 level 矩阵/outcome-settlement 语义/modern required/cohort/descriptor） | phase、tick、recordedAt、createdAtTick、detail、legacyV1、forensic（深比较）、faultTick、rollbackConfirmed |
+| quarantine | validateTreasuryQuarantineEntryShape（phase/outcome/settlement 矩阵/forensic provenance/legacyV1/deltas/contract 事实） | 同上 |
+| authorization-fault | validateFaultEntryShape（outcome=not_started、rollbackConfirmed=true、faultTick、detail 边界、authority 矩阵） | 同上 |
+
+回滚统一恢复 entry/entryCount/revision/updatedAt（authorizationFaults 修复为恢复原 updatedAt，不再错写 Game.time）。
+
+### 11.7 committed verifier 复用路径
+
+normal resolve-as-committed、beginTick staged recovery、finalize 补完成、already-resolved 检查 → 同一 `verifyTreasuryCommittedResolutionProof({tombstone, authorityResolution, receiptProof})`。immediate 流程：写 resolving → refresh → **重读持久 proof** → verifier → 通过才释放 → finalize；verifier 失败时 authority 与 resolving tombstone 保留（fail closed，恢复路径继续阻断）。

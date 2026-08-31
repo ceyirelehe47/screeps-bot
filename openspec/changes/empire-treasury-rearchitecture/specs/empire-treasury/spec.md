@@ -1369,3 +1369,119 @@ intent / quarantine / authorization-fault 的写入必须（MUST）在发布前�
 - **THEN** 写入回滚、entryCount/revision/updatedAt 恢复、调用方收到结构化 store fault
 
 authorization-fault store 的轻量健康探测必须（MUST）检查 metadata 矛盾（version 受支持集合、entries 普通对象、entryCount 非负安全整数且不超硬容量、updatedAt 合法安全整数）且不扫描 entries 全表；write readiness 与 authorization 联合判定在 store 存在时必须（MUST）触发完整 load 验证（首次有界全表扫描、heap 缓存后 O(1)）——损坏期间授权拒绝、Game callback 零调用。
+
+### Requirement: 第十五轮——自动恢复统一 unresolved authority resolver
+
+staged resolution 的全部自动恢复路径（resolving committed 的 beginTick 恢复、final not-executed 的补完成释放、global reset 补完成）必须（MUST）经唯一的 `resolveTreasuryUnresolvedAuthority` 读取 authority，不得（MUST NOT）自行实现 quarantine 优先、intent fallback、等级比较或 durable identity 比较。status=ok 时只允许（MAY）使用返回的 normalized authority 继续 proof 验证；status=inconsistent 时必须（MUST）保留 intent、quarantine、tombstone 与 write-fault marker，记录独立 authorityInconsistent 计数，write readiness 保持阻断，零 authority 释放、零 receipt refresh、零 tombstone stage 变化；status=not_found 时只允许（MAY）进入"authority 已在前一阶段释放"分支（committed 仍须 receipt ↔ tombstone identity match 且 tick 足够才补完成 finalize；not-executed 视为释放已完成），不得（MUST NOT）伪造新 authority。
+
+#### Scenario: 双 authority 不一致时零释放
+
+- **WHEN** resolving committed tombstone 存在，同 ID quarantine（modern）与 intent（legacy/modern 不同 identity）并存且 resolver 判 inconsistent
+- **THEN** 两份 authority 原样保留、tombstone 保持 resolving、marker 保留、authorityInconsistent 计数独立增加、write readiness 保持阻断
+
+#### Scenario: 完全一致的双 authority 正常恢复
+
+- **WHEN** 同 ID quarantine 与 intent 身份完全一致（resolver ok）
+- **THEN** normalized authority 路径正常继续三方 proof 验证与释放
+
+### Requirement: 第十五轮——resolution tombstone 不可逆状态机
+
+resolution store（v5）的每次写入必须（MUST）经不可逆状态机判定：合法创建只有 absent → resolving committed 与 absent → final not-executed；合法更新只有 resolving committed → final committed，且必须（MUST）保持 transactionId、digest、proofLevel、完整 attempt identity、resolution kind、actionTick、observationTick、reconcilerKind、source、settledAtTick 与 forensic provenance 不变（仅 stage 与 resolvedAtTick 单调推进、必要 finalization 审计字段可变）。resolving committed → final not-executed、resolving committed → resolving not-executed、final committed → final not-executed、final not-executed → final committed、final → resolving、同 ID 改变 resolution kind / digest / proofLevel / attempt identity / actionTick、降低 settledAtTick 必须（MUST）全部拒绝且原 tombstone 完全不变。已有 tombstone 时只允许（MAY）全部安全关键字段完全一致的 exact idempotent 重复写，不得（MUST NOT）以覆盖写实现幂等。
+
+#### Scenario: resolving committed 不能变为 final not-executed
+
+- **WHEN** 已存在 resolving committed tombstone，尝试写入同 ID 的 final not-executed（即使 digest 相同）
+- **THEN** 拒绝，原 tombstone 完全不变
+
+#### Scenario: final tombstone 的 exact idempotence
+
+- **WHEN** 已存在 final tombstone，重复写入全部安全关键字段完全一致的内容
+- **THEN** 幂等返回（already-present 语义），原数据不变；任一字段不同则 identity/state conflict
+
+### Requirement: 第十五轮——resolving 期间 reconciler 与 capability 互斥
+
+capability 签发路径必须（MUST）在调用 adapter.reconcile 之前读取 resolution tombstone：stage=resolving 时不得（MUST NOT）调用 reconciler、不得签发新 capability，必须（MUST）返回 resolution_in_progress（等待 staged recovery 继续原结论）；stage=final 且完整 attempt identity 与当前 authority match 时必须（MUST）返回 already-resolved 语义且 reconciler 零调用；tombstone 存在但 identity conflict 或 proof insufficient 时必须（MUST）fail closed（reconciler 零调用）。resolving tombstone 不得（MUST NOT）被第二个相反结论覆盖。
+
+#### Scenario: resolving 期间 reconciler 零调用
+
+- **WHEN** resolving committed tombstone 存在（staged resolution 进行中）且请求签发 capability
+- **THEN** 拒绝 resolution_in_progress、adapter.reconcile 调用数为 0、不签发第二份普通 capability
+
+### Requirement: 第十五轮——forensic proof 显式管理 provenance
+
+forensic proof 必须（MUST）绑定显式管理 provenance（协议版本、acknowledgement 类型、管理操作身份或 capability digest、attempt identity、确认时间、来源、自动补完成许可）才能参与任何显式 forensic 流程；migration-derived forensic tombstone（旧 partial identity 迁移）必须（MUST）永久隔离——不得（MUST NOT）由普通 beginTick 自动释放、不得（MUST NOT）参与普通 capability resolution、不得（MUST NOT）假装已有人确认。普通自动 recovery 的 proof 释放矩阵必须（MUST）收敛为 identity-bound → modern 与 lowlevel → lowlevel；legacy 与 forensic proof 一律不得（MUST NOT）通过普通自动 recovery 释放 authority（legacy replay blocker 语义保留，但不作为 authority release proof）。缺少显式 forensic provenance 的 forensic proof 与 authority 保持隔离并提供（MUST）诊断（来源保留）。
+
+#### Scenario: migration-derived forensic 不被 beginTick 释放
+
+- **WHEN** forensic proof tombstone 与 forensic authority 并存（等级相同），普通 beginTick recovery 运行
+- **THEN** authority 不释放（proof-level 矩阵阻断）、隔离与诊断保留
+
+### Requirement: 第十五轮——按 authority class 的 same-ID 幂等
+
+intent / quarantine / authorization-fault 三个 store 的 same-ID 写入必须（MUST）经唯一的 authority-class 幂等比较模块，不得（MUST NOT）以"durable identity digest 空对空匹配"作为通用幂等证明。modern：authorityLevel 相同、durableIdentityDigest 双方完整存在且一致、cohort identity 存在且一致、contract identity 一致；lowlevel：authorityLevel 相同、受控 lowlevelSource 相同、durableIdentityDigest 存在且一致、digest/kind/actionKind/source/canonical postings 一致；legacy：受控 legacy signature（transactionId、digest、kind/actionKind、canonical postings、source 或已定义 legacy provenance、legacyV1 标记）完全相同才幂等；forensic：forensic reason/provenance、已知 attempt identity、digest、canonical postings、source、fault phase/outcome 全部相同才幂等。跨 authority level 的 same-ID entry 必须（MUST）永远冲突；缺少足够 provenance 时必须（MUST）不视作 same（保持已有 entry，返回 conflict/isolated）。
+
+#### Scenario: legacy 空 durable 不同 digest 不幂等
+
+- **WHEN** 同 ID legacy entry 与新写入 legacy 候选 durableIdentityDigest 均为空但 digest（或 canonical postings / source）不同
+- **THEN** identity conflict（不返回 already_present），原数据不动
+
+#### Scenario: 跨等级 same-ID 冲突
+
+- **WHEN** 同 ID 既有 modern entry，新写入候选声明 lowlevel（或相反）
+- **THEN** identity conflict，原数据不动
+
+### Requirement: 第十五轮——store-specific durable publication 语义验证
+
+durable publication read-back 必须（MUST）支持注入 store-specific 完整 shape 与语义校验：intent（authority level 矩阵、outcome/settlement 语义矩阵、lowlevel provenance、modern required 字段、cohort/descriptor）；quarantine（phase/outcome/settlement 语义矩阵、forensic provenance、legacy 标记、tick/recordedAt、deltas、contract/cohort/descriptor 事实——必须检出 phase 被篡改但 digest 未变）；authorization-fault（outcome 恒 not_started、rollbackConfirmed 恒 true、faultTick、source、detail 边界、authority 矩阵、cohort/descriptor、forensic/legacy 信息）。共享比较字段集必须（MUST）覆盖全部安全关键不可变字段（phase、outcome、settlement、forensic 对象、legacyV1、faultTick、rollbackConfirmed、authority level、lowlevel provenance、结构与 cohort 嵌套事实、tick/recordedAt/createdAtTick、detail）。read-back 失败必须（MUST）回滚并恢复 entry、entryCount、revision、updatedAt 与相关缓存——不得留下当前 global 暂时可信、下次 reset 才 fatal 的 entry。
+
+#### Scenario: quarantine phase 篡改触发回滚
+
+- **WHEN** quarantine 发布后、read-back 前 Memory 中的 phase 被篡改（digest 未变）
+- **THEN** read-back 失败、本次写入回滚、entryCount/revision 恢复、调用方收到结构化 store fault
+
+#### Scenario: authorization-fault 固定事实篡改触发回滚
+
+- **WHEN** authorization-fault 发布后 faultTick 被篡改或 rollbackConfirmed 变为 false
+- **THEN** read-back 失败并回滚，bookkeeping 恢复
+
+### Requirement: 第十五轮——authority 读取完整深冻结
+
+readTreasuryIntentEntry、readTreasuryQuarantineEntry、readTreasuryAuthorizationFaultEntry、readTreasuryResolutionTombstone 与全部 list / diagnostic API 必须（MUST）返回完整深拷贝并深冻结的快照：postings/deltas、structure descriptors、authorization cohort（含 revisions 与 authorization leg digests）、forensic provenance、嵌套 policy/owner 事实与任何嵌套数组或普通对象。调用者修改返回对象的任意嵌套字段时 Memory 必须（MUST）不变、store revision 不得（MUST NOT）被绕过、heap health cache 不得（MUST NOT）被外部对象污染。深冻结 helper 必须（MUST）只处理明确有界的普通对象/数组（有界深度与键数），不得（MUST NOT）使用通用无限递归 clone 处理任意对象。
+
+#### Scenario: 修改 read quarantine 的 cohort revisions
+
+- **WHEN** 调用者修改 readTreasuryQuarantineEntry 返回快照的 authorizationCohort.revisions（或 forensic 对象）
+- **THEN** Memory 中的权威 entry 不变
+
+### Requirement: 第十五轮——lowlevel provenance 受控权威
+
+lowlevelSource 必须（MUST）是受控来源集合的成员（runtime-lowlevel@v1、migrated-lowlevel@v1；test-only 来源只能经测试通道），不得（MUST NOT）接受任意非空字符串。production 代码不得（MUST NOT）自行传任意字符串；未知 source 必须（MUST）拒绝。migration 只能（MAY）生成 migrated 来源；runtime 来源只能由 store 内部写入路径缺省声明；来源必须（MUST）进入 lowlevel same-ID 比较（source 变化 → conflict）。旧任意字符串 source 迁移时无法证明来源必须（MUST）定级 forensic 隔离，不得（MUST NOT）直接信任。
+
+#### Scenario: 未知 lowlevel source 拒绝
+
+- **WHEN** 携带未知 lowlevelSource 字符串的 lowlevel entry 通过 store 写入或 load 校验
+- **THEN** 拒绝/ unhealthy（fail closed）
+
+### Requirement: 第十五轮——immediate 与 staged recovery 共用三方 verifier
+
+必须（MUST）存在唯一的 committed proof verifier（输入 tombstone、normalized authority 解析结果与持久 receipt proof；输出 verified / conflict / insufficient / authority_inconsistent / receipt_absent / receipt_stale），normal resolve-as-committed、beginTick staged recovery、finalize 补完成与
+ already-resolved 检查共同复用。immediate resolve-as-committed 必须执行：写 resolving tombstone → refresh receipt → 重新读取持久 receipt proof → 调用统一三方 verifier → verifier 通过才释放 authority → finalize；不得仅凭 refresh 返回成功释放。refresh 成功后持久 receipt 被篡改、双 authority 变 inconsistent、receipt proof 变 legacy/insufficient 时必须不释放（authority 与 resolving tombstone 保留，独立计数），且任意拒绝路径 Game callback 零调用。
+
+#### Scenario: refresh 成功但 receipt 被篡改
+
+- **WHEN** immediate resolve-as-committed 的 receipt refresh 返回成功，但重新读取的持久 proof 与 tombstone attempt identity 不一致
+- **THEN** 不释放 authority、不 finalize、resolving tombstone 保留
+
+### Requirement: 第十五轮——resolution health 版本兼容
+
+resolution store 轻量 health probe 的受支持版本集合必须与 loader 一致（v1/v2/v3/v4/v5 均为 supported migration pending，不误报 unknown fatal）；未知版本仍必须 fail closed。未 load 时轻量 probe 不得执行全表扫描（resolving 计数由 heap 缓存承载，写路径触发完整 load/migration）；write readiness 的 resolving blocker 在 store 存在时必须触发完整 load 验证后读取缓存计数。
+
+#### Scenario: v3 store 轻量 health 不误报
+
+- **WHEN** 持久 resolution store 为 v3（loader 支持 v3→v5 迁移）且未 load
+- **THEN** 轻量 probe 报告 healthy（migration pending），不报 unknown version；写路径触发完整迁移
+
+#### Scenario: unknown 版本仍 fail closed
+
+- **WHEN** 持久 resolution store 版本为未知值（如 99）
+- **THEN** 轻量 probe 报 unhealthy（fail closed）
