@@ -275,6 +275,30 @@ function lookupNormalizedReceipt(
   } else if (version === 2 || version === 3 || version === 4 || version === 5) {
     key = encodeReceiptKey(transactionId);
   } else {
+    // 未知/更高版本：store 整体 fail closed（admission/登记拒绝），但已能
+    // 可靠解释的合法条目不得被遗忘（【第十三轮 4.2】幂等保证不因版本未知
+    // 丢失）——按 v2+ 前缀键形态探测：合法数字 = legacy committed；合法
+    // v5/v4 proof 按等级分流；无法解释 = incompatible。
+    key = encodeReceiptKey(transactionId);
+    if (!Object.prototype.hasOwnProperty.call(settled, key)) return { status: "incompatible" };
+    const unknownValue = settled[key];
+    if (isValidSettledTick(unknownValue, nowTick)) return { status: "legacy_committed", settledAtTick: unknownValue };
+    if (isValidSettlementProof(unknownValue, nowTick)) {
+      const proof = unknownValue as TreasurySettlementProof;
+      return proof.level === "modern"
+        ? { status: "modern_committed", proof }
+        : { status: "legacy_committed", settledAtTick: proof.settledAtTick };
+    }
+    if (isValidV4SettlementProofShape(unknownValue, nowTick)) {
+      const typed = unknownValue as { settledAtTick: number; digest?: string; durableIdentityDigest?: string };
+      if (typed.durableIdentityDigest !== undefined) {
+        return {
+          status: "modern_committed",
+          proof: { level: "modern", settledAtTick: typed.settledAtTick, digest: typed.digest, durableIdentityDigest: typed.durableIdentityDigest },
+        };
+      }
+      return { status: "legacy_committed", settledAtTick: typed.settledAtTick };
+    }
     return { status: "incompatible" };
   }
   if (!Object.prototype.hasOwnProperty.call(settled, key)) return { status: "absent" };

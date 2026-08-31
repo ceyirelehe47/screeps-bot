@@ -848,7 +848,9 @@ export function quarantineTreasuryTransaction(
   // 非 modern contract authority；生产 contract 路径由调用方显式声明）。
   const entry: TreasuryQuarantineEntry = { ...entryInput, authorityLevel: entryInput.authorityLevel ?? "lowlevel" };
   // 写入前重新完整验证 entry（快照封闭配套——不假设调用方传入 prepare
-  // 验证过的安全对象）。
+  // 验证过的安全对象）。identity 重算（cohort/durable digest 与持久事实
+  // 一致）由 load 全量校验与 repair 承载（写入方 digest 的最终一致性在
+  // 读取路径 fail closed——与 intent 同款边界）。
   const shapeError = validateTreasuryQuarantineEntryShape(entry);
   if (shapeError !== null) {
     quarantineEvents.admissionRejections += 1;

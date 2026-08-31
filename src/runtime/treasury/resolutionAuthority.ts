@@ -239,9 +239,23 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
     const existing = readTreasuryResolutionTombstone(marker.transactionId);
     if (existing !== undefined && existing.stage === "final" && existing.resolution === "not-executed") {
       // already_resolved 必须比较完整 attempt identity——同 id、同普通 digest
-      // 但不同 owner/policy/cohort 的 attempt 不得共享 forensic tombstone
-      //（marker 缺 identity 字段时为 legacy forensic proof：遇携带现代身份的
-      // tombstone 判 insufficient/conflict，不得 already_resolved）。
+      // 但不同 owner/policy/cohort 的 attempt 不得共享 forensic tombstone。
+      // marker 缺 identity 字段 = legacy forensic proof：只与同为 legacy（无
+      // 现代身份）的 tombstone 幂等；tombstone 携带现代身份时证明不足，
+      // 不得 already_resolved（fail closed，显式处理）。
+      const markerModern =
+        marker.attemptIdentity?.durableIdentityDigest !== undefined ||
+        marker.attemptIdentity?.authorizationCohortDigest !== undefined;
+      const tombstoneModern =
+        existing.durableIdentityDigest !== undefined || existing.authorizationCohortDigest !== undefined;
+      if (!markerModern && tombstoneModern) {
+        deps.metrics.reconciliationCapabilitiesRejected += 1;
+        return {
+          status: "rejected",
+          reason: "digest_mismatch",
+          detail: `既有 not-executed tombstone 携带现代 attempt identity，而 forensic marker 为 legacy proof（无 identity 字段）——证明不足，不得 already_resolved 或覆盖（${marker.transactionId.slice(0, 48)}，显式处理）`,
+        };
+      }
       if (treasuryAttemptIdentityRelation(existing, markerAttempt) === "match") {
         clearTreasuryWriteFaultMarkerForResolution(marker.transactionId, marker.digest);
         return { status: "already_resolved", resolution: "not-executed", transactionId: marker.transactionId };
