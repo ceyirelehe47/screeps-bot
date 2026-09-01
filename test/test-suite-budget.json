@@ -1,26 +1,26 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "710bdbc",
-    "suites": 243,
-    "tests": 1633,
-    "passed": 1633,
+    "commit": "7c38c45",
+    "suites": 250,
+    "tests": 1697,
+    "passed": 1697,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "commit": "710bdbc",
-    "suites": 243,
-    "tests": 1633,
-    "passed": 1633,
+    "commit": "7c38c45",
+    "suites": 250,
+    "tests": 1697,
+    "passed": 1697,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 101,
+    "highRiskFiles": 108,
     "defaultFiles": 127
   },
   "files": {
@@ -1237,6 +1237,41 @@
     "src/runtime/treasury/treasuryRound18OperationCount.test.ts": {
       "baseline": 6,
       "budget": 6,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound19CommittedLineageResolution.test.ts": {
+      "baseline": 16,
+      "budget": 16,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound19HandoffDualAuthority.test.ts": {
+      "baseline": 8,
+      "budget": 8,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound19RetirementStages.test.ts": {
+      "baseline": 12,
+      "budget": 12,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound19IndexIntegrity.test.ts": {
+      "baseline": 5,
+      "budget": 5,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound19TerminalSummaryProof.test.ts": {
+      "baseline": 11,
+      "budget": 11,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound19ReceiptHealthMigration.test.ts": {
+      "baseline": 8,
+      "budget": 8,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound19OperationCount.test.ts": {
+      "baseline": 4,
+      "budget": 4,
       "tier": "high-risk"
     }
   }
