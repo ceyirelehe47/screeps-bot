@@ -911,15 +911,24 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       ? undefined
       : { transactionId: marker.transactionId, digest: marker.digest };
   });
-  // 【第十八轮 24.3】lineage 恢复的 committed receipt proof 只读视图装配
-  //（commit-pending 补完成：receipt 是 durable 权威——binding/generation 匹配
-  // 才补完成 chain_committed）。
+  // 【第十八轮 24.3 / 第二十一轮 8.1】lineage 恢复的 committed receipt
+  // proof 完整只读视图装配（模块单向依赖）：child-active 补完成按完整 exact
+  // proof（digest/contract/cohort/durable/class/provenance/lineage）验证——
+  // binding/generation 只是诊断字段，不构成放行依据。
   setTreasuryLineageReceiptReaderForAssembly((transactionId) => {
     const lookup = lookupTreasurySettledReceipt(transactionId);
     if (lookup.status !== "modern_committed") return undefined;
     return {
-      binding: lookup.proof.lineageBindingDigest,
-      generation: lookup.proof.lineageGeneration,
+      level: lookup.proof.level,
+      digest: lookup.proof.digest,
+      contractDigest: lookup.proof.contractDigest,
+      authorizationCohortDigest: lookup.proof.authorizationCohortDigest,
+      durableIdentityDigest: lookup.proof.durableIdentityDigest,
+      lowlevelSource: lookup.proof.lowlevelSource,
+      lineageId: lookup.proof.lineageId,
+      lineageGeneration: lookup.proof.lineageGeneration,
+      parentTransactionId: lookup.proof.parentTransactionId,
+      lineageBindingDigest: lookup.proof.lineageBindingDigest,
     };
   });
   /** bundle 签发序号（authorizationDigest 唯一性成分）。 */

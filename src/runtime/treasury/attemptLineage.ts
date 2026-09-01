@@ -68,6 +68,7 @@ import {
 import {
   registerTreasurySemanticLineageRecordSourceForAssembly,
 } from "@/runtime/treasury/semanticLineageValidation";
+import { verifyTreasuryChildActiveCommitRecovery } from "@/runtime/treasury/currentLineageSettlementVerifier";
 
 /** lineage store schema 版本（持久格式升级时递增；未知版本 fail closed）。 */
 export const TREASURY_LINEAGE_VERSION = 2;
@@ -193,6 +194,8 @@ export const lineageStoreEvents = {
   childIntentForensics: 0,
   childActivationForwardCompletions: 0,
   chainCommitCompletions: 0,
+  /** 【第二十一轮 8.3】child-active 补完成的 receipt proof conflict 计数。 */
+  childCommitProofConflicts: 0,
   retirementCompletions: 0,
   indexCorruptions: 0,
   migrations: 0,
@@ -211,6 +214,7 @@ export function resetTreasuryLineageRuntimeForTest(): void {
     childIntentForensics: 0,
     childActivationForwardCompletions: 0,
     chainCommitCompletions: 0,
+    childCommitProofConflicts: 0,
     retirementCompletions: 0,
     indexCorruptions: 0,
     migrations: 0,
@@ -1756,23 +1760,34 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
       continue;
     }
     if (record.state === "child_active") {
-      // commit-pending 补完成：当前代 committed receipt 匹配（binding）→
-      // chain_committed（receipt 是 durable commit-pending proof——task 7.4）。
-      const receiptProof = readLineageReceiptProofBinding(record.currentTransactionId);
-      if (
-        receiptProof !== undefined &&
-        receiptProof.binding === record.bindingDigest &&
-        receiptProof.generation === record.generation
-      ) {
-        if (readTreasuryIntentEntry(record.currentTransactionId) !== undefined) {
-          releaseTreasuryIntentEntry(record.currentTransactionId);
+      // 【第二十一轮 8】commit-pending 补完成的单一 verifier：完整 Receipt
+      // exact proof（digest/contract/cohort/durable/proof class/lowlevel
+      // provenance/lineage 四字段）与 record current exact identity 匹配才
+      // 允许关闭 lineage——binding+generation 快捷放行已删除（轻量字段不再
+      // 单独构成关闭依据）。状态变化顺序（8.2）：close chain_committed →
+      // 释放残留 Intent（close 失败时 Intent 与 child_active 事实保留，
+      // Receipt 作为持久 commit proof，beginTick 幂等重试）。
+      const receiptProof = lineageReceiptProofReader(record.currentTransactionId);
+      if (receiptProof !== undefined) {
+        const recovery = verifyTreasuryChildActiveCommitRecovery({ record, receiptProof });
+        if (recovery.status === "verified") {
+          const closed = closeTreasuryLineageAsChainCommitted(lineageId);
+          if (closed.status !== "rejected") {
+            if (readTreasuryIntentEntry(record.currentTransactionId) !== undefined) {
+              releaseTreasuryIntentEntry(record.currentTransactionId);
+            }
+            lineageStoreEvents.chainCommitCompletions += 1;
+            result = { ...result, chainCommitCompletions: result.chainCommitCompletions + 1 };
+          }
+          continue;
         }
-        const closed = closeTreasuryLineageAsChainCommitted(lineageId);
-        if (closed.status !== "rejected") {
-          lineageStoreEvents.chainCommitCompletions += 1;
-          result = { ...result, chainCommitCompletions: result.chainCommitCompletions + 1 };
+        if (recovery.status === "conflict") {
+          lineageStoreEvents.childCommitProofConflicts += 1;
         }
-        continue;
+        // conflict / insufficient / legacy：child_active、Intent 与 Receipt
+        // 证据全部保留（不自动升级、不猜测），fallthrough 到防御性 retirement
+        // 收敛检查（committed receipt 冲突时 not-executed 分支不会命中——
+        // tombstone/authority 条件不满足，保持现状）。
       }
       // 防御性 retirement 收敛：final not-executed tombstone + authority 已清。
       // 【第十九轮 C.6】与运行时路径执行同样的 marker 证明——经 retire 转换
@@ -1823,18 +1838,29 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
   return result;
 }
 
-// committed receipt 只读视图（facade 装配注入——保持模块单向依赖）。
-let lineageReceiptProofReader: (transactionId: string) => { readonly binding: string | undefined; readonly generation: number | undefined } | undefined = () => undefined;
-
-/** facade 装配时注入 receipt proof 的 binding/generation 读取。 */
-export function setTreasuryLineageReceiptReaderForAssembly(
-  reader: (transactionId: string) => { readonly binding: string | undefined; readonly generation: number | undefined } | undefined,
-): void {
-  lineageReceiptProofReader = reader;
+// committed receipt 完整 proof 只读视图（facade 装配注入——保持模块单向依赖）。
+// 【第二十一轮 8.1】reader 返回完整 settlement proof 视图（不再只透传
+// binding/generation——child-active 补完成按完整 exact proof 验证）。
+export interface TreasuryLineageReceiptProofView {
+  readonly level?: string;
+  readonly digest?: string;
+  readonly contractDigest?: string;
+  readonly authorizationCohortDigest?: string;
+  readonly durableIdentityDigest?: string;
+  readonly lowlevelSource?: string;
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
 }
 
-function readLineageReceiptProofBinding(transactionId: string): { readonly binding: string | undefined; readonly generation: number | undefined } | undefined {
-  return lineageReceiptProofReader(transactionId);
+let lineageReceiptProofReader: (transactionId: string) => TreasuryLineageReceiptProofView | undefined = () => undefined;
+
+/** facade 装配时注入 receipt settlement proof 的完整只读视图。 */
+export function setTreasuryLineageReceiptReaderForAssembly(
+  reader: (transactionId: string) => TreasuryLineageReceiptProofView | undefined,
+): void {
+  lineageReceiptProofReader = reader;
 }
 
 /** 恢复路径的 marker 只读视图（避免与 writeFault 清除语义耦合的轻量转发）。 */
