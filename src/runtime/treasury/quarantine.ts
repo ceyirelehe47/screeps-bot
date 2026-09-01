@@ -109,6 +109,8 @@ export interface TreasuryQuarantineEntry {
   /** 稳定 adapter/reconciler 语义身份（第十二轮 3.5）。 */
   readonly adapterSemanticIdentity?: string;
   readonly durablePayload?: string;
+  /** 【第十八轮 24.12】adapter 显式 retry facts（canonical 文本 ≤1024）。 */
+  readonly adapterRetryFacts?: string;
   readonly durablePayloadVersion?: number;
   /** authorization bundle digest（contract 路径）。 */
   readonly authorizationDigest?: string;
@@ -337,6 +339,11 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
   if (candidate.adapterSemanticIdentity !== undefined) {
     if (typeof candidate.adapterSemanticIdentity !== "string" || candidate.adapterSemanticIdentity.length === 0 || candidate.adapterSemanticIdentity.length > QUARANTINE_KIND_SOURCE_MAX) {
       return "adapterSemanticIdentity 非法（1..128 字符）";
+    }
+  }
+  if (candidate.adapterRetryFacts !== undefined) {
+    if (typeof candidate.adapterRetryFacts !== "string" || candidate.adapterRetryFacts.length === 0 || candidate.adapterRetryFacts.length > 1024) {
+      return "adapterRetryFacts 非法（1..1024 字符 canonical 文本）";
     }
   }
   if (candidate.durablePayload !== undefined) {

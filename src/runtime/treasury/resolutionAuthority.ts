@@ -94,7 +94,8 @@ function publishImmediateNotExecutedLineage(
         actionKind: fault.actionKind,
         kind: fault.actionKind,
         adapterVersion: fault.adapterVersion,
-        adapterRegistrationId: fault.adapterRegistrationId,
+        // authorization-fault entry 不持久化 adapter retry facts——immediate
+        // not-executed 只能 non-rearmable（digest 不可重建，不猜测）。
         adapterSemanticIdentity: fault.adapterSemanticIdentity,
         postings: fault.postings,
         structureFacts: fault.structureFacts,

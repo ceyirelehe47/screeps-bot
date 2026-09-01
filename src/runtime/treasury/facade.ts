@@ -437,6 +437,8 @@ export interface TreasuryWriterKernelExecution {
      * Game 动作语义完全一致）。
      */
     readonly canonicalArgsText?: string;
+    /** 【第十八轮 24.12】adapter 显式 retry facts（digest 重算输入）。 */
+    readonly adapterRetryFacts?: string;
   };
   /**
    * 【第十七轮第八节/第十节】tr1_ rearm child 的 opaque rearm capability
@@ -1882,8 +1884,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         const recomputedRetrySemantic = computeTreasuryModernRetrySemanticDigest({
           actionKind: verifiedContract.actionKind,
           adapterVersion: verifiedContract.adapterVersion,
-          ...(verifiedContract.adapterRegistrationId !== undefined ? { adapterRegistrationId: verifiedContract.adapterRegistrationId } : {}),
           ...(verifiedContract.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: verifiedContract.adapterSemanticIdentity } : {}),
+          ...(verifiedContract.adapterRetryFacts !== undefined ? { adapterRetryFacts: verifiedContract.adapterRetryFacts } : {}),
           ...(verifiedContract.canonicalArgsText !== undefined ? { canonicalArgsText: verifiedContract.canonicalArgsText } : {}),
           postings: verifiedContract.postings.map((leg) => ({ ...leg })),
           ...(verifiedContract.structureDescriptors.length > 0 ? { structureDescriptors: verifiedContract.structureDescriptors } : {}),
@@ -2895,8 +2897,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
                 ...(execution?.intentContract !== undefined
                   ? {
                       ...(execution.intentContract.adapterVersion !== undefined ? { adapterVersion: execution.intentContract.adapterVersion } : {}),
-                      ...(execution.intentContract.adapterRegistrationId !== undefined ? { adapterRegistrationId: execution.intentContract.adapterRegistrationId } : {}),
                       ...(execution.intentContract.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: execution.intentContract.adapterSemanticIdentity } : {}),
+                      ...(execution.intentContract.adapterRetryFacts !== undefined ? { adapterRetryFacts: execution.intentContract.adapterRetryFacts } : {}),
                       ...(execution.intentContract.canonicalArgsText !== undefined ? { canonicalArgsText: execution.intentContract.canonicalArgsText } : {}),
                       ...(execution.intentContract.durablePayload !== undefined ? { durablePayload: execution.intentContract.durablePayload } : {}),
                       ...(execution.intentContract.durablePayloadVersion !== undefined ? { durablePayloadVersion: execution.intentContract.durablePayloadVersion } : {}),
@@ -2954,6 +2956,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
                 : {}),
               ...(execution.intentContract.durablePayloadVersion !== undefined
                 ? { durablePayloadVersion: execution.intentContract.durablePayloadVersion }
+                : {}),
+              ...(execution.intentContract.adapterRetryFacts !== undefined
+                ? { adapterRetryFacts: execution.intentContract.adapterRetryFacts }
                 : {}),
               ...(execution.intentContract.structureFacts !== undefined
                 ? { structureFacts: execution.intentContract.structureFacts }
@@ -3034,6 +3039,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
                 : {}),
               ...(execution.intentContract.durablePayloadVersion !== undefined
                 ? { durablePayloadVersion: execution.intentContract.durablePayloadVersion }
+                : {}),
+              ...(execution.intentContract.adapterRetryFacts !== undefined
+                ? { adapterRetryFacts: execution.intentContract.adapterRetryFacts }
                 : {}),
               ...(execution.intentContract.structureFacts !== undefined
                 ? { structureFacts: execution.intentContract.structureFacts.map((fact) => ({ ...fact })) }

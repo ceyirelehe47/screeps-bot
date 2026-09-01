@@ -1,17 +1,28 @@
 /**
- * 【第十七轮第九节】retry semantic identity——child 必须是 parent 动作的
- * 语义重试，而不是只使用不同 transaction ID 的任意新动作。
+ * 【第十七轮第九节建立·第十八轮 v2】retry semantic identity——child 必须是
+ * parent 动作的语义重试，而不是只使用不同 transaction ID 的任意新动作。
  *
- * 固定语义：
+ * 【第十八轮 24.12 v2】稳定性重构：
+ * - **移除 per-global registration sequence**（adapterRegistrationId 不再
+ *   参与 digest——注册顺序变化/global reset 后相同 stable 语义与 retry
+ *   facts 必须得到相同 digest）；
+ * - **加入 adapter 显式声明的 canonical retry facts**（adapterRetryFacts：
+ *   覆盖全部会改变真实 Game API 调用语义的参数——与 durableFacts 职责
+ *   分离；durable payload 相同而 retry facts 不同 → digest 必须不同）；
+ * - 协议 tag 升级 v2（retry semantic 版本变化 → 旧 capability 绑定的
+ *   digest 自动失效）。
+ *
+ * 固定语义（保留）：
  * - 稳定、确定性、版本化的 digest（双 lane FNV-1a 16hex，纯函数零随机）；
  * - **modern contract 版**绑定实际 Game 动作语义：action kind、adapter
- *   version/registration/稳定语义身份、canonical action args 业务语义、
- *   canonical postings（资源/数量/room/location）、structure descriptors
- *   与角色、durable reconciliation payload/version、source、owner identity；
+ *   version、稳定语义身份、canonical retry facts、canonical postings
+ *   （资源/数量/room/location）、structure descriptors 与角色、durable
+ *   reconciliation payload/version、source、owner identity；
  * - **排除** parent/child transaction ID、tick、observation epoch、当前
  *   commitment/projection revision、policy decision digest、authorization
- *   bundle ID——child 必须重新经过当前状态授权（policy/commitment/库存/
- *   容量全部重估），但实际 Game 动作语义必须与 parent 一致；
+ *   bundle ID、adapter 注册序号、global 对象身份、函数源码字符串——child
+ *   必须重新经过当前状态授权（policy/commitment/库存/容量全部重估），但
+ *   实际 Game 动作语义必须与 parent 一致；
  * - **lowlevel 版**绑定 kind、source、canonical postings、受控
  *   lowlevelSource、durable payload——facts 不足（缺受控 source 或缺
  *   postings/durable 语义）返回 null（non-rearmable，不签发 capability）。
@@ -20,7 +31,7 @@
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 import type { TreasuryStructureBindingDescriptor } from "@/runtime/treasury/types";
 
-export const TREASURY_RETRY_SEMANTIC_PROTOCOL = "treasury-retry-semantic@v1";
+export const TREASURY_RETRY_SEMANTIC_PROTOCOL = "treasury-retry-semantic@v2";
 
 function descriptorSemanticText(descriptor: TreasuryStructureBindingDescriptor): string {
   const objectId = descriptor.objectId ?? "-";
@@ -37,13 +48,18 @@ function postingSemanticText(leg: { roomName: string; locationKind: string; reso
 export interface TreasuryModernRetrySemanticFacts {
   readonly actionKind: string;
   readonly adapterVersion?: number;
-  readonly adapterRegistrationId?: string;
   readonly adapterSemanticIdentity?: string;
   /**
-   * canonical action args 的业务语义文本——**不参与 digest**：durable
-   * payload（durableFacts.payload，由 args 派生）已覆盖 args 业务语义且
-   * intent/quarantine 均持久化（canonicalArgsText 仅 heap contract 携带，
-   * parent facts 不可重建）。
+   * 【第十八轮 v2】adapter 显式声明的 canonical retry facts 文本
+   * （adapterRetrySemantics.canonicalize 输出）——**rearm 必需**：未实现
+   * retry facts 的 adapter 在 not-executed 后只能 non-rearmable（digest
+   * 不可重建，不猜测）。per-global registration sequence 已移除。
+   */
+  readonly adapterRetryFacts?: string;
+  /**
+   * canonical action args 的业务语义文本——**不参与 digest**：retry facts
+   * + durable payload 已覆盖 args 业务语义且 intent/quarantine 均持久化
+   * （canonicalArgsText 仅 heap contract 携带，parent facts 不可重建）。
    */
   readonly canonicalArgsText?: string;
   readonly postings: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
@@ -83,7 +99,7 @@ export function computeTreasuryModernRetrySemanticDigest(facts: TreasuryModernRe
   const parts: string[] = [
     `k:${String(facts.actionKind.length)}:${facts.actionKind}`,
     `av:${facts.adapterVersion === undefined ? "-" : String(facts.adapterVersion)}`,
-    `ar:${facts.adapterRegistrationId === undefined ? "-" : facts.adapterRegistrationId}`,
+    `rf:${facts.adapterRetryFacts === undefined ? "-" : `${String(facts.adapterRetryFacts.length)}:${facts.adapterRetryFacts}`}`,
     `asi:${facts.adapterSemanticIdentity === undefined ? "-" : `${String(facts.adapterSemanticIdentity.length)}:${facts.adapterSemanticIdentity}`}`,
     `p:${encodePostings(facts.postings)}`,
     `sd:${facts.structureDescriptors === undefined ? "-" : facts.structureDescriptors.map(descriptorSemanticText).sort().map((text) => `${String(text.length)}:${text}`).join(",")}`,
@@ -126,8 +142,9 @@ export function modernRetrySemanticFactsOfEntry(entry: {
   readonly actionKind?: string;
   readonly kind?: string;
   readonly adapterVersion?: number;
-  readonly adapterRegistrationId?: string;
   readonly adapterSemanticIdentity?: string;
+  /** 【第十八轮 v2】adapter 显式 retry facts（intent/quarantine 持久化）。 */
+  readonly adapterRetryFacts?: string;
   readonly postings?:
     | readonly { roomName: string; locationKind: string; resource: string; delta: number }[]
     | readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
@@ -141,6 +158,9 @@ export function modernRetrySemanticFactsOfEntry(entry: {
   const postings = entry.postings ?? entry.deltas;
   const actionKind = entry.actionKind ?? entry.kind;
   if (postings === undefined || actionKind === undefined || entry.source === undefined) return null;
+  // 【第十八轮 24.12】rearm 必需 adapter 显式 retry facts——未实现 →
+  // non-rearmable（digest 不可重建，不猜测）。
+  if (entry.adapterRetryFacts === undefined) return null;
   if (entry.structureFacts !== undefined) {
     for (const descriptor of entry.structureFacts) {
       if (!descriptor || typeof descriptor !== "object") return null;
@@ -158,7 +178,7 @@ export function modernRetrySemanticFactsOfEntry(entry: {
   return {
     actionKind,
     ...(entry.adapterVersion !== undefined ? { adapterVersion: entry.adapterVersion } : {}),
-    ...(entry.adapterRegistrationId !== undefined ? { adapterRegistrationId: entry.adapterRegistrationId } : {}),
+    ...(entry.adapterRetryFacts !== undefined ? { adapterRetryFacts: entry.adapterRetryFacts } : {}),
     ...(entry.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: entry.adapterSemanticIdentity } : {}),
     postings,
     ...(entry.structureFacts !== undefined

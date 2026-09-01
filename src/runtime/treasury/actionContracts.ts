@@ -47,6 +47,7 @@ import type {
 } from "@/runtime/treasury/types";
 import { TREASURY_STRUCTURE_DESCRIPTOR_VERSION } from "@/runtime/treasury/types";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
+import { canonicalizeTreasuryAdapterRetryFacts } from "@/runtime/treasury/adapterRetrySemantics";
 import { canonicalizeTreasuryActionArgs, TREASURY_CANONICAL_ENCODING_VERSION } from "@/runtime/treasury/canonicalEncoding";
 
 const ACTION_KIND_MAX = 128;
@@ -144,6 +145,13 @@ export interface TreasuryActionAdapter<TArgs = unknown, TResult extends { ok: bo
   structureBindings?(args: TArgs): readonly TreasuryActionStructureBinding[];
   /** 有界版本化对账事实（持久 intent 的 durable payload 来源）。 */
   durableFacts?(args: TArgs): TreasuryDurableFacts | null;
+  /**
+   * 【第十八轮 24.12】显式版本化 retry semantic facts：从 canonical frozen
+   * args 派生有界事实（string/number/boolean Record——必须覆盖全部会改变
+   * 真实 Game API 调用语义的参数）。与 durableFacts 职责分离；未实现 →
+   * 动作正常执行、not-executed 后 non-rearmable（不猜测）。
+   */
+  retryFacts?(args: TArgs): Record<string, string | number | boolean> | null;
   reconcile?(facts: TreasuryActionReconcilerFacts, observation: unknown): TreasuryActionReconcilerConclusion;
 }
 
@@ -170,6 +178,13 @@ export interface TreasuryRegisteredActionAdapter<TArgs = unknown, TResult extend
   execute(args: TArgs): TResult;
   structureBindings?(args: TArgs): readonly TreasuryActionStructureBinding[];
   durableFacts?(args: TArgs): TreasuryDurableFacts | null;
+  /**
+   * 【第十八轮 24.12】显式版本化 retry semantic facts：从 canonical frozen
+   * args 派生有界事实（string/number/boolean Record——必须覆盖全部会改变
+   * 真实 Game API 调用语义的参数）。与 durableFacts 职责分离；未实现 →
+   * 动作正常执行、not-executed 后 non-rearmable（不猜测）。
+   */
+  retryFacts?(args: TArgs): Record<string, string | number | boolean> | null;
   reconcile?(facts: TreasuryActionReconcilerFacts, observation: unknown): TreasuryActionReconcilerConclusion;
 }
 
@@ -214,6 +229,9 @@ function validateAdapterShape(adapter: TreasuryActionAdapter): string | null {
   if (adapter.durableFacts !== undefined && typeof adapter.durableFacts !== "function") {
     return "adapter.durableFacts 须为函数";
   }
+  if (adapter.retryFacts !== undefined && typeof adapter.retryFacts !== "function") {
+    return "adapter.retryFacts 须为函数";
+  }
   if (adapter.reconcile !== undefined && typeof adapter.reconcile !== "function") {
     return "adapter.reconcile 须为函数";
   }
@@ -249,6 +267,7 @@ export function registerTreasuryActionAdapter(
         existing.view.execute === adapter.execute &&
         existing.view.structureBindings === adapter.structureBindings &&
         existing.view.durableFacts === adapter.durableFacts &&
+        existing.view.retryFacts === adapter.retryFacts &&
         existing.view.reconcile === adapter.reconcile;
       if (!sameImplementation) {
         if (existing.view.semanticIdentity !== adapter.semanticIdentity) {
@@ -286,6 +305,7 @@ export function registerTreasuryActionAdapter(
     execute: adapter.execute,
     ...(adapter.structureBindings !== undefined ? { structureBindings: adapter.structureBindings } : {}),
     ...(adapter.durableFacts !== undefined ? { durableFacts: adapter.durableFacts } : {}),
+  ...(adapter.retryFacts !== undefined ? { retryFacts: adapter.retryFacts } : {}),
     ...(adapter.reconcile !== undefined ? { reconcile: adapter.reconcile } : {}),
   });
   const record: TreasuryAdapterRegistrationRecord = Object.freeze({
@@ -399,6 +419,8 @@ export interface TreasuryActionContract {
   readonly digest: string;
   /** adapter.durableFacts(canonical) 的有界对账事实（intent 持久化来源）。 */
   readonly durableFacts?: Readonly<TreasuryDurableFacts>;
+  /** 【第十八轮 24.12】canonical retry facts（adapter 显式声明；digest 参与）。 */
+  readonly adapterRetryFacts?: string;
   readonly epoch: {
     readonly scope: TreasuryObservationScope;
     readonly epochSeq: number;
@@ -973,6 +995,25 @@ function buildTreasuryActionContractInner(
       durableFacts = { version: facts.version, payload: facts.payload };
     }
   }
+  // 【第十八轮 24.12】adapter 显式 retry facts：canonical frozen args 派生 →
+  // 共享边界（shape validation / canonical encoding / 大小上限 / 异常边界）。
+  // 派生抛错或超限 → contract 构建拒绝（fail closed——不产出部分事实）；
+  // adapter 未实现 → 无 retry facts（action 正常执行，not-executed 后
+  // non-rearmable）。
+  let adapterRetryFacts: string | undefined;
+  if (adapter.retryFacts !== undefined) {
+    const retryCall = adapterCall("retryFacts", () => adapter.retryFacts!(canonicalArgs));
+    if (retryCall.status === "fault") {
+      actionContractEvents.rejected += 1;
+      return { status: "rejected", reason: "contract_invalid", detail: retryCall.detail };
+    }
+    const canonicalized = canonicalizeTreasuryAdapterRetryFacts(retryCall.value);
+    if (canonicalized.status === "rejected") {
+      actionContractEvents.rejected += 1;
+      return { status: "rejected", reason: "contract_invalid", detail: `retry facts 非法: ${canonicalized.detail}` };
+    }
+    adapterRetryFacts = canonicalized.text;
+  }
   const sortedPostings = [...derived].sort((a, b) => (postingKey(a) < postingKey(b) ? -1 : postingKey(a) > postingKey(b) ? 1 : 0));
   // 【第十一轮 3.13.9】完整 descriptor 集（排序确定）：AC4 digest 输入与
   // intent/quarantine durable facts 的同源事实——同结构不同 role 各占一条。
@@ -1005,8 +1046,9 @@ function buildTreasuryActionContractInner(
     durableFacts !== undefined
       ? `:dfv:${String(durableFacts.version)}:dfh:${durablePayloadHash}:rcv:${String(durableFacts.version)}`
       : ":df:none";
+  const retryFactsText = adapterRetryFacts !== undefined ? `:rf:${String(adapterRetryFacts.length)}:${adapterRetryFacts}` : ":rf:none";
   const digest = hashTreasuryCanonicalString(
-    `AC4:ce:${String(TREASURY_CANONICAL_ENCODING_VERSION)}:k:${String(request.actionKind.length)}:${request.actionKind}:av:${String(adapter.version)}:ar:${String(adapter.registrationId.length)}:${adapter.registrationId}:asi:${String(adapter.semanticIdentity.length)}:${adapter.semanticIdentity}:t:${String(request.transactionId.length)}:${request.transactionId}:a:${String(canonicalized.text.length)}:${canonicalized.text}:p:${sortedPostings.map(canonicalPostingText).join(",")}:sd:${sortedDescriptors.map(canonicalStructureDescriptorText).join(",")}${durableText}`,
+    `AC4:ce:${String(TREASURY_CANONICAL_ENCODING_VERSION)}:k:${String(request.actionKind.length)}:${request.actionKind}:av:${String(adapter.version)}:ar:${String(adapter.registrationId.length)}:${adapter.registrationId}:asi:${String(adapter.semanticIdentity.length)}:${adapter.semanticIdentity}:t:${String(request.transactionId.length)}:${request.transactionId}:a:${String(canonicalized.text.length)}:${canonicalized.text}:p:${sortedPostings.map(canonicalPostingText).join(",")}:sd:${sortedDescriptors.map(canonicalStructureDescriptorText).join(",")}${durableText}${retryFactsText}`,
   );
   const contract = Object.freeze({
     __brand: "treasury-action-contract",
@@ -1024,6 +1066,7 @@ function buildTreasuryActionContractInner(
     structureDescriptors: Object.freeze(sortedDescriptors.map((d) => Object.freeze({ ...d }))),
     digest,
     ...(durableFacts !== undefined ? { durableFacts: Object.freeze({ ...durableFacts }) } : {}),
+    ...(adapterRetryFacts !== undefined ? { adapterRetryFacts } : {}),
     epoch: {
       scope: observation.epoch.scope,
       epochSeq: observation.epoch.epochSeq,
@@ -1235,6 +1278,7 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
               structureFacts: contract.structureDescriptors.map((descriptor) => ({ ...descriptor })),
             }
           : {}),
+        ...(contract.adapterRetryFacts !== undefined ? { adapterRetryFacts: contract.adapterRetryFacts } : {}),
       },
     },
   );
@@ -1326,6 +1370,21 @@ export function makeTreasuryTestTransferAdapter(
       return {
         version: 1,
         payload: `transfer|${args.fromRoom}:${args.fromLocation}|${args.toRoom}:${args.toLocation}|${args.resource}|${String(args.amount)}`.slice(0, DURABLE_FACTS_PAYLOAD_MAX),
+      };
+    },
+    // 【第十八轮 24.12】显式 retry facts：覆盖全部会改变真实 Game API 调用
+    // 语义的参数（durable payload 不含 fee——retry facts 必须覆盖）。
+    retryFacts(args: TreasuryTestTransferArgs): Record<string, string | number | boolean> {
+      return {
+        op: "transfer",
+        fromRoom: args.fromRoom,
+        fromLocation: args.fromLocation,
+        toRoom: args.toRoom,
+        toLocation: args.toLocation,
+        resource: args.resource,
+        amount: args.amount,
+        ...(args.feeFromRoom !== undefined ? { feeFromRoom: args.feeFromRoom } : {}),
+        ...(args.feeAmount !== undefined ? { feeAmount: args.feeAmount } : {}),
       };
     },
     reconcile(): TreasuryActionReconcilerConclusion {

@@ -842,7 +842,7 @@ function prepareTreasuryNotExecutedLineage(
         readonly source: string;
         readonly postings: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
         readonly adapterVersion?: number;
-        readonly adapterRegistrationId?: string;
+        readonly adapterRetryFacts?: string;
         readonly adapterSemanticIdentity?: string;
         readonly structureFacts?: readonly ({ readonly [key: string]: unknown })[];
         readonly durablePayload?: string;
@@ -856,7 +856,7 @@ function prepareTreasuryNotExecutedLineage(
         source: intent.source,
         postings: intent.postings,
         ...(intent.adapterVersion !== undefined ? { adapterVersion: intent.adapterVersion } : {}),
-        ...(intent.adapterRegistrationId !== undefined ? { adapterRegistrationId: intent.adapterRegistrationId } : {}),
+        ...(intent.adapterRetryFacts !== undefined ? { adapterRetryFacts: intent.adapterRetryFacts } : {}),
         ...(intent.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: intent.adapterSemanticIdentity } : {}),
         ...(intent.structureFacts !== undefined ? { structureFacts: intent.structureFacts as unknown as readonly { readonly [key: string]: unknown }[] } : {}),
         ...(intent.durablePayload !== undefined ? { durablePayload: intent.durablePayload } : {}),
@@ -870,7 +870,7 @@ function prepareTreasuryNotExecutedLineage(
         source: quarantine.source,
         postings: quarantine.deltas,
         ...(quarantine.adapterVersion !== undefined ? { adapterVersion: quarantine.adapterVersion } : {}),
-        ...(quarantine.adapterRegistrationId !== undefined ? { adapterRegistrationId: quarantine.adapterRegistrationId } : {}),
+        ...(quarantine.adapterRetryFacts !== undefined ? { adapterRetryFacts: quarantine.adapterRetryFacts } : {}),
         ...(quarantine.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: quarantine.adapterSemanticIdentity } : {}),
         ...(quarantine.structureFacts !== undefined ? { structureFacts: quarantine.structureFacts as unknown as readonly { readonly [key: string]: unknown }[] } : {}),
         ...(quarantine.durablePayload !== undefined ? { durablePayload: quarantine.durablePayload } : {}),
@@ -905,7 +905,7 @@ function prepareTreasuryNotExecutedLineage(
     actionKind: entryFacts.kind,
     kind: entryFacts.kind,
     ...(entryFacts.adapterVersion !== undefined ? { adapterVersion: entryFacts.adapterVersion } : {}),
-    ...(entryFacts.adapterRegistrationId !== undefined ? { adapterRegistrationId: entryFacts.adapterRegistrationId } : {}),
+    ...(entryFacts.adapterRetryFacts !== undefined ? { adapterRetryFacts: entryFacts.adapterRetryFacts } : {}),
     ...(entryFacts.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: entryFacts.adapterSemanticIdentity } : {}),
     postings: entryFacts.postings,
     ...(entryFacts.structureFacts !== undefined ? { structureFacts: entryFacts.structureFacts } : {}),

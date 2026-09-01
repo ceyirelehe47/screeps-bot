@@ -227,6 +227,9 @@ export interface TreasuryIntentEntry {
   adapterSemanticIdentity?: string;
   /** 有界 durable reconciliation payload（第九轮 v2：adapter.durableFacts）。 */
   durablePayload?: string;
+  /** 【第十八轮 24.12】adapter 显式 retry facts（canonical 文本 ≤1024——
+   * retry semantic digest 的重算输入；未实现 → not-executed 后 non-rearmable）。 */
+  adapterRetryFacts?: string;
   /** durable payload 的版本（第九轮 v2：capability 绑定用）。 */
   durablePayloadVersion?: number;
   /** canonical postings（merged；WAL 语义的唯一资产事实副本）。 */
@@ -400,6 +403,11 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
   if (candidate.adapterSemanticIdentity !== undefined) {
     if (typeof candidate.adapterSemanticIdentity !== "string" || candidate.adapterSemanticIdentity.length === 0 || candidate.adapterSemanticIdentity.length > INTENT_KIND_SOURCE_MAX) {
       return "adapterSemanticIdentity 非法（1..128 字符）";
+    }
+  }
+  if (candidate.adapterRetryFacts !== undefined) {
+    if (typeof candidate.adapterRetryFacts !== "string" || candidate.adapterRetryFacts.length === 0 || candidate.adapterRetryFacts.length > 1024) {
+      return "adapterRetryFacts 非法（1..1024 字符 canonical 文本）";
     }
   }
   if (candidate.durablePayload !== undefined) {
@@ -1278,6 +1286,7 @@ export function transferTreasuryIntentToQuarantine(
     ...(entry.adapterRegistrationId !== undefined ? { adapterRegistrationId: entry.adapterRegistrationId } : {}),
     ...(entry.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: entry.adapterSemanticIdentity } : {}),
     ...(entry.durablePayload !== undefined ? { durablePayload: entry.durablePayload } : {}),
+    ...(entry.adapterRetryFacts !== undefined ? { adapterRetryFacts: entry.adapterRetryFacts } : {}),
     ...(entry.durablePayloadVersion !== undefined ? { durablePayloadVersion: entry.durablePayloadVersion } : {}),
     ...(entry.authorizationDigest !== undefined ? { authorizationDigest: entry.authorizationDigest } : {}),
     ...(entry.ownerIdentity !== undefined ? { ownerIdentity: entry.ownerIdentity } : {}),
