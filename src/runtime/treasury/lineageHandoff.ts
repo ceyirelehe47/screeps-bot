@@ -91,12 +91,18 @@ export type TreasuryHandoffRecoveryWindow =
   | { readonly action: "forensic"; readonly detail: string };
 
 /**
- * 窗口判定（§6.3）：
- * - intent 缺失且 quarantine 缺失/proof 不匹配 → 回滚（callback 确定未开始）；
- * - intent proof 不匹配（binding/generation/lineage 冲突）→ forensic；
- * - intent 为 not_started/ready 且 proof 匹配 → 释放并回滚（正常窗口）；
- * - intent 已 executing/更后，或 intent 缺失但 quarantine proof 匹配 → 前向
- *   补完成 child_active（callback 可能已开始——不得回滚为未执行）。
+ * 窗口判定（§6.3 / 【第十九轮 B】双 authority 版——intent 存在时同样读取
+ * quarantine，绝不因一侧存在而忽略另一侧）：
+ * - 任一侧 lineage proof 冲突（binding/generation/lineage 不匹配或部分
+ *   存在）→ forensic isolation（保留全部 authority，不猜测）；
+ * - rollback 仅当 callback **确定未开始**：intent 为一致 not_started/ready
+ *   且**无任何匹配或冲突的 quarantine**（quarantine 是 Game callback 后
+ *   写入的 durable 事实——存在即说明 callback 可能已开始）；
+ * - intent 一致 ready 但 quarantine 匹配存在（转移中断窗口：quarantine 写
+ *   成功、intent 删除前中断）→ forward_complete（绝不回滚）；
+ * - intent 已 executing/更后 → forward_complete（无冲突 quarantine 时）；
+ * - intent 缺失但 quarantine proof 匹配 → forward_complete；
+ * - intent 与 quarantine 均缺失 → rollback（零释放——无 intent 可释放）。
  */
 export function classifyTreasuryHandoffRecoveryWindow(input: {
   readonly record: Readonly<TreasuryAttemptLineageRecord>;
@@ -106,37 +112,42 @@ export function classifyTreasuryHandoffRecoveryWindow(input: {
   readonly quarantine: TreasuryHandoffEntryProofView | undefined;
 }): TreasuryHandoffRecoveryWindow {
   const { record, intent, quarantine } = input;
+  // 【第十九轮 B.3】两侧 proof 独立验证先行：intent 冲突或 quarantine 冲突
+  // 都进入 forensic（保留全部 authority——不因一侧"看起来正常"而放行）。
   if (intent !== undefined && !treasuryHandoffEntryProofMatches(intent, record)) {
     return {
       action: "forensic",
       detail: "child_intent_pending 窗口 intent lineage proof 冲突（binding/generation/lineage 不匹配或缺失）",
     };
   }
-  if (intent !== undefined && intent.outcome === "not_started" && intent.settlement === "ready") {
+  if (quarantine !== undefined && !treasuryHandoffEntryProofMatches(quarantine, record)) {
+    return {
+      action: "forensic",
+      detail: "child_intent_pending 窗口 quarantine lineage proof 冲突（intent 存在时同样验证——双 authority 任一冲突即 forensic，不猜测）",
+    };
+  }
+  // 【第十九轮 B.4/B.6】rollback 条件：intent 一致 not_started/ready 且无任何
+  // quarantine（execution-started 的持久信号为零）。Intent ready 与 quarantine
+  // 并存时绝不回滚（quarantine 的存在本身即 callback 后事实）。
+  if (intent !== undefined && intent.outcome === "not_started" && intent.settlement === "ready" && quarantine === undefined) {
     return {
       action: "rollback",
       releaseIntent: true,
-      detail: "intent 一致 not_started/ready（execution-started 未持久化——callback 确定未开始）",
+      detail: "intent 一致 not_started/ready 且无任何 quarantine（execution-started 未持久化——callback 确定未开始）",
+    };
+  }
+  if (quarantine !== undefined) {
+    return {
+      action: "forward_complete",
+      detail: intent !== undefined
+        ? "intent 与 quarantine 并存（转移中断窗口——quarantine proof 匹配且是 callback 后事实，前向补完成，绝不回滚）"
+        : "intent 已转 quarantine 且 lineage proof 匹配（authority 接管——前向补完成接管）",
     };
   }
   if (intent !== undefined) {
     return {
       action: "forward_complete",
       detail: `intent 已进入 ${String(intent.settlement)}（callback 可能已开始——前向补完成接管）`,
-    };
-  }
-  if (quarantine !== undefined) {
-    if (treasuryHandoffEntryProofMatches(quarantine, record)) {
-      return {
-        action: "forward_complete",
-        detail: "intent 已转 quarantine 且 lineage proof 匹配（authority 接管——前向补完成接管）",
-      };
-    }
-    // 本 child 的 quarantine 存在但 lineage proof 不匹配（binding/generation/
-    // lineage 冲突或缺失）——持久状态违反不变量，forensic（不猜测）。
-    return {
-      action: "forensic",
-      detail: "child_intent_pending 窗口 quarantine lineage proof 冲突（intent 已转移但 proof 与 handoff facts 不匹配）",
     };
   }
   return {

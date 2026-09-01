@@ -1513,13 +1513,15 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
     }
     if (record.state === "child_intent_pending") {
       const childId = record.nextChildTransactionId!;
+      // 【第十九轮 B.1】始终检查两个 store（删除"intent 存在就不读
+      // quarantine"——双 authority 任一侧的冲突/execution 信号都必须进入
+      // 分类）。
       const intent = readTreasuryIntentEntry(childId) as unknown as
         | { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string; readonly lowlevelSource?: string; readonly outcome?: string; readonly settlement?: string; readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string }
         | undefined;
-      const quarantine = intent === undefined
-        ? (readTreasuryQuarantineEntry(childId) as unknown as { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string; readonly lowlevelSource?: string; readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string } | undefined)
-        : undefined;
-      // 【第十八轮 24.2】单一权威窗口分类（lineageHandoff——§6.3 恢复矩阵）。
+      const quarantine = readTreasuryQuarantineEntry(childId) as unknown as { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string; readonly lowlevelSource?: string; readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string } | undefined;
+      // 【第十八轮 24.2 / 第十九轮 B.2】单一权威窗口分类（lineageHandoff——
+      // §6.3 恢复矩阵 + 双 authority 一致性）。
       const window = classifyTreasuryHandoffRecoveryWindow({
         record,
         intent,
@@ -1542,9 +1544,9 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
         }
         continue;
       }
-      // forward_complete：identity 从持久 facts（intent 优先，其次 proof 匹配
-      // 的 quarantine）派生。
-      const factsSource = intent ?? quarantine!;
+      // forward_complete：identity 从验证后的统一持久事实派生——quarantine
+      // （proof 匹配——callback 后写入的更强事实）优先，其次 intent。
+      const factsSource = quarantine !== undefined ? quarantine : intent!;
       const activated = activateTreasuryLineageChild(lineageId, lineageIdentityOfEntryFacts({
         digest: factsSource.digest,
         ...(factsSource.contractDigest !== undefined ? { contractDigest: factsSource.contractDigest } : {}),
