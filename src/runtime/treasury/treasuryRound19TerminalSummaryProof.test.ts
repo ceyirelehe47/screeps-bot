@@ -377,6 +377,9 @@ describe("summary v1 迁移与满载（第十九轮 25.6/25.9）", () => {
     for (const key of Object.keys(store.entries)) {
       store.entries[key].schemaVersion = 1;
       delete (store.entries[key] as unknown as Record<string, unknown>).authorityClass;
+      // 【第二十一轮 7.4】真实 v1/v2 数据不携带 exact identity 字段——降级模拟一并剥离。
+      delete (store.entries[key] as unknown as Record<string, unknown>).rootExact;
+      delete (store.entries[key] as unknown as Record<string, unknown>).finalExact;
     }
     resetTreasuryRetirementSummaryRuntimeForTest();
     // load 触发 v1→v2 迁移。

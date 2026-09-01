@@ -87,7 +87,7 @@ function resolveNotExecuted(service: TreasuryTestService, transactionId: string)
 }
 
 /** 真实 lowlevel chain fixture：root → retirement（exact proof）→ gen1 child_active。 */
-function seedActiveChildChain(rootId: string, digest = "1111111111111111", durable = "2222222222222222"): {
+function seedActiveChildChain(rootId: string, digest = "1111111111111111", durable?: string): {
   readonly childId: string;
   readonly lineageId: string;
   readonly identity: {
@@ -100,9 +100,18 @@ function seedActiveChildChain(rootId: string, digest = "1111111111111111", durab
     readonly lineageBindingDigest: string;
   };
 } {
+  // 【第二十一轮 6.4】root/child 的 durable 按 facts 真实重算（semantic current 完整比较 durable）。
+  const rootDurable = durable ?? recomputeTreasuryDurableIdentityDigest({
+    transactionId: rootId,
+    digest,
+    actionKind: "terminal.send",
+    source: "test",
+    postings: [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -500 }],
+  });
+  if (rootDurable === null) throw new Error("seed root durable recompute failed");
   const created = createTreasuryAttemptLineageRecord({
     rootTransactionId: rootId,
-    rootIdentity: { digest, durableIdentityDigest: durable },
+    rootIdentity: { digest, durableIdentityDigest: rootDurable },
     actionKind: "terminal.send",
     authorityClass: "lowlevel",
     lowlevelSource: "runtime-lowlevel@v1",
@@ -116,14 +125,27 @@ function seedActiveChildChain(rootId: string, digest = "1111111111111111", durab
   const childId = deriveTreasuryLineageNextChildTransactionId(lineageId, 1, rootId);
   if (stageTreasuryLineageCapabilityIssued(lineageId, childId).status === "rejected") throw new Error("seed stage issued failed");
   if (stageTreasuryLineageChildIntentPending(lineageId, childId).status === "rejected") throw new Error("seed stage pending failed");
-  const activated = activateTreasuryLineageChild(lineageId, { digest, durableIdentityDigest: durable, lowlevelSource: "runtime-lowlevel@v1" });
+  const pendingBinding = readTreasuryAttemptLineageRecord(lineageId)!.pendingBindingDigest!;
+  const resolvedDurable = recomputeTreasuryDurableIdentityDigest({
+    transactionId: childId,
+    digest,
+    actionKind: "terminal.send",
+    source: "test",
+    postings: [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -500 }],
+    lineageId,
+    lineageGeneration: 1,
+    parentTransactionId: rootId,
+    lineageBindingDigest: pendingBinding,
+  });
+  if (resolvedDurable === null) throw new Error("seed child durable recompute failed");
+  const activated = activateTreasuryLineageChild(lineageId, { digest, durableIdentityDigest: resolvedDurable, lowlevelSource: "runtime-lowlevel@v1" });
   if (activated.status === "rejected") throw new Error("seed activate failed");
   return {
     childId,
     lineageId,
     identity: {
       digest,
-      durableIdentityDigest: durable,
+      durableIdentityDigest: resolvedDurable,
       lowlevelSource: "runtime-lowlevel@v1",
       lineageId,
       lineageGeneration: 1,

@@ -389,15 +389,18 @@ describe("receipt refresh 门禁（第二十轮 26.6）", () => {
 
   it("既有 tr1_ receipt 缺 proof（迁移形态）→ blocked（replay blocker，不自动补全）", () => {
     ensureTreasuryReceiptStore();
-    const chain = seedActiveChildChain("r20_rf_legacy", "4444444444444444", "5555555555555555");
+    const chain = seedActiveChildChain("r20_rf_legacy", "4444444444444444");
+    // 【第二十一轮 13.1】与 lowlevel 链一致的低层 receipt（modern contract 字段
+    // 不能出现在 lowlevel chain——semantic gate 先行拦截 class 矛盾）。
     Memory.runtime!.treasury!.receipts!.settled[`t:${chain.childId}`] = {
-      level: "identity-bound",
+      level: "lowlevel",
       settledAtTick: Game.time,
       digest: "4444444444444444",
-      durableIdentityDigest: "5555555555555555",
+      durableIdentityDigest: chain.identity.durableIdentityDigest,
+      lowlevelSource: "runtime-lowlevel@v1",
     } as never;
     Game.time += 1;
-    const refreshed = refreshSettledReceiptForResolution(chain.childId, Game.time, { ...chain.identity, contractDigest: "4444444444444444", authorizationCohortDigest: "5555555555555555" });
+    const refreshed = refreshSettledReceiptForResolution(chain.childId, Game.time, { ...chain.identity });
     expect(refreshed.status).toBe("blocked");
     if (refreshed.status === "blocked") expect(refreshed.reason).toBe("legacy_proof");
     expect(readTreasurySettlementProof(chain.childId)?.level).toBe("legacy");

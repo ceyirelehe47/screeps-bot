@@ -33,6 +33,7 @@ import {
   updateTreasuryAttemptLineageRecord as updateTreasuryAttemptLineageRecordForTest,
 } from "@/runtime/treasury/attemptLineage";
 import {
+  computeTreasuryGenerationRootIdentityDigest,
   persistTreasuryGenerationRetirementProof,
   readTreasuryGenerationRetirementProof,
   peekTreasuryGenerationRetirementHealth,
@@ -235,7 +236,8 @@ describe("exact per-generation retirement authority（第二十轮 26.7）", () 
       schemaVersion: 1,
       lineageId: created.record.lineageId,
       rootTransactionId: "r20_gr_fill",
-      rootIdentityDigest: "3333333333333333",
+      // 【第二十一轮 10.2】root 绑定：rootIdentityDigest 必须与 (rootTransactionId, lineageId) 满足共享 canonical 派生。
+      rootIdentityDigest: computeTreasuryGenerationRootIdentityDigest({ digest: "1111111111111111", durableIdentityDigest: "2222222222222222" }),
       generation,
       transactionId: expectedIdOf(generation),
       ...(generation >= 1 ? {
@@ -295,7 +297,8 @@ describe("exact per-generation retirement authority（第二十轮 26.7）", () 
       schemaVersion: 1,
       lineageId: created.record.lineageId,
       rootTransactionId: "r20_gr_alias",
-      rootIdentityDigest: "3333333333333333",
+      // 【第二十一轮 10.2】root 绑定：rootIdentityDigest 真实派生（假值被共享 canonical 校验拒绝）。
+      rootIdentityDigest: computeTreasuryGenerationRootIdentityDigest({ digest: "1111111111111111", durableIdentityDigest: "2222222222222222" }),
       generation: 0,
       transactionId: "r20_gr_alias",
       digest: "1111111111111111",
@@ -412,6 +415,9 @@ describe("active lineage 历史代 exact proof（第二十轮 26.8）", () => {
       proofLevel: bProof.authorityClass,
       durableIdentityDigest: bProof.durableIdentityDigest,
       lowlevelSource: bProof.lowlevelSource,
+      // 【第二十一轮 12.2】tombstone 必须携带持久 parent/binding（缺失 = 不可证明 pin）。
+      parentTransactionId: bProof.parentTransactionId,
+      lineageBindingDigest: bProof.bindingDigest,
     });
     expect(verdictB.verdict).toBe("replacement_match");
     void childId;
@@ -544,7 +550,8 @@ describe("root/child tombstone replacement 身份 exact（第二十轮 26.8）",
       lowlevelSource: "runtime-lowlevel@v1",
     });
     expect(verdict.verdict).toBe("replacement_conflict");
-    if (verdict.verdict === "replacement_conflict") expect(verdict.detail).toContain("rootIdentityDigest");
+    // 【第二十一轮 12.1】v3 语义：rootExact 完整比较（不再仅凭 rootIdentityDigest 重算判定）。
+    if (verdict.verdict === "replacement_conflict") expect(verdict.detail).toContain("rootExact");
     void lineageId;
   });
 

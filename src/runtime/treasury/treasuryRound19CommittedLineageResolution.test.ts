@@ -62,7 +62,7 @@ const ROOMS: RoomSpec[] = [
 /** 【第二十轮】真实 lowlevel chain fixture：root → retirement → gen1 child_active。
  * semantic lineage validation / receipt 门禁按 record 权威重算——伪造 ID 与
  * 无 record 的四字段不再是可接受的 fixture 形态。 */
-function seedActiveChildChain(rootId: string, digest = "1111111111111111", durable = "2222222222222222"): {
+function seedActiveChildChain(rootId: string, digest = "1111111111111111", durable?: string): {
   readonly childId: string;
   readonly lineageId: string;
   readonly identity: {
@@ -75,9 +75,18 @@ function seedActiveChildChain(rootId: string, digest = "1111111111111111", durab
     readonly lineageBindingDigest: string;
   };
 } {
+  // 【第二十一轮 6.4】root 的 durable 也按 root facts 重算（durable 参数显式传入时兼容旧 fixture）。
+  const rootDurable = durable ?? recomputeTreasuryDurableIdentityDigest({
+    transactionId: rootId,
+    digest,
+    actionKind: "terminal.send",
+    source: "test",
+    postings: [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -500 }],
+  });
+  if (rootDurable === null) throw new Error("seed root durable recompute failed");
   const created = createTreasuryAttemptLineageRecord({
     rootTransactionId: rootId,
-    rootIdentity: { digest, durableIdentityDigest: durable },
+    rootIdentity: { digest, durableIdentityDigest: rootDurable },
     actionKind: "terminal.send",
     authorityClass: "lowlevel",
     lowlevelSource: "runtime-lowlevel@v1",
@@ -91,14 +100,29 @@ function seedActiveChildChain(rootId: string, digest = "1111111111111111", durab
   const childId = deriveTreasuryLineageNextChildTransactionId(lineageId, 1, rootId);
   if (stageTreasuryLineageCapabilityIssued(lineageId, childId).status === "rejected") throw new Error("seed stage issued failed");
   if (stageTreasuryLineageChildIntentPending(lineageId, childId).status === "rejected") throw new Error("seed stage pending failed");
-  const activated = activateTreasuryLineageChild(lineageId, { digest, durableIdentityDigest: durable, lowlevelSource: "runtime-lowlevel@v1" });
+  // 【第二十一轮 6.4】durable 缺省按 intent facts（含 lineage 四字段）真实重算——
+  // semantic current 分支完整比较 durable，chain 与 intent 的 durable 必须同源。
+  const pendingBinding = readTreasuryAttemptLineageRecord(lineageId)!.pendingBindingDigest!;
+  const resolvedDurable = durable ?? recomputeTreasuryDurableIdentityDigest({
+    transactionId: childId,
+    digest,
+    actionKind: "terminal.send",
+    source: "test",
+    postings: [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -500 }],
+    lineageId,
+    lineageGeneration: 1,
+    parentTransactionId: rootId,
+    lineageBindingDigest: pendingBinding,
+  });
+  if (resolvedDurable === null) throw new Error("seed durable recompute failed");
+  const activated = activateTreasuryLineageChild(lineageId, { digest, durableIdentityDigest: resolvedDurable, lowlevelSource: "runtime-lowlevel@v1" });
   if (activated.status === "rejected") throw new Error("seed activate failed");
   return {
     childId,
     lineageId,
     identity: {
       digest,
-      durableIdentityDigest: durable,
+      durableIdentityDigest: resolvedDurable,
       lowlevelSource: "runtime-lowlevel@v1",
       lineageId,
       lineageGeneration: 1,
@@ -320,23 +344,21 @@ describe("receipt refresh 的 lineage-aware 身份规则（第十九轮 25.2）"
     const chain = seedActiveChildChain("r19_rf_legacy_root", "4444444444444444", "5555555555555555");
     const childId = chain.childId;
     // 手塞 v7→v8 迁移后的缺 proof modern receipt（lookup 归一 legacy_committed）。
+    // 【第二十一轮 13.1】与 lowlevel 链一致的低层 receipt（identity-bound proof
+    // 不能出现在 lowlevel chain——class 矛盾会被 semantic gate 先行拦截）。
     Memory.runtime!.treasury!.receipts!.settled[`t:${childId}`] = {
-      level: "identity-bound",
+      level: "lowlevel",
       settledAtTick: Game.time,
       digest: "4444444444444444",
       durableIdentityDigest: "5555555555555555",
-      contractDigest: "4444444444444444",
-      authorizationCohortDigest: "5555555555555555",
+      lowlevelSource: "runtime-lowlevel@v1",
     } as never;
     Game.time += 1;
-    const refreshed = refreshSettledReceiptForResolution(childId, Game.time, {
-      ...chain.identity,
-      contractDigest: "4444444444444444",
-      authorizationCohortDigest: "5555555555555555",
-    });
+    const refreshed = refreshSettledReceiptForResolution(childId, Game.time, { ...chain.identity });
     expect(refreshed.status).toBe("blocked");
     if (refreshed.status === "blocked") expect(refreshed.reason).toBe("legacy_proof");
-    // 原 proof 未被覆盖/升级。
+    // 原 proof 未被覆盖/升级（持久 lowlevel proof 原样保留；readTreasurySettlementProof
+    // 对缺 lineage 的 tr1_ receipt 返回归一 legacy 视图——replay blocker 语义）。
     expect(readTreasurySettlementProof(childId)?.level).toBe("legacy");
   });
 
@@ -409,7 +431,8 @@ describe("unified unresolved authority 的 lineage proof 矩阵（第十九轮 2
       lowlevelSource: "runtime-lowlevel@v1",
       ...extra,
     };
-    entry.durableIdentityDigest = recomputeTreasuryDurableIdentityDigest(entry as never) ?? undefined;
+    // 【第二十一轮】extra 可显式提供与 lineage record 同源的 durable（缺省才真实重算）。
+    entry.durableIdentityDigest = (extra.durableIdentityDigest as string | undefined) ?? recomputeTreasuryDurableIdentityDigest(entry as never) ?? undefined;
     entries[`i:${transactionId}`] = entry;
     intents.entryCount = Object.keys(entries).length;
     branch.intents = intents;
@@ -454,6 +477,7 @@ describe("unified unresolved authority 的 lineage proof 矩阵（第十九轮 2
       parentTransactionId: "r19_ok_parent",
       lineageBindingDigest: chain.identity.lineageBindingDigest,
       digest: "1111111111111111",
+      // 【第二十一轮 6.4】durable 由 helper 真实重算（与 chain 同源——semantic current 完整比较）。
     });
     const resolution = resolveTreasuryUnresolvedAuthority(chain.childId);
     expect(resolution.status).toBe("ok");

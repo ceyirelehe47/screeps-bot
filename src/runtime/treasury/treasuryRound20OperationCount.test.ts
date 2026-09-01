@@ -151,7 +151,8 @@ describe("operation-count（第二十轮性能要求）", () => {
     const lineageScans = lineageStoreEvents.fullScans;
     const proofScans = generationRetirementEvents.fullScans;
     for (let i = 0; i < 50; i += 1) {
-      const verdict = validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity });
+      // 【第二十一轮 6.4】current 分支要求完整 exact identity 输入。
+      const verdict = validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity, identity: chain.identity });
       expect(verdict.verdict).toBe("match");
     }
     expect(lineageStoreEvents.fullScans).toBe(lineageScans);
