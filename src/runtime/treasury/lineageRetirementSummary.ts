@@ -36,6 +36,7 @@ import { readTreasuryQuarantineEntry, peekTreasuryQuarantineHealth } from "@/run
 import { readTreasuryAuthorizationFaultEntry, peekTreasuryAuthorizationFaultHealth } from "@/runtime/treasury/authorizationFaults";
 import { readTreasuryWriteFault, validateTreasuryWriteFaultMarkerShape } from "@/runtime/treasury/writeFault";
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
+import { registerTreasuryLineageResetHook } from "@/runtime/treasury/receipts";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
 
 export const TREASURY_RETIREMENT_SUMMARY_VERSION = 1;
@@ -346,6 +347,10 @@ export function compactTreasuryTerminalLineagesAtTickBoundary(): number {
   }
   return compacted;
 }
+
+// 测试清理注册（receipts.clearTreasuryPersistenceForTest 统一调用——与
+// attemptLineage 同一清理链，summary heap 缓存不跨测试泄漏）。
+registerTreasuryLineageResetHook(resetTreasuryRetirementSummaryRuntimeForTest);
 
 // 装配注册（attemptLineage 容量预检的压缩钩子——满载时先压缩终态 record）。
 registerTreasuryLineageCompactorForAssembly(compactTreasuryTerminalLineagesAtTickBoundary);

@@ -186,7 +186,17 @@ export interface TreasuryProjectionController {
   publishPreparedReceipt(
     transactionId: string,
     tick: number,
-    identity?: { readonly digest?: string; readonly durableIdentityDigest?: string },
+    identity?: {
+      readonly digest?: string;
+      readonly contractDigest?: string;
+      readonly authorizationCohortDigest?: string;
+      readonly durableIdentityDigest?: string;
+      readonly lowlevelSource?: string;
+      readonly lineageId?: string;
+      readonly lineageGeneration?: number;
+      readonly parentTransactionId?: string;
+      readonly lineageBindingDigest?: string;
+    },
   ): TreasuryReceiptWriteResult;
   /**
    * staged commit 第 2 段——heap 发布：journal + committed overlay + 容量
@@ -588,6 +598,11 @@ export function createTreasuryProjectionController(
       readonly contractDigest?: string;
       readonly authorizationCohortDigest?: string;
       readonly durableIdentityDigest?: string;
+      readonly lowlevelSource?: string;
+      readonly lineageId?: string;
+      readonly lineageGeneration?: number;
+      readonly parentTransactionId?: string;
+      readonly lineageBindingDigest?: string;
     },
   ): TreasuryReceiptWriteResult {
     return commitSettledReceipt(transactionId, tick, identity);

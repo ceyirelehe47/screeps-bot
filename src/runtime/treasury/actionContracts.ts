@@ -1124,6 +1124,16 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
     actionContractEvents.rejected += 1;
     return { status: "prepare_rejected", reason: "contract_invalid", detail: "contract 未在本模块构建（伪造对象/JSON 副本一律无效）" };
   }
+  // 【第十八轮 24.13】execution request 的 source 不得覆盖已授权 contract
+  // source（不同 → callback 前拒绝；相同 → 幂等透传）。
+  if (request.source !== undefined && request.source !== contract.source) {
+    actionContractEvents.rejected += 1;
+    return {
+      status: "prepare_rejected",
+      reason: "contract_invalid",
+      detail: `execution request source "${request.source.slice(0, 32)}" 与 contract source "${contract.source.slice(0, 32)}" 不一致——source 在 contract build 时确定（单一权威），不得覆盖已授权 source（Game callback 零调用）`,
+    };
+  }
   if (contract.builtAtTick !== Game.time) {
     actionContractEvents.rejected += 1;
     return {
