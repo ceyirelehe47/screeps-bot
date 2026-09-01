@@ -635,6 +635,15 @@ export function refreshSettledReceiptForResolution(
     readonly durableIdentityDigest?: string;
     /** 【第十六轮第十一节】lowlevel attempt 的显式 provenance（proof 链绑定）。 */
     readonly lowlevelSource?: string;
+    /**
+     * 【第十九轮 A.4】tr1_ rearm attempt 的完整 lineage proof：match 时原样
+     * 保留既有 proof 的 lineage（只刷新 tick，不降级）；absent 时从当前
+     * authority 写入完整 proof；冲突 → 拒绝刷新。
+     */
+    readonly lineageId?: string;
+    readonly lineageGeneration?: number;
+    readonly parentTransactionId?: string;
+    readonly lineageBindingDigest?: string;
   },
 ): TreasuryReceiptRefreshResult {
   const runtime = loadReceiptStoreRuntime();
@@ -650,7 +659,27 @@ export function refreshSettledReceiptForResolution(
       detail: `transactionId ${transactionId.slice(0, 48)} 对应 receipt value 损坏，无法安全刷新（fail closed）`,
     };
   }
-  const identityComplete = identity?.digest !== undefined && identity?.durableIdentityDigest !== undefined;
+  // 【第十九轮 A.4】tr1_ 的 refresh 必须携带完整 lineage proof——authority 无法
+  // 提供（resolver 已阻断此形态）或调用方缺省时 fail closed，不写 legacy。
+  const identityLineageComplete =
+    identity?.lineageId !== undefined && identity?.lineageGeneration !== undefined &&
+    identity?.parentTransactionId !== undefined && identity?.lineageBindingDigest !== undefined;
+  if (transactionId.startsWith("tr1_") && !identityLineageComplete) {
+    receiptEvents.receiptIdentityInsufficient += 1;
+    return {
+      status: "blocked",
+      reason: "insufficient_proof",
+      detail: `tr1_ rearm attempt 的 receipt 刷新必须携带完整 lineage proof（lineageId/generation/parent/binding）——缺失即拒绝（不写 legacy、不猜测 generation）`,
+    };
+  }
+  if (!transactionId.startsWith("tr1_") && identityLineageComplete) {
+    receiptEvents.receiptIdentityConflicts += 1;
+    return {
+      status: "blocked",
+      reason: "identity_conflict",
+      detail: `非 rearm attempt（initial）的 receipt 刷新不得携带 lineage proof（initial 不能被 lineage proof 证明）`,
+    };
+  }
   if (existing.status !== "absent") {
     const existingTick = existing.status === "legacy_committed" ? existing.settledAtTick : existing.proof.settledAtTick;
     // 【第十三轮第六节】identity-aware 刷新：旧 receipt 不能因 transaction ID
@@ -681,6 +710,10 @@ export function refreshSettledReceiptForResolution(
     : {}),
       ...(identity.durableIdentityDigest !== undefined ? { durableIdentityDigest: identity.durableIdentityDigest } : {}),
       ...(identity.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
+      ...(identity.lineageId !== undefined ? { lineageId: identity.lineageId } : {}),
+      ...(identity.lineageGeneration !== undefined ? { lineageGeneration: identity.lineageGeneration } : {}),
+      ...(identity.parentTransactionId !== undefined ? { parentTransactionId: identity.parentTransactionId } : {}),
+      ...(identity.lineageBindingDigest !== undefined ? { lineageBindingDigest: identity.lineageBindingDigest } : {}),
     };
     const relation = treasuryAttemptIdentityRelation(
       { ...existing.proof, digest: existing.proof.digest ?? attempt.digest },
@@ -703,9 +736,11 @@ export function refreshSettledReceiptForResolution(
       };
     }
     receiptEvents.receiptIdentityMatches += 1;
-    // match：保留既有 proof 身份（identity 成分一致——含 lowlevel provenance），
-    // 仅刷新 settledAtTick。【第十七轮第十五节 v7】level 按事实重算（identity-
-    // bound / lowlevel / legacy 三级显式——不再写 "modern"）。
+    // match：保留既有 proof 身份（identity 成分一致——含 lowlevel provenance 与
+    // 【第十九轮 A.4】lineage proof），仅刷新 settledAtTick。【第十七轮第十五节
+    // v7】level 按事实重算（identity-bound / lowlevel / legacy 三级显式——不再
+    // 写 "modern"）。tr1_ 的既有 proof 必带完整 lineage（lookup 已把缺 proof 的
+    // tr1_ 归一为 legacy_committed），原样透传不降级。
     const refreshedLevel = receiptProofLevelOfIdentity(existing.proof);
     const nextProof: TreasurySettlementProof =
       refreshedLevel === "lowlevel"
@@ -715,6 +750,10 @@ export function refreshSettledReceiptForResolution(
             digest: existing.proof.digest ?? attempt.digest,
             durableIdentityDigest: existing.proof.durableIdentityDigest ?? attempt.durableIdentityDigest,
             ...(existing.proof.lowlevelSource !== undefined ? { lowlevelSource: existing.proof.lowlevelSource } : {}),
+            ...(existing.proof.lineageId !== undefined ? { lineageId: existing.proof.lineageId } : {}),
+            ...(existing.proof.lineageGeneration !== undefined ? { lineageGeneration: existing.proof.lineageGeneration } : {}),
+            ...(existing.proof.parentTransactionId !== undefined ? { parentTransactionId: existing.proof.parentTransactionId } : {}),
+            ...(existing.proof.lineageBindingDigest !== undefined ? { lineageBindingDigest: existing.proof.lineageBindingDigest } : {}),
           }
         : refreshedLevel === "identity-bound"
           ? {
@@ -726,6 +765,10 @@ export function refreshSettledReceiptForResolution(
               ...(existing.proof.authorizationCohortDigest !== undefined
                 ? { authorizationCohortDigest: existing.proof.authorizationCohortDigest }
                 : {}),
+              ...(existing.proof.lineageId !== undefined ? { lineageId: existing.proof.lineageId } : {}),
+              ...(existing.proof.lineageGeneration !== undefined ? { lineageGeneration: existing.proof.lineageGeneration } : {}),
+              ...(existing.proof.parentTransactionId !== undefined ? { parentTransactionId: existing.proof.parentTransactionId } : {}),
+              ...(existing.proof.lineageBindingDigest !== undefined ? { lineageBindingDigest: existing.proof.lineageBindingDigest } : {}),
             }
           : { level: "legacy", settledAtTick: tick };
     if (existingTick === tick) {
@@ -746,7 +789,8 @@ export function refreshSettledReceiptForResolution(
   // authority resolve）显式 legacy proof——不冒充现代证明。【第十六轮第十
   // 一节】lowlevel attempt 的 provenance 一并写入 proof（runtime 与
   // migrated 不能互相证明）。【第十七轮第十五节 v7】显式三级——lowlevel
-  // 禁携带 modern contract/cohort 字段。
+  // 禁携带 modern contract/cohort 字段。【第十九轮 A.4】tr1_ 的完整 lineage
+  // proof 从当前 authority 写入（上文已 fail closed 校验完整）。
   const absentLevel = receiptProofLevelOfIdentity(identity);
   const nextProof: TreasurySettlementProof =
     absentLevel === "lowlevel"
@@ -756,6 +800,10 @@ export function refreshSettledReceiptForResolution(
           digest: identity?.digest,
           durableIdentityDigest: identity?.durableIdentityDigest,
           ...(identity?.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
+          ...(identity?.lineageId !== undefined ? { lineageId: identity.lineageId } : {}),
+          ...(identity?.lineageGeneration !== undefined ? { lineageGeneration: identity.lineageGeneration } : {}),
+          ...(identity?.parentTransactionId !== undefined ? { parentTransactionId: identity.parentTransactionId } : {}),
+          ...(identity?.lineageBindingDigest !== undefined ? { lineageBindingDigest: identity.lineageBindingDigest } : {}),
         }
       : absentLevel === "identity-bound"
         ? {
@@ -767,6 +815,10 @@ export function refreshSettledReceiptForResolution(
             ...(identity?.authorizationCohortDigest !== undefined
               ? { authorizationCohortDigest: identity.authorizationCohortDigest }
               : {}),
+            ...(identity?.lineageId !== undefined ? { lineageId: identity.lineageId } : {}),
+            ...(identity?.lineageGeneration !== undefined ? { lineageGeneration: identity.lineageGeneration } : {}),
+            ...(identity?.parentTransactionId !== undefined ? { parentTransactionId: identity.parentTransactionId } : {}),
+            ...(identity?.lineageBindingDigest !== undefined ? { lineageBindingDigest: identity.lineageBindingDigest } : {}),
           }
         : { level: "legacy", settledAtTick: tick };
   store.settled[key] = nextProof;

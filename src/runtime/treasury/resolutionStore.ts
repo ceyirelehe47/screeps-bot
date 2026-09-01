@@ -347,6 +347,33 @@ export function validateTreasuryResolutionTombstoneShape(entry: unknown): string
       return `lowlevelSource 只允许 lowlevel proof 携带（当前 ${String(candidate.proofLevel)}）`;
     }
   }
+  // 【第十九轮 A.3】lineage proof 整体性（v7 字段矩阵）：四字段整体存在或
+  // 整体缺失；携带时形状完整；非 tr1_ tombstone 禁止携带（initial attempt
+  // 不得被 lineage proof 证明——load 上下文同样适用，v6 迁移不产生该形态）。
+  {
+    const lineageFieldNames = ["lineageId", "lineageGeneration", "parentTransactionId", "lineageBindingDigest"] as const;
+    const present = lineageFieldNames.filter((field) => candidate[field] !== undefined);
+    if (present.length !== 0 && present.length !== lineageFieldNames.length) {
+      return `lineage proof 必须整体存在或整体缺失（部分携带: ${present.join(",")}——形状损坏）`;
+    }
+    if (present.length === lineageFieldNames.length) {
+      if (typeof candidate.lineageId !== "string" || !RESOLUTION_DIGEST_PATTERN.test(candidate.lineageId)) {
+        return "lineageId 非法（须 16 小写 hex）";
+      }
+      if (typeof candidate.lineageGeneration !== "number" || !Number.isSafeInteger(candidate.lineageGeneration) || candidate.lineageGeneration < 1) {
+        return "lineageGeneration 非安全正整数";
+      }
+      if (typeof candidate.parentTransactionId !== "string" || candidate.parentTransactionId.length === 0 || candidate.parentTransactionId.length > 128) {
+        return "parentTransactionId 非法（1..128 字符）";
+      }
+      if (typeof candidate.lineageBindingDigest !== "string" || !RESOLUTION_DIGEST_PATTERN.test(candidate.lineageBindingDigest)) {
+        return "lineageBindingDigest 非法（须 16 小写 hex）";
+      }
+      if (typeof candidate.transactionId === "string" && !candidate.transactionId.startsWith("tr1_")) {
+        return "非 tr1_ tombstone 不得携带 lineage proof（initial attempt 专属禁带）";
+      }
+    }
+  }
   // 【第十四轮第十一节】proof class required/forbidden 矩阵。
   const proofLevel = candidate.proofLevel;
   if (proofLevel === "identity-bound") {
@@ -1124,6 +1151,13 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
             : {}),
           ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
           ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+          // 【第十九轮 A.7】staged recovery 与 immediate resolve-as-committed 同
+          // 一 lineage-aware refresh 语义（tr1_ resolving tombstone 的 proof 是
+          // 续做 refresh 的权威来源）。
+          ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+          ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+          ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
+          ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
         });
         if (refresh.status === "fatal" || refresh.status === "blocked") {
           resolutionStoreEvents.faulted += 1;
@@ -1181,6 +1215,10 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
           authorizationCohortDigest: entry.authorizationCohortDigest,
           durableIdentityDigest: entry.durableIdentityDigest,
           lowlevelSource: entry.lowlevelSource,
+          // 【第十九轮 A.3】staged recovery 的 marker 清除同样携带 lineage 维度
+          //（child marker 不得被 parent proof 清除）。
+          ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
+          ...(entry.lineageGeneration !== undefined ? { attemptGeneration: entry.lineageGeneration } : {}),
         }),
       );
       const finalEntry: TreasuryResolutionTombstone = { ...entry, stage: "final" };

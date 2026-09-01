@@ -22,6 +22,7 @@
  */
 
 import type { TreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
+import { parseTreasuryRearmChildTransactionIdV2 } from "@/runtime/treasury/transactionId";
 
 /** 校验上下文：load/migration 兼容历史（迁移数据缺新字段 = 隔离而非 fatal）；write 对新写入严格。 */
 export type TreasuryResolutionStateValidationContext = "load" | "write";
@@ -101,6 +102,20 @@ export function validateTreasuryResolutionTombstoneState(
     }
     if (entry.proofLevel === "identity-bound" && entry.lowlevelSource !== undefined) {
       return "identity-bound tombstone 禁止携带 lowlevelSource（modern proof 不携带低层 provenance）";
+    }
+    // 【第十九轮 A.3】tr1_ v2 rearm attempt 的新写 tombstone 必带完整 lineage
+    // proof——v1 tr1_ ID 不可 generation 寻址（历史 load 兼容形态不强制）。
+    if (
+      typeof entry.transactionId === "string" &&
+      entry.transactionId.startsWith("tr1_") &&
+      parseTreasuryRearmChildTransactionIdV2(entry.transactionId) !== null
+    ) {
+      if (
+        entry.lineageId === undefined || entry.lineageGeneration === undefined ||
+        entry.parentTransactionId === undefined || entry.lineageBindingDigest === undefined
+      ) {
+        return "tr1_ v2 rearm attempt 的新写 tombstone 必须携带完整 lineage proof（generation 寻址的 attempt 缺 proof = 身份不可证明——fail closed）";
+      }
     }
   }
   return null;

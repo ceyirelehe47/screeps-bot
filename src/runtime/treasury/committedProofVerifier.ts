@@ -42,6 +42,15 @@ export interface TreasuryCommittedReceiptProofView {
   readonly durableIdentityDigest?: string;
   /** 【第十六轮第十一节 v6】lowlevel provenance（受控枚举）。 */
   readonly lowlevelSource?: string;
+  /**
+   * 【第十九轮 A.5】lineage proof（tr1_ receipt 的完整四字段——三方每组
+   * relation 都含 lineage 维度：generation N 的 receipt 不能证明 N+1、
+   * parent proof 不能证明 child）。
+   */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
 }
 
 export type TreasuryCommittedProofVerdict =
@@ -60,6 +69,10 @@ function attemptIdentityOf(source: {
   readonly authorizationCohortDigest?: string;
   readonly durableIdentityDigest?: string;
   readonly lowlevelSource?: string;
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
 }): TreasuryAttemptIdentity {
   return {
     digest: source.digest ?? "",
@@ -67,6 +80,10 @@ function attemptIdentityOf(source: {
     ...(source.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: source.authorizationCohortDigest } : {}),
     ...(source.durableIdentityDigest !== undefined ? { durableIdentityDigest: source.durableIdentityDigest } : {}),
     ...(source.lowlevelSource !== undefined ? { lowlevelSource: source.lowlevelSource } : {}),
+    ...(source.lineageId !== undefined ? { lineageId: source.lineageId } : {}),
+    ...(source.lineageGeneration !== undefined ? { lineageGeneration: source.lineageGeneration } : {}),
+    ...(source.parentTransactionId !== undefined ? { parentTransactionId: source.parentTransactionId } : {}),
+    ...(source.lineageBindingDigest !== undefined ? { lineageBindingDigest: source.lineageBindingDigest } : {}),
   };
 }
 
@@ -96,7 +113,8 @@ export function treasuryProofLevelAutoReleasesAuthorityLevel(
  * 4. receipt proof 非 modern level → insufficient（legacy proof 不能证明
  *    当前 attempt 的 committed 结论、更不能释放 authority）；
  * 5. receipt ↔ tombstone 完整 attempt identity relation（含 lowlevel
- *    provenance 维度）：match 才继续，conflict / insufficient 分别返回；
+ *    provenance 与【第十九轮 A.5】lineage proof 维度——tr1_ 时双方都必须
+ *    携带完整四字段且一致）：match 才继续，conflict / insufficient 分别返回；
  * 6. authority 仍存在（status ok）：proof level ↔ authority 等级自动释放
  *    矩阵 + tombstone ↔ authority、receipt ↔ authority 双 relation match
  *    （含 lowlevel provenance——runtime 与 migrated 不能互相证明）；
@@ -114,6 +132,10 @@ export function verifyTreasuryCommittedResolutionProof(input: {
     | "authorizationCohortDigest"
     | "durableIdentityDigest"
     | "lowlevelSource"
+    | "lineageId"
+    | "lineageGeneration"
+    | "parentTransactionId"
+    | "lineageBindingDigest"
   >;
   readonly authorityResolution: TreasuryUnresolvedAuthorityResolution;
   readonly receiptProof: TreasuryCommittedReceiptProofView | undefined;

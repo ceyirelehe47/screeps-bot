@@ -47,6 +47,15 @@ export interface TreasuryReconciliationCapability {
   /** 【第十六轮第十一节】lowlevel attempt 的显式 provenance（capability 绑定
    *  ——runtime 与 migrated 不能互相证明；modern capability 不携带）。 */
   readonly lowlevelSource?: string;
+  /**
+   * 【第十九轮 A.2】tr1_ rearm authority 的完整 lineage proof 绑定
+   * （capability 不得仅凭 transactionId/digest/普通 durable identity 证明
+   * child generation——签发时从归一化 authority 透传，prevalidation 强比较）。
+   */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
   readonly postFaultEpoch: {
     readonly scope: TreasuryObservationScope;
     readonly epochSeq: number;

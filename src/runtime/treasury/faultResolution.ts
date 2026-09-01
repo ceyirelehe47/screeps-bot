@@ -348,6 +348,10 @@ function prevalidate(
       ...(capability.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: capability.authorizationCohortDigest } : {}),
       ...(capability.durableIdentityDigest !== undefined ? { durableIdentityDigest: capability.durableIdentityDigest } : {}),
       ...(capability.lowlevelSource !== undefined ? { lowlevelSource: capability.lowlevelSource } : {}),
+      ...(capability.lineageId !== undefined ? { lineageId: capability.lineageId } : {}),
+      ...(capability.lineageGeneration !== undefined ? { lineageGeneration: capability.lineageGeneration } : {}),
+      ...(capability.parentTransactionId !== undefined ? { parentTransactionId: capability.parentTransactionId } : {}),
+      ...(capability.lineageBindingDigest !== undefined ? { lineageBindingDigest: capability.lineageBindingDigest } : {}),
     };
     const tombstone = readTreasuryResolutionTombstone(input.transactionId);
     if (tombstone !== undefined && tombstone.stage === "final") {
@@ -376,6 +380,10 @@ function prevalidate(
                 ? { authorizationCohortDigest: proof.authorizationCohortDigest }
                 : {}),
               ...(proof.durableIdentityDigest !== undefined ? { durableIdentityDigest: proof.durableIdentityDigest } : {}),
+              ...(proof.lineageId !== undefined ? { lineageId: proof.lineageId } : {}),
+              ...(proof.lineageGeneration !== undefined ? { lineageGeneration: proof.lineageGeneration } : {}),
+              ...(proof.parentTransactionId !== undefined ? { parentTransactionId: proof.parentTransactionId } : {}),
+              ...(proof.lineageBindingDigest !== undefined ? { lineageBindingDigest: proof.lineageBindingDigest } : {}),
             },
             attempt,
           )
@@ -542,6 +550,45 @@ function prevalidate(
       },
     };
   }
+  // 【第十九轮 A.2】lineage proof 强绑定：tr1_ rearm authority 的 capability
+  // 必须携带**完全相同**的完整 lineage proof——capability 不得仅凭
+  // transactionId / digest / 普通 durable identity 证明 child generation
+  //（generation N 的 capability 不能证明 N+1、parent 不能证明 child）。
+  // 非 tr1_（initial）authority 的 capability 不得携带任何 lineage 字段。
+  {
+    const authorityHasLineage = authority.lineageId !== undefined;
+    const capabilityHasLineage =
+      capability.lineageId !== undefined || capability.lineageGeneration !== undefined ||
+      capability.parentTransactionId !== undefined || capability.lineageBindingDigest !== undefined;
+    if (authorityHasLineage !== capabilityHasLineage) {
+      countRejected();
+      return {
+        stop: {
+          status: "rejected",
+          reason: "reconciler_mismatch",
+          detail: authorityHasLineage
+            ? `tr1_ rearm authority 的 capability 缺少 lineage proof 绑定（child generation 不可证明——fail closed）`
+            : `非 rearm authority（initial attempt）的 capability 不得携带 lineage proof（initial 不能被 lineage proof 证明）`,
+        },
+      };
+    }
+    if (
+      authorityHasLineage &&
+      (capability.lineageId !== authority.lineageId ||
+        capability.lineageGeneration !== authority.lineageGeneration ||
+        capability.parentTransactionId !== authority.parentTransactionId ||
+        capability.lineageBindingDigest !== authority.lineageBindingDigest)
+    ) {
+      countRejected();
+      return {
+        stop: {
+          status: "rejected",
+          reason: "reconciler_mismatch",
+          detail: `capability 绑定的 lineage proof 与 authority 不一致（lineageId/generation/parent/binding 任一不同——不同 generation 的 proof 互不证明）`,
+        },
+      };
+    }
+  }
   // 时序：当前 tick 严格晚于故障 tick；capability 观察严格晚于故障 tick 且
   // 不晚于当前 tick（stale/未来观察均拒绝）。
   if (Game.time <= authority.recordedAt) {
@@ -648,6 +695,14 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
       detail: `authority 等级 ${String(authority.authorityLevel)} 不参与普通 staged resolution（无对应 proof class——显式 forensic/legacy 流程处理）`,
     };
   }
+  // 【第十九轮 A.3】tr1_ authority 的完整 lineage proof 进 tombstone（resolving
+  // 与 final 同源——verdict / verifier / marker 清除全部按此比较）。
+  const authorityLineageProofSpread = {
+    ...(authority.lineageId !== undefined ? { lineageId: authority.lineageId } : {}),
+    ...(authority.lineageGeneration !== undefined ? { lineageGeneration: authority.lineageGeneration } : {}),
+    ...(authority.parentTransactionId !== undefined ? { parentTransactionId: authority.parentTransactionId } : {}),
+    ...(authority.lineageBindingDigest !== undefined ? { lineageBindingDigest: authority.lineageBindingDigest } : {}),
+  };
   const resolvingWrite = writeTreasuryResolutionTombstone({
     transactionId: authority.transactionId,
     digest: authority.digest,
@@ -664,6 +719,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
     ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
     ...(resolvingProofLevel === "lowlevel" && authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+    ...authorityLineageProofSpread,
   });
   if (resolvingWrite.status === "rejected") {
     countRejected();
@@ -691,6 +747,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
       : {}),
     ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
     ...(authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+    ...authorityLineageProofSpread,
   });
   if (receipt.status === "fatal") {
     // receipt 不可写：回滚 tombstone（零原状态变化），quarantine/marker 不动。
@@ -726,6 +783,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
       ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
       ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
       ...(resolvingProofLevel === "lowlevel" && authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+      ...authorityLineageProofSpread,
     },
     authorityResolution: postRefreshAuthority,
     receiptProof: readBackProof,
@@ -757,6 +815,10 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
       authorizationCohortDigest: authority.authorizationCohortDigest,
       durableIdentityDigest: authority.durableIdentityDigest,
       lowlevelSource: authority.lowlevelSource,
+      // 【第十九轮 A.3】class-aware marker relation 的 lineage 维度（对照
+      // not-executed 路径——child marker 不得被 parent proof 清除）。
+      ...(authority.lineageBindingDigest !== undefined ? { lineageBindingDigest: authority.lineageBindingDigest } : {}),
+      ...(authority.lineageGeneration !== undefined ? { attemptGeneration: authority.lineageGeneration } : {}),
     }),
   );
   const finalizeWrite = writeTreasuryResolutionTombstone({
@@ -775,6 +837,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
     ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
     ...(resolvingProofLevel === "lowlevel" && authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+    ...authorityLineageProofSpread,
   });
   if (finalizeWrite.status === "rejected") {
     // finalize 失败：保持 resolving（beginTick 恢复幂等完成——receipt 已写、
@@ -787,13 +850,25 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     };
   }
   recordTreasuryResolutionEvent("committed");
-  // 【第十八轮 24.3】resolution-as-committed 后 tr1_ child 的 lineage 最终
-  // chain-committed（receipt 已是 committed 权威；更新失败 → lineage 保持
-  // child_active，beginTick 按 matching receipt 补完成）。
+  // 【第十八轮 24.3】【第十九轮 A.6】resolution-as-committed 后 tr1_ child 的
+  // lineage 最终 chain-committed：receipt 已是 committed 权威——推进前先验证
+  // receipt proof 的 lineage（lineageId/generation/parent/binding）与 lineage
+  // record 完全一致（generation 混用防御：generation N 的 receipt 不能证明
+  // N+1 的 chain）。不匹配 → 保持 child_active（beginTick 补完成同样按
+  // matching receipt 判定，不会推进），等待显式处理。
   if (isTreasuryRearmAttemptId(authority.transactionId)) {
     const chainLineage = lookupTreasuryAttemptLineageByAttemptId(authority.transactionId);
     if (chainLineage !== undefined && chainLineage.state === "child_active" && chainLineage.currentTransactionId === authority.transactionId) {
-      void closeTreasuryLineageAsChainCommitted(chainLineage.lineageId);
+      const committedProof = readTreasurySettlementProof(authority.transactionId);
+      const proofLineageMatchesRecord =
+        committedProof !== undefined &&
+        committedProof.lineageId === chainLineage.lineageId &&
+        committedProof.lineageGeneration === chainLineage.generation &&
+        committedProof.parentTransactionId === chainLineage.currentParentTransactionId &&
+        committedProof.lineageBindingDigest === chainLineage.bindingDigest;
+      if (proofLineageMatchesRecord) {
+        void closeTreasuryLineageAsChainCommitted(chainLineage.lineageId);
+      }
     }
   }
   return {
@@ -1124,8 +1199,13 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
   // marker class-aware 清除与 tr1_ proof 所需的 lineage record（publication
   // 已成功——record 即当前 attempt 的退休权威）。
   const lineagePublicationRecord = lookupTreasuryAttemptLineageByAttemptId(authority.transactionId);
+  // 【第十九轮 A.3】lineage proof 只对 tr1_ rearm attempt 生成——root/
+  // initial attempt 的 lineage record 虽有 lineageId/generation(0)，但 initial
+  // 禁止携带 proof（部分字段 = 形状损坏，整体性校验 fail closed）。
   const lineageProofOfAuthority =
-    lineagePublicationRecord !== undefined && lineagePublicationRecord.currentTransactionId === authority.transactionId
+    lineagePublicationRecord !== undefined &&
+    lineagePublicationRecord.currentTransactionId === authority.transactionId &&
+    isTreasuryRearmAttemptId(authority.transactionId)
       ? {
           ...(lineagePublicationRecord.lineageId !== undefined ? { lineageId: lineagePublicationRecord.lineageId } : {}),
           ...(lineagePublicationRecord.generation !== undefined ? { lineageGeneration: lineagePublicationRecord.generation } : {}),

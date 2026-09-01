@@ -3553,6 +3553,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           ...(facts0.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: facts0.authorizationCohortDigest } : {}),
           ...(facts0.durableIdentityDigest !== undefined ? { durableIdentityDigest: facts0.durableIdentityDigest } : {}),
           ...(facts0.lowlevelSource !== undefined ? { lowlevelSource: facts0.lowlevelSource } : {}),
+          // 【第十九轮 A.1】capability 签发前与既有 resolution proof 的 lineage
+          // 维度比较（tr1_ 缺 proof 的旧 tombstone 不得证明当前 generation）。
+          ...(facts0.lineageId !== undefined ? { lineageId: facts0.lineageId } : {}),
+          ...(facts0.lineageGeneration !== undefined ? { lineageGeneration: facts0.lineageGeneration } : {}),
+          ...(facts0.parentTransactionId !== undefined ? { parentTransactionId: facts0.parentTransactionId } : {}),
+          ...(facts0.lineageBindingDigest !== undefined ? { lineageBindingDigest: facts0.lineageBindingDigest } : {}),
         };
         const resolutionRelation = treasuryAttemptIdentityRelation(existingResolution, resolutionAttempt);
         if (resolutionRelation !== "match") {
@@ -3693,6 +3699,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         ...(facts0.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: facts0.authorizationCohortDigest } : {}),
         ...(facts0.durableIdentityDigest !== undefined ? { durableIdentityDigest: facts0.durableIdentityDigest } : {}),
         ...(facts0.lowlevelSource !== undefined ? { lowlevelSource: facts0.lowlevelSource } : {}),
+        // 【第十九轮 A.2】tr1_ rearm authority 的完整 lineage proof 绑定
+        //（child generation 证明——prevalidation 强比较）。
+        ...(facts0.lineageId !== undefined ? { lineageId: facts0.lineageId } : {}),
+        ...(facts0.lineageGeneration !== undefined ? { lineageGeneration: facts0.lineageGeneration } : {}),
+        ...(facts0.parentTransactionId !== undefined ? { parentTransactionId: facts0.parentTransactionId } : {}),
+        ...(facts0.lineageBindingDigest !== undefined ? { lineageBindingDigest: facts0.lineageBindingDigest } : {}),
         postFaultEpoch: {
           scope: state.observation.epoch.scope,
           epochSeq: state.observation.epoch.epochSeq,
