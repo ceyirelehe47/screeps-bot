@@ -22,11 +22,17 @@ export interface TreasuryLineageIndexRecordView {
   readonly generation: number;
 }
 
+/**
+ * 【第十九轮 D.1】same-record 判定改用 store entry identity（root
+ * transaction ID——store key 的派生），不再用 lineageId 相等：两个不同
+ * entry 携带相同 lineageId 是 duplicate 冲突而非同一 record（Round 18 用
+ * lineageId 判同 record 导致该冲突被静默跳过）。
+ */
 function sameRecord(
-  left: Pick<TreasuryLineageIndexRecordView, "lineageId">,
-  right: Pick<TreasuryLineageIndexRecordView, "lineageId">,
+  left: Pick<TreasuryLineageIndexRecordView, "lineageId" | "rootTransactionId">,
+  right: Pick<TreasuryLineageIndexRecordView, "lineageId" | "rootTransactionId">,
 ): boolean {
-  return left.lineageId === right.lineageId;
+  return left.rootTransactionId === right.rootTransactionId;
 }
 
 /** 单 record 内部组合的状态语义检查（load 与写入候选共用）。 */
@@ -75,7 +81,11 @@ export function findTreasuryLineageCrossIndexConflicts(
       return null;
     };
     const lineageClash = clash("lineageId", record.lineageId, byLineageId);
-    if (lineageClash !== null) return lineageClash;
+    if (lineageClash !== null) {
+      // 【第十九轮 D.2】duplicate lineageId：两个不同 root 的 entry 携带相同
+      // lineageId——lineage 身份是 proof 链的锚，重复即整个 store unhealthy。
+      return `duplicate lineageId ${record.lineageId.slice(0, 12)}（lineage ${byLineageId.get(record.lineageId)!.lineageId.slice(0, 12)} 的 root ${byLineageId.get(record.lineageId)!.rootTransactionId.slice(0, 24)} 与 ${record.rootTransactionId.slice(0, 24)}——同一 lineage 身份不得属于两个 entry）`;
+    }
     const rootClash = clash("root", record.rootTransactionId, byRoot);
     if (rootClash !== null) return rootClash;
     const rootAsCurrent = byCurrent.get(record.rootTransactionId);
