@@ -701,7 +701,11 @@ describe("receipt proof class v7（第十七轮第十五节）", () => {
         nextExpiryTick: Game.time + 5_001,
       },
     };
-    // 迁移发现等级矛盾 → fail closed（原数据保留、不猜测）。
+    // 【第十九轮 F】v6 在轻量 health 阶段是 migration pending（不误报
+    // unknown fatal——版本认可与 loader 迁移能力一致）；真正的等级矛盾
+    // fail closed 由 load 迁移发现（原数据保留、不猜测）。
+    expect(peekTreasuryReceiptHealth().healthy).toBe(true);
+    expect(() => ensureTreasuryReceiptStore()).toThrow(/等级矛盾/);
     expect(peekTreasuryReceiptHealth().healthy).toBe(false);
     // 原 v6 数据未动。
     const raw = (Memory.runtime.treasury.receipts.settled as Record<string, { level?: string }>)[
