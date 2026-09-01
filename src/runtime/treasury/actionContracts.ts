@@ -421,6 +421,12 @@ export interface TreasuryActionContract {
   readonly durableFacts?: Readonly<TreasuryDurableFacts>;
   /** 【第十八轮 24.12】canonical retry facts（adapter 显式声明；digest 参与）。 */
   readonly adapterRetryFacts?: string;
+  /**
+   * 【第十八轮 24.13】contract source（build 时确定的单一权威值——缺省
+   * "action-contract"）：进入 contract digest、retry semantic、durable intent、
+   * authorization context；execution request 的 source 必须与之完全相同。
+   */
+  readonly source: string;
   readonly epoch: {
     readonly scope: TreasuryObservationScope;
     readonly epochSeq: number;
@@ -1047,8 +1053,10 @@ function buildTreasuryActionContractInner(
       ? `:dfv:${String(durableFacts.version)}:dfh:${durablePayloadHash}:rcv:${String(durableFacts.version)}`
       : ":df:none";
   const retryFactsText = adapterRetryFacts !== undefined ? `:rf:${String(adapterRetryFacts.length)}:${adapterRetryFacts}` : ":rf:none";
+  const contractSource = request.source ?? "action-contract";
+  const sourceText = `:src:${String(contractSource.length)}:${contractSource}`;
   const digest = hashTreasuryCanonicalString(
-    `AC4:ce:${String(TREASURY_CANONICAL_ENCODING_VERSION)}:k:${String(request.actionKind.length)}:${request.actionKind}:av:${String(adapter.version)}:ar:${String(adapter.registrationId.length)}:${adapter.registrationId}:asi:${String(adapter.semanticIdentity.length)}:${adapter.semanticIdentity}:t:${String(request.transactionId.length)}:${request.transactionId}:a:${String(canonicalized.text.length)}:${canonicalized.text}:p:${sortedPostings.map(canonicalPostingText).join(",")}:sd:${sortedDescriptors.map(canonicalStructureDescriptorText).join(",")}${durableText}${retryFactsText}`,
+    `AC4:ce:${String(TREASURY_CANONICAL_ENCODING_VERSION)}:k:${String(request.actionKind.length)}:${request.actionKind}:av:${String(adapter.version)}:ar:${String(adapter.registrationId.length)}:${adapter.registrationId}:asi:${String(adapter.semanticIdentity.length)}:${adapter.semanticIdentity}:t:${String(request.transactionId.length)}:${request.transactionId}:a:${String(canonicalized.text.length)}:${canonicalized.text}:p:${sortedPostings.map(canonicalPostingText).join(",")}:sd:${sortedDescriptors.map(canonicalStructureDescriptorText).join(",")}${durableText}${retryFactsText}${sourceText}`,
   );
   const contract = Object.freeze({
     __brand: "treasury-action-contract",
@@ -1067,6 +1075,7 @@ function buildTreasuryActionContractInner(
     digest,
     ...(durableFacts !== undefined ? { durableFacts: Object.freeze({ ...durableFacts }) } : {}),
     ...(adapterRetryFacts !== undefined ? { adapterRetryFacts } : {}),
+    source: contractSource,
     epoch: {
       scope: observation.epoch.scope,
       epochSeq: observation.epoch.epochSeq,
@@ -1246,7 +1255,7 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
     {
       transactionId: contract.transactionId,
       kind: contract.actionKind,
-      source: request.source ?? "action-contract",
+      source: contract.source,
       decision: {
         scope: contract.epoch.scope,
         epochSeq: contract.epoch.epochSeq,

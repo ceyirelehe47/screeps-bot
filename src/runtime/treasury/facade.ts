@@ -1890,7 +1890,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           postings: verifiedContract.postings.map((leg) => ({ ...leg })),
           ...(verifiedContract.structureDescriptors.length > 0 ? { structureDescriptors: verifiedContract.structureDescriptors } : {}),
           ...(verifiedContract.durableFacts !== undefined ? { durablePayload: verifiedContract.durableFacts.payload, durablePayloadVersion: verifiedContract.durableFacts.version } : {}),
-          source: "action-contract",
+              // 【第十八轮 24.13】authorization 重算使用 contract source（单一权威）。
+          source: verifiedContract.source,
           ...(options?.owner !== undefined ? { ownerIdentity: String(treasuryAuthorizationOwnerKey(options.owner)) } : {}),
         });
         if (recomputedRetrySemantic !== tr1Capability.binding.retrySemanticDigest) {
