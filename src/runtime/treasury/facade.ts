@@ -210,7 +210,7 @@ import {
   rollbackTreasuryLineageToRearmReady,
   closeTreasuryLineageAsChainCommitted,
   retireTreasuryLineageCurrentAttempt,
-  completeTreasuryLineageRetirement,
+  convergeTreasuryLineageRetirementFromFacts,
   updateTreasuryAttemptLineageRecord,
   type TreasuryAttemptLineageIdentity,
 } from "@/runtime/treasury/attemptLineage";
@@ -3472,8 +3472,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           const markerAbsent =
             readTreasuryWriteFault() === undefined || readTreasuryWriteFault()?.transactionId !== record.canonical.transactionId;
           if (markerCleared || markerAbsent) {
-            markTreasuryPendingReleaseCompleted(record.canonical.transactionId);
-            void completeTreasuryLineageRetirement(childLineage.lineageId);
+            // 【第十九轮 C.7】三段分别证明后 converge 收敛——pending-release
+            // 索引移除与 retirement 完成共享同一阶段事实。
+            const converged = convergeTreasuryLineageRetirementFromFacts(childLineage.lineageId);
+            if (converged.status === "completed") {
+              markTreasuryPendingReleaseCompleted(record.canonical.transactionId);
+            }
           }
           return {
             status: "executed_aborted",

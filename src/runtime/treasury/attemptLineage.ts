@@ -1339,20 +1339,126 @@ export function retireTreasuryLineageCurrentAttempt(input: {
   });
 }
 
-/** retirement 三段完成推进：retiring → rearm_ready / non_rearmable_retired。 */
+/**
+ * 【第十九轮 C.1】retirement 阶段分别推进（单调 false→true）。调用方必须
+ * **先完成对应持久证明**——本 helper 只记录已证明事实，绝不自行推断：
+ * - authorityReleased：统一 resolver 明确返回 not_found（或等价受控 release
+ *   结果）之后；
+ * - markerCleaned：class-aware marker 证明（marker 不存在 / 不指向本
+ *   attempt / 匹配 marker 已成功清除）之后。
+ * publication 不经本 helper（retire 转换的 candidate 持久化 + read-back 内置）。
+ */
+export function markTreasuryLineageRetirementStageVerified(
+  lineageId: string,
+  stage: "authorityReleased" | "markerCleaned",
+): TreasuryAttemptLineageWriteResult {
+  return updateTreasuryAttemptLineageRecord(lineageId, (current) => {
+    if (current.state !== "retiring") {
+      throw new Error(`retirement 阶段推进只允许从 retiring（got ${String(current.state)}）`);
+    }
+    if (current.retirement[stage]) {
+      // 已证明的阶段幂等重入——零写入（不烧 revision）。
+      return current;
+    }
+    return {
+      ...current,
+      retirement: { ...current.retirement, [stage]: true },
+      updatedAtTick: Game.time,
+      recordRevision: current.recordRevision + 1,
+    };
+  });
+}
+
+/**
+ * retirement 完成推进（retiring → rearm_ready / non_rearmable_retired）。
+ * 【第十九轮 C.1】本函数**不再无条件置三段全 true**——只推进 state，且要求
+ * 三段已分别由对应持久证明推进（publication: retire 转换内置；release/
+ * marker: markTreasuryLineageRetirementStageVerified）。未全部证明 → 拒绝
+ * （保持 retiring——cleanup/release pending，不进 rearm_ready、无 eviction
+ * 资格）。
+ */
 export function completeTreasuryLineageRetirement(lineageId: string): TreasuryAttemptLineageWriteResult {
   return updateTreasuryAttemptLineageRecord(lineageId, (current) => {
     if (current.state !== "retiring") {
       throw new Error(`retirement 完成只允许从 retiring（got ${String(current.state)}）`);
     }
+    if (!current.retirement.lineagePublished || !current.retirement.authorityReleased || !current.retirement.markerCleaned) {
+      throw new Error(
+        `retirement 三段未全部证明（publication=${String(current.retirement.lineagePublished)}，release=${String(current.retirement.authorityReleased)}，marker=${String(current.retirement.markerCleaned)}）——保持 retiring（阶段分别证明后才可完成）`,
+      );
+    }
     return {
       ...current,
       state: current.rearmable ? "rearm_ready" : "non_rearmable_retired",
-      retirement: { lineagePublished: true, authorityReleased: true, markerCleaned: true },
       updatedAtTick: Game.time,
       recordRevision: current.recordRevision + 1,
     };
   });
+}
+
+/**
+ * 【第十九轮 C.7】从持久事实收敛 retirement 三段并完成——facade 运行时路径
+ * 与 beginTick 恢复共用的单一权威（不在各调用方实现近似算法）：
+ * - authorityReleased：统一 resolver 返回 not_found 才推进（ok/inconsistent/
+ *   store_unhealthy 都保持 pending——不可判定绝不猜测）；
+ * - markerCleaned：marker 不存在或 transactionId 不指向本 attempt 才推进
+ *   （marker 指向本 attempt 时——匹配未清或 digest/binding 冲突——一律
+ *   cleanup pending，不得进入 rearm_ready）；
+ * - 三段全 true 才 complete；否则保持 retiring（返回 pending 与未证明阶段）。
+ */
+export function convergeTreasuryLineageRetirementFromFacts(lineageId: string): {
+  readonly status: "completed" | "pending" | "rejected";
+  readonly pendingStages?: readonly string[];
+  readonly detail?: string;
+} {
+  const record = readTreasuryAttemptLineageRecord(lineageId);
+  if (record === undefined) {
+    return { status: "rejected", detail: `lineage ${lineageId.slice(0, 16)} 不存在` };
+  }
+  if (record.state !== "retiring") {
+    return { status: "rejected", detail: `retirement 收敛只允许 retiring（got ${String(record.state)}）` };
+  }
+  const pendingStages: string[] = [];
+  if (!record.retirement.authorityReleased) {
+    const authorityResolution = resolveTreasuryUnresolvedAuthority(record.currentTransactionId);
+    if (authorityResolution.status === "not_found") {
+      const marked = markTreasuryLineageRetirementStageVerified(lineageId, "authorityReleased");
+      if (marked.status === "rejected") {
+        return { status: "pending", pendingStages: ["authorityReleased"], detail: marked.detail };
+      }
+    } else {
+      pendingStages.push("authorityReleased");
+    }
+  }
+  if (!record.retirement.markerCleaned) {
+    const marker = readLineageRecoveryMarker();
+    if (marker === undefined || marker.transactionId !== record.currentTransactionId) {
+      const marked = markTreasuryLineageRetirementStageVerified(lineageId, "markerCleaned");
+      if (marked.status === "rejected") {
+        return { status: "pending", pendingStages: ["markerCleaned"], detail: marked.detail };
+      }
+    } else {
+      // marker 指向本 attempt：匹配未清（等待 recoverStagedResolutions 的
+      // class-aware 清除）或 digest 冲突（不可证明清除）都保持 pending。
+      pendingStages.push("markerCleaned");
+    }
+  }
+  if (pendingStages.length > 0) {
+    return { status: "pending", pendingStages };
+  }
+  const fresh = readTreasuryAttemptLineageRecord(lineageId);
+  if (fresh === undefined || fresh.state !== "retiring") {
+    return { status: "rejected", detail: "收敛过程中 record 消失或状态变化" };
+  }
+  if (!fresh.retirement.lineagePublished) {
+    return { status: "pending", pendingStages: ["lineagePublished"] };
+  }
+  const completed = completeTreasuryLineageRetirement(lineageId);
+  if (completed.status === "rejected") {
+    return { status: "pending", pendingStages: ["complete"], detail: completed.detail };
+  }
+  lineageStoreEvents.retirementCompletions += 1;
+  return { status: "completed" };
 }
 
 /** child commit 终态推进：child_active → chain_committed。 */
@@ -1580,6 +1686,9 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
         continue;
       }
       // 防御性 retirement 收敛：final not-executed tombstone + authority 已清。
+      // 【第十九轮 C.6】与运行时路径执行同样的 marker 证明——经 retire 转换
+      //（publication 内置）+ converge 分别证明 release/marker（marker 指向本
+      // attempt 时保持 cleanup pending，不进 rearm_ready）。
       const tombstone = readTreasuryResolutionTombstone(record.currentTransactionId);
       if (
         tombstone !== undefined &&
@@ -1588,19 +1697,10 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
         resolveTreasuryUnresolvedAuthority(record.currentTransactionId).status === "not_found" &&
         record.retirementGeneration === record.generation
       ) {
-        const updated = updateTreasuryAttemptLineageRecord(lineageId, (current) => ({
-          ...current,
-          state: "retiring",
-          resolutionState: "not_executed" as const,
-          retirement: { lineagePublished: true, authorityReleased: true, markerCleaned: current.retirement.markerCleaned },
-          retirementGeneration: current.generation,
-          updatedAtTick: Game.time,
-          recordRevision: current.recordRevision + 1,
-        }));
-        if (updated.status !== "rejected") {
-          const completed = completeTreasuryLineageRetirement(lineageId);
-          if (completed.status !== "rejected") {
-            lineageStoreEvents.retirementCompletions += 1;
+        const retired = retireTreasuryLineageCurrentAttempt({ lineageId });
+        if (retired.status !== "rejected") {
+          const converged = convergeTreasuryLineageRetirementFromFacts(lineageId);
+          if (converged.status === "completed") {
             result = { ...result, retirementCompletions: result.retirementCompletions + 1 };
           }
         }
@@ -1608,31 +1708,12 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
       continue;
     }
     if (record.state === "retiring") {
-      // 三段补完成：release/marker 的实际补动作由 recoverStagedResolutions 完成
-      //（顺序在前）——这里按最终持久事实收敛标志。
-      const authorityResolution = resolveTreasuryUnresolvedAuthority(record.currentTransactionId);
-      const authorityReleased =
-        authorityResolution.status === "not_found"
-          ? true
-          : authorityResolution.status === "ok"
-            ? false
-            : null; // inconsistent/store_unhealthy → 不可判定，保持 pending。
-      let markerCleaned: boolean | null;
-      if (record.retirement.markerCleaned) {
-        markerCleaned = true;
-      } else {
-        const marker = readLineageRecoveryMarker();
-        markerCleaned =
-          marker === undefined ||
-          marker.transactionId !== record.currentTransactionId ||
-          marker.digest !== record.currentIdentity.digest;
-      }
-      if (authorityReleased === true && markerCleaned === true) {
-        const completed = completeTreasuryLineageRetirement(lineageId);
-        if (completed.status !== "rejected") {
-          lineageStoreEvents.retirementCompletions += 1;
-          result = { ...result, retirementCompletions: result.retirementCompletions + 1 };
-        }
+      // 【第十九轮 C.7】三段按持久事实收敛（release/marker 的实际补动作由
+      // recoverStagedResolutions 完成——顺序在前；本处只按最终持久事实推进
+      // 阶段与状态，与运行时路径共用同一 converge）。
+      const converged = convergeTreasuryLineageRetirementFromFacts(lineageId);
+      if (converged.status === "completed") {
+        result = { ...result, retirementCompletions: result.retirementCompletions + 1 };
       }
       continue;
     }

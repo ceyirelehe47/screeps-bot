@@ -79,7 +79,7 @@ import {
   lookupTreasuryAttemptLineageByAttemptId,
   peekTreasuryAttemptLineageHealth,
   retireTreasuryLineageCurrentAttempt,
-  completeTreasuryLineageRetirement,
+  convergeTreasuryLineageRetirementFromFacts,
   closeTreasuryLineageAsChainCommitted,
   type TreasuryAttemptLineageIdentity,
   type TreasuryLineageAuthorityClass,
@@ -1086,15 +1086,14 @@ function publishTreasuryNotExecutedLineage(
  * rearm_ready（capability 可申请）；non-rearmable → 终态 non_rearmable_
  * retired（永久阻断 parent、不签发 capability）。
  */
-function completeTreasuryNotExecutedRetirement(transactionId: string): void {
+function completeTreasuryNotExecutedRetirement(transactionId: string): { readonly status: "completed" | "pending" | "rejected" } {
   const lineage = lookupTreasuryAttemptLineageByAttemptId(transactionId);
-  if (lineage === undefined) return;
-  // 调用时机即三段完成：publication（record 已持久化——本函数只在 publish
-  // 成功后的主路径被调用）+ release（上文 release* 已执行）+ marker（上文
-  // class-aware 清除已确认）。
-  if (lineage.state === "retiring") {
-    void completeTreasuryLineageRetirement(lineage.lineageId);
-  }
+  if (lineage === undefined) return { status: "rejected" };
+  // 【第十九轮 C.1/C.7】三段分别由持久证明推进（publication: retire 转换
+  // 内置；release: 统一 resolver not_found；marker: class-aware 清除后重读
+  // 不存在/不指向本 attempt）——converge 单一权威收敛，不再无条件置 true。
+  if (lineage.state !== "retiring") return { status: "rejected" };
+  return convergeTreasuryLineageRetirementFromFacts(lineage.lineageId);
 }
 
 /**
@@ -1265,12 +1264,14 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
         : {}),
     }),
   );
-  // marker 不存在或已清除 → pending-release 完成。
+  // marker 不存在或已清除 → 三段收敛（【第十九轮 C.7】pending-release 索引
+  // 移除与 retirement 完成共享同一阶段事实——converge 完成才移除）。
   const markerAbsent = readTreasuryWriteFault() === undefined || readTreasuryWriteFault()?.transactionId !== authority.transactionId;
   if (markerCleared || markerAbsent) {
-    markTreasuryPendingReleaseCompleted(authority.transactionId);
-    // lineage 三段收敛（publication 在上一步、release 在本步、marker 本步）。
-    completeTreasuryNotExecutedRetirement(authority.transactionId);
+    const converged = completeTreasuryNotExecutedRetirement(authority.transactionId);
+    if (converged.status === "completed") {
+      markTreasuryPendingReleaseCompleted(authority.transactionId);
+    }
     recordTreasuryResolutionEvent("notExecuted");
     return {
       status: "resolved",

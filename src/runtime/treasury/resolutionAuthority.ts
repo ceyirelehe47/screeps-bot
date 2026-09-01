@@ -36,7 +36,7 @@ import {
   createTreasuryAttemptLineageRecord,
   lookupTreasuryAttemptLineageByAttemptId,
   retireTreasuryLineageCurrentAttempt,
-  completeTreasuryLineageRetirement,
+  convergeTreasuryLineageRetirementFromFacts,
   type TreasuryAttemptLineageIdentity,
 } from "@/runtime/treasury/attemptLineage";
 import {
@@ -152,9 +152,10 @@ function publishImmediateNotExecutedLineage(
 function completeImmediateNotExecutedRetirement(transactionId: string): void {
   const lineage = lookupTreasuryAttemptLineageByAttemptId(transactionId);
   if (lineage === undefined) return;
-  // 调用时机即三段完成（publication + release + marker 清除均已在上文确认）。
+  // 【第十九轮 C.7】三段分别由持久证明推进——converge 单一权威收敛
+  //（不再无条件置 true；marker 指向本 attempt 时保持 cleanup pending）。
   if (lineage.state === "retiring") {
-    void completeTreasuryLineageRetirement(lineage.lineageId);
+    void convergeTreasuryLineageRetirementFromFacts(lineage.lineageId);
   }
 }
 
