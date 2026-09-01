@@ -41,7 +41,13 @@ import {
 } from "@/runtime/treasury/transactionId";
 import { computeTreasuryLineageBindingDigest } from "@/runtime/treasury/lineageBinding";
 import type { TreasuryLineageProofFacts } from "@/runtime/treasury/lineageProof";
-import type { TreasuryExactIdentityFactsInput } from "@/runtime/treasury/exactAttemptIdentity";
+import {
+  treasuryExactAttemptIdentityOfFacts,
+  treasuryProofClassOfIdentityFacts,
+  type TreasuryExactIdentityFactsInput,
+} from "@/runtime/treasury/exactAttemptIdentity";
+import { verifyTreasuryCurrentLineageExactIdentity } from "@/runtime/treasury/currentLineageSettlementVerifier";
+import { treasuryTerminalFinalExactOfSummary, treasuryTerminalExactIdentityRelation } from "@/runtime/treasury/terminalExactIdentity";
 import type { TreasuryAttemptLineageRecord } from "@/runtime/treasury/attemptLineage";
 import type { TreasuryLineageRetirementSummary } from "@/runtime/treasury/lineageRetirementSummary";
 
@@ -203,6 +209,11 @@ function verifyGenerationProof(
     if (identity.durableIdentityDigest !== undefined && identity.durableIdentityDigest !== proof.durableIdentityDigest) {
       return "exact retirement proof 的 durableIdentityDigest 与 identity 视图不一致";
     }
+    // 【第二十一轮】provenance 与 proof 绑定（historical 的 lowlevel 权威是
+    // exact retirement proof 自身携带的 lowlevelSource——受控比较）。
+    if (identity.lowlevelSource !== undefined && identity.lowlevelSource !== proof.lowlevelSource) {
+      return "exact retirement proof 的 lowlevelSource 与 identity 视图不一致（runtime 与 migrated 不能互相证明）";
+    }
   }
   return null;
 }
@@ -315,8 +326,13 @@ export function validateTreasurySemanticLineage(input: {
           detail: "current generation 的 record current（ID/parent/binding）与 proof 不一致（generation 混用或篡改）",
         };
       }
-      if (identity !== undefined && identity.digest !== undefined && identity.digest !== record.currentIdentity.digest) {
-        return { verdict: "conflict", detail: "identity 视图 digest 与 record.currentIdentity.digest 不一致" };
+      // 【第二十一轮 6.4】active current 必须完整比较 exact identity（digest/
+      // contract/cohort/durable/proof class/lowlevelSource 与
+      // record.currentIdentity 及 record.authorityClass）——单一权威
+      // currentLineageSettlementVerifier；identity 缺失或任一维度不同不得 match。
+      const currentVerify = verifyTreasuryCurrentLineageExactIdentity({ record, identity, proof });
+      if (currentVerify.verdict !== "match") {
+        return { verdict: currentVerify.verdict, detail: currentVerify.detail };
       }
       return { verdict: "match", authoritySource: "active", generationRole: "current", record };
     }
@@ -378,11 +394,67 @@ export function validateTreasurySemanticLineage(input: {
       detail: "v1 迁移 summary 缺 authorityClass（terminal class 不可证明——legacy isolated，不猜测）",
     };
   }
-  const classError = identityClassConflict("attempt identity", identity, summary.authorityClass, identity?.lowlevelSource);
+  // 【第二十一轮 7.3/7.4】terminal current 的 exact identity 由 summary v3
+  // 持久化的 finalExact 证明——旧 v1/v2 summary（无 finalExact）是
+  // replay-only：保留 root 重放门禁，但不得证明 terminal current、不得授权
+  // 新写入（fail closed，不自动补造）。terminal historical 仍由 exact
+  // generation retirement proof 证明（proof 自带完整身份维度与 provenance）。
+  const finalExactView = treasuryTerminalFinalExactOfSummary(summary);
+  // provenance 权威：v3 summary 用持久化 finalExact.lowlevelSource（不得拿
+  // 调用方 source 与调用方自己比较——第二十一轮修复）；旧 summary 的
+  // terminal current 反正 replay-only（insufficient），terminal historical 的
+  // provenance 由 exact retirement proof 承载（verifyGenerationProof）。
+  const isTerminalCurrentGeneration = parsed.generation === summary.finalGeneration;
+  const provenanceAuthority = finalExactView !== null
+    ? finalExactView.finalExact.lowlevelSource
+    : (isTerminalCurrentGeneration ? undefined : identity?.lowlevelSource);
+  const classError = identityClassConflict("attempt identity", identity, summary.authorityClass, provenanceAuthority);
   if (classError !== null) return { verdict: "conflict", detail: classError };
   if (parsed.generation === summary.finalGeneration) {
     if (summary.finalAttemptId !== transactionId) {
       return { verdict: "conflict", detail: "summary.finalAttemptId 与待验证 attempt ID 不一致" };
+    }
+    // 【第二十一轮 7.3】terminal current 的完整 exact identity 证明：构造调用方
+    // 与 summary 持久化的 final exact identity，执行 proof-class-aware 比较——
+    // finalAttemptId + finalGeneration 外壳不构成证明。
+    if (finalExactView === null) {
+      return {
+        verdict: "insufficient",
+        detail: "旧 terminal summary 缺少持久化 final exact identity（replay-only——root 重放门禁保留，terminal current 不可证明，不猜测）",
+      };
+    }
+    if (identity === undefined) {
+      return {
+        verdict: "insufficient",
+        detail: "terminal current 验证要求输入携带完整 exact identity（缺失即不可证明——不得 match）",
+      };
+    }
+    const callerExact = treasuryExactAttemptIdentityOfFacts(
+      transactionId,
+      {
+        ...identity,
+        lineageId: proof.lineageId,
+        lineageGeneration: proof.lineageGeneration,
+        parentTransactionId: proof.parentTransactionId,
+        lineageBindingDigest: proof.lineageBindingDigest,
+      },
+      treasuryProofClassOfIdentityFacts(identity),
+    );
+    if (callerExact === null) {
+      return { verdict: "insufficient", detail: "输入 identity 无法构造完整 exact attempt identity（terminal current 不可证明）" };
+    }
+    const terminalRelation = treasuryTerminalExactIdentityRelation(callerExact, finalExactView.exactIdentity);
+    if (terminalRelation === "conflict") {
+      return {
+        verdict: "conflict",
+        detail: "输入 attempt 与 summary 持久化 final exact identity 不一致（digest/contract/cohort/durable/class/lowlevel/parent/binding 任一维度冲突）",
+      };
+    }
+    if (terminalRelation === "insufficient") {
+      return {
+        verdict: "insufficient",
+        detail: "输入 attempt 缺少 summary final exact identity 要求的身份维度（不可证明——不降级 match）",
+      };
     }
     return { verdict: "match", authoritySource: "terminal", generationRole: "terminal_current", summary };
   }
