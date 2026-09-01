@@ -39,7 +39,7 @@
  *   postings 是唯一资产事实副本。
  */
 
-import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
+import { isTreasuryRearmAttemptId, isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import { validateTreasuryAuthorizationCohortFacts } from "@/runtime/treasury/cohortValidation";
 import { validateTreasuryStructureDescriptorArray } from "@/runtime/treasury/structureDescriptorValidation";
@@ -473,7 +473,7 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
   }
   // 【第十八轮 24.5】lineage proof required/forbidden 矩阵：is rearm attempt
   // → 全部必填；is initial attempt → 全部禁止（不只检查可选 digest 格式）。
-  const isRearmAttempt = typeof candidate.transactionId === "string" && candidate.transactionId.startsWith("tr1_");
+  const isRearmAttempt = typeof candidate.transactionId === "string" && isTreasuryRearmAttemptId(candidate.transactionId);
   if (isRearmAttempt) {
     if (typeof candidate.lineageId !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.lineageId)) {
       return "tr1_ intent 缺少合法 lineageId（rearm attempt 的 lineage proof 必填——不得当普通 modern/lowlevel entry）";
@@ -696,7 +696,7 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
     const entries: Record<string, TreasuryIntentEntry> = {};
     for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
       const legacy = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as Partial<TreasuryIntentEntry>;
-      const isRearm = typeof legacy.transactionId === "string" && legacy.transactionId.startsWith("tr1_");
+      const isRearm = typeof legacy.transactionId === "string" && isTreasuryRearmAttemptId(legacy.transactionId);
       const hasAnyLineage = legacy.lineageId !== undefined || legacy.lineageGeneration !== undefined
         || legacy.parentTransactionId !== undefined || legacy.lineageBindingDigest !== undefined;
       if (!isRearm && hasAnyLineage) {
@@ -1356,7 +1356,18 @@ export function recoverTreasuryIntentsAtTickBoundary(
   proofChecker: (
     transactionId: string,
     outcome: string,
-    attempt: { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string },
+    attempt: {
+      readonly digest: string;
+      readonly contractDigest?: string;
+      readonly authorizationCohortDigest?: string;
+      readonly durableIdentityDigest?: string;
+      /** 【第二十轮 8】finalized proof 链的完整维度（lowlevel + lineage 四字段）。 */
+      readonly lowlevelSource?: string;
+      readonly lineageId?: string;
+      readonly lineageGeneration?: number;
+      readonly parentTransactionId?: string;
+      readonly lineageBindingDigest?: string;
+    },
   ) => string | null,
 ): TreasuryIntentRecoveryReport {
   const report: TreasuryIntentRecoveryReport = {
@@ -1384,11 +1395,18 @@ export function recoverTreasuryIntentsAtTickBoundary(
       // attempt identity 校验——returned_ok 须 identity 匹配的 committed
       // proof；其余须 identity 匹配的 not-executed tombstone。proof 缺失或
       // identity 不一致 → semantic store fault（entry 保留，fail closed）。
+      // 【第二十轮 8】finalized proof 链携带完整维度（exact identity 单一
+      // 构造语义——tr1_ intent 的 lineage 四字段与 lowlevelSource 不再丢弃）。
       const proofError = proofChecker(entry.transactionId, entry.outcome, {
         digest: entry.digest,
         ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
         ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
         ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+        ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+        ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+        ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+        ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
+        ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
       });
       if (proofError !== null) {
         report.storeFatal = `finalized proof 缺失: ${proofError}`;

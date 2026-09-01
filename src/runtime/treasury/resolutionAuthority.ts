@@ -218,10 +218,14 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
     if (existing !== undefined && existing.stage === "final" && existing.resolution === "not-executed") {
       // 【第十二轮 3.3】幂等仅在完整 attempt identity 一致时成立：旧
       // tombstone 不得解决同 ID 的新 attempt。
+      // 【第二十轮 8】完整维度（durable/lowlevel）进入幂等比较——authorization-
+      // fault entry 不携带 lineage proof（tr1_ child 不走 pre-execution fault
+      // 路径，无需 lineage 维度）。
       const attempt: TreasuryAttemptIdentity = {
         digest: fault.digest,
         ...(fault.contractDigest !== undefined ? { contractDigest: fault.contractDigest } : {}),
         ...(fault.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fault.authorizationCohortDigest } : {}),
+        ...(fault.durableIdentityDigest !== undefined ? { durableIdentityDigest: fault.durableIdentityDigest } : {}),
       };
       if (treasuryAttemptIdentityRelation(existing, attempt) !== "match") {
         deps.metrics.reconciliationCapabilitiesRejected += 1;

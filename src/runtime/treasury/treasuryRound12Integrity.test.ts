@@ -488,7 +488,8 @@ describe("tombstone / finalized proof identity（第十二轮 3.3/3.4）", () =>
       nextExpiryTick: null,
     };
     const store = Memory.runtime!.treasury!.receipts!;
-    store.settled["t:proof_ok"] = { level: "identity-bound" as const, settledAtTick: Game.time - 1, digest: "4444444444444444", durableIdentityDigest: identity };
+    // 【第二十轮】低层 finalized intent 的 proof 链比较含 lowlevelSource（单向——attempt 携带则 proof 必须携带）。手塞 proof 补齐 provenance。
+    store.settled["t:proof_ok"] = { level: "lowlevel" as const, settledAtTick: Game.time - 1, digest: "4444444444444444", durableIdentityDigest: identity, lowlevelSource: "runtime-lowlevel@v1" };
     const write = writeTreasuryIntentEntry({
       transactionId: "proof_ok",
       digest: "4444444444444444",

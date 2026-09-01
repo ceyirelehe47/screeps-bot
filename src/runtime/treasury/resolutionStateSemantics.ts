@@ -22,7 +22,7 @@
  */
 
 import type { TreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
-import { parseTreasuryRearmChildTransactionIdV2 } from "@/runtime/treasury/transactionId";
+import { isTreasuryRearmAttemptId, parseTreasuryRearmChildTransactionIdV2 } from "@/runtime/treasury/transactionId";
 
 /** 校验上下文：load/migration 兼容历史（迁移数据缺新字段 = 隔离而非 fatal）；write 对新写入严格。 */
 export type TreasuryResolutionStateValidationContext = "load" | "write";
@@ -107,7 +107,7 @@ export function validateTreasuryResolutionTombstoneState(
     // proof——v1 tr1_ ID 不可 generation 寻址（历史 load 兼容形态不强制）。
     if (
       typeof entry.transactionId === "string" &&
-      entry.transactionId.startsWith("tr1_") &&
+      isTreasuryRearmAttemptId(entry.transactionId) &&
       parseTreasuryRearmChildTransactionIdV2(entry.transactionId) !== null
     ) {
       if (

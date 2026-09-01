@@ -35,7 +35,7 @@
  *   仅测试）。
  */
 
-import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
+import { isTreasuryRearmAttemptId, isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import { TREASURY_WRITE_FAULT_PHASES, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
 import { validateTreasuryAuthorizationCohortFacts } from "@/runtime/treasury/cohortValidation";
@@ -394,7 +394,7 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
   }
   // 【第十八轮 24.5】lineage proof required/forbidden 矩阵（与 intent v7 同一
   // 语义；tr1_ entry 缺 proof 不得当普通 modern/lowlevel entry）。
-  const isRearmAttempt = typeof candidate.transactionId === "string" && candidate.transactionId.startsWith("tr1_");
+  const isRearmAttempt = typeof candidate.transactionId === "string" && isTreasuryRearmAttemptId(candidate.transactionId);
   if (isRearmAttempt) {
     if (typeof candidate.lineageId !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.lineageId)) {
       return "tr1_ quarantine 缺少合法 lineageId（rearm attempt 的 lineage proof 必填）";
@@ -704,7 +704,7 @@ function loadQuarantineStoreRuntime(): QuarantineStoreRuntime {
     const entries: Record<string, TreasuryQuarantineEntry> = {};
     for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
       const legacy = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as Partial<TreasuryQuarantineEntry>;
-      const isRearm = typeof legacy.transactionId === "string" && legacy.transactionId.startsWith("tr1_");
+      const isRearm = typeof legacy.transactionId === "string" && isTreasuryRearmAttemptId(legacy.transactionId);
       const hasAnyLineage = legacy.lineageId !== undefined || legacy.lineageGeneration !== undefined
         || legacy.parentTransactionId !== undefined || legacy.lineageBindingDigest !== undefined;
       if (!isRearm && hasAnyLineage) {

@@ -426,7 +426,7 @@ describe("full receipt identity propagation（第十四轮第七节）", () => {
       updatedAtTick: Game.time,
     });
     expect(write.status).toBe("written");
-    expect(commitSettledReceipt("fp_finalized_match", Game.time, { digest, durableIdentityDigest: identity }).status).toBe("written");
+    expect(commitSettledReceipt("fp_finalized_match", Game.time, { digest, durableIdentityDigest: identity, lowlevelSource: "runtime-lowlevel@v1" }).status).toBe("written");
     Game.time += 1;
     makeService().beginTick();
     expect(readTreasuryIntentEntry("fp_finalized_match")).toBeUndefined();

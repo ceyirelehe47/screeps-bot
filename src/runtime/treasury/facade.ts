@@ -48,6 +48,11 @@ import {
   buildTreasuryObservation,
 } from "@/runtime/treasury/observation";
 import {
+  treasuryExactAttemptIdentityOfIdentityInput,
+  treasuryExactAttemptIdentityOfReceiptProof,
+  treasuryExactAttemptIdentityRelation,
+} from "@/runtime/treasury/exactAttemptIdentity";
+import {
   buildTreasuryCanonicalTransaction,
   computeTreasuryPayloadDigest,
   validateTreasuryTransactionInputShape,
@@ -859,7 +864,17 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   function checkTreasuryFinalizedProof(
     transactionId: string,
     outcome: string,
-    attempt: { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string },
+    attempt: {
+      readonly digest: string;
+      readonly contractDigest?: string;
+      readonly authorizationCohortDigest?: string;
+      readonly durableIdentityDigest?: string;
+      readonly lowlevelSource?: string;
+      readonly lineageId?: string;
+      readonly lineageGeneration?: number;
+      readonly parentTransactionId?: string;
+      readonly lineageBindingDigest?: string;
+    },
   ): string | null {
     return recoveryCoordinator.checkTreasuryFinalizedProof(transactionId, outcome, attempt);
   }
@@ -2524,21 +2539,27 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (settledBeforeCommit !== undefined) {
         if (record.durableIdentityDigest !== undefined) {
           const proof = readTreasurySettlementProof(record.canonical.transactionId);
-          const attempt: TreasuryAttemptIdentity = {
+          // 【第二十轮 8】exact attempt identity 单一构造（含 lineage 四字段、
+          // lowlevelSource 与 proof class——修复丢弃 lineage 字段导致 matching
+          // tr1_ receipt 被误判 settlement_identity_conflict 的缺陷）。
+          const attemptExact = treasuryExactAttemptIdentityOfIdentityInput(record.canonical.transactionId, {
             digest: record.digest,
-            ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
-            ...(record.authorizationCohortDigest !== undefined
-              ? { authorizationCohortDigest: record.authorizationCohortDigest }
-              : {}),
             durableIdentityDigest: record.durableIdentityDigest,
-          };
+            ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+            ...(record.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.authorizationCohortDigest } : {}),
+            ...(record.contractDigest === undefined ? { lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME } : {}),
+            ...(record.lineageId !== undefined ? { lineageId: record.lineageId } : {}),
+            ...(record.lineageGeneration !== undefined ? { lineageGeneration: record.lineageGeneration } : {}),
+            ...(record.lineageParentTransactionId !== undefined ? { parentTransactionId: record.lineageParentTransactionId } : {}),
+            ...(record.lineageBindingDigest !== undefined ? { lineageBindingDigest: record.lineageBindingDigest } : {}),
+          });
+          const proofExact = proof === undefined || proof.level === "legacy"
+            ? null
+            : treasuryExactAttemptIdentityOfReceiptProof(record.canonical.transactionId, proof);
           const relation =
-            proof === undefined || proof.level === "legacy"
+            proofExact === null || attemptExact === null
               ? ("insufficient" as const)
-              : treasuryAttemptIdentityRelation(
-                  { ...proof, digest: proof.digest ?? record.digest },
-                  attempt,
-                );
+              : treasuryExactAttemptIdentityRelation(proofExact, attemptExact);
           if (relation !== "match") {
             metrics.duplicateSettlementsRejected += 1;
             return {

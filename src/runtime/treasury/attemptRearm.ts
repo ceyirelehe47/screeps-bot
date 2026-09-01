@@ -60,6 +60,13 @@ export interface TreasuryRearmParentIdentity {
   readonly authorizationCohortDigest?: string;
   readonly durableIdentityDigest?: string;
   readonly lowlevelSource?: string;
+  /** 【第二十轮 8】tr1_ parent 的 lineage 四字段（expected identity 与
+   * tombstone 的完整比较维度——parent proof 不能被缺 lineage 的期望身份
+   * 冒充证明）。 */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
 }
 
 export type TreasuryAttemptRearmResult =
@@ -172,6 +179,10 @@ export function rearmResolvedNotExecutedAttempt(input: {
       ...(expected.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: expected.authorizationCohortDigest } : {}),
       ...(expected.durableIdentityDigest !== undefined ? { durableIdentityDigest: expected.durableIdentityDigest } : {}),
       ...(expected.lowlevelSource !== undefined ? { lowlevelSource: expected.lowlevelSource } : {}),
+      ...(expected.lineageId !== undefined ? { lineageId: expected.lineageId } : {}),
+      ...(expected.lineageGeneration !== undefined ? { lineageGeneration: expected.lineageGeneration } : {}),
+      ...(expected.parentTransactionId !== undefined ? { parentTransactionId: expected.parentTransactionId } : {}),
+      ...(expected.lineageBindingDigest !== undefined ? { lineageBindingDigest: expected.lineageBindingDigest } : {}),
     } satisfies TreasuryAttemptIdentity);
     if (relation !== "match") {
       return {

@@ -175,6 +175,13 @@ export function createTreasuryRecoveryCoordinator(deps: TreasuryRecoveryCoordina
             ...(settlement.durableIdentityDigest !== undefined
               ? { durableIdentityDigest: settlement.durableIdentityDigest }
               : {}),
+            ...(settlement.lowlevelSource !== undefined ? { lowlevelSource: settlement.lowlevelSource } : {}),
+            // 【第二十轮 8】lineage 四字段一并进入 finalized proof 比较（tr1_
+            // intent 的 finalized 链不再丢失 lineage 维度）。
+            ...(settlement.lineageId !== undefined ? { lineageId: settlement.lineageId } : {}),
+            ...(settlement.lineageGeneration !== undefined ? { lineageGeneration: settlement.lineageGeneration } : {}),
+            ...(settlement.parentTransactionId !== undefined ? { parentTransactionId: settlement.parentTransactionId } : {}),
+            ...(settlement.lineageBindingDigest !== undefined ? { lineageBindingDigest: settlement.lineageBindingDigest } : {}),
           },
           attempt,
         ) === "match"

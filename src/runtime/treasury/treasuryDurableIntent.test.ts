@@ -317,6 +317,7 @@ describe("global reset 恢复", () => {
       commitSettledReceipt("ti_final_ok_proof", Game.time, {
         digest: "0123456789abcdef",
         durableIdentityDigest: seededProof?.durableIdentityDigest,
+        lowlevelSource: "runtime-lowlevel@v1",
       }).status,
     ).not.toBe("fatal");
     Game.time += 1;
