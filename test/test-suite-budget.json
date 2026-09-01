@@ -1,26 +1,26 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "5f89263",
-    "suites": 238,
-    "tests": 1540,
-    "passed": 1540,
+    "commit": "4f9d42a",
+    "suites": 240,
+    "tests": 1573,
+    "passed": 1573,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "commit": "5f89263",
-    "suites": 238,
-    "tests": 1540,
-    "passed": 1540,
+    "commit": "4f9d42a",
+    "suites": 240,
+    "tests": 1573,
+    "passed": 1573,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 96,
+    "highRiskFiles": 98,
     "defaultFiles": 127
   },
   "files": {
@@ -1060,8 +1060,8 @@
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryWriteArchitecture.test.ts": {
-      "baseline": 0,
-      "budget": 18,
+      "baseline": 19,
+      "budget": 19,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryWriteAdmissionPerformance.test.ts": {
@@ -1212,6 +1212,16 @@
     "src/runtime/treasury/treasuryRound16StoreHealth.test.ts": {
       "baseline": 7,
       "budget": 7,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound17DurableLineageRearm.test.ts": {
+      "baseline": 26,
+      "budget": 26,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound17OperationCount.test.ts": {
+      "baseline": 6,
+      "budget": 6,
       "tier": "high-risk"
     }
   }
