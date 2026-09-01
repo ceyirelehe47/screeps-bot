@@ -1,26 +1,26 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "7c38c45",
-    "suites": 250,
-    "tests": 1697,
-    "passed": 1697,
+    "commit": "b692aef",
+    "suites": 254,
+    "tests": 1764,
+    "passed": 1764,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "commit": "7c38c45",
-    "suites": 250,
-    "tests": 1697,
-    "passed": 1697,
+    "commit": "b692aef",
+    "suites": 254,
+    "tests": 1764,
+    "passed": 1764,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 108,
+    "highRiskFiles": 112,
     "defaultFiles": 127
   },
   "files": {
@@ -1272,6 +1272,26 @@
     "src/runtime/treasury/treasuryRound19OperationCount.test.ts": {
       "baseline": 4,
       "budget": 4,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound20SemanticLineage.test.ts": {
+      "baseline": 22,
+      "budget": 22,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound20ExactRetirement.test.ts": {
+      "baseline": 20,
+      "budget": 20,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound20ReceiptIdentity.test.ts": {
+      "baseline": 16,
+      "budget": 16,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound20OperationCount.test.ts": {
+      "baseline": 9,
+      "budget": 9,
       "tier": "high-risk"
     }
   }
