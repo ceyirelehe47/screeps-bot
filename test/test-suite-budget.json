@@ -1,26 +1,26 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "b692aef",
-    "suites": 254,
-    "tests": 1764,
-    "passed": 1764,
+    "commit": "054691d",
+    "suites": 258,
+    "tests": 1838,
+    "passed": 1838,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "commit": "b692aef",
-    "suites": 254,
-    "tests": 1764,
-    "passed": 1764,
+    "commit": "054691d",
+    "suites": 258,
+    "tests": 1838,
+    "passed": 1838,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 112,
+    "highRiskFiles": 116,
     "defaultFiles": 127
   },
   "files": {
@@ -1293,6 +1293,26 @@
       "baseline": 9,
       "budget": 9,
       "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound21CurrentIdentity.test.ts": {
+      "budget": 23,
+      "risk": "high",
+      "rationale": "Round 21 exact current/terminal identity、commit recovery、compaction 四方、300 代生命周期与架构扫描——安全关键矩阵"
+    },
+    "src/runtime/treasury/treasuryRound21CommitRecovery.test.ts": {
+      "budget": 22,
+      "risk": "high",
+      "rationale": "Round 21 exact current/terminal identity、commit recovery、compaction 四方、300 代生命周期与架构扫描——安全关键矩阵"
+    },
+    "src/runtime/treasury/treasuryRound21CompactionAndRefresh.test.ts": {
+      "budget": 19,
+      "risk": "high",
+      "rationale": "Round 21 exact current/terminal identity、commit recovery、compaction 四方、300 代生命周期与架构扫描——安全关键矩阵"
+    },
+    "src/runtime/treasury/treasuryRound21Lifecycle.test.ts": {
+      "budget": 10,
+      "risk": "high",
+      "rationale": "Round 21 exact current/terminal identity、commit recovery、compaction 四方、300 代生命周期与架构扫描——安全关键矩阵"
     }
   }
 }
