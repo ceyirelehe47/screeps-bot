@@ -22,6 +22,10 @@ import { readTreasuryResolutionTombstone, writeTreasuryResolutionTombstone } fro
 import { recordTreasuryWriteFault } from "@/runtime/treasury/writeFault";
 import { deriveTreasuryRearmChildTransactionId } from "@/runtime/treasury/attemptRearm";
 import {
+  deriveTreasuryLineageNextChildTransactionId,
+  lookupTreasuryAttemptLineageByAttemptId,
+} from "@/runtime/treasury/attemptLineage";
+import {
   makeTreasuryTestTransferAdapter,
   replaceTreasuryActionAdapterForTest,
   type TreasuryActionReconcilerConclusion,
@@ -137,15 +141,19 @@ describe("attempt rearm（第十六轮第五节）", () => {
       const issued = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_semantics" });
       expect(issued.status).toBe("issued");
       if (issued.status !== "issued") return;
-      const tombstone = readTreasuryResolutionTombstone("rearm_semantics")!;
-      expect(issued.childTransactionId).toBe(
-        deriveTreasuryRearmChildTransactionId({
-          transactionId: "rearm_semantics",
-          digest: tombstone.digest,
-          ...(tombstone.durableIdentityDigest !== undefined ? { durableIdentityDigest: tombstone.durableIdentityDigest } : {}),
-          ...(tombstone.lowlevelSource !== undefined ? { lowlevelSource: tombstone.lowlevelSource } : {}),
-        }),
-      );
+      // 【第十八轮】child ID v2 generation-addressable：与 production 权威派生
+      //（attemptLineage——(lineageId, generation+1, root)）一致。
+      const lineageRecord = lookupTreasuryAttemptLineageByAttemptId("rearm_semantics");
+      expect(lineageRecord).toBeDefined();
+      if (lineageRecord !== undefined) {
+        expect(issued.childTransactionId).toBe(
+          deriveTreasuryLineageNextChildTransactionId(
+            lineageRecord.lineageId,
+            lineageRecord.generation + 1,
+            lineageRecord.rootTransactionId,
+          ),
+        );
+      }
     }
   });
 
@@ -156,7 +164,7 @@ describe("attempt rearm（第十六轮第五节）", () => {
     const first = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_idem" });
     expect(first.status).toBe("issued");
     if (first.status !== "issued") return;
-    expect(first.childTransactionId).toMatch(/^tr1_[0-9a-f]{16}$/);
+    expect(first.childTransactionId).toMatch(/^tr1_[0-9a-f]{16}_[0-9a-f]{6}_[0-9a-f]{8}$/);
     expect(first.childTransactionId.length).toBeLessThanOrEqual(128);
     const second = next.issueTreasuryRearmCapability({ parentTransactionId: "rearm_idem" });
     expect(second.status).toBe("rejected");

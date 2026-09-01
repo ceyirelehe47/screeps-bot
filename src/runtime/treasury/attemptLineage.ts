@@ -1,41 +1,55 @@
 /**
- * 【第十七轮第五节】durable attempt lineage / retired-attempt store。
+ * 【第十七轮建立·第十八轮 v2 升级】durable attempt lineage / retired-attempt store。
  *
- * 背景（Round 16 遗留断链）：same-ID 不可重试目前只依赖 final not-executed
- * tombstone——tombstone 超过 retention 被驱逐后，旧 parent ID 可以再次进入
- * prepare；not-executed retry 语义没有跨 tombstone retention 存续的持久
- * lineage authority。
+ * Round 17 语义（保留）：每条业务重试链一个有界 record（root/current attempt
+ * ID 与完整 identity、generation、状态、next child、retry semantic digest、
+ * authority class、retirement 三段）；状态机单调；硬容量满载 fail closed；
+ * root/current O(1) 索引；root attempt ID 永久 retired。
  *
- * 固定语义：
- * - 每条业务重试链**一个**有界 record（不是无界 attempt 数组）：root/current
- *   attempt ID 与完整 identity、generation、状态、next child、retry semantic
- *   digest、authority class、retirement 三段（lineagePublished /
- *   authorityReleased / markerCleaned）；
- * - 状态机单调（retiring → rearm_ready → capability_issued →
- *   child_intent_pending → child_active → chain_committed；或 non_rearmable_
- *   retired / forensic_isolated），禁止回退、同代不同 child、重复 child、
- *   改变 root / 语义身份 / authority class、复用旧 generation；
- * - 新 root chain 占一个 slot；同 chain 的代际推进更新同一 record 不新增
- *   slot；**普通运行不得自动删除 record**（无自动驱逐）；
- * - 硬容量满载时新 root 拒绝（fail closed）——不驱逐旧安全事实恢复容量；
- * - root/current/next O(1) 索引：global reset 首次 load 一次有界全表验证与
- *   索引重建；索引只是定位器，Memory record 才是权威；不一致 → store
- *   unhealthy；
- * - root attempt ID 只要存在 lineage record 即永久 retired（tombstone 过期
- *   后仍返回 retired/rearm_required 语义）。
+ * 【第十八轮 v2】新增：
+ * - lineageId/root/current/next 四索引全部 O(1) 且全局唯一——跨索引冲突
+ *   （lineageIndexIntegrity.ts 单一语义）令整个 store unhealthy，绝不静默
+ *   覆盖、绝不自动删除（写入候选预检：冲突 → 原 store 不变）；
+ * - exact idempotence 修复：candidate 与 existing 完整一致（含 revision 一致）
+ *   才幂等；非幂等写 revision 严格 +1；每条转换有允许变化字段集合，冻结
+ *   lineageId/root/root identity/authority class/lowlevel source/action kind/
+ *   adapter stable identity/owner/created tick；current identity/generation/
+ *   binding 只在接管转换（child_intent_pending → child_active）同时变化；
+ * - retirement 按 generation 重置：retirementGeneration 标记三段所属代，
+ *   新 generation 接管时复位——上一代完成标志不得授权当前代驱逐；
+ * - handoff facts 持久化：capability_issued/child_intent_pending 必须携带
+ *   nextChildTransactionId（v2 generation-addressable）与 pendingBindingDigest
+ *   （写入冻结、load 重算验证）；
+ * - generation-addressable child ID 协议 v2（tr1_<lineageId>_<generation>_
+ *   <checksum>——checksum 绑定 root）：任意历史代 attempt ID 与 binding 可
+ *   只凭 record O(1) 重算（per-generation tombstone verdict 与多代回收的基
+ *   础；不保存无界 attempt 数组）；
+ * - child_active 进入 pending 恢复集（commit-pending / 退休防御收敛）；
+ *   terminalIds 索引（压缩候选，lineageRetirementSummary 使用）；
+ * - store v1 → v2 迁移：v1 next-child（parent identity 派生、不可 generation
+ *   寻址）一律回退清除（等价 global reset 后的 capability 过期回滚——heap
+ *   capability 在迁移场景必然已失效）；其余状态原样携带（v1 child 的
+ *   tombstone 不可寻址 → 永久 pin，不猜测 generation）。
  */
 
 import {
   encodeTreasuryCanonicalTuple,
   hashTreasuryCanonicalString,
   isValidTreasuryTransactionId,
+  formatTreasuryRearmChildTransactionIdV2,
+  parseTreasuryRearmChildTransactionIdV2,
+  treasuryRearmChildIdChecksumOf,
 } from "@/runtime/treasury/transactionId";
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
+import { computeTreasuryLineageBindingDigest } from "@/runtime/treasury/lineageBinding";
+import {
+  findTreasuryLineageCrossIndexConflicts,
+  treasuryLineageCandidateConflictsWith,
+} from "@/runtime/treasury/lineageIndexIntegrity";
 import {
   readTreasuryResolutionTombstone,
   listTreasuryPendingReleaseIds,
-  registerTreasuryRetentionLineageLookupForAssembly,
 } from "@/runtime/treasury/resolutionStore";
 import { registerTreasuryLineageResetHook } from "@/runtime/treasury/receipts";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
@@ -43,10 +57,11 @@ import {
   readTreasuryIntentEntry,
   releaseTreasuryIntentEntry,
 } from "@/runtime/treasury/intents";
+import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 
 /** lineage store schema 版本（持久格式升级时递增；未知版本 fail closed）。 */
-export const TREASURY_LINEAGE_VERSION = 1;
-/** 硬容量：最多同时存续的重试链数（满载 fail closed，不驱逐）。 */
+export const TREASURY_LINEAGE_VERSION = 2;
+/** 硬容量：最多同时存续的重试链数（满载 fail closed，不驱逐；终态压缩见 lineageRetirementSummary）。 */
 export const TREASURY_LINEAGE_MAX_ENTRIES = 64;
 
 const LINEAGE_KEY_PREFIX = "l:";
@@ -54,7 +69,7 @@ const LINEAGE_DIGEST_PATTERN = /^[0-9a-f]{16}$/;
 const LINEAGE_ID_BASIS = "treasury-attempt-lineage@v1";
 const NON_REARM_REASON_MAX = 96;
 
-/** lineage 状态（单调状态机；语义见模块头注释）。 */
+/** lineage 状态（单调状态机；语义见 ALLOWED_TRANSITIONS 与模块头注释）。 */
 export type TreasuryAttemptLineageState =
   | "retiring"
   | "rearm_ready"
@@ -98,32 +113,38 @@ export interface TreasuryAttemptLineageRecord {
   readonly rootIdentity: TreasuryAttemptLineageIdentity;
   readonly currentTransactionId: string;
   readonly currentIdentity: TreasuryAttemptLineageIdentity;
+  /** 【v2】当前代的 parent attempt ID（generation≥1 必填——接管时冻结）。 */
+  readonly currentParentTransactionId?: string;
   /** 当前 attempt 的 action kind（capability actionKind 绑定；不可变）。 */
   readonly actionKind: string;
   /** 稳定 adapter/reconciler 语义身份（capability 匹配用；可选）。 */
   readonly adapterSemanticIdentity?: string;
   /** owner canonical identity（capability 匹配用；可选）。 */
   readonly ownerIdentity?: string;
-  /** 非负安全整数；root=0；child 接管完成时 +1。 */
+  /** 非负安全整数；root=0；child 接管完成时 +1（只在接管转换推进）。 */
   readonly generation: number;
   readonly state: TreasuryAttemptLineageState;
   readonly resolutionState: TreasuryLineageResolutionState;
-  /** rearm 派生的确定性 child ID（capability 签发时写入并冻结）。 */
+  /** rearm 派生的确定性 child ID（v2 generation-addressable；仅 handoff/回滚态携带）。 */
   readonly nextChildTransactionId?: string;
-  /** 当前 current 的重试语义 digest（non-rearmable 缺失）。 */
+  /** 【v2】handoff 在途 binding digest（capability_issued 冻结；load 重算验证）。 */
+  readonly pendingBindingDigest?: string;
+  /** 当前 current 为 rearm child 时的 lineage binding digest（接管时 = pendingBinding）。 */
+  readonly bindingDigest?: string;
+  /** 当前 current 的重试语义 digest（non-rearmable 缺失；链内不可变）。 */
   readonly retrySemanticDigest?: string;
   readonly authorityClass: TreasuryLineageAuthorityClass;
   readonly lowlevelSource?: string;
-  /** 当前 current 为 rearm child 时的 lineage binding digest。 */
-  readonly bindingDigest?: string;
   readonly rearmable: boolean;
   readonly nonRearmReason?: string;
-  /** retirement 三段完成标志（final not-executed 的 staged 协议）。 */
+  /** retirement 三段完成标志——只适用于 retirementGeneration 标记的代。 */
   readonly retirement: {
     readonly lineagePublished: boolean;
     readonly authorityReleased: boolean;
     readonly markerCleaned: boolean;
   };
+  /** 【v2】retirement 三段所属的 generation（新 generation 接管时复位）。 */
+  readonly retirementGeneration: number;
   /** 每次成功写入 +1（capability 的 lineage revision 绑定）。 */
   readonly recordRevision: number;
   readonly createdAtTick: number;
@@ -160,8 +181,11 @@ export const lineageStoreEvents = {
   capabilityExpiries: 0,
   childIntentRollbacks: 0,
   childIntentForensics: 0,
+  childActivationForwardCompletions: 0,
+  chainCommitCompletions: 0,
   retirementCompletions: 0,
   indexCorruptions: 0,
+  migrations: 0,
   writes: 0,
   writeFailures: 0,
 };
@@ -175,8 +199,11 @@ export function resetTreasuryLineageRuntimeForTest(): void {
     capabilityExpiries: 0,
     childIntentRollbacks: 0,
     childIntentForensics: 0,
+    childActivationForwardCompletions: 0,
+    chainCommitCompletions: 0,
     retirementCompletions: 0,
     indexCorruptions: 0,
+    migrations: 0,
     writes: 0,
     writeFailures: 0,
   });
@@ -186,26 +213,23 @@ export function resetTreasuryLineageRuntimeForTest(): void {
 // 单向依赖，避免 receipts ↔ attemptLineage 循环 import）。
 registerTreasuryLineageResetHook(resetTreasuryLineageRuntimeForTest);
 
-// 【第十七轮第十三节】retention 驱逐资格的 O(1) lineage lookup 注入（模块
-// 单向依赖：resolutionStore 不 import 本模块——装配时反向注册）。
-registerTreasuryRetentionLineageLookupForAssembly((transactionId) => {
-  const record = lookupTreasuryAttemptLineageByAttemptId(transactionId);
-  return record === undefined ? undefined : { state: record.state, retirement: record.retirement };
-});
-
 // ── heap 运行态（global reset 即丢；首次 load 一次全表验证重建） ───────────
 
 interface TreasuryLineageStoreRuntime {
   readonly store: TreasuryAttemptLineageStore;
-  readonly fatal: string | null;
+  /** 致命诊断（索引同步失败等——写入失败后标记 fatal，fail closed）。 */
+  fatal: string | null;
   /** 空 store 是否已发布到 Memory（读取路径零写缓存——写入前必须发布）。 */
   published: boolean;
+  readonly lineageIdIndex: Map<string, string>;
   /** root/current/next O(1) 索引（key = store key，含前缀）。 */
   readonly rootIndex: Map<string, string>;
   readonly currentIndex: Map<string, string>;
   readonly nextChildIndex: Map<string, string>;
-  /** 需要恢复动作的 lineage ID 子集（retiring / capability_issued / child_intent_pending）。 */
+  /** 需要恢复动作的 lineage ID 子集（retiring / handoff / child_active）。 */
   readonly pendingIds: Set<string>;
+  /** 终态压缩候选（chain_committed / non_rearmable_retired）。 */
+  readonly terminalIds: Set<string>;
 }
 
 let heapRuntime: TreasuryLineageStoreRuntime | null = null;
@@ -236,30 +260,29 @@ export function computeTreasuryAttemptLineageId(
 }
 
 /**
- * 【第十七轮第七节】lineage 的确定性 next-child ID 派生（production 权威
- * 实现——facade issueTreasuryRearmCapability 专用）：canonical tuple 绑定
- * Round 16 rearm 协议版本 + parent ID + parent attempt identity 全部成分，
- * 输出 `tr1_<hash16>`。同 parent identity 幂等、跨 global reset 恒定——与
- * attemptRearm.ts 的 test-only derive helper 同一编码（协议兼容）。
+ * 【第十八轮 14.4】generation-addressable next-child ID 派生（production 权威
+ * 实现——facade issueTreasuryRearmCapability 专用）：`tr1_<lineageId16>_
+ * <generation6hex>_<checksum8>`，checksum 绑定 root transaction ID。同
+ * (lineage, generation) 幂等、跨 global reset 恒定；状态机保证每代唯一 child。
  */
 export function deriveTreasuryLineageNextChildTransactionId(
-  parentTransactionId: string,
-  parentIdentity: TreasuryAttemptLineageIdentity,
+  lineageId: string,
+  generation: number,
+  rootTransactionId: string,
 ): string {
-  const canonical = encodeTreasuryCanonicalTuple([
-    "treasury-attempt-rearm@v1",
-    parentTransactionId,
-    parentIdentity.digest,
-    parentIdentity.contractDigest ?? "",
-    parentIdentity.authorizationCohortDigest ?? "",
-    parentIdentity.durableIdentityDigest ?? "",
-    parentIdentity.lowlevelSource ?? "",
-  ]);
-  const childId = "tr1_" + hashTreasuryCanonicalString(canonical);
-  if (!isValidTreasuryTransactionId(childId)) {
-    throw new Error(`lineage child id 铸造结果不符合 Treasury transactionId 边界: ${childId}`);
-  }
-  return childId;
+  return formatTreasuryRearmChildTransactionIdV2({ lineageId, generation, rootTransactionId });
+}
+
+/**
+ * 指定 generation 的期望 attempt ID（verdict / binding 重算共用）：gen 0 =
+ * root；gen ≥1 = v2 派生。O(1)、只凭 record 字段。
+ */
+export function expectedTreasuryLineageAttemptId(
+  record: Pick<TreasuryAttemptLineageRecord, "lineageId" | "rootTransactionId">,
+  generation: number,
+): string {
+  if (generation <= 0) return record.rootTransactionId;
+  return deriveTreasuryLineageNextChildTransactionId(record.lineageId, generation, record.rootTransactionId);
 }
 
 // ── 形状与语义校验 ──────────────────────────────────────────────────────────
@@ -328,6 +351,14 @@ export function validateTreasuryAttemptLineageRecordShape(record: unknown): stri
       return `record.${field} 非安全非负整数`;
     }
   }
+  if (
+    candidate.retirementGeneration === undefined ||
+    typeof candidate.retirementGeneration !== "number" ||
+    !Number.isSafeInteger(candidate.retirementGeneration) ||
+    candidate.retirementGeneration < 0
+  ) {
+    return "record.retirementGeneration 非安全非负整数（v2 必填）";
+  }
   if (typeof candidate.actionKind !== "string" || candidate.actionKind.length === 0 || candidate.actionKind.length > 128) {
     return "record.actionKind 非法（1..128 字符）";
   }
@@ -337,6 +368,11 @@ export function validateTreasuryAttemptLineageRecordShape(record: unknown): stri
   if (candidate.ownerIdentity !== undefined && (typeof candidate.ownerIdentity !== "string" || candidate.ownerIdentity.length === 0)) {
     return "record.ownerIdentity 非法";
   }
+  if (candidate.currentParentTransactionId !== undefined) {
+    if (typeof candidate.currentParentTransactionId !== "string" || !isValidTreasuryTransactionId(candidate.currentParentTransactionId)) {
+      return "record.currentParentTransactionId 非法 transactionId";
+    }
+  }
   if (candidate.nextChildTransactionId !== undefined) {
     if (typeof candidate.nextChildTransactionId !== "string" || !isValidTreasuryTransactionId(candidate.nextChildTransactionId)) {
       return "record.nextChildTransactionId 非法";
@@ -345,8 +381,10 @@ export function validateTreasuryAttemptLineageRecordShape(record: unknown): stri
   if (candidate.retrySemanticDigest !== undefined && (typeof candidate.retrySemanticDigest !== "string" || !LINEAGE_DIGEST_PATTERN.test(candidate.retrySemanticDigest))) {
     return "record.retrySemanticDigest 非法（须 16 小写 hex）";
   }
-  if (candidate.bindingDigest !== undefined && (typeof candidate.bindingDigest !== "string" || !LINEAGE_DIGEST_PATTERN.test(candidate.bindingDigest))) {
-    return "record.bindingDigest 非法（须 16 小写 hex）";
+  for (const field of ["bindingDigest", "pendingBindingDigest"] as const) {
+    if (candidate[field] !== undefined && (typeof candidate[field] !== "string" || !LINEAGE_DIGEST_PATTERN.test(candidate[field] as string))) {
+      return `record.${field} 非法（须 16 小写 hex）`;
+    }
   }
   if (typeof candidate.rearmable !== "boolean") return "record.rearmable 非布尔";
   if (candidate.nonRearmReason !== undefined) {
@@ -368,19 +406,95 @@ export function validateTreasuryAttemptLineageRecordShape(record: unknown): stri
   return null;
 }
 
-/** 持久语义矩阵（load / 写入候选共用）。 */
+/**
+ * 持久语义矩阵（load / 写入候选共用）：状态组合 + handoff facts 派生验证
+ * （nextChild 必须是 v2 generation-addressable 且等于 record 派生；pending-
+ * Binding 必须等于 (lineageId, generation+1, parent=current, child) 重算）。
+ */
 export function validateTreasuryAttemptLineageRecordState(record: unknown): string | null {
   const candidate = record as Partial<TreasuryAttemptLineageRecord>;
   const state = candidate.state;
+  // handoff facts 派生验证（任何携带 nextChild 的状态）。
+  if (candidate.nextChildTransactionId !== undefined) {
+    if (state !== "rearm_ready" && state !== "capability_issued" && state !== "child_intent_pending") {
+      return `${String(state)} 不得携带 nextChildTransactionId（handoff 事实只存在于 handoff/回滚态）`;
+    }
+    const parsed = parseTreasuryRearmChildTransactionIdV2(candidate.nextChildTransactionId);
+    if (parsed === null) {
+      return "record.nextChildTransactionId 非 v2 generation-addressable 形态（legacy v1 child 不得出现在 v2 store）";
+    }
+    if (parsed.lineageId !== candidate.lineageId || parsed.generation !== candidate.generation! + 1) {
+      return "record.nextChildTransactionId 与 (lineageId, generation+1) 派生不一致";
+    }
+    const checksum = treasuryRearmChildIdChecksumOf({
+      lineageId: candidate.lineageId!,
+      generation: candidate.generation! + 1,
+      rootTransactionId: candidate.rootTransactionId!,
+    });
+    if (!candidate.nextChildTransactionId.endsWith(`_${checksum}`)) {
+      return "record.nextChildTransactionId checksum 与 root 绑定重算不一致";
+    }
+    if (candidate.pendingBindingDigest === undefined) {
+      return "携带 nextChildTransactionId 的 record 必须同时携带 pendingBindingDigest";
+    }
+    const expectedBinding = computeTreasuryLineageBindingDigest({
+      lineageId: candidate.lineageId!,
+      generation: candidate.generation! + 1,
+      parentTransactionId: candidate.currentTransactionId!,
+      childTransactionId: candidate.nextChildTransactionId,
+    });
+    if (candidate.pendingBindingDigest !== expectedBinding) {
+      return "record.pendingBindingDigest 与 handoff 派生重算不一致（篡改/损坏）";
+    }
+  } else if (candidate.pendingBindingDigest !== undefined) {
+    return "record.pendingBindingDigest 只能与 nextChildTransactionId 同时存在";
+  }
+  // 接管后的 binding 与 parent 验证（generation ≥1）。
+  if (candidate.generation! >= 1) {
+    if (candidate.currentParentTransactionId === undefined) {
+      return `generation≥1 的 record 必须携带 currentParentTransactionId（迁移遗留的 v1 child 除外——load 迁移时按原始事实保留）`;
+    }
+    if (candidate.bindingDigest === undefined) {
+      return "generation≥1 的 record 必须携带 bindingDigest（child 接管证明）";
+    }
+    if (candidate.currentParentTransactionId === candidate.currentTransactionId) {
+      return "record.currentParentTransactionId 等于 current（parent/child 不得相同）";
+    }
+    const parsedCurrent = parseTreasuryRearmChildTransactionIdV2(candidate.currentTransactionId);
+    if (parsedCurrent !== null) {
+      const expectedCurrent = expectedTreasuryLineageAttemptId(candidate as TreasuryAttemptLineageRecord, candidate.generation!);
+      if (parsedCurrent.lineageId !== candidate.lineageId || candidate.currentTransactionId !== expectedCurrent) {
+        return "generation≥1 的 v2 current 与 (lineageId, generation) 派生不一致";
+      }
+      const expectedParent = expectedTreasuryLineageAttemptId(candidate as TreasuryAttemptLineageRecord, candidate.generation! - 1);
+      if (candidate.currentParentTransactionId !== expectedParent) {
+        return "record.currentParentTransactionId 与上一代期望 attempt ID 不一致";
+      }
+    }
+    const expectedBinding = computeTreasuryLineageBindingDigest({
+      lineageId: candidate.lineageId!,
+      generation: candidate.generation!,
+      parentTransactionId: candidate.currentParentTransactionId,
+      childTransactionId: candidate.currentTransactionId,
+    });
+    if (candidate.bindingDigest !== expectedBinding) {
+      return "record.bindingDigest 与 (lineage, generation, parent, current) 派生重算不一致";
+    }
+  } else {
+    if (candidate.bindingDigest !== undefined) return "generation=0（root 代）不得携带 bindingDigest";
+    if (candidate.currentParentTransactionId !== undefined) return "generation=0 不得携带 currentParentTransactionId";
+  }
   switch (state) {
     case "retiring":
       if (candidate.resolutionState !== "not_executed") return "retiring 只能配 not_executed";
+      if (candidate.retirementGeneration !== candidate.generation) return "retiring 的 retirementGeneration 必须等于当前代";
       break;
     case "rearm_ready":
       if (candidate.resolutionState !== "not_executed") return "rearm_ready 只能配 not_executed";
       if (!candidate.retirement?.lineagePublished || !candidate.retirement?.authorityReleased || !candidate.retirement?.markerCleaned) {
         return "rearm_ready 必须三段 retirement 全部完成";
       }
+      if (candidate.retirementGeneration !== candidate.generation) return "rearm_ready 的 retirementGeneration 必须等于当前代";
       break;
     case "capability_issued":
       if (candidate.resolutionState !== "not_executed") return "capability_issued 只能配 not_executed";
@@ -394,7 +508,6 @@ export function validateTreasuryAttemptLineageRecordState(record: unknown): stri
       if (candidate.currentTransactionId === candidate.rootTransactionId) {
         return "child_active 的 current 必须是 child（不得为 root）";
       }
-      if (candidate.bindingDigest === undefined) return "child_active 必须携带 bindingDigest";
       break;
     case "chain_committed":
       if (candidate.resolutionState !== "committed") return "chain_committed 只能配 committed";
@@ -402,12 +515,15 @@ export function validateTreasuryAttemptLineageRecordState(record: unknown): stri
     case "non_rearmable_retired":
     case "forensic_isolated":
       if (candidate.rearmable !== false) return `${String(state)} 必须 non-rearmable`;
+      if (candidate.retirementGeneration !== candidate.generation) {
+        return `${String(state)} 的 retirementGeneration 必须等于当前代`;
+      }
       break;
   }
   return null;
 }
 
-// ── 状态机（单调转换矩阵） ─────────────────────────────────────────────────
+// ── 状态机（单调转换矩阵 + transition-specific 允许字段） ───────────────────
 
 export type TreasuryAttemptLineageTransitionResult =
   | { readonly status: "allowed" }
@@ -426,10 +542,79 @@ const ALLOWED_TRANSITIONS: Readonly<Record<TreasuryAttemptLineageState, readonly
   forensic_isolated: [],
 };
 
+/** 全局冻结字段（任何转换不得变化——不可变安全事实）。 */
+const FROZEN_FIELDS: readonly string[] = [
+  "lineageId",
+  "rootTransactionId",
+  "rootIdentity",
+  "actionKind",
+  "adapterSemanticIdentity",
+  "ownerIdentity",
+  "authorityClass",
+  "lowlevelSource",
+  "createdAtTick",
+];
+
 /**
- * 转换校验（写入与 load 全表校验共用）：状态边合法 + 不可变事实（root、
- * lineageId、authorityClass、retry semantic 身份）不得变化 + generation 只
- * 允许在 child_active 推进时 +1 + exact idempotent（全部字段一致）。
+ * 【第十八轮 24.7】每条转换的允许变化字段集合（top-level key；"retirement"
+ * 视为单字段）。未列出的字段变化 → 拒绝（同 state 只允许明确声明的进度
+ * 字段变化；current identity/generation/binding 只在接管转换同时变化）。
+ */
+const TRANSITION_ALLOWED_CHANGES: Readonly<Record<string, readonly string[]>> = {
+  // child 退休（direct non-OK 或 resolver publication）。
+  "child_active>retiring": [
+    "state", "resolutionState", "retirement", "retirementGeneration", "nextChildTransactionId",
+    "pendingBindingDigest", "rearmable", "nonRearmReason", "retrySemanticDigest", "updatedAtTick", "recordRevision",
+  ],
+  "retiring>rearm_ready": ["state", "retirement", "rearmable", "nonRearmReason", "updatedAtTick", "recordRevision"],
+  "retiring>non_rearmable_retired": ["state", "retirement", "rearmable", "nonRearmReason", "updatedAtTick", "recordRevision"],
+  // capability 签发（handoff facts 冻结）。
+  "rearm_ready>capability_issued": ["state", "nextChildTransactionId", "pendingBindingDigest", "updatedAtTick", "recordRevision"],
+  // handoff 推进（child intent 写入前）。
+  "capability_issued>child_intent_pending": ["state", "updatedAtTick", "recordRevision"],
+  // 回滚（capability 过期 / intent 未开始失败）——child facts 保留（同代重签）。
+  "capability_issued>rearm_ready": ["state", "updatedAtTick", "recordRevision"],
+  "child_intent_pending>rearm_ready": ["state", "updatedAtTick", "recordRevision"],
+  // 接管（唯一允许 current/generation/binding 变化的转换）。
+  "child_intent_pending>child_active": [
+    "state", "currentTransactionId", "currentIdentity", "currentParentTransactionId", "generation",
+    "resolutionState", "bindingDigest", "nextChildTransactionId", "pendingBindingDigest",
+    "retirement", "retirementGeneration", "updatedAtTick", "recordRevision",
+  ],
+  // child commit 终态。
+  "child_active>chain_committed": ["state", "resolutionState", "updatedAtTick", "recordRevision"],
+  // retiring 同 state 的恢复收敛（三段标志 / backfill 补齐 digest）。
+  "retiring>retiring": ["retirement", "retrySemanticDigest", "rearmable", "nonRearmReason", "updatedAtTick", "recordRevision"],
+};
+
+function allowedChangesOf(existingState: TreasuryAttemptLineageState, nextState: TreasuryAttemptLineageState): readonly string[] | null {
+  if (nextState === "forensic_isolated") {
+    return ["state", "rearmable", "nonRearmReason", "nextChildTransactionId", "pendingBindingDigest", "updatedAtTick", "recordRevision"];
+  }
+  return TRANSITION_ALLOWED_CHANGES[`${existingState}>${nextState}`] ?? null;
+}
+
+function changedTopLevelKeys(
+  existing: TreasuryAttemptLineageRecord,
+  next: TreasuryAttemptLineageRecord,
+): string[] {
+  const keys = new Set<string>([...Object.keys(existing), ...Object.keys(next)]);
+  const changed: string[] = [];
+  for (const key of keys) {
+    const left = (existing as unknown as Record<string, unknown>)[key];
+    const right = (next as unknown as Record<string, unknown>)[key];
+    if (JSON.stringify(left) !== JSON.stringify(right)) changed.push(key);
+  }
+  return changed;
+}
+
+/**
+ * 转换校验（写入与 load 全表校验共用）：
+ * - exact idempotence：完整一致（含 revision 一致）→ idempotent（真正可达）；
+ * - 非幂等写：recordRevision 严格 +1；
+ * - 全局冻结字段不可变；generation 只在接管转换 +1、其余必须相等；
+ * - 每条转换的允许变化字段集合（changed keys ⊆ allowed set）；
+ * - updatedAtTick 不回退；rearmable 只允许 true→false。
  */
 export function validateTreasuryAttemptLineageTransition(
   existing: TreasuryAttemptLineageRecord | undefined,
@@ -442,47 +627,59 @@ export function validateTreasuryAttemptLineageTransition(
     }
     return { status: "allowed" };
   }
-  // 不可变事实。
-  if (existing.rootTransactionId !== next.rootTransactionId) {
-    return { status: "rejected", detail: "root attempt 不可改变" };
-  }
-  if (computeTreasuryLineageIdentityDigest(existing.rootIdentity) !== computeTreasuryLineageIdentityDigest(next.rootIdentity)) {
-    return { status: "rejected", detail: "root identity 不可改变" };
-  }
-  if (existing.authorityClass !== next.authorityClass || existing.lowlevelSource !== next.lowlevelSource) {
-    return { status: "rejected", detail: "authority class / lowlevelSource 不可改变" };
-  }
-  if (existing.retrySemanticDigest !== next.retrySemanticDigest) {
-    return { status: "rejected", detail: "retry semantic identity 不可改变（child 必须是 parent 动作的语义重试）" };
-  }
-  if (next.generation < existing.generation) {
-    return { status: "rejected", detail: "generation 不可回退" };
-  }
-  if (next.generation > existing.generation + 1) {
-    return { status: "rejected", detail: "generation 只允许逐代 +1" };
-  }
-  if (existing.generation === next.generation && next.generation > 0) {
-    // 同代更新：current 不得变化（同代不同 attempt = 复用旧 generation）。
-    if (existing.currentTransactionId !== next.currentTransactionId) {
-      return { status: "rejected", detail: "同 generation 不得更换 current attempt" };
+  // 全局冻结事实。
+  for (const field of FROZEN_FIELDS) {
+    const left = (existing as unknown as Record<string, unknown>)[field];
+    const right = (next as unknown as Record<string, unknown>)[field];
+    if (JSON.stringify(left) !== JSON.stringify(right)) {
+      return { status: "rejected", detail: `冻结字段 ${field} 不可变化` };
     }
   }
-  if (next.state === "capability_issued" || next.state === "child_intent_pending") {
-    if (existing.nextChildTransactionId !== undefined && existing.nextChildTransactionId !== next.nextChildTransactionId) {
-      return { status: "rejected", detail: "同一 generation 不得派生不同 child" };
+  // 接管转换的 generation 规则。
+  const isTakeover = existing.state === "child_intent_pending" && next.state === "child_active";
+  if (isTakeover) {
+    if (next.generation !== existing.generation + 1) {
+      return { status: "rejected", detail: `接管转换 generation 必须严格 +1（${String(existing.generation)} → ${String(next.generation)}）` };
     }
+  } else if (next.generation !== existing.generation) {
+    return { status: "rejected", detail: "非接管转换 generation 不可变化（不可回退、不可跳跃）" };
+  }
+  // exact idempotence（完整一致且 revision 一致 → 幂等，revision 不增加）。
+  if (JSON.stringify({ ...existing }) === JSON.stringify({ ...next })) {
+    return { status: "idempotent" };
   }
   if (next.recordRevision !== existing.recordRevision + 1) {
-    return { status: "rejected", detail: `recordRevision 必须严格 +1（${String(existing.recordRevision)} → ${String(next.recordRevision)}）` };
+    return { status: "rejected", detail: `recordRevision 必须严格 +1 或 exact idempotent（${String(existing.recordRevision)} → ${String(next.recordRevision)}）` };
   }
-  if (existing.state === next.state) {
-    const existingJson = JSON.stringify({ ...existing });
-    const nextJson = JSON.stringify({ ...next });
-    if (existingJson === nextJson) return { status: "idempotent" };
-    return { status: "rejected", detail: "同状态只允许 exact idempotent 重复写" };
+  if (existing.rearmable === true && next.rearmable === false) {
+    // 允许（retiring/forensic 的 declared 进度）；false→true 禁止。
+  } else if (existing.rearmable !== next.rearmable) {
+    return { status: "rejected", detail: "rearmable 不可从 false 恢复为 true" };
   }
-  if (!ALLOWED_TRANSITIONS[existing.state].includes(next.state)) {
+  if (existing.retrySemanticDigest !== next.retrySemanticDigest) {
+    const progressDigest = existing.retrySemanticDigest === undefined && next.retrySemanticDigest !== undefined;
+    if (!progressDigest) {
+      return { status: "rejected", detail: "retry semantic identity 不可改变（child 必须是 parent 动作的语义重试；已定义后不可重写）" };
+    }
+  }
+  if (next.updatedAtTick < existing.updatedAtTick) {
+    return { status: "rejected", detail: "updatedAtTick 不可回退" };
+  }
+  const allowed = allowedChangesOf(existing.state, next.state);
+  if (allowed === null) {
+    if (existing.state === next.state) {
+      return { status: "rejected", detail: `同状态 ${String(existing.state)} 只允许明确声明的进度字段变化` };
+    }
     return { status: "rejected", detail: `非法状态转换 ${String(existing.state)} → ${String(next.state)}` };
+  }
+  if (existing.state !== next.state && !ALLOWED_TRANSITIONS[existing.state].includes(next.state)) {
+    return { status: "rejected", detail: `非法状态转换 ${String(existing.state)} → ${String(next.state)}` };
+  }
+  const changed = changedTopLevelKeys(existing, next);
+  for (const key of changed) {
+    if (!allowed.includes(key)) {
+      return { status: "rejected", detail: `转换 ${String(existing.state)} → ${String(next.state)} 不允许修改字段 ${key}（transition-specific 允许字段集外的变化）` };
+    }
   }
   return { status: "allowed" };
 }
@@ -499,6 +696,102 @@ function publishLineageStoreToMemory(runtime: TreasuryLineageStoreRuntime): void
   runtime.published = true;
 }
 
+function emptyLineageRuntime(): TreasuryLineageStoreRuntime {
+  const store: TreasuryAttemptLineageStore = {
+    version: TREASURY_LINEAGE_VERSION,
+    entries: {},
+    entryCount: 0,
+    updatedAt: Game.time,
+  };
+  return {
+    store,
+    fatal: null,
+    published: false,
+    lineageIdIndex: new Map(),
+    rootIndex: new Map(),
+    currentIndex: new Map(),
+    nextChildIndex: new Map(),
+    pendingIds: new Set(),
+    terminalIds: new Set(),
+  };
+}
+
+/**
+ * 【第十八轮 24.9】store v1 → v2 迁移：v1 record 的 nextChildTransactionId
+ * 由 parent identity 派生（不可 generation 寻址）——一律回退清除（等价
+ * global reset 后的 capability 过期回滚：heap capability 在迁移场景必然已
+ * 失效，child ID 将按 v2 重新确定性派生）；capability_issued/child_intent_
+ * pending 同步回退 rearm_ready。其余状态原样携带 + 补 retirementGeneration。
+ * 迁移后的 v1 child（current）不受影响（current 不需重派生），但其历史
+ * tombstone 不可寻址 → verdict 永久 pin。
+ */
+function migrateLineageStoreV1ToV2(raw: TreasuryAttemptLineageStore): { store: TreasuryAttemptLineageStore; detail: string | null } {
+  const entries: Record<string, TreasuryAttemptLineageRecord> = {};
+  let rolledBack = 0;
+  let forensics = 0;
+  for (const [key, rawRecord] of Object.entries(raw.entries)) {
+    const record = rawRecord as Partial<TreasuryAttemptLineageRecord>;
+    let next: TreasuryAttemptLineageRecord;
+    const legacyChild =
+      record.nextChildTransactionId !== undefined &&
+      parseTreasuryRearmChildTransactionIdV2(record.nextChildTransactionId) === null;
+    if (legacyChild || record.state === "capability_issued" || record.state === "child_intent_pending") {
+      // 回退：handoff 在途状态迁移等价 global reset（capability 必然失效）。
+      const { nextChildTransactionId: _stale, pendingBindingDigest: _staleBinding, ...rest } = record as TreasuryAttemptLineageRecord;
+      void _stale;
+      void _staleBinding;
+      next = {
+        ...rest,
+        state: "rearm_ready",
+        retirementGeneration: record.generation,
+        updatedAtTick: Game.time,
+        recordRevision: record.recordRevision + 1,
+      } as TreasuryAttemptLineageRecord;
+      rolledBack += 1;
+    } else if (
+      record.generation! >= 1 &&
+      record.currentParentTransactionId === undefined &&
+      parseTreasuryRearmChildTransactionIdV2(record.currentTransactionId!) === null
+    ) {
+      // v1 child（不可 generation 寻址）且无法证明 parent（gen≥2 的 parent 是
+      // 不可重派的 v1 child）→ forensic 隔离（不猜测）；gen 1 的 parent=root
+      // 可安全补全。
+      const { nextChildTransactionId: _stale, pendingBindingDigest: _staleBinding, ...rest } = record as TreasuryAttemptLineageRecord;
+      void _stale;
+      void _staleBinding;
+      next = {
+        ...rest,
+        currentParentTransactionId: record.generation === 1 ? record.rootTransactionId : undefined,
+        ...(record.generation === 1 ? {} : { state: "forensic_isolated" as const, rearmable: false, nonRearmReason: "v1→v2 迁移：gen≥2 的 v1 child 无法证明 parent（不猜测 generation/parent）" }),
+        retirementGeneration: record.generation,
+        updatedAtTick: Game.time,
+        recordRevision: record.recordRevision + 1,
+      } as TreasuryAttemptLineageRecord;
+      if (record.generation !== 1) forensics += 1;
+    } else {
+      next = {
+        ...record,
+        ...(record.generation! >= 1 && record.currentParentTransactionId === undefined
+          ? { currentParentTransactionId: record.rootTransactionId }
+          : {}),
+        retirementGeneration: record.generation,
+      } as TreasuryAttemptLineageRecord;
+    }
+    entries[key] = next;
+  }
+  const store: TreasuryAttemptLineageStore = {
+    version: TREASURY_LINEAGE_VERSION,
+    entries,
+    entryCount: Object.keys(entries).length,
+    updatedAt: Game.time,
+  };
+  lineageStoreEvents.migrations += 1;
+  return {
+    store,
+    detail: `lineage store v1→v2 迁移完成（回退 ${String(rolledBack)}，forensic 隔离 ${String(forensics)}）`,
+  };
+}
+
 function loadLineageStoreRuntime(forWrite = false): TreasuryLineageStoreRuntime {
   if (heapRuntime !== null) return heapRuntime;
   lineageStoreEvents.fullScans += 1;
@@ -506,36 +799,40 @@ function loadLineageStoreRuntime(forWrite = false): TreasuryLineageStoreRuntime 
   if (branch?.attemptLineage === undefined) {
     // 读取路径返回空运行态（零写）；写入路径创建空 store 并发布到 Memory
     //（否则后续写入落在 heap 幽灵对象上——Memory 从未收到权威数据）。
-    const store: TreasuryAttemptLineageStore = {
-      version: TREASURY_LINEAGE_VERSION,
-      entries: {},
-      entryCount: 0,
-      updatedAt: Game.time,
-    };
-    heapRuntime = {
-      store,
-      fatal: null,
-      published: false,
-      rootIndex: new Map(),
-      currentIndex: new Map(),
-      nextChildIndex: new Map(),
-      pendingIds: new Set(),
-    };
+    heapRuntime = emptyLineageRuntime();
     if (forWrite) publishLineageStoreToMemory(heapRuntime);
     return heapRuntime;
   }
-  const store = branch.attemptLineage as unknown as TreasuryAttemptLineageStore;
+  const raw = branch.attemptLineage as unknown as TreasuryAttemptLineageStore;
+  let store = raw;
+  if (raw.version === TREASURY_LINEAGE_VERSION - 1) {
+    const migrated = migrateLineageStoreV1ToV2(raw);
+    store = migrated.store;
+    branch.attemptLineage = store as unknown as NonNullable<(typeof branch)["attemptLineage"]>;
+  }
   const fatal = validateLineageStoreShape(store);
   const runtime: TreasuryLineageStoreRuntime = {
     store,
     fatal,
     published: true,
+    lineageIdIndex: new Map(),
     rootIndex: new Map(),
     currentIndex: new Map(),
     nextChildIndex: new Map(),
     pendingIds: new Set(),
+    terminalIds: new Set(),
   };
-  if (fatal === null) buildLineageIndexes(runtime);
+  if (fatal === null) {
+    // 跨索引完整性（24.6）：duplicate lineageId/current/next、跨索引冲突 →
+    // 整个 store unhealthy（不静默覆盖、不自动删除）。
+    const conflict = findTreasuryLineageCrossIndexConflicts(Object.values(store.entries));
+    if (conflict !== null) {
+      runtime.fatal = `lineage 索引冲突: ${conflict}`;
+      lineageStoreEvents.indexCorruptions += 1;
+    } else {
+      buildLineageIndexes(runtime);
+    }
+  }
   heapRuntime = runtime;
   return runtime;
 }
@@ -571,16 +868,22 @@ function validateLineageStoreShape(store: TreasuryAttemptLineageStore): string |
 }
 
 function buildLineageIndexes(runtime: TreasuryLineageStoreRuntime): void {
+  runtime.lineageIdIndex.clear();
   runtime.rootIndex.clear();
   runtime.currentIndex.clear();
   runtime.nextChildIndex.clear();
   runtime.pendingIds.clear();
+  runtime.terminalIds.clear();
   for (const [key, record] of Object.entries(runtime.store.entries)) {
+    runtime.lineageIdIndex.set(record.lineageId, key);
     runtime.rootIndex.set(record.rootTransactionId, key);
     runtime.currentIndex.set(record.currentTransactionId, key);
     if (record.nextChildTransactionId !== undefined) runtime.nextChildIndex.set(record.nextChildTransactionId, key);
-    if (record.state === "retiring" || record.state === "capability_issued" || record.state === "child_intent_pending") {
+    if (record.state === "retiring" || record.state === "capability_issued" || record.state === "child_intent_pending" || record.state === "child_active") {
       runtime.pendingIds.add(record.lineageId);
+    }
+    if (record.state === "chain_committed" || record.state === "non_rearmable_retired") {
+      runtime.terminalIds.add(record.lineageId);
     }
   }
 }
@@ -612,19 +915,24 @@ export function ensureTreasuryAttemptLineageStoreValidated(): string | null {
   return loadLineageStoreRuntime().fatal;
 }
 
-// ── 读取（冻结快照） ────────────────────────────────────────────────────────
+// ── 读取（冻结快照；全部 O(1) 索引） ────────────────────────────────────────
 
 function freezeRecord(record: TreasuryAttemptLineageRecord): Readonly<TreasuryAttemptLineageRecord> {
   return treasuryBoundedDeepFreezeSnapshot(record) as Readonly<TreasuryAttemptLineageRecord>;
 }
 
+/** lineageId O(1) 读取（第十八轮起不再扫描全部 entries）。 */
 export function readTreasuryAttemptLineageRecord(lineageId: string): Readonly<TreasuryAttemptLineageRecord> | undefined {
   const runtime = loadLineageStoreRuntime();
   if (runtime.fatal !== null) return undefined;
-  for (const record of Object.values(runtime.store.entries)) {
-    if (record.lineageId === lineageId) return freezeRecord(record);
+  const key = runtime.lineageIdIndex.get(lineageId);
+  if (key === undefined) return undefined;
+  const record = runtime.store.entries[key];
+  if (record === undefined || record.lineageId !== lineageId) {
+    lineageStoreEvents.indexCorruptions += 1;
+    return undefined;
   }
-  return undefined;
+  return freezeRecord(record);
 }
 
 /** root ∪ current 索引 O(1) 查询（prepare 门禁的 retired 检测）。 */
@@ -659,17 +967,27 @@ export function lookupTreasuryAttemptLineageByNextChild(childTransactionId: stri
 
 /**
  * 容量预检（新 root chain 前执行；在任何原状态变化之前）：同 root 已存在
- * 不占新 slot；满载拒绝（fail closed——**不驱逐**旧 record）。
+ * 不占新 slot；满载时先尝试终态压缩（lineageRetirementSummary 装配注入），
+ * 仍满 → 拒绝（fail closed——不驱逐安全事实）。
  */
+let terminalCompactor: (() => number) | null = null;
+
+/** 装配注入（lineageRetirementSummary 模块加载时注册——单向依赖）。 */
+export function registerTreasuryLineageCompactorForAssembly(compact: () => number): void {
+  terminalCompactor = compact;
+}
+
 export function ensureTreasuryLineageSlotAvailable(rootTransactionId?: string): string | null {
   const runtime = loadLineageStoreRuntime();
   if (runtime.fatal !== null) return runtime.fatal;
   if (rootTransactionId !== undefined && runtime.rootIndex.has(rootTransactionId)) return null;
   if (runtime.store.entryCount < TREASURY_LINEAGE_MAX_ENTRIES) return null;
-  return `attempt lineage store 已达硬容量 ${String(TREASURY_LINEAGE_MAX_ENTRIES)}（fail closed——不驱逐安全事实；显式归档协议不属于本轮）`;
+  const compacted = terminalCompactor !== null ? terminalCompactor() : 0;
+  if (compacted > 0 && runtime.store.entryCount < TREASURY_LINEAGE_MAX_ENTRIES) return null;
+  return `attempt lineage store 已达硬容量 ${String(TREASURY_LINEAGE_MAX_ENTRIES)}（fail closed——不驱逐安全事实；终态压缩后仍满）`;
 }
 
-// ── 写入（clone → 校验 → 转换 → 发布 → read-back → 回滚） ─────────────────
+// ── 写入（clone → 校验 → 转换 → 跨记录冲突预检 → 发布 → 完整 read-back） ──
 
 export type TreasuryAttemptLineageWriteResult =
   | { readonly status: "written"; readonly record: Readonly<TreasuryAttemptLineageRecord> }
@@ -706,6 +1024,15 @@ function writeLineageRecord(candidate: TreasuryAttemptLineageRecord): TreasuryAt
   if (transition.status === "idempotent") {
     return { status: "idempotent", record: freezeRecord(existing!) };
   }
+  // 【24.6】跨记录索引唯一性预检：候选键与其它 record 冲突 → 原 store 不变。
+  const others = Object.entries(store.entries)
+    .filter(([otherKey]) => otherKey !== key)
+    .map(([, record]) => record);
+  const conflict = treasuryLineageCandidateConflictsWith(candidate, others);
+  if (conflict !== null) {
+    lineageStoreEvents.writeFailures += 1;
+    return { status: "rejected", detail: conflict };
+  }
   if (existing === undefined) {
     // 新 root：占用新 slot——满载 fail closed（预检之外的双保险）。
     if (store.entryCount >= TREASURY_LINEAGE_MAX_ENTRIES) {
@@ -718,14 +1045,17 @@ function writeLineageRecord(candidate: TreasuryAttemptLineageRecord): TreasuryAt
   }
   // 深拷贝发布（调用方输入与 Memory 无共享引用）。
   const previous = existing === undefined ? undefined : cloneTreasuryDurableValue(existing);
-  store.entries[key] = cloneTreasuryDurableValue(candidate);
+  const published = cloneTreasuryDurableValue(candidate);
+  store.entries[key] = published;
   store.updatedAt = Game.time;
-  // read-back 重算验证（发布失败完整回滚）。
+  // 【24.6】完整 read-back：与发布副本全字段一致 + 形状/语义/lineageId 重算。
   const readBack = store.entries[key];
   const readBackError =
-    validateTreasuryAttemptLineageRecordShape(readBack) === null && validateTreasuryAttemptLineageRecordState(readBack) === null && readBack!.lineageId === candidate.lineageId
+    validateTreasuryAttemptLineageRecordShape(readBack) === null &&
+    validateTreasuryAttemptLineageRecordState(readBack) === null &&
+    JSON.stringify(readBack) === JSON.stringify(published)
       ? null
-      : "lineage read-back 验证失败";
+      : "lineage read-back 完整验证失败（全字段比较）";
   if (readBackError !== null) {
     if (previous === undefined) delete store.entries[key];
     else store.entries[key] = previous;
@@ -734,17 +1064,50 @@ function writeLineageRecord(candidate: TreasuryAttemptLineageRecord): TreasuryAt
     return { status: "rejected", detail: readBackError };
   }
   if (existing === undefined) store.entryCount += 1;
-  // 索引同步维护。
-  if (existing !== undefined) {
-    runtime.currentIndex.delete(existing.currentTransactionId);
-    if (existing.nextChildTransactionId !== undefined) runtime.nextChildIndex.delete(existing.nextChildTransactionId);
-    runtime.pendingIds.delete(existing.lineageId);
-  }
-  runtime.rootIndex.set(readBack!.rootTransactionId, key);
-  runtime.currentIndex.set(readBack!.currentTransactionId, key);
-  if (readBack!.nextChildTransactionId !== undefined) runtime.nextChildIndex.set(readBack!.nextChildTransactionId, key);
-  if (readBack!.state === "retiring" || readBack!.state === "capability_issued" || readBack!.state === "child_intent_pending") {
-    runtime.pendingIds.add(readBack!.lineageId);
+  // 索引同步维护（写入与 read-back 已验证；此处任何跨记录覆盖都是致命——
+  // 预检已排除，防御分支回滚 Memory 并标记 fatal）。
+  const rollbackMemory = (): void => {
+    if (previous === undefined) delete store.entries[key];
+    else store.entries[key] = previous;
+    if (existing === undefined) store.entryCount -= 1;
+    store.updatedAt = Game.time;
+  };
+  try {
+    if (existing !== undefined) {
+      runtime.lineageIdIndex.delete(existing.lineageId);
+      runtime.rootIndex.delete(existing.rootTransactionId);
+      runtime.currentIndex.delete(existing.currentTransactionId);
+      if (existing.nextChildTransactionId !== undefined) runtime.nextChildIndex.delete(existing.nextChildTransactionId);
+      runtime.pendingIds.delete(existing.lineageId);
+      runtime.terminalIds.delete(existing.lineageId);
+    }
+    const assertFree = (label: string, value: string | undefined, index: Map<string, string>): void => {
+      if (value === undefined) return;
+      const owner = index.get(value);
+      if (owner !== undefined && owner !== key) {
+        throw new Error(`索引同步冲突（${label} ${value.slice(0, 24)} 已属于 ${owner.slice(0, 24)}）`);
+      }
+    };
+    assertFree("lineageId", readBack!.lineageId, runtime.lineageIdIndex);
+    assertFree("root", readBack!.rootTransactionId, runtime.rootIndex);
+    assertFree("current", readBack!.currentTransactionId, runtime.currentIndex);
+    assertFree("next", readBack!.nextChildTransactionId, runtime.nextChildIndex);
+    runtime.lineageIdIndex.set(readBack!.lineageId, key);
+    runtime.rootIndex.set(readBack!.rootTransactionId, key);
+    runtime.currentIndex.set(readBack!.currentTransactionId, key);
+    if (readBack!.nextChildTransactionId !== undefined) runtime.nextChildIndex.set(readBack!.nextChildTransactionId, key);
+    if (readBack!.state === "retiring" || readBack!.state === "capability_issued" || readBack!.state === "child_intent_pending" || readBack!.state === "child_active") {
+      runtime.pendingIds.add(readBack!.lineageId);
+    }
+    if (readBack!.state === "chain_committed" || readBack!.state === "non_rearmable_retired") {
+      runtime.terminalIds.add(readBack!.lineageId);
+    }
+  } catch (error) {
+    rollbackMemory();
+    runtime.fatal = `lineage 索引同步失败（已回滚 Memory）: ${String(error instanceof Error ? error.message : error).slice(0, 128)}`;
+    lineageStoreEvents.indexCorruptions += 1;
+    lineageStoreEvents.writeFailures += 1;
+    return { status: "rejected", detail: runtime.fatal };
   }
   lineageStoreEvents.writes += 1;
   return {
@@ -753,7 +1116,7 @@ function writeLineageRecord(candidate: TreasuryAttemptLineageRecord): TreasuryAt
   };
 }
 
-/** 新建 root chain 的 retiring record（final not-executed staged publication）。 */
+/** 新建 root chain 的 retiring record（publication 即创建——lineagePublished 起点 true）。 */
 export function createTreasuryAttemptLineageRecord(input: {
   readonly rootTransactionId: string;
   readonly rootIdentity: TreasuryAttemptLineageIdentity;
@@ -773,6 +1136,7 @@ export function createTreasuryAttemptLineageRecord(input: {
   }
   // 统一从 retiring 开始（rearmable 与否）——retirement 三段完成后由
   // complete/backfill 推进到 rearm_ready 或 non_rearmable_retired 终态。
+  // 创建即 publication（第十八轮 §5：candidate 持久化先于 authority release）。
   const now = Game.time;
   return writeLineageRecord({
     lineageId: computeTreasuryAttemptLineageId(input.rootTransactionId, input.rootIdentity),
@@ -791,7 +1155,8 @@ export function createTreasuryAttemptLineageRecord(input: {
     ...(input.lowlevelSource !== undefined ? { lowlevelSource: input.lowlevelSource } : {}),
     rearmable: input.rearmable,
     ...(input.nonRearmReason !== undefined ? { nonRearmReason: input.nonRearmReason } : {}),
-    retirement: { lineagePublished: false, authorityReleased: false, markerCleaned: false },
+    retirement: { lineagePublished: true, authorityReleased: false, markerCleaned: false },
+    retirementGeneration: 0,
     recordRevision: 0,
     createdAtTick: now,
     updatedAtTick: now,
@@ -800,7 +1165,8 @@ export function createTreasuryAttemptLineageRecord(input: {
 
 /**
  * 受控状态推进（capability 签发 / child 接管 / 终态 / 三段补完成的唯一
- * mutation 入口）：next 必须通过状态机与不可变事实校验。
+ * mutation 入口）：next 必须通过状态机与不可变事实校验。exact idempotent
+ * （revision 一致 + 完整一致）合法返回；否则 revision 必须基于最新 +1。
  */
 export function updateTreasuryAttemptLineageRecord(
   lineageId: string,
@@ -817,11 +1183,225 @@ export function updateTreasuryAttemptLineageRecord(
     return { status: "rejected", detail: `lineage ${lineageId.slice(0, 16)} 不存在（不可凭空推进）` };
   }
   const next = mutate(existing);
-  if (next.recordRevision !== existing.recordRevision + 1) {
+  if (next.recordRevision !== existing.recordRevision + 1 && next.recordRevision !== existing.recordRevision) {
     lineageStoreEvents.writeFailures += 1;
-    return { status: "rejected", detail: "mutation 必须基于最新 record 推进 recordRevision+1" };
+    return { status: "rejected", detail: "mutation 必须基于最新 record 推进 recordRevision+1（或 exact idempotent）" };
   }
   return writeLineageRecord(next);
+}
+
+// ── 协议推进 helper（单一权威构造——facade / faultResolution / recovery 共用） ─
+
+/** capability 签发推进：rearm_ready → capability_issued（handoff facts 冻结）。 */
+export function stageTreasuryLineageCapabilityIssued(
+  lineageId: string,
+  childTransactionId: string,
+): TreasuryAttemptLineageWriteResult {
+  return updateTreasuryAttemptLineageRecord(lineageId, (current) => {
+    const expected = deriveTreasuryLineageNextChildTransactionId(current.lineageId, current.generation + 1, current.rootTransactionId);
+    if (childTransactionId !== expected) {
+      throw new Error(`child ID 与 lineage 派生不一致（期望 ${expected.slice(0, 24)}，实际 ${childTransactionId.slice(0, 24)}）`);
+    }
+    return {
+      ...current,
+      state: "capability_issued",
+      nextChildTransactionId: childTransactionId,
+      pendingBindingDigest: computeTreasuryLineageBindingDigest({
+        lineageId: current.lineageId,
+        generation: current.generation + 1,
+        parentTransactionId: current.currentTransactionId,
+        childTransactionId,
+      }),
+      updatedAtTick: Game.time,
+      recordRevision: current.recordRevision + 1,
+    };
+  });
+}
+
+/** handoff 推进：capability_issued → child_intent_pending（intent 写入前）。 */
+export function stageTreasuryLineageChildIntentPending(
+  lineageId: string,
+  childTransactionId: string,
+): TreasuryAttemptLineageWriteResult {
+  return updateTreasuryAttemptLineageRecord(lineageId, (current) => {
+    if (current.nextChildTransactionId !== childTransactionId) {
+      throw new Error(`child intent 阶段的 child ID 与冻结的 nextChild 不一致`);
+    }
+    return {
+      ...current,
+      state: "child_intent_pending",
+      updatedAtTick: Game.time,
+      recordRevision: current.recordRevision + 1,
+    };
+  });
+}
+
+/** 回滚：capability_issued/child_intent_pending → rearm_ready（child facts 保留——同代重签）。 */
+export function rollbackTreasuryLineageToRearmReady(lineageId: string): TreasuryAttemptLineageWriteResult {
+  return updateTreasuryAttemptLineageRecord(lineageId, (current) => {
+    if (current.state !== "capability_issued" && current.state !== "child_intent_pending") {
+      throw new Error(`回滚只允许 handoff 在途状态（got ${String(current.state)}）`);
+    }
+    return {
+      ...current,
+      state: "rearm_ready",
+      updatedAtTick: Game.time,
+      recordRevision: current.recordRevision + 1,
+    };
+  });
+}
+
+/**
+ * 接管推进（唯一允许 current/generation/binding 变化的转换）：child_intent_
+ * pending → child_active。binding 取 pendingBinding；parent = 推进前 current；
+ * retirement 三段按新 generation 复位（上一代完成标志不得沿用）。
+ */
+export function activateTreasuryLineageChild(
+  lineageId: string,
+  childIdentity: TreasuryAttemptLineageIdentity,
+): TreasuryAttemptLineageWriteResult {
+  return updateTreasuryAttemptLineageRecord(lineageId, (current) => {
+    if (current.state !== "child_intent_pending") {
+      throw new Error(`child 接管只允许从 child_intent_pending（got ${String(current.state)}）`);
+    }
+    const parentTransactionId = current.currentTransactionId;
+    const childTransactionId = current.nextChildTransactionId!;
+    const { nextChildTransactionId: _consumedChild, pendingBindingDigest: _consumedBinding, ...rest } = current;
+    void _consumedChild;
+    void _consumedBinding;
+    return {
+      ...rest,
+      state: "child_active",
+      currentTransactionId: childTransactionId,
+      currentIdentity: cloneTreasuryDurableValue(childIdentity),
+      currentParentTransactionId: parentTransactionId,
+      generation: current.generation + 1,
+      resolutionState: "unresolved",
+      bindingDigest: current.pendingBindingDigest,
+      retirement: { lineagePublished: false, authorityReleased: false, markerCleaned: false },
+      retirementGeneration: current.generation + 1,
+      updatedAtTick: Game.time,
+      recordRevision: current.recordRevision + 1,
+    };
+  });
+}
+
+/** child 退休推进：child_active → retiring（当前代 not-executed publication）。 */
+export function retireTreasuryLineageCurrentAttempt(input: {
+  readonly lineageId: string;
+  readonly retrySemanticDigest?: string;
+  readonly rearmable?: boolean;
+  readonly nonRearmReason?: string;
+}): TreasuryAttemptLineageWriteResult {
+  return updateTreasuryAttemptLineageRecord(input.lineageId, (current) => {
+    if (current.state !== "child_active") {
+      throw new Error(`child 退休只允许从 child_active（got ${String(current.state)}）`);
+    }
+    const { nextChildTransactionId: _stale, pendingBindingDigest: _staleBinding, ...rest } = current;
+    void _stale;
+    void _staleBinding;
+    const rearmable = input.rearmable !== undefined ? input.rearmable && current.rearmable : current.rearmable;
+    return {
+      ...rest,
+      state: "retiring",
+      resolutionState: "not_executed" as const,
+      ...(input.retrySemanticDigest !== undefined && current.retrySemanticDigest === undefined
+        ? { retrySemanticDigest: input.retrySemanticDigest }
+        : {}),
+      rearmable,
+      ...(rearmable && current.rearmable
+        ? {}
+        : { nonRearmReason: input.nonRearmReason ?? current.nonRearmReason ?? "non-rearmable" }),
+      retirement: { lineagePublished: true, authorityReleased: false, markerCleaned: false },
+      retirementGeneration: current.generation,
+      updatedAtTick: Game.time,
+      recordRevision: current.recordRevision + 1,
+    };
+  });
+}
+
+/** retirement 三段完成推进：retiring → rearm_ready / non_rearmable_retired。 */
+export function completeTreasuryLineageRetirement(lineageId: string): TreasuryAttemptLineageWriteResult {
+  return updateTreasuryAttemptLineageRecord(lineageId, (current) => {
+    if (current.state !== "retiring") {
+      throw new Error(`retirement 完成只允许从 retiring（got ${String(current.state)}）`);
+    }
+    return {
+      ...current,
+      state: current.rearmable ? "rearm_ready" : "non_rearmable_retired",
+      retirement: { lineagePublished: true, authorityReleased: true, markerCleaned: true },
+      updatedAtTick: Game.time,
+      recordRevision: current.recordRevision + 1,
+    };
+  });
+}
+
+/** child commit 终态推进：child_active → chain_committed。 */
+export function closeTreasuryLineageAsChainCommitted(lineageId: string): TreasuryAttemptLineageWriteResult {
+  return updateTreasuryAttemptLineageRecord(lineageId, (current) => {
+    if (current.state !== "child_active") {
+      throw new Error(`chain_committed 只允许从 child_active（got ${String(current.state)}）`);
+    }
+    return {
+      ...current,
+      state: "chain_committed",
+      resolutionState: "committed",
+      updatedAtTick: Game.time,
+      recordRevision: current.recordRevision + 1,
+    };
+  });
+}
+
+/** forensic 隔离（任意状态进入；child facts 清除、non-rearmable）。 */
+export function isolateTreasuryLineageForensically(lineageId: string, reason: string): TreasuryAttemptLineageWriteResult {
+  return updateTreasuryAttemptLineageRecord(lineageId, (current) => {
+    const { nextChildTransactionId: _stale, pendingBindingDigest: _staleBinding, ...rest } = current;
+    void _stale;
+    void _staleBinding;
+    return {
+      ...rest,
+      state: "forensic_isolated",
+      rearmable: false,
+      nonRearmReason: reason.slice(0, NON_REARM_REASON_MAX),
+      updatedAtTick: Game.time,
+      recordRevision: current.recordRevision + 1,
+    };
+  });
+}
+
+// ── 终态压缩支持（lineageRetirementSummary 编排；本模块只提供受控删除） ────
+
+/** 终态压缩候选清单（O(terminal) ≤ 容量上界；空闲零成本）。 */
+export function listTreasuryTerminalLineageIds(): readonly string[] {
+  const runtime = loadLineageStoreRuntime();
+  if (runtime.fatal !== null) return [];
+  return [...runtime.terminalIds];
+}
+
+/**
+ * 受控删除（仅 lineageRetirementSummary 压缩编排调用）：record 必须处于终态
+ * 且 summary 已写入并 read-back（调用方保证）——删除后同步全部索引。
+ */
+export function removeTreasuryAttemptLineageRecordForCompaction(lineageId: string): { readonly status: "removed" } | { readonly status: "rejected"; readonly detail: string } {
+  const runtime = loadLineageStoreRuntime();
+  if (runtime.fatal !== null) return { status: "rejected", detail: runtime.fatal };
+  const key = runtime.lineageIdIndex.get(lineageId);
+  if (key === undefined) return { status: "rejected", detail: `lineage ${lineageId.slice(0, 16)} 不存在` };
+  const record = runtime.store.entries[key];
+  if (record === undefined) return { status: "rejected", detail: "索引与 entries 不一致（拒绝压缩）" };
+  if (record.state !== "chain_committed" && record.state !== "non_rearmable_retired") {
+    return { status: "rejected", detail: `非终态 record 不得压缩（state ${String(record.state)}）` };
+  }
+  delete runtime.store.entries[key];
+  runtime.store.entryCount -= 1;
+  runtime.store.updatedAt = Game.time;
+  runtime.lineageIdIndex.delete(record.lineageId);
+  runtime.rootIndex.delete(record.rootTransactionId);
+  runtime.currentIndex.delete(record.currentTransactionId);
+  if (record.nextChildTransactionId !== undefined) runtime.nextChildIndex.delete(record.nextChildTransactionId);
+  runtime.pendingIds.delete(record.lineageId);
+  runtime.terminalIds.delete(record.lineageId);
+  return { status: "removed" };
 }
 
 // ── beginTick 恢复 ──────────────────────────────────────────────────────────
@@ -831,23 +1411,59 @@ export interface TreasuryLineageRecoveryResult {
   readonly capabilityExpiries: number;
   readonly childIntentRollbacks: number;
   readonly childIntentForensics: number;
+  readonly childActivationForwardCompletions: number;
+  readonly chainCommitCompletions: number;
   readonly retirementCompletions: number;
   readonly backfills: number;
 }
 
+/** 接管恢复用 identity（intent/quarantine 持久 facts 的共同视图）。 */
+function lineageIdentityOfEntryFacts(entry: {
+  readonly digest: string;
+  readonly contractDigest?: string;
+  readonly authorizationCohortDigest?: string;
+  readonly durableIdentityDigest?: string;
+  readonly lowlevelSource?: string;
+}): TreasuryAttemptLineageIdentity {
+  return {
+    digest: entry.digest,
+    ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+    ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+    ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+    ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+  };
+}
+
+/** entry（intent/quarantine）的 lineage proof 与 handoff facts 匹配检查。 */
+function entryLineageProofMatches(
+  entry: { readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string } | undefined,
+  record: Readonly<TreasuryAttemptLineageRecord>,
+): boolean {
+  if (entry === undefined) return false;
+  return (
+    entry.lineageId === record.lineageId &&
+    entry.lineageGeneration === record.generation + 1 &&
+    entry.lineageBindingDigest === record.pendingBindingDigest &&
+    entry.lineageBindingDigest !== undefined
+  );
+}
+
 /**
- * 【第十七轮第五节/第十三节】beginTick lineage 恢复（挂 facade performBeginTick，
- * 位于 recoverStagedResolutions 之后——释放/清 marker 的补完成先行，lineage
- * 三段随最终持久事实收敛）：
- * - capability_issued（跨 tick/global reset）：heap capability 已失效 → 回退
- *   rearm_ready（保留 nextChildTransactionId——child ID 确定性不变，可重签）；
- * - child_intent_pending：intent 缺失或一致 not_started → 回滚 rearm_ready
- *   （一致时先释放 intent）；intent identity 不一致 / 非初始状态 → forensic；
- * - retiring：按 resolver 四态与 marker 终态补完成三段（release/marker 的
- *   实际动作由 recoverStagedResolutions 承担——这里只收敛 durable 标志）；
+ * 【第十八轮 24.2/24.3】beginTick lineage 恢复（挂 facade performBeginTick，
+ * 位于 intent recovery 与 recoverStagedResolutions 之后）：
+ * - capability_issued：heap capability 已失效 → 回退 rearm_ready（child facts
+ *   保留——同代 child ID 确定性不变，可重签）；
+ * - child_intent_pending：intent 缺失 → 回滚；一致 not_started/ready → 释放
+ *   intent 并回滚（正常窗口不 forensic）；binding/generation/child 冲突 →
+ *   forensic；intent 已 executing/更后或已转 quarantine（proof 匹配）→ 前向
+ *   补完成 child_active（callback 可能已开始，不得回滚为未执行）；
+ * - child_active：当前代 committed receipt 匹配（binding/generation）→ 补完成
+ *   chain_committed 并释放遗留 intent；final not-executed tombstone 且 authority
+ *   已清 → 防御性完成 retirement；
+ * - retiring：三段按最终持久事实收敛（release/marker 实际动作由
+ *   recoverStagedResolutions / resolver 承担）；
  * - pendingRelease 索引中无 lineage record 的 final not-executed tombstone：
- *   backfill（Round 16 遗留——authority 仍在场可取 retry facts 则 rearmable
- *   candidate，否则 non-rearmable retired；不猜测）。
+ *   backfill（Round 16 遗留）。
  * 空闲（pendingIds 与 pendingRelease 索引均空）→ O(1) 快路径，不扫描 entries。
  */
 export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapshot?: readonly string[]): TreasuryLineageRecoveryResult {
@@ -856,36 +1472,35 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
     capabilityExpiries: 0,
     childIntentRollbacks: 0,
     childIntentForensics: 0,
+    childActivationForwardCompletions: 0,
+    chainCommitCompletions: 0,
     retirementCompletions: 0,
     backfills: 0,
   };
   const runtime = loadLineageStoreRuntime();
   if (runtime.fatal !== null) return { ...empty, skipped: runtime.fatal };
-  // facade 在 recoverStagedResolutions 之前传入快照（补完成会移除索引项）；
-  // 缺省时自行读取（独立调用兼容）。
   const pendingReleaseIds = pendingReleaseSnapshot ?? listTreasuryPendingReleaseIds();
   if (runtime.pendingIds.size === 0 && pendingReleaseIds.length === 0) {
     lineageStoreEvents.idleFastPath += 1;
     return empty;
   }
   let result: TreasuryLineageRecoveryResult = empty;
-  // 1) 现有 record 的恢复动作。
-  for (const lineageId of [...runtime.pendingIds]) {
+  const recordOf = (lineageId: string): Readonly<TreasuryAttemptLineageRecord> | undefined => {
     const record = readTreasuryAttemptLineageRecord(lineageId);
     if (record === undefined) {
       // 索引项失效（Memory 已无该 record）——索引只是定位器，清理。
       runtime.pendingIds.delete(lineageId);
+      runtime.terminalIds.delete(lineageId);
       lineageStoreEvents.indexCorruptions += 1;
-      continue;
     }
+    return record;
+  };
+  for (const lineageId of [...runtime.pendingIds]) {
+    const record = recordOf(lineageId);
+    if (record === undefined) continue;
     if (record.state === "capability_issued") {
-      const updated = updateTreasuryAttemptLineageRecord(lineageId, (current) => ({
-        ...current,
-        state: "rearm_ready",
-        updatedAtTick: Game.time,
-        recordRevision: current.recordRevision + 1,
-      }));
-      if (updated.status !== "rejected") {
+      const rolled = rollbackTreasuryLineageToRearmReady(lineageId);
+      if (rolled.status !== "rejected") {
         lineageStoreEvents.capabilityExpiries += 1;
         result = { ...result, capabilityExpiries: result.capabilityExpiries + 1 };
       }
@@ -894,51 +1509,99 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
     if (record.state === "child_intent_pending") {
       const childId = record.nextChildTransactionId!;
       const intent = readTreasuryIntentEntry(childId);
-      if (intent === undefined) {
-        const rolled = updateTreasuryAttemptLineageRecord(lineageId, (current) => ({
-          ...current,
-          state: "rearm_ready",
-          updatedAtTick: Game.time,
-          recordRevision: current.recordRevision + 1,
-        }));
-        if (rolled.status !== "rejected") {
-          lineageStoreEvents.childIntentRollbacks += 1;
-          result = { ...result, childIntentRollbacks: result.childIntentRollbacks + 1 };
+      const quarantine = intent === undefined ? readTreasuryQuarantineEntry(childId) : undefined;
+      const intentProof = intent as unknown as { readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string } | undefined;
+      const quarantineProof = quarantine as unknown as { readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string } | undefined;
+      if (intent !== undefined && !entryLineageProofMatches(intentProof, record)) {
+        // intent 存在但 lineage proof 不匹配（binding/generation/lineage 冲突
+        // 或缺失）——持久状态违反不变量，forensic 隔离（不猜测）。
+        const isolated = isolateTreasuryLineageForensically(lineageId, "child_intent_pending 窗口 intent lineage proof 冲突（binding/generation/lineage 不匹配）");
+        if (isolated.status !== "rejected") {
+          lineageStoreEvents.childIntentForensics += 1;
+          result = { ...result, childIntentForensics: result.childIntentForensics + 1 };
         }
         continue;
       }
-      const bindingConsistent =
-        (intent.lineageBindingDigest === undefined && record.bindingDigest === undefined) ||
-        intent.lineageBindingDigest === record.bindingDigest;
-      if (intent.outcome === "not_started" && intent.settlement === "ready" && bindingConsistent) {
-        // callback 从未开始：释放 intent 并回滚 lineage（capability 已随
-        // tick/global reset 失效，可重签同一 child ID）。
+      if (intent !== undefined && intent.outcome === "not_started" && intent.settlement === "ready") {
+        // callback 从未开始（execution-started 尚未持久化）：释放 intent 并
+        // 回滚（capability 已随 tick/global reset 失效，可重签同代 child）。
         releaseTreasuryIntentEntry(childId);
-        const rolled = updateTreasuryAttemptLineageRecord(lineageId, (current) => ({
-          ...current,
-          state: "rearm_ready",
-          updatedAtTick: Game.time,
-          recordRevision: current.recordRevision + 1,
-        }));
+        const rolled = rollbackTreasuryLineageToRearmReady(lineageId);
         if (rolled.status !== "rejected") {
           lineageStoreEvents.childIntentRollbacks += 1;
           result = { ...result, childIntentRollbacks: result.childIntentRollbacks + 1 };
         }
         continue;
       }
-      // intent 非初始状态或 binding 不一致：child_intent_pending 窗口内 callback
-      // 不可能开始——持久状态违反不变量，forensic 隔离（不猜测）。
-      const isolated = updateTreasuryAttemptLineageRecord(lineageId, (current) => ({
-        ...current,
-        state: "forensic_isolated",
-        rearmable: false,
-        nonRearmReason: "child_intent_pending 窗口 intent 状态非法（callback 前不得离开 not_started/ready 或改变 binding）",
-        updatedAtTick: Game.time,
-        recordRevision: current.recordRevision + 1,
-      }));
-      if (isolated.status !== "rejected") {
-        lineageStoreEvents.childIntentForensics += 1;
-        result = { ...result, childIntentForensics: result.childIntentForensics + 1 };
+      if (intent !== undefined || entryLineageProofMatches(quarantineProof, record)) {
+        // intent 已 executing/更后，或 intent 已转 quarantine 且 proof 匹配：
+        // callback 可能已开始——前向补完成接管（identity 从持久 facts 派生）。
+        const factsSource = intent ?? quarantine!;
+        const activated = activateTreasuryLineageChild(lineageId, lineageIdentityOfEntryFacts({
+          digest: factsSource.digest,
+          ...(factsSource.contractDigest !== undefined ? { contractDigest: factsSource.contractDigest } : {}),
+          ...(factsSource.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: factsSource.authorizationCohortDigest } : {}),
+          ...(factsSource.durableIdentityDigest !== undefined ? { durableIdentityDigest: factsSource.durableIdentityDigest } : {}),
+          ...(factsSource.lowlevelSource !== undefined ? { lowlevelSource: factsSource.lowlevelSource } : {}),
+        }));
+        if (activated.status !== "rejected") {
+          lineageStoreEvents.childActivationForwardCompletions += 1;
+          result = { ...result, childActivationForwardCompletions: result.childActivationForwardCompletions + 1 };
+        }
+        continue;
+      }
+      // intent 与 quarantine 均缺失：callback 确定未开始 → 回滚。
+      const rolled = rollbackTreasuryLineageToRearmReady(lineageId);
+      if (rolled.status !== "rejected") {
+        lineageStoreEvents.childIntentRollbacks += 1;
+        result = { ...result, childIntentRollbacks: result.childIntentRollbacks + 1 };
+      }
+      continue;
+    }
+    if (record.state === "child_active") {
+      // commit-pending 补完成：当前代 committed receipt 匹配（binding）→
+      // chain_committed（receipt 是 durable commit-pending proof——task 7.4）。
+      const receiptProof = readLineageReceiptProofBinding(record.currentTransactionId);
+      if (
+        receiptProof !== undefined &&
+        receiptProof.binding === record.bindingDigest &&
+        receiptProof.generation === record.generation
+      ) {
+        if (readTreasuryIntentEntry(record.currentTransactionId) !== undefined) {
+          releaseTreasuryIntentEntry(record.currentTransactionId);
+        }
+        const closed = closeTreasuryLineageAsChainCommitted(lineageId);
+        if (closed.status !== "rejected") {
+          lineageStoreEvents.chainCommitCompletions += 1;
+          result = { ...result, chainCommitCompletions: result.chainCommitCompletions + 1 };
+        }
+        continue;
+      }
+      // 防御性 retirement 收敛：final not-executed tombstone + authority 已清。
+      const tombstone = readTreasuryResolutionTombstone(record.currentTransactionId);
+      if (
+        tombstone !== undefined &&
+        tombstone.stage === "final" &&
+        tombstone.resolution === "not-executed" &&
+        resolveTreasuryUnresolvedAuthority(record.currentTransactionId).status === "not_found" &&
+        record.retirementGeneration === record.generation
+      ) {
+        const updated = updateTreasuryAttemptLineageRecord(lineageId, (current) => ({
+          ...current,
+          state: "retiring",
+          resolutionState: "not_executed" as const,
+          retirement: { lineagePublished: true, authorityReleased: true, markerCleaned: current.retirement.markerCleaned },
+          retirementGeneration: current.generation,
+          updatedAtTick: Game.time,
+          recordRevision: current.recordRevision + 1,
+        }));
+        if (updated.status !== "rejected") {
+          const completed = completeTreasuryLineageRetirement(lineageId);
+          if (completed.status !== "rejected") {
+            lineageStoreEvents.retirementCompletions += 1;
+            result = { ...result, retirementCompletions: result.retirementCompletions + 1 };
+          }
+        }
       }
       continue;
     }
@@ -956,13 +1619,6 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
       if (record.retirement.markerCleaned) {
         markerCleaned = true;
       } else {
-        // marker 属于其它 attempt 或不存在 → 清理完成；属于本 attempt 且仍
-        // unresolved → 未完成（recoverStagedResolutions 已尝试过清除）。
-        markerCleaned = null; // 由调用侧 marker 终态判定（见下）。
-      }
-      if (markerCleaned === null) {
-        // 只读检查 marker 是否仍指向本 attempt（未深度 import writeFault 的
-        // 清除语义——恢复只收敛标志，清除动作由 resolution 恢复承担）。
         const marker = readLineageRecoveryMarker();
         markerCleaned =
           marker === undefined ||
@@ -970,13 +1626,7 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
           marker.digest !== record.currentIdentity.digest;
       }
       if (authorityReleased === true && markerCleaned === true) {
-        const completed = updateTreasuryAttemptLineageRecord(lineageId, (current) => ({
-          ...current,
-          state: current.rearmable ? "rearm_ready" : "non_rearmable_retired",
-          retirement: { lineagePublished: true, authorityReleased: true, markerCleaned: true },
-          updatedAtTick: Game.time,
-          recordRevision: current.recordRevision + 1,
-        }));
+        const completed = completeTreasuryLineageRetirement(lineageId);
         if (completed.status !== "rejected") {
           lineageStoreEvents.retirementCompletions += 1;
           result = { ...result, retirementCompletions: result.retirementCompletions + 1 };
@@ -985,8 +1635,8 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
       continue;
     }
   }
-  // 2) pendingRelease 索引中无 lineage record 的 final not-executed（Round 16
-  //    遗留 / lineage 写失败中断）——backfill。
+  // pendingRelease 索引中无 lineage record 的 final not-executed（Round 16
+  // 遗留 / lineage 写失败中断）——backfill。
   for (const transactionId of pendingReleaseIds) {
     const existing = lookupTreasuryAttemptLineageByAttemptId(transactionId);
     if (existing !== undefined) continue;
@@ -999,6 +1649,20 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
     }
   }
   return result;
+}
+
+// committed receipt 只读视图（facade 装配注入——保持模块单向依赖）。
+let lineageReceiptProofReader: (transactionId: string) => { readonly binding: string | undefined; readonly generation: number | undefined } | undefined = () => undefined;
+
+/** facade 装配时注入 receipt proof 的 binding/generation 读取。 */
+export function setTreasuryLineageReceiptReaderForAssembly(
+  reader: (transactionId: string) => { readonly binding: string | undefined; readonly generation: number | undefined } | undefined,
+): void {
+  lineageReceiptProofReader = reader;
+}
+
+function readLineageReceiptProofBinding(transactionId: string): { readonly binding: string | undefined; readonly generation: number | undefined } | undefined {
+  return lineageReceiptProofReader(transactionId);
 }
 
 /** 恢复路径的 marker 只读视图（避免与 writeFault 清除语义耦合的轻量转发）。 */
@@ -1016,51 +1680,32 @@ function readLineageRecoveryMarker(): { readonly transactionId: string; readonly
 }
 
 /**
- * Round 16 旧 final not-executed tombstone 的 backfill（任务 6.3）：
- * - authority（intent/quarantine）仍在场且 modern/lowlevel facts 完整：
- *   rearmable candidate（retry semantic facts 从 authority 计算——由调用侧
- *   计算后经 createTreasuryAttemptLineageRecord 传入？不——backfill 保持
- *   non-rearmable 语义：tombstone 自身不携带 action retry 语义，authority
- *   仍释放前的事实不足以重建受控 retry digest（prevalidate 上下文缺失），
- *   统一 non-rearmable retired（永久阻断 parent、不签发 capability）；
- * - identity partial 或矛盾 → forensic_isolated（tombstone 保持 pin）；
- * - 容量不足 → 不写（tombstone 保持 pin，fail closed）。
+ * Round 16 旧 final not-executed tombstone 的 backfill（Round 17 语义保留）：
+ * backfill 统一 non-rearmable retired（tombstone 自身不携带 action retry 语义，
+ * prevalidate 上下文缺失——不猜测）；identity partial 或矛盾 → forensic；
+ * 容量不足 → 不写（tombstone 保持 pin，fail closed）。
  */
 function backfillLineageFromTombstone(
   transactionId: string,
   tombstone: Readonly<{ transactionId: string; digest: string; proofLevel: string; contractDigest?: string; authorizationCohortDigest?: string; durableIdentityDigest?: string; lowlevelSource?: string }>,
 ): boolean {
-  if (tombstone.proofLevel !== "identity-bound" && tombstone.proofLevel !== "lowlevel") {
-    // legacy/forensic proof：不建 rearmable 权威——identity partial 矛盾按
-    // forensic 隔离；legacy 无现代身份事实也按 forensic 隔离（不猜测）。
-    const authorityClass: TreasuryLineageAuthorityClass = "identity-bound";
-    const created = createTreasuryAttemptLineageRecord({
-      rootTransactionId: transactionId,
-      rootIdentity: { digest: tombstone.digest },
-      actionKind: `backfilled:${String(tombstone.proofLevel)}`,
-      authorityClass,
-      rearmable: false,
-      nonRearmReason: `Round16 backfill：proof level ${String(tombstone.proofLevel)} 不可 rearm（隔离退休）`,
-    });
-    return created.status !== "rejected";
-  }
+  const authorityClass: TreasuryLineageAuthorityClass =
+    tombstone.proofLevel === "lowlevel" ? "lowlevel" : "identity-bound";
   const identity: TreasuryAttemptLineageIdentity = {
     digest: tombstone.digest,
     ...(tombstone.contractDigest !== undefined ? { contractDigest: tombstone.contractDigest } : {}),
     ...(tombstone.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: tombstone.authorizationCohortDigest } : {}),
     ...(tombstone.durableIdentityDigest !== undefined ? { durableIdentityDigest: tombstone.durableIdentityDigest } : {}),
-    ...(tombstone.lowlevelSource !== undefined ? { lowlevelSource: tombstone.lowlevelSource } : {}),
+    ...(tombstone.proofLevel === "lowlevel" && tombstone.lowlevelSource !== undefined ? { lowlevelSource: tombstone.lowlevelSource } : {}),
   };
   const created = createTreasuryAttemptLineageRecord({
     rootTransactionId: transactionId,
     rootIdentity: identity,
     actionKind: `backfilled:${String(tombstone.proofLevel)}`,
-    authorityClass: tombstone.proofLevel === "lowlevel" ? "lowlevel" : "identity-bound",
+    authorityClass,
     ...(tombstone.proofLevel === "lowlevel" && tombstone.lowlevelSource !== undefined
       ? { lowlevelSource: tombstone.lowlevelSource }
       : {}),
-    // Round 16 tombstone 只有 attempt proof、无 action retry 语义——
-    // non-rearmable retired（永久阻断 parent ID 重用；不签发 capability）。
     rearmable: false,
     nonRearmReason: "Round16 backfill：只有 attempt proof、缺少 action retry 语义（non-rearmable retired）",
   });
@@ -1076,8 +1721,6 @@ function backfillLineageFromTombstone(
   const threeComplete = authorityReleased && markerCleaned;
   const completed = updateTreasuryAttemptLineageRecord(record.lineageId, (current) => ({
     ...current,
-    // 三段全完成时收敛终态（Round 16 backfill 全部 non-rearmable）；
-    // authority/marker 未清则保持 retiring（beginTick 后续 tick 继续收敛）。
     state: threeComplete ? "non_rearmable_retired" : current.state,
     retirement: { lineagePublished: true, authorityReleased, markerCleaned },
     updatedAtTick: Game.time,

@@ -574,7 +574,9 @@ describe("tombstone retention 与永久 retirement（第十七轮第十三节）
     // capability 仍可从 lineage record 签发（child ID 与驱逐前一致）。
     const issued = t2.issueTreasuryRearmCapability({ parentTransactionId: "r17_retire_root" });
     expect(issued.status).toBe("issued");
-    if (issued.status === "issued") expect(issued.childTransactionId).toMatch(/^tr1_[0-9a-f]{16}$/);
+    // 【第十八轮】child ID v2 generation-addressable 形态（tr1_<lineageId16>_
+    // <generation6>_<checksum8>——checksum 绑定 root）。
+    if (issued.status === "issued") expect(issued.childTransactionId).toMatch(/^tr1_[0-9a-f]{16}_[0-9a-f]{6}_[0-9a-f]{8}$/);
   });
 
   it("无 lineage replacement 的超龄 final not-executed：pin 不驱逐", () => {

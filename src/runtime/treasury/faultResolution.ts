@@ -77,7 +77,8 @@ import {
   ensureTreasuryLineageSlotAvailable,
   lookupTreasuryAttemptLineageByAttemptId,
   peekTreasuryAttemptLineageHealth,
-  updateTreasuryAttemptLineageRecord,
+  retireTreasuryLineageCurrentAttempt,
+  completeTreasuryLineageRetirement,
   type TreasuryAttemptLineageIdentity,
   type TreasuryLineageAuthorityClass,
 } from "@/runtime/treasury/attemptLineage";
@@ -951,26 +952,11 @@ function publishTreasuryNotExecutedLineage(
     return created.status === "rejected" ? { status: "pending" } : { status: "published" };
   }
   // 既有 chain：本 attempt 是 current（child 退休）或 root（Round 16 backfill
-  // 已建）——推进 retirement 阶段。
-  const updated = updateTreasuryAttemptLineageRecord(existing.lineageId, (current) => {
-    // child 退休：currentIdentity 不变（同 attempt）；旧代 nextChildTransactionId
-    // 清除（该 child 已成为 current——下一代的 child 从新 current 派生，
-    // 残留会把 child 派生回自身）。
-    const { nextChildTransactionId: _stale, ...currentWithoutNextChild } = current;
-    void _stale;
-    return {
-      ...currentWithoutNextChild,
-      resolutionState: "not_executed" as const,
-      ...(retrySemanticDigest !== null && current.retrySemanticDigest === undefined
-        ? { retrySemanticDigest }
-        : {}),
-      state: "retiring" as const,
-      rearmable: rearmable && current.rearmable,
-      ...(rearmable && current.rearmable ? {} : { nonRearmReason: retrySemanticDigest === null ? "retry semantic facts 不足" : current.nonRearmReason ?? "non-rearmable" }),
-      retirement: { lineagePublished: true, authorityReleased: false, markerCleaned: false },
-      updatedAtTick: Game.time,
-      recordRevision: current.recordRevision + 1,
-    };
+  // 已建）——推进 retirement 阶段（单一权威 helper：清 next-child、三段复位、
+  // retirementGeneration 归属当前代）。
+  const updated = retireTreasuryLineageCurrentAttempt({
+    lineageId: existing.lineageId,
+    ...(retrySemanticDigest !== null ? { retrySemanticDigest } : {}),
   });
   return updated.status === "rejected" ? { status: "pending" } : { status: "published" };
 }
@@ -988,13 +974,7 @@ function completeTreasuryNotExecutedRetirement(transactionId: string): void {
   // 成功后的主路径被调用）+ release（上文 release* 已执行）+ marker（上文
   // class-aware 清除已确认）。
   if (lineage.state === "retiring") {
-    void updateTreasuryAttemptLineageRecord(lineage.lineageId, (current) => ({
-      ...current,
-      state: current.rearmable ? "rearm_ready" : "non_rearmable_retired",
-      retirement: { lineagePublished: true, authorityReleased: true, markerCleaned: true },
-      updatedAtTick: Game.time,
-      recordRevision: current.recordRevision + 1,
-    }));
+    void completeTreasuryLineageRetirement(lineage.lineageId);
   }
 }
 

@@ -28,6 +28,10 @@ import {
   lookupTreasuryAttemptLineageByNextChild,
   type TreasuryAttemptLineageRecord,
 } from "@/runtime/treasury/attemptLineage";
+import {
+  lookupTreasuryRetirementSummaryByRoot,
+  peekTreasuryRetirementSummaryHealth,
+} from "@/runtime/treasury/lineageRetirementSummary";
 
 export type TreasuryRearmPreflightResult =
   | {
@@ -85,6 +89,22 @@ export function preflightTreasuryRearmCapability(input: {
   // ── lineage record：存在 + rearm-ready + rearmable。
   const lineage = lookupTreasuryAttemptLineageByAttemptId(input.parentTransactionId);
   if (lineage === undefined) {
+    // 【第十八轮 24.10/24.11】active record 已压缩：terminal retirement
+    // summary 是精确权威——chain 已闭合（committed / non-rearmable），
+    // root 永久不可 rearm；summary store 损坏 → fail closed（不把损坏解释
+    // 成"不存在"）。
+    const summaryHealth = peekTreasuryRetirementSummaryHealth();
+    if (!summaryHealth.healthy) {
+      return { status: "rejected", reason: "lineage_store_unhealthy", detail: summaryHealth.detail ?? "retirement summary store 损坏（rearm preflight fail closed）" };
+    }
+    const summary = lookupTreasuryRetirementSummaryByRoot(input.parentTransactionId);
+    if (summary !== undefined) {
+      return {
+        status: "rejected",
+        reason: "lineage_not_rearmable",
+        detail: `parent ${input.parentTransactionId.slice(0, 48)} 的 chain 已压缩为 terminal retirement summary（${summary.terminalState}，最终代 ${String(summary.finalGeneration)}）——chain 已闭合，不可 rearm`,
+      };
+    }
     return {
       status: "rejected",
       reason: "lineage_record_missing",

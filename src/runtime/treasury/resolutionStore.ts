@@ -150,6 +150,14 @@ export interface TreasuryResolutionTombstone {
    * 也不得猜测为 runtime 来源）。只允许 proofLevel=lowlevel 携带。
    */
   readonly lowlevelSource?: string;
+  /**
+   * 【第十八轮 24.4 v7】tr1_ rearm attempt 的 lineage proof（intent/
+   * quarantine 同源携带）：not-executed final tombstone 的 per-generation
+   * replacement verdict 完整比较 binding（lineageId/generation/parent 随
+   * store 版本升级补齐）。tr1_ tombstone 缺 proof → 不释放当前 rearm
+   * authority（旧 proof 只作 replay blocker）。
+   */
+  readonly lineageBindingDigest?: string;
   /** 原 action tick（审计保留；receipt retention 从 settledAtTick 起算）。 */
   actionTick: number;
   /** receipt 结算 tick（resolve-as-committed = resolution tick）。 */
@@ -669,14 +677,15 @@ export function ensureTreasuryResolutionSlotAvailable(): string | null {
 
 /** 惰性清理：只删除 stage=final 且超过 retention 的形状完整条目（第九轮
  *  4.10：stage=resolving 永不被普通垃圾回收驱逐——resolution-intent 丢弃
- * 不可接受，满载 fail closed 由容量预检承担）。【第十六轮第十三节】同步
+ *  不可接受，满载 fail closed 由容量预检承担）。【第十六轮第十三节】同步
  *  维护 pending 恢复索引（retention 删除不得遗留幽灵索引项）。
- * 【第十七轮第十三节】final not-executed 的驱逐资格：必须存在已持久化且
- * 完整的 lineage replacement（retirement 三段全部完成、状态允许其承担
- * 永久 retirement 门禁）——无 replacement（Round 16 遗留 / backfill 未完成
- * /publication pending）或任一 pending/cleanup 未完成 → **pin 永不驱逐**
- * （O(1) 索引查询，不扫描全部 lineage）。驱逐删除 tombstone 与 pending
- * 索引项，但绝不触碰 lineage record（durable 永久退休权威）。 */
+ * 【第十八轮 24.8】final not-executed 的驱逐资格按**该具体 attempt
+ *  generation** 判定（lineageGenerationRetirement 注入的 O(1) verdict）：
+ *  match（lineage/generation/transaction ID/binding/proof class/identity/
+ *  三段完成全部验证）→ 可驱逐；pending/conflict/missing/store unhealthy →
+ *  pin（conflict 计数 identityConflicts）。驱逐删除 tombstone 与 pending
+ *  索引项，但绝不触碰 lineage record / retirement summary（durable 永久
+ *  退休权威）。 */
 function evictExpiredTombstones(store: TreasuryResolutionStore, indexes?: { resolvingIds: Set<string>; pendingReleaseIds: Set<string> }): number {
   let removed = 0;
   resolutionStoreEvents.fullScans += 1;
@@ -685,22 +694,21 @@ function evictExpiredTombstones(store: TreasuryResolutionStore, indexes?: { reso
     if (entry.stage === "resolving") continue; // resolving 永不驱逐（第九轮 4.10）
     if (entry.resolvedAtTick < Game.time - TREASURY_RESOLUTION_RETENTION_TICKS) {
       if (entry.resolution === "not-executed") {
-        // 驱逐资格 = lineage replacement 完整接管永久 retirement 门禁（经
-        // 装配注入的 O(1) lookup——模块单向依赖；未注册时保守 pin）。
-        const lineage = retentionLineageLookup?.(entry.transactionId);
-        if (lineage === undefined || !lineage.retirement.lineagePublished || !lineage.retirement.authorityReleased || !lineage.retirement.markerCleaned) {
-          resolutionStoreEvents.retentionPins += 1;
-          continue;
-        }
-        if (
-          lineage.state !== "rearm_ready" &&
-          lineage.state !== "capability_issued" &&
-          lineage.state !== "child_intent_pending" &&
-          lineage.state !== "child_active" &&
-          lineage.state !== "chain_committed" &&
-          lineage.state !== "non_rearmable_retired"
-        ) {
-          // retiring（staged 进行中）/forensic_isolated：门禁未就绪 → pin。
+        // 驱逐资格 = 该 attempt generation 的 replacement proof 完整接管永久
+        // retirement 门禁（装配注入的 O(1) verdict；未注册时保守 pin）。
+        const verdict =
+          retentionReplacementVerdict?.({
+            transactionId: entry.transactionId,
+            digest: entry.digest,
+            resolution: entry.resolution,
+            stage: entry.stage,
+            proofLevel: entry.proofLevel,
+            ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
+          }) ?? { verdict: "replacement_missing", detail: "verdict 未注册（保守 pin）" } as TreasuryRetentionReplacementVerdict;
+        if (verdict.verdict !== "replacement_match") {
+          if (verdict.verdict === "replacement_conflict") {
+            resolutionStoreEvents.identityConflicts += 1;
+          }
           resolutionStoreEvents.retentionPins += 1;
           continue;
         }
@@ -829,21 +837,34 @@ export function listTreasuryPendingReleaseIds(): readonly string[] {
 }
 
 /**
- * 【第十七轮第十三节】驱逐资格的 lineage 查询注入（模块单向依赖：
- * resolutionStore 不 import attemptLineage——attemptLineage 模块装配时把
- * O(1) lookup 注册进来；未注册时（部分单元测试直接构造）视为无 replacement
- * → pin 保守）。
+ * 【第十八轮 24.8】驱逐资格的 per-generation replacement verdict 注入（模块
+ * 单向依赖：resolutionStore 不 import lineage 模块——lineageGenerationRetirement
+ * 模块装配时把 O(1) verdict 注册进来；未注册时（部分单元测试直接构造）视为
+ * 无 replacement → pin 保守）。
  */
-type TreasuryRetentionLineageView = {
-  readonly state: string;
-  readonly retirement: { readonly lineagePublished: boolean; readonly authorityReleased: boolean; readonly markerCleaned: boolean };
-};
-let retentionLineageLookup: ((transactionId: string) => TreasuryRetentionLineageView | undefined) | null = null;
+export type TreasuryRetentionReplacementVerdict =
+  | { readonly verdict: "replacement_match" }
+  | { readonly verdict: "replacement_pending"; readonly detail: string }
+  | { readonly verdict: "replacement_conflict"; readonly detail: string }
+  | { readonly verdict: "replacement_missing"; readonly detail: string }
+  | { readonly verdict: "store_unhealthy"; readonly detail: string };
+
+/** verdict 输入的最小 tombstone 视图（lineageGenerationRetirement 定义完整语义）。 */
+export interface TreasuryRetentionTombstoneView {
+  readonly transactionId: string;
+  readonly digest: string;
+  readonly resolution: string;
+  readonly stage: string;
+  readonly proofLevel: string;
+  readonly lineageBindingDigest?: string;
+}
+
+let retentionReplacementVerdict: ((tombstone: TreasuryRetentionTombstoneView) => TreasuryRetentionReplacementVerdict) | null = null;
 
 export function registerTreasuryRetentionLineageLookupForAssembly(
-  lookup: ((transactionId: string) => TreasuryRetentionLineageView | undefined) | null,
+  lookup: ((tombstone: TreasuryRetentionTombstoneView) => TreasuryRetentionReplacementVerdict) | null,
 ): void {
-  retentionLineageLookup = lookup;
+  retentionReplacementVerdict = lookup;
 }
 
 // ── 统一 replay horizon（prepare 幂等与 receipt 同一规则） ─────────────────

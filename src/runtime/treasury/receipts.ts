@@ -122,6 +122,15 @@ export interface TreasurySettlementProof {
   readonly authorizationCohortDigest?: string;
   readonly durableIdentityDigest?: string;
   readonly lowlevelSource?: string;
+  /**
+   * 【第十八轮 24.4 v8】tr1_ rearm attempt 的 lineage proof（commit 写入点
+   * 携带；tr1_ receipt 缺 proof → 不释放当前 rearm authority，只作 replay
+   * blocker——旧 proof 不得冒充当前代）。initial attempt 禁止携带。
+   */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
 }
 
 export interface TreasuryReceiptStore {

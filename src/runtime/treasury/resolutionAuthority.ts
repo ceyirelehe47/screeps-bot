@@ -35,7 +35,8 @@ import {
 import {
   createTreasuryAttemptLineageRecord,
   lookupTreasuryAttemptLineageByAttemptId,
-  updateTreasuryAttemptLineageRecord,
+  retireTreasuryLineageCurrentAttempt,
+  completeTreasuryLineageRetirement,
   type TreasuryAttemptLineageIdentity,
 } from "@/runtime/treasury/attemptLineage";
 import {
@@ -123,16 +124,12 @@ function publishImmediateNotExecutedLineage(
   const rearmable = retrySemanticDigest !== null;
   const existing = lookupTreasuryAttemptLineageByAttemptId(fault.transactionId);
   if (existing !== undefined) {
-    const updated = updateTreasuryAttemptLineageRecord(existing.lineageId, (current) => ({
-      ...current,
-      resolutionState: "not_executed" as const,
-      state: "retiring" as const,
-      rearmable: rearmable && current.rearmable,
-      ...(rearmable && current.rearmable ? {} : { nonRearmReason: retrySemanticDigest === null ? "retry semantic facts 不足" : current.nonRearmReason ?? "non-rearmable" }),
-      retirement: { lineagePublished: true, authorityReleased: false, markerCleaned: false },
-      updatedAtTick: Game.time,
-      recordRevision: current.recordRevision + 1,
-    }));
+    // 既有 chain 的 current 退休（单一权威 helper；非 child_active 状态由
+    // 状态机拒绝 → pending，fail closed）。
+    const updated = retireTreasuryLineageCurrentAttempt({
+      lineageId: existing.lineageId,
+      ...(retrySemanticDigest !== null ? { retrySemanticDigest } : {}),
+    });
     return updated.status === "rejected" ? "pending" : "published";
   }
   const created = createTreasuryAttemptLineageRecord({
@@ -156,13 +153,7 @@ function completeImmediateNotExecutedRetirement(transactionId: string): void {
   if (lineage === undefined) return;
   // 调用时机即三段完成（publication + release + marker 清除均已在上文确认）。
   if (lineage.state === "retiring") {
-    void updateTreasuryAttemptLineageRecord(lineage.lineageId, (current) => ({
-      ...current,
-      state: current.rearmable ? "rearm_ready" : "non_rearmable_retired",
-      retirement: { lineagePublished: true, authorityReleased: true, markerCleaned: true },
-      updatedAtTick: Game.time,
-      recordRevision: current.recordRevision + 1,
-    }));
+    void completeTreasuryLineageRetirement(lineage.lineageId);
   }
 }
 

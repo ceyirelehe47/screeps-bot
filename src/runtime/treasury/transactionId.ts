@@ -57,6 +57,75 @@ export function isTreasuryRearmAttemptId(transactionId: string): boolean {
 }
 
 /**
+ * 【第十八轮 14.4】generation-addressable rearm child ID（协议 v2）：
+ * `tr1_<lineageId:16hex>_<generation:6hex>_<checksum:8hex>`——ID 自带
+ * (lineageId, generation)，可 O(1) 解析；checksum 绑定 root transactionId
+ * （对 record 重算即可验证 ID 确属该 chain）。同 lineage+generation 恒同一
+ * ID（每代唯一 child 由 lineage 状态机保证）；不同 lineage/generation 必不
+ * 同。旧 v1 child ID（parent identity 派生，20 字符）不匹配本形态 → 不可
+ * 寻址（legacy 隔离：继续受 tr1_ 门禁，但不得猜测 generation）。
+ */
+const REARM_CHILD_V2_PATTERN = /^tr1_([0-9a-f]{16})_([0-9a-f]{6})_([0-9a-f]{8})$/;
+
+/** v2 child ID 的派生协议标签（协议升级时递增）。 */
+export const TREASURY_REARM_CHILD_ID_PROTOCOL_V2 = "treasury-attempt-rearm@v2";
+
+function toHex6(value: number): string {
+  return (value >>> 0).toString(16).padStart(6, "0");
+}
+
+/** 铸造 generation-addressable rearm child ID（attemptLineage 单一调用点）。 */
+export function formatTreasuryRearmChildTransactionIdV2(input: {
+  readonly lineageId: string;
+  readonly generation: number;
+  readonly rootTransactionId: string;
+}): string {
+  if (
+    typeof input.lineageId !== "string" ||
+    !/^[0-9a-f]{16}$/.test(input.lineageId) ||
+    !Number.isSafeInteger(input.generation) ||
+    input.generation < 1 ||
+    input.generation > 0xffffff
+  ) {
+    throw new Error(`rearm child ID v2 铸造输入非法: ${JSON.stringify(input).slice(0, 96)}`);
+  }
+  const checksum = hashTreasuryCanonicalString(
+    `${TREASURY_REARM_CHILD_ID_PROTOCOL_V2}:${input.lineageId}:${String(input.generation)}:${input.rootTransactionId}`,
+  );
+  const childId = `${REARM_ID_PREFIX}${input.lineageId}_${toHex6(input.generation)}_${checksum.slice(0, 8)}`;
+  if (!isValidTreasuryTransactionId(childId)) {
+    throw new Error(`rearm child ID v2 铸造结果不符合 Treasury transactionId 边界: ${childId}`);
+  }
+  return childId;
+}
+
+/**
+ * 解析 v2 rearm child ID（只认完整 v2 形态；v1/伪造 ID 返回 null——不猜测）。
+ * 不验证 checksum（需要 root 与 lineage record 对照，由调用侧权威完成）。
+ */
+export function parseTreasuryRearmChildTransactionIdV2(
+  transactionId: string,
+): { readonly lineageId: string; readonly generation: number } | null {
+  if (typeof transactionId !== "string") return null;
+  const match = REARM_CHILD_V2_PATTERN.exec(transactionId);
+  if (match === null) return null;
+  const generation = Number.parseInt(match[2], 16);
+  if (!Number.isSafeInteger(generation) || generation < 1) return null;
+  return { lineageId: match[1], generation };
+}
+
+/** v2 child ID 的 checksum 成分重算（record 对照验证共用）。 */
+export function treasuryRearmChildIdChecksumOf(input: {
+  readonly lineageId: string;
+  readonly generation: number;
+  readonly rootTransactionId: string;
+}): string {
+  return hashTreasuryCanonicalString(
+    `${TREASURY_REARM_CHILD_ID_PROTOCOL_V2}:${input.lineageId}:${String(input.generation)}:${input.rootTransactionId}`,
+  ).slice(0, 8);
+}
+
+/**
  * 单个 canonical 成分编码（类型标签 + 长度前缀 / 数字直写）：
  * - 字符串 `s:<len>:<原文>`——任意 Unicode/空串/空格/冒号合法，len 为
  *   code unit 数，消费方按 len 精确切分，编码对拼接可逆（无元组边界歧义）；

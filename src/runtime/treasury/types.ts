@@ -301,7 +301,16 @@ export type TreasuryPreparationResult =
  * already_settled。仅存 handle 非法/过期/终态/故障类拒绝。
  */
 export type TreasuryPreparedCommitResult =
-  | { readonly status: "committed"; readonly transactionId: string; readonly postings: number; readonly tick: number }
+  | {
+      readonly status: "committed";
+      readonly transactionId: string;
+      readonly postings: number;
+      readonly tick: number;
+      /** 【第十八轮 24.3】receipt/heap 已 committed 但 lineage chain_committed
+       *  终态写入失败——receipt 是权威，intent 保留为 commit-pending proof，
+       *  beginTick 按 matching receipt 补完成（不静默忽略）。 */
+      readonly lineageFinalizationPending?: boolean;
+    }
   | { readonly status: "already_settled"; readonly transactionId: string; readonly firstRecordedAtTick: number }
   | { readonly status: "rejected"; readonly reason: TreasuryRejectionReason; readonly detail?: string };
 
@@ -356,6 +365,9 @@ export type TreasurySafeExecuteResult<TAction extends { ok: boolean }> =
       readonly handle: TreasuryPreparedHandle;
       readonly actionResult: TAction;
       readonly committedAtTick: number;
+      /** 【第十八轮 24.3】commit 已完成但 lineage 终态补完成 pending（intent
+       *  保留为 durable proof；beginTick 按 matching receipt 补完成）。 */
+      readonly lineageFinalizationPending?: boolean;
     }
   | {
       readonly status: "executed_aborted";
