@@ -464,8 +464,15 @@ describe("Treasury write-admission 架构边界", () => {
       if (/deriveTreasuryRearmChildTransactionId/.test(fileSource)) {
         violations.push(`${relative} 引用 deriveTreasuryRearmChildTransactionId（test-only——production 的 child 派生权威在 attemptLineage.deriveTreasuryLineageNextChildTransactionId，只经 facade issue 通道）`);
       }
-      // tr1_ 命名空间判定单一权威在 transactionId.ts；facade 是唯一门禁消费方。
-      if (/isTreasuryRearmAttemptId/.test(fileSource) && relative !== "runtime/treasury/transactionId.ts" && relative !== "runtime/treasury/facade.ts") {
+      // tr1_ 命名空间判定单一权威在 transactionId.ts；facade 是门禁消费方，
+      // faultResolution 是 lineage 终态收敛消费方（第十八轮 committed/retired
+      // child 的 chain 状态推进——协议栈内部窄边界）。
+      if (
+        /isTreasuryRearmAttemptId/.test(fileSource) &&
+        relative !== "runtime/treasury/transactionId.ts" &&
+        relative !== "runtime/treasury/facade.ts" &&
+        relative !== "runtime/treasury/faultResolution.ts"
+      ) {
         violations.push(`${relative} 引用 isTreasuryRearmAttemptId（tr1_ 判定单一权威在 transactionId.ts，门禁在 facade）`);
       }
     }

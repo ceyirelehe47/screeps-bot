@@ -186,8 +186,10 @@ import {
 import {
   writeTreasuryResolutionTombstone,
   ensureTreasuryResolutionSlotAvailable,
+  markTreasuryPendingReleaseCompleted,
 } from "@/runtime/treasury/resolutionStore";
 import { clearTreasuryWriteFaultMarkerForResolution, readTreasuryWriteFault, classAwareMarkerFieldsOfFacts } from "@/runtime/treasury/writeFault";
+import { classAwareIdentityOfAttempt } from "@/runtime/treasury/markerAttemptIdentity";
 import {
   isTreasuryRearmAttemptId,
   isValidTreasuryTransactionId,
@@ -208,6 +210,7 @@ import {
   rollbackTreasuryLineageToRearmReady,
   closeTreasuryLineageAsChainCommitted,
   retireTreasuryLineageCurrentAttempt,
+  completeTreasuryLineageRetirement,
   updateTreasuryAttemptLineageRecord,
   type TreasuryAttemptLineageIdentity,
 } from "@/runtime/treasury/attemptLineage";
@@ -3347,7 +3350,93 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           ...(aborted.status === "rejected" && aborted.detail !== undefined ? { detail: aborted.detail } : {}),
         };
       }
-      // 确认 aborted：intent 关闭（slot 回收）。
+      // 确认 aborted：intent 关闭（slot 回收）。【第十八轮 24.3】tr1_ child
+      // 的 non-OK + abort 确认 = 当前 generation 的确定 not-executed——同步
+      // 完成当前代 retirement（publication → final tombstone（tr1_ proof）→
+      // 释放 intent → marker 终态 → rearm-ready，同一 lineage record 不新增
+      // slot，下一次 capability 以当前 child 为 parent 生成下一代）。任一步
+      // 失败：intent 事实保留（quarantine→resolver 收敛），lineage 不停留在
+      // 无恢复路径的状态，返回 retirement=pending_publication。
+      if (record.lineageBindingDigest !== undefined && isTreasuryRearmAttemptId(record.canonical.transactionId)) {
+        const childLineage = lookupTreasuryAttemptLineageByAttemptId(record.canonical.transactionId);
+        if (childLineage !== undefined && childLineage.state === "child_active") {
+          const retirementPublication = retireTreasuryLineageCurrentAttempt({ lineageId: childLineage.lineageId });
+          if (retirementPublication.status === "rejected") {
+            return {
+              status: "executed_aborted",
+              handle: prepared.handle,
+              actionResult,
+              retirement: "pending_publication",
+              detail: `child not-executed retirement publication 失败（intent 保留，quarantine→resolver 收敛）: ${retirementPublication.detail}`,
+            };
+          }
+          const retiredRecord = lookupTreasuryAttemptLineageByAttemptId(record.canonical.transactionId);
+          const childTombstone = writeTreasuryResolutionTombstone({
+            transactionId: record.canonical.transactionId,
+            digest: record.digest,
+            resolution: "not-executed",
+            stage: "final",
+            proofLevel: retiredRecord?.authorityClass ?? (record.contractDigest === undefined ? "lowlevel" : "identity-bound"),
+            actionTick: Game.time,
+            observationTick: Game.time,
+            resolvedAtTick: Game.time,
+            source: "direct-abort",
+            ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+            ...(record.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.authorizationCohortDigest } : {}),
+            ...(record.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.durableIdentityDigest } : {}),
+            ...(retiredRecord?.authorityClass === "lowlevel" && retiredRecord.lowlevelSource !== undefined
+              ? { lowlevelSource: retiredRecord.lowlevelSource }
+              : {}),
+            ...(retiredRecord !== undefined && retiredRecord.currentTransactionId === record.canonical.transactionId
+              ? {
+                  lineageId: retiredRecord.lineageId,
+                  lineageGeneration: retiredRecord.generation,
+                  ...(retiredRecord.currentParentTransactionId !== undefined ? { parentTransactionId: retiredRecord.currentParentTransactionId } : {}),
+                  lineageBindingDigest: retiredRecord.bindingDigest!,
+                }
+              : {}),
+          });
+          if (childTombstone.status === "rejected") {
+            return {
+              status: "executed_aborted",
+              handle: prepared.handle,
+              actionResult,
+              retirement: "pending_publication",
+              detail: `child not-executed tombstone 写入失败（intent 保留，后续 tick resolver 收敛）: ${childTombstone.detail}`,
+            };
+          }
+          releaseTreasuryIntentEntry(record.canonical.transactionId);
+          // marker class-aware 清除（non-OK + abort 确认正常无 marker——检查
+          // 结果决定三段完成）。
+          const markerCleared = clearTreasuryWriteFaultMarkerForResolution(
+            classAwareIdentityOfAttempt({
+              transactionId: record.canonical.transactionId,
+              digest: record.digest,
+              authorityLevel: retiredRecord?.authorityClass === "lowlevel" ? "lowlevel" : "modern",
+              ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+              ...(record.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.authorizationCohortDigest } : {}),
+              ...(record.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.durableIdentityDigest } : {}),
+              ...(retiredRecord?.authorityClass === "lowlevel" && retiredRecord.lowlevelSource !== undefined
+                ? { lowlevelSource: retiredRecord.lowlevelSource }
+                : {}),
+              ...(retiredRecord?.bindingDigest !== undefined ? { lineageBindingDigest: retiredRecord.bindingDigest } : {}),
+              ...(retiredRecord !== undefined ? { attemptGeneration: retiredRecord.generation } : {}),
+            }),
+          );
+          const markerAbsent =
+            readTreasuryWriteFault() === undefined || readTreasuryWriteFault()?.transactionId !== record.canonical.transactionId;
+          if (markerCleared || markerAbsent) {
+            markTreasuryPendingReleaseCompleted(record.canonical.transactionId);
+            void completeTreasuryLineageRetirement(childLineage.lineageId);
+          }
+          return {
+            status: "executed_aborted",
+            handle: prepared.handle,
+            actionResult,
+            retirement: markerCleared || markerAbsent ? "complete_rearm_ready" : "pending_cleanup",
+          };
+        }
+      }
       releaseTreasuryIntentEntry(record.canonical.transactionId);
       return {
         status: "executed_aborted",

@@ -72,6 +72,7 @@ import {
   writeTreasuryResolutionTombstone,
   type TreasuryResolutionProofLevel,
 } from "@/runtime/treasury/resolutionStore";
+import { isTreasuryRearmAttemptId } from "@/runtime/treasury/transactionId";
 import {
   createTreasuryAttemptLineageRecord,
   ensureTreasuryLineageSlotAvailable,
@@ -79,6 +80,7 @@ import {
   peekTreasuryAttemptLineageHealth,
   retireTreasuryLineageCurrentAttempt,
   completeTreasuryLineageRetirement,
+  closeTreasuryLineageAsChainCommitted,
   type TreasuryAttemptLineageIdentity,
   type TreasuryLineageAuthorityClass,
 } from "@/runtime/treasury/attemptLineage";
@@ -785,6 +787,15 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     };
   }
   recordTreasuryResolutionEvent("committed");
+  // 【第十八轮 24.3】resolution-as-committed 后 tr1_ child 的 lineage 最终
+  // chain-committed（receipt 已是 committed 权威；更新失败 → lineage 保持
+  // child_active，beginTick 按 matching receipt 补完成）。
+  if (isTreasuryRearmAttemptId(authority.transactionId)) {
+    const chainLineage = lookupTreasuryAttemptLineageByAttemptId(authority.transactionId);
+    if (chainLineage !== undefined && chainLineage.state === "child_active" && chainLineage.currentTransactionId === authority.transactionId) {
+      void closeTreasuryLineageAsChainCommitted(chainLineage.lineageId);
+    }
+  }
   return {
     status: "resolved",
     resolution: "committed",

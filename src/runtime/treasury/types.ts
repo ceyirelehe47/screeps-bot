@@ -373,6 +373,11 @@ export type TreasurySafeExecuteResult<TAction extends { ok: boolean }> =
       readonly status: "executed_aborted";
       readonly handle: TreasuryPreparedHandle;
       readonly actionResult: TAction;
+      /** 【第十八轮 24.3】tr1_ child 的当前代 not-executed retirement 状态
+       *  （complete_rearm_ready / pending_publication / pending_cleanup；
+       *  initial attempt 不携带）。 */
+      readonly retirement?: "complete_rearm_ready" | "pending_publication" | "pending_cleanup";
+      readonly detail?: string;
     }
   | {
       /** Game 非 OK 且 abort 未确认（write_admission_locked / handle 故障等）。
