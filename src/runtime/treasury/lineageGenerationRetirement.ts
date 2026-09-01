@@ -40,13 +40,21 @@ import {
 import { parseTreasuryRearmChildTransactionIdV2, isTreasuryRearmAttemptId } from "@/runtime/treasury/transactionId";
 import { computeTreasuryLineageBindingDigest } from "@/runtime/treasury/lineageBinding";
 import { registerTreasuryRetentionLineageLookupForAssembly } from "@/runtime/treasury/resolutionStore";
-import { lookupTreasuryRetirementSummaryByLineageId, lookupTreasuryRetirementSummaryByRoot, peekTreasuryRetirementSummaryHealth, type TreasuryLineageRetirementSummary } from "@/runtime/treasury/lineageRetirementSummary";
+import { lookupTreasuryRetirementSummaryByLineageId, lookupTreasuryRetirementSummaryByRoot, peekTreasuryRetirementSummaryHealth, TREASURY_RETIREMENT_SUMMARY_VERSION, type TreasuryLineageRetirementSummary } from "@/runtime/treasury/lineageRetirementSummary";
 import {
   peekTreasuryGenerationRetirementHealth,
   readTreasuryGenerationRetirementProof,
   computeTreasuryGenerationRootIdentityDigest,
   type TreasuryGenerationRetirementProof,
 } from "@/runtime/treasury/generationRetirementAuthority";
+import {
+  compareTreasuryGenerationProofWithTombstone,
+  verifyTreasuryGenerationRetirementRelation,
+} from "@/runtime/treasury/generationRetirementRelation";
+import {
+  expectedTreasuryCurrentLineageExactIdentity,
+  describeTreasuryCurrentLineageRequiredness,
+} from "@/runtime/treasury/currentLineageSettlementVerifier";
 
 export type TreasuryTombstoneReplacementVerdict =
   | { readonly verdict: "replacement_match" }
@@ -97,50 +105,12 @@ function bindingOfGeneration(record: TreasuryAttemptLineageRecord, generation: n
 }
 
 /**
- * exact retirement proof 与 tombstone 的完整比较（历史代/终代共用）：
- * transactionId / parent / binding 派生 / proof class / digest 及
- * contract/cohort/durable/lowlevel identity 维度（exact proof identity 与
- * tombstone 不同 → conflict）。
- */
-function compareGenerationProofWithTombstone(
-  proof: Readonly<TreasuryGenerationRetirementProof>,
-  tombstone: TreasuryTombstoneReplacementInput,
-  expectedParent: string,
-  expectedBinding: string | undefined,
-): string | null {
-  if (proof.transactionId !== tombstone.transactionId) {
-    return "exact retirement proof 的 transactionId 与 tombstone 不一致";
-  }
-  if (proof.parentTransactionId !== undefined || proof.bindingDigest !== undefined) {
-    if (proof.parentTransactionId !== expectedParent) {
-      return "exact retirement proof 的 parentTransactionId 与上一代确定性派生不一致";
-    }
-    if (expectedBinding === undefined || proof.bindingDigest !== expectedBinding) {
-      return "exact retirement proof 的 bindingDigest 与权威重算不一致";
-    }
-  }
-  if (proof.authorityClass !== tombstone.proofLevel) {
-    return `exact retirement proof class ${String(proof.authorityClass)} 与 tombstone proof class ${String(tombstone.proofLevel)} 不匹配`;
-  }
-  if (proof.digest !== tombstone.digest) {
-    return "exact retirement proof 的 digest 与 tombstone 不一致（完整 attempt identity 冲突）";
-  }
-  if (
-    (proof.contractDigest ?? undefined) !== (tombstone.contractDigest ?? undefined) ||
-    (proof.authorizationCohortDigest ?? undefined) !== (tombstone.authorizationCohortDigest ?? undefined) ||
-    (proof.durableIdentityDigest ?? undefined) !== (tombstone.durableIdentityDigest ?? undefined) ||
-    (proof.lowlevelSource ?? undefined) !== (tombstone.lowlevelSource ?? undefined)
-  ) {
-    return "exact retirement proof 的 contract/cohort/durable/lowlevel identity 维度与 tombstone 不一致";
-  }
-  return null;
-}
-
-/**
- * 【第二十轮 12.1】root tombstone 的 summary 精确身份验证（不再仅凭
- * rootTransactionId 命中）：rootIdentityDigest 五元重算（tombstone 的
- * digest/contract/cohort/durable/lowlevelSource）+ proofLevel vs
- * summary.authorityClass + resolution 语义 + generation 0 的 exact proof。
+ * 【第二十一轮 12.1】root tombstone 的 summary 精确身份验证：v3 summary 的
+ * rootExact（canonical root exact identity）完整比较——digest/contract/
+ * cohort/durable/lowlevel 五元 + proofLevel vs rootExact.proofClass +
+ * canonical rootIdentityDigest 重算 + resolution 语义 + generation 0 的
+ * exact proof。旧 v1/v2 summary（无 rootExact）→ replacement_missing/pin
+ * （不猜测——root 永久重放门禁不受影响）。
  */
 function verdictOfRootSummary(
   summary: Readonly<TreasuryLineageRetirementSummary>,
@@ -149,30 +119,39 @@ function verdictOfRootSummary(
   if (summary.authorityClass === undefined) {
     return { verdict: "replacement_missing", detail: "v1 迁移 summary 缺 authorityClass（proof class 不可证明——pin，不猜测）" };
   }
-  if (tombstone.proofLevel !== summary.authorityClass) {
+  if (summary.schemaVersion < TREASURY_RETIREMENT_SUMMARY_VERSION || summary.rootExact === undefined) {
     return {
-      verdict: "replacement_conflict",
-      detail: `root tombstone proof class ${String(tombstone.proofLevel)} 与 summary authority class ${String(summary.authorityClass)} 不匹配`,
+      verdict: "replacement_missing",
+      detail: "旧 terminal summary 缺少 root exact identity（replay-only——root 重放门禁保留，root replacement 不可证明，不猜测）",
     };
   }
-  // rootIdentityDigest 重算与 summary 同口径。rootIdentity 的五元维度中
-  // lowlevelSource 是历史可选形态（contract 链不含；低层链的 publication
-  // rootIdentity 可能携带 provenance）——两种口径任一匹配即通过（tombstone
-  // 的其余维度仍全部比较，不引入伪造空间）。
-  const identityBase = {
-    digest: tombstone.digest,
-    ...(tombstone.contractDigest !== undefined ? { contractDigest: tombstone.contractDigest } : {}),
-    ...(tombstone.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: tombstone.authorizationCohortDigest } : {}),
-    ...(tombstone.durableIdentityDigest !== undefined ? { durableIdentityDigest: tombstone.durableIdentityDigest } : {}),
-  };
-  const recomputedRootIdentityDigest = computeTreasuryGenerationRootIdentityDigest(identityBase);
-  const recomputedRootIdentityDigestWithProvenance = tombstone.lowlevelSource !== undefined
-    ? computeTreasuryGenerationRootIdentityDigest({ ...identityBase, lowlevelSource: tombstone.lowlevelSource })
-    : null;
-  if (recomputedRootIdentityDigest !== summary.rootIdentityDigest && recomputedRootIdentityDigestWithProvenance !== summary.rootIdentityDigest) {
+  if (tombstone.proofLevel !== summary.rootExact.proofClass) {
     return {
       verdict: "replacement_conflict",
-      detail: "root tombstone 的五元 identity 重算与 summary.rootIdentityDigest 不一致（同 root ID 不同 identity——conflict/pin，不删除证据）",
+      detail: `root tombstone proof class ${String(tombstone.proofLevel)} 与 summary root exact proof class ${String(summary.rootExact.proofClass)} 不匹配`,
+    };
+  }
+  // 【第二十一轮 7.1】canonical 单一口径：rootIdentityDigest 由 rootExact 五元
+  // 重算（不再保留双口径任一匹配语义）。
+  const canonicalRootDigest = computeTreasuryGenerationRootIdentityDigest(summary.rootExact);
+  if (canonicalRootDigest !== summary.rootIdentityDigest) {
+    return {
+      verdict: "replacement_conflict",
+      detail: "summary.rootIdentityDigest 与 rootExact canonical 重算不一致（单一口径被破坏——conflict/pin）",
+    };
+  }
+  // rootExact 完整比较（tombstone 五元 vs 持久 rootExact——同 root ID 不同
+  // identity 即 conflict）。
+  if (
+    tombstone.digest !== summary.rootExact.digest ||
+    (tombstone.contractDigest ?? undefined) !== (summary.rootExact.contractDigest ?? undefined) ||
+    (tombstone.authorizationCohortDigest ?? undefined) !== (summary.rootExact.authorizationCohortDigest ?? undefined) ||
+    (tombstone.durableIdentityDigest ?? undefined) !== (summary.rootExact.durableIdentityDigest ?? undefined) ||
+    (tombstone.lowlevelSource ?? undefined) !== (summary.rootExact.lowlevelSource ?? undefined)
+  ) {
+    return {
+      verdict: "replacement_conflict",
+      detail: "root tombstone 的五元 identity 与 summary 持久 rootExact 不一致（同 root ID 不同 identity——conflict/pin，不删除证据）",
     };
   }
   // root 代（generation 0）的 exact retirement proof：chain 经完整 retirement
@@ -188,19 +167,22 @@ function verdictOfRootSummary(
       detail: "generation 0（root 代）无 exact retirement proof（Round 18/19 旧数据——pin，不自动补现代 proof）",
     };
   }
-  const proofError = compareGenerationProofWithTombstone(rootProof, tombstone, summary.rootTransactionId, undefined);
-  if (proofError !== null) {
-    return { verdict: "replacement_conflict", detail: proofError };
+  const proofCompare = compareTreasuryGenerationProofWithTombstone(rootProof, tombstone, summary.rootTransactionId, undefined);
+  if (proofCompare !== null) {
+    return { verdict: proofCompare.kind === "missing" ? "replacement_missing" : "replacement_conflict", detail: proofCompare.detail };
   }
   return { verdict: "replacement_match" };
 }
 
 /**
- * 【第十九轮 E.2 / 第二十轮 12.4 重写】压缩后历史 generation 的 verdict：
- * summary 只提供定位与 finalGeneration 边界——membership 与 identity 由
- * exact retirement proof 证明（finalGeneration 只是边界，不是单独的
- * membership/identity proof）。ID 派生 + checksum 绑定 root、binding 重算、
- * proof class、final 代与 terminalState 相容仍由 summary 事实承载。
+ * 【第十九轮 E.2 / 第二十轮 12.4 / 第二十一轮 12.3 重写】压缩后历史
+ * generation 的 verdict：summary 只提供定位与 finalGeneration 边界——
+ * membership 与 identity 由 exact retirement proof 证明（finalGeneration 只是
+ * 边界，不是单独的 membership/identity proof）。ID 派生 + checksum 绑定
+ * root、binding 重算、tombstone 持久 parent 显式比较、proof class、final 代
+ * 与 terminalState 相容由 summary 事实与 compareTreasuryGenerationProofWithTombstone
+ * （单一 relation 实现）承载。旧 v1/v2 summary（无 exact identity）不得驱逐
+ * historical child（14.2——pin）。
  */
 function verdictOfSummaryProof(
   summary: Readonly<TreasuryLineageRetirementSummary>,
@@ -209,6 +191,15 @@ function verdictOfSummaryProof(
 ): TreasuryTombstoneReplacementVerdict {
   if (generation > summary.finalGeneration) {
     return { verdict: "replacement_conflict", detail: `tombstone generation ${String(generation)} 超过 summary 已闭合的 finalGeneration ${String(summary.finalGeneration)}（未来代不可证明）` };
+  }
+  if (summary.authorityClass === undefined) {
+    return { verdict: "replacement_missing", detail: "v1 迁移 summary 缺 authorityClass（proof class 不可证明——pin，不猜测）" };
+  }
+  if (summary.schemaVersion < TREASURY_RETIREMENT_SUMMARY_VERSION) {
+    return {
+      verdict: "replacement_missing",
+      detail: "旧 terminal summary（replay-only）不得驱逐 historical child tombstone（exact terminal authority 不可证明——pin）",
+    };
   }
   const expectedId = generation <= 0
     ? summary.rootTransactionId
@@ -228,16 +219,14 @@ function verdictOfSummaryProof(
   if (tombstone.lineageBindingDigest !== undefined && tombstone.lineageBindingDigest !== expectedBinding) {
     return { verdict: "replacement_conflict", detail: "tombstone lineage binding 与 summary (lineageId, generation, parent, child) 重算不一致" };
   }
-  if (summary.authorityClass === undefined) {
-    return { verdict: "replacement_missing", detail: "v1 迁移 summary 缺 authorityClass（proof class 不可证明——pin，不猜测）" };
-  }
   if (tombstone.proofLevel !== summary.authorityClass) {
     return { verdict: "replacement_conflict", detail: `tombstone proof class ${String(tombstone.proofLevel)} 与 summary authority class ${String(summary.authorityClass)} 不匹配` };
   }
   if (generation === summary.finalGeneration && summary.terminalState !== "non_rearmable_retired") {
     return { verdict: "replacement_conflict", detail: `finalGeneration ${String(generation)} 是 committed 代（${summary.terminalState}）——committed 代不存在 not-executed 结局（generation 混用）` };
   }
-  // 【第二十轮 12.4】membership / identity 由 exact retirement proof 证明。
+  // 【第二十轮 12.4 / 第二十一轮 12.3】membership / identity 由 exact
+  // retirement proof 证明（tombstone 持久 parent 由 compare 显式比较）。
   const proofHealth = peekTreasuryGenerationRetirementHealth();
   if (!proofHealth.healthy) {
     return { verdict: "store_unhealthy", detail: proofHealth.detail ?? "exact generation retirement store 损坏（retention fail closed）" };
@@ -249,9 +238,14 @@ function verdictOfSummaryProof(
       detail: `summary finalGeneration=${String(summary.finalGeneration)} 存在但历史 generation ${String(generation)} 无 exact retirement authority（finalGeneration 只是边界不是 membership proof——pin）`,
     };
   }
-  const proofError = compareGenerationProofWithTombstone(generationProof, { ...tombstone, resolution: "not-executed", stage: "final", lineageBindingDigest: tombstone.lineageBindingDigest ?? expectedBinding }, expectedParent, expectedBinding);
-  if (proofError !== null) {
-    return { verdict: "replacement_conflict", detail: proofError };
+  const proofCompare = compareTreasuryGenerationProofWithTombstone(
+    generationProof,
+    { ...tombstone, lineageBindingDigest: tombstone.lineageBindingDigest ?? expectedBinding },
+    expectedParent,
+    expectedBinding,
+  );
+  if (proofCompare !== null) {
+    return { verdict: proofCompare.kind === "missing" ? "replacement_missing" : "replacement_conflict", detail: proofCompare.detail };
   }
   return { verdict: "replacement_match" };
 }
@@ -382,12 +376,53 @@ export function treasuryTombstoneReplacementVerdict(
     if (!REPLACEMENT_ALLOWED_STATES.has(record.state)) {
       return { verdict: "replacement_pending", detail: `lineage 状态 ${String(record.state)} 未接管永久 retirement 门禁` };
     }
+    // 【第二十一轮 9.1】当前代（含 root 代 generation 0）的 replacement 必须
+    // 由 matching exact retirement proof 证明——三阶段布尔值不单独充当
+    // replacement（record 已进入 rearm_ready 也一样：proof 缺失/冲突/损坏 →
+    // pin，不删除证据）。
+    const proofHealth = peekTreasuryGenerationRetirementHealth();
+    if (!proofHealth.healthy) {
+      return { verdict: "store_unhealthy", detail: proofHealth.detail ?? "exact generation retirement store 损坏（retention fail closed）" };
+    }
+    const currentGenerationProof = readTreasuryGenerationRetirementProof(record.lineageId, generation);
+    if (currentGenerationProof === undefined) {
+      return {
+        verdict: "replacement_missing",
+        detail: `当前 generation ${String(generation)} 无 matching exact retirement proof（三阶段布尔不构成 replacement——pin，不删除证据）`,
+      };
+    }
+    const currentRequirednessError = describeTreasuryCurrentLineageRequiredness(record);
+    const currentExact = currentRequirednessError === null ? expectedTreasuryCurrentLineageExactIdentity(record) : null;
+    if (currentExact === null) {
+      return {
+        verdict: "replacement_missing",
+        detail: `record current 身份不满足 requiredness（${currentRequirednessError ?? "构造失败"}）——当前代 replacement 不可证明（pin）`,
+      };
+    }
+    const retirementRelation = verifyTreasuryGenerationRetirementRelation({
+      exactProof: currentGenerationProof,
+      expectedCurrent: {
+        ...currentExact,
+        rootTransactionId: record.rootTransactionId,
+        rootIdentityDigest: computeTreasuryGenerationRootIdentityDigest(record.rootIdentity),
+        authorityLineageId: record.lineageId,
+        authorityGeneration: record.generation,
+      },
+      tombstone,
+    });
+    if (retirementRelation.verdict !== "match") {
+      return {
+        verdict: retirementRelation.verdict === "conflict" ? "replacement_conflict" : "replacement_missing",
+        detail: `当前代 exact retirement proof 三方 relation 未通过（${retirementRelation.detail}）`,
+      };
+    }
     return { verdict: "replacement_match" };
   }
-  // ──【第二十轮 12.3】历史代（generation < record.generation）：删除
-  //    "状态机曾推进即 match" 的推断——必须命中 exact generation retirement
-  //    authority 并完整比较（ID/parent/binding 派生、proof class、digest 及
-  //    contract/cohort/durable/lowlevel identity 维度）。
+  // ──【第二十轮 12.3 / 第二十一轮 12.2】历史代（generation < record.generation）：
+  //    删除 "状态机曾推进即 match" 的推断——必须命中 exact generation
+  //    retirement authority 并完整比较（ID/parent/binding 派生、proof class、
+  //    digest 及 contract/cohort/durable/lowlevel identity 维度、tombstone
+  //    持久 parent 字段——单一 relation 实现）。
   const expectedParent = expectedTreasuryLineageAttemptId(record, generation - 1);
   const proofHealth = peekTreasuryGenerationRetirementHealth();
   if (!proofHealth.healthy) {
@@ -400,9 +435,9 @@ export function treasuryTombstoneReplacementVerdict(
       detail: `历史 generation ${String(generation)} 无 exact retirement proof（generation < currentGeneration 不是证明——状态机曾推进不构成可验证的持久 attempt proof；pin，不猜测）`,
     };
   }
-  const proofError = compareGenerationProofWithTombstone(generationProof, tombstone, expectedParent, expectedBinding);
-  if (proofError !== null) {
-    return { verdict: "replacement_conflict", detail: proofError };
+  const proofCompare = compareTreasuryGenerationProofWithTombstone(generationProof, tombstone, expectedParent, expectedBinding);
+  if (proofCompare !== null) {
+    return { verdict: proofCompare.kind === "missing" ? "replacement_missing" : "replacement_conflict", detail: proofCompare.detail };
   }
   return { verdict: "replacement_match" };
 }
