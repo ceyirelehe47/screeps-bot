@@ -64,12 +64,20 @@
 import {
   TREASURY_TRANSACTION_ID_MAX_LENGTH,
   isValidTreasuryTransactionId,
+  isTreasuryRearmAttemptId,
 } from "@/runtime/treasury/transactionId";
 import type { TreasuryWriteFaultMarker } from "@/runtime/treasury/writeFault";
 import {
   treasuryAttemptIdentityRelation,
   type TreasuryAttemptIdentity,
 } from "@/runtime/treasury/identityProof";
+import {
+  treasuryExactAttemptIdentityOfIdentityInput,
+  treasuryExactAttemptIdentityOfReceiptProof,
+  treasuryExactAttemptIdentityRelation,
+  type TreasuryExactIdentityFactsInput,
+} from "@/runtime/treasury/exactAttemptIdentity";
+import { validateTreasurySemanticLineage, describeTreasurySemanticLineageVerdict } from "@/runtime/treasury/semanticLineageValidation";
 import { resetTreasuryQuarantineRuntimeForTest } from "@/runtime/treasury/quarantine";
 import { resetTreasuryResolutionEventsForTest } from "@/runtime/treasury/resolutionEvents";
 import { resetTreasuryIntentRuntimeForTest } from "@/runtime/treasury/intents";
@@ -318,6 +326,67 @@ function receiptProofLevelOfIdentity(identity: {
 }
 
 /**
+ * 【第二十轮 9.3/9.4/9.5】tr1_ receipt 的 semantic lineage 写入门禁（commit
+ * 写入与 refresh 共用）：完整 lineage proof + exact identity（digest+durable）
+ * + semantic validation = match 是写入/刷新的前提；validator 未装配（authority
+ * source 未注册）同样 fail closed——绝不乐观写入。返回 null = 通过；
+ * conflict=true 时调用方按 identity_conflict 归类（binding/parent/generation
+ * 与权威重算冲突），否则 insufficient_proof。
+ */
+function tr1ReceiptSemanticGate(
+  transactionId: string,
+  identity: TreasuryExactIdentityFactsInput | undefined,
+  identityLineageComplete: boolean,
+  requireCommitEligibleGeneration: boolean,
+): { readonly detail: string; readonly conflict: boolean } | null {
+  if (!isTreasuryRearmAttemptId(transactionId)) return null;
+  if (!identityLineageComplete || identity?.digest === undefined || identity.durableIdentityDigest === undefined) {
+    receiptEvents.receiptProofLevelRejections += 1;
+    return {
+      conflict: false,
+      detail: "tr1_ rearm attempt 的 receipt 写入/刷新必须携带完整 lineage proof 与 exact identity（digest+durableIdentityDigest）——缺失即零写入（不写 legacy、不猜测 generation）",
+    };
+  }
+  const semantic = validateTreasurySemanticLineage({
+    transactionId,
+    proof: {
+      lineageId: identity.lineageId!,
+      lineageGeneration: identity.lineageGeneration!,
+      parentTransactionId: identity.parentTransactionId!,
+      lineageBindingDigest: identity.lineageBindingDigest!,
+    },
+    identity,
+  });
+  if (semantic.verdict !== "match") {
+    receiptEvents.receiptProofLevelRejections += 1;
+    return {
+      conflict: semantic.verdict === "conflict",
+      detail: `tr1_ receipt 的 semantic lineage validation 未通过（${describeTreasurySemanticLineageVerdict(semantic)}）——零写入（fail closed）`,
+    };
+  }
+  if (requireCommitEligibleGeneration) {
+    // 【9.3】active lineage/handoff 状态允许 commit：在途 child（pending
+    // handoff）与历史代不得写 committed receipt；terminal summary 必须是
+    // chain_committed（non-rearmable 终态不存在 committed receipt）。
+    if (semantic.generationRole === "pending_handoff" || semantic.generationRole === "historical" || semantic.generationRole === "terminal_historical") {
+      receiptEvents.receiptProofLevelRejections += 1;
+      return {
+        conflict: false,
+        detail: `tr1_ receipt commit 的 generation 角色 ${semantic.generationRole} 不允许（在途 child / 历史代——active lineage/handoff 状态不允许 commit）`,
+      };
+    }
+    if (semantic.authoritySource === "terminal" && semantic.summary?.terminalState !== "chain_committed") {
+      receiptEvents.receiptProofLevelRejections += 1;
+      return {
+        conflict: false,
+        detail: "terminal summary 是 non-rearmable 终态（not-executed chain——不存在 committed receipt 语义）",
+      };
+    }
+  }
+  return null;
+}
+
+/**
  * v4 value 形状校验（第十二轮 schema，无 level 字段）：对象含合法
  * settledAtTick；digest/durableIdentityDigest 可选（16 hex）；出现 v4 之后
  * 引入的字段（level/contractDigest/authorizationCohortDigest）视为损坏。
@@ -457,7 +526,7 @@ function lookupNormalizedReceipt(
   // blocker（legacy_committed 语义——不得释放当前 rearm authority）。
   if (
     typeof transactionId === "string" &&
-    transactionId.startsWith("tr1_") &&
+    isTreasuryRearmAttemptId(transactionId) &&
     (proof.lineageId === undefined || proof.lineageGeneration === undefined || proof.parentTransactionId === undefined || proof.lineageBindingDigest === undefined)
   ) {
     return { status: "legacy_committed", settledAtTick: proof.settledAtTick };
@@ -669,7 +738,7 @@ export function refreshSettledReceiptForResolution(
   const identityLineageComplete =
     identity?.lineageId !== undefined && identity?.lineageGeneration !== undefined &&
     identity?.parentTransactionId !== undefined && identity?.lineageBindingDigest !== undefined;
-  if (transactionId.startsWith("tr1_") && !identityLineageComplete) {
+  if (isTreasuryRearmAttemptId(transactionId) && !identityLineageComplete) {
     receiptEvents.receiptIdentityInsufficient += 1;
     return {
       status: "blocked",
@@ -677,13 +746,26 @@ export function refreshSettledReceiptForResolution(
       detail: `tr1_ rearm attempt 的 receipt 刷新必须携带完整 lineage proof（lineageId/generation/parent/binding）——缺失即拒绝（不写 legacy、不猜测 generation）`,
     };
   }
-  if (!transactionId.startsWith("tr1_") && identityLineageComplete) {
+  if (!isTreasuryRearmAttemptId(transactionId) && identityLineageComplete) {
     receiptEvents.receiptIdentityConflicts += 1;
     return {
       status: "blocked",
       reason: "identity_conflict",
       detail: `非 rearm attempt（initial）的 receipt 刷新不得携带 lineage proof（initial 不能被 lineage proof 证明）`,
     };
+  }
+  // 【第二十轮 9.4】refresh 的 semantic lineage 门禁：四字段完整但语义无效
+  //（ID 派生/parent/binding/authority 状态冲突——含 validator 未装配）→
+  // blocked（fail closed，不覆盖既有 proof、不乐观写入）；semantic conflict
+  // 归类 identity_conflict（binding/parent/generation 与权威重算冲突）。
+  const refreshSemanticBlock = tr1ReceiptSemanticGate(transactionId, identity, identityLineageComplete, false);
+  if (refreshSemanticBlock !== null) {
+    if (refreshSemanticBlock.conflict) {
+      receiptEvents.receiptIdentityConflicts += 1;
+      return { status: "blocked", reason: "identity_conflict", detail: refreshSemanticBlock.detail };
+    }
+    receiptEvents.receiptIdentityInsufficient += 1;
+    return { status: "blocked", reason: "insufficient_proof", detail: refreshSemanticBlock.detail };
   }
   if (existing.status !== "absent") {
     const existingTick = existing.status === "legacy_committed" ? existing.settledAtTick : existing.proof.settledAtTick;
@@ -1402,31 +1484,24 @@ export function commitSettledReceipt(
       };
     }
     const settledAtTick = existing.status === "legacy_committed" ? existing.settledAtTick : existing.proof.settledAtTick;
-    const attempt: TreasuryAttemptIdentity | undefined =
-      identity?.digest !== undefined && identity.durableIdentityDigest !== undefined
-        ? {
-            digest: identity.digest,
-            ...(identity.contractDigest !== undefined ? { contractDigest: identity.contractDigest } : {}),
-            ...(identity.authorizationCohortDigest !== undefined
-              ? { authorizationCohortDigest: identity.authorizationCohortDigest }
-              : {}),
-            durableIdentityDigest: identity.durableIdentityDigest,
-            ...(identity.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
-          }
-        : undefined;
+    // 【第二十轮 9.1/26.5】幂等比较构造完整 exact attempt identity（含
+    // lineage 四字段与 proof class——单一构造层，不手工拼接）：修复第十九
+    // 轮丢弃 lineage 字段导致 matching rearm receipt 被误判 identity_conflict
+    // 的缺陷；不同 generation/parent/binding/proof class/lowlevel 仍拒绝。
+    const attemptExact = treasuryExactAttemptIdentityOfIdentityInput(transactionId, identity);
     if (existing.status === "legacy_committed") {
       receiptEvents.receiptIdentityInsufficient += 1;
       return { status: "already_settled_insufficient", settledAtTick, relation: "legacy" };
     }
     // existing 为 modern proof（v5 矩阵保证 digest 与 durableIdentityDigest 存在）
-    if (attempt === undefined) {
+    if (attemptExact === undefined || identity?.digest === undefined || identity.durableIdentityDigest === undefined) {
       receiptEvents.receiptIdentityInsufficient += 1;
       return { status: "already_settled_insufficient", settledAtTick, relation: "insufficient" };
     }
-    const relation = treasuryAttemptIdentityRelation(
-      { ...existing.proof, digest: existing.proof.digest ?? attempt.digest },
-      attempt,
-    );
+    const proofExact = treasuryExactAttemptIdentityOfReceiptProof(transactionId, existing.proof);
+    const relation = proofExact === null
+      ? ("insufficient" as const)
+      : treasuryExactAttemptIdentityRelation(proofExact, attemptExact);
     if (relation === "match") {
       receiptEvents.receiptIdentityMatches += 1;
       return { status: "already_settled_match", settledAtTick };
@@ -1451,6 +1526,27 @@ export function commitSettledReceipt(
     return {
       status: "fatal",
       detail: `transactionId ${transactionId.slice(0, 48)} 的结算 identity 须 digest 与 durableIdentityDigest 成对提供（部分提供无法安全定级 proof 等级）`,
+    };
+  }
+  // 【第二十轮 9.3/9.5】tr1_ 新写入门禁：完整 lineage proof + semantic
+  // lineage validation = match + active/terminal authority 状态允许 commit；
+  // 否则零写入 + 明确 fatal（调用方进入安全 fault 处理）。initial attempt
+  // 携带任何 lineage 字段同样拒绝零写。
+  const commitLineageFieldCount =
+    (identity?.lineageId !== undefined ? 1 : 0) +
+    (identity?.lineageGeneration !== undefined ? 1 : 0) +
+    (identity?.parentTransactionId !== undefined ? 1 : 0) +
+    (identity?.lineageBindingDigest !== undefined ? 1 : 0);
+  if (isTreasuryRearmAttemptId(transactionId)) {
+    const semanticBlock = tr1ReceiptSemanticGate(transactionId, identity, commitLineageFieldCount === 4, true);
+    if (semanticBlock !== null) {
+      return { status: "fatal", detail: semanticBlock.detail };
+    }
+  } else if (commitLineageFieldCount !== 0) {
+    receiptEvents.receiptProofLevelRejections += 1;
+    return {
+      status: "fatal",
+      detail: `transactionId ${transactionId.slice(0, 48)} 是 initial attempt 但携带 lineage proof（tr1_ 专属字段禁止——零写入）`,
     };
   }
   const commitLevel = receiptProofLevelOfIdentity(identity);
@@ -1649,9 +1745,11 @@ export function clearTreasuryPersistenceForTest(): void {
     delete branch.intents;
     delete branch.authorizationFaults;
     // 【第十七轮】durable attempt lineage 一并清理（含 heap 运行态复位）；
-    // 【第十八轮】retirement summary 分支一并清理。
+    // 【第十八轮】retirement summary 分支一并清理；
+    // 【第二十轮】exact generation retirement proof 分支一并清理。
     delete (branch as { attemptLineage?: unknown }).attemptLineage;
     delete (branch as { lineageRetirementSummaries?: unknown }).lineageRetirementSummaries;
+    delete (branch as { generationRetirementProofs?: unknown }).generationRetirementProofs;
   }
   heapStoreRuntime = null;
   pendingAdmissions.clear();

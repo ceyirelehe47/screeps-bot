@@ -14,7 +14,9 @@
  * 构成运行时循环依赖）。
  */
 
-import type { TreasuryAttemptLineageRecord, TreasuryAttemptLineageState } from "@/runtime/treasury/attemptLineage";
+import type { TreasuryAttemptLineageRecord, TreasuryAttemptLineageState, TreasuryAttemptLineageIdentity } from "@/runtime/treasury/attemptLineage";
+import type { TreasuryUnresolvedAuthorityResolution } from "@/runtime/treasury/unresolvedAuthority";
+import { validateTreasurySemanticLineage } from "@/runtime/treasury/semanticLineageValidation";
 
 /** capability 消费时的预期 lineage 状态（intent 已写入、read-back 已验证）。 */
 export const TREASURY_HANDOFF_CONSUME_EXPECTED_STATE: TreasuryAttemptLineageState = "child_intent_pending";
@@ -63,96 +65,160 @@ export function treasuryRearmCapabilityBindingMatchesLineageRecord(
   return { status: "matched" };
 }
 
-/** 恢复窗口的 intent/quarantine lineage proof 视图（持久 entry 的共同形状）。 */
-export interface TreasuryHandoffEntryProofView {
-  readonly lineageId?: string;
-  readonly lineageGeneration?: number;
-  readonly lineageBindingDigest?: string;
-}
+// ── 【第二十轮第七节】unified exact authority 版恢复判定 ────────────────────
 
-/** entry（intent/quarantine）proof 与 handoff facts 匹配（generation = record+1）。 */
-export function treasuryHandoffEntryProofMatches(
-  entry: TreasuryHandoffEntryProofView | undefined,
-  record: Readonly<TreasuryAttemptLineageRecord>,
-): boolean {
-  if (entry === undefined) return false;
-  return (
-    entry.lineageId === record.lineageId &&
-    entry.lineageGeneration === record.generation + 1 &&
-    entry.lineageBindingDigest === record.pendingBindingDigest &&
-    entry.lineageBindingDigest !== undefined
-  );
-}
-
-/** beginTick 恢复窗口分类（child_intent_pending 状态的决策）。 */
-export type TreasuryHandoffRecoveryWindow =
+/** unified authority 版窗口动作（forward 携带从 resolver 结果构造的 child identity）。 */
+export type TreasuryHandoffAuthorityWindow =
   | { readonly action: "rollback"; readonly releaseIntent: boolean; readonly detail: string }
-  | { readonly action: "forward_complete"; readonly detail: string }
-  | { readonly action: "forensic"; readonly detail: string };
+  | { readonly action: "forward_complete"; readonly childIdentity: TreasuryAttemptLineageIdentity; readonly detail: string }
+  | { readonly action: "forensic"; readonly detail: string }
+  | { readonly action: "pending_store_unhealthy"; readonly detail: string };
 
 /**
- * 窗口判定（§6.3 / 【第十九轮 B】双 authority 版——intent 存在时同样读取
- * quarantine，绝不因一侧存在而忽略另一侧）：
- * - 任一侧 lineage proof 冲突（binding/generation/lineage 不匹配或部分
- *   存在）→ forensic isolation（保留全部 authority，不猜测）；
- * - rollback 仅当 callback **确定未开始**：intent 为一致 not_started/ready
- *   且**无任何匹配或冲突的 quarantine**（quarantine 是 Game callback 后
- *   写入的 durable 事实——存在即说明 callback 可能已开始）；
- * - intent 一致 ready 但 quarantine 匹配存在（转移中断窗口：quarantine 写
- *   成功、intent 删除前中断）→ forward_complete（绝不回滚）；
- * - intent 已 executing/更后 → forward_complete（无冲突 quarantine 时）；
- * - intent 缺失但 quarantine proof 匹配 → forward_complete；
- * - intent 与 quarantine 均缺失 → rollback（零释放——无 intent 可释放）。
+ * 【第二十轮 7.2/7.3/7.4/7.5】child_intent_pending 窗口的完整 authority 一致性
+ * 判定（单一决策入口——attemptLineage 的 beginTick handoff 恢复使用）：
+ *
+ * 输入为 resolveTreasuryUnresolvedAuthority(childId) 的**完整**解析结果（绝
+ * 不在两侧删除前另行拆读单个 store）。矩阵：
+ * - store_unhealthy → pending（保留两侧证据，不 rollback、不 forward——
+ *   store 损坏绝不解释为 authority absent）；
+ * - inconsistent（含 intent/quarantine 的 identity/等级/lineage/execution
+ *   fact 冲突）→ forensic（保留全部 authority）；
+ * - not_found（两侧均无）→ rollback（零释放）；
+ * - ok：
+ *   - semantic lineage validation ≠ match（child ID 派生/parent/binding/
+ *     authority 状态语义错误）→ forensic；
+ *   - authority 的 lineage 四字段与 record pending facts（lineageId /
+ *     generation+1 / parent=current / pendingBindingDigest）不一致 → forensic；
+ *   - authority class（modern↔identity-bound / lowlevel↔lowlevel）、
+ *     lowlevelSource、actionKind、adapterSemanticIdentity 与 record 冻结事实
+ *     不一致 → forensic；
+ *   - resolver 证明只有 Intent（authorityKind=intent）且 outcome=not_started、
+ *     settlement=ready（callback 确定未开始）→ rollback + 释放 intent；
+ *   - quarantine 接管（authorityKind=quarantine——含双存在归一）或 executing/
+ *     更后 → forward_complete（child identity 从 resolver 结果构造，不从
+ *     任意一侧挑字段）。
  */
-export function classifyTreasuryHandoffRecoveryWindow(input: {
+export function classifyTreasuryHandoffAuthorityWindow(input: {
   readonly record: Readonly<TreasuryAttemptLineageRecord>;
-  readonly intent:
-    | (TreasuryHandoffEntryProofView & { readonly outcome?: string; readonly settlement?: string })
-    | undefined;
-  readonly quarantine: TreasuryHandoffEntryProofView | undefined;
-}): TreasuryHandoffRecoveryWindow {
-  const { record, intent, quarantine } = input;
-  // 【第十九轮 B.3】两侧 proof 独立验证先行：intent 冲突或 quarantine 冲突
-  // 都进入 forensic（保留全部 authority——不因一侧"看起来正常"而放行）。
-  if (intent !== undefined && !treasuryHandoffEntryProofMatches(intent, record)) {
+  readonly childTransactionId: string;
+  readonly authorityResolution: TreasuryUnresolvedAuthorityResolution;
+}): TreasuryHandoffAuthorityWindow {
+  const { record, childTransactionId, authorityResolution } = input;
+  if (authorityResolution.status === "store_unhealthy") {
     return {
-      action: "forensic",
-      detail: "child_intent_pending 窗口 intent lineage proof 冲突（binding/generation/lineage 不匹配或缺失）",
+      action: "pending_store_unhealthy",
+      detail: `handoff 双 authority store unhealthy（${authorityResolution.detail}）——保留两侧证据，不 rollback、不 forward`,
     };
   }
-  if (quarantine !== undefined && !treasuryHandoffEntryProofMatches(quarantine, record)) {
+  if (authorityResolution.status === "inconsistent") {
     return {
       action: "forensic",
-      detail: "child_intent_pending 窗口 quarantine lineage proof 冲突（intent 存在时同样验证——双 authority 任一冲突即 forensic，不猜测）",
+      detail: `handoff 双 authority inconsistent（${authorityResolution.detail}）——保留全部 authority，不猜测`,
     };
   }
-  // 【第十九轮 B.4/B.6】rollback 条件：intent 一致 not_started/ready 且无任何
-  // quarantine（execution-started 的持久信号为零）。Intent ready 与 quarantine
-  // 并存时绝不回滚（quarantine 的存在本身即 callback 后事实）。
-  if (intent !== undefined && intent.outcome === "not_started" && intent.settlement === "ready" && quarantine === undefined) {
+  if (authorityResolution.status === "not_found") {
+    return {
+      action: "rollback",
+      releaseIntent: false,
+      detail: "resolver 证明 intent 与 quarantine 均不存在（callback 确定未开始——零释放回滚）",
+    };
+  }
+  const authority = authorityResolution.authority;
+  if (authority.transactionId !== childTransactionId) {
+    return { action: "forensic", detail: "resolver 返回的 authority transactionId 与 child ID 不一致（防御）" };
+  }
+  // tr1_ authority 的四字段完整性（resolver shape 层应已保证——防御）。
+  if (
+    authority.lineageId === undefined || authority.lineageGeneration === undefined ||
+    authority.parentTransactionId === undefined || authority.lineageBindingDigest === undefined
+  ) {
+    return { action: "forensic", detail: "resolver 归一的 tr1_ authority 缺完整 lineage proof（防御——shape 层应已拦截）" };
+  }
+  // semantic lineage validation（child ID/parent/binding/authority 状态的语义
+  // 真实性——四字段在两侧一致复制不构成证明）。
+  const semantic = validateTreasurySemanticLineage({
+    transactionId: childTransactionId,
+    proof: {
+      lineageId: authority.lineageId,
+      lineageGeneration: authority.lineageGeneration,
+      parentTransactionId: authority.parentTransactionId,
+      lineageBindingDigest: authority.lineageBindingDigest,
+    },
+    identity: {
+      digest: authority.digest,
+      ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+      ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
+      ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+      ...(authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+    },
+  });
+  if (semantic.verdict !== "match") {
+    return {
+      action: "forensic",
+      detail: `handoff semantic lineage validation 未通过（${semantic.verdict}: ${"detail" in semantic ? semantic.detail : "unknown"}）——一致复制的四字段不是语义证明`,
+    };
+  }
+  // record pending facts 匹配（lineage 四字段）。
+  if (
+    authority.lineageId !== record.lineageId ||
+    authority.lineageGeneration !== record.generation + 1 ||
+    authority.parentTransactionId !== record.currentTransactionId ||
+    authority.lineageBindingDigest !== record.pendingBindingDigest
+  ) {
+    return {
+      action: "forensic",
+      detail: "authority lineage proof 与 lineage record 冻结的 pending handoff facts 不一致（generation/parent/binding 冲突）",
+    };
+  }
+  // authority class / provenance / action kind / adapter semantic identity。
+  const expectedLevel = record.authorityClass === "lowlevel" ? "lowlevel" : "modern";
+  if (authority.authorityLevel !== expectedLevel) {
+    return {
+      action: "forensic",
+      detail: `authority class ${String(authority.authorityLevel)} 与 lineage 冻结的 authority class ${record.authorityClass} 不匹配`,
+    };
+  }
+  if ((authority.lowlevelSource ?? undefined) !== (record.lowlevelSource ?? undefined)) {
+    return {
+      action: "forensic",
+      detail: "authority lowlevel provenance 与 lineage 冻结的 lowlevelSource 不一致（runtime 与 migrated 不能互相证明）",
+    };
+  }
+  if (authority.actionKind !== record.actionKind) {
+    return {
+      action: "forensic",
+      detail: `authority action kind ${authority.actionKind} 与 lineage 冻结的 ${record.actionKind} 不一致`,
+    };
+  }
+  // 注：adapterSemanticIdentity 不在此比较——低层 contractless 的 intent/
+  // quarantine 权威形态不携带该字段（resolver 的双存在归一已在其内部比较
+  // modern 双方的 adapter semantic identity；此处只比较任务书 7.2 列出的
+  // class/provenance/action kind 等冻结维度）。
+  // rollback 仅当 resolver 证明只有 Intent 且 callback 确定未开始。
+  if (
+    authorityResolution.authority.authorityKind === "intent" &&
+    authority.outcome === "not_started" &&
+    authority.settlement === "ready"
+  ) {
     return {
       action: "rollback",
       releaseIntent: true,
-      detail: "intent 一致 not_started/ready 且无任何 quarantine（execution-started 未持久化——callback 确定未开始）",
+      detail: "resolver 证明只有 intent（not_started/ready——execution-started 持久信号为零），callback 确定未开始",
     };
   }
-  if (quarantine !== undefined) {
-    return {
-      action: "forward_complete",
-      detail: intent !== undefined
-        ? "intent 与 quarantine 并存（转移中断窗口——quarantine proof 匹配且是 callback 后事实，前向补完成，绝不回滚）"
-        : "intent 已转 quarantine 且 lineage proof 匹配（authority 接管——前向补完成接管）",
-    };
-  }
-  if (intent !== undefined) {
-    return {
-      action: "forward_complete",
-      detail: `intent 已进入 ${String(intent.settlement)}（callback 可能已开始——前向补完成接管）`,
-    };
-  }
+  const quarantineTakenOver = authorityResolution.authority.authorityKind === "quarantine";
   return {
-    action: "rollback",
-    releaseIntent: false,
-    detail: "intent 与 quarantine 均缺失（callback 确定未开始）",
+    action: "forward_complete",
+    childIdentity: {
+      digest: authority.digest,
+      ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+      ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
+      ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+      ...(authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+    },
+    detail: quarantineTakenOver
+      ? "resolver 归一 authority 为 quarantine（quarantine 是 callback 后写入的持久事实——前向补完成，绝不回滚）"
+      : `intent 已进入 ${authority.settlement}（callback 可能已开始——前向补完成接管）`,
   };
 }

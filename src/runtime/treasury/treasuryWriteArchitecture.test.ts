@@ -464,15 +464,30 @@ describe("Treasury write-admission 架构边界", () => {
       if (/deriveTreasuryRearmChildTransactionId/.test(fileSource)) {
         violations.push(`${relative} 引用 deriveTreasuryRearmChildTransactionId（test-only——production 的 child 派生权威在 attemptLineage.deriveTreasuryLineageNextChildTransactionId，只经 facade issue 通道）`);
       }
-      // tr1_ 命名空间判定单一权威在 transactionId.ts；facade 是门禁消费方，
-      // faultResolution 是 lineage 终态收敛消费方（第十八轮 committed/retired
-      // child 的 chain 状态推进——协议栈内部窄边界）。
-      if (
-        /isTreasuryRearmAttemptId/.test(fileSource) &&
-        relative !== "runtime/treasury/transactionId.ts" &&
-        relative !== "runtime/treasury/facade.ts" &&
-        relative !== "runtime/treasury/faultResolution.ts"
-      ) {
+      // tr1_ 命名空间判定单一权威在 transactionId.ts。【第二十轮 6.1】
+      // isTreasuryRearmAttemptId 是收敛后的唯一判定入口（production 禁止
+      // raw startsWith("tr1_")——下方另有专项扫描）；消费方白名单：
+      // facade（门禁）、faultResolution（chain 终态收敛）、semanticLineage/
+      // exactIdentity/GRA/receipts/resolutionStore/committedVerifier/
+      // lineageHandoff（第二十轮 semantic proof 与 exact identity 的协议栈
+      // 内部窄边界）。
+      const REARM_NAMESPACE_CONSUMERS = new Set([
+        "runtime/treasury/transactionId.ts",
+        "runtime/treasury/facade.ts",
+        "runtime/treasury/faultResolution.ts",
+        "runtime/treasury/semanticLineageValidation.ts",
+        "runtime/treasury/exactAttemptIdentity.ts",
+        "runtime/treasury/generationRetirementAuthority.ts",
+        "runtime/treasury/receipts.ts",
+        "runtime/treasury/resolutionStore.ts",
+        "runtime/treasury/committedProofVerifier.ts",
+        "runtime/treasury/lineageHandoff.ts",
+        "runtime/treasury/lineageGenerationRetirement.ts",
+        "runtime/treasury/intents.ts",
+        "runtime/treasury/quarantine.ts",
+        "runtime/treasury/resolutionStateSemantics.ts",
+      ]);
+      if (/isTreasuryRearmAttemptId/.test(fileSource) && !REARM_NAMESPACE_CONSUMERS.has(relative)) {
         violations.push(`${relative} 引用 isTreasuryRearmAttemptId（tr1_ 判定单一权威在 transactionId.ts，门禁在 facade）`);
       }
     }

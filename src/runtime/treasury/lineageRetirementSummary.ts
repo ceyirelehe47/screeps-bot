@@ -40,6 +40,7 @@ import { readTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionSt
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { registerTreasuryLineageResetHook } from "@/runtime/treasury/receipts";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
+import { registerTreasurySemanticSummarySourceForAssembly } from "@/runtime/treasury/semanticLineageValidation";
 
 export const TREASURY_RETIREMENT_SUMMARY_VERSION = 2;
 /** 独立硬容量（evidence 记录推导：≤128 × ~250B ≈ 32KB Memory 上界）。 */
@@ -432,6 +433,17 @@ export function compactTreasuryTerminalLineagesAtTickBoundary(): number {
   }
   return compacted;
 }
+
+// 【第二十轮第六节】semantic lineage validator 的 terminal summary 只读
+// source（模块加载注册——可重入：测试注销 sources 后可重新装配）。
+export function registerTreasuryRetirementSummarySemanticSourceForAssembly(): void {
+  registerTreasurySemanticSummarySourceForAssembly({
+    healthy: () => peekTreasuryRetirementSummaryHealth().healthy,
+    unhealthyDetail: () => peekTreasuryRetirementSummaryHealth().detail,
+    readByLineageId: (lineageId) => lookupTreasuryRetirementSummaryByLineageId(lineageId),
+  });
+}
+registerTreasuryRetirementSummarySemanticSourceForAssembly();
 
 // 测试清理注册（receipts.clearTreasuryPersistenceForTest 统一调用——与
 // attemptLineage 同一清理链，summary heap 缓存不跨测试泄漏）。

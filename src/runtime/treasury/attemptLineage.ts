@@ -58,9 +58,16 @@ import {
   releaseTreasuryIntentEntry,
 } from "@/runtime/treasury/intents";
 import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
-import { classifyTreasuryHandoffRecoveryWindow } from "@/runtime/treasury/lineageHandoff";
+import { classifyTreasuryHandoffAuthorityWindow } from "@/runtime/treasury/lineageHandoff";
 import { registerTreasuryIntentLineageProofResolverForAssembly } from "@/runtime/treasury/intents";
 import { registerTreasuryQuarantineLineageProofResolverForAssembly } from "@/runtime/treasury/quarantine";
+import {
+  persistTreasuryGenerationRetirementProof,
+  computeTreasuryGenerationRootIdentityDigest,
+} from "@/runtime/treasury/generationRetirementAuthority";
+import {
+  registerTreasurySemanticLineageRecordSourceForAssembly,
+} from "@/runtime/treasury/semanticLineageValidation";
 
 /** lineage store schema 版本（持久格式升级时递增；未知版本 fail closed）。 */
 export const TREASURY_LINEAGE_VERSION = 2;
@@ -231,6 +238,18 @@ const lineageProofOfCurrentAttempt = (transactionId: string): { readonly lineage
 };
 registerTreasuryIntentLineageProofResolverForAssembly(lineageProofOfCurrentAttempt);
 registerTreasuryQuarantineLineageProofResolverForAssembly(lineageProofOfCurrentAttempt);
+
+// 【第二十轮第六节】semantic lineage validator 的 active record 只读 source
+//（模块加载注册——单向依赖；semanticLineageValidation 不 import 本模块；
+// 可重入：测试注销 sources 后可重新装配）。
+export function registerTreasuryAttemptLineageSemanticSourceForAssembly(): void {
+  registerTreasurySemanticLineageRecordSourceForAssembly({
+    healthy: () => peekTreasuryAttemptLineageHealth().healthy,
+    unhealthyDetail: () => peekTreasuryAttemptLineageHealth().detail,
+    readByLineageId: (lineageId) => readTreasuryAttemptLineageRecord(lineageId),
+  });
+}
+registerTreasuryAttemptLineageSemanticSourceForAssembly();
 
 // ── heap 运行态（global reset 即丢；首次 load 一次全表验证重建） ───────────
 
@@ -1453,6 +1472,47 @@ export function convergeTreasuryLineageRetirementFromFacts(lineageId: string): {
   if (!fresh.retirement.lineagePublished) {
     return { status: "pending", pendingStages: ["lineagePublished"] };
   }
+  // 【第二十轮 10.1/10.3】exact per-generation retirement proof：三段收敛
+  // 完成后、状态推进（rearm_ready / non_rearmable_retired——下一代 capability
+  // 的前置）之前写入 + read-back 验证。写入失败（容量满载/冲突/损坏）→
+  // 保持 retiring（fail closed——不签发下一代、无 eviction 资格）。幂等
+  // 重入（中断窗口：proof 已写、状态未推进）不烧容量。
+  if (fresh.generation >= 1 && (fresh.currentParentTransactionId === undefined || fresh.bindingDigest === undefined)) {
+    return {
+      status: "pending",
+      pendingStages: ["exact_retirement_proof"],
+      detail: "generation≥1 的 retiring record 缺 parent/binding（无法构造 exact retirement proof——防御）",
+    };
+  }
+  const exactProofInput = {
+    schemaVersion: 1 as const,
+    lineageId: fresh.lineageId,
+    rootTransactionId: fresh.rootTransactionId,
+    rootIdentityDigest: computeTreasuryGenerationRootIdentityDigest(fresh.rootIdentity),
+    generation: fresh.generation,
+    transactionId: fresh.currentTransactionId,
+    ...(fresh.generation >= 1 ? { parentTransactionId: fresh.currentParentTransactionId!, bindingDigest: fresh.bindingDigest! } : {}),
+    digest: fresh.currentIdentity.digest,
+    ...(fresh.currentIdentity.contractDigest !== undefined ? { contractDigest: fresh.currentIdentity.contractDigest } : {}),
+    ...(fresh.currentIdentity.authorizationCohortDigest !== undefined
+      ? { authorizationCohortDigest: fresh.currentIdentity.authorizationCohortDigest }
+      : {}),
+    ...(fresh.currentIdentity.durableIdentityDigest !== undefined ? { durableIdentityDigest: fresh.currentIdentity.durableIdentityDigest } : {}),
+    // lowlevel provenance：identity 维度优先，缺省回落 record 顶层冻结字段
+    //（低层 root/identity 视图未携带 provenance 时 record.lowlevelSource 是权威）。
+    ...((fresh.currentIdentity.lowlevelSource ?? fresh.lowlevelSource) !== undefined
+      ? { lowlevelSource: fresh.currentIdentity.lowlevelSource ?? fresh.lowlevelSource }
+      : {}),
+    authorityClass: fresh.authorityClass,
+    ...(fresh.retrySemanticDigest !== undefined ? { retrySemanticDigest: fresh.retrySemanticDigest } : {}),
+    resolution: "not_executed" as const,
+    retirement: { lineagePublished: true as const, authorityReleased: true as const, markerCleaned: true as const },
+    completedAtTick: Game.time,
+  };
+  const exactPersisted = persistTreasuryGenerationRetirementProof(exactProofInput);
+  if (exactPersisted.status === "rejected") {
+    return { status: "pending", pendingStages: ["exact_retirement_proof"], detail: exactPersisted.detail };
+  }
   const completed = completeTreasuryLineageRetirement(lineageId);
   if (completed.status === "rejected") {
     return { status: "pending", pendingStages: ["complete"], detail: completed.detail };
@@ -1542,21 +1602,92 @@ export interface TreasuryLineageRecoveryResult {
   readonly backfills: number;
 }
 
-/** 接管恢复用 identity（intent/quarantine 持久 facts 的共同视图）。 */
-function lineageIdentityOfEntryFacts(entry: {
-  readonly digest: string;
-  readonly contractDigest?: string;
-  readonly authorizationCohortDigest?: string;
-  readonly durableIdentityDigest?: string;
-  readonly lowlevelSource?: string;
-}): TreasuryAttemptLineageIdentity {
-  return {
-    digest: entry.digest,
-    ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
-    ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
-    ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
-    ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+/**
+ * 单个 child_intent_pending 窗口的恢复动作（beginTick handoff 判定与主
+ * lineage recovery 共用——【第二十轮 7.1】双 authority 判定先于普通 Intent
+ * recovery 执行；主 recovery 对同一 record 的重入幂等：转换后的 state 不再
+ * 命中 child_intent_pending 分支）。
+ */
+function recoverPendingHandoffWindow(
+  lineageId: string,
+  record: Readonly<TreasuryAttemptLineageRecord>,
+  result: TreasuryLineageRecoveryResult,
+): TreasuryLineageRecoveryResult {
+  const childId = record.nextChildTransactionId!;
+  // 【第二十轮 7.2】handoff 恢复直接复用 unified unresolved authority
+  // resolver 的完整一致性（identity 重算/等级/proof class/lowlevel/
+  // digest/contract/cohort/durable/postings/kind/lineage/execution-fact
+  // cohesion）+ semantic lineage validation——不再自行比较 lineage 外壳。
+  const window = classifyTreasuryHandoffAuthorityWindow({
+    record,
+    childTransactionId: childId,
+    authorityResolution: resolveTreasuryUnresolvedAuthority(childId),
+  });
+  if (window.action === "forensic") {
+    const isolated = isolateTreasuryLineageForensically(lineageId, window.detail);
+    if (isolated.status !== "rejected") {
+      lineageStoreEvents.childIntentForensics += 1;
+      return { ...result, childIntentForensics: result.childIntentForensics + 1 };
+    }
+    return result;
+  }
+  if (window.action === "pending_store_unhealthy") {
+    // 保留两侧证据（intent + quarantine + record 原样），不 rollback、
+    // 不 forward——store 损坏绝不解释为 authority absent。
+    return result;
+  }
+  if (window.action === "rollback") {
+    if (window.releaseIntent) releaseTreasuryIntentEntry(childId);
+    const rolled = rollbackTreasuryLineageToRearmReady(lineageId);
+    if (rolled.status !== "rejected") {
+      lineageStoreEvents.childIntentRollbacks += 1;
+      return { ...result, childIntentRollbacks: result.childIntentRollbacks + 1 };
+    }
+    return result;
+  }
+  // forward_complete：child identity 从统一 resolver 结果构造（不从任意
+  // 一侧挑字段——resolver 已完成完整一致性归一）。
+  const activated = activateTreasuryLineageChild(lineageId, window.childIdentity);
+  if (activated.status !== "rejected") {
+    lineageStoreEvents.childActivationForwardCompletions += 1;
+    return { ...result, childActivationForwardCompletions: result.childActivationForwardCompletions + 1 };
+  }
+  return result;
+}
+
+/**
+ * 【第二十轮 7.1】beginTick 的 handoff 双 authority 证据保留顺序：本函数
+ * 必须先于 recoverTreasuryIntentsAtTickBoundary（普通 Intent recovery/
+ * cleanup）执行——child_intent_pending 的 Intent 与 Quarantine 完整一致性
+ * 判定（含 rollback 的 intent 释放、forward 的接管、forensic 隔离）先于
+ * 任何通用 ready-intent 删除，双 authority 冲突证据不会被提前清除。只
+ * 处理 pending handoff（不扫描全部 Intent/Quarantine——O(pending)）。
+ */
+export function recoverTreasuryLineageHandoffEvidenceAtTickBoundary(): TreasuryLineageRecoveryResult {
+  const empty: TreasuryLineageRecoveryResult = {
+    skipped: null,
+    capabilityExpiries: 0,
+    childIntentRollbacks: 0,
+    childIntentForensics: 0,
+    childActivationForwardCompletions: 0,
+    chainCommitCompletions: 0,
+    retirementCompletions: 0,
+    backfills: 0,
   };
+  const runtime = loadLineageStoreRuntime();
+  if (runtime.fatal !== null) return { ...empty, skipped: runtime.fatal };
+  if (runtime.pendingIds.size === 0) {
+    lineageStoreEvents.idleFastPath += 1;
+    return empty;
+  }
+  let result: TreasuryLineageRecoveryResult = empty;
+  for (const lineageId of [...runtime.pendingIds]) {
+    const record = readTreasuryAttemptLineageRecord(lineageId);
+    if (record === undefined) continue;
+    if (record.state !== "child_intent_pending") continue;
+    result = recoverPendingHandoffWindow(lineageId, record, result);
+  }
+  return result;
 }
 
 /**
@@ -1618,52 +1749,10 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
       continue;
     }
     if (record.state === "child_intent_pending") {
-      const childId = record.nextChildTransactionId!;
-      // 【第十九轮 B.1】始终检查两个 store（删除"intent 存在就不读
-      // quarantine"——双 authority 任一侧的冲突/execution 信号都必须进入
-      // 分类）。
-      const intent = readTreasuryIntentEntry(childId) as unknown as
-        | { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string; readonly lowlevelSource?: string; readonly outcome?: string; readonly settlement?: string; readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string }
-        | undefined;
-      const quarantine = readTreasuryQuarantineEntry(childId) as unknown as { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string; readonly lowlevelSource?: string; readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string } | undefined;
-      // 【第十八轮 24.2 / 第十九轮 B.2】单一权威窗口分类（lineageHandoff——
-      // §6.3 恢复矩阵 + 双 authority 一致性）。
-      const window = classifyTreasuryHandoffRecoveryWindow({
-        record,
-        intent,
-        quarantine,
-      });
-      if (window.action === "forensic") {
-        const isolated = isolateTreasuryLineageForensically(lineageId, window.detail);
-        if (isolated.status !== "rejected") {
-          lineageStoreEvents.childIntentForensics += 1;
-          result = { ...result, childIntentForensics: result.childIntentForensics + 1 };
-        }
-        continue;
-      }
-      if (window.action === "rollback") {
-        if (window.releaseIntent) releaseTreasuryIntentEntry(childId);
-        const rolled = rollbackTreasuryLineageToRearmReady(lineageId);
-        if (rolled.status !== "rejected") {
-          lineageStoreEvents.childIntentRollbacks += 1;
-          result = { ...result, childIntentRollbacks: result.childIntentRollbacks + 1 };
-        }
-        continue;
-      }
-      // forward_complete：identity 从验证后的统一持久事实派生——quarantine
-      // （proof 匹配——callback 后写入的更强事实）优先，其次 intent。
-      const factsSource = quarantine !== undefined ? quarantine : intent!;
-      const activated = activateTreasuryLineageChild(lineageId, lineageIdentityOfEntryFacts({
-        digest: factsSource.digest,
-        ...(factsSource.contractDigest !== undefined ? { contractDigest: factsSource.contractDigest } : {}),
-        ...(factsSource.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: factsSource.authorizationCohortDigest } : {}),
-        ...(factsSource.durableIdentityDigest !== undefined ? { durableIdentityDigest: factsSource.durableIdentityDigest } : {}),
-        ...(factsSource.lowlevelSource !== undefined ? { lowlevelSource: factsSource.lowlevelSource } : {}),
-      }));
-      if (activated.status !== "rejected") {
-        lineageStoreEvents.childActivationForwardCompletions += 1;
-        result = { ...result, childActivationForwardCompletions: result.childActivationForwardCompletions + 1 };
-      }
+      // 【第二十轮 7.1】主 recovery 重入同一 handoff 判定（beginTick 前置的
+      // recoverTreasuryLineageHandoffEvidenceAtTickBoundary 已处理过的 record
+      // 状态已转换——此处只覆盖 store_unhealthy 保留的重入，幂等）。
+      result = recoverPendingHandoffWindow(lineageId, record, result);
       continue;
     }
     if (record.state === "child_active") {

@@ -89,14 +89,32 @@ function stagePendingWithIntent(
   const record = lookupTreasuryAttemptLineageByAttemptId(parentTransactionId)!;
   expect(stageTreasuryLineageChildIntentPending(record.lineageId, issued.childTransactionId).status).not.toBe("rejected");
   const pending = readTreasuryAttemptLineageRecord(record.lineageId)!;
-  const intentWrite = writeTreasuryIntentEntry({
-    authorityLevel: "lowlevel",
+  const intentFacts = {
     transactionId: issued.childTransactionId,
     digest: "aaaaaaaaaaaaaaaa",
     actionKind: "terminal.send",
     kind: "terminal.send",
     source: "test",
     postings: [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -500 }],
+    lowlevelSource: "runtime-lowlevel@v1",
+    lineageId: pending.lineageId,
+    lineageGeneration: pending.generation + 1,
+    parentTransactionId: parentTransactionId,
+    lineageBindingDigest: pending.pendingBindingDigest!,
+  };
+  // 低层双存在归一要求 intent 与 quarantine 的 durableIdentityDigest 完整
+  // 相等（生产低层 intent 由 facade 写入时携带；fixture 按同一权威重算）。
+  const intentDurable = recomputeTreasuryDurableIdentityDigest(intentFacts as never) ?? undefined;
+  const intentWrite = writeTreasuryIntentEntry({
+    authorityLevel: "lowlevel",
+    lowlevelSource: "runtime-lowlevel@v1",
+    transactionId: issued.childTransactionId,
+    digest: "aaaaaaaaaaaaaaaa",
+    actionKind: "terminal.send",
+    kind: "terminal.send",
+    source: "test",
+    postings: [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -500 }],
+    durableIdentityDigest: intentDurable,
     outcome: intentOverrides?.ready === true ? "not_started" : "started_unknown",
     settlement: intentOverrides?.ready === true ? "ready" : "executing",
     auditSource: "test",
@@ -167,16 +185,19 @@ afterEach(() => {
 });
 
 describe("child handoff 双 authority 恢复矩阵（第十九轮 25.3）", () => {
-  it("intent ready + quarantine 匹配并存（转移中断窗口）：forward_complete——绝不回滚", () => {
+  it("intent ready + quarantine 匹配并存：【第二十轮】execution facts 矛盾（not_started vs started_unknown）→ forensic——绝不回滚、绝不 forward", () => {
     const parent = "r19_hda_ready_q";
     const { childId, lineageId } = stagePendingWithIntent(parent, { ready: true });
     const pending = readTreasuryAttemptLineageRecord(lineageId)!;
     seedQuarantine(childId, pending.lineageId, pending.generation + 1, parent, pending.pendingBindingDigest!);
     advanceTick();
     const record = readTreasuryAttemptLineageRecord(lineageId);
-    // quarantine 存在 = callback 后事实——前向补完成接管，不回滚 rearm_ready。
-    expect(record?.state).toBe("child_active");
-    expect(record?.currentTransactionId).toBe(childId);
+    // 【第二十轮 7.5】ready intent（not_started）与 quarantine（started_
+    // unknown——callback 后事实）的 execution facts 互相矛盾：unified
+    // resolver 的 cohesion 矩阵判 inconsistent → forensic 隔离（保留全部
+    // authority——不猜测、不回滚、不前向）。真实转移中断窗口（intent 已
+    // executing + quarantine 匹配）的 forward 由下方 executing 场景承载。
+    expect(record?.state).toBe("forensic_isolated");
     // ready intent 可能被通用 intent recovery（Round 16 语义：无 proof 的
     // not_started intent 回收）先行释放——authority 由 quarantine 权威形态
     // 保留（forward 分支本身不释放）。

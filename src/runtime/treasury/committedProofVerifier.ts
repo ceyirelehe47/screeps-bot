@@ -29,6 +29,7 @@ import {
   treasuryAttemptIdentityRelation,
   type TreasuryAttemptIdentity,
 } from "@/runtime/treasury/identityProof";
+import { isTreasuryRearmAttemptId } from "@/runtime/treasury/transactionId";
 import type { TreasuryResolutionProofLevel, TreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
 import type { TreasuryUnresolvedAuthorityResolution } from "@/runtime/treasury/unresolvedAuthority";
 
@@ -60,7 +61,12 @@ export type TreasuryCommittedProofVerdict =
   | { readonly status: "authority_inconsistent"; readonly detail: string }
   | { readonly status: "authority_store_unhealthy"; readonly detail: string }
   | { readonly status: "receipt_absent"; readonly detail: string }
-  | { readonly status: "receipt_stale"; readonly detail: string };
+  | { readonly status: "receipt_stale"; readonly detail: string }
+  | {
+    /** 【第二十轮 13.4】三方互相 match ≠ 真实 generation——tr1_ 必须另附 semantic lineage verdict。 */
+    readonly status: "semantic_lineage_invalid";
+    readonly detail: string;
+  };
 
 /** tombstone / authority / receipt proof → 完整 attempt identity 视图。 */
 function attemptIdentityOf(source: {
@@ -139,8 +145,15 @@ export function verifyTreasuryCommittedResolutionProof(input: {
   >;
   readonly authorityResolution: TreasuryUnresolvedAuthorityResolution;
   readonly receiptProof: TreasuryCommittedReceiptProofView | undefined;
+  /**
+   * 【第二十轮 13.4】tr1_ tombstone 必须附带调用方先行计算的 semantic
+   * lineage verdict（validateTreasurySemanticLineage 的结论）：三者互相
+   * match 不自动代表真实 generation——child ID 派生/parent/binding/authority
+   * 状态的语义证明是独立一层。非 tr1_ 不需要（undefined）。
+   */
+  readonly semanticLineageVerdict?: { readonly verdict: string; readonly detail?: string };
 }): TreasuryCommittedProofVerdict {
-  const { tombstone, authorityResolution, receiptProof } = input;
+  const { tombstone, authorityResolution, receiptProof, semanticLineageVerdict } = input;
   if (authorityResolution.status === "inconsistent") {
     return {
       status: "authority_inconsistent",
@@ -152,6 +165,29 @@ export function verifyTreasuryCommittedResolutionProof(input: {
       status: "authority_store_unhealthy",
       detail: `unresolved authority store unhealthy（${authorityResolution.detail}）——零释放零结论（store fatal 不得解释为 authority absent）`,
     };
+  }
+  // 【第二十轮 13.4】semantic lineage 证明先于三方等式比较：一组结构完整但
+  // 语义伪造的 lineage 四字段（Receipt/Tombstone/Authority 互相一致但与
+  // child ID 派生/binding 重算冲突）不得释放 authority。
+  if (isTreasuryRearmAttemptId(tombstone.transactionId)) {
+    if (semanticLineageVerdict === undefined) {
+      return {
+        status: "semantic_lineage_invalid",
+        detail: "tr1_ committed proof 缺少 semantic lineage verdict（调用方未验证——三方等式 match 不代表真实 generation）",
+      };
+    }
+    if (semanticLineageVerdict.verdict === "store_unhealthy") {
+      return {
+        status: "authority_store_unhealthy",
+        detail: `semantic lineage authority store unhealthy（${semanticLineageVerdict.detail ?? "unknown"}）——零释放零结论`,
+      };
+    }
+    if (semanticLineageVerdict.verdict !== "match") {
+      return {
+        status: "semantic_lineage_invalid",
+        detail: `semantic lineage validation 未通过（${semanticLineageVerdict.verdict}: ${semanticLineageVerdict.detail ?? "unknown"}）——三方互相 match 不证明真实 generation`,
+      };
+    }
   }
   if (receiptProof === undefined) {
     return { status: "receipt_absent", detail: `transactionId ${tombstone.transactionId.slice(0, 48)} 无持久 settlement proof（refresh 后仍缺失或被清除）` };

@@ -202,6 +202,7 @@ import {
   peekTreasuryAttemptLineageHealth,
   readTreasuryAttemptLineageRecord,
   recoverTreasuryAttemptLineageAtTickBoundary,
+  recoverTreasuryLineageHandoffEvidenceAtTickBoundary,
   setTreasuryLineageRecoveryMarkerReaderForAssembly,
   setTreasuryLineageReceiptReaderForAssembly,
   stageTreasuryLineageCapabilityIssued,
@@ -1215,6 +1216,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (schemaGate.status === "rejected") {
         metrics.reservationSchemaActivationFailures += 1;
       }
+      // 【第二十轮 7.1】handoff 双 authority 证据保留顺序：child_intent_
+      // pending 的 Intent/Quarantine 完整一致性判定（unified resolver +
+      // semantic lineage validation——rollback/forward/forensic）必须先于
+      // 普通 Intent recovery 的 ready-intent 删除执行，双 authority 冲突
+      // 证据不会被提前清除（只处理 pending handoff，不扫描全部 store）。
+      recoverTreasuryLineageHandoffEvidenceAtTickBoundary();
       // durable intent 恢复（第八轮 3.4）：先于一切 planner/writer 加载验证
       // intent store——ready 相确认未执行关闭、其余保守转 execution-unknown
       // quarantine（quarantine 写失败时 intent 保留为 emergency authority）。

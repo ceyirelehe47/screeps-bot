@@ -9,6 +9,8 @@ const resolutionEvents = {
   notExecuted: 0,
   uncertain: 0,
   rejected: 0,
+  /** 【第二十轮 13.6】chain_committed 推进写失败（保持可恢复 pending——beginTick 幂等补完成）。 */
+  chainCommitPendingRetries: 0,
 };
 
 export interface TreasuryResolutionCounters {
@@ -16,6 +18,8 @@ export interface TreasuryResolutionCounters {
   readonly notExecuted: number;
   readonly uncertain: number;
   readonly rejected: number;
+  /** 【第二十轮 13.6】chain_committed 推进写失败计数（保持 pending）。 */
+  readonly chainCommitPendingRetries: number;
 }
 
 /** 只读读取（零写）。 */
@@ -34,4 +38,5 @@ export function resetTreasuryResolutionEventsForTest(): void {
   resolutionEvents.notExecuted = 0;
   resolutionEvents.uncertain = 0;
   resolutionEvents.rejected = 0;
+  resolutionEvents.chainCommitPendingRetries = 0;
 }

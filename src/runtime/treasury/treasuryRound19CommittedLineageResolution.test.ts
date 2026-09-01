@@ -32,7 +32,16 @@ import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commi
 import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
 import { readTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
-import { lookupTreasuryAttemptLineageByAttemptId } from "@/runtime/treasury/attemptLineage";
+import {
+  lookupTreasuryAttemptLineageByAttemptId,
+  createTreasuryAttemptLineageRecord,
+  convergeTreasuryLineageRetirementFromFacts,
+  stageTreasuryLineageCapabilityIssued,
+  stageTreasuryLineageChildIntentPending,
+  activateTreasuryLineageChild,
+  deriveTreasuryLineageNextChildTransactionId,
+  readTreasuryAttemptLineageRecord,
+} from "@/runtime/treasury/attemptLineage";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
 import { recomputeTreasuryDurableIdentityDigest } from "@/runtime/treasury/identityProof";
 import { verifyTreasuryCommittedResolutionProof } from "@/runtime/treasury/committedProofVerifier";
@@ -49,6 +58,55 @@ const ROOMS: RoomSpec[] = [
     terminal: { id: "term-1", resources: { energy: 20_000 }, freeCapacity: 5_000 },
   },
 ];
+
+/** 【第二十轮】真实 lowlevel chain fixture：root → retirement → gen1 child_active。
+ * semantic lineage validation / receipt 门禁按 record 权威重算——伪造 ID 与
+ * 无 record 的四字段不再是可接受的 fixture 形态。 */
+function seedActiveChildChain(rootId: string, digest = "1111111111111111", durable = "2222222222222222"): {
+  readonly childId: string;
+  readonly lineageId: string;
+  readonly identity: {
+    readonly digest: string;
+    readonly durableIdentityDigest: string;
+    readonly lowlevelSource: string;
+    readonly lineageId: string;
+    readonly lineageGeneration: number;
+    readonly parentTransactionId: string;
+    readonly lineageBindingDigest: string;
+  };
+} {
+  const created = createTreasuryAttemptLineageRecord({
+    rootTransactionId: rootId,
+    rootIdentity: { digest, durableIdentityDigest: durable },
+    actionKind: "terminal.send",
+    authorityClass: "lowlevel",
+    lowlevelSource: "runtime-lowlevel@v1",
+    rearmable: true,
+    retrySemanticDigest: "6666666666666666",
+  });
+  if (created.status !== "written") throw new Error("seed chain create failed");
+  const lineageId = created.record.lineageId;
+  const converged = convergeTreasuryLineageRetirementFromFacts(lineageId);
+  if (converged.status !== "completed") throw new Error("seed chain converge failed: " + JSON.stringify(converged));
+  const childId = deriveTreasuryLineageNextChildTransactionId(lineageId, 1, rootId);
+  if (stageTreasuryLineageCapabilityIssued(lineageId, childId).status === "rejected") throw new Error("seed stage issued failed");
+  if (stageTreasuryLineageChildIntentPending(lineageId, childId).status === "rejected") throw new Error("seed stage pending failed");
+  const activated = activateTreasuryLineageChild(lineageId, { digest, durableIdentityDigest: durable, lowlevelSource: "runtime-lowlevel@v1" });
+  if (activated.status === "rejected") throw new Error("seed activate failed");
+  return {
+    childId,
+    lineageId,
+    identity: {
+      digest,
+      durableIdentityDigest: durable,
+      lowlevelSource: "runtime-lowlevel@v1",
+      lineageId,
+      lineageGeneration: 1,
+      parentTransactionId: rootId,
+      lineageBindingDigest: readTreasuryAttemptLineageRecord(lineageId)!.bindingDigest!,
+    },
+  };
+}
 
 function makeService(): TreasuryTestService {
   const rooms = installRooms(ROOMS);
@@ -238,52 +296,43 @@ describe("tr1_ committed resolution（第十九轮 25.1/25.9：receipt 写入前
 describe("receipt refresh 的 lineage-aware 身份规则（第十九轮 25.2）", () => {
   it("既有完整 tr1_ receipt 与当前 attempt 完全匹配：只刷新 tick、四字段原样保留", () => {
     ensureTreasuryReceiptStore();
-    const childId = "tr1_0123456789abcdef_000001_00112233";
-    const identity = {
-      digest: "1111111111111111",
-      durableIdentityDigest: "2222222222222222",
-      lowlevelSource: "runtime-lowlevel@v1",
-      lineageId: "0123456789abcdef",
-      lineageGeneration: 1,
-      parentTransactionId: "r19_rf_parent",
-      lineageBindingDigest: "3333333333333333",
-    };
+    // 【第二十轮】真实 chain fixture（record 是 semantic 门禁的权威——伪造
+    // ID/无 record 的四字段不再是合法 fixture 形态）。
+    const chain = seedActiveChildChain("r19_rf_match_root");
+    const childId = chain.childId;
+    const identity = chain.identity;
     const committed = commitSettledReceipt(childId, Game.time, identity);
-    expect(committed.status).not.toBe("rejected");
+    expect(committed.status).toBe("written");
     Game.time += 3;
     const refreshed = refreshSettledReceiptForResolution(childId, Game.time, identity);
     expect(refreshed.status).toBe("refreshed");
     if (refreshed.status === "refreshed") expect(refreshed.previousTick).toBe(Game.time - 3);
     const proof = readTreasurySettlementProof(childId);
     expect(proof?.level).toBe("lowlevel");
-    expect(proof?.lineageId).toBe("0123456789abcdef");
+    expect(proof?.lineageId).toBe(chain.lineageId);
     expect(proof?.lineageGeneration).toBe(1);
-    expect(proof?.parentTransactionId).toBe("r19_rf_parent");
-    expect(proof?.lineageBindingDigest).toBe("3333333333333333");
+    expect(proof?.parentTransactionId).toBe("r19_rf_match_root");
+    expect(proof?.lineageBindingDigest).toBe(identity.lineageBindingDigest);
   });
 
   it("既有 tr1_ receipt 缺 proof（v7 迁移形态）：refresh 不自动补齐/升级——继续 replay blocker", () => {
     ensureTreasuryReceiptStore();
-    const childId = "tr1_0123456789abcdef_000002_00112233";
+    const chain = seedActiveChildChain("r19_rf_legacy_root", "4444444444444444", "5555555555555555");
+    const childId = chain.childId;
     // 手塞 v7→v8 迁移后的缺 proof modern receipt（lookup 归一 legacy_committed）。
     Memory.runtime!.treasury!.receipts!.settled[`t:${childId}`] = {
       level: "identity-bound",
       settledAtTick: Game.time,
-      digest: "1111111111111111",
-      durableIdentityDigest: "2222222222222222",
+      digest: "4444444444444444",
+      durableIdentityDigest: "5555555555555555",
       contractDigest: "4444444444444444",
       authorizationCohortDigest: "5555555555555555",
     } as never;
     Game.time += 1;
     const refreshed = refreshSettledReceiptForResolution(childId, Game.time, {
-      digest: "1111111111111111",
-      durableIdentityDigest: "2222222222222222",
+      ...chain.identity,
       contractDigest: "4444444444444444",
       authorizationCohortDigest: "5555555555555555",
-      lineageId: "0123456789abcdef",
-      lineageGeneration: 2,
-      parentTransactionId: "r19_rf_parent2",
-      lineageBindingDigest: "3333333333333333",
     });
     expect(refreshed.status).toBe("blocked");
     if (refreshed.status === "blocked") expect(refreshed.reason).toBe("legacy_proof");
@@ -319,29 +368,20 @@ describe("receipt refresh 的 lineage-aware 身份规则（第十九轮 25.2）"
 
   it("既有完整 tr1_ receipt 与刷新 identity 的 binding 冲突：拒绝刷新", () => {
     ensureTreasuryReceiptStore();
-    const childId = "tr1_0123456789abcdef_000004_00112233";
-    const committed = commitSettledReceipt(childId, Game.time, {
-      digest: "1111111111111111",
-      durableIdentityDigest: "2222222222222222",
-      lowlevelSource: "runtime-lowlevel@v1",
-      lineageId: "0123456789abcdef",
-      lineageGeneration: 1,
-      parentTransactionId: "r19_rf_parent4",
-      lineageBindingDigest: "3333333333333333",
-    });
-    expect(committed.status).not.toBe("rejected");
+    const chain = seedActiveChildChain("r19_rf_conflict_root");
+    const childId = chain.childId;
+    const committed = commitSettledReceipt(childId, Game.time, chain.identity);
+    expect(committed.status).toBe("written");
     Game.time += 1;
+    // binding 换成格式合法但与 record 重算不同的 digest。
     const refreshed = refreshSettledReceiptForResolution(childId, Game.time, {
-      digest: "1111111111111111",
-      durableIdentityDigest: "2222222222222222",
-      lowlevelSource: "runtime-lowlevel@v1",
-      lineageId: "0123456789abcdef",
-      lineageGeneration: 1,
-      parentTransactionId: "r19_rf_parent4",
-      lineageBindingDigest: "9999999999999999", // binding 冲突
+      ...chain.identity,
+      lineageBindingDigest: "9999999999999999",
     });
     expect(refreshed.status).toBe("blocked");
     if (refreshed.status === "blocked") expect(refreshed.reason).toBe("identity_conflict");
+    // 原 proof 未被覆盖（四字段原样保留）。
+    expect(readTreasurySettlementProof(childId)?.lineageBindingDigest).toBe(chain.identity.lineageBindingDigest);
   });
 });
 
@@ -405,19 +445,23 @@ describe("unified unresolved authority 的 lineage proof 矩阵（第十九轮 2
   });
 
   it("intent-only：tr1_ intent 携带完整 proof → ok 且 authority 暴露四字段", () => {
-    seedIntent("tr1_0123456789abcdef_000007_00112233", {
-      lineageId: "0123456789abcdef",
+    // 【第二十轮】resolver 对 tr1_ 叠加 semantic gate——fixture 必须携带与
+    // record 一致的真实四字段（权威重算 binding）。
+    const chain = seedActiveChildChain("r19_ok_parent");
+    seedIntent(chain.childId, {
+      lineageId: chain.lineageId,
       lineageGeneration: 1,
       parentTransactionId: "r19_ok_parent",
-      lineageBindingDigest: "3333333333333333",
+      lineageBindingDigest: chain.identity.lineageBindingDigest,
+      digest: "1111111111111111",
     });
-    const resolution = resolveTreasuryUnresolvedAuthority("tr1_0123456789abcdef_000007_00112233");
+    const resolution = resolveTreasuryUnresolvedAuthority(chain.childId);
     expect(resolution.status).toBe("ok");
     if (resolution.status === "ok") {
-      expect(resolution.authority.lineageId).toBe("0123456789abcdef");
+      expect(resolution.authority.lineageId).toBe(chain.lineageId);
       expect(resolution.authority.lineageGeneration).toBe(1);
       expect(resolution.authority.parentTransactionId).toBe("r19_ok_parent");
-      expect(resolution.authority.lineageBindingDigest).toBe("3333333333333333");
+      expect(resolution.authority.lineageBindingDigest).toBe(chain.identity.lineageBindingDigest);
     }
   });
 
@@ -514,6 +558,9 @@ describe("committed 三方 verifier 的 lineage 维度（第十九轮 25.9：逐
         tombstone: mutatedTombstone,
         authorityResolution: verifierAuthority({ ...baseProof }),
         receiptProof: receipt,
+        // 【第二十轮 13.4】tr1_ 附 semantic verdict（mutated 字段间互不一致由
+        // 三方 relation 抓获——semantic 维度以 match 为基线）。
+        semanticLineageVerdict: { verdict: "match" },
       });
       expect(verdict.status).toBe("conflict");
       if (verdict.status === "conflict") expect(verdict.detail).toContain("conflict");
@@ -525,6 +572,7 @@ describe("committed 三方 verifier 的 lineage 维度（第十九轮 25.9：逐
       tombstone,
       authorityResolution: verifierAuthority({ ...baseProof }),
       receiptProof: { level: "lowlevel", settledAtTick: 100, ...baseIdentity },
+      semanticLineageVerdict: { verdict: "match" },
     });
     expect(verdict.status).toBe("insufficient");
   });
@@ -534,6 +582,7 @@ describe("committed 三方 verifier 的 lineage 维度（第十九轮 25.9：逐
       tombstone,
       authorityResolution: verifierAuthority({}),
       receiptProof: receipt,
+      semanticLineageVerdict: { verdict: "match" },
     });
     expect(verdict.status).toBe("conflict");
   });
@@ -543,6 +592,7 @@ describe("committed 三方 verifier 的 lineage 维度（第十九轮 25.9：逐
       tombstone,
       authorityResolution: verifierAuthority({ ...baseProof }),
       receiptProof: receipt,
+      semanticLineageVerdict: { verdict: "match" },
     });
     expect(verdict.status).toBe("verified");
     if (verdict.status === "verified") expect(verdict.authorityPresent).toBe(true);

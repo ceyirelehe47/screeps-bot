@@ -56,6 +56,10 @@ import {
   treasuryLineageProofShapeErrorForTransaction,
   type TreasuryLineageProofFacts,
 } from "@/runtime/treasury/lineageProof";
+import {
+  validateTreasurySemanticLineage,
+  describeTreasurySemanticLineageVerdict,
+} from "@/runtime/treasury/semanticLineageValidation";
 
 /** 归一化 authority facts（签发/resolution/recovery/release 共用形状）。 */
 export interface TreasuryUnresolvedAuthority {
@@ -163,6 +167,51 @@ function lineageProofSpread(facts: TreasuryLineageProofFacts | undefined): { rea
         parentTransactionId: facts.parentTransactionId,
         lineageBindingDigest: facts.lineageBindingDigest,
       };
+}
+
+/**
+ * 【第二十轮 16.8】tr1_ 归一化 authority 的 semantic lineage gate（三个
+ * ok 返回路径共用）：child ID 内嵌 lineage/generation、确定性 parent 派生、
+ * binding 权威重算、active lineage / terminal authority 状态相容性全部
+ * 重算验证。shape proof（四字段在两侧一致复制）不构成语义证明——一致
+ * 复制的错误事实必须在此拦截：
+ * - semantic conflict / insufficient(legacy isolated) / no_authority →
+ *   inconsistent（fail closed——capability 不签发、resolution 阻断）；
+ * - semantic store_unhealthy（lineage/summary/exact retirement store）→
+ *   store_unhealthy（零 release / 零 refresh / 零结论）。
+ * 非 tr1_ authority 不经本 gate（initial attempt 无 lineage 语义域）。
+ */
+function semanticGateOfAuthority(
+  authority: TreasuryUnresolvedAuthority,
+): TreasuryUnresolvedAuthorityResolution | null {
+  if (authority.lineageId === undefined) return null;
+  const semantic = validateTreasurySemanticLineage({
+    transactionId: authority.transactionId,
+    proof: {
+      lineageId: authority.lineageId,
+      lineageGeneration: authority.lineageGeneration!,
+      parentTransactionId: authority.parentTransactionId!,
+      lineageBindingDigest: authority.lineageBindingDigest!,
+    },
+    identity: {
+      digest: authority.digest,
+      ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+      ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
+      ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+      ...(authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+    },
+  });
+  if (semantic.verdict === "match") return null;
+  if (semantic.verdict === "store_unhealthy") {
+    return {
+      status: "store_unhealthy",
+      detail: `tr1_ authority 的 semantic lineage 验证 store unhealthy（${semantic.detail}）——零 release/refresh/marker-clear/stage 变化`,
+    };
+  }
+  return {
+    status: "inconsistent",
+    detail: `tr1_ authority 的 semantic lineage validation 未通过（${describeTreasurySemanticLineageVerdict(semantic)}）——一致复制的四字段不是语义证明，fail closed`,
+  };
 }
 
 /**
@@ -378,41 +427,42 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
       return { status: "inconsistent", detail: `同 id 双权威 execution fact 不一致: ${cohesion.detail}` };
     }
     const mergedFacts = cohesion.merged;
+    const normalizedAuthority: TreasuryUnresolvedAuthority = {
+      authorityKind: "quarantine",
+      transactionId: quarantined.transactionId,
+      digest: quarantined.digest,
+      kind: quarantined.kind,
+      actionKind: quarantined.actionKind ?? quarantined.kind,
+      phase: mergedFacts.phase,
+      outcome: mergedFacts.outcome,
+      settlement: mergedFacts.settlement,
+      recordedAt: quarantined.recordedAt,
+      actionTick: quarantined.tick,
+      postings: quarantined.deltas.map((leg) => ({ ...leg })),
+      ...(quarantined.contractId !== undefined ? { contractId: quarantined.contractId } : {}),
+      ...(quarantined.contractDigest !== undefined ? { contractDigest: quarantined.contractDigest } : {}),
+      ...(quarantined.adapterVersion !== undefined ? { adapterVersion: quarantined.adapterVersion } : {}),
+      ...(quarantined.durablePayload !== undefined ? { durablePayload: quarantined.durablePayload } : {}),
+      ...(quarantined.durablePayloadVersion !== undefined ? { durablePayloadVersion: quarantined.durablePayloadVersion } : {}),
+      ...(quarantined.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: quarantined.authorizationCohortDigest } : {}),
+      ...(quarantined.durableIdentityDigest !== undefined ? { durableIdentityDigest: quarantined.durableIdentityDigest } : {}),
+      ...(quarantined.authorizationDigest !== undefined ? { authorizationDigest: quarantined.authorizationDigest } : {}),
+      ...(quarantined.structureFacts !== undefined
+        ? { structureFacts: quarantined.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
+        : {}),
+      ...(quarantined.authorityLevel !== undefined ? { authorityLevel: quarantined.authorityLevel } : {}),
+      ...(quarantined.lowlevelSource !== undefined ? { lowlevelSource: quarantined.lowlevelSource } : {}),
+      ...(quarantined.legacyV1 !== undefined ? { legacyV1: quarantined.legacyV1 } : {}),
+      ...(quarantined.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: quarantined.adapterSemanticIdentity } : {}),
+      ...(quarantined.forensic !== undefined ? { forensic: { ...quarantined.forensic } } : {}),
+      ...lineageProofSpread(quarantineLineage),
+    };
     // legacy+legacy：digest/kind/postings 受控比较（上文已完成）；forensic+
     // forensic：同一隔离记录（digest/kind/postings 相同）——上文完成。
-    return {
-      status: "ok",
-      authority: {
-        authorityKind: "quarantine",
-        transactionId: quarantined.transactionId,
-        digest: quarantined.digest,
-        kind: quarantined.kind,
-        actionKind: quarantined.actionKind ?? quarantined.kind,
-        phase: mergedFacts.phase,
-        outcome: mergedFacts.outcome,
-        settlement: mergedFacts.settlement,
-        recordedAt: quarantined.recordedAt,
-        actionTick: quarantined.tick,
-        postings: quarantined.deltas.map((leg) => ({ ...leg })),
-        ...(quarantined.contractId !== undefined ? { contractId: quarantined.contractId } : {}),
-        ...(quarantined.contractDigest !== undefined ? { contractDigest: quarantined.contractDigest } : {}),
-        ...(quarantined.adapterVersion !== undefined ? { adapterVersion: quarantined.adapterVersion } : {}),
-        ...(quarantined.durablePayload !== undefined ? { durablePayload: quarantined.durablePayload } : {}),
-        ...(quarantined.durablePayloadVersion !== undefined ? { durablePayloadVersion: quarantined.durablePayloadVersion } : {}),
-        ...(quarantined.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: quarantined.authorizationCohortDigest } : {}),
-        ...(quarantined.durableIdentityDigest !== undefined ? { durableIdentityDigest: quarantined.durableIdentityDigest } : {}),
-        ...(quarantined.authorizationDigest !== undefined ? { authorizationDigest: quarantined.authorizationDigest } : {}),
-        ...(quarantined.structureFacts !== undefined
-          ? { structureFacts: quarantined.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
-          : {}),
-        ...(quarantined.authorityLevel !== undefined ? { authorityLevel: quarantined.authorityLevel } : {}),
-        ...(quarantined.lowlevelSource !== undefined ? { lowlevelSource: quarantined.lowlevelSource } : {}),
-        ...(quarantined.legacyV1 !== undefined ? { legacyV1: quarantined.legacyV1 } : {}),
-        ...(quarantined.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: quarantined.adapterSemanticIdentity } : {}),
-        ...(quarantined.forensic !== undefined ? { forensic: { ...quarantined.forensic } } : {}),
-        ...lineageProofSpread(quarantineLineage),
-      },
-    };
+    // 【第二十轮 16.8】tr1_ 归一化 authority 的 semantic lineage gate。
+    const mergedSemanticGate = semanticGateOfAuthority(normalizedAuthority);
+    if (mergedSemanticGate !== null) return mergedSemanticGate;
+    return { status: "ok", authority: normalizedAuthority };
   }
   if (quarantined !== undefined) {
     // 【第十二轮 3.6】authority 事实身份重算：digest 必须能由持久事实重算
@@ -437,39 +487,40 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
     }
     // quarantine 优先（v2 自带完整合同事实；并存 intent 时以 quarantine 为
     // 权威形态，intent 的同名字段已在上文比对）。
-    return {
-      status: "ok",
-      authority: {
-        authorityKind: "quarantine",
-        transactionId: quarantined.transactionId,
-        digest: quarantined.digest,
-        kind: quarantined.kind,
-        actionKind: quarantined.actionKind ?? quarantined.kind,
-        phase: quarantined.phase,
-        outcome: quarantined.outcome,
-        settlement: quarantined.settlement,
-        recordedAt: quarantined.recordedAt,
-        actionTick: quarantined.tick,
-        postings: quarantined.deltas.map((leg) => ({ ...leg })),
-        ...(quarantined.contractId !== undefined ? { contractId: quarantined.contractId } : {}),
-        ...(quarantined.contractDigest !== undefined ? { contractDigest: quarantined.contractDigest } : {}),
-        ...(quarantined.adapterVersion !== undefined ? { adapterVersion: quarantined.adapterVersion } : {}),
-        ...(quarantined.durablePayload !== undefined ? { durablePayload: quarantined.durablePayload } : {}),
-        ...(quarantined.durablePayloadVersion !== undefined ? { durablePayloadVersion: quarantined.durablePayloadVersion } : {}),
-        ...(quarantined.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: quarantined.authorizationCohortDigest } : {}),
-        ...(quarantined.durableIdentityDigest !== undefined ? { durableIdentityDigest: quarantined.durableIdentityDigest } : {}),
-        ...(quarantined.authorizationDigest !== undefined ? { authorizationDigest: quarantined.authorizationDigest } : {}),
-        ...(quarantined.structureFacts !== undefined
-          ? { structureFacts: quarantined.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
-          : {}),
-        ...(quarantined.authorityLevel !== undefined ? { authorityLevel: quarantined.authorityLevel } : {}),
-        ...(quarantined.lowlevelSource !== undefined ? { lowlevelSource: quarantined.lowlevelSource } : {}),
-        ...(quarantined.legacyV1 !== undefined ? { legacyV1: quarantined.legacyV1 } : {}),
-        ...(quarantined.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: quarantined.adapterSemanticIdentity } : {}),
-        ...(quarantined.forensic !== undefined ? { forensic: { ...quarantined.forensic } } : {}),
-        ...lineageProofSpread(quarantineOnlyLineage),
-      },
+    const normalizedAuthority: TreasuryUnresolvedAuthority = {
+      authorityKind: "quarantine",
+      transactionId: quarantined.transactionId,
+      digest: quarantined.digest,
+      kind: quarantined.kind,
+      actionKind: quarantined.actionKind ?? quarantined.kind,
+      phase: quarantined.phase,
+      outcome: quarantined.outcome,
+      settlement: quarantined.settlement,
+      recordedAt: quarantined.recordedAt,
+      actionTick: quarantined.tick,
+      postings: quarantined.deltas.map((leg) => ({ ...leg })),
+      ...(quarantined.contractId !== undefined ? { contractId: quarantined.contractId } : {}),
+      ...(quarantined.contractDigest !== undefined ? { contractDigest: quarantined.contractDigest } : {}),
+      ...(quarantined.adapterVersion !== undefined ? { adapterVersion: quarantined.adapterVersion } : {}),
+      ...(quarantined.durablePayload !== undefined ? { durablePayload: quarantined.durablePayload } : {}),
+      ...(quarantined.durablePayloadVersion !== undefined ? { durablePayloadVersion: quarantined.durablePayloadVersion } : {}),
+      ...(quarantined.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: quarantined.authorizationCohortDigest } : {}),
+      ...(quarantined.durableIdentityDigest !== undefined ? { durableIdentityDigest: quarantined.durableIdentityDigest } : {}),
+      ...(quarantined.authorizationDigest !== undefined ? { authorizationDigest: quarantined.authorizationDigest } : {}),
+      ...(quarantined.structureFacts !== undefined
+        ? { structureFacts: quarantined.structureFacts.map((fact) => ({ ...fact }) as { readonly [key: string]: unknown }) }
+        : {}),
+      ...(quarantined.authorityLevel !== undefined ? { authorityLevel: quarantined.authorityLevel } : {}),
+      ...(quarantined.lowlevelSource !== undefined ? { lowlevelSource: quarantined.lowlevelSource } : {}),
+      ...(quarantined.legacyV1 !== undefined ? { legacyV1: quarantined.legacyV1 } : {}),
+      ...(quarantined.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: quarantined.adapterSemanticIdentity } : {}),
+      ...(quarantined.forensic !== undefined ? { forensic: { ...quarantined.forensic } } : {}),
+      ...lineageProofSpread(quarantineOnlyLineage),
     };
+    // 【第二十轮 16.8】tr1_ 归一化 authority 的 semantic lineage gate。
+    const quarantineOnlySemanticGate = semanticGateOfAuthority(normalizedAuthority);
+    if (quarantineOnlySemanticGate !== null) return quarantineOnlySemanticGate;
+    return { status: "ok", authority: normalizedAuthority };
   }
   // intent-only（emergency authority）：完整参与签发与 resolution。
   const intent = intended as NonNullable<typeof intended>;
@@ -490,20 +541,18 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
   if (intentLineageFacts === "partial") {
     return { status: "inconsistent", detail: "intent authority 的 lineage proof 部分存在（形状异常——fail closed）" };
   }
-  return {
-    status: "ok",
-    authority: {
-      authorityKind: "intent",
-      transactionId: intent.transactionId,
-      digest: intent.digest,
-      kind: intent.kind,
-      actionKind: intent.actionKind,
-      phase: intent.settlement,
-      outcome: intent.outcome,
-      settlement: intent.settlement,
-      recordedAt: intent.updatedAtTick,
-      actionTick: intent.createdAtTick,
-      postings: intent.postings.map((leg) => ({ ...leg })),
+  const normalizedAuthority: TreasuryUnresolvedAuthority = {
+    authorityKind: "intent",
+    transactionId: intent.transactionId,
+    digest: intent.digest,
+    kind: intent.kind,
+    actionKind: intent.actionKind,
+    phase: intent.settlement,
+    outcome: intent.outcome,
+    settlement: intent.settlement,
+    recordedAt: intent.updatedAtTick,
+    actionTick: intent.createdAtTick,
+    postings: intent.postings.map((leg) => ({ ...leg })),
       ...(intent.contractId !== undefined ? { contractId: intent.contractId } : {}),
       ...(intent.contractDigest !== undefined ? { contractDigest: intent.contractDigest } : {}),
       ...(intent.adapterVersion !== undefined ? { adapterVersion: intent.adapterVersion } : {}),
@@ -519,8 +568,11 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
       ...(intent.authorityLevel !== undefined ? { authorityLevel: intent.authorityLevel } : {}),
       ...(intent.lowlevelSource !== undefined ? { lowlevelSource: intent.lowlevelSource } : {}),
       ...lineageProofSpread(intentLineageFacts),
-    },
   };
+  // 【第二十轮 16.8】tr1_ 归一化 authority 的 semantic lineage gate。
+  const intentOnlySemanticGate = semanticGateOfAuthority(normalizedAuthority);
+  if (intentOnlySemanticGate !== null) return intentOnlySemanticGate;
+  return { status: "ok", authority: normalizedAuthority };
 }
 
 /**

@@ -73,6 +73,7 @@ import {
   type TreasuryResolutionProofLevel,
 } from "@/runtime/treasury/resolutionStore";
 import { isTreasuryRearmAttemptId } from "@/runtime/treasury/transactionId";
+import { validateTreasurySemanticLineage } from "@/runtime/treasury/semanticLineageValidation";
 import {
   createTreasuryAttemptLineageRecord,
   ensureTreasuryLineageSlotAvailable,
@@ -203,6 +204,52 @@ export { readTreasuryResolutionCounters } from "@/runtime/treasury/resolutionEve
 
 function countRejected(): void {
   recordTreasuryResolutionEvent("rejected");
+}
+
+/**
+ * 【第二十轮 13.4】tr1_ authority 的 semantic lineage verdict（三方 verifier
+ * 调用输入）：child ID 派生/parent/binding 权威重算/active-terminal authority
+ * 状态的语义证明——一组结构完整但语义伪造的四字段（互相一致却与 ID 派生
+ * 冲突）不得落盘为现代 proof / 释放 authority。非 tr1_ 返回 undefined。
+ */
+function semanticLineageVerdictOfAuthorityFacts(authority: {
+  readonly transactionId: string;
+  readonly digest: string;
+  readonly contractDigest?: string;
+  readonly authorizationCohortDigest?: string;
+  readonly durableIdentityDigest?: string;
+  readonly lowlevelSource?: string;
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
+}): { readonly verdict: string; readonly detail?: string } | undefined {
+  if (!isTreasuryRearmAttemptId(authority.transactionId)) return undefined;
+  if (
+    authority.lineageId === undefined || authority.lineageGeneration === undefined ||
+    authority.parentTransactionId === undefined || authority.lineageBindingDigest === undefined
+  ) {
+    return { verdict: "insufficient", detail: "tr1_ authority 缺完整 lineage proof（resolver shape 层应已拦截——防御）" };
+  }
+  const semantic = validateTreasurySemanticLineage({
+    transactionId: authority.transactionId,
+    proof: {
+      lineageId: authority.lineageId,
+      lineageGeneration: authority.lineageGeneration,
+      parentTransactionId: authority.parentTransactionId,
+      lineageBindingDigest: authority.lineageBindingDigest,
+    },
+    identity: {
+      digest: authority.digest,
+      ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+      ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
+      ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+      ...(authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+    },
+  });
+  return semantic.verdict === "match"
+    ? { verdict: "match" }
+    : { verdict: semantic.verdict, detail: "detail" in semantic ? semantic.detail : undefined };
 }
 
 // ── 【第十五轮第十三节】test-only 故障注入：receipt refresh 成功之后、统一
@@ -773,6 +820,9 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
   runImmediateResolutionFaultInjector();
   const readBackProof = readTreasurySettlementProof(authority.transactionId);
   const postRefreshAuthority = resolveTreasuryUnresolvedAuthority(authority.transactionId);
+  // 【第二十轮 13.4】tr1_ 的 semantic lineage verdict（三方互相 match ≠ 真实
+  // generation——child ID 派生/parent/binding/authority 状态语义独立验证）。
+  const semanticLineageVerdict = semanticLineageVerdictOfAuthorityFacts(authority);
   const committedVerdict = verifyTreasuryCommittedResolutionProof({
     tombstone: {
       transactionId: authority.transactionId,
@@ -787,6 +837,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     },
     authorityResolution: postRefreshAuthority,
     receiptProof: readBackProof,
+    ...(semanticLineageVerdict !== undefined ? { semanticLineageVerdict } : {}),
   });
   if (committedVerdict.status !== "verified") {
     countRejected();
@@ -850,12 +901,13 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     };
   }
   recordTreasuryResolutionEvent("committed");
-  // 【第十八轮 24.3】【第十九轮 A.6】resolution-as-committed 后 tr1_ child 的
-  // lineage 最终 chain-committed：receipt 已是 committed 权威——推进前先验证
-  // receipt proof 的 lineage（lineageId/generation/parent/binding）与 lineage
-  // record 完全一致（generation 混用防御：generation N 的 receipt 不能证明
-  // N+1 的 chain）。不匹配 → 保持 child_active（beginTick 补完成同样按
-  // matching receipt 判定，不会推进），等待显式处理。
+  // 【第十八轮 24.3】【第十九轮 A.6】【第二十轮 13.6】resolution-as-committed 后
+  // tr1_ child 的 lineage 最终 chain-committed：receipt 已是 committed 权威——
+  // 推进前按**完整 exact settlement identity**（digest/contract/cohort/durable/
+  // lowlevel + lineage 四字段 + proof class）与 lineage record current 一致验证
+  //（generation 混用与 identity 降级防御）。不匹配 → 保持 child_active（beginTick
+  // 补完成同样按 matching receipt 判定，不会推进）；close 写入结果不被忽略——
+  // 失败保持 pending（可恢复，beginTick 幂等补完成），不伪装已完成。
   if (isTreasuryRearmAttemptId(authority.transactionId)) {
     const chainLineage = lookupTreasuryAttemptLineageByAttemptId(authority.transactionId);
     if (chainLineage !== undefined && chainLineage.state === "child_active" && chainLineage.currentTransactionId === authority.transactionId) {
@@ -866,8 +918,22 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
         committedProof.lineageGeneration === chainLineage.generation &&
         committedProof.parentTransactionId === chainLineage.currentParentTransactionId &&
         committedProof.lineageBindingDigest === chainLineage.bindingDigest;
-      if (proofLineageMatchesRecord) {
-        void closeTreasuryLineageAsChainCommitted(chainLineage.lineageId);
+      // exact settlement identity 维度（同 digest/lineage 但 contract/cohort/
+      // durable/lowlevel 不同的 receipt 不得推进 chain）。
+      const proofIdentityMatchesRecord =
+        committedProof !== undefined &&
+        committedProof.digest === chainLineage.currentIdentity.digest &&
+        (committedProof.contractDigest ?? undefined) === (chainLineage.currentIdentity.contractDigest ?? undefined) &&
+        (committedProof.authorizationCohortDigest ?? undefined) === (chainLineage.currentIdentity.authorizationCohortDigest ?? undefined) &&
+        (committedProof.durableIdentityDigest ?? undefined) === (chainLineage.currentIdentity.durableIdentityDigest ?? undefined) &&
+        (committedProof.lowlevelSource ?? undefined) === (chainLineage.currentIdentity.lowlevelSource ?? chainLineage.lowlevelSource ?? undefined);
+      if (proofLineageMatchesRecord && proofIdentityMatchesRecord) {
+        const closed = closeTreasuryLineageAsChainCommitted(chainLineage.lineageId);
+        if (closed.status === "rejected") {
+          // 写入失败：保持 child_active（可恢复 pending——beginTick 的
+          // commit-pending 补完成按同一 matching receipt 幂等重试）。
+          recordTreasuryResolutionEvent("chainCommitPendingRetries");
+        }
       }
     }
   }

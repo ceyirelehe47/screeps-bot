@@ -51,7 +51,7 @@
  * 不得导致 authority 被错误释放。
  */
 
-import { isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
+import { isValidTreasuryTransactionId, isTreasuryRearmAttemptId } from "@/runtime/treasury/transactionId";
 import {
   TREASURY_RECEIPT_RETENTION_TICKS,
   readTreasurySettlementProof,
@@ -84,6 +84,8 @@ import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { validateTreasuryResolutionTombstoneState } from "@/runtime/treasury/resolutionStateSemantics";
 import { validateTreasuryLowlevelSourceField } from "@/runtime/treasury/authorityLevel";
 import { classAwareIdentityOfAttempt } from "@/runtime/treasury/markerAttemptIdentity";
+import { treasuryExactAttemptIdentityOfTombstone, treasuryExactAttemptIdentityOfAuthority, treasuryExactAttemptIdentityRelation, type TreasuryExactAttemptIdentity } from "@/runtime/treasury/exactAttemptIdentity";
+import { validateTreasurySemanticLineage } from "@/runtime/treasury/semanticLineageValidation";
 
 /**
  * 【第十六轮第十一节】resolution tombstone v6（lowlevel proof 绑定显式
@@ -369,7 +371,7 @@ export function validateTreasuryResolutionTombstoneShape(entry: unknown): string
       if (typeof candidate.lineageBindingDigest !== "string" || !RESOLUTION_DIGEST_PATTERN.test(candidate.lineageBindingDigest)) {
         return "lineageBindingDigest 非法（须 16 小写 hex）";
       }
-      if (typeof candidate.transactionId === "string" && !candidate.transactionId.startsWith("tr1_")) {
+      if (typeof candidate.transactionId === "string" && !isTreasuryRearmAttemptId(candidate.transactionId)) {
         return "非 tr1_ tombstone 不得携带 lineage proof（initial attempt 专属禁带）";
       }
     }
@@ -770,6 +772,12 @@ function evictExpiredTombstones(store: TreasuryResolutionStore, indexes?: { reso
       store.entryCount -= 1;
       removed += 1;
       if (indexes !== undefined) indexes.pendingReleaseIds.delete(entry.transactionId);
+      // 【第二十轮 10.1】not-executed 驱逐后联动释放该代 exact retirement
+      // proof（依赖消失——root 门禁由 retirement summary 承担；committed
+      // 条目无 proof 不涉及）。
+      if (entry.resolution === "not-executed") {
+        generationProofReleaser?.(entry.transactionId);
+      }
     }
   }
   if (removed > 0) store.updatedAt = Game.time;
@@ -924,6 +932,18 @@ export function registerTreasuryRetentionLineageLookupForAssembly(
   retentionReplacementVerdict = lookup;
 }
 
+/**
+ * 【第二十轮 10.1】exact generation retirement proof 的驱逐联动释放注入
+ * （generationRetirementAuthority 模块加载注册——模块单向依赖）：final
+ * not-executed tombstone 按 replacement_match 驱逐后，对应代 proof 的唯一
+ * 长期依赖消失（root 门禁由 retirement summary 承担）→ 释放。
+ */
+let generationProofReleaser: ((transactionId: string) => void) | null = null;
+
+export function registerTreasuryGenerationProofReleaseForAssembly(release: (transactionId: string) => void): void {
+  generationProofReleaser = release;
+}
+
 // ── 统一 replay horizon（prepare 幂等与 receipt 同一规则） ─────────────────
 
 /**
@@ -1015,21 +1035,60 @@ export interface TreasuryResolutionRecoveryReport {
  */
 
 /** authority entry → attempt identity 视图（final not-executed 补完成比较；
- *  【第十六轮第十一节】lowlevelSource 一并进入 attempt identity 视图）。 */
+ *  【第二十轮 8】exact attempt identity 单一构造——lineage 四字段与 proof
+ *  class 不再在视图里丢弃）。 */
 function attemptIdentityOf(authority: {
+  readonly transactionId: string;
   readonly digest: string;
   readonly contractDigest?: string;
   readonly authorizationCohortDigest?: string;
   readonly durableIdentityDigest?: string;
   readonly lowlevelSource?: string;
-}): TreasuryAttemptIdentity {
-  return {
-    digest: authority.digest,
-    ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
-    ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
-    ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
-    ...(authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
-  };
+  readonly authorityLevel?: string;
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
+}): TreasuryExactAttemptIdentity {
+  const exact = treasuryExactAttemptIdentityOfAuthority(authority);
+  if (exact !== null) return exact;
+  // 视图构造失败（tr1_ 缺完整 lineage / digest 缺失——防御）：退化为空
+  // digest 视图，exact relation 对 digest 缺失方判 conflict（fail closed）。
+  return { transactionId: authority.transactionId, digest: "", proofClass: "legacy" };
+}
+
+/**
+ * 【第二十轮 13.4】tr1_ tombstone 的 semantic lineage verdict（verifier 调用方
+ * 先行计算）：tombstone 自身四字段完整（v7 shape 矩阵）时验证其语义真实性
+ * ——child ID 派生/parent/binding 重算/active-terminal authority 状态。
+ */
+function semanticLineageVerdictOfTombstone(entry: TreasuryResolutionTombstone): { readonly verdict: string; readonly detail?: string } | undefined {
+  if (!isTreasuryRearmAttemptId(entry.transactionId)) return undefined;
+  if (
+    entry.lineageId === undefined || entry.lineageGeneration === undefined ||
+    entry.parentTransactionId === undefined || entry.lineageBindingDigest === undefined
+  ) {
+    return { verdict: "insufficient", detail: "tr1_ resolving tombstone 缺完整 lineage proof（形状层应已拦截——防御）" };
+  }
+  const semantic = validateTreasurySemanticLineage({
+    transactionId: entry.transactionId,
+    proof: {
+      lineageId: entry.lineageId,
+      lineageGeneration: entry.lineageGeneration,
+      parentTransactionId: entry.parentTransactionId,
+      lineageBindingDigest: entry.lineageBindingDigest,
+    },
+    identity: {
+      digest: entry.digest,
+      ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+      ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+      ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+      ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+    },
+  });
+  return semantic.verdict === "match"
+    ? { verdict: "match" }
+    : { verdict: semantic.verdict, detail: "detail" in semantic ? semantic.detail : undefined };
 }
 
 /**
@@ -1185,11 +1244,14 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
       }
       // ── 第 3 步：共用三方 verifier（receipt 时间证明、modern level、
       //    receipt ↔ tombstone、proof level 自动释放矩阵、tombstone/receipt
-      //    ↔ authority 全部由此承载）。
+      //    ↔ authority 全部由此承载）。【第二十轮 13.4】tr1_ 另附 semantic
+      //    lineage verdict——三方互相 match 不自动代表真实 generation。
+      const semanticVerdict = semanticLineageVerdictOfTombstone(entry);
       const verdict = verifyTreasuryCommittedResolutionProof({
         tombstone: entry,
         authorityResolution,
         receiptProof,
+        ...(semanticVerdict !== undefined ? { semanticLineageVerdict: semanticVerdict } : {}),
       });
       if (verdict.status !== "verified") {
         resolutionStoreEvents.faulted += 1;
@@ -1337,7 +1399,10 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
         continue;
       }
     }
-    const relation = treasuryAttemptIdentityRelation(entry, attemptIdentityOf(authority));
+    const relation = treasuryExactAttemptIdentityRelation(
+      treasuryExactAttemptIdentityOfTombstone(entry) ?? attemptIdentityOf({ transactionId: entry.transactionId, digest: entry.digest }),
+      attemptIdentityOf(authority),
+    );
     if (relation !== "match") {
       resolutionStoreEvents.faulted += 1;
       if (relation === "conflict") {

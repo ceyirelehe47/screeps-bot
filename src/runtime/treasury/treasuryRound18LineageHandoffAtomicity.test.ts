@@ -791,14 +791,22 @@ describe("lineage durable proof 矩阵（第十八轮 24.4/24.5）", () => {
     expect(quarantine?.lineageBindingDigest).toBe(record.bindingDigest);
   });
 
-  it("tr1_ receipt 缺完整 lineage proof：lookup 降级 legacy（只作 replay blocker）", () => {
+  it("tr1_ receipt 缺完整 lineage proof：【第二十轮】commit 零写 fatal；手塞缺 proof receipt lookup 降级 legacy（只作 replay blocker）", () => {
     ensureTreasuryReceiptStore();
-    expect(
-      commitSettledReceipt("tr1_ffff000011112222_000001_aaaa0000", Game.time, {
-        digest: "aaaaaaaaaaaaaaaa",
-        durableIdentityDigest: "bbbbbbbbbbbbbbbb",
-      }).status,
-    ).not.toBe("rejected");
+    // 【第二十轮 9.3】tr1_ 新 commit 缺完整 proof → 零写入 + fatal。
+    const committed = commitSettledReceipt("tr1_ffff000011112222_000001_aaaa0000", Game.time, {
+      digest: "aaaaaaaaaaaaaaaa",
+      durableIdentityDigest: "bbbbbbbbbbbbbbbb",
+    });
+    expect(committed.status).toBe("fatal");
+    expect(lookupTreasurySettledReceipt("tr1_ffff000011112222_000001_aaaa0000").status).toBe("absent");
+    // 既有缺 proof receipt（v7 迁移形态）的 lookup 仍降级 legacy_committed。
+    Memory.runtime!.treasury!.receipts!.settled["t:tr1_ffff000011112222_000001_aaaa0000"] = {
+      level: "identity-bound",
+      settledAtTick: Game.time,
+      digest: "aaaaaaaaaaaaaaaa",
+      durableIdentityDigest: "bbbbbbbbbbbbbbbb",
+    } as never;
     const lookup = lookupTreasurySettledReceipt("tr1_ffff000011112222_000001_aaaa0000");
     expect(lookup.status).toBe("legacy_committed");
   });
