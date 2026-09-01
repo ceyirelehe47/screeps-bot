@@ -42,13 +42,35 @@ import { registerTreasuryLineageResetHook } from "@/runtime/treasury/receipts";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
 import { validateTreasurySemanticLineage } from "@/runtime/treasury/semanticLineageValidation";
 import {
+  expectedTreasuryCurrentLineageExactIdentity,
+  describeTreasuryCurrentLineageRequiredness,
+} from "@/runtime/treasury/currentLineageSettlementVerifier";
+import {
+  TREASURY_TERMINAL_ROOT_IDENTITY_ALGORITHM,
+  TREASURY_TERMINAL_EXACT_IDENTITY_SCHEMA,
+  validateTreasuryTerminalRootExactShape,
+  validateTreasuryTerminalFinalExactShape,
+  type TreasuryTerminalRootExactIdentity,
+  type TreasuryTerminalFinalExactIdentity,
+} from "@/runtime/treasury/terminalExactIdentity";
+import { verifyTreasuryGenerationRetirementRelation } from "@/runtime/treasury/generationRetirementRelation";
+import { treasuryExactAttemptIdentityOfReceiptProof, treasuryExactAttemptIdentityOfTombstone, treasuryExactAttemptIdentityRelation } from "@/runtime/treasury/exactAttemptIdentity";
+import { computeTreasuryGenerationRootIdentityDigest } from "@/runtime/treasury/generationRetirementAuthority";
+import {
   peekTreasuryGenerationRetirementHealth,
   readTreasuryGenerationRetirementProof,
   releaseOrphanTreasuryGenerationRetirementProofs,
 } from "@/runtime/treasury/generationRetirementAuthority";
 import { registerTreasurySemanticSummarySourceForAssembly } from "@/runtime/treasury/semanticLineageValidation";
 
-export const TREASURY_RETIREMENT_SUMMARY_VERSION = 2;
+/**
+ * 【第二十一轮 7】summary v3：持久化 root / final exact identity（exact
+ * terminal authority）。v3 之前（v1/v2）的 store 是 replay-only——root 永久
+ * 重放门禁保留，但不得证明 terminal current / 授权新写入。
+ */
+export const TREASURY_RETIREMENT_SUMMARY_VERSION = 3;
+/** legacy store 版本（v2/v1——load 只读解释，不自动迁移到 v3）。 */
+export const TREASURY_RETIREMENT_SUMMARY_LEGACY_VERSION = 2;
 /** 独立硬容量（evidence 记录推导：≤128 × ~250B ≈ 32KB Memory 上界）。 */
 export const TREASURY_RETIREMENT_SUMMARY_MAX_ENTRIES = 128;
 
@@ -62,7 +84,12 @@ export interface TreasuryLineageRetirementSummary {
   /** 16hex lineage 身份（root + identity 派生——与 active record 同源）。 */
   readonly lineageId: string;
   readonly rootTransactionId: string;
-  /** root identity 合成 digest（root 永久退休门禁的紧凑绑定）。 */
+  /**
+   * root identity 合成 digest（root 永久退休门禁的紧凑绑定）。
+   * 【v3】canonical 单一口径：computeTreasuryGenerationRootIdentityDigest
+   * (rootExact 五元)——不再保留"双口径任一匹配"语义（旧口径 summary 是
+   * replay-only）。
+   */
   readonly rootIdentityDigest: string;
   readonly terminalState: TreasuryLineageTerminalState;
   /** chain 最终 generation（committed 的一代 / non-rearmable 退休的一代）。 */
@@ -76,6 +103,10 @@ export interface TreasuryLineageRetirementSummary {
    * pin；root 永久门禁不受影响）。
    */
   readonly authorityClass?: "identity-bound" | "lowlevel";
+  /** 【v3】canonical root exact identity（root replacement 的权威证明）。 */
+  readonly rootExact?: TreasuryTerminalRootExactIdentity;
+  /** 【v3】final attempt 的完整 exact identity（terminal current 的权威证明）。 */
+  readonly finalExact?: TreasuryTerminalFinalExactIdentity;
 }
 
 export interface TreasuryRetirementSummaryStore {
@@ -120,7 +151,7 @@ let heapRuntime: TreasurySummaryRuntime | null = null;
 function validateSummaryShape(summary: unknown): string | null {
   if (!summary || typeof summary !== "object") return "summary 非对象";
   const candidate = summary as Partial<TreasuryLineageRetirementSummary>;
-  if (candidate.schemaVersion !== TREASURY_RETIREMENT_SUMMARY_VERSION) {
+  if (candidate.schemaVersion !== TREASURY_RETIREMENT_SUMMARY_VERSION && candidate.schemaVersion !== TREASURY_RETIREMENT_SUMMARY_LEGACY_VERSION) {
     return `summary.schemaVersion 非法（${String(candidate.schemaVersion)}）`;
   }
   if (typeof candidate.lineageId !== "string" || !SUMMARY_DIGEST_PATTERN.test(candidate.lineageId)) {
@@ -149,12 +180,42 @@ function validateSummaryShape(summary: unknown): string | null {
   if (candidate.authorityClass !== undefined && candidate.authorityClass !== "identity-bound" && candidate.authorityClass !== "lowlevel") {
     return `summary.authorityClass 非法: ${String(candidate.authorityClass)}`;
   }
+  // 【第二十一轮 7】exact identity 字段矩阵：
+  // - v3：rootExact / finalExact 必须存在且形状合法（authorityClass 与
+  //   finalExact.proofClass 强制一致；rootIdentityDigest 与 rootExact canonical
+  //   重算一致；finalAttemptId 派生与 finalGeneration 相容）；
+  // - v2（legacy replay-only）：不得携带 exact 字段（半升级形态 = 损坏）。
+  if (candidate.schemaVersion === TREASURY_RETIREMENT_SUMMARY_VERSION) {
+    if (candidate.rootExact === undefined || candidate.finalExact === undefined) {
+      return "v3 summary 缺少 rootExact/finalExact（exact terminal authority 必填）";
+    }
+    const rootShapeError = validateTreasuryTerminalRootExactShape(candidate.rootExact);
+    if (rootShapeError !== null) return `summary.rootExact 损坏: ${rootShapeError}`;
+    const finalShapeError = validateTreasuryTerminalFinalExactShape(candidate.finalExact, candidate.finalGeneration);
+    if (finalShapeError !== null) return `summary.finalExact 损坏: ${finalShapeError}`;
+    if (candidate.authorityClass === undefined || candidate.authorityClass !== candidate.finalExact.proofClass) {
+      return "v3 summary 的 authorityClass 与 finalExact.proofClass 不一致（class 双权威矛盾）";
+    }
+    const canonicalRootDigest = computeTreasuryGenerationRootIdentityDigest(candidate.rootExact);
+    if (canonicalRootDigest !== candidate.rootIdentityDigest) {
+      return "v3 summary 的 rootIdentityDigest 与 rootExact canonical 重算不一致（单一口径）";
+    }
+    if (candidate.finalExact.durableIdentityDigest === undefined) {
+      return "v3 summary 的 finalExact 缺 durableIdentityDigest（弱身份不得充当 terminal authority）";
+    }
+  } else {
+    if (candidate.rootExact !== undefined || candidate.finalExact !== undefined) {
+      return "legacy v2 summary 携带 exact identity 字段（半升级形态——损坏，fail closed）";
+    }
+  }
   return null;
 }
 
 function validateSummaryStoreShape(store: TreasuryRetirementSummaryStore): string | null {
   if (!store || typeof store !== "object") return "summary store 非对象";
-  if (store.version !== TREASURY_RETIREMENT_SUMMARY_VERSION) {
+  // 【第二十一轮 7】store version 2 是 legacy replay-only（root 门禁保留，
+  // terminal exact 语义不可证明）；版本未知 fail closed。
+  if (store.version !== TREASURY_RETIREMENT_SUMMARY_VERSION && store.version !== TREASURY_RETIREMENT_SUMMARY_LEGACY_VERSION) {
     return `summary store 版本未知（${String(store.version)}）——fail closed`;
   }
   if (!store.entries || typeof store.entries !== "object") return "summary store.entries 非对象";
@@ -173,6 +234,11 @@ function validateSummaryStoreShape(store: TreasuryRetirementSummaryStore): strin
     if (shapeError !== null) return `summary entry 损坏（${key.slice(0, 24)}）: ${shapeError}`;
     if (key !== SUMMARY_KEY_PREFIX + summary.rootTransactionId) {
       return `summary key 与 rootTransactionId 不一致（${key.slice(0, 24)}）`;
+    }
+    // 【第二十一轮 7】store 版本与 entry schemaVersion 必须一致（v3 store 含
+    // v2 entry = 混合形态损坏；v2 store 的 replay-only 语义依赖版本隔离）。
+    if (summary.schemaVersion !== store.version) {
+      return `summary entry schemaVersion ${String(summary.schemaVersion)} 与 store version ${String(store.version)} 不一致（混合版本 store——fail closed）`;
     }
     if (seenLineage.has(summary.lineageId)) {
       return `summary lineageId 重复（${summary.lineageId.slice(0, 12)}）`;
@@ -207,19 +273,22 @@ function loadSummaryRuntime(forWrite = false): TreasurySummaryRuntime {
     return heapRuntime;
   }
   const store = branch.lineageRetirementSummaries as unknown as TreasuryRetirementSummaryStore;
-  // 【第十九轮 E】v1 → v2 迁移（原子：临时结构验证通过后一次替换；失败
-  // 保留原数据并 fail closed）：v2 只新增可选 authorityClass（v1 summary 无
-  // 来源可补——迁移后历史代 tombstone 的 class 不可证明，verdict 保守 pin；
-  // root 永久门禁不受影响）。迁移零字段变换（version 提升而已）。
+  // 【第十九轮 E / 第二十一轮 7.4】v1 → v2 迁移（原子：临时结构验证通过后
+  // 一次替换；失败保留原数据并 fail closed）：v2 只新增可选 authorityClass
+  //（v1 summary 无来源可补）。迁移零字段变换（version 提升而已）。
+  // 【第二十一轮 7.4】v1/v2 都是 replay-only——不自动补造 exact identity，
+  // 不迁移到 v3（只有能从仍存在的 active lineage 与 matching 外部 settlement
+  // proof 确定性重建时才允许升级，而 v1/v2 summary 存在意味着 active record
+  // 已删除——无法重建）。root 永久重放门禁不受影响。
   if (store.version === 1) {
     // entry 级 schemaVersion 一并提升（v2 只新增可选 authorityClass——纯格式
     // 升级，零字段变换；任一 entry 形状损坏 → 整体保留原数据 fail closed）。
     const migratedEntries: Record<string, TreasuryLineageRetirementSummary> = {};
     for (const [key, summary] of Object.entries(store.entries)) {
-      migratedEntries[key] = { ...summary, schemaVersion: TREASURY_RETIREMENT_SUMMARY_VERSION };
+      migratedEntries[key] = { ...summary, schemaVersion: TREASURY_RETIREMENT_SUMMARY_LEGACY_VERSION };
     }
     const upgraded: TreasuryRetirementSummaryStore = {
-      version: TREASURY_RETIREMENT_SUMMARY_VERSION,
+      version: TREASURY_RETIREMENT_SUMMARY_LEGACY_VERSION,
       entries: migratedEntries,
       entryCount: store.entryCount,
       updatedAt: store.updatedAt,
@@ -293,6 +362,64 @@ export function lookupTreasuryRetirementSummaryByLineageId(lineageId: string): R
 }
 
 /** 单条压缩（summary 写入 + read-back → 历史代 proof 验证 → 删除 active record → 孤儿 proof 清理）。 */
+
+/** 【第二十一轮 7.1/7.2】record → summary candidate 的 root exact identity（canonical 单一构造）。 */
+function rootExactOfRecord(record: Readonly<TreasuryAttemptLineageRecord>): TreasuryTerminalRootExactIdentity {
+  const rootLowlevelSource = record.rootIdentity.lowlevelSource ?? (record.authorityClass === "lowlevel" ? record.lowlevelSource : undefined);
+  return {
+    digest: record.rootIdentity.digest,
+    ...(record.rootIdentity.contractDigest !== undefined ? { contractDigest: record.rootIdentity.contractDigest } : {}),
+    ...(record.rootIdentity.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.rootIdentity.authorizationCohortDigest } : {}),
+    ...(record.rootIdentity.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.rootIdentity.durableIdentityDigest } : {}),
+    ...(rootLowlevelSource !== undefined ? { lowlevelSource: rootLowlevelSource } : {}),
+    proofClass: record.authorityClass,
+    identityAlgorithm: TREASURY_TERMINAL_ROOT_IDENTITY_ALGORITHM,
+  };
+}
+
+/** 【第二十一轮 7.2】record → summary candidate 的 final exact identity（canonical 单一构造）。 */
+function finalExactOfRecord(record: Readonly<TreasuryAttemptLineageRecord>): TreasuryTerminalFinalExactIdentity {
+  const lowlevelSource = record.currentIdentity.lowlevelSource ?? record.lowlevelSource;
+  return {
+    digest: record.currentIdentity.digest,
+    ...(record.currentIdentity.contractDigest !== undefined ? { contractDigest: record.currentIdentity.contractDigest } : {}),
+    ...(record.currentIdentity.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.currentIdentity.authorizationCohortDigest } : {}),
+    ...(record.currentIdentity.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.currentIdentity.durableIdentityDigest } : {}),
+    ...(lowlevelSource !== undefined ? { lowlevelSource } : {}),
+    proofClass: record.authorityClass,
+    ...(record.generation >= 1
+      ? { parentTransactionId: record.currentParentTransactionId!, lineageBindingDigest: record.bindingDigest! }
+      : {}),
+    ...(record.retrySemanticDigest !== undefined ? { retrySemanticDigest: record.retrySemanticDigest } : {}),
+    exactIdentitySchema: TREASURY_TERMINAL_EXACT_IDENTITY_SCHEMA,
+  };
+}
+
+/**
+ * 四方 proof 的第四方：candidate finalExact ↔ record current exact（构造自
+ * 同一 record——显式 relation 验证防御构造逻辑漂移）。null = 一致。
+ */
+function candidateFinalExactRelationError(
+  currentExact: ReturnType<typeof expectedTreasuryCurrentLineageExactIdentity>,
+  finalExact: TreasuryTerminalFinalExactIdentity,
+): string | null {
+  if (currentExact === null) return "record current exact identity 不可构造";
+  if (currentExact.proofClass !== finalExact.proofClass) return "proof class 不一致";
+  if (currentExact.digest !== finalExact.digest) return "digest 不一致";
+  const dimensions: readonly (readonly [string, string | undefined, string | undefined])[] = [
+    ["contractDigest", currentExact.contractDigest, finalExact.contractDigest],
+    ["authorizationCohortDigest", currentExact.authorizationCohortDigest, finalExact.authorizationCohortDigest],
+    ["durableIdentityDigest", currentExact.durableIdentityDigest, finalExact.durableIdentityDigest],
+    ["lowlevelSource", currentExact.lowlevelSource, finalExact.lowlevelSource],
+    ["parentTransactionId", currentExact.parentTransactionId, finalExact.parentTransactionId],
+    ["lineageBindingDigest", currentExact.lineageBindingDigest, finalExact.lineageBindingDigest],
+  ];
+  for (const [field, current, final_] of dimensions) {
+    if ((current ?? undefined) !== (final_ ?? undefined)) return `${field} 不一致`;
+  }
+  return null;
+}
+
 function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRecord>): { readonly status: "compacted" } | { readonly status: "rejected"; readonly detail: string } {
   // ──【第二十轮 11.4】压缩前检查全部相关 store 健康（lineage/summary 自身
   //    由写入路径 load 承载；此处显式检查 resolution/receipt/exact
@@ -327,31 +454,29 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
   if (marker !== undefined && (marker.transactionId === currentId || marker.transactionId === record.rootTransactionId)) {
     return { status: "rejected", detail: "write-fault marker 尚未清理（pending marker 不压缩）" };
   }
-  // ──【第二十轮 11.2/11.3】exact settlement identity 验证：外部终态证明与
-  //    active lineage current 的**完整** exact identity 比较（digest/contract/
-  //    cohort/durable/lowlevel + proof class + lineage 四字段）+ semantic
-  //    lineage validation = match（record.state 终态本身不足以授权删除 active
-  //    权威——summary 必须能在 record 消失后独立证明终态）。
+  // ──【第二十一轮 11.1/11.2】exact four-way proof：外部终态证明（committed
+  //    receipt / final not-executed tombstone）↔ active lineage current exact
+  //    identity ↔ semantic lineage authority ↔ summary candidate final exact
+  //    identity 四者全部 match（单一比较入口 currentLineageSettlementVerifier
+  //    的 expected 构造 + exactAttemptIdentity relation / generation
+  //    retirement relation——record.state 终态本身不足以授权删除 active 权威）。
+  const requirednessError = describeTreasuryCurrentLineageRequiredness(record);
+  if (requirednessError !== null) {
+    return { status: "rejected", detail: `record current 身份不满足 requiredness（${requirednessError}）——不压缩` };
+  }
+  const currentExact = expectedTreasuryCurrentLineageExactIdentity(record);
+  if (currentExact === null) {
+    return { status: "rejected", detail: "record current exact identity 构造失败（不压缩）" };
+  }
   if (record.state === "chain_committed") {
     const receiptProof = readTreasurySettlementProof(currentId);
-    const expectedClass = record.authorityClass;
-    const receiptLineageMatches =
-      receiptProof !== undefined &&
-      receiptProof.level !== "legacy" &&
-      receiptProof.level === expectedClass &&
-      receiptProof.digest === record.currentIdentity.digest &&
-      (receiptProof.contractDigest ?? undefined) === (record.currentIdentity.contractDigest ?? undefined) &&
-      (receiptProof.authorizationCohortDigest ?? undefined) === (record.currentIdentity.authorizationCohortDigest ?? undefined) &&
-      (receiptProof.durableIdentityDigest ?? undefined) === (record.currentIdentity.durableIdentityDigest ?? undefined) &&
-      (receiptProof.lowlevelSource ?? undefined) === (record.currentIdentity.lowlevelSource ?? record.lowlevelSource ?? undefined) &&
-      (record.generation >= 1
-        ? receiptProof.lineageId === record.lineageId &&
-          receiptProof.lineageGeneration === record.generation &&
-          receiptProof.parentTransactionId === record.currentParentTransactionId &&
-          receiptProof.lineageBindingDigest === record.bindingDigest
-        : receiptProof.lineageId === undefined);
-    if (!receiptLineageMatches) {
-      return { status: "rejected", detail: "chain_committed 缺少 matching committed receipt（完整 exact settlement identity：digest/contract/cohort/durable/lowlevel + proof class + lineage proof 与 record 一致）——不压缩" };
+    if (receiptProof === undefined) {
+      return { status: "rejected", detail: "chain_committed 缺少 committed receipt（完整 exact settlement identity 不可读）——不压缩" };
+    }
+    const receiptExact = treasuryExactAttemptIdentityOfReceiptProof(currentId, receiptProof);
+    const receiptRelation = receiptExact === null ? ("insufficient" as const) : treasuryExactAttemptIdentityRelation(receiptExact, currentExact);
+    if (receiptRelation !== "match") {
+      return { status: "rejected", detail: `chain_committed 的 committed receipt 与 record current exact identity 不${receiptRelation === "conflict" ? "一致（conflict）" : "可证明（insufficient）"}（digest/contract/cohort/durable/lowlevel/class/lineage 任一维度）——不压缩` };
     }
     if (record.generation >= 1) {
       const semantic = validateTreasurySemanticLineage({
@@ -378,32 +503,32 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
     }
   } else {
     const tombstone = readTreasuryResolutionTombstone(currentId);
-    const tombstoneLineageMatches =
-      tombstone !== undefined &&
-      tombstone.stage === "final" &&
-      tombstone.resolution === "not-executed" &&
-      tombstone.proofLevel === record.authorityClass &&
-      tombstone.digest === record.currentIdentity.digest &&
-      (tombstone.contractDigest ?? undefined) === (record.currentIdentity.contractDigest ?? undefined) &&
-      (tombstone.authorizationCohortDigest ?? undefined) === (record.currentIdentity.authorizationCohortDigest ?? undefined) &&
-      (tombstone.durableIdentityDigest ?? undefined) === (record.currentIdentity.durableIdentityDigest ?? undefined) &&
-      (tombstone.lowlevelSource ?? undefined) === (record.currentIdentity.lowlevelSource ?? record.lowlevelSource ?? undefined) &&
-      (record.generation >= 1
-        ? tombstone.lineageId === record.lineageId &&
-          tombstone.lineageGeneration === record.generation &&
-          tombstone.parentTransactionId === record.currentParentTransactionId &&
-          tombstone.lineageBindingDigest === record.bindingDigest
-        : tombstone.lineageId === undefined);
-    if (!tombstoneLineageMatches) {
-      return { status: "rejected", detail: "non_rearmable_retired 缺少 matching final not-executed tombstone（完整 exact settlement identity 与 record 一致）——不压缩" };
+    if (tombstone === undefined || tombstone.stage !== "final" || tombstone.resolution !== "not-executed") {
+      return { status: "rejected", detail: "non_rearmable_retired 缺少 matching final not-executed tombstone——不压缩" };
     }
     if (!record.retirement.lineagePublished || !record.retirement.authorityReleased || !record.retirement.markerCleaned) {
       return { status: "rejected", detail: "non_rearmable_retired 的 retirement 三段未全部完成（publication/release/marker）——不压缩" };
     }
-    // 【第二十轮 11.3】当前代 exact retirement proof 必须在位（压缩后历史代
-    // tombstone 的 replacement 由 exact proof 证明）。
-    if (readTreasuryGenerationRetirementProof(record.lineageId, record.generation) === undefined) {
-      return { status: "rejected", detail: "当前代 exact retirement proof 缺失（压缩后历史代证明缺失——不压缩）" };
+    // 【第二十一轮 11.2/11.3】tombstone ↔ record ↔ exact retirement proof 三方
+    // relation（不能只检查 proof 存在性）。
+    const tombstoneExact = treasuryExactAttemptIdentityOfTombstone(tombstone);
+    const tombstoneRelation = tombstoneExact === null ? ("insufficient" as const) : treasuryExactAttemptIdentityRelation(tombstoneExact, currentExact);
+    if (tombstoneRelation !== "match") {
+      return { status: "rejected", detail: `non_rearmable_retired 的 final tombstone 与 record current exact identity 不${tombstoneRelation === "conflict" ? "一致（conflict）" : "可证明（insufficient）"}——不压缩` };
+    }
+    const exactProof = readTreasuryGenerationRetirementProof(record.lineageId, record.generation);
+    if (exactProof === undefined) {
+      return { status: "rejected", detail: "当前代 exact retirement proof 缺失（三段布尔不构成 replacement——不压缩）" };
+    }
+    const retirementRelation = verifyTreasuryGenerationRetirementRelation({
+      exactProof,
+      // expected.rootIdentityDigest 与 GRA proof 写入口径一致（converge 用
+      // record.rootIdentity 直接五元合成——relation 重算必须同口径）。
+      expectedCurrent: { ...currentExact, rootTransactionId: record.rootTransactionId, rootIdentityDigest: computeTreasuryGenerationRootIdentityDigest(record.rootIdentity), authorityLineageId: record.lineageId, authorityGeneration: record.generation },
+      tombstone,
+    });
+    if (retirementRelation.verdict !== "match") {
+      return { status: "rejected", detail: `non_rearmable_retired 的 exact retirement proof 三方 relation 未通过（${retirementRelation.verdict}: ${retirementRelation.detail}）——不压缩` };
     }
   }
   // ── summary 写入（先于 active 删除；read-back 完整验证）。
@@ -412,23 +537,48 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
   if (runtime.fatal !== null) {
     return { status: "rejected", detail: runtime.fatal };
   }
+  // 【第二十一轮 7.4/14.3】legacy replay-only store（v2）不接受新 summary
+  // 写入——v2 entry 无法补造 exact identity，升级 store 会制造混合版本权威；
+  // 拒绝压缩（active record 保留，明确诊断）。
+  if (runtime.store.version !== TREASURY_RETIREMENT_SUMMARY_VERSION) {
+    return {
+      status: "rejected",
+      detail: `retirement summary store 是 legacy replay-only 版本 ${String(runtime.store.version)}（不覆盖、不混合、不自动补造 exact identity——active record 保留）`,
+    };
+  }
+  // 【第二十一轮 7.1/7.2】summary candidate 的 root/final exact identity 从
+  // record 构造（canonical 单一构造——helper 复用，compaction 不自行展开）。
+  const rootExact = rootExactOfRecord(record);
+  const canonicalRootIdentityDigest = computeTreasuryGenerationRootIdentityDigest(rootExact);
+  const finalExact = finalExactOfRecord(record);
+  // 四方 proof 的最后一方：candidate finalExact ↔ record current exact（构造
+  // 自同一 record，relation 显式验证——防御构造逻辑漂移）。
+  const candidateRelationError = candidateFinalExactRelationError(currentExact, finalExact);
+  if (candidateRelationError !== null) {
+    return { status: "rejected", detail: `summary candidate final exact identity 与 record current exact identity 不一致（${candidateRelationError}）——不压缩` };
+  }
   const key = SUMMARY_KEY_PREFIX + record.rootTransactionId;
   const existing = Object.prototype.hasOwnProperty.call(runtime.store.entries, key)
     ? runtime.store.entries[key]
     : undefined;
   if (existing !== undefined) {
-    // 已有同 root summary（幂等压缩重入 / root 重用冲突防御）——完整
-    // identity 必须一致（【第二十轮 11.2】幂等比较扩展 finalGeneration/
-    // finalAttemptId/authorityClass），否则拒绝（不覆盖、不删除 active record）。
+    // 已有同 root summary（幂等压缩重入 / root 重用冲突防御）——【第二十一轮
+    // 7.5】完整 exact 幂等：lineageId / root exact / terminal state / final
+    // generation / final attempt ID / final exact identity / proof class /
+    // lowlevel provenance / schema version 任一不同即拒绝（不覆盖、不删除
+    // active record）。
     const identityMatch =
       existing.lineageId === record.lineageId &&
-      existing.rootIdentityDigest === computeTreasuryLineageIdentityDigest(record.rootIdentity) &&
+      existing.schemaVersion === TREASURY_RETIREMENT_SUMMARY_VERSION &&
+      existing.rootIdentityDigest === canonicalRootIdentityDigest &&
+      JSON.stringify(existing.rootExact) === JSON.stringify(rootExact) &&
       existing.terminalState === record.state &&
       existing.finalGeneration === record.generation &&
       existing.finalAttemptId === currentId &&
-      (existing.authorityClass ?? undefined) === (record.authorityClass ?? undefined);
+      JSON.stringify(existing.finalExact) === JSON.stringify(finalExact) &&
+      existing.authorityClass === record.authorityClass;
     if (!identityMatch) {
-      return { status: "rejected", detail: "同 root 已存在不同 identity 的 summary（压缩拒绝——不覆盖安全事实）" };
+      return { status: "rejected", detail: "同 root 已存在不同 identity 的 summary（exact 幂等失败——不覆盖安全事实）" };
     }
   } else {
     if (runtime.store.entryCount >= TREASURY_RETIREMENT_SUMMARY_MAX_ENTRIES) {
@@ -438,14 +588,16 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
       schemaVersion: TREASURY_RETIREMENT_SUMMARY_VERSION,
       lineageId: record.lineageId,
       rootTransactionId: record.rootTransactionId,
-      rootIdentityDigest: computeTreasuryLineageIdentityDigest(record.rootIdentity),
+      rootIdentityDigest: canonicalRootIdentityDigest,
       terminalState: record.state,
       finalGeneration: record.generation,
       finalAttemptId: currentId,
       finalizedAtTick: Game.time,
       // 【第十九轮 E v2】chain 的 proof class（压缩后历史代 tombstone 的
-      // class 比较权威）。
+      // class 比较权威）。【第二十一轮 7】v3 强制与 finalExact.proofClass 一致。
       authorityClass: record.authorityClass,
+      rootExact,
+      finalExact,
     });
     runtime.store.entries[key] = published;
     runtime.store.updatedAt = Game.time;
