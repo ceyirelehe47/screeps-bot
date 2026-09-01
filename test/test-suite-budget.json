@@ -1,26 +1,26 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "4f9d42a",
-    "suites": 240,
-    "tests": 1573,
-    "passed": 1573,
+    "commit": "710bdbc",
+    "suites": 243,
+    "tests": 1633,
+    "passed": 1633,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "commit": "4f9d42a",
-    "suites": 240,
-    "tests": 1573,
-    "passed": 1573,
+    "commit": "710bdbc",
+    "suites": 243,
+    "tests": 1633,
+    "passed": 1633,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 98,
+    "highRiskFiles": 101,
     "defaultFiles": 127
   },
   "files": {
@@ -1220,6 +1220,21 @@
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryRound17OperationCount.test.ts": {
+      "baseline": 6,
+      "budget": 6,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound18LineageHandoffAtomicity.test.ts": {
+      "baseline": 32,
+      "budget": 32,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound18GenerationRetention.test.ts": {
+      "baseline": 22,
+      "budget": 22,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound18OperationCount.test.ts": {
       "baseline": 6,
       "budget": 6,
       "tier": "high-risk"
