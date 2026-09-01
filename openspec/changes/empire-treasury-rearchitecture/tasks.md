@@ -351,3 +351,39 @@
 - [x] 26.11 散落收敛与架构保护：production 非 namespace 权威模块的 startsWith("tr1_") 全部替换为 isTreasuryRearmAttemptId（transactionId.ts 权威内部除外）；源码扫描断言（raw rearm 判断、安全关键手工 identity 构造、production 导入 test helper）
 - [x] 26.12 确定性测试（round20，4 文件）：semantic lineage 基础矩阵（ID/generation/parent/binding/active/terminal/store unhealthy/legacy）；handoff 完整 authority（四字段相同但 contract/cohort/durable/class/lowlevel/postings/outcome/settlement 不同 → forensic；完整一致 forward；intent-only not_started/ready rollback；executing forward；判定前不删 Intent；reset 后 forward；store unhealthy 保留两侧）；prepared/receipt 幂等与门禁矩阵；exact generation retirement（三阶段→proof 持久化、read-back 失败不签发、满载 fail closed、identity 篡改 conflict、N+1 门禁、alias 隔离、深冻结、reset 索引重建）；active 历史代/compaction/tombstone replacement 矩阵；committed resolution 语义矩阵；operation-count（50 次 semantic validation/Receipt lookup/tombstone verdict 不增 fullScans；空闲 beginTick 不扫 exact history；300 代 entryCount 常数与 Resolution store 收敛）；回归（Round 15-19 全部保留、initial 全链路、writer 边界扫描、真实 writer diff 空）
 - [x] 26.13 验证与证据：typecheck/build/round20 定向/treasury 全量/仓库全量/verify-jest-budget 真实通过；evidence（round20-semantic-lineage-validation-exact-terminal-proofs-local-validation.md）；预算锚点独立提交（requiredBaselineCommit 指向含全部实现与测试且位于 budget 提交之前）
+
+## 27. Round 21 — Exact Current Identity & Proof-Lifecycle Closure
+
+- [x] 27.1 新增 currentLineageSettlementVerifier.ts（active current exact
+      identity 唯一构造/requiredness/verifier + child-active commit recovery
+      单一 verifier）
+- [x] 27.2 新增 terminalExactIdentity.ts（summary v3 root/final exact
+      identity canonical 表示与形状校验、proof-class-aware relation）
+- [x] 27.3 新增 generationRetirementRelation.ts（三方 relation + 历史
+      代二元比较——tombstone 持久 parent 显式校验）
+- [x] 27.4 semanticLineageValidation：active current 分支完整 exact identity
+      比较；terminal current 分支 finalExact 证明；terminal provenance 与
+      summary 持久值比较；historical provenance 与 exact proof 绑定
+- [x] 27.5 lineageRetirementSummary v3：rootExact/finalExact 持久化 +
+      read-back；canonical rootIdentityDigest 单一口径；v1/v2 replay-only
+      隔离（不自动迁移 v3）；compaction 四方 exact proof；同 root 幂等
+      压缩全字段比较
+- [x] 27.6 attemptLineage：child_active 补完成改完整 Receipt exact proof
+      （reader 扩展为完整 settlement proof 视图）；close → 释放 Intent 顺序；
+      binding+generation 快捷放行删除
+- [x] 27.7 lineageGenerationRetirement：当前代（含 gen0）replacement 依赖
+      matching exact proof 三方 relation；root verdict 升级 v3 rootExact
+      完整比较；historical child 持久 parent 显式比较；v2 summary 不得
+      驱逐 historical child
+- [x] 27.8 generationRetirementAuthority：class required/forbidden 矩阵；
+      root 绑定 canonical 派生校验；全局 transactionId 唯一（load 查重 +
+      写入/read-back 占用检查）；byAttempt 真实 O(1)
+- [x] 27.9 receipts：refresh 切换 proof-class-aware exact relation；match
+      只改 settledAtTick（身份字段原样保留）
+- [x] 27.10 facade：receipt reader 装配返回完整 settlement proof 视图
+- [x] 27.11 测试：treasuryRound21CurrentIdentity（23）/ treasuryRound21
+      CommitRecovery（22）/ treasuryRound21CompactionAndRefresh（19）/
+      treasuryRound21Lifecycle（10：300 代长期收敛、retention 窗口容量
+      fail closed、operation-count、架构扫描）
+- [x] 27.12 既有测试 fixture 升级到 Round 21 语义（durable 真实重算、
+      tombstone 持久 parent、GRA rootIdentityDigest 派生、v3 summary 形态）

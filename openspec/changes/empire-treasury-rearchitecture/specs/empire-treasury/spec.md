@@ -1968,3 +1968,173 @@ tr1_ 的 resolver 归一化、capability 签发/prevalidation、resolving/final 
 
 - **WHEN** Receipt/Tombstone/Authority 的 lineage 四字段互相一致但与 child ID 派生/binding 重算冲突
 - **THEN** verifier 调用方拒绝 finalize，authority 保留
+
+### Requirement: active current exact identity 证明（round 21）
+
+Treasury 的 semantic lineage validation 在 active current（generation ===
+record.generation）分支 SHALL 通过单一 current exact identity verifier 完整
+比较输入 attempt 与 record.currentIdentity 及 record.authorityClass 的全部
+身份维度（digest/contractDigest/authorizationCohortDigest/
+durableIdentityDigest/proof class/lowlevelSource/lineage 四字段）。
+
+- 任一维度不同 SHALL 返回 conflict；期望维度缺失 SHALL 返回 insufficient；
+  输入 identity 未提供 SHALL 返回 insufficient（不得 match）。
+- identity-bound current 的 requiredness：digest + durableIdentityDigest、
+  禁 lowlevelSource；modern contract 来源（current/root identity 携带
+  contract 维度）SHOULD 缺 contract/cohort 时判 insufficient（弱
+  identity-bound 不得降级匹配）。
+- lowlevel current 的 requiredness：digest + durableIdentityDigest + 受控
+  lowlevelSource；携带 modern contract/cohort 事实 SHALL 判不可证明。
+
+#### Scenario: active current 完整一致
+
+- **WHEN** 输入 attempt 携带与 record.currentIdentity 完全一致的身份维度
+- **THEN** semantic verdict = match（authoritySource=active、generationRole=current）
+
+#### Scenario: digest 相同但 contract/cohort/durable/class/provenance 不同
+
+- **WHEN** 任一维度与 record 不一致
+- **THEN** semantic verdict = conflict
+
+#### Scenario: 输入缺维度或未提供 identity
+
+- **WHEN** 输入缺少 record 要求的身份维度（含 identity 未提供）
+- **THEN** semantic verdict = insufficient（不得 match）
+
+### Requirement: terminal summary v3 exact terminal authority（round 21）
+
+Retirement summary store SHALL 升级到 v3：每条 entry 持久化 rootExact（五元
++ proofClass + identityAlgorithm）与 finalExact（完整身份维度 + gen≥1 的
+parent/binding + exactIdentitySchema），authorityClass 与 finalExact.proofClass
+强制一致，rootIdentityDigest 按 rootExact 五元 canonical 单一口径重算一致。
+
+- v1/v2 store SHALL 作为 legacy replay-only 只读解释（v1 原子迁移 v2）：
+  保留 root 永久重放门禁，不得证明 terminal current、不得授权新 Receipt
+  写入/committed resolution/historical child 驱逐、不得自动补造 exact
+  identity、不得被 v3 写入混合。
+- terminal current semantic validation SHALL 构造 caller 侧与 summary 持久
+  finalExact 的 proof-class-aware 比较；lowlevelSource 与 summary 持久值比较。
+- 同 root 幂等压缩 SHALL 要求全部 exact 字段一致（rootExact/finalExact/
+  terminal state/final generation/final attempt ID/proof class/provenance/
+  schema version）；任一不同 SHALL 拒绝且不覆盖。
+
+#### Scenario: v3 压缩与 read-back
+
+- **WHEN** 终态 chain 完成四方 proof 压缩
+- **THEN** summary v3 持久化 root/final exact identity 且可 read-back 验证
+
+#### Scenario: 旧 summary replay-only
+
+- **WHEN** v2 summary 存在且无 finalExact
+- **THEN** terminal current 返回 insufficient；root blocker 保留；新 Receipt
+  写入被 tr1_ semantic gate 拒绝
+
+### Requirement: child-active commit recovery 完整 exact committed proof（round 21）
+
+child_active 的 beginTick 补完成 SHALL 读取完整 Receipt settlement proof 并
+经单一 commit recovery verifier 验证（Receipt 非 legacy、proof class 与
+record.authorityClass 一致、Receipt exact identity 与 record current exact
+identity 完整 match、transactionId 一致）后才关闭 lineage。
+
+- 状态变化顺序 SHALL 为 close chain_committed → 释放残留 Intent；close
+  失败时 Intent 与 child_active 事实保留（Receipt 作为持久 commit proof，
+  beginTick 幂等重试）。
+- 仅 binding+generation 相同 SHALL NOT 构成关闭依据；digest/contract/
+  cohort/durable/class/provenance 任一不同或 proof legacy/不可证明 SHALL
+  保留全部证据不关闭。
+
+#### Scenario: 完整 match 补完成
+
+- **WHEN** committed receipt 与 record current exact identity 完整一致
+- **THEN** chain_committed 推进并释放残留 Intent
+
+#### Scenario: 部分匹配不关闭
+
+- **WHEN** receipt 仅 binding/generation 相同但任一身份维度不同或为 legacy
+- **THEN** child_active 与 Intent 保留，零状态变化
+
+### Requirement: current generation tombstone 的 exact replacement（round 21）
+
+当前 generation（含 generation 0 root）的 final not-executed tombstone
+SHALL 在三段布尔与状态检查之外命中 matching exact generation retirement
+proof 并通过三方 relation（expectedCurrent 来自 record current exact
+identity 构造）才判 replacement_match。
+
+- 三阶段布尔值 SHALL NOT 单独充当 replacement；record 已推进 rearm_ready
+  而 proof 缺失/冲突/损坏 SHALL 仍 pin（不删除证据）。
+- historical child tombstone（active record 与 summary 两侧）SHALL 显式
+  比较持久 parentTransactionId 与 expected parent（缺失 → missing；篡改 →
+  conflict）。
+
+#### Scenario: 三段全 true 且 exact proof 完整 match
+
+- **THEN** replacement_match
+
+#### Scenario: proof 缺失或内容不匹配
+
+- **THEN** replacement_missing / replacement_conflict（pin）
+
+### Requirement: generation retirement authority 的 class 矩阵与全局唯一（round 21）
+
+Exact generation retirement proof store SHALL 强制 proof-class required/
+forbidden 字段矩阵（identity-bound：durable 必填、禁 provenance、modern
+contract 维度成对；lowlevel：durable + 受控 provenance 必填、禁 modern
+facts），并要求 (rootTransactionId, rootIdentityDigest, lineageId) 满足共享
+canonical 派生。
+
+- store 内 transactionId SHALL 全局唯一：load 索引重建检测到不同 key 使用
+  同一 transactionId（含 root ID 出现在两个 lineage）SHALL 判整 store
+  unhealthy；写入前与 read-back 后的 byAttempt 占用冲突 SHALL 拒绝或回滚。
+- byAttempt 查询 SHALL 真实 O(1)（索引直接命中，不遍历 byLineage）。
+
+#### Scenario: class 矩阵违规
+
+- **WHEN** identity-bound proof 缺 durable 或携带 provenance；lowlevel proof
+  缺 durable/provenance 或携带 contract/cohort
+- **THEN** 写入拒绝
+
+#### Scenario: 重复 transactionId
+
+- **WHEN** 两个不同 key 携带同一 transactionId（写入或 load）
+- **THEN** 写入拒绝 / 整 store unhealthy
+
+### Requirement: terminal compaction 四方 exact proof（round 21）
+
+Terminal compaction（chain_committed 与 non_rearmable）SHALL 在删除 active
+lineage 前验证四方（外部终态证明 ↔ record current exact identity ↔
+semantic lineage authority ↔ summary candidate final exact identity）全部
+match；non_rearmable 还 SHALL 通过 exact retirement proof 三方 relation（不
+得只检查 proof 存在性）。
+
+- 发布顺序 SHALL 为：完整外部终态 proof 验证 → candidate 构造 → summary
+  写入 → read-back 完整验证 → 索引同步 → 删除 active → 孤儿 proof 清理。
+- legacy v2 summary store SHALL 拒绝新 compaction 写入（active 保留）。
+
+#### Scenario: chain_committed 四方 match
+
+- **WHEN** receipt/record/semantic/candidate 完整一致
+- **THEN** 可压缩且压缩后 terminal current exact validation 继续 match
+
+#### Scenario: 任一方不匹配
+
+- **THEN** 不压缩（active 保留）
+
+### Requirement: receipt refresh 的 proof-class-aware exact relation（round 21）
+
+Receipt refresh SHALL 使用 proof-class-aware exact relation（既有 proof 与
+attempt 双侧均经 exact builder 构造）作为刷新许可。
+
+- match 时 SHALL 只更新 settledAtTick（既有 proof 全部身份字段原样保留）。
+- identity-bound Receipt 与 lowlevel attempt（或反向）、provenance 不同、
+  lineage/contract/cohort/durable 不同、legacy Receipt、validator 未装配、
+  store unhealthy SHALL 全部阻断且不改 Receipt。
+
+#### Scenario: class 互证禁止
+
+- **WHEN** identity-bound Receipt 遇 lowlevel attempt（或反向）
+- **THEN** blocked（不刷新）
+
+#### Scenario: matching refresh
+
+- **WHEN** 同 class 同身份完全匹配
+- **THEN** refreshed（仅 settledAtTick 变化）

@@ -236,3 +236,30 @@
 - **Committed resolution 语义闭环**：resolver、tombstone 写入、三方 verifier 调用方、not_found finalize、chain_committed 推进全部叠加 semantic validation；写入结果不被忽略；production 散落 startsWith("tr1_") 收敛到 namespace 权威。
 
 本轮完成后才具备进入 terminal.send adapter 纯实现、contract plan shadow、authorization shadow、next-tick reconciliation shadow 与零 Game API 端到端演练的条件；本轮仍禁止一切真实 Game 写 API 调用。
+
+## Round 21 — Exact Current Identity & Proof-Lifecycle Closure
+
+Round 20 审查发现的阻断项：active current 只比较普通 digest、terminal
+summary 只有外壳字段、child-active 补完成只读 binding+generation、当前代
+tombstone 凭三段布尔获得 replacement、GRA 缺 class 矩阵与全局唯一、refresh
+使用非 class-aware 旧 relation、300 代端到端未真正执行。
+
+Round 21 交付（详见 design §17）：
+
+- 三个窄职责单一权威模块：currentLineageSettlementVerifier /
+  terminalExactIdentity / generationRetirementRelation；
+- active current / terminal current 的完整 exact identity 证明；
+- terminal summary v3（root/final exact identity 持久化 + canonical 单一
+  口径 + v1/v2 replay-only 隔离）；
+- child-active commit recovery 的完整 Receipt exact proof 与正确状态变化
+  顺序（close → 释放 Intent）；
+- 当前代（含 root）tombstone replacement 的 matching exact proof 三方
+  relation；historical child 持久 parent 显式比较；
+- GRA class 矩阵、root 绑定 canonical 派生、全局 transactionId 唯一、
+  byAttempt 真实 O(1)、read-back 与索引同步；
+- terminal compaction 四方 exact proof（chain_committed 与 non_rearmable）；
+- receipt refresh 的 proof-class-aware exact relation；
+- 300 代真实长期收敛测试 + retention 窗口容量边界 + operation-count +
+  架构扫描（快捷放行/存在性压缩/手工 identity/raw startsWith 负向检查）。
+
+本轮仍未接入真实 writer（terminal.send adapter 纯实现等属于下一阶段）。

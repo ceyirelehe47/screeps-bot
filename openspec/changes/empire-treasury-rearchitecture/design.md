@@ -1361,3 +1361,138 @@ lineageHandoff.ts 降级为 consume 期矩阵 + 恢复判定输入的纯决策�
 replay blocker / pin / legacy isolated——不猜测、不自动升级、不通过
 延长 retention 掩盖。所有 store 升级保持原子迁移（临时候选 → 全量验证
 → 一次替换 → 失败保留原 Memory → fail closed）。
+
+## 17. Round 21 — Exact Current Identity & Proof-Lifecycle Closure（设计补充）
+
+Round 20 的 semantic validator 证明了 lineage 四字段的语义真实，但审查发现
+current/terminal 两端的 attempt identity 仍只有"外壳级"验证：active current
+只比较普通 digest；terminal summary 只保存 finalAttemptId/finalGeneration/
+authorityClass；child-active 的 beginTick 补完成只读 receipt 的 binding +
+generation 即关闭 lineage。Round 21 关闭这些旁路。
+
+### 17.1 模块收敛（窄职责单一权威）
+
+- `currentLineageSettlementVerifier.ts`（新增）：
+  - `expectedTreasuryCurrentLineageExactIdentity(record)` — active record →
+    权威 exact identity 的唯一构造（复用 exactAttemptIdentityOfFacts；
+    requiredness 失败返回 null）；
+  - `describeTreasuryCurrentLineageRequiredness(record)` — requiredness 的
+    可诊断描述（identity-bound：digest+durable、禁 provenance、modern
+    contract 来源必须保留 contract/cohort 成对；lowlevel：digest+durable+
+    受控 provenance、禁 modern contract/cohort 事实）；
+  - `verifyTreasuryCurrentLineageExactIdentity({record, identity, proof})` —
+    semantic lineage active current 分支的单一验证器（proof class /
+    lowlevelSource / digest / contract / cohort / durable / lineage 四字段
+    任一不同 → conflict；缺维度 → insufficient；输入 identity 的 lineage 与
+    proof 四字段不一致 → conflict）；
+  - `verifyTreasuryChildActiveCommitRecovery({record, receiptProof})` —
+    child-active beginTick 补完成的单一 commit recovery verifier（完整
+    Receipt exact proof；legacy/"modern" 旧 proof 不关闭 lineage）。
+- `terminalExactIdentity.ts`（新增）：summary v3 持久化 root/final exact
+  identity 的 canonical 表示与形状校验；`treasuryTerminalFinalExactOfSummary`
+  （旧 summary → null = replay-only）；`treasuryTerminalExactIdentityRelation`
+  （proof-class-aware 比较——legacy class 一律 conflict）。
+- `generationRetirementRelation.ts`（新增）：
+  - `verifyTreasuryGenerationRetirementRelation({exactProof, expectedCurrent,
+    tombstone})` — generation retirement 三方 relation（transactionId/
+    lineage/generation/parent/binding/digest/contract/cohort/durable/proof
+    class/lowlevelSource/root identity 绑定/resolution/三段）；
+  - `compareTreasuryGenerationProofWithTombstone` — 历史代的 proof↔tombstone
+    二元比较（tombstone 持久 parent 缺失 → missing；不等 → conflict）。
+
+### 17.2 Active current exact identity（6.x）
+
+semantic validator 的 `generation === record.generation` 分支调用
+`verifyTreasuryCurrentLineageExactIdentity`：record current 三元（ID/parent/
+binding）与 proof 一致后，还要求输入 identity 携带完整 exact identity 并与
+`record.currentIdentity` + `record.authorityClass` 完全一致（caller 视图
+构造时并入 proof 的 lineage 四字段——两个输入通道殊途同归）。identity 未
+提供 → insufficient（不得 match）。
+
+### 17.3 Terminal summary v3（7.x）
+
+- store/entry 版本升至 3（`TREASURY_RETIREMENT_SUMMARY_VERSION = 3`）；
+- v3 entry 持久化 `rootExact`（五元 + proofClass + identityAlgorithm=
+  "root-identity@v1"）与 `finalExact`（digest/contract/cohort/durable/
+  lowlevelSource/proofClass + gen≥1 的 parent/binding + 可选
+  retrySemanticDigest + exactIdentitySchema=1）；authorityClass 与
+  finalExact.proofClass 强制一致；rootIdentityDigest = rootExact 五元的
+  canonical 单一口径重算（不再保留双口径任一匹配）；
+- v1/v2 store 是 legacy replay-only：load 只读解释（v1 仍原子迁移到 v2），
+  不自动补造 exact identity、不迁移到 v3；新 compaction 只写入 v3 store
+  （legacy store 拒绝写入——不制造混合版本权威）；
+- terminal current semantic validation：v3 finalExact 构造 summary 侧 exact
+  identity，与 caller 侧执行 proof-class-aware 比较；lowlevelSource 与
+  summary 持久值比较（不再拿调用方 source 与自身比较）；旧 summary →
+  insufficient（replay-only）；terminal historical 仍由 exact retirement
+  proof 证明（provenance 与 proof 绑定）。
+
+### 17.4 Child-active commit recovery（8.x）
+
+`recoverTreasuryAttemptLineageAtTickBoundary` 的 child_active 分支改为：
+reader（facade 装配）返回完整 settlement proof 视图 → 单一 verifier 验证
+（legacy 拦截、proof class、exact identity 全维度）→ verified 后 **先 close
+chain_committed，成功后才释放残留 Intent**（close 失败时 Intent 与
+child_active 保留、receipt 作为持久 commit proof、下 tick 幂等重试）。
+binding+generation 快捷放行删除（架构扫描保护）。
+
+### 17.5 Current generation tombstone replacement（9.x）
+
+当前代（含 gen0 root）verdict 在三段布尔与状态检查后必须命中 matching
+exact retirement proof 并通过三方 relation（`verifyTreasuryGeneration
+RetirementRelation`）——三阶段布尔不再单独充当 replacement；record 已推进
+rearm_ready 也一样（proof 缺失/冲突/损坏 → pin）。
+
+### 17.6 Generation retirement authority 强化（10.x）
+
+- class required/forbidden 矩阵进入 proof 语义校验（identity-bound 缺
+  durable 拒绝；modern contract 维度必须成对；lowlevel 必带 durable +
+  provenance、禁 modern facts）；
+- root 绑定：(rootTransactionId, rootIdentityDigest) → lineageId 共享
+  canonical 派生重算（三_ROOT 字段互相可验证）；
+- 全局 transaction ID 唯一：load 索引重建检测重复（不同 key 同
+  transactionId → 整 store unhealthy）；写入前与 read-back 后检查 byAttempt
+  占用（冲突拒绝/回滚）；
+- `lookupTreasuryGenerationRetirementProofByAttemptId` 真正 O(1)（byAttempt
+  索引直接命中，不再解析 lineage 后遍历）。
+
+### 17.7 Terminal compaction 四方 proof（11.x）
+
+- chain_committed：committed receipt ↔ record current exact（relation）↔
+  semantic lineage ↔ summary candidate finalExact（candidateFinalExact
+  RelationError 防御构造漂移）；
+- non_rearmable：tombstone ↔ record current exact（relation）↔ exact
+  retirement proof（三方 relation）↔ semantic ↔ candidate；
+- 发布顺序保持：外部终态 proof 验证 → candidate 构造 → summary 写入 →
+  read-back → 索引同步 → 删除 active → 孤儿 proof 清理；同 root 幂等压缩
+  要求全部 exact 字段一致（rootExact/finalExact JSON 全等）；
+- v2 legacy store 拒绝新 compaction 写入（active 保留、明确诊断）。
+
+### 17.8 Root/historical child replacement（12.x）
+
+- root verdict：v3 rootExact 完整比较（五元 + proofClass）+ canonical
+  rootIdentityDigest 重算 + gen0 exact proof；旧 summary → missing/pin；
+- historical child（active record 与 summary 两侧）：tombstone 持久
+  parentTransactionId 必须与 expected parent 显式一致（缺失 → missing；
+  篡改 → conflict）——不再只信 proof 内的 parent；
+- summary historical child：v2 replay-only → missing（不得驱逐）。
+
+### 17.9 Receipt refresh class-aware（13.x）
+
+refresh 的既有 proof 比较切换到 `treasuryExactAttemptIdentityOfReceiptProof`
++ `treasuryExactAttemptIdentityRelation`（proof-class-aware）：legacy/
+"modern" 旧 proof 与 mismatch 阻断；match 时只改 settledAtTick（proof
+身份字段原样 spread 保留，不再手工重构）。
+
+### 17.10 测试与性能（15.x/16/18）
+
+- 新增 4 个测试文件（74 tests）：current/terminal identity 矩阵、commit
+  recovery、tombstone replacement、GRA 矩阵/索引/唯一、compaction 四方、
+  refresh class-aware、**300 代真实长期收敛**（active entryCount 恒 1、
+  child ID 唯一、历史 tombstone/proof 随依赖消失收敛、store 容量有界、
+  root 重放门禁）、retention 窗口内满载 fail closed、operation-count、
+  架构扫描（binding+generation 快捷放行、proof 存在性压缩、手工 identity
+  构造、raw startsWith("tr1_") 白名单）；
+- O(1) 不变量：current/terminal exact verification、byAttempt 查询、
+  tombstone replacement 单条、空闲 beginTick；global reset 首次 load 一次
+  有界全表（GRA/summary/lineage 索引重建，含 transactionId 查重）。
