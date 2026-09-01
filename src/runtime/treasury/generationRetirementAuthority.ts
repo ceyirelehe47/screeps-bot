@@ -42,6 +42,7 @@ import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSna
 import { registerTreasuryLineageResetHook } from "@/runtime/treasury/receipts";
 import {
   registerTreasuryGenerationProofSourceForAssembly,
+  peekTreasurySemanticLineageRecordSource,
   type TreasuryGenerationProofSource,
 } from "@/runtime/treasury/semanticLineageValidation";
 import { registerTreasuryGenerationProofReleaseForAssembly } from "@/runtime/treasury/resolutionStore";
@@ -134,6 +135,8 @@ interface TreasuryGenerationRetirementRuntime {
   published: boolean;
   /** lineageId → 该 chain 的全部 store key（容量上界内的有界集合）。 */
   readonly byLineage: Map<string, Set<string>>;
+  /** attempt ID（root 或 tr1_ child）→ store key（tombstone 驱逐联动释放 O(1)）。 */
+  readonly byAttempt: Map<string, string>;
 }
 
 let heapRuntime: TreasuryGenerationRetirementRuntime | null = null;
@@ -306,13 +309,13 @@ function loadGenerationRetirementRuntime(forWrite = false): TreasuryGenerationRe
       entryCount: 0,
       updatedAt: Game.time,
     };
-    heapRuntime = { store, fatal: null, published: false, byLineage: new Map() };
+    heapRuntime = { store, fatal: null, published: false, byLineage: new Map(), byAttempt: new Map() };
     if (forWrite) publishGenerationRetirementStoreToMemory(heapRuntime);
     return heapRuntime;
   }
   const store = branch.generationRetirementProofs as unknown as TreasuryGenerationRetirementStore;
   const fatal = validateGenerationRetirementStoreShape(store);
-  const runtime: TreasuryGenerationRetirementRuntime = { store, fatal, published: true, byLineage: new Map() };
+  const runtime: TreasuryGenerationRetirementRuntime = { store, fatal, published: true, byLineage: new Map(), byAttempt: new Map() };
   if (fatal === null) {
     for (const [key, proof] of Object.entries(store.entries)) {
       let keys = runtime.byLineage.get(proof.lineageId);
@@ -321,6 +324,7 @@ function loadGenerationRetirementRuntime(forWrite = false): TreasuryGenerationRe
         runtime.byLineage.set(proof.lineageId, keys);
       }
       keys.add(key);
+      runtime.byAttempt.set(proof.transactionId, key);
     }
   }
   heapRuntime = runtime;
@@ -460,6 +464,7 @@ export function persistTreasuryGenerationRetirementProof(
     runtime.byLineage.set(proof.lineageId, keys);
   }
   keys.add(key);
+  runtime.byAttempt.set(proof.transactionId, key);
   generationRetirementEvents.writes += 1;
   return { status: "written" };
 }
@@ -475,22 +480,30 @@ export function persistTreasuryGenerationRetirementProof(
 export function releaseTreasuryGenerationRetirementProofOfAttempt(transactionId: string): { readonly status: "released" } | { readonly status: "absent" } | { readonly status: "rejected"; readonly detail: string } {
   const runtime = loadGenerationRetirementRuntime();
   if (runtime.fatal !== null) return { status: "rejected", detail: runtime.fatal };
-  const lineageId = parseLineageIdOf(transactionId);
-  if (lineageId === null) return { status: "absent" };
-  const keys = runtime.byLineage.get(lineageId);
-  if (keys === undefined) return { status: "absent" };
-  for (const key of keys) {
-    const proof = runtime.store.entries[key];
-    if (proof === undefined || proof.transactionId !== transactionId) continue;
-    delete runtime.store.entries[key];
-    runtime.store.entryCount -= 1;
-    runtime.store.updatedAt = Game.time;
-    keys.delete(key);
-    if (keys.size === 0) runtime.byLineage.delete(lineageId);
-    generationRetirementEvents.releases += 1;
-    return { status: "released" };
+  // 【第二十轮 10.1】byAttempt O(1) 索引：root（gen 0，非 tr1_）与 tr1_ child
+  // 的 tombstone 驱逐联动释放统一路径（root 门禁由 retirement summary 承担）。
+  const key = runtime.byAttempt.get(transactionId);
+  if (key === undefined) return { status: "absent" };
+  const proof = runtime.store.entries[key];
+  if (proof === undefined) return { status: "absent" };
+  // 当前代 proof 是下一代 capability 签发门禁（10.3）的依据——chain 仍活跃
+  //（record 存在且 generation 相同）时不得因 tombstone 驱逐释放（只有历史代
+  // 的 proof 在其 tombstone 驱逐后才是孤儿）。
+  const activeRecord = peekTreasurySemanticLineageRecordSource()?.readByLineageId(proof.lineageId);
+  if (activeRecord !== undefined && activeRecord.generation === proof.generation) {
+    return { status: "absent" };
   }
-  return { status: "absent" };
+  delete runtime.store.entries[key];
+  runtime.store.entryCount -= 1;
+  runtime.store.updatedAt = Game.time;
+  runtime.byAttempt.delete(transactionId);
+  const keys = runtime.byLineage.get(proof.lineageId);
+  if (keys !== undefined) {
+    keys.delete(key);
+    if (keys.size === 0) runtime.byLineage.delete(proof.lineageId);
+  }
+  generationRetirementEvents.releases += 1;
+  return { status: "released" };
 }
 
 /**
@@ -517,6 +530,7 @@ export function releaseOrphanTreasuryGenerationRetirementProofs(
     delete runtime.store.entries[key];
     runtime.store.entryCount -= 1;
     runtime.store.updatedAt = Game.time;
+    runtime.byAttempt.delete(proof.transactionId);
     keys.delete(key);
     released += 1;
   }

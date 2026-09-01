@@ -155,14 +155,21 @@ function verdictOfRootSummary(
       detail: `root tombstone proof class ${String(tombstone.proofLevel)} 与 summary authority class ${String(summary.authorityClass)} 不匹配`,
     };
   }
-  const recomputedRootIdentityDigest = computeTreasuryGenerationRootIdentityDigest({
+  // rootIdentityDigest 重算与 summary 同口径。rootIdentity 的五元维度中
+  // lowlevelSource 是历史可选形态（contract 链不含；低层链的 publication
+  // rootIdentity 可能携带 provenance）——两种口径任一匹配即通过（tombstone
+  // 的其余维度仍全部比较，不引入伪造空间）。
+  const identityBase = {
     digest: tombstone.digest,
     ...(tombstone.contractDigest !== undefined ? { contractDigest: tombstone.contractDigest } : {}),
     ...(tombstone.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: tombstone.authorizationCohortDigest } : {}),
     ...(tombstone.durableIdentityDigest !== undefined ? { durableIdentityDigest: tombstone.durableIdentityDigest } : {}),
-    ...(tombstone.lowlevelSource !== undefined ? { lowlevelSource: tombstone.lowlevelSource } : {}),
-  });
-  if (recomputedRootIdentityDigest !== summary.rootIdentityDigest) {
+  };
+  const recomputedRootIdentityDigest = computeTreasuryGenerationRootIdentityDigest(identityBase);
+  const recomputedRootIdentityDigestWithProvenance = tombstone.lowlevelSource !== undefined
+    ? computeTreasuryGenerationRootIdentityDigest({ ...identityBase, lowlevelSource: tombstone.lowlevelSource })
+    : null;
+  if (recomputedRootIdentityDigest !== summary.rootIdentityDigest && recomputedRootIdentityDigestWithProvenance !== summary.rootIdentityDigest) {
     return {
       verdict: "replacement_conflict",
       detail: "root tombstone 的五元 identity 重算与 summary.rootIdentityDigest 不一致（同 root ID 不同 identity——conflict/pin，不删除证据）",

@@ -789,22 +789,20 @@ export function refreshSettledReceiptForResolution(
         detail: `transactionId ${transactionId.slice(0, 48)} 存在既有 modern receipt proof 但刷新请求未携带 attempt digest——不得覆盖（settledAtTick ${String(existingTick)}）`,
       };
     }
-    const attempt: TreasuryAttemptIdentity = {
-      digest: identity.digest,
-      ...(identity.contractDigest !== undefined ? { contractDigest: identity.contractDigest } : {}),
-      ...(identity.authorizationCohortDigest !== undefined
-        ? { authorizationCohortDigest: identity.authorizationCohortDigest }
-    : {}),
-      ...(identity.durableIdentityDigest !== undefined ? { durableIdentityDigest: identity.durableIdentityDigest } : {}),
-      ...(identity.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
-      ...(identity.lineageId !== undefined ? { lineageId: identity.lineageId } : {}),
-      ...(identity.lineageGeneration !== undefined ? { lineageGeneration: identity.lineageGeneration } : {}),
-      ...(identity.parentTransactionId !== undefined ? { parentTransactionId: identity.parentTransactionId } : {}),
-      ...(identity.lineageBindingDigest !== undefined ? { lineageBindingDigest: identity.lineageBindingDigest } : {}),
-    };
+    // 【第二十轮 8】exact attempt identity 单一构造（lineage/lowlevel/class
+    // 维度经 helper——不再手工展开）。
+    const attemptExactView = treasuryExactAttemptIdentityOfIdentityInput(transactionId, identity);
+    if (attemptExactView === null) {
+      receiptEvents.receiptIdentityInsufficient += 1;
+      return {
+        status: "blocked",
+        reason: "insufficient_proof",
+        detail: `transactionId ${transactionId.slice(0, 48)} 的刷新 identity 无法构造完整 exact attempt identity（tr1_ 缺 lineage / 维度缺失——防御）`,
+      };
+    }
     const relation = treasuryAttemptIdentityRelation(
-      { ...existing.proof, digest: existing.proof.digest ?? attempt.digest },
-      attempt,
+      { ...existing.proof, digest: existing.proof.digest ?? attemptExactView.digest },
+      attemptExactView,
     );
     if (relation === "conflict") {
       receiptEvents.receiptIdentityConflicts += 1;
@@ -834,8 +832,8 @@ export function refreshSettledReceiptForResolution(
         ? {
             level: "lowlevel",
             settledAtTick: tick,
-            digest: existing.proof.digest ?? attempt.digest,
-            durableIdentityDigest: existing.proof.durableIdentityDigest ?? attempt.durableIdentityDigest,
+            digest: existing.proof.digest ?? attemptExactView.digest,
+            durableIdentityDigest: existing.proof.durableIdentityDigest ?? attemptExactView.durableIdentityDigest,
             ...(existing.proof.lowlevelSource !== undefined ? { lowlevelSource: existing.proof.lowlevelSource } : {}),
             ...(existing.proof.lineageId !== undefined ? { lineageId: existing.proof.lineageId } : {}),
             ...(existing.proof.lineageGeneration !== undefined ? { lineageGeneration: existing.proof.lineageGeneration } : {}),
@@ -846,8 +844,8 @@ export function refreshSettledReceiptForResolution(
           ? {
               level: "identity-bound",
               settledAtTick: tick,
-              digest: existing.proof.digest ?? attempt.digest,
-              durableIdentityDigest: existing.proof.durableIdentityDigest ?? attempt.durableIdentityDigest,
+              digest: existing.proof.digest ?? attemptExactView.digest,
+              durableIdentityDigest: existing.proof.durableIdentityDigest ?? attemptExactView.durableIdentityDigest,
               ...(existing.proof.contractDigest !== undefined ? { contractDigest: existing.proof.contractDigest } : {}),
               ...(existing.proof.authorizationCohortDigest !== undefined
                 ? { authorizationCohortDigest: existing.proof.authorizationCohortDigest }

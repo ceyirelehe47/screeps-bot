@@ -16,6 +16,7 @@ import type {
 } from "@/runtime/treasury/reconciliation";
 import type { TreasuryFaultResolutionResult } from "@/runtime/treasury/faultResolution";
 import type { TreasuryAuthorizationFaultEntry } from "@/runtime/treasury/authorizationFaults";
+import { treasuryExactAttemptIdentityOfIdentityInput } from "@/runtime/treasury/exactAttemptIdentity";
 import {
   releaseTreasuryAuthorizationFaultEntry,
 } from "@/runtime/treasury/authorizationFaults";
@@ -218,16 +219,23 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
     if (existing !== undefined && existing.stage === "final" && existing.resolution === "not-executed") {
       // 【第十二轮 3.3】幂等仅在完整 attempt identity 一致时成立：旧
       // tombstone 不得解决同 ID 的新 attempt。
-      // 【第二十轮 8】完整维度（durable/lowlevel）进入幂等比较——authorization-
-      // fault entry 不携带 lineage proof（tr1_ child 不走 pre-execution fault
-      // 路径，无需 lineage 维度）。
-      const attempt: TreasuryAttemptIdentity = {
+      // 【第二十轮 8】exact attempt identity 单一构造（durable/lowlevel 维度
+      // 经 helper——authorization-fault entry 不携带 lineage proof，class 按
+      // fault facts 推导）。
+      const attemptExact = treasuryExactAttemptIdentityOfIdentityInput(fault.transactionId, {
         digest: fault.digest,
         ...(fault.contractDigest !== undefined ? { contractDigest: fault.contractDigest } : {}),
         ...(fault.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fault.authorizationCohortDigest } : {}),
         ...(fault.durableIdentityDigest !== undefined ? { durableIdentityDigest: fault.durableIdentityDigest } : {}),
-      };
-      if (treasuryAttemptIdentityRelation(existing, attempt) !== "match") {
+      });
+      if (attemptExact === null) {
+        return {
+          status: "rejected",
+          reason: "digest_mismatch",
+          detail: "fault authority 的 attempt identity 无法构造完整 exact 视图（digest 缺失——防御 fail closed）",
+        };
+      }
+      if (treasuryAttemptIdentityRelation(existing, attemptExact) !== "match") {
         deps.metrics.reconciliationCapabilitiesRejected += 1;
         return {
           status: "rejected",

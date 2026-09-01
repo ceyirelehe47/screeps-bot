@@ -397,7 +397,9 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
     } else if (sharedLevel === "lowlevel") {
       // 【第十四轮 8.2】低层双 authority：严格低层 identity（durable 双方
       // 完整存在且相等）——低层矩阵保证 durableIdentityDigest 存在，缺失即
-      // 损坏形态。
+      // 损坏形态。【第二十轮 7.2】contract/cohort 维度同样必须一致（低层
+      // contractless 语义下一方携带 modern 字段即双权威形态矛盾——
+      // handoff 的完整 identity 冲突不得被 lineage 外壳相同掩盖）。
       if (
         quarantined.durableIdentityDigest === undefined ||
         intended.durableIdentityDigest === undefined ||
@@ -407,6 +409,12 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
           status: "inconsistent",
           detail: "lowlevel 双权威 durableIdentityDigest 不完整或不一致——fail closed",
         };
+      }
+      if ((quarantined.contractDigest ?? undefined) !== (intended.contractDigest ?? undefined)) {
+        return { status: "inconsistent", detail: "lowlevel 双权威 contractDigest 不一致（contractless 语义下双权威形态矛盾）——fail closed" };
+      }
+      if ((quarantined.authorizationCohortDigest ?? undefined) !== (intended.authorizationCohortDigest ?? undefined)) {
+        return { status: "inconsistent", detail: "lowlevel 双权威 authorizationCohortDigest 不一致——fail closed" };
       }
     }
     // 【第十六轮第六节】execution-fact cohesion：immutable identity 相同不

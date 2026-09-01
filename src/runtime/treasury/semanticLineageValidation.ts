@@ -109,6 +109,11 @@ export function isTreasurySemanticLineageSourceAssembled(): boolean {
   return recordSource !== null && summarySource !== null && generationProofSource !== null;
 }
 
+/** record source 只读访问（GRA 等模块的当前代判定——不暴露 mutation）。 */
+export function peekTreasurySemanticLineageRecordSource(): TreasurySemanticLineageRecordSource | null {
+  return recordSource;
+}
+
 // ── verdict ──────────────────────────────────────────────────────────────────
 
 /** generation 相对权威 source 的角色（match 时输出——调用方按上下文消费）。 */
