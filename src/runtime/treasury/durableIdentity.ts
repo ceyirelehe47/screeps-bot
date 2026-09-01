@@ -39,6 +39,17 @@ export interface TreasuryDurableIdentityInput {
   readonly ownerIdentity?: string;
   readonly policyIdentity?: string;
   readonly source: string;
+  /**
+   * 【第十八轮 24.4】tr1_ rearm attempt 的 lineage proof：rearm attempt 的
+   * durable identity 必须包含完整 lineage proof（lineageId/generation/
+   * parent/binding）；initial attempt 完全不包含。一方携带、一方缺失 →
+   * digest 不同 → conflict/insufficient（不得 match）——tr1_ 缺 proof 的旧
+   * entry 不得冒充当前 rearm attempt。
+   */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly lineageParentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
 }
 
 function descriptorIdentityText(descriptor: TreasuryStructureBindingDescriptor): string {
@@ -81,6 +92,10 @@ export function computeTreasuryDurableIdentityDigest(input: TreasuryDurableIdent
     `o:${input.ownerIdentity === undefined ? "-" : `${String(input.ownerIdentity.length)}:${input.ownerIdentity}`}`,
     `pi:${input.policyIdentity === undefined ? "-" : `${String(input.policyIdentity.length)}:${input.policyIdentity}`}`,
     `s:${String(input.source.length)}:${input.source}`,
+    `li:${input.lineageId === undefined ? "-" : input.lineageId}`,
+    `lg:${input.lineageGeneration === undefined ? "-" : String(input.lineageGeneration)}`,
+    `lp:${input.lineageParentTransactionId === undefined ? "-" : `${String(input.lineageParentTransactionId.length)}:${input.lineageParentTransactionId}`}`,
+    `lb:${input.lineageBindingDigest === undefined ? "-" : input.lineageBindingDigest}`,
   ];
   return hashTreasuryCanonicalString(`durable-identity:${parts.join("|")}`);
 }

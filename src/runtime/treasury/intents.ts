@@ -78,7 +78,7 @@ import {
  * 【第十四轮】intent v6：entry 携带显式 authorityLevel + lowlevel 严格矩阵
  * （lowlevelSource 来源标记必填；迁移定级不再把 partial-modern 归入 lowlevel）。
  */
-export const TREASURY_INTENT_VERSION = 6 as const;
+export const TREASURY_INTENT_VERSION = 7 as const;
 /** 与 quarantine 同上限——recovery slot 统一计数的前提。 */
 export const TREASURY_INTENT_MAX_ENTRIES = 64;
 
@@ -249,7 +249,12 @@ export interface TreasuryIntentEntry {
   authorizationCohortDigest?: string;
   /** 统一 durable action identity digest（第十一轮 3.13.5：全 store 幂等/一致性比较的唯一权威）。 */
   durableIdentityDigest?: string;
-  /** 【第十七轮第十一节】tr1_ rearm child 的 lineage/rearm binding digest（quarantine/receipt/tombstone proof 链继承；initial attempt 不携带）。 */
+  /** 【第十七轮第十一节·第十八轮 v7 完整 proof】tr1_ rearm child 的 lineage
+   * proof（lineageId/generation/parent/binding——quarantine/receipt/tombstone
+   * proof 链继承；tr1_ entry 必填、initial attempt 禁止携带）。 */
+  lineageId?: string;
+  lineageGeneration?: number;
+  parentTransactionId?: string;
   lineageBindingDigest?: string;
   /** 有界审计来源。 */
   auditSource?: string;
@@ -258,7 +263,7 @@ export interface TreasuryIntentEntry {
 }
 
 export interface TreasuryIntentStore {
-  version: 6;
+  version: 7;
   entries: Record<string, TreasuryIntentEntry>;
   entryCount: number;
   updatedAt: number;
@@ -458,6 +463,25 @@ export function validateTreasuryIntentEntryShape(entry: unknown): string | null 
       return "lineageBindingDigest 非法（须为 16 小写 hex）";
     }
   }
+  // 【第十八轮 24.5】lineage proof required/forbidden 矩阵：is rearm attempt
+  // → 全部必填；is initial attempt → 全部禁止（不只检查可选 digest 格式）。
+  const isRearmAttempt = typeof candidate.transactionId === "string" && candidate.transactionId.startsWith("tr1_");
+  if (isRearmAttempt) {
+    if (typeof candidate.lineageId !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.lineageId)) {
+      return "tr1_ intent 缺少合法 lineageId（rearm attempt 的 lineage proof 必填——不得当普通 modern/lowlevel entry）";
+    }
+    if (typeof candidate.lineageGeneration !== "number" || !Number.isSafeInteger(candidate.lineageGeneration) || candidate.lineageGeneration < 1) {
+      return "tr1_ intent 缺少合法 lineageGeneration（rearm attempt 的 lineage proof 必填）";
+    }
+    if (typeof candidate.parentTransactionId !== "string" || candidate.parentTransactionId.length === 0) {
+      return "tr1_ intent 缺少 parentTransactionId（rearm attempt 的 lineage proof 必填）";
+    }
+    if (typeof candidate.lineageBindingDigest !== "string" || !INTENT_DIGEST_PATTERN.test(candidate.lineageBindingDigest)) {
+      return "tr1_ intent 缺少合法 lineageBindingDigest（rearm attempt 的 lineage proof 必填）";
+    }
+  } else if (candidate.lineageId !== undefined || candidate.lineageGeneration !== undefined || candidate.parentTransactionId !== undefined || candidate.lineageBindingDigest !== undefined) {
+    return "initial attempt 不得携带 lineage proof（tr1_ 专属字段出现在非 tr1_ intent——store unhealthy）";
+  }
   if (candidate.authorizationCohort !== undefined) {
     // 【第十三轮第九节】共享 cohort validator（唯一权威——全字段 + 异常边界）。
     const cohortError = validateTreasuryAuthorizationCohortFacts(candidate.authorizationCohort, candidate.transactionId);
@@ -656,6 +680,48 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
     heapRuntime = { store: upgraded, fatal: null };
     return heapRuntime;
   }
+  if (rawVersion === TREASURY_INTENT_VERSION - 1) {
+    // 【第十八轮 24.5】v6 → v7 迁移：tr1_ entry 的 lineage proof 补全——可从
+    // lineage record 安全补全（current 命中 + binding 一致）→ 原子补全；不可
+    // 证明（binding 缺失/不匹配、record 缺失）→ fatal（store unhealthy，原
+    // 数据保留——不猜测）；non-tr1_ 携带 lineage 字段 → fatal。
+    const entries: Record<string, TreasuryIntentEntry> = {};
+    for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
+      const legacy = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as Partial<TreasuryIntentEntry>;
+      const isRearm = typeof legacy.transactionId === "string" && legacy.transactionId.startsWith("tr1_");
+      const hasAnyLineage = legacy.lineageId !== undefined || legacy.lineageGeneration !== undefined
+        || legacy.parentTransactionId !== undefined || legacy.lineageBindingDigest !== undefined;
+      if (!isRearm && hasAnyLineage) {
+        heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `v6→v7 迁移：非 tr1_ intent 携带 lineage proof（${key.slice(0, 48)}）——intent store fail closed，原数据保留`);
+        return heapRuntime;
+      }
+      if (isRearm && (legacy.lineageId === undefined || legacy.lineageGeneration === undefined || legacy.parentTransactionId === undefined)) {
+        const resolved = intentLineageProofResolver !== null ? intentLineageProofResolver(legacy.transactionId!) : null;
+        const bindingMatches = legacy.lineageBindingDigest !== undefined && resolved !== null && resolved.bindingDigest === legacy.lineageBindingDigest;
+        if (resolved === null || !bindingMatches) {
+          heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `v6→v7 迁移：tr1_ intent 的 lineage proof 无法从 lineage record 安全补全（${key.slice(0, 48)}）——intent store fail closed，原数据保留（不猜测）`);
+          return heapRuntime;
+        }
+        entries[key] = {
+          ...(legacy as TreasuryIntentEntry),
+          lineageId: resolved.lineageId,
+          lineageGeneration: resolved.generation,
+          parentTransactionId: resolved.parentTransactionId,
+        };
+        continue;
+      }
+      entries[key] = legacy as TreasuryIntentEntry;
+    }
+    const upgraded: TreasuryIntentStore = { version: TREASURY_INTENT_VERSION, entries, entryCount: Object.keys(entries).length, updatedAt: Game.time };
+    const upgradeError = validateIntentStoreShape(upgraded);
+    if (upgradeError !== null) {
+      heapRuntime = fatalRuntime(raw as unknown as TreasuryIntentStore, `${upgradeError}（v6 → v7 升级校验失败，intent store fail closed，原数据保留）`);
+      return heapRuntime;
+    }
+    intentBranch().intents = upgraded;
+    heapRuntime = { store: upgraded, fatal: null };
+    return heapRuntime;
+  }
   const shapeError = validateIntentStoreShape(raw);
   if (shapeError !== null) {
     heapRuntime = fatalRuntime(raw, `${shapeError}（intent store fail closed，原数据保留）`);
@@ -663,6 +729,16 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
   }
   heapRuntime = { store: raw, fatal: null };
   return heapRuntime;
+}
+
+// 【第十八轮 24.5】lineage proof 补全 resolver（装配注入——attemptLineage
+// 模块加载时注册；模块单向依赖：intents 不 import attemptLineage）。
+let intentLineageProofResolver: ((transactionId: string) => { readonly lineageId: string; readonly generation: number; readonly parentTransactionId: string; readonly bindingDigest: string } | null) | null = null;
+
+export function registerTreasuryIntentLineageProofResolverForAssembly(
+  resolver: ((transactionId: string) => { readonly lineageId: string; readonly generation: number; readonly parentTransactionId: string; readonly bindingDigest: string } | null) | null,
+): void {
+  intentLineageProofResolver = resolver;
 }
 
 export interface TreasuryIntentHealth {
@@ -689,7 +765,8 @@ export function peekTreasuryIntentHealth(): TreasuryIntentHealth {
     (store.version as number) !== 2 &&
     (store.version as number) !== 3 &&
     (store.version as number) !== 4 &&
-    (store.version as number) !== 5
+    (store.version as number) !== 5 &&
+    (store.version as number) !== 6
   ) {
     return {
       healthy: false,
@@ -1217,8 +1294,14 @@ export function transferTreasuryIntentToQuarantine(
       : {}),
     ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
     ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
-    // 【第十七轮第十一节】lineage binding 随 intent 事实转移继承（child
-    // quarantine/receipt/tombstone 携带同一 binding）。
+    // 【第十七轮第十一节·第十八轮 24.5 完整 proof】lineage proof 随 intent
+    // 事实转移继承（child quarantine/receipt/tombstone 携带同一 proof；
+    // 转移前 authority class / immutable identity / lineage ID / generation /
+    // binding / parent 已在上方由 identity 重算与 same-ID 矩阵验证一致——
+    // 任一不一致本函数在写入前即拒绝，quarantine 不接管、intent 保留）。
+    ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+    ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+    ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
     ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
   } as TreasuryQuarantineEntry);
   if (write.status === "rejected") {

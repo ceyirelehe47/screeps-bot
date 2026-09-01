@@ -17,7 +17,13 @@
  */
 
 import { peekTreasuryReceiptHealth, lookupTreasurySettledReceipt } from "@/runtime/treasury/receipts";
-import { readTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
+import {
+  readTreasuryResolutionTombstone,
+  ensureTreasuryResolutionStoreValidated,
+  peekTreasuryResolutionStoreEntry,
+} from "@/runtime/treasury/resolutionStore";
+import { peekTreasuryAuthorizationFaultHealth } from "@/runtime/treasury/authorizationFaults";
+import { validateTreasuryWriteFaultMarkerShape } from "@/runtime/treasury/writeFault";
 import { readTreasuryIntentEntry, peekTreasuryIntentHealth } from "@/runtime/treasury/intents";
 import { readTreasuryQuarantineEntry, peekTreasuryQuarantineHealth } from "@/runtime/treasury/quarantine";
 import { readTreasuryAuthorizationFaultEntry } from "@/runtime/treasury/authorizationFaults";
@@ -86,6 +92,27 @@ export function preflightTreasuryRearmCapability(input: {
   if (!intentHealth.healthy) {
     return { status: "rejected", reason: "lineage_store_unhealthy", detail: intentHealth.detail ?? "intent store 损坏（rearm preflight fail closed）" };
   }
+  // 【第十八轮 24.11】全部相关 store 健康前置（resolution / authorization-
+  // fault / retirement summary / write-fault marker 形状）——任一 unhealthy
+  // → 零 capability、零 lineage mutation、零 callback。
+  if (peekTreasuryResolutionStoreEntry() !== undefined) {
+    const resolutionFatal = ensureTreasuryResolutionStoreValidated();
+    if (resolutionFatal !== null) {
+      return { status: "rejected", reason: "lineage_store_unhealthy", detail: `resolution store 损坏（rearm preflight fail closed）: ${resolutionFatal}` };
+    }
+  }
+  const authorizationFaultHealth = peekTreasuryAuthorizationFaultHealth();
+  if (!authorizationFaultHealth.healthy) {
+    return { status: "rejected", reason: "lineage_store_unhealthy", detail: authorizationFaultHealth.detail ?? "authorization-fault store 损坏（rearm preflight fail closed）" };
+  }
+  const summaryHealth0 = peekTreasuryRetirementSummaryHealth();
+  if (!summaryHealth0.healthy) {
+    return { status: "rejected", reason: "lineage_store_unhealthy", detail: summaryHealth0.detail ?? "retirement summary store 损坏（rearm preflight fail closed）" };
+  }
+  const pendingMarker = readTreasuryWriteFault();
+  if (pendingMarker !== undefined && validateTreasuryWriteFaultMarkerShape(pendingMarker) !== null) {
+    return { status: "rejected", reason: "lineage_store_unhealthy", detail: "write-fault marker 形状损坏（rearm preflight fail closed——不把损坏解释成无 marker）" };
+  }
   // ── lineage record：存在 + rearm-ready + rearmable。
   const lineage = lookupTreasuryAttemptLineageByAttemptId(input.parentTransactionId);
   if (lineage === undefined) {
@@ -140,7 +167,10 @@ export function preflightTreasuryRearmCapability(input: {
     };
   }
   // ── parent not-executed proof 完整（final tombstone 或 lineage 已接管——
-  //    tombstone 可能已被 retention 驱逐，驱逐后 lineage record 即权威）。
+  //    tombstone 可能已被 retention 驱逐，驱逐后 lineage generation retirement
+  //    proof 即权威）。tombstone 存在时必须与 lineage 当前代完全匹配
+  //（attempt identity / proof class / lowlevel source / lineage proof——
+  //    【第十八轮 24.11】不匹配 → proof_conflict 零签发）。
   const tombstone = readTreasuryResolutionTombstone(input.parentTransactionId);
   if (tombstone !== undefined) {
     if (tombstone.stage === "resolving") {
@@ -152,6 +182,42 @@ export function preflightTreasuryRearmCapability(input: {
         reason: "proof_conflict",
         detail: `parent 同时存在 not-executed lineage 与 committed tombstone（final not-executed + committed proof 冲突——不删除任何 proof，fail closed）`,
       };
+    }
+    if (tombstone.stage === "final" && tombstone.resolution === "not-executed") {
+      if (tombstone.proofLevel !== lineage.authorityClass) {
+        return {
+          status: "rejected",
+          reason: "proof_conflict",
+          detail: `parent tombstone proof class ${String(tombstone.proofLevel)} 与 lineage authority class ${String(lineage.authorityClass)} 不匹配（identity/generation proof 冲突——零 capability）`,
+        };
+      }
+      if (tombstone.digest !== lineage.currentIdentity.digest) {
+        return {
+          status: "rejected",
+          reason: "proof_conflict",
+          detail: "parent tombstone digest 与 lineage 当前代 attempt identity digest 不匹配（generation proof 冲突——零 capability）",
+        };
+      }
+      if (
+        tombstone.lowlevelSource !== undefined &&
+        lineage.lowlevelSource !== undefined &&
+        tombstone.lowlevelSource !== lineage.lowlevelSource
+      ) {
+        return {
+          status: "rejected",
+          reason: "proof_conflict",
+          detail: "parent tombstone lowlevel source 与 lineage provenance 不匹配（零 capability）",
+        };
+      }
+      if (tombstone.lineageBindingDigest !== undefined && lineage.generation >= 1) {
+        if (tombstone.lineageBindingDigest !== lineage.bindingDigest) {
+          return {
+            status: "rejected",
+            reason: "proof_conflict",
+            detail: "parent tombstone lineage binding 与 lineage record binding 不匹配（generation proof 冲突——零 capability）",
+          };
+        }
+      }
     }
   }
   // ── parent 不存在 committed receipt（final not-executed + committed receipt 冲突）。
@@ -212,6 +278,13 @@ export function checkTreasuryChildAttemptOccupancy(
   heapChildOccupied?: (childTransactionId: string) => boolean,
   excludeLineageId?: string,
 ): string | null {
+  // 【第十八轮 24.11】store unhealthy 不得解释成"未占用"（损坏 store 的
+  // 单 key undefined 读取不可信）——任一相关 store unhealthy → 按 occupied
+  // 阻断（fail closed）。
+  if (!peekTreasuryReceiptHealth().healthy) return "receipt store unhealthy（fail closed）";
+  if (!peekTreasuryIntentHealth().healthy) return "intent store unhealthy（fail closed）";
+  if (!peekTreasuryQuarantineHealth().healthy) return "quarantine store unhealthy（fail closed）";
+  if (!peekTreasuryAttemptLineageHealth().healthy) return "lineage store unhealthy（fail closed）";
   const receiptLookup = lookupTreasurySettledReceipt(childTransactionId);
   if (receiptLookup.status !== "absent") {
     return `receipt store（${receiptLookup.status}）`;

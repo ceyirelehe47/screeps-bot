@@ -647,7 +647,7 @@ describe("Treasury 两阶段 prepare/commit/abort 协议", () => {
     }
     Memory.runtime.treasury = {
       receipts: {
-        version: 3 as unknown as 7,
+        version: 3 as unknown as 8,
         settled,
         updatedAt: Game.time,
         entryCount: TREASURY_RECEIPT_MAX_ENTRIES - 2,

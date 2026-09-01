@@ -402,7 +402,7 @@ describe("proof levels：modern required 字段矩阵（第十三轮第八节）
     // 显式触发 load（不经 beginTick 恢复——(not_started, ready) 会被恢复
     // 语义确认未执行关闭，与本测试无关）。
     expect(ensureTreasuryIntentStoreValidated()).toBeNull();
-    expect(peekTreasuryIntentStore()!.version).toBe(6); // 【第十四轮】intent store v6
+    expect(peekTreasuryIntentStore()!.version).toBe(7); // 【第十八轮】intent store v7
     const entry = readTreasuryIntentEntry("pl_legacy");
     expect(entry?.authorityLevel).toBe("legacy");
   });

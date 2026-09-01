@@ -59,6 +59,8 @@ import {
 } from "@/runtime/treasury/intents";
 import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { classifyTreasuryHandoffRecoveryWindow } from "@/runtime/treasury/lineageHandoff";
+import { registerTreasuryIntentLineageProofResolverForAssembly } from "@/runtime/treasury/intents";
+import { registerTreasuryQuarantineLineageProofResolverForAssembly } from "@/runtime/treasury/quarantine";
 
 /** lineage store schema 版本（持久格式升级时递增；未知版本 fail closed）。 */
 export const TREASURY_LINEAGE_VERSION = 2;
@@ -213,6 +215,22 @@ export function resetTreasuryLineageRuntimeForTest(): void {
 // 测试清理注册（receipts.clearTreasuryPersistenceForTest 统一调用——模块
 // 单向依赖，避免 receipts ↔ attemptLineage 循环 import）。
 registerTreasuryLineageResetHook(resetTreasuryLineageRuntimeForTest);
+
+// 【第十八轮 24.5】intent store v6→v7 迁移的 lineage proof 补全 resolver
+//（装配注入——模块单向依赖：intents 不 import 本模块）。
+const lineageProofOfCurrentAttempt = (transactionId: string): { readonly lineageId: string; readonly generation: number; readonly parentTransactionId: string; readonly bindingDigest: string } | null => {
+  const record = lookupTreasuryAttemptLineageByAttemptId(transactionId);
+  if (record === undefined || record.currentTransactionId !== transactionId) return null;
+  if (record.bindingDigest === undefined || record.currentParentTransactionId === undefined) return null;
+  return {
+    lineageId: record.lineageId,
+    generation: record.generation,
+    parentTransactionId: record.currentParentTransactionId,
+    bindingDigest: record.bindingDigest,
+  };
+};
+registerTreasuryIntentLineageProofResolverForAssembly(lineageProofOfCurrentAttempt);
+registerTreasuryQuarantineLineageProofResolverForAssembly(lineageProofOfCurrentAttempt);
 
 // ── heap 运行态（global reset 即丢；首次 load 一次全表验证重建） ───────────
 

@@ -434,7 +434,7 @@ describe("tombstone / finalized proof identity（第十二轮 3.3/3.4）", () =>
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = Memory.runtime.treasury ?? {};
     Memory.runtime.treasury.receipts = Memory.runtime.treasury.receipts ?? {
-      version: 7,
+      version: 8,
       settled: {},
       updatedAt: Game.time,
       entryCount: 0,
@@ -481,7 +481,7 @@ describe("tombstone / finalized proof identity（第十二轮 3.3/3.4）", () =>
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = Memory.runtime.treasury ?? {};
     Memory.runtime.treasury.receipts = Memory.runtime.treasury.receipts ?? {
-      version: 7,
+      version: 8,
       settled: {},
       updatedAt: Game.time,
       entryCount: 0,

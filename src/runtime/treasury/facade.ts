@@ -354,10 +354,12 @@ interface PreparedTransaction {
   /** 【第十三轮】commit 段 receipt proof 绑定的完整 attempt 身份（contract 路径）。 */
   contractDigest?: string;
   authorizationCohortDigest?: string;
-  /** 【第十七轮第十一节】tr1_ rearm child 的 lineage binding（proof 链继承）。 */
+  /** 【第十七轮第十一节·第十八轮完整 proof】tr1_ rearm child 的 lineage
+   * proof（receipt/tombstone/marker proof 链继承）。 */
   lineageBindingDigest?: string;
-  /** 【第十七轮第十四节】rearm child 的 attempt generation（marker class-aware 身份）。 */
   lineageGeneration?: number;
+  lineageId?: string;
+  lineageParentTransactionId?: string;
 }
 
 /**
@@ -1144,6 +1146,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
             contractDigest: record.contractDigest,
             ...(record.lineageBindingDigest !== undefined ? { lineageBindingDigest: record.lineageBindingDigest } : {}),
             ...(record.lineageGeneration !== undefined ? { lineageGeneration: record.lineageGeneration } : {}),
+            ...(record.lineageId !== undefined ? { lineageId: record.lineageId } : {}),
           }),
         });
         metrics.commitFaults += 1;
@@ -2573,6 +2576,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
                 // 为 lowlevel）的 receipt 绑定 runtime provenance：runtime 与
                 // migrated 不能互相证明；缺 provenance 的旧 receipt 是隔离态。
                 ...(record.contractDigest === undefined ? { lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME } : {}),
+                // 【第十八轮 24.4】tr1_ rearm child 的 receipt 携带完整 lineage
+                // proof（commit-pending 补完成与 generation 冲突检测的权威）。
+                ...(record.lineageId !== undefined ? { lineageId: record.lineageId } : {}),
+                ...(record.lineageGeneration !== undefined ? { lineageGeneration: record.lineageGeneration } : {}),
+                ...(record.lineageParentTransactionId !== undefined ? { parentTransactionId: record.lineageParentTransactionId } : {}),
+                ...(record.lineageBindingDigest !== undefined ? { lineageBindingDigest: record.lineageBindingDigest } : {}),
               }
             : undefined,
         );
@@ -2647,6 +2656,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
             contractDigest: record.contractDigest,
             ...(record.lineageBindingDigest !== undefined ? { lineageBindingDigest: record.lineageBindingDigest } : {}),
             ...(record.lineageGeneration !== undefined ? { lineageGeneration: record.lineageGeneration } : {}),
+            ...(record.lineageId !== undefined ? { lineageId: record.lineageId } : {}),
           }),
         });
         return {
@@ -2793,59 +2803,6 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           redeemedCohort = redeemed.cohort;
         }
       }
-      // 【第十二轮 3.5】低层（非 contract）路径同样绑定稳定语义身份：intent
-      // 写入时从当前 registry 读取该 kind 的 adapter semanticIdentity（同一
-      // registry 的 reconciler 语义锚点；contract 路径以 contract 携带值为准）。
-      const intentAdapterSemanticIdentity =
-        execution?.intentContract?.adapterSemanticIdentity ??
-        findTreasuryActionAdapter(record.canonical.kind)?.semanticIdentity;
-      // 【第十一轮 3.13.5】统一 durable action identity：全 store 幂等/
-      // read-back/转移/双权威比较的唯一 digest（outcome/settlement 不进）。
-      const durableIdentity = computeTreasuryDurableIdentityDigest({
-        transactionId: record.canonical.transactionId,
-        digest: record.digest,
-        actionKind: record.canonical.kind,
-        postings: record.shape.merged.map((leg) => ({ ...leg })),
-        source: record.canonical.source,
-        ...(intentAdapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: intentAdapterSemanticIdentity } : {}),
-        ...(execution?.intentContract !== undefined
-          ? {
-              contractId: execution.intentContract.contractId,
-              contractDigest: execution.intentContract.contractDigest,
-              ...(execution.intentContract.adapterRegistrationId !== undefined
-                ? { adapterRegistrationId: execution.intentContract.adapterRegistrationId }
-                : {}),
-              ...(execution.intentContract.adapterRegistrationId !== undefined
-                ? { adapterRegistrationId: execution.intentContract.adapterRegistrationId }
-                : {}),
-              ...(execution.intentContract.adapterSemanticIdentity !== undefined
-                ? { adapterSemanticIdentity: execution.intentContract.adapterSemanticIdentity }
-                : {}),
-              ...(execution.intentContract.durablePayload !== undefined
-                ? { durablePayload: execution.intentContract.durablePayload }
-                : {}),
-              ...(execution.intentContract.durablePayloadVersion !== undefined
-                ? { durablePayloadVersion: execution.intentContract.durablePayloadVersion }
-                : {}),
-              ...(execution.intentContract.structureFacts !== undefined
-                ? { structureFacts: execution.intentContract.structureFacts }
-                : {}),
-            }
-          : {}),
-        ...(redeemedCohort !== undefined
-          ? { authorizationCohortDigest: computeTreasuryAuthorizationCohortDigest(redeemedCohort) }
-          : {}),
-        ...(redeemedCohort !== undefined && redeemedCohort.ownerIdentity !== ""
-          ? { ownerIdentity: redeemedCohort.ownerIdentity }
-          : {}),
-        ...(redeemedCohort !== undefined
-          ? {
-              policyIdentity:
-                redeemedCohort.policyId + "@v" + String(redeemedCohort.policyVersion) + ":" + redeemedCohort.policyDecisionDigest,
-            }
-          : {}),
-      });
-      record.durableIdentityDigest = durableIdentity;
       // 【第十三轮】commit 段 receipt proof 绑定完整 attempt 身份（与
       // durable identity 同源派生；低层路径无 contract 时缺省）。
       record.contractDigest = execution?.intentContract?.contractDigest;
@@ -2882,9 +2839,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       //    完整验证 → retry semantic 重算比较 → lineage → child_intent_
       //    pending。任一失败 callback 零调用、预留全部释放（结构化拒绝）；
       //    consume 与 child_active 推进在 intent read-back 一致后（下文）。──
-      let tr1LineageBindingDigest: string | undefined;
+      // 【第十二轮 3.5】低层（非 contract）路径同样绑定稳定语义身份：intent
+      // 写入时从当前 registry 读取该 kind 的 adapter semanticIdentity（同一
+      // registry 的 reconciler 语义锚点；contract 路径以 contract 携带值为准）。
+      const intentAdapterSemanticIdentity =
+        execution?.intentContract?.adapterSemanticIdentity ??
+        findTreasuryActionAdapter(record.canonical.kind)?.semanticIdentity;
+            let tr1LineageBindingDigest: string | undefined;
       let tr1LineageGeneration: number | undefined;
       let tr1LineageId: string | undefined;
+      let tr1LineageParentTransactionId: string | undefined;
       if (isTreasuryRearmAttemptId(record.canonical.transactionId)) {
         const abortTr1 = (reason: "rearm_capability_invalid" | "lineage_store_fatal", detail: string): TreasurySafeExecuteResult<TAction> => {
           record.state = "aborted";
@@ -2961,7 +2925,70 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         tr1LineageBindingDigest = tr1Capability.binding.bindingDigest;
         tr1LineageGeneration = tr1Capability.binding.generation;
         tr1LineageId = tr1Capability.binding.lineageId;
+        tr1LineageParentTransactionId = tr1Capability.binding.parentTransactionId;
       }
+      // 【第十一轮 3.13.5】统一 durable action identity：全 store 幂等/
+      // read-back/转移/双权威比较的唯一 digest（outcome/settlement 不进）。
+      const durableIdentityInput = {
+        transactionId: record.canonical.transactionId,
+        digest: record.digest,
+        actionKind: record.canonical.kind,
+        postings: record.shape.merged.map((leg) => ({ ...leg })),
+        source: record.canonical.source,
+        ...(intentAdapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: intentAdapterSemanticIdentity } : {}),
+        ...(execution?.intentContract !== undefined
+          ? {
+              contractId: execution.intentContract.contractId,
+              contractDigest: execution.intentContract.contractDigest,
+              ...(execution.intentContract.adapterRegistrationId !== undefined
+                ? { adapterRegistrationId: execution.intentContract.adapterRegistrationId }
+                : {}),
+              ...(execution.intentContract.adapterRegistrationId !== undefined
+                ? { adapterRegistrationId: execution.intentContract.adapterRegistrationId }
+                : {}),
+              ...(execution.intentContract.adapterSemanticIdentity !== undefined
+                ? { adapterSemanticIdentity: execution.intentContract.adapterSemanticIdentity }
+                : {}),
+              ...(execution.intentContract.durablePayload !== undefined
+                ? { durablePayload: execution.intentContract.durablePayload }
+                : {}),
+              ...(execution.intentContract.durablePayloadVersion !== undefined
+                ? { durablePayloadVersion: execution.intentContract.durablePayloadVersion }
+                : {}),
+              ...(execution.intentContract.structureFacts !== undefined
+                ? { structureFacts: execution.intentContract.structureFacts }
+                : {}),
+            }
+          : {}),
+        ...(redeemedCohort !== undefined
+          ? { authorizationCohortDigest: computeTreasuryAuthorizationCohortDigest(redeemedCohort) }
+          : {}),
+        ...(redeemedCohort !== undefined && redeemedCohort.ownerIdentity !== ""
+          ? { ownerIdentity: redeemedCohort.ownerIdentity }
+          : {}),
+        ...(redeemedCohort !== undefined
+          ? {
+              policyIdentity:
+                redeemedCohort.policyId + "@v" + String(redeemedCohort.policyVersion) + ":" + redeemedCohort.policyDecisionDigest,
+            }
+          : {}),
+      } satisfies Parameters<typeof computeTreasuryDurableIdentityDigest>[0];
+      // 【第十八轮 24.4】tr1_ rearm attempt 的 lineage proof 进入统一 durable
+      // identity（initial attempt 完全不包含——单侧缺失/不同 proof 的同 ID
+      // 比较 outcome 永远 conflict，不 match）。
+      const durableIdentityWithLineage = computeTreasuryDurableIdentityDigest({
+        ...durableIdentityInput,
+        ...(tr1LineageId !== undefined && tr1LineageBindingDigest !== undefined && tr1LineageGeneration !== undefined && tr1LineageParentTransactionId !== undefined
+          ? {
+              lineageId: tr1LineageId,
+              lineageGeneration: tr1LineageGeneration,
+              lineageParentTransactionId: tr1LineageParentTransactionId,
+              lineageBindingDigest: tr1LineageBindingDigest,
+            }
+          : {}),
+      });
+      record.durableIdentityDigest = durableIdentityWithLineage;
+
       const intentWrite = writeTreasuryIntentEntry({
         authorityLevel: intentAuthorityLevel,
         transactionId: record.canonical.transactionId,
@@ -2978,10 +3005,13 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         outcome: "not_started",
         settlement: "ready",
         auditSource: "execute-prepared-action",
-        durableIdentityDigest: durableIdentity,
+        durableIdentityDigest: record.durableIdentityDigest,
         // 【第十七轮第十一节】tr1_ rearm child 的 lineage binding 进 intent
         //（quarantine/receipt/tombstone proof 链继承；initial attempt 不携带）。
         ...(tr1LineageBindingDigest !== undefined ? { lineageBindingDigest: tr1LineageBindingDigest } : {}),
+        ...(tr1LineageId !== undefined ? { lineageId: tr1LineageId } : {}),
+        ...(tr1LineageGeneration !== undefined ? { lineageGeneration: tr1LineageGeneration } : {}),
+        ...(tr1LineageParentTransactionId !== undefined ? { parentTransactionId: tr1LineageParentTransactionId } : {}),
         ...(intentAdapterSemanticIdentity !== undefined
           ? { adapterSemanticIdentity: intentAdapterSemanticIdentity }
           : {}),
@@ -3048,7 +3078,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const readBack = readTreasuryIntentEntry(record.canonical.transactionId);
       const identityOptionalMatches = (actual: string | number | undefined, declared: string | number | undefined): boolean =>
         actual === declared || (actual === undefined && declared === undefined);
-      const readBackIdentityConsistent = treasuryDurableIdentitiesMatch(readBack?.durableIdentityDigest, durableIdentity);
+      const readBackIdentityConsistent = treasuryDurableIdentitiesMatch(readBack?.durableIdentityDigest, record.durableIdentityDigest);
       const readBackConsistent =
         readBack !== undefined &&
         readBackIdentityConsistent &&
@@ -3094,7 +3124,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       //    失败 → intent 保留为 staged（beginTick 恢复：一致 not_started →
       //    回滚 rearm_ready 并释放 intent），callback 零调用。 ───────────────
       if (tr1LineageId !== undefined && tr1LineageBindingDigest !== undefined) {
-        if (readBack.lineageBindingDigest !== tr1LineageBindingDigest) {
+        if (
+          readBack.lineageBindingDigest !== tr1LineageBindingDigest ||
+          readBack.lineageId !== tr1LineageId ||
+          readBack.lineageGeneration !== tr1LineageGeneration ||
+          readBack.parentTransactionId !== tr1LineageParentTransactionId
+        ) {
           // intent 未携带预期 binding（store 不可信/被并行篡改）——fail closed。
           metrics.intentWriteFailures += 1;
           record.state = "expired";
@@ -3105,7 +3140,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           return {
             status: "prepare_rejected",
             reason: "identity_conflict",
-            detail: "tr1_ intent read-back 未携带预期 lineage binding digest——fail closed，Game callback 零调用",
+            detail: "tr1_ intent read-back 未携带预期完整 lineage proof（binding/generation/lineage/parent）——fail closed，Game callback 零调用",
           };
         }
         // 【第十八轮 24.2】严格消费：lineage 必须处于 child_intent_pending 且
@@ -3128,6 +3163,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         }
         record.lineageBindingDigest = tr1LineageBindingDigest;
         record.lineageGeneration = tr1LineageGeneration;
+        record.lineageId = tr1LineageId;
+        record.lineageParentTransactionId = tr1LineageParentTransactionId;
       }
       // ── execution-started（ready → executing，严格迁移：期望前序 + digest
       //    一致）：任何 rejected（含 not_found——第九轮修复：entry 缺失绝不能
@@ -3168,7 +3205,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           digest: record.digest,
           ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
           ...(record.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.authorizationCohortDigest } : {}),
-          durableIdentityDigest: durableIdentity,
+          durableIdentityDigest: record.durableIdentityDigest,
           // 【第十八轮 24.1】lowlevel child 的 identity 携带受控 provenance
           //（resolver publication 的 read-back identity 匹配要求完整）。
           ...(intentAuthorityLevel === "lowlevel"

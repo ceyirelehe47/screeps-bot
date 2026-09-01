@@ -378,7 +378,7 @@ describe("emergency intent authority（quarantine 写失败）", () => {
     const service = makeService();
     seedIntent("ti_emergency", "executing", -800);
     // 损坏 quarantine store：未知版本使一切写入/读取 fatal（先建合法 store）。
-    Memory.runtime!.treasury!.quarantine = { version: 3 as unknown as 5, entries: {}, entryCount: 0 };
+    Memory.runtime!.treasury!.quarantine = { version: 3 as unknown as 6, entries: {}, entryCount: 0 };
     (Memory.runtime!.treasury!.quarantine as { version: number }).version = 99;
     resetTreasuryIntentRuntimeForTest();
     Game.time += 1;
@@ -405,7 +405,7 @@ describe("emergency intent authority（quarantine 写失败）", () => {
   it("quarantine 写失败后修复 store：下一 tick 恢复重试成功（intent→quarantine 转换完成）", () => {
     const service = makeService();
     seedIntent("ti_retry", "executing");
-    Memory.runtime!.treasury!.quarantine = { version: 3 as unknown as 5, entries: {}, entryCount: 0 };
+    Memory.runtime!.treasury!.quarantine = { version: 3 as unknown as 6, entries: {}, entryCount: 0 };
     (Memory.runtime!.treasury!.quarantine as { version: number }).version = 99;
     resetTreasuryIntentRuntimeForTest();
     Game.time += 1;
@@ -475,7 +475,7 @@ describe("store 健康契约", () => {
     expect(health.healthy).toBe(true);
     expect(health.entryCount).toBe(1);
     const store = Memory.runtime!.treasury!.intents!;
-    expect(store.version).toBe(6);
+    expect(store.version).toBe(7);
     expect(store.entryCount).toBe(1);
     // 冻结快照：外部修改不生效。
     const snapshot = readTreasuryIntentEntry("ti_health")!;
@@ -520,10 +520,10 @@ describe("store 健康契约", () => {
 
   it("未知版本 fail closed（原数据保留）", () => {
     seedIntent("ti_unknown", "ready");
-    (Memory.runtime!.treasury!.intents as { version: number }).version = 7;
+    (Memory.runtime!.treasury!.intents as { version: number }).version = 8;
     resetTreasuryIntentRuntimeForTest();
     expect(peekTreasuryIntentHealth().healthy).toBe(false);
-    expect(Memory.runtime!.treasury!.intents!.version).toBe(7); // 不重置
+    expect(Memory.runtime!.treasury!.intents!.version).toBe(8); // 不重置
   });
 
   it("写入前重验 entry：非法 postings/phase/digest 结构化拒绝且 store 不变", () => {
@@ -831,7 +831,7 @@ describe("严格 phase 状态机与 phase 写失败（第九轮 4.4/4.5）", () 
     // 触发 load：read-back 或任何写路径访问 → v1 迁移 v3。
     const entry = readTreasuryIntentEntry("ti_v1");
     expect(entry?.transactionId).toBe("ti_v1");
-    expect((Memory.runtime.treasury.intents as { version: number }).version).toBe(6);
+    expect((Memory.runtime.treasury.intents as { version: number }).version).toBe(7);
     expect(Memory.runtime.treasury.intents.entries["i:ti_v1"].digest).toBe("0123456789abcdef");
     // 旧 phase "ready" → (not_started, ready)。
     expect(entry?.outcome).toBe("not_started");
@@ -1055,7 +1055,7 @@ describe("durable authority cohesion（第十轮 5.1：quarantine v2 完整合�
     expect(legacy?.outcome).toBe("returned_ok"); // commit 类 phase → returned_ok
     expect(legacy?.legacyV1).toBe(true); // 无并存 intent → legacy 标记
     expect(legacy?.authorityLevel).toBe("legacy");
-    expect((Memory.runtime.treasury.quarantine as { version: number }).version).toBe(5);
+    expect((Memory.runtime.treasury.quarantine as { version: number }).version).toBe(6);
   });
 
   it("recovery slot：同 ID 双权威（转移窗口残留）只占一个 slot", () => {

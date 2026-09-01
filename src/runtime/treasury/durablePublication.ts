@@ -169,6 +169,12 @@ export function compareTreasuryAuthorityPublicationReadBack(
     ["ownerIdentity", optionalEqual(published.ownerIdentity, expected.ownerIdentity)],
     ["policyIdentity", optionalEqual(published.policyIdentity, expected.policyIdentity)],
     ["durableIdentityDigest", optionalEqual(published.durableIdentityDigest, expected.durableIdentityDigest)],
+    // 【第十八轮 24.5】lineage proof 全字段 read-back 比较（检测写入后
+    // binding 被删除 / generation 被篡改 / lineage ID 变化）。
+    ["lineageId", optionalEqual(published.lineageId, expected.lineageId)],
+    ["lineageGeneration", optionalEqual(published.lineageGeneration, expected.lineageGeneration)],
+    ["parentTransactionId", optionalEqual(published.parentTransactionId, expected.parentTransactionId)],
+    ["lineageBindingDigest", optionalEqual(published.lineageBindingDigest, expected.lineageBindingDigest)],
     ["outcome", optionalEqual(published.outcome, expected.outcome)],
     ["settlement", optionalEqual(published.settlement, expected.settlement)],
     ["phase", optionalEqual(published.phase, expected.phase)],

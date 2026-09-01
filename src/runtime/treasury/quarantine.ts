@@ -122,7 +122,11 @@ export interface TreasuryQuarantineEntry {
   readonly authorizationCohortDigest?: string;
   /** 统一 durable action identity digest（第十一轮 3.13.5：全 store 幂等/一致性比较）。 */
   readonly durableIdentityDigest?: string;
-  /** 【第十七轮第十一节】tr1_ rearm child 的 lineage/rearm binding digest（从 intent 事实转移继承；initial attempt 不携带）。 */
+  /** 【第十七轮第十一节·第十八轮 v6 完整 proof】tr1_ rearm child 的 lineage
+   * proof（从 intent 事实转移继承；tr1_ entry 必填、initial 禁止携带）。 */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
   readonly lineageBindingDigest?: string;
   /** v1 迁移且无并存 intent 补全合同事实（不参与 contract-backed resolution）。 */
   readonly legacyV1?: boolean;
@@ -140,7 +144,7 @@ export type TreasuryQuarantineStructureFact = TreasuryStructureBindingDescriptor
 
 export interface TreasuryQuarantineStore {
   /** schema 版本（当前 5；未知版本 fail closed）。 */
-  version: 5;
+  version: 6;
   /** key = "q:"+transactionId（transactionId 字符集受限，前缀无边界歧义，防危险字面量）。 */
   entries: Record<string, TreasuryQuarantineEntry>;
   /** entries 自有键计数（load 校验与 fault-slot admission 的 O(1) 权威）。 */
@@ -150,7 +154,7 @@ export interface TreasuryQuarantineStore {
 }
 
 /** 【第十四轮】quarantine v5：lowlevel 严格矩阵（lowlevelSource 来源标记）。 */
-export const TREASURY_QUARANTINE_VERSION = 5 as const;
+export const TREASURY_QUARANTINE_VERSION = 6 as const;
 export const TREASURY_QUARANTINE_MAX_ENTRIES = 64;
 
 const QUARANTINE_KEY_PREFIX = "q:";
@@ -380,6 +384,25 @@ export function validateTreasuryQuarantineEntryShape(entry: unknown): string | n
     if (typeof candidate.lineageBindingDigest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.lineageBindingDigest)) {
       return "lineageBindingDigest 非法（须为 16 小写 hex）";
     }
+  }
+  // 【第十八轮 24.5】lineage proof required/forbidden 矩阵（与 intent v7 同一
+  // 语义；tr1_ entry 缺 proof 不得当普通 modern/lowlevel entry）。
+  const isRearmAttempt = typeof candidate.transactionId === "string" && candidate.transactionId.startsWith("tr1_");
+  if (isRearmAttempt) {
+    if (typeof candidate.lineageId !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.lineageId)) {
+      return "tr1_ quarantine 缺少合法 lineageId（rearm attempt 的 lineage proof 必填）";
+    }
+    if (typeof candidate.lineageGeneration !== "number" || !Number.isSafeInteger(candidate.lineageGeneration) || candidate.lineageGeneration < 1) {
+      return "tr1_ quarantine 缺少合法 lineageGeneration（rearm attempt 的 lineage proof 必填）";
+    }
+    if (typeof candidate.parentTransactionId !== "string" || candidate.parentTransactionId.length === 0) {
+      return "tr1_ quarantine 缺少 parentTransactionId（rearm attempt 的 lineage proof 必填）";
+    }
+    if (typeof candidate.lineageBindingDigest !== "string" || !QUARANTINE_DIGEST_PATTERN.test(candidate.lineageBindingDigest)) {
+      return "tr1_ quarantine 缺少合法 lineageBindingDigest（rearm attempt 的 lineage proof 必填）";
+    }
+  } else if (candidate.lineageId !== undefined || candidate.lineageGeneration !== undefined || candidate.parentTransactionId !== undefined || candidate.lineageBindingDigest !== undefined) {
+    return "initial attempt 不得携带 lineage proof（tr1_ 专属字段出现在非 tr1_ quarantine——store unhealthy）";
   }
   if (candidate.authorizationCohort !== undefined) {
     // 【第十三轮第九节】共享 cohort validator（唯一权威——全字段 + 异常边界；
@@ -665,6 +688,47 @@ function loadQuarantineStoreRuntime(): QuarantineStoreRuntime {
     }
     quarantineBranch().quarantine = upgradedV3;
     heapRuntime = { store: upgradedV3, fatal: null };
+    return heapRuntime;
+  }
+  if ((raw.version as number) === 5) {
+    // 【第十八轮 24.5】v5 → v6 迁移：tr1_ entry 的 lineage proof 补全——可从
+    // lineage record 安全补全（current 命中 + binding 一致）→ 原子补全；不可
+    // 证明 → fatal（原数据保留——不猜测）；non-tr1_ 携带 lineage 字段 → fatal。
+    const entries: Record<string, TreasuryQuarantineEntry> = {};
+    for (const key of Object.keys((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
+      const legacy = ((raw as { entries?: Record<string, unknown> }).entries ?? {})[key] as Partial<TreasuryQuarantineEntry>;
+      const isRearm = typeof legacy.transactionId === "string" && legacy.transactionId.startsWith("tr1_");
+      const hasAnyLineage = legacy.lineageId !== undefined || legacy.lineageGeneration !== undefined
+        || legacy.parentTransactionId !== undefined || legacy.lineageBindingDigest !== undefined;
+      if (!isRearm && hasAnyLineage) {
+        heapRuntime = fatalRuntime(raw, `v5→v6 迁移：非 tr1_ quarantine 携带 lineage proof（${key.slice(0, 48)}）——quarantine fail closed，原数据保留`);
+        return heapRuntime;
+      }
+      if (isRearm && (legacy.lineageId === undefined || legacy.lineageGeneration === undefined || legacy.parentTransactionId === undefined)) {
+        const resolved = quarantineLineageProofResolver !== null ? quarantineLineageProofResolver(legacy.transactionId!) : null;
+        const bindingMatches = legacy.lineageBindingDigest !== undefined && resolved !== null && resolved.bindingDigest === legacy.lineageBindingDigest;
+        if (resolved === null || !bindingMatches) {
+          heapRuntime = fatalRuntime(raw, `v5→v6 迁移：tr1_ quarantine 的 lineage proof 无法从 lineage record 安全补全（${key.slice(0, 48)}）——quarantine fail closed，原数据保留（不猜测）`);
+          return heapRuntime;
+        }
+        entries[key] = {
+          ...(legacy as TreasuryQuarantineEntry),
+          lineageId: resolved.lineageId,
+          lineageGeneration: resolved.generation,
+          parentTransactionId: resolved.parentTransactionId,
+        };
+        continue;
+      }
+      entries[key] = legacy as TreasuryQuarantineEntry;
+    }
+    const upgraded: TreasuryQuarantineStore = { ...(raw as unknown as TreasuryQuarantineStore), version: TREASURY_QUARANTINE_VERSION, entries };
+    const upgradeError = validateQuarantineStoreShape(upgraded);
+    if (upgradeError !== null) {
+      heapRuntime = fatalRuntime(raw, `${upgradeError}（v5→v6 升级校验失败，quarantine fail closed，原数据保留）`);
+      return heapRuntime;
+    }
+    quarantineBranch().quarantine = upgraded;
+    heapRuntime = { store: upgraded, fatal: null };
     return heapRuntime;
   }
   if ((raw.version as number) === 4) {
@@ -1219,4 +1283,14 @@ export function repairTreasuryQuarantineStoreMetadataForResolution(): { status: 
 /** 诊断：合法 phase 集合是否包含给定值（测试与 guard 用）。 */
 export function isValidTreasuryQuarantinePhase(phase: string): phase is TreasuryWriteFaultPhase {
   return VALID_QUARANTINE_PHASES.has(phase);
+}
+
+// 【第十八轮 24.5】lineage proof 补全 resolver（装配注入——attemptLineage
+// 模块加载时注册；模块单向依赖：quarantine 不 import attemptLineage）。
+let quarantineLineageProofResolver: ((transactionId: string) => { readonly lineageId: string; readonly generation: number; readonly parentTransactionId: string; readonly bindingDigest: string } | null) | null = null;
+
+export function registerTreasuryQuarantineLineageProofResolverForAssembly(
+  resolver: ((transactionId: string) => { readonly lineageId: string; readonly generation: number; readonly parentTransactionId: string; readonly bindingDigest: string } | null) | null,
+): void {
+  quarantineLineageProofResolver = resolver;
 }

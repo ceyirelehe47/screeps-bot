@@ -951,7 +951,7 @@ describe("partial-modern migration isolation（第十四轮第十节）", () => 
     seedLegacyQuarantine(3, { ...partialModernEntry, adapterVersion: 2 });
     const migrated = readTreasuryQuarantineEntry("mm_partial");
     expect(migrated?.authorityLevel).toBe("forensic");
-    expect((Memory.runtime as { treasury?: { quarantine?: { version?: number } } }).treasury?.quarantine?.version).toBe(5);
+    expect((Memory.runtime as { treasury?: { quarantine?: { version?: number } } }).treasury?.quarantine?.version).toBe(6);
   });
 
   it("旧 entry 有 cohort facts 但缺 digest：迁移 fail closed（原 store 保留）", () => {
@@ -1057,7 +1057,7 @@ describe("partial-modern migration isolation（第十四轮第十节）", () => 
     resetTreasuryQuarantineRuntimeForTest();
     const second = readTreasuryQuarantineEntry("mm_partial");
     expect(second?.authorityLevel).toBe(first?.authorityLevel);
-    expect((Memory.runtime as { treasury?: { quarantine?: { version?: number } } }).treasury?.quarantine?.version).toBe(5);
+    expect((Memory.runtime as { treasury?: { quarantine?: { version?: number } } }).treasury?.quarantine?.version).toBe(6);
   });
 });
 

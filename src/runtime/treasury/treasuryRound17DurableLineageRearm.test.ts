@@ -661,7 +661,7 @@ describe("receipt proof class v7（第十七轮第十五节）", () => {
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = {
       receipts: {
-        version: 6 as unknown as 7,
+        version: 6 as unknown as 8,
         settled: {
           "t:r17_v6_mod": { level: "modern" as unknown as "identity-bound", settledAtTick: Game.time, digest: "1111111111111111", durableIdentityDigest: "2222222222222222" },
           "t:r17_v6_low": { level: "modern" as unknown as "identity-bound", settledAtTick: Game.time, digest: "3333333333333333", durableIdentityDigest: "4444444444444444", lowlevelSource: "runtime-lowlevel@v1" },
@@ -673,7 +673,7 @@ describe("receipt proof class v7（第十七轮第十五节）", () => {
       },
     };
     // 触发 load 迁移（ensure 的 load 路径执行 v6→v7 原子迁移）。
-    expect(ensureTreasuryReceiptStore().version).toBe(7);
+    expect(ensureTreasuryReceiptStore().version).toBe(8); // 第十八轮：v6 经 v7 结构迁移至 v8
     expect(readTreasurySettlementProof("r17_v6_mod")?.level).toBe("identity-bound");
     expect(readTreasurySettlementProof("r17_v6_low")?.level).toBe("lowlevel");
     expect(readTreasurySettlementProof("r17_v6_low")?.contractDigest).toBeUndefined(); // lowlevel 禁 modern 字段
@@ -685,7 +685,7 @@ describe("receipt proof class v7（第十七轮第十五节）", () => {
     Memory.runtime = Memory.runtime ?? {};
     Memory.runtime.treasury = {
       receipts: {
-        version: 6 as unknown as 7,
+        version: 6 as unknown as 8,
         settled: {
           "t:r17_v6_bad": {
             level: "modern" as unknown as "identity-bound",

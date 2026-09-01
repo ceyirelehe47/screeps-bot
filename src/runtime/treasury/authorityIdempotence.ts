@@ -26,6 +26,12 @@
 
 export interface TreasuryAuthorityIdempotenceEntryView {
   readonly transactionId?: unknown;
+  /** 【第十八轮 24.5】lineage proof（同 ID 不同 lineage/generation/binding →
+   *  永远 conflict——公共前置，全部 authority class 一致适用）。 */
+  readonly lineageId?: unknown;
+  readonly lineageGeneration?: unknown;
+  readonly parentTransactionId?: unknown;
+  readonly lineageBindingDigest?: unknown;
   readonly authorityLevel?: unknown;
   readonly lowlevelSource?: unknown;
   readonly digest?: unknown;
@@ -104,6 +110,19 @@ export function compareTreasuryAuthoritySameIdIdentity(
   }
   if (!normalizedEqual(existing.faultTick, candidate.faultTick)) {
     return { verdict: "conflict", detail: `${label}: faultTick 不一致（既有 ${String(existing.faultTick)}，新 ${String(candidate.faultTick)}）` };
+  }
+  // 【第十八轮 24.5】lineage proof 公共前置：同 ID 但 lineage proof 不同 →
+  // 永远 conflict（不同 lineage/generation/parent/binding 不得 already_present）。
+  if (
+    !normalizedEqual(existing.lineageId, candidate.lineageId) ||
+    !normalizedEqual(existing.lineageGeneration, candidate.lineageGeneration) ||
+    !normalizedEqual(existing.parentTransactionId, candidate.parentTransactionId) ||
+    !normalizedEqual(existing.lineageBindingDigest, candidate.lineageBindingDigest)
+  ) {
+    return {
+      verdict: "conflict",
+      detail: `${label}: lineage proof 不一致（lineageId/generation/parent/binding 任一不同——同 ID 不同 lineage 永远冲突）`,
+    };
   }
   // 跨 authority level 的 same-ID entry 永远冲突。
   if (!normalizedEqual(existing.authorityLevel, candidate.authorityLevel)) {

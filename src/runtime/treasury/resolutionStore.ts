@@ -89,7 +89,7 @@ import { classAwareIdentityOfAttempt } from "@/runtime/treasury/markerAttemptIde
  * 【第十六轮第十一节】resolution tombstone v6（lowlevel proof 绑定显式
  * provenance——runtime 与 migrated 来源不能互相证明）。
  */
-export const TREASURY_RESOLUTION_VERSION = 6 as const;
+export const TREASURY_RESOLUTION_VERSION = 7 as const;
 export const TREASURY_RESOLUTION_MAX_ENTRIES = 256;
 const TREASURY_RESOLUTION_RETENTION_TICKS = 5_000;
 const RESOLUTION_KEY_PREFIX = "r:";
@@ -158,6 +158,11 @@ export interface TreasuryResolutionTombstone {
    * authority（旧 proof 只作 replay blocker）。
    */
   readonly lineageBindingDigest?: string;
+  /** 【第十八轮 24.4 v7】tr1_ not-executed tombstone 的完整 lineage proof
+   *  （verdict 的 binding/generation 比较；tr1_ 新写必填）。 */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
   /** 原 action tick（审计保留；receipt retention 从 settledAtTick 起算）。 */
   actionTick: number;
   /** receipt 结算 tick（resolve-as-committed = resolution tick）。 */
@@ -172,7 +177,7 @@ export interface TreasuryResolutionTombstone {
 }
 
 export interface TreasuryResolutionStore {
-  version: 6;
+  version: 7;
   entries: Record<string, TreasuryResolutionTombstone>;
   entryCount: number;
   updatedAt: number;
@@ -476,6 +481,22 @@ function loadResolutionStoreRuntime(): ResolutionStoreRuntime {
       return heapRuntime;
     }
     heapRuntime = { store: candidate, fatal: null, ...buildRecoveryIndexes(candidate) };
+    return heapRuntime;
+  }
+  if ((raw.version as number) === TREASURY_RESOLUTION_VERSION - 1) {
+    // 【第十八轮 24.4】v6 → v7 迁移：tr1_ tombstone 的 lineage proof 补全
+    //（可从 lineage record 安全补全——current 命中 + binding 一致 → 原子补全；
+    // 不可证明 → 原 entry 无损保留（binding 缺失 → verdict 永久 pin、
+    // preflight 阻断——不释放当前 rearm authority，不猜测））。结构 passthrough
+    // + 全量重验证。
+    const upgradedV6: TreasuryResolutionStore = { ...(raw as unknown as TreasuryResolutionStore), version: TREASURY_RESOLUTION_VERSION, updatedAt: Game.time };
+    const shapeErrorV6 = validateResolutionStoreShape(upgradedV6);
+    if (shapeErrorV6 !== null) {
+      heapRuntime = fatalRuntime(raw as unknown as TreasuryResolutionStore, `${shapeErrorV6}（v6→v7 升级校验失败，原数据保留）`);
+      return heapRuntime;
+    }
+    resolutionBranch().resolutions = upgradedV6;
+    heapRuntime = { store: upgradedV6, fatal: null, ...buildRecoveryIndexes(upgradedV6) };
     return heapRuntime;
   }
   if (raw.version === 5) {

@@ -79,7 +79,7 @@ import { validateTreasuryLowlevelSourceField } from "@/runtime/treasury/authorit
 
 export const TREASURY_RECEIPT_RETENTION_TICKS = 5_000;
 export const TREASURY_RECEIPT_MAX_ENTRIES = 4_096;
-export const TREASURY_RECEIPT_VERSION = 7 as const;
+export const TREASURY_RECEIPT_VERSION = 8 as const;
 
 const RECEIPT_KEY_PREFIX = "t:";
 
@@ -262,6 +262,22 @@ function isValidSettlementProof(value: unknown, nowTick: number): value is Treas
   if (typed.lowlevelSource !== undefined && validateTreasuryLowlevelSourceField(typed.lowlevelSource) !== null) {
     return false;
   }
+  // 【第十八轮 24.4 v8】lineage proof 字段形状（tr1_ receipt 携带；legacy 禁）。
+  if (typed.lineageId !== undefined && (typeof typed.lineageId !== "string" || !/^[0-9a-f]{16}$/.test(typed.lineageId))) {
+    return false;
+  }
+  if (typed.lineageBindingDigest !== undefined && (typeof typed.lineageBindingDigest !== "string" || !/^[0-9a-f]{16}$/.test(typed.lineageBindingDigest))) {
+    return false;
+  }
+  if (typed.lineageGeneration !== undefined && (typeof typed.lineageGeneration !== "number" || !Number.isSafeInteger(typed.lineageGeneration) || typed.lineageGeneration < 1)) {
+    return false;
+  }
+  if (typed.parentTransactionId !== undefined && (typeof typed.parentTransactionId !== "string" || typed.parentTransactionId.length === 0)) {
+    return false;
+  }
+  // lineage proof 只能整体携带或整体缺失（不完整 proof 视为损坏）。
+  const lineageFieldCount = [typed.lineageId, typed.lineageGeneration, typed.parentTransactionId, typed.lineageBindingDigest].filter((v) => v !== undefined).length;
+  if (lineageFieldCount !== 0 && lineageFieldCount !== 4) return false;
   if (typed.level === "identity-bound") {
     if (typed.digest === undefined || typed.durableIdentityDigest === undefined) return false;
     if (typed.lowlevelSource !== undefined) return false;
@@ -273,11 +289,12 @@ function isValidSettlementProof(value: unknown, nowTick: number): value is Treas
     if (typed.contractDigest !== undefined || typed.authorizationCohortDigest !== undefined) return false;
     return true;
   }
-  // legacy proof 禁携带身份字段。
+  // legacy proof 禁携带身份字段（含 lineage proof）。
   for (const field of identityFields) {
     if (typed[field] !== undefined) return false;
   }
   if (typed.lowlevelSource !== undefined) return false;
+  if (lineageFieldCount !== 0) return false;
   return true;
 }
 
@@ -368,7 +385,7 @@ function lookupNormalizedReceipt(
   let key: string;
   if (version === 1) {
     key = transactionId; // v1 裸键 = transactionId 本身
-  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7) {
+  } else if (version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7 || version === 8) {
     key = encodeReceiptKey(transactionId);
   } else {
     // 未知/更高版本：store 整体 fail closed（admission/登记拒绝），但已能
@@ -430,12 +447,22 @@ function lookupNormalizedReceipt(
       ? { status: "modern_committed", proof }
       : { status: "legacy_committed", settledAtTick: proof.settledAtTick };
   }
-  // version === 7【第十七轮第十五节】显式三级 proof class。
+  // version === 7/8【第十七轮三级 / 第十八轮 v8 lineage proof】。
   if (!isValidSettlementProof(value, nowTick)) return { status: "corrupted" };
   const proof = value as TreasurySettlementProof;
-  return proof.level === "legacy"
-    ? { status: "legacy_committed", settledAtTick: proof.settledAtTick }
-    : { status: "modern_committed", proof };
+  if (proof.level === "legacy") {
+    return { status: "legacy_committed", settledAtTick: proof.settledAtTick };
+  }
+  // 【第十八轮 24.4】tr1_ receipt 缺完整 lineage proof → 只作旧 replay
+  // blocker（legacy_committed 语义——不得释放当前 rearm authority）。
+  if (
+    typeof transactionId === "string" &&
+    transactionId.startsWith("tr1_") &&
+    (proof.lineageId === undefined || proof.lineageGeneration === undefined || proof.parentTransactionId === undefined || proof.lineageBindingDigest === undefined)
+  ) {
+    return { status: "legacy_committed", settledAtTick: proof.settledAtTick };
+  }
+  return { status: "modern_committed", proof };
 }
 
 /** 只读查询入口（零写；query/门禁路径共用）。 */
@@ -1048,6 +1075,30 @@ function loadReceiptStoreRuntime(): ReceiptStoreRuntime {
       heapStoreRuntime = fatalRuntime(raw, `${shapeError}（v${String(raw.version)}→v7 升级校验失败，原数据保留）`);
       return heapStoreRuntime;
     }
+    treasuryBranch().receipts = upgraded;
+    heapStoreRuntime = { store: upgraded, fatal: null };
+    return heapStoreRuntime;
+  }
+  if (raw.version === TREASURY_RECEIPT_VERSION - 1) {
+    // 【第十八轮 24.4】v7 → v8 结构迁移（新 lineage proof 字段全 optional——
+    // passthrough + 全量重验证；tr1_ 旧 proof 缺 lineage 的定级在 lookup 侧
+    // 承载：只作 replay blocker，不释放当前 rearm authority）。
+    const source = raw.settled;
+    if (!source || typeof source !== "object") {
+      heapStoreRuntime = fatalRuntime(raw, `v7 receipt store 缺失 settled 对象（原数据保留，拒绝登记）`);
+      return heapStoreRuntime;
+    }
+    const upgraded: TreasuryReceiptStore = {
+      ...(raw as unknown as TreasuryReceiptStore),
+      version: TREASURY_RECEIPT_VERSION,
+      updatedAt: Game.time,
+    };
+    const shapeError = validateReceiptStoreShape(upgraded, Game.time, "migration");
+    if (shapeError !== null) {
+      heapStoreRuntime = fatalRuntime(raw, `${shapeError}（v7→v8 升级校验失败，原数据保留）`);
+      return heapStoreRuntime;
+    }
+    receiptEvents.migrationsExecuted += 1;
     treasuryBranch().receipts = upgraded;
     heapStoreRuntime = { store: upgraded, fatal: null };
     return heapStoreRuntime;

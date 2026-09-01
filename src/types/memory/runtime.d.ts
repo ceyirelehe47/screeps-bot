@@ -648,7 +648,7 @@ declare global {
          * 的 "modern" 由版本化迁移归级（无 lowlevelSource → identity-bound、
          * 有合法 lowlevelSource → lowlevel、矛盾 fail closed 原数据保留）。
          */
-        version: 7;
+        version: 8;
         settled: Record<
           string,
           | {
@@ -660,6 +660,11 @@ declare global {
               durableIdentityDigest?: string;
               /** 【第十六轮 v6】lowlevel provenance（仅 lowlevel proof 携带；受控枚举）。 */
               lowlevelSource?: string;
+              /** 【第十八轮 v8】tr1_ rearm receipt 的 lineage proof（缺 proof 的旧 tr1_ receipt 只作 replay blocker）。 */
+              lineageId?: string;
+              lineageGeneration?: number;
+              parentTransactionId?: string;
+              lineageBindingDigest?: string;
             }
           | number
         >;
@@ -742,7 +747,7 @@ declare global {
          * （lowlevelSource 来源标记必填；迁移定级不再把 partial-modern
          * 归入 lowlevel——部分现代事实一律 forensic 隔离）。
          */
-        version: 6;
+        version: 7;
         entries: Record<
           string,
           {
@@ -860,7 +865,7 @@ declare global {
          * 迁移定级不再把 partial-modern 归入 lowlevel——部分现代事实一律
          * forensic 隔离）。
          */
-        version: 5;
+        version: 6;
         entries: Record<
           string,
           {
@@ -1037,7 +1042,7 @@ declare global {
          * 不再由 optional 字段存在性隐式猜测；v3 迁移：全身份 → identity-
          * bound、全缺 → legacy、部分 → forensic 隔离）。
          */
-        version: 6;
+        version: 7;
         entries: Record<
           string,
           {

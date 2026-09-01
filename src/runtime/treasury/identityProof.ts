@@ -49,6 +49,11 @@ export interface TreasuryIdentityFactsEntry {
     | readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
   readonly deltas?: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
   readonly durableIdentityDigest?: string;
+  /** 【第十八轮 24.4】tr1_ rearm attempt 的 lineage proof（v7 起必填矩阵）。 */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
 }
 
 /**
@@ -85,6 +90,10 @@ export function recomputeTreasuryDurableIdentityDigest(entry: TreasuryIdentityFa
       ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
       ...(entry.ownerIdentity !== undefined ? { ownerIdentity: entry.ownerIdentity } : {}),
       ...(entry.policyIdentity !== undefined ? { policyIdentity: entry.policyIdentity } : {}),
+      ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+      ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+      ...(entry.parentTransactionId !== undefined ? { lineageParentTransactionId: entry.parentTransactionId } : {}),
+      ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
     };
     if (input.actionKind === "" || input.source === "") return null;
     return computeTreasuryDurableIdentityDigest(input);
@@ -146,6 +155,11 @@ export interface TreasuryAttemptIdentity {
   readonly durableIdentityDigest?: string;
   /** lowlevel provenance（受控枚举；modern attempt 不携带）。 */
   readonly lowlevelSource?: string;
+  /** 【第十八轮 24.4】lineage proof（tr1_ attempt 携带；initial 不携带）。 */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
 }
 
 /**
@@ -164,10 +178,37 @@ export interface TreasuryAttemptIdentity {
  * 不得证明非低层 attempt由 capability prevalidate 的显式等级校验承载）。
  */
 export function treasuryAttemptIdentityRelation(
-  proof: { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string; readonly lowlevelSource?: string },
+  proof: {
+    readonly digest: string;
+    readonly contractDigest?: string;
+    readonly authorizationCohortDigest?: string;
+    readonly durableIdentityDigest?: string;
+    readonly lowlevelSource?: string;
+    readonly lineageId?: string;
+    readonly lineageGeneration?: number;
+    readonly parentTransactionId?: string;
+    readonly lineageBindingDigest?: string;
+  },
   attempt: TreasuryAttemptIdentity,
 ): "match" | "conflict" | "insufficient" {
   if (proof.digest !== attempt.digest) return "conflict";
+  // 【第十八轮 24.4】lineage proof 双向 fail closed：attempt 携带而 proof
+  // 缺失 → insufficient（旧 proof 不得冒充当前 rearm attempt）；proof 携带
+  // 而 attempt 缺失 → conflict（initial attempt 不得被 lineage proof 证明）；
+  // 双方携带则四字段全部相等（不同 lineage/generation/parent/binding 互不
+  // 证明——parent proof 不能证明 child、generation N 不能证明 N+1）。
+  const attemptHasLineage = attempt.lineageId !== undefined || attempt.lineageGeneration !== undefined
+    || attempt.parentTransactionId !== undefined || attempt.lineageBindingDigest !== undefined;
+  const proofHasLineage = proof.lineageId !== undefined || proof.lineageGeneration !== undefined
+    || proof.parentTransactionId !== undefined || proof.lineageBindingDigest !== undefined;
+  if (attemptHasLineage && !proofHasLineage) return "insufficient";
+  if (!attemptHasLineage && proofHasLineage) return "conflict";
+  if (attemptHasLineage && proofHasLineage) {
+    if (proof.lineageId !== attempt.lineageId) return "conflict";
+    if (proof.lineageGeneration !== attempt.lineageGeneration) return "conflict";
+    if (proof.parentTransactionId !== attempt.parentTransactionId) return "conflict";
+    if (proof.lineageBindingDigest !== attempt.lineageBindingDigest) return "conflict";
+  }
   if (attempt.lowlevelSource !== undefined) {
     if (proof.lowlevelSource === undefined) return "insufficient";
     if (proof.lowlevelSource !== attempt.lowlevelSource) return "conflict";

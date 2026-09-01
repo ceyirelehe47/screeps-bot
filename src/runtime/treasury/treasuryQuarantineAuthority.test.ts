@@ -96,7 +96,7 @@ describe("quarantine schema v2 元数据", () => {
     expect(quarantineTreasuryTransaction(validEntry()).status).toBe("written");
     const store = Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore;
     // 【第十四轮】quarantine store schema v5（lowlevel 严格矩阵 + 完整发布协议）。
-    expect(store.version).toBe(5);
+    expect(store.version).toBe(6);
     expect(store.entryCount).toBe(1);
     expect(Object.keys(store.entries)).toEqual(["q:ts7_v1"]);
     const health = peekTreasuryQuarantineHealth();
@@ -203,7 +203,7 @@ describe("quarantine 损坏 fail closed（load 全量验证）", () => {
     resetTreasuryQuarantineRuntimeForTest();
     expect(quarantineTreasuryTransaction(validEntry()).status).toBe("written");
     // 【第十四轮】legacy 空 store 无损升级目标为 v5。
-    expect((Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore).version).toBe(5);
+    expect((Memory.runtime!.treasury!.quarantine as unknown as TreasuryQuarantineStore).version).toBe(6);
     // 非空 legacy store → fatal（显式 repair 处理）。
     clearTreasuryPersistenceForTest();
     corruptStore((store) => {

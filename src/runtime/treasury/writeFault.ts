@@ -130,11 +130,13 @@ export interface TreasuryWriteFaultMarker {
    * generation。缺失（v1 marker）= class 不可证明——class-aware 清除按
    * insufficient 保守处理（绝不猜测 class）。
    */
-  readonly markerVersion?: 2;
+  readonly markerVersion?: 2 | 3;
   readonly authorityClass?: "identity-bound" | "lowlevel" | "legacy" | "forensic";
   readonly lowlevelSource?: string;
   readonly lineageBindingDigest?: string;
   readonly attemptGeneration?: number;
+  /** 【第十八轮 v3】tr1_ marker 的完整 lineage proof（binding 携带时必填）。 */
+  readonly lineageId?: string;
 }
 
 interface TreasuryWriteFaultBranch {
@@ -225,8 +227,20 @@ export function validateTreasuryWriteFaultMarkerShape(marker: unknown): string |
     }
   }
   // 【第十七轮第十四节】marker v2 class-aware 字段（可选；存在即校验）。
-  if (candidate.markerVersion !== undefined && candidate.markerVersion !== 2) {
-    return `marker.markerVersion 非法（期望 2）: ${String(candidate.markerVersion).slice(0, 16)}`;
+  if (candidate.markerVersion !== undefined && candidate.markerVersion !== 2 && candidate.markerVersion !== 3) {
+    return `marker.markerVersion 非法（期望 2 或 3）: ${String(candidate.markerVersion).slice(0, 16)}`;
+  }
+  // 【第十八轮 24.4 marker v3】tr1_ marker 的 lineage proof：binding 携带时
+  // lineageId 必填（v3）；v2 marker（无 lineageId）按 legacy identity 语义
+  // 继续读取（class-aware 清除 insufficient——不猜）。
+  if (candidate.lineageId !== undefined && (typeof candidate.lineageId !== "string" || !WRITE_FAULT_DIGEST_PATTERN.test(candidate.lineageId))) {
+    return "marker.lineageId 非法（须为 16 小写 hex）";
+  }
+  if (candidate.lineageBindingDigest !== undefined && candidate.lineageId === undefined) {
+    return "marker 携带 lineageBindingDigest 但缺少 lineageId（v3 proof 不完整）";
+  }
+  if (candidate.markerVersion === 3 && candidate.lineageBindingDigest !== undefined && candidate.lineageId === undefined) {
+    return "marker v3 携带 binding 必须同时携带 lineageId";
   }
   if (
     candidate.authorityClass !== undefined &&
@@ -403,20 +417,24 @@ export function classAwareMarkerFieldsOfFacts(facts: {
   readonly contractDigest?: string;
   readonly lineageBindingDigest?: string;
   readonly lineageGeneration?: number;
+  /** 【第十八轮 v3】lineageId（tr1_ marker 完整 proof）。 */
+  readonly lineageId?: string;
 }): {
-  readonly markerVersion: 2;
+  readonly markerVersion: 2 | 3;
   readonly authorityClass: "identity-bound" | "lowlevel";
   readonly lowlevelSource?: string;
   readonly lineageBindingDigest?: string;
   readonly attemptGeneration?: number;
+  readonly lineageId?: string;
 } {
   const authorityClass: "identity-bound" | "lowlevel" = facts.contractDigest !== undefined ? "identity-bound" : "lowlevel";
   return {
-    markerVersion: 2,
+    markerVersion: facts.lineageId !== undefined ? 3 : 2,
     authorityClass,
     ...(authorityClass === "lowlevel" ? { lowlevelSource: "runtime-lowlevel@v1" } : {}),
     ...(facts.lineageBindingDigest !== undefined ? { lineageBindingDigest: facts.lineageBindingDigest } : {}),
     ...(facts.lineageGeneration !== undefined ? { attemptGeneration: facts.lineageGeneration } : {}),
+    ...(facts.lineageId !== undefined ? { lineageId: facts.lineageId } : {}),
   };
 }
 
