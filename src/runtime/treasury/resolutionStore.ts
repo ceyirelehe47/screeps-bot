@@ -643,8 +643,10 @@ export interface TreasuryResolutionStoreHealth {
   readonly entryCount: number;
 }
 
-/** 轻量 probe 的受支持版本集合（与 loader 一致——supported migration pending）。 */
-const TREASURY_RESOLUTION_SUPPORTED_VERSIONS: ReadonlySet<number> = new Set([TREASURY_RESOLUTION_VERSION, 5, 4, 3, 2, 1]);
+/** 轻量 probe 的受支持版本集合（与 loader 一致——supported migration pending）。
+ * 【第十九轮 F】v6 = loader 的 v6→v7 迁移分支（第十八轮新增时漏加入本
+ * 集合——部署环境仍为 v6 的 store 是 migration pending 而非 unknown fatal）。 */
+const TREASURY_RESOLUTION_SUPPORTED_VERSIONS: ReadonlySet<number> = new Set([TREASURY_RESOLUTION_VERSION, 6, 5, 4, 3, 2, 1]);
 
 /**
  * 健康探测（只读零写；轻量——**未 load 时不全表扫描**，resolving 计数走

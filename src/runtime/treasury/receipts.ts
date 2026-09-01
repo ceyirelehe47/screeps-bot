@@ -501,7 +501,12 @@ export function peekTreasuryReceiptHealth(): TreasuryReceiptHealth {
     store.version !== 2 &&
     store.version !== 3 &&
     store.version !== 4 &&
-    store.version !== 5
+    store.version !== 5 &&
+    // 【第十九轮 F】loader 实际支持原子迁移的版本（v5/v6→v7 结构迁移、
+    // v7→v8 passthrough）在轻量 health 阶段不得误报 unknown fatal——
+    // 部署环境仍为 v6/v7 的 store 是 migration pending 而非损坏。
+    store.version !== 6 &&
+    store.version !== 7
   ) {
     return { healthy: false, detail: `未知 receipt 版本 ${String(store.version)}（fail closed）` };
   }
