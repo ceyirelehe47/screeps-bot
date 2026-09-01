@@ -1845,3 +1845,62 @@ source 在 contract build 时确定并进入 contract identity（digest）、ret
 
 - **WHEN** execution request 携带与 contract 不同的 source
 - **THEN** callback 前拒绝且 Game callback 零调用
+
+## Requirement: 第十九轮——committed lineage resolution 全链 proof
+
+unified unresolved authority 必须暴露并验证 lineage proof：tr1_ 必携带完整四字段、initial 禁止携带、双存在四字段完全一致（一侧有一侧无 inconsistent——不静默选择一侧）、单侧同样经持久事实验证。reconciliation capability 绑定完整 proof（签发透传 + prevalidation 强比较——capability 不得仅凭 transactionId/digest/普通 durable identity 证明 child generation）。resolve-as-committed 的 resolving/final tombstone、receipt refresh、三方 verifier（receipt↔tombstone↔authority 每组含 lineage 维度）、marker 清除、chain_committed 推进全部携带并比较完整 proof；chain_committed 只能由 matching receipt 的 binding/generation 与 record 一致推进。receipt refresh lineage-aware：match 保留既有 proof 只刷 tick（不降级 legacy）、absent 从 authority 写入完整 proof、tr1_ 缺 proof 的 refresh fail closed 不写 legacy、既有缺 proof receipt 仅 replay blocker。
+
+#### Scenario: tr1_ committed resolution receipt 写入前 commit fault
+
+- **WHEN** tr1_ child callback OK 但 receipt 发布前 commit fault（executed_unsettled + quarantine）
+- **THEN** 显式 resolve-as-committed 后 receipt 从 authority 写入完整 lineage proof、final tombstone 同源、lineage chain_committed、无 generation 混用
+
+#### Scenario: refresh 保留既有 proof
+
+- **WHEN** tr1_ receipt 已带完整 proof 且与刷新 identity 完全匹配
+- **THEN** refresh 只刷新 settledAtTick，四字段原样保留（不降级 legacy）
+
+## Requirement: 第十九轮——handoff 双 authority 恢复
+
+child_intent_pending 恢复始终检查 intent 与 quarantine 两个 store（不得"intent 存在就不读 quarantine"）。任一侧 proof 冲突 → forensic isolation（保留全部 authority）。rollback 仅当 intent 一致 not_started/ready 且无任何匹配或冲突 quarantine 且无其他 execution-started 持久信号；intent ready 与 quarantine 并存（转移中断窗口：quarantine 写成功、intent 删除前中断）→ forward_complete 绝不回滚。forward 的 child identity 从验证后的统一持久事实派生（quarantine proof 匹配优先）。
+
+#### Scenario: intent ready + quarantine 并存
+
+- **WHEN** child_intent_pending 窗口 intent 为 not_started/ready 且同 id quarantine 存在（proof 匹配）
+- **THEN** 前向补完成 child_active，不回滚 rearm_ready
+
+## Requirement: 第十九轮——retirement 三阶段分别证明
+
+completeTreasuryLineageRetirement 不得无条件三段全 true：publication 只由 lineage candidate 持久化+read-back 证明（retire 转换内置）；authorityReleased 只由统一 resolver not_found（或等价受控 release 结果）证明；markerCleaned 只由 marker 不存在/不指向本 attempt/匹配 marker 成功清除证明——marker 指向本 attempt（匹配未清或 digest/binding 冲突或 class 不可证明）一律 cleanup pending。阶段置位只经单调 markStage helper；三段全 true 才允许完成（否则保持 retiring，不进 rearm_ready、无 eviction 资格）。运行时路径与 beginTick 恢复（含 child_active 防御路径）共用同一 converge 收敛函数；pending-release 索引移除与 retirement 完成共享阶段事实。
+
+#### Scenario: marker 匹配未清时不完成
+
+- **WHEN** retiring record 的当前代 marker 仍存在且指向本 attempt
+- **THEN** converge 返回 cleanup pending、lineage 保持 retiring、tombstone replacement verdict 为 replacement_pending
+
+## Requirement: 第十九轮——lineage 索引 same-record 判定与 duplicate 检测
+
+same-record 判定必须使用 store entry identity（rootTransactionId），不得用 lineageId 相等：两个不同 root 携带相同 lineageId 是 duplicate 冲突而非同一 record。duplicate lineageId/current/next、root/current/next 跨 record 冲突、record 内组合矛盾在 load 全表校验与写入候选预检均 fail closed（原 store 与索引不变、不静默覆盖、不自动删除）。
+
+#### Scenario: duplicate current
+
+- **WHEN** store 中两条 record 的 currentTransactionId 相同（lineageId 各自合法）
+- **THEN** load 判整个 store unhealthy，两条 entry 原样保留
+
+## Requirement: 第十九轮——terminal summary 历史代证明与压缩资格
+
+summary v2 携带 authorityClass（v1→v2 原子迁移：entry schemaVersion 一并提升、失败保留原数据 fail closed；迁移 summary 缺 class → 历史代 verdict 保守 pin，root 门禁不受影响）。active record 压缩前必须验证外部终态证明：chain_committed 需 matching committed receipt 的完整 lineage proof；non_rearmable_retired 需 matching final not-executed tombstone lineage proof + 三段完整；任一 authority/marker/intent/quarantine 残留不压缩。压缩后历史 child tombstone 凭自身完整 lineage proof 按 lineageId 定位 summary 并重演验证（v2 ID 派生+checksum 绑定 root、generation ≤ finalGeneration、binding 按 (lineageId, generation, parent, child) 重算、proof class、final 代 not-executed 只与 non_rearmable_retired 相容）；无 proof 旧 tombstone、future generation、错误 binding/class/lineageId → pin/conflict。summary 写入+read-back 先于删除 active record；满载 fail closed；root prepare 永久门禁压缩后继续有效。
+
+#### Scenario: 压缩后历史代回收
+
+- **WHEN** A→B→C chain（A root not-executed、B gen1 not-executed、C gen2 committed）压缩为 summary 后 B 的 final not-executed tombstone 到期
+- **THEN** verdict 按 summary 重演验证返回 replacement_match，B tombstone 可回收、root ID 仍永久阻断
+
+## Requirement: 第十九轮——receipt health 版本认可与迁移一致
+
+轻量 health probe 认可 loader 实际支持原子迁移的全部版本（receipt v6/v7、resolution v6——migration pending 而非 unknown fatal），peek 仍零迁移零写；真正 load 执行现有原子迁移（临时结构验证 → 一次替换 → 失败保留原数据 fail closed）；tr1_ 旧 receipt 缺 proof 迁移后仍为 replay blocker。
+
+#### Scenario: v6/v7 raw store peek
+
+- **WHEN** 部署环境 receipt store 仍为 v6/v7 且未 load
+- **THEN** 轻量 health 报 healthy（migration pending），Memory 原样；load 后原子迁移 v8
