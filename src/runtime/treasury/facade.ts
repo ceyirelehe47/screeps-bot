@@ -3105,9 +3105,13 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
             detail: "tr1_ intent read-back 未携带预期 lineage binding digest——fail closed，Game callback 零调用",
           };
         }
+        // 【第十八轮 24.2】严格消费：lineage 必须处于 child_intent_pending 且
+        // revision 等于签发 revision+1，binding 与 record 完整匹配（无 skip
+        // 旁路）。失败 → 释放 intent 并同步回滚 lineage（同代 child 保留可重签）。
         const consumed = rearmCapabilityAuthority.consumeRearmCapability(execution?.rearmCapability);
         if (consumed.status !== "valid") {
           releaseTreasuryIntentEntry(record.canonical.transactionId);
+          rollbackTreasuryLineageToRearmReady(tr1LineageId);
           preparedById.delete(record.canonical.transactionId);
           projection.tentativeRelease(record.tentativeKey);
           releaseTreasuryReceiptReservation(record.canonical.transactionId);
@@ -3119,33 +3123,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
             detail: `tr1_ rearm capability 消费失败（${consumed.reason}）: ${consumed.detail}——intent 已释放、lineage 回滚 ready 可重签，Game callback 零调用`,
           };
         }
-        const childIdentity: TreasuryAttemptLineageIdentity = {
-          digest: record.digest,
-          ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
-          ...(record.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.authorizationCohortDigest } : {}),
-          durableIdentityDigest: durableIdentity,
-        };
-        const activated = activateTreasuryLineageChild(tr1LineageId, childIdentity);
-        if (activated.status === "rejected") {
-          // intent 保留（staged 恢复），callback 零调用。
-          metrics.intentWriteFailures += 1;
-          record.state = "expired";
-          preparedById.delete(record.canonical.transactionId);
-          projection.tentativeRelease(record.tentativeKey);
-          releaseTreasuryReceiptReservation(record.canonical.transactionId);
-          finalizeHandleRecord(record, "expired");
-          return {
-            status: "prepare_rejected",
-            reason: "lineage_store_fatal",
-            detail: `lineage child_active 推进失败（intent 保留为 staged，beginTick 恢复回滚或补完成）: ${activated.detail}——Game callback 零调用`,
-          };
-        }
         record.lineageBindingDigest = tr1LineageBindingDigest;
         record.lineageGeneration = tr1LineageGeneration;
       }
       // ── execution-started（ready → executing，严格迁移：期望前序 + digest
       //    一致）：任何 rejected（含 not_found——第九轮修复：entry 缺失绝不能
-      //    无权威地执行 callback）都 callback 零调用、保守关闭。 ─────────────
+      //    无权威地执行 callback）都 callback 零调用、保守关闭。【第十八轮
+      //    24.2】tr1_ 的 executing 先于 lineage child_active 推进——executing
+      //    是 callback 可能已开始的唯一持久信号；此处失败则 intent 仍是
+      //    ready（callback 确定未开始）→ 释放 intent 并同步回滚 lineage。 ──
       const started = progressTreasuryIntent(record.canonical.transactionId, {
         outcome: "started_unknown",
         settlement: "executing",
@@ -3155,6 +3141,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       });
       if (started.status === "rejected") {
         metrics.intentWriteFailures += 1;
+        if (tr1LineageId !== undefined) {
+          releaseTreasuryIntentEntry(record.canonical.transactionId);
+          rollbackTreasuryLineageToRearmReady(tr1LineageId);
+        }
         record.state = "expired";
         preparedById.delete(record.canonical.transactionId);
         projection.tentativeRelease(record.tentativeKey);
@@ -3163,10 +3153,35 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         return {
           status: "prepare_rejected",
           reason: "intent_store_unavailable",
-          detail: `durable intent 状态迁移失败（${started.reason}）: ${started.detail}——Game callback 零调用`,
+          detail: `durable intent 状态迁移失败（${started.reason}）: ${started.detail}——Game callback 零调用${tr1LineageId !== undefined ? "，tr1_ intent 已释放、lineage 已回滚 rearm_ready（同代 child 可重签）" : ""}`,
         };
       }
       record.state = "executing";
+      if (tr1LineageId !== undefined && tr1LineageBindingDigest !== undefined) {
+        // ──【第十八轮 24.2】armed 推进（executing 已持久化之后、Game callback
+        //    之前）：失败 → callback 零调用、intent 保留在 executing（beginTick
+        //    前向补完成 child_active——不产生第二 child）。 ──────────────────
+        const childIdentity: TreasuryAttemptLineageIdentity = {
+          digest: record.digest,
+          ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+          ...(record.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.authorizationCohortDigest } : {}),
+          durableIdentityDigest: durableIdentity,
+        };
+        const activated = activateTreasuryLineageChild(tr1LineageId, childIdentity);
+        if (activated.status === "rejected") {
+          metrics.intentWriteFailures += 1;
+          record.state = "expired";
+          preparedById.delete(record.canonical.transactionId);
+          projection.tentativeRelease(record.tentativeKey);
+          releaseTreasuryReceiptReservation(record.canonical.transactionId);
+          finalizeHandleRecord(record, "expired");
+          return {
+            status: "prepare_rejected",
+            reason: "lineage_store_fatal",
+            detail: `lineage child_active 推进失败（intent 保留在 executing，beginTick 前向补完成接管）: ${activated.detail}——Game callback 零调用`,
+          };
+        }
+      }
       let actionResult: TAction;
       try {
         // Game API 恰好执行一次（本包装器与注册 adapter 是仅有的调用点）。

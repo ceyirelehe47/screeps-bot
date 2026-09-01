@@ -23,7 +23,12 @@
  * symbol 通道（不进公共 service 面）。
  */
 
-import { readTreasuryAttemptLineageRecord } from "@/runtime/treasury/attemptLineage";
+import { readTreasuryAttemptLineageRecord, type TreasuryAttemptLineageState } from "@/runtime/treasury/attemptLineage";
+import {
+  TREASURY_HANDOFF_CONSUME_EXPECTED_STATE,
+  expectedTreasuryHandoffConsumeRevision,
+  treasuryRearmCapabilityBindingMatchesLineageRecord,
+} from "@/runtime/treasury/lineageHandoff";
 
 /** capability 的绑定事实（可读视图——对象身份才是防伪权威）。 */
 export interface TreasuryRearmCapabilityBinding {
@@ -60,6 +65,8 @@ export type TreasuryRearmCapabilityValidation =
         | "cross_generation"
         | "cross_tick"
         | "lineage_revision_changed"
+        | "lineage_state_unexpected"
+        | "lineage_binding_mismatch"
         | "lineage_missing";
       readonly detail: string;
     };
@@ -92,7 +99,14 @@ export function createTreasuryRearmCapabilityAuthority(deps: {
   let activeTick = -1;
   let outstanding = 0;
 
-  const validate = (capability: unknown, options?: { readonly skipLineageRevision?: boolean }): TreasuryRearmCapabilityValidation => {
+  const validate = (
+    capability: unknown,
+    options?: {
+      /** 消费路径的严格期望：lineage 必须处于该状态、revision 必须等于该值。 */
+      readonly expectedLineageState?: TreasuryAttemptLineageState;
+      readonly expectedLineageRevision?: number;
+    },
+  ): TreasuryRearmCapabilityValidation => {
     if (!capability || typeof capability !== "object") {
       return { status: "rejected", reason: "invalid_capability", detail: "capability 缺失或非对象" };
     }
@@ -121,22 +135,45 @@ export function createTreasuryRearmCapabilityAuthority(deps: {
         detail: `capability 于 tick ${String(typed.tick)} 签发（当前 ${String(Game.time)}）——跨 tick 失效`,
       };
     }
-    // lineage revision 与 Memory record 一致（durable 权威；record 缺失 = 已
-    // 被外部推进/清除——失效）。consume 路径跳过：child 接管协议在 consume
-    // 前已将 lineage 受控推进（capability_issued → child_intent_pending，
-    // revision+1）——受控推进不构成失效（外部 validate 仍受 revision 保护）。
-    if (options?.skipLineageRevision !== true) {
-      const record = readTreasuryAttemptLineageRecord(typed.binding.lineageId);
-      if (record === undefined) {
-        return { status: "rejected", reason: "lineage_missing", detail: "lineage record 不存在（capability 绑定的 durable 权威缺失）" };
+    // lineage 与 Memory record 一致（durable 权威；record 缺失 = 已被外部推进/
+    // 清除——失效）。【第十八轮 24.2】消费路径严格期望：state === 预期 handoff
+    // 状态、revision === capability 允许的明确 revision（签发 revision + 1——
+    // child_intent_pending 推进），且 binding 与 record 的完整匹配矩阵成立
+    //（lineageId/child/generation/pendingBinding/retry semantic）——不再存在
+    // skip-all-revision 旁路。
+    const record = readTreasuryAttemptLineageRecord(typed.binding.lineageId);
+    if (record === undefined) {
+      return { status: "rejected", reason: "lineage_missing", detail: "lineage record 不存在（capability 绑定的 durable 权威缺失）" };
+    }
+    if (options?.expectedLineageState !== undefined || options?.expectedLineageRevision !== undefined) {
+      if (options.expectedLineageState !== undefined && record.state !== options.expectedLineageState) {
+        return {
+          status: "rejected",
+          reason: "lineage_state_unexpected",
+          detail: `lineage 状态 ${String(record.state)} 不是预期的 ${String(options.expectedLineageState)}（capability 不得消费）`,
+        };
       }
-      if (record.recordRevision !== typed.binding.lineageRecordRevision) {
+      if (
+        options.expectedLineageRevision !== undefined &&
+        record.recordRevision !== options.expectedLineageRevision
+      ) {
         return {
           status: "rejected",
           reason: "lineage_revision_changed",
-          detail: `lineage record revision 已变化（capability ${String(typed.binding.lineageRecordRevision)}，record ${String(record.recordRevision)}）——旧 capability 失效`,
+          detail: `lineage record revision ${String(record.recordRevision)} 不等于 capability 允许的明确 revision ${String(options.expectedLineageRevision)}——旧 capability 失效`,
         };
       }
+      const bindingMatch = treasuryRearmCapabilityBindingMatchesLineageRecord(typed.binding, record);
+      if (bindingMatch.status === "rejected") {
+        return { status: "rejected", reason: "lineage_binding_mismatch", detail: bindingMatch.detail };
+      }
+    } else if (record.recordRevision !== typed.binding.lineageRecordRevision) {
+      // 只读验证（authorization 阶段）：revision 必须仍等于签发值。
+      return {
+        status: "rejected",
+        reason: "lineage_revision_changed",
+        detail: `lineage record revision 已变化（capability ${String(typed.binding.lineageRecordRevision)}，record ${String(record.recordRevision)}）——旧 capability 失效`,
+      };
     }
     return { status: "valid", capability: typed };
   };
@@ -167,9 +204,18 @@ export function createTreasuryRearmCapabilityAuthority(deps: {
     },
     validateRearmCapability: (capability: unknown) => validate(capability),
     consumeRearmCapability(capability: unknown): TreasuryRearmCapabilityValidation {
-      // 接管协议受控推进后的消费：跳过 lineage revision（协议自身推进不失效；
-      // 对象身份/未消费/generation/tick 仍严格）。
-      const validated = validate(capability, { skipLineageRevision: true });
+      // 【第十八轮 24.2】严格消费：lineage 必须处于 child_intent_pending 且
+      // revision 等于签发 revision+1（child_intent_pending 推进），binding 与
+      // record 完整匹配——不再跳过全部 revision 检查。
+      const typedPeek = capability as TreasuryRearmCapability | null | undefined;
+      const expectedRevision =
+        typedPeek && typeof typedPeek === "object" && typeof typedPeek.binding?.lineageRecordRevision === "number"
+          ? expectedTreasuryHandoffConsumeRevision(typedPeek.binding.lineageRecordRevision)
+          : undefined;
+      const validated = validate(capability, {
+        expectedLineageState: TREASURY_HANDOFF_CONSUME_EXPECTED_STATE,
+        ...(expectedRevision !== undefined ? { expectedLineageRevision: expectedRevision } : {}),
+      });
       if (validated.status !== "valid") return validated;
       consumedCapabilities.add(validated.capability);
       outstanding = Math.max(0, outstanding - 1);

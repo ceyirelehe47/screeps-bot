@@ -58,6 +58,7 @@ import {
   releaseTreasuryIntentEntry,
 } from "@/runtime/treasury/intents";
 import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
+import { classifyTreasuryHandoffRecoveryWindow } from "@/runtime/treasury/lineageHandoff";
 
 /** lineage store schema 版本（持久格式升级时递增；未知版本 fail closed）。 */
 export const TREASURY_LINEAGE_VERSION = 2;
@@ -1434,20 +1435,6 @@ function lineageIdentityOfEntryFacts(entry: {
   };
 }
 
-/** entry（intent/quarantine）的 lineage proof 与 handoff facts 匹配检查。 */
-function entryLineageProofMatches(
-  entry: { readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string } | undefined,
-  record: Readonly<TreasuryAttemptLineageRecord>,
-): boolean {
-  if (entry === undefined) return false;
-  return (
-    entry.lineageId === record.lineageId &&
-    entry.lineageGeneration === record.generation + 1 &&
-    entry.lineageBindingDigest === record.pendingBindingDigest &&
-    entry.lineageBindingDigest !== undefined
-  );
-}
-
 /**
  * 【第十八轮 24.2/24.3】beginTick lineage 恢复（挂 facade performBeginTick，
  * 位于 intent recovery 与 recoverStagedResolutions 之后）：
@@ -1508,24 +1495,28 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
     }
     if (record.state === "child_intent_pending") {
       const childId = record.nextChildTransactionId!;
-      const intent = readTreasuryIntentEntry(childId);
-      const quarantine = intent === undefined ? readTreasuryQuarantineEntry(childId) : undefined;
-      const intentProof = intent as unknown as { readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string } | undefined;
-      const quarantineProof = quarantine as unknown as { readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string } | undefined;
-      if (intent !== undefined && !entryLineageProofMatches(intentProof, record)) {
-        // intent 存在但 lineage proof 不匹配（binding/generation/lineage 冲突
-        // 或缺失）——持久状态违反不变量，forensic 隔离（不猜测）。
-        const isolated = isolateTreasuryLineageForensically(lineageId, "child_intent_pending 窗口 intent lineage proof 冲突（binding/generation/lineage 不匹配）");
+      const intent = readTreasuryIntentEntry(childId) as unknown as
+        | { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string; readonly lowlevelSource?: string; readonly outcome?: string; readonly settlement?: string; readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string }
+        | undefined;
+      const quarantine = intent === undefined
+        ? (readTreasuryQuarantineEntry(childId) as unknown as { readonly digest: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string; readonly lowlevelSource?: string; readonly lineageId?: string; readonly lineageGeneration?: number; readonly lineageBindingDigest?: string } | undefined)
+        : undefined;
+      // 【第十八轮 24.2】单一权威窗口分类（lineageHandoff——§6.3 恢复矩阵）。
+      const window = classifyTreasuryHandoffRecoveryWindow({
+        record,
+        intent,
+        quarantine,
+      });
+      if (window.action === "forensic") {
+        const isolated = isolateTreasuryLineageForensically(lineageId, window.detail);
         if (isolated.status !== "rejected") {
           lineageStoreEvents.childIntentForensics += 1;
           result = { ...result, childIntentForensics: result.childIntentForensics + 1 };
         }
         continue;
       }
-      if (intent !== undefined && intent.outcome === "not_started" && intent.settlement === "ready") {
-        // callback 从未开始（execution-started 尚未持久化）：释放 intent 并
-        // 回滚（capability 已随 tick/global reset 失效，可重签同代 child）。
-        releaseTreasuryIntentEntry(childId);
+      if (window.action === "rollback") {
+        if (window.releaseIntent) releaseTreasuryIntentEntry(childId);
         const rolled = rollbackTreasuryLineageToRearmReady(lineageId);
         if (rolled.status !== "rejected") {
           lineageStoreEvents.childIntentRollbacks += 1;
@@ -1533,28 +1524,19 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
         }
         continue;
       }
-      if (intent !== undefined || entryLineageProofMatches(quarantineProof, record)) {
-        // intent 已 executing/更后，或 intent 已转 quarantine 且 proof 匹配：
-        // callback 可能已开始——前向补完成接管（identity 从持久 facts 派生）。
-        const factsSource = intent ?? quarantine!;
-        const activated = activateTreasuryLineageChild(lineageId, lineageIdentityOfEntryFacts({
-          digest: factsSource.digest,
-          ...(factsSource.contractDigest !== undefined ? { contractDigest: factsSource.contractDigest } : {}),
-          ...(factsSource.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: factsSource.authorizationCohortDigest } : {}),
-          ...(factsSource.durableIdentityDigest !== undefined ? { durableIdentityDigest: factsSource.durableIdentityDigest } : {}),
-          ...(factsSource.lowlevelSource !== undefined ? { lowlevelSource: factsSource.lowlevelSource } : {}),
-        }));
-        if (activated.status !== "rejected") {
-          lineageStoreEvents.childActivationForwardCompletions += 1;
-          result = { ...result, childActivationForwardCompletions: result.childActivationForwardCompletions + 1 };
-        }
-        continue;
-      }
-      // intent 与 quarantine 均缺失：callback 确定未开始 → 回滚。
-      const rolled = rollbackTreasuryLineageToRearmReady(lineageId);
-      if (rolled.status !== "rejected") {
-        lineageStoreEvents.childIntentRollbacks += 1;
-        result = { ...result, childIntentRollbacks: result.childIntentRollbacks + 1 };
+      // forward_complete：identity 从持久 facts（intent 优先，其次 proof 匹配
+      // 的 quarantine）派生。
+      const factsSource = intent ?? quarantine!;
+      const activated = activateTreasuryLineageChild(lineageId, lineageIdentityOfEntryFacts({
+        digest: factsSource.digest,
+        ...(factsSource.contractDigest !== undefined ? { contractDigest: factsSource.contractDigest } : {}),
+        ...(factsSource.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: factsSource.authorizationCohortDigest } : {}),
+        ...(factsSource.durableIdentityDigest !== undefined ? { durableIdentityDigest: factsSource.durableIdentityDigest } : {}),
+        ...(factsSource.lowlevelSource !== undefined ? { lowlevelSource: factsSource.lowlevelSource } : {}),
+      }));
+      if (activated.status !== "rejected") {
+        lineageStoreEvents.childActivationForwardCompletions += 1;
+        result = { ...result, childActivationForwardCompletions: result.childActivationForwardCompletions + 1 };
       }
       continue;
     }
