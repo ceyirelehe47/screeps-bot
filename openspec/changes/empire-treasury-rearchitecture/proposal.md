@@ -203,3 +203,20 @@
 - 市场安全合同零改动；`Memory.runtime.inventoryPerf`/`empireInventoryShadow` 原样保留；不新增 global 私有槽、不修改冻结的 Memory schema 声明。
 - Jest 预算新增 4 个 treasury 测试文件，按既有预算治理流程更新锚点。
 - 旧系统删除按阶段进行，见 design.md 迁移地图与删除清单。
+
+
+## Round 18 — Lineage Handoff Atomicity & Generation-Proof Closure（第十八轮范围补充）
+
+第十七轮交付的 durable lineage / rearm capability 协议仍存在审查阻断项，本轮只关闭这些断链（不推翻第十七轮成果、不接真实 Game writer、不部署）：
+
+- **Lineage replacement publication 原子性**：publication（candidate 持久化 + read-back + identity 匹配）提前到 authority release / marker cleanup / pending-release 移除之前；失败时 intent/quarantine/marker/pending 索引全部保留，返回 `lineage_publication_pending`，下一 beginTick 从保留 authority 重建完整 retry facts。
+- **Child handoff 状态机**：capability_issued 起持久化完整 handoff facts（child ID/generation/pendingBindingDigest/retry semantic/class/owner/expected identity）；capability consume 严格验证预期 lineage state 与 revision（删除 skip-all-revision 旁路）；global reset 恢复矩阵覆盖 handoff-pending×intent 全部窗口（缺失→回滚、ready→释放回滚、冲突→forensic、executing/更后→前向补完成 child_active）；callback 前任意失败零调用并可恢复。
+- **Child 结果分支**：non-OK + abort 确认 → 当前 generation 的同步 not-executed retirement（可进入下一代 rearm，同一 lineage record 不新增 slot）；abort 失败 → quarantine；commit 成功 → chain_committed（receipt 先行携带 lineage proof；终态写失败 → executed_unsettled + beginTick 按 matching receipt 补完成）；resolution-as-committed 后 lineage 最终 chain-committed。
+- **Generation proof 闭环**：统一 lineage attempt proof 视图进入 durable identity、intent、quarantine、authorization-fault、write-fault marker（v3）、receipt（v8）、resolution tombstone（v7）、reconciliation capability、finalized proof、committed verifier、same-ID 幂等与 intent→quarantine 转移；tr1_ entry 缺 proof fail closed；initial 携带 proof 拒绝。
+- **Lineage store v2 索引与状态机**：lineageId/root/current/next 四索引 O(1) 且全局唯一、跨索引冲突 fail closed（不静默覆盖）；read-back 比较全部安全关键字段；exact idempotence 修复（revision 一致 + 内容一致才幂等）；transition-specific 允许字段矩阵；retirement 按 generation 重置。
+- **Per-generation tombstone replacement 与多代回收**：generation-addressable child ID 协议 v2（`tr1_<lineageId>_<generation>_<checksum>`，O(1) 解析与验证）；驱逐资格按该具体 attempt generation 判定（match/pending/conflict/missing/unhealthy）；A→B→C 的历史 tombstone 可独立回收、旧 ID 仍不可执行、单 chain 多代重试不线性耗尽 Resolution store。
+- **Terminal 压缩与退休摘要**：chain_committed / non_rearmable_retired 压缩为 retirement summary（独立硬容量 store，精确永久 root 门禁，不依赖 receipt/tombstone retention）；满载 fail closed；压缩释放 active slot；forensic 不自动压缩。
+- **稳定 adapter retry semantic**：adapter 显式声明版本化 retry facts（canonical/有界/异常边界，与 durableFacts 分离）；retry digest v2 移除 per-global registration sequence（注册顺序/global reset 稳定）；未实现 retry facts → not-executed 后 non-rearmable。
+- **Contract source 单一权威**：source 于 build 时确定并进入 contract identity/retry semantic/intent/authorization context；authorization 不写死、execution 不得覆盖（不同 → callback 前拒绝）。
+
+本轮完成后才具备进入 terminal.send adapter 实现、纯 contract plan shadow、authorization shadow、next-tick reconciliation shadow 与零 Game API 端到端演练的条件；本轮仍禁止一切真实 Game 写 API 调用。

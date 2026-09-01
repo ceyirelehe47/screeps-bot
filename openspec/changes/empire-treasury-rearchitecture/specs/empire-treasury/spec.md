@@ -1751,3 +1751,97 @@ receipt settlement proof 的 level 显式三级：identity-bound（拥有 modern
 
 - **WHEN** identity-bound proof 试图释放 lowlevel authority（或反之、或跨 runtime/migrated 来源）
 - **THEN** 释放矩阵拒绝；authority 保持；零副作用
+
+
+## Requirement: 第十八轮——lineage replacement publication-before-release 原子性
+
+resolve-as-not-executed 在 lineage retirement candidate 持久化并 read-back 验证（与 authority/tombstone identity 完全匹配、索引同步一致）之前，不得释放 unresolved authority、不得清理 marker、不得移除 pending-release 索引。publication 写入/read-back/索引/identity 任一失败时：intent 与 quarantine 保留、marker 保留、pending-release 保留、不返回 retirement 完成语义（`lineage_publication_pending`），下一 beginTick 仍能从保留的 authority 重建完整 retry facts（不得退化为只能 non-rearmable backfill）。只有 publication/release/marker 三段全部 verified，才允许移除 pending-release 索引、授予 tombstone 驱逐资格、进入 rearm-ready。
+
+#### Scenario: lineage candidate 写入失败时 authority 不释放
+
+- **WHEN** resolve-as-not-executed 的 lineage candidate 持久化失败
+- **THEN** intent/quarantine/marker/pending-release 索引全部保留
+- **AND** 返回 lineage_publication_pending，不进入 rearm-ready
+- **AND** 下一 beginTick 可从保留 authority 重试完整 publication
+
+## Requirement: 第十八轮——child handoff 状态机与 reset 恢复
+
+capability_issued 起 lineage 持久化完整 handoff facts（child ID、parent/current attempt ID、target generation、pendingBindingDigest、retry semantic digest、authority class、owner/lowlevel、expected current identity）。capability 消费必须验证 lineage 处于预期 handoff 状态且 recordRevision 等于 capability 允许的明确 revision（不得跳过全部 revision 检查）。tr1_ 接管顺序：capability 验证 → child_intent_pending → intent 写入（携带 lineage proof）→ read-back → consume → execution-started → child_active → callback。global reset 窗口恢复：capability_issued → rearm_ready（child ID 稳定）；handoff-pending + intent 缺失 → 回滚；+ 一致 ready intent → 释放并回滚（不 forensic）；+ binding/generation 冲突 → forensic；+ intent executing 或更后（或 quarantine 已接管且 proof 匹配）→ 前向补完成 child_active。callback 前任意失败：callback 调用数 0、回滚 rearm-ready 或保留明确 pending 供恢复、不产生第二 child、同 generation child ID 一致。
+
+#### Scenario: consume 遇非预期 lineage revision
+
+- **WHEN** capability 消费时 lineage recordRevision 不等于签发 revision+1 或 state 不是 child_intent_pending
+- **THEN** 拒绝消费且 Game callback 零调用
+
+## Requirement: 第十八轮——child 结果终态（non-OK / unknown / committed）
+
+child 明确 non-OK 且 abort 确认：持久化当前 generation not-executed proof（lineage child_active→retiring→rearm-ready；final tombstone 携带 tr1_ lineage proof；清除上一代 next-child 事实；当前 generation retirement 独立重置），下一次 capability 以当前 child 为 parent 生成下一代（同一 lineage record）；publication 失败时 intent 事实保留、lineage 不丢失；abort 失败进入 quarantine，不得当 not-executed 完成。callback 抛错/结果未知：保留 authority 与完整 proof，后续 resolution 推进同一 generation。commit 成功：receipt 先行携带 lineage proof，lineage 进入 chain-committed；终态更新失败不忽略——intent 保留、返回 executed_unsettled、beginTick 按 matching receipt 补完成（receipt 与 generation 冲突时不补完成）；chain-committed 后不得再签发下一代 capability。
+
+#### Scenario: A→B non-OK 后可继续 C
+
+- **WHEN** B（tr1_ child）non-OK 且 abort 确认并完成 retirement
+- **THEN** 以 B 为 parent 签发下一代 capability 得到新 child C（ID 不同）
+- **AND** lineage 停留同一 record、active entryCount 不增长
+
+## Requirement: 第十八轮——generation proof 进入统一 durable identity 与全部 store
+
+tr1_（及未来版本 rearm ID）的 durable entry 必须携带完整 lineage proof（lineageId/generation/parentTransactionId/bindingDigest）；initial attempt 完全不携带；单侧缺失或不同 lineage/generation/parent/binding → conflict 或 insufficient（不得 match）。proof 传播至 action contract、authorization bundle、intent、quarantine、authorization-fault、write-fault marker、receipt、resolution tombstone、reconciliation capability、finalized proof、committed verifier、same-ID 幂等、intent→quarantine 转移与 child occupancy。tr1_ entry 缺 proof → store unhealthy 或 forensic；non-tr1_ 携带 → unhealthy。迁移：tr1_ 缺 proof 且可从 lineage 安全补全 → 原子补全并验证；不可证明 → forensic/store unhealthy；旧 receipt/tombstone proof 缺 generation → 只作旧 replay blocker，不得释放当前 rearm authority。
+
+#### Scenario: tr1 intent 缺 binding → store unhealthy
+
+- **WHEN** intent store 载入 tr1_ entry 缺任一 lineage proof 字段且无法从 lineage 补全
+- **THEN** intent store unhealthy（fail closed），不得当普通 modern/lowlevel entry
+
+## Requirement: 第十八轮——lineage 索引完整性、exact idempotence 与 transition 允许字段
+
+lineageId/root/current/next 四索引全部 O(1) 且全局唯一：跨索引冲突（duplicate lineageId/current/next、record A current = record B root/next 等）→ 整个 store unhealthy，不得由 Map.set 静默覆盖、不自动删除任一 record；写入产生冲突时原 store 不变。publication read-back 比较全部安全关键字段（root/current identity、action kind、adapter stable identity、owner、generation、state、resolution、child ID、retry semantic、class/source、binding、retirement、revision、protocol version）。exact 重复写（revision 一致 + 完整一致）真正幂等；合法状态推进 revision 严格 +1；每条转换有允许变化集合，lineageId/root/root identity/authority class/lowlevel source/action kind/adapter stable identity/owner/retry semantic 协议/created tick 冻结；current identity/generation/binding 只在接管转换同时变化；updatedAt 不回退、generation 不回退；进入新 generation 时 retirement 按 generation 重置（上一代完成标志不得授权当前代驱逐）。
+
+#### Scenario: exact 相同 record 写入幂等
+
+- **WHEN** 以与现有 record 完整一致（含 recordRevision）的内容重复写入
+- **THEN** 返回 idempotent 且 recordRevision 不增加
+
+## Requirement: 第十八轮——per-generation tombstone replacement 与多代有界退休
+
+tombstone 驱逐资格由该具体 attempt generation 的 replacement proof 决定，verdict ∈ {replacement_match, replacement_pending, replacement_conflict, replacement_missing, store_unhealthy}。rearm child ID 协议 v2 generation-addressable（`tr1_<lineageId16>_<generation6>_<checksum8>`，checksum 绑定 root；O(1) 解析与重算验证；旧 v1 tr1_ ID 继续门禁但不可寻址 → 相关 tombstone 永久 pin，不猜测 generation）。match：lineage/generation/transaction ID/attempt identity（当前代完整、历史代经 ID 协议+状态机链）/binding（按 (lineageId,generation) 重算）/proof class/resolution=not-executed/三段完成。pending/conflict/unhealthy/missing → pin（conflict 计数）。A→B→C 的 A/B tombstone 在 replacement 完成后可独立回收；旧 ID 仍不可直接执行；单 chain 多代重试不线性耗尽 Resolution store；active entryCount 不随 generation 增长。
+
+#### Scenario: B replacement pending 时 B tombstone pin
+
+- **WHEN** B 的 not-executed retirement 三段未全部完成且 B tombstone 超龄
+- **THEN** B tombstone 被 pin 不驱逐，且上一代 A 的全 true retirement 不得授权 B 驱逐
+
+## Requirement: 第十八轮——terminal lineage 压缩与退休摘要
+
+chain_committed（无 intent/quarantine/marker/pending handoff/pending finalization）与 non_rearmable_retired（三段完成、无 pending authority/marker）可从 active store 压缩为 retirement summary（独立 store、独立硬容量）：summary 精确权威——永久阻止 root ID 重用（prepare 门禁含 summary 索引）、证明终态、绑定 root identity 与 lineageId、区分 committed/non-rearmable、O(1) 查询、不依赖普通 receipt/tombstone retention。summary 满载 fail closed：不删除旧 summary、不压缩 active record、新 chain 按容量门禁拒绝。压缩成功释放 active slot。forensic_isolated 不得自动压缩。
+
+#### Scenario: 压缩后 root 仍永久拒绝
+
+- **WHEN** chain committed 压缩后以 root ID prepare
+- **THEN** 拒绝（retired），且 summary store 损坏时 prepare fail closed
+
+## Requirement: 第十八轮——rearm preflight 完整 proof 与 store health
+
+capability 签发前检查 lineage、retirement summary、receipt、resolution、intent、quarantine、authorization-fault、write-fault marker 全部 store 健康：任一 unhealthy → 零 capability、零 lineage mutation、零 callback。tombstone 存在时验证 tombstone ↔ lineage current generation retirement proof 完整匹配（attempt identity/proof class/lowlevel source/lineage/generation/binding）；tombstone 已合法驱逐时由 lineage generation proof 或 terminal summary 证明；相反 proof 继续阻断；child 占用检查区分 absent/occupied/store unhealthy（损坏 store 不当 absent）。
+
+#### Scenario: resolution store 损坏时零 capability
+
+- **WHEN** resolution store unhealthy 时申请 rearm capability
+- **THEN** 拒绝且零 lineage mutation、零 callback
+
+## Requirement: 第十八轮——稳定 adapter retry semantic（显式版本化 retry facts）
+
+adapter 显式声明 `retryFacts(args)`：从 canonical frozen args 派生有界事实（shape validation、canonical encoding、大小上限、异常边界），与 durableFacts 职责分离，覆盖全部改变真实 Game API 调用语义的参数。retry digest v2 绑定 action kind/adapter version/stable semantic identity/retry semantic protocol/canonical retry facts/postings/structure/durable payload/source/owner，移除 per-global registration sequence/global 对象身份/函数源码字符串：注册顺序变化与 global reset 后相同 stable 语义与 retry facts 得到相同 digest。adapter 未实现 retryFacts → 动作正常执行、not-executed 后 non-rearmable；retry facts 抛错/超限 → non-rearmable 或 fail closed；改变一个真实 Game 参数 → digest 变化；policy revision 变化 → digest 不变但重新授权；durable payload 相同而 retry facts 不同 → digest 不同；retry semantic 版本变化 → 旧 capability 拒绝。
+
+#### Scenario: 注册顺序变化 digest 稳定
+
+- **WHEN** 同一 stable semantic identity 的 adapter 以不同注册顺序注册于两个 global
+- **THEN** 相同 args 的 retry semantic digest 相同
+
+## Requirement: 第十八轮——contract source 单一权威
+
+source 在 contract build 时确定并进入 contract identity（digest）、retry semantic、durable intent、authorization context 与 reconciliation facts。authorization 阶段使用 contract source 重算（不得写死 action-contract）；execution request 的 source 必须与 contract source 完全相同（不同 → callback 前拒绝）；parent 与 child source 变化 → retry 拒绝。
+
+#### Scenario: execution 试图覆盖 contract source
+
+- **WHEN** execution request 携带与 contract 不同的 source
+- **THEN** callback 前拒绝且 Game callback 零调用

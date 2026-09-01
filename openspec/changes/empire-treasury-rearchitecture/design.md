@@ -976,3 +976,154 @@ receipts v7：proof level 三级 identity-bound/lowlevel/legacy（不再用 mode
 - receipts v6 → v7：proof level 枚举扩展 + lowlevel class 字段矩阵。
 - intents（v6）/quarantine（v5）：新增可选 lineageBindingDigest 字段（向后兼容，验证矩阵更新）。
 - write-fault marker：新增 v2 可选字段（向后兼容读取）。
+
+
+## 14. 第十八轮设计：Lineage Handoff Atomicity & Generation-Proof Closure
+
+### 14.1 目标协议链（唯一权威顺序）
+
+```text
+parent/current attempt not-executed（resolver 路径）
+  prevalidate → resolution slot 预检 → lineage 容量与 retry facts 预检
+  → lineage retirement candidate 持久化 + read-back（identity 匹配验证）
+  → consume reconciliation capability
+  → final not-executed tombstone
+  → 释放 quarantine/intent（authority release）
+  → class-aware marker cleanup（检查清除结果）
+  → 三段 verified → rearm-ready / non-rearmable 终态
+（direct 路径：child non-OK + abort 确认 → 同步 retirement，
+  publication 失败时 intent 保留、退化为 quarantine→resolver 收敛）
+
+rearm-ready → capability_issued（handoff facts 持久化）
+  → child_intent_pending（intent 写入 + read-back 含 lineage proof）
+  → consume（严格 state=child_intent_pending + revision=issue+1）
+  → intent execution-started（executing）
+  → child_active（current/generation/binding 推进）
+  → Game callback（唯一调用点）
+  ├─ callback 前任意失败 → 回滚 rearm-ready / 保留 handoff-pending 供恢复
+  ├─ callback non-OK + abort 确认 → 当前代 retirement → rearm-ready（下一代）
+  ├─ callback 抛错/未知 → quarantine → resolver（同一 generation 推进）
+  └─ callback OK + commit 成功 → chain_committed（receipt 先行；
+     终态写失败 → executed_unsettled + beginTick 按 receipt 补完成）
+```
+
+### 14.2 publication-before-release 不变量
+
+resolve-as-not-executed 的 lineage candidate 持久化被提前到 capability 消费与
+tombstone 之前（candidate 即 root/current 的永久退休权威，可安全先行）；authority
+release 的固定放行条件：store 健康、candidate 构造成功（含完整 attempt identity/
+generation/binding/retry semantic 或明确 non-rearmable 原因）、candidate 持久化
+成功、Memory read-back 成功且与 authority/tombstone identity 完全匹配、索引同步
+一致。任一失败：intent/quarantine/marker/pending-release 索引全部保留、不返回
+retirement 完成语义（`lineage_publication_pending`），下一轮从保留的 authority
+重建完整 retry facts（不退化为只能 non-rearmable backfill）。pending-release 索引
+移除、tombstone 驱逐资格、rearm-ready 三个后果都以三段全部 verified 为前提。
+
+### 14.3 handoff 状态与中断窗口
+
+handoff durable facts（capability_issued 起持久化）：child ID（nextChildTransactionId，
+v2 generation-addressable）、parent/current attempt ID（currentTransactionId）、
+target generation（record.generation+1）、pendingBindingDigest（写入时冻结、load
+重算验证）、retry semantic digest（record 不可变字段）、authority class/
+owner/lowlevel、expected current identity（currentIdentity）、协议版本（store
+version）。capability consume 严格验证 lineage 处于 child_intent_pending 且
+recordRevision 等于签发 revision+1（删除 skip-all-revision 旁路）。
+
+中断窗口与恢复（beginTick，只处理 pending lineage ID）：
+- capability_issued（跨 tick/global reset）→ 回退 rearm_ready，child ID 保留；
+- child_intent_pending + intent 缺失 → 回滚 rearm_ready；
+- + 一致 not_started/ready intent（binding/generation 匹配）→ 释放 intent 并回滚
+  （正常窗口，不 forensic）；
+- + binding/generation/child 冲突 → forensic_isolated（intent 保留）；
+- + intent 已 executing/更后（或 intent 已转 quarantine 且 proof 匹配）→ 前向补完成
+  child_active（identity 从 intent/quarantine facts 派生）——callback 可能已开始，
+  不得回滚为未执行；
+- child_active + 当前代 committed receipt 匹配 → 补完成 chain_committed。
+
+execution-started（intent→executing）先于 lineage child_active 推进：armed 推进
+失败时 intent 已在 executing（callback 可能开始的唯一持久信号），恢复走前向补完成；
+execution-started 写失败时 lineage 仍在 child_intent_pending 且 intent 仍是
+ready（callback 确定未开始）→ 回滚。generation 永不回退，同一 generation 的 child
+ID 在回滚/重签间保持一致。
+
+### 14.4 generation-addressable child ID 协议 v2
+
+`tr1_<lineageId:16hex>_<generation:6hex>_<checksum:8hex>`（36 字符，charset 合法）；
+checksum = hash16("treasury-attempt-rearm@v2" + lineageId + generation +
+rootTransactionId) 前 8 hex——ID 自带 (lineageId, generation) 可 O(1) 解析并对照
+record root 重算验证。同 lineage+generation 恒同一 ID（状态机保证每代唯一 child）；
+不同 lineage/generation 必不同。多代 chain 的任意历史代 attempt ID 与其 binding
+digest 都可以只凭 record（root + lineageId + generation）O(1) 重算——这是
+per-generation tombstone verdict 与多代回收的基础，不需要无界 attempt 数组。
+旧 v1 child ID（parent identity 派生）不可解析 → legacy 隔离：继续受 tr1_ 门禁，
+相关 tombstone 永久 pin，不得猜测 generation。
+
+### 14.5 per-generation tombstone replacement verdict
+
+resolutionStore 驱逐 final not-executed 时按 entry 逐条查询
+`replacementVerdict(transactionId)`（lineageGenerationRetirement.ts）：
+- replacement_match：ID 解析（v2）或 root 命中 active record / terminal summary；
+  generation ≤ record.generation（历史代：状态机已证明其 retirement 在推进前完成）
+  或 === 当前代且三段完成；transactionId 等于该代期望 ID；binding 重算一致；
+  proof class 与 record authorityClass 一致；当前代另比较 digest。→ 允许驱逐。
+- replacement_pending（当前代 retiring/三段未全）/ replacement_conflict（class、
+  binding、transactionId、当前代 digest 不匹配）/ replacement_missing（无 record
+  且无 summary、或 v1 ID 不可寻址）/ store_unhealthy → pin（conflict 计数）。
+committed 终态（chain_committed 或 summary committed）后的 committed tombstone
+按既有普通 retention 处理。单 chain 多代推进不新增 active entry、历史 tombstone
+在超龄后均可独立回收，Resolution store 不因单 chain 重试线性泄漏。
+
+### 14.6 terminal 压缩与 retirement summary
+
+active lineage store（容量 64）保留进行中/可 rearm 的 chain；chain_committed 与
+non_rearmable_retired 在无 intent/quarantine/marker/pending 事实时压缩为
+retirement summary（独立 store `lineageRetirementSummaries`，硬容量 128，key=
+root transactionId）：{lineageId, rootTransactionId, rootIdentityDigest,
+terminalState, finalGeneration, finalizedAtTick, schemaVersion}。summary 是精确
+权威：永久阻止 root ID 重用（prepare 门禁 root∪current∪summary 三索引）、证明
+终态、不依赖 receipt/tombstone retention；满载 fail closed（不删旧 summary、
+不压缩、新 root 经 active 容量门禁拒绝）。forensic_isolated 不自动压缩。压缩在
+beginTick 对 terminal 记录有界执行（terminalIds 索引，空闲 O(1)），成功后释放
+active slot。Memory 成本：active ≤64×~700B，summary ≤128×~250B（evidence 记录推导）。
+
+### 14.7 generation proof 与 store 版本
+
+统一 proof 视图（lineageAttemptProof.ts）：{lineageId, lineageGeneration,
+parentTransactionId, lineageBindingDigest}（+authorityClass 于 marker/proof class
+矩阵）。durable identity 计算：tr1_ attempt 的 durableIdentityDigest 输入包含
+lineage proof（单侧缺失/不一致 → conflict/insufficient，不得 match）；initial
+attempt 完全不包含。store 升级：attemptLineage v1→v2（pendingBindingDigest/
+retirementGeneration/lineageId 索引/v1 next-child 回退迁移）、intents v6→v7、
+quarantine v5→v6、resolutions v6→v7、write-fault marker v3（+lineageId）、
+receipts v7→v8（tr1_ receipt 携带完整 lineage proof；旧 tr1_ receipt 缺 proof →
+只作 replay blocker，不释放当前 rearm authority）。迁移规则：tr1_ 缺 proof 且可
+从 lineage 安全补全 → 原子补全并验证；不可证明 → forensic/store unhealthy；
+non-tr1_ 携带 lineage 字段 → unhealthy。
+
+### 14.8 adapter retry semantic v2 与 source 单一权威
+
+adapter 协议新增 `retryFacts(args)`（可选）：从 canonical frozen args 派生有界
+事实对象（string/number/boolean 值、键 ≤48、canonical 编码 ≤1024 字符、异常与
+超限 fail closed），与 durableFacts 职责分离；必须覆盖全部改变真实 Game API 调用
+语义的参数。retry digest v2（treasury-retry-semantic@v2）绑定 action kind/adapter
+version/stable semantic identity/canonical retry facts/canonical postings/structure
+descriptors/durable payload/source/owner——移除 per-global registrationId：注册顺序
+变化与 global reset 不改变 digest。adapter 未实现 retryFacts → 动作正常执行、
+not-executed 后 non-rearmable（不猜测）。
+
+contract source 在 build 时确定（缺省 "action-contract"），进入 contract digest、
+retry semantic、durable intent、authorization context；authorization 重算使用
+contract.source（不再写死）；execution request.source 必须与 contract.source 完全
+相同（不同 → callback 前拒绝）；parent/child source 变化 → retry semantic 不匹配
+拒绝。
+
+### 14.9 模块边界
+
+新增窄职责模块：lineageHandoff.ts（handoff 状态机唯一权威：期望 revision 推导、
+consume 校验参数、回滚/前向恢复）、lineageAttemptProof.ts（canonical proof 视图 +
+required/forbidden 矩阵 + relation 单一实现）、lineageGenerationRetirement.ts
+（verdict + 期望 attempt ID 派生）、lineageRetirementSummary.ts（terminal summary
+store + 压缩编排）、lineageIndexIntegrity.ts（跨索引唯一性/冲突判定）、
+adapterRetrySemantics.ts（retry facts 协议）。lineage staged publication 不内联进
+faultResolution 大段逻辑；production service 不暴露 lineage 直接 mutation；
+production 源码不得导入 test-only child derive helper（架构扫描全量覆盖）。
