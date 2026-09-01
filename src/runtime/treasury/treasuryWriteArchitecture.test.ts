@@ -452,4 +452,23 @@ describe("Treasury write-admission 架构边界", () => {
     }
     expect(violations).toEqual([]);
   });
+
+  it("第十七轮：child ID derive helper 是 test-only 边界——production 源码不得导入（child ID 只能经 issueTreasuryRearmCapability 交付）", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      // attemptRearm.ts 自身定义该导出（test-only 标注）。
+      if (relative === "runtime/treasury/attemptRearm.ts") continue;
+      const fileSource = readFileSync(filePath, "utf8");
+      if (/deriveTreasuryRearmChildTransactionId/.test(fileSource)) {
+        violations.push(`${relative} 引用 deriveTreasuryRearmChildTransactionId（test-only——production 的 child 派生权威在 attemptLineage.deriveTreasuryLineageNextChildTransactionId，只经 facade issue 通道）`);
+      }
+      // tr1_ 命名空间判定单一权威在 transactionId.ts；facade 是唯一门禁消费方。
+      if (/isTreasuryRearmAttemptId/.test(fileSource) && relative !== "runtime/treasury/transactionId.ts" && relative !== "runtime/treasury/facade.ts") {
+        violations.push(`${relative} 引用 isTreasuryRearmAttemptId（tr1_ 判定单一权威在 transactionId.ts，门禁在 facade）`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
 });
