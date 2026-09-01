@@ -50,6 +50,12 @@ import {
 import { verifyTreasuryEntryIdentity, type TreasuryIdentityFactsEntry } from "@/runtime/treasury/identityProof";
 import { treasuryAuthorityLevelPairCompatibility } from "@/runtime/treasury/authorityCompatibility";
 import { compareTreasuryExecutionFactCohesion } from "@/runtime/treasury/executionFactCohesion";
+import {
+  treasuryLineageProofOfEntry,
+  treasuryLineageProofRelation,
+  treasuryLineageProofShapeErrorForTransaction,
+  type TreasuryLineageProofFacts,
+} from "@/runtime/treasury/lineageProof";
 
 /** 归一化 authority facts（签发/resolution/recovery/release 共用形状）。 */
 export interface TreasuryUnresolvedAuthority {
@@ -91,6 +97,15 @@ export interface TreasuryUnresolvedAuthority {
   readonly adapterSemanticIdentity?: string;
   /** forensic incomplete authority 标记（第十二轮 3.8）。 */
   readonly forensic?: { readonly reason: string; readonly detail: string };
+  /**
+   * 【第十九轮 A.1】lineage proof（tr1_ rearm authority 必携带完整四字段；
+   * initial attempt 不携带——形状由 resolver 从两侧持久事实验证，缺字段/
+   * 单侧缺失/双侧不一致均 fail closed，不静默选择一侧）。
+   */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
 }
 
 export type TreasuryUnresolvedAuthorityResolution =
@@ -117,6 +132,37 @@ function postingSignature(postings: readonly { roomName: string; locationKind: s
     .map((leg) => `${leg.roomName}\u0000${leg.locationKind}\u0000${leg.resource}\u0000${String(leg.delta)}`)
     .sort()
     .join("\u0001");
+}
+
+/**
+ * 【第十九轮 A.1】authority entry 相对其 transactionId 的 lineage proof 形状
+ * 验证（tr1_ 必须完整、initial 必须全缺失——lineageProof 单一权威）。返回
+ * null = 形状合法（facts 或合法的 undefined）。
+ */
+function authorityLineageFactsError(
+  transactionId: string,
+  entry: {
+    readonly transactionId: string;
+    readonly lineageId?: unknown;
+    readonly lineageGeneration?: unknown;
+    readonly parentTransactionId?: unknown;
+    readonly lineageBindingDigest?: unknown;
+  },
+  label: string,
+): string | null {
+  return treasuryLineageProofShapeErrorForTransaction(transactionId, entry, label);
+}
+
+/** 归一化 authority 的 lineage proof 字段展开（facts 存在时透传）。 */
+function lineageProofSpread(facts: TreasuryLineageProofFacts | undefined): { readonly lineageId?: string; readonly lineageGeneration?: number; readonly parentTransactionId?: string; readonly lineageBindingDigest?: string } {
+  return facts === undefined
+    ? {}
+    : {
+        lineageId: facts.lineageId,
+        lineageGeneration: facts.lineageGeneration,
+        parentTransactionId: facts.parentTransactionId,
+        lineageBindingDigest: facts.lineageBindingDigest,
+      };
 }
 
 /**
@@ -226,6 +272,42 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         detail: "同 id 双权威 postings 不一致（canonical 逐腿比较）——fail closed，不任选其一",
       };
     }
+    // 【第十九轮 A.1】lineage proof 双侧验证：先各自相对 transactionId 做
+    // 形状验证（tr1_ 必须完整、initial 必须全缺失——一侧有一侧无或部分
+    // 存在都是不可归一化的持久矛盾）；双侧完整时四字段必须完全一致。
+    const quarantineLineageError = authorityLineageFactsError(
+      quarantined.transactionId,
+      quarantined as unknown as Parameters<typeof authorityLineageFactsError>[1],
+      "quarantine authority",
+    );
+    if (quarantineLineageError !== null) {
+      return { status: "inconsistent", detail: quarantineLineageError };
+    }
+    const intentLineageError = authorityLineageFactsError(
+      intended.transactionId,
+      intended as unknown as Parameters<typeof authorityLineageFactsError>[1],
+      "intent authority",
+    );
+    if (intentLineageError !== null) {
+      return { status: "inconsistent", detail: intentLineageError };
+    }
+    const quarantineLineage = treasuryLineageProofOfEntry(quarantined as unknown as Parameters<typeof treasuryLineageProofOfEntry>[0]);
+    const intentLineage = treasuryLineageProofOfEntry(intended as unknown as Parameters<typeof treasuryLineageProofOfEntry>[0]);
+    if (quarantineLineage === "partial" || intentLineage === "partial") {
+      return { status: "inconsistent", detail: "同 id 双权威的 lineage proof 形状异常（部分存在——不可归一化）" };
+    }
+    if ((quarantineLineage !== undefined) !== (intentLineage !== undefined)) {
+      return {
+        status: "inconsistent",
+        detail: `同 id 双权威 lineage proof 单侧缺失（quarantine ${quarantineLineage !== undefined ? "携带" : "缺失"}，intent ${intentLineage !== undefined ? "携带" : "缺失"}）——不得静默选择其中一侧`,
+      };
+    }
+    if (quarantineLineage !== undefined && intentLineage !== undefined && treasuryLineageProofRelation(intentLineage, quarantineLineage) !== "match") {
+      return {
+        status: "inconsistent",
+        detail: "同 id 双权威 lineage proof 不一致（lineageId/generation/parent/binding 任一不同——fail closed，不任选其一）",
+      };
+    }
     const sharedLevel = quarantined.authorityLevel;
     if (sharedLevel === "modern") {
       // 【第十四轮 8.3】modern 双 authority：完整 durable identity 一致——
@@ -328,6 +410,7 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         ...(quarantined.legacyV1 !== undefined ? { legacyV1: quarantined.legacyV1 } : {}),
         ...(quarantined.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: quarantined.adapterSemanticIdentity } : {}),
         ...(quarantined.forensic !== undefined ? { forensic: { ...quarantined.forensic } } : {}),
+        ...lineageProofSpread(quarantineLineage),
       },
     };
   }
@@ -337,6 +420,20 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
     const quarantineIdentityError = verifyTreasuryEntryIdentity(quarantined as unknown as TreasuryIdentityFactsEntry, `quarantine authority（${quarantined.transactionId.slice(0, 48)}）`);
     if (quarantineIdentityError !== null) {
       return { status: "inconsistent", detail: quarantineIdentityError };
+    }
+    // 【第十九轮 A.1】单侧 authority 的 lineage proof 同样经持久事实验证
+    //（tr1_ 缺完整 proof 不得归一化为可签发 authority）。
+    const quarantineOnlyLineageError = authorityLineageFactsError(
+      quarantined.transactionId,
+      quarantined as unknown as Parameters<typeof authorityLineageFactsError>[1],
+      "quarantine authority",
+    );
+    if (quarantineOnlyLineageError !== null) {
+      return { status: "inconsistent", detail: quarantineOnlyLineageError };
+    }
+    const quarantineOnlyLineage = treasuryLineageProofOfEntry(quarantined as unknown as Parameters<typeof treasuryLineageProofOfEntry>[0]);
+    if (quarantineOnlyLineage === "partial") {
+      return { status: "inconsistent", detail: "quarantine authority 的 lineage proof 部分存在（形状异常——fail closed）" };
     }
     // quarantine 优先（v2 自带完整合同事实；并存 intent 时以 quarantine 为
     // 权威形态，intent 的同名字段已在上文比对）。
@@ -370,6 +467,7 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
         ...(quarantined.legacyV1 !== undefined ? { legacyV1: quarantined.legacyV1 } : {}),
         ...(quarantined.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: quarantined.adapterSemanticIdentity } : {}),
         ...(quarantined.forensic !== undefined ? { forensic: { ...quarantined.forensic } } : {}),
+        ...lineageProofSpread(quarantineOnlyLineage),
       },
     };
   }
@@ -378,6 +476,19 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
   const intentIdentityError = verifyTreasuryEntryIdentity(intent as unknown as TreasuryIdentityFactsEntry, `intent authority（${intent.transactionId.slice(0, 48)}）`);
   if (intentIdentityError !== null) {
     return { status: "inconsistent", detail: intentIdentityError };
+  }
+  // 【第十九轮 A.1】单侧 emergency authority 的 lineage proof 持久事实验证。
+  const intentOnlyLineageError = authorityLineageFactsError(
+    intent.transactionId,
+    intent as unknown as Parameters<typeof authorityLineageFactsError>[1],
+    "intent authority",
+  );
+  if (intentOnlyLineageError !== null) {
+    return { status: "inconsistent", detail: intentOnlyLineageError };
+  }
+  const intentLineageFacts = treasuryLineageProofOfEntry(intent as unknown as Parameters<typeof treasuryLineageProofOfEntry>[0]);
+  if (intentLineageFacts === "partial") {
+    return { status: "inconsistent", detail: "intent authority 的 lineage proof 部分存在（形状异常——fail closed）" };
   }
   return {
     status: "ok",
@@ -407,6 +518,7 @@ export function resolveTreasuryUnresolvedAuthority(transactionId: string): Treas
       ...(intent.adapterSemanticIdentity !== undefined ? { adapterSemanticIdentity: intent.adapterSemanticIdentity } : {}),
       ...(intent.authorityLevel !== undefined ? { authorityLevel: intent.authorityLevel } : {}),
       ...(intent.lowlevelSource !== undefined ? { lowlevelSource: intent.lowlevelSource } : {}),
+      ...lineageProofSpread(intentLineageFacts),
     },
   };
 }
