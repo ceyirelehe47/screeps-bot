@@ -1127,3 +1127,48 @@ store + 压缩编排）、lineageIndexIntegrity.ts（跨索引唯一性/冲突�
 adapterRetrySemantics.ts（retry facts 协议）。lineage staged publication 不内联进
 faultResolution 大段逻辑；production service 不暴露 lineage 直接 mutation；
 production 源码不得导入 test-only child derive helper（架构扫描全量覆盖）。
+
+## 15. 第十九轮设计：Committed Lineage Resolution & Terminal Proof Compaction
+
+### 15.1 committed resolution 的完整 proof 流（工作包 A 唯一权威顺序）
+
+```text
+unresolved authority（resolver 归一化，暴露并验证 lineage proof）
+  → reconciliation capability 签发（透传完整 proof）
+  → prevalidate（capability ↔ authority lineage 强比较）
+  → resolving tombstone（携带完整 proof）
+  → consume capability
+  → receipt refresh（lineage-aware：保留/写入完整 proof）
+  → 三方 verifier（receipt↔tombstone↔authority，每组含 lineage 维度）
+  → verified → 释放 intent/quarantine → class-aware marker 清除（携带 proof）
+  → final tombstone（携带完整 proof）
+  → chain_committed（matching receipt 的 binding/generation 与 record 一致才推进）
+```
+
+断点不变量：任何一段 fail closed 时上游保留（resolving tombstone 保留 + authority 保留 + marker 保留），beginTick `recoverStagedResolutions` 以同一 verifier 语义幂等补完成，不依赖旧 heap capability。
+
+### 15.2 双 authority handoff 恢复矩阵（工作包 B）
+
+| intent | quarantine | 判定 |
+|---|---|---|
+| proof 冲突 | 任意 | forensic（保留全部 authority） |
+| 任意 | proof 冲突 | forensic |
+| not_started/ready | 不存在 | rollback + 释放 intent |
+| not_started/ready | 匹配存在 | forward_complete（quarantine 是 callback 后事实——绝不回滚） |
+| executing/更后 | 任意（无冲突） | forward_complete |
+| 缺失 | 匹配存在 | forward_complete |
+| 缺失 | 缺失 | rollback（零释放） |
+
+forward 的 child identity 从验证后的持久事实派生：quarantine（proof 匹配）优先，其次 intent。
+
+### 15.3 retirement 三阶段的证明来源（工作包 C）
+
+- `lineagePublished`：retire 时 lineage candidate 持久化 + read-back（`child_active>retiring` 转换内置）。
+- `authorityReleased`：统一 resolver 返回 `not_found`（`convergeTreasuryLineageRetirementFromFacts` 内验证）。
+- `markerCleaned`：marker 不存在 / transactionId 不指向本 attempt / class-aware 清除成功后重读不存在；marker 指向本 attempt 但 digest/binding/generation 冲突或 class 不可证明 → cleanup pending（保持 retiring，不进 rearm_ready，无 eviction 资格）。
+
+`completeTreasuryLineageRetirement` 只推进 state 并校验三段全 true；阶段置位只经 `markTreasuryLineageRetirementStageVerified`（单调 false→true）。
+
+### 15.4 summary generation 证明（工作包 E）
+
+active record 压缩后，历史 child tombstone 凭 tombstone 自身完整 lineage proof + summary 的 `(lineageId, rootTransactionId, finalGeneration, authorityClass, terminalState)` 精确重演验证：ID v2 派生 + checksum（绑定 root）、generation ≤ finalGeneration、binding 按 (lineageId, generation, parent=gen-1 派生 ID, child) 重算、proof class 与 summary authorityClass 一致、final 代 not-executed 只与 non_rearmable_retired 相容。无 proof 旧 tombstone、v1 迁移 summary（authorityClass 缺失）、future generation、错误 binding → pin/conflict，不猜测。
