@@ -133,6 +133,8 @@ describe("retirement 三阶段分别证明（第十九轮 25.4）", () => {
       resolution: "not-executed",
       stage: "final",
       proofLevel: "lowlevel",
+      durableIdentityDigest: ROOT_DURABLE,
+      lowlevelSource: "runtime-lowlevel@v1",
     });
     expect(verdict.verdict).toBe("replacement_pending");
   });
@@ -227,6 +229,8 @@ describe("retirement 三阶段分别证明（第十九轮 25.4）", () => {
       resolution: "not-executed",
       stage: "final",
       proofLevel: "lowlevel",
+      durableIdentityDigest: ROOT_DURABLE,
+      lowlevelSource: "runtime-lowlevel@v1",
     });
     expect(verdict.verdict).toBe("replacement_match");
   });

@@ -29,6 +29,10 @@ import { readTreasuryQuarantineEntry, peekTreasuryQuarantineHealth } from "@/run
 import { readTreasuryAuthorizationFaultEntry } from "@/runtime/treasury/authorizationFaults";
 import { readTreasuryWriteFault } from "@/runtime/treasury/writeFault";
 import {
+  peekTreasuryGenerationRetirementHealth,
+  readTreasuryGenerationRetirementProof,
+} from "@/runtime/treasury/generationRetirementAuthority";
+import {
   peekTreasuryAttemptLineageHealth,
   lookupTreasuryAttemptLineageByAttemptId,
   lookupTreasuryAttemptLineageByNextChild,
@@ -57,6 +61,7 @@ export type TreasuryRearmPreflightResult =
         | "parent_authority_present"
         | "parent_marker_pending"
         | "retirement_incomplete"
+        | "generation_retirement_proof_missing"
         | "receipt_store_unhealthy"
         | "child_identity_occupied";
       readonly detail: string;
@@ -165,6 +170,39 @@ export function preflightTreasuryRearmCapability(input: {
       reason: "retirement_incomplete",
       detail: `lineage retirement 未完整（published=${String(lineage.retirement.lineagePublished)}，released=${String(lineage.retirement.authorityReleased)}，markerCleaned=${String(lineage.retirement.markerCleaned)}）`,
     };
+  }
+  // ── 【第二十轮 10.3】下一代 capability 的 exact retirement proof 门禁：
+  //    Generation N 的 capability 只有 N 的 exact retirement proof 持久化并
+  //    read-back 后才可签发（proof 解析一致：transactionId/binding/parent 与
+  //    record 权威重算）。Round 18/19 旧数据缺 proof 同样拒绝/保持 pin
+  //    （不自动补现代 proof）；store 损坏 fail closed。
+  {
+    const generationProofHealth = peekTreasuryGenerationRetirementHealth();
+    if (!generationProofHealth.healthy) {
+      return {
+        status: "rejected",
+        reason: "lineage_store_unhealthy",
+        detail: generationProofHealth.detail ?? "exact generation retirement store 损坏（rearm preflight fail closed）",
+      };
+    }
+    const generationProof = readTreasuryGenerationRetirementProof(lineage.lineageId, lineage.generation);
+    const expectedChildOfParent = lineage.generation <= 0
+      ? lineage.rootTransactionId
+      : undefined; // gen≥1 的期望 attempt ID 由 proof 自身携带并经 store 形状/语义校验
+    if (
+      generationProof === undefined ||
+      generationProof.transactionId !== lineage.currentTransactionId ||
+      generationProof.digest !== lineage.currentIdentity.digest ||
+      (lineage.generation >= 1 && generationProof.bindingDigest !== lineage.bindingDigest) ||
+      (lineage.generation >= 1 && generationProof.parentTransactionId !== lineage.currentParentTransactionId) ||
+      (lineage.generation === 0 && expectedChildOfParent !== undefined && generationProof.transactionId !== expectedChildOfParent)
+    ) {
+      return {
+        status: "rejected",
+        reason: "generation_retirement_proof_missing",
+        detail: `lineage generation ${String(lineage.generation)} 的 exact retirement proof 缺失或与 record 不一致（下一代 capability 不可签发——proof 持久化 read-back 是签发前置；不自动补现代 proof）`,
+      };
+    }
   }
   // ── parent not-executed proof 完整（final tombstone 或 lineage 已接管——
   //    tombstone 可能已被 retention 驱逐，驱逐后 lineage generation retirement

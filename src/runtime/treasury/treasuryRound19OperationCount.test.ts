@@ -143,24 +143,27 @@ describe("operation-count（第十九轮性能要求）", () => {
     advanceTick();
     expect(lookupTreasuryAttemptLineageByAttemptId(cap.childTransactionId)).toBeUndefined();
     expect(lookupTreasuryRetirementSummaryByRoot("r19_oc2_root")).toBeDefined();
-    // 预热（首次 load summary store 计一次 fullScan）。
-    treasuryTombstoneReplacementVerdict({
+    // 【第二十轮】root verdict 输入取真实 tombstone 的完整 identity 维度
+    //（五元重算与 exact proof 比较需要）。
+    const rootTombstone = readTreasuryResolutionTombstone("r19_oc2_root")!;
+    expect(rootTombstone).toBeDefined();
+    const rootVerdictInput = {
       transactionId: "r19_oc2_root",
-      digest: "1111111111111111",
-      resolution: "not-executed",
-      stage: "final",
-      proofLevel: "lowlevel",
-    });
+      digest: rootTombstone.digest,
+      resolution: "not-executed" as const,
+      stage: "final" as const,
+      proofLevel: rootTombstone.proofLevel,
+      ...(rootTombstone.contractDigest !== undefined ? { contractDigest: rootTombstone.contractDigest } : {}),
+      ...(rootTombstone.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: rootTombstone.authorizationCohortDigest } : {}),
+      ...(rootTombstone.durableIdentityDigest !== undefined ? { durableIdentityDigest: rootTombstone.durableIdentityDigest } : {}),
+      ...(rootTombstone.lowlevelSource !== undefined ? { lowlevelSource: rootTombstone.lowlevelSource } : {}),
+    };
+    // 预热（首次 load summary store 计一次 fullScan）。
+    treasuryTombstoneReplacementVerdict(rootVerdictInput);
     const lineageScans = lineageStoreEvents.fullScans;
     const summaryScans = retirementSummaryEvents.fullScans;
     for (let i = 0; i < 50; i += 1) {
-      const verdict = treasuryTombstoneReplacementVerdict({
-        transactionId: "r19_oc2_root",
-        digest: "1111111111111111",
-        resolution: "not-executed",
-        stage: "final",
-        proofLevel: "lowlevel",
-      });
+      const verdict = treasuryTombstoneReplacementVerdict(rootVerdictInput);
       expect(verdict.verdict).toBe("replacement_match");
     }
     expect(lineageStoreEvents.fullScans).toBe(lineageScans);

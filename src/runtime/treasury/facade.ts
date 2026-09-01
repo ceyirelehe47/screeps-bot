@@ -548,6 +548,7 @@ export interface TreasuryService {
       | "parent_authority_present"
       | "parent_marker_pending"
       | "retirement_incomplete"
+      | "generation_retirement_proof_missing"
       | "receipt_store_unhealthy"
       | "child_identity_occupied"
       | "lineage_write_failed";

@@ -27,6 +27,7 @@ import {
 } from "@/runtime/treasury/attemptLineage";
 import { retirementSummaryEvents } from "@/runtime/treasury/lineageRetirementSummary";
 import { treasuryTombstoneReplacementVerdict } from "@/runtime/treasury/lineageGenerationRetirement";
+import { readTreasuryGenerationRetirementProof } from "@/runtime/treasury/generationRetirementAuthority";
 import { registerTreasuryPolicyResolver, makeFixedReserveTreasuryPolicy } from "@/runtime/treasury/policyAuthority";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 import { treasuryTestService, type TreasuryTestService } from "@/runtime/treasury/testHarness";
@@ -138,14 +139,23 @@ describe("round 18 operation-count（第十八轮 24.15）", () => {
   it("单条 tombstone replacement verdict：O(1) 索引查询（lineage fullScans 不增）", () => {
     advanceChain("r18_op_verdict", 3);
     const record = lookupTreasuryAttemptLineageByAttemptId("r18_op_verdict")!;
+    // 【第二十轮】root（历史代 gen 0）的 verdict 维度取该代 exact retirement
+    // proof 的 identity（当前代 currentIdentity 与 root 代不同——代际不可混用）。
+    const rootProof = readTreasuryGenerationRetirementProof(record.lineageId, 0)!;
+    expect(rootProof).toBeDefined();
     const scansBefore = lineageStoreEvents.fullScans;
     for (let i = 0; i < 30; i += 1) {
       const verdict = treasuryTombstoneReplacementVerdict({
         transactionId: record.rootTransactionId,
-        digest: record.currentIdentity.digest,
+        digest: rootProof.digest,
         resolution: "not-executed",
         stage: "final",
-        proofLevel: record.authorityClass,
+        proofLevel: rootProof.authorityClass,
+        // 【第二十轮 12.2】完整 attempt identity 维度（exact proof 比较需要）。
+        contractDigest: rootProof.contractDigest,
+        authorizationCohortDigest: rootProof.authorizationCohortDigest,
+        durableIdentityDigest: rootProof.durableIdentityDigest,
+        lowlevelSource: rootProof.lowlevelSource,
       });
       expect(verdict.verdict).toBe("replacement_match");
     }

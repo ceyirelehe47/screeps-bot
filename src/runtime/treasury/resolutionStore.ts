@@ -759,6 +759,12 @@ function evictExpiredTombstones(store: TreasuryResolutionStore, indexes?: { reso
             ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
             ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
             ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
+            // 【第二十轮 12.2】完整 attempt identity 维度一并进入 verdict
+            //（exact retirement proof 与 record current 的完整比较需要）。
+            ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+            ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+            ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+            ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
           }) ?? { verdict: "replacement_missing", detail: "verdict 未注册（保守 pin）" } as TreasuryRetentionReplacementVerdict;
         if (verdict.verdict !== "replacement_match") {
           if (verdict.verdict === "replacement_conflict") {

@@ -16,6 +16,7 @@
  * - receipt proof class v7（迁移三级、identity-bound 携带 source unhealthy）。
  */
 import { createTreasuryService } from "@/runtime/treasury/facade";
+import { treasuryTombstoneReplacementVerdict } from "@/runtime/treasury/lineageGenerationRetirement";
 import {
   buildTreasuryActionContract,
   executeTreasuryActionContract,

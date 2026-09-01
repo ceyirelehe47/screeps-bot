@@ -211,6 +211,11 @@ describe("A→B→C 端到端：压缩后历史代 tombstone 由 summary 精确�
       ...(bTombstone!.lineageId !== undefined ? { lineageId: bTombstone!.lineageId } : {}),
       ...(bTombstone!.lineageGeneration !== undefined ? { lineageGeneration: bTombstone!.lineageGeneration } : {}),
       ...(bTombstone!.parentTransactionId !== undefined ? { parentTransactionId: bTombstone!.parentTransactionId } : {}),
+      // 【第二十轮 12.2/12.4】完整 attempt identity 维度（exact proof 比较）。
+      ...(bTombstone!.contractDigest !== undefined ? { contractDigest: bTombstone!.contractDigest } : {}),
+      ...(bTombstone!.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: bTombstone!.authorizationCohortDigest } : {}),
+      ...(bTombstone!.durableIdentityDigest !== undefined ? { durableIdentityDigest: bTombstone!.durableIdentityDigest } : {}),
+      ...(bTombstone!.lowlevelSource !== undefined ? { lowlevelSource: bTombstone!.lowlevelSource } : {}),
     });
     expect(bVerdict.verdict).toBe("replacement_match");
     // A（root）tombstone 同样回收。
