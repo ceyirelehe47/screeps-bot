@@ -111,6 +111,8 @@ export const generationRetirementEvents = {
   idempotentWrites: 0,
   releases: 0,
   orphanReleases: 0,
+  /** 【第二十一轮 10.3】全局 transactionId 唯一性冲突计数。 */
+  indexConflicts: 0,
 };
 
 export function resetTreasuryGenerationRetirementRuntimeForTest(): void {
@@ -122,6 +124,7 @@ export function resetTreasuryGenerationRetirementRuntimeForTest(): void {
     idempotentWrites: 0,
     releases: 0,
     orphanReleases: 0,
+    indexConflicts: 0,
   });
 }
 
@@ -151,7 +154,20 @@ function encodeGenerationProofKey(lineageId: string, generation: number): string
   return `${PROOF_KEY_PREFIX}${lineageId}:${toHex6(generation)}`;
 }
 
-/** proof 内部一致性重算（load/写入/read-back/查询共用）：ID/parent/binding/class 派生。 */
+/**
+ * 【第二十一轮 10.2】root 身份绑定共享 canonical 算法（与
+ * attemptLineage.computeTreasuryAttemptLineageId 同协议——lineageId 由
+ * rootTransactionId + rootIdentityDigest 派生）：proof 的三_ROOT 字段必须
+ * 互相可验证，不能只检查格式合法。协议常量复制自 attemptLineage（模块
+ * 单向依赖：attemptLineage import 本模块，不得反向）。
+ */
+const LINEAGE_ID_DERIVATION_BASIS = "treasury-attempt-lineage@v1";
+
+function computeLineageIdFromRootBinding(rootTransactionId: string, rootIdentityDigest: string): string {
+  return hashTreasuryCanonicalString(`${LINEAGE_ID_DERIVATION_BASIS}:${rootTransactionId}:${rootIdentityDigest}`);
+}
+
+/** proof 内部一致性重算（load/写入/read-back/查询共用）：ID/parent/binding/class 派生 + class 字段矩阵 + root 绑定。 */
 function validateTreasuryGenerationRetirementProofSemantics(proof: TreasuryGenerationRetirementProof): string | null {
   const isRearm = isTreasuryRearmAttemptId(proof.transactionId);
   if (proof.generation === 0) {
@@ -192,11 +208,36 @@ function validateTreasuryGenerationRetirementProofSemantics(proof: TreasuryGener
       return "bindingDigest 与 (lineageId, generation, parent, child) 权威重算不一致";
     }
   }
-  if (proof.authorityClass === "identity-bound" && proof.lowlevelSource !== undefined) {
-    return "identity-bound proof 携带 lowlevelSource（class 矛盾）";
+  // ──【第二十一轮 10.1】proof-class required/forbidden 字段矩阵。
+  if (proof.authorityClass === "identity-bound") {
+    if (proof.lowlevelSource !== undefined) {
+      return "identity-bound proof 携带 lowlevelSource（class 矛盾）";
+    }
+    if (proof.durableIdentityDigest === undefined) {
+      return "identity-bound proof 缺 durableIdentityDigest（不得持久化只有普通 digest 的 identity-bound exact proof）";
+    }
+    // modern contract 来源（携带任一 contract 维度）必须成对保留。
+    if (
+      (proof.contractDigest !== undefined || proof.authorizationCohortDigest !== undefined) &&
+      (proof.contractDigest === undefined || proof.authorizationCohortDigest === undefined)
+    ) {
+      return "modern contract 来源的 identity-bound proof 必须成对携带 contractDigest 与 authorizationCohortDigest";
+    }
+  } else {
+    if (typeof proof.lowlevelSource !== "string") {
+      return "lowlevel proof 缺少 lowlevelSource";
+    }
+    if (proof.durableIdentityDigest === undefined) {
+      return "lowlevel proof 缺 durableIdentityDigest";
+    }
+    if (proof.contractDigest !== undefined || proof.authorizationCohortDigest !== undefined) {
+      return "lowlevel proof 携带 modern contract/cohort 事实（class 矛盾）";
+    }
   }
-  if (proof.authorityClass === "lowlevel" && typeof proof.lowlevelSource !== "string") {
-    return "lowlevel proof 缺少 lowlevelSource";
+  // ──【第二十一轮 10.2】root 身份绑定：(rootTransactionId, rootIdentityDigest)
+  //    共享 canonical 算法重算 lineageId——三者互相验证。
+  if (computeLineageIdFromRootBinding(proof.rootTransactionId, proof.rootIdentityDigest) !== proof.lineageId) {
+    return "proof 的 (rootTransactionId, rootIdentityDigest, lineageId) 不满足共享 canonical 派生（root 绑定不可验证）";
   }
   return null;
 }
@@ -314,7 +355,23 @@ function loadGenerationRetirementRuntime(forWrite = false): TreasuryGenerationRe
     return heapRuntime;
   }
   const store = branch.generationRetirementProofs as unknown as TreasuryGenerationRetirementStore;
-  const fatal = validateGenerationRetirementStoreShape(store);
+  const shapeError = validateGenerationRetirementStoreShape(store);
+  // 【第二十一轮 10.3】索引重建不得依赖 Map.set 覆盖——同 transactionId 出现
+  // 在两个不同 key（含 root ID 出现在两个不同 lineage）→ 整 store unhealthy。
+  let indexError: string | null = null;
+  if (shapeError === null) {
+    const probeByAttempt = new Map<string, string>();
+    for (const [key, proof] of Object.entries(store.entries)) {
+      const existingKey = probeByAttempt.get(proof.transactionId);
+      if (existingKey !== undefined && existingKey !== key) {
+        indexError = `generation retirement transactionId 重复（${proof.transactionId.slice(0, 28)} 同时位于 ${existingKey.slice(0, 28)} 与 ${key.slice(0, 28)}）——整 store unhealthy`;
+        break;
+      }
+      probeByAttempt.set(proof.transactionId, key);
+    }
+    if (indexError !== null) generationRetirementEvents.indexConflicts += 1;
+  }
+  const fatal = shapeError ?? indexError;
   const runtime: TreasuryGenerationRetirementRuntime = { store, fatal, published: true, byLineage: new Map(), byAttempt: new Map() };
   if (fatal === null) {
     for (const [key, proof] of Object.entries(store.entries)) {
@@ -372,26 +429,19 @@ export function readTreasuryGenerationRetirementProof(
   return treasuryBoundedDeepFreezeSnapshot(proof) as Readonly<TreasuryGenerationRetirementProof>;
 }
 
-/** lineageId O(1) 查询（null = 查询代不属于该 chain——非占用证据）。 */
+/** attempt ID O(1) 查询（真实索引命中——root 或 tr1_ child 的 proof 定位）。 */
 export function lookupTreasuryGenerationRetirementProofByAttemptId(
   transactionId: string,
 ): Readonly<TreasuryGenerationRetirementProof> | undefined {
   const runtime = loadGenerationRetirementRuntime();
   if (runtime.fatal !== null) return undefined;
-  const keys = runtime.byLineage.get(parseLineageIdOf(transactionId) ?? "");
-  if (keys === undefined) return undefined;
-  for (const key of keys) {
-    const proof = runtime.store.entries[key];
-    if (proof !== undefined && proof.transactionId === transactionId) {
-      return treasuryBoundedDeepFreezeSnapshot(proof) as Readonly<TreasuryGenerationRetirementProof>;
-    }
-  }
-  return undefined;
-}
-
-function parseLineageIdOf(transactionId: string): string | null {
-  const parsed = parseTreasuryRearmChildTransactionIdV2(transactionId);
-  return parsed === null ? null : parsed.lineageId;
+  // 【第二十一轮 10.4】byAttempt 索引直接命中——不解析 lineage 后遍历该
+  // lineage 的全部 proof。
+  const key = runtime.byAttempt.get(transactionId);
+  if (key === undefined) return undefined;
+  const proof = runtime.store.entries[key];
+  if (proof === undefined || proof.transactionId !== transactionId) return undefined;
+  return treasuryBoundedDeepFreezeSnapshot(proof) as Readonly<TreasuryGenerationRetirementProof>;
 }
 
 // ── 写入（clone → 校验 → 幂等/冲突预检 → 发布 → read-back → 索引同步） ─────
@@ -436,6 +486,18 @@ export function persistTreasuryGenerationRetirementProof(
       detail: `同 (lineageId, generation) 已存在不同内容的 exact retirement proof（${key.slice(0, 28)}）——冲突不覆盖`,
     };
   }
+  // 【第二十一轮 10.3】全局 transaction ID 唯一：同 transactionId 已被其它
+  // entry（不同 key / 不同 lineage / 不同 generation，含 root ID 出现在两个
+  // lineage）占用 → 拒绝（byAttempt 索引不得被 Map.set 覆盖隐藏冲突）。
+  const occupiedKey = runtime.byAttempt.get(proof.transactionId);
+  if (occupiedKey !== undefined && occupiedKey !== key) {
+    generationRetirementEvents.writeFailures += 1;
+    generationRetirementEvents.indexConflicts += 1;
+    return {
+      status: "rejected",
+      detail: `transactionId ${proof.transactionId.slice(0, 28)} 已被其它 exact retirement entry 占用（${occupiedKey.slice(0, 28)}）——全局唯一，拒绝写入`,
+    };
+  }
   if (runtime.store.entryCount >= TREASURY_GENERATION_RETIREMENT_MAX_ENTRIES) {
     generationRetirementEvents.writeFailures += 1;
     return {
@@ -456,6 +518,17 @@ export function persistTreasuryGenerationRetirementProof(
     runtime.store.updatedAt = Game.time;
     generationRetirementEvents.writeFailures += 1;
     return { status: "rejected", detail: "generation retirement proof read-back 验证失败（不推进 retirement）" };
+  }
+  // 【第二十一轮 10.5】read-back 后、索引同步前复核 transactionId 未被其它
+  // entry 占用（防御 read-back 窗口内的并发形态——JS 单线程下覆盖仍是索引
+  // 同步顺序错误的防护）；占用 → 回滚 Memory（不推进 lineage）。
+  const postOccupiedKey = runtime.byAttempt.get(proof.transactionId);
+  if (postOccupiedKey !== undefined && postOccupiedKey !== key) {
+    delete runtime.store.entries[key];
+    runtime.store.updatedAt = Game.time;
+    generationRetirementEvents.writeFailures += 1;
+    generationRetirementEvents.indexConflicts += 1;
+    return { status: "rejected", detail: "generation retirement proof 索引同步前发现 transactionId 占用冲突（已回滚）" };
   }
   runtime.store.entryCount += 1;
   let keys = runtime.byLineage.get(proof.lineageId);
