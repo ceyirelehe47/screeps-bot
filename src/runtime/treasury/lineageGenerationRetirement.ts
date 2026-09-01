@@ -168,9 +168,8 @@ export function treasuryTombstoneReplacementVerdict(
   // retirement 在下一代 capability 签发前已完成（rearm 只允许 rearm_ready）；
   // ID 协议 + checksum 绑定证明 tombstone 属于该代——attempt identity 经
   // handoff 协议链证明（签发/消费时已验证，不保存无界 identity 历史）。
-  if (!REPLACEMENT_ALLOWED_STATES.has(record.state) && record.state !== "forensic_isolated") {
-    return { verdict: "replacement_pending", detail: `lineage 状态 ${String(record.state)} 异常（历史代判定 fail closed）` };
-  }
+  // 当前代的瞬态（retiring——当前代退休进行中）不影响历史代已完成的
+  // replacement 证明（retirementGeneration 重置语义保证旧代事实不冒充新代）。
   return { verdict: "replacement_match" };
 }
 

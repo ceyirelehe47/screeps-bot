@@ -125,10 +125,18 @@ export function classifyTreasuryHandoffRecoveryWindow(input: {
       detail: `intent 已进入 ${String(intent.settlement)}（callback 可能已开始——前向补完成接管）`,
     };
   }
-  if (treasuryHandoffEntryProofMatches(quarantine, record)) {
+  if (quarantine !== undefined) {
+    if (treasuryHandoffEntryProofMatches(quarantine, record)) {
+      return {
+        action: "forward_complete",
+        detail: "intent 已转 quarantine 且 lineage proof 匹配（authority 接管——前向补完成接管）",
+      };
+    }
+    // 本 child 的 quarantine 存在但 lineage proof 不匹配（binding/generation/
+    // lineage 冲突或缺失）——持久状态违反不变量，forensic（不猜测）。
     return {
-      action: "forward_complete",
-      detail: "intent 已转 quarantine 且 lineage proof 匹配（authority 接管——前向补完成接管）",
+      action: "forensic",
+      detail: "child_intent_pending 窗口 quarantine lineage proof 冲突（intent 已转移但 proof 与 handoff facts 不匹配）",
     };
   }
   return {

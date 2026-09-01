@@ -1308,6 +1308,11 @@ export function commitSettledReceipt(
     readonly durableIdentityDigest?: string;
     /** 【第十六轮第十一节】lowlevel attempt 的显式 provenance（proof 链绑定）。 */
     readonly lowlevelSource?: string;
+    /** 【第十八轮 24.4】tr1_ rearm attempt 的 lineage proof（整体携带）。 */
+    readonly lineageId?: string;
+    readonly lineageGeneration?: number;
+    readonly parentTransactionId?: string;
+    readonly lineageBindingDigest?: string;
   },
 ): TreasuryReceiptWriteResult {
   const runtime = loadReceiptStoreRuntime();
@@ -1392,6 +1397,18 @@ export function commitSettledReceipt(
     };
   }
   const commitLevel = receiptProofLevelOfIdentity(identity);
+  // 【第十八轮 24.4】lineage proof 整体透传（4 字段全有或全无——tr1_ receipt
+  // 携带完整 proof；缺失的旧写入只作 replay blocker）。
+  const lineageProofFields =
+    identity?.lineageId !== undefined && identity.lineageGeneration !== undefined
+    && identity.parentTransactionId !== undefined && identity.lineageBindingDigest !== undefined
+      ? {
+          lineageId: identity.lineageId,
+          lineageGeneration: identity.lineageGeneration,
+          parentTransactionId: identity.parentTransactionId,
+          lineageBindingDigest: identity.lineageBindingDigest,
+        }
+      : {};
   const proof: TreasurySettlementProof =
     identityComplete && commitLevel === "lowlevel"
       ? {
@@ -1400,6 +1417,7 @@ export function commitSettledReceipt(
           digest: identity?.digest,
           durableIdentityDigest: identity?.durableIdentityDigest,
           ...(identity?.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
+          ...lineageProofFields,
         }
       : identityComplete
         ? {
@@ -1411,6 +1429,7 @@ export function commitSettledReceipt(
             ...(identity?.authorizationCohortDigest !== undefined
               ? { authorizationCohortDigest: identity.authorizationCohortDigest }
               : {}),
+            ...lineageProofFields,
           }
     : { level: "legacy", settledAtTick: tick };
   store.settled[key] = proof;
@@ -1543,14 +1562,22 @@ export function readTreasuryLifecycle(): TreasuryLifecycleMemory | undefined {
  * 时无需清理。
  */
 let resolutionResetHook: (() => void) | null = null;
-let lineageResetHook: (() => void) | null = null;
+/** 【第十八轮】lineage 族 heap 复位 hook 列表（attemptLineage +
+ * lineageRetirementSummary 都需复位——单槽会被后注册者覆盖，跨测试泄漏
+ * heap 缓存会把写入引到孤儿 store 上）。 */
+const lineageResetHooks: (() => void)[] = [];
 export function registerTreasuryResolutionResetHook(hook: (() => void) | null): void {
   resolutionResetHook = hook;
 }
 
 /** 【第十七轮】attemptLineage 的 heap 复位 hook 注册（避免模块循环依赖）。 */
 export function registerTreasuryLineageResetHook(hook: (() => void) | null): void {
-  lineageResetHook = hook;
+  const index = lineageResetHooks.indexOf(hook);
+  if (hook === null) {
+    if (index >= 0) lineageResetHooks.splice(index, 1);
+    return;
+  }
+  if (index < 0) lineageResetHooks.push(hook);
 }
 
 /** 仅供测试：清除 Treasury 持久状态（receipts + lifecycle + writeFault + quarantine + resolutions + intents）并失效 heap 缓存。 */
@@ -1564,8 +1591,10 @@ export function clearTreasuryPersistenceForTest(): void {
     delete branch.resolutions;
     delete branch.intents;
     delete branch.authorizationFaults;
-    // 【第十七轮】durable attempt lineage 一并清理（含 heap 运行态复位）。
+    // 【第十七轮】durable attempt lineage 一并清理（含 heap 运行态复位）；
+    // 【第十八轮】retirement summary 分支一并清理。
     delete (branch as { attemptLineage?: unknown }).attemptLineage;
+    delete (branch as { lineageRetirementSummaries?: unknown }).lineageRetirementSummaries;
   }
   heapStoreRuntime = null;
   pendingAdmissions.clear();
@@ -1575,7 +1604,7 @@ export function clearTreasuryPersistenceForTest(): void {
   resetTreasuryAuthorizationFaultRuntimeForTest();
   unsealTreasuryAdapterRegistryForTest();
   resolutionResetHook?.();
-  lineageResetHook?.();
+  for (const hook of lineageResetHooks) hook();
   receiptEvents.migrationsExecuted = 0;
   receiptEvents.incompatibleFailures = 0;
   receiptEvents.receiptFullScans = 0;
