@@ -35,11 +35,17 @@ import { readTreasuryIntentEntry, peekTreasuryIntentHealth } from "@/runtime/tre
 import { readTreasuryQuarantineEntry, peekTreasuryQuarantineHealth } from "@/runtime/treasury/quarantine";
 import { readTreasuryAuthorizationFaultEntry, peekTreasuryAuthorizationFaultHealth } from "@/runtime/treasury/authorizationFaults";
 import { readTreasuryWriteFault, validateTreasuryWriteFaultMarkerShape } from "@/runtime/treasury/writeFault";
-import { readTreasurySettlementProof } from "@/runtime/treasury/receipts";
-import { readTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
+import { readTreasurySettlementProof, peekTreasuryReceiptHealth } from "@/runtime/treasury/receipts";
+import { readTreasuryResolutionTombstone, peekTreasuryResolutionStoreHealth } from "@/runtime/treasury/resolutionStore";
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { registerTreasuryLineageResetHook } from "@/runtime/treasury/receipts";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
+import { validateTreasurySemanticLineage } from "@/runtime/treasury/semanticLineageValidation";
+import {
+  peekTreasuryGenerationRetirementHealth,
+  readTreasuryGenerationRetirementProof,
+  releaseOrphanTreasuryGenerationRetirementProofs,
+} from "@/runtime/treasury/generationRetirementAuthority";
 import { registerTreasurySemanticSummarySourceForAssembly } from "@/runtime/treasury/semanticLineageValidation";
 
 export const TREASURY_RETIREMENT_SUMMARY_VERSION = 2;
@@ -286,8 +292,20 @@ export function lookupTreasuryRetirementSummaryByLineageId(lineageId: string): R
   return treasuryBoundedDeepFreezeSnapshot(summary) as Readonly<TreasuryLineageRetirementSummary>;
 }
 
-/** 单条压缩（summary 写入 + read-back → 删除 active record）。 */
+/** 单条压缩（summary 写入 + read-back → 历史代 proof 验证 → 删除 active record → 孤儿 proof 清理）。 */
 function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRecord>): { readonly status: "compacted" } | { readonly status: "rejected"; readonly detail: string } {
+  // ──【第二十轮 11.4】压缩前检查全部相关 store 健康（lineage/summary 自身
+  //    由写入路径 load 承载；此处显式检查 resolution/receipt/exact
+  //    retirement——任一 unhealthy 不压缩）。
+  if (!peekTreasuryResolutionStoreHealth().healthy) {
+    return { status: "rejected", detail: "resolution store unhealthy（compaction fail closed）" };
+  }
+  if (!peekTreasuryReceiptHealth().healthy) {
+    return { status: "rejected", detail: "receipt store unhealthy（compaction fail closed）" };
+  }
+  if (!peekTreasuryGenerationRetirementHealth().healthy) {
+    return { status: "rejected", detail: "exact generation retirement store unhealthy（compaction fail closed）" };
+  }
   // ── 压缩资格（24.10）：终态 + 无任何 pending authority/marker 事实。
   if (record.state !== "chain_committed" && record.state !== "non_rearmable_retired") {
     return { status: "rejected", detail: `非终态（state ${String(record.state)}）` };
@@ -309,14 +327,23 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
   if (marker !== undefined && (marker.transactionId === currentId || marker.transactionId === record.rootTransactionId)) {
     return { status: "rejected", detail: "write-fault marker 尚未清理（pending marker 不压缩）" };
   }
-  // ──【第十九轮 E.6】压缩前验证外部终态证明——record.state 终态本身不足以
-  //    授权删除 active 权威（summary 必须能在 record 消失后独立证明终态）。
+  // ──【第二十轮 11.2/11.3】exact settlement identity 验证：外部终态证明与
+  //    active lineage current 的**完整** exact identity 比较（digest/contract/
+  //    cohort/durable/lowlevel + proof class + lineage 四字段）+ semantic
+  //    lineage validation = match（record.state 终态本身不足以授权删除 active
+  //    权威——summary 必须能在 record 消失后独立证明终态）。
   if (record.state === "chain_committed") {
     const receiptProof = readTreasurySettlementProof(currentId);
+    const expectedClass = record.authorityClass;
     const receiptLineageMatches =
       receiptProof !== undefined &&
       receiptProof.level !== "legacy" &&
+      receiptProof.level === expectedClass &&
       receiptProof.digest === record.currentIdentity.digest &&
+      (receiptProof.contractDigest ?? undefined) === (record.currentIdentity.contractDigest ?? undefined) &&
+      (receiptProof.authorizationCohortDigest ?? undefined) === (record.currentIdentity.authorizationCohortDigest ?? undefined) &&
+      (receiptProof.durableIdentityDigest ?? undefined) === (record.currentIdentity.durableIdentityDigest ?? undefined) &&
+      (receiptProof.lowlevelSource ?? undefined) === (record.currentIdentity.lowlevelSource ?? record.lowlevelSource ?? undefined) &&
       (record.generation >= 1
         ? receiptProof.lineageId === record.lineageId &&
           receiptProof.lineageGeneration === record.generation &&
@@ -324,7 +351,30 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
           receiptProof.lineageBindingDigest === record.bindingDigest
         : receiptProof.lineageId === undefined);
     if (!receiptLineageMatches) {
-      return { status: "rejected", detail: "chain_committed 缺少 matching committed receipt（digest + 完整 lineage proof 与 record 一致）——不压缩" };
+      return { status: "rejected", detail: "chain_committed 缺少 matching committed receipt（完整 exact settlement identity：digest/contract/cohort/durable/lowlevel + proof class + lineage proof 与 record 一致）——不压缩" };
+    }
+    if (record.generation >= 1) {
+      const semantic = validateTreasurySemanticLineage({
+        transactionId: currentId,
+        proof: {
+          lineageId: record.lineageId,
+          lineageGeneration: record.generation,
+          parentTransactionId: record.currentParentTransactionId!,
+          lineageBindingDigest: record.bindingDigest!,
+        },
+        identity: {
+          digest: record.currentIdentity.digest,
+          ...(record.currentIdentity.contractDigest !== undefined ? { contractDigest: record.currentIdentity.contractDigest } : {}),
+          ...(record.currentIdentity.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.currentIdentity.authorizationCohortDigest } : {}),
+          ...(record.currentIdentity.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.currentIdentity.durableIdentityDigest } : {}),
+          ...((record.currentIdentity.lowlevelSource ?? record.lowlevelSource) !== undefined
+            ? { lowlevelSource: record.currentIdentity.lowlevelSource ?? record.lowlevelSource }
+            : {}),
+        },
+      });
+      if (semantic.verdict !== "match") {
+        return { status: "rejected", detail: `chain_committed 的 semantic lineage validation 未通过（${semantic.verdict}）——不压缩` };
+      }
     }
   } else {
     const tombstone = readTreasuryResolutionTombstone(currentId);
@@ -332,7 +382,12 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
       tombstone !== undefined &&
       tombstone.stage === "final" &&
       tombstone.resolution === "not-executed" &&
+      tombstone.proofLevel === record.authorityClass &&
       tombstone.digest === record.currentIdentity.digest &&
+      (tombstone.contractDigest ?? undefined) === (record.currentIdentity.contractDigest ?? undefined) &&
+      (tombstone.authorizationCohortDigest ?? undefined) === (record.currentIdentity.authorizationCohortDigest ?? undefined) &&
+      (tombstone.durableIdentityDigest ?? undefined) === (record.currentIdentity.durableIdentityDigest ?? undefined) &&
+      (tombstone.lowlevelSource ?? undefined) === (record.currentIdentity.lowlevelSource ?? record.lowlevelSource ?? undefined) &&
       (record.generation >= 1
         ? tombstone.lineageId === record.lineageId &&
           tombstone.lineageGeneration === record.generation &&
@@ -340,10 +395,15 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
           tombstone.lineageBindingDigest === record.bindingDigest
         : tombstone.lineageId === undefined);
     if (!tombstoneLineageMatches) {
-      return { status: "rejected", detail: "non_rearmable_retired 缺少 matching final not-executed tombstone（digest + 完整 lineage proof 与 record 一致）——不压缩" };
+      return { status: "rejected", detail: "non_rearmable_retired 缺少 matching final not-executed tombstone（完整 exact settlement identity 与 record 一致）——不压缩" };
     }
     if (!record.retirement.lineagePublished || !record.retirement.authorityReleased || !record.retirement.markerCleaned) {
       return { status: "rejected", detail: "non_rearmable_retired 的 retirement 三段未全部完成（publication/release/marker）——不压缩" };
+    }
+    // 【第二十轮 11.3】当前代 exact retirement proof 必须在位（压缩后历史代
+    // tombstone 的 replacement 由 exact proof 证明）。
+    if (readTreasuryGenerationRetirementProof(record.lineageId, record.generation) === undefined) {
+      return { status: "rejected", detail: "当前代 exact retirement proof 缺失（压缩后历史代证明缺失——不压缩）" };
     }
   }
   // ── summary 写入（先于 active 删除；read-back 完整验证）。
@@ -357,12 +417,16 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
     ? runtime.store.entries[key]
     : undefined;
   if (existing !== undefined) {
-    // 已有同 root summary（幂等压缩重入 / root 重用冲突防御）——identity 必须
-    // 一致，否则拒绝（不覆盖、不删除 active record）。
+    // 已有同 root summary（幂等压缩重入 / root 重用冲突防御）——完整
+    // identity 必须一致（【第二十轮 11.2】幂等比较扩展 finalGeneration/
+    // finalAttemptId/authorityClass），否则拒绝（不覆盖、不删除 active record）。
     const identityMatch =
       existing.lineageId === record.lineageId &&
       existing.rootIdentityDigest === computeTreasuryLineageIdentityDigest(record.rootIdentity) &&
-      existing.terminalState === record.state;
+      existing.terminalState === record.state &&
+      existing.finalGeneration === record.generation &&
+      existing.finalAttemptId === currentId &&
+      (existing.authorityClass ?? undefined) === (record.authorityClass ?? undefined);
     if (!identityMatch) {
       return { status: "rejected", detail: "同 root 已存在不同 identity 的 summary（压缩拒绝——不覆盖安全事实）" };
     }
@@ -396,11 +460,19 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
     runtime.byLineageId.set(published.lineageId, key);
     retirementSummaryEvents.writes += 1;
   }
-  // ── summary 已持久化验证 → 删除 active record（失败零删除已保证顺序）。
+  // ──【第二十轮 11.5】summary 已持久化验证 → 历史 generation proof 可独立
+  //    验证（仍存活 tombstone 的 exact proof 在位）→ 删除 active record（失败
+  //    零删除已保证顺序）→ 清理该 lineage 中 tombstone 已不存在的孤儿 proof
+  //    （per-chain 有界遍历；root 门禁由 summary 承担）。
   const removed = removeTreasuryAttemptLineageRecordForCompaction(record.lineageId);
   if (removed.status === "rejected") {
     return { status: "rejected", detail: `active record 删除失败（summary 保留）: ${removed.detail}` };
   }
+  releaseOrphanTreasuryGenerationRetirementProofs(record.lineageId, (generation, proof) => {
+    // 仍存活的 tombstone 依赖保留（generation 0 的 root tombstone 与 tr1_ child）。
+    void generation;
+    return readTreasuryResolutionTombstone(proof.transactionId) !== undefined;
+  });
   retirementSummaryEvents.compactions += 1;
   return { status: "compacted" };
 }
