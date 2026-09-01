@@ -3166,6 +3166,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
           ...(record.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.authorizationCohortDigest } : {}),
           durableIdentityDigest: durableIdentity,
+          // 【第十八轮 24.1】lowlevel child 的 identity 携带受控 provenance
+          //（resolver publication 的 read-back identity 匹配要求完整）。
+          ...(intentAuthorityLevel === "lowlevel"
+            ? { lowlevelSource: readBack?.lowlevelSource ?? TREASURY_LOWLEVEL_SOURCE_RUNTIME }
+            : {}),
         };
         const activated = activateTreasuryLineageChild(tr1LineageId, childIdentity);
         if (activated.status === "rejected") {

@@ -183,6 +183,9 @@ export type TreasuryFaultResolutionResult =
         | "authority_store_unhealthy"
         | "resolution_store_fatal"
         | "resolution_store_full"
+        /** 【第十八轮 24.1】lineage retirement candidate 持久化/read-back 失败——
+         *  authority/quarantine/marker/pending-release 全部保留（fail closed）。 */
+        | "lineage_publication_pending"
         | "invalid_input"
         /** 【第十三轮】同 id 既有 receipt proof 与当前 attempt identity 冲突。 */
         | "settlement_identity_conflict"
@@ -908,12 +911,14 @@ function prepareTreasuryNotExecutedLineage(
 }
 
 /**
- * 【第十七轮第六节】写 lineage replacement record（final tombstone 写入
- * 成功后调用）：root 无既有 lineage → 创建 retiring candidate（root =
- * 本 attempt）；既有 lineage（本 attempt 是 chain 的 current，即 child 链）
- * → current not-executed 退休（child_active → retiring，retry semantic
- * 更新为本 attempt 的 digest——不可变事实校验按"推进"而非"新建"解释）。
- * 写失败 → authority 与 marker 保留（beginTick 重试 publication）。
+ * 【第十八轮 24.1】写 lineage retirement candidate 并 read-back（**先于
+ * capability 消费、tombstone 写入与 authority release**——candidate 是
+ * root/current 的永久退休权威，可安全先行）：root 无既有 lineage → 创建
+ * retiring candidate；既有 lineage（本 attempt 是 current）→ current
+ * not-executed 退休（child_active → retiring）。幂等重入（已 retiring 且
+ * identity 匹配 → published，不重复推进）；写后从 Memory 实际副本 read-back
+ * 并与 authority identity 完全匹配验证——任一失败返回 pending（调用侧保留
+ * intent/quarantine/marker/pending-release 并返回 lineage_publication_pending）。
  */
 function publishTreasuryNotExecutedLineage(
   authority: TreasuryUnresolvedAuthority,
@@ -949,16 +954,44 @@ function publishTreasuryNotExecutedLineage(
       ...(retrySemanticDigest !== null ? { retrySemanticDigest } : {}),
       ...(rearmable ? {} : { nonRearmReason: retrySemanticDigest === null ? "retry semantic facts 不足（无法证明 child 是 parent 动作的语义重试）" : "non-rearmable" }),
     });
-    return created.status === "rejected" ? { status: "pending" } : { status: "published" };
+    if (created.status === "rejected") return { status: "pending" };
+  } else {
+    if (existing.currentTransactionId === authority.transactionId && existing.state === "retiring") {
+      // 幂等重入：candidate 已持久化（consume/tombstone 写失败后的重试）。
+      // identity 必须仍与 authority 完全匹配（篡改 → pending，fail closed）。
+      const stillMatching =
+        existing.currentIdentity.digest === identity.digest &&
+        existing.currentIdentity.contractDigest === identity.contractDigest &&
+        existing.currentIdentity.authorizationCohortDigest === identity.authorizationCohortDigest &&
+        existing.currentIdentity.durableIdentityDigest === identity.durableIdentityDigest &&
+        existing.authorityClass === authorityClass;
+      return stillMatching ? { status: "published" } : { status: "pending" };
+    }
+    // 既有 chain：本 attempt 是 current（child 退休）——推进 retirement 阶段
+    //（单一权威 helper：清 next-child、三段复位、retirementGeneration 归属
+    // 当前代）。非 child_active 状态由状态机拒绝 → pending（fail closed）。
+    const updated = retireTreasuryLineageCurrentAttempt({
+      lineageId: existing.lineageId,
+      ...(retrySemanticDigest !== null ? { retrySemanticDigest } : {}),
+    });
+    if (updated.status === "rejected") return { status: "pending" };
   }
-  // 既有 chain：本 attempt 是 current（child 退休）或 root（Round 16 backfill
-  // 已建）——推进 retirement 阶段（单一权威 helper：清 next-child、三段复位、
-  // retirementGeneration 归属当前代）。
-  const updated = retireTreasuryLineageCurrentAttempt({
-    lineageId: existing.lineageId,
-    ...(retrySemanticDigest !== null ? { retrySemanticDigest } : {}),
-  });
-  return updated.status === "rejected" ? { status: "pending" } : { status: "published" };
+  // ── read-back（从 Memory 实际副本）：record 存在、current 是本 attempt、
+  //    identity 与 authority 完全匹配——否则视为 publication 失败。
+  const readBackRecord = lookupTreasuryAttemptLineageByAttemptId(authority.transactionId);
+  if (readBackRecord === undefined || readBackRecord.currentTransactionId !== authority.transactionId) {
+    return { status: "pending" };
+  }
+  const identityMatch =
+    readBackRecord.currentIdentity.digest === identity.digest &&
+    readBackRecord.currentIdentity.contractDigest === identity.contractDigest &&
+    readBackRecord.currentIdentity.authorizationCohortDigest === identity.authorizationCohortDigest &&
+    readBackRecord.currentIdentity.durableIdentityDigest === identity.durableIdentityDigest &&
+    readBackRecord.currentIdentity.lowlevelSource === identity.lowlevelSource &&
+    readBackRecord.authorityClass === authorityClass &&
+    readBackRecord.retirementGeneration === readBackRecord.generation &&
+    readBackRecord.retirement.lineagePublished;
+  return identityMatch ? { status: "published" } : { status: "pending" };
 }
 
 /**
@@ -1051,16 +1084,45 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
     countRejected();
     return { status: "rejected", reason: "resolution_store_full", detail: `lineage replacement 预检失败（authority 保持，fail closed）: ${lineagePreparation.detail}` };
   }
-  // staged 第 2 步【第十六轮第十二节】：**先 consume capability**——final
+  // staged 第 2 步【第十八轮 24.1 publication-before-release】：**先持久化
+  // lineage retirement candidate 并 read-back**（candidate 是 root/current 的
+  // 永久退休权威，可安全先行；read-back 含 identity 与 authority 完全匹配
+  // 验证）。失败 → intent/quarantine/marker/pending-release 索引全部保留、
+  // 不写 tombstone、不消费 capability、返回 lineage_publication_pending——
+  // 下一轮从保留的 authority 重建完整 retry facts（不退化为只能
+  // non-rearmable backfill）。
+  const lineagePublication = publishTreasuryNotExecutedLineage(authority, finalProofLevel, lineagePreparation.retrySemanticDigest);
+  if (lineagePublication.status === "pending") {
+    countRejected();
+    return {
+      status: "rejected",
+      reason: "lineage_publication_pending",
+      detail: `lineage retirement candidate 持久化/read-back 失败（authority/quarantine/marker/pending-release 全部保留，下一轮可重试完整 publication——fail closed）`,
+    };
+  }
+  // staged 第 3 步【第十六轮第十二节】：**consume capability**——final
   // tombstone 不可回滚（状态机只允许 exact idempotent），必须保证"final
-  // proof 存在即表示 capability 消费阶段已完成"。consume 失败时零持久副
-  // 作用（不写 tombstone、authority 保留、marker 保留）。
+  // proof 存在即表示 capability 消费阶段已完成"。consume 失败时 lineage
+  // candidate 保留（retiring 权威无害——阻断同 ID 重 prepare），authority 与
+  // marker 保留、不写 tombstone。
   const consumedNow = kernel.consumeReconciliationCapability(input.capability);
   if (consumedNow.status !== "valid") {
     countRejected();
     return { status: "rejected", reason: "invalid_capability", detail: `capability 消费失败（${consumedNow.reason}）: ${consumedNow.detail}——未产生 final tombstone，authority 与 marker 均保留` };
   }
-  // staged 第 3 步：写 final tombstone（capability 已消费——此后任何中断都
+  // marker class-aware 清除与 tr1_ proof 所需的 lineage record（publication
+  // 已成功——record 即当前 attempt 的退休权威）。
+  const lineagePublicationRecord = lookupTreasuryAttemptLineageByAttemptId(authority.transactionId);
+  const lineageProofOfAuthority =
+    lineagePublicationRecord !== undefined && lineagePublicationRecord.currentTransactionId === authority.transactionId
+      ? {
+          ...(lineagePublicationRecord.lineageId !== undefined ? { lineageId: lineagePublicationRecord.lineageId } : {}),
+          ...(lineagePublicationRecord.generation !== undefined ? { lineageGeneration: lineagePublicationRecord.generation } : {}),
+          ...(lineagePublicationRecord.currentParentTransactionId !== undefined ? { parentTransactionId: lineagePublicationRecord.currentParentTransactionId } : {}),
+          ...(lineagePublicationRecord.bindingDigest !== undefined ? { lineageBindingDigest: lineagePublicationRecord.bindingDigest } : {}),
+        }
+      : {};
+  // staged 第 4 步：写 final tombstone（capability 已消费——此后任何中断都
   // 由 beginTick pending-release 补完成，不存在可自动释放但未消费的 proof）。
   const finalWrite = writeTreasuryResolutionTombstone({
     transactionId: authority.transactionId,
@@ -1077,19 +1139,15 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
     ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
     ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
     ...(finalProofLevel === "lowlevel" && authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+    ...lineageProofOfAuthority,
   });
   if (finalWrite.status === "rejected") {
     // consume 成功但 tombstone 写失败：authority 保留（本 tick capability 已
-    // 消费；后续 tick 重新签发 capability 重试——不形成错误终态）。
+    // 消费；后续 tick 重新签发 capability 重试——不形成错误终态；lineage
+    // candidate 保留为退休权威，tombstone 未写 → pendingRelease 索引无项）。
     countRejected();
     return { status: "rejected", reason: "resolution_store_fatal", detail: `final tombstone 写入失败（capability 已消费，authority 保留，后续 tick 可重新签发重试）: ${finalWrite.detail}` };
   }
-  // staged 第 4 步【第十七轮第六节】：写 lineage candidate 并 read-back。
-  // 写失败 → authority 与 marker 保留（beginTick 重试 publication；tombstone
-  // 因无 lineage replacement 被驱逐资格门禁 pin，parent 永久阻断不失效）。
-  const lineagePublication = publishTreasuryNotExecutedLineage(authority, finalProofLevel, lineagePreparation.retrySemanticDigest);
-  // marker class-aware 清除所需的 lineage binding/generation（tr1_ child）。
-  const lineagePublicationRecord = lookupTreasuryAttemptLineageByAttemptId(authority.transactionId);
   // staged 第 5 步：释放 quarantine/intent（中断由恢复补完成）。
   releaseTreasuryQuarantineEntry(authority.transactionId);
   releaseTreasuryIntentEntry(authority.transactionId);
@@ -1130,13 +1188,12 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
       receiptWritten: false, // 绝不写 receipt / committed projection
       sameIdRetryAllowed: false, // 【第十六轮第五节】同 ID 永不可直接重新执行
       actionTick: authority.actionTick,
-      // 【第十七轮第六节】retirement 状态（child ID 只经 opaque capability 交付）。
+      // 【第十七轮第六节】retirement 状态（child ID 只经 opaque capability 交付；
+      // 【第十八轮】publication 已在前置验证成功——此处只区分 rearmable 终态）。
       retirement:
-        lineagePublication.status === "pending"
-          ? "pending_publication"
-          : lineagePreparation.retrySemanticDigest === null
-            ? "complete_non_rearmable"
-            : "complete_rearm_ready",
+        lineagePreparation.retrySemanticDigest === null
+          ? "complete_non_rearmable"
+          : "complete_rearm_ready",
     };
   }
   // marker 清除失败：pending 索引保留、lineage 保持 cleanup-pending（不签发
