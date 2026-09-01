@@ -28,12 +28,13 @@ import {
   readTreasuryAttemptLineageRecord,
   lookupTreasuryAttemptLineageByAttemptId,
   expectedTreasuryLineageAttemptId,
+  deriveTreasuryLineageNextChildTransactionId,
   type TreasuryAttemptLineageRecord,
 } from "@/runtime/treasury/attemptLineage";
 import { parseTreasuryRearmChildTransactionIdV2 } from "@/runtime/treasury/transactionId";
 import { computeTreasuryLineageBindingDigest } from "@/runtime/treasury/lineageBinding";
 import { registerTreasuryRetentionLineageLookupForAssembly } from "@/runtime/treasury/resolutionStore";
-import { lookupTreasuryRetirementSummaryByRoot, peekTreasuryRetirementSummaryHealth } from "@/runtime/treasury/lineageRetirementSummary";
+import { lookupTreasuryRetirementSummaryByLineageId, lookupTreasuryRetirementSummaryByRoot, peekTreasuryRetirementSummaryHealth, type TreasuryLineageRetirementSummary } from "@/runtime/treasury/lineageRetirementSummary";
 
 export type TreasuryTombstoneReplacementVerdict =
   | { readonly verdict: "replacement_match" }
@@ -51,6 +52,11 @@ export interface TreasuryTombstoneReplacementInput {
   readonly proofLevel: string;
   /** 【v7 起携带】tr1_ not-executed tombstone 的 lineage binding proof。 */
   readonly lineageBindingDigest?: string;
+  /** 【第十九轮 E.1】tombstone 自身的完整 lineage proof（record 缺失时按
+   * lineageId 定位 terminal summary 并重演历史代验证）。 */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
 }
 
 /** 允许承担永久 retirement 门禁的 lineage 状态（retiring 进行中除外）。 */
@@ -72,6 +78,53 @@ function bindingOfGeneration(record: TreasuryAttemptLineageRecord, generation: n
     parentTransactionId: parent,
     childTransactionId: child,
   });
+}
+
+/**
+ * 【第十九轮 E.2】压缩后历史 generation 的重演验证（与 active record 等价）：
+ * summary 保留 (lineageId, rootTransactionId, finalGeneration, authorityClass,
+ * terminalState) 精确事实——child ID 的 v2 派生 + checksum 绑定 root、
+ * binding 按 (lineageId, generation, parent 派生 ID, child) 重算、proof class
+ * 与 summary 一致、final 代 not-executed 只与 non_rearmable_retired 相容。
+ * future generation / 错误 lineageId / 错误 binding / 错误 class → conflict；
+ * v1 迁移 summary 缺 authorityClass → missing（不可证明——pin，不猜测）。
+ */
+function verdictOfSummaryProof(
+  summary: Readonly<TreasuryLineageRetirementSummary>,
+  tombstone: Pick<TreasuryTombstoneReplacementInput, "transactionId" | "proofLevel" | "lineageBindingDigest">,
+  generation: number,
+): TreasuryTombstoneReplacementVerdict {
+  if (generation > summary.finalGeneration) {
+    return { verdict: "replacement_conflict", detail: `tombstone generation ${String(generation)} 超过 summary 已闭合的 finalGeneration ${String(summary.finalGeneration)}（未来代不可证明）` };
+  }
+  const expectedId = generation <= 0
+    ? summary.rootTransactionId
+    : deriveTreasuryLineageNextChildTransactionId(summary.lineageId, generation, summary.rootTransactionId);
+  if (expectedId !== tombstone.transactionId) {
+    return { verdict: "replacement_conflict", detail: `tombstone transaction ID 与 summary (lineageId, generation, root) 派生不一致（checksum 绑定 root——错误 lineage/root 不可证明）` };
+  }
+  const expectedParent = generation - 1 <= 0
+    ? summary.rootTransactionId
+    : deriveTreasuryLineageNextChildTransactionId(summary.lineageId, generation - 1, summary.rootTransactionId);
+  const expectedBinding = computeTreasuryLineageBindingDigest({
+    lineageId: summary.lineageId,
+    generation,
+    parentTransactionId: expectedParent,
+    childTransactionId: tombstone.transactionId,
+  });
+  if (tombstone.lineageBindingDigest !== expectedBinding) {
+    return { verdict: "replacement_conflict", detail: "tombstone lineage binding 与 summary (lineageId, generation, parent, child) 重算不一致" };
+  }
+  if (summary.authorityClass === undefined) {
+    return { verdict: "replacement_missing", detail: "v1 迁移 summary 缺 authorityClass（proof class 不可证明——pin，不猜测）" };
+  }
+  if (tombstone.proofLevel !== summary.authorityClass) {
+    return { verdict: "replacement_conflict", detail: `tombstone proof class ${String(tombstone.proofLevel)} 与 summary authority class ${String(summary.authorityClass)} 不匹配` };
+  }
+  if (generation === summary.finalGeneration && summary.terminalState !== "non_rearmable_retired") {
+    return { verdict: "replacement_conflict", detail: `finalGeneration ${String(generation)} 是 committed 代（${summary.terminalState}）——committed 代不存在 not-executed 结局（generation 混用）` };
+  }
+  return { verdict: "replacement_match" };
 }
 
 /**
@@ -101,20 +154,41 @@ export function treasuryTombstoneReplacementVerdict(
     generation = 0;
   }
   if (record === undefined) {
-    // 无 active record：terminal summary（压缩后的 chain）证明 chain 已闭合
-    // ——summary 是永久 root 门禁，历史 not-executed tombstone 可回收。
+    // 【第十九轮 E.1/E.2】active record 缺失：root tombstone 按 root 查询
+    // summary（ID 全局唯一即归属）；v2 child tombstone 依据**自身完整
+    // lineage proof** 按 lineageId 定位 summary 并重演历史代验证（ID 派生 +
+    // checksum 绑定 root、generation ≤ finalGeneration、binding 重算、proof
+    // class、final 代与 terminalState 相容）。
     const summaryHealth = peekTreasuryRetirementSummaryHealth();
     if (!summaryHealth.healthy) {
       return { verdict: "store_unhealthy", detail: summaryHealth.detail ?? "retirement summary store 损坏（retention fail closed）" };
     }
-    const summary = lookupTreasuryRetirementSummaryByRoot(tombstone.transactionId);
-    if (summary !== undefined && (summary.terminalState === "chain_committed" || summary.terminalState === "non_rearmable_retired")) {
+    const rootSummary = lookupTreasuryRetirementSummaryByRoot(tombstone.transactionId);
+    if (rootSummary !== undefined && rootSummary.rootTransactionId === tombstone.transactionId) {
       return { verdict: "replacement_match" };
     }
-    if (parsed === null && tombstone.transactionId.startsWith("tr1_")) {
-      return { verdict: "replacement_missing", detail: "v1 rearm child ID 不可 generation 寻址（无 replacement 证明——永久 pin，不猜测 generation）" };
+    if (parsed === null) {
+      if (tombstone.transactionId.startsWith("tr1_")) {
+        return { verdict: "replacement_missing", detail: "v1 rearm child ID 不可 generation 寻址（无 replacement 证明——永久 pin，不猜测 generation）" };
+      }
+      return { verdict: "replacement_missing", detail: `attempt ${tombstone.transactionId.slice(0, 24)} 无 lineage replacement（Round 16 遗留 / backfill 未完成 / 已迁移隔离）` };
     }
-    return { verdict: "replacement_missing", detail: `attempt ${tombstone.transactionId.slice(0, 24)} 无 lineage replacement（Round 16 遗留 / backfill 未完成 / 已迁移隔离）` };
+    // v2 child：未携带完整 lineage proof 的旧 tombstone 不得借 summary 猜测
+    // 归属（E.4）——继续 pin。
+    if (
+      tombstone.lineageId === undefined || tombstone.lineageGeneration === undefined ||
+      tombstone.parentTransactionId === undefined || tombstone.lineageBindingDigest === undefined
+    ) {
+      return { verdict: "replacement_missing", detail: "v2 child tombstone 缺完整 lineage proof（压缩后不可由 summary 猜测归属——pin）" };
+    }
+    if (tombstone.lineageId !== parsed.lineageId || tombstone.lineageGeneration !== parsed.generation) {
+      return { verdict: "replacement_conflict", detail: "tombstone 自身 lineage proof 与 ID 内嵌 (lineageId, generation) 不一致" };
+    }
+    const summary = lookupTreasuryRetirementSummaryByLineageId(parsed.lineageId);
+    if (summary === undefined) {
+      return { verdict: "replacement_missing", detail: `lineage ${parsed.lineageId.slice(0, 12)} 无 terminal summary（不可定位 replacement——pin）` };
+    }
+    return verdictOfSummaryProof(summary, tombstone, parsed.generation);
   }
   // root 命中时 generation 取 root 代（0）；current 命中取当前代。
   if (parsed === null) {

@@ -35,11 +35,13 @@ import { readTreasuryIntentEntry, peekTreasuryIntentHealth } from "@/runtime/tre
 import { readTreasuryQuarantineEntry, peekTreasuryQuarantineHealth } from "@/runtime/treasury/quarantine";
 import { readTreasuryAuthorizationFaultEntry, peekTreasuryAuthorizationFaultHealth } from "@/runtime/treasury/authorizationFaults";
 import { readTreasuryWriteFault, validateTreasuryWriteFaultMarkerShape } from "@/runtime/treasury/writeFault";
+import { readTreasurySettlementProof } from "@/runtime/treasury/receipts";
+import { readTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { registerTreasuryLineageResetHook } from "@/runtime/treasury/receipts";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
 
-export const TREASURY_RETIREMENT_SUMMARY_VERSION = 1;
+export const TREASURY_RETIREMENT_SUMMARY_VERSION = 2;
 /** 独立硬容量（evidence 记录推导：≤128 × ~250B ≈ 32KB Memory 上界）。 */
 export const TREASURY_RETIREMENT_SUMMARY_MAX_ENTRIES = 128;
 
@@ -61,6 +63,12 @@ export interface TreasuryLineageRetirementSummary {
   /** 最终 attempt ID（chain_committed 的 child / non-rearmable 的 current）。 */
   readonly finalAttemptId: string;
   readonly finalizedAtTick: number;
+  /**
+   * 【第十九轮 E v2】chain 的 authority/proof class——压缩后历史代 tombstone
+   * 的 proof class 与此比较（v1 迁移 summary 缺失 → 历史代 verdict 保守
+   * pin；root 永久门禁不受影响）。
+   */
+  readonly authorityClass?: "identity-bound" | "lowlevel";
 }
 
 export interface TreasuryRetirementSummaryStore {
@@ -129,6 +137,11 @@ function validateSummaryShape(summary: unknown): string | null {
   if (typeof candidate.finalAttemptId !== "string" || candidate.finalAttemptId.length === 0 || candidate.finalAttemptId.length > 128) {
     return "summary.finalAttemptId 非法";
   }
+  // 【第十九轮 E v2】authorityClass 可选（v1 迁移缺失 = 历史代 class 不可
+  // 证明）；存在时必须是受控枚举。
+  if (candidate.authorityClass !== undefined && candidate.authorityClass !== "identity-bound" && candidate.authorityClass !== "lowlevel") {
+    return `summary.authorityClass 非法: ${String(candidate.authorityClass)}`;
+  }
   return null;
 }
 
@@ -187,6 +200,38 @@ function loadSummaryRuntime(forWrite = false): TreasurySummaryRuntime {
     return heapRuntime;
   }
   const store = branch.lineageRetirementSummaries as unknown as TreasuryRetirementSummaryStore;
+  // 【第十九轮 E】v1 → v2 迁移（原子：临时结构验证通过后一次替换；失败
+  // 保留原数据并 fail closed）：v2 只新增可选 authorityClass（v1 summary 无
+  // 来源可补——迁移后历史代 tombstone 的 class 不可证明，verdict 保守 pin；
+  // root 永久门禁不受影响）。迁移零字段变换（version 提升而已）。
+  if (store.version === 1) {
+    // entry 级 schemaVersion 一并提升（v2 只新增可选 authorityClass——纯格式
+    // 升级，零字段变换；任一 entry 形状损坏 → 整体保留原数据 fail closed）。
+    const migratedEntries: Record<string, TreasuryLineageRetirementSummary> = {};
+    for (const [key, summary] of Object.entries(store.entries)) {
+      migratedEntries[key] = { ...summary, schemaVersion: TREASURY_RETIREMENT_SUMMARY_VERSION };
+    }
+    const upgraded: TreasuryRetirementSummaryStore = {
+      version: TREASURY_RETIREMENT_SUMMARY_VERSION,
+      entries: migratedEntries,
+      entryCount: store.entryCount,
+      updatedAt: store.updatedAt,
+    };
+    if (validateSummaryStoreShape(upgraded) === null) {
+      retirementSummaryEvents.fullScans += 1;
+      branch.lineageRetirementSummaries = upgraded as unknown as NonNullable<(typeof branch)["lineageRetirementSummaries"]>;
+      const runtime: TreasurySummaryRuntime = { store: upgraded, fatal: null, published: true, byRoot: new Map(), byLineageId: new Map() };
+      for (const [key, summary] of Object.entries(upgraded.entries)) {
+        runtime.byRoot.set(summary.rootTransactionId, key);
+        runtime.byLineageId.set(summary.lineageId, key);
+      }
+      heapRuntime = runtime;
+      return runtime;
+    }
+    const fatalRuntime: TreasurySummaryRuntime = { store, fatal: "summary store v1→v2 迁移自检失败（原数据保留 fail closed）", published: true, byRoot: new Map(), byLineageId: new Map() };
+    heapRuntime = fatalRuntime;
+    return fatalRuntime;
+  }
   const fatal = validateSummaryStoreShape(store);
   const runtime: TreasurySummaryRuntime = { store, fatal, published: true, byRoot: new Map(), byLineageId: new Map() };
   if (fatal === null) {
@@ -263,6 +308,43 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
   if (marker !== undefined && (marker.transactionId === currentId || marker.transactionId === record.rootTransactionId)) {
     return { status: "rejected", detail: "write-fault marker 尚未清理（pending marker 不压缩）" };
   }
+  // ──【第十九轮 E.6】压缩前验证外部终态证明——record.state 终态本身不足以
+  //    授权删除 active 权威（summary 必须能在 record 消失后独立证明终态）。
+  if (record.state === "chain_committed") {
+    const receiptProof = readTreasurySettlementProof(currentId);
+    const receiptLineageMatches =
+      receiptProof !== undefined &&
+      receiptProof.level !== "legacy" &&
+      receiptProof.digest === record.currentIdentity.digest &&
+      (record.generation >= 1
+        ? receiptProof.lineageId === record.lineageId &&
+          receiptProof.lineageGeneration === record.generation &&
+          receiptProof.parentTransactionId === record.currentParentTransactionId &&
+          receiptProof.lineageBindingDigest === record.bindingDigest
+        : receiptProof.lineageId === undefined);
+    if (!receiptLineageMatches) {
+      return { status: "rejected", detail: "chain_committed 缺少 matching committed receipt（digest + 完整 lineage proof 与 record 一致）——不压缩" };
+    }
+  } else {
+    const tombstone = readTreasuryResolutionTombstone(currentId);
+    const tombstoneLineageMatches =
+      tombstone !== undefined &&
+      tombstone.stage === "final" &&
+      tombstone.resolution === "not-executed" &&
+      tombstone.digest === record.currentIdentity.digest &&
+      (record.generation >= 1
+        ? tombstone.lineageId === record.lineageId &&
+          tombstone.lineageGeneration === record.generation &&
+          tombstone.parentTransactionId === record.currentParentTransactionId &&
+          tombstone.lineageBindingDigest === record.bindingDigest
+        : tombstone.lineageId === undefined);
+    if (!tombstoneLineageMatches) {
+      return { status: "rejected", detail: "non_rearmable_retired 缺少 matching final not-executed tombstone（digest + 完整 lineage proof 与 record 一致）——不压缩" };
+    }
+    if (!record.retirement.lineagePublished || !record.retirement.authorityReleased || !record.retirement.markerCleaned) {
+      return { status: "rejected", detail: "non_rearmable_retired 的 retirement 三段未全部完成（publication/release/marker）——不压缩" };
+    }
+  }
   // ── summary 写入（先于 active 删除；read-back 完整验证）。
   const runtime = loadSummaryRuntime(true);
   if (!runtime.published) publishSummaryStoreToMemory(runtime);
@@ -296,6 +378,9 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
       finalGeneration: record.generation,
       finalAttemptId: currentId,
       finalizedAtTick: Game.time,
+      // 【第十九轮 E v2】chain 的 proof class（压缩后历史代 tombstone 的
+      // class 比较权威）。
+      authorityClass: record.authorityClass,
     });
     runtime.store.entries[key] = published;
     runtime.store.updatedAt = Game.time;

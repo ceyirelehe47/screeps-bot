@@ -752,6 +752,9 @@ function evictExpiredTombstones(store: TreasuryResolutionStore, indexes?: { reso
             stage: entry.stage,
             proofLevel: entry.proofLevel,
             ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
+            ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+            ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+            ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
           }) ?? { verdict: "replacement_missing", detail: "verdict 未注册（保守 pin）" } as TreasuryRetentionReplacementVerdict;
         if (verdict.verdict !== "replacement_match") {
           if (verdict.verdict === "replacement_conflict") {
@@ -905,6 +908,10 @@ export interface TreasuryRetentionTombstoneView {
   readonly stage: string;
   readonly proofLevel: string;
   readonly lineageBindingDigest?: string;
+  /** 【第十九轮 E.1】完整 lineage proof（压缩后按 lineageId 定位 summary）。 */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
 }
 
 let retentionReplacementVerdict: ((tombstone: TreasuryRetentionTombstoneView) => TreasuryRetentionReplacementVerdict) | null = null;
