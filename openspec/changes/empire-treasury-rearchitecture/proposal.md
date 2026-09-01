@@ -220,3 +220,19 @@
 - **Contract source 单一权威**：source 于 build 时确定并进入 contract identity/retry semantic/intent/authorization context；authorization 不写死、execution 不得覆盖（不同 → callback 前拒绝）。
 
 本轮完成后才具备进入 terminal.send adapter 实现、纯 contract plan shadow、authorization shadow、next-tick reconciliation shadow 与零 Game API 端到端演练的条件；本轮仍禁止一切真实 Game 写 API 调用。
+
+
+## Round 20 — Semantic Lineage Validation & Exact Terminal Proofs（第二十轮范围补充）
+
+第十九轮交付的 lineage proof 传播仍存在审查阻断项：proof 只证明"结构相等"不证明"语义真实"；handoff 恢复只比较 lineage 外壳且 beginTick 顺序可能提前删除证据；receipt 幂等遗漏 lineage 字段导致 matching rearm receipt 误判；历史代退休仅凭状态机推断。本轮只关闭这些断链（不推翻既有成果、不接真实 Game writer、不部署）：
+
+- **Semantic Lineage Validator 单一权威**（semanticLineageValidation.ts）：tr1_ 的 child ID 内嵌 lineageId/generation、确定性 parent 派生（gen1 parent=root）、binding 权威重算、active lineage / terminal authority 状态相容性全部重算验证；verdict 区分 match/conflict/insufficient(legacy isolated)/store_unhealthy/no_authority；shape proof 与 semantic proof 两层分离。
+- **Handoff 恢复复用 unified exact authority + beginTick 证据保留顺序**：child_intent_pending 窗口经 resolveTreasuryUnresolvedAuthority 完整一致性判定（class/digest/contract/cohort/durable/lowlevel/postings/outcome/settlement 全维度），lineage handoff 判定先于普通 Intent recovery，双 authority 判定前不删除任何一侧证据。
+- **Exact attempt identity 单一构造层**（exactAttemptIdentity.ts）：安全关键调用点（receipt 幂等、prepared commit 预检、finalized proof 链、resolution 补完成、authorization-fault 幂等、rearm parent identity、三方 verifier 输入）不再手工拼接字段子集。
+- **Receipt 幂等 exact 化与写入门禁**：matching tr1_ receipt 在 global reset 后幂等补完成（修复 lineage 字段遗漏误判 conflict）；tr1_ 新写入强制完整 proof + semantic validation=match（零写 + fatal）；initial 携带 proof 拒绝；validator 未装配 fail closed。
+- **Exact per-generation retirement authority**（generationRetirementAuthority.ts）：每个 final not-executed generation 的可独立验证 proof（三段完成 + 完整 attempt identity），read-back 后才推进 retirement 终态；下一代 capability 以当前代 exact proof 为门禁；硬容量满载 fail closed；tombstone 驱逐/chain 压缩后有界回收。
+- **Historical generation 由 exact proof 证明**：删除"generation < currentGeneration 即已退休"的状态机推断；root/child tombstone replacement 完整身份验证（rootIdentityDigest 五元重算、持久 parent、binding 重算、proof class、exact generation proof）；summary finalGeneration 只是边界不是 membership proof。
+- **Terminal compaction exact settlement identity**：压缩前完整比较 receipt/tombstone ↔ active lineage current 的 digest/contract/cohort/durable/lowlevelSource/proof class/lineage + semantic validation；全部相关 store 健康检查；summary read-back 先于 active 删除。
+- **Committed resolution 语义闭环**：resolver、tombstone 写入、三方 verifier 调用方、not_found finalize、chain_committed 推进全部叠加 semantic validation；写入结果不被忽略；production 散落 startsWith("tr1_") 收敛到 namespace 权威。
+
+本轮完成后才具备进入 terminal.send adapter 纯实现、contract plan shadow、authorization shadow、next-tick reconciliation shadow 与零 Game API 端到端演练的条件；本轮仍禁止一切真实 Game 写 API 调用。

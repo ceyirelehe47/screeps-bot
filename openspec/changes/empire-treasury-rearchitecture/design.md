@@ -1172,3 +1172,192 @@ forward 的 child identity 从验证后的持久事实派生：quarantine（proo
 ### 15.4 summary generation 证明（工作包 E）
 
 active record 压缩后，历史 child tombstone 凭 tombstone 自身完整 lineage proof + summary 的 `(lineageId, rootTransactionId, finalGeneration, authorityClass, terminalState)` 精确重演验证：ID v2 派生 + checksum（绑定 root）、generation ≤ finalGeneration、binding 按 (lineageId, generation, parent=gen-1 派生 ID, child) 重算、proof class 与 summary authorityClass 一致、final 代 not-executed 只与 non_rearmable_retired 相容。无 proof 旧 tombstone、v1 迁移 summary（authorityClass 缺失）、future generation、错误 binding → pin/conflict，不猜测。
+## 16. 第二十轮设计：Semantic Lineage Validation & Exact Terminal Proofs
+
+### 16.1 shape proof 与 semantic proof 的两层分离
+
+第十九轮的 lineageProof.ts 只证明"四字段形状合法 + 两个载体上相等"（shape proof）。本轮新增 semanticLineageValidation.ts（单一权威、版本化、无副作用 + 装配注入只读 source）证明"字段本身语义真实"：
+
+```text
+tr1_ transaction ID
+  ├─ parse v2（legacy 不可解析 ID → legacy isolated，不猜测）
+  ├─ ID 内嵌 (lineageId, generation) === proof 四字段对应项
+  ├─ 从权威 source（active lineage record / terminal summary）取 root，
+  │   重算 expected child ID（v2 派生 + checksum 绑定 root）
+  ├─ expected parent = expectedTreasuryLineageAttemptId(gen-1)，
+  │   proof.parentTransactionId 必须 === expected（gen1 parent=root）
+  ├─ binding = computeTreasuryLineageBindingDigest(lineageId, gen,
+  │   expectedParent, child) 重算比较（不信任载体自带 binding）
+  └─ authority 状态验证（active lineage / terminal summary + exact
+      retirement authority；generation 角色：current / pending_handoff /
+      historical_exact）
+        ▼
+Semantic Lineage Verdict：match / conflict / insufficient(legacy isolated) /
+store_unhealthy / no_authority
+```
+
+消费方（unresolved authority、handoff recovery、capability 签发与
+prevalidation、receipt commit/refresh、resolution tombstone 写入、
+committed 三方 verifier、tombstone replacement、terminal compaction、
+finalized proof）全部复用同一结论；verdict 不得折叠成 undefined/false。
+Store unhealthy 时 semantic validator 一律 fail closed（不返回 match）。
+Retry semantic identity 仍是独立维度（active lineage 验证包含
+retrySemanticDigest 一致性，但不并入 binding digest）。
+
+validator 的 authority source 经装配注入（lineage record reader 由
+attemptLineage 注册、summary reader 由 lineageRetirementSummary 注册、
+exact retirement proof reader 由 generationRetirementAuthority 注册——
+模块单向依赖，receipts/unresolvedAuthority 直接 import validator 不成环；
+readers 未注册时 tr1_ 写入/验证路径 fail closed）。
+
+### 16.2 handoff 恢复复用 unified exact authority + beginTick 证据保留顺序
+
+handoff 恢复不再自行比较 lineage 外壳：child_intent_pending 窗口直接调
+resolveTreasuryUnresolvedAuthority(childId)（或共享同一 authority cohesion
+核心），在其完整一致性（identity 重算、authority level、proof class、
+lowlevelSource、canonical digest、contract/cohort/durable identity、
+postings/kind、lineage semantic proof、execution-fact cohesion、
+settlement/phase）之上叠加 semantic lineage validation 与 record pending
+facts 匹配：
+
+| resolver 结果 | 附加条件 | 判定 |
+|---|---|---|
+| store_unhealthy | — | 保留两侧证据，不动作（pending） |
+| inconsistent | — | forensic（保留全部 authority） |
+| not_found | — | rollback（零释放——两侧均无） |
+| ok | semantic=match、四字段与 record pending facts 一致、authorityClass/lowlevelSource/actionKind/adapterSemanticIdentity 与 record 一致、intent-only + not_started/ready | rollback + 释放 intent |
+| ok | 同上但 quarantine 存在（authorityKind=quarantine）或 executing/更后 | forward_complete（child identity 从 resolver 结果构造） |
+| ok | semantic ≠ match / class / provenance / action kind 冲突 | forensic |
+
+beginTick 顺序固定：lineage handoff 双 authority 判定先于普通 Intent
+recovery（recoverTreasuryLineageHandoffEvidenceAtTickBoundary 在
+recoverTreasuryIntentsAtTickBoundary 之前执行；主 lineage recovery 对
+child_intent_pending 的重入走同一 classifier，幂等）。Intent 与
+Quarantine 并存时，二者完整一致性在任一侧删除前完成。
+
+### 16.3 exact attempt identity 单一构造层
+
+exactAttemptIdentity.ts 成为 prepared/Intent/Quarantine/Receipt/
+Resolution tombstone/unresolved authority/active lineage current/terminal
+proof 的规范 identity 视图的唯一构造实现（维度：transactionId、digest、
+contractDigest、authorizationCohortDigest、durableIdentityDigest、
+lowlevelSource、proof/authority class、lineage 四字段）。relation 对称
+区分 match/conflict/insufficient；一方为 rearm 一方缺 lineage → conflict/
+insufficient（由 transactionId 命名空间决定方向）。安全关键调用点
+（receipt 幂等、prepared commit 预检、finalized intent proof 链、
+resolution 补完成比较、authorization-fault 幂等、rearm parent identity、
+committed 三方 verifier 输入）不得再手工展开字段子集——架构扫描保护。
+marker 的 class-aware 子集视图是明确允许的诊断性简化（不用于 authority
+release / receipt idempotence / compaction / tombstone eviction /
+committed finalization）。
+
+### 16.4 receipt 幂等 exact 化与写入门禁
+
+- 既有 tr1_ receipt 的幂等比较构造完整 exact attempt identity（修复
+  第十九轮把 lineage 四字段丢弃导致 matching rearm receipt 被误判
+  identity_conflict 的缺陷）；proof class 变化同样 conflict。
+- commitSettledReceipt 的 absent 写入路径对 tr1_ 强制：完整 lineage proof
+  形状 + semantic lineage validation = match + active/terminal authority
+  状态允许 commit；否则零写入 + 明确 fatal 结果（调用方进入安全 fault
+  处理）。initial attempt 携带 lineage proof → 拒绝零写。
+- refresh 沿用第十九轮方向门禁并叠加 semantic validation：matching
+  proof 原样保留仅刷新 tick；旧 rearm proof 缺 exact semantic authority →
+  replay blocker（不自动补全）；conflict 不覆盖。
+- validator 未装配（readers 未注册）→ tr1_ production 写入 fail closed。
+
+### 16.5 exact per-generation retirement authority
+
+generationRetirementAuthority.ts（独立持久 store：
+`Memory.runtime.treasury.generationRetirementProofs`，schema v1）：每个
+final not-executed generation 在 retirement 三段全部完成、状态推进前写入
+一条可独立验证的 exact retirement proof：
+
+```text
+{ lineageId, rootTransactionId, rootIdentityDigest, generation,
+  transactionId, parentTransactionId(gen≥1), bindingDigest(gen≥1),
+  digest, contractDigest?, authorizationCohortDigest?,
+  durableIdentityDigest?, lowlevelSource?, authorityClass,
+  retrySemanticDigest?, resolution: "not_executed",
+  retirement: {lineagePublished, authorityReleased, markerCleaned} 全 true,
+  completedAtTick }
+```
+
+- 写入顺序：三段收敛完成 → exact proof 写入 + Memory read-back 验证 →
+  才推进 retiring → rearm_ready/non_rearmable_retired（失败保持
+  retiring，fail closed）；
+- 下一代 capability 门禁：preflight 校验当前 generation N 的 exact proof
+  存在且解析一致，缺失 → 拒绝签发 N+1 capability（Round 18/19 旧数据
+  缺 proof → 同样拒绝/保持 pin，不自动补现代 proof）；
+- 容量：硬容量 384（resolution store 256 tombstone 依赖上界 + active
+  lineage 64 当前代余量），满载 fail closed（不驱逐被依赖 proof、
+  当前 lineage 保持 retiring）；lookup O(1)（扁平 key + heap 索引）；
+- 回收：resolution tombstone 驱逐（verdict match）后释放对应 proof
+  （驱逐方注入 release hook）；chain 压缩后清理该 lineage 中 tombstone
+  已不存在的孤儿 proof（压缩路径有界遍历）。正常 tick 不全扫 proof。
+
+### 16.6 historical generation 由 exact proof 证明（删除状态机推断）
+
+lineageGenerationRetirement.ts 的 verdict 重写：
+
+- active record 历史代（generation < record.generation）：必须命中
+  (lineageId, generation) 的 exact retirement proof 且完整比较
+  （transactionId/parent/binding 派生、proof class、digest 及
+  contract/cohort/durable/lowlevel 维度）才 replacement_match；proof 缺失
+  → replacement_missing（pin）；篡改 → conflict。删除
+  "状态机曾推进 + generation 较旧即 match"的推断。
+- root tombstone：不再仅凭 rootTransactionId 命中 summary——重算
+  rootIdentityDigest（tombstone 的 digest/contract/cohort/durable/
+  lowlevelSource 五元 identity）与 summary 比较 + proofLevel vs
+  summary.authorityClass + terminal 语义 + generation 0 的 exact proof；
+  同 root ID 不同 identity → conflict/pin。
+- summary 历史代（压缩后）：summary 只提供定位与边界
+  （finalGeneration 上界），membership 与 identity 由 exact retirement
+  proof 证明；缺 proof → missing/pin（v1 迁移 summary 同样不猜测）。
+- 当前代：保留三段 + retirementGeneration 归属检查，并叠加持久
+  parentTransactionId 与 record.currentParentTransactionId 的完整比较。
+
+### 16.7 terminal compaction 的 exact settlement identity 验证
+
+压缩（chain_committed / non_rearmable_retired）前在既有门禁之上新增：
+
+- chain_committed：matching committed receipt 与 active lineage current
+  的完整 exact settlement identity 比较（digest/contract/cohort/durable/
+  lowlevelSource + proof class + lineage 四字段）+ semantic lineage
+  validation = match；
+- non_rearmable：matching final not-executed tombstone 的完整 identity
+  比较 + retirement 三段 + 当前代 exact retirement proof 存在 +
+  semantic validation = match；
+- 压缩前检查全部相关 store 健康（lineage/summary/exact retirement/
+  receipt/resolution/intent/quarantine/authorization-fault/marker）；
+- 幂等重入的 existing summary 比较扩展到 finalGeneration/finalAttemptId/
+  authorityClass；
+- 发布顺序固定：exact terminal candidate → summary 写入 + read-back →
+  索引验证 → 历史 generation proof 可独立验证（exact proofs 在位）→
+  才删除 active lineage → 清理孤儿 proof。
+
+### 16.8 committed resolution 的语义验证闭环
+
+- resolver（unresolved authority）：tr1_ authority 归一化叠加 semantic
+  validation——conflict/insufficient(legacy)/no_authority → inconsistent
+  fail closed；lineage/summary/retirement store unhealthy → store_unhealthy；
+- resolving/final tombstone 写入前对 tr1_ 执行 semantic validator（结构
+  完整但语义伪造的四字段不得落盘为现代 proof）；
+- 三方 verifier 的调用方在 receipt↔tombstone↔authority 三组 relation 之上
+  叠加 semantic lineage verdict（三者互相 match ≠ 真实 generation）；
+  authority not_found 的补完成 finalize 同样需要 semantic lineage
+  authority 可验证；
+- chain_committed 推进的写入结果不得被忽略（失败保持可恢复 pending，
+  beginTick 幂等补完成）；receipt 比较扩展为完整 exact identity。
+
+### 16.9 模块边界与迁移
+
+新增窄职责模块：semanticLineageValidation.ts（semantic verdict 单一
+权威）、exactAttemptIdentity.ts（exact identity 构造单一实现）、
+generationRetirementAuthority.ts（exact retirement proof store）。
+lineageHandoff.ts 降级为 consume 期矩阵 + 恢复判定输入的纯决策模块
+（不再自持简化 authority comparison）；散落的 startsWith("tr1_") 全部
+收敛到 transactionId.ts 的 isTreasuryRearmAttemptId（namespace 权威内部
+除外）；legacy v1 child ID / Round 18-19 缺 exact proof 的旧数据一律
+replay blocker / pin / legacy isolated——不猜测、不自动升级、不通过
+延长 retention 掩盖。所有 store 升级保持原子迁移（临时候选 → 全量验证
+→ 一次替换 → 失败保留原 Memory → fail closed）。

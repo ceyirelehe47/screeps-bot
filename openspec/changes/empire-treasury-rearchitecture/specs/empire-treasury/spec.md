@@ -1904,3 +1904,67 @@ summary v2 携带 authorityClass（v1→v2 原子迁移：entry schemaVersion �
 
 - **WHEN** 部署环境 receipt store 仍为 v6/v7 且未 load
 - **THEN** 轻量 health 报 healthy（migration pending），Memory 原样；load 后原子迁移 v8
+
+
+## Requirement: 第二十轮——semantic lineage validation 单一权威
+
+lineage proof 的结构相等（shape proof）与语义真实（semantic proof）是两层独立验证：shape 由 lineageProof 矩阵承载；semantic 由 semanticLineageValidation 单一权威承载（版本化、无副作用、装配注入只读 source）。tr1_ attempt 必须通过 semantic validation：child ID 内嵌 lineageId/generation 与 proof 一致、parent 为确定性上一代 attempt（gen1 parent=root）、binding 由权威算法重算匹配、active lineage 存在时与 record 状态/current/next/history 语义/authority class/lowlevelSource/retry semantic 相容、active lineage 不存在时由 terminal summary + exact retirement authority 证明。verdict 至少区分 match/conflict/insufficient(legacy isolated)/store_unhealthy/no_authority，消费方不得折叠。store unhealthy 时 validator fail closed 不返回 match；legacy 不可解析 ID 与无法语义验证的旧 proof 一律 legacy isolated/replay blocker（不猜测、不自动升级）。
+
+#### Scenario: 四字段一致但共同错误
+
+- **WHEN** Intent 与 Quarantine 的 lineage 四字段完全相同但与 child ID 内嵌 (lineageId, generation) 派生不一致
+- **THEN** semantic validator 返回 conflict（一致复制的错误事实不是证明），resolver 判 inconsistent
+
+## Requirement: 第二十轮——handoff 复用 unified exact authority 且判定前保留证据
+
+beginTick 中 lineage handoff 双 authority 一致性判定先于普通 Intent recovery/cleanup 执行（或等价 pin 机制），Intent 与 Quarantine 并存时二者完整一致性的判定先于任一侧删除。handoff 恢复直接复用 unified resolver 的完整一致性（identity 重算、authority level、proof class、lowlevelSource、canonical digest、contract/cohort/durable identity、postings/kind、lineage semantic proof、execution-fact cohesion、settlement/phase），不得只调用 lineage proof matcher。rollback 仅当 resolver 证明只有 Intent、完整 identity 与 handoff facts 匹配、outcome=not_started、settlement=ready、无 Quarantine/marker/receipt/resolution 等 execution-started 事实；forward 的 child identity 从统一 resolver 结果构造。
+
+#### Scenario: 双 authority 判定前 Intent 不被删除
+
+- **WHEN** child_intent_pending 窗口的 ready Intent 与匹配 Quarantine 并存且 beginTick 执行
+- **THEN** 通用 Intent recovery 不先删除该 Intent，handoff 完整判定后 forward_complete
+
+## Requirement: 第二十轮——exact attempt identity 单一构造
+
+安全关键路径（receipt 幂等、prepared commit 预检、finalized intent proof 链、resolution 补完成、authorization-fault 幂等、rearm parent identity、committed 三方 verifier 输入）的 attempt identity 视图由 exactAttemptIdentity 单一构造实现生成（transactionId + digest + contract/cohort/durable identity + lowlevelSource + proof class + lineage 四字段），调用点不得手工展开部分字段。一方为 rearm 一方缺 lineage → conflict/insufficient；不同 generation/parent/binding → conflict。既有 tr1_ Receipt 在 global reset 后重入 commit 时按完整 exact identity 幂等识别（already_settled_match），不得误判 conflict/insufficient。
+
+#### Scenario: matching tr1_ receipt 重入
+
+- **WHEN** tr1_ child receipt 已写入后 global reset，prepared/commit 路径再次读取同一 receipt
+- **THEN** exact identity match 返回 already_settled_match（或安全 finalization），不进入永久 fault
+
+## Requirement: 第二十轮——receipt 写入边界强制语义 proof
+
+commitSettledReceipt 对 tr1_ 新写入强制完整 lineage proof + semantic lineage validation = match + active/terminal authority 状态允许 commit；否则零写入并返回明确 fatal/blocked 结果。initial attempt 携带 lineage proof 拒绝零写。refresh 保留 matching proof 仅刷新 tick；旧 rearm proof 缺 exact semantic authority 为 replay blocker 不自动补全；conflict 不覆盖。validator 未装配时 tr1_ production 写入 fail closed。
+
+#### Scenario: tr1_ 新 commit 缺 proof
+
+- **WHEN** tr1_ commit 不携带完整 lineage proof 或 binding 重算不匹配
+- **THEN** 零写入、返回 fatal，调用方进入安全 fault 处理
+
+## Requirement: 第二十轮——exact per-generation retirement authority
+
+每个 final not-executed generation 在 retirement 三段全部完成后、状态推进前形成可独立验证的 exact retirement proof（transactionId/generation/parent/binding/完整 attempt identity/authority class/resolution=not-executed/三段完成），持久化并 read-back 后才允许推进；Generation N+1 capability 只有 N 的 exact proof 持久化后才能签发。proof store 有硬容量、满载 fail closed、lookup O(1)、不保存无界数组；回收只发生在依赖（tombstone/active record）消失后。historical generation 的 replacement/eviction 必须命中 exact proof 并完整比较（transactionId/parent/binding/proof class/identity 维度），不得因 generation < currentGeneration 或状态机曾推进而 match；旧数据缺 proof → pin。
+
+#### Scenario: 下一代 capability 门禁
+
+- **WHEN** Generation N retirement 的 exact proof 写入 read-back 失败或缺失
+- **THEN** 不签发 Generation N+1 capability，lineage 保持可恢复状态
+
+## Requirement: 第二十轮——terminal compaction 与 tombstone replacement 的 exact 身份验证
+
+terminal compaction 验证完整 settlement identity（receipt/tombstone ↔ active lineage current exact identity：digest/contract/cohort/durable/lowlevelSource/proof class/lineage 四字段 + semantic validation）；non-rearmable 叠加三段与当前代 exact proof。压缩前检查全部相关 store 健康；summary 写入 read-back 先于 active 删除；满载 fail closed。root tombstone replacement 重算 rootIdentityDigest 与 summary 比较（不只凭 root ID 命中）；child tombstone 验证 ID 解析/lineage/generation/expected parent/持久 parent/binding 重算/proof class/lowlevelSource/完整 attempt identity/exact generation retirement authority；summary finalGeneration 只是边界不是 membership proof。
+
+#### Scenario: 同 digest 不同 contract 不压缩
+
+- **WHEN** chain_committed receipt 与 active lineage current 的 digest 与 lineage 四字段相同但 contractDigest 不同
+- **THEN** 不压缩，active record 保留
+
+## Requirement: 第二十轮——committed resolution 语义闭环与架构收敛
+
+tr1_ 的 resolver 归一化、capability 签发/prevalidation、resolving/final tombstone 写入、三方 verifier 调用方、authority not_found 的补完成 finalize、chain_committed 推进全部叠加 semantic lineage validation；chain_committed 写入结果不被忽略（失败保持可恢复 pending）。production 源码不再散落 raw startsWith("tr1_")（namespace 权威内部除外）；安全关键调用点不再手工构造不完整 attempt identity（架构扫描保护）；production 模块不导入 child ID test helper；所有拒绝路径 Game callback 调用数为 0；本轮不接入真实 writer。
+
+#### Scenario: 三方一致但 semantic 错误
+
+- **WHEN** Receipt/Tombstone/Authority 的 lineage 四字段互相一致但与 child ID 派生/binding 重算冲突
+- **THEN** verifier 调用方拒绝 finalize，authority 保留
