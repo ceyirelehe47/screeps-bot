@@ -84,7 +84,6 @@ import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { validateTreasuryResolutionTombstoneState } from "@/runtime/treasury/resolutionStateSemantics";
 import { validateTreasuryLowlevelSourceField } from "@/runtime/treasury/authorityLevel";
 import { classAwareIdentityOfAttempt } from "@/runtime/treasury/markerAttemptIdentity";
-import { lookupTreasuryAttemptLineageByAttemptId } from "@/runtime/treasury/attemptLineage";
 
 /**
  * 【第十六轮第十一节】resolution tombstone v6（lowlevel proof 绑定显式
@@ -686,8 +685,9 @@ function evictExpiredTombstones(store: TreasuryResolutionStore, indexes?: { reso
     if (entry.stage === "resolving") continue; // resolving 永不驱逐（第九轮 4.10）
     if (entry.resolvedAtTick < Game.time - TREASURY_RESOLUTION_RETENTION_TICKS) {
       if (entry.resolution === "not-executed") {
-        // 驱逐资格 = lineage replacement 完整接管永久 retirement 门禁。
-        const lineage = lookupTreasuryAttemptLineageByAttemptId(entry.transactionId);
+        // 驱逐资格 = lineage replacement 完整接管永久 retirement 门禁（经
+        // 装配注入的 O(1) lookup——模块单向依赖；未注册时保守 pin）。
+        const lineage = retentionLineageLookup?.(entry.transactionId);
         if (lineage === undefined || !lineage.retirement.lineagePublished || !lineage.retirement.authorityReleased || !lineage.retirement.markerCleaned) {
           resolutionStoreEvents.retentionPins += 1;
           continue;
@@ -826,6 +826,24 @@ export function markTreasuryPendingReleaseCompleted(transactionId: string): void
 export function listTreasuryPendingReleaseIds(): readonly string[] {
   if (heapRuntime === null) return [];
   return [...heapRuntime.pendingReleaseIds];
+}
+
+/**
+ * 【第十七轮第十三节】驱逐资格的 lineage 查询注入（模块单向依赖：
+ * resolutionStore 不 import attemptLineage——attemptLineage 模块装配时把
+ * O(1) lookup 注册进来；未注册时（部分单元测试直接构造）视为无 replacement
+ * → pin 保守）。
+ */
+type TreasuryRetentionLineageView = {
+  readonly state: string;
+  readonly retirement: { readonly lineagePublished: boolean; readonly authorityReleased: boolean; readonly markerCleaned: boolean };
+};
+let retentionLineageLookup: ((transactionId: string) => TreasuryRetentionLineageView | undefined) | null = null;
+
+export function registerTreasuryRetentionLineageLookupForAssembly(
+  lookup: ((transactionId: string) => TreasuryRetentionLineageView | undefined) | null,
+): void {
+  retentionLineageLookup = lookup;
 }
 
 // ── 统一 replay horizon（prepare 幂等与 receipt 同一规则） ─────────────────

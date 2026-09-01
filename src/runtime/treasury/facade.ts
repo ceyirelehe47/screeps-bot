@@ -3902,7 +3902,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     consumeTreasuryAuthorization: (token, options) => internalService.consumeTreasuryAuthorization(token, options),
     validateTreasuryAuthorizationForRedeem: (tokens, contract, postings) =>
       internalService.validateTreasuryAuthorizationForRedeem(tokens, contract, postings),
-    prepareTransaction: (input) => internalService.prepareTransaction(input),
+    prepareTransaction: (input, prepareOptions) =>
+      internalService.prepareTransaction(input, prepareOptions),
     executePreparedAction: (input, action, execution) =>
       internalService.executePreparedAction(input, action, execution),
     commitPreparedTransaction: (handle) => internalService.commitPreparedTransaction(handle),

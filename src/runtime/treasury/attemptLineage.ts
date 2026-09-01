@@ -35,6 +35,7 @@ import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSna
 import {
   readTreasuryResolutionTombstone,
   listTreasuryPendingReleaseIds,
+  registerTreasuryRetentionLineageLookupForAssembly,
 } from "@/runtime/treasury/resolutionStore";
 import { registerTreasuryLineageResetHook } from "@/runtime/treasury/receipts";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
@@ -185,11 +186,20 @@ export function resetTreasuryLineageRuntimeForTest(): void {
 // 单向依赖，避免 receipts ↔ attemptLineage 循环 import）。
 registerTreasuryLineageResetHook(resetTreasuryLineageRuntimeForTest);
 
+// 【第十七轮第十三节】retention 驱逐资格的 O(1) lineage lookup 注入（模块
+// 单向依赖：resolutionStore 不 import 本模块——装配时反向注册）。
+registerTreasuryRetentionLineageLookupForAssembly((transactionId) => {
+  const record = lookupTreasuryAttemptLineageByAttemptId(transactionId);
+  return record === undefined ? undefined : { state: record.state, retirement: record.retirement };
+});
+
 // ── heap 运行态（global reset 即丢；首次 load 一次全表验证重建） ───────────
 
 interface TreasuryLineageStoreRuntime {
   readonly store: TreasuryAttemptLineageStore;
   readonly fatal: string | null;
+  /** 空 store 是否已发布到 Memory（读取路径零写缓存——写入前必须发布）。 */
+  published: boolean;
   /** root/current/next O(1) 索引（key = store key，含前缀）。 */
   readonly rootIndex: Map<string, string>;
   readonly currentIndex: Map<string, string>;
@@ -479,20 +489,39 @@ export function validateTreasuryAttemptLineageTransition(
 
 // ── store 运行态 load / 验证 / 索引 ────────────────────────────────────────
 
-function loadLineageStoreRuntime(): TreasuryLineageStoreRuntime {
+/** 空 store 发布到 Memory（写入路径权威初始化——读取路径零写缓存解除）。 */
+function publishLineageStoreToMemory(runtime: TreasuryLineageStoreRuntime): void {
+  const target = ((Memory.runtime ??= {} as NonNullable<Memory["runtime"]>) as unknown as RuntimeMemoryWithLineage);
+  const branch = (target.treasury ??= {});
+  if (branch.attemptLineage === undefined) {
+    branch.attemptLineage = runtime.store as unknown as NonNullable<(typeof branch)["attemptLineage"]>;
+  }
+  runtime.published = true;
+}
+
+function loadLineageStoreRuntime(forWrite = false): TreasuryLineageStoreRuntime {
   if (heapRuntime !== null) return heapRuntime;
   lineageStoreEvents.fullScans += 1;
   const branch = (Memory.runtime as unknown as RuntimeMemoryWithLineage | undefined)?.treasury;
   if (branch?.attemptLineage === undefined) {
-    // 首次写入时才创建空 store；读取路径返回空运行态（零写）。
+    // 读取路径返回空运行态（零写）；写入路径创建空 store 并发布到 Memory
+    //（否则后续写入落在 heap 幽灵对象上——Memory 从未收到权威数据）。
+    const store: TreasuryAttemptLineageStore = {
+      version: TREASURY_LINEAGE_VERSION,
+      entries: {},
+      entryCount: 0,
+      updatedAt: Game.time,
+    };
     heapRuntime = {
-      store: { version: TREASURY_LINEAGE_VERSION, entries: {}, entryCount: 0, updatedAt: 0 },
+      store,
       fatal: null,
+      published: false,
       rootIndex: new Map(),
       currentIndex: new Map(),
       nextChildIndex: new Map(),
       pendingIds: new Set(),
     };
+    if (forWrite) publishLineageStoreToMemory(heapRuntime);
     return heapRuntime;
   }
   const store = branch.attemptLineage as unknown as TreasuryAttemptLineageStore;
@@ -500,6 +529,7 @@ function loadLineageStoreRuntime(): TreasuryLineageStoreRuntime {
   const runtime: TreasuryLineageStoreRuntime = {
     store,
     fatal,
+    published: true,
     rootIndex: new Map(),
     currentIndex: new Map(),
     nextChildIndex: new Map(),
@@ -658,8 +688,8 @@ function writeLineageRecord(candidate: TreasuryAttemptLineageRecord): TreasuryAt
     lineageStoreEvents.writeFailures += 1;
     return { status: "rejected", detail: `拒绝写入语义非法 lineage record: ${stateError}` };
   }
-  const branch = treasuryBranch();
-  const runtime = loadLineageStoreRuntime();
+  const runtime = loadLineageStoreRuntime(true);
+  if (!runtime.published) publishLineageStoreToMemory(runtime);
   if (runtime.fatal !== null) {
     lineageStoreEvents.writeFailures += 1;
     return { status: "rejected", detail: runtime.fatal };

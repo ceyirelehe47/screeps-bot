@@ -39,7 +39,12 @@ export interface TreasuryModernRetrySemanticFacts {
   readonly adapterVersion?: number;
   readonly adapterRegistrationId?: string;
   readonly adapterSemanticIdentity?: string;
-  /** canonical action args 的业务语义文本（contract.canonicalArgsText）。 */
+  /**
+   * canonical action args 的业务语义文本——**不参与 digest**：durable
+   * payload（durableFacts.payload，由 args 派生）已覆盖 args 业务语义且
+   * intent/quarantine 均持久化（canonicalArgsText 仅 heap contract 携带，
+   * parent facts 不可重建）。
+   */
   readonly canonicalArgsText?: string;
   readonly postings: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
   readonly structureDescriptors?: readonly TreasuryStructureBindingDescriptor[];
@@ -80,7 +85,6 @@ export function computeTreasuryModernRetrySemanticDigest(facts: TreasuryModernRe
     `av:${facts.adapterVersion === undefined ? "-" : String(facts.adapterVersion)}`,
     `ar:${facts.adapterRegistrationId === undefined ? "-" : facts.adapterRegistrationId}`,
     `asi:${facts.adapterSemanticIdentity === undefined ? "-" : `${String(facts.adapterSemanticIdentity.length)}:${facts.adapterSemanticIdentity}`}`,
-    `args:${facts.canonicalArgsText === undefined ? "-" : `${String(facts.canonicalArgsText.length)}:${facts.canonicalArgsText}`}`,
     `p:${encodePostings(facts.postings)}`,
     `sd:${facts.structureDescriptors === undefined ? "-" : facts.structureDescriptors.map(descriptorSemanticText).sort().map((text) => `${String(text.length)}:${text}`).join(",")}`,
     `dp:${facts.durablePayload === undefined ? "-" : `${String(facts.durablePayloadVersion ?? 0)}:${facts.durablePayload}`}`,

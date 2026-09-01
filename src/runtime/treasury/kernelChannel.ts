@@ -59,7 +59,10 @@ export interface TreasuryWriterKernel {
     postings: readonly TreasuryPosting[],
   ): { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string; readonly detail: string };
   /** prepare（tentative 接管；actionContracts 执行路径与 test harness）。 */
-  prepareTransaction(input: TreasuryTransactionInput): TreasuryPreparationResult;
+  prepareTransaction(input: TreasuryTransactionInput, prepareOptions?: {
+    /** 【第十七轮第八节】tr1_ rearm child 的 opaque capability（kernel 内部通道）。 */
+    readonly rearmCapability?: unknown;
+  }): TreasuryPreparationResult;
   /** 任意 callback 执行入口（actionContracts 执行路径与 test harness）。 */
   executePreparedAction<TAction extends { ok: boolean }>(
     input: TreasuryTransactionInput,
