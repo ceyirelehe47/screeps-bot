@@ -67,10 +67,7 @@ import {
   isTreasuryRearmAttemptId,
 } from "@/runtime/treasury/transactionId";
 import type { TreasuryWriteFaultMarker } from "@/runtime/treasury/writeFault";
-import {
-  treasuryAttemptIdentityRelation,
-  type TreasuryAttemptIdentity,
-} from "@/runtime/treasury/identityProof";
+import type { TreasuryAttemptIdentity } from "@/runtime/treasury/identityProof";
 import {
   treasuryExactAttemptIdentityOfIdentityInput,
   treasuryExactAttemptIdentityOfReceiptProof,
@@ -800,16 +797,20 @@ export function refreshSettledReceiptForResolution(
         detail: `transactionId ${transactionId.slice(0, 48)} 的刷新 identity 无法构造完整 exact attempt identity（tr1_ 缺 lineage / 维度缺失——防御）`,
       };
     }
-    const relation = treasuryAttemptIdentityRelation(
-      { ...existing.proof, digest: existing.proof.digest ?? attemptExactView.digest },
-      attemptExactView,
-    );
+    // 【第二十一轮 13.1】refresh 统一 proof-class-aware exact relation（与
+    // commit 幂等路径同构——不再使用缺少 proof class 维度的旧 relation 作为
+    // 刷新许可）：legacy 已在上文拦截；proof 与 attempt 的 class/身份维度
+    // （contract/cohort/durable/lowlevel/lineage）任一不同即阻断。
+    const relation = (() => {
+      const proofExact = treasuryExactAttemptIdentityOfReceiptProof(transactionId, existing.proof);
+      return proofExact === null ? ("insufficient" as const) : treasuryExactAttemptIdentityRelation(proofExact, attemptExactView);
+    })();
     if (relation === "conflict") {
       receiptEvents.receiptIdentityConflicts += 1;
       return {
         status: "blocked",
         reason: "identity_conflict",
-        detail: `transactionId ${transactionId.slice(0, 48)} 既有 modern receipt proof 与当前 attempt identity 冲突——拒绝刷新（保持 resolving authority；settledAtTick ${String(existingTick)}）`,
+        detail: `transactionId ${transactionId.slice(0, 48)} 既有 modern receipt proof 与当前 attempt identity 冲突（proof class / contract / cohort / durable / lowlevel / lineage 任一维度）——拒绝刷新（保持 resolving authority；settledAtTick ${String(existingTick)}）`,
       };
     }
     if (relation === "insufficient") {
@@ -821,41 +822,10 @@ export function refreshSettledReceiptForResolution(
       };
     }
     receiptEvents.receiptIdentityMatches += 1;
-    // match：保留既有 proof 身份（identity 成分一致——含 lowlevel provenance 与
-    // 【第十九轮 A.4】lineage proof），仅刷新 settledAtTick。【第十七轮第十五节
-    // v7】level 按事实重算（identity-bound / lowlevel / legacy 三级显式——不再
-    // 写 "modern"）。tr1_ 的既有 proof 必带完整 lineage（lookup 已把缺 proof 的
-    // tr1_ 归一为 legacy_committed），原样透传不降级。
-    const refreshedLevel = receiptProofLevelOfIdentity(existing.proof);
-    const nextProof: TreasurySettlementProof =
-      refreshedLevel === "lowlevel"
-        ? {
-            level: "lowlevel",
-            settledAtTick: tick,
-            digest: existing.proof.digest ?? attemptExactView.digest,
-            durableIdentityDigest: existing.proof.durableIdentityDigest ?? attemptExactView.durableIdentityDigest,
-            ...(existing.proof.lowlevelSource !== undefined ? { lowlevelSource: existing.proof.lowlevelSource } : {}),
-            ...(existing.proof.lineageId !== undefined ? { lineageId: existing.proof.lineageId } : {}),
-            ...(existing.proof.lineageGeneration !== undefined ? { lineageGeneration: existing.proof.lineageGeneration } : {}),
-            ...(existing.proof.parentTransactionId !== undefined ? { parentTransactionId: existing.proof.parentTransactionId } : {}),
-            ...(existing.proof.lineageBindingDigest !== undefined ? { lineageBindingDigest: existing.proof.lineageBindingDigest } : {}),
-          }
-        : refreshedLevel === "identity-bound"
-          ? {
-              level: "identity-bound",
-              settledAtTick: tick,
-              digest: existing.proof.digest ?? attemptExactView.digest,
-              durableIdentityDigest: existing.proof.durableIdentityDigest ?? attemptExactView.durableIdentityDigest,
-              ...(existing.proof.contractDigest !== undefined ? { contractDigest: existing.proof.contractDigest } : {}),
-              ...(existing.proof.authorizationCohortDigest !== undefined
-                ? { authorizationCohortDigest: existing.proof.authorizationCohortDigest }
-                : {}),
-              ...(existing.proof.lineageId !== undefined ? { lineageId: existing.proof.lineageId } : {}),
-              ...(existing.proof.lineageGeneration !== undefined ? { lineageGeneration: existing.proof.lineageGeneration } : {}),
-              ...(existing.proof.parentTransactionId !== undefined ? { parentTransactionId: existing.proof.parentTransactionId } : {}),
-              ...(existing.proof.lineageBindingDigest !== undefined ? { lineageBindingDigest: existing.proof.lineageBindingDigest } : {}),
-            }
-          : { level: "legacy", settledAtTick: tick };
+    // match：只刷新 settledAtTick——既有 proof 的全部身份字段（level/digest/
+    // contract/cohort/durable/lowlevel/lineage）原样保留（13.2，不重算降级、
+    // 不手工重构）。
+    const nextProof: TreasurySettlementProof = { ...existing.proof, settledAtTick: tick };
     if (existingTick === tick) {
       receiptEvents.receiptRefreshes += 1;
       return { status: "refreshed", previousTick: tick };
