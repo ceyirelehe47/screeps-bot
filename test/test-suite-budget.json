@@ -1,19 +1,18 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "2c8ad9e",
-    "suites": 259,
-    "tests": 1856,
-    "passed": 1856,
+    "commit": "79e6c7f",
+    "suites": 260,
+    "tests": 1888,
+    "passed": 1888,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "commit": "2c8ad9e",
-    "suites": 259,
-    "tests": 1856,
-    "passed": 1856,
+    "suites": 260,
+    "tests": 1888,
+    "passed": 1888,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -1318,6 +1317,11 @@
       "budget": 10,
       "risk": "high",
       "rationale": "Round 21 exact current/terminal identity、commit recovery、compaction 四方、300 代生命周期与架构扫描——安全关键矩阵"
+    },
+    "src/runtime/treasury/treasuryRound22Remediation.test.ts": {
+      "baseline": 0,
+      "budget": 32,
+      "tier": "high-risk"
     }
   }
 }
