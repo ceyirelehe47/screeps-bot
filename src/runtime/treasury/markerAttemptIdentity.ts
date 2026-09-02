@@ -33,6 +33,9 @@ export interface TreasuryClassAwareAttemptIdentity {
   readonly lowlevelSource?: string;
   readonly lineageBindingDigest?: string;
   readonly attemptGeneration?: number;
+  /** 【第二十二轮 v4】完整 lineage 维度（tr1_ exact marker 比较用）。 */
+  readonly lineageId?: string;
+  readonly parentTransactionId?: string;
 }
 
 export type TreasuryClassAwareMarkerRelation = "match" | "conflict" | "insufficient";
@@ -106,6 +109,8 @@ export function classAwareIdentityOfAttempt(input: {
   readonly lowlevelSource?: string;
   readonly lineageBindingDigest?: string;
   readonly attemptGeneration?: number;
+  readonly lineageId?: string;
+  readonly parentTransactionId?: string;
 }): TreasuryClassAwareAttemptIdentity {
   const authorityClass =
     input.authorityLevel === "modern"
@@ -127,5 +132,7 @@ export function classAwareIdentityOfAttempt(input: {
     ...(input.lowlevelSource !== undefined ? { lowlevelSource: input.lowlevelSource } : {}),
     ...(input.lineageBindingDigest !== undefined ? { lineageBindingDigest: input.lineageBindingDigest } : {}),
     ...(input.attemptGeneration !== undefined ? { attemptGeneration: input.attemptGeneration } : {}),
+    ...(input.lineageId !== undefined ? { lineageId: input.lineageId } : {}),
+    ...(input.parentTransactionId !== undefined ? { parentTransactionId: input.parentTransactionId } : {}),
   };
 }

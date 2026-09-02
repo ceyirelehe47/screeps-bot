@@ -7,7 +7,7 @@
  * 检查（receipts + resolution tombstone 组合——beginTick 恢复注入）。
  */
 
-import { recordTreasuryWriteFault, classAwareMarkerFieldsOfFacts, TREASURY_WRITE_FAULT_DETAIL_MAX, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
+import { recordTreasuryWriteFault, exactMarkerFieldsOfPreparedRecord, TREASURY_WRITE_FAULT_DETAIL_MAX, type TreasuryWriteFaultPhase } from "@/runtime/treasury/writeFault";
 import {
   outcomeOfTreasuryFaultPhase,
   quarantineTreasuryTransaction,
@@ -34,10 +34,14 @@ export interface TreasuryRecoveryRecord {
   readonly digest: string;
   readonly preparedAtTick: number;
   readonly faultPhase?: TreasuryWriteFaultPhase;
-  /** 【第十七轮】class-aware marker / proof 链继承字段（facade 注入）。 */
+  /** 【第十七轮→第二十二轮 v4】exact marker / proof 链继承字段（facade 注入）。 */
   readonly contractDigest?: string;
+  readonly authorizationCohortDigest?: string;
+  readonly durableIdentityDigest?: string;
   readonly lineageBindingDigest?: string;
   readonly lineageGeneration?: number;
+  readonly lineageId?: string;
+  readonly lineageParentTransactionId?: string;
   state: string;
 }
 
@@ -78,14 +82,17 @@ export function createTreasuryRecoveryCoordinator(deps: TreasuryRecoveryCoordina
       status: "unresolved",
       recordedAt: Game.time,
       ...(detail !== undefined ? { detail: detail.slice(0, TREASURY_WRITE_FAULT_DETAIL_MAX) } : {}),
-      // 【第十七轮第十四节】class-aware attempt identity（contract →
-      // identity-bound；纯低层 → lowlevel + runtime 来源；binding/generation
-      // 由 tr1_ 接管路径注入）。
-      ...classAwareMarkerFieldsOfFacts({
+      // 【第二十二轮 v4】exact marker identity（显式 profile + 完整事实——
+      // contract 路径 modern-contract；纯低层 lowlevel + runtime 来源）。
+      ...(exactMarkerFieldsOfPreparedRecord({
         ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+        ...(record.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.authorizationCohortDigest } : {}),
+        ...(record.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.durableIdentityDigest } : {}),
         ...(record.lineageBindingDigest !== undefined ? { lineageBindingDigest: record.lineageBindingDigest } : {}),
         ...(record.lineageGeneration !== undefined ? { lineageGeneration: record.lineageGeneration } : {}),
-      }),
+        ...(record.lineageId !== undefined ? { lineageId: record.lineageId } : {}),
+        ...(record.lineageParentTransactionId !== undefined ? { parentTransactionId: record.lineageParentTransactionId } : {}),
+      }) ?? {}),
     });
     transferRecordToQuarantine(record, faultPhase);
   };

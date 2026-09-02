@@ -17,7 +17,7 @@ import type {
 } from "@/runtime/treasury/authorization";
 import { postingsWithinAuthorizationScope, TREASURY_AUTHORIZATION_ACTIVE_LIMIT } from "@/runtime/treasury/authorization";
 import type { TreasuryAuthorizationCohortFacts } from "@/runtime/treasury/authorization";
-import { recordTreasuryWriteFault, TREASURY_WRITE_FAULT_DETAIL_MAX } from "@/runtime/treasury/writeFault";
+import { recordTreasuryWriteFault, exactMarkerFieldsOfAttemptFacts, TREASURY_WRITE_FAULT_DETAIL_MAX } from "@/runtime/treasury/writeFault";
 import { writeTreasuryAuthorizationFaultEntry } from "@/runtime/treasury/authorizationFaults";
 import type { TreasuryAuthorityLevel } from "@/runtime/treasury/authorityLevel";
 import { computeTreasuryDurableIdentityDigest } from "@/runtime/treasury/durableIdentity";
@@ -482,10 +482,13 @@ export function createTreasuryAuthorizationLedger(deps: TreasuryAuthorizationLed
           : `unexpected status: ${faultWrite.status}`;
       // 状态已一致回滚，但发布序列中断本身按 internal authorization fault
       // 处理：写入 marker 阻断后续 writer（审计要求显式确认，不静默）。
-      // 【第十三轮第十一节】marker 保存 redemption 故障前已计算的完整
-      // attempt identity（contract/cohort digest + durable identity）——
-      // forensic resolution 的 tombstone 绑定同一 identity；缺失字段的旧
-      // marker 才是 legacy forensic proof。
+      // 【第十三轮第十一节→第二十二轮 v4】marker 保存 redemption 故障前已
+      // 计算的完整 attempt identity（contract/cohort digest + durable
+      // identity）——forensic resolution 的 tombstone 绑定同一 identity。
+      // 【第二十二轮】统一 v4 exact marker（显式 modern-contract profile +
+      // 顶层完整事实——不再写旧式嵌套 attemptIdentity / v2 顶层子集两套
+      // 表示；identity 不完整时降级保留 marker 基础字段（legacy 视图，
+      // relation 判 insufficient fail closed））。
       recordTreasuryWriteFault({
         transactionId: context.transactionId,
         digest: record.contractDigest,
@@ -495,22 +498,17 @@ export function createTreasuryAuthorizationLedger(deps: TreasuryAuthorizationLed
         phase: authorityPublished ? "internal_authorization_fault" : "internal_authorization_fault_forensic",
         status: "unresolved",
         recordedAt: Game.time,
-        ...(record.contractDigest !== undefined || record.cohortDigest !== undefined || faultIdentity !== undefined
-          ? {
-              attemptIdentity: {
-                ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
-                ...(record.cohortDigest !== undefined ? { authorizationCohortDigest: record.cohortDigest } : {}),
-                ...(faultIdentity !== undefined ? { durableIdentityDigest: faultIdentity } : {}),
-              },
-            }
-          : {}),
-        // 【第十七轮第十四节】bundle redemption 是 contract 路径——marker 携带
-        // class-aware 身份（identity-bound；binding/generation 由 rearm bundle
-        // record 注入）。
-        markerVersion: 2,
-        authorityClass: "identity-bound",
-        ...(record.rearmLineageBindingDigest !== undefined ? { lineageBindingDigest: record.rearmLineageBindingDigest } : {}),
-        ...(record.rearmAttemptGeneration !== undefined ? { attemptGeneration: record.rearmAttemptGeneration } : {}),
+        ...(exactMarkerFieldsOfAttemptFacts({
+          // bundle redemption 是 contract 路径——identity-bound；binding/
+          // generation/lineageId 由 rearm bundle record 注入。
+          identityProfile: "modern-contract",
+          ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+          ...(record.cohortDigest !== undefined ? { authorizationCohortDigest: record.cohortDigest } : {}),
+          ...(faultIdentity !== undefined ? { durableIdentityDigest: faultIdentity } : {}),
+          ...(record.rearmLineageId !== undefined ? { lineageId: record.rearmLineageId } : {}),
+          ...(record.rearmLineageBindingDigest !== undefined ? { lineageBindingDigest: record.rearmLineageBindingDigest } : {}),
+          ...(record.rearmAttemptGeneration !== undefined ? { lineageGeneration: record.rearmAttemptGeneration } : {}),
+        }) ?? {}),
         detail: authorityPublished
           ? `原子 redemption 中断并回滚（${String(error instanceof Error ? error.message : error).slice(0, TREASURY_WRITE_FAULT_DETAIL_MAX)}）——状态零变化，marker 阻断后续 writer`
           : `原子 redemption 中断并回滚，但 durable fault authority 写入失败（${faultWriteDetail}）——forensic fail closed：authority 缺失，仅显式 forensic 通道可解除`,

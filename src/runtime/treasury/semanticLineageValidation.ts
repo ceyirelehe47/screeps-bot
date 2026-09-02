@@ -108,6 +108,7 @@ export function resetTreasurySemanticLineageSourcesForTest(): void {
   recordSource = null;
   summarySource = null;
   generationProofSource = null;
+  committedProofSource = null;
 }
 
 /** production 装配状态（未装配时 tr1_ 验证/写入路径 fail closed）。 */
@@ -134,6 +135,51 @@ export type TreasurySemanticLineageGenerationRole =
   | "terminal_current"
   /** summary 存在下的历史代（generation < finalGeneration——由 exact proof 证明）。 */
   | "terminal_historical";
+
+/**
+ * 【第二十二轮第十节】semantic lineage 验证 purpose（显式——安全关键
+ * 调用必须传入，不得以布尔开关或裸 match 表达复杂语义）：
+ *
+ * - handoff：只允许 pending_handoff（在途 child 的受控恢复窗口）；
+ * - current_execution：只允许 current（capability 签发 / callback 执行阶段）；
+ * - committed_settlement：允许 current（状态机允许 commit/recovery）或
+ *   terminal_current（summary terminalState=chain_committed）；historical /
+ *   terminal_historical 的 not-executed proof 永远不能授权 committed；
+ *   同代已存在 exact not-executed retirement proof → conflict；
+ * - not_executed_retirement：允许 current 的 retiring/cleanup 路径，以及
+ *   terminal_current（仅验证已存在 non-rearmable 终态）；committed 终态
+ *   拒绝；
+ * - tombstone_replacement：current 或 historical（需 matching exact
+ *   retirement proof）——不承担 commit 授权；
+ * - historical_diagnostic：只读诊断（全部 role 可读——不得用于写
+ *   Receipt / finalize / release / compaction / capability 签发）。
+ */
+export type TreasurySemanticLineagePurpose =
+  | "handoff"
+  | "current_execution"
+  | "committed_settlement"
+  | "not_executed_retirement"
+  | "tombstone_replacement"
+  | "historical_diagnostic"
+  /**
+   * unresolved authority 归一化读取 gate（resolver 三个 ok 路径共用）：
+   * 验证 authority 的 lineage 语义真实性（防伪造/混用），不授权任何特定
+   * 用途——全部 role 允许；消费方做状态改变时必须另行使用对应 purpose
+   * （capability 签发 / commit / release 各有门禁）。
+   */
+  | "authority_resolution";
+
+/** committed proof 的只读探测 source（facade 装配：receipt + tombstone 组合）。 */
+export interface TreasurySemanticCommittedProofSource {
+  /** "present" = matching committed proof 存在；"absent" = 无；"unknown" = 无法判定（不阻断——coordinator 层必检）。 */
+  probe(transactionId: string): "present" | "absent" | "unknown";
+}
+
+let committedProofSource: TreasurySemanticCommittedProofSource | null = null;
+
+export function registerTreasurySemanticCommittedProofSourceForAssembly(source: TreasurySemanticCommittedProofSource | null): void {
+  committedProofSource = source;
+}
 
 export type TreasurySemanticLineageVerdict =
   | {
@@ -219,16 +265,145 @@ function verifyGenerationProof(
 }
 
 /**
- * semantic lineage validation（单一入口）：
- * - 非 tr1_ 输入：initial attempt 不属于 lineage 语义域 → conflict（调用方
- *   应在 shape 层先行拦截——此处防御）；
- * - tr1_：parse → ID/proof 一致 → parent/binding 派生重算 → active lineage
- *   或 terminal authority 状态验证 → verdict。
+ * semantic lineage validation（单一入口，purpose-aware）：
+ * 主验证（shape → 派生 → authority）后按 purpose 矩阵过滤 generation
+ * role——bare match 不再授权所有用途。purpose 必填（类型层面强制——
+ * 状态改变调用缺 purpose 无法编译；防御性运行时检查见下）。
  */
 export function validateTreasurySemanticLineage(input: {
   readonly transactionId: string;
   readonly proof: TreasuryLineageProofFacts;
   /** attempt identity 维度（可选——class/provenance/历史 proof 的受控比较）。 */
+  readonly identity?: TreasuryExactIdentityFactsInput;
+  /** 【第二十二轮】验证 purpose（必填——无默认值）。 */
+  readonly purpose?: TreasurySemanticLineagePurpose;
+}): TreasurySemanticLineageVerdict {
+  const purpose = input.purpose;
+  if (purpose === undefined) {
+    return {
+      verdict: "store_unhealthy",
+      detail: "semantic lineage 验证缺少 purpose（安全关键调用必须显式声明用途——fail closed）",
+    };
+  }
+  const base = validateTreasurySemanticLineageWithRole(input);
+  if (base.verdict !== "match") return base;
+  const gate = treasurySemanticLineagePurposeGate(purpose, base);
+  if (gate !== null) {
+    return gate.rejectAs === "conflict"
+      ? { verdict: "conflict", detail: gate.detail }
+      : { verdict: "insufficient", detail: gate.detail };
+  }
+  return base;
+}
+
+/** purpose 矩阵 gate：返回 null = 允许；否则按 rejectAs 拒绝（单一权威）。 */
+function treasurySemanticLineagePurposeGate(
+  purpose: TreasurySemanticLineagePurpose,
+  match: {
+    readonly authoritySource: "active" | "terminal";
+    readonly generationRole: TreasurySemanticLineageGenerationRole;
+    readonly record?: Readonly<TreasuryAttemptLineageRecord>;
+    readonly summary?: Readonly<TreasuryLineageRetirementSummary>;
+    readonly transactionId?: string;
+  },
+): { readonly rejectAs: "conflict" | "insufficient"; readonly detail: string } | null {
+  const { generationRole } = match;
+  const roleAllowed =
+    purpose === "historical_diagnostic" || purpose === "authority_resolution"
+      ? true
+      : purpose === "handoff"
+        ? generationRole === "pending_handoff"
+        : purpose === "current_execution"
+          ? generationRole === "current"
+          : purpose === "committed_settlement"
+            ? generationRole === "current" || generationRole === "terminal_current"
+            : purpose === "not_executed_retirement"
+              ? generationRole === "current" || generationRole === "terminal_current"
+              : purpose === "tombstone_replacement"
+                ? generationRole === "current" || generationRole === "historical" || generationRole === "terminal_current" || generationRole === "terminal_historical"
+                : false;
+  if (!roleAllowed) {
+    return {
+      rejectAs: "insufficient",
+      detail: `purpose=${purpose} 不允许 generation role=${generationRole}（historical not-executed proof 不能授权 committed 路径——purpose 矩阵 fail closed）`,
+    };
+  }
+  if (purpose === "committed_settlement") {
+    if (generationRole === "current") {
+      const state = match.record?.state;
+      const stateAllowed = state === "child_active" || state === "chain_committed";
+      if (!stateAllowed) {
+        return {
+          rejectAs: "insufficient",
+          detail: `committed settlement 的 current 状态为 ${String(state)}（不允许 commit/recovery 的阶段——purpose 矩阵 fail closed）`,
+        };
+      }
+      // 同代已存在 exact not-executed retirement proof → 相反结论 conflict。
+      const lineageId = match.record?.lineageId;
+      const generation = match.record?.generation;
+      if (lineageId !== undefined && generation !== undefined && generationProofSource !== null) {
+        const opposite = generationProofSource.read(lineageId, generation);
+        if (opposite !== undefined && opposite.transactionId === match.record?.currentTransactionId) {
+          return {
+            rejectAs: "conflict",
+            detail: `generation ${String(generation)} 已存在 matching exact not-executed retirement proof（相反结论——committed purpose 拒绝）`,
+          };
+        }
+      }
+    } else if (generationRole === "terminal_current") {
+      if (match.summary?.terminalState !== "chain_committed") {
+        return {
+          rejectAs: "insufficient",
+          detail: `committed settlement 的 terminal current 状态为 ${String(match.summary?.terminalState)}（仅 chain_committed 可证明）`,
+        };
+      }
+    }
+  }
+  if (purpose === "not_executed_retirement") {
+    if (generationRole === "current") {
+      const state = match.record?.state;
+      if (state === "child_active" || state === "chain_committed") {
+        return {
+          rejectAs: "conflict",
+          detail: "chain_committed/child_active 的 current 不允许 not-executed retirement（已进入 committed 轨道——相反结论）",
+        };
+      }
+      const stateAllowed = state === "retiring" || state === "non_rearmable_retired" || state === "rearm_ready";
+      if (!stateAllowed) {
+        return {
+          rejectAs: "insufficient",
+          detail: `not-executed retirement 的 current 状态为 ${String(state)}（retiring/cleanup 之外不允许）`,
+        };
+      }
+    } else if (generationRole === "terminal_current") {
+      if (match.summary?.terminalState !== "non_rearmable_retired") {
+        return {
+          rejectAs: "insufficient",
+          detail: `not-executed retirement 的 terminal current 状态为 ${String(match.summary?.terminalState)}（仅验证已存在 non-rearmable 终态）`,
+        };
+      }
+    }
+    // matching committed proof（receipt/tombstone，facade 装配的组合探测）。
+    if (committedProofSource !== null && match.record !== undefined) {
+      const committed = committedProofSource.probe(match.record.currentTransactionId);
+      if (committed === "present") {
+        return {
+          rejectAs: "conflict",
+          detail: "同 attempt 存在 matching committed proof（相反结论——not-executed retirement 拒绝）",
+        };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * 主验证（role 判定权威——purpose 包装的内部实现；历史调用方迁移期间
+ * 保持导出，新代码一律走 validateTreasurySemanticLineage）。
+ */
+function validateTreasurySemanticLineageWithRole(input: {
+  readonly transactionId: string;
+  readonly proof: TreasuryLineageProofFacts;
   readonly identity?: TreasuryExactIdentityFactsInput;
 }): TreasurySemanticLineageVerdict {
   const { transactionId, proof, identity } = input;

@@ -323,18 +323,19 @@ function receiptProofLevelOfIdentity(identity: {
 }
 
 /**
- * 【第二十轮 9.3/9.4/9.5】tr1_ receipt 的 semantic lineage 写入门禁（commit
- * 写入与 refresh 共用）：完整 lineage proof + exact identity（digest+durable）
- * + semantic validation = match 是写入/刷新的前提；validator 未装配（authority
- * source 未注册）同样 fail closed——绝不乐观写入。返回 null = 通过；
- * conflict=true 时调用方按 identity_conflict 归类（binding/parent/generation
- * 与权威重算冲突），否则 insufficient_proof。
+ * 【第二十轮 9.3/9.4/9.5→第二十二轮第十节】tr1_ receipt 的 semantic
+ * lineage 写入门禁（commit 写入与 refresh 共用）：完整 lineage proof +
+ * exact identity（digest+durable）+ purpose-aware semantic validation =
+ * match 是写入/刷新的前提；validator 未装配（authority source 未注册）
+ * 同样 fail closed——绝不乐观写入。commit 与 refresh 均为 committed
+ * settlement 路径（refresh 属 release-trusted 链路——不得以布尔开关放宽
+ * generation role）。返回 null = 通过；conflict=true 时调用方按
+ * identity_conflict 归类，否则 insufficient_proof。
  */
 function tr1ReceiptSemanticGate(
   transactionId: string,
   identity: TreasuryExactIdentityFactsInput | undefined,
   identityLineageComplete: boolean,
-  requireCommitEligibleGeneration: boolean,
 ): { readonly detail: string; readonly conflict: boolean } | null {
   if (!isTreasuryRearmAttemptId(transactionId)) return null;
   if (!identityLineageComplete || identity?.digest === undefined || identity.durableIdentityDigest === undefined) {
@@ -353,6 +354,7 @@ function tr1ReceiptSemanticGate(
       lineageBindingDigest: identity.lineageBindingDigest!,
     },
     identity,
+    purpose: "committed_settlement",
   });
   if (semantic.verdict !== "match") {
     receiptEvents.receiptProofLevelRejections += 1;
@@ -360,25 +362,6 @@ function tr1ReceiptSemanticGate(
       conflict: semantic.verdict === "conflict",
       detail: `tr1_ receipt 的 semantic lineage validation 未通过（${describeTreasurySemanticLineageVerdict(semantic)}）——零写入（fail closed）`,
     };
-  }
-  if (requireCommitEligibleGeneration) {
-    // 【9.3】active lineage/handoff 状态允许 commit：在途 child（pending
-    // handoff）与历史代不得写 committed receipt；terminal summary 必须是
-    // chain_committed（non-rearmable 终态不存在 committed receipt）。
-    if (semantic.generationRole === "pending_handoff" || semantic.generationRole === "historical" || semantic.generationRole === "terminal_historical") {
-      receiptEvents.receiptProofLevelRejections += 1;
-      return {
-        conflict: false,
-        detail: `tr1_ receipt commit 的 generation 角色 ${semantic.generationRole} 不允许（在途 child / 历史代——active lineage/handoff 状态不允许 commit）`,
-      };
-    }
-    if (semantic.authoritySource === "terminal" && semantic.summary?.terminalState !== "chain_committed") {
-      receiptEvents.receiptProofLevelRejections += 1;
-      return {
-        conflict: false,
-        detail: "terminal summary 是 non-rearmable 终态（not-executed chain——不存在 committed receipt 语义）",
-      };
-    }
   }
   return null;
 }
@@ -755,7 +738,7 @@ export function refreshSettledReceiptForResolution(
   //（ID 派生/parent/binding/authority 状态冲突——含 validator 未装配）→
   // blocked（fail closed，不覆盖既有 proof、不乐观写入）；semantic conflict
   // 归类 identity_conflict（binding/parent/generation 与权威重算冲突）。
-  const refreshSemanticBlock = tr1ReceiptSemanticGate(transactionId, identity, identityLineageComplete, false);
+  const refreshSemanticBlock = tr1ReceiptSemanticGate(transactionId, identity, identityLineageComplete);
   if (refreshSemanticBlock !== null) {
     if (refreshSemanticBlock.conflict) {
       receiptEvents.receiptIdentityConflicts += 1;
@@ -1269,6 +1252,55 @@ export function readTreasurySettlementProof(transactionId: string): Readonly<Tre
   return undefined;
 }
 
+/**
+ * 【第二十二轮第八节】release-trusted receipt 读取（与 replay-readable 的
+ * normalized lookup 明确分离）：
+ *
+ * - 触发 Receipt store 完整 load/migration（version / metadata /
+ *   entryCount / nextExpiry / 全部 key / 全部 value / proof 等级矩阵）——
+ *   每 heap 生命周期首次一次有界全表扫描，随后 heap 缓存，同 global 后续
+ *   单条读取 O(1)；
+ * - store 任一无关 entry 损坏 / 版本未知 / fatal → store_unhealthy（绝不
+ *   返回 trusted proof——单条可解释 proof 只够 replay-readable 阻断重放，
+ *   不足以释放 Authority、关闭 Lineage 或压缩 Summary）；
+ * - legacy proof（数字 / level=legacy / tr1_ 缺 lineage 字段）→
+ *   legacy_insufficient（replay-only，不参与 release）。
+ */
+export type TreasuryTrustedReceiptLookup =
+  | { readonly status: "trusted_proof"; readonly proof: TreasurySettlementProof }
+  | { readonly status: "absent" }
+  | { readonly status: "legacy_insufficient"; readonly detail: string }
+  | { readonly status: "store_unhealthy"; readonly detail: string };
+
+export function lookupTreasuryTrustedSettledReceipt(transactionId: string): TreasuryTrustedReceiptLookup {
+  const runtime = loadReceiptStoreRuntime();
+  if (runtime.fatal !== null) {
+    return { status: "store_unhealthy", detail: `receipt store fail-closed: ${runtime.fatal}` };
+  }
+  const store = runtime.store;
+  const key = encodeReceiptKey(transactionId);
+  if (!Object.prototype.hasOwnProperty.call(store.settled, key)) {
+    return { status: "absent" };
+  }
+  const value = store.settled[key];
+  if (typeof value === "number") {
+    return { status: "legacy_insufficient", detail: "legacy 数字 proof（replay-only——不参与 release 信任）" };
+  }
+  if (value.level === "legacy") {
+    return { status: "legacy_insufficient", detail: "legacy 等级 proof（replay-only——不参与 release 信任）" };
+  }
+  if (
+    isTreasuryRearmAttemptId(transactionId) &&
+    (value.lineageId === undefined ||
+      value.lineageGeneration === undefined ||
+      value.parentTransactionId === undefined ||
+      value.lineageBindingDigest === undefined)
+  ) {
+    return { status: "legacy_insufficient", detail: "tr1_ proof 缺 lineage 四字段（replay-only 降级——不参与 release 信任）" };
+  }
+  return { status: "trusted_proof", proof: value };
+}
+
 export type TreasuryReceiptAdmission =
   | { readonly status: "admitted" }
   | { readonly status: "already_settled"; readonly firstSettledAtTick: number }
@@ -1506,7 +1538,7 @@ export function commitSettledReceipt(
     (identity?.parentTransactionId !== undefined ? 1 : 0) +
     (identity?.lineageBindingDigest !== undefined ? 1 : 0);
   if (isTreasuryRearmAttemptId(transactionId)) {
-    const semanticBlock = tr1ReceiptSemanticGate(transactionId, identity, commitLineageFieldCount === 4, true);
+    const semanticBlock = tr1ReceiptSemanticGate(transactionId, identity, commitLineageFieldCount === 4);
     if (semanticBlock !== null) {
       return { status: "fatal", detail: semanticBlock.detail };
     }
