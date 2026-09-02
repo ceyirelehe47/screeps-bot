@@ -22,6 +22,7 @@ import {
 } from "@/runtime/treasury/authorizationFaults";
 import {
   clearTreasuryWriteFaultMarkerForResolution,
+  clearTreasuryForensicMarkerForAcknowledgedRollback,
   readTreasuryWriteFault,
 } from "@/runtime/treasury/writeFault";
 import {
@@ -418,7 +419,7 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
         };
       }
       if (treasuryAttemptIdentityRelation(existing, markerAttempt) === "match") {
-        clearTreasuryWriteFaultMarkerForResolution({
+        clearTreasuryForensicMarkerForAcknowledgedRollback({
           transactionId: marker.transactionId,
           digest: marker.digest,
           ...(marker.authorityClass !== undefined ? { authorityClass: marker.authorityClass } : {}),
@@ -471,7 +472,7 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
     if (finalWrite.status === "rejected") {
       return { status: "rejected", reason: "resolution_store_fatal", detail: `final tombstone 写入失败（forensic marker 保留，可重试）: ${finalWrite.detail}` };
     }
-    clearTreasuryWriteFaultMarkerForResolution({
+    clearTreasuryForensicMarkerForAcknowledgedRollback({
       transactionId: marker.transactionId,
       digest: marker.digest,
       ...(marker.authorityClass !== undefined ? { authorityClass: marker.authorityClass } : {}),

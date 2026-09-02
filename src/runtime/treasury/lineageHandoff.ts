@@ -145,6 +145,7 @@ export function classifyTreasuryHandoffAuthorityWindow(input: {
       parentTransactionId: authority.parentTransactionId,
       lineageBindingDigest: authority.lineageBindingDigest,
     },
+    purpose: "handoff",
     identity: {
       digest: authority.digest,
       ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),

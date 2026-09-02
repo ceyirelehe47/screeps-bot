@@ -59,10 +59,15 @@ import {
   registerTreasuryResolutionResetHook,
 } from "@/runtime/treasury/receipts";
 import {
-  clearTreasuryWriteFaultMarkerForResolution,
   readTreasuryWriteFault,
   TREASURY_EXECUTION_UNKNOWN_PHASES,
 } from "@/runtime/treasury/writeFault";
+import {
+  dischargeTreasuryMarkerForAttempt,
+  treasuryMarkerDischargeCompletesAttemptPhase,
+  treasuryMarkerDischargeExpectedOfFacts,
+} from "@/runtime/treasury/markerDischarge";
+import { treasuryMarkerExactIdentityRelation } from "@/runtime/treasury/markerExactIdentity";
 import { releaseTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { releaseTreasuryIntentEntry } from "@/runtime/treasury/intents";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
@@ -1084,6 +1089,7 @@ function semanticLineageVerdictOfTombstone(entry: TreasuryResolutionTombstone): 
       parentTransactionId: entry.parentTransactionId,
       lineageBindingDigest: entry.lineageBindingDigest,
     },
+    purpose: entry.resolution === "committed" ? "committed_settlement" : "not_executed_retirement",
     identity: {
       digest: entry.digest,
       ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
@@ -1110,26 +1116,34 @@ function semanticLineageVerdictOfTombstone(entry: TreasuryResolutionTombstone): 
  *   记录独立诊断、不伪造 authority。
  */
 function validatePendingReleaseMarkerCompletion(
-  marker: { readonly transactionId: string; readonly digest: string; readonly phase: string; readonly attemptIdentity?: { readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string } },
+  marker: { readonly transactionId: string; readonly digest: string; readonly phase: string; readonly markerProtocol?: number; readonly markerVersion?: number; readonly identityProfile?: string; readonly authorityClass?: string; readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string; readonly lowlevelSource?: string; readonly lineageId?: string; readonly lineageGeneration?: number; readonly attemptGeneration?: number; readonly parentTransactionId?: string; readonly lineageBindingDigest?: string; readonly attemptIdentity?: { readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string } },
   entry: TreasuryResolutionTombstone,
 ): string | null {
   if (marker.transactionId !== entry.transactionId || marker.digest !== entry.digest) {
     return `marker 属于另一 attempt（marker ${marker.transactionId.slice(0, 48)}/${marker.digest.slice(0, 16)}，tombstone ${entry.transactionId.slice(0, 48)}/${entry.digest.slice(0, 16)}）`;
   }
-  if (marker.attemptIdentity === undefined) {
-    return "marker 缺少 attemptIdentity（旧 proof 证明不足——不得据以清除）";
-  }
-  const markerAttempt: TreasuryAttemptIdentity = {
-    digest: marker.digest,
-    ...(marker.attemptIdentity.contractDigest !== undefined ? { contractDigest: marker.attemptIdentity.contractDigest } : {}),
-    ...(marker.attemptIdentity.authorizationCohortDigest !== undefined
-      ? { authorizationCohortDigest: marker.attemptIdentity.authorizationCohortDigest }
-      : {}),
-    ...(marker.attemptIdentity.durableIdentityDigest !== undefined ? { durableIdentityDigest: marker.attemptIdentity.durableIdentityDigest } : {}),
-  };
-  const relation = treasuryAttemptIdentityRelation(entry, markerAttempt);
-  if (relation !== "match") {
-    return `marker attemptIdentity 与 tombstone ${relation}（contract/cohort/durable identity 关系不满足 match）`;
+  // 【第二十二轮第六节】identity 检查改用统一 marker exact relation（顶层
+  // class-aware v2/v3/v4 marker 均可证明——不再强制旧式嵌套
+  // attemptIdentity；v1 legacy marker 同 transaction 无法证明 → 由 relation
+  // 判 insufficient fail closed）。phase 兼容矩阵保留。
+  const markerRelation = treasuryMarkerExactIdentityRelation(
+    treasuryMarkerDischargeExpectedOfFacts({
+      transactionId: entry.transactionId,
+      digest: entry.digest,
+      proofClass: entry.proofLevel,
+      ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+      ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+      ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+      ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+      ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+      ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+      ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
+      ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
+    }),
+    marker,
+  );
+  if (markerRelation.kind !== "match") {
+    return `marker 与 tombstone 的 exact relation=${markerRelation.kind}（${markerRelation.detail}）`;
   }
   // phase 与 not-executed 结论兼容矩阵：preExecution tombstone 只配
   // internal authorization fault 类 phase；普通 not-executed 只配
@@ -1139,17 +1153,6 @@ function validatePendingReleaseMarkerCompletion(
     : TREASURY_EXECUTION_UNKNOWN_PHASES.has(marker.phase);
   if (!phaseCompatible) {
     return `marker phase ${marker.phase} 与 not-executed 结论不兼容（preExecution=${String(entry.preExecution === true)} 的合法 phase 类不匹配）`;
-  }
-  // tombstone proof level 与 marker identity 兼容：marker 携带完整现代身份
-  // （contract+cohort+durable）时 tombstone 须为 identity-bound；仅 durable 时
-  // 须为 lowlevel 或 identity-bound（relation match 已保证身份一致，此处防
-  // 御 proof level 降级冒充）。
-  const markerModernComplete =
-    marker.attemptIdentity.contractDigest !== undefined &&
-    marker.attemptIdentity.authorizationCohortDigest !== undefined &&
-    marker.attemptIdentity.durableIdentityDigest !== undefined;
-  if (markerModernComplete && entry.proofLevel !== "identity-bound") {
-    return `marker 携带完整现代 attempt identity 而 tombstone proof level 为 ${String(entry.proofLevel)}（proof 等级不兼容）`;
   }
   return null;
 }
@@ -1283,21 +1286,30 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
       //    均为幂等操作；finalize 经状态机校验）。
       releaseTreasuryQuarantineEntry(transactionId);
       releaseTreasuryIntentEntry(transactionId);
-      clearTreasuryWriteFaultMarkerForResolution(
-        classAwareIdentityOfAttempt({
+      // 【第二十二轮第七节】committed cleanup 持久顺序：discharge（read-back）
+      // 未完成时不得 finalize、不得移除 resolving 索引——final committed
+      // 绝不与当前 attempt matching marker 并存。
+      const committedDischarge = dischargeTreasuryMarkerForAttempt(
+        treasuryMarkerDischargeExpectedOfFacts({
           transactionId,
           digest: entry.digest,
-          authorityLevel: entry.proofLevel === "lowlevel" ? "lowlevel" : entry.proofLevel === "identity-bound" ? "modern" : undefined,
-          contractDigest: entry.contractDigest,
-          authorizationCohortDigest: entry.authorizationCohortDigest,
-          durableIdentityDigest: entry.durableIdentityDigest,
-          lowlevelSource: entry.lowlevelSource,
-          // 【第十九轮 A.3】staged recovery 的 marker 清除同样携带 lineage 维度
-          //（child marker 不得被 parent proof 清除）。
+          proofClass: entry.proofLevel,
+          ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+          ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+          ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+          ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+          ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+          ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+          ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
           ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
-          ...(entry.lineageGeneration !== undefined ? { attemptGeneration: entry.lineageGeneration } : {}),
         }),
       );
+      if (!treasuryMarkerDischargeCompletesAttemptPhase(committedDischarge.outcome)) {
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
       const finalEntry: TreasuryResolutionTombstone = { ...entry, stage: "final" };
       const transition = validateTreasuryResolutionTombstoneTransition(entry, finalEntry);
       if (transition.status !== "allowed_finalize") {
@@ -1356,17 +1368,30 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
         resolutionStoreEvents.markerCleanupBlockers += 1;
         continue;
       }
-      clearTreasuryWriteFaultMarkerForResolution(
-        classAwareIdentityOfAttempt({
+      // 【第二十二轮第六节】marker 补完成改用统一 exact relation +
+      // discharge（不再强制旧式嵌套 attemptIdentity——顶层 class-aware
+      // v2/v3/v4 marker 均可证明）。未完成不移除 pending 索引。
+      const notExecutedDischarge = dischargeTreasuryMarkerForAttempt(
+        treasuryMarkerDischargeExpectedOfFacts({
           transactionId: entry.transactionId,
           digest: entry.digest,
-          authorityLevel: entry.proofLevel === "lowlevel" ? "lowlevel" : entry.proofLevel === "identity-bound" ? "modern" : undefined,
-          contractDigest: entry.contractDigest,
-          authorizationCohortDigest: entry.authorizationCohortDigest,
-          durableIdentityDigest: entry.durableIdentityDigest,
-          lowlevelSource: entry.lowlevelSource,
+          proofClass: entry.proofLevel,
+          ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+          ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+          ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+          ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+          ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+          ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+          ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
+          ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
         }),
       );
+      if (!treasuryMarkerDischargeCompletesAttemptPhase(notExecutedDischarge.outcome)) {
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
       runtime.pendingReleaseIds.delete(transactionId);
       resolutionStoreEvents.recovered += 1;
       report.completedRelease += 1;
@@ -1424,17 +1449,29 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
     // quarantine 与 intent 身份一致，一并释放安全）。
     releaseTreasuryQuarantineEntry(transactionId);
     releaseTreasuryIntentEntry(transactionId);
-    clearTreasuryWriteFaultMarkerForResolution(
-      classAwareIdentityOfAttempt({
+    // 【第二十二轮第六节】authority 释放后的 marker 清理同样经
+    // discharge + read-back——未完成不移除 pending 索引。
+    const authorityPresentDischarge = dischargeTreasuryMarkerForAttempt(
+      treasuryMarkerDischargeExpectedOfFacts({
         transactionId,
         digest: entry.digest,
-        authorityLevel: authority.authorityLevel,
-        contractDigest: authority.contractDigest,
-        authorizationCohortDigest: authority.authorizationCohortDigest,
-        durableIdentityDigest: authority.durableIdentityDigest,
-        lowlevelSource: authority.lowlevelSource,
+        proofClass: authority.authorityLevel,
+        ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+        ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
+        ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+        ...(authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+        ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+        ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+        ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
+        ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
       }),
     );
+    if (!treasuryMarkerDischargeCompletesAttemptPhase(authorityPresentDischarge.outcome)) {
+      resolutionStoreEvents.faulted += 1;
+      report.markerCleanupBlocked += 1;
+      resolutionStoreEvents.markerCleanupBlockers += 1;
+      continue;
+    }
     runtime.pendingReleaseIds.delete(transactionId);
     resolutionStoreEvents.recovered += 1;
     report.completedRelease += 1;

@@ -46,8 +46,16 @@ import {
   type TreasuryGenerationProofSource,
 } from "@/runtime/treasury/semanticLineageValidation";
 import { registerTreasuryGenerationProofReleaseForAssembly } from "@/runtime/treasury/resolutionStore";
+import {
+  TREASURY_IDENTITY_PROFILES,
+  treasuryProofClassOfIdentityProfile,
+  validateTreasuryIdentityProfileFacts,
+  treasuryIdentityProfileOfFacts,
+} from "@/runtime/treasury/identityProfile";
 
-export const TREASURY_GENERATION_RETIREMENT_VERSION = 1;
+export const TREASURY_GENERATION_RETIREMENT_VERSION = 2;
+/** v1（Round 20 exact proof，无 identityProfile）——确定性迁移到 v2。 */
+const TREASURY_GENERATION_RETIREMENT_LEGACY_VERSION = 1;
 /** 硬容量（evidence 记录推导：256 tombstone 依赖上界 + 64 active 当前代 + 余量）。 */
 export const TREASURY_GENERATION_RETIREMENT_MAX_ENTRIES = 384;
 
@@ -56,7 +64,10 @@ const DIGEST_PATTERN = /^[0-9a-f]{16}$/;
 
 /** exact per-generation retirement proof（可独立验证的该代退休权威）。 */
 export interface TreasuryGenerationRetirementProof {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
+  /** 【第二十二轮第十一节】显式 identity profile（v2 必带——禁止 optional
+   * 字段反向推断等级；legacy-replay / forensic-isolated 不参与自动协议）。 */
+  readonly identityProfile: import("@/runtime/treasury/identityProfile").TreasuryIdentityProfile;
   /** 16hex lineage 身份（与 active record / summary 同源）。 */
   readonly lineageId: string;
   readonly rootTransactionId: string;
@@ -113,6 +124,8 @@ export const generationRetirementEvents = {
   orphanReleases: 0,
   /** 【第二十一轮 10.3】全局 transactionId 唯一性冲突计数。 */
   indexConflicts: 0,
+  /** 【第二十二轮】v1→v2 迁移自检失败计数。 */
+  incompatibleFailures: 0,
 };
 
 export function resetTreasuryGenerationRetirementRuntimeForTest(): void {
@@ -253,6 +266,23 @@ export function validateTreasuryGenerationRetirementProofShape(proof: unknown): 
   if (candidate.schemaVersion !== TREASURY_GENERATION_RETIREMENT_VERSION) {
     return `proof.schemaVersion 非法（${String(candidate.schemaVersion)}）`;
   }
+  if (!TREASURY_IDENTITY_PROFILES.has(candidate.identityProfile as never)) {
+    return `proof.identityProfile 非法枚举（${String(candidate.identityProfile).slice(0, 32)}）`;
+  }
+  if (
+    candidate.identityProfile !== "legacy-replay" &&
+    treasuryProofClassOfIdentityProfile(candidate.identityProfile) !== candidate.authorityClass
+  ) {
+    return "proof.identityProfile 与 authorityClass 不满足唯一合法组合";
+  }
+  const profileError = validateTreasuryIdentityProfileFacts(candidate.identityProfile, {
+    digest: candidate.digest,
+    contractDigest: candidate.contractDigest,
+    authorizationCohortDigest: candidate.authorizationCohortDigest,
+    durableIdentityDigest: candidate.durableIdentityDigest,
+    lowlevelSource: candidate.lowlevelSource,
+  });
+  if (profileError !== null) return `proof v2 profile 矩阵失败: ${profileError}`;
   if (typeof candidate.lineageId !== "string" || !DIGEST_PATTERN.test(candidate.lineageId)) {
     return "proof.lineageId 非法（须 16 小写 hex）";
   }
@@ -316,7 +346,7 @@ function publishGenerationRetirementStoreToMemory(runtime: TreasuryGenerationRet
 
 function validateGenerationRetirementStoreShape(store: TreasuryGenerationRetirementStore): string | null {
   if (!store || typeof store !== "object") return "generation retirement store 非对象";
-  if (store.version !== TREASURY_GENERATION_RETIREMENT_VERSION) {
+  if (store.version !== TREASURY_GENERATION_RETIREMENT_VERSION && store.version !== TREASURY_GENERATION_RETIREMENT_LEGACY_VERSION) {
     return `generation retirement store 版本未知（${String(store.version)}，期望 ${String(TREASURY_GENERATION_RETIREMENT_VERSION)}）——fail closed`;
   }
   if (!store.entries || typeof store.entries !== "object") return "generation retirement store.entries 非对象";
@@ -354,7 +384,43 @@ function loadGenerationRetirementRuntime(forWrite = false): TreasuryGenerationRe
     if (forWrite) publishGenerationRetirementStoreToMemory(heapRuntime);
     return heapRuntime;
   }
-  const store = branch.generationRetirementProofs as unknown as TreasuryGenerationRetirementStore;
+  let store = branch.generationRetirementProofs as unknown as TreasuryGenerationRetirementStore;
+  // 【第二十二轮 11.7】v1 → v2 确定性迁移（identityProfile 从字段推导）：
+  // - modern 三元组 + durable → modern-contract；
+  // - lowlevel（source + durable，无 contract/cohort）→ lowlevel；
+  // - digest + durable、contract/cohort 同时缺失 → legacy-replay（隔离——
+  //   不自动获得 execution/settlement 权限，由消费方 profile gate 拒绝）；
+  // - partial（contract XOR cohort / lowlevel 维度不完整 / 缺 digest）→
+  //   整 store fail closed（原 Memory 保留）。
+  // 迁移临时结构 + 全量重验证 + 成功后一次替换（失败保留原 store replay-only）。
+  if (store.version === TREASURY_GENERATION_RETIREMENT_LEGACY_VERSION) {
+    generationRetirementEvents.fullScans += 1;
+    const migrated: TreasuryGenerationRetirementStore = {
+      version: TREASURY_GENERATION_RETIREMENT_VERSION,
+      entries: {},
+      entryCount: 0,
+      updatedAt: Game.time,
+    };
+    let migrationError: string | null = null;
+    for (const [key, proof] of Object.entries(store.entries)) {
+      const profile = treasuryIdentityProfileOfFacts(proof);
+      if (profile === null) {
+        migrationError = `v1→v2 迁移推导失败（${key.slice(0, 28)}：partial/矛盾字段——整 store fail closed，原数据保留 replay-only）`;
+        break;
+      }
+      migrated.entries[key] = { ...(proof as object), schemaVersion: TREASURY_GENERATION_RETIREMENT_VERSION, identityProfile: profile } as TreasuryGenerationRetirementProof;
+      migrated.entryCount += 1;
+    }
+    const migratedShapeError = migrationError ?? validateGenerationRetirementStoreShape(migrated);
+    if (migratedShapeError !== null) {
+      heapRuntime = { store, fatal: `GRA v1→v2 迁移自检失败: ${migratedShapeError}（原数据保留 fail closed）`, published: true, byLineage: new Map(), byAttempt: new Map() };
+      generationRetirementEvents.incompatibleFailures = (generationRetirementEvents.incompatibleFailures ?? 0) + 1;
+      return heapRuntime;
+    }
+    // 原子替换（原 v1 store 不再读取）。
+    store = migrated;
+    (branch as { generationRetirementProofs?: TreasuryGenerationRetirementStore }).generationRetirementProofs = migrated;
+  }
   const shapeError = validateGenerationRetirementStoreShape(store);
   // 【第二十一轮 10.3】索引重建不得依赖 Map.set 覆盖——同 transactionId 出现
   // 在两个不同 key（含 root ID 出现在两个不同 lineage）→ 整 store unhealthy。

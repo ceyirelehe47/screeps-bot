@@ -73,6 +73,17 @@ import {
   type TreasuryResolutionProofLevel,
 } from "@/runtime/treasury/resolutionStore";
 import { isTreasuryRearmAttemptId } from "@/runtime/treasury/transactionId";
+import {
+  openTreasuryResolutionCleanup,
+  markTreasuryResolutionCleanupStage,
+  completeTreasuryResolutionCleanup,
+} from "@/runtime/treasury/resolutionCleanupJournal";
+import {
+  dischargeTreasuryMarkerForAttempt,
+  treasuryMarkerDischargeCompletesAttemptPhase,
+  treasuryMarkerDischargeExpectedOfFacts,
+} from "@/runtime/treasury/markerDischarge";
+import { treasuryIdentityProfileOfProofClass } from "@/runtime/treasury/identityProfile";
 import { validateTreasurySemanticLineage } from "@/runtime/treasury/semanticLineageValidation";
 import {
   createTreasuryAttemptLineageRecord,
@@ -155,6 +166,10 @@ export type TreasuryFaultResolutionResult =
         | "complete_non_rearmable"
         | "pending_cleanup"
         | "pending_publication";
+      /** 【第二十二轮 17.3】当前 attempt 已完成但其它 attempt 的 write-fault
+       * marker 仍锁定全局 writer（unrelated global lock 事实——与 attempt
+       * resolution 状态正交）。 */
+      readonly globalWriteAdmissionStillLocked?: boolean;
     }
   | {
       readonly status: "already_resolved";
@@ -189,6 +204,10 @@ export type TreasuryFaultResolutionResult =
         /** 【第十八轮 24.1】lineage retirement candidate 持久化/read-back 失败——
          *  authority/quarantine/marker/pending-release 全部保留（fail closed）。 */
         | "lineage_publication_pending"
+        /** 【第二十二轮第七节】committed resolution 的 marker discharge 未完成
+         *  （conflict/insufficient/store unhealthy/delete failed）——authority 与
+         *  resolving tombstone 保留，beginTick journal 恢复幂等重试。 */
+        | "marker_cleanup_blocked"
         | "invalid_input"
         /** 【第十三轮】同 id 既有 receipt proof 与当前 attempt identity 冲突。 */
         | "settlement_identity_conflict"
@@ -239,6 +258,7 @@ function semanticLineageVerdictOfAuthorityFacts(authority: {
       parentTransactionId: authority.parentTransactionId,
       lineageBindingDigest: authority.lineageBindingDigest,
     },
+    purpose: "committed_settlement",
     identity: {
       digest: authority.digest,
       ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
@@ -772,6 +792,25 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     countRejected();
     return { status: "rejected", reason: "resolution_store_fatal", detail: `resolving tombstone 写入失败: ${resolvingWrite.detail}` };
   }
+  // 【第二十二轮第七节】committed cleanup journal entry：settlement proof
+  // （resolving tombstone）持久化即创建——四个持久阶段（marker discharge /
+  // authority release / outcome finalization / lineage finalization）的
+  // pending 权威，global reset 后从 Memory 重建。
+  openTreasuryResolutionCleanup({
+    transactionId: authority.transactionId,
+    digest: authority.digest,
+    resolution: "committed",
+    identityProfile: treasuryIdentityProfileOfProofClass(resolvingProofLevel) ?? "legacy-replay",
+    proofClass: resolvingProofLevel,
+    ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+    ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
+    ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+    ...(authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+    ...(authority.lineageId !== undefined ? { lineageId: authority.lineageId } : {}),
+    ...(authority.lineageGeneration !== undefined ? { lineageGeneration: authority.lineageGeneration } : {}),
+    ...(authority.parentTransactionId !== undefined ? { parentTransactionId: authority.parentTransactionId } : {}),
+    ...(authority.lineageBindingDigest !== undefined ? { lineageBindingDigest: authority.lineageBindingDigest } : {}),
+  });
   // 【第十轮 3.12.8】capability 消费时点：staged resolution intent（resolving
   // tombstone）写入成功后才消费——此前任何拒绝都不烧掉 capability；此后
   // 中断由 durable staged state 跨 reset 幂等恢复（不依赖旧 capability）。
@@ -853,25 +892,42 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
       detail: `committed proof 三方验证失败（${committedVerdict.status}）: ${committedVerdict.detail}——authority 与 resolving tombstone 保留（beginTick 恢复幂等重验）`,
     };
   }
-  // staged 第 5-7 步：释放 quarantine/intent → 清匹配 marker（class-aware）
-  // → finalize。
-  releaseTreasuryQuarantineEntry(authority.transactionId);
-  releaseTreasuryIntentEntry(authority.transactionId);
-  clearTreasuryWriteFaultMarkerForResolution(
-    classAwareIdentityOfAttempt({
+  // staged 第 5-7 步【第二十二轮 7.3】：marker discharge（read-back）→ 释放
+  // quarantine/intent → read-back 确认 not_found → finalize。discharge 先于
+  // release：marker 清除时 Authority 仍在，可继续阻断 writer；即使清 marker
+  // 后中断，Intent/Quarantine 仍阻断——不形成"Authority 已删、Marker 无法
+  // 证明"的孤儿状态。
+  const committedDischarge = dischargeTreasuryMarkerForAttempt(
+    treasuryMarkerDischargeExpectedOfFacts({
       transactionId: authority.transactionId,
       digest: authority.digest,
-      authorityLevel: authority.authorityLevel,
-      contractDigest: authority.contractDigest,
-      authorizationCohortDigest: authority.authorizationCohortDigest,
-      durableIdentityDigest: authority.durableIdentityDigest,
-      lowlevelSource: authority.lowlevelSource,
-      // 【第十九轮 A.3】class-aware marker relation 的 lineage 维度（对照
-      // not-executed 路径——child marker 不得被 parent proof 清除）。
+      proofClass: resolvingProofLevel,
+      ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+      ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
+      ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+      ...(resolvingProofLevel === "lowlevel" && authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+      ...(authority.lineageId !== undefined ? { lineageId: authority.lineageId } : {}),
+      ...(authority.lineageGeneration !== undefined ? { lineageGeneration: authority.lineageGeneration } : {}),
+      ...(authority.parentTransactionId !== undefined ? { parentTransactionId: authority.parentTransactionId } : {}),
       ...(authority.lineageBindingDigest !== undefined ? { lineageBindingDigest: authority.lineageBindingDigest } : {}),
-      ...(authority.lineageGeneration !== undefined ? { attemptGeneration: authority.lineageGeneration } : {}),
     }),
   );
+  if (!treasuryMarkerDischargeCompletesAttemptPhase(committedDischarge.outcome)) {
+    // marker 清理未完成：authority 与 resolving tombstone 保留（beginTick
+    // journal 恢复幂等重试 discharge）；不释放、不 finalize。
+    countRejected();
+    return {
+      status: "rejected",
+      reason: "marker_cleanup_blocked",
+      detail: `committed resolution 的 marker discharge 未完成（${committedDischarge.outcome}: ${committedDischarge.detail}）——authority 保留，恢复稍后重试`,
+    };
+  }
+  markTreasuryResolutionCleanupStage(authority.transactionId, "marker_discharge", committedDischarge.outcome);
+  releaseTreasuryQuarantineEntry(authority.transactionId);
+  releaseTreasuryIntentEntry(authority.transactionId);
+  if (resolveTreasuryUnresolvedAuthority(authority.transactionId).status === "not_found") {
+    markTreasuryResolutionCleanupStage(authority.transactionId, "authority_release");
+  }
   const finalizeWrite = writeTreasuryResolutionTombstone({
     transactionId: authority.transactionId,
     digest: authority.digest,
@@ -901,6 +957,12 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     };
   }
   recordTreasuryResolutionEvent("committed");
+  markTreasuryResolutionCleanupStage(authority.transactionId, "outcome_finalization");
+  if (!isTreasuryRearmAttemptId(authority.transactionId)) {
+    // initial attempt 无 lineage 终态阶段（not_applicable）——journal 直接完成。
+    markTreasuryResolutionCleanupStage(authority.transactionId, "lineage_finalization");
+    completeTreasuryResolutionCleanup(authority.transactionId);
+  }
   // 【第十八轮 24.3】【第十九轮 A.6】【第二十轮 13.6】resolution-as-committed 后
   // tr1_ child 的 lineage 最终 chain-committed：receipt 已是 committed 权威——
   // 推进前按**完整 exact settlement identity**（digest/contract/cohort/durable/
@@ -933,6 +995,9 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
           // 写入失败：保持 child_active（可恢复 pending——beginTick 的
           // commit-pending 补完成按同一 matching receipt 幂等重试）。
           recordTreasuryResolutionEvent("chainCommitPendingRetries");
+        } else {
+          markTreasuryResolutionCleanupStage(authority.transactionId, "lineage_finalization");
+          completeTreasuryResolutionCleanup(authority.transactionId);
         }
       }
     }
@@ -942,6 +1007,9 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     resolution: "committed",
     transactionId: authority.transactionId,
     receiptWritten: true,
+    // 【第二十二轮 17.3】unrelated marker 场景：当前 attempt complete，但
+    // Treasury 全局 write lock 仍被另一 fault 持有（明确表达两个事实）。
+    globalWriteAdmissionStillLocked: committedDischarge.globalWriteAdmissionStillLocked,
     sameIdRetryAllowed: false, // receipt 已刷新：同 id 重放命中 already_settled（防重放）
     actionTick: authority.actionTick,
     settledAtTick: Game.time,
@@ -1304,39 +1372,78 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
     countRejected();
     return { status: "rejected", reason: "resolution_store_fatal", detail: `final tombstone 写入失败（capability 已消费，authority 保留，后续 tick 可重新签发重试）: ${finalWrite.detail}` };
   }
-  // staged 第 5 步：释放 quarantine/intent（中断由恢复补完成）。
-  releaseTreasuryQuarantineEntry(authority.transactionId);
-  releaseTreasuryIntentEntry(authority.transactionId);
-  // staged 第 6 步【第十七轮第十四节】：identity-aware 清 marker——检查清除
-  // 结果：只有 marker 不存在或 matching marker 成功清除才标记 pending-release
-  // 完成、lineage 进入 rearm-ready。conflict/insufficient → tombstone 与
-  // pending 索引保留、lineage 保持 cleanup-pending、返回结构化状态。
-  const markerCleared = clearTreasuryWriteFaultMarkerForResolution(
-    classAwareIdentityOfAttempt({
+  // 【第二十二轮第七节】not-executed cleanup journal entry（settlement
+  // proof = final tombstone 持久化即创建——四个持久阶段的 pending 权威）。
+  openTreasuryResolutionCleanup({
+    transactionId: authority.transactionId,
+    digest: authority.digest,
+    resolution: "not-executed",
+    identityProfile: treasuryIdentityProfileOfProofClass(finalProofLevel) ?? "legacy-replay",
+    proofClass: finalProofLevel,
+    ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+    ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
+    ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+    ...(finalProofLevel === "lowlevel" && authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+    ...(authority.lineageId !== undefined ? { lineageId: authority.lineageId } : {}),
+    ...(authority.lineageGeneration !== undefined ? { lineageGeneration: authority.lineageGeneration } : {}),
+    ...(authority.parentTransactionId !== undefined ? { parentTransactionId: authority.parentTransactionId } : {}),
+    ...(authority.lineageBindingDigest !== undefined ? { lineageBindingDigest: authority.lineageBindingDigest } : {}),
+  });
+  // staged 第 5 步【第二十二轮 7.4】：marker discharge（read-back）先于
+  // authority release——marker 清除时 Authority 仍在；中断后 Intent/Quarantine
+  // 仍阻断。discharge 未完成 → tombstone 与 pending 索引保留、lineage 保持
+  // cleanup-pending、返回结构化 pending 状态（beginTick journal 幂等重试）。
+  const notExecutedDischarge = dischargeTreasuryMarkerForAttempt(
+    treasuryMarkerDischargeExpectedOfFacts({
       transactionId: authority.transactionId,
       digest: authority.digest,
-      authorityLevel: authority.authorityLevel,
-      contractDigest: authority.contractDigest,
-      authorizationCohortDigest: authority.authorizationCohortDigest,
-      durableIdentityDigest: authority.durableIdentityDigest,
-      lowlevelSource: authority.lowlevelSource,
-      // 【第十七轮第十四节】tr1_ child marker 携带 lineage binding 与
-      // generation——清除 proof 必须同样携带（从 lineage record 取）。
-      ...(lineagePublicationRecord?.bindingDigest !== undefined
-        ? { lineageBindingDigest: lineagePublicationRecord.bindingDigest }
+      proofClass: finalProofLevel,
+      ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
+      ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
+      ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
+      ...(finalProofLevel === 'lowlevel' && authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+      ...(isTreasuryRearmAttemptId(authority.transactionId) && lineagePublicationRecord?.lineageId !== undefined
+        ? { lineageId: lineagePublicationRecord.lineageId }
         : {}),
-      ...(lineagePublicationRecord?.generation !== undefined
-        ? { attemptGeneration: lineagePublicationRecord.generation }
+      ...(isTreasuryRearmAttemptId(authority.transactionId) && lineagePublicationRecord?.generation !== undefined
+        ? { lineageGeneration: lineagePublicationRecord.generation }
+        : {}),
+      ...(isTreasuryRearmAttemptId(authority.transactionId) && lineagePublicationRecord?.currentParentTransactionId !== undefined
+        ? { parentTransactionId: lineagePublicationRecord.currentParentTransactionId }
+        : {}),
+      ...(isTreasuryRearmAttemptId(authority.transactionId) && lineagePublicationRecord?.bindingDigest !== undefined
+        ? { lineageBindingDigest: lineagePublicationRecord.bindingDigest }
         : {}),
     }),
   );
-  // marker 不存在或已清除 → 三段收敛（【第十九轮 C.7】pending-release 索引
-  // 移除与 retirement 完成共享同一阶段事实——converge 完成才移除）。
-  const markerAbsent = readTreasuryWriteFault() === undefined || readTreasuryWriteFault()?.transactionId !== authority.transactionId;
-  if (markerCleared || markerAbsent) {
+  if (!treasuryMarkerDischargeCompletesAttemptPhase(notExecutedDischarge.outcome)) {
+    recordTreasuryResolutionEvent('notExecuted');
+    return {
+      status: 'resolved',
+      resolution: 'not-executed',
+      transactionId: authority.transactionId,
+      receiptWritten: false,
+      sameIdRetryAllowed: false,
+      actionTick: authority.actionTick,
+      retirement: 'pending_cleanup',
+    };
+  }
+  markTreasuryResolutionCleanupStage(authority.transactionId, 'marker_discharge', notExecutedDischarge.outcome);
+  releaseTreasuryQuarantineEntry(authority.transactionId);
+  releaseTreasuryIntentEntry(authority.transactionId);
+  if (resolveTreasuryUnresolvedAuthority(authority.transactionId).status === 'not_found') {
+    markTreasuryResolutionCleanupStage(authority.transactionId, 'authority_release');
+  }
+  // staged 第 6 步：三段收敛（exact retirement proof 写入由 converge 内部
+  // 承载——【第十九轮 C.7】pending-release 索引移除与 retirement 完成共享
+  // 同一阶段事实——converge 完成才移除）。
+  {
     const converged = completeTreasuryNotExecutedRetirement(authority.transactionId);
-    if (converged.status === "completed") {
+    if (converged.status === 'completed') {
       markTreasuryPendingReleaseCompleted(authority.transactionId);
+      markTreasuryResolutionCleanupStage(authority.transactionId, 'outcome_finalization');
+      markTreasuryResolutionCleanupStage(authority.transactionId, 'lineage_finalization');
+      completeTreasuryResolutionCleanup(authority.transactionId);
     }
     recordTreasuryResolutionEvent("notExecuted");
     return {
@@ -1352,6 +1459,7 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
         lineagePreparation.retrySemanticDigest === null
           ? "complete_non_rearmable"
           : "complete_rearm_ready",
+      globalWriteAdmissionStillLocked: notExecutedDischarge.globalWriteAdmissionStillLocked,
     };
   }
   // marker 清除失败：pending 索引保留、lineage 保持 cleanup-pending（不签发

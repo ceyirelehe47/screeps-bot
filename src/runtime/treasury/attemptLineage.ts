@@ -53,6 +53,11 @@ import {
 } from "@/runtime/treasury/resolutionStore";
 import { registerTreasuryLineageResetHook } from "@/runtime/treasury/receipts";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
+import { treasuryMarkerExactIdentityRelation } from "@/runtime/treasury/markerExactIdentity";
+import { verifyTreasuryCurrentSettlement, registerTreasurySettlementLineageHealthSourceForAssembly } from "@/runtime/treasury/currentSettlementCoordinator";
+import { treasuryIdentityProfileOfFacts, treasuryProofClassOfIdentityProfile, TREASURY_IDENTITY_PROFILES } from "@/runtime/treasury/identityProfile";
+import { sweepTreasuryOrphanGenerationProofOnAdvance } from "@/runtime/treasury/generationProofLifecycle";
+import { treasuryMarkerDischargeExpectedOfFacts } from "@/runtime/treasury/markerDischarge";
 import {
   readTreasuryIntentEntry,
   releaseTreasuryIntentEntry,
@@ -68,10 +73,12 @@ import {
 import {
   registerTreasurySemanticLineageRecordSourceForAssembly,
 } from "@/runtime/treasury/semanticLineageValidation";
-import { verifyTreasuryChildActiveCommitRecovery } from "@/runtime/treasury/currentLineageSettlementVerifier";
+import { verifyTreasuryChildActiveCommitRecovery, expectedTreasuryCurrentLineageExactIdentity } from "@/runtime/treasury/currentLineageSettlementVerifier";
 
 /** lineage store schema 版本（持久格式升级时递增；未知版本 fail closed）。 */
-export const TREASURY_LINEAGE_VERSION = 2;
+export const TREASURY_LINEAGE_VERSION = 3;
+/** v2（Round 18，无 identityProfile）——确定性迁移到 v3。 */
+export const TREASURY_LINEAGE_LEGACY_VERSION = 2;
 /** 硬容量：最多同时存续的重试链数（满载 fail closed，不驱逐；终态压缩见 lineageRetirementSummary）。 */
 export const TREASURY_LINEAGE_MAX_ENTRIES = 64;
 
@@ -121,6 +128,8 @@ export interface TreasuryAttemptLineageRecord {
   /** 16hex lineage 身份（rootTransactionId + root identity 派生）。 */
   readonly lineageId: string;
   readonly rootTransactionId: string;
+  /** 【第二十二轮第十一节】显式 identity profile（v3 必带——chain 级、生命周期不可变）。 */
+  readonly identityProfile: import("@/runtime/treasury/identityProfile").TreasuryIdentityProfile;
   readonly rootIdentity: TreasuryAttemptLineageIdentity;
   readonly currentTransactionId: string;
   readonly currentIdentity: TreasuryAttemptLineageIdentity;
@@ -247,7 +256,11 @@ registerTreasuryQuarantineLineageProofResolverForAssembly(lineageProofOfCurrentA
 //（模块加载注册——单向依赖；semanticLineageValidation 不 import 本模块；
 // 可重入：测试注销 sources 后可重新装配）。
 export function registerTreasuryAttemptLineageSemanticSourceForAssembly(): void {
-  registerTreasurySemanticLineageRecordSourceForAssembly({
+  registerTreasurySettlementLineageHealthSourceForAssembly(() => {
+  const health = peekTreasuryAttemptLineageHealth();
+  return { healthy: health.healthy, detail: health.detail ?? null };
+});
+registerTreasurySemanticLineageRecordSourceForAssembly({
     healthy: () => peekTreasuryAttemptLineageHealth().healthy,
     unhealthyDetail: () => peekTreasuryAttemptLineageHealth().detail,
     readByLineageId: (lineageId) => readTreasuryAttemptLineageRecord(lineageId),
@@ -386,6 +399,16 @@ export function validateTreasuryAttemptLineageRecordShape(record: unknown): stri
   }
   if (candidate.authorityClass === "lowlevel" && typeof candidate.lowlevelSource !== "string") {
     return "record.lowlevel 缺少 lowlevelSource";
+  }
+  if (!TREASURY_IDENTITY_PROFILES.has(candidate.identityProfile as never)) {
+    return `record.identityProfile 非法枚举（${String(candidate.identityProfile).slice(0, 32)}）`;
+  }
+  if (
+    candidate.identityProfile !== "legacy-replay" &&
+    candidate.identityProfile !== "forensic-isolated" &&
+    treasuryProofClassOfIdentityProfile(candidate.identityProfile) !== candidate.authorityClass
+  ) {
+    return "record.identityProfile 与 authorityClass 不满足唯一合法组合";
   }
   for (const field of ["generation", "recordRevision", "createdAtTick", "updatedAtTick"] as const) {
     const value = candidate[field];
@@ -822,7 +845,8 @@ function migrateLineageStoreV1ToV2(raw: TreasuryAttemptLineageStore): { store: T
     entries[key] = next;
   }
   const store: TreasuryAttemptLineageStore = {
-    version: TREASURY_LINEAGE_VERSION,
+    // 【第二十二轮】v1→v2 产物标记 legacy 版本——v2→v3 迁移链式接续补 profile。
+    version: TREASURY_LINEAGE_LEGACY_VERSION,
     entries,
     entryCount: Object.keys(entries).length,
     updatedAt: Game.time,
@@ -847,10 +871,59 @@ function loadLineageStoreRuntime(forWrite = false): TreasuryLineageStoreRuntime 
   }
   const raw = branch.attemptLineage as unknown as TreasuryAttemptLineageStore;
   let store = raw;
-  if (raw.version === TREASURY_LINEAGE_VERSION - 1) {
+  if (raw.version === TREASURY_LINEAGE_VERSION - 2) {
     const migrated = migrateLineageStoreV1ToV2(raw);
     store = migrated.store;
     branch.attemptLineage = store as unknown as NonNullable<(typeof branch)["attemptLineage"]>;
+  }
+  // 【第二十二轮 11.7】v2 → v3 确定性迁移（identityProfile 从 root identity
+  // 推导——modern 三元组 → modern-contract；lowlevel 矩阵 → lowlevel；
+  // contract/cohort 同时缺失 → legacy-replay（隔离，不自动获得 execution/
+  // settlement 权限）；partial → 整 store fail closed 原数据保留）。
+  if ((store as { version?: number }).version === TREASURY_LINEAGE_VERSION - 1) {
+    lineageStoreEvents.fullScans += 1;
+    const migratedEntries: Record<string, TreasuryAttemptLineageRecord> = {};
+    let migrationError: string | null = null;
+    for (const [key, record] of Object.entries(store.entries)) {
+      const profile = treasuryIdentityProfileOfFacts((record as { rootIdentity?: unknown }).rootIdentity);
+      if (profile === null) {
+        migrationError = `v2→v3 迁移推导失败（${key.slice(0, 16)}：partial/矛盾身份字段——整 store fail closed，原数据保留）`;
+        break;
+      }
+      migratedEntries[key] = { ...(record as object), identityProfile: profile } as unknown as TreasuryAttemptLineageRecord;
+    }
+    if (migrationError === null) {
+      const migratedStore: TreasuryAttemptLineageStore = {
+        version: TREASURY_LINEAGE_VERSION,
+        entries: migratedEntries,
+        entryCount: Object.keys(migratedEntries).length,
+        updatedAt: Game.time,
+      };
+      const migratedShape = validateLineageStoreShape(migratedStore);
+      if (migratedShape === null) {
+        lineageStoreEvents.migrations += 1;
+        store = migratedStore;
+        branch.attemptLineage = store as unknown as NonNullable<(typeof branch)["attemptLineage"]>;
+      } else {
+        migrationError = migratedShape;
+      }
+    }
+    if (migrationError !== null) {
+      if (process.env.DEBUG_R22L) console.log("DBG-LIN-MIG:", migrationError);
+      const fatalRuntime: TreasuryLineageStoreRuntime = {
+        store,
+        fatal: `lineage v2→v3 迁移自检失败: ${migrationError}（原数据保留 fail closed）`,
+        published: true,
+        lineageIdIndex: new Map(),
+        rootIndex: new Map(),
+        currentIndex: new Map(),
+        nextChildIndex: new Map(),
+        pendingIds: new Set(),
+        terminalIds: new Set(),
+      };
+      heapRuntime = fatalRuntime;
+      return fatalRuntime;
+    }
   }
   const fatal = validateLineageStoreShape(store);
   const runtime: TreasuryLineageStoreRuntime = {
@@ -881,7 +954,7 @@ function loadLineageStoreRuntime(forWrite = false): TreasuryLineageStoreRuntime 
 
 function validateLineageStoreShape(store: TreasuryAttemptLineageStore): string | null {
   if (!store || typeof store !== "object") return "lineage store 非对象";
-  if (store.version !== TREASURY_LINEAGE_VERSION) {
+  if (store.version !== TREASURY_LINEAGE_VERSION && store.version !== TREASURY_LINEAGE_LEGACY_VERSION) {
     return `lineage store 版本未知（${String(store.version)}，期望 ${String(TREASURY_LINEAGE_VERSION)}）——fail closed`;
   }
   if (!store.entries || typeof store.entries !== "object") return "lineage store.entries 非对象";
@@ -1170,6 +1243,8 @@ export function createTreasuryAttemptLineageRecord(input: {
   readonly nonRearmReason?: string;
   readonly adapterSemanticIdentity?: string;
   readonly ownerIdentity?: string;
+  /** 【第二十二轮】显式 profile（缺省从 root identity 事实推导——partial → 拒绝创建）。 */
+  readonly identityProfile?: import("@/runtime/treasury/identityProfile").TreasuryIdentityProfile;
 }): TreasuryAttemptLineageWriteResult {
   const slotError = ensureTreasuryLineageSlotAvailable(input.rootTransactionId);
   if (slotError !== null) {
@@ -1180,7 +1255,14 @@ export function createTreasuryAttemptLineageRecord(input: {
   // complete/backfill 推进到 rearm_ready 或 non_rearmable_retired 终态。
   // 创建即 publication（第十八轮 §5：candidate 持久化先于 authority release）。
   const now = Game.time;
+  // 【第二十二轮 11.1】新权威记录必须携带显式 identity profile。
+  const identityProfile = input.identityProfile ?? treasuryIdentityProfileOfFacts(input.rootIdentity);
+  if (identityProfile === null) {
+    lineageStoreEvents.writeFailures += 1;
+    return { status: "rejected", detail: "root identity 的 profile 推导失败（partial/矛盾字段——不创建 lineage）" };
+  }
   return writeLineageRecord({
+    identityProfile,
     lineageId: computeTreasuryAttemptLineageId(input.rootTransactionId, input.rootIdentity),
     rootTransactionId: input.rootTransactionId,
     rootIdentity: cloneTreasuryDurableValue(input.rootIdentity),
@@ -1488,8 +1570,21 @@ export function convergeTreasuryLineageRetirementFromFacts(lineageId: string): {
       detail: "generation≥1 的 retiring record 缺 parent/binding（无法构造 exact retirement proof——防御）",
     };
   }
+  // 【第二十二轮 11.1】新写 proof 必须携带显式 identity profile（字段推导；
+  // partial/矛盾 → 构造失败保持 pending——不写不完整 proof）。
+  const exactProofProfile = treasuryIdentityProfileOfFacts({
+    digest: fresh.currentIdentity.digest,
+    ...(fresh.currentIdentity.contractDigest !== undefined ? { contractDigest: fresh.currentIdentity.contractDigest } : {}),
+    ...(fresh.currentIdentity.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fresh.currentIdentity.authorizationCohortDigest } : {}),
+    ...(fresh.currentIdentity.durableIdentityDigest !== undefined ? { durableIdentityDigest: fresh.currentIdentity.durableIdentityDigest } : {}),
+    ...((fresh.currentIdentity.lowlevelSource ?? fresh.lowlevelSource) !== undefined ? { lowlevelSource: fresh.currentIdentity.lowlevelSource ?? fresh.lowlevelSource } : {}),
+  });
+  if (exactProofProfile === null) {
+    return { status: "pending", pendingStages: ["exact_retirement_proof"], detail: "exact retirement proof 的 identity profile 推导失败（partial/矛盾字段——fail closed 不写入）" };
+  }
   const exactProofInput = {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
+    identityProfile: exactProofProfile,
     lineageId: fresh.lineageId,
     rootTransactionId: fresh.rootTransactionId,
     rootIdentityDigest: computeTreasuryGenerationRootIdentityDigest(fresh.rootIdentity),
@@ -1654,6 +1749,8 @@ function recoverPendingHandoffWindow(
   const activated = activateTreasuryLineageChild(lineageId, window.childIdentity);
   if (activated.status !== "rejected") {
     lineageStoreEvents.childActivationForwardCompletions += 1;
+    // 【第二十二轮第十三节】advance 后的上一代孤儿 proof 有界清理。
+    sweepTreasuryOrphanGenerationProofOnAdvance(lineageId, activated.record.generation - 1);
     return { ...result, childActivationForwardCompletions: result.childActivationForwardCompletions + 1 };
   }
   return result;
@@ -1760,6 +1857,11 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
       continue;
     }
     if (record.state === "child_active") {
+      // 【第二十二轮 13.2】advance 后中断的孤儿 proof 补清理（确定性检查
+      // generation-1——幂等，不依赖 heap 列表）。
+      if (record.generation >= 1) {
+        sweepTreasuryOrphanGenerationProofOnAdvance(record.lineageId, record.generation - 1);
+      }
       // 【第二十一轮 8】commit-pending 补完成的单一 verifier：完整 Receipt
       // exact proof（digest/contract/cohort/durable/proof class/lowlevel
       // provenance/lineage 四字段）与 record current exact identity 匹配才
@@ -1771,14 +1873,39 @@ export function recoverTreasuryAttemptLineageAtTickBoundary(pendingReleaseSnapsh
       if (receiptProof !== undefined) {
         const recovery = verifyTreasuryChildActiveCommitRecovery({ record, receiptProof });
         if (recovery.status === "verified") {
-          const closed = closeTreasuryLineageAsChainCommitted(lineageId);
-          if (closed.status !== "rejected") {
-            if (readTreasuryIntentEntry(record.currentTransactionId) !== undefined) {
-              releaseTreasuryIntentEntry(record.currentTransactionId);
+          // 【第二十二轮 9.4】child-active 关闭必须经 cross-store settlement
+          // coordinator：Receipt 单条 exact match 之外统一检查 Intent/Quarantine
+          // 结论、Resolution tombstone、相反 not-executed proof（GRA）、marker
+          // 归属与各 store health——任一冲突/不健康不关闭 lineage。
+          const currentExact = expectedTreasuryCurrentLineageExactIdentity(record);
+          const settlement = currentExact === null ? null : verifyTreasuryCurrentSettlement({
+            outcome: "committed",
+            attempt: currentExact,
+            identityProfile: treasuryIdentityProfileOfFacts(record.currentIdentity) ?? "legacy-replay",
+            lineageProof: {
+              lineageId: record.lineageId,
+              lineageGeneration: record.generation,
+              parentTransactionId: record.currentParentTransactionId!,
+              lineageBindingDigest: record.bindingDigest!,
+            },
+            identityFacts: record.currentIdentity,
+          });
+          if (settlement !== null && settlement.verdict === "committed_verified") {
+            const closed = closeTreasuryLineageAsChainCommitted(lineageId);
+            if (closed.status !== "rejected") {
+              if (readTreasuryIntentEntry(record.currentTransactionId) !== undefined) {
+                releaseTreasuryIntentEntry(record.currentTransactionId);
+              }
+              lineageStoreEvents.chainCommitCompletions += 1;
+              result = { ...result, chainCommitCompletions: result.chainCommitCompletions + 1 };
             }
-            lineageStoreEvents.chainCommitCompletions += 1;
-            result = { ...result, chainCommitCompletions: result.chainCommitCompletions + 1 };
+            continue;
           }
+          if (settlement !== null && settlement.verdict === "conflict") {
+            lineageStoreEvents.childCommitProofConflicts += 1;
+          }
+          // insufficient / store_unhealthy：cross-store 前置未满足——child_active、
+          // Intent 与 Receipt 证据保留（beginTick 幂等重试）。
           continue;
         }
         if (recovery.status === "conflict") {
@@ -1863,17 +1990,37 @@ export function setTreasuryLineageReceiptReaderForAssembly(
   lineageReceiptProofReader = reader;
 }
 
-/** 恢复路径的 marker 只读视图（避免与 writeFault 清除语义耦合的轻量转发）。 */
-let lineageRecoveryMarkerReader: () => { readonly transactionId: string; readonly digest: string } | undefined = () => undefined;
+/** 恢复路径的 marker 只读完整视图（【第二十二轮第十二节】backfill/converge 的
+ * marker 判定需要 class-aware 维度——facade 透传 write-fault 快照全字段）。 */
+export interface TreasuryLineageRecoveryMarkerView {
+  readonly transactionId: string;
+  readonly digest: string;
+  readonly markerProtocol?: number;
+  readonly markerVersion?: number;
+  readonly identityProfile?: string;
+  readonly authorityClass?: string;
+  readonly contractDigest?: string;
+  readonly authorizationCohortDigest?: string;
+  readonly durableIdentityDigest?: string;
+  readonly lowlevelSource?: string;
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly attemptGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
+  readonly attemptIdentity?: { readonly contractDigest?: string; readonly authorizationCohortDigest?: string; readonly durableIdentityDigest?: string };
+}
+
+let lineageRecoveryMarkerReader: () => TreasuryLineageRecoveryMarkerView | undefined = () => undefined;
 
 /** facade 装配时注入 marker 读取（保持模块单向依赖：writeFault → 不 import 本模块）。 */
 export function setTreasuryLineageRecoveryMarkerReaderForAssembly(
-  reader: () => { readonly transactionId: string; readonly digest: string } | undefined,
+  reader: () => TreasuryLineageRecoveryMarkerView | undefined,
 ): void {
   lineageRecoveryMarkerReader = reader;
 }
 
-function readLineageRecoveryMarker(): { readonly transactionId: string; readonly digest: string } | undefined {
+function readLineageRecoveryMarker(): TreasuryLineageRecoveryMarkerView | undefined {
   return lineageRecoveryMarkerReader();
 }
 
@@ -1912,9 +2059,29 @@ function backfillLineageFromTombstone(
   // recoverStagedResolutions 已先行补完成释放与清 marker）。
   const record = created.record;
   const authorityResolution = resolveTreasuryUnresolvedAuthority(transactionId);
+  // 【第二十二轮第十二节】marker 判定改用统一 marker exact relation——
+  // 删除 backfill 自定义 boolean（旧逻辑把同 transaction digest 冲突误判为
+  // cleaned）：unrelated/absent 才算当前 attempt 已解除；match（未清）/conflict/
+  // insufficient 均保持 markerCleaned=false（终态不推进、tombstone 继续 pin）。
   const marker = readLineageRecoveryMarker();
-  const markerCleaned =
-    marker === undefined || marker.transactionId !== transactionId || marker.digest !== tombstone.digest;
+  let markerCleaned: boolean;
+  if (marker === undefined) {
+    markerCleaned = true;
+  } else {
+    const relation = treasuryMarkerExactIdentityRelation(
+      treasuryMarkerDischargeExpectedOfFacts({
+        transactionId,
+        digest: tombstone.digest,
+        proofClass: tombstone.proofLevel,
+        ...(tombstone.contractDigest !== undefined ? { contractDigest: tombstone.contractDigest } : {}),
+        ...(tombstone.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: tombstone.authorizationCohortDigest } : {}),
+        ...(tombstone.durableIdentityDigest !== undefined ? { durableIdentityDigest: tombstone.durableIdentityDigest } : {}),
+        ...(tombstone.lowlevelSource !== undefined ? { lowlevelSource: tombstone.lowlevelSource } : {}),
+      }),
+      marker,
+    );
+    markerCleaned = relation.kind === "unrelated";
+  }
   const authorityReleased = authorityResolution.status === "not_found";
   const threeComplete = authorityReleased && markerCleaned;
   const completed = updateTreasuryAttemptLineageRecord(record.lineageId, (current) => ({

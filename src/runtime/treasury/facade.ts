@@ -95,6 +95,7 @@ import {
   isTreasuryTransactionQuarantined,
   outcomeOfTreasuryFaultPhase,
   peekTreasuryQuarantineHealth,
+  releaseTreasuryQuarantineEntry,
   peekTreasuryQuarantineStore,
   quarantineTreasuryTransaction,
   readTreasuryQuarantineCounters,
@@ -193,7 +194,15 @@ import {
   ensureTreasuryResolutionSlotAvailable,
   markTreasuryPendingReleaseCompleted,
 } from "@/runtime/treasury/resolutionStore";
-import { clearTreasuryWriteFaultMarkerForResolution, readTreasuryWriteFault, classAwareMarkerFieldsOfFacts } from "@/runtime/treasury/writeFault";
+import { clearTreasuryWriteFaultMarkerForResolution, readTreasuryWriteFault, exactMarkerFieldsOfPreparedRecord } from "@/runtime/treasury/writeFault";
+import { sweepTreasuryOrphanGenerationProofOnAdvance } from "@/runtime/treasury/generationProofLifecycle";
+import {
+  registerTreasuryResolutionCleanupHandlersForAssembly,
+  recoverTreasuryResolutionCleanupAtTickBoundary,
+} from "@/runtime/treasury/resolutionCleanupJournal";
+import { readTreasuryTrustedSettlementProofForAttempt } from "@/runtime/treasury/trustedSettlementProof";
+import { treasuryExactAttemptIdentityOfFacts, treasuryExactAttemptIdentityOfTombstone } from "@/runtime/treasury/exactAttemptIdentity";
+import { readTreasuryGenerationRetirementProof } from "@/runtime/treasury/generationRetirementAuthority";
 import { classAwareIdentityOfAttempt } from "@/runtime/treasury/markerAttemptIdentity";
 import {
   isTreasuryRearmAttemptId,
@@ -905,16 +914,115 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   });
   // 【第十七轮第五节】lineage 恢复的 marker 只读视图装配（模块单向依赖：
   // attemptLineage 不直接 import writeFault 的清除语义）。
-  setTreasuryLineageRecoveryMarkerReaderForAssembly(() => {
-    const marker = readTreasuryWriteFault();
-    return marker === undefined
-      ? undefined
-      : { transactionId: marker.transactionId, digest: marker.digest };
-  });
+  setTreasuryLineageRecoveryMarkerReaderForAssembly(() => readTreasuryWriteFault());
   // 【第十八轮 24.3 / 第二十一轮 8.1】lineage 恢复的 committed receipt
   // proof 完整只读视图装配（模块单向依赖）：child-active 补完成按完整 exact
   // proof（digest/contract/cohort/durable/class/provenance/lineage）验证——
   // binding/generation 只是诊断字段，不构成放行依据。
+  // 【第二十二轮第七节】resolution cleanup journal 的阶段处理器装配
+  //（production 装配——重操作经注入解 journal 与各 store 的依赖环；未装配
+  // 时 journal 恢复 fail closed 保留全部 pending）。
+  registerTreasuryResolutionCleanupHandlersForAssembly({
+    authorityRelease: (entry) => {
+      const current = resolveTreasuryUnresolvedAuthority(entry.transactionId);
+      if (current.status === "not_found") return { status: "already_absent", detail: "resolver not_found（已释放）" };
+      if (current.status !== "ok") return { status: "blocked", detail: `unresolved authority ${current.status}` };
+      // 结论 proof 校验后才释放：committed → trusted receipt exact match；
+      // not-executed → final tombstone exact match（release-trusted 语义——
+      // store 任一 entry 损坏时不返回 trusted proof）。
+      const expected = treasuryExactAttemptIdentityOfFacts(
+        entry.transactionId,
+        {
+          digest: entry.digest,
+          ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+          ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+          ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+          ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+          ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+          ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+          ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
+          ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
+        },
+        entry.proofClass === "lowlevel" ? "lowlevel" : entry.proofClass === "identity-bound" ? "identity-bound" : "legacy",
+      );
+      if (expected === null) return { status: "blocked", detail: "journal entry 身份无法构造 exact identity" };
+      if (entry.resolution === "committed") {
+        const trusted = readTreasuryTrustedSettlementProofForAttempt(entry.transactionId, expected);
+        if (trusted.status !== "trusted_proof") {
+          return { status: "blocked", detail: `committed trusted receipt ${trusted.status}: ${trusted.detail}` };
+        }
+      } else {
+        const tombstone = readTreasuryResolutionTombstone(entry.transactionId);
+        if (tombstone === undefined || tombstone.stage !== "final" || tombstone.resolution !== "not-executed") {
+          return { status: "blocked", detail: "final not-executed tombstone 缺失（不可释放）" };
+        }
+        const tombstoneExact = treasuryExactAttemptIdentityOfTombstone(tombstone);
+        if (tombstoneExact === null || treasuryExactAttemptIdentityRelation(tombstoneExact, expected) !== "match") {
+          return { status: "blocked", detail: "final tombstone 与 journal entry 身份不一致" };
+        }
+      }
+      releaseTreasuryQuarantineEntry(entry.transactionId);
+      releaseTreasuryIntentEntry(entry.transactionId);
+      if (resolveTreasuryUnresolvedAuthority(entry.transactionId).status !== "not_found") {
+        return { status: "blocked", detail: "release 后 read-back 仍非 not_found（重试）" };
+      }
+      return { status: "released", detail: "已释放并 read-back 确认 not_found" };
+    },
+    outcomeFinalization: (entry) => {
+      if (entry.resolution === "committed") {
+        const tombstone = readTreasuryResolutionTombstone(entry.transactionId);
+        if (tombstone !== undefined && tombstone.stage === "final" && tombstone.resolution === "committed") {
+          return { status: "already_final", detail: "final committed tombstone 已存在" };
+        }
+        if (tombstone === undefined || tombstone.stage !== "resolving" || tombstone.resolution !== "committed") {
+          return { status: "blocked", detail: "resolving committed tombstone 缺失（outcome 不可 finalize）" };
+        }
+        const write = writeTreasuryResolutionTombstone({ ...tombstone, stage: "final" });
+        if (write.status === "rejected") {
+          return { status: "blocked", detail: `finalize 写入失败: ${write.detail}` };
+        }
+        return { status: "finalized", detail: "final committed tombstone 已写入" };
+      }
+      // not-executed：tr1_ 需 matching exact GRA proof；initial 的 outcome
+      // proof = final tombstone（已由 settlement proof 持久化保证）。
+      if (entry.lineageId !== undefined && entry.lineageGeneration !== undefined) {
+        const proof = readTreasuryGenerationRetirementProof(entry.lineageId, entry.lineageGeneration);
+        if (proof === undefined || proof.transactionId !== entry.transactionId || proof.digest !== entry.digest) {
+          return { status: "blocked", detail: "matching exact retirement proof 缺失（converge 未完成——exact-proof pending）" };
+        }
+        return { status: "already_final", detail: "exact retirement proof 已存在" };
+      }
+      return { status: "already_final", detail: "initial attempt 的 outcome proof = final tombstone" };
+    },
+    lineageFinalization: (entry) => {
+      if (entry.lineageId === undefined) {
+        return { status: "not_applicable", detail: "initial attempt 无 lineage 终态阶段" };
+      }
+      const record = readTreasuryAttemptLineageRecord(entry.lineageId);
+      if (record === undefined) {
+        return { status: "not_applicable", detail: "lineage record 不存在（terminal/backfill 已处理）" };
+      }
+      if (entry.resolution === "committed") {
+        if (record.state === "chain_committed") return { status: "already_final", detail: "chain_committed" };
+        if (record.state !== "child_active") {
+          return { status: "blocked", detail: `lineage 状态 ${record.state} 非 child_active（不可 close）` };
+        }
+        const closed = closeTreasuryLineageAsChainCommitted(entry.lineageId);
+        if (closed.status === "rejected") {
+          return { status: "blocked", detail: `close 失败: ${closed.detail}` };
+        }
+        return { status: "finalized", detail: "chain_committed 已推进" };
+      }
+      if (record.state === "rearm_ready" || record.state === "non_rearmable_retired") {
+        return { status: "already_final", detail: record.state };
+      }
+      const converged = convergeTreasuryLineageRetirementFromFacts(entry.lineageId);
+      if (converged.status === "completed") {
+        return { status: "finalized", detail: "retirement 三段收敛完成" };
+      }
+      return { status: "blocked", detail: `converge pending: ${JSON.stringify(converged)}`.slice(0, 160) };
+    },
+  });
   setTreasuryLineageReceiptReaderForAssembly((transactionId) => {
     const lookup = lookupTreasurySettledReceipt(transactionId);
     if (lookup.status !== "modern_committed") return undefined;
@@ -1169,13 +1277,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           phase: "executing_at_end_tick",
           status: "unresolved",
           recordedAt: Game.time,
-          // 【第十七轮第十四节】class-aware attempt identity。
-          ...classAwareMarkerFieldsOfFacts({
-            contractDigest: record.contractDigest,
+          // 【第二十二轮 v4】exact marker identity（显式 profile + 完整事实）。
+          ...(exactMarkerFieldsOfPreparedRecord({
+            ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+            ...(record.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.authorizationCohortDigest } : {}),
+            ...(record.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.durableIdentityDigest } : {}),
             ...(record.lineageBindingDigest !== undefined ? { lineageBindingDigest: record.lineageBindingDigest } : {}),
             ...(record.lineageGeneration !== undefined ? { lineageGeneration: record.lineageGeneration } : {}),
             ...(record.lineageId !== undefined ? { lineageId: record.lineageId } : {}),
-          }),
+            ...(record.lineageParentTransactionId !== undefined ? { parentTransactionId: record.lineageParentTransactionId } : {}),
+          }) ?? {}),
         });
         metrics.commitFaults += 1;
         continue;
@@ -1259,6 +1370,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // 回滚（resolving+receipt 已写 → finalize；无进展 → 回滚；final 未
       // 释放 → 补完成）。
       recoverStagedResolutions();
+      // 【第二十二轮第七节】resolution cleanup journal 恢复（staged
+      // resolution 之后——journal 是 marker discharge / authority release /
+      // outcome / lineage 四阶段的持久 pending 权威，global reset 后重建；
+      // 空 journal O(1) 快路径）。
+      recoverTreasuryResolutionCleanupAtTickBoundary();
       // 【第十七轮第五节】durable attempt lineage 恢复（位于 resolution 恢复
       // 之后——释放/清 marker 的补完成先行，lineage 三段随后按最终持久事实
       // 收敛）：capability_issued 跨 tick 回退 rearm_ready；child_intent_
@@ -2692,13 +2808,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           phase,
           status: "unresolved",
           recordedAt: Game.time,
-          // 【第十七轮第十四节】class-aware attempt identity。
-          ...classAwareMarkerFieldsOfFacts({
-            contractDigest: record.contractDigest,
+          // 【第二十二轮 v4】exact marker identity（显式 profile + 完整事实）。
+          ...(exactMarkerFieldsOfPreparedRecord({
+            ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+            ...(record.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.authorizationCohortDigest } : {}),
+            ...(record.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.durableIdentityDigest } : {}),
             ...(record.lineageBindingDigest !== undefined ? { lineageBindingDigest: record.lineageBindingDigest } : {}),
             ...(record.lineageGeneration !== undefined ? { lineageGeneration: record.lineageGeneration } : {}),
             ...(record.lineageId !== undefined ? { lineageId: record.lineageId } : {}),
-          }),
+            ...(record.lineageParentTransactionId !== undefined ? { parentTransactionId: record.lineageParentTransactionId } : {}),
+          }) ?? {}),
         });
         return {
           status: "rejected",
@@ -3260,6 +3379,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
             : {}),
         };
         const activated = activateTreasuryLineageChild(tr1LineageId, childIdentity);
+        if (activated.status !== "rejected") {
+          // 【第二十二轮第十三节】generation advance 成功后清理上一代孤儿
+          // GRA proof（慢速 rearm 的有界生命周期——单代 O(1) 查询）。
+          sweepTreasuryOrphanGenerationProofOnAdvance(tr1LineageId, activated.record.generation - 1);
+        }
         if (activated.status === "rejected") {
           metrics.intentWriteFailures += 1;
           record.state = "expired";

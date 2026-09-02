@@ -56,12 +56,16 @@ import {
 import { verifyTreasuryGenerationRetirementRelation } from "@/runtime/treasury/generationRetirementRelation";
 import { treasuryExactAttemptIdentityOfReceiptProof, treasuryExactAttemptIdentityOfTombstone, treasuryExactAttemptIdentityRelation } from "@/runtime/treasury/exactAttemptIdentity";
 import { computeTreasuryGenerationRootIdentityDigest } from "@/runtime/treasury/generationRetirementAuthority";
+import { computeTreasuryLineageBindingDigest } from "@/runtime/treasury/lineageBinding";
+import { formatTreasuryRearmChildTransactionIdV2, hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
+import { treasuryIdentityProfileOfFacts, treasuryProofClassOfIdentityProfile } from "@/runtime/treasury/identityProfile";
 import {
   peekTreasuryGenerationRetirementHealth,
   readTreasuryGenerationRetirementProof,
   releaseOrphanTreasuryGenerationRetirementProofs,
 } from "@/runtime/treasury/generationRetirementAuthority";
 import { registerTreasurySemanticSummarySourceForAssembly } from "@/runtime/treasury/semanticLineageValidation";
+import { registerTreasurySettlementSummaryHealthSourceForAssembly, verifyTreasuryOppositeProofAbsence } from "@/runtime/treasury/currentSettlementCoordinator";
 
 /**
  * 【第二十一轮 7】summary v3：持久化 root / final exact identity（exact
@@ -203,6 +207,39 @@ function validateSummaryShape(summary: unknown): string | null {
     if (candidate.finalExact.durableIdentityDigest === undefined) {
       return "v3 summary 的 finalExact 缺 durableIdentityDigest（弱身份不得充当 terminal authority）";
     }
+    // 【第二十二轮第十五节】canonical 派生重算（load/写入自证——不依赖
+    // 后续 semantic 调用才发现）：lineageId/finalAttemptId/parent/binding
+    // 派生 + rootExact 的 profile 推导与 authorityClass 一致。
+    // lineageId 的 root 绑定派生由 GRA 的 computeLineageIdFromRootBinding 校验
+    // 承载（summary 的 rootIdentityDigest 含 provenance 回落口径，与 record
+    // 派生口径存在已知设计差异——双口径不在此重复强制）。
+    const expectedFinalAttemptId = candidate.finalGeneration <= 0
+      ? candidate.rootTransactionId
+      : formatTreasuryRearmChildTransactionIdV2({ lineageId: candidate.lineageId, generation: candidate.finalGeneration, rootTransactionId: candidate.rootTransactionId });
+    if (expectedFinalAttemptId !== candidate.finalAttemptId) {
+      return "canonical：finalAttemptId 与 (lineageId, root, finalGeneration) 派生不一致";
+    }
+    if (candidate.finalGeneration >= 1) {
+      const expectedParent = candidate.finalGeneration === 1
+        ? candidate.rootTransactionId
+        : formatTreasuryRearmChildTransactionIdV2({ lineageId: candidate.lineageId, generation: candidate.finalGeneration - 1, rootTransactionId: candidate.rootTransactionId });
+      if (candidate.finalExact?.parentTransactionId === undefined || candidate.finalExact.parentTransactionId !== expectedParent) {
+        return "canonical：finalExact.parentTransactionId 与上一代确定性派生不一致";
+      }
+      const expectedBinding = computeTreasuryLineageBindingDigest({
+        lineageId: candidate.lineageId,
+        generation: candidate.finalGeneration,
+        parentTransactionId: expectedParent,
+        childTransactionId: candidate.finalAttemptId,
+      });
+      if (candidate.finalExact!.lineageBindingDigest !== expectedBinding) {
+        return "canonical：finalExact.lineageBindingDigest 权威重算不一致";
+      }
+    }
+    const rootProfile = treasuryIdentityProfileOfFacts(candidate.rootExact!);
+    if (rootProfile === null || treasuryProofClassOfIdentityProfile(rootProfile) !== candidate.authorityClass) {
+      return "canonical：rootExact 的 profile 推导与 authorityClass 不一致（partial/矛盾——store unhealthy）";
+    }
   } else {
     if (candidate.rootExact !== undefined || candidate.finalExact !== undefined) {
       return "legacy v2 summary 携带 exact identity 字段（半升级形态——损坏，fail closed）";
@@ -272,7 +309,7 @@ function loadSummaryRuntime(forWrite = false): TreasurySummaryRuntime {
     if (forWrite) publishSummaryStoreToMemory(heapRuntime);
     return heapRuntime;
   }
-  const store = branch.lineageRetirementSummaries as unknown as TreasuryRetirementSummaryStore;
+  let store = branch.lineageRetirementSummaries as unknown as TreasuryRetirementSummaryStore;
   // 【第十九轮 E / 第二十一轮 7.4】v1 → v2 迁移（原子：临时结构验证通过后
   // 一次替换；失败保留原数据并 fail closed）：v2 只新增可选 authorityClass
   //（v1 summary 无来源可补）。迁移零字段变换（version 提升而已）。
@@ -293,20 +330,50 @@ function loadSummaryRuntime(forWrite = false): TreasurySummaryRuntime {
       entryCount: store.entryCount,
       updatedAt: store.updatedAt,
     };
-    if (validateSummaryStoreShape(upgraded) === null) {
+    const dbgV12 = validateSummaryStoreShape(upgraded);
+    if (dbgV12 === null) {
       retirementSummaryEvents.fullScans += 1;
       branch.lineageRetirementSummaries = upgraded as unknown as NonNullable<(typeof branch)["lineageRetirementSummaries"]>;
-      const runtime: TreasurySummaryRuntime = { store: upgraded, fatal: null, published: true, byRoot: new Map(), byLineageId: new Map() };
-      for (const [key, summary] of Object.entries(upgraded.entries)) {
-        runtime.byRoot.set(summary.rootTransactionId, key);
-        runtime.byLineageId.set(summary.lineageId, key);
-      }
-      heapRuntime = runtime;
-      return runtime;
+      // 【第二十二轮】v1→v2 迁移成功后不在此 return——fall through 到 v2
+      // legacy archive 拆分段（同一 load 内完成 v1→v2→archive 链）。
+      store = upgraded;
+    } else {
+      const fatalRuntime: TreasurySummaryRuntime = { store, fatal: "summary store v1→v2 迁移自检失败（原数据保留 fail closed）", published: true, byRoot: new Map(), byLineageId: new Map() };
+      heapRuntime = fatalRuntime;
+      return fatalRuntime;
     }
-    const fatalRuntime: TreasurySummaryRuntime = { store, fatal: "summary store v1→v2 迁移自检失败（原数据保留 fail closed）", published: true, byRoot: new Map(), byLineageId: new Map() };
-    heapRuntime = fatalRuntime;
-    return fatalRuntime;
+  }
+  // 【第二十二轮第十四节】legacy v2 store 拆分到独立 replay archive：不再
+  // 阻止未来 exact 压缩。legacy summary 永久保留 root 重放门禁，但不得
+  // 证明 terminal current / historical eviction；新 exact summary 继续写入
+  // 主 store（v3）。双平面 root 唯一性由压缩前 cross-plane 检查承载。
+  if (store.version === TREASURY_RETIREMENT_SUMMARY_LEGACY_VERSION) {
+    const legacyBranch = branch as unknown as { legacyRetirementSummaries?: TreasuryRetirementSummaryStore };
+    if (legacyBranch.legacyRetirementSummaries === undefined) {
+      legacyBranch.legacyRetirementSummaries = { version: TREASURY_RETIREMENT_SUMMARY_LEGACY_VERSION, entries: { ...store.entries }, entryCount: store.entryCount, updatedAt: store.updatedAt };
+    } else {
+      const existing = legacyBranch.legacyRetirementSummaries;
+      for (const [key, summary] of Object.entries(store.entries)) {
+        const dup = Object.values(existing.entries).find((e) => e.rootTransactionId === summary.rootTransactionId || e.lineageId === summary.lineageId);
+        if (dup !== undefined && (dup.rootTransactionId !== summary.rootTransactionId || dup.lineageId !== summary.lineageId)) {
+          const fatalRuntime: TreasurySummaryRuntime = { store, fatal: "legacy archive 与 legacy store 的 root/lineageId 冲突（fail closed——不覆盖）", published: true, byRoot: new Map(), byLineageId: new Map() };
+          heapRuntime = fatalRuntime;
+          return fatalRuntime;
+        }
+        existing.entries[key] = summary;
+        existing.entryCount += 1;
+      }
+    }
+    const rebuilt: TreasuryRetirementSummaryStore = {
+      version: TREASURY_RETIREMENT_SUMMARY_VERSION,
+      entries: {},
+      entryCount: 0,
+      updatedAt: Game.time,
+    };
+    branch.lineageRetirementSummaries = rebuilt as unknown as NonNullable<(typeof branch)["lineageRetirementSummaries"]>;
+    const rebuiltRuntime: TreasurySummaryRuntime = { store: rebuilt, fatal: null, published: true, byRoot: new Map(), byLineageId: new Map() };
+    heapRuntime = rebuiltRuntime;
+    return rebuiltRuntime;
   }
   const fatal = validateSummaryStoreShape(store);
   const runtime: TreasurySummaryRuntime = { store, fatal, published: true, byRoot: new Map(), byLineageId: new Map() };
@@ -340,14 +407,42 @@ export function peekTreasuryRetirementSummaryHealth(): TreasuryRetirementSummary
 }
 
 /** root ID → summary 的 O(1) 查询（prepare 永久退休门禁的一部分）。 */
+/** 【第二十二轮第十四节】legacy replay archive 只读查询（root 重放门禁——不证明 terminal current）。 */
+export function lookupTreasuryLegacyRetirementSummaryByRoot(rootTransactionId: string): Readonly<TreasuryLineageRetirementSummary> | undefined {
+  const branch = (Memory.runtime as unknown as RuntimeMemoryWithSummary | undefined)?.treasury as { legacyRetirementSummaries?: TreasuryRetirementSummaryStore } | undefined;
+  const archive = branch?.legacyRetirementSummaries;
+  if (archive === undefined) return undefined;
+  for (const summary of Object.values(archive.entries)) {
+    if (summary.rootTransactionId === rootTransactionId) {
+      return treasuryBoundedDeepFreezeSnapshot(summary) as Readonly<TreasuryLineageRetirementSummary>;
+    }
+  }
+  return undefined;
+}
+
+/** 双平面 root 唯一性检查（root 相同 identity 不一致 → conflict 详情；一致/无冲突 → null）。 */
+export function treasuryRetirementSummaryCrossPlaneConflictDetail(rootTransactionId: string): string | null {
+  const exact = lookupTreasuryRetirementSummaryByRoot(rootTransactionId);
+  const legacy = lookupTreasuryLegacyRetirementSummaryByRoot(rootTransactionId);
+  if (exact !== undefined && legacy !== undefined && exact.lineageId !== legacy.lineageId) {
+    return `root ${rootTransactionId.slice(0, 16)} 在 exact 与 legacy 双平面的 identity 不一致（fail closed——不覆盖）`;
+  }
+  return null;
+}
+
 export function lookupTreasuryRetirementSummaryByRoot(rootTransactionId: string): Readonly<TreasuryLineageRetirementSummary> | undefined {
   const runtime = loadSummaryRuntime();
   if (runtime.fatal !== null) return undefined;
   const key = runtime.byRoot.get(rootTransactionId);
-  if (key === undefined) return undefined;
-  const summary = runtime.store.entries[key];
-  if (summary === undefined) return undefined;
-  return treasuryBoundedDeepFreezeSnapshot(summary) as Readonly<TreasuryLineageRetirementSummary>;
+  if (key !== undefined) {
+    const summary = runtime.store.entries[key];
+    if (summary !== undefined) {
+      return treasuryBoundedDeepFreezeSnapshot(summary) as Readonly<TreasuryLineageRetirementSummary>;
+    }
+  }
+  // 【第二十二轮第十四节】root/lineage lookup 同时检查两个平面：legacy
+  // archive 的 root 重放门禁永久保留（v2 entry 在 semantic 层 replay-only）。
+  return lookupTreasuryLegacyRetirementSummaryByRoot(rootTransactionId);
 }
 
 /** lineageId → summary 的 O(1) 查询（诊断/防重复压缩）。 */
@@ -355,10 +450,24 @@ export function lookupTreasuryRetirementSummaryByLineageId(lineageId: string): R
   const runtime = loadSummaryRuntime();
   if (runtime.fatal !== null) return undefined;
   const key = runtime.byLineageId.get(lineageId);
-  if (key === undefined) return undefined;
-  const summary = runtime.store.entries[key];
-  if (summary === undefined) return undefined;
-  return treasuryBoundedDeepFreezeSnapshot(summary) as Readonly<TreasuryLineageRetirementSummary>;
+  if (key !== undefined) {
+    const summary = runtime.store.entries[key];
+    if (summary !== undefined) {
+      return treasuryBoundedDeepFreezeSnapshot(summary) as Readonly<TreasuryLineageRetirementSummary>;
+    }
+  }
+  // 【第二十二轮第十四节】双平面 lookup（archive 的 v2 entry 在 semantic
+  // 层按 replay-only 处理——terminal current 恒 insufficient）。archive 按
+  // lineageId 线性查（容量 128 有界——load 时已保证）。
+  const branch = (Memory.runtime as unknown as RuntimeMemoryWithSummary | undefined)?.treasury as { legacyRetirementSummaries?: TreasuryRetirementSummaryStore } | undefined;
+  const archive = branch?.legacyRetirementSummaries;
+  if (archive === undefined) return undefined;
+  for (const summary of Object.values(archive.entries)) {
+    if (summary.lineageId === lineageId) {
+      return treasuryBoundedDeepFreezeSnapshot(summary) as Readonly<TreasuryLineageRetirementSummary>;
+    }
+  }
+  return undefined;
 }
 
 /** 单条压缩（summary 写入 + read-back → 历史代 proof 验证 → 删除 active record → 孤儿 proof 清理）。 */
@@ -487,6 +596,7 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
           parentTransactionId: record.currentParentTransactionId!,
           lineageBindingDigest: record.bindingDigest!,
         },
+        purpose: "committed_settlement",
         identity: {
           digest: record.currentIdentity.digest,
           ...(record.currentIdentity.contractDigest !== undefined ? { contractDigest: record.currentIdentity.contractDigest } : {}),
@@ -531,7 +641,26 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
       return { status: "rejected", detail: `non_rearmable_retired 的 exact retirement proof 三方 relation 未通过（${retirementRelation.verdict}: ${retirementRelation.detail}）——不压缩` };
     }
   }
+  // ── 【第二十二轮第十六节】相反结论 proof 显式不存在检查：“目标结论
+  //    proof 存在”不等于“相反结论 proof 不存在”。chain_committed 目标旁存在
+  //    matching final not-executed tombstone / GRA not-executed exact proof、
+  //    或 non_rearmable 目标旁存在 trusted committed receipt / committed
+  //    tombstone → 拒绝压缩（active lineage 保留）。exact identity 匹配——
+  //    同 ID 的其它 attempt 不误阻断。
+  const oppositeCheck = verifyTreasuryOppositeProofAbsence({
+    outcome: record.state === "chain_committed" ? "committed" : "not-executed",
+    attempt: currentExact,
+  });
+  if (oppositeCheck.blocked) {
+    return { status: "rejected", detail: `相反结论 proof 存在（${oppositeCheck.sources.join(", ")}: ${oppositeCheck.details.join(" | ").slice(0, 192)}）——不压缩` };
+  }
   // ── summary 写入（先于 active 删除；read-back 完整验证）。
+  // 【第二十二轮第十四节】双平面 root 唯一性：压缩目标 root 已存在于
+  // legacy archive 且 identity 不一致 → 拒绝（不覆盖）。
+  const crossPlaneConflict = treasuryRetirementSummaryCrossPlaneConflictDetail(record.rootTransactionId);
+  if (crossPlaneConflict !== null) {
+    return { status: "rejected", detail: crossPlaneConflict };
+  }
   const runtime = loadSummaryRuntime(true);
   if (!runtime.published) publishSummaryStoreToMemory(runtime);
   if (runtime.fatal !== null) {
@@ -601,11 +730,12 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
     });
     runtime.store.entries[key] = published;
     runtime.store.updatedAt = Game.time;
-    if (validateSummaryShape(runtime.store.entries[key]) !== null || JSON.stringify(runtime.store.entries[key]) !== JSON.stringify(published)) {
+    const readBackShapeError = validateSummaryShape(runtime.store.entries[key]);
+    if (readBackShapeError !== null || JSON.stringify(runtime.store.entries[key]) !== JSON.stringify(published)) {
       delete runtime.store.entries[key];
       runtime.store.updatedAt = Game.time;
       retirementSummaryEvents.writeFailures += 1;
-      return { status: "rejected", detail: "summary read-back 验证失败（不删除 active record）" };
+      return { status: "rejected", detail: `summary read-back 验证失败（${readBackShapeError ?? "JSON 不一致"}——不删除 active record）` };
     }
     runtime.store.entryCount += 1;
     runtime.byRoot.set(published.rootTransactionId, key);
@@ -661,7 +791,11 @@ export function compactTreasuryTerminalLineagesAtTickBoundary(): number {
 // 【第二十轮第六节】semantic lineage validator 的 terminal summary 只读
 // source（模块加载注册——可重入：测试注销 sources 后可重新装配）。
 export function registerTreasuryRetirementSummarySemanticSourceForAssembly(): void {
-  registerTreasurySemanticSummarySourceForAssembly({
+  registerTreasurySettlementSummaryHealthSourceForAssembly(() => {
+  const health = peekTreasuryRetirementSummaryHealth();
+  return { healthy: health.healthy, detail: health.detail ?? null };
+});
+registerTreasurySemanticSummarySourceForAssembly({
     healthy: () => peekTreasuryRetirementSummaryHealth().healthy,
     unhealthyDetail: () => peekTreasuryRetirementSummaryHealth().detail,
     readByLineageId: (lineageId) => lookupTreasuryRetirementSummaryByLineageId(lineageId),
