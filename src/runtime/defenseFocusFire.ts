@@ -225,7 +225,7 @@ export function executableDefenderDamage(
   target: { readonly x: number; readonly y: number },
 ): number {
   const range = chebyshevRange(defender, target);
-  if (range <= DEFENDER_MELEE_RANGE) return defender.meleeDamage;
+  if (range <= DEFENDER_MELEE_RANGE && defender.meleeDamage > 0) return defender.meleeDamage;
   if (defender.meleeDamage === 0 && range <= DEFENDER_RANGED_RANGE) return defender.rangedDamage;
   return 0;
 }

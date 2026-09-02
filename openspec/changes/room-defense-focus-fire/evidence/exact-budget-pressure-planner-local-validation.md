@@ -124,3 +124,13 @@ homeDefender 新增显式计划目标专属路径：attack / rangedAttack / move
 - 剩余遗留：防御者 boost 伤害按 body 明细计入但执行层 mode 判定用
   `getActiveBodyparts` 计数（两者只影响"是否>0"的等价判定，不影响数值）；
   pressure 目标的战略评分权重未经实战调参。
+
+## 五、验收附记：纯远程贴身语义对齐
+
+独立验收发现 `executableDefenderDamage` 首分支未排除纯远程（melee=0）
+防御者——贴身（range 1）时 planner 计 0 而执行层按
+`defenderEngagementMode` 实际执行 `rangedAttack`（欠估方向，安全但
+语义分歧）。已修复为与 mode 判定完全同口径（`range <= 1 && melee > 0`
+才计 melee；纯远程 ≤3 一律计 ranged，含贴身），并在语义测试中固化
+range=1 纯远程断言（`executableDefenderDamage = 60`、mode =
+`"ranged_attack"`）。测试计数不变（26），budget target 不受影响。

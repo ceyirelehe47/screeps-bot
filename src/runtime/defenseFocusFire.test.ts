@@ -437,7 +437,10 @@ describe("【Remediation II】Tower 与 Defender 共享 TOUGH/boost 有效伤害
     expect(executableDefenderDamage(mixed, at(10, 12))).toBe(0);
     expect(executableDefenderDamage(mixed, at(10, 13))).toBe(0);
     expect(defenderEngagementMode(mixed, at(10, 12))).toBe("approach");
-    // 纯远程：≤3 计 ranged 伤害（执行层 rangedAttack）。
+    // 纯远程：≤3 计 ranged 伤害（执行层 rangedAttack）——含贴身（range 1，
+    // 与 defenderEngagementMode 的 "ranged_attack" 完全同口径）。
+    expect(executableDefenderDamage(pureRanged, at(10, 11))).toBe(60);
+    expect(defenderEngagementMode(pureRanged, at(10, 11))).toBe("ranged_attack");
     expect(executableDefenderDamage(pureRanged, at(10, 12))).toBe(60);
     expect(executableDefenderDamage(pureRanged, at(10, 13))).toBe(60);
     expect(executableDefenderDamage(pureRanged, at(10, 14))).toBe(0);
