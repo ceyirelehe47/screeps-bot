@@ -88,6 +88,22 @@ declare global {
         defenderRoles?: Record<string, "primary" | "secondary">;
       }
     >;
+    /** 【Defense Focus-Fire Sidecar】每房间每 tick 的协同集火 plan（目标与
+     *  actor 分配；plannedAtTick 与 Game.time 不符视为过期，消费方回退）。 */
+    defenseEngagement?: Record<
+      string,
+      {
+        roomName: string;
+        plannedAtTick: number;
+        focusTargetId: string | null;
+        focusAssignedDamage: number;
+        focusExpectedHeal: number;
+        towerAssignments: Record<string, string>;
+        defenderAssignments: Record<string, string>;
+        emergencyHealByTowerId: Record<string, string>;
+        fallbackReason?: string;
+      }
+    >;
     crossShard?: {
       remotes?: Record<
         string,

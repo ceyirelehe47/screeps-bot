@@ -39,7 +39,9 @@ const MEMORY_BRANCHES = {
     // 【第十八轮】receipts v8 lineage proof / intents v7 + quarantine v6 完整
     // lineage 矩阵 / resolutions v7 / attemptLineage v2（pendingBinding/
     // retirementGeneration/currentParent）后的 schema 指纹。
-    schemaFingerprint: "a5a54e692381e1f3b41adf16e7301aec4fa739598affa9ceb3f831487262821e",
+    // 【Defense Focus-Fire Sidecar】defenseEngagement（每房间协同集火 plan）
+    // 字段加入后的 schema 指纹。
+    schemaFingerprint: "2ebc5f893bace385c9a9d7b503c4d7ed219017438218d6c8c12cac53c2a2edb6",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
@@ -65,6 +67,7 @@ const MEMORY_BRANCHES = {
       "towerCombat",
       "illegalStructureCleanup",
       "defenseCoordination",
+      "defenseEngagement",
       "crossShard",
       "resourceControl",
       "marketSaleAutomation",

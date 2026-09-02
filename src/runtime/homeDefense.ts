@@ -3,8 +3,9 @@ import { getSafeZone } from "@/runtime/safeZone";
 import { clearBoostLabTasks } from "@/runtime/boostControl";
 import { canTowersHandleHostiles } from "@/runtime/towerControl";
 import { getPlayerHostiles } from "@/runtime/defenseMode";
-import { assignDefenderSlot, clearDefenseCoordination, setDefenderRole, writeDefenseFronts } from "@/runtime/defenseCoordination";
+import { assignDefenderSlot, clearDefenseCoordination, getRoomDefenseCoordination, setDefenderRole, writeDefenseFronts } from "@/runtime/defenseCoordination";
 import { buildDefenseFronts } from "@/runtime/defenseFronts";
+import { buildFocusFireRoomInput, planRoomEngagement, writeRoomEngagementPlan, clearRoomEngagementPlan } from "@/runtime/defenseFocusFire";
 
 const DEFAULT_MAX_DEFENDERS = 3;
 
@@ -151,6 +152,45 @@ function syncDefenderAssignments(roomName: string, desiredCount: number, frontCo
   }
 }
 
+/**
+ * 【Defense Focus-Fire Sidecar】每房间每 tick 一次快照 + 一次评分，生成
+ * 唯一 engagement plan（Tower 与主防 Creep 共享的联合伤害预算/分火/紧急
+ * 治疗仲裁目标分配）。planner 为纯函数；本处只负责快照采集与持久化。
+ */
+function planRoomFocusFire(room: Room, hostiles: Creep[], frontCount: number): void {
+  if (hostiles.length === 0 || frontCount === 0) {
+    return;
+  }
+  const coordination = getRoomDefenseCoordination(room.name);
+  const slotsByCreepName: Record<string, string> = {};
+  const rolesBySlot: Record<string, "primary" | "secondary"> = {};
+  if (coordination?.defenderRoles) {
+    for (const [slot, role] of Object.entries(coordination.defenderRoles)) {
+      rolesBySlot[slot] = role;
+    }
+  }
+  const defenders = room.find(FIND_MY_CREEPS, { filter: (creep) => creep.memory.role === "homeDefender" });
+  for (const defender of defenders) {
+    // 槽位由 spawn config（args[1]）权威给出；找不到时以 creep 名回落。
+    const configName = Memory.creeps[defender.name]?.configName ?? "";
+    const slotFromConfig = configName.split(":").pop() ?? "";
+    slotsByCreepName[defender.name] = slotFromConfig || defender.name;
+  }
+  const wounded = (getTickContextService().getRoomContext(room)?.getMyCreeps() || []).filter(
+    (creep) => creep.hits < creep.hitsMax,
+  );
+  const input = buildFocusFireRoomInput({
+    roomName: room.name,
+    hostiles,
+    towers: getTickContextService().getRoomContext(room)?.getTowers() || [],
+    defenders,
+    defenderSlots: slotsByCreepName,
+    defenderRoles: rolesBySlot,
+    wounded,
+  });
+  writeRoomEngagementPlan(planRoomEngagement(input, Game.time));
+}
+
 export function runHomeDefense(): void {
   const tickContext = getTickContextService();
 
@@ -176,9 +216,11 @@ export function runHomeDefense(): void {
         stopQueuedDefenderSpawning(room.name, desiredCount);
         clearBoostLabTasks(room.name);
       }
+      planRoomFocusFire(room, playerHostiles, fronts.length);
     } else {
       removeDefendersAbove(room.name, 0);
       clearDefenseCoordination(room.name);
+      clearRoomEngagementPlan(room.name);
       clearBoostLabTasks(room.name);
     }
   }

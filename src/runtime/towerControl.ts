@@ -4,6 +4,7 @@ import { chooseBoundaryBurstEngagement, chooseInsideBurstTarget } from "@/runtim
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { getSafeZone } from "@/runtime/safeZone";
 import { getBoundaryRamparts } from "@/runtime/safeZoneHelpers";
+import { readRoomEngagementPlan, type FocusFireEngagementPlan } from "@/runtime/defenseFocusFire";
 
 const TOWER_MIN_REPAIR_ENERGY = 400;
 const TOWER_MIN_EMERGENCY_REPAIR_ENERGY = 200;
@@ -387,9 +388,63 @@ function chooseCoordinatedBurstTarget(
   return combinedBurst > incomingHeal ? preferredTarget : null;
 }
 
+/**
+ * 【Defense Focus-Fire Sidecar 消费侧】本 tick 存在有效 plan 时按 plan 执行：
+ * 紧急治疗塔按仲裁结果治疗重伤 creep；攻击塔按 towerAssignments 目标攻击
+ * （分配目标或 focusTarget 失效则本 tick 空转——保守等待下一 tick 重规划，
+ * 不回退独立评分造成伤害分裂）。执行仍用既有 tower.heal/attack 入口。
+ */
+function runTowerCombatWithPlan(
+  room: Room,
+  towers: StructureTower[],
+  hostiles: Creep[],
+  plan: FocusFireEngagementPlan,
+): boolean {
+  const hostileById = new Map(hostiles.map((hostile) => [hostile.id as string, hostile]));
+  const state = ensureTowerCombatRoomState(room.name);
+  delete state.focusTargetId;
+  delete state.lastFocusHits;
+  delete state.stalledTicks;
+  delete state.spreadUntil;
+
+  let anyAction = false;
+  for (const tower of [...towers].sort((left, right) => left.id.localeCompare(right.id))) {
+    const healCreepId = plan.emergencyHealByTowerId[tower.id];
+    if (healCreepId !== undefined) {
+      const woundedCreep = Game.getObjectById?.(healCreepId as Id<Creep>);
+      if (woundedCreep) {
+        const code = tower.heal(woundedCreep);
+        if (code === OK) {
+          recordFixedCpuAction("towerControl");
+          anyAction = anyAction || code === OK;
+        }
+      }
+      continue;
+    }
+    const assignedId = plan.towerAssignments[tower.id] ?? plan.focusTargetId ?? undefined;
+    const target = assignedId !== null && assignedId !== undefined ? hostileById.get(assignedId) : undefined;
+    if (target) {
+      const code = tower.attack(target);
+      if (code === OK) {
+        recordFixedCpuAction("towerControl");
+        anyAction = true;
+      }
+    }
+  }
+  return anyAction || hostiles.length > 0;
+}
+
 function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[], woundedCreeps: Creep[]): boolean {
   if (hostiles.length <= 0 || towers.length <= 0) {
     return false;
+  }
+
+  // plan 消费（fresh 校验在 read 内）：有效 plan 是本 tick 唯一权威；缺失/
+  // 过期/无可击穿目标（fallbackReason）→ 走既有独立逻辑（每房间每 tick 由
+  // homeDefense 重写 plan，回退只发生在 plan 不可用的同一 tick，不循环）。
+  const engagementPlan = readRoomEngagementPlan(room.name);
+  if (engagementPlan !== null && engagementPlan.focusTargetId !== null) {
+    return runTowerCombatWithPlan(room, towers, hostiles, engagementPlan);
   }
 
   const attackTowers: StructureTower[] = [];
