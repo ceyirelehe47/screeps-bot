@@ -2138,3 +2138,27 @@ attempt 双侧均经 exact builder 构造）作为刷新许可。
 
 - **WHEN** 同 class 同身份完全匹配
 - **THEN** refreshed（仅 settledAtTick 变化）
+
+### Requirement: Marker Discharge 原子性与全局锁语义
+Treasury 系统**必须**以持久 marker discharge 协议解除 write-fault marker：exact relation（显式比较 lineageId/generation/parent/binding）判定后删除并 Memory read-back；结果结构化（七值），区分当前 attempt 已解除与全局 write admission 仍被其它 attempt 锁定两个事实；同 transaction identity 冲突/证明不足/store 损坏一律零状态变化。
+
+### Requirement: Resolution Cleanup 持久阶段
+committed 与 not-executed resolution **必须**共用持久 cleanup journal：四阶段（marker discharge / authority release / outcome finalization / lineage finalization）单调推进、global reset 后可从 Memory 重建；marker discharge 先于 authority release；pending 索引只在对应持久阶段完成后移除。
+
+### Requirement: Release-trusted Receipt 读取
+任何释放 Authority、关闭 Lineage、finalize resolution 或压缩 Summary 的路径**必须**使用 release-trusted receipt 读取（完整 store 验证；任一 entry 损坏不返回 trusted proof）；replay-readable 读取只用于防重放与诊断。
+
+### Requirement: Cross-store Settlement Coordinator
+child-active commit 恢复、committed resolution 与 terminal compaction 的安全判定**必须**经统一 cross-store coordinator（trusted receipt + tombstone + GRA proof + unified resolver + marker 归属 + semantic purpose + store health 单 key 联合判定）；相反结论 proof 存在时拒绝。
+
+### Requirement: Purpose-aware Semantic Lineage
+安全关键的 semantic lineage 验证**必须**显式携带 purpose；historical/terminal-historical 的 not-executed proof 永不授权 committed 路径；committed settlement 只接受状态机允许的 current 或 chain_committed terminal current。
+
+### Requirement: Explicit Identity Profile
+Lineage、GRA、Summary 与新版 marker 权威**必须**持久显式 identity profile（modern-contract/lowlevel/legacy-replay/forensic-isolated）；required/forbidden 矩阵单一权威；profile 生命周期不可变；legacy-replay/forensic-isolated 不参与自动 release/rearm/commit；旧数据确定性迁移（partial → 整 store fail closed，不降级）。
+
+### Requirement: Legacy/Exact Summary 双平面共存
+legacy replay archive 与 exact summary store **必须**安全共存：archive 永久保留 root 重放门禁但不证明 terminal current；exact 压缩不再被 legacy store 阻断；双平面 root identity 冲突拒绝；v3 summary canonical 自验证（finalAttemptId/parent/binding 派生重算 + profile 一致）。
+
+### Requirement: Slow-rearm 孤儿 Proof 有界清理
+generation advance 成功后系统**必须**对上一代 exact retirement proof 做有界孤儿清理（单代 O(1) 查询；tombstone/authority/receipt/journal 依赖仍存或 store 不健康时保留）；beginTick 确定性补清理。

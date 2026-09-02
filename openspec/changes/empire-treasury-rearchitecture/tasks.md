@@ -387,3 +387,22 @@
       fail closed、operation-count、架构扫描）
 - [x] 27.12 既有测试 fixture 升级到 Round 21 语义（durable 真实重算、
       tombstone 持久 parent、GRA rootIdentityDigest 派生、v3 summary 形态）
+
+## 27. Round 22 — Marker Cleanup Atomicity & Explicit Proof Profiles
+- [x] identityProfile 单一权威（四枚举矩阵 + 推导 + 迁移规则）
+- [x] marker v4 exact identity + 六值 relation（显式 lineage 维度）
+- [x] marker discharge 协议（read-back + 七值结果 + 两事实分离）
+- [x] writeFault v4 形状校验 + 写入点升级（facade/recoveryCoordinator/authorizationLedger）
+- [x] resolution cleanup journal（持久四阶段 + hooks 恢复 + beginTick 接线）
+- [x] faultResolution committed/not-executed 顺序重排（discharge 先于 release）+ journal open/mark
+- [x] replay-readable 与 release-trusted receipt 分离（trustedSettlementProof）
+- [x] cross-store settlement coordinator（child-active 接线 + 相反 proof 检查）
+- [x] purpose-aware semantic lineage（七 purpose 矩阵 + gate 布尔删除 + 全调用方迁移）
+- [x] lineage v3 / GRA v2 profile 持久化 + 确定性迁移
+- [x] summary legacy archive 双平面 + canonical 自验证
+- [x] compaction 相反 proof 显式拒绝
+- [x] backfill marker 冲突语义修复
+- [x] slow-rearm 孤儿 GRA proof 有界清理（advance + beginTick 接线）
+- [x] result 语义（globalWriteAdmissionStillLocked + marker_cleanup_blocked）
+- [x] Round 22 测试（treasuryRound22MarkerDischarge：18 tests）+ 既有 fixture 升级
+- [x] evidence：round22-marker-cleanup-atomicity-explicit-proof-profiles-local-validation.md

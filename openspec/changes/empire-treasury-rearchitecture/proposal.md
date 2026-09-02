@@ -263,3 +263,7 @@ Round 21 交付（详见 design §17）：
   架构扫描（快捷放行/存在性压缩/手工 identity/raw startsWith 负向检查）。
 
 本轮仍未接入真实 writer（terminal.send adapter 纯实现等属于下一阶段）。
+
+## Round 22 — Marker Cleanup Atomicity & Explicit Proof Profiles
+
+关闭 Round 21 审查的全部阻断项：marker 清理升级为持久、可恢复、可读回证明的阶段（marker v4 exact identity + discharge read-back + 两事实分离）；committed 与 not-executed 共用 resolution cleanup journal（四持久阶段）；replay-readable 与 release-trusted receipt 分离；cross-store settlement coordinator 统一 child-active/resolution/compaction 判定；semantic lineage purpose 矩阵（historical not-executed proof 永不授权 committed）；explicit identity profile 持久化（Lineage v3/GRA v2/marker v4 + 确定性迁移 + 降级禁止）；legacy/exact summary 双平面共存 + canonical 自验证；compaction 相反 proof 显式拒绝；backfill marker 冲突修复；slow-rearm 孤儿 proof 有界清理。

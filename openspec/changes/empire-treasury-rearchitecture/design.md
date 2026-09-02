@@ -1496,3 +1496,32 @@ refresh 的既有 proof 比较切换到 `treasuryExactAttemptIdentityOfReceiptPr
 - O(1) 不变量：current/terminal exact verification、byAttempt 查询、
   tombstone replacement 单条、空闲 beginTick；global reset 首次 load 一次
   有界全表（GRA/summary/lineage 索引重建，含 transactionId 查重）。
+
+## 18. Round 22 — Marker Cleanup Atomicity & Explicit Proof Profiles
+
+### 18.1 Marker discharge 权威
+marker v4 exact identity（显式 profile + 顶层完整事实 + lineage 四字段，markerExactIdentity 单一 relation：match/conflict/insufficient/unrelated/store_unhealthy）；discharge 协议（relation → 删除 → Memory read-back → 七值结构化结果）；attemptMarkerDischarged 与 globalWriteAdmissionStillLocked 两事实分离；forensic 通道独立清除（acknowledge-rolled-back）。
+
+### 18.2 持久 cleanup journal
+Memory.runtime.treasury.resolutionCleanup（v1，容量 256）：四阶段布尔单调推进，journal 即 pending 索引（global reset 重建）；恢复编排 hooks 注入（未装配 fail closed）；安全顺序 marker discharge 先于 authority release。
+
+### 18.3 Replay-readable vs release-trusted Receipt
+lookupTreasuryTrustedSettledReceipt：完整 load/migration（每 heap 一次全表扫描，随后 O(1)）；任一 entry 损坏 → store_unhealthy。释放 Authority/关闭 Lineage/finalize/压缩一律 release-trusted（coordinator / journal handler / child-active）。
+
+### 18.4 Cross-store settlement coordinator
+verifyTreasuryCurrentSettlement：committed/not_executed verified 的全 store 单 key 联合判定（trusted receipt、resolution tombstone、GRA proof、unified resolver、marker 归属、semantic purpose、store health——lineage/summary health source 装配注入）；verifyTreasuryOppositeProofAbsence 供 compaction 显式拒绝相反结论 proof。
+
+### 18.5 Purpose-aware semantic lineage
+七 purpose 必填（缺省 fail closed）；committed_settlement 拒绝 historical/terminal-historical/同代 not-executed proof；not_executed_retirement 拒绝 committed 轨道；receipts gate 布尔删除。
+
+### 18.6 Explicit identity profile
+identityProfile 单一权威（四枚举 + required/forbidden 矩阵 + 确定性推导 + 自动协议判定）；Lineage v3 / GRA v2 持久 identityProfile（v1/v2 store 确定性迁移，partial → 整 store fail closed）；marker v4 显式 profile；legacy-replay / forensic-isolated 不参与自动协议。
+
+### 18.7 Legacy/exact summary 双平面
+v1/v2 store 整体拆 legacy replay archive（不再阻断 exact 压缩）；root/lineageId lookup 双平面（archive root 重放门禁永久保留）；双平面 root identity 冲突拒绝压缩；v3 canonical 自验证（finalAttemptId/parent/binding 派生重算 + rootExact profile 推导一致）。
+
+### 18.8 Slow-rearm 孤儿 proof 与 backfill 修复
+generation advance 后单代 O(1) 孤儿清理（依赖检查：tombstone/resolver/receipt/journal/store health）；beginTick 确定性补清理。backfill markerCleaned 改统一 exact relation（digest 冲突不再误判 cleaned）。
+
+### 18.9 Result 语义
+globalWriteAdmissionStillLocked（17.3 两事实分离）；marker_cleanup_blocked 显式拒绝状态；API 返回不伪装强于真实持久进度的完成语义。
