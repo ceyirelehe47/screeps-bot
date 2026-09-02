@@ -261,7 +261,7 @@ describe("operation-count 与空闲成本（第二十一轮 15.3/18）", () => {
     // reset 同时清零计数——基准取 reset 后（首次访问 1 次 load 全表）。
     const graScans = generationRetirementEvents.fullScans;
     for (let i = 0; i < 50; i += 1) {
-      expect(validateTreasurySemanticLineage({ transactionId: record.currentTransactionId, proof: proofInput, identity: identityInput }).verdict).toBe("match");
+      expect(validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: record.currentTransactionId, proof: proofInput, identity: identityInput }).verdict).toBe("match");
       // gen2（已退休历史代）的 proof 经 byAttempt 命中；活跃代 gen3 无 proof（retire 才写）。
       expect(lookupTreasuryGenerationRetirementProofByAttemptId(result.childIds[1])).toBeDefined();
     }

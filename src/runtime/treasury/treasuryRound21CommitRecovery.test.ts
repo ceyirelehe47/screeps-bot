@@ -404,7 +404,8 @@ describe("exact retirement proof class 矩阵与索引（第二十一轮 10）",
   function lowlevelProofOf(rootId: string, lineageId: string): TreasuryGenerationRetirementProof {
     const rootIdentity = { digest: "1111111111111111", durableIdentityDigest: "2222222222222222" };
     return {
-      schemaVersion: 1,
+      schemaVersion: 2 as const,
+      identityProfile: "lowlevel" as const,
       lineageId,
       rootTransactionId: rootId,
       rootIdentityDigest: computeTreasuryGenerationRootIdentityDigest(rootIdentity),
@@ -429,7 +430,8 @@ describe("exact retirement proof class 矩阵与索引（第二十一轮 10）",
       authorizationCohortDigest: "dddddddddddddddd",
     };
     return {
-      schemaVersion: 1,
+      schemaVersion: 2 as const,
+    identityProfile: "modern-contract" as const,
       lineageId,
       rootTransactionId: rootId,
       rootIdentityDigest: computeTreasuryGenerationRootIdentityDigest(rootIdentity),

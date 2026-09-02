@@ -367,7 +367,12 @@ describe("not-executed capability 消费顺序（第十六轮第十二节）", (
       phase: "executing_at_end_tick",
       status: "unresolved",
       recordedAt: Game.time,
-      attemptIdentity: { durableIdentityDigest: derived },
+      // 【第二十二轮 v4】exact marker（lowlevel profile + 顶层完整身份）。
+      markerProtocol: 4 as const,
+      identityProfile: "lowlevel" as const,
+      authorityClass: "lowlevel" as const,
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+      durableIdentityDigest: derived,
     });
     expect(readTreasuryWriteFault()).toBeDefined();
     const report = recoverStagedResolutions();

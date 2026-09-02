@@ -165,7 +165,7 @@ function seedResolvingTombstone(
 }
 
 /** legacy quarantine marker fixture（阻断路径的 marker 不清除断言用）。 */
-function seedMarker(transactionId: string, digest: string): void {
+function seedMarker(transactionId: string, digest: string, identity?: string): void {
   recordTreasuryWriteFault({
     transactionId,
     digest,
@@ -175,6 +175,18 @@ function seedMarker(transactionId: string, digest: string): void {
     phase: "ok_pending_commit_unresolved",
     status: "unresolved",
     recordedAt: Game.time,
+    ...(identity !== undefined
+      ? {
+          // 【第二十二轮 v4】exact marker（lowlevel profile——committed finalize 的
+          // discharge 需完整可证明身份；不传则保持 v1 legacy 形态：relation
+          // insufficient，markerCleanupBlocked 保留）。
+          markerProtocol: 4 as const,
+          identityProfile: "lowlevel" as const,
+          authorityClass: "lowlevel" as const,
+          lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+          durableIdentityDigest: identity,
+        }
+      : {}),
   });
 }
 
@@ -251,9 +263,9 @@ describe("staged committed proof closure（第十四轮第五节）", () => {
 
   it("receipt identity 与 tombstone match 且 tick 等于 required：可 finalize 并释放", () => {
     seedLowlevelQuarantine("pc_match_equal");
-    seedMarker("pc_match_equal", "0123456789abcdef");
     const digest = "0123456789abcdef";
     const identity = lowlevelIdentity("pc_match_equal", digest);
+    seedMarker("pc_match_equal", "0123456789abcdef", identity);
     seedResolvingTombstone("pc_match_equal", digest, identity, Game.time);
     expect(commitSettledReceipt("pc_match_equal", Game.time, { digest, durableIdentityDigest: identity, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }).status).toBe("written");
     Game.time += 1;

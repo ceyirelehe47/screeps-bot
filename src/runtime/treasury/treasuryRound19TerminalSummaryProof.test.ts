@@ -14,6 +14,8 @@
  * - verdict 的 future generation / 错误 binding / 错误 class → conflict。
  */
 import { createTreasuryService } from "@/runtime/treasury/facade";
+import { computeTreasuryGenerationRootIdentityDigest } from "@/runtime/treasury/generationRetirementAuthority";
+import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 import {
   buildTreasuryActionContract,
   executeTreasuryActionContract,
@@ -365,6 +367,18 @@ describe("压缩后 verdict 的 summary 重演验证矩阵（第十九轮 25.6�
   });
 });
 
+function seedFullV3SummaryStoreR19(): void {
+  const entries: Record<string, unknown> = {};
+  for (let i = 0; i < TREASURY_RETIREMENT_SUMMARY_MAX_ENTRIES; i += 1) {
+    const root = `r19_sum_fill_${String(i)}`;
+    const rootExact = { digest: `a${String(i).padStart(15, "0")}`, durableIdentityDigest: `b${String(i).padStart(15, "0")}`, lowlevelSource: "runtime-lowlevel@v1", proofClass: "lowlevel", identityAlgorithm: "root-identity@v1" };
+    const rootIdentityDigest = computeTreasuryGenerationRootIdentityDigest(rootExact);
+    entries[`rs:${root}`] = { schemaVersion: 3, lineageId: hashTreasuryCanonicalString(`treasury-attempt-lineage@v1:${root}:${rootIdentityDigest}`), rootTransactionId: root, rootIdentityDigest, terminalState: "non_rearmable_retired", finalGeneration: 0, finalAttemptId: root, finalizedAtTick: Game.time, authorityClass: "lowlevel", rootExact, finalExact: { digest: rootExact.digest, durableIdentityDigest: rootExact.durableIdentityDigest, lowlevelSource: "runtime-lowlevel@v1", proofClass: "lowlevel", exactIdentitySchema: 1 } };
+  }
+  Memory.runtime = Memory.runtime ?? {};
+  (Memory.runtime as unknown as { treasury?: Record<string, unknown> }).treasury = { lineageRetirementSummaries: { version: 3, entries, entryCount: TREASURY_RETIREMENT_SUMMARY_MAX_ENTRIES, updatedAt: Game.time } };
+  resetTreasuryRetirementSummaryRuntimeForTest();
+}
 describe("summary v1 迁移与满载（第十九轮 25.6/25.9）", () => {
   it("v1 summary store：原子迁移 v2（entry schemaVersion 提升）、root 门禁继续、历史代 class 不可证明 → pin", () => {
     const root = "r19_vmig_root";
@@ -382,12 +396,16 @@ describe("summary v1 迁移与满载（第十九轮 25.6/25.9）", () => {
       delete (store.entries[key] as unknown as Record<string, unknown>).finalExact;
     }
     resetTreasuryRetirementSummaryRuntimeForTest();
-    // load 触发 v1→v2 迁移。
-    const health = peekTreasuryRetirementSummaryHealth();
-    expect(health.healthy).toBe(true);
-    expect(health.entryCount).toBe(1);
+    // load 触发 v1→v2 迁移（+【第二十二轮】v2 legacy archive 拆分）。
+    void lookupTreasuryRetirementSummaryByRoot(root);
+    // 【第二十二轮】v1→v2→legacy archive 链：root 门禁经双平面 lookup 继续。
+    expect(lookupTreasuryRetirementSummaryByRoot(root)).toBeDefined();
+    // 【第二十二轮第十四节】v1→v2 迁移后 legacy v2 整体拆入独立 archive：
+    // 主 store 重建为空 v3（exact 压缩继续可用），archive 保留 replay 门禁。
     const migrated = (Memory.runtime!.treasury as unknown as { lineageRetirementSummaries: { version: number } }).lineageRetirementSummaries.version;
-    expect(migrated).toBe(2);
+    expect(migrated).toBe(3);
+    expect(peekTreasuryRetirementSummaryHealth().entryCount).toBe(0);
+    expect((Memory.runtime!.treasury as unknown as { legacyRetirementSummaries?: { entryCount: number } }).legacyRetirementSummaries?.entryCount).toBe(1);
     // root 门禁继续有效。
     const summary = lookupTreasuryRetirementSummaryByRoot(root);
     expect(summary).toBeDefined();
@@ -411,25 +429,7 @@ describe("summary v1 迁移与满载（第十九轮 25.6/25.9）", () => {
   });
 
   it("summary 满载：不删除旧 summary、active record 保持、新 root 容量门禁拒绝（v2 语义回归）", () => {
-    const entries: Record<string, unknown> = {};
-    for (let i = 0; i < TREASURY_RETIREMENT_SUMMARY_MAX_ENTRIES; i += 1) {
-      entries[`rs:r19_sum_fill_${String(i)}`] = {
-        schemaVersion: 2,
-        lineageId: `0000000000000${String(i).padStart(3, "0")}`.slice(-16),
-        rootTransactionId: `r19_sum_fill_${String(i)}`,
-        rootIdentityDigest: `1000000000000${String(i).padStart(3, "0")}`.slice(-16),
-        terminalState: "non_rearmable_retired",
-        finalGeneration: 0,
-        finalAttemptId: `r19_sum_fill_${String(i)}`,
-        finalizedAtTick: Game.time,
-      };
-    }
-    Memory.runtime = Memory.runtime ?? {};
-    (Memory.runtime as unknown as { treasury?: Record<string, unknown> }).treasury = {
-      ...((Memory.runtime as unknown as { treasury?: Record<string, unknown> }).treasury ?? {}),
-      lineageRetirementSummaries: { version: 2, entries, entryCount: TREASURY_RETIREMENT_SUMMARY_MAX_ENTRIES, updatedAt: Game.time },
-    };
-    resetTreasuryRetirementSummaryRuntimeForTest();
+    seedFullV3SummaryStoreR19();
     expect(peekTreasuryRetirementSummaryHealth().entryCount).toBe(TREASURY_RETIREMENT_SUMMARY_MAX_ENTRIES);
     // committed chain 无法压缩（summary 满）→ active 保持。
     const root = "r19_cmpf_root";

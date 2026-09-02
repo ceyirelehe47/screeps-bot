@@ -147,12 +147,12 @@ describe("operation-count（第二十轮性能要求）", () => {
   it("50 次 semantic validation 不增加 fullScans（O(1)：ID 解析 + 索引 + 单条 proof 查询）", () => {
     const chain = seedActiveChildChain("r20_oc_sem");
     // 预热（首次 load 计一次 fullScan）。
-    validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity });
+    validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: chain.childId, proof: chain.identity });
     const lineageScans = lineageStoreEvents.fullScans;
     const proofScans = generationRetirementEvents.fullScans;
     for (let i = 0; i < 50; i += 1) {
       // 【第二十一轮 6.4】current 分支要求完整 exact identity 输入。
-      const verdict = validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity, identity: chain.identity });
+      const verdict = validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: chain.childId, proof: chain.identity, identity: chain.identity });
       expect(verdict.verdict).toBe("match");
     }
     expect(lineageStoreEvents.fullScans).toBe(lineageScans);

@@ -233,7 +233,8 @@ describe("exact per-generation retirement authority（第二十轮 26.7）", () 
     const expectedIdOf = (generation: number): string =>
       generation <= 0 ? "r20_gr_fill" : deriveTreasuryLineageNextChildTransactionId(created.record.lineageId, generation, "r20_gr_fill");
     const fillerProof = (generation: number): TreasuryGenerationRetirementProof => ({
-      schemaVersion: 1,
+      schemaVersion: 2 as const,
+      identityProfile: "lowlevel" as const,
       lineageId: created.record.lineageId,
       rootTransactionId: "r20_gr_fill",
       // 【第二十一轮 10.2】root 绑定：rootIdentityDigest 必须与 (rootTransactionId, lineageId) 满足共享 canonical 派生。
@@ -294,7 +295,8 @@ describe("exact per-generation retirement authority（第二十轮 26.7）", () 
     expect(created.status).toBe("written");
     if (created.status !== "written") return;
     const input: TreasuryGenerationRetirementProof = {
-      schemaVersion: 1,
+      schemaVersion: 2 as const,
+    identityProfile: "lowlevel" as const,
       lineageId: created.record.lineageId,
       rootTransactionId: "r20_gr_alias",
       // 【第二十一轮 10.2】root 绑定：rootIdentityDigest 真实派生（假值被共享 canonical 校验拒绝）。

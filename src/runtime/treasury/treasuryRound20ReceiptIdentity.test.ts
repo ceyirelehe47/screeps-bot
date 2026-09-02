@@ -216,8 +216,21 @@ describe("existing tr1_ receipt 的 exact 幂等（第二十轮 26.5）", () => 
     expect(childExecuted.status).toBe("executed_unsettled");
     expect(readTreasurySettlementProof(issued.childTransactionId)).toBeDefined();
     setTreasuryCommitFaultInjectorForTest(null);
-    // beginTick 恢复：commit-pending 补完成 → chain_committed。
+    // 【第二十二轮 9.4】beginTick 恢复：当前 attempt marker 未 discharge 前
+    // cross-store coordinator 拒绝关闭（child_active 保留——fail closed）。
     advanceTick();
+    const pending = lookupTreasuryAttemptLineageByAttemptId(issued.childTransactionId);
+    expect(pending?.state).toBe("child_active");
+    // 显式 committed resolution（receipt 已持久化——trusted proof）完成
+    // marker discharge 后 chain 关闭。heap_publish 是 commit 类 phase——
+    // conclusion 必须为 observed_committed（本 describe 默认 adapter 是
+    // observed_not_executed，此处按场景切换）。
+    reconcilerConclusion = "observed_committed";
+    const t3 = advanceTick();
+    const cap = t3.issueTreasuryReconciliationCapability({ transactionId: issued.childTransactionId });
+    expect(cap.status).toBe("issued");
+    if (cap.status !== "issued") return;
+    expect(t3.resolveUnresolvedTransaction({ transactionId: issued.childTransactionId, capability: cap.capability }).status).toBe("resolved");
     const record = lookupTreasuryAttemptLineageByAttemptId(issued.childTransactionId);
     expect(record?.state).toBe("chain_committed");
   });

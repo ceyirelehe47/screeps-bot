@@ -301,7 +301,7 @@ afterEach(() => {
 describe("semantic lineage validation 基础矩阵（第二十轮 26.1）", () => {
   it("正确 v2 child + 正确四字段 + matching active lineage → match（current）", () => {
     const chain = seedActiveChildChain("r20_sem_match");
-    const verdict = validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity, identity: chain.identity });
+    const verdict = validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: chain.childId, proof: chain.identity, identity: chain.identity });
     expect(verdict.verdict).toBe("match");
     if (verdict.verdict === "match") {
       expect(verdict.authoritySource).toBe("active");
@@ -312,6 +312,7 @@ describe("semantic lineage validation 基础矩阵（第二十轮 26.1）", () =
   it("child ID 内嵌 lineageId 与 proof 不同 → conflict", () => {
     const chain = seedActiveChildChain("r20_sem_lid");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: { ...chain.identity, lineageId: "ffffffffffffffff" },
     });
@@ -321,6 +322,7 @@ describe("semantic lineage validation 基础矩阵（第二十轮 26.1）", () =
   it("child ID 内嵌 generation 与 proof 不同 → conflict", () => {
     const chain = seedActiveChildChain("r20_sem_gen");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: { ...chain.identity, lineageGeneration: 2 },
     });
@@ -330,6 +332,7 @@ describe("semantic lineage validation 基础矩阵（第二十轮 26.1）", () =
   it("generation 1 的 parent 不是 root → conflict", () => {
     const chain = seedActiveChildChain("r20_sem_par");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: { ...chain.identity, parentTransactionId: "r20_other_parent" },
     });
@@ -339,6 +342,7 @@ describe("semantic lineage validation 基础矩阵（第二十轮 26.1）", () =
   it("binding 字段格式正确但重算不同 → conflict", () => {
     const chain = seedActiveChildChain("r20_sem_bind");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: { ...chain.identity, lineageBindingDigest: "9999999999999999" },
     });
@@ -348,12 +352,13 @@ describe("semantic lineage validation 基础矩阵（第二十轮 26.1）", () =
   it("child ID 与 root/lineage 派生不一致（伪造 checksum）→ conflict", () => {
     const chain = seedActiveChildChain("r20_sem_cks");
     const forged = `tr1_${chain.lineageId}_000001_deadbeef`;
-    const verdict = validateTreasurySemanticLineage({ transactionId: forged, proof: chain.identity });
+    const verdict = validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: forged, proof: chain.identity });
     expect(verdict.verdict).toBe("conflict");
   });
 
   it("legacy 不可解析 tr1_ ID → insufficient（legacy isolated，不猜测）", () => {
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: "tr1_legacyv1childid0000x",
       proof: { lineageId: "0123456789abcdef", lineageGeneration: 1, parentTransactionId: "r20_legacy_root", lineageBindingDigest: "3333333333333333" },
     });
@@ -362,6 +367,7 @@ describe("semantic lineage validation 基础矩阵（第二十轮 26.1）", () =
 
   it("initial attempt（非 tr1_）输入 → conflict（无 lineage 语义域）", () => {
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: "r20_initial_tx",
       proof: { lineageId: "0123456789abcdef", lineageGeneration: 1, parentTransactionId: "r20_initial_parent", lineageBindingDigest: "3333333333333333" },
     });
@@ -389,6 +395,7 @@ describe("semantic lineage validation 基础矩阵（第二十轮 26.1）", () =
     expect(activated.status).not.toBe("rejected");
     const record = readTreasuryAttemptLineageRecord(created.record.lineageId)!;
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: childId,
       proof: {
         lineageId: record.lineageId,
@@ -408,7 +415,7 @@ describe("semantic lineage validation 基础矩阵（第二十轮 26.1）", () =
     store!.entryCount = store!.entryCount + 1;
     resetTreasuryLineageRuntimeForTest();
     expect(peekTreasuryAttemptLineageHealth().healthy).toBe(false);
-    const verdict = validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity });
+    const verdict = validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: chain.childId, proof: chain.identity });
     expect(verdict.verdict).toBe("store_unhealthy");
   });
 
@@ -416,7 +423,7 @@ describe("semantic lineage validation 基础矩阵（第二十轮 26.1）", () =
     const chain = seedActiveChildChain("r20_sem_src");
     resetTreasurySemanticLineageSourcesForTest();
     try {
-      const verdict = validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity });
+      const verdict = validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: chain.childId, proof: chain.identity });
       expect(verdict.verdict).toBe("store_unhealthy");
     } finally {
       // 恢复装配（后续测试依赖——模块级注册函数可重入）。

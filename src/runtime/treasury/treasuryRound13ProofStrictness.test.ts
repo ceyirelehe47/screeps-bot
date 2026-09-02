@@ -693,8 +693,11 @@ describe("forensic attempt identity（第十三轮第十一节）", () => {
     const marker = readTreasuryWriteFault();
     expect(marker?.phase).toBe("internal_authorization_fault_forensic");
     // marker 携带完整 attempt identity。
-    expect(marker?.attemptIdentity?.contractDigest).toBeDefined();
-    expect(marker?.attemptIdentity?.durableIdentityDigest).toMatch(/^[0-9a-f]{16}$/);
+    // 【第二十二轮 v4】exact marker 顶层完整身份（不再写旧式嵌套 attemptIdentity）。
+    expect(marker?.contractDigest).toBeDefined();
+    expect(marker?.durableIdentityDigest).toMatch(/^[0-9a-f]{16}$/);
+    expect(marker?.markerProtocol).toBe(4);
+    expect(marker?.identityProfile).toBe("modern-contract");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
   });
 

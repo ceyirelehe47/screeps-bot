@@ -231,6 +231,7 @@ describe("chain-committed compaction 与压缩后 terminal current（第二十�
     expect(summary.terminalState).toBe("chain_committed");
     // 压缩后 terminal current exact validation 继续 match。
     const match = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: { lineageId: record.lineageId, lineageGeneration: record.generation, parentTransactionId: record.currentParentTransactionId!, lineageBindingDigest: record.bindingDigest! },
       identity: { digest: record.currentIdentity.digest, durableIdentityDigest: record.currentIdentity.durableIdentityDigest, lowlevelSource: record.lowlevelSource },
@@ -242,6 +243,7 @@ describe("chain-committed compaction 与压缩后 terminal current（第二十�
     }
     // 错误 identity 不能 match。
     const wrong = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: { lineageId: record.lineageId, lineageGeneration: record.generation, parentTransactionId: record.currentParentTransactionId!, lineageBindingDigest: record.bindingDigest! },
       identity: { digest: "7777777777777777", durableIdentityDigest: record.currentIdentity.durableIdentityDigest, lowlevelSource: record.lowlevelSource },

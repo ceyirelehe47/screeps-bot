@@ -234,7 +234,7 @@ function compactedSingleGeneration(rootId: string): { readonly lineageId: string
 describe("active current 完整 exact identity（第二十一轮 6）", () => {
   it("完整一致（lowlevel）→ match", () => {
     const chain = seedLowlevelChildChain("r21_ac_ok");
-    const verdict = validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity, identity: chain.identity });
+    const verdict = validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: chain.childId, proof: chain.identity, identity: chain.identity });
     expect(verdict.verdict).toBe("match");
     if (verdict.verdict === "match") {
       expect(verdict.authoritySource).toBe("active");
@@ -245,6 +245,7 @@ describe("active current 完整 exact identity（第二十一轮 6）", () => {
   it("完整一致（modern contract 链）→ match", () => {
     const chain = seedModernChildChain("r21_ac_mod");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: chain.identity,
       identity: { ...chain.identity, contractDigest: chain.contractDigest, authorizationCohortDigest: chain.cohortDigest },
@@ -255,6 +256,7 @@ describe("active current 完整 exact identity（第二十一轮 6）", () => {
   it("digest 相同、contract 不同（modern 链）→ conflict", () => {
     const chain = seedModernChildChain("r21_ac_ctr");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: chain.identity,
       identity: { ...chain.identity, contractDigest: "eeeeeeeeeeeeeeee", authorizationCohortDigest: chain.cohortDigest },
@@ -265,6 +267,7 @@ describe("active current 完整 exact identity（第二十一轮 6）", () => {
   it("digest/contract 相同、cohort 不同 → conflict", () => {
     const chain = seedModernChildChain("r21_ac_coh");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: chain.identity,
       identity: { ...chain.identity, contractDigest: chain.contractDigest, authorizationCohortDigest: "ffffffffffffffff" },
@@ -275,6 +278,7 @@ describe("active current 完整 exact identity（第二十一轮 6）", () => {
   it("durable identity 不同 → conflict", () => {
     const chain = seedLowlevelChildChain("r21_ac_dur");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: chain.identity,
       identity: { ...chain.identity, durableIdentityDigest: "9999999999999999" },
@@ -286,20 +290,21 @@ describe("active current 完整 exact identity（第二十一轮 6）", () => {
     const chain = seedLowlevelChildChain("r21_ac_nd");
     const { durableIdentityDigest: _omit, ...partial } = chain.identity;
     void _omit;
-    const verdict = validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity, identity: partial });
+    const verdict = validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: chain.childId, proof: chain.identity, identity: partial });
     expect(verdict.verdict).toBe("insufficient");
   });
 
   it("modern contract current 输入缺 contract → insufficient（弱 identity 不得匹配）", () => {
     const chain = seedModernChildChain("r21_ac_nc");
     // 输入不携带 contract/cohort（record.currentIdentity 有）→ 不可证明。
-    const verdict = validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity, identity: chain.identity });
+    const verdict = validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: chain.childId, proof: chain.identity, identity: chain.identity });
     expect(verdict.verdict).toBe("insufficient");
   });
 
   it("modern contract current 输入缺 cohort → insufficient", () => {
     const chain = seedModernChildChain("r21_ac_nch");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: chain.identity,
       identity: { ...chain.identity, contractDigest: chain.contractDigest },
@@ -310,6 +315,7 @@ describe("active current 完整 exact identity（第二十一轮 6）", () => {
   it("identity-bound 输入携带 lowlevelSource → conflict（class 矛盾）", () => {
     const chain = seedModernChildChain("r21_ac_llc");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: chain.identity,
       identity: { ...chain.identity, contractDigest: chain.contractDigest, authorizationCohortDigest: chain.cohortDigest, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME },
@@ -321,13 +327,14 @@ describe("active current 完整 exact identity（第二十一轮 6）", () => {
     const chain = seedLowlevelChildChain("r21_ac_nll");
     const { lowlevelSource: _omit, ...partial } = chain.identity;
     void _omit;
-    const verdict = validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity, identity: partial });
+    const verdict = validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: chain.childId, proof: chain.identity, identity: partial });
     expect(verdict.verdict).not.toBe("match");
   });
 
   it("lowlevelSource 不同 → conflict（runtime 与 migrated 不能互相证明）", () => {
     const chain = seedLowlevelChildChain("r21_ac_lls");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: chain.identity,
       identity: { ...chain.identity, lowlevelSource: "migrated-lowlevel@v1" },
@@ -338,6 +345,7 @@ describe("active current 完整 exact identity（第二十一轮 6）", () => {
   it("proof class 不同（lowlevel 输入 vs modern record）→ conflict", () => {
     const chain = seedModernChildChain("r21_ac_cls");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: chain.identity,
       identity: { ...chain.identity, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME },
@@ -347,13 +355,14 @@ describe("active current 完整 exact identity（第二十一轮 6）", () => {
 
   it("identity 未提供 → current 不可证明（insufficient，不得 match）", () => {
     const chain = seedLowlevelChildChain("r21_ac_nid");
-    const verdict = validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity });
+    const verdict = validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: chain.childId, proof: chain.identity });
     expect(verdict.verdict).toBe("insufficient");
   });
 
   it("lineage 四字段正确但 digest 错误 → semantic validator 不得 match", () => {
     const chain = seedLowlevelChildChain("r21_ac_lxd");
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: chain.identity,
       identity: { ...chain.identity, digest: "7777777777777777" },
@@ -385,6 +394,7 @@ describe("terminal summary v3 与 terminal current exact identity（第二十一
     const { lineageId } = compactedSingleGeneration("r21_tc_ok");
     const summary = lookupTreasuryRetirementSummaryByLineageId(lineageId)!;
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: "r21_tc_ok",
       proof: { lineageId: summary.lineageId, lineageGeneration: 0, parentTransactionId: "r21_tc_ok", lineageBindingDigest: "0000000000000000" },
       identity: {
@@ -431,6 +441,7 @@ describe("terminal summary v3 与 terminal current exact identity（第二十一
     expect(summary.finalAttemptId).toBe(chain.childId);
     // 完整 match。
     const matchVerdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: {
         lineageId: chain.lineageId,
@@ -451,6 +462,7 @@ describe("terminal summary v3 与 terminal current exact identity（第二十一
     }
     // 同 finalAttemptId 但 digest 不同 → conflict（外壳不构成证明）。
     const conflictVerdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: {
         lineageId: chain.lineageId,
@@ -499,24 +511,28 @@ describe("terminal summary v3 与 terminal current exact identity（第二十一
       lineageBindingDigest: record.bindingDigest!,
     };
     const durableVerdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: proofInput,
       identity: { digest: record.currentIdentity.digest, durableIdentityDigest: "9999999999999999", lowlevelSource: record.lowlevelSource },
     });
     expect(durableVerdict.verdict).toBe("conflict");
     const sourceVerdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: proofInput,
       identity: { digest: record.currentIdentity.digest, durableIdentityDigest: record.currentIdentity.durableIdentityDigest, lowlevelSource: "migrated-lowlevel@v1" },
     });
     expect(sourceVerdict.verdict).toBe("conflict");
     const parentVerdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: { ...proofInput, parentTransactionId: "r21_wrong_parent" },
       identity: { digest: record.currentIdentity.digest, durableIdentityDigest: record.currentIdentity.durableIdentityDigest, lowlevelSource: record.lowlevelSource },
     });
     expect(parentVerdict.verdict).toBe("conflict");
     const bindingVerdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: chain.childId,
       proof: { ...proofInput, lineageBindingDigest: "8888888888888888" },
       identity: { digest: record.currentIdentity.digest, durableIdentityDigest: record.currentIdentity.durableIdentityDigest, lowlevelSource: record.lowlevelSource },
@@ -543,6 +559,7 @@ describe("terminal summary v3 与 terminal current exact identity（第二十一
     expect(lookupTreasuryRetirementSummaryByRoot("r21_ts_legacy")).toBeDefined();
     // terminal current 不可证明（v2 无 finalExact）。
     const verdict = validateTreasurySemanticLineage({
+      purpose: "historical_diagnostic",
       transactionId: "tr1_x".padEnd(24, "0"),
       proof: { lineageId: summary.lineageId, lineageGeneration: 0, parentTransactionId: "r21_ts_legacy", lineageBindingDigest: "0000000000000000" },
       identity: { digest: summary.rootIdentityDigest, durableIdentityDigest: summary.rootIdentityDigest },
@@ -617,7 +634,7 @@ describe("健康与防御（回归锚点）", () => {
     store!.entryCount = store!.entryCount + 1;
     resetTreasuryLineageRuntimeForTest();
     expect(peekTreasuryAttemptLineageHealth().healthy).toBe(false);
-    const verdict = validateTreasurySemanticLineage({ transactionId: chain.childId, proof: chain.identity, identity: chain.identity });
+    const verdict = validateTreasurySemanticLineage({ purpose: "historical_diagnostic", transactionId: chain.childId, proof: chain.identity, identity: chain.identity });
     expect(verdict.verdict).toBe("store_unhealthy");
   });
 

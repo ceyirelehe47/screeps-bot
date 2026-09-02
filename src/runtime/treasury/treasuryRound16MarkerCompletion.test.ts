@@ -94,7 +94,14 @@ function seedFinalNotExecuted(transactionId: string, identity: string): void {
 }
 
 
-function seedMarker(overrides: { digest?: string; attemptIdentity?: { durableIdentityDigest?: string } } = {}): void {
+function seedMarker(overrides: {
+  digest?: string;
+  attemptIdentity?: { durableIdentityDigest?: string };
+  durableIdentityDigest?: string;
+  lowlevelSource?: string;
+  /** 显式传 false 时不写 v4 身份字段（模拟 v1 legacy marker）。 */
+  legacyV1?: boolean;
+} = {}): void {
   recordTreasuryWriteFault({
     transactionId: "mc_tx",
     digest: overrides.digest ?? DIGEST,
@@ -104,6 +111,17 @@ function seedMarker(overrides: { digest?: string; attemptIdentity?: { durableIde
     phase: "executing_at_end_tick",
     status: "unresolved",
     recordedAt: Game.time,
+    ...(overrides.legacyV1 === true
+      ? {}
+      : {
+          // 【第二十二轮 v4】exact marker：lowlevel profile + 顶层完整身份事实。
+          markerProtocol: 4 as const,
+          identityProfile: "lowlevel" as const,
+          authorityClass: "lowlevel" as const,
+          lowlevelSource: overrides.lowlevelSource ?? TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+          durableIdentityDigest:
+            overrides.durableIdentityDigest ?? overrides.attemptIdentity?.durableIdentityDigest ?? "0cc99174bb6f2e74",
+        }),
     ...(overrides.attemptIdentity !== undefined ? { attemptIdentity: overrides.attemptIdentity } : {}),
   });
 }
@@ -124,7 +142,7 @@ describe("marker 补完成（第十六轮第七节）", () => {
   it("final not-executed + authority 已释放 + matching marker：beginTick 清 marker（幂等）", () => {
     const identity = seedQuarantineThenRelease("mc_tx");
     seedFinalNotExecuted("mc_tx", identity);
-    seedMarker({ attemptIdentity: { durableIdentityDigest: identity } });
+    seedMarker({ durableIdentityDigest: identity });
     expect(readTreasuryWriteFault()).toBeDefined();
     const report = recoverStagedResolutions();
     expect(report.completedRelease).toBe(1);
@@ -138,7 +156,7 @@ describe("marker 补完成（第十六轮第七节）", () => {
   it("marker digest 冲突（属于另一 attempt）：不清除", () => {
     const identity = seedQuarantineThenRelease("mc_tx");
     seedFinalNotExecuted("mc_tx", identity);
-    seedMarker({ digest: "ffffffffffffffff", attemptIdentity: { durableIdentityDigest: identity } });
+    seedMarker({ digest: "ffffffffffffffff", durableIdentityDigest: identity });
     const report = recoverStagedResolutions();
     expect(report.markerCleanupBlocked).toBeGreaterThanOrEqual(1);
     expect(report.completedRelease).toBe(0);
@@ -149,16 +167,16 @@ describe("marker 补完成（第十六轮第七节）", () => {
   it("marker attemptIdentity 与 tombstone conflict：不清除", () => {
     const identity = seedQuarantineThenRelease("mc_tx");
     seedFinalNotExecuted("mc_tx", identity);
-    seedMarker({ attemptIdentity: { durableIdentityDigest: "aaaaaaaaaaaaaaaa" } });
+    seedMarker({ durableIdentityDigest: "aaaaaaaaaaaaaaaa" });
     const report = recoverStagedResolutions();
     expect(report.markerCleanupBlocked).toBeGreaterThanOrEqual(1);
     expect(readTreasuryWriteFault()).toBeDefined();
   });
 
-  it("marker 缺 attemptIdentity（旧 proof insufficient）：不清除", () => {
+  it("marker 无 class-aware 身份（v1 legacy insufficient）：不清除", () => {
     const identity = seedQuarantineThenRelease("mc_tx");
     seedFinalNotExecuted("mc_tx", identity);
-    seedMarker();
+    seedMarker({ legacyV1: true });
     const report = recoverStagedResolutions();
     expect(report.markerCleanupBlocked).toBeGreaterThanOrEqual(1);
     expect(readTreasuryWriteFault()).toBeDefined();
@@ -196,7 +214,7 @@ describe("marker 补完成（第十六轮第七节）", () => {
   it("marker 清除后 rearm 才允许；未清除时 rearm 拒绝", () => {
     const identity = seedQuarantineThenRelease("mc_tx");
     seedFinalNotExecuted("mc_tx", identity);
-    seedMarker({ attemptIdentity: { durableIdentityDigest: identity } });
+    seedMarker({ durableIdentityDigest: identity });
     // 直接调协议入口（零写、不依赖 service 闭包）——不经 beginTick 恢复，
     // marker 保持 pending 状态。
     const blocked = rearmResolvedNotExecutedAttempt({ parentTransactionId: "mc_tx" });
@@ -211,7 +229,7 @@ describe("marker 补完成（第十六轮第七节）", () => {
   it("marker 读取返回深冻结快照（不泄漏 attemptIdentity 引用）", () => {
     const identity = seedQuarantineThenRelease("mc_tx");
     seedFinalNotExecuted("mc_tx", identity);
-    seedMarker({ attemptIdentity: { durableIdentityDigest: identity } });
+    seedMarker({ durableIdentityDigest: identity });
     const marker = readTreasuryWriteFault();
     expect(marker).toBeDefined();
     expect(Object.isFrozen(marker)).toBe(true);
