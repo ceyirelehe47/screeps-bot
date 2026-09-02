@@ -193,6 +193,7 @@ function semanticGateOfAuthority(
       parentTransactionId: authority.parentTransactionId!,
       lineageBindingDigest: authority.lineageBindingDigest!,
     },
+    purpose: "authority_resolution",
     identity: {
       digest: authority.digest,
       ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
