@@ -163,7 +163,17 @@ marker malformed、receipt 未知版本。
 | `node scripts/verify-jest-budget.mjs` | `JEST_TEST_BUDGET=PASSED`（260/1888；budget 提交锚定本代码提交） |
 
 budget（verify-jest-budget.mjs 锚点 + test-suite-budget.json + manifest）在
-代码提交 `79e6c7f` 之后更新并以独立提交入库；此后无代码变化。
+代码提交 `79e6c7f` 之后更新并以独立提交入库；此后无 Treasury 代码变化。
+
+## 10. 最终验证附记（Defense sidecar 提交后复验）
+
+Treasury 代码在 `79e6c7f` 之后零变化（后续提交为独立的 Defense
+Focus-Fire sidecar `194631f`/`8ac8d88` 与 budget/evidence `3bc4bd1`/
+`887f217`，均不触碰 `src/runtime/treasury/`）。最终分支 HEAD
+`887f2174f97ea5da6651dfa1e395b0d17849ac60` 上复验全套命令：
+`tsc` 0 错误；`npm run build` 成功（bundle sha256 `490f74e9cd096930…`）；
+Round 22 marker discharge 定向 18/18；Treasury 全量 66 suites/1182 tests；
+全仓 261 suites/1902 tests；`verify-jest-budget` PASSED。
 
 ## 9. 遗留与如实声明
 
