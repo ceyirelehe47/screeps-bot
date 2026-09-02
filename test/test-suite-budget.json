@@ -1,18 +1,18 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "79e6c7f",
-    "suites": 260,
-    "tests": 1888,
-    "passed": 1888,
+    "commit": "8ac8d88",
+    "suites": 261,
+    "tests": 1902,
+    "passed": 1902,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 260,
-    "tests": 1888,
-    "passed": 1888,
+    "suites": 261,
+    "tests": 1902,
+    "passed": 1902,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -1321,6 +1321,11 @@
     "src/runtime/treasury/treasuryRound22Remediation.test.ts": {
       "baseline": 0,
       "budget": 32,
+      "tier": "high-risk"
+    },
+    "src/runtime/defenseFocusFire.test.ts": {
+      "baseline": 0,
+      "budget": 14,
       "tier": "high-risk"
     }
   }
