@@ -96,6 +96,8 @@ declare global {
         roomName: string;
         plannedAtTick: number;
         focusTargetId: string | null;
+        /** 主目标在联合预算内是否可击杀（false = 共享战略压制目标）。 */
+        killExpected: boolean;
         focusAssignedDamage: number;
         focusExpectedHeal: number;
         towerAssignments: Record<string, string>;

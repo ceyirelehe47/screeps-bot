@@ -3,6 +3,7 @@ import { getAssignedDefenseFront, getDefenderRole, getTowerFocusFront } from "@/
 import { getPlayerHostiles } from "@/runtime/defenseMode";
 import { getSafeZone } from "@/runtime/safeZone";
 import { createSafeZoneCostCallback, getBoundaryRamparts } from "@/runtime/safeZoneHelpers";
+import { moveToTarget } from "@/roles/shared";
 
 jest.mock("@/runtime/safeZone", () => ({
   getSafeZone: jest.fn(),
@@ -150,5 +151,137 @@ describe("homeDefenderRole", () => {
     homeDefenderRole("W1N1", "0").target(defender);
 
     expect(defender.moveTo).not.toHaveBeenCalled();
+  });
+
+  it("【Remediation II】显式计划目标优先：贴身按计划目标 attack（旧独立评分/去重不得改目标）", () => {
+    Game.time = 5;
+    const plannedTarget = createHostile("planned", 10, 11, 80);
+    const otherTarget = createHostile("other", 10, 10, 100);
+    const defender = {
+      name: "defender-0",
+      memory: { role: "homeDefender" },
+      body: [{ type: ATTACK }],
+      pos: new MockPos(10, 11, "W1N1") as unknown as RoomPosition,
+      attack: jest.fn(() => OK),
+      rangedAttack: jest.fn(() => OK),
+      moveTo: jest.fn(() => OK),
+      getActiveBodyparts: jest.fn((part: BodyPartConstant) => (part === ATTACK ? 2 : 0)),
+    } as unknown as Creep;
+    const room = createRoom([defender]);
+    Object.defineProperty(defender, "room", { value: room });
+    (getPlayerHostiles as jest.Mock).mockReturnValue([plannedTarget, otherTarget]);
+    (getAssignedDefenseFront as jest.Mock).mockReturnValue(null);
+    (getTowerFocusFront as jest.Mock).mockReturnValue(null);
+    Memory.runtime = {
+      defenseEngagement: {
+        W1N1: {
+          roomName: "W1N1",
+          plannedAtTick: Game.time,
+          focusTargetId: "planned",
+          killExpected: true,
+          focusAssignedDamage: 0,
+          focusExpectedHeal: 0,
+          towerAssignments: {},
+          defenderAssignments: { "0": "planned" },
+          emergencyHealByTowerId: {},
+        },
+      },
+    } as never;
+
+    homeDefenderRole("W1N1", "0").target(defender);
+
+    expect(defender.attack).toHaveBeenCalledWith(plannedTarget);
+    expect(defender.attack).not.toHaveBeenCalledWith(otherTarget);
+    expect(moveToTarget).not.toHaveBeenCalled();
+  });
+
+  it("【Remediation II】纯远程防御者按计划目标 rangedAttack（与 planner 计入的伤害一致）", () => {
+    Game.time = 6;
+    const plannedTarget = createHostile("planned", 10, 13, 300);
+    const defender = {
+      name: "defender-1",
+      memory: { role: "homeDefender" },
+      body: [{ type: RANGED_ATTACK }],
+      pos: new MockPos(10, 11, "W1N1") as unknown as RoomPosition,
+      attack: jest.fn(() => OK),
+      rangedAttack: jest.fn(() => OK),
+      moveTo: jest.fn(() => OK),
+      getActiveBodyparts: jest.fn((part: BodyPartConstant) => (part === RANGED_ATTACK ? 2 : 0)),
+    } as unknown as Creep;
+    const room = createRoom([defender]);
+    Object.defineProperty(defender, "room", { value: room });
+    (getPlayerHostiles as jest.Mock).mockReturnValue([plannedTarget]);
+    (getAssignedDefenseFront as jest.Mock).mockReturnValue(null);
+    (getTowerFocusFront as jest.Mock).mockReturnValue(null);
+    Memory.runtime = {
+      defenseEngagement: {
+        W1N1: {
+          roomName: "W1N1",
+          plannedAtTick: Game.time,
+          focusTargetId: "planned",
+          killExpected: true,
+          focusAssignedDamage: 0,
+          focusExpectedHeal: 0,
+          towerAssignments: {},
+          defenderAssignments: { "0": "planned" },
+          emergencyHealByTowerId: {},
+        },
+      },
+    } as never;
+
+    homeDefenderRole("W1N1", "0").target(defender);
+
+    // range 2 ≤ 3 且无 ATTACK 部件 → rangedAttack 计划目标（planner 同口径
+    // 计入 rangedDamage）；不调用 attack。
+    expect(defender.rangedAttack).toHaveBeenCalledWith(plannedTarget);
+    expect(defender.attack).not.toHaveBeenCalled();
+    expect(moveToTarget).not.toHaveBeenCalled();
+  });
+
+  it("【Remediation II】计划目标不可即时攻击 → 本 tick 伤害为 0 且移动朝共享目标（不走 coverage rampart）", () => {
+    Game.time = 7;
+    const plannedTarget = createHostile("planned", 20, 20, 300);
+    const rampart = createRampart(12, 10);
+    const defender = {
+      name: "defender-0",
+      memory: { role: "homeDefender" },
+      body: [{ type: ATTACK }],
+      pos: new MockPos(12, 10, "W1N1") as unknown as RoomPosition,
+      attack: jest.fn(() => OK),
+      rangedAttack: jest.fn(() => OK),
+      moveTo: jest.fn(() => OK),
+      getActiveBodyparts: jest.fn((part: BodyPartConstant) => (part === ATTACK ? 1 : 0)),
+    } as unknown as Creep;
+    const room = createRoom([defender]);
+    Object.defineProperty(defender, "room", { value: room });
+    (getPlayerHostiles as jest.Mock).mockReturnValue([plannedTarget]);
+    (getAssignedDefenseFront as jest.Mock).mockReturnValue(null);
+    (getTowerFocusFront as jest.Mock).mockReturnValue(null);
+    (getBoundaryRamparts as jest.Mock).mockReturnValue([rampart]);
+    (getDefenderRole as jest.Mock).mockReturnValue("secondary");
+    Memory.runtime = {
+      defenseEngagement: {
+        W1N1: {
+          roomName: "W1N1",
+          plannedAtTick: Game.time,
+          focusTargetId: "planned",
+          killExpected: true,
+          focusAssignedDamage: 0,
+          focusExpectedHeal: 0,
+          towerAssignments: {},
+          defenderAssignments: { "0": "planned" },
+          emergencyHealByTowerId: {},
+        },
+      },
+    } as never;
+
+    homeDefenderRole("W1N1", "0").target(defender);
+
+    // 需要移动（range 10）→ 本 tick 伤害 0、移动朝共享计划目标；不执行
+    // attack/rangedAttack，也不进入旧的 coverage rampart 分支。
+    expect(defender.attack).not.toHaveBeenCalled();
+    expect(defender.rangedAttack).not.toHaveBeenCalled();
+    expect(moveToTarget).toHaveBeenCalledTimes(1);
+    expect(moveToTarget).toHaveBeenCalledWith(defender, plannedTarget, 1, expect.anything());
   });
 });

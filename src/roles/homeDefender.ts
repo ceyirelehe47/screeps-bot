@@ -4,7 +4,7 @@ import { getAssignedDefenseFront, getDefenderRole, getTowerFocusFront, type Defe
 import { getPlayerHostiles } from "@/runtime/defenseMode";
 import { chooseBoundaryBurstEngagement, chooseInsideBurstTarget } from "@/runtime/hostilePriorities";
 import { createSafeZoneCostCallback, getBoundaryRamparts } from "@/runtime/safeZoneHelpers";
-import { readRoomEngagementPlan } from "@/runtime/defenseFocusFire";
+import { defenderEngagementMode, readRoomEngagementPlan } from "@/runtime/defenseFocusFire";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import type { RoleFactory } from "@/types/system";
 
@@ -70,19 +70,44 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
     const allHostiles = measureCreepDecision(() => getPlayerHostiles(creep.room));
     const assignedFront = getAssignedDefenseFront(roomName, slot) || getTowerFocusFront(roomName);
     const defenderRole = getDefenderRole(roomName, slot);
-    // 【Defense Focus-Fire Sidecar 消费侧】本 tick 的房间 plan 给本槽位分配了
-    // 联合集火目标时，以该目标为唯一作战对象（与 Tower 共享同一伤害预算）；
-    // 分配目标已失效（不在 hostiles 中）→ 本 tick 空转等待重规划（不回退
-    // 独立评分——避免与 Tower 再度分裂火力）。
-    const plannedTargetId = slot !== undefined ? readRoomEngagementPlan(roomName)?.defenderAssignments?.[slot] : undefined;
-    const hostiles = plannedTargetId !== undefined
-      ? allHostiles.filter((hostile) => hostile.id === plannedTargetId)
-      : assignedFront
-        ? allHostiles.filter((hostile) => assignedFront.hostileIds.includes(hostile.id))
-        : allHostiles;
-    if (hostiles.length === 0) return false;
-
     const safeZoneCostCallback = createSafeZoneCostCallback(safeZone);
+    // 【Defense Focus-Fire Sidecar 消费侧 + Remediation II G】本 tick 的房间
+    // plan 给本槽位分配了联合集火目标时，以该目标为唯一作战对象——显式
+    // assignment 优先，旧的 secondary 去重 / coverage rampart / 独立评分不得
+    // 把它改到另一目标。执行语义与 planner 的 defenderEngagementMode 单一
+    // 语义源一致：贴身 attack()；纯远程（无 ATTACK 部件）≤3 距离
+    // rangedAttack()（planner 才计入该伤害）；其余移动贴近（本 tick 伤害
+    // 计 0，移动仍朝共享目标）。分配目标已失效 → 本 tick 空转等待重规划
+    // （不回退独立评分——避免与 Tower 再度分裂火力）。
+    const plannedTargetId = slot !== undefined ? readRoomEngagementPlan(roomName)?.defenderAssignments?.[slot] : undefined;
+    if (plannedTargetId !== undefined) {
+      const plannedTarget = allHostiles.find((hostile) => hostile.id === plannedTargetId);
+      if (!plannedTarget) return false;
+      const meleeDamage = creep.getActiveBodyparts(ATTACK) * ATTACK_POWER;
+      const rangedDamage = creep.getActiveBodyparts(RANGED_ATTACK) * RANGED_ATTACK_POWER;
+      const mode = defenderEngagementMode(
+        { x: creep.pos.x, y: creep.pos.y, meleeDamage, rangedDamage },
+        { x: plannedTarget.pos.x, y: plannedTarget.pos.y },
+      );
+      if (mode === "attack") {
+        measureCreepIntent(() => creep.attack(plannedTarget));
+      } else if (mode === "ranged_attack") {
+        measureCreepIntent(() => creep.rangedAttack(plannedTarget));
+      } else {
+        moveToTarget(creep, plannedTarget, 1, {
+          costCallback: safeZoneCostCallback,
+          cacheKey: `safezone:${roomName}`,
+          maxRooms: 1,
+          reusePath: 2,
+        });
+      }
+      return false;
+    }
+
+    const hostiles = assignedFront
+      ? allHostiles.filter((hostile) => assignedFront.hostileIds.includes(hostile.id))
+      : allHostiles;
+    if (hostiles.length === 0) return false;
 
     const insideHostiles = measureCreepDecision(() =>
       hostiles.filter((h) => safeZone.has(h.pos.x * 50 + h.pos.y)),

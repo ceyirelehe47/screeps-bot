@@ -1,4 +1,5 @@
 import { runTowerControl } from "@/runtime/towerControl";
+import { readFocusFirePlannerStatsForTest, type FocusFireEngagementPlan } from "@/runtime/defenseFocusFire";
 
 type RuntimeGlobal = typeof global & {
   __runtimeServices?: unknown;
@@ -191,5 +192,77 @@ describe("runTowerControl", () => {
 
     expect(towerA.attack).not.toHaveBeenCalled();
     expect(towerB.attack).not.toHaveBeenCalled();
+  });
+
+  it("【Remediation II】pressure plan（killExpected=false）仍是唯一权威：塔攻击共享压制目标而非独立评分", () => {
+    const roomName = "W1N9";
+    // 独立评分会选近距离高净伤的 hostile-near；共享 plan 指定 hostile-pressure
+    //（killExpected=false 的压制目标）——plan 路径不得回退独立选择。
+    const nearTarget = createHostile(roomName, "hostile-near", 11, 10, { hits: 100 });
+    const pressureTarget = createHostile(roomName, "hostile-pressure", 35, 35, { hits: 100 });
+    const towerA = createTower(roomName, "tower-a", 10, 10);
+    const towerB = createTower(roomName, "tower-b", 12, 10);
+    const room = createRoom(roomName, {
+      towers: [towerA, towerB],
+      hostiles: [nearTarget, pressureTarget],
+    });
+    Game.rooms[room.name] = room;
+    const plan: FocusFireEngagementPlan = {
+      roomName,
+      plannedAtTick: Game.time,
+      focusTargetId: "hostile-pressure",
+      killExpected: false,
+      focusAssignedDamage: 0,
+      focusExpectedHeal: 9_999,
+      towerAssignments: { "tower-a": "hostile-pressure", "tower-b": "hostile-pressure" },
+      defenderAssignments: {},
+      emergencyHealByTowerId: {},
+    };
+    Memory.runtime = { defenseEngagement: { [roomName]: plan } } as never;
+    const plannerInvocationsBefore = readFocusFirePlannerStatsForTest().invocations;
+
+    runTowerControl();
+
+    expect(towerA.attack).toHaveBeenCalledWith(pressureTarget);
+    expect(towerB.attack).toHaveBeenCalledWith(pressureTarget);
+    expect(towerA.attack).not.toHaveBeenCalledWith(nearTarget);
+    // 消费方零重评分：planner 调用计数不因 runTowerControl 增加。
+    expect(readFocusFirePlannerStatsForTest().invocations).toBe(plannerInvocationsBefore);
+  });
+
+  it("【Remediation II】紧急治疗塔按 plan 治疗（不出现于攻击分配），攻击塔按分配目标攻击", () => {
+    const roomName = "W1N8";
+    const hostile = createHostile(roomName, "hostile-1", 20, 20, { hits: 100 });
+    const wounded = createHostile(roomName, "wounded-1", 15, 15, { hits: 50 });
+    const healTower = createTower(roomName, "tower-heal", 10, 10);
+    const attackTower = createTower(roomName, "tower-atk", 12, 10);
+    const room = createRoom(roomName, {
+      towers: [healTower, attackTower],
+      hostiles: [hostile],
+      myCreeps: [wounded],
+    });
+    Game.rooms[room.name] = room;
+    (Game.getObjectById as unknown as jest.Mock) = jest.fn((id: string) =>
+      id === "wounded-1" ? wounded : undefined,
+    );
+    const plan: FocusFireEngagementPlan = {
+      roomName,
+      plannedAtTick: Game.time,
+      focusTargetId: "hostile-1",
+      killExpected: true,
+      focusAssignedDamage: 600,
+      focusExpectedHeal: 0,
+      towerAssignments: { "tower-atk": "hostile-1" },
+      defenderAssignments: {},
+      emergencyHealByTowerId: { "tower-heal": "wounded-1" },
+    };
+    Memory.runtime = { defenseEngagement: { [roomName]: plan } } as never;
+
+    runTowerControl();
+
+    expect(healTower.heal).toHaveBeenCalledWith(wounded);
+    expect(healTower.attack).not.toHaveBeenCalled();
+    expect(attackTower.attack).toHaveBeenCalledWith(hostile);
+    expect(attackTower.heal).not.toHaveBeenCalled();
   });
 });

@@ -40,8 +40,9 @@ const MEMORY_BRANCHES = {
     // lineage 矩阵 / resolutions v7 / attemptLineage v2（pendingBinding/
     // retirementGeneration/currentParent）后的 schema 指纹。
     // 【Defense Focus-Fire Sidecar】defenseEngagement（每房间协同集火 plan）
-    // 字段加入后的 schema 指纹。
-    schemaFingerprint: "2ebc5f893bace385c9a9d7b503c4d7ed219017438218d6c8c12cac53c2a2edb6",
+    // 字段加入后的 schema 指纹。【Remediation II】defenseEngagement 增
+    // killExpected（pressure 共享压制语义）后的指纹。
+    schemaFingerprint: "01177203d272f50d70ab13f8a847ad7f0eaad2e2345ebb7c59f1571fe6184faf",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
