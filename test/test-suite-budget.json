@@ -1,25 +1,25 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "8ac8d88",
-    "suites": 261,
-    "tests": 1902,
-    "passed": 1902,
+    "commit": "a9f4eb2",
+    "suites": 262,
+    "tests": 1956,
+    "passed": 1956,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 261,
-    "tests": 1902,
-    "passed": 1902,
+    "suites": 262,
+    "tests": 1956,
+    "passed": 1956,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 117,
+    "highRiskFiles": 118,
     "defaultFiles": 127
   },
   "files": {
@@ -110,7 +110,7 @@
     },
     "src/roles/homeDefender.test.ts": {
       "baseline": 3,
-      "budget": 2,
+      "budget": 5,
       "tier": "default-max-2"
     },
     "src/roles/index.test.ts": {
@@ -760,7 +760,7 @@
     },
     "src/runtime/towerControl.test.ts": {
       "baseline": 3,
-      "budget": 2,
+      "budget": 4,
       "tier": "default-max-2"
     },
     "src/runtime/upgraderPolicy.test.ts": {
@@ -1323,9 +1323,14 @@
       "budget": 32,
       "tier": "high-risk"
     },
+    "src/runtime/treasury/treasuryRound22RemediationII.test.ts": {
+      "baseline": 0,
+      "budget": 37,
+      "tier": "high-risk"
+    },
     "src/runtime/defenseFocusFire.test.ts": {
       "baseline": 0,
-      "budget": 14,
+      "budget": 26,
       "tier": "high-risk"
     }
   }
