@@ -275,8 +275,10 @@ export function validateTreasurySemanticLineage(input: {
   readonly proof: TreasuryLineageProofFacts;
   /** attempt identity 维度（可选——class/provenance/历史 proof 的受控比较）。 */
   readonly identity?: TreasuryExactIdentityFactsInput;
-  /** 【第二十二轮】验证 purpose（必填——无默认值）。 */
-  readonly purpose?: TreasurySemanticLineagePurpose;
+  /** 【第二十二轮 + remediation F】验证 purpose（必填字段——TypeScript 层
+   *  强制：状态改变调用缺 purpose 无法编译；下方运行时 defensive check
+   *  保留（external/JS 调用面与解构拷贝防线）。 */
+  readonly purpose: TreasurySemanticLineagePurpose;
 }): TreasurySemanticLineageVerdict {
   const purpose = input.purpose;
   if (purpose === undefined) {

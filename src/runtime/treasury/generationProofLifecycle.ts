@@ -27,8 +27,13 @@ import {
 import { peekTreasurySemanticLineageRecordSource } from "@/runtime/treasury/semanticLineageValidation";
 import { readTreasuryResolutionTombstone, peekTreasuryResolutionStoreHealth } from "@/runtime/treasury/resolutionStore";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
-import { lookupTreasurySettledReceipt } from "@/runtime/treasury/receipts";
-import { readTreasuryResolutionCleanupEntry } from "@/runtime/treasury/resolutionCleanupJournal";
+import { lookupTreasuryTrustedSettledReceipt } from "@/runtime/treasury/receipts";
+import {
+  peekTreasuryResolutionCleanupHealth,
+  readTreasuryResolutionCleanupEntry,
+} from "@/runtime/treasury/resolutionCleanupJournal";
+import { readTreasuryWriteFault, validateTreasuryWriteFaultMarkerShape } from "@/runtime/treasury/writeFault";
+import { treasuryIdentityProfileConflictDetail } from "@/runtime/treasury/identityProfile";
 
 export type TreasuryOrphanProofSweepResult =
   | { readonly status: "released"; readonly lineageId: string; readonly generation: number }
@@ -39,6 +44,14 @@ export type TreasuryOrphanProofSweepResult =
  * generation advance 后的有界孤儿 proof 清理（单代查询——O(1)）。
  * previousGeneration 必须小于 active record 的当前 generation（advance 已
  * 成功）才可能释放；任一依赖仍存在 → retained（零状态变化）。
+ *
+ * 【Round 22 remediation E】destructive 删除门禁全部改用 release-trusted /
+ * 结构化健康读取：trusted receipt lookup（store 任一 entry 损坏或 legacy
+ * 版本不释放——replay-readable lookup 不再作删除门禁）、resolution store
+ * health、cleanup journal health（unhealthy 不折叠为"无 pending"）、
+ * matching write-fault marker 不存在（malformed 同样 retained）、unresolved
+ * authority not_found、tombstone 不存在、active generation 已真实接管、
+ * exact identity profile 一致。
  */
 export function sweepTreasuryOrphanGenerationProofOnAdvance(
   lineageId: string,
@@ -63,6 +76,15 @@ export function sweepTreasuryOrphanGenerationProofOnAdvance(
     // generation 未推进：当前代 proof 是下一代 capability 门禁——保留。
     return { status: "retained", detail: `generation ${String(previousGeneration)} 仍是 current（下一代未接管）` };
   }
+  // exact profile 一致（GRA v2 与 lineage record 的 profile 在生命周期中不可变）。
+  const profileConflict = treasuryIdentityProfileConflictDetail(
+    "GRA proof 与 active lineage record",
+    proof.identityProfile,
+    activeRecord.identityProfile,
+  );
+  if (profileConflict !== null) {
+    return { status: "retained", detail: profileConflict };
+  }
   const resolutionHealth = peekTreasuryResolutionStoreHealth();
   if (!resolutionHealth.healthy) {
     return { status: "retained", detail: `resolution store unhealthy: ${resolutionHealth.detail ?? "unknown"}` };
@@ -75,13 +97,35 @@ export function sweepTreasuryOrphanGenerationProofOnAdvance(
   if (authority.status !== "not_found") {
     return { status: "retained", detail: `unresolved authority ${authority.status}（Intent/Quarantine 依赖）` };
   }
-  const receipt = lookupTreasurySettledReceipt(proof.transactionId);
+  // release-trusted receipt 读取（E.1）：store unhealthy / legacy 版本 /
+  // identity 冲突一律 retained——replay-readable lookup 不作删除门禁。
+  const receipt = lookupTreasuryTrustedSettledReceipt(proof.transactionId);
   if (receipt.status !== "absent") {
-    return { status: "retained", detail: `receipt ${receipt.status}（committed proof 依赖——不清理）` };
+    return { status: "retained", detail: `trusted receipt ${receipt.status}（committed proof 依赖——不清理）` };
+  }
+  // cleanup journal：unhealthy 不折叠为"无 pending"（结构化健康结果）；
+  // pending entry 存在 → cleanup 状态不确定，保留。
+  const cleanupHealth = peekTreasuryResolutionCleanupHealth();
+  if (!cleanupHealth.healthy) {
+    return { status: "retained", detail: `resolution cleanup journal unhealthy: ${cleanupHealth.detail ?? "unknown"}` };
   }
   const cleanupEntry = readTreasuryResolutionCleanupEntry(proof.transactionId);
   if (cleanupEntry !== undefined) {
     return { status: "retained", detail: "resolution cleanup journal pending（cleanup 状态不确定不清理）" };
+  }
+  // matching write-fault marker 不存在（E.2）：malformed marker 无法判定
+  // matching → retained；同 transactionId marker 存在 → retained（该
+  // attempt 的 cleanup 未完成）。unrelated marker（其它 attempt）不阻断本
+  // proof 的孤儿清理。
+  const marker = readTreasuryWriteFault();
+  if (marker !== undefined) {
+    const markerShapeError = validateTreasuryWriteFaultMarkerShape(marker);
+    if (markerShapeError !== null) {
+      return { status: "retained", detail: `write-fault marker malformed（matching 不可判定）: ${markerShapeError}` };
+    }
+    if (marker.transactionId === proof.transactionId) {
+      return { status: "retained", detail: "matching write-fault marker 仍存在（cleanup 未完成——不清理）" };
+    }
   }
   const released = releaseTreasuryGenerationRetirementProofOfAttempt(proof.transactionId);
   if (released.status === "released") {

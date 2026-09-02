@@ -33,11 +33,63 @@ import {
   treasuryMarkerDischargeCompletesAttemptPhase,
   type TreasuryMarkerDischargeOutcome,
 } from "@/runtime/treasury/markerDischarge";
-import { type TreasuryIdentityProfile } from "@/runtime/treasury/identityProfile";
+import { treasuryIdentityProfileOfProofClass, type TreasuryIdentityProfile } from "@/runtime/treasury/identityProfile";
 
 export const TREASURY_RESOLUTION_CLEANUP_VERSION = 1;
 export const TREASURY_RESOLUTION_CLEANUP_MAX_ENTRIES = 256;
 const CLEANUP_KEY_PREFIX = "c:";
+
+/**
+ * 【Round 22 remediation B】open 输入的单一构造权威：identity profile 按
+ * proof class 唯一映射（未知 → legacy-replay 隔离），全部身份字段按携带
+ * 透传——所有生产调用点（faultResolution / resolutionStore 恢复 /
+ * resolutionAuthority / facade executed-aborted）共用同一字段集构造，
+ * 幂等 reopen 的 exact 相等比较不因调用点构造差异产生伪 conflict。
+ */
+export function treasuryResolutionCleanupOpenInputOfFacts(facts: {
+  readonly transactionId: string;
+  readonly digest: string;
+  readonly resolution: "committed" | "not-executed";
+  readonly proofClass: string;
+  readonly contractDigest?: string;
+  readonly authorizationCohortDigest?: string;
+  readonly durableIdentityDigest?: string;
+  readonly lowlevelSource?: string;
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
+}): {
+  readonly transactionId: string;
+  readonly digest: string;
+  readonly resolution: "committed" | "not-executed";
+  readonly identityProfile: TreasuryIdentityProfile;
+  readonly proofClass: string;
+  readonly contractDigest?: string;
+  readonly authorizationCohortDigest?: string;
+  readonly durableIdentityDigest?: string;
+  readonly lowlevelSource?: string;
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
+} {
+  return {
+    transactionId: facts.transactionId,
+    digest: facts.digest,
+    resolution: facts.resolution,
+    identityProfile: treasuryIdentityProfileOfProofClass(facts.proofClass) ?? "legacy-replay",
+    proofClass: facts.proofClass,
+    ...(facts.contractDigest !== undefined ? { contractDigest: facts.contractDigest } : {}),
+    ...(facts.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: facts.authorizationCohortDigest } : {}),
+    ...(facts.durableIdentityDigest !== undefined ? { durableIdentityDigest: facts.durableIdentityDigest } : {}),
+    ...(facts.lowlevelSource !== undefined ? { lowlevelSource: facts.lowlevelSource } : {}),
+    ...(facts.lineageId !== undefined ? { lineageId: facts.lineageId } : {}),
+    ...(facts.lineageGeneration !== undefined ? { lineageGeneration: facts.lineageGeneration } : {}),
+    ...(facts.parentTransactionId !== undefined ? { parentTransactionId: facts.parentTransactionId } : {}),
+    ...(facts.lineageBindingDigest !== undefined ? { lineageBindingDigest: facts.lineageBindingDigest } : {}),
+  };
+}
 
 /** cleanup entry：完整 attempt exact identity + 四阶段持久布尔。 */
 export interface TreasuryResolutionCleanupEntry {
@@ -198,10 +250,17 @@ function loadCleanupRuntime(): CleanupRuntime {
   if (heapRuntime !== null) return heapRuntime;
   const raw = (Memory.runtime as unknown as RuntimeMemoryWithCleanup | undefined)?.treasury?.resolutionCleanup;
   if (raw === undefined) {
-    heapRuntime = {
-      store: { version: TREASURY_RESOLUTION_CLEANUP_VERSION, entries: {}, entryCount: 0, updatedAt: Game.time },
-      fatal: null,
+    const store: TreasuryResolutionCleanupStore = {
+      version: TREASURY_RESOLUTION_CLEANUP_VERSION,
+      entries: {},
+      entryCount: 0,
+      updatedAt: Game.time,
     };
+    // 【Round 22 remediation A.1/A.2】首次初始化必须把新 store 真正挂到
+    // Memory.runtime.treasury.resolutionCleanup——heap 缓存只是同一 Memory
+    // 权威 store 的引用，global reset 后从 Memory 原样恢复（不依赖 heap）。
+    cleanupBranch().resolutionCleanup = store;
+    heapRuntime = { store, fatal: null };
     return heapRuntime;
   }
   const shapeError = validateCleanupStoreShape(raw);
@@ -210,16 +269,53 @@ function loadCleanupRuntime(): CleanupRuntime {
     heapRuntime = { store: raw as unknown as TreasuryResolutionCleanupStore, fatal: shapeError };
     return heapRuntime;
   }
-  heapRuntime = { store: raw as TreasuryResolutionCleanupStore, fatal: null };
+  heapRuntime = { store: raw as unknown as TreasuryResolutionCleanupStore, fatal: null };
   return heapRuntime;
 }
 
-/** test 清理（clearTreasuryPersistenceForTest 之外的独立重置）。 */
-export function resetTreasuryResolutionCleanupForTest(): void {
+/** journal store 结构化健康探测（destructive caller 门禁——不得折叠为 entry absent）。 */
+export interface TreasuryResolutionCleanupHealth {
+  readonly healthy: boolean;
+  readonly detail: string | null;
+}
+
+/**
+ * 【Round 22 remediation A.5】cleanup journal 健康探测（只读）：store 不存在
+ * 或形状合法 → healthy；损坏 → unhealthy。destructive caller（GRA 孤儿
+ * proof 清理等）遇 unhealthy 必须 retained/fail closed——不得把
+ * readTreasuryResolutionCleanupEntry 的 undefined（fatal 与 absent 同形）
+ * 当作"无 pending cleanup"。
+ */
+export function peekTreasuryResolutionCleanupHealth(): TreasuryResolutionCleanupHealth {
+  const raw = (Memory.runtime as unknown as RuntimeMemoryWithCleanup | undefined)?.treasury?.resolutionCleanup;
+  if (raw === undefined) return { healthy: true, detail: null };
+  const shapeError = validateCleanupStoreShape(raw);
+  if (shapeError !== null) {
+    cleanupEvents.shapeFailures += 1;
+    return { healthy: false, detail: shapeError };
+  }
+  return { healthy: true, detail: null };
+}
+
+/** test-only：删除 Memory 中的 durable 数据（heap 缓存一并失效）。 */
+export function clearTreasuryResolutionCleanupDurableForTest(): void {
   const branch = (Memory.runtime as unknown as RuntimeMemoryWithCleanup | undefined)?.treasury;
   if (branch !== undefined) delete branch.resolutionCleanup;
   heapRuntime = null;
   resetTreasuryResolutionCleanupEventsForTest();
+}
+
+/**
+ * test-only：只清 heap 缓存、不删除 Memory——模拟 global reset 后的
+ * 首次访问（下次 load 从 Memory 权威恢复全部 entry 与阶段进度）。
+ */
+export function resetTreasuryResolutionCleanupHeapCacheForTest(): void {
+  heapRuntime = null;
+}
+
+/** test 完全清理（Memory + heap + events；测试 setup 用，不用于模拟 global reset）。 */
+export function resetTreasuryResolutionCleanupForTest(): void {
+  clearTreasuryResolutionCleanupDurableForTest();
 }
 
 export type TreasuryResolutionCleanupOpenResult =
@@ -229,10 +325,30 @@ export type TreasuryResolutionCleanupOpenResult =
   | { readonly status: "rejected"; readonly detail: string };
 
 /**
- * settlement proof 持久化后创建 cleanup entry（幂等：同 transactionId 同
- * resolution 的重复 open 更新身份字段并保留阶段进度；不同 resolution →
- * conflict fail closed）。容量满 → rejected（调用方不得继续推进终态——
- * settlement proof 已持久化，恢复稍后重试 open）。
+ * 【Round 22 remediation D】open 的 exact identity 字段（幂等 reopen 的
+ * 全量比较集——任何维度不等即 conflict，零状态变化）。
+ */
+const CLEANUP_IDENTITY_FIELDS = [
+  "digest",
+  "identityProfile",
+  "proofClass",
+  "contractDigest",
+  "authorizationCohortDigest",
+  "durableIdentityDigest",
+  "lowlevelSource",
+  "lineageId",
+  "lineageGeneration",
+  "parentTransactionId",
+  "lineageBindingDigest",
+] as const;
+
+/**
+ * settlement proof 持久化后创建 cleanup entry。幂等 reopen（同 transactionId
+ * 同 resolution）要求 exact identity 全字段相等（【Round 22 remediation D】
+ * identity 不可变——digest/profile/class/provenance/lineage 任一不等 →
+ * conflict，零状态变化，不得在保留阶段进度时覆盖身份字段）；不同
+ * resolution → conflict fail closed。容量满 → rejected（调用方不得继续
+ * 推进终态——settlement proof 已持久化，恢复稍后重试 open）。
  */
 export function openTreasuryResolutionCleanup(input: {
   readonly transactionId: string;
@@ -263,19 +379,17 @@ export function openTreasuryResolutionCleanup(input: {
         detail: `cleanup entry 已以 ${existing.resolution} 打开（同一 attempt 不得同时存在两种 settlement 结论——fail closed）`,
       };
     }
-    // 幂等重开：更新身份字段（settlement proof 之后的渐进事实），保留阶段进度。
-    runtime.store.entries[key] = {
-      ...existing,
-      ...(input.contractDigest !== undefined ? { contractDigest: input.contractDigest } : {}),
-      ...(input.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: input.authorizationCohortDigest } : {}),
-      ...(input.durableIdentityDigest !== undefined ? { durableIdentityDigest: input.durableIdentityDigest } : {}),
-      ...(input.lowlevelSource !== undefined ? { lowlevelSource: input.lowlevelSource } : {}),
-      ...(input.lineageId !== undefined ? { lineageId: input.lineageId } : {}),
-      ...(input.lineageGeneration !== undefined ? { lineageGeneration: input.lineageGeneration } : {}),
-      ...(input.parentTransactionId !== undefined ? { parentTransactionId: input.parentTransactionId } : {}),
-      ...(input.lineageBindingDigest !== undefined ? { lineageBindingDigest: input.lineageBindingDigest } : {}),
-      updatedAt: Game.time,
-    };
+    for (const field of CLEANUP_IDENTITY_FIELDS) {
+      const existingValue = existing[field];
+      const inputValue = input[field];
+      if (existingValue !== inputValue) {
+        cleanupEvents.conflicts += 1;
+        return {
+          status: "conflict",
+          detail: `cleanup entry 身份字段 ${field} 不一致（既有 ${String(existingValue).slice(0, 24)} vs 请求 ${String(inputValue).slice(0, 24)}）——identity 不可变，零状态变化（fail closed）`,
+        };
+      }
+    }
     cleanupEvents.reopened += 1;
     return { status: "already_open" };
   }
@@ -331,7 +445,11 @@ export function listTreasuryResolutionCleanupPendingIds(): readonly string[] {
   return Object.keys(runtime.store.entries).map((key) => key.slice(CLEANUP_KEY_PREFIX.length));
 }
 
-/** 阶段完成标记（单调推进——已完成阶段不得回退）。 */
+/**
+ * 阶段完成标记（单调推进——已完成阶段不得回退）。【Round 22 remediation D】
+ * 强制前置顺序 marker → authority → outcome → lineage：越级设置后续布尔
+ * 一律拒绝（返回 false，零状态变化）——任意 caller 不得跳过前置阶段。
+ */
 export function markTreasuryResolutionCleanupStage(
   transactionId: string,
   stage: TreasuryResolutionCleanupStage,
@@ -350,14 +468,17 @@ export function markTreasuryResolutionCleanupStage(
       break;
     case "authority_release":
       if (entry.authorityReleased) return true;
+      if (!entry.markerDischarged) return false;
       entry.authorityReleased = true;
       break;
     case "outcome_finalization":
       if (entry.outcomeFinalized) return true;
+      if (!entry.markerDischarged || !entry.authorityReleased) return false;
       entry.outcomeFinalized = true;
       break;
     case "lineage_finalization":
       if (entry.lineageFinalized) return true;
+      if (!entry.markerDischarged || !entry.authorityReleased || !entry.outcomeFinalized) return false;
       entry.lineageFinalized = true;
       break;
   }

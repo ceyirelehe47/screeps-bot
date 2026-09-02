@@ -67,6 +67,13 @@ import {
   treasuryMarkerDischargeCompletesAttemptPhase,
   treasuryMarkerDischargeExpectedOfFacts,
 } from "@/runtime/treasury/markerDischarge";
+import {
+  openTreasuryResolutionCleanup,
+  markTreasuryResolutionCleanupStage,
+  completeTreasuryResolutionCleanup,
+  readTreasuryResolutionCleanupEntry,
+  treasuryResolutionCleanupOpenInputOfFacts,
+} from "@/runtime/treasury/resolutionCleanupJournal";
 import { treasuryMarkerExactIdentityRelation } from "@/runtime/treasury/markerExactIdentity";
 import { releaseTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { releaseTreasuryIntentEntry } from "@/runtime/treasury/intents";
@@ -1281,18 +1288,15 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
         }
         continue;
       }
-      // ── 第 4 步：三方 match（或 authority 已释放且 receipt ↔ tombstone
-      //    match）→ 释放 + finalize（幂等——authority 释放与 marker 清除
-      //    均为幂等操作；finalize 经状态机校验）。
-      releaseTreasuryQuarantineEntry(transactionId);
-      releaseTreasuryIntentEntry(transactionId);
-      // 【第二十二轮第七节】committed cleanup 持久顺序：discharge（read-back）
-      // 未完成时不得 finalize、不得移除 resolving 索引——final committed
-      // 绝不与当前 attempt matching marker 并存。
-      const committedDischarge = dischargeTreasuryMarkerForAttempt(
-        treasuryMarkerDischargeExpectedOfFacts({
+      // ── 第 4 步【Round 22 remediation B.2】：cleanup journal 接入 + 严格
+      //    顺序 discharge（read-back）→ release → authority read-back →
+      //    finalize。marker discharge 未完成前不得释放 Intent/Quarantine——
+      //    journal store fatal / identity 冲突同样阻断 finalize 与索引移除。
+      const committedCleanupOpen = openTreasuryResolutionCleanup(
+        treasuryResolutionCleanupOpenInputOfFacts({
           transactionId,
           digest: entry.digest,
+          resolution: "committed",
           proofClass: entry.proofLevel,
           ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
           ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
@@ -1304,11 +1308,57 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
           ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
         }),
       );
-      if (!treasuryMarkerDischargeCompletesAttemptPhase(committedDischarge.outcome)) {
+      if (committedCleanupOpen.status === "rejected" || committedCleanupOpen.status === "conflict") {
         resolutionStoreEvents.faulted += 1;
         report.markerCleanupBlocked += 1;
         resolutionStoreEvents.markerCleanupBlockers += 1;
         continue;
+      }
+      const committedCleanup = readTreasuryResolutionCleanupEntry(transactionId);
+      if (committedCleanup === undefined) {
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
+      if (!committedCleanup.markerDischarged) {
+        const committedDischarge = dischargeTreasuryMarkerForAttempt(
+          treasuryMarkerDischargeExpectedOfFacts({
+            transactionId,
+            digest: entry.digest,
+            proofClass: entry.proofLevel,
+            ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+            ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+            ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+            ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+            ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+            ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+            ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
+            ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
+          }),
+        );
+        if (!treasuryMarkerDischargeCompletesAttemptPhase(committedDischarge.outcome)) {
+          // marker 清理未完成：authority 与 resolving tombstone 保留（不释放、
+          // 不 finalize——beginTick journal 恢复幂等重试 discharge）。
+          resolutionStoreEvents.faulted += 1;
+          report.markerCleanupBlocked += 1;
+          resolutionStoreEvents.markerCleanupBlockers += 1;
+          continue;
+        }
+        markTreasuryResolutionCleanupStage(transactionId, "marker_discharge", committedDischarge.outcome);
+      }
+      if (!committedCleanup.authorityReleased) {
+        releaseTreasuryQuarantineEntry(transactionId);
+        releaseTreasuryIntentEntry(transactionId);
+        if (resolveTreasuryUnresolvedAuthority(transactionId).status !== "not_found") {
+          // 释放后 read-back 未确认 not_found：resolving 保留（journal 阶段
+          // 不推进，下一 tick 幂等重试）。
+          resolutionStoreEvents.faulted += 1;
+          report.markerCleanupBlocked += 1;
+          resolutionStoreEvents.markerCleanupBlockers += 1;
+          continue;
+        }
+        markTreasuryResolutionCleanupStage(transactionId, "authority_release");
       }
       const finalEntry: TreasuryResolutionTombstone = { ...entry, stage: "final" };
       const transition = validateTreasuryResolutionTombstoneTransition(entry, finalEntry);
@@ -1321,6 +1371,16 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
         continue;
       }
       runtime.store.entries[key] = finalEntry;
+      markTreasuryResolutionCleanupStage(transactionId, "outcome_finalization");
+      // lineage finalization：initial attempt（无 lineageId）当场 not_
+      // applicable 完成并删除 entry（journal 不积压）；tr1_ 的 chain close
+      // 由 beginTick journal recovery（顺序在本函数之后）按同一阶段顺序
+      // 补完成。
+      const committedAfterOutcome = readTreasuryResolutionCleanupEntry(transactionId);
+      if (committedAfterOutcome !== undefined && committedAfterOutcome.lineageId === undefined) {
+        markTreasuryResolutionCleanupStage(transactionId, "lineage_finalization");
+        completeTreasuryResolutionCleanup(transactionId);
+      }
       runtime.resolvingIds.delete(transactionId);
       runtime.store.updatedAt = Game.time;
       resolutionStoreEvents.recovered += 1;
@@ -1353,11 +1413,53 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
       continue;
     }
     if (authorityResolution.status === "not_found") {
-      // 【第十六轮第七节】authority 已释放：检查 write-fault marker 的安全
-      // 补完成——marker 不存在=释放与清理均完成；存在且全部匹配才清除；
-      // conflict/insufficient/他属一律保留（write readiness 继续阻断）。
+      // 【第十六轮第七节 + Round 22 remediation B】authority 已释放的历史
+      // 遗留窗口：检查 write-fault marker 的安全补完成——marker 不存在=
+      // 释放与清理均完成；存在且全部匹配才清除；conflict/insufficient/
+      // 他属一律保留（write readiness 继续阻断）。journal 幂等补开
+      // （settlement proof = final tombstone 已持久化）；store fatal /
+      // identity 冲突不折叠为"已完成"。
+      const notFoundCleanupOpen = openTreasuryResolutionCleanup(
+        treasuryResolutionCleanupOpenInputOfFacts({
+          transactionId: entry.transactionId,
+          digest: entry.digest,
+          resolution: "not-executed",
+          proofClass: entry.proofLevel,
+          ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+          ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+          ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+          ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+          ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+          ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+          ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
+          ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
+        }),
+      );
+      if (notFoundCleanupOpen.status === "rejected" || notFoundCleanupOpen.status === "conflict") {
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
       const marker = readTreasuryWriteFault();
       if (marker === undefined) {
+        const pendingEntry = readTreasuryResolutionCleanupEntry(entry.transactionId);
+        if (pendingEntry !== undefined && !pendingEntry.markerDischarged) {
+          markTreasuryResolutionCleanupStage(entry.transactionId, "marker_discharge", "already_absent");
+        }
+        // authority read-back 已是 not_found；outcome proof = final tombstone
+        //（本分支的存在前提）。lineage 阶段由 beginTick journal recovery 补完成。
+        const progressedEntry = readTreasuryResolutionCleanupEntry(entry.transactionId);
+        if (progressedEntry !== undefined) {
+          if (!progressedEntry.authorityReleased) markTreasuryResolutionCleanupStage(entry.transactionId, "authority_release");
+          if (!progressedEntry.outcomeFinalized) markTreasuryResolutionCleanupStage(entry.transactionId, "outcome_finalization");
+          // initial attempt（无 lineageId）当场完成 lineage 并删除 entry；
+          // tr1_ 留 journal recovery 补完成（converge / exact proof）。
+          if (progressedEntry.lineageId === undefined) {
+            markTreasuryResolutionCleanupStage(entry.transactionId, "lineage_finalization");
+            completeTreasuryResolutionCleanup(entry.transactionId);
+          }
+        }
         runtime.pendingReleaseIds.delete(transactionId);
         continue;
       }
@@ -1391,6 +1493,18 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
         report.markerCleanupBlocked += 1;
         resolutionStoreEvents.markerCleanupBlockers += 1;
         continue;
+      }
+      const completedEntry = readTreasuryResolutionCleanupEntry(entry.transactionId);
+      if (completedEntry !== undefined) {
+        if (!completedEntry.markerDischarged) markTreasuryResolutionCleanupStage(entry.transactionId, "marker_discharge", notExecutedDischarge.outcome);
+        if (!completedEntry.authorityReleased) markTreasuryResolutionCleanupStage(entry.transactionId, "authority_release");
+        if (!completedEntry.outcomeFinalized) markTreasuryResolutionCleanupStage(entry.transactionId, "outcome_finalization");
+        // initial attempt（无 lineageId）当场完成 lineage 并删除 entry；
+        // tr1_ 留 journal recovery 补完成。
+        if (completedEntry.lineageId === undefined) {
+          markTreasuryResolutionCleanupStage(entry.transactionId, "lineage_finalization");
+          completeTreasuryResolutionCleanup(entry.transactionId);
+        }
       }
       runtime.pendingReleaseIds.delete(transactionId);
       resolutionStoreEvents.recovered += 1;
@@ -1445,32 +1559,87 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
       }
       continue;
     }
-    // final tombstone 已写但释放未完成：补完成（幂等——resolver 判 ok 时
-    // quarantine 与 intent 身份一致，一并释放安全）。
-    releaseTreasuryQuarantineEntry(transactionId);
-    releaseTreasuryIntentEntry(transactionId);
-    // 【第二十二轮第六节】authority 释放后的 marker 清理同样经
-    // discharge + read-back——未完成不移除 pending 索引。
-    const authorityPresentDischarge = dischargeTreasuryMarkerForAttempt(
-      treasuryMarkerDischargeExpectedOfFacts({
+    // final tombstone 已写但释放未完成【Round 22 remediation B.2】：journal
+    // 接入 + 严格顺序 discharge（read-back）→ release → authority read-back
+    // → 阶段推进。marker discharge 未完成前不得释放 Intent/Quarantine。
+    const authorityPresentCleanupOpen = openTreasuryResolutionCleanup(
+      treasuryResolutionCleanupOpenInputOfFacts({
         transactionId,
         digest: entry.digest,
-        proofClass: authority.authorityLevel,
-        ...(authority.contractDigest !== undefined ? { contractDigest: authority.contractDigest } : {}),
-        ...(authority.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: authority.authorizationCohortDigest } : {}),
-        ...(authority.durableIdentityDigest !== undefined ? { durableIdentityDigest: authority.durableIdentityDigest } : {}),
-        ...(authority.lowlevelSource !== undefined ? { lowlevelSource: authority.lowlevelSource } : {}),
+        resolution: "not-executed",
+        proofClass: entry.proofLevel,
+        ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+        ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+        ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+        ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
         ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
         ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
         ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
         ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
       }),
     );
-    if (!treasuryMarkerDischargeCompletesAttemptPhase(authorityPresentDischarge.outcome)) {
+    if (authorityPresentCleanupOpen.status === "rejected" || authorityPresentCleanupOpen.status === "conflict") {
       resolutionStoreEvents.faulted += 1;
       report.markerCleanupBlocked += 1;
       resolutionStoreEvents.markerCleanupBlockers += 1;
       continue;
+    }
+    const authorityPresentCleanup = readTreasuryResolutionCleanupEntry(transactionId);
+    if (authorityPresentCleanup === undefined) {
+      resolutionStoreEvents.faulted += 1;
+      report.markerCleanupBlocked += 1;
+      resolutionStoreEvents.markerCleanupBlockers += 1;
+      continue;
+    }
+    if (!authorityPresentCleanup.markerDischarged) {
+      const authorityPresentDischarge = dischargeTreasuryMarkerForAttempt(
+        treasuryMarkerDischargeExpectedOfFacts({
+          transactionId,
+          digest: entry.digest,
+          proofClass: entry.proofLevel,
+          ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+          ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+          ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+          ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+          ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+          ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+          ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
+          ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
+        }),
+      );
+      if (!treasuryMarkerDischargeCompletesAttemptPhase(authorityPresentDischarge.outcome)) {
+        // marker 清理未完成：authority（quarantine/intent）保留、pending
+        // 索引保留——不释放（beginTick journal 恢复幂等重试）。
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
+      markTreasuryResolutionCleanupStage(transactionId, "marker_discharge", authorityPresentDischarge.outcome);
+    }
+    if (!authorityPresentCleanup.authorityReleased) {
+      // 幂等释放（resolver 判 ok 时 quarantine 与 intent 身份一致，一并
+      // 释放安全）；释放后 read-back 确认 not_found 才推进阶段。
+      releaseTreasuryQuarantineEntry(transactionId);
+      releaseTreasuryIntentEntry(transactionId);
+      if (resolveTreasuryUnresolvedAuthority(transactionId).status !== "not_found") {
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
+      markTreasuryResolutionCleanupStage(transactionId, "authority_release");
+    }
+    if (!authorityPresentCleanup.outcomeFinalized) {
+      // outcome proof = final not-executed tombstone（本分支的存在前提）。
+      markTreasuryResolutionCleanupStage(transactionId, "outcome_finalization");
+    }
+    // initial attempt（无 lineageId）当场完成 lineage 并删除 entry；tr1_
+    // 留 journal recovery 补完成（converge / exact proof）。
+    const authorityPresentAfterOutcome = readTreasuryResolutionCleanupEntry(transactionId);
+    if (authorityPresentAfterOutcome !== undefined && authorityPresentAfterOutcome.lineageId === undefined) {
+      markTreasuryResolutionCleanupStage(transactionId, "lineage_finalization");
+      completeTreasuryResolutionCleanup(transactionId);
     }
     runtime.pendingReleaseIds.delete(transactionId);
     resolutionStoreEvents.recovered += 1;

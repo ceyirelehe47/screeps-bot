@@ -194,16 +194,24 @@ import {
   ensureTreasuryResolutionSlotAvailable,
   markTreasuryPendingReleaseCompleted,
 } from "@/runtime/treasury/resolutionStore";
-import { clearTreasuryWriteFaultMarkerForResolution, readTreasuryWriteFault, exactMarkerFieldsOfPreparedRecord } from "@/runtime/treasury/writeFault";
+import { readTreasuryWriteFault, exactMarkerFieldsOfPreparedRecord } from "@/runtime/treasury/writeFault";
 import { sweepTreasuryOrphanGenerationProofOnAdvance } from "@/runtime/treasury/generationProofLifecycle";
 import {
   registerTreasuryResolutionCleanupHandlersForAssembly,
   recoverTreasuryResolutionCleanupAtTickBoundary,
+  openTreasuryResolutionCleanup,
+  markTreasuryResolutionCleanupStage,
+  completeTreasuryResolutionCleanup,
+  treasuryResolutionCleanupOpenInputOfFacts,
 } from "@/runtime/treasury/resolutionCleanupJournal";
+import {
+  dischargeTreasuryMarkerForAttempt,
+  treasuryMarkerDischargeCompletesAttemptPhase,
+  treasuryMarkerDischargeExpectedOfFacts,
+} from "@/runtime/treasury/markerDischarge";
 import { readTreasuryTrustedSettlementProofForAttempt } from "@/runtime/treasury/trustedSettlementProof";
 import { treasuryExactAttemptIdentityOfFacts, treasuryExactAttemptIdentityOfTombstone } from "@/runtime/treasury/exactAttemptIdentity";
 import { readTreasuryGenerationRetirementProof } from "@/runtime/treasury/generationRetirementAuthority";
-import { classAwareIdentityOfAttempt } from "@/runtime/treasury/markerAttemptIdentity";
 import {
   isTreasuryRearmAttemptId,
   isValidTreasuryTransactionId,
@@ -3613,39 +3621,96 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
               detail: `child not-executed tombstone 写入失败（intent 保留，后续 tick resolver 收敛）: ${childTombstone.detail}`,
             };
           }
-          releaseTreasuryIntentEntry(record.canonical.transactionId);
-          // marker class-aware 清除（non-OK + abort 确认正常无 marker——检查
-          // 结果决定三段完成）。
-          const markerCleared = clearTreasuryWriteFaultMarkerForResolution(
-            classAwareIdentityOfAttempt({
-              transactionId: record.canonical.transactionId,
-              digest: record.digest,
-              authorityLevel: retiredRecord?.authorityClass === "lowlevel" ? "lowlevel" : "modern",
-              ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
-              ...(record.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.authorizationCohortDigest } : {}),
-              ...(record.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.durableIdentityDigest } : {}),
-              ...(retiredRecord?.authorityClass === "lowlevel" && retiredRecord.lowlevelSource !== undefined
-                ? { lowlevelSource: retiredRecord.lowlevelSource }
-                : {}),
-              ...(retiredRecord?.bindingDigest !== undefined ? { lineageBindingDigest: retiredRecord.bindingDigest } : {}),
-              ...(retiredRecord !== undefined ? { attemptGeneration: retiredRecord.generation } : {}),
-            }),
+          // 【Round 22 remediation B.3】executed-aborted 的 rearm cleanup 接入
+          // 统一 discharge + cleanup journal（不再调用旧 boolean clear 包装器，
+          // 也不得以 readTreasuryWriteFault()?.transactionId !== currentId 当作
+          // markerAbsent 证明）。严格顺序：discharge（read-back）→ release
+          // intent → read-back → converge → pending-release 移除；journal
+          // rejected/conflict 或 discharge malformed/conflict/insufficient 时
+          // intent 保留、retirement 停在 pending_cleanup、pending-release 与
+          // journal entry 均不推进（beginTick 恢复幂等重试）。
+          const abortedCleanupIdentity = {
+            transactionId: record.canonical.transactionId,
+            digest: record.digest,
+            proofClass:
+              retiredRecord?.authorityClass === "lowlevel"
+                ? "lowlevel"
+                : retiredRecord?.authorityClass === "identity-bound"
+                  ? "identity-bound"
+                  : (record.contractDigest === undefined ? "lowlevel" : "identity-bound"),
+            ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
+            ...(record.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: record.authorizationCohortDigest } : {}),
+            ...(record.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.durableIdentityDigest } : {}),
+            ...(retiredRecord?.authorityClass === "lowlevel" && retiredRecord.lowlevelSource !== undefined
+              ? { lowlevelSource: retiredRecord.lowlevelSource }
+              : {}),
+            ...(retiredRecord !== undefined && retiredRecord.currentTransactionId === record.canonical.transactionId
+              ? {
+                  lineageId: retiredRecord.lineageId,
+                  lineageGeneration: retiredRecord.generation,
+                  ...(retiredRecord.currentParentTransactionId !== undefined ? { parentTransactionId: retiredRecord.currentParentTransactionId } : {}),
+                  lineageBindingDigest: retiredRecord.bindingDigest!,
+                }
+              : {}),
+          };
+          const abortedCleanupOpen = openTreasuryResolutionCleanup(
+            treasuryResolutionCleanupOpenInputOfFacts({ ...abortedCleanupIdentity, resolution: "not-executed" }),
           );
-          const markerAbsent =
-            readTreasuryWriteFault() === undefined || readTreasuryWriteFault()?.transactionId !== record.canonical.transactionId;
-          if (markerCleared || markerAbsent) {
-            // 【第十九轮 C.7】三段分别证明后 converge 收敛——pending-release
-            // 索引移除与 retirement 完成共享同一阶段事实。
-            const converged = convergeTreasuryLineageRetirementFromFacts(childLineage.lineageId);
-            if (converged.status === "completed") {
-              markTreasuryPendingReleaseCompleted(record.canonical.transactionId);
-            }
+          if (abortedCleanupOpen.status === "rejected" || abortedCleanupOpen.status === "conflict") {
+            return {
+              status: "executed_aborted",
+              handle: prepared.handle,
+              actionResult,
+              retirement: "pending_cleanup",
+              detail: `cleanup journal ${abortedCleanupOpen.status}: ${abortedCleanupOpen.detail}（intent 保留，恢复稍后重试）`,
+            };
+          }
+          const abortedDischarge = dischargeTreasuryMarkerForAttempt(
+            treasuryMarkerDischargeExpectedOfFacts(abortedCleanupIdentity),
+          );
+          if (!treasuryMarkerDischargeCompletesAttemptPhase(abortedDischarge.outcome)) {
+            return {
+              status: "executed_aborted",
+              handle: prepared.handle,
+              actionResult,
+              retirement: "pending_cleanup",
+              detail: `marker discharge ${abortedDischarge.outcome}: ${abortedDischarge.detail}（intent 保留，journal 恢复重试）`,
+            };
+          }
+          markTreasuryResolutionCleanupStage(record.canonical.transactionId, "marker_discharge", abortedDischarge.outcome);
+          releaseTreasuryIntentEntry(record.canonical.transactionId);
+          if (readTreasuryIntentEntry(record.canonical.transactionId) !== undefined) {
+            return {
+              status: "executed_aborted",
+              handle: prepared.handle,
+              actionResult,
+              retirement: "pending_cleanup",
+              detail: "intent 释放后 read-back 仍存在（journal 阶段不推进，恢复重试）",
+            };
+          }
+          markTreasuryResolutionCleanupStage(record.canonical.transactionId, "authority_release");
+          markTreasuryResolutionCleanupStage(record.canonical.transactionId, "outcome_finalization");
+          // 【第十九轮 C.7】三段分别证明后 converge 收敛——pending-release
+          // 索引移除与 retirement 完成共享同一阶段事实。
+          const converged = convergeTreasuryLineageRetirementFromFacts(childLineage.lineageId);
+          if (converged.status === "completed") {
+            markTreasuryPendingReleaseCompleted(record.canonical.transactionId);
+            markTreasuryResolutionCleanupStage(record.canonical.transactionId, "lineage_finalization");
+            completeTreasuryResolutionCleanup(record.canonical.transactionId);
+            return {
+              status: "executed_aborted",
+              handle: prepared.handle,
+              actionResult,
+              retirement: "complete_rearm_ready",
+              globalWriteAdmissionStillLocked: abortedDischarge.globalWriteAdmissionStillLocked,
+            };
           }
           return {
             status: "executed_aborted",
             handle: prepared.handle,
             actionResult,
-            retirement: markerCleared || markerAbsent ? "complete_rearm_ready" : "pending_cleanup",
+            retirement: "pending_cleanup",
+            detail: `retirement converge pending: ${JSON.stringify(converged).slice(0, 120)}`,
           };
         }
       }

@@ -30,11 +30,16 @@
  * ForResolution 语义重定向至此（boolean 兼容包装）。
  */
 
-import { readTreasuryWriteFault, type TreasuryWriteFaultMarker } from "@/runtime/treasury/writeFault";
+import {
+  readTreasuryWriteFault,
+  validateTreasuryWriteFaultMarkerShape,
+  type TreasuryWriteFaultMarker,
+} from "@/runtime/treasury/writeFault";
 import { treasuryMarkerExactIdentityRelation } from "@/runtime/treasury/markerExactIdentity";
 import {
   type TreasuryIdentityProfile,
   treasuryProfileAllowsAutomaticProtocol,
+  validateTreasuryIdentityProfileFacts,
 } from "@/runtime/treasury/identityProfile";
 
 /** discharge 结果（六值 + detail；boolean 歧义全部展开）。 */
@@ -82,8 +87,16 @@ type RuntimeMemoryWithTreasuryFaultBranch = NonNullable<Memory["runtime"]> & {
 
 /**
  * 受控 marker discharge（唯一生产清除入口）：
- * relation 判定 → 匹配删除 → Memory read-back → 结构化结果。
+ * expected requiredness 校验 → marker 完整 shape 校验 → relation 判定 →
+ * 匹配删除 → Memory read-back（含 shape 校验）→ 结构化结果。
  * 永不抛出；除"匹配 marker 实际删除"外零状态变化。
+ *
+ * 【Round 22 remediation C】marker 的 phase/status/tick/recordedAt/kind/
+ * source 任一非法 → store_unhealthy（marker 保留、authority 保留、
+ * journal/pending 不推进）；expected 缺 profile required 字段 →
+ * insufficient（不利用 expectedValue === undefined 跳过维度比较）；删除后
+ * read-back 的新 marker 非对象/缺基础字段 → store_unhealthy（不抛异常、
+ * 不当 unrelated）。
  */
 export function dischargeTreasuryMarkerForAttempt(
   expected: TreasuryMarkerDischargeExpected,
@@ -98,10 +111,40 @@ export function dischargeTreasuryMarkerForAttempt(
       globalWriteAdmissionStillLocked: false,
     };
   }
+  // C.1：discharge 前完整 write-fault marker shape validation（phase/status/
+  // tick/recordedAt/kind/source 及全部身份字段形状）——malformed marker 的
+  // exact relation 不可判定，零状态 fail closed。
+  const markerShapeError = validateTreasuryWriteFaultMarkerShape(marker);
+  if (markerShapeError !== null) {
+    return {
+      outcome: "store_unhealthy",
+      detail: `write-fault marker 形状非法（discharge 拒绝——marker/authority/journal 全部保留）: ${markerShapeError}`,
+      attemptMarkerDischarged: false,
+      globalWriteAdmissionStillLocked: true,
+    };
+  }
   if (!treasuryProfileAllowsAutomaticProtocol(expected.identityProfile)) {
     return {
       outcome: "insufficient",
       detail: `expected attempt 的 identity profile ${expected.identityProfile} 不参与自动 marker discharge（显式 forensic / 人工通道）`,
+      attemptMarkerDischarged: false,
+      globalWriteAdmissionStillLocked: true,
+    };
+  }
+  // C.3：expected attempt 自身的 profile required/forbidden 矩阵——缺
+  // required 事实（modern-contract 缺 contract/cohort/durable；lowlevel 缺
+  // durable/受控 source）→ insufficient（expected 证明材料不足，不删除）。
+  const expectedFactsError = validateTreasuryIdentityProfileFacts(expected.identityProfile, {
+    digest: expected.digest,
+    contractDigest: expected.contractDigest,
+    authorizationCohortDigest: expected.authorizationCohortDigest,
+    durableIdentityDigest: expected.durableIdentityDigest,
+    lowlevelSource: expected.lowlevelSource,
+  });
+  if (expectedFactsError !== null) {
+    return {
+      outcome: "insufficient",
+      detail: `expected attempt 未通过 ${expected.identityProfile} profile required/forbidden 矩阵（维度不得按 undefined 跳过比较）: ${expectedFactsError}`,
       attemptMarkerDischarged: false,
       globalWriteAdmissionStillLocked: true,
     };
@@ -124,7 +167,8 @@ export function dischargeTreasuryMarkerForAttempt(
   if (relation.kind === "insufficient") {
     return { outcome: "insufficient", detail: relation.detail, attemptMarkerDischarged: false, globalWriteAdmissionStillLocked: true };
   }
-  // relation match：执行删除并 read-back（6.4）。
+  // relation match：执行删除并 read-back（6.4 + remediation C.2 read-back
+  // shape 校验——null/非对象/缺 transactionId 不得抛异常或当 unrelated）。
   delete branch!.writeFault;
   const readBack = (Memory.runtime as unknown as RuntimeMemoryWithTreasuryFaultBranch | undefined)?.treasury?.writeFault;
   if (readBack === undefined) {
@@ -135,10 +179,27 @@ export function dischargeTreasuryMarkerForAttempt(
       globalWriteAdmissionStillLocked: false,
     };
   }
-  if (readBack.transactionId !== expected.transactionId) {
+  if (readBack === null || typeof readBack !== "object") {
+    return {
+      outcome: "store_unhealthy",
+      detail: "marker 删除后 read-back 为非对象值（store unhealthy——当前 attempt 视为已解除，全局锁保留并要求修复）",
+      attemptMarkerDischarged: true,
+      globalWriteAdmissionStillLocked: true,
+    };
+  }
+  const readBackShapeError = validateTreasuryWriteFaultMarkerShape(readBack);
+  if (readBackShapeError !== null || typeof (readBack as TreasuryWriteFaultMarker).transactionId !== "string") {
+    return {
+      outcome: "store_unhealthy",
+      detail: `marker 删除后 read-back 形状非法（${readBackShapeError ?? "transactionId 非法"}——当前 attempt 视为已解除，全局锁保留）`,
+      attemptMarkerDischarged: true,
+      globalWriteAdmissionStillLocked: true,
+    };
+  }
+  if ((readBack as TreasuryWriteFaultMarker).transactionId !== expected.transactionId) {
     return {
       outcome: "unrelated_global_lock",
-      detail: `匹配 marker 删除后 read-back 发现新的其它 transaction marker ${readBack.transactionId.slice(0, 12)}…（当前 attempt 已解除；global lock 保留）`,
+      detail: `匹配 marker 删除后 read-back 发现新的其它 transaction marker ${((readBack as TreasuryWriteFaultMarker).transactionId).slice(0, 12)}…（当前 attempt 已解除；global lock 保留）`,
       attemptMarkerDischarged: true,
       globalWriteAdmissionStillLocked: true,
     };

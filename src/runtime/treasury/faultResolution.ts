@@ -41,10 +41,7 @@
  */
 
 import { refreshSettledReceiptForResolution, hasSettledReceipt } from "@/runtime/treasury/receipts";
-import {
-  clearTreasuryWriteFaultMarkerForResolution,
-  readTreasuryWriteFault,
-} from "@/runtime/treasury/writeFault";
+import { readTreasuryWriteFault } from "@/runtime/treasury/writeFault";
 import {
   ensureTreasuryQuarantineStoreValidated,
   peekTreasuryQuarantineHealth,

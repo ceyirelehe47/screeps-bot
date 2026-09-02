@@ -377,6 +377,9 @@ export type TreasurySafeExecuteResult<TAction extends { ok: boolean }> =
        *  （complete_rearm_ready / pending_publication / pending_cleanup；
        *  initial attempt 不携带）。 */
       readonly retirement?: "complete_rearm_ready" | "pending_publication" | "pending_cleanup";
+      /** 【Round 22 remediation】当前 attempt 的 marker 已 discharge，但全局
+       *  write admission 是否仍被其它 attempt 的 marker 锁定（两事实分离）。 */
+      readonly globalWriteAdmissionStillLocked?: boolean;
       readonly detail?: string;
     }
   | {
