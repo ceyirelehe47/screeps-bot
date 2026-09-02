@@ -362,30 +362,56 @@ describe("B：六个中断窗口的 heap reset 恢复（remediation B.6）", () 
 
   it("窗口 6（lineage finalization 前）：tr1_ entry 恢复完成 lineage 阶段", () => {
     seedCommittedCleanupScene({ marker: true, authority: true, outcome: true });
-    // 构造 tr1_ 身份的独立 entry（lineage 阶段 pending）。
-    const opened = openTreasuryResolutionCleanup({
-      transactionId: "r22r_w6_child",
+    // 构造真实 tr1_ child ID 的 committed cleanup entry（lineage 阶段 pending）：
+    // final committed tombstone 已持久化（outcome 事实可重验——D.4 恢复不
+    // 信任 boolean，outcome handler 会重新读取 tombstone）。
+    const w6LineageId = "1111111111111111";
+    const w6Child = deriveTreasuryLineageNextChildTransactionId(w6LineageId, 1, "r22r_w6_root");
+    const w6Binding = computeTreasuryLineageBindingDigest({ lineageId: w6LineageId, generation: 1, parentTransactionId: "r22r_w6_root", childTransactionId: w6Child });
+    const w6Resolving = writeTreasuryResolutionTombstone({
+      transactionId: w6Child,
       digest: DIGEST,
-      resolution: "not-executed",
+      resolution: "committed",
+      stage: "resolving",
+      proofLevel: "lowlevel",
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+      durableIdentityDigest: "0cc99174bb6f2e74",
+      actionTick: Game.time,
+      settledAtTick: Game.time,
+      observationTick: Game.time,
+      resolvedAtTick: Game.time,
+      reconcilerKind: "terminal.send",
+      source: "test",
+      lineageId: w6LineageId,
+      lineageGeneration: 1,
+      parentTransactionId: "r22r_w6_root",
+      lineageBindingDigest: w6Binding,
+    });
+    expect(w6Resolving.status).not.toBe("rejected");
+    expect(writeTreasuryResolutionTombstone({ ...readTreasuryResolutionTombstone(w6Child)!, stage: "final" }).status).not.toBe("rejected");
+    const opened = openTreasuryResolutionCleanup({
+      transactionId: w6Child,
+      digest: DIGEST,
+      resolution: "committed",
       identityProfile: "lowlevel",
       proofClass: "lowlevel",
       lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
       durableIdentityDigest: "0cc99174bb6f2e74",
-      lineageId: "1111111111111111",
+      lineageId: w6LineageId,
       lineageGeneration: 1,
       parentTransactionId: "r22r_w6_root",
-      lineageBindingDigest: "2222222222222222",
+      lineageBindingDigest: w6Binding,
     });
     expect(opened.status).toBe("opened");
-    expect(markTreasuryResolutionCleanupStage("r22r_w6_child", "marker_discharge", "already_absent")).toBe(true);
-    expect(markTreasuryResolutionCleanupStage("r22r_w6_child", "authority_release")).toBe(true);
-    expect(markTreasuryResolutionCleanupStage("r22r_w6_child", "outcome_finalization")).toBe(true);
+    expect(markTreasuryResolutionCleanupStage(w6Child, "marker_discharge", "already_absent")).toBe(true);
+    expect(markTreasuryResolutionCleanupStage(w6Child, "authority_release")).toBe(true);
+    expect(markTreasuryResolutionCleanupStage(w6Child, "outcome_finalization")).toBe(true);
     installTestStageHandlers();
     resetTreasuryResolutionCleanupHeapCacheForTest();
     const report = recoverTreasuryResolutionCleanupAtTickBoundary();
     expect(report.blocked).toBe(0);
     // tr1_ entry 的 lineage 阶段补完成后 entry 删除。
-    expect(readTreasuryResolutionCleanupEntry("r22r_w6_child")).toBeUndefined();
+    expect(readTreasuryResolutionCleanupEntry(w6Child)).toBeUndefined();
   });
 
   it("handlers 未装配 → 恢复 fail closed 保留全部 pending（不推进任何阶段）", () => {
@@ -702,13 +728,16 @@ describe("E：GRA 孤儿 proof 的 release-trusted 删除门禁（remediation E�
 
   it("cleanup journal pending → retained", () => {
     seedOrphanProofScene();
-    const gen1ProofTransaction = readTreasuryGenerationRetirementProof(lineageId, 1)!.transactionId;
+    const gen1Proof = readTreasuryGenerationRetirementProof(lineageId, 1)!;
+    const gen1ProofTransaction = gen1Proof.transactionId;
     openTreasuryResolutionCleanup({
       transactionId: gen1ProofTransaction,
       digest: ROOT_DIGEST,
       resolution: "not-executed",
       identityProfile: "lowlevel",
       proofClass: "lowlevel",
+      durableIdentityDigest: gen1Proof.durableIdentityDigest!,
+      lowlevelSource: gen1Proof.lowlevelSource!,
     });
     const result = sweepTreasuryOrphanGenerationProofOnAdvance(lineageId, 1);
     expect(result).toMatchObject({ status: "retained", detail: expect.stringContaining("pending") });
@@ -774,7 +803,7 @@ describe("F：purpose 必填契约与 unresolvedAuthority ok 路径回归（reme
         }
       }
     }
-    expect(callSites).toBe(7);
+    expect(callSites).toBe(8);
   });
 
   it("运行时 defensive：缺 purpose 的调用（类型外）→ store_unhealthy fail closed", () => {

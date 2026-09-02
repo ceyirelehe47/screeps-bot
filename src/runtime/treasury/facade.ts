@@ -210,6 +210,8 @@ import {
   treasuryMarkerDischargeExpectedOfFacts,
 } from "@/runtime/treasury/markerDischarge";
 import { readTreasuryTrustedSettlementProofForAttempt } from "@/runtime/treasury/trustedSettlementProof";
+import { verifyTreasuryCommittedResolutionProof } from "@/runtime/treasury/committedProofVerifier";
+import { validateTreasurySemanticLineage } from "@/runtime/treasury/semanticLineageValidation";
 import { treasuryExactAttemptIdentityOfFacts, treasuryExactAttemptIdentityOfTombstone } from "@/runtime/treasury/exactAttemptIdentity";
 import { readTreasuryGenerationRetirementProof } from "@/runtime/treasury/generationRetirementAuthority";
 import {
@@ -923,6 +925,40 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   // 【第十七轮第五节】lineage 恢复的 marker 只读视图装配（模块单向依赖：
   // attemptLineage 不直接 import writeFault 的清除语义）。
   setTreasuryLineageRecoveryMarkerReaderForAssembly(() => readTreasuryWriteFault());
+  // 【Remediation II D.4】journal outcome 阶段（committed）重验统一三方
+  // verifier 所需的 tr1_ semantic lineage verdict（child ID 派生/parent/
+  // binding 重算/authority 状态——非 tr1_ 返回 undefined）。
+  const semanticLineageVerdictOfTombstoneFacts = (
+    tombstone: Parameters<typeof verifyTreasuryCommittedResolutionProof>[0]["tombstone"],
+  ): { readonly verdict: string; readonly detail?: string } | undefined => {
+    if (!isTreasuryRearmAttemptId(tombstone.transactionId)) return undefined;
+    if (
+      tombstone.lineageId === undefined || tombstone.lineageGeneration === undefined ||
+      tombstone.parentTransactionId === undefined || tombstone.lineageBindingDigest === undefined
+    ) {
+      return { verdict: "insufficient", detail: "tr1_ tombstone 缺完整 lineage proof（形状层应已拦截——防御）" };
+    }
+    const semantic = validateTreasurySemanticLineage({
+      transactionId: tombstone.transactionId,
+      proof: {
+        lineageId: tombstone.lineageId,
+        lineageGeneration: tombstone.lineageGeneration,
+        parentTransactionId: tombstone.parentTransactionId,
+        lineageBindingDigest: tombstone.lineageBindingDigest,
+      },
+      purpose: "committed_settlement",
+      identity: {
+        digest: tombstone.digest,
+        ...(tombstone.contractDigest !== undefined ? { contractDigest: tombstone.contractDigest } : {}),
+        ...(tombstone.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: tombstone.authorizationCohortDigest } : {}),
+        ...(tombstone.durableIdentityDigest !== undefined ? { durableIdentityDigest: tombstone.durableIdentityDigest } : {}),
+        ...(tombstone.lowlevelSource !== undefined ? { lowlevelSource: tombstone.lowlevelSource } : {}),
+      },
+    });
+    return semantic.verdict === "match"
+      ? { verdict: "match" }
+      : { verdict: semantic.verdict, detail: "detail" in semantic ? semantic.detail : undefined };
+  };
   // 【第十八轮 24.3 / 第二十一轮 8.1】lineage 恢复的 committed receipt
   // proof 完整只读视图装配（模块单向依赖）：child-active 补完成按完整 exact
   // proof（digest/contract/cohort/durable/class/provenance/lineage）验证——
@@ -978,18 +1014,69 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
     outcomeFinalization: (entry) => {
       if (entry.resolution === "committed") {
+        // 【Remediation II D.4】outcome 阶段不信任 journal boolean——final 也
+        // 重新确认：exact tombstone 一致 + trusted Receipt + 统一三方
+        // verifier（authority 此时应为 not_found——release 阶段已 read-back）。
         const tombstone = readTreasuryResolutionTombstone(entry.transactionId);
-        if (tombstone !== undefined && tombstone.stage === "final" && tombstone.resolution === "committed") {
-          return { status: "already_final", detail: "final committed tombstone 已存在" };
+        if (tombstone === undefined || tombstone.resolution !== "committed") {
+          return { status: "blocked", detail: "committed tombstone 缺失或结论不一致（outcome 不可 finalize）" };
         }
-        if (tombstone === undefined || tombstone.stage !== "resolving" || tombstone.resolution !== "committed") {
-          return { status: "blocked", detail: "resolving committed tombstone 缺失（outcome 不可 finalize）" };
+        const expected = treasuryExactAttemptIdentityOfFacts(
+          entry.transactionId,
+          {
+            digest: entry.digest,
+            ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+            ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+            ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+            ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+            ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+            ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+            ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
+            ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
+          },
+          entry.proofClass === "lowlevel" ? "lowlevel" : entry.proofClass === "identity-bound" ? "identity-bound" : "legacy",
+        );
+        if (expected === null) return { status: "blocked", detail: "journal entry 身份无法构造 exact identity" };
+        const tombstoneExact = treasuryExactAttemptIdentityOfTombstone(tombstone);
+        if (tombstoneExact === null || treasuryExactAttemptIdentityRelation(tombstoneExact, expected) !== "match") {
+          return { status: "blocked", detail: "tombstone 与 journal entry 身份不一致（outcome 不可 finalize）" };
         }
-        const write = writeTreasuryResolutionTombstone({ ...tombstone, stage: "final" });
+        const trusted = readTreasuryTrustedSettlementProofForAttempt(entry.transactionId, expected);
+        if (trusted.status !== "trusted_proof") {
+          return { status: "blocked", detail: `committed trusted receipt ${trusted.status}: ${trusted.detail}` };
+        }
+        const authorityResolution = resolveTreasuryUnresolvedAuthority(entry.transactionId);
+        if (authorityResolution.status === "inconsistent" || authorityResolution.status === "store_unhealthy") {
+          return { status: "blocked", detail: `authority resolver ${authorityResolution.status}（outcome 阶段重验失败）` };
+        }
+        const receiptProof = readTreasurySettlementProof(entry.transactionId);
+        const semanticLineageVerdict = semanticLineageVerdictOfTombstoneFacts(tombstone);
+        const verdict = verifyTreasuryCommittedResolutionProof({
+          tombstone,
+          authorityResolution,
+          receiptProof,
+          ...(semanticLineageVerdict !== undefined ? { semanticLineageVerdict } : {}),
+        });
+        if (verdict.status !== "verified") {
+          return { status: "blocked", detail: `统一 committed verifier ${verdict.status}: ${verdict.detail}` };
+        }
+        if (tombstone.stage === "final") {
+          return { status: "already_final", detail: "final committed tombstone 已重验（trusted receipt + verifier）" };
+        }
+        if (tombstone.stage !== "resolving") {
+          return { status: "blocked", detail: `committed tombstone stage ${String(tombstone.stage)} 非 resolving/final` };
+        }
+        // resolvedAtTick 单调推进至 settledAtTick（final 终态时序矩阵要求
+        // settledAtTick ≤ resolvedAtTick；staged 目标 tick 允许晚于创建时刻）。
+        const write = writeTreasuryResolutionTombstone({
+          ...tombstone,
+          stage: "final",
+          resolvedAtTick: Math.max(tombstone.resolvedAtTick, tombstone.settledAtTick ?? tombstone.resolvedAtTick),
+        });
         if (write.status === "rejected") {
           return { status: "blocked", detail: `finalize 写入失败: ${write.detail}` };
         }
-        return { status: "finalized", detail: "final committed tombstone 已写入" };
+        return { status: "finalized", detail: "final committed tombstone 已写入（trusted receipt + verifier 重验通过）" };
       }
       // not-executed：tr1_ 需 matching exact GRA proof；initial 的 outcome
       // proof = final tombstone（已由 settlement proof 持久化保证）。
@@ -1009,6 +1096,18 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const record = readTreasuryAttemptLineageRecord(entry.lineageId);
       if (record === undefined) {
         return { status: "not_applicable", detail: "lineage record 不存在（terminal/backfill 已处理）" };
+      }
+      // 【Remediation II D.4】lineage 阶段不信任 boolean——终态也重验 record
+      // 确实处于本 attempt 的 exact 最终状态：current attempt / generation /
+      // parent / binding 任一不匹配都不得完成。
+      const recordMatchesEntry =
+        record.lineageId === entry.lineageId &&
+        record.currentTransactionId === entry.transactionId &&
+        record.generation === entry.lineageGeneration &&
+        (record.currentParentTransactionId ?? undefined) === (entry.parentTransactionId ?? undefined) &&
+        (record.bindingDigest ?? undefined) === (entry.lineageBindingDigest ?? undefined);
+      if (!recordMatchesEntry) {
+        return { status: "blocked", detail: "lineage record 与 journal entry 的当前代不一致（generation/parent/binding/current attempt 任一不匹配）" };
       }
       if (entry.resolution === "committed") {
         if (record.state === "chain_committed") return { status: "already_final", detail: "chain_committed" };

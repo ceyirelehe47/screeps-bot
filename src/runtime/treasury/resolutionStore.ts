@@ -1321,7 +1321,10 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
         resolutionStoreEvents.markerCleanupBlockers += 1;
         continue;
       }
-      if (!committedCleanup.markerDischarged) {
+      // 【Remediation II D.4】marker 阶段布尔不是安全证明——resolver ok 时
+      // 无条件重跑 discharge（already_absent/matching_cleared 幂等；boolean
+      // 撒谎但 matching marker 仍存在时按 exact relation 安全补清除）。
+      {
         const committedDischarge = dischargeTreasuryMarkerForAttempt(
           treasuryMarkerDischargeExpectedOfFacts({
             transactionId,
@@ -1345,22 +1348,44 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
           resolutionStoreEvents.markerCleanupBlockers += 1;
           continue;
         }
-        markTreasuryResolutionCleanupStage(transactionId, "marker_discharge", committedDischarge.outcome);
-      }
-      if (!committedCleanup.authorityReleased) {
-        releaseTreasuryQuarantineEntry(transactionId);
-        releaseTreasuryIntentEntry(transactionId);
-        if (resolveTreasuryUnresolvedAuthority(transactionId).status !== "not_found") {
-          // 释放后 read-back 未确认 not_found：resolving 保留（journal 阶段
-          // 不推进，下一 tick 幂等重试）。
+        if (!markTreasuryResolutionCleanupStage(transactionId, "marker_discharge", committedDischarge.outcome)) {
           resolutionStoreEvents.faulted += 1;
           report.markerCleanupBlocked += 1;
           resolutionStoreEvents.markerCleanupBlockers += 1;
           continue;
         }
-        markTreasuryResolutionCleanupStage(transactionId, "authority_release");
       }
-      const finalEntry: TreasuryResolutionTombstone = { ...entry, stage: "final" };
+      // resolver 第 1 步已确认 authority 在场（ok）。journal 阶段布尔不是
+      // 安全证明（【Remediation II D.4】同款语义：authorityReleased=true 而
+      // authority 在场 = 持久矛盾——幂等重释放 + read-back，不跳过）。
+      releaseTreasuryQuarantineEntry(transactionId);
+      releaseTreasuryIntentEntry(transactionId);
+      if (resolveTreasuryUnresolvedAuthority(transactionId).status !== "not_found") {
+        // 释放后 read-back 未确认 not_found：resolving 保留（journal 阶段
+        // 不推进，下一 tick 幂等重试）。
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
+      // 【Remediation II B.4】阶段写入失败同样阻断 finalize（journal 阶段
+      // 未推进——不得进入 outcome finalization）。
+      if (!markTreasuryResolutionCleanupStage(transactionId, "authority_release")) {
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
+      // 【Remediation II B.4】finalize 经统一状态机写入（不绕过
+      // writeTreasuryResolutionTombstone 的形状/语义/容量校验）；写入被拒
+      // 保留 resolving（journal outcome 阶段不推进）。resolvedAtTick 单调
+      // 推进至 settledAtTick——staged 目标结算 tick 允许晚于创建时刻
+      //（resolving 语义），final 终态要求 settledAtTick ≤ resolvedAtTick。
+      const finalEntry: TreasuryResolutionTombstone = {
+        ...entry,
+        stage: "final",
+        resolvedAtTick: Math.max(entry.resolvedAtTick, entry.settledAtTick ?? entry.resolvedAtTick),
+      };
       const transition = validateTreasuryResolutionTombstoneTransition(entry, finalEntry);
       if (transition.status !== "allowed_finalize") {
         // 防御：resolving entry 自身形态与 finalize 目标矛盾（不应发生——
@@ -1370,8 +1395,22 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
         resolutionStoreEvents.identityInsufficientBlockers += 1;
         continue;
       }
-      runtime.store.entries[key] = finalEntry;
-      markTreasuryResolutionCleanupStage(transactionId, "outcome_finalization");
+      // 【Remediation II B.4】finalize 经统一状态机写入（不绕过
+      // writeTreasuryResolutionTombstone 的形状/语义/容量校验）；写入被拒
+      // 保留 resolving（journal outcome 阶段不推进）。
+      const committedFinalizeWrite = writeTreasuryResolutionTombstone(finalEntry);
+      if (committedFinalizeWrite.status === "rejected") {
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
+      if (!markTreasuryResolutionCleanupStage(transactionId, "outcome_finalization")) {
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
       // lineage finalization：initial attempt（无 lineageId）当场 not_
       // applicable 完成并删除 entry（journal 不积压）；tr1_ 的 chain close
       // 由 beginTick journal recovery（顺序在本函数之后）按同一阶段顺序
@@ -1441,28 +1480,49 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
         resolutionStoreEvents.markerCleanupBlockers += 1;
         continue;
       }
-      const marker = readTreasuryWriteFault();
-      if (marker === undefined) {
-        const pendingEntry = readTreasuryResolutionCleanupEntry(entry.transactionId);
-        if (pendingEntry !== undefined && !pendingEntry.markerDischarged) {
-          markTreasuryResolutionCleanupStage(entry.transactionId, "marker_discharge", "already_absent");
-        }
-        // authority read-back 已是 not_found；outcome proof = final tombstone
-        //（本分支的存在前提）。lineage 阶段由 beginTick journal recovery 补完成。
-        const progressedEntry = readTreasuryResolutionCleanupEntry(entry.transactionId);
-        if (progressedEntry !== undefined) {
-          if (!progressedEntry.authorityReleased) markTreasuryResolutionCleanupStage(entry.transactionId, "authority_release");
-          if (!progressedEntry.outcomeFinalized) markTreasuryResolutionCleanupStage(entry.transactionId, "outcome_finalization");
+        const marker = readTreasuryWriteFault();
+        if (marker === undefined) {
+          const pendingEntry = readTreasuryResolutionCleanupEntry(entry.transactionId);
+          if (pendingEntry !== undefined && !pendingEntry.markerDischarged) {
+            markTreasuryResolutionCleanupStage(entry.transactionId, "marker_discharge", "already_absent");
+          }
+          // authority read-back 已是 not_found；outcome proof = final tombstone
+          //（本分支的存在前提）。lineage 阶段由 beginTick journal recovery 补完成。
+          // 【Remediation II B.4】阶段写入失败不得移除 pending-release 索引
+          //（下一 tick 幂等重试）。
+          const progressedEntry = readTreasuryResolutionCleanupEntry(entry.transactionId);
+          if (
+            progressedEntry !== undefined &&
+            (!progressedEntry.authorityReleased || !progressedEntry.outcomeFinalized)
+          ) {
+            const authorityStageAdvanced =
+              progressedEntry.authorityReleased || markTreasuryResolutionCleanupStage(entry.transactionId, "authority_release");
+            const outcomeStageAdvanced =
+              progressedEntry.outcomeFinalized || markTreasuryResolutionCleanupStage(entry.transactionId, "outcome_finalization");
+            if (!authorityStageAdvanced || !outcomeStageAdvanced) {
+              resolutionStoreEvents.faulted += 1;
+              report.markerCleanupBlocked += 1;
+              resolutionStoreEvents.markerCleanupBlockers += 1;
+              continue;
+            }
+          }
+          const progressedAfterStages = readTreasuryResolutionCleanupEntry(entry.transactionId);
           // initial attempt（无 lineageId）当场完成 lineage 并删除 entry；
           // tr1_ 留 journal recovery 补完成（converge / exact proof）。
-          if (progressedEntry.lineageId === undefined) {
-            markTreasuryResolutionCleanupStage(entry.transactionId, "lineage_finalization");
-            completeTreasuryResolutionCleanup(entry.transactionId);
+          if (progressedAfterStages !== undefined && progressedAfterStages.lineageId === undefined) {
+            if (
+              !markTreasuryResolutionCleanupStage(entry.transactionId, "lineage_finalization") ||
+              !completeTreasuryResolutionCleanup(entry.transactionId)
+            ) {
+              resolutionStoreEvents.faulted += 1;
+              report.markerCleanupBlocked += 1;
+              resolutionStoreEvents.markerCleanupBlockers += 1;
+              continue;
+            }
           }
+          runtime.pendingReleaseIds.delete(transactionId);
+          continue;
         }
-        runtime.pendingReleaseIds.delete(transactionId);
-        continue;
-      }
       const markerBlock = validatePendingReleaseMarkerCompletion(marker, entry);
       if (markerBlock !== null) {
         resolutionStoreEvents.faulted += 1;
@@ -1496,14 +1556,32 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
       }
       const completedEntry = readTreasuryResolutionCleanupEntry(entry.transactionId);
       if (completedEntry !== undefined) {
-        if (!completedEntry.markerDischarged) markTreasuryResolutionCleanupStage(entry.transactionId, "marker_discharge", notExecutedDischarge.outcome);
-        if (!completedEntry.authorityReleased) markTreasuryResolutionCleanupStage(entry.transactionId, "authority_release");
-        if (!completedEntry.outcomeFinalized) markTreasuryResolutionCleanupStage(entry.transactionId, "outcome_finalization");
+        // 【Remediation II B.4】任一阶段写入失败不移除 pending-release 索引
+        //（保持强制前置顺序，下一 tick 幂等重试）。
+        const markerStageAdvanced =
+          completedEntry.markerDischarged || markTreasuryResolutionCleanupStage(entry.transactionId, "marker_discharge", notExecutedDischarge.outcome);
+        const authorityStageAdvanced =
+          completedEntry.authorityReleased || markTreasuryResolutionCleanupStage(entry.transactionId, "authority_release");
+        const outcomeStageAdvanced =
+          completedEntry.outcomeFinalized || markTreasuryResolutionCleanupStage(entry.transactionId, "outcome_finalization");
+        if (!markerStageAdvanced || !authorityStageAdvanced || !outcomeStageAdvanced) {
+          resolutionStoreEvents.faulted += 1;
+          report.markerCleanupBlocked += 1;
+          resolutionStoreEvents.markerCleanupBlockers += 1;
+          continue;
+        }
         // initial attempt（无 lineageId）当场完成 lineage 并删除 entry；
         // tr1_ 留 journal recovery 补完成。
         if (completedEntry.lineageId === undefined) {
-          markTreasuryResolutionCleanupStage(entry.transactionId, "lineage_finalization");
-          completeTreasuryResolutionCleanup(entry.transactionId);
+          if (
+            !markTreasuryResolutionCleanupStage(entry.transactionId, "lineage_finalization") ||
+            !completeTreasuryResolutionCleanup(entry.transactionId)
+          ) {
+            resolutionStoreEvents.faulted += 1;
+            report.markerCleanupBlocked += 1;
+            resolutionStoreEvents.markerCleanupBlockers += 1;
+            continue;
+          }
         }
       }
       runtime.pendingReleaseIds.delete(transactionId);
@@ -1591,7 +1669,9 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
       resolutionStoreEvents.markerCleanupBlockers += 1;
       continue;
     }
-    if (!authorityPresentCleanup.markerDischarged) {
+    // 【Remediation II D.4】marker 阶段布尔不是安全证明——authority 在场时
+    // 无条件重跑 discharge（幂等；boolean 撒谎时安全补清除）。
+    {
       const authorityPresentDischarge = dischargeTreasuryMarkerForAttempt(
         treasuryMarkerDischargeExpectedOfFacts({
           transactionId,
@@ -1615,31 +1695,52 @@ export function recoverStagedResolutions(): TreasuryResolutionRecoveryReport {
         resolutionStoreEvents.markerCleanupBlockers += 1;
         continue;
       }
-      markTreasuryResolutionCleanupStage(transactionId, "marker_discharge", authorityPresentDischarge.outcome);
-    }
-    if (!authorityPresentCleanup.authorityReleased) {
-      // 幂等释放（resolver 判 ok 时 quarantine 与 intent 身份一致，一并
-      // 释放安全）；释放后 read-back 确认 not_found 才推进阶段。
-      releaseTreasuryQuarantineEntry(transactionId);
-      releaseTreasuryIntentEntry(transactionId);
-      if (resolveTreasuryUnresolvedAuthority(transactionId).status !== "not_found") {
+      if (!markTreasuryResolutionCleanupStage(transactionId, "marker_discharge", authorityPresentDischarge.outcome)) {
         resolutionStoreEvents.faulted += 1;
         report.markerCleanupBlocked += 1;
         resolutionStoreEvents.markerCleanupBlockers += 1;
         continue;
       }
-      markTreasuryResolutionCleanupStage(transactionId, "authority_release");
+    }
+    // resolver 已确认 authority 在场——journal 阶段布尔不是安全证明
+    //（【Remediation II D.4】同款语义：幂等重释放 + read-back 确认 not_found
+    // 才推进阶段；read-back 非 not_found 或阶段写入失败都保留 pending 索引）。
+    releaseTreasuryQuarantineEntry(transactionId);
+    releaseTreasuryIntentEntry(transactionId);
+    if (resolveTreasuryUnresolvedAuthority(transactionId).status !== "not_found") {
+      resolutionStoreEvents.faulted += 1;
+      report.markerCleanupBlocked += 1;
+      resolutionStoreEvents.markerCleanupBlockers += 1;
+      continue;
+    }
+    if (!markTreasuryResolutionCleanupStage(transactionId, "authority_release")) {
+      resolutionStoreEvents.faulted += 1;
+      report.markerCleanupBlocked += 1;
+      resolutionStoreEvents.markerCleanupBlockers += 1;
+      continue;
     }
     if (!authorityPresentCleanup.outcomeFinalized) {
       // outcome proof = final not-executed tombstone（本分支的存在前提）。
-      markTreasuryResolutionCleanupStage(transactionId, "outcome_finalization");
+      if (!markTreasuryResolutionCleanupStage(transactionId, "outcome_finalization")) {
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
     }
     // initial attempt（无 lineageId）当场完成 lineage 并删除 entry；tr1_
     // 留 journal recovery 补完成（converge / exact proof）。
     const authorityPresentAfterOutcome = readTreasuryResolutionCleanupEntry(transactionId);
     if (authorityPresentAfterOutcome !== undefined && authorityPresentAfterOutcome.lineageId === undefined) {
-      markTreasuryResolutionCleanupStage(transactionId, "lineage_finalization");
-      completeTreasuryResolutionCleanup(transactionId);
+      if (
+        !markTreasuryResolutionCleanupStage(transactionId, "lineage_finalization") ||
+        !completeTreasuryResolutionCleanup(transactionId)
+      ) {
+        resolutionStoreEvents.faulted += 1;
+        report.markerCleanupBlocked += 1;
+        resolutionStoreEvents.markerCleanupBlockers += 1;
+        continue;
+      }
     }
     runtime.pendingReleaseIds.delete(transactionId);
     resolutionStoreEvents.recovered += 1;

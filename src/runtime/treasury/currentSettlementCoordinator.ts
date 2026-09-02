@@ -48,6 +48,10 @@ import {
   treasuryExactAttemptIdentityRelation,
   type TreasuryExactAttemptIdentity,
 } from "@/runtime/treasury/exactAttemptIdentity";
+import {
+  compareTreasuryGenerationProofWithTombstone,
+  type TreasuryGenerationRetirementProofView,
+} from "@/runtime/treasury/generationRetirementRelation";
 import { readTreasuryTrustedSettlementProofForAttempt } from "@/runtime/treasury/trustedSettlementProof";
 import {
   type TreasuryIdentityProfile,
@@ -217,11 +221,18 @@ export function verifyTreasuryCurrentSettlement(query: TreasuryCurrentSettlement
     }
   }
 
-  // 5) GRA not-executed proof（byAttempt O(1)）。
+  // 5) GRA not-executed proof（byAttempt O(1)）。【Remediation II E】完整
+  //    GRA exact relation（graExactRelationToAttempt 复用统一 matcher——
+  //    digest/lineageId 之外的任一维度冲突同样 fail closed，不再放行）。
   const graProof = lookupTreasuryGenerationRetirementProofByAttemptId(attempt.transactionId);
   if (isCommitted) {
-    if (graProof !== undefined && graProof.transactionId === attempt.transactionId && graProof.digest === attempt.digest) {
-      accumulate(acc, "conflicts", "generation_retirement_proof", "committed 目标存在 matching GRA not-executed exact proof（相反结论 proof）");
+    if (graProof !== undefined) {
+      const relation = graExactRelationToAttempt(graProof, attempt);
+      if (relation === "match") {
+        accumulate(acc, "conflicts", "generation_retirement_proof", "committed 目标存在 matching GRA not-executed exact proof（相反结论 proof）");
+      } else {
+        accumulate(acc, "conflicts", "generation_retirement_proof", `GRA proof 与 attempt 身份 ${relation}（同 attempt id 的 exact 维度冲突——fail closed）`);
+      }
     }
   } else if (graProof === undefined) {
     // tr1_ 链的 not-executed 结论需要 exact proof；initial（非 tr1_）无
@@ -229,8 +240,11 @@ export function verifyTreasuryCurrentSettlement(query: TreasuryCurrentSettlement
     if (attempt.lineageId !== undefined) {
       accumulate(acc, "insufficiencies", "generation_retirement_proof", "tr1_ not-executed settlement 缺少 matching exact retirement proof");
     }
-  } else if (graProof.digest !== attempt.digest || graProof.lineageId !== attempt.lineageId) {
-    accumulate(acc, "conflicts", "generation_retirement_proof", "GRA proof 与 attempt 身份冲突（同 ID 不同链/digest）");
+  } else {
+    const relation = graExactRelationToAttempt(graProof, attempt);
+    if (relation !== "match") {
+      accumulate(acc, "conflicts", "generation_retirement_proof", `GRA proof 与 attempt 身份 ${relation}（exact 维度不一致——不得据此推进清理/删除 proof/授权 rearm）`);
+    }
   }
 
   // 6) Intent/Quarantine（unified resolver）。
@@ -295,6 +309,56 @@ function uniqueSources(details: readonly string[]): readonly string[] {
 }
 
 /**
+ * 【Remediation II E】GRA not-executed proof ↔ attempt 的完整 exact relation
+ * （复用 generationRetirementRelation 单一 matcher，不复制身份比较逻辑）：
+ * transaction/attempt 关系、digest、proof class、contract/cohort/durable/
+ * lowlevel 维度、parent/binding（期望派生 + tombstone 视图持久字段）、
+ * lineageId/generation 显式一致（matcher 未覆盖的两维）、gen0/gen≥1 形态
+ * （gen0 禁 parent/binding；tr1_ 必须完整 lineage 维度）。
+ * match / conflict / insufficient（tombstone 视图缺持久 parent = 不可证明）。
+ */
+function graExactRelationToAttempt(
+  graProof: TreasuryGenerationRetirementProofView,
+  attempt: TreasuryExactAttemptIdentity,
+): "match" | "conflict" | "insufficient" {
+  if (attempt.lineageId !== undefined) {
+    // tr1_：lineageId/generation 显式一致；parent/binding 必须完整可比较。
+    if (graProof.lineageId !== attempt.lineageId) return "conflict";
+    if (graProof.generation !== attempt.lineageGeneration) return "conflict";
+    if (attempt.parentTransactionId === undefined || attempt.lineageBindingDigest === undefined) {
+      return "insufficient";
+    }
+  } else {
+    // initial attempt：GRA proof 必须是 gen0 形态（无 parent/binding——
+    // proof.lineageId 由其内部 root 绑定重算语义承担，不与 attempt 比较）。
+    if (graProof.generation !== 0) return "conflict";
+    if (graProof.parentTransactionId !== undefined || graProof.bindingDigest !== undefined) return "conflict";
+    if (graProof.transactionId !== attempt.transactionId) return "conflict";
+  }
+  const attemptTombstoneView = {
+    transactionId: attempt.transactionId,
+    digest: attempt.digest,
+    proofLevel: attempt.proofClass,
+    ...(attempt.contractDigest !== undefined ? { contractDigest: attempt.contractDigest } : {}),
+    ...(attempt.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: attempt.authorizationCohortDigest } : {}),
+    ...(attempt.durableIdentityDigest !== undefined ? { durableIdentityDigest: attempt.durableIdentityDigest } : {}),
+    ...(attempt.lowlevelSource !== undefined ? { lowlevelSource: attempt.lowlevelSource } : {}),
+    ...(attempt.lineageId !== undefined ? { lineageId: attempt.lineageId } : {}),
+    ...(attempt.lineageGeneration !== undefined ? { lineageGeneration: attempt.lineageGeneration } : {}),
+    ...(attempt.parentTransactionId !== undefined ? { parentTransactionId: attempt.parentTransactionId } : {}),
+    ...(attempt.lineageBindingDigest !== undefined ? { lineageBindingDigest: attempt.lineageBindingDigest } : {}),
+  };
+  const relation = compareTreasuryGenerationProofWithTombstone(
+    graProof,
+    attemptTombstoneView,
+    attempt.parentTransactionId ?? attempt.transactionId,
+    attempt.lineageBindingDigest,
+  );
+  if (relation === null) return "match";
+  return relation.kind === "conflict" ? "conflict" : "insufficient";
+}
+
+/**
  * 相反 proof 显式不存在检查（十六节——compaction 复用）：
  * committed 目标必须确认无 matching final not-executed tombstone / GRA
  * not-executed proof；not-executed 目标必须确认无 trusted committed
@@ -325,8 +389,16 @@ export function verifyTreasuryOppositeProofAbsence(query: {
       }
     }
     const graProof = lookupTreasuryGenerationRetirementProofByAttemptId(attempt.transactionId);
-    if (graProof !== undefined && graProof.transactionId === attempt.transactionId && graProof.digest === attempt.digest) {
-      details.push("generation_retirement_proof: matching GRA not-executed exact proof（相反结论）");
+    if (graProof !== undefined) {
+      // 【Remediation II E】完整 exact relation：matching → 相反结论 proof
+      // 阻断；不 matching（同 attempt id 但任一维度冲突）→ 相反结论缺失
+      // 不可证明，同样 retained（不删除、不推进）。
+      const relation = graExactRelationToAttempt(graProof, attempt);
+      if (relation === "match") {
+        details.push("generation_retirement_proof: matching GRA not-executed exact proof（相反结论）");
+      } else {
+        details.push(`generation_retirement_proof: GRA proof 与 attempt 身份 ${relation}（相反结论缺失不可证明——retained）`);
+      }
     }
   } else {
     const trustedReceipt = readTreasuryTrustedSettlementProofForAttempt(attempt.transactionId, attempt);
