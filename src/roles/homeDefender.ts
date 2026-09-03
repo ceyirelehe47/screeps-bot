@@ -7,8 +7,9 @@ import { createSafeZoneCostCallback, getBoundaryRamparts } from "@/runtime/safeZ
 import {
   defenderEngagementMode,
   readRoomEngagementPlan,
-  resolveRoomEngagementFallbackTarget,
+  type FocusFireDefenderEngagement,
 } from "@/runtime/defenseFocusFire";
+import { resolveRoomEngagementFallbackRevision } from "@/runtime/engagementFallbackRevision";
 import { moveToTarget, moveToTargetRoom } from "@/roles/shared";
 import type { RoleFactory } from "@/types/system";
 
@@ -75,39 +76,54 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
     const assignedFront = getAssignedDefenseFront(roomName, slot) || getTowerFocusFront(roomName);
     const defenderRole = getDefenderRole(roomName, slot);
     const safeZoneCostCallback = createSafeZoneCostCallback(safeZone);
-    // 【Defense Focus-Fire Sidecar 消费侧 + Remediation II G / III 十六/十七】
-    // 本 tick 的房间 plan 给本槽位分配了联合集火目标时，以该目标为唯一作战
-    // 对象——显式 assignment 优先，旧的 secondary 去重 / coverage rampart /
-    // 独立评分不得把它改到另一目标。执行语义与 planner 的
-    // defenderEngagementMode 单一语义源一致：贴身 attack()；纯远程（无
-    // ATTACK 部件）≤3 距离 rangedAttack()（planner 才计入该伤害）；
+    // 【Defense Focus-Fire Sidecar 消费侧 + Remediation II G / III 十六/十七 +
+    // IV 十七】本 tick 的 fresh plan 是唯一权威：本槽位在 defenderEngagements
+    // 中（含显式 hold / targetId=null）即完全由 plan 决定——attack/
+    // ranged_attack/engage_position/hold 都不回退旧独立评分。执行语义与
+    // planner 的 defenderEngagementMode 单一语义源一致：贴身 attack()；纯
+    // 远程（无 ATTACK 部件）≤3 距离 rangedAttack()（planner 才计入该伤害）；
     // approach 时 combat target 与接敌位置分离——敌在安全区内（inside）
-    // 直接接敌；敌在边界外（boundary）前往合法 rampart 站位（不离开防线
-    // 追逐共享目标）。分配目标失效 → 房间级一次性共享 live fallback（与
-    // Tower 消费同一结果）；无合法 fallback 才本 tick 空转等待重规划。
+    // 直接接敌；敌在边界外（boundary）前往 per-defender 唯一 rampart 站位
+    //（不离开防线追逐共享目标）。分配目标失效 → 房间级一次性 fallback
+    // revision（与 Tower 消费同一修订计划——front 约束与 per-defender 位置
+    // 保留）；无 front-local 替代时本 tick hold（不跨 front、不回退独立
+    // 评分）。slot 不在 plan 的 defenderEngagements 中 = planner 明确未让
+    // 该 actor 参与（如 slot 推导失败）——保留既有独立行为。
     const engagementPlan = slot !== undefined ? readRoomEngagementPlan(roomName) : null;
-    const plannedEngagement = slot !== undefined ? engagementPlan?.defenderEngagements?.[slot] : undefined;
-    let plannedTargetId: string | undefined = plannedEngagement?.targetId ?? (slot !== undefined ? engagementPlan?.defenderAssignments?.[slot] : undefined);
-    if (plannedTargetId !== undefined) {
-      let plannedTarget = allHostiles.find((hostile) => hostile.id === plannedTargetId);
-      let engagementPosition = plannedEngagement?.positionKind !== undefined && plannedTarget
-        ? { x: plannedEngagement.position!.x, y: plannedEngagement.position!.y, kind: plannedEngagement.positionKind }
-        : plannedTarget && engagementPlan?.engagementByTargetId?.[plannedTarget.id];
-      if (!plannedTarget) {
-        // 【Remediation III 十七】目标失效：房间级共享 fallback（每房间每
-        // tick 至多一次解析；Tower 与 Defender 消费同一缓存结果）。
-        const fallback = resolveRoomEngagementFallbackTarget(
+    const plannedEngagement: FocusFireDefenderEngagement | undefined =
+      slot !== undefined ? engagementPlan?.defenderEngagements?.[slot] : undefined;
+    if (plannedEngagement !== undefined && engagementPlan !== null) {
+      let plannedTargetId: string | null | undefined = plannedEngagement.targetId;
+      let engagementPosition =
+        plannedEngagement.positionKind !== undefined && plannedEngagement.position !== undefined
+          ? { x: plannedEngagement.position.x, y: plannedEngagement.position.y, kind: plannedEngagement.positionKind }
+          : undefined;
+      let engagementMode = plannedEngagement.mode;
+      let plannedTarget = plannedTargetId !== null && plannedTargetId !== undefined
+        ? allHostiles.find((hostile) => hostile.id === plannedTargetId)
+        : undefined;
+      if (plannedTargetId !== null && plannedTargetId !== undefined && !plannedTarget) {
+        // 【Remediation IV 十六】目标失效：房间级一次性 fallback revision
+        //（每房间每 tick 至多一次生成；Tower 与 Defender 消费同一修订）。
+        const { revision } = resolveRoomEngagementFallbackRevision(
           roomName,
-          plannedTargetId,
+          [plannedTargetId],
           new Set(allHostiles.map((hostile) => hostile.id as string)),
         );
-        if (fallback.targetId !== null) {
-          plannedTargetId = fallback.targetId;
-          plannedTarget = allHostiles.find((hostile) => hostile.id === plannedTargetId);
-          engagementPosition = plannedTarget ? engagementPlan?.engagementByTargetId?.[plannedTarget.id] : undefined;
+        const revised = slot !== undefined ? revision?.defenderEngagementBySlot?.[slot] : undefined;
+        if (revision !== null && revised !== undefined) {
+          plannedTargetId = revised.targetId;
+          engagementMode = revised.targetId !== null ? engagementMode : "hold";
+          plannedTarget = plannedTargetId !== null ? allHostiles.find((hostile) => hostile.id === plannedTargetId) : undefined;
+          engagementPosition =
+            revised.targetId !== null && revised.position !== undefined && revised.positionKind !== undefined
+              ? { x: revised.position.x, y: revised.position.y, kind: revised.positionKind }
+              : plannedTarget !== undefined && plannedTargetId !== null
+                ? engagementPlan.engagementByTargetId?.[plannedTargetId]
+                : undefined;
         }
       }
-      if (plannedTargetId !== undefined && !plannedTarget) return false;
+      if (plannedTargetId !== null && plannedTargetId !== undefined && !plannedTarget) return false;
       if (plannedTarget) {
         const meleeDamage = creep.getActiveBodyparts(ATTACK) * ATTACK_POWER;
         const rangedDamage = creep.getActiveBodyparts(RANGED_ATTACK) * RANGED_ATTACK_POWER;
@@ -120,8 +136,8 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
         } else if (mode === "ranged_attack") {
           measureCreepIntent(() => creep.rangedAttack(plannedTarget!));
         } else if (engagementPosition?.kind === "boundary") {
-          // 【十六.3】敌在边界外：前往合法 rampart 站位（既有防线系统给出
-          // 的接敌位置——不为追共享目标绕过 Rampart/离开 safe-zone）。
+          // 【十六.3】敌在边界外：前往合法 rampart 站位（per-defender 唯一
+          // 位置——不为追共享目标绕过 Rampart/离开 safe-zone）。
           const position =
             (typeof creep.room.getPositionAt === "function"
               ? creep.room.getPositionAt(engagementPosition.x, engagementPosition.y)
@@ -143,6 +159,9 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
         }
         return false;
       }
+      // 【Remediation IV 十七】plan 显式 hold（或 fallback 无 front-local
+      // 替代）：本 tick 保持——不回退独立评分、不跨 front 增援。
+      if (engagementMode === "hold") return false;
     }
 
     const hostiles = assignedFront

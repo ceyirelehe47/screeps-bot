@@ -37,6 +37,7 @@
  */
 
 import { getMemoryService } from "@/runtime/runtimeServices";
+import { allocateDefenderRampartPositions } from "@/runtime/defenderRampartAllocation";
 
 /** 保守击杀裕度：作用于含敌方本 tick 治疗的保守击杀预算。 */
 export const FOCUS_FIRE_KILL_OVERKILL_MARGIN = 1.15;
@@ -87,6 +88,8 @@ export interface FocusFireHostileSnapshot {
   readonly workPower?: number;
   /** 【Remediation III 十六】接敌位置（采集方按既有 front/rampart 系统给出）。 */
   readonly engagement?: FocusFireEngagementPosition;
+  /** 【Remediation IV 十五】per-defender 唯一 Rampart 分配的候选集合（boundary 接敌；含他属占用标记）。 */
+  readonly engagementCandidates?: ReadonlyArray<{ readonly id: string; readonly x: number; readonly y: number; readonly occupied?: boolean }>;
 }
 
 export interface FocusFireTowerSnapshot {
@@ -108,6 +111,12 @@ export interface FocusFireDefenderSnapshot {
   readonly meleeDamage: number;
   /** 远程单 tick 输出（getActiveBodyparts(RANGED_ATTACK) × RANGED_ATTACK_POWER，含 boost）。 */
   readonly rangedDamage: number;
+  /** 【Remediation IV 十三】assigned front ID（未分配 = undefined——room-scope 保守默认）。 */
+  readonly frontId?: string;
+  /** 【Remediation IV 十三】该 front 允许处理的 hostile ID 集合（预计算——planner 内 O(1) 判定）。 */
+  readonly eligibleHostileIds?: ReadonlySet<string>;
+  /** 【Remediation IV 十三】既有协调系统显式标记的跨 front 增援许可。 */
+  readonly reinforcementAllowed?: boolean;
 }
 
 export interface FocusFireWoundedSnapshot {
@@ -126,14 +135,21 @@ export interface FocusFireRoomInput {
   readonly wounded: readonly FocusFireWoundedSnapshot[];
 }
 
-/** 【Remediation III 十六】Defender 的作战 assignment（目标 + 接敌模式/位置）。 */
+/** 【Remediation III 十六 / IV 十四】Defender 的作战 assignment（目标 + 接敌模式/位置）。 */
 export interface FocusFireDefenderEngagement {
-  readonly targetId: string;
-  /** attack/ranged_attack=本 tick 有伤害动作；engage_position=移动接敌（本 tick 伤害 0）。 */
-  readonly mode: "attack" | "ranged_attack" | "engage_position";
-  /** 接敌目标位置（engage_position 时必带——inside 直接接敌 / boundary 合法 rampart）。 */
+  /** combat target（null = 无目标的本 tick hold——fresh plan 仍是权威，不回退独立选敌）。 */
+  readonly targetId: string | null;
+  /** attack/ranged_attack=本 tick 有伤害动作；engage_position=移动接敌（本 tick 伤害 0）；hold=守位/等待（无合法替代）。 */
+  readonly mode: "attack" | "ranged_attack" | "engage_position" | "hold";
+  /** 接敌目标位置（engage_position 时必带——inside 直接接敌 / boundary per-defender 唯一 rampart）。 */
   readonly position?: { readonly x: number; readonly y: number };
   readonly positionKind?: "inside" | "boundary";
+}
+
+/** 【Remediation IV 十六】plan 持久的 Defender front 约束（fallback revision 消费）。 */
+export interface FocusFireDefenderFrontFact {
+  readonly frontId?: string;
+  readonly eligibleTargetIds: readonly string[];
 }
 
 export interface FocusFireEngagementPlan {
@@ -155,7 +171,7 @@ export interface FocusFireEngagementPlan {
   readonly towerAssignments: Readonly<Record<string, string>>;
   /** 防御者 slot → hostileId。 */
   readonly defenderAssignments: Readonly<Record<string, string>>;
-  /** 【Remediation III 十六】防御者 slot → 作战 assignment（目标与站位分离表达）。 */
+  /** 【Remediation III 十六 / IV 十四】防御者 slot → 作战 assignment（覆盖全部参与 Defender——含 hold；目标与站位分离表达）。 */
   readonly defenderEngagements: Readonly<Record<string, FocusFireDefenderEngagement>>;
   /** 【Remediation III 十六】hostileId → 接敌位置（fallback 消费侧复用）。 */
   readonly engagementByTargetId: Readonly<Record<string, FocusFireEngagementPosition>>;
@@ -163,6 +179,8 @@ export interface FocusFireEngagementPlan {
   readonly emergencyHealByTowerId: Readonly<Record<string, string>>;
   /** 【Remediation III 十七】共享 fallback 候选顺序（分类桶排序；resolver 逐个探活）。 */
   readonly fallbackTargetIds: readonly string[];
+  /** 【Remediation IV 十六】Defender front 约束（fallback revision 的 front-local 替代依据）。 */
+  readonly defenderFronts: Readonly<Record<string, FocusFireDefenderFrontFact>>;
   /** 【Remediation III 十七】运行期共享 fallback 解析缓存（每房间每 tick 至多一次）。 */
   fallbackResolution?: { readonly tick: number; readonly resolvedTargetId: string | null; requests: number };
   readonly fallbackReason?: "no-hostile" | "no-attack-actor";
@@ -238,6 +256,10 @@ interface AttackActor {
   readonly y: number;
   /** 本 tick 可对目标发出的 raw 伤害（塔按能量门槛 + 距离衰减；防御者按共享可执行语义）。 */
   readonly rawDamageTo: (target: { x: number; y: number }) => number;
+  /** 【Remediation IV 十三】defender 的 front eligibility（tower 无此约束 = 房间级）。 */
+  readonly eligibleHostileIds?: ReadonlySet<string>;
+  /** 【Remediation IV 十四】defender 角色事实（positioning 阶段排序）。 */
+  readonly role?: "primary" | "secondary";
 }
 
 function towerAttackActorOf(tower: FocusFireTowerSnapshot): AttackActor {
@@ -289,7 +311,15 @@ function defenderAttackActorOf(defender: FocusFireDefenderSnapshot): AttackActor
     sortKey: defender.slot,
     x: defender.x,
     y: defender.y,
-    rawDamageTo: (target) => executableDefenderDamage(defender, target),
+    // 【Remediation IV 十三】Defender 默认只对其 assigned front 的 hostile
+    // 可用（eligible 集合预计算——内层 O(1) 判定，不重复扫描 front）；
+    // 未分配 front 的 Defender 采用 room-scope 保守默认（全集合）。
+    eligibleHostileIds: defender.eligibleHostileIds,
+    role: defender.role,
+    rawDamageTo: (target: { x: number; y: number; id?: string }) =>
+      target.id !== undefined && defender.eligibleHostileIds !== undefined && !defender.eligibleHostileIds.has(target.id)
+        ? 0
+        : executableDefenderDamage(defender, target),
   };
 }
 
@@ -461,10 +491,15 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
       focusExpectedHeal: 0,
       towerAssignments: {},
       defenderAssignments: {},
-      defenderEngagements: {},
+      // 【IV 十七】fresh plan 是权威：即使 focusTargetId=null，全部参与
+      // Defender 获得显式 hold（消费侧不得回退独立选敌）。
+      defenderEngagements: Object.fromEntries(
+        input.defenders.map((defender) => [defender.slot, { targetId: null, mode: "hold" as const }]),
+      ),
       engagementByTargetId: emptyEngagements,
       emergencyHealByTowerId,
       fallbackTargetIds: [],
+      defenderFronts: {},
       fallbackReason: "no-hostile",
     };
   }
@@ -482,10 +517,24 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
       focusExpectedHeal: 0,
       towerAssignments: {},
       defenderAssignments: {},
-      defenderEngagements: {},
+      defenderEngagements: Object.fromEntries(
+        input.defenders.map((defender) => [defender.slot, { targetId: null, mode: "hold" as const }]),
+      ),
       engagementByTargetId: emptyEngagements,
       emergencyHealByTowerId,
       fallbackTargetIds: input.hostiles.map((hostile) => hostile.id),
+      defenderFronts: Object.fromEntries(
+        input.defenders.map((defender) => [
+          defender.slot,
+          {
+            ...(defender.frontId !== undefined ? { frontId: defender.frontId } : {}),
+            eligibleTargetIds:
+              defender.eligibleHostileIds !== undefined
+                ? input.hostiles.map((h) => h.id).filter((id) => defender.eligibleHostileIds!.has(id))
+                : input.hostiles.map((h) => h.id).slice().sort((a, b) => a.localeCompare(b)),
+          },
+        ]),
+      ),
       fallbackReason: "no-attack-actor",
     };
   }
@@ -506,10 +555,26 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
   const primary = orderedHostiles[0]!;
   const primaryClass = classifyFocusTarget(primary, jointEffectiveByHostileId.get(primary.id) ?? 0);
 
-  // 【Remediation III 十四/十五】目标级分配循环（确定性、有界——无指数搜索）。
+  // 【Remediation III 十四/十五 + IV 十四】目标级分配循环（确定性、有界——
+  // 无指数搜索）。【IV】对当前 target 伤害为 0 的 Defender 不再被提前消费
+  // 为 positioning follower——零伤害 Defender 保留在 remaining 池，下一个
+  // target 重新计算其伤害（对 Primary 为 0、对 Secondary 为正的 Defender
+  // 参与 Secondary）；只有全部可执行伤害分配完成后才进入 positioning
+  // 阶段（独立 rampart / hold）。
   const towerAssignments: Record<string, string> = {};
   const defenderAssignments: Record<string, string> = {};
   const defenderEngagements: Record<string, FocusFireDefenderEngagement> = {};
+  const defenderFronts: Record<string, FocusFireDefenderFrontFact> = {};
+  const orderedHostileIds = () => orderedHostiles.map((hostile) => hostile.id);
+  for (const defender of input.defenders) {
+    defenderFronts[defender.slot] = {
+      ...(defender.frontId !== undefined ? { frontId: defender.frontId } : {}),
+      eligibleTargetIds:
+        defender.eligibleHostileIds !== undefined
+          ? orderedHostileIds().filter((id) => defender.eligibleHostileIds!.has(id))
+          : orderedHostileIds(),
+    };
+  }
   let focusAssignedDamage = 0;
   let unassigned = [...actors];
   let current: FocusFireHostileSnapshot | null = primary;
@@ -518,14 +583,31 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
   while (current !== null && unassigned.length > 0 && guard++ <= input.hostiles.length + 1) {
     const budget = budgetByHostileId.get(current.id)!;
     const classOfCurrent = classifyFocusTarget(current, jointEffectiveByHostileId.get(current.id) ?? 0);
-    // 剩余 actor 对当前目标的联合可行性（重算——目标级状态）。
-    const jointWithRemaining = effectiveDamageOfActors(unassigned, current);
+    // 对当前 target 有正本 tick 伤害且符合 front eligibility 的 actor 子集
+    //（零伤害 actor 保留——不作为 follower 提前消费）。
+    const positiveActors = unassigned.filter((actor) => actor.rawDamageTo(current!) > 0);
+    if (positiveActors.length === 0) {
+      // 剩余 actor（含 front-受限 Defender）对当前目标均零伤害：不消费、
+      // 不压制——评估下一个目标。
+      const remainingHostiles = orderedHostiles.filter(
+        (hostile) => !assignedTargets.some((entry) => entry.targetId === hostile.id) && hostile.id !== current!.id,
+      );
+      if (remainingHostiles.length === 0) {
+        current = null;
+        break;
+      }
+      current = pickNextTarget(remainingHostiles, unassigned, jointEffectiveByHostileId, budgetByHostileId);
+      continue;
+    }
+    // 剩余 actor 对当前目标的联合可行性（重算——目标级状态；零伤害 actor
+    // 不改变数值，killability 只由正伤害 actor 构成）。
+    const jointWithRemaining = effectiveDamageOfActors(positiveActors, current);
     if (classOfCurrent === "killable_this_tick" && jointWithRemaining >= budget) {
       // 可靠击杀：确定性 greedy（边际有效伤害降序——对 fresh 状态的单 actor
       // 有效伤害排序，平手稳定 key；分配顺序推进 TOUGH 模拟至预算达成）。
       const sim = freshToughSimState(current.toughProfile);
-      const marginalRanked = [...unassigned]
-        .map((actor) => ({ actor, marginal: applyRawDamage(freshToughSimState(current.toughProfile), actor.rawDamageTo(current)) }))
+      const marginalRanked = [...positiveActors]
+        .map((actor) => ({ actor, marginal: applyRawDamage(freshToughSimState(current!.toughProfile), actor.rawDamageTo(current!)) }))
         .filter((entry) => entry.marginal > 0)
         .sort((left, right) => right.marginal - left.marginal || left.actor.sortKey.localeCompare(right.actor.sortKey));
       let cumulative = 0;
@@ -535,20 +617,16 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
         cumulative += applyRawDamage(sim, entry.actor.rawDamageTo(current));
         assignedNow.push(entry.actor);
       }
-      // 剩余的零边际 actor（移动中的 Defender 等）也跟随当前目标（定位
-      // assignment——不参与预算但保持共享 combat target）。
-      const assignedKeys = new Set(assignedNow.map((actor) => actor.sortKey));
-      const zeroMarginalFollowers = unassigned.filter(
-        (actor) => !assignedKeys.has(actor.sortKey) && actor.rawDamageTo(current) <= 0,
-      );
-      const assignedActors = [...assignedNow, ...zeroMarginalFollowers];
-      for (const actor of assignedActors) {
+      // 【Remediation IV 十四】零伤害 Defender 不再作为 follower 提前消费
+      //——保留在 unassigned（下一 target 重新评估；全部伤害分配完成后
+      // 由 positioning 阶段分配独立 rampart / hold）。
+      for (const actor of assignedNow) {
         if (actor.kind === "tower") towerAssignments[actor.id] = current.id;
         else defenderAssignments[actor.id] = current.id;
       }
       if (current.id === primary.id) focusAssignedDamage = cumulative;
       assignedTargets.push({ targetId: current.id, class: classOfCurrent });
-      const assignedKeySet = new Set(assignedActors.map((actor) => actor.sortKey));
+      const assignedKeySet = new Set(assignedNow.map((actor) => actor.sortKey));
       unassigned = unassigned.filter((actor) => !assignedKeySet.has(actor.sortKey));
       // 选择下一个目标：剩余 actor 重新分类排序（killable 优先）。
       const remainingHostiles = orderedHostiles.filter(
@@ -561,29 +639,130 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
       current = pickNextTarget(remainingHostiles, unassigned, jointEffectiveByHostileId, budgetByHostileId);
       continue;
     }
-    // 不可击杀（suppression/pressure 或剩余火力不足）：全部剩余 actor 共同
-    // 压制当前目标——不切换第三目标、不逐 actor 各自选敌（15.1）。
-    for (const actor of unassigned) {
+    // 不可击杀（suppression/pressure 或剩余火力不足）：对当前目标有正伤害
+    // 的全部剩余 actor 共同压制——不切换第三目标、不逐 actor 各自选敌
+    //（15.1）；零伤害 Defender 保留（14.1——下一目标重新评估）。
+    for (const actor of positiveActors) {
       if (actor.kind === "tower") towerAssignments[actor.id] = current.id;
       else defenderAssignments[actor.id] = current.id;
     }
     if (current.id === primary.id) {
-      focusAssignedDamage = effectiveDamageOfActors(unassigned, current);
+      focusAssignedDamage = jointWithRemaining;
     }
     assignedTargets.push({ targetId: current.id, class: classOfCurrent });
-    unassigned = [];
-    break;
+    const positiveKeySet = new Set(positiveActors.map((actor) => actor.sortKey));
+    unassigned = unassigned.filter((actor) => !positiveKeySet.has(actor.sortKey));
+    const remainingHostiles = orderedHostiles.filter(
+      (hostile) => !assignedTargets.some((entry) => entry.targetId === hostile.id),
+    );
+    if (remainingHostiles.length === 0) {
+      current = null;
+      break;
+    }
+    current = pickNextTarget(remainingHostiles, unassigned, jointEffectiveByHostileId, budgetByHostileId);
   }
-  // 未获得目标的残余 actor（理论不可达——防御性压制 primary）。
+  // 未获得目标的残余 Tower（防御性压制 primary——理论不可达）。零伤害
+  // Defender 不在此分配——positioning 阶段统一处理（独立 rampart / hold）。
   for (const actor of unassigned) {
     if (actor.kind === "tower") towerAssignments[actor.id] = primary.id;
-    else defenderAssignments[actor.id] = primary.id;
+  }
+
+  // 【Remediation IV 十四.2 / 十五】positioning 阶段：全部可执行伤害分配完成
+  // 后处理仍未分配的 Defender——按自身 front 选择需要防守的 target（eligible
+  // 集合内按计划候选顺序——combat target 保留给下一 tick 规划），分配独立
+  // engagement position（per-defender 唯一 rampart——allocate 单一实现）；
+  // 候选不足时明确 hold（不追逐边界外 hostile、不回退独立选敌）。
+  const positioningDefenders = input.defenders.filter((defender) => defenderAssignments[defender.slot] === undefined);
+  if (positioningDefenders.length > 0) {
+    const targetIdBySlot: Record<string, string> = {};
+    for (const defender of positioningDefenders) {
+      // eligible 集合内、本 plan 仍存在的 hostiles 中按候选顺序选第一个
+      //（无 front 约束的 Defender 用全局顺序——primary 所在 front 优先）。
+      const eligibleOrder = orderedHostiles.filter(
+        (hostile) => defender.eligibleHostileIds === undefined || defender.eligibleHostileIds.has(hostile.id),
+      );
+      const chosen = eligibleOrder[0];
+      if (chosen !== undefined) {
+        defenderAssignments[defender.slot] = chosen.id;
+        targetIdBySlot[defender.slot] = chosen.id;
+      }
+    }
+    // per-defender 唯一 rampart 分配（boundary 候选；inside 直接接敌）。
+    const candidatesByTargetId: Record<string, { id: string; x: number; y: number; occupied?: boolean }[]> = {};
+    const targetPositionById: Record<string, { x: number; y: number }> = {};
+    for (const hostile of input.hostiles) {
+      targetPositionById[hostile.id] = { x: hostile.x, y: hostile.y };
+      if (hostile.engagementCandidates !== undefined && hostile.engagementCandidates.length > 0) {
+        candidatesByTargetId[hostile.id] = [...hostile.engagementCandidates];
+      } else if (hostile.engagement?.kind === "boundary") {
+        // 候选缺失时退化为单一 engagement 位置（采集层默认——per-defender
+        // 唯一性由 allocate 保证：单候选只分配一名 Defender，其余 hold）。
+        candidatesByTargetId[hostile.id] = [{ id: `pos:${hostile.engagement.x},${hostile.engagement.y}`, x: hostile.engagement.x, y: hostile.engagement.y }];
+      }
+    }
+    const allocation = allocateDefenderRampartPositions({
+      defenders: positioningDefenders
+        .filter((defender) => targetIdBySlot[defender.slot] !== undefined)
+        .map((defender) => ({ slot: defender.slot, role: defender.role, x: defender.x, y: defender.y, targetId: targetIdBySlot[defender.slot]! })),
+      candidatesByTargetId,
+      targetPositionById,
+    });
+    for (const defender of positioningDefenders) {
+      const targetId = targetIdBySlot[defender.slot];
+      if (targetId === undefined) {
+        // 无 eligible target（全部失效/不在 front）：明确 hold（不跨 front、
+        // 不回退独立选敌）。
+        defenderEngagements[defender.slot] = { targetId: null, mode: "hold" };
+        continue;
+      }
+      const target = hostilesById.get(targetId)!;
+      const mode = defenderEngagementMode(defender, target);
+      const engagement = target.engagement;
+      if (mode !== "approach") {
+        // 站位即战位（贴身/射程内）：直接动作语义。
+        defenderEngagements[defender.slot] = { targetId, mode };
+        continue;
+      }
+      if (engagement?.kind === "inside") {
+        defenderEngagements[defender.slot] = {
+          targetId,
+          mode: "engage_position",
+          position: { x: engagement.x, y: engagement.y },
+          positionKind: "inside",
+        };
+        continue;
+      }
+      if (engagement?.kind === "boundary") {
+        const allocated = allocation[defender.slot];
+        if (allocated !== undefined) {
+          defenderEngagements[defender.slot] = {
+            targetId,
+            mode: "engage_position",
+            position: { x: allocated.x, y: allocated.y },
+            positionKind: "boundary",
+          };
+        } else {
+          // 候选 Rampart 不足：明确 hold（本 tick 伤害 0、保留 combat target
+          // 给下一 tick 规划——不重复分配已占用位置、不追逐边界外 hostile）。
+          defenderEngagements[defender.slot] = { targetId, mode: "hold" };
+        }
+        continue;
+      }
+      // 无站位信息（采集层防线系统未给出）：engage_position 不带位置——
+      // 消费侧按既有规则直接接敌。
+      defenderEngagements[defender.slot] = { targetId, mode: "engage_position" };
+    }
   }
 
   // 【十六】Defender 的作战 assignment：目标与接敌位置分离表达。
   for (const defender of input.defenders) {
+    if (defenderEngagements[defender.slot] !== undefined) continue;
     const targetId = defenderAssignments[defender.slot];
-    if (targetId === undefined) continue;
+    if (targetId === undefined) {
+      // 参与计划但无任何 assignment（输入 defender 均应参与——防御性 hold）。
+      defenderEngagements[defender.slot] = { targetId: null, mode: "hold" };
+      continue;
+    }
     const target = hostilesById.get(targetId)!;
     const mode = defenderEngagementMode(defender, target);
     const engagement = target.engagement;
@@ -619,6 +798,7 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
     // 【十七】fallback 候选顺序 = 分类桶排序（primary 在首位；resolver 在
     // 失效时按顺序探活）。
     fallbackTargetIds: orderedHostiles.map((hostile) => hostile.id),
+    defenderFronts,
   };
 }
 
@@ -674,32 +854,6 @@ interface RuntimeMemoryWithEngagement {
  * 无合法 fallback 返回 null（全部相关 actor 本 tick 共同空转——不回退
  * 独立评分）。计数有界（plan 每 tick 重写）。
  */
-export function resolveRoomEngagementFallbackTarget(
-  roomName: string,
-  failedTargetId: string,
-  aliveHostileIds: ReadonlySet<string>,
-): { readonly targetId: string | null; readonly fromCache: boolean } {
-  const runtime = Memory.runtime as RuntimeMemoryWithEngagement | undefined;
-  const plan = runtime?.defenseEngagement?.[roomName];
-  if (!plan || plan.plannedAtTick !== Game.time) {
-    return { targetId: null, fromCache: false };
-  }
-  if (plan.fallbackResolution && plan.fallbackResolution.tick === Game.time) {
-    plan.fallbackResolution.requests += 1;
-    return { targetId: plan.fallbackResolution.resolvedTargetId, fromCache: true };
-  }
-  let resolved: string | null = null;
-  for (const candidateId of plan.fallbackTargetIds) {
-    if (candidateId === failedTargetId) continue;
-    if (aliveHostileIds.has(candidateId)) {
-      resolved = candidateId;
-      break;
-    }
-  }
-  plan.fallbackResolution = { tick: Game.time, resolvedTargetId: resolved, requests: 1 };
-  return { targetId: resolved, fromCache: false };
-}
-
 export function writeRoomEngagementPlan(plan: FocusFireEngagementPlan): void {
   const runtime = getMemoryService().ensureRuntime() as unknown as RuntimeMemoryWithEngagement;
   runtime.defenseEngagement = runtime.defenseEngagement || {};
@@ -787,6 +941,10 @@ export function buildFocusFireRoomInput(args: {
   readonly wounded: readonly Creep[];
   /** 【Remediation III 十六】hostile 接敌位置（安全区内/边界外 rampart——由调用方按既有防线系统给出）。 */
   readonly hostileEngagements?: Readonly<Record<string, FocusFireEngagementPosition>>;
+  /** 【Remediation IV 十五】hostile 的 boundary rampart 候选集合（per-defender 唯一分配——由调用方按既有防线系统给出）。 */
+  readonly hostileEngagementCandidates?: Readonly<Record<string, readonly { id: string; x: number; y: number; occupied?: boolean }[]>>;
+  /** 【Remediation IV 十三】Defender 的 assigned front 与该 front 允许的 hostile 集合（预计算）。 */
+  readonly defenderFronts?: Readonly<Record<string, { frontId?: string; eligibleHostileIds: ReadonlySet<string> }>>;
 }): FocusFireRoomInput {
   const { hostiles } = args;
   const hostileSnapshots: FocusFireHostileSnapshot[] = hostiles.map((hostile) => {
@@ -808,12 +966,15 @@ export function buildFocusFireRoomInput(args: {
       toughProfile: toughProfileOfBody(hostile.body),
       incomingHeal,
       threat: hostileThreatOf(hostile.body, (part) => hostile.getActiveBodyparts(part)),
-      ...(healPower > 0 || workPower > 0 || args.hostileEngagements?.[hostile.id] !== undefined
+      ...(healPower > 0 || workPower > 0 || args.hostileEngagements?.[hostile.id] !== undefined || args.hostileEngagementCandidates?.[hostile.id] !== undefined
         ? {
             ...(healPower > 0 ? { healPower } : {}),
             ...(workPower > 0 ? { workPower } : {}),
             ...(args.hostileEngagements?.[hostile.id] !== undefined
               ? { engagement: args.hostileEngagements[hostile.id] }
+              : {}),
+            ...(args.hostileEngagementCandidates?.[hostile.id] !== undefined
+              ? { engagementCandidates: args.hostileEngagementCandidates[hostile.id] }
               : {}),
           }
         : {}),
@@ -834,6 +995,7 @@ export function buildFocusFireRoomInput(args: {
       if (part.type === ATTACK) meleeDamage += Math.floor(ATTACK_POWER * attackBoostMultiplier(part, "attack"));
       if (part.type === RANGED_ATTACK) rangedDamage += Math.floor(RANGED_ATTACK_POWER * attackBoostMultiplier(part, "rangedAttack"));
     }
+    const front = args.defenderFronts?.[slot];
     return {
       id: creep.id,
       slot,
@@ -842,6 +1004,8 @@ export function buildFocusFireRoomInput(args: {
       y: creep.pos.y,
       meleeDamage,
       rangedDamage,
+      ...(front?.frontId !== undefined ? { frontId: front.frontId } : {}),
+      ...(front?.eligibleHostileIds !== undefined ? { eligibleHostileIds: front.eligibleHostileIds } : {}),
     };
   });
   const woundedSnapshots: FocusFireWoundedSnapshot[] = args.wounded.map((creep) => ({

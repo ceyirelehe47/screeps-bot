@@ -108,11 +108,24 @@ declare global {
         focusExpectedHeal: number;
         towerAssignments: Record<string, string>;
         defenderAssignments: Record<string, string>;
-        /** Defender slot → 作战 assignment（目标与接敌位置分离）。 */
+        /** Defender slot → 作战 assignment（目标与接敌位置分离；targetId=null
+         *  为显式 hold——fresh plan 仍是权威，不回退独立选敌）。 */
         defenderEngagements?: Record<
           string,
-          { targetId: string; mode: string; position?: { x: number; y: number }; positionKind?: string }
+          { targetId: string | null; mode: string; position?: { x: number; y: number }; positionKind?: string }
         >;
+        /** 【Remediation IV 十六】Defender front 约束（fallback revision 的
+         *  front-local 替代依据——eligibleTargetIds 为预计算集合）。 */
+        defenderFronts?: Record<string, { frontId?: string; eligibleTargetIds: string[] }>;
+        /** 【Remediation IV 十六】运行期房间级 fallback 修订计划（每房间每
+         *  tick 至多一次生成；Tower 与 Defender 共同消费）。 */
+        fallbackRevision?: {
+          tick: number;
+          towerTargetByTowerId: Record<string, string | null>;
+          defenderEngagementBySlot: Record<string, { targetId: string | null; position?: { x: number; y: number }; positionKind?: string }>;
+          emergencyHealByTowerId: Record<string, string>;
+          requests: number;
+        };
         /** hostileId → 接敌位置（inside=直接接敌 / boundary=合法 rampart）。 */
         engagementByTargetId?: Record<string, { x: number; y: number; kind: string }>;
         emergencyHealByTowerId: Record<string, string>;

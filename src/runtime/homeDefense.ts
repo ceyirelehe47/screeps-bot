@@ -160,9 +160,12 @@ function syncDefenderAssignments(roomName: string, desiredCount: number, frontCo
  * 【Remediation III 十六】combat target 与 engagement position 分离：敌在
  * 安全区内=直接接敌；敌在边界外=最近合法 boundary rampart（复用既有
  * safeZoneHelpers 防线系统——planner 不建立平行站位模型）。
+ * 【Remediation IV 十三/十五】采集 front eligibility（assigned front 的
+ * hostile 集合预计算）与 per-defender 唯一 Rampart 分配的候选集合
+ * （boundary ramparts + 他属占用标记——Defender 默认只处理本 front）。
  */
-function planRoomFocusFire(room: Room, hostiles: Creep[], frontCount: number): void {
-  if (hostiles.length === 0 || frontCount === 0) {
+function planRoomFocusFire(room: Room, hostiles: Creep[], fronts: { id: string; hostileIds: string[] }[]): void {
+  if (hostiles.length === 0 || fronts.length === 0) {
     return;
   }
   const coordination = getRoomDefenseCoordination(room.name);
@@ -183,11 +186,43 @@ function planRoomFocusFire(room: Room, hostiles: Creep[], frontCount: number): v
   const wounded = (getTickContextService().getRoomContext(room)?.getMyCreeps() || []).filter(
     (creep) => creep.hits < creep.hitsMax,
   );
-  // 【Remediation III 十六】接敌位置采集（既有防线系统单一权威）。
+  // 【Remediation IV 十三】Defender front eligibility：assigned front 的
+  // hostile 集合（预计算——planner / fallback revision 内层 O(1) 判定）。
+  const roomHostileIds = hostiles.map((hostile) => hostile.id as string);
+  const defenderFronts: Record<string, { frontId?: string; eligibleHostileIds: Set<string> }> = {};
+  if (coordination?.defenderAssignments) {
+    for (const [slot, frontId] of Object.entries(coordination.defenderAssignments)) {
+      const front = fronts.find((candidate) => candidate.id === frontId);
+      if (front) {
+        defenderFronts[slot] = { frontId, eligibleHostileIds: new Set(front.hostileIds) };
+      }
+    }
+  }
+  // 【Remediation IV 十七】接敌位置采集（既有防线系统单一权威）。
   const safeZone = getSafeZone(room.name);
   const hostileEngagements: Record<string, { x: number; y: number; kind: "inside" | "boundary" }> = {};
+  const hostileEngagementCandidates: Record<string, { id: string; x: number; y: number; occupied?: boolean }[]> = {};
   if (safeZone.size > 0) {
     const boundaryRamparts = getBoundaryRamparts(room, safeZone);
+    // 他属占用检测（其它 my creep 脚下的 rampart——采集一次共享）。
+    const occupiedRampartKeys = new Set<string>();
+    for (const creep of room.find(FIND_MY_CREEPS)) {
+      if (creep.memory.role === "homeDefender") continue;
+      for (const structure of creep.pos.lookFor(LOOK_STRUCTURES)) {
+        if (structure.structureType === STRUCTURE_RAMPART && (structure as StructureRampart).my) {
+          occupiedRampartKeys.add(`${structure.pos.x},${structure.pos.y}`);
+        }
+      }
+    }
+    const candidates = boundaryRamparts
+      .slice()
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((rampart) => ({
+        id: rampart.id,
+        x: rampart.pos.x,
+        y: rampart.pos.y,
+        ...(occupiedRampartKeys.has(`${rampart.pos.x},${rampart.pos.y}`) ? { occupied: true } : {}),
+      }));
     for (const hostile of hostiles) {
       if (safeZone.has(hostile.pos.x * 50 + hostile.pos.y)) {
         hostileEngagements[hostile.id] = { x: hostile.pos.x, y: hostile.pos.y, kind: "inside" };
@@ -205,6 +240,17 @@ function planRoomFocusFire(room: Room, hostiles: Creep[], frontCount: number): v
       }
       if (nearest) {
         hostileEngagements[hostile.id] = { x: nearest.pos.x, y: nearest.pos.y, kind: "boundary" };
+        // 【Remediation IV 十五】per-defender 唯一分配的候选集合（全部
+        // boundary ramparts——按目标距离稳定排序，occupied 标记由采集层
+        // 一次给出；planner 的 allocate 保证每候选至多一 Defender）。
+        hostileEngagementCandidates[hostile.id] = candidates
+          .slice()
+          .sort(
+            (left, right) =>
+              Math.max(Math.abs(left.x - hostile.pos.x), Math.abs(left.y - hostile.pos.y)) -
+                Math.max(Math.abs(right.x - hostile.pos.x), Math.abs(right.y - hostile.pos.y)) ||
+              left.id.localeCompare(right.id),
+          );
       }
     }
   }
@@ -217,6 +263,8 @@ function planRoomFocusFire(room: Room, hostiles: Creep[], frontCount: number): v
     defenderRoles: rolesBySlot,
     wounded,
     hostileEngagements,
+    ...(Object.keys(hostileEngagementCandidates).length > 0 ? { hostileEngagementCandidates } : {}),
+    ...(Object.keys(defenderFronts).length > 0 ? { defenderFronts } : {}),
   });
   writeRoomEngagementPlan(planRoomEngagement(input, Game.time));
 }
@@ -246,7 +294,7 @@ export function runHomeDefense(): void {
         stopQueuedDefenderSpawning(room.name, desiredCount);
         clearBoostLabTasks(room.name);
       }
-      planRoomFocusFire(room, playerHostiles, fronts.length);
+      planRoomFocusFire(room, playerHostiles, fronts);
     } else {
       removeDefendersAbove(room.name, 0);
       clearDefenseCoordination(room.name);

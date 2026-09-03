@@ -4,7 +4,8 @@ import { chooseBoundaryBurstEngagement, chooseInsideBurstTarget } from "@/runtim
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { getSafeZone } from "@/runtime/safeZone";
 import { getBoundaryRamparts } from "@/runtime/safeZoneHelpers";
-import { readRoomEngagementPlan, resolveRoomEngagementFallbackTarget, type FocusFireEngagementPlan } from "@/runtime/defenseFocusFire";
+import { readRoomEngagementPlan, type FocusFireEngagementPlan } from "@/runtime/defenseFocusFire";
+import { resolveRoomEngagementFallbackRevision } from "@/runtime/engagementFallbackRevision";
 
 const TOWER_MIN_REPAIR_ENERGY = 400;
 const TOWER_MIN_EMERGENCY_REPAIR_ENERGY = 200;
@@ -424,15 +425,17 @@ function runTowerCombatWithPlan(
     const assignedId = plan.towerAssignments[tower.id] ?? plan.focusTargetId ?? undefined;
     let target = assignedId !== null && assignedId !== undefined ? hostileById.get(assignedId) : undefined;
     if (!target && assignedId !== undefined && assignedId !== null) {
-      // 【Remediation III 十七】计划目标失效：房间级一次性共享 live fallback
-      //（与 Defender 消费同一结果——不独立重评分、不分裂火力）。
-      const fallback = resolveRoomEngagementFallbackTarget(
+      // 【Remediation IV 十六】计划目标失效：房间级一次性 fallback revision
+      //（与 Defender 消费同一修订计划——Tower 按房间级修订目标支援；无
+      // 替代时明确 idle，不回退独立评分、不分裂火力）。
+      const { revision } = resolveRoomEngagementFallbackRevision(
         room.name,
-        assignedId,
+        [assignedId],
         new Set(hostiles.map((hostile) => hostile.id as string)),
       );
-      if (fallback.targetId !== null) {
-        target = hostileById.get(fallback.targetId);
+      const revised = revision?.towerTargetByTowerId?.[tower.id] ?? null;
+      if (revised !== null) {
+        target = hostileById.get(revised);
       }
     }
     if (target) {
@@ -442,6 +445,8 @@ function runTowerCombatWithPlan(
         anyAction = true;
       }
     }
+    // 无目标（focusTargetId=null / fallback 无替代）：本 tick 该塔明确
+    // idle——保守等待下一 tick 重规划（fresh plan 仍是权威）。
   }
   return anyAction || hostiles.length > 0;
 }
@@ -451,11 +456,14 @@ function runTowerCombat(room: Room, towers: StructureTower[], hostiles: Creep[],
     return false;
   }
 
-  // plan 消费（fresh 校验在 read 内）：有效 plan 是本 tick 唯一权威；缺失/
-  // 过期/无可击穿目标（fallbackReason）→ 走既有独立逻辑（每房间每 tick 由
-  // homeDefense 重写 plan，回退只发生在 plan 不可用的同一 tick，不循环）。
+  // plan 消费（fresh 校验在 read 内）：【Remediation IV 十七】fresh plan 是
+  // 本 tick 唯一权威——即使 focusTargetId=null（no-hostile / no-attack-
+  // actor fallbackReason）也服从 plan（emergency heal 仍执行、攻击塔明确
+  // idle——不回退独立评分）；plan 缺失/过期（stale）→ 走既有独立逻辑
+  //（每房间每 tick 由 homeDefense 重写 plan，回退只发生在 plan 不可用的
+  // 同一 tick，不循环）。
   const engagementPlan = readRoomEngagementPlan(room.name);
-  if (engagementPlan !== null && engagementPlan.focusTargetId !== null) {
+  if (engagementPlan !== null) {
     return runTowerCombatWithPlan(room, towers, hostiles, engagementPlan);
   }
 
