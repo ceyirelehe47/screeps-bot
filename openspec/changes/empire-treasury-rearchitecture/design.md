@@ -1548,3 +1548,27 @@ open 只做 admission：移除既有 reservation 的 proof_durable 自动激活�
 
 ### 19.7 中断窗口
 gate/discharge/completion 的全部窗口：proof activation 后 marker 前（gate verified→discharge）；marker ack 后 authority 前（absent marker→recoverable）；authority release 后 read-back 前（resolver not_found 硬门禁）；outcome/lineage 各阶段（外部事实重验）；journal completion 的 completion 写入/删除双 read-back；global reset 后（journal absent + completion match 幂等 completed；completion absent → no_cleanup_authority）。
+
+## 20. Round 22 Remediation V — Completion Authority Integrity & Root-Lineage Exactness
+
+### 20.1 完成状态不谎报（四节）
+journal absent + completion absent 不再映射 fully_complete：`advanceTreasuryResolutionCleanupPhases` 返回独立 status `no_cleanup_authority`（五个阶段表达未证明——全部 false，不伪造 true）；completion 身份冲突 → `completion_conflict`；store 损坏 → `store_unhealthy`。`treasuryCleanupStatusOfAdvance` 只有 `advance.status === "completed"` 才输出 `fully_complete`；`TreasuryCleanupProgressStage` 新增 `no_cleanup_authority` / `cleanup_conflict` / `cleanup_store_unhealthy` 结构化 stage。全部公共消费分支（facade executed-aborted、faultResolution committed/not-executed、resolutionAuthority reopen/fault）补齐新状态——completion conflict 此前会穿透全部 pendingStage 分支伪装 complete_rearm_ready。
+
+### 20.2 Completion exact relation（五节）
+`validateCompletionProofShape` 复用 identityProfile 单一语义源：profile 枚举 + profile↔proofClass 唯一映射 + required/forbidden 矩阵 + 16hex digest 格式 + lineage 四字段整体性/tr1_ 携带矩阵（exact identity 构造层单一权威）——"字段是非空字符串"不再自我授权（手工塞的损坏 proof 在 load 全表验证即 store_unhealthy）。record 的 Memory read-back 比较全部不可变身份维度（digest/profile/class/contract/cohort/durable/lowlevel/generation/parent/binding）+ resolution + 五阶段事实；lookup 提供expected 时经 `treasuryExactAttemptIdentityRelation` 完整比较（profile 经唯一 class 映射传递），无 expected 时单条复验拦截损坏形状；corrupted completion store 表现为 store_unhealthy，绝不 proof absent。
+
+### 20.3 Authorization Fault tri-state 与 tr1_ lineage 四字段（六节）
+authorizationFaults v5：rearm（tr1_）fault entry 持久化完整 lineage 四字段（all-or-none；tr1_ 必带、initial 禁带——缺失写入前拒绝，不发布永远无法 discharge 的 partial authority）；v4 tr1_ entry 无法完整迁移 → 原数据保留 fail closed（不猜测 parent/binding）。`readTreasuryAuthorizationFaultEntryStructured` tri-state（present/absent/store_unhealthy）——pre-release gate 的 fault absent 判定、exact discharge 的释放后 read-back、facade 的 pre-execution fault 路由都不再折叠 undefined。authorizationLedger 透传 rearm lineage 四字段到 fault entry 与 marker v4（含 parentTransactionId）。resolutionAuthority 的 tr1_ fault 路径：lineage 四字段透传（final tombstone + reopen/cleanup identity）；publishImmediateNotExecutedLineage 的 tr1_ 分支以在途 chain 匹配为 lineage 处理（不创建新 root、不 retire 非 current）；stageHandlers 的 outcome 阶段承载在途 child 回滚（child_intent_pending → rearm_ready，child 代无 GRA 义务），lineage 阶段幂等确认已回滚终态。semanticLineageValidation 的 not_executed_retirement purpose 允许 pending_handoff role（child ID 派生/binding 权威重算已由 role 判定层验证）。
+
+### 20.4 Root not-executed 的 exact relation（七节）
+现代 profile（modern-contract/lowlevel）的 root not-executed cleanup 在第一个 destructive action（marker discharge）之前完成 root exact relation（`relateTreasuryRootLineageForNotExecuted`，经 rootLineageRelationChannel 装配注入避免模块环）：journal exact identity ↔ active record（rootTransactionId / rootIdentity 全维度 / authorityClass↔proofClass / current === root 且 currentIdentity 全维度 / state ∈ retiring|rearm_ready|non_rearmable_retired）或 ↔ terminal summary（rootTransactionId / rootExact 全维度 / terminalState=non_rearmable_retired / finalExact 兜底）。二者皆无 → lineage_missing 阻断；任一维度不同 → conflict（root 已被 child 接管的重新打开同样 conflict——root cleanup 本应已完成）；都不得 not_applicable。root committed（协议明确无 lineage）与隔离 profile 保持既有语义。`verifyTreasuryLineageFinalizationState` 的 root/terminal 分支同步升级为完整 exact 比较（新增 active_identity_conflict 状态）；stageHandlers 的 root 匹配升级 rootIdentity 全维度。
+
+### 20.5 Completion replacement lifecycle 与 headroom admission（八节）
+`cleanupCompletionReplacement`（probes 注入避免模块环）：
+- `verifyTreasuryCleanupCompletionSupersession`：attempt 的完成事实是否已被持久 replacement 替代——GRA proof byAttempt（per-generation exact retirement proof，三段完成事实）/ terminal summary byRoot（root 是 final 代 + non_rearmable_retired）/ final committed tombstone（initial committed 的持久 settlement 权威）；
+- `reclaimTreasuryCleanupCompletionHeadroom`：bounded（≤128）扫描 + 逐项 supersession 验证 → 删除 → read-back absent——只回收有已验证 replacement 的 completion；
+- coordinator 与 completeTreasuryCleanupAcknowledged 的 journal-absent 判定接入 supersession（completion absent 时先查 replacement——superseded = completed，被回收 attempt 的查询不退化为 no_cleanup_authority）；completion 写入满载时先 bounded 回收再重试一次（normal path 零扫描）。
+activate 回收 parent completion 前要求其代 GRA proof 在位（防御 gate——不制造无法查询完成事实的空洞）；terminal summary compaction 成功后回收 final/root attempt 的 completion（supersession 成立才删，conflict/unhealthy 保留）。write readiness 新增 `completion_store_unhealthy` / `completion_headroom_exhausted` blocker——满载/unhealthy 在真实 Game callback 之前 fail closed。
+
+### 20.6 Open 永远只做 admission（九节）
+`openTreasuryResolutionCleanup` 删除 proofMode 参数：新 entry 恒 `settlementProofDurable=false` 的 reservation；删除绕过 activation validator 的旧入口 `activateTreasuryResolutionCleanupProof`（零 production 调用方，架构扫描防复活）——`acknowledgeTreasuryCleanupSettlementProof`（matching 持久 proof 验证 → 写入 → Memory read-back）是唯一 false→true 写入口。production 调用点顺序：open/admit → target proof 持久化后经 activation authority 激活（coordinator 阶段 0 / faultResolution 显式 ack）→ marker gate；exact reopen 保持原 activation 状态、不改变 identity、不改变阶段进度；committed staged 回滚的 revoke durable 事实参数对齐 reservation（本次新建的未激活 entry 安全撤销语义保持）。
