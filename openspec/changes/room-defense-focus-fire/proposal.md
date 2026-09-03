@@ -110,3 +110,19 @@ fresh plan 的伤害分配路径与 positioning 路径统一进入房间级唯�
 
 ### Fresh plan 缺 assignment 默认 hold（十一节）
 canonical slot 单一来源：planner 只用 spawn config 最后段（与 defenseCoordination 的 String(i) / RoleFactory 注入的 args[1] 同源）；configName 缺失的 defender 不入 plan（不再以 creep name 回落——消除 plan 键与消费 slot 的错配根源）。消费端：fresh plan 存在但本 slot 无 entry → 默认 hold（不 attack、不 rangedAttack、不 moveTo 独立目标、不跨 front）；只有 entry 显式 participation=not_participating 才允许旧独立行为（entry 缺失不是不参与）；stale plan / 无 plan 保留旧安全 fallback；候选不足的显式 hold（plan 或 revision）在 approach 距离下不再追逐边界外目标。
+
+## Round 22 Remediation VI — All-Actor Rampart Reservation & Fallback Real Facts
+
+### 动机
+唯一 Rampart 分配此前只覆盖需要 approach/engage_position 的 Defender——本 tick 已能直接 attack/ranged_attack 的 Defender 当前所站 Rampart 不进 allocator 输入与 occupied 集合（同 tick 其它 Defender 可被分配同一格；fallback revision 也无法保留它）；fallback 重新分配把所有需重分配者近似为 role=secondary、坐标=target anchor（真实 role/位置丢失）；homeDefense 的 occupied 采集无条件跳过全部 homeDefender（非参与者的 Rampart 占用漏采）。
+
+### 变更
+- planner（defenseFocusFire）：direct attacker 站合法 boundary 候选 Rampart → plan 持久化候选集与 allocate 输入同步标 occupied + entry 携带 reservedPosition（房间级 used 权威；actor 不停止攻击）；plan 新增 defenderFactsBySlot 持久化真实 role/坐标快照；候选集合无条件构造（allocate 与 plan 持久化共享数组引用——标记一处生效）；
+- homeDefense：homeDefender 不再无条件跳过——参与 plan 者的位置保留由 planner 权威承载，非参与者（含 slot 残缺）照常占用标记；
+- fallback revision：unaffected direct actor 的 reservedPosition 进 used 集合并原样透传（保留原动作 attack/ranged_attack——不因 fallback 停止攻击）；重分配按 plan 持久化的真实 role/坐标评分（primary 优先、真实距离决胜）；per-slot mode 联合扩展；
+- runtime.d.ts：reservedPosition / defenderFactsBySlot / fallbackRevision per-slot reservedPosition（schema 指纹更新）。
+
+### 不变量
+- 参与计划的每个 Defender 的当前 Rampart（若为合法候选）都进入房间级 used 集合——不论 mode；
+- 不为避免冲突让 direct attacker 停止攻击、不让 approach Defender 追逐边界外 hostile；
+- 不调用 PathFinder 做 fallback 重规划；每房间每 tick 至多一次 plan / 一次 revision；输入顺序变化不改变 per-slot 语义结果。

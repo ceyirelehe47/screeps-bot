@@ -267,3 +267,23 @@ Round 21 交付（详见 design §17）：
 ## Round 22 — Marker Cleanup Atomicity & Explicit Proof Profiles
 
 关闭 Round 21 审查的全部阻断项：marker 清理升级为持久、可恢复、可读回证明的阶段（marker v4 exact identity + discharge read-back + 两事实分离）；committed 与 not-executed 共用 resolution cleanup journal（四持久阶段）；replay-readable 与 release-trusted receipt 分离；cross-store settlement coordinator 统一 child-active/resolution/compaction 判定；semantic lineage purpose 矩阵（historical not-executed proof 永不授权 committed）；explicit identity profile 持久化（Lineage v3/GRA v2/marker v4 + 确定性迁移 + 降级禁止）；legacy/exact summary 双平面共存 + canonical 自验证；compaction 相反 proof 显式拒绝；backfill marker 冲突修复；slow-rearm 孤儿 proof 有界清理。
+
+## Round 22 Remediation VI — Exact Completion Supersession & Durable Historical Authority
+
+### 动机
+Remediation V 的 replacement 判定只按 transactionId + resolution 字符串匹配（GRA / terminal summary / final tombstone 存在即 superseded），且 final committed tombstone 单独就能把 journal-absent + completion-absent 折叠为 completed——这不是 exact relation；GRA / tombstone 各有 retention 生命周期，被回收后完成事实退化为 no_cleanup_authority；headroom 纯计数阻断会形成"满载 → writer 全断 → 永无新 completion → reclaim 永不触发"的永久停机。
+
+### 变更
+- 新增 cleanupSupersessionAuthority：exact replacement 验证（outcome + 全维度 identity；GRA 三阶段/root 绑定/authorityClass）+ durable historical completion authority（硬容量 384、write/read-back/global-reset 恢复）+ 统一 archive 入口（唯一 completion 删除路径，8 步固定顺序 + 中断窗口幂等）+ state-changing headroom preflight；
+- coordinator / completeTreasuryCleanupAcknowledged 的 journal-absent 判定只认 completion / historical authority（tombstone/GRA 单独不证明 cleanup 完成）；
+- advance 携带 settlementOutcome（持久权威），lookup 绑定 expectedOutcome，treasuryCleanupStatusOfAdvance 阻断 settlement relabel；
+- recordTreasuryCleanupCompletion 结构化失败 reason；identity conflict 零全局 GC；
+- authorize / prepare / execute 三处真实路径接入 headroom preflight（拒绝前 bounded exact reclaim；callback 前终检零调用 fail closed；query 零写不变）；
+- 修复 completion/historical 写入的同引用 read-back 漏洞（独立 clone）。
+
+### 不变量
+- transactionId 相同绝不等于 exact attempt 相同；settlement outcome 相同是 supersession 的必要条件；
+- destructive deletion 前必有可持久、可 read-back、global reset 后可恢复的替代权威；
+- replay-readable proof（tombstone/GRA/summary）不作为 destructive cleanup 权威；
+- 满载且无安全可回收项在任何新 Game callback 前 fail closed，不删除旧安全事实；
+- 300-generation 链上 root 与全部 child 的历史完成权威永不退化为 no_cleanup_authority。

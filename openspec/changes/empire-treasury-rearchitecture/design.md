@@ -1572,3 +1572,23 @@ activate 回收 parent completion 前要求其代 GRA proof 在位（防御 gate
 
 ### 20.6 Open 永远只做 admission（九节）
 `openTreasuryResolutionCleanup` 删除 proofMode 参数：新 entry 恒 `settlementProofDurable=false` 的 reservation；删除绕过 activation validator 的旧入口 `activateTreasuryResolutionCleanupProof`（零 production 调用方，架构扫描防复活）——`acknowledgeTreasuryCleanupSettlementProof`（matching 持久 proof 验证 → 写入 → Memory read-back）是唯一 false→true 写入口。production 调用点顺序：open/admit → target proof 持久化后经 activation authority 激活（coordinator 阶段 0 / faultResolution 显式 ack）→ marker gate；exact reopen 保持原 activation 状态、不改变 identity、不改变阶段进度；committed staged 回滚的 revoke durable 事实参数对齐 reservation（本次新建的未激活 entry 安全撤销语义保持）。
+
+## 21. Round 22 Remediation VI — Exact Completion Supersession & Durable Historical Authority
+
+### 21.1 精确 supersession（outcome + 全维度 identity——不再 transactionId-only）
+新模块 `cleanupSupersessionAuthority` 承载 `verifyTreasuryExactCompletionReplacement`：GRA / terminal summary / final tombstone 三路 replacement 必须与 completion 在 **settlement outcome + 全部 exact identity 维度**（digest / identityProfile / proofClass / contract / cohort / durable / lowlevel / lineage 四字段）完整匹配才 superseded。GRA 额外验证 root 绑定字段（rootTransactionId/rootIdentityDigest——经 GRA store load 时的 semantics canonical 重算 + lineageId 相等传递）、authorityClass、resolution=not_executed 与 retirement 三阶段全 true；gen0（root）的 exact identity 不含 lineage 维度（initial attempt 禁止 lineage proof 的构造器矩阵），gen≥1（tr1_）携带完整四字段。outcome 相反（T1/T2）或任一维度差异/单侧携带（T3/T4）→ conflict——completion 保留、零删除。GRA exact 构造按 generation 分支是关键：root 的 GRA 自带 lineageId 绑定事实，但 root attempt 的 exact identity 不含 lineage 维度。
+
+### 21.2 Durable historical completion authority（跨 GRA/tombstone 生命周期存续）
+`Memory.runtime.treasury.cleanupSupersessions`（schemaVersion 1、硬容量 384、key `sa:<transactionId>`）：completion 的紧凑压缩归档（authoritative settlement outcome + canonical exact identity 全维度 + lineageDisposition + via + archivedAtTick）。store 不存在 = 健康空；未知版本/malformed → fail closed 不折叠 absent；write 前完整 shape 验证（profile 枚举/唯一 class 映射/16hex/lineage 整体性）+ write 后 Memory read-back 全维度比较（失败回滚 authority，completion 保留）；global reset 经 reset hook 重建 heap。final committed tombstone 单独存在不再证明 cleanup completed（T5）——它只证明 settlement outcome；coordinator 与 completeTreasuryCleanupAcknowledged 的 journal-absent 完成判定只认 completion proof 或 durable historical authority。
+
+### 21.3 统一删除入口与 archive 固定顺序
+`archiveTreasuryCleanupCompletionViaAuthority` 是所有 completion destructive release 的唯一生产入口（attemptLineage 的 activate 回收、summary compaction 的 final/root 回收、headroom reclaim 全部经此；底层 `releaseTreasuryCleanupCompletionOfAttempt` 仅限 authority 模块内部——架构扫描防绕过）。固定顺序：验证 completion（健康 + shape）→ 验证 replacement（via 指定时 exact——gra-proof / terminal-summary / final-tombstone / any-exact；compact-archive 不要求 replacement，completion 自身完整验证即安全压缩语义）→ historical authority 写入 + read-back（独立 clone——candidate 引用不得同时充当比较基准）→ 删除 completion → 删除 read-back absent。幂等：completion 已不在而 historical 在位 → already_archived；两者皆无 → absent。中断窗口（fault 注入测试）：authority 写入前中断 → completion 保留；写入后删除前中断 → 两者并存、重入幂等继续；read-back 失败 → 回滚保留；删除 read-back 复活 → blocked pending、后续幂等恢复。
+
+### 21.4 Settlement outcome 权威绑定
+`advanceTreasuryResolutionCleanupPhases` 新增 `expectedOutcome` 入参与 `settlementOutcome` 返回字段（completed 时必有——来自 completion proof / historical authority / journal entry 的持久权威）。`lookupTreasuryCleanupCompletion` / `lookupTreasuryHistoricalCompletion` 支持 expectedOutcome：committed 权威用 not-executed 视角查询 → conflict（不得 relabel）。`treasuryCleanupStatusOfAdvance` 验证调用方 settlement 标签与 advance.settlementOutcome 一致——冲突 → cleanup_conflict（绝不输出"not-executed + fully_complete"）。
+
+### 21.5 结构化写入失败与满载活性
+`recordTreasuryCleanupCompletion` 的 rejected 携带结构化 reason（capacity_exhausted / existing_conflict / invalid_candidate / store_unhealthy / read_back_failure）——只有 capacity_exhausted 触发 bounded reclaim，identity conflict 零全局 GC 副作用（T13）。`ensureTreasuryCleanupCompletionHeadroom`（state-changing preflight）：headroom 充足 → ok 零写；满载 → bounded（≤128）compact-archive 回收（每条均经 authority 写入 read-back + 删除 read-back）→ 复查容量；store unhealthy → 零 archive 零删除（不折叠为无可回收项）。接入三处真实路径：authorizeTreasuryActionContract 拒绝前先 reclaim（成功则 headroom blocker 解除）、prepareTransaction 独立复查（新 rejection reason completion_headroom_exhausted / completion_store_unhealthy）、executePreparedAction 在 Game callback 前终检（callback 零调用 fail closed）；query 路径保持零写。
+
+### 21.6 read-back 同引用修复
+completion 与 historical authority 的 store 写入此前直接赋 candidate 引用（heap store 与 Memory 权威同对象）——写入窗口内的篡改会同步进 candidate 使 read-back 全维度比较恒真。两处写入均改为独立 clone（比较基准与持久拷贝分离）。
