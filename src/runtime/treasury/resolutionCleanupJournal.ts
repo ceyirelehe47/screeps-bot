@@ -35,13 +35,10 @@
  * - 恢复不信任阶段 boolean（D.4）：每阶段经幂等外部事实验证后推进。
  */
 
+import { registerTreasuryResolutionCleanupResetHook } from "@/runtime/treasury/receipts";
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
-import {
-  dischargeTreasuryMarkerForAttempt,
-  treasuryMarkerDischargeCompletesAttemptPhase,
-  type TreasuryMarkerDischargeOutcome,
-} from "@/runtime/treasury/markerDischarge";
+import type { TreasuryMarkerDischargeOutcome } from "@/runtime/treasury/markerDischarge";
 import {
   TREASURY_IDENTITY_PROFILES,
   treasuryProofClassOfIdentityProfile,
@@ -183,6 +180,42 @@ export function registerTreasuryResolutionCleanupHandlersForAssembly(
   handlers: TreasuryResolutionCleanupStageHandlers | null,
 ): void {
   stageHandlers = handlers;
+}
+
+/**
+ * 【Remediation III】装配的 stage handlers 读取（cleanupStageAcknowledgement
+ * / coordinator 作为阶段外部事实验证器使用——不重复实现）。
+ */
+export function peekTreasuryResolutionCleanupStageHandlers(): TreasuryResolutionCleanupStageHandlers | null {
+  return stageHandlers;
+}
+
+/**
+ * 【Remediation III 八】恢复驱动装配：journal 恢复循环的唯一 destructive
+ * 推进者（cleanup coordinator）。未装配 → 恢复 fail closed（pending 保留，
+ * 与 stage handlers 未装配同语义）。test reset 传 null 重入。
+ */
+export interface TreasuryResolutionCleanupRecoveryDriver {
+  readonly advance: (
+    entry: Readonly<TreasuryResolutionCleanupEntry>,
+  ) => {
+    readonly status: "completed" | "pending" | "absent" | "store_unhealthy";
+    readonly pendingStage: string;
+    readonly detail: string;
+  };
+}
+
+let recoveryDriver: TreasuryResolutionCleanupRecoveryDriver | null = null;
+
+export function registerTreasuryResolutionCleanupRecoveryDriverForAssembly(
+  driver: TreasuryResolutionCleanupRecoveryDriver | null,
+): void {
+  recoveryDriver = driver;
+}
+
+/** 【Remediation III】恢复驱动读取（facade 装配断言用）。 */
+export function peekTreasuryResolutionCleanupRecoveryDriver(): TreasuryResolutionCleanupRecoveryDriver | null {
+  return recoveryDriver;
 }
 
 export interface TreasuryResolutionCleanupEvents {
@@ -364,6 +397,14 @@ interface CleanupRuntime {
 }
 
 let heapRuntime: CleanupRuntime | null = null;
+
+// 【Remediation III】clearTreasuryPersistenceForTest 时同步失效 heap 缓存
+//（Memory 分支被删除后 heap 不得继续指向 detached store——否则写入与
+// Memory read-back 不一致）。模块加载时注册（receipts 单向依赖，无环）。
+registerTreasuryResolutionCleanupResetHook(() => {
+  heapRuntime = null;
+  resetTreasuryResolutionCleanupEventsForTest();
+});
 
 function loadCleanupRuntime(): CleanupRuntime {
   if (heapRuntime !== null) return heapRuntime;
@@ -577,6 +618,74 @@ export function readTreasuryResolutionCleanupEntry(
   return entry === undefined ? undefined : (treasuryBoundedDeepFreezeSnapshot(entry) as TreasuryResolutionCleanupEntry);
 }
 
+/**
+ * 【Remediation III 六】journal Memory read-back 读取：绕过 heap 缓存直读
+ * `Memory.runtime.treasury.resolutionCleanup` 权威 store 的单键 entry（O(1)，
+ * 只做 entry 级形状校验——store 整体形状由 load 路径与 peekHealth 承担），
+ * 结构化区分 present / absent / store_unhealthy——durable acknowledgement
+ * 的写入后确认唯一读取通道（heap 引用与 Memory 同对象，本函数的意义在于
+ * 显式重读并区分 fatal 与 absent，不再同形折叠）。
+ */
+export interface TreasuryResolutionCleanupReadBack {
+  readonly status: "present" | "absent" | "store_unhealthy";
+  readonly entry?: Readonly<TreasuryResolutionCleanupEntry>;
+  readonly detail?: string;
+}
+
+export function readBackTreasuryResolutionCleanupEntryFromMemory(
+  transactionId: string,
+): TreasuryResolutionCleanupReadBack {
+  const store = (Memory.runtime as unknown as RuntimeMemoryWithCleanup | undefined)?.treasury?.resolutionCleanup;
+  if (store === undefined) return { status: "absent" };
+  if (store.version !== TREASURY_RESOLUTION_CLEANUP_VERSION || !store.entries || typeof store.entries !== "object") {
+    cleanupEvents.shapeFailures += 1;
+    return { status: "store_unhealthy", detail: "cleanup journal store 基础形状非法（read-back）" };
+  }
+  const key = CLEANUP_KEY_PREFIX + transactionId;
+  const entry = store.entries[key] as Partial<TreasuryResolutionCleanupEntry> | undefined;
+  if (entry === undefined) return { status: "absent" };
+  // 单 entry 级形状校验（identity 形状 + 阶段布尔 + 单 entry 偏序）。
+  if (!entry || typeof entry !== "object" || entry.transactionId !== transactionId) {
+    cleanupEvents.shapeFailures += 1;
+    return { status: "store_unhealthy", detail: `read-back entry ${key.slice(0, 8)} 基础形状非法` };
+  }
+  const identityError = validateCleanupEntryIdentity(entry, key);
+  if (identityError !== null) {
+    cleanupEvents.shapeFailures += 1;
+    return { status: "store_unhealthy", detail: identityError };
+  }
+  if (typeof entry.settlementProofDurable !== "boolean") {
+    cleanupEvents.shapeFailures += 1;
+    return { status: "store_unhealthy", detail: `read-back entry ${key.slice(0, 8)} settlementProofDurable 非布尔` };
+  }
+  for (const stage of ["markerDischarged", "authorityReleased", "outcomeFinalized", "lineageFinalized"] as const) {
+    if (typeof entry[stage] !== "boolean") {
+      cleanupEvents.shapeFailures += 1;
+      return { status: "store_unhealthy", detail: `read-back entry ${key.slice(0, 8)} 阶段 ${stage} 非布尔` };
+    }
+  }
+  if (!entry.settlementProofDurable && (entry.markerDischarged || entry.authorityReleased || entry.outcomeFinalized || entry.lineageFinalized)) {
+    cleanupEvents.shapeFailures += 1;
+    return { status: "store_unhealthy", detail: `read-back entry ${key.slice(0, 8)} reservation 携带已推进阶段` };
+  }
+  if (entry.authorityReleased && !entry.markerDischarged) {
+    cleanupEvents.shapeFailures += 1;
+    return { status: "store_unhealthy", detail: `read-back entry ${key.slice(0, 8)} 阶段越级（authority 先于 marker）` };
+  }
+  if (entry.outcomeFinalized && !entry.authorityReleased) {
+    cleanupEvents.shapeFailures += 1;
+    return { status: "store_unhealthy", detail: `read-back entry ${key.slice(0, 8)} 阶段越级（outcome 先于 authority）` };
+  }
+  if (entry.lineageFinalized && !entry.outcomeFinalized) {
+    cleanupEvents.shapeFailures += 1;
+    return { status: "store_unhealthy", detail: `read-back entry ${key.slice(0, 8)} 阶段越级（lineage 先于 outcome）` };
+  }
+  return {
+    status: "present",
+    entry: treasuryBoundedDeepFreezeSnapshot(entry) as TreasuryResolutionCleanupEntry,
+  };
+}
+
 /** pending cleanup id 列表（journal 即持久索引——global reset 后直接重建）。 */
 export function listTreasuryResolutionCleanupPendingIds(): readonly string[] {
   const runtime = loadCleanupRuntime();
@@ -727,23 +836,6 @@ export function revokeTreasuryResolutionCleanup(input: {
   return { status: "revoked" };
 }
 
-function dischargeExpectedOfEntry(entry: Readonly<TreasuryResolutionCleanupEntry>) {
-  return {
-    transactionId: entry.transactionId,
-    digest: entry.digest,
-    proofClass: entry.proofClass,
-    identityProfile: entry.identityProfile,
-    ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
-    ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
-    ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
-    ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
-    ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
-    ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
-    ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
-    ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
-  };
-}
-
 export interface TreasuryResolutionCleanupRecoveryReport {
   readonly examined: number;
   readonly progressed: number;
@@ -755,19 +847,17 @@ export interface TreasuryResolutionCleanupRecoveryReport {
 }
 
 /**
- * beginTick 恢复编排：journal 未完成 entry 按安全顺序补完成
- * （marker discharge → authority release → outcome → lineage）。
- * handlers 未装配（production 装配缺失）→ fail closed 保留全部 pending。
- * 空 journal O(1) 快路径。
+ * beginTick 恢复编排：journal 未完成 entry 交给装配的 recovery driver
+ * （【Remediation III 八】cleanup coordinator——唯一 destructive owner）按
+ * 阶段 acknowledgement 推进。driver / stage handlers 未装配（production
+ * 装配缺失）→ fail closed 保留全部 pending。空 journal O(1) 快路径。
  *
- * 【Remediation II D.4】阶段持久 boolean 只是恢复进度提示，不是安全证明：
- * 每个阶段都重新通过幂等外部事实验证（marker：重新读取并 discharge；
- * authority：resolver 重确认 + 需要时重新释放；outcome：committed 重验
- * trusted receipt + exact tombstone、not-executed 重验 exact proof/GRA 收敛
- * ——由 facade 装配的 stage handlers 承载）；"boolean 撒谎"（如
- * markerDischarged=true 但 matching marker 仍存在）不得直接跳过并删除
- * entry。settlementProofDurable=false 的 reservation 跳过（无 proof 可恢复，
- * 等待激活或撤销——计入 pendingReservations，不折叠为已完成）。
+ * 【Remediation III】本函数不再直接执行任何 discharge / release /
+ * finalize / lineage close / 阶段标记——所有 destructive 步骤经 driver 的
+ * durable acknowledgement（写入 + Memory read-back + 结构化结果）完成；
+ * 阶段 boolean 只是进度提示，driver 每阶段重验外部事实。
+ * settlementProofDurable=false 的 reservation 跳过（无 proof 可恢复，等待
+ * 激活或撤销——计入 pendingReservations，不折叠为已完成）。
  */
 export function recoverTreasuryResolutionCleanupAtTickBoundary(): TreasuryResolutionCleanupRecoveryReport {
   const runtime = loadCleanupRuntime();
@@ -783,12 +873,16 @@ export function recoverTreasuryResolutionCleanupAtTickBoundary(): TreasuryResolu
   }
   const keys = Object.keys(runtime.store.entries);
   if (keys.length === 0) return report;
-  if (stageHandlers === null) {
+  if (recoveryDriver === null || stageHandlers === null) {
     cleanupEvents.recoveryBlocked += keys.length;
     return {
       ...report,
       blocked: keys.length,
-      blockedDetails: ["cleanup stage handlers 未装配（production fail closed——pending 保留）"],
+      blockedDetails: [
+        recoveryDriver === null
+          ? "cleanup recovery driver 未装配（production fail closed——pending 保留）"
+          : "cleanup stage handlers 未装配（production fail closed——pending 保留）",
+      ],
     };
   }
   for (const key of keys) {
@@ -799,84 +893,29 @@ export function recoverTreasuryResolutionCleanupAtTickBoundary(): TreasuryResolu
       continue;
     }
     report.examined += 1;
-    let advanced = false;
-    // 阶段 1：marker discharge——boolean 为 true 也重新读取并验证 marker
-    //（matching marker 重现时按 exact relation 安全补 discharge；malformed/
-    // conflict/insufficient 阻断；unrelated marker 区分"本 attempt 阶段完成"
-    // 与"全局 write admission 仍锁定"——后者不阻断本 attempt 恢复）。
-    {
-      const discharge = dischargeTreasuryMarkerForAttempt(dischargeExpectedOfEntry(entry));
-      if (discharge.outcome === "matching_cleared" || discharge.outcome === "already_absent") {
-        cleanupEvents.markerDischarges += 1;
-      }
-      if (treasuryMarkerDischargeCompletesAttemptPhase(discharge.outcome)) {
-        if (!entry.markerDischarged) {
-          markTreasuryResolutionCleanupStage(entry.transactionId, "marker_discharge", discharge.outcome);
-        }
-        advanced = true;
-      } else {
-        cleanupEvents.markerDischargeBlocks += 1;
-        cleanupEvents.recoveryBlocked += 1;
-        report.blocked += 1;
-        report.blockedDetails.push(`marker discharge ${discharge.outcome}: ${discharge.detail}`);
-        continue;
-      }
-    }
-    // 阶段 2：authority release——resolver 重确认 not_found；仍有同 attempt
-    // Authority 时按安全顺序重新释放并 read-back（handler 承载；inconsistent/
-    // store_unhealthy 阻断）。boolean 为 true 同样重验（boolean 撒谎不得跳过）。
-    {
-      const release = stageHandlers.authorityRelease(treasuryBoundedDeepFreezeSnapshot(entry) as TreasuryResolutionCleanupEntry);
-      if (release.status === "released" || release.status === "already_absent") {
-        if (!entry.authorityReleased) {
-          markTreasuryResolutionCleanupStage(entry.transactionId, "authority_release");
-        }
-        advanced = true;
-      } else {
-        cleanupEvents.recoveryBlocked += 1;
-        report.blocked += 1;
-        report.blockedDetails.push(`authority release ${release.status}: ${release.detail}`);
-        continue;
-      }
-    }
-    // 阶段 3：outcome 终态——committed 重验 trusted Receipt + exact tombstone
-    // 后 finalize；not-executed 重验 exact GRA proof（handler 承载）。
-    {
-      const outcome = stageHandlers.outcomeFinalization(treasuryBoundedDeepFreezeSnapshot(entry) as TreasuryResolutionCleanupEntry);
-      if (outcome.status === "finalized" || outcome.status === "already_final") {
-        if (!entry.outcomeFinalized) {
-          markTreasuryResolutionCleanupStage(entry.transactionId, "outcome_finalization");
-        }
-        advanced = true;
-      } else {
-        cleanupEvents.recoveryBlocked += 1;
-        report.blocked += 1;
-        report.blockedDetails.push(`outcome finalization ${outcome.status}: ${outcome.detail}`);
-        continue;
-      }
-    }
-    // 阶段 4：lineage 终态——exact 最终状态重确认（generation/parent/binding/
-    // 当前 attempt 任一不匹配都不得完成——handler 承载）。
-    {
-      const lineage = stageHandlers.lineageFinalization(treasuryBoundedDeepFreezeSnapshot(entry) as TreasuryResolutionCleanupEntry);
-      if (lineage.status === "finalized" || lineage.status === "already_final" || lineage.status === "not_applicable") {
-        if (!entry.lineageFinalized) {
-          markTreasuryResolutionCleanupStage(entry.transactionId, "lineage_finalization");
-        }
-        advanced = true;
-      } else {
-        cleanupEvents.recoveryBlocked += 1;
-        report.blocked += 1;
-        report.blockedDetails.push(`lineage finalization ${lineage.status}: ${lineage.detail}`);
-        continue;
-      }
-    }
-    if (advanced) report.progressed += 1;
-    if (treasuryResolutionCleanupComplete(runtime.store.entries[key])) {
-      if (completeTreasuryResolutionCleanup(entry.transactionId)) {
+    const advanced = recoveryDriver.advance(treasuryBoundedDeepFreezeSnapshot(entry) as TreasuryResolutionCleanupEntry);
+    if (advanced.status === "completed") {
+      // driver 内部已完成 journal 删除 read-back；此处复查 Memory 确认。
+      if (readBackTreasuryResolutionCleanupEntryFromMemory(entry.transactionId).status === "absent") {
         report.completed += 1;
+        report.progressed += 1;
+      } else {
+        cleanupEvents.recoveryBlocked += 1;
+        report.blocked += 1;
+        report.blockedDetails.push(`cleanup 完成后 entry 仍存在: ${advanced.detail}`);
       }
+      continue;
     }
+    if (advanced.status === "absent" || advanced.status === "store_unhealthy") {
+      cleanupEvents.recoveryBlocked += 1;
+      report.blocked += 1;
+      report.blockedDetails.push(`cleanup advance ${advanced.status}（${advanced.pendingStage}）: ${advanced.detail}`);
+      continue;
+    }
+    // pending：entry 保留，下一 tick 幂等重试。
+    cleanupEvents.recoveryBlocked += 1;
+    report.blocked += 1;
+    report.blockedDetails.push(`cleanup pending（${advanced.pendingStage}）: ${advanced.detail}`);
   }
   return report;
 }

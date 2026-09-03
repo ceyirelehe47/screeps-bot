@@ -803,7 +803,9 @@ describe("F：purpose 必填契约与 unresolvedAuthority ok 路径回归（reme
         }
       }
     }
-    expect(callSites).toBe(8);
+    // 【Remediation III】resolutionCleanupStageHandlers（facade 装配语义的
+    // 迁移目标）新增 semantic lineage verdict 调用点：8 → 9。
+    expect(callSites).toBe(9);
   });
 
   it("运行时 defensive：缺 purpose 的调用（类型外）→ store_unhealthy fail closed", () => {

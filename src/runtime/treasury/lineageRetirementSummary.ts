@@ -35,7 +35,8 @@ import { readTreasuryIntentEntry, peekTreasuryIntentHealth } from "@/runtime/tre
 import { readTreasuryQuarantineEntry, peekTreasuryQuarantineHealth } from "@/runtime/treasury/quarantine";
 import { readTreasuryAuthorizationFaultEntry, peekTreasuryAuthorizationFaultHealth } from "@/runtime/treasury/authorizationFaults";
 import { readTreasuryWriteFault, validateTreasuryWriteFaultMarkerShape } from "@/runtime/treasury/writeFault";
-import { readTreasurySettlementProof, peekTreasuryReceiptHealth } from "@/runtime/treasury/receipts";
+import { peekTreasuryReceiptHealth } from "@/runtime/treasury/receipts";
+import { readTreasuryTrustedSettlementProofForAttempt } from "@/runtime/treasury/trustedSettlementProof";
 import { readTreasuryResolutionTombstone, peekTreasuryResolutionStoreHealth } from "@/runtime/treasury/resolutionStore";
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { registerTreasuryLineageResetHook } from "@/runtime/treasury/receipts";
@@ -578,14 +579,12 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
     return { status: "rejected", detail: "record current exact identity 构造失败（不压缩）" };
   }
   if (record.state === "chain_committed") {
-    const receiptProof = readTreasurySettlementProof(currentId);
-    if (receiptProof === undefined) {
-      return { status: "rejected", detail: "chain_committed 缺少 committed receipt（完整 exact settlement identity 不可读）——不压缩" };
-    }
-    const receiptExact = treasuryExactAttemptIdentityOfReceiptProof(currentId, receiptProof);
-    const receiptRelation = receiptExact === null ? ("insufficient" as const) : treasuryExactAttemptIdentityRelation(receiptExact, currentExact);
-    if (receiptRelation !== "match") {
-      return { status: "rejected", detail: `chain_committed 的 committed receipt 与 record current exact identity 不${receiptRelation === "conflict" ? "一致（conflict）" : "可证明（insufficient）"}（digest/contract/cohort/durable/lowlevel/class/lineage 任一维度）——不压缩` };
+    // 【Remediation III 九】terminal compaction 的 committed receipt 必须
+    // release-trusted：store 任一无关 entry 损坏 → store_unhealthy 不压缩
+    //（replay-readable 单条读取不再作为压缩依据）。
+    const compactionTrusted = readTreasuryTrustedSettlementProofForAttempt(currentId, currentExact);
+    if (compactionTrusted.status !== "trusted_proof") {
+      return { status: "rejected", detail: `chain_committed 的 trusted committed receipt ${compactionTrusted.status}: ${compactionTrusted.detail}——不压缩` };
     }
     if (record.generation >= 1) {
       const semantic = validateTreasurySemanticLineage({

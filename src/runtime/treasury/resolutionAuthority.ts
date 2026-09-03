@@ -18,23 +18,17 @@ import type { TreasuryFaultResolutionResult } from "@/runtime/treasury/faultReso
 import type { TreasuryAuthorizationFaultEntry } from "@/runtime/treasury/authorizationFaults";
 import { treasuryExactAttemptIdentityOfIdentityInput } from "@/runtime/treasury/exactAttemptIdentity";
 import {
-  readTreasuryAuthorizationFaultEntry,
-  releaseTreasuryAuthorizationFaultEntry,
-} from "@/runtime/treasury/authorizationFaults";
-import {
   clearTreasuryForensicMarkerForAcknowledgedRollback,
   readTreasuryWriteFault,
 } from "@/runtime/treasury/writeFault";
 import {
   openTreasuryResolutionCleanup,
-  markTreasuryResolutionCleanupStage,
   treasuryResolutionCleanupOpenInputOfFacts,
 } from "@/runtime/treasury/resolutionCleanupJournal";
 import {
-  dischargeTreasuryMarkerForAttempt,
-  treasuryMarkerDischargeCompletesAttemptPhase,
-  treasuryMarkerDischargeExpectedOfFacts,
-} from "@/runtime/treasury/markerDischarge";
+  advanceTreasuryResolutionCleanupPhases,
+  treasuryCleanupStatusOfAdvance,
+} from "@/runtime/treasury/resolutionCleanupCoordinator";
 import {
   treasuryAttemptIdentityRelation,
   type TreasuryAttemptIdentity,
@@ -159,17 +153,6 @@ function publishImmediateNotExecutedLineage(
   return created.status === "rejected" ? "pending" : "published";
 }
 
-/** 【第十七轮第六节】immediate not-executed 的 retirement 三段完成收敛。 */
-function completeImmediateNotExecutedRetirement(transactionId: string): void {
-  const lineage = lookupTreasuryAttemptLineageByAttemptId(transactionId);
-  if (lineage === undefined) return;
-  // 【第十九轮 C.7】三段分别由持久证明推进——converge 单一权威收敛
-  //（不再无条件置 true；marker 指向本 attempt 时保持 cleanup pending）。
-  if (lineage.state === "retiring") {
-    void convergeTreasuryLineageRetirementFromFacts(lineage.lineageId);
-  }
-}
-
 /**
  * 建立 resolution authority（service 闭包私有）：capability registry 与
  * 单次消费语义、resolution kernel 组装、pre-execution 恢复协议。
@@ -277,24 +260,19 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
           detail: `cleanup journal ${reopenCleanup.status}: ${reopenCleanup.detail}（fault authority 保留，重试）`,
         };
       }
-      const reopenDischarge = dischargeTreasuryMarkerForAttempt(
-        treasuryMarkerDischargeExpectedOfFacts(reopenIdentity),
-      );
-      if (!treasuryMarkerDischargeCompletesAttemptPhase(reopenDischarge.outcome)) {
+      // 【Remediation III 六/八】幂等重入路径的 cleanup 阶段推进统一经
+      // coordinator（authorization fault entry 的释放经 facade 装配的
+      // authority handler——不绕过、不手工 mark）。settlement 结论已定
+      //（final tombstone 存在），cleanup pending 由 beginTick 恢复幂等补
+      // 完成——只有 store 异常才拒绝重入。
+      const reopenAdvance = advanceTreasuryResolutionCleanupPhases({ transactionId: fault.transactionId });
+      if (reopenAdvance.status === "absent" || reopenAdvance.status === "store_unhealthy") {
         deps.metrics.reconciliationCapabilitiesRejected += 1;
         return {
           status: "rejected",
-          reason: "marker_cleanup_blocked",
-          detail: `marker discharge ${reopenDischarge.outcome}: ${reopenDischarge.detail}（fault authority 保留，恢复重试）`,
+          reason: "resolution_store_fatal",
+          detail: `cleanup advance ${reopenAdvance.status}: ${reopenAdvance.detail}（fault authority 保留，重试）`,
         };
-      }
-      markTreasuryResolutionCleanupStage(fault.transactionId, "marker_discharge", reopenDischarge.outcome);
-      releaseTreasuryAuthorizationFaultEntry(fault.transactionId);
-      // 释放后 read-back 确认才推进 journal 阶段（未确认 → 阶段 pending，
-      // beginTick 恢复幂等重试）。
-      if (readTreasuryAuthorizationFaultEntry(fault.transactionId) === undefined) {
-        markTreasuryResolutionCleanupStage(fault.transactionId, "authority_release");
-        markTreasuryResolutionCleanupStage(fault.transactionId, "outcome_finalization");
       }
       return { status: "already_resolved", resolution: "not-executed", transactionId: fault.transactionId };
     }
@@ -353,13 +331,10 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       };
     }
     // 【第十七轮第六节/第十四节】immediate not-executed 同样建立 lineage
-    // replacement（retirement 权威）。【Round 22 remediation B.5】marker 清理
-    // 统一 discharge + cleanup journal（旧 boolean clear 与
-    // readTreasuryWriteFault()?.transactionId 比较的假 markerAbsent 证明全部
-    // 移除）：open（settlement proof = final tombstone 已写）→ discharge
-    // （read-back）→ mark → release fault authority → read-back → mark →
-    // outcome mark → retirement converge。discharge/journal 未完成 → fault
-    // authority 保留、retirement pending（恢复重试）。
+    // replacement（retirement 权威）。【Remediation III 六/八】cleanup 阶段
+    // 推进统一经 coordinator——marker discharge / authorization fault 释放 /
+    // outcome / lineage / journal completion 全部经结构化 ack（写入 +
+    // Memory read-back），不再直接组合 mark 并忽略 boolean。
     const lineagePublished = publishImmediateNotExecutedLineage(fault, faultProofLevel);
     const faultCleanupIdentity = {
       transactionId: fault.transactionId,
@@ -381,10 +356,8 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
         detail: `cleanup journal ${faultCleanupOpen.status}: ${faultCleanupOpen.detail}（fault authority 保留，重试）`,
       };
     }
-    const faultDischarge = dischargeTreasuryMarkerForAttempt(
-      treasuryMarkerDischargeExpectedOfFacts(faultCleanupIdentity),
-    );
-    if (!treasuryMarkerDischargeCompletesAttemptPhase(faultDischarge.outcome)) {
+    const faultAdvance = advanceTreasuryResolutionCleanupPhases({ transactionId: fault.transactionId });
+    if (faultAdvance.status === "absent" || faultAdvance.status === "store_unhealthy") {
       deps.metrics.reconciliationCapabilitiesRejected += 1;
       return {
         status: "resolved",
@@ -394,14 +367,26 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
         sameIdRetryAllowed: false,
         actionTick: fault.faultTick,
         retirement: "pending_cleanup",
-        globalWriteAdmissionStillLocked: faultDischarge.globalWriteAdmissionStillLocked,
+        cleanup: { settlement: "not-executed" as const, stage: "journal_completion_pending" as const, globalWriteAdmissionStillLocked: true },
+        globalWriteAdmissionStillLocked: true,
       };
     }
-    markTreasuryResolutionCleanupStage(fault.transactionId, "marker_discharge", faultDischarge.outcome);
-    releaseTreasuryAuthorizationFaultEntry(fault.transactionId);
-    if (readTreasuryAuthorizationFaultEntry(fault.transactionId) !== undefined) {
-      // fault authority 释放后 read-back 仍存在——journal 阶段不推进，
-      // retirement pending（beginTick 恢复幂等重试）。
+    deps.metrics.resolutionRecovered += 1;
+    if (faultAdvance.status !== "completed") {
+      // cleanup 阶段未全部持久确认：按 pendingStage 映射明确 pending 语义
+      //（marker → pending_cleanup；authority → authority_release_pending；
+      // outcome/GRA → exact_proof_pending；lineage → lineage_finalization_
+      // pending；journal completion → pending_cleanup）——绝不伪装 complete。
+      const faultRetirementPending =
+        faultAdvance.pendingStage === "marker_discharge"
+          ? "pending_cleanup"
+          : faultAdvance.pendingStage === "authority_release"
+            ? "authority_release_pending"
+            : faultAdvance.pendingStage === "outcome_finalization"
+              ? "exact_proof_pending"
+              : faultAdvance.pendingStage === "lineage_finalization"
+                ? "lineage_finalization_pending"
+                : "pending_cleanup";
       return {
         status: "resolved",
         resolution: "not-executed",
@@ -409,13 +394,13 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
         receiptWritten: false,
         sameIdRetryAllowed: false,
         actionTick: fault.faultTick,
-        retirement: "pending_cleanup",
+        retirement: faultRetirementPending,
+        cleanup: treasuryCleanupStatusOfAdvance("not-executed", faultAdvance),
+        ...(faultAdvance.globalWriteAdmissionLockedKnown
+          ? { globalWriteAdmissionStillLocked: faultAdvance.globalWriteAdmissionStillLocked }
+          : {}),
       };
     }
-    markTreasuryResolutionCleanupStage(fault.transactionId, "authority_release");
-    markTreasuryResolutionCleanupStage(fault.transactionId, "outcome_finalization");
-    completeImmediateNotExecutedRetirement(fault.transactionId);
-    deps.metrics.resolutionRecovered += 1;
     const retrySemanticReady = faultProofLevel === "identity-bound" || faultProofLevel === "lowlevel";
     return {
       status: "resolved",
@@ -425,14 +410,16 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       sameIdRetryAllowed: false, // 【第十六轮第五节】同 ID 永不可直接重新执行（显式 rearm）
       actionTick: fault.faultTick,
       // 【第十七轮第六节】retirement 状态（child ID 只经 opaque capability
-      // 交付——不再返回 rearmChildTransactionId 字符串）。
+      // 交付——不再返回 rearmChildTransactionId 字符串）。【11.1】只有全部
+      // 阶段 acknowledged 且 journal 删除 read-back 后才返回 complete_*。
       retirement:
         lineagePublished === "pending"
           ? "pending_publication"
           : retrySemanticReady
             ? "complete_rearm_ready"
             : "complete_non_rearmable",
-      globalWriteAdmissionStillLocked: faultDischarge.globalWriteAdmissionStillLocked,
+      cleanup: treasuryCleanupStatusOfAdvance("not-executed", faultAdvance),
+      globalWriteAdmissionStillLocked: faultAdvance.globalWriteAdmissionStillLocked,
     };
   };
 

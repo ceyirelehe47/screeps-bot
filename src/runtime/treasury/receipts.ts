@@ -1723,6 +1723,20 @@ export function registerTreasuryResolutionResetHook(hook: (() => void) | null): 
   resolutionResetHook = hook;
 }
 
+/** 【Remediation III】cleanup journal 的 heap 复位 hook 注册（数组——
+ * journal 模块加载时注册；clear 时 journal Memory 分支一并删除，heap
+ * 缓存必须失效，否则后续写入落到已摘除的 detached store 与 Memory
+ * read-back 不一致）。 */
+const resolutionCleanupResetHooks: (() => void)[] = [];
+export function registerTreasuryResolutionCleanupResetHook(hook: (() => void) | null): void {
+  const index = resolutionCleanupResetHooks.indexOf(hook);
+  if (hook === null) {
+    if (index >= 0) resolutionCleanupResetHooks.splice(index, 1);
+    return;
+  }
+  if (index < 0) resolutionCleanupResetHooks.push(hook);
+}
+
 /** 【第十七轮】attemptLineage 的 heap 复位 hook 注册（避免模块循环依赖）。 */
 export function registerTreasuryLineageResetHook(hook: (() => void) | null): void {
   const index = lineageResetHooks.indexOf(hook);
@@ -1734,6 +1748,12 @@ export function registerTreasuryLineageResetHook(hook: (() => void) | null): voi
 }
 
 /** 仅供测试：清除 Treasury 持久状态（receipts + lifecycle + writeFault + quarantine + resolutions + intents）并失效 heap 缓存。 */
+/** test-only：只清 receipt store 的 heap 缓存（模拟 global reset 后的首次
+ * trusted 读取——load 校验重走，同 global 的 O(1) 缓存语义不受影响）。 */
+export function resetTreasuryReceiptHeapCacheForTest(): void {
+  heapStoreRuntime = null;
+}
+
 export function clearTreasuryPersistenceForTest(): void {
   const branch = (Memory.runtime as unknown as RuntimeMemoryWithTreasury | undefined)?.treasury;
   if (branch) {
@@ -1750,6 +1770,8 @@ export function clearTreasuryPersistenceForTest(): void {
     delete (branch as { attemptLineage?: unknown }).attemptLineage;
     delete (branch as { lineageRetirementSummaries?: unknown }).lineageRetirementSummaries;
     delete (branch as { generationRetirementProofs?: unknown }).generationRetirementProofs;
+    // 【Remediation III】cleanup journal 分支一并清理（heap 复位经 hook）。
+    delete (branch as { resolutionCleanup?: unknown }).resolutionCleanup;
   }
   heapStoreRuntime = null;
   pendingAdmissions.clear();
@@ -1760,6 +1782,7 @@ export function clearTreasuryPersistenceForTest(): void {
   unsealTreasuryAdapterRegistryForTest();
   resolutionResetHook?.();
   for (const hook of lineageResetHooks) hook();
+  for (const hook of resolutionCleanupResetHooks) hook();
   receiptEvents.migrationsExecuted = 0;
   receiptEvents.incompatibleFailures = 0;
   receiptEvents.receiptFullScans = 0;

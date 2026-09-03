@@ -375,8 +375,19 @@ export type TreasurySafeExecuteResult<TAction extends { ok: boolean }> =
       readonly actionResult: TAction;
       /** 【第十八轮 24.3】tr1_ child 的当前代 not-executed retirement 状态
        *  （complete_rearm_ready / pending_publication / pending_cleanup；
-       *  initial attempt 不携带）。 */
-      readonly retirement?: "complete_rearm_ready" | "pending_publication" | "pending_cleanup";
+       *  initial attempt 不携带）。【Remediation III 十一】pending 细分
+       *  （authority/exact proof/lineage/journal）由 cleanup 报告表达。 */
+      readonly retirement?:
+        | "complete_rearm_ready"
+        | "pending_publication"
+        | "pending_cleanup"
+        | "authority_release_pending"
+        | "exact_proof_pending"
+        | "lineage_finalization_pending";
+      /** 【Remediation III 十一】cleanup 完成状态的三层事实报告（settlement
+       *  结论 / journal 删除 read-back 后的进度 / 全局 write admission 锁）。
+       *  retirement 不得谎称完全完成——pending 阶段在此显式表达。 */
+      readonly cleanup?: import("@/runtime/treasury/resolutionCleanupCoordinator").TreasuryCleanupStatusReport;
       /** 【Round 22 remediation】当前 attempt 的 marker 已 discharge，但全局
        *  write admission 是否仍被其它 attempt 的 marker 锁定（两事实分离）。 */
       readonly globalWriteAdmissionStillLocked?: boolean;

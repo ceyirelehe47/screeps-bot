@@ -486,11 +486,96 @@ describe("Treasury write-admission 架构边界", () => {
         "runtime/treasury/intents.ts",
         "runtime/treasury/quarantine.ts",
         "runtime/treasury/resolutionStateSemantics.ts",
+        // 【Remediation III】facade 门禁语义的 stage handlers 迁移目标
+        //（semantic lineage verdict / chain close 的 tr1_ 判定经此承载）。
+        "runtime/treasury/resolutionCleanupStageHandlers.ts",
       ]);
       if (/isTreasuryRearmAttemptId/.test(fileSource) && !REARM_NAMESPACE_CONSUMERS.has(relative)) {
         violations.push(`${relative} 引用 isTreasuryRearmAttemptId（tr1_ 判定单一权威在 transactionId.ts，门禁在 facade）`);
       }
     }
     expect(violations).toEqual([]);
+  });
+});
+
+// ── 【Round 22 Remediation III 8.4】cleanup 阶段推进的架构守卫 ───────────────
+
+describe("Treasury cleanup 阶段推进架构守卫（Remediation III）", () => {
+  it("journal 写原语只有受控调用方：生产代码不得直接调用 mark/activate/complete（唯一 ack 实现之外）", () => {
+    const violations: string[] = [];
+    const ALLOWED = new Set([
+      // 原语定义（本模块）。
+      "runtime/treasury/resolutionCleanupJournal.ts",
+      // 唯一 durable acknowledgement 实现（内部调用检查返回值）。
+      "runtime/treasury/cleanupStageAcknowledgement.ts",
+    ]);
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      if (ALLOWED.has(relative)) continue;
+      const fileSource = readFileSync(filePath, "utf8");
+      if (/markTreasuryResolutionCleanupStage\s*\(/.test(fileSource)) {
+        violations.push(`${relative} 调用 markTreasuryResolutionCleanupStage（阶段推进必须经 cleanupStageAcknowledgement 的结构化 ack）`);
+      }
+      if (/activateTreasuryResolutionCleanupProof\s*\(/.test(fileSource)) {
+        violations.push(`${relative} 调用 activateTreasuryResolutionCleanupProof（activation 必须经 settlementProofActivation 的 matching proof 验证）`);
+      }
+      if (/completeTreasuryResolutionCleanup\s*\(/.test(fileSource)) {
+        violations.push(`${relative} 调用 completeTreasuryResolutionCleanup（journal completion 必须经 completeTreasuryCleanupAcknowledged 的删除 read-back）`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("cleanupStageAcknowledgement 内部调用必须检查返回值（不允许表达式语句）", () => {
+    const source = readFileSync(join(SRC_ROOT, "runtime/treasury/cleanupStageAcknowledgement.ts"), "utf8");
+    const violations: string[] = [];
+    const lines = source.split("\n");
+    lines.forEach((line, index) => {
+      const statement = line.match(/^\s*(?:markTreasuryResolutionCleanupStage|completeTreasuryResolutionCleanup)\s*\(/);
+      if (statement) {
+        violations.push(`cleanupStageAcknowledgement.ts:${String(index + 1)} 表达式语句调用写原语（返回值必须被检查）`);
+      }
+    });
+    // 实际调用（if 条件内）不在行首——表达式语句正则应零命中。
+    expect(violations).toEqual([]);
+    // 且模块内确实存在受控调用（防退化成空壳）。
+    expect(source).toMatch(/if \(!markTreasuryResolutionCleanupStage\(/);
+    expect(source).toMatch(/if \(!completeTreasuryResolutionCleanup\(/);
+  });
+
+  it("staged/committed destructive 路径的 receipt 读取必须 release-trusted（replay 直读只允许显式预检标记）", () => {
+    const violations: string[] = [];
+    const GUARDED = ["runtime/treasury/resolutionStore.ts", "runtime/treasury/faultResolution.ts"];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      if (!GUARDED.includes(relative)) continue;
+      const lines = readFileSync(filePath, "utf8").split("\n");
+      lines.forEach((line, index) => {
+        if (/readTreasurySettlementProof\s*\(/.test(line)) {
+          // 上方 3 行内必须有 replay 预检标记（显式查询用途——正式 proof 走 trusted）。
+          const context = lines.slice(Math.max(0, index - 3), index + 1).join("\n");
+          if (!context.includes("replay-readable 预检") && !context.includes("replay 预检")) {
+            violations.push(`${relative}:${String(index + 1)} 直读 readTreasurySettlementProof 而无 replay 预检标记（release 路径必须 readTreasuryTrustedSettlementProofForAttempt）`);
+          }
+        }
+      });
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("单一 destructive owner：journal 恢复只经装配的 recovery driver（不存在第二套阶段推进）", () => {
+    const journalSource = readFileSync(join(SRC_ROOT, "runtime/treasury/resolutionCleanupJournal.ts"), "utf8");
+    // journal 恢复循环不得直接调用 discharge/release/finalize 原语（driver 装配推进）。
+    expect(journalSource).toMatch(/recoveryDriver\.advance\(/);
+    expect(journalSource).toMatch(/registerTreasuryResolutionCleanupRecoveryDriverForAssembly/);
+    // immediate 路径与恢复共用 coordinator 的 advance。
+    const facadeSource = readFileSync(join(SRC_ROOT, "runtime/treasury/facade.ts"), "utf8");
+    expect(facadeSource).toMatch(/advanceTreasuryResolutionCleanupPhases\(/);
+    const faultResolutionSource = readFileSync(join(SRC_ROOT, "runtime/treasury/faultResolution.ts"), "utf8");
+    expect(faultResolutionSource).toMatch(/advanceTreasuryResolutionCleanupPhases\(/);
+    const resolutionStoreSource = readFileSync(join(SRC_ROOT, "runtime/treasury/resolutionStore.ts"), "utf8");
+    expect(resolutionStoreSource).toMatch(/advanceTreasuryResolutionCleanupPhases\(/);
   });
 });
