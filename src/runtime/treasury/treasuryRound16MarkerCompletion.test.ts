@@ -78,7 +78,7 @@ function seedQuarantineThenRelease(transactionId: string): string {
   //（生产路径在 tombstone 前创建；意外缺失时 lineage 阶段结构化 blocked）。
   const lineageCreated = createTreasuryAttemptLineageRecord({
     rootTransactionId: transactionId,
-    rootIdentity: { digest: DIGEST, durableIdentityDigest: identity as string },
+    rootIdentity: { digest: DIGEST, durableIdentityDigest: identity as string, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME },
     actionKind: "terminal.send",
     authorityClass: "lowlevel",
     lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,

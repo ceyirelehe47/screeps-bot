@@ -194,6 +194,10 @@ function seedCommittedCleanupScene(stages: { marker?: boolean; authority?: boole
     durableIdentityDigest: durable,
   });
   expect(opened.status).toBe("opened");
+  // 【Remediation V 九】open 只创建 reservation——窗口 fixture 模拟 proof
+  // activation 已完成（settlement proof 已持久，activation 权威会通过）。
+  (Memory.runtime as unknown as { treasury?: { resolutionCleanup?: { entries?: Record<string, { settlementProofDurable?: boolean }> } } })
+    .treasury!.resolutionCleanup!.entries!["c:r22r_tx"]!.settlementProofDurable = true;
   const sceneExpected = { ...lowlevelExpected, durableIdentityDigest: durable };
   if (stages.marker) {
     // 窗口 3/4：marker 已删除（read-back 完成）。
@@ -254,6 +258,10 @@ describe("A：cleanup journal 真实持久化（remediation A）", () => {
       durableIdentityDigest: "0cc99174bb6f2e74",
     });
     expect(opened.status).toBe("opened");
+    // 【Remediation V 九】open 恒 reservation——手工激活（global reset 恢复
+    // 语义验证的 fixture 前置）。
+    (Memory.runtime as unknown as { treasury?: { resolutionCleanup?: { entries?: Record<string, { settlementProofDurable?: boolean }> } } })
+      .treasury!.resolutionCleanup!.entries!["c:r22r_a2"]!.settlementProofDurable = true;
     expect(markTreasuryResolutionCleanupStage("r22r_a2", "marker_discharge", "matching_cleared")).toBe(true);
     // Memory 中确实存在 entry 与阶段。
     const durableBefore = (Memory.runtime as unknown as { treasury?: { resolutionCleanup?: { entries?: Record<string, unknown> } } }).treasury!.resolutionCleanup!;
@@ -468,6 +476,9 @@ describe("B：六个中断窗口的 heap reset 恢复（remediation B.6）", () 
       lineageBindingDigest: w6Binding,
     });
     expect(opened.status).toBe("opened");
+    // 【Remediation V 九】open 恒 reservation——窗口 fixture 手工激活。
+    (Memory.runtime as unknown as { treasury?: { resolutionCleanup?: { entries?: Record<string, { settlementProofDurable?: boolean }> } } })
+      .treasury!.resolutionCleanup!.entries![`c:${w6Child}`]!.settlementProofDurable = true;
     expect(markTreasuryResolutionCleanupStage(w6Child, "marker_discharge", "already_absent")).toBe(true);
     expect(markTreasuryResolutionCleanupStage(w6Child, "authority_release")).toBe(true);
     expect(markTreasuryResolutionCleanupStage(w6Child, "outcome_finalization")).toBe(true);
@@ -643,6 +654,8 @@ describe("D：journal identity 不可变与阶段强制顺序（remediation D）
 
   it("reopen 同 id 同 resolution：digest/profile/class/provenance/lineage 任一不等 → conflict 零状态变化", () => {
     expect(openTreasuryResolutionCleanup(baseInput).status).toBe("opened");
+    (Memory.runtime as unknown as { treasury?: { resolutionCleanup?: { entries?: Record<string, { settlementProofDurable?: boolean }> } } })
+      .treasury!.resolutionCleanup!.entries!["c:r22r_d1"]!.settlementProofDurable = true;
     expect(markTreasuryResolutionCleanupStage("r22r_d1", "marker_discharge", "already_absent")).toBe(true);
     const conflictVariants = [
       { digest: "ffffffffffffffff" },
@@ -672,6 +685,10 @@ describe("D：journal identity 不可变与阶段强制顺序（remediation D）
 
   it("越级 mark（跳过前置阶段）→ false 零状态变化", () => {
     expect(openTreasuryResolutionCleanup(baseInput).status).toBe("opened");
+    // reservation 期间全部阶段 mark 均被拒绝（proof activation 是唯一入口）。
+    expect(markTreasuryResolutionCleanupStage("r22r_d1", "marker_discharge", "already_absent")).toBe(false);
+    (Memory.runtime as unknown as { treasury?: { resolutionCleanup?: { entries?: Record<string, { settlementProofDurable?: boolean }> } } })
+      .treasury!.resolutionCleanup!.entries!["c:r22r_d1"]!.settlementProofDurable = true;
     expect(markTreasuryResolutionCleanupStage("r22r_d1", "authority_release")).toBe(false);
     expect(markTreasuryResolutionCleanupStage("r22r_d1", "outcome_finalization")).toBe(false);
     expect(markTreasuryResolutionCleanupStage("r22r_d1", "lineage_finalization")).toBe(false);
@@ -698,7 +715,7 @@ describe("E：GRA 孤儿 proof 的 release-trusted 删除门禁（remediation E�
   function seedOrphanProofScene(): { readonly gen2Id: string } {
     const created = createTreasuryAttemptLineageRecord({
       rootTransactionId: ROOT_ID,
-      rootIdentity: { digest: ROOT_DIGEST, durableIdentityDigest: ROOT_DURABLE },
+      rootIdentity: { digest: ROOT_DIGEST, durableIdentityDigest: ROOT_DURABLE, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME },
       actionKind: "terminal.send",
       authorityClass: "lowlevel",
       lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
@@ -904,7 +921,7 @@ describe("F：purpose 必填契约与 unresolvedAuthority ok 路径回归（reme
     })!;
     const created = createTreasuryAttemptLineageRecord({
       rootTransactionId: rootId,
-      rootIdentity: { digest: ROOT_F_DIGEST, durableIdentityDigest: rootDurable },
+      rootIdentity: { digest: ROOT_F_DIGEST, durableIdentityDigest: rootDurable, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME },
       actionKind: "terminal.send",
       authorityClass: "lowlevel",
       lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,

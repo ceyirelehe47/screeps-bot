@@ -41,10 +41,12 @@ import {
 import {
   createTreasuryAttemptLineageRecord,
   lookupTreasuryAttemptLineageByAttemptId,
+  lookupTreasuryAttemptLineageByNextChild,
   retireTreasuryLineageCurrentAttempt,
   convergeTreasuryLineageRetirementFromFacts,
   type TreasuryAttemptLineageIdentity,
 } from "@/runtime/treasury/attemptLineage";
+import { isTreasuryRearmAttemptId } from "@/runtime/treasury/transactionId";
 import {
   computeTreasuryModernRetrySemanticDigest,
   computeTreasuryLowlevelRetrySemanticDigest,
@@ -128,6 +130,25 @@ function publishImmediateNotExecutedLineage(
     ...(lowlevelClass && fault.lowlevelSource !== undefined ? { lowlevelSource: fault.lowlevelSource } : {}),
   };
   const rearmable = retrySemanticDigest !== null;
+  // 【Remediation V 六】tr1_（rearm child）redemption fault：child 从未接管
+  // lineage（chain 处于 capability_issued / child_intent_pending，current 仍是
+  // parent）——不创建新 root（tr1_ 不得作为 root）、不 retire current（child
+  // 不是 current）。在途 chain 事实匹配（lineageId / binding / generation+1）
+  // 即 lineage 处理已确立（child not-executed 的 chain 回滚由 cleanup outcome
+  // 阶段承载）；无 matching 在途 chain → pending（fail closed，不猜测）。
+  if (isTreasuryRearmAttemptId(fault.transactionId)) {
+    if (fault.lineageId === undefined) return "pending";
+    const pendingChain = lookupTreasuryAttemptLineageByNextChild(fault.transactionId);
+    if (
+      pendingChain !== undefined &&
+      pendingChain.lineageId === fault.lineageId &&
+      pendingChain.generation + 1 === fault.lineageGeneration &&
+      pendingChain.pendingBindingDigest === fault.lineageBindingDigest
+    ) {
+      return "published";
+    }
+    return "pending";
+  }
   const existing = lookupTreasuryAttemptLineageByAttemptId(fault.transactionId);
   if (existing !== undefined) {
     // 既有 chain 的 current 退休（单一权威 helper；非 child_active 状态由
@@ -240,6 +261,8 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       // cleanup journal（旧 boolean clear 无生产 caller）：final tombstone
       // 已存在（settlement proof 持久化）——open 幂等补开，discharge 未完成
       // 时 fault authority 保留（fail closed，恢复稍后重试）。
+      // 【Remediation V 六】tr1_ fault 的 lineage 四字段整体透传（tr1_ 的
+      // exact identity 需要 lineage 维度）。
       const reopenIdentity = {
         transactionId: fault.transactionId,
         digest: fault.digest,
@@ -248,6 +271,10 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
         ...(fault.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fault.authorizationCohortDigest } : {}),
         ...(fault.durableIdentityDigest !== undefined ? { durableIdentityDigest: fault.durableIdentityDigest } : {}),
         ...(existing.lowlevelSource !== undefined ? { lowlevelSource: existing.lowlevelSource } : {}),
+        ...(fault.lineageId !== undefined ? { lineageId: fault.lineageId } : {}),
+        ...(fault.lineageGeneration !== undefined ? { lineageGeneration: fault.lineageGeneration } : {}),
+        ...(fault.parentTransactionId !== undefined ? { parentTransactionId: fault.parentTransactionId } : {}),
+        ...(fault.lineageBindingDigest !== undefined ? { lineageBindingDigest: fault.lineageBindingDigest } : {}),
       };
       const reopenCleanup = openTreasuryResolutionCleanup(
         treasuryResolutionCleanupOpenInputOfFacts({ ...reopenIdentity, resolution: "not-executed" }),
@@ -266,7 +293,12 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       //（final tombstone 存在），cleanup pending 由 beginTick 恢复幂等补
       // 完成——只有 store 异常才拒绝重入。
       const reopenAdvance = advanceTreasuryResolutionCleanupPhases({ transactionId: fault.transactionId });
-      if (reopenAdvance.status === "absent" || reopenAdvance.status === "store_unhealthy") {
+      if (
+        reopenAdvance.status === "absent" ||
+        reopenAdvance.status === "store_unhealthy" ||
+        reopenAdvance.status === "no_cleanup_authority" ||
+        reopenAdvance.status === "completion_conflict"
+      ) {
         deps.metrics.reconciliationCapabilitiesRejected += 1;
         return {
           status: "rejected",
@@ -322,6 +354,13 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       ...(fault.contractDigest !== undefined ? { contractDigest: fault.contractDigest } : {}),
       ...(fault.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fault.authorizationCohortDigest } : {}),
       ...(fault.durableIdentityDigest !== undefined ? { durableIdentityDigest: fault.durableIdentityDigest } : {}),
+      // 【Remediation V 六】tr1_ fault 的 lineage 四字段整体透传（final
+      // tombstone 的 exact identity 需要 lineage 维度——gate 的 tombstone
+      // exact 构造对 tr1_ 缺 lineage 判 conflict）。
+      ...(fault.lineageId !== undefined ? { lineageId: fault.lineageId } : {}),
+      ...(fault.lineageGeneration !== undefined ? { lineageGeneration: fault.lineageGeneration } : {}),
+      ...(fault.parentTransactionId !== undefined ? { parentTransactionId: fault.parentTransactionId } : {}),
+      ...(fault.lineageBindingDigest !== undefined ? { lineageBindingDigest: fault.lineageBindingDigest } : {}),
     });
     if (finalWrite.status === "rejected") {
       return {
@@ -344,6 +383,10 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       ...(fault.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fault.authorizationCohortDigest } : {}),
       ...(fault.durableIdentityDigest !== undefined ? { durableIdentityDigest: fault.durableIdentityDigest } : {}),
       ...(faultProofLevel === "lowlevel" && fault.lowlevelSource !== undefined ? { lowlevelSource: fault.lowlevelSource } : {}),
+      ...(fault.lineageId !== undefined ? { lineageId: fault.lineageId } : {}),
+      ...(fault.lineageGeneration !== undefined ? { lineageGeneration: fault.lineageGeneration } : {}),
+      ...(fault.parentTransactionId !== undefined ? { parentTransactionId: fault.parentTransactionId } : {}),
+      ...(fault.lineageBindingDigest !== undefined ? { lineageBindingDigest: fault.lineageBindingDigest } : {}),
     };
     const faultCleanupOpen = openTreasuryResolutionCleanup(
       treasuryResolutionCleanupOpenInputOfFacts({ ...faultCleanupIdentity, resolution: "not-executed" }),
@@ -357,7 +400,12 @@ export function createTreasuryResolutionAuthority(deps: TreasuryResolutionAuthor
       };
     }
     const faultAdvance = advanceTreasuryResolutionCleanupPhases({ transactionId: fault.transactionId });
-    if (faultAdvance.status === "absent" || faultAdvance.status === "store_unhealthy") {
+    if (
+      faultAdvance.status === "absent" ||
+      faultAdvance.status === "store_unhealthy" ||
+      faultAdvance.status === "no_cleanup_authority" ||
+      faultAdvance.status === "completion_conflict"
+    ) {
       deps.metrics.reconciliationCapabilitiesRejected += 1;
       return {
         status: "resolved",

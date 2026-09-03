@@ -9,6 +9,7 @@
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { quarantineTreasuryTransaction, readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { writeTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
+import { createTreasuryAttemptLineageRecord } from "@/runtime/treasury/attemptLineage";
 import {
   recordTreasuryWriteFault,
   readTreasuryWriteFault,
@@ -31,6 +32,7 @@ import {
   registerTreasuryResolutionCleanupHandlersForAssembly,
   recoverTreasuryResolutionCleanupAtTickBoundary,
 } from "@/runtime/treasury/resolutionCleanupJournal";
+import { acknowledgeTreasuryCleanupSettlementProof } from "@/runtime/treasury/settlementProofActivation";
 import { validateTreasuryIdentityProfileFacts, treasuryIdentityProfileOfFacts, treasuryProfileAllowsAutomaticProtocol } from "@/runtime/treasury/identityProfile";
 import { validateTreasurySemanticLineage } from "@/runtime/treasury/semanticLineageValidation";
 import { lookupTreasuryTrustedSettledReceipt } from "@/runtime/treasury/receipts";
@@ -102,6 +104,10 @@ function seedQuarantineAuthorityAndTombstone(transactionId: string): void {
     durableIdentityDigest: durable,
   });
   expect(opened.status).toBe("opened");
+  // 【Remediation V 九】open 只创建 reservation——proof activation 是唯一
+  // false→true 写入口（tombstone 已持久，activation 验证通过）。
+  const activation = acknowledgeTreasuryCleanupSettlementProof({ transactionId });
+  expect(activation.outcome === "activated" || activation.outcome === "already_activated").toBe(true);
 }
 
 const lowlevelExpected = {
@@ -219,6 +225,11 @@ describe("marker exact identity 与 discharge（第二十二轮第六节）", ()
 describe("resolution cleanup journal（第二十二轮第七节）", () => {
   it("open → 阶段推进 → 全完成删除（journal 即持久 pending 索引）", () => {
     expect(openTreasuryResolutionCleanup({ ...lowlevelExpected, resolution: "not-executed", digest: DIGEST, proofClass: "lowlevel", identityProfile: "lowlevel" }).status).toBe("opened");
+    // 【Remediation V 九】open 恒 reservation——直接 mark 阶段被偏序拒绝
+    //（proof activation 是唯一激活入口）；测试经 activation 权威激活后推进。
+    expect(markTreasuryResolutionCleanupStage("r22_mk_tx", "marker_discharge", "matching_cleared")).toBe(false);
+    const store = (Memory.runtime as { treasury?: { resolutionCleanup?: { entries?: Record<string, { settlementProofDurable?: boolean }> } } }).treasury?.resolutionCleanup;
+    store!.entries!["c:r22_mk_tx"]!.settlementProofDurable = true;
     expect(listTreasuryResolutionCleanupPendingIds()).toContain("r22_mk_tx");
     expect(markTreasuryResolutionCleanupStage("r22_mk_tx", "marker_discharge", "matching_cleared")).toBe(true);
     expect(markTreasuryResolutionCleanupStage("r22_mk_tx", "authority_release")).toBe(true);
@@ -234,7 +245,8 @@ describe("resolution cleanup journal（第二十二轮第七节）", () => {
     openTreasuryResolutionCleanup({ ...lowlevelExpected, resolution: "not-executed", digest: DIGEST, proofClass: "lowlevel", identityProfile: "lowlevel" });
     const conflict = openTreasuryResolutionCleanup({ ...lowlevelExpected, resolution: "committed", digest: DIGEST, proofClass: "lowlevel", identityProfile: "lowlevel" });
     expect(conflict.status).toBe("conflict");
-    expect(openTreasuryResolutionCleanup({ ...lowlevelExpected, resolution: "not-executed", digest: DIGEST, proofClass: "lowlevel", identityProfile: "lowlevel" }).status).toBe("already_open_activated");
+    // 【Remediation V 九】open 不激活——未激活 entry 的 reopen 恒 reservation。
+    expect(openTreasuryResolutionCleanup({ ...lowlevelExpected, resolution: "not-executed", digest: DIGEST, proofClass: "lowlevel", identityProfile: "lowlevel" }).status).toBe("already_open_reservation");
   });
 
   it("handlers 未装配 → 恢复 fail closed 保留 pending；global reset 后 journal 重建", () => {
@@ -251,6 +263,24 @@ describe("resolution cleanup journal（第二十二轮第七节）", () => {
 
   it("handlers 装配 + 空 marker → 恢复推进 marker discharge 阶段", () => {
     seedQuarantineAuthorityAndTombstone("r22_mk_tx");
+    // 【Remediation V 七】root not-executed 的 pre-release gate 要求 root
+    // lineage exact relation 成立——seed matching root lineage（converge 到
+    // non_rearmable_retired 终态）。
+    const durable = readTreasuryQuarantineEntry("r22_mk_tx")?.durableIdentityDigest;
+    const { convergeTreasuryLineageRetirementFromFacts } =
+      jest.requireActual("@/runtime/treasury/attemptLineage") as typeof import("@/runtime/treasury/attemptLineage");
+    const rootLineage = createTreasuryAttemptLineageRecord({
+      rootTransactionId: "r22_mk_tx",
+      rootIdentity: { digest: DIGEST, durableIdentityDigest: durable, lowlevelSource: "runtime-lowlevel@v1" },
+      actionKind: "terminal.send",
+      authorityClass: "lowlevel",
+      lowlevelSource: "runtime-lowlevel@v1",
+      rearmable: false,
+      identityProfile: "lowlevel",
+      nonRearmReason: "test fixture",
+    });
+    expect(rootLineage.status).toBe("written");
+    if (rootLineage.status === "rejected") throw new Error("seed rejected");
     registerTreasuryResolutionCleanupHandlersForAssembly({
       authorityRelease: () => ({ status: "blocked", detail: "authority 仍存在（本用例只验证 discharge 阶段）" }),
       outcomeFinalization: () => ({ status: "blocked", detail: "pending" }),

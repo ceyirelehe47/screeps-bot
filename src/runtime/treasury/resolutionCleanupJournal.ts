@@ -199,7 +199,7 @@ export interface TreasuryResolutionCleanupRecoveryDriver {
   readonly advance: (
     entry: Readonly<TreasuryResolutionCleanupEntry>,
   ) => {
-    readonly status: "completed" | "pending" | "absent" | "store_unhealthy";
+    readonly status: "completed" | "pending" | "absent" | "store_unhealthy" | "no_cleanup_authority" | "completion_conflict";
     readonly pendingStage: string;
     readonly detail: string;
   };
@@ -505,7 +505,7 @@ const CLEANUP_IDENTITY_FIELDS = [
 ] as const;
 
 /**
- * settlement proof 持久化后创建 cleanup entry（或【Remediation II A.6】在
+ * settlement proof 持久化前/后创建 cleanup entry（【Remediation II A.6】在
  * 消费 capability 之前以 reservation 模式先行取得 cleanup 所有权）。幂等
  * reopen（同 transactionId 同 resolution）要求 exact identity 全字段相等
  * （【Round 22 remediation D】identity 不可变——digest/profile/class/
@@ -514,15 +514,15 @@ const CLEANUP_IDENTITY_FIELDS = [
  * rejected（调用方不得继续推进终态——settlement proof 已持久化，恢复稍后
  * 重试 open）。
  *
- * proofMode（默认 "proof_durable"——proof 已在 open 前落盘，创建即
- * settlementProofDurable=true）：
- * - "reservation"【Remediation II A.6】：capability 消费前的持久、exact、
- *   不可与其他 attempt 冲突的 cleanup admission——创建为
- *   settlementProofDurable=false（不谎称 proof durable）；proof 写入成功后
- *   经 activate（或对既有 reservation 的 proof_durable open 幂等激活）推进；
- *   未激活的 reservation 不参与任何阶段推进，可被本次创建方安全撤销。
- * - 对既有 reservation entry 的 proof_durable open（exact identity 一致）→
- *   幂等激活（settlementProofDurable 推进为 true，阶段进度保留）。
+ * 【Remediation V 九】open 永远只做 admission：新 entry 一律创建为
+ * settlementProofDurable=false 的 reservation（不保留 proofMode 参数——
+ * settlementProofDurable 的唯一 false→true 转换是
+ * acknowledgeTreasuryCleanupSettlementProof 的 proof activation 权威；
+ * 任何调用方声明"proof 已 durable"都不得绕过 activation validator）。
+ * production 调用点顺序：open/admit → target proof 持久化后经 activation
+ * authority 激活（coordinator 阶段 0 / faultResolution 显式 ack）→ marker
+ * gate。exact reopen 保持原 activation 状态、不改变 identity、不改变阶段
+ * 进度。
  */
 export function openTreasuryResolutionCleanup(input: {
   readonly transactionId: string;
@@ -538,7 +538,6 @@ export function openTreasuryResolutionCleanup(input: {
   readonly lineageGeneration?: number;
   readonly parentTransactionId?: string;
   readonly lineageBindingDigest?: string;
-  readonly proofMode?: "proof_durable" | "reservation";
 }): TreasuryResolutionCleanupOpenResult {
   const runtime = loadCleanupRuntime();
   if (runtime.fatal !== null) {
@@ -565,11 +564,11 @@ export function openTreasuryResolutionCleanup(input: {
         };
       }
     }
-    // 【Remediation IV 十一.1】open 只做 admission：不再自动激活既有
+    // 【Remediation IV 十一.1 / V 九】open 只做 admission：不再自动激活既有
     // reservation（settlementProofDurable 的推进只能经
     // acknowledgeTreasuryCleanupSettlementProof 的 proof activation 权威——
-    // open 不得以 proofMode 默认值绕过 activation validator 相信调用方）。
-    // 返回显式区分 reservation / activated 状态。
+    // open 不得以任何参数绕过 activation validator 相信调用方）。返回显式
+    // 区分 reservation / activated 状态。
     cleanupEvents.reopened += 1;
     return existing.settlementProofDurable
       ? { status: "already_open_activated" }
@@ -585,13 +584,15 @@ export function openTreasuryResolutionCleanup(input: {
   // 【Remediation IV 十一.2】新 candidate 写入前完整验证（与 load 同强度的
   // entry validator：profile 枚举 + profile↔proofClass 唯一映射 + required/
   // forbidden 矩阵 + lineage 四字段整体性 + 时间形状）；非法 → 写入前拒绝。
+  // 【V 九】新 entry 恒为 reservation（settlementProofDurable=false）——
+  // activation 是唯一 false→true 写入口（settlementProofActivation）。
   const candidate = {
     transactionId: input.transactionId,
     digest: input.digest,
     resolution: input.resolution,
     identityProfile: input.identityProfile,
     proofClass: input.proofClass,
-    settlementProofDurable: input.proofMode !== "reservation",
+    settlementProofDurable: false,
     markerDischarged: false,
     authorityReleased: false,
     outcomeFinalized: false,
@@ -805,24 +806,6 @@ export function completeTreasuryResolutionCleanup(transactionId: string): boolea
   runtime.store.entryCount -= 1;
   runtime.store.updatedAt = Game.time;
   cleanupEvents.completed += 1;
-  return true;
-}
-
-/**
- * 【Remediation II A.6】reservation 激活：settlement/resolution proof 写入
- * 成功并 read-back 确认后调用——settlementProofDurable false→true（幂等：
- * 已激活返回 true）。fatal / entry 缺失 → false（调用方继续主流程，恢复
- * 路径的 proof_durable open 会按 proof 事实幂等补激活）。
- */
-export function activateTreasuryResolutionCleanupProof(transactionId: string): boolean {
-  const runtime = loadCleanupRuntime();
-  if (runtime.fatal !== null) return false;
-  const entry = runtime.store.entries[CLEANUP_KEY_PREFIX + transactionId];
-  if (entry === undefined) return false;
-  if (entry.settlementProofDurable) return true;
-  entry.settlementProofDurable = true;
-  entry.updatedAt = Game.time;
-  runtime.store.updatedAt = Game.time;
   return true;
 }
 

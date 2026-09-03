@@ -866,7 +866,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     // 的既有 entry 不会被误删，不留下无 settlement 流程的孤儿 pending）。
     deleteTreasuryResolutionTombstone(authority.transactionId);
     if (committedCleanupOpen.status === "opened") {
-      revokeTreasuryResolutionCleanup({ ...committedCleanupInput, settlementProofDurable: true });
+      revokeTreasuryResolutionCleanup({ ...committedCleanupInput, settlementProofDurable: false });
     }
     countRejected();
     return { status: "rejected", reason: "invalid_capability", detail: `capability 消费失败（${consumedNow.reason}）: ${consumedNow.detail}` };
@@ -891,7 +891,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
     // 流程未成立——不留下永久 pending 孤儿）。
     deleteTreasuryResolutionTombstone(authority.transactionId);
     if (committedCleanupOpen.status === "opened") {
-      revokeTreasuryResolutionCleanup({ ...committedCleanupInput, settlementProofDurable: true });
+      revokeTreasuryResolutionCleanup({ ...committedCleanupInput, settlementProofDurable: false });
     }
     countRejected();
     return { status: "rejected", reason: "receipt_store_fatal", detail: receipt.detail };
@@ -899,7 +899,7 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
   if (receipt.status === "blocked") {
     deleteTreasuryResolutionTombstone(authority.transactionId);
     if (committedCleanupOpen.status === "opened") {
-      revokeTreasuryResolutionCleanup({ ...committedCleanupInput, settlementProofDurable: true });
+      revokeTreasuryResolutionCleanup({ ...committedCleanupInput, settlementProofDurable: false });
     }
     countRejected();
     return {
@@ -1003,6 +1003,8 @@ export function resolveTreasuryQuarantinedTransactionAsCommitted(
   if (
     committedCleanupAdvance.status === "absent" ||
     committedCleanupAdvance.status === "store_unhealthy" ||
+    committedCleanupAdvance.status === "no_cleanup_authority" ||
+    committedCleanupAdvance.status === "completion_conflict" ||
     committedCleanupAdvance.pendingStage === "proof_activation"
   ) {
     countRejected();
@@ -1374,7 +1376,7 @@ export function resolveTreasuryQuarantinedTransactionAsNotExecuted(
     ...(authority.parentTransactionId !== undefined ? { parentTransactionId: authority.parentTransactionId } : {}),
     ...(authority.lineageBindingDigest !== undefined ? { lineageBindingDigest: authority.lineageBindingDigest } : {}),
   });
-  const notExecutedCleanupOpen = openTreasuryResolutionCleanup({ ...notExecutedCleanupInput, proofMode: "reservation" });
+  const notExecutedCleanupOpen = openTreasuryResolutionCleanup(notExecutedCleanupInput);
   if (notExecutedCleanupOpen.status === "rejected" || notExecutedCleanupOpen.status === "conflict") {
     countRejected();
     return {

@@ -21,8 +21,10 @@ import { verifyTreasuryCommittedResolutionProof } from "@/runtime/treasury/commi
 import { dischargeTreasuryExactAuthorityForCleanup } from "@/runtime/treasury/exactAuthorityDischarge";
 import {
   relateTreasuryGenerationRetirementProofForOutcome,
+  relateTreasuryRootLineageForNotExecuted,
   verifyTreasuryLineageFinalizationState,
 } from "@/runtime/treasury/lineageFinalizationProof";
+import { registerTreasuryRootLineageRelationForAssembly } from "@/runtime/treasury/rootLineageRelationChannel";
 import {
   registerTreasuryResolutionCleanupHandlersForAssembly,
   type TreasuryResolutionCleanupStageHandlers,
@@ -39,9 +41,20 @@ import {
   peekTreasuryGenerationRetirementHealth,
 } from "@/runtime/treasury/generationRetirementAuthority";
 import {
+  lookupTreasuryRetirementSummaryByRoot,
+  peekTreasuryRetirementSummaryHealth,
+} from "@/runtime/treasury/lineageRetirementSummary";
+import {
+  listTreasuryCleanupCompletionTransactionIds,
+  lookupTreasuryCleanupCompletion,
+} from "@/runtime/treasury/cleanupCompletionAuthority";
+import { registerTreasuryCompletionReplacementProbesForAssembly } from "@/runtime/treasury/cleanupCompletionReplacement";
+import {
   lookupTreasuryAttemptLineageByAttemptId,
+  lookupTreasuryAttemptLineageByNextChild,
   closeTreasuryLineageAsChainCommitted,
   convergeTreasuryLineageRetirementFromFacts,
+  rollbackTreasuryLineageToRearmReady,
 } from "@/runtime/treasury/attemptLineage";
 import {
   treasuryExactAttemptIdentityOfFacts,
@@ -213,6 +226,38 @@ export function treasuryResolutionCleanupStageHandlers(): TreasuryResolutionClea
       }
     }
     if (entry.lineageId !== undefined && entry.lineageGeneration !== undefined) {
+      // 【Remediation V 六】tr1_ 在途 child（chain 处于 capability_issued /
+      // child_intent_pending——child 从未接管，current 仍是 parent）：child
+      // not-executed 的 lineage 语义 = 回滚到 rearm_ready（该代无 retirement/
+      // GRA 义务——outcome proof = final tombstone + 回滚事实，不是 converge
+      // 后的 exact GRA proof）。回滚成功即 already_final；chain 不匹配 →
+      // blocked（fail closed）。
+      {
+        const pendingChain = lookupTreasuryAttemptLineageByNextChild(entry.transactionId);
+        if (
+          pendingChain !== undefined &&
+          pendingChain.lineageId === entry.lineageId &&
+          pendingChain.generation + 1 === entry.lineageGeneration &&
+          pendingChain.pendingBindingDigest === entry.lineageBindingDigest &&
+          (pendingChain.state === "capability_issued" || pendingChain.state === "child_intent_pending")
+        ) {
+          const rolledBack = rollbackTreasuryLineageToRearmReady(pendingChain.lineageId);
+          if (rolledBack.status === "rejected") {
+            return { status: "blocked", detail: `tr1_ 在途 child 回滚失败: ${rolledBack.detail}` };
+          }
+          return { status: "already_final", detail: "tr1_ 在途 child not-executed：chain 已回滚 rearm_ready（child 代无 GRA 义务——outcome proof = final tombstone + 回滚）" };
+        }
+        // 已回滚（rearm_ready，nextChild/binding 事实保留）：同语义幂等完成。
+        if (
+          pendingChain !== undefined &&
+          pendingChain.lineageId === entry.lineageId &&
+          pendingChain.generation + 1 === entry.lineageGeneration &&
+          pendingChain.pendingBindingDigest === entry.lineageBindingDigest &&
+          pendingChain.state === "rearm_ready"
+        ) {
+          return { status: "already_final", detail: "tr1_ 在途 child not-executed 已回滚（rearm_ready——幂等）" };
+        }
+      }
       // 【Remediation IV 八.2】GRA exact outcome：删除 transactionId+digest
       // 快捷判断——已有 GRA 必须经完整三方 relation（journal ↔ final
       // tombstone ↔ proof：root identity/lineage/generation/parent/binding/
@@ -244,12 +289,19 @@ export function treasuryResolutionCleanupStageHandlers(): TreasuryResolutionClea
     // initial attempt：outcome proof = final tombstone + root lineage 的
     // retirement 三段收敛（【Remediation III 6.4】"pending-release 状态与
     // retirement facts 一致"——exact proof 冲突/缺失在 outcome 阶段即阻断，
-    // 不得等到 lineage 阶段才暴露）。
+    // 不得等到 lineage 阶段才暴露）。【Remediation V 七】root 匹配升级为
+    // rootIdentity exact 全维度比较（不再只比 currentTransactionId+state）。
     {
       const initialRoot = lookupTreasuryAttemptLineageByAttemptId(entry.transactionId);
       if (
         initialRoot !== undefined &&
         initialRoot.currentTransactionId === entry.transactionId &&
+        initialRoot.rootTransactionId === entry.transactionId &&
+        initialRoot.rootIdentity.digest === entry.digest &&
+        (initialRoot.rootIdentity.contractDigest ?? undefined) === (entry.contractDigest ?? undefined) &&
+        (initialRoot.rootIdentity.authorizationCohortDigest ?? undefined) === (entry.authorizationCohortDigest ?? undefined) &&
+        (initialRoot.rootIdentity.durableIdentityDigest ?? undefined) === (entry.durableIdentityDigest ?? undefined) &&
+        (initialRoot.rootIdentity.lowlevelSource ?? undefined) === (entry.lowlevelSource ?? undefined) &&
         initialRoot.state === "retiring"
       ) {
         const initialConverged = convergeTreasuryLineageRetirementFromFacts(initialRoot.lineageId);
@@ -266,15 +318,36 @@ export function treasuryResolutionCleanupStageHandlers(): TreasuryResolutionClea
     // not_applicable——root not-executed 与 rearm attempt 的 lineage 意外
     // 缺失必须结构化阻断；active 缺失时只有 matching terminal exact
     // summary 可证明终态；store unhealthy 零阶段推进。
+    // 【Remediation V 七】root/terminal 比较升级为完整 exact identity
+    //（rootIdentity / finalExact 全维度——不再只比 transactionId+digest）。
+    const entryIdentity = treasuryExactAttemptIdentityOfFacts(
+      entry.transactionId,
+      {
+        digest: entry.digest,
+        ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
+        ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
+        ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
+        ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
+        ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+        ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+        ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
+        ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
+      },
+      entry.proofClass === "lowlevel" ? "lowlevel" : entry.proofClass === "identity-bound" ? "identity-bound" : "legacy",
+    );
     const finalizationState = verifyTreasuryLineageFinalizationState({
       transactionId: entry.transactionId,
       ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
       ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
       resolution: entry.resolution,
       expectedDigest: entry.digest,
+      ...(entryIdentity !== null ? { expectedIdentity: entryIdentity } : {}),
     });
     if (finalizationState.state === "store_unhealthy") {
       return { status: "blocked", detail: `lineage 终态判定 store unhealthy: ${finalizationState.detail}` };
+    }
+    if (finalizationState.state === "active_identity_conflict") {
+      return { status: "blocked", detail: `root lineage 身份冲突: ${finalizationState.detail}` };
     }
     if (finalizationState.state === "terminal_final") {
       return { status: "already_final", detail: `terminal exact summary 证明 ${finalizationState.terminalState} 终态` };
@@ -305,7 +378,17 @@ export function treasuryResolutionCleanupStageHandlers(): TreasuryResolutionClea
       // 【Remediation III 八】root not-executed 的 root lineage record 处于
       // retiring 时在此收敛（原 resolutionAuthority 的 completeImmediate
       // NotExecutedRetirement 单一语义——收敛结果成为 lineage 阶段的硬门禁）。
-      if (record.currentTransactionId === entry.transactionId) {
+      // 【Remediation V 七】root 匹配升级为 rootIdentity exact 全维度比较
+      //（不再只比 currentTransactionId + state）。
+      const rootIdentityMatches =
+        record.currentTransactionId === entry.transactionId &&
+        record.rootTransactionId === entry.transactionId &&
+        record.rootIdentity.digest === entry.digest &&
+        (record.rootIdentity.contractDigest ?? undefined) === (entry.contractDigest ?? undefined) &&
+        (record.rootIdentity.authorizationCohortDigest ?? undefined) === (entry.authorizationCohortDigest ?? undefined) &&
+        (record.rootIdentity.durableIdentityDigest ?? undefined) === (entry.durableIdentityDigest ?? undefined) &&
+        (record.rootIdentity.lowlevelSource ?? undefined) === (entry.lowlevelSource ?? undefined);
+      if (rootIdentityMatches) {
         if (record.state === "retiring") {
           const rootConverged = convergeTreasuryLineageRetirementFromFacts(record.lineageId);
           if (rootConverged.status === "completed") {
@@ -317,7 +400,7 @@ export function treasuryResolutionCleanupStageHandlers(): TreasuryResolutionClea
           return { status: "already_final", detail: `root lineage ${record.state}（not-executed 终态）` };
         }
       }
-      return { status: "blocked", detail: `root lineage record 状态 ${record.state}（current ${record.currentTransactionId.slice(0, 8)}）与 root not-executed 收敛语义不符` };
+      return { status: "blocked", detail: `root lineage record 状态 ${record.state}（current ${record.currentTransactionId.slice(0, 8)}）与 root not-executed 收敛语义不符（rootIdentity exact 不匹配或状态非法）` };
     }
     // 【Remediation II D.4】lineage 阶段不信任 boolean——终态也重验 record
     // 确实处于本 attempt 的 exact 最终状态：current attempt / generation /
@@ -329,6 +412,18 @@ export function treasuryResolutionCleanupStageHandlers(): TreasuryResolutionClea
       (record.currentParentTransactionId ?? undefined) === (entry.parentTransactionId ?? undefined) &&
       (record.bindingDigest ?? undefined) === (entry.lineageBindingDigest ?? undefined);
     if (!recordMatchesEntry) {
+      // 【Remediation V 六】tr1_ 在途 child 的 not-executed 终态：child 从未
+      // 接管（current 是 parent）——record 的在途 handoff 事实（nextChild /
+      // binding / generation+1）匹配 entry 且 chain 已回滚 rearm_ready
+      //（outcome 阶段承载回滚）即 already_final；在途事实不匹配 → blocked。
+      const pendingHandoffMatches =
+        record.nextChildTransactionId === entry.transactionId &&
+        record.generation + 1 === entry.lineageGeneration &&
+        record.pendingBindingDigest === entry.lineageBindingDigest &&
+        record.state === "rearm_ready";
+      if (pendingHandoffMatches) {
+        return { status: "already_final", detail: "tr1_ 在途 child not-executed 已回滚（rearm_ready 是该 attempt 的 lineage 终态）" };
+      }
       return { status: "blocked", detail: "lineage record 与 journal entry 的当前代不一致（generation/parent/binding/current attempt 任一不匹配）" };
     }
     if (entry.resolution === "committed") {
@@ -407,4 +502,21 @@ registerTreasuryOppositeProofDepsForAssembly({
   lookupGRAProof: (transactionId: string) => lookupTreasuryGenerationRetirementProofByAttemptId(transactionId),
   graStoreHealthy: () => peekTreasuryGenerationRetirementHealth().healthy,
 });
+// 【Remediation V 八】completion replacement probes 装配（GRA / terminal
+// summary / final tombstone 的只读探测 + completion 有界枚举/删除 read-back）。
+registerTreasuryCompletionReplacementProbesForAssembly({
+  graStoreHealthy: () => peekTreasuryGenerationRetirementHealth().healthy,
+  readGRAProofByAttempt: (transactionId) => lookupTreasuryGenerationRetirementProofByAttemptId(transactionId),
+  summaryStoreHealthy: () => peekTreasuryRetirementSummaryHealth().healthy,
+  readSummaryByRoot: (rootTransactionId) => lookupTreasuryRetirementSummaryByRoot(rootTransactionId),
+  resolutionStoreHealthy: () => peekTreasuryResolutionStoreHealth().healthy,
+  readTombstone: (transactionId) => readTreasuryResolutionTombstone(transactionId),
+  listCompletionTransactionIds: () => listTreasuryCleanupCompletionTransactionIds(),
+  completionAbsentAfterRelease: (transactionId) =>
+    lookupTreasuryCleanupCompletion(transactionId).verdict === "absent",
+});
+// 【Remediation V 七】root lineage exact relation 装配（channel 注入——
+// pre-release gate 消费；未装配 gate 对现代 profile root not-executed fail
+// closed）。
+registerTreasuryRootLineageRelationForAssembly(relateTreasuryRootLineageForNotExecuted);
 assembleTreasuryResolutionCleanupCoordinator();

@@ -180,7 +180,7 @@ import {
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 import { computeTreasuryDurableIdentityDigest, treasuryDurableIdentitiesMatch } from "@/runtime/treasury/durableIdentity";
 import {
-  readTreasuryAuthorizationFaultEntry,
+  readTreasuryAuthorizationFaultEntryStructured,
   releaseTreasuryAuthorizationFaultEntry,
   treasuryAuthorizationFaultBlockers,
   writeTreasuryAuthorizationFaultEntry,
@@ -189,6 +189,11 @@ import {
   peekTreasuryAuthorizationFaultHealth,
   TREASURY_AUTHORIZATION_FAULT_MAX_ENTRIES,
 } from "@/runtime/treasury/authorizationFaults";
+import {
+  peekTreasuryCleanupCompletionHealth,
+  peekTreasuryCleanupCompletionEntryCount,
+  TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
+} from "@/runtime/treasury/cleanupCompletionAuthority";
 import {
   writeTreasuryResolutionTombstone,
   ensureTreasuryResolutionSlotAvailable,
@@ -1028,6 +1033,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     // 【第十二轮 3.1.6】fault authority 容量前置 admission：满载时阻断新
     // writer——不得等 redemption 故障发生后才发现 fault store 已满。
     authorizationFaultCapacityExhausted: () => peekTreasuryAuthorizationFaultHealth().entryCount >= TREASURY_AUTHORIZATION_FAULT_MAX_ENTRIES,
+    // 【Remediation V 八】completion store 健康与容量 headroom 前置 admission：
+    // unhealthy / 满载（无可用槽且未验证可回收）时在真实 Game callback 之前
+    // fail closed——不得等 cleanup 末尾才发现 completion 满载永久 pending。
+    completionStoreUnhealthy: () => !peekTreasuryCleanupCompletionHealth().healthy,
+    completionHeadroomExhausted: () => peekTreasuryCleanupCompletionEntryCount() >= TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
     policyNotReady: () => !treasuryPolicyAuthorityReady(),
     authorizationCapacityExhausted: () => authorizationLedger.activeCount() >= TREASURY_AUTHORIZATION_ACTIVE_LIMIT,
   };
@@ -3620,7 +3630,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           const abortedAdvance = advanceTreasuryResolutionCleanupPhases({
             transactionId: record.canonical.transactionId,
           });
-          if (abortedAdvance.status === "absent" || abortedAdvance.status === "store_unhealthy") {
+          if (
+            abortedAdvance.status === "absent" ||
+            abortedAdvance.status === "store_unhealthy" ||
+            abortedAdvance.status === "no_cleanup_authority" ||
+            abortedAdvance.status === "completion_conflict"
+          ) {
+            // 【Remediation V 四】journal absent 且无完成权威（no_cleanup_
+            // authority）/ completion 身份冲突 / store unhealthy 都是结构化
+            // 未完成——不得折叠为完成语义（completion conflict 此前会穿透
+            // 全部 pendingStage 分支伪装 complete_rearm_ready）。
             return {
               status: "executed_aborted",
               handle: prepared.handle,
@@ -3954,7 +3973,17 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // 【第十一轮 3.13.1】pre-execution authorization fault 专用恢复路由：
       // durable authority 命中时不走 capability 路径（协议已证明 Game 未
       // 执行——不需要 action reconciler）；要求显式 acknowledgeRolledBack。
-      const preExecutionFault = readTreasuryAuthorizationFaultEntry(input?.transactionId ?? "");
+      // 【Remediation V 六】structured 读取——fault store unhealthy 不得折叠
+      // 为"fault 不存在"而错走 capability 路径（fail closed 拒绝）。
+      const preExecutionFaultRead = readTreasuryAuthorizationFaultEntryStructured(input?.transactionId ?? "");
+      if (preExecutionFaultRead.status === "store_unhealthy") {
+        return {
+          status: "rejected",
+          reason: "resolution_store_fatal",
+          detail: `authorization fault store unhealthy: ${preExecutionFaultRead.detail}（不得折叠为 fault 不存在——fail closed）`,
+        };
+      }
+      const preExecutionFault = preExecutionFaultRead.status === "present" ? preExecutionFaultRead.entry : undefined;
       if (preExecutionFault !== undefined) {
         return resolutionAuthorityInternal.resolvePreExecutionAuthorizationFault(input, preExecutionFault);
       }
@@ -3963,7 +3992,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // digest 与 tombstone 一致 → already_resolved（digest 是该通道的
       // attempt identity 绑定——同 ID 新 attempt 的 contract digest 必然
       // 不同，不匹配即拒绝）。
-      if (preExecutionFault === undefined && input?.acknowledgeRolledBack === true && input.digest !== undefined) {
+      if (preExecutionFaultRead.status === "absent" && input?.acknowledgeRolledBack === true && input.digest !== undefined) {
         const resolvedTombstone = readTreasuryResolutionTombstone(input.transactionId ?? "");
         if (
           resolvedTombstone !== undefined &&
@@ -3978,7 +4007,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // 【第十二轮 3.1.7】forensic marker（authority 写入失败的兜底）专用通道。
       const forensicMarker = readTreasuryWriteFault();
       if (
-        preExecutionFault === undefined &&
+        preExecutionFaultRead.status === "absent" &&
         forensicMarker !== undefined &&
         forensicMarker.transactionId === input?.transactionId &&
         forensicMarker.phase === "internal_authorization_fault_forensic"

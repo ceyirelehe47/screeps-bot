@@ -29,12 +29,24 @@
 import { registerTreasuryResolutionCleanupResetHook } from "@/runtime/treasury/receipts";
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
+import {
+  TREASURY_IDENTITY_PROFILES,
+  treasuryProofClassOfIdentityProfile,
+  validateTreasuryIdentityProfileFacts,
+  type TreasuryIdentityProfile,
+} from "@/runtime/treasury/identityProfile";
+import {
+  treasuryExactAttemptIdentityOfFacts,
+  treasuryExactAttemptIdentityRelation,
+  type TreasuryExactAttemptIdentity,
+} from "@/runtime/treasury/exactAttemptIdentity";
 import type { TreasuryResolutionCleanupEntry } from "@/runtime/treasury/resolutionCleanupJournal";
-import type { TreasuryExactAttemptIdentity } from "@/runtime/treasury/exactAttemptIdentity";
 
 export const TREASURY_CLEANUP_COMPLETION_VERSION = 1;
 export const TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES = 128;
 const COMPLETION_KEY_PREFIX = "cc:";
+/** digest 维度字段格式（与 authorizationFaults/lineage 的 16hex 同口径）。 */
+const COMPLETION_DIGEST_PATTERN = /^[0-9a-f]{16}$/;
 
 /**
  * 单 attempt cleanup 完成的持久证明（journal 删除后的唯一完成权威）。
@@ -120,11 +132,44 @@ function validateCompletionProofShape(proof: unknown, key: string): string | nul
   }
   const identity = candidate.identity;
   if (!identity || typeof identity !== "object") return `completion proof ${key.slice(0, 11)} identity 非对象`;
+  // 【Remediation V 五.2】digest 维度字段格式（16hex——与 fault/lineage 同
+  // 口径；格式非法 = 损坏，不折叠为 absent）。
+  for (const field of ["digest", "contractDigest", "authorizationCohortDigest", "durableIdentityDigest"] as const) {
+    const value = identity[field];
+    if (value !== undefined && (typeof value !== "string" || !COMPLETION_DIGEST_PATTERN.test(value))) {
+      return `completion proof ${key.slice(0, 11)} identity.${field} 非法（须 16 小写 hex）`;
+    }
+  }
   if (typeof identity.digest !== "string" || identity.digest.length === 0) {
     return `completion proof ${key.slice(0, 11)} identity.digest 非法`;
   }
   if (typeof identity.proofClass !== "string" || identity.proofClass.length === 0) {
     return `completion proof ${key.slice(0, 11)} identity.proofClass 非法`;
+  }
+  // 【Remediation V 五.2】completion exact relation 的单一语义源（与 journal
+  // validateCleanupEntryIdentity 同强度）：profile 枚举 + profile↔proofClass
+  // 唯一映射 + required/forbidden 矩阵——completion 不再接受"字段是非空字符
+  // 串"的自我授权形状。
+  if (typeof identity.identityProfile !== "string" || !TREASURY_IDENTITY_PROFILES.has(identity.identityProfile)) {
+    return `completion proof ${key.slice(0, 11)} identity.identityProfile 非法枚举: ${String(identity.identityProfile).slice(0, 32)}`;
+  }
+  if (treasuryProofClassOfIdentityProfile(identity.identityProfile as TreasuryIdentityProfile) !== identity.proofClass) {
+    return `completion proof ${key.slice(0, 11)} identityProfile 与 proofClass 不满足唯一合法组合（${identity.identityProfile} vs ${identity.proofClass}）`;
+  }
+  const profileError = validateTreasuryIdentityProfileFacts(identity.identityProfile as TreasuryIdentityProfile, {
+    digest: identity.digest,
+    contractDigest: identity.contractDigest,
+    authorizationCohortDigest: identity.authorizationCohortDigest,
+    durableIdentityDigest: identity.durableIdentityDigest,
+    lowlevelSource: identity.lowlevelSource,
+  });
+  if (profileError !== null) {
+    return `completion proof ${key.slice(0, 11)} ${profileError}`;
+  }
+  // lineage 四字段整体性 + tr1_/initial 携带矩阵（exact identity 构造层单一
+  // 权威——部分携带 / tr1_ 缺字段 / initial 错带全部拒绝）。
+  if (completionExactIdentityOfProof(proof as TreasuryCleanupCompletionProof) === null) {
+    return `completion proof ${key.slice(0, 11)} 身份无法构造 exact identity（lineage 四字段整体性 / tr1_ 携带矩阵失败）`;
   }
   if (
     candidate.settlementProofVerified !== true ||
@@ -145,6 +190,33 @@ function validateCompletionProofShape(proof: unknown, key: string): string | nul
     return `completion proof ${key.slice(0, 11)} completedAtTick 非法`;
   }
   return null;
+}
+
+/**
+ * 【Remediation V 五.2】completion proof → exact attempt identity（单一构造
+ * 口径——与 journal entry 的 treasuryPreReleaseExactIdentityOfEntry 同源；
+ * lineage 四字段整体性与 tr1_/initial 携带矩阵由构造层承载，非法形状返回
+ * null）。
+ */
+export function completionExactIdentityOfProof(
+  proof: Pick<TreasuryCleanupCompletionProof, "transactionId" | "identity">,
+): TreasuryExactAttemptIdentity | null {
+  const identity = proof.identity;
+  return treasuryExactAttemptIdentityOfFacts(
+    proof.transactionId,
+    {
+      digest: identity.digest,
+      ...(identity.contractDigest !== undefined ? { contractDigest: identity.contractDigest } : {}),
+      ...(identity.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: identity.authorizationCohortDigest } : {}),
+      ...(identity.durableIdentityDigest !== undefined ? { durableIdentityDigest: identity.durableIdentityDigest } : {}),
+      ...(identity.lowlevelSource !== undefined ? { lowlevelSource: identity.lowlevelSource } : {}),
+      ...(identity.lineageId !== undefined ? { lineageId: identity.lineageId } : {}),
+      ...(identity.lineageGeneration !== undefined ? { lineageGeneration: identity.lineageGeneration } : {}),
+      ...(identity.parentTransactionId !== undefined ? { parentTransactionId: identity.parentTransactionId } : {}),
+      ...(identity.lineageBindingDigest !== undefined ? { lineageBindingDigest: identity.lineageBindingDigest } : {}),
+    },
+    identity.proofClass === "lowlevel" ? "lowlevel" : identity.proofClass === "identity-bound" ? "identity-bound" : "legacy",
+  );
 }
 
 function validateCompletionStoreShape(store: unknown): string | null {
@@ -318,16 +390,35 @@ export function recordTreasuryCleanupCompletion(input: {
     runtime.store.entryCount -= 1;
     return { status: "rejected", detail: `completion read-back 失败: ${readBackError}（已回滚，journal 保留）` };
   }
+  // 【Remediation V 五.2】read-back 比较全部不可变身份维度与必要完成事实
+  //（不再只比 digest/proofClass/lineageId/lineageDisposition/transactionId
+  // 五项——contract/cohort/durable/lowlevel/generation/parent/binding/
+  // identityProfile 任一被篡改都必须失败回滚）。
+  const readBackProof = readBack as TreasuryCleanupCompletionProof;
   const readBackIdentityEqual =
-    (readBack as TreasuryCleanupCompletionProof).identity.digest === candidate.identity.digest &&
-    (readBack as TreasuryCleanupCompletionProof).identity.proofClass === candidate.identity.proofClass &&
-    (readBack as TreasuryCleanupCompletionProof).identity.lineageId === candidate.identity.lineageId &&
-    (readBack as TreasuryCleanupCompletionProof).lineageDisposition === candidate.lineageDisposition &&
-    (readBack as TreasuryCleanupCompletionProof).transactionId === candidate.transactionId;
+    readBackProof.transactionId === candidate.transactionId &&
+    readBackProof.resolution === candidate.resolution &&
+    readBackProof.identity.digest === candidate.identity.digest &&
+    readBackProof.identity.identityProfile === candidate.identity.identityProfile &&
+    readBackProof.identity.proofClass === candidate.identity.proofClass &&
+    (readBackProof.identity.contractDigest ?? undefined) === (candidate.identity.contractDigest ?? undefined) &&
+    (readBackProof.identity.authorizationCohortDigest ?? undefined) === (candidate.identity.authorizationCohortDigest ?? undefined) &&
+    (readBackProof.identity.durableIdentityDigest ?? undefined) === (candidate.identity.durableIdentityDigest ?? undefined) &&
+    (readBackProof.identity.lowlevelSource ?? undefined) === (candidate.identity.lowlevelSource ?? undefined) &&
+    (readBackProof.identity.lineageId ?? undefined) === (candidate.identity.lineageId ?? undefined) &&
+    (readBackProof.identity.lineageGeneration ?? undefined) === (candidate.identity.lineageGeneration ?? undefined) &&
+    (readBackProof.identity.parentTransactionId ?? undefined) === (candidate.identity.parentTransactionId ?? undefined) &&
+    (readBackProof.identity.lineageBindingDigest ?? undefined) === (candidate.identity.lineageBindingDigest ?? undefined) &&
+    readBackProof.lineageDisposition === candidate.lineageDisposition &&
+    readBackProof.settlementProofVerified === true &&
+    readBackProof.markerDischarged === true &&
+    readBackProof.authorityAbsentConfirmed === true &&
+    readBackProof.outcomeFinal === true &&
+    readBackProof.lineageFinalOrNotApplicable === true;
   if (!readBackIdentityEqual) {
     delete runtime.store.entries[key];
     runtime.store.entryCount -= 1;
-    return { status: "rejected", detail: "completion read-back 身份不一致（已回滚，journal 保留）" };
+    return { status: "rejected", detail: "completion read-back 身份或完成事实不一致（已回滚，journal 保留）" };
   }
   return { status: "written" };
 }
@@ -342,7 +433,9 @@ export type TreasuryCleanupCompletionLookup =
  * journal absent 时的完成判定（单 key O(1)）：completion 存在且与调用方
  * expected identity 完整 match → match；不存在 → absent（no_cleanup_
  * authority——不得折叠为 completed）；身份不一致 → conflict（fail closed）。
- * expected 未提供时（无 journal 可对照的幂等重入）proof 自身为持久权威。
+ * expected 未提供时（无 journal 可对照的幂等重入）proof 自身为持久权威——
+ * 但 shape 校验（load 时全表 + 此处单条复验）保证完整 profile/lineage 矩阵，
+ * 不存在"仅字段非空即自我授权"。
  */
 export function lookupTreasuryCleanupCompletion(
   transactionId: string,
@@ -354,34 +447,49 @@ export function lookupTreasuryCleanupCompletion(
   }
   const proof = runtime.store.entries[COMPLETION_KEY_PREFIX + transactionId];
   if (proof === undefined) return { verdict: "absent" };
+  // 防御性单条复验（heap store 与 Memory 同对象——手工篡改在 load 后发生时
+  // 由此拦截，不得以损坏形状判 match）。
+  const shapeError = validateCompletionProofShape(proof, COMPLETION_KEY_PREFIX + transactionId);
+  if (shapeError !== null) {
+    return { verdict: "store_unhealthy", detail: `completion proof 损坏: ${shapeError}` };
+  }
   if (expected !== undefined) {
-    const identity = proof.identity;
-    const same =
-      proof.transactionId === expected.transactionId &&
-      identity.digest === expected.digest &&
-      identity.proofClass === expected.proofClass &&
-      (identity.contractDigest ?? undefined) === (expected.contractDigest ?? undefined) &&
-      (identity.authorizationCohortDigest ?? undefined) === (expected.authorizationCohortDigest ?? undefined) &&
-      (identity.durableIdentityDigest ?? undefined) === (expected.durableIdentityDigest ?? undefined) &&
-      (identity.lowlevelSource ?? undefined) === (expected.lowlevelSource ?? undefined) &&
-      (identity.lineageId ?? undefined) === (expected.lineageId ?? undefined) &&
-      (identity.lineageGeneration ?? undefined) === (expected.lineageGeneration ?? undefined) &&
-      (identity.parentTransactionId ?? undefined) === (expected.parentTransactionId ?? undefined) &&
-      (identity.lineageBindingDigest ?? undefined) === (expected.lineageBindingDigest ?? undefined);
-    if (!same) {
+    // 【Remediation V 五.2】expected 比较完整 exact relation（单一构造层 +
+    // 对称 relation——含 contract/cohort/durable/lowlevel/lineage 四字段；
+    // proofClass 经 relation 比较，identityProfile 由 profile↔class 唯一映射
+    // 传递保证）+ settlement resolution 维度。
+    const proofExact = completionExactIdentityOfProof(proof);
+    if (proofExact === null) {
+      return { verdict: "store_unhealthy", detail: "completion proof 身份无法构造 exact identity（shape 校验后仍失败——防御）" };
+    }
+    const relation = treasuryExactAttemptIdentityRelation(proofExact, expected);
+    if (relation !== "match") {
       return {
         verdict: "conflict",
-        detail: `completion proof 身份与 expected 不一致（digest ${identity.digest.slice(0, 8)} vs ${expected.digest.slice(0, 8)} 等——不得视为已完成）`,
+        detail: `completion proof 身份与 expected ${relation}（digest ${proof.identity.digest.slice(0, 8)} vs ${expected.digest.slice(0, 8)} 等——不得视为已完成）`,
       };
     }
   }
   return { verdict: "match", proof: treasuryBoundedDeepFreezeSnapshot(proof) as TreasuryCleanupCompletionProof };
 }
 
-/** 【诊断/测试】当前 store entry 数（容量观测）。 */
+/** 【诊断/测试】当前 store entry 数（容量观测——只读：store 不存在 = 0，不隐式创建）。 */
 export function peekTreasuryCleanupCompletionEntryCount(): number {
+  const raw = (Memory.runtime as unknown as RuntimeMemoryWithCompletions | undefined)?.treasury?.cleanupCompletions;
+  if (raw === undefined) return 0;
+  const keys = raw && typeof raw === "object" ? Object.keys(raw.entries ?? {}) : [];
+  return keys.length > TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES ? -1 : keys.length;
+}
+
+/**
+ * 【Remediation V 八】bounded 枚举当前 completion 的全部 transactionId
+ * （≤硬容量；replacement 模块的 headroom 回收扫描用——不进入 normal 查询
+ * 路径）。fatal store → 空数组（调用方按 unhealthy fail closed）。
+ */
+export function listTreasuryCleanupCompletionTransactionIds(): readonly string[] {
   const runtime = loadCompletionRuntime();
-  return runtime.fatal !== null ? -1 : runtime.store.entryCount;
+  if (runtime.fatal !== null) return [];
+  return Object.keys(runtime.store.entries).map((key) => key.slice(COMPLETION_KEY_PREFIX.length));
 }
 
 /**

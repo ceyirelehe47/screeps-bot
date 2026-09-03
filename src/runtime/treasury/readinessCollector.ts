@@ -33,6 +33,9 @@ export interface TreasuryReadinessStateSources {
   readonly authorizationFaultUnresolved: () => boolean;
   /** 【第十二轮 3.1.6】fault authority 容量前置 admission（满载阻断新 writer）。 */
   readonly authorizationFaultCapacityExhausted: () => boolean;
+  /** 【Remediation V 八】completion store 健康与容量 headroom 前置 admission。 */
+  readonly completionStoreUnhealthy: () => boolean;
+  readonly completionHeadroomExhausted: () => boolean;
   readonly policyNotReady: () => boolean;
   readonly authorizationCapacityExhausted: () => boolean;
 }
@@ -66,6 +69,8 @@ export function collectTreasuryWriteReadinessInputs(
     recoverySlotExhausted: sources.recoverySlotExhausted(),
     authorizationFaultUnresolved: sources.authorizationFaultUnresolved(),
     authorizationFaultCapacityExhausted: sources.authorizationFaultCapacityExhausted(),
+    completionStoreUnhealthy: sources.completionStoreUnhealthy(),
+    completionHeadroomExhausted: sources.completionHeadroomExhausted(),
     ...(overrides?.policyNotReady !== undefined ? { policyNotReady: overrides.policyNotReady } : { policyNotReady: sources.policyNotReady() }),
     authorizationCapacityExhausted: sources.authorizationCapacityExhausted(),
   };

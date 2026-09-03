@@ -67,6 +67,8 @@ import {
 } from "@/runtime/treasury/generationRetirementAuthority";
 import { registerTreasurySemanticSummarySourceForAssembly } from "@/runtime/treasury/semanticLineageValidation";
 import { registerTreasurySettlementSummaryHealthSourceForAssembly, verifyTreasuryOppositeProofAbsence } from "@/runtime/treasury/currentSettlementCoordinator";
+import { releaseTreasuryCleanupCompletionOfAttempt } from "@/runtime/treasury/cleanupCompletionAuthority";
+import { verifyTreasuryCleanupCompletionSupersession } from "@/runtime/treasury/cleanupCompletionReplacement";
 
 /**
  * 【第二十一轮 7】summary v3：持久化 root / final exact identity（exact
@@ -754,6 +756,22 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
     void generation;
     return readTreasuryResolutionTombstone(proof.transactionId) !== undefined;
   });
+  // ──【Remediation V 八】summary 已完整写入、read-back、exact 验证 →
+  //    final/root attempt 的 completion proof 可安全回收（summary 成为
+  //    chain 级可查询 replacement）；supersession 未成立（conflict/
+  //    unhealthy）时 completion 保留（fail closed——不影响压缩本身）。
+  {
+    const summaryReplacement = verifyTreasuryCleanupCompletionSupersession(currentId);
+    if (summaryReplacement.verdict === "superseded") {
+      releaseTreasuryCleanupCompletionOfAttempt(currentId);
+    }
+    if (record.rootTransactionId !== currentId) {
+      const rootReplacement = verifyTreasuryCleanupCompletionSupersession(record.rootTransactionId);
+      if (rootReplacement.verdict === "superseded") {
+        releaseTreasuryCleanupCompletionOfAttempt(record.rootTransactionId);
+      }
+    }
+  }
   retirementSummaryEvents.compactions += 1;
   return { status: "compacted" };
 }

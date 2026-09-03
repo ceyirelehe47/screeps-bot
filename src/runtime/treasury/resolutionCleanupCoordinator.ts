@@ -43,6 +43,7 @@ import {
 import { acknowledgeTreasuryCleanupSettlementProof } from "@/runtime/treasury/settlementProofActivation";
 import { gateTreasuryPreReleaseSettlement } from "@/runtime/treasury/preReleaseSettlementGate";
 import { lookupTreasuryCleanupCompletion, peekTreasuryCleanupCompletionHealth } from "@/runtime/treasury/cleanupCompletionAuthority";
+import { verifyTreasuryCleanupCompletionSupersession } from "@/runtime/treasury/cleanupCompletionReplacement";
 
 export type TreasuryCleanupPendingStage =
   | "proof_activation"
@@ -64,13 +65,37 @@ export interface TreasuryCleanupPhases {
 }
 
 export interface TreasuryCleanupAdvanceResult {
-  readonly status: "completed" | "pending" | "absent" | "store_unhealthy";
+  readonly status:
+    | "completed"
+    | "pending"
+    | "absent"
+    | "store_unhealthy"
+    /** 【Remediation V 四】journal absent 且无任何完成权威（completion/replacement 均不成立）——明确未证明状态，不得映射为 fully_complete。 */
+    | "no_cleanup_authority"
+    /** 【Remediation V 四】journal absent 且 completion/replacement authority 身份冲突——结构化 fail closed。 */
+    | "completion_conflict";
   readonly pendingStage: TreasuryCleanupPendingStage;
   readonly detail: string;
   readonly phases: TreasuryCleanupPhases;
   /** marker ack 已执行时的全局 write admission 锁事实（未执行 = unknown）。 */
   readonly globalWriteAdmissionStillLocked: boolean;
   readonly globalWriteAdmissionLockedKnown: boolean;
+}
+
+/**
+ * 【Remediation V 四】无 journal entry 时的 phases 语义：只有 completion
+ * authority（或 replacement authority）已验证成立才能表达"全阶段完成"；
+ * 无权威时全部阶段为未证明（false）——不得把五个阶段伪造成 true。
+ */
+function unprovenPhases(journalEntryAbsent: boolean): TreasuryCleanupPhases {
+  return {
+    settlementProofDurable: false,
+    markerDischarged: false,
+    authorityReleased: false,
+    outcomeFinalized: false,
+    lineageFinalized: false,
+    journalEntryAbsent,
+  };
 }
 
 function phasesOfEntry(entry: Readonly<TreasuryResolutionCleanupEntry> | undefined, journalEntryAbsent: boolean): TreasuryCleanupPhases {
@@ -100,12 +125,14 @@ function pendingResult(
   entry: Readonly<TreasuryResolutionCleanupEntry> | undefined,
   journalEntryAbsent: boolean,
   status: TreasuryCleanupAdvanceResult["status"] = "pending",
+  /** 【Remediation V 四】无权威时 phases 表达未证明（不得伪造成 true）。 */
+  unproven = false,
 ): TreasuryCleanupAdvanceResult {
   return {
     status,
     pendingStage,
     detail,
-    phases: phasesOfEntry(entry, journalEntryAbsent),
+    phases: unproven ? unprovenPhases(journalEntryAbsent) : phasesOfEntry(entry, journalEntryAbsent),
     globalWriteAdmissionStillLocked: false,
     globalWriteAdmissionLockedKnown: false,
   };
@@ -134,7 +161,14 @@ export function advanceTreasuryResolutionCleanupPhases(input: {
     if (journalEntryAbsent) {
       const completionHealth = peekTreasuryCleanupCompletionHealth();
       if (!completionHealth.healthy) {
-        return pendingResult("none", `completion authority store unhealthy: ${completionHealth.detail}`, undefined, false, "store_unhealthy");
+        return pendingResult(
+          "none",
+          `completion authority store unhealthy: ${completionHealth.detail}`,
+          undefined,
+          false,
+          "store_unhealthy",
+          true,
+        );
       }
       const completion = lookupTreasuryCleanupCompletion(input.transactionId, input.expectedIdentity);
       if (completion.verdict === "match") {
@@ -143,14 +177,57 @@ export function advanceTreasuryResolutionCleanupPhases(input: {
           pendingStage: "none",
           detail: "cleanup entry 不存在且 matching completion authority 存在（幂等——journal 删除已由 completion 证明）",
           phases: phasesOfEntry(undefined, true),
-          globalWriteAdmissionStillLocked: false,
-          globalWriteAdmissionLockedKnown: false,
+          globalWriteAdmissionStillLocked: completion.proof.globalWriteAdmissionStillLocked,
+          globalWriteAdmissionLockedKnown: true,
         };
       }
       if (completion.verdict === "absent") {
-        return pendingResult("none", "no_cleanup_authority：journal entry 不存在且无 completion authority（不得视为已完成）", undefined, true, "absent");
+        // 【Remediation V 八】completion absent 不直接终结：先验证持久
+        // replacement authority（GRA proof / terminal summary / final
+        // tombstone——被安全回收的 completion 由更高层权威持续证明完成）；
+        // superseded = completed（可查询 replacement 成立），否则
+        // no_cleanup_authority（完成未证明——不得折叠为已完成）。
+        const supersession = verifyTreasuryCleanupCompletionSupersession(input.transactionId);
+        if (supersession.verdict === "superseded") {
+          return {
+            status: "completed",
+            pendingStage: "none",
+            detail: `cleanup entry 不存在但完成事实被 replacement authority 持续证明（${supersession.via}: ${supersession.detail}）`,
+            phases: phasesOfEntry(undefined, true),
+            globalWriteAdmissionStillLocked: false,
+            globalWriteAdmissionLockedKnown: false,
+          };
+        }
+        if (supersession.verdict === "store_unhealthy") {
+          return pendingResult(
+            "none",
+            `replacement authority store unhealthy: ${supersession.detail}`,
+            undefined,
+            true,
+            "store_unhealthy",
+            true,
+          );
+        }
+        return pendingResult(
+          "none",
+          "no_cleanup_authority：journal entry 不存在且无 completion/replacement authority（完成未证明——不得视为已完成）",
+          undefined,
+          true,
+          "no_cleanup_authority",
+          true,
+        );
       }
-      return pendingResult("none", `completion authority ${completion.verdict}: ${completion.detail}`, undefined, false);
+      if (completion.verdict === "conflict") {
+        return pendingResult(
+          "none",
+          `completion authority conflict: ${completion.detail}`,
+          undefined,
+          false,
+          "completion_conflict",
+          true,
+        );
+      }
+      return pendingResult("none", `completion authority ${completion.verdict}: ${completion.detail}`, undefined, false, "store_unhealthy", true);
     }
     return pendingResult("none", "cleanup entry 读取失败（store unhealthy）", undefined, false, "store_unhealthy");
   }
@@ -260,7 +337,13 @@ export type TreasuryCleanupProgressStage =
   | "authority_pending"
   | "outcome_pending"
   | "lineage_pending"
-  | "journal_completion_pending";
+  | "journal_completion_pending"
+  /** 【Remediation V 四】journal absent 且无完成权威——完成未证明（不得折叠为 fully_complete）。 */
+  | "no_cleanup_authority"
+  /** 【Remediation V 四】completion/replacement authority 身份冲突——fail closed 待人工/恢复处理。 */
+  | "cleanup_conflict"
+  /** 【Remediation V 四】completion/journal store unhealthy——fail closed。 */
+  | "cleanup_store_unhealthy";
 
 export interface TreasuryCleanupStatusReport {
   readonly settlement: "committed" | "not-executed";
@@ -269,7 +352,13 @@ export interface TreasuryCleanupStatusReport {
   readonly globalWriteAdmissionStillLocked: boolean;
 }
 
-/** advance 结果 → API 完成状态报告（pendingStage 与 stage 一一映射）。 */
+/**
+ * advance 结果 → API 完成状态报告。【Remediation V 四】fully_complete 当且
+ * 仅当 advance.status === "completed"（本次完成全部阶段并删除 journal，或
+ * journal absent 且 matching completion authority 已完整验证）；
+ * no_cleanup_authority / completion_conflict / store_unhealthy 各自保持结构化
+ * 语义——pendingStage 的 none 不再等价于 fully_complete。
+ */
 export function treasuryCleanupStatusOfAdvance(
   settlement: "committed" | "not-executed",
   advance: TreasuryCleanupAdvanceResult,
@@ -283,6 +372,18 @@ export function treasuryCleanupStatusOfAdvance(
     lineage_finalization: "lineage_pending",
     journal_completion: "journal_completion_pending",
   };
+  if (advance.status === "no_cleanup_authority") {
+    return { settlement, stage: "no_cleanup_authority", globalWriteAdmissionStillLocked: advance.globalWriteAdmissionStillLocked };
+  }
+  if (advance.status === "completion_conflict") {
+    return { settlement, stage: "cleanup_conflict", globalWriteAdmissionStillLocked: advance.globalWriteAdmissionStillLocked };
+  }
+  if (advance.status === "store_unhealthy") {
+    return { settlement, stage: "cleanup_store_unhealthy", globalWriteAdmissionStillLocked: advance.globalWriteAdmissionStillLocked };
+  }
+  if (advance.status === "absent") {
+    return { settlement, stage: "no_cleanup_authority", globalWriteAdmissionStillLocked: advance.globalWriteAdmissionStillLocked };
+  }
   return {
     settlement,
     stage: advance.status === "completed" ? "fully_complete" : stageOf[advance.pendingStage],

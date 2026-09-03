@@ -121,11 +121,11 @@ function seedFinalNotExecutedTombstone(transactionId: string, durable: string, o
 }
 
 function seedRootLineage(transactionId: string, durable: string): void {
-  const { createTreasuryAttemptLineageRecord, convergeTreasuryLineageRetirementFromFacts } =
+  const { createTreasuryAttemptLineageRecord } =
     jest.requireActual("@/runtime/treasury/attemptLineage") as typeof import("@/runtime/treasury/attemptLineage");
   const created = createTreasuryAttemptLineageRecord({
     rootTransactionId: transactionId,
-    rootIdentity: { digest: DIGEST, durableIdentityDigest: durable },
+    rootIdentity: { digest: DIGEST, durableIdentityDigest: durable, lowlevelSource: RUNTIME },
     actionKind: "terminal.send",
     authorityClass: "lowlevel",
     lowlevelSource: RUNTIME,
@@ -135,7 +135,13 @@ function seedRootLineage(transactionId: string, durable: string): void {
   });
   expect(created.status).toBe("written");
   if (created.status === "rejected") throw new Error("seed rejected");
-  expect(convergeTreasuryLineageRetirementFromFacts(created.record.lineageId).status).toBe("completed");
+  // retiring 即满足 root exact relation（rearm_ready/non_rearmable 由 cleanup 阶段收敛）。
+}
+
+/** 【Remediation V 九】open 恒 reservation——手工构造"已激活"fixture（activation 权威的等价模拟）。 */
+function activateEntryForFixture(transactionId: string): void {
+  const store = (Memory.runtime as unknown as { treasury?: { resolutionCleanup?: { entries?: Record<string, { settlementProofDurable?: boolean }> } } }).treasury?.resolutionCleanup;
+  store!.entries!["c:" + transactionId]!.settlementProofDurable = true;
 }
 
 function openNotExecutedEntry(transactionId: string, durable: string, extra: Record<string, unknown> = {}): TreasuryResolutionCleanupEntry {
@@ -310,6 +316,7 @@ describe("Remediation IV 1：authority exact discharge（journal ↔ 当前 Auth
     const faultDurable = readTreasuryAuthorizationFaultEntry("iv_tx3")?.durableIdentityDigest as string;
     // journal 用不同的 durable（身份 B——同 digest 不同 durable identity）。
     seedFinalNotExecutedTombstone("iv_tx3", "bbbbbbbbbbbbbbbb");
+    seedRootLineage("iv_tx3", "bbbbbbbbbbbbbbbb");
     const entry = openNotExecutedEntry("iv_tx3", "bbbbbbbbbbbbbbbb");
     expect(gateTreasuryPreReleaseSettlement(entry).status).toBe("authority_conflict");
     expect(readTreasuryAuthorizationFaultEntry("iv_tx3")).toBeDefined();
@@ -357,6 +364,7 @@ describe("Remediation IV 1：authority exact discharge（journal ↔ 当前 Auth
     expect(fault.status).toBe("written");
     const durable = readTreasuryAuthorizationFaultEntry("iv_tx4")?.durableIdentityDigest as string;
     seedFinalNotExecutedTombstone("iv_tx4", durable);
+    seedRootLineage("iv_tx4", durable);
     openNotExecutedEntry("iv_tx4", durable);
     // marker 未 ack + authority(fault) 在场但 marker absent → gate verified
     //（fault source）→ marker ack → authority release（fault 释放 read-back）。
@@ -373,6 +381,7 @@ describe("Remediation IV 1：authority exact discharge（journal ↔ 当前 Auth
     openNotExecutedEntry("iv_tx5", durable);
     // 按生产安全顺序先 ack marker（marker 本不存在——already_absent 完成语义）。
     seedRootLineage("iv_tx5", durable);
+    activateEntryForFixture("iv_tx5");
     expect(markTreasuryResolutionCleanupStage("iv_tx5", "marker_discharge", "already_absent")).toBe(true);
     const entry = readTreasuryResolutionCleanupEntry("iv_tx5")!;
     expect(gateTreasuryPreReleaseSettlement(entry).status).toBe("authority_absent_recoverable");
@@ -384,6 +393,7 @@ describe("Remediation IV 1：authority exact discharge（journal ↔ 当前 Auth
   it("authority absent 但 marker 仍存在 → 顺序破坏：unexpected（最后一把锁不得因 absent 被清除）", () => {
     const durable = seedQuarantine("iv_tx6");
     seedFinalNotExecutedTombstone("iv_tx6", durable);
+    seedRootLineage("iv_tx6", durable);
     releaseTreasuryQuarantineEntry("iv_tx6");
     releaseTreasuryIntentEntry("iv_tx6");
     openNotExecutedEntry("iv_tx6", durable);
@@ -602,11 +612,14 @@ describe("Remediation IV 4：lineage finalization 区分 active / terminal / mis
     releaseTreasuryQuarantineEntry("iv_l1");
     releaseTreasuryIntentEntry("iv_l1");
     openNotExecutedEntry("iv_l1", durable);
+    activateEntryForFixture("iv_l1");
     expect(markTreasuryResolutionCleanupStage("iv_l1", "marker_discharge", "already_absent")).toBe(true);
     expect(markTreasuryResolutionCleanupStage("iv_l1", "authority_release")).toBe(true);
     const advance = advanceTreasuryResolutionCleanupPhases({ transactionId: "iv_l1" });
-    expect(advance.pendingStage).toBe("lineage_finalization");
-    expect(advance.detail).toContain("不得 not_applicable");
+    // 【Remediation V 七】root exact relation 前移到 pre-release gate——
+    // marker discharge 之前即阻断（不再等到 lineage 阶段）。
+    expect(advance.pendingStage).toBe("marker_discharge");
+    expect(advance.detail).toContain("root");
     expect(readTreasuryResolutionCleanupEntry("iv_l1")).toBeDefined();
   });
 
@@ -624,8 +637,10 @@ describe("Remediation IV 4：lineage finalization 区分 active / terminal / mis
 describe("Remediation IV 5：cleanup completion authority（journal absent ≠ completed）", () => {
   it("journal absent + completion absent → no_cleanup_authority（不得 completed）", () => {
     const advance = advanceTreasuryResolutionCleanupPhases({ transactionId: "iv_c1" });
-    expect(advance.status).toBe("absent");
+    // 【Remediation V 四】no_cleanup_authority 升级为独立 status（不折叠 absent）。
+    expect(advance.status).toBe("no_cleanup_authority");
     expect(advance.detail).toContain("no_cleanup_authority");
+    expect(advance.phases.markerDischarged).toBe(false);
   });
 
   it("journal absent + matching completion → completed（global reset 后幂等识别）", () => {
@@ -634,6 +649,7 @@ describe("Remediation IV 5：cleanup completion authority（journal absent ≠ c
     releaseTreasuryQuarantineEntry("iv_c2");
     releaseTreasuryIntentEntry("iv_c2");
     openNotExecutedEntry("iv_c2", durable);
+    activateEntryForFixture("iv_c2");
     expect(markTreasuryResolutionCleanupStage("iv_c2", "marker_discharge", "already_absent")).toBe(true);
     // 完整推进（root lineage 由 publication 语义补——此处经 advance 的
     // outcome/lineage 阶段：root not-executed 无 lineage record 会 blocked，
@@ -642,7 +658,7 @@ describe("Remediation IV 5：cleanup completion authority（journal absent ≠ c
       jest.requireActual("@/runtime/treasury/attemptLineage") as typeof import("@/runtime/treasury/attemptLineage");
     const created = createTreasuryAttemptLineageRecord({
       rootTransactionId: "iv_c2",
-      rootIdentity: { digest: DIGEST, durableIdentityDigest: durable },
+      rootIdentity: { digest: DIGEST, durableIdentityDigest: durable, lowlevelSource: RUNTIME },
       actionKind: "terminal.send",
       authorityClass: "lowlevel",
       lowlevelSource: RUNTIME,
@@ -681,6 +697,7 @@ describe("Remediation IV 5：cleanup completion authority（journal absent ≠ c
     // 写入一个 identity 不同的 completion（模拟另一 attempt 的旧 proof——
     // 同 id 不同 digest 不可能经 record 写入；直接构造 lookup 的 expected
     // 冲突视角）。
+    activateEntryForFixture("iv_c3");
     expect(markTreasuryResolutionCleanupStage("iv_c3", "marker_discharge", "already_absent")).toBe(true);
     expect(markTreasuryResolutionCleanupStage("iv_c3", "authority_release")).toBe(true);
     expect(markTreasuryResolutionCleanupStage("iv_c3", "outcome_finalization")).toBe(true);
@@ -710,7 +727,7 @@ describe("Remediation IV 5：cleanup completion authority（journal absent ≠ c
         schemaVersion: 1,
         transactionId: `iv_full_${i}`,
         resolution: "not-executed",
-        identity: { digest: DIGEST, identityProfile: "lowlevel", proofClass: "lowlevel" },
+        identity: { digest: DIGEST, identityProfile: "lowlevel", proofClass: "lowlevel", durableIdentityDigest: "eeeeeeeeeeee" + String(i).padStart(4, "0"), lowlevelSource: RUNTIME },
         settlementProofVerified: true,
         markerDischarged: true,
         authorityAbsentConfirmed: true,
@@ -779,7 +796,6 @@ describe("Remediation IV 6：journal open 只做 admission（无自动激活旁�
       resolution: "not-executed",
       identityProfile: "legacy-replay",
       proofClass: "legacy",
-      proofMode: "reservation",
     });
     expect(opened.status).toBe("opened");
     const reopen = openTreasuryResolutionCleanup({
@@ -802,7 +818,6 @@ describe("Remediation IV 6：journal open 只做 admission（无自动激活旁�
       proofClass: "lowlevel",
       lowlevelSource: RUNTIME,
       durableIdentityDigest: "cccccccccccccccc",
-      proofMode: "reservation",
     });
     seedFinalNotExecutedTombstone("iv_o4", "cccccccccccccccc");
     const activation = acknowledgeTreasuryCleanupSettlementProof({ transactionId: "iv_o4" });
@@ -819,7 +834,6 @@ describe("Remediation IV 6：journal open 只做 admission（无自动激活旁�
       proofClass: "lowlevel",
       lowlevelSource: RUNTIME,
       durableIdentityDigest: "dddddddddddddddd",
-      proofMode: "reservation",
     });
     const activation = acknowledgeTreasuryCleanupSettlementProof({ transactionId: "iv_o5" });
     expect(activation.outcome).toBe("proof_absent");

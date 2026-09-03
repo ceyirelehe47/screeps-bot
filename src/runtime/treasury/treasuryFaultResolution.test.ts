@@ -831,6 +831,21 @@ describe("staged atomic（故障注入与恢复）", () => {
       }).status,
     ).not.toBe("rejected");
     expect(readTreasuryQuarantineEntry("ts1_release")).toBeDefined(); // 释放未完成
+    // 【Remediation V 七】root not-executed 的 pre-release gate 要求 root
+    // lineage exact relation——seed matching root lineage（retiring）。
+    const { createTreasuryAttemptLineageRecord } =
+      jest.requireActual("@/runtime/treasury/attemptLineage") as typeof import("@/runtime/treasury/attemptLineage");
+    const rootLineage = createTreasuryAttemptLineageRecord({
+      rootTransactionId: "ts1_release",
+      rootIdentity: { digest: releaseAuthority.digest, durableIdentityDigest: releaseAuthority.durableIdentityDigest!, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME },
+      actionKind: "terminal.send",
+      authorityClass: "lowlevel",
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+      rearmable: false,
+      identityProfile: "lowlevel",
+      nonRearmReason: "test fixture",
+    });
+    expect(rootLineage.status).toBe("written");
     Game.time += 1;
     const next = makeService();
     next.beginTick();

@@ -154,6 +154,12 @@ function seedFinalNotExecutedTombstone(transactionId: string, durable: string): 
   expect(write.status).not.toBe("rejected");
 }
 
+/** 【Remediation V 九】open 恒 reservation——手工构造已激活 fixture。 */
+function activateCleanupEntryForFixture(transactionId: string): void {
+  const store = (Memory.runtime as unknown as { treasury?: { resolutionCleanup?: { entries?: Record<string, { settlementProofDurable?: boolean }> } } }).treasury?.resolutionCleanup;
+  store!.entries!["c:" + transactionId]!.settlementProofDurable = true;
+}
+
 function openCommittedCleanupEntry(transactionId: string, durable: string): void {
   const opened = openTreasuryResolutionCleanup(
     treasuryResolutionCleanupOpenInputOfFacts({
@@ -166,6 +172,7 @@ function openCommittedCleanupEntry(transactionId: string, durable: string): void
     }),
   );
   expect(opened.status).toBe("opened");
+  activateCleanupEntryForFixture(transactionId);
 }
 
 function openNotExecutedCleanupEntry(transactionId: string, durable: string, proofMode: "proof_durable" | "reservation" = "proof_durable"): void {
@@ -178,9 +185,11 @@ function openNotExecutedCleanupEntry(transactionId: string, durable: string, pro
       ...LOWLEVEL_SPREAD,
       durableIdentityDigest: durable,
     }),
-    ...(proofMode === "reservation" ? { proofMode: "reservation" as const } : {}),
   });
   expect(opened.status).toBe("opened");
+  // 【Remediation V 九】proofMode=proof_durable 的 fixture 手工激活（open 恒
+  // reservation——activation 是唯一 false→true 写入口）。
+  if (proofMode !== "reservation") activateCleanupEntryForFixture(transactionId);
 }
 
 function exactOfFacts(transactionId: string, durable: string) {
@@ -220,7 +229,7 @@ function seedReleasedNotExecutedScene(transactionId: string, opts: { reservation
   if (opts.reservation !== true) {
     const lineageCreated = createTreasuryAttemptLineageRecord({
       rootTransactionId: transactionId,
-      rootIdentity: { digest: DIGEST, durableIdentityDigest: durable },
+      rootIdentity: { digest: DIGEST, durableIdentityDigest: durable, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME },
       actionKind: "terminal.send",
       authorityClass: "lowlevel",
       lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
@@ -428,7 +437,8 @@ describe("Remediation III 2：proof activation 绑定 matching 持久 proof", ()
 
   it("matching resolving committed tombstone → 幂等复验成立", () => {
     seedCommittedCleanupScene("r3_cm", { marker: false });
-    // committed 的 proof_durable open 创建即 true——幂等复验 matching proof。
+    // 【Remediation V 九】open 恒 reservation——fixture 手工激活后 activation
+    // 幂等复验 matching resolving committed tombstone 成立。
     expect(acknowledgeTreasuryCleanupSettlementProof({ transactionId: "r3_cm" }).outcome).toBe("already_activated");
   });
 

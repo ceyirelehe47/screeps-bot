@@ -96,7 +96,7 @@ describe("第十六轮 operation-count（第十三/十五节）", () => {
 function seedRootLineage(transactionId: string, identity: string): void {
   const created = createTreasuryAttemptLineageRecord({
     rootTransactionId: transactionId,
-    rootIdentity: { digest: DIGEST, durableIdentityDigest: identity },
+    rootIdentity: { digest: DIGEST, durableIdentityDigest: identity, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME },
     actionKind: "terminal.send",
     authorityClass: "lowlevel",
     lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,

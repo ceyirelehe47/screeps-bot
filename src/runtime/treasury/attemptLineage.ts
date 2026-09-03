@@ -70,6 +70,7 @@ import { registerTreasuryQuarantineLineageProofResolverForAssembly } from "@/run
 import {
   persistTreasuryGenerationRetirementProof,
   computeTreasuryGenerationRootIdentityDigest,
+  lookupTreasuryGenerationRetirementProofByAttemptId,
 } from "@/runtime/treasury/generationRetirementAuthority";
 import {
   registerTreasurySemanticLineageRecordSourceForAssembly,
@@ -1415,7 +1416,16 @@ export function activateTreasuryLineageChild(
     };
   });
   if (result.status !== "rejected" && parentAttemptId !== undefined) {
-    releaseTreasuryCleanupCompletionOfAttempt(parentAttemptId);
+    // 【Remediation V 八】release 前 gate：child 接管成功（record 已持久
+    // child_active + read-back）后，parent 的完成事实必须已有可查询
+    // replacement（其代的 exact retirement proof——rearm 门禁消费过 parent
+    // 的 rearm_ready，proof 应已由 converge 写入）；proof 缺失（异常链）时
+    // 不回收 parent completion（fail closed——容量交给 bounded headroom
+    // 回收处理，不得制造无法查询完成事实的空洞）。
+    const parentReplacement = lookupTreasuryGenerationRetirementProofByAttemptId(parentAttemptId);
+    if (parentReplacement !== undefined) {
+      releaseTreasuryCleanupCompletionOfAttempt(parentAttemptId);
+    }
   }
   return result;
 }

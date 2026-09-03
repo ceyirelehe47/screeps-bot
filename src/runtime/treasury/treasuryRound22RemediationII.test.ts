@@ -369,7 +369,9 @@ describe("Remediation II 4：新建 journal 后 staged 回滚的安全撤销", (
     // already-open 的既有 entry 保留（不得误删既有 journal）。
     const kept = readTreasuryResolutionCleanupEntry("r22ii_keep");
     expect(kept).toBeDefined();
-    expect(kept!.settlementProofDurable).toBe(true);
+    // 【Remediation V 九】open/reopen 恒不激活（settlement flow 未成立——
+    // receipt blocked 回滚，entry 保持 reservation 原状）。
+    expect(kept!.settlementProofDurable).toBe(false);
     expect(kept!.markerDischarged).toBe(false);
   });
 });
@@ -689,6 +691,7 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
     expect(opened.status).toBe("opened");
     const store = journalBranch().resolutionCleanup as TreasuryResolutionCleanupStore;
     const rawEntry = store.entries[`c:${tx}`];
+    rawEntry.settlementProofDurable = true;
     rawEntry.markerDischarged = true;
     rawEntry.authorityReleased = true;
     rawEntry.outcomeFinalized = true;
@@ -766,6 +769,7 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
     const store = journalBranch().resolutionCleanup as TreasuryResolutionCleanupStore;
     // 撒谎：marker/authority/outcome 全 true（marker 确实不在场）。
     const rawEntry = store.entries[`c:${tx}`];
+    rawEntry.settlementProofDurable = true;
     rawEntry.markerDischarged = true;
     rawEntry.authorityReleased = true;
     rawEntry.outcomeFinalized = true;
@@ -806,6 +810,7 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
     expect(opened.status).toBe("opened");
     const store = journalBranch().resolutionCleanup as TreasuryResolutionCleanupStore;
     const rawEntry = store.entries[`c:${tx}`];
+    rawEntry.settlementProofDurable = true;
     rawEntry.markerDischarged = true;
     rawEntry.authorityReleased = true;
     rawEntry.outcomeFinalized = true;
@@ -842,6 +847,7 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
     expect(opened.status).toBe("opened");
     const store = journalBranch().resolutionCleanup as TreasuryResolutionCleanupStore;
     const rawEntry = store.entries[`c:${child}`];
+    rawEntry.settlementProofDurable = true;
     rawEntry.markerDischarged = true;
     rawEntry.authorityReleased = true;
     rawEntry.outcomeFinalized = true;
@@ -880,7 +886,6 @@ describe("Remediation II 11：reservation 生命周期", () => {
       resolution: "not-executed",
       identityProfile: "legacy-replay",
       proofClass: "legacy",
-      proofMode: "reservation",
     });
     expect(opened.status).toBe("opened");
     expect(readTreasuryResolutionCleanupEntry("r22ii_resv")!.settlementProofDurable).toBe(false);
@@ -955,7 +960,6 @@ describe("Remediation II 11：reservation 生命周期", () => {
       resolution: "not-executed",
       identityProfile: "legacy-replay",
       proofClass: "legacy",
-      proofMode: "reservation",
     });
     expect(revokeTreasuryResolutionCleanup({
       transactionId: "r22ii_revoke",

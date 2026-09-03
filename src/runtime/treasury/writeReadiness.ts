@@ -36,6 +36,10 @@ export interface TreasuryWriteReadinessInputs {
   readonly authorizationFaultUnresolved: boolean;
   /** 【第十二轮 3.1.6】fault authority 容量前置 admission（满载阻断新 writer）。 */
   readonly authorizationFaultCapacityExhausted: boolean;
+  /** 【Remediation V 八】cleanup completion store unhealthy（fail closed——不得等 cleanup 阶段才发现）。 */
+  readonly completionStoreUnhealthy: boolean;
+  /** 【Remediation V 八】completion 容量/headroom 前置 admission：满载时无法保证本 transaction 完成时有槽或可安全回收槽——真实 Game callback 之前 fail closed。 */
+  readonly completionHeadroomExhausted: boolean;
 }
 
 /** 评估结果（blockers 按优先级排序；ready = blockers 为空）。 */
@@ -68,6 +72,8 @@ const BLOCKER_PRIORITY: ReadonlyArray<{ readonly key: keyof TreasuryWriteReadine
   { key: "authorizationCapacityExhausted", blocker: "authorization_capacity_exhausted" },
   { key: "authorizationFaultUnresolved", blocker: "authorization_fault" },
   { key: "authorizationFaultCapacityExhausted", blocker: "authorization_fault_capacity_exhausted" },
+  { key: "completionStoreUnhealthy", blocker: "completion_store_unhealthy" },
+  { key: "completionHeadroomExhausted", blocker: "completion_headroom_exhausted" },
 ] as const);
 
 /**

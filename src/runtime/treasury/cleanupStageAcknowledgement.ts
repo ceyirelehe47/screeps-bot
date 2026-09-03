@@ -44,6 +44,10 @@ import {
   lookupTreasuryCleanupCompletion,
 } from "@/runtime/treasury/cleanupCompletionAuthority";
 import {
+  reclaimTreasuryCleanupCompletionHeadroom,
+  verifyTreasuryCleanupCompletionSupersession,
+} from "@/runtime/treasury/cleanupCompletionReplacement";
+import {
   dischargeTreasuryMarkerForAttempt,
   treasuryMarkerDischargeCompletesAttemptPhase,
   type TreasuryMarkerDischargeExpected,
@@ -480,12 +484,21 @@ export function completeTreasuryCleanupAcknowledged(input: {
     // 【Remediation IV 十.3】journal absent 不再自动等于完成：matching
     // completion authority 才能证明合法完成；absent → no_cleanup_authority
     // （journal 从未创建 / 被错误删除 / Memory 损坏丢失——fail closed）。
+    // 【Remediation V 八】completion absent 时先验证 replacement authority
+    //（被安全回收的 completion 由 GRA/summary/tombstone 持续证明完成）。
     const completion = lookupTreasuryCleanupCompletion(transactionId);
     if (completion.verdict === "match") {
       return { status: "already_completed", detail: "entry 已删除且 matching completion authority 存在（幂等已完成）" };
     }
     if (completion.verdict === "absent") {
-      return { status: "no_cleanup_authority", detail: "journal entry 不存在且无 completion authority（不得视为已完成——fail closed）" };
+      const supersession = verifyTreasuryCleanupCompletionSupersession(transactionId);
+      if (supersession.verdict === "superseded") {
+        return { status: "already_completed", detail: `entry 已删除且完成事实被 replacement authority 持续证明（${supersession.via}）` };
+      }
+      if (supersession.verdict === "store_unhealthy") {
+        return { status: "store_unhealthy", detail: `replacement authority store unhealthy: ${supersession.detail}` };
+      }
+      return { status: "no_cleanup_authority", detail: "journal entry 不存在且无 completion/replacement authority（不得视为已完成——fail closed）" };
     }
     return { status: "store_unhealthy", detail: `completion authority ${completion.verdict}: ${completion.detail}` };
   }
@@ -504,11 +517,25 @@ export function completeTreasuryCleanupAcknowledged(input: {
   }
   // 【十.2】completion proof 先于 journal 删除持久化（写入 + read-back +
   // exact identity 重新验证——recordTreasuryCleanupCompletion 内部承载）。
-  const completionWrite = recordTreasuryCleanupCompletion({
+  // 【Remediation V 八】满载 fail closed 前先做 bounded headroom 回收（只回
+  // 收有已验证 replacement authority 的 completion——GRA / terminal summary /
+  // final tombstone），回收后重试一次：normal path 零扫描，仅满载这一罕见
+  // 状态发生 bounded（≤硬容量）回收。
+  let completionWrite = recordTreasuryCleanupCompletion({
     entry,
     lineageDisposition: input.lineageDisposition,
     globalWriteAdmissionStillLocked: input.globalWriteAdmissionStillLocked ?? false,
   });
+  if (completionWrite.status === "rejected") {
+    const headroom = reclaimTreasuryCleanupCompletionHeadroom({ minSlots: 1 });
+    if (headroom.reclaimed > 0) {
+      completionWrite = recordTreasuryCleanupCompletion({
+        entry,
+        lineageDisposition: input.lineageDisposition,
+        globalWriteAdmissionStillLocked: input.globalWriteAdmissionStillLocked ?? false,
+      });
+    }
+  }
   if (completionWrite.status === "rejected") {
     return { status: "cleanup_pending", detail: `completion proof 写入失败（journal 保留）: ${completionWrite.detail}` };
   }
