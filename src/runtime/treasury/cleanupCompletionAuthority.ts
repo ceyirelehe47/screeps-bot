@@ -287,16 +287,26 @@ export function resetTreasuryCleanupCompletionHeapCacheForTest(): void {
   heapRuntime = null;
 }
 
+/** 【Remediation VI 4.6】completion 写入失败的结构化原因（只有 capacity_exhausted 允许触发 reclaim）。 */
+export type TreasuryCleanupCompletionRejectReason =
+  | "store_unhealthy"
+  | "invalid_candidate"
+  | "existing_conflict"
+  | "capacity_exhausted"
+  | "read_back_failure";
+
 export type TreasuryCleanupCompletionRecordResult =
   | { readonly status: "written" }
   | { readonly status: "idempotent" }
-  | { readonly status: "rejected"; readonly detail: string };
+  | { readonly status: "rejected"; readonly reason: TreasuryCleanupCompletionRejectReason; readonly detail: string };
 
 /**
  * completion proof 写入（journal 删除前的持久化步骤）：全部 journal 阶段
  * 已 ack 的 entry → candidate 写入 → 单 key Memory read-back → 完整 identity
- * 与阶段事实重新验证。写入失败/冲突 → rejected（journal 保留，完成路径
- * pending 重试）；同 id 幂等要求完整 identity 一致（不覆盖旧 proof）。
+ * 与阶段事实重新验证。写入失败/冲突 → rejected（携带结构化 reason——只有
+ * capacity_exhausted 允许触发 bounded reclaim，identity conflict / invalid /
+ * unhealthy / read-back 失败一律零全局 GC 副作用）；同 id 幂等要求完整
+ * identity 一致（不覆盖旧 proof）。
  */
 export function recordTreasuryCleanupCompletion(input: {
   readonly entry: Readonly<TreasuryResolutionCleanupEntry>;
@@ -305,7 +315,7 @@ export function recordTreasuryCleanupCompletion(input: {
 }): TreasuryCleanupCompletionRecordResult {
   const runtime = loadCompletionRuntime();
   if (runtime.fatal !== null) {
-    return { status: "rejected", detail: `completion store fail-closed: ${runtime.fatal}` };
+    return { status: "rejected", reason: "store_unhealthy", detail: `completion store fail-closed: ${runtime.fatal}` };
   }
   const entry = input.entry;
   if (
@@ -315,7 +325,7 @@ export function recordTreasuryCleanupCompletion(input: {
     !entry.outcomeFinalized ||
     !entry.lineageFinalized
   ) {
-    return { status: "rejected", detail: "completion 只能证明五阶段全部 ack 的 entry（journal 阶段未完成）" };
+    return { status: "rejected", reason: "invalid_candidate", detail: "completion 只能证明五阶段全部 ack 的 entry（journal 阶段未完成）" };
   }
   const key = COMPLETION_KEY_PREFIX + entry.transactionId;
   const existing = runtime.store.entries[key];
@@ -366,21 +376,25 @@ export function recordTreasuryCleanupCompletion(input: {
       existing.lineageDisposition === candidate.lineageDisposition;
     return sameIdentity
       ? { status: "idempotent" }
-      : { status: "rejected", detail: "同 transactionId 已存在身份不一致的 completion proof（不覆盖旧 proof——fail closed）" };
+      : { status: "rejected", reason: "existing_conflict", detail: "同 transactionId 已存在身份不一致的 completion proof（不覆盖旧 proof——fail closed）" };
   }
   if (runtime.store.entryCount >= TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES) {
     return {
       status: "rejected",
+      reason: "capacity_exhausted",
       detail: `completion store 满载（${String(TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES)}——fail closed，journal 保留 pending 重试）`,
     };
   }
-  runtime.store.entries[key] = candidate;
+  // 【Remediation VI】写入独立 clone（heap store 与 Memory 权威同对象——
+  // candidate 引用不得同时充当 read-back 比较基准，否则写入窗口内的篡改
+  // 会同步进 candidate 使全维度比较恒真）。
+  runtime.store.entries[key] = cloneTreasuryDurableValue(candidate);
   runtime.store.entryCount += 1;
   runtime.store.updatedAt = Game.time;
   // Memory read-back：直读权威 store 单 key，完整 identity + 阶段事实重新验证。
   const rawStore = (Memory.runtime as unknown as RuntimeMemoryWithCompletions | undefined)?.treasury?.cleanupCompletions;
   if (rawStore === undefined) {
-    return { status: "rejected", detail: "completion 写入后 Memory read-back store 缺失（journal 保留）" };
+    return { status: "rejected", reason: "read_back_failure", detail: "completion 写入后 Memory read-back store 缺失（journal 保留）" };
   }
   const readBack = rawStore.entries[key];
   const readBackError = readBack === undefined ? "read-back proof 缺失" : validateCompletionProofShape(readBack, key);
@@ -388,7 +402,7 @@ export function recordTreasuryCleanupCompletion(input: {
     // read-back 失败：回滚本次写入（completion 是新写入的——entry 从未存在）。
     delete runtime.store.entries[key];
     runtime.store.entryCount -= 1;
-    return { status: "rejected", detail: `completion read-back 失败: ${readBackError}（已回滚，journal 保留）` };
+    return { status: "rejected", reason: "read_back_failure", detail: `completion read-back 失败: ${readBackError}（已回滚，journal 保留）` };
   }
   // 【Remediation V 五.2】read-back 比较全部不可变身份维度与必要完成事实
   //（不再只比 digest/proofClass/lineageId/lineageDisposition/transactionId
@@ -418,7 +432,7 @@ export function recordTreasuryCleanupCompletion(input: {
   if (!readBackIdentityEqual) {
     delete runtime.store.entries[key];
     runtime.store.entryCount -= 1;
-    return { status: "rejected", detail: "completion read-back 身份或完成事实不一致（已回滚，journal 保留）" };
+    return { status: "rejected", reason: "read_back_failure", detail: "completion read-back 身份或完成事实不一致（已回滚，journal 保留）" };
   }
   return { status: "written" };
 }
@@ -433,6 +447,9 @@ export type TreasuryCleanupCompletionLookup =
  * journal absent 时的完成判定（单 key O(1)）：completion 存在且与调用方
  * expected identity 完整 match → match；不存在 → absent（no_cleanup_
  * authority——不得折叠为 completed）；身份不一致 → conflict（fail closed）。
+ * 【Remediation VI 4.4】查询绑定 settlement outcome：expectedOutcome 提供
+ * 时与 proof.resolution 比较，不一致 → conflict（committed completion 用
+ * not-executed 视角查询不得 match——settlement relabel 被 authority 阻断）。
  * expected 未提供时（无 journal 可对照的幂等重入）proof 自身为持久权威——
  * 但 shape 校验（load 时全表 + 此处单条复验）保证完整 profile/lineage 矩阵，
  * 不存在"仅字段非空即自我授权"。
@@ -440,6 +457,7 @@ export type TreasuryCleanupCompletionLookup =
 export function lookupTreasuryCleanupCompletion(
   transactionId: string,
   expected?: TreasuryExactAttemptIdentity,
+  expectedOutcome?: "committed" | "not-executed",
 ): TreasuryCleanupCompletionLookup {
   const runtime = loadCompletionRuntime();
   if (runtime.fatal !== null) {
@@ -452,6 +470,12 @@ export function lookupTreasuryCleanupCompletion(
   const shapeError = validateCompletionProofShape(proof, COMPLETION_KEY_PREFIX + transactionId);
   if (shapeError !== null) {
     return { verdict: "store_unhealthy", detail: `completion proof 损坏: ${shapeError}` };
+  }
+  if (expectedOutcome !== undefined && proof.resolution !== expectedOutcome) {
+    return {
+      verdict: "conflict",
+      detail: `completion proof settlement=${proof.resolution} 与查询视角 ${expectedOutcome} 不一致（outcome 绑定——不得 relabel）`,
+    };
   }
   if (expected !== undefined) {
     // 【Remediation V 五.2】expected 比较完整 exact relation（单一构造层 +

@@ -67,8 +67,7 @@ import {
 } from "@/runtime/treasury/generationRetirementAuthority";
 import { registerTreasurySemanticSummarySourceForAssembly } from "@/runtime/treasury/semanticLineageValidation";
 import { registerTreasurySettlementSummaryHealthSourceForAssembly, verifyTreasuryOppositeProofAbsence } from "@/runtime/treasury/currentSettlementCoordinator";
-import { releaseTreasuryCleanupCompletionOfAttempt } from "@/runtime/treasury/cleanupCompletionAuthority";
-import { verifyTreasuryCleanupCompletionSupersession } from "@/runtime/treasury/cleanupCompletionReplacement";
+import { archiveTreasuryCleanupCompletionViaAuthority } from "@/runtime/treasury/cleanupSupersessionAuthority";
 
 /**
  * 【第二十一轮 7】summary v3：持久化 root / final exact identity（exact
@@ -756,20 +755,16 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
     void generation;
     return readTreasuryResolutionTombstone(proof.transactionId) !== undefined;
   });
-  // ──【Remediation V 八】summary 已完整写入、read-back、exact 验证 →
-  //    final/root attempt 的 completion proof 可安全回收（summary 成为
-  //    chain 级可查询 replacement）；supersession 未成立（conflict/
-  //    unhealthy）时 completion 保留（fail closed——不影响压缩本身）。
+  // ──【Remediation VI 4.5】summary 已完整写入、read-back、exact 验证 →
+  //    final/root attempt 的 completion 经统一 supersession authority 入口
+  //    归档回收（exact replacement 验证 → durable historical authority 写入
+  //    + read-back → 删除 + read-back）；replacement exact 不成立（conflict/
+  //    absent/unhealthy）时 completion 保留（fail closed——不影响压缩本身，
+  //    历史查询由 completion/historical authority 持续承载）。
   {
-    const summaryReplacement = verifyTreasuryCleanupCompletionSupersession(currentId);
-    if (summaryReplacement.verdict === "superseded") {
-      releaseTreasuryCleanupCompletionOfAttempt(currentId);
-    }
+    void archiveTreasuryCleanupCompletionViaAuthority({ transactionId: currentId, via: "any-exact" });
     if (record.rootTransactionId !== currentId) {
-      const rootReplacement = verifyTreasuryCleanupCompletionSupersession(record.rootTransactionId);
-      if (rootReplacement.verdict === "superseded") {
-        releaseTreasuryCleanupCompletionOfAttempt(record.rootTransactionId);
-      }
+      void archiveTreasuryCleanupCompletionViaAuthority({ transactionId: record.rootTransactionId, via: "any-exact" });
     }
   }
   retirementSummaryEvents.compactions += 1;

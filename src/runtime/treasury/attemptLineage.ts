@@ -53,7 +53,7 @@ import {
 } from "@/runtime/treasury/resolutionStore";
 import { registerTreasuryLineageResetHook } from "@/runtime/treasury/receipts";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
-import { releaseTreasuryCleanupCompletionOfAttempt } from "@/runtime/treasury/cleanupCompletionAuthority";
+import { archiveTreasuryCleanupCompletionViaAuthority } from "@/runtime/treasury/cleanupSupersessionAuthority";
 import { treasuryMarkerExactIdentityRelation } from "@/runtime/treasury/markerExactIdentity";
 import { verifyTreasuryCurrentSettlement, registerTreasurySettlementLineageHealthSourceForAssembly } from "@/runtime/treasury/currentSettlementCoordinator";
 import { treasuryIdentityProfileOfFacts, treasuryProofClassOfIdentityProfile, TREASURY_IDENTITY_PROFILES } from "@/runtime/treasury/identityProfile";
@@ -70,7 +70,6 @@ import { registerTreasuryQuarantineLineageProofResolverForAssembly } from "@/run
 import {
   persistTreasuryGenerationRetirementProof,
   computeTreasuryGenerationRootIdentityDigest,
-  lookupTreasuryGenerationRetirementProofByAttemptId,
 } from "@/runtime/treasury/generationRetirementAuthority";
 import {
   registerTreasurySemanticLineageRecordSourceForAssembly,
@@ -1416,16 +1415,13 @@ export function activateTreasuryLineageChild(
     };
   });
   if (result.status !== "rejected" && parentAttemptId !== undefined) {
-    // 【Remediation V 八】release 前 gate：child 接管成功（record 已持久
-    // child_active + read-back）后，parent 的完成事实必须已有可查询
-    // replacement（其代的 exact retirement proof——rearm 门禁消费过 parent
-    // 的 rearm_ready，proof 应已由 converge 写入）；proof 缺失（异常链）时
-    // 不回收 parent completion（fail closed——容量交给 bounded headroom
-    // 回收处理，不得制造无法查询完成事实的空洞）。
-    const parentReplacement = lookupTreasuryGenerationRetirementProofByAttemptId(parentAttemptId);
-    if (parentReplacement !== undefined) {
-      releaseTreasuryCleanupCompletionOfAttempt(parentAttemptId);
-    }
+    // 【Remediation VI 4.5】parent completion 的删除只经统一 supersession
+    // authority 入口：exact GRA replacement 验证（outcome + 全维度 identity
+    // 含 lineage 四字段同一代 + retirement 三阶段）→ durable historical
+    // authority 写入 + read-back → 删除 + 删除 read-back。GRA 缺失或 exact
+    // 验证冲突时 completion 保留（fail closed——历史查询不退化，容量交给
+    // bounded headroom 回收处理）。
+    void archiveTreasuryCleanupCompletionViaAuthority({ transactionId: parentAttemptId, via: "gra-proof" });
   }
   return result;
 }

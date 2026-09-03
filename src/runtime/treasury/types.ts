@@ -171,6 +171,10 @@ export type TreasuryRejectionReason =
   | "handle_faulted"
   /** write admission 全局锁定（unresolved write fault；显式修复路径解除）。 */
   | "write_admission_locked"
+  /** 【Remediation VI 4.7】completion/supersession store unhealthy（零 archive 零删除零 callback——fail closed）。 */
+  | "completion_store_unhealthy"
+  /** 【Remediation VI 4.7】completion headroom 回收后仍不足（满载且无更多安全可回收项，completion 均保留——fail closed）。 */
+  | "completion_headroom_exhausted"
   /** transaction 处于 durable quarantine（Game 结果未知/commit 故障未对账，
    *  跨 tick 持久占用资源与 transaction identity；显式 resolution 解除前
    *  不得再次 prepare）。 */

@@ -194,6 +194,7 @@ import {
   peekTreasuryCleanupCompletionEntryCount,
   TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
 } from "@/runtime/treasury/cleanupCompletionAuthority";
+import { ensureTreasuryCleanupCompletionHeadroom } from "@/runtime/treasury/cleanupSupersessionAuthority";
 import {
   writeTreasuryResolutionTombstone,
   ensureTreasuryResolutionSlotAvailable,
@@ -2048,9 +2049,24 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       //    枚举/优先级/状态来源；不满足时授权本身拒绝，不留"已授权但
       //    writer 阻断"的空转 token）。 ─────────────────────────────────────
       ensureTickState(true);
+      // 【Remediation VI 4.7】authorize 是 state-changing 路径：completion
+      // headroom 不足时拒绝前必须先尝试 bounded exact reclaim（archive →
+      // historical authority 交接），回收成功则 headroom blocker 解除；
+      // 回收不可行（exhausted/unhealthy）时 blocker 保持（fail closed——
+      // query 的零写语义不受影响）。
+      const headroomPreflight = ensureTreasuryCleanupCompletionHeadroom({ minSlots: 1 });
+      if (headroomPreflight.status === "store_unhealthy") {
+        metrics.authorizationRejected += 1;
+        return {
+          status: "rejected",
+          reason: "write_admission_blocked",
+          detail: `completion headroom preflight store unhealthy: ${headroomPreflight.detail}——禁止新授权（零 archive 零删除零 callback）`,
+        };
+      }
       const authorizeReadiness = evaluateTreasuryWriteReadiness(
         collectTreasuryWriteReadinessInputs(readinessSources, {
           policyNotReady: false, // policy 已在前置单独检查（携带专用 reason）
+          ...(headroomPreflight.status === "ok" ? { completionHeadroomExhausted: false } : {}),
         }),
         "authorize",
       );
@@ -2488,6 +2504,27 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           status: "rejected",
           reason: "write_admission_locked",
           detail: "存在 unresolved write fault（显式修复路径解除前阻断全部 writer）",
+        };
+      }
+      // 【Remediation VI 4.7】低层 prepare 独立复查 completion 容量活性（不得
+      // 只信较早的 query/authorization 结果）：headroom 不足时先 bounded exact
+      // reclaim（archive → historical authority），仍不足/unhealthy → 拒绝
+      //（Game callback 之前）；completion 均保留（fail closed）。
+      const prepareHeadroom = ensureTreasuryCleanupCompletionHeadroom({ minSlots: 1 });
+      if (prepareHeadroom.status === "store_unhealthy") {
+        metrics.transactionsRejectedInvalid += 1;
+        return {
+          status: "rejected",
+          reason: "completion_store_unhealthy",
+          detail: `completion/supersession store unhealthy: ${prepareHeadroom.detail}（零 archive 零删除零 callback——fail closed）`,
+        };
+      }
+      if (prepareHeadroom.status === "headroom_exhausted") {
+        metrics.transactionsRejectedInvalid += 1;
+        return {
+          status: "rejected",
+          reason: "completion_headroom_exhausted",
+          detail: `completion headroom 回收后仍不足（${prepareHeadroom.detail}——满载且无更多安全可回收项，completion 均保留，fail closed）`,
         };
       }
       const decision = resolveDecisionEpoch(input.decision);
@@ -3360,6 +3397,24 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
             detail: `lineage child_active 推进失败（intent 保留在 executing，beginTick 前向补完成接管）: ${activated.detail}——Game callback 零调用`,
           };
         }
+      }
+      // ──【Remediation VI 4.7】Game callback 前的 completion headroom 终检
+      //    （不信任较早的 query/authorization/prepare 结果——窗口期内 store
+      //    可能已被其它 writer 填满）：unhealthy / 回收后仍不足 → 释放全部
+      //    预留、callback 零调用、结构化拒绝。
+      const executeHeadroom = ensureTreasuryCleanupCompletionHeadroom({ minSlots: 1 });
+      if (executeHeadroom.status !== "ok") {
+        record.state = "aborted";
+        preparedById.delete(record.canonical.transactionId);
+        projection.tentativeRelease(record.tentativeKey);
+        releaseTreasuryReceiptReservation(record.canonical.transactionId);
+        finalizeHandleRecord(record, "aborted");
+        metrics.transactionsRejectedInvalid += 1;
+        return {
+          status: "prepare_rejected",
+          reason: executeHeadroom.status === "store_unhealthy" ? "completion_store_unhealthy" : "completion_headroom_exhausted",
+          detail: `Game callback 前 completion headroom 终检失败（${executeHeadroom.detail}）——预留已释放，callback 零调用，fail closed`,
+        };
       }
       let actionResult: TAction;
       try {

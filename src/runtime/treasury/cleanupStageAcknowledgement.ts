@@ -43,10 +43,8 @@ import {
   recordTreasuryCleanupCompletion,
   lookupTreasuryCleanupCompletion,
 } from "@/runtime/treasury/cleanupCompletionAuthority";
-import {
-  reclaimTreasuryCleanupCompletionHeadroom,
-  verifyTreasuryCleanupCompletionSupersession,
-} from "@/runtime/treasury/cleanupCompletionReplacement";
+import { lookupTreasuryHistoricalCompletion } from "@/runtime/treasury/cleanupSupersessionAuthority";
+import { reclaimTreasuryCleanupCompletionHeadroom } from "@/runtime/treasury/cleanupCompletionReplacement";
 import {
   dischargeTreasuryMarkerForAttempt,
   treasuryMarkerDischargeCompletesAttemptPhase,
@@ -484,21 +482,22 @@ export function completeTreasuryCleanupAcknowledged(input: {
     // 【Remediation IV 十.3】journal absent 不再自动等于完成：matching
     // completion authority 才能证明合法完成；absent → no_cleanup_authority
     // （journal 从未创建 / 被错误删除 / Memory 损坏丢失——fail closed）。
-    // 【Remediation V 八】completion absent 时先验证 replacement authority
-    //（被安全回收的 completion 由 GRA/summary/tombstone 持续证明完成）。
+    // 【Remediation VI 4.2/4.3】completion 也 absent 时，持久完成权威是
+    // durable historical authority（GRA/tombstone 不再单独证明——它们
+    // 只证明 settlement/retirement，且有各自 retention 生命周期）。
     const completion = lookupTreasuryCleanupCompletion(transactionId);
     if (completion.verdict === "match") {
       return { status: "already_completed", detail: "entry 已删除且 matching completion authority 存在（幂等已完成）" };
     }
     if (completion.verdict === "absent") {
-      const supersession = verifyTreasuryCleanupCompletionSupersession(transactionId);
-      if (supersession.verdict === "superseded") {
-        return { status: "already_completed", detail: `entry 已删除且完成事实被 replacement authority 持续证明（${supersession.via}）` };
+      const historical = lookupTreasuryHistoricalCompletion(transactionId);
+      if (historical.verdict === "match") {
+        return { status: "already_completed", detail: `entry 与 completion 均已回收，durable historical authority 持续证明完成（outcome=${historical.record.resolution}）` };
       }
-      if (supersession.verdict === "store_unhealthy") {
-        return { status: "store_unhealthy", detail: `replacement authority store unhealthy: ${supersession.detail}` };
+      if (historical.verdict === "store_unhealthy") {
+        return { status: "store_unhealthy", detail: `historical authority store unhealthy: ${historical.detail}` };
       }
-      return { status: "no_cleanup_authority", detail: "journal entry 不存在且无 completion/replacement authority（不得视为已完成——fail closed）" };
+      return { status: "no_cleanup_authority", detail: "journal entry 不存在且无 completion / durable historical authority（不得视为已完成——fail closed）" };
     }
     return { status: "store_unhealthy", detail: `completion authority ${completion.verdict}: ${completion.detail}` };
   }
@@ -517,16 +516,19 @@ export function completeTreasuryCleanupAcknowledged(input: {
   }
   // 【十.2】completion proof 先于 journal 删除持久化（写入 + read-back +
   // exact identity 重新验证——recordTreasuryCleanupCompletion 内部承载）。
-  // 【Remediation V 八】满载 fail closed 前先做 bounded headroom 回收（只回
-  // 收有已验证 replacement authority 的 completion——GRA / terminal summary /
-  // final tombstone），回收后重试一次：normal path 零扫描，仅满载这一罕见
-  // 状态发生 bounded（≤硬容量）回收。
+  // 【Remediation VI 4.6】满载 fail closed 前先做 bounded headroom 回收——
+  // **只有结构化 reason=capacity_exhausted 才允许触发 reclaim**（identity
+  // conflict / invalid / unhealthy / read-back 失败一律零全局 GC 副作用）；
+  // 回收 = exact archive（completion 验证 → durable historical authority
+  // 写入 read-back → 删除 read-back，统一 supersession authority 入口），
+  // 回收后重试一次：normal path 零扫描，仅满载这一罕见状态发生 bounded
+  // （≤硬容量）回收。
   let completionWrite = recordTreasuryCleanupCompletion({
     entry,
     lineageDisposition: input.lineageDisposition,
     globalWriteAdmissionStillLocked: input.globalWriteAdmissionStillLocked ?? false,
   });
-  if (completionWrite.status === "rejected") {
+  if (completionWrite.status === "rejected" && completionWrite.reason === "capacity_exhausted") {
     const headroom = reclaimTreasuryCleanupCompletionHeadroom({ minSlots: 1 });
     if (headroom.reclaimed > 0) {
       completionWrite = recordTreasuryCleanupCompletion({
