@@ -80,6 +80,7 @@ function createRoom(myCreeps: Creep[]): Room {
       if (type === FIND_MY_CREEPS) return myCreeps;
       return [];
     }),
+    getPositionAt: (x: number, y: number) => new MockPos(x, y, "W1N1"),
   } as unknown as Room;
 }
 
@@ -151,6 +152,60 @@ describe("homeDefenderRole", () => {
     homeDefenderRole("W1N1", "0").target(defender);
 
     expect(defender.moveTo).not.toHaveBeenCalled();
+  });
+
+  it("【Remediation III 十六】boundary 目标 approach：Defender 前往合法 rampart 站位（不直接追逐共享目标）", () => {
+    Game.time = 9;
+    const boundaryTarget = createHostile("planned", 45, 45, 3000);
+    const defender = {
+      name: "defender-0",
+      memory: { role: "homeDefender" },
+      body: [{ type: ATTACK }],
+      pos: new MockPos(10, 10, "W1N1") as unknown as RoomPosition,
+      attack: jest.fn(() => OK),
+      rangedAttack: jest.fn(() => OK),
+      moveTo: jest.fn(() => OK),
+      getActiveBodyparts: jest.fn((part: BodyPartConstant) => (part === ATTACK ? 2 : 0)),
+    } as unknown as Creep;
+    const room = createRoom([defender]);
+    Object.defineProperty(defender, "room", { value: room });
+    (getPlayerHostiles as jest.Mock).mockReturnValue([boundaryTarget]);
+    (getAssignedDefenseFront as jest.Mock).mockReturnValue(null);
+    (getTowerFocusFront as jest.Mock).mockReturnValue(null);
+    Memory.runtime = {
+      defenseEngagement: {
+        W1N1: {
+          roomName: "W1N1",
+          plannedAtTick: Game.time,
+          focusTargetId: "planned",
+          focusTargetClass: "suppression_only",
+          killExpected: false,
+          focusAssignedDamage: 0,
+          focusKillBudget: null,
+          focusExpectedHeal: 0,
+          towerAssignments: {},
+          defenderAssignments: { "0": "planned" },
+          defenderEngagements: {
+            "0": { targetId: "planned", mode: "engage_position", position: { x: 30, y: 30 }, positionKind: "boundary" },
+          },
+          engagementByTargetId: { planned: { x: 30, y: 30, kind: "boundary" } },
+          emergencyHealByTowerId: {},
+          fallbackTargetIds: ["planned"],
+        },
+      },
+    } as never;
+
+    homeDefenderRole("W1N1", "0").target(defender);
+
+    // approach 使用合法 rampart 站位（range 0），不是直接追 hostile。
+    expect(moveToTarget).toHaveBeenCalledTimes(1);
+    const moveArgs = (moveToTarget as jest.Mock).mock.calls[0]!;
+    expect(moveArgs[1].x).toBe(30);
+    expect(moveArgs[1].y).toBe(30);
+    expect(moveArgs[2]).toBe(0);
+    // 不直接追共享目标（不是 hostile 坐标 45/45）。
+    expect(moveArgs[1].x).not.toBe(45);
+    expect(defender.attack).not.toHaveBeenCalled();
   });
 
   it("【Remediation II】显式计划目标优先：贴身按计划目标 attack（旧独立评分/去重不得改目标）", () => {
