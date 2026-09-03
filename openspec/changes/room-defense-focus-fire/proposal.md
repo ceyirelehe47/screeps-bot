@@ -99,3 +99,14 @@ Tower 与主防 Creep（homeDefender）各自独立评分选择攻击目标（to
 ### 确定性与 operation-count
 - 同快照（任意来源顺序/hostile/front 输入反转）产生同一 plan（defenderFronts.eligibleTargetIds 按计划候选顺序确定性构造）；
 - planner 每房间每 tick 一次；revision 每房间每 tick 一次生成；Rampart 分配 O(Defenders×候选) 稳定 greedy（无指数匹配、无 PathFinder）；每房间每 tick 只构建一次 hostile 快照。
+
+## Round 22 Remediation V — Fallback Position Reallocation & Plan Coverage
+
+### Fallback 重新分配独立 Rampart（十节）
+fallback revision 生成时对整个房间 Defender 集合重新执行 actor-specific position allocation（`allocateDefenderRampartPositions` 单一实现）——不再把 plan.engagementByTargetId[target] 的 target-level 单一位置复制给多个 Defender：unaffected Defender 的原独立位置优先保留（先占 used 集合，不被替代分配抢占）；失效者只从 front-local alive targets 选择替代、经 plan 持久化的候选集合（`engagementCandidatesByTargetId`——boundary rampart 候选 + 他属占用标记，有界可序列化；revision 不重查 Game/防线系统、不调 PathFinder）房间级单次分配；occupied candidate 跳过；候选不足明确 hold（保留 combat target，不追逐边界外 hostile）；inside target 不携带复制位置（消费方按当前可执行距离重算 action mode——不错误复用原目标的 mode）；revision 的 per-slot assignment 携带 mode（engage_position/hold）。Tower-first 与 Defender-first 得到同一 revision 对象；输入顺序反转 per-slot 语义稳定。
+
+### 初始 plan 的统一唯一分配（十节）
+fresh plan 的伤害分配路径与 positioning 路径统一进入房间级唯一 Rampart 分配窗口（收集去重；boundary 接敌不再复制 target-level 位置——多 Defender 同目标各得独立格，不足者 hold）。
+
+### Fresh plan 缺 assignment 默认 hold（十一节）
+canonical slot 单一来源：planner 只用 spawn config 最后段（与 defenseCoordination 的 String(i) / RoleFactory 注入的 args[1] 同源）；configName 缺失的 defender 不入 plan（不再以 creep name 回落——消除 plan 键与消费 slot 的错配根源）。消费端：fresh plan 存在但本 slot 无 entry → 默认 hold（不 attack、不 rangedAttack、不 moveTo 独立目标、不跨 front）；只有 entry 显式 participation=not_participating 才允许旧独立行为（entry 缺失不是不参与）；stale plan / 无 plan 保留旧安全 fallback；候选不足的显式 hold（plan 或 revision）在 approach 距离下不再追逐边界外目标。
