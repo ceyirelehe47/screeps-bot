@@ -1,25 +1,25 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "e31e5cac895f929d6e2df0a3536e053c4946ba4a",
-    "suites": 264,
-    "tests": 2014,
-    "passed": 2014,
+    "commit": "91a11f5cc59df0b710db832e096602ad9f5b378f",
+    "suites": 266,
+    "tests": 2067,
+    "passed": 2067,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 264,
-    "tests": 2014,
-    "passed": 2014,
+    "suites": 266,
+    "tests": 2067,
+    "passed": 2067,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 120,
+    "highRiskFiles": 122,
     "defaultFiles": 127
   },
   "files": {
@@ -1341,6 +1341,16 @@
     "src/runtime/defenseFocusFireStateful.test.ts": {
       "baseline": 0,
       "budget": 24,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound22RemediationIV.test.ts": {
+      "baseline": 0,
+      "budget": 27,
+      "tier": "high-risk"
+    },
+    "src/runtime/defenseFrontAware.test.ts": {
+      "baseline": 0,
+      "budget": 26,
       "tier": "high-risk"
     }
   }
