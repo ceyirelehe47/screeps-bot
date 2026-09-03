@@ -480,9 +480,11 @@ export function resetTreasuryResolutionCleanupForTest(): void {
 
 export type TreasuryResolutionCleanupOpenResult =
   | { readonly status: "opened" }
-  | { readonly status: "already_open" }
+  | { readonly status: "already_open_activated" }
+  | { readonly status: "already_open_reservation" }
   | { readonly status: "conflict"; readonly detail: string }
-  | { readonly status: "rejected"; readonly detail: string };
+  | { readonly status: "rejected"; readonly detail: string }
+  | { readonly status: "read_back_failed"; readonly detail: string };
 
 /**
  * 【Round 22 remediation D】open 的 exact identity 字段（幂等 reopen 的
@@ -563,15 +565,15 @@ export function openTreasuryResolutionCleanup(input: {
         };
       }
     }
-    // 【Remediation II A.6】既有 reservation + 本次 proof_durable open（proof
-    // 已由调用方确认落盘）→ 幂等激活；identity 冲突已在上文 fail closed。
-    if (!existing.settlementProofDurable && input.proofMode !== "reservation") {
-      existing.settlementProofDurable = true;
-      existing.updatedAt = Game.time;
-      runtime.store.updatedAt = Game.time;
-    }
+    // 【Remediation IV 十一.1】open 只做 admission：不再自动激活既有
+    // reservation（settlementProofDurable 的推进只能经
+    // acknowledgeTreasuryCleanupSettlementProof 的 proof activation 权威——
+    // open 不得以 proofMode 默认值绕过 activation validator 相信调用方）。
+    // 返回显式区分 reservation / activated 状态。
     cleanupEvents.reopened += 1;
-    return { status: "already_open" };
+    return existing.settlementProofDurable
+      ? { status: "already_open_activated" }
+      : { status: "already_open_reservation" };
   }
   if (runtime.store.entryCount >= TREASURY_RESOLUTION_CLEANUP_MAX_ENTRIES) {
     cleanupEvents.capacityBlocked += 1;
@@ -580,7 +582,10 @@ export function openTreasuryResolutionCleanup(input: {
       detail: `cleanup journal 满载（${String(TREASURY_RESOLUTION_CLEANUP_MAX_ENTRIES)}——fail closed，不驱逐未完成 cleanup）`,
     };
   }
-  runtime.store.entries[key] = cloneTreasuryDurableValue({
+  // 【Remediation IV 十一.2】新 candidate 写入前完整验证（与 load 同强度的
+  // entry validator：profile 枚举 + profile↔proofClass 唯一映射 + required/
+  // forbidden 矩阵 + lineage 四字段整体性 + 时间形状）；非法 → 写入前拒绝。
+  const candidate = {
     transactionId: input.transactionId,
     digest: input.digest,
     resolution: input.resolution,
@@ -601,11 +606,53 @@ export function openTreasuryResolutionCleanup(input: {
     ...(input.lineageGeneration !== undefined ? { lineageGeneration: input.lineageGeneration } : {}),
     ...(input.parentTransactionId !== undefined ? { parentTransactionId: input.parentTransactionId } : {}),
     ...(input.lineageBindingDigest !== undefined ? { lineageBindingDigest: input.lineageBindingDigest } : {}),
-  });
+  } as TreasuryResolutionCleanupEntry;
+  const candidateError = validateCleanupEntryIdentity(candidate, key);
+  if (candidateError !== null) {
+    cleanupEvents.shapeFailures += 1;
+    return { status: "rejected", detail: candidateError };
+  }
+  runtime.store.entries[key] = cloneTreasuryDurableValue(candidate);
   runtime.store.entryCount += 1;
   runtime.store.updatedAt = Game.time;
+  // 【十一.2】写入后 Memory read-back：单 key 直读 + 完整 identity 重算 +
+  // entryCount/store shape 一致——任一不成立回滚本次写入（不返回 opened）。
+  const readBackError = validateCleanupEntryReadBack(input.transactionId, candidate);
+  if (readBackError !== null) {
+    delete runtime.store.entries[key];
+    runtime.store.entryCount -= 1;
+    cleanupEvents.shapeFailures += 1;
+    return { status: "read_back_failed", detail: readBackError };
+  }
   cleanupEvents.opened += 1;
   return { status: "opened" };
+}
+
+/** 新写入 candidate 的 Memory read-back 校验（identity 重算 + entryCount）。 */
+function validateCleanupEntryReadBack(
+  transactionId: string,
+  candidate: Readonly<TreasuryResolutionCleanupEntry>,
+): string | null {
+  const store = (Memory.runtime as unknown as RuntimeMemoryWithCleanup | undefined)?.treasury?.resolutionCleanup;
+  if (store === undefined) return "open read-back：cleanup journal store 缺失";
+  const key = CLEANUP_KEY_PREFIX + transactionId;
+  const readBackEntry = store.entries[key] as Partial<TreasuryResolutionCleanupEntry> | undefined;
+  if (readBackEntry === undefined) return `open read-back：entry ${key.slice(0, 8)} 未持久`;
+  for (const field of CLEANUP_IDENTITY_FIELDS) {
+    if ((readBackEntry[field] as unknown) !== (candidate[field] as unknown)) {
+      return `open read-back：identity 字段 ${field} 与 candidate 不一致`;
+    }
+  }
+  if (readBackEntry.resolution !== candidate.resolution) return "open read-back：resolution 不一致";
+  if (readBackEntry.settlementProofDurable !== candidate.settlementProofDurable) {
+    return "open read-back：settlementProofDurable 不一致";
+  }
+  for (const stage of ["markerDischarged", "authorityReleased", "outcomeFinalized", "lineageFinalized"] as const) {
+    if (readBackEntry[stage] !== candidate[stage]) return `open read-back：阶段 ${stage} 不一致`;
+  }
+  const shapeError = validateCleanupStoreShape(store);
+  if (shapeError !== null) return `open read-back：store shape ${shapeError}`;
+  return null;
 }
 
 /** 读取 entry（只读冻结快照）。 */

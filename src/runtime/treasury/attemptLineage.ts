@@ -53,6 +53,7 @@ import {
 } from "@/runtime/treasury/resolutionStore";
 import { registerTreasuryLineageResetHook } from "@/runtime/treasury/receipts";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
+import { releaseTreasuryCleanupCompletionOfAttempt } from "@/runtime/treasury/cleanupCompletionAuthority";
 import { treasuryMarkerExactIdentityRelation } from "@/runtime/treasury/markerExactIdentity";
 import { verifyTreasuryCurrentSettlement, registerTreasurySettlementLineageHealthSourceForAssembly } from "@/runtime/treasury/currentSettlementCoordinator";
 import { treasuryIdentityProfileOfFacts, treasuryProofClassOfIdentityProfile, TREASURY_IDENTITY_PROFILES } from "@/runtime/treasury/identityProfile";
@@ -1384,7 +1385,12 @@ export function activateTreasuryLineageChild(
   lineageId: string,
   childIdentity: TreasuryAttemptLineageIdentity,
 ): TreasuryAttemptLineageWriteResult {
-  return updateTreasuryAttemptLineageRecord(lineageId, (current) => {
+  // 【Remediation IV 十.4】child 接管前捕获 parent attempt ID——接管成功后
+  // 释放其 cleanup completion proof（parent cleanup 已被 rearm 门禁消费确认，
+  // completion 的完成事实被 lineage 接管安全替代；不回收则长 rearm 链会
+  // 触碰 completion 硬容量 fail closed）。
+  const parentAttemptId = readTreasuryAttemptLineageRecord(lineageId)?.currentTransactionId;
+  const result = updateTreasuryAttemptLineageRecord(lineageId, (current) => {
     if (current.state !== "child_intent_pending") {
       throw new Error(`child 接管只允许从 child_intent_pending（got ${String(current.state)}）`);
     }
@@ -1408,6 +1414,10 @@ export function activateTreasuryLineageChild(
       recordRevision: current.recordRevision + 1,
     };
   });
+  if (result.status !== "rejected" && parentAttemptId !== undefined) {
+    releaseTreasuryCleanupCompletionOfAttempt(parentAttemptId);
+  }
+  return result;
 }
 
 /** child 退休推进：child_active → retiring（当前代 not-executed publication）。 */
