@@ -45,7 +45,10 @@ const MEMORY_BRANCHES = {
     // 【Remediation IV】defenseEngagement 增 defenderFronts / fallbackRevision
     //（front 约束与房间级修订计划）、defenderEngagements.targetId 可空
     //（显式 hold）后的 schema 指纹。
-    schemaFingerprint: "0869b788491639af8630023a17dd387a37b7a5061b2d394ad323a9b59a86572f",
+    // 【Remediation VI】defenderEngagements 增 reservedPosition（direct
+    // actor Rampart 保留事实）、defenderFactsBySlot（真实 role/坐标快照）、
+    // fallbackRevision per-slot reservedPosition 后的 schema 指纹。
+    schemaFingerprint: "741155d57d7b691526498675c2d0452342b3fcb9d790d2e2e8f03e155732ce30",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
