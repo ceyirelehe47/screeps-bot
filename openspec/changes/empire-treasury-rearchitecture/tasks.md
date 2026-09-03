@@ -406,3 +406,15 @@
 - [x] result 语义（globalWriteAdmissionStillLocked + marker_cleanup_blocked）
 - [x] Round 22 测试（treasuryRound22MarkerDischarge：18 tests）+ 既有 fixture 升级
 - [x] evidence：round22-marker-cleanup-atomicity-explicit-proof-profiles-local-validation.md
+## 30. Round 22 Remediation III — Durable Stage Acknowledgement
+- [x] cleanupStageAcknowledgement：journal 阶段推进的唯一结构化 ack 权威（健康探测 → entry 读取 → expected identity 比较 → 前置偏序 → 外部 proof 幂等重验 → 写入检查返回值 → Memory 单键 read-back：identity 未变/前置仍成立/目标已持久/未越级）
+- [x] settlementProofActivation：reservation 激活绑定 matching 持久 tombstone（resolution/stage/全 identity 维度/proof class 唯一映射 + store 健康 + read-back）
+- [x] oppositeProofMatrix：同 transaction ID 相反结论 proof 四分类唯一实现（match/conflict/insufficient/store_unhealthy——insufficient ≠ absent）
+- [x] resolutionCleanupCoordinator：唯一 destructive owner（activation → marker（committed 前置 release-trusted Receipt：损坏/conflict/legacy 不足零 marker 清除）→ authority → outcome（trusted + 相反 proof + converge 驱动）→ lineage → journal completion 删除 read-back）
+- [x] resolutionCleanupStageHandlers：facade 装配语义独立模块（加载时自动注册 handlers/probes/driver；authorization-fault authority 纳入同一 release 通道；chain close 的 trusted 验证）
+- [x] release-trusted 收敛：immediate verifier read-back / staged 三方验证 / chain close / terminal compaction 全部 readTreasuryTrustedSettlementProofForAttempt（replay 仅保留显式标记的预检/admission）
+- [x] API 完成状态三层事实（cleanup 报告 + retirement pending 细分 + globalWriteAdmissionStillLocked）
+- [x] receipts：clearTreasuryPersistenceForTest 清理 cleanup journal 分支（heap 复位 hook——修复 detached store 不一致）+ receipt heap test-only reset
+- [x] 架构守卫：写原语受控调用方 / 返回值检查 / replay 预检标记 / 单一 destructive owner
+- [x] Round 22 Remediation III 测试（treasuryRound22RemediationIII：28 tests）
+- [x] evidence：round22-remediation-iii-durable-stage-acknowledgement-local-validation.md
