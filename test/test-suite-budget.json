@@ -1,25 +1,25 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "a9f4eb2",
-    "suites": 262,
-    "tests": 1956,
-    "passed": 1956,
+    "commit": "e31e5cac895f929d6e2df0a3536e053c4946ba4a",
+    "suites": 264,
+    "tests": 2014,
+    "passed": 2014,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 262,
-    "tests": 1956,
-    "passed": 1956,
+    "suites": 264,
+    "tests": 2014,
+    "passed": 2014,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 118,
+    "highRiskFiles": 120,
     "defaultFiles": 127
   },
   "files": {
@@ -110,7 +110,7 @@
     },
     "src/roles/homeDefender.test.ts": {
       "baseline": 3,
-      "budget": 5,
+      "budget": 6,
       "tier": "default-max-2"
     },
     "src/roles/index.test.ts": {
@@ -760,7 +760,7 @@
     },
     "src/runtime/towerControl.test.ts": {
       "baseline": 3,
-      "budget": 4,
+      "budget": 5,
       "tier": "default-max-2"
     },
     "src/runtime/upgraderPolicy.test.ts": {
@@ -1065,7 +1065,7 @@
     },
     "src/runtime/treasury/treasuryWriteArchitecture.test.ts": {
       "baseline": 19,
-      "budget": 19,
+      "budget": 23,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryWriteAdmissionPerformance.test.ts": {
@@ -1331,6 +1331,16 @@
     "src/runtime/defenseFocusFire.test.ts": {
       "baseline": 0,
       "budget": 26,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound22RemediationIII.test.ts": {
+      "baseline": 0,
+      "budget": 28,
+      "tier": "high-risk"
+    },
+    "src/runtime/defenseFocusFireStateful.test.ts": {
+      "baseline": 0,
+      "budget": 24,
       "tier": "high-risk"
     }
   }
