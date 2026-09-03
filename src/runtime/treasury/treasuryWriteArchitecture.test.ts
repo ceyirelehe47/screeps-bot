@@ -489,6 +489,10 @@ describe("Treasury write-admission 架构边界", () => {
         // 【Remediation III】facade 门禁语义的 stage handlers 迁移目标
         //（semantic lineage verdict / chain close 的 tr1_ 判定经此承载）。
         "runtime/treasury/resolutionCleanupStageHandlers.ts",
+        // 【Remediation V 六】authorization fault v5 的 tr1_ lineage 携带矩阵
+        //（写入前校验）与 tr1_ redemption fault 的 lineage publication 分支。
+        "runtime/treasury/authorizationFaults.ts",
+        "runtime/treasury/resolutionAuthority.ts",
       ]);
       if (/isTreasuryRearmAttemptId/.test(fileSource) && !REARM_NAMESPACE_CONSUMERS.has(relative)) {
         violations.push(`${relative} 引用 isTreasuryRearmAttemptId（tr1_ 判定单一权威在 transactionId.ts，门禁在 facade）`);

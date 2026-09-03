@@ -981,7 +981,7 @@ describe("authorization fault store health 与边界回归（第十二轮 3.9/3.
     const entry = readTreasuryAuthorizationFaultEntry("legacy_v1");
     expect(entry).toBeDefined();
     expect((entry as { legacyV1?: boolean }).legacyV1).toBe(true);
-    expect(Memory.runtime!.treasury!.authorizationFaults!.version).toBe(4); // 【第十四轮】authorizationFaults v4
+    expect(Memory.runtime!.treasury!.authorizationFaults!.version).toBe(5); // 【Remediation V 六】authorizationFaults v5（tr1_ lineage 四字段）
   });
 
   it("正常 contract → bundle → intent → callback OK → commit 路径与 non-OK → abort 路径保持通过", () => {

@@ -24,7 +24,7 @@ import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolve
 import { releaseTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import { releaseTreasuryIntentEntry } from "@/runtime/treasury/intents";
 import {
-  readTreasuryAuthorizationFaultEntry,
+  readTreasuryAuthorizationFaultEntryStructured,
   releaseTreasuryAuthorizationFaultEntry,
 } from "@/runtime/treasury/authorizationFaults";
 import type { TreasuryResolutionCleanupEntry } from "@/runtime/treasury/resolutionCleanupJournal";
@@ -45,8 +45,14 @@ export function dischargeTreasuryExactAuthorityForCleanup(
   switch (gate.status) {
     case "verified": {
       if (gate.authoritySource === "authorization-fault") {
+        // 【Remediation V 六】release 后 read-back 用 tri-state 读取：
+        // store unhealthy 不得折叠为 absent（fatal store 下"读不到"≠"已释放"）。
         releaseTreasuryAuthorizationFaultEntry(entry.transactionId);
-        if (readTreasuryAuthorizationFaultEntry(entry.transactionId) !== undefined) {
+        const readBack = readTreasuryAuthorizationFaultEntryStructured(entry.transactionId);
+        if (readBack.status === "store_unhealthy") {
+          return { status: "blocked", gateStatus: gate.status, detail: `authorization fault 释放后 read-back store unhealthy: ${readBack.detail}（authority 阶段不得 ack）` };
+        }
+        if (readBack.status === "present") {
           return { status: "blocked", gateStatus: gate.status, detail: "authorization fault 释放后 read-back 仍存在（重试）" };
         }
         return { status: "released", authoritySource: "authorization-fault", detail: "authorization fault entry 已释放并 read-back 确认消失" };

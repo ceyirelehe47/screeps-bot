@@ -320,7 +320,11 @@ function treasurySemanticLineagePurposeGate(
           : purpose === "committed_settlement"
             ? generationRole === "current" || generationRole === "terminal_current"
             : purpose === "not_executed_retirement"
-              ? generationRole === "current" || generationRole === "terminal_current"
+              // 【Remediation V 六】pending_handoff = tr1_ redemption fault 的
+              // 在途 child not-executed（child 从未激活——cleanup 的 lineage
+              // 语义是回滚到 rearm_ready，不是该代的 retirement proof；
+              // child ID 派生/binding 权威重算已由 role 判定层验证）。
+              ? generationRole === "current" || generationRole === "terminal_current" || generationRole === "pending_handoff"
               : purpose === "tombstone_replacement"
                 ? generationRole === "current" || generationRole === "historical" || generationRole === "terminal_current" || generationRole === "terminal_historical"
                 : false;

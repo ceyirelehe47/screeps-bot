@@ -36,7 +36,7 @@ import {
   type TreasuryExactAttemptIdentity,
 } from "@/runtime/treasury/exactAttemptIdentity";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
-import { readTreasuryAuthorizationFaultEntry } from "@/runtime/treasury/authorizationFaults";
+import { readTreasuryAuthorizationFaultEntryStructured } from "@/runtime/treasury/authorizationFaults";
 import { readTreasuryTrustedSettlementProofForAttempt } from "@/runtime/treasury/trustedSettlementProof";
 import {
   peekTreasuryCleanupProofProbes,
@@ -70,34 +70,17 @@ import {
   checkTreasuryOppositeProofsForNotExecuted,
 } from "@/runtime/treasury/oppositeProofMatrix";
 import { validateTreasurySemanticLineage } from "@/runtime/treasury/semanticLineageValidation";
+import { peekTreasuryRootLineageRelation } from "@/runtime/treasury/rootLineageRelationChannel";
 import {
   peekTreasuryMarkerDischargeState,
   treasuryMarkerDischargeExpectedOfFacts,
 } from "@/runtime/treasury/markerDischarge";
 import type { TreasuryResolutionCleanupEntry } from "@/runtime/treasury/resolutionCleanupJournal";
+import { treasuryPreReleaseExactIdentityOfEntry } from "@/runtime/treasury/entryExactIdentity";
 
-/** journal entry（含 identity 形状）→ exact attempt identity（单一构造口径）。 */
-export function treasuryPreReleaseExactIdentityOfEntry(
-  entry: Readonly<TreasuryResolutionCleanupEntry>,
-): TreasuryExactAttemptIdentity | null {
-  return treasuryExactAttemptIdentityOfFacts(
-    entry.transactionId,
-    {
-      digest: entry.digest,
-      ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
-      ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
-      ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
-      ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
-      ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
-      ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
-      ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
-      ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
-    },
-    entry.proofClass === "lowlevel" ? "lowlevel" : entry.proofClass === "identity-bound" ? "identity-bound" : "legacy",
-  );
-}
+export { treasuryPreReleaseExactIdentityOfEntry };
 
-/** Authorization Fault entry → 完整 exact identity（authorityLevel 显式定级——不只比较 digest）。 */
+/** Authorization Fault entry → 完整 exact identity（authorityLevel 显式定级——不只比较 digest；【Remediation V 六】lineage 四字段整体透传——tr1_ fault 的 exact identity 必须包含 lineage 维度）。 */
 export function treasuryPreReleaseExactIdentityOfAuthorizationFault(
   fault: {
     readonly transactionId: string;
@@ -107,6 +90,10 @@ export function treasuryPreReleaseExactIdentityOfAuthorizationFault(
     readonly contractDigest?: string;
     readonly authorizationCohortDigest?: string;
     readonly durableIdentityDigest?: string;
+    readonly lineageId?: string;
+    readonly lineageGeneration?: number;
+    readonly parentTransactionId?: string;
+    readonly lineageBindingDigest?: string;
   },
 ): TreasuryExactAttemptIdentity | null {
   const proofClass =
@@ -123,6 +110,10 @@ export function treasuryPreReleaseExactIdentityOfAuthorizationFault(
       ...(fault.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: fault.authorizationCohortDigest } : {}),
       ...(fault.durableIdentityDigest !== undefined ? { durableIdentityDigest: fault.durableIdentityDigest } : {}),
       ...(proofClass === "lowlevel" && fault.lowlevelSource !== undefined ? { lowlevelSource: fault.lowlevelSource } : {}),
+      ...(fault.lineageId !== undefined ? { lineageId: fault.lineageId } : {}),
+      ...(fault.lineageGeneration !== undefined ? { lineageGeneration: fault.lineageGeneration } : {}),
+      ...(fault.parentTransactionId !== undefined ? { parentTransactionId: fault.parentTransactionId } : {}),
+      ...(fault.lineageBindingDigest !== undefined ? { lineageBindingDigest: fault.lineageBindingDigest } : {}),
     },
     proofClass,
   );
@@ -232,6 +223,12 @@ export function gateTreasuryPreReleaseSettlement(
   }
 
   // ── 3. semantic lineage purpose（tr1_ entry——release 前确认；非 tr1_ 无 lineage 协议要求）。
+  //    【Remediation V 七】现代 profile 的 root not-executed：root lineage
+  //    publication 是 settlement 协议的组成部分——marker discharge 前完成
+  //    root exact relation（active record rootIdentity/currentIdentity 全维度
+  //    或 terminal summary rootExact）；identity 冲突/缺失阻断，不降级
+  //    not_applicable。root committed / 隔离 profile 保持既有语义（协议明确
+  //    无 lineage 义务）。
   if (entry.lineageId !== undefined) {
     const semantic = validateTreasurySemanticLineage({
       transactionId: entry.transactionId,
@@ -254,6 +251,23 @@ export function gateTreasuryPreReleaseSettlement(
       return result(
         "semantic_lineage_blocked",
         `semantic lineage purpose ${semantic.verdict}: ${"detail" in semantic ? semantic.detail : "purpose 矩阵拒绝"}`,
+      );
+    }
+  } else if (
+    entry.resolution === "not-executed" &&
+    (entry.identityProfile === "modern-contract" || entry.identityProfile === "lowlevel")
+  ) {
+    // root relation 经装配 channel（未装配 fail closed——不得静态 import
+    // lineageFinalizationProof 造成 resolutionStore 模块环）。
+    const rootRelationSource = peekTreasuryRootLineageRelation();
+    if (rootRelationSource === null) {
+      return result("semantic_lineage_blocked", "root lineage relation source 未装配（root not-executed 的 exact relation 不可验证——fail closed）");
+    }
+    const rootRelation = rootRelationSource(journalIdentity);
+    if (rootRelation.verdict !== "match") {
+      return result(
+        "semantic_lineage_blocked",
+        `root not-executed lineage exact relation ${rootRelation.verdict}: ${rootRelation.detail}（marker discharge 前必须成立——不得 not_applicable）`,
       );
     }
   }
@@ -281,9 +295,14 @@ export function gateTreasuryPreReleaseSettlement(
     return result("authority_store_unhealthy", `unresolved authority store unhealthy: ${current.detail}`);
   }
   // resolver not_found：authorization fault 可能仍在（resolver 只覆盖 intent/quarantine）。
-  const fault = readTreasuryAuthorizationFaultEntry(entry.transactionId);
-  if (fault !== undefined) {
-    const faultExact = treasuryPreReleaseExactIdentityOfAuthorizationFault(fault);
+  // 【Remediation V 六】tri-state 读取——store unhealthy 不得折叠为 absent：
+  // fatal store 下在场的 fault 可能被误判"authority 不存在"而放行 destructive。
+  const faultRead = readTreasuryAuthorizationFaultEntryStructured(entry.transactionId);
+  if (faultRead.status === "store_unhealthy") {
+    return result("authority_store_unhealthy", `authorization fault store unhealthy: ${faultRead.detail}（absent 判定前必须确认 store healthy）`);
+  }
+  if (faultRead.status === "present") {
+    const faultExact = treasuryPreReleaseExactIdentityOfAuthorizationFault(faultRead.entry);
     if (faultExact === null) {
       return result("authority_insufficient", "authorization fault entry 身份无法构造 exact identity（不释放）");
     }

@@ -39,6 +39,7 @@ import {
 } from "@/runtime/treasury/durablePublication";
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { compareTreasuryAuthoritySameIdIdentity } from "@/runtime/treasury/authorityIdempotence";
+import { isTreasuryRearmAttemptId } from "@/runtime/treasury/transactionId";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
 import type { TreasuryStructureBindingDescriptor } from "@/runtime/treasury/types";
 import {
@@ -50,8 +51,13 @@ import {
 /**
  * 【第十四轮】authorization-fault v4：lowlevel 严格矩阵（lowlevelSource
  * 来源标记）+ read-back 完整身份比较 + health probe metadata 门禁。
+ * 【Round 22 Remediation V 六】v5：rearm（tr1_）fault 携带完整 lineage 四
+ * 字段（lineageId / lineageGeneration / parentTransactionId /
+ * lineageBindingDigest——all-or-none；tr1_ 必带、initial 禁带）。v4 的 tr1_
+ * entry 缺 lineage 事实无法完整迁移 → 原数据保留 fail closed（不猜测缺失
+ * parent/binding）。
  */
-const AUTHORIZATION_FAULT_VERSION = 4 as const;
+const AUTHORIZATION_FAULT_VERSION = 5 as const;
 export const TREASURY_AUTHORIZATION_FAULT_MAX_ENTRIES = 64;
 const AUTHORIZATION_FAULT_KEY_PREFIX = "af:";
 const FAULT_DIGEST_PATTERN = /^[0-9a-f]{16}$/;
@@ -91,6 +97,15 @@ export interface TreasuryAuthorizationFaultEntry {
   readonly durableIdentityDigest?: string;
   /** v1 迁移 entry（身份事实不完整——仅按 digest 匹配的旧协议解除）。 */
   readonly legacyV1?: boolean;
+  /**
+   * 【v5 / Remediation V 六】rearm（tr1_）fault 的 lineage proof 四字段
+   * （all-or-none：tr1_ transactionId 必须整体携带，写入前拒绝部分携带；
+   * initial attempt 禁止携带——缺失 parent/binding 不得猜测）。
+   */
+  readonly lineageId?: string;
+  readonly lineageGeneration?: number;
+  readonly parentTransactionId?: string;
+  readonly lineageBindingDigest?: string;
   /** canonical postings（有界 ≤32；资产事实快照）。 */
   readonly postings: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
   readonly faultTick: number;
@@ -103,7 +118,7 @@ export interface TreasuryAuthorizationFaultEntry {
 }
 
 export interface TreasuryAuthorizationFaultStore {
-  version: 4;
+  version: 5;
   entries: Record<string, TreasuryAuthorizationFaultEntry>;
   entryCount: number;
   updatedAt: number;
@@ -225,6 +240,30 @@ function validateFaultEntryShape(entry: unknown): string | null {
     // 在持久层即拒绝）。
     const descriptorError = validateTreasuryStructureDescriptorArray(candidate.structureFacts, 16);
     if (descriptorError !== null) return descriptorError;
+  }
+  // 【v5 / Remediation V 六】lineage 四字段整体性 + tr1_/initial 携带矩阵：
+  // tr1_（rearm）fault 必须整体携带（缺任一 → 写入前拒绝——不发布貌似
+  // normal、实际永远无法 discharge 的 partial authority）；initial fault
+  // 禁止携带（携带即身份矛盾）。
+  {
+    const lineageFields = ["lineageId", "lineageGeneration", "parentTransactionId", "lineageBindingDigest"] as const;
+    const presentLineage = lineageFields.filter((field) => candidate[field] !== undefined);
+    if (presentLineage.length !== 0 && presentLineage.length !== lineageFields.length) {
+      return `lineage 字段必须整体存在或整体缺失（部分携带: ${presentLineage.join(",")})`;
+    }
+    if (presentLineage.length === lineageFields.length) {
+      if (typeof candidate.lineageId !== "string" || candidate.lineageId.length === 0) return "lineageId 非法";
+      if (typeof candidate.lineageGeneration !== "number" || !Number.isSafeInteger(candidate.lineageGeneration) || (candidate.lineageGeneration as number) < 1) {
+        return "lineageGeneration 非安全正整数";
+      }
+      if (typeof candidate.parentTransactionId !== "string" || candidate.parentTransactionId.length === 0) return "parentTransactionId 非法";
+      if (typeof candidate.lineageBindingDigest !== "string" || candidate.lineageBindingDigest.length === 0) return "lineageBindingDigest 非法";
+      if (!isTreasuryRearmAttemptId(candidate.transactionId)) {
+        return "initial（非 tr1_）authorization fault 禁止携带 lineage proof（身份矛盾）";
+      }
+    } else if (presentLineage.length === 0 && isTreasuryRearmAttemptId(candidate.transactionId)) {
+      return "tr1_（rearm）authorization fault 缺完整 lineage 四字段（写入前拒绝——不猜测缺失 parent/binding）";
+    }
   }
   if (candidate.authorizationCohort !== undefined) {
     // 【第十三轮第九节】共享 cohort validator（唯一权威——全字段 + 异常边界；
@@ -400,6 +439,40 @@ function loadFaultStoreRuntime(): FaultStoreRuntime {
     heapFaultRuntime = { store: upgraded, fatal: null };
     return heapFaultRuntime;
   }
+  if ((raw.version as number) === 4) {
+    // v4 → v5 迁移（【Remediation V 六】lineage 四字段，原子）：非 tr1_
+    // entry 无 lineage 协议义务——原样迁移；tr1_ entry 在 v4 协议下从未携带
+    // lineage 事实（parent/binding 不可推导）→ 整 store fatal 原数据保留
+    // （fail closed——不猜测缺失 lineage、不发布可自动解除的 partial
+    // authority）。形状损坏 → fatal 原数据保留。
+    const entries: Record<string, TreasuryAuthorizationFaultEntry> = {};
+    faultEvents.fullScans += 1;
+    for (const [key, value] of Object.entries((raw as { entries?: Record<string, unknown> }).entries ?? {})) {
+      const typed = value as TreasuryAuthorizationFaultEntry;
+      if (isTreasuryRearmAttemptId(typed.transactionId)) {
+        heapFaultRuntime = {
+          store: raw,
+          fatal: `v4 tr1_ fault entry（${key.slice(0, 48)}）无法完整迁移 v5：lineage 四字段缺失且不可推导（原数据保留，fail closed——显式 forensic 处理）`,
+        };
+        return heapFaultRuntime;
+      }
+      const shapeError = validateFaultEntryShape(typed);
+      if (shapeError !== null) {
+        heapFaultRuntime = { store: raw, fatal: `${shapeError}（v4 fault entry 损坏，人工处理；key ${key.slice(0, 48)}）` };
+        return heapFaultRuntime;
+      }
+      entries[key] = typed;
+    }
+    const upgraded: TreasuryAuthorizationFaultStore = { version: AUTHORIZATION_FAULT_VERSION, entries, entryCount: Object.keys(entries).length, updatedAt: Game.time };
+    const upgradedError = validateFaultStoreShape(upgraded);
+    if (upgradedError !== null) {
+      heapFaultRuntime = { store: raw, fatal: `${upgradedError}（v4→v5 升级自检失败，authorizationFaults fail closed，原数据保留）` };
+      return heapFaultRuntime;
+    }
+    faultBranch().authorizationFaults = upgraded;
+    heapFaultRuntime = { store: upgraded, fatal: null };
+    return heapFaultRuntime;
+  }
   const shapeError = validateFaultStoreShape(raw);
   if (shapeError !== null) {
     heapFaultRuntime = { store: raw, fatal: `${shapeError}（authorizationFaults fail closed，原数据保留）` };
@@ -429,7 +502,7 @@ export function peekTreasuryAuthorizationFaultHealth(): TreasuryAuthorizationFau
   }
   const store = peekTreasuryAuthorizationFaultStore();
   if (store === undefined) return { healthy: true, detail: null, entryCount: 0 };
-  if (store.version !== AUTHORIZATION_FAULT_VERSION && store.version !== 1 && store.version !== 2 && store.version !== 3) {
+  if (store.version !== AUTHORIZATION_FAULT_VERSION && store.version !== 1 && store.version !== 2 && store.version !== 3 && store.version !== 4) {
     return { healthy: false, detail: `未知 authorizationFaults 版本 ${String(store.version)}`, entryCount: 0 };
   }
   if (!store.entries || typeof store.entries !== "object") {
@@ -611,6 +684,35 @@ export function readTreasuryAuthorizationFaultEntry(transactionId: string): Read
         ...(entry.structureFacts !== undefined ? { structureFacts: entry.structureFacts.map((fact) => ({ ...fact })) } : {}),
         ...(entry.authorizationCohort !== undefined ? { authorizationCohort: { ...entry.authorizationCohort } } : {}),
       }) as Readonly<TreasuryAuthorizationFaultEntry>);
+}
+
+/**
+ * 【Remediation V 六】结构化、健康感知的单条读取（tri-state）：
+ * - present：entry 存在（store 健康）；
+ * - absent：entry 不存在且 store 健康（store 不存在 = 健康空）；
+ * - store_unhealthy：store fatal / 形状损坏——**不得折叠为 absent**（pre-
+ *   release gate 与 exact discharge 的 absent 判定必须先确认 store healthy）。
+ */
+export type TreasuryAuthorizationFaultEntryRead =
+  | { readonly status: "present"; readonly entry: Readonly<TreasuryAuthorizationFaultEntry> }
+  | { readonly status: "absent" }
+  | { readonly status: "store_unhealthy"; readonly detail: string };
+
+export function readTreasuryAuthorizationFaultEntryStructured(transactionId: string): TreasuryAuthorizationFaultEntryRead {
+  if (peekTreasuryAuthorizationFaultStore() === undefined) return { status: "absent" };
+  const runtime = loadFaultStoreRuntime();
+  if (runtime.fatal) return { status: "store_unhealthy", detail: runtime.fatal };
+  const entry = runtime.store.entries[encodeFaultKey(transactionId)];
+  if (entry === undefined) return { status: "absent" };
+  return {
+    status: "present",
+    entry: treasuryBoundedDeepFreezeSnapshot({
+      ...entry,
+      postings: entry.postings.map((leg) => ({ ...leg })),
+      ...(entry.structureFacts !== undefined ? { structureFacts: entry.structureFacts.map((fact) => ({ ...fact })) } : {}),
+      ...(entry.authorizationCohort !== undefined ? { authorizationCohort: { ...entry.authorizationCohort } } : {}),
+    }) as Readonly<TreasuryAuthorizationFaultEntry>,
+  };
 }
 
 /** resolution 路径：释放单条 fault authority（tombstone 写入成功后调用）。 */

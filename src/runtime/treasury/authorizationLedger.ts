@@ -467,6 +467,13 @@ export function createTreasuryAuthorizationLedger(deps: TreasuryAuthorizationLed
         ...(record.cohortDigest !== undefined ? { authorizationCohortDigest: record.cohortDigest } : {}),
         ...(record.ownerIdentity !== "" ? { ownerIdentity: record.ownerIdentity } : {}),
         ...(record.policyIdentity !== "" ? { policyIdentity: record.policyIdentity } : {}),
+        // 【Remediation V 六】rearm lineage 四字段整体透传（tr1_ redemption
+        // fault 的 durable authority 携带完整 lineage proof——缺失时 store
+        // 写入前拒绝，不发布永远无法 discharge 的 partial authority）。
+        ...(record.rearmLineageId !== undefined ? { lineageId: record.rearmLineageId } : {}),
+        ...(record.rearmAttemptGeneration !== undefined ? { lineageGeneration: record.rearmAttemptGeneration } : {}),
+        ...(record.rearmParentTransactionId !== undefined ? { parentTransactionId: record.rearmParentTransactionId } : {}),
+        ...(record.rearmLineageBindingDigest !== undefined ? { lineageBindingDigest: record.rearmLineageBindingDigest } : {}),
         postings: context.postings.map((leg) => ({ roomName: leg.roomName, locationKind: leg.locationKind, resource: leg.resource, delta: leg.delta })),
         faultTick: Game.time,
         outcome: "not_started",
@@ -500,7 +507,8 @@ export function createTreasuryAuthorizationLedger(deps: TreasuryAuthorizationLed
         recordedAt: Game.time,
         ...(exactMarkerFieldsOfAttemptFacts({
           // bundle redemption 是 contract 路径——identity-bound；binding/
-          // generation/lineageId 由 rearm bundle record 注入。
+          // generation/lineageId/parent 由 rearm bundle record 注入（【V 六】
+          // parentTransactionId 一并透传——marker v4 lineage 四字段完整）。
           identityProfile: "modern-contract",
           ...(record.contractDigest !== undefined ? { contractDigest: record.contractDigest } : {}),
           ...(record.cohortDigest !== undefined ? { authorizationCohortDigest: record.cohortDigest } : {}),
@@ -508,6 +516,7 @@ export function createTreasuryAuthorizationLedger(deps: TreasuryAuthorizationLed
           ...(record.rearmLineageId !== undefined ? { lineageId: record.rearmLineageId } : {}),
           ...(record.rearmLineageBindingDigest !== undefined ? { lineageBindingDigest: record.rearmLineageBindingDigest } : {}),
           ...(record.rearmAttemptGeneration !== undefined ? { lineageGeneration: record.rearmAttemptGeneration } : {}),
+          ...(record.rearmParentTransactionId !== undefined ? { parentTransactionId: record.rearmParentTransactionId } : {}),
         }) ?? {}),
         detail: authorityPublished
           ? `原子 redemption 中断并回滚（${String(error instanceof Error ? error.message : error).slice(0, TREASURY_WRITE_FAULT_DETAIL_MAX)}）——状态零变化，marker 阻断后续 writer`
