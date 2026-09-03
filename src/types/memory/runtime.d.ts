@@ -111,7 +111,8 @@ declare global {
         /** Defender slot → 作战 assignment（目标与接敌位置分离；targetId=null
          *  为显式 hold——fresh plan 仍是权威，不回退独立选敌；participation=
          *  not_participating 是唯一允许消费方走旧独立行为的显式语义——entry
-         *  缺失不是不参与，fresh plan 存在时默认 hold）。 */
+         *  缺失不是不参与，fresh plan 存在时默认 hold；reservedPosition 为
+         *  direct actor 当前所站合法 boundary Rampart 的房间级保留事实）。 */
         defenderEngagements?: Record<
           string,
           {
@@ -120,6 +121,7 @@ declare global {
             position?: { x: number; y: number };
             positionKind?: string;
             participation?: string;
+            reservedPosition?: { x: number; y: number };
           }
         >;
         /** 【Remediation IV 十六】Defender front 约束（fallback revision 的
@@ -128,6 +130,9 @@ declare global {
         /** 【Remediation V 十】per-defender 唯一分配的候选集合持久化（hostileId
          *  → boundary rampart 候选 + 他属占用标记——fallback revision 消费）。 */
         engagementCandidatesByTargetId?: Record<string, { id: string; x: number; y: number; occupied?: boolean }[]>;
+        /** 【Remediation VI 6.3】参与 Defender 的本 tick 真实 facts（role + 当前
+         *  坐标——planner 输入快照持久化；fallback revision 按真实位置/role 评分）。 */
+        defenderFactsBySlot?: Record<string, { role: string; x: number; y: number }>;
         /** 【Remediation IV 十六 / V 十】运行期房间级 fallback 修订计划（每房间每
          *  tick 至多一次生成；Tower 与 Defender 共同消费——per-defender 独立位置
          *  重新分配，unaffected 原位置保留）。 */
@@ -136,7 +141,7 @@ declare global {
           towerTargetByTowerId: Record<string, string | null>;
           defenderEngagementBySlot: Record<
             string,
-            { targetId: string | null; mode: string; position?: { x: number; y: number }; positionKind?: string }
+            { targetId: string | null; mode: string; position?: { x: number; y: number }; positionKind?: string; reservedPosition?: { x: number; y: number } }
           >;
           emergencyHealByTowerId: Record<string, string>;
           requests: number;

@@ -32,11 +32,17 @@ import { readRoomEngagementPlan, type FocusFireEngagementPlan } from "@/runtime/
 export interface FocusFireFallbackDefenderEngagement {
   /** 修订后的 combat target（null = 本 tick hold——无合法 front-local 替代）。 */
   readonly targetId: string | null;
-  /** 修订后的 action mode（engage_position=boundary 独立站位 / inside 由消费方按距离重算；hold=无合法位置或无替代）。 */
-  readonly mode: "engage_position" | "hold";
+  /**
+   * 修订后的 action mode（engage_position=boundary 独立站位 / inside 由消费方按距离重算；hold=无合法位置或无替代；
+   * attack/ranged_attack=unaffected direct actor 的原动作保留——其 Rampart
+   * 已在 used-position 集合，不得被 replacement 抢占）。
+   */
+  readonly mode: "engage_position" | "hold" | "attack" | "ranged_attack";
   /** 修订后的独立接敌位置（boundary engage_position 时必带——per-defender 唯一）。 */
   readonly position?: { readonly x: number; readonly y: number };
   readonly positionKind?: "inside" | "boundary";
+  /** 【Remediation VI 6.3】unaffected direct actor 的 Rampart 保留事实（原样透传）。 */
+  readonly reservedPosition?: { readonly x: number; readonly y: number };
 }
 
 /** 房间级 fallback 修订计划（Tower 与 Defender 共同消费）。 */
@@ -114,6 +120,10 @@ export function resolveRoomEngagementFallbackRevision(
     readonly engagement: { x: number; y: number; kind: "inside" | "boundary" } | undefined;
     readonly originalPosition: { readonly x: number; readonly y: number } | undefined;
     readonly originalPositionKind: "inside" | "boundary" | undefined;
+    /** 【Remediation VI 6.3】unaffected 的原 action mode（direct actor 保留原动作）。 */
+    readonly originalMode: "attack" | "ranged_attack" | "engage_position" | "hold" | undefined;
+    /** 【Remediation VI 6.3】unaffected direct actor 的 Rampart 保留事实。 */
+    readonly reservedPosition: { readonly x: number; readonly y: number } | undefined;
   }
   const slots = Object.keys(plan.defenderFronts ?? {}).sort((left, right) => left.localeCompare(right));
   const revisedSlots: RevisedSlot[] = [];
@@ -132,6 +142,8 @@ export function resolveRoomEngagementFallbackRevision(
         engagement,
         originalPosition: original?.position,
         originalPositionKind: original?.positionKind,
+        originalMode: original?.mode,
+        reservedPosition: original?.reservedPosition,
       });
       continue;
     }
@@ -146,28 +158,44 @@ export function resolveRoomEngagementFallbackRevision(
       engagement: revised !== null ? planEngagementOfTarget(plan, revised) : undefined,
       originalPosition: undefined,
       originalPositionKind: undefined,
+      originalMode: undefined,
+      reservedPosition: undefined,
     });
   }
-  // 2. 房间级 used-position 初始化：unaffected Defender 的原独立位置优先保留
-  //    （合法 boundary 位置先占——不被替代分配抢占）。
+  // 2. 房间级 used-position 初始化：
+  //    - unaffected Defender 的原独立位置优先保留（合法 boundary 位置先占
+  //      ——不被替代分配抢占）；
+  //    - 【Remediation VI 6.3】unaffected direct actor（attack/ranged_attack）
+  //      的 reservedPosition 同样进入 used 集合——revision 不得把该 Rampart
+  //      分给 replacement Defender（D4：fallback 不抢 unaffected actor 的位置）。
   const usedPositionKeys = new Set<string>();
   for (const item of revisedSlots) {
     if (item.retained && item.originalPosition !== undefined) {
       usedPositionKeys.add(`${item.originalPosition.x},${item.originalPosition.y}`);
+    }
+    if (item.retained && item.reservedPosition !== undefined) {
+      usedPositionKeys.add(`${item.reservedPosition.x},${item.reservedPosition.y}`);
     }
   }
   // 3. 需要重新分配独立位置的 Defender（替代 boundary target 者）进入统一
   //    allocate：候选 = plan 持久化的该 target 候选集合（occupied 跳过；
   //    候选缺失退化为 plan 的 target-level 单一 engagement 位置——单候选
   //    只分配一名，其余 hold）；unaffected 已占位置不可再分配。
+  //    【Remediation VI 6.3】真实 role/坐标来自 plan 持久化的 defender
+  //    facts（planner 输入快照）——按真实 actor 位置评分（不用 target
+  //    anchor 近似、不硬编码 secondary）；旧 plan 无 facts 时回落 anchor。
   const reallocationInput: { slot: string; role: "primary" | "secondary"; x: number; y: number; targetId: string }[] = [];
   for (const item of revisedSlots) {
     if (!item.retained && item.targetId !== null && item.boundary) {
-      // Defender 的当前坐标未知（plan 不持久化实时位置）——以修订 target
-      // 的位置作为距离评分参考（到 defender 距离维度退化为 0 差——不影响
-      // 候选唯一性与确定性排序）。
+      const facts = plan.defenderFactsBySlot?.[item.slot];
       const anchor = item.engagement ?? { x: 0, y: 0, kind: "boundary" as const };
-      reallocationInput.push({ slot: item.slot, role: "secondary", x: anchor.x, y: anchor.y, targetId: item.targetId });
+      reallocationInput.push({
+        slot: item.slot,
+        role: facts?.role ?? "secondary",
+        x: facts?.x ?? anchor.x,
+        y: facts?.y ?? anchor.y,
+        targetId: item.targetId,
+      });
     }
   }
   let allocation: Record<string, { id: string; x: number; y: number; occupied?: boolean }> = {};
@@ -200,9 +228,10 @@ export function resolveRoomEngagementFallbackRevision(
       targetPositionById,
     });
   }
-  // 4. 生成 per-slot 修订 assignment：retained 保留原位置；替代 boundary 用
-  //    allocate 结果（无 → hold——保留 combat target）；inside 不带位置
-  //    （消费方按当前距离重算 mode）。
+  // 4. 生成 per-slot 修订 assignment：retained 保留原位置（direct actor 保留
+  //    原动作与 Rampart 保留事实）；替代 boundary 用 allocate 结果（无 →
+  //    hold——保留 combat target）；inside 不带位置（消费方按当前距离重算
+  //    mode）。
   const defenderEngagementBySlot: Record<string, FocusFireFallbackDefenderEngagement> = {};
   for (const item of revisedSlots) {
     if (item.targetId === null) {
@@ -210,6 +239,17 @@ export function resolveRoomEngagementFallbackRevision(
       continue;
     }
     if (item.retained) {
+      // 【Remediation VI 6.3】unaffected direct actor（attack/ranged_attack）
+      // 保留原动作（不因 fallback 停止攻击）；其 reservedPosition 已进
+      // used 集合并原样透传（消费方据此知道该 Rampart 被保留）。
+      if (item.originalMode === "attack" || item.originalMode === "ranged_attack") {
+        defenderEngagementBySlot[item.slot] = {
+          targetId: item.targetId,
+          mode: item.originalMode,
+          ...(item.reservedPosition !== undefined ? { reservedPosition: { x: item.reservedPosition.x, y: item.reservedPosition.y } } : {}),
+        };
+        continue;
+      }
       defenderEngagementBySlot[item.slot] = {
         targetId: item.targetId,
         mode: "engage_position",
