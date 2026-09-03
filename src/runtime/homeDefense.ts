@@ -6,6 +6,7 @@ import { getPlayerHostiles } from "@/runtime/defenseMode";
 import { assignDefenderSlot, clearDefenseCoordination, getRoomDefenseCoordination, setDefenderRole, writeDefenseFronts } from "@/runtime/defenseCoordination";
 import { buildDefenseFronts } from "@/runtime/defenseFronts";
 import { buildFocusFireRoomInput, planRoomEngagement, writeRoomEngagementPlan, clearRoomEngagementPlan } from "@/runtime/defenseFocusFire";
+import { getBoundaryRamparts } from "@/runtime/safeZoneHelpers";
 
 const DEFAULT_MAX_DEFENDERS = 3;
 
@@ -156,6 +157,9 @@ function syncDefenderAssignments(roomName: string, desiredCount: number, frontCo
  * 【Defense Focus-Fire Sidecar】每房间每 tick 一次快照 + 一次评分，生成
  * 唯一 engagement plan（Tower 与主防 Creep 共享的联合伤害预算/分火/紧急
  * 治疗仲裁目标分配）。planner 为纯函数；本处只负责快照采集与持久化。
+ * 【Remediation III 十六】combat target 与 engagement position 分离：敌在
+ * 安全区内=直接接敌；敌在边界外=最近合法 boundary rampart（复用既有
+ * safeZoneHelpers 防线系统——planner 不建立平行站位模型）。
  */
 function planRoomFocusFire(room: Room, hostiles: Creep[], frontCount: number): void {
   if (hostiles.length === 0 || frontCount === 0) {
@@ -179,6 +183,31 @@ function planRoomFocusFire(room: Room, hostiles: Creep[], frontCount: number): v
   const wounded = (getTickContextService().getRoomContext(room)?.getMyCreeps() || []).filter(
     (creep) => creep.hits < creep.hitsMax,
   );
+  // 【Remediation III 十六】接敌位置采集（既有防线系统单一权威）。
+  const safeZone = getSafeZone(room.name);
+  const hostileEngagements: Record<string, { x: number; y: number; kind: "inside" | "boundary" }> = {};
+  if (safeZone.size > 0) {
+    const boundaryRamparts = getBoundaryRamparts(room, safeZone);
+    for (const hostile of hostiles) {
+      if (safeZone.has(hostile.pos.x * 50 + hostile.pos.y)) {
+        hostileEngagements[hostile.id] = { x: hostile.pos.x, y: hostile.pos.y, kind: "inside" };
+        continue;
+      }
+      // 最近合法 boundary rampart（chebyshev 最近；平手按 id 稳定决胜）。
+      let nearest: StructureRampart | null = null;
+      let nearestRange = Infinity;
+      for (const rampart of boundaryRamparts) {
+        const range = Math.max(Math.abs(rampart.pos.x - hostile.pos.x), Math.abs(rampart.pos.y - hostile.pos.y));
+        if (range < nearestRange || (range === nearestRange && nearest !== null && rampart.id < nearest.id)) {
+          nearest = rampart;
+          nearestRange = range;
+        }
+      }
+      if (nearest) {
+        hostileEngagements[hostile.id] = { x: nearest.pos.x, y: nearest.pos.y, kind: "boundary" };
+      }
+    }
+  }
   const input = buildFocusFireRoomInput({
     roomName: room.name,
     hostiles,
@@ -187,6 +216,7 @@ function planRoomFocusFire(room: Room, hostiles: Creep[], frontCount: number): v
     defenderSlots: slotsByCreepName,
     defenderRoles: rolesBySlot,
     wounded,
+    hostileEngagements,
   });
   writeRoomEngagementPlan(planRoomEngagement(input, Game.time));
 }

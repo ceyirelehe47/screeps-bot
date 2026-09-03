@@ -4,7 +4,7 @@ import { chooseBoundaryBurstEngagement, chooseInsideBurstTarget } from "@/runtim
 import { getMemoryService, getTickContextService } from "@/runtime/runtimeServices";
 import { getSafeZone } from "@/runtime/safeZone";
 import { getBoundaryRamparts } from "@/runtime/safeZoneHelpers";
-import { readRoomEngagementPlan, type FocusFireEngagementPlan } from "@/runtime/defenseFocusFire";
+import { readRoomEngagementPlan, resolveRoomEngagementFallbackTarget, type FocusFireEngagementPlan } from "@/runtime/defenseFocusFire";
 
 const TOWER_MIN_REPAIR_ENERGY = 400;
 const TOWER_MIN_EMERGENCY_REPAIR_ENERGY = 200;
@@ -422,7 +422,19 @@ function runTowerCombatWithPlan(
       continue;
     }
     const assignedId = plan.towerAssignments[tower.id] ?? plan.focusTargetId ?? undefined;
-    const target = assignedId !== null && assignedId !== undefined ? hostileById.get(assignedId) : undefined;
+    let target = assignedId !== null && assignedId !== undefined ? hostileById.get(assignedId) : undefined;
+    if (!target && assignedId !== undefined && assignedId !== null) {
+      // 【Remediation III 十七】计划目标失效：房间级一次性共享 live fallback
+      //（与 Defender 消费同一结果——不独立重评分、不分裂火力）。
+      const fallback = resolveRoomEngagementFallbackTarget(
+        room.name,
+        assignedId,
+        new Set(hostiles.map((hostile) => hostile.id as string)),
+      );
+      if (fallback.targetId !== null) {
+        target = hostileById.get(fallback.targetId);
+      }
+    }
     if (target) {
       const code = tower.attack(target);
       if (code === OK) {
