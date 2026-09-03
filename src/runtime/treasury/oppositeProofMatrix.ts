@@ -77,6 +77,8 @@ export interface TreasuryOppositeProofGraView {
   readonly authorizationCohortDigest?: string;
   readonly durableIdentityDigest?: string;
   readonly lowlevelSource?: string;
+  /** 【Remediation IV 8.3】proof class 维度（缺失 → 身份不可证明 insufficient）。 */
+  readonly authorityClass?: "identity-bound" | "lowlevel";
 }
 
 export interface TreasuryOppositeProofDeps {
@@ -101,14 +103,6 @@ export interface TreasuryOppositeProofCheck {
   /** blockers 为空 = 无相反 proof 证据且 store 健康（可放行）。 */
   readonly clear: boolean;
 }
-
-const GRA_IDENTITY_FIELDS = [
-  "digest",
-  "contractDigest",
-  "authorizationCohortDigest",
-  "durableIdentityDigest",
-  "lowlevelSource",
-] as const;
 
 const TOMBSTONE_CLASS_OF_LEVEL: Record<string, "identity-bound" | "lowlevel" | "legacy"> = {
   "identity-bound": "identity-bound",
@@ -180,35 +174,49 @@ export function checkTreasuryOppositeProofsForCommitted(
       }
     }
   }
-  // 10.1：matching 或 conflicting GRA proof。
+  // 10.1【Remediation IV 8.3】：matching 或 conflicting GRA proof——完整
+  // exact identity relation（digest/proofClass/contract/cohort/durable/
+  // lowlevel/lineage 四字段含 generation/parent/binding），不再手工比较
+  // 部分字段；维度不足或不可证明同样阻断（insufficient ≠ absent）。
   if (!oppositeDeps.graStoreHealthy()) {
     blockers.push({ source: "gra-proof", classification: "store_unhealthy", detail: "GRA proof store unhealthy（无法证明无相反 GRA proof）" });
   } else {
     const gra = oppositeDeps.lookupGRAProof(transactionId);
     if (gra !== undefined) {
-      // GRA proof 携带完整 identity：任一维度与 expected 冲突即 conflict；
-      // 维度不足（contract/cohort/durable 缺席而 expected 要求）即
-      // insufficient——不得折叠为 absent。
-      let dimensionConflict: string | null = null;
-      let dimensionInsufficient = false;
-      for (const field of GRA_IDENTITY_FIELDS) {
-        const graValue = (gra as unknown as Record<string, unknown>)[field] as string | undefined;
-        const expectedValue = (expected as unknown as Record<string, unknown>)[field] as string | undefined;
-        if (graValue === undefined && expectedValue !== undefined) {
-          dimensionInsufficient = true;
-          continue;
-        }
-        if (graValue !== undefined && expectedValue !== undefined && graValue !== expectedValue) {
-          dimensionConflict = field;
-          break;
-        }
-      }
-      if (dimensionConflict !== null) {
-        blockers.push({ source: "gra-proof", classification: "identity_conflict", detail: `同 transaction ID 的 GRA proof 字段 ${dimensionConflict} 冲突（GRA 证明 not_executed——conflict）` });
-      } else if (dimensionInsufficient) {
-        blockers.push({ source: "gra-proof", classification: "insufficient", detail: "GRA proof 身份维度不足（insufficient ≠ absent——阻断）" });
+      if (gra.authorityClass !== "identity-bound" && gra.authorityClass !== "lowlevel") {
+        blockers.push({ source: "gra-proof", classification: "insufficient", detail: "GRA proof 缺 authorityClass（proof class 维度不可证明——insufficient ≠ absent）" });
       } else {
-        blockers.push({ source: "gra-proof", classification: "exact_match", detail: "同 transaction ID 存在 matching GRA proof（not_executed 结论——conflict）" });
+        const graExact = treasuryExactAttemptIdentityOfFacts(
+          gra.transactionId,
+          {
+            digest: gra.digest,
+            ...(gra.contractDigest !== undefined ? { contractDigest: gra.contractDigest } : {}),
+            ...(gra.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: gra.authorizationCohortDigest } : {}),
+            ...(gra.durableIdentityDigest !== undefined ? { durableIdentityDigest: gra.durableIdentityDigest } : {}),
+            ...(gra.authorityClass === "lowlevel" && gra.lowlevelSource !== undefined ? { lowlevelSource: gra.lowlevelSource } : {}),
+            ...(gra.generation >= 1
+              ? {
+                  lineageId: gra.lineageId,
+                  lineageGeneration: gra.generation,
+                  parentTransactionId: gra.parentTransactionId,
+                  lineageBindingDigest: gra.bindingDigest,
+                }
+              : {}),
+          },
+          gra.authorityClass,
+        );
+        if (graExact === null) {
+          blockers.push({ source: "gra-proof", classification: "insufficient", detail: "GRA proof 无法构造完整 exact identity（lineage/parent/binding 维度缺失——insufficient ≠ absent）" });
+        } else {
+          const relation = treasuryExactAttemptIdentityRelation(graExact, expected);
+          if (relation === "match") {
+            blockers.push({ source: "gra-proof", classification: "exact_match", detail: "同 transaction ID 存在完整 identity 匹配的 GRA proof（not_executed 结论——conflict）" });
+          } else if (relation === "conflict") {
+            blockers.push({ source: "gra-proof", classification: "identity_conflict", detail: "同 transaction ID 的 GRA proof identity 冲突（不可证明无关——conflict）" });
+          } else {
+            blockers.push({ source: "gra-proof", classification: "insufficient", detail: "GRA proof 身份维度不足（insufficient ≠ absent——阻断）" });
+          }
+        }
       }
     }
   }

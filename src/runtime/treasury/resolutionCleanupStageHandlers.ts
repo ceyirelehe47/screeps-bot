@@ -11,12 +11,6 @@
  */
 
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
-import { releaseTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
-import { releaseTreasuryIntentEntry } from "@/runtime/treasury/intents";
-import {
-  readTreasuryAuthorizationFaultEntry,
-  releaseTreasuryAuthorizationFaultEntry,
-} from "@/runtime/treasury/authorizationFaults";
 import {
   readTreasuryResolutionTombstone,
   writeTreasuryResolutionTombstone,
@@ -24,6 +18,11 @@ import {
 } from "@/runtime/treasury/resolutionStore";
 import { readTreasuryTrustedSettlementProofForAttempt } from "@/runtime/treasury/trustedSettlementProof";
 import { verifyTreasuryCommittedResolutionProof } from "@/runtime/treasury/committedProofVerifier";
+import { dischargeTreasuryExactAuthorityForCleanup } from "@/runtime/treasury/exactAuthorityDischarge";
+import {
+  relateTreasuryGenerationRetirementProofForOutcome,
+  verifyTreasuryLineageFinalizationState,
+} from "@/runtime/treasury/lineageFinalizationProof";
 import {
   registerTreasuryResolutionCleanupHandlersForAssembly,
   type TreasuryResolutionCleanupStageHandlers,
@@ -36,13 +35,11 @@ import {
 import { registerTreasuryCleanupProofProbesForAssembly } from "@/runtime/treasury/settlementProofActivation";
 import { assembleTreasuryResolutionCleanupCoordinator } from "@/runtime/treasury/resolutionCleanupCoordinator";
 import {
-  readTreasuryGenerationRetirementProof,
   lookupTreasuryGenerationRetirementProofByAttemptId,
   peekTreasuryGenerationRetirementHealth,
 } from "@/runtime/treasury/generationRetirementAuthority";
 import {
   lookupTreasuryAttemptLineageByAttemptId,
-  readTreasuryAttemptLineageRecord,
   closeTreasuryLineageAsChainCommitted,
   convergeTreasuryLineageRetirementFromFacts,
 } from "@/runtime/treasury/attemptLineage";
@@ -95,96 +92,13 @@ function semanticLineageVerdictOfTombstoneFacts(
 export function treasuryResolutionCleanupStageHandlers(): TreasuryResolutionCleanupStageHandlers {
   return {
   authorityRelease: (entry) => {
-    const current = resolveTreasuryUnresolvedAuthority(entry.transactionId);
-    if (current.status === "not_found") {
-      // 【Remediation III 八】authorization-fault-backed authority（pre-
-      // execution fault 的 resolutionAuthority 路径）：unified resolver 只
-      // 覆盖 quarantine/intent——journal entry 的 authority 阶段对
-      // authorization fault entry 同样经本 handler 释放（验证结论 proof
-      // 后释放 + read-back），不得绕过 coordinator 手工释放。
-      const faultEntry = readTreasuryAuthorizationFaultEntry(entry.transactionId);
-      if (faultEntry === undefined) return { status: "already_absent", detail: "resolver not_found（已释放）" };
-      const faultExpected = treasuryExactAttemptIdentityOfFacts(
-        entry.transactionId,
-        {
-          digest: entry.digest,
-          ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
-          ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
-          ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
-          ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
-          ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
-          ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
-          ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
-          ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
-        },
-        entry.proofClass === "lowlevel" ? "lowlevel" : entry.proofClass === "identity-bound" ? "identity-bound" : "legacy",
-      );
-      if (faultExpected === null) return { status: "blocked", detail: "journal entry 身份无法构造 exact identity（authorization fault）" };
-      if (faultEntry.digest !== entry.digest) {
-        return { status: "blocked", detail: "authorization fault entry digest 与 journal entry 不一致（不可释放）" };
-      }
-      if (entry.resolution === "committed") {
-        const faultTrusted = readTreasuryTrustedSettlementProofForAttempt(entry.transactionId, faultExpected);
-        if (faultTrusted.status !== "trusted_proof") {
-          return { status: "blocked", detail: `committed trusted receipt ${faultTrusted.status}: ${faultTrusted.detail}` };
-        }
-      } else {
-        const faultTombstone = readTreasuryResolutionTombstone(entry.transactionId);
-        if (faultTombstone === undefined || faultTombstone.stage !== "final" || faultTombstone.resolution !== "not-executed") {
-          return { status: "blocked", detail: "final not-executed tombstone 缺失（authorization fault 不可释放）" };
-        }
-        const faultTombstoneExact = treasuryExactAttemptIdentityOfTombstone(faultTombstone);
-        if (faultTombstoneExact === null || treasuryExactAttemptIdentityRelation(faultTombstoneExact, faultExpected) !== "match") {
-          return { status: "blocked", detail: "final tombstone 与 journal entry 身份不一致（authorization fault）" };
-        }
-      }
-      releaseTreasuryAuthorizationFaultEntry(entry.transactionId);
-      if (readTreasuryAuthorizationFaultEntry(entry.transactionId) !== undefined) {
-        return { status: "blocked", detail: "authorization fault 释放后 read-back 仍存在（重试）" };
-      }
-      return { status: "released", detail: "authorization fault entry 已释放并 read-back 确认消失" };
-    }
-    if (current.status !== "ok") return { status: "blocked", detail: `unresolved authority ${current.status}` };
-    // 结论 proof 校验后才释放：committed → trusted receipt exact match；
-    // not-executed → final tombstone exact match（release-trusted 语义——
-    // store 任一 entry 损坏时不返回 trusted proof）。
-    const expected = treasuryExactAttemptIdentityOfFacts(
-      entry.transactionId,
-      {
-        digest: entry.digest,
-        ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
-        ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
-        ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
-        ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
-        ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
-        ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
-        ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
-        ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
-      },
-      entry.proofClass === "lowlevel" ? "lowlevel" : entry.proofClass === "identity-bound" ? "identity-bound" : "legacy",
-    );
-    if (expected === null) return { status: "blocked", detail: "journal entry 身份无法构造 exact identity" };
-    if (entry.resolution === "committed") {
-      const trusted = readTreasuryTrustedSettlementProofForAttempt(entry.transactionId, expected);
-      if (trusted.status !== "trusted_proof") {
-        return { status: "blocked", detail: `committed trusted receipt ${trusted.status}: ${trusted.detail}` };
-      }
-    } else {
-      const tombstone = readTreasuryResolutionTombstone(entry.transactionId);
-      if (tombstone === undefined || tombstone.stage !== "final" || tombstone.resolution !== "not-executed") {
-        return { status: "blocked", detail: "final not-executed tombstone 缺失（不可释放）" };
-      }
-      const tombstoneExact = treasuryExactAttemptIdentityOfTombstone(tombstone);
-      if (tombstoneExact === null || treasuryExactAttemptIdentityRelation(tombstoneExact, expected) !== "match") {
-        return { status: "blocked", detail: "final tombstone 与 journal entry 身份不一致" };
-      }
-    }
-    releaseTreasuryQuarantineEntry(entry.transactionId);
-    releaseTreasuryIntentEntry(entry.transactionId);
-    if (resolveTreasuryUnresolvedAuthority(entry.transactionId).status !== "not_found") {
-      return { status: "blocked", detail: "release 后 read-back 仍非 not_found（重试）" };
-    }
-    return { status: "released", detail: "已释放并 read-back 确认 not_found" };
+    // 【Remediation IV 七】authority release 唯一实现委托 exact discharge：
+    // pre-release gate（journal ↔ proof ↔ opposite ↔ lineage ↔ authority
+    // 完整 exact 验证）与 release 位于同一同步窗口——同 transaction ID 的
+    // 身份冲突 Authority（Intent/Quarantine/Authorization Fault 任一维度
+    // 不同）不得被当作另一合法 attempt 删除；opposite proof 检查在 marker
+    // discharge 之前（coordinator 阶段 0.5）与本 handler 双重前移。
+    return dischargeTreasuryExactAuthorityForCleanup(entry);
   },
   outcomeFinalization: (entry) => {
     if (entry.resolution === "committed") {
@@ -299,8 +213,18 @@ export function treasuryResolutionCleanupStageHandlers(): TreasuryResolutionClea
       }
     }
     if (entry.lineageId !== undefined && entry.lineageGeneration !== undefined) {
-      let proof = readTreasuryGenerationRetirementProof(entry.lineageId, entry.lineageGeneration);
-      if (proof === undefined || proof.transactionId !== entry.transactionId || proof.digest !== entry.digest) {
+      // 【Remediation IV 八.2】GRA exact outcome：删除 transactionId+digest
+      // 快捷判断——已有 GRA 必须经完整三方 relation（journal ↔ final
+      // tombstone ↔ proof：root identity/lineage/generation/parent/binding/
+      // digest/contract/cohort/durable/source/proof class/resolution/
+      // retirement 三段）才 already_final；conflict/insufficient/store
+      // unhealthy 全部 blocked；缺失（absent）经 converge 单一权威写入后
+      // 重新执行同一 relation。
+      const relation = relateTreasuryGenerationRetirementProofForOutcome(entry);
+      if (relation.verdict === "match") {
+        return { status: "already_final", detail: "exact retirement proof 已存在（完整三方 exact relation match）" };
+      }
+      if (relation.verdict === "absent") {
         // 【Remediation III 6.4】exact GRA proof 的写入（retirement 三段
         // 收敛）由本 handler 驱动（converge 单一权威幂等推进）——outcome
         // 阶段完成 = exact proof 已持久并完整匹配，不得把"converge 尚未
@@ -309,13 +233,13 @@ export function treasuryResolutionCleanupStageHandlers(): TreasuryResolutionClea
         if (outcomeConverged.status !== "completed") {
           return { status: "blocked", detail: `retirement converge pending（exact-proof pending）: ${JSON.stringify(outcomeConverged).slice(0, 120)}` };
         }
-        proof = readTreasuryGenerationRetirementProof(entry.lineageId, entry.lineageGeneration);
-        if (proof === undefined || proof.transactionId !== entry.transactionId || proof.digest !== entry.digest) {
-          return { status: "blocked", detail: "converge 完成后 matching exact retirement proof 仍缺失（exact-proof pending）" };
+        const retried = relateTreasuryGenerationRetirementProofForOutcome(entry);
+        if (retried.verdict === "match") {
+          return { status: "finalized", detail: "exact retirement proof 经 converge 写入并完整 relation match（outcome 完成）" };
         }
-        return { status: "finalized", detail: "exact retirement proof 经 converge 写入并匹配（outcome 完成）" };
+        return { status: "blocked", detail: `converge 完成后 GRA exact relation 仍 ${retried.verdict}: ${retried.detail}（exact-proof pending）` };
       }
-      return { status: "already_final", detail: "exact retirement proof 已存在" };
+      return { status: "blocked", detail: `GRA exact relation ${relation.verdict}: ${relation.detail}` };
     }
     // initial attempt：outcome proof = final tombstone + root lineage 的
     // retirement 三段收敛（【Remediation III 6.4】"pending-release 状态与
@@ -337,25 +261,63 @@ export function treasuryResolutionCleanupStageHandlers(): TreasuryResolutionClea
     return { status: "already_final", detail: "initial attempt 的 outcome proof = final tombstone + root retirement 收敛" };
   },
   lineageFinalization: (entry) => {
-    if (entry.lineageId === undefined) {
-      // 【Remediation III 八】root/initial attempt 的 not_applicable 语义
-      // 统一经本 handler：immediate not-executed 建立的 root lineage record
-      // 处于 retiring 时在此收敛（原 resolutionAuthority 的
-      // completeImmediateNotExecutedRetirement 单一语义——收敛结果成为
-      // lineage 阶段的硬门禁，不再被忽略）。
-      const rootLineage = lookupTreasuryAttemptLineageByAttemptId(entry.transactionId);
-      if (rootLineage !== undefined && rootLineage.state === "retiring" && rootLineage.currentTransactionId === entry.transactionId) {
-        const rootConverged = convergeTreasuryLineageRetirementFromFacts(rootLineage.lineageId);
-        if (rootConverged.status === "completed") {
-          return { status: "finalized", detail: "root lineage retirement 三段收敛完成" };
-        }
-        return { status: "blocked", detail: `root converge pending: ${JSON.stringify(rootConverged).slice(0, 120)}` };
-      }
-      return { status: "not_applicable", detail: "initial attempt 无 lineage 终态阶段" };
+    // 【Remediation IV 九】lineage finalization 区分 active / terminal /
+    // missing / unhealthy：active record 读取 undefined 不再自动解释为
+    // not_applicable——root not-executed 与 rearm attempt 的 lineage 意外
+    // 缺失必须结构化阻断；active 缺失时只有 matching terminal exact
+    // summary 可证明终态；store unhealthy 零阶段推进。
+    const finalizationState = verifyTreasuryLineageFinalizationState({
+      transactionId: entry.transactionId,
+      ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
+      ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
+      resolution: entry.resolution,
+      expectedDigest: entry.digest,
+    });
+    if (finalizationState.state === "store_unhealthy") {
+      return { status: "blocked", detail: `lineage 终态判定 store unhealthy: ${finalizationState.detail}` };
     }
-    const record = readTreasuryAttemptLineageRecord(entry.lineageId);
-    if (record === undefined) {
-      return { status: "not_applicable", detail: "lineage record 不存在（terminal/backfill 已处理）" };
+    if (finalizationState.state === "terminal_final") {
+      return { status: "already_final", detail: `terminal exact summary 证明 ${finalizationState.terminalState} 终态` };
+    }
+    if (finalizationState.state === "summary_conflict") {
+      return { status: "blocked", detail: `terminal summary 与 cleanup entry 不一致: ${finalizationState.detail}` };
+    }
+    if (finalizationState.state === "lineage_missing") {
+      if (
+        entry.lineageId === undefined &&
+        (entry.resolution === "committed" ||
+          entry.identityProfile === "legacy-replay" ||
+          entry.identityProfile === "forensic-isolated")
+      ) {
+        // 【九.3】initial committed：transaction 非 rearm、无 active lineage、
+        // 无 terminal lineage、协议本身不要求 lineage → not_applicable。
+        // legacy-replay / forensic-isolated 的 root not-executed 同理——隔离
+        // profile 不参与自动协议（无 root lineage publication 义务）；现代
+        // profile（lowlevel/modern）的 root not-executed lineage 缺失仍然
+        // 结构化阻断（publication 是 settlement 的组成部分）。
+        return { status: "not_applicable", detail: "initial/隔离 profile attempt 无 lineage 终态阶段（协议不要求）" };
+      }
+      return { status: "blocked", detail: `${finalizationState.detail}——不得 not_applicable` };
+    }
+    // active record 存在。
+    const record = finalizationState.record;
+    if (entry.lineageId === undefined) {
+      // 【Remediation III 八】root not-executed 的 root lineage record 处于
+      // retiring 时在此收敛（原 resolutionAuthority 的 completeImmediate
+      // NotExecutedRetirement 单一语义——收敛结果成为 lineage 阶段的硬门禁）。
+      if (record.currentTransactionId === entry.transactionId) {
+        if (record.state === "retiring") {
+          const rootConverged = convergeTreasuryLineageRetirementFromFacts(record.lineageId);
+          if (rootConverged.status === "completed") {
+            return { status: "finalized", detail: "root lineage retirement 三段收敛完成" };
+          }
+          return { status: "blocked", detail: `root converge pending: ${JSON.stringify(rootConverged).slice(0, 120)}` };
+        }
+        if (record.state === "rearm_ready" || record.state === "non_rearmable_retired") {
+          return { status: "already_final", detail: `root lineage ${record.state}（not-executed 终态）` };
+        }
+      }
+      return { status: "blocked", detail: `root lineage record 状态 ${record.state}（current ${record.currentTransactionId.slice(0, 8)}）与 root not-executed 收敛语义不符` };
     }
     // 【Remediation II D.4】lineage 阶段不信任 boolean——终态也重验 record
     // 确实处于本 attempt 的 exact 最终状态：current attempt / generation /

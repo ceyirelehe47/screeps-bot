@@ -40,11 +40,14 @@ import {
   type TreasuryResolutionCleanupStage,
 } from "@/runtime/treasury/resolutionCleanupJournal";
 import {
+  recordTreasuryCleanupCompletion,
+  lookupTreasuryCleanupCompletion,
+} from "@/runtime/treasury/cleanupCompletionAuthority";
+import {
   dischargeTreasuryMarkerForAttempt,
   treasuryMarkerDischargeCompletesAttemptPhase,
   type TreasuryMarkerDischargeExpected,
 } from "@/runtime/treasury/markerDischarge";
-import type { TreasuryIdentityProfile } from "@/runtime/treasury/identityProfile";
 
 /** ack 结果（不得只返回含义模糊的 boolean）。 */
 export type TreasuryCleanupStageAckOutcome =
@@ -62,22 +65,21 @@ export interface TreasuryCleanupStageAckResult {
   readonly detail: string;
   /** marker 阶段透传 discharge 的全局锁事实（其余阶段无此维度）。 */
   readonly globalWriteAdmissionStillLocked?: boolean;
+  /**
+   * 【Remediation IV 十】lineage 阶段的完成语义（finalized/already_final
+   * → final；not_applicable → not_applicable）——completion authority 写入
+   * 时持久化"lineage 已 final 或明确 not-applicable"的区分事实。
+   */
+  readonly lineageDisposition?: "final" | "not_applicable";
 }
 
-/** 调用方已知的 attempt identity（与 journal entry 的不可变字段比较）。 */
-export interface TreasuryCleanupAckIdentity {
-  readonly digest?: string;
-  readonly identityProfile?: TreasuryIdentityProfile;
-  readonly proofClass?: string;
-  readonly contractDigest?: string;
-  readonly authorizationCohortDigest?: string;
-  readonly durableIdentityDigest?: string;
-  readonly lowlevelSource?: string;
-  readonly lineageId?: string;
-  readonly lineageGeneration?: number;
-  readonly parentTransactionId?: string;
-  readonly lineageBindingDigest?: string;
-}
+/**
+ * 调用方已知的 attempt identity。【Remediation IV 十一.4】state-changing
+ * 调用不再接受可选 partial expected——journal entry 自身是唯一 expected
+ * 来源（ack 协议以 Memory read-back 与 entry 的完整 11 字段自洽比较承载
+ * 防篡改，调用方不再可能以部分字段绕过其它维度比较）。
+ */
+export type TreasuryCleanupAckIdentity = Readonly<TreasuryResolutionCleanupEntry>;
 
 const ACK_IDENTITY_FIELDS = [
   "digest",
@@ -92,17 +94,6 @@ const ACK_IDENTITY_FIELDS = [
   "parentTransactionId",
   "lineageBindingDigest",
 ] as const;
-
-function identityMismatchDetail(entry: Readonly<TreasuryResolutionCleanupEntry>, expected: TreasuryCleanupAckIdentity): string | null {
-  for (const field of ACK_IDENTITY_FIELDS) {
-    const expectedValue = expected[field];
-    if (expectedValue === undefined) continue;
-    if (entry[field] !== expectedValue) {
-      return `identity 字段 ${field} 不一致（journal ${String(entry[field]).slice(0, 24)} vs expected ${String(expectedValue).slice(0, 24)}）`;
-    }
-  }
-  return null;
-}
 
 function stageBoolOf(entry: Readonly<TreasuryResolutionCleanupEntry>, stage: TreasuryResolutionCleanupStage): boolean {
   switch (stage) {
@@ -217,12 +208,12 @@ interface ExternalProofVerdict {
   readonly detail: string;
   readonly globalWriteAdmissionStillLocked?: boolean;
   readonly stageDetail?: string;
+  readonly lineageDisposition?: "final" | "not_applicable";
 }
 
 function acknowledgeCleanupStage(input: {
   readonly transactionId: string;
   readonly stage: TreasuryResolutionCleanupStage;
-  readonly expected?: TreasuryCleanupAckIdentity;
   readonly external: (entry: Readonly<TreasuryResolutionCleanupEntry>) => ExternalProofVerdict;
 }): TreasuryCleanupStageAckResult {
   const health = peekTreasuryResolutionCleanupHealth();
@@ -233,10 +224,19 @@ function acknowledgeCleanupStage(input: {
   if (entry === undefined) {
     return { outcome: "absent", detail: `cleanup entry ${input.transactionId.slice(0, 12)} 不存在（store 健康——非 fatal 折叠）` };
   }
-  if (input.expected !== undefined) {
-    const mismatch = identityMismatchDetail(entry, input.expected);
-    if (mismatch !== null) {
-      return { outcome: "conflict", detail: `ack ${input.stage} 拒绝：${mismatch}（零状态变化）` };
+  // 【Remediation IV 十一.4】journal entry 是唯一 expected 来源：heap 读取
+  // 与 Memory read-back 的完整 11 字段自洽比较（任何维度被篡改 → conflict，
+  // 零状态变化）——调用方不再可能以部分 expected 字段绕过其它维度。
+  const identityReadBack = readBackTreasuryResolutionCleanupEntryFromMemory(input.transactionId);
+  if (identityReadBack.status === "store_unhealthy") {
+    return { outcome: "store_unhealthy", detail: `cleanup journal read-back unhealthy: ${identityReadBack.detail ?? "unknown"}` };
+  }
+  if (identityReadBack.status === "absent" || identityReadBack.entry === undefined) {
+    return { outcome: "conflict", detail: `ack ${input.stage} 拒绝：Memory read-back entry 缺失（heap 与 Memory 不一致）` };
+  }
+  for (const field of ACK_IDENTITY_FIELDS) {
+    if (identityReadBack.entry[field] !== entry[field]) {
+      return { outcome: "conflict", detail: `ack ${input.stage} 拒绝：identity 字段 ${field} 在 Memory read-back 中不一致（篡改/损坏——零状态变化）` };
     }
   }
   if (!entry.settlementProofDurable) {
@@ -264,6 +264,7 @@ function acknowledgeCleanupStage(input: {
       ...(external.globalWriteAdmissionStillLocked !== undefined
         ? { globalWriteAdmissionStillLocked: external.globalWriteAdmissionStillLocked }
         : {}),
+      ...(external.lineageDisposition !== undefined ? { lineageDisposition: external.lineageDisposition } : {}),
     };
   }
   const beforeFault = ackFaultInjector?.({ transactionId: input.transactionId, stage: input.stage, phase: "before_write" }) ?? null;
@@ -310,6 +311,7 @@ function acknowledgeCleanupStage(input: {
     ...(external.globalWriteAdmissionStillLocked !== undefined
       ? { globalWriteAdmissionStillLocked: external.globalWriteAdmissionStillLocked }
       : {}),
+    ...(external.lineageDisposition !== undefined ? { lineageDisposition: external.lineageDisposition } : {}),
   };
 }
 
@@ -342,12 +344,10 @@ function dischargeExpectedOf(entry: Readonly<TreasuryResolutionCleanupEntry>): T
  */
 export function acknowledgeTreasuryCleanupMarkerDischarge(input: {
   readonly transactionId: string;
-  readonly expected?: TreasuryCleanupAckIdentity;
 }): TreasuryCleanupStageAckResult {
   return acknowledgeCleanupStage({
     transactionId: input.transactionId,
     stage: "marker_discharge",
-    expected: input.expected,
     external: (entry) => {
       const discharge = dischargeTreasuryMarkerForAttempt(dischargeExpectedOf(entry));
       return {
@@ -368,7 +368,6 @@ export function acknowledgeTreasuryCleanupMarkerDischarge(input: {
  */
 export function acknowledgeTreasuryCleanupAuthorityRelease(input: {
   readonly transactionId: string;
-  readonly expected?: TreasuryCleanupAckIdentity;
 }): TreasuryCleanupStageAckResult {
   const handlers = peekTreasuryResolutionCleanupStageHandlers();
   if (handlers === null) {
@@ -377,7 +376,6 @@ export function acknowledgeTreasuryCleanupAuthorityRelease(input: {
   return acknowledgeCleanupStage({
     transactionId: input.transactionId,
     stage: "authority_release",
-    expected: input.expected,
     external: (entry) => {
       const release = handlers.authorityRelease(entry);
       return {
@@ -397,7 +395,6 @@ export function acknowledgeTreasuryCleanupAuthorityRelease(input: {
  */
 export function acknowledgeTreasuryCleanupOutcomeFinalization(input: {
   readonly transactionId: string;
-  readonly expected?: TreasuryCleanupAckIdentity;
 }): TreasuryCleanupStageAckResult {
   const handlers = peekTreasuryResolutionCleanupStageHandlers();
   if (handlers === null) {
@@ -406,7 +403,6 @@ export function acknowledgeTreasuryCleanupOutcomeFinalization(input: {
   return acknowledgeCleanupStage({
     transactionId: input.transactionId,
     stage: "outcome_finalization",
-    expected: input.expected,
     external: (entry) => {
       const outcome = handlers.outcomeFinalization(entry);
       return {
@@ -426,7 +422,6 @@ export function acknowledgeTreasuryCleanupOutcomeFinalization(input: {
  */
 export function acknowledgeTreasuryCleanupLineageFinalization(input: {
   readonly transactionId: string;
-  readonly expected?: TreasuryCleanupAckIdentity;
 }): TreasuryCleanupStageAckResult {
   const handlers = peekTreasuryResolutionCleanupStageHandlers();
   if (handlers === null) {
@@ -435,31 +430,44 @@ export function acknowledgeTreasuryCleanupLineageFinalization(input: {
   return acknowledgeCleanupStage({
     transactionId: input.transactionId,
     stage: "lineage_finalization",
-    expected: input.expected,
     external: (entry) => {
       const lineage = handlers.lineageFinalization(entry);
       return {
         ok: lineage.status === "finalized" || lineage.status === "already_final" || lineage.status === "not_applicable",
         detail: `${lineage.status}: ${lineage.detail}`,
+        lineageDisposition: lineage.status === "not_applicable" ? "not_applicable" : "final",
       };
     },
   });
 }
 
-/** cleanup 完成结果（删除 + read-back absent 才是完全完成）。 */
+/** cleanup 完成结果（completion proof 持久 + journal 删除 + 双 read-back 才是完全完成）。 */
 export interface TreasuryCleanupCompletionResult {
-  readonly status: "completed" | "already_completed" | "cleanup_pending" | "store_unhealthy";
+  readonly status: "completed" | "already_completed" | "cleanup_pending" | "store_unhealthy" | "no_cleanup_authority";
   readonly detail: string;
 }
 
 /**
- * 【六.6】journal completion ack：只有五个持久事实（settlementProofDurable /
- * markerDischarged / authorityReleased / outcomeFinalized / lineageFinalized）
- * 全部 read-back 为 true 才删除 entry；删除后重新读取 Memory 确认 entry
- * 不存在才返回 completed。删除失败或仍存在 → cleanup_pending（不得向调用
- * 者报告 fully complete）。
+ * 【六.6 + Remediation IV 十.2】journal completion ack——固定写入顺序：
+ *
+ *   五个持久事实全部 read-back true
+ *     → completion candidate 写入 + Memory read-back + exact identity 重新验证
+ *     → 删除 journal entry
+ *     → journal 删除 read-back absent
+ *     → fully complete
+ *
+ * completion 写入失败 / read-back 冲突 → journal 保留（completion pending，
+ * 下 tick 幂等重试）；journal 删除失败 → completion 存在、journal pending
+ * （下 tick 幂等删除）。entry 已不存在时经 completion authority 区分合法
+ * 完成（match → already_completed）与无权威的意外缺失（absent →
+ * no_cleanup_authority——不得向调用者报告完成）。
  */
-export function completeTreasuryCleanupAcknowledged(transactionId: string): TreasuryCleanupCompletionResult {
+export function completeTreasuryCleanupAcknowledged(input: {
+  readonly transactionId: string;
+  readonly lineageDisposition: "final" | "not_applicable";
+  readonly globalWriteAdmissionStillLocked?: boolean;
+}): TreasuryCleanupCompletionResult {
+  const { transactionId } = input;
   const health = peekTreasuryResolutionCleanupHealth();
   if (!health.healthy) {
     return { status: "store_unhealthy", detail: `cleanup journal unhealthy: ${health.detail ?? "unknown"}` };
@@ -469,7 +477,17 @@ export function completeTreasuryCleanupAcknowledged(transactionId: string): Trea
     return { status: "store_unhealthy", detail: readBack0.detail ?? "read-back store unhealthy" };
   }
   if (readBack0.status === "absent") {
-    return { status: "already_completed", detail: "entry 已不存在（read-back 确认 absent——幂等已完成）" };
+    // 【Remediation IV 十.3】journal absent 不再自动等于完成：matching
+    // completion authority 才能证明合法完成；absent → no_cleanup_authority
+    // （journal 从未创建 / 被错误删除 / Memory 损坏丢失——fail closed）。
+    const completion = lookupTreasuryCleanupCompletion(transactionId);
+    if (completion.verdict === "match") {
+      return { status: "already_completed", detail: "entry 已删除且 matching completion authority 存在（幂等已完成）" };
+    }
+    if (completion.verdict === "absent") {
+      return { status: "no_cleanup_authority", detail: "journal entry 不存在且无 completion authority（不得视为已完成——fail closed）" };
+    }
+    return { status: "store_unhealthy", detail: `completion authority ${completion.verdict}: ${completion.detail}` };
   }
   const entry = readBack0.entry!;
   if (
@@ -484,8 +502,19 @@ export function completeTreasuryCleanupAcknowledged(transactionId: string): Trea
       detail: `阶段未全部持久确认（proof=${String(entry.settlementProofDurable)} marker=${String(entry.markerDischarged)} authority=${String(entry.authorityReleased)} outcome=${String(entry.outcomeFinalized)} lineage=${String(entry.lineageFinalized)}）`,
     };
   }
+  // 【十.2】completion proof 先于 journal 删除持久化（写入 + read-back +
+  // exact identity 重新验证——recordTreasuryCleanupCompletion 内部承载）。
+  const completionWrite = recordTreasuryCleanupCompletion({
+    entry,
+    lineageDisposition: input.lineageDisposition,
+    globalWriteAdmissionStillLocked: input.globalWriteAdmissionStillLocked ?? false,
+  });
+  if (completionWrite.status === "rejected") {
+    return { status: "cleanup_pending", detail: `completion proof 写入失败（journal 保留）: ${completionWrite.detail}` };
+  }
   if (!completeTreasuryResolutionCleanup(transactionId)) {
-    return { status: "cleanup_pending", detail: "cleanup entry 删除被拒（底层返回 false——entry 保留）" };
+    // journal 删除失败：completion 已存在——下 tick 幂等重删（journal pending）。
+    return { status: "cleanup_pending", detail: "cleanup entry 删除被拒（completion 已持久——下 tick 幂等删除）" };
   }
   const afterFault = ackFaultInjector?.({ transactionId, stage: "journal_completion", phase: "after_delete" }) ?? null;
   if (afterFault === "restore_entry") {
@@ -498,10 +527,10 @@ export function completeTreasuryCleanupAcknowledged(transactionId: string): Trea
   }
   const readBack1 = readBackTreasuryResolutionCleanupEntryFromMemory(transactionId);
   if (readBack1.status === "present") {
-    return { status: "cleanup_pending", detail: "删除后 read-back 仍存在 entry（journal completion 未持久确认）" };
+    return { status: "cleanup_pending", detail: "删除后 read-back 仍存在 entry（completion 已持久——journal completion 未确认）" };
   }
   if (readBack1.status === "store_unhealthy") {
     return { status: "store_unhealthy", detail: readBack1.detail ?? "删除后 read-back store unhealthy" };
   }
-  return { status: "completed", detail: "cleanup entry 已删除并经 Memory read-back 确认 absent" };
+  return { status: "completed", detail: "completion proof 已持久且 cleanup entry 删除经 Memory read-back 确认 absent" };
 }

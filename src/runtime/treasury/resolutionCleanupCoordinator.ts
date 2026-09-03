@@ -39,31 +39,10 @@ import {
   acknowledgeTreasuryCleanupOutcomeFinalization,
   acknowledgeTreasuryCleanupLineageFinalization,
   completeTreasuryCleanupAcknowledged,
-  type TreasuryCleanupAckIdentity,
 } from "@/runtime/treasury/cleanupStageAcknowledgement";
 import { acknowledgeTreasuryCleanupSettlementProof } from "@/runtime/treasury/settlementProofActivation";
-import { readTreasuryTrustedSettlementProofForAttempt } from "@/runtime/treasury/trustedSettlementProof";
-import {
-  treasuryExactAttemptIdentityOfFacts,
-  type TreasuryExactAttemptIdentity,
-} from "@/runtime/treasury/exactAttemptIdentity";
-function expectedIdentityOfEntry(entry: Readonly<TreasuryResolutionCleanupEntry>): TreasuryExactAttemptIdentity | null {
-  return treasuryExactAttemptIdentityOfFacts(
-    entry.transactionId,
-    {
-      digest: entry.digest,
-      ...(entry.contractDigest !== undefined ? { contractDigest: entry.contractDigest } : {}),
-      ...(entry.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: entry.authorizationCohortDigest } : {}),
-      ...(entry.durableIdentityDigest !== undefined ? { durableIdentityDigest: entry.durableIdentityDigest } : {}),
-      ...(entry.lowlevelSource !== undefined ? { lowlevelSource: entry.lowlevelSource } : {}),
-      ...(entry.lineageId !== undefined ? { lineageId: entry.lineageId } : {}),
-      ...(entry.lineageGeneration !== undefined ? { lineageGeneration: entry.lineageGeneration } : {}),
-      ...(entry.parentTransactionId !== undefined ? { parentTransactionId: entry.parentTransactionId } : {}),
-      ...(entry.lineageBindingDigest !== undefined ? { lineageBindingDigest: entry.lineageBindingDigest } : {}),
-    },
-    entry.proofClass === "lowlevel" ? "lowlevel" : entry.proofClass === "identity-bound" ? "identity-bound" : "legacy",
-  );
-}
+import { gateTreasuryPreReleaseSettlement } from "@/runtime/treasury/preReleaseSettlementGate";
+import { lookupTreasuryCleanupCompletion, peekTreasuryCleanupCompletionHealth } from "@/runtime/treasury/cleanupCompletionAuthority";
 
 export type TreasuryCleanupPendingStage =
   | "proof_activation"
@@ -135,32 +114,49 @@ function pendingResult(
 /**
  * 推进单个 attempt 的全部 cleanup 阶段（幂等——任意阶段已持久确认时
  * 复验外部事实后继续）。任一阶段未确认即停止并返回结构化 pending。
+ *
+ * 【Remediation IV 十一.4】不再接受调用方 expected——journal entry 是唯一
+ * expected 来源；【六/七】marker discharge 之前先经 pre-release gate
+ * （journal ↔ target proof ↔ opposite proof ↔ semantic lineage ↔ authority
+ * 全 exact 验证——opposite proof 检查前移至任何 destructive 动作之前）。
  */
 export function advanceTreasuryResolutionCleanupPhases(input: {
   readonly transactionId: string;
-  readonly expected?: TreasuryCleanupAckIdentity;
+  readonly expectedIdentity?: import("@/runtime/treasury/exactAttemptIdentity").TreasuryExactAttemptIdentity;
 }): TreasuryCleanupAdvanceResult {
   const journalEntryAbsent = readBackTreasuryResolutionCleanupEntryFromMemory(input.transactionId).status === "absent";
   const entry = readTreasuryResolutionCleanupEntry(input.transactionId);
   if (entry === undefined) {
-    // store 健康但 entry 不存在：advance 的调用方都在 open admission 成功
-    // 之后进入——entry 缺失即已完成删除（幂等 completed：journal 删除
-    // read-back 即完全完成的事实）。store 不健康（fatal 与 absent 同形
-    // 折叠）→ store_unhealthy fail closed。
+    // store 健康但 entry 不存在：【Remediation IV 十.3】journal absent 不再
+    // 自动等于完成——matching completion authority 才能证明合法完成（未提供
+    // expected 时 completion proof 自身为持久权威）；absent → no_cleanup_
+    // authority（fail closed，不得把所有 phase 设为 true）；冲突 → 阻断。
     if (journalEntryAbsent) {
-      return {
-        status: "completed",
-        pendingStage: "none",
-        detail: "cleanup entry 不存在且 store 健康（幂等——journal 删除已 read-back 确认）",
-        phases: phasesOfEntry(undefined, true),
-        globalWriteAdmissionStillLocked: false,
-        globalWriteAdmissionLockedKnown: false,
-      };
+      const completionHealth = peekTreasuryCleanupCompletionHealth();
+      if (!completionHealth.healthy) {
+        return pendingResult("none", `completion authority store unhealthy: ${completionHealth.detail}`, undefined, false, "store_unhealthy");
+      }
+      const completion = lookupTreasuryCleanupCompletion(input.transactionId, input.expectedIdentity);
+      if (completion.verdict === "match") {
+        return {
+          status: "completed",
+          pendingStage: "none",
+          detail: "cleanup entry 不存在且 matching completion authority 存在（幂等——journal 删除已由 completion 证明）",
+          phases: phasesOfEntry(undefined, true),
+          globalWriteAdmissionStillLocked: false,
+          globalWriteAdmissionLockedKnown: false,
+        };
+      }
+      if (completion.verdict === "absent") {
+        return pendingResult("none", "no_cleanup_authority：journal entry 不存在且无 completion authority（不得视为已完成）", undefined, true, "absent");
+      }
+      return pendingResult("none", `completion authority ${completion.verdict}: ${completion.detail}`, undefined, false);
     }
     return pendingResult("none", "cleanup entry 读取失败（store unhealthy）", undefined, false, "store_unhealthy");
   }
   let globalLocked = false;
   let globalLockedKnown = false;
+  let lineageDisposition: "final" | "not_applicable" = "final";
   // 阶段 0：proof activation（reservation → durable）。
   if (!entry.settlementProofDurable) {
     const activation = acknowledgeTreasuryCleanupSettlementProof({ transactionId: input.transactionId });
@@ -168,34 +164,25 @@ export function advanceTreasuryResolutionCleanupPhases(input: {
       return pendingResult("proof_activation", `settlement proof activation ${activation.outcome}: ${activation.detail}`, entry, false);
     }
   }
-  // 阶段 0.5【九.1】：committed 的 marker discharge 是第一个 destructive
-  // 动作——之前必须确认 release-trusted Receipt 成立（store 任一无关 entry
-  // 损坏 / identity conflict / legacy 不足时不清 marker、不释放、不推进）。
-  // not-executed 的 release 证据（final tombstone）已由 activation 验证。
-  if (entry.resolution === "committed") {
-    const markerExpected = expectedIdentityOfEntry(entry);
-    if (markerExpected === null) {
-      return pendingResult("marker_discharge", "committed entry 身份无法构造 exact identity（trusted 前置拒绝）", entry, false);
-    }
-    const markerTrusted = readTreasuryTrustedSettlementProofForAttempt(input.transactionId, markerExpected);
-    if (
-      markerTrusted.status === "store_unhealthy" ||
-      markerTrusted.status === "identity_conflict" ||
-      markerTrusted.status === "legacy_insufficient"
-    ) {
-      // 九.1：无关 entry 损坏 / identity 冲突 / legacy 不足时零 marker
-      // discharge。absent 不阻断（receipt 尚未刷新的恢复窗口——
-      // authority 阶段的 trusted 验证会在缺席时阻断）。
-      return pendingResult(
-        "marker_discharge",
-        `committed trusted receipt ${markerTrusted.status}: ${markerTrusted.detail}（marker 不清除——零 destructive）`,
-        entry,
-        false,
-      );
-    }
+  // 阶段 0.5【Remediation IV 六】：pre-release settlement gate——marker
+  // discharge 是第一个 destructive 动作，之前必须确认 journal exact
+  // identity ↔ target settlement proof exact identity ↔ opposite proof
+  // 确证 absent ↔ semantic lineage purpose ↔ 当前 unresolved Authority
+  // exact identity 全部成立（authority exact 验证与 opposite proof 检查
+  // 从 outcome 阶段前移；同 transaction ID 的身份冲突 Authority 不得进入
+  // marker 阶段）。verified / authority_absent_recoverable（marker 已 ack
+  // 的合法中断窗口）才继续；其余结构化结果零 destructive 推进。
+  const gate = gateTreasuryPreReleaseSettlement(entry);
+  if (gate.status !== "verified" && gate.status !== "authority_absent_recoverable") {
+    return pendingResult(
+      "marker_discharge",
+      `pre-release gate ${gate.status}: ${gate.detail}（marker 不清除、Authority 不释放——零 destructive）`,
+      entry,
+      false,
+    );
   }
   // 阶段 1：marker discharge（含 discharge 自身 read-back + 阶段 read-back）。
-  const marker = acknowledgeTreasuryCleanupMarkerDischarge({ transactionId: input.transactionId, expected: input.expected });
+  const marker = acknowledgeTreasuryCleanupMarkerDischarge({ transactionId: input.transactionId });
   if (marker.outcome !== "acknowledged" && marker.outcome !== "already_acknowledged") {
     const result = pendingResult("marker_discharge", `marker discharge ack ${marker.outcome}: ${marker.detail}`, entry, false);
     return marker.globalWriteAdmissionStillLocked !== undefined
@@ -204,28 +191,37 @@ export function advanceTreasuryResolutionCleanupPhases(input: {
   }
   globalLocked = marker.globalWriteAdmissionStillLocked ?? false;
   globalLockedKnown = marker.globalWriteAdmissionStillLocked !== undefined;
-  // 阶段 2：authority release（resolver read-back not_found 硬门禁）。
-  const authority = acknowledgeTreasuryCleanupAuthorityRelease({ transactionId: input.transactionId, expected: input.expected });
+  // 阶段 2：authority release（pre-release gate verified discharge——resolver
+  // read-back not_found 硬门禁）。
+  const authority = acknowledgeTreasuryCleanupAuthorityRelease({ transactionId: input.transactionId });
   if (authority.outcome !== "acknowledged" && authority.outcome !== "already_acknowledged") {
     const result = pendingResult("authority_release", `authority release ack ${authority.outcome}: ${authority.detail}`, entry, false);
     return { ...result, globalWriteAdmissionStillLocked: globalLocked, globalWriteAdmissionLockedKnown: globalLockedKnown };
   }
   // 阶段 3：outcome finalization（trusted proof + 相反 proof 门禁——装配
   // handler 承载）。
-  const outcome = acknowledgeTreasuryCleanupOutcomeFinalization({ transactionId: input.transactionId, expected: input.expected });
+  const outcome = acknowledgeTreasuryCleanupOutcomeFinalization({ transactionId: input.transactionId });
   if (outcome.outcome !== "acknowledged" && outcome.outcome !== "already_acknowledged") {
     const result = pendingResult("outcome_finalization", `outcome finalization ack ${outcome.outcome}: ${outcome.detail}`, entry, false);
     return { ...result, globalWriteAdmissionStillLocked: globalLocked, globalWriteAdmissionLockedKnown: globalLockedKnown };
   }
   // 阶段 4：lineage finalization（initial attempt 经 not_applicable 同一
-  // 结构化接口完成）。
-  const lineage = acknowledgeTreasuryCleanupLineageFinalization({ transactionId: input.transactionId, expected: input.expected });
+  // 结构化接口完成——完成语义由 completion authority 持久化区分）。
+  const lineage = acknowledgeTreasuryCleanupLineageFinalization({ transactionId: input.transactionId });
   if (lineage.outcome !== "acknowledged" && lineage.outcome !== "already_acknowledged") {
     const result = pendingResult("lineage_finalization", `lineage finalization ack ${lineage.outcome}: ${lineage.detail}`, entry, false);
     return { ...result, globalWriteAdmissionStillLocked: globalLocked, globalWriteAdmissionLockedKnown: globalLockedKnown };
   }
-  // 阶段 5：journal completion（删除 + read-back absent 才是完全完成）。
-  const completion = completeTreasuryCleanupAcknowledged(input.transactionId);
+  if (lineage.lineageDisposition !== undefined) {
+    lineageDisposition = lineage.lineageDisposition;
+  }
+  // 阶段 5：journal completion（completion proof 先持久化并 read-back，随后
+  // 删除 journal + read-back absent 才是完全完成）。
+  const completion = completeTreasuryCleanupAcknowledged({
+    transactionId: input.transactionId,
+    lineageDisposition,
+    globalWriteAdmissionStillLocked: globalLocked,
+  });
   if (completion.status === "store_unhealthy") {
     const result = pendingResult("journal_completion", completion.detail, entry, false, "store_unhealthy");
     return { ...result, globalWriteAdmissionStillLocked: globalLocked, globalWriteAdmissionLockedKnown: globalLockedKnown };
