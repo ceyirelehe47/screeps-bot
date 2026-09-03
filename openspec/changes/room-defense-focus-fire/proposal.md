@@ -71,3 +71,31 @@ Tower 与主防 Creep（homeDefender）各自独立评分选择攻击目标（to
 ### Operation-count
 - planner 每房间每 tick 一次（消费不增加调用）；fallback 多消费者单次
   解析；候选评分 O(hostiles×actors) 有界；无指数子集搜索。
+
+## Round 22 Remediation IV — Front-aware Defender Allocation
+
+### Tower 与 Defender 不同的 target eligibility（十三节）
+- Tower：房间级火力调度（任意合法 hostile）；
+- Defender：默认只对其 assigned front 的 hostile 集合可用（`defenderFrontEligibility` 单一语义源——eligible 集合预计算，planner 内层 O(1) 判定）；未分配 front 的 Defender 采用 room-scope 保守默认；跨 front 增援只允许既有协调系统显式标记（reinforcementAllowed）；
+- Target killability 只计入该 target 实际可用的 Defender——借另一 front 的 Defender 不可虚构本 tick 击杀能力；多 front 时 Defender 不被房间级 primary 拉离本 front。
+
+### Zero-primary-damage Defender 再利用（十四节）
+- 对当前 target 本 tick 伤害为 0 的 Defender 不再作为 positioning follower 提前消费——保留在 remaining 池，下一个 target 重新计算（对 Primary 为 0、对 Secondary 为正/可击杀的 Defender 参与 Secondary）；
+- 全部可执行伤害分配完成后进入 positioning 阶段：按自身 front 选择防守 target（eligible 集合内按计划候选顺序；combat target 保留给下一 tick 规划）、分配独立 engagement position；防御性残余 Tower 分配不再提前消费零伤害 Defender。
+
+### Per-defender 唯一 Rampart 分配（十五节）
+- `defenderRampartAllocation`（确定性 stable greedy，纯函数、无 PathFinder）：Defender 按 primary 优先 → secondary → slot 决胜排序；候选按未占用（含他属 occupied 标记）/到目标距离/到 Defender 当前距离/ID 决胜；每候选至多一 Defender；已站合法候选保留；候选不足明确 hold（不重复分配、不追逐边界外 hostile）；
+- 采集层（homeDefense）提供 per-hostile 候选集合（boundary ramparts 稳定排序 + 他属占用标记）——复用既有 safeZoneHelpers 防线系统，planner 不建立平行防线模型。
+
+### Room-level fallback revision（十六节）
+- `engagementFallbackRevision`：任一 consumer 发现 assigned target 失效时，每房间每 tick 至多生成一次完整修订计划（不再返回单一全局 fallback target）；
+- Tower 按房间级修订目标（fallback 候选 ∩ 存活）或明确 idle；Defender 按 front-local 替代（plan 持久的 defenderFronts.eligibleTargetIds ∩ 存活）或明确 hold——不跨 front、不回退独立评分；紧急治疗 assignment 原样保留；
+- 多 target 失效/多 consumer（Tower 与 Defender 任意顺序）消费同一 revision；第一个请求来自某 front 不把其它 front 的 Defender 错误转向；多房间完全隔离。
+
+### Fresh plan 是消费权威（十七节）
+- towerControl：fresh plan 存在即权威——即使 focusTargetId=null（no-hostile / no-attack-actor）也服从（emergency heal 执行、攻击塔明确 idle）；stale plan 才走既有独立逻辑；
+- homeDefender：defenderEngagements[slot] 存在（含显式 hold / targetId=null）即完全由 plan 决定（attack/ranged_attack/engage_position/hold 都不回退旧独立评分）；defenderAssignments 不再作为回落（缺失 assignment 不隐式区分参与）；slot 不在 plan = planner 明确未让该 actor 参与——保留既有独立行为。
+
+### 确定性与 operation-count
+- 同快照（任意来源顺序/hostile/front 输入反转）产生同一 plan（defenderFronts.eligibleTargetIds 按计划候选顺序确定性构造）；
+- planner 每房间每 tick 一次；revision 每房间每 tick 一次生成；Rampart 分配 O(Defenders×候选) 稳定 greedy（无指数匹配、无 PathFinder）；每房间每 tick 只构建一次 hostile 快照。

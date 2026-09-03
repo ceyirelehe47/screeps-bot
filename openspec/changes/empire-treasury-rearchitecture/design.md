@@ -1525,3 +1525,26 @@ generation advance 后单代 O(1) 孤儿清理（依赖检查：tombstone/resolv
 
 ### 18.9 Result 语义
 globalWriteAdmissionStillLocked（17.3 两事实分离）；marker_cleanup_blocked 显式拒绝状态；API 返回不伪装强于真实持久进度的完成语义。
+
+## 19. Round 22 Remediation IV — Exact Authority Discharge & Cleanup Completion Authority
+
+### 19.1 Pre-release settlement gate（六节）
+`preReleaseSettlementGate.ts`（只读、无副作用、单 key 查询）：marker discharge 与 Authority release 之前的统一验证链——journal exact identity ↔ target settlement proof（committed→release-trusted Receipt / not-executed→final tombstone，经装配 probes 读取以避免 resolutionStore 环依赖）↔ opposite proof 确证 absent（match/conflict/insufficient/store_unhealthy 全部阻断）↔ semantic lineage purpose（tr1_ 的 committed_settlement / not_executed_retirement verdict 非 match 即阻断）↔ 当前 unresolved Authority exact identity（Intent/Quarantine 经统一 resolver 的完整 authority 视图；Authorization Fault 构造完整 exact identity——authorityLevel 显式定级，不再只比较 digest）。结构化结果（verified / authority_absent_recoverable / authority_absent_unexpected / authority_conflict / authority_insufficient / authority_inconsistent / authority_store_unhealthy / target_proof_* / opposite_proof_* / semantic_lineage_blocked），调用方不得折叠成 false。
+
+### 19.2 Exact authority discharge（七节）
+`exactAuthorityDischarge.ts`：Authority 释放唯一实现——gate 验证与 release 同一同步窗口（handler 每次重验，不信任外部传入结论）；同 transaction ID 的身份冲突 Authority（任一维度不同）不得被当作另一合法 attempt 删除；release 后 resolver read-back 必须 not_found（否则 authority 阶段不得 ack）；Authorization Fault 完整 match 后释放 + read-back absent。authority absent 的两个窗口：marker 阶段已 ack（生产中断窗口）或外部 marker 事实已 absent（journal 幂等补开的遗留窗口）→ recoverable 幂等补完成；marker 仍存在 → unexpected（安全顺序破坏——最后一把锁不得因 absent 被清除，结构化阻断交人工/forensic）。
+
+### 19.3 GRA exact outcome 与 opposite 前移（八节）
+outcome handler 删除 transactionId+digest 快捷判断；`lineageFinalizationProof.ts` 的 `relateTreasuryGenerationRetirementProofForOutcome`：journal ↔ final tombstone ↔ GRA proof 三方完整 relation（复用 verifyTreasuryGenerationRetirementRelation 单一权威；root facts 从 active lineage record 或 terminal summary 权威解析——proof 自称的 root 不被信任；byAttempt 冲突检测：同 attempt 的异 (lineage, generation) proof → conflict）。缺失经 converge 后重新执行同一 relation。oppositeProofMatrix 的 GRA blocker 升级为完整 exact identity relation（digest/proofClass/contract/cohort/durable/lowlevel/lineage 四字段含 generation/parent/binding）；coordinator 阶段 0.5 扩展为完整 gate——opposite proof 检查前移到任何 destructive 动作之前。
+
+### 19.4 Lineage finalization 四分类（九节）
+active record 存在 → 现有 exact 匹配 + 状态机推进；active 缺失 → terminal summary 的 finalExact 完整 match + finalAttemptId/finalGeneration/terminalState 与 resolution 一致才 already_final；两者都缺 → lineage_missing 结构化 blocked（root not-executed 现代 profile 不得 not_applicable；committed initial 与隔离 profile（legacy-replay/forensic-isolated——协议本身不创建 lineage）可 not_applicable）；任一 store unhealthy → 零阶段推进。root not-executed 的终态（rearm_ready/non_rearmable_retired）显式 already_final。
+
+### 19.5 Cleanup completion authority（十节）
+`cleanupCompletionAuthority.ts`：独立有界 completion store（Memory.runtime.treasury.cleanupCompletions，v1，硬容量 128 满载 fail closed、不覆盖旧 proof、同 id 幂等要求完整 identity 一致）。写入顺序固定：全部 journal 阶段 ack → completion 写入 + Memory read-back + exact identity 重新验证 → 删除 journal entry → journal 删除 read-back → fully complete；completion 写入失败 → journal 保留（pending 重试）；journal 删除失败 → completion 存在、下 tick 幂等重删。journal absent 时以 completion authority 区分 completed（match）/ no_cleanup_authority（absent——不得折叠为已完成）/ conflict（fail closed）。容量回收：child 接管时释放 parent attempt 的 completion（被 rearm 门禁消费确认的完成事实由 lineage 接管安全替代）；chain 终结由 terminal summary 承接。
+
+### 19.6 Journal open/activation 分离（十一节）
+open 只做 admission：移除既有 reservation 的 proof_durable 自动激活（激活唯一经 acknowledgeTreasuryCleanupSettlementProof 的 proof activation 权威）；返回细分 already_open_activated / already_open_reservation / conflict / rejected / read_back_failed。新 candidate 写入前完整验证（与 load 同强度 entry validator）；写入后单 key Memory read-back + identity 重算 + entryCount/store shape 校验，失败回滚。state-changing ack 协议移除可选 expected——journal entry 是唯一 expected 来源（heap 与 Memory read-back 的完整 11 字段自洽比较承载防篡改）；coordinator 的 advance 输入不再有 digest-only 通道。
+
+### 19.7 中断窗口
+gate/discharge/completion 的全部窗口：proof activation 后 marker 前（gate verified→discharge）；marker ack 后 authority 前（absent marker→recoverable）；authority release 后 read-back 前（resolver not_found 硬门禁）；outcome/lineage 各阶段（外部事实重验）；journal completion 的 completion 写入/删除双 read-back；global reset 后（journal absent + completion match 幂等 completed；completion absent → no_cleanup_authority）。
