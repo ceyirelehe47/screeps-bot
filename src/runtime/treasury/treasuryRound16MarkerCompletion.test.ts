@@ -23,6 +23,8 @@ import {
 } from "@/runtime/treasury/resolutionStore";
 import { recordTreasuryWriteFault, readTreasuryWriteFault } from "@/runtime/treasury/writeFault";
 import { rearmResolvedNotExecutedAttempt } from "@/runtime/treasury/attemptRearm";
+import { listTreasuryPendingReleaseIds } from "@/runtime/treasury/resolutionStore";
+import { createTreasuryAttemptLineageRecord } from "@/runtime/treasury/attemptLineage";
 import { TREASURY_LOWLEVEL_SOURCE_RUNTIME } from "@/runtime/treasury/authorityLevel";
 import {
   makeTreasuryTestTransferAdapter,
@@ -72,6 +74,19 @@ function seedQuarantineThenRelease(transactionId: string): string {
   expect(identity).toBeDefined();
   // 模拟"释放已完成、marker 残留"的中断窗口。
   expect(releaseTreasuryQuarantineEntry(transactionId)).toBe(true);
+  // 【Remediation IV 九.2】not-executed settlement 的 root lineage publication
+  //（生产路径在 tombstone 前创建；意外缺失时 lineage 阶段结构化 blocked）。
+  const lineageCreated = createTreasuryAttemptLineageRecord({
+    rootTransactionId: transactionId,
+    rootIdentity: { digest: DIGEST, durableIdentityDigest: identity as string },
+    actionKind: "terminal.send",
+    authorityClass: "lowlevel",
+    lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+    rearmable: true,
+    identityProfile: "lowlevel",
+    retrySemanticDigest: "6666666666666666",
+  });
+  expect(lineageCreated.status).toBe("written");
   return identity as string;
 }
 
@@ -139,18 +154,20 @@ beforeEach(() => {
 });
 
 describe("marker 补完成（第十六轮第七节）", () => {
-  it("final not-executed + authority 已释放 + matching marker：beginTick 清 marker（幂等）", () => {
+  it("final not-executed + authority 已释放 + matching marker：安全顺序破坏 → 结构化阻断（marker 保留）", () => {
     const identity = seedQuarantineThenRelease("mc_tx");
     seedFinalNotExecuted("mc_tx", identity);
     seedMarker({ durableIdentityDigest: identity });
     expect(readTreasuryWriteFault()).toBeDefined();
+    // 【Remediation IV 六.4】authority absent + marker 仍未清除 = 安全顺序
+    // marker→authority 被破坏：最后一把锁不得因 Authority absent 被清除。
     const report = recoverStagedResolutions();
-    expect(report.completedRelease).toBe(1);
-    expect(readTreasuryWriteFault()).toBeUndefined();
-    // 幂等：再次 beginTick 无待处理项。
+    expect(report.completedRelease).toBe(0);
+    expect(report.markerCleanupBlocked).toBeGreaterThanOrEqual(1);
+    expect(readTreasuryWriteFault()).toBeDefined();
     const again = recoverStagedResolutions();
-    expect(again.idleFastPath).toBe(true);
-    expect(again.completedRelease).toBe(0);
+    expect(again.markerCleanupBlocked).toBeGreaterThanOrEqual(1);
+    expect(readTreasuryWriteFault()).toBeDefined();
   });
 
   it("marker digest 冲突（属于另一 attempt）：不清除", () => {
@@ -220,8 +237,13 @@ describe("marker 补完成（第十六轮第七节）", () => {
     const blocked = rearmResolvedNotExecutedAttempt({ parentTransactionId: "mc_tx" });
     expect(blocked.status).toBe("rejected");
     if (blocked.status === "rejected") expect(blocked.reason).toBe("marker_cleanup_pending");
+    // 【Remediation IV】marker 残留 + authority 已释放 = 顺序破坏（上方
+    // 用例语义）——手工清除 marker 后（authority/marker 均 absent 的遗留
+    // 窗口）恢复可幂等补完成。
+    const markerStore = (Memory.runtime as { treasury?: { writeFault?: unknown } }).treasury;
+    delete markerStore?.writeFault;
     const report = recoverStagedResolutions();
-    expect(report.completedRelease).toBe(1);
+    expect(listTreasuryPendingReleaseIds()).toEqual([]);
     const allowed = rearmResolvedNotExecutedAttempt({ parentTransactionId: "mc_tx" });
     expect(allowed.status).toBe("rearmed");
   });

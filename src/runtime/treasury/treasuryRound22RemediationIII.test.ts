@@ -38,6 +38,7 @@ import {
   openTreasuryResolutionCleanup,
   readTreasuryResolutionCleanupEntry,
   readTreasuryResolutionCleanupEvents,
+  markTreasuryResolutionCleanupStage,
   readBackTreasuryResolutionCleanupEntryFromMemory,
   recoverTreasuryResolutionCleanupAtTickBoundary,
   resetTreasuryResolutionCleanupHeapCacheForTest,
@@ -63,6 +64,7 @@ import {
 import { advanceTreasuryResolutionCleanupPhases } from "@/runtime/treasury/resolutionCleanupCoordinator";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
 import { TREASURY_LOWLEVEL_SOURCE_RUNTIME } from "@/runtime/treasury/authorityLevel";
+import { createTreasuryAttemptLineageRecord } from "@/runtime/treasury/attemptLineage";
 import { treasuryExactAttemptIdentityOfFacts } from "@/runtime/treasury/exactAttemptIdentity";
 import { installRooms } from "@mock/treasury";
 import { treasuryTestService } from "@/runtime/treasury/testHarness";
@@ -211,7 +213,30 @@ function seedReleasedNotExecutedScene(transactionId: string, opts: { reservation
   seedFinalNotExecutedTombstone(transactionId, durable);
   expect(releaseTreasuryQuarantineEntry(transactionId)).toBe(true);
   releaseTreasuryIntentEntry(transactionId);
+  // 【Remediation IV 九.2】not-executed settlement 的 root lineage publication
+  //（生产 immediate/staged 路径在 tombstone 前创建——retiring 状态由
+  // outcome/lineage 阶段的 converge 收敛；意外缺失时 lineage 阶段结构化
+  // blocked，不再 not_applicable）。
+  if (opts.reservation !== true) {
+    const lineageCreated = createTreasuryAttemptLineageRecord({
+      rootTransactionId: transactionId,
+      rootIdentity: { digest: DIGEST, durableIdentityDigest: durable },
+      actionKind: "terminal.send",
+      authorityClass: "lowlevel",
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+      rearmable: false,
+      identityProfile: "lowlevel",
+      nonRearmReason: "test fixture（无 retry semantic facts）",
+    });
+    expect(lineageCreated.status).toBe("written");
+  }
   openNotExecutedCleanupEntry(transactionId, durable, opts.reservation === true ? "reservation" : "proof_durable");
+  // 【Remediation IV 六.4】authority 已释放的合法中断窗口要求 marker 阶段
+  // 已 ack（安全顺序 marker→authority）——fixture 按生产顺序补 marker ack
+  //（marker 本就不存在，already_absent 完成语义）后再进入 gate。
+  if (opts.reservation !== true) {
+    markTreasuryResolutionCleanupStage(transactionId, "marker_discharge", "already_absent");
+  }
   return durable;
 }
 
@@ -328,7 +353,11 @@ describe("Remediation III 1：stage acknowledgement 硬门禁", () => {
     expect(advance.pendingStage).toBe("journal_completion");
     // entry 复现（删除未持久确认）——不得报告 fully complete。
     expect(readBackTreasuryResolutionCleanupEntryFromMemory("r3_tx2").status).toBe("present");
-    const completion = completeTreasuryCleanupAcknowledged("r3_tx2");
+    const completion = completeTreasuryCleanupAcknowledged({
+      transactionId: "r3_tx2",
+      lineageDisposition: "final",
+      globalWriteAdmissionStillLocked: false,
+    });
     expect(completion.status).not.toBe("completed");
   });
 

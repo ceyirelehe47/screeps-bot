@@ -9,7 +9,7 @@
  * proof 的 release-trusted 删除门禁）、F（purpose 必填类型契约与
  * unresolvedAuthority ok 路径回归）。
  */
-import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
+import { clearTreasuryPersistenceForTest, commitSettledReceipt } from "@/runtime/treasury/receipts";
 import { recordTreasuryWriteFault, readTreasuryWriteFault } from "@/runtime/treasury/writeFault";
 import { dischargeTreasuryMarkerForAttempt } from "@/runtime/treasury/markerDischarge";
 import {
@@ -50,6 +50,7 @@ import {
   activateTreasuryLineageChild,
   retireTreasuryLineageCurrentAttempt,
   readTreasuryAttemptLineageRecord,
+  registerTreasuryAttemptLineageSemanticSourceForAssembly,
   resetTreasuryLineageRuntimeForTest,
   deriveTreasuryLineageNextChildTransactionId,
 } from "@/runtime/treasury/attemptLineage";
@@ -83,7 +84,7 @@ function seedV4Marker(overrides: Record<string, unknown> = {}): void {
     identityProfile: "lowlevel",
     authorityClass: "lowlevel",
     lowlevelSource: "runtime-lowlevel@v1",
-    durableIdentityDigest: "0cc99174bb6f2e74",
+    durableIdentityDigest: overrides.durableIdentityDigest ?? "0cc99174bb6f2e74",
     ...overrides,
   } as never);
 }
@@ -97,7 +98,7 @@ const lowlevelExpected = {
   durableIdentityDigest: "0cc99174bb6f2e74",
 };
 
-function seedQuarantineAuthority(transactionId: string): void {
+function seedQuarantineAuthority(transactionId: string): string {
   const write = quarantineTreasuryTransaction({
     transactionId,
     authorityLevel: "lowlevel",
@@ -115,6 +116,13 @@ function seedQuarantineAuthority(transactionId: string): void {
     recordedAt: Game.time,
   });
   expect(write.status).toBe("written");
+  // 【Remediation IV 六.3】durableIdentityDigest 由 quarantine 写入按
+  // postings 重算（与 Game.time 相关）——fixture 全部身份载体（marker/
+  // tombstone/receipt/journal entry）统一使用 authority 的实际 durable，
+  // 与生产路径（authority 事实单一来源）一致。
+  const durable = readTreasuryQuarantineEntry(transactionId)?.durableIdentityDigest;
+  expect(durable).toBeDefined();
+  return durable as string;
 }
 
 /** 与生产 facade handler 同构的测试装配（trusted receipt 验证由 facade
@@ -148,8 +156,10 @@ function installTestStageHandlers(): void {
 
 /** committed initial attempt 的完整 cleanup 场景 fixture（marker + authority + resolving tombstone + journal entry）。 */
 function seedCommittedCleanupScene(stages: { marker?: boolean; authority?: boolean; outcome?: boolean } = {}): void {
-  seedV4Marker();
-  seedQuarantineAuthority("r22r_tx");
+  // 【Remediation IV 六.3】authority 先 seed——durable 重算值成为全部身份
+  // 载体的单一来源（journal ↔ authority exact identity 一致）。
+  const durable = seedQuarantineAuthority("r22r_tx");
+  seedV4Marker({ durableIdentityDigest: durable });
   const written = writeTreasuryResolutionTombstone({
     transactionId: "r22r_tx",
     digest: DIGEST,
@@ -157,7 +167,7 @@ function seedCommittedCleanupScene(stages: { marker?: boolean; authority?: boole
     stage: "resolving",
     proofLevel: "lowlevel",
     lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
-    durableIdentityDigest: "0cc99174bb6f2e74",
+    durableIdentityDigest: durable,
     actionTick: Game.time,
     settledAtTick: Game.time,
     observationTick: Game.time,
@@ -166,6 +176,14 @@ function seedCommittedCleanupScene(stages: { marker?: boolean; authority?: boole
     source: "test",
   });
   expect(written.status).not.toBe("rejected");
+  // 【Remediation IV 六.5】committed 目标的 pre-release gate 要求
+  // release-trusted Receipt 在 marker discharge 之前成立（生产 staged 流程
+  // receipt 刷新先于 cleanup advance——fixture 与生产时序对齐）。
+  expect(commitSettledReceipt("r22r_tx", Game.time, {
+    digest: DIGEST,
+    durableIdentityDigest: durable,
+    lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+  }).status).not.toBe("rejected");
   const opened = openTreasuryResolutionCleanup({
     transactionId: "r22r_tx",
     digest: DIGEST,
@@ -173,12 +191,13 @@ function seedCommittedCleanupScene(stages: { marker?: boolean; authority?: boole
     identityProfile: "lowlevel",
     proofClass: "lowlevel",
     lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
-    durableIdentityDigest: "0cc99174bb6f2e74",
+    durableIdentityDigest: durable,
   });
   expect(opened.status).toBe("opened");
+  const sceneExpected = { ...lowlevelExpected, durableIdentityDigest: durable };
   if (stages.marker) {
     // 窗口 3/4：marker 已删除（read-back 完成）。
-    const discharged = dischargeTreasuryMarkerForAttempt(lowlevelExpected);
+    const discharged = dischargeTreasuryMarkerForAttempt(sceneExpected);
     expect(discharged.outcome).toBe("matching_cleared");
     expect(markTreasuryResolutionCleanupStage("r22r_tx", "marker_discharge", discharged.outcome)).toBe(true);
   }
@@ -362,12 +381,48 @@ describe("B：六个中断窗口的 heap reset 恢复（remediation B.6）", () 
 
   it("窗口 6（lineage finalization 前）：tr1_ entry 恢复完成 lineage 阶段", () => {
     seedCommittedCleanupScene({ marker: true, authority: true, outcome: true });
-    // 构造真实 tr1_ child ID 的 committed cleanup entry（lineage 阶段 pending）：
-    // final committed tombstone 已持久化（outcome 事实可重验——D.4 恢复不
-    // 信任 boolean，outcome handler 会重新读取 tombstone）。
-    const w6LineageId = "1111111111111111";
-    const w6Child = deriveTreasuryLineageNextChildTransactionId(w6LineageId, 1, "r22r_w6_root");
-    const w6Binding = computeTreasuryLineageBindingDigest({ lineageId: w6LineageId, generation: 1, parentTransactionId: "r22r_w6_root", childTransactionId: w6Child });
+    // 【Remediation IV 六/九】真实 tr1_ chain（child_active record）：pre-
+    // release gate 的 semantic lineage purpose 验证要求 active 权威在场
+    //（手工 lineageId 无 record → no_authority → gate 阻断——fixture 与
+    // 生产一致：tr1_ cleanup 的 lineage record 由 capability 流程创建）。
+    registerTreasuryAttemptLineageSemanticSourceForAssembly();
+    registerTreasuryRetirementSummarySemanticSourceForAssembly();
+    registerTreasuryGenerationRetirementSemanticSourceForAssembly();
+    const w6Root = "r22r_w6_root";
+    const created = createTreasuryAttemptLineageRecord({
+      rootTransactionId: w6Root,
+      rootIdentity: { digest: DIGEST, durableIdentityDigest: "0cc99174bb6f2e74" },
+      actionKind: "terminal.send",
+      authorityClass: "lowlevel",
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+      rearmable: true,
+      identityProfile: "lowlevel",
+      retrySemanticDigest: "6666666666666666",
+    });
+    expect(created.status).toBe("written");
+    if (created.status === "rejected") throw new Error("seed create rejected");
+    const w6LineageId = created.record.lineageId;
+    // root retiring → rearm_ready（capability 签发前置——与生产 rearm 流程一致）。
+    expect(convergeTreasuryLineageRetirementFromFacts(w6LineageId).status).toBe("completed");
+    const w6Child = deriveTreasuryLineageNextChildTransactionId(w6LineageId, 1, w6Root);
+    expect(stageTreasuryLineageCapabilityIssued(w6LineageId, w6Child).status).not.toBe("rejected");
+    expect(stageTreasuryLineageChildIntentPending(w6LineageId, w6Child).status).not.toBe("rejected");
+    const w6Binding = readTreasuryAttemptLineageRecord(w6LineageId)!.pendingBindingDigest!;
+    const w6Durable = recomputeTreasuryDurableIdentityDigest({
+      transactionId: w6Child,
+      digest: DIGEST,
+      actionKind: "terminal.send",
+      source: "test",
+      postings: [{ roomName: "W1N57", locationKind: "storage" as const, resource: "energy" as const, delta: -500 }],
+      lineageId: w6LineageId,
+      lineageGeneration: 1,
+      parentTransactionId: w6Root,
+      lineageBindingDigest: w6Binding,
+    });
+    expect(w6Durable).not.toBeNull();
+    expect(
+      activateTreasuryLineageChild(w6LineageId, { digest: DIGEST, durableIdentityDigest: w6Durable!, lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME }).status,
+    ).not.toBe("rejected");
     const w6Resolving = writeTreasuryResolutionTombstone({
       transactionId: w6Child,
       digest: DIGEST,
@@ -375,7 +430,7 @@ describe("B：六个中断窗口的 heap reset 恢复（remediation B.6）", () 
       stage: "resolving",
       proofLevel: "lowlevel",
       lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
-      durableIdentityDigest: "0cc99174bb6f2e74",
+      durableIdentityDigest: w6Durable,
       actionTick: Game.time,
       settledAtTick: Game.time,
       observationTick: Game.time,
@@ -384,11 +439,21 @@ describe("B：六个中断窗口的 heap reset 恢复（remediation B.6）", () 
       source: "test",
       lineageId: w6LineageId,
       lineageGeneration: 1,
-      parentTransactionId: "r22r_w6_root",
+      parentTransactionId: w6Root,
       lineageBindingDigest: w6Binding,
     });
     expect(w6Resolving.status).not.toBe("rejected");
     expect(writeTreasuryResolutionTombstone({ ...readTreasuryResolutionTombstone(w6Child)!, stage: "final" }).status).not.toBe("rejected");
+    // committed gate 前置：release-trusted receipt（含 lineage proof 维度）。
+    expect(commitSettledReceipt(w6Child, Game.time, {
+      digest: DIGEST,
+      durableIdentityDigest: w6Durable!,
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+      lineageId: w6LineageId,
+      lineageGeneration: 1,
+      parentTransactionId: w6Root,
+      lineageBindingDigest: w6Binding,
+    }).status).not.toBe("rejected");
     const opened = openTreasuryResolutionCleanup({
       transactionId: w6Child,
       digest: DIGEST,
@@ -396,10 +461,10 @@ describe("B：六个中断窗口的 heap reset 恢复（remediation B.6）", () 
       identityProfile: "lowlevel",
       proofClass: "lowlevel",
       lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
-      durableIdentityDigest: "0cc99174bb6f2e74",
+      durableIdentityDigest: w6Durable!,
       lineageId: w6LineageId,
       lineageGeneration: 1,
-      parentTransactionId: "r22r_w6_root",
+      parentTransactionId: w6Root,
       lineageBindingDigest: w6Binding,
     });
     expect(opened.status).toBe("opened");
@@ -597,7 +662,7 @@ describe("D：journal identity 不可变与阶段强制顺序（remediation D）
       expect(entry.markerDischarged).toBe(true);
     }
     // exact 相等 reopen 幂等。
-    expect(openTreasuryResolutionCleanup(baseInput).status).toBe("already_open");
+    expect(openTreasuryResolutionCleanup(baseInput).status).toBe("already_open_activated");
   });
 
   it("不同 resolution reopen → conflict", () => {
@@ -805,7 +870,7 @@ describe("F：purpose 必填契约与 unresolvedAuthority ok 路径回归（reme
     }
     // 【Remediation III】resolutionCleanupStageHandlers（facade 装配语义的
     // 迁移目标）新增 semantic lineage verdict 调用点：8 → 9。
-    expect(callSites).toBe(9);
+    expect(callSites).toBe(10);
   });
 
   it("运行时 defensive：缺 purpose 的调用（类型外）→ store_unhealthy fail closed", () => {

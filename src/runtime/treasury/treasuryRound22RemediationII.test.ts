@@ -41,7 +41,12 @@ import {
   readTreasuryResolutionTombstone,
   writeTreasuryResolutionTombstone,
   resetTreasuryResolutionStoreForTest,
+  peekTreasuryResolutionStoreHealth,
 } from "@/runtime/treasury/resolutionStore";
+import {
+  acknowledgeTreasuryCleanupSettlementProof,
+  registerTreasuryCleanupProofProbesForAssembly,
+} from "@/runtime/treasury/settlementProofActivation";
 import {
   openTreasuryResolutionCleanup,
   markTreasuryResolutionCleanupStage,
@@ -341,13 +346,19 @@ describe("Remediation II 4：新建 journal 后 staged 回滚的安全撤销", (
       ...identity,
     }).status).not.toBe("rejected");
     // 预开 exact identity 一致的 committed entry（模拟上一中断留下的 pending）。
+    // 【Remediation IV 十一.2】entry 实际是 lowlevel authority（testHarness
+    // 的 executePreparedAction 路径）——preOpen 按实际身份构造（新 candidate
+    // 验证要求 profile↔facts 一致，modern-contract 缺 contract 会被写入前
+    // 拒绝，与本 attempt 无关的 profile 不得混入）。
+    const quarantineEntry = readTreasuryQuarantineEntry("r22ii_keep")!;
     const preOpen = openTreasuryResolutionCleanup({
       transactionId: "r22ii_keep",
       digest,
       resolution: "committed",
-      identityProfile: "modern-contract",
-      proofClass: "identity-bound",
-      ...identity,
+      identityProfile: "lowlevel",
+      proofClass: "lowlevel",
+      ...(quarantineEntry.lowlevelSource !== undefined ? { lowlevelSource: quarantineEntry.lowlevelSource } : {}),
+      ...(quarantineEntry.durableIdentityDigest !== undefined ? { durableIdentityDigest: quarantineEntry.durableIdentityDigest } : {}),
     });
     expect(preOpen.status).toBe("opened");
     const next = advanceTick();
@@ -439,18 +450,21 @@ describe("Remediation II 6：authority release read-back 是 finalize 硬门禁"
     const capability = issueCapability(next, "r22ii_readback", digest);
     const actual = unresolvedAuthorityModule.resolveTreasuryUnresolvedAuthority;
     // resolver 调用序：1 prevalidate 快路径、2 prevalidate 完整解析、
-    // 3 refresh 后 verifier 输入、4 release 后 read-back（伪造点）。
+    // 3 refresh 后 verifier 输入、【Remediation IV】4 coordinator pre-release
+    // gate、5 discharge 内部 gate（两处都必须真实 ok 才会 release）、
+    // 6 release 后 read-back（伪造点）。
     let calls = 0;
     let verifierResult: ReturnType<typeof actual> | null = null;
     spy = jest.spyOn(unresolvedAuthorityModule, "resolveTreasuryUnresolvedAuthority");
     spy.mockImplementation(((transactionId: string) => {
       calls += 1;
       if (calls === 3) verifierResult = actual(transactionId);
-      if (calls >= 4) {
+      if (calls >= 6) {
         if (mode === "replay_ok" && verifierResult !== null && verifierResult.status === "ok") return verifierResult;
         if (mode === "inconsistent") return { status: "inconsistent", detail: "injected" } as const;
         return { status: "store_unhealthy", detail: "injected" } as const;
       }
+      if (calls >= 4 && mode === "replay_ok" && verifierResult !== null && verifierResult.status === "ok") return verifierResult;
       return actual(transactionId);
     }) as typeof actual);
     const result = resolveCommitted(next, "r22ii_readback", capability!);
@@ -471,12 +485,13 @@ describe("Remediation II 6：authority release read-back 是 finalize 硬门禁"
     const capability = issueCapability(next, "r22ii_ne_readback");
     const actual = unresolvedAuthorityModule.resolveTreasuryUnresolvedAuthority;
     // resolver 调用序：1 prevalidate 快路径、2 prevalidate 完整解析、
-    // 3 release 后 read-back（伪造点）。
+    // 【Remediation IV】3 coordinator pre-release gate、4 discharge 内部
+    // gate、5 release 后 read-back（伪造点）。
     let calls = 0;
     spy = jest.spyOn(unresolvedAuthorityModule, "resolveTreasuryUnresolvedAuthority");
     spy.mockImplementation(((transactionId: string) => {
       calls += 1;
-      if (calls >= 3) return { status: "inconsistent", detail: "injected" } as const;
+      if (calls >= 5) return { status: "inconsistent", detail: "injected" } as const;
       return actual(transactionId);
     }) as typeof actual);
     const result = resolveNotExecuted(next, "r22ii_ne_readback", capability!);
@@ -617,6 +632,9 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
       recordedAt: Game.time,
     });
     expect(write.status).toBe("written");
+    // 【Remediation IV 六.3】durable 以 authority 重算值为单一来源（gate 的 journal↔authority exact identity）。
+    const durable = readTreasuryQuarantineEntry(tx)?.durableIdentityDigest as string;
+    expect(durable).toBeDefined();
     // final committed tombstone 经状态机两段写入（absent 不得直写 final committed）。
     const resolving = writeTreasuryResolutionTombstone({
       transactionId: tx,
@@ -625,7 +643,7 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
       stage: "resolving",
       proofLevel: "lowlevel",
       lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
-      durableIdentityDigest: DURABLE_A,
+      durableIdentityDigest: durable,
       actionTick: Game.time,
       settledAtTick: Game.time,
       observationTick: Game.time,
@@ -634,6 +652,13 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
     });
     expect(resolving.status).not.toBe("rejected");
     expect(writeTreasuryResolutionTombstone({ ...readTreasuryResolutionTombstone(tx)!, stage: "final" }).status).not.toBe("rejected");
+    // 【Remediation IV 六.5】committed 场景的 pre-release gate 要求
+    // release-trusted Receipt（生产时序对齐）。
+    expect(commitSettledReceipt(tx, Game.time, {
+      digest: DIGEST_A,
+      durableIdentityDigest: durable,
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+    }).status).not.toBe("rejected");
     // matching marker（与 entry 身份完全一致——lowlevel + durable + runtime source）。
     recordTreasuryWriteFault({
       transactionId: tx,
@@ -648,7 +673,7 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
       identityProfile: "lowlevel",
       authorityClass: "lowlevel",
       lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
-      durableIdentityDigest: DURABLE_A,
+      durableIdentityDigest: durable,
     } as never);
     expect(readTreasuryWriteFault()).toBeDefined();
     // 打开 entry 并手工撒谎（marker 阶段 true 但 marker 未清除）。
@@ -659,7 +684,7 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
       identityProfile: "lowlevel",
       proofClass: "lowlevel",
       lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
-      durableIdentityDigest: DURABLE_A,
+      durableIdentityDigest: durable,
     });
     expect(opened.status).toBe("opened");
     const store = journalBranch().resolutionCleanup as TreasuryResolutionCleanupStore;
@@ -702,6 +727,9 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
       recordedAt: Game.time,
     });
     expect(write.status).toBe("written");
+    // 【Remediation IV 六.3】durable 以 authority 重算值为单一来源。
+    const durable = readTreasuryQuarantineEntry(tx)?.durableIdentityDigest as string;
+    expect(durable).toBeDefined();
     const resolving = writeTreasuryResolutionTombstone({
       transactionId: tx,
       digest: DIGEST_A,
@@ -709,7 +737,7 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
       stage: "resolving",
       proofLevel: "lowlevel",
       lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
-      durableIdentityDigest: DURABLE_A,
+      durableIdentityDigest: durable,
       actionTick: Game.time,
       settledAtTick: Game.time,
       observationTick: Game.time,
@@ -718,6 +746,13 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
     });
     expect(resolving.status).not.toBe("rejected");
     expect(writeTreasuryResolutionTombstone({ ...readTreasuryResolutionTombstone(tx)!, stage: "final" }).status).not.toBe("rejected");
+    // 【Remediation IV 六.5】committed 场景的 pre-release gate 要求
+    // release-trusted Receipt（生产时序对齐）。
+    expect(commitSettledReceipt(tx, Game.time, {
+      digest: DIGEST_A,
+      durableIdentityDigest: durable,
+      lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+    }).status).not.toBe("rejected");
     const opened = openTreasuryResolutionCleanup({
       transactionId: tx,
       digest: DIGEST_A,
@@ -725,7 +760,7 @@ describe("Remediation II 9：阶段 boolean 撒谎 → 恢复重验外部事实"
       identityProfile: "lowlevel",
       proofClass: "lowlevel",
       lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
-      durableIdentityDigest: DURABLE_A,
+      durableIdentityDigest: durable,
     });
     expect(opened.status).toBe("opened");
     const store = journalBranch().resolutionCleanup as TreasuryResolutionCleanupStore;
@@ -859,15 +894,38 @@ describe("Remediation II 11：reservation 生命周期", () => {
     const skipped = recoverTreasuryResolutionCleanupAtTickBoundary();
     expect(skipped.pendingReservations).toBe(1);
     expect(skipped.examined).toBe(0);
-    // proof 落盘后：proof_durable open 幂等激活（identity 一致）。
-    const reactivated = openTreasuryResolutionCleanup({
+    // 【Remediation IV 十一.1】proof 落盘后：open 不再自动激活（admission
+    // 与 proof activation 分离）——激活只能经
+    // acknowledgeTreasuryCleanupSettlementProof 的 proof activation 权威。
+    const reopened = openTreasuryResolutionCleanup({
       transactionId: "r22ii_resv",
       digest: DIGEST_A,
       resolution: "not-executed",
       identityProfile: "legacy-replay",
       proofClass: "legacy",
     });
-    expect(reactivated.status).toBe("already_open");
+    expect(reopened.status).toBe("already_open_reservation");
+    expect(readTreasuryResolutionCleanupEntry("r22ii_resv")!.settlementProofDurable).toBe(false);
+    // matching final tombstone 落盘后经 activation authority 激活。
+    const tombstoneWrite = writeTreasuryResolutionTombstone({
+      transactionId: "r22ii_resv",
+      digest: DIGEST_A,
+      resolution: "not-executed",
+      stage: "final",
+      proofLevel: "legacy",
+      actionTick: Game.time,
+      observationTick: Game.time,
+      resolvedAtTick: Game.time,
+      reconcilerKind: "terminal.send",
+      source: "test",
+    });
+    expect(tombstoneWrite.status).not.toBe("rejected");
+    registerTreasuryCleanupProofProbesForAssembly({
+      readTombstone: (transactionId) => readTreasuryResolutionTombstone(transactionId),
+      resolutionStoreHealthy: () => peekTreasuryResolutionStoreHealth().healthy,
+    });
+    const activation = acknowledgeTreasuryCleanupSettlementProof({ transactionId: "r22ii_resv" });
+    expect(activation.outcome).toBe("activated");
     const entry = readTreasuryResolutionCleanupEntry("r22ii_resv")!;
     expect(entry.settlementProofDurable).toBe(true);
     expect(markTreasuryResolutionCleanupStage("r22ii_resv", "marker_discharge", "already_absent")).toBe(true);

@@ -7,6 +7,8 @@
  * 关键路径（完整矩阵由既有 Round 13-21 fixture 升级用例承载）。
  */
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
+import { quarantineTreasuryTransaction, readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
+import { writeTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
 import {
   recordTreasuryWriteFault,
   readTreasuryWriteFault,
@@ -52,6 +54,54 @@ function seedV4Marker(overrides: Record<string, unknown> = {}): void {
     durableIdentityDigest: "0cc99174bb6f2e74",
     ...overrides,
   } as never);
+}
+
+/** quarantine authority + final not-executed tombstone + journal entry（gate 前置事实齐备——durable 以 authority 重算值为单一来源）。 */
+function seedQuarantineAuthorityAndTombstone(transactionId: string): void {
+  const write = quarantineTreasuryTransaction({
+    transactionId,
+    authorityLevel: "lowlevel",
+    lowlevelSource: "runtime-lowlevel@v1",
+    digest: DIGEST,
+    tick: Game.time,
+    kind: "terminal.send",
+    actionKind: "terminal.send",
+    source: "test",
+    adapterSemanticIdentity: "terminal.send@reconciler-semantics-v1",
+    phase: "executing_at_end_tick",
+    outcome: "started_unknown",
+    settlement: "quarantined",
+    deltas: [{ roomName: "W1N57", locationKind: "storage" as const, resource: "energy" as const, delta: -500 }],
+    recordedAt: Game.time,
+  });
+  expect(write.status).toBe("written");
+  const durable = readTreasuryQuarantineEntry(transactionId)?.durableIdentityDigest;
+  expect(durable).toBeDefined();
+  const tombstone = writeTreasuryResolutionTombstone({
+    transactionId,
+    digest: DIGEST,
+    resolution: "not-executed",
+    stage: "final",
+    proofLevel: "lowlevel",
+    lowlevelSource: "runtime-lowlevel@v1",
+    durableIdentityDigest: durable,
+    actionTick: Game.time,
+    observationTick: Game.time,
+    resolvedAtTick: Game.time,
+    reconcilerKind: "terminal.send",
+    source: "test",
+  });
+  expect(tombstone.status).not.toBe("rejected");
+  const opened = openTreasuryResolutionCleanup({
+    transactionId,
+    digest: DIGEST,
+    resolution: "not-executed",
+    identityProfile: "lowlevel",
+    proofClass: "lowlevel",
+    lowlevelSource: "runtime-lowlevel@v1",
+    durableIdentityDigest: durable,
+  });
+  expect(opened.status).toBe("opened");
 }
 
 const lowlevelExpected = {
@@ -184,7 +234,7 @@ describe("resolution cleanup journal（第二十二轮第七节）", () => {
     openTreasuryResolutionCleanup({ ...lowlevelExpected, resolution: "not-executed", digest: DIGEST, proofClass: "lowlevel", identityProfile: "lowlevel" });
     const conflict = openTreasuryResolutionCleanup({ ...lowlevelExpected, resolution: "committed", digest: DIGEST, proofClass: "lowlevel", identityProfile: "lowlevel" });
     expect(conflict.status).toBe("conflict");
-    expect(openTreasuryResolutionCleanup({ ...lowlevelExpected, resolution: "not-executed", digest: DIGEST, proofClass: "lowlevel", identityProfile: "lowlevel" }).status).toBe("already_open");
+    expect(openTreasuryResolutionCleanup({ ...lowlevelExpected, resolution: "not-executed", digest: DIGEST, proofClass: "lowlevel", identityProfile: "lowlevel" }).status).toBe("already_open_activated");
   });
 
   it("handlers 未装配 → 恢复 fail closed 保留 pending；global reset 后 journal 重建", () => {
@@ -200,7 +250,7 @@ describe("resolution cleanup journal（第二十二轮第七节）", () => {
   });
 
   it("handlers 装配 + 空 marker → 恢复推进 marker discharge 阶段", () => {
-    openTreasuryResolutionCleanup({ ...lowlevelExpected, resolution: "not-executed", digest: DIGEST, proofClass: "lowlevel", identityProfile: "lowlevel" });
+    seedQuarantineAuthorityAndTombstone("r22_mk_tx");
     registerTreasuryResolutionCleanupHandlersForAssembly({
       authorityRelease: () => ({ status: "blocked", detail: "authority 仍存在（本用例只验证 discharge 阶段）" }),
       outcomeFinalization: () => ({ status: "blocked", detail: "pending" }),

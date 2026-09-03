@@ -14,6 +14,7 @@
  * - store_unhealthy resolver 不回退扫描或选择另一 authority。
  */
 import { createTreasuryService } from "@/runtime/treasury/facade";
+import { createTreasuryAttemptLineageRecord } from "@/runtime/treasury/attemptLineage";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { quarantineTreasuryTransaction, readTreasuryQuarantineEntry, releaseTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
@@ -91,6 +92,21 @@ beforeEach(() => {
 });
 
 describe("第十六轮 operation-count（第十三/十五节）", () => {
+/** 【Remediation IV 九.2】not-executed 场景的 root lineage publication（生产在 tombstone 前创建）。 */
+function seedRootLineage(transactionId: string, identity: string): void {
+  const created = createTreasuryAttemptLineageRecord({
+    rootTransactionId: transactionId,
+    rootIdentity: { digest: DIGEST, durableIdentityDigest: identity },
+    actionKind: "terminal.send",
+    authorityClass: "lowlevel",
+    lowlevelSource: TREASURY_LOWLEVEL_SOURCE_RUNTIME,
+    rearmable: false,
+    identityProfile: "lowlevel",
+    nonRearmReason: "test fixture（无 retry semantic facts）",
+  });
+  expect(created.status).toBe("written");
+}
+
   it("无待恢复项时 beginTick 不扫描 resolution store（idleFastPath O(1)）", () => {
     makeService();
     const scansBefore = readTreasuryResolutionStoreCounters().fullScans;
@@ -153,6 +169,7 @@ describe("第十六轮 operation-count（第十三/十五节）", () => {
   it("final not-executed pending release 进入索引、补完成后移出", () => {
     const identity = derivedIdentity("oc_pending");
     expect(releaseTreasuryQuarantineEntry("oc_pending")).toBe(true);
+    seedRootLineage("oc_pending", identity);
     const w = writeTreasuryResolutionTombstone({
       transactionId: "oc_pending",
       digest: DIGEST,
@@ -179,6 +196,7 @@ describe("第十六轮 operation-count（第十三/十五节）", () => {
   it("global reset 首次 load 重建索引一次、后续 tick 不全扫", () => {
     const identity = derivedIdentity("oc_reset");
     expect(releaseTreasuryQuarantineEntry("oc_reset")).toBe(true);
+    seedRootLineage("oc_reset", identity);
     writeTreasuryResolutionTombstone({
       transactionId: "oc_reset",
       digest: DIGEST,
@@ -222,6 +240,7 @@ describe("第十六轮 operation-count（第十三/十五节）", () => {
     // 验证直接驱逐路径后 recovery 空闲。
     const identity = derivedIdentity("oc_new");
     expect(releaseTreasuryQuarantineEntry("oc_new")).toBe(true);
+    seedRootLineage("oc_new", identity);
     writeTreasuryResolutionTombstone({
       transactionId: "oc_new",
       digest: DIGEST,

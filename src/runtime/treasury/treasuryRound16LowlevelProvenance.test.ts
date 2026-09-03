@@ -319,7 +319,7 @@ describe("not-executed capability 消费顺序（第十六轮第十二节）", (
     expect(readTreasuryQuarantineEntry("cs_staging")).toBeUndefined();
   });
 
-  it("tombstone 成功后释放前中断：beginTick 补完成（marker 残留场景）", () => {
+  it("tombstone 成功后释放前中断：marker 残留 + authority 已释放 → 顺序破坏结构化阻断（marker 保留）", () => {
     // 手工构造中断窗口：quarantine 已释放、final tombstone 已写、marker 残留。
     const service = makeService();
     void service;
@@ -375,9 +375,12 @@ describe("not-executed capability 消费顺序（第十六轮第十二节）", (
       durableIdentityDigest: derived,
     });
     expect(readTreasuryWriteFault()).toBeDefined();
+    // 【Remediation IV 六.4】authority absent + marker 残留 = 安全顺序破坏
+    //（Round 22 之前旧顺序的遗留形状）——最后一把锁不得因 absent 被清除。
     const report = recoverStagedResolutions();
-    expect(report.completedRelease).toBe(1);
-    expect(readTreasuryWriteFault()).toBeUndefined();
+    expect(report.completedRelease).toBe(0);
+    expect(report.markerCleanupBlocked).toBeGreaterThanOrEqual(1);
+    expect(readTreasuryWriteFault()).toBeDefined();
   });
 
   it("未成功消费 capability 永远不对应可自动释放的 final proof：final proof 存在 → capability 已消费（发布顺序）", () => {

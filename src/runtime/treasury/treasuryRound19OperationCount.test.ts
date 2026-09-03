@@ -196,7 +196,7 @@ describe("operation-count（第十九轮性能要求）", () => {
       const issued = currentService.issueTreasuryRearmCapability({ parentTransactionId: parent });
       expect(issued.status).toBe("issued");
       if (issued.status !== "issued") return;
-      expect(peekTreasuryAttemptLineageHealth().entryCount).toBe(1);
+            expect(peekTreasuryAttemptLineageHealth().entryCount).toBe(1);
       // 低层 non-OK + abort 确认（同步退休 → tombstone + rearm-ready）。
       const childExec = currentService.executePreparedAction(
         freshInput(currentService, issued.childTransactionId),
