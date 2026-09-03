@@ -583,3 +583,59 @@ describe("Treasury cleanup 阶段推进架构守卫（Remediation III）", () =>
     expect(resolutionStoreSource).toMatch(/advanceTreasuryResolutionCleanupPhases\(/);
   });
 });
+
+// ── 【Round 22 Remediation VI 4.5/T14】completion 删除单一权威入口 ──────────
+
+describe("Treasury completion supersession 架构守卫（Remediation VI）", () => {
+  it("completion 底层 release 只允许统一 supersession/archive authority 模块使用（T14）", () => {
+    const violations: string[] = [];
+    // 底层 release 原语（cleanupCompletionAuthority 定义处）+ 统一入口
+    //（cleanupSupersessionAuthority——内部承载"验证 → historical authority
+    // 写入 read-back → 删除 → 删除 read-back"固定顺序）之外的生产模块一律
+    // 禁止：attemptLineage / lineageRetirementSummary / headroom reclaim /
+    // cleanup acknowledgement 等调用方只能经 archiveTreasuryCleanup
+    // CompletionViaAuthority。
+    const ALLOWED = new Set([
+      "runtime/treasury/cleanupCompletionAuthority.ts",
+      "runtime/treasury/cleanupSupersessionAuthority.ts",
+    ]);
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      if (ALLOWED.has(relative)) continue;
+      const source = readFileSync(filePath, "utf8");
+      if (/releaseTreasuryCleanupCompletionOfAttempt/.test(source)) {
+        violations.push(`${relative} 直接引用 completion 底层 release（删除必须经 cleanupSupersessionAuthority 统一入口）`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("不得重新引入 transactionId-only supersession / tombstone-alone-completed 模式（T14）", () => {
+    // 统一入口内部必须 exact 验证 replacement（outcome + 全维度 identity），
+    // 且 coordinator 的 journal-absent 完成判定只依赖 completion/historical
+    // authority（GRA/tombstone 不再单独证明 cleanup completed）。
+    const authoritySource = readFileSync(join(SRC_ROOT, "runtime/treasury/cleanupSupersessionAuthority.ts"), "utf8");
+    expect(authoritySource).toMatch(/verifyTreasuryExactCompletionReplacement/);
+    expect(authoritySource).toMatch(/input\.completion\.resolution !== "not-executed"/);
+    const coordinatorSource = readFileSync(join(SRC_ROOT, "runtime/treasury/resolutionCleanupCoordinator.ts"), "utf8");
+    expect(coordinatorSource).toMatch(/lookupTreasuryHistoricalCompletion/);
+    expect(coordinatorSource).not.toMatch(/verifyTreasuryCleanupCompletionSupersession/);
+    // lifecycle 驱动点（attemptLineage / summary compaction）只经统一入口。
+    const attemptLineageSource = readFileSync(join(SRC_ROOT, "runtime/treasury/attemptLineage.ts"), "utf8");
+    expect(attemptLineageSource).toMatch(/archiveTreasuryCleanupCompletionViaAuthority/);
+    expect(attemptLineageSource).not.toMatch(/releaseTreasuryCleanupCompletionOfAttempt/);
+    const summarySource = readFileSync(join(SRC_ROOT, "runtime/treasury/lineageRetirementSummary.ts"), "utf8");
+    expect(summarySource).toMatch(/archiveTreasuryCleanupCompletionViaAuthority/);
+    expect(summarySource).not.toMatch(/releaseTreasuryCleanupCompletionOfAttempt/);
+  });
+
+  it("state-changing 路径的 completion headroom preflight 已接入（authorize/prepare/execute）", () => {
+    const facadeSource = readFileSync(join(SRC_ROOT, "runtime/treasury/facade.ts"), "utf8");
+    const occurrences = facadeSource.split("ensureTreasuryCleanupCompletionHeadroom").length - 1;
+    // authorize + prepare + execute 三处调用 + readinessSources 装配 import。
+    expect(occurrences).toBeGreaterThanOrEqual(3);
+    expect(facadeSource).toMatch(/"completion_headroom_exhausted"/);
+    expect(facadeSource).toMatch(/"completion_store_unhealthy"/);
+  });
+});

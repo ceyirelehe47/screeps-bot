@@ -58,6 +58,12 @@ import {
   reclaimTreasuryCleanupCompletionHeadroom,
 } from "@/runtime/treasury/cleanupCompletionReplacement";
 import {
+  archiveTreasuryCleanupCompletionViaAuthority,
+  clearTreasuryCleanupSupersessionDurableForTest,
+  ensureTreasuryCleanupCompletionHeadroom,
+  verifyTreasuryHistoricalCompletionStatus,
+} from "@/runtime/treasury/cleanupSupersessionAuthority";
+import {
   createTreasuryAttemptLineageRecord,
   readTreasuryAttemptLineageRecord,
   lookupTreasuryAttemptLineageByNextChild,
@@ -205,6 +211,7 @@ beforeEach(() => {
   resetTreasuryResolutionStoreForTest();
   clearTreasuryCleanupCompletionDurableForTest();
   resetTreasuryCleanupCompletionHeapCacheForTest();
+  clearTreasuryCleanupSupersessionDurableForTest();
   registerTreasuryCleanupProofProbesForAssembly({
     readTombstone: (transactionId) => readTreasuryResolutionTombstone(transactionId) as never,
     resolutionStoreHealthy: () => peekTreasuryResolutionStoreHealth().healthy,
@@ -221,11 +228,9 @@ beforeEach(() => {
     summaryStoreHealthy: () => true,
     readSummaryByRoot: (rootTransactionId) => lookupTreasuryRetirementSummaryByRoot(rootTransactionId),
     resolutionStoreHealthy: () => peekTreasuryResolutionStoreHealth().healthy,
-    readTombstone: (transactionId) => {
-      const store = (Memory.runtime as unknown as { treasury?: { resolutions?: { entries?: Record<string, { transactionId: string; resolution: string; stage: string }> } } } | undefined)?.treasury?.resolutions;
-      const entry = store?.entries?.["r:" + transactionId];
-      return entry !== undefined ? { transactionId: entry.transactionId, resolution: entry.resolution, stage: entry.stage } : undefined;
-    },
+    // 【Remediation VI】probes 类型升级为完整 exact 视图（digest/proofLevel/
+    // identity 维度直读权威 tombstone——exact replacement 验证消费）。
+    readTombstone: (transactionId) => readTreasuryResolutionTombstone(transactionId) as never,
     listCompletionTransactionIds: () => listTreasuryCleanupCompletionTransactionIds(),
     completionAbsentAfterRelease: (transactionId) => lookupTreasuryCleanupCompletion(transactionId).verdict === "absent",
   });
@@ -286,21 +291,30 @@ describe("Remediation V 四：完成状态不谎报（no_cleanup_authority / con
     expect(treasuryCleanupStatusOfAdvance("not-executed", advance).stage).toBe("fully_complete");
   });
 
-  it("journal absent + completion absent 但 GRA replacement 存在 → superseded = completed", () => {
-    // tr1_ 历史代：GRA proof（release-trusted 写入）是 completion 的可查询 replacement。
+  it("journal absent + completion absent 但 GRA replacement 存在 → GRA 单独不证明 cleanup 完成（须 durable historical authority）", () => {
+    // 【Remediation VI 4.2】GRA proof 只证明该代 not-executed retirement，
+    // 不证明 marker discharge / authority release / completion 曾合法存在——
+    // completion absent 且无 historical authority 时 no_cleanup_authority
+    //（不得因 GRA 在位折叠为 completed）。
     const root = "v_gr_root";
     const rootDurable = seedQuarantine(root);
     seedFinalNotExecutedTombstone(root, rootDurable);
     releaseTreasuryQuarantineEntry(root);
     const lineageId = seedRootLineageRetiring(root, rootDurable);
     expect(convergeTreasuryLineageRetirementFromFacts(lineageId).status).toBe("completed");
-    // root 的 GRA proof（generation 0）存在 → root 查询 superseded。
+    // root 的 GRA proof（generation 0）存在——但 completion 不在。
     expect(lookupTreasuryGenerationRetirementProofByAttemptId(root)).toBeDefined();
-    const supersession = verifyTreasuryCleanupCompletionSupersession(root);
-    expect(supersession.verdict).toBe("superseded");
     const advance = advanceTreasuryResolutionCleanupPhases({ transactionId: root });
-    expect(advance.status).toBe("completed");
-    expect(treasuryCleanupStatusOfAdvance("not-executed", advance).stage).toBe("fully_complete");
+    expect(advance.status).toBe("no_cleanup_authority");
+    expect(treasuryCleanupStatusOfAdvance("not-executed", advance).stage).toBe("no_cleanup_authority");
+    // 经统一 archive 入口（GRA exact 验证 → historical authority 写入）后，
+    // 完成事实才由 durable historical authority 持续证明。
+    seedCompletionStore({ ["cc:" + root]: validCompletionProof(root, rootDurable) });
+    const archived = archiveTreasuryCleanupCompletionViaAuthority({ transactionId: root, via: "gra-proof" });
+    expect(archived.status).toBe("archived");
+    const afterArchive = advanceTreasuryResolutionCleanupPhases({ transactionId: root });
+    expect(afterArchive.status).toBe("completed");
+    expect(treasuryCleanupStatusOfAdvance("not-executed", afterArchive).stage).toBe("fully_complete");
   });
 });
 
@@ -779,8 +793,12 @@ describe("Remediation V 八：completion 容量与 replacement lifecycle", () =>
     expect(readiness.blockers).toContain("completion_headroom_exhausted");
   });
 
-  it("reclaimHeadroom：只回收有 replacement（GRA）的 completion；无 replacement 保留", () => {
-    // v_gc_a 有 GRA proof（superseded）→ 可回收；v_gc_b 无任何 replacement → 保留。
+  it("reclaimHeadroom：headroom 充足时零回收；compact archive 归档后 historical authority 持续证明完成", () => {
+    // 【Remediation VI 4.7】headroom preflight 只在容量不足时才执行 bounded
+    // 回收（entryCount + minSlots ≤ MAX → ok 且零写）；compact archive
+    //（completion 自身完整验证 → durable historical authority 写入 read-back
+    // → 删除 read-back）是统一回收路径——被回收 attempt 的查询经 historical
+    // authority completed（不退化为 no_cleanup_authority）。
     const rootA = "v_gc_a";
     const durableA = seedQuarantine(rootA);
     seedFinalNotExecutedTombstone(rootA, durableA);
@@ -792,19 +810,26 @@ describe("Remediation V 八：completion 容量与 replacement lifecycle", () =>
       ["cc:" + rootA]: validCompletionProof(rootA, durableA),
       "cc:v_gc_b": validCompletionProof("v_gc_b", "0123456789abc001"),
     });
-    const reclaim = reclaimTreasuryCleanupCompletionHeadroom({ minSlots: 2 });
-    expect(reclaim.reclaimed).toBe(1); // 只有 v_gc_a
+    // headroom 充足 → preflight ok 且零回收（零写语义）。
+    const preflight = ensureTreasuryCleanupCompletionHeadroom({ minSlots: 1 });
+    expect(preflight.status).toBe("ok");
+    expect(preflight.reclaimed).toBe(0);
+    expect(lookupTreasuryCleanupCompletion(rootA).verdict).toBe("match");
+    // 统一 archive 入口（rootA 走 GRA exact 验证、v_gc_b 走 compact archive）。
+    expect(archiveTreasuryCleanupCompletionViaAuthority({ transactionId: rootA, via: "gra-proof" }).status).toBe("archived");
+    expect(archiveTreasuryCleanupCompletionViaAuthority({ transactionId: "v_gc_b", via: "compact-archive" }).status).toBe("archived");
     expect(lookupTreasuryCleanupCompletion(rootA).verdict).toBe("absent");
-    expect(lookupTreasuryCleanupCompletion("v_gc_b").verdict).toBe("match");
-    // 被回收的 attempt 查询 superseded = completed（不是 no_cleanup_authority）。
-    expect(verifyTreasuryCleanupCompletionSupersession(rootA).verdict).toBe("superseded");
+    expect(lookupTreasuryCleanupCompletion("v_gc_b").verdict).toBe("absent");
+    // 被归档的 attempt 查询经 durable historical authority = completed。
+    expect(verifyTreasuryHistoricalCompletionStatus(rootA).verdict).toBe("match");
+    expect(verifyTreasuryHistoricalCompletionStatus(rootA).settlement).toBe("not-executed");
     expect(advanceTreasuryResolutionCleanupPhases({ transactionId: rootA }).status).toBe("completed");
-    // 未回收的 completion 仍 match；既无 completion 又无 replacement 的查询 no_cleanup_authority。
-    expect(lookupTreasuryCleanupCompletion("v_gc_b").verdict).toBe("match");
+    expect(advanceTreasuryResolutionCleanupPhases({ transactionId: "v_gc_b" }).status).toBe("completed");
+    // 既无 completion 又无 historical authority 的查询 no_cleanup_authority。
     expect(advanceTreasuryResolutionCleanupPhases({ transactionId: "v_gc_none" }).status).toBe("no_cleanup_authority");
   });
 
-  it("replacement store unhealthy（GRA fatal）→ 不回收、supersession fail closed", () => {
+  it("replacement store unhealthy（GRA fatal）→ GRA-verified archive fail closed；supersession 查询 fail closed", () => {
     seedCompletionStore({ "cc:v_gc_c": validCompletionProof("v_gc_c", "0123456789abc002") });
     // 手工破坏 GRA store（version 非法）→ graStoreHealthy false。
     (Memory.runtime as unknown as { treasury?: Record<string, unknown> }).treasury!.generationRetirementProofs = {
@@ -812,8 +837,12 @@ describe("Remediation V 八：completion 容量与 replacement lifecycle", () =>
     };
     const supersession = verifyTreasuryCleanupCompletionSupersession("v_gc_c");
     expect(supersession.verdict).toBe("store_unhealthy");
-    const reclaim = reclaimTreasuryCleanupCompletionHeadroom({ minSlots: 1 });
-    expect(reclaim.reclaimed).toBe(0);
+    // 要求 GRA replacement 的 archive 路径 fail closed（completion 保留）。
+    const archived = archiveTreasuryCleanupCompletionViaAuthority({ transactionId: "v_gc_c", via: "gra-proof" });
+    expect(archived.status).toBe("blocked");
+    if (archived.status === "blocked") {
+      expect(archived.reason).toBe("replacement_store_unhealthy");
+    }
     expect(lookupTreasuryCleanupCompletion("v_gc_c").verdict).toBe("match"); // 未删除
   });
 
@@ -849,13 +878,16 @@ describe("Remediation V 八：completion 容量与 replacement lifecycle", () =>
       lineageId, lineageGeneration: 1, parentTransactionId: root, lineageBindingDigest: binding,
     })!;
     expect(activateTreasuryLineageChild(lineageId, { digest: DIGEST, durableIdentityDigest: childDurable, lowlevelSource: RUNTIME }).status).not.toBe("rejected");
-    // GRA proof 在位 → parent completion 被回收，其查询经 replacement 完成。
+    // 【Remediation VI】GRA proof 在位 → activate 经统一 archive 入口回收
+    // parent completion（exact GRA 验证 → durable historical authority）；
+    // 查询经 historical authority completed。
     expect(lookupTreasuryCleanupCompletion(root).verdict).toBe("absent");
-    expect(verifyTreasuryCleanupCompletionSupersession(root).verdict).toBe("superseded");
+    expect(verifyTreasuryHistoricalCompletionStatus(root).verdict).toBe("match");
+    expect(verifyTreasuryHistoricalCompletionStatus(root).settlement).toBe("not-executed");
     expect(advanceTreasuryResolutionCleanupPhases({ transactionId: root }).status).toBe("completed");
   });
 
-  it("300 代链：parent completion 经 activate 回收（GRA 在位）、历史代查询不退化为 no authority", () => {
+  it("300 代链：parent completion 经 activate 归档（GRA 在位）、历史代查询不退化为 no authority", () => {
     const root = "v_chain_root";
     const rootDurable = seedQuarantine(root);
     const created = createTreasuryAttemptLineageRecord({
@@ -871,6 +903,9 @@ describe("Remediation V 八：completion 容量与 replacement lifecycle", () =>
     if (created.status === "rejected") throw new Error("seed rejected");
     const lineageId = created.record.lineageId;
     let currentId = root;
+    let currentDurable = rootDurable;
+    let currentBinding: string | undefined;
+    let currentParent: string | undefined;
     // converge 前置：root authority 已结算释放（tombstone 在位、marker absent）。
     seedFinalNotExecutedTombstone(root, rootDurable);
     expect(releaseTreasuryQuarantineEntry(root)).toBe(true);
@@ -885,18 +920,56 @@ describe("Remediation V 八：completion 容量与 replacement lifecycle", () =>
         postings: [{ roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -500 }],
         lineageId, lineageGeneration: generation, parentTransactionId: currentId, lineageBindingDigest: binding,
       })!;
+      // parent（currentId）的 completion：root initial（无 lineage 维度）或
+      // tr1_（完整 lineage 四字段——与该代 GRA proof 同源事实）。
+      const parentIdentity =
+        generation === 1
+          ? { digest: DIGEST, identityProfile: "lowlevel", proofClass: "lowlevel", durableIdentityDigest: currentDurable, lowlevelSource: RUNTIME }
+          : {
+              digest: DIGEST, identityProfile: "lowlevel", proofClass: "lowlevel",
+              durableIdentityDigest: currentDurable, lowlevelSource: RUNTIME,
+              lineageId, lineageGeneration: generation - 1,
+              ...(currentParent !== undefined ? { parentTransactionId: currentParent } : {}),
+              ...(currentBinding !== undefined ? { lineageBindingDigest: currentBinding } : {}),
+            };
+      seedCompletionStore({
+        ["cc:" + currentId]: validCompletionProof(currentId, currentDurable, { identity: parentIdentity, resolution: "not-executed" }),
+      });
       expect(activateTreasuryLineageChild(lineageId, { digest: DIGEST, durableIdentityDigest: childDurable, lowlevelSource: RUNTIME }).status).not.toBe("rejected");
+      // activate 后 parent completion 已归档（durable historical authority）。
+      expect(lookupTreasuryCleanupCompletion(currentId).verdict).toBe("absent");
+      expect(verifyTreasuryHistoricalCompletionStatus(currentId).verdict).toBe("match");
       expect(retireTreasuryLineageCurrentAttempt({ lineageId }).status).not.toBe("rejected");
+      currentParent = currentId;
+      currentBinding = binding;
       currentId = childId;
+      currentDurable = childDurable;
     }
-    // 最后一代 retire 后 converge（写入末代 proof）。
+    // 最后一代 retire 后 converge（写入末代 proof），再为末代建立 completion
+    // 并经统一入口归档（末代 parent=gen11 已在循环内归档；末代自身同样
+    // 需要 durable historical authority）。
     expect(convergeTreasuryLineageRetirementFromFacts(lineageId).status).toBe("completed");
-    // 每代 GRA proof 在位 → 每个历史 parent 的 supersession 查询 completed。
+    seedCompletionStore({
+      ["cc:" + currentId]: validCompletionProof(currentId, currentDurable, {
+        resolution: "not-executed",
+        identity: {
+          digest: DIGEST, identityProfile: "lowlevel", proofClass: "lowlevel",
+          durableIdentityDigest: currentDurable, lowlevelSource: RUNTIME,
+          lineageId, lineageGeneration: 12,
+          ...(currentParent !== undefined ? { parentTransactionId: currentParent } : {}),
+          ...(currentBinding !== undefined ? { lineageBindingDigest: currentBinding } : {}),
+        },
+      }),
+    });
+    expect(archiveTreasuryCleanupCompletionViaAuthority({ transactionId: currentId, via: "gra-proof" }).status).toBe("archived");
+    // 每代 GRA proof 在位且 completion 已归档 → 历史查询经 historical
+    // authority completed（不退化为 no_cleanup_authority）。
+    expect(verifyTreasuryHistoricalCompletionStatus(root).verdict).toBe("match");
     for (let generation = 1; generation <= 12; generation++) {
       const attemptId = deriveTreasuryLineageNextChildTransactionId(lineageId, generation, root);
       expect(lookupTreasuryGenerationRetirementProofByAttemptId(attemptId)).toBeDefined();
-      expect(verifyTreasuryCleanupCompletionSupersession(attemptId).verdict).toBe("superseded");
-      expect(advanceTreasuryResolutionCleanupPhases({ transactionId: attemptId }).status).toBe("completed");
+      expect(verifyTreasuryHistoricalCompletionStatus(attemptId).verdict).toBe("match");
+      expect(verifyTreasuryHistoricalCompletionStatus(attemptId).settlement).toBe("not-executed");
     }
   });
 });
