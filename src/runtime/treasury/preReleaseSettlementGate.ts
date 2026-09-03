@@ -32,17 +32,39 @@
 import {
   treasuryExactAttemptIdentityOfFacts,
   treasuryExactAttemptIdentityOfAuthority,
-  treasuryExactAttemptIdentityOfTombstone,
   treasuryExactAttemptIdentityRelation,
   type TreasuryExactAttemptIdentity,
 } from "@/runtime/treasury/exactAttemptIdentity";
 import { resolveTreasuryUnresolvedAuthority } from "@/runtime/treasury/unresolvedAuthority";
 import { readTreasuryAuthorizationFaultEntry } from "@/runtime/treasury/authorizationFaults";
-import {
-  readTreasuryResolutionTombstone,
-  peekTreasuryResolutionStoreHealth,
-} from "@/runtime/treasury/resolutionStore";
 import { readTreasuryTrustedSettlementProofForAttempt } from "@/runtime/treasury/trustedSettlementProof";
+import {
+  peekTreasuryCleanupProofProbes,
+  type TreasuryCleanupProofTombstoneView,
+} from "@/runtime/treasury/settlementProofActivation";
+
+/** tombstone structural 视图 → exact identity（不直接 import resolutionStore——环依赖）。 */
+function exactOfTombstoneView(tombstone: TreasuryCleanupProofTombstoneView) {
+  return treasuryExactAttemptIdentityOfFacts(
+    tombstone.transactionId,
+    {
+      digest: tombstone.digest,
+      ...(tombstone.contractDigest !== undefined ? { contractDigest: tombstone.contractDigest } : {}),
+      ...(tombstone.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: tombstone.authorizationCohortDigest } : {}),
+      ...(tombstone.durableIdentityDigest !== undefined ? { durableIdentityDigest: tombstone.durableIdentityDigest } : {}),
+      ...(tombstone.lowlevelSource !== undefined ? { lowlevelSource: tombstone.lowlevelSource } : {}),
+      ...(tombstone.lineageId !== undefined ? { lineageId: tombstone.lineageId } : {}),
+      ...(tombstone.lineageGeneration !== undefined ? { lineageGeneration: tombstone.lineageGeneration } : {}),
+      ...(tombstone.parentTransactionId !== undefined ? { parentTransactionId: tombstone.parentTransactionId } : {}),
+      ...(tombstone.lineageBindingDigest !== undefined ? { lineageBindingDigest: tombstone.lineageBindingDigest } : {}),
+    },
+    tombstone.proofLevel === "lowlevel"
+      ? "lowlevel"
+      : tombstone.proofLevel === "identity-bound" || tombstone.proofLevel === "modern"
+        ? "identity-bound"
+        : "legacy",
+  );
+}
 import {
   checkTreasuryOppositeProofsForCommitted,
   checkTreasuryOppositeProofsForNotExecuted,
@@ -164,17 +186,24 @@ export function gateTreasuryPreReleaseSettlement(
       return result("target_proof_store_unhealthy", `committed receipt store unhealthy: ${trusted.detail}`);
     }
   } else {
-    if (!peekTreasuryResolutionStoreHealth().healthy) {
+    // not-executed：final tombstone 读取经装配 probes（避免 resolutionStore
+    // 环依赖；probes 未装配 → store_unhealthy fail closed——与 activation
+    // 同语义）。
+    const probes = peekTreasuryCleanupProofProbes();
+    if (probes === null) {
+      return result("target_proof_store_unhealthy", "cleanup proof probes 未装配（final not-executed tombstone 不可验证——fail closed）");
+    }
+    if (!probes.resolutionStoreHealthy()) {
       return result("target_proof_store_unhealthy", "resolution store unhealthy（final not-executed tombstone 不可信）");
     }
-    const tombstone = readTreasuryResolutionTombstone(entry.transactionId);
+    const tombstone: TreasuryCleanupProofTombstoneView | undefined = probes.readTombstone(entry.transactionId);
     if (tombstone === undefined) {
       return result("target_proof_absent", "final not-executed tombstone 缺失（release 前必须成立）");
     }
     if (tombstone.stage !== "final" || tombstone.resolution !== "not-executed") {
       return result("target_proof_conflict", `tombstone ${String(tombstone.stage)}/${String(tombstone.resolution)} 非 final not-executed`);
     }
-    const tombstoneExact = treasuryExactAttemptIdentityOfTombstone(tombstone);
+    const tombstoneExact = exactOfTombstoneView(tombstone);
     if (tombstoneExact === null) {
       return result("target_proof_conflict", "final tombstone 身份无法构造 exact identity（维度不足）");
     }
