@@ -238,6 +238,10 @@ describe("homeDefenderRole", () => {
           focusExpectedHeal: 0,
           towerAssignments: {},
           defenderAssignments: { "0": "planned" },
+          // 【Remediation IV 十七】plan 生成器现在总是输出 defenderEngagements
+          //（消费侧唯一权威——defenderAssignments 不再作为回落）。测试
+          // fixture 与新协议对齐。
+          defenderEngagements: { "0": { targetId: "planned", mode: "attack" } },
           emergencyHealByTowerId: {},
         },
       },
@@ -279,6 +283,10 @@ describe("homeDefenderRole", () => {
           focusExpectedHeal: 0,
           towerAssignments: {},
           defenderAssignments: { "0": "planned" },
+          // 【Remediation IV 十七】plan 生成器现在总是输出 defenderEngagements
+          //（消费侧唯一权威——defenderAssignments 不再作为回落）。测试
+          // fixture 与新协议对齐。
+          defenderEngagements: { "0": { targetId: "planned", mode: "attack" } },
           emergencyHealByTowerId: {},
         },
       },
@@ -325,6 +333,10 @@ describe("homeDefenderRole", () => {
           focusExpectedHeal: 0,
           towerAssignments: {},
           defenderAssignments: { "0": "planned" },
+          // 【Remediation IV 十七】plan 生成器现在总是输出 defenderEngagements
+          //（消费侧唯一权威——defenderAssignments 不再作为回落）。测试
+          // fixture 与新协议对齐。
+          defenderEngagements: { "0": { targetId: "planned", mode: "attack" } },
           emergencyHealByTowerId: {},
         },
       },

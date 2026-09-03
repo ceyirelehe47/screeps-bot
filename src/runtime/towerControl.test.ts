@@ -218,6 +218,7 @@ describe("runTowerControl", () => {
       engagementByTargetId: {},
       emergencyHealByTowerId: {},
       fallbackTargetIds: ["hostile-dead", "hostile-live"],
+      defenderFronts: {},
     };
     Memory.runtime = { defenseEngagement: { [roomName]: plan } } as never;
     const plannerInvocationsBefore = readFocusFirePlannerStatsForTest().invocations;
@@ -258,6 +259,7 @@ describe("runTowerControl", () => {
       engagementByTargetId: {},
       emergencyHealByTowerId: {},
       fallbackTargetIds: ["hostile-pressure", "hostile-near"],
+      defenderFronts: {},
     };
     Memory.runtime = { defenseEngagement: { [roomName]: plan } } as never;
     const plannerInvocationsBefore = readFocusFirePlannerStatsForTest().invocations;
@@ -301,6 +303,7 @@ describe("runTowerControl", () => {
       engagementByTargetId: {},
       emergencyHealByTowerId: { "tower-heal": "wounded-1" },
       fallbackTargetIds: ["hostile-1"],
+      defenderFronts: {},
     };
     Memory.runtime = { defenseEngagement: { [roomName]: plan } } as never;
 

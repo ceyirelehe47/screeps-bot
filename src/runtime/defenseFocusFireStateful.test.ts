@@ -23,13 +23,13 @@
  */
 import {
   planRoomEngagement,
-  resolveRoomEngagementFallbackTarget,
   writeRoomEngagementPlan,
   clearDefenseEngagementForTest,
   executableDefenderDamage,
   type FocusFireRoomInput,
   type FocusFireEngagementPlan,
 } from "@/runtime/defenseFocusFire";
+import { resolveRoomEngagementFallbackRevision } from "@/runtime/engagementFallbackRevision";
 
 const TOWER_FULL = TOWER_POWER_ATTACK;
 
@@ -176,7 +176,11 @@ describe("Remediation III：primary actor 分配", () => {
     expect(plan.focusAssignedDamage).toBeGreaterThanOrEqual(230);
     // 未被 primary 需要的 actor 去向 secondary（不零散空转）。
     expect(plan.towerAssignments.t2).toBe("h_second");
-    expect(plan.defenderAssignments["0"]).toBe("h_second");
+    // 【Remediation IV 十四】防御者对 secondary 距离 7（射程外、本 tick 伤害
+    // 0）——不再作为压制 actor 消费：positioning 阶段保留 combat target
+    //（贴身的 primary——下一 tick 预算变化时可参与）。
+    expect(plan.defenderAssignments["0"]).toBe("h_primary");
+    expect(plan.defenderEngagements["0"]?.mode).toBe("attack");
   });
 
   it("输入 actor 顺序反转后 plan 语义一致（确定性）", () => {
@@ -397,31 +401,31 @@ describe("Remediation III：房间级一次性共享 fallback", () => {
   it("primary 失效：fallback 顺序命中第一个存活目标；同 tick 多消费者共享一次解析", () => {
     seedPlan("W1N57", "h_primary", ["h_f1", "h_f2"]);
     const alive = new Set(["h_f2"]); // h_f1 也死了
-    const first = resolveRoomEngagementFallbackTarget("W1N57", "h_primary", alive);
-    expect(first.targetId).toBe("h_f2");
+    const first = resolveRoomEngagementFallbackRevision("W1N57", ["h_primary"], alive);
+    expect(first.revision?.towerTargetByTowerId.t1).toBe("h_f2");
     expect(first.fromCache).toBe(false);
-    // 第二个消费者（Defender）同 tick 命中缓存。
-    const second = resolveRoomEngagementFallbackTarget("W1N57", "h_primary", alive);
-    expect(second.targetId).toBe("h_f2");
+    // 第二个消费者（Defender）同 tick 命中同一 revision。
+    const second = resolveRoomEngagementFallbackRevision("W1N57", ["h_primary"], alive);
+    expect(second.revision?.towerTargetByTowerId.t1).toBe("h_f2");
     expect(second.fromCache).toBe(true);
-    // plan 上的运行期缓存（计数有界——每 tick 重写）。
-    const plan = (Memory.runtime as { defenseEngagement?: Record<string, FocusFireEngagementPlan> }).defenseEngagement?.["W1N57"];
-    expect(plan?.fallbackResolution?.requests).toBe(2);
+    // plan 上的运行期 revision（计数有界——每 tick 重写）。
+    const plan = (Memory.runtime as { defenseEngagement?: Record<string, FocusFireEngagementPlan & { fallbackRevision?: { requests: number } }> }).defenseEngagement?.["W1N57"];
+    expect(plan?.fallbackRevision?.requests).toBe(2);
   });
 
   it("无合法 fallback：返回 null（共同空转——不回退独立评分）", () => {
     seedPlan("W1N56", "h_primary", ["h_f1"]);
-    const result = resolveRoomEngagementFallbackTarget("W1N56", "h_primary", new Set());
-    expect(result.targetId).toBeNull();
+    const result = resolveRoomEngagementFallbackRevision("W1N56", ["h_primary"], new Set());
+    expect(result.revision?.towerTargetByTowerId.t1 ?? null).toBeNull();
   });
 
   it("多房间隔离：fallback 解析互不影响", () => {
     seedPlan("W1N57", "h_primary", ["h_f1"]);
     seedPlan("W1N58", "h_other", ["h_f9"]);
-    const a = resolveRoomEngagementFallbackTarget("W1N57", "h_primary", new Set(["h_f1"]));
-    const b = resolveRoomEngagementFallbackTarget("W1N58", "h_other", new Set(["h_f9"]));
-    expect(a.targetId).toBe("h_f1");
-    expect(b.targetId).toBe("h_f9");
+    const a = resolveRoomEngagementFallbackRevision("W1N57", ["h_primary"], new Set(["h_f1"]));
+    const b = resolveRoomEngagementFallbackRevision("W1N58", ["h_other"], new Set(["h_f9"]));
+    expect(a.revision?.towerTargetByTowerId.t1).toBe("h_f1");
+    expect(b.revision?.towerTargetByTowerId.t1).toBe("h_f9");
   });
 
   it("stale plan（上一 tick）不参与 fallback 解析", () => {
@@ -430,8 +434,8 @@ describe("Remediation III：房间级一次性共享 fallback", () => {
       Game.time - 1,
     );
     writeRoomEngagementPlan(stale);
-    const result = resolveRoomEngagementFallbackTarget(stale.roomName, "h_x", new Set(["h_x"]));
-    expect(result.targetId).toBeNull();
+    const result = resolveRoomEngagementFallbackRevision(stale.roomName, ["h_x"], new Set(["h_x"]));
+    expect(result.revision).toBeNull();
   });
 });
 
@@ -501,10 +505,10 @@ describe("Remediation III：operation-count", () => {
     writeRoomEngagementPlan(plan);
     const alive = new Set(["h_y"]);
     for (let i = 0; i < 10; i++) {
-      resolveRoomEngagementFallbackTarget(plan.roomName, "h_x", alive);
+      resolveRoomEngagementFallbackRevision(plan.roomName, ["h_x"], alive);
     }
-    const stored = (Memory.runtime as { defenseEngagement?: Record<string, FocusFireEngagementPlan> }).defenseEngagement?.[plan.roomName];
-    expect(stored?.fallbackResolution?.requests).toBe(10); // 单次解析 + 9 次缓存
-    expect(stored?.fallbackResolution?.resolvedTargetId).toBe("h_y");
+    const stored = (Memory.runtime as { defenseEngagement?: Record<string, FocusFireEngagementPlan & { fallbackRevision?: { requests: number; towerTargetByTowerId: Record<string, string | null> } }> }).defenseEngagement?.[plan.roomName];
+    expect(stored?.fallbackRevision?.requests).toBe(10); // 单次生成 revision + 9 次缓存读
+    expect(stored?.fallbackRevision?.towerTargetByTowerId.t1).toBe("h_y");
   });
 });
