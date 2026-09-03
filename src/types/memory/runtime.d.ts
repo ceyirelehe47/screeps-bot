@@ -89,20 +89,37 @@ declare global {
       }
     >;
     /** 【Defense Focus-Fire Sidecar】每房间每 tick 的协同集火 plan（目标与
-     *  actor 分配；plannedAtTick 与 Game.time 不符视为过期，消费方回退）。 */
+     *  actor 分配；plannedAtTick 与 Game.time 不符视为过期，消费方回退）。
+     *  【Remediation III】三分类 / 击杀预算 / engagement 分离 / fallback
+     *  候选与运行期共享解析缓存。 */
     defenseEngagement?: Record<
       string,
       {
         roomName: string;
         plannedAtTick: number;
         focusTargetId: string | null;
+        /** 主目标三分类（killable_this_tick / positive_pressure / suppression_only）。 */
+        focusTargetClass?: string;
         /** 主目标在联合预算内是否可击杀（false = 共享战略压制目标）。 */
         killExpected: boolean;
         focusAssignedDamage: number;
+        /** 主目标完整击杀预算（pressure/suppression 类为 null）。 */
+        focusKillBudget?: number | null;
         focusExpectedHeal: number;
         towerAssignments: Record<string, string>;
         defenderAssignments: Record<string, string>;
+        /** Defender slot → 作战 assignment（目标与接敌位置分离）。 */
+        defenderEngagements?: Record<
+          string,
+          { targetId: string; mode: string; position?: { x: number; y: number }; positionKind?: string }
+        >;
+        /** hostileId → 接敌位置（inside=直接接敌 / boundary=合法 rampart）。 */
+        engagementByTargetId?: Record<string, { x: number; y: number; kind: string }>;
         emergencyHealByTowerId: Record<string, string>;
+        /** 共享 fallback 候选顺序（resolver 逐个探活）。 */
+        fallbackTargetIds?: string[];
+        /** 运行期共享 fallback 解析缓存（每房间每 tick 至多一次）。 */
+        fallbackResolution?: { tick: number; resolvedTargetId: string | null; requests: number };
         fallbackReason?: string;
       }
     >;

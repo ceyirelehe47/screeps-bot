@@ -42,7 +42,7 @@ const MEMORY_BRANCHES = {
     // 【Defense Focus-Fire Sidecar】defenseEngagement（每房间协同集火 plan）
     // 字段加入后的 schema 指纹。【Remediation II】defenseEngagement 增
     // killExpected（pressure 共享压制语义）后的指纹。
-    schemaFingerprint: "01177203d272f50d70ab13f8a847ad7f0eaad2e2345ebb7c59f1571fe6184faf",
+    schemaFingerprint: "1d1a6c7a6d7983603844abc139e9fb24d192ec375c47eed3372245d2fa3a0750",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",

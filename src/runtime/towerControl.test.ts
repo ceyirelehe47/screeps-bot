@@ -194,6 +194,42 @@ describe("runTowerControl", () => {
     expect(towerB.attack).not.toHaveBeenCalled();
   });
 
+  it("【Remediation III 十七】计划目标失效：房间级共享 fallback 转向仍存活的 secondary（不独立重评分）", () => {
+    const roomName = "W1N7";
+    const liveSecondary = createHostile(roomName, "hostile-live", 35, 35, { hits: 100 });
+    const towerA = createTower(roomName, "tower-a", 10, 10);
+    const room = createRoom(roomName, {
+      towers: [towerA],
+      hostiles: [liveSecondary], // 计划目标 hostile-dead 不在本 tick hostiles 中（已失效）
+    });
+    Game.rooms[room.name] = room;
+    const plan: FocusFireEngagementPlan = {
+      roomName,
+      plannedAtTick: Game.time,
+      focusTargetId: "hostile-dead",
+      focusTargetClass: "killable_this_tick",
+      killExpected: true,
+      focusAssignedDamage: 600,
+      focusKillBudget: 115,
+      focusExpectedHeal: 0,
+      towerAssignments: { "tower-a": "hostile-dead" },
+      defenderAssignments: {},
+      defenderEngagements: {},
+      engagementByTargetId: {},
+      emergencyHealByTowerId: {},
+      fallbackTargetIds: ["hostile-dead", "hostile-live"],
+    };
+    Memory.runtime = { defenseEngagement: { [roomName]: plan } } as never;
+    const plannerInvocationsBefore = readFocusFirePlannerStatsForTest().invocations;
+
+    runTowerControl();
+
+    // Tower 转向共享 fallback 目标（不空转、不独立重评分——与 Defender 消费
+    // 同一 fallbackResolution 缓存）。
+    expect(towerA.attack).toHaveBeenCalledWith(liveSecondary);
+    expect(readFocusFirePlannerStatsForTest().invocations).toBe(plannerInvocationsBefore);
+  });
+
   it("【Remediation II】pressure plan（killExpected=false）仍是唯一权威：塔攻击共享压制目标而非独立评分", () => {
     const roomName = "W1N9";
     // 独立评分会选近距离高净伤的 hostile-near；共享 plan 指定 hostile-pressure
@@ -211,12 +247,17 @@ describe("runTowerControl", () => {
       roomName,
       plannedAtTick: Game.time,
       focusTargetId: "hostile-pressure",
+      focusTargetClass: "suppression_only",
       killExpected: false,
       focusAssignedDamage: 0,
+      focusKillBudget: null,
       focusExpectedHeal: 9_999,
       towerAssignments: { "tower-a": "hostile-pressure", "tower-b": "hostile-pressure" },
       defenderAssignments: {},
+      defenderEngagements: {},
+      engagementByTargetId: {},
       emergencyHealByTowerId: {},
+      fallbackTargetIds: ["hostile-pressure", "hostile-near"],
     };
     Memory.runtime = { defenseEngagement: { [roomName]: plan } } as never;
     const plannerInvocationsBefore = readFocusFirePlannerStatsForTest().invocations;
@@ -249,12 +290,17 @@ describe("runTowerControl", () => {
       roomName,
       plannedAtTick: Game.time,
       focusTargetId: "hostile-1",
+      focusTargetClass: "killable_this_tick",
       killExpected: true,
       focusAssignedDamage: 600,
+      focusKillBudget: 115,
       focusExpectedHeal: 0,
       towerAssignments: { "tower-atk": "hostile-1" },
       defenderAssignments: {},
+      defenderEngagements: {},
+      engagementByTargetId: {},
       emergencyHealByTowerId: { "tower-heal": "wounded-1" },
+      fallbackTargetIds: ["hostile-1"],
     };
     Memory.runtime = { defenseEngagement: { [roomName]: plan } } as never;
 

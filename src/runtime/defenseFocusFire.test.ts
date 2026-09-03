@@ -491,16 +491,20 @@ describe("【Remediation II】Secondary 按剩余 actor 重新计算", () => {
     const plan = planRoomEngagement(input, 100);
     expect(plan.focusTargetId).toBe("h_low");
     expect(plan.killExpected).toBe(true);
-    expect(plan.towerAssignments.t1).toBe("h_low");
-    // t2/t3/t4 spill：剩余 actor 预算 B(净 800) > A(净 700) → 全部 h_b。
-    expect(plan.towerAssignments.t2).toBe("h_b");
+    // 【Remediation III 十四】primary 分配按边际有效伤害降序 greedy——贴身
+    // 防御者（800）单独达到 h_low 的击杀预算（ceil(80×1.15)=92），最少
+    // actor、最小过量；塔全部进入 secondary 池。
+    expect(plan.defenderAssignments["0"]).toBe("h_low");
+    // 【Remediation III 十五】secondary 按剩余 actor 重评：A 与 B 均可由
+    // 剩余塔可靠击杀（1800 ≥ A 1150 / B 1380）→ killable 桶内战略价值
+    // 平手按稳定 ID 选 h_a；h_a 达到预算后 t3/t4 转入 tertiary 压制 h_b
+    //（不再逐塔独立选敌）。
+    expect(plan.towerAssignments.t1).toBe("h_a");
+    expect(plan.towerAssignments.t2).toBe("h_a");
     expect(plan.towerAssignments.t3).toBe("h_b");
     expect(plan.towerAssignments.t4).toBe("h_b");
-    // 零伤害 spilled actor（防御者对 A/B 均不可达）：不把其输出计入任何
-    // secondary 击杀预算——确定性分给评分最高的压制候选（A 的敌方治疗更
-    // 低 → A），focusAssignedDamage 只含 primary 实际分配（t1 的 600）。
-    expect(plan.defenderAssignments["0"]).toBe("h_a");
-    expect(plan.focusAssignedDamage).toBe(TOWER_FULL);
+    // focusAssignedDamage 只含 primary 实际分配（防御者的 800）。
+    expect(plan.focusAssignedDamage).toBe(800);
   });
 });
 

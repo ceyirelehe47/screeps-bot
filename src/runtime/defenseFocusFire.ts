@@ -6,33 +6,31 @@
  * 每房间每 tick 由调用方（homeDefense）采集一次快照并生成唯一 engagement
  * plan；最终执行仍由 towerControl 与 homeDefender 的既有动作入口完成。
  *
- * 【Remediation II 预算修正】
- * A. 紧急治疗仲裁先行：emergencyHealByTowerId 先于攻击预算确定，治疗塔
- *    从攻击 actor 集合移除——目标选择/净伤害/击杀可行性只使用剩余真实
- *    攻击 actor（旧实现先按全部塔评分再扣治疗塔，目标选择使用了不存在
- *    的攻击火力）。
- * B/C. 击杀预算含敌方本 tick 治疗：killBudget = ceil((hits + incomingHeal)
- *    × KILL_OVERKILL_MARGIN)；只有 primary 累计**已分配**有效伤害达到预算
- *    后，后续 actor 才分火——负责跨越阈值的 actor 恒分配给 primary（旧
- *    实现在 focusAssigned + damage >= threshold 时把跨越者 spill，primary
- *    永远达不到阈值）。
- * D. 统一 TOUGH/boost 有效伤害模型：顺序伤害模拟（与 Screeps 引擎
- *    _applyDamage 同算法——伤害按 body 顺序消耗部件、boosted TOUGH 按
- *    damage ratio 折算吸收）对 Tower 与 Defender 输出一视同仁；Defender-
- *    only 且目标带 boosted TOUGH 时不再默认 ratio=1（旧实现只对塔伤害乘
- *    固定比例、防御者原始伤害直接相加）。
- * E. Secondary 按剩余 actor 重新计算：每次 spill 时用**尚未分配**的 actor
- *    集合对候选重新做顺序模拟评分（目标特定有效伤害/射程/TOUGH/敌方治
- *    疗全部重算）——不得用"全军火力表"完成 spill，也不得把已分配 actor
- *    再次计入 secondary 预算。
- * F. 不可击杀场景保持共享压制：没有 net>0 候选时仍产生确定性共享
- *    primary（killExpected=false 的 pressure 语义），Tower 与 Defender 消费
- *    同一目标，不因"敌方治疗暂时覆盖输出"回退独立评分。fallback 仅用于
- *    无 hostile / 无可参与 actor 的场景。
- * G. Planner 预算与执行层一致：防御者只计"本 tick 确实会发出的动作"的伤害
- *    （ATTACK：贴身才计，需要移动计 0；RANGED_ATTACK：仅纯远程防御者在
- *    ≤3 距离 rangedAttack 计入——执行层 homeDefender 按同一
- *    defenderEngagementMode 语义执行，共享判定单一语义源）。
+ * 【Remediation III：kill feasibility 三分类 + 有状态分配】
+ * 1. 目标分类（killable_this_tick / positive_pressure / suppression_only）：
+ *    killBudget = ceil((hits + incomingHeal) × MARGIN)——只有全部可参与
+ *    攻击 actor 的顺序模拟有效伤害达到完整预算才是本 tick 可靠击杀；
+ *    killExpected=true 当且仅当 primary 是 killable 且实际分配伤害达到
+ *    预算（净伤害为正不再等价于可击杀）。
+ * 2. 候选优先级按桶：可靠击杀桶（HEAL 核心 / 拆墙 / 威胁 / 低血量 /
+ *    少 actor 成本 / 小过量 / 稳定 ID）→ 正净伤压制桶 → 共同压制桶——
+ *    高净伤但不可击杀的高血量目标不得压过本 tick 可靠击杀的低血量目标。
+ * 3. Primary actor 分配：确定性 greedy（对 primary 的边际有效伤害降序、
+ *    稳定 key 决胜），TOUGH 状态随分配顺序推进，达到预算即停止——
+ *    跨越预算阈值的 actor 恒留 primary；移动中的 Defender 边际伤害为 0，
+ *    不计入预算但保留定位 assignment。
+ * 4. Stateful secondary：目标级分配循环——secondary 达到自身 killBudget
+ *    才切 tertiary；当前目标无法由全部剩余 actor 击杀时，全部剩余 actor
+ *    共同压制该目标（不再切换、不逐 actor 各自选敌——确定性拆火）。
+ * 5. Combat target 与 engagement position 分离：hostile 快照携带接敌位置
+ *    （安全区内=直接接敌；边界外=最近合法 rampart——由采集方按既有
+ *    front/rampart 系统计算，planner 不建立平行防线模型）。Defender 的
+ *    approach 消费该位置——不因共享目标绕过 Rampart、不离开防线追逐。
+ * 6. Shared live fallback：plan 持久化候选顺序（fallbackTargetIds），
+ *    目标失效时每房间每 tick 至多一次共享解析（Tower 与 Defender 消费
+ *    同一结果——fallbackResolution 运行期写回 plan，计数有界）。
+ * 7. 紧急治疗 Tower 按对伤员的实际治疗量选择（距离衰减感知，治疗量
+ *    降序、Tower ID 稳定决胜；满足保守需求即停——剩余塔进入攻击预算）。
  *
  * 确定性：候选/actor 全部按稳定 id（slot）字典序，评分平手以 id 决胜；
  * 同快照（任意来源顺序）产生同一 plan。
@@ -52,6 +50,19 @@ const DEFENDER_RANGED_RANGE = 3;
 const DEFENDER_MELEE_RANGE = 1;
 /** Tower 一次攻击/治疗的能量成本（低于该值的塔不可参与）。 */
 const TOWER_ACTION_ENERGY_COST = 10;
+/** WORK 部件拆墙输出（引擎 WORK_POWER=100——常量包未导出，本地同值）。 */
+const WORK_DISMANTLE_POWER = 100;
+
+/** 【Remediation III 十三】目标的三分类（本 tick 联合可行性行为语义）。 */
+export type FocusFireTargetClass = "killable_this_tick" | "positive_pressure" | "suppression_only";
+
+/** 【Remediation III 十六】combat target 与 engagement position 分离。 */
+export interface FocusFireEngagementPosition {
+  readonly x: number;
+  readonly y: number;
+  /** inside=敌在安全区内（直接接敌）；boundary=敌在边界外（合法 rampart 站位）。 */
+  readonly kind: "inside" | "boundary";
+}
 
 export interface FocusFireHostileSnapshot {
   readonly id: string;
@@ -70,6 +81,12 @@ export interface FocusFireHostileSnapshot {
   readonly incomingHeal: number;
   /** 威胁权重（body 组成；采集时由既有 threat 语义计算）。 */
   readonly threat: number;
+  /** 【Remediation III】该目标自身的 heal 输出（HEAL 核心排序维度）。 */
+  readonly healPower?: number;
+  /** 【Remediation III】该目标自身的 WORK 拆墙输出（拆墙威胁排序维度）。 */
+  readonly workPower?: number;
+  /** 【Remediation III 十六】接敌位置（采集方按既有 front/rampart 系统给出）。 */
+  readonly engagement?: FocusFireEngagementPosition;
 }
 
 export interface FocusFireTowerSnapshot {
@@ -109,23 +126,45 @@ export interface FocusFireRoomInput {
   readonly wounded: readonly FocusFireWoundedSnapshot[];
 }
 
+/** 【Remediation III 十六】Defender 的作战 assignment（目标 + 接敌模式/位置）。 */
+export interface FocusFireDefenderEngagement {
+  readonly targetId: string;
+  /** attack/ranged_attack=本 tick 有伤害动作；engage_position=移动接敌（本 tick 伤害 0）。 */
+  readonly mode: "attack" | "ranged_attack" | "engage_position";
+  /** 接敌目标位置（engage_position 时必带——inside 直接接敌 / boundary 合法 rampart）。 */
+  readonly position?: { readonly x: number; readonly y: number };
+  readonly positionKind?: "inside" | "boundary";
+}
+
 export interface FocusFireEngagementPlan {
   readonly roomName: string;
   readonly plannedAtTick: number;
   /** 联合预算下的共享主目标（pressure 模式也非 null；null = 真正无 plan）。 */
   readonly focusTargetId: string | null;
-  /** 主目标是否在联合预算内可击杀（false = 共享战略压制目标）。 */
+  /** 【Remediation III 十三】主目标的三分类。 */
+  readonly focusTargetClass: FocusFireTargetClass;
+  /** 主目标是否在联合预算内可击杀（= primary 分类 killable 且分配伤害达到预算）。 */
   readonly killExpected: boolean;
   /** 主目标累计分配的联合**有效**伤害（顺序 TOUGH 模拟、仅实际分配 actor）。 */
   readonly focusAssignedDamage: number;
+  /** 主目标的完整击杀预算（ceil((hits+heal)×margin)；pressure 类为 null）。 */
+  readonly focusKillBudget: number | null;
   /** 主目标的敌方治疗总量（预算对照）。 */
   readonly focusExpectedHeal: number;
-  /** towerId → hostileId（过量伤害控制后的分火结果；治疗塔不出现）。 */
+  /** towerId → hostileId（目标级分配结果；治疗塔不出现）。 */
   readonly towerAssignments: Readonly<Record<string, string>>;
   /** 防御者 slot → hostileId。 */
   readonly defenderAssignments: Readonly<Record<string, string>>;
+  /** 【Remediation III 十六】防御者 slot → 作战 assignment（目标与站位分离表达）。 */
+  readonly defenderEngagements: Readonly<Record<string, FocusFireDefenderEngagement>>;
+  /** 【Remediation III 十六】hostileId → 接敌位置（fallback 消费侧复用）。 */
+  readonly engagementByTargetId: Readonly<Record<string, FocusFireEngagementPosition>>;
   /** towerId → 重伤 creep id（紧急治疗仲裁；这些塔不参与攻击）。 */
   readonly emergencyHealByTowerId: Readonly<Record<string, string>>;
+  /** 【Remediation III 十七】共享 fallback 候选顺序（分类桶排序；resolver 逐个探活）。 */
+  readonly fallbackTargetIds: readonly string[];
+  /** 【Remediation III 十七】运行期共享 fallback 解析缓存（每房间每 tick 至多一次）。 */
+  fallbackResolution?: { readonly tick: number; readonly resolvedTargetId: string | null; requests: number };
   readonly fallbackReason?: "no-hostile" | "no-attack-actor";
 }
 
@@ -267,50 +306,106 @@ function effectiveDamageOfActors(
   return total;
 }
 
-/** 目标评分（净伤害优先、残血加成、威胁决胜——全部确定性）。 */
+/** 完整击杀预算（含保守敌方治疗与安全裕度）。 */
+function killBudgetOf(target: FocusFireHostileSnapshot): number {
+  return Math.ceil((target.hits + target.incomingHeal) * FOCUS_FIRE_KILL_OVERKILL_MARGIN);
+}
+
+/** 【Remediation III 十三】目标三分类（按全部可参与攻击 actor 的联合有效伤害）。 */
+export function classifyFocusTarget(
+  target: FocusFireHostileSnapshot,
+  jointEffectiveDamage: number,
+): FocusFireTargetClass {
+  if (jointEffectiveDamage >= killBudgetOf(target)) return "killable_this_tick";
+  if (jointEffectiveDamage - target.incomingHeal > 0) return "positive_pressure";
+  return "suppression_only";
+}
+
+function classRankOfClass(cls: FocusFireTargetClass): number {
+  return cls === "killable_this_tick" ? 2 : cls === "positive_pressure" ? 1 : 0;
+}
+
+/**
+ * 目标评分（压制桶与决胜用：净伤害优先、残血加成、威胁决胜——确定性）。
+ */
 function scoreOf(target: FocusFireHostileSnapshot, effective: number): number {
   const net = effective - target.incomingHeal;
   return net * 1000 - target.hits * 0.2 + target.threat - (target.hits < target.hitsMax ? 50 : 0);
 }
 
-/** 候选排序键：可击杀（net>0）严格优先，其次评分，最后 id 字典序决胜。 */
-function candidateOrderKey(target: FocusFireHostileSnapshot, effective: number): [number, number, string] {
-  const net = effective - target.incomingHeal;
-  return [net > 0 ? 1 : 0, scoreOf(target, effective), target.id];
+/**
+ * 【Remediation III 十三】候选排序键（桶优先）：
+ * killable 桶内按战略价值——HEAL 核心（healPower）→ 拆墙（workPower）→
+ * 威胁 → 低当前 hits → 少 actor 成本 → 小过量伤害 → 稳定 ID；
+ * pressure 桶内按净伤害评分；suppression 桶同。高净伤不可击杀目标不得
+ * 压过本 tick 可靠击杀目标。
+ */
+type CandidateOrderKey = { readonly descending: readonly number[]; readonly id: string };
+
+function candidateOrderKey(
+  target: FocusFireHostileSnapshot,
+  jointEffective: number,
+  budget: number,
+): CandidateOrderKey {
+  const cls = classifyFocusTarget(target, jointEffective);
+  // 桶间：可靠击杀 > 正净伤压制 > 共同压制；桶内语义随桶变化——
+  // killable 桶按战略价值（HEAL 核心/拆墙/威胁/低血量/小过量），
+  // pressure/suppression 桶按净伤害评分（Remediation II 的压制语义保留）。
+  if (cls === "killable_this_tick") {
+    const overkill = Math.max(0, jointEffective - budget);
+    return {
+      descending: [2, target.healPower ?? 0, target.workPower ?? 0, target.threat, -target.hits, -overkill],
+      id: target.id,
+    };
+  }
+  if (cls === "positive_pressure") {
+    return { descending: [1, scoreOf(target, jointEffective)], id: target.id };
+  }
+  return { descending: [0, scoreOf(target, jointEffective)], id: target.id };
 }
 
-/** 紧急治疗仲裁：重伤缺口排序（缺口大者优先，id 字典序决胜），限量占用塔。 */
+function compareCandidateOrder(left: CandidateOrderKey, right: CandidateOrderKey): number {
+  for (let i = 0; i < left.descending.length; i++) {
+    if (left.descending[i]! < right.descending[i]!) return 1;
+    if (left.descending[i]! > right.descending[i]!) return -1;
+  }
+  return left.id.localeCompare(right.id);
+}
+
+/** 紧急治疗仲裁（【Remediation III 十八】）：对每个伤员按**实际治疗量**降序
+ * 选塔（距离衰减感知；平手按 Tower ID 稳定决胜），满足保守需求即停——
+ * 剩余塔全部进入攻击预算。伤员按缺口降序、ID 决胜。 */
 function planEmergencyHeal(
   input: FocusFireRoomInput,
-  towerIdsByEnergy: readonly string[],
+  eligibleTowerIds: readonly string[],
 ): Record<string, string> {
   const assignments: Record<string, string> = {};
-  const emergencyCap = Math.max(1, Math.ceil(towerIdsByEnergy.length * FOCUS_FIRE_EMERGENCY_HEAL_TOWER_CAP_RATIO));
+  const emergencyCap = Math.max(1, Math.ceil(eligibleTowerIds.length * FOCUS_FIRE_EMERGENCY_HEAL_TOWER_CAP_RATIO));
   const towersById = new Map(input.towers.map((tower) => [tower.id, tower]!));
   const wounded = [...input.wounded]
     .map((creep) => ({ creep, missing: creep.hitsMax - creep.hits }))
     .filter((entry) => entry.missing >= Math.max(1, Math.floor(entry.creep.hitsMax * FOCUS_FIRE_EMERGENCY_HEAL_MISSING_RATIO)))
     .sort((left, right) => right.missing - left.missing || left.creep.id.localeCompare(right.creep.id));
-  if (wounded.length === 0 || towerIdsByEnergy.length === 0) {
+  if (wounded.length === 0 || eligibleTowerIds.length === 0) {
     return assignments;
   }
-  // 塔按 id 稳定排序依次指派（就近留给执行层校验，规划层保持确定性）。
-  const availableTowers = [...towerIdsByEnergy].sort((left, right) => left.localeCompare(right));
-  let towerIndex = 0;
+  const usedTowerIds = new Set<string>();
   for (const entry of wounded) {
+    if (Object.keys(assignments).length >= emergencyCap) break;
+    // 按对该伤员的实际治疗量降序、Tower ID 决胜（确定性）。
+    const ranked = eligibleTowerIds
+      .filter((towerId) => !usedTowerIds.has(towerId))
+      .map((towerId) => ({ towerId, heal: towerHealPowerAtRange(chebyshevRange(towersById.get(towerId)!, entry.creep)) }))
+      .filter((candidate) => candidate.heal > 0)
+      .sort((left, right) => right.heal - left.heal || left.towerId.localeCompare(right.towerId));
     let remaining = entry.missing;
-    while (remaining > 0 && towerIndex < availableTowers.length && Object.keys(assignments).length < emergencyCap) {
-      const towerId = availableTowers[towerIndex];
-      const tower = towersById.get(towerId)!;
-      const healPerTick = towerHealPowerAtRange(chebyshevRange(tower, entry.creep));
-      if (healPerTick <= 0) {
-        towerIndex += 1;
-        continue;
-      }
+    for (const candidate of ranked) {
+      if (Object.keys(assignments).length >= emergencyCap) break;
+      if (remaining <= 0) break;
       // 同一塔本 tick 只服务一个重伤目标（不跨目标拆分）。
-      assignments[towerId] = entry.creep.id;
-      remaining -= healPerTick;
-      towerIndex += 1;
+      assignments[candidate.towerId] = entry.creep.id;
+      usedTowerIds.add(candidate.towerId);
+      remaining -= candidate.heal;
     }
   }
   return assignments;
@@ -324,18 +419,16 @@ export function readFocusFirePlannerStatsForTest(): { readonly invocations: numb
 
 /**
  * 每房间每 tick 的唯一 engagement plan（纯函数——确定性输入输出）。
- * 顺序：紧急治疗仲裁（A）→ 攻击 actor 集合（剔除治疗塔）→ 顺序 TOUGH 模拟
- * 评分选 primary（F：无 net>0 也产生 pressure 共享目标）→ 含治疗击杀预算
- * （C）逐 actor 分配（B：跨越者恒留 primary）→ spill 按剩余 actor 重评
- * secondary（E）。
+ * 顺序：紧急治疗仲裁（按实际治疗量）→ 攻击 actor 集合（剔除治疗塔）→
+ * 三分类候选排序（killable 桶战略优先）→ 目标级分配循环（primary greedy
+ * 至 killBudget → secondary/tertiary 同算法；不可击杀时全部剩余共同压制）
+ * → combat target 与 engagement position 分离输出 → fallback 候选顺序。
  */
 export function planRoomEngagement(input: FocusFireRoomInput, tick: number): FocusFireEngagementPlan {
   plannerStats.invocations += 1;
-  // 【A】紧急治疗仲裁先于一切攻击预算。
-  const emergencyHealByTowerId = planEmergencyHeal(
-    input,
-    input.towers.filter((tower) => tower.energy >= TOWER_ACTION_ENERGY_COST).map((tower) => tower.id),
-  );
+  // 【Remediation III 十八】紧急治疗仲裁先于一切攻击预算。
+  const eligibleTowerIds = input.towers.filter((tower) => tower.energy >= TOWER_ACTION_ENERGY_COST).map((tower) => tower.id);
+  const emergencyHealByTowerId = planEmergencyHeal(input, eligibleTowerIds);
   const healTowerIds = new Set(Object.keys(emergencyHealByTowerId));
 
   const hostilesById = new Map(input.hostiles.map((hostile) => [hostile.id, hostile]!));
@@ -349,17 +442,29 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
     .map(defenderAttackActorOf);
   const actors = [...attackTowers, ...attackDefenders];
 
+  const emptyEngagements: Record<string, FocusFireEngagementPosition> = {};
+  for (const hostile of input.hostiles) {
+    if (hostile.engagement !== undefined) {
+      emptyEngagements[hostile.id] = hostile.engagement;
+    }
+  }
+
   if (input.hostiles.length === 0) {
     return {
       roomName: input.roomName,
       plannedAtTick: tick,
       focusTargetId: null,
+      focusTargetClass: "suppression_only",
       killExpected: false,
       focusAssignedDamage: 0,
+      focusKillBudget: null,
       focusExpectedHeal: 0,
       towerAssignments: {},
       defenderAssignments: {},
+      defenderEngagements: {},
+      engagementByTargetId: emptyEngagements,
       emergencyHealByTowerId,
+      fallbackTargetIds: [],
       fallbackReason: "no-hostile",
     };
   }
@@ -370,89 +475,229 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
       roomName: input.roomName,
       plannedAtTick: tick,
       focusTargetId: null,
+      focusTargetClass: "suppression_only",
       killExpected: false,
       focusAssignedDamage: 0,
+      focusKillBudget: null,
       focusExpectedHeal: 0,
       towerAssignments: {},
       defenderAssignments: {},
+      defenderEngagements: {},
+      engagementByTargetId: emptyEngagements,
       emergencyHealByTowerId,
+      fallbackTargetIds: input.hostiles.map((hostile) => hostile.id),
       fallbackReason: "no-attack-actor",
     };
   }
 
-  // 评分：全部攻击 actor 的顺序模拟有效伤害（per hostile，fresh 状态）。
-  const effectiveByHostileId = new Map<string, number>();
+  // 联合有效伤害与分类（per hostile，fresh 状态）。
+  const jointEffectiveByHostileId = new Map<string, number>();
+  const budgetByHostileId = new Map<string, number>();
   for (const hostile of input.hostiles) {
-    effectiveByHostileId.set(hostile.id, effectiveDamageOfActors(actors, hostile));
+    jointEffectiveByHostileId.set(hostile.id, effectiveDamageOfActors(actors, hostile));
+    budgetByHostileId.set(hostile.id, killBudgetOf(hostile));
   }
-  // 【F】可击杀（net>0）严格优先；全部 net<=0 时仍取最高分为共享压制目标。
-  const primary = [...input.hostiles].sort((left, right) => {
-    const leftKey = candidateOrderKey(left, effectiveByHostileId.get(left.id) ?? 0);
-    const rightKey = candidateOrderKey(right, effectiveByHostileId.get(right.id) ?? 0);
-    return rightKey[0] - leftKey[0] || rightKey[1] - leftKey[1] || leftKey[2].localeCompare(rightKey[2]);
-  })[0]!;
-  const primaryEffective = effectiveByHostileId.get(primary.id) ?? 0;
-  const killExpected = primaryEffective - primary.incomingHeal > 0;
+  // 候选排序（桶优先；killable 桶战略价值；同桶 ID 决胜）。
+  const orderedHostiles = [...input.hostiles].sort((left, right) => {
+    const leftKey = candidateOrderKey(left, jointEffectiveByHostileId.get(left.id) ?? 0, budgetByHostileId.get(left.id) ?? 0);
+    const rightKey = candidateOrderKey(right, jointEffectiveByHostileId.get(right.id) ?? 0, budgetByHostileId.get(right.id) ?? 0);
+    return compareCandidateOrder(leftKey, rightKey);
+  });
+  const primary = orderedHostiles[0]!;
+  const primaryClass = classifyFocusTarget(primary, jointEffectiveByHostileId.get(primary.id) ?? 0);
 
-  // 【C】击杀预算含敌方本 tick 治疗：primary 累计有效伤害 < hits+heal 期间
-  // 绝不分火；预算 ceil((hits+heal)×margin) 达成后的后续 actor 才 spill。
-  const killBudget = killExpected
-    ? Math.ceil((primary.hits + primary.incomingHeal) * FOCUS_FIRE_KILL_OVERKILL_MARGIN)
-    : Number.POSITIVE_INFINITY;
-
+  // 【Remediation III 十四/十五】目标级分配循环（确定性、有界——无指数搜索）。
   const towerAssignments: Record<string, string> = {};
   const defenderAssignments: Record<string, string> = {};
-  const primarySim = freshToughSimState(primary.toughProfile);
+  const defenderEngagements: Record<string, FocusFireDefenderEngagement> = {};
   let focusAssignedDamage = 0;
+  let unassigned = [...actors];
+  let current: FocusFireHostileSnapshot | null = primary;
+  const assignedTargets: { targetId: string; class: FocusFireTargetClass }[] = [];
+  let guard = 0;
+  while (current !== null && unassigned.length > 0 && guard++ <= input.hostiles.length + 1) {
+    const budget = budgetByHostileId.get(current.id)!;
+    const classOfCurrent = classifyFocusTarget(current, jointEffectiveByHostileId.get(current.id) ?? 0);
+    // 剩余 actor 对当前目标的联合可行性（重算——目标级状态）。
+    const jointWithRemaining = effectiveDamageOfActors(unassigned, current);
+    if (classOfCurrent === "killable_this_tick" && jointWithRemaining >= budget) {
+      // 可靠击杀：确定性 greedy（边际有效伤害降序——对 fresh 状态的单 actor
+      // 有效伤害排序，平手稳定 key；分配顺序推进 TOUGH 模拟至预算达成）。
+      const sim = freshToughSimState(current.toughProfile);
+      const marginalRanked = [...unassigned]
+        .map((actor) => ({ actor, marginal: applyRawDamage(freshToughSimState(current.toughProfile), actor.rawDamageTo(current)) }))
+        .filter((entry) => entry.marginal > 0)
+        .sort((left, right) => right.marginal - left.marginal || left.actor.sortKey.localeCompare(right.actor.sortKey));
+      let cumulative = 0;
+      const assignedNow: AttackActor[] = [];
+      for (const entry of marginalRanked) {
+        if (cumulative >= budget) break;
+        cumulative += applyRawDamage(sim, entry.actor.rawDamageTo(current));
+        assignedNow.push(entry.actor);
+      }
+      // 剩余的零边际 actor（移动中的 Defender 等）也跟随当前目标（定位
+      // assignment——不参与预算但保持共享 combat target）。
+      const assignedKeys = new Set(assignedNow.map((actor) => actor.sortKey));
+      const zeroMarginalFollowers = unassigned.filter(
+        (actor) => !assignedKeys.has(actor.sortKey) && actor.rawDamageTo(current) <= 0,
+      );
+      const assignedActors = [...assignedNow, ...zeroMarginalFollowers];
+      for (const actor of assignedActors) {
+        if (actor.kind === "tower") towerAssignments[actor.id] = current.id;
+        else defenderAssignments[actor.id] = current.id;
+      }
+      if (current.id === primary.id) focusAssignedDamage = cumulative;
+      assignedTargets.push({ targetId: current.id, class: classOfCurrent });
+      const assignedKeySet = new Set(assignedActors.map((actor) => actor.sortKey));
+      unassigned = unassigned.filter((actor) => !assignedKeySet.has(actor.sortKey));
+      // 选择下一个目标：剩余 actor 重新分类排序（killable 优先）。
+      const remainingHostiles = orderedHostiles.filter(
+        (hostile) => !assignedTargets.some((entry) => entry.targetId === hostile.id),
+      );
+      if (remainingHostiles.length === 0) {
+        current = null;
+        break;
+      }
+      current = pickNextTarget(remainingHostiles, unassigned, jointEffectiveByHostileId, budgetByHostileId);
+      continue;
+    }
+    // 不可击杀（suppression/pressure 或剩余火力不足）：全部剩余 actor 共同
+    // 压制当前目标——不切换第三目标、不逐 actor 各自选敌（15.1）。
+    for (const actor of unassigned) {
+      if (actor.kind === "tower") towerAssignments[actor.id] = current.id;
+      else defenderAssignments[actor.id] = current.id;
+    }
+    if (current.id === primary.id) {
+      focusAssignedDamage = effectiveDamageOfActors(unassigned, current);
+    }
+    assignedTargets.push({ targetId: current.id, class: classOfCurrent });
+    unassigned = [];
+    break;
+  }
+  // 未获得目标的残余 actor（理论不可达——防御性压制 primary）。
+  for (const actor of unassigned) {
+    if (actor.kind === "tower") towerAssignments[actor.id] = primary.id;
+    else defenderAssignments[actor.id] = primary.id;
+  }
 
-  // 逐 actor 分配（顺序确定性：塔按 id、防御者按 slot）。
-  for (let index = 0; index < actors.length; index++) {
-    const actor = actors[index];
-    const remainingActors = actors.slice(index);
-    const shouldSpill = killExpected && focusAssignedDamage >= killBudget && input.hostiles.length > 1;
-    let assignedId = primary.id;
-    if (shouldSpill) {
-      // 【E】secondary 用**剩余未分配** actor 重新做顺序模拟评分（目标特定
-      // 有效伤害/TOUGH/治疗全部重算；已分配 actor 不再计入任何预算）。
-      const secondary = [...input.hostiles]
-        .filter((hostile) => hostile.id !== primary.id)
-        .sort((left, right) => {
-          const leftKey = candidateOrderKey(left, effectiveDamageOfActors(remainingActors, left));
-          const rightKey = candidateOrderKey(right, effectiveDamageOfActors(remainingActors, right));
-          return rightKey[0] - leftKey[0] || rightKey[1] - leftKey[1] || leftKey[2].localeCompare(rightKey[2]);
-        })[0]!;
-      assignedId = secondary.id;
-    }
-    if (actor.kind === "tower") {
-      towerAssignments[actor.id] = assignedId;
+  // 【十六】Defender 的作战 assignment：目标与接敌位置分离表达。
+  for (const defender of input.defenders) {
+    const targetId = defenderAssignments[defender.slot];
+    if (targetId === undefined) continue;
+    const target = hostilesById.get(targetId)!;
+    const mode = defenderEngagementMode(defender, target);
+    const engagement = target.engagement;
+    if (mode === "approach") {
+      defenderEngagements[defender.slot] = {
+        targetId,
+        mode: "engage_position",
+        // inside=直接接敌（追击目标自身符合既有规则）；boundary=前往合法
+        // rampart 站位（不离开防线追逐不可达目标）。
+        ...(engagement !== undefined ? { position: { x: engagement.x, y: engagement.y }, positionKind: engagement.kind } : {}),
+      };
     } else {
-      defenderAssignments[actor.id] = assignedId;
-    }
-    if (assignedId === primary.id) {
-      // 【B】跨越阈值的 actor 分配给 primary 并计入累计（只有实际分配给
-      // primary 的有效伤害才累计）。
-      const target = hostilesById.get(primary.id)!;
-      focusAssignedDamage += applyRawDamage(primarySim, actor.rawDamageTo(target));
+      defenderEngagements[defender.slot] = { targetId, mode };
     }
   }
+
+  const killExpected = primaryClass === "killable_this_tick" && focusAssignedDamage >= budgetByHostileId.get(primary.id)!;
 
   return {
     roomName: input.roomName,
     plannedAtTick: tick,
     focusTargetId: primary.id,
+    focusTargetClass: primaryClass,
     killExpected,
     focusAssignedDamage: Math.round(focusAssignedDamage),
+    focusKillBudget: primaryClass === "killable_this_tick" ? budgetByHostileId.get(primary.id)! : null,
     focusExpectedHeal: primary.incomingHeal,
     towerAssignments,
     defenderAssignments,
+    defenderEngagements,
+    engagementByTargetId: emptyEngagements,
     emergencyHealByTowerId,
+    // 【十七】fallback 候选顺序 = 分类桶排序（primary 在首位；resolver 在
+    // 失效时按顺序探活）。
+    fallbackTargetIds: orderedHostiles.map((hostile) => hostile.id),
   };
 }
 
-// ── 持久 store（Memory.runtime.defenseEngagement——独立于 Treasury 分支） ──
+/** 剩余目标中的下一个（killable 优先 → 战略价值；无可击杀时选最佳共同压制）。 */
+function pickNextTarget(
+  remainingHostiles: readonly FocusFireHostileSnapshot[],
+  remainingActors: readonly AttackActor[],
+  jointEffectiveByHostileId: ReadonlyMap<string, number>,
+  budgetByHostileId: ReadonlyMap<string, number>,
+): FocusFireHostileSnapshot | null {
+  if (remainingHostiles.length === 0) return null;
+  const scored = remainingHostiles.map((hostile) => {
+    // 用**剩余** actor 重新评估（已分配 actor 不再计入任何预算——E 语义）。
+    const remainingJoint = effectiveDamageOfActors(remainingActors, hostile);
+    const remainingBudget = budgetByHostileId.get(hostile.id)!;
+    return { hostile, remainingJoint, remainingBudget };
+  });
+  scored.sort((left, right) => {
+    const leftKillable = left.remainingJoint >= left.remainingBudget ? 1 : 0;
+    const rightKillable = right.remainingJoint >= right.remainingBudget ? 1 : 0;
+    if (leftKillable !== rightKillable) return rightKillable - leftKillable;
+    // killable 桶内战略价值；pressure/suppression 桶内评分。
+    if (leftKillable === 1) {
+      // killable 桶内战略价值（HEAL/拆墙/威胁/低血量——降序），稳定 ID
+      // 字典序升序决胜。
+      const leftKey = [left.hostile.healPower ?? 0, left.hostile.workPower ?? 0, left.hostile.threat, -left.hostile.hits];
+      const rightKey = [right.hostile.healPower ?? 0, right.hostile.workPower ?? 0, right.hostile.threat, -right.hostile.hits];
+      for (let i = 0; i < leftKey.length; i++) {
+        if (leftKey[i]! < rightKey[i]!) return 1;
+        if (leftKey[i]! > rightKey[i]!) return -1;
+      }
+      return left.hostile.id.localeCompare(right.hostile.id);
+    }
+    const leftScore = scoreOf(left.hostile, left.remainingJoint);
+    const rightScore = scoreOf(right.hostile, right.remainingJoint);
+    if (leftScore !== rightScore) return rightScore - leftScore;
+    return left.hostile.id.localeCompare(right.hostile.id);
+  });
+  void jointEffectiveByHostileId;
+  return scored[0]!.hostile;
+}
+
+// ── 【Remediation III 十七】房间级一次性共享 live fallback ──────────────────
 
 interface RuntimeMemoryWithEngagement {
   defenseEngagement?: Record<string, FocusFireEngagementPlan>;
+}
+
+/**
+ * 共享 fallback 解析：计划目标失效时，每房间每 tick 至多计算一次（结果
+ * 写回 plan 的 fallbackResolution——Tower 与 Defender 消费同一缓存）。
+ * 按计划时的候选顺序（fallbackTargetIds）找第一个仍存活的 hostile；
+ * 无合法 fallback 返回 null（全部相关 actor 本 tick 共同空转——不回退
+ * 独立评分）。计数有界（plan 每 tick 重写）。
+ */
+export function resolveRoomEngagementFallbackTarget(
+  roomName: string,
+  failedTargetId: string,
+  aliveHostileIds: ReadonlySet<string>,
+): { readonly targetId: string | null; readonly fromCache: boolean } {
+  const runtime = Memory.runtime as RuntimeMemoryWithEngagement | undefined;
+  const plan = runtime?.defenseEngagement?.[roomName];
+  if (!plan || plan.plannedAtTick !== Game.time) {
+    return { targetId: null, fromCache: false };
+  }
+  if (plan.fallbackResolution && plan.fallbackResolution.tick === Game.time) {
+    plan.fallbackResolution.requests += 1;
+    return { targetId: plan.fallbackResolution.resolvedTargetId, fromCache: true };
+  }
+  let resolved: string | null = null;
+  for (const candidateId of plan.fallbackTargetIds) {
+    if (candidateId === failedTargetId) continue;
+    if (aliveHostileIds.has(candidateId)) {
+      resolved = candidateId;
+      break;
+    }
+  }
+  plan.fallbackResolution = { tick: Game.time, resolvedTargetId: resolved, requests: 1 };
+  return { targetId: resolved, fromCache: false };
 }
 
 export function writeRoomEngagementPlan(plan: FocusFireEngagementPlan): void {
@@ -540,14 +785,20 @@ export function buildFocusFireRoomInput(args: {
   readonly defenderSlots: Readonly<Record<string, string>>;
   readonly defenderRoles: Readonly<Record<string, "primary" | "secondary">>;
   readonly wounded: readonly Creep[];
+  /** 【Remediation III 十六】hostile 接敌位置（安全区内/边界外 rampart——由调用方按既有防线系统给出）。 */
+  readonly hostileEngagements?: Readonly<Record<string, FocusFireEngagementPosition>>;
 }): FocusFireRoomInput {
   const { hostiles } = args;
   const hostileSnapshots: FocusFireHostileSnapshot[] = hostiles.map((hostile) => {
     let incomingHeal = 0;
+    let healPower = 0;
+    let workPower = 0;
     for (const healer of hostiles) {
       const range = Math.max(Math.abs(healer.pos.x - hostile.pos.x), Math.abs(healer.pos.y - hostile.pos.y));
       incomingHeal += creepHealPowerAtRange(healer, range);
     }
+    healPower = creepHealPowerAtRange(hostile, 1);
+    workPower = hostile.getActiveBodyparts(WORK) * WORK_DISMANTLE_POWER;
     return {
       id: hostile.id,
       x: hostile.pos.x,
@@ -557,6 +808,15 @@ export function buildFocusFireRoomInput(args: {
       toughProfile: toughProfileOfBody(hostile.body),
       incomingHeal,
       threat: hostileThreatOf(hostile.body, (part) => hostile.getActiveBodyparts(part)),
+      ...(healPower > 0 || workPower > 0 || args.hostileEngagements?.[hostile.id] !== undefined
+        ? {
+            ...(healPower > 0 ? { healPower } : {}),
+            ...(workPower > 0 ? { workPower } : {}),
+            ...(args.hostileEngagements?.[hostile.id] !== undefined
+              ? { engagement: args.hostileEngagements[hostile.id] }
+              : {}),
+          }
+        : {}),
     };
   });
   const towerSnapshots: FocusFireTowerSnapshot[] = args.towers.map((tower) => ({
