@@ -45,7 +45,7 @@ const MEMORY_BRANCHES = {
     // 【Remediation IV】defenseEngagement 增 defenderFronts / fallbackRevision
     //（front 约束与房间级修订计划）、defenderEngagements.targetId 可空
     //（显式 hold）后的 schema 指纹。
-    schemaFingerprint: "56875740e4dc5076023ada264800514bc5dc272003ef99e608473eb0920c42e5",
+    schemaFingerprint: "0869b788491639af8630023a17dd387a37b7a5061b2d394ad323a9b59a86572f",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
