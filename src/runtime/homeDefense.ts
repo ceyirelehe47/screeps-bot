@@ -178,11 +178,19 @@ function planRoomFocusFire(room: Room, hostiles: Creep[], fronts: { id: string; 
   }
   const defenders = room.find(FIND_MY_CREEPS, { filter: (creep) => creep.memory.role === "homeDefender" });
   for (const defender of defenders) {
-    // 槽位由 spawn config（args[1]）权威给出；找不到时以 creep 名回落。
+    // 【Remediation V 十一】canonical slot 单一来源：spawn config 的最后段
+    //（与 defenseCoordination 的 String(i) / RoleFactory 注入的 args[1] 同源）。
+    // configName 缺失（Memory.creeps 残缺——异常）时不再以 creep name 回落
+    //（planner 键与消费 slot 不一致会形成 fresh plan 有 entry 而消费方查
+    // 不到的错配——该 defender 不入 plan，消费侧按"fresh plan 缺 assignment
+    // 默认 hold"处理）。
     const configName = Memory.creeps[defender.name]?.configName ?? "";
     const slotFromConfig = configName.split(":").pop() ?? "";
-    slotsByCreepName[defender.name] = slotFromConfig || defender.name;
+    if (slotFromConfig.length > 0) {
+      slotsByCreepName[defender.name] = slotFromConfig;
+    }
   }
+  const plannedDefenders = defenders.filter((defender) => slotsByCreepName[defender.name] !== undefined);
   const wounded = (getTickContextService().getRoomContext(room)?.getMyCreeps() || []).filter(
     (creep) => creep.hits < creep.hitsMax,
   );
@@ -258,7 +266,7 @@ function planRoomFocusFire(room: Room, hostiles: Creep[], fronts: { id: string; 
     roomName: room.name,
     hostiles,
     towers: getTickContextService().getRoomContext(room)?.getTowers() || [],
-    defenders,
+    defenders: plannedDefenders,
     defenderSlots: slotsByCreepName,
     defenderRoles: rolesBySlot,
     wounded,

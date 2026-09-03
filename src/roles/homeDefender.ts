@@ -77,22 +77,32 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
     const defenderRole = getDefenderRole(roomName, slot);
     const safeZoneCostCallback = createSafeZoneCostCallback(safeZone);
     // 【Defense Focus-Fire Sidecar 消费侧 + Remediation II G / III 十六/十七 +
-    // IV 十七】本 tick 的 fresh plan 是唯一权威：本槽位在 defenderEngagements
-    // 中（含显式 hold / targetId=null）即完全由 plan 决定——attack/
-    // ranged_attack/engage_position/hold 都不回退旧独立评分。执行语义与
-    // planner 的 defenderEngagementMode 单一语义源一致：贴身 attack()；纯
-    // 远程（无 ATTACK 部件）≤3 距离 rangedAttack()（planner 才计入该伤害）；
-    // approach 时 combat target 与接敌位置分离——敌在安全区内（inside）
-    // 直接接敌；敌在边界外（boundary）前往 per-defender 唯一 rampart 站位
-    //（不离开防线追逐共享目标）。分配目标失效 → 房间级一次性 fallback
-    // revision（与 Tower 消费同一修订计划——front 约束与 per-defender 位置
-    // 保留）；无 front-local 替代时本 tick hold（不跨 front、不回退独立
-    // 评分）。slot 不在 plan 的 defenderEngagements 中 = planner 明确未让
-    // 该 actor 参与（如 slot 推导失败）——保留既有独立行为。
-    const engagementPlan = slot !== undefined ? readRoomEngagementPlan(roomName) : null;
+    // IV 十七 + V 十一】本 tick 的 fresh plan 是唯一权威：fresh plan 存在时
+    // 本槽位在 defenderEngagements 中的 entry（含显式 hold / targetId=null）
+    // 即完全由 plan 决定——attack/ranged_attack/engage_position/hold 都不回退
+    // 旧独立评分。**entry 缺失（slot 推导失败 / plan 键与消费 slot 不一致）
+    // 不再解释为"planner 未让其参与"——默认本 tick hold**（不 attack、不
+    // moveTo 独立目标、不跨 front）；只有 entry 显式 participation=
+    // "not_participating" 才允许旧独立行为。stale plan（非本 tick）或无 plan
+    // 时保留既有安全 fallback。执行语义与 planner 的 defenderEngagementMode
+    // 单一语义源一致：贴身 attack()；纯远程（无 ATTACK 部件）≤3 距离
+    // rangedAttack()（planner 才计入该伤害）；approach 时 combat target 与
+    // 接敌位置分离——敌在安全区内（inside）直接接敌；敌在边界外（boundary）
+    // 前往 per-defender 唯一 rampart 站位（不离开防线追逐共享目标）。分配
+    // 目标失效 → 房间级一次性 fallback revision（与 Tower 消费同一修订计划
+    // ——front 约束与 per-defender 独立位置重新分配，unaffected 位置保留）；
+    // 无 front-local 替代或候选 Rampart 不足时本 tick hold（不跨 front、不
+    // 回退独立评分）。
+    const engagementPlan = readRoomEngagementPlan(roomName);
     const plannedEngagement: FocusFireDefenderEngagement | undefined =
       slot !== undefined ? engagementPlan?.defenderEngagements?.[slot] : undefined;
-    if (plannedEngagement !== undefined && engagementPlan !== null) {
+    if (engagementPlan !== null && plannedEngagement?.participation === "not_participating") {
+      // 显式不参与（plan 明确记录的字段——不是 entry 缺失）：允许旧独立行为。
+    } else if (engagementPlan !== null && plannedEngagement === undefined) {
+      // fresh plan 存在但本 actor 无 assignment：默认 hold（映射缺失 ≠ 明确
+      // 未参与——不 attack、不 rangedAttack、不 moveTo）。
+      return false;
+    } else if (plannedEngagement !== undefined && engagementPlan !== null) {
       let plannedTargetId: string | null | undefined = plannedEngagement.targetId;
       let engagementPosition =
         plannedEngagement.positionKind !== undefined && plannedEngagement.position !== undefined
@@ -103,8 +113,9 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
         ? allHostiles.find((hostile) => hostile.id === plannedTargetId)
         : undefined;
       if (plannedTargetId !== null && plannedTargetId !== undefined && !plannedTarget) {
-        // 【Remediation IV 十六】目标失效：房间级一次性 fallback revision
-        //（每房间每 tick 至多一次生成；Tower 与 Defender 消费同一修订）。
+        // 【Remediation IV 十六 / V 十】目标失效：房间级一次性 fallback
+        // revision（每房间每 tick 至多一次生成；Tower 与 Defender 消费同一
+        // 修订——per-defender 独立位置重新分配，mode 由 revision 权威给出）。
         const { revision } = resolveRoomEngagementFallbackRevision(
           roomName,
           [plannedTargetId],
@@ -113,7 +124,7 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
         const revised = slot !== undefined ? revision?.defenderEngagementBySlot?.[slot] : undefined;
         if (revision !== null && revised !== undefined) {
           plannedTargetId = revised.targetId;
-          engagementMode = revised.targetId !== null ? engagementMode : "hold";
+          engagementMode = revised.mode;
           plannedTarget = plannedTargetId !== null ? allHostiles.find((hostile) => hostile.id === plannedTargetId) : undefined;
           engagementPosition =
             revised.targetId !== null && revised.position !== undefined && revised.positionKind !== undefined
@@ -131,6 +142,11 @@ export const homeDefenderRole: RoleFactory = (roomName: string, slot?: string) =
           { x: creep.pos.x, y: creep.pos.y, meleeDamage, rangedDamage },
           { x: plannedTarget.pos.x, y: plannedTarget.pos.y },
         );
+        if (mode === "approach" && engagementMode === "hold") {
+          // 【V 十】候选 Rampart 不足的显式 hold（plan/revision 权威）：目标
+          // 在边界外且无合法独立站位——本 tick 不追逐（伤害 0、等待重规划）。
+          return false;
+        }
         if (mode === "attack") {
           measureCreepIntent(() => creep.attack(plannedTarget!));
         } else if (mode === "ranged_attack") {

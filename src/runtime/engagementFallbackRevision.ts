@@ -1,30 +1,40 @@
 /**
- * 【Round 22 Remediation IV 十六】room-level fallback revision——目标失效时
- * 的一次性房间级修订计划。
+ * 【Round 22 Remediation IV 十六 + V 十】room-level fallback revision——目标
+ * 失效时的一次性房间级修订计划（per-defender 独立位置重新分配）。
  *
- * Remediation III 的共享 fallback 只解析一个房间级 targetId（fallback
- * Resolution.resolvedTargetId）：多 front / per-defender 独立位置 / 多个
- * assigned target 同时失效时，单一缓存 target 不能表达各 actor 的修订
- * （第一个请求者决定缓存、后续 actor 消费可能错误的共享目标——南
- * Defender 的失败可能把北 Defender 错误转到南 front）。
+ * Remediation III 的共享 fallback 只解析一个房间级 targetId；Remediation IV
+ * 升级为房间级修订计划，但 Defender 的修订位置仍从 plan.
+ * engagementByTargetId[target] 复制 target-level 单一位置——多 Defender 同
+ * revised target 时重新产生 Rampart 冲突。
  *
- * 本模块生成一次房间级修订计划（每房间每 tick 至多一次——plan 运行期
- * 写回，计数有界）：
- *  - Tower：全房间修订目标（fallback 候选顺序 ∩ 存活集合的首个）或 null
- *    （明确 idle——不回退独立评分）；
- *  - Defender：front-local 修订目标（其 eligible 集合 ∩ 存活集合，按计划
- *    候选顺序）或 null（hold——不跨 front、不回退独立选敌）；
- *  - 紧急治疗 assignment 原样保留（plan 权威）；
- *  - Tower 与 Defender 消费同一 revision（多 consumer 只触发一次生成）。
+ * 【Remediation V 十】本模块在第一次房间级修订生成时对整个房间的 Defender
+ * 集合重新执行 actor-specific position allocation（allocate 单一实现）：
+ *
+ *  - 原 assignment 仍有效的 Defender：保留原 target 与原独立位置（不重排）
+ *    ——原位置先占 used 集合（合法、未冲突才保留）；
+ *  - 目标失效的 Defender：只从 front-local alive targets 选择替代；boundary
+ *    target 使用 plan 持久化的候选 Rampart 集合（engagementCandidatesByTargetId
+ *    ——含他属占用标记），房间级单次分配中共享 used-position 集合；
+ *  - occupied candidate 跳过；候选不足时明确 hold（保留 combat target）；
+ *  - inside target 不携带位置——消费方按当前可执行距离重算 action mode
+ *    （不错误复用原目标的 mode）；
+ *  - Tower 修订目标与紧急治疗 assignment 原样保留（plan 权威）；
+ *  - Tower 与 Defender 消费同一 revision（任意顺序请求得到同一对象）。
+ *
+ * 每房间每 tick 至多生成一次（写回 plan，计数有界）；不调用 PathFinder、
+ * 不建立第二套防线模型。
  */
 
+import { allocateDefenderRampartPositions } from "@/runtime/defenderRampartAllocation";
 import { readRoomEngagementPlan, type FocusFireEngagementPlan } from "@/runtime/defenseFocusFire";
 
 /** fallback 修订计划中单个 Defender 的 assignment。 */
 export interface FocusFireFallbackDefenderEngagement {
   /** 修订后的 combat target（null = 本 tick hold——无合法 front-local 替代）。 */
   readonly targetId: string | null;
-  /** 修订后的接敌位置（有 target 时携带 plan 的位置事实）。 */
+  /** 修订后的 action mode（engage_position=boundary 独立站位 / inside 由消费方按距离重算；hold=无合法位置或无替代）。 */
+  readonly mode: "engage_position" | "hold";
+  /** 修订后的独立接敌位置（boundary engage_position 时必带——per-defender 唯一）。 */
   readonly position?: { readonly x: number; readonly y: number };
   readonly positionKind?: "inside" | "boundary";
 }
@@ -59,11 +69,23 @@ function firstAliveInOrder(order: readonly string[], alive: ReadonlySet<string>,
   return null;
 }
 
+/** plan 持久化的接敌位置事实（target-level——仅作为 inside/无候选退化视图）。 */
+function planEngagementOfTarget(
+  plan: FocusFireEngagementPlan,
+  targetId: string,
+): { x: number; y: number; kind: "inside" | "boundary" } | undefined {
+  const engagement = plan.engagementByTargetId?.[targetId];
+  return engagement !== undefined && (engagement.kind === "inside" || engagement.kind === "boundary")
+    ? { x: engagement.x, y: engagement.y, kind: engagement.kind }
+    : undefined;
+}
+
 /**
  * 目标失效时的房间级修订：第一次请求生成完整 revision（全部参与 actor 的
- * 修订目标），后续请求（Tower / Defender 任意顺序）读同一 revision。
- * stale plan / 无 plan → 空 revision 语义由调用方按既有安全 fallback
- * 处理（返回 fromCache=false 且各映射为空——调用方不得据此回退独立评分）。
+ * 修订目标 + per-defender 独立位置重新分配），后续请求（Tower / Defender
+ * 任意顺序）读同一 revision。stale plan / 无 plan → 空 revision 语义由调用方
+ * 按既有安全 fallback 处理（返回 fromCache=false 且 revision=null——调用方
+ * 不得据此回退独立评分）。
  */
 export function resolveRoomEngagementFallbackRevision(
   roomName: string,
@@ -79,17 +101,137 @@ export function resolveRoomEngagementFallbackRevision(
   const failed = new Set(failedTargetIds);
   // Tower：全房间最佳替代（候选顺序 = plan 的分类桶排序）。
   const towerTarget = firstAliveInOrder(plan.fallbackTargetIds, aliveHostileIds, failed);
-  // Defender：front-local 替代（eligible 集合 ∩ 存活；不跨 front）。
-  const defenderEngagementBySlot: Record<string, FocusFireFallbackDefenderEngagement> = {};
-  for (const [slot, front] of Object.entries(plan.defenderFronts ?? {})) {
+  // ── Defender 集合的房间级修订（front-local 替代 + 位置保留/重新分配）。
+  // 1. 决定每个 slot 的修订 target：原 target 有效 → 保留；失效 →
+  //    front-local alive 替代；无替代 → null（hold）。
+  interface RevisedSlot {
+    readonly slot: string;
+    readonly targetId: string | null;
+    /** 原 assignment 是否保留（unaffected——原位置优先保留）。 */
+    readonly retained: boolean;
+    readonly boundary: boolean;
+    /** 修订 target 的接敌位置事实（plan 持久——boundary 候选优先）。 */
+    readonly engagement: { x: number; y: number; kind: "inside" | "boundary" } | undefined;
+    readonly originalPosition: { readonly x: number; readonly y: number } | undefined;
+    readonly originalPositionKind: "inside" | "boundary" | undefined;
+  }
+  const slots = Object.keys(plan.defenderFronts ?? {}).sort((left, right) => left.localeCompare(right));
+  const revisedSlots: RevisedSlot[] = [];
+  for (const slot of slots) {
+    const front = plan.defenderFronts![slot]!;
+    const original = plan.defenderEngagements?.[slot];
+    const originalTargetId = original?.targetId ?? null;
+    const originalAlive = originalTargetId !== null && aliveHostileIds.has(originalTargetId) && !failed.has(originalTargetId);
+    if (originalAlive) {
+      const engagement = planEngagementOfTarget(plan, originalTargetId!);
+      revisedSlots.push({
+        slot,
+        targetId: originalTargetId,
+        retained: true,
+        boundary: original?.positionKind === "boundary",
+        engagement,
+        originalPosition: original?.position,
+        originalPositionKind: original?.positionKind,
+      });
+      continue;
+    }
+    // 原 target 失效：front-local 替代（eligible 集合 ∩ 存活；不跨 front）。
     const eligibleOrder = plan.fallbackTargetIds.filter((id) => front.eligibleTargetIds.includes(id));
     const revised = firstAliveInOrder(eligibleOrder, aliveHostileIds, failed);
-    const engagement = revised !== null ? plan.engagementByTargetId[revised] : undefined;
-    defenderEngagementBySlot[slot] = {
+    revisedSlots.push({
+      slot,
       targetId: revised,
-      ...(revised !== null && engagement !== undefined
-        ? { position: { x: engagement.x, y: engagement.y }, positionKind: engagement.kind }
-        : {}),
+      retained: false,
+      boundary: revised !== null && planEngagementOfTarget(plan, revised)?.kind === "boundary",
+      engagement: revised !== null ? planEngagementOfTarget(plan, revised) : undefined,
+      originalPosition: undefined,
+      originalPositionKind: undefined,
+    });
+  }
+  // 2. 房间级 used-position 初始化：unaffected Defender 的原独立位置优先保留
+  //    （合法 boundary 位置先占——不被替代分配抢占）。
+  const usedPositionKeys = new Set<string>();
+  for (const item of revisedSlots) {
+    if (item.retained && item.originalPosition !== undefined) {
+      usedPositionKeys.add(`${item.originalPosition.x},${item.originalPosition.y}`);
+    }
+  }
+  // 3. 需要重新分配独立位置的 Defender（替代 boundary target 者）进入统一
+  //    allocate：候选 = plan 持久化的该 target 候选集合（occupied 跳过；
+  //    候选缺失退化为 plan 的 target-level 单一 engagement 位置——单候选
+  //    只分配一名，其余 hold）；unaffected 已占位置不可再分配。
+  const reallocationInput: { slot: string; role: "primary" | "secondary"; x: number; y: number; targetId: string }[] = [];
+  for (const item of revisedSlots) {
+    if (!item.retained && item.targetId !== null && item.boundary) {
+      // Defender 的当前坐标未知（plan 不持久化实时位置）——以修订 target
+      // 的位置作为距离评分参考（到 defender 距离维度退化为 0 差——不影响
+      // 候选唯一性与确定性排序）。
+      const anchor = item.engagement ?? { x: 0, y: 0, kind: "boundary" as const };
+      reallocationInput.push({ slot: item.slot, role: "secondary", x: anchor.x, y: anchor.y, targetId: item.targetId });
+    }
+  }
+  let allocation: Record<string, { id: string; x: number; y: number; occupied?: boolean }> = {};
+  if (reallocationInput.length > 0) {
+    const candidatesByTargetId: Record<string, { id: string; x: number; y: number; occupied?: boolean }[]> = {};
+    const targetPositionById: Record<string, { x: number; y: number }> = {};
+    for (const item of revisedSlots) {
+      if (item.retained || item.targetId === null || !item.boundary) continue;
+      const persisted = plan.engagementCandidatesByTargetId?.[item.targetId];
+      if (persisted !== undefined && persisted.length > 0) {
+        candidatesByTargetId[item.targetId] = persisted
+          .filter((candidate) => candidate.occupied !== true)
+          .filter((candidate) => !usedPositionKeys.has(`${candidate.x},${candidate.y}`))
+          .map((candidate) => ({ id: candidate.id, x: candidate.x, y: candidate.y }));
+      } else if (item.engagement !== undefined) {
+        // 候选集合未持久化（采集层退化）：单一 target-level 位置候选。
+        candidatesByTargetId[item.targetId] = [
+          ...(usedPositionKeys.has(`${item.engagement.x},${item.engagement.y}`)
+            ? []
+            : [{ id: `pos:${item.engagement.x},${item.engagement.y}`, x: item.engagement.x, y: item.engagement.y }]),
+        ];
+      }
+      if (item.engagement !== undefined) {
+        targetPositionById[item.targetId] = { x: item.engagement.x, y: item.engagement.y };
+      }
+    }
+    allocation = allocateDefenderRampartPositions({
+      defenders: reallocationInput,
+      candidatesByTargetId,
+      targetPositionById,
+    });
+  }
+  // 4. 生成 per-slot 修订 assignment：retained 保留原位置；替代 boundary 用
+  //    allocate 结果（无 → hold——保留 combat target）；inside 不带位置
+  //    （消费方按当前距离重算 mode）。
+  const defenderEngagementBySlot: Record<string, FocusFireFallbackDefenderEngagement> = {};
+  for (const item of revisedSlots) {
+    if (item.targetId === null) {
+      defenderEngagementBySlot[item.slot] = { targetId: null, mode: "hold" };
+      continue;
+    }
+    if (item.retained) {
+      defenderEngagementBySlot[item.slot] = {
+        targetId: item.targetId,
+        mode: "engage_position",
+        ...(item.originalPosition !== undefined ? { position: { x: item.originalPosition.x, y: item.originalPosition.y } } : {}),
+        ...(item.originalPositionKind !== undefined ? { positionKind: item.originalPositionKind } : {}),
+      };
+      continue;
+    }
+    if (item.boundary) {
+      const allocated = allocation[item.slot];
+      defenderEngagementBySlot[item.slot] =
+        allocated !== undefined
+          ? { targetId: item.targetId, mode: "engage_position", position: { x: allocated.x, y: allocated.y }, positionKind: "boundary" }
+          : { targetId: item.targetId, mode: "hold" };
+      continue;
+    }
+    // inside（或无站位信息）：不带位置——消费方按当前可执行距离重算 action
+    // mode（不错误复用原目标的 mode）。
+    defenderEngagementBySlot[item.slot] = {
+      targetId: item.targetId,
+      mode: "engage_position",
+      ...(item.engagement !== undefined ? { positionKind: "inside" } : {}),
     };
   }
   const revision: FocusFireFallbackRevision = {

@@ -144,6 +144,12 @@ export interface FocusFireDefenderEngagement {
   /** 接敌目标位置（engage_position 时必带——inside 直接接敌 / boundary per-defender 唯一 rampart）。 */
   readonly position?: { readonly x: number; readonly y: number };
   readonly positionKind?: "inside" | "boundary";
+  /**
+   * 【Remediation V 十一】显式参与语义：not_participating = plan 明确记录
+   * 该 actor 不参与（消费方允许走旧独立行为）。entry 缺失不是 not_
+   * participating——fresh plan 存在但缺 assignment 时消费方默认 hold。
+   */
+  readonly participation?: "assigned" | "not_participating";
 }
 
 /** 【Remediation IV 十六】plan 持久的 Defender front 约束（fallback revision 消费）。 */
@@ -181,6 +187,12 @@ export interface FocusFireEngagementPlan {
   readonly fallbackTargetIds: readonly string[];
   /** 【Remediation IV 十六】Defender front 约束（fallback revision 的 front-local 替代依据）。 */
   readonly defenderFronts: Readonly<Record<string, FocusFireDefenderFrontFact>>;
+  /**
+   * 【Remediation V 十】per-defender 唯一分配的候选集合持久化（hostileId →
+   * boundary rampart 候选，含他属占用标记——有界可序列化；fallback
+   * revision 的房间级重新分配消费，不在 revision 中重查 Game/防线系统）。
+   */
+  readonly engagementCandidatesByTargetId?: Readonly<Record<string, ReadonlyArray<{ readonly id: string; readonly x: number; readonly y: number; readonly occupied?: boolean }>>>;
   /** 【Remediation III 十七】运行期共享 fallback 解析缓存（每房间每 tick 至多一次）。 */
   fallbackResolution?: { readonly tick: number; readonly resolvedTargetId: string | null; requests: number };
   readonly fallbackReason?: "no-hostile" | "no-attack-actor";
@@ -456,6 +468,22 @@ export function readFocusFirePlannerStatsForTest(): { readonly invocations: numb
  */
 export function planRoomEngagement(input: FocusFireRoomInput, tick: number): FocusFireEngagementPlan {
   plannerStats.invocations += 1;
+  // 【Remediation V 十】boundary 候选集合持久化（plan 可序列化——fallback
+  // revision 的房间级重新分配消费，不在 revision 中重查防线系统）。
+  const engagementCandidatesForPlan: Record<string, { id: string; x: number; y: number; occupied?: boolean }[]> | undefined = (() => {
+    const collected: Record<string, { id: string; x: number; y: number; occupied?: boolean }[]> = {};
+    for (const hostile of input.hostiles) {
+      if (hostile.engagementCandidates !== undefined && hostile.engagementCandidates.length > 0) {
+        collected[hostile.id] = hostile.engagementCandidates.map((candidate) => ({
+          id: candidate.id,
+          x: candidate.x,
+          y: candidate.y,
+          ...(candidate.occupied === true ? { occupied: true } : {}),
+        }));
+      }
+    }
+    return Object.keys(collected).length > 0 ? collected : undefined;
+  })();
   // 【Remediation III 十八】紧急治疗仲裁先于一切攻击预算。
   const eligibleTowerIds = input.towers.filter((tower) => tower.energy >= TOWER_ACTION_ENERGY_COST).map((tower) => tower.id);
   const emergencyHealByTowerId = planEmergencyHeal(input, eligibleTowerIds);
@@ -667,11 +695,13 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
     if (actor.kind === "tower") towerAssignments[actor.id] = primary.id;
   }
 
-  // 【Remediation IV 十四.2 / 十五】positioning 阶段：全部可执行伤害分配完成
-  // 后处理仍未分配的 Defender——按自身 front 选择需要防守的 target（eligible
-  // 集合内按计划候选顺序——combat target 保留给下一 tick 规划），分配独立
-  // engagement position（per-defender 唯一 rampart——allocate 单一实现）；
-  // 候选不足时明确 hold（不追逐边界外 hostile、不回退独立选敌）。
+  // 【Remediation IV 十四.2 / 十五 + V 十】positioning 阶段：全部可执行伤害
+  // 分配完成后处理仍未分配的 Defender——按自身 front 选择需要防守的 target
+  //（eligible 集合内按计划候选顺序——combat target 保留给下一 tick 规划），
+  // boundary 接敌统一进入房间级唯一 Rampart 分配；候选不足时明确 hold
+  //（不追逐边界外 hostile、不回退独立选敌）。
+  const pendingBoundary: { readonly slot: string; readonly role: "primary" | "secondary"; readonly x: number; readonly y: number; readonly targetId: string }[] = [];
+  const pendingBoundarySlots = new Set<string>();
   const positioningDefenders = input.defenders.filter((defender) => defenderAssignments[defender.slot] === undefined);
   if (positioningDefenders.length > 0) {
     const targetIdBySlot: Record<string, string> = {};
@@ -687,26 +717,6 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
         targetIdBySlot[defender.slot] = chosen.id;
       }
     }
-    // per-defender 唯一 rampart 分配（boundary 候选；inside 直接接敌）。
-    const candidatesByTargetId: Record<string, { id: string; x: number; y: number; occupied?: boolean }[]> = {};
-    const targetPositionById: Record<string, { x: number; y: number }> = {};
-    for (const hostile of input.hostiles) {
-      targetPositionById[hostile.id] = { x: hostile.x, y: hostile.y };
-      if (hostile.engagementCandidates !== undefined && hostile.engagementCandidates.length > 0) {
-        candidatesByTargetId[hostile.id] = [...hostile.engagementCandidates];
-      } else if (hostile.engagement?.kind === "boundary") {
-        // 候选缺失时退化为单一 engagement 位置（采集层默认——per-defender
-        // 唯一性由 allocate 保证：单候选只分配一名 Defender，其余 hold）。
-        candidatesByTargetId[hostile.id] = [{ id: `pos:${hostile.engagement.x},${hostile.engagement.y}`, x: hostile.engagement.x, y: hostile.engagement.y }];
-      }
-    }
-    const allocation = allocateDefenderRampartPositions({
-      defenders: positioningDefenders
-        .filter((defender) => targetIdBySlot[defender.slot] !== undefined)
-        .map((defender) => ({ slot: defender.slot, role: defender.role, x: defender.x, y: defender.y, targetId: targetIdBySlot[defender.slot]! })),
-      candidatesByTargetId,
-      targetPositionById,
-    });
     for (const defender of positioningDefenders) {
       const targetId = targetIdBySlot[defender.slot];
       if (targetId === undefined) {
@@ -733,19 +743,8 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
         continue;
       }
       if (engagement?.kind === "boundary") {
-        const allocated = allocation[defender.slot];
-        if (allocated !== undefined) {
-          defenderEngagements[defender.slot] = {
-            targetId,
-            mode: "engage_position",
-            position: { x: allocated.x, y: allocated.y },
-            positionKind: "boundary",
-          };
-        } else {
-          // 候选 Rampart 不足：明确 hold（本 tick 伤害 0、保留 combat target
-          // 给下一 tick 规划——不重复分配已占用位置、不追逐边界外 hostile）。
-          defenderEngagements[defender.slot] = { targetId, mode: "hold" };
-        }
+        pendingBoundary.push({ slot: defender.slot, role: defender.role, x: defender.x, y: defender.y, targetId });
+        pendingBoundarySlots.add(defender.slot);
         continue;
       }
       // 无站位信息（采集层防线系统未给出）：engage_position 不带位置——
@@ -755,8 +754,11 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
   }
 
   // 【十六】Defender 的作战 assignment：目标与接敌位置分离表达。
+  //【V 十】伤害分配路径的 boundary 接敌不再复制 target-level 单一位置——与
+  // positioning 统一进入房间级唯一 Rampart 分配（多 Defender 同目标时各得
+  // 独立 rampart，不足者 hold）。
   for (const defender of input.defenders) {
-    if (defenderEngagements[defender.slot] !== undefined) continue;
+    if (defenderEngagements[defender.slot] !== undefined || pendingBoundarySlots.has(defender.slot)) continue;
     const targetId = defenderAssignments[defender.slot];
     if (targetId === undefined) {
       // 参与计划但无任何 assignment（输入 defender 均应参与——防御性 hold）。
@@ -767,15 +769,58 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
     const mode = defenderEngagementMode(defender, target);
     const engagement = target.engagement;
     if (mode === "approach") {
-      defenderEngagements[defender.slot] = {
-        targetId,
-        mode: "engage_position",
-        // inside=直接接敌（追击目标自身符合既有规则）；boundary=前往合法
-        // rampart 站位（不离开防线追逐不可达目标）。
-        ...(engagement !== undefined ? { position: { x: engagement.x, y: engagement.y }, positionKind: engagement.kind } : {}),
-      };
+      if (engagement?.kind === "inside") {
+        // inside=直接接敌（追击目标自身符合既有规则）。
+        defenderEngagements[defender.slot] = {
+          targetId,
+          mode: "engage_position",
+          position: { x: engagement.x, y: engagement.y },
+          positionKind: "inside",
+        };
+      } else if (engagement?.kind === "boundary") {
+        // boundary=前往合法 rampart 站位（per-defender 唯一分配——统一窗口）。
+        pendingBoundary.push({ slot: defender.slot, role: defender.role, x: defender.x, y: defender.y, targetId });
+      } else {
+        defenderEngagements[defender.slot] = { targetId, mode: "engage_position" };
+      }
     } else {
       defenderEngagements[defender.slot] = { targetId, mode };
+    }
+  }
+
+  // 房间级单次 per-defender 唯一 Rampart 分配（伤害分配 + positioning 合并；
+  // allocate 内部按 primary→secondary→slot 稳定排序——与输入顺序无关）。
+  if (pendingBoundary.length > 0) {
+    const candidatesByTargetId: Record<string, { id: string; x: number; y: number; occupied?: boolean }[]> = {};
+    const targetPositionById: Record<string, { x: number; y: number }> = {};
+    for (const hostile of input.hostiles) {
+      targetPositionById[hostile.id] = { x: hostile.x, y: hostile.y };
+      if (hostile.engagementCandidates !== undefined && hostile.engagementCandidates.length > 0) {
+        candidatesByTargetId[hostile.id] = [...hostile.engagementCandidates];
+      } else if (hostile.engagement?.kind === "boundary") {
+        // 候选缺失时退化为单一 engagement 位置（采集层默认——per-defender
+        // 唯一性由 allocate 保证：单候选只分配一名 Defender，其余 hold）。
+        candidatesByTargetId[hostile.id] = [{ id: `pos:${hostile.engagement.x},${hostile.engagement.y}`, x: hostile.engagement.x, y: hostile.engagement.y }];
+      }
+    }
+    const allocation = allocateDefenderRampartPositions({
+      defenders: pendingBoundary,
+      candidatesByTargetId,
+      targetPositionById,
+    });
+    for (const item of pendingBoundary) {
+      const allocated = allocation[item.slot];
+      defenderEngagements[item.slot] =
+        allocated !== undefined
+          ? {
+              targetId: item.targetId,
+              mode: "engage_position",
+              position: { x: allocated.x, y: allocated.y },
+              positionKind: "boundary",
+            }
+          // 候选 Rampart 不足：明确 hold（本 tick 伤害 0、保留 combat target
+          // 给下一 tick 规划——不重复分配已占用位置、不追逐边界外 hostile）。
+          : { targetId: item.targetId, mode: "hold" };
     }
   }
 
@@ -799,6 +844,9 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
     // 失效时按顺序探活）。
     fallbackTargetIds: orderedHostiles.map((hostile) => hostile.id),
     defenderFronts,
+    // 【Remediation V 十】per-defender 唯一分配候选集合持久化（fallback
+    // revision 的房间级重新分配消费——有界、可序列化）。
+    ...(engagementCandidatesForPlan !== undefined ? { engagementCandidatesByTargetId: engagementCandidatesForPlan } : {}),
   };
 }
 
