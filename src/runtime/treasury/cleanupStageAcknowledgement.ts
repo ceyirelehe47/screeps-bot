@@ -501,6 +501,11 @@ export function completeTreasuryCleanupAcknowledged(input: {
     if (completionAuthority.status === "store_unhealthy") {
       return { status: "store_unhealthy", detail: `cleanup completion authority store unhealthy: ${completionAuthority.detail}` };
     }
+    if (completionAuthority.status === "insufficient") {
+      // 【IX 工作流 F】completion 声明维度不足——不得确认完成（journal
+      // absent 不等于完成证明——fail closed）。
+      return { status: "store_unhealthy", detail: `cleanup completion authority identity 维度不足: ${completionAuthority.detail}（不确证完成——fail closed）` };
+    }
     if (completionAuthority.status === "conflict") {
       return { status: "store_unhealthy", detail: `cleanup completion authority 冲突: ${completionAuthority.detail}` };
     }
@@ -567,12 +572,19 @@ export function completeTreasuryCleanupAcknowledged(input: {
   if (completionWrite.status === "rejected") {
     return { status: "cleanup_pending", detail: `completion proof 写入失败（journal 保留）: ${completionWrite.detail}` };
   }
-  // 【Remediation VII 修复二 / VIII D4】completion authority 已成功接管——
-  // matching reservation 就此消费（live entry 占用容量槽，reservation 必须
-  // 同时移除，否则双重计数；checked——store 损坏不静默成功）。中断窗口
-  //（consume 前后 global reset）由 beginTick 的 matching pair recovery /
-  // completion 恢复权威兜底（R9/R10）。
-  consumeTreasuryCompletionHandoff(transactionId);
+  // 【Remediation VII 修复二 / VIII D4 → IX 工作流 D 7.3】completion authority
+  // 已成功接管——matching reservation 就此消费（live entry 占用容量槽，
+  // reservation 必须同时移除，否则双重计数）。consume 是结构化 mutation
+  //（H1/H2）：失败（store unhealthy / 删除 read-back 不一致）时 completion
+  // 可保留、reservation 可保留，但 **journal 必须保留**、不得返回
+  // completed——beginTick recovery（matching pair reconcile）继续 handoff。
+  const consumeResult = consumeTreasuryCompletionHandoff(transactionId);
+  if (consumeResult.status === "rejected") {
+    return {
+      status: "cleanup_pending",
+      detail: `completion reservation consume 失败（${consumeResult.detail}）——completion 已持久，journal 保留，handoff 未完成（不返回 completed）`,
+    };
+  }
   if (!completeTreasuryResolutionCleanup(transactionId)) {
     // journal 删除失败：completion 已存在——下 tick 幂等重删（journal pending）。
     return { status: "cleanup_pending", detail: "cleanup entry 删除被拒（completion 已持久——下 tick 幂等删除）" };

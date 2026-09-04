@@ -174,14 +174,20 @@ export type TreasuryCompletionHeadroomReservationAcquireResult =
   | { readonly status: "rejected"; readonly reason: "capacity_exhausted" | "store_unhealthy"; readonly detail: string };
 
 /**
- * 独占 reservation 获取（prepare 成功返回前调用；幂等——同 transactionId
- * 返回同一 reservation，不重复计数、不重复占槽）。容量不变量：
- * completionEntryCount + reservationCount < completion 硬容量（调用方传入
- * completion 计数——本模块不反向依赖 completion authority）。
+ * 【IX 工作流 E 8.1】独占 reservation 获取（幂等——同 transactionId 返回
+ * 同一 reservation，不重复计数、不重复占槽）。
+ *
+ * 容量口径单一实现：调用方（cleanupCompletionHandoff——effective occupancy
+ * 的唯一公式持有者）传入 **acquire 之后的 effective occupancy**
+ * （live + independent reservation + unresolved handoff slot − matching pair
+ * duplication；matching pair 恢复型 acquire 不新增槽——同一 handoff 只计
+ * 一次）。本模块只做边界比较，不再把本 store 的 entryCount 二次叠加
+ * （VIII 的双重计数缺陷：live + 2×reserved − pairs 近似准入，第 65 个
+ * reservation 提前失败——O7/O8 的 128 边界由本口径修复）。
  */
 export function acquireTreasuryCompletionHeadroomReservation(input: {
   readonly transactionId: string;
-  readonly completionEntryCount: number;
+  readonly occupancyAfterAcquire: number;
   readonly completionHardCapacity: number;
 }): TreasuryCompletionHeadroomReservationAcquireResult {
   const runtime = loadReservationRuntime();
@@ -197,14 +203,14 @@ export function acquireTreasuryCompletionHeadroomReservation(input: {
     }
     return { status: "already_reserved" };
   }
-  if (input.completionEntryCount < 0) {
-    return { status: "rejected", reason: "store_unhealthy", detail: "completion entry count 不可读（fail closed）" };
+  if (!Number.isSafeInteger(input.occupancyAfterAcquire) || input.occupancyAfterAcquire < 0) {
+    return { status: "rejected", reason: "store_unhealthy", detail: "effective occupancy 不可读（fail closed）" };
   }
-  if (input.completionEntryCount + runtime.store.entryCount >= input.completionHardCapacity) {
+  if (input.occupancyAfterAcquire > input.completionHardCapacity) {
     return {
       status: "rejected",
       reason: "capacity_exhausted",
-      detail: `live completion ${String(input.completionEntryCount)} + reserved ${String(runtime.store.entryCount)} ≥ ${String(input.completionHardCapacity)}（独占 reservation 不可得——fail closed）`,
+      detail: `acquire 后 effective occupancy ${String(input.occupancyAfterAcquire)} > 硬容量 ${String(input.completionHardCapacity)}（live + reserved − matching pairs 单一公式——独占 reservation 不可得，fail closed）`,
     };
   }
   const candidate: TreasuryCompletionHeadroomReservationEntry = cloneTreasuryDurableValue({

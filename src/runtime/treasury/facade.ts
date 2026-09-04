@@ -206,6 +206,7 @@ import {
   releaseTreasuryCompletionHeadroomChecked,
   sweepOrphanTreasuryCompletionReservations,
 } from "@/runtime/treasury/cleanupCompletionHandoff";
+import { runTreasuryLifecycleGcCoordinator } from "@/runtime/treasury/treasuryLifecycleGcCoordinator";
 import {
   writeTreasuryResolutionTombstone,
   ensureTreasuryResolutionSlotAvailable,
@@ -603,6 +604,7 @@ export interface TreasuryService {
       | "lineage_not_rearmable"
       | "parent_not_resolved"
       | "proof_conflict"
+  | "proof_insufficient"
       | "parent_authority_present"
       | "parent_marker_pending"
       | "retirement_incomplete"
@@ -1175,6 +1177,19 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
    * endTick 侧的审计（outstanding 计数/样本/executing 严重故障）在
    * auditOutstandingPrepared 内联。
    */
+  /**
+   * 【IX 工作流 D 7.4 / H3】callback 确定未开始的拒绝/abort 路径的结构化
+   * headroom 释放：成功返回 ""（detail 可继续声明"预留已释放"）；失败返回
+   * 明确注记——预留未释放（保留由 TTL/orphan sweep 恢复），调用方不得把
+   * 事务当作完全关闭。
+   */
+  function describeTreasuryCompletionHeadroomRelease(transactionId: string): string {
+    const release = releaseTreasuryCompletionHeadroomChecked(transactionId);
+    if (release.status !== "rejected") return "";
+    metrics.reservationReleaseFailures += 1;
+    return `；⚠ completion headroom 预留未释放（${release.detail}）——预留保留由 TTL/orphan sweep 恢复，本事务不视为预留已关闭`;
+  }
+
   function invalidatePreparedTransactions(context: "end_tick" | "begin_tick_remedy"): void {
     if (preparedById.size === 0) return;
     auditOutstandingPrepared(context);
@@ -1186,8 +1201,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // resolution cleanup 写入 completion 时 consume（不得提前释放）。
       } else {
         // prepared（Game callback 确定未开始）：reservation 随 tick 边界
-        // 作废一并释放。
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        // 作废一并释放。【IX 工作流 D】结构化结果必须检查（H9）：失败只
+        // 计入诊断并保留（TTL/orphan sweep 恢复）——本函数无返回值，不
+        // 谎报"已释放"。
+        const invalidationRelease = releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        if (invalidationRelease.status === "rejected") metrics.reservationReleaseFailures += 1;
       }
       record.state = "expired";
       finalizeHandleRecord(record, "expired"); // stub 化：丢弃 canonical/observation/shape 引用
@@ -1373,6 +1391,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       //（有界 ≤ reservation 数）：超时、无 durable intent（callback 可能已
       // 开始的唯一持久信号）且非本 tick active handle 的 reservation 释放；
       // execution-unknown / quarantine 接管的保留至 resolution cleanup。
+      // 【Remediation IX 工作流 B】单一 lifecycle GC coordinator（beginTick
+      // 固定条目预算：active issued ticket 显式过期 + terminal ticket 有界
+      // 淘汰——watermark frontier 验证后；query 路径零写）。
+      runTreasuryLifecycleGcCoordinator();
       // 【Remediation VIII 工作流 D4/D6】beginTick 的 reservation 分级恢复：
       // 1) matching pair（completion 在位 + reservation 在位——写 completion
       //    后 consume 前 global reset 的中断窗口）→ 完成 consume（同一
@@ -2467,6 +2489,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
             detail: `durable settlement authority 冲突: ${durableSettlement.detail}（同 ID 持久权威矛盾——不选边，fail closed）`,
           };
         }
+        if (durableSettlement.status === "insufficient") {
+          // 【IX 工作流 F / S15】存在 exact 声明但 identity 维度不足——视为
+          // 已出现/不可执行 blocker（callback 零调用，不 release Authority）。
+          metrics.transactionsRejectedInvalid += 1;
+          return {
+            status: "rejected",
+            reason: "proof_insufficient",
+            detail: `durable settlement authority identity 维度不足: ${durableSettlement.detail}（存在 exact 声明但无法验证一致——fail closed，callback 零调用）`,
+          };
+        }
         if (durableSettlement.status === "exact" || durableSettlement.status === "protocol") {
           // 【Remediation VIII 工作流 B】exact（live/historical completion——
           // 完整 exact identity）与 protocol（chain certificate——协议推导
@@ -2815,7 +2847,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         preparedById.delete(record.canonical.transactionId);
         projection.tentativeRelease(record.tentativeKey);
         releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        // 【IX 工作流 D】结构化 release：失败计数诊断（reservation 保留由
+        // pair reconcile/sweep 兜底——already_settled 结果不含释放声明）。
+        const settledRelease = releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        if (settledRelease.status === "rejected") metrics.reservationReleaseFailures += 1;
         finalizeHandleRecord(record, "committed");
         return {
           status: "already_settled",
@@ -2905,7 +2940,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // executePreparedAction 的 executed_committed 路径同语义——任何无
         // cleanup-pending 标记的成功结果不得遗留 reservation 至 TTL）。
         if (!lineageFinalizationPending) {
-          releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+          // 【IX 工作流 D】结构化 release：失败计数诊断（reservation 保留
+          // 由 pair reconcile/sweep 兜底——committed 结果不含释放声明）。
+          const committedRelease = releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+          if (committedRelease.status === "rejected") metrics.reservationReleaseFailures += 1;
         }
         return {
           status: "committed",
@@ -3009,8 +3047,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // 【Remediation VII 修复二】abort 的前提是 Game 副作用确定未发生
       //（prepared 显式 abort，或 Game 已明确返回非 OK 后的收尾 abort）——
       // 独占 headroom reservation 一并释放（not-executed cleanup 的
-      // completion 写入由 headroom preflight 保障）。
-      releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+      // completion 写入由 headroom preflight 保障）。【IX 工作流 D】结构化
+      // release：失败计数诊断（reservation 保留由 sweep 兜底——aborted
+      // 结果不含释放声明）。
+      const abortRelease = releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+      if (abortRelease.status === "rejected") metrics.reservationReleaseFailures += 1;
       finalizeHandleRecord(record, "aborted");
       metrics.transactionPreparesAborted += 1;
       return { status: "aborted", transactionId: record.canonical.transactionId };
@@ -3060,13 +3101,13 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           preparedById.delete(record.canonical.transactionId);
           projection.tentativeRelease(record.tentativeKey);
           releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        const headroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
           finalizeHandleRecord(record, "aborted");
           metrics.authorizationRejected += 1;
           return {
             status: "prepare_rejected",
             reason: redeemed.reason === "internal_authorization_fault" ? "internal_authorization_fault" : "authorization_invalid",
-            detail: `授权 redemption 失败（${redeemed.reason}）: ${redeemed.detail}——tentative 已释放，Game callback 零调用`,
+            detail: `授权 redemption 失败（${redeemed.reason}）: ${redeemed.detail}——tentative 已释放，Game callback 零调用${headroomNote}`,
           };
         }
       } else if (execution?.redeemAuthorization !== undefined) {
@@ -3079,13 +3120,13 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           preparedById.delete(record.canonical.transactionId);
           projection.tentativeRelease(record.tentativeKey);
           releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        const headroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
           finalizeHandleRecord(record, "aborted");
           metrics.authorizationRejected += 1;
           return {
             status: "prepare_rejected",
             reason: "authorization_invalid",
-            detail: `授权 redemption 失败（${redeemed.reason}）: ${redeemed.detail}——tentative 已释放，Game callback 零调用`,
+            detail: `授权 redemption 失败（${redeemed.reason}）: ${redeemed.detail}——tentative 已释放，Game callback 零调用${headroomNote}`,
           };
         }
         if (redeemed.cohort !== undefined) {
@@ -3114,13 +3155,13 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         preparedById.delete(record.canonical.transactionId);
         projection.tentativeRelease(record.tentativeKey);
         releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        const headroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
         finalizeHandleRecord(record, "aborted");
         metrics.authorizationRejected += 1;
         return {
           status: "prepare_rejected",
           reason: "authority_invariant_violation",
-          detail: `production 定级不变量破坏（intentContract=${String(hasIntentContract)}，redeemedCohort=${String(hasRedeemedCohort)}——partial-modern 不得写 lowlevel authority）——Game callback 零调用，预留已释放，fail closed`,
+          detail: `production 定级不变量破坏（intentContract=${String(hasIntentContract)}，redeemedCohort=${String(hasRedeemedCohort)}——partial-modern 不得写 lowlevel authority）——Game callback 零调用${headroomNote === "" ? "，预留已释放" : headroomNote}，fail closed`,
         };
       }
       const intentAuthorityLevel: TreasuryAuthorityLevel = hasIntentContract ? "modern" : "lowlevel";
@@ -3145,10 +3186,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           preparedById.delete(record.canonical.transactionId);
           projection.tentativeRelease(record.tentativeKey);
           releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        const headroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
           finalizeHandleRecord(record, "aborted");
           metrics.transactionsRejectedInvalid += 1;
-          return { status: "prepare_rejected", reason, detail };
+          return { status: "prepare_rejected", reason, detail: detail + headroomNote };
         };
         const capabilityValidation = rearmCapabilityAuthority.validateRearmCapability(execution?.rearmCapability);
         if (capabilityValidation.status !== "valid") {
@@ -3295,18 +3336,19 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           durableIdentityDigest: durableIdentityWithLineage,
         });
         if (reservationAdmission.status === "rejected") {
-          releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+          const firstRelease = releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+          if (firstRelease.status === "rejected") metrics.reservationReleaseFailures += 1;
           record.state = "aborted";
           preparedById.delete(record.canonical.transactionId);
           projection.tentativeRelease(record.tentativeKey);
           releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        const headroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
           finalizeHandleRecord(record, "aborted");
           metrics.transactionsRejectedInvalid += 1;
           return {
             status: "prepare_rejected",
             reason: reservationAdmission.reason === "store_unhealthy" ? "completion_store_unhealthy" : "completion_headroom_exhausted",
-            detail: `final admission 失败（${reservationAdmission.reason}）: ${reservationAdmission.detail}——零 Intent、零消费、零推进、callback 零调用，fail closed`,
+            detail: `final admission 失败（${reservationAdmission.reason}）: ${reservationAdmission.detail}——零 Intent、零消费、零推进、callback 零调用，fail closed${headroomNote}`,
           };
         }
       }
@@ -3385,12 +3427,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         preparedById.delete(record.canonical.transactionId);
         projection.tentativeRelease(record.tentativeKey);
         releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        const headroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
         finalizeHandleRecord(record, "aborted");
         return {
           status: "prepare_rejected",
           reason: "intent_store_unavailable",
-          detail: `durable intent 写入失败（${intentWrite.reason}）：${intentWrite.detail}——Game callback 零调用，预留已释放`,
+          detail: `durable intent 写入失败（${intentWrite.reason}）：${intentWrite.detail}——Game callback 零调用${headroomNote === "" ? "，预留已释放" : headroomNote}`,
         };
       }
       record.intentWritten = true;
@@ -3436,12 +3478,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         preparedById.delete(record.canonical.transactionId);
         projection.tentativeRelease(record.tentativeKey);
         releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        const headroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
         finalizeHandleRecord(record, "expired");
         return {
           status: "prepare_rejected",
           reason: "identity_conflict",
-          detail: "durable intent read-back 统一 identity 验证失败（同 id 已存在不同 contract/bundle/cohort/descriptor/digest 的 intent，或 store 不可信）——fail closed，不静默接受不同 durable identity——Game callback 零调用",
+          detail: "durable intent read-back 统一 identity 验证失败（同 id 已存在不同 contract/bundle/cohort/descriptor/digest 的 intent，或 store 不可信）——fail closed，不静默接受不同 durable identity——Game callback 零调用" + headroomNote,
         };
       }
       // ──【第十七轮第十节】tr1_ 接管完成（capability 消费 + lineage →
@@ -3463,12 +3505,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           preparedById.delete(record.canonical.transactionId);
           projection.tentativeRelease(record.tentativeKey);
           releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        const headroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
           finalizeHandleRecord(record, "expired");
           return {
             status: "prepare_rejected",
             reason: "identity_conflict",
-            detail: "tr1_ intent read-back 未携带预期完整 lineage proof（binding/generation/lineage/parent）——fail closed，Game callback 零调用",
+            detail: "tr1_ intent read-back 未携带预期完整 lineage proof（binding/generation/lineage/parent）——fail closed，Game callback 零调用" + headroomNote,
           };
         }
         // 【第十八轮 24.2】严格消费：lineage 必须处于 child_intent_pending 且
@@ -3481,13 +3523,13 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           preparedById.delete(record.canonical.transactionId);
           projection.tentativeRelease(record.tentativeKey);
           releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        const headroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
           finalizeHandleRecord(record, "aborted");
           metrics.transactionsRejectedInvalid += 1;
           return {
             status: "prepare_rejected",
             reason: "rearm_capability_invalid",
-            detail: `tr1_ rearm capability 消费失败（${consumed.reason}）: ${consumed.detail}——intent 已释放、lineage 回滚 ready 可重签，Game callback 零调用`,
+            detail: `tr1_ rearm capability 消费失败（${consumed.reason}）: ${consumed.detail}——intent 已释放、lineage 回滚 ready 可重签，Game callback 零调用${headroomNote}`,
           };
         }
         record.lineageBindingDigest = tr1LineageBindingDigest;
@@ -3518,12 +3560,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         preparedById.delete(record.canonical.transactionId);
         projection.tentativeRelease(record.tentativeKey);
         releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        const headroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
         finalizeHandleRecord(record, "expired");
         return {
           status: "prepare_rejected",
           reason: "intent_store_unavailable",
-          detail: `durable intent 状态迁移失败（${started.reason}）: ${started.detail}——Game callback 零调用${tr1LineageId !== undefined ? "，tr1_ intent 已释放、lineage 已回滚 rearm_ready（同代 child 可重签）" : ""}`,
+          detail: `durable intent 状态迁移失败（${started.reason}）: ${started.detail}——Game callback 零调用${tr1LineageId !== undefined ? "，tr1_ intent 已释放、lineage 已回滚 rearm_ready（同代 child 可重签）" : ""}${headroomNote}`,
         };
       }
       record.state = "executing";
@@ -3554,12 +3596,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           preparedById.delete(record.canonical.transactionId);
           projection.tentativeRelease(record.tentativeKey);
           releaseTreasuryReceiptReservation(record.canonical.transactionId);
-        releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+        const headroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
           finalizeHandleRecord(record, "expired");
           return {
             status: "prepare_rejected",
             reason: "lineage_store_fatal",
-            detail: `lineage child_active 推进失败（intent 保留在 executing，beginTick 前向补完成接管）: ${activated.detail}——Game callback 零调用`,
+            detail: `lineage child_active 推进失败（intent 保留在 executing，beginTick 前向补完成接管）: ${activated.detail}——Game callback 零调用${headroomNote}`,
           };
         }
       }
@@ -3640,7 +3682,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           // cleanup 需要写 completion 时经 handoff owner 的 recovery
           // acquire 路径重新取得（容量不足 → journal pending fail closed）。
           if (committed.lineageFinalizationPending !== true) {
-            releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+            const tailRelease = releaseTreasuryCompletionHeadroomChecked(record.canonical.transactionId);
+            if (tailRelease.status === "rejected") metrics.reservationReleaseFailures += 1;
           }
           return {
             status: "executed_committed",
@@ -4033,6 +4076,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         }
         if (durableSettlement.status === "conflict") {
           return reject("resolution_identity_conflict", `durable settlement authority 冲突: ${durableSettlement.detail}（不选边——零 capability）`);
+        }
+        if (durableSettlement.status === "insufficient") {
+          // 【IX 工作流 F / S14】destructive capability 对 insufficient 零
+          // mutation——维度不足不得据此签发/复述结论。
+          return reject("resolution_identity_conflict", `durable settlement authority identity 维度不足: ${durableSettlement.detail}（存在 exact 声明但无法验证一致——零 capability）`);
         }
         if (durableSettlement.status === "retired") {
           return reject("legacy_authority_isolated", `transactionId ${input.transactionId.slice(0, 48)} 已永久退休（${durableSettlement.source}）——结论已由压缩权威承载，不签发 resolution capability`);

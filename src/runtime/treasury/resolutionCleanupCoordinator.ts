@@ -199,6 +199,16 @@ export function advanceTreasuryResolutionCleanupPhases(input: {
           settlementOutcome: completionAuthority.outcome,
         };
       }
+      if (completionAuthority.status === "insufficient") {
+        return pendingResult(
+          "none",
+          `cleanup completion authority identity 维度不足: ${completionAuthority.detail}（不确证完成——journal absent 不等于完成证明）`,
+          undefined,
+          false,
+          "completion_conflict",
+          true,
+        );
+      }
       if (completionAuthority.status === "conflict") {
         return pendingResult(
           "none",

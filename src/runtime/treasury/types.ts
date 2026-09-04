@@ -196,6 +196,7 @@ export type TreasuryRejectionReason =
   | "child_identity_occupied"
   /** 【第十七轮第十二节】parent 同时存在 not-executed 与 committed proof。 */
   | "proof_conflict"
+  | "proof_insufficient"
   /** 【第十七轮第五节】attempt lineage store 损坏或容量满载（fail closed）。 */
   | "lineage_store_fatal"
   /** 全局 quarantine write blocker（第七轮）：存在任意 unresolved
@@ -853,6 +854,8 @@ export interface TreasuryMetrics {
   quarantineStoreHealthy: boolean;
   /** prepare 被 quarantine 全局 blocker/slot admission 拒绝的次数（含防御分支）。 */
   quarantineAdmissionRejections: number;
+  /** 【IX 工作流 D】completion headroom reservation 结构化 release/consume 的失败计数（H3——结果不谎报已释放）。 */
+  reservationReleaseFailures: number;
   /** 当前 unresolved quarantine 条目数（gauge；含 legacy overflowed 语义上的阻断）。 */
   unresolvedQuarantines: number;
   /** resolution committed / not-executed / uncertain / rejected 次数（faultResolution heap 计数聚合）。 */
@@ -995,6 +998,7 @@ export function createTreasuryMetrics(): TreasuryMetrics {
     quarantineSlotsRemaining: 0,
     quarantineStoreHealthy: false,
     quarantineAdmissionRejections: 0,
+    reservationReleaseFailures: 0,
     unresolvedQuarantines: 0,
     resolutionCommitted: 0,
     resolutionNotExecuted: 0,

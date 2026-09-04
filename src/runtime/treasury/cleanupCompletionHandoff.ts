@@ -47,48 +47,15 @@ import {
   peekTreasuryCompletionHeadroomReservation,
   peekTreasuryCompletionHeadroomReservationCount,
   peekTreasuryCompletionHeadroomReservationHealth,
+  releaseTreasuryCompletionHeadroomReservation,
   TREASURY_COMPLETION_RESERVATION_TTL_TICKS,
   type TreasuryCompletionHeadroomReservationEntry,
+  type TreasuryReservationMutationResult,
 } from "@/runtime/treasury/completionHeadroomReservation";
-import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
-import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
-import {
-  peekTreasuryResolutionCleanupHealth,
-  readTreasuryResolutionCleanupEntry,
-} from "@/runtime/treasury/resolutionCleanupJournal";
-import {
-  peekTreasuryAuthorizationFaultHealth,
-  readTreasuryAuthorizationFaultEntry,
-} from "@/runtime/treasury/authorizationFaults";
-import { peekTreasuryWriteFaultHealth, readTreasuryWriteFault } from "@/runtime/treasury/writeFault";
 import { reclaimTreasuryCleanupCompletionHeadroom } from "@/runtime/treasury/cleanupCompletionReplacement";
+import { resolveTreasuryAttemptLifecycleOwnership } from "@/runtime/treasury/treasuryLifecycleOwnerResolver";
 
-// 【模块环规避】resolutionStore / attemptLineage 在本模块的加载上游
-//（cleanupStageAcknowledgement → 本模块 → … 不得回到 resolutionStore 的
-// TDZ 初始化区）。owner truth graph 的 tombstone / lineage 维度经 assembly
-// 注入（注册方：resolutionStore / attemptLineage 模块加载时——与
-// generationRetirementAuthority 的 register 模式同构）。未装配时该维度
-// 视为 owned（fail closed——不把"未探测"解释成 orphan）。
-interface TreasuryReservationTombstoneProbe {
-  readonly tombstoneOf: (transactionId: string) => { readonly stage?: unknown } | undefined;
-  readonly tombstoneStoreHealthy: () => boolean;
-}
 
-interface TreasuryReservationLineageProbe {
-  readonly lineageOf: (transactionId: string) => { readonly state?: unknown } | undefined;
-  readonly lineageStoreHealthy: () => boolean;
-}
-
-let tombstoneProbe: TreasuryReservationTombstoneProbe | null = null;
-let lineageProbe: TreasuryReservationLineageProbe | null = null;
-
-export function registerTreasuryReservationTombstoneProbeForAssembly(probe: TreasuryReservationTombstoneProbe): void {
-  tombstoneProbe = probe;
-}
-
-export function registerTreasuryReservationLineageProbeForAssembly(probe: TreasuryReservationLineageProbe): void {
-  lineageProbe = probe;
-}
 
 /** 诊断/测试可见的 mutation 失败计数（checked release 消费——不静默）。 */
 export const treasuryCompletionHandoffDiagnostics = {
@@ -157,8 +124,25 @@ export type TreasuryPrepareHeadroomAcquireResult =
     };
 
 /**
+ * 【D2/D5 → IX 工作流 E 8.1】completion headroom 的容量公式单一实现：
+ * acquire 之后的 effective occupancy = live + independent reservation +
+ * unresolved handoff slot − matching pair duplication。matching pair 恢复型
+ * acquire（该 transactionId 已有 live completion 在位）不新增槽——同一
+ * handoff 只计一次（O8：mixed live/reserved/pair 组合逐一满足单一公式；
+ * O7：live=0 时第 128 个独立 reservation 成功、第 129 个才失败）。
+ */
+export function occupancyAfterTreasuryCompletionAcquire(
+  occupancy: TreasuryEffectiveCompletionOccupancy,
+  transactionId: string,
+): number {
+  const isMatchingPair = lookupTreasuryCleanupCompletion(transactionId).verdict === "match";
+  return isMatchingPair ? occupancy.effective : occupancy.effective + 1;
+}
+
+/**
  * 【D2/D5】prepare 的 completion headroom acquire（effective occupancy 口径
- * ——matching pair 不双计）。幂等；写入 + read-back 由 reservation 模块承载。
+ * ——matching pair 不双计）。幂等；写入 + read-back 由 reservation 模块承载
+ * （底层只做边界比较——总量公式在本模块单一实现，不再二次叠加 reserved）。
  */
 export function acquireTreasuryCompletionHeadroomForPrepare(input: {
   readonly transactionId: string;
@@ -170,7 +154,7 @@ export function acquireTreasuryCompletionHeadroomForPrepare(input: {
   }
   return acquireTreasuryCompletionHeadroomReservation({
     transactionId: input.transactionId,
-    completionEntryCount: occupancy.effective,
+    occupancyAfterAcquire: occupancyAfterTreasuryCompletionAcquire(occupancy, input.transactionId),
     completionHardCapacity: input.completionHardCapacity,
   });
 }
@@ -250,16 +234,27 @@ export function admitTreasuryCompletionPublicationReservation(input: {
   return { status: "admitted", recoveryAcquired: true };
 }
 
-/** 【D4】completion 写入成功后的受控 consume（checked——不静默）。 */
-export function consumeTreasuryCompletionHandoff(transactionId: string): void {
+/**
+ * 【D4 → IX 工作流 D 7.2】completion 写入成功后的受控 consume——结构化
+ * 结果必须由调用方检查（H1/H2：store_unhealthy / read-back 失败时 journal
+ * 不得删除、不得返回 completed；不再退化为 heap 计数器吞错）。
+ */
+export function consumeTreasuryCompletionHandoff(transactionId: string): TreasuryReservationMutationResult {
   const result = consumeTreasuryCompletionHeadroomReservation(transactionId);
   if (result.status === "rejected") treasuryCompletionHandoffDiagnostics.consumeFailures += 1;
+  return result;
 }
 
-/** 【D3】显式释放（checked——不静默；失败时 reservation 保留由 TTL/恢复兜底）。 */
-export function releaseTreasuryCompletionHeadroomChecked(transactionId: string): void {
-  const result = consumeTreasuryCompletionHeadroomReservation(transactionId);
+/**
+ * 【D3 → IX 工作流 D 7.2】显式释放（callback 确定未开始的拒绝/abort/expired
+ * 路径）——结构化结果由调用方检查（H3：失败时结果明确暴露"预留未释放"，
+ * 不声称正常关闭；失败时 reservation 保留由 TTL/orphan sweep 兜底恢复）。
+ * release 与 consume 语义分离（此前误调 consume 计数通道）。
+ */
+export function releaseTreasuryCompletionHeadroomChecked(transactionId: string): TreasuryReservationMutationResult {
+  const result = releaseTreasuryCompletionHeadroomReservation(transactionId);
   if (result.status === "rejected") treasuryCompletionHandoffDiagnostics.releaseFailures += 1;
+  return result;
 }
 
 /**
@@ -293,36 +288,21 @@ export function reconcileTreasuryReservationCompletionPairs(): number {
 }
 
 /**
- * 【D6】单一 reservation owner state：active handle 之外的 durable owner
- * 全集判定。返回 null = 无任何 owner（candidate orphan）；字符串 = owner
- * 描述（含 fail closed——任一 owner store unhealthy 视为 owned，不把
- * "读不到"解释成 orphan）。
+ * 【D6 → IX 工作流 E 8.3】单一 reservation owner state：不再手工拼 store
+ * 列表——统一经 treasuryLifecycleOwnerResolver（issued ticket / admission
+ * reservation / headroom 互查 / intent / quarantine / journal / resolution /
+ * fault / marker / lineage / matching completion 等完整权威）。返回 null =
+ * 无 active owner（candidate orphan）；字符串 = owner 描述（含 fail
+ * closed——任一相关 store unhealthy 视为 owned）。terminal-authority
+ * （final tombstone / settled receipt / historical / GRA / summary）不阻止
+ * reservation sweep（cleanup 已终结的 reservation 应释放）。
  */
 function reservationOwnerState(transactionId: string): string | null {
-  if (readTreasuryIntentEntry(transactionId) !== undefined) return "durable intent";
-  if (readTreasuryQuarantineEntry(transactionId) !== undefined) return "durable quarantine";
-  const journalHealth = peekTreasuryResolutionCleanupHealth();
-  if (!journalHealth.healthy) return `cleanup journal store unhealthy（fail closed）: ${journalHealth.detail ?? ""}`;
-  if (readTreasuryResolutionCleanupEntry(transactionId) !== undefined) return "cleanup journal";
-  if (tombstoneProbe === null) return "resolution owner probe 未装配（fail closed——视为 owned）";
-  if (!tombstoneProbe.tombstoneStoreHealthy()) return "resolution store unhealthy（fail closed）";
-  const tombstone = tombstoneProbe.tombstoneOf(transactionId);
-  if (tombstone !== undefined && tombstone.stage !== "final") return `resolving resolution（stage=${String(tombstone.stage)}）`;
-  const faultHealth = peekTreasuryAuthorizationFaultHealth();
-  if (!faultHealth.healthy) return `authorization fault store unhealthy（fail closed）: ${faultHealth.detail ?? ""}`;
-  if (readTreasuryAuthorizationFaultEntry(transactionId) !== undefined) return "authorization fault";
-  const markerHealth = peekTreasuryWriteFaultHealth();
-  if (!markerHealth.healthy) return `write-fault marker store unhealthy（fail closed）: ${markerHealth.detail ?? ""}`;
-  const marker = readTreasuryWriteFault();
-  if (marker !== undefined && marker.transactionId === transactionId) return "write-fault marker";
-  if (lineageProbe !== null) {
-    if (!lineageProbe.lineageStoreHealthy()) return "attempt lineage store unhealthy（fail closed）";
-    const lineage = lineageProbe.lineageOf(transactionId);
-    if (lineage !== undefined && lineage.state !== "chain_committed" && lineage.state !== "non_rearmable_retired" && lineage.state !== "forensic_isolated") {
-      return `active lineage（state=${String(lineage.state)}）`;
-    }
+  // sweep 的对象就是该 reservation 自身——排除 headroom 自引用维度。
+  const ownership = resolveTreasuryAttemptLifecycleOwnership(transactionId, { excludeHeadroomReservation: true });
+  if (ownership.status === "owned" && (ownership.kind === "active" || ownership.storeUnhealthy)) {
+    return ownership.owner;
   }
-  if (lookupTreasuryCleanupCompletion(transactionId).verdict === "match") return "matching live completion（pair——由 recovery consume）";
   return null;
 }
 
