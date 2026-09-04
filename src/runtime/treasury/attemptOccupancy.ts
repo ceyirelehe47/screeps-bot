@@ -42,7 +42,7 @@ import {
   lookupTreasuryRetirementSummaryByRoot,
   peekTreasuryRetirementSummaryHealth,
 } from "@/runtime/treasury/lineageRetirementSummary";
-import { lookupTreasuryHistoricalCompletion } from "@/runtime/treasury/cleanupSupersessionAuthority";
+import { resolveTreasuryDurableSettlementAuthority } from "@/runtime/treasury/historicalSettlementAuthority";
 
 export type TreasuryRearmPreflightResult =
   | {
@@ -271,26 +271,38 @@ export function preflightTreasuryRearmCapability(input: {
   if (receiptLookup.status === "corrupted") {
     return { status: "rejected", reason: "receipt_store_unhealthy", detail: "parent receipt 损坏（不可信 proof 上不得 rearm）" };
   }
-  // ── 【Remediation VII 修复一】durable historical completion authority 进入
-  //    rearm preflight：historical committed 与 rearm-ready lineage 同 ID 共存
-  //    是持久权威间的矛盾（同 ID 一个说 committed、一个说 not-executed）——
-  //    零 capability、零 mutation；matching historical not-executed 只是完成
-  //    事实的一部分，不替代 lineage/GRA/generation/parent/binding 检查；
-  //    historical store unhealthy 时同样零 capability（不折叠为 absent）。
+  // ── 【Remediation VII 修复一 / VIII 工作流 B】统一 durable settlement
+  //    authority resolver 进入 rearm preflight（live/historical/certificate/
+  //    range 无短路聚合）：durable committed 与 rearm-ready lineage 同 ID
+  //    共存是持久权威间的矛盾（同 ID 一个说 committed、一个说
+  //    not-executed）——零 capability、零 mutation；matching not-executed /
+  //    protocol 结论只是完成事实的一部分，不替代 lineage/GRA/generation/
+  //    parent/binding 检查；权威 store unhealthy 时同样零 capability
+  //    （不折叠为 absent）。
   {
-    const historicalParent = lookupTreasuryHistoricalCompletion(input.parentTransactionId);
-    if (historicalParent.verdict === "store_unhealthy") {
+    const durableParent = resolveTreasuryDurableSettlementAuthority({ transactionId: input.parentTransactionId });
+    if (durableParent.status === "store_unhealthy") {
       return {
         status: "rejected",
         reason: "lineage_store_unhealthy",
-        detail: `historical completion store unhealthy: ${historicalParent.detail}（rearm preflight fail closed——零 capability）`,
+        detail: `durable settlement authority store unhealthy: ${durableParent.detail}（rearm preflight fail closed——零 capability）`,
       };
     }
-    if (historicalParent.verdict === "match" && historicalParent.record.resolution === "committed") {
+    if (durableParent.status === "conflict") {
       return {
         status: "rejected",
         reason: "proof_conflict",
-        detail: `parent ${input.parentTransactionId.slice(0, 48)} 存在 historical committed 权威（与 rearm-ready lineage 的 not-executed 结论冲突——零 capability、零 child staging、零 mutation）`,
+        detail: `parent ${input.parentTransactionId.slice(0, 48)} 的持久权威互相矛盾（${durableParent.detail}——零 capability）`,
+      };
+    }
+    if (
+      (durableParent.status === "exact" || durableParent.status === "protocol") &&
+      durableParent.outcome === "committed"
+    ) {
+      return {
+        status: "rejected",
+        reason: "proof_conflict",
+        detail: `parent ${input.parentTransactionId.slice(0, 48)} 存在 durable committed 权威（${durableParent.source}——与 rearm-ready lineage 的 not-executed 结论冲突，零 capability、零 child staging、零 mutation）`,
       };
     }
   }
@@ -347,13 +359,16 @@ export function checkTreasuryChildAttemptOccupancy(
   if (!peekTreasuryIntentHealth().healthy) return "intent store unhealthy（fail closed）";
   if (!peekTreasuryQuarantineHealth().healthy) return "quarantine store unhealthy（fail closed）";
   if (!peekTreasuryAttemptLineageHealth().healthy) return "lineage store unhealthy（fail closed）";
-  // 【Remediation VII 修复一】durable completion 权威（live + historical）：
-  // 候选 child ID 已有持久完成事实 → occupied；权威 store unhealthy → 按
-  // occupied 阻断（不折叠为"未占用"）。
+  // 【Remediation VII 修复一 / VIII 工作流 B】统一 durable settlement
+  // authority resolver（live/historical/certificate/range——含 chain 压缩后
+  // 的 certificate 权威）：候选 child ID 已有持久结算/退休事实 → occupied；
+  // 权威 store unhealthy → 按 occupied 阻断（不折叠为"未占用"）。
   {
-    const historicalChild = lookupTreasuryHistoricalCompletion(childTransactionId);
-    if (historicalChild.verdict === "match") return "historical completion authority";
-    if (historicalChild.verdict === "store_unhealthy") return "historical completion store unhealthy（fail closed）";
+    const durableChild = resolveTreasuryDurableSettlementAuthority({ transactionId: childTransactionId });
+    if (durableChild.status === "exact" || durableChild.status === "protocol") return "durable settlement authority（completion/certificate）";
+    if (durableChild.status === "retired") return "retired attempt authority（certificate/range）";
+    if (durableChild.status === "store_unhealthy") return "durable settlement authority store unhealthy（fail closed）";
+    if (durableChild.status === "conflict") return "durable settlement authority conflict（fail closed）";
   }
   const receiptLookup = lookupTreasurySettledReceipt(childTransactionId);
   if (receiptLookup.status !== "absent") {

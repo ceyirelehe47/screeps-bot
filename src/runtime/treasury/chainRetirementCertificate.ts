@@ -27,19 +27,29 @@
  * production 通道自本轮起只产生 ti1_ / tr1_ ID，legacy 数量有界）。
  */
 
-import { registerTreasuryResolutionCleanupResetHook } from "@/runtime/treasury/receipts";
+import { lookupTreasurySettledReceipt, registerTreasuryResolutionCleanupResetHook } from "@/runtime/treasury/receipts";
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import {
+  buildTreasuryIssuedInitialAttemptIdFromSequence,
   parseTreasuryIssuedInitialAttemptId,
   peekTreasuryAttemptIssuerHealth,
+  peekTreasuryIssuedAttemptWatermark,
   resetTreasuryAttemptIssuerHeapCacheForTest,
 } from "@/runtime/treasury/attemptIssuer";
+import { lookupTreasuryCleanupCompletion } from "@/runtime/treasury/cleanupCompletionAuthority";
+import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
+import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
+import { readTreasuryResolutionCleanupEntry } from "@/runtime/treasury/resolutionCleanupJournal";
+import { readTreasuryAuthorizationFaultEntry } from "@/runtime/treasury/authorizationFaults";
+import { readTreasuryWriteFault } from "@/runtime/treasury/writeFault";
 import {
   parseTreasuryRearmChildTransactionIdV2,
+  treasuryRearmChildIdChecksumOf,
   isTreasuryRearmAttemptId,
 } from "@/runtime/treasury/transactionId";
 import {
   listTreasuryHistoricalCompletionRecords,
+  lookupTreasuryHistoricalCompletion,
   registerTreasuryHistoricalCompactorForAssembly,
   retireTreasuryHistoricalRecordForCompression,
   type TreasuryHistoricalCompletionRecord,
@@ -156,6 +166,52 @@ function validateCertificateShape(certificate: unknown, key: string): string | n
   }
   if (!Number.isSafeInteger(candidate.finalizedAtTick) || (candidate.finalizedAtTick as number) < 0) {
     return `chain certificate ${key.slice(0, 12)} finalizedAtTick 非法`;
+  }
+  return validateCertificateCanonicalRelations(candidate as TreasuryChainRetirementCertificate, key);
+}
+
+/**
+ * 【Remediation VIII 工作流 C】certificate 的 canonical 关系验证（store
+ * load 与单条 lookup 共用——任一违反即整条损坏，不当作在位权威）：
+ * 1. finalAttemptId 必须与 root / lineage / finalGeneration 的确定性派生
+ *    一致（finalGeneration=0 → finalAttemptId 即 root；≥1 → v2 child 形态
+ *    + lineageId/generation 匹配 + checksum 按 rootTransactionId 重算一致）；
+ * 2. rootSequence 必须与 rootTransactionId 的发行事实一致（ti1_ root 的
+ *    解析序号；legacy root = -1 且不得为 ti1_ 形态）。
+ */
+function validateCertificateCanonicalRelations(
+  certificate: TreasuryChainRetirementCertificate,
+  key: string,
+): string | null {
+  if (certificate.finalGeneration === 0) {
+    if (certificate.finalAttemptId !== certificate.rootTransactionId) {
+      return `chain certificate ${key.slice(0, 12)} finalGeneration=0 但 finalAttemptId != rootTransactionId`;
+    }
+  } else {
+    const parsedFinal = parseTreasuryRearmChildTransactionIdV2(certificate.finalAttemptId);
+    if (parsedFinal === null) {
+      return `chain certificate ${key.slice(0, 12)} finalGeneration>=1 但 finalAttemptId 非 v2 child 形态`;
+    }
+    if (parsedFinal.lineageId !== certificate.lineageId || parsedFinal.generation !== certificate.finalGeneration) {
+      return `chain certificate ${key.slice(0, 12)} finalAttemptId 的 lineage/generation 与证书不一致`;
+    }
+    const expectedChecksum = treasuryRearmChildIdChecksumOf({
+      lineageId: certificate.lineageId,
+      generation: certificate.finalGeneration,
+      rootTransactionId: certificate.rootTransactionId,
+    });
+    const actualChecksum = certificate.finalAttemptId.slice(certificate.finalAttemptId.length - 8);
+    if (expectedChecksum !== actualChecksum) {
+      return `chain certificate ${key.slice(0, 12)} finalAttemptId checksum 与确定性派生不一致`;
+    }
+  }
+  const parsedRoot = parseTreasuryIssuedInitialAttemptId(certificate.rootTransactionId);
+  if (certificate.rootSequence >= 1) {
+    if (parsedRoot === null || parsedRoot.sequence !== certificate.rootSequence) {
+      return `chain certificate ${key.slice(0, 12)} rootSequence 与 rootTransactionId 发行序号不一致`;
+    }
+  } else if (parsedRoot !== null) {
+    return `chain certificate ${key.slice(0, 12)} rootSequence=-1（legacy pin）但 rootTransactionId 是 ti1_ 形态`;
   }
   return null;
 }
@@ -317,8 +373,53 @@ export type TreasuryChainGenerationOutcome =
   | { readonly verdict: "store_unhealthy"; readonly detail: string };
 
 /**
+ * 【Remediation VIII 工作流 C】root ID 的 chain 证书 outcome 查询：
+ *  - finalGeneration = 0（root-only chain）：terminalState 直接映射
+ *    （chain_committed → root committed；non_rearmable_retired → root
+ *    not-executed）；
+ *  - finalGeneration ≥ 1（root 被 rearm 替代）：root 一律 not-executed
+ *    ——无论 terminalState（chain_committed 的 committed 属于 final 代，
+ *    不属于 root——错误映射会破坏 outcome 绑定语义）。
+ * 返回的 verdict 携带 proofClass 标记：certificate 是协议推导（identity
+ * 不足以构成 exact proof——destructive 路径不得据此 relabel）。
+ */
+export function lookupTreasuryChainRetirementRootOutcome(
+  rootTransactionId: string,
+): TreasuryChainGenerationOutcome {
+  const runtime = loadCertificateRuntime();
+  if (runtime.fatal !== null) {
+    return { verdict: "store_unhealthy", detail: `chain certificate store fail-closed: ${runtime.fatal}` };
+  }
+  const certificate = runtime.store.entries[CERTIFICATE_KEY_PREFIX + rootTransactionId];
+  if (certificate === undefined) return { verdict: "absent" };
+  const shapeError = validateCertificateShape(certificate, CERTIFICATE_KEY_PREFIX + rootTransactionId);
+  if (shapeError !== null) {
+    return { verdict: "store_unhealthy", detail: `chain certificate 损坏: ${shapeError}` };
+  }
+  if (certificate.finalGeneration === 0) {
+    const outcome = certificate.terminalState === "chain_committed" ? "committed" : "not-executed";
+    return {
+      verdict: "match",
+      outcome,
+      certificate,
+      detail: `chain certificate root-only（finalGeneration=0）终态 ${certificate.terminalState}——root ${outcome}`,
+    };
+  }
+  return {
+    verdict: "match",
+    outcome: "not-executed",
+    certificate,
+    detail: `chain certificate finalGeneration=${String(certificate.finalGeneration)}——root 已被 rearm 替代，协议确定 not-executed（committed 属于 final 代）`,
+  };
+}
+
+/**
  * generation-addressable tr1_ child ID 的 chain 内代查询（O(1)：ID 自带
  * (lineageId, generation)）：
+ * - 【Remediation VIII 工作流 C】checksum 验证：用 certificate 的
+ *   rootTransactionId 重算 child checksum——不一致（伪造/篡改）不 match
+ *   （absent——不获得任何权威事实；该 ID 的重放由 tr1_ capability 门禁
+ *   阻断，不依赖本查询）；
  * - generation ≤ finalGeneration：属于已退休 chain——非 final 代协议确定
  *   not-executed（重试语义：中间代全部被下一代替代）；final 代 outcome 由
  *   terminalState 确定；
@@ -344,6 +445,16 @@ export function lookupTreasuryChainRetirementGenerationOutcome(
   const shapeError = validateCertificateShape(certificate, key);
   if (shapeError !== null) {
     return { verdict: "store_unhealthy", detail: `chain certificate 损坏: ${shapeError}` };
+  }
+  // 【VIII C3】checksum 必须与 certificate 的 rootTransactionId 确定性派生
+  // 一致——改一位即不属于该 chain（不 match）。
+  const expectedChecksum = treasuryRearmChildIdChecksumOf({
+    lineageId: certificate.lineageId,
+    generation: parsed.generation,
+    rootTransactionId: certificate.rootTransactionId,
+  });
+  if (transactionId.slice(transactionId.length - 8) !== expectedChecksum) {
+    return { verdict: "absent" };
   }
   if (parsed.generation > certificate.finalGeneration) {
     return { verdict: "absent" };
@@ -406,6 +517,138 @@ export function absorbTreasuryRetiredSequence(sequence: number): { readonly stat
       return { status: "idempotent" };
     }
   }
+  // 【VIII 工作流 E2/L3】区间满载时先做孤儿 gap coalesce：把"已发行但
+  // 从未进入 lifecycle"的洞显式 abandon 吸收进 retired range（mint 不产生
+  // 无界永久洞——E2.8），桥接相邻区间腾出槽位；无法收敛 → rejected
+  // （fail closed——绝不把在飞/有权威序号误判 retired）。
+  if (countRangesAfterAbsorb(sequence, ranges) > TREASURY_RETIRED_RANGE_MAX_ENTRIES) {
+    const coalesced = coalesceOrphanGapUnderPressure();
+    if (!coalesced.coalesced) {
+      return {
+        status: "rejected",
+        detail: `retired range 已达硬容量 ${String(TREASURY_RETIRED_RANGE_MAX_ENTRIES)} 且无孤儿 gap 可收敛（${coalesced.detail}——不吸收不相邻序号，fail closed）`,
+      };
+    }
+  }
+  return absorbSequenceUnchecked(sequence);
+}
+
+/** gap 中序号的 lifecycle 权威覆盖检查（只读——任一在位即不可 abandon）。 */
+function sequenceHasLifecycleAuthority(sequence: number): boolean {
+  const built = buildTreasuryIssuedInitialAttemptIdFromSequence(sequence);
+  if (built.status !== "built") return true; // 不可重建 → 保守视为有权威
+  const transactionId = built.transactionId;
+  if (lookupTreasuryCleanupCompletion(transactionId).verdict === "match") return true;
+  const historical = lookupTreasuryHistoricalCompletion(transactionId);
+  if (historical.verdict !== "absent") return true; // match/conflict/unhealthy 全部保守
+  if (lookupTreasurySettledReceipt(transactionId).status !== "absent") return true;
+  if (readTreasuryIntentEntry(transactionId) !== undefined) return true;
+  if (readTreasuryQuarantineEntry(transactionId) !== undefined) return true;
+  if (readTreasuryResolutionCleanupEntry(transactionId) !== undefined) return true;
+  if (readTreasuryAuthorizationFaultEntry(transactionId) !== undefined) return true;
+  const marker = readTreasuryWriteFault();
+  if (marker !== undefined && marker.transactionId === transactionId) return true;
+  return false;
+}
+
+/** 单个区间间隙的长度上限（coalesce 扫描有界）。 */
+const ORPHAN_GAP_MAX_WIDTH = 512;
+/** 最近发行的安全窗口（在途 attempt 保护——mint 后短窗口内不 abandon）。 */
+const ORPHAN_GAP_RECENT_WINDOW = 32;
+
+/**
+ * 满载压力下的孤儿 gap 收敛：找一个"全部序号均为孤儿"的小区间间隙，
+ * 逐个 abandon（吸收进 retired range）——桥接两侧区间，区间数下降。
+ * 未完成/未退休序号（任何 lifecycle 权威在位 / 超安全窗口的最近发行 /
+ * 未发行）一律不动（E2.7）。
+ */
+function coalesceOrphanGapUnderPressure(): { readonly coalesced: boolean; readonly detail: string } {
+  const runtime = loadRangeRuntime();
+  if (runtime.fatal !== null) return { coalesced: false, detail: `range store fail-closed: ${runtime.fatal}` };
+  const ranges = runtime.store.ranges;
+  if (ranges.length < 2) return { coalesced: false, detail: "区间数不足（无间隙可桥接）" };
+  const watermark = peekTreasuryIssuedAttemptWatermark();
+  if (watermark < 0) return { coalesced: false, detail: "issuer watermark 不可读（fail closed）" };
+  for (let index = 1; index < ranges.length; index += 1) {
+    const gapMin = ranges[index - 1]!.maxSequence + 1;
+    const gapMax = ranges[index]!.minSequence - 1;
+    if (gapMax < gapMin) continue;
+    if (gapMax - gapMin >= ORPHAN_GAP_MAX_WIDTH) continue;
+    let allOrphan = true;
+    for (let sequence = gapMin; sequence <= gapMax; sequence += 1) {
+      if (sequence > watermark || watermark - sequence < ORPHAN_GAP_RECENT_WINDOW) {
+        allOrphan = false;
+        break;
+      }
+      if (sequenceHasLifecycleAuthority(sequence)) {
+        allOrphan = false;
+        break;
+      }
+    }
+    if (!allOrphan) continue;
+    for (let sequence = gapMin; sequence <= gapMax; sequence += 1) {
+      const absorbed = absorbSequenceUnchecked(sequence);
+      if (absorbed.status === "rejected") {
+        return { coalesced: false, detail: `孤儿 gap 吸收中断（seq ${String(sequence)}）: ${absorbed.detail}` };
+      }
+    }
+    return { coalesced: true, detail: `孤儿 gap [${String(gapMin)}, ${String(gapMax)}] 已 abandon 收敛` };
+  }
+  return { coalesced: false, detail: "无可收敛的孤儿 gap（全部间隙含在飞/有权威/近期发行序号）" };
+}
+
+/** 预计算吸收后的区间数（不改 store）。 */
+function countRangesAfterAbsorb(sequence: number, ranges: readonly TreasuryRetiredSequenceRange[]): number {
+  const nextRanges: TreasuryRetiredSequenceRange[] = ranges.map((range) => ({ ...range }));
+  let merged = false;
+  for (let index = 0; index < nextRanges.length; index += 1) {
+    const range = nextRanges[index]!;
+    if (sequence === range.minSequence - 1) {
+      nextRanges[index] = { ...range, minSequence: sequence, mergedAtTick: Game.time };
+      merged = true;
+      break;
+    }
+    if (sequence === range.maxSequence + 1) {
+      nextRanges[index] = { ...range, maxSequence: sequence, mergedAtTick: Game.time };
+      merged = true;
+      break;
+    }
+  }
+  if (!merged) {
+    nextRanges.push({ minSequence: sequence, maxSequence: sequence, mergedAtTick: Game.time });
+    nextRanges.sort((left, right) => left.minSequence - right.minSequence);
+  }
+  const coalesced: TreasuryRetiredSequenceRange[] = [];
+  for (const range of nextRanges) {
+    const last = coalesced[coalesced.length - 1];
+    if (last !== undefined && range.minSequence <= last.maxSequence + 1) {
+      coalesced[coalesced.length - 1] = {
+        minSequence: last.minSequence,
+        maxSequence: Math.max(last.maxSequence, range.maxSequence),
+        mergedAtTick: Game.time,
+      };
+    } else {
+      coalesced.push({ ...range });
+    }
+  }
+  return coalesced.length;
+}
+
+/** 区间写入核心（吸收 + 相邻合并 + read-back——不做满载 coalesce，供 absorb 与 coalesce 共用）。 */
+function absorbSequenceUnchecked(sequence: number): { readonly status: "absorbed" | "idempotent" } | { readonly status: "rejected"; readonly detail: string } {
+  if (!Number.isSafeInteger(sequence) || sequence < 1) {
+    return { status: "rejected", detail: `退休序号非法: ${String(sequence)}` };
+  }
+  const runtime = loadRangeRuntime();
+  if (runtime.fatal !== null) {
+    return { status: "rejected", detail: `retired range store fail-closed: ${runtime.fatal}` };
+  }
+  const ranges = runtime.store.ranges;
+  for (const range of ranges) {
+    if (sequence >= range.minSequence && sequence <= range.maxSequence) {
+      return { status: "idempotent" };
+    }
+  }
   const nextRanges: TreasuryRetiredSequenceRange[] = ranges.map((range) => ({ ...range }));
   // 插入并吸收相邻区间（min-1 / max+1 相邻者合并——单调收敛）。
   let merged = false;
@@ -443,7 +686,7 @@ export function absorbTreasuryRetiredSequence(sequence: number): { readonly stat
   if (coalesced.length > TREASURY_RETIRED_RANGE_MAX_ENTRIES) {
     return {
       status: "rejected",
-      detail: `retired range 已达硬容量 ${String(TREASURY_RETIRED_RANGE_MAX_ENTRIES)} 且无相邻区间可合并（不吸收不相邻序号——fail closed）`,
+      detail: `retired range 已达硬容量 ${String(TREASURY_RETIRED_RANGE_MAX_ENTRIES)}（吸收后 ${String(coalesced.length)}——不删除既有区间，fail closed）`,
     };
   }
   const previous = JSON.stringify(runtime.store.ranges);

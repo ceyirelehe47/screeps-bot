@@ -42,7 +42,7 @@ import {
 } from "@/runtime/treasury/cleanupStageAcknowledgement";
 import { acknowledgeTreasuryCleanupSettlementProof } from "@/runtime/treasury/settlementProofActivation";
 import { gateTreasuryPreReleaseSettlement } from "@/runtime/treasury/preReleaseSettlementGate";
-import { lookupTreasuryCleanupCompletion, peekTreasuryCleanupCompletionHealth } from "@/runtime/treasury/cleanupCompletionAuthority";
+import { resolveTreasuryCleanupCompletionAuthority } from "@/runtime/treasury/historicalSettlementAuthority";
 import { resolveTreasuryDurableSettlementAuthority } from "@/runtime/treasury/historicalSettlementAuthority";
 
 export type TreasuryCleanupPendingStage =
@@ -176,83 +176,48 @@ export function advanceTreasuryResolutionCleanupPhases(input: {
     // completed——tombstone retention 到期 / GRA 生命周期回收后完成事实
     // 仍由 historical authority 存续）。
     if (journalEntryAbsent) {
-      const completionHealth = peekTreasuryCleanupCompletionHealth();
-      if (!completionHealth.healthy) {
-        return pendingResult(
-          "none",
-          `completion authority store unhealthy: ${completionHealth.detail}`,
-          undefined,
-          false,
-          "store_unhealthy",
-          true,
-        );
-      }
-      const completion = lookupTreasuryCleanupCompletion(input.transactionId, input.expectedIdentity, input.expectedOutcome);
-      if (completion.verdict === "match") {
-        return {
-          status: "completed",
-          pendingStage: "none",
-          detail: "cleanup entry 不存在且 matching completion authority 存在（幂等——journal 删除已由 completion 证明）",
-          phases: phasesOfEntry(undefined, true),
-          globalWriteAdmissionStillLocked: completion.proof.globalWriteAdmissionStillLocked,
-          globalWriteAdmissionLockedKnown: true,
-          settlementOutcome: completion.proof.resolution,
-        };
-      }
-      if (completion.verdict === "conflict") {
-        return pendingResult(
-          "none",
-          `completion authority conflict: ${completion.detail}`,
-          undefined,
-          false,
-          "completion_conflict",
-          true,
-        );
-      }
-      if (completion.verdict === "store_unhealthy") {
-        return pendingResult("none", `completion authority ${completion.verdict}: ${completion.detail}`, undefined, false, "store_unhealthy", true);
-      }
-      // completion absent：durable settlement authority（单一 resolver——
-      // historical completion / chain retirement certificate；被安全回收的
-      // completion 的持久交接权威，outcome + exact identity 绑定）。
-      // 【Remediation VII 修复四】chain 压缩后 per-attempt historical entry
-      // 已由 certificate 接管——完成查询不得因压缩退化为 no_cleanup_
-      // authority（T17：GRA/tombstone GC + terminal compaction 后仍成立）。
-      const durableAuthority = resolveTreasuryDurableSettlementAuthority({
+      // 【Remediation VIII 工作流 B3】journal-absent 判定经统一 cleanup
+      // completion authority resolver：只有 live completion（五阶段全部
+      // 持久确认后写入）与 historical completion（显式 supersession）能
+      // 证明 cleanup 完成；chain certificate / retired range 只证明
+      // settlement outcome，不证明 marker discharge / authority release /
+      // outcome finalization / lineage finalization / journal deletion——
+      // 不进入本判定（S8：只有 settlement certificate → no_cleanup_authority）。
+      const completionAuthority = resolveTreasuryCleanupCompletionAuthority({
         transactionId: input.transactionId,
         ...(input.expectedIdentity !== undefined ? { expected: input.expectedIdentity } : {}),
         ...(input.expectedOutcome !== undefined ? { expectedOutcome: input.expectedOutcome } : {}),
       });
-      if (durableAuthority.status === "exact") {
+      if (completionAuthority.status === "completed") {
         return {
           status: "completed",
           pendingStage: "none",
-          detail: `cleanup entry 与 completion 均不存在，但 durable settlement authority（${durableAuthority.source}）持续证明完成（outcome=${durableAuthority.outcome}——跨 GRA/tombstone 回收与 chain 压缩存续）`,
+          detail: `cleanup entry 不存在，cleanup completion authority（${completionAuthority.source}）持续证明完成（幂等——journal 删除已由 completion 证明）`,
           phases: phasesOfEntry(undefined, true),
-          globalWriteAdmissionStillLocked: false,
-          globalWriteAdmissionLockedKnown: false,
-          settlementOutcome: durableAuthority.outcome,
+          globalWriteAdmissionStillLocked: completionAuthority.globalWriteAdmissionStillLocked ?? false,
+          globalWriteAdmissionLockedKnown: completionAuthority.globalWriteAdmissionStillLocked !== undefined,
+          settlementOutcome: completionAuthority.outcome,
         };
       }
-      if (durableAuthority.status === "conflict") {
+      if (completionAuthority.status === "conflict") {
         return pendingResult(
           "none",
-          `durable settlement authority conflict: ${durableAuthority.detail}`,
+          `cleanup completion authority conflict: ${completionAuthority.detail}`,
           undefined,
           false,
           "completion_conflict",
           true,
         );
       }
-      if (durableAuthority.status === "store_unhealthy") {
-        return pendingResult("none", `durable settlement authority store unhealthy: ${durableAuthority.detail}`, undefined, false, "store_unhealthy", true);
+      if (completionAuthority.status === "store_unhealthy") {
+        return pendingResult("none", `cleanup completion authority store unhealthy: ${completionAuthority.detail}`, undefined, false, "store_unhealthy", true);
       }
-      // final committed tombstone 单独存在不证明 cleanup 完成（T5）：它只
-      // 证明 settlement outcome，不证明 marker discharge / authority release /
-      // outcome finalize / lineage final / completion 曾合法存在。
+      // settlement certificate / retired range 单独存在不证明 cleanup 完成
+      //（S8）：它们只证明 settlement outcome，不证明 marker discharge /
+      // authority release / outcome finalization / lineage finalization。
       return pendingResult(
         "none",
-        "no_cleanup_authority：journal entry 不存在且无 completion / durable historical authority（GRA/tombstone 单独存在不证明 cleanup 完成——完成未证明，不得视为已完成）",
+        "no_cleanup_authority：journal entry 不存在且无 cleanup completion authority（settlement certificate / retired range 不证明 cleanup 完成——完成未证明，不得视为已完成）",
         undefined,
         true,
         "no_cleanup_authority",
