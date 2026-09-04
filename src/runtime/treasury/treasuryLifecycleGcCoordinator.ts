@@ -43,17 +43,19 @@ export interface TreasuryRetiredRangeMigrationReport {
 }
 
 /**
- * v1 retired range 的显式迁移（唯一 migration owner——beginTick 的前置
- * migration 阶段）。幂等（v2/absent → idle，零写）；迁移前 v1 源完整形状
- * 校验 + 发行域严格证明（issuer 版本边界），不可证明 → blocked（原 store
- * 原样保留，query 与 absorb 继续 fail closed，不产生第二 frontier）。
+ * v1/v2 retired range 的显式迁移（唯一 migration owner——beginTick 的前置
+ * migration 阶段）。幂等（v3/absent → idle，零写）；【XII 工作流 E】v2 → v3
+ * 物理分区迁移（namespace 标签分流 + legacy 超额显式 legacyOverflow）；v1
+ * 迁移前完整形状校验 + 发行域严格证明（issuer 版本边界），不可证明 →
+ * blocked（原 store 原样保留，query 与 absorb 继续 fail closed，不产生第二
+ * frontier）。
  */
 export function runTreasuryRetiredRangeMigrationAtTickBoundary(): TreasuryRetiredRangeMigrationReport {
   const raw = (Memory.runtime as unknown as { treasury?: { retiredAttemptRanges?: { version?: unknown } } } | undefined)
     ?.treasury?.retiredAttemptRanges;
   if (raw === undefined) return { status: "idle", detail: null };
-  if (raw.version === 2) return { status: "idle", detail: null };
-  if (raw.version !== 1) {
+  if (raw.version === 3) return { status: "idle", detail: null };
+  if (raw.version !== 1 && raw.version !== 2) {
     return {
       status: "unhealthy",
       detail: `retired range store 版本未知（${String(raw.version).slice(0, 8)}——不迁移，fail closed）`,

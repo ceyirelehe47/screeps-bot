@@ -297,11 +297,12 @@ describe("Remediation X：ticket handoff / namespace / health-complete 架构守
     expect(source).toContain("rangeAbsorbsSequence(namespace: \"legacy\" | \"current\", sequence: number)");
   });
 
-  it("X5：namespace-aware range/certificate store 全部登记 lifecycle contract（v2 语义）", () => {
+  it("X5：namespace-aware range/certificate store 全部登记 lifecycle contract（v3 物理分区语义）", () => {
     const rangeContract = lookupTreasuryStoreLifecycleContract("retiredAttemptRanges");
     expect(rangeContract).toBeDefined();
     expect(rangeContract!.protectedFact).toContain("namespace");
-    expect(rangeContract!.resetRecovery).toContain("v1 裸 sequence store 经 tick-boundary migration owner 显式迁移");
+    expect(rangeContract!.resetRecovery).toContain("v1/v2 store 经 tick-boundary migration owner 显式迁移");
+    expect(rangeContract!.capacityNote).toContain("v3 物理分区");
     const certificateContract = lookupTreasuryStoreLifecycleContract("chainRetirementCertificates");
     expect(certificateContract).toBeDefined();
   });
@@ -544,13 +545,17 @@ describe("Remediation XI：positive handoff / canonical identity / unified relea
     expect(expireCall).toBeGreaterThan(migrationCall);
   });
 
-  it("XI6：legacy/current 容量策略登记在 lifecycle contract（quota 三方一致）", () => {
+  it("XI6：legacy/current 容量策略登记在 lifecycle contract（物理分区硬上限三方一致）", () => {
     const certificateSource = readSource("runtime/treasury/chainRetirementCertificate.ts");
-    expect(certificateSource).toContain("export const TREASURY_RETIRED_RANGE_CURRENT_QUOTA = 48");
+    // 【XII/E】v3 物理分区：current/legacy 各自独立硬上限（48 / 16，
+    // legacy 迁移存量显式 legacyOverflow 至多 64——总 Memory 上限 112）。
+    expect(certificateSource).toContain("export const TREASURY_RETIRED_RANGE_CURRENT_CAPACITY = 48");
     expect(certificateSource).toContain("export const TREASURY_RETIRED_RANGE_LEGACY_QUOTA = 16");
+    expect(certificateSource).toContain("export const TREASURY_RETIRED_RANGE_LEGACY_CAPACITY = 64");
     const contractSource = readSource("runtime/treasury/treasuryLifecycleContract.ts");
-    expect(contractSource).toContain("TREASURY_RETIRED_RANGE_CURRENT_QUOTA");
+    expect(contractSource).toContain("TREASURY_RETIRED_RANGE_CURRENT_CAPACITY");
     expect(contractSource).toContain("TREASURY_RETIRED_RANGE_LEGACY_QUOTA");
+    expect(contractSource).toContain("TREASURY_RETIRED_RANGE_LEGACY_CAPACITY");
   });
 
   it("XI7：Defense 生产代码不得引用 ticket / GRA 内部协议（复验）", () => {

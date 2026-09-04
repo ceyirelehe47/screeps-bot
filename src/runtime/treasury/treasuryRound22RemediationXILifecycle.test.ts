@@ -28,6 +28,7 @@ import {
   peekTreasuryRetiredRangeHealth,
   recordTreasuryChainRetirementCertificate,
   resetTreasuryChainCertificateHeapCacheForTest,
+  TREASURY_RETIRED_RANGE_CURRENT_CAPACITY,
   TREASURY_RETIRED_RANGE_CURRENT_QUOTA,
   TREASURY_RETIRED_RANGE_LEGACY_QUOTA,
 } from "@/runtime/treasury/chainRetirementCertificate";
@@ -260,7 +261,8 @@ describe("Remediation XI C：canonical certificate root", () => {
     expect(result.status).toBe("rejected");
     if (result.status === "rejected") expect(result.detail).toContain("canonical");
     // current retired range 不吸收该 sequence（fail closed——无破坏性变化）。
-    expect(((treasuryBranch().retiredAttemptRanges as { ranges: unknown[] } | undefined)?.ranges ?? []).length).toBe(0);
+    const rangeRaw = (treasuryBranch().retiredAttemptRanges as RangeStoreV3Fixture | undefined);
+    expect(rangeRaw === undefined ? 0 : rangeRaw.current.ranges.length + rangeRaw.legacy.ranges.length).toBe(0);
     expect(absorbTreasuryRetiredSequence("current", 1).status).toBe("absorbed");
   });
 
@@ -515,6 +517,23 @@ describe("Remediation XI G：统一 GRA release authority", () => {
 
 // ══ M 组：Query-pure migration ════════════════════════════════════════════
 
+/** 【XII/E】v3 分区 range store 读取 helper（断言用）。 */
+type RangeStoreV3Fixture = {
+  version: number;
+  current: { ranges: { namespace: string; minSequence: number; maxSequence: number }[]; entryCount: number };
+  legacy: { ranges: { namespace: string; minSequence: number; maxSequence: number }[]; entryCount: number };
+  legacyOverflow?: boolean;
+};
+function rangeStoreOfMemory(): RangeStoreV3Fixture {
+  const store = treasuryBranch().retiredAttemptRanges as RangeStoreV3Fixture | undefined;
+  if (store === undefined) throw new Error("range store 缺失（fixture 前提）");
+  return store;
+}
+function allRetiredRanges(): { namespace: string; minSequence: number; maxSequence: number }[] {
+  const store = rangeStoreOfMemory();
+  return [...store.current.ranges, ...store.legacy.ranges];
+}
+
 /** 手写 v1 retired range store（迁移源）。 */
 function seedV1RangeStore(minSequence: number, maxSequence: number, updatedAtTick?: number): void {
   treasuryBranch().retiredAttemptRanges = {
@@ -582,12 +601,13 @@ describe("Remediation XI M：query-pure migration", () => {
     seedV1RangeStore(1, 100);
     const migration = runTreasuryRetiredRangeMigrationAtTickBoundary();
     expect(migration.status).toBe("migrated");
-    const store = treasuryBranch().retiredAttemptRanges as { version: number; ranges: { namespace: string; minSequence: number; maxSequence: number }[]; entryCount: number };
-    expect(store.version).toBe(2);
-    expect(store.ranges[0]!.namespace).toBe("legacy");
-    expect(store.ranges[0]!.minSequence).toBe(1);
-    expect(store.ranges[0]!.maxSequence).toBe(100);
-    expect(store.entryCount).toBe(1);
+    const store = rangeStoreOfMemory();
+    expect(store.version).toBe(3);
+    expect(store.legacy.ranges.length).toBe(1);
+    expect(store.legacy.ranges[0]!.minSequence).toBe(1);
+    expect(store.legacy.ranges[0]!.maxSequence).toBe(100);
+    expect(store.current.ranges.length).toBe(0);
+    expect(store.legacy.entryCount).toBe(1);
     // query 随后正常（健康 + 按域判定）。
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
     expect(checkTreasuryAttemptRetiredRange("ti1_50_0123456789abcdef").retired).toBe(true);
@@ -604,8 +624,11 @@ describe("Remediation XI M：query-pure migration", () => {
     seedV1RangeStore(10, 20, 6);
     const migration = runTreasuryRetiredRangeMigrationAtTickBoundary();
     expect(migration.status).toBe("migrated");
-    const store = treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string }[] };
-    expect(store.ranges[0]!.namespace).toBe("current");
+    const store = rangeStoreOfMemory();
+    expect(store.current.ranges.length).toBe(1);
+    expect(store.current.ranges[0]!.minSequence).toBe(10);
+    expect(store.current.ranges[0]!.maxSequence).toBe(20);
+    expect(store.legacy.ranges.length).toBe(0);
     expect(checkTreasuryAttemptRetiredRange("ti2_15_0123456789abcdef").retired).toBe(true);
     expect(checkTreasuryAttemptRetiredRange("ti1_15_0123456789abcdef").retired).toBe(false);
   });
@@ -639,10 +662,11 @@ describe("Remediation XI M：query-pure migration", () => {
     resetTreasuryChainCertificateHeapCacheForTest();
     expect(runTreasuryRetiredRangeMigrationAtTickBoundary().status).toBe("idle");
     expect(JSON.stringify(treasuryBranch().retiredAttemptRanges)).toBe(migratedSnapshot);
-    const store = treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string; minSequence: number; maxSequence: number }[]; entryCount: number };
-    expect(store.ranges.length).toBe(1);
-    expect(store.ranges[0]!.namespace).toBe("legacy");
-    expect(store.entryCount).toBe(1);
+    const store = rangeStoreOfMemory();
+    expect(store.version).toBe(3);
+    expect(store.legacy.ranges.length).toBe(1);
+    expect(store.current.ranges.length).toBe(0);
+    expect(store.legacy.entryCount).toBe(1);
   });
 
   it("M7：GC coordinator 的前置 migration 阶段（report 携带结构化结果）", () => {
@@ -670,7 +694,7 @@ describe("Remediation XI M：query-pure migration", () => {
     Game.time += 100;
     const repaired = runTreasuryLifecycleGcCoordinator();
     expect(repaired.rangeMigration.status).toBe("migrated");
-    expect((treasuryBranch().retiredAttemptRanges as { version: number }).version).toBe(2);
+    expect((treasuryBranch().retiredAttemptRanges as { version: number }).version).toBe(3);
   });
 });
 
@@ -687,9 +711,9 @@ describe("Remediation XI Q：namespace 容量隔离", () => {
     for (let index = 0; index < 8; index += 1) {
       expect(absorbTreasuryRetiredSequence("current", 2 + index * 3).status).toBe("absorbed");
     }
-    const store = treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string }[] };
-    expect(store.ranges.filter((range) => range.namespace === "legacy").length).toBe(TREASURY_RETIRED_RANGE_LEGACY_QUOTA);
-    expect(store.ranges.filter((range) => range.namespace === "current").length).toBe(8);
+    const store = rangeStoreOfMemory();
+    expect(store.legacy.ranges.length).toBe(TREASURY_RETIRED_RANGE_LEGACY_QUOTA);
+    expect(store.current.ranges.length).toBe(8);
   });
 
   it("Q2：两域互不驱逐——legacy 满载不阻断 current；current 满载不阻断 legacy", () => {
@@ -700,9 +724,9 @@ describe("Remediation XI Q：namespace 容量隔离", () => {
     // current 域满（48）→ current 新增区间 fail closed；legacy 吸收不受影响。
     expect(absorbTreasuryRetiredSequence("current", 1 + TREASURY_RETIRED_RANGE_CURRENT_QUOTA * 3 + 7).status).toBe("rejected");
     expect(absorbTreasuryRetiredSequence("legacy", 5).status).toBe("absorbed");
-    const store = treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string }[] };
-    expect(store.ranges.filter((range) => range.namespace === "current").length).toBe(TREASURY_RETIRED_RANGE_CURRENT_QUOTA);
-    expect(store.ranges.filter((range) => range.namespace === "legacy").length).toBe(1);
+    const store = rangeStoreOfMemory();
+    expect(store.current.ranges.length).toBe(TREASURY_RETIRED_RANGE_CURRENT_CAPACITY);
+    expect(store.legacy.ranges.length).toBe(1);
   });
 
   it("Q3：旧 legacy 数据超过新配额 → 不丢失、不静默裁剪、合并式吸收仍允许、新增区间拒绝", () => {
@@ -714,16 +738,22 @@ describe("Remediation XI Q：namespace 容量隔离", () => {
     }
     treasuryBranch().retiredAttemptRanges = { version: 2, ranges, entryCount: ranges.length, updatedAt: Game.time };
     resetTreasuryChainCertificateHeapCacheForTest();
-    // store 健康（超额存量不判损坏）。
+    // 【XII/E】v2 combined 存量 → v3 分区迁移（唯一 owner）：超额 legacy 显式
+    // legacyOverflow（不静默裁剪、不折叠为损坏）。
+    expect(runTreasuryRetiredRangeMigrationAtTickBoundary().status).toBe("migrated");
+    // store 健康（超额存量 + 显式标记不判损坏）。
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
+    const store = rangeStoreOfMemory();
+    expect(store.version).toBe(3);
+    expect(store.legacyOverflow).toBe(true);
+    expect(store.current.ranges.length).toBe(0);
     // 合并式吸收（扩展既有区间——不新增区间数）允许。
     expect(absorbTreasuryRetiredSequence("legacy", 2).status).toBe("absorbed");
-    // 新增 legacy 区间（第 21 条 > 配额 16）拒绝（不裁剪存量腾槽）。
+    // legacyOverflow 显式 forensic 状态下新增 legacy 区间一律拒绝。
     expect(absorbTreasuryRetiredSequence("legacy", 500).status).toBe("rejected");
-    const store = treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string; minSequence: number; maxSequence: number }[] };
     // 数据不丢：20 条全部在位（1 号区间扩展为 [1,2]）。
-    expect(store.ranges.filter((range) => range.namespace === "legacy").length).toBe(20);
-    expect(store.ranges.some((range) => range.minSequence === 1 && range.maxSequence === 2)).toBe(true);
+    expect(store.legacy.ranges.length).toBe(20);
+    expect(store.legacy.ranges.some((range) => range.minSequence === 1 && range.maxSequence === 2)).toBe(true);
     // current 保留容量策略不受超额 legacy 影响。
     expect(absorbTreasuryRetiredSequence("current", 7).status).toBe("absorbed");
   });
@@ -743,11 +773,14 @@ describe("Remediation XI Q：namespace 容量隔离", () => {
     for (let index = 0; index < TREASURY_RETIRED_RANGE_CURRENT_QUOTA - 1; index += 1) {
       void absorbTreasuryRetiredSequence("current", 20 + index * 3);
     }
-    const store = treasuryBranch().retiredAttemptRanges as { ranges: unknown[] };
-    expect(store.ranges.length).toBeLessThanOrEqual(64);
+    // 【XII/E】分区各自有界（current ≤48、legacy ≤16——两分区独立硬上限）。
+    const store = rangeStoreOfMemory();
+    expect(store.current.ranges.length).toBeLessThanOrEqual(TREASURY_RETIRED_RANGE_CURRENT_CAPACITY);
+    expect(store.legacy.ranges.length).toBeLessThanOrEqual(TREASURY_RETIRED_RANGE_LEGACY_QUOTA);
     expect(absorbTreasuryRetiredSequence("legacy", 900).status).toBe("rejected");
     expect(absorbTreasuryRetiredSequence("current", 900).status).toBe("rejected");
-    expect(store.ranges.length).toBeLessThanOrEqual(64);
+    expect(store.current.ranges.length).toBeLessThanOrEqual(TREASURY_RETIRED_RANGE_CURRENT_CAPACITY);
+    expect(store.legacy.ranges.length).toBeLessThanOrEqual(TREASURY_RETIRED_RANGE_LEGACY_QUOTA);
   });
 });
 
@@ -805,10 +838,10 @@ describe("Remediation XI 压力：open/expire/retire 循环与容量记录", () 
     for (let index = 0; index < TREASURY_RETIRED_RANGE_CURRENT_QUOTA; index += 1) {
       void absorbTreasuryRetiredSequence("current", 2 + index * 3);
     }
-    const rangeStore = treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string }[] };
-    expect(rangeStore.ranges.length).toBe(64);
-    expect(rangeStore.ranges.filter((range) => range.namespace === "legacy").length).toBe(TREASURY_RETIRED_RANGE_LEGACY_QUOTA);
-    expect(rangeStore.ranges.filter((range) => range.namespace === "current").length).toBe(TREASURY_RETIRED_RANGE_CURRENT_QUOTA);
+    // 【XII/E】v3 分区：两分区各自满载（current 48 / legacy 16）。
+    const rangeStore = rangeStoreOfMemory();
+    expect(rangeStore.current.ranges.length).toBe(TREASURY_RETIRED_RANGE_CURRENT_CAPACITY);
+    expect(rangeStore.legacy.ranges.length).toBe(TREASURY_RETIRED_RANGE_LEGACY_QUOTA);
     // ticket 总容量 128（active 64 上界由 X 轮 B 系覆盖——此处终态断言）。
     const { TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES } = require("@/runtime/treasury/attemptIssuanceTicket") as typeof import("@/runtime/treasury/attemptIssuanceTicket");
     expect(TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES).toBe(128);

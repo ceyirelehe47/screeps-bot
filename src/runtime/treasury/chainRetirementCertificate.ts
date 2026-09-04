@@ -59,18 +59,30 @@ import { resolveTreasuryAttemptLifecycleOwnership } from "@/runtime/treasury/tre
 
 export const TREASURY_CHAIN_CERTIFICATE_VERSION = 1;
 export const TREASURY_CHAIN_CERTIFICATE_MAX_ENTRIES = 256;
-/** 【X 工作流 D】v2：区间绑定发行域（ti1_=legacy / ti2_=current）——同序号
- * 在两个域是两个不同发行事实，裸 sequence 不再是跨 namespace 的退休 key。 */
-export const TREASURY_RETIRED_RANGE_VERSION = 2;
-export const TREASURY_RETIRED_RANGE_MAX_ENTRIES = 64;
 /**
- * 【XI 工作流 F】per-namespace 容量配额：current 保留 48、legacy 16（总和
- * = 物理硬容量 64）。legacy 达到自身配额时 current 仍有保留容量（Q1）；
- * 两域互不驱逐（range 只合并不删除）；超额 legacy 存量保留不裁剪（Q3），
- * 只阻断需要新增 legacy 区间的吸收。
+ * 【XII 工作流 E】v3：真实物理分区——current 与 legacy 是同一版本化 store
+ * 内的**独立分区**（各自独立数组与硬上限），不再共享单一 ranges 数组的
+ * 逻辑 quota。v1（裸 sequence）/ v2（单一 ranges + namespace 标签）经
+ * tick-boundary migration owner 显式迁移（query 零写）。
  */
-export const TREASURY_RETIRED_RANGE_CURRENT_QUOTA = 48;
+export const TREASURY_RETIRED_RANGE_VERSION = 3;
+/**
+ * 【XII 工作流 E】current 分区物理硬上限（原定保留预算——legacy 无论多少
+ * 条都占不走 current 的容量）。总 Memory 硬上限 = CURRENT + LEGACY_OVERFLOW。
+ */
+export const TREASURY_RETIRED_RANGE_CURRENT_CAPACITY = 48;
+/**
+ * legacy 分区的正常配额；v2 存量迁移可能携带超额 legacy（旧协议允许至
+ * 64）——超额部分显式标记 legacyOverflow（legacy 新吸收 fail closed、
+ * current 分区不受影响、不静默裁剪）。
+ */
 export const TREASURY_RETIRED_RANGE_LEGACY_QUOTA = 16;
+/** legacy 分区物理硬上限（旧协议 v2 单数组的 64 上限——迁移存量的显式上界）。 */
+export const TREASURY_RETIRED_RANGE_LEGACY_CAPACITY = 64;
+/** 向后兼容别名（XI 语义——current 预算即 48）。 */
+export const TREASURY_RETIRED_RANGE_CURRENT_QUOTA = TREASURY_RETIRED_RANGE_CURRENT_CAPACITY;
+/** 总 Memory 硬上限（两分区物理上限之和——v3 布局的上界不变量）。 */
+export const TREASURY_RETIRED_RANGE_MAX_ENTRIES = TREASURY_RETIRED_RANGE_CURRENT_CAPACITY + TREASURY_RETIRED_RANGE_LEGACY_CAPACITY;
 const CERTIFICATE_KEY_PREFIX = "crc:";
 const LINEAGE_ID_PATTERN = /^[0-9a-f]{16}$/;
 
@@ -120,8 +132,29 @@ function compareRetiredRanges(left: TreasuryRetiredSequenceRange, right: Treasur
   return left.minSequence - right.minSequence;
 }
 
+export interface TreasuryRetiredRangePartition {
+  /** 本分区的独立区间数组（条目 namespace 必须与分区一致——校验强制）。 */
+  ranges: TreasuryRetiredSequenceRange[];
+  entryCount: number;
+}
+
+/**
+ * 【XII 工作流 E】v3 物理分区布局：current 与 legacy 各自独立数组 + 独立
+ * 硬上限（48 / 16，legacy 迁移存量显式溢出至多 64 并标记 legacyOverflow）。
+ * 两域不共享可被另一方全部占用的物理 entry 上限；总 Memory 硬上限 = 112。
+ */
 export interface TreasuryRetiredRangeStore {
   readonly version: typeof TREASURY_RETIRED_RANGE_VERSION;
+  current: TreasuryRetiredRangePartition;
+  legacy: TreasuryRetiredRangePartition;
+  /** legacy 分区超额（> LEGACY_QUOTA 的迁移存量）显式 forensic 标记：legacy 新吸收 fail closed，current 分区不受影响。 */
+  legacyOverflow?: boolean;
+  updatedAt: number;
+}
+
+/** 【XII 工作流 E】v2 单一数组布局（迁移源——读路径只报 migration_required）。 */
+interface TreasuryRetiredRangeStoreV2 {
+  readonly version: 2;
   ranges: TreasuryRetiredSequenceRange[];
   entryCount: number;
   updatedAt: number;
@@ -329,22 +362,24 @@ function ensureCertificateStorePublished(): void {
   }
 }
 
-function validateRangeStoreShape(store: unknown): string | null {
-  if (!store || typeof store !== "object") return "retired range store 非对象";
-  const candidate = store as Partial<TreasuryRetiredRangeStore>;
-  if (candidate.version !== TREASURY_RETIRED_RANGE_VERSION) {
-    return `retired range store 版本非法: ${String(candidate.version).slice(0, 16)}（当前协议 v${String(TREASURY_RETIRED_RANGE_VERSION)}——v1 裸 sequence 区间经 load 迁移或 fail closed）`;
+/** 【XII 工作流 E】单分区条目级校验（namespace 与分区一致 + 域内严格递增）。 */
+function validateRangePartitionShape(
+  partition: unknown,
+  expectedNamespace: TreasuryRetiredRangeNamespace,
+  capacity: number,
+  label: string,
+): string | null {
+  if (!partition || typeof partition !== "object") return `retired range ${label} 分区非对象`;
+  const candidate = partition as Partial<TreasuryRetiredRangePartition>;
+  if (!Array.isArray(candidate.ranges)) return `retired range ${label} 分区 ranges 非数组`;
+  if (candidate.ranges.length > capacity) {
+    return `retired range ${label} 分区超过硬容量 ${String(capacity)}（实际 ${String(candidate.ranges.length)}）`;
   }
-  if (!Array.isArray(candidate.ranges)) return "retired range store ranges 非数组";
-  if (candidate.ranges.length > TREASURY_RETIRED_RANGE_MAX_ENTRIES) {
-    return `retired range store 超过硬容量 ${String(TREASURY_RETIRED_RANGE_MAX_ENTRIES)}（实际 ${String(candidate.ranges.length)}）`;
-  }
-  let previousNamespace: TreasuryRetiredRangeNamespace | null = null;
   let previousMax = -1;
   for (const range of candidate.ranges) {
-    if (!range || typeof range !== "object") return "retired range entry 非对象";
-    if (range.namespace !== "legacy" && range.namespace !== "current") {
-      return `retired range 区间发行域非法: ${String(range.namespace).slice(0, 16)}（须为 legacy/current）`;
+    if (!range || typeof range !== "object") return `retired range ${label} 分区间隔非对象`;
+    if (range.namespace !== expectedNamespace) {
+      return `retired range ${label} 分区混入 ${String(range.namespace).slice(0, 16)} 域区间（分区隔离被破坏）`;
     }
     if (
       !Number.isSafeInteger(range.minSequence) ||
@@ -352,23 +387,43 @@ function validateRangeStoreShape(store: unknown): string | null {
       range.minSequence < 1 ||
       range.maxSequence < range.minSequence
     ) {
-      return `retired range 区间非法（[${String(range.minSequence)}, ${String(range.maxSequence)}]）`;
+      return `retired range ${label} 分区间隔非法（[${String(range?.minSequence)}, ${String(range?.maxSequence)}]）`;
     }
     if (!Number.isSafeInteger(range.mergedAtTick) || range.mergedAtTick < 0) {
-      return "retired range mergedAtTick 非法";
+      return `retired range ${label} 分区 mergedAtTick 非法`;
     }
-    if (previousNamespace === range.namespace) {
-      if (range.minSequence <= previousMax) {
-        return "retired range 区间在同域内必须严格递增且互不重叠（相邻可合并——重叠即损坏）";
-      }
-    } else if (previousNamespace !== null && range.namespace < previousNamespace) {
-      return "retired range 区间必须按发行域排序（current 在前、legacy 在后）";
+    if (range.minSequence <= previousMax) {
+      return `retired range ${label} 分区间隔必须严格递增且互不重叠（相邻可合并——重叠即损坏）`;
     }
-    previousNamespace = range.namespace;
     previousMax = range.maxSequence;
   }
   if (candidate.entryCount !== candidate.ranges.length) {
-    return `retired range store entryCount ${String(candidate.entryCount)} != ${String(candidate.ranges.length)}`;
+    return `retired range ${label} 分区 entryCount ${String(candidate.entryCount)} != ${String(candidate.ranges.length)}`;
+  }
+  return null;
+}
+
+function validateRangeStoreShape(store: unknown): string | null {
+  if (!store || typeof store !== "object") return "retired range store 非对象";
+  const candidate = store as Partial<TreasuryRetiredRangeStore>;
+  if (candidate.version !== TREASURY_RETIRED_RANGE_VERSION) {
+    return `retired range store 版本非法: ${String(candidate.version).slice(0, 16)}（当前协议 v${String(TREASURY_RETIRED_RANGE_VERSION)}——v1/v2 经 load 迁移或 fail closed）`;
+  }
+  // legacyOverflow 语义：仅当 legacy 分区超额（> QUOTA）时合法在位；超额
+  // 而未标记 / 标记而未超额均为形状错误（显式 forensic 状态不得含糊）。
+  const legacyCount = Array.isArray((candidate.legacy as { ranges?: unknown[] })?.ranges) ? (candidate.legacy as { ranges: unknown[] }).ranges.length : -1;
+  if (candidate.legacyOverflow === true && legacyCount <= TREASURY_RETIRED_RANGE_LEGACY_QUOTA) {
+    return `retired range legacyOverflow 标记存在但 legacy 分区未超额（${String(legacyCount)} ≤ ${String(TREASURY_RETIRED_RANGE_LEGACY_QUOTA)}——显式状态与事实矛盾）`;
+  }
+  if (candidate.legacyOverflow !== true && legacyCount > TREASURY_RETIRED_RANGE_LEGACY_QUOTA) {
+    return `retired range legacy 分区超额（${String(legacyCount)} > ${String(TREASURY_RETIRED_RANGE_LEGACY_QUOTA)}）但未标记 legacyOverflow（迁移不完整或损坏）`;
+  }
+  const currentError = validateRangePartitionShape(candidate.current, "current", TREASURY_RETIRED_RANGE_CURRENT_CAPACITY, "current");
+  if (currentError !== null) return currentError;
+  const legacyError = validateRangePartitionShape(candidate.legacy, "legacy", TREASURY_RETIRED_RANGE_LEGACY_CAPACITY, "legacy");
+  if (legacyError !== null) return legacyError;
+  if (!Number.isSafeInteger(candidate.updatedAt) || (candidate.updatedAt as number) < 0) {
+    return "retired range store updatedAt 非法";
   }
   return null;
 }
@@ -453,28 +508,108 @@ export function validateLegacyRetiredRangeStoreShape(store: unknown): string | n
 }
 
 /**
- * 【X 工作流 D / N7 → XI 工作流 E】v1 → v2 迁移（单对象替换 + read-back；
- * 失败还原 v1）。【XI】迁移唯一 owner 是 lifecycle GC coordinator 的
- * tick-boundary migration 阶段（runTreasuryRetiredRangeMigrationAt
- * TickBoundary）——query 与写路径（absorb）不再触发；本函数仅供 migration
- * owner 调用，先做 v1 源形状校验（source 与 target 双侧）。
+ * 【X 工作流 D / N7 → XI 工作流 E → XII 工作流 E】v1/v2 → v3 迁移（单对象
+ * 替换 + read-back；失败还原源）。【XI】迁移唯一 owner 是 lifecycle GC
+ * coordinator 的 tick-boundary migration 阶段——query 与写路径（absorb）
+ * 不再触发。【XII】v3 是物理分区布局：v1 经发行域证明归入单一分区；v2 按
+ * namespace 标签分流（legacy 超额显式标记 legacyOverflow——保留不裁剪）。
  */
 export function migrateLegacyRetiredRangeStore(raw: unknown): RangeRuntime {
-  const legacyStore = raw as { version: 1; ranges: { minSequence: number; maxSequence: number; mergedAtTick: number }[]; entryCount: number; updatedAt: number };
-  const sourceShapeError = validateLegacyRetiredRangeStoreShape(raw);
-  if (sourceShapeError !== null) {
-    return { store: legacyStore as unknown as TreasuryRetiredRangeStore, fatal: `retired range v1 迁移源形状校验失败: ${sourceShapeError}（fail closed——原数据保留）` };
+  const rawVersion = (raw as { version?: unknown })?.version;
+  if (rawVersion === 1) {
+    const legacyStore = raw as { version: 1; ranges: { minSequence: number; maxSequence: number; mergedAtTick: number }[]; entryCount: number; updatedAt: number };
+    const sourceShapeError = validateLegacyRetiredRangeStoreShape(raw);
+    if (sourceShapeError !== null) {
+      return { store: legacyStore as unknown as TreasuryRetiredRangeStore, fatal: `retired range v1 迁移源形状校验失败: ${sourceShapeError}（fail closed——原数据保留）` };
+    }
+    const domainProof = proveLegacyRetiredRangeDomain(legacyStore.updatedAt);
+    if (domainProof.domain === "indeterminate") {
+      return { store: legacyStore as unknown as TreasuryRetiredRangeStore, fatal: `retired range v1 store 发行域不可证明: ${domainProof.detail}（forensic fail closed——不得把它解释成两个 domain）` };
+    }
+    const migratedRanges = legacyStore.ranges.map((range) => ({ namespace: domainProof.domain, minSequence: range.minSequence, maxSequence: range.maxSequence, mergedAtTick: range.mergedAtTick }));
+    const migrated = buildPartitionedRangeStore(
+      domainProof.domain === "current" ? migratedRanges : [],
+      domainProof.domain === "legacy" ? migratedRanges : [],
+    );
+    return commitRangeStoreMigration(raw, legacyStore as unknown as TreasuryRetiredRangeStore, migrated, "v1→v3");
   }
-  const domainProof = proveLegacyRetiredRangeDomain(legacyStore.updatedAt);
-  if (domainProof.domain === "indeterminate") {
-    return { store: legacyStore as unknown as TreasuryRetiredRangeStore, fatal: `retired range v1 store 发行域不可证明: ${domainProof.detail}（forensic fail closed——不得把它解释成两个 domain）` };
+  if (rawVersion === 2) {
+    const v2Store = raw as TreasuryRetiredRangeStoreV2;
+    const sourceShapeError = validateLegacyV2RangeStoreShape(raw);
+    if (sourceShapeError !== null) {
+      return { store: v2Store as unknown as TreasuryRetiredRangeStore, fatal: `retired range v2 迁移源形状校验失败: ${sourceShapeError}（fail closed——原数据保留）` };
+    }
+    // 【XII / N5】v2 → v3 分区迁移：按 namespace 标签分流；写入 + read-back
+    // + 失败还原；reset 幂等（v3 在位 → coordinator idle 零写）。
+    const migrated = buildPartitionedRangeStore(
+      v2Store.ranges.filter((range) => range.namespace === "current"),
+      v2Store.ranges.filter((range) => range.namespace === "legacy"),
+    );
+    return commitRangeStoreMigration(raw, v2Store as unknown as TreasuryRetiredRangeStore, migrated, "v2→v3");
   }
-  const migrated: TreasuryRetiredRangeStore = {
+  return { store: raw as TreasuryRetiredRangeStore, fatal: `retired range store 版本未知（${String(rawVersion).slice(0, 8)}——不迁移，fail closed）` };
+}
+
+/** v2 单数组源形状校验（迁移源专用——与 v2 时代的校验同构）。 */
+function validateLegacyV2RangeStoreShape(raw: unknown): string | null {
+  const candidate = raw as Partial<TreasuryRetiredRangeStoreV2>;
+  if (!candidate || typeof candidate !== "object") return "v2 retired range store 非对象";
+  if (candidate.version !== 2) return `v2 retired range store 版本非法: ${String(candidate.version).slice(0, 8)}`;
+  if (!Array.isArray(candidate.ranges)) return "v2 retired range store ranges 非数组";
+  if (candidate.ranges.length > 64) {
+    return `v2 retired range store 超过旧协议硬容量 64（实际 ${String(candidate.ranges.length)}）`;
+  }
+  let previousNamespace: TreasuryRetiredRangeNamespace | null = null;
+  let previousMax = -1;
+  for (const range of candidate.ranges) {
+    if (!range || typeof range !== "object") return "v2 retired range entry 非对象";
+    if (range.namespace !== "legacy" && range.namespace !== "current") {
+      return `v2 retired range 区间发行域非法: ${String(range.namespace).slice(0, 16)}`;
+    }
+    if (
+      !Number.isSafeInteger(range.minSequence) ||
+      !Number.isSafeInteger(range.maxSequence) ||
+      range.minSequence < 1 ||
+      range.maxSequence < range.minSequence
+    ) {
+      return `v2 retired range 区间非法（[${String(range?.minSequence)}, ${String(range?.maxSequence)}]）`;
+    }
+    if (!Number.isSafeInteger(range.mergedAtTick) || range.mergedAtTick < 0) return "v2 retired range mergedAtTick 非法";
+    if (previousNamespace === range.namespace) {
+      if (range.minSequence <= previousMax) return "v2 retired range 区间在同域内必须严格递增且互不重叠";
+    } else if (previousNamespace !== null && range.namespace < previousNamespace) {
+      return "v2 retired range 区间必须按发行域排序（current 在前、legacy 在后）";
+    }
+    previousNamespace = range.namespace;
+    previousMax = range.maxSequence;
+  }
+  if (candidate.entryCount !== candidate.ranges.length) {
+    return `v2 retired range store entryCount ${String(candidate.entryCount)} != ${String(candidate.ranges.length)}`;
+  }
+  return null;
+}
+
+/** 分区 store 构造（合并语义等价迁移；legacy 超额显式标记）。 */
+function buildPartitionedRangeStore(
+  currentRanges: readonly TreasuryRetiredSequenceRange[],
+  legacyRanges: readonly TreasuryRetiredSequenceRange[],
+): TreasuryRetiredRangeStore {
+  return {
     version: TREASURY_RETIRED_RANGE_VERSION,
-    ranges: legacyStore.ranges.map((range) => ({ namespace: domainProof.domain, minSequence: range.minSequence, maxSequence: range.maxSequence, mergedAtTick: range.mergedAtTick })),
-    entryCount: legacyStore.ranges.length,
+    current: { ranges: [...currentRanges], entryCount: currentRanges.length },
+    legacy: { ranges: [...legacyRanges], entryCount: legacyRanges.length },
+    ...(legacyRanges.length > TREASURY_RETIRED_RANGE_LEGACY_QUOTA ? { legacyOverflow: true } : {}),
     updatedAt: Game.time,
   };
+}
+
+/** 迁移提交（单对象替换 + read-back；失败还原源——v1/v2 共用）。 */
+function commitRangeStoreMigration(
+  rawSource: unknown,
+  sourceAsStore: TreasuryRetiredRangeStore,
+  migrated: TreasuryRetiredRangeStore,
+  label: string,
+): RangeRuntime {
   const branch = certificateBranch();
   const rollback = branch.retiredAttemptRanges;
   branch.retiredAttemptRanges = migrated;
@@ -482,7 +617,14 @@ export function migrateLegacyRetiredRangeStore(raw: unknown): RangeRuntime {
   const readBackError = validateRangeStoreShape(readBack);
   if (readBackError !== null) {
     branch.retiredAttemptRanges = rollback;
-    return { store: legacyStore as unknown as TreasuryRetiredRangeStore, fatal: `retired range v1→v2 迁移 read-back 失败: ${readBackError}（已还原 v1，fail closed）` };
+    return { store: sourceAsStore, fatal: `retired range ${label} 迁移 read-back 失败: ${readBackError}（已还原源 store，fail closed）` };
+  }
+  // 完整性：迁移后两分区区间总数 == 源区间数（不丢旧事实——N5）。
+  const sourceCount = (rawSource as { ranges?: unknown[] }).ranges?.length ?? 0;
+  const migratedCount = readBack.current.ranges.length + readBack.legacy.ranges.length;
+  if (migratedCount !== sourceCount) {
+    branch.retiredAttemptRanges = rollback;
+    return { store: sourceAsStore, fatal: `retired range ${label} 迁移区间数不一致（源 ${String(sourceCount)} → 分区 ${String(migratedCount)}——已还原源 store，fail closed）` };
   }
   return { store: readBack, fatal: null };
 }
@@ -493,21 +635,22 @@ function loadRangeRuntime(): RangeRuntime {
   if (raw === undefined) {
     const store: TreasuryRetiredRangeStore = {
       version: TREASURY_RETIRED_RANGE_VERSION,
-      ranges: [],
-      entryCount: 0,
+      current: { ranges: [], entryCount: 0 },
+      legacy: { ranges: [], entryCount: 0 },
       updatedAt: Game.time,
     };
     certificateBranch().retiredAttemptRanges = store;
     heapRangeRuntime = { store, fatal: null };
     return heapRangeRuntime;
   }
-  if ((raw as { version?: unknown }).version === 1) {
-    // 【XI 工作流 E】v1 裸 sequence store 不再由 load 触发迁移——迁移唯一
-    // owner 是 lifecycle GC coordinator 的 tick-boundary migration 阶段
+  const rawVersion = (raw as { version?: unknown }).version;
+  if (rawVersion === 1 || rawVersion === 2) {
+    // 【XI 工作流 E → XII 工作流 E】v1/v2 store 不再由 load 触发迁移——迁移
+    // 唯一 owner 是 lifecycle GC coordinator 的 tick-boundary migration 阶段
     //（query 零写）；写路径（absorb）同样 fail closed（迁移完成前不吸收）。
     heapRangeRuntime = {
       store: raw as unknown as TreasuryRetiredRangeStore,
-      fatal: "retired range store 为 v1（待显式迁移——迁移由 lifecycle GC coordinator 的 tick-boundary migration owner 执行；query 零写，写路径 fail closed）",
+      fatal: `retired range store 为 v${String(rawVersion)}（待显式迁移——迁移由 lifecycle GC coordinator 的 tick-boundary migration owner 执行；query 零写，写路径 fail closed）`,
     };
     return heapRangeRuntime;
   }
@@ -539,12 +682,13 @@ export function peekTreasuryRetiredRangeHealth(): TreasuryRetiredRangeHealth {
   // 【XI 工作流 E / M1】query 零写：不触发 load/迁移/空店初始化。
   const raw = (Memory.runtime as unknown as RuntimeMemoryWithCertificates | undefined)?.treasury?.retiredAttemptRanges;
   if (raw === undefined) return { healthy: true, detail: null };
-  if ((raw as { version?: unknown }).version === 1) {
-    // v1 待显式迁移（migration owner 在 tick 边界执行）——probe 视角
+  const rawVersion = (raw as { version?: unknown }).version;
+  if (rawVersion === 1 || rawVersion === 2) {
+    // v1/v2 待显式迁移（migration owner 在 tick 边界执行）——probe 视角
     // fail closed（不把 migration_required 折叠为健康/空）。
     return {
       healthy: false,
-      detail: "retired range store 为 v1（待 tick-boundary migration owner 显式迁移——query 零写，迁移前 fail closed）",
+      detail: `retired range store 为 v${String(rawVersion)}（待 tick-boundary migration owner 显式迁移——query 零写，迁移前 fail closed）`,
     };
   }
   const shapeError = validateRangeStoreShape(raw);
@@ -689,16 +833,17 @@ export function checkTreasuryAttemptRetiredRange(
   transactionId: string,
 ): { readonly retired: boolean; readonly detail: string } {
   // 【XI 工作流 E / M1-M2】query 零写：直读 Memory（store 不存在 = 健康空，
-  // 不初始化；v1 = migration_required → 保守 retired 阻断，不折叠为
-  // ordinary absent）。
+  // 不初始化；v1/v2 = migration_required → 保守 retired 阻断，不折叠为
+  // ordinary absent）。【XII 工作流 E】v3 分区直读（按 ID 自带发行域选分区）。
   const parsed = parseTreasuryIssuedInitialAttemptId(transactionId);
   if (parsed === null) return { retired: false, detail: "" };
   const raw = (Memory.runtime as unknown as RuntimeMemoryWithCertificates | undefined)?.treasury?.retiredAttemptRanges;
   if (raw === undefined) return { retired: false, detail: "" };
-  if ((raw as { version?: unknown }).version === 1) {
+  const rawVersion = (raw as { version?: unknown }).version;
+  if (rawVersion === 1 || rawVersion === 2) {
     return {
       retired: true,
-      detail: "retired range store 为 v1（migration_required——迁移完成前按已退休阻断，fail closed）",
+      detail: `retired range store 为 v${String(rawVersion)}（migration_required——迁移完成前按已退休阻断，fail closed）`,
     };
   }
   const shapeError = validateRangeStoreShape(raw);
@@ -706,8 +851,8 @@ export function checkTreasuryAttemptRetiredRange(
     // store 损坏不得折叠为"未退休"——按 retired 阻断（fail closed）。
     return { retired: true, detail: `retired range store 损坏（fail closed）: ${shapeError}` };
   }
-  for (const range of (raw as TreasuryRetiredRangeStore).ranges) {
-    if (range.namespace !== parsed.namespace) continue;
+  const partition = parsed.namespace === "current" ? (raw as TreasuryRetiredRangeStore).current : (raw as TreasuryRetiredRangeStore).legacy;
+  for (const range of partition.ranges) {
     if (parsed.sequence >= range.minSequence && parsed.sequence <= range.maxSequence) {
       return { retired: true, detail: `[${range.namespace} ${String(range.minSequence)}, ${String(range.maxSequence)}]` };
     }
@@ -732,74 +877,75 @@ export type TreasuryRetiredRangeStructuredLookup =
   /** 【XI 工作流 E】v1 store 在位且未迁移（query 零写——只报告所需状态，不折叠为 absent）。 */
   | { readonly status: "migration_required"; readonly detail: string };
 
-/** 容器级校验（版本/数组/entryCount——条目级问题归 malformed）。 */
+/** 容器级校验（版本/分区/entryCount——条目级问题归 malformed）。 */
 function validateRangeContainerShape(store: unknown): string | null {
   if (!store || typeof store !== "object") return "retired range store 非对象";
   const candidate = store as Partial<TreasuryRetiredRangeStore>;
   if (candidate.version !== TREASURY_RETIRED_RANGE_VERSION) {
     return `retired range store 版本非法: ${String(candidate.version).slice(0, 16)}`;
   }
-  if (!Array.isArray(candidate.ranges)) return "retired range store ranges 非数组";
-  if (candidate.ranges.length > TREASURY_RETIRED_RANGE_MAX_ENTRIES) {
-    return `retired range store 超过硬容量 ${String(TREASURY_RETIRED_RANGE_MAX_ENTRIES)}（实际 ${String(candidate.ranges.length)}）`;
+  if (!candidate.current || !Array.isArray(candidate.current.ranges)) return "retired range current 分区缺失/非数组";
+  if (!candidate.legacy || !Array.isArray(candidate.legacy.ranges)) return "retired range legacy 分区缺失/非数组";
+  if (candidate.current.entryCount !== candidate.current.ranges.length) {
+    return `retired range current 分区 entryCount ${String(candidate.current.entryCount)} != ${String(candidate.current.ranges.length)}`;
   }
-  if (candidate.entryCount !== candidate.ranges.length) {
-    return `retired range store entryCount ${String(candidate.entryCount)} != ${String(candidate.ranges.length)}`;
+  if (candidate.legacy.entryCount !== candidate.legacy.ranges.length) {
+    return `retired range legacy 分区 entryCount ${String(candidate.legacy.entryCount)} != ${String(candidate.legacy.ranges.length)}`;
   }
   return null;
 }
 
-/** 条目级校验（单条区间 shape 与同域严格递增——malformed 分类）。 */
+/** 条目级校验（分区条目 shape 与域内严格递增——malformed 分类）。 */
 function validateRangeEntriesShape(store: TreasuryRetiredRangeStore): string | null {
-  const containerError = validateRangeStoreShape(store);
-  if (containerError !== null && containerError.startsWith("retired range 区间")) return containerError;
-  let previousNamespace: TreasuryRetiredRangeNamespace | null = null;
-  let previousMax = -1;
-  for (const range of store.ranges) {
-    if (!range || typeof range !== "object") return "retired range entry 非对象";
-    if (range.namespace !== "legacy" && range.namespace !== "current") {
-      return `retired range 区间发行域非法: ${String(range.namespace).slice(0, 16)}`;
-    }
-    if (
-      !Number.isSafeInteger(range.minSequence) ||
-      !Number.isSafeInteger(range.maxSequence) ||
-      range.minSequence < 1 ||
-      range.maxSequence < range.minSequence
-    ) {
-      return `retired range 区间非法（[${String(range?.minSequence)}, ${String(range?.maxSequence)}]）`;
-    }
-    if (!Number.isSafeInteger(range.mergedAtTick) || range.mergedAtTick < 0) {
-      return "retired range mergedAtTick 非法";
-    }
-    if (previousNamespace === range.namespace) {
-      if (range.minSequence <= previousMax) {
-        return "retired range 区间在同域内必须严格递增且互不重叠（相邻可合并——重叠即损坏）";
+  for (const [partition, namespace] of [
+    [store.current, "current"],
+    [store.legacy, "legacy"],
+  ] as const) {
+    let previousMax = -1;
+    for (const range of partition.ranges) {
+      if (!range || typeof range !== "object") return `retired range ${namespace} 分区间隔非对象`;
+      if (range.namespace !== namespace) {
+        return `retired range ${namespace} 分区混入 ${String(range.namespace).slice(0, 16)} 域区间（分区隔离被破坏）`;
       }
+      if (
+        !Number.isSafeInteger(range.minSequence) ||
+        !Number.isSafeInteger(range.maxSequence) ||
+        range.minSequence < 1 ||
+        range.maxSequence < range.minSequence
+      ) {
+        return `retired range ${namespace} 分区间隔非法（[${String(range?.minSequence)}, ${String(range?.maxSequence)}]）`;
+      }
+      if (!Number.isSafeInteger(range.mergedAtTick) || range.mergedAtTick < 0) {
+        return `retired range ${namespace} 分区 mergedAtTick 非法`;
+      }
+      if (range.minSequence <= previousMax) {
+        return `retired range ${namespace} 分区间隔必须严格递增且互不重叠（相邻可合并——重叠即损坏）`;
+      }
+      previousMax = range.maxSequence;
     }
-    previousNamespace = range.namespace;
-    previousMax = range.maxSequence;
   }
   return null;
 }
 
 /** 【IX 工作流 C / 6.1】结构化 retired range 查询（eviction 专用四态）。 */
 export function lookupTreasuryRetiredRangeStructured(transactionId: string): TreasuryRetiredRangeStructuredLookup {
-  // 【XI 工作流 E / M1】query 零写：v1 只报告 migration_required（迁移由
+  // 【XI 工作流 E / M1】query 零写：v1/v2 只报告 migration_required（迁移由
   // tick-boundary migration owner 执行），不触发 load/迁移/空店初始化。
   const parsed = parseTreasuryIssuedInitialAttemptId(transactionId);
   if (parsed === null) return { status: "absent" };
   const raw = (Memory.runtime as unknown as RuntimeMemoryWithCertificates | undefined)?.treasury?.retiredAttemptRanges;
   if (raw === undefined) return { status: "absent" };
-  if ((raw as { version?: unknown }).version === 1) {
+  const rawVersion = (raw as { version?: unknown }).version;
+  if (rawVersion === 1 || rawVersion === 2) {
     return {
       status: "migration_required",
-      detail: "v1 裸 sequence store（发行域未证明——迁移由 lifecycle GC coordinator 的 tick-boundary migration owner 执行；query 零写）",
+      detail: `v${String(rawVersion)} 单数组 store（发行域分区未完成——迁移由 lifecycle GC coordinator 的 tick-boundary migration owner 执行；query 零写）`,
     };
   }
   return lookupRetiredRangeStructuredInStore(raw, parsed);
 }
 
-/** v2 store 内的按域查询（迁移后 store 与直读 store 共用）。 */
+/** v3 store 内的按域分区查询（迁移后 store 与直读 store 共用）。 */
 function lookupRetiredRangeStructuredInStore(
   store: TreasuryRetiredRangeStore,
   parsed: { readonly sequence: number; readonly namespace: "legacy" | "current" } | null,
@@ -809,8 +955,8 @@ function lookupRetiredRangeStructuredInStore(
   if (containerError !== null) return { status: "store_unhealthy", detail: containerError };
   const entryError = validateRangeEntriesShape(store);
   if (entryError !== null) return { status: "malformed", detail: entryError };
-  for (const range of store.ranges) {
-    if (range.namespace !== parsed.namespace) continue;
+  const partition = parsed.namespace === "current" ? store.current : store.legacy;
+  for (const range of partition.ranges) {
     if (parsed.sequence >= range.minSequence && parsed.sequence <= range.maxSequence) {
       return { status: "present", detail: `[${range.namespace} ${String(range.minSequence)}, ${String(range.maxSequence)}]` };
     }
@@ -857,9 +1003,8 @@ export function absorbTreasuryRetiredSequence(
   if (runtime.fatal !== null) {
     return { status: "rejected", detail: `retired range store fail-closed: ${runtime.fatal}` };
   }
-  const ranges = runtime.store.ranges;
-  for (const range of ranges) {
-    if (range.namespace !== namespace) continue;
+  const partition = namespace === "current" ? runtime.store.current : runtime.store.legacy;
+  for (const range of partition.ranges) {
     if (sequence >= range.minSequence && sequence <= range.maxSequence) {
       return { status: "idempotent" };
     }
@@ -870,31 +1015,32 @@ export function absorbTreasuryRetiredSequence(
   // （fail closed——绝不把在飞/有权威序号误判 retired）。
   // 【X 工作流 D / N5】coalesce 只处理 current 域的 gap（legacy 域缺少
   // canonical ID reconstruction——ti1_ gap 不可用当前 watermark 猜测放弃）。
-  // 【XI 工作流 F / Q1-Q3】触发条件含域配额：吸收会使目标域区间数增加且
-  // 超过该域 quota → current 域先 coalesce 收敛；legacy 域直接 fail closed
-  //（超额存量保留不裁剪——只阻断新增区间的吸收）。
-  const namespaceQuota = namespace === "current" ? TREASURY_RETIRED_RANGE_CURRENT_QUOTA : TREASURY_RETIRED_RANGE_LEGACY_QUOTA;
-  const namespaceCountBefore = ranges.filter((range) => range.namespace === namespace).length;
-  const projectedTotal = countRangesAfterAbsorb(namespace, sequence, ranges);
-  const totalOverflow = projectedTotal > TREASURY_RETIRED_RANGE_MAX_ENTRIES;
+  // 【XI 工作流 F → XII 工作流 E / Q 组】触发条件含域配额：v3 分区下目标
+  // 分区已达硬上限 → current 分区先 coalesce 收敛；legacy 分区直接 fail
+  // closed（legacyOverflow 的迁移存量保留不裁剪——只阻断新增区间吸收，
+  // current 分区不受影响，N2-N4）。
+  const namespaceCapacity = namespace === "current" ? TREASURY_RETIRED_RANGE_CURRENT_CAPACITY : TREASURY_RETIRED_RANGE_LEGACY_QUOTA;
+  const namespaceCountBefore = partition.ranges.length;
+  const projectedTotal = runtime.store.current.ranges.length + runtime.store.legacy.ranges.length;
+  const totalOverflow = projectedTotal + 1 > TREASURY_RETIRED_RANGE_MAX_ENTRIES;
   // 相邻可合并不新增区间数（core 的精确终检以 coalesced 结果为准——此处
   // 只决定是否尝试 coalesce 收敛）。
-  const mergeableIntoExisting = ranges.some(
-    (range) => range.namespace === namespace && (sequence === range.minSequence - 1 || sequence === range.maxSequence + 1),
+  const mergeableIntoExisting = partition.ranges.some(
+    (range) => sequence === range.minSequence - 1 || sequence === range.maxSequence + 1,
   );
-  const namespaceOverflow = !mergeableIntoExisting && namespaceCountBefore + 1 > namespaceQuota;
+  const namespaceOverflow = !mergeableIntoExisting && namespaceCountBefore + 1 > namespaceCapacity;
   if (totalOverflow || namespaceOverflow) {
     if (namespaceOverflow && namespace !== "current") {
       return {
         status: "rejected",
-        detail: `retired range ${namespace} 域已达配额 ${String(namespaceQuota)}（新增区间后 ${String(namespaceCountBefore + 1)}——超额存量保留不裁剪，两域互不驱逐，fail closed）`,
+        detail: `retired range ${namespace} 分区已达容量 ${String(namespaceCapacity)}（新增区间后 ${String(namespaceCountBefore + 1)}${runtime.store.legacyOverflow === true ? "（legacyOverflow 迁移存量在位）" : ""}——超额存量保留不裁剪，两分区互不驱逐，fail closed）`,
       };
     }
     const coalesced = coalesceOrphanGapUnderPressure();
     if (!coalesced.coalesced) {
       return {
         status: "rejected",
-        detail: `retired range 已达硬容量 ${String(TREASURY_RETIRED_RANGE_MAX_ENTRIES)} 且无孤儿 gap 可收敛（${coalesced.detail}——不吸收不相邻序号，fail closed）`,
+        detail: `retired range 分区已达容量（current ${String(runtime.store.current.ranges.length)}/${String(TREASURY_RETIRED_RANGE_CURRENT_CAPACITY)}、legacy ${String(runtime.store.legacy.ranges.length)}/${String(TREASURY_RETIRED_RANGE_LEGACY_CAPACITY)}）且无孤儿 gap 可收敛（${coalesced.detail}——不吸收不相邻序号，fail closed）`,
       };
     }
   }
@@ -949,11 +1095,11 @@ const ORPHAN_GAP_RECENT_WINDOW = 32;
 function coalesceOrphanGapUnderPressure(): { readonly coalesced: boolean; readonly detail: string } {
   const runtime = loadRangeRuntime();
   if (runtime.fatal !== null) return { coalesced: false, detail: `range store fail-closed: ${runtime.fatal}` };
-  // 【X 工作流 D / N5】namespace-local：只处理 current(ti2_) 域的区间间隙。
-  // legacy(ti1_) 域的 gap 永不 coalesce——ti1_ canonical ID 不可重建，无法
-  // 逐序号证明 lifecycle 权威缺失，不得用当前 watermark 猜测 legacy 放弃。
-  const ranges = runtime.store.ranges.filter((range) => range.namespace === "current");
-  if (ranges.length < 2) return { coalesced: false, detail: "current 域区间数不足（无间隙可桥接；legacy gap 不参与 coalesce）" };
+  // 【X 工作流 D / N5 → XII 工作流 E】namespace-local：只处理 current(ti2_)
+  // 分区的区间间隙。legacy 分区的 gap 永不 coalesce——ti1_ canonical ID
+  // 不可重建，无法逐序号证明 lifecycle 权威缺失。
+  const ranges = runtime.store.current.ranges;
+  if (ranges.length < 2) return { coalesced: false, detail: "current 分区区间数不足（无间隙可桥接；legacy gap 不参与 coalesce）" };
   const watermark = peekTreasuryIssuedAttemptWatermark();
   if (watermark < 0) return { coalesced: false, detail: "issuer watermark 不可读（fail closed）" };
   for (let index = 1; index < ranges.length; index += 1) {
@@ -979,22 +1125,21 @@ function coalesceOrphanGapUnderPressure(): { readonly coalesced: boolean; readon
         return { coalesced: false, detail: `孤儿 gap 吸收中断（seq ${String(sequence)}）: ${absorbed.detail}` };
       }
     }
-    return { coalesced: true, detail: `current 域孤儿 gap [${String(gapMin)}, ${String(gapMax)}] 已 abandon 收敛` };
+    return { coalesced: true, detail: `current 分区孤儿 gap [${String(gapMin)}, ${String(gapMax)}] 已 abandon 收敛` };
   }
   return { coalesced: false, detail: "无可收敛的孤儿 gap（全部间隙含在飞/有权威/近期发行序号；legacy gap 不处理）" };
 }
 
-/** 预计算吸收后的区间数（不改 store；namespace-aware——只与同域区间合并）。 */
-function countRangesAfterAbsorb(
+/** 【XII 工作流 E】分区内的吸收合并核心（同域 min-1/max+1 相邻合并 + 二次桥接）。 */
+function mergePartitionRanges(
   namespace: TreasuryRetiredRangeNamespace,
   sequence: number,
   ranges: readonly TreasuryRetiredSequenceRange[],
-): number {
+): TreasuryRetiredSequenceRange[] {
   const nextRanges: TreasuryRetiredSequenceRange[] = ranges.map((range) => ({ ...range }));
   let merged = false;
   for (let index = 0; index < nextRanges.length; index += 1) {
     const range = nextRanges[index]!;
-    if (range.namespace !== namespace) continue;
     if (sequence === range.minSequence - 1) {
       nextRanges[index] = { ...range, minSequence: sequence, mergedAtTick: Game.time };
       merged = true;
@@ -1013,9 +1158,9 @@ function countRangesAfterAbsorb(
   const coalesced: TreasuryRetiredSequenceRange[] = [];
   for (const range of nextRanges) {
     const last = coalesced[coalesced.length - 1];
-    if (last !== undefined && last.namespace === range.namespace && range.minSequence <= last.maxSequence + 1) {
+    if (last !== undefined && range.minSequence <= last.maxSequence + 1) {
       coalesced[coalesced.length - 1] = {
-        namespace: range.namespace,
+        namespace,
         minSequence: last.minSequence,
         maxSequence: Math.max(last.maxSequence, range.maxSequence),
         mergedAtTick: Game.time,
@@ -1024,10 +1169,10 @@ function countRangesAfterAbsorb(
       coalesced.push({ ...range });
     }
   }
-  return coalesced.length;
+  return coalesced;
 }
 
-/** 区间写入核心（同域吸收 + 相邻合并 + read-back——不做满载 coalesce，供 absorb 与 coalesce 共用）。 */
+/** 区间写入核心（分区吸收 + 相邻合并 + read-back——不做满载 coalesce，供 absorb 与 coalesce 共用）。 */
 function absorbSequenceUnchecked(
   namespace: TreasuryRetiredRangeNamespace,
   sequence: number,
@@ -1039,78 +1184,45 @@ function absorbSequenceUnchecked(
   if (runtime.fatal !== null) {
     return { status: "rejected", detail: `retired range store fail-closed: ${runtime.fatal}` };
   }
-  const ranges = runtime.store.ranges;
-  for (const range of ranges) {
-    if (range.namespace !== namespace) continue;
+  const partition = namespace === "current" ? runtime.store.current : runtime.store.legacy;
+  for (const range of partition.ranges) {
     if (sequence >= range.minSequence && sequence <= range.maxSequence) {
       return { status: "idempotent" };
     }
   }
-  const nextRanges: TreasuryRetiredSequenceRange[] = ranges.map((range) => ({ ...range }));
-  // 插入并吸收相邻区间（同域 min-1 / max+1 相邻者合并——单调收敛）。
-  let merged = false;
-  for (let index = 0; index < nextRanges.length; index += 1) {
-    const range = nextRanges[index];
-    if (range.namespace !== namespace) continue;
-    if (sequence === range.minSequence - 1) {
-      nextRanges[index] = { ...range, minSequence: sequence, mergedAtTick: Game.time };
-      merged = true;
-      break;
-    }
-    if (sequence === range.maxSequence + 1) {
-      nextRanges[index] = { ...range, maxSequence: sequence, mergedAtTick: Game.time };
-      merged = true;
-      break;
-    }
-  }
-  if (!merged) {
-    nextRanges.push({ namespace, minSequence: sequence, maxSequence: sequence, mergedAtTick: Game.time });
-    nextRanges.sort(compareRetiredRanges);
-  }
-  // 相邻区间二次合并（同域扩展后可能桥接两个旧区间）。
-  const coalesced: TreasuryRetiredSequenceRange[] = [];
-  for (const range of nextRanges) {
-    const last = coalesced[coalesced.length - 1];
-    if (last !== undefined && last.namespace === range.namespace && range.minSequence <= last.maxSequence + 1) {
-      coalesced[coalesced.length - 1] = {
-        namespace: range.namespace,
-        minSequence: last.minSequence,
-        maxSequence: Math.max(last.maxSequence, range.maxSequence),
-        mergedAtTick: Game.time,
-      };
-    } else {
-      coalesced.push({ ...range });
-    }
-  }
-  if (coalesced.length > TREASURY_RETIRED_RANGE_MAX_ENTRIES) {
+  const coalesced = mergePartitionRanges(namespace, sequence, partition.ranges);
+  // 【XII 工作流 E / Q 组】分区硬上限终检（写入前的权威强制——入口的
+  // coalesce 触发只是收敛尝试）：本次吸收新增区间数时——legacyOverflow
+  // 显式 forensic 状态下 legacy 新增一律拒绝（超额存量保留、不裁剪、
+  // 不再增长）；超过本分区容量 → 拒绝（不删除其它分区事实腾槽；current
+  // 分区保留容量不被 legacy 占用，N1-N4）。
+  const capacity = namespace === "current"
+    ? TREASURY_RETIRED_RANGE_CURRENT_CAPACITY
+    : runtime.store.legacyOverflow === true
+      ? TREASURY_RETIRED_RANGE_LEGACY_CAPACITY
+      : TREASURY_RETIRED_RANGE_LEGACY_QUOTA;
+  const addsRangeCount = coalesced.length > partition.ranges.length;
+  if (addsRangeCount && namespace === "legacy" && runtime.store.legacyOverflow === true) {
     return {
       status: "rejected",
-      detail: `retired range 已达硬容量 ${String(TREASURY_RETIRED_RANGE_MAX_ENTRIES)}（吸收后 ${String(coalesced.length)}——不删除既有区间，fail closed）`,
+      detail: `retired range legacy 分区处于 legacyOverflow 显式 forensic 状态（${String(partition.ranges.length)} > ${String(TREASURY_RETIRED_RANGE_LEGACY_QUOTA)} 迁移存量）——新增区间一律 fail closed（存量保留不裁剪，current 分区不受影响）`,
     };
   }
-  // 【XI 工作流 F / Q2】域配额终检（写入前的权威强制——入口的 coalesce
-  // 触发只是收敛尝试）：本次吸收使目标域区间数增加且超过 quota → 拒绝
-  //（不删除其它域事实腾槽；超额存量不裁剪）。
-  {
-    const quota = namespace === "current" ? TREASURY_RETIRED_RANGE_CURRENT_QUOTA : TREASURY_RETIRED_RANGE_LEGACY_QUOTA;
-    const countBefore = ranges.filter((range) => range.namespace === namespace).length;
-    const countAfter = coalesced.filter((range) => range.namespace === namespace).length;
-    if (countAfter > countBefore && countAfter > quota) {
-      return {
-        status: "rejected",
-        detail: `retired range ${namespace} 域已达配额 ${String(quota)}（吸收后 ${String(countAfter)}——不删除其它域事实腾槽，fail closed）`,
-      };
-    }
+  if (addsRangeCount && coalesced.length > capacity) {
+    return {
+      status: "rejected",
+      detail: `retired range ${namespace} 分区已达容量 ${String(capacity)}（吸收后 ${String(coalesced.length)}——不删除其它分区事实腾槽，fail closed）`,
+    };
   }
-  const previous = JSON.stringify(runtime.store.ranges);
-  runtime.store.ranges = coalesced;
-  runtime.store.entryCount = coalesced.length;
+  const previousRanges = JSON.stringify(partition.ranges);
+  partition.ranges = coalesced;
+  partition.entryCount = coalesced.length;
   runtime.store.updatedAt = Game.time;
   const rawStore = (Memory.runtime as unknown as RuntimeMemoryWithCertificates | undefined)?.treasury?.retiredAttemptRanges;
   const shapeError = rawStore === undefined ? "retired range store 缺失" : validateRangeStoreShape(rawStore);
   if (shapeError !== null) {
-    runtime.store.ranges = JSON.parse(previous) as TreasuryRetiredSequenceRange[];
-    runtime.store.entryCount = runtime.store.ranges.length;
+    partition.ranges = JSON.parse(previousRanges) as TreasuryRetiredSequenceRange[];
+    partition.entryCount = partition.ranges.length;
     runtime.store.updatedAt = Game.time;
     return { status: "rejected", detail: `retired range read-back 失败: ${shapeError}` };
   }
@@ -1401,11 +1513,13 @@ function certificateKeyInPlace(key: string, lineageId: string): boolean {
 
 function rangeAbsorbsSequence(namespace: "legacy" | "current", sequence: number): boolean {
   const rawStore = (Memory.runtime as unknown as RuntimeMemoryWithCertificates | undefined)?.treasury?.retiredAttemptRanges;
-  if (rawStore === undefined || !Array.isArray(rawStore.ranges)) return false;
-  // 【X 工作流 D】guard 同样按发行域匹配（裸序号命中其它域的区间不构成
-  // 本域 retirement 证明）。
-  return rawStore.ranges.some(
-    (range) => range.namespace === namespace && sequence >= range.minSequence && sequence <= range.maxSequence,
+  // 【XII 工作流 E】v3 分区直读（v1/v2 未迁移 → false——迁移完成前不构成
+  // 本域 retirement 证明，fail closed 语义由调用方 health 前置承载）。
+  if (rawStore === undefined || (rawStore as { version?: unknown }).version !== TREASURY_RETIRED_RANGE_VERSION) return false;
+  const partition = namespace === "current" ? rawStore.current : rawStore.legacy;
+  if (partition === undefined || !Array.isArray(partition.ranges)) return false;
+  return partition.ranges.some(
+    (range) => sequence >= range.minSequence && sequence <= range.maxSequence,
   );
 }
 
@@ -1431,5 +1545,26 @@ export function peekTreasuryChainCertificateEntryCount(): number {
 export function peekTreasuryRetiredRangeEntryCount(): number {
   const raw = (Memory.runtime as unknown as RuntimeMemoryWithCertificates | undefined)?.treasury?.retiredAttemptRanges;
   if (raw === undefined) return 0;
-  return Array.isArray(raw.ranges) ? raw.ranges.length : -1;
+  // 【XII 工作流 E】v3 分区计数（两分区之和；v1/v2 未迁移 → -1 fail closed）。
+  if ((raw as { version?: unknown }).version !== TREASURY_RETIRED_RANGE_VERSION) return -1;
+  return raw.current.ranges.length + raw.legacy.ranges.length;
+}
+
+/**
+ * 【XII 工作流 E / N8】分区容量只读视图（current/legacy 各自区间数与硬
+ * 上限——evidence 与 N 组容量断言共用；v1/v2 未迁移 → null）。
+ */
+export function peekTreasuryRetiredRangePartitionCounts(): {
+  readonly current: number;
+  readonly legacy: number;
+  readonly legacyOverflow: boolean;
+} | null {
+  const raw = (Memory.runtime as unknown as RuntimeMemoryWithCertificates | undefined)?.treasury?.retiredAttemptRanges;
+  if (raw === undefined) return { current: 0, legacy: 0, legacyOverflow: false };
+  if ((raw as { version?: unknown }).version !== TREASURY_RETIRED_RANGE_VERSION) return null;
+  return {
+    current: raw.current.ranges.length,
+    legacy: raw.legacy.ranges.length,
+    legacyOverflow: raw.legacyOverflow === true,
+  };
 }

@@ -235,6 +235,19 @@ function seedV1RetiredRangeStore(minSequence: number, maxSequence: number, updat
   resetTreasuryChainCertificateHeapCacheForTest();
 }
 
+type RangeStoreV3FixtureNS = {
+  version: number;
+  current: { ranges: { namespace: string; minSequence: number; maxSequence: number }[] };
+  legacy: { ranges: { namespace: string; minSequence: number; maxSequence: number }[] };
+  legacyOverflow?: boolean;
+};
+
+/** 【XII/E】v3 分区 range store 的拼合视图（断言用——两分区区间合并）。 */
+function allRetiredRangesFixture(): { namespace: string; minSequence: number; maxSequence: number }[] {
+  const store = treasuryBranch().retiredAttemptRanges as RangeStoreV3FixtureNS;
+  return [...store.current.ranges, ...store.legacy.ranges];
+}
+
 function treasuryBranch(): Record<string, unknown> {
   if (!Memory.runtime) Memory.runtime = {} as never;
   const runtime = Memory.runtime as unknown as { treasury?: Record<string, unknown> };
@@ -255,7 +268,8 @@ describe("Remediation X N：namespace-scoped anti-reuse", () => {
     // 迁移唯一 owner（tick-boundary migration 阶段）。
     migrateV1RangeViaOwner();
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
-    const ranges = (treasuryBranch().retiredAttemptRanges as { version: number; ranges: { namespace: string }[] }).ranges;
+    const ranges = allRetiredRangesFixture();
+    expect(ranges.length).toBe(1);
     expect(ranges[0]!.namespace).toBe("legacy");
     // ti2_1（current 域）不受 legacy 区间影响。
     const id = abandonedId("n1_current");
@@ -352,7 +366,7 @@ describe("Remediation X N：namespace-scoped anti-reuse", () => {
     for (let index = 0; index < TREASURY_RETIRED_RANGE_MAX_ENTRIES + 8; index += 1) {
       void absorbTreasuryRetiredSequence("current", 100 + index * 3);
     }
-    const rangesAfter = (treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string; minSequence: number; maxSequence: number }[] }).ranges;
+    const rangesAfter = allRetiredRangesFixture();
     const currentRanges = rangesAfter.filter((range) => range.namespace === "current");
     const legacyRanges = rangesAfter.filter((range) => range.namespace === "legacy");
     // current 域 gap 已桥接（1..5 相邻合并或吸收更多）。
@@ -402,9 +416,12 @@ describe("Remediation X N：namespace-scoped anti-reuse", () => {
 
   it("N8：range store malformed / unknown version → structured lookup 返回 unhealthy/malformed，不授权 eviction", () => {
     makeService();
-    // malformed：区间 min > max。
+    // malformed：区间 min > max（【XII/E】v3 分区形态）。
     treasuryBranch().retiredAttemptRanges = {
-      version: 2, ranges: [{ namespace: "current", minSequence: 3, maxSequence: 1, mergedAtTick: Game.time }], entryCount: 1, updatedAt: Game.time,
+      version: 3,
+      current: { ranges: [{ namespace: "current", minSequence: 3, maxSequence: 1, mergedAtTick: Game.time }], entryCount: 1 },
+      legacy: { ranges: [], entryCount: 0 },
+      updatedAt: Game.time,
     };
     resetTreasuryChainCertificateHeapCacheForTest();
     const malformed = lookupTreasuryRetiredRangeStructured("ti2_2_0123456789abcdef");
@@ -440,7 +457,7 @@ describe("Remediation X N：namespace-scoped anti-reuse", () => {
     const { compressTreasuryRetirableHistoricalEntries } = require("@/runtime/treasury/chainRetirementCertificate") as typeof import("@/runtime/treasury/chainRetirementCertificate");
     const compressed = compressTreasuryRetirableHistoricalEntries();
     expect(compressed.retired).toBeGreaterThan(0);
-    const ranges = (treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string; minSequence: number; maxSequence: number }[] }).ranges;
+    const ranges = allRetiredRangesFixture();
     // legacy 域吸收了 ti1_1..（保留窗口外的旧记录）；current 域吸收了
     // ti2_500..（同批）——两域各自持有自己的序号区间。
     expect(ranges.some((range) => range.namespace === "legacy" && range.minSequence <= 1)).toBe(true);
@@ -623,7 +640,7 @@ describe("Remediation X H：health-complete owner resolution", () => {
     let coalescedGap = false;
     for (let filler = 100; filler < 100 + TREASURY_RETIRED_RANGE_MAX_ENTRIES + 4; filler += 1) {
       if (absorbTreasuryRetiredSequence("current", filler).status === "rejected") break;
-      const ranges = (treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string; minSequence: number; maxSequence: number }[] }).ranges;
+      const ranges = allRetiredRangesFixture();
       if (ranges.some((range) => range.namespace === "current" && range.minSequence <= 2 && range.maxSequence >= 4)) {
         coalescedGap = true;
         break;
@@ -696,9 +713,12 @@ describe("Remediation X H：health-complete owner resolution", () => {
     const ownership = resolveTreasuryAttemptLifecycleOwnership(id);
     expect(ownership.status).toBe("owned");
     // range malformed → structured 非 absent（N8 已断言；resolver 消费视角
-    // 复验：malformed 不折叠为 absent）。
+    // 复验：malformed 不折叠为 absent）。【XII/E】v3 分区形态。
     treasuryBranch().retiredAttemptRanges = {
-      version: 2, ranges: [{ namespace: "current", minSequence: 3, maxSequence: 1, mergedAtTick: Game.time }], entryCount: 1, updatedAt: Game.time,
+      version: 3,
+      current: { ranges: [{ namespace: "current", minSequence: 3, maxSequence: 1, mergedAtTick: Game.time }], entryCount: 1 },
+      legacy: { ranges: [], entryCount: 0 },
+      updatedAt: Game.time,
     };
     resetTreasuryChainCertificateHeapCacheForTest();
     const malformed = lookupTreasuryRetiredRangeStructured("ti2_2_0123456789abcdef");
@@ -978,8 +998,8 @@ describe("Remediation X 压力：长期运行与中断恢复", () => {
     migrateV1RangeViaOwner();
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
     expect(absorbTreasuryRetiredSequence("current", 1).status).toBe("absorbed");
-    const ranges = (treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string; minSequence: number; maxSequence: number }[] }).ranges;
-    // 两域并存：legacy [1,100] 与 current [1,1]（同序号、独立区间）。
+    const ranges = allRetiredRangesFixture();
+    // 两域并存：legacy [1,100] 与 current [1,1]（同序号、独立分区区间）。
     expect(ranges.some((range) => range.namespace === "legacy" && range.minSequence === 1 && range.maxSequence === 100)).toBe(true);
     expect(ranges.some((range) => range.namespace === "current" && range.minSequence === 1)).toBe(true);
     expect(checkTreasuryAttemptRetiredRange("ti1_1_0123456789abcdef").retired).toBe(true);
