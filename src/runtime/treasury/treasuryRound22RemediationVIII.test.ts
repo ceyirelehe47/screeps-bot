@@ -171,6 +171,14 @@ function mintedId(correlation: string): string {
   return opened.transactionId;
 }
 
+/** 【XII/F】compaction root 用 mint：root 须进入 terminal lifecycle（abandon
+ * ticket）——certificate 写入要求 root 无 active ticket（I3）。 */
+function abandonedMintedId(correlation: string): string {
+  const root = mintedId(correlation);
+  if (!abandonTreasuryIssuedAttemptTicketForTest(root)) throw new Error("abandon failed in fixture");
+  return root;
+}
+
 /** 【X 迁移】已发行 ID + ticket 按生产同路径放弃（abandonForTest：active→
  * expired→retired，单条作用域不触碰其它在飞 opening；用于构造持久权威
  * fixture 的 root ID——X 协议下 active ticket 本身是 lifecycle owner）。 */
@@ -412,6 +420,43 @@ function tamperHash16(transactionId: string): string {
 
 // ── I 组：完整可验证的 service-issued ID ───────────────────────────────────
 
+
+/** 【XII/F】直接持久层注入 certificate（绕过 record 的 terminal lifecycle
+ * authority 验证——本文件测试 certificate 的 outcome 语义/查询/occupancy/
+ * 驱逐，发行证明链由 XII I 组新测试覆盖）。 */
+function seedCertificateDirect(input: {
+  readonly lineageId: string;
+  readonly rootTransactionId: string;
+  readonly finalAttemptId: string;
+  readonly finalGeneration: number;
+  readonly terminalState: "chain_committed" | "non_rearmable_retired";
+}): void {
+  const issuerModule = require("@/runtime/treasury/attemptIssuer") as typeof import("@/runtime/treasury/attemptIssuer");
+  const certModule = require("@/runtime/treasury/chainRetirementCertificate") as typeof import("@/runtime/treasury/chainRetirementCertificate");
+  const parsedRoot = issuerModule.parseTreasuryIssuedInitialAttemptId(input.rootTransactionId);
+  if (!Memory.runtime) Memory.runtime = {} as never;
+  const runtime = Memory.runtime as unknown as { treasury?: Record<string, unknown> };
+  runtime.treasury = runtime.treasury ?? {};
+  const branch = runtime.treasury as {
+    chainRetirementCertificates?: { version: number; entries: Record<string, unknown>; entryCount: number; updatedAt: number };
+  };
+  const store = branch.chainRetirementCertificates ?? { version: 1, entries: {}, entryCount: 0, updatedAt: Game.time };
+  store.entries["crc:" + input.rootTransactionId] = {
+    schemaVersion: 1,
+    rootSequence: parsedRoot !== null ? parsedRoot.sequence : -1,
+    lineageId: input.lineageId,
+    rootTransactionId: input.rootTransactionId,
+    finalAttemptId: input.finalAttemptId,
+    finalGeneration: input.finalGeneration,
+    terminalState: input.terminalState,
+    finalizedAtTick: Game.time,
+  };
+  store.entryCount = Object.keys(store.entries).length;
+  store.updatedAt = Game.time;
+  branch.chainRetirementCertificates = store;
+  certModule.resetTreasuryChainCertificateHeapCacheForTest();
+}
+
 describe("Remediation VIII I：issued attempt ID 的完整可验证性", () => {
   it("I1：合法 sequence 保持、篡改 hash16 一位 → production contract 拒绝、callback 零调用", () => {
     const service = makeService();
@@ -569,10 +614,10 @@ describe("Remediation VIII S：统一 settlement reconciliation（无短路聚�
     const lineageId = "0123456789abcdf3";
     const finalChild = deriveTreasuryLineageNextChildTransactionId(lineageId, 2, root);
     // certificate：root not-executed（finalGeneration>=1——root 被 rearm 替代）。
-    expect(recordTreasuryChainRetirementCertificate({
+    seedCertificateDirect({
       lineageId, rootTransactionId: root, finalAttemptId: finalChild, finalGeneration: 2,
       terminalState: "chain_committed",
-    }).status).toBe("written");
+    });
     // historical 塞入 root committed（与 certificate 的 root not-executed 矛盾）。
     seedHistoricalRecord({ transactionId: root, resolution: "committed" });
     const resolved = resolveTreasuryDurableSettlementAuthority({ transactionId: root });
@@ -619,10 +664,10 @@ describe("Remediation VIII S：统一 settlement reconciliation（无短路聚�
     const root = mintedId("s6_root");
     const lineageId = "0123456789abcdf6";
     const child = deriveTreasuryLineageNextChildTransactionId(lineageId, 4, root);
-    expect(recordTreasuryChainRetirementCertificate({
+    seedCertificateDirect({
       lineageId, rootTransactionId: root, finalAttemptId: child, finalGeneration: 4,
       terminalState: "non_rearmable_retired",
-    }).status).toBe("written");
+    });
     // child occupancy 认识 certificate。
     expect(checkTreasuryChildAttemptOccupancy(child)).toBe("durable settlement authority（completion/certificate）");
     // opposite proof 认识（committed 目标 + certificate not-executed → 阻断）。
@@ -681,10 +726,10 @@ describe("Remediation VIII S：统一 settlement reconciliation（无短路聚�
     const root = mintedId("s8_root");
     const lineageId = "0123456789abcdf8";
     const child = deriveTreasuryLineageNextChildTransactionId(lineageId, 1, root);
-    expect(recordTreasuryChainRetirementCertificate({
+    seedCertificateDirect({
       lineageId, rootTransactionId: root, finalAttemptId: child, finalGeneration: 1,
       terminalState: "chain_committed",
-    }).status).toBe("written");
+    });
     // journal absent、无 live/historical completion——certificate 不证明
     // cleanup 完成。
     expect(advanceTreasuryResolutionCleanupPhases({ transactionId: root }).status).toBe("no_cleanup_authority");
@@ -716,10 +761,10 @@ describe("Remediation VIII C：certificate outcome 语义 / checksum / canonical
     const root = mintedId("c1_root");
     const lineageId = "0123456789abcdc1";
     const child = deriveTreasuryLineageNextChildTransactionId(lineageId, 1, root);
-    expect(recordTreasuryChainRetirementCertificate({
+    seedCertificateDirect({
       lineageId, rootTransactionId: root, finalAttemptId: child, finalGeneration: 1,
       terminalState: "chain_committed",
-    }).status).toBe("written");
+    });
     const rootResolved = resolveTreasuryDurableSettlementAuthority({ transactionId: root });
     expect(rootResolved.status).toBe("protocol");
     if (rootResolved.status === "protocol") expect(rootResolved.outcome).toBe("not-executed");
@@ -733,10 +778,10 @@ describe("Remediation VIII C：certificate outcome 语义 / checksum / canonical
     const root = mintedId("c2_root");
     const lineageId = "0123456789abcdc2";
     const finalChild = deriveTreasuryLineageNextChildTransactionId(lineageId, 3, root);
-    expect(recordTreasuryChainRetirementCertificate({
+    seedCertificateDirect({
       lineageId, rootTransactionId: root, finalAttemptId: finalChild, finalGeneration: 3,
       terminalState: "chain_committed",
-    }).status).toBe("written");
+    });
     for (const generation of [1, 2]) {
       const resolved = resolveTreasuryDurableSettlementAuthority({
         transactionId: deriveTreasuryLineageNextChildTransactionId(lineageId, generation, root),
@@ -754,10 +799,10 @@ describe("Remediation VIII C：certificate outcome 语义 / checksum / canonical
     const root = mintedId("c3_root");
     const lineageId = "0123456789abcdc3";
     const finalChild = deriveTreasuryLineageNextChildTransactionId(lineageId, 2, root);
-    expect(recordTreasuryChainRetirementCertificate({
+    seedCertificateDirect({
       lineageId, rootTransactionId: root, finalAttemptId: finalChild, finalGeneration: 2,
       terminalState: "non_rearmable_retired",
-    }).status).toBe("written");
+    });
     const rootResolved = resolveTreasuryDurableSettlementAuthority({ transactionId: root });
     expect(rootResolved.status).toBe("protocol");
     if (rootResolved.status === "protocol") expect(rootResolved.outcome).toBe("not-executed");
@@ -775,10 +820,10 @@ describe("Remediation VIII C：certificate outcome 语义 / checksum / canonical
     const root = mintedId("c4_root");
     const lineageId = "0123456789abcdc4";
     const child = deriveTreasuryLineageNextChildTransactionId(lineageId, 2, root);
-    expect(recordTreasuryChainRetirementCertificate({
+    seedCertificateDirect({
       lineageId, rootTransactionId: root, finalAttemptId: child, finalGeneration: 2,
       terminalState: "non_rearmable_retired",
-    }).status).toBe("written");
+    });
     const tampered = child.slice(0, child.length - 1) + (child.slice(-1) === "0" ? "1" : "0");
     expect(resolveTreasuryDurableSettlementAuthority({ transactionId: tampered }).status).toBe("absent");
     // 未篡改的原 ID 依然 protocol match。
@@ -790,10 +835,10 @@ describe("Remediation VIII C：certificate outcome 语义 / checksum / canonical
     const root = mintedId("c5_root");
     const lineageId = "0123456789abcdc5";
     const child = deriveTreasuryLineageNextChildTransactionId(lineageId, 1, root);
-    expect(recordTreasuryChainRetirementCertificate({
+    seedCertificateDirect({
       lineageId, rootTransactionId: root, finalAttemptId: child, finalGeneration: 1,
       terminalState: "chain_committed",
-    }).status).toBe("written");
+    });
     // expected identity（D2——与 certificate 无法对证的任意 identity）。
     const resolved = resolveTreasuryDurableSettlementAuthority({ transactionId: child, expected: identityOf(child, "999999999999999g".slice(0, 16)) });
     expect(resolved.status).not.toBe("exact");
@@ -836,10 +881,10 @@ describe("Remediation VIII C：certificate outcome 语义 / checksum / canonical
     const root = mintedId("c7_root");
     const lineageId = "0123456789abcdc7";
     const child = deriveTreasuryLineageNextChildTransactionId(lineageId, 5, root);
-    expect(recordTreasuryChainRetirementCertificate({
+    seedCertificateDirect({
       lineageId, rootTransactionId: root, finalAttemptId: child, finalGeneration: 5,
       terminalState: "non_rearmable_retired",
-    }).status).toBe("written");
+    });
     // replay gate：同 ID（root 与 child）都阻断。
     expect(service.prepareTransaction(input(service, root)).status).toBe("rejected");
     // destructive：reconciliation capability 因 protocol identity 不足拒绝
@@ -1239,7 +1284,7 @@ describe("Remediation VIII L：长期有界（>128 chain / >64 乱序区间 / >3
     makeService();
     const roots: string[] = [];
     for (let index = 0; index < 30; index += 1) {
-      const root = mintedId("l5_" + index);
+      const root = abandonedMintedId("l5_" + index);
       roots.push(root);
       const lineageId = seedNonRearmableRoot(root);
       expect(compactTreasuryTerminalLineage(lineageId).status).toBe("compacted");

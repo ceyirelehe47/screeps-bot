@@ -38,6 +38,7 @@ import {
   verifyTreasuryCurrentIssuedIdCanonical,
   buildTreasuryCurrentIssuedIdUnchecked,
 } from "@/runtime/treasury/attemptIssuer";
+import { readTreasuryIssuedAttemptTicket } from "@/runtime/treasury/attemptIssuanceTicket";
 import { lookupTreasuryCleanupCompletion } from "@/runtime/treasury/cleanupCompletionAuthority";
 import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
 import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
@@ -972,6 +973,16 @@ function lookupRetiredRangeStructuredInStore(
 interface TreasuryRetirementSummaryProbe {
   readonly summaryOfRoot: (rootTransactionId: string) => { readonly lineageId?: unknown } | undefined;
   readonly summaryStoreHealthy: () => boolean;
+  /**
+   * 【XII 工作流 F】summary ↔ certificate replacement relation 的单一实现
+   * 委托（注册方提供 lineageRetirementSummary 的
+   * verifyTreasurySummaryCertificateReplacement——本模块直接 import 成环，
+   * 经 probe 注入）。返回 null = full relation match。
+   */
+  readonly verifyCertificateReplacement: (
+    summary: unknown,
+    certificate: { rootSequence: number; lineageId: string; rootTransactionId: string; finalAttemptId: string; finalGeneration: number; terminalState: string },
+  ) => string | null;
 }
 
 let retirementSummaryProbe: TreasuryRetirementSummaryProbe | null = null;
@@ -1255,6 +1266,36 @@ export function recordTreasuryChainRetirementCertificate(input: {
   }
   const parsedRoot = parseTreasuryIssuedInitialAttemptId(input.rootTransactionId);
   const rootSequence = parsedRoot !== null ? parsedRoot.sequence : -1;
+  // ──【XII 工作流 F / I1-I6】发行事实与 terminal lifecycle authority 的
+  //    正面证明（canonical ID 只证明"该 sequence 的唯一合法形态"，不证明
+  //    已发行且已进入 terminal lifecycle——纯构造的未来 canonical ID 不得
+  //    铸造 certificate；全部拒绝路径零写）。 ────────────────────────────
+  if (parsedRoot !== null && parsedRoot.namespace === "current") {
+    const watermark = peekTreasuryIssuedAttemptWatermark();
+    if (watermark < 0) {
+      return { status: "rejected", detail: "issuer watermark 不可读（发行 frontier 不可判定——不写 certificate，fail closed）" };
+    }
+    if (parsedRoot.sequence > watermark) {
+      return { status: "rejected", detail: `root sequence ${String(parsedRoot.sequence)} 超出 issuer watermark ${String(watermark)}（future canonical ID 不构成发行事实——certificate 拒绝，range 不变化）` };
+    }
+  }
+  // matching terminal summary authority（compaction 时序：active record 已删、
+  // summary 已持久化——summary 是唯一在位事实源；经 probe 单一实现比较）。
+  if (retirementSummaryProbe === null) {
+    return { status: "rejected", detail: "retirement summary probe 未装配（terminal lifecycle authority 不可判定——不写 certificate，fail closed）" };
+  }
+  if (!retirementSummaryProbe.summaryStoreHealthy()) {
+    return { status: "rejected", detail: "retirement summary store unhealthy（terminal lifecycle authority 不可判定——不写 certificate，fail closed）" };
+  }
+  const rootSummary = retirementSummaryProbe.summaryOfRoot(input.rootTransactionId);
+  if (rootSummary === undefined) {
+    return { status: "rejected", detail: `root ${input.rootTransactionId.slice(0, 16)} 无 matching terminal retirement summary（watermark 只证明序号消耗、不证明 terminal lifecycle——裸 issuer 洞不得铸造 certificate，fail closed）` };
+  }
+  // active ticket 未 terminal → 不得写 terminal certificate（I3）。
+  const rootTicket = readTreasuryIssuedAttemptTicket(input.rootTransactionId);
+  if (rootTicket !== undefined && rootTicket.state === "active") {
+    return { status: "rejected", detail: `root ${input.rootTransactionId.slice(0, 16)} 的 issued ticket 仍 active（尚未 terminal——不得写 terminal certificate，fail closed）` };
+  }
   const runtime = loadCertificateRuntime();
   if (runtime.fatal !== null) {
     return { status: "rejected", detail: `chain certificate store fail-closed: ${runtime.fatal}` };
@@ -1272,6 +1313,33 @@ export function recordTreasuryChainRetirementCertificate(input: {
   const shapeError = validateCertificateShape(candidate, CERTIFICATE_KEY_PREFIX + input.rootTransactionId);
   if (shapeError !== null) {
     return { status: "rejected", detail: `chain certificate candidate 非法: ${shapeError}` };
+  }
+  // 【XII 工作流 F / I5】summary ↔ candidate 的 terminal authority 匹配
+  //（root/lineage/terminalState/finalGeneration/finalAttemptId 五字段 +
+  // ti_ root 的 sequence/发行域一致；arbitrary root（rootSequence=-1 的
+  // legacy pin）不做发行域重算——按其隔离协议处理）。经 probe 委托的
+  // verifyTreasurySummaryCertificateReplacement 是**replacement 方向**语义
+  //（arbitrary root 不可替代——X 轮驱逐语义），record 方向在此内联匹配。
+  {
+    const summary = rootSummary as {
+      rootTransactionId: unknown;
+      lineageId: unknown;
+      terminalState: unknown;
+      finalGeneration: unknown;
+      finalAttemptId: unknown;
+    };
+    let relationError: string | null = null;
+    if (summary.rootTransactionId !== candidate.rootTransactionId) relationError = "root ID 不一致";
+    else if (summary.lineageId !== candidate.lineageId) relationError = "lineageId 不一致";
+    else if (summary.terminalState !== candidate.terminalState) relationError = "terminalState 与 summary 相反";
+    else if (summary.finalGeneration !== candidate.finalGeneration) relationError = "finalGeneration 不一致";
+    else if (summary.finalAttemptId !== candidate.finalAttemptId) relationError = "finalAttemptId 不一致";
+    else if (parsedRoot !== null && parsedRoot.namespace !== (parseTreasuryIssuedInitialAttemptId(candidate.rootTransactionId)?.namespace ?? parsedRoot.namespace)) {
+      relationError = "rootSequence 的发行域不一致（ti1_/ti2_ 是两个独立发行域）";
+    }
+    if (relationError !== null) {
+      return { status: "rejected", detail: `chain certificate 与 matching terminal summary 的关系不一致（${relationError}——lifecycle identity conflict，不写 certificate、不覆盖旧权威、不吸收 range）` };
+    }
   }
   const key = CERTIFICATE_KEY_PREFIX + input.rootTransactionId;
   const existing = runtime.store.entries[key];

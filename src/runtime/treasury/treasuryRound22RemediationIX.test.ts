@@ -419,6 +419,43 @@ function seedHistoricalRecord(overrides: Partial<TreasuryHistoricalCompletionRec
 
 // ══ 工作流 A：Versioned Issuance Migration ═════════════════════════════════
 
+
+/** 【XII/F】直接持久层注入 certificate（绕过 record 的 terminal lifecycle
+ * authority 验证——本文件测试 certificate 的 outcome 语义/查询/occupancy/
+ * 驱逐，发行证明链由 XII I 组新测试覆盖）。 */
+function seedCertificateDirect(input: {
+  readonly lineageId: string;
+  readonly rootTransactionId: string;
+  readonly finalAttemptId: string;
+  readonly finalGeneration: number;
+  readonly terminalState: "chain_committed" | "non_rearmable_retired";
+}): void {
+  const issuerModule = require("@/runtime/treasury/attemptIssuer") as typeof import("@/runtime/treasury/attemptIssuer");
+  const certModule = require("@/runtime/treasury/chainRetirementCertificate") as typeof import("@/runtime/treasury/chainRetirementCertificate");
+  const parsedRoot = issuerModule.parseTreasuryIssuedInitialAttemptId(input.rootTransactionId);
+  if (!Memory.runtime) Memory.runtime = {} as never;
+  const runtime = Memory.runtime as unknown as { treasury?: Record<string, unknown> };
+  runtime.treasury = runtime.treasury ?? {};
+  const branch = runtime.treasury as {
+    chainRetirementCertificates?: { version: number; entries: Record<string, unknown>; entryCount: number; updatedAt: number };
+  };
+  const store = branch.chainRetirementCertificates ?? { version: 1, entries: {}, entryCount: 0, updatedAt: Game.time };
+  store.entries["crc:" + input.rootTransactionId] = {
+    schemaVersion: 1,
+    rootSequence: parsedRoot !== null ? parsedRoot.sequence : -1,
+    lineageId: input.lineageId,
+    rootTransactionId: input.rootTransactionId,
+    finalAttemptId: input.finalAttemptId,
+    finalGeneration: input.finalGeneration,
+    terminalState: input.terminalState,
+    finalizedAtTick: Game.time,
+  };
+  store.entryCount = Object.keys(store.entries).length;
+  store.updatedAt = Game.time;
+  branch.chainRetirementCertificates = store;
+  certModule.resetTreasuryChainCertificateHeapCacheForTest();
+}
+
 describe("Remediation IX A：versioned issuance migration", () => {
   it("A1：旧 store version=1/watermark=100 不能证明任何 ti2_ 新格式 ID 已发行——seq 42 的新协议完整 ID 被拒（callback=0），迁移保留 legacy watermark", () => {
     seedLegacyIssuerStore(100);
@@ -1082,13 +1119,13 @@ describe("Remediation IX S：resolver insufficient 真正 fail closed", () => {
     makeService();
     const root = mintedId("ix-s13");
     const child = deriveTreasuryLineageNextChildTransactionId(LINEAGE_A, 2, root);
-    expect(recordTreasuryChainRetirementCertificate({
+    seedCertificateDirect({
       lineageId: LINEAGE_A,
       rootTransactionId: root,
       finalAttemptId: child,
       finalGeneration: 2,
       terminalState: "non_rearmable_retired",
-    }).status).toBe("written");
+    });
     const resolved = resolveTreasuryDurableSettlementAuthority({ transactionId: root });
     expect(resolved.status).toBe("protocol");
     // exact 声明（live completion）+ protocol 同 outcome → exact（identity

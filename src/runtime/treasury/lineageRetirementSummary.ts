@@ -1101,6 +1101,10 @@ registerTreasuryLineageCompactorForAssembly(compactTreasuryTerminalLineagesAtTic
 registerTreasuryRetirementSummaryProbeForAssembly({
   summaryOfRoot: (rootTransactionId) => lookupTreasuryRetirementSummaryByRoot(rootTransactionId),
   summaryStoreHealthy: () => peekTreasuryRetirementSummaryHealth().healthy,
+  // 【XII 工作流 F】summary ↔ certificate replacement relation 的单一实现
+  // 委托（certificate 写入前的 terminal lifecycle authority 验证）。
+  verifyCertificateReplacement: (summary, certificate) =>
+    verifyTreasurySummaryCertificateReplacement(summary as Readonly<TreasuryLineageRetirementSummary>, certificate),
 });
 // 【IX 工作流 E 8.3】统一 lifecycle owner resolver 的 summary 维度（terminal
 // authority——阻断 sequence abandon，不阻断 reservation sweep）。

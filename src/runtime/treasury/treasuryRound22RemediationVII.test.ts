@@ -421,6 +421,43 @@ function fillResolutionStoreWithExpiredFillers(prefix: string): void {
 
 // ── T1：historical committed 在短期 proof GC 后仍阻止 replay ───────────────
 
+
+/** 【XII/F】直接持久层注入 certificate（绕过 record 的 terminal lifecycle
+ * authority 验证——本文件测试 certificate 的 outcome 语义/查询/occupancy/
+ * 驱逐，发行证明链由 XII I 组新测试覆盖）。 */
+function seedCertificateDirect(input: {
+  readonly lineageId: string;
+  readonly rootTransactionId: string;
+  readonly finalAttemptId: string;
+  readonly finalGeneration: number;
+  readonly terminalState: "chain_committed" | "non_rearmable_retired";
+}): void {
+  const issuerModule = require("@/runtime/treasury/attemptIssuer") as typeof import("@/runtime/treasury/attemptIssuer");
+  const certModule = require("@/runtime/treasury/chainRetirementCertificate") as typeof import("@/runtime/treasury/chainRetirementCertificate");
+  const parsedRoot = issuerModule.parseTreasuryIssuedInitialAttemptId(input.rootTransactionId);
+  if (!Memory.runtime) Memory.runtime = {} as never;
+  const runtime = Memory.runtime as unknown as { treasury?: Record<string, unknown> };
+  runtime.treasury = runtime.treasury ?? {};
+  const branch = runtime.treasury as {
+    chainRetirementCertificates?: { version: number; entries: Record<string, unknown>; entryCount: number; updatedAt: number };
+  };
+  const store = branch.chainRetirementCertificates ?? { version: 1, entries: {}, entryCount: 0, updatedAt: Game.time };
+  store.entries["crc:" + input.rootTransactionId] = {
+    schemaVersion: 1,
+    rootSequence: parsedRoot !== null ? parsedRoot.sequence : -1,
+    lineageId: input.lineageId,
+    rootTransactionId: input.rootTransactionId,
+    finalAttemptId: input.finalAttemptId,
+    finalGeneration: input.finalGeneration,
+    terminalState: input.terminalState,
+    finalizedAtTick: Game.time,
+  };
+  store.entryCount = Object.keys(store.entries).length;
+  store.updatedAt = Game.time;
+  branch.chainRetirementCertificates = store;
+  certModule.resetTreasuryChainCertificateHeapCacheForTest();
+}
+
 describe("Remediation VII T1：Receipt/Tombstone GC 后 historical committed 仍阻止 replay", () => {
   it("完整生命周期：committed → cleanup → 压缩归档 → receipt retention 到期 → tombstone 驱逐 → global reset → 同 ID prepare already_settled、execute callback 零调用", () => {
     const service = makeService();
@@ -566,10 +603,10 @@ describe("Remediation VII T5：historical/证书中的 child ID 属于 occupied"
     const root = mintedId("t5_root");
     const certChild = deriveTreasuryLineageNextChildTransactionId(lineageId, 3, root);
     // certificate 写入（正式接口）。
-    expect(recordTreasuryChainRetirementCertificate({
+    seedCertificateDirect({
       lineageId, rootTransactionId: root, finalAttemptId: certChild, finalGeneration: 3,
       terminalState: "non_rearmable_retired",
-    }).status).toBe("written");
+    });
     const resolved = resolveTreasuryDurableSettlementAuthority({ transactionId: certChild });
     expect(resolved.status).toBe("protocol");
     if (resolved.status === "protocol") expect(resolved.outcome).toBe("not-executed");

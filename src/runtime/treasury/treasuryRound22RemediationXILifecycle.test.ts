@@ -216,6 +216,17 @@ function seedChain(tag: string): { root: string; lineageId: string; durable: str
   return { root, lineageId: seeded.lineageId, durable: seeded.durable };
 }
 
+/** 【XII 工作流 F】真实压缩链 fixture：compaction 持久化 matching terminal
+ * summary（含 rootExact/finalExact canonical digest）——certificate 写入的
+ * 唯一正牌 terminal lifecycle authority 来源（手写 summary 无法满足 v3 的
+ * canonical digest 绑定）。返回 chain（root/lineageId）。 */
+function compactedChain(tag: string): { root: string; lineageId: string; durable: string } {
+  const chain = seedChain(tag);
+  const compacted = compactTreasuryTerminalLineage(chain.lineageId);
+  if (compacted.status === "rejected") throw new Error("compaction rejected in fixture: " + compacted.detail.slice(0, 120));
+  return chain;
+}
+
 // ══ C 组：Canonical certificate root ═════════════════════════════════════
 
 describe("Remediation XI C：canonical certificate root", () => {
@@ -268,12 +279,13 @@ describe("Remediation XI C：canonical certificate root", () => {
 
   it("C2：rootSequence 与 ID 内 sequence 不一致 → 拒绝", () => {
     makeService();
-    const { buildTreasuryIssuedInitialAttemptIdFromSequence } = require("@/runtime/treasury/attemptIssuer") as typeof import("@/runtime/treasury/attemptIssuer");
-    const built = buildTreasuryIssuedInitialAttemptIdFromSequence(2);
-    if (built.status !== "built") throw new Error("build rejected");
-    const canonicalRoot = built.transactionId;
+    // 【XII/F】真实压缩链（matching terminal summary 在位）→ 同 identity
+    // record 幂等（certificate 只能由 terminal compaction 的 matching 事实
+    // 生成——裸调用不再铸造）。
+    const chain = compactedChain("c2");
+    const canonicalRoot = chain.root;
     const result = recordTreasuryChainRetirementCertificate({
-      lineageId: "00000000000000cc",
+      lineageId: chain.lineageId,
       rootTransactionId: canonicalRoot,
       finalAttemptId: canonicalRoot,
       finalGeneration: 0,
@@ -282,7 +294,7 @@ describe("Remediation XI C：canonical certificate root", () => {
     // rootSequence 由 ID 派生——canonical ID 自身一致；构造不一致需要持久层
     // 篡改（record 路径不可构造 mismatch）。改为 store 内手塞 mismatch entry
     // → 整店 unhealthy（validateCertificateCanonicalRelations 检出）。
-    expect(result.status).toBe("written");
+    expect(result.status).toBe("idempotent");
     const store = certificateStoreOfMemory();
     const entry = store.entries["crc:" + canonicalRoot] as { rootSequence: number };
     entry.rootSequence = 999; // 与 ID 内 sequence=2 不一致
@@ -295,44 +307,44 @@ describe("Remediation XI C：canonical certificate root", () => {
 
   it("C3：合法 current certificate → 正常写入与查询", () => {
     makeService();
-    const { buildTreasuryIssuedInitialAttemptIdFromSequence } = require("@/runtime/treasury/attemptIssuer") as typeof import("@/runtime/treasury/attemptIssuer");
-    const built = buildTreasuryIssuedInitialAttemptIdFromSequence(3);
-    if (built.status !== "built") throw new Error("build rejected");
-    const canonicalRoot = built.transactionId;
+    const chain = compactedChain("c3");
+    const canonicalRoot = chain.root;
     const written = recordTreasuryChainRetirementCertificate({
-      lineageId: "00000000000000dd",
+      lineageId: chain.lineageId,
       rootTransactionId: canonicalRoot,
       finalAttemptId: canonicalRoot,
       finalGeneration: 0,
       terminalState: "non_rearmable_retired",
     });
-    expect(written.status).toBe("written");
+    expect(written.status).toBe("idempotent");
     const { lookupTreasuryChainRetirementCertificate } = require("@/runtime/treasury/chainRetirementCertificate") as typeof import("@/runtime/treasury/chainRetirementCertificate");
-    expect(lookupTreasuryChainRetirementCertificate(canonicalRoot)?.rootSequence).toBe(3);
+    expect(lookupTreasuryChainRetirementCertificate(canonicalRoot)?.rootSequence).toBe(
+      Number.parseInt(/ti2_(\d+)_/.exec(canonicalRoot)![1]!, 10),
+    );
   });
 
   it("C4：legacy/current 同 sequence 隔离（certificate/range 不跨域退休）", () => {
     makeService();
-    const { buildTreasuryIssuedInitialAttemptIdFromSequence } = require("@/runtime/treasury/attemptIssuer") as typeof import("@/runtime/treasury/attemptIssuer");
-    const built = buildTreasuryIssuedInitialAttemptIdFromSequence(7);
-    if (built.status !== "built") throw new Error("build rejected");
-    const currentRoot = built.transactionId;
+    const chain = compactedChain("c4");
+    const currentRoot = chain.root;
     const written = recordTreasuryChainRetirementCertificate({
-      lineageId: "00000000000000ee",
+      lineageId: chain.lineageId,
       rootTransactionId: currentRoot,
       finalAttemptId: currentRoot,
       finalGeneration: 0,
       terminalState: "non_rearmable_retired",
     });
-    expect(written.status).toBe("written");
-    // legacy 域吸收 sequence=7 不影响 current 域查询（两域独立）。
-    expect(absorbTreasuryRetiredSequence("legacy", 7).status).toBe("absorbed");
+    expect(written.status).toBe("idempotent");
+    const rootSequence = Number.parseInt(/ti2_(\d+)_/.exec(currentRoot)![1]!, 10);
+    // 【XII/F】真实压缩链已把 current 域 root 序号吸收进 retired range
+    //（compaction 的 range absorb 是 certificate 写入的后续步骤）。
     const { checkTreasuryAttemptRetiredRange } = require("@/runtime/treasury/chainRetirementCertificate") as typeof import("@/runtime/treasury/chainRetirementCertificate");
-    expect(checkTreasuryAttemptRetiredRange("ti1_7_0123456789abcdef").retired).toBe(true);
-    expect(checkTreasuryAttemptRetiredRange(currentRoot).retired).toBe(false);
-    // current 域吸收后同序号两域并存。
-    expect(absorbTreasuryRetiredSequence("current", 7).status).toBe("absorbed");
     expect(checkTreasuryAttemptRetiredRange(currentRoot).retired).toBe(true);
+    // legacy 分区吸收同序号独立成立（跨域同 sequence 两个独立事实）。
+    expect(absorbTreasuryRetiredSequence("legacy", rootSequence).status).toBe("absorbed");
+    expect(checkTreasuryAttemptRetiredRange("ti1_" + rootSequence + "_0123456789abcdef").retired).toBe(true);
+    // current 分区幂等（已吸收）。
+    expect(absorbTreasuryRetiredSequence("current", rootSequence).status).toBe("idempotent");
   });
 });
 
