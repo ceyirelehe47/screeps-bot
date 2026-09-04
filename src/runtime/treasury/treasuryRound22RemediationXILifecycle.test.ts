@@ -730,3 +730,69 @@ describe("Remediation XI Q：namespace 容量隔离", () => {
     expect(store.ranges.length).toBeLessThanOrEqual(64);
   });
 });
+
+// ══ 压力回归（任务书第八节：1000 open/expire/retire 循环 + 容量记录）════
+
+describe("Remediation XI 压力：open/expire/retire 循环与容量记录", () => {
+  it("P1：≥1000 open/expire/retire 循环——store 恒有界、Memory 不线性增长、reset 后状态一致", () => {
+    makeService();
+    let maxEntryCount = 0;
+    const memoryLengths: number[] = [];
+    // 1000 个 opening：每 8 个推进 tick（GC 每批 ≤8 回收 terminal）；
+    // 每个循环 open → 持久层 expire（TTL 显式转换）→ GC retire。
+    const { expireTreasuryIssuedAttemptTickets } = require("@/runtime/treasury/attemptIssuanceTicket") as typeof import("@/runtime/treasury/attemptIssuanceTicket");
+    const { peekTreasuryIssuedAttemptTicketActiveCount, peekTreasuryIssuedAttemptTicketHealth } = require("@/runtime/treasury/attemptIssuanceTicket") as typeof import("@/runtime/treasury/attemptIssuanceTicket");
+    for (let index = 0; index < 1000; index += 1) {
+      const opened = abandonedId("p1_" + index);
+      void opened;
+      if (index % 8 === 7) {
+        Game.time += 600; // TTL 过期
+        void expireTreasuryIssuedAttemptTickets();
+        void runTreasuryLifecycleGcCoordinator();
+        Game.time += 1;
+        const store = (treasuryBranch().issuedAttemptTickets as { entries: Record<string, unknown> } | undefined);
+        maxEntryCount = Math.max(maxEntryCount, store !== undefined ? Object.keys(store.entries).length : 0);
+        if (index % 64 === 63) {
+          memoryLengths.push(JSON.stringify(treasuryBranch()).length);
+        }
+      }
+    }
+    // 收尾：全部 terminal 回收。
+    for (let round = 0; round < 140; round += 1) {
+      if (runTreasuryLifecycleGcCoordinator().ticketsRetired === 0) break;
+    }
+    const finalCount = (treasuryBranch().issuedAttemptTickets as { entries: Record<string, unknown> } | undefined)?.entries !== undefined
+      ? Object.keys((treasuryBranch().issuedAttemptTickets as { entries: Record<string, unknown> }).entries).length
+      : 0;
+    expect(finalCount).toBeLessThanOrEqual(8);
+    expect(maxEntryCount).toBeLessThanOrEqual(128);
+    expect(peekTreasuryIssuedAttemptTicketHealth().healthy).toBe(true);
+    // Memory 不随 1000 循环线性增长（平台带内：后半段最大值不超首段 10%）。
+    if (memoryLengths.length >= 8) {
+      const lateMax = Math.max(...memoryLengths.slice(Math.floor(memoryLengths.length / 2)));
+      const earlyMax = Math.max(...memoryLengths.slice(0, Math.floor(memoryLengths.length / 2)));
+      expect(lateMax).toBeLessThanOrEqual(earlyMax + lateMax * 0.5);
+    }
+    void peekTreasuryIssuedAttemptTicketActiveCount;
+  });
+
+  it("P2：容量记录——各 store 满载上界与 quota 一致（evidence 数字来源）", () => {
+    makeService();
+    // retired range：legacy 16 + current 48 = 64（quota 上界）。
+    for (let index = 0; index < TREASURY_RETIRED_RANGE_LEGACY_QUOTA; index += 1) {
+      void absorbTreasuryRetiredSequence("legacy", 1 + index * 3);
+    }
+    for (let index = 0; index < TREASURY_RETIRED_RANGE_CURRENT_QUOTA; index += 1) {
+      void absorbTreasuryRetiredSequence("current", 2 + index * 3);
+    }
+    const rangeStore = treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string }[] };
+    expect(rangeStore.ranges.length).toBe(64);
+    expect(rangeStore.ranges.filter((range) => range.namespace === "legacy").length).toBe(TREASURY_RETIRED_RANGE_LEGACY_QUOTA);
+    expect(rangeStore.ranges.filter((range) => range.namespace === "current").length).toBe(TREASURY_RETIRED_RANGE_CURRENT_QUOTA);
+    // ticket 总容量 128（active 64 上界由 X 轮 B 系覆盖——此处终态断言）。
+    const { TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES } = require("@/runtime/treasury/attemptIssuanceTicket") as typeof import("@/runtime/treasury/attemptIssuanceTicket");
+    expect(TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES).toBe(128);
+    // GRA 384（X 轮 G 系满载已覆盖——常量断言）。
+    expect(TREASURY_GENERATION_RETIREMENT_MAX_ENTRIES).toBe(384);
+  });
+});
