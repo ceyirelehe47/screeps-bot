@@ -49,11 +49,11 @@ import {
 } from "@/runtime/treasury/transactionId";
 import {
   listTreasuryHistoricalCompletionRecords,
-  lookupTreasuryHistoricalCompletion,
   registerTreasuryHistoricalCompactorForAssembly,
   retireTreasuryHistoricalRecordForCompression,
   type TreasuryHistoricalCompletionRecord,
 } from "@/runtime/treasury/cleanupSupersessionAuthority";
+import { resolveTreasuryAttemptLifecycleOwnership } from "@/runtime/treasury/treasuryLifecycleOwnerResolver";
 
 export const TREASURY_CHAIN_CERTIFICATE_VERSION = 1;
 export const TREASURY_CHAIN_CERTIFICATE_MAX_ENTRIES = 256;
@@ -496,6 +496,96 @@ export function checkTreasuryAttemptRetiredRange(
   return { retired: false, detail: "" };
 }
 
+/**
+ * 【IX 工作流 C / 6.1】retired range 的结构化查询（destructive eviction/
+ * compaction 调用方专用——不得使用把 store unhealthy 折叠为 retired=true 的
+ * checkTreasuryAttemptRetiredRange）。四态：
+ *  - present：序号在退休区间内（anti-reuse frontier 已接管）；
+ *  - absent：序号未退休（且 store 容器/条目均健康）；
+ *  - store_unhealthy：容器级损坏（版本/形状/entryCount）；
+ *  - malformed：区间数据级损坏（单条区间 shape / 严格递增被破坏）。
+ */
+export type TreasuryRetiredRangeStructuredLookup =
+  | { readonly status: "present"; readonly detail: string }
+  | { readonly status: "absent" }
+  | { readonly status: "store_unhealthy"; readonly detail: string }
+  | { readonly status: "malformed"; readonly detail: string };
+
+/** 容器级校验（版本/数组/entryCount——条目级问题归 malformed）。 */
+function validateRangeContainerShape(store: unknown): string | null {
+  if (!store || typeof store !== "object") return "retired range store 非对象";
+  const candidate = store as Partial<TreasuryRetiredRangeStore>;
+  if (candidate.version !== TREASURY_RETIRED_RANGE_VERSION) {
+    return `retired range store 版本非法: ${String(candidate.version).slice(0, 16)}`;
+  }
+  if (!Array.isArray(candidate.ranges)) return "retired range store ranges 非数组";
+  if (candidate.ranges.length > TREASURY_RETIRED_RANGE_MAX_ENTRIES) {
+    return `retired range store 超过硬容量 ${String(TREASURY_RETIRED_RANGE_MAX_ENTRIES)}（实际 ${String(candidate.ranges.length)}）`;
+  }
+  if (candidate.entryCount !== candidate.ranges.length) {
+    return `retired range store entryCount ${String(candidate.entryCount)} != ${String(candidate.ranges.length)}`;
+  }
+  return null;
+}
+
+/** 条目级校验（单条区间 shape 与严格递增——malformed 分类）。 */
+function validateRangeEntriesShape(store: TreasuryRetiredRangeStore): string | null {
+  let previousMax = -1;
+  for (const range of store.ranges) {
+    if (!range || typeof range !== "object") return "retired range entry 非对象";
+    if (
+      !Number.isSafeInteger(range.minSequence) ||
+      !Number.isSafeInteger(range.maxSequence) ||
+      range.minSequence < 1 ||
+      range.maxSequence < range.minSequence
+    ) {
+      return `retired range 区间非法（[${String(range?.minSequence)}, ${String(range?.maxSequence)}]）`;
+    }
+    if (!Number.isSafeInteger(range.mergedAtTick) || range.mergedAtTick < 0) {
+      return "retired range mergedAtTick 非法";
+    }
+    if (range.minSequence <= previousMax) {
+      return "retired range 区间必须严格递增且互不重叠（相邻可合并——重叠即损坏）";
+    }
+    previousMax = range.maxSequence;
+  }
+  return null;
+}
+
+/** 【IX 工作流 C / 6.1】结构化 retired range 查询（eviction 专用四态）。 */
+export function lookupTreasuryRetiredRangeStructured(transactionId: string): TreasuryRetiredRangeStructuredLookup {
+  const parsed = parseTreasuryIssuedInitialAttemptId(transactionId);
+  if (parsed === null) return { status: "absent" };
+  const raw = (Memory.runtime as unknown as RuntimeMemoryWithCertificates | undefined)?.treasury?.retiredAttemptRanges;
+  if (raw === undefined) return { status: "absent" };
+  const containerError = validateRangeContainerShape(raw);
+  if (containerError !== null) return { status: "store_unhealthy", detail: containerError };
+  const entryError = validateRangeEntriesShape(raw);
+  if (entryError !== null) return { status: "malformed", detail: entryError };
+  for (const range of raw.ranges) {
+    if (parsed.sequence >= range.minSequence && parsed.sequence <= range.maxSequence) {
+      return { status: "present", detail: `[${String(range.minSequence)}, ${String(range.maxSequence)}]` };
+    }
+  }
+  return { status: "absent" };
+}
+
+// ──【IX 工作流 C】retirement summary 的 assembly probe（certificate 驱逐前
+//    验证"无 matching summary 在位"——summary 以 certificate 为 replacement
+//    authority 时不撤走 replacement。注册方：lineageRetirementSummary 模块
+//    加载时（本模块在其 import 下游——直接 import 成环）。未装配 → 视为
+//    summary 可能在位（fail closed 不驱逐）。
+interface TreasuryRetirementSummaryProbe {
+  readonly summaryOfRoot: (rootTransactionId: string) => { readonly lineageId?: unknown } | undefined;
+  readonly summaryStoreHealthy: () => boolean;
+}
+
+let retirementSummaryProbe: TreasuryRetirementSummaryProbe | null = null;
+
+export function registerTreasuryRetirementSummaryProbeForAssembly(probe: TreasuryRetirementSummaryProbe): void {
+  retirementSummaryProbe = probe;
+}
+
 // ── 写入（compaction 接线调用——state-changing）────────────────────────────
 
 /**
@@ -533,21 +623,24 @@ export function absorbTreasuryRetiredSequence(sequence: number): { readonly stat
   return absorbSequenceUnchecked(sequence);
 }
 
-/** gap 中序号的 lifecycle 权威覆盖检查（只读——任一在位即不可 abandon）。 */
+/**
+ * gap 中序号的 lifecycle 权威覆盖检查（只读——任一在位即不可 abandon）。
+ * 【IX 工作流 E 8.3】不再手工拼部分 store 列表：先查本模块自有的
+ * certificate / retired range 维度，其余完整生命周期权威（issued ticket /
+ * admission reservation / headroom reservation / intent / quarantine /
+ * journal / resolution / fault / marker / lineage / completion / historical /
+ * receipt / GRA / summary——O1-O5）统一经 treasuryLifecycleOwnerResolver
+ * 判定（任一相关 store unhealthy → 视为有权威，fail closed）。
+ */
 function sequenceHasLifecycleAuthority(sequence: number): boolean {
   const built = buildTreasuryIssuedInitialAttemptIdFromSequence(sequence);
   if (built.status !== "built") return true; // 不可重建 → 保守视为有权威
   const transactionId = built.transactionId;
-  if (lookupTreasuryCleanupCompletion(transactionId).verdict === "match") return true;
-  const historical = lookupTreasuryHistoricalCompletion(transactionId);
-  if (historical.verdict !== "absent") return true; // match/conflict/unhealthy 全部保守
-  if (lookupTreasurySettledReceipt(transactionId).status !== "absent") return true;
-  if (readTreasuryIntentEntry(transactionId) !== undefined) return true;
-  if (readTreasuryQuarantineEntry(transactionId) !== undefined) return true;
-  if (readTreasuryResolutionCleanupEntry(transactionId) !== undefined) return true;
-  if (readTreasuryAuthorizationFaultEntry(transactionId) !== undefined) return true;
-  const marker = readTreasuryWriteFault();
-  if (marker !== undefined && marker.transactionId === transactionId) return true;
+  // 本模块自有维度：root 已有 chain certificate / 序号已进 retired range。
+  if (lookupTreasuryChainRetirementCertificate(transactionId) !== undefined) return true;
+  if (lookupTreasuryRetiredRangeStructured(transactionId).status === "present") return true;
+  const ownership = resolveTreasuryAttemptLifecycleOwnership(transactionId);
+  if (ownership.status === "owned") return true; // active 与 terminal-authority 均阻断 abandon
   return false;
 }
 
@@ -763,26 +856,44 @@ export function recordTreasuryChainRetirementCertificate(input: {
       : { status: "rejected", detail: "同 root 已存在不同 identity 的 chain certificate（不覆盖旧权威）" };
   }
   if (runtime.store.entryCount >= TREASURY_CHAIN_CERTIFICATE_MAX_ENTRIES) {
-    // 满载压缩：最老的非 legacy certificate → root 序号进 retired range。
-    let oldestKey: string | null = null;
-    let oldestSequence = Infinity;
-    for (const [candidateKey, certificate] of Object.entries(runtime.store.entries)) {
-      if (certificate.rootSequence >= 1 && certificate.rootSequence < oldestSequence) {
-        oldestSequence = certificate.rootSequence;
-        oldestKey = candidateKey;
+    // 【IX 工作流 C / 6.3】certificate 满载驱逐——有界 eligible 扫描（全部
+    // 现代条目按 rootSequence 升序，不只最老一条；Q8：队首不可清理不永久
+    // 停机）。eligibility（全部满足才驱逐）：
+    //  1. retired range 结构化查询不返回 store_unhealthy/malformed（Q1——
+    //     range 损坏时绝不当作 replacement 在位）；
+    //  2. root 序号已被 range 吸收（absent 时先 absorb——monotonic 安全：
+    //     chain 已终结、序号已消耗；absorb 失败换下一条）；
+    //  3. 无 matching retirement summary 在位（summary 以 certificate 为
+    //     replacement authority——probe 未装配/store unhealthy 视为在位，
+    //     fail closed）。
+    // legacy pin（rootSequence=-1）永不驱逐。
+    const modern = Object.entries(runtime.store.entries)
+      .filter(([, certificate]) => certificate.rootSequence >= 1)
+      .sort((left, right) => left[1].rootSequence - right[1].rootSequence);
+    let evictedKey: string | null = null;
+    let evictedCertificate: TreasuryChainRetirementCertificate | undefined;
+    for (const [candidateKey, certificate] of modern) {
+      const rangeLookup = lookupTreasuryRetiredRangeStructured(certificate.rootTransactionId);
+      if (rangeLookup.status === "store_unhealthy" || rangeLookup.status === "malformed") continue;
+      if (rangeLookup.status === "absent") {
+        const absorbed = absorbTreasuryRetiredSequence(certificate.rootSequence);
+        if (absorbed.status === "rejected") continue;
       }
+      if (retirementSummaryProbe === null) break; // fail closed——不驱逐任何条目
+      if (!retirementSummaryProbe.summaryStoreHealthy()) break;
+      if (retirementSummaryProbe.summaryOfRoot(certificate.rootTransactionId) !== undefined) continue;
+      evictedKey = candidateKey;
+      evictedCertificate = certificate;
+      break;
     }
-    if (oldestKey === null) {
+    if (evictedKey === null || evictedCertificate === undefined) {
       return {
         status: "rejected",
-        detail: `chain certificate 已达硬容量 ${String(TREASURY_CHAIN_CERTIFICATE_MAX_ENTRIES)} 且全部为 legacy pin（不删除旧权威——fail closed）`,
+        detail: `chain certificate 已达硬容量 ${String(TREASURY_CHAIN_CERTIFICATE_MAX_ENTRIES)} 且无 eligible 条目（range replacement 不在位/损坏或 summary 仍依赖——不删除旧权威，fail closed）`,
       };
     }
-    const absorbed = absorbTreasuryRetiredSequence(oldestSequence);
-    if (absorbed.status === "rejected") {
-      return { status: "rejected", detail: `certificate 满载压缩失败（retired range）: ${absorbed.detail}` };
-    }
-    const evicted = runtime.store.entries[oldestKey];
+    const oldestKey = evictedKey;
+    const evicted = evictedCertificate;
     delete runtime.store.entries[oldestKey];
     runtime.store.entryCount -= 1;
     runtime.store.updatedAt = Game.time;
