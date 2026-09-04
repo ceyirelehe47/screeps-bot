@@ -45,6 +45,7 @@ import {
 } from "@/runtime/treasury/cleanupCompletionAuthority";
 import { lookupTreasuryHistoricalCompletion } from "@/runtime/treasury/cleanupSupersessionAuthority";
 import { reclaimTreasuryCleanupCompletionHeadroom } from "@/runtime/treasury/cleanupCompletionReplacement";
+import { consumeTreasuryCompletionHeadroomReservation } from "@/runtime/treasury/completionHeadroomReservation";
 import {
   dischargeTreasuryMarkerForAttempt,
   treasuryMarkerDischargeCompletesAttemptPhase,
@@ -541,6 +542,10 @@ export function completeTreasuryCleanupAcknowledged(input: {
   if (completionWrite.status === "rejected") {
     return { status: "cleanup_pending", detail: `completion proof 写入失败（journal 保留）: ${completionWrite.detail}` };
   }
+  // 【Remediation VII 修复二】completion authority 已成功接管——该 attempt
+  // 的独占 headroom reservation 就此消费（live entry 占用容量槽，reservation
+  // 必须同时移除，否则双重计数；幂等 absent 无害）。
+  consumeTreasuryCompletionHeadroomReservation(transactionId);
   if (!completeTreasuryResolutionCleanup(transactionId)) {
     // journal 删除失败：completion 已存在——下 tick 幂等重删（journal pending）。
     return { status: "cleanup_pending", detail: "cleanup entry 删除被拒（completion 已持久——下 tick 幂等删除）" };

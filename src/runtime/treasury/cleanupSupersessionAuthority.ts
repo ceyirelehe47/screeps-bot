@@ -63,6 +63,7 @@ import {
   releaseTreasuryCleanupCompletionOfAttempt,
   type TreasuryCleanupCompletionProof,
 } from "@/runtime/treasury/cleanupCompletionAuthority";
+import { peekTreasuryCompletionHeadroomReservationCount } from "@/runtime/treasury/completionHeadroomReservation";
 
 export const TREASURY_CLEANUP_SUPERSESSION_VERSION = 1;
 export const TREASURY_CLEANUP_SUPERSESSION_MAX_ENTRIES = 384;
@@ -975,12 +976,19 @@ export function ensureTreasuryCleanupCompletionHeadroom(input: {
   if (entryCount < 0) {
     return { status: "store_unhealthy", reclaimed: 0, detail: "completion store 超容（entryCount 探测失败——fail closed）" };
   }
-  if (entryCount + input.minSlots <= TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES) {
-    return { status: "ok", reclaimed: 0, detail: `headroom 充足（${String(entryCount)}/${String(TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES)}——零回收）` };
+  // 【Remediation VII 修复二】独占 reservation 计入占用：live completion +
+  // reserved slots ≤ 硬容量 恒成立——已被其它 transaction 预留的槽不算
+  // headroom（"检查当前还有一个槽"不是 reservation）。
+  const reservedCount = peekTreasuryCompletionHeadroomReservationCount();
+  if (entryCount + reservedCount + input.minSlots <= TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES) {
+    return { status: "ok", reclaimed: 0, detail: `headroom 充足（live ${String(entryCount)} + reserved ${String(reservedCount)}/${String(TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES)}——零回收）` };
   }
   let reclaimed = 0;
   for (const transactionId of replacementProbes.listCompletionTransactionIds()) {
-    if (peekTreasuryCleanupCompletionEntryCount() + input.minSlots <= TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES) break;
+    if (
+      peekTreasuryCleanupCompletionEntryCount() + peekTreasuryCompletionHeadroomReservationCount() + input.minSlots
+      <= TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES
+    ) break;
     const archived = archiveTreasuryCleanupCompletionViaAuthority({ transactionId, via: "compact-archive" });
     if (archived.status === "archived") {
       reclaimed += 1;
@@ -1011,13 +1019,16 @@ export function ensureTreasuryCleanupCompletionHeadroom(input: {
     };
   }
   const afterCount = peekTreasuryCleanupCompletionEntryCount();
-  if (afterCount >= 0 && afterCount + input.minSlots <= TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES) {
+  if (
+    afterCount >= 0 &&
+    afterCount + peekTreasuryCompletionHeadroomReservationCount() + input.minSlots <= TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES
+  ) {
     return { status: "ok", reclaimed, detail: `headroom preflight 回收 ${String(reclaimed)} 条（exact archive + read-back）后容量恢复` };
   }
   return {
     status: "headroom_exhausted",
     reclaimed,
-    detail: `满载且无更多安全可回收项（回收 ${String(reclaimed)} 条后仍 ${String(afterCount)}/${String(TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES)}——fail closed，completion 均保留）`,
+    detail: `满载且无更多安全可回收项（回收 ${String(reclaimed)} 条后仍 live ${String(afterCount)} + reserved ${String(peekTreasuryCompletionHeadroomReservationCount())}/${String(TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES)}——fail closed，completion 均保留）`,
   };
 }
 
