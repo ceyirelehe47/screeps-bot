@@ -767,13 +767,14 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
   //    unhealthy）→ 不压缩 historical（chain 的 per-attempt exact outcome
   //    保留——fail closed，不影响 summary 压缩本身）。
   let chainHistoricalRetired = 0;
-  {
+  const terminalState: "chain_committed" | "non_rearmable_retired" = record.state;
+  const compressChainAfterArchive = (): void => {
     const certificateWrite = recordTreasuryChainRetirementCertificate({
       lineageId: record.lineageId,
       rootTransactionId: record.rootTransactionId,
       finalAttemptId: currentId,
       finalGeneration: record.generation,
-      terminalState: record.state,
+      terminalState,
     });
     if (certificateWrite.status !== "rejected") {
       const compressed = compressTreasuryChainHistoricalEntries({
@@ -782,7 +783,7 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
       });
       chainHistoricalRetired = compressed.retired;
     }
-  }
+  };
   // ──【Remediation VI 4.5 / VII 修复五.5】final/root attempt 的 completion
   //    经统一 supersession authority 入口归档回收（exact replacement 验证
   //    → durable historical authority 写入 read-back → 删除 + read-back）。
@@ -805,6 +806,10 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
       }
     }
   }
+  // 【Remediation VII 修复四】chain 压缩位于 completion archive **之后**：
+  // 尾部归档新写入的 per-attempt entry 同样被 certificate 接管退休——
+  // terminal 压缩后 historical 不残留任何该 chain 的 per-attempt 记录。
+  compressChainAfterArchive();
   retirementSummaryEvents.compactions += 1;
   return {
     status: "compacted",
