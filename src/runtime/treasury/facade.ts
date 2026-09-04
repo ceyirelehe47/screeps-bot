@@ -206,7 +206,7 @@ import {
   releaseTreasuryCompletionHeadroomChecked,
   sweepOrphanTreasuryCompletionReservations,
 } from "@/runtime/treasury/cleanupCompletionHandoff";
-import { runTreasuryLifecycleGcCoordinator } from "@/runtime/treasury/treasuryLifecycleGcCoordinator";
+import { runTreasuryLifecycleGcCoordinator, runTreasuryAuthorityStoreMigrationsAtTickBoundary } from "@/runtime/treasury/treasuryLifecycleGcCoordinator";
 import {
   completeTreasuryIssuedTicketHandoff,
   gateTreasuryIssuedAttemptTicketForContractExecution,
@@ -1359,6 +1359,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (schemaGate.status === "rejected") {
         metrics.reservationSchemaActivationFailures += 1;
       }
+      // 【XII 工作流 D / Q7】authority store legacy 版本的显式迁移（唯一
+      // migration owner——先于一切恢复逻辑：lineage / retirement summary /
+      // GRA 的读路径（query）遇 legacy 版本 fail closed 且零写，本阶段按写
+      // 路径语义确定性迁移；blocked 不阻断后续恢复（各恢复路径对 fatal
+      // store 自行 fail closed）。
+      runTreasuryAuthorityStoreMigrationsAtTickBoundary();
       // 【第二十轮 7.1】handoff 双 authority 证据保留顺序：child_intent_
       // pending 的 Intent/Quarantine 完整一致性判定（unified resolver +
       // semantic lineage validation——rollback/forward/forensic）必须先于

@@ -211,6 +211,26 @@ function loadIssuerRuntime(): IssuerRuntime {
   return heapRuntime;
 }
 
+/**
+ * 【XII 工作流 D / Q7】issuer v1 的 tick-boundary 显式迁移（唯一 migration
+ * owner——beginTick 前置阶段调用；受控 opening 的 mint 路径 load 仍是写
+ * 入时迁移）。absent/v2 → idle（零写）；v1 → 复用写路径迁移（v1 源校验 +
+ * 原子替换 + read-back 失败还原）；失败 → blocked（v1 保留，fail closed）。
+ */
+export function migrateTreasuryAttemptIssuerStoreLegacyAtTickBoundary(): { status: "idle" | "migrated" | "blocked"; detail: string | null } {
+  const raw = issuerStoreOfMemory();
+  if (raw === undefined) return { status: "idle", detail: null };
+  if (raw.version === TREASURY_ATTEMPT_ISSUER_VERSION) return { status: "idle", detail: null };
+  if (raw.version !== TREASURY_ATTEMPT_ISSUER_LEGACY_VERSION) {
+    return { status: "blocked", detail: `issuer store 版本未知（${String(raw.version).slice(0, 8)}——不迁移，fail closed）` };
+  }
+  const runtime = loadIssuerRuntime();
+  if (runtime.fatal !== null) {
+    return { status: "blocked", detail: runtime.fatal };
+  }
+  return { status: "migrated", detail: null };
+}
+
 export interface TreasuryAttemptIssuerHealth {
   readonly healthy: boolean;
   readonly detail: string;
@@ -423,11 +443,12 @@ export function checkTreasuryServiceIssuedAttemptId(transactionId: string): Trea
     // ti1_ 都不再作为当前格式的合法新 initial ID（A1/A4/A5）。
     return { status: "legacy_unverified", sequence: parsed.sequence, namespace: "legacy" };
   }
-  const runtime = loadIssuerRuntime();
-  if (runtime.fatal !== null) {
-    return { status: "store_unhealthy", detail: `attempt issuer store unhealthy: ${runtime.fatal}` };
+  // 【XII 工作流 D / Q4】零写：不触发 load（absent 不创建空 store、v1 不
+  // 迁移）——watermark 经零写 peek（absent = 0；v1/不可读 = -1 → fail closed）。
+  const watermark = peekTreasuryIssuedAttemptWatermark();
+  if (watermark < 0) {
+    return { status: "store_unhealthy", detail: "attempt issuer store unhealthy（v1 待迁移或不可读——query 零写 fail closed）" };
   }
-  const watermark = runtime.store.highWatermark;
   if (parsed.sequence > watermark) return { status: "forged_future", sequence: parsed.sequence };
   if (transactionId === authoritativeIdOfSequence(parsed.sequence)) {
     return { status: "issued", sequence: parsed.sequence };

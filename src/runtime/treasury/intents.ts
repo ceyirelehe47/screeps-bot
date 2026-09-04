@@ -798,19 +798,67 @@ export function ensureTreasuryIntentStoreValidated(): string | null {
 }
 
 /**
- * 【XI 工作流 E / M1】零写全量校验（query 路径专用——lifecycle owner
- * resolver 的 Intent 维度）：store 不存在 = 健康空（不创建空 store）；在位
- * → 全量形状校验（entry 级 unrelated 损坏同样检出）；v1..v5 待迁移版本
- * → fail closed（迁移只在写路径 load 发生，query 不迁移）。
+ * 【XII 工作流 D / Q2】零写全量校验视图（query 路径专用——lifecycle owner
+ * resolver / positive owner verifier 的 Intent 维度）：store 不存在 =
+ * absent（不创建空 store）；当前版本 → 全量形状校验（entry 级 unrelated
+ * 损坏同样检出，不 load、不迁移）；v1..v6 待迁移版本 → migration_required
+ * （迁移只由 beginTick migration owner 或写路径 load 执行，query 不迁移、
+ * 不升级——XI 时期"在位即复用 load（含 v6→v7 无损升级）"的实现违反
+ * query-pure，XII 收紧）；unknown 版本 → unhealthy。结果按 raw 引用缓存在
+ * heap（store 替换/重建即失效；原地写入保持一致性不改变 verdict）。
  */
-export function peekTreasuryIntentStoreValidation(): string | null {
-  // store 不存在 = 健康空（零写——不创建空 store，M1/M2）；在位 → 复用
-  // load 的全量校验（含无损版本升级——升级只发生在 store 已在位时，与
-  // "query 不初始化/不创造 store"的零写边界一致）。
-  const raw = (Memory.runtime as unknown as { treasury?: { intents?: unknown } } | undefined)?.treasury?.intents;
-  if (raw === undefined) return null;
-  const runtime = loadIntentStoreRuntime();
-  return runtime.fatal;
+export type TreasuryIntentQueryStatus =
+  | { readonly status: "valid" }
+  | { readonly status: "absent" }
+  | { readonly status: "migration_required"; readonly detail: string }
+  | { readonly status: "unhealthy"; readonly detail: string };
+
+interface IntentQueryCacheEntry {
+  readonly raw: unknown;
+  readonly verdict: TreasuryIntentQueryStatus;
+}
+
+let intentQueryCache: IntentQueryCacheEntry | null = null;
+
+export function peekTreasuryIntentStoreValidation(): TreasuryIntentQueryStatus {
+  const raw = peekTreasuryIntentStore() as unknown;
+  if (raw === undefined) return { status: "absent" };
+  // fast-path：heap 已 load 成功（同引用）→ 复用其校验结论（避免重复全表扫描）。
+  if (heapRuntime !== null && heapRuntime.store === raw) {
+    return heapRuntime.fatal === null
+      ? { status: "valid" }
+      : { status: "unhealthy", detail: heapRuntime.fatal };
+  }
+  if (intentQueryCache !== null && intentQueryCache.raw === raw) return intentQueryCache.verdict;
+  const version = (raw as { version?: unknown }).version;
+  let verdict: TreasuryIntentQueryStatus;
+  if (version === TREASURY_INTENT_VERSION) {
+    const shapeError = validateIntentStoreShape(raw as TreasuryIntentStore);
+    verdict = shapeError === null
+      ? { status: "valid" }
+      : { status: "unhealthy", detail: `${shapeError}（intent store fail closed，query 零写）` };
+  } else if (
+    version === 1 || version === 2 || version === 3 || version === 4 || version === 5 || version === 6
+  ) {
+    verdict = {
+      status: "migration_required",
+      detail: `intent store v${String(version)} 待迁移（query 零写——beginTick migration owner 执行）`,
+    };
+  } else {
+    verdict = { status: "unhealthy", detail: `未知 intent store 版本 ${String(version)}` };
+  }
+  intentQueryCache = { raw, verdict };
+  return verdict;
+}
+
+/** query 路径零写单条读取：仅当前版本且校验通过时返回冻结快照。 */
+export function readTreasuryIntentEntryForQuery(transactionId: string): Readonly<TreasuryIntentEntry> | undefined {
+  const verdict = peekTreasuryIntentStoreValidation();
+  if (verdict.status !== "valid") return undefined;
+  const raw = peekTreasuryIntentStore();
+  if (raw === undefined) return undefined;
+  const entry = (raw.entries as Record<string, TreasuryIntentEntry>)[encodeIntentKey(transactionId)];
+  return entry === undefined ? undefined : freezeIntentCopy(entry);
 }
 
 /** 冻结深拷贝的单条 entry（快照封闭——外部修改不影响内部权威）。 */
@@ -1461,6 +1509,7 @@ export function resetTreasuryIntentRuntimeForTest(): void {
   heapRuntime = null;
   aggregateCache = null;
   storeRevision = 0;
+  intentQueryCache = null;
   intentEvents.fullScans = 0;
   intentEvents.loadValidationEntries = 0;
   intentEvents.writeFailures = 0;

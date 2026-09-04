@@ -220,7 +220,7 @@ function seedDurableIntent(transactionId: string): void {
     intents?: { version: number; entries: Record<string, unknown>; entryCount: number; updatedAt: number };
   };
   if (branch.intents === undefined) {
-    branch.intents = { version: 6, entries: {}, entryCount: 0, updatedAt: Game.time };
+    branch.intents = { version: 7, entries: {}, entryCount: 0, updatedAt: Game.time };
   }
   const seeded: Record<string, unknown> = {
     authorityLevel: "lowlevel",
@@ -253,7 +253,7 @@ describe("Remediation XI H：positive ticket handoff 证明", () => {
     // unrelated transaction 的 intent entry 损坏（合法 v6 store + 他键 entry 非法）。
     pendingInjection = () => {
       const branch = (Memory.runtime as unknown as { treasury?: { intents?: { version: number; entries: Record<string, unknown>; entryCount: number; updatedAt: number } } })?.treasury;
-      branch!.intents = { version: 6, entries: { "i:ti2_999_other": { broken: true } }, entryCount: 1, updatedAt: Game.time };
+      branch!.intents = { version: 7, entries: { "i:ti2_999_other": { broken: true } }, entryCount: 1, updatedAt: Game.time };
     };
     const executed = executeWithExistingBundle(service, id);
     expect(executed.callbackCount).toBe(0);
@@ -302,7 +302,7 @@ describe("Remediation XI H：positive ticket handoff 证明", () => {
       void receiptsModule;
       const branch = (Memory.runtime as unknown as { treasury?: { receipts?: unknown } })?.treasury;
       if (branch !== undefined) {
-        branch.receipts = { version: 6, entries: { "r:ti2_777_otherbroken": { garbage: 1 } }, entryCount: 1, updatedAt: Game.time };
+        branch.receipts = { version: 8, entries: { "r:ti2_777_otherbroken": { garbage: 1 } }, entryCount: 1, updatedAt: Game.time };
       }
     };
     const executed = executeWithExistingBundle(service, id);

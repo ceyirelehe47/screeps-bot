@@ -1256,10 +1256,9 @@ export function readTreasurySettlementProof(transactionId: string): Readonly<Tre
  * 【第二十二轮第八节】release-trusted receipt 读取（与 replay-readable 的
  * normalized lookup 明确分离）：
  *
- * - 触发 Receipt store 完整 load/migration（version / metadata /
- *   entryCount / nextExpiry / 全部 key / 全部 value / proof 等级矩阵）——
- *   每 heap 生命周期首次一次有界全表扫描，随后 heap 缓存，同 global 后续
- *   单条读取 O(1)；
+ * - 【XII 工作流 D / Q3】零写全表校验（不触发 load/migration/初始化——
+ *   版本/entryCount/全部 key/全部 value/proof 等级矩阵经零写 validation
+ *   视图完成，结果 heap 缓存）；
  * - store 任一无关 entry 损坏 / 版本未知 / fatal → store_unhealthy（绝不
  *   返回 trusted proof——单条可解释 proof 只够 replay-readable 阻断重放，
  *   不足以释放 Authority、关闭 Lineage 或压缩 Summary）；
@@ -1272,12 +1271,64 @@ export type TreasuryTrustedReceiptLookup =
   | { readonly status: "legacy_insufficient"; readonly detail: string }
   | { readonly status: "store_unhealthy"; readonly detail: string };
 
-export function lookupTreasuryTrustedSettledReceipt(transactionId: string): TreasuryTrustedReceiptLookup {
-  const runtime = loadReceiptStoreRuntime();
-  if (runtime.fatal !== null) {
-    return { status: "store_unhealthy", detail: `receipt store fail-closed: ${runtime.fatal}` };
+/**
+ * 【XII 工作流 D / Q3】receipt store 的零写 release-trusted 校验视图：
+ * absent（不初始化）/ 当前版本全表校验 valid / v1..v7 migration_required
+ * （query 不迁移——beginTick migration owner 或写路径 load 执行）/ unknown
+ * unhealthy。结果按 raw 引用缓存在 heap（trusted receipt 是 GRA release /
+ * trusted settlement proof 的读取通道——release-trusted health 必须零写）。
+ */
+export type TreasuryReceiptTrustedValidation =
+  | { readonly status: "valid" }
+  | { readonly status: "absent" }
+  | { readonly status: "migration_required"; readonly detail: string }
+  | { readonly status: "unhealthy"; readonly detail: string };
+
+interface ReceiptTrustedQueryCacheEntry {
+  readonly raw: unknown;
+  readonly verdict: TreasuryReceiptTrustedValidation;
+}
+
+let receiptTrustedQueryCache: ReceiptTrustedQueryCacheEntry | null = null;
+
+export function peekTreasuryReceiptStoreTrustedValidation(): TreasuryReceiptTrustedValidation {
+  const raw = peekTreasuryReceiptStore() as unknown;
+  if (raw === undefined) return { status: "absent" };
+  // fast-path：heap 已 load 成功（同引用）→ 复用其校验结论（避免重复全表扫描）。
+  if (heapStoreRuntime !== null && heapStoreRuntime.store === raw) {
+    return heapStoreRuntime.fatal === null
+      ? { status: "valid" }
+      : { status: "unhealthy", detail: heapStoreRuntime.fatal };
   }
-  const store = runtime.store;
+  if (receiptTrustedQueryCache !== null && receiptTrustedQueryCache.raw === raw) return receiptTrustedQueryCache.verdict;
+  const version = (raw as { version?: unknown }).version;
+  let verdict: TreasuryReceiptTrustedValidation;
+  if (version === TREASURY_RECEIPT_VERSION) {
+    const shapeError = validateReceiptStoreShape(raw as TreasuryReceiptStore, Game.time, "load");
+    verdict = shapeError === null
+      ? { status: "valid" }
+      : { status: "unhealthy", detail: `receipt store fail-closed（query 零写）: ${shapeError}` };
+  } else if (version === 1 || version === 2 || version === 3 || version === 4 || version === 5 || version === 6 || version === 7) {
+    verdict = {
+      status: "migration_required",
+      detail: `receipt store v${String(version)} 待迁移（query 零写——beginTick migration owner 执行）`,
+    };
+  } else {
+    verdict = { status: "unhealthy", detail: `未知 receipt store 版本 ${String(version)}` };
+  }
+  receiptTrustedQueryCache = { raw, verdict };
+  return verdict;
+}
+
+export function lookupTreasuryTrustedSettledReceipt(transactionId: string): TreasuryTrustedReceiptLookup {
+  // 【XII 工作流 D / Q3】零写：不触发 load（不初始化空 store、不迁移
+  // legacy 版本）；全表校验经零写 validation 视图完成，单键直读。
+  const verdict = peekTreasuryReceiptStoreTrustedValidation();
+  if (verdict.status === "absent") return { status: "absent" };
+  if (verdict.status === "migration_required") return { status: "store_unhealthy", detail: verdict.detail };
+  if (verdict.status === "unhealthy") return { status: "store_unhealthy", detail: verdict.detail };
+  const store = peekTreasuryReceiptStore();
+  if (store === undefined) return { status: "absent" };
   const key = encodeReceiptKey(transactionId);
   if (!Object.prototype.hasOwnProperty.call(store.settled, key)) {
     return { status: "absent" };
@@ -1757,6 +1808,7 @@ export function registerTreasuryLineageResetHook(hook: (() => void) | null): voi
  * trusted 读取——load 校验重走，同 global 的 O(1) 缓存语义不受影响）。 */
 export function resetTreasuryReceiptHeapCacheForTest(): void {
   heapStoreRuntime = null;
+  receiptTrustedQueryCache = null;
 }
 
 export function clearTreasuryPersistenceForTest(): void {

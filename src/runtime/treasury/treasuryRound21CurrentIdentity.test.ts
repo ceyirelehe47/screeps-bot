@@ -44,6 +44,7 @@ import {
   lookupTreasuryRetirementSummaryByRoot,
   lookupTreasuryRetirementSummaryByLineageId,
   resetTreasuryRetirementSummaryRuntimeForTest,
+  migrateTreasuryRetirementSummaryStoreLegacyAtTickBoundary,
   TREASURY_RETIREMENT_SUMMARY_VERSION,
 } from "@/runtime/treasury/lineageRetirementSummary";
 import { writeTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
@@ -553,6 +554,9 @@ describe("terminal summary v3 与 terminal current exact identity（第二十一
       delete store.entries[key].finalExact;
     }
     resetTreasuryRetirementSummaryRuntimeForTest();
+    // 【XII/D】query 零写——v2 不再经 lookup 读时迁移（legacy archive 拆分）；
+    // 显式 migration owner 执行后再断言（v2 → archive + 空 v3 主 store）。
+    expect(migrateTreasuryRetirementSummaryStoreLegacyAtTickBoundary().status).toBe("migrated");
     const summary = lookupTreasuryRetirementSummaryByLineageId(lineageId)!;
     expect(summary).toBeDefined();
     // root replay blocker 保留。

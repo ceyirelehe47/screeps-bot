@@ -336,6 +336,21 @@ function loadSummaryRuntime(forWrite = false): TreasurySummaryRuntime {
     return heapRuntime;
   }
   let store = branch.lineageRetirementSummaries as unknown as TreasuryRetirementSummaryStore;
+  // 【XII 工作流 D / Q4】query 不迁移：读路径（forWrite=false）遇 v1/v2
+  // legacy 版本 → fatal（migration_required——fail closed，原数据保留、
+  // 零写）；迁移只由写路径 load（forWrite=true）或 beginTick migration
+  // owner 执行。
+  if (!forWrite && (store.version === 1 || store.version === TREASURY_RETIREMENT_SUMMARY_LEGACY_VERSION)) {
+    const pendingRuntime: TreasurySummaryRuntime = {
+      store,
+      fatal: `summary store v${String(store.version)} 待迁移（query 零写——beginTick migration owner 执行）`,
+      published: true,
+      byRoot: new Map(),
+      byLineageId: new Map(),
+    };
+    heapRuntime = pendingRuntime;
+    return pendingRuntime;
+  }
   // 【第十九轮 E / 第二十一轮 7.4】v1 → v2 迁移（原子：临时结构验证通过后
   // 一次替换；失败保留原数据并 fail closed）：v2 只新增可选 authorityClass
   //（v1 summary 无来源可补）。迁移零字段变换（version 提升而已）。
@@ -462,6 +477,28 @@ export function peekTreasuryRetirementSummaryEntryCount(): number {
     ?.treasury?.lineageRetirementSummaries;
   if (raw === undefined) return 0;
   return Object.keys(raw.entries ?? {}).length;
+}
+
+/**
+ * 【XII 工作流 D / Q7】summary store legacy 版本的 tick-boundary 显式迁移
+ * （唯一 migration owner——beginTick 前置阶段调用）。absent/v3 → idle
+ * （零写）；v1/v2 → 复用写路径 load（forWrite=true）的确定性迁移（v1→v2
+ * + legacy archive 拆分）+ 全量重验 + 原子替换；失败 → blocked（原数据
+ * 保留，读路径继续 fail closed）。
+ */
+export function migrateTreasuryRetirementSummaryStoreLegacyAtTickBoundary(): { status: "idle" | "migrated" | "blocked"; detail: string | null } {
+  const branch = (Memory.runtime as unknown as RuntimeMemoryWithSummary | undefined)?.treasury;
+  const raw = branch?.lineageRetirementSummaries as { version?: unknown } | undefined;
+  if (raw === undefined) return { status: "idle", detail: null };
+  if (raw.version === TREASURY_RETIREMENT_SUMMARY_VERSION) return { status: "idle", detail: null };
+  if (raw.version !== 1 && raw.version !== TREASURY_RETIREMENT_SUMMARY_LEGACY_VERSION) {
+    return { status: "blocked", detail: `summary store 版本未知（${String(raw.version).slice(0, 8)}——不迁移，fail closed）` };
+  }
+  const runtime = loadSummaryRuntime(true);
+  if (runtime.fatal !== null) {
+    return { status: "blocked", detail: runtime.fatal };
+  }
+  return { status: "migrated", detail: null };
 }
 
 export function lookupTreasuryRetirementSummaryByRoot(rootTransactionId: string): Readonly<TreasuryLineageRetirementSummary> | undefined {

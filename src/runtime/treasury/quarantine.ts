@@ -945,7 +945,67 @@ export function treasuryForensicQuarantineDiagnostics(): readonly TreasuryForens
 }
 
 export function isTreasuryTransactionQuarantined(transactionId: string): boolean {
-  return readTreasuryQuarantineEntry(transactionId) !== undefined;
+  return readTreasuryQuarantineEntryForQuery(transactionId) !== undefined;
+}
+
+/**
+ * 【XII 工作流 D / Q2】零写全量校验视图（query 路径专用——lifecycle owner
+ * resolver / positive owner verifier / prepare 门禁的 Quarantine 维度）：
+ * store 不存在 = absent（不创建）；当前版本 → 全量形状校验（entry 级
+ * unrelated 损坏同样检出）；v1..v5 待迁移版本 → migration_required（query
+ * 不迁移、不升级——迁移由 beginTick migration owner 或写路径 load 执行）；
+ * unknown 版本 → unhealthy。结果按 raw 引用缓存在 heap。
+ */
+export type TreasuryQuarantineQueryStatus =
+  | { readonly status: "valid" }
+  | { readonly status: "absent" }
+  | { readonly status: "migration_required"; readonly detail: string }
+  | { readonly status: "unhealthy"; readonly detail: string };
+
+interface QuarantineQueryCacheEntry {
+  readonly raw: unknown;
+  readonly verdict: TreasuryQuarantineQueryStatus;
+}
+
+let quarantineQueryCache: QuarantineQueryCacheEntry | null = null;
+
+export function peekTreasuryQuarantineStoreValidation(): TreasuryQuarantineQueryStatus {
+  const raw = peekTreasuryQuarantineStore() as unknown;
+  if (raw === undefined) return { status: "absent" };
+  // fast-path：heap 已 load 成功（同引用）→ 复用其校验结论（避免重复全表扫描）。
+  if (heapRuntime !== null && heapRuntime.store === raw) {
+    return heapRuntime.fatal === null
+      ? { status: "valid" }
+      : { status: "unhealthy", detail: heapRuntime.fatal };
+  }
+  if (quarantineQueryCache !== null && quarantineQueryCache.raw === raw) return quarantineQueryCache.verdict;
+  const version = (raw as { version?: unknown }).version;
+  let verdict: TreasuryQuarantineQueryStatus;
+  if (version === TREASURY_QUARANTINE_VERSION) {
+    const shapeError = validateQuarantineStoreShape(raw as TreasuryQuarantineStore);
+    verdict = shapeError === null
+      ? { status: "valid" }
+      : { status: "unhealthy", detail: `${shapeError}（quarantine fail closed，query 零写）` };
+  } else if (version === 1 || version === 2 || version === 3 || version === 4 || version === 5) {
+    verdict = {
+      status: "migration_required",
+      detail: `quarantine store v${String(version)} 待迁移（query 零写——beginTick migration owner 执行）`,
+    };
+  } else {
+    verdict = { status: "unhealthy", detail: `未知 quarantine store 版本 ${String(version)}` };
+  }
+  quarantineQueryCache = { raw, verdict };
+  return verdict;
+}
+
+/** query 路径零写单条读取：仅当前版本且校验通过时返回冻结快照。 */
+export function readTreasuryQuarantineEntryForQuery(transactionId: string): Readonly<TreasuryQuarantineEntry> | undefined {
+  const verdict = peekTreasuryQuarantineStoreValidation();
+  if (verdict.status !== "valid") return undefined;
+  const raw = peekTreasuryQuarantineStore();
+  if (raw === undefined) return undefined;
+  const entry = (raw.entries as Record<string, TreasuryQuarantineEntry>)[encodeQuarantineKey(transactionId)];
+  return entry === undefined ? undefined : freezeQuarantineCopy(entry);
 }
 
 /**
@@ -1227,6 +1287,7 @@ export function resetTreasuryQuarantineRuntimeForTest(): void {
   heapRuntime = null;
   aggregateCache = null;
   storeRevision = 0;
+  quarantineQueryCache = null;
   quarantineEvents.fullScans = 0;
   quarantineEvents.loadValidationEntries = 0;
   quarantineEvents.admissionRejections = 0;

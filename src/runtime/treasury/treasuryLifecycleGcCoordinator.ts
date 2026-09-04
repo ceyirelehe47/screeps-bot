@@ -24,8 +24,11 @@ import {
   peekTreasuryIssuedAttemptTicketHealth,
   retireTreasuryTerminalIssuedAttemptTickets,
 } from "@/runtime/treasury/attemptIssuanceTicket";
-import { peekTreasuryIssuedAttemptWatermark } from "@/runtime/treasury/attemptIssuer";
+import { peekTreasuryIssuedAttemptWatermark, migrateTreasuryAttemptIssuerStoreLegacyAtTickBoundary } from "@/runtime/treasury/attemptIssuer";
 import { migrateLegacyRetiredRangeStore } from "@/runtime/treasury/chainRetirementCertificate";
+import { migrateTreasuryLineageStoreLegacyAtTickBoundary } from "@/runtime/treasury/attemptLineage";
+import { migrateTreasuryRetirementSummaryStoreLegacyAtTickBoundary } from "@/runtime/treasury/lineageRetirementSummary";
+import { migrateTreasuryGenerationRetirementStoreLegacyAtTickBoundary } from "@/runtime/treasury/generationRetirementAuthority";
 
 /**
  * 【XI 工作流 E / M3-M6】v1 retired range 迁移报告（tick-boundary
@@ -70,6 +73,32 @@ export interface TreasuryLifecycleGcReport {
   readonly skipped: string | null;
   /** 【XI 工作流 E】v1 retired range 迁移阶段结果（前置——blocked/unhealthy 不阻断 ticket GC）。 */
   readonly rangeMigration: TreasuryRetiredRangeMigrationReport;
+  /** 【XII 工作流 D / Q7】authority store legacy 版本迁移阶段结果（beginTick 最前置）。 */
+  readonly authorityMigration: TreasuryAuthorityStoreMigrationReport;
+}
+
+/**
+ * 【XII 工作流 D / Q7】authority store legacy 版本的显式迁移（唯一
+ * migration owner——beginTick 最前置阶段，先于一切 lineage/intent 恢复）。
+ * lineage / retirement summary / GRA 三个 store 的读路径（query）遇 legacy
+ * 版本 fail closed（migration_required）且零写；本函数按写路径语义执行
+ * 确定性迁移（原子替换 + 全量重验）。幂等（当前版本/absent → idle 零写）；
+ * 失败 → blocked（原数据保留，读路径继续 fail closed，下 tick 重试）。
+ */
+export interface TreasuryAuthorityStoreMigrationReport {
+  readonly lineage: { readonly status: "idle" | "migrated" | "blocked"; readonly detail: string | null };
+  readonly summary: { readonly status: "idle" | "migrated" | "blocked"; readonly detail: string | null };
+  readonly generationRetirement: { readonly status: "idle" | "migrated" | "blocked"; readonly detail: string | null };
+  readonly attemptIssuer: { readonly status: "idle" | "migrated" | "blocked"; readonly detail: string | null };
+}
+
+export function runTreasuryAuthorityStoreMigrationsAtTickBoundary(): TreasuryAuthorityStoreMigrationReport {
+  return {
+    lineage: migrateTreasuryLineageStoreLegacyAtTickBoundary(),
+    summary: migrateTreasuryRetirementSummaryStoreLegacyAtTickBoundary(),
+    generationRetirement: migrateTreasuryGenerationRetirementStoreLegacyAtTickBoundary(),
+    attemptIssuer: migrateTreasuryAttemptIssuerStoreLegacyAtTickBoundary(),
+  };
 }
 
 /**
@@ -77,6 +106,10 @@ export interface TreasuryLifecycleGcReport {
  * 返回结构化报告——失败不写成"已清理"。
  */
 export function runTreasuryLifecycleGcCoordinator(): TreasuryLifecycleGcReport {
+  // 【XII 工作流 D / Q7】authority store legacy 迁移（唯一 owner；facade
+  // beginTick 在恢复逻辑之前已单独调用 runTreasuryAuthorityStoreMigrations-
+  // AtTickBoundary——此处幂等复查，保证直接调用本 coordinator 的路径同样覆盖）。
+  const authorityMigration = runTreasuryAuthorityStoreMigrationsAtTickBoundary();
   // 【XI 工作流 E】前置 migration 阶段（唯一 owner）：v1 → v2 显式迁移。
   // blocked/unhealthy 只报告（原数据保留）；不阻断后续 ticket GC（互不
   // 依赖的 store）。
@@ -88,6 +121,7 @@ export function runTreasuryLifecycleGcCoordinator(): TreasuryLifecycleGcReport {
       ticketsRetired: 0,
       skipped: `issued ticket store unhealthy: ${ticketHealth.detail}（GC 跳过——fail closed）`,
       rangeMigration,
+      authorityMigration,
     };
   }
   const ticketsExpired = expireTreasuryIssuedAttemptTickets();
@@ -98,6 +132,7 @@ export function runTreasuryLifecycleGcCoordinator(): TreasuryLifecycleGcReport {
       ticketsRetired: 0,
       skipped: "issuer watermark 不可读（terminal ticket 淘汰跳过——fail closed）",
       rangeMigration,
+      authorityMigration,
     };
   }
   const retirement = retireTreasuryTerminalIssuedAttemptTickets(watermark);
@@ -106,5 +141,6 @@ export function runTreasuryLifecycleGcCoordinator(): TreasuryLifecycleGcReport {
     ticketsRetired: retirement.retired,
     skipped: retirement.detail,
     rangeMigration,
+    authorityMigration,
   };
 }

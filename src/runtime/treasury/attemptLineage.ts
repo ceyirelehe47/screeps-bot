@@ -871,6 +871,28 @@ function loadLineageStoreRuntime(forWrite = false): TreasuryLineageStoreRuntime 
     return heapRuntime;
   }
   const raw = branch.attemptLineage as unknown as TreasuryAttemptLineageStore;
+  // 【XII 工作流 D / Q4】query 不迁移：读路径（forWrite=false）遇 v1/v2
+  // legacy 版本 → fatal（migration_required——fail closed，原数据保留、
+  // 零写）；迁移只由写路径 load（forWrite=true）或 beginTick migration
+  // owner 执行。unrelated 损坏仍由下方 v3 校验承载。
+  if (
+    !forWrite &&
+    (raw.version === TREASURY_LINEAGE_VERSION - 2 || raw.version === TREASURY_LINEAGE_VERSION - 1)
+  ) {
+    const pendingRuntime: TreasuryLineageStoreRuntime = {
+      store: raw,
+      fatal: `lineage store v${String(raw.version)} 待迁移（query 零写——beginTick migration owner 执行）`,
+      published: true,
+      lineageIdIndex: new Map(),
+      rootIndex: new Map(),
+      currentIndex: new Map(),
+      nextChildIndex: new Map(),
+      pendingIds: new Set(),
+      terminalIds: new Set(),
+    };
+    heapRuntime = pendingRuntime;
+    return pendingRuntime;
+  }
   let store = raw;
   if (raw.version === TREASURY_LINEAGE_VERSION - 2) {
     const migrated = migrateLineageStoreV1ToV2(raw);
@@ -1029,6 +1051,27 @@ export function ensureTreasuryAttemptLineageStoreValidated(): string | null {
   const branch = (Memory.runtime as unknown as RuntimeMemoryWithLineage | undefined)?.treasury;
   if (branch?.attemptLineage === undefined) return null;
   return loadLineageStoreRuntime().fatal;
+}
+
+/**
+ * 【XII 工作流 D / Q7】lineage store legacy 版本的 tick-boundary 显式迁移
+ * （唯一 migration owner——beginTick 前置阶段调用）。absent/v3 → idle（零
+ * 写）；v1/v2 → 复用写路径 load（forWrite=true）的确定性迁移 + 全量重验 +
+ * 原子替换；迁移失败 → blocked（原数据保留，读路径继续 fail closed）。
+ */
+export function migrateTreasuryLineageStoreLegacyAtTickBoundary(): { status: "idle" | "migrated" | "blocked"; detail: string | null } {
+  const branch = (Memory.runtime as unknown as RuntimeMemoryWithLineage | undefined)?.treasury;
+  const raw = branch?.attemptLineage as { version?: unknown } | undefined;
+  if (raw === undefined) return { status: "idle", detail: null };
+  if (raw.version === TREASURY_LINEAGE_VERSION) return { status: "idle", detail: null };
+  if (raw.version !== TREASURY_LINEAGE_VERSION - 2 && raw.version !== TREASURY_LINEAGE_VERSION - 1) {
+    return { status: "blocked", detail: `lineage store 版本未知（${String(raw.version).slice(0, 8)}——不迁移，fail closed）` };
+  }
+  const runtime = loadLineageStoreRuntime(true);
+  if (runtime.fatal !== null) {
+    return { status: "blocked", detail: runtime.fatal };
+  }
+  return { status: "migrated", detail: null };
 }
 
 // ── 读取（冻结快照；全部 O(1) 索引） ────────────────────────────────────────

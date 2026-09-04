@@ -468,7 +468,7 @@ function seedDurableIntent(transactionId: string): void {
     intents?: { version: number; entries: Record<string, unknown>; entryCount: number; updatedAt: number };
   };
   if (branch.intents === undefined) {
-    branch.intents = { version: 6, entries: {}, entryCount: 0, updatedAt: Game.time };
+    branch.intents = { version: 7, entries: {}, entryCount: 0, updatedAt: Game.time };
   }
   // 【XI】durableIdentityDigest 必须与持久事实重算一致（X 轮的假值
   // "ffffffffffffffff" 在 intent v7 校验下使 store fail closed——XI 的

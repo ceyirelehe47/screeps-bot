@@ -50,14 +50,17 @@ import {
   peekTreasuryCompletionHeadroomReservation,
   peekTreasuryCompletionHeadroomReservationHealth,
 } from "@/runtime/treasury/completionHeadroomReservation";
-import { peekTreasuryIntentStoreValidation, readTreasuryIntentEntry } from "@/runtime/treasury/intents";
-import { ensureTreasuryQuarantineStoreValidated, readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
+import { peekTreasuryIntentStoreValidation, readTreasuryIntentEntryForQuery } from "@/runtime/treasury/intents";
+import {
+  peekTreasuryQuarantineStoreValidation,
+  readTreasuryQuarantineEntryForQuery,
+} from "@/runtime/treasury/quarantine";
 import {
   peekTreasuryResolutionCleanupHealth,
   readTreasuryResolutionCleanupEntry,
 } from "@/runtime/treasury/resolutionCleanupJournal";
 import {
-  peekTreasuryAuthorizationFaultHealth,
+  peekTreasuryAuthorizationFaultStoreValidation,
   readTreasuryAuthorizationFaultEntry,
 } from "@/runtime/treasury/authorizationFaults";
 import { peekTreasuryWriteFaultHealth, readTreasuryWriteFault } from "@/runtime/treasury/writeFault";
@@ -223,26 +226,35 @@ export function resolveTreasuryAttemptLifecycleOwnership(
 
   // 4) durable Intent。【X 工作流 E / H1/H2】fatal 时 read 返回 undefined 与
   //    absent 同形——全量校验（unrelated entry 损坏同样检出为 fatal），
-  //    fatal → owned+unhealthy（不折叠为 absent）。【XI 工作流 E / M1】
-  //    校验零写（peek——store 不存在 = 健康空，不创建；迁移只在写路径
-  //    load 发生，query 不迁移）。
-  const intentValidationError = peekTreasuryIntentStoreValidation();
-  if (intentValidationError !== null) return unhealthyOwned(`intent store unhealthy（fail closed）: ${intentValidationError}`);
-  if (readTreasuryIntentEntry(transactionId) !== undefined) return owned("active", "durable intent");
+  //    fatal → owned+unhealthy（不折叠为 absent）。【XII 工作流 D / Q2】
+  //    校验零写且不迁移（v1..v6 → migration_required fail closed；当前版本
+  //    → 全量形状校验；store 不存在 = 健康空，不创建）。
+  const intentValidation = peekTreasuryIntentStoreValidation();
+  if (intentValidation.status === "migration_required" || intentValidation.status === "unhealthy") {
+    return unhealthyOwned(`intent store unhealthy（fail closed）: ${intentValidation.detail}`);
+  }
+  if (readTreasuryIntentEntryForQuery(transactionId) !== undefined) return owned("active", "durable intent");
 
-  // 5) Quarantine。【X 工作流 E / H3】同 Intent——ensure 触发全量校验。
-  const quarantineValidationError = ensureTreasuryQuarantineStoreValidated();
-  if (quarantineValidationError !== null) return unhealthyOwned(`quarantine store unhealthy（fail closed）: ${quarantineValidationError}`);
-  if (readTreasuryQuarantineEntry(transactionId) !== undefined) return owned("active", "durable quarantine");
+  // 5) Quarantine。【X 工作流 E / H3】同 Intent——零写全量校验（migration_
+  //    required / unhealthy → owned+unhealthy，不折叠为 absent）。
+  const quarantineValidation = peekTreasuryQuarantineStoreValidation();
+  if (quarantineValidation.status === "migration_required" || quarantineValidation.status === "unhealthy") {
+    return unhealthyOwned(`quarantine store unhealthy（fail closed）: ${quarantineValidation.detail}`);
+  }
+  if (readTreasuryQuarantineEntryForQuery(transactionId) !== undefined) return owned("active", "durable quarantine");
 
   // 6) cleanup journal。
   const journalHealth = peekTreasuryResolutionCleanupHealth();
   if (!journalHealth.healthy) return unhealthyOwned(`cleanup journal store unhealthy（fail closed）: ${journalHealth.detail ?? ""}`);
   if (readTreasuryResolutionCleanupEntry(transactionId) !== undefined) return owned("active", "cleanup journal");
 
-  // 7) Authorization Fault。
-  const faultHealth = peekTreasuryAuthorizationFaultHealth();
-  if (!faultHealth.healthy) return unhealthyOwned(`authorization fault store unhealthy（fail closed）: ${faultHealth.detail ?? ""}`);
+  // 7) Authorization Fault。【XII 工作流 D / Q4】零写全量校验（v1..v4 →
+  //    migration_required fail closed——不折叠为 absent；当前版本 → 全量
+  //    形状校验；absent = 健康空）。
+  const faultValidation = peekTreasuryAuthorizationFaultStoreValidation();
+  if (faultValidation.status === "migration_required" || faultValidation.status === "unhealthy") {
+    return unhealthyOwned(`authorization fault store unhealthy（fail closed）: ${faultValidation.detail}`);
+  }
   if (readTreasuryAuthorizationFaultEntry(transactionId) !== undefined) return owned("active", "authorization fault");
 
   // 8) write-fault marker。

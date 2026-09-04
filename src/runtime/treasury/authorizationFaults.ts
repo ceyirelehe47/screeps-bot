@@ -146,6 +146,7 @@ export function readTreasuryAuthorizationFaultCounters(): typeof faultEvents {
 
 export function resetTreasuryAuthorizationFaultRuntimeForTest(): void {
   heapFaultRuntime = null;
+  faultQueryCache = null;
   faultEvents.writeRejections = 0;
   faultEvents.writeFailures = 0;
   faultEvents.releases = 0;
@@ -163,6 +164,55 @@ function faultBranch(): TreasuryAuthorizationFaultBranch {
 /** 只读读取原始 store（零写）。 */
 export function peekTreasuryAuthorizationFaultStore(): TreasuryAuthorizationFaultStore | undefined {
   return (Memory.runtime as unknown as RuntimeMemoryWithFaults | undefined)?.treasury?.authorizationFaults;
+}
+
+/**
+ * 【XII 工作流 D / Q4】零写全量校验视图（query 路径专用——lifecycle owner
+ * resolver / positive owner verifier 的 Authorization Fault 维度）：absent
+ * （不初始化）/ 当前版本全表校验 valid / v1..v4 migration_required（query
+ * 不迁移——beginTick 恢复或写路径 load 执行）/ unknown unhealthy。结果按
+ * raw 引用缓存在 heap。
+ */
+export type TreasuryAuthorizationFaultQueryStatus =
+  | { readonly status: "valid" }
+  | { readonly status: "absent" }
+  | { readonly status: "migration_required"; readonly detail: string }
+  | { readonly status: "unhealthy"; readonly detail: string };
+
+interface FaultQueryCacheEntry {
+  readonly raw: unknown;
+  readonly verdict: TreasuryAuthorizationFaultQueryStatus;
+}
+
+let faultQueryCache: FaultQueryCacheEntry | null = null;
+
+export function peekTreasuryAuthorizationFaultStoreValidation(): TreasuryAuthorizationFaultQueryStatus {
+  const raw = peekTreasuryAuthorizationFaultStore() as unknown;
+  if (raw === undefined) return { status: "absent" };
+  // fast-path：heap 已 load 成功（同引用）→ 复用其校验结论（避免重复全表扫描）。
+  if (heapFaultRuntime !== null && heapFaultRuntime.store === raw) {
+    return heapFaultRuntime.fatal === null
+      ? { status: "valid" }
+      : { status: "unhealthy", detail: heapFaultRuntime.fatal };
+  }
+  if (faultQueryCache !== null && faultQueryCache.raw === raw) return faultQueryCache.verdict;
+  const version = (raw as { version?: unknown }).version;
+  let verdict: TreasuryAuthorizationFaultQueryStatus;
+  if (version === AUTHORIZATION_FAULT_VERSION) {
+    const shapeError = validateFaultStoreShape(raw as TreasuryAuthorizationFaultStore);
+    verdict = shapeError === null
+      ? { status: "valid" }
+      : { status: "unhealthy", detail: `${shapeError}（authorization fault store fail closed，query 零写）` };
+  } else if (version === 1 || version === 2 || version === 3 || version === 4) {
+    verdict = {
+      status: "migration_required",
+      detail: `authorization fault store v${String(version)} 待迁移（query 零写——写路径 load 执行）`,
+    };
+  } else {
+    verdict = { status: "unhealthy", detail: `未知 authorization fault store 版本 ${String(version)}` };
+  }
+  faultQueryCache = { raw, verdict };
+  return verdict;
 }
 
 function encodeFaultKey(transactionId: string): string {

@@ -483,7 +483,7 @@ describe("Remediation X H：health-complete owner resolution", () => {
       intents?: { version: number; entries: Record<string, unknown>; entryCount: number; updatedAt: number };
     };
     if (branch.intents === undefined) {
-      branch.intents = { version: 6, entries: {}, entryCount: 0, updatedAt: Game.time };
+      branch.intents = { version: 7, entries: {}, entryCount: 0, updatedAt: Game.time };
     }
     // 【XI】durableIdentityDigest 必须与持久事实重算一致（假值会使 intent
     // store 在 v7 校验下 fail closed——正向 handoff 判 blocked 而非 owner）。
@@ -990,10 +990,14 @@ describe("Remediation X 压力：长期运行与中断恢复", () => {
     const service = makeService();
     // 窗口 1：issuer v1→v2 迁移写入后 reset → 迁移幂等（无双 watermark）。
     seedLegacyIssuerStore(100);
-    const { peekTreasuryAttemptIssuerHealth, checkTreasuryServiceIssuedAttemptId } = require("@/runtime/treasury/attemptIssuer") as typeof import("@/runtime/treasury/attemptIssuer");
-    // load 触发 v1→v2 迁移（check → loadIssuerRuntime）。
-    void checkTreasuryServiceIssuedAttemptId("ti2_1_0123456789abcdef");
+    const { peekTreasuryAttemptIssuerHealth, checkTreasuryServiceIssuedAttemptId, migrateTreasuryAttemptIssuerStoreLegacyAtTickBoundary } = require("@/runtime/treasury/attemptIssuer") as typeof import("@/runtime/treasury/attemptIssuer");
+    // 【XII/D】check 已零写（v1 → store_unhealthy fail closed，不迁移）；
+    // 迁移唯一 owner 是 tick-boundary migration 阶段。
+    expect(checkTreasuryServiceIssuedAttemptId("ti2_1_0123456789abcdef").status).toBe("store_unhealthy");
+    expect(peekTreasuryAttemptIssuerHealth().healthy).toBe(false);
+    expect(migrateTreasuryAttemptIssuerStoreLegacyAtTickBoundary().status).toBe("migrated");
     expect(peekTreasuryAttemptIssuerHealth().healthy).toBe(true);
+    expect(checkTreasuryServiceIssuedAttemptId("ti2_1_0123456789abcdef").status).toBe("forged_future");
     resetTreasuryAttemptIssuerHeapCacheForTest();
     expect(peekTreasuryAttemptIssuerHealth().healthy).toBe(true);
     expect(peekTreasuryIssuedAttemptWatermark()).toBe(0);
@@ -1012,7 +1016,7 @@ describe("Remediation X 压力：长期运行与中断恢复", () => {
     const { completeTreasuryIssuedTicketHandoff } = require("@/runtime/treasury/attemptIssuanceHandoff") as typeof import("@/runtime/treasury/attemptIssuanceHandoff");
     if (handoffTarget.status === "opened") {
       const branchIntents = treasuryBranch() as { intents?: { version: number; entries: Record<string, unknown>; entryCount: number; updatedAt: number } };
-      if (branchIntents.intents === undefined) branchIntents.intents = { version: 6, entries: {}, entryCount: 0, updatedAt: Game.time };
+      if (branchIntents.intents === undefined) branchIntents.intents = { version: 7, entries: {}, entryCount: 0, updatedAt: Game.time };
       // 【XI】durableIdentityDigest 与持久事实重算一致（假值使 intent store
       // fail closed——正向 handoff 判 blocked 而非 exact_owner）。
       const x4Seeded: Record<string, unknown> = {

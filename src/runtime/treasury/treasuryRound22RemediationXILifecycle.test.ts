@@ -644,10 +644,21 @@ describe("Remediation XI M：query-pure migration", () => {
     expect(report.rangeMigration.status).toBe("blocked");
     // blocked 不阻断 ticket GC（互不依赖）。
     expect(report.skipped).toBeNull();
-    // 修复证明输入（issuer 回 v1 → 严格归 legacy）后 coordinator 完成迁移。
+    // 【XII/D】修复证明输入：issuer 回 v1。同 tick 内 coordinator 的
+    // authority 阶段先把 issuer v1 迁移为 v2（migratedAtTick = 当前
+    // tick），range v1 的 updatedAt（20）≥ 迁移时刻时不可证明 → 仍
+    // blocked（保守——生产中时间推进后 updatedAt 严格早于迁移时刻即自愈）。
     treasuryBranch().attemptIssuer = { version: 1, highWatermark: 100, updatedAt: Game.time };
     resetTreasuryAttemptIssuerHeapCacheForTest();
     resetTreasuryChainCertificateHeapCacheForTest();
+    const sameTick = runTreasuryLifecycleGcCoordinator();
+    expect(sameTick.authorityMigration.attemptIssuer.status).toBe("migrated");
+    // 修复 issuer 后时间推进（updatedAt 20 严格早于迁移时刻 → 全部
+    // ti1_ → legacy 严格可证）→ coordinator 完成迁移。
+    treasuryBranch().attemptIssuer = { version: 1, highWatermark: 100, updatedAt: Game.time };
+    resetTreasuryAttemptIssuerHeapCacheForTest();
+    resetTreasuryChainCertificateHeapCacheForTest();
+    Game.time += 100;
     const repaired = runTreasuryLifecycleGcCoordinator();
     expect(repaired.rangeMigration.status).toBe("migrated");
     expect((treasuryBranch().retiredAttemptRanges as { version: number }).version).toBe(2);

@@ -62,7 +62,7 @@ import { recordTreasuryWriteFault } from "@/runtime/treasury/writeFault";
 import { treasuryAttemptIdentityRelation } from "@/runtime/treasury/identityProof";
 import { computeTreasuryAttemptLineageId } from "@/runtime/treasury/attemptLineage";
 import { treasuryRearmCapabilityBindingMatchesLineageRecord } from "@/runtime/treasury/lineageHandoff";
-import { resetTreasuryLineageRuntimeForTest } from "@/runtime/treasury/attemptLineage";
+import { resetTreasuryLineageRuntimeForTest, migrateTreasuryLineageStoreLegacyAtTickBoundary } from "@/runtime/treasury/attemptLineage";
 
 const ROOMS: RoomSpec[] = [
   {
@@ -206,6 +206,8 @@ describe("lineage publication 原子性（第十八轮 24.1）", () => {
       updatedAt: Game.time,
     };
     resetTreasuryLineageRuntimeForTest();
+    // 【XII/D】query 零写——v2 不再读时迁移；显式 tick-boundary owner 执行 v2→v3 后继续容量断言。
+    expect(migrateTreasuryLineageStoreLegacyAtTickBoundary().status).toBe("migrated");
     expect(peekTreasuryAttemptLineageHealth().healthy).toBe(true);
     expect(peekTreasuryAttemptLineageHealth().entryCount).toBe(TREASURY_LINEAGE_MAX_ENTRIES);
     const next = advanceTick();
@@ -1018,6 +1020,8 @@ describe("lineage store v1 → v2 迁移（第十八轮 24.9）", () => {
       },
     };
     resetTreasuryLineageRuntimeForTest();
+    // 【XII/D】query 零写——v1 不再读时迁移；显式 owner 触发 v1→v2 迁移（capability_issued 回退 rearm_ready + 清 v1 child）后再读取。
+    expect(migrateTreasuryLineageStoreLegacyAtTickBoundary().status).toBe("migrated");
     const record = readTreasuryAttemptLineageRecord(lineageId);
     expect(record).toBeDefined();
     expect(record?.state).toBe("rearm_ready");

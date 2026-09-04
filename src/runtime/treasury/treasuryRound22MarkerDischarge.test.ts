@@ -294,7 +294,11 @@ describe("resolution cleanup journal（第二十二轮第七节）", () => {
 
 describe("release-trusted receipt 分离（第二十二轮第八节）", () => {
   it("不存在 → absent；store 损坏 → store_unhealthy（绝不 trusted）", () => {
+    // 【XII/D】trusted lookup 零写——absent 分支不再隐式创建 Memory 分支。
+    const runtimeBefore = (Memory.runtime as { treasury?: unknown } | undefined)?.treasury;
     expect(lookupTreasuryTrustedSettledReceipt("r22_absent_tx").status).toBe("absent");
+    expect((Memory.runtime as { treasury?: unknown } | undefined)?.treasury).toBe(runtimeBefore);
+    if (!Memory.runtime) Memory.runtime = {} as never;
     (Memory.runtime as unknown as { treasury?: { receipts?: unknown } }).treasury = {
       receipts: { version: 999, settled: {}, entryCount: 0, nextExpiryTick: null },
     };

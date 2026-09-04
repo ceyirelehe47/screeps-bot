@@ -313,19 +313,23 @@ describe("Remediation X：ticket handoff / namespace / health-complete 架构守
     expect(handoffSource).toContain("resolveTreasuryAttemptLifecycleOwnership");
   });
 
-  it("X7：Intent/Quarantine 的 fatal-折叠 read API 不得在未检查健康时作为 absence 证明（resolver 内 ensure 前置）", () => {
+  it("X7：Intent/Quarantine 的 fatal-折叠 read API 不得在未检查健康时作为 absence 证明（resolver 内 validation 前置 + 零写）", () => {
     const resolverSource = readSource("runtime/treasury/treasuryLifecycleOwnerResolver.ts");
-    // 【XI/E】Intent 维度零写校验（peek——store 不存在 = 健康空不创建，
-    // 在位 → load 全量校验）；Quarantine 维持 ensure（absent 早退零写）。
+    // 【XII/D】Intent/Quarantine 维度均改零写全量校验视图（不 load、不迁移、
+    // 不创建空 store——legacy 版本 migration_required fail closed），单条
+    // 读取用 ForQuery 变体（零写）。
     expect(resolverSource).toContain("peekTreasuryIntentStoreValidation()");
-    expect(resolverSource).toContain("ensureTreasuryQuarantineStoreValidated()");
-    // 校验前置于对应 read。
+    expect(resolverSource).toContain("readTreasuryIntentEntryForQuery(transactionId)");
     const intentEnsure = resolverSource.indexOf("peekTreasuryIntentStoreValidation()");
-    const intentRead = resolverSource.indexOf("readTreasuryIntentEntry(transactionId)");
+    const intentRead = resolverSource.indexOf("readTreasuryIntentEntryForQuery(transactionId)");
     expect(intentRead).toBeGreaterThan(intentEnsure);
-    const quarantineEnsure = resolverSource.indexOf("ensureTreasuryQuarantineStoreValidated()");
-    const quarantineRead = resolverSource.indexOf("readTreasuryQuarantineEntry(transactionId)");
+    expect(resolverSource).toContain("peekTreasuryQuarantineStoreValidation()");
+    expect(resolverSource).toContain("readTreasuryQuarantineEntryForQuery(transactionId)");
+    const quarantineEnsure = resolverSource.indexOf("peekTreasuryQuarantineStoreValidation()");
+    const quarantineRead = resolverSource.indexOf("readTreasuryQuarantineEntryForQuery(transactionId)");
     expect(quarantineRead).toBeGreaterThan(quarantineEnsure);
+    // Authorization Fault 维度同样零写校验前置（migration_required 不折叠为 absent）。
+    expect(resolverSource).toContain("peekTreasuryAuthorizationFaultStoreValidation()");
     // settled receipt 的整店 health 前置。
     expect(resolverSource).toContain("peekTreasuryReceiptHealth()");
     // summary probe 未装配 → owned（不静默跳过维度）。

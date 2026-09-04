@@ -30,7 +30,7 @@ import {
 } from "@/runtime/treasury/attemptLineage";
 import { readTreasuryGenerationRetirementProof, resetTreasuryGenerationRetirementRuntimeForTest, peekTreasuryGenerationRetirementHealth, type TreasuryGenerationRetirementProof } from "@/runtime/treasury/generationRetirementAuthority";
 import { treasuryTombstoneReplacementVerdict } from "@/runtime/treasury/lineageGenerationRetirement";
-import { compactTreasuryTerminalLineage, lookupTreasuryRetirementSummaryByLineageId, lookupTreasuryRetirementSummaryByRoot, resetTreasuryRetirementSummaryRuntimeForTest, TREASURY_RETIREMENT_SUMMARY_VERSION } from "@/runtime/treasury/lineageRetirementSummary";
+import { compactTreasuryTerminalLineage, lookupTreasuryRetirementSummaryByLineageId, lookupTreasuryRetirementSummaryByRoot, resetTreasuryRetirementSummaryRuntimeForTest, migrateTreasuryRetirementSummaryStoreLegacyAtTickBoundary, TREASURY_RETIREMENT_SUMMARY_VERSION } from "@/runtime/treasury/lineageRetirementSummary";
 import { writeTreasuryResolutionTombstone, readTreasuryResolutionTombstone } from "@/runtime/treasury/resolutionStore";
 import { recomputeTreasuryDurableIdentityDigest } from "@/runtime/treasury/identityProof";
 import { validateTreasurySemanticLineage, resetTreasurySemanticLineageSourcesForTest } from "@/runtime/treasury/semanticLineageValidation";
@@ -461,6 +461,8 @@ describe("root 与 historical child replacement（第二十一轮 12）", () => 
       delete store.entries[key].finalExact;
     }
     resetTreasuryRetirementSummaryRuntimeForTest();
+    // 【XII/D】query 零写——v2 不再读时迁移；显式 owner 拆入 legacy archive（replay-only 平面——replacement_missing 语义经 archive 继续）。
+    expect(migrateTreasuryRetirementSummaryStoreLegacyAtTickBoundary().status).toBe("migrated");
     const gen1Proof = readTreasuryGenerationRetirementProof(chain.lineageId, 1);
     // 恢复 gen0 proof 供查（不影响 v2 语义断言）。
     void gen1Proof;

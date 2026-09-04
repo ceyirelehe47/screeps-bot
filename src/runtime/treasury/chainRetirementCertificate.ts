@@ -140,6 +140,8 @@ interface CertificateRuntime {
   store: TreasuryChainCertificateStore;
   byLineageId: Map<string, string>;
   fatal: string | null;
+  /** heap 空视图是否已发布到 Memory（absent + 只读查询 → false——零写）。 */
+  published: boolean;
 }
 
 interface RangeRuntime {
@@ -279,7 +281,14 @@ function validateCertificateStoreShape(store: unknown): string | null {
   return null;
 }
 
-function loadCertificateRuntime(): CertificateRuntime {
+/**
+ * 【XII 工作流 D / Q1】certificate runtime 加载：store 不存在时——只读
+ * 路径（forWrite=false，lookup/health/generation outcome）返回 heap-only
+ * 空视图（零写——**不**创建 `chainRetirementCertificates` 分支）；写路径
+ * （forWrite=true，record）创建空 store 并发布到 Memory。store 在位 →
+ * 全量形状校验（fatal fail closed，原数据保留）。
+ */
+function loadCertificateRuntime(forWrite = false): CertificateRuntime {
   if (heapCertificateRuntime !== null) return heapCertificateRuntime;
   const raw = (Memory.runtime as unknown as RuntimeMemoryWithCertificates | undefined)?.treasury?.chainRetirementCertificates;
   if (raw === undefined) {
@@ -289,8 +298,11 @@ function loadCertificateRuntime(): CertificateRuntime {
       entryCount: 0,
       updatedAt: Game.time,
     };
-    certificateBranch().chainRetirementCertificates = store;
-    heapCertificateRuntime = { store, byLineageId: new Map(), fatal: null };
+    heapCertificateRuntime = { store, byLineageId: new Map(), fatal: null, published: false };
+    if (forWrite) {
+      certificateBranch().chainRetirementCertificates = store;
+      heapCertificateRuntime.published = true;
+    }
     return heapCertificateRuntime;
   }
   const shapeError = validateCertificateStoreShape(raw);
@@ -300,8 +312,21 @@ function loadCertificateRuntime(): CertificateRuntime {
       byLineageId.set(certificate.lineageId, key);
     }
   }
-  heapCertificateRuntime = { store: raw as unknown as TreasuryChainCertificateStore, byLineageId, fatal: shapeError };
+  heapCertificateRuntime = { store: raw as unknown as TreasuryChainCertificateStore, byLineageId, fatal: shapeError, published: true };
   return heapCertificateRuntime;
+}
+
+/**
+ * 【XII 工作流 D / Q1】写前发布（record 路径专用）：只读查询可能已建立
+ * heap-only 空视图（published=false）——真实写入前必须发布到 Memory，
+ * 否则写入落在 heap 幽灵对象上（Memory 从未收到权威数据）。
+ */
+function ensureCertificateStorePublished(): void {
+  const runtime = loadCertificateRuntime(true);
+  if (!runtime.published) {
+    certificateBranch().chainRetirementCertificates = runtime.store;
+    runtime.published = true;
+  }
 }
 
 function validateRangeStoreShape(store: unknown): string | null {
@@ -1218,6 +1243,9 @@ export function recordTreasuryChainRetirementCertificate(input: {
       return { status: "rejected", detail: "certificate 满载驱逐 read-back 失败（不写新 certificate——fail closed）" };
     }
   }
+  // 【XII 工作流 D / Q1】全部校验通过、即将真实写入——先发布 heap 空视图
+  // （absent 首写时创建 store；此前的拒绝路径全部零写，I6）。
+  ensureCertificateStorePublished();
   runtime.store.entries[key] = cloneTreasuryDurableValue(candidate);
   runtime.store.entryCount += 1;
   runtime.store.updatedAt = Game.time;

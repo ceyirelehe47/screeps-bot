@@ -660,6 +660,12 @@ function validateCleanupEntryReadBack(
 export function readTreasuryResolutionCleanupEntry(
   transactionId: string,
 ): Readonly<TreasuryResolutionCleanupEntry> | undefined {
+  // 【XII 工作流 D / Q4】store 不存在 = absent（零写——不隐式创建空 store；
+  // 创建只发生在写路径 load）。fatal store 的 undefined 与 absent 同形由
+  // 调用方的 peekHealth 前置区分（GRA / resolver 均已有）。
+  if ((Memory.runtime as unknown as RuntimeMemoryWithCleanup | undefined)?.treasury?.resolutionCleanup === undefined) {
+    return undefined;
+  }
   const runtime = loadCleanupRuntime();
   if (runtime.fatal !== null) return undefined;
   const entry = runtime.store.entries[CLEANUP_KEY_PREFIX + transactionId];

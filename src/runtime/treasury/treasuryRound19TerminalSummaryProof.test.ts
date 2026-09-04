@@ -38,6 +38,7 @@ import {
   lookupTreasuryRetirementSummaryByRoot,
   peekTreasuryRetirementSummaryHealth,
   resetTreasuryRetirementSummaryRuntimeForTest,
+  migrateTreasuryRetirementSummaryStoreLegacyAtTickBoundary,
   TREASURY_RETIREMENT_SUMMARY_MAX_ENTRIES,
 } from "@/runtime/treasury/lineageRetirementSummary";
 import { treasuryTombstoneReplacementVerdict } from "@/runtime/treasury/lineageGenerationRetirement";
@@ -396,7 +397,9 @@ describe("summary v1 迁移与满载（第十九轮 25.6/25.9）", () => {
       delete (store.entries[key] as unknown as Record<string, unknown>).finalExact;
     }
     resetTreasuryRetirementSummaryRuntimeForTest();
-    // load 触发 v1→v2 迁移（+【第二十二轮】v2 legacy archive 拆分）。
+    // 【XII/D】query 零写——v1 不再经 lookup 读时迁移；显式 tick-boundary
+    // migration owner 执行 v1→v2（+【第二十二轮】v2 legacy archive 拆分）。
+    expect(migrateTreasuryRetirementSummaryStoreLegacyAtTickBoundary().status).toBe("migrated");
     void lookupTreasuryRetirementSummaryByRoot(root);
     // 【第二十二轮】v1→v2→legacy archive 链：root 门禁经双平面 lookup 继续。
     expect(lookupTreasuryRetirementSummaryByRoot(root)).toBeDefined();
