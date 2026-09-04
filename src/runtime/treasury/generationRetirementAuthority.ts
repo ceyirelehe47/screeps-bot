@@ -45,13 +45,22 @@ import {
   peekTreasurySemanticLineageRecordSource,
   type TreasuryGenerationProofSource,
 } from "@/runtime/treasury/semanticLineageValidation";
-import { registerTreasuryGenerationProofReleaseForAssembly } from "@/runtime/treasury/resolutionStore";
+import {
+  peekTreasuryResolutionStoreHealth,
+  readTreasuryResolutionTombstone,
+  registerTreasuryGenerationProofReleaseForAssembly,
+} from "@/runtime/treasury/resolutionStore";
+import {
+  peekTreasuryResolutionCleanupHealth,
+  readTreasuryResolutionCleanupEntry,
+} from "@/runtime/treasury/resolutionCleanupJournal";
 import {
   TREASURY_IDENTITY_PROFILES,
   treasuryProofClassOfIdentityProfile,
   validateTreasuryIdentityProfileFacts,
   treasuryIdentityProfileOfFacts,
 } from "@/runtime/treasury/identityProfile";
+import { parseTreasuryIssuedInitialAttemptId } from "@/runtime/treasury/attemptIssuer";
 
 export const TREASURY_GENERATION_RETIREMENT_VERSION = 2;
 /** v1（Round 20 exact proof，无 identityProfile）——确定性迁移到 v2。 */
@@ -565,11 +574,15 @@ export function persistTreasuryGenerationRetirementProof(
     };
   }
   if (runtime.store.entryCount >= TREASURY_GENERATION_RETIREMENT_MAX_ENTRIES) {
-    // 【IX 工作流 B/C】GRA 是 recent exact detail（非永久层）——满载不再
-    // 永久 fail closed：有界 eligible 扫描驱逐已被 retirement summary 接管
-    // 的 root 代 proof（summary 持有该 chain 的完整 exact terminal facts
-    // ——root/final identity + proof class；probe 未装配/summary 不在位/
-    // store unhealthy 一律不驱逐，fail closed）。无 eligible → rejected。
+    // 【IX 工作流 B/C → X 工作流 F】GRA 是 recent exact detail（非永久层）
+    // ——满载不再永久 fail closed：有界 eligible 扫描驱逐被 matching exact
+    // current summary **按 exact replacement relation 全维度接管**（root ID/
+    // lineage/issuer domain/terminalState 相容/authorityClass/identity
+    // profile/digest/canonical root identity/durable/contract/cohort/
+    // lowlevel 矩阵——legacy replay-only 不授权）且无 exact 依赖（journal/
+    // tombstone/active lineage 关闭）的 root 代 proof；probe 未装配/summary
+    // 不在位/store unhealthy/relation 不一致/依赖在位一律不驱逐，fail
+    // closed。无 eligible → rejected。
     const evicted = evictGenerationProofsSupersededBySummary(runtime);
     if (evicted === 0) {
       generationRetirementEvents.writeFailures += 1;
@@ -720,12 +733,33 @@ export function registerTreasuryGenerationRetirementSemanticSourceForAssembly():
 }
 registerTreasuryGenerationRetirementSemanticSourceForAssembly();
 
-// ──【IX 工作流 B/C】retirement summary 的 assembly probe（GRA 满载驱逐
-//    前验证"summary 已接管该 chain 的 exact terminal facts"。注册方：
-//    lineageRetirementSummary 模块底部（GRA 与 summary 互相在对方上游——
-//    直接 import 成环）。未装配 → 无驱逐（fail closed）。
+// ──【IX 工作流 B/C → X 工作流 F】retirement summary 的 assembly probe（GRA
+//    满载驱逐前验证"summary 已按 exact replacement relation 接管该 proof 的
+//    retirement 语义"）。注册方：lineageRetirementSummary 模块底部（GRA 与
+//    summary 互相在对方上游——直接 import 成环）。未装配 → 无驱逐（fail
+//    closed）。【X/F】probe 返回完整 summary 视图（modern-only——legacy
+//    replay-only archive 不进入驱逐判定，G6）。
+interface TreasuryGenerationSummaryReplacementView {
+  readonly schemaVersion: number;
+  readonly lineageId: string;
+  readonly rootTransactionId: string;
+  readonly rootIdentityDigest: string;
+  readonly terminalState: string;
+  readonly finalGeneration: number;
+  readonly finalAttemptId: string;
+  readonly authorityClass?: string;
+  readonly rootExact?: {
+    readonly digest: string;
+    readonly contractDigest?: string;
+    readonly authorizationCohortDigest?: string;
+    readonly durableIdentityDigest?: string;
+    readonly lowlevelSource?: string;
+    readonly proofClass: string;
+  };
+}
+
 interface TreasuryGenerationSummaryProbe {
-  readonly summaryOfLineageId: (lineageId: string) => { readonly lineageId?: unknown } | undefined;
+  readonly summaryOfLineageId: (lineageId: string) => TreasuryGenerationSummaryReplacementView | undefined;
   readonly summaryStoreHealthy: () => boolean;
 }
 
@@ -735,10 +769,118 @@ export function registerTreasuryGenerationSummaryProbeForAssembly(probe: Treasur
   generationSummaryProbe = probe;
 }
 
-/** 有界（≤硬容量）eligible 扫描：驱逐 generation=0 且 summary（同 lineage）
- *  在位的 root proof——exact terminal facts 已由 summary 承接（IX Q10：
- *  600 chain 后 GRA 不永久停机）。返回驱逐数（read-back 失败即停）。 */
-function evictGenerationProofsSupersededBySummary(runtime: { store: { entries: Record<string, TreasuryGenerationRetirementProof>; entryCount: number; updatedAt: number }; byAttempt: Map<string, string> }): number {
+// 【X 工作流 F / G7】GRA ↔ attemptLineage 模块环规避：lineage 依赖维度经
+// probe 注入（注册方：attemptLineage 模块底部）。未装配 → 无驱逐（fail
+// closed——依赖不可判定时不删除 proof）。
+interface TreasuryGenerationLineageProbe {
+  readonly lineageOf: (transactionId: string) => { readonly state?: unknown } | undefined;
+  readonly lineageStoreHealthy: () => boolean;
+}
+
+let generationLineageProbe: TreasuryGenerationLineageProbe | null = null;
+
+export function registerTreasuryGenerationLineageProbeForAssembly(probe: TreasuryGenerationLineageProbe): void {
+  generationLineageProbe = probe;
+}
+
+/**
+ * 【X 工作流 F】GRA proof ↔ summary 的 exact replacement relation（单一
+ * canonical verifier——驱逐决策不得自行比较字段子集）。维度：
+ *  - summary 是当前 exact schema（v3；legacy replay-only 不授权——G6）；
+ *  - root transaction ID / lineage ID / root issuer domain 一致（G1/N10）；
+ *  - generation 语义：只有 root 代（generation=0）proof 可由 summary 的
+ *    root exact identity 接管；
+ *  - retirement outcome 相容：gen0 proof 的 resolution 恒 not_executed——
+ *    root-only chain 的 summary terminalState=chain_committed 与之矛盾（G2）；
+ *  - proof class（authorityClass）/ identity profile 一致（G3）；
+ *  - digest / canonical root identity（五元合成）一致（G4）；
+ *  - contract / cohort / durable / lowlevel provenance 按 class 矩阵逐维
+ *    一致（G5）。
+ * 返回 null = exact replacement 在位；字符串 = 首个不一致维度。
+ */
+export function verifyTreasuryGenerationSummaryReplacement(
+  proof: Readonly<TreasuryGenerationRetirementProof>,
+  summary: Readonly<TreasuryGenerationSummaryReplacementView>,
+): string | null {
+  if (summary.schemaVersion !== 3) return "summary 不是当前 exact schema（legacy replay-only archive 不授权 destructive eviction）";
+  if (proof.rootTransactionId !== summary.rootTransactionId) return "root transaction ID 不一致";
+  if (proof.lineageId !== summary.lineageId) return "lineage ID 不一致";
+  if (proof.generation !== 0) return "只有 root 代（generation=0）proof 可由 summary 接管";
+  if (summary.finalGeneration === 0 && summary.terminalState === "chain_committed") {
+    return "summary terminalState 与 root not-executed proof 矛盾（root-only chain 的 committed 属于 root）";
+  }
+  if (summary.authorityClass !== proof.authorityClass) return "proof class（authorityClass）不一致";
+  if (summary.rootExact === undefined) return "summary 缺少 rootExact exact identity";
+  const rootExact = summary.rootExact;
+  if (proof.digest !== rootExact.digest) return "digest 不一致";
+  if (proof.rootIdentityDigest !== summary.rootIdentityDigest) return "canonical root identity（五元合成）不一致";
+  if (proof.durableIdentityDigest !== rootExact.durableIdentityDigest) return "durable identity 不一致";
+  if (proof.authorityClass === "identity-bound") {
+    if (proof.contractDigest !== rootExact.contractDigest) return "contract digest 不一致（identity-bound 必须成对一致）";
+    if (proof.authorizationCohortDigest !== rootExact.authorizationCohortDigest) return "authorization cohort digest 不一致（identity-bound 必须成对一致）";
+    if (rootExact.lowlevelSource !== undefined) return "rootExact 携带 lowlevelSource（与 identity-bound class 矛盾）";
+  } else {
+    if (proof.lowlevelSource !== rootExact.lowlevelSource) return "lowlevel source 不一致";
+    if (rootExact.contractDigest !== undefined || rootExact.authorizationCohortDigest !== undefined) {
+      return "rootExact 携带 contract/cohort（与 lowlevel class 矛盾）";
+    }
+  }
+  const summaryProfile = treasuryIdentityProfileOfFacts({
+    digest: rootExact.digest,
+    ...(rootExact.contractDigest !== undefined ? { contractDigest: rootExact.contractDigest } : {}),
+    ...(rootExact.authorizationCohortDigest !== undefined ? { authorizationCohortDigest: rootExact.authorizationCohortDigest } : {}),
+    ...(rootExact.durableIdentityDigest !== undefined ? { durableIdentityDigest: rootExact.durableIdentityDigest } : {}),
+    ...(rootExact.lowlevelSource !== undefined ? { lowlevelSource: rootExact.lowlevelSource } : {}),
+  });
+  if (summaryProfile === null || summaryProfile !== proof.identityProfile) return "identity profile 不一致";
+  const proofParsedRoot = parseTreasuryIssuedInitialAttemptId(proof.rootTransactionId);
+  const summaryParsedRoot = parseTreasuryIssuedInitialAttemptId(summary.rootTransactionId);
+  if (proofParsedRoot === null || summaryParsedRoot === null || proofParsedRoot.namespace !== summaryParsedRoot.namespace) {
+    return "root issuer domain 不一致（ti1_/ti2_ 是两个独立发行域）";
+  }
+  return null;
+}
+
+/**
+ * 【X 工作流 F / G7】exact 依赖检查：仍依赖该 proof 的 active cleanup /
+ * tombstone / lineage 事实在位（或相关 store 不可信）→ 不得驱逐。全部
+ * health-complete（损坏 = 依赖在位，fail closed）。返回 null = 无依赖。
+ */
+function generationProofDependenciesActive(proof: Readonly<TreasuryGenerationRetirementProof>): string | null {
+  const journalHealth = peekTreasuryResolutionCleanupHealth();
+  if (!journalHealth.healthy) return `cleanup journal store unhealthy（fail closed）: ${journalHealth.detail ?? ""}`;
+  if (readTreasuryResolutionCleanupEntry(proof.transactionId) !== undefined) return `cleanup journal 引用 ${proof.transactionId.slice(0, 24)}`;
+  const tombstoneHealth = peekTreasuryResolutionStoreHealth();
+  if (!tombstoneHealth.healthy) return `resolution store unhealthy（fail closed）: ${tombstoneHealth.detail ?? ""}`;
+  if (readTreasuryResolutionTombstone(proof.transactionId) !== undefined) return `resolution tombstone 在位（exact consumer——${proof.transactionId.slice(0, 24)}）`;
+  if (generationLineageProbe === null) return "attempt lineage probe 未装配（fail closed——依赖不可判定）";
+  if (!generationLineageProbe.lineageStoreHealthy()) return "attempt lineage store unhealthy（fail closed）";
+  const lineage = generationLineageProbe.lineageOf(proof.transactionId);
+  if (
+    lineage !== undefined &&
+    lineage.state !== "chain_committed" &&
+    lineage.state !== "non_rearmable_retired" &&
+    lineage.state !== "forensic_isolated"
+  ) {
+    return `active lineage 仍引用（state=${String(lineage.state)}）`;
+  }
+  return null;
+}
+
+/**
+ * 有界（≤硬容量）eligible 扫描：驱逐被 matching exact current summary 真正
+ * 接管 retirement 语义的 root 代 proof（【X 工作流 F】不再是"同 lineage 有
+ * summary 即驱逐"的存在性检查——verifyTreasuryGenerationSummaryReplacement
+ * 全维度 + generationProofDependenciesActive 依赖关闭双门禁；summary store
+ * 或 GRA store 不健康 / probe 未装配一律不驱逐，fail closed）。索引维护：
+ * 删除同步清理 byAttempt 与 byLineage；read-back 失败完整恢复 store 与全部
+ * 索引（G11）。返回驱逐数。
+ */
+function evictGenerationProofsSupersededBySummary(runtime: {
+  store: { entries: Record<string, TreasuryGenerationRetirementProof>; entryCount: number; updatedAt: number };
+  byAttempt: Map<string, string>;
+  byLineage: Map<string, Set<string>>;
+}): number {
   if (generationSummaryProbe === null) return 0;
   if (!generationSummaryProbe.summaryStoreHealthy()) return 0;
   let evicted = 0;
@@ -746,15 +888,32 @@ function evictGenerationProofsSupersededBySummary(runtime: { store: { entries: R
     if (proof.generation !== 0) continue;
     const summary = generationSummaryProbe.summaryOfLineageId(proof.lineageId);
     if (summary === undefined) continue;
+    const relationError = verifyTreasuryGenerationSummaryReplacement(proof, summary);
+    if (relationError !== null) continue; // exact relation 不一致（G1-G6）——不驱逐，继续扫描
+    const dependency = generationProofDependenciesActive(proof);
+    if (dependency !== null) continue; // exact consumer 仍依赖（G7）——不驱逐
     delete runtime.store.entries[key];
     runtime.store.entryCount -= 1;
     runtime.byAttempt.delete(proof.transactionId);
+    const lineageKeys = runtime.byLineage.get(proof.lineageId);
+    if (lineageKeys !== undefined) {
+      lineageKeys.delete(key);
+      if (lineageKeys.size === 0) runtime.byLineage.delete(proof.lineageId);
+    }
     const rawStore = (Memory.runtime as unknown as { treasury?: { generationRetirementProofs?: { entries?: Record<string, unknown>; entryCount?: number } } } | undefined)
       ?.treasury?.generationRetirementProofs;
     if (rawStore === undefined || rawStore.entries?.[key] !== undefined || rawStore.entryCount !== runtime.store.entryCount) {
+      // read-back 失败：完整恢复 store 与全部索引（entries/entryCount/
+      // byAttempt/byLineage——G11）。
       runtime.store.entries[key] = proof;
       runtime.store.entryCount += 1;
       runtime.byAttempt.set(proof.transactionId, key);
+      let restoredKeys = runtime.byLineage.get(proof.lineageId);
+      if (restoredKeys === undefined) {
+        restoredKeys = new Set<string>();
+        runtime.byLineage.set(proof.lineageId, restoredKeys);
+      }
+      restoredKeys.add(key);
       break;
     }
     evicted += 1;

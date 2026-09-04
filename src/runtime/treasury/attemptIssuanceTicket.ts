@@ -38,6 +38,13 @@ import { mintTreasuryInitialAttemptId, peekTreasuryIssuedAttemptWatermark } from
 export const TREASURY_ISSUED_TICKET_VERSION = 1;
 /** active ticket 容量（满载 fail closed——阻断新 issuance，不按年龄删除）。 */
 export const TREASURY_ISSUED_TICKET_MAX_ENTRIES = 64;
+/**
+ * 【X 工作流 G】**总 entry 硬容量**（active + terminal）：active 上限只是
+ * 并发约束，不是 store 容量——无总量上限时 consumed/expired 的产生速率
+ * 长期高于 GC 回收速率会让 Memory 无界增长。128 = active 64 + terminal
+ * 回收余量（GC 每批 ≤8/tick，满载前由 open 的 bounded reclaim 先行回收）。
+ */
+export const TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES = 128;
 /** active ticket 的显式过期窗口（过期为状态转换，非删除）。 */
 export const TREASURY_ISSUED_TICKET_TTL_TICKS = 500;
 /** GC coordinator 每 tick 的 terminal ticket 淘汰预算（有界）。 */
@@ -145,6 +152,9 @@ function validateTicketStoreShape(store: unknown): string | null {
     const error = validateTicketEntryShape(candidate.entries[key], key);
     if (error !== null) return error;
   }
+  if (keys.length > TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES) {
+    return `issued ticket store 超过总硬容量 ${String(TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES)}（实际 ${String(keys.length)}——B1）`;
+  }
   if (candidate.entryCount !== keys.length) {
     return `issued ticket store entryCount ${String(candidate.entryCount)} != ${String(keys.length)}`;
   }
@@ -228,6 +238,24 @@ export function openTreasuryIssuedInitialAttempt(owner: string): TreasuryIssuedA
       reason: "ticket_capacity_exhausted",
       detail: `active issued ticket 已达硬容量 ${String(TREASURY_ISSUED_TICKET_MAX_ENTRIES)}（active/unresolved 不按年龄删除——阻断新 issuance，fail closed）`,
     };
+  }
+  // 【X 工作流 G / B4】总容量检查在 mint（watermark 推进）**之前**：满载先
+  // 有界回收 eligible terminal entry（watermark frontier 已覆盖的 consumed/
+  // expired——与 GC coordinator 同一 retire 路径）；回收后仍满 → fail
+  // closed（watermark 不推进——不存在"先推进 watermark 再发现无槽"）。
+  if (runtime.store.entryCount >= TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES) {
+    const watermark = peekTreasuryIssuedAttemptWatermark();
+    if (watermark >= 0) {
+      void retireTreasuryTerminalIssuedAttemptTickets(watermark);
+    }
+    const totalAfterReclaim = Object.keys(runtime.store.entries).length;
+    if (totalAfterReclaim >= TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES) {
+      return {
+        status: "rejected",
+        reason: "ticket_capacity_exhausted",
+        detail: `issued ticket store 总 entry 已达硬容量 ${String(TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES)}（terminal 回收后仍满——fail closed；active 不因满载被删，watermark 未推进）`,
+      };
+    }
   }
   const minted = mintTreasuryInitialAttemptId();
   if (minted.status === "rejected") {

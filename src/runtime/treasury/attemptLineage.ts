@@ -2123,3 +2123,11 @@ __registerLifecycleLineageProbe({
   lineageOf: (transactionId) => lookupTreasuryAttemptLineageByAttemptId(transactionId) as unknown as { readonly state?: unknown } | undefined,
   lineageStoreHealthy: () => peekTreasuryAttemptLineageHealth().healthy,
 });
+
+// 【X 工作流 F / G7】GRA 满载驱逐的 lineage 依赖 probe（exact consumer 仍在
+// active lineage 时不得驱逐 proof；GRA ↔ attemptLineage 模块环——底部注册）。
+import { registerTreasuryGenerationLineageProbeForAssembly as __registerGenerationLineageProbe } from "@/runtime/treasury/generationRetirementAuthority";
+__registerGenerationLineageProbe({
+  lineageOf: (transactionId) => lookupTreasuryAttemptLineageByAttemptId(transactionId) as unknown as { readonly state?: unknown } | undefined,
+  lineageStoreHealthy: () => peekTreasuryAttemptLineageHealth().healthy,
+});

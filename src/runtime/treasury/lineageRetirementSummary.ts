@@ -1059,10 +1059,16 @@ __registerLifecycleSummaryProbe({
   summaryOfRoot: (rootTransactionId) => lookupTreasuryRetirementSummaryByRoot(rootTransactionId),
   summaryStoreHealthy: () => peekTreasuryRetirementSummaryHealth().healthy,
 });
-// 【IX 工作流 B/C】GRA 满载驱逐的 summary probe（root 代 proof 的 exact
-// terminal facts 已由 summary 承接时可驱逐——600 chain 长期有界）。
+// 【IX 工作流 B/C → X 工作流 F】GRA 满载驱逐的 summary probe：modern-only
+//（当前 exact schema v3——legacy replay-only archive 回落不进入驱逐判定，
+// G6；关系全维度由 GRA 侧 verifyTreasuryGenerationSummaryReplacement 验证）。
 import { registerTreasuryGenerationSummaryProbeForAssembly as __registerGenerationSummaryProbe } from "@/runtime/treasury/generationRetirementAuthority";
 __registerGenerationSummaryProbe({
-  summaryOfLineageId: (lineageId) => lookupTreasuryRetirementSummaryByLineageId(lineageId),
+  summaryOfLineageId: (lineageId) => {
+    const summary = lookupTreasuryRetirementSummaryByLineageId(lineageId);
+    if (summary === undefined) return undefined;
+    if (summary.schemaVersion !== TREASURY_RETIREMENT_SUMMARY_VERSION) return undefined;
+    return summary;
+  },
   summaryStoreHealthy: () => peekTreasuryRetirementSummaryHealth().healthy,
 });

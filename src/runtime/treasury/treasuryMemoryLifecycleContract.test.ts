@@ -14,6 +14,7 @@ import {
   lookupTreasuryStoreLifecycleContract,
   type TreasuryStoreLifecycleContract,
 } from "@/runtime/treasury/treasuryLifecycleContract";
+import { TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES } from "@/runtime/treasury/attemptIssuanceTicket";
 
 const SRC_ROOT = join(process.cwd(), "src");
 
@@ -212,7 +213,8 @@ describe("Remediation IX：Treasury Memory lifecycle contract（machine-checkabl
     expect(ticketContract).toBeDefined();
     if (ticketContract !== undefined) {
       expect(ticketContract!.classification).toBe("active-unresolved");
-      expect(ticketContract!.hardCapacity).toBe(64);
+      // 【X 工作流 G】总 entry 硬容量（active 64 是并发上限，不是 store 容量）。
+      expect(ticketContract!.hardCapacity).toBe(TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES);
       expect(ticketContract!.allowsAgeEviction).toBe(false);
       expect(ticketContract!.overflowBehavior).toBe("fail-closed");
     }

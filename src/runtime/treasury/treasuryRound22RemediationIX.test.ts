@@ -89,7 +89,7 @@ import {
   readTreasuryResolutionCleanupEntry,
 } from "@/runtime/treasury/resolutionCleanupJournal";
 import { advanceTreasuryResolutionCleanupPhases } from "@/runtime/treasury/resolutionCleanupCoordinator";
-import { resetTreasuryResolutionStoreForTest } from "@/runtime/treasury/resolutionStore";
+import { ensureTreasuryResolutionSlotAvailable, resetTreasuryResolutionStoreForTest } from "@/runtime/treasury/resolutionStore";
 import {
   buildTreasuryActionContract,
   clearTreasuryAdapterRegistryForTest,
@@ -270,8 +270,13 @@ function seedFinalNotExecutedTombstone(transactionId: string, durable: string): 
   const branch = runtime.treasury as {
     resolutions?: { version: number; entries: Record<string, unknown>; entryCount: number; updatedAt: number };
   };
-  const entries = branch.resolutions?.entries ?? {};
-  entries["r:" + transactionId] = {
+  // 【X 迁移】就地扩展（不替换 store 对象）——resolution store 的 heap 缓存
+  // 持有同一对象引用，替换对象会让缓存的 entryCount 冻结、写入路径的容量
+  // 控制与惰性退休（tombstone → GRA proof 联动释放）永不触发。
+  if (branch.resolutions === undefined) {
+    branch.resolutions = { version: 7, entries: {}, entryCount: 0, updatedAt: Game.time };
+  }
+  branch.resolutions.entries["r:" + transactionId] = {
     transactionId,
     digest: DIGEST,
     resolution: "not-executed",
@@ -285,7 +290,8 @@ function seedFinalNotExecutedTombstone(transactionId: string, durable: string): 
     reconcilerKind: "terminal.send",
     source: "test",
   };
-  branch.resolutions = { version: 7, entries, entryCount: Object.keys(entries).length, updatedAt: Game.time };
+  branch.resolutions.entryCount = Object.keys(branch.resolutions.entries).length;
+  branch.resolutions.updatedAt = Game.time;
 }
 
 /** non-rearmable root 的完整终态链路（converge 正式通道——VIII 同构）。 */
@@ -1329,7 +1335,14 @@ describe("Remediation IX Q：summary/certificate/range 的 replacement 验证驱
         // retention 退休 / GC coordinator / 边界压缩按正式节奏发生——
         // GRA root proof 等中间层随之有界）。
         Game.time += 60;
-        if (index % 10 === 0) service.beginTick();
+        if (index % 10 === 0) {
+          service.beginTick();
+          // 【X 迁移】tombstone 惰性退休的容量触发（真实写入路径的等价物
+          //——注入 fixture 不走写入路径；到期 tombstone 退休 → GRA proof
+          // 联动释放，GRA/tombstone 在容量内稳态）。
+          const slotError = ensureTreasuryResolutionSlotAvailable();
+          if (slotError !== null) throw new Error("resolution slot: " + slotError);
+        }
         const root = abandonedId(tag + "_" + index);
         first300.push(root);
         const lineageId = seedNonRearmableRoot(root);
