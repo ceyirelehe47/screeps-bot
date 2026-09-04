@@ -227,3 +227,177 @@ describe("Remediation IX：Treasury Memory lifecycle contract（machine-checkabl
     }
   });
 });
+
+// ══【Round 22 Remediation X】架构守护（第五节 12 项）════════════════════════
+
+describe("Remediation X：ticket handoff / namespace / health-complete 架构守护", () => {
+  function readSource(relative: string): string {
+    return readFileSync(join(SRC_ROOT, ...relative.split("/")), "utf8");
+  }
+
+  it("X1：production initial attempt 执行路径必须引用内部 ticket handoff gate", () => {
+    // prepare 层 gate（contract 与低层 kernel 通道的必经点）+ execution-started
+    // 后的 handoff consume 都在 facade.executePreparedAction / prepareTransaction。
+    const facadeSource = readSource("runtime/treasury/facade.ts");
+    expect(facadeSource).toContain("gateTreasuryIssuedAttemptTicketForPrepare");
+    expect(facadeSource).toContain("gateTreasuryIssuedAttemptTicketForContractExecution");
+    expect(facadeSource).toContain("completeTreasuryIssuedTicketHandoff");
+    // contract binding gate 先于 redemption / intent / callback。
+    const facadeGateIndex = facadeSource.indexOf("bindingGate");
+    expect(facadeGateIndex).toBeGreaterThan(-1);
+    const redemptionIndex = facadeSource.indexOf("redeemAuthorizationBundleAtomic(", facadeGateIndex);
+    expect(redemptionIndex).toBeGreaterThan(facadeGateIndex);
+  });
+
+  it("X2：production 模块不得直接调用 mintTreasuryInitialAttemptId（受控 opening 唯一）", () => {
+    const callers: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      if (relative === "runtime/treasury/attemptIssuer.ts" || relative === "runtime/treasury/attemptIssuanceTicket.ts") continue;
+      if (/mintTreasuryInitialAttemptId\s*\(/.test(readFileSync(filePath, "utf8"))) {
+        callers.push(relative);
+      }
+    }
+    expect(callers).toEqual([]);
+  });
+
+  it("X3：production 模块不得手工调用 ticket consume 绕开接管协议（owner-gated handoff 唯一）", () => {
+    const callers: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.split(/[\\/]/).slice(-3).join("/");
+      if (relative === "runtime/treasury/attemptIssuanceTicket.ts" || relative === "runtime/treasury/attemptIssuanceHandoff.ts") continue;
+      if (/consumeTreasuryIssuedAttemptTicketForHandoff\s*\(/.test(readFileSync(filePath, "utf8"))) {
+        callers.push(relative);
+      }
+    }
+    expect(callers).toEqual([]);
+    // handoff 模块的 consume 必须在 owner-gated 前置之后。
+    const handoffSource = readSource("runtime/treasury/attemptIssuanceHandoff.ts");
+    const ownershipIndex = handoffSource.indexOf("durableOwnerInPlace(transactionId)");
+    const consumeIndex = handoffSource.indexOf("consumeTreasuryIssuedAttemptTicketForHandoff(transactionId)");
+    expect(ownershipIndex).toBeGreaterThan(-1);
+    expect(consumeIndex).toBeGreaterThan(ownershipIndex);
+  });
+
+  it("X4：retired range destructive API 必须携带 issuer domain（裸 sequence 不再是合法入参）", () => {
+    const source = readSource("runtime/treasury/chainRetirementCertificate.ts");
+    // 导出签名的第一参数是 namespace 枚举。
+    expect(source).toMatch(/export function absorbTreasuryRetiredSequence\(\s*namespace: TreasuryRetiredRangeNamespace,/);
+    // 全部调用点首参为发行域（namespace 枚举 / "legacy" / "current" /
+    // parse 结果的 namespace 字段——无裸 sequence 调用残留）。
+    const callHeads = [...source.matchAll(/absorbTreasuryRetiredSequence\(\s*([\w."]+)/g)].map((match) => match[1]!);
+    expect(callHeads.length).toBeGreaterThanOrEqual(3);
+    for (const head of callHeads) {
+      expect(["namespace", '"legacy"', '"current"', "parsed.namespace", "parsedRoot.namespace", "parsedEvictRoot.namespace"]).toContain(head);
+    }
+    // rangeAbsorbsSequence 的 guard 同样按域匹配。
+    expect(source).toContain("rangeAbsorbsSequence(namespace: \"legacy\" | \"current\", sequence: number)");
+  });
+
+  it("X5：namespace-aware range/certificate store 全部登记 lifecycle contract（v2 语义）", () => {
+    const rangeContract = lookupTreasuryStoreLifecycleContract("retiredAttemptRanges");
+    expect(rangeContract).toBeDefined();
+    expect(rangeContract!.protectedFact).toContain("namespace");
+    expect(rangeContract!.resetRecovery).toContain("v1 裸 sequence store 经 load 显式迁移");
+    const certificateContract = lookupTreasuryStoreLifecycleContract("chainRetirementCertificates");
+    expect(certificateContract).toBeDefined();
+  });
+
+  it("X6：destructive orphan consumer 必须调用统一 lifecycle owner resolver（不自拼 owner 列表）", () => {
+    // retired range gap coalesce 与 reservation TTL sweep 均经 resolver。
+    const certificateSource = readSource("runtime/treasury/chainRetirementCertificate.ts");
+    expect(certificateSource).toContain("resolveTreasuryAttemptLifecycleOwnership");
+    const handoffSource = readSource("runtime/treasury/cleanupCompletionHandoff.ts");
+    expect(handoffSource).toContain("resolveTreasuryAttemptLifecycleOwnership");
+  });
+
+  it("X7：Intent/Quarantine 的 fatal-折叠 read API 不得在未检查健康时作为 absence 证明（resolver 内 ensure 前置）", () => {
+    const resolverSource = readSource("runtime/treasury/treasuryLifecycleOwnerResolver.ts");
+    expect(resolverSource).toContain("ensureTreasuryIntentStoreValidated()");
+    expect(resolverSource).toContain("ensureTreasuryQuarantineStoreValidated()");
+    // ensure 前置于对应 read。
+    const intentEnsure = resolverSource.indexOf("ensureTreasuryIntentStoreValidated()");
+    const intentRead = resolverSource.indexOf("readTreasuryIntentEntry(transactionId)");
+    expect(intentRead).toBeGreaterThan(intentEnsure);
+    const quarantineEnsure = resolverSource.indexOf("ensureTreasuryQuarantineStoreValidated()");
+    const quarantineRead = resolverSource.indexOf("readTreasuryQuarantineEntry(transactionId)");
+    expect(quarantineRead).toBeGreaterThan(quarantineEnsure);
+    // settled receipt 的整店 health 前置。
+    expect(resolverSource).toContain("peekTreasuryReceiptHealth()");
+    // summary probe 未装配 → owned（不静默跳过维度）。
+    expect(resolverSource).toContain("retirement summary probe 未装配");
+  });
+
+  it("X8：GRA capacity eviction 必须调用 exact replacement verifier（存在性检查不得授权驱逐）", () => {
+    const graSource = readSource("runtime/treasury/generationRetirementAuthority.ts");
+    expect(graSource).toContain("verifyTreasuryGenerationSummaryReplacement");
+    const verifierIndex = graSource.indexOf("const relationError = verifyTreasuryGenerationSummaryReplacement(proof, summary);");
+    const deleteIndex = graSource.indexOf("delete runtime.store.entries[key];", verifierIndex);
+    expect(verifierIndex).toBeGreaterThan(-1);
+    expect(deleteIndex).toBeGreaterThan(verifierIndex);
+    // 依赖关闭检查（journal/tombstone/lineage）在 relation 之后、删除之前。
+    const dependencyIndex = graSource.indexOf("generationProofDependenciesActive(proof)");
+    expect(dependencyIndex).toBeGreaterThan(verifierIndex);
+    expect(deleteIndex).toBeGreaterThan(dependencyIndex);
+    // 驱逐索引维护：byAttempt 与 byLineage 双清。
+    expect(graSource).toContain("runtime.byAttempt.delete(proof.transactionId);");
+    expect(graSource).toContain("runtime.byLineage.get(proof.lineageId)");
+  });
+
+  it("X9：legacy replay-only summary 不得成为 destructive replacement source（modern-only probe）", () => {
+    const summarySource = readSource("runtime/treasury/lineageRetirementSummary.ts");
+    const probeIndex = summarySource.indexOf("__registerGenerationSummaryProbe({");
+    const modernOnlySnippet = summarySource.slice(probeIndex, probeIndex + 700);
+    expect(modernOnlySnippet).toContain("schemaVersion !== TREASURY_RETIREMENT_SUMMARY_VERSION");
+    // GRA verifier 的 schema 维度。
+    const graSource = readSource("runtime/treasury/generationRetirementAuthority.ts");
+    expect(graSource).toContain("summary 不是当前 exact schema");
+  });
+
+  it("X10：ticket store 总容量常量与 validator / lifecycle contract 三方一致", () => {
+    const ticketSource = readSource("runtime/treasury/attemptIssuanceTicket.ts");
+    expect(ticketSource).toContain("TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES = 128");
+    expect(ticketSource).toContain("超过总硬容量");
+    // open 的总容量检查在 mint 之前（watermark 不预推进）。
+    const totalCheckIndex = ticketSource.indexOf("runtime.store.entryCount >= TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES");
+    const mintIndex = ticketSource.indexOf("const minted = mintTreasuryInitialAttemptId();");
+    expect(totalCheckIndex).toBeGreaterThan(-1);
+    expect(mintIndex).toBeGreaterThan(totalCheckIndex);
+    const contract = lookupTreasuryStoreLifecycleContract("issuedAttemptTickets");
+    expect(contract!.hardCapacity).toBe(TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES);
+  });
+
+  it("X11：facade query 路径不得运行 ticket GC 或其它 Memory mutation（GC 由 beginTick 唯一接线）", () => {
+    const facadeSource = readSource("runtime/treasury/facade.ts");
+    // ticket GC（expire/retire）只经 coordinator，facade 不直接调用。
+    expect(facadeSource).not.toMatch(/expireTreasuryIssuedAttemptTickets\s*\(/);
+    expect(facadeSource).not.toMatch(/retireTreasuryTerminalIssuedAttemptTickets\s*\(/);
+    expect(facadeSource).toContain("runTreasuryLifecycleGcCoordinator()");
+    const coordinatorSource = readSource("runtime/treasury/treasuryLifecycleGcCoordinator.ts");
+    expect(coordinatorSource).toContain("runTreasuryLifecycleGcCoordinator");
+    // gate 的 durable-owner 恢复是 owner-gated consume（写路径），不得进入
+    // query 入口——以 query 函数（observation/metrics/writeAdmission）不含
+    // gate 调用验证。
+    const observationIndex = facadeSource.indexOf("observation():");
+    const gateIndex = facadeSource.indexOf("gateTreasuryIssuedAttemptTicketForPrepare(");
+    expect(observationIndex).toBeGreaterThan(-1);
+    expect(gateIndex).toBeGreaterThan(-1);
+  });
+
+  it("X12：Defense 生产文件零修改（本轮 Treasury-only 冻结）", () => {
+    // 源码级确认：Defense 生产模块不引用 Treasury ticket/handoff 内部协议。
+    const defenseFiles = listFilesRecursive(SRC_ROOT).filter((filePath) => {
+      const relative = filePath.split(/[\\/]/).slice(-2).join("/");
+      return !filePath.endsWith(".test.ts") && relative.startsWith("runtime/") &&
+        /defense|Defender|focusFire|fallback|tower/i.test(filePath.split(/[\\/]/).pop() ?? "");
+    });
+    expect(defenseFiles.length).toBeGreaterThan(0);
+    for (const filePath of defenseFiles) {
+      const source = readFileSync(filePath, "utf8");
+      expect(source).not.toMatch(/attemptIssuance(Ticket|Handoff)/);
+      expect(source).not.toMatch(/consumeTreasuryIssuedAttemptTicket/);
+    }
+  });
+});
