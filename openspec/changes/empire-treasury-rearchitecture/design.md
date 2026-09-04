@@ -1652,3 +1652,27 @@ resolver 新增 insufficient 状态：两个 exact declaration 只有 relation=m
 
 ### 24.7 Defense：global rampart footprints（工作流 10）
 房间级 coordinate → physical owner slot 的 ownership snapshot 进入 production：planner 构建候选坐标全集 + collectPhysicalCandidateFootprints（同 tile 字典序决胜）；claim 触发条件保持"自己 target 的未占用候选"（VIII 收敛不回归），标记作用域升级 markCandidateOccupiedGlobally（同坐标在全部 target 候选数组一并 occupied——唯一性按坐标不按 candidate ID）；stationary 保留/hold 回填/engage 二次标记统一经共享 helper；fallback 消费同一 physicalRampartOwnership 入口（坐标键 candidateKeyOf 统一、retained hold 第三路经 footprint 构建）。
+
+
+## 25. Round 22 Remediation X — Ticket-Gated Attempt Opening, Namespace-Scoped Anti-Reuse, Health-Complete Lifecycle GC & Exact GRA Replacement
+
+### 25.1 ticket-gated production opening（工作流 A / B）
+ti2_ initial attempt 的 execution authority 状态机收敛：issuer watermark + 确定性 checksum 只是必要条件——production Game callback 可达必须持有 matching、active、binding 一致的 issued ticket，且 ticket → durable owner 的接管由 Treasury 内部协议完成（调用者不得也不需要手工 consume）。三层落点：facade.prepareTransaction 的 ticket gate（位于全部既有 replay blocker 之后——already_settled/rearm_required/retired_attempt 语义优先；无 ticket/expired/consumed-without-owner/durable-owner-in-place 一律拒绝）、facade.executePreparedAction 的 contract binding gate（AC4 digest——跨 tick 稳定，同 ID 不同 exact opening 即 conflict）与 execution-started 持久化后的 handoff consume（active → consumed + read-back）。统一 consume 规则：durable owner（统一 resolver 判定，exclude ticket 自身与 admission/headroom 瞬态预留）在位才 consume——纯前置失败与完整回滚的 abort 保持 active（同 exact opening 幂等重试，B5/B8）；中断窗口（durable owner 在位 + ticket 未 consume）由 gate 的恢复分支幂等补完成并拒绝重复执行（T8）。手工 consume 原语 owner-gated（无 durable owner 拒绝——不产生 consumed-but-unowned；构造该状态也不能获得执行权限，T9）。issuedAttemptTicket store 的总 entry 硬上限 128（shape validator 强制；open 满载先有界回收 eligible terminal——与 GC 同一 retire 路径，仍满 fail closed 且 watermark 不推进）。
+
+### 25.2 namespace-scoped anti-reuse（工作流 D）
+retired range store v2：区间绑定发行域（ti1_=legacy / ti2_=current），同域内单调合并、域间互不影响；absorb/吸收核心/预计算/guard 全部携带 issuer domain（裸 sequence 不再是合法 destructive 入参——架构守护）。查询按 ID 自带 namespace 匹配（同序号两域独立事实）。v1→v2 显式迁移（load/peek/structured 触发，幂等）：发行域从版本边界严格证明——issuer v1（ti2_ 未诞生）→ legacy；issuer v2 无 legacy record（从未有 ti1_）→ current；v1 range 最后写入严格早于 issuer 迁移时刻 → legacy；不可证明（可能混合且区间合并后不可拆分）→ forensic fail closed（store 保持 v1 原样，不静默猜测）。summary↔certificate relation 与 GRA↔summary relation 均含 issuer domain 显式维度（同序号跨域 conflict，N10）。孤儿 gap coalesce 收敛为 current 域专属（legacy canonical ID 不可重建——不得用当前 watermark 猜测 legacy gap 放弃）。
+
+### 25.3 health-complete lifecycle owner resolver（工作流 E）
+resolver 的全部 source health-complete：Intent/Quarantine 的 fatal 与 absent 在 read API 同形（undefined）——判定前 ensure 触发 load 全量校验（entry 级损坏含 unrelated entry 同样检出 → owned+unhealthy，H1/H2/H3）；settled receipt 的整店 heap fatal（own key 缺失时 lookup 返回 absent）health 前置 → owned+unhealthy；retirement summary probe 未装配 → owned+unhealthy（与其余 probe 一致，不再静默跳过维度，H5）。coalesce 的 certificate/range 自查维度同步加固（损坏视为有权威）。该 resolver 继续作为 retired range orphan gap coalesce 与 completion reservation TTL sweep 的单一 owner truth source。
+
+### 25.4 exact GRA replacement（工作流 F）
+GRA 满载驱逐从"同 lineage 有 summary 即驱逐"的存在性检查升级为单一 canonical verifier（verifyTreasuryGenerationSummaryReplacement）：root transaction ID / lineage ID / root issuer domain / generation=0 / retirement outcome 相容（root-only chain_committed 与 not-executed proof 矛盾）/ proof class / identity profile / digest / canonical root identity / durable identity / contract+cohort+lowlevel 按 class 矩阵 / summary schemaVersion=3（modern-only probe——legacy replay-only archive 不进入驱逐判定）。exact 依赖关闭（cleanup journal + resolution tombstone + active lineage，全 health-complete）作为第二门禁——删除被 tombstone 依赖的 proof 会让该 tombstone 的驱逐 verdict 永久 pin。驱逐删除同步维护 byAttempt 与 byLineage 双索引；read-back 失败完整恢复 store 与全部索引（G11）。
+
+### 25.5 不变量增补（X 终态）
+- 仅 `sequence <= watermark` 绝不构成 execution authority（T1）；
+- expired/deleted/consumed ticket 永不可执行；execution-started 持久化后 ticket 永不回 active（B6/T3/T9）；
+- ticket→durable owner 接管不存在"ticket 已 terminal 且无 durable owner"窗口（consume 恒在 owner 在位后）；
+- ti1_/ti2_ anti-reuse 完全按发行域隔离（同序号两域独立状态、互不替代）；
+- destructive orphan/GC 判定只在全部 source 明确健康且明确 absent 时返回 unowned；
+- GRA 驱逐需 exact replacement relation 全维度 + 依赖关闭；legacy summary 不授权 destructive eviction；
+- ticket store 总 entry ≤ 128（真实硬上限——validator/契约/行为三方一致）。

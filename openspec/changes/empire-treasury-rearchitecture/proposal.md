@@ -321,3 +321,7 @@ Remediation V 的 replacement 判定只按 transactionId + resolution 字符串�
 - live + reserved − pairs 只按单一公式计数（同一 handoff 只计一槽）；
 - exact identity 维度不足（insufficient）在 destructive 路径零 mutation、在 replay 路径零 callback；
 - 同一 Rampart 坐标无论出现在多少 target 候选数组（candidate ID 是否相同）都只能属于一个 Defender。
+## Round 22 Remediation X — Ticket-Gated Attempt Opening, Namespace-Scoped Anti-Reuse, Health-Complete Lifecycle GC & Exact GRA Replacement
+
+P0/P1 阻断项收口：(1) issued ticket 进入 production execution 强制门禁——ti2_ ID 的 Game callback 可达必须持有 matching、active、binding 一致的 ticket，ticket → durable owner 的接管（consume）由内部协议在 execution-started 持久化后完成（中断窗口幂等恢复、纯前置失败不产生 consumed-but-unowned、手工 consume 不授予执行权限）；(2) retired range v2 按发行域隔离——ti1_/ti2_ 同序号是两个独立事实，v1 裸 sequence store 从版本边界严格证明迁移或 forensic fail closed，coalesce 收敛 current 域专属；(3) lifecycle owner resolver health-complete——Intent/Quarantine ensure 全量校验前置（unrelated entry 损坏同样 owned+unhealthy）、settled receipt 整店 fatal、summary probe 未装配 fail closed；(4) GRA 满载驱逐 exact replacement relation（单一 canonical verifier 全维度 + modern-only summary probe + 依赖关闭 + 双索引维护与 read-back 恢复）；(5) issued ticket store 真实总容量 128（validator 强制、open 满载先回收再 fail closed、watermark 不预推进）。固定反例 T1-T12 / N1-N10 / H1-H10 / G1-G12 / B1-B8 + 长期压力（600 chain / 256 production opening / 高吞吐 GC / reset 五窗口）与架构守护 12 项。详见 design.md 第 25 节与 evidence/round22-remediation-x-ticket-gated-opening-and-namespaced-lifecycle-local-validation.md。
+
