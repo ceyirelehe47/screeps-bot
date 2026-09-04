@@ -38,6 +38,7 @@
 
 import { getMemoryService } from "@/runtime/runtimeServices";
 import { allocateDefenderRampartPositions } from "@/runtime/defenderRampartAllocation";
+import { candidateKeyOf, collectPhysicalCandidateFootprints } from "@/runtime/physicalRampartOwnership";
 
 
 /** 保守击杀裕度：作用于含敌方本 tick 治疗的保守击杀预算。 */
@@ -844,41 +845,61 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
   //    未站合法候选上的 stationary actor 不产生保留事实（原 tile 不是
   //    boundary 候选——无冲突面）。actor 不停止攻击、不被迫移动。
   const defendersBySlot = new Map(input.defenders.map((defender) => [defender.slot, defender]!));
+  // ──【Remediation IX 工作流 10】房间级物理 Rampart ownership snapshot：
+  //    候选坐标全集（跨全部 target 的候选数组——同一坐标可能以不同
+  //    candidate ID 出现在多个 target 的数组中，物理唯一性按坐标不按 ID）
+  //    + 当前物理占据合法候选的 Defender footprint（key → slot，同 tile
+  //    多 defender 时 slot 字典序最小者胜——确定性，输入顺序无关）。
+  //    stationary 保留 / pending claim / hold 回填全部消费同一 footprint
+  //    语义（与 fallback revision 共享 physicalRampartOwnership 入口——
+  //    架构测试 D23 守护）。
+  const planCandidateKeys = new Set<string>();
+  for (const candidates of Object.values(candidatesByTargetId)) {
+    for (const candidate of candidates) planCandidateKeys.add(candidateKeyOf(candidate.x, candidate.y));
+  }
+  const ownershipFootprints = collectPhysicalCandidateFootprints(input.defenders, planCandidateKeys);
+  /** 房间级全局标记：同坐标在全部 target 候选数组中一并 occupied（D16/D17）。 */
+  const markCandidateOccupiedGlobally = (x: number, y: number): void => {
+    for (const candidates of Object.values(candidatesByTargetId)) {
+      for (const candidate of candidates) {
+        if (candidate.x === x && candidate.y === y) candidate.occupied = true;
+      }
+    }
+  };
   for (const slot of Object.keys(defenderEngagements)) {
     const entry = defenderEngagements[slot]!;
     if (entry.mode !== "attack" && entry.mode !== "ranged_attack" && entry.mode !== "hold") continue;
     const defender = defendersBySlot.get(slot);
     if (defender === undefined) continue;
-    let reserved: { x: number; y: number } | undefined;
-    for (const candidates of Object.values(candidatesByTargetId)) {
-      for (const candidate of candidates) {
-        if (candidate.x === defender.x && candidate.y === defender.y) {
-          candidate.occupied = true;
-          if (reserved === undefined) reserved = { x: defender.x, y: defender.y };
-        }
-      }
-    }
-    if (reserved !== undefined) {
-      defenderEngagements[slot] = { ...entry, reservedPosition: reserved };
-    }
+    const footprintKey = candidateKeyOf(defender.x, defender.y);
+    // 未站合法候选 / 同 tile 被（字典序更小的）他人占据 → 不产生保留事实。
+    if (!planCandidateKeys.has(footprintKey) || ownershipFootprints.get(footprintKey) !== slot) continue;
+    markCandidateOccupiedGlobally(defender.x, defender.y);
+    defenderEngagements[slot] = { ...entry, reservedPosition: { x: defender.x, y: defender.y } };
   }
-  // ──【Remediation VIII 工作流 F】allocation 前的物理 Rampart ownership：
-  //    pending boundary Defender 站在**自己 target** 的未占用候选上时直接
-  //    claim（engage_position = 当前 tile + reservedPosition + 候选标
-  //    occupied——occupant 保留当前位置，其他 Defender 不可获得；D9/D10
-  //    的晚绑定冲突在 allocate 之前消除）。claim 按 slot 字典序处理
-  //    （确定性——D14）。站在别的 target 候选 / 非候选上的成员照常进入
-  //    allocator（同 target 内 on-tile 距离 0 天然优先；变 hold 时的脚下
-  //    保留由 allocate 后的 hold 分支回填承载）。
+  // ──【Remediation VIII 工作流 F → IX 工作流 10】allocation 前的物理
+  //    Rampart ownership：pending boundary Defender 站在**自己 target** 的
+  //    未占用候选上时直接 claim（engage_position = 当前 tile +
+  //    reservedPosition——occupant 保留当前位置，其他 Defender 不可获得；
+  //    D9/D10 的晚绑定冲突在 allocate 之前消除）。claim 按 slot 字典序
+  //    处理（确定性——D14）。
+  //    【IX D16/D17】claim 的标记作用域升级为房间级：同坐标出现在其它
+  //    target 候选数组（candidate ID 不同）时一并标 occupied——Rampart
+  //    唯一性按坐标、不按 candidate ID，跨 target 只能属于一个 Defender
+  //    （全局 used set；allocator 的坐标去重与之共同消费）。站在别的
+  //    target 候选 / 非候选上的成员照常进入 allocator（同 target 内
+  //    on-tile 距离 0 天然优先；变 hold 时的脚下保留由 allocate 后的
+  //    hold 分支回填承载）。
   if (pendingBoundary.length > 0) {
     const stillPending: typeof pendingBoundary = [];
     for (const item of [...pendingBoundary].sort((left, right) => left.slot.localeCompare(right.slot))) {
       const ownCandidates = candidatesByTargetId[item.targetId];
-      const ownCandidate = ownCandidates?.find(
+      const onOwnCandidate = ownCandidates?.some(
         (candidate) => candidate.x === item.x && candidate.y === item.y && candidate.occupied !== true,
-      );
-      if (ownCandidate !== undefined) {
-        ownCandidate.occupied = true;
+      ) === true;
+      const footprintOwner = ownershipFootprints.get(candidateKeyOf(item.x, item.y));
+      if (onOwnCandidate && (footprintOwner === undefined || footprintOwner === item.slot)) {
+        markCandidateOccupiedGlobally(item.x, item.y);
         defenderEngagements[item.slot] = {
           targetId: item.targetId,
           mode: "engage_position",
@@ -918,17 +939,9 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
           : {
               targetId: item.targetId,
               mode: "hold",
-              ...((): { reservedPosition: { x: number; y: number } } | {} => {
-                for (const candidates of Object.values(candidatesByTargetId)) {
-                  for (const candidate of candidates) {
-                    if (candidate.x === item.x && candidate.y === item.y) {
-                      candidate.occupied = true;
-                      return { reservedPosition: { x: item.x, y: item.y } };
-                    }
-                  }
-                }
-                return {};
-              })(),
+              ...(planCandidateKeys.has(candidateKeyOf(item.x, item.y))
+                ? (markCandidateOccupiedGlobally(item.x, item.y), { reservedPosition: { x: item.x, y: item.y } })
+                : {}),
             };
     }
     // ──【Remediation VII 修复】stationary engage_position 二次标记：分配
@@ -941,13 +954,7 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
       const allocated = allocation[item.slot];
       if (allocated === undefined) continue;
       if (allocated.x !== item.x || allocated.y !== item.y) continue;
-      for (const candidates of Object.values(candidatesByTargetId)) {
-        for (const candidate of candidates) {
-          if (candidate.x === allocated.x && candidate.y === allocated.y) {
-            candidate.occupied = true;
-          }
-        }
-      }
+      markCandidateOccupiedGlobally(allocated.x, allocated.y);
       defenderEngagements[item.slot] = {
         ...defenderEngagements[item.slot]!,
         reservedPosition: { x: allocated.x, y: allocated.y },

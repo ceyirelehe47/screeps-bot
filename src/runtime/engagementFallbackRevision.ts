@@ -26,6 +26,7 @@
  */
 
 import { allocateDefenderRampartPositions } from "@/runtime/defenderRampartAllocation";
+import { candidateKeyOf, collectPhysicalCandidateFootprints } from "@/runtime/physicalRampartOwnership";
 
 import { readRoomEngagementPlan, type FocusFireEngagementPlan } from "@/runtime/defenseFocusFire";
 
@@ -173,24 +174,40 @@ export function resolveRoomEngagementFallbackRevision(
   const planCandidateKeys = new Set<string>();
   for (const candidates of Object.values(plan.engagementCandidatesByTargetId ?? {})) {
     for (const candidate of candidates) {
-      planCandidateKeys.add(`${candidate.x},${candidate.y}`);
+      planCandidateKeys.add(candidateKeyOf(candidate.x, candidate.y));
     }
   }
+  // 【IX 工作流 10】retained defender 的物理 footprint 经共享入口构建
+  //（同 tile 多 defender slot 字典序决胜——确定性；与 planner 消费同一
+  // physicalRampartOwnership 语义，架构测试 D23 守护）。
+  const retainedFacts = revisedSlots
+    .filter((item) => item.retained && item.reservedPosition === undefined && item.originalMode === "hold")
+    .map((item) => {
+      const facts = plan.defenderFactsBySlot?.[item.slot];
+      return facts !== undefined ? { slot: item.slot, x: facts.x, y: facts.y } : null;
+    })
+    .filter((facts): facts is { slot: string; x: number; y: number } => facts !== null);
+  const retainedFootprints = collectPhysicalCandidateFootprints(retainedFacts, planCandidateKeys);
   for (const item of revisedSlots) {
     if (item.retained && item.originalPosition !== undefined) {
-      usedPositionKeys.add(`${item.originalPosition.x},${item.originalPosition.y}`);
+      usedPositionKeys.add(candidateKeyOf(item.originalPosition.x, item.originalPosition.y));
     }
     if (item.retained && item.reservedPosition !== undefined) {
-      usedPositionKeys.add(`${item.reservedPosition.x},${item.reservedPosition.y}`);
+      usedPositionKeys.add(candidateKeyOf(item.reservedPosition.x, item.reservedPosition.y));
     }
     // 【Remediation VII 修复】第三路：retained stationary 且无 reservedPosition
     //（旧 plan 数据 / planner 保留事实缺失）——hold 的真实坐标来自 plan
-    // 持久化的 defender facts；坐标命中 plan 任一候选集时进入 used 集合
-    //（unaffected hold Defender 的脚下 Rampart 不被 replacement 抢占）。
+    // 持久化的 defender facts；坐标命中 plan 任一候选集且为本 slot 的
+    // footprint 时进入 used 集合（unaffected hold Defender 的脚下 Rampart
+    // 不被 replacement 抢占）。
     if (item.retained && item.reservedPosition === undefined && item.originalMode === "hold") {
       const facts = plan.defenderFactsBySlot?.[item.slot];
-      if (facts !== undefined && planCandidateKeys.has(`${facts.x},${facts.y}`)) {
-        usedPositionKeys.add(`${facts.x},${facts.y}`);
+      if (
+        facts !== undefined &&
+        planCandidateKeys.has(candidateKeyOf(facts.x, facts.y)) &&
+        retainedFootprints.get(candidateKeyOf(facts.x, facts.y)) === item.slot
+      ) {
+        usedPositionKeys.add(candidateKeyOf(facts.x, facts.y));
       }
     }
   }
@@ -229,11 +246,11 @@ export function resolveRoomEngagementFallbackRevision(
       if (persisted !== undefined && persisted.length > 0) {
         return persisted
           .filter((candidate) => candidate.occupied !== true)
-          .filter((candidate) => !usedPositionKeys.has(`${candidate.x},${candidate.y}`))
+          .filter((candidate) => !usedPositionKeys.has(candidateKeyOf(candidate.x, candidate.y)))
           .map((candidate) => ({ id: candidate.id, x: candidate.x, y: candidate.y }));
       }
       const engagement = planEngagementOfTarget(plan, targetId);
-      if (engagement !== undefined && !usedPositionKeys.has(`${engagement.x},${engagement.y}`)) {
+      if (engagement !== undefined && !usedPositionKeys.has(candidateKeyOf(engagement.x, engagement.y))) {
         return [{ id: `pos:${engagement.x},${engagement.y}`, x: engagement.x, y: engagement.y }];
       }
       return [];
@@ -245,7 +262,7 @@ export function resolveRoomEngagementFallbackRevision(
       );
       if (ownCandidate !== undefined) {
         claimedPositions.set(item.slot, { x: item.x, y: item.y });
-        usedPositionKeys.add(`${item.x},${item.y}`);
+        usedPositionKeys.add(candidateKeyOf(item.x, item.y));
         continue;
       }
       stillAllocating.push(item);
@@ -262,7 +279,7 @@ export function resolveRoomEngagementFallbackRevision(
       if (persisted !== undefined && persisted.length > 0) {
         candidatesByTargetId[item.targetId] = persisted
           .filter((candidate) => candidate.occupied !== true)
-          .filter((candidate) => !usedPositionKeys.has(`${candidate.x},${candidate.y}`))
+          .filter((candidate) => !usedPositionKeys.has(candidateKeyOf(candidate.x, candidate.y)))
           .map((candidate) => ({ id: candidate.id, x: candidate.x, y: candidate.y }));
       } else if (item.engagement !== undefined) {
         // 候选集合未持久化（采集层退化）：单一 target-level 位置候选。
@@ -313,7 +330,7 @@ export function resolveRoomEngagementFallbackRevision(
         const stationaryReserved =
           item.reservedPosition !== undefined
             ? item.reservedPosition
-            : facts !== undefined && planCandidateKeys.has(`${facts.x},${facts.y}`)
+            : facts !== undefined && planCandidateKeys.has(candidateKeyOf(facts.x, facts.y))
               ? { x: facts.x, y: facts.y }
               : undefined;
         defenderEngagementBySlot[item.slot] = {
@@ -354,7 +371,7 @@ export function resolveRoomEngagementFallbackRevision(
       // 已站在合法候选 Rampart 上时保留当前位置事实（reservedPosition——
       // 不输出无位置的 hold 让消费方回落共享位置；hold actor 不被迫移动）。
       const facts = plan.defenderFactsBySlot?.[item.slot];
-      const currentOnCandidate = facts !== undefined && planCandidateKeys.has(`${facts.x},${facts.y}`) ? { x: facts.x, y: facts.y } : undefined;
+      const currentOnCandidate = facts !== undefined && planCandidateKeys.has(candidateKeyOf(facts.x, facts.y)) ? { x: facts.x, y: facts.y } : undefined;
       defenderEngagementBySlot[item.slot] = {
         targetId: item.targetId,
         mode: "hold",
