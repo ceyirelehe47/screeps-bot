@@ -26,6 +26,7 @@
  */
 
 import { allocateDefenderRampartPositions } from "@/runtime/defenderRampartAllocation";
+
 import { readRoomEngagementPlan, type FocusFireEngagementPlan } from "@/runtime/defenseFocusFire";
 
 /** fallback 修订计划中单个 Defender 的 assignment。 */
@@ -200,7 +201,7 @@ export function resolveRoomEngagementFallbackRevision(
   //    【Remediation VI 6.3】真实 role/坐标来自 plan 持久化的 defender
   //    facts（planner 输入快照）——按真实 actor 位置评分（不用 target
   //    anchor 近似、不硬编码 secondary）；旧 plan 无 facts 时回落 anchor。
-  const reallocationInput: { slot: string; role: "primary" | "secondary"; x: number; y: number; targetId: string }[] = [];
+  let reallocationInput: { slot: string; role: "primary" | "secondary"; x: number; y: number; targetId: string }[] = [];
   for (const item of revisedSlots) {
     if (!item.retained && item.targetId !== null && item.boundary) {
       const facts = plan.defenderFactsBySlot?.[item.slot];
@@ -213,6 +214,43 @@ export function resolveRoomEngagementFallbackRevision(
         targetId: item.targetId,
       });
     }
+  }
+  // ──【Remediation VIII 工作流 F】replacement 的物理 Rampart ownership：
+  //    replacement Defender 站在**自己 revised target** 的未占用候选上时
+  //    直接 claim（engage_position = 当前 tile + used 集合——occupant 优先
+  //    保留自己的位置，不进 allocator；D11/D12 的晚绑定冲突在 allocate
+  //    之前消除）。claim 按 slot 字典序（reallocationInput 构造自排序的
+  //    revisedSlots——确定性）。站在别的 target 候选的成员照常进入
+  //    allocator；变 hold 时的脚下保留由下方 D5 分支回填承载。
+  const claimedPositions = new Map<string, { x: number; y: number }>();
+  {
+    const availableCandidatesOf = (targetId: string): { id: string; x: number; y: number }[] => {
+      const persisted = plan.engagementCandidatesByTargetId?.[targetId];
+      if (persisted !== undefined && persisted.length > 0) {
+        return persisted
+          .filter((candidate) => candidate.occupied !== true)
+          .filter((candidate) => !usedPositionKeys.has(`${candidate.x},${candidate.y}`))
+          .map((candidate) => ({ id: candidate.id, x: candidate.x, y: candidate.y }));
+      }
+      const engagement = planEngagementOfTarget(plan, targetId);
+      if (engagement !== undefined && !usedPositionKeys.has(`${engagement.x},${engagement.y}`)) {
+        return [{ id: `pos:${engagement.x},${engagement.y}`, x: engagement.x, y: engagement.y }];
+      }
+      return [];
+    };
+    const stillAllocating: typeof reallocationInput = [];
+    for (const item of reallocationInput) {
+      const ownCandidate = availableCandidatesOf(item.targetId).find(
+        (candidate) => candidate.x === item.x && candidate.y === item.y,
+      );
+      if (ownCandidate !== undefined) {
+        claimedPositions.set(item.slot, { x: item.x, y: item.y });
+        usedPositionKeys.add(`${item.x},${item.y}`);
+        continue;
+      }
+      stillAllocating.push(item);
+    }
+    reallocationInput = stillAllocating;
   }
   let allocation: Record<string, { id: string; x: number; y: number; occupied?: boolean }> = {};
   if (reallocationInput.length > 0) {
@@ -294,6 +332,19 @@ export function resolveRoomEngagementFallbackRevision(
       continue;
     }
     if (item.boundary) {
+      const claimed = claimedPositions.get(item.slot);
+      if (claimed !== undefined) {
+        // 【VIII F】replacement 的 physical claim（occupant 保留自己脚下
+        // 的合法候选——engage_position + reservedPosition）。
+        defenderEngagementBySlot[item.slot] = {
+          targetId: item.targetId,
+          mode: "engage_position",
+          position: { x: claimed.x, y: claimed.y },
+          positionKind: "boundary",
+          reservedPosition: { x: claimed.x, y: claimed.y },
+        };
+        continue;
+      }
       const allocated = allocation[item.slot];
       if (allocated !== undefined) {
         defenderEngagementBySlot[item.slot] = { targetId: item.targetId, mode: "engage_position", position: { x: allocated.x, y: allocated.y }, positionKind: "boundary" };

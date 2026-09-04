@@ -39,6 +39,7 @@
 import { getMemoryService } from "@/runtime/runtimeServices";
 import { allocateDefenderRampartPositions } from "@/runtime/defenderRampartAllocation";
 
+
 /** 保守击杀裕度：作用于含敌方本 tick 治疗的保守击杀预算。 */
 export const FOCUS_FIRE_KILL_OVERKILL_MARGIN = 1.15;
 /** 重伤阈值：hp 缺口达到 hitsMax 的该比例才允许占用塔紧急治疗。 */
@@ -724,7 +725,7 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
   //（eligible 集合内按计划候选顺序——combat target 保留给下一 tick 规划），
   // boundary 接敌统一进入房间级唯一 Rampart 分配；候选不足时明确 hold
   //（不追逐边界外 hostile、不回退独立选敌）。
-  const pendingBoundary: { readonly slot: string; readonly role: "primary" | "secondary"; readonly x: number; readonly y: number; readonly targetId: string }[] = [];
+  let pendingBoundary: { readonly slot: string; readonly role: "primary" | "secondary"; readonly x: number; readonly y: number; readonly targetId: string }[] = [];
   const pendingBoundarySlots = new Set<string>();
   const positioningDefenders = input.defenders.filter((defender) => defenderAssignments[defender.slot] === undefined);
   if (positioningDefenders.length > 0) {
@@ -861,6 +862,36 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
       defenderEngagements[slot] = { ...entry, reservedPosition: reserved };
     }
   }
+  // ──【Remediation VIII 工作流 F】allocation 前的物理 Rampart ownership：
+  //    pending boundary Defender 站在**自己 target** 的未占用候选上时直接
+  //    claim（engage_position = 当前 tile + reservedPosition + 候选标
+  //    occupied——occupant 保留当前位置，其他 Defender 不可获得；D9/D10
+  //    的晚绑定冲突在 allocate 之前消除）。claim 按 slot 字典序处理
+  //    （确定性——D14）。站在别的 target 候选 / 非候选上的成员照常进入
+  //    allocator（同 target 内 on-tile 距离 0 天然优先；变 hold 时的脚下
+  //    保留由 allocate 后的 hold 分支回填承载）。
+  if (pendingBoundary.length > 0) {
+    const stillPending: typeof pendingBoundary = [];
+    for (const item of [...pendingBoundary].sort((left, right) => left.slot.localeCompare(right.slot))) {
+      const ownCandidates = candidatesByTargetId[item.targetId];
+      const ownCandidate = ownCandidates?.find(
+        (candidate) => candidate.x === item.x && candidate.y === item.y && candidate.occupied !== true,
+      );
+      if (ownCandidate !== undefined) {
+        ownCandidate.occupied = true;
+        defenderEngagements[item.slot] = {
+          targetId: item.targetId,
+          mode: "engage_position",
+          position: { x: item.x, y: item.y },
+          positionKind: "boundary",
+          reservedPosition: { x: item.x, y: item.y },
+        };
+        continue;
+      }
+      stillPending.push(item);
+    }
+    pendingBoundary = stillPending;
+  }
   if (pendingBoundary.length > 0) {
     const allocation = allocateDefenderRampartPositions({
       defenders: pendingBoundary,
@@ -876,10 +907,29 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
               mode: "engage_position",
               position: { x: allocated.x, y: allocated.y },
               positionKind: "boundary",
+              ...(allocated.x === item.x && allocated.y === item.y ? { reservedPosition: { x: item.x, y: item.y } } : {}),
             }
           // 候选 Rampart 不足：明确 hold（本 tick 伤害 0、保留 combat target
           // 给下一 tick 规划——不重复分配已占用位置、不追逐边界外 hostile）。
-          : { targetId: item.targetId, mode: "hold" };
+          // 【Remediation VIII 工作流 F】hold actor 当前脚下命中合法候选时
+          // 保留当前位置事实（候选标 occupied + reservedPosition——与
+          // fallback revision 的 D5 语义对称；claim 阶段未覆盖的跨 target
+          // 站位也在此兜底）。
+          : {
+              targetId: item.targetId,
+              mode: "hold",
+              ...((): { reservedPosition: { x: number; y: number } } | {} => {
+                for (const candidates of Object.values(candidatesByTargetId)) {
+                  for (const candidate of candidates) {
+                    if (candidate.x === item.x && candidate.y === item.y) {
+                      candidate.occupied = true;
+                      return { reservedPosition: { x: item.x, y: item.y } };
+                    }
+                  }
+                }
+                return {};
+              })(),
+            };
     }
     // ──【Remediation VII 修复】stationary engage_position 二次标记：分配
     //    位置等于 Defender 当前 tile（已站在目标 Rampart 上——本 tick 不
