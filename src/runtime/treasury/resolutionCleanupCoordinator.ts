@@ -43,7 +43,7 @@ import {
 import { acknowledgeTreasuryCleanupSettlementProof } from "@/runtime/treasury/settlementProofActivation";
 import { gateTreasuryPreReleaseSettlement } from "@/runtime/treasury/preReleaseSettlementGate";
 import { lookupTreasuryCleanupCompletion, peekTreasuryCleanupCompletionHealth } from "@/runtime/treasury/cleanupCompletionAuthority";
-import { lookupTreasuryHistoricalCompletion } from "@/runtime/treasury/cleanupSupersessionAuthority";
+import { resolveTreasuryDurableSettlementAuthority } from "@/runtime/treasury/historicalSettlementAuthority";
 
 export type TreasuryCleanupPendingStage =
   | "proof_activation"
@@ -212,32 +212,40 @@ export function advanceTreasuryResolutionCleanupPhases(input: {
       if (completion.verdict === "store_unhealthy") {
         return pendingResult("none", `completion authority ${completion.verdict}: ${completion.detail}`, undefined, false, "store_unhealthy", true);
       }
-      // completion absent：durable historical authority（被安全回收的
-      // completion 的持久交接权威——outcome + exact identity 绑定）。
-      const historical = lookupTreasuryHistoricalCompletion(input.transactionId, input.expectedIdentity, input.expectedOutcome);
-      if (historical.verdict === "match") {
+      // completion absent：durable settlement authority（单一 resolver——
+      // historical completion / chain retirement certificate；被安全回收的
+      // completion 的持久交接权威，outcome + exact identity 绑定）。
+      // 【Remediation VII 修复四】chain 压缩后 per-attempt historical entry
+      // 已由 certificate 接管——完成查询不得因压缩退化为 no_cleanup_
+      // authority（T17：GRA/tombstone GC + terminal compaction 后仍成立）。
+      const durableAuthority = resolveTreasuryDurableSettlementAuthority({
+        transactionId: input.transactionId,
+        ...(input.expectedIdentity !== undefined ? { expected: input.expectedIdentity } : {}),
+        ...(input.expectedOutcome !== undefined ? { expectedOutcome: input.expectedOutcome } : {}),
+      });
+      if (durableAuthority.status === "exact") {
         return {
           status: "completed",
           pendingStage: "none",
-          detail: `cleanup entry 与 completion 均不存在，但 durable historical authority 持续证明完成（outcome=${historical.record.resolution}——跨 GRA/tombstone 回收存续）`,
+          detail: `cleanup entry 与 completion 均不存在，但 durable settlement authority（${durableAuthority.source}）持续证明完成（outcome=${durableAuthority.outcome}——跨 GRA/tombstone 回收与 chain 压缩存续）`,
           phases: phasesOfEntry(undefined, true),
           globalWriteAdmissionStillLocked: false,
           globalWriteAdmissionLockedKnown: false,
-          settlementOutcome: historical.record.resolution,
+          settlementOutcome: durableAuthority.outcome,
         };
       }
-      if (historical.verdict === "conflict") {
+      if (durableAuthority.status === "conflict") {
         return pendingResult(
           "none",
-          `historical completion authority conflict: ${historical.detail}`,
+          `durable settlement authority conflict: ${durableAuthority.detail}`,
           undefined,
           false,
           "completion_conflict",
           true,
         );
       }
-      if (historical.verdict === "store_unhealthy") {
-        return pendingResult("none", `historical authority store unhealthy: ${historical.detail}`, undefined, false, "store_unhealthy", true);
+      if (durableAuthority.status === "store_unhealthy") {
+        return pendingResult("none", `durable settlement authority store unhealthy: ${durableAuthority.detail}`, undefined, false, "store_unhealthy", true);
       }
       // final committed tombstone 单独存在不证明 cleanup 完成（T5）：它只
       // 证明 settlement outcome，不证明 marker discharge / authority release /

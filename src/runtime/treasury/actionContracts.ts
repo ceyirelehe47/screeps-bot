@@ -47,6 +47,10 @@ import type {
 } from "@/runtime/treasury/types";
 import { TREASURY_STRUCTURE_DESCRIPTOR_VERSION } from "@/runtime/treasury/types";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
+import {
+  checkTreasuryServiceIssuedAttemptId,
+  parseTreasuryIssuedInitialAttemptId,
+} from "@/runtime/treasury/attemptIssuer";
 import { canonicalizeTreasuryAdapterRetryFacts } from "@/runtime/treasury/adapterRetrySemantics";
 import { canonicalizeTreasuryActionArgs, TREASURY_CANONICAL_ENCODING_VERSION } from "@/runtime/treasury/canonicalEncoding";
 
@@ -1123,6 +1127,31 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
   if (!contract || typeof contract !== "object" || !contractRegistry.has(contract)) {
     actionContractEvents.rejected += 1;
     return { status: "prepare_rejected", reason: "contract_invalid", detail: "contract 未在本模块构建（伪造对象/JSON 副本一律无效）" };
+  }
+  // ──【Remediation VII 修复四】ti1_ service-issued 命名空间防伪：production
+  //    contract 通道不接受伪造的 ti1_ ID（seq > watermark——尚未发行的
+  //    序号）。真实 writer 的 initial ID 由 attemptIssuer.mint 签发（持久
+  //    单调 high-watermark，global reset 不回退）；tr1_ child 经 capability
+  //    派生（facade 门禁）；arbitrary legacy 字符串只存在于测试域
+  //    （架构测试守护 production 调用方必须经 mint/capability）。
+  if (parseTreasuryIssuedInitialAttemptId(contract.transactionId) !== null) {
+    const issuedCheck = checkTreasuryServiceIssuedAttemptId(contract.transactionId);
+    if (issuedCheck.status === "store_unhealthy") {
+      actionContractEvents.rejected += 1;
+      return {
+        status: "prepare_rejected",
+        reason: "issuer_store_unhealthy",
+        detail: `attempt issuer store unhealthy（${issuedCheck.detail}）——ti1_ ID 发行事实不可判定，fail closed`,
+      };
+    }
+    if (issuedCheck.status === "forged_future") {
+      actionContractEvents.rejected += 1;
+      return {
+        status: "prepare_rejected",
+        reason: "transaction_id_not_issued",
+        detail: `transactionId ${contract.transactionId.slice(0, 24)} 的发行序号（${String(issuedCheck.sequence)}）超过当前 high-watermark——手工伪造的 service-issued ID 一律拒绝（Game callback 零调用）`,
+      };
+    }
   }
   // 【第十八轮 24.13】execution request 的 source 不得覆盖已授权 contract
   // source（不同 → callback 前拒绝；相同 → 幂等透传）。

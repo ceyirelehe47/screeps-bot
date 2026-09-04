@@ -22,7 +22,9 @@
  * fail closed（不签发）。
  */
 
-import { registerTreasuryResolutionCleanupResetHook } from "@/runtime/treasury/receipts";
+// 【模块环规避】issuer 不直接依赖 receipts 的 reset hook（receipts →
+// actionContracts → attemptIssuer → receipts 成环）；heap 失效由
+// chainRetirementCertificate 的清理 hook 一并承载（同链加载）。
 import { hashTreasuryCanonicalString, isValidTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 
 export const TREASURY_ATTEMPT_ISSUER_VERSION = 1;
@@ -54,10 +56,6 @@ interface IssuerRuntime {
 }
 
 let heapRuntime: IssuerRuntime | null = null;
-
-registerTreasuryResolutionCleanupResetHook(() => {
-  heapRuntime = null;
-});
 
 function issuerBranch(): TreasuryMemoryBranchWithIssuer {
   if (!Memory.runtime) Memory.runtime = {};

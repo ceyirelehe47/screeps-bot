@@ -1385,11 +1385,25 @@ export function activateTreasuryLineageChild(
   lineageId: string,
   childIdentity: TreasuryAttemptLineageIdentity,
 ): TreasuryAttemptLineageWriteResult {
-  // 【Remediation IV 十.4】child 接管前捕获 parent attempt ID——接管成功后
-  // 释放其 cleanup completion proof（parent cleanup 已被 rearm 门禁消费确认，
-  // completion 的完成事实被 lineage 接管安全替代；不回收则长 rearm 链会
-  // 触碰 completion 硬容量 fail closed）。
+  // 【Remediation IV 十.4】child 接管前捕获 parent attempt ID——其 cleanup
+  // completion proof 的回收在此完成。【Remediation VII 修复五.5】archive 前
+  // 移：先完成 exact archive/read-back（GRA replacement 验证 → durable
+  // historical authority 写入 read-back → 删除 read-back）再推进
+  // child_active——失败结果不再被无条件 void 忽略，blocked（GRA 缺失/
+  // exact 冲突/满载/损坏）→ 拒绝推进，lineage 保持 child_intent_pending
+  //（可恢复重试——capability 尚未消费、同代 child 保留）；absent（parent
+  // 无 completion——无事实可交接）与 interrupted（authority 已写、删除
+  // 未确认——交接事实已建立）不阻塞推进。
   const parentAttemptId = readTreasuryAttemptLineageRecord(lineageId)?.currentTransactionId;
+  if (parentAttemptId !== undefined) {
+    const parentArchive = archiveTreasuryCleanupCompletionViaAuthority({ transactionId: parentAttemptId, via: "gra-proof" });
+    if (parentArchive.status === "blocked") {
+      return {
+        status: "rejected",
+        detail: `parent completion 归档失败（${parentArchive.reason}）: ${parentArchive.detail}——child_active 不推进（lineage 保持 child_intent_pending，可恢复重试）`,
+      };
+    }
+  }
   const result = updateTreasuryAttemptLineageRecord(lineageId, (current) => {
     if (current.state !== "child_intent_pending") {
       throw new Error(`child 接管只允许从 child_intent_pending（got ${String(current.state)}）`);
@@ -1414,15 +1428,6 @@ export function activateTreasuryLineageChild(
       recordRevision: current.recordRevision + 1,
     };
   });
-  if (result.status !== "rejected" && parentAttemptId !== undefined) {
-    // 【Remediation VI 4.5】parent completion 的删除只经统一 supersession
-    // authority 入口：exact GRA replacement 验证（outcome + 全维度 identity
-    // 含 lineage 四字段同一代 + retirement 三阶段）→ durable historical
-    // authority 写入 + read-back → 删除 + 删除 read-back。GRA 缺失或 exact
-    // 验证冲突时 completion 保留（fail closed——历史查询不退化，容量交给
-    // bounded headroom 回收处理）。
-    void archiveTreasuryCleanupCompletionViaAuthority({ transactionId: parentAttemptId, via: "gra-proof" });
-  }
   return result;
 }
 

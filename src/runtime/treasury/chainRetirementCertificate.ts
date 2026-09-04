@@ -32,11 +32,18 @@ import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import {
   parseTreasuryIssuedInitialAttemptId,
   peekTreasuryAttemptIssuerHealth,
+  resetTreasuryAttemptIssuerHeapCacheForTest,
 } from "@/runtime/treasury/attemptIssuer";
 import {
   parseTreasuryRearmChildTransactionIdV2,
   isTreasuryRearmAttemptId,
 } from "@/runtime/treasury/transactionId";
+import {
+  listTreasuryHistoricalCompletionRecords,
+  registerTreasuryHistoricalCompactorForAssembly,
+  retireTreasuryHistoricalRecordForCompression,
+  type TreasuryHistoricalCompletionRecord,
+} from "@/runtime/treasury/cleanupSupersessionAuthority";
 
 export const TREASURY_CHAIN_CERTIFICATE_VERSION = 1;
 export const TREASURY_CHAIN_CERTIFICATE_MAX_ENTRIES = 256;
@@ -110,6 +117,7 @@ let heapRangeRuntime: RangeRuntime | null = null;
 registerTreasuryResolutionCleanupResetHook(() => {
   heapCertificateRuntime = null;
   heapRangeRuntime = null;
+  resetTreasuryAttemptIssuerHeapCacheForTest();
 });
 
 function certificateBranch(): TreasuryMemoryBranchWithCertificates {
@@ -590,6 +598,121 @@ export function clearTreasuryChainCertificateDurableForTest(): void {
   heapCertificateRuntime = null;
   heapRangeRuntime = null;
 }
+
+// ──【Remediation VII 修复四】historical 压缩（bounded exact outcome 层 →
+//    permanent anti-reuse 层的退休通道）────────────────────────────────────
+
+/** 压缩保留窗口：最近归档的 exact outcome 保留供审计/冲突检测（不做即时压缩）。 */
+export const TREASURY_HISTORICAL_RETAINED_RECENT = 64;
+
+/**
+ * chain 压缩（terminal compaction 成功、certificate 写入 read-back 之后
+ * 调用）：该 chain 的全部 per-attempt historical entries 退休——cert 已
+ * 承载 root + final 代 exact outcome 与全部中间代的协议性 not-executed，
+ * chain 级永久 footprint 与 generation 数量无关（T17：301 → certificate
+ * 一条）。每条退休前 Memory 直读复验 + certificate 在位 guard。
+ */
+export function compressTreasuryChainHistoricalEntries(input: {
+  readonly rootTransactionId: string;
+  readonly lineageId: string;
+}): { readonly retired: number } {
+  const certificateKey = CERTIFICATE_KEY_PREFIX + input.rootTransactionId;
+  const certificateInPlace = (): boolean => {
+    const rawStore = (Memory.runtime as unknown as RuntimeMemoryWithCertificates | undefined)?.treasury?.chainRetirementCertificates;
+    const certificate = rawStore?.entries[certificateKey];
+    return certificate !== undefined && certificate.lineageId === input.lineageId;
+  };
+  if (!certificateInPlace()) return { retired: 0 };
+  let retired = 0;
+  for (const record of listTreasuryHistoricalCompletionRecords()) {
+    const inChain =
+      record.transactionId === input.rootTransactionId ||
+      (record.identity.lineageId !== undefined && record.identity.lineageId === input.lineageId);
+    if (!inChain) continue;
+    // guard：certificate 仍在位（每条独立验证——证书中途被逐出则停止删除）。
+    if (retireTreasuryHistoricalRecordForCompression(record.transactionId, certificateInPlace)) {
+      retired += 1;
+    }
+  }
+  return { retired };
+}
+
+/**
+ * 满载压缩（archive capacity 分支经 assembly 注入触发；有界 ≤ 硬容量）：
+ * 只退休已有 permanent anti-reuse 接管的 entry——
+ *  - 非 tr1_ root 且是 ti1_ service-issued ID：retired range 先吸收其
+ *    发行序号（read-back）再删除（独立 initial attempt 的终结 completion
+ *    已完整验证——exact outcome 压缩为 retired 事实，重放由 range 阻断）；
+ *  - tr1_ child：其 chain 的 certificate 在位才可退休（chain 未终结不碰）；
+ *  - legacy/arbitrary root（非 ti1_）：永久保留（replay blocker——不猜测
+ *    进 high-watermark）；
+ *  - 最近 TREASURY_HISTORICAL_RETAINED_RECENT 条保留（审计窗口）。
+ * 任一条目退休失败（range 写入/直读复验）→ 跳过该条继续（fail closed
+ * 单条不阻塞其它），调用方按剩余容量决定是否拒绝。
+ */
+export function compressTreasuryRetirableHistoricalEntries(): { readonly retired: number } {
+  const records = listTreasuryHistoricalCompletionRecords();
+  if (records.length === 0) return { retired: 0 };
+  // 保留最近归档的 N 条（archivedAtTick 降序取前 N 的 transactionId 集合）。
+  const recentIds = new Set(
+    records
+      .slice()
+      .sort((left, right) => right.archivedAtTick - left.archivedAtTick)
+      .slice(0, TREASURY_HISTORICAL_RETAINED_RECENT)
+      .map((record) => record.transactionId),
+  );
+  const issuerHealth = peekTreasuryAttemptIssuerHealth();
+  const issuerHealthy = issuerHealth.healthy;
+  let retired = 0;
+  for (const record of records) {
+    if (retired >= TREASURY_HISTORICAL_RETAINED_RECENT) break; // 压缩量有界（每次 ≤ 保留窗口大小）
+    if (recentIds.has(record.transactionId)) continue;
+    if (isTreasuryRearmAttemptId(record.transactionId)) {
+      // tr1_ child：chain certificate 在位才退休（guard 每条验证）。
+      const parsed = parseTreasuryRearmChildTransactionIdV2(record.transactionId);
+      if (parsed === null) continue;
+      const certificateKey = lookupCertificateKeyByLineageId(parsed.lineageId);
+      if (certificateKey === null) continue;
+      if (retireTreasuryHistoricalRecordForCompression(record.transactionId, () => certificateKeyInPlace(certificateKey, parsed.lineageId))) {
+        retired += 1;
+      }
+      continue;
+    }
+    // 独立 initial attempt：issuer 损坏时零压缩（fail closed）；root 序号
+    // 先进 retired range（read-back）再删除。
+    const parsed = parseTreasuryIssuedInitialAttemptId(record.transactionId);
+    if (parsed === null) continue; // legacy/arbitrary root：永久保留
+    if (!issuerHealthy) continue;
+    const absorbed = absorbTreasuryRetiredSequence(parsed.sequence);
+    if (absorbed.status === "rejected") continue;
+    if (retireTreasuryHistoricalRecordForCompression(record.transactionId, () => rangeAbsorbsSequence(parsed.sequence))) {
+      retired += 1;
+    }
+  }
+  return { retired };
+}
+
+function lookupCertificateKeyByLineageId(lineageId: string): string | null {
+  const runtime = loadCertificateRuntime();
+  if (runtime.fatal !== null) return null;
+  return runtime.byLineageId.get(lineageId) ?? null;
+}
+
+function certificateKeyInPlace(key: string, lineageId: string): boolean {
+  const rawStore = (Memory.runtime as unknown as RuntimeMemoryWithCertificates | undefined)?.treasury?.chainRetirementCertificates;
+  const certificate = rawStore?.entries[key];
+  return certificate !== undefined && certificate.lineageId === lineageId;
+}
+
+function rangeAbsorbsSequence(sequence: number): boolean {
+  const rawStore = (Memory.runtime as unknown as RuntimeMemoryWithCertificates | undefined)?.treasury?.retiredAttemptRanges;
+  if (rawStore === undefined || !Array.isArray(rawStore.ranges)) return false;
+  return rawStore.ranges.some((range) => sequence >= range.minSequence && sequence <= range.maxSequence);
+}
+
+// 模块加载注册（archive 满载压缩回调——cleanupSupersessionAuthority 的
+// capacity 分支调用；未装配时该分支 fail closed）。
+registerTreasuryHistoricalCompactorForAssembly(compressTreasuryRetirableHistoricalEntries);
 
 /** test-only：只清 heap 缓存（模拟 global reset 后从 Memory 恢复）。 */
 export function resetTreasuryChainCertificateHeapCacheForTest(): void {

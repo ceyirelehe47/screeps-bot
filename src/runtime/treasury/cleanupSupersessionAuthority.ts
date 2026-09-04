@@ -44,12 +44,14 @@ import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
 import {
   TREASURY_IDENTITY_PROFILES,
+  treasuryProfileAllowsAutomaticProtocol,
   treasuryProofClassOfIdentityProfile,
   validateTreasuryIdentityProfileFacts,
   type TreasuryIdentityProfile,
 } from "@/runtime/treasury/identityProfile";
 import {
   treasuryExactAttemptIdentityOfFacts,
+  treasuryProofClassOfPersistedClass,
   treasuryExactAttemptIdentityOfTombstone,
   treasuryExactAttemptIdentityRelation,
   type TreasuryExactAttemptIdentity,
@@ -150,7 +152,7 @@ function historicalRecordExactIdentity(
       ...(identity.parentTransactionId !== undefined ? { parentTransactionId: identity.parentTransactionId } : {}),
       ...(identity.lineageBindingDigest !== undefined ? { lineageBindingDigest: identity.lineageBindingDigest } : {}),
     },
-    identity.proofClass === "lowlevel" ? "lowlevel" : identity.proofClass === "identity-bound" ? "identity-bound" : "legacy",
+        treasuryProofClassOfPersistedClass(identity.proofClass),
   );
 }
 
@@ -534,7 +536,7 @@ export function verifyTreasuryExactCompletionReplacement(input: {
           ...(rootExact.durableIdentityDigest !== undefined ? { durableIdentityDigest: rootExact.durableIdentityDigest } : {}),
           ...(rootExact.lowlevelSource !== undefined ? { lowlevelSource: rootExact.lowlevelSource } : {}),
         },
-        rootExact.proofClass === "lowlevel" ? "lowlevel" : rootExact.proofClass === "identity-bound" ? "identity-bound" : "legacy",
+        treasuryProofClassOfPersistedClass(rootExact.proofClass),
       );
       if (summaryExact === null) {
         return { verdict: "store_unhealthy", detail: "summary rootExact 无法构造 exact identity（fail closed）" };
@@ -658,6 +660,7 @@ export function lookupTreasuryHistoricalCompletion(
 // ── 统一 archive 入口（completion destructive release 的唯一生产权威）──────
 
 export type TreasuryCompletionArchiveBlockReason =
+  | "profile_isolated"
   | "completion_store_unhealthy"
   | "supersession_store_unhealthy"
   | "completion_conflict"
@@ -746,6 +749,18 @@ export function archiveTreasuryCleanupCompletionViaAuthority(input: {
     return { status: "absent", detail: "completion 与 historical authority 均不存在（无可归档事实）" };
   }
   const proof = completion.proof;
+  // ──【Remediation VII 修复五】profile gate：automatic archive / compact /
+  //    supersession 只允许 modern-contract / lowlevel——legacy-replay 与
+  //    forensic-isolated 的 completion 不得被自动协议归档/删除（compact-
+  //    archive 不因"不要求 replacement"绕过；显式管理路径之外零删除）。
+  //    满载时 headroom reclaim 对隔离 profile fail closed（不回收）。
+  if (!treasuryProfileAllowsAutomaticProtocol(proof.identity.identityProfile as TreasuryIdentityProfile)) {
+    return {
+      status: "blocked",
+      reason: "profile_isolated",
+      detail: `completion 的 identity profile ${proof.identity.identityProfile} 不参与 automatic archive（隔离 profile 只能经显式管理路径处理——completion 保留，fail closed）`,
+    };
+  }
   // via 指定 replacement 时：exact 验证（outcome + 全维度 identity）。
   if (input.via !== "compact-archive") {
     if (replacementProbes === null) {
@@ -823,11 +838,20 @@ export function archiveTreasuryCleanupCompletionViaAuthority(input: {
     return deleteCompletionAfterAuthority(transactionId);
   }
   if (supersessionRuntime.store.entryCount >= TREASURY_CLEANUP_SUPERSESSION_MAX_ENTRIES) {
-    return {
-      status: "blocked",
-      reason: "capacity_exhausted",
-      detail: `historical authority 满载（${String(TREASURY_CLEANUP_SUPERSESSION_MAX_ENTRIES)}——completion 保留 fail closed，不得删除旧安全事实）`,
-    };
+    // 【Remediation VII 修复四】满载时先做有界压缩（chain certificate /
+    // retired range 已接管的 per-attempt historical entry 可安全退休）——
+    // compactor 由 chainRetirementCertificate 装配（模块环规避：本模块被
+    // 其 import）；未装配或压缩后仍满载 → fail closed（不删除旧安全事实）。
+    if (historicalCompactor !== null) {
+      historicalCompactor();
+    }
+    if (supersessionRuntime.store.entryCount >= TREASURY_CLEANUP_SUPERSESSION_MAX_ENTRIES) {
+      return {
+        status: "blocked",
+        reason: "capacity_exhausted",
+        detail: `historical authority 满载（${String(TREASURY_CLEANUP_SUPERSESSION_MAX_ENTRIES)}——压缩后仍无空间，completion 保留 fail closed，不得删除旧安全事实）`,
+      };
+    }
   }
   if (archiveFaultStep === "before-authority-write") {
     return { status: "blocked", reason: "authority_write_failure", detail: "fault 注入：authority 写入前中断（completion 保留）" };
@@ -1049,4 +1073,54 @@ export function verifyTreasuryHistoricalCompletionStatus(transactionId: string):
     return { verdict: "absent", settlement: null, detail: "无 historical completion authority" };
   }
   return { verdict: lookup.verdict, settlement: null, detail: lookup.detail };
+}
+
+// ──【Remediation VII 修复四】historical 压缩接口（chain certificate /
+//    retired range 接管后的 per-attempt entry 退休——由
+//    chainRetirementCertificate 调用，本模块保持删除权威单一入口）──────
+
+/** 【压缩用】有界枚举当前 historical records（≤硬容量；fatal store → 空数组）。 */
+export function listTreasuryHistoricalCompletionRecords(): readonly TreasuryHistoricalCompletionRecord[] {
+  const runtime = loadSupersessionRuntime();
+  if (runtime.fatal !== null) return [];
+  return Object.keys(runtime.store.entries).map((key) => runtime.store.entries[key]);
+}
+
+/**
+ * 压缩路径的单条 historical entry 退休（chain certificate / retired range
+ * 已接管该 attempt 的防重放权威后调用）：Memory 直读完整复验 → guard
+ * （调用方证明退休依据在位）→ 删除 → read-back absent。任一步失败 →
+ * false（entry 保留，fail closed）。
+ */
+export function retireTreasuryHistoricalRecordForCompression(
+  transactionId: string,
+  guard: (record: TreasuryHistoricalCompletionRecord) => boolean,
+): boolean {
+  const runtime = loadSupersessionRuntime();
+  if (runtime.fatal !== null) return false;
+  const key = SUPERSESSION_KEY_PREFIX + transactionId;
+  const entry = runtime.store.entries[key];
+  if (entry === undefined) return false;
+  const shapeError = validateHistoricalRecordShape(entry, key);
+  if (shapeError !== null) return false;
+  // Memory 权威直读复验（heap 与 Memory 同对象——shape 复验抓热缓存后篡改）。
+  const rawEntry = (Memory.runtime as unknown as RuntimeMemoryWithSupersessions | undefined)?.treasury?.cleanupSupersessions?.entries[key];
+  if (rawEntry === undefined || rawEntry !== entry) {
+    return false;
+  }
+  if (!guard(entry)) return false;
+  delete runtime.store.entries[key];
+  runtime.store.entryCount -= 1;
+  runtime.store.updatedAt = Game.time;
+  const afterDelete = (Memory.runtime as unknown as RuntimeMemoryWithSupersessions | undefined)?.treasury?.cleanupSupersessions?.entries[key];
+  return afterDelete === undefined;
+}
+
+/** historical 满载压缩回调（chainRetirementCertificate 装配；未装配 fail closed）。 */
+export type TreasuryHistoricalCompactor = () => void;
+
+let historicalCompactor: TreasuryHistoricalCompactor | null = null;
+
+export function registerTreasuryHistoricalCompactorForAssembly(compactor: TreasuryHistoricalCompactor | null): void {
+  historicalCompactor = compactor;
 }

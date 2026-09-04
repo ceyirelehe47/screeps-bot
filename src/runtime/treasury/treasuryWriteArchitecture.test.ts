@@ -505,6 +505,40 @@ describe("Treasury write-admission 架构边界", () => {
   });
 });
 
+// ── 【Round 22 Remediation VII T20】service-issued ID / archive 结果守护 ────
+
+describe("Treasury write-admission 架构边界（Remediation VII）", () => {
+  it("production contract 通道调用方必须经 mint/capability 取得 transactionId（arbitrary caller ID 只存在于测试域）", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      if (filePath.endsWith("actionContracts.ts")) continue; // enforcement 自身
+      const relative = filePath.split(/[\/]/).slice(-3).join("/");
+      const fileSource = readFileSync(filePath, "utf8");
+      const usesContractChannel = /executeTreasuryActionContract|buildTreasuryActionContract/.test(fileSource);
+      if (!usesContractChannel) continue;
+      const minted = /mintTreasuryInitialAttemptId|issueTreasuryRearmCapability/.test(fileSource);
+      if (!minted) {
+        violations.push(`${relative} 使用 production contract 通道但未经 service-issued ID authority（mint/capability）取得 transactionId`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("production 源码不得以 void 忽略 completion archive 结果（依赖回收成功的路径必须处理结构化结果）", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.split(/[\/]/).slice(-3).join("/");
+      const fileSource = readFileSync(filePath, "utf8");
+      if (/void\s+archiveTreasuryCleanupCompletionViaAuthority/.test(fileSource)) {
+        violations.push(`${relative} 以 void 忽略 archiveTreasuryCleanupCompletionViaAuthority 结果`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+});
+
 // ── 【Round 22 Remediation III 8.4】cleanup 阶段推进的架构守卫 ───────────────
 
 describe("Treasury cleanup 阶段推进架构守卫（Remediation III）", () => {
@@ -622,7 +656,10 @@ describe("Treasury completion supersession 架构守卫（Remediation VI）", ()
     expect(authoritySource).toMatch(/verifyTreasuryExactCompletionReplacement/);
     expect(authoritySource).toMatch(/input\.completion\.resolution !== "not-executed"/);
     const coordinatorSource = readFileSync(join(SRC_ROOT, "runtime/treasury/resolutionCleanupCoordinator.ts"), "utf8");
-    expect(coordinatorSource).toMatch(/lookupTreasuryHistoricalCompletion/);
+    // 【Remediation VII】journal-absent 完成判定升级为单一 durable settlement
+    // resolver（live completion → historical → chain certificate——压缩后
+    // 不退化为 no_cleanup_authority）。
+    expect(coordinatorSource).toMatch(/resolveTreasuryDurableSettlementAuthority/);
     expect(coordinatorSource).not.toMatch(/verifyTreasuryCleanupCompletionSupersession/);
     // lifecycle 驱动点（attemptLineage / summary compaction）只经统一入口。
     const attemptLineageSource = readFileSync(join(SRC_ROOT, "runtime/treasury/attemptLineage.ts"), "utf8");

@@ -43,7 +43,7 @@ import {
   recordTreasuryCleanupCompletion,
   lookupTreasuryCleanupCompletion,
 } from "@/runtime/treasury/cleanupCompletionAuthority";
-import { lookupTreasuryHistoricalCompletion } from "@/runtime/treasury/cleanupSupersessionAuthority";
+import { resolveTreasuryDurableSettlementAuthority } from "@/runtime/treasury/historicalSettlementAuthority";
 import { reclaimTreasuryCleanupCompletionHeadroom } from "@/runtime/treasury/cleanupCompletionReplacement";
 import { consumeTreasuryCompletionHeadroomReservation } from "@/runtime/treasury/completionHeadroomReservation";
 import {
@@ -491,14 +491,20 @@ export function completeTreasuryCleanupAcknowledged(input: {
       return { status: "already_completed", detail: "entry 已删除且 matching completion authority 存在（幂等已完成）" };
     }
     if (completion.verdict === "absent") {
-      const historical = lookupTreasuryHistoricalCompletion(transactionId);
-      if (historical.verdict === "match") {
-        return { status: "already_completed", detail: `entry 与 completion 均已回收，durable historical authority 持续证明完成（outcome=${historical.record.resolution}）` };
+      // 【Remediation VII 修复四】durable settlement authority（单一
+      // resolver——historical / chain certificate）：chain 压缩后完成查询
+      // 仍由 certificate 承载，不退化为 no_cleanup_authority。
+      const durableAuthority = resolveTreasuryDurableSettlementAuthority({ transactionId });
+      if (durableAuthority.status === "exact") {
+        return { status: "already_completed", detail: `entry 与 completion 均已回收，durable settlement authority（${durableAuthority.source}）持续证明完成（outcome=${durableAuthority.outcome}）` };
       }
-      if (historical.verdict === "store_unhealthy") {
-        return { status: "store_unhealthy", detail: `historical authority store unhealthy: ${historical.detail}` };
+      if (durableAuthority.status === "store_unhealthy") {
+        return { status: "store_unhealthy", detail: `durable settlement authority store unhealthy: ${durableAuthority.detail}` };
       }
-      return { status: "no_cleanup_authority", detail: "journal entry 不存在且无 completion / durable historical authority（不得视为已完成——fail closed）" };
+      if (durableAuthority.status === "conflict") {
+        return { status: "store_unhealthy", detail: `durable settlement authority conflict: ${durableAuthority.detail}` };
+      }
+      return { status: "no_cleanup_authority", detail: "journal entry 不存在且无 completion / durable settlement authority（不得视为已完成——fail closed）" };
     }
     return { status: "store_unhealthy", detail: `completion authority ${completion.verdict}: ${completion.detail}` };
   }

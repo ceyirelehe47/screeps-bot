@@ -68,6 +68,10 @@ import {
 import { registerTreasurySemanticSummarySourceForAssembly } from "@/runtime/treasury/semanticLineageValidation";
 import { registerTreasurySettlementSummaryHealthSourceForAssembly, verifyTreasuryOppositeProofAbsence } from "@/runtime/treasury/currentSettlementCoordinator";
 import { archiveTreasuryCleanupCompletionViaAuthority } from "@/runtime/treasury/cleanupSupersessionAuthority";
+import {
+  compressTreasuryChainHistoricalEntries,
+  recordTreasuryChainRetirementCertificate,
+} from "@/runtime/treasury/chainRetirementCertificate";
 
 /**
  * 【第二十一轮 7】summary v3：持久化 root / final exact identity（exact
@@ -137,11 +141,12 @@ export const retirementSummaryEvents = {
   compactionRejections: 0,
   writes: 0,
   writeFailures: 0,
+  completionArchivePending: 0,
 };
 
 export function resetTreasuryRetirementSummaryRuntimeForTest(): void {
   heapRuntime = null;
-  Object.assign(retirementSummaryEvents, { fullScans: 0, compactions: 0, compactionRejections: 0, writes: 0, writeFailures: 0 });
+  Object.assign(retirementSummaryEvents, { fullScans: 0, compactions: 0, compactionRejections: 0, writes: 0, writeFailures: 0, completionArchivePending: 0 });
 }
 
 interface TreasurySummaryRuntime {
@@ -531,7 +536,7 @@ function candidateFinalExactRelationError(
   return null;
 }
 
-function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRecord>): { readonly status: "compacted" } | { readonly status: "rejected"; readonly detail: string } {
+function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRecord>): { readonly status: "compacted"; readonly chainHistoricalRetired?: number; readonly completionArchivePending?: readonly string[] } | { readonly status: "rejected"; readonly detail: string } {
   // ──【第二十轮 11.4】压缩前检查全部相关 store 健康（lineage/summary 自身
   //    由写入路径 load 承载；此处显式检查 resolution/receipt/exact
   //    retirement——任一 unhealthy 不压缩）。
@@ -755,24 +760,61 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
     void generation;
     return readTreasuryResolutionTombstone(proof.transactionId) !== undefined;
   });
-  // ──【Remediation VI 4.5】summary 已完整写入、read-back、exact 验证 →
-  //    final/root attempt 的 completion 经统一 supersession authority 入口
-  //    归档回收（exact replacement 验证 → durable historical authority 写入
-  //    + read-back → 删除 + read-back）；replacement exact 不成立（conflict/
-  //    absent/unhealthy）时 completion 保留（fail closed——不影响压缩本身，
-  //    历史查询由 completion/historical authority 持续承载）。
+  // ──【Remediation VII 修复四】chain retirement certificate：summary 已
+  //    完整写入 read-back 后，把 chain 的永久防重放权威压缩为单条
+  //    certificate（root/final 代/terminalState——footprint 与 generation
+  //    数量无关）。certificate 写入失败（满载且全为 legacy pin / store
+  //    unhealthy）→ 不压缩 historical（chain 的 per-attempt exact outcome
+  //    保留——fail closed，不影响 summary 压缩本身）。
+  let chainHistoricalRetired = 0;
   {
-    void archiveTreasuryCleanupCompletionViaAuthority({ transactionId: currentId, via: "any-exact" });
+    const certificateWrite = recordTreasuryChainRetirementCertificate({
+      lineageId: record.lineageId,
+      rootTransactionId: record.rootTransactionId,
+      finalAttemptId: currentId,
+      finalGeneration: record.generation,
+      terminalState: record.state,
+    });
+    if (certificateWrite.status !== "rejected") {
+      const compressed = compressTreasuryChainHistoricalEntries({
+        rootTransactionId: record.rootTransactionId,
+        lineageId: record.lineageId,
+      });
+      chainHistoricalRetired = compressed.retired;
+    }
+  }
+  // ──【Remediation VI 4.5 / VII 修复五.5】final/root attempt 的 completion
+  //    经统一 supersession authority 入口归档回收（exact replacement 验证
+  //    → durable historical authority 写入 read-back → 删除 + read-back）。
+  //    archive 结果不再被无条件忽略：blocked/interrupted（exact 不可证明/
+  //    满载/损坏）→ completion 保留（fail closed），pending 事实随返回值
+  //    结构化上报（容量交由 bounded headroom 回收；压缩已由 certificate
+  //    承载 chain 权威——pending 不产生安全缺口）。
+  const completionArchivePending: string[] = [];
+  {
+    const currentArchive = archiveTreasuryCleanupCompletionViaAuthority({ transactionId: currentId, via: "any-exact" });
+    if (currentArchive.status === "blocked" || currentArchive.status === "interrupted") {
+      retirementSummaryEvents.completionArchivePending += 1;
+      completionArchivePending.push(currentId);
+    }
     if (record.rootTransactionId !== currentId) {
-      void archiveTreasuryCleanupCompletionViaAuthority({ transactionId: record.rootTransactionId, via: "any-exact" });
+      const rootArchive = archiveTreasuryCleanupCompletionViaAuthority({ transactionId: record.rootTransactionId, via: "any-exact" });
+      if (rootArchive.status === "blocked" || rootArchive.status === "interrupted") {
+        retirementSummaryEvents.completionArchivePending += 1;
+        completionArchivePending.push(record.rootTransactionId);
+      }
     }
   }
   retirementSummaryEvents.compactions += 1;
-  return { status: "compacted" };
+  return {
+    status: "compacted",
+    ...(chainHistoricalRetired > 0 ? { chainHistoricalRetired } : {}),
+    ...(completionArchivePending.length > 0 ? { completionArchivePending } : {}),
+  };
 }
 
 /** 显式压缩单条 lineage（beginTick 有界批处理 / 测试与运维通道）。 */
-export function compactTreasuryTerminalLineage(lineageId: string): { readonly status: "compacted" } | { readonly status: "rejected"; readonly detail: string } {
+export function compactTreasuryTerminalLineage(lineageId: string): { readonly status: "compacted"; readonly chainHistoricalRetired?: number; readonly completionArchivePending?: readonly string[] } | { readonly status: "rejected"; readonly detail: string } {
   const record = readTreasuryAttemptLineageRecord(lineageId);
   if (record === undefined) {
     return { status: "rejected", detail: `lineage ${lineageId.slice(0, 16)} 不存在` };

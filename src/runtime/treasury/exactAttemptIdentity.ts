@@ -26,8 +26,13 @@
 import { isTreasuryRearmAttemptId } from "@/runtime/treasury/transactionId";
 import { validateTreasuryLowlevelSourceField } from "@/runtime/treasury/authorityLevel";
 
-/** proof / authority class（与 receipt proof level、tombstone proofLevel 同源）。 */
-export type TreasuryAttemptProofClass = "identity-bound" | "lowlevel" | "legacy";
+/**
+ * proof / authority class（与 receipt proof level、tombstone proofLevel 同源）。
+ * 【Remediation VII 修复五】forensic 为显式隔离等级（forensic-isolated
+ * profile 的唯一合法 class）——不得在 exact relation 构造时折叠为 legacy
+ * （隔离等级语义保留：不同 class 即身份冲突，同 class 才可能 match）。
+ */
+export type TreasuryAttemptProofClass = "identity-bound" | "lowlevel" | "legacy" | "forensic";
 
 /** exact attempt identity 的规范视图（全部构造经本模块 helper）。 */
 export interface TreasuryExactAttemptIdentity {
@@ -80,6 +85,16 @@ export function treasuryProofClassOfIdentityFacts(
 }
 
 /** unresolved authority level → proof class（modern→identity-bound；lowlevel→lowlevel；legacy/forensic→legacy 不可释放标记）。 */
+/**
+ * 【Remediation VII 修复五】持久化 proofClass 字符串的 canonical 转换：
+ * lowlevel / identity-bound / forensic 原样保留（forensic 不折叠为
+ * legacy——隔离 profile 的 exact identity 可比较、可区分）；其余 → legacy。
+ */
+export function treasuryProofClassOfPersistedClass(persisted: string): TreasuryAttemptProofClass {
+  if (persisted === "lowlevel" || persisted === "identity-bound" || persisted === "forensic") return persisted;
+  return "legacy";
+}
+
 export function treasuryProofClassOfAuthorityLevel(level: string | undefined): TreasuryAttemptProofClass {
   if (level === "lowlevel") return "lowlevel";
   if (level === "modern") return "identity-bound";

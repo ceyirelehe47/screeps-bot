@@ -59,6 +59,8 @@ import {
   verifyTreasuryHistoricalCompletionStatus,
   TREASURY_CLEANUP_SUPERSESSION_MAX_ENTRIES,
 } from "@/runtime/treasury/cleanupSupersessionAuthority";
+import { resolveTreasuryDurableSettlementAuthority } from "@/runtime/treasury/historicalSettlementAuthority";
+import { lookupTreasuryChainRetirementCertificate, peekTreasuryChainCertificateEntryCount } from "@/runtime/treasury/chainRetirementCertificate";
 import {
   registerTreasuryCompletionReplacementProbesForAssembly,
   verifyTreasuryCleanupCompletionSupersession,
@@ -674,15 +676,17 @@ describe("Remediation VI T8：GRA/tombstone 被正式生命周期回收后历史
     // global reset 模拟。
     resetTreasuryCleanupCompletionHeapCacheForTest();
     resetTreasuryCleanupSupersessionHeapCacheForTest();
-    // 历史权威仍有效：exact completed + authoritative settlement 正确。
-    const status = verifyTreasuryHistoricalCompletionStatus(root);
-    expect(status.verdict).toBe("match");
-    expect(status.settlement).toBe("not-executed");
+    // 【Remediation VII T17 语义升级】terminal compaction 已把 root 的
+    // per-attempt historical entry 压缩为 chain retirement certificate——
+    // historical lookup 不再 match（已压缩），完成事实与 authoritative
+    // settlement 由 durable settlement authority（certificate）持续证明。
+    expect(lookupTreasuryChainRetirementCertificate(root)).toBeDefined();
+    const resolved = resolveTreasuryDurableSettlementAuthority({ transactionId: root });
+    expect(resolved.status).toBe("exact");
+    if (resolved.status === "exact") expect(resolved.outcome).toBe("not-executed");
     expect(advanceTreasuryResolutionCleanupPhases({ transactionId: root }).status).toBe("completed");
-    // 错误 expected identity/outcome 仍 conflict。
-    const wrongIdentity = treasuryExactAttemptIdentityOfFacts(root, { digest: DIGEST, durableIdentityDigest: "1111111111abc009", lowlevelSource: RUNTIME }, "lowlevel")!;
-    expect(lookupTreasuryHistoricalCompletion(root, wrongIdentity).verdict).toBe("conflict");
-    expect(lookupTreasuryHistoricalCompletion(root, undefined, "committed").verdict).toBe("conflict");
+    // 错误 outcome 视角仍 conflict（certificate 绑定 authoritative outcome）。
+    expect(resolveTreasuryDurableSettlementAuthority({ transactionId: root, expectedOutcome: "committed" }).status).toBe("conflict");
   });
 });
 
@@ -806,35 +810,47 @@ describe("Remediation VI T9：真实 300-generation chain（root + generation 1.
     // completion 幂等归档）。
     settleParentCleanup(currentId, currentDurable, 300);
     expect(archiveTreasuryCleanupCompletionViaAuthority({ transactionId: currentId, via: "any-exact" }).status).toBe("archived");
-    expect(compactTreasuryTerminalLineage(lineageId).status).toBe("compacted");
-    // compaction 后 active record 被 summary 替代。
-    expect(lookupTreasuryRetirementSummaryByRoot(root)).toBeDefined();
-
-    // 容量边界：live completion store 未超硬容量；historical 未超其硬容量。
-    expect(peekTreasuryCleanupCompletionEntryCount()).toBeLessThanOrEqual(TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES);
-    const historicalCount = peekTreasuryCleanupSupersessionEntryCount();
-    expect(historicalCount).toBeLessThanOrEqual(TREASURY_CLEANUP_SUPERSESSION_MAX_ENTRIES);
-    expect(historicalCount).toBeGreaterThanOrEqual(301); // root + 300 children 全部归档。
-
-    // root 与 generation 1..300 全部历史 attempt 可查询、outcome 正确。
-    const expectHistorical = (attemptId: string): void => {
-      const status = verifyTreasuryHistoricalCompletionStatus(attemptId);
-      expect(status.verdict).toBe("match");
-      expect(status.settlement).toBe("not-executed");
-    };
-    expectHistorical(root);
-    for (let generation = 1; generation <= 300; generation++) {
-      const attemptId = deriveTreasuryLineageNextChildTransactionId(lineageId, generation, root);
-      expectHistorical(attemptId);
-    }
-    // 错误 generation/identity/outcome 不 match。
+    // 压缩前（historical 仍承载 per-attempt exact identity）：错误 identity/
+    // outcome 不 match——exact 层身份维度在压缩发生前验证。
     const gen150 = deriveTreasuryLineageNextChildTransactionId(lineageId, 150, root);
     const gen300 = deriveTreasuryLineageNextChildTransactionId(lineageId, 300, root);
     expect(lookupTreasuryHistoricalCompletion(gen150, undefined, "committed").verdict).toBe("conflict");
     const wrongIdentity = treasuryExactAttemptIdentityOfFacts(gen300, { digest: DIGEST, durableIdentityDigest: "1111111111abc300", lowlevelSource: RUNTIME, lineageId, lineageGeneration: 300, parentTransactionId: gen150, lineageBindingDigest: "2222222222abc300" }, "lowlevel");
     expect(wrongIdentity).not.toBeNull();
     expect(lookupTreasuryHistoricalCompletion(gen300, wrongIdentity!).verdict).toBe("conflict");
-    // advance 幂等查询不退化为 no_cleanup_authority。
+    expect(compactTreasuryTerminalLineage(lineageId).status).toBe("compacted");
+    // compaction 后 active record 被 summary 替代。
+    expect(lookupTreasuryRetirementSummaryByRoot(root)).toBeDefined();
+
+    // 容量边界：live completion store 未超硬容量。
+    expect(peekTreasuryCleanupCompletionEntryCount()).toBeLessThanOrEqual(TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES);
+    // 【Remediation VII T17】terminal compaction 后 chain 压缩：不再保留
+    // 301 条 per-attempt 永久 historical records——chain 级永久 footprint 与
+    // generation 数量无关（certificate 一条）。
+    expect(peekTreasuryCleanupSupersessionEntryCount()).toBe(0);
+    expect(peekTreasuryChainCertificateEntryCount()).toBe(1);
+    const certificate = lookupTreasuryChainRetirementCertificate(root);
+    expect(certificate).toBeDefined();
+    expect(certificate!.finalGeneration).toBe(300);
+    expect(certificate!.terminalState).toBe("non_rearmable_retired");
+
+    // root 与 generation 1..300 全部经 durable settlement authority（chain
+    // certificate）可查询、outcome 正确、永久 replay-blocked。
+    const expectResolved = (attemptId: string): void => {
+      const resolved = resolveTreasuryDurableSettlementAuthority({ transactionId: attemptId });
+      expect(resolved.status).toBe("exact");
+      if (resolved.status === "exact") expect(resolved.outcome).toBe("not-executed");
+    };
+    expectResolved(root);
+    for (let generation = 1; generation <= 300; generation++) {
+      const attemptId = deriveTreasuryLineageNextChildTransactionId(lineageId, generation, root);
+      expectResolved(attemptId);
+    }
+    // 错误 outcome 视角 / 超出 final generation 的 ID 不 match。
+    expect(resolveTreasuryDurableSettlementAuthority({ transactionId: gen300, expectedOutcome: "committed" }).status).toBe("conflict");
+    const genBeyond = deriveTreasuryLineageNextChildTransactionId(lineageId, 301, root);
+    expect(resolveTreasuryDurableSettlementAuthority({ transactionId: genBeyond }).status).toBe("absent");
+    // advance 幂等查询不退化为 no_cleanup_authority（certificate 承载完成）。
     expect(advanceTreasuryResolutionCleanupPhases({ transactionId: root }).status).toBe("completed");
     expect(advanceTreasuryResolutionCleanupPhases({ transactionId: gen300 }).status).toBe("completed");
   });

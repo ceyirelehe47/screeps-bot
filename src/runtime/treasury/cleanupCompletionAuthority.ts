@@ -37,6 +37,7 @@ import {
 } from "@/runtime/treasury/identityProfile";
 import {
   treasuryExactAttemptIdentityOfFacts,
+  treasuryProofClassOfPersistedClass,
   treasuryExactAttemptIdentityRelation,
   type TreasuryExactAttemptIdentity,
 } from "@/runtime/treasury/exactAttemptIdentity";
@@ -215,7 +216,7 @@ export function completionExactIdentityOfProof(
       ...(identity.parentTransactionId !== undefined ? { parentTransactionId: identity.parentTransactionId } : {}),
       ...(identity.lineageBindingDigest !== undefined ? { lineageBindingDigest: identity.lineageBindingDigest } : {}),
     },
-    identity.proofClass === "lowlevel" ? "lowlevel" : identity.proofClass === "identity-bound" ? "identity-bound" : "legacy",
+        treasuryProofClassOfPersistedClass(identity.proofClass),
   );
 }
 
