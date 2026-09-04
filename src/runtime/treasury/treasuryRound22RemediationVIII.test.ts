@@ -500,7 +500,7 @@ describe("Remediation VIII I：issued attempt ID 的完整可验证性", () => {
 
   it("I7：同一 sequence 不得出现两个都被 runtime 接受的完整 initial ID", () => {
     const transactionId = mintedId("i7_unique");
-    const parsed = /ti1_(\d+)_/.exec(transactionId);
+    const parsed = /ti2_(\d+)_/.exec(transactionId);
     expect(parsed).not.toBeNull();
     const sequence = Number.parseInt(parsed![1], 10);
     const rebuilt = buildTreasuryIssuedInitialAttemptIdFromSequence(sequence);
@@ -623,7 +623,7 @@ describe("Remediation VIII S：统一 settlement reconciliation（无短路聚�
     const transactionId = mintedId("s7_root");
     seedNonRearmableRoot(transactionId);
     // 手工吸收 root 序号进 retired range（正式压缩通道的等价终态）。
-    const sequence = Number.parseInt(/ti1_(\d+)_/.exec(transactionId)![1]!, 10);
+    const sequence = Number.parseInt(/ti2_(\d+)_/.exec(transactionId)![1]!, 10);
     // retired range 覆盖（模拟 certificate 驱逐后的终态——直接持久层注入
     // 等价区间由 L3 覆盖正式通道；此处验证 retired 语义）。
     const branch = (Memory.runtime as unknown as { treasury?: Record<string, unknown> }).treasury!;
@@ -788,7 +788,7 @@ describe("Remediation VIII C：certificate outcome 语义 / checksum / canonical
       version: 1,
       entries: {
         ["crc:" + root]: {
-          schemaVersion: 1, rootSequence: Number.parseInt(/ti1_(\d+)_/.exec(root)![1]!, 10),
+          schemaVersion: 1, rootSequence: Number.parseInt(/ti2_(\d+)_/.exec(root)![1]!, 10),
           lineageId, rootTransactionId: root, finalAttemptId: forgedChild, finalGeneration: 1,
           terminalState: "chain_committed", finalizedAtTick: Game.time,
         },
@@ -932,18 +932,24 @@ describe("Remediation VIII R：reservation 生命周期闭合", () => {
     // A 获取最后一个 reservation。
     expect(acquireTreasuryCompletionHeadroomReservation({
       transactionId: a,
-      completionEntryCount: peekTreasuryEffectiveCompletionOccupancy().effective,
+      occupancyAfterAcquire: peekTreasuryEffectiveCompletionOccupancy().effective + 1,
       completionHardCapacity: TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
     }).status).toBe("acquired");
-    // B（无 matching reservation 的 legacy cleanup）尝试 publish → 拒绝。
+    // B（无 matching reservation 的 legacy cleanup）尝试 publish：首次
+    // recovery acquire 因 live(127)+reserved(1)+1=129 > 128 拒绝 → bounded
+    // reclaim 腾出 1 个 live 槽（127→126）→ 重试 126+1+1=128 ≤ 128 合法
+    // 取得（【IX 工作流 E 8.1 单一公式】——B 未抢占 A 的独占槽，A 的
+    // reservation 原样在位；旧的双重计数口径在 reclaim 后仍会误拒）。
     const b = mintedId("r6_b");
     const admission = admitTreasuryCompletionPublicationReservation({
       transactionId: b,
       durableIdentityDigest: durableOf(b),
       completionHardCapacity: TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
     });
-    expect(admission.status).toBe("rejected");
-    if (admission.status === "rejected") expect(admission.reason).toBe("reservation_unavailable");
+    expect(admission.status).toBe("admitted");
+    if (admission.status === "admitted") expect(admission.recoveryAcquired).toBe(true);
+    // A 的独占 reservation 未被抢占。
+    expect(peekTreasuryCompletionHeadroomReservation(a)).toBeDefined();
     // B 无 completion 写入、有效占用从未超过 MAX。
     expect(lookupTreasuryCleanupCompletion(b).verdict).toBe("absent");
     const occupancy = peekTreasuryEffectiveCompletionOccupancy();
@@ -967,7 +973,7 @@ describe("Remediation VIII R：reservation 生命周期闭合", () => {
     // reservation 绑定 identity A。
     expect(acquireTreasuryCompletionHeadroomReservation({
       transactionId,
-      completionEntryCount: 0,
+      occupancyAfterAcquire: 1,
       completionHardCapacity: TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
     }).status).toBe("acquired");
     expect(admitTreasuryCompletionHeadroomReservationForExecution({
@@ -993,7 +999,8 @@ describe("Remediation VIII R：reservation 生命周期闭合", () => {
     executeCommitted(service, transactionId);
     expect(acquireTreasuryCompletionHeadroomReservation({
       transactionId,
-      completionEntryCount: peekTreasuryEffectiveCompletionOccupancy().effective,
+      // matching pair 恢复型 acquire——不新增槽（effective 已含该 live 槽）。
+      occupancyAfterAcquire: peekTreasuryEffectiveCompletionOccupancy().effective,
       completionHardCapacity: TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
     }).status).toBe("acquired");
     expect(admitTreasuryCompletionHeadroomReservationForExecution({
@@ -1045,7 +1052,7 @@ describe("Remediation VIII R：reservation 生命周期闭合", () => {
     makeService();
     const transactionId = mintedId("r11");
     expect(acquireTreasuryCompletionHeadroomReservation({
-      transactionId, completionEntryCount: 0, completionHardCapacity: TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
+      transactionId, occupancyAfterAcquire: 1, completionHardCapacity: TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
     }).status).toBe("acquired");
     // cleanup journal 在位（lineage finalization 进行中）。
     const opened = openTreasuryResolutionCleanup(
@@ -1065,7 +1072,7 @@ describe("Remediation VIII R：reservation 生命周期闭合", () => {
     makeService();
     const transactionId = mintedId("r12");
     expect(acquireTreasuryCompletionHeadroomReservation({
-      transactionId, completionEntryCount: 0, completionHardCapacity: TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
+      transactionId, occupancyAfterAcquire: 1, completionHardCapacity: TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
     }).status).toBe("acquired");
     Game.time += TREASURY_COMPLETION_RESERVATION_TTL_TICKS + 1;
     const swept = sweepOrphanTreasuryCompletionReservations(new Set());
@@ -1077,7 +1084,7 @@ describe("Remediation VIII R：reservation 生命周期闭合", () => {
     makeService();
     const transactionId = mintedId("r13");
     expect(acquireTreasuryCompletionHeadroomReservation({
-      transactionId, completionEntryCount: 0, completionHardCapacity: TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
+      transactionId, occupancyAfterAcquire: 1, completionHardCapacity: TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
     }).status).toBe("acquired");
     // 损坏 store（entryCount 不一致）。
     const branch = (Memory.runtime as unknown as { treasury?: { completionHeadroomReservations?: { entryCount: number } } }).treasury;

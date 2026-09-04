@@ -515,12 +515,15 @@ describe("Treasury write-admission 架构边界", () => {
 
 describe("Treasury write-admission 架构边界（Remediation VIII）", () => {
   it("S10：安全关键模块不得直接拼装 historical/certificate/range truth graph（统一 resolver 单一入口）", () => {
-    // 受控例外：统一 resolver（historicalSettlementAuthority）、底层实现
-    //（chainRetirementCertificate / cleanupSupersessionAuthority）、压缩
-    // 编排（lineageRetirementSummary——certificate/range 的 replacement
-    // 在位检查）与注释引用（cleanupCompletionReplacement）。
+    // 受控例外：统一 resolver（historicalSettlementAuthority）、统一
+    // lifecycle owner resolver（【IX 工作流 E 8.3】orphan 判定真相源——
+    // 直接查底层 store 是其职责）、底层实现（chainRetirementCertificate /
+    // cleanupSupersessionAuthority）、压缩编排（lineageRetirementSummary
+    // ——certificate/range 的 replacement 在位检查）与注释引用
+    //（cleanupCompletionReplacement）。
     const LOW_LEVEL_LOOKUP_ALLOWLIST = new Set([
       "runtime/treasury/historicalSettlementAuthority.ts",
+      "runtime/treasury/treasuryLifecycleOwnerResolver.ts",
       "runtime/treasury/chainRetirementCertificate.ts",
       "runtime/treasury/cleanupSupersessionAuthority.ts",
       "runtime/treasury/cleanupCompletionReplacement.ts",
