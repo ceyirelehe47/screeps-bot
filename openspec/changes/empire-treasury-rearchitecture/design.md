@@ -1676,3 +1676,33 @@ GRA 满载驱逐从"同 lineage 有 summary 即驱逐"的存在性检查升级�
 - destructive orphan/GC 判定只在全部 source 明确健康且明确 absent 时返回 unowned；
 - GRA 驱逐需 exact replacement relation 全维度 + 依赖关闭；legacy summary 不授权 destructive eviction；
 - ticket store 总 entry ≤ 128（真实硬上限——validator/契约/行为三方一致）。
+
+## 26. Round 22 Remediation XI——正向 Ticket 接管证明、规范发行身份、统一 GRA 释放与只读迁移边界
+
+### 26.1 正向证明与保守阻断分离（resolver verdict）
+
+通用 lifecycle resolver 的 `owned` 双语义结构化拆分：`verdict ∈ { exact_owner, blocked, absent }`。
+
+- `exact_owner`：维度 entry 真实在位——唯一可授权 ticket handoff consume 的 verdict；
+- `blocked`：store unhealthy / probe 未装配 / live completion identity conflict（storeUnhealthy=false 的 conflict 不得用 `!storeUnhealthy` 区分）等保守阻断——只阻断执行与 GC，绝不构成"新 owner 已接管"；
+- `absent`：全部维度健康且明确为空。
+
+ticket gate 只消费 exact_owner；blocked → `issued_ticket_owner_unverifiable`（ticket 保持 active，修复后同 exact opening 可恢复或幂等完成 handoff）。consume/read-back 失败 → 不报告 handoff_recovered、返回真实结构化失败（gate 与 facade 执行点均消费 completeHandoff 结果——callback 永远在成功 handoff 判定之后且恰好一次）。
+
+### 26.2 规范发行身份（canonical current ID）
+
+`verifyTreasuryCurrentIssuedIdCanonical`（纯函数、零 Memory 读写）：ti2_ 形态 + namespace=current + checksum 按 v3 协议 tag 确定性重算全等 + expectedSequence 完全相等。issued ticket 的 validateTicketEntryShape 与 certificate 的 validateCertificateCanonicalRelations（current root）共用；任一条 canonical relation 损坏 → 整店 unhealthy（不自动修复、不删除损坏 entry）。发行事实独立判定：gate 验证 ticket.sequence ≤ issuer watermark（canonical ID 不构成发行事实）。legacy ti1_ root 保持隔离语义（不重算、不解释为 current）。
+
+### 26.3 统一 GRA destructive release authority
+
+全部生产删除经唯一 primitive `releaseGenerationProofDestructive(key, mode)`（tombstone_retired / orphan_advance / compaction_orphan / summary_superseded）。primitive 内部自验（不信任调用方检查）：索引一致、active lineage 非当前代（probe）、cleanup journal 关闭、resolution tombstone 关闭（tombstone 缺席不再是独立充分条件）、summary_superseded 模式重验 exact replacement relation 全维度（legacy replay-only 不授权）。删除同步维护双索引 + read-back；失败完整恢复。caller 消费结构化 blocked（resolutionStore 诊断 / compaction pending / sweep retained）——不再 void 忽略。
+
+### 26.4 只读迁移边界（query-pure migration）
+
+v1 retired range 迁移唯一 owner = lifecycle GC coordinator 的前置 tick-boundary migration 阶段（源形状校验 → 发行域严格证明 → 单对象替换 + read-back；不可证明 → blocked 原数据保留；幂等）。全部 range 查询零写（v1 → migration_required 第五态 / 保守 retired 阻断；absent → 健康空不初始化）；resolver 的 Intent 维度 peek 零写校验；completion/supersession 的 store-absent 读取零写（heap-only 空视图 + 写路径 ensurePublished）。
+
+### 26.5 namespace 容量隔离
+
+per-namespace quota：current 48 / legacy 16（总和 = 物理 64）。只针对"新增区间"（相邻合并不计数）；超额 legacy 存量保留不裁剪；两域互不驱逐、不跨域合并；current 满载先 coalesce 收敛（current-only）。lifecycle contract 三方登记。
+
+（实现细节与固定反例映射见 evidence/round22-remediation-xi-positive-handoff-canonical-lifecycle-local-validation.md）
