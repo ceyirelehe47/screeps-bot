@@ -1407,6 +1407,11 @@ export function reserveTreasuryReceiptAdmission(transactionId: string, nowTick: 
 }
 
 /** abort：释放 prepare 预留（返回是否确有预留被释放）。 */
+/** 【IX 工作流 E 8.3】receipt admission reservation 的只读查询（lifecycle owner resolver 用——prepare→commit 窗口的 heap owner）。 */
+export function hasTreasuryReceiptAdmissionReservation(transactionId: string): boolean {
+  return pendingAdmissions.has(transactionId);
+}
+
 export function releaseTreasuryReceiptReservation(transactionId: string): boolean {
   return pendingAdmissions.delete(transactionId);
 }

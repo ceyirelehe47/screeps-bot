@@ -2118,8 +2118,8 @@ function backfillLineageFromTombstone(
 // 【Remediation VIII 工作流 D6】owner truth graph 的 lineage 维度注入
 //（cleanupCompletionHandoff 不得反向 import 本模块——TDZ 环规避；本模块
 // 加载晚于 resolutionStore 的占位注册，此处覆盖为完整 probes）。
-import { registerTreasuryReservationLineageProbeForAssembly as __registerReservationLineageProbe } from "@/runtime/treasury/cleanupCompletionHandoff";
-__registerReservationLineageProbe({
+import { registerTreasuryLifecycleLineageProbeForAssembly as __registerLifecycleLineageProbe } from "@/runtime/treasury/treasuryLifecycleOwnerResolver";
+__registerLifecycleLineageProbe({
   lineageOf: (transactionId) => lookupTreasuryAttemptLineageByAttemptId(transactionId) as unknown as { readonly state?: unknown } | undefined,
   lineageStoreHealthy: () => peekTreasuryAttemptLineageHealth().healthy,
 });
