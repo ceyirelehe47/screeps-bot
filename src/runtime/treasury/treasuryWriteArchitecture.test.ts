@@ -496,9 +496,88 @@ describe("Treasury write-admission 架构边界", () => {
         // 【Remediation VII】durable settlement authority 的 chain 级数据源
         //（tr1_ child ID 的 generation-addressable 查询路由）。
         "runtime/treasury/chainRetirementCertificate.ts",
+        // 【Remediation VIII】production contract 通道的 ID 命名空间分类
+        //（tr1_ 经 capability 门禁放行——facade 单一权威）与统一
+        // reconciliation 的 tr1_ 查询路由（root/child 来源分流）。
+        "runtime/treasury/actionContracts.ts",
+        "runtime/treasury/historicalSettlementAuthority.ts",
       ]);
       if (/isTreasuryRearmAttemptId/.test(fileSource) && !REARM_NAMESPACE_CONSUMERS.has(relative)) {
         violations.push(`${relative} 引用 isTreasuryRearmAttemptId（tr1_ 判定单一权威在 transactionId.ts，门禁在 facade）`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+});
+
+// ── 【Round 22 Remediation VIII S10 / 十一节】统一 reconciliation 与
+//    reservation handoff 的架构守护 ────────────────────────────────────────
+
+describe("Treasury write-admission 架构边界（Remediation VIII）", () => {
+  it("S10：安全关键模块不得直接拼装 historical/certificate/range truth graph（统一 resolver 单一入口）", () => {
+    // 受控例外：统一 resolver（historicalSettlementAuthority）、底层实现
+    //（chainRetirementCertificate / cleanupSupersessionAuthority）、压缩
+    // 编排（lineageRetirementSummary——certificate/range 的 replacement
+    // 在位检查）与注释引用（cleanupCompletionReplacement）。
+    const LOW_LEVEL_LOOKUP_ALLOWLIST = new Set([
+      "runtime/treasury/historicalSettlementAuthority.ts",
+      "runtime/treasury/chainRetirementCertificate.ts",
+      "runtime/treasury/cleanupSupersessionAuthority.ts",
+      "runtime/treasury/cleanupCompletionReplacement.ts",
+      "runtime/treasury/lineageRetirementSummary.ts",
+    ]);
+    const LOOKUP_PATTERN = /\b(?:lookupTreasuryHistoricalCompletion|lookupTreasuryChainRetirementCertificate|lookupTreasuryChainRetirementGenerationOutcome|checkTreasuryAttemptRetiredRange)\b/;
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.slice(SRC_ROOT.length + 1).split("\\").join("/");
+      if (!relative.startsWith("runtime/treasury/")) continue;
+      if (LOW_LEVEL_LOOKUP_ALLOWLIST.has(relative)) continue;
+      const fileSource = readFileSync(filePath, "utf8");
+      // 注释行不扫描（文档性引用不算拼装）。
+      for (const line of fileSource.split("\n")) {
+        const code = line.replace(/\/\/.*$/, "");
+        if (LOOKUP_PATTERN.test(code)) {
+          violations.push(`${relative} 直接调用底层 settlement 权威 lookup（安全关键模块必须经 resolveTreasuryDurableSettlementAuthority / resolveTreasuryCleanupCompletionAuthority）`);
+          break;
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("reservation consume/release 不得被 void 忽略（结构化结果必须检查）", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.slice(SRC_ROOT.length + 1).split("\\").join("/");
+      if (!relative.startsWith("runtime/treasury/")) continue;
+      // 定义处（completionHeadroomReservation）与 checked owner
+      //（cleanupCompletionHandoff——内部检查并计数）例外。
+      if (relative === "runtime/treasury/completionHeadroomReservation.ts" || relative === "runtime/treasury/cleanupCompletionHandoff.ts") continue;
+      const fileSource = readFileSync(filePath, "utf8");
+      const VOID_PATTERN = /^\s*(?:const|let|var)?\s*(?:consume|release)TreasuryCompletionHeadroomReservation\([^)]*\)\s*;/;
+      for (const line of fileSource.split("\n")) {
+        if (VOID_PATTERN.test(line)) {
+          violations.push(`${relative} 裸调用 reservation mutation（结果不得被 void 忽略——须检查结构化结果或经 checked owner）`);
+          break;
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("completion publication 的生产调用方只有 cleanup stage acknowledgement（受控 handoff owner 内）", () => {
+    const violations: string[] = [];
+    for (const filePath of listFilesRecursive(SRC_ROOT)) {
+      if (filePath.endsWith(".test.ts")) continue;
+      const relative = filePath.slice(SRC_ROOT.length + 1).split("\\").join("/");
+      if (!relative.startsWith("runtime/treasury/")) continue;
+      if (relative === "runtime/treasury/cleanupCompletionAuthority.ts" || relative === "runtime/treasury/cleanupStageAcknowledgement.ts") continue;
+      const fileSource = readFileSync(filePath, "utf8");
+      const code = fileSource.replace(/\/\/[^\n]*/g, "");
+      if (/recordTreasuryCleanupCompletion\(/.test(code)) {
+        violations.push(`${relative} 直接调用 completion publication（生产 publication 只能经 cleanupStageAcknowledgement 的 matching reservation handoff）`);
       }
     }
     expect(violations).toEqual([]);

@@ -480,7 +480,7 @@ describe("Remediation VII T3：historical opposite proof 双方向", () => {
     seedHistoricalRecord({ transactionId, resolution: "committed" });
     const check = checkTreasuryOppositeProofsForNotExecuted(transactionId, expected(transactionId));
     expect(check.clear).toBe(false);
-    expect(check.blockers.some((blocker) => blocker.source === "historical-authority" && blocker.classification === "exact_match")).toBe(true);
+    expect(check.blockers.some((blocker) => blocker.source === "durable-settlement-authority" && blocker.classification === "exact_match")).toBe(true);
   });
 
   it("B：historical not-executed + 目标 committed → 相反 proof 阻断", () => {
@@ -488,7 +488,7 @@ describe("Remediation VII T3：historical opposite proof 双方向", () => {
     seedHistoricalRecord({ transactionId, resolution: "not-executed" });
     const check = checkTreasuryOppositeProofsForCommitted(transactionId, expected(transactionId));
     expect(check.clear).toBe(false);
-    expect(check.blockers.some((blocker) => blocker.source === "historical-authority" && blocker.classification === "exact_match")).toBe(true);
+    expect(check.blockers.some((blocker) => blocker.source === "durable-settlement-authority" && blocker.classification === "exact_match")).toBe(true);
   });
 
   it("同方向（非相反 outcome）的 historical 权威不构成 opposite proof", () => {
@@ -539,10 +539,10 @@ describe("Remediation VII T5：historical/证书中的 child ID 属于 occupied"
         lineageBindingDigest: "0123456789abcde1",
       },
     });
-    expect(checkTreasuryChildAttemptOccupancy(childId)).toBe("historical completion authority");
+    expect(checkTreasuryChildAttemptOccupancy(childId)).toBe("durable settlement authority（completion/certificate）");
   });
 
-  it("chain certificate 覆盖的 generation → resolver exact；child occupancy 语义不误伤（cert 不在 occupancy 判定即 absent，重放由 tr1_ 门禁承载）", () => {
+  it("chain certificate 覆盖的 generation → resolver protocol（VIII C4：certificate 是协议推导，identity 不足不冒充 exact）；child occupancy 认识 certificate（S6——不再 absent）", () => {
     const lineageId = "0123456789abcdef";
     const root = mintedId("t5_root");
     const certChild = deriveTreasuryLineageNextChildTransactionId(lineageId, 3, root);
@@ -552,16 +552,22 @@ describe("Remediation VII T5：historical/证书中的 child ID 属于 occupied"
       terminalState: "non_rearmable_retired",
     }).status).toBe("written");
     const resolved = resolveTreasuryDurableSettlementAuthority({ transactionId: certChild });
-    expect(resolved.status).toBe("exact");
-    if (resolved.status === "exact") expect(resolved.outcome).toBe("not-executed");
-    // 中间代协议确定 not-executed。
+    expect(resolved.status).toBe("protocol");
+    if (resolved.status === "protocol") expect(resolved.outcome).toBe("not-executed");
+    // 【S6】certificate-only 的 child 属于 occupied（occupancy 认识压缩后权威）。
+    expect(checkTreasuryChildAttemptOccupancy(certChild)).toBe("durable settlement authority（completion/certificate）");
+    // 中间代协议确定 not-executed（同样 protocol——不冒充 exact）。
     const gen2 = deriveTreasuryLineageNextChildTransactionId(lineageId, 2, root);
     const resolved2 = resolveTreasuryDurableSettlementAuthority({ transactionId: gen2 });
-    expect(resolved2.status).toBe("exact");
+    expect(resolved2.status).toBe("protocol");
+    if (resolved2.status === "protocol") expect(resolved2.outcome).toBe("not-executed");
     // 错误 outcome → conflict；超出 final generation → absent。
     expect(resolveTreasuryDurableSettlementAuthority({ transactionId: certChild, expectedOutcome: "committed" }).status).toBe("conflict");
     const beyond = deriveTreasuryLineageNextChildTransactionId(lineageId, 9, root);
     expect(resolveTreasuryDurableSettlementAuthority({ transactionId: beyond }).status).toBe("absent");
+    // 【C4】篡改 checksum 一位的 child ID：不得获得 certificate 匹配。
+    const tampered = certChild.slice(0, certChild.length - 1) + (certChild.slice(-1) === "0" ? "1" : "0");
+    expect(resolveTreasuryDurableSettlementAuthority({ transactionId: tampered }).status).toBe("absent");
   });
 });
 
@@ -617,9 +623,9 @@ describe("Remediation VII T7：historical store unhealthy 时全部入口 fail c
     )!;
     corruptHistoricalStore();
     const committedCheck = checkTreasuryOppositeProofsForCommitted(transactionId, expected);
-    expect(committedCheck.blockers.some((blocker) => blocker.source === "historical-authority" && blocker.classification === "store_unhealthy")).toBe(true);
+    expect(committedCheck.blockers.some((blocker) => blocker.source === "durable-settlement-authority" && blocker.classification === "store_unhealthy")).toBe(true);
     const notExecutedCheck = checkTreasuryOppositeProofsForNotExecuted(transactionId, expected);
-    expect(notExecutedCheck.blockers.some((blocker) => blocker.source === "historical-authority" && blocker.classification === "store_unhealthy")).toBe(true);
+    expect(notExecutedCheck.blockers.some((blocker) => blocker.source === "durable-settlement-authority" && blocker.classification === "store_unhealthy")).toBe(true);
   });
 
   it("rearm preflight → 零 capability（lineage_store_unhealthy）", () => {
@@ -634,7 +640,7 @@ describe("Remediation VII T7：historical store unhealthy 时全部入口 fail c
   it("child occupancy → unhealthy 阻断（不折叠为未占用）", () => {
     corruptHistoricalStore();
     const childId = deriveTreasuryLineageNextChildTransactionId("0123456789abcdf0", 1, "vii_t7_root");
-    expect(checkTreasuryChildAttemptOccupancy(childId)).toBe("historical completion store unhealthy（fail closed）");
+    expect(checkTreasuryChildAttemptOccupancy(childId)).toBe("durable settlement authority store unhealthy（fail closed）");
   });
 });
 
@@ -774,8 +780,12 @@ describe("Remediation VII T10：独占 reservation 的容量竞争", () => {
     expect(callback).toHaveBeenCalledTimes(1);
     // 恒成立：live + reserved ≤ MAX。
     expect(peekTreasuryCleanupCompletionEntryCount() + peekTreasuryCompletionHeadroomReservationCount()).toBeLessThanOrEqual(TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES);
-    // A 的 reservation 保留至 completion 写入消费（cleanup 编排 consume）。
-    expect(peekTreasuryCompletionHeadroomReservation(a)).toBeDefined();
+    // 【Remediation VIII D3 语义更新】普通成功 commit（无 cleanup journal/
+    // unresolved authority 接管）→ reservation 立即释放，不得滞留至 TTL
+    //（R5）；后续需要写 completion 的 cleanup 经 handoff owner 的 recovery
+    // acquire 重新取得（R6/B 场景由 VIII 测试覆盖）。
+    expect(peekTreasuryCompletionHeadroomReservation(a)).toBeUndefined();
+    expect(peekTreasuryCompletionHeadroomReservationCount()).toBe(0);
   });
 });
 
@@ -981,7 +991,9 @@ describe("Remediation VII T16：global reset 各窗口的 reservation 一致性"
     const executed = service.executePreparedAction(input(service, transactionId), callback);
     expect(executed.status).toBe("executed_committed");
     expect(callback).toHaveBeenCalledTimes(1);
-    expect(peekTreasuryCompletionHeadroomReservationCount()).toBe(1);
+    // 【Remediation VIII D3 语义更新】普通无 cleanup-pending 的 committed
+    // 不遗留 reservation（旧预期 1 → 新预期 0——T16 按任务书修正）。
+    expect(peekTreasuryCompletionHeadroomReservationCount()).toBe(0);
   });
 
   it("窗口 4：callback started_unknown 后 reset → quarantine 接管、reservation 保留（TTL sweep 不释放）", () => {
@@ -1103,6 +1115,7 @@ describe("Remediation VII T17：300-generation chain 的 terminal 压缩（footp
 
     settleParentCleanup(currentId, currentDurable, 300);
     const compacted = compactTreasuryTerminalLineage(lineageId);
+    if (compacted.status === "rejected") console.log("T17 COMPACT REJECTED:", JSON.stringify(compacted).slice(0, 500));
     expect(compacted.status).toBe("compacted");
     // terminal 压缩后：historical 不保留 301 条 per-attempt 永久记录；
     // chain 级永久 footprint 与 generation 数量无关（certificate 一条）。
@@ -1113,9 +1126,11 @@ describe("Remediation VII T17：300-generation chain 的 terminal 压缩（footp
     // GRA/Tombstone/Receipt GC + heap reset 后仍成立）。
     resetTreasuryCleanupSupersessionHeapCacheForTest();
     const expectResolved = (attemptId: string): void => {
+      // 【Remediation VIII C4】压缩后权威是 chain certificate 的协议推导
+      //（protocol）——重放阻断等效，identity 不足不冒充 exact。
       const resolved = resolveTreasuryDurableSettlementAuthority({ transactionId: attemptId });
-      expect(resolved.status).toBe("exact");
-      if (resolved.status === "exact") expect(resolved.outcome).toBe("not-executed");
+      expect(resolved.status).toBe("protocol");
+      if (resolved.status === "protocol") expect(resolved.outcome).toBe("not-executed");
     };
     expectResolved(root);
     for (let generation = 1; generation <= 300; generation++) {
@@ -1194,7 +1209,7 @@ describe("Remediation VII T19：issuer 单调、防伪、防复用、correlation
     }
   });
 
-  it("手工伪造（seq > watermark）→ forged_future；合法发行 → issued；arbitrary → not_service_issued", () => {
+  it("手工伪造（seq > watermark）→ forged_future；合法发行 → issued；arbitrary → not_service_issued；【VIII A1 更新】seq ≤ watermark + 错误完整 ID → legacy_unverified", () => {
     const minted = mintTreasuryInitialAttemptId("check");
     expect(minted.status).toBe("minted");
     const watermark = peekTreasuryIssuedAttemptWatermark();
@@ -1203,6 +1218,15 @@ describe("Remediation VII T19：issuer 单调、防伪、防复用、correlation
     const forged = `ti1_${String(watermark + 7)}_0123456789abcdef`;
     expect(checkTreasuryServiceIssuedAttemptId(forged).status).toBe("forged_future");
     expect(checkTreasuryServiceIssuedAttemptId("arbitrary-caller-id").status).toBe("not_service_issued");
+    // 【Remediation VIII A1】seq ≤ watermark 但 hash16 篡改——不因 sequence
+    // 合法而被当作 issued（完整 ID 必须与确定性重算一致）。
+    const mintedId0 = minted.status === "minted" ? minted.transactionId : "";
+    const separator = mintedId0.lastIndexOf("_");
+    const hash = mintedId0.slice(separator + 1);
+    const tampered = mintedId0.slice(0, separator + 1) + (hash.charCodeAt(hash.length - 1) === 0x30 ? "1" : "0") + hash.slice(1);
+    const tamperedCheck = checkTreasuryServiceIssuedAttemptId(tampered);
+    expect(tamperedCheck.status).toBe("legacy_unverified");
+    if (tamperedCheck.status === "legacy_unverified") expect(tamperedCheck.sequence).toBe(watermark);
   });
 
   it("caller correlation 只是 metadata：不同 correlation → 不同 ID；correlation 不影响 issuer 判定", () => {

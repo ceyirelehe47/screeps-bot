@@ -682,9 +682,14 @@ describe("Remediation VI T8：GRA/tombstone 被正式生命周期回收后历史
     // settlement 由 durable settlement authority（certificate）持续证明。
     expect(lookupTreasuryChainRetirementCertificate(root)).toBeDefined();
     const resolved = resolveTreasuryDurableSettlementAuthority({ transactionId: root });
-    expect(resolved.status).toBe("exact");
-    if (resolved.status === "exact") expect(resolved.outcome).toBe("not-executed");
-    expect(advanceTreasuryResolutionCleanupPhases({ transactionId: root }).status).toBe("completed");
+    // 【Remediation VIII C4】压缩后 root 权威 = certificate 协议推导（protocol）。
+    expect(resolved.status).toBe("protocol");
+    if (resolved.status === "protocol") expect(resolved.outcome).toBe("not-executed");
+    // 【Remediation VIII B3/S8 语义更新】journal absent 且 completion/
+    // historical 均已被压缩（只剩 settlement certificate）——certificate
+    // 只证明 settlement outcome，不证明五阶段 cleanup 完成 →
+    // no_cleanup_authority（fail closed，不得 completed）。
+    expect(advanceTreasuryResolutionCleanupPhases({ transactionId: root }).status).toBe("no_cleanup_authority");
     // 错误 outcome 视角仍 conflict（certificate 绑定 authoritative outcome）。
     expect(resolveTreasuryDurableSettlementAuthority({ transactionId: root, expectedOutcome: "committed" }).status).toBe("conflict");
   });
@@ -837,9 +842,10 @@ describe("Remediation VI T9：真实 300-generation chain（root + generation 1.
     // root 与 generation 1..300 全部经 durable settlement authority（chain
     // certificate）可查询、outcome 正确、永久 replay-blocked。
     const expectResolved = (attemptId: string): void => {
+      // 【Remediation VIII C4】压缩后代权威 = certificate 协议推导（protocol）。
       const resolved = resolveTreasuryDurableSettlementAuthority({ transactionId: attemptId });
-      expect(resolved.status).toBe("exact");
-      if (resolved.status === "exact") expect(resolved.outcome).toBe("not-executed");
+      expect(resolved.status).toBe("protocol");
+      if (resolved.status === "protocol") expect(resolved.outcome).toBe("not-executed");
     };
     expectResolved(root);
     for (let generation = 1; generation <= 300; generation++) {
@@ -850,9 +856,12 @@ describe("Remediation VI T9：真实 300-generation chain（root + generation 1.
     expect(resolveTreasuryDurableSettlementAuthority({ transactionId: gen300, expectedOutcome: "committed" }).status).toBe("conflict");
     const genBeyond = deriveTreasuryLineageNextChildTransactionId(lineageId, 301, root);
     expect(resolveTreasuryDurableSettlementAuthority({ transactionId: genBeyond }).status).toBe("absent");
-    // advance 幂等查询不退化为 no_cleanup_authority（certificate 承载完成）。
-    expect(advanceTreasuryResolutionCleanupPhases({ transactionId: root }).status).toBe("completed");
-    expect(advanceTreasuryResolutionCleanupPhases({ transactionId: gen300 }).status).toBe("completed");
+    // 【Remediation VIII B3/S8 语义更新】certificate 只证明 settlement
+    // outcome（重放阻断经 resolver protocol），不证明 cleanup 五阶段完成
+    // ——journal absent + 权威只剩 certificate → no_cleanup_authority
+    //（fail closed；cleanup 完成的幂等证明只认 live/historical completion）。
+    expect(advanceTreasuryResolutionCleanupPhases({ transactionId: root }).status).toBe("no_cleanup_authority");
+    expect(advanceTreasuryResolutionCleanupPhases({ transactionId: gen300 }).status).toBe("no_cleanup_authority");
   });
 });
 
