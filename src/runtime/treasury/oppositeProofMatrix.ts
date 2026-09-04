@@ -246,6 +246,14 @@ export function checkTreasuryOppositeProofsForCommitted(
         classification: "identity_conflict",
         detail: `${durable.detail}（持久权威互相矛盾——无法证明无相反权威）`,
       });
+    } else if (durable.status === "insufficient") {
+      // 【IX 工作流 F】exact 声明存在但维度不足（无 outcome 可判定）——
+      // 无法证明无相反权威，阻断（retained——不得据此 release Authority）。
+      blockers.push({
+        source: "durable-settlement-authority",
+        classification: "identity_conflict",
+        detail: `${durable.detail}（identity 维度不足——无法证明无相反权威，retained）`,
+      });
     } else if (durable.status === "store_unhealthy") {
       blockers.push({
         source: "durable-settlement-authority",
@@ -328,6 +336,14 @@ export function checkTreasuryOppositeProofsForNotExecuted(
         source: "durable-settlement-authority",
         classification: "identity_conflict",
         detail: `${durable.detail}（持久权威互相矛盾——无法证明无相反权威）`,
+      });
+    } else if (durable.status === "insufficient") {
+      // 【IX 工作流 F】exact 声明存在但维度不足（无 outcome 可判定）——
+      // 无法证明无相反权威，阻断（retained——不得据此 release Authority）。
+      blockers.push({
+        source: "durable-settlement-authority",
+        classification: "identity_conflict",
+        detail: `${durable.detail}（identity 维度不足——无法证明无相反权威，retained）`,
       });
     } else if (durable.status === "store_unhealthy") {
       blockers.push({

@@ -59,6 +59,7 @@ export type TreasuryRearmPreflightResult =
         | "lineage_not_rearmable"
         | "parent_not_resolved"
         | "proof_conflict"
+  | "proof_insufficient"
         | "parent_authority_present"
         | "parent_marker_pending"
         | "retirement_incomplete"
@@ -295,6 +296,15 @@ export function preflightTreasuryRearmCapability(input: {
         detail: `parent ${input.parentTransactionId.slice(0, 48)} 的持久权威互相矛盾（${durableParent.detail}——零 capability）`,
       };
     }
+    if (durableParent.status === "insufficient") {
+      // 【IX 工作流 F】parent 权威存在 exact 声明但维度不足——fail closed
+      //（零 capability，不把维度缺失当兼容）。
+      return {
+        status: "rejected",
+        reason: "proof_insufficient",
+        detail: `parent ${input.parentTransactionId.slice(0, 48)} 的持久权威 identity 维度不足（${durableParent.detail}——零 capability）`,
+      };
+    }
     if (
       (durableParent.status === "exact" || durableParent.status === "protocol") &&
       durableParent.outcome === "committed"
@@ -369,6 +379,7 @@ export function checkTreasuryChildAttemptOccupancy(
     if (durableChild.status === "retired") return "retired attempt authority（certificate/range）";
     if (durableChild.status === "store_unhealthy") return "durable settlement authority store unhealthy（fail closed）";
     if (durableChild.status === "conflict") return "durable settlement authority conflict（fail closed）";
+    if (durableChild.status === "insufficient") return "durable settlement authority identity insufficient（fail closed——维度不足按占用阻断）";
   }
   const receiptLookup = lookupTreasurySettledReceipt(childTransactionId);
   if (receiptLookup.status !== "absent") {

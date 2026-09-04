@@ -261,6 +261,10 @@ export function verifyTreasuryCurrentSettlement(query: TreasuryCurrentSettlement
       accumulate(acc, "unhealthies", "durable_settlement_authority", durable.detail);
     } else if (durable.status === "conflict") {
       accumulate(acc, "conflicts", "durable_settlement_authority", durable.detail);
+    } else if (durable.status === "insufficient") {
+      // 【IX 工作流 F / S11】exact 声明存在但与 attempt identity 维度不足
+      // ——不得验证一致，fail closed（settlement 确认阻断）。
+      accumulate(acc, "conflicts", "durable_settlement_authority", `identity 维度不足（insufficient）: ${durable.detail}`);
     } else if (durable.status === "exact" || durable.status === "protocol") {
       if (isCommitted && durable.outcome === "not-executed") {
         accumulate(acc, "conflicts", "durable_settlement_authority", `committed 目标存在 matching durable not-executed 权威（${durable.source}——相反结论 proof）`);
@@ -453,6 +457,10 @@ export function verifyTreasuryOppositeProofAbsence(query: {
       details.push(`durable_settlement_authority: ${durable.detail}（相反结论缺失不可证明——retained）`);
     } else if (durable.status === "store_unhealthy") {
       details.push(`durable_settlement_authority: ${durable.detail}`);
+    } else if (durable.status === "insufficient") {
+      // 【IX 工作流 F】exact 声明存在但维度不足（无 outcome 可判定）——
+      // 相反结论缺失不可证明，retained（不得据此 release Authority）。
+      details.push(`durable_settlement_authority: ${durable.detail}（identity 维度不足——相反结论缺失不可证明，retained）`);
     }
   }
   return { blocked: details.length > 0, sources: uniqueSources(details), details };

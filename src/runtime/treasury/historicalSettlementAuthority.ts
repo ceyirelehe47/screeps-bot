@@ -101,6 +101,20 @@ export type TreasuryDurableSettlementResolution =
       readonly source: "chain-certificate" | "retired-range";
       readonly detail: string;
     }
+  | {
+      /**
+       * 【IX 工作流 F / 9.2】存在 exact 声明但 identity 维度不足——两个
+       * exact declaration 只有 relation=match 才可共同证明 exact；expected
+       * 验证维度不足同样 insufficient。语义：
+       *  - replay gate：视为已出现/不可执行 blocker（S15——callback 零调用），
+       *    但不得 release Authority；
+       *  - destructive caller（marker discharge / authority release /
+       *    cleanup completion）：零 mutation（S14）；
+       *  - 不冒充 exact，也不折叠为 absent。
+       */
+      readonly status: "insufficient";
+      readonly detail: string;
+    }
   | { readonly status: "conflict"; readonly detail: string }
   | { readonly status: "absent" }
   | { readonly status: "store_unhealthy"; readonly detail: string };
@@ -330,6 +344,16 @@ export function resolveTreasuryDurableSettlementAuthority(input: {
         detail: `${first.source} 与 ${other.source} outcome 相同但 exact identity 明确不一致（durable digest ${(first.identity!.durableIdentityDigest ?? "<absent>").slice(0, 8)} vs ${(other.identity!.durableIdentityDigest ?? "<absent>").slice(0, 8)}）——不选边`,
       };
     }
+    if (pairRelation === "insufficient") {
+      // 【IX 工作流 F / 9.2 规则 1】两个 exact declaration 只有 relation=match
+      // 才可共同证明 exact——维度不足（如一方缺 durable identity）不得聚合
+      // 为 exact（S11：live exact 带 durable identity、historical 同 outcome
+      // 但缺维度 → insufficient，不选边）。
+      return {
+        status: "insufficient",
+        detail: `${first.source} 与 ${other.source} outcome 一致但 exact identity 维度不足（insufficient——${(first.identity!.durableIdentityDigest ?? "<absent>").slice(0, 8)} vs ${(other.identity!.durableIdentityDigest ?? "<absent>").slice(0, 8)}）——不得共同证明 exact，fail closed`,
+      };
+    }
   }
   // 全部声明（exact + protocol）的 outcome 必须一致（certificate 与
   // completion 相反结论 = conflict——S3；expectedOutcome 共同验证）。
@@ -351,13 +375,31 @@ export function resolveTreasuryDurableSettlementAuthority(input: {
   // durable identity 不同）；维度不足（insufficient）无法验证一致——不选
   // 边阻断（与底层 lookup 的保守度一致，正常流程的维度缺失 completion
   // 不被误判为身份冲突）。
-  if (input.expected !== undefined) {
+  if (input.expected !== undefined && exactDeclarations.length > 0) {
+    // 【IX 工作流 F / 9.2 规则 4】caller 提供期望且存在 exact 声明时，每个
+    // exact source 都必须 relation=match——insufficient（维度无法验证一致，
+    // 含 expected 自身缺关键维度，S12）同样阻断，不得向下聚合为 exact。
+    // 无 exact 声明时（仅 protocol/retired）不存在"共同证明 exact"的
+    // 目标——expected 不改变 protocol/retired 裁决（C5：protocol 不冒充
+    // exact 的语义保持）。
+    if (input.expected == null || input.expected.durableIdentityDigest === undefined) {
+      return {
+        status: "insufficient",
+        detail: `查询期望 exact identity 缺关键维度（durableIdentityDigest absent——期望本身不足，不得据此验证 exact 声明）`,
+      };
+    }
     for (const item of exactDeclarations) {
       const relation = treasuryExactAttemptIdentityRelation(item.identity!, input.expected);
       if (relation === "conflict") {
         return {
           status: "conflict",
           detail: `${item.source} 的 exact identity 与查询期望明确不一致（durable digest ${(item.identity!.durableIdentityDigest ?? "<absent>").slice(0, 8)} vs ${(input.expected.durableIdentityDigest ?? "<absent>").slice(0, 8)}）——不选边`,
+        };
+      }
+      if (relation === "insufficient") {
+        return {
+          status: "insufficient",
+          detail: `${item.source} 的 exact identity 与查询期望维度不足（durable digest ${(item.identity!.durableIdentityDigest ?? "<absent>").slice(0, 8)} vs ${(input.expected.durableIdentityDigest ?? "<absent>").slice(0, 8)}——无法验证一致，不得返回 exact）`,
         };
       }
     }
@@ -409,6 +451,7 @@ export type TreasuryCleanupCompletionResolution =
       readonly detail: string;
     }
   | { readonly status: "conflict"; readonly detail: string }
+  | { readonly status: "insufficient"; readonly detail: string }
   | { readonly status: "absent" }
   | { readonly status: "store_unhealthy"; readonly detail: string };
 
@@ -480,10 +523,20 @@ export function resolveTreasuryCleanupCompletionAuthority(input: {
   const first = declarations[0]!;
   for (let index = 1; index < declarations.length; index += 1) {
     const other = declarations[index]!;
-    if (first.outcome !== other.outcome || treasuryExactAttemptIdentityRelation(first.identity!, other.identity!) === "conflict") {
+    const relation = treasuryExactAttemptIdentityRelation(first.identity!, other.identity!);
+    if (first.outcome !== other.outcome || relation === "conflict") {
       return {
         status: "conflict",
         detail: `${first.source} 与 ${other.source} 的 cleanup completion 声明不一致——不选边`,
+      };
+    }
+    if (relation === "insufficient") {
+      // 【IX 工作流 F】两个 exact completion 声明维度不足（如 historical 缺
+      // durable identity 维度）——不得共同证明 completed（fail closed，
+      // journal 语义由调用方按未确认处理）。
+      return {
+        status: "insufficient",
+        detail: `${first.source} 与 ${other.source} 的 cleanup completion 声明 identity 维度不足（insufficient）——不确证 completed，fail closed`,
       };
     }
   }
