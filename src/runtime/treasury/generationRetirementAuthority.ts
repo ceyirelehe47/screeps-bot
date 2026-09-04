@@ -565,11 +565,19 @@ export function persistTreasuryGenerationRetirementProof(
     };
   }
   if (runtime.store.entryCount >= TREASURY_GENERATION_RETIREMENT_MAX_ENTRIES) {
-    generationRetirementEvents.writeFailures += 1;
-    return {
-      status: "rejected",
-      detail: `generation retirement store 已达硬容量 ${String(TREASURY_GENERATION_RETIREMENT_MAX_ENTRIES)}（fail closed——不驱逐被依赖 proof；retirement 保持 retiring）`,
-    };
+    // 【IX 工作流 B/C】GRA 是 recent exact detail（非永久层）——满载不再
+    // 永久 fail closed：有界 eligible 扫描驱逐已被 retirement summary 接管
+    // 的 root 代 proof（summary 持有该 chain 的完整 exact terminal facts
+    // ——root/final identity + proof class；probe 未装配/summary 不在位/
+    // store unhealthy 一律不驱逐，fail closed）。无 eligible → rejected。
+    const evicted = evictGenerationProofsSupersededBySummary(runtime);
+    if (evicted === 0) {
+      generationRetirementEvents.writeFailures += 1;
+      return {
+        status: "rejected",
+        detail: `generation retirement store 已达硬容量 ${String(TREASURY_GENERATION_RETIREMENT_MAX_ENTRIES)} 且无 summary 接管的 eligible proof（fail closed——不驱逐被依赖 proof；retirement 保持 retiring）`,
+      };
+    }
   }
   const published = cloneTreasuryDurableValue(proof);
   runtime.store.entries[key] = published;
@@ -711,3 +719,56 @@ export function registerTreasuryGenerationRetirementSemanticSourceForAssembly():
   });
 }
 registerTreasuryGenerationRetirementSemanticSourceForAssembly();
+
+// ──【IX 工作流 B/C】retirement summary 的 assembly probe（GRA 满载驱逐
+//    前验证"summary 已接管该 chain 的 exact terminal facts"。注册方：
+//    lineageRetirementSummary 模块底部（GRA 与 summary 互相在对方上游——
+//    直接 import 成环）。未装配 → 无驱逐（fail closed）。
+interface TreasuryGenerationSummaryProbe {
+  readonly summaryOfLineageId: (lineageId: string) => { readonly lineageId?: unknown } | undefined;
+  readonly summaryStoreHealthy: () => boolean;
+}
+
+let generationSummaryProbe: TreasuryGenerationSummaryProbe | null = null;
+
+export function registerTreasuryGenerationSummaryProbeForAssembly(probe: TreasuryGenerationSummaryProbe): void {
+  generationSummaryProbe = probe;
+}
+
+/** 有界（≤硬容量）eligible 扫描：驱逐 generation=0 且 summary（同 lineage）
+ *  在位的 root proof——exact terminal facts 已由 summary 承接（IX Q10：
+ *  600 chain 后 GRA 不永久停机）。返回驱逐数（read-back 失败即停）。 */
+function evictGenerationProofsSupersededBySummary(runtime: { store: { entries: Record<string, TreasuryGenerationRetirementProof>; entryCount: number; updatedAt: number }; byAttempt: Map<string, string> }): number {
+  if (generationSummaryProbe === null) return 0;
+  if (!generationSummaryProbe.summaryStoreHealthy()) return 0;
+  let evicted = 0;
+  for (const [key, proof] of Object.entries(runtime.store.entries)) {
+    if (proof.generation !== 0) continue;
+    const summary = generationSummaryProbe.summaryOfLineageId(proof.lineageId);
+    if (summary === undefined) continue;
+    delete runtime.store.entries[key];
+    runtime.store.entryCount -= 1;
+    runtime.byAttempt.delete(proof.transactionId);
+    const rawStore = (Memory.runtime as unknown as { treasury?: { generationRetirementProofs?: { entries?: Record<string, unknown>; entryCount?: number } } } | undefined)
+      ?.treasury?.generationRetirementProofs;
+    if (rawStore === undefined || rawStore.entries?.[key] !== undefined || rawStore.entryCount !== runtime.store.entryCount) {
+      runtime.store.entries[key] = proof;
+      runtime.store.entryCount += 1;
+      runtime.byAttempt.set(proof.transactionId, key);
+      break;
+    }
+    evicted += 1;
+    if (runtime.store.entryCount < TREASURY_GENERATION_RETIREMENT_MAX_ENTRIES) break;
+  }
+  if (evicted > 0) runtime.store.updatedAt = Game.time;
+  return evicted;
+}
+
+// ──【IX 工作流 E 8.3】统一 lifecycle owner resolver 的 GRA 维度（terminal
+//    authority——O4：proof 在位时序号不得退休）。GRA import resolutionStore
+//    （proof release 注册），不能被 resolver 顶层 import——经 probe 注入。
+import { registerTreasuryLifecycleGenerationProofProbeForAssembly as __registerGenerationProbe } from "@/runtime/treasury/treasuryLifecycleOwnerResolver";
+__registerGenerationProbe({
+  proofOfAttempt: (transactionId) => lookupTreasuryGenerationRetirementProofByAttemptId(transactionId),
+  proofStoreHealthy: () => peekTreasuryGenerationRetirementHealth().healthy,
+});
