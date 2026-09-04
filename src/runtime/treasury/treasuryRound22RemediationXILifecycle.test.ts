@@ -431,11 +431,14 @@ describe("Remediation XI G：统一 GRA release authority", () => {
   it("G4：exact replacement + dependencies closed → release 成功、索引/entryCount 正确、重复 release 幂等", () => {
     makeService();
     const chain = seedChain("g4");
-    // eligible 形态：tombstone 退休 + record 压缩删除（真实压缩链路的后置
-    // 中断窗口——compaction 的孤儿清理本应释放，模拟"联动失败残留"）。
+    // 【XII 工作流 C】真实压缩链：compact 写入 summary + certificate（exact
+    // replacement 权威在位）；GRA 孤儿清理因 tombstone 在位（consumer_active）
+    // 保留 proof——模拟"联动失败残留"。此后 tombstone 驱逐 → proof 经
+    // compaction_orphan（summary full relation）正面验证后释放。
+    const compacted = compactTreasuryTerminalLineage(chain.lineageId);
+    expect(compacted.status).not.toBe("rejected");
     dropTombstone(chain.root);
-    expect(removeTreasuryAttemptLineageRecordForCompaction(chain.lineageId).status).toBe("removed");
-    const released = releaseTreasuryGenerationRetirementProofOfAttempt(chain.root, "tombstone_retired");
+    const released = releaseTreasuryGenerationRetirementProofOfAttempt(chain.root, "compaction_orphan");
     expect(released.status).toBe("released");
     expect(peekTreasuryGenerationRetirementHealth().entryCount).toBe(0);
     expect(lookupTreasuryGenerationRetirementProofByAttemptId(chain.root)).toBeUndefined();
@@ -448,8 +451,9 @@ describe("Remediation XI G：统一 GRA release authority", () => {
   it("G5：release read-back 失败 → blocked + 完整恢复（entries/entryCount/byAttempt/byLineage）", () => {
     makeService();
     const chain = seedChain("g5");
+    const compacted = compactTreasuryTerminalLineage(chain.lineageId);
+    expect(compacted.status).not.toBe("rejected");
     dropTombstone(chain.root);
-    expect(removeTreasuryAttemptLineageRecordForCompaction(chain.lineageId).status).toBe("removed");
     // 受控 test hook：拦截 GRA Memory 解引用一次——删除写入后 read-back 读到
     // 旧 entry（read-back 失败路径触发，完整恢复）。
     const branch = treasuryBranch();
@@ -485,21 +489,26 @@ describe("Remediation XI G：统一 GRA release authority", () => {
   it("G7：replacement 在位 + release 前 global reset → 重跑幂等（released 或 absent，至少一方完整在位）", () => {
     makeService();
     const chain = seedChain("g7");
-    // 先 compact（summary 写入 = replacement 权威在位），再把 proof 快照
-    // 幂等回写（compaction 的孤儿清理因 tombstone 在位保留该 proof——快照
-    // 即当前在位对象；此处显式断言后 drop）。
+    // 【XII 工作流 C】真实压缩链（summary 写入 = replacement 权威在位）；
+    // GRA 孤儿清理因 tombstone 在位保留该 proof（快照即当前在位对象）。
     const proofSnapshot = readTreasuryGenerationRetirementProof(chain.lineageId, 0);
     expect(proofSnapshot).toBeDefined();
+    const compacted = compactTreasuryTerminalLineage(chain.lineageId);
+    expect(compacted.status).not.toBe("rejected");
     dropTombstone(chain.root);
-    expect(removeTreasuryAttemptLineageRecordForCompaction(chain.lineageId).status).toBe("removed");
     // global reset（heap 重建——Memory 是唯一权威）。
     resetTreasuryGenerationRetirementRuntimeForTest();
     expect(lookupTreasuryGenerationRetirementProofByAttemptId(chain.root)).toBeDefined();
-    const released = releaseTreasuryGenerationRetirementProofOfAttempt(chain.root, "orphan_advance");
+    // 【XII】orphan_advance 需要正面 active-lineage advanced replacement
+    // （record 缺席不再是删除依据）——record 已被 compact 删除 → blocked；
+    // 改用 compaction_orphan（summary full relation）释放。
+    const advancedMissing = releaseTreasuryGenerationRetirementProofOfAttempt(chain.root, "orphan_advance");
+    expect(advancedMissing.status).toBe("blocked");
+    const released = releaseTreasuryGenerationRetirementProofOfAttempt(chain.root, "compaction_orphan");
     expect(released.status).toBe("released");
     // reset 后重跑：absent（幂等——不重复副作用、不双重删除）。
     resetTreasuryGenerationRetirementRuntimeForTest();
-    const repeat = releaseTreasuryGenerationRetirementProofOfAttempt(chain.root, "orphan_advance");
+    const repeat = releaseTreasuryGenerationRetirementProofOfAttempt(chain.root, "compaction_orphan");
     expect(repeat.status).toBe("absent");
   });
 });

@@ -522,11 +522,14 @@ describe("Treasury write-admission 架构边界（Remediation VIII）", () => {
     // ——certificate/range 的 replacement 在位检查）与注释引用
     //（cleanupCompletionReplacement）。【XII 工作流 A】positive ownership
     // verifier 是 ticket handoff 的统一判定权威（全 source 聚合是其职责
-    // ——与 lifecycle owner resolver 同级的受控例外）。
+    // ——与 lifecycle owner resolver 同级的受控例外）。【XII 工作流 C /
+    // 6.1】GRA 的 destructive primitive 必须自己读取并正面验证 replacement
+    //（certificate/range 是 replacement class 的验证输入——受控例外）。
     const LOW_LEVEL_LOOKUP_ALLOWLIST = new Set([
       "runtime/treasury/historicalSettlementAuthority.ts",
       "runtime/treasury/treasuryLifecycleOwnerResolver.ts",
       "runtime/treasury/positiveOwnershipVerifier.ts",
+      "runtime/treasury/generationRetirementAuthority.ts",
       "runtime/treasury/chainRetirementCertificate.ts",
       "runtime/treasury/cleanupSupersessionAuthority.ts",
       "runtime/treasury/cleanupCompletionReplacement.ts",

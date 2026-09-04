@@ -61,6 +61,15 @@ import {
   treasuryIdentityProfileOfFacts,
 } from "@/runtime/treasury/identityProfile";
 import { parseTreasuryIssuedInitialAttemptId } from "@/runtime/treasury/attemptIssuer";
+import { peekTreasuryIntentStoreValidation, readTreasuryIntentEntryForQuery } from "@/runtime/treasury/intents";
+import { peekTreasuryQuarantineStoreValidation, readTreasuryQuarantineEntryForQuery } from "@/runtime/treasury/quarantine";
+import { peekTreasuryAuthorizationFaultStoreValidation, readTreasuryAuthorizationFaultEntry } from "@/runtime/treasury/authorizationFaults";
+import { peekTreasuryWriteFaultHealth, readTreasuryWriteFault } from "@/runtime/treasury/writeFault";
+import {
+  lookupTreasuryChainRetirementCertificate,
+  lookupTreasuryRetiredRangeStructured,
+  peekTreasuryChainRetirementCertificateHealth,
+} from "@/runtime/treasury/chainRetirementCertificate";
 
 export const TREASURY_GENERATION_RETIREMENT_VERSION = 2;
 /** v1（Round 20 exact proof，无 identityProfile）——确定性迁移到 v2。 */
@@ -748,15 +757,19 @@ function releaseGenerationProofDestructive(
       detail: `byAttempt 索引与 entry 不一致（${proof.transactionId.slice(0, 24)} → ${String(runtime.byAttempt.get(proof.transactionId))}）——不删除`,
     };
   }
-  // 2) active lineage 不再依赖（下一代 capability 门禁依据——record 仍是当前
-  //    代时不得释放；probe 未装配/不健康 → 阻断，fail closed）。
-  if (generationLineageProbe === null) {
-    return { status: "blocked", reason: "store_unhealthy", detail: "attempt lineage probe 未装配（依赖不可判定——不删除 proof）" };
+  // 2) 【XII 工作流 C / 6.4】lineage 依赖判定与 record 读取使用**同一**装配
+  //    source（semantic lineage record source——health/read 同源；probe A 说
+  //    健康而 source B 读不到不得当 absent）。未装配/不健康 → 阻断 fail
+  //    closed。record 仍是当前代 → lineage_current。
+  const recordSource = peekTreasurySemanticLineageRecordSource();
+  if (recordSource === null) {
+    return { status: "blocked", reason: "store_unhealthy", detail: "semantic lineage record source 未装配（依赖不可判定——不删除 proof）" };
   }
-  if (!generationLineageProbe.lineageStoreHealthy()) {
-    return { status: "blocked", reason: "store_unhealthy", detail: "attempt lineage store unhealthy（依赖不可判定——不删除 proof）" };
+  const sourceUnhealthy = recordSource.unhealthyDetail();
+  if (sourceUnhealthy !== null && sourceUnhealthy !== undefined) {
+    return { status: "blocked", reason: "store_unhealthy", detail: `attempt lineage store unhealthy: ${String(sourceUnhealthy)}（依赖不可判定——不删除 proof）` };
   }
-  const activeRecord = peekTreasurySemanticLineageRecordSource()?.readByLineageId(proof.lineageId);
+  const activeRecord = recordSource.readByLineageId(proof.lineageId);
   if (activeRecord !== undefined && activeRecord.generation === proof.generation) {
     return {
       status: "blocked",
@@ -764,7 +777,10 @@ function releaseGenerationProofDestructive(
       detail: `lineage ${proof.lineageId.slice(0, 8)} 仍在 generation ${String(proof.generation)}（当前代 proof 是下一代 capability 门禁——不释放）`,
     };
   }
-  // 3) exact consumer 关闭：cleanup journal 与 resolution tombstone。
+  // 3) 【XII 工作流 C / 6.3】exact consumer 关闭：cleanup journal / resolution
+  //    tombstone / unresolved intent / quarantine / write-fault marker /
+  //    authorization fault。任一在位 → consumer_active；任一 store
+  //    unhealthy / probe 缺失 → 阻断（不把"不知道"解释成"已关闭"）。
   const journalHealth = peekTreasuryResolutionCleanupHealth();
   if (!journalHealth.healthy) {
     return { status: "blocked", reason: "store_unhealthy", detail: `cleanup journal store unhealthy: ${journalHealth.detail ?? ""}（不删除 proof）` };
@@ -787,26 +803,68 @@ function releaseGenerationProofDestructive(
       detail: `resolution tombstone 在位（${proof.transactionId.slice(0, 24)}——exact consumer 未关闭，不删除 proof）`,
     };
   }
-  // 4) summary_superseded 模式附加：exact replacement relation 全维度（调用方
-  //    的存在性检查不构成授权——G2/G3/G4）。
-  if (mode === "summary_superseded") {
-    if (generationSummaryProbe === null) {
-      return { status: "blocked", reason: "replacement_missing", detail: "retirement summary probe 未装配（exact replacement 不可判定——不删除 proof）" };
-    }
-    if (!generationSummaryProbe.summaryStoreHealthy()) {
-      return { status: "blocked", reason: "replacement_missing", detail: "retirement summary store unhealthy（exact replacement 不可判定——不删除 proof）" };
-    }
-    const summary = generationSummaryProbe.summaryOfLineageId(proof.lineageId);
-    if (summary === undefined) {
-      return { status: "blocked", reason: "replacement_missing", detail: `lineage ${proof.lineageId.slice(0, 8)} 无 matching summary（无 replacement 不删除 proof）` };
-    }
-    const relationError = verifyTreasuryGenerationSummaryReplacement(proof, summary);
-    if (relationError !== null) {
-      return { status: "blocked", reason: "replacement_missing", detail: `summary replacement relation 不一致（${relationError}——不删除 proof）` };
-    }
+  const intentValidation = peekTreasuryIntentStoreValidation();
+  if (intentValidation.status === "unhealthy" || intentValidation.status === "migration_required") {
+    return { status: "blocked", reason: "store_unhealthy", detail: `intent store unhealthy（${intentValidation.detail}）——exact consumer 不可判定，不删除 proof` };
+  }
+  if (readTreasuryIntentEntryForQuery(proof.transactionId) !== undefined) {
+    return {
+      status: "blocked",
+      reason: "consumer_active",
+      detail: `unresolved intent 在位（${proof.transactionId.slice(0, 24)}——exact consumer 未关闭，不删除 proof）`,
+    };
+  }
+  const quarantineValidation = peekTreasuryQuarantineStoreValidation();
+  if (quarantineValidation.status === "unhealthy" || quarantineValidation.status === "migration_required") {
+    return { status: "blocked", reason: "store_unhealthy", detail: `quarantine store unhealthy（${quarantineValidation.detail}）——exact consumer 不可判定，不删除 proof` };
+  }
+  if (readTreasuryQuarantineEntryForQuery(proof.transactionId) !== undefined) {
+    return {
+      status: "blocked",
+      reason: "consumer_active",
+      detail: `quarantine 在位（${proof.transactionId.slice(0, 24)}——exact consumer 未关闭，不删除 proof）`,
+    };
+  }
+  const markerHealth = peekTreasuryWriteFaultHealth();
+  if (!markerHealth.healthy) {
+    return { status: "blocked", reason: "store_unhealthy", detail: `write-fault marker store unhealthy: ${markerHealth.detail ?? ""}（不删除 proof）` };
+  }
+  const marker = readTreasuryWriteFault();
+  if (marker !== undefined && marker.transactionId === proof.transactionId) {
+    return {
+      status: "blocked",
+      reason: "consumer_active",
+      detail: `write-fault marker 引用 ${proof.transactionId.slice(0, 24)}（exact consumer 在位——不删除 proof）`,
+    };
+  }
+  const faultValidation = peekTreasuryAuthorizationFaultStoreValidation();
+  if (faultValidation.status === "unhealthy" || faultValidation.status === "migration_required") {
+    return { status: "blocked", reason: "store_unhealthy", detail: `authorization fault store unhealthy（${faultValidation.detail}）——exact consumer 不可判定，不删除 proof` };
+  }
+  if (readTreasuryAuthorizationFaultEntry(proof.transactionId) !== undefined) {
+    return {
+      status: "blocked",
+      reason: "consumer_active",
+      detail: `authorization fault 在位（${proof.transactionId.slice(0, 24)}——exact consumer 未关闭，不删除 proof）`,
+    };
+  }
+  // 4) 【XII 工作流 C / 6.1-6.2】replacement 正面验证矩阵：mode 只是调用方
+  //    声明的释放目的——授权由 primitive 自己读取并正面验证对应 replacement
+  //    class（"tombstone 缺失 + journal 缺失 + 非当前代 → 删除"的缺席链不再
+  //    构成授权）：
+  //    - summary_superseded / compaction_orphan：exact Summary full relation
+  //      （compaction_orphan 亦接受 terminal certificate 覆盖）；
+  //    - orphan_advance：active-lineage advanced replacement（record 在位 +
+  //      同 lineage + generation 严格更大 + root identity 相容）；
+  //    - tombstone_retired：terminal certificate 覆盖或 namespace-scoped
+  //      retired range anti-reuse 覆盖（tombstone 已被 caller 驱逐——持久
+  //      接管证据是 certificate/range）。
+  const replacementError = verifyGenerationProofReplacement(proof, mode, activeRecord);
+  if (replacementError !== null) {
+    return { status: "blocked", reason: "replacement_missing", detail: replacementError };
   }
   // 5) 删除 + 索引维护 + read-back；失败完整恢复（entries/entryCount/
-  //    byAttempt/byLineage；updatedAt 保守 bump——G6）。
+  //    byAttempt/byLineage；updatedAt 保守 bump——G6/G9）。
   delete runtime.store.entries[key];
   runtime.store.entryCount -= 1;
   runtime.store.updatedAt = Game.time;
@@ -836,6 +894,95 @@ function releaseGenerationProofDestructive(
     };
   }
   return { status: "released", mode };
+}
+
+/**
+ * 【XII 工作流 C / 6.2】replacement class 正面验证（返回 null = 至少一种
+ * 持久接管关系被正面证明；字符串 = replacement_missing detail）。
+ */
+function verifyGenerationProofReplacement(
+  proof: TreasuryGenerationRetirementProof,
+  mode: TreasuryGenerationProofReleaseMode,
+  activeRecord: { lineageId: string; generation: number; rootTransactionId: string } | undefined,
+): string | null {
+  if (mode === "summary_superseded" || mode === "compaction_orphan") {
+    // Exact Summary replacement（full relation）优先；compaction_orphan 亦
+    // 接受 terminal certificate 覆盖。
+    if (generationSummaryProbe !== null && generationSummaryProbe.summaryStoreHealthy()) {
+      const summary = generationSummaryProbe.summaryOfLineageId(proof.lineageId);
+      if (summary !== undefined) {
+        const relationError = verifyTreasuryGenerationSummaryReplacement(proof, summary);
+        if (relationError === null) return null;
+        if (mode === "summary_superseded") {
+          return `summary replacement relation 不一致（${relationError}——不删除 proof）`;
+        }
+      } else if (mode === "summary_superseded") {
+        return `lineage ${proof.lineageId.slice(0, 8)} 无 matching summary（无 replacement 不删除 proof）`;
+      }
+    } else if (mode === "summary_superseded") {
+      return generationSummaryProbe === null
+        ? "retirement summary probe 未装配（exact replacement 不可判定——不删除 proof）"
+        : "retirement summary store unhealthy（exact replacement 不可判定——不删除 proof）";
+    }
+    if (mode === "compaction_orphan") {
+      const certificateError = verifyGenerationProofCertificateCoverage(proof);
+      if (certificateError === null) return null;
+      return `lineage ${proof.lineageId.slice(0, 8)} 无 matching summary 且无 terminal certificate 覆盖（${certificateError}——无 replacement 不删除 proof）`;
+    }
+    return "exact summary replacement 不可判定（summary probe 未装配/不健康——不删除 proof）";
+  }
+  if (mode === "orphan_advance") {
+    // Active-lineage advanced replacement：必须**正面**证明后继 generation
+    // 已接管（record 在位 + 同 lineage + generation 严格更大 + root 一致）。
+    // "record 缺席"或"当前代不等于 proof generation"不再是删除依据。
+    if (activeRecord === undefined) {
+      return `lineage ${proof.lineageId.slice(0, 8)} 无 active record（advanced replacement 不可证明——record 缺席不是删除依据）`;
+    }
+    if (activeRecord.lineageId !== proof.lineageId || activeRecord.generation <= proof.generation) {
+      return `active lineage generation ${String(activeRecord.generation)} 未严格超过 proof generation ${String(proof.generation)}（advanced replacement 不成立）`;
+    }
+    if (activeRecord.rootTransactionId !== proof.rootTransactionId) {
+      return `active lineage root（${activeRecord.rootTransactionId.slice(0, 16)}）与 proof root（${proof.rootTransactionId.slice(0, 16)}）不一致（lineage identity 冲突——不得释放）`;
+    }
+    return null;
+  }
+  // tombstone_retired：tombstone 已被 caller 驱逐——持久接管证据按序验证：
+  // 1) active-lineage advanced replacement（chain 仍在推进：record 在位 +
+  //    generation 严格更大 + root 一致——中间代 tombstone 驱逐的正牌
+  //    replacement，6.2）；
+  // 2) terminal certificate 覆盖（chain 已终结压缩）；
+  // 3) namespace-scoped retired range anti-reuse 覆盖。
+  if (
+    activeRecord !== undefined &&
+    activeRecord.generation > proof.generation &&
+    activeRecord.rootTransactionId === proof.rootTransactionId
+  ) {
+    return null;
+  }
+  const certificateError = verifyGenerationProofCertificateCoverage(proof);
+  if (certificateError === null) return null;
+  const range = lookupTreasuryRetiredRangeStructured(proof.rootTransactionId);
+  if (range.status === "present") return null;
+  return `无 advanced active lineage / terminal certificate / retired range 覆盖（${certificateError}；range ${range.status}——tombstone 缺席不构成 replacement，不删除 proof）`;
+}
+
+/** terminal certificate 覆盖验证（certificate 健康 + root/lineage/finalGeneration 覆盖该代）。 */
+function verifyGenerationProofCertificateCoverage(proof: TreasuryGenerationRetirementProof): string | null {
+  const health = peekTreasuryChainRetirementCertificateHealth();
+  if (!health.healthy) {
+    return `chain certificate store unhealthy: ${health.detail ?? ""}`;
+  }
+  const certificate = lookupTreasuryChainRetirementCertificate(proof.rootTransactionId);
+  if (certificate === undefined) {
+    return `root ${proof.rootTransactionId.slice(0, 16)} 无 terminal chain certificate`;
+  }
+  if (certificate.lineageId !== proof.lineageId) {
+    return `certificate lineage（${certificate.lineageId.slice(0, 8)}）与 proof lineage（${proof.lineageId.slice(0, 8)}）不一致`;
+  }
+  if (certificate.finalGeneration < proof.generation) {
+    return `certificate finalGeneration ${String(certificate.finalGeneration)} 未覆盖 proof generation ${String(proof.generation)}`;
+  }
+  return null;
 }
 
 /**
