@@ -35,6 +35,7 @@ import {
   peekTreasuryAttemptIssuerHealth,
   peekTreasuryIssuedAttemptWatermark,
   resetTreasuryAttemptIssuerHeapCacheForTest,
+  verifyTreasuryCurrentIssuedIdCanonical,
 } from "@/runtime/treasury/attemptIssuer";
 import { lookupTreasuryCleanupCompletion } from "@/runtime/treasury/cleanupCompletionAuthority";
 import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
@@ -225,6 +226,17 @@ function validateCertificateCanonicalRelations(
   if (certificate.rootSequence >= 1) {
     if (parsedRoot === null || parsedRoot.sequence !== certificate.rootSequence) {
       return `chain certificate ${key.slice(0, 12)} rootSequence 与 rootTransactionId 发行序号不一致`;
+    }
+    // 【XI 工作流 C / C1-C2】current（ti2_）root 的完整 canonical 校验：
+    // checksum 按协议 tag v3 确定性重算全等 + rootSequence 与 ID 内 sequence
+    // 完全相等 + namespace === current。legacy（ti1_）root 保持隔离语义
+    //（不用当前协议重算 legacy checksum、不解释为 current）；宽松 parser
+    // 的形态匹配不构成 root 权威。
+    if (parsedRoot.namespace === "current") {
+      const canonical = verifyTreasuryCurrentIssuedIdCanonical(certificate.rootTransactionId, certificate.rootSequence);
+      if ("reason" in canonical) {
+        return `chain certificate ${key.slice(0, 12)} rootTransactionId 非 canonical current 发行 ID: ${canonical.reason}`;
+      }
     }
   } else if (parsedRoot !== null) {
     return `chain certificate ${key.slice(0, 12)} rootSequence=-1（legacy pin）但 rootTransactionId 是 ti1_ 形态`;
@@ -1048,6 +1060,17 @@ export function recordTreasuryChainRetirementCertificate(input: {
     let evictedKey: string | null = null;
     let evictedCertificate: TreasuryChainRetirementCertificate | undefined;
     for (const [candidateKey, certificate] of modern) {
+      // 【XI 工作流 C】驱逐候选的防御性 canonical 复验（load 后篡改拦截）：
+      // current root 不 canonical → 跳过（不吸收该 rootSequence、不删除该
+      // certificate——fail closed）。
+      const parsedCandidateRoot = parseTreasuryIssuedInitialAttemptId(certificate.rootTransactionId);
+      if (
+        parsedCandidateRoot !== null &&
+        parsedCandidateRoot.namespace === "current" &&
+        "reason" in verifyTreasuryCurrentIssuedIdCanonical(certificate.rootTransactionId, certificate.rootSequence)
+      ) {
+        continue;
+      }
       const rangeLookup = lookupTreasuryRetiredRangeStructured(certificate.rootTransactionId);
       if (rangeLookup.status === "store_unhealthy" || rangeLookup.status === "malformed") continue;
       if (rangeLookup.status === "absent") {

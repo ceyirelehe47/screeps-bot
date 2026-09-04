@@ -170,6 +170,14 @@ interface TreasurySummaryRuntime {
 
 let heapRuntime: TreasurySummaryRuntime | null = null;
 
+/** 【XI 工作流 D】最近一次 compaction 孤儿清理 pending 诊断（GRA release 被阻断——proof 保留）。 */
+let lastCompactionOrphanReleasePending: string | null = null;
+
+/** 只读：最近一次 compaction 的 GRA 孤儿释放 pending（null = 无 pending 记录）。 */
+export function peekTreasuryCompactionOrphanReleasePending(): string | null {
+  return lastCompactionOrphanReleasePending;
+}
+
 function validateSummaryShape(summary: unknown): string | null {
   if (!summary || typeof summary !== "object") return "summary 非对象";
   const candidate = summary as Partial<TreasuryLineageRetirementSummary>;
@@ -812,11 +820,16 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
   if (removed.status === "rejected") {
     return { status: "rejected", detail: `active record 删除失败（summary 保留）: ${removed.detail}` };
   }
-  releaseOrphanTreasuryGenerationRetirementProofs(record.lineageId, (generation, proof) => {
-    // 仍存活的 tombstone 依赖保留（generation 0 的 root tombstone 与 tr1_ child）。
-    void generation;
-    return readTreasuryResolutionTombstone(proof.transactionId) !== undefined;
-  });
+  // 【XI 工作流 D】孤儿清理统一经 GRA release authority（去谓词注入——
+  // tombstone/journal/lineage/索引由 primitive 内部自验，调用方检查不再
+  // 构成授权）；blocked → 结构化 pending（compaction 安全完成但 proof 保留，
+  // 不谎称已释放——诊断写入模块级 pending 记录）。
+  const orphanRelease = releaseOrphanTreasuryGenerationRetirementProofs(record.lineageId);
+  if (orphanRelease.blockedDetail !== null) {
+    lastCompactionOrphanReleasePending = orphanRelease.blockedDetail;
+  } else if (orphanRelease.retained === 0) {
+    lastCompactionOrphanReleasePending = null;
+  }
 /**
  * 【IX 工作流 C / Q5】range-only 替代（anti-reuse-only 不得替代 exact
  * summary）前的 exact 依赖检查：summary 的 root / finalAttemptId 仍被任何

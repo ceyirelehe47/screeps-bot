@@ -39,6 +39,7 @@ import {
   peekTreasuryGenerationRetirementHealth,
   resetTreasuryGenerationRetirementRuntimeForTest,
   releaseTreasuryGenerationRetirementProofOfAttempt,
+  removeTreasuryGenerationRetirementProofForTest,
   TREASURY_GENERATION_RETIREMENT_MAX_ENTRIES,
   generationRetirementEvents,
   type TreasuryGenerationRetirementProof,
@@ -352,8 +353,10 @@ describe("active lineage 历史代 exact proof（第二十轮 26.8）", () => {
   it("删除 A exact proof → A tombstone pin（generation < current 不再推断 match）", () => {
     const { lineageId } = advanceChainToGeneration("r20_hist_del", 1);
     const aProof = readTreasuryGenerationRetirementProof(lineageId, 0)!;
-    const released = releaseTreasuryGenerationRetirementProofOfAttempt("r20_hist_del");
-    expect(released.status).toBe("released");
+    // 【XI】统一 release authority 对 tombstone 在位的 proof 阻断（exact
+    // consumer 未关闭）——本测试验证的是 proof 缺失后的 verdict 行为，经
+    // test-only 直删构造（非释放语义本身）。
+    expect(removeTreasuryGenerationRetirementProofForTest("r20_hist_del")).toBe(true);
     const verdict = treasuryTombstoneReplacementVerdict({
       transactionId: "r20_hist_del",
       digest: aProof.digest,
@@ -569,8 +572,8 @@ describe("root/child tombstone replacement 身份 exact（第二十轮 26.8）",
       lowlevelSource: "runtime-lowlevel@v1",
     });
     expect(match.verdict).toBe("replacement_match");
-    const released = releaseTreasuryGenerationRetirementProofOfAttempt("r20_root_mch");
-    expect(released.status).toBe("released");
+    // 【XI】同上——test-only 直删构造 proof 缺失形态。
+    expect(removeTreasuryGenerationRetirementProofForTest("r20_root_mch")).toBe(true);
     const missing = treasuryTombstoneReplacementVerdict({
       transactionId: "r20_root_mch",
       digest: "1111111111111111",

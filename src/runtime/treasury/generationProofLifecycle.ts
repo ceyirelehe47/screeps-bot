@@ -127,9 +127,15 @@ export function sweepTreasuryOrphanGenerationProofOnAdvance(
       return { status: "retained", detail: "matching write-fault marker 仍存在（cleanup 未完成——不清理）" };
     }
   }
-  const released = releaseTreasuryGenerationRetirementProofOfAttempt(proof.transactionId);
+  // 【XI 工作流 D】经统一 release authority（mode=orphan_advance——内部自验
+  // lineage/journal/tombstone/索引，本函数的前置检查只是候选筛选）；blocked
+  // → 结构化 retained（proof 保留，不谎称已释放）。
+  const released = releaseTreasuryGenerationRetirementProofOfAttempt(proof.transactionId, "orphan_advance");
   if (released.status === "released") {
     return { status: "released", lineageId, generation: previousGeneration };
+  }
+  if (released.status === "blocked") {
+    return { status: "retained", detail: "统一 release authority 阻断（" + released.reason + "): " + released.detail };
   }
   return { status: "absent" };
 }

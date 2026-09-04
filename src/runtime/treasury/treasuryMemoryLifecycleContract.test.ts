@@ -333,15 +333,21 @@ describe("Remediation X：ticket handoff / namespace / health-complete 架构守
   it("X8：GRA capacity eviction 必须调用 exact replacement verifier（存在性检查不得授权驱逐）", () => {
     const graSource = readSource("runtime/treasury/generationRetirementAuthority.ts");
     expect(graSource).toContain("verifyTreasuryGenerationSummaryReplacement");
+    // 【XI 工作流 D】全部生产删除收敛到统一 release primitive——驱逐扫描的
+    // verifier → 依赖检查 → primitive 删除顺序仍成立（primitive 内部自验
+    // replacement relation + 依赖关闭 + 索引 + read-back）。
     const verifierIndex = graSource.indexOf("const relationError = verifyTreasuryGenerationSummaryReplacement(proof, summary);");
-    const deleteIndex = graSource.indexOf("delete runtime.store.entries[key];", verifierIndex);
     expect(verifierIndex).toBeGreaterThan(-1);
-    expect(deleteIndex).toBeGreaterThan(verifierIndex);
-    // 依赖关闭检查（journal/tombstone/lineage）在 relation 之后、删除之前。
     const dependencyIndex = graSource.indexOf("generationProofDependenciesActive(proof)");
     expect(dependencyIndex).toBeGreaterThan(verifierIndex);
-    expect(deleteIndex).toBeGreaterThan(dependencyIndex);
-    // 驱逐索引维护：byAttempt 与 byLineage 双清。
+    const evictCallIndex = graSource.indexOf('releaseGenerationProofDestructive(runtime, key, "summary_superseded")', dependencyIndex);
+    expect(evictCallIndex).toBeGreaterThan(dependencyIndex);
+    // 统一 primitive 是唯一删除实现点（函数体内含 delete + 双索引 + read-back）。
+    const primitiveIndex = graSource.indexOf("function releaseGenerationProofDestructive(");
+    expect(primitiveIndex).toBeGreaterThan(-1);
+    const primitiveDeleteIndex = graSource.indexOf("delete runtime.store.entries[key];", primitiveIndex);
+    expect(primitiveDeleteIndex).toBeGreaterThan(primitiveIndex);
+    // 驱逐索引维护：byAttempt 与 byLineage 双清（primitive 内）。
     expect(graSource).toContain("runtime.byAttempt.delete(proof.transactionId);");
     expect(graSource).toContain("runtime.byLineage.get(proof.lineageId)");
   });

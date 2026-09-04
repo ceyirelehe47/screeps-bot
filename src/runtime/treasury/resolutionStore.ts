@@ -788,7 +788,14 @@ function evictExpiredTombstones(store: TreasuryResolutionStore, indexes?: { reso
       // proof（依赖消失——root 门禁由 retirement summary 承担；committed
       // 条目无 proof 不涉及）。
       if (entry.resolution === "not-executed") {
-        generationProofReleaser?.(entry.transactionId);
+        // 【XI 工作流 D】消费联动释放的结构化结果——blocked 不 void 忽略
+        //（记录 pending 诊断；proof 保留，由 compaction 孤儿清理 / advance
+        // sweep 兜底，不谎称已释放）。
+        const releaseOutcome = generationProofReleaser?.(entry.transactionId);
+        lastGenerationProofReleaseBlockedDetail =
+          releaseOutcome !== undefined && releaseOutcome !== null && releaseOutcome.status === "blocked"
+            ? releaseOutcome.detail
+            : null;
       }
     }
   }
@@ -950,7 +957,15 @@ export function registerTreasuryRetentionLineageLookupForAssembly(
  * not-executed tombstone 按 replacement_match 驱逐后，对应代 proof 的唯一
  * 长期依赖消失（root 门禁由 retirement summary 承担）→ 释放。
  */
-let generationProofReleaser: ((transactionId: string) => void) | null = null;
+let generationProofReleaser: ((transactionId: string) => { readonly status: "released" } | { readonly status: "absent" } | { readonly status: "blocked"; readonly detail: string }) | null = null;
+
+/** 【XI 工作流 D】最近一次 GRA 联动释放被阻断的结构化诊断（pending——不谎称已释放；compaction 孤儿清理 / advance sweep 兜底）。 */
+let lastGenerationProofReleaseBlockedDetail: string | null = null;
+
+/** 只读：最近一次 tombstone 驱逐联动释放的 blocked 诊断（null = 无阻断记录）。 */
+export function peekTreasuryGenerationProofReleaseBlockedDetail(): string | null {
+  return lastGenerationProofReleaseBlockedDetail;
+}
 
 // 【Remediation VIII 工作流 D6】owner truth graph 的 tombstone 维度注入
 //（cleanupCompletionHandoff 在本模块加载上游——不能反向 import）。
@@ -960,7 +975,9 @@ __registerLifecycleTombstoneProbe({
   tombstoneStoreHealthy: () => peekTreasuryResolutionStoreHealth().healthy,
 });
 
-export function registerTreasuryGenerationProofReleaseForAssembly(release: (transactionId: string) => void): void {
+export function registerTreasuryGenerationProofReleaseForAssembly(
+  release: (transactionId: string) => { readonly status: "released" } | { readonly status: "absent" } | { readonly status: "blocked"; readonly detail: string },
+): void {
   generationProofReleaser = release;
 }
 

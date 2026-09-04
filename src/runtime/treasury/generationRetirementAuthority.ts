@@ -150,6 +150,31 @@ export function resetTreasuryGenerationRetirementRuntimeForTest(): void {
   });
 }
 
+/**
+ * test-only：直删单条 proof（验证 tombstone replacement verdict / 依赖行为
+ * 的 fixture 构造——测试目的是观察"proof 缺失"后的下游行为，不是释放语义
+ * 本身）。生产零调用（test-only 命名 + 架构守护）；同步维护 heap 索引与
+ * Memory。返回是否实际删除。
+ */
+export function removeTreasuryGenerationRetirementProofForTest(transactionId: string): boolean {
+  const runtime = loadGenerationRetirementRuntime();
+  if (runtime.fatal !== null) return false;
+  const key = runtime.byAttempt.get(transactionId);
+  if (key === undefined) return false;
+  const proof = runtime.store.entries[key];
+  if (proof === undefined) return false;
+  delete runtime.store.entries[key];
+  runtime.store.entryCount -= 1;
+  runtime.store.updatedAt = Game.time;
+  runtime.byAttempt.delete(transactionId);
+  const keys = runtime.byLineage.get(proof.lineageId);
+  if (keys !== undefined) {
+    keys.delete(key);
+    if (keys.size === 0) runtime.byLineage.delete(proof.lineageId);
+  }
+  return true;
+}
+
 // 测试清理注册（receipts.clearTreasuryPersistenceForTest 统一调用——模块
 // 单向依赖，避免 receipts ↔ 本模块循环 import）。
 registerTreasuryLineageResetHook(resetTreasuryGenerationRetirementRuntimeForTest);
@@ -631,72 +656,222 @@ export function persistTreasuryGenerationRetirementProof(
 
 // ── 回收（依赖驱动；正常 tick 零扫描） ──────────────────────────────────────
 
-/**
- * tombstone 驱逐联动释放（resolutionStore.evictExpiredTombstones 注入调用）：
- * 该 attempt 的 tombstone 已按 replacement_match 驱逐 → 对应代 proof 的
- * 唯一长期依赖消失（root 门禁由 summary 承担）→ 释放。store unhealthy 时
- * 不释放（fail closed）。
- */
-export function releaseTreasuryGenerationRetirementProofOfAttempt(transactionId: string): { readonly status: "released" } | { readonly status: "absent" } | { readonly status: "rejected"; readonly detail: string } {
-  const runtime = loadGenerationRetirementRuntime();
-  if (runtime.fatal !== null) return { status: "rejected", detail: runtime.fatal };
-  // 【第二十轮 10.1】byAttempt O(1) 索引：root（gen 0，非 tr1_）与 tr1_ child
-  // 的 tombstone 驱逐联动释放统一路径（root 门禁由 retirement summary 承担）。
-  const key = runtime.byAttempt.get(transactionId);
-  if (key === undefined) return { status: "absent" };
+// ──【Round 22 Remediation XI 工作流 D】统一 GRA destructive release
+//    authority——全部生产 delete 的唯一出口。三个既有路径（tombstone 驱逐
+//    联动 / generation advance 孤儿清理 / chain 压缩孤儿清理）与满载驱逐
+//    都必须经 releaseGenerationProofDestructive；primitive 内部自验全部
+//    结构化证据（不信任调用方"刚刚做过检查"的隐式授权）：
+//     1. entry 在位 + byAttempt/byLineage 索引一致（防索引漂移）；
+//     2. active lineage 不再依赖：lineage probe 装配 + 健康；record 仍是
+//        当前代（generation 相同）→ 阻断（下一代 capability 门禁依据）；
+//     3. exact consumer 关闭：cleanup journal 健康 + 该 attempt entry 不在；
+//        resolution store 健康 + tombstone 不在（tombstone 不存在不再是
+//        独立充分条件——G1）；
+//     4. mode=summary_superseded 附加：summary probe 装配 + store 健康 +
+//        verifyTreasuryGenerationSummaryReplacement 全维度通过（legacy
+//        replay-only 不授权——G2/G3）；
+//     5. 删除同步维护 entries/entryCount/byAttempt/byLineage/updatedAt +
+//        Memory read-back；失败完整恢复（G6）。
+export type TreasuryGenerationProofReleaseMode =
+  /** tombstone 驱逐联动（resolutionStore hook——not-executed verdict match 后）。 */
+  | "tombstone_retired"
+  /** generation advance 后的有界孤儿清理（generationProofLifecycle）。 */
+  | "orphan_advance"
+  /** chain 压缩后的孤儿清理（lineageRetirementSummary compaction）。 */
+  | "compaction_orphan"
+  /** 满载驱逐：exact summary replacement relation 全维度接管（X 工作流 F）。 */
+  | "summary_superseded";
+
+export type TreasuryGenerationProofReleaseOutcome =
+  | { readonly status: "released"; readonly mode: TreasuryGenerationProofReleaseMode }
+  | { readonly status: "absent" }
+  | {
+      readonly status: "blocked";
+      readonly reason: "store_unhealthy" | "index_conflict" | "lineage_current" | "consumer_active" | "replacement_missing";
+      readonly detail: string;
+    };
+
+interface TreasuryGenerationProofReleaseRuntime {
+  store: { entries: Record<string, TreasuryGenerationRetirementProof>; entryCount: number; updatedAt: number };
+  byAttempt: Map<string, string>;
+  byLineage: Map<string, Set<string>>;
+}
+
+/** 唯一 destructive primitive（GRA 内部——生产 delete 的唯一实现点）。 */
+function releaseGenerationProofDestructive(
+  runtime: TreasuryGenerationProofReleaseRuntime,
+  key: string,
+  mode: TreasuryGenerationProofReleaseMode,
+): TreasuryGenerationProofReleaseOutcome {
   const proof = runtime.store.entries[key];
   if (proof === undefined) return { status: "absent" };
-  // 当前代 proof 是下一代 capability 签发门禁（10.3）的依据——chain 仍活跃
-  //（record 存在且 generation 相同）时不得因 tombstone 驱逐释放（只有历史代
-  // 的 proof 在其 tombstone 驱逐后才是孤儿）。
+  // 1) 索引一致：byAttempt 必须反查到同一 key（索引漂移 → 阻断，不猜测删除）。
+  if (runtime.byAttempt.get(proof.transactionId) !== key) {
+    return {
+      status: "blocked",
+      reason: "index_conflict",
+      detail: `byAttempt 索引与 entry 不一致（${proof.transactionId.slice(0, 24)} → ${String(runtime.byAttempt.get(proof.transactionId))}）——不删除`,
+    };
+  }
+  // 2) active lineage 不再依赖（下一代 capability 门禁依据——record 仍是当前
+  //    代时不得释放；probe 未装配/不健康 → 阻断，fail closed）。
+  if (generationLineageProbe === null) {
+    return { status: "blocked", reason: "store_unhealthy", detail: "attempt lineage probe 未装配（依赖不可判定——不删除 proof）" };
+  }
+  if (!generationLineageProbe.lineageStoreHealthy()) {
+    return { status: "blocked", reason: "store_unhealthy", detail: "attempt lineage store unhealthy（依赖不可判定——不删除 proof）" };
+  }
   const activeRecord = peekTreasurySemanticLineageRecordSource()?.readByLineageId(proof.lineageId);
   if (activeRecord !== undefined && activeRecord.generation === proof.generation) {
-    return { status: "absent" };
+    return {
+      status: "blocked",
+      reason: "lineage_current",
+      detail: `lineage ${proof.lineageId.slice(0, 8)} 仍在 generation ${String(proof.generation)}（当前代 proof 是下一代 capability 门禁——不释放）`,
+    };
   }
+  // 3) exact consumer 关闭：cleanup journal 与 resolution tombstone。
+  const journalHealth = peekTreasuryResolutionCleanupHealth();
+  if (!journalHealth.healthy) {
+    return { status: "blocked", reason: "store_unhealthy", detail: `cleanup journal store unhealthy: ${journalHealth.detail ?? ""}（不删除 proof）` };
+  }
+  if (readTreasuryResolutionCleanupEntry(proof.transactionId) !== undefined) {
+    return {
+      status: "blocked",
+      reason: "consumer_active",
+      detail: `cleanup journal 引用 ${proof.transactionId.slice(0, 24)}（exact consumer 在位——不删除 proof）`,
+    };
+  }
+  const tombstoneHealth = peekTreasuryResolutionStoreHealth();
+  if (!tombstoneHealth.healthy) {
+    return { status: "blocked", reason: "store_unhealthy", detail: `resolution store unhealthy: ${tombstoneHealth.detail ?? ""}（不删除 proof）` };
+  }
+  if (readTreasuryResolutionTombstone(proof.transactionId) !== undefined) {
+    return {
+      status: "blocked",
+      reason: "consumer_active",
+      detail: `resolution tombstone 在位（${proof.transactionId.slice(0, 24)}——exact consumer 未关闭，不删除 proof）`,
+    };
+  }
+  // 4) summary_superseded 模式附加：exact replacement relation 全维度（调用方
+  //    的存在性检查不构成授权——G2/G3/G4）。
+  if (mode === "summary_superseded") {
+    if (generationSummaryProbe === null) {
+      return { status: "blocked", reason: "replacement_missing", detail: "retirement summary probe 未装配（exact replacement 不可判定——不删除 proof）" };
+    }
+    if (!generationSummaryProbe.summaryStoreHealthy()) {
+      return { status: "blocked", reason: "replacement_missing", detail: "retirement summary store unhealthy（exact replacement 不可判定——不删除 proof）" };
+    }
+    const summary = generationSummaryProbe.summaryOfLineageId(proof.lineageId);
+    if (summary === undefined) {
+      return { status: "blocked", reason: "replacement_missing", detail: `lineage ${proof.lineageId.slice(0, 8)} 无 matching summary（无 replacement 不删除 proof）` };
+    }
+    const relationError = verifyTreasuryGenerationSummaryReplacement(proof, summary);
+    if (relationError !== null) {
+      return { status: "blocked", reason: "replacement_missing", detail: `summary replacement relation 不一致（${relationError}——不删除 proof）` };
+    }
+  }
+  // 5) 删除 + 索引维护 + read-back；失败完整恢复（entries/entryCount/
+  //    byAttempt/byLineage；updatedAt 保守 bump——G6）。
   delete runtime.store.entries[key];
   runtime.store.entryCount -= 1;
   runtime.store.updatedAt = Game.time;
-  runtime.byAttempt.delete(transactionId);
-  const keys = runtime.byLineage.get(proof.lineageId);
-  if (keys !== undefined) {
-    keys.delete(key);
-    if (keys.size === 0) runtime.byLineage.delete(proof.lineageId);
+  runtime.byAttempt.delete(proof.transactionId);
+  const lineageKeys = runtime.byLineage.get(proof.lineageId);
+  if (lineageKeys !== undefined) {
+    lineageKeys.delete(key);
+    if (lineageKeys.size === 0) runtime.byLineage.delete(proof.lineageId);
   }
-  generationRetirementEvents.releases += 1;
-  return { status: "released" };
+  const rawStore = (Memory.runtime as unknown as { treasury?: { generationRetirementProofs?: { entries?: Record<string, unknown>; entryCount?: number } } } | undefined)
+    ?.treasury?.generationRetirementProofs;
+  if (rawStore === undefined || rawStore.entries?.[key] !== undefined || rawStore.entryCount !== runtime.store.entryCount) {
+    runtime.store.entries[key] = proof;
+    runtime.store.entryCount += 1;
+    runtime.store.updatedAt = Game.time;
+    runtime.byAttempt.set(proof.transactionId, key);
+    let restoredKeys = runtime.byLineage.get(proof.lineageId);
+    if (restoredKeys === undefined) {
+      restoredKeys = new Set<string>();
+      runtime.byLineage.set(proof.lineageId, restoredKeys);
+    }
+    restoredKeys.add(key);
+    return {
+      status: "blocked",
+      reason: "store_unhealthy",
+      detail: "generation retirement proof release read-back 失败（已完整恢复 entries/entryCount/byAttempt/byLineage）",
+    };
+  }
+  return { status: "released", mode };
+}
+
+/**
+ * tombstone 驱逐联动释放（resolutionStore.evictExpiredTombstones 注入调用；
+ * generationProofLifecycle 的 advance sweep 经 mode="orphan_advance"）：
+ * 该 attempt 的 tombstone 已按 replacement_match 驱逐 → 对应代 proof 的
+ * 唯一长期依赖消失（root 门禁由 summary 承担）→ 经统一 release authority
+ * 释放（内部自验 lineage/journal/tombstone/索引——调用方检查不构成授权）。
+ * blocked → 结构化返回（proof 保留，不谎称已释放）。
+ */
+export function releaseTreasuryGenerationRetirementProofOfAttempt(
+  transactionId: string,
+  mode: TreasuryGenerationProofReleaseMode = "tombstone_retired",
+): TreasuryGenerationProofReleaseOutcome {
+  const runtime = loadGenerationRetirementRuntime();
+  if (runtime.fatal !== null) {
+    return { status: "blocked", reason: "store_unhealthy", detail: `GRA store fail-closed: ${runtime.fatal}` };
+  }
+  const key = runtime.byAttempt.get(transactionId);
+  if (key === undefined) return { status: "absent" };
+  const outcome = releaseGenerationProofDestructive(runtime, key, mode);
+  if (outcome.status === "released") {
+    generationRetirementEvents.releases += 1;
+  }
+  return outcome;
+}
+
+/** chain 压缩后的孤儿清理结果（compaction 结构化报告 pending——不谎称已释放）。 */
+export interface TreasuryOrphanGenerationProofReleaseReport {
+  readonly released: number;
+  readonly retained: number;
+  readonly blockedDetail: string | null;
 }
 
 /**
  * chain 压缩后的孤儿清理（lineageRetirementSummary 压缩编排调用）：该
- * lineage 中"tombstone 已不存在"的历史代 proof 释放（summary 已写入——
- * root 门禁不依赖本 store）。per-chain 有界遍历（≤ 该 chain 代数 ≤ 容量）。
+ * lineage 中历史代 proof 经统一 release authority（mode="compaction_orphan"）
+ * 逐条自验释放——tombstone/journal 仍在位、lineage 仍是当前代、索引漂移、
+ * store unhealthy 一律保留（结构化 pending）。per-chain 有界遍历（≤ 该 chain
+ * 代数 ≤ 容量）。
  */
 export function releaseOrphanTreasuryGenerationRetirementProofs(
   lineageId: string,
-  tombstoneExists: (generation: number, proof: Readonly<TreasuryGenerationRetirementProof>) => boolean,
-): number {
+): TreasuryOrphanGenerationProofReleaseReport {
   const runtime = loadGenerationRetirementRuntime();
-  if (runtime.fatal !== null) return 0;
+  if (runtime.fatal !== null) {
+    return { released: 0, retained: 0, blockedDetail: `GRA store fail-closed: ${runtime.fatal}` };
+  }
   const keys = runtime.byLineage.get(lineageId);
-  if (keys === undefined) return 0;
+  if (keys === undefined) return { released: 0, retained: 0, blockedDetail: null };
   let released = 0;
+  let retained = 0;
+  let blockedDetail: string | null = null;
   for (const key of [...keys]) {
     const proof = runtime.store.entries[key];
     if (proof === undefined) {
+      // 索引自愈（entry 缺失的悬挂 key——非 destructive 路径）。
       keys.delete(key);
       continue;
     }
-    if (tombstoneExists(proof.generation, proof)) continue;
-    delete runtime.store.entries[key];
-    runtime.store.entryCount -= 1;
-    runtime.store.updatedAt = Game.time;
-    runtime.byAttempt.delete(proof.transactionId);
-    keys.delete(key);
-    released += 1;
+    const outcome = releaseGenerationProofDestructive(runtime, key, "compaction_orphan");
+    if (outcome.status === "released") {
+      released += 1;
+    } else if (outcome.status === "blocked") {
+      retained += 1;
+      if (blockedDetail === null) blockedDetail = outcome.detail;
+    }
   }
   if (keys.size === 0) runtime.byLineage.delete(lineageId);
-  generationRetirementEvents.orphanReleases += released;
-  return released;
+  if (released > 0) generationRetirementEvents.orphanReleases += released;
+  return { released, retained, blockedDetail };
 }
 
 /** rootIdentityDigest 派生（与 attemptLineage.computeTreasuryLineageIdentityDigest 同算法——proof 构造共用）。 */
@@ -727,9 +902,11 @@ export function registerTreasuryGenerationRetirementSemanticSourceForAssembly():
     unhealthyDetail: () => peekTreasuryGenerationRetirementHealth().detail,
     read: (lineageId, generation) => readTreasuryGenerationRetirementProof(lineageId, generation),
   });
-  registerTreasuryGenerationProofReleaseForAssembly((transactionId) => {
-    void releaseTreasuryGenerationRetirementProofOfAttempt(transactionId);
-  });
+  // 【XI 工作流 D】hook 返回结构化 outcome（resolutionStore 消费 blocked——
+  // 不再 void；统一经 release authority 自验）。
+  registerTreasuryGenerationProofReleaseForAssembly((transactionId) =>
+    releaseTreasuryGenerationRetirementProofOfAttempt(transactionId, "tombstone_retired"),
+  );
 }
 registerTreasuryGenerationRetirementSemanticSourceForAssembly();
 
@@ -869,12 +1046,12 @@ function generationProofDependenciesActive(proof: Readonly<TreasuryGenerationRet
 
 /**
  * 有界（≤硬容量）eligible 扫描：驱逐被 matching exact current summary 真正
- * 接管 retirement 语义的 root 代 proof（【X 工作流 F】不再是"同 lineage 有
- * summary 即驱逐"的存在性检查——verifyTreasuryGenerationSummaryReplacement
- * 全维度 + generationProofDependenciesActive 依赖关闭双门禁；summary store
- * 或 GRA store 不健康 / probe 未装配一律不驱逐，fail closed）。索引维护：
- * 删除同步清理 byAttempt 与 byLineage；read-back 失败完整恢复 store 与全部
- * 索引（G11）。返回驱逐数。
+ * 接管 retirement 语义的 root 代 proof（【X 工作流 F】verifyTreasury
+ * SummaryReplacement 全维度 + generationProofDependenciesActive 依赖关闭双
+ * 门禁）。【XI 工作流 D】每条删除统一经 releaseGenerationProofDestructive
+ * （mode="summary_superseded"——replacement relation 在 primitive 内部重验，
+ * 外层扫描只是候选枚举，不构成授权）。索引维护与 read-back 恢复由 primitive
+ * 统一承载（G6/G11）。返回驱逐数。
  */
 function evictGenerationProofsSupersededBySummary(runtime: {
   store: { entries: Record<string, TreasuryGenerationRetirementProof>; entryCount: number; updatedAt: number };
@@ -885,41 +1062,18 @@ function evictGenerationProofsSupersededBySummary(runtime: {
   if (!generationSummaryProbe.summaryStoreHealthy()) return 0;
   let evicted = 0;
   for (const [key, proof] of Object.entries(runtime.store.entries)) {
-    if (proof.generation !== 0) continue;
+    if (proof.generation !== 0) continue; // 只有 root 代可由 summary 的 rootExact 接管
     const summary = generationSummaryProbe.summaryOfLineageId(proof.lineageId);
     if (summary === undefined) continue;
     const relationError = verifyTreasuryGenerationSummaryReplacement(proof, summary);
     if (relationError !== null) continue; // exact relation 不一致（G1-G6）——不驱逐，继续扫描
     const dependency = generationProofDependenciesActive(proof);
     if (dependency !== null) continue; // exact consumer 仍依赖（G7）——不驱逐
-    delete runtime.store.entries[key];
-    runtime.store.entryCount -= 1;
-    runtime.byAttempt.delete(proof.transactionId);
-    const lineageKeys = runtime.byLineage.get(proof.lineageId);
-    if (lineageKeys !== undefined) {
-      lineageKeys.delete(key);
-      if (lineageKeys.size === 0) runtime.byLineage.delete(proof.lineageId);
-    }
-    const rawStore = (Memory.runtime as unknown as { treasury?: { generationRetirementProofs?: { entries?: Record<string, unknown>; entryCount?: number } } } | undefined)
-      ?.treasury?.generationRetirementProofs;
-    if (rawStore === undefined || rawStore.entries?.[key] !== undefined || rawStore.entryCount !== runtime.store.entryCount) {
-      // read-back 失败：完整恢复 store 与全部索引（entries/entryCount/
-      // byAttempt/byLineage——G11）。
-      runtime.store.entries[key] = proof;
-      runtime.store.entryCount += 1;
-      runtime.byAttempt.set(proof.transactionId, key);
-      let restoredKeys = runtime.byLineage.get(proof.lineageId);
-      if (restoredKeys === undefined) {
-        restoredKeys = new Set<string>();
-        runtime.byLineage.set(proof.lineageId, restoredKeys);
-      }
-      restoredKeys.add(key);
-      break;
-    }
+    const outcome = releaseGenerationProofDestructive(runtime, key, "summary_superseded");
+    if (outcome.status !== "released") break; // read-back 失败已恢复 / 权威阻断——停止本批
     evicted += 1;
     if (runtime.store.entryCount < TREASURY_GENERATION_RETIREMENT_MAX_ENTRIES) break;
   }
-  if (evicted > 0) runtime.store.updatedAt = Game.time;
   return evicted;
 }
 
