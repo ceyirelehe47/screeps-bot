@@ -126,3 +126,14 @@ canonical slot 单一来源：planner 只用 spawn config 最后段（与 defens
 - 参与计划的每个 Defender 的当前 Rampart（若为合法候选）都进入房间级 used 集合——不论 mode；
 - 不为避免冲突让 direct attacker 停止攻击、不让 approach Defender 追逐边界外 hostile；
 - 不调用 PathFinder 做 fallback 重规划；每房间每 tick 至多一次 plan / 一次 revision；输入顺序变化不改变 per-slot 语义结果。
+
+## Round 22 Remediation VII — Stationary Defender Rampart Ownership
+
+占用规则按"本 tick 是否离开当前位置"判断，不再只看是否直接攻击：
+
+- **planner 保留循环扩展**：hold（显式不动——无 front-local 候选/候选不足）与 direct attack/ranged_attack 一样参与 stationary 占用——当前 tile 命中任一 target 的合法 boundary 候选 → 候选标 occupied + entry 携带 reservedPosition（不停止攻击、不被迫移动）；allocate 之后的 stationary engage_position（分配位置 = 当前 tile）二次标记（正在移动腾位者不保留）。
+- **fallback revision**：used 集合第三路（retained hold 无 reservedPosition 的旧 plan——真实坐标来自 defenderFactsBySlot，命中 plan 候选集时进入 used）；retained hold 输出保持 hold + reservedPosition（不再错误改写为无位置 engage_position——那会让消费方回落 target-level 单一位置重新制造共享位置冲突）；replacement 无合法候选但当前已在合法 Rampart 的 hold 携带当前位置保留事实。
+- **非参与语义不变**：非参与计划的 homeDefender（canonical slot 缺失）由采集层标 occupied（不被 planner 重复分配）；参与计划的 Defender 全部由 planner stationary 权威承载（采集层跳过——不双重排除）。
+- **稳定性**：输入顺序反转（Defender/candidate/front key）per-slot mode/targetId/position/reservedPosition 语义一致；每房间每 tick 至多一次 plan/revision；used-position 以坐标唯一；stationary 判定 O(Defenders × candidates) 有界；不调用 PathFinder。
+
+固定反例 D1–D8 见 `src/runtime/defenseStationaryRampartOwnership.test.ts`（hold 占位/唯一候选 hold/stationary engage_position/fallback 保留/replacement hold 保留当前位置/direct attacker 回归/非参与者/顺序稳定）。

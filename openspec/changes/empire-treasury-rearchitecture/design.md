@@ -1592,3 +1592,20 @@ activate 回收 parent completion 前要求其代 GRA proof 在位（防御 gate
 
 ### 21.6 read-back 同引用修复
 completion 与 historical authority 的 store 写入此前直接赋 candidate 引用（heap store 与 Memory 权威同对象）——写入窗口内的篡改会同步进 candidate 使 read-back 全维度比较恒真。两处写入均改为独立 clone（比较基准与持久拷贝分离）。
+
+## 22. Round 22 Remediation VII — Global Historical Settlement, Headroom Reservation & Bounded Permanent Replay
+
+### 22.1 durable settlement authority 接入全局事务真相（单一 resolver）
+新模块 `historicalSettlementAuthority.resolveTreasuryDurableSettlementAuthority` 是全库 truth graph 接线的唯一入口（live completion → durable historical → chain certificate → generation-addressable tr1_ 代查询 → retired range；五态 exact/retired/conflict/absent/store_unhealthy）。接线点：prepare same-ID replay gate（lineage/summary 之后——exact committed → already_settled、not-executed → rearm_required、retired → retired_attempt；Receipt/Tombstone GC 后同 ID 不得再次执行）、opposite proof matrix 双方向（相反 outcome 的 matching 权威是 exact_match blocker；同方向不阻断）、rearm preflight（historical committed 与 rearm-ready lineage 冲突 → proof_conflict 零 capability）、child occupancy（historical/证书 ID → occupied）、reconciliation（相反结论零签发、matching 幂等 already_resolved）、current settlement 事实源、cleanup coordinator/acknowledgement 的 journal-absent 完成判定（chain 压缩后由 certificate 承载——不退化 no_cleanup_authority）。
+
+### 22.2 独占 completion headroom reservation（"检查还有一个槽"不是 reservation）
+新模块 `completionHeadroomReservation`（`Memory.runtime.treasury.completionHeadroomReservations`，version 1，key `hr:<transactionId>`）：prepare 成功返回前 acquire（写入 + read-back；幂等——同 ID 重复 prepare 不重复计数；live completion + reserved ≤ 128 恒成立，ensureHeadroom/readiness blocker 全部计入 reserved）。execute 的 final admission **前移**至 durable Intent 写入 / executing 迁移 / capability 消费 / child_active / Game callback 之前：admit（reservation 在位 + 最终 durable identity digest 绑定 read-back）失败 → callback 零调用、零 Intent、零消费、零推进、全部预留释放——不再留下 executing Intent（下一 tick 误转 quarantine）或已消费 capability。释放语义：确定未开始（拒绝分支/abort/tick invalidate）→ release；execution unknown（callback 抛错 → quarantine 接管）→ 保留至 resolution cleanup 写 completion 后 consume；TTL 1000 ticks + 无 durable intent/quarantine + 非 active handle 的泄漏兜底（beginTick 有界 sweep）。
+
+### 22.3 有界永久防重放（两层历史语义）与 service-issued initial ID
+对任意字符串 ID 的永久精确记忆与有界 Memory 不可兼得——本轮建立两层结构：
+- **permanent anti-reuse authority**：`attemptIssuer`（`ti1_<seq>_<hash16>` + 持久单调 high-watermark，mint → 写回 → read-back，global reset 不回退；caller 业务键只是 correlation metadata）；`chainRetirementCertificate`（每条终结 chain 一条——rootSequence/lineageId/finalGeneration/terminalState，footprint 与 generation 数量无关；硬容量 256，满载驱逐最老非 legacy certificate 进 retired range，legacy/arbitrary root 永久 pin）；`retiredAttemptRanges`（发行序号区间，相邻单调合并、硬容量 64——不吸收不相邻序号，绝不误判未退休 ID）。
+- **bounded exact outcome authority**：historical store 384（最近 64 条审计保留窗口）；chain terminal compaction 写 certificate 后把该 chain 全部 per-attempt entries 退休（T17：300 代链 → historical 0 + certificate 1；压缩位于尾部 completion archive 之后——不留残留）；满载时经 assembly compactor 做有界退休（chain cert 在位的 child / ti1_ 独立 root 进 range），仍满载才 fail closed（T18：600 attempts 持续运行、旧 ID 全部不可重放）。
+- **enforcement**：production contract 通道（executeTreasuryActionContract）拒绝伪造 ti1_（seq > watermark）；架构守护强制 production 调用方经 mint/capability；复用由 replay gate 阻断。
+
+### 22.4 existing historical record 删除前完整 revalidation 与 profile 隔离
+archive 幂等路径（existing record）先完整 `validateHistoricalRecordShape`（schemaVersion/archivedAtTick 安全整数/via 枚举/profile↔class/键一致/digest hex/lineage 矩阵）；`deleteCompletionAfterAuthority` 最后一步前再从 Memory 权威直读复验——热缓存后篡改（7 维）在删除前拦截（不再延迟到删除后才暴露）。`TreasuryAttemptProofClass` 增 `forensic`（canonical 转换不再把 forensic 折叠为 legacy——不同 class 即身份冲突）；automatic archive（含 compact-archive）加 `treasuryProfileAllowsAutomaticProtocol` gate——legacy-replay/forensic-isolated 的 completion 不得被自动归档/删除（满载 fail closed，显式管理路径之外零删除）。`activateTreasuryLineageChild` 归档前移（先 exact archive/read-back 再 child_active；blocked → 可恢复拒绝）；summary compaction 的 archive 结果结构化上报（completionArchivePending——不再无条件 void 忽略；架构测试守护）。
