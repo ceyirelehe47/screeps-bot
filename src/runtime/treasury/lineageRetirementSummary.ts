@@ -518,6 +518,13 @@ export function verifyTreasurySummaryCertificateReplacement(
   if (certificate.finalAttemptId !== summary.finalAttemptId) return "finalAttemptId 不一致";
   const parsedRoot = parseTreasuryIssuedInitialAttemptId(summary.rootTransactionId);
   if (parsedRoot === null || certificate.rootSequence !== parsedRoot.sequence) return "rootSequence 与 root 发行序号不一致";
+  // 【X 工作流 D / N10】issuer domain 显式维度：rootSequence 不能脱离
+  // root namespace 单独充当 replacement——同序号不同域（ti1_ vs ti2_）
+  // 的 summary ↔ certificate 一律 conflict。
+  const parsedCertificateRoot = parseTreasuryIssuedInitialAttemptId(certificate.rootTransactionId);
+  if (parsedCertificateRoot === null || parsedCertificateRoot.namespace !== parsedRoot.namespace) {
+    return "rootSequence 的发行域不一致（ti1_/ti2_ 是两个独立发行域——同序号不构成 replacement）";
+  }
   return null;
 }
 
@@ -856,10 +863,14 @@ function evictTreasuryRetirementSummaryForCapacity():
   const modern = Object.entries(runtime.store.entries)
     .map(([key, entry]) => {
       const parsed = parseTreasuryIssuedInitialAttemptId(entry.rootTransactionId);
-      return parsed === null ? null : { key, entry, sequence: parsed.sequence };
+      return parsed === null ? null : { key, entry, namespace: parsed.namespace, sequence: parsed.sequence };
     })
-    .filter((item): item is { key: string; entry: TreasuryLineageRetirementSummary; sequence: number } => item !== null)
-    .sort((left, right) => left.sequence - right.sequence);
+    .filter((item): item is { key: string; entry: TreasuryLineageRetirementSummary; namespace: "legacy" | "current"; sequence: number } => item !== null)
+    // 【X 工作流 D】驱逐顺序按（发行域, 序号）——current 域优先淘汰（活跃
+    // 域的旧事实更快进入 range/certificate 接管；legacy 域序号靠后）。
+    .sort((left, right) =>
+      left.namespace !== right.namespace ? (left.namespace < right.namespace ? -1 : 1) : left.sequence - right.sequence,
+    );
   if (modern.length === 0) {
     return { status: "rejected", detail: "满载条目全部为 legacy pin（无现代条目可驱逐）" };
   }
@@ -937,7 +948,10 @@ function evictTreasuryRetirementSummaryForCapacity():
       // certificate（anti-reuse 由 certificate 在位兜底——下轮压缩重试）。
       const parsedRoot = parseTreasuryIssuedInitialAttemptId(record.rootTransactionId);
       if (parsedRoot !== null) {
-        void absorbTreasuryRetiredSequence(parsedRoot.sequence);
+        // 【X 工作流 D / N9】吸收域取自 root ID 自带 namespace（ti1_/ti2_
+        // 分别进入匹配域的 anti-reuse authority——historical compression
+        // 吸收到匹配 namespace 的 range）。
+        void absorbTreasuryRetiredSequence(parsedRoot.namespace, parsedRoot.sequence);
       }
       const compressed = compressTreasuryChainHistoricalEntries({
         rootTransactionId: record.rootTransactionId,
