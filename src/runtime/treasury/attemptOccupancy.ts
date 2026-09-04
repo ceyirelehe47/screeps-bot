@@ -42,6 +42,7 @@ import {
   lookupTreasuryRetirementSummaryByRoot,
   peekTreasuryRetirementSummaryHealth,
 } from "@/runtime/treasury/lineageRetirementSummary";
+import { lookupTreasuryHistoricalCompletion } from "@/runtime/treasury/cleanupSupersessionAuthority";
 
 export type TreasuryRearmPreflightResult =
   | {
@@ -270,6 +271,29 @@ export function preflightTreasuryRearmCapability(input: {
   if (receiptLookup.status === "corrupted") {
     return { status: "rejected", reason: "receipt_store_unhealthy", detail: "parent receipt 损坏（不可信 proof 上不得 rearm）" };
   }
+  // ── 【Remediation VII 修复一】durable historical completion authority 进入
+  //    rearm preflight：historical committed 与 rearm-ready lineage 同 ID 共存
+  //    是持久权威间的矛盾（同 ID 一个说 committed、一个说 not-executed）——
+  //    零 capability、零 mutation；matching historical not-executed 只是完成
+  //    事实的一部分，不替代 lineage/GRA/generation/parent/binding 检查；
+  //    historical store unhealthy 时同样零 capability（不折叠为 absent）。
+  {
+    const historicalParent = lookupTreasuryHistoricalCompletion(input.parentTransactionId);
+    if (historicalParent.verdict === "store_unhealthy") {
+      return {
+        status: "rejected",
+        reason: "lineage_store_unhealthy",
+        detail: `historical completion store unhealthy: ${historicalParent.detail}（rearm preflight fail closed——零 capability）`,
+      };
+    }
+    if (historicalParent.verdict === "match" && historicalParent.record.resolution === "committed") {
+      return {
+        status: "rejected",
+        reason: "proof_conflict",
+        detail: `parent ${input.parentTransactionId.slice(0, 48)} 存在 historical committed 权威（与 rearm-ready lineage 的 not-executed 结论冲突——零 capability、零 child staging、零 mutation）`,
+      };
+    }
+  }
   // ── parent authority 已释放 + marker 已清理。
   const parentIntent = readTreasuryIntentEntry(input.parentTransactionId);
   if (parentIntent !== undefined) {
@@ -323,6 +347,14 @@ export function checkTreasuryChildAttemptOccupancy(
   if (!peekTreasuryIntentHealth().healthy) return "intent store unhealthy（fail closed）";
   if (!peekTreasuryQuarantineHealth().healthy) return "quarantine store unhealthy（fail closed）";
   if (!peekTreasuryAttemptLineageHealth().healthy) return "lineage store unhealthy（fail closed）";
+  // 【Remediation VII 修复一】durable completion 权威（live + historical）：
+  // 候选 child ID 已有持久完成事实 → occupied；权威 store unhealthy → 按
+  // occupied 阻断（不折叠为"未占用"）。
+  {
+    const historicalChild = lookupTreasuryHistoricalCompletion(childTransactionId);
+    if (historicalChild.verdict === "match") return "historical completion authority";
+    if (historicalChild.verdict === "store_unhealthy") return "historical completion store unhealthy（fail closed）";
+  }
   const receiptLookup = lookupTreasurySettledReceipt(childTransactionId);
   if (receiptLookup.status !== "absent") {
     return `receipt store（${receiptLookup.status}）`;

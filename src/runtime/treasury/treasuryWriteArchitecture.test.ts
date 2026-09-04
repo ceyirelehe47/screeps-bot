@@ -493,6 +493,9 @@ describe("Treasury write-admission 架构边界", () => {
         //（写入前校验）与 tr1_ redemption fault 的 lineage publication 分支。
         "runtime/treasury/authorizationFaults.ts",
         "runtime/treasury/resolutionAuthority.ts",
+        // 【Remediation VII】durable settlement authority 的 chain 级数据源
+        //（tr1_ child ID 的 generation-addressable 查询路由）。
+        "runtime/treasury/chainRetirementCertificate.ts",
       ]);
       if (/isTreasuryRearmAttemptId/.test(fileSource) && !REARM_NAMESPACE_CONSUMERS.has(relative)) {
         violations.push(`${relative} 引用 isTreasuryRearmAttemptId（tr1_ 判定单一权威在 transactionId.ts，门禁在 facade）`);

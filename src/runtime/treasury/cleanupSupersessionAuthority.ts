@@ -786,6 +786,18 @@ export function archiveTreasuryCleanupCompletionViaAuthority(input: {
   });
   const existing = supersessionRuntime.store.entries[key];
   if (existing !== undefined) {
+    // 【Remediation VII 修复三】existing record 在任何删除决策前必须完整
+    // shape revalidation（schemaVersion / archivedAtTick 安全整数 / via 枚举
+    // / profile↔class / 键一致 / digest hex / lineage 矩阵）——热缓存后
+    // 被原地篡改（非身份字段）不得在删除 live completion 之后才暴露。
+    const existingShapeError = validateHistoricalRecordShape(existing, key);
+    if (existingShapeError !== null) {
+      return {
+        status: "blocked",
+        reason: "supersession_store_unhealthy",
+        detail: `已存在 historical record 损坏: ${existingShapeError}（completion 保留——零删除，fail closed）`,
+      };
+    }
     // 幂等：已存在 historical record 必须与 completion 在全部持久维度一致
     //（archivedAtTick/via 除外）——身份或 outcome 冲突 → blocked（不覆盖）。
     const sameRecord =
@@ -877,6 +889,25 @@ export function archiveTreasuryCleanupCompletionViaAuthority(input: {
 }
 
 function deleteCompletionAfterAuthority(transactionId: string): TreasuryCompletionArchiveResult {
+  // 【Remediation VII 修复三】删除的最后一步之前，再从 Memory 权威直读
+  // historical record 并完整验证一次（shape 全维度 + 在位）——不依赖模块
+  // load 时的全表验证，也不让 heap 缓存对象充当唯一基准。record 缺失或
+  // 损坏 → blocked（completion 保留，fail closed）。
+  {
+    const rawStore = (Memory.runtime as unknown as RuntimeMemoryWithSupersessions | undefined)?.treasury?.cleanupSupersessions;
+    const key = SUPERSESSION_KEY_PREFIX + transactionId;
+    const durableRecord = rawStore?.entries[key];
+    const durableError = durableRecord === undefined
+      ? "Memory 权威中 historical record 缺失（heap 与 Memory 不一致）"
+      : validateHistoricalRecordShape(durableRecord, key);
+    if (durableError !== null) {
+      return {
+        status: "blocked",
+        reason: "supersession_store_unhealthy",
+        detail: `删除前 Memory 直读复验失败: ${durableError}（completion 保留——零删除，fail closed）`,
+      };
+    }
+  }
   // authority 已持久验证 → 删除 completion → 删除 read-back absent。
   const released = releaseTreasuryCleanupCompletionOfAttempt(transactionId);
   if (!released) {

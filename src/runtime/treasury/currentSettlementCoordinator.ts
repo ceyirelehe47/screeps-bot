@@ -57,6 +57,7 @@ import {
   type TreasuryIdentityProfile,
   treasuryProfileAllowsAutomaticProtocol,
 } from "@/runtime/treasury/identityProfile";
+import { lookupTreasuryHistoricalCompletion } from "@/runtime/treasury/cleanupSupersessionAuthority";
 import type { TreasuryLineageProofFacts } from "@/runtime/treasury/lineageProof";
 
 /** summary / lineage store 的 health source（装配注入——解循环依赖）。 */
@@ -247,7 +248,29 @@ export function verifyTreasuryCurrentSettlement(query: TreasuryCurrentSettlement
     }
   }
 
-  // 6) Intent/Quarantine（unified resolver）。
+  // 5.5) 【Remediation VII 修复一】durable historical completion authority
+  //      进入 current settlement 事实源：相反 outcome 的 matching historical
+  //      权威是 conflict；同 ID 但身份不一致的 historical 权威同样 conflict
+  //      （不选边）；store unhealthy → fail closed。matching 同 outcome 的
+  //      historical 权威只是佐证（verified 的充分性仍由 receipt/tombstone
+  //      承载）——不单独推高结论。
+  {
+    const historical = lookupTreasuryHistoricalCompletion(attempt.transactionId, attempt);
+    if (historical.verdict === "store_unhealthy") {
+      accumulate(acc, "unhealthies", "historical_completion_store", historical.detail);
+    } else if (historical.verdict === "conflict") {
+      accumulate(acc, "conflicts", "historical_completion_store", historical.detail);
+    } else if (historical.verdict === "match") {
+      const historicalOutcome = historical.record.resolution;
+      if (isCommitted && historicalOutcome === "not-executed") {
+        accumulate(acc, "conflicts", "historical_completion_store", "committed 目标存在 matching historical not-executed 权威（相反结论 proof）");
+      } else if (!isCommitted && historicalOutcome === "committed") {
+        accumulate(acc, "conflicts", "historical_completion_store", "not-executed 目标存在 matching historical committed 权威（相反结论 proof）");
+      }
+    }
+  }
+
+  // 6) Intent/Quarantine（unresolved resolver）。
   const authority = resolveTreasuryUnresolvedAuthority(attempt.transactionId);
   if (authority.status === "store_unhealthy") {
     accumulate(acc, "unhealthies", "unresolved_authority", authority.detail);
@@ -413,6 +436,20 @@ export function verifyTreasuryOppositeProofAbsence(query: {
       if (tombstoneExact !== null && treasuryExactAttemptIdentityRelation(tombstoneExact, attempt) !== "insufficient") {
         details.push("resolution_tombstone: matching final committed tombstone（相反结论）");
       }
+    }
+  }
+  // 【Remediation VII 修复一】historical 权威进入相反 proof 显式不存在检查：
+  // 相反 outcome 的 matching historical 权威阻断；同 ID 身份冲突同样阻断；
+  // 同方向权威不阻断（按权威真实 resolution 判定方向）。
+  {
+    const historical = lookupTreasuryHistoricalCompletion(attempt.transactionId, attempt);
+    const oppositeOutcome = query.outcome === "committed" ? "not-executed" : "committed";
+    if (historical.verdict === "match" && historical.record.resolution === oppositeOutcome) {
+      details.push(`historical_completion_store: matching historical ${oppositeOutcome} 权威（相反结论）`);
+    } else if (historical.verdict === "conflict") {
+      details.push(`historical_completion_store: ${historical.detail}（相反结论缺失不可证明——retained）`);
+    } else if (historical.verdict === "store_unhealthy") {
+      details.push(`historical_completion_store: ${historical.detail}`);
     }
   }
   return { blocked: details.length > 0, sources: uniqueSources(details), details };

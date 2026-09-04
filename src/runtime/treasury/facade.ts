@@ -195,6 +195,7 @@ import {
   TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
 } from "@/runtime/treasury/cleanupCompletionAuthority";
 import { ensureTreasuryCleanupCompletionHeadroom } from "@/runtime/treasury/cleanupSupersessionAuthority";
+import { resolveTreasuryDurableSettlementAuthority } from "@/runtime/treasury/historicalSettlementAuthority";
 import {
   writeTreasuryResolutionTombstone,
   ensureTreasuryResolutionSlotAvailable,
@@ -2405,6 +2406,60 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           };
         }
       }
+      // ──【Remediation VII 修复一】durable settlement authority 进入 same-ID
+      //    replay gate（单一 resolver——live completion → historical →
+      //    chain certificate → retired range）。Receipt / Tombstone 因
+      //    retention 消失后，已 committed 的 ID 在这里被 already_settled 拦截、
+      //    final not-executed 被 rearm_required 拦截、已退休（详细 outcome
+      //    已压缩）被 retired_attempt 拦截——同 ID 不得再次进入 Game
+      //    callback。权威冲突 / store unhealthy 一律 fail closed。位于
+      //    lineage / summary 门禁之后：仍可 rearm 的 root（active lineage
+      //    rearm_ready）保持 retired_attempt 语义（重试经 capability——
+      //    Round 17 第十三节），本 gate 承载 lineage/summary/GC 之后的
+      //    durable 权威层。
+      {
+        const durableSettlement = resolveTreasuryDurableSettlementAuthority({ transactionId: input.transactionId });
+        if (durableSettlement.status === "store_unhealthy") {
+          metrics.transactionsRejectedInvalid += 1;
+          return {
+            status: "rejected",
+            reason: "completion_store_unhealthy",
+            detail: `durable settlement authority store unhealthy: ${durableSettlement.detail}（不把损坏解释成无权威——fail closed，callback 零调用）`,
+          };
+        }
+        if (durableSettlement.status === "conflict") {
+          metrics.transactionsRejectedInvalid += 1;
+          return {
+            status: "rejected",
+            reason: "proof_conflict",
+            detail: `durable settlement authority 冲突: ${durableSettlement.detail}（同 ID 持久权威矛盾——不选边，fail closed）`,
+          };
+        }
+        if (durableSettlement.status === "exact") {
+          if (durableSettlement.outcome === "committed") {
+            metrics.duplicateSettlementsRejected += 1;
+            return {
+              status: "already_settled",
+              transactionId: input.transactionId,
+              firstRecordedAtTick: durableSettlement.recordedAtTick ?? Game.time,
+            };
+          }
+          metrics.transactionsRejectedInvalid += 1;
+          return {
+            status: "rejected",
+            reason: "rearm_required",
+            detail: `transactionId ${input.transactionId.slice(0, 48)} 存在 durable not-executed 权威（${durableSettlement.source}——同 ID 只标识一个执行 attempt，重试必须经 service.issueTreasuryRearmCapability 签发 opaque capability 生成 tr1_ child）`,
+          };
+        }
+        if (durableSettlement.status === "retired") {
+          metrics.transactionsRejectedInvalid += 1;
+          return {
+            status: "rejected",
+            reason: "retired_attempt",
+            detail: `transactionId ${input.transactionId.slice(0, 48)} 已永久退休（${durableSettlement.source}: ${durableSettlement.detail}——详细 outcome 已压缩，重放一律拒绝）`,
+          };
+        }
+      }
       // 全局 quarantine write blocker（第七轮）：存在任何 unresolved quarantine
       // 或 store 损坏时，一切新 transaction 在 Game callback 之前拒绝——
       // write-fault marker 不是唯一锁来源（marker 已解决但仍有其它 quarantine
@@ -3865,6 +3920,30 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       // active handle：resolution 后 endTick 不得重新 quarantine。
       if (preparedById.has(input.transactionId)) {
         return reject("active_handle_present", "transaction 仍属于当前 active handle registry（须等 handle 终态化/服务重建）");
+      }
+      // ──【Remediation VII 修复一】durable settlement authority 进入
+      //    reconciliation capability 签发：historical/certificate committed
+      //    不得签发 not-executed resolution（反向同理）；matching outcome
+      //    只能幂等返回 already_resolved（不重跑 reconciler、不签发第二份
+      //    capability）；权威冲突 / store unhealthy → 零 capability。
+      {
+        const durableSettlement = resolveTreasuryDurableSettlementAuthority({ transactionId: input.transactionId });
+        if (durableSettlement.status === "store_unhealthy") {
+          return reject("authority_store_unhealthy", `durable settlement authority store unhealthy: ${durableSettlement.detail}（不把损坏解释成无权威——零 capability）`);
+        }
+        if (durableSettlement.status === "conflict") {
+          return reject("resolution_identity_conflict", `durable settlement authority 冲突: ${durableSettlement.detail}（不选边——零 capability）`);
+        }
+        if (durableSettlement.status === "retired") {
+          return reject("legacy_authority_isolated", `transactionId ${input.transactionId.slice(0, 48)} 已永久退休（${durableSettlement.source}）——结论已由压缩权威承载，不签发 resolution capability`);
+        }
+        if (durableSettlement.status === "exact") {
+          return {
+            status: "already_resolved",
+            resolution: durableSettlement.outcome,
+            transactionId: input.transactionId,
+          };
+        }
       }
       // post-fault observation：当前 tick 严格晚于故障 tick 且当前 observation
       // 为故障后观察。

@@ -33,6 +33,7 @@ import {
   treasuryExactAttemptIdentityRelation,
   type TreasuryExactAttemptIdentity,
 } from "@/runtime/treasury/exactAttemptIdentity";
+import { lookupTreasuryHistoricalCompletion } from "@/runtime/treasury/cleanupSupersessionAuthority";
 
 /** 四分类（absent 之外全部是阻断）。 */
 export type TreasuryOppositeProofClassification =
@@ -43,7 +44,7 @@ export type TreasuryOppositeProofClassification =
   | "store_unhealthy";
 
 export interface TreasuryOppositeProofBlocker {
-  readonly source: "not-executed-tombstone" | "gra-proof" | "committed-receipt" | "committed-tombstone";
+  readonly source: "not-executed-tombstone" | "gra-proof" | "committed-receipt" | "committed-tombstone" | "historical-authority";
   readonly classification: Exclude<TreasuryOppositeProofClassification, "absent">;
   readonly detail: string;
 }
@@ -220,6 +221,34 @@ export function checkTreasuryOppositeProofsForCommitted(
       }
     }
   }
+  // 【Remediation VII 修复一】durable historical completion authority 进入
+  // 相反 proof 矩阵：目标 committed 时，matching 的 historical not-executed
+  // 权威是相反结论 proof（exact_match 阻断）；同 ID 但身份冲突的 historical
+  // 权威同样阻断（不证明无关）；store unhealthy 阻断。**同方向（committed）
+  // 的 historical 权威不是相反 proof——不阻断**（查询不带 outcome 视角，
+  // 按权威真实 resolution 判定方向）。
+  {
+    const historical = lookupTreasuryHistoricalCompletion(transactionId, expected);
+    if (historical.verdict === "match" && historical.record.resolution === "not-executed") {
+      blockers.push({
+        source: "historical-authority",
+        classification: "exact_match",
+        detail: "同 transaction ID 存在 matching historical not-executed 权威（相反结论成立——conflict）",
+      });
+    } else if (historical.verdict === "conflict") {
+      blockers.push({
+        source: "historical-authority",
+        classification: "identity_conflict",
+        detail: `${historical.detail}（historical 权威与当前 attempt 不可证明一致——conflict）`,
+      });
+    } else if (historical.verdict === "store_unhealthy") {
+      blockers.push({
+        source: "historical-authority",
+        classification: "store_unhealthy",
+        detail: `historical completion store unhealthy（无法证明无相反权威）: ${historical.detail}`,
+      });
+    }
+  }
   return { blockers, clear: blockers.length === 0 };
 }
 
@@ -272,6 +301,31 @@ export function checkTreasuryOppositeProofsForNotExecuted(
           blockers.push({ source: "committed-tombstone", classification: "insufficient", detail: "committed tombstone 身份维度不足（insufficient ≠ absent——阻断）" });
         }
       }
+    }
+  }
+  // 【Remediation VII 修复一】目标 not-executed 时：matching 的 historical
+  // committed 权威是相反 proof；身份冲突/unhealthy 同样阻断；同方向
+  //（not-executed）权威不阻断。
+  {
+    const historical = lookupTreasuryHistoricalCompletion(transactionId, expected);
+    if (historical.verdict === "match" && historical.record.resolution === "committed") {
+      blockers.push({
+        source: "historical-authority",
+        classification: "exact_match",
+        detail: "同 transaction ID 存在 matching historical committed 权威（相反结论成立——conflict）",
+      });
+    } else if (historical.verdict === "conflict") {
+      blockers.push({
+        source: "historical-authority",
+        classification: "identity_conflict",
+        detail: `${historical.detail}（historical 权威与当前 attempt 不可证明一致——conflict）`,
+      });
+    } else if (historical.verdict === "store_unhealthy") {
+      blockers.push({
+        source: "historical-authority",
+        classification: "store_unhealthy",
+        detail: `historical completion store unhealthy（无法证明无相反权威）: ${historical.detail}`,
+      });
     }
   }
   return { blockers, clear: blockers.length === 0 };
