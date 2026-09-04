@@ -213,11 +213,12 @@ function planRoomFocusFire(room: Room, hostiles: Creep[], fronts: { id: string; 
   if (safeZone.size > 0) {
     const boundaryRamparts = getBoundaryRamparts(room, safeZone);
     // 他属占用检测（其它 my creep 脚下的 rampart——采集一次共享）。
-    // 【Remediation VI 6.2】homeDefender 不再无条件跳过：参与 plan 的
-    // Defender 的位置保留由 planner 的 all-actor 占用权威承载（direct
-    // attacker 的 reservedPosition / approach 分配的 used 集合——不在此
-    // 重复排除）；非参与计划的 homeDefender（configName 残缺/不在 plan）
-    // 与其它 my creep 一样占用标记（该位置不得再分配）。
+    // 【Remediation VI 6.2 / VII 修复】homeDefender 不再无条件跳过：参与
+    // plan 的 Defender 的位置保留由 planner 的 stationary 占用权威承载
+    //（direct attack / ranged_attack / hold / 站位 engage_position——本
+    // tick 不离开当前位置者的 reservedPosition / approach 分配的 used 集
+    // 合，不在此重复排除）；非参与计划的 homeDefender（configName 残缺/
+    // 不在 plan）与其它 my creep 一样占用标记（该位置不得再分配）。
     const occupiedRampartKeys = new Set<string>();
     for (const creep of room.find(FIND_MY_CREEPS)) {
       if (creep.memory.role === "homeDefender" && slotsByCreepName[creep.name] !== undefined) {

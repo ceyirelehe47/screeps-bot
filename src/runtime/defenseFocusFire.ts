@@ -151,10 +151,12 @@ export interface FocusFireDefenderEngagement {
    */
   readonly participation?: "assigned" | "not_participating";
   /**
-   * 【Remediation VI 6.1】direct actor（attack/ranged_attack 且本 tick 不移
-   * 动）当前所站的合法 boundary 候选 Rampart 的保留事实——房间级
-   * used-position 权威：allocate 与 fallback revision 均不得把该位置分配
-   * 给其他 Defender（direct actor 不因直接攻击而从占用集合消失）。
+   * 【Remediation VI 6.1 / VII 修复】本 tick 不离开当前位置的参与 Defender
+   *（direct attack / ranged_attack / hold / 站位 engage_position）当前所站
+   * 的合法 boundary 候选 Rampart 的保留事实——房间级 used-position 权威：
+   * allocate 与 fallback revision 均不得把该位置分配给其他 Defender
+   *（stationary actor 不因直接攻击/hold 而从占用集合消失；正在移动腾位
+   * 的 engage_position 不保留）。
    */
   readonly reservedPosition?: { readonly x: number; readonly y: number };
 }
@@ -828,19 +830,22 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
       candidatesByTargetId[hostile.id] = [{ id: `pos:${hostile.engagement.x},${hostile.engagement.y}`, x: hostile.engagement.x, y: hostile.engagement.y }];
     }
   }
-  // ──【Remediation VI 6.1】all-actor Rampart 占用：direct attacker（本 tick
-  //    可直接 attack/ranged_attack、不进移动分配）当前所站的合法 boundary
-  //    候选 Rampart 进入房间级 used 权威——
+  // ──【Remediation VI 6.1 / VII 修复】stationary 参与 Defender 的 Rampart
+  //    占用权威：本 tick 不离开当前位置的参与 Defender（attack /
+  //    ranged_attack / hold——direct actor 在攻击、hold 显式不动，都不进
+  //    移动分配）当前所站的合法 boundary 候选 Rampart 进入房间级 used 权威：
   //     1) plan 持久化候选集与 allocate 输入同步标 occupied（后续 approach
   //        Defender 与 fallback revision 均不可获得该位置）；
   //     2) entry 携带 reservedPosition（消费与 revision 的 used-position
-  //        事实——不因 actor 本 tick 直接攻击而从占用集合消失）。
-  //    未站合法候选上的 direct actor 不产生保留事实（原 tile 不是 boundary
-  //    候选——无冲突面）。actor 不停止攻击、不被迫移动。
+  //        事实——不因 actor 本 tick 直接攻击/hold 而从占用集合消失）。
+  //    engage_position 且分配位置 = 当前 tile 的 stationary actor 由
+  //    allocate 之后的二次标记承载（本 tick 移动者不保留——正在腾位）。
+  //    未站合法候选上的 stationary actor 不产生保留事实（原 tile 不是
+  //    boundary 候选——无冲突面）。actor 不停止攻击、不被迫移动。
   const defendersBySlot = new Map(input.defenders.map((defender) => [defender.slot, defender]!));
   for (const slot of Object.keys(defenderEngagements)) {
     const entry = defenderEngagements[slot]!;
-    if (entry.mode !== "attack" && entry.mode !== "ranged_attack") continue;
+    if (entry.mode !== "attack" && entry.mode !== "ranged_attack" && entry.mode !== "hold") continue;
     const defender = defendersBySlot.get(slot);
     if (defender === undefined) continue;
     let reserved: { x: number; y: number } | undefined;
@@ -875,6 +880,28 @@ export function planRoomEngagement(input: FocusFireRoomInput, tick: number): Foc
           // 候选 Rampart 不足：明确 hold（本 tick 伤害 0、保留 combat target
           // 给下一 tick 规划——不重复分配已占用位置、不追逐边界外 hostile）。
           : { targetId: item.targetId, mode: "hold" };
+    }
+    // ──【Remediation VII 修复】stationary engage_position 二次标记：分配
+    //    位置等于 Defender 当前 tile（已站在目标 Rampart 上——本 tick 不
+    //    移动）时，该位置同样进入房间级 used 权威（候选标 occupied +
+    //    entry 携带 reservedPosition——fallback revision 与后续 allocate
+    //    不得把该位置分给他人）。分配位置 ≠ 当前 tile 的 actor 正在移动
+    //    腾位——不保留。
+    for (const item of pendingBoundary) {
+      const allocated = allocation[item.slot];
+      if (allocated === undefined) continue;
+      if (allocated.x !== item.x || allocated.y !== item.y) continue;
+      for (const candidates of Object.values(candidatesByTargetId)) {
+        for (const candidate of candidates) {
+          if (candidate.x === allocated.x && candidate.y === allocated.y) {
+            candidate.occupied = true;
+          }
+        }
+      }
+      defenderEngagements[item.slot] = {
+        ...defenderEngagements[item.slot]!,
+        reservedPosition: { x: allocated.x, y: allocated.y },
+      };
     }
   }
 

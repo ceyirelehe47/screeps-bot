@@ -169,12 +169,28 @@ export function resolveRoomEngagementFallbackRevision(
   //      的 reservedPosition 同样进入 used 集合——revision 不得把该 Rampart
   //      分给 replacement Defender（D4：fallback 不抢 unaffected actor 的位置）。
   const usedPositionKeys = new Set<string>();
+  const planCandidateKeys = new Set<string>();
+  for (const candidates of Object.values(plan.engagementCandidatesByTargetId ?? {})) {
+    for (const candidate of candidates) {
+      planCandidateKeys.add(`${candidate.x},${candidate.y}`);
+    }
+  }
   for (const item of revisedSlots) {
     if (item.retained && item.originalPosition !== undefined) {
       usedPositionKeys.add(`${item.originalPosition.x},${item.originalPosition.y}`);
     }
     if (item.retained && item.reservedPosition !== undefined) {
       usedPositionKeys.add(`${item.reservedPosition.x},${item.reservedPosition.y}`);
+    }
+    // 【Remediation VII 修复】第三路：retained stationary 且无 reservedPosition
+    //（旧 plan 数据 / planner 保留事实缺失）——hold 的真实坐标来自 plan
+    // 持久化的 defender facts；坐标命中 plan 任一候选集时进入 used 集合
+    //（unaffected hold Defender 的脚下 Rampart 不被 replacement 抢占）。
+    if (item.retained && item.reservedPosition === undefined && item.originalMode === "hold") {
+      const facts = plan.defenderFactsBySlot?.[item.slot];
+      if (facts !== undefined && planCandidateKeys.has(`${facts.x},${facts.y}`)) {
+        usedPositionKeys.add(`${facts.x},${facts.y}`);
+      }
     }
   }
   // 3. 需要重新分配独立位置的 Defender（替代 boundary target 者）进入统一
@@ -250,6 +266,25 @@ export function resolveRoomEngagementFallbackRevision(
         };
         continue;
       }
+      // 【Remediation VII 修复】retained hold 保持 hold（不再错误改写为无
+      // 位置的 engage_position——那会让消费方回落 target-level 单一位置，
+      // 重新制造共享位置冲突）；真实坐标保留事实随 facts 透传（脚下合法
+      // Rampart 继续进入 used 权威，hold actor 不被迫移动）。
+      if (item.originalMode === "hold") {
+        const facts = plan.defenderFactsBySlot?.[item.slot];
+        const stationaryReserved =
+          item.reservedPosition !== undefined
+            ? item.reservedPosition
+            : facts !== undefined && planCandidateKeys.has(`${facts.x},${facts.y}`)
+              ? { x: facts.x, y: facts.y }
+              : undefined;
+        defenderEngagementBySlot[item.slot] = {
+          targetId: item.targetId,
+          mode: "hold",
+          ...(stationaryReserved !== undefined ? { reservedPosition: { x: stationaryReserved.x, y: stationaryReserved.y } } : {}),
+        };
+        continue;
+      }
       defenderEngagementBySlot[item.slot] = {
         targetId: item.targetId,
         mode: "engage_position",
@@ -260,10 +295,20 @@ export function resolveRoomEngagementFallbackRevision(
     }
     if (item.boundary) {
       const allocated = allocation[item.slot];
-      defenderEngagementBySlot[item.slot] =
-        allocated !== undefined
-          ? { targetId: item.targetId, mode: "engage_position", position: { x: allocated.x, y: allocated.y }, positionKind: "boundary" }
-          : { targetId: item.targetId, mode: "hold" };
+      if (allocated !== undefined) {
+        defenderEngagementBySlot[item.slot] = { targetId: item.targetId, mode: "engage_position", position: { x: allocated.x, y: allocated.y }, positionKind: "boundary" };
+        continue;
+      }
+      // 【Remediation VII 修复 D5】替代无合法候选 → 明确 hold；actor 当前
+      // 已站在合法候选 Rampart 上时保留当前位置事实（reservedPosition——
+      // 不输出无位置的 hold 让消费方回落共享位置；hold actor 不被迫移动）。
+      const facts = plan.defenderFactsBySlot?.[item.slot];
+      const currentOnCandidate = facts !== undefined && planCandidateKeys.has(`${facts.x},${facts.y}`) ? { x: facts.x, y: facts.y } : undefined;
+      defenderEngagementBySlot[item.slot] = {
+        targetId: item.targetId,
+        mode: "hold",
+        ...(currentOnCandidate !== undefined ? { reservedPosition: currentOnCandidate } : {}),
+      };
       continue;
     }
     // inside（或无站位信息）：不带位置——消费方按当前可执行距离重算 action

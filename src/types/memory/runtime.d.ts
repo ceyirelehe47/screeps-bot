@@ -112,7 +112,9 @@ declare global {
          *  为显式 hold——fresh plan 仍是权威，不回退独立选敌；participation=
          *  not_participating 是唯一允许消费方走旧独立行为的显式语义——entry
          *  缺失不是不参与，fresh plan 存在时默认 hold；reservedPosition 为
-         *  direct actor 当前所站合法 boundary Rampart 的房间级保留事实）。 */
+         *  本 tick 不离开当前位置的参与 Defender（direct attack /
+         *  ranged_attack / hold / 站位 engage_position）当前所站合法
+         *  boundary Rampart 的房间级保留事实——移动腾位者不保留）。 */
         defenderEngagements?: Record<
           string,
           {
