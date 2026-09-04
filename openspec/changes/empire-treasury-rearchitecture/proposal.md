@@ -303,3 +303,21 @@ Remediation V 的 replacement 判定只按 transactionId + resolution 字符串�
 - certificate 是协议推导——不冒充 exact proof，不证明 cleanup 完成；
 - 任何返回 executed_committed 且无 cleanup-pending 标记的结果不遗留 reservation；
 - planner 与 fallback 不得把当前物理占据的 Rampart 分配给另一个 Defender。
+### Round 22 Remediation IX — Versioned Issuance Migration, Lifecycle Inventory, Checked Handoff & Global Footprints
+
+- versioned issuance migration：issuer store version=2 + ti2_ 命名空间（v1 watermark 保留为 legacy 记录、新命名空间独立推进——ghost ID 消除）；旧 ti1_ 一律 legacy namespace（production 拒绝新执行、持久权威继续阻断重放）；openTreasuryIssuedInitialAttempt 把 watermark 推进与持久 issued ticket 原子化（无裸 ID 窗口；TTL 显式过期 + 有界 GC 淘汰）；
+- lifecycle inventory：Memory.runtime.treasury 全部 18 store 的机器可检查契约（classification/容量/退出路径/清理 owner/replacement/overflow/reset/上界/年龄淘汰许可）+ 架构守护（未登记/无退出/错分类/年龄淘汰 → 失败）+ beginTick 固定预算 GC coordinator（query 零写）；
+- replacement 验证驱逐：retired range 结构化四态查询（boolean 折叠 API 禁入 GC）；summary/certificate/GRA 满载驱逐一律有界 eligible 扫描 + 正面 replacement relation 验证（anti-reuse-only 不冒充 exact；store unhealthy 绝不授权驱逐；chain 终结时 root 序号进 range——被逐后旧 ID 恒非 absent）；
+- checked completion handoff：consume/release 结构化返回并强制检查（consume 失败 journal 保留、不返回 completed；拒绝路径释放失败如实并入 detail 不谎报）；容量公式单一实现（acquire 后 effective = live + independent reservation + unresolved handoff slot − pair duplication——128/129 边界恢复）；
+- 完整 orphan owner：统一 lifecycle owner resolver（active 与 terminal 权威分层；store unhealthy/probe 未装配视为 owned）——reservation sweep 与孤儿 gap coalesce 不再手工拼 store 列表；
+- resolver insufficient fail closed：两个 exact 声明仅 match 共同证明 exact；expected 维度不足阻断；全部消费方（replay gate/capability/rearm/occupancy/verifier/opposite）显式 fail closed；
+- Defense：global rampart footprints——房间级坐标 ownership snapshot 进入 production（claim 坐标全局标记全部 target 候选数组；唯一性按坐标不按 candidate ID；planner/fallback 共享入口）。
+
+#### 不变量（增补）
+- 旧 issuer watermark 不能证明任何新格式 ID 已发行；production issuance 恒伴随持久 lifecycle owner（ticket）；
+- Treasury 持久 store 无 lifecycle contract 不得存在；active/unresolved 不按年龄/FIFO 删除；
+- destructive eviction 必须验证 matching replacement 的 identity/outcome/lifecycle relation——store unhealthy 绝不授权删除；
+- reservation mutation 的结构化失败必须传播到调用状态机（consume 失败时 journal 不删除；reject 的 release 失败不谎报已释放）；
+- live + reserved − pairs 只按单一公式计数（同一 handoff 只计一槽）；
+- exact identity 维度不足（insufficient）在 destructive 路径零 mutation、在 replay 路径零 callback；
+- 同一 Rampart 坐标无论出现在多少 target 候选数组（candidate ID 是否相同）都只能属于一个 Defender。

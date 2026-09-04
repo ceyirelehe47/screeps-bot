@@ -137,3 +137,13 @@ canonical slot 单一来源：planner 只用 spawn config 最后段（与 defens
 - **稳定性**：输入顺序反转（Defender/candidate/front key）per-slot mode/targetId/position/reservedPosition 语义一致；每房间每 tick 至多一次 plan/revision；used-position 以坐标唯一；stationary 判定 O(Defenders × candidates) 有界；不调用 PathFinder。
 
 固定反例 D1–D8 见 `src/runtime/defenseStationaryRampartOwnership.test.ts`（hold 占位/唯一候选 hold/stationary engage_position/fallback 保留/replacement hold 保留当前位置/direct attacker 回归/非参与者/顺序稳定）。
+
+## Round 22 Remediation IX — Global Rampart Footprints
+
+房间级 `coordinate → physical owner slot` 的 ownership snapshot（VIII 的 per-target 数组内 claim 升级为全局）：
+
+- **planner 全局标记**：候选坐标全集来自全部 target 的候选数组；`collectPhysicalCandidateFootprints`（slot 字典序决胜——确定性）构建物理占据快照；claim 触发条件保持"站在自己 target 的未占用候选"（VIII 收敛不回归），标记作用域升级 `markCandidateOccupiedGlobally`——同坐标在全部 target 候选数组一并 occupied（Rampart 唯一性按坐标、不按 candidate ID）；stationary 保留/hold 脚下回填/engage 二次标记统一经共享 helper；
+- **fallback 共享入口**：坐标键统一 `candidateKeyOf`；retained hold 第三路的 facts footprint 经共享 `collectPhysicalCandidateFootprints` 构建（与 planner 同语义——架构测试 D23 守护两侧引用）；
+- **消费层不变**：loser 明确 hold（不 moveTo 已占 Rampart、不追逐边界外敌人）；direct attacker 继续攻击；occupant 的 engage_position 消费不强迫移动；保守一 tick ownership 保持。
+
+固定反例 D16–D23 见 `src/runtime/defenseGlobalRampartFootprints.test.ts`（跨 target 共享坐标 claim/fallback 共享候选/混合全局唯一/顺序稳定/consumer hold/架构扫描）。

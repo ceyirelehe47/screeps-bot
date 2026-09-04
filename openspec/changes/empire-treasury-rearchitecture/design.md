@@ -1630,3 +1630,25 @@ retirement summary 满载（128）驱逐：现代 chain 的 summary 条目在 re
 
 ### 23.6 Defense：allocation 前物理 Rampart ownership（工作流 F）
 共享占用入口 `physicalRampartOwnership`；planner 的 pending boundary claim（站在自己 target 的未占用候选 → engage_position = 当前 tile + reservedPosition + occupied，slot 字典序确定）；allocate 后变 hold 的 loser 脚下保留（occupied + reservedPosition）；fallback replacement claim（自己 revised target 候选 → claim + used 集合）。planner 与 fallback 共用同一占用语义（跨 target 站位不预保护——正常移动者照常分配）。
+## 24. Round 22 Remediation IX — Versioned Issuance Migration, Lifecycle-Safe Queue Eviction & Checked Completion Handoff
+
+### 24.1 versioned issuance migration（工作流 A）
+issuer store 升 version=2 + 命名空间 ti2_（协议 tag v3，hash 仍只依赖 sequence）：v1→v2 单对象替换 + read-back 迁移——旧 watermark 保留为 legacy 记录（anti-reuse 事实不清空 Memory），新命名空间 watermark 独立从 0 推进；global reset 后重读幂等（version=2 即完成，无第二 frontier）；未知版本/损坏 fail closed。旧 ti1_ 一律 legacy issued namespace：check 返回 legacy_unverified（不再作为当前发行协议的合法 initial ID），production contract writer 拒绝其新执行；既有 Receipt/historical/lineage 权威中的旧 ID 继续阻断同 ID 重放。新模块 `attemptIssuanceTicket`：openTreasuryIssuedInitialAttempt 把 watermark 推进与持久 issued ticket 收敛为同一受控操作（ticket 写失败 watermark 回滚——无裸 ID 窗口）；ticket TTL 显式过期（正面生命周期事实）、consume（opening 接管）、GC 有界淘汰（watermark frontier 验证）；active 容量 64 满载 fail closed。mint 仅存在于受控 opening 与 issuer 模块内部（架构守护）。
+
+### 24.2 lifecycle inventory 与有界 recent queue（工作流 B）
+`treasuryLifecycleContract`：Memory.runtime.treasury 下全部 18 个持久 store 的机器可检查 lifecycle 契约（classification 六类 / 硬容量 / terminal condition / cleanup owner / replacement authority / retention policy / overflow 行为 / reset 恢复 / lookup 与 GC 上界 / 年龄淘汰许可）——架构测试对照源码扫描验证完备性与分类约束（未登记新 store / temporal 无退出 / authority 标 telemetry / active 年龄淘汰 → 失败）。`treasuryLifecycleGcCoordinator`：beginTick 固定条目预算 GC（ticket expire + terminal retire ≤8/批），query 路径零写。GRA（generation retirement proof）按 recent exact detail 收敛：满载驱逐已被 retirement summary 接管的 root 代 proof（summary 持有 chain 完整 exact terminal facts；probe 未装配/summary 不在位/store unhealthy 不驱逐）——600 chain 后 GRA 不再永久停机。
+
+### 24.3 replacement 验证的安全驱逐（工作流 C）
+`lookupTreasuryRetiredRangeStructured` 四态（present/absent/store_unhealthy/malformed——容器级与条目级损坏分层）：destructive eviction 专用；boolean 折叠 API（unhealthy→retired=true）保留给最外层 replay blocker，架构守护禁入 GC 决策。summary 满载驱逐 = 有界 eligible 扫描（全部现代条目按 root 序号升序——队首不可清理不永久停机）×（certificate 路径：verifyTreasurySummaryCertificateReplacement 正面全维度验证（root ID/lineageId/terminalState/finalGeneration/finalAttemptId/rootSequence）｜range 路径：anti-reuse-only 且 exact 依赖关闭（cleanup journal/GRA 引用全空））；certificate 满载驱逐 = range 结构化在位 + 无 matching summary + probe fail closed；legacy pin 永不驱逐。chain 终结压缩时 ti root 序号吸收进 retired range（certificate 驱逐的 replacement 前提；被逐后 chain 查询退化为 retired——wraparound 后旧 ID 恒非 absent）。
+
+### 24.4 checked completion handoff 与单一容量公式（工作流 D / E 8.1）
+consume/release 结构化返回并由调用方检查：ack 在 consume 失败（store unhealthy/read-back 不一致）时保留 journal、不返回 completed（beginTick recovery 继续 handoff）；facade 全部 15 处 release 点消费结构化结果——callback 前拒绝路径的释放失败如实并入 detail（不谎报"预留已释放"），成功路径失败进 reservationReleaseFailures 诊断。容量公式单一实现：acquire 收 occupancyAfterAcquire（acquire 后 effective = live + independent reservation + unresolved handoff slot − matching pair duplication）——消除 VIII 的 live+2×reserved−pairs 双重计数（第 65 个 reservation 提前失败的缺陷）；live=0 时第 128 个独立 reservation 成功、第 129 个才失败。
+
+### 24.5 完整 orphan owner resolver（工作流 E 8.3）
+`treasuryLifecycleOwnerResolver`：orphan/GC 判定的唯一 owner 真相源——active owner（issued ticket/receipt admission reservation/headroom reservation/intent/quarantine/journal/resolving resolution/fault/marker/活跃 lineage/matching completion）与 terminal 权威（final tombstone/settled receipt/historical/GRA/summary/terminal lineage）分层；任一相关 store unhealthy 或 probe 未装配 → owned（不把读不到解释成 orphan）。reservation TTL sweep（排除自身维度）与 retired range 孤儿 gap coalesce 不再手工拼 store 列表；terminal-authority 不阻止 reservation 释放（cleanup 已终结的应释放）但阻断 sequence abandon。
+
+### 24.6 resolver insufficient fail closed（工作流 F）
+resolver 新增 insufficient 状态：两个 exact declaration 只有 relation=match 才共同证明 exact（outcome 一致但维度不足不再聚合为 exact）；expected 提供且存在 exact 声明时每个 source 都必须 match（expected 自身缺关键维度同样阻断；无 exact 声明时 protocol/retired 裁决不受影响）。cleanup completion resolver 同步（维度不足不确证 completed）。全部消费方显式 fail closed：replay gate（proof_insufficient——已出现/不可执行 blocker、零 callback、不 release Authority）、reconciliation capability（零 mutation）、rearm preflight（零 capability）、child occupancy（按占用阻断）、settlement verifier、opposite proof matrix 与 opposite-absence（retained）。
+
+### 24.7 Defense：global rampart footprints（工作流 10）
+房间级 coordinate → physical owner slot 的 ownership snapshot 进入 production：planner 构建候选坐标全集 + collectPhysicalCandidateFootprints（同 tile 字典序决胜）；claim 触发条件保持"自己 target 的未占用候选"（VIII 收敛不回归），标记作用域升级 markCandidateOccupiedGlobally（同坐标在全部 target 候选数组一并 occupied——唯一性按坐标不按 candidate ID）；stationary 保留/hold 回填/engage 二次标记统一经共享 helper；fallback 消费同一 physicalRampartOwnership 入口（坐标键 candidateKeyOf 统一、retained hold 第三路经 footprint 构建）。
