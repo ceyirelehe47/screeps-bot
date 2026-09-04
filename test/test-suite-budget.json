@@ -1,25 +1,26 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "10ff781996f818b8c7ec76ae42dca72075d36431",
-    "suites": 274,
-    "tests": 2255,
-    "passed": 2255,
+    "commit": "e28df92e76985a6f12a505af5da9525796f24311",
+    "suites": 277,
+    "tests": 2316,
+    "passed": 2316,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 274,
-    "tests": 2255,
-    "passed": 2255,
+    "commit": "e28df92e76985a6f12a505af5da9525796f24311",
+    "suites": 277,
+    "tests": 2316,
+    "passed": 2316,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 126,
+    "highRiskFiles": 129,
     "defaultFiles": 127
   },
   "files": {
@@ -1391,6 +1392,21 @@
     "src/runtime/defensePreallocationRampartOwnership.test.ts": {
       "baseline": 0,
       "budget": 8,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound22RemediationIX.test.ts": {
+      "baseline": 0,
+      "budget": 40,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryMemoryLifecycleContract.test.ts": {
+      "baseline": 0,
+      "budget": 12,
+      "tier": "high-risk"
+    },
+    "src/runtime/defenseGlobalRampartFootprints.test.ts": {
+      "baseline": 0,
+      "budget": 9,
       "tier": "high-risk"
     }
   }
