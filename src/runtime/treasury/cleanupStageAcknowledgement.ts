@@ -41,11 +41,14 @@ import {
 } from "@/runtime/treasury/resolutionCleanupJournal";
 import {
   recordTreasuryCleanupCompletion,
-  lookupTreasuryCleanupCompletion,
+  TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
 } from "@/runtime/treasury/cleanupCompletionAuthority";
-import { resolveTreasuryDurableSettlementAuthority } from "@/runtime/treasury/historicalSettlementAuthority";
+import { resolveTreasuryCleanupCompletionAuthority } from "@/runtime/treasury/historicalSettlementAuthority";
 import { reclaimTreasuryCleanupCompletionHeadroom } from "@/runtime/treasury/cleanupCompletionReplacement";
-import { consumeTreasuryCompletionHeadroomReservation } from "@/runtime/treasury/completionHeadroomReservation";
+import {
+  admitTreasuryCompletionPublicationReservation,
+  consumeTreasuryCompletionHandoff,
+} from "@/runtime/treasury/cleanupCompletionHandoff";
 import {
   dischargeTreasuryMarkerForAttempt,
   treasuryMarkerDischargeCompletesAttemptPhase,
@@ -483,30 +486,25 @@ export function completeTreasuryCleanupAcknowledged(input: {
     // 【Remediation IV 十.3】journal absent 不再自动等于完成：matching
     // completion authority 才能证明合法完成；absent → no_cleanup_authority
     // （journal 从未创建 / 被错误删除 / Memory 损坏丢失——fail closed）。
-    // 【Remediation VI 4.2/4.3】completion 也 absent 时，持久完成权威是
-    // durable historical authority（GRA/tombstone 不再单独证明——它们
-    // 只证明 settlement/retirement，且有各自 retention 生命周期）。
-    const completion = lookupTreasuryCleanupCompletion(transactionId);
-    if (completion.verdict === "match") {
-      return { status: "already_completed", detail: "entry 已删除且 matching completion authority 存在（幂等已完成）" };
+    // 【Remediation VIII 工作流 B3】判定经统一 cleanup completion
+    // authority resolver：只有 live completion（五阶段全部持久确认后
+    // 写入）与 historical completion（显式 supersession——接管
+    // cleanup-complete 事实）能证明 cleanup 完成；chain certificate /
+    // retired range 只证明 settlement outcome（协议推导），不证明 marker
+    // discharge / authority release / outcome finalization / lineage
+    // finalization / journal deletion——不进入本判定（S8：journal
+    // absent + 只有 settlement certificate → 不得 completed）。
+    const completionAuthority = resolveTreasuryCleanupCompletionAuthority({ transactionId });
+    if (completionAuthority.status === "completed") {
+      return { status: "already_completed", detail: `journal entry 已删除，cleanup completion authority（${completionAuthority.source}）持续证明完成（outcome=${completionAuthority.outcome}）` };
     }
-    if (completion.verdict === "absent") {
-      // 【Remediation VII 修复四】durable settlement authority（单一
-      // resolver——historical / chain certificate）：chain 压缩后完成查询
-      // 仍由 certificate 承载，不退化为 no_cleanup_authority。
-      const durableAuthority = resolveTreasuryDurableSettlementAuthority({ transactionId });
-      if (durableAuthority.status === "exact") {
-        return { status: "already_completed", detail: `entry 与 completion 均已回收，durable settlement authority（${durableAuthority.source}）持续证明完成（outcome=${durableAuthority.outcome}）` };
-      }
-      if (durableAuthority.status === "store_unhealthy") {
-        return { status: "store_unhealthy", detail: `durable settlement authority store unhealthy: ${durableAuthority.detail}` };
-      }
-      if (durableAuthority.status === "conflict") {
-        return { status: "store_unhealthy", detail: `durable settlement authority conflict: ${durableAuthority.detail}` };
-      }
-      return { status: "no_cleanup_authority", detail: "journal entry 不存在且无 completion / durable settlement authority（不得视为已完成——fail closed）" };
+    if (completionAuthority.status === "store_unhealthy") {
+      return { status: "store_unhealthy", detail: `cleanup completion authority store unhealthy: ${completionAuthority.detail}` };
     }
-    return { status: "store_unhealthy", detail: `completion authority ${completion.verdict}: ${completion.detail}` };
+    if (completionAuthority.status === "conflict") {
+      return { status: "store_unhealthy", detail: `cleanup completion authority 冲突: ${completionAuthority.detail}` };
+    }
+    return { status: "no_cleanup_authority", detail: "journal entry 不存在且无 cleanup completion authority（settlement certificate / retired range 不证明 cleanup 完成——fail closed）" };
   }
   const entry = readBack0.entry!;
   if (
@@ -530,6 +528,27 @@ export function completeTreasuryCleanupAcknowledged(input: {
   // 写入 read-back → 删除 read-back，统一 supersession authority 入口），
   // 回收后重试一次：normal path 零扫描，仅满载这一罕见状态发生 bounded
   // （≤硬容量）回收。
+  // 【Remediation VIII 工作流 D4】completion publication 必须由 matching
+  // reservation 支撑：在位 reservation 的 identity 绑定必须与 completion
+  // 的 durable identity 一致（R8：不一致 → 拒绝发布，reservation/journal/
+  // 旧 proof 保留）；无 matching reservation（旧 cleanup / 正常 committed
+  // 后释放 / 中断恢复）→ recovery acquire（effective occupancy 口径——R6：
+  // 容量不足时不占用他人槽位）→ 无法取得时保持 journal pending，不写
+  // completion。
+  const publicationAdmission = admitTreasuryCompletionPublicationReservation({
+    transactionId,
+    // 绑定 completion 权威可用的最高 identity 维度（modern=durable
+    // digest；legacy proof 无 durable 维度时绑定 attempt digest——同 ID
+    // 不同 identity 仍在 admission 处拒绝，R8 语义不降级）。
+    durableIdentityDigest: entry.durableIdentityDigest ?? entry.digest,
+    completionHardCapacity: TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
+  });
+  if (publicationAdmission.status === "rejected") {
+    return {
+      status: "cleanup_pending",
+      detail: `completion publication admission 拒绝（${publicationAdmission.reason}）: ${publicationAdmission.detail}（journal 保留、不写 completion——fail closed）`,
+    };
+  }
   let completionWrite = recordTreasuryCleanupCompletion({
     entry,
     lineageDisposition: input.lineageDisposition,
@@ -548,10 +567,12 @@ export function completeTreasuryCleanupAcknowledged(input: {
   if (completionWrite.status === "rejected") {
     return { status: "cleanup_pending", detail: `completion proof 写入失败（journal 保留）: ${completionWrite.detail}` };
   }
-  // 【Remediation VII 修复二】completion authority 已成功接管——该 attempt
-  // 的独占 headroom reservation 就此消费（live entry 占用容量槽，reservation
-  // 必须同时移除，否则双重计数；幂等 absent 无害）。
-  consumeTreasuryCompletionHeadroomReservation(transactionId);
+  // 【Remediation VII 修复二 / VIII D4】completion authority 已成功接管——
+  // matching reservation 就此消费（live entry 占用容量槽，reservation 必须
+  // 同时移除，否则双重计数；checked——store 损坏不静默成功）。中断窗口
+  //（consume 前后 global reset）由 beginTick 的 matching pair recovery /
+  // completion 恢复权威兜底（R9/R10）。
+  consumeTreasuryCompletionHandoff(transactionId);
   if (!completeTreasuryResolutionCleanup(transactionId)) {
     // journal 删除失败：completion 已存在——下 tick 幂等重删（journal pending）。
     return { status: "cleanup_pending", detail: "cleanup entry 删除被拒（completion 已持久——下 tick 幂等删除）" };

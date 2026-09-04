@@ -952,6 +952,14 @@ export function registerTreasuryRetentionLineageLookupForAssembly(
  */
 let generationProofReleaser: ((transactionId: string) => void) | null = null;
 
+// 【Remediation VIII 工作流 D6】owner truth graph 的 tombstone 维度注入
+//（cleanupCompletionHandoff 在本模块加载上游——不能反向 import）。
+import { registerTreasuryReservationTombstoneProbeForAssembly as __registerReservationTombstoneProbe } from "@/runtime/treasury/cleanupCompletionHandoff";
+__registerReservationTombstoneProbe({
+  tombstoneOf: (transactionId) => readTreasuryResolutionTombstone(transactionId) as unknown as { readonly stage?: unknown } | undefined,
+  tombstoneStoreHealthy: () => peekTreasuryResolutionStoreHealth().healthy,
+});
+
 export function registerTreasuryGenerationProofReleaseForAssembly(release: (transactionId: string) => void): void {
   generationProofReleaser = release;
 }

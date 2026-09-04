@@ -295,31 +295,54 @@ export function admitTreasuryCompletionHeadroomReservationForExecution(input: {
 }
 
 /**
+ * 【Remediation VIII 工作流 D】reservation mutation 的结构化结果——
+ * release/consume 不得 silent void：store 损坏 / read-back 失败时调用方
+ * 必须得到结构化失败（R13），不继续 destructive cleanup。
+ */
+export type TreasuryReservationMutationResult =
+  | { readonly status: "released" }
+  | { readonly status: "absent" }
+  | { readonly status: "rejected"; readonly reason: "store_unhealthy"; readonly detail: string };
+
+/**
  * completion publication 消费 reservation（completion 写入成功后的释放
  * 形态——live entry 已占用容量槽，reservation 必须同时移除，否则双重
- * 计数）。幂等（absent 无害）。
+ * 计数）。幂等（absent 无害）；store 损坏 → 结构化 rejected。
  */
-export function consumeTreasuryCompletionHeadroomReservation(transactionId: string): void {
-  releaseEntry(transactionId);
+export function consumeTreasuryCompletionHeadroomReservation(transactionId: string): TreasuryReservationMutationResult {
+  return releaseEntry(transactionId);
 }
 
 /**
- * 显式释放（callback 确定未开始的拒绝/abort/expired 路径）。幂等。
+ * 显式释放（callback 确定未开始的拒绝/abort/expired 路径）。幂等；
  * execution-unknown / quarantine 接管的路径**不得**调用本函数（reservation
  * 保留至 resolution cleanup 完成）。
  */
-export function releaseTreasuryCompletionHeadroomReservation(transactionId: string): void {
-  releaseEntry(transactionId);
+export function releaseTreasuryCompletionHeadroomReservation(transactionId: string): TreasuryReservationMutationResult {
+  return releaseEntry(transactionId);
 }
 
-function releaseEntry(transactionId: string): void {
+function releaseEntry(transactionId: string): TreasuryReservationMutationResult {
   const runtime = loadReservationRuntime();
-  if (runtime.fatal !== null) return;
+  if (runtime.fatal !== null) {
+    return { status: "rejected", reason: "store_unhealthy", detail: `headroom reservation store fail-closed: ${runtime.fatal}（不静默成功）` };
+  }
   const key = RESERVATION_KEY_PREFIX + transactionId;
-  if (runtime.store.entries[key] === undefined) return;
+  if (runtime.store.entries[key] === undefined) return { status: "absent" };
   delete runtime.store.entries[key];
   runtime.store.entryCount -= 1;
   runtime.store.updatedAt = Game.time;
+  // Memory read-back：entry 必须已从持久层消失（heap 与 Memory 同对象，
+  // 此检查拦截 Memory 被外部替换/损坏的窗口）。
+  const rawStore = (Memory.runtime as unknown as RuntimeMemoryWithReservations | undefined)?.treasury?.completionHeadroomReservations;
+  if (rawStore === undefined || rawStore.entries[key] !== undefined || rawStore.entryCount !== runtime.store.entryCount) {
+    return {
+      status: "rejected",
+      reason: "store_unhealthy",
+      detail: "reservation 删除后 Memory read-back 不一致（删除已尽力执行——不当作静默成功，调用方得到结构化失败）",
+    };
+  }
+  return { status: "released" };
 }
 
 /**
