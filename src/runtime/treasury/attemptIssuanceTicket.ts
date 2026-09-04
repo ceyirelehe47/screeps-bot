@@ -1,6 +1,7 @@
 /**
- * 【Round 22 Remediation IX 工作流 A / 4.3 方案 B】issued attempt ticket——
- * production issuance 与 attempt opening 的受控原子入口。
+ * 【Round 22 Remediation IX 工作流 A / 4.3 方案 B → X 工作流 A】issued
+ * attempt ticket——production issuance 与 attempt opening 的受控原子入口，
+ * 以及 execution authority 的强制来源。
  *
  * Remediation VIII 的 mint 是裸操作：watermark 推进后 Treasury 对该 sequence
  * 无任何 lifecycle owner——issuer watermark 与真实 lifecycle 之间形成无界
@@ -13,7 +14,14 @@
  *   watermark 一并回退，不存在"ID 已返回但 Treasury 完全无 lifecycle owner"
  *   的窗口——A8）；
  * - ticket 有明确 TTL（active → expired 是显式协议转换，有正面生命周期
- *   事实——不是删除）与显式 consume（prepare/admission 接管时）；
+ *   事实——不是删除）与显式 consume（durable owner 接管协议——X 工作流 B：
+ *   consume 只经 attemptIssuanceHandoff 的 owner-gated 入口，durable
+ *   lifecycle owner 写入并 read-back 之后才发生；直接手工 consume 不产生
+ *   执行权限——consumed 且无 durable owner 的 ID 在 prepare/execute gate
+ *   一律拒绝）；
+ * - 【X 工作流 A】execution authority：ti2_ ID 的 production Game callback
+ *   可达必须持有 matching、仍可接管（active）、且 contract binding 一致的
+ *   issued ticket——只有 `sequence <= watermark` 绝不构成执行权限；
  * - 未过期 ticket 不得被 orphan GC；过期（expired）/已消费（consumed）的
  *   terminal ticket 由 lifecycle GC coordinator 在验证 issuer watermark ≥
  *   sequence（monotonic anti-reuse frontier 已承载）后按有界预算淘汰；
@@ -25,7 +33,7 @@
  */
 
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
-import { mintTreasuryInitialAttemptId } from "@/runtime/treasury/attemptIssuer";
+import { mintTreasuryInitialAttemptId, peekTreasuryIssuedAttemptWatermark } from "@/runtime/treasury/attemptIssuer";
 
 export const TREASURY_ISSUED_TICKET_VERSION = 1;
 /** active ticket 容量（满载 fail closed——阻断新 issuance，不按年龄删除）。 */
@@ -46,6 +54,12 @@ export interface TreasuryIssuedAttemptTicketEntry {
   /** active（在飞）/ consumed（已被 opening 接管）/ expired（TTL 显式过期）。 */
   state: "active" | "consumed" | "expired";
   readonly stateChangedAtTick: number;
+  /**
+   * 【X 工作流 A / T6】首次 contract execution 时的 binding（AC4 contract
+   * digest——跨 tick 稳定）。绑定后不同 contract（digest 变化）接管同一
+   * ticket 即 exact conflict；同 digest 幂等重放放行至 gate 的后续检查。
+   */
+  readonly boundContractDigest?: string;
 }
 
 export interface TreasuryIssuedAttemptTicketStore {
@@ -104,6 +118,12 @@ function validateTicketEntryShape(entry: unknown, key: string): string | null {
   }
   if (!Number.isSafeInteger(candidate.stateChangedAtTick) || (candidate.stateChangedAtTick as number) < 0) {
     return `issued ticket ${key.slice(0, 8)} stateChangedAtTick 非法`;
+  }
+  if (
+    candidate.boundContractDigest !== undefined &&
+    (typeof candidate.boundContractDigest !== "string" || candidate.boundContractDigest.length === 0 || candidate.boundContractDigest.length > 128)
+  ) {
+    return `issued ticket ${key.slice(0, 8)} boundContractDigest 非法`;
   }
   return null;
 }
@@ -258,11 +278,18 @@ export type TreasuryIssuedTicketMutationResult =
   | { readonly status: "rejected"; readonly reason: "store_unhealthy" | "state_conflict"; readonly detail: string };
 
 /**
- * opening 接管（prepare/admission 成功路径）：active → consumed（幂等：
- * 已 consumed 返回 consumed；expired 不可再接管 → state_conflict）。写入 +
- * Memory read-back；失败 → 结构化 rejected（调用方 fail closed）。
+ * 【X 工作流 B】durable owner 接管协议的 consume 步骤（active → consumed）。
+ *
+ * 本函数是**协议内部原语**：唯一合法调用方是 attemptIssuanceHandoff 的
+ * `completeTreasuryIssuedTicketHandoff`（先验证 durable lifecycle owner
+ * 已写入并经权威判定在位，再 consume——不存在"ticket 已 terminal 且没有
+ * durable owner"的窗口）。手工直接调用本函数不会授予任何执行权限：
+ * consumed 且无 durable owner 的 ID 在 prepare/execute gate 一律拒绝（T9）。
+ *
+ * 幂等：已 consumed 返回 consumed；expired 不可再接管 → state_conflict。
+ * 写入 + Memory read-back；失败 → 结构化 rejected（调用方 fail closed）。
  */
-export function consumeTreasuryIssuedAttemptTicketForOpening(transactionId: string): TreasuryIssuedTicketMutationResult {
+export function consumeTreasuryIssuedAttemptTicketForHandoff(transactionId: string): TreasuryIssuedTicketMutationResult {
   const runtime = loadTicketRuntime();
   if (runtime.fatal !== null) {
     return { status: "rejected", reason: "store_unhealthy", detail: `issued ticket store fail-closed: ${runtime.fatal}` };
@@ -292,6 +319,68 @@ export function consumeTreasuryIssuedAttemptTicketForOpening(transactionId: stri
     return { status: "rejected", reason: "store_unhealthy", detail: "issued ticket consume read-back 失败（已回滚）" };
   }
   return { status: "consumed" };
+}
+
+export type TreasuryIssuedTicketBindResult =
+  | { readonly status: "bound" }
+  | { readonly status: "idempotent" }
+  | { readonly status: "rejected"; readonly reason: "store_unhealthy" | "state_conflict" | "binding_conflict"; readonly detail: string };
+
+/**
+ * 【X 工作流 A / T6】active ticket 与 contract 的首次 binding：把 AC4
+ * contract digest（跨 tick 稳定——actionKind/transactionId/canonical args/
+ * postings/structure descriptors/durable facts/retry facts/source）写入
+ * ticket 并 read-back。
+ *
+ * - 未绑定 → 绑定当前 contract digest（声明性事实——不是执行权限消耗；
+ *   纯前置失败后的同 exact opening 幂等重试不受影响（T7/B8））；
+ * - 已绑定同 digest → 幂等（同 exact opening 重试）；
+ * - 已绑定不同 digest → exact conflict（contract B 不得接管 contract A 的
+ *   ticket——A 的安全事实不被覆盖）；
+ * - 非 active（consumed/expired）→ state_conflict（不修改既有状态）。
+ */
+export function bindTreasuryIssuedAttemptTicketToContract(
+  transactionId: string,
+  contractDigest: string,
+): TreasuryIssuedTicketBindResult {
+  if (typeof contractDigest !== "string" || contractDigest.length === 0 || contractDigest.length > 128) {
+    return { status: "rejected", reason: "binding_conflict", detail: "contract digest 非法（binding 拒绝）" };
+  }
+  const runtime = loadTicketRuntime();
+  if (runtime.fatal !== null) {
+    return { status: "rejected", reason: "store_unhealthy", detail: `issued ticket store fail-closed: ${runtime.fatal}` };
+  }
+  const key = TICKET_KEY_PREFIX + transactionId;
+  const entry = runtime.store.entries[key];
+  if (entry === undefined) return { status: "rejected", reason: "state_conflict", detail: "issued ticket 不存在（无 binding 对象）" };
+  const shapeError = validateTicketEntryShape(entry, key);
+  if (shapeError !== null) {
+    return { status: "rejected", reason: "store_unhealthy", detail: `issued ticket 损坏: ${shapeError}` };
+  }
+  if (entry.state !== "active") {
+    return { status: "rejected", reason: "state_conflict", detail: `issued ticket 状态 ${entry.state} 不可绑定（仅 active ticket 可绑定 contract）` };
+  }
+  if (entry.boundContractDigest !== undefined) {
+    if (entry.boundContractDigest === contractDigest) return { status: "idempotent" };
+    return {
+      status: "rejected",
+      reason: "binding_conflict",
+      detail: `issued ticket 已绑定其它 contract（bound digest ${entry.boundContractDigest.slice(0, 16)} != ${contractDigest.slice(0, 16)}——同 ID 的不同 exact opening 不得接管同一 ticket）`,
+    };
+  }
+  const next: TreasuryIssuedAttemptTicketEntry = cloneTreasuryDurableValue({
+    ...entry,
+    boundContractDigest: contractDigest,
+  });
+  runtime.store.entries[key] = next;
+  runtime.store.updatedAt = Game.time;
+  const rawStore = ticketStoreOfMemory();
+  if (rawStore === undefined || rawStore.entries[key]?.boundContractDigest !== contractDigest || rawStore.entries[key]?.state !== "active") {
+    runtime.store.entries[key] = cloneTreasuryDurableValue(entry);
+    runtime.store.updatedAt = Game.time;
+    return { status: "rejected", reason: "store_unhealthy", detail: "issued ticket binding read-back 失败（已回滚）" };
+  }
+  return { status: "bound" };
 }
 
 /**
@@ -378,4 +467,48 @@ export function clearTreasuryIssuedAttemptTicketDurableForTest(): void {
 /** test-only：只清 heap 缓存（模拟 global reset 后从 Memory 恢复）。 */
 export function resetTreasuryIssuedAttemptTicketHeapCacheForTest(): void {
   heapRuntime = null;
+}
+
+/**
+ * test-only：单条 ticket 的确定性放弃（active → expired → retire 删除）。
+ * 写入与 read-back 走与生产 TTL/GC **完全相同**的路径（expire 转换 +
+ * watermark frontier 验证 + 删除 read-back）；唯一差异是作用域限定单条
+ * （生产的全局 TTL 扫描会同时触碰其它在飞 opening——fixture 构造持久
+ * 权威时不允许误伤）。生产代码零调用（test-only 命名与架构守护共同约束）。
+ */
+export function abandonTreasuryIssuedAttemptTicketForTest(transactionId: string): boolean {
+  const runtime = loadTicketRuntime();
+  if (runtime.fatal !== null) return false;
+  const key = TICKET_KEY_PREFIX + transactionId;
+  const entry = runtime.store.entries[key];
+  if (entry === undefined) return false;
+  const shapeError = validateTicketEntryShape(entry, key);
+  if (shapeError !== null) return false;
+  if (entry.state === "active") {
+    const next: TreasuryIssuedAttemptTicketEntry = cloneTreasuryDurableValue({
+      ...entry,
+      state: "expired",
+      stateChangedAtTick: Game.time,
+    });
+    runtime.store.entries[key] = next;
+    const raw = ticketStoreOfMemory();
+    if (raw === undefined || raw.entries[key]?.state !== "expired") {
+      runtime.store.entries[key] = entry;
+      return false;
+    }
+  }
+  const current = runtime.store.entries[key];
+  if (current === undefined) return true;
+  const watermark = peekTreasuryIssuedAttemptWatermark();
+  if (watermark < 0 || current.sequence > watermark) return false;
+  delete runtime.store.entries[key];
+  runtime.store.entryCount -= 1;
+  const raw = ticketStoreOfMemory();
+  if (raw === undefined || raw.entries[key] !== undefined || raw.entryCount !== runtime.store.entryCount) {
+    runtime.store.entries[key] = current;
+    runtime.store.entryCount += 1;
+    return false;
+  }
+  runtime.store.updatedAt = Game.time;
+  return true;
 }

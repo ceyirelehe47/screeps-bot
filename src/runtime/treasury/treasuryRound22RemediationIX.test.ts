@@ -22,8 +22,8 @@ import {
   resetTreasuryAttemptIssuerHeapCacheForTest,
 } from "@/runtime/treasury/attemptIssuer";
 import {
+  abandonTreasuryIssuedAttemptTicketForTest,
   clearTreasuryIssuedAttemptTicketDurableForTest,
-  consumeTreasuryIssuedAttemptTicketForOpening,
   openTreasuryIssuedInitialAttempt,
   peekTreasuryIssuedAttemptTicketHealth,
   readTreasuryIssuedAttemptTicket,
@@ -158,9 +158,23 @@ function input(service: TreasuryTestService, transactionId: string, delta = -500
 }
 
 function mintedId(correlation: string): string {
-  const minted = mintTreasuryInitialAttemptId(correlation);
-  if (minted.status !== "minted") throw new Error("mint rejected in fixture");
-  return minted.transactionId;
+  // 【X 迁移】fixture 走 production opening 路径（mint 与 ticket 原子——
+  // 裸 mint ID 在 X 协议下不再可执行）。
+  const opened = openTreasuryIssuedInitialAttempt(correlation);
+  if (opened.status !== "opened") throw new Error("open rejected in fixture");
+  return opened.transactionId;
+}
+
+/** 【X 迁移】已发行 ID + ticket 按生产同路径放弃（abandonForTest：active→
+ * expired→retired，单条作用域不触碰其它在飞 opening；用于构造持久权威
+ * fixture 的 root ID——X 协议下 active ticket 本身是 lifecycle owner）。 */
+function abandonedId(correlation: string): string {
+  const opened = openTreasuryIssuedInitialAttempt(correlation);
+  if (opened.status !== "opened") throw new Error("open rejected in fixture");
+  if (!abandonTreasuryIssuedAttemptTicketForTest(opened.transactionId)) {
+    throw new Error("abandon failed in fixture");
+  }
+  return opened.transactionId;
 }
 
 function durableOf(transactionId: string): string {
@@ -421,8 +435,8 @@ describe("Remediation IX A：versioned issuance migration", () => {
     if (opened.status !== "opened") return;
     expect(opened.transactionId.startsWith("ti2_")).toBe(true);
     expect(checkTreasuryServiceIssuedAttemptId(opened.transactionId).status).toBe("issued");
-    // ticket 消费（opening 接管）后 production execute 正常。
-    expect(consumeTreasuryIssuedAttemptTicketForOpening(opened.transactionId).status).toBe("consumed");
+    // 【X 工作流 A】调用者不手工 consume——ticket handoff 由 execute 内部协议
+    // 在 execution-started 持久化后完成（T2 语义）。
     const executed = contractExecuteSealed(service, opened.transactionId);
     expect(executed.result).toBeDefined();
     expect(executed.callbackCount).toBe(1);
@@ -706,18 +720,18 @@ describe("Remediation IX O：reservation 单一容量公式与完整 orphan owne
 
   it("O4：Resolution Tombstone（resolving/final）与 GRA 在位 → owned（final 为 terminal-authority）", () => {
     makeService();
-    const resolving = mintedId("ix-o4a");
+    const resolving = abandonedId("ix-o4a");
     seedTombstone(resolving, "not-executed", "reconciling", durableOf(resolving));
     const resolvingOwnership = resolveTreasuryAttemptLifecycleOwnership(resolving);
     expect(resolvingOwnership.status).toBe("owned");
     expect(resolvingOwnership.kind).toBe("active");
-    const final = mintedId("ix-o4b");
+    const final = abandonedId("ix-o4b");
     seedTombstone(final, "committed", "final", durableOf(final));
     const finalOwnership = resolveTreasuryAttemptLifecycleOwnership(final);
     expect(finalOwnership.status).toBe("owned");
     expect(finalOwnership.kind).toBe("terminal-authority");
     // GRA proof 在位 → terminal-authority（真实 converge 链路写入 root 代 proof）。
-    const graOwner = mintedId("ix-o4c");
+    const graOwner = abandonedId("ix-o4c");
     const graLineageId = seedNonRearmableRoot(graOwner);
     void graLineageId;
     const graOwnership = resolveTreasuryAttemptLifecycleOwnership(graOwner);
@@ -975,7 +989,7 @@ describe("Remediation IX H：checked completion handoff（结构化 mutation 传
     // 见 treasuryWriteArchitecture.test.ts 的对应守护（本测试验证运行时
     // 语义：sweepOrphan 的 consume 失败保留条目）。
     makeService();
-    const transactionId = mintedId("ix-h9");
+    const transactionId = abandonedId("ix-h9");
     expect(acquireTreasuryCompletionHeadroomReservation({
       transactionId,
       occupancyAfterAcquire: 1,
@@ -1177,7 +1191,7 @@ describe("Remediation IX Q：summary/certificate/range 的 replacement 验证驱
   function seedChains(count: number, tag: string): string[] {
     const roots: string[] = [];
     for (let index = 0; index < count; index += 1) {
-      const root = mintedId(tag + "_" + index);
+      const root = abandonedId(tag + "_" + index);
       roots.push(root);
       const lineageId = seedNonRearmableRoot(root);
       expect(compactTreasuryTerminalLineage(lineageId).status).toBe("compacted");
@@ -1316,7 +1330,7 @@ describe("Remediation IX Q：summary/certificate/range 的 replacement 验证驱
         // GRA root proof 等中间层随之有界）。
         Game.time += 60;
         if (index % 10 === 0) service.beginTick();
-        const root = mintedId(tag + "_" + index);
+        const root = abandonedId(tag + "_" + index);
         first300.push(root);
         const lineageId = seedNonRearmableRoot(root);
         expect(compactTreasuryTerminalLineage(lineageId).status).toBe("compacted");

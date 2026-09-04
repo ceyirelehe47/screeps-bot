@@ -32,6 +32,11 @@ import {
   checkTreasuryServiceIssuedAttemptId,
 } from "@/runtime/treasury/attemptIssuer";
 import {
+  abandonTreasuryIssuedAttemptTicketForTest,
+  clearTreasuryIssuedAttemptTicketDurableForTest,
+  openTreasuryIssuedInitialAttempt,
+} from "@/runtime/treasury/attemptIssuanceTicket";
+import {
   lookupTreasuryChainRetirementCertificate,
   peekTreasuryChainCertificateEntryCount,
   clearTreasuryChainCertificateDurableForTest,
@@ -124,6 +129,7 @@ beforeEach(() => {
   clearTreasuryCleanupSupersessionDurableForTest();
   clearTreasuryChainCertificateDurableForTest();
   clearTreasuryAttemptIssuerDurableForTest();
+  clearTreasuryIssuedAttemptTicketDurableForTest();
   clearTreasuryCompletionHeadroomReservationDurableForTest();
   resetTreasuryResolutionStoreForTest();
 });
@@ -266,9 +272,22 @@ function input(service: TreasuryTestService, transactionId: string, delta = -500
 
 /** ti1_ minted initial ID（真实 issuer 通道——非 bypass）。 */
 function mintedId(correlation: string): string {
-  const minted = mintTreasuryInitialAttemptId(correlation);
-  if (minted.status !== "minted") throw new Error("mint rejected in fixture");
-  return minted.transactionId;
+  // 【X 迁移】fixture 走 production opening 路径（mint 与 ticket 原子）。
+  const opened = openTreasuryIssuedInitialAttempt(correlation);
+  if (opened.status !== "opened") throw new Error("open rejected in fixture");
+  return opened.transactionId;
+}
+
+/** 【X 迁移】已发行 ID + ticket 按生产同路径放弃（abandonForTest：active→
+ * expired→retired，单条作用域不触碰其它在飞 opening；用于构造持久权威
+ * fixture 的 root ID——X 协议下 active ticket 本身是 lifecycle owner）。 */
+function abandonedId(correlation: string): string {
+  const opened = openTreasuryIssuedInitialAttempt(correlation);
+  if (opened.status !== "opened") throw new Error("open rejected in fixture");
+  if (!abandonTreasuryIssuedAttemptTicketForTest(opened.transactionId)) {
+    throw new Error("abandon failed in fixture");
+  }
+  return opened.transactionId;
 }
 
 /**
@@ -738,7 +757,7 @@ describe("Remediation VII T9：隔离 profile 的 completion 不参与 automatic
     const service = makeService();
     // 隔离 profile 塞满 live store（128）。
     for (let index = 0; index < TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES; index += 1) {
-      seedIsolatedCompletion(mintedId("t9_fill_" + index), index % 2 === 0 ? "legacy-replay" : "forensic-isolated");
+      seedIsolatedCompletion(abandonedId("t9_fill_" + index), index % 2 === 0 ? "legacy-replay" : "forensic-isolated");
     }
     expect(peekTreasuryCleanupCompletionEntryCount()).toBe(TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES);
     // 新 writer：prepare 拒绝（headroom exhausted——隔离项不可回收）。
@@ -759,7 +778,7 @@ describe("Remediation VII T10：独占 reservation 的容量竞争", () => {
     const service = makeService();
     // live completion 填到 MAX-1。
     for (let index = 0; index < TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES - 1; index += 1) {
-      seedCompletionEntry(mintedId("t10_fill_" + index));
+      seedCompletionEntry(abandonedId("t10_fill_" + index));
     }
     expect(peekTreasuryCleanupCompletionEntryCount()).toBe(TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES - 1);
     // prepare A → 独占 reservation（live 127 + reserved 1 = 128）。
@@ -911,7 +930,7 @@ describe("Remediation VII T14：prepare 后容量变化窗口", () => {
     // 其它状态变化：live completion 被填满（128/128——普通 headroom 检查会
     // 认为不足，但 A 的独占 reservation 已经把一个槽锁给 A）。
     for (let index = 0; index < TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES; index += 1) {
-      seedCompletionEntry(mintedId("t14_fill_" + index));
+      seedCompletionEntry(abandonedId("t14_fill_" + index));
     }
     expect(peekTreasuryCleanupCompletionEntryCount()).toBe(TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES);
     const callback = jest.fn(() => ({ ok: true }) as never);
@@ -1155,7 +1174,7 @@ describe("Remediation VII T18：600 initial attempts 跨越旧 384 边界持续�
     const TOTAL = 600;
     const allIds: string[] = [];
     for (let index = 0; index < TOTAL; index += 1) {
-      const transactionId = mintedId("t18_" + index);
+      const transactionId = abandonedId("t18_" + index);
       allIds.push(transactionId);
       seedHistoricalRecord({ transactionId, resolution: index % 3 === 0 ? "committed" : "not-executed" });
       // 满载（384）时正式压缩通道退休旧的（range 吸收）——不人工清库。

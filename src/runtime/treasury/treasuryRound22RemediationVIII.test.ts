@@ -38,6 +38,11 @@ import {
   resetTreasuryAttemptIssuerHeapCacheForTest,
 } from "@/runtime/treasury/attemptIssuer";
 import {
+  abandonTreasuryIssuedAttemptTicketForTest,
+  clearTreasuryIssuedAttemptTicketDurableForTest,
+  openTreasuryIssuedInitialAttempt,
+} from "@/runtime/treasury/attemptIssuanceTicket";
+import {
   resolveTreasuryDurableSettlementAuthority,
   resolveTreasuryCleanupCompletionAuthority,
 } from "@/runtime/treasury/historicalSettlementAuthority";
@@ -126,6 +131,7 @@ beforeEach(() => {
   clearTreasuryCleanupSupersessionDurableForTest();
   clearTreasuryChainCertificateDurableForTest();
   clearTreasuryAttemptIssuerDurableForTest();
+  clearTreasuryIssuedAttemptTicketDurableForTest();
   clearTreasuryCompletionHeadroomReservationDurableForTest();
   resetTreasuryResolutionStoreForTest();
 });
@@ -159,9 +165,22 @@ function input(service: TreasuryTestService, transactionId: string, delta = -500
 }
 
 function mintedId(correlation: string): string {
-  const minted = mintTreasuryInitialAttemptId(correlation);
-  if (minted.status !== "minted") throw new Error("mint rejected in fixture");
-  return minted.transactionId;
+  // 【X 迁移】fixture 走 production opening 路径（mint 与 ticket 原子）。
+  const opened = openTreasuryIssuedInitialAttempt(correlation);
+  if (opened.status !== "opened") throw new Error("open rejected in fixture");
+  return opened.transactionId;
+}
+
+/** 【X 迁移】已发行 ID + ticket 按生产同路径放弃（abandonForTest：active→
+ * expired→retired，单条作用域不触碰其它在飞 opening；用于构造持久权威
+ * fixture 的 root ID——X 协议下 active ticket 本身是 lifecycle owner）。 */
+function abandonedId(correlation: string): string {
+  const opened = openTreasuryIssuedInitialAttempt(correlation);
+  if (opened.status !== "opened") throw new Error("open rejected in fixture");
+  if (!abandonTreasuryIssuedAttemptTicketForTest(opened.transactionId)) {
+    throw new Error("abandon failed in fixture");
+  }
+  return opened.transactionId;
 }
 
 function durableOf(transactionId: string): string {
@@ -833,7 +852,11 @@ describe("Remediation VIII R：reservation 生命周期闭合", () => {
   it("R1：连续 200 个 invalid epoch prepare → reservation count 始终为 0", () => {
     const service = makeService();
     for (let index = 0; index < 200; index += 1) {
+      // 【X 迁移】invalid epoch 拒绝发生在 ticket gate 之后——先 open 再按
+      // 生产同路径放弃本条 ticket（active 满 64 会阻断后续 open；放弃后无
+      // ticket 的 ID 在 gate 即拒，两条拒绝路径都不创建 reservation）。
       const transactionId = mintedId("r1_" + index);
+      if (!abandonTreasuryIssuedAttemptTicketForTest(transactionId)) throw new Error("abandon failed in fixture");
       const stale = { scope: "stale-scope" as never, epochSeq: 999_999, observedAtTick: 1 };
       const prepared = service.prepareTransaction({ ...input(service, transactionId), decision: stale });
       expect(prepared.status).toBe("rejected");
@@ -1070,7 +1093,7 @@ describe("Remediation VIII R：reservation 生命周期闭合", () => {
 
   it("R12：真正 orphan（无 handle/Intent/Quarantine/journal/Resolution/Fault/Marker/lineage owner）→ TTL 后可安全释放", () => {
     makeService();
-    const transactionId = mintedId("r12");
+    const transactionId = abandonedId("r12");
     expect(acquireTreasuryCompletionHeadroomReservation({
       transactionId, occupancyAfterAcquire: 1, completionHardCapacity: TREASURY_CLEANUP_COMPLETION_MAX_ENTRIES,
     }).status).toBe("acquired");
@@ -1111,12 +1134,12 @@ describe("Remediation VIII L：长期有界（>128 chain / >64 乱序区间 / >3
     // 覆盖；L1 聚焦 >128 条终态链的长期有界性（E1 核心）。
     // 160 条 non_rearmable 终态链（正式 converge 状态迁移 → compact）。
     for (let index = 0; index < 160; index += 1) {
-      const root = mintedId("l1_root_" + index);
+      const root = abandonedId("l1_root_" + index);
       const lineageId = seedNonRearmableRoot(root);
       expect(compactTreasuryTerminalLineage(lineageId).status).toBe("compacted");
     }
     // 第 161 条新 chain 仍能创建（summary 128 满载后不永久停机）。
-    const freshRoot = mintedId("l1_fresh");
+    const freshRoot = abandonedId("l1_fresh");
     const freshLineage = seedNonRearmableRoot(freshRoot);
     expect(compactTreasuryTerminalLineage(freshLineage).status).toBe("compacted");
     // certificate 有界（≤256——满载驱逐进 retired range）。
@@ -1127,7 +1150,7 @@ describe("Remediation VIII L：长期有界（>128 chain / >64 乱序区间 / >3
     const service = makeService();
     const roots: string[] = [];
     for (let index = 0; index < 140; index += 1) {
-      const root = mintedId("l2_root_" + index);
+      const root = abandonedId("l2_root_" + index);
       roots.push(root);
       const lineageId = seedNonRearmableRoot(root);
       expect(compactTreasuryTerminalLineage(lineageId).status).toBe("compacted");
@@ -1149,7 +1172,7 @@ describe("Remediation VIII L：长期有界（>128 chain / >64 乱序区间 / >3
     // 奇数 seq 先退休（mint 1..131——偶数 mint 后丢弃为孤儿）。
     const oddRoots: string[] = [];
     for (let index = 1; index <= 131; index += 1) {
-      const transactionId = mintedId("l3_" + index);
+      const transactionId = abandonedId("l3_" + index);
       if (index % 2 === 1) {
         oddRoots.push(transactionId);
         const lineageId = seedNonRearmableRoot(transactionId);
@@ -1163,12 +1186,12 @@ describe("Remediation VIII L：长期有界（>128 chain / >64 乱序区间 / >3
       expect(checkTreasuryAttemptRetiredRange(root).retired || resolveTreasuryDurableSettlementAuthority({ transactionId: root }).status !== "absent").toBe(true);
     }
     // 继续新 chain 不停机。
-    const freshRoot = mintedId("l3_fresh");
+    const freshRoot = abandonedId("l3_fresh");
     const freshLineage = seedNonRearmableRoot(freshRoot);
     expect(compactTreasuryTerminalLineage(freshLineage).status).toBe("compacted");
     // 在飞 hole 不误退休：mint 一个新 seq 并开 quarantine（在飞），其后
     // coalesce 不得把它吸收进 range。
-    const inFlight = mintedId("l3_inflight");
+    const inFlight = abandonedId("l3_inflight");
     seedQuarantineEntry(inFlight);
     const before = checkTreasuryAttemptRetiredRange(inFlight).retired;
     expect(before).toBe(false);

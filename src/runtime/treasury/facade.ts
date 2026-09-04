@@ -208,6 +208,12 @@ import {
 } from "@/runtime/treasury/cleanupCompletionHandoff";
 import { runTreasuryLifecycleGcCoordinator } from "@/runtime/treasury/treasuryLifecycleGcCoordinator";
 import {
+  completeTreasuryIssuedTicketHandoff,
+  gateTreasuryIssuedAttemptTicketForContractExecution,
+  gateTreasuryIssuedAttemptTicketForPrepare,
+  isTreasuryCurrentIssuedInitialAttemptId,
+} from "@/runtime/treasury/attemptIssuanceHandoff";
+import {
   writeTreasuryResolutionTombstone,
   ensureTreasuryResolutionSlotAvailable,
   markTreasuryPendingReleaseCompleted,
@@ -2528,6 +2534,23 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           };
         }
       }
+      // ──【Round 22 Remediation X 工作流 A】issued ticket 强制接管门禁
+      //    （prepare 层——contract 与低层 kernel 通道共用的唯一必经点）。
+      //    位于既有 replay blocker（settled / quarantine / tombstone /
+      //    lineage / summary / durable settlement）**之后**：持久结算权威的
+      //    既有拒绝语义（already_settled / rearm_required / retired_attempt）
+      //    保持优先；到达此处的 ti2_ ID 无任何结算 blocker——execution
+      //    authority 必须来自 matching、active 的 issued ticket。无 ticket /
+      //    expired / consumed-without-owner / durable owner 已在位（中断恢复
+      //    ——幂等完成 handoff 后拒绝重复执行）一律在 Game callback 之前
+      //    拒绝。接管（consume）由 executePreparedAction 在 execution-started
+      //    持久化后内部完成——调用者不得也不需要手工 consume。tr1_ / 非
+      //    ti2_ 形态不经此门禁。                                        ──
+      const ticketPrepareGate = gateTreasuryIssuedAttemptTicketForPrepare(input.transactionId);
+      if (ticketPrepareGate !== null) {
+        metrics.transactionsRejectedInvalid += 1;
+        return { status: "rejected", reason: ticketPrepareGate.reason, detail: ticketPrepareGate.detail };
+      }
       // 全局 quarantine write blocker（第七轮）：存在任何 unresolved quarantine
       // 或 store 损坏时，一切新 transaction 在 Game callback 之前拒绝——
       // write-fault marker 不是唯一锁来源（marker 已解决但仍有其它 quarantine
@@ -3077,6 +3100,28 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // 理论不可达（handle 刚签发）：按协议违规拒绝，不执行 Game API。
         return { status: "prepare_rejected", reason: "invalid_handle", detail: "签发后 handle 记录缺失（内部不一致）" };
       }
+      // ──【Round 22 Remediation X 工作流 A / T6】contract 路径的 ticket
+      //    binding gate：prepare 层 gate（prepareTransaction 内）已确认
+      //    ticket 存在且 active、无 durable owner 在位；此处把 ticket 绑定到
+      //    本 contract 的 AC4 digest（跨 tick 稳定）——已绑定不同 digest 的
+      //    ticket 即 exact conflict（contract B 不得接管 contract A 的
+      //    opening）。低层通道（无 contract digest）只有 prepare 层 gate。
+      //    先于全部 redemption/intent/callback。                           ──
+      if (execution?.intentContract?.contractDigest !== undefined) {
+        const bindingGate = gateTreasuryIssuedAttemptTicketForContractExecution(
+          record.canonical.transactionId,
+          execution.intentContract.contractDigest,
+        );
+        if (bindingGate !== null) {
+          record.state = "aborted";
+          preparedById.delete(record.canonical.transactionId);
+          projection.tentativeRelease(record.tentativeKey);
+          releaseTreasuryReceiptReservation(record.canonical.transactionId);
+          finalizeHandleRecord(record, "aborted");
+          metrics.transactionsRejectedInvalid += 1;
+          return { status: "prepare_rejected", reason: bindingGate.reason, detail: bindingGate.detail };
+        }
+      }
       let redeemedCohort: TreasuryAuthorizationCohortFacts | undefined;
       // ── 批量原子 redemption（第十轮 3.12.4）：tentative 已接管（prepare
       //    成功）、durable intent 写入与 Game callback 之前——全部 legs 一次
@@ -3569,6 +3614,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         };
       }
       record.state = "executing";
+      // ──【Round 22 Remediation X 工作流 B】issued ticket → durable owner 的
+      //    接管完成点：execution-started 已持久化（executing intent 即 durable
+      //    lifecycle owner，read-back 已验证），此后 ticket 永不回到 active
+      //    （B6）。consume 是幂等尽力操作——失败（store read-back 抖动）不
+      //    阻断已不可逆的执行（callback 必须执行）；残留的 active-ticket-
+      //    with-owner 窗口由 gate 的 durable-owner 分支在下次触碰时幂等补
+      //    完成（T8）。
+      if (isTreasuryCurrentIssuedInitialAttemptId(record.canonical.transactionId)) {
+        void completeTreasuryIssuedTicketHandoff(record.canonical.transactionId);
+      }
       if (tr1LineageId !== undefined && tr1LineageBindingDigest !== undefined) {
         // ──【第十八轮 24.2】armed 推进（executing 已持久化之后、Game callback
         //    之前）：失败 → callback 零调用、intent 保留在 executing（beginTick

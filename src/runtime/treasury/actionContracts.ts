@@ -1186,6 +1186,13 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
       detail: `transactionId ${contract.transactionId.slice(0, 24)} 不在 service-issued 命名空间（须为 ti2_ 受控 opening 签发或 tr1_ capability 派生）——production contract writer 不接受 arbitrary / ts1_ / tt1_ / 旧 ti1_ ID（Game callback 零调用）`,
     };
   }
+  // ──【Round 22 Remediation X 工作流 A】issued ticket 强制接管门禁不在本层
+  //    执行（模块环：本模块位于 receipts/resolutionStore 初始化链上游，顶部
+  //    import handoff（→ resolver → headroom → receipts）形成 TDZ 环）。
+  //    gate 与接管协议统一在 writer kernel 执行路径（facade.executePrepared
+  //    Action：prepare 层 ticket gate + contract binding gate + execution-
+  //    started 持久化后的 handoff consume）——contract 与低层通道的唯一
+  //    必经点，且先于全部 Game callback。                                ──
   // 【第十八轮 24.13】execution request 的 source 不得覆盖已授权 contract
   // source（不同 → callback 前拒绝；相同 → 幂等透传）。
   if (request.source !== undefined && request.source !== contract.source) {

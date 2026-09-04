@@ -111,10 +111,25 @@ export function registerTreasuryLifecycleGenerationProofProbeForAssembly(probe: 
 /**
  * 完整生命周期权威判定（O1-O6）。返回 never-owned 之外的任何 owner 事实；
  * store unhealthy 一律 owned（fail closed）。
+ *
+ * options.excludeIssuedTicket：跳过 issued ticket 维度（X 工作流 B 的
+ * handoff 协议用它判定"durable owner 在位"——ticket 是被接管对象，不是
+ * 它自己的 durable owner；不排除则 active ticket 恒 owned，consume 永远
+ * 无法满足 owner 前置）。
+ *
+ * options.excludeInflightReservations：跳过 receipt admission reservation
+ * （heap）与 completion headroom reservation 两个 prepare→commit 窗口的
+ * 瞬态预留维度（X 工作流 B 的 ticket gate 用——heap 预留不是 durable
+ * Memory 事实，global reset 后消失，不承载"execution-started 已持久化"
+ * 语义；本次 prepare 自己的预留不得被解读为接管已完成的恢复场景）。
  */
 export function resolveTreasuryAttemptLifecycleOwnership(
   transactionId: string,
-  options?: { readonly excludeHeadroomReservation?: boolean },
+  options?: {
+    readonly excludeHeadroomReservation?: boolean;
+    readonly excludeIssuedTicket?: boolean;
+    readonly excludeInflightReservations?: boolean;
+  },
 ): TreasuryLifecycleOwnershipResolution {
   const owned = (kind: TreasuryLifecycleOwnershipKind, owner: string): TreasuryLifecycleOwnershipResolution => ({
     status: "owned",
@@ -130,21 +145,29 @@ export function resolveTreasuryAttemptLifecycleOwnership(
   });
 
   // 1) production issued ticket（active——opening 前的 lifecycle owner）。
+  //    【X 工作流 B】handoff 协议经 excludeIssuedTicket 排除自身维度。
   const ticketHealth = peekTreasuryIssuedAttemptTicketHealth();
   if (!ticketHealth.healthy) return unhealthyOwned(`issued ticket store unhealthy（fail closed）: ${ticketHealth.detail}`);
-  const ticket = readTreasuryIssuedAttemptTicket(transactionId);
-  if (ticket !== undefined && ticket.state === "active") return owned("active", "active issued ticket（受控 opening 在飞）");
+  if (options?.excludeIssuedTicket !== true) {
+    const ticket = readTreasuryIssuedAttemptTicket(transactionId);
+    if (ticket !== undefined && ticket.state === "active") return owned("active", "active issued ticket（受控 opening 在飞）");
+  }
 
   // 2) receipt admission reservation（heap——prepare→commit 窗口）。
-  if (hasTreasuryReceiptAdmissionReservation(transactionId)) return owned("active", "receipt admission reservation（prepare→commit 窗口）");
+  //    【X 工作流 B】ticket gate 的恢复判定排除（瞬态 heap 预留不是 durable
+  //    Memory 事实）；orphan sweep 等生命周期判定保留（在飞即有 owner）。
+  if (options?.excludeInflightReservations !== true) {
+    if (hasTreasuryReceiptAdmissionReservation(transactionId)) return owned("active", "receipt admission reservation（prepare→commit 窗口）");
+  }
 
   // 3) completion headroom reservation（reservation TTL sweep 自身对象的
   //    维度经 excludeHeadroomReservation 排除——否则 sweep 永远自引用
   //    owned；sequence abandon 场景不排除：headroom reservation 在位 =
-  //    该 sequence 有 active owner（O1）。
+  //    该 sequence 有 active owner（O1）；ticket gate 经
+  //    excludeInflightReservations 一并排除——瞬态预留不构成接管完成）。
   const reservationHealth = peekTreasuryCompletionHeadroomReservationHealth();
   if (!reservationHealth.healthy) return unhealthyOwned(`headroom reservation store unhealthy（fail closed）: ${reservationHealth.detail}`);
-  if (options?.excludeHeadroomReservation !== true) {
+  if (options?.excludeHeadroomReservation !== true && options?.excludeInflightReservations !== true) {
     if (peekTreasuryCompletionHeadroomReservation(transactionId) !== undefined) {
       return owned("active", "completion headroom reservation");
     }

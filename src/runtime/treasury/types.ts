@@ -197,6 +197,25 @@ export type TreasuryRejectionReason =
   /** 【第十七轮第十二节】parent 同时存在 not-executed 与 committed proof。 */
   | "proof_conflict"
   | "proof_insufficient"
+  /** 【Round 22 Remediation X 工作流 A】issued ticket store 损坏（版本未知/
+   *  entry 损坏/超容量）：ti2_ execution authority 不可判定，fail closed。 */
+  | "issued_ticket_store_unhealthy"
+  /** 【X 工作流 A / T1】无 matching issued ticket——issuer watermark 只证明
+   *  序号已消耗，不构成 execution authority（裸 mint ID 不可执行）。 */
+  | "issued_ticket_missing"
+  /** 【X 工作流 A / T3】issued ticket 已 TTL 显式过期——永不可执行。 */
+  | "issued_ticket_expired"
+  /** 【X 工作流 A / T9】ticket 已 consumed 且无 durable lifecycle owner——
+   *  手工 consume 不产生执行权限，fail closed。 */
+  | "issued_ticket_consumed_without_owner"
+  /** 【X 工作流 B / T8】durable lifecycle owner 已在位——ticket handoff 幂等
+   *  完成后拒绝重复执行（同一 callback 不得再次执行）。 */
+  | "issued_ticket_handoff_recovered"
+  /** 【X 工作流 A / T6】ticket 已绑定其它 contract（不同 AC4 digest——同 ID
+   *  的不同 exact opening 不得接管同一 ticket）。 */
+  | "issued_ticket_binding_conflict"
+  /** 【X 工作流 A】ticket 状态不可绑定/接管（非 active 等）。 */
+  | "issued_ticket_state_conflict"
   /** 【第十七轮第五节】attempt lineage store 损坏或容量满载（fail closed）。 */
   | "lineage_store_fatal"
   /** 全局 quarantine write blocker（第七轮）：存在任意 unresolved
