@@ -213,6 +213,14 @@ function seedLegacyIssuerStore(highWatermark: number, migratedAtTick?: number): 
   resetTreasuryAttemptIssuerHeapCacheForTest();
 }
 
+/** 【XI/E】经唯一 migration owner 触发 v1→v2 迁移（query 零写——peek 只报告 migration_required）。 */
+function migrateV1RangeViaOwner(expectStatus: "migrated" | "blocked" = "migrated"): { status: string; detail: string | null } {
+  const { runTreasuryRetiredRangeMigrationAtTickBoundary } = require("@/runtime/treasury/treasuryLifecycleGcCoordinator") as typeof import("@/runtime/treasury/treasuryLifecycleGcCoordinator");
+  const report = runTreasuryRetiredRangeMigrationAtTickBoundary();
+  expect(report.status).toBe(expectStatus);
+  return report;
+}
+
 /** 手写 v1 retired range store（迁移源）。 */
 function seedV1RetiredRangeStore(minSequence: number, maxSequence: number, updatedAtTick?: number): void {
   if (!Memory.runtime) Memory.runtime = {} as never;
@@ -242,6 +250,10 @@ describe("Remediation X N：namespace-scoped anti-reuse", () => {
     seedLegacyIssuerStore(100);
     seedV1RetiredRangeStore(1, 100);
     // 触发迁移（health 探测 → load 显式迁移：issuer v1 → 全部归 legacy）。
+    // 【XI/E】query 零写：v1 先报告 migration_required（不迁移）。
+    expect(peekTreasuryRetiredRangeHealth().healthy).toBe(false);
+    // 迁移唯一 owner（tick-boundary migration 阶段）。
+    migrateV1RangeViaOwner();
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
     const ranges = (treasuryBranch().retiredAttemptRanges as { version: number; ranges: { namespace: string }[] }).ranges;
     expect(ranges[0]!.namespace).toBe("legacy");
@@ -257,6 +269,10 @@ describe("Remediation X N：namespace-scoped anti-reuse", () => {
     makeService();
     seedLegacyIssuerStore(100);
     seedV1RetiredRangeStore(1, 100);
+    // 【XI/E】query 零写：v1 先报告 migration_required（不迁移）。
+    expect(peekTreasuryRetiredRangeHealth().healthy).toBe(false);
+    // 迁移唯一 owner（tick-boundary migration 阶段）。
+    migrateV1RangeViaOwner();
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
     // ti2_1 退休（current 域吸收）。
     expect(absorbTreasuryRetiredSequence("current", 1).status).toBe("absorbed");
@@ -271,6 +287,10 @@ describe("Remediation X N：namespace-scoped anti-reuse", () => {
     makeService();
     seedLegacyIssuerStore(100);
     seedV1RetiredRangeStore(7, 7);
+    // 【XI/E】query 零写：v1 先报告 migration_required（不迁移）。
+    expect(peekTreasuryRetiredRangeHealth().healthy).toBe(false);
+    // 迁移唯一 owner（tick-boundary migration 阶段）。
+    migrateV1RangeViaOwner();
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
     // current 域没有 7 的区间 → ti2_7 未退休（active）。
     expect(checkTreasuryAttemptRetiredRange("ti2_7_0123456789abcdef").retired).toBe(false);
@@ -311,6 +331,10 @@ describe("Remediation X N：namespace-scoped anti-reuse", () => {
     makeService();
     seedLegacyIssuerStore(100);
     seedV1RetiredRangeStore(1, 1);
+    // 【XI/E】query 零写：v1 先报告 migration_required（不迁移）。
+    expect(peekTreasuryRetiredRangeHealth().healthy).toBe(false);
+    // 迁移唯一 owner（tick-boundary migration 阶段）。
+    migrateV1RangeViaOwner();
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
     // current 域：吸收 1 与 5（经 current 吸收——watermark 需覆盖；gap 序号
     // 需超出近期发行安全窗口（≥32）才可被 coalesce abandon）。
@@ -344,11 +368,15 @@ describe("Remediation X N：namespace-scoped anti-reuse", () => {
     seedV1RetiredRangeStore(1, 100, 20); // updatedAt 20 >= migratedAtTick 10
     const health = peekTreasuryRetiredRangeHealth();
     expect(health.healthy).toBe(false);
-    expect(health.detail ?? "").toContain("不可证明");
+    expect(health.detail ?? "").toContain("v1");
+    // 【XI/E】迁移唯一 owner 报告 blocked（不可证明——forensic，不静默猜测）；
     // store 未被迁移改写（v1 原样保留——fail closed 不产生半迁移状态）。
+    const migration = migrateV1RangeViaOwner("blocked");
+    expect(migration.detail ?? "").toContain("不可证明");
     expect((treasuryBranch().retiredAttemptRanges as { version: number }).version).toBe(1);
-    // structured 查询不授权任何域的 present/absent 判定。
-    expect(lookupTreasuryRetiredRangeStructured("ti1_1_0123456789abcdef").status).toBe("store_unhealthy");
+    // structured 查询只报告 migration_required（不授权任何域的 present/absent
+    // 判定——不折叠为 absent）。
+    expect(lookupTreasuryRetiredRangeStructured("ti1_1_0123456789abcdef").status).toBe("migration_required");
     expect(absorbTreasuryRetiredSequence("current", 1).status).toBe("rejected");
   });
 
@@ -356,6 +384,10 @@ describe("Remediation X N：namespace-scoped anti-reuse", () => {
     makeService();
     seedLegacyIssuerStore(100, 10);
     seedV1RetiredRangeStore(1, 100, 5); // updatedAt 5 < migratedAtTick 10 → 严格归 legacy
+    // 【XI/E】query 零写：v1 先报告 migration_required（不迁移）。
+    expect(peekTreasuryRetiredRangeHealth().healthy).toBe(false);
+    // 迁移唯一 owner（tick-boundary migration 阶段）。
+    migrateV1RangeViaOwner();
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
     const afterFirst = JSON.stringify(treasuryBranch().retiredAttemptRanges);
     expect(checkTreasuryAttemptRetiredRange("ti1_50_0123456789abcdef").retired).toBe(true);
@@ -390,6 +422,10 @@ describe("Remediation X N：namespace-scoped anti-reuse", () => {
     makeService();
     seedLegacyIssuerStore(100);
     seedV1RetiredRangeStore(1, 100);
+    // 【XI/E】query 零写：v1 先报告 migration_required（不迁移）。
+    expect(peekTreasuryRetiredRangeHealth().healthy).toBe(false);
+    // 迁移唯一 owner（tick-boundary migration 阶段）。
+    migrateV1RangeViaOwner();
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
     // 触发 issuer v1→v2 迁移（v1 下 peekHealth 报 unhealthy——压缩通道
     // issuerHealthy 前置会跳过全部记录）。
@@ -569,6 +605,10 @@ describe("Remediation X H：health-complete owner resolution", () => {
     makeService();
     seedLegacyIssuerStore(100);
     seedV1RetiredRangeStore(1, 1);
+    // 【XI/E】query 零写：v1 先报告 migration_required（不迁移）。
+    expect(peekTreasuryRetiredRangeHealth().healthy).toBe(false);
+    // 迁移唯一 owner（tick-boundary migration 阶段）。
+    migrateV1RangeViaOwner();
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
     for (let sequence = 1; sequence <= 40; sequence += 1) abandonedId("h7_" + sequence);
     expect(absorbTreasuryRetiredSequence("current", 1).status).toBe("absorbed");
@@ -932,6 +972,10 @@ describe("Remediation X 压力：长期运行与中断恢复", () => {
     makeService();
     seedLegacyIssuerStore(100);
     seedV1RetiredRangeStore(1, 100);
+    // 【XI/E】query 零写：v1 先报告 migration_required（不迁移）。
+    expect(peekTreasuryRetiredRangeHealth().healthy).toBe(false);
+    // 迁移唯一 owner（tick-boundary migration 阶段）。
+    migrateV1RangeViaOwner();
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
     expect(absorbTreasuryRetiredSequence("current", 1).status).toBe("absorbed");
     const ranges = (treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string; minSequence: number; maxSequence: number }[] }).ranges;
@@ -1005,7 +1049,12 @@ describe("Remediation X 压力：长期运行与中断恢复", () => {
     // 此处与 issuer/ticket 窗口联动复验）。
     seedV1RetiredRangeStore(200, 300, 0);
     resetTreasuryChainCertificateHeapCacheForTest();
+    // 【XI/E】query 零写：v1 先报告 migration_required（不迁移）。
+    expect(peekTreasuryRetiredRangeHealth().healthy).toBe(false);
+    // 迁移唯一 owner（tick-boundary migration 阶段）。
+    migrateV1RangeViaOwner();
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
+    // reset 后幂等复验：v2 → migration owner 报 idle（不再迁移），query 健康。
     resetTreasuryChainCertificateHeapCacheForTest();
     expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
     expect(checkTreasuryAttemptRetiredRange("ti1_250_0123456789abcdef").retired).toBe(true);

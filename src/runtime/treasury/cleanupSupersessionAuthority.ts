@@ -251,7 +251,14 @@ function validateSupersessionStoreShape(store: unknown): string | null {
   return null;
 }
 
-function loadSupersessionRuntime(): SupersessionRuntime {
+/** 【XI 工作流 E】写路径发布保障（同 completion——heap-only 空视图首次真实写入前落 Memory）。 */
+function ensureSupersessionStorePublished(runtime: SupersessionRuntime): void {
+  if ((Memory.runtime as unknown as RuntimeMemoryWithSupersessions | undefined)?.treasury?.cleanupSupersessions === undefined) {
+    supersessionBranch().cleanupSupersessions = runtime.store;
+  }
+}
+
+function loadSupersessionRuntime(forWrite = false): SupersessionRuntime {
   if (heapRuntime !== null) return heapRuntime;
   const raw = (Memory.runtime as unknown as RuntimeMemoryWithSupersessions | undefined)?.treasury?.cleanupSupersessions;
   if (raw === undefined) {
@@ -261,8 +268,10 @@ function loadSupersessionRuntime(): SupersessionRuntime {
       entryCount: 0,
       updatedAt: Game.time,
     };
-    supersessionBranch().cleanupSupersessions = store;
+    // 【XI 工作流 E / M1】store-absent 的读取路径零写（heap-only 空视图）；
+    // 写路径（forWrite）发布空店权威。
     heapRuntime = { store, fatal: null };
+    if (forWrite) supersessionBranch().cleanupSupersessions = store;
     return heapRuntime;
   }
   const shapeError = validateSupersessionStoreShape(raw);
@@ -786,10 +795,11 @@ export function archiveTreasuryCleanupCompletionViaAuthority(input: {
     }
   }
   // historical authority：健康 + 幂等 + 容量。
-  const supersessionRuntime = loadSupersessionRuntime();
+  const supersessionRuntime = loadSupersessionRuntime(true);
   if (supersessionRuntime.fatal !== null) {
     return { status: "blocked", reason: "supersession_store_unhealthy", detail: `supersession store fail-closed: ${supersessionRuntime.fatal}（completion 保留）` };
   }
+  ensureSupersessionStorePublished(supersessionRuntime);
   const key = SUPERSESSION_KEY_PREFIX + transactionId;
   const candidate: TreasuryHistoricalCompletionRecord = cloneTreasuryDurableValue({
     schemaVersion: TREASURY_CLEANUP_SUPERSESSION_VERSION,
@@ -1096,11 +1106,12 @@ export function retireTreasuryHistoricalRecordForCompression(
   transactionId: string,
   guard: (record: TreasuryHistoricalCompletionRecord) => boolean,
 ): boolean {
-  const runtime = loadSupersessionRuntime();
+  const runtime = loadSupersessionRuntime(true);
   if (runtime.fatal !== null) return false;
   const key = SUPERSESSION_KEY_PREFIX + transactionId;
   const entry = runtime.store.entries[key];
   if (entry === undefined) return false;
+  ensureSupersessionStorePublished(runtime);
   const shapeError = validateHistoricalRecordShape(entry, key);
   if (shapeError !== null) return false;
   // Memory 权威直读复验（heap 与 Memory 同对象——shape 复验抓热缓存后篡改）。

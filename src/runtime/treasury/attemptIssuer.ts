@@ -263,6 +263,17 @@ function authoritativeIdOfSequence(sequence: number): string {
   );
 }
 
+/**
+ * 【XI 工作流 E】纯构建（零 Memory 读写）：sequence → canonical ti2_ ID。
+ * 不经 loadIssuerRuntime——不初始化空 issuer store、不触发 v1 迁移（探测
+ * 路径专用）；发行事实（sequence ≤ watermark）不由此判定。
+ */
+export function buildTreasuryCurrentIssuedIdUnchecked(sequence: number): string | null {
+  if (!Number.isSafeInteger(sequence) || sequence < 1) return null;
+  const transactionId = authoritativeIdOfSequence(sequence);
+  return parseTreasuryIssuedInitialAttemptId(transactionId) === null ? null : transactionId;
+}
+
 export type TreasuryIssuedAttemptBuildResult =
   | { readonly status: "built"; readonly transactionId: string }
   | { readonly status: "rejected"; readonly reason: "store_unhealthy" | "sequence_invalid"; readonly detail: string };

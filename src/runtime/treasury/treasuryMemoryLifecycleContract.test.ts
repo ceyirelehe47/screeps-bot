@@ -300,7 +300,7 @@ describe("Remediation X：ticket handoff / namespace / health-complete 架构守
     const rangeContract = lookupTreasuryStoreLifecycleContract("retiredAttemptRanges");
     expect(rangeContract).toBeDefined();
     expect(rangeContract!.protectedFact).toContain("namespace");
-    expect(rangeContract!.resetRecovery).toContain("v1 裸 sequence store 经 load 显式迁移");
+    expect(rangeContract!.resetRecovery).toContain("v1 裸 sequence store 经 tick-boundary migration owner 显式迁移");
     const certificateContract = lookupTreasuryStoreLifecycleContract("chainRetirementCertificates");
     expect(certificateContract).toBeDefined();
   });
@@ -315,10 +315,12 @@ describe("Remediation X：ticket handoff / namespace / health-complete 架构守
 
   it("X7：Intent/Quarantine 的 fatal-折叠 read API 不得在未检查健康时作为 absence 证明（resolver 内 ensure 前置）", () => {
     const resolverSource = readSource("runtime/treasury/treasuryLifecycleOwnerResolver.ts");
-    expect(resolverSource).toContain("ensureTreasuryIntentStoreValidated()");
+    // 【XI/E】Intent 维度零写校验（peek——store 不存在 = 健康空不创建，
+    // 在位 → load 全量校验）；Quarantine 维持 ensure（absent 早退零写）。
+    expect(resolverSource).toContain("peekTreasuryIntentStoreValidation()");
     expect(resolverSource).toContain("ensureTreasuryQuarantineStoreValidated()");
-    // ensure 前置于对应 read。
-    const intentEnsure = resolverSource.indexOf("ensureTreasuryIntentStoreValidated()");
+    // 校验前置于对应 read。
+    const intentEnsure = resolverSource.indexOf("peekTreasuryIntentStoreValidation()");
     const intentRead = resolverSource.indexOf("readTreasuryIntentEntry(transactionId)");
     expect(intentRead).toBeGreaterThan(intentEnsure);
     const quarantineEnsure = resolverSource.indexOf("ensureTreasuryQuarantineStoreValidated()");

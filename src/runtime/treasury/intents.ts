@@ -797,6 +797,22 @@ export function ensureTreasuryIntentStoreValidated(): string | null {
   return runtime.fatal;
 }
 
+/**
+ * 【XI 工作流 E / M1】零写全量校验（query 路径专用——lifecycle owner
+ * resolver 的 Intent 维度）：store 不存在 = 健康空（不创建空 store）；在位
+ * → 全量形状校验（entry 级 unrelated 损坏同样检出）；v1..v5 待迁移版本
+ * → fail closed（迁移只在写路径 load 发生，query 不迁移）。
+ */
+export function peekTreasuryIntentStoreValidation(): string | null {
+  // store 不存在 = 健康空（零写——不创建空 store，M1/M2）；在位 → 复用
+  // load 的全量校验（含无损版本升级——升级只发生在 store 已在位时，与
+  // "query 不初始化/不创造 store"的零写边界一致）。
+  const raw = (Memory.runtime as unknown as { treasury?: { intents?: unknown } } | undefined)?.treasury?.intents;
+  if (raw === undefined) return null;
+  const runtime = loadIntentStoreRuntime();
+  return runtime.fatal;
+}
+
 /** 冻结深拷贝的单条 entry（快照封闭——外部修改不影响内部权威）。 */
 function freezeIntentCopy(entry: TreasuryIntentEntry): Readonly<TreasuryIntentEntry> {
   return Object.freeze({

@@ -244,7 +244,15 @@ function validateCompletionStoreShape(store: unknown): string | null {
   return null;
 }
 
-function loadCompletionRuntime(): CompletionRuntime {
+/** 【XI 工作流 E】写路径发布保障：heap-only 空视图（读取路径零写产物）在
+ * 首次真实写入前必须落到 Memory——否则写入只改 heap 不持久。 */
+function ensureCompletionStorePublished(runtime: CompletionRuntime): void {
+  if ((Memory.runtime as unknown as RuntimeMemoryWithCompletions | undefined)?.treasury?.cleanupCompletions === undefined) {
+    completionBranch().cleanupCompletions = runtime.store;
+  }
+}
+
+function loadCompletionRuntime(forWrite = false): CompletionRuntime {
   if (heapRuntime !== null) return heapRuntime;
   const raw = (Memory.runtime as unknown as RuntimeMemoryWithCompletions | undefined)?.treasury?.cleanupCompletions;
   if (raw === undefined) {
@@ -254,8 +262,10 @@ function loadCompletionRuntime(): CompletionRuntime {
       entryCount: 0,
       updatedAt: Game.time,
     };
-    completionBranch().cleanupCompletions = store;
+    // 【XI 工作流 E / M1】store-absent 的读取路径零写：heap-only 空视图
+    //（不初始化 Memory）；写路径（forWrite）发布空店权威。
     heapRuntime = { store, fatal: null };
+    if (forWrite) completionBranch().cleanupCompletions = store;
     return heapRuntime;
   }
   const shapeError = validateCompletionStoreShape(raw);
@@ -314,10 +324,11 @@ export function recordTreasuryCleanupCompletion(input: {
   readonly lineageDisposition: "final" | "not_applicable";
   readonly globalWriteAdmissionStillLocked: boolean;
 }): TreasuryCleanupCompletionRecordResult {
-  const runtime = loadCompletionRuntime();
+  const runtime = loadCompletionRuntime(true);
   if (runtime.fatal !== null) {
     return { status: "rejected", reason: "store_unhealthy", detail: `completion store fail-closed: ${runtime.fatal}` };
   }
+  ensureCompletionStorePublished(runtime);
   const entry = input.entry;
   if (
     !entry.settlementProofDurable ||
@@ -528,10 +539,11 @@ export function listTreasuryCleanupCompletionTransactionIds(): readonly string[]
  * 释放后 store 容量回到可用区间（满载 fail closed 不再永久卡死长链）。
  */
 export function releaseTreasuryCleanupCompletionOfAttempt(transactionId: string): boolean {
-  const runtime = loadCompletionRuntime();
+  const runtime = loadCompletionRuntime(true);
   if (runtime.fatal !== null) return false;
   const key = COMPLETION_KEY_PREFIX + transactionId;
   if (runtime.store.entries[key] === undefined) return false;
+  ensureCompletionStorePublished(runtime);
   delete runtime.store.entries[key];
   runtime.store.entryCount -= 1;
   runtime.store.updatedAt = Game.time;

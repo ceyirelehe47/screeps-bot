@@ -16,13 +16,25 @@ import {
   openTreasuryIssuedInitialAttempt,
   abandonTreasuryIssuedAttemptTicketForTest,
 } from "@/runtime/treasury/attemptIssuanceTicket";
-import { clearTreasuryAttemptIssuerDurableForTest } from "@/runtime/treasury/attemptIssuer";
+import {
+  clearTreasuryAttemptIssuerDurableForTest,
+  resetTreasuryAttemptIssuerHeapCacheForTest,
+} from "@/runtime/treasury/attemptIssuer";
 import {
   absorbTreasuryRetiredSequence,
+  checkTreasuryAttemptRetiredRange,
   clearTreasuryChainCertificateDurableForTest,
+  lookupTreasuryRetiredRangeStructured,
+  peekTreasuryRetiredRangeHealth,
   recordTreasuryChainRetirementCertificate,
   resetTreasuryChainCertificateHeapCacheForTest,
+  TREASURY_RETIRED_RANGE_CURRENT_QUOTA,
+  TREASURY_RETIRED_RANGE_LEGACY_QUOTA,
 } from "@/runtime/treasury/chainRetirementCertificate";
+import {
+  runTreasuryRetiredRangeMigrationAtTickBoundary,
+  runTreasuryLifecycleGcCoordinator,
+} from "@/runtime/treasury/treasuryLifecycleGcCoordinator";
 import {
   convergeTreasuryLineageRetirementFromFacts,
   createTreasuryAttemptLineageRecord,
@@ -42,6 +54,7 @@ import {
   TREASURY_GENERATION_RETIREMENT_MAX_ENTRIES,
 } from "@/runtime/treasury/generationRetirementAuthority";
 import { resetTreasuryResolutionStoreForTest } from "@/runtime/treasury/resolutionStore";
+import { resolveTreasuryAttemptLifecycleOwnership } from "@/runtime/treasury/treasuryLifecycleOwnerResolver";
 import { clearTreasuryPersistenceForTest } from "@/runtime/treasury/receipts";
 import {
   clearTreasuryCleanupCompletionDurableForTest,
@@ -488,5 +501,232 @@ describe("Remediation XI G：统一 GRA release authority", () => {
     resetTreasuryGenerationRetirementRuntimeForTest();
     const repeat = releaseTreasuryGenerationRetirementProofOfAttempt(chain.root, "orphan_advance");
     expect(repeat.status).toBe("absent");
+  });
+});
+
+// ══ M 组：Query-pure migration ════════════════════════════════════════════
+
+/** 手写 v1 retired range store（迁移源）。 */
+function seedV1RangeStore(minSequence: number, maxSequence: number, updatedAtTick?: number): void {
+  treasuryBranch().retiredAttemptRanges = {
+    version: 1,
+    ranges: [{ minSequence, maxSequence, mergedAtTick: updatedAtTick ?? Game.time }],
+    entryCount: 1,
+    updatedAt: updatedAtTick ?? Game.time,
+  };
+  resetTreasuryChainCertificateHeapCacheForTest();
+}
+
+/** 手写 v2 issuer store（migration 证明输入：legacyWatermark null = 全新安装）。 */
+function seedIssuerStoreV2(highWatermark: number, legacyWatermark: number | null, migratedAtTick: number): void {
+  treasuryBranch().attemptIssuer = legacyWatermark === null
+    ? { version: 2, highWatermark, migratedAtTick, updatedAt: Game.time }
+    : {
+        version: 2,
+        highWatermark,
+        legacy: { version: 1, highWatermark: legacyWatermark, retiredAtTick: migratedAtTick - 1 },
+        migratedAtTick,
+        updatedAt: Game.time,
+      };
+  resetTreasuryAttemptIssuerHeapCacheForTest();
+}
+
+describe("Remediation XI M：query-pure migration", () => {
+  it("M1：v1 range 的所有 query 零写（前后 Memory 序列化完全一致）", () => {
+    makeService();
+    seedIssuerStoreV2(3, 100, 5);
+    seedV1RangeStore(1, 100, 0);
+    const id = abandonedId("m1");
+    // warm-up（heap 建立后快照——排除首次 load 差异）。
+    void resolveTreasuryAttemptLifecycleOwnership(id);
+    void lookupTreasuryRetiredRangeStructured(id);
+    const before = JSON.stringify((Memory.runtime as unknown as { treasury?: unknown }).treasury);
+    for (let round = 0; round < 3; round += 1) {
+      expect(peekTreasuryRetiredRangeHealth().healthy).toBe(false); // v1 → migration_required（不迁移）
+      expect(lookupTreasuryRetiredRangeStructured(id).status === "migration_required").toBe(true);
+      expect(checkTreasuryAttemptRetiredRange(id).retired).toBe(true); // fail closed 阻断
+      void resolveTreasuryAttemptLifecycleOwnership(id);
+    }
+    const after = JSON.stringify((Memory.runtime as unknown as { treasury?: unknown }).treasury);
+    expect(after).toBe(before);
+    // store 保持 v1（query 不迁移、不初始化、不改 version）。
+    expect((treasuryBranch().retiredAttemptRanges as { version: number }).version).toBe(1);
+  });
+
+  it("M2：store absent 的全部 query 零写（retiredAttemptRanges 仍不存在）", () => {
+    makeService();
+    const id = abandonedId("m2");
+    for (let round = 0; round < 3; round += 1) {
+      expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
+      expect(lookupTreasuryRetiredRangeStructured(id).status).toBe("absent");
+      expect(checkTreasuryAttemptRetiredRange(id).retired).toBe(false);
+      void resolveTreasuryAttemptLifecycleOwnership(id);
+    }
+    expect(treasuryBranch().retiredAttemptRanges).toBeUndefined();
+  });
+
+  it("M3：显式可证明 legacy 迁移（issuer v1 → 全部归 legacy）——read-back、query 正常、二次 idle", () => {
+    makeService();
+    // issuer v1（ti2_ 未诞生）→ v1 区间全部归 legacy。
+    treasuryBranch().attemptIssuer = { version: 1, highWatermark: 100, updatedAt: Game.time };
+    resetTreasuryAttemptIssuerHeapCacheForTest();
+    seedV1RangeStore(1, 100);
+    const migration = runTreasuryRetiredRangeMigrationAtTickBoundary();
+    expect(migration.status).toBe("migrated");
+    const store = treasuryBranch().retiredAttemptRanges as { version: number; ranges: { namespace: string; minSequence: number; maxSequence: number }[]; entryCount: number };
+    expect(store.version).toBe(2);
+    expect(store.ranges[0]!.namespace).toBe("legacy");
+    expect(store.ranges[0]!.minSequence).toBe(1);
+    expect(store.ranges[0]!.maxSequence).toBe(100);
+    expect(store.entryCount).toBe(1);
+    // query 随后正常（健康 + 按域判定）。
+    expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
+    expect(checkTreasuryAttemptRetiredRange("ti1_50_0123456789abcdef").retired).toBe(true);
+    expect(checkTreasuryAttemptRetiredRange("ti2_50_0123456789abcdef").retired).toBe(false);
+    // 第二次运行幂等（idle 零写）。
+    const snapshot = JSON.stringify(treasuryBranch().retiredAttemptRanges);
+    expect(runTreasuryRetiredRangeMigrationAtTickBoundary().status).toBe("idle");
+    expect(JSON.stringify(treasuryBranch().retiredAttemptRanges)).toBe(snapshot);
+  });
+
+  it("M4：显式可证明 current 迁移（issuer v2 无 legacy record → 全部归 current）", () => {
+    makeService();
+    seedIssuerStoreV2(200, null, 5); // 全新安装——从未有 ti1_ 发行
+    seedV1RangeStore(10, 20, 6);
+    const migration = runTreasuryRetiredRangeMigrationAtTickBoundary();
+    expect(migration.status).toBe("migrated");
+    const store = treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string }[] };
+    expect(store.ranges[0]!.namespace).toBe("current");
+    expect(checkTreasuryAttemptRetiredRange("ti2_15_0123456789abcdef").retired).toBe(true);
+    expect(checkTreasuryAttemptRetiredRange("ti1_15_0123456789abcdef").retired).toBe(false);
+  });
+
+  it("M5：不可证明混合 v1（updatedAt ≥ migratedAtTick）→ 原 store 原样保留、migration blocked、query 不写、absorb 拒绝", () => {
+    makeService();
+    seedIssuerStoreV2(3, 100, 10);
+    seedV1RangeStore(1, 100, 20); // 写入横跨迁移时刻
+    const before = JSON.stringify(treasuryBranch().retiredAttemptRanges);
+    expect(peekTreasuryRetiredRangeHealth().healthy).toBe(false);
+    const migration = runTreasuryRetiredRangeMigrationAtTickBoundary();
+    expect(migration.status).toBe("blocked");
+    if (migration.status === "blocked") expect(migration.detail ?? "").toContain("不可证明");
+    expect(JSON.stringify(treasuryBranch().retiredAttemptRanges)).toBe(before);
+    expect((treasuryBranch().retiredAttemptRanges as { version: number }).version).toBe(1);
+    expect(absorbTreasuryRetiredSequence("current", 1).status).toBe("rejected");
+    expect(absorbTreasuryRetiredSequence("legacy", 1).status).toBe("rejected");
+    // 无第二 frontier：再次 migration 仍 blocked（不产生半迁移 v2）。
+    expect(runTreasuryRetiredRangeMigrationAtTickBoundary().status).toBe("blocked");
+    expect(Object.keys(treasuryBranch()).filter((key) => key === "retiredAttemptRanges").length).toBe(1);
+  });
+
+  it("M6：迁移写入后 global reset → 重跑幂等（ranges 不重复、不跨域、entryCount 一致）", () => {
+    makeService();
+    treasuryBranch().attemptIssuer = { version: 1, highWatermark: 100, updatedAt: Game.time };
+    resetTreasuryAttemptIssuerHeapCacheForTest();
+    seedV1RangeStore(1, 50);
+    expect(runTreasuryRetiredRangeMigrationAtTickBoundary().status).toBe("migrated");
+    const migratedSnapshot = JSON.stringify(treasuryBranch().retiredAttemptRanges);
+    // global reset（heap 重建）→ migration owner 幂等 idle、store 不变。
+    resetTreasuryChainCertificateHeapCacheForTest();
+    expect(runTreasuryRetiredRangeMigrationAtTickBoundary().status).toBe("idle");
+    expect(JSON.stringify(treasuryBranch().retiredAttemptRanges)).toBe(migratedSnapshot);
+    const store = treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string; minSequence: number; maxSequence: number }[]; entryCount: number };
+    expect(store.ranges.length).toBe(1);
+    expect(store.ranges[0]!.namespace).toBe("legacy");
+    expect(store.entryCount).toBe(1);
+  });
+
+  it("M7：GC coordinator 的前置 migration 阶段（report 携带结构化结果）", () => {
+    makeService();
+    seedIssuerStoreV2(3, 100, 10);
+    seedV1RangeStore(1, 100, 20);
+    const report = runTreasuryLifecycleGcCoordinator();
+    expect(report.rangeMigration.status).toBe("blocked");
+    // blocked 不阻断 ticket GC（互不依赖）。
+    expect(report.skipped).toBeNull();
+    // 修复证明输入（issuer 回 v1 → 严格归 legacy）后 coordinator 完成迁移。
+    treasuryBranch().attemptIssuer = { version: 1, highWatermark: 100, updatedAt: Game.time };
+    resetTreasuryAttemptIssuerHeapCacheForTest();
+    resetTreasuryChainCertificateHeapCacheForTest();
+    const repaired = runTreasuryLifecycleGcCoordinator();
+    expect(repaired.rangeMigration.status).toBe("migrated");
+    expect((treasuryBranch().retiredAttemptRanges as { version: number }).version).toBe(2);
+  });
+});
+
+// ══ Q 组：Namespace capacity ══════════════════════════════════════════════
+
+describe("Remediation XI Q：namespace 容量隔离", () => {
+  it("Q1：legacy 占满自身配额 → current 仍有保留容量（吸收不受 legacy 影响）", () => {
+    makeService();
+    // legacy 域占满自身配额（16 条互不相邻区间）。
+    for (let index = 0; index < TREASURY_RETIRED_RANGE_LEGACY_QUOTA; index += 1) {
+      expect(absorbTreasuryRetiredSequence("legacy", 1 + index * 3).status).toBe("absorbed");
+    }
+    // current 域吸收照常（保留容量不受 legacy 占满影响）。
+    for (let index = 0; index < 8; index += 1) {
+      expect(absorbTreasuryRetiredSequence("current", 2 + index * 3).status).toBe("absorbed");
+    }
+    const store = treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string }[] };
+    expect(store.ranges.filter((range) => range.namespace === "legacy").length).toBe(TREASURY_RETIRED_RANGE_LEGACY_QUOTA);
+    expect(store.ranges.filter((range) => range.namespace === "current").length).toBe(8);
+  });
+
+  it("Q2：两域互不驱逐——legacy 满载不阻断 current；current 满载不阻断 legacy", () => {
+    makeService();
+    for (let index = 0; index < TREASURY_RETIRED_RANGE_CURRENT_QUOTA; index += 1) {
+      expect(absorbTreasuryRetiredSequence("current", 1 + index * 3).status).toBe("absorbed");
+    }
+    // current 域满（48）→ current 新增区间 fail closed；legacy 吸收不受影响。
+    expect(absorbTreasuryRetiredSequence("current", 1 + TREASURY_RETIRED_RANGE_CURRENT_QUOTA * 3 + 7).status).toBe("rejected");
+    expect(absorbTreasuryRetiredSequence("legacy", 5).status).toBe("absorbed");
+    const store = treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string }[] };
+    expect(store.ranges.filter((range) => range.namespace === "current").length).toBe(TREASURY_RETIRED_RANGE_CURRENT_QUOTA);
+    expect(store.ranges.filter((range) => range.namespace === "legacy").length).toBe(1);
+  });
+
+  it("Q3：旧 legacy 数据超过新配额 → 不丢失、不静默裁剪、合并式吸收仍允许、新增区间拒绝", () => {
+    makeService();
+    // 超额 legacy 存量（20 条 > 配额 16——历史数据直注）。
+    const ranges: { namespace: "legacy"; minSequence: number; maxSequence: number; mergedAtTick: number }[] = [];
+    for (let index = 0; index < 20; index += 1) {
+      ranges.push({ namespace: "legacy", minSequence: 1 + index * 3, maxSequence: 1 + index * 3, mergedAtTick: Game.time });
+    }
+    treasuryBranch().retiredAttemptRanges = { version: 2, ranges, entryCount: ranges.length, updatedAt: Game.time };
+    resetTreasuryChainCertificateHeapCacheForTest();
+    // store 健康（超额存量不判损坏）。
+    expect(peekTreasuryRetiredRangeHealth().healthy).toBe(true);
+    // 合并式吸收（扩展既有区间——不新增区间数）允许。
+    expect(absorbTreasuryRetiredSequence("legacy", 2).status).toBe("absorbed");
+    // 新增 legacy 区间（第 21 条 > 配额 16）拒绝（不裁剪存量腾槽）。
+    expect(absorbTreasuryRetiredSequence("legacy", 500).status).toBe("rejected");
+    const store = treasuryBranch().retiredAttemptRanges as { ranges: { namespace: string; minSequence: number; maxSequence: number }[] };
+    // 数据不丢：20 条全部在位（1 号区间扩展为 [1,2]）。
+    expect(store.ranges.filter((range) => range.namespace === "legacy").length).toBe(20);
+    expect(store.ranges.some((range) => range.minSequence === 1 && range.maxSequence === 2)).toBe(true);
+    // current 保留容量策略不受超额 legacy 影响。
+    expect(absorbTreasuryRetiredSequence("current", 7).status).toBe("absorbed");
+  });
+
+  it("Q4：扫描有界——store 区间总数 ≤ 物理硬容量、同 sequence 两域独立", () => {
+    makeService();
+    // 同 sequence 在两个域是两个独立事实（Q2 补充语义）。
+    expect(absorbTreasuryRetiredSequence("legacy", 9).status).toBe("absorbed");
+    expect(absorbTreasuryRetiredSequence("current", 9).status).toBe("absorbed");
+    expect(checkTreasuryAttemptRetiredRange("ti1_9_0123456789abcdef").retired).toBe(true);
+    expect(checkTreasuryAttemptRetiredRange("ti2_9_0123456789abcdef").retired).toBe(true);
+    // 填满全部物理容量（legacy 16 + current 48 = 64）→ 两域新增均 fail closed
+    //（store 恒 ≤ 硬容量——扫描有界）。
+    for (let index = 0; index < TREASURY_RETIRED_RANGE_LEGACY_QUOTA - 1; index += 1) {
+      void absorbTreasuryRetiredSequence("legacy", 20 + index * 3);
+    }
+    for (let index = 0; index < TREASURY_RETIRED_RANGE_CURRENT_QUOTA - 1; index += 1) {
+      void absorbTreasuryRetiredSequence("current", 20 + index * 3);
+    }
+    const store = treasuryBranch().retiredAttemptRanges as { ranges: unknown[] };
+    expect(store.ranges.length).toBeLessThanOrEqual(64);
+    expect(absorbTreasuryRetiredSequence("legacy", 900).status).toBe("rejected");
+    expect(absorbTreasuryRetiredSequence("current", 900).status).toBe("rejected");
+    expect(store.ranges.length).toBeLessThanOrEqual(64);
   });
 });

@@ -646,7 +646,9 @@ describe("Remediation VIII S：统一 settlement reconciliation（无短路聚�
     // retired range 覆盖（模拟 certificate 驱逐后的终态——直接持久层注入
     // 等价区间由 L3 覆盖正式通道；此处验证 retired 语义）。
     const branch = (Memory.runtime as unknown as { treasury?: Record<string, unknown> }).treasury!;
-    branch.retiredAttemptRanges = { version: 1, ranges: [{ minSequence: sequence, maxSequence: sequence, mergedAtTick: Game.time }], entryCount: 1, updatedAt: Game.time };
+    // 【XI/E】v2 区间（current 域——v1 只经 tick-boundary migration owner 迁移，
+    // query 路径对 v1 一律 fail closed；此处注入等价终态的 v2 区间）。
+    branch.retiredAttemptRanges = { version: 2, ranges: [{ namespace: "current", minSequence: sequence, maxSequence: sequence, mergedAtTick: Game.time }], entryCount: 1, updatedAt: Game.time };
     resetTreasuryChainCertificateHeapCacheForTest();
     // resolver：retired（不是 exact、不带 outcome）。
     const resolved = resolveTreasuryDurableSettlementAuthority({ transactionId });

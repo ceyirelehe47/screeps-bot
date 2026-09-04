@@ -50,7 +50,7 @@ import {
   peekTreasuryCompletionHeadroomReservation,
   peekTreasuryCompletionHeadroomReservationHealth,
 } from "@/runtime/treasury/completionHeadroomReservation";
-import { ensureTreasuryIntentStoreValidated, readTreasuryIntentEntry } from "@/runtime/treasury/intents";
+import { peekTreasuryIntentStoreValidation, readTreasuryIntentEntry } from "@/runtime/treasury/intents";
 import { ensureTreasuryQuarantineStoreValidated, readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import {
   peekTreasuryResolutionCleanupHealth,
@@ -222,9 +222,11 @@ export function resolveTreasuryAttemptLifecycleOwnership(
   }
 
   // 4) durable Intent。【X 工作流 E / H1/H2】fatal 时 read 返回 undefined 与
-  //    absent 同形——先 ensure 触发 load 全量校验（unrelated entry 损坏同样
-  //    检出为 fatal），fatal → owned+unhealthy（不折叠为 absent）。
-  const intentValidationError = ensureTreasuryIntentStoreValidated();
+  //    absent 同形——全量校验（unrelated entry 损坏同样检出为 fatal），
+  //    fatal → owned+unhealthy（不折叠为 absent）。【XI 工作流 E / M1】
+  //    校验零写（peek——store 不存在 = 健康空，不创建；迁移只在写路径
+  //    load 发生，query 不迁移）。
+  const intentValidationError = peekTreasuryIntentStoreValidation();
   if (intentValidationError !== null) return unhealthyOwned(`intent store unhealthy（fail closed）: ${intentValidationError}`);
   if (readTreasuryIntentEntry(transactionId) !== undefined) return owned("active", "durable intent");
 
