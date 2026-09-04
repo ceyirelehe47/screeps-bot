@@ -1,18 +1,18 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "c5864f5f68124429c55f533b46cb4077000d0a75",
-    "suites": 272,
-    "tests": 2203,
-    "passed": 2203,
+    "commit": "10ff781996f818b8c7ec76ae42dca72075d36431",
+    "suites": 274,
+    "tests": 2255,
+    "passed": 2255,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 272,
-    "tests": 2203,
-    "passed": 2203,
+    "suites": 274,
+    "tests": 2255,
+    "passed": 2255,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -1065,7 +1065,7 @@
     },
     "src/runtime/treasury/treasuryWriteArchitecture.test.ts": {
       "baseline": 19,
-      "budget": 28,
+      "budget": 31,
       "tier": "high-risk"
     },
     "src/runtime/treasury/treasuryWriteAdmissionPerformance.test.ts": {
@@ -1379,6 +1379,16 @@
       "tier": "high-risk"
     },
     "src/runtime/defenseStationaryRampartOwnership.test.ts": {
+      "baseline": 0,
+      "budget": 8,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound22RemediationVIII.test.ts": {
+      "baseline": 0,
+      "budget": 41,
+      "tier": "high-risk"
+    },
+    "src/runtime/defensePreallocationRampartOwnership.test.ts": {
       "baseline": 0,
       "budget": 8,
       "tier": "high-risk"
