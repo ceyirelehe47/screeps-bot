@@ -25,16 +25,25 @@
  * fail closed：任一相关 store unhealthy → owned（不把"读不到"解释成
  * orphan）；probe 未装配 → owned。certificate / retired range 维度由调用方
  * （chainRetirementCertificate——同模块自查）补充。
+ *
+ * 【Round 22 Remediation X 工作流 E / H1-H10】health-complete：
+ *  - Intent / Quarantine 的 fatal 与 absent 在 read API 同形（undefined）——
+ *    判定前先 ensure 触发 load 全量校验（entry 级损坏含 unrelated entry
+ *    同样检出 → owned+unhealthy，H1/H2）；
+ *  - settled receipt 的整店 heap fatal（他键损坏/迁移失败）同样
+ *    owned+unhealthy（H 系）；
+ *  - retirement summary probe 未装配 → owned+unhealthy（与其余 probe 一致，
+ *    不再静默跳过维度）。
  */
 
 import { readTreasuryIssuedAttemptTicket, peekTreasuryIssuedAttemptTicketHealth } from "@/runtime/treasury/attemptIssuanceTicket";
-import { hasTreasuryReceiptAdmissionReservation, lookupTreasurySettledReceipt } from "@/runtime/treasury/receipts";
+import { hasTreasuryReceiptAdmissionReservation, lookupTreasurySettledReceipt, peekTreasuryReceiptHealth } from "@/runtime/treasury/receipts";
 import {
   peekTreasuryCompletionHeadroomReservation,
   peekTreasuryCompletionHeadroomReservationHealth,
 } from "@/runtime/treasury/completionHeadroomReservation";
-import { readTreasuryIntentEntry } from "@/runtime/treasury/intents";
-import { readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
+import { ensureTreasuryIntentStoreValidated, readTreasuryIntentEntry } from "@/runtime/treasury/intents";
+import { ensureTreasuryQuarantineStoreValidated, readTreasuryQuarantineEntry } from "@/runtime/treasury/quarantine";
 import {
   peekTreasuryResolutionCleanupHealth,
   readTreasuryResolutionCleanupEntry,
@@ -173,10 +182,16 @@ export function resolveTreasuryAttemptLifecycleOwnership(
     }
   }
 
-  // 4) durable Intent。
+  // 4) durable Intent。【X 工作流 E / H1/H2】fatal 时 read 返回 undefined 与
+  //    absent 同形——先 ensure 触发 load 全量校验（unrelated entry 损坏同样
+  //    检出为 fatal），fatal → owned+unhealthy（不折叠为 absent）。
+  const intentValidationError = ensureTreasuryIntentStoreValidated();
+  if (intentValidationError !== null) return unhealthyOwned(`intent store unhealthy（fail closed）: ${intentValidationError}`);
   if (readTreasuryIntentEntry(transactionId) !== undefined) return owned("active", "durable intent");
 
-  // 5) Quarantine。
+  // 5) Quarantine。【X 工作流 E / H3】同 Intent——ensure 触发全量校验。
+  const quarantineValidationError = ensureTreasuryQuarantineStoreValidated();
+  if (quarantineValidationError !== null) return unhealthyOwned(`quarantine store unhealthy（fail closed）: ${quarantineValidationError}`);
   if (readTreasuryQuarantineEntry(transactionId) !== undefined) return owned("active", "durable quarantine");
 
   // 6) cleanup journal。
@@ -225,6 +240,10 @@ export function resolveTreasuryAttemptLifecycleOwnership(
   if (historical.verdict === "store_unhealthy") return unhealthyOwned(`historical completion store unhealthy（fail closed）: ${historical.detail}`);
   if (historical.verdict !== "absent") return owned("terminal-authority", "historical completion（durable archive）");
 
+  // 【X 工作流 E】settled receipt 的整店 heap fatal（他键损坏 / 迁移失败，
+  // own key 缺失时 lookup 返回 absent）同样 fail closed——health 前置。
+  const receiptHealth = peekTreasuryReceiptHealth();
+  if (!receiptHealth.healthy) return unhealthyOwned(`settled receipt store unhealthy（fail closed）: ${receiptHealth.detail}`);
   const receipt = lookupTreasurySettledReceipt(transactionId);
   if (receipt.status === "corrupted") return unhealthyOwned("settled receipt store unhealthy（fail closed）");
   if (receipt.status !== "absent") return owned("terminal-authority", "settled receipt");
@@ -241,11 +260,12 @@ export function resolveTreasuryAttemptLifecycleOwnership(
   if (lineage !== undefined) {
     return owned("terminal-authority", `terminal lineage（state=${String(lineage.state)}）`);
   }
-  if (summaryProbe !== null) {
-    if (!summaryProbe.summaryStoreHealthy()) return unhealthyOwned("retirement summary store unhealthy（fail closed）");
-    if (summaryProbe.summaryOfRoot(transactionId) !== undefined) {
-      return owned("terminal-authority", "retirement summary");
-    }
+  // 【X 工作流 E / H5】summary probe 未装配 → owned+unhealthy（与 tombstone/
+  // lineage/GRA probe 一致——维度缺失不得折叠为 unowned）。
+  if (summaryProbe === null) return unhealthyOwned("retirement summary probe 未装配（fail closed——视为 owned）");
+  if (!summaryProbe.summaryStoreHealthy()) return unhealthyOwned("retirement summary store unhealthy（fail closed）");
+  if (summaryProbe.summaryOfRoot(transactionId) !== undefined) {
+    return owned("terminal-authority", "retirement summary");
   }
   return { status: "unowned", kind: null, owner: null, storeUnhealthy: false };
 }
