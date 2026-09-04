@@ -69,9 +69,12 @@ import { registerTreasurySemanticSummarySourceForAssembly } from "@/runtime/trea
 import { registerTreasurySettlementSummaryHealthSourceForAssembly, verifyTreasuryOppositeProofAbsence } from "@/runtime/treasury/currentSettlementCoordinator";
 import { archiveTreasuryCleanupCompletionViaAuthority } from "@/runtime/treasury/cleanupSupersessionAuthority";
 import {
+  checkTreasuryAttemptRetiredRange,
   compressTreasuryChainHistoricalEntries,
+  lookupTreasuryChainRetirementCertificate,
   recordTreasuryChainRetirementCertificate,
 } from "@/runtime/treasury/chainRetirementCertificate";
+import { parseTreasuryIssuedInitialAttemptId } from "@/runtime/treasury/attemptIssuer";
 
 /**
  * 【第二十一轮 7】summary v3：持久化 root / final exact identity（exact
@@ -716,7 +719,16 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
     }
   } else {
     if (runtime.store.entryCount >= TREASURY_RETIREMENT_SUMMARY_MAX_ENTRIES) {
-      return { status: "rejected", detail: `retirement summary 已达硬容量 ${String(TREASURY_RETIREMENT_SUMMARY_MAX_ENTRIES)}（不删除旧 summary、不压缩 active record——fail closed）` };
+      // 【VIII 工作流 E2/L1】满载不再永久 fail closed：现代 service-issued
+      // chain 的 summary 条目在 replacement authority（chain certificate
+      // 在位，或其 root 序号已被 retired range 吸收）写入并 read-back 后
+      // 可驱逐——certificate 承接 chain 权威（root/final/terminalState +
+      // 协议 outcome），range 承接 anti-reuse；summary 只是审计视图。
+      // 无可驱逐条目（全 legacy pin / replacement 不在位）→ fail closed。
+      const eviction = evictTreasuryRetirementSummaryForCapacity();
+      if (eviction.status === "rejected") {
+        return { status: "rejected", detail: `retirement summary 已达硬容量 ${String(TREASURY_RETIREMENT_SUMMARY_MAX_ENTRIES)} 且无可安全驱逐条目（${eviction.detail}——fail closed）` };
+      }
     }
     const published = cloneTreasuryDurableValue<TreasuryLineageRetirementSummary>({
       schemaVersion: TREASURY_RETIREMENT_SUMMARY_VERSION,
@@ -760,6 +772,57 @@ function compactTerminalLineageRecord(record: Readonly<TreasuryAttemptLineageRec
     void generation;
     return readTreasuryResolutionTombstone(proof.transactionId) !== undefined;
   });
+/**
+ * 【VIII 工作流 E2/L1】retirement summary 满载驱逐：找 root 发行序号最小
+ * 的现代（ti1_）条目，验证其 replacement authority 在位（chain certificate
+ * 按 root 可寻址，或 root 序号已被 retired range 吸收——anti-reuse 已由
+ * range 承载），删除 entry + Memory read-back。legacy pin 与无 replacement
+ * 的条目不驱逐（exact facts 无接管者——fail closed 方向保守）。
+ */
+function evictTreasuryRetirementSummaryForCapacity():
+  | { readonly status: "evicted"; readonly rootTransactionId: string }
+  | { readonly status: "rejected"; readonly detail: string } {
+  const runtime = loadSummaryRuntime(true);
+  if (runtime.fatal !== null) {
+    return { status: "rejected", detail: `retirement summary store fail-closed: ${runtime.fatal}` };
+  }
+  let evictKey: string | null = null;
+  let evictRoot: string | null = null;
+  let evictSequence = Infinity;
+  for (const [key, entry] of Object.entries(runtime.store.entries)) {
+    const parsed = parseTreasuryIssuedInitialAttemptId(entry.rootTransactionId);
+    if (parsed === null) continue; // legacy pin：不驱逐
+    if (parsed.sequence < evictSequence) {
+      evictSequence = parsed.sequence;
+      evictKey = key;
+      evictRoot = entry.rootTransactionId;
+    }
+  }
+  if (evictKey === null || evictRoot === null) {
+    return { status: "rejected", detail: "满载条目全部为 legacy pin（无现代条目可驱逐）" };
+  }
+  // replacement authority 在位检查（certificate 可寻址 或 range 已吸收）。
+  const certificate = lookupTreasuryChainRetirementCertificate(evictRoot);
+  if (certificate === undefined) {
+    const rangeCheck = checkTreasuryAttemptRetiredRange(evictRoot);
+    if (!rangeCheck.retired) {
+      return { status: "rejected", detail: `条目 ${evictRoot.slice(0, 24)} 的 replacement authority 不在位（无 certificate 且未进 retired range——不删除 exact facts）` };
+    }
+  }
+  const evictedLineage = runtime.store.entries[evictKey]!.lineageId;
+  delete runtime.store.entries[evictKey];
+  runtime.store.entryCount -= 1;
+  runtime.store.updatedAt = Game.time;
+  runtime.byRoot.delete(evictRoot);
+  runtime.byLineageId.delete(evictedLineage);
+  const rawStore = (Memory.runtime as unknown as { treasury?: { lineageRetirementSummaries?: { entries?: Record<string, unknown>; entryCount?: number } } } | undefined)
+    ?.treasury?.lineageRetirementSummaries;
+  if (rawStore === undefined || rawStore.entries?.[evictKey] !== undefined || rawStore.entryCount !== runtime.store.entryCount) {
+    return { status: "rejected", detail: "summary 驱逐 read-back 失败（已尽力删除——调用方按满载 fail closed 处理）" };
+  }
+  return { status: "evicted", rootTransactionId: evictRoot };
+}
+
   // ──【Remediation VII 修复四】chain retirement certificate：summary 已
   //    完整写入 read-back 后，把 chain 的永久防重放权威压缩为单条
   //    certificate（root/final 代/terminalState——footprint 与 generation
