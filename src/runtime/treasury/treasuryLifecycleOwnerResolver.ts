@@ -34,6 +34,14 @@
  *    owned+unhealthy（H 系）；
  *  - retirement summary probe 未装配 → owned+unhealthy（与其余 probe 一致，
  *    不再静默跳过维度）。
+ *
+ * 【Round 22 Remediation XI 工作流 A】verdict 字段把"owned"的双语义结构化
+ * 拆开：exact_owner（确有正向 durable owner——唯一可授权 ticket handoff
+ * consume 的 verdict）与 blocked（store unhealthy / probe 未装配 / identity
+ * conflict 等保守阻断——GC/orphan 判定按 owned 处理，但绝不构成正向 owner）。
+ * ticket handoff 协议只消费 exact_owner；调用方不得用 owner 描述字符串或
+ * !storeUnhealthy 判断安全语义（H5：conflict 是 storeUnhealthy=false 的
+ * blocked）。
  */
 
 import { readTreasuryIssuedAttemptTicket, peekTreasuryIssuedAttemptTicketHealth } from "@/runtime/treasury/attemptIssuanceTicket";
@@ -58,6 +66,23 @@ import { lookupTreasuryHistoricalCompletion } from "@/runtime/treasury/cleanupSu
 
 export type TreasuryLifecycleOwnershipKind = "active" | "terminal-authority";
 
+/**
+ * 【Round 22 Remediation XI 工作流 A】正向证明与保守阻断的结构化区分。
+ * "现在不能删除/不能执行"（blocked——GC blocker）不等于"新的 owner 已经
+ * 接管"（exact_owner）。ticket handoff 只允许消费 exact_owner；blocked
+ * 一律拒绝且保持 ticket 原状态（H1-H5）。
+ */
+export type TreasuryLifecycleOwnershipVerdict =
+  /** 确有正向、结构化、来源明确的 durable owner（该维度 entry 真实在位）。 */
+  | "exact_owner"
+  /**
+   * 保守阻断（store unhealthy / probe 未装配 / identity conflict / 语义
+   * 不可判定）——防止 GC 而阻断，绝不构成正向 owner 或 handoff 依据。
+   */
+  | "blocked"
+  /** 全部权威维度确证为空（每个维度都健康且明确 absent）。 */
+  | "absent";
+
 export interface TreasuryLifecycleOwnershipResolution {
   /** owned = 存在任一 owner（或 fail closed）；unowned = 全部权威确证为空。 */
   readonly status: "owned" | "unowned";
@@ -67,6 +92,8 @@ export interface TreasuryLifecycleOwnershipResolution {
   readonly owner: string | null;
   /** 任一相关 store unhealthy（此时恒 owned——fail closed）。 */
   readonly storeUnhealthy: boolean;
+  /** 【XI 工作流 A】结构化 verdict（不得靠 owner 描述字符串判断安全语义）。 */
+  readonly verdict: TreasuryLifecycleOwnershipVerdict;
 }
 
 // 【模块环规避】resolutionStore / attemptLineage / lineageRetirementSummary
@@ -145,12 +172,24 @@ export function resolveTreasuryAttemptLifecycleOwnership(
     kind,
     owner,
     storeUnhealthy: false,
+    verdict: "exact_owner",
   });
   const unhealthyOwned = (owner: string): TreasuryLifecycleOwnershipResolution => ({
     status: "owned",
     kind: "active",
     owner,
     storeUnhealthy: true,
+    verdict: "blocked",
+  });
+  // 【XI 工作流 A / H5】identity conflict 等结构化 blocker：阻断 GC/orphan
+  // 判定，但不是正向 owner（storeUnhealthy=false 的 blocked——不能用
+  // !storeUnhealthy 区分，必须读 verdict）。
+  const blockerOwned = (owner: string): TreasuryLifecycleOwnershipResolution => ({
+    status: "owned",
+    kind: "active",
+    owner,
+    storeUnhealthy: false,
+    verdict: "blocked",
   });
 
   // 1) production issued ticket（active——opening 前的 lifecycle owner）。
@@ -230,7 +269,7 @@ export function resolveTreasuryAttemptLifecycleOwnership(
   //     abandon 同样是权威）。
   const completion = lookupTreasuryCleanupCompletion(transactionId);
   if (completion.verdict === "store_unhealthy") return unhealthyOwned(`live completion store unhealthy（fail closed）: ${completion.detail}`);
-  if (completion.verdict === "conflict") return owned("active", "live completion 权威冲突（结构化冲突——不当作可清理）");
+  if (completion.verdict === "conflict") return blockerOwned("live completion 权威冲突（结构化冲突——GC blocker，非正向 owner）");
   if (completion.verdict === "match") return owned("active", "matching live completion（pair）");
 
   // 12) historical completion / settled receipt / GRA / final tombstone /
@@ -267,5 +306,5 @@ export function resolveTreasuryAttemptLifecycleOwnership(
   if (summaryProbe.summaryOfRoot(transactionId) !== undefined) {
     return owned("terminal-authority", "retirement summary");
   }
-  return { status: "unowned", kind: null, owner: null, storeUnhealthy: false };
+  return { status: "unowned", kind: null, owner: null, storeUnhealthy: false, verdict: "absent" };
 }

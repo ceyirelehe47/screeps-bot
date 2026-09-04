@@ -33,7 +33,11 @@
  */
 
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
-import { mintTreasuryInitialAttemptId, peekTreasuryIssuedAttemptWatermark } from "@/runtime/treasury/attemptIssuer";
+import {
+  mintTreasuryInitialAttemptId,
+  peekTreasuryIssuedAttemptWatermark,
+  verifyTreasuryCurrentIssuedIdCanonical,
+} from "@/runtime/treasury/attemptIssuer";
 
 export const TREASURY_ISSUED_TICKET_VERSION = 1;
 /** active ticket 容量（满载 fail closed——阻断新 issuance，不按年龄删除）。 */
@@ -113,6 +117,18 @@ function validateTicketEntryShape(entry: unknown, key: string): string | null {
   }
   if (!Number.isSafeInteger(candidate.sequence) || (candidate.sequence as number) < 1) {
     return `issued ticket ${key.slice(0, 8)} sequence 非法`;
+  }
+  // 【XI 工作流 B / T1-T4】canonical current 发行身份：ti2_ 域 + checksum
+  // 确定性重算一致 + entry.sequence 与 ID 内 sequence 完全相等。任何一条
+  // 损坏都使整店 unhealthy（validateTicketStoreShape 逐条共用本校验——
+  // production callback 不可达，不自动修复损坏 entry）。
+  // （non-strict 判别收窄限制——经 "reason" in 判定失败分支。）
+  const canonical = verifyTreasuryCurrentIssuedIdCanonical(
+    candidate.transactionId as string,
+    candidate.sequence as number,
+  );
+  if ("reason" in canonical) {
+    return `issued ticket ${key.slice(0, 8)} 非 canonical current 发行 ID: ${canonical.reason}`;
   }
   if (!Number.isSafeInteger(candidate.issuedAtTick) || (candidate.issuedAtTick as number) < 0) {
     return `issued ticket ${key.slice(0, 8)} issuedAtTick 非法`;

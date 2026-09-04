@@ -3614,15 +3614,34 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         };
       }
       record.state = "executing";
-      // ──【Round 22 Remediation X 工作流 B】issued ticket → durable owner 的
-      //    接管完成点：execution-started 已持久化（executing intent 即 durable
-      //    lifecycle owner，read-back 已验证），此后 ticket 永不回到 active
-      //    （B6）。consume 是幂等尽力操作——失败（store read-back 抖动）不
-      //    阻断已不可逆的执行（callback 必须执行）；残留的 active-ticket-
-      //    with-owner 窗口由 gate 的 durable-owner 分支在下次触碰时幂等补
-      //    完成（T8）。
+      // ──【Round 22 Remediation X 工作流 B → XI 工作流 A / 3.2】issued
+      //    ticket → durable owner 的接管完成点：execution-started 已持久化
+      //    （executing intent 即 durable lifecycle owner，read-back 已验证），
+      //    此后 ticket 永不回到 active（B6）。handoff consume 必须在 Game
+      //    callback 之前成功——callback 永远在成功 handoff 判定之后且恰好
+      //    一次（XI）：consume 失败（store read-back 抖动 / 状态冲突 / ticket
+      //    缺失）→ callback=0、保守关闭 handle（intent 保留 executing——
+      //    durable owner 在位，下次 gate 以 exact_owner 幂等补完成，不重复
+      //    callback）。
       if (isTreasuryCurrentIssuedInitialAttemptId(record.canonical.transactionId)) {
-        void completeTreasuryIssuedTicketHandoff(record.canonical.transactionId);
+        const handoff = completeTreasuryIssuedTicketHandoff(record.canonical.transactionId);
+        if (handoff.status !== "consumed") {
+          metrics.transactionsRejectedInvalid += 1;
+          record.state = "expired";
+          preparedById.delete(record.canonical.transactionId);
+          projection.tentativeRelease(record.tentativeKey);
+          releaseTreasuryReceiptReservation(record.canonical.transactionId);
+          const handoffHeadroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
+          finalizeHandleRecord(record, "expired");
+          return {
+            status: "prepare_rejected",
+            reason:
+              handoff.status === "rejected" && handoff.reason === "store_unhealthy"
+                ? "issued_ticket_store_unhealthy"
+                : "issued_ticket_handoff_failed",
+            detail: `issued ticket handoff consume 失败（${handoff.status === "rejected" ? handoff.detail : "ticket 缺失（同 tick 内被删除）"}）——execution-started 已持久化（durable owner 保留在位，下次 gate 幂等补完成），Game callback 零调用${handoffHeadroomNote}`,
+          };
+        }
       }
       if (tr1LineageId !== undefined && tr1LineageBindingDigest !== undefined) {
         // ──【第十八轮 24.2】armed 推进（executing 已持久化之后、Game callback

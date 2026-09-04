@@ -48,6 +48,7 @@ import {
   resetTreasuryResolutionStoreForTest,
 } from "@/runtime/treasury/resolutionStore";
 import { resolveTreasuryAttemptLifecycleOwnership } from "@/runtime/treasury/treasuryLifecycleOwnerResolver";
+import { recomputeTreasuryDurableIdentityDigest } from "@/runtime/treasury/identityProof";
 import {
   clearTreasuryPersistenceForTest,
 } from "@/runtime/treasury/receipts";
@@ -448,7 +449,9 @@ describe("Remediation X H：health-complete owner resolution", () => {
     if (branch.intents === undefined) {
       branch.intents = { version: 6, entries: {}, entryCount: 0, updatedAt: Game.time };
     }
-    branch.intents.entries["i:" + transactionId] = {
+    // 【XI】durableIdentityDigest 必须与持久事实重算一致（假值会使 intent
+    // store 在 v7 校验下 fail closed——正向 handoff 判 blocked 而非 owner）。
+    const seeded: Record<string, unknown> = {
       authorityLevel: "lowlevel",
       transactionId,
       digest: DIGEST,
@@ -460,11 +463,14 @@ describe("Remediation X H：health-complete owner resolution", () => {
       settlement: "executing",
       auditSource: "execute-prepared-action",
       lowlevelSource: "runtime-lowlevel@v1",
-      durableIdentityDigest: "abababababababab",
       createdAtTick: Game.time,
       updatedAtTick: Game.time,
       ...overrides,
     };
+    if (seeded.durableIdentityDigest === undefined) {
+      seeded.durableIdentityDigest = recomputeTreasuryDurableIdentityDigest(seeded as never) ?? "abababababababab";
+    }
+    branch.intents.entries["i:" + transactionId] = seeded;
     branch.intents.entryCount = Object.keys(branch.intents.entries).length;
     branch.intents.updatedAt = Game.time;
   }
@@ -963,14 +969,18 @@ describe("Remediation X 压力：长期运行与中断恢复", () => {
     if (handoffTarget.status === "opened") {
       const branchIntents = treasuryBranch() as { intents?: { version: number; entries: Record<string, unknown>; entryCount: number; updatedAt: number } };
       if (branchIntents.intents === undefined) branchIntents.intents = { version: 6, entries: {}, entryCount: 0, updatedAt: Game.time };
-      branchIntents.intents.entries["i:" + handoffTarget.transactionId] = {
+      // 【XI】durableIdentityDigest 与持久事实重算一致（假值使 intent store
+      // fail closed——正向 handoff 判 blocked 而非 exact_owner）。
+      const x4Seeded: Record<string, unknown> = {
         authorityLevel: "lowlevel", transactionId: handoffTarget.transactionId, digest: DIGEST,
         actionKind: "terminal.send", kind: "terminal.send", source: "test",
         postings: [{ roomName: ROOMS[0].name, locationKind: "storage", resource: "energy", delta: -500 }],
         outcome: "started_unknown", settlement: "executing", auditSource: "execute-prepared-action",
-        lowlevelSource: "runtime-lowlevel@v1", durableIdentityDigest: "abababababababab",
+        lowlevelSource: "runtime-lowlevel@v1",
         createdAtTick: Game.time, updatedAtTick: Game.time,
       };
+      x4Seeded.durableIdentityDigest = recomputeTreasuryDurableIdentityDigest(x4Seeded as never) ?? "abababababababab";
+      branchIntents.intents.entries["i:" + handoffTarget.transactionId] = x4Seeded;
       branchIntents.intents.entryCount = Object.keys(branchIntents.intents.entries).length;
       resetTreasuryIssuedAttemptTicketHeapCacheForTest();
       expect(completeTreasuryIssuedTicketHandoff(handoffTarget.transactionId).status).toBe("consumed");

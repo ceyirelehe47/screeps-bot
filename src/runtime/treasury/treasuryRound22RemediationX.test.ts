@@ -31,6 +31,7 @@ import {
   clearTreasuryAttemptIssuerDurableForTest,
   resetTreasuryAttemptIssuerHeapCacheForTest,
   checkTreasuryServiceIssuedAttemptId,
+  buildTreasuryIssuedInitialAttemptIdFromSequence,
 } from "@/runtime/treasury/attemptIssuer";
 import {
   buildTreasuryActionContract,
@@ -44,6 +45,7 @@ import {
 import { runTreasuryLifecycleGcCoordinator } from "@/runtime/treasury/treasuryLifecycleGcCoordinator";
 import { completeTreasuryIssuedTicketHandoff } from "@/runtime/treasury/attemptIssuanceHandoff";
 import { resolveTreasuryAttemptLifecycleOwnership } from "@/runtime/treasury/treasuryLifecycleOwnerResolver";
+import { recomputeTreasuryDurableIdentityDigest } from "@/runtime/treasury/identityProof";
 import { lookupTreasuryStoreLifecycleContract } from "@/runtime/treasury/treasuryLifecycleContract";
 import {
   clearTreasuryPersistenceForTest,
@@ -468,7 +470,11 @@ function seedDurableIntent(transactionId: string): void {
   if (branch.intents === undefined) {
     branch.intents = { version: 6, entries: {}, entryCount: 0, updatedAt: Game.time };
   }
-  branch.intents.entries["i:" + transactionId] = {
+  // 【XI】durableIdentityDigest 必须与持久事实重算一致（X 轮的假值
+  // "ffffffffffffffff" 在 intent v7 校验下使 store fail closed——XI 的
+  // 正向 handoff 证明把该状态判为 blocked 而非 owner 在位，fixture 需要
+  // 构造真正健康的 durable owner）。
+  const seeded: Record<string, unknown> = {
     authorityLevel: "lowlevel",
     transactionId,
     digest: "0123456789abc001",
@@ -480,10 +486,12 @@ function seedDurableIntent(transactionId: string): void {
     settlement: "executing",
     auditSource: "execute-prepared-action",
     lowlevelSource: "runtime-lowlevel@v1",
-    durableIdentityDigest: "ffffffffffffffff",
     createdAtTick: Game.time,
     updatedAtTick: Game.time,
   };
+  const recomputed = recomputeTreasuryDurableIdentityDigest(seeded as never);
+  seeded.durableIdentityDigest = recomputed ?? "ffffffffffffffff";
+  branch.intents.entries["i:" + transactionId] = seeded;
   branch.intents.entryCount = Object.keys(branch.intents.entries).length;
   branch.intents.updatedAt = Game.time;
 }
@@ -572,8 +580,12 @@ describe("Remediation X B：ticket storage boundedness", () => {
     const store = ticketStoreOfMemory()!;
     while (Object.keys(store.entries).length < TREASURY_ISSUED_TICKET_MAX_TOTAL_ENTRIES) {
       const fakeSeq = 9_000_000 + Object.keys(store.entries).length;
-      store.entries["tk:ti2_" + fakeSeq + "_ccccccccdddddddd"] = {
-        transactionId: "ti2_" + fakeSeq + "_ccccccccdddddddd",
+      // 【XI】fake terminal 也必须是 canonical current ID（假 checksum 会被
+      // canonical shape 校验判为损坏——store unhealthy 而非容量语义）。
+      const builtFake = buildTreasuryIssuedInitialAttemptIdFromSequence(fakeSeq);
+      if (builtFake.status !== "built") break;
+      store.entries["tk:" + builtFake.transactionId] = {
+        transactionId: builtFake.transactionId,
         sequence: fakeSeq,
         issuedAtTick: Game.time,
         owner: "b4_fake",

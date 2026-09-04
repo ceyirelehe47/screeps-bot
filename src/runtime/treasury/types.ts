@@ -216,6 +216,16 @@ export type TreasuryRejectionReason =
   | "issued_ticket_binding_conflict"
   /** 【X 工作流 A】ticket 状态不可绑定/接管（非 active 等）。 */
   | "issued_ticket_state_conflict"
+  /** 【Round 22 Remediation XI 工作流 A / H1-H5】durable owner 不可正向证明
+   *  （store unhealthy / probe 未装配 / identity conflict 等保守阻断——非
+   *  exact_owner）：handoff 不推进，ticket 保持 active，fail closed。 */
+  | "issued_ticket_owner_unverifiable"
+  /** 【XI 工作流 B / T6】ticket sequence 超出 issuer watermark——canonical
+   *  ID 不构成发行事实（手工塞入的未来序号不得经 ticket 通道执行）。 */
+  | "issued_ticket_unissued"
+  /** 【XI 工作流 A / H7】execution-started 已持久化但 handoff consume 失败
+   *  （非 store_unhealthy 类）——callback=0、保守关闭，下次 gate 幂等补完成。 */
+  | "issued_ticket_handoff_failed"
   /** 【第十七轮第五节】attempt lineage store 损坏或容量满载（fail closed）。 */
   | "lineage_store_fatal"
   /** 全局 quarantine write blocker（第七轮）：存在任意 unresolved

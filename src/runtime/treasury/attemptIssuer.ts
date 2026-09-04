@@ -341,6 +341,47 @@ export function parseTreasuryIssuedInitialAttemptId(
   return { sequence, namespace: match[1] === "1" ? "legacy" : "current" };
 }
 
+export type TreasuryCurrentIssuedIdCanonicalVerdict =
+  | { readonly ok: true; readonly sequence: number }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * 【Round 22 Remediation XI 工作流 B】current（ti2_）发行 ID 的 canonical
+ * 校验——纯函数、零 Memory 读写（issued ticket 与 current chain certificate
+ * 的 shape 校验共用）。完整维度：
+ *  - ID 形态（ti2_ + 十进制 sequence + 16 位小写 hex checksum）；
+ *  - issuer domain === current（ti1_ 是独立 legacy 发行域——不得解释为
+ *    current opening，也不得用当前协议重算其 checksum）；
+ *  - checksum 按 ISSUER_PROTOCOL_TAG v3 确定性重算全等（不匹配 = tampered，
+ *    不自动修复）；
+ *  - 传入 expectedSequence 时必须与 ID 内 sequence 完全相等。
+ *
+ * 注意：本函数只证明"ID 是某 sequence 的唯一合法 current 完整形态"，不证明
+ * 发行事实（sequence ≤ watermark 由调用方按 issuer store 判定——T6）。
+ */
+export function verifyTreasuryCurrentIssuedIdCanonical(
+  transactionId: string,
+  expectedSequence?: number,
+): TreasuryCurrentIssuedIdCanonicalVerdict {
+  const parsed = parseTreasuryIssuedInitialAttemptId(transactionId);
+  if (parsed === null) {
+    return { ok: false, reason: `非 ti1_/ti2_ 发行 ID 形态: ${transactionId.slice(0, 16)}` };
+  }
+  if (parsed.namespace !== "current") {
+    return { ok: false, reason: "发行域为 legacy（ti1_——独立发行域，不得解释为 current）" };
+  }
+  if (transactionId !== authoritativeIdOfSequence(parsed.sequence)) {
+    return { ok: false, reason: "checksum 与确定性重算不一致（tampered——不自动修复）" };
+  }
+  if (expectedSequence !== undefined && parsed.sequence !== expectedSequence) {
+    return {
+      ok: false,
+      reason: `ID 内 sequence ${String(parsed.sequence)} 与期望 sequence ${String(expectedSequence)} 不一致`,
+    };
+  }
+  return { ok: true, sequence: parsed.sequence };
+}
+
 export type TreasuryIssuedAttemptCheck =
   | { readonly status: "issued"; readonly sequence: number }
   /** seq > watermark：手工伪造的未来 ID（production 通道拒绝）。 */
