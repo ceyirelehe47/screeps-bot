@@ -1,27 +1,27 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "d5f69f230d671e04238927cc1bf9208abaddcea3",
-    "suites": 279,
-    "tests": 2373,
-    "passed": 2373,
+    "commit": "e99fd15a4f1d996213d94cb93029218d8eadf654",
+    "suites": 281,
+    "tests": 2417,
+    "passed": 2417,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "commit": "d5f69f230d671e04238927cc1bf9208abaddcea3",
-    "suites": 279,
-    "tests": 2373,
-    "passed": 2373,
+    "commit": "e99fd15a4f1d996213d94cb93029218d8eadf654",
+    "suites": 281,
+    "tests": 2417,
+    "passed": 2417,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
     "protectedFullFiles": 15,
-    "highRiskFiles": 131,
-    "defaultFiles": 127
+    "highRiskFiles": 133,
+    "defaultFiles": 133
   },
   "files": {
     "src/runtime/treasury/treasuryRound22MarkerDischarge.test.ts": {
@@ -1401,7 +1401,7 @@
     },
     "src/runtime/treasury/treasuryMemoryLifecycleContract.test.ts": {
       "baseline": 0,
-      "budget": 24,
+      "budget": 31,
       "tier": "high-risk"
     },
     "src/runtime/defenseGlobalRampartFootprints.test.ts": {
@@ -1417,6 +1417,16 @@
     "src/runtime/treasury/treasuryRound22RemediationXNamespace.test.ts": {
       "baseline": 0,
       "budget": 26,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound22RemediationXI.test.ts": {
+      "baseline": 0,
+      "budget": 14,
+      "tier": "high-risk"
+    },
+    "src/runtime/treasury/treasuryRound22RemediationXILifecycle.test.ts": {
+      "baseline": 0,
+      "budget": 23,
       "tier": "high-risk"
     }
   }
