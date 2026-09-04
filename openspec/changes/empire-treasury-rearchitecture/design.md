@@ -1609,3 +1609,24 @@ completion 与 historical authority 的 store 写入此前直接赋 candidate �
 
 ### 22.4 existing historical record 删除前完整 revalidation 与 profile 隔离
 archive 幂等路径（existing record）先完整 `validateHistoricalRecordShape`（schemaVersion/archivedAtTick 安全整数/via 枚举/profile↔class/键一致/digest hex/lineage 矩阵）；`deleteCompletionAfterAuthority` 最后一步前再从 Memory 权威直读复验——热缓存后篡改（7 维）在删除前拦截（不再延迟到删除后才暴露）。`TreasuryAttemptProofClass` 增 `forensic`（canonical 转换不再把 forensic 折叠为 legacy——不同 class 即身份冲突）；automatic archive（含 compact-archive）加 `treasuryProfileAllowsAutomaticProtocol` gate——legacy-replay/forensic-isolated 的 completion 不得被自动归档/删除（满载 fail closed，显式管理路径之外零删除）。`activateTreasuryLineageChild` 归档前移（先 exact archive/read-back 再 child_active；blocked → 可恢复拒绝）；summary compaction 的 archive 结果结构化上报（completionArchivePending——不再无条件 void 忽略；架构测试守护）。
+
+
+## 23. Round 22 Remediation VIII — Verifiable Issued IDs, Unified Settlement Reconciliation & Reservation-backed Completion
+
+### 23.1 完整可验证的 service-issued ID（工作流 A）
+issuer 协议升级 v2：authoritative hash 只依赖 sequence（correlation 降级为纯 metadata）——每个已发行 sequence 恰好存在一个可验证的完整 authoritative ID，完整验证 = watermark + 确定性重算（global reset 后不依赖 heap 对象）；seq ≤ watermark 但 hash 篡改 → `legacy_unverified`（旧 v1 hash 数据同通道——不得当作当前格式合法新 ID，replay blocker 由 settlement authority/range 承载）。production contract 通道（registry sealed = 生产装配 runtime 权威）的 ID 命名空间 enforcement：ti1_ 完整验证、tr1_ 经 capability 门禁、arbitrary/ts1_/tt1_ 一律拒绝（测试域 unsealed 保留受控入口、与 production channel 隔离）；issuer store 损坏 → mint/build/check/contract 全链 fail closed。
+
+### 23.2 统一 settlement reconciliation 与权威分离（工作流 B）
+resolver 重写为无短路聚合：live completion → historical → chain certificate（root/tr1_ child）→ retired range 全部收集后统一裁决——任一相关来源 store_unhealthy 不被前方 match 遮蔽；exact 声明之间 outcome/identity 不一致 → conflict（不选边）；expectedOutcome/expected identity 由全部声明共同验证（identity 比较用统一 relation 语义——insufficient 不选边）。新增 `protocol` 状态（certificate 协议推导 outcome，identity 不足）：replay gate/opposite proof/occupancy/reconciliation 一致认识并阻断，destructive 路径（marker discharge/authority release/cleanup completion/resolution relabel）不使用。新增 `resolveTreasuryCleanupCompletionAuthority`（B3 权威分离）：cleanup 完成只认 live completion 与 historical supersession——settlement certificate/retired range 不证明五阶段 cleanup 完成（journal absent + 只有 certificate → no_cleanup_authority）。安全关键模块（occupancy/oppositeProof/coordinator ×2/ack）全部改经统一 resolver；S10 架构守护禁止直接调用底层 lookup。
+
+### 23.3 certificate 真实证明能力（工作流 C）
+outcome 映射修正：finalGeneration≥1 时 root 一律 not-executed（chain_committed 的 committed 属于 final 代——删除错误的 root committed 映射）；tr1_ child checksum 按 certificate 的 rootTransactionId 重算验证（改一位即不属于该 chain）；canonical 关系验证（finalAttemptId 确定性派生 + rootSequence 一致）进入 store load 与单条 lookup（违反 → 整条损坏 fail closed）。
+
+### 23.4 reservation-backed completion（工作流 D）
+新模块 `cleanupCompletionHandoff`（单一 handoff owner）：prepare 的 acquire 移到全部纯验证之后（无效 epoch/projection/recovery slot/receipt admission 拒绝零遗留）；普通成功 commit（无 cleanup 接管）reservation 立即释放（不滞留至 TTL）；completion publication 必须有 matching reservation 且 identity 绑定一致（无 reservation 的旧 cleanup → recovery acquire → 容量不足先 bounded reclaim 再重试 → 仍失败 journal pending）；effective occupancy = live + reserved − matching pairs（同一 handoff 只计一槽）；beginTick 的 matching pair recovery（写 completion 后 consume 前中断 → 无双计）；TTL orphan sweep 的单一 owner truth graph（intent/quarantine/journal/resolving resolution/fault/marker/活跃 lineage/matching completion；owner store unhealthy 视为 owned；tombstone/lineage 经 assembly probe 注入——TDZ 环规避）；release/consume 结构化返回（store 损坏不静默成功，架构守护禁止裸调用）。
+
+### 23.5 长期有界（工作流 E）
+retirement summary 满载（128）驱逐：现代 chain 的 summary 条目在 replacement authority（certificate 在位 / root 序号已被 range 吸收）确认后删除（legacy pin 与无 replacement 不驱逐）；retired range 满载（64）的孤儿 gap coalesce：已发行但从未进入 lifecycle 的洞显式 abandon 桥接（任何 lifecycle 权威在位 / 最近发行安全窗口内的序号不动——零误判）。>128 终态链、>64 乱序退休区间、>384 historical 边界后系统持续运行（L1/L3/L4 真实 lifecycle 路径验证）。
+
+### 23.6 Defense：allocation 前物理 Rampart ownership（工作流 F）
+共享占用入口 `physicalRampartOwnership`；planner 的 pending boundary claim（站在自己 target 的未占用候选 → engage_position = 当前 tile + reservedPosition + occupied，slot 字典序确定）；allocate 后变 hold 的 loser 脚下保留（occupied + reservedPosition）；fallback replacement claim（自己 revised target 候选 → claim + used 集合）。planner 与 fallback 共用同一占用语义（跨 target 站位不预保护——正常移动者照常分配）。

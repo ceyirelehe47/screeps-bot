@@ -287,3 +287,19 @@ Remediation V 的 replacement 判定只按 transactionId + resolution 字符串�
 - replay-readable proof（tombstone/GRA/summary）不作为 destructive cleanup 权威；
 - 满载且无安全可回收项在任何新 Game callback 前 fail closed，不删除旧安全事实；
 - 300-generation 链上 root 与全部 child 的历史完成权威永不退化为 no_cleanup_authority。
+
+
+### Round 22 Remediation VIII — Verifiable Issued IDs, Unified Settlement Reconciliation, Reservation-backed Completion & Pre-allocation Stationary Ownership
+- issued ID 完整可验证：v2 确定性 hash（每 sequence 唯一合法完整 ID）+ global reset 后重算验证 + production contract 通道的 arbitrary/ts1_/tt1_ runtime 拒绝 + issuer 损坏全链 fail closed；
+- 统一 settlement reconciliation：无短路聚合（后方 conflict/unhealthy 不被遮蔽）+ protocol/exact/retired 三级区分（certificate 协议推导不进 destructive）+ settlement 与 cleanup completion 权威分离（certificate 不证明五阶段）；
+- certificate 语义修正：finalGeneration≥1 时 root not-executed、tr1_ checksum 重算、canonical 关系验证；
+- reservation 闭合：prepare 纯验证后 acquire（零泄漏）、普通成功零滞留、matching handoff（identity 绑定 + reclaim-then-retry + pair recovery）、TTL owner truth graph、结构化 mutation；
+- 长期有界：summary 满载驱逐（replacement authority 接管）+ retired range 孤儿 gap coalesce（在飞/近期发行零误判）；
+- Defense：allocation 前物理 ownership（planner/fallback 共享入口的 claim + hold loser 脚下保留——双占位在分配前消除）。
+
+#### 不变量（增补）
+- 同一 sequence 只有一个可验证的完整 authoritative ID；correlation 不参与权威身份；
+- settlement 权威的聚合不因先找到 match 而跳过后方的冲突或损坏；
+- certificate 是协议推导——不冒充 exact proof，不证明 cleanup 完成；
+- 任何返回 executed_committed 且无 cleanup-pending 标记的结果不遗留 reservation；
+- planner 与 fallback 不得把当前物理占据的 Rampart 分配给另一个 Defender。
