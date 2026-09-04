@@ -71,6 +71,13 @@ export interface TreasuryIssuedAttemptTicketEntry {
    * ticket 即 exact conflict；同 digest 幂等重放放行至 gate 的后续检查。
    */
   readonly boundContractDigest?: string;
+  /**
+   * 【XII 工作流 A / 4.3】binding 同时携带当前 opening 的 canonical
+   * transaction digest（prepared payload 的 canonical 形态——与 AC4
+   * contract digest 相互独立的第二维度）。同 digest 幂等；不同 canonical
+   * digest 接管即 binding conflict（不同 opening 不得接管同一 ticket）。
+   */
+  readonly boundCanonicalDigest?: string;
 }
 
 export interface TreasuryIssuedAttemptTicketStore {
@@ -386,6 +393,7 @@ export type TreasuryIssuedTicketBindResult =
 export function bindTreasuryIssuedAttemptTicketToContract(
   transactionId: string,
   contractDigest: string,
+  canonicalDigest?: string,
 ): TreasuryIssuedTicketBindResult {
   if (typeof contractDigest !== "string" || contractDigest.length === 0 || contractDigest.length > 128) {
     return { status: "rejected", reason: "binding_conflict", detail: "contract digest 非法（binding 拒绝）" };
@@ -405,16 +413,27 @@ export function bindTreasuryIssuedAttemptTicketToContract(
     return { status: "rejected", reason: "state_conflict", detail: `issued ticket 状态 ${entry.state} 不可绑定（仅 active ticket 可绑定 contract）` };
   }
   if (entry.boundContractDigest !== undefined) {
-    if (entry.boundContractDigest === contractDigest) return { status: "idempotent" };
-    return {
-      status: "rejected",
-      reason: "binding_conflict",
-      detail: `issued ticket 已绑定其它 contract（bound digest ${entry.boundContractDigest.slice(0, 16)} != ${contractDigest.slice(0, 16)}——同 ID 的不同 exact opening 不得接管同一 ticket）`,
-    };
+    if (entry.boundContractDigest !== contractDigest) {
+      return {
+        status: "rejected",
+        reason: "binding_conflict",
+        detail: `issued ticket 已绑定其它 contract（bound digest ${entry.boundContractDigest.slice(0, 16)} != ${contractDigest.slice(0, 16)}——同 ID 的不同 exact opening 不得接管同一 ticket）`,
+      };
+    }
+    // 【XII / 4.3】已绑定同一 contract 时，canonical digest 维度同样幂等校验。
+    if (canonicalDigest !== undefined && entry.boundCanonicalDigest !== undefined && entry.boundCanonicalDigest !== canonicalDigest) {
+      return {
+        status: "rejected",
+        reason: "binding_conflict",
+        detail: `issued ticket 已绑定其它 canonical digest（${entry.boundCanonicalDigest.slice(0, 16)} != ${canonicalDigest.slice(0, 16)}——同 ID 的不同 exact opening 不得接管同一 ticket）`,
+      };
+    }
+    return { status: "idempotent" };
   }
   const next: TreasuryIssuedAttemptTicketEntry = cloneTreasuryDurableValue({
     ...entry,
     boundContractDigest: contractDigest,
+    ...(canonicalDigest !== undefined ? { boundCanonicalDigest: canonicalDigest } : {}),
   });
   runtime.store.entries[key] = next;
   runtime.store.updatedAt = Game.time;
@@ -499,6 +518,17 @@ export function peekTreasuryIssuedAttemptTicketActiveCount(): number {
     if (entry.state === "active") count += 1;
   }
   return count;
+}
+
+/** active ticket 的 transactionId 清单（零写直读——GC 收敛 sweep 用，有界）。 */
+export function listTreasuryActiveIssuedTicketTransactionIds(): readonly string[] {
+  const raw = ticketStoreOfMemory();
+  if (raw === undefined) return Object.freeze([]);
+  const ids: string[] = [];
+  for (const entry of Object.values(raw.entries)) {
+    if (entry.state === "active") ids.push(entry.transactionId);
+  }
+  return Object.freeze(ids);
 }
 
 /** test-only：删除 Memory 中的 ticket store（heap 一并失效）。 */

@@ -226,6 +226,27 @@ export type TreasuryRejectionReason =
   /** 【XI 工作流 A / H7】execution-started 已持久化但 handoff consume 失败
    *  （非 store_unhealthy 类）——callback=0、保守关闭，下次 gate 幂等补完成。 */
   | "issued_ticket_handoff_failed"
+  /** 【XII 工作流 A / O1-O2】同 ID durable owner 与当前 opening identity
+   *  冲突（identity_conflict / outcome_conflict）——不同 opening 不得接管
+   *  ticket，callback=0、ticket 保持原状态。 */
+  | "issued_ticket_owner_conflict"
+  /** 【XII 工作流 A / O5】owner source 只能给出 insufficient / legacy
+   *  identity（legacy receipt 等 replay-only 权威）——不得升级为 modern
+   *  exact owner，callback=0、ticket 保持原状态。 */
+  | "issued_ticket_owner_insufficient"
+  /** 【XII 工作流 A / O7】仅 protocol / retired 权威在位（certificate /
+   *  retired range）——能阻断执行但不构成 exact owner，不得消费 active
+   *  ticket，callback=0。 */
+  | "issued_ticket_owner_protocol"
+  /** 【XII 工作流 A / 4.4】同 ID 且 identity 一致的 execution/terminal
+   *  owner 已在位（early probe 短路重试）——execution authority 已转移，
+   *  本次 execute 拒绝（callback=0）；幂等 consume 由 beginTick 恢复路径
+   *  承载，不重复执行。 */
+  | "issued_ticket_owner_in_flight"
+  /** 【XII 工作流 A / 4.4】该 attempt 已有 matching terminal settlement
+   *  （matching_terminal_owner）——幂等完成、不产生第二个 attempt，
+   *  callback=0。 */
+  | "issued_ticket_already_settled"
   /** 【第十七轮第五节】attempt lineage store 损坏或容量满载（fail closed）。 */
   | "lineage_store_fatal"
   /** 全局 quarantine write blocker（第七轮）：存在任意 unresolved

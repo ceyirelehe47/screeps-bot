@@ -1013,7 +1013,7 @@ describe("Remediation X 压力：长期运行与中断恢复", () => {
     // handoff（gate 的 durable-owner 分支）、callback 不重复。
     const handoffTarget = openTreasuryIssuedInitialAttempt("x4_handoff");
     expect(handoffTarget.status).toBe("opened");
-    const { completeTreasuryIssuedTicketHandoff } = require("@/runtime/treasury/attemptIssuanceHandoff") as typeof import("@/runtime/treasury/attemptIssuanceHandoff");
+    const { completeTreasuryIssuedTicketHandoffForIntentRecovery } = require("@/runtime/treasury/attemptIssuanceHandoff") as typeof import("@/runtime/treasury/attemptIssuanceHandoff");
     if (handoffTarget.status === "opened") {
       const branchIntents = treasuryBranch() as { intents?: { version: number; entries: Record<string, unknown>; entryCount: number; updatedAt: number } };
       if (branchIntents.intents === undefined) branchIntents.intents = { version: 7, entries: {}, entryCount: 0, updatedAt: Game.time };
@@ -1031,9 +1031,9 @@ describe("Remediation X 压力：长期运行与中断恢复", () => {
       branchIntents.intents.entries["i:" + handoffTarget.transactionId] = x4Seeded;
       branchIntents.intents.entryCount = Object.keys(branchIntents.intents.entries).length;
       resetTreasuryIssuedAttemptTicketHeapCacheForTest();
-      expect(completeTreasuryIssuedTicketHandoff(handoffTarget.transactionId).status).toBe("consumed");
+      expect(completeTreasuryIssuedTicketHandoffForIntentRecovery(handoffTarget.transactionId).status).toBe("consumed");
       // 幂等：再次完成 → consumed（无重复副作用）。
-      expect(completeTreasuryIssuedTicketHandoff(handoffTarget.transactionId).status).toBe("consumed");
+      expect(completeTreasuryIssuedTicketHandoffForIntentRecovery(handoffTarget.transactionId).status).toBe("consumed");
       // 窗口验证完成——恢复（删除 in-flight intent，解除全局 write blocker）。
       delete branchIntents.intents.entries["i:" + handoffTarget.transactionId];
       branchIntents.intents.entryCount = Object.keys(branchIntents.intents.entries).length;

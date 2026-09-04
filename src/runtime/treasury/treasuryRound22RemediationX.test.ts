@@ -43,7 +43,7 @@ import {
   clearTreasuryAdapterRegistryForTest,
 } from "@/runtime/treasury/actionContracts";
 import { runTreasuryLifecycleGcCoordinator } from "@/runtime/treasury/treasuryLifecycleGcCoordinator";
-import { completeTreasuryIssuedTicketHandoff } from "@/runtime/treasury/attemptIssuanceHandoff";
+import { completeTreasuryIssuedTicketHandoffForIntentRecovery } from "@/runtime/treasury/attemptIssuanceHandoff";
 import { resolveTreasuryAttemptLifecycleOwnership } from "@/runtime/treasury/treasuryLifecycleOwnerResolver";
 import { recomputeTreasuryDurableIdentityDigest } from "@/runtime/treasury/identityProof";
 import { lookupTreasuryStoreLifecycleContract } from "@/runtime/treasury/treasuryLifecycleContract";
@@ -375,8 +375,13 @@ describe("Remediation X T：ticket-gated opening", () => {
     };
     const executed = executeWithExistingBundle(service, id);
     expect(executed.callbackCount).toBe(0);
-    expect(executed.reason).toBe("issued_ticket_handoff_recovered");
-    // gate 的 durable-owner 分支幂等完成 handoff（active → consumed）。
+    // 【XII】execute 重试先被全局 intent write blocker 拦截（callback=0、
+    // ticket 保持 active）；execution-owner 的幂等 consume 由 beginTick
+    // 恢复路径承载（XII 4.4 / 5.3 窗口 D）。
+    expect(["intent_write_blocked", "issued_ticket_owner_in_flight"]).toContain(executed.reason);
+    expect(readTreasuryIssuedAttemptTicket(id)?.state).toBe("active");
+    const intentsModule = require("@/runtime/treasury/intents") as typeof import("@/runtime/treasury/intents");
+    intentsModule.recoverTreasuryIntentsAtTickBoundary(() => null);
     expect(readTreasuryIssuedAttemptTicket(id)?.state).toBe("consumed");
     // 同一 callback 不再次执行：重复 execute 恒拒绝。
     const again = productionOpening(service, id);
@@ -390,7 +395,9 @@ describe("Remediation X T：ticket-gated opening", () => {
     const service = makeService();
     const id = openedId("t9");
     // 9a：owner-gated handoff 无 durable owner → 拒绝（不制造 consumed-but-unowned）。
-    const handoff = completeTreasuryIssuedTicketHandoff(id);
+    // 【XII】owner-gated handoff 的无-owner 拒绝经恢复路径变体验证（durable
+    // intent 不在位 → rejected，不制造 consumed-but-unowned）。
+    const handoff = completeTreasuryIssuedTicketHandoffForIntentRecovery(id);
     expect(handoff.status).toBe("rejected");
     expect(readTreasuryIssuedAttemptTicket(id)?.state).toBe("active");
     // 9b：极端构造（持久层直改 state=consumed——历史手工 consume 等价物）→
@@ -663,6 +670,10 @@ describe("Remediation X B：ticket storage boundedness", () => {
     };
     const recovered = executeWithExistingBundle(service, ids[1]!);
     expect(recovered.callbackCount).toBe(0);
+    // 【XII】execute 重试被全局 intent blocker 拦截；恢复路径幂等 consume。
+    expect(readTreasuryIssuedAttemptTicket(ids[1]!)?.state).toBe("active");
+    const intentsModule = require("@/runtime/treasury/intents") as typeof import("@/runtime/treasury/intents");
+    intentsModule.recoverTreasuryIntentsAtTickBoundary(() => null);
     expect(readTreasuryIssuedAttemptTicket(ids[1]!)?.state).toBe("consumed");
     // 阶段 3：terminal cleanup 阶段 reset。
     ids.push(openedId("b8_a3"));

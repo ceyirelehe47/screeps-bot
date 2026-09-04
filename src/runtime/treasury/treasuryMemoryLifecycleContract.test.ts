@@ -273,12 +273,13 @@ describe("Remediation X：ticket handoff / namespace / health-complete 架构守
       }
     }
     expect(callers).toEqual([]);
-    // handoff 模块的 consume 必须在 owner-gated 前置之后。
+    // 【XII】handoff 模块的 consume 必须在 positive-owner verifier 判定
+    // 之后（verify → matching 三态才允许 consume）。
     const handoffSource = readSource("runtime/treasury/attemptIssuanceHandoff.ts");
-    const ownershipIndex = handoffSource.indexOf("durableOwnerInPlace(transactionId)");
+    const verifyIndex = handoffSource.indexOf("verifyTreasuryPositiveOwnershipForOpening(transactionId, expected)");
     const consumeIndex = handoffSource.indexOf("consumeTreasuryIssuedAttemptTicketForHandoff(transactionId)");
-    expect(ownershipIndex).toBeGreaterThan(-1);
-    expect(consumeIndex).toBeGreaterThan(ownershipIndex);
+    expect(verifyIndex).toBeGreaterThan(-1);
+    expect(consumeIndex).toBeGreaterThan(verifyIndex);
   });
 
   it("X4：retired range destructive API 必须携带 issuer domain（裸 sequence 不再是合法入参）", () => {
@@ -424,7 +425,10 @@ describe("Remediation XI：positive handoff / canonical identity / unified relea
 
   it("XI1：ticket handoff 必须消费结构化 positive-owner verdict（不得用通用 resolver 的模糊 owned 授权 consume）", () => {
     const handoffSource = readSource("runtime/treasury/attemptIssuanceHandoff.ts");
-    expect(handoffSource).toContain('ownership.verdict === "exact_owner"');
+    // 【XII】consume 授权来自 positive verifier 的 matching 三态（expected
+    // identity 绑定当前 opening），不再消费 resolver 的 exact_owner。
+    expect(handoffSource).toContain('verifyTreasuryPositiveOwnershipForOpening');
+    expect(handoffSource).toContain('verdict.verdict !== "matching_not_started_owner"');
     // 模糊 owned（含 unhealthyOwned 保守阻断与 conflict blocker）不得作为
     // consume 依据——handoff 内不得出现 status === "owned" 判定。
     expect(handoffSource).not.toContain('ownership.status === "owned"');

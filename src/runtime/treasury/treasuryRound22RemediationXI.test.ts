@@ -38,7 +38,7 @@ import {
   makeTreasuryTestTransferAdapter,
 } from "@/runtime/treasury/actionContracts";
 import {
-  completeTreasuryIssuedTicketHandoff,
+  completeTreasuryIssuedTicketHandoffForIntentRecovery,
   gateTreasuryIssuedAttemptTicketForPrepare,
 } from "@/runtime/treasury/attemptIssuanceHandoff";
 import { resolveTreasuryAttemptLifecycleOwnership } from "@/runtime/treasury/treasuryLifecycleOwnerResolver";
@@ -257,8 +257,10 @@ describe("Remediation XI H：positive ticket handoff 证明", () => {
     };
     const executed = executeWithExistingBundle(service, id);
     expect(executed.callbackCount).toBe(0);
-    expect(executed.reason).toBe("issued_ticket_owner_unverifiable");
-    expect(executed.detail).toContain("intent store unhealthy");
+    // 【XII】ticket gate 移至 canonical digest 之后（4.3）——intent store
+    // 损坏先被全局 intent blocker 拦截（intent_write_blocked /
+    // intent_store_fatal：同样 callback=0、ticket 保持 active、fail closed）。
+    expect(["intent_write_blocked", "intent_store_fatal"]).toContain(executed.reason);
     // ticket 保持 active（未 consume / 未 expire / 未删除）。
     expect(readTreasuryIssuedAttemptTicket(id)?.state).toBe("active");
     // 修复 store（删除损坏 intents + heap 缓存一并失效）：同 exact opening
@@ -281,7 +283,10 @@ describe("Remediation XI H：positive ticket handoff 证明", () => {
     };
     const executed = executeWithExistingBundle(service, id);
     expect(executed.callbackCount).toBe(0);
-    expect(executed.reason).toBe("issued_ticket_owner_unverifiable");
+    // 【XII】全局 quarantine blocker（prepare 的 health 前置）先拦截——
+    // quarantine_store_fatal：同样 callback=0、ticket 保持 active、fail
+    // closed（owner_unverifiable 的承载点移至 digest 后 early gate）。
+    expect(["quarantine_store_fatal", "quarantine_write_blocked"]).toContain(executed.reason);
     expect(readTreasuryIssuedAttemptTicket(id)?.state).toBe("active");
     // 修复（删除损坏 store + heap 缓存一并失效）→ 同 opening 恢复执行。
     const branch = (Memory.runtime as unknown as { treasury?: Record<string, unknown> })?.treasury!;
@@ -318,15 +323,17 @@ describe("Remediation XI H：positive ticket handoff 证明", () => {
     let ticketStateAfter: string | undefined;
     jest.isolateModules(() => {
       const handoff = require("@/runtime/treasury/attemptIssuanceHandoff") as typeof import("@/runtime/treasury/attemptIssuanceHandoff");
-      // fresh registry：resolver 的 tombstone/lineage/GRA/summary probe 均未
-      // 装配（注册方模块未加载）——正向判定不可达。
-      const rejection = handoff.gateTreasuryIssuedAttemptTicketForPrepare(id);
+      // 【XII】positive verifier 直接 import 各 source 的零读 API（无装配
+      // probe）——fresh registry 下全部 source absent → verdict absent。
+      const rejection = handoff.gateTreasuryIssuedAttemptTicketForPrepare(id, "0123456789abcdef");
       gateOutcome = rejection === null ? {} : { reason: rejection.reason, detail: rejection.detail };
       const tickets = require("@/runtime/treasury/attemptIssuanceTicket") as typeof import("@/runtime/treasury/attemptIssuanceTicket");
       ticketStateAfter = tickets.readTreasuryIssuedAttemptTicket(id)?.state;
     });
-    expect(gateOutcome.reason).toBe("issued_ticket_owner_unverifiable");
-    expect(gateOutcome.detail).toContain("probe 未装配");
+    // 【XII】无 owner（全部 source absent）→ gate 放行（null）——装配缺失
+    // 折叠为 owner 的风险已被直接 import 设计消除；probe_unavailable 仅在
+    // 显式装配探测 API 缺失时作为防御分支保留。
+    expect(gateOutcome.reason).toBeUndefined();
     expect(ticketStateAfter).toBe("active");
   });
 
@@ -353,7 +360,7 @@ describe("Remediation XI H：positive ticket handoff 证明", () => {
     expect(resolverOutcome.verdict).toBe("blocked");
     // gate 直达：durable owner 不可正向证明 → owner_unverifiable（发生在任何
     // Game callback 之前）、ticket 保持 active 不 consume。
-    const gateOutcome = gateTreasuryIssuedAttemptTicketForPrepare(id);
+    const gateOutcome = gateTreasuryIssuedAttemptTicketForPrepare(id, "0123456789abcdef");
     expect(gateOutcome?.reason).toBe("issued_ticket_owner_unverifiable");
     expect(readTreasuryIssuedAttemptTicket(id)?.state).toBe("active");
     // execute 全链：write readiness 在 authorize 层先拦截（completion store
@@ -372,7 +379,15 @@ describe("Remediation XI H：positive ticket handoff 证明", () => {
     };
     const executed = executeWithExistingBundle(service, id);
     expect(executed.callbackCount).toBe(0);
-    expect(executed.reason).toBe("issued_ticket_handoff_recovered");
+    // 【XII】execute 重试被全局 intent write blocker 先拦截（in-flight
+    // executing intent——callback=0、ticket 保持 active，不再由 execute
+    // 路径 consume）；execution-owner 的幂等 consume 由 beginTick 恢复路径
+    // 承载（matching_execution_owner → consume，4.4 / 5.3 窗口 D）。
+    expect(["intent_write_blocked", "issued_ticket_owner_in_flight"]).toContain(executed.reason);
+    expect(readTreasuryIssuedAttemptTicket(id)?.state).toBe("active");
+    // beginTick 恢复：execution-owner intent 转 quarantine 前幂等完成 handoff。
+    const intentsModule = require("@/runtime/treasury/intents") as typeof import("@/runtime/treasury/intents");
+    intentsModule.recoverTreasuryIntentsAtTickBoundary(() => null);
     expect(readTreasuryIssuedAttemptTicket(id)?.state).toBe("consumed");
     // 重复 execute：callback=0——in-flight executing intent 使全局 write
     // admission 先于 ticket gate 阻断新授权（正向 durable owner 在位的
@@ -412,14 +427,18 @@ describe("Remediation XI H：positive ticket handoff 证明", () => {
     };
     const executed = executeWithExistingBundle(service, id);
     expect(executed.callbackCount).toBe(0);
-    expect(executed.reason).not.toBe("issued_ticket_handoff_recovered");
-    expect(executed.reason).toBe("issued_ticket_store_unhealthy");
-    expect(executed.detail).toContain("read-back");
-    // ticket 完整恢复（active）+ entryCount 不变。
+    // 【XII】execute 重试先被全局 intent write blocker 拦截（callback=0，
+    // ticket 保持 active）；consume read-back 失败注入由恢复路径触发。
+    expect(["intent_write_blocked", "issued_ticket_owner_in_flight"]).toContain(executed.reason);
+    // beginTick 恢复：consume read-back 被 getter 拦截一次 → rejected（不谎
+    // 称 recovered）→ ticket 完整恢复（active）+ entryCount 不变。
+    const intentsModule = require("@/runtime/treasury/intents") as typeof import("@/runtime/treasury/intents");
+    intentsModule.recoverTreasuryIntentsAtTickBoundary(() => null);
     expect(readTreasuryIssuedAttemptTicket(id)?.state).toBe("active");
     expect(ticketStoreOfMemory().entryCount).toBe(1);
     // 修复（sabotage 已解除——getter 只拦截一次）：completeHandoff 再次成功。
-    const repaired = completeTreasuryIssuedTicketHandoff(id);
+    // 【XII】恢复路径幂等 consume（durable intent 即 execution owner）。
+    const repaired = completeTreasuryIssuedTicketHandoffForIntentRecovery(id);
     expect(repaired.status).toBe("consumed");
     expect(readTreasuryIssuedAttemptTicket(id)?.state).toBe("consumed");
   });
@@ -430,7 +449,7 @@ describe("Remediation XI H：positive ticket handoff 证明", () => {
     // resolver 不排除瞬态预留时 verdict=exact_owner（reservation 维度正向），
     // 但 handoff 协议的 durableOwnerInPlace 排除后 absent——completeHandoff 拒绝。
     // 无 reservation 的干净状态下（prepare 前）：completeHandoff → rejected。
-    const completion = completeTreasuryIssuedTicketHandoff(id);
+    const completion = completeTreasuryIssuedTicketHandoffForIntentRecovery(id);
     expect(completion.status).toBe("rejected");
     expect(readTreasuryIssuedAttemptTicket(id)?.state).toBe("active");
     // 首次正常 execute（prepare 会创建 admission reservation——不得被误判

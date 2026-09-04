@@ -743,6 +743,17 @@ function loadIntentStoreRuntime(): IntentStoreRuntime {
 // 模块加载时注册；模块单向依赖：intents 不 import attemptLineage）。
 let intentLineageProofResolver: ((transactionId: string) => { readonly lineageId: string; readonly generation: number; readonly parentTransactionId: string; readonly bindingDigest: string } | null) | null = null;
 
+// 【XII 工作流 B / 5.3 窗口 D】execution-owner intent 转 quarantine 前的
+// issued ticket handoff 幂等 consume（装配注入——attemptIssuanceHandoff
+// 模块加载时注册；模块单向依赖：intents 不 import handoff）。
+let intentHandoffRecoveryConsume: ((transactionId: string) => void) | null = null;
+
+export function registerTreasuryIntentTicketHandoffRecoveryHookForAssembly(
+  hook: ((transactionId: string) => void) | null,
+): void {
+  intentHandoffRecoveryConsume = hook;
+}
+
 export function registerTreasuryIntentLineageProofResolverForAssembly(
   resolver: ((transactionId: string) => { readonly lineageId: string; readonly generation: number; readonly parentTransactionId: string; readonly bindingDigest: string } | null) | null,
 ): void {
@@ -1490,6 +1501,11 @@ export function recoverTreasuryIntentsAtTickBoundary(
         : entry.outcome === "returned_ok"
           ? ("ok_pending_commit_unresolved" as const)
           : ("executing_at_end_tick" as const);
+    // 【XII 工作流 B / 5.3 窗口 D】execution-owner intent（callback 可能已
+    // 开始）转 quarantine 前幂等完成 issued ticket handoff（matching_
+    // execution owner → consume——XI 语义在 XII 时序下的恢复侧承接：consume
+    // 失败不阻断 quarantine 转换，ticket 由下一 tick 恢复/GC 收敛）。
+    intentHandoffRecoveryConsume?.(entry.transactionId);
     const transferred = transferTreasuryIntentToQuarantine(entry, quarantinePhase);
     if (transferred.status === "retained") {
       // emergency intent authority：保留 entry（postings/占用/slot 不丢，
@@ -1500,6 +1516,10 @@ export function recoverTreasuryIntentsAtTickBoundary(
     }
     intentEvents.quarantineConversions += 1;
     report.convertedToQuarantine += 1;
+    // 【XII / 5.3】transfer 成功而 consume 失败的中断窗口：owner 已转为
+    // 同 ID quarantine——收敛由 GC coordinator 的 ticket handoff 收敛 sweep
+    // 承载（时点分离：本 tick 内不重试，避免瞬时 read-back 故障的重复
+    // consume 尝试掩盖回滚事实）。
   }
   return report;
 }

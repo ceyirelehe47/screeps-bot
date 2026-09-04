@@ -520,10 +520,13 @@ describe("Treasury write-admission 架构边界（Remediation VIII）", () => {
     // 直接查底层 store 是其职责）、底层实现（chainRetirementCertificate /
     // cleanupSupersessionAuthority）、压缩编排（lineageRetirementSummary
     // ——certificate/range 的 replacement 在位检查）与注释引用
-    //（cleanupCompletionReplacement）。
+    //（cleanupCompletionReplacement）。【XII 工作流 A】positive ownership
+    // verifier 是 ticket handoff 的统一判定权威（全 source 聚合是其职责
+    // ——与 lifecycle owner resolver 同级的受控例外）。
     const LOW_LEVEL_LOOKUP_ALLOWLIST = new Set([
       "runtime/treasury/historicalSettlementAuthority.ts",
       "runtime/treasury/treasuryLifecycleOwnerResolver.ts",
+      "runtime/treasury/positiveOwnershipVerifier.ts",
       "runtime/treasury/chainRetirementCertificate.ts",
       "runtime/treasury/cleanupSupersessionAuthority.ts",
       "runtime/treasury/cleanupCompletionReplacement.ts",

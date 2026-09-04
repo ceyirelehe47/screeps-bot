@@ -209,6 +209,7 @@ import {
 import { runTreasuryLifecycleGcCoordinator, runTreasuryAuthorityStoreMigrationsAtTickBoundary } from "@/runtime/treasury/treasuryLifecycleGcCoordinator";
 import {
   completeTreasuryIssuedTicketHandoff,
+  completeTreasuryIssuedTicketHandoffStructured,
   gateTreasuryIssuedAttemptTicketForContractExecution,
   gateTreasuryIssuedAttemptTicketForPrepare,
   isTreasuryCurrentIssuedInitialAttemptId,
@@ -2552,11 +2553,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       //    拒绝。接管（consume）由 executePreparedAction 在 execution-started
       //    持久化后内部完成——调用者不得也不需要手工 consume。tr1_ / 非
       //    ti2_ 形态不经此门禁。                                        ──
-      const ticketPrepareGate = gateTreasuryIssuedAttemptTicketForPrepare(input.transactionId);
-      if (ticketPrepareGate !== null) {
-        metrics.transactionsRejectedInvalid += 1;
-        return { status: "rejected", reason: ticketPrepareGate.reason, detail: ticketPrepareGate.detail };
-      }
+      // 【XII 工作流 A / 4.3】ticket gate 的 early ownership probe 需要
+      // canonical digest——基础检查与 probe 一并移至 canonical transaction
+      // 构造之后（纯输入/epoch/health/blocker 检查在前）。
+
       // 全局 quarantine write blocker（第七轮）：存在任何 unresolved quarantine
       // 或 store 损坏时，一切新 transaction 在 Game callback 之前拒绝——
       // write-fault marker 不是唯一锁来源（marker 已解决但仍有其它 quarantine
@@ -2607,6 +2607,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const canonical = buildTreasuryCanonicalTransaction(input);
       const digest = computeTreasuryPayloadDigest(canonical);
       metrics.digestGenerations += 1;
+      // 【XII 工作流 A / 4.3】ticket prepare gate（基础检查 + early
+      // ownership probe）在 canonical digest 构造之后——probe 的 known
+      // 维度携带 canonical digest（同 ID 不同 canonical payload 的 owner
+      // 即 identity conflict，O1）。
+      const ticketPrepareGate = gateTreasuryIssuedAttemptTicketForPrepare(input.transactionId, digest);
+      if (ticketPrepareGate !== null) {
+        metrics.transactionsRejectedInvalid += 1;
+        return { status: "rejected", reason: ticketPrepareGate.reason, detail: ticketPrepareGate.detail };
+      }
       const existingPrepare = preparedById.get(input.transactionId);
       if (existingPrepare) {
         if (existingPrepare.digest !== digest) {
@@ -3117,6 +3126,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         const bindingGate = gateTreasuryIssuedAttemptTicketForContractExecution(
           record.canonical.transactionId,
           execution.intentContract.contractDigest,
+          // 【XII 工作流 A / 4.3】binding 双维度：AC4 contract digest + prepared
+          // canonical transaction digest（不同 opening 的任一维度不同即
+          // binding conflict；early probe 同样以双维度判定）。
+          record.digest,
         );
         if (bindingGate !== null) {
           record.state = "aborted";
@@ -3588,6 +3601,98 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         record.lineageId = tr1LineageId;
         record.lineageParentTransactionId = tr1LineageParentTransactionId;
       }
+      // ──【Round 22 Remediation XII 工作流 A/B / 3.2-3.4 + 5.1】issued
+      //    ticket handoff：**先于** Intent 进入 executing（XII 时序反转——
+      //    XI 的 executing→consume 顺序会在 consume 失败时留下 execution-
+      //    unknown 的虚假信号，P1/P2）。此时 durable callback_not_started
+      //    owner（intent not_started/ready）已写入并 read-back 验证，expected
+      //    opening identity 的全部维度已构造（canonical digest / contract
+      //    digest / cohort digest / durable identity / proofClass / tr1_
+      //    lineage 四字段）：
+      //     - verifier 聚合全部 source（无 first-match）→ matching owner
+      //       （identity 与当前 opening 完全一致）→ consume + consume
+      //       read-back → consumed 才允许 progress executing；
+      //     - identity/outcome conflict、insufficient、store unhealthy、
+      //       protocol/retired-only → callback=0、ticket 保持原状态、
+      //       **Intent 保持 callback_not_started（不进 executing、不进
+      //       quarantine）**——beginTick 安全释放（窗口 B）或修复后同
+      //       exact opening 幂等重试（O1-O8 / 5.2）。
+      if (isTreasuryCurrentIssuedInitialAttemptId(record.canonical.transactionId)) {
+        const expectedOpeningIdentity = treasuryExactAttemptIdentityOfFacts(
+          record.canonical.transactionId,
+          {
+            digest: record.digest,
+            ...(execution?.intentContract?.contractDigest !== undefined
+              ? { contractDigest: execution.intentContract.contractDigest }
+              : {}),
+            ...(redeemedCohort !== undefined
+              ? { authorizationCohortDigest: computeTreasuryAuthorizationCohortDigest(redeemedCohort) }
+              : {}),
+            ...(record.durableIdentityDigest !== undefined ? { durableIdentityDigest: record.durableIdentityDigest } : {}),
+            ...(readBack?.lowlevelSource !== undefined ? { lowlevelSource: readBack.lowlevelSource } : {}),
+            ...(tr1LineageId !== undefined && tr1LineageBindingDigest !== undefined
+              ? {
+                  lineageId: tr1LineageId,
+                  lineageGeneration: tr1LineageGeneration,
+                  parentTransactionId: tr1LineageParentTransactionId,
+                  lineageBindingDigest: tr1LineageBindingDigest,
+                }
+              : {}),
+          },
+          intentAuthorityLevel === "lowlevel" ? "lowlevel" : "identity-bound",
+        );
+        if (expectedOpeningIdentity === null) {
+          // expected 无法构造（协议内部错误）——fail closed（不 consume、
+          // 不进 executing、callback=0）。
+          metrics.transactionsRejectedInvalid += 1;
+          record.state = "expired";
+          preparedById.delete(record.canonical.transactionId);
+          projection.tentativeRelease(record.tentativeKey);
+          releaseTreasuryReceiptReservation(record.canonical.transactionId);
+          const identityHeadroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
+          finalizeHandleRecord(record, "expired");
+          return {
+            status: "prepare_rejected",
+            reason: "issued_ticket_handoff_failed",
+            detail: `expected opening identity 构造失败（内部协议错误）——不 consume、Intent 保持 not_started，Game callback 零调用${identityHeadroomNote}`,
+          };
+        }
+        const handoff = completeTreasuryIssuedTicketHandoffStructured(record.canonical.transactionId, expectedOpeningIdentity);
+        if (handoff.status !== "consumed") {
+          metrics.transactionsRejectedInvalid += 1;
+          if (tr1LineageId !== undefined) {
+            // tr1_ 的 capability 已消费——按确定未执行路径回滚 lineage 并
+            // 释放 intent（同 progress 失败分支的既有语义）。
+            releaseTreasuryIntentEntry(record.canonical.transactionId);
+            rollbackTreasuryLineageToRearmReady(tr1LineageId);
+          }
+          record.state = "expired";
+          preparedById.delete(record.canonical.transactionId);
+          projection.tentativeRelease(record.tentativeKey);
+          releaseTreasuryReceiptReservation(record.canonical.transactionId);
+          const handoffHeadroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
+          finalizeHandleRecord(record, "expired");
+          // 【XII / 5.2】Intent 保持 (not_started, ready)——callback 确定未
+          // 开始（P1/P2：不进 executing、不转 execution-unknown、不进
+          // quarantine；beginTick 释放或同 exact opening 幂等重试）。
+          return {
+            status: "prepare_rejected",
+            reason:
+              handoff.status === "rejected" && handoff.verdict === "store_unhealthy"
+                ? "issued_ticket_store_unhealthy"
+                : handoff.status === "rejected" && (handoff.verdict === "identity_conflict" || handoff.verdict === "outcome_conflict")
+                  ? "issued_ticket_owner_conflict"
+                  : handoff.status === "rejected" && handoff.verdict === "insufficient"
+                    ? "issued_ticket_owner_insufficient"
+                    : handoff.status === "rejected" && (handoff.verdict === "protocol_only" || handoff.verdict === "retired_only")
+                      ? "issued_ticket_owner_protocol"
+                      : handoff.status === "absent"
+                        ? "issued_ticket_missing"
+                        : "issued_ticket_handoff_failed",
+            detail: `issued ticket handoff 未完成（${handoff.status === "rejected" ? handoff.verdict + ": " + handoff.detail : handoff.status}）——Intent 保持 callback_not_started（不进 executing / 不产生 execution-unknown），ticket 保持原状态，Game callback 零调用${handoffHeadroomNote}`,
+          };
+        }
+      }
       // ── execution-started（ready → executing，严格迁移：期望前序 + digest
       //    一致）：任何 rejected（含 not_found——第九轮修复：entry 缺失绝不能
       //    无权威地执行 callback）都 callback 零调用、保守关闭。【第十八轮
@@ -3620,35 +3725,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         };
       }
       record.state = "executing";
-      // ──【Round 22 Remediation X 工作流 B → XI 工作流 A / 3.2】issued
-      //    ticket → durable owner 的接管完成点：execution-started 已持久化
-      //    （executing intent 即 durable lifecycle owner，read-back 已验证），
-      //    此后 ticket 永不回到 active（B6）。handoff consume 必须在 Game
-      //    callback 之前成功——callback 永远在成功 handoff 判定之后且恰好
-      //    一次（XI）：consume 失败（store read-back 抖动 / 状态冲突 / ticket
-      //    缺失）→ callback=0、保守关闭 handle（intent 保留 executing——
-      //    durable owner 在位，下次 gate 以 exact_owner 幂等补完成，不重复
-      //    callback）。
-      if (isTreasuryCurrentIssuedInitialAttemptId(record.canonical.transactionId)) {
-        const handoff = completeTreasuryIssuedTicketHandoff(record.canonical.transactionId);
-        if (handoff.status !== "consumed") {
-          metrics.transactionsRejectedInvalid += 1;
-          record.state = "expired";
-          preparedById.delete(record.canonical.transactionId);
-          projection.tentativeRelease(record.tentativeKey);
-          releaseTreasuryReceiptReservation(record.canonical.transactionId);
-          const handoffHeadroomNote = describeTreasuryCompletionHeadroomRelease(record.canonical.transactionId);
-          finalizeHandleRecord(record, "expired");
-          return {
-            status: "prepare_rejected",
-            reason:
-              handoff.status === "rejected" && handoff.reason === "store_unhealthy"
-                ? "issued_ticket_store_unhealthy"
-                : "issued_ticket_handoff_failed",
-            detail: `issued ticket handoff consume 失败（${handoff.status === "rejected" ? handoff.detail : "ticket 缺失（同 tick 内被删除）"}）——execution-started 已持久化（durable owner 保留在位，下次 gate 幂等补完成），Game callback 零调用${handoffHeadroomNote}`,
-          };
-        }
-      }
+      // 【XII 工作流 B】issued ticket handoff 已在本 tick 更早位置（intent
+      // read-back 之后、progress executing 之前）完成——consume 失败路径
+      // 不会到达此处（Intent 不进 executing、callback=0）。此处 executing
+      // 意味着 ticket 已 consumed + read-back（不存在"executing 而未
+      // consume"的持久状态）。
       if (tr1LineageId !== undefined && tr1LineageBindingDigest !== undefined) {
         // ──【第十八轮 24.2】armed 推进（executing 已持久化之后、Game callback
         //    之前）：失败 → callback 零调用、intent 保留在 executing（beginTick

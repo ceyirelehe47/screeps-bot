@@ -21,10 +21,12 @@
 
 import {
   expireTreasuryIssuedAttemptTickets,
+  listTreasuryActiveIssuedTicketTransactionIds,
   peekTreasuryIssuedAttemptTicketHealth,
   retireTreasuryTerminalIssuedAttemptTickets,
 } from "@/runtime/treasury/attemptIssuanceTicket";
 import { peekTreasuryIssuedAttemptWatermark, migrateTreasuryAttemptIssuerStoreLegacyAtTickBoundary } from "@/runtime/treasury/attemptIssuer";
+import { completeTreasuryIssuedTicketHandoffForIntentRecovery } from "@/runtime/treasury/attemptIssuanceHandoff";
 import { migrateLegacyRetiredRangeStore } from "@/runtime/treasury/chainRetirementCertificate";
 import { migrateTreasuryLineageStoreLegacyAtTickBoundary } from "@/runtime/treasury/attemptLineage";
 import { migrateTreasuryRetirementSummaryStoreLegacyAtTickBoundary } from "@/runtime/treasury/lineageRetirementSummary";
@@ -75,6 +77,8 @@ export interface TreasuryLifecycleGcReport {
   readonly rangeMigration: TreasuryRetiredRangeMigrationReport;
   /** 【XII 工作流 D / Q7】authority store legacy 版本迁移阶段结果（beginTick 最前置）。 */
   readonly authorityMigration: TreasuryAuthorityStoreMigrationReport;
+  /** 【XII 工作流 B / 5.3】execution-owner ticket handoff 收敛数（quarantine owner 在位的 active ticket 幂等 consume）。 */
+  readonly ticketHandoffConverged: number;
 }
 
 /**
@@ -122,9 +126,21 @@ export function runTreasuryLifecycleGcCoordinator(): TreasuryLifecycleGcReport {
       skipped: `issued ticket store unhealthy: ${ticketHealth.detail}（GC 跳过——fail closed）`,
       rangeMigration,
       authorityMigration,
+      ticketHandoffConverged: 0,
     };
   }
   const ticketsExpired = expireTreasuryIssuedAttemptTickets();
+  // 【XII 工作流 B / 5.3】ticket handoff 收敛 sweep（有界——active ticket ≤
+  // 容量上限）：beginTick 恢复把 execution-owner intent 转 quarantine 时若
+  // consume 失败（read-back 抖动等），owner 已转为同 ID quarantine 而 ticket
+  // 仍 active——本 sweep 以 quarantine owner（execution-unknown 权威）幂等
+  // 补 consume（ForIntentRecovery 内部自验：intent/quarantine 在位 + identity
+  // 可构造；不满足即跳过，不误伤普通 active ticket）。
+  let ticketHandoffConverged = 0;
+  for (const activeId of listTreasuryActiveIssuedTicketTransactionIds()) {
+    const converged = completeTreasuryIssuedTicketHandoffForIntentRecovery(activeId);
+    if (converged.status === "consumed") ticketHandoffConverged += 1;
+  }
   const watermark = peekTreasuryIssuedAttemptWatermark();
   if (watermark < 0) {
     return {
@@ -133,6 +149,7 @@ export function runTreasuryLifecycleGcCoordinator(): TreasuryLifecycleGcReport {
       skipped: "issuer watermark 不可读（terminal ticket 淘汰跳过——fail closed）",
       rangeMigration,
       authorityMigration,
+      ticketHandoffConverged,
     };
   }
   const retirement = retireTreasuryTerminalIssuedAttemptTickets(watermark);
@@ -142,5 +159,6 @@ export function runTreasuryLifecycleGcCoordinator(): TreasuryLifecycleGcReport {
     skipped: retirement.detail,
     rangeMigration,
     authorityMigration,
+    ticketHandoffConverged,
   };
 }
