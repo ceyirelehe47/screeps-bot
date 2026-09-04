@@ -1127,14 +1127,17 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
     actionContractEvents.rejected += 1;
     return { status: "prepare_rejected", reason: "contract_invalid", detail: "contract 未在本模块构建（伪造对象/JSON 副本一律无效）" };
   }
-  // ──【Round 22 Remediation VIII 工作流 A】production contract 通道的
-  //    runtime ID 命名空间 enforcement（不再只依赖架构测试约束"生产调用
-  //    方必须经 mint"）：
-  //    - ti1_ initial attempt：完整 service-issued 验证（watermark + v2
-  //      确定性重算——同 sequence 错误 checksum 无法冒充；seq >
+  // ──【Round 22 Remediation VIII 工作流 A / IX 工作流 A】production
+  //    contract 通道的 runtime ID 命名空间 enforcement（不再只依赖架构测试
+  //    约束"生产调用方必须经受控 opening"）：
+  //    - ti2_ initial attempt：完整 service-issued 验证（v2 store watermark
+  //      + v3 确定性重算——同 sequence 错误 checksum 无法冒充；seq >
   //      watermark 与 hash 篡改同样拒绝）；
   //    - tr1_ rearm attempt：放行至 facade prepareTransaction 的 opaque
   //      capability 门禁（单一权威——contract 层不重复验证）；
+  //    - 旧 ti1_ 命名空间：legacy issued namespace——IX 迁移后不再是当前
+  //      发行协议，一律 legacy_unverified 拒绝新执行（既有权威中的旧 ID
+  //      继续 replay 阻断）；
   //    - arbitrary / ts1_ / tt1_ / 普通字符串：production 装配（registry
   //      sealed）下一律拒绝——service-issued 命名空间之外不存在合法的
   //      新 initial attempt ID。测试域（unsealed）保留受控入口，与
@@ -1157,7 +1160,7 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
     return {
       status: "prepare_rejected",
       reason: "issuer_store_unhealthy",
-      detail: `attempt issuer store unhealthy（${issuedCheck.detail}）——ti1_ ID 发行事实不可判定，fail closed`,
+      detail: `attempt issuer store unhealthy（${issuedCheck.detail}）——ti2_ ID 发行事实不可判定，fail closed`,
     };
   } else if (issuedCheck.status === "forged_future") {
     actionContractEvents.rejected += 1;
@@ -1171,14 +1174,16 @@ export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
     return {
       status: "prepare_rejected",
       reason: "transaction_id_not_issued",
-      detail: `transactionId ${contract.transactionId.slice(0, 24)} 的发行序号（${String(issuedCheck.sequence)}）已过但完整 ID 与确定性重算不匹配（篡改 checksum / 旧 v1 hash）——当前格式唯一合法完整 ID 之外的值一律拒绝（Game callback 零调用）`,
+      detail: issuedCheck.namespace === "legacy"
+        ? `transactionId ${contract.transactionId.slice(0, 24)} 属于旧 ti1_ issued namespace（IX 迁移后不再是当前发行协议——不作为新 initial attempt 执行；既有权威中的旧 ID 继续由 durable settlement authority 阻断重放）`
+        : `transactionId ${contract.transactionId.slice(0, 24)} 的发行序号（${String(issuedCheck.sequence)}）已过但完整 ID 与确定性重算不匹配（篡改 checksum）——当前格式唯一合法完整 ID 之外的值一律拒绝（Game callback 零调用）`,
     };
   } else if (issuedCheck.status === "not_service_issued" && productionChannel) {
     actionContractEvents.rejected += 1;
     return {
       status: "prepare_rejected",
       reason: "transaction_id_not_service_issued",
-      detail: `transactionId ${contract.transactionId.slice(0, 24)} 不在 service-issued 命名空间（须为 ti1_ mint 或 tr1_ capability 派生）——production contract writer 不接受 arbitrary / ts1_ / tt1_ ID（Game callback 零调用）`,
+      detail: `transactionId ${contract.transactionId.slice(0, 24)} 不在 service-issued 命名空间（须为 ti2_ 受控 opening 签发或 tr1_ capability 派生）——production contract writer 不接受 arbitrary / ts1_ / tt1_ / 旧 ti1_ ID（Game callback 零调用）`,
     };
   }
   // 【第十八轮 24.13】execution request 的 source 不得覆盖已授权 contract
