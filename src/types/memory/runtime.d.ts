@@ -737,7 +737,13 @@ declare global {
         };
         /** 同键流出与流入不互相抵消：分别成腿（一负一正两条）。 */
         worstCase: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
-        /** 调用边界事实（v3：worldSequence = 调用前受控世界序——观察覆盖判定锚点，可选兼容旧记录）。 */
+        /**
+         * 调用边界事实（Remediation I/R1：dispatch_start 与 phase 同次
+         * 发布的恢复锚点——"调用已获准进入，此后可能发生"；不是
+         * executed 也不是 external.accepted。
+         */
+        invocationBoundary: { atTick: number; worldSequence?: number } | null;
+        /** 实际调用事实（v3：worldSequence = 调用前受控世界序——观察覆盖判定锚点，可选兼容旧记录）。 */
         invocation: { atTick: number; worldSequence?: number } | null;
         external: { accepted: boolean; atTick: number } | null;
         outcome: "unknown" | "committed" | "not_executed";
@@ -747,7 +753,8 @@ declare global {
           source: string;
           atTick: number;
         } | null;
-        cleanup: { consumerKeys: readonly string[]; failures: number };
+        /** cursor = 记录内消费者轮转位置（Remediation I/R2：调度元信息，不是完成 proof）。 */
+        cleanup: { consumerKeys: readonly string[]; failures: number; cursor: number };
         retryDeadlineTick: number | null;
         lastError: string | null;
       }>;

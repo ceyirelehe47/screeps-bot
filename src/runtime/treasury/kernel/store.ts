@@ -137,7 +137,7 @@ function rejectUnknownFields(value: Record<string, unknown>, label: string, allo
 
 const WORK_RECORD_FIELDS = [
   "workKey", "attemptId", "generation", "parentAttemptId", "phase", "admittedAtTick",
-  "updatedAtTick", "identity", "worstCase", "invocation", "external", "outcome",
+  "updatedAtTick", "identity", "worstCase", "invocationBoundary", "invocation", "external", "outcome",
   "outcomeEvidence", "cleanup", "retryDeadlineTick", "lastError",
 ] as const;
 const IDENTITY_FIELDS = [
@@ -146,7 +146,7 @@ const IDENTITY_FIELDS = [
 ] as const;
 const LEG_FIELDS = ["roomName", "locationKind", "resource", "delta"] as const;
 const EVIDENCE_FIELDS = ["kind", "conclusion", "source", "atTick"] as const;
-const CLEANUP_FIELDS = ["consumerKeys", "failures"] as const;
+const CLEANUP_FIELDS = ["consumerKeys", "failures", "cursor"] as const;
 
 function validateWorkRecord(attemptId: string, value: unknown): string | null {
   if (!isPlainObject(value)) return `active[${attemptId}] 非对象`;
@@ -237,6 +237,29 @@ function validateWorkRecord(attemptId: string, value: unknown): string | null {
       return `active[${attemptId}].worstCase 腿非法`;
     }
   }
+  if (r.invocationBoundary !== null) {
+    if (!isPlainObject(r.invocationBoundary)) return `active[${attemptId}].invocationBoundary 非法`;
+    problem = rejectUnknownFields(r.invocationBoundary, `active[${attemptId}].invocationBoundary`, ["atTick", "worldSequence"]);
+    if (problem !== null) return problem;
+    if (!nonNegativeSafeInteger(r.invocationBoundary.atTick)) return `active[${attemptId}].invocationBoundary.atTick 非法`;
+    if (r.invocationBoundary.worldSequence !== undefined && !nonNegativeSafeInteger(r.invocationBoundary.worldSequence)) {
+      return `active[${attemptId}].invocationBoundary.worldSequence 非法`;
+    }
+  }
+  // Remediation I/R1/§4.1：调用边界与 dispatching 同次发布——dispatching/
+  // outcome_unknown 必有边界锚点（缺锚点的旧记录是不完整数据，
+  // 拒绝而不补当前时间修成健康；不做在线迁移）。实际调用/接受
+  // 事实存在 ⇒ 边界必然已发布过（一致性）。pending 不得持有任何
+  // 调用侧事实（未开始）。
+  if ((r.phase === "dispatching" || r.phase === "outcome_unknown") && r.invocationBoundary === null) {
+    return `active[${attemptId}] 阶段 ${r.phase} 但缺调用边界锚点（结果真实性不可恢复的不完整数据）`;
+  }
+  if ((r.invocation !== null || r.external !== null) && r.invocationBoundary === null) {
+    return `active[${attemptId}] 持有调用/接受事实但缺调用边界（结构矛盾）`;
+  }
+  if (r.phase === "pending" && (r.invocationBoundary !== null || r.invocation !== null || r.external !== null)) {
+    return `active[${attemptId}] pending 持有调用侧事实（未开始不得伪造调用事实）`;
+  }
   if (r.invocation !== null) {
     if (!isPlainObject(r.invocation)) return `active[${attemptId}].invocation 非法`;
     problem = rejectUnknownFields(r.invocation, `active[${attemptId}].invocation`, ["atTick", "worldSequence"]);
@@ -319,6 +342,11 @@ function validateWorkRecord(attemptId: string, value: unknown): string | null {
   }
   if (typeof r.cleanup.failures !== "number" || !Number.isSafeInteger(r.cleanup.failures) || r.cleanup.failures < 0) {
     return `active[${attemptId}].cleanup.failures 非法`;
+  }
+  // 记录内轮转位置（Remediation I/R2）：非负安全整数（不约束 < 集合
+  // 长度——集合缩小/回绕后按取模安全重定位）；调度元信息，不是完成 proof。
+  if (typeof r.cleanup.cursor !== "number" || !Number.isSafeInteger(r.cleanup.cursor) || r.cleanup.cursor < 0) {
+    return `active[${attemptId}].cleanup.cursor 非法`;
   }
   if (r.retryDeadlineTick !== null && !nonNegativeSafeInteger(r.retryDeadlineTick)) {
     return `active[${attemptId}].retryDeadlineTick 非法`;
@@ -718,6 +746,7 @@ export function buildTreasuryCoreWorstWorkRecord(): TreasuryCoreWorkRecord {
       resource: worstIdentifier(32),
       delta: -WORST_SAFE_INTEGER,
     })),
+    invocationBoundary: { atTick: WORST_SAFE_INTEGER, worldSequence: WORST_SAFE_INTEGER },
     invocation: { atTick: WORST_SAFE_INTEGER, worldSequence: WORST_SAFE_INTEGER },
     external: { accepted: true, atTick: WORST_SAFE_INTEGER },
     outcome: "not_executed",
@@ -730,6 +759,7 @@ export function buildTreasuryCoreWorstWorkRecord(): TreasuryCoreWorkRecord {
     cleanup: {
       consumerKeys: Array.from({ length: TREASURY_CORE_CONSUMER_KEYS_MAX }, (_, i) => worstConsumerKey(i)),
       failures: WORST_SAFE_INTEGER,
+      cursor: WORST_SAFE_INTEGER,
     },
     retryDeadlineTick: WORST_SAFE_INTEGER,
     lastError: " ".repeat(TREASURY_CORE_ERROR_DETAIL_MAX),

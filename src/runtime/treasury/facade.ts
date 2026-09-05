@@ -1208,6 +1208,17 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // 形状预检：完整许可校验在 kernel（WeakSet 身份/冻结/generation）。
         return { status: "rejected", reason: "dispatch 许可形状不可信（kernel 终验前的前置拒绝）" };
       }
+      // 许可认证前置（Remediation I/R4/§6.2）：在读取 postings/owner 作为
+      // 授权输入、调用 policy 或消耗 fresh 额度**之前**，确认这是本运行时
+      // 签发、当前 tick/generation 有效、未消费且对应当前可执行活跃
+      // attempt 的真许可——非法克隆/旧 runtime/过期/已消费/已退出工作的
+      // 许可不再占用高成本验证资源（fresh/policy 零增量、实际动作 0）。
+      // 预检是只读的；真正调用边界的终验仍在 kernel.executeDispatch 内。
+      const permitPreflight = kernel.preflightDispatchPermit(dispatch);
+      if (permitPreflight.status === "invalid") {
+        metrics.transactionsRejectedInvalid += 1;
+        return { status: "rejected", reason: `dispatch 许可认证失败（${permitPreflight.reason}）` };
+      }
       // 复验（§4.4）：当前 policy/承诺/容量/结构事实——同一判定公式，
       // 排除本笔 pending 占用（既有责任继续兑现，不双扣）。
       const revalidation = evaluateRevalidation(
@@ -1263,6 +1274,36 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const window = admissionWindowOpen();
       if (window.status === "closed") {
         return { status: "rejected", reason: window.reason, reasonCode: "lifecycle_closed" };
+      }
+      // rearm 新消费者义务：本轮只拒绝（Remediation I/R3/§6.1）。公共
+      // executeRearm 不提供新 child 消费者义务的发行与释放能力——非空
+      // externalConsumers 必须结构化拒绝（理由明确），不得静默忽略后创建
+      // 空义务 child；类型非法（null/对象/字符串）同样是结构化 invalid
+      // input，不抛错。拒绝先于父代权利消费、child ID/记录发布与其他
+      // 可避免的高成本授权处理；父代保持合法 retry_ready，capability
+      // 在原 tick/runtime 规则内仍可用于不含新义务的合法请求。
+      if (options?.externalConsumers !== undefined) {
+        if (!Array.isArray(options.externalConsumers)) {
+          return {
+            status: "rejected",
+            reason: "rearm 请求的 externalConsumers 类型非法（须为数组）——结构化拒绝，不静默忽略",
+            reasonCode: "invalid_input",
+          };
+        }
+        if (options.externalConsumers.length > 0) {
+          return {
+            status: "rejected",
+            reason: `当前 rearm 不支持新消费者义务（收到 ${String(options.externalConsumers.length)} 项——child 不发行外部消费者义务，请求不被静默丢弃）`,
+            reasonCode: "invalid_input",
+          };
+        }
+      }
+      // 许可认证前置（Remediation I/R4/§6.2）：先于 contract 验证等高成本
+      // 处理确认 rearm 许可真实性（本 runtime 签发/未消费/父代仍
+      // retry_ready）——非法输入不消耗授权资源。
+      const rearmPreflight = kernel.preflightRearmPermit(rearm);
+      if (rearmPreflight.status === "invalid") {
+        return { status: "rejected", reason: `rearm 许可认证失败（${rearmPreflight.reason}）`, reasonCode: "invalid_input" };
       }
       const verify = verifyTreasuryActionContractForAuthorization(contract);
       if (verify.status !== "ok") {

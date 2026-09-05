@@ -214,6 +214,13 @@ export interface TreasuryCoreCleanupState {
   readonly consumerKeys: readonly string[];
   /** 连续清理失败计数（诊断；不无限累积故障记录）。 */
   failures: number;
+  /**
+   * 记录内消费者轮转位置（Remediation I/R2/§5.1）：剩余集合内的服务
+   * 偏移，随成对预算的确认命令持久推进。调度元信息——集合成员资格仍是
+   * 唯一未完成义务事实，本值不证明任何义务完成；集合缩小/回绕时按
+   * 取模安全重定位（不越界、不永久跳过成员）。
+   */
+  cursor: number;
 }
 
 export interface TreasuryCoreWorkRecord {
@@ -226,6 +233,16 @@ export interface TreasuryCoreWorkRecord {
   readonly updatedAtTick: number;
   readonly identity: TreasuryCoreIdentityFacts;
   readonly worstCase: readonly TreasuryCoreWorstCaseLeg[];
+  /**
+   * 调用边界事实（Remediation I/R1/§4.1）：dispatch_start 与
+   * pending→dispatching **同次发布**的恢复锚点——语义是"调用已获准进入，
+   * 此后可能发生"，不是 executed=true 也不是 external.accepted=true。
+   * 效果只可能在边界之后发生：观察构建序 > 边界序即覆盖（退出判定的
+   * 保守下界锚点）。实际调用/接受事实见 invocation/external（独立含义，
+   * 读者不得把前置边界误读成实际成功）。dispatch_result/recover/settle
+   * 保留不改写；rearm 的新 child 从 null 起步（不继承父代边界）。
+   */
+  readonly invocationBoundary: TreasuryCoreInvocationFact | null;
   readonly invocation: TreasuryCoreInvocationFact | null;
   readonly external: TreasuryCoreExternalFact | null;
   readonly outcome: TreasuryCoreOutcome;

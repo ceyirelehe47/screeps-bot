@@ -77,6 +77,11 @@ export interface TreasuryCoreAdmitCommand {
 export interface TreasuryCoreDispatchStartCommand {
   readonly type: "dispatch_start";
   readonly attemptId: string;
+  /**
+   * 调用边界世界序（Remediation I/R1/§4.1）：效果侧锚点——由受控
+   * kernel 在动作调用之前读取持久世界序传入；不接受外部调用者自报。
+   */
+  readonly boundaryWorldSequence: number;
   /** 当次许可绑定的 canonical 摘要（身份不匹配 → 拒绝，不推进）。 */
   readonly canonicalDigest: string;
 }
@@ -109,6 +114,12 @@ export interface TreasuryCoreAdvanceCleanupCommand {
   readonly attemptId: string;
   /** 释放端口已确认幂等完成的外部消费者 key（kernel 传入；本模块只做状态判定）。 */
   readonly releasedDuties: readonly string[];
+  /**
+   * 记录内消费者轮转位置（Remediation I/R2/§5.1）：本次成对预算单位的
+   * 最后尝试位置 +1（取模）。无论端口 true/false/throw，只要已取得预算即随确认
+   * 命令持久推进；调度元信息，不证明义务完成。
+   */
+  readonly rotationCursor?: number;
   /**
    * 观察接管证明（IV/R1/§4.1）：committed 聚合退出的必要条件（非充分——
    * 还需义务清空）。由 kernel 编排层从 ports.observeForCleanup 取得；
@@ -279,11 +290,12 @@ function admitCommand(
     updatedAtTick: ctx.nowTick,
     identity: command.identity,
     worstCase: command.worstCase,
+    invocationBoundary: null,
     invocation: null,
     external: null,
     outcome: "unknown",
     outcomeEvidence: null,
-    cleanup: { consumerKeys: [...command.externalConsumers], failures: 0 },
+    cleanup: { consumerKeys: [...command.externalConsumers], failures: 0, cursor: 0 },
     retryDeadlineTick: null,
     lastError: null,
   };
@@ -310,7 +322,16 @@ function dispatchStartCommand(
       reason: `attempt ${command.attemptId} 身份冲突：许可绑定 ${command.canonicalDigest.slice(0, 12)}，聚合绑定 ${record.identity.canonicalDigest.slice(0, 12)}（原事实保留，不推进）`,
     };
   }
-  withRecord(memory, command.attemptId, (r) => ({ ...r, phase: "dispatching", updatedAtTick: ctx.nowTick }));
+  // Remediation I/R1/§4.1：调用边界与 pending→dispatching 同次发布（不先发
+  // dispatching 再另写一条边界——那会重新制造两步之间的恢复空窗）。语义是
+  // "调用已获准进入，此后可能发生"，不是 executed；实际调用/接受事实由
+  // dispatch_result 的 invocation/external 独立表达。
+  withRecord(memory, command.attemptId, (r) => ({
+    ...r,
+    phase: "dispatching",
+    invocationBoundary: { atTick: ctx.nowTick, worldSequence: command.boundaryWorldSequence },
+    updatedAtTick: ctx.nowTick,
+  }));
   bumpCounter(memory, "dispatched");
   return { status: "ok", memory, effects: [{ effect: "dispatch_started", attemptId: command.attemptId }] };
 }
@@ -415,14 +436,18 @@ function observationTakesOverEffect(
   record: TreasuryCoreWorkRecord,
   proof: TreasuryCoreObservationProof,
 ): boolean {
-  // 效果时点锚点：优先调用边界事实；晚到 reconcile 的记录可能只有
-  // external accepted（调用已发生的正面事实）——以其 atTick 兜底。
+  // 效果时点锚点（Remediation I/R1/§4.2）：优先实际调用事实；退到
+  // external accepted（晚到 reconcile 记录的正面事实）；再退到调用边界
+  // （边界发布后效果才可能发生——观察序 > 边界序即覆盖，
+  // 保守下界锚点；结果写回前中断的记录据此仍有退出出口）。
   const anchor =
     record.invocation !== null
       ? { atTick: record.invocation.atTick, worldSequence: record.invocation.worldSequence }
       : record.external !== null
         ? { atTick: record.external.atTick, worldSequence: undefined }
-        : null;
+        : record.invocationBoundary !== null
+          ? { atTick: record.invocationBoundary.atTick, worldSequence: record.invocationBoundary.worldSequence }
+          : null;
   if (anchor === null) return false; // 无任何调用边界事实；保守不退出
   const locationsCovered = record.worstCase.every((leg) =>
     proof.coveredLocations.includes(`${leg.roomName} ${leg.locationKind}`),
@@ -452,7 +477,13 @@ function advanceCleanupCommand(
     const failures = command.releasedDuties.length === 0 ? record.cleanup.failures + 1 : record.cleanup.failures;
     withRecord(memory, command.attemptId, (r) => ({
       ...r,
-      cleanup: { consumerKeys: remaining, failures: Math.min(failures, TREASURY_CORE_COUNTER_SATURATION) },
+      // Remediation I/R2：轮转位置随确认命令持久推进（集合缩小后由
+      // 消费方按取模重定位——这里存原值，下次读时安全回绕）。
+      cleanup: {
+        consumerKeys: remaining,
+        failures: Math.min(failures, TREASURY_CORE_COUNTER_SATURATION),
+        cursor: command.rotationCursor ?? r.cleanup.cursor,
+      },
       updatedAtTick: ctx.nowTick,
     }));
     return { status: "ok", memory, effects: [] };
@@ -478,7 +509,7 @@ function advanceCleanupCommand(
       ...r,
       phase: "retry_ready",
       retryDeadlineTick: ctx.nowTick + TREASURY_CORE_RETRY_RIGHT_TICKS,
-      cleanup: { consumerKeys: [], failures: r.cleanup.failures },
+      cleanup: { consumerKeys: [], failures: r.cleanup.failures, cursor: 0 },
       updatedAtTick: ctx.nowTick,
     }));
     return { status: "ok", memory, effects: [{ effect: "retry_ready", attemptId: command.attemptId }] };
@@ -495,7 +526,7 @@ function advanceCleanupCommand(
     }
     withRecord(memory, command.attemptId, (r) => ({
       ...r,
-      cleanup: { consumerKeys: [], failures: r.cleanup.failures },
+      cleanup: { consumerKeys: [], failures: r.cleanup.failures, cursor: 0 },
       updatedAtTick: ctx.nowTick,
     }));
     return { status: "ok", memory, effects: [] };
@@ -566,6 +597,9 @@ function rearmCommand(
     updatedAtTick: ctx.nowTick,
     identity: command.identity,
     worstCase: command.worstCase,
+    // Remediation I/R1/§4.2：新 child 从未开始状态起步——不继承父代
+    // 调用边界或接受事实（旧代许可始终不可再次执行）。
+    invocationBoundary: null,
     invocation: null,
     external: null,
     outcome: "unknown",
@@ -573,7 +607,7 @@ function rearmCommand(
     // IV/R5/§6.3：child 不继承父代义务——retry_ready 的父代 cleanup 必为
     // 空集合（validator 强制）；child 是新 attempt，不带外部消费者义务
     // （rearm 命令不接受 externalConsumers——不新增 child 义务发行系统）。
-    cleanup: { consumerKeys: [], failures: 0 },
+    cleanup: { consumerKeys: [], failures: 0, cursor: 0 },
     retryDeadlineTick: null,
     lastError: null,
   };
@@ -658,7 +692,7 @@ function cancelPendingCommand(
   if (phaseProblem !== null) {
     return { status: "rejected", reason: `${phaseProblem}（只有确定未开始的 pending 可安全取消）` };
   }
-  if (record.invocation !== null || record.external !== null) {
+  if (record.invocation !== null || record.external !== null || record.invocationBoundary !== null) {
     return { status: "rejected", reason: "存在调用边界事实（不可凭取消抹除已发生的调用）" };
   }
   if (record.cleanup.consumerKeys.length > 0) {
