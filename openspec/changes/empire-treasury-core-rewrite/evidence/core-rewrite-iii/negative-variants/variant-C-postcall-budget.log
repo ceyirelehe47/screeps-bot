@@ -1,0 +1,4 @@
+variant C：释放端口预算预扣退回调用后计费（预扣不持久发布——重入读到旧预算）
+command: npx jest --runInBand src/runtime/treasury/treasuryRewrite3Acceptance.test.ts
+  ● C16 释放端口重入共享预算 › 两条 closing × 8 消费者、端口单次重入 beginTick：本 tick 实际释放调用总计 ≤ 8 且真实调用 > 0
+Tests:       3 failed, 55 passed, 58 total

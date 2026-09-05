@@ -1269,8 +1269,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         health.status === "healthy"
           ? listTreasuryCoreActiveWorks(health.memory).map((record) => treasuryBoundedDeepFreezeSnapshot(record) as TreasuryCoreWorkRecord)
           : [];
+      // R7/§8.2：ring 非数组或含坏元素（healthy + ringDegraded 可达）不得
+      // 使查询崩溃，也不复制/遍历坏历史——degraded 时返回空历史 + 诊断。
       const ringSource =
-        health.status === "healthy" && Array.isArray(health.memory.ring) ? health.memory.ring : [];
+        health.status === "healthy" && health.ringDegraded === null && Array.isArray(health.memory.ring)
+          ? health.memory.ring
+          : [];
       const ring: readonly TreasuryCoreRingEntry[] = ringSource.map(
         (entry) => treasuryBoundedDeepFreezeSnapshot(entry) as TreasuryCoreRingEntry,
       );

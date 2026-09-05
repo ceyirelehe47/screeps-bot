@@ -40,6 +40,62 @@ export interface TreasuryLegacyAttackInputs {
   readonly rearm?: unknown;
 }
 
+interface WorldStructureSnapshot {
+  readonly id: string;
+  readonly resources: Record<string, number>;
+  readonly freeCapacity: number;
+}
+
+interface WorldSnapshot {
+  readonly [roomName: string]: {
+    readonly storage?: WorldStructureSnapshot;
+    readonly terminal?: WorldStructureSnapshot;
+  };
+}
+
+/**
+ * 快照当前受控世界（§6.3：重装 mock 房间不得把已发生的世界效果重置回
+ * 原余额——结构与数值原样保留；世界序不回退）。
+ */
+function snapshotWorld(): WorldSnapshot {
+  const rooms = (globalThis as unknown as { Game: { rooms?: Record<string, Room> } }).Game.rooms ?? {};
+  const snapshot: Record<string, { storage?: WorldStructureSnapshot; terminal?: WorldStructureSnapshot }> = {};
+  for (const [roomName, room] of Object.entries(rooms)) {
+    const entry: { storage?: WorldStructureSnapshot; terminal?: WorldStructureSnapshot } = {};
+    for (const kind of ["storage", "terminal"] as const) {
+      const structure = (room as unknown as Record<string, { id: string; store: Record<string, number> } | undefined>)[kind];
+      if (structure === undefined) continue;
+      const resources: Record<string, number> = {};
+      const freeCapacity =
+        (structure.store as unknown as { __freeCapacity?: number }).__freeCapacity ?? 0;
+      for (const key of Object.keys(structure.store)) {
+        const value = structure.store[key];
+        if (typeof value === "number") resources[key] = value;
+      }
+      entry[kind] = { id: structure.id, resources, freeCapacity };
+    }
+    snapshot[roomName] = entry;
+  }
+  return snapshot as WorldSnapshot;
+}
+
+/** 重装房间规格，但保留快照中的结构 ID 与世界数值（效果不重置）。 */
+function roomSpecsWithWorld(specs: readonly RoomSpec[], world: WorldSnapshot): RoomSpec[] {
+  return specs.map((spec) => {
+    const snap = world[spec.name];
+    if (snap === undefined) return spec;
+    return {
+      ...spec,
+      storage: spec.storage && snap.storage
+        ? { id: snap.storage.id, resources: { ...snap.storage.resources }, freeCapacity: snap.storage.freeCapacity }
+        : spec.storage,
+      terminal: spec.terminal && snap.terminal
+        ? { id: snap.terminal.id, resources: { ...snap.terminal.resources }, freeCapacity: snap.terminal.freeCapacity }
+        : spec.terminal,
+    };
+  });
+}
+
 /** 序列化整个全局 Memory（断点快照）。 */
 export function snapshotWholeMemory(): string {
   return JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
@@ -82,7 +138,10 @@ export function performTreasuryFullReset(input: {
   if (input.advanceTicks !== undefined && input.advanceTicks > 0) {
     Game.time += input.advanceTicks;
   }
-  const rooms = installRooms(input.roomSpecs);
+  // §6.3：重装 mock 房间保留已发生的世界效果（结构 ID 与数值原样搬运，
+  // 不重置回规格初始值；世界序全局保留——观察覆盖判定不因重装失真）。
+  const world = snapshotWorld();
+  const rooms = installRooms(roomSpecsWithWorld(input.roomSpecs, world));
   const service = facadeModule.createTreasuryService({
     getRooms: () => Object.values(rooms),
     holderExists: () => true,

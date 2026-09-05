@@ -1,0 +1,18 @@
+    √ A pending 流出 80 后，B 流出 80 必须拒绝（累计 160 > 可支配 100） (22 ms)
+    √ 对照：B 流出 20 获准；A 安全取消后 B 流出 80 恢复获准 (11 ms)
+    √ A committed（效果未入观察）流出 80 后，B 流出 80 必须拒绝 (6 ms)
+    √ exact owner 自己的预留 300：owner 流出 950 必须获准（上层排除后 1000 ≥ 950） (3 ms)
+    √ 对照：同一场景不声明 owner 时流出 950 拒绝（预留对他人有效） (3 ms)
+    √ 授权后同 tick policy 收紧（reserve 0→950）：旧许可实际调用必须为 0 (2 ms)
+    √ 对照：policy 不变时同一许可调用恰 1 次 (6 ms)
+    √ endTick 后同 tick 再 dispatch / 第二实例重开授权：实际调用必须为 0 (4 ms)
+    √ 写入端原地把 dispatching 改回 pending：发布必须失败、实际调用 0 (3 ms)
+    √ A 执行 800 后（同 tick，观察未含效果）：第二实例 B 申请 800 必须拒绝、200 获准 (5 ms)
+    √ 对照：世界更新进入下一 tick 观察后（storage 800），B 流出 750 获准且不双扣 A (4 ms)
+    √ 两条 closing × 8 消费者、端口单次重入 beginTick：本 tick 实际释放调用总计 ≤ 8 (5 ms)
+    √ ring=null：kernelJournal/kernelMetrics 首次查询零写且不崩溃 (3 ms)
+    √ ring=null + 跨 tick pending sweep：beginTick 不崩溃且取消完成 (2 ms)
+    √ 超长 parentAttemptId（10,000 字符）必须判 unhealthy
+    √ durableFacts 夹带未知巨字段必须判 unhealthy
+    √ invocation.atTick 字符串 / external.accepted 字符串必须判 unhealthy (1 ms)
+Tests:       17 passed, 17 total

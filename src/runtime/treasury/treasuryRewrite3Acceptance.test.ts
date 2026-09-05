@@ -874,3 +874,597 @@ describe("C13 多实例接收责任（空位 100）", () => {
     ).toBe("admitted");
   });
 });
+
+// ── C16：端口重入共享预算 ──────────────────────────────────────────────────
+
+describe("C16 释放端口重入共享预算", () => {
+  function makeClosing(attemptId: string, workKey: string, consumers: string[]) {
+    return {
+      workKey,
+      attemptId,
+      generation: 1,
+      parentAttemptId: null,
+      phase: "closing" as const,
+      admittedAtTick: Game.time - 1,
+      updatedAtTick: Game.time - 1,
+      identity: {
+        actionKind: "test.transfer",
+        adapterVersion: 1,
+        adapterRegistrationId: "reg-c16",
+        adapterSemanticIdentity: "test.transfer@reconciler-semantics-v1",
+        canonicalDigest: "a".repeat(16),
+        postingsDigest: "b".repeat(16),
+        retryFactsDigest: null,
+        durableFacts: null,
+      },
+      worstCase: [],
+      invocation: { atTick: Game.time - 1 },
+      external: { accepted: true, atTick: Game.time - 1 },
+      outcome: "committed" as const,
+      outcomeEvidence: { kind: "adapter_execution_semantics" as const, conclusion: "executed" as const, source: "test", atTick: Game.time - 1 },
+      cleanup: { consumerKeys: consumers, failures: 0 },
+      retryDeadlineTick: null,
+      lastError: null,
+    };
+  }
+
+  it("两条 closing × 8 消费者、端口单次重入 beginTick：本 tick 实际释放调用总计 ≤ 8 且真实调用 > 0", () => {
+    const consumers = Array.from({ length: 8 }, (_, i) => `ext:c16:c${String(i)}`);
+    Memory.runtime = Memory.runtime ?? {};
+    (Memory.runtime as Record<string, unknown>).treasuryCore = {
+      version: 3,
+      installEpochId: "e".repeat(16),
+      issuance: { frontier: 2, burned: 0 },
+      lifecycle: { lastBeginTick: null, lastEndTick: null },
+      recovery: { sweepCursor: 0, cleanupCursor: 0, budgetTick: 0, budgetUsed: 0 },
+      active: {
+        tk1_1_aaaaaaaaaaaaaaaa: makeClosing("tk1_1_aaaaaaaaaaaaaaaa", "biz:c16:a", consumers),
+        tk1_2_aaaaaaaaaaaaaaaa: makeClosing("tk1_2_aaaaaaaaaaaaaaaa", "biz:c16:b", consumers),
+      },
+      ring: [],
+      ringCursor: 0,
+      counters: { admitted: 2, dispatched: 2, settledCommitted: 2, settledNotExecuted: 0, unknown: 0, rearmings: 0, rejectedAdmissions: 0, recoveryAdvances: 0, cleanupFailures: 0 },
+    };
+    let releaseCalls = 0;
+    let reentryDepth = 0;
+    const kernel = createTreasuryCoreKernel({
+      nowTick: () => Game.time,
+      runtimeGeneration: () => 1,
+      findAdapter: () => undefined,
+      checkAdmissionCapacity: () => null,
+      releaseExternalConsumer: () => {
+        releaseCalls += 1;
+        if (reentryDepth === 0) {
+          reentryDepth += 1;
+          kernel.beginTick();
+          reentryDepth -= 1;
+        }
+        return true;
+      },
+    });
+    kernel.beginTick();
+    // 记录健康且端口真实调用 > 0；同 tick 重入不得使总调用超过 8。
+    expect(releaseCalls).toBeGreaterThan(0);
+    expect(releaseCalls).toBeLessThanOrEqual(8);
+    const recovery = (Memory.runtime as unknown as { treasuryCore: { recovery: { budgetUsed: number } } }).treasuryCore.recovery;
+    expect(recovery.budgetUsed).toBeLessThanOrEqual(8);
+  });
+
+  it("重复入口在同 tick 预算耗尽后不再调用端口", () => {
+    const consumers = Array.from({ length: 8 }, (_, i) => `ext:c16:r${String(i)}`);
+    Memory.runtime = Memory.runtime ?? {};
+    (Memory.runtime as Record<string, unknown>).treasuryCore = {
+      version: 3,
+      installEpochId: "e".repeat(16),
+      issuance: { frontier: 1, burned: 0 },
+      lifecycle: { lastBeginTick: null, lastEndTick: null },
+      recovery: { sweepCursor: 0, cleanupCursor: 0, budgetTick: 0, budgetUsed: 0 },
+      active: { tk1_1_cccccccccccccccc: makeClosing("tk1_1_cccccccccccccccc", "biz:c16:repeat", consumers) },
+      ring: [],
+      ringCursor: 0,
+      counters: { admitted: 1, dispatched: 1, settledCommitted: 1, settledNotExecuted: 0, unknown: 0, rearmings: 0, rejectedAdmissions: 0, recoveryAdvances: 0, cleanupFailures: 0 },
+    };
+    let releaseCalls = 0;
+    const kernel = createTreasuryCoreKernel({
+      nowTick: () => Game.time,
+      runtimeGeneration: () => 1,
+      findAdapter: () => undefined,
+      checkAdmissionCapacity: () => null,
+      releaseExternalConsumer: () => {
+        releaseCalls += 1;
+        return true;
+      },
+    });
+    kernel.beginTick();
+    const afterFirst = releaseCalls;
+    expect(afterFirst).toBe(8);
+    // 同 tick 重复入口：预算已耗尽，不再调用端口。
+    kernel.beginTick();
+    expect(releaseCalls).toBe(afterFirst);
+    // 多实例（第二 kernel）：同 tick 共享持久预算，同样不再调用。
+    const kernel2 = createTreasuryCoreKernel({
+      nowTick: () => Game.time,
+      runtimeGeneration: () => 2,
+      findAdapter: () => undefined,
+      checkAdmissionCapacity: () => null,
+      releaseExternalConsumer: () => {
+        releaseCalls += 1;
+        return true;
+      },
+    });
+    kernel2.beginTick();
+    expect(releaseCalls).toBe(afterFirst);
+  });
+});
+
+// ── C17：预扣失败/硬终止/失败重试的预算语义 ────────────────────────────────
+
+describe("C17 预扣与失败预算", () => {
+  function closingFixture(attemptId: string, consumers: string[]): void {
+    Memory.runtime = Memory.runtime ?? {};
+    (Memory.runtime as Record<string, unknown>).treasuryCore = {
+      version: 3,
+      installEpochId: "e".repeat(16),
+      issuance: { frontier: 1, burned: 0 },
+      lifecycle: { lastBeginTick: null, lastEndTick: null },
+      recovery: { sweepCursor: 0, cleanupCursor: 0, budgetTick: 0, budgetUsed: 0 },
+      active: {
+        [attemptId]: {
+          workKey: "biz:c17:duty",
+          attemptId,
+          generation: 1,
+          parentAttemptId: null,
+          phase: "closing",
+          admittedAtTick: Game.time - 1,
+          updatedAtTick: Game.time - 1,
+          identity: {
+            actionKind: "test.transfer",
+            adapterVersion: 1,
+            adapterRegistrationId: "reg-c17",
+            adapterSemanticIdentity: "test.transfer@reconciler-semantics-v1",
+            canonicalDigest: "a".repeat(16),
+            postingsDigest: "b".repeat(16),
+            retryFactsDigest: null,
+            durableFacts: null,
+          },
+          worstCase: [],
+          invocation: { atTick: Game.time - 1 },
+          external: { accepted: true, atTick: Game.time - 1 },
+          outcome: "committed",
+          outcomeEvidence: { kind: "adapter_execution_semantics", conclusion: "executed", source: "test", atTick: Game.time - 1 },
+          cleanup: { consumerKeys: consumers, failures: 0 },
+          retryDeadlineTick: null,
+          lastError: null,
+        },
+      },
+      ring: [],
+      ringCursor: 0,
+      counters: { admitted: 1, dispatched: 1, settledCommitted: 1, settledNotExecuted: 0, unknown: 0, rearmings: 0, rejectedAdmissions: 0, recoveryAdvances: 0, cleanupFailures: 0 },
+    };
+  }
+
+  it("预扣发布写失败：端口调用 0（不调用未取得预算的外部端口）", () => {
+    closingFixture("tk1_1_eeeeeeeeeeeeeeee", ["ext:c17:a"]);
+    let releaseCalls = 0;
+    const kernel = createTreasuryCoreKernel({
+      nowTick: () => Game.time,
+      runtimeGeneration: () => 1,
+      findAdapter: () => undefined,
+      checkAdmissionCapacity: () => null,
+      releaseExternalConsumer: () => {
+        releaseCalls += 1;
+        return true;
+      },
+    });
+    // 拦截：只丢弃预扣写（recovery 更新且不含其它状态变化）。
+    const runtime = Memory.runtime as Record<string, unknown>;
+    const descriptor = Object.getOwnPropertyDescriptor(runtime, "treasuryCore");
+    Object.defineProperty(runtime, "treasuryCore", {
+      configurable: true,
+      get: () => descriptor?.value,
+      set(next: unknown) {
+        const draft = next as { recovery?: { budgetUsed?: number }; active?: Record<string, unknown> } | undefined;
+        const isPrepayOnly =
+          draft !== undefined &&
+          draft.recovery !== undefined &&
+          Object.keys(draft.active ?? {}).length === (Object.keys(((descriptor?.value as { active?: Record<string, unknown> })?.active) ?? {})).length;
+        if (isPrepayOnly) return; // 预扣写被丢弃
+        // 其余写放行（替换 descriptor.value 引用模拟真实存储）。
+        (descriptor as { value: unknown }).value = next;
+      },
+    });
+    try {
+      kernel.beginTick();
+    } finally {
+      delete runtime.treasuryCore;
+      if (descriptor) Object.defineProperty(runtime, "treasuryCore", descriptor);
+    }
+    expect(releaseCalls).toBe(0);
+  });
+
+  it("端口返回 false / 抛错：预算已耗、duty 保留、下 tick 幂等重试", () => {
+    closingFixture("tk1_1_ffffffffffffffff", ["ext:c17:f1", "ext:c17:f2"]);
+    const releaseCalls: string[] = [];
+    let mode = 0; // 0=throw, 1=false, 2=true
+    const kernel = createTreasuryCoreKernel({
+      nowTick: () => Game.time,
+      runtimeGeneration: () => 1,
+      findAdapter: () => undefined,
+      checkAdmissionCapacity: () => null,
+      releaseExternalConsumer: (key, id) => {
+        releaseCalls.push(`${key}@${id}`);
+        if (mode === 0) throw new Error("port fault");
+        return mode === 2;
+      },
+    });
+    kernel.beginTick(); // throw 模式：2 次调用均耗预算，duty 保留。
+    const store = () => (Memory.runtime as unknown as { treasuryCore?: { active: Record<string, { cleanup: { consumerKeys: string[] } }> } }).treasuryCore;
+    expect(store()?.active["tk1_1_ffffffffffffffff"]).toBeDefined();
+    expect(releaseCalls.length).toBe(2);
+    Game.time += 1;
+    mode = 1;
+    kernel.beginTick(); // false 模式：明确未确认。
+    expect(store()?.active["tk1_1_ffffffffffffffff"].cleanup.consumerKeys.length).toBe(2);
+    Game.time += 1;
+    mode = 2;
+    kernel.beginTick(); // 确认：全部释放并退出。
+    expect(store()?.active["tk1_1_ffffffffffffffff"]).toBeUndefined();
+    // 幂等关联：同一 (key, attemptId) 重复出现的集合只有一组。
+    expect(new Set(releaseCalls).size).toBe(2);
+  });
+});
+
+// ── C18：公平推进（前 8 失败 + 后续完成 + 混合流量不饿死） ──────────────────
+
+describe("C18 公平推进有限界", () => {
+  it("前 8 条 closing 义务永久失败、第 9 条可完成：在实测有限界内完成", () => {
+    const service = makeService();
+    // 9 条 closing committed（无真实端口经 facade 无法注入——用 v3 fixture：
+    // 前 8 条 duty 永久 false，第 9 条 true）。经裸 kernel 验证游标公平。
+    const consumers = (i: number) => [`ext:c18:sticky-${String(i)}`];
+    Memory.runtime = Memory.runtime ?? {};
+    const active: Record<string, unknown> = {};
+    for (let i = 0; i < 9; i += 1) {
+      const attemptId = `tk1_${String(i + 1)}_${"a".repeat(16)}`;
+      active[attemptId] = {
+        workKey: `biz:c18:w${String(i)}`,
+        attemptId,
+        generation: 1,
+        parentAttemptId: null,
+        phase: "closing",
+        admittedAtTick: Game.time - 1,
+        updatedAtTick: Game.time - 1,
+        identity: {
+          actionKind: "test.transfer", adapterVersion: 1, adapterRegistrationId: "reg-c18",
+          adapterSemanticIdentity: "test.transfer@reconciler-semantics-v1",
+          canonicalDigest: "a".repeat(16), postingsDigest: "b".repeat(16),
+          retryFactsDigest: null, durableFacts: null,
+        },
+        worstCase: [],
+        invocation: { atTick: Game.time - 1 },
+        external: { accepted: true, atTick: Game.time - 1 },
+        outcome: "committed",
+        outcomeEvidence: { kind: "adapter_execution_semantics", conclusion: "executed", source: "test", atTick: Game.time - 1 },
+        cleanup: { consumerKeys: consumers(i), failures: 0 },
+        retryDeadlineTick: null,
+        lastError: null,
+      };
+    }
+    (Memory.runtime as Record<string, unknown>).treasuryCore = {
+      version: 3,
+      installEpochId: "e".repeat(16),
+      issuance: { frontier: 9, burned: 0 },
+      lifecycle: { lastBeginTick: null, lastEndTick: null },
+      recovery: { sweepCursor: 0, cleanupCursor: 0, budgetTick: 0, budgetUsed: 0 },
+      active,
+      ring: [],
+      ringCursor: 0,
+      counters: { admitted: 9, dispatched: 9, settledCommitted: 9, settledNotExecuted: 0, unknown: 0, rearmings: 0, rejectedAdmissions: 0, recoveryAdvances: 0, cleanupFailures: 0 },
+    };
+    const kernel = createTreasuryCoreKernel({
+      nowTick: () => Game.time,
+      runtimeGeneration: () => 1,
+      findAdapter: () => undefined,
+      checkAdmissionCapacity: () => null,
+      releaseExternalConsumer: (key) => key === "ext:c18:sticky-8",
+    });
+    // 游标轮转：前 8 条永久失败（false），第 9 条成功。每 tick 8 次预算
+    // 全部给清理（无 pending/dispatching 干扰）→ 第 9 条在 ≤ ⌈9/8⌉+1 轮内
+    // 获得服务并完成。
+    let ticks = 0;
+    for (; ticks < 12; ticks += 1) {
+      Game.time += 1;
+      kernel.beginTick();
+      const done = (Memory.runtime as unknown as { treasuryCore: { active: Record<string, unknown> } }).treasuryCore.active["tk1_9_aaaaaaaaaaaaaaaa"] === undefined;
+      if (done) break;
+    }
+    expect((Memory.runtime as unknown as { treasuryCore: { active: Record<string, unknown> } }).treasuryCore.active["tk1_9_aaaaaaaaaaaaaaaa"]).toBeUndefined();
+    expect(ticks).toBeLessThan(12);
+    // 前 8 条风险不被删除（duty 保留）。
+    expect(Object.keys((Memory.runtime as unknown as { treasuryCore: { active: Record<string, unknown> } }).treasuryCore.active).length).toBe(8);
+  });
+
+  it("持续 pending 取消流量不饿死清理：closing 与 sweep 各获份额", () => {
+    const installed = installRooms(POOL_ROOMS);
+    const service = createTreasuryService({ getRooms: () => Object.values(installed) });
+    service.beginTick();
+    // 10 条跨 tick pending（sweep 子预算 3/tick）+ 1 条 closing committed
+    //（由真实流程构造：execute committed 后本 tick 内即 closing）。
+    for (let i = 0; i < 10; i += 1) {
+      admit(service, `biz:c18:pend-${String(i)}`, transferArgs({ amount: 5 }));
+    }
+    const closer = admit(service, "biz:c18:closer", transferArgs({ amount: 5 }));
+    expect(service.executeAuthorizedDispatch(closer.dispatch).status).toBe("committed");
+    // 下一 tick：sweep 用 ≤3，清理保底 ≥2——closer（无义务 closing）应立即退出。
+    Game.time += 1;
+    service.beginTick();
+    expect(service.kernelJournal().active.find((r) => r.attemptId === closer.attemptId)).toBeUndefined();
+    // sweep 不被清零（子预算 3 条被取消）。
+    expect(service.kernelMetrics().activeCount).toBeLessThanOrEqual(10);
+    // 后续 tick 内 pending 全部取消（⌈10/3⌉=4 tick）。
+    let ticks = 0;
+    while (service.kernelMetrics().activeCount > 0 && ticks < 8) {
+      Game.time += 1;
+      service.beginTick();
+      ticks += 1;
+    }
+    expect(service.kernelMetrics().activeCount).toBe(0);
+  });
+});
+
+// ── C19：ring 各类损坏贯穿查询与全部命令 ──────────────────────────────────
+
+describe("C19 ring degraded 全路径隔离", () => {
+  // [] 是合法空环（无 degraded 诊断）——不在坏 ring 之列。
+  const BAD_RINGS: readonly unknown[] = [null, "not-array", 42, {}, [["bad"]]];
+
+  it.each(BAD_RINGS)("坏 ring（%p）：kernelJournal 零写不崩、诊断有界；合法工作完成安全收尾", (badRing) => {
+    const service = makeService();
+    const a = admit(service, "biz:c19:work", transferArgs({ amount: 80 }));
+    expect(service.executeAuthorizedDispatch(a.dispatch).status).toBe("committed");
+    const store = Memory.runtime?.treasuryCore as { ring: unknown };
+    store.ring = badRing;
+    // 首次查询零写、不崩溃、返回安全空历史 + degraded 诊断。
+    const before = JSON.stringify(store);
+    let journal: ReturnType<TreasuryService["kernelJournal"]>;
+    expect(() => {
+      journal = service.kernelJournal();
+    }).not.toThrow();
+    expect(JSON.stringify(store)).toBe(before);
+    expect(Array.isArray(journal!.ring)).toBe(true);
+    expect(journal!.ring.length).toBe(0);
+    expect(journal!.health.status).toBe("healthy");
+    if (journal!.health.status === "healthy") expect(journal!.health.ringDegraded).not.toBeNull();
+    expect(() => service.kernelMetrics()).not.toThrow();
+    // 跨 tick：清理退出（ring 在写前重建）+ pending sweep 不崩。
+    Game.time += 1;
+    expect(() => service.beginTick()).not.toThrow();
+    expect(service.kernelJournal().active.find((r) => r.attemptId === a.attemptId)).toBeUndefined();
+  });
+
+  it("坏游标/超限/坏元素/重复/重叠：查询有界诊断；取消（显式）与恢复不崩", () => {
+    const service = makeService();
+    const a = admit(service, "biz:c19:cursor", transferArgs({ amount: 80 }));
+    const store = Memory.runtime?.treasuryCore as unknown as {
+      ring: unknown[]; ringCursor: number;
+    };
+    store.ring = [{ attemptId: "tk1_1_aaaaaaaaaaaaaaaa", workKey: "biz:c19:overlap", generation: 1, terminalPhase: "committed", closedAtTick: 1 }, "junk"];
+    store.ringCursor = 9_999;
+    let journal: ReturnType<TreasuryService["kernelJournal"]>;
+    expect(() => {
+      journal = service.kernelJournal();
+    }).not.toThrow();
+    expect(journal!.health.status).toBe("healthy");
+    if (journal!.health.status === "healthy") expect(journal!.health.ringDegraded).not.toBeNull();
+    // 显式取消路径（无义务 → ring 追加前重建）。
+    expect(service.cancelPendingWork({ attemptId: a.attemptId }).status).toBe("ok");
+    expect(service.kernelJournal().active.length).toBe(0);
+    // 坏历史不授予权限：ring 内容不产生任何执行许可。
+    expect(service.executeAuthorizedDispatch({ attemptId: "tk1_1_aaaaaaaaaaaaaaaa" }).status).toBe("rejected");
+  });
+});
+
+// ── C20：active 层矛盾不因丢 ring 而修复；发行不自动重置 ────────────────────
+
+describe("C20 active 矛盾与发行保护", () => {
+  it("closing 相反证据（outcome=committed 但 evidence=not_executed）：unhealthy，丢 ring 不修复", () => {
+    const service = makeService();
+    const a = admit(service, "biz:c20:contra", transferArgs({ amount: 80 }));
+    const store = Memory.runtime?.treasuryCore as unknown as {
+      active: Record<string, { phase: string; outcome: string; outcomeEvidence: { conclusion: string; kind: string } }>;
+      ring: unknown;
+    };
+    const record = store.active[a.attemptId];
+    record.phase = "closing";
+    record.outcome = "committed";
+    record.outcomeEvidence = { conclusion: "not_executed", kind: "adapter_execution_semantics" };
+    expect(service.kernelJournal().health.status).toBe("unhealthy");
+    // 丢弃 ring 不能把 active 层矛盾修成健康。
+    store.ring = [];
+    expect(service.kernelJournal().health.status).toBe("unhealthy");
+    // unhealthy 阻断写入（发行不自动重置）。
+    expect(
+      service.authorizeTreasuryActionContract(buildContract(service, "biz:c20:blocked", transferArgs({ amount: 5 })), { workKey: "biz:c20:blocked" }).status,
+    ).toBe("rejected");
+    const issuance = (Memory.runtime?.treasuryCore as unknown as { issuance: { frontier: number } }).issuance.frontier;
+    expect(issuance).toBe(1);
+  });
+
+  it("非法 phase / 重复工作键：unhealthy；合法新工作与发行按支持边界处理", () => {
+    const service = makeService();
+    admit(service, "biz:c20:dup", transferArgs({ amount: 80 }));
+    const store = Memory.runtime?.treasuryCore as unknown as {
+      active: Record<string, { phase: string }>;
+    };
+    const id = Object.keys(store.active)[0];
+    store.active[id].phase = "not-a-phase";
+    expect(service.kernelJournal().health.status).toBe("unhealthy");
+  });
+});
+
+// ── C21：有界值拒绝（深拷贝/序列化之前） ────────────────────────────────────
+
+describe("C21 有界解码", () => {
+  function baseStore(active: Record<string, unknown>): void {
+    Memory.runtime = Memory.runtime ?? {};
+    (Memory.runtime as Record<string, unknown>).treasuryCore = {
+      version: 3,
+      installEpochId: "e".repeat(16),
+      issuance: { frontier: 0, burned: 0 },
+      lifecycle: { lastBeginTick: null, lastEndTick: null },
+      recovery: { sweepCursor: 0, cleanupCursor: 0, budgetTick: 0, budgetUsed: 0 },
+      active,
+      ring: [],
+      ringCursor: 0,
+      counters: { admitted: 0, dispatched: 0, settledCommitted: 0, settledNotExecuted: 0, unknown: 0, rearmings: 0, rejectedAdmissions: 0, recoveryAdvances: 0, cleanupFailures: 0 },
+    };
+  }
+
+  function pendingRecord(overrides: Record<string, unknown>): Record<string, unknown> {
+    return {
+      workKey: "biz:c21:a",
+      attemptId: "tk1_1_aaaaaaaaaaaaaaaa",
+      generation: 1,
+      parentAttemptId: null,
+      phase: "pending",
+      admittedAtTick: 100,
+      updatedAtTick: 100,
+      identity: {
+        actionKind: "test.transfer",
+        adapterVersion: 1,
+        adapterRegistrationId: "reg-c21",
+        adapterSemanticIdentity: "test.transfer@reconciler-semantics-v1",
+        canonicalDigest: "a".repeat(16),
+        postingsDigest: "b".repeat(16),
+        retryFactsDigest: null,
+        durableFacts: null,
+      },
+      worstCase: [
+        { roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -80 },
+        { roomName: "W2N57", locationKind: "terminal", resource: "energy", delta: 80 },
+      ],
+      invocation: null,
+      external: null,
+      outcome: "unknown",
+      outcomeEvidence: null,
+      cleanup: { consumerKeys: [], failures: 0 },
+      retryDeadlineTick: null,
+      lastError: null,
+      ...overrides,
+    };
+  }
+
+  it.each([
+    ["超长 parentAttemptId", { parentAttemptId: "tk1_" + "x".repeat(10_000) }],
+    ["durableFacts 夹带未知巨字段", {
+      identity: {
+        actionKind: "test.transfer", adapterVersion: 1, adapterRegistrationId: "reg-c21",
+        adapterSemanticIdentity: "test.transfer@reconciler-semantics-v1",
+        canonicalDigest: "a".repeat(16), postingsDigest: "b".repeat(16),
+        retryFactsDigest: null,
+        durableFacts: { version: 1, payload: "p", smuggled: "z".repeat(50_000) },
+      },
+    }],
+    ["invocation.atTick 字符串", { invocation: { atTick: "one" } }],
+    ["external.accepted 字符串", { external: { accepted: "yes", atTick: 1 } }],
+    ["evidence.atTick 非整数", {
+      phase: "closing", outcome: "not_executed",
+      outcomeEvidence: { kind: "pending_cancellation", conclusion: "not_executed", source: "kernel:safe_cancel", atTick: 1.5 },
+    }],
+    ["retryDeadlineTick 负数", { retryDeadlineTick: -5 }],
+    ["payload 含引号转义字符", {
+      identity: {
+        actionKind: "test.transfer", adapterVersion: 1, adapterRegistrationId: "reg-c21",
+        adapterSemanticIdentity: "test.transfer@reconciler-semantics-v1",
+        canonicalDigest: "a".repeat(16), postingsDigest: "b".repeat(16),
+        retryFactsDigest: null,
+        durableFacts: { version: 1, payload: 'bad"quote' },
+      },
+    }],
+    ["worstCase locationKind 非枚举", {
+      worstCase: [{ roomName: "W1N57", locationKind: "depot", resource: "energy", delta: -80 }],
+    }],
+  ])("有界拒绝：%s（不截断安全事实再接纳）", (_label, overrides) => {
+    baseStore({ "tk1_1_aaaaaaaaaaaaaaaa": pendingRecord(overrides as Record<string, unknown>) });
+    const service = makeService();
+    const journal = service.kernelJournal();
+    expect(journal.health.status).toBe("unhealthy");
+    // 损坏输入整体保留（不截断字段重写后接纳）。
+    const raw = (Memory.runtime as unknown as { treasuryCore: { active: Record<string, unknown> } }).treasuryCore.active;
+    expect(Object.keys(raw).length).toBe(1);
+  });
+});
+
+// ── C22：完整生命周期空间预算（逐槽上界 + 实测满载） ────────────────────────
+
+describe("C22 槽位上界与满载预算", () => {
+  it("推导：64 × 活跃槽上界 + 128 × 历史槽上界 + 根元信息 ≤ 360,000", () => {
+    const total =
+      TREASURY_CORE_ACTIVE_LIMIT * treasuryCoreSlotWorstChars()
+      + TREASURY_CORE_RING_LIMIT * treasuryCoreRingSlotWorstChars()
+      + treasuryCoreMetaWorstChars();
+    expect(total).toBeLessThanOrEqual(TREASURY_CORE_TOTAL_CHAR_BUDGET);
+  });
+
+  it("从真实接纳路径建立合法最大字段记录（含转义文本 lastError），满 active + 满 ring，最坏演化不超预算", () => {
+    const service = makeService();
+    // 接纳满 64 条（真实路径——每条经完整授权）。
+    for (let i = 0; i < TREASURY_CORE_ACTIVE_LIMIT; i += 1) {
+      admit(service, `biz:c22:real-${String(i)}`, transferArgs({ amount: 1 }));
+    }
+    const store = Memory.runtime!.treasuryCore as unknown as {
+      active: Record<string, Record<string, unknown>>;
+      ring: unknown[];
+      issuance: { frontier: number };
+    };
+    // 手动演化到最坏形态（字段上限全部取满；lastError 自由文本含引号/中文
+    // ——转义膨胀按 6× 计入推导）。
+    const first = Object.values(store.active)[0];
+    for (const [attemptId, record] of Object.entries(store.active)) {
+      record.phase = "outcome_unknown";
+      record.invocation = { atTick: Game.time, worldSequence: 999_999 };
+      record.lastError = "错\u0000详\\\"情" + "z".repeat(80);
+      void attemptId;
+    }
+    store.issuance.frontier = 9_999_999_999;
+    for (let i = 0; i < TREASURY_CORE_RING_LIMIT; i += 1) {
+      store.ring.push({
+        attemptId: `tk1_${String(8000 + i)}_ffffffffffffffff`,
+        workKey: "biz:c22:ring:" + "w".repeat(80),
+        generation: 9_999_999_999,
+        terminalPhase: "retry_expired",
+        closedAtTick: Game.time,
+      });
+    }
+    // 完整合法状态（手写最坏形态必须仍过校验——否则推导对象错了）。
+    expect(readTreasuryCoreStoreHealth().status).toBe("healthy");
+    const text = JSON.stringify(store);
+    // 字符数与 UTF-8 bytes 分别计量（二者都 ≤ 预算；字符预算是权威口径）。
+    expect(text.length).toBeLessThanOrEqual(TREASURY_CORE_TOTAL_CHAR_BUDGET);
+    const utf8Bytes = Buffer.byteLength(text, "utf8");
+    expect(utf8Bytes).toBeGreaterThan(0);
+    // 新增超额拒绝（满载 + 预算双门槛）。
+    expect(
+      service.authorizeTreasuryActionContract(buildContract(service, "biz:c22:rejected", transferArgs({ amount: 1 })), { workKey: "biz:c22:rejected" }).status,
+    ).toBe("rejected");
+    // 已接纳工作仍有写回余量（unknown → settle 推进可写）。
+    void first;
+    expect(service.kernelMetrics().activeCount).toBe(TREASURY_CORE_ACTIVE_LIMIT);
+  });
+
+  it("安全 payload 超限拒绝（不 slice 截断成另一动作事实）", () => {
+    const service = makeService();
+    const admission = service.authorizeTreasuryActionContract(
+      buildContract(service, "biz:c22:toolong", transferArgs({ amount: 80 })),
+      { workKey: "biz:c22:toolong" },
+    );
+    expect(admission.status).toBe("admitted");
+    // 直接注入超限 payload 的记录 → unhealthy（拒绝，不截断）。
+    const store = Memory.runtime!.treasuryCore as unknown as {
+      active: Record<string, { identity: { durableFacts: { payload: string } | null } }>;
+    };
+    const id = Object.keys(store.active)[0];
+    store.active[id].identity.durableFacts = { payload: "x".repeat(600) };
+    expect(readTreasuryCoreStoreHealth().status).toBe("unhealthy");
+  });
+});

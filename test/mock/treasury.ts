@@ -82,8 +82,8 @@ export function installRooms(specs: RoomSpec[]): Record<string, Room> {
 
 /** 测试宿主直接推进世界序（installRooms 重建除外的一切世界真实更新）。 */
 export function bumpTreasuryWorldSequenceForTest(): void {
-  (globalThis as { __treasuryWorldSequence?: number }).__treasuryWorldSequence =
-    ((globalThis as { __treasuryWorldSequence?: number }).__treasuryWorldSequence ?? 0) + 1;
+  const holder = global as { __treasuryWorldSequence?: number };
+  holder.__treasuryWorldSequence = (holder.__treasuryWorldSequence ?? 0) + 1;
 }
 
 /**

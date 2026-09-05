@@ -1,0 +1,6 @@
+variant A：authorizationFacts 的 policy 检查退回仅观察口径（占用/承诺/预留不参与、候选取单腿最大而非累计）
+command: npx jest --runInBand src/runtime/treasury/treasuryRewrite3Acceptance.test.ts（修复后同一用例必须转绿）
+  ● C01 policy 累计（池 1000 / 保留 900） › A pending 80 后 B 80 拒绝；B 20 获准；A 取消后 B 80 恢复（无累计越界）
+  ● C01 policy 累计（池 1000 / 保留 900） › A unknown 80 后 B 80 拒绝（unknown 占用参与政策合计）
+  ● C01 policy 累计（池 1000 / 保留 900） › A committed（效果未入观察）80 后 B 80 拒绝；下一 tick 观察接管后额度恢复
+Tests:       3 failed, 55 passed, 58 total

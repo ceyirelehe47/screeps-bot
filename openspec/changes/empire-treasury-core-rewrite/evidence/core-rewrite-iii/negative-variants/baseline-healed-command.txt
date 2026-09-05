@@ -1,0 +1,2 @@
+command: npx jest --config jest.config.cjs --runInBand --testMatch baseline-glob --runTestsByPath scripts/baseline-red/treasury3-boundaries.baseline.ts
+exit-code: 0 (17 passed / 17——13 个基线缺陷反例全部转绿 + 4 对照保持通过)

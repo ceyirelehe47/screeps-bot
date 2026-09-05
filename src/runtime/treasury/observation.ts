@@ -22,15 +22,21 @@ import {
   treasuryLocationKey,
 } from "@/runtime/treasury/types";
 
-/** 受控世界序（globalThis 单调计数；global reset 归零不影响保守方向）。 */
+/** 审计全局根上的世界序槽（私有全局槽；global reset 归零不影响保守方向）。 */
+type GlobalWithWorldSequence = typeof global & {
+  __treasuryWorldSequence?: number;
+};
+
+const worldSequenceGlobal = global as GlobalWithWorldSequence;
+
+/** 受控世界序（单调计数；观察覆盖判定的世界侧锚点——§6.2）。 */
 export function readTreasuryWorldSequence(): number {
-  return (globalThis as { __treasuryWorldSequence?: number }).__treasuryWorldSequence ?? 0;
+  return worldSequenceGlobal.__treasuryWorldSequence ?? 0;
 }
 
 /** 受控世界真实更新时递增（同步 adapter 写世界 / 测试宿主施加效果时调用）。 */
 export function bumpTreasuryWorldSequence(): void {
-  const holder = globalThis as { __treasuryWorldSequence?: number };
-  holder.__treasuryWorldSequence = (holder.__treasuryWorldSequence ?? 0) + 1;
+  worldSequenceGlobal.__treasuryWorldSequence = (worldSequenceGlobal.__treasuryWorldSequence ?? 0) + 1;
 }
 
 export interface TreasuryObservationBuildOptions {

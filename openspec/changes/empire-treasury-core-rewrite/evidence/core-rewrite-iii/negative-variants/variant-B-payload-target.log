@@ -1,0 +1,4 @@
+variant B：writeTreasuryCoreMemory 的发布确认退回与写入载荷自身比较（expected = draft，独立快照删除）
+command: npx jest --runInBand src/runtime/treasury/treasuryRewrite3Acceptance.test.ts
+  ● C08 独立发布目标（原地载荷污染） › 写入端原地把 dispatching 改回 pending 并返回同一引用：发布失败、调用 0、许可未消费
+Tests:       1 failed, 57 passed, 58 total
