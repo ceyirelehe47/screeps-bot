@@ -1,12 +1,17 @@
-PASS src/runtime/treasury/treasuryKernelStress.test.ts (177.112 s)
-PASS src/runtime/treasury/treasuryRewrite3Acceptance.test.ts
+PASS src/runtime/treasury/treasuryKernelStress.test.ts (170.833 s)
 PASS src/runtime/treasury/treasuryRewrite2Lifecycle.test.ts
 PASS src/runtime/treasury/treasuryKernelAcceptance.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Acceptance.test.ts
 PASS src/runtime/treasury/treasuryKernelArchitecture.test.ts
-PASS src/runtime/treasury/treasuryRewrite3Lifecycle.test.ts
 PASS src/runtime/treasury/treasuryRewrite2Acceptance.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Lifecycle.test.ts
 PASS src/runtime/treasury/treasuryKernel.test.ts
 PASS src/runtime/treasury/treasuryTypedOwnerMigration.test.ts
+PASS src/runtime/treasury/treasuryImmutableRegistries.test.ts
+PASS src/runtime/treasury/treasuryActionContract.test.ts
+PASS src/runtime/treasury/treasuryCore.test.ts
+PASS src/runtime/treasury/treasuryTransactionIdVectors.test.ts
+PASS src/runtime/treasury/treasuryCommitments.test.ts
 PASS src/runtime/treasury/treasuryShadow.test.ts
   ● Console
 
@@ -25,18 +30,13 @@ PASS src/runtime/treasury/treasuryShadow.test.ts
 
       at finishShadow (src/runtime/treasury/shadow.ts:343:13)
 
-PASS src/runtime/treasury/treasuryCore.test.ts
-PASS src/runtime/treasury/treasuryActionContract.test.ts
-PASS src/runtime/treasury/treasuryImmutableRegistries.test.ts
-PASS src/runtime/treasury/treasuryTransactionIdVectors.test.ts
-PASS src/runtime/treasury/treasuryCommitments.test.ts
 PASS src/runtime/treasury/treasuryCommitmentCompleteness.test.ts
-PASS src/runtime/treasury/treasuryCanonicalEncoding.test.ts
 PASS src/runtime/treasury/treasuryCapacityViews.test.ts
+PASS src/runtime/treasury/treasuryCanonicalEncoding.test.ts
 
 Test Suites: 18 passed, 18 total
 Tests:       393 passed, 393 total
 Snapshots:   0 total
-Time:        188.549 s
+Time:        180.096 s, estimated 181 s
 Ran all test suites matching /src\\runtime\\treasury\\/i.
 Test results written to: .tmp-evidence\jest-treasury.json

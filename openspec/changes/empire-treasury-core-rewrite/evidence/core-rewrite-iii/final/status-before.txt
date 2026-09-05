@@ -1,0 +1,3 @@
+ M .tmp-evidence/status-before.txt
+ M .tmp-evidence/validation-head.txt
+?? scripts/tmp-run-logged.sh

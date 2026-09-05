@@ -7,5 +7,5 @@ No deployment target set. Build only.
 cleared:  D:\code\screeps\screeps-bot\dist
 [36m
 [1msrc/main.ts[22m → [1mdist/main.js[22m...[39m
-[deploy] bundle sha256: a3f4e991f9f61ae8… (full in Memory.runtime.lastDeployBundleHash)
-[32mcreated [1mdist/main.js[22m in [1m18.2s[22m[39m
+[deploy] bundle sha256: b8f270589d1644cd… (full in Memory.runtime.lastDeployBundleHash)
+[32mcreated [1mdist/main.js[22m in [1m27.4s[22m[39m

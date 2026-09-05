@@ -1,0 +1,20 @@
+ M .tmp-evidence/build.log
+ M .tmp-evidence/bundle-sha256.txt
+ M .tmp-evidence/head-after.txt
+ M .tmp-evidence/jest-defense.json
+ M .tmp-evidence/jest-defense.log
+ M .tmp-evidence/jest-full.json
+ M .tmp-evidence/jest-full.log
+ M .tmp-evidence/jest-treasury.json
+ M .tmp-evidence/jest-treasury.log
+ M .tmp-evidence/status-after.txt
+ M .tmp-evidence/status-before.txt
+ M .tmp-evidence/validation-head.txt
+?? .tmp-evidence/budget-verify.log
+?? .tmp-evidence/budget.command.txt
+?? .tmp-evidence/budget.exit-code.txt
+?? .tmp-evidence/budget.log
+?? .tmp-evidence/diff-check.command.txt
+?? .tmp-evidence/diff-check.exit-code.txt
+?? .tmp-evidence/diff-check.log
+?? scripts/tmp-run-logged.sh
