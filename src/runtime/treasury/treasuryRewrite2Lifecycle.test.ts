@@ -32,7 +32,7 @@ import {
   installWholeMemorySnapshot,
   performTreasuryFullReset,
   snapshotWholeMemory,
-} from "@/runtime/treasury/treasuryFullResetHarness";
+} from "@mock/treasuryResetHarness";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
 const ROOMS: RoomSpec[] = [
@@ -146,6 +146,18 @@ describe("B03 每 attempt 实际进入至多一次", () => {
     reentrant.permit = dispatch;
     const executed = service.executeAuthorizedDispatch(dispatch);
     expect(executed.status).toBe("committed");
+    expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
+  });
+
+  it("克隆真 dispatch 许可（字段全对的新对象）：拒绝——对象身份即凭证（WeakSet 注册）", () => {
+    const service = makeService();
+    const { dispatch } = admit(service, "biz:b03:clone");
+    const cloned = { ...(dispatch as unknown as Record<string, unknown>) } as never;
+    const replay = service.executeAuthorizedDispatch(cloned);
+    expect(replay.status).toBe("rejected");
+    expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
+    // 原许可仍有效（未被克隆影响）。
+    expect(service.executeAuthorizedDispatch(dispatch).status).toBe("committed");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
   });
 
