@@ -2,6 +2,19 @@
 
 旧权威 → 新职责 → 退役位置 → 最终 runtime 引用。基线 `cf2ee7b`（Remediation XII）→ 本轮 HEAD。
 
+## -1. Core Rewrite IV 增补确认（2026-09-06）
+
+IV 轮新增的持久信息与门禁**不是**新证明权威：
+
+| 检查项 | 结论 |
+| --- | --- |
+| `Memory.runtime.treasuryWorldSequence`（IV 新增独立键） | 单一安全整数计数器，受控世界真实更新时 +1（单字段直写、不走发布确认——丢一次 bump 只落保守方向）。它只是观察覆盖判定的**时间锚点**，不证明任何交易执行/清理完成；比较域 = Memory 持久域（跨 heap reset 连续）。替代 III 的 global 槽 `__treasuryWorldSequence`（已退役并从 PRIVATE_GLOBAL_SLOTS 移除）——不构成第二套世界事实账本 |
+| 观察接管证明（advance_cleanup.observationProof） | 数据化证明（worldSequence/atTick/coveredLocations），由 kernel 编排层从 ports.observeForCleanup（facade 装配）取得——调用者不可自报；它只是退出条件的**必要输入**，未覆盖效果的资源责任仍由原聚合承担（occupancy 投影不变） |
+| 观察视图时效（ensureTickState 重建） | 失效边界而非权威：拒绝陈旧视图（epoch.worldSequence < 持久世界序 → 重建），不证明交易执行；不建立逐 facade 确认列表、永久观察凭证或第二套 applied 账本 |
+| 成对预算（prepayReleaseUnitBudget/applyPrepaidCleanupCommand） | 调度许可而非完成证据：份额是"可进入端口+确认"的许可，完成只由端口确认 + advance_cleanup 真实 remaining 表达；validator 防止第 9 份（R4 死锁根除） |
+| 构造器上界（buildTreasuryCoreWorst*） | 空间推导工具：上界 = 真实 JSON.stringify 一次，不是持久数据；validator 真实收紧（腿数 12/generation·adapterVersion ≤9999）与上界一致 |
+| 旧 proof 体系 | 未复活：无 Ticket/Intent/GRA/Summary/certificate/retired range 或其改名版本；无逐 attempt/逐 generation/逐消费者 proof store；ring 仍非权威（D20 坏 ring 对照） |
+
 ## 0. Core Rewrite III 增补确认（2026-09-05）
 
 - 旧 proof 体系（Ticket/Intent/GRA/Summary/certificate/retired range/receipt/token/quarantine）**未复活**：本轮全部修复落在现有 kernel/facade/authorizationFacts/store 内，未新增任何持久证明 store、未新增逐交易/逐代 proof。

@@ -1,0 +1,3 @@
+00ec2f522908446daca41cc730a3dccbf7f118347a25fe3dc9a22e7b868d76c6 *openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv/negative-variants/variant-A-run.log
+1b53aaac8d3792c1f8fe0b1df2a6a191e49d708b3325224725422fa58e039a88 *openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv/negative-variants/variant-B-run.log
+847dfb18c6b12dd232a1b5e91eab7edde4a5fde82b3c8c1ce75c366443cff404 *openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv/negative-variants/variant-C-run.log

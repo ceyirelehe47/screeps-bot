@@ -1,6 +1,8 @@
-# Empire Treasury Core Rewrite — Design（III 修订版）
+# Empire Treasury Core Rewrite — Design（IV 修订版）
 
-日期：2026-09-05（Core Rewrite III 修订；II/I 版语义保留为本文件历史基线）。本文写现行实现事实；旧设计文档保留为历史（`../empire-treasury-rearchitecture/`）。III 修订性质：在 II 内核上完成边界修复——端到端授权一致性（同一份完整上下文贯穿接纳/执行/rearm/端口）、独立发布确认目标（写入载荷不充当自身证明）、观察接管闭环（已确认未入观察的效果由原聚合承担，世界序判定覆盖）、端口调用前预算预扣与子预算公平、完整值校验与逐槽空间预算——不是第二次净重写，不恢复旧多层证明体系。
+日期：2026-09-06（Core Rewrite IV 修订；III/II/I 版语义保留为本文件历史基线）。本文写现行实现事实；旧设计文档保留为历史（`../empire-treasury-rearchitecture/`）。III 修订性质：在 II 内核上完成边界修复——端到端授权一致性（同一份完整上下文贯穿接纳/执行/rearm/端口）、独立发布确认目标（写入载荷不充当自身证明）、观察接管闭环（已确认未入观察的效果由原聚合承担，世界序判定覆盖）、端口调用前预算预扣与子预算公平、完整值校验与逐槽空间预算——不是第二次净重写，不恢复旧多层证明体系。
+
+IV 修订性质：保留单一活跃聚合内核，修实观察责任退出（完整关闭条件进入删除命令边界）、旧授权视图失效、fresh 不足阻断、承诺完整性进门禁、成对清理预算、真实剩余义务持久化、世界序持久域与构造器实测空间上界（R1–R7，evidence/core-rewrite-iv/）——不是净重写，不恢复任何旧 proof 体系。
 
 ## 1. 核心模型
 
@@ -28,6 +30,38 @@ pending ──dispatch_start──▶ dispatching ──dispatch_result──▶
 ```
 
 不变量（store 校验强制）：closing/retry_ready 必须有与 outcome 结论一致的证据；outcome=unknown 只出现在 pending/dispatching/outcome_unknown；**ring 与 active 的重叠/重复只产生 ringDegraded 诊断（非权威历史不可信，以 active 为准）**；active 内部的结构矛盾（相反证据/缺证据/发行不自洽）→ unhealthy 阻断。安全四态与 ring 层分离（§1.7）。
+
+### 1.1a committed 聚合的完整退出条件（IV/R1/§4.1）
+
+closing(committed) 退出活跃集合**至少同时满足**（在执行删除的命令边界
+成立，不是 occupancy helper 或测试前置里的事实）：
+
+1. **确定执行结论**：outcome=committed 且证据结论一致（validator 强制）；
+2. **效果被可信观察接管**：kernel 编排层经 ports.observeForCleanup（facade
+   从共享观察装配）取得观察证明——时间序（观察构建世界序 > 效果锚点世界
+   序；晚到 reconcile 记录的锚点回退 external.atTick）**且**范围（worstCase
+   全部位置 `room\0loc` 在观察覆盖集合内——部分适用观察不判覆盖，D12）；
+   证明是数据不是谓词——调用者无法自报"已覆盖"或伪造大序号；
+3. **外部安全义务全部关闭**：cleanup.consumerKeys 为空（真实确认得出，
+   §1.8），空集合本身被持久写回（IV/R5——否则 rearm 复制旧集合）；
+4. **删除发布成功**：同一发布确认写协议。
+
+观察未覆盖（无观察端口/时间序未到/范围缺失）→ **不退出**：写回真实剩余
+义务（可为空集合），必要资源与接收容量责任继续由原聚合承担（occupancy
+投影不变）；重复 beginTick/endTick/cleanup 零写跳过（不花预算、不靠
+ring/时间消除，D01）。not_executed 与安全 pending 取消**没有**"等待世界
+效果"的义务——它们按剩余消费者与 retry 规则退出或进 retry_ready。
+
+**世界序持久域（IV/R7/§4.3）**：受控世界序权威在
+`Memory.runtime.treasuryWorldSequence`（单一安全整数，受控世界真实更新时
++1，bump 单字段直写——丢一次只落保守方向）。比较域 = Memory 持久域：
+正常 tick / global 重建 / 完整 reset（heap 全清、Memory 保留）序号连续，
+观察覆盖判定照常成立（D09：新运行时从新可信观察完成接管，不双扣、不
+永久扣留）；整份 Memory 丢失时记录随之丢失，不存在需要判定的锚点（旧
+备份回滚仍是未验证边界）。III 的 global 槽方案（`__treasuryWorldSequence`）
+已退役——global 侧计数 reset 后归零，与 Memory 内旧记录的
+invocation.worldSequence 跨域不可比（要么永久扣留、要么凭无关序号误判
+覆盖）。
 
 ### 1.2 单一写入口与发布确认
 
@@ -71,6 +105,28 @@ pending ──dispatch_start──▶ dispatching ──dispatch_result──▶
 3. **fresh 观察**：复验使用当前世界的 fresh 观察（beginFreshObservation，额度 8/tick，耗尽退回本 tick 缓存快照）——同 tick 内结构消失/重建必须被拦截。
 4. **结构 incarnation**：签发时观察的结构绑定快照（permit.structureBindings）与当前观察逐一比对（位置存在且 structureId 一致）；观察不覆盖动作目标同样拒绝（接纳端口前置检查）。
 
+### 1.3b 执行/授权门禁的 IV 修订（fresh 不足、完整性、视图时效）
+
+- **fresh 耗尽即阻断（IV/R2/§5.1）**：执行前复验要求**当前世界的 fresh
+  观察**（额度 8/tick）；额度耗尽或构建失败返回结构化阻断
+  `observation_unavailable`——动作调用 0、许可不消费、记录保持 pending
+  （可安全取消）。**不存在"退回本 tick 缓存快照"的安全回退**（旧快照的
+  结构 incarnation 与金额事实可能已过期）。下一 tick 或 fresh 可用时合法
+  工作恢复可执行（D04 对照）。不增加 fresh 额度、不新建观察订阅。
+- **完整性进所有真实门禁（IV/R3/§5.2）**：共同授权判定在数值检查之前
+  消费承诺完整性——候选腿涉及的任何 (room, resource) scope incomplete
+  （含 global incomplete 传导）→ authorize / dispatch 复验 / rearm 一致
+  阻断（`commitment_incomplete`），与 query 的 blockers 同源；跳过坏记录
+  后的剩余数值不构成完整账目。共同就绪门禁（commonReadinessGate）同时
+  覆盖共享 reservation 迁移/健康状态。承诺索引按 revision 失效缓存。
+- **观察视图时效（IV/R1 后半/§4.2）**：授权观察不得早于最新受控世界序
+  ——ensureTickState 发现 `epoch.worldSequence < 持久世界序` 即重建观察
+  （仅替换观察与承诺索引缓存，不重置 fresh 额度与许可审计——防借重建刷
+  额度）。效果发生后持旧观察的实例在任何安全入口被强制刷新：聚合退出与
+  旧视图失效组成同一安全边界（D02：A 执行 800 并退出后，旧观察实例的
+  800 被新观察物理余额拒绝、200 有正当对照获准）。多实例共享同一 Memory
+  持久事实（不按根对象引用分家）。
+
 ### 1.4 身份与许可（签发快照封闭）
 
 - attemptId：`tk1_<frontier>_<hash16>`，frontier 单调不回退；分配失败烧掉序号；溢出拒绝分配不回绕。
@@ -104,7 +160,7 @@ pending ──dispatch_start──▶ dispatching ──dispatch_result──▶
 | committed 且效果已被观察覆盖 | 该观察（数字已含效果，不再扣占用） |
 | not_executed / pending_cancellation | 无责任 |
 
-覆盖判定**优先用受控世界序**（§6 语义）：观察构建序 epoch.worldSequence > invocation.worldSequence（调用边界世界序）→ 受控世界已在调用后真实更新且该观察构建于其后 → 效果已进入该观察（同步生效模型下 fresh 观察包含本 tick 已发生效果，不与占用双扣）。世界序缺失（旧记录/未提供）回退 tick 边界保守判定（observedAtTick ≤ invocation.atTick → 占用）。世界序在审计全局根 `__treasuryWorldSequence`（私有槽）单调维护：同步 adapter 写世界 / 测试宿主施加效果时 +1；"时间过去了"或"净余额碰巧相等"不构成覆盖。实例本地 applied overlay 不参与授权判定（仅作 query projected 展示缓存——它不能是已确认效果的安全载体）。
+覆盖判定**优先用受控世界序**（§1.1a 持久域，IV 修订）：观察构建序 epoch.worldSequence > 效果锚点世界序（invocation.worldSequence；晚到 reconcile 记录无 invocation 时锚点回退 external.atTick 的 tick 边界）→ 效果已进入该观察（同步生效模型下不与占用双扣）。世界序缺失（旧记录/未提供）回退 tick 边界保守判定（观察 atTick ≤ 效果时点 → 占用）。世界序权威在 `Memory.runtime.treasuryWorldSequence`（IV：global 槽退役——跨 heap reset 连续，§1.1a）；“时间过去了”、“净余额碰巧相等”或“无关源序号变大”都不构成覆盖（D10/D12）。实例本地 applied overlay 不参与授权判定（仅作 query projected 展示缓存——它不能是已确认效果的安全载体）。
 
 - 持久腿（worstCase）分方向成腿：**同一资源键的流出与流入不互相抵消**（Σmax(0,−delta) 与 Σmax(0,+delta) 各一条）；对候选原始腿按流出合计查存量、按流入合计查接收容量（同 tick 多笔不得重复占满接收空间；unknown 与未覆盖 committed 的可能流入占接收容量、不成可花费资产）。
 - 接纳/查询的宽松展示选项（projected/incoming）不授予可花费资产，与严格判定明确区分；query 的 authorizationSafe blockers 与接纳阻断同源（owner/承诺完整性/policy 可用性/存储健康/窗口/reservation 健康）。
@@ -119,12 +175,12 @@ pending ──dispatch_start──▶ dispatching ──dispatch_result──▶
 
 - 每 tick 操作预算 8（恢复扫描/状态发布/外部清理调用共享；**同 tick 多次 beginTick / 多实例经持久记账 recovery.budgetTick/budgetUsed 共享同一份额**）。
 - 游标（recovery.sweepCursor/cleanupCursor）是调度元信息：轮转保证前面的任务永久失败也让后续任务在有限轮次获得机会（active ≤ 64、预算 8/tick → 可完成项最多 8 轮内被访问）；进度跨 reset 延续；失效可安全重建，不是完成 proof。
-- 清理逐消费者幂等释放（每次端口调用消耗预算，无论成败）；端口缺失/未确认/抛错 → duty 保留（无默认成功）。释放成功但确认写失败 → 保留原义务，之后仅通过同一幂等 (consumerKey, attemptId) 重试。
+- 清理逐消费者幂等释放；端口缺失/未确认/抛错 → duty 保留（无默认成功）。释放成功但确认写失败 → 保留原义务，之后仅通过同一幂等 (consumerKey, attemptId) 重试（义务不跨 attempt 迁移，D16/D18）。
+- **真实剩余义务始终持久化（IV/R5/§6.3）**：advance_cleanup 无论剩余非空还是为空都写回真实 remaining——进入 retry_ready 时 consumerKeys 必须持久为空；validator 强制 retry_ready ⇒ not_executed + 空义务 + 证据一致（矛盾状态在安全读取/命令边界拒绝、不自动清空，D20）；rearm 的 child 不继承父代义务（不存在 child 义务发行系统）。
 
+**成对预算（IV/R4/§6.1–§6.2）**：每消费者单位 = “端口调用 + 对应确认命令”，进入外部端口前**持久预扣完整 2 份**（prepayReleaseUnitBudget：usedNow+2 ≤ 8 才可调用）；确认命令（成功确认、失败诊断——诊断就是本单位的确认命令）使用已预扣份额（applyPrepaidCleanupCommand 记账不递增）。总量仍 8/tick：无其他阶段消耗时一 tick 最多 4 个消费者单位、外部调用 ≤8 保持；8 义务记录两 tick 完成全部调用与确认、至多 3 个完整预算 tick 终态（D13）。预扣发布失败 → 调用 0；预扣后无论 true/false/throw/确认写失败份额不退回；硬中断保守损失该 2 份，下 tick 恢复。无外部消费者的安全状态推进仍按单命令份额（+1）。预算记账单调不回退（每次从持久现读 max）；同 tick 重复入口/多实例/端口内重入共享同一持久记账。
 
-**端口调用前持久预扣（R6/§7.1，III）**：每次外部释放端口调用**之前**先持久发布 budgetUsed=used+1——预扣发布失败则不调用端口（零调用）；端口抛错/返回 false/确认写回失败时该份额已消耗（不退回供重入再花）；预扣后硬中断保守损失本 tick 这一次额度，下 tick 正常恢复。预算记账单调不回退（每次写从持久现读取 max——重入/多实例推高后的值不得被本地旧值覆盖）。同 tick 重复入口/多实例/端口内重入经持久记账共享同一份额（实测端口调用总计 ≤8）。
-
-**子预算（§7.3，III）**：dispatching 恢复 ≤2、跨 tick pending sweep ≤3、retry 期限关闭 ≤1 → closing 清理保底 ≥2——持续到来的取消流量不能饿死健康清理。公平界（实测）：64 条 closing 在每 tick ≥2 次真实推进下 ≤32 tick 全部首次服务；义务总界 = 总义务次数 ÷ 8/tick。
+**公平游标的 IV 修订（D19）**：预算耗尽时清理循环**立即 break**（游标停在耗尽处，下一 tick 从其后记录开始）——continue 空转会推满一圈回到本 tick 起点，后方记录永远落在“预算已尽”访问位（结构性饿死）；§6.2 额度耗尽后廉价返回，不无限扫描。失败记录每条 2 份（成对单位）；子预算：dispatching 恢复 ≤2、sweep ≤3、retry 关闭 ≤1 → 清理保底 ≥2（≥1 个成对单位/tick）。实测（D19）：8 条永久失败（各 1 义务）+ 1 条 8 义务可完成 + 每 tick 新 pending 噪声，12 tick 内完成；64 条 closing 全部首次服务 ≤32 tick（III 界保持）。
 ## 2. 模块布局
 
 ```
@@ -153,19 +209,20 @@ scripts/baseline-red/              基线缺陷重现脚本（R04；显式运行
 2. **持久化模型假设**：内核在"已发布持久状态保留、heap 全部丢失后恢复"模型下安全闭环；"效果保留而最新 Memory 回退"的非原子窗口未获真实 driver 证明——真实 driver 禁用是结论而不是待办。
 3. 外部消费者释放端口的生产装配未接线（无真实消费者注册；测试经 kernel ports 注入验证）。**无端口时非空义务的接纳被拒绝**——不存在"接受义务后再接入"的路径。
 4. treasuryPerf 仍由 shadow 低频写入（诊断）。
-5. **世界序模型边界（III）**：观察覆盖的世界序判定在"全部同步生效（受控测试世界：adapter 写世界时 bump）"或"全部 tick 后生效（真实 driver：效果进世界时无人 bump，判定保守占用至聚合退出）"两种模型下分别正确；**混合模型**（同一系统内部分效果同步 bump、部分不 bump）中无关效果的 bump 会使未覆盖效果被误判已覆盖——接入真实 driver 时必须全系统统一模型，该边界已写入部署阻断条件。
-6. **完整 reset 的跨模块语义（III）**：resetModules 后新 runtime 不认旧模块构建的 contract/许可（WeakSet/registry 印记随模块缓存消亡）——重建后的新工作必须经新模块构建（harness handles.actionContractsModule）；这不是缺陷而是跨 reset 信任边界的体现。
+5. **世界序模型边界（III；IV 修订比较域）**：世界序判定在“全部同步生效（受控测试世界：adapter 写世界时 bump 持久序）”或“全部 tick 后生效（真实 driver：无人 bump，判定保守占用至聚合退出）”两种模型下分别正确；**混合模型不支持**——接入真实 driver 时全系统统一模型（部署阻断条件）。IV 起比较域 = Memory 持久域（`Memory.runtime.treasuryWorldSequence`）：跨 heap reset 序号连续、判定照常（D09）；旧备份回滚/整份 Memory 丢失仍是未验证边界。
+6. **完整 reset 的跨模块语义（III；IV 补充）**：resetModules 后新 runtime 不认旧模块构建的 contract/许可（WeakSet/registry 印记随模块缓存消亡）——重建后的新工作必须经新模块构建（harness handles.actionContractsModule）。IV 补充：完整 reset 清空全部 Treasury 运行时 global（含已退役世界序槽），宿主世界数值、外部接受记录、执行/释放轨迹独立保留——两类数据不得混淆。
 
-## 5. 容量与预算（III：逐槽完整生命周期上界）
+## 5. 容量与预算（IV：构造器实测法上界）
 
-总预算 = **360,000 个 JSON 序列化字符**（字符数为权威口径；UTF-8 bytes 另行计量）。推导方法为逐槽完整生命周期上界（store.ts：treasuryCoreSlotWorstChars / treasuryCoreRingSlotWorstChars / treasuryCoreMetaWorstChars，C22 断言）：
+总预算 = **360,000 个 JSON 序列化字符**（字符数为权威口径；UTF-8 bytes 另行计量，受控字符集下二者相等）。IV 修订推导方法（R6：III 手写公式系统性低估——字段键名两侧引号每处漏 2、数字按 13 位计而 validator 允许 16 位安全整数（负 delta 17 位）、漏计 invocation.worldSequence，按公式常量修正重算 ≈373,226 反超总预算）：**构造完整最坏合法记录（全部字段取 validator 允许极值）→ 真实 JSON.stringify 实测长度即上界**（store.ts：buildTreasuryCoreWorstWorkRecord / buildTreasuryCoreWorstRingEntry / treasuryCoreSlotWorstChars 等；D21/D22 断言）。上界本身就是一次真实序列化——键引号/冒号/逗号/括号/active 键/数字位宽全部按实际表示计入，不存在推导与实际表示漂移。
 
 ```
-64 × 单活跃槽完整生命周期上限 + 128 × 单历史槽上限 + 根元信息 ≤ 360,000
+64 × 单活跃槽完整生命周期上界 + 128 × 单历史槽上界 + 根元信息 ≤ 360,000（构造器实测合计 ~343,500）
 ```
 
-- 受控字符集（IDENTIFIER_PATTERN：字母/数字/`_.:@-`；payload 可打印 ASCII 且无引号反斜杠）→ 这些字段 JSON 序列化**零转义膨胀**，上界可精确推导；自由文本字段（lastError ≤96）按最坏 6× 转义系数（\uXXXX）计入。
-- 单槽上界覆盖**全部阶段同时取最坏**（worstCase 16 腿 + 8 消费者 + durable payload 512 + evidence + lastError 6×…）——不能"先接纳所有短 pending、等它们变成长 unknown/closing 时无空间可写"。
-- 接纳前检查：当前序列化 + 新槽完整生命周期上界 + 新历史槽上界 ≤ 总预算；任何状态演化都不超过槽上界（字段硬上限 + 受控字符集），已接纳工作收尾始终有余量。
-- 恢复预算：总量 8/tick（外部端口调用）+ 子预算分层（§1.8）；状态转移/持久发布/扫描另有有界上界（每命令一次安全发布 + 每端口调用一次预扣发布）。
-- 压力实测：10,000 完成工作终态 < 32KB；1,000 代 retry 链；固定 unknown 混合负载；满载最坏形态 ≤ 总预算（C22）。
+- 为使极值记录合法且总预算成立，validator 真实强制收紧（不是估算口径）：worstCase 腿数 16 → **12**、generation ≤ **9,999**、adapterVersion ≤ **9,999**；其余数字字段允许至 MAX_SAFE_INTEGER（16 位；带符号 delta 17 位）按实测计入。
+- 受控字符集字段零转义膨胀；自由文本（lastError ≤96）按真实转义（每控制字符 6 倍）实测计入；超界 payload 整体拒绝、无 slice 截断后接受（安全事实不能被截成另一份事实，D21）。
+- 单槽上界覆盖全部阶段同时取最坏（closing+not_executed+evidence+worstCase+invocation 含 worldSequence+8 消费者+最坏转义 lastError）——不能“先接纳短 pending、演化成长记录时无空间可写”。
+- 接纳前检查：当前序列化 + 新槽完整生命周期上界 + 新历史槽上界 ≤ 总预算；已接纳工作收尾始终有余量（D22 真实接纳满载实测）。
+- 恢复预算：总量 8/tick、成对单位 2 份（§1.8）；状态转移/持久发布/扫描有界（每命令一次安全发布 + 每单位一次预扣发布）。
+- 压力实测（D23）：批量完成 + 合法 retry + 固定 unknown 混合，世界轨迹与独立参考模型一致；ring 淘汰不授予旧 ID 许可；全 heap reset 后接管退出、无重复调用。

@@ -1,5 +1,16 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Core Rewrite IV（2026-09-06 完成）
+
+- [x] 侦察与红灯基线（subagent 交叉验证七缺口全部定位；b6c87c1 干净 worktree：8 缺陷反例红灯 / 8 合法对照绿，evidence/core-rewrite-iv/baseline）
+- [x] 工作流 A（R1/R7）：committed 完整退出条件进入 advance_cleanup 命令边界（时间序 + 范围 + 义务空 + 发布成功；无观察端口保守保留，D01/D12）；观察视图时效（epoch.worldSequence < 持久世界序 → 重建观察，聚合退出与旧视图失效同边界，D02/D03）；世界序持久化（Memory.runtime.treasuryWorldSequence，global 槽退役；跨 heap reset 接管不双扣不扣留，D09/D10）
+- [x] 工作流 B（R2/R3）：fresh 耗尽即阻断（observation_unavailable，无旧快照回退，D04/D05）；承诺完整性 + reservation 迁移/健康进全部真实入口（authorize/dispatch/rearm 与 query 同源，D06/D07/D08）
+- [x] 工作流 C（R4/R5）：成对预算（预扣 2 份/单位、确认与失败诊断 0 份额；8 义务 ≤3 完整预算 tick 完成，D13/D17）；真实 remaining 持久化（retry_ready ⇒ 空集合 validator 强制，D14/D15/D20）；公平游标 break——D19 发现并修复两个实现层缺陷（预算耗尽 continue 空转致游标回原点结构性饿死；失败诊断 +1 份额挤占后方记录）；断点/丢写/reset 语义（D16/D18）
+- [x] 工作流 D（R6）：槽位上界构造器实测法（真实 JSON.stringify；validator 真实收紧腿数 12/generation·adapterVersion ≤9999；满载实测 ≤360,000、bytes 另报，D21/D22）
+- [x] D01–D24 验收矩阵（treasuryRewrite4Acceptance 20 + treasuryRewrite4Lifecycle 12）；D24 负向变体三件套红灯（A:2 红 / B:1 红 / C:1 红，语义断言失败）后还原全绿；D23 混合规模模型（世界轨迹与独立参考模型一致 + 全 heap reset 接管）
+- [x] 既有 A/B/C 套件适配（C01 语义演进注明依据；C03 fixture 走真实 mutation API；C16 成对预算 8→4；B19/A20 上界适配；kernel 直调测试补 observeForCleanup 端口）
+- [x] 全仓回归 222 suites / 1260 tests 零回归；budget 更新 220/1228 → 222/1260；schema 保持 v3（treasuryCore 子树结构不变，新增独立键 treasuryWorldSequence）
+
 ## Core Rewrite III（2026-09-05 完成）
 
 - [x] 影响范围侦察（subagent：授权链/发布链/观察投影/调度预算/解码五位置；R1–R9 全部定位到 383ffc1 源码）

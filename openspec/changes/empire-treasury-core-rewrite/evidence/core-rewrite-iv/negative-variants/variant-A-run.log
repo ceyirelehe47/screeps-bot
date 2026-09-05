@@ -1,0 +1,72 @@
+FAIL src/runtime/treasury/treasuryRewrite4Acceptance.test.ts
+  D01 committed 无消费者的观察责任
+    × 目标位置不在适用观察范围：重复 beginTick/endTick/cleanup 都不退出，不靠 ring 或时间消除 (21 ms)
+    × 范围恢复（新可信观察覆盖）后正常退出，义务集合为空 (4 ms)
+  D02 观察接管退出后的旧视图失效
+    ○ skipped A 执行 800 并退出后，旧观察实例 B：800 拒绝（新观察物理余额 200），200 获准（新 contract）
+  D03 接收空间的观察接管
+    ○ skipped A 确认流入 80 并退出后：旧实例申请流入 80 拒；新观察空位 20 不双扣，20 合法
+  D04 fresh 耗尽的执行门禁
+    ○ skipped 额度耗尽后结构换 ID：blocked、实际调用 0、无 applied、pending 可安全取消；fresh 可用对照执行 1
+  D05 组合场景（D02/D03 之后再耗尽 fresh）
+    ○ skipped 旧真许可在 fresh 耗尽 + 结构变化下 blocked；新合法工作仍可授权；多实例重复入口幂等
+  D06 完整性门禁三时点
+    ○ skipped authorize 前注入：query 阻断、authorize 拒绝（不按剩余数值放行）；修复后合法对照获准
+    ○ skipped 真许可已签发后注入：dispatch 复验一致阻断、实际调用 0；修复后同一许可可执行
+  D07 rearm 门禁与权利保持
+    ○ skipped 父代 retry_ready 后承诺不完整：不产生 child、不消费 rearm 权利；修复后同一许可合法 rearm
+  D08 own-reservation 与他人责任并存
+    ○ skipped owner A 200 获准并执行；他人 B 700 获准并执行；不声明 owner 的 950 对照拒绝
+  D12 多位置动作的部分观察
+    ○ skipped 观察只覆盖流出侧时 committed 不退出；全部位置恢复覆盖后才退出并使旧视图失效
+  D14 retry 链的义务继承
+    ○ skipped 父代 not-executed 单义务 D 释放完成：retry_ready 持久空集合；child 不继承 D、不重复释放；child 可执行
+  D20 retry_ready 矛盾与坏 ring 隔离
+    ○ skipped 非空义务 + retry_ready：unhealthy（拒绝，不自动清空）
+    ○ skipped committed + retry_ready：unhealthy
+    ○ skipped 仅 ring 坏（非数组）：healthy + ringDegraded，查询零写，健康工作仍可完成退出
+  D21 空间上界与实际表示
+    ○ skipped 构造器最坏记录通过 validator（合法输入）且其真实序列化 = 声明上界
+    ○ skipped 逐字段极值独立验证：数字位宽（16 位正/17 位负）、worldSequence、转义文本、consumerKeys 数量
+    ○ skipped 非法值在复制前拒绝：超界 payload 整体拒绝（无 slice 截断后接受）
+    ○ skipped 满载数学断言：64 × 槽上界 + 128 × 历史槽上界 + 根元信息 ≤ 360,000（bytes 另报）
+  D22 真实接纳满载与生命周期预算
+    ○ skipped 真实接纳极值记录 × 满 active + 满 ring，演化 unknown/closing/partial cleanup：总序列化 ≤ 预算，超额拒绝，已接纳可收尾
+
+  ● D01 committed 无消费者的观察责任 › 目标位置不在适用观察范围：重复 beginTick/endTick/cleanup 都不退出，不靠 ring 或时间消除
+
+    expect(received).toBeDefined()
+
+    Received: undefined
+
+    [0m [90m 203 |[39m     }
+     [90m 204 |[39m     [36mconst[39m record [33m=[39m activeRecord(a[33m.[39mattemptId)[33m;[39m
+    [31m[1m>[22m[39m[90m 205 |[39m     expect(record)[33m.[39mtoBeDefined()[33m;[39m
+     [90m     |[39m                    [31m[1m^[22m[39m
+     [90m 206 |[39m     expect((record [36mas[39m { phase[33m:[39m string })[33m.[39mphase)[33m.[39mtoBe([32m"closing"[39m)[33m;[39m
+     [90m 207 |[39m     [90m// 时间流逝与 ring 存在都不能替代观察接管。[39m
+     [90m 208 |[39m     expect(scoped[33m.[39mservice[33m.[39mkernelJournal()[33m.[39mring[33m.[39msome((e) [33m=>[39m e[33m.[39mattemptId [33m===[39m a[33m.[39mattemptId))[33m.[39mtoBe([36mfalse[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite4Acceptance.test.ts:205:20)
+
+  ● D01 committed 无消费者的观察责任 › 范围恢复（新可信观察覆盖）后正常退出，义务集合为空
+
+    expect(received).toBeDefined()
+
+    Received: undefined
+
+    [0m [90m 216 |[39m     [33mGame[39m[33m.[39mtime [33m+=[39m [35m1[39m[33m;[39m
+     [90m 217 |[39m     scoped[33m.[39mservice[33m.[39mbeginTick()[33m;[39m
+    [31m[1m>[22m[39m[90m 218 |[39m     expect(activeRecord(a[33m.[39mattemptId))[33m.[39mtoBeDefined()[33m;[39m
+     [90m     |[39m                                       [31m[1m^[22m[39m
+     [90m 219 |[39m     scoped[33m.[39mshow([32m"W2N57"[39m)[33m;[39m
+     [90m 220 |[39m     [33mGame[39m[33m.[39mtime [33m+=[39m [35m1[39m[33m;[39m
+     [90m 221 |[39m     scoped[33m.[39mservice[33m.[39mbeginTick()[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite4Acceptance.test.ts:218:39)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 18 skipped, 20 total
+Snapshots:   0 total
+Time:        4.036 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryRewrite4Acceptance.test.ts/i with tests matching "D01".

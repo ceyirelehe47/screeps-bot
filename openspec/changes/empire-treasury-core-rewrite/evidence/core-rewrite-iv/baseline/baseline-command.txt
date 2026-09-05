@@ -1,0 +1,4 @@
+exit-code: 1
+command: npx jest --config jest.config.cjs --runInBand --testMatch "**/*.baseline.ts" --runTestsByPath scripts/baseline-red/treasury4-boundaries.baseline.ts
+worktree: b6c87c1cd45742882075e43f068b3470fcd301c8 (detached, node_modules junction 自主树)
+exit-code: 1 (8 failed / 8 passed —— 8 个缺陷反例红灯，8 个合法对照通过)

@@ -1,0 +1,183 @@
+FAIL scripts/baseline-red/treasury4-boundaries.baseline.ts
+  R1 committed 退出条件（观察接管）
+    × 同 tick 效果未入观察时 cleanup 不得删除聚合（旧观察+已删记录=责任消失） (18 ms)
+    × 删除后旧观察不得继续授权：B 以旧观察金额申请 800 必须拒绝 (6 ms)
+    √ 对照：下一 tick 观察含效果（世界序推进）后聚合正常退出 (4 ms)
+  R2 执行复验 fresh 回退（额度耗尽）
+    × fresh 耗尽后目标结构换 ID：真许可执行必须 blocked 且实际调用 0 (8 ms)
+    √ 对照：fresh 可用时同结构变化必须 blocked（现有语义不回归） (3 ms)
+    √ 对照：fresh 可用且结构未变时同一许可执行恰 1 次 (3 ms)
+  R3 承诺完整性进授权门禁
+    × 适用 scope incomplete 时 query 阻断（对照）且 authorize 也必须拒绝 (4 ms)
+    √ 对照：任务修复（合法 remainingAmount）后同一 authorize 获准 (3 ms)
+  R4 成对预算（8 义务 closing 可完成）
+    × 一条 8 义务 closing、端口全 true：3 个完整预算 tick 内剩余义务必须清空 (12 ms)
+    √ 对照：7 义务记录 3 tick 内完成（现状即绿——上界缺口恰在 8） (5 ms)
+  R5 retry_ready 空义务集合
+    × not_executed 单义务释放完成进 retry_ready：consumerKeys 必须持久为空 (3 ms)
+    √ 对照：retry_ready 可签发 rearm 许可（现状即绿） (2 ms)
+  R6 槽位上界与实际序列化一致
+    √ validator 接受全部字段极值记录（对照：这是合法输入） (3 ms)
+    × 槽位上界公式必须 ≥ 该记录的真实 JSON 序列化长度（含 active 键） (1 ms)
+  R7 世界序跨域（global 清零 + Memory 保留）
+    × heap 清零后宿主世界保留效果：新观察必须完成接管（不双扣、不永久扣留） (4 ms)
+    √ 对照：未发生效果时 heap 清零不影响新实例授权 (2 ms)
+
+  ● R1 committed 退出条件（观察接管） › 同 tick 效果未入观察时 cleanup 不得删除聚合（旧观察+已删记录=责任消失）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    [0m [90m 196 |[39m     service[33m.[39mbeginTick()[33m;[39m
+     [90m 197 |[39m     [36mconst[39m stillActive [33m=[39m service[33m.[39mkernelJournal()[33m.[39mactive[33m.[39msome((r) [33m=>[39m r[33m.[39mattemptId [33m===[39m a[33m.[39mattemptId)[33m;[39m
+    [31m[1m>[22m[39m[90m 198 |[39m     expect(stillActive)[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m     |[39m                         [31m[1m^[22m[39m
+     [90m 199 |[39m   })[33m;[39m
+     [90m 200 |[39m
+     [90m 201 |[39m   it([32m"删除后旧观察不得继续授权：B 以旧观察金额申请 800 必须拒绝"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (scripts/baseline-red/treasury4-boundaries.baseline.ts:198:25)
+
+  ● R1 committed 退出条件（观察接管） › 删除后旧观察不得继续授权：B 以旧观察金额申请 800 必须拒绝
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 208 |[39m       { workKey[33m:[39m [32m"biz:r1:b2"[39m }[33m,[39m
+     [90m 209 |[39m     )[33m;[39m
+    [31m[1m>[22m[39m[90m 210 |[39m     expect(b[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                      [31m[1m^[22m[39m
+     [90m 211 |[39m   })[33m;[39m
+     [90m 212 |[39m
+     [90m 213 |[39m   it([32m"对照：下一 tick 观察含效果（世界序推进）后聚合正常退出"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (scripts/baseline-red/treasury4-boundaries.baseline.ts:210:22)
+
+  ● R2 执行复验 fresh 回退（额度耗尽） › fresh 耗尽后目标结构换 ID：真许可执行必须 blocked 且实际调用 0
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "blocked"
+    Received: "committed"
+
+    [0m [90m 234 |[39m     rebuildTerminal([32m"term-2-rebuilt"[39m)[33m;[39m
+     [90m 235 |[39m     [36mconst[39m outcome [33m=[39m service[33m.[39mexecuteAuthorizedDispatch(p[33m.[39mdispatch)[33m;[39m
+    [31m[1m>[22m[39m[90m 236 |[39m     expect(outcome[33m.[39mstatus)[33m.[39mtoBe([32m"blocked"[39m)[33m;[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 237 |[39m     [36mconst[39m effects [33m=[39m readTreasuryTestAdapterSideEffectsForTestSafe()[33m;[39m
+     [90m 238 |[39m     expect(effects[33m.[39mexecuteCalls)[33m.[39mtoBe([35m0[39m)[33m;[39m
+     [90m 239 |[39m   })[33m;[39m[0m
+
+      at Object.<anonymous> (scripts/baseline-red/treasury4-boundaries.baseline.ts:236:28)
+
+  ● R3 承诺完整性进授权门禁 › 适用 scope incomplete 时 query 阻断（对照）且 authorize 也必须拒绝
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 290 |[39m       { workKey[33m:[39m [32m"biz:r3:a"[39m }[33m,[39m
+     [90m 291 |[39m     )[33m;[39m
+    [31m[1m>[22m[39m[90m 292 |[39m     expect(admission[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                              [31m[1m^[22m[39m
+     [90m 293 |[39m   })[33m;[39m
+     [90m 294 |[39m
+     [90m 295 |[39m   it([32m"对照：任务修复（合法 remainingAmount）后同一 authorize 获准"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (scripts/baseline-red/treasury4-boundaries.baseline.ts:292:30)
+
+  ● R4 成对预算（8 义务 closing 可完成） › 一条 8 义务 closing、端口全 true：3 个完整预算 tick 内剩余义务必须清空
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 10
+
+    - Array []
+    + Array [
+    +   "ext:r4:duty-0",
+    +   "ext:r4:duty-1",
+    +   "ext:r4:duty-2",
+    +   "ext:r4:duty-3",
+    +   "ext:r4:duty-4",
+    +   "ext:r4:duty-5",
+    +   "ext:r4:duty-6",
+    +   "ext:r4:duty-7",
+    + ]
+
+    [0m [90m 330 |[39m     [90m// 或仍活跃但义务为空——两者都算"可完成"。现状：8 义务原样保留。[39m
+     [90m 331 |[39m     [36mconst[39m remaining [33m=[39m record [33m===[39m undefined [33m?[39m [] [33m:[39m [[33m...[39mrecord[33m.[39mcleanup[33m.[39mconsumerKeys][33m;[39m
+    [31m[1m>[22m[39m[90m 332 |[39m     expect(remaining)[33m.[39mtoEqual([])[33m;[39m
+     [90m     |[39m                       [31m[1m^[22m[39m
+     [90m 333 |[39m   })[33m;[39m
+     [90m 334 |[39m
+     [90m 335 |[39m   it([32m"对照：7 义务记录 3 tick 内完成（现状即绿——上界缺口恰在 8）"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (scripts/baseline-red/treasury4-boundaries.baseline.ts:332:23)
+
+  ● R5 retry_ready 空义务集合 › not_executed 单义务释放完成进 retry_ready：consumerKeys 必须持久为空
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "ext:r5:duty-d",
+    + ]
+
+    [0m [90m 356 |[39m     [36mif[39m (record [33m===[39m undefined) [36mthrow[39m [36mnew[39m [33mError[39m([32m"record should stay in retry_ready (deadline 5000 ticks)"[39m)[33m;[39m
+     [90m 357 |[39m     expect(record[33m.[39mphase)[33m.[39mtoBe([32m"retry_ready"[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 358 |[39m     expect([[33m...[39mrecord[33m.[39mcleanup[33m.[39mconsumerKeys])[33m.[39mtoEqual([])[33m;[39m
+     [90m     |[39m                                              [31m[1m^[22m[39m
+     [90m 359 |[39m   })[33m;[39m
+     [90m 360 |[39m
+     [90m 361 |[39m   it([32m"对照：retry_ready 可签发 rearm 许可（现状即绿）"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (scripts/baseline-red/treasury4-boundaries.baseline.ts:358:46)
+
+  ● R6 槽位上界与实际序列化一致 › 槽位上界公式必须 ≥ 该记录的真实 JSON 序列化长度（含 active 键）
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 5182
+    Received:    4929
+
+    [0m [90m 431 |[39m     [36mconst[39m { attemptId[33m,[39m record } [33m=[39m worstRecord()[33m;[39m
+     [90m 432 |[39m     [36mconst[39m actual [33m=[39m [33mJSON[39m[33m.[39mstringify({ [attemptId][33m:[39m record })[33m.[39mlength[33m;[39m
+    [31m[1m>[22m[39m[90m 433 |[39m     expect(treasuryCoreSlotWorstChars())[33m.[39mtoBeGreaterThanOrEqual(actual)[33m;[39m
+     [90m     |[39m                                          [31m[1m^[22m[39m
+     [90m 434 |[39m   })[33m;[39m
+     [90m 435 |[39m })[33m;[39m
+     [90m 436 |[39m[0m
+
+      at Object.<anonymous> (scripts/baseline-red/treasury4-boundaries.baseline.ts:433:42)
+
+  ● R7 世界序跨域（global 清零 + Memory 保留） › heap 清零后宿主世界保留效果：新观察必须完成接管（不双扣、不永久扣留）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "admitted"
+    Received: "rejected"
+
+    [0m [90m 473 |[39m       { workKey[33m:[39m [32m"biz:r7:b"[39m }[33m,[39m
+     [90m 474 |[39m     )[33m;[39m
+    [31m[1m>[22m[39m[90m 475 |[39m     expect(b[33m.[39mstatus)[33m.[39mtoBe([32m"admitted"[39m)[33m;[39m
+     [90m     |[39m                      [31m[1m^[22m[39m
+     [90m 476 |[39m   })[33m;[39m
+     [90m 477 |[39m
+     [90m 478 |[39m   it([32m"对照：未发生效果时 heap 清零不影响新实例授权"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (scripts/baseline-red/treasury4-boundaries.baseline.ts:475:22)
+
+Test Suites: 1 failed, 1 total
+Tests:       8 failed, 8 passed, 16 total
+Snapshots:   0 total
+Time:        3.649 s, estimated 4 s
+Ran all test suites within paths "scripts/baseline-red/treasury4-boundaries.baseline.ts".

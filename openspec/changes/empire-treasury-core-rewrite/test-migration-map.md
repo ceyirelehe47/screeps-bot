@@ -108,3 +108,60 @@
 
 - Treasury：src 内 19 suites / 393 tests（328 适配保留 + 65 新增）。
 - 全仓见 evidence/core-rewrite-iii/final/jest-full.json（budget manifest 为权威）。
+
+## 8. Core Rewrite IV（2026-09-06）：D01–D24 定位与旧 C 覆盖修正
+
+### 8.1 新增套件
+
+| 套件 | 用例数 | 覆盖 |
+| --- | --- | --- |
+| src/runtime/treasury/treasuryRewrite4Acceptance.test.ts | 20 | D01–D09、D12、D14、D20、D21、D22 |
+| src/runtime/treasury/treasuryRewrite4Lifecycle.test.ts | 12 | D09–D11、D13、D15–D19、D23 |
+| scripts/baseline-red/treasury4-boundaries.baseline.ts（不入默认收集） | 16 | R1–R7 基线反例（治愈复验版：8 反例全转绿 + 8 对照） |
+
+### 8.2 D01–D24 → 测试定位
+
+| D | 场景 | 测试 |
+| --- | --- | --- |
+| D01 | 观察不可确认不退出/恢复退出 | Acceptance "D01 committed 无消费者的观察责任"（2 例：范围缺失零写保留 + 恢复退出） |
+| D02 | cleanup 后旧视图失效（1000/800/200） | Acceptance "D02 观察接管退出后的旧视图失效" |
+| D03 | 接收空间责任闭合（100/80/20） | Acceptance "D03 接收空间的观察接管" |
+| D04 | fresh 耗尽 + 结构变化 blocked/取消/对照 | Acceptance "D04 fresh 耗尽的执行门禁" |
+| D05 | 组合（清理+旧视图+fresh 耗尽+多实例） | Acceptance "D05 组合场景" |
+| D06 | 完整性三时点（authorize 前/真许可后/修复对照） | Acceptance "D06 完整性门禁三时点"（2 例） |
+| D07 | rearm 门禁与权利保持 | Acceptance "D07 rearm 门禁与权利保持" |
+| D08 | own-reservation 贯穿 + 他人责任 | Acceptance "D08 own-reservation 与他人责任并存" |
+| D09 | heap 全清 + Memory 保留 → 接管 | Lifecycle "D09 全 heap reset 后的观察接管" |
+| D10 | 无关推进不当覆盖 | Lifecycle "D10 无关推进与范围缺失" |
+| D11 | 硬终止断点 + 晚到 reconcile executed | Lifecycle "D11 硬终止与晚到结论"（2 例） |
+| D12 | 部分适用观察不判覆盖 | Acceptance "D12 多位置动作的部分观察" |
+| D13 | 8 义务逐 tick 完成轨迹 | Lifecycle "D13 成对预算下的 8 义务完成" |
+| D14 | 父子义务不重复继承 | Acceptance "D14 retry 链的义务继承" |
+| D15 | 混合结果义务部分推进 | Lifecycle "D15 混合结果义务的部分推进" |
+| D16 | 预扣/确认丢写 | Lifecycle "D16 预扣/确认丢写的预算语义"（2 例） |
+| D17 | 重入共享预算 | Lifecycle "D17 重入与份额共享" |
+| D18 | 断点 + 完整 reset | Lifecycle "D18 断点与完整 reset 后的预算/许可/义务" |
+| D19 | 公平有限界（失败前置+噪声） | Lifecycle "D19 公平推进有限界" |
+| D20 | retry_ready 矛盾 + 坏 ring 隔离 | Acceptance "D20 retry_ready 矛盾与坏 ring 隔离"（3 例） |
+| D21 | 上界与实际表示逐项对照 | Acceptance "D21 空间上界与实际表示"（4 例） |
+| D22 | 真实接纳满载生命周期预算 | Acceptance "D22 真实接纳满载与生命周期预算" |
+| D23 | 混合规模模型 + reset | Lifecycle "D23 混合规模模型与账目一致" |
+| D24 | 负向变体三件套 | evidence/core-rewrite-iv/negative-variants/（A:2 红 D01 / B:1 红 D04 / C:1 红 D13；还原后 425 全绿） |
+
+### 8.3 旧 C 项修订（IV 语义演进，任务书 §9.4）
+
+| 旧 C | 修订 | 依据 |
+| --- | --- | --- |
+| C01 第三例（同 tick B 80 拒绝） | 改为"同 tick 观察重建后 80 获准 + 850 物理余额拒绝" | IV/§4.2 视图时效：效果后旧观察立即失效、入口重建（转移保 scope 总量，80 本就可支配；防双花由 per-leg 物理余额保证） |
+| C03 fixture | 直写 resourceReservations 改为 reserveProductionResourceForOwner（权威 key + revision/健康缓存失效） | IV/§5.2 授权路径消费 reservation 健康——直写 key 与 makeReservationStoreKey 不一致被正确暴露 |
+| C05 | 不变（fresh 拦截保持） | — |
+| C11 确认写失败 | 时序适配（成对预算下确认 0 份额） | IV/§6.1 |
+| C12 | 世界序持久域（断言不变，比较域改变） | IV/§4.3 |
+| C16"恰好 8 次" | 单 tick 端口调用 8 → 4（成对单位 2 份）；保留真实调用 >0、≤8、全实例共享、remaining 清空/工作退出双断言 | IV/§6.1（任务书 §9.4 明示 C16 非不可变业务要求） |
+| C18 sticky-8 | 推进预算适配（成对语义） | IV/§6.1 |
+| C15/B25 reset | harness 清 Treasury global（世界序已持久化于 Memory，槽退役） | IV/§9.3 |
+| A20/B19 | fixture 腿数 16→12、generation/adapterVersion ≤9999；A20 invocation.atTick 取上一 tick | IV/R6 validator 收紧 + tick 兜底严格大于 |
+
+### 8.4 数量对账（IV 后）
+
+220/1228 → **222 suites / 1260 tests**（+2 套件 = treasuryRewrite4Acceptance/Lifecycle；+32 测试）。全仓零回归；budget manifest 与锚点同步更新（evidence/core-rewrite-iv/final/）。

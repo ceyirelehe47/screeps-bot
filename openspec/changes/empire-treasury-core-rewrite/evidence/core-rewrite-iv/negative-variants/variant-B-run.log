@@ -1,0 +1,57 @@
+FAIL src/runtime/treasury/treasuryRewrite4Acceptance.test.ts
+  D01 committed 无消费者的观察责任
+    ○ skipped 目标位置不在适用观察范围：重复 beginTick/endTick/cleanup 都不退出，不靠 ring 或时间消除
+    ○ skipped 范围恢复（新可信观察覆盖）后正常退出，义务集合为空
+  D02 观察接管退出后的旧视图失效
+    ○ skipped A 执行 800 并退出后，旧观察实例 B：800 拒绝（新观察物理余额 200），200 获准（新 contract）
+  D03 接收空间的观察接管
+    ○ skipped A 确认流入 80 并退出后：旧实例申请流入 80 拒；新观察空位 20 不双扣，20 合法
+  D04 fresh 耗尽的执行门禁
+    × 额度耗尽后结构换 ID：blocked、实际调用 0、无 applied、pending 可安全取消；fresh 可用对照执行 1 (21 ms)
+  D05 组合场景（D02/D03 之后再耗尽 fresh）
+    ○ skipped 旧真许可在 fresh 耗尽 + 结构变化下 blocked；新合法工作仍可授权；多实例重复入口幂等
+  D06 完整性门禁三时点
+    ○ skipped authorize 前注入：query 阻断、authorize 拒绝（不按剩余数值放行）；修复后合法对照获准
+    ○ skipped 真许可已签发后注入：dispatch 复验一致阻断、实际调用 0；修复后同一许可可执行
+  D07 rearm 门禁与权利保持
+    ○ skipped 父代 retry_ready 后承诺不完整：不产生 child、不消费 rearm 权利；修复后同一许可合法 rearm
+  D08 own-reservation 与他人责任并存
+    ○ skipped owner A 200 获准并执行；他人 B 700 获准并执行；不声明 owner 的 950 对照拒绝
+  D12 多位置动作的部分观察
+    ○ skipped 观察只覆盖流出侧时 committed 不退出；全部位置恢复覆盖后才退出并使旧视图失效
+  D14 retry 链的义务继承
+    ○ skipped 父代 not-executed 单义务 D 释放完成：retry_ready 持久空集合；child 不继承 D、不重复释放；child 可执行
+  D20 retry_ready 矛盾与坏 ring 隔离
+    ○ skipped 非空义务 + retry_ready：unhealthy（拒绝，不自动清空）
+    ○ skipped committed + retry_ready：unhealthy
+    ○ skipped 仅 ring 坏（非数组）：healthy + ringDegraded，查询零写，健康工作仍可完成退出
+  D21 空间上界与实际表示
+    ○ skipped 构造器最坏记录通过 validator（合法输入）且其真实序列化 = 声明上界
+    ○ skipped 逐字段极值独立验证：数字位宽（16 位正/17 位负）、worldSequence、转义文本、consumerKeys 数量
+    ○ skipped 非法值在复制前拒绝：超界 payload 整体拒绝（无 slice 截断后接受）
+    ○ skipped 满载数学断言：64 × 槽上界 + 128 × 历史槽上界 + 根元信息 ≤ 360,000（bytes 另报）
+  D22 真实接纳满载与生命周期预算
+    ○ skipped 真实接纳极值记录 × 满 active + 满 ring，演化 unknown/closing/partial cleanup：总序列化 ≤ 预算，超额拒绝，已接纳可收尾
+
+  ● D04 fresh 耗尽的执行门禁 › 额度耗尽后结构换 ID：blocked、实际调用 0、无 applied、pending 可安全取消；fresh 可用对照执行 1
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "blocked"
+    Received: "committed"
+
+    [0m [90m 293 |[39m     (installed[[32m"W2N57"[39m] [36mas[39m unknown [36mas[39m { terminal[33m?[39m[33m:[39m { id[33m:[39m string } })[33m.[39mterminal[33m![39m[33m.[39mid [33m=[39m [32m"term-2-rebuilt"[39m[33m;[39m
+     [90m 294 |[39m     [36mconst[39m outcome [33m=[39m service[33m.[39mexecuteAuthorizedDispatch(p[33m.[39mdispatch)[33m;[39m
+    [31m[1m>[22m[39m[90m 295 |[39m     expect(outcome[33m.[39mstatus)[33m.[39mtoBe([32m"blocked"[39m)[33m;[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 296 |[39m     expect(readTreasuryTestAdapterSideEffects()[33m.[39mexecutions)[33m.[39mtoBe([35m0[39m)[33m;[39m
+     [90m 297 |[39m     [90m// 许可未消费、记录保持 pending——可安全取消（调用边界从未开始）。[39m
+     [90m 298 |[39m     expect(service[33m.[39mcancelPendingWork({ attemptId[33m:[39m p[33m.[39mattemptId })[33m.[39mstatus)[33m.[39mtoBe([32m"ok"[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite4Acceptance.test.ts:295:28)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 19 skipped, 20 total
+Snapshots:   0 total
+Time:        4.198 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryRewrite4Acceptance.test.ts/i with tests matching "D04".
