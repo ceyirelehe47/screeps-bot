@@ -1,0 +1,11 @@
+src/runtime/defenseFocusFire.test.ts
+src/runtime/defenseFocusFireStateful.test.ts
+src/runtime/defenseFallbackReallocation.test.ts
+src/runtime/defenseAllActorReservation.test.ts
+src/runtime/defenseGlobalRampartFootprints.test.ts
+src/runtime/defensePreallocationRampartOwnership.test.ts
+src/runtime/defenseStationaryRampartOwnership.test.ts
+src/runtime/homeDefense.test.ts
+src/runtime/towerControl.test.ts
+src/roles/homeDefender.test.ts
+test/memoryDeclarationBoundaries.test.ts

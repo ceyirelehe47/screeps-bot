@@ -1,1112 +1,1797 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "ad50c03e3bb459179c2c5dd6cb4dbd4526428ae6",
-    "suites": 218,
-    "tests": 1163
+    "commit": "193ec62f9f7d3d7185d3fa9874fa960d9f1e9ddb",
+    "suites": 220,
+    "tests": 1228
   },
   "target": {
-    "commit": "ad50c03e3bb459179c2c5dd6cb4dbd4526428ae6",
-    "suites": 218,
-    "tests": 1163,
-    "passed": 1163,
+    "commit": "193ec62f9f7d3d7185d3fa9874fa960d9f1e9ddb",
+    "suites": 220,
+    "tests": 1228,
+    "passed": 1228,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Core Rewrite II：B01-B28 矩阵/生命周期/完整 reset/压力扩展入库（test-migration-map.md §6）；tier 信息性"
+    "note": "Core Rewrite III：C01-C24 矩阵/世界序观察覆盖/预扣预算/逐槽空间预算入库（test-migration-map.md §7）；tier 信息性"
   },
   "files": {
-    "src/runtime/treasury/treasuryKernelStress.test.ts": {
-      "baseline": 0,
-      "budget": 8,
-      "tier": "default-max-2"
+    "scripts/lib/deployGuard.test.ts": {
+      "budget": 17,
+      "tests": 17,
+      "passed": 17,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
     },
-    "src/runtime/marketBaseResourcePermit.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "test/localDispatchPerformanceBaseline.test.ts": {
-      "baseline": 0,
-      "budget": 1,
-      "tier": "protected-full"
-    },
-    "src/runtime/marketBaseResourceAutomation.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "test/memoryDeclarationBoundaries.test.ts": {
-      "baseline": 0,
-      "budget": 6,
-      "tier": "protected-full"
-    },
-    "test/ambientGlobalAbiBoundaries.test.ts": {
-      "baseline": 0,
-      "budget": 5,
-      "tier": "protected-full"
+    "scripts/lib/redactSecrets.test.ts": {
+      "budget": 7,
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
     },
     "scripts/monitor-service.test.ts": {
-      "baseline": 0,
       "budget": 2,
-      "tier": "default-max-2"
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
     },
-    "test/typescriptConfigBoundaries.test.ts": {
-      "baseline": 0,
-      "budget": 4,
+    "src/config/spawnProfiles.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/main.test.ts": {
+      "budget": 6,
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
       "tier": "protected-full"
     },
-    "test/localDispatchArchitectureBoundaries.test.ts": {
-      "baseline": 0,
+    "src/mount/mountCreep.lifecycleCache.test.ts": {
+      "budget": 10,
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/mount/mountCreep.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/mount/mountSpawn.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/movement/common.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/movement/metrics.flush.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/movement/pathing.crossTickCache.test.ts": {
+      "budget": 14,
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/movement/pathing.test.ts": {
+      "budget": 3,
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/movement/roomTopologyRevision.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/movement/routing.backoff.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/movement/routing.cachedPathValidation.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/movement/routing.dynamicObstacles.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/movement/routing.segmentCache.test.ts": {
+      "budget": 56,
+      "tests": 56,
+      "passed": 56,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
+      "tier": "protected-full"
+    },
+    "src/movement/routing.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/movement/staticRoomMatrix.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/movement/traffic.naturalObstacles.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/movement/traffic.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/carrier.bestCandidate.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/carrier.test.ts": {
       "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/claimer.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/colonizerHarvester.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/combatBoosts.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/energyTargets.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/healer.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/homeDefender.test.ts": {
+      "budget": 6,
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/index.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/meleeAttacker.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/mineralHarvester.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/powerBankAttacker.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/powerBankHauler.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/powerBankHealer.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/powerBankScout.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/remoteCarrier.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/remoteDefender.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/remoteMiningCarrier.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/remoteMiningReserver.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/remoteWorker.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/scout.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/shared.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/upgrader.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/roles/worker.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/actionLog.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/autoReserveFlag.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/boostControl.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/bootstrap.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/bootstrapArchitecture.test.ts": {
+      "budget": 10,
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
+      "tier": "protected-full"
+    },
+    "src/runtime/carrierBodyPolicy.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/carrierTaskBoard.revisionCache.test.ts": {
+      "budget": 6,
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/carrierTaskBoard.test.ts": {
+      "budget": 6,
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/colonization.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/colonization.travelPath.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/configNormalize.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/console/operationsCommands.test.ts": {
+      "budget": 1,
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/console/resourceTransferCommands.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/consoleCommands.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/cpuMonitor.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/cpuPhaseProfiler.lowOverhead.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/creepAssignmentState.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/crossShardColonization.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/defenseAllActorReservation.test.ts": {
+      "budget": 11,
+      "tests": 11,
+      "passed": 11,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/defenseFallbackReallocation.test.ts": {
+      "budget": 13,
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/defenseFocusFire.test.ts": {
+      "budget": 26,
+      "tests": 26,
+      "passed": 26,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/defenseFocusFireStateful.test.ts": {
+      "budget": 24,
+      "tests": 24,
+      "passed": 24,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/defenseFrontAware.test.ts": {
+      "budget": 26,
+      "tests": 26,
+      "passed": 26,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/defenseGlobalRampartFootprints.test.ts": {
+      "budget": 9,
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/defensePreallocationRampartOwnership.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/defenseStationaryRampartOwnership.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/deployAnnounce.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/dispatchOwnership/actorBinding.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/dispatchOwnership/carrierAmountSlice.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/dispatchOwnership/ref.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/dispatchOwnership/workerSlot.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/emergencySpawning.test.ts": {
+      "budget": 1,
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/empireInventoryBenchmark.test.ts": {
+      "budget": 1,
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/empireInventoryIndex.test.ts": {
+      "budget": 12,
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/empireInventoryShadow.test.ts": {
+      "budget": 12,
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/energyPickupReservation.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/externalTelemetry.test.ts": {
+      "budget": 12,
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
+      "tier": "protected-full"
+    },
+    "src/runtime/factoryControl.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/flagHauling.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/homeDefense.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/hostilePriorities.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/hubFlag.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/hubPlanner.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/hubProductionIntegration.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/hubProgress.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/hubProtectionSnapshot.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/hubUpgradeControl.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/linkControl.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/linkNetworkMemory.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/linkNetworkMemoryOwnership.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
+      "tier": "protected-full"
+    },
+    "src/runtime/localCarrierDestinationCapacity.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/localDispatchOwnership.target.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/logistics/capacityHeadroom.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/logistics/receiverCapacityLedger.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/logistics/resourceTransferTasks.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketActionArbiter.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketBaseResourceAutomation.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketBaseResourceLedger.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketBaseResourcePermit.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketBaseResourcePolicy.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketDirectContinuousAutomation.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketDirectContinuousLedger.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketDirectContinuousPlanner.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketDirectContinuousPolicy.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleAutomation.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleConfig.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleDiagnostics.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleDirectAutomation.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleDirectEngineAssumptions.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleDirectPending.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleDirectPricing.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleDirectShadow.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleExposure.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleFeeLedger.test.ts": {
+      "budget": 7,
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleLifecycle.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSalePlanningAuthorization.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSalePlanningGate.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSalePricing.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSalePricingAdapter.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleProtection.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleProtectionAdapter.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleProtectionMemo.test.ts": {
+      "budget": 3,
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleRuntime.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketSaleSession.test.ts": {
+      "budget": 14,
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/marketWriteArchitecture.test.ts": {
+      "budget": 1,
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
+      "tier": "protected-full"
+    },
+    "src/runtime/memoryAudit.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/memoryCleanup.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/memorySizeRegression.test.ts": {
+      "budget": 1,
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/minerBodyPolicy.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/mineralExtraction.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/nukerControl.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/pixelGenerator.test.ts": {
+      "budget": 1,
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/powerBankBoost.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/powerBankConstants.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/powerBankDiscovery.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/powerBankHarvest.test.ts": {
+      "budget": 6,
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/powerBankObserver.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/powerBankStatus.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/powerBankViability.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/powerCreepControl.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/powerSpawnControl.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/productionStateMachine.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/reactionMap.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/remoteMining.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/resourceControl.capacityRegression.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/resourceControl.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/resourceReservation.test.ts": {
+      "budget": 20,
+      "tests": 20,
+      "passed": 20,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/roomEnergyPolicy.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/roomPlannerConstruction.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/roomTypes.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/roomWorkforce.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/roomWorkforceIdentity.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/safeZone.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/safeZoneHelpers.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/spawnPlanner.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/spawnQueueOwnership.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/synthesisControl.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/synthesisControlStateMachine.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/adapters/carrierLogistics.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/adapters/factoryCommand.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/adapters/powerBankWorkflow.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/adapters/powerCreepAction.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/adapters/resourceTransfer.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/adapters/spawnProduction.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/adapters/warWorkflow.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/adapters/workerWork.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/adapters/workflowAdapters.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/catalog.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/model.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/registry.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/taskSystem/snapshot.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/terminalActionEnergyOwnership.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/terminalBootstrapRecovery.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/tickContext.typedIndex.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/towerControl.scanThrottle.test.ts": {
+      "budget": 6,
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/towerControl.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryActionContract.test.ts": {
+      "budget": 13,
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryCanonicalEncoding.test.ts": {
+      "budget": 18,
+      "tests": 18,
+      "passed": 18,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryCapacityViews.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryCommitmentCompleteness.test.ts": {
+      "budget": 19,
+      "tests": 19,
+      "passed": 19,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryCommitments.test.ts": {
+      "budget": 14,
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryCore.test.ts": {
+      "budget": 22,
+      "tests": 22,
+      "passed": 22,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryImmutableRegistries.test.ts": {
+      "budget": 15,
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryKernel.test.ts": {
+      "budget": 28,
+      "tests": 28,
+      "passed": 28,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryKernelAcceptance.test.ts": {
+      "budget": 43,
+      "tests": 43,
+      "passed": 43,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryKernelArchitecture.test.ts": {
+      "budget": 7,
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryKernelStress.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRewrite2Acceptance.test.ts": {
+      "budget": 42,
+      "tests": 42,
+      "passed": 42,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRewrite2Lifecycle.test.ts": {
+      "budget": 18,
+      "tests": 18,
+      "passed": 18,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRewrite3Acceptance.test.ts": {
+      "budget": 58,
+      "tests": 58,
+      "passed": 58,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRewrite3Lifecycle.test.ts": {
+      "budget": 7,
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryShadow.test.ts": {
+      "budget": 6,
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryTransactionIdVectors.test.ts": {
+      "budget": 30,
+      "tests": 30,
+      "passed": 30,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryTypedOwnerMigration.test.ts": {
+      "budget": 41,
+      "tests": 41,
+      "passed": 41,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/upgraderPolicy.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/warControl.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/workerTaskPool.characterization.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/workerTaskPool.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/types/roleCatalog.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/visual/palette.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/visual/panel.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/ambientGlobalAbiBoundaries.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
+      "tier": "protected-full"
+    },
+    "test/defenseMode.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/harvester.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/localDispatchArchitectureBoundaries.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
+      "tier": "protected-full"
+    },
+    "test/localDispatchPerformanceBaseline.test.ts": {
+      "budget": 1,
+      "tests": 1,
+      "passed": 1,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
+      "tier": "protected-full"
+    },
+    "test/memoryDeclarationBoundaries.test.ts": {
+      "budget": 6,
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
+      "tier": "protected-full"
+    },
+    "test/miner.test.ts": {
+      "budget": 2,
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/roleIdentityCatalogBoundaries.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
       "tier": "protected-full"
     },
     "test/taskSystemArchitectureBoundaries.test.ts": {
-      "baseline": 0,
       "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
       "tier": "protected-full"
-    },
-    "src/runtime/treasury/treasuryRewrite2Lifecycle.test.ts": {
-      "baseline": 0,
-      "budget": 18,
-      "tier": "default-max-2"
     },
     "test/taskSystemCatalogBoundaries.test.ts": {
-      "baseline": 0,
       "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
       "tier": "protected-full"
-    },
-    "test/roleIdentityCatalogBoundaries.test.ts": {
-      "baseline": 0,
-      "budget": 5,
-      "tier": "protected-full"
-    },
-    "src/runtime/marketBaseResourceLedger.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/bootstrapArchitecture.test.ts": {
-      "baseline": 0,
-      "budget": 10,
-      "tier": "protected-full"
-    },
-    "src/runtime/marketSaleAutomation.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/linkNetworkMemoryOwnership.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "protected-full"
-    },
-    "src/runtime/treasury/treasuryKernelAcceptance.test.ts": {
-      "baseline": 0,
-      "budget": 43,
-      "tier": "default-max-2"
-    },
-    "src/runtime/treasury/treasuryKernelArchitecture.test.ts": {
-      "baseline": 0,
-      "budget": 7,
-      "tier": "default-max-2"
-    },
-    "src/roles/index.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "test/treasuryCommitmentInvalidationBoundaries.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/hubProductionIntegration.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/movement/routing.segmentCache.test.ts": {
-      "baseline": 0,
-      "budget": 56,
-      "tier": "protected-full"
-    },
-    "src/runtime/resourceControl.capacityRegression.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/treasury/treasuryRewrite2Acceptance.test.ts": {
-      "baseline": 0,
-      "budget": 42,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleSession.test.ts": {
-      "baseline": 0,
-      "budget": 14,
-      "tier": "default-max-2"
-    },
-    "src/runtime/logistics/resourceTransferTasks.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/treasury/treasuryKernel.test.ts": {
-      "baseline": 0,
-      "budget": 28,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSalePlanningAuthorization.test.ts": {
-      "baseline": 0,
-      "budget": 5,
-      "tier": "default-max-2"
-    },
-    "src/runtime/hubPlanner.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "test/warWorkflowLifecycleBoundaries.test.ts": {
-      "baseline": 0,
-      "budget": 3,
-      "tier": "protected-full"
-    },
-    "src/runtime/powerBankHarvest.test.ts": {
-      "baseline": 0,
-      "budget": 6,
-      "tier": "default-max-2"
-    },
-    "src/runtime/bootstrap.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/synthesisControl.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/console/operationsCommands.test.ts": {
-      "baseline": 0,
-      "budget": 1,
-      "tier": "default-max-2"
-    },
-    "src/runtime/powerBankBoost.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "scripts/lib/redactSecrets.test.ts": {
-      "baseline": 0,
-      "budget": 7,
-      "tier": "default-max-2"
-    },
-    "src/runtime/treasury/treasuryImmutableRegistries.test.ts": {
-      "baseline": 0,
-      "budget": 15,
-      "tier": "default-max-2"
-    },
-    "src/runtime/warControl.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/mount/mountCreep.lifecycleCache.test.ts": {
-      "baseline": 0,
-      "budget": 10,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/snapshot.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/memoryCleanup.test.ts": {
-      "baseline": 0,
-      "budget": 8,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketDirectContinuousLedger.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/treasury/treasuryTypedOwnerMigration.test.ts": {
-      "baseline": 0,
-      "budget": 41,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSalePlanningGate.test.ts": {
-      "baseline": 0,
-      "budget": 5,
-      "tier": "default-max-2"
-    },
-    "src/runtime/externalTelemetry.test.ts": {
-      "baseline": 0,
-      "budget": 12,
-      "tier": "protected-full"
-    },
-    "src/mount/mountCreep.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketWriteArchitecture.test.ts": {
-      "baseline": 0,
-      "budget": 1,
-      "tier": "protected-full"
-    },
-    "src/runtime/consoleCommands.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketDirectContinuousAutomation.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/empireInventoryShadow.test.ts": {
-      "baseline": 0,
-      "budget": 12,
-      "tier": "default-max-2"
-    },
-    "src/runtime/nukerControl.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/treasury/treasuryCore.test.ts": {
-      "baseline": 0,
-      "budget": 22,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleDirectAutomation.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/empireInventoryIndex.test.ts": {
-      "baseline": 0,
-      "budget": 12,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketDirectContinuousPolicy.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/resourceControl.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/memorySizeRegression.test.ts": {
-      "baseline": 0,
-      "budget": 1,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleRuntime.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleProtectionMemo.test.ts": {
-      "baseline": 0,
-      "budget": 3,
-      "tier": "default-max-2"
-    },
-    "src/movement/pathing.crossTickCache.test.ts": {
-      "baseline": 0,
-      "budget": 14,
-      "tier": "default-max-2"
-    },
-    "src/runtime/hubFlag.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/localDispatchOwnership.target.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/carrier.test.ts": {
-      "baseline": 0,
-      "budget": 8,
-      "tier": "default-max-2"
-    },
-    "src/runtime/treasury/treasuryActionContract.test.ts": {
-      "baseline": 0,
-      "budget": 13,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleFeeLedger.test.ts": {
-      "baseline": 0,
-      "budget": 7,
-      "tier": "default-max-2"
-    },
-    "src/runtime/roomWorkforce.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/defenseStationaryRampartOwnership.test.ts": {
-      "baseline": 0,
-      "budget": 8,
-      "tier": "default-max-2"
-    },
-    "src/runtime/treasury/treasuryTransactionIdVectors.test.ts": {
-      "baseline": 0,
-      "budget": 30,
-      "tier": "default-max-2"
-    },
-    "src/runtime/towerControl.test.ts": {
-      "baseline": 0,
-      "budget": 5,
-      "tier": "default-max-2"
-    },
-    "src/runtime/synthesisControlStateMachine.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/defenseFrontAware.test.ts": {
-      "baseline": 0,
-      "budget": 26,
-      "tier": "default-max-2"
-    },
-    "src/runtime/workerTaskPool.characterization.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/spawnPlanner.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/colonization.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketBaseResourcePolicy.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/defenseFocusFireStateful.test.ts": {
-      "baseline": 0,
-      "budget": 24,
-      "tier": "default-max-2"
-    },
-    "src/runtime/defenseFocusFire.test.ts": {
-      "baseline": 0,
-      "budget": 26,
-      "tier": "default-max-2"
-    },
-    "src/runtime/treasury/treasuryCommitments.test.ts": {
-      "baseline": 0,
-      "budget": 14,
-      "tier": "default-max-2"
-    },
-    "src/runtime/cpuPhaseProfiler.lowOverhead.test.ts": {
-      "baseline": 0,
-      "budget": 8,
-      "tier": "default-max-2"
-    },
-    "src/runtime/colonization.travelPath.test.ts": {
-      "baseline": 0,
-      "budget": 8,
-      "tier": "default-max-2"
-    },
-    "src/runtime/defenseFallbackReallocation.test.ts": {
-      "baseline": 0,
-      "budget": 13,
-      "tier": "default-max-2"
-    },
-    "src/movement/routing.cachedPathValidation.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/flagHauling.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/movement/pathing.test.ts": {
-      "baseline": 0,
-      "budget": 3,
-      "tier": "default-max-2"
-    },
-    "src/main.test.ts": {
-      "baseline": 0,
-      "budget": 6,
-      "tier": "protected-full"
-    },
-    "src/runtime/treasury/treasuryShadow.test.ts": {
-      "baseline": 0,
-      "budget": 6,
-      "tier": "default-max-2"
-    },
-    "src/runtime/defensePreallocationRampartOwnership.test.ts": {
-      "baseline": 0,
-      "budget": 8,
-      "tier": "default-max-2"
-    },
-    "src/movement/roomTopologyRevision.test.ts": {
-      "baseline": 0,
-      "budget": 5,
-      "tier": "default-max-2"
-    },
-    "src/runtime/treasury/treasuryCommitmentCompleteness.test.ts": {
-      "baseline": 0,
-      "budget": 19,
-      "tier": "default-max-2"
-    },
-    "src/mount/mountSpawn.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/defenseAllActorReservation.test.ts": {
-      "baseline": 0,
-      "budget": 11,
-      "tier": "default-max-2"
-    },
-    "src/runtime/hubUpgradeControl.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/boostControl.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/carrier.bestCandidate.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/movement/routing.backoff.test.ts": {
-      "baseline": 0,
-      "budget": 5,
-      "tier": "default-max-2"
-    },
-    "src/visual/panel.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleProtectionAdapter.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/defenseGlobalRampartFootprints.test.ts": {
-      "baseline": 0,
-      "budget": 9,
-      "tier": "default-max-2"
-    },
-    "src/runtime/dispatchOwnership/ref.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSalePricingAdapter.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleConfig.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/shared.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/movement/staticRoomMatrix.test.ts": {
-      "baseline": 0,
-      "budget": 5,
-      "tier": "default-max-2"
-    },
-    "src/config/spawnProfiles.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/model.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/remoteMiningCarrier.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/roles/energyTargets.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/resourceReservation.test.ts": {
-      "baseline": 0,
-      "budget": 20,
-      "tier": "default-max-2"
-    },
-    "src/runtime/crossShardColonization.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/remoteCarrier.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/towerControl.scanThrottle.test.ts": {
-      "baseline": 0,
-      "budget": 6,
-      "tier": "default-max-2"
-    },
-    "src/runtime/homeDefense.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/homeDefender.test.ts": {
-      "baseline": 0,
-      "budget": 6,
-      "tier": "default-max-2"
-    },
-    "src/runtime/remoteMining.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/mineralExtraction.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/movement/routing.dynamicObstacles.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/treasury/treasuryCapacityViews.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/console/resourceTransferCommands.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/hubProgress.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/roles/meleeAttacker.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/workerTaskPool.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/empireInventoryBenchmark.test.ts": {
-      "baseline": 0,
-      "budget": 1,
-      "tier": "default-max-2"
-    },
-    "src/movement/routing.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/roomPlannerConstruction.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/powerBankObserver.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleDirectShadow.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/worker.test.ts": {
-      "baseline": 0,
-      "budget": 8,
-      "tier": "default-max-2"
-    },
-    "src/roles/powerBankHauler.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/dispatchOwnership/actorBinding.test.ts": {
-      "baseline": 0,
-      "budget": 8,
-      "tier": "default-max-2"
-    },
-    "src/runtime/minerBodyPolicy.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/deployAnnounce.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "scripts/lib/deployGuard.test.ts": {
-      "baseline": 0,
-      "budget": 17,
-      "tier": "default-max-2"
-    },
-    "src/runtime/linkControl.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/upgrader.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/registry.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/safeZoneHelpers.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketDirectContinuousPlanner.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "test/defenseMode.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/cpuMonitor.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/types/roleCatalog.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/treasury/treasuryCanonicalEncoding.test.ts": {
-      "baseline": 0,
-      "budget": 18,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/adapters/workflowAdapters.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/adapters/powerBankWorkflow.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/visual/palette.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/roomWorkforceIdentity.test.ts": {
-      "baseline": 0,
-      "budget": 5,
-      "tier": "default-max-2"
-    },
-    "src/runtime/hubProtectionSnapshot.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/factoryControl.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/mineralHarvester.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/movement/metrics.flush.test.ts": {
-      "baseline": 0,
-      "budget": 5,
-      "tier": "default-max-2"
-    },
-    "src/runtime/spawnQueueOwnership.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/emergencySpawning.test.ts": {
-      "baseline": 0,
-      "budget": 1,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/adapters/powerCreepAction.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/adapters/factoryCommand.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/terminalBootstrapRecovery.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/carrierTaskBoard.test.ts": {
-      "baseline": 0,
-      "budget": 6,
-      "tier": "default-max-2"
-    },
-    "src/runtime/carrierTaskBoard.revisionCache.test.ts": {
-      "baseline": 0,
-      "budget": 6,
-      "tier": "default-max-2"
-    },
-    "src/runtime/autoReserveFlag.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/powerBankScout.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/powerSpawnControl.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/powerBankHealer.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/powerBankAttacker.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/dispatchOwnership/workerSlot.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/powerCreepControl.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/pixelGenerator.test.ts": {
-      "baseline": 0,
-      "budget": 1,
-      "tier": "default-max-2"
-    },
-    "src/roles/remoteDefender.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/adapters/workerWork.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/adapters/warWorkflow.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/tickContext.typedIndex.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/linkNetworkMemory.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/actionLog.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/movement/traffic.naturalObstacles.test.ts": {
-      "baseline": 0,
-      "budget": 5,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/catalog.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/upgraderPolicy.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/powerBankViability.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleDirectPending.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/adapters/spawnProduction.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/adapters/carrierLogistics.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/remoteWorker.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/combatBoosts.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/movement/traffic.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleDirectPricing.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleDirectEngineAssumptions.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/localCarrierDestinationCapacity.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/creepAssignmentState.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/scout.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "test/miner.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/dispatchOwnership/carrierAmountSlice.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/safeZone.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/powerBankDiscovery.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/logistics/receiverCapacityLedger.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/roomTypes.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/productionStateMachine.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/powerBankStatus.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSalePricing.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleExposure.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleDiagnostics.test.ts": {
-      "baseline": 0,
-      "budget": 4,
-      "tier": "default-max-2"
-    },
-    "src/runtime/hostilePriorities.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/healer.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/claimer.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/movement/common.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "test/harvester.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/taskSystem/adapters/resourceTransfer.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/memoryAudit.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleProtection.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketActionArbiter.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/colonizerHarvester.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/energyPickupReservation.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/carrierBodyPolicy.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/roles/remoteMiningReserver.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
     },
     "test/tickContext.test.ts": {
-      "baseline": 0,
       "budget": 2,
-      "tier": "default-max-2"
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
     },
-    "src/runtime/logistics/capacityHeadroom.test.ts": {
-      "baseline": 0,
+    "test/treasuryCommitmentInvalidationBoundaries.test.ts": {
       "budget": 2,
-      "tier": "default-max-2"
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
     },
-    "src/runtime/terminalActionEnergyOwnership.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
+    "test/typescriptConfigBoundaries.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
+      "tier": "protected-full"
     },
-    "src/runtime/powerBankConstants.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/marketSaleLifecycle.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/configNormalize.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/roomEnergyPolicy.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
-    },
-    "src/runtime/reactionMap.test.ts": {
-      "baseline": 0,
-      "budget": 2,
-      "tier": "default-max-2"
+    "test/warWorkflowLifecycleBoundaries.test.ts": {
+      "budget": 3,
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0,
+      "tier": "protected-full"
     }
   }
 }

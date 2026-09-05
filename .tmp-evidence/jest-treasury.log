@@ -1,0 +1,42 @@
+PASS src/runtime/treasury/treasuryKernelStress.test.ts (177.112 s)
+PASS src/runtime/treasury/treasuryRewrite3Acceptance.test.ts
+PASS src/runtime/treasury/treasuryRewrite2Lifecycle.test.ts
+PASS src/runtime/treasury/treasuryKernelAcceptance.test.ts
+PASS src/runtime/treasury/treasuryKernelArchitecture.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Lifecycle.test.ts
+PASS src/runtime/treasury/treasuryRewrite2Acceptance.test.ts
+PASS src/runtime/treasury/treasuryKernel.test.ts
+PASS src/runtime/treasury/treasuryTypedOwnerMigration.test.ts
+PASS src/runtime/treasury/treasuryShadow.test.ts
+  ● Console
+
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5001 newMismatches=1 fields=stale_epoch sample={"checkedAtTick":5001,"field":"stale_epoch","roomName":"*","treasuryValue":5000,"otherValue":5001}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+PASS src/runtime/treasury/treasuryCore.test.ts
+PASS src/runtime/treasury/treasuryActionContract.test.ts
+PASS src/runtime/treasury/treasuryImmutableRegistries.test.ts
+PASS src/runtime/treasury/treasuryTransactionIdVectors.test.ts
+PASS src/runtime/treasury/treasuryCommitments.test.ts
+PASS src/runtime/treasury/treasuryCommitmentCompleteness.test.ts
+PASS src/runtime/treasury/treasuryCanonicalEncoding.test.ts
+PASS src/runtime/treasury/treasuryCapacityViews.test.ts
+
+Test Suites: 18 passed, 18 total
+Tests:       393 passed, 393 total
+Snapshots:   0 total
+Time:        188.549 s
+Ran all test suites matching /src\\runtime\\treasury\\/i.
+Test results written to: .tmp-evidence\jest-treasury.json
