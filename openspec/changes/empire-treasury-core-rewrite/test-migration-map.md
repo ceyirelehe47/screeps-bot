@@ -82,3 +82,29 @@
 | 元信息异常对照 | B28 | Rewrite2Acceptance › B28（frontier 溢出/legacy 阻断不擦除） | 基线绿（回归保持） |
 
 数量对账（II 轮）：Treasury 16 suites / 327 tests（I 轮 15/306 + Rewrite2Acceptance 42 + Rewrite2Lifecycle 17 + acceptance 修正后 43；stress 6→8）。
+
+
+## 7. Core Rewrite III（2026-09-05）：C01–C24 定位与旧 B 覆盖修正
+
+### 7.1 新增套件
+
+| 文件 | tests | 覆盖 |
+| --- | --- | --- |
+| treasuryRewrite3Acceptance.test.ts | 58 | C01–C13、C16–C22（授权累计/own-reservation 全链/fail-closed 一致/执行门禁/窗口/不双扣/独立发布/重入推进/结果写失败/多实例流出接收/端口重入预算/预扣失败零调用/公平有限界/ring 六类坏值/active 矛盾/有界值拒绝/逐槽预算推导与满载实测） |
+| treasuryRewrite3Lifecycle.test.ts | 7 | C14/C15（同 tick fresh 不双扣、晚到 reconcile 保守、三断点完整 reset 账目重建、旧视图不超额、世界效果不被 reset 重置）+ C23（长期 unknown 混合流量） |
+| scripts/baseline-red/treasury3-boundaries.baseline.ts | 17 | R1–R8 基线反例（13 缺陷 + 4 对照）；基线红灯 13/4 → 修复后治愈复验 17/17 |
+
+### 7.2 旧 B 项覆盖修正（任务书 §10.3）
+
+- B05（只改克隆）→ C08/C09（原地污染传入载荷 + 嵌套字段反转 + 换旧合法值 + 初始化失败 + 取消丢写）补齐"写边界污染"族。
+- B03（同许可重放）→ C12/C13（不同合法 workKey 的两实例竞争）补齐"多实例账目"族。
+- B15（释放确认写失败重试）→ III 预扣语义更新：预扣写失败的首个 tick **零端口调用**（原语义直接调用）；确认写失败后下 tick 同一幂等 (key, attemptId) 重试保留。
+- B17（超限记录零调用）→ C16 补"记录健康且真实调用 >0 仍守限"的正向前提（超限输入 calls=0 只是输入校验，不作预算证据）。
+- B20（ring degraded 标签）→ C19 补非数组 ring + 全命令路径 + 至少一笔合法工作真正完成收尾；degraded 查询返回空历史（不逐条快照坏值）。
+- B12/B19（sweep/满载）→ 适配子预算 3/tick 与世界真实更新（观测量按 adapter 写世界后的数字断言）；B19 满载观测量放大以同时满足复验（占用极值物理可过）。
+- 参考模型（treasuryKernelStress）→ 升级为世界真实更新语义（settled 推进时 worldA 扣减、settled 在推进前计入占用、世界每轮重建）——不再假设"删除记录即恢复容量"。
+
+### 7.3 数量对账（III 后）
+
+- Treasury：src 内 19 suites / 393 tests（328 适配保留 + 65 新增）。
+- 全仓见 evidence/core-rewrite-iii/final/jest-full.json（budget manifest 为权威）。

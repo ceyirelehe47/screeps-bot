@@ -1,6 +1,15 @@
-# Authority Retirement Map — Core Rewrite I
+# Authority Retirement Map — Core Rewrite I（III 增补确认）
 
 旧权威 → 新职责 → 退役位置 → 最终 runtime 引用。基线 `cf2ee7b`（Remediation XII）→ 本轮 HEAD。
+
+## 0. Core Rewrite III 增补确认（2026-09-05）
+
+- 旧 proof 体系（Ticket/Intent/GRA/Summary/certificate/retired range/receipt/token/quarantine）**未复活**：本轮全部修复落在现有 kernel/facade/authorizationFacts/store 内，未新增任何持久证明 store、未新增逐交易/逐代 proof。
+- **实例本地 applied overlay 的派生地位（R5/§6.1）**：授权判定不再消费 overlay（已确认未入观察的效果由 occupancy 从 active 记录派生——观察覆盖世界序判定）；overlay 仅作 query projected 展示缓存，可丢失可重建，不是任何效果的安全载体。
+- **原聚合的观察责任**：closing(committed) 在效果被当前观察接管前由原活跃聚合继续承担占用（世界序/tick 双锚点判定）；不存在第二执行权威、不存在独立的"已完成效果登记处"。
+- **世界序（__treasuryWorldSequence）是调度/判定元信息**：单调计数器，非权威账本——丢失只会使判定保守（多占用），不会漏算或授予执行权。
+- **发布确认不新增持久回执**：独立预期快照是写协议内部的临时深拷贝，不落盘、不形成第二份权威。
+- **执行门禁在 facade 层**：blocked 前置状态不推进 kernel 状态机——许可权威（WeakSet + 冻结快照）与门禁事实（窗口/复验/incarnation）分离，后者失败不消费前者。
 
 ## 1. 旧权威 → 新职责
 
