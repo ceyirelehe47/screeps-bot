@@ -44,9 +44,23 @@
 - E10 推导界：每 tick 8 份额=4 成对单位、9 条 closing 轮转、噪声（sweep ≤3 + dispatching 恢复 ≤2 份额）挤占后界=40 tick；实测界内完成（详见测试注释与运行日志）。
 - E19 满载实测：64×worst（含 invocationBoundary/cursor 极值）+128×worst ring + 元信息 = 343,817 字符 ≤ 360,000；受控字符集 bytes=chars。
 
-## 5. 最终验证（验证 HEAD）
+## 5. 最终验证（验证 HEAD = 223e06c95fa922626003c4403aaf3c489c466780）
 
-见 `final/`（validation-head.txt、head-after.txt、Jest JSON×3、build log、bundle sha256、node/npm 版本、status 前后）。验证命令模板 = 任务书 §11.2（typecheck/build/jest-treasury/jest-defense/jest-full + diff-check + HEAD 前后一致 + 工作树干净）。
+验证 HEAD = 分支提交链末端（生产 04f22f4 → 测试 ab678e1 → 文档/evidence c18a6bc → budget 223e06c）；预算代码锚点 = c18a6bc（budget 自带全仓重跑 PASSED，追加验证实际 HEAD = 223e06c，见 final/jest-full.exit-code.txt）。
+
+命令模板 = 任务书 §11.2；全部退出码 0（final/*.exit-code.txt），HEAD 前后一致、工作树前后干净（status-before/after 均为空）：
+
+| 步骤 | 结果 |
+| --- | --- |
+| typecheck（tsc --noEmit） | 0 错误 |
+| build（npm run build，仅本地） | 成功；dist/main.js sha256 = 6ee470700f3c9e4a1b3bf7dab7bdcb65b70c94289f1a8f5f77fb61cec095d6cb |
+| jest-treasury | 22 suites / 449 tests / 449 passed / 0 failed / 0 pending / 0 todo / 0 runtime-error |
+| jest-defense（含 memoryDeclarationBoundaries） | 11 suites / 118 tests / 118 passed / 0 failed |
+| jest-full | 225 suites / 1289 tests / 1289 passed / 0 failed / 0 pending / 0 todo / 0 runtime-error |
+| git diff --check | 干净 |
+| verify-jest-budget.mjs（budget 提交时） | JEST_TEST_BUDGET=PASSED（225/1289，锚点 c18a6bc） |
+
+环境：node/npm 版本见 final/node-version.txt、final/npm-version.txt。
 
 ## 6. 支持的断点模型与限制（不扩大）
 
