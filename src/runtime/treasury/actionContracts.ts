@@ -1118,6 +1118,11 @@ export function makeTreasuryTestTransferAdapter(
     kind: "test.transfer",
     version: 1,
     semanticIdentity: "test.transfer@reconciler-semantics-v1",
+    // 【Core Rewrite I】执行语义声明：测试桩模拟同步 API（接受即效果、
+    // 拒绝即未执行、抛错→unknown）。保守默认（settlesOnAccept=false /
+    // nonOkOutcome=unknown）的行为由 kernel 单测用专用 adapter 覆盖。
+    settlesOnAccept: true,
+    nonOkOutcome: "not_executed",
     validate(args: unknown): string | null {
       if (!args || typeof args !== "object") return "args 非对象";
       const candidate = args as Partial<TreasuryTestTransferArgs>;

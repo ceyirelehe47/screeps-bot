@@ -143,9 +143,9 @@ function validateWorkRecord(attemptId: string, value: unknown): string | null {
       !boundedString(leg.roomName, 64) ||
       !boundedString(leg.locationKind, 32) ||
       !boundedString(leg.resource, 32) ||
-      typeof leg.outflow !== "number" ||
-      !Number.isSafeInteger(leg.outflow) ||
-      leg.outflow <= 0
+      typeof leg.delta !== "number" ||
+      !Number.isSafeInteger(leg.delta) ||
+      leg.delta === 0
     ) {
       return `active[${attemptId}].worstCase 腿非法`;
     }

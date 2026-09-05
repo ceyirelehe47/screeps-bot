@@ -98,13 +98,17 @@ export interface TreasuryCoreIdentityFacts {
   readonly durableFacts: { readonly version: number; readonly payload: string } | null;
 }
 
-/** 接纳时锁定的最坏资源占用事实（未知结果期间保持全额占用）。 */
+/**
+ * 接纳时锁定的 canonical posting 腿（带符号 delta；同键腿合并）。
+ * 最坏占用 = per key Σmax(0, −delta)（occupancy 派生）；对账 reconciler
+ * 收到完整带符号集。worst-case 语义由负值合计表达。
+ */
 export interface TreasuryCoreWorstCaseLeg {
   readonly roomName: string;
   readonly locationKind: string;
   readonly resource: string;
-  /** 该位置该资源的最大流出量（正数）。 */
-  readonly outflow: number;
+  /** 带符号净变化（流出为负）。 */
+  readonly delta: number;
 }
 
 /** 三种事实：动作调用发生 / 外部接口接受 / 世界效果确认（outcome 字段）。 */

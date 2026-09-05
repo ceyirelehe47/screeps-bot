@@ -40,7 +40,7 @@ export function computeTreasuryCoreOccupancy(memory: TreasuryCoreMemory): Treasu
     holdingWorkCount += 1;
     for (const leg of record.worstCase) {
       const key = `${leg.roomName}\0${leg.locationKind}\0${leg.resource}`;
-      byKey.set(key, (byKey.get(key) ?? 0) + leg.outflow);
+      byKey.set(key, (byKey.get(key) ?? 0) + Math.max(0, -leg.delta));
     }
   }
   return { byKey, holdingWorkCount };
@@ -58,7 +58,7 @@ export function treasuryCoreOccupancyAt(
     if (!treasuryCoreWorkHoldsOccupancy(record)) continue;
     for (const leg of record.worstCase) {
       if (leg.roomName === roomName && leg.locationKind === locationKind && leg.resource === resource) {
-        total += leg.outflow;
+        total += Math.max(0, -leg.delta);
       }
     }
   }

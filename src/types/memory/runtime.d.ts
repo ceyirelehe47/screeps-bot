@@ -718,7 +718,7 @@ declare global {
           retryFactsDigest: string | null;
           durableFacts: { version: number; payload: string } | null;
         };
-        worstCase: readonly { roomName: string; locationKind: string; resource: string; outflow: number }[];
+        worstCase: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
         invocation: { atTick: number } | null;
         external: { accepted: boolean; atTick: number } | null;
         outcome: "unknown" | "committed" | "not_executed";

@@ -31,7 +31,9 @@ import {
 } from "@/runtime/treasury/holderResolution";
 import type { TreasuryOwnerIdentity } from "@/runtime/treasury/ownerIdentity";
 import {
+  ensureReservationSchemaActivated,
   isReservationOwnerMigrationComplete,
+  readReservationMutationCounters,
   validateReservationStoreHealth,
 } from "@/runtime/resourceReservation";
 import { readTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
@@ -40,12 +42,18 @@ import {
   readTreasuryActionContractCounters,
   verifyTreasuryActionContractForAuthorization,
 } from "@/runtime/treasury/actionContracts";
-import type { TreasuryActionContract } from "@/runtime/treasury/actionContracts";
+import {
+  findTreasuryPolicyResolver,
+  validateTreasuryPolicyDecision,
+  type TreasuryRegisteredPolicyResolver,
+} from "@/runtime/treasury/policyAuthority";
+import type { TreasuryActionContract, TreasuryActionReconcilerConclusion } from "@/runtime/treasury/actionContracts";
 import { canonicalizeTreasuryAdapterRetryFacts } from "@/runtime/treasury/adapterRetrySemantics";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 import {
   createTreasuryCoreKernel,
   type TreasuryCoreActionAdapterPort,
+  type TreasuryCoreRejectionCode,
   type TreasuryCoreAdmissionResult,
   type TreasuryCoreDispatchOutcome,
   type TreasuryCoreKernelMetrics,
@@ -114,8 +122,10 @@ export interface TreasuryRearmCapabilityRequest {
 
 export interface TreasurySettleRequest {
   readonly attemptId: string;
+  /** adapter_reconcile：结论由 facade 调用注册 reconciler 得出（不可传入）。 */
   readonly evidenceKind: "adapter_reconcile" | "external_settlement_receipt";
-  readonly conclusion: "executed" | "not_executed" | "still_uncertain";
+  /** 仅 external_settlement_receipt 模式使用（受控外部对账通道）。 */
+  readonly conclusion?: "executed" | "not_executed" | "still_uncertain";
 }
 
 /** 内核只读日志视图（活跃聚合 + ring 的深冻结投影）。 */
@@ -382,8 +392,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           appliedDelta -
           tentativeOutflow -
           (occupancy.byKey.get(key) ?? 0);
-        if (available < leg.outflow) {
-          return `容量不足：${leg.roomName}/${leg.locationKind}/${leg.resource} 可用 ${String(available)} < 最坏流出 ${String(leg.outflow)}`;
+        const legOutflow = Math.max(0, -leg.delta);
+        if (available < legOutflow) {
+          return `容量不足：${leg.roomName}/${leg.locationKind}/${leg.resource} 可用 ${String(available)} < 最坏流出 ${String(legOutflow)}`;
         }
         // 正流入容量占用（receiver capacity：同 tick 多笔不得重复占满接收空间）。
         const locationKey = overlayLocationKey(leg.roomName, leg.locationKind);
@@ -394,7 +405,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           state.observation.freeCapacity(leg.roomName, leg.locationKind as TreasuryLocationKind) - inflowOccupied;
         const legInflow = worstCase
           .filter((l) => overlayLocationKey(l.roomName, l.locationKind) === locationKey)
-          .reduce((sum, l) => sum + l.outflow, 0);
+          .reduce((sum, l) => sum + Math.max(0, l.delta), 0);
         if (legInflow > freeCapacity) {
           return `接收容量不足：${leg.roomName}/${leg.locationKind} 剩余 ${String(freeCapacity)} < 本笔最坏流入 ${String(legInflow)}`;
         }
@@ -411,7 +422,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     for (const record of listTreasuryCoreActiveWorks(health.memory)) {
       if (record.phase !== "outcome_unknown" && record.phase !== "closing") continue;
       for (const leg of record.worstCase) {
-        if (leg.roomName === roomName && leg.locationKind === kind) total += leg.outflow;
+        if (leg.roomName === roomName && leg.locationKind === kind) total += Math.max(0, leg.delta);
       }
     }
     return total;
@@ -425,7 +436,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   });
 
   function ensureTickState(lazy: boolean): TreasuryTickState {
-    if (current !== null && current.tick === Game.time) return current;
+    if (current !== null && current.tick === Game.time) {
+      metrics.observationReuseHits += 1;
+      return current;
+    }
     if (lazy) metrics.lifecycleLazyInitializations += 1;
     metrics.observationRebuilds += 1;
     epochSeq += 1;
@@ -487,12 +501,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (posting.delta >= 0) continue;
       const key = overlayResourceKey(posting.roomName, posting.locationKind, posting.resource);
       const existing = merged.get(key);
-      const outflow = -posting.delta;
+      const delta = posting.delta;
       merged.set(key, {
         roomName: posting.roomName,
         locationKind: posting.locationKind,
         resource: posting.resource,
-        outflow: (existing?.outflow ?? 0) + outflow,
+        delta: (existing?.delta ?? 0) + delta,
       });
     }
     return [...merged.values()];
@@ -528,6 +542,68 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     overlayRevision += 1;
   }
 
+  /**
+   * policy withhold 检查（contract-first 接纳路径）：注册 policy resolver 的
+   * withhold/strategicReserve 参与 per-resource 额度（保守扣减——不得自报）。
+   * resolver 缺失/抛错/输出非法一律 fail closed 拒绝接纳。
+   */
+  function checkPolicyForAdmission(
+    contract: TreasuryActionContract,
+    worstCase: readonly TreasuryCoreWorstCaseLeg[],
+    state: TreasuryTickState,
+  ): { reasonCode: TreasuryCoreRejectionCode; reason: string } | null {
+    void state;
+    const resolver = findTreasuryPolicyResolver();
+    if (resolver === undefined) {
+      return { reasonCode: "policy_unavailable", reason: "无注册 policy resolver（fail closed：不得自报 withhold）" };
+    }
+    const rooms = [...new Set(worstCase.map((leg) => leg.roomName))];
+    const ownerKey = contract.transactionId.length > 0 ? "contract:" + contract.digest.slice(0, 8) : "anonymous";
+    for (const resource of new Set(worstCase.map((leg) => leg.resource))) {
+      let decision: ReturnType<TreasuryRegisteredPolicyResolver["evaluate"]>;
+      try {
+        decision = resolver.evaluate({
+          contractId: contract.contractId,
+          contractDigest: contract.digest,
+          actionKind: contract.actionKind,
+          resource,
+          rooms,
+          ownerIdentity: ownerKey,
+          tick: Game.time,
+        });
+      } catch (error) {
+        return {
+          reasonCode: "policy_fault",
+          reason: "policy_fault：resolver 抛错 " + String(error instanceof Error ? error.message : error).slice(0, 96),
+        };
+      }
+      if ("status" in decision) {
+        return { reasonCode: "policy_violation", reason: "policy 拒绝：" + decision.reason };
+      }
+      const validated = validateTreasuryPolicyDecision(decision);
+      if (validated !== null) {
+        return { reasonCode: "policy_fault", reason: "policy_fault：" + validated };
+      }
+      const reserve = decision.withhold + decision.strategicReserve;
+      for (const leg of worstCase.filter((l) => l.resource === resource && l.delta < 0)) {
+        const outflow = -leg.delta;
+        let roomObserved = 0;
+        for (const kind of ["storage", "terminal"] as const) {
+          roomObserved += state.observation.amount(leg.roomName, kind, resource);
+        }
+        if (roomObserved - reserve < outflow) {
+          return {
+            reasonCode: "insufficient_amount",
+            reason:
+              "policy 额度不足：" + resource + " 可支配 " + String(Math.max(0, roomObserved - reserve)) +
+              "（policy withhold " + String(decision.withhold) + " + reserve " + String(decision.strategicReserve) + "）< 最坏流出 " + String(outflow),
+          };
+        }
+      }
+    }
+    return null;
+  }
+
   function postingsOfContract(contract: TreasuryActionContract): readonly PostingDelta[] {
     return contract.postings.map((p) => ({
       roomName: p.roomName,
@@ -548,6 +624,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (current !== null && current.tick !== Game.time) {
         // 上一 tick 缺 endTick：kernel 恢复承担补救（保守推进）。
         metrics.lifecycleMissingEndWarnings += 1;
+      }
+      // reservation schema activation gate（沿旧语义）：显式 beginTick 先于
+      // 全部 planner/reservation writer 完成激活；失败不写数据、计数。
+      const schemaGate = ensureReservationSchemaActivated();
+      if (schemaGate.status === 'rejected') {
+        metrics.reservationSchemaActivationFailures += 1;
       }
       kernel.beginTick();
       current = null;
@@ -620,6 +702,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       });
       state.commitmentIndex = index;
       state.commitmentBuiltRevision = revision;
+      metrics.commitmentRecords = index.metrics.taskRecords + index.metrics.reservationRecords;
+      metrics.typedOwnerResolvedCount = index.metrics.typedOwnerResolved;
+      metrics.legacyUnresolvedOwnerCount = index.metrics.legacyUnresolvedOwners;
+      metrics.invalidCommitmentRecords = index.metrics.invalidCommitmentRecords;
+      metrics.incompleteCommitmentScopes = index.metrics.incompleteCommitmentScopes;
+      metrics.commitmentGloballyIncomplete = index.metrics.globallyIncomplete;
       return index;
     },
 
@@ -750,7 +838,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         committed,
         incoming,
         spendable: Math.max(0, rawSpendable),
-        overcommitted: rawSpendable < 0,
+        overcommitted: !authorizable || rawSpendable < 0,
         ownerStatus,
         contextStatus: "valid",
         commitmentStatus,
@@ -800,7 +888,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           if (record.phase === "outcome_unknown" || record.phase === "closing") {
             for (const leg of record.worstCase) {
               if (leg.roomName === roomName && leg.locationKind === kind) {
-                kernelInflow += leg.outflow;
+                kernelInflow += Math.max(0, leg.delta);
               }
             }
           }
@@ -827,6 +915,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         transactionsRejectedInvalid: kernelM.counters.rejectedAdmissions,
         preparedActive: kernelM.activeCount,
         freshEpochLimitRejections: metrics.freshEpochLimitRejections,
+        reservationSchemaActivationFailures:
+          metrics.reservationSchemaActivationFailures + readReservationMutationCounters().schemaActivationFailures,
+        reservationMutationRejections: readReservationMutationCounters().mutationRejections,
+        reservationStoreHealthy: validateReservationStoreHealth().healthy,
+        kernelActiveWorks: kernelM.activeCount,
+        kernelUnknownWorks: kernelM.unknownCount,
+        kernelRetryReadyWorks: kernelM.retryReadyCount,
+        kernelRingEntries: kernelM.ringCount,
+        kernelIssuanceFrontier: kernelM.frontier,
+        kernelIssuanceBurned: kernelM.burned,
         contractsBuilt: contractCounters.built,
         contractsRejected: contractCounters.rejected,
       } as TreasuryMetrics;
@@ -852,6 +950,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const worstCase = worstCaseOfPostings(postings);
       if (worstCase.length === 0) {
         return { status: "rejected", reason: "postings 无流出腿（worstCase 为空）", reasonCode: "invalid_input" };
+      }
+      const policyProblem = checkPolicyForAdmission(typed, worstCase, ensureTickState(true));
+      if (policyProblem !== null) {
+        metrics.transactionsRejectedInvalid += 1;
+        return { status: "rejected", reason: policyProblem.reason, reasonCode: policyProblem.reasonCode };
       }
       const admission = kernel.admit({
         workKey: options.workKey,
@@ -932,16 +1035,67 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
 
     settleUnknownOutcome(request: TreasurySettleRequest) {
-      const adapterIdentity = (() => {
+      // adapter_reconcile 证据的结论必须来自注册 reconciler 本身——facade
+      // 内部调用（durable facts + 当前 shared observation），调用方不可传
+      // conclusion（防伪造）。external_settlement_receipt 是显式外部对账
+      // 通道（本轮真实 driver 禁用；结论由受控协作者传入并在证据中记录
+      // 来源——接入真实 driver 前必须升级为受控 capability，见 design 限制）。
+      let conclusion: "executed" | "not_executed" | "still_uncertain";
+      let adapterIdentity: string | undefined;
+      if (request.evidenceKind === "adapter_reconcile") {
         const h = readTreasuryCoreStoreHealth();
-        if (h.status !== "healthy") return undefined;
-        return h.memory.active[request.attemptId]?.identity.adapterSemanticIdentity;
-      })();
+        if (h.status !== "healthy") {
+          return { status: "rejected", reason: "kernel store 不可读" };
+        }
+        const record = h.memory.active[request.attemptId];
+        if (record === undefined) return { status: "rejected", reason: "attempt 不在活跃集合" };
+        const adapter = findTreasuryActionAdapter(record.identity.actionKind);
+        if (
+          adapter === undefined ||
+          adapter.registrationId !== record.identity.adapterRegistrationId ||
+          adapter.semanticIdentity !== record.identity.adapterSemanticIdentity
+        ) {
+          return { status: "rejected", reason: "reconciler 注册身份与聚合不一致" };
+        }
+        if (adapter.reconcile === undefined) {
+          return { status: "rejected", reason: "该 action kind 未提供 reconciler" };
+        }
+        let raw: TreasuryActionReconcilerConclusion;
+        try {
+          raw = adapter.reconcile(
+            {
+              actionKind: record.identity.actionKind,
+              transactionId: record.attemptId,
+              contractId: "ac:" + record.identity.canonicalDigest,
+              contractDigest: record.identity.canonicalDigest,
+              adapterVersion: record.identity.adapterVersion,
+              durablePayload: record.identity.durableFacts?.payload,
+              durablePayloadVersion: record.identity.durableFacts?.version,
+              postings: record.worstCase.map((leg) => ({
+                roomName: leg.roomName,
+                locationKind: leg.locationKind as "storage" | "terminal",
+                resource: leg.resource,
+                delta: leg.delta,
+              })),
+            },
+            service.observation(),
+          );
+        } catch (error) {
+          return { status: "rejected", reason: "reconciler 抛错：" + String(error instanceof Error ? error.message : error).slice(0, 96) };
+        }
+        conclusion = raw === "observed_committed" ? "executed" : raw === "observed_not_executed" ? "not_executed" : "still_uncertain";
+        adapterIdentity = adapter.semanticIdentity;
+      } else {
+        if (request.conclusion === undefined) {
+          return { status: "rejected", reason: "external_settlement_receipt 必须提供结论" };
+        }
+        conclusion = request.conclusion;
+      }
       return kernel.settle({
         attemptId: request.attemptId,
         evidenceKind: request.evidenceKind,
-        conclusion: request.conclusion,
-        adapterSemanticIdentity: request.evidenceKind === "adapter_reconcile" ? adapterIdentity : undefined,
+        conclusion,
+        adapterSemanticIdentity: adapterIdentity,
       });
     },
 

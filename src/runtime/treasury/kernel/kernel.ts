@@ -93,6 +93,10 @@ export type TreasuryCoreAdmissionResult =
   | { readonly status: "rejected"; readonly reason: string; readonly reasonCode: TreasuryCoreRejectionCode };
 
 export type TreasuryCoreRejectionCode =
+  | "policy_unavailable"
+  | "policy_fault"
+  | "policy_violation"
+  | "insufficient_amount"
   | "store_unhealthy"
   | "store_incompatible"
   | "legacy_store_present"
@@ -171,17 +175,21 @@ export interface TreasuryCoreKernel {
 }
 
 export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): TreasuryCoreKernel {
-  const legacy = detectLegacyTreasuryStores();
+  // 旧业务数据检测按调用时快照进行（运行中出现/清除都会被下一次检查反映；
+  // 只读键存在性，成本 O(已知键数)）。
+  function legacyNow(): readonly string[] {
+    return detectLegacyTreasuryStores();
+  }
 
   type WritableHealth =
     | { status: "writable"; memory: TreasuryCoreMemory }
     | { status: "blocked"; code: TreasuryCoreRejectionCode; reason: string };
   function requireWritableHealth(): WritableHealth {
-    if (legacy.length > 0) {
+    if (legacyNow().length > 0) {
       return {
         status: "blocked",
         code: "legacy_store_present",
-        reason: `检测到旧 Treasury 业务数据（${legacy.join(",")}）——不解析、不擦除，新内核写入阻断`,
+        reason: `检测到旧 Treasury 业务数据（${legacyNow().join(",")}）——不解析、不擦除，新内核写入阻断`,
       };
     }
     const health = readTreasuryCoreStoreHealth();
@@ -473,7 +481,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     let cleaned = 0;
     const health = readTreasuryCoreStoreHealth();
     if (health.status !== "healthy") return { recovered, closed, cleaned };
-    if (legacy.length > 0) return { recovered, closed, cleaned };
+    if (legacyNow().length > 0) return { recovered, closed, cleaned };
     // 1) dispatching 残留 → 保守 unknown（可能已进入；不重发）。
     for (const record of sortedActive(health.memory)) {
       if (record.phase !== "dispatching") continue;
@@ -543,7 +551,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
   function endTick(): { recoveredToUnknown: number } {
     let recoveredToUnknown = 0;
     const health = readTreasuryCoreStoreHealth();
-    if (health.status === "healthy" && legacy.length === 0) {
+    if (health.status === "healthy" && legacyNow().length === 0) {
       // dispatching 残留（当次调用异常逃逸）→ 保守 unknown。
       for (const record of sortedActive(health.memory)) {
         if (record.phase !== "dispatching") continue;
@@ -603,13 +611,13 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       frontier: memory.issuance.frontier,
       burned: memory.issuance.burned,
       counters: memory.counters,
-      legacyStores: legacy,
+      legacyStores: legacyNow(),
     };
   }
 
   return {
     health: () => readTreasuryCoreStoreHealth(),
-    legacyStores: () => legacy,
+    legacyStores: () => legacyNow(),
     metrics,
     admit,
     executeDispatch,
