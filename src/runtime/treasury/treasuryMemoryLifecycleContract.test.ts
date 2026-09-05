@@ -573,3 +573,114 @@ describe("Remediation XI：positive handoff / canonical identity / unified relea
     }
   });
 });
+
+// ══ XII 架构守护（Remediation XII 任务书第十二节）══════════════════════════
+
+describe("Remediation XII：opening-bound handoff / replacement-proven GRA / query-pure / 物理分区 架构守护", () => {
+  function readSource(relative: string): string {
+    return readFileSync(join(SRC_ROOT, ...relative.split("/")), "utf8");
+  }
+
+  it("XII1：ticket handoff verifier 必须接收 expected opening identity（不得只按 transactionId 授权 consume）", () => {
+    const handoffSource = readSource("runtime/treasury/attemptIssuanceHandoff.ts");
+    // completeTreasuryIssuedTicketHandoff 系列签名携带 expected（完整 identity）。
+    expect(handoffSource).toContain("expected: TreasuryExactAttemptIdentity");
+    // facade 的 handoff 调用传入构造的 expected opening identity（不得省略）。
+    const facadeSource = readSource("runtime/treasury/facade.ts");
+    expect(facadeSource).toContain("const expectedOpeningIdentity = treasuryExactAttemptIdentityOfFacts(");
+    expect(facadeSource).toContain("completeTreasuryIssuedTicketHandoffStructured(record.canonical.transactionId, expectedOpeningIdentity)");
+    // verifier 消费完整维度（contract digest / cohort digest / durable / tr1_ lineage）。
+    const verifierSource = readSource("runtime/treasury/positiveOwnershipVerifier.ts");
+    expect(verifierSource).toContain("treasuryExactAttemptIdentityRelation");
+  });
+
+  it("XII2：positive verifier 聚合全部 source 后统一裁决（不得 first-match return）", () => {
+    const verifierSource = readSource("runtime/treasury/positiveOwnershipVerifier.ts");
+    // 收集结构 + 统一裁决函数（无 early return 的 per-source owner 判定）。
+    expect(verifierSource).toContain("const observations: SourceObservation[] = []");
+    expect(verifierSource).toContain("return adjudicatePositiveOwnership(observations);");
+    // 裁决优先级：unhealthy > conflict > outcome_conflict > insufficient。
+    expect(verifierSource.indexOf('observations.find((o) => o.relation === "unhealthy")')).toBeLessThan(
+      verifierSource.indexOf('observations.find((o) => o.relation === "conflict")'),
+    );
+    // matching 三态区分（not-started 不冒充 execution owner）。
+    expect(verifierSource).toContain('"matching_not_started_owner"');
+    expect(verifierSource).toContain('"matching_execution_owner"');
+    expect(verifierSource).toContain('"matching_terminal_owner"');
+  });
+
+  it("XII3：active execution path 的 ticket consume 必须早于 Intent executing（时序反转的源码级守护）", () => {
+    const facadeSource = readSource("runtime/treasury/facade.ts");
+    const handoffIndex = facadeSource.indexOf("completeTreasuryIssuedTicketHandoffStructured(record.canonical.transactionId, expectedOpeningIdentity)");
+    const progressIndex = facadeSource.indexOf('const started = progressTreasuryIntent(record.canonical.transactionId, {');
+    expect(handoffIndex).toBeGreaterThan(-1);
+    expect(progressIndex).toBeGreaterThan(handoffIndex);
+    // consume 失败分支不得调用 progress（Intent 保持 not_started）。
+    const failBranch = facadeSource.slice(handoffIndex, progressIndex);
+    expect(failBranch).not.toContain("progressTreasuryIntent(");
+    expect(failBranch).toContain("issued_ticket_handoff_failed");
+  });
+
+  it("XII4：GRA release 必须使用结构化 replacement verifier（缺席链不构成授权）", () => {
+    const graSource = readSource("runtime/treasury/generationRetirementAuthority.ts");
+    expect(graSource).toContain("function verifyGenerationProofReplacement(");
+    // orphan_advance 正面验证 advanced lineage（generation 严格更大）。
+    expect(graSource).toContain("activeRecord.generation <= proof.generation");
+    expect(graSource).toContain("record 缺席不是删除依据");
+    // tombstone_retired 的 certificate/range 覆盖验证。
+    expect(graSource).toContain("function verifyGenerationProofCertificateCoverage(");
+    expect(graSource).toContain("tombstone 缺席不构成 replacement");
+    // health 判定与 record 读取同一装配 source（6.4）。
+    expect(graSource).toContain("const recordSource = peekTreasurySemanticLineageRecordSource();");
+  });
+
+  it("XII5：certificate publication 必须检查真实 issuance / terminal lifecycle（纯构造未来 ID 不得铸造）", () => {
+    const certificateSource = readSource("runtime/treasury/chainRetirementCertificate.ts");
+    expect(certificateSource).toContain("parsedRoot.sequence > watermark");
+    expect(certificateSource).toContain("无 matching terminal retirement summary");
+    expect(certificateSource).toContain("的 issued ticket 仍 active");
+    // write 前 ensure 发布（拒绝路径零写）。
+    expect(certificateSource).toContain("function ensureCertificateStorePublished(): void");
+  });
+
+  it("XII6：query 路径零写——resolver/verifier 不得调用可迁移 loader / GC / store-creating 分支", () => {
+    const resolverSource = readSource("runtime/treasury/treasuryLifecycleOwnerResolver.ts");
+    expect(resolverSource).not.toContain("loadIntentStoreRuntime()");
+    expect(resolverSource).not.toContain("ensureTreasuryQuarantineStoreValidated");
+    const verifierSource = readSource("runtime/treasury/positiveOwnershipVerifier.ts");
+    expect(verifierSource).not.toContain("loadIntentStoreRuntime()");
+    expect(verifierSource).not.toContain("migrateLegacy");
+    // certificate lookup 零写（absent 不初始化）。
+    const certificateSource = readSource("runtime/treasury/chainRetirementCertificate.ts");
+    expect(certificateSource).toContain("function loadCertificateRuntime(forWrite = false)");
+  });
+
+  it("XII7：authority store 迁移唯一 owner 是 beginTick 前置阶段（query/写路径不迁移 legacy store）", () => {
+    const coordinatorSource = readSource("runtime/treasury/treasuryLifecycleGcCoordinator.ts");
+    expect(coordinatorSource).toContain("export function runTreasuryAuthorityStoreMigrationsAtTickBoundary()");
+    const facadeSource = readSource("runtime/treasury/facade.ts");
+    // beginTick 在一切恢复逻辑之前调用 migration owner。
+    const migrationIndex = facadeSource.indexOf("runTreasuryAuthorityStoreMigrationsAtTickBoundary();");
+    const recoveryIndex = facadeSource.indexOf("recoverTreasuryLineageHandoffEvidenceAtTickBoundary();");
+    expect(migrationIndex).toBeGreaterThan(-1);
+    expect(recoveryIndex).toBeGreaterThan(migrationIndex);
+    // v3 分区：读写按分区（单一 ranges 数组的旧布局不得回归）。
+    const certificateSource = readSource("runtime/treasury/chainRetirementCertificate.ts");
+    expect(certificateSource).toContain("function mergePartitionRanges(");
+    expect(certificateSource).toContain("legacyOverflow");
+  });
+
+  it("XII8：Defense 生产代码零修改（本轮 Treasury-only 复验）", () => {
+    const defenseFiles = listFilesRecursive(SRC_ROOT).filter((filePath) => {
+      const relative = filePath.split(/[\\/]/).slice(-2).join("/");
+      return !filePath.endsWith(".test.ts") && relative.startsWith("runtime/") &&
+        /defense|Defender|focusFire|fallback|tower/i.test(filePath.split(/[\\/]/).pop() ?? "");
+    });
+    expect(defenseFiles.length).toBeGreaterThan(0);
+    for (const filePath of defenseFiles) {
+      const source = readFileSync(filePath, "utf8");
+      expect(source).not.toMatch(/positiveOwnershipVerifier/);
+      expect(source).not.toMatch(/verifyGenerationProofReplacement/);
+    }
+  });
+});

@@ -224,6 +224,9 @@ export function migrateTreasuryAttemptIssuerStoreLegacyAtTickBoundary(): { statu
   if (raw.version !== TREASURY_ATTEMPT_ISSUER_LEGACY_VERSION) {
     return { status: "blocked", detail: `issuer store 版本未知（${String(raw.version).slice(0, 8)}——不迁移，fail closed）` };
   }
+  // 【XII】heap 失效：缓存的 store 与 Memory 直读 raw 不一致时必须重建
+  //（否则 load 返回旧 heap 视图——Memory 的 v1 被遮蔽，迁移被谎报）。
+  if (heapRuntime !== null && heapRuntime.store !== raw) heapRuntime = null;
   const runtime = loadIssuerRuntime();
   if (runtime.fatal !== null) {
     return { status: "blocked", detail: runtime.fatal };

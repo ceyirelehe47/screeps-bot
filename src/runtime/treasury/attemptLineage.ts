@@ -1067,6 +1067,8 @@ export function migrateTreasuryLineageStoreLegacyAtTickBoundary(): { status: "id
   if (raw.version !== TREASURY_LINEAGE_VERSION - 2 && raw.version !== TREASURY_LINEAGE_VERSION - 1) {
     return { status: "blocked", detail: `lineage store 版本未知（${String(raw.version).slice(0, 8)}——不迁移，fail closed）` };
   }
+  // 【XII】heap 失效（同 issuer migrate——防 heap 视图遮蔽 Memory legacy store）。
+  if (heapRuntime !== null && heapRuntime.store !== raw) heapRuntime = null;
   const runtime = loadLineageStoreRuntime(true);
   if (runtime.fatal !== null) {
     return { status: "blocked", detail: runtime.fatal };

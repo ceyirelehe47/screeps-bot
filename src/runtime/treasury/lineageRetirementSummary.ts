@@ -494,6 +494,8 @@ export function migrateTreasuryRetirementSummaryStoreLegacyAtTickBoundary(): { s
   if (raw.version !== 1 && raw.version !== TREASURY_RETIREMENT_SUMMARY_LEGACY_VERSION) {
     return { status: "blocked", detail: `summary store 版本未知（${String(raw.version).slice(0, 8)}——不迁移，fail closed）` };
   }
+  // 【XII】heap 失效（同 issuer migrate——防 heap 视图遮蔽 Memory legacy store）。
+  if (heapRuntime !== null && heapRuntime.store !== raw) heapRuntime = null;
   const runtime = loadSummaryRuntime(true);
   if (runtime.fatal !== null) {
     return { status: "blocked", detail: runtime.fatal };
