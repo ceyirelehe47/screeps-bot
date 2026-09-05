@@ -11,6 +11,7 @@
  * reset）依赖新 API / 共享 reset harness，见 treasuryRewrite2Lifecycle。
  */
 import { createTreasuryService, type TreasuryService, type TreasuryServiceDeps } from "@/runtime/treasury/facade";
+import { readTreasuryWorldSequence } from "@/runtime/treasury/observation";
 import {
   buildTreasuryActionContract,
   makeTreasuryTestTransferAdapter,
@@ -618,6 +619,7 @@ describe("B14 缺释放端口不得默认成功（R05）", () => {
     installCoreStoreFixture({ [attemptId]: makeClosingRecord({ attemptId, workKey: "biz:b14:held", consumerKeys: ["ext:b14:x"] }) });
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -637,6 +639,7 @@ describe("B15 释放失败/抛错/幂等重试（R05）", () => {
     installCoreStoreFixture({ [attemptId]: makeClosingRecord({ attemptId, workKey: "biz:b15:false", consumerKeys: ["ext:b15:x"] }) });
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -652,6 +655,7 @@ describe("B15 释放失败/抛错/幂等重试（R05）", () => {
     installCoreStoreFixture({ [attemptId]: makeClosingRecord({ attemptId, workKey: "biz:b15:throw", consumerKeys: ["ext:b15:y"] }) });
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -670,6 +674,7 @@ describe("B15 释放失败/抛错/幂等重试（R05）", () => {
     const releaseCalls: string[] = [];
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -723,6 +728,7 @@ describe("B16 前 8 条永久失败的公平性（R08）", () => {
     installCoreStoreFixture(active);
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -756,6 +762,7 @@ describe("B17 每 tick 释放端口调用预算（R08）", () => {
     let calls = 0;
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -786,6 +793,7 @@ describe("B18 consumerKeys 数量上限（R09）", () => {
   it("接纳时 externalConsumers 超上限（端口可用）：有界拒绝，不截断一半义务", () => {
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,

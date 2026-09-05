@@ -7,6 +7,7 @@
  * 本文件是修复后的正式行为测试（对应 R1–R8 的治愈对照）。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import { readTreasuryWorldSequence } from "@/runtime/treasury/observation";
 import {
   buildTreasuryActionContract,
   makeTreasuryTestTransferAdapter,
@@ -24,6 +25,8 @@ import {
   type TreasuryPolicyResolver,
 } from "@/runtime/treasury/policyAuthority";
 import { resetTreasuryCoreStoreForTest } from "@/runtime/treasury/testHarness";
+import { classifyTreasuryHolderIdAsOwner } from "@/runtime/treasury/ownerIdentity";
+import { reserveProductionResourceForOwner } from "@/runtime/resourceReservation";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
 import { createTreasuryCoreKernel } from "@/runtime/treasury/kernel/kernel";
 import {
@@ -155,21 +158,25 @@ describe("C01 policy 累计（池 1000 / 保留 900）", () => {
     ).toBe("rejected");
   });
 
-  it("A committed（效果未入观察）80 后 B 80 拒绝；下一 tick 观察接管后额度恢复", () => {
+  it("A committed 80 后旧观察立即失效（IV/§4.2）：B 同 tick 按新观察判定，不双花", () => {
     const rooms = installRooms(POOL_ROOMS);
     const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
     service.beginTick();
     const a = admit(service, "biz:c01:c", transferArgs({ amount: 80 }));
     expect(service.executeAuthorizedDispatch(a.dispatch).status).toBe("committed");
+    // IV 语义演进：效果发生（持久世界序 bump）后旧授权视图立即失效，安全
+    // 入口重建观察（源 920 + 汇 80）。III 轮"同 tick 效果不可见 + occupancy
+    // 扣 80"的前提已删除——转移保帝国总量（scope 合计仍 1000），policy
+    // 口径下 80 本就可支配；防双花由 per-leg 物理余额（源 920 ≥ 80）保证。
+    // 若无视图失效，旧观察 1000 + A 已删/未删的错配才是超额通道。
     expect(
       service.authorizeTreasuryActionContract(buildContract(service, "biz:c01:cb", transferArgs({ amount: 80 })), { workKey: "biz:c01:cb" }).status,
-    ).toBe("rejected");
-    // 世界已被 adapter 真实更新（storage 920）；下一 tick 观察接管。
-    Game.time += 1;
-    service.beginTick();
-    expect(
-      service.authorizeTreasuryActionContract(buildContract(service, "biz:c01:cb2", transferArgs({ amount: 20 })), { workKey: "biz:c01:cb2" }).status,
     ).toBe("admitted");
+    // 双花对照：源余额已被 A 真实消耗 80——基于新观察申请 850（>920 物理
+    // 余额）必须拒绝，证明重建观察含真实效果、不是回到旧快照。
+    expect(
+      service.authorizeTreasuryActionContract(buildContract(service, "biz:c01:cb-big", transferArgs({ amount: 850 })), { workKey: "biz:c01:cb-big" }).status,
+    ).toBe("rejected");
   });
 });
 
@@ -258,9 +265,13 @@ describe("C03 own-reservation 全链一致", () => {
       holderExists: () => true,
     });
     service.beginTick();
-    (Memory.runtime as unknown as { resourceReservations?: Record<string, unknown> }).resourceReservations = {
-      "res:c03:own": { roomName: "W1N57", resource: RESOURCE_ENERGY, holderId: OWN_HOLDER, amount: 300, expiresAt: Game.time + 1000 },
-    };
+    // IV/§5.2：授权路径也消费 reservation store 健康——fixture 经真实
+    // mutation API 写入（权威 key + revision/健康缓存正确失效；直写
+    // Memory 不 bump revision，健康缓存可能复用陈旧判定）。
+    const owner = classifyTreasuryHolderIdAsOwner(OWN_HOLDER);
+    if (owner === undefined) throw new Error("OWN_HOLDER 未分类为 typed owner");
+    const reserved = reserveProductionResourceForOwner("W1N57", RESOURCE_ENERGY, 300, owner, 1000);
+    if (reserved.status !== "ok") throw new Error(`reserve failed: ${"reason" in reserved ? reserved.reason : "?"}`);
     return { service, holderId: OWN_HOLDER };
   }
 
@@ -771,6 +782,7 @@ describe("C11 结果写失败与释放确认写失败", () => {
     const releaseCalls: string[] = [];
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -929,6 +941,7 @@ describe("C16 释放端口重入共享预算", () => {
     let reentryDepth = 0;
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -967,6 +980,7 @@ describe("C16 释放端口重入共享预算", () => {
     let releaseCalls = 0;
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -977,13 +991,16 @@ describe("C16 释放端口重入共享预算", () => {
     });
     kernel.beginTick();
     const afterFirst = releaseCalls;
-    expect(afterFirst).toBe(8);
+    // IV/§6.1 成对预算：每消费者单位预扣 2 份（调用+确认），8 份预算 →
+    // 单 tick 最多 4 个单位（外部调用 ≤8 语义不变；断言从 8 改 4）。
+    expect(afterFirst).toBe(4);
     // 同 tick 重复入口：预算已耗尽，不再调用端口。
     kernel.beginTick();
     expect(releaseCalls).toBe(afterFirst);
     // 多实例（第二 kernel）：同 tick 共享持久预算，同样不再调用。
     const kernel2 = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 2,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -1048,6 +1065,7 @@ describe("C17 预扣与失败预算", () => {
     let releaseCalls = 0;
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -1088,6 +1106,7 @@ describe("C17 预扣与失败预算", () => {
     let mode = 0; // 0=throw, 1=false, 2=true
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -1163,6 +1182,7 @@ describe("C18 公平推进有限界", () => {
     };
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,

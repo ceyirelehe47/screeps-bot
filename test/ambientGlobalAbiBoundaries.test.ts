@@ -23,7 +23,6 @@ const PRIVATE_GLOBAL_SLOTS = new Set([
   "__empireInventoryIndex",
   "__empireInventoryCounters",
   "__empireInventoryShadow",
-  "__treasuryWorldSequence",
   "colours",
   "roomPlanCache",
 ]);

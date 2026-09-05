@@ -50,7 +50,9 @@ const MEMORY_BRANCHES = {
     // fallbackRevision per-slot reservedPosition 后的 schema 指纹。
     // 【Core Rewrite I】旧 treasury 多 store 声明整体替换为 treasuryCore
     //（单一活跃聚合 + 近期明细环，见 kernel/types.ts）后的 schema 指纹。
-    schemaFingerprint: "91f70c31beedd020aabf76a3e2838dd680731d859e8b796445ca2b0bbc0d156a",
+    // 【Core Rewrite IV】runtime 根新增 treasuryWorldSequence（受控世界序
+    // 持久权威——global 槽退役）后的 schema 指纹。
+    schemaFingerprint: "2d2cd73f6d1c39817a8c9f90f911784395de95bb6710ce05e25b050517d79735",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
@@ -89,6 +91,7 @@ const MEMORY_BRANCHES = {
       "resourceReservationsOwnerVersion",
       "treasuryCore",
       "treasuryPerf",
+      "treasuryWorldSequence",
       "powerBankBoost",
       "powerBankObserver",
       "remoteMining",

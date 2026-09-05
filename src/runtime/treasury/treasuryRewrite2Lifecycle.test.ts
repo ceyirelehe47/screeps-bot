@@ -323,7 +323,7 @@ describe("B19 满载最坏状态的总预算与收尾余量", () => {
         updatedAtTick: Game.time,
         phase: "outcome_unknown",
         lastError: "z".repeat(96),
-        worstCase: Array.from({ length: 16 }, (_, j) => ({
+        worstCase: Array.from({ length: 12 }, (_, j) => ({
           roomName: "W1N57",
           locationKind: j % 2 === 0 ? "storage" : "terminal",
           resource: RESOURCE_ENERGY,

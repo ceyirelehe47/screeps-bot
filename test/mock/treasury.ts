@@ -1,3 +1,5 @@
+import { bumpTreasuryWorldSequence } from "@/runtime/treasury/observation";
+
 /**
  * Treasury 测试共享 mock helper。
  *
@@ -80,10 +82,13 @@ export function installRooms(specs: RoomSpec[]): Record<string, Room> {
   return rooms;
 }
 
-/** 测试宿主直接推进世界序（installRooms 重建除外的一切世界真实更新）。 */
+/**
+ * 测试宿主直接推进世界序（installRooms 重建除外的一切世界真实更新）。
+ * IV/R7：世界序权威在 Memory 持久层（observation.ts），global 槽已退役
+ * ——完整 reset（heap 清、Memory 保留）后序号连续，跨域比较不再发生。
+ */
 export function bumpTreasuryWorldSequenceForTest(): void {
-  const holder = global as { __treasuryWorldSequence?: number };
-  holder.__treasuryWorldSequence = (holder.__treasuryWorldSequence ?? 0) + 1;
+  bumpTreasuryWorldSequence();
 }
 
 /**

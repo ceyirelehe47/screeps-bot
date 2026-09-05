@@ -121,6 +121,10 @@ export function performTreasuryFullReset(input: {
   // 3) 重建模块缓存：WeakSet permit 注册表、adapter/policy registry、
   //    service generation 计数全部归零（旧 heap 许可失去注册）。
   jest.resetModules();
+  // §9.3/IV R7：清空被测运行时遗留的全部 Treasury global 槽——世界序权威
+  // 在 Memory 持久层（Memory.runtime.treasuryWorldSequence），跨 reset 的
+  // 观察覆盖判定用它；旧 global 槽已退役，清理防其作为残留污染断言。
+  delete (globalThis as { __treasuryWorldSequence?: number }).__treasuryWorldSequence;
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const facadeModule = require("@/runtime/treasury/facade") as typeof import("@/runtime/treasury/facade");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -138,8 +142,9 @@ export function performTreasuryFullReset(input: {
   if (input.advanceTicks !== undefined && input.advanceTicks > 0) {
     Game.time += input.advanceTicks;
   }
-  // §6.3：重装 mock 房间保留已发生的世界效果（结构 ID 与数值原样搬运，
-  // 不重置回规格初始值；世界序全局保留——观察覆盖判定不因重装失真）。
+  // §6.3/IV：重装 mock 房间保留已发生的世界效果（结构 ID 与数值原样
+  // 搬运，不重置回规格初始值）。世界序不在 global（已清）——Memory 持久
+  // 世界序随快照保留，重装不 bump（重建是基建行为而非世界推进）。
   const world = snapshotWorld();
   const rooms = installRooms(roomSpecsWithWorld(input.roomSpecs, world));
   const service = facadeModule.createTreasuryService({

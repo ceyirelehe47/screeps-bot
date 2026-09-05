@@ -6,6 +6,7 @@
  * 快照、宿主侧独立轨迹——不从被测函数返回状态反推调用次数。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import { readTreasuryWorldSequence } from "@/runtime/treasury/observation";
 import {
   buildTreasuryActionContract,
   makeTreasuryTestTransferAdapter,
@@ -592,6 +593,7 @@ describe("A17 清理责任", () => {
     // 直接构造 kernel 实例注入释放端口（facade 未暴露端口——测试用 kernel API）。
     const kernel = createTreasuryCoreKernel({
       nowTick: () => Game.time,
+      observeForCleanup: () => ({ worldSequence: readTreasuryWorldSequence(), atTick: Game.time, locationExists: () => true }),
       runtimeGeneration: () => 1,
       findAdapter: () => undefined,
       checkAdmissionCapacity: () => null,
@@ -762,7 +764,9 @@ describe("A20 满载与序列化预算", () => {
         source: "test",
         atTick: Game.time,
       };
-      (seed as unknown as { invocation: unknown }).invocation = { atTick: Game.time };
+      // IV/R1：效果锚点取上一 tick（观察构建 tick 严格大于效果时点才判
+      // 覆盖——同 tick 的直塞 invocation 会被 tick 兜底保守保留）。
+      (seed as unknown as { invocation: unknown }).invocation = { atTick: Game.time - 1 };
       // 同 tick 内推进（幂等 beginTick 直接进 kernel 恢复；跨 tick 会先
       // 触发 pending sweep 抢占预算——该语义由 B12/B13 单独覆盖）。
       return service.beginTick();
