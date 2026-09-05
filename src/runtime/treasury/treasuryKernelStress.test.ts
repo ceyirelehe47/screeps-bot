@@ -77,6 +77,79 @@ beforeEach(() => {
   registerTreasuryPolicyResolver(makeNoReserveTreasuryPolicy());
 });
 
+describe("压力：接收容量竞争序列（Core Rewrite II §7.5）", () => {
+  it("连续 unknown 流入逐步压缩接收容量：可用额度单调下降、超额全拒", () => {
+    const rooms = installRooms([
+      {
+        name: "W1N57",
+        storage: { id: "stor-1", resources: { energy: 10_000_000 }, freeCapacity: 1_000_000 },
+        terminal: { id: "term-1", resources: { energy: 0 }, freeCapacity: 50_000 },
+      },
+    ] as never);
+    const service = createTreasuryService({ getRooms: () => Object.values(rooms), holderExists: () => true });
+    service.beginTick();
+    let admitted = 0;
+    let rejected = 0;
+    for (let i = 0; i < 200; i += 1) {
+      const amount = 800;
+      const built = buildTreasuryActionContract(service, {
+        actionKind: "test.transfer",
+        transactionId: `biz:stress:inflow-${String(i)}`,
+        args: transferArgs({ amount, outcome: "throw" }),
+      });
+      if (built.status !== "built") throw new Error("unreachable");
+      const admission = service.authorizeTreasuryActionContract(built.contract, { workKey: `biz:stress:inflow-${String(i)}` });
+      if (admission.status === "admitted") {
+        admitted += 1;
+        const executed = service.executeAuthorizedDispatch(admission.dispatch);
+        expect(executed.status).toBe("unknown");
+      } else {
+        rejected += 1;
+        // 拒绝只可能来自接收容量（unknown 流入全额占接收容量，不因 tick
+        // 推进/TTL 释放）；62 笔获准 < 64 槽，不会触达满载。
+        expect(admission.reason).toContain("接收容量");
+      }
+      if (i % 3 === 0) {
+        Game.time += 1;
+        service.beginTick();
+      }
+    }
+    // 确定性上界：容量 50_000 / 每笔 800 → 恰 62 笔获准（49,600 ≤ 50,000；
+    // 第 63 笔 50,400 > 50,000 拒绝）。
+    expect(admitted).toBe(62);
+    expect(rejected).toBe(138);
+  });
+});
+
+describe("压力：pending sweep 取消流（Core Rewrite II §7.5）", () => {
+  it("500 项 pending 跨 tick 全部安全取消：零真实调用、槽位回收、ring 有界", () => {
+    const service = makeService();
+    for (let round = 0; round < 10; round += 1) {
+      for (let i = 0; i < 50; i += 1) {
+        const workKey = `biz:stress:sweep-${String(round)}-${String(i)}`;
+        const built = buildTreasuryActionContract(service, { actionKind: "test.transfer", transactionId: workKey, args: transferArgs() });
+        if (built.status !== "built") throw new Error("unreachable");
+        const admission = service.authorizeTreasuryActionContract(built.contract, { workKey });
+        expect(admission.status).toBe("admitted");
+      }
+      // sweep 预算 8/tick：50 笔需 7 个 tick 全部取消（64 槽内不触满载）。
+      for (let t = 0; t < 8; t += 1) {
+        Game.time += 1;
+        service.beginTick();
+      }
+      expect(service.kernelMetrics().activeCount).toBe(0);
+    }
+    expect(service.kernelMetrics().activeCount).toBe(0);
+    expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
+    expect(service.kernelJournal().ring.length).toBeLessThanOrEqual(128);
+    // 槽位全部回收。
+    const after = makeService();
+    const built = buildTreasuryActionContract(after, { actionKind: "test.transfer", transactionId: "biz:stress:after-sweep", args: transferArgs() });
+    const admission = after.authorizeTreasuryActionContract(built.status === "built" ? built.contract : null, { workKey: "biz:stress:after-sweep" });
+    expect(admission.status).toBe("admitted");
+  });
+});
+
 describe("压力：高吞吐完成生命周期", () => {
   it("10,000 项完成工作：副作用恰 10,000 次、ring 有界、终态体积有界", () => {
     const service = makeService();

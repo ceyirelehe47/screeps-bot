@@ -36,10 +36,11 @@ function injectActiveWork(service: TreasuryService, phase: TreasuryCoreWorkRecor
   if (!Memory.runtime) Memory.runtime = {} as never;
   if (!Memory.runtime.treasuryCore) {
     Memory.runtime.treasuryCore = {
-      version: 1,
+      version: 2,
       installEpochId: "0123456789abcdef",
       issuance: { frontier: 0, burned: 0 },
       lifecycle: { lastBeginTick: Game.time, lastEndTick: null },
+      recovery: { sweepCursor: 0, cleanupCursor: 0, budgetTick: Game.time, budgetUsed: 0 },
       active: {},
       ring: [],
       ringCursor: 0,

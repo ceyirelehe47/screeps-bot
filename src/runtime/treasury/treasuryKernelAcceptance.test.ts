@@ -167,6 +167,19 @@ describe("A03 同 work/attempt 的 payload、contract、adapter 语义不同", (
     expect(record?.identity.adapterVersion).toBe(1);
   });
 
+  it("持真许可修改字段（R11 等价修正）：冻结快照抛错/无效，原授权语义不变", () => {
+    const service = makeService();
+    const { attemptId, dispatch } = admit(service, "biz:a03:real-mutation");
+    // 真许可（WeakSet 注册）的字段替换被深冻结阻止（完整矩阵见 B01/B02）。
+    expect(() => {
+      (dispatch as unknown as { canonicalDigest: string }).canonicalDigest = "0".repeat(16);
+    }).toThrow();
+    const executed = service.executeAuthorizedDispatch(dispatch);
+    expect(executed.status).toBe("committed");
+    expect(readTreasuryTestAdapterSideEffects().executions).toBe(1);
+    void attemptId;
+  });
+
   it("permit 绑定 digest 与聚合不一致（许可错配）：拒绝执行", () => {
     const service = makeService();
     const { attemptId } = admit(service, "biz:a03:mismatch");
@@ -238,19 +251,19 @@ describe("A05（R2 等价）store 四态区分", () => {
     expect(result.status).toBe("rejected");
     // 原数据保留（不被清库、不重新初始化）。
     expect(Memory.runtime!.treasuryCore!.active[attemptId]).toBeDefined();
-    (Memory.runtime!.treasuryCore as unknown as { version: number }).version = 1;
-    expect(JSON.stringify(Memory.runtime!.treasuryCore)).toBe(snapshot.replace('"version":99', '"version":1'));
+    (Memory.runtime!.treasuryCore as unknown as { version: number }).version = 2;
+    expect(JSON.stringify(Memory.runtime!.treasuryCore)).toBe(snapshot.replace('"version":99', '"version":2'));
   });
 });
 
 // ── A06（R3）矛盾证据并存：与排列顺序无关 ──────────────────────────────────
 
 describe("A06（R3 等价）not_started 与 committed 证据并存", () => {
-  it("active(pending) + ring(同 attemptId committed) 结构矛盾：unhealthy 阻断，不挑一边", () => {
+  it("active(pending) + ring(同 attemptId committed)：历史 degraded（以 active 为准），不凭 ring 决定关闭或重放", () => {
     const service = makeService();
     const { attemptId } = admit(service, "biz:a06:conflict");
     const store = Memory.runtime!.treasuryCore!;
-    // 注入相反证据：ring 声称同 attempt 已 committed（active 仍 pending）。
+    // 注入相反历史：ring 声称同 attempt 已 committed（active 仍 pending）。
     store.ring.push({
       attemptId,
       workKey: "biz:a06:conflict",
@@ -258,14 +271,16 @@ describe("A06（R3 等价）not_started 与 committed 证据并存", () => {
       terminalPhase: "committed",
       closedAtTick: Game.time,
     });
-    // 无论证据注入顺序如何（先 active 后 ring 或反之），store 校验都判
-    // 结构矛盾——结果与排列顺序无关。
+    // 安全权威仍健康；ring 重叠只产生 degraded 诊断（历史不可信，以
+    // active 为准——Core Rewrite II §6.5）。
     const health = readTreasuryCoreStoreHealth();
-    expect(health.status).toBe("unhealthy");
-    if (health.status === "unhealthy") expect(health.reason).toContain("结构矛盾");
-    // 阻断写入与执行。
+    expect(health.status).toBe("healthy");
+    if (health.status === "healthy") expect(health.ringDegraded).toContain("重叠");
+    // 核心不因历史错误阻断：新接纳可用（ring 层在下一次成功写入时重建）。
     const contract = buildContract(service, "biz:a06:new", transferArgs());
-    expect(service.authorizeTreasuryActionContract(contract, { workKey: "biz:a06:new" }).status).toBe("rejected");
+    expect(service.authorizeTreasuryActionContract(contract, { workKey: "biz:a06:new" }).status).toBe("admitted");
+    // ring 不构成 settlement 证据：active 记录不被关闭或重放。
+    expect(service.kernelJournal().active.find((r) => r.attemptId === attemptId)?.phase).toBe("pending");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
   });
 });
@@ -302,7 +317,7 @@ describe("A08 dispatching 发布失败", () => {
     expect(executed.status).toBe("rejected");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
     // 修复 store：聚合保持 pending（有正面未开始证据——不虚构 unknown）。
-    (Memory.runtime!.treasuryCore as unknown as { version: number }).version = 1;
+    (Memory.runtime!.treasuryCore as unknown as { version: number }).version = 2;
     const record = service.kernelJournal().active.find((r) => r.attemptId === attemptId);
     expect(record?.phase).toBe("pending");
     expect(record?.invocation).toBeNull();
@@ -412,7 +427,7 @@ describe("A11 API 接受不构成充分 settlement 证明", () => {
     // 世界模拟：余额被其他因素抵消（净变化 0）——仍不能推导 committed。
     Game.time += 1;
     service.beginTick();
-    const settled = service.settleUnknownOutcome({ attemptId, evidenceKind: "adapter_reconcile" });
+    const settled = service.settleUnknownOutcome({ attemptId });
     expect(settled.status).toBe("still_uncertain");
     const record = service.kernelJournal().active.find((r) => r.attemptId === attemptId);
     expect(record?.outcome).toBe("unknown");
@@ -535,6 +550,26 @@ describe("A16 容量竞争", () => {
     expect(second.status).toBe("rejected");
   });
 
+  it("多笔合计超容量（R11 等价修正）：两笔各 60、容量 100——第二笔按合计拒绝", () => {
+    const service = makeService([
+      {
+        name: "W1N57",
+        storage: { id: "stor-1", resources: { energy: 100_000 }, freeCapacity: 10_000 },
+        terminal: { id: "term-1", resources: { energy: 20_000 }, freeCapacity: 100 },
+      },
+    ]);
+    const first = service.authorizeTreasuryActionContract(
+      buildContract(service, "biz:a16:multi-1", { ...transferArgs(), amount: 60 }),
+      { workKey: "biz:a16:multi-1" },
+    );
+    expect(first.status).toBe("admitted");
+    const second = service.authorizeTreasuryActionContract(
+      buildContract(service, "biz:a16:multi-2", { ...transferArgs(), amount: 60 }),
+      { workKey: "biz:a16:multi-2" },
+    );
+    expect(second.status).toBe("rejected");
+  });
+
   it("接收容量竞争：terminal free 不足时流入腿拒绝（同 tick 不得重复占满接收空间）", () => {
     const service = makeService([
       {
@@ -564,10 +599,11 @@ describe("A17 清理责任", () => {
     });
     if (!Memory.runtime) Memory.runtime = {} as never;
     Memory.runtime.treasuryCore = {
-      version: 1,
+      version: 2,
       installEpochId: "0123456789abcdef",
       issuance: { frontier: 2, burned: 0 },
       lifecycle: { lastBeginTick: null, lastEndTick: null },
+      recovery: { sweepCursor: 0, cleanupCursor: 0, budgetTick: 0, budgetUsed: 0 },
       active: {
         tk1_1_aaaaaaaaaaaaaaaa: {
           workKey: "biz:a17:cleanup",
@@ -633,14 +669,19 @@ describe("A17 清理责任", () => {
 // ── A18 ring 满/损坏/清空（见 treasuryKernel.test 的环测试 + A06） ──────────
 
 describe("A18 近期环异常", () => {
-  it("ring 损坏（非法条目）→ unhealthy 阻断写入，但不阻碍安全观察", () => {
+  it("ring 损坏（非法条目）→ 历史 degraded：不阻断安全观察，写入路径重建 ring 层", () => {
     const service = makeService();
     admit(service, "biz:a18:init");
     Memory.runtime!.treasuryCore!.ring.push({ bad: "entry" } as never);
     const health = readTreasuryCoreStoreHealth();
-    expect(health.status).toBe("unhealthy");
+    expect(health.status).toBe("healthy");
+    if (health.status === "healthy") expect(health.ringDegraded).not.toBeNull();
     // 查询仍可用（零写观察不因 ring 损坏崩溃）。
     expect(() => service.query({ resource: RESOURCE_ENERGY, rooms: ["W1N57"] })).not.toThrow();
+    // 安全收尾不被 ring 故障阻断：下一次成功写入重建（丢弃）ring 层。
+    const contract = buildContract(service, "biz:a18:next", transferArgs());
+    expect(service.authorizeTreasuryActionContract(contract, { workKey: "biz:a18:next" }).status).toBe("admitted");
+    expect(service.kernelJournal().health.ringDegraded).toBeNull();
   });
 });
 
@@ -691,6 +732,10 @@ describe("A20 满载与序列化预算", () => {
         ...store.active[Object.keys(store.active)[0]],
         attemptId,
         workKey: `biz:a20:fill:${i}`,
+        // 本 tick 注入（不触发跨 tick pending sweep 抢占清理预算——sweep
+        // 语义由 B12/B13 单独覆盖）。
+        admittedAtTick: Game.time,
+        updatedAtTick: Game.time,
         lastError: "x".repeat(192),
       } as never;
     }
@@ -718,7 +763,8 @@ describe("A20 满载与序列化预算", () => {
         atTick: Game.time,
       };
       (seed as unknown as { invocation: unknown }).invocation = { atTick: Game.time };
-      Game.time += 1;
+      // 同 tick 内推进（幂等 beginTick 直接进 kernel 恢复；跨 tick 会先
+      // 触发 pending sweep 抢占预算——该语义由 B12/B13 单独覆盖）。
       return service.beginTick();
     })();
     expect(dispatchExecuted.cleaned).toBeGreaterThanOrEqual(1);
@@ -757,14 +803,36 @@ describe("A21 查询纯度（零 Memory 写）", () => {
     expect((Memory.runtime.treasuryCore as unknown as { version: number }).version).toBe(99);
   });
 
-  it("返回对象不可反向修改权威", () => {
+  it("返回对象不可反向修改权威（含 health/ring/counters 全部可达嵌套）", () => {
     const service = makeService();
-    const { attemptId } = admit(service, "biz:a21:immutable");
-    const active = service.kernelJournal().active;
+    const { attemptId, dispatch } = admit(service, "biz:a21:immutable");
+    const journal = service.kernelJournal();
+    // health 不含 memory 引用（R06）；修改冻结快照抛错且不影响后续读取。
+    expect((journal.health as unknown as { memory?: unknown }).memory).toBeUndefined();
+    expect(() => {
+      (journal.health as unknown as { status: string }).status = "unhealthy";
+    }).toThrow();
+    const active = journal.active;
     expect(() => {
       (active.find((r) => r.attemptId === attemptId) as unknown as { phase: string }).phase = "closing";
     }).toThrow();
     expect(service.kernelJournal().active.find((r) => r.attemptId === attemptId)?.phase).toBe("pending");
+    // ring 元素与 counters 同样不可回写（完整矩阵见 B22）。
+    const executed = service.executeAuthorizedDispatch(dispatch);
+    expect(executed.status).toBe("committed");
+    Game.time += 1;
+    service.beginTick();
+    const after = service.kernelJournal();
+    const entry = after.ring.find((e) => e.attemptId === attemptId);
+    if (entry !== undefined) {
+      expect(() => {
+        (entry as unknown as { attemptId: string }).attemptId = "tampered";
+      }).toThrow();
+    }
+    const metrics = service.kernelMetrics();
+    const before = metrics.counters.admitted;
+    (metrics.counters as unknown as { admitted: number }).admitted = 99_999;
+    expect(service.kernelMetrics().counters.admitted).toBe(before);
   });
 });
 
@@ -780,7 +848,7 @@ describe("A22 global reset 等价", () => {
     expect(admission.status).toBe("admitted");
     if (admission.status !== "admitted") throw new Error("unreachable");
     const unknown = admit(service, "biz:a22:unknown", { outcome: "throw" });
-    void unknown;
+    service.executeAuthorizedDispatch(unknown.dispatch);
     service.executeAuthorizedDispatch(admission.dispatch);
     // 序列化 → 清空 heap（模拟 global reset：服务与全部 WeakSet 丢弃）→ 反序列化。
     const serialized = JSON.stringify(Memory.runtime!.treasuryCore);
@@ -800,7 +868,7 @@ describe("A22 global reset 等价", () => {
     // 旧 handle 不可复用：旧 dispatch permit 对象已随旧 runtime 失效。
     const replay = freshService.executeAuthorizedDispatch(admission.dispatch);
     expect(replay.status).toBe("rejected");
-    expect(readTreasuryTestAdapterSideEffects().executions).toBe(1); // 仅 a22:reset 真实进入一次
+    expect(readTreasuryTestAdapterSideEffects().executions).toBe(2); // a22:reset 与 a22:unknown 各真实进入一次
   });
 });
 

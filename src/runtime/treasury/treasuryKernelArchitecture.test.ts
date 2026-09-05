@@ -149,7 +149,7 @@ describe("Treasury Core Rewrite 架构守护", () => {
     const commandsSource = readFileSync(resolve(TREASURY_DIR, "kernel/commands.ts"), "utf8");
     const sf = ts.createSourceFile("commands.ts", commandsSource, ts.ScriptTarget.ES2017, true);
     const commandUnion = commandsSource.match(/export type TreasuryCoreCommand =[\s\S]*?;/)?.[0] ?? "";
-    for (const cmdName of ["Admit", "DispatchStart", "DispatchResult", "Settle", "AdvanceCleanup", "Rearm", "Close", "Recover"]) {
+    for (const cmdName of ["Admit", "DispatchStart", "DispatchResult", "Settle", "AdvanceCleanup", "Rearm", "Close", "Recover", "CancelPending"]) {
       expect(commandUnion).toContain(`TreasuryCore${cmdName}Command`);
     }
     // switch 覆盖全部命令（穷尽性由 tsc 保证，此处防新增遗漏 default 兜底）。

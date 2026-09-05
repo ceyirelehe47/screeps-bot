@@ -1,21 +1,25 @@
 /**
- * Treasury Facade——Core Rewrite I 薄装配层。
+ * Treasury Facade——Core Rewrite II 装配层。
  *
- * 新协议（openspec/changes/empire-treasury-core-rewrite）：
+ * 协议（openspec/changes/empire-treasury-core-rewrite，II 修订）：
  * - 写路径全部委托 treasury kernel（单一写入口状态机）：authorize =
  *   admit（活跃聚合 + 正向执行许可），execute = 受控 dispatch（许可校验 →
  *   dispatching 发布 → 动作恰好一次 → 三种事实分别持久）。
- * - 旧 Ticket / Intent / Quarantine / Resolution / receipt / GRA /
- *   certificate / summary 多 store 权威已退役；发现旧业务数据时 kernel
- *   报告 incompatible 并阻断写入（不解析、不擦除）。
+ * - 授权事实口径统一（§5）：查询严格口径、普通接纳、rearm 与执行前复验
+ *   共用 authorizationFacts 的同一判定——观察 + applied overlay + 业务
+ *   承诺 + 生产预留 + policy + kernel 占用（流出占存量、流入占接收容量）。
+ *   tentative overlay 已删除：admit 后 active 记录即同 tick 扣减权威，
+ *   同一责任唯一扣减归属（B09 不双扣）。
+ * - 结算结论只来自注册 reconciler（facade 装配 reconcileOutcome 端口交给
+ *   kernel 受控编排）；自报 external_settlement_receipt 通道不存在（R07）。
+ * - pending 可安全取消（cancelPendingWork + beginTick 跨 tick sweep）；
+ *   无受控释放端口时非空消费者义务的接纳被拒绝（R05）。
  * - 查询侧保持既有语义：observation（物理事实快照 + epoch）、commitments
  *  （任务/预留承诺索引）、query（fail-closed 输入 + owner 验证 +
- *   completeness）、容量四口径（strict / risk-adjusted）。本 tick 投影
- *   overlay 由 admit（tentative）与 dispatch committed（已发生）驱动，
- *   每 tick 重建；跨 tick 风险占用由 kernel 活跃聚合承担。
- * - beginTick：kernel 恢复推进（dispatching 残留保守化、retry 期限关闭、
- *   清理公平推进）+ 观察重建；endTick：kernel 收尾 + 残留保守化。查询
- *   路径零写（不初始化 store、不迁移、不 GC）。
+ *   completeness）、容量四口径。查询视图返回独立深快照（不泄漏底层
+ *   Memory 引用——R06）；查询路径零写。
+ * - beginTick：kernel 恢复推进（保守化/跨 tick pending 取消/期限关闭/
+ *   公平清理）+ 观察重建；endTick：kernel 收尾 + 残留保守化。
  */
 
 import {
@@ -45,9 +49,8 @@ import {
 import {
   findTreasuryPolicyResolver,
   validateTreasuryPolicyDecision,
-  type TreasuryRegisteredPolicyResolver,
 } from "@/runtime/treasury/policyAuthority";
-import type { TreasuryActionContract, TreasuryActionReconcilerConclusion } from "@/runtime/treasury/actionContracts";
+import type { TreasuryActionContract } from "@/runtime/treasury/actionContracts";
 import { canonicalizeTreasuryAdapterRetryFacts } from "@/runtime/treasury/adapterRetrySemantics";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
 import {
@@ -66,15 +69,22 @@ import type {
   TreasuryCoreDispatchPermit,
   TreasuryCoreIdentityFacts,
   TreasuryCoreMemory,
+  TreasuryCorePermitPosting,
+  TreasuryCorePublicHealth,
   TreasuryCoreRearmPermit,
   TreasuryCoreRingEntry,
-  TreasuryCoreStoreHealth,
   TreasuryCoreWorkRecord,
-  TreasuryCoreWorstCaseLeg,
 } from "@/runtime/treasury/kernel/types";
 import {
   readTreasuryCoreStoreHealth,
 } from "@/runtime/treasury/kernel/store";
+import {
+  evaluateTreasuryAdmissionFacts,
+  treasuryWorstCaseOfPostings,
+  type TreasuryAdmissionFactSources,
+  type TreasuryAdmissionVerdict,
+  type TreasuryCandidateLeg,
+} from "@/runtime/treasury/authorizationFacts";
 import type {
   TreasuryCommitmentCompleteness,
   TreasuryCommitmentIndex,
@@ -108,12 +118,17 @@ export interface TreasuryServiceDeps {
   readonly resolveHolder?: (holderId: string) => TreasuryHolderResolution | undefined;
 }
 
-/** contract 接纳选项（Core Rewrite I：workKey 必填，业务任务身份）。 */
+/** contract 接纳选项（workKey 必填，业务任务身份）。 */
 export interface TreasuryContractAuthorizationOptions {
   /** 受控业务任务键（`biz:` 前缀 + 调用方命名空间 + 业务键；活跃集合内排他）。 */
   readonly workKey: string;
-  /** 受控外部消费者 key（closing 阶段须逐一幂等释放确认）。 */
+  /** 受控外部消费者 key（closing 阶段须逐一幂等释放确认；须有释放端口）。 */
   readonly externalConsumers?: readonly string[];
+  /**
+   * exact owner 声明（经验证后排除自己的生产预留——§5.3：只有验证过的
+   * exact owner/作用域才能排除自己的那一项）。
+   */
+  readonly owner?: TreasuryQueryOwner;
 }
 
 export interface TreasuryRearmCapabilityRequest {
@@ -121,25 +136,22 @@ export interface TreasuryRearmCapabilityRequest {
   readonly attemptId: string;
 }
 
-export interface TreasurySettleRequest {
+/** 安全取消请求：只结束确定未开始的当前 pending attempt（§6.1）。 */
+export interface TreasuryCancelPendingRequest {
   readonly attemptId: string;
-  /** adapter_reconcile：结论由 facade 调用注册 reconciler 得出（不可传入）。 */
-  readonly evidenceKind: "adapter_reconcile" | "external_settlement_receipt";
-  /** 仅 external_settlement_receipt 模式使用（受控外部对账通道）。 */
-  readonly conclusion?: "executed" | "not_executed" | "still_uncertain";
 }
 
-/** 内核只读日志视图（活跃聚合 + ring 的深冻结投影）。 */
+/** 内核只读日志视图（活跃聚合 + ring 的独立深快照；不含 memory 引用）。 */
 export interface TreasuryKernelJournalView {
-  readonly health: TreasuryCoreStoreHealth;
+  readonly health: TreasuryCorePublicHealth;
   readonly legacyStores: readonly string[];
   readonly active: readonly TreasuryCoreWorkRecord[];
   readonly ring: readonly TreasuryCoreRingEntry[];
 }
 
 export interface TreasuryService {
-  /** tick 起点：kernel 恢复推进（保守化/期限关闭/公平清理）+ 观察重建（幂等）。 */
-  beginTick(): { readonly recovered: number; readonly closed: number; readonly cleaned: number };
+  /** tick 起点：kernel 恢复推进（保守化/取消/期限关闭/公平清理）+ 观察重建（幂等）。 */
+  beginTick(): { readonly recovered: number; readonly closed: number; readonly cleaned: number; readonly cancelled: number };
   endTick(): void;
   observation(): TreasuryObservationView;
   beginFreshObservation(): TreasuryObservationView | null;
@@ -165,14 +177,20 @@ export interface TreasuryService {
   issueTreasuryRearmCapability(
     request: TreasuryRearmCapabilityRequest,
   ): { readonly status: "ok"; readonly rearm: TreasuryCoreRearmPermit } | { readonly status: "rejected"; readonly reason: string };
-  /** 消费 retry 许可：同语义 contract 建立下一代 attempt（新 ID/generation）。 */
+  /** 消费 retry 许可：同语义 contract 建立下一代 attempt（新 ID/generation；与普通接纳同一授权口径）。 */
   executeRearm(
     rearm: unknown,
     contract: unknown,
     options?: TreasuryContractAuthorizationOptions,
   ): TreasuryCoreAdmissionResult;
-  /** 事后结算（outcome_unknown → committed/not_executed，须受控证据）。 */
-  settleUnknownOutcome(request: TreasurySettleRequest): { readonly status: "ok" } | { readonly status: "still_uncertain" } | { readonly status: "rejected"; readonly reason: string };
+  /**
+   * 事后结算（outcome_unknown → committed/not_executed）。结论由内核经
+   * 受控 reconcileOutcome 端口（注册 reconciler）得出——调用者不可传入
+   * 结论（external_settlement_receipt 自报通道已关闭，R07）。
+   */
+  settleUnknownOutcome(request: { readonly attemptId: string }): { readonly status: "ok" } | { readonly status: "still_uncertain" } | { readonly status: "rejected"; readonly reason: string };
+  /** 安全取消：只结束确定未开始的当前 pending attempt（调用边界未开始）。 */
+  cancelPendingWork(request: TreasuryCancelPendingRequest): { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string };
   /** 安全关闭（retry 期限到期 / 业务显式放弃；执行未知的记录不可关闭）。 */
   closeWork(request: { readonly attemptId: string; readonly reason: "retry_expired" | "abandoned" }): { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string };
   /** 本 tick 签发未消费的 dispatch 许可审计（heap 计数）。 */
@@ -301,24 +319,19 @@ function resolveOwnerStatus(
   return { valid: true, ownerRoom: owner.roomName, ownerIdentity };
 }
 
-// ── 本 tick 投影 overlay（heap；每 tick 重建） ───────────────────────────────
+// ── 本 tick 已发生效果 overlay（heap；每 tick 重建；无 tentative） ────────────
 
 interface TreasuryTickOverlay {
-  /** 已发生（dispatch committed）的资源净变化：`room\0loc\0res` → delta。 */
+  /** 已发生（dispatch committed / settle executed）的资源净变化：`room\0loc\0res` → delta。 */
   readonly resourceDeltas: Map<string, number>;
   /** 已发生的容量净变化（正流入占用）：`room\0loc` → delta。 */
   readonly capacityDeltas: Map<string, number>;
-  /** admit 后 dispatch 前的 tentative 预留（防同 tick 超卖）。 */
-  readonly tentativeResource: Map<string, number>;
-  readonly tentativeCapacity: Map<string, number>;
 }
 
 function freshOverlay(): TreasuryTickOverlay {
   return {
     resourceDeltas: new Map(),
     capacityDeltas: new Map(),
-    tentativeResource: new Map(),
-    tentativeCapacity: new Map(),
   };
 }
 
@@ -328,13 +341,6 @@ interface TreasuryTickState {
   commitmentIndex?: TreasuryCommitmentIndex;
   commitmentBuiltRevision?: number;
   ended: boolean;
-}
-
-interface PostingDelta {
-  readonly roomName: string;
-  readonly locationKind: string;
-  readonly resource: string;
-  readonly delta: number;
 }
 
 function overlayResourceKey(roomName: string, locationKind: string, resource: string): string {
@@ -378,90 +384,215 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     };
   }
 
-  function kernelOccupancyForAdmission(legs: readonly TreasuryCoreWorstCaseLeg[]): string | null {
-    // 容量接纳检查（design §6.2）：物理观察 − 本 tick tentative/已发生占用
-    // − kernel 活跃占用（跨 tick 风险）。流出腿（负 delta）校验存量可覆盖；
-    // 流入腿（正 delta）校验接收容量（同 tick 多笔不得重复占满接收空间）。
-    // 输入为完整带符号 posting 腿（流出与流入都不得遗漏）。
+  function kernelOccupancyNow(): { byKey: ReadonlyMap<string, number>; inflowByLocation: ReadonlyMap<string, number> } {
+    const health = readTreasuryCoreStoreHealth();
+    if (health.status !== "healthy") {
+      return { byKey: new Map(), inflowByLocation: new Map() };
+    }
+    const occupancy = computeTreasuryCoreOccupancy(health.memory);
+    return { byKey: occupancy.byKey, inflowByLocation: occupancy.inflowByLocation };
+  }
+
+  // ── 统一授权事实来源（查询严格口径 / 接纳 / rearm / 执行前复验共用） ──────
+
+  function buildAdmissionFactSources(state: TreasuryTickState): TreasuryAdmissionFactSources {
+    return {
+      observedAmount: (roomName, locationKind, resource) =>
+        state.observation.amount(roomName, locationKind as TreasuryLocationKind, resource),
+      observedFreeCapacity: (roomName, locationKind) =>
+        state.observation.freeCapacity(roomName, locationKind as TreasuryLocationKind),
+      appliedResourceDelta: (roomName, locationKind, resource) =>
+        overlay.resourceDeltas.get(overlayResourceKey(roomName, locationKind, resource)) ?? 0,
+      appliedCapacityUsed: (roomName, locationKind) =>
+        Math.max(0, overlay.capacityDeltas.get(overlayLocationKey(roomName, locationKind)) ?? 0),
+      occupancyOutflow: (roomName, locationKind, resource) =>
+        kernelOccupancyNow().byKey.get(overlayResourceKey(roomName, locationKind, resource)) ?? 0,
+      occupancyInflow: (roomName, locationKind) =>
+        kernelOccupancyNow().inflowByLocation.get(overlayLocationKey(roomName, locationKind)) ?? 0,
+      committedOutgoing: (roomName, resource) =>
+        service.commitments().pendingOutgoing(roomName, resource),
+      reservedProduction: (roomName, resource, excludeOwner) =>
+        service.commitments().reservedProduction(roomName, resource, excludeOwner),
+      policyReserve: (resource, rooms) => {
+        const resolver = findTreasuryPolicyResolver();
+        if (resolver === undefined) {
+          return { status: "rejected" as const, reasonCode: "policy_unavailable" as const, reason: "无注册 policy resolver（fail closed：不得自报 withhold）" };
+        }
+        let decision: ReturnType<typeof resolver.evaluate>;
+        try {
+          decision = resolver.evaluate({
+            contractId: "-",
+            contractDigest: "-",
+            actionKind: "-",
+            resource,
+            rooms: [...rooms],
+            ownerIdentity: "anonymous",
+            tick: Game.time,
+          });
+        } catch (error) {
+          return {
+            status: "rejected" as const,
+            reasonCode: "policy_fault" as const,
+            reason: "policy_fault：resolver 抛错 " + String(error instanceof Error ? error.message : error).slice(0, 96),
+          };
+        }
+        if ("status" in decision) {
+          return { status: "rejected" as const, reasonCode: "policy_violation" as const, reason: "policy 拒绝：" + decision.reason };
+        }
+        const validated = validateTreasuryPolicyDecision(decision);
+        if (validated !== null) {
+          return { status: "rejected" as const, reasonCode: "policy_fault" as const, reason: "policy_fault：" + validated };
+        }
+        return { status: "ok" as const, reserve: decision.withhold + decision.strategicReserve };
+      },
+    };
+  }
+
+  /**
+   * 共同授权判定入口（§5.1）：接纳、rearm、执行前复验共用。
+   * candidateLegs 为原始 posting 全集（未合并）。
+   */
+  function evaluateAdmissionForCandidate(
+    candidateLegs: readonly TreasuryCandidateLeg[],
+    owner: TreasuryQueryOwner | undefined,
+  ): TreasuryAdmissionVerdict {
     const state = ensureTickState(true);
-    const health = readTreasuryCoreStoreHealth();
-    if (health.status === "healthy") {
-      const occupancy = computeTreasuryCoreOccupancy(health.memory);
-      for (const leg of legs) {
-        if (leg.delta >= 0) continue;
-        const inflowAtLocation = legs
-          .filter((l) => overlayLocationKey(l.roomName, l.locationKind) === overlayLocationKey(leg.roomName, leg.locationKind))
-          .reduce((sum, l) => sum + Math.max(0, l.delta), 0);
-        const capacityProblem = checkLocationCapacity(state, leg, inflowAtLocation, occupancy);
-        if (capacityProblem !== null) return capacityProblem;
-      }
-      // 独立校验纯流入位置的接收容量（该位置可能没有流出腿）。
-      const checkedLocations = new Set<string>(legs.filter((l) => l.delta < 0).map((l) => overlayLocationKey(l.roomName, l.locationKind)));
-      for (const leg of legs) {
-        if (leg.delta <= 0) continue;
-        const locKey = overlayLocationKey(leg.roomName, leg.locationKind);
-        if (checkedLocations.has(locKey)) continue;
-        checkedLocations.add(locKey);
-        const inflowAtLocation = legs
-          .filter((l) => overlayLocationKey(l.roomName, l.locationKind) === locKey)
-          .reduce((sum, l) => sum + Math.max(0, l.delta), 0);
-        const capacityProblem = checkLocationCapacity(state, leg, inflowAtLocation, occupancy);
-        if (capacityProblem !== null) return capacityProblem;
-      }
+    const ownerCheck = resolveOwnerStatus(owner, resolveHolder);
+    if (owner !== undefined && !ownerCheck.valid) {
+      return { status: "rejected", reasonCode: "invalid_input", reason: "owner 声明非法（fail closed）" };
     }
-    return null;
+    const sources = buildAdmissionFactSources(state);
+    return evaluateTreasuryAdmissionFacts(sources, candidateLegs, {
+      excludeOwner:
+        ownerCheck.valid && ownerCheck.ownerIdentity && owner !== undefined && ownerCheck.ownerRoom !== undefined
+          ? ownerCheck.ownerIdentity
+          : undefined,
+    });
   }
 
-  function checkLocationCapacity(
-    state: TreasuryTickState,
-    leg: TreasuryCoreWorstCaseLeg,
-    inflowAtLocation: number,
-    occupancy: ReturnType<typeof computeTreasuryCoreOccupancy>,
-  ): string | null {
-    const key = overlayResourceKey(leg.roomName, leg.locationKind, leg.resource);
-    const tentativeOutflow = Math.max(0, -(overlay.tentativeResource.get(key) ?? 0));
-    const appliedDelta = overlay.resourceDeltas.get(key) ?? 0;
-    const available =
-      state.observation.amount(leg.roomName, leg.locationKind as TreasuryLocationKind, leg.resource) +
-      appliedDelta -
-      tentativeOutflow -
-      (occupancy.byKey.get(key) ?? 0);
-    const legOutflow = Math.max(0, -leg.delta);
-    if (available < legOutflow) {
-      return `容量不足：${leg.roomName}/${leg.locationKind}/${leg.resource} 可用 ${String(available)} < 最坏流出 ${String(legOutflow)}`;
+  /** policy 检查带 contract 上下文（contract-first 接纳/rearm 路径）。 */
+  function evaluateAdmissionForContract(
+    contract: TreasuryActionContract,
+    candidateLegs: readonly TreasuryCandidateLeg[],
+    owner: TreasuryQueryOwner | undefined,
+  ): TreasuryAdmissionVerdict {
+    const state = ensureTickState(true);
+    const ownerCheck = resolveOwnerStatus(owner, resolveHolder);
+    if (owner !== undefined && !ownerCheck.valid) {
+      return { status: "rejected", reasonCode: "invalid_input", reason: "owner 声明非法（fail closed）" };
     }
-    // 正流入容量占用（receiver capacity：同 tick 多笔不得重复占满接收空间）。
-    const locationKey = overlayLocationKey(leg.roomName, leg.locationKind);
-    const inflowOccupied =
-      Math.max(0, overlay.capacityDeltas.get(locationKey) ?? 0) +
-      Math.max(0, overlay.tentativeCapacity.get(locationKey) ?? 0);
-    const freeCapacity =
-      state.observation.freeCapacity(leg.roomName, leg.locationKind as TreasuryLocationKind) - inflowOccupied;
-    if (inflowAtLocation > freeCapacity) {
-      return `接收容量不足：${leg.roomName}/${leg.locationKind} 剩余 ${String(freeCapacity)} < 本笔最坏流入 ${String(inflowAtLocation)}`;
-    }
-    return null;
-  }
-
-  /** kernel 侧 unknown/closing 的最坏正流入容量占用（risk 口径输入）。 */
-  function kernelUnknownInflowOccupancy(roomName: string, kind: TreasuryLocationKind): number {
-    const health = readTreasuryCoreStoreHealth();
-    if (health.status !== "healthy") return 0;
-    let total = 0;
-    for (const record of listTreasuryCoreActiveWorks(health.memory)) {
-      if (record.phase !== "outcome_unknown" && record.phase !== "closing") continue;
-      for (const leg of record.worstCase) {
-        if (leg.roomName === roomName && leg.locationKind === kind) total += Math.max(0, leg.delta);
-      }
-    }
-    return total;
+    const base = buildAdmissionFactSources(state);
+    const rooms = [...new Set(candidateLegs.map((leg) => leg.roomName))];
+    const sources: TreasuryAdmissionFactSources = {
+      ...base,
+      policyReserve: (resource, policyRooms) => {
+        const resolver = findTreasuryPolicyResolver();
+        if (resolver === undefined) {
+          return { status: "rejected" as const, reasonCode: "policy_unavailable" as const, reason: "无注册 policy resolver（fail closed：不得自报 withhold）" };
+        }
+        const ownerKey = contract.transactionId.length > 0 ? `contract:${contract.digest.slice(0, 8)}` : "anonymous";
+        let decision: ReturnType<typeof resolver.evaluate>;
+        try {
+          decision = resolver.evaluate({
+            contractId: contract.contractId,
+            contractDigest: contract.digest,
+            actionKind: contract.actionKind,
+            resource,
+            rooms: [...policyRooms],
+            ownerIdentity: ownerKey,
+            tick: Game.time,
+          });
+        } catch (error) {
+          return {
+            status: "rejected" as const,
+            reasonCode: "policy_fault" as const,
+            reason: "policy_fault：resolver 抛错 " + String(error instanceof Error ? error.message : error).slice(0, 96),
+          };
+        }
+        if ("status" in decision) {
+          return { status: "rejected" as const, reasonCode: "policy_violation" as const, reason: "policy 拒绝：" + decision.reason };
+        }
+        const validated = validateTreasuryPolicyDecision(decision);
+        if (validated !== null) {
+          return { status: "rejected" as const, reasonCode: "policy_fault" as const, reason: "policy_fault：" + validated };
+        }
+        return { status: "ok" as const, reserve: decision.withhold + decision.strategicReserve };
+      },
+    };
+    void rooms;
+    return evaluateTreasuryAdmissionFacts(sources, candidateLegs, {
+      excludeOwner:
+        ownerCheck.valid && ownerCheck.ownerIdentity && owner !== undefined && ownerCheck.ownerRoom !== undefined
+          ? ownerCheck.ownerIdentity
+          : undefined,
+    });
   }
 
   const kernel = createTreasuryCoreKernel({
     nowTick: () => Game.time,
     runtimeGeneration: () => serviceGeneration,
     findAdapter: coreAdapterPort,
-    checkAdmissionCapacity: kernelOccupancyForAdmission,
+    reconcileOutcome: (record) => {
+      // 受控对账端口：内核唯一结算通道（§4.4）。reconciler 收到的是当前
+      // attempt 的可信 durable facts/动作身份与当前有效观察——不是调用者
+      // 拼出的另一笔事实。缺 adapter/身份不匹配/抛错/未知结论 → rejected
+      //（unknown 保留，不转换成 not_executed）。
+      // 跨 reset 匹配标准（design II §7.3）：kind + version + stable
+      // semanticIdentity——registrationId 含 global 内注册序号，只证明同一
+      // global 内实现未替换，不参与跨 reset 的 reconciler 解释权判定；
+      // semanticIdentity 声明不变即作者承诺 reconcile 语义一致。
+      const adapter = findTreasuryActionAdapter(record.identity.actionKind);
+      if (
+        adapter === undefined ||
+        adapter.version !== record.identity.adapterVersion ||
+        adapter.semanticIdentity !== record.identity.adapterSemanticIdentity
+      ) {
+        return { status: "rejected" as const, reason: "reconciler 语义身份与聚合不一致（stable semantic identity 匹配失败）" };
+      }
+      if (adapter.reconcile === undefined) {
+        return { status: "rejected" as const, reason: "该 action kind 未提供 reconciler" };
+      }
+      let raw: string;
+      try {
+        raw = adapter.reconcile(
+          {
+            actionKind: record.identity.actionKind,
+            transactionId: record.attemptId,
+            contractId: "ac:" + record.identity.canonicalDigest,
+            contractDigest: record.identity.canonicalDigest,
+            adapterVersion: record.identity.adapterVersion,
+            durablePayload: record.identity.durableFacts?.payload,
+            durablePayloadVersion: record.identity.durableFacts?.version,
+            postings: record.worstCase.map((leg) => ({
+              roomName: leg.roomName,
+              locationKind: leg.locationKind as "storage" | "terminal",
+              resource: leg.resource,
+              delta: leg.delta,
+            })),
+          },
+          service.observation(),
+        );
+      } catch (error) {
+        return { status: "rejected" as const, reason: "reconciler 抛错：" + String(error instanceof Error ? error.message : error).slice(0, 96) };
+      }
+      if (raw !== "observed_committed" && raw !== "observed_not_executed" && raw !== "still_uncertain") {
+        return { status: "rejected" as const, reason: "reconciler 返回未知结论（不转换）" };
+      }
+      const conclusion = raw === "observed_committed" ? "executed" : raw === "observed_not_executed" ? "not_executed" : "still_uncertain";
+      return { status: "ok" as const, conclusion, source: adapter.semanticIdentity };
+    },
+    checkAdmissionCapacity: (worstCase) => {
+      // kernel 侧容量端口（occupancy 已在其中由 sources 提供）：将持久
+      // worstCase（双向腿）还原为候选腿形状，与接纳同一判定。
+      const candidateLegs: TreasuryCandidateLeg[] = worstCase.map((leg) => ({
+        roomName: leg.roomName,
+        locationKind: leg.locationKind,
+        resource: leg.resource,
+        delta: leg.delta,
+      }));
+      const verdict = evaluateAdmissionForCandidate(candidateLegs, undefined);
+      return verdict.status === "ok" ? null : verdict.reason;
+    },
   });
 
   function ensureTickState(lazy: boolean): TreasuryTickState {
@@ -524,119 +655,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     };
   }
 
-  /**
-   * canonical posting 腿（带符号、同键合并、零腿剔除）——持久事实与容量
-   * 检查共用：流出腿校验存量、流入腿校验接收容量、reconciler 获得全集。
-   */
-  function worstCaseOfPostings(postings: readonly PostingDelta[]): TreasuryCoreWorstCaseLeg[] {
-    const merged = new Map<string, { roomName: string; locationKind: string; resource: string; delta: number }>();
-    for (const posting of postings) {
-      const key = overlayResourceKey(posting.roomName, posting.locationKind, posting.resource);
-      const existing = merged.get(key);
-      const delta = posting.delta;
-      merged.set(key, {
-        roomName: posting.roomName,
-        locationKind: posting.locationKind,
-        resource: posting.resource,
-        delta: (existing?.delta ?? 0) + posting.delta,
-      });
-    }
-    return [...merged.values()].filter((leg) => leg.delta !== 0);
-  }
-
-  function applyTentativeHold(attemptId: string, postings: readonly PostingDelta[]): void {
-    void attemptId;
-    for (const posting of postings) {
-      const key = overlayResourceKey(posting.roomName, posting.locationKind, posting.resource);
-      overlay.tentativeResource.set(key, (overlay.tentativeResource.get(key) ?? 0) + posting.delta);
-      const locKey = overlayLocationKey(posting.roomName, posting.locationKind);
-      overlay.tentativeCapacity.set(locKey, (overlay.tentativeCapacity.get(locKey) ?? 0) + posting.delta);
-    }
-    overlayRevision += 1;
-  }
-
-  function releaseTentative(postings: readonly PostingDelta[], committed: boolean): void {
-    for (const posting of postings) {
-      const key = overlayResourceKey(posting.roomName, posting.locationKind, posting.resource);
-      const remaining = (overlay.tentativeResource.get(key) ?? 0) - posting.delta;
-      if (remaining === 0) overlay.tentativeResource.delete(key);
-      else overlay.tentativeResource.set(key, remaining);
-      const locKey = overlayLocationKey(posting.roomName, posting.locationKind);
-      const remainingCap = (overlay.tentativeCapacity.get(locKey) ?? 0) - posting.delta;
-      if (remainingCap === 0) overlay.tentativeCapacity.delete(locKey);
-      else overlay.tentativeCapacity.set(locKey, remainingCap);
-      if (committed) {
-        // 世界效果已发生：本 tick 投影按实际 delta 修正（观察快照 stale）。
-        overlay.resourceDeltas.set(key, (overlay.resourceDeltas.get(key) ?? 0) + posting.delta);
-        overlay.capacityDeltas.set(locKey, (overlay.capacityDeltas.get(locKey) ?? 0) + posting.delta);
-      }
-    }
-    overlayRevision += 1;
-  }
-
-  /**
-   * policy withhold 检查（contract-first 接纳路径）：注册 policy resolver 的
-   * withhold/strategicReserve 参与 per-resource 额度（保守扣减——不得自报）。
-   * resolver 缺失/抛错/输出非法一律 fail closed 拒绝接纳。
-   */
-  function checkPolicyForAdmission(
-    contract: TreasuryActionContract,
-    worstCase: readonly TreasuryCoreWorstCaseLeg[],
-    state: TreasuryTickState,
-  ): { reasonCode: TreasuryCoreRejectionCode; reason: string } | null {
-    void state;
-    const resolver = findTreasuryPolicyResolver();
-    if (resolver === undefined) {
-      return { reasonCode: "policy_unavailable", reason: "无注册 policy resolver（fail closed：不得自报 withhold）" };
-    }
-    const rooms = [...new Set(worstCase.map((leg) => leg.roomName))];
-    const ownerKey = contract.transactionId.length > 0 ? "contract:" + contract.digest.slice(0, 8) : "anonymous";
-    for (const resource of new Set(worstCase.map((leg) => leg.resource))) {
-      let decision: ReturnType<TreasuryRegisteredPolicyResolver["evaluate"]>;
-      try {
-        decision = resolver.evaluate({
-          contractId: contract.contractId,
-          contractDigest: contract.digest,
-          actionKind: contract.actionKind,
-          resource,
-          rooms,
-          ownerIdentity: ownerKey,
-          tick: Game.time,
-        });
-      } catch (error) {
-        return {
-          reasonCode: "policy_fault",
-          reason: "policy_fault：resolver 抛错 " + String(error instanceof Error ? error.message : error).slice(0, 96),
-        };
-      }
-      if ("status" in decision) {
-        return { reasonCode: "policy_violation", reason: "policy 拒绝：" + decision.reason };
-      }
-      const validated = validateTreasuryPolicyDecision(decision);
-      if (validated !== null) {
-        return { reasonCode: "policy_fault", reason: "policy_fault：" + validated };
-      }
-      const reserve = decision.withhold + decision.strategicReserve;
-      for (const leg of worstCase.filter((l) => l.resource === resource && l.delta < 0)) {
-        const outflow = -leg.delta;
-        let roomObserved = 0;
-        for (const kind of ["storage", "terminal"] as const) {
-          roomObserved += state.observation.amount(leg.roomName, kind, resource);
-        }
-        if (roomObserved - reserve < outflow) {
-          return {
-            reasonCode: "insufficient_amount",
-            reason:
-              "policy 额度不足：" + resource + " 可支配 " + String(Math.max(0, roomObserved - reserve)) +
-              "（policy withhold " + String(decision.withhold) + " + reserve " + String(decision.strategicReserve) + "）< 最坏流出 " + String(outflow),
-          };
-        }
-      }
-    }
-    return null;
-  }
-
-  function postingsOfContract(contract: TreasuryActionContract): readonly PostingDelta[] {
+  /** 候选原始 posting 腿（contract 派生；双向腿持久化用 treasuryWorstCaseOfPostings）。 */
+  function candidateLegsOfContract(contract: TreasuryActionContract): TreasuryCandidateLeg[] {
     return contract.postings.map((p) => ({
       roomName: p.roomName,
       locationKind: p.locationKind,
@@ -645,10 +665,21 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     }));
   }
 
+  /** 已确认效果进入本 tick overlay（世界效果已发生，观察快照 stale）。 */
+  function applyCommittedPostings(postings: readonly TreasuryCorePermitPosting[]): void {
+    for (const posting of postings) {
+      const key = overlayResourceKey(posting.roomName, posting.locationKind, posting.resource);
+      overlay.resourceDeltas.set(key, (overlay.resourceDeltas.get(key) ?? 0) + posting.delta);
+      const locKey = overlayLocationKey(posting.roomName, posting.locationKind);
+      overlay.capacityDeltas.set(locKey, (overlay.capacityDeltas.get(locKey) ?? 0) + posting.delta);
+    }
+    overlayRevision += 1;
+  }
+
   const service: TreasuryService = {
     beginTick() {
       if (current !== null && current.tick === Game.time && !current.ended) {
-        // 幂等重复 beginTick。
+        // 幂等重复 beginTick（预算经持久记账共享——B17）。
         return kernel.beginTick();
       }
       metrics.lifecycleBeginTicks += 1;
@@ -777,12 +808,14 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         }
       }
 
+      // 本 tick 已发生的世界效果（applied overlay；同一责任单次表达——
+      // tentative 已删除，active 占用见 committed 桶，不双扣）。
       let projected = observed;
       if (allowProjected) {
         for (const roomName of rooms) {
           for (const kind of kinds) {
             const key = overlayResourceKey(roomName, kind, context.resource);
-            projected += (overlay.resourceDeltas.get(key) ?? 0) + (overlay.tentativeResource.get(key) ?? 0);
+            projected += overlay.resourceDeltas.get(key) ?? 0;
           }
         }
       }
@@ -795,6 +828,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           : "invalid_fail_closed";
 
       const commitments = service.commitments();
+      // 统一扣减桶（§5.1：与接纳/rearm 同一权威）：任务流出 + 生产预留 +
+      // kernel 占用（pending/dispatching/unknown 的最坏流出）。已确认
+      // committed 效果不在此桶（由 applied overlay/刷新观察表达）。
       let committed = 0;
       if (context.subtractOutgoing !== false) {
         for (const roomName of rooms) {
@@ -809,17 +845,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
               : undefined;
           committed += commitments.reservedProduction(roomName, context.resource, excludeOwner);
         }
-        // kernel 活跃占用（Core Rewrite I）：pending/dispatching/unknown/
-        // closing(committed) 的最坏流出计入 committed（保守——可能已执行）。
-        const kernelHealth = readTreasuryCoreStoreHealth();
-        if (kernelHealth.status === "healthy") {
-          const occupancy = computeTreasuryCoreOccupancy(kernelHealth.memory);
-          if (occupancy.byKey.size > 0) {
-            for (const roomName of rooms) {
-              for (const kind of kinds) {
-                const occupied = occupancy.byKey.get(overlayResourceKey(roomName, kind, context.resource)) ?? 0;
-                if (occupied > 0) committed += occupied;
-              }
+        const occupancy = kernelOccupancyNow();
+        if (occupancy.byKey.size > 0) {
+          for (const roomName of rooms) {
+            for (const kind of kinds) {
+              const occupied = occupancy.byKey.get(overlayResourceKey(roomName, kind, context.resource)) ?? 0;
+              if (occupied > 0) committed += occupied;
             }
           }
         }
@@ -847,8 +878,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const authorizable = ownerCheck.valid && commitmentComplete;
       const rawSpendable = authorizable ? base - committed - withhold : 0;
 
-      // authorizationSafe 联合判定（Core Rewrite I 口径）：owner/承诺完整性 +
-      // kernel store 健康 + 旧业务数据兼容 + 共享 reservation store 健康。
+      // authorizationSafe 联合判定：owner/承诺完整性 + kernel store 健康 +
+      // 旧业务数据兼容 + 共享 reservation store 健康。
       const blockers: string[] = [];
       if (!ownerCheck.valid && context.owner) blockers.push("invalid_owner");
       if (!commitmentComplete) blockers.push("commitment_incomplete");
@@ -885,8 +916,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const state = ensureTickState(true);
       return (
         state.observation.usedCapacity(roomName, kind) +
-        (overlay.capacityDeltas.get(overlayLocationKey(roomName, kind)) ?? 0) +
-        (overlay.tentativeCapacity.get(overlayLocationKey(roomName, kind)) ?? 0)
+        Math.max(0, overlay.capacityDeltas.get(overlayLocationKey(roomName, kind)) ?? 0)
       );
     },
 
@@ -894,8 +924,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const state = ensureTickState(true);
       return (
         state.observation.freeCapacity(roomName, kind) -
-        (overlay.capacityDeltas.get(overlayLocationKey(roomName, kind)) ?? 0) -
-        (overlay.tentativeCapacity.get(overlayLocationKey(roomName, kind)) ?? 0)
+        Math.max(0, overlay.capacityDeltas.get(overlayLocationKey(roomName, kind)) ?? 0)
       );
     },
 
@@ -911,25 +940,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       metrics.riskAdjustedCapacityLookups += 1;
       const state = ensureTickState(true);
       const locationKey = overlayLocationKey(roomName, kind);
-      const kernelHealth = readTreasuryCoreStoreHealth();
-      let kernelInflow = 0;
-      if (kernelHealth.status === "healthy") {
-        for (const record of listTreasuryCoreActiveWorks(kernelHealth.memory)) {
-          // 可能已流入的 uncertain/committed 资源占用空间：按该位置最坏
-          // 流入合计（receiver capacity 口径——正流入减少 free）。
-          if (record.phase === "outcome_unknown" || record.phase === "closing") {
-            for (const leg of record.worstCase) {
-              if (leg.roomName === roomName && leg.locationKind === kind) {
-                kernelInflow += Math.max(0, leg.delta);
-              }
-            }
-          }
-        }
-      }
+      // 统一占用口径（§5.2）：unknown 的可能流入占用接收容量（occupancy
+      // 投影），committed 效果由 applied overlay 表达——同一责任单次扣减。
+      const kernelInflow = kernelUnknownInflowOccupancy(roomName, kind);
       return (
         state.observation.freeCapacity(roomName, kind) -
-        (overlay.capacityDeltas.get(locationKey) ?? 0) -
-        (overlay.tentativeCapacity.get(locationKey) ?? 0) -
+        Math.max(0, overlay.capacityDeltas.get(locationKey) ?? 0) -
         kernelInflow
       );
     },
@@ -978,15 +994,16 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (identity.status === "rejected") {
         return { status: "rejected", reason: identity.reason, reasonCode: "invalid_input" };
       }
-      const postings = postingsOfContract(typed);
-      const worstCase = worstCaseOfPostings(postings);
+      const candidateLegs = candidateLegsOfContract(typed);
+      const worstCase = treasuryWorstCaseOfPostings(candidateLegs);
       if (worstCase.length === 0) {
         return { status: "rejected", reason: "postings 为空（无可持久的动作腿）", reasonCode: "invalid_input" };
       }
-      const policyProblem = checkPolicyForAdmission(typed, worstCase, ensureTickState(true));
-      if (policyProblem !== null) {
+      // 共同授权判定（§5.1）：观察 + applied + 承诺 + 预留 + policy + 占用。
+      const verdict = evaluateAdmissionForContract(typed, candidateLegs, options.owner);
+      if (verdict.status === "rejected") {
         metrics.transactionsRejectedInvalid += 1;
-        return { status: "rejected", reason: policyProblem.reason, reasonCode: policyProblem.reasonCode };
+        return { status: "rejected", reason: verdict.reason, reasonCode: verdict.reasonCode as TreasuryCoreRejectionCode };
       }
       const admission = kernel.admit({
         workKey: options.workKey,
@@ -994,9 +1011,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         worstCase,
         externalConsumers: options.externalConsumers ?? [],
         canonicalArgs: typed.args,
+        postings: candidateLegs.map((leg) => ({ ...leg })),
       });
       if (admission.status === "admitted") {
-        applyTentativeHold(admission.attemptId, postings);
         permitsIssuedThisTick += 1;
         issuedPermits.add(admission.dispatch);
       }
@@ -1004,30 +1021,20 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
 
     executeAuthorizedDispatch(dispatch: unknown): TreasuryCoreDispatchOutcome {
-      let postings: readonly PostingDelta[] | null = null;
-      if (
-        typeof dispatch === "object" &&
-        dispatch !== null &&
-        issuedPermits.has(dispatch as TreasuryCoreDispatchPermit)
-      ) {
-        // 记录本 permit 的 posting 形状（tentative 释放与 overlay 修正）。
-        const adapter = findTreasuryActionAdapter((dispatch as TreasuryCoreDispatchPermit).actionKind);
-        if (adapter !== undefined) {
-          const args = (dispatch as TreasuryCoreDispatchPermit).canonicalArgs;
-          postings = adapter.derivePostings(args).map((p) => ({
-            roomName: p.roomName,
-            locationKind: p.locationKind,
-            resource: p.resource,
-            delta: p.delta,
-          }));
-        }
-      }
       const outcome = kernel.executeDispatch(dispatch);
-      if (postings !== null && (outcome.status !== "rejected" || outcome.reason === "")) {
-        // dispatch 已发生（前置拒绝/发布失败之外的一切）→ 释放 tentative；
-        // committed 则按实际 delta 修正本 tick overlay。
-        const committed = outcome.status === "committed" || (outcome.status === "persist_failed" && outcome.observed === "committed");
-        releaseTentative(postings, committed);
+      // 已确认效果进入本 tick overlay（世界效果已发生；posting 来自许可的
+      // 冻结签发快照——不重新派生）。发布失败/前置拒绝不动 overlay。
+      if (
+        outcome.status === "committed" ||
+        (outcome.status === "persist_failed" && outcome.observed === "committed")
+      ) {
+        if (
+          typeof dispatch === "object" &&
+          dispatch !== null &&
+          issuedPermits.has(dispatch as TreasuryCoreDispatchPermit)
+        ) {
+          applyCommittedPostings((dispatch as TreasuryCoreDispatchPermit).postings);
+        }
       }
       return outcome;
     },
@@ -1050,85 +1057,36 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (identity.status === "rejected") {
         return { status: "rejected", reason: identity.reason, reasonCode: "invalid_input" };
       }
-      const postings = postingsOfContract(typed);
-      const worstCase = worstCaseOfPostings(postings);
+      const candidateLegs = candidateLegsOfContract(typed);
+      const worstCase = treasuryWorstCaseOfPostings(candidateLegs);
+      // rearm 与新接纳同一授权口径（§5.3）：policy/承诺/容量/接收占用都在
+      // 共同判定中——rearm 不继承前代余额或 policy 豁免。
+      const verdict = evaluateAdmissionForContract(typed, candidateLegs, options?.owner);
+      if (verdict.status === "rejected") {
+        return { status: "rejected", reason: verdict.reason, reasonCode: verdict.reasonCode as TreasuryCoreRejectionCode };
+      }
       const admission = kernel.executeRearm(rearm, {
         identity: identity.facts,
         worstCase,
         canonicalArgs: typed.args,
+        postings: candidateLegs.map((leg) => ({ ...leg })),
       });
       if (admission.status === "admitted") {
-        applyTentativeHold(admission.attemptId, postings);
         permitsIssuedThisTick += 1;
         issuedPermits.add(admission.dispatch);
-        void options;
       }
       return admission;
     },
 
-    settleUnknownOutcome(request: TreasurySettleRequest) {
-      // adapter_reconcile 证据的结论必须来自注册 reconciler 本身——facade
-      // 内部调用（durable facts + 当前 shared observation），调用方不可传
-      // conclusion（防伪造）。external_settlement_receipt 是显式外部对账
-      // 通道（本轮真实 driver 禁用；结论由受控协作者传入并在证据中记录
-      // 来源——接入真实 driver 前必须升级为受控 capability，见 design 限制）。
-      let conclusion: "executed" | "not_executed" | "still_uncertain";
-      let adapterIdentity: string | undefined;
-      if (request.evidenceKind === "adapter_reconcile") {
-        const h = readTreasuryCoreStoreHealth();
-        if (h.status !== "healthy") {
-          return { status: "rejected", reason: "kernel store 不可读" };
-        }
-        const record = h.memory.active[request.attemptId];
-        if (record === undefined) return { status: "rejected", reason: "attempt 不在活跃集合" };
-        const adapter = findTreasuryActionAdapter(record.identity.actionKind);
-        if (
-          adapter === undefined ||
-          adapter.registrationId !== record.identity.adapterRegistrationId ||
-          adapter.semanticIdentity !== record.identity.adapterSemanticIdentity
-        ) {
-          return { status: "rejected", reason: "reconciler 注册身份与聚合不一致" };
-        }
-        if (adapter.reconcile === undefined) {
-          return { status: "rejected", reason: "该 action kind 未提供 reconciler" };
-        }
-        let raw: TreasuryActionReconcilerConclusion;
-        try {
-          raw = adapter.reconcile(
-            {
-              actionKind: record.identity.actionKind,
-              transactionId: record.attemptId,
-              contractId: "ac:" + record.identity.canonicalDigest,
-              contractDigest: record.identity.canonicalDigest,
-              adapterVersion: record.identity.adapterVersion,
-              durablePayload: record.identity.durableFacts?.payload,
-              durablePayloadVersion: record.identity.durableFacts?.version,
-              postings: record.worstCase.map((leg) => ({
-                roomName: leg.roomName,
-                locationKind: leg.locationKind as "storage" | "terminal",
-                resource: leg.resource,
-                delta: leg.delta,
-              })),
-            },
-            service.observation(),
-          );
-        } catch (error) {
-          return { status: "rejected", reason: "reconciler 抛错：" + String(error instanceof Error ? error.message : error).slice(0, 96) };
-        }
-        conclusion = raw === "observed_committed" ? "executed" : raw === "observed_not_executed" ? "not_executed" : "still_uncertain";
-        adapterIdentity = adapter.semanticIdentity;
-      } else {
-        if (request.conclusion === undefined) {
-          return { status: "rejected", reason: "external_settlement_receipt 必须提供结论" };
-        }
-        conclusion = request.conclusion;
-      }
-      return kernel.settle({
-        attemptId: request.attemptId,
-        evidenceKind: request.evidenceKind,
-        conclusion,
-        adapterSemanticIdentity: adapterIdentity,
-      });
+    settleUnknownOutcome(request: { readonly attemptId: string }) {
+      // adapter_reconcile 证据的结论由内核经受控 reconcileOutcome 端口调用
+      // 注册 reconciler 得出——facade 到 kernel 的信任边界封闭；调用者
+      // 只能指定 attempt，不能提交结论（R07）。
+      return kernel.settle({ attemptId: request.attemptId });
+    },
+
+    cancelPendingWork(request: TreasuryCancelPendingRequest) {
+      return kernel.cancelPending({ attemptId: request.attemptId });
     },
 
     closeWork(request: { readonly attemptId: string; readonly reason: "retry_expired" | "abandoned" }) {
@@ -1141,15 +1099,27 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
 
     kernelJournal(): TreasuryKernelJournalView {
       const health = readTreasuryCoreStoreHealth();
+      // 独立深快照（R06/B22）：health 只给状态与有界诊断（不暴露 memory
+      // 引用）；active/ring 逐条深冻结快照（与 Memory 无共享可变引用）。
+      const publicHealth: TreasuryCorePublicHealth =
+        health.status === "healthy"
+          ? { status: "healthy", reason: null, ringDegraded: health.ringDegraded }
+          : health.status === "absent"
+            ? { status: "absent", reason: null, ringDegraded: null }
+            : { status: health.status, reason: health.reason, ringDegraded: null };
       const active: readonly TreasuryCoreWorkRecord[] =
         health.status === "healthy"
           ? listTreasuryCoreActiveWorks(health.memory).map((record) => treasuryBoundedDeepFreezeSnapshot(record) as TreasuryCoreWorkRecord)
           : [];
+      const ring: readonly TreasuryCoreRingEntry[] =
+        health.status === "healthy"
+          ? health.memory.ring.map((entry) => treasuryBoundedDeepFreezeSnapshot(entry) as TreasuryCoreRingEntry)
+          : [];
       return {
-        health,
+        health: Object.freeze(publicHealth),
         legacyStores: kernel.legacyStores(),
         active,
-        ring: health.status === "healthy" ? Object.freeze([...health.memory.ring]) : [],
+        ring,
       };
     },
 
@@ -1170,6 +1140,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       Object.assign(metrics, createTreasuryMetrics());
     },
   };
+
+  /** kernel 侧 unknown 的最坏正流入容量占用（统一 occupancy 投影）。 */
+  function kernelUnknownInflowOccupancy(roomName: string, kind: TreasuryLocationKind): number {
+    return kernelOccupancyNow().inflowByLocation.get(overlayLocationKey(roomName, kind)) ?? 0;
+  }
 
   return service;
 }

@@ -269,9 +269,10 @@ describe("第六轮 authorizationSafe 联合判定与 blockers", () => {
     // treasuryCore 活跃记录损坏（unhealthy ≠ absent，R2/A05 语义）。
     if (!Memory.runtime) Memory.runtime = {} as never;
     Memory.runtime.treasuryCore = {
-      version: 1, installEpochId: "0123456789abcdef",
+      version: 2, installEpochId: "0123456789abcdef",
       issuance: { frontier: 1, burned: 0 },
       lifecycle: { lastBeginTick: null, lastEndTick: null },
+      recovery: { sweepCursor: 0, cleanupCursor: 0, budgetTick: 0, budgetUsed: 0 },
       active: { tk1_broken: ({ bad: "shape" } as never) },
       ring: [], ringCursor: 0,
       counters: { admitted: 0, dispatched: 0, settledCommitted: 0, settledNotExecuted: 0, unknown: 0, rearmings: 0, rejectedAdmissions: 0, recoveryAdvances: 0, cleanupFailures: 0 },

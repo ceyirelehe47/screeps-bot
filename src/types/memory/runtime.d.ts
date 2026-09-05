@@ -686,11 +686,14 @@ declare global {
      */
     resourceReservationsCorrupted?: string;
     /**
-     * 【Core Rewrite I】Treasury 新内核持久根（v1）。一项未完成工作 = 一个
+     * 【Core Rewrite II】Treasury 新内核持久根（v2）。一项未完成工作 = 一个
      * 有界活跃聚合（active，键 = attemptId，上限 64）；只有该聚合内当前
      * attempt 的正向许可（heap-only，不持久化）可进入动作调用；ring 为
-     * 近期明细环（上限 128，不参与授权）。发行 frontier 单调不回退；分配
-     * 失败烧掉序号（burned 计数），不为洞建永久记录。
+     * 近期明细环（上限 128，不参与授权；损坏只产生 degraded 诊断，不阻断
+     * 安全权威）。发行 frontier 单调不回退；分配失败烧掉序号（burned 计数），
+     * 不为洞建永久记录。v2：recovery 调度区（公平游标 + per-tick 预算记账）；
+     * 结算证据通道收口（external_settlement_receipt 退役、pending_cancellation
+     * 新增）；worstCase 同键流出/流入不互相抵消。
      * 遇到旧 Memory.runtime.treasury 业务数据（intents/quarantine/receipts
      * 等）时内核报告 incompatible 并阻断写入——不解析、不擦除。
      * - treasuryPerf：指标快照（shadow 低频写入，仅诊断）。
@@ -700,6 +703,13 @@ declare global {
       installEpochId: string;
       issuance: { frontier: number; burned: number };
       lifecycle: { lastBeginTick: number | null; lastEndTick: number | null };
+      /** 恢复/清理调度元信息（v2：游标轮转 + per-tick 操作预算记账）。 */
+      recovery: {
+        sweepCursor: number;
+        cleanupCursor: number;
+        budgetTick: number;
+        budgetUsed: number;
+      };
       active: Record<string, {
         workKey: string;
         attemptId: string;
@@ -718,12 +728,13 @@ declare global {
           retryFactsDigest: string | null;
           durableFacts: { version: number; payload: string } | null;
         };
+        /** 同键流出与流入不互相抵消：分别成腿（一负一正两条）。 */
         worstCase: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
         invocation: { atTick: number } | null;
         external: { accepted: boolean; atTick: number } | null;
         outcome: "unknown" | "committed" | "not_executed";
         outcomeEvidence: {
-          kind: "adapter_execution_semantics" | "adapter_reconcile" | "external_settlement_receipt";
+          kind: "adapter_execution_semantics" | "adapter_reconcile" | "pending_cancellation";
           conclusion: "executed" | "not_executed" | "still_uncertain";
           source: string;
           atTick: number;

@@ -1,29 +1,39 @@
 /**
- * Treasury Core Kernel——装配与单一写入口（Core Rewrite I 的运行核心）。
+ * Treasury Core Kernel——装配与单一写入口（Core Rewrite II 运行核心）。
  *
- * 契约（design §7.1 / §5 / §6）：
+ * 契约（design II §4–§6）：
  * - 一切持久状态变更经 applyTreasuryCoreCommand（commands.ts 纯转移 +
- *   writeTreasuryCoreMemory 写后读回）。恢复、GC、容量回收没有旁路。
- * - 正向执行许可（dispatch permit）只在 admit / rearm 成功时签发，heap-only，
- *   跨 tick / runtime generation 失效；executeDispatch 校验许可对象身份、
- *   活跃记录、当前阶段与完整身份后才调用动作——外部字符串 ID 永远不是许可。
- * - dispatch 顺序固定：许可校验 → dispatching 发布（持久+读回，失败则零
- *   调用、保持 pending）→ permit 置 consumed → 动作恰好一次 → 三种事实
- *   （invocation / external accept / settlement）分别持久。
- * - beginTick/endTick 恢复只做保守推进（dispatching → outcome_unknown）、
- *   公平清理与 retry 期限关闭；未知结果不能被推导成 not-executed。
- * - 满载拒绝新工作；已接纳工作始终可获得恢复/收尾预算。
+ *   writeTreasuryCoreMemory 发布确认：基线漂移检查 + 读回与草稿深度精确
+ *   比较）。恢复、GC、容量回收没有旁路。
+ * - 正向执行许可（dispatch permit）只在 admit / rearm 成功时签发，heap-only
+ *   深冻结快照，跨 tick / runtime generation 失效；executeDispatch 校验
+ *   许可对象身份、冻结完整性、活跃记录、当前阶段与完整身份事实后才调用
+ *   动作——外部字符串 ID 永远不是许可，真许可的可变字段也不可信。
+ * - dispatch 顺序固定：许可校验 → dispatching 发布（持久+发布确认，失败则
+ *   零调用、保持 pending）→ permit 置 consumed → 动作恰好一次（参数来自
+ *   冻结签发快照）→ 三种事实（invocation / external accept / settlement）
+ *   分别持久。
+ * - beginTick/endTick：dispatching 保守化 → 跨 tick pending 安全取消（§6.1）
+ *   → retry 期限关闭 → closing 公平清理（持久游标轮转 + per-tick 操作预算，
+ *   同 tick 多入口共享）；未知结果不能被推导成 not-executed。
+ * - 结算结论只来自受控 reconcileOutcome 端口（facade 装配的注册
+ *   reconciler）；自报 external receipt 通道不存在（R07）。
+ * - 无受控释放端口时：非空 externalConsumers 的接纳被拒绝；已持久义务在
+ *   端口缺失/未确认/抛错时保持 active（无默认成功——R05）。
+ * - 满载拒绝新工作（含总序列化预算）；已接纳工作始终可获得恢复/收尾预算。
  */
 
 import {
   TREASURY_CORE_RECOVERY_BUDGET_PER_TICK,
   TREASURY_CORE_SCHEMA_VERSION,
+  TREASURY_CORE_TOTAL_CHAR_BUDGET,
   type TreasuryCoreDispatchPermit,
   type TreasuryCoreIdentityFacts,
   type TreasuryCoreMemory,
   type TreasuryCoreRearmPermit,
   type TreasuryCoreStoreHealth,
   type TreasuryCoreWorstCaseLeg,
+  type TreasuryCoreWorkRecord,
 } from "@/runtime/treasury/kernel/types";
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
 import {
@@ -35,12 +45,15 @@ import {
   detectLegacyTreasuryStores,
   initializeTreasuryCoreStore,
   readTreasuryCoreStoreHealth,
+  resetTreasuryCoreRingLayer,
+  treasuryCoreSerializedChars,
   writeTreasuryCoreMemory,
 } from "@/runtime/treasury/kernel/store";
 import {
   isValidTreasuryCoreWorkKey,
   mintTreasuryCoreDispatchPermit,
   mintTreasuryCoreRearmPermit,
+  treasuryCorePermitRecordConflicts,
   validateTreasuryCoreDispatchPermit,
   validateTreasuryCoreRearmPermit,
 } from "@/runtime/treasury/kernel/identity";
@@ -59,17 +72,24 @@ export interface TreasuryCoreActionAdapterPort {
   readonly nonOkOutcome: "not_executed" | "unknown";
 }
 
+/** 受控对账端口：结论由 facade 装配的注册 reconciler 得出（内核唯一结算通道）。 */
+export type TreasuryCoreReconcileOutcomePort = (record: TreasuryCoreWorkRecord) =>
+  | { readonly status: "ok"; readonly conclusion: "executed" | "not_executed" | "still_uncertain"; readonly source: string }
+  | { readonly status: "rejected"; readonly reason: string };
+
 export interface TreasuryCoreKernelPorts {
   readonly nowTick: () => number;
   /** runtime generation（facade service 生成号；global reset 后变化）。 */
   readonly runtimeGeneration: () => number;
   readonly findAdapter: (kind: string) => TreasuryCoreActionAdapterPort | undefined;
+  /** 受控对账端口（settle 结论唯一来源；缺省即无法结算——unknown 保留）。 */
+  readonly reconcileOutcome?: TreasuryCoreReconcileOutcomePort;
   /**
    * 接纳容量端口：由 facade 用 exact observation + 本 tick overlay +
    * kernel 占用口径实现。返回拒绝原因或 null（可用）。
    */
   readonly checkAdmissionCapacity: (worstCase: readonly TreasuryCoreWorstCaseLeg[]) => string | null;
-  /** 外部消费者幂等释放端口（返回 false = 释放未确认，duty 保留）。 */
+  /** 外部消费者幂等释放端口（返回 false = 释放未确认，duty 保留；缺失即无受控释放能力）。 */
   readonly releaseExternalConsumer?: (consumerKey: string, attemptId: string) => boolean;
   /** 诊断事件流（可选；测试计量与 metrics 挂载点，不影响权威）。 */
   readonly onEffect?: (effect: TreasuryCoreEffect) => void;
@@ -82,6 +102,8 @@ export interface TreasuryCoreAdmissionInput {
   readonly externalConsumers: readonly string[];
   /** 当次调用的 canonical frozen args（只进 permit，不持久）。 */
   readonly canonicalArgs: unknown;
+  /** 签发时的原始 posting 腿（只进 permit，不持久）。 */
+  readonly postings: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
 }
 
 export type TreasuryCoreAdmissionResult =
@@ -104,6 +126,8 @@ export type TreasuryCoreRejectionCode =
   | "work_key_conflict"
   | "invalid_input"
   | "capacity_insufficient"
+  | "release_port_unavailable"
+  | "memory_budget_exceeded"
   | "write_failed";
 
 export type TreasuryCoreDispatchOutcome =
@@ -148,12 +172,9 @@ export interface TreasuryCoreKernel {
   readonly metrics: () => TreasuryCoreKernelMetrics;
   readonly admit: (input: TreasuryCoreAdmissionInput) => TreasuryCoreAdmissionResult;
   readonly executeDispatch: (permit: unknown) => TreasuryCoreDispatchOutcome;
+  /** 事后结算（outcome_unknown → committed/not_executed；结论只来自受控对账端口）。 */
   readonly settle: (input: {
     attemptId: string;
-    evidenceKind: "adapter_reconcile" | "external_settlement_receipt";
-    conclusion: "executed" | "not_executed" | "still_uncertain";
-    /** adapter_reconcile 时的 reconciler 语义身份（必须与聚合一致）。 */
-    adapterSemanticIdentity?: string;
   }) => { readonly status: "ok" } | { readonly status: "still_uncertain" } | { readonly status: "rejected"; readonly reason: string };
   readonly issueRearmPermit: (input: {
     parentAttemptId: string;
@@ -164,13 +185,18 @@ export interface TreasuryCoreKernel {
       readonly identity: TreasuryCoreIdentityFacts;
       readonly worstCase: readonly TreasuryCoreWorstCaseLeg[];
       readonly canonicalArgs: unknown;
+      readonly postings: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
     },
   ) => TreasuryCoreAdmissionResult;
+  /** 安全取消：只结束确定未开始的当前 pending attempt（§6.1）。 */
+  readonly cancelPending: (input: {
+    attemptId: string;
+  }) => { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string };
   readonly closeWork: (input: {
     attemptId: string;
     reason: "retry_expired" | "abandoned";
   }) => { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string };
-  readonly beginTick: () => { readonly recovered: number; readonly closed: number; readonly cleaned: number };
+  readonly beginTick: () => { readonly recovered: number; readonly closed: number; readonly cleaned: number; readonly cancelled: number };
   readonly endTick: () => { readonly recoveredToUnknown: number };
 }
 
@@ -182,7 +208,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
   }
 
   type WritableHealth =
-    | { status: "writable"; memory: TreasuryCoreMemory }
+    | { status: "writable"; memory: TreasuryCoreMemory; ringDegraded: string | null }
     | { status: "blocked"; code: TreasuryCoreRejectionCode; reason: string };
   function requireWritableHealth(): WritableHealth {
     if (legacyNow().length > 0) {
@@ -204,9 +230,9 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       if (after.status !== "healthy") {
         return { status: "blocked", code: "write_failed", reason: `初始化后读取异常：${after.status === "absent" ? "缺失" : after.reason}` };
       }
-      return { status: "writable", memory: after.memory };
+      return { status: "writable", memory: after.memory, ringDegraded: after.ringDegraded };
     }
-    return { status: "writable", memory: health.memory };
+    return { status: "writable", memory: health.memory, ringDegraded: health.ringDegraded };
   }
 
   function runCommand(
@@ -216,8 +242,10 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     if (health.status === "blocked") return { status: "failed", reason: health.reason };
     // 在写入副本上先跑纯转移：非 admit 命令被拒绝时不落盘；admit 的拒绝
     // 只递增 rejectedAdmissions 计数器（纯函数在副本上就地维护），同样
-    // 写回。其余持久变更全部来自被接受的转移。
+    // 写回。其余持久变更全部来自被接受的转移。ring 层损坏在下一次成功
+    // 写入前重建（丢弃非权威明细；查询不修复——R10）。
     const draft = cloneForCommand(health.memory);
+    if (health.ringDegraded !== null) resetTreasuryCoreRingLayer(draft);
     const result = applyTreasuryCoreStateCommand(draft, command, { nowTick: ports.nowTick() });
     if (result.status === "rejected" && command.type !== "admit") {
       return { status: "failed", reason: result.reason };
@@ -240,8 +268,27 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     if (input.worstCase.length === 0) {
       return { status: "rejected", reason: "worstCase 为空（动作必须声明最坏占用）", reasonCode: "invalid_input" };
     }
+    // 缺受控释放能力时拒绝非空消费者义务（§6.2：不接受义务后再写“以后接入”）。
+    if (input.externalConsumers.length > 0 && ports.releaseExternalConsumer === undefined) {
+      return {
+        status: "rejected",
+        reason: "无受控外部消费者释放端口（非空 externalConsumers 的接纳必须拒绝）",
+        reasonCode: "release_port_unavailable",
+      };
+    }
     const health = requireWritableHealth();
     if (health.status === "blocked") return { status: "rejected", reason: health.reason, reasonCode: health.code };
+    // 总序列化预算（§6.4）：接纳前保证最坏生命周期仍可容纳（满载阻断新增，
+    // 不阻断已接纳工作收尾）。序列化体积按发布确认后的精确布局计算。
+    const serializedNow = treasuryCoreSerializedChars(health.memory);
+    if (serializedNow > 0 && serializedNow + estimateAdmissionWorstChars(input) > TREASURY_CORE_TOTAL_CHAR_BUDGET) {
+      bumpRejectedCounter();
+      return {
+        status: "rejected",
+        reason: `treasuryCore 总序列化预算超限（当前 ${String(serializedNow)} + 新聚合最坏 ${String(estimateAdmissionWorstChars(input))} > ${String(TREASURY_CORE_TOTAL_CHAR_BUDGET)} 字符）`,
+        reasonCode: "memory_budget_exceeded",
+      };
+    }
     const capacityProblem = ports.checkAdmissionCapacity(input.worstCase);
     if (capacityProblem !== null) {
       bumpRejectedCounter();
@@ -255,7 +302,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       externalConsumers: input.externalConsumers,
     });
     if (run.status === "failed") {
-      // 满载 / 排他冲突由纯函数拒绝并已计数；写入失败额外补计数。
+      // 满载 / 排他冲突 / 预算 / 输入上限由纯函数拒绝并已计数；写入失败额外补计数。
       return { status: "rejected", reason: run.reason, reasonCode: classifyRejection(run.reason) };
     }
     const admitted = run.effects.find((e): e is { effect: "admitted"; attemptId: string } => e.effect === "admitted");
@@ -264,6 +311,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       attemptId: admitted.attemptId,
       canonicalDigest: input.identity.canonicalDigest,
       canonicalArgs: input.canonicalArgs,
+      postings: input.postings,
       actionKind: input.identity.actionKind,
       adapterRegistrationId: input.identity.adapterRegistrationId,
       adapterSemanticIdentity: input.identity.adapterSemanticIdentity,
@@ -276,14 +324,25 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
   function classifyRejection(reason: string): TreasuryCoreRejectionCode {
     if (reason.includes("满载")) return "active_full";
     if (reason.includes("排他冲突")) return "work_key_conflict";
+    if (reason.includes("externalConsumers")) return "invalid_input";
+    if (reason.includes("预算超限")) return "memory_budget_exceeded";
     return "write_failed";
+  }
+
+  /** 单条新聚合的最坏序列化字符（按字段上限构造，不依赖当前观测）。 */
+  function estimateAdmissionWorstChars(input: TreasuryCoreAdmissionInput): number {
+    const worstIdentity = 64 + 8 + 128 + 128 + 64 + 64 + 64 + (input.identity.durableFacts !== null ? 540 : 4);
+    const worstLegs = 16 * 110;
+    const worstConsumers = 8 * 132;
+    const rest = 4800;
+    return worstIdentity + worstLegs + worstConsumers + rest;
   }
 
   function bumpRejectedCounter(): void {
     const health = readTreasuryCoreStoreHealth();
     if (health.status !== "healthy") return;
     writeTreasuryCoreMemory((root) => {
-      root.counters.rejectedAdmissions += 1;
+      if (root.counters.rejectedAdmissions < 9_999_999_999) root.counters.rejectedAdmissions += 1;
     }, () => undefined);
   }
 
@@ -304,8 +363,11 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     if (record.phase !== "pending") {
       return { status: "rejected", reason: `attempt ${typed.attemptId} 阶段为 ${record.phase}（不可再次调用）` };
     }
-    if (record.identity.canonicalDigest !== typed.canonicalDigest) {
-      return { status: "rejected", reason: "许可与聚合身份冲突（原事实保留，不执行）" };
+    // 执行前完整身份重验（§4.1）：可信签发快照与聚合当前事实逐项一致——
+    // 许可对象身份可信不代表其字段可信；任何不匹配都拒绝且不消费许可。
+    const identityConflict = treasuryCorePermitRecordConflicts(typed, record.identity);
+    if (identityConflict !== null) {
+      return { status: "rejected", reason: `许可与聚合身份冲突（${identityConflict}；原事实保留，不执行）` };
     }
     const adapter = ports.findAdapter(record.identity.actionKind);
     if (
@@ -319,14 +381,13 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
         reason: "adapter 注册身份与聚合不一致（执行环境语义已变化，旧授权失效）",
       };
     }
-    // 1) dispatching 发布（持久 + 读回）。失败 → 零调用、保持 pending。
+    // 1) dispatching 发布（持久 + 发布确认）。失败 → 零调用、保持 pending。
     const start = runCommand({ type: "dispatch_start", attemptId: typed.attemptId, canonicalDigest: typed.canonicalDigest });
     if (start.status === "failed") return { status: "publish_failed", reason: start.reason };
     // 2) 置 consumed（重入/同 tick 重复在此之后一律拒绝）。
     consumedPermits.add(typed);
-    // 3) 动作恰好一次。invocation 事实先于调用记录在事件流（onEffect）
-    //    中不可用——invocation 是 dispatch_result 命令的输入，由本函数
-    //    在调用后统一持久（异常路径也持久 unknown）。
+    // 3) 动作恰好一次：实际执行参数来自冻结签发快照（typed.canonicalArgs），
+    //    不从公开可变字段重新派生（R01）。
     let invocationOutcome: "committed" | "not_executed" | "unknown";
     let external: { accepted: boolean } | null = null;
     let errorMessage: string | null = null;
@@ -362,7 +423,8 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       error: errorMessage,
     });
     if (persist.status === "failed") {
-      // 兜底：至少推进为 unknown（写一次 conservative recovery）。
+      // 兜底：至少推进为 unknown（写一次 conservative recovery）。不回滚到
+      // pending、不恢复已使用许可（§4.2）。
       const fallback = runCommand({ type: "recover_dispatching", attemptId: typed.attemptId });
       return {
         status: "persist_failed",
@@ -382,29 +444,35 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     if (health.status === "blocked") return { status: "rejected", reason: health.reason };
     const record = health.memory.active[input.attemptId];
     if (record === undefined) return { status: "rejected", reason: `attempt ${input.attemptId} 不在活跃集合` };
-    if (input.evidenceKind === "adapter_reconcile") {
-      if (input.adapterSemanticIdentity === undefined) {
-        return { status: "rejected", reason: "adapter_reconcile 证据必须声明 reconciler 语义身份" };
-      }
-      if (input.adapterSemanticIdentity !== record.identity.adapterSemanticIdentity) {
-        return { status: "rejected", reason: "reconciler 语义身份与聚合不一致（不得从其他 owner 反推结论）" };
-      }
-      const adapter = ports.findAdapter(record.identity.actionKind);
-      if (
-        adapter === undefined ||
-        adapter.registrationId !== record.identity.adapterRegistrationId ||
-        adapter.semanticIdentity !== record.identity.adapterSemanticIdentity
-      ) {
-        return { status: "rejected", reason: "reconciler 注册身份与聚合不一致" };
-      }
+    if (record.phase !== "outcome_unknown") {
+      return { status: "rejected", reason: `attempt ${input.attemptId} 阶段为 ${record.phase}（仅结果未知的聚合可对账）` };
+    }
+    // 结论只来自受控对账端口（facade 装配的注册 reconciler）——调用者不能
+    // 传入结论，也不存在 kernel.settle(rawConclusion) 旁路（R07/§4.4）。
+    const port = ports.reconcileOutcome;
+    if (port === undefined) {
+      return { status: "rejected", reason: "无受控对账端口（unknown 保留，不猜测）" };
+    }
+    let reconciled: ReturnType<TreasuryCoreReconcileOutcomePort>;
+    try {
+      reconciled = port(record);
+    } catch (error) {
+      return { status: "rejected", reason: "对账端口抛错：" + String(error instanceof Error ? error.message : error).slice(0, 96) };
+    }
+    if (reconciled.status === "rejected") {
+      return { status: "rejected", reason: `对账未成立（${reconciled.reason}）` };
+    }
+    const conclusion = reconciled.conclusion;
+    if (conclusion !== "executed" && conclusion !== "not_executed" && conclusion !== "still_uncertain") {
+      return { status: "rejected", reason: "对账端口返回未知结论（不转换，unknown 保留）" };
     }
     const run = runCommand({
       type: "settle",
       attemptId: input.attemptId,
-      evidence: { kind: input.evidenceKind, conclusion: input.conclusion, source: (input.adapterSemanticIdentity ?? "external").slice(0, 64) },
+      evidence: { kind: "adapter_reconcile", conclusion, source: reconciled.source.slice(0, 64) },
     });
     if (run.status === "failed") return { status: "rejected", reason: run.reason };
-    if (input.conclusion === "still_uncertain") return { status: "still_uncertain" };
+    if (conclusion === "still_uncertain") return { status: "still_uncertain" };
     return { status: "ok" };
   }
 
@@ -461,6 +529,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       attemptId: reared.attemptId,
       canonicalDigest: next.identity.canonicalDigest,
       canonicalArgs: next.canonicalArgs,
+      postings: next.postings,
       actionKind: next.identity.actionKind,
       adapterRegistrationId: next.identity.adapterRegistrationId,
       adapterSemanticIdentity: next.identity.adapterSemanticIdentity,
@@ -470,95 +539,199 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     return { status: "admitted", attemptId: reared.attemptId, dispatch };
   }
 
+  function cancelPending(input: Parameters<TreasuryCoreKernel["cancelPending"]>[0]): ReturnType<TreasuryCoreKernel["cancelPending"]> {
+    const run = runCommand({ type: "cancel_pending", attemptId: input.attemptId });
+    return run.status === "applied" ? { status: "ok" } : { status: "rejected", reason: run.reason };
+  }
+
   function closeWork(input: Parameters<TreasuryCoreKernel["closeWork"]>[0]): ReturnType<TreasuryCoreKernel["closeWork"]> {
     const run = runCommand({ type: "close", attemptId: input.attemptId, reason: input.reason });
     return run.status === "applied" ? { status: "ok" } : { status: "rejected", reason: run.reason };
   }
 
-  function beginTick(): { recovered: number; closed: number; cleaned: number } {
-    let recovered = 0;
-    let closed = 0;
-    let cleaned = 0;
-    const health = readTreasuryCoreStoreHealth();
-    if (health.status !== "healthy") return { recovered, closed, cleaned };
-    if (legacyNow().length > 0) return { recovered, closed, cleaned };
-    // 1) dispatching 残留 → 保守 unknown（可能已进入；不重发）。
-    for (const record of sortedActive(health.memory)) {
-      if (record.phase !== "dispatching") continue;
-      if (applyRecoveryCommand({ type: "recover_dispatching", attemptId: record.attemptId })) recovered += 1;
-    }
-    // 2) retry 权利期限关闭。
-    const nowTick = ports.nowTick();
-    const afterRecover = readTreasuryCoreStoreHealth();
-    if (afterRecover.status === "healthy") {
-      for (const record of sortedActive(afterRecover.memory)) {
-        if (record.phase !== "retry_ready") continue;
-        if (record.retryDeadlineTick !== null && nowTick > record.retryDeadlineTick) {
-          if (applyRecoveryCommand({ type: "close", attemptId: record.attemptId, reason: "retry_expired" })) closed += 1;
-        }
-      }
-    }
-    // 3) closing 清理公平推进（预算内；external consumer 释放经端口幂等确认）。
-    const afterCloses = readTreasuryCoreStoreHealth();
-    if (afterCloses.status === "healthy") {
-      let budget = TREASURY_CORE_RECOVERY_BUDGET_PER_TICK;
-      for (const record of sortedActive(afterCloses.memory)) {
-        if (budget <= 0) break;
-        if (record.phase !== "closing") continue;
-        if (record.cleanup.consumerKeys.length === 0) {
-          if (applyRecoveryCommand({ type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] })) {
-            cleaned += 1;
-            budget -= 1;
-          }
-          continue;
-        }
-        const released: string[] = [];
-        let allConfirmed = true;
-        for (const consumerKey of record.cleanup.consumerKeys) {
-          const ok = ports.releaseExternalConsumer?.(consumerKey, record.attemptId) ?? true;
-          if (ok) released.push(consumerKey);
-          else allConfirmed = false;
-        }
-        // 释放未确认的消费者义务保留（不因端口失败谎报完成）。
-        if (applyRecoveryCommand({ type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: released })) {
-          cleaned += 1;
-          budget -= 1;
-          void allConfirmed;
-        }
-      }
-    }
-    // 4) lifecycle 标记。
-    writeTreasuryCoreMemory((root) => {
-      root.lifecycle.lastBeginTick = ports.nowTick();
-    }, () => undefined);
-    return { recovered, closed, cleaned };
+  // ── beginTick：恢复推进（预算共享 + 公平游标轮转） ─────────────────────────
+  //
+  // 预算语义（§6.3）：每 tick 恢复扫描/状态发布/外部清理调用共享
+  // RECOVERY_BUDGET_PER_TICK；同 tick 重复 beginTick / 多实例经持久记账
+  // （recovery.budgetTick/budgetUsed）共享同一份额。游标（sweepCursor/
+  // cleanupCursor）是调度元信息：失效可安全重建，不是完成 proof；前面的
+  // 任务失败也消耗预算并让后续任务在有限轮次获得机会（轮转保证：
+  // active ≤ 64、预算 8/tick → 可完成项最多 ⌈64/8⌉=8 轮内被访问）。
+
+  function readBudgetState(memory: TreasuryCoreMemory, nowTick: number): number {
+    if (memory.recovery.budgetTick !== nowTick) return 0;
+    return memory.recovery.budgetUsed;
   }
 
-  function applyRecoveryCommand(command: TreasuryCoreCommand): boolean {
+  /** 预算内执行一条恢复命令（命令写自身携带预算记账）。 */
+  function applyBudgetedCommand(
+    used: number,
+    command: TreasuryCoreCommand,
+    cursors: { sweepCursor: number; cleanupCursor: number },
+  ): { applied: boolean; used: number } {
+    const nowTick = ports.nowTick();
     const draftHealth = readTreasuryCoreStoreHealth();
-    if (draftHealth.status !== "healthy") return false;
+    if (draftHealth.status !== "healthy") return { applied: false, used };
     const draft = cloneForCommand(draftHealth.memory);
-    const result = applyTreasuryCoreStateCommand(draft, command, { nowTick: ports.nowTick() });
-    if (result.status === "rejected") return false;
+    const result = applyTreasuryCoreStateCommand(draft, command, { nowTick });
+    if (result.status === "rejected") return { applied: false, used };
+    draft.recovery = { sweepCursor: cursors.sweepCursor, cleanupCursor: cursors.cleanupCursor, budgetTick: nowTick, budgetUsed: used + 1 };
     const write = writeTreasuryCoreMemory((root) => {
       Object.assign(root, draft);
     }, () => undefined);
-    if (write.status === "failed") return false;
+    if (write.status === "failed") return { applied: false, used };
     for (const effect of result.effects) ports.onEffect?.(effect);
-    return true;
+    return { applied: true, used: used + 1 };
+  }
+
+  function beginTick(): { recovered: number; closed: number; cleaned: number; cancelled: number } {
+    let recovered = 0;
+    let closed = 0;
+    let cleaned = 0;
+    let cancelled = 0;
+    const health = readTreasuryCoreStoreHealth();
+    // ring 层损坏（ringDegraded）不阻断恢复/收尾（R10）——只有安全层
+    // unhealthy/incompatible 或旧业务数据存在才整体阻断。
+    if (health.status !== "healthy") return { recovered, closed, cleaned, cancelled };
+    if (legacyNow().length > 0) return { recovered, closed, cleaned, cancelled };
+    const nowTick = ports.nowTick();
+    const cursors = { sweepCursor: health.memory.recovery.sweepCursor, cleanupCursor: health.memory.recovery.cleanupCursor };
+    let used = readBudgetState(health.memory, nowTick);
+
+    // 1) dispatching 残留 → 保守 unknown（可能已进入；不重发）。
+    for (const record of sortedActive(health.memory)) {
+      if (used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) break;
+      if (record.phase !== "dispatching") continue;
+      const step = applyBudgetedCommand(used, { type: "recover_dispatching", attemptId: record.attemptId }, cursors);
+      used = step.used;
+      if (step.applied) recovered += 1;
+    }
+
+    // 2) 跨 tick 失效 pending 的安全取消（§6.1）：admittedAtTick < nowTick 的
+    //    pending 其旧许可已失效；按预算轮转取消（不是本 tick 接纳的记录
+    //    不会被当作旧残留——admittedAtTick === nowTick 不满足条件）。
+    const afterRecover = readTreasuryCoreStoreHealth();
+    if (afterRecover.status === "healthy") {
+      const pendings = sortedActive(afterRecover.memory).filter((r) => r.phase === "pending" && r.admittedAtTick < nowTick);
+      if (pendings.length > 0) {
+        const start = cursors.sweepCursor % pendings.length;
+        let visited = 0;
+        while (visited < pendings.length && used < TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) {
+          const record = pendings[(start + visited) % pendings.length];
+          visited += 1;
+          cursors.sweepCursor = (cursors.sweepCursor + 1) % pendings.length;
+          const step = applyBudgetedCommand(used, { type: "cancel_pending", attemptId: record.attemptId }, cursors);
+          used = step.used;
+          if (step.applied) cancelled += 1;
+        }
+      } else {
+        cursors.sweepCursor = 0;
+      }
+    }
+
+    // 3) retry 权利期限关闭。
+    const afterSweep = readTreasuryCoreStoreHealth();
+    if (afterSweep.status === "healthy") {
+      for (const record of sortedActive(afterSweep.memory)) {
+        if (used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) break;
+        if (record.phase !== "retry_ready") continue;
+        if (record.retryDeadlineTick !== null && nowTick > record.retryDeadlineTick) {
+          const step = applyBudgetedCommand(used, { type: "close", attemptId: record.attemptId, reason: "retry_expired" }, cursors);
+          used = step.used;
+          if (step.applied) closed += 1;
+        }
+      }
+    }
+
+    // 4) closing 清理公平推进（游标轮转；预算覆盖外部端口调用与状态发布）。
+    const afterCloses = readTreasuryCoreStoreHealth();
+    if (afterCloses.status === "healthy") {
+      const closings = sortedActive(afterCloses.memory).filter((r) => r.phase === "closing");
+      if (closings.length > 0) {
+        const start = cursors.cleanupCursor % closings.length;
+        let visited = 0;
+        while (visited < closings.length && used < TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) {
+          const record = closings[(start + visited) % closings.length];
+          visited += 1;
+          cursors.cleanupCursor = (cursors.cleanupCursor + 1) % closings.length;
+          if (record.cleanup.consumerKeys.length === 0) {
+            const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] }, cursors);
+            used = step.used;
+            if (step.applied) cleaned += 1;
+            continue;
+          }
+          // 逐消费者幂等释放（每次端口调用消耗预算——无论成败；预算耗尽
+          // 即停，义务保留）。
+          const releasePort = ports.releaseExternalConsumer;
+          if (releasePort === undefined) {
+            // 端口缺失：不默认成功——保留义务并记录失败计数（有界诊断）。
+            const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] }, cursors);
+            used = step.used;
+            if (step.applied) cleaned += 1;
+            continue;
+          }
+          const released: string[] = [];
+          let portFaulted = false;
+          for (const consumerKey of record.cleanup.consumerKeys) {
+            if (used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) break;
+            let ok: boolean;
+            try {
+              ok = releasePort(consumerKey, record.attemptId);
+            } catch {
+              // 端口抛错：该 duty 保留（不崩 tick、不默认成功）。
+              portFaulted = true;
+              ok = false;
+            }
+            used += 1;
+            if (ok) released.push(consumerKey);
+          }
+          if (released.length === 0 && portFaulted && used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) {
+            // 端口故障且预算耗尽：本 tick 不写状态（duty 全保留，下 tick 重试）。
+            continue;
+          }
+          if (released.length === 0 && !portFaulted) {
+            // 端口明确未确认（false）：推进失败计数（诊断），duty 保留。
+            const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] }, cursors);
+            used = step.used;
+            if (step.applied) cleaned += 1;
+            continue;
+          }
+          // 释放未确认的消费者义务保留（不因端口失败谎报完成）。
+          const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: released }, cursors);
+          used = step.used;
+          if (step.applied) cleaned += 1;
+        }
+      } else {
+        cursors.cleanupCursor = 0;
+      }
+    }
+
+    // 5) lifecycle 标记 + 游标/预算终态持久化。
+    writeTreasuryCoreMemory((root) => {
+      root.lifecycle.lastBeginTick = nowTick;
+      root.recovery = { ...cursors, budgetTick: nowTick, budgetUsed: used };
+    }, () => undefined);
+    return { recovered, closed, cleaned, cancelled };
   }
 
   function endTick(): { recoveredToUnknown: number } {
     let recoveredToUnknown = 0;
     const health = readTreasuryCoreStoreHealth();
     if (health.status === "healthy" && legacyNow().length === 0) {
-      // dispatching 残留（当次调用异常逃逸）→ 保守 unknown。
+      const nowTick = ports.nowTick();
+      let used = readBudgetState(health.memory, nowTick);
+      const cursors = { sweepCursor: health.memory.recovery.sweepCursor, cleanupCursor: health.memory.recovery.cleanupCursor };
+      // dispatching 残留（当次调用异常逃逸）→ 保守 unknown（共享同 tick 预算）。
       for (const record of sortedActive(health.memory)) {
+        if (used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) break;
         if (record.phase !== "dispatching") continue;
-        if (applyRecoveryCommand({ type: "recover_dispatching", attemptId: record.attemptId })) recoveredToUnknown += 1;
+        const step = applyBudgetedCommand(used, { type: "recover_dispatching", attemptId: record.attemptId }, cursors);
+        used = step.used;
+        if (step.applied) recoveredToUnknown += 1;
       }
       writeTreasuryCoreMemory((root) => {
         root.lifecycle.lastEndTick = ports.nowTick();
+        root.recovery = { ...cursors, budgetTick: nowTick, budgetUsed: used };
       }, () => undefined);
     }
     return { recoveredToUnknown };
@@ -575,6 +748,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       installEpochId: "-",
       issuance: { frontier: 0, burned: 0 },
       lifecycle: { lastBeginTick: null, lastEndTick: null },
+      recovery: { sweepCursor: 0, cleanupCursor: 0, budgetTick: 0, budgetUsed: 0 },
       active: {},
       ring: [],
       ringCursor: 0,
@@ -610,7 +784,8 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       ringCount: memory.ring.length,
       frontier: memory.issuance.frontier,
       burned: memory.issuance.burned,
-      counters: memory.counters,
+      // 深快照：不泄漏底层持久 counters 引用（R06/B22）。
+      counters: { ...memory.counters },
       legacyStores: legacyNow(),
     };
   }
@@ -624,6 +799,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     settle,
     issueRearmPermit,
     executeRearm,
+    cancelPending,
     closeWork,
     beginTick,
     endTick,

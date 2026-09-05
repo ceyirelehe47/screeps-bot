@@ -312,7 +312,7 @@ describe("settle（对账结算）", () => {
     const service = makeService();
     const { attemptId, dispatch } = admitTransfer(service, "biz:settle:exec", { ...transferArgs(), outcome: "throw" });
     service.executeAuthorizedDispatch(dispatch);
-    const settled = service.settleUnknownOutcome({ attemptId, evidenceKind: "adapter_reconcile" });
+    const settled = service.settleUnknownOutcome({ attemptId });
     expect(settled.status).toBe("ok");
     expect(activeRecord(service, attemptId)?.outcome).toBe("committed");
   });
@@ -322,7 +322,7 @@ describe("settle（对账结算）", () => {
     const service = makeService();
     const { attemptId, dispatch } = admitTransfer(service, "biz:settle:uncertain", { ...transferArgs(), outcome: "throw" });
     service.executeAuthorizedDispatch(dispatch);
-    const settled = service.settleUnknownOutcome({ attemptId, evidenceKind: "adapter_reconcile" });
+    const settled = service.settleUnknownOutcome({ attemptId });
     expect(settled.status).toBe("still_uncertain");
     expect(activeRecord(service, attemptId)?.phase).toBe("outcome_unknown");
   });
@@ -335,7 +335,7 @@ describe("settle（对账结算）", () => {
       ...makeTreasuryTestTransferAdapter("observed_committed"),
       semanticIdentity: "test.transfer@different-semantics",
     });
-    const settled = service.settleUnknownOutcome({ attemptId, evidenceKind: "adapter_reconcile" });
+    const settled = service.settleUnknownOutcome({ attemptId });
     expect(settled.status).toBe("rejected");
     expect(activeRecord(service, attemptId)?.phase).toBe("outcome_unknown");
   });

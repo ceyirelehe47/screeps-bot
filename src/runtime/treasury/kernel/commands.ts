@@ -8,19 +8,28 @@
  *
  * 阶段不变量（每次转移后必须成立）：
  * - pending：无 invocation/external 事实，outcome=unknown，无 evidence。
+ *   可经 cancel_pending 安全取消（§6.1：调用边界尚未成功开始的工作）。
  * - dispatching：当次调用边界已发布；只有当次调用者可推进（dispatch_result）
  *   或恢复/边界保守化（recover → outcome_unknown）。
  * - outcome_unknown：invocation 可能已发生；不可再调用、不可直接 rearm。
  * - closing：outcome 确定（committed/not_executed 且有证据）；不可再调用。
  * - retry_ready：not_executed 且清理完成；有界 retry 权利期限。
  * - closed 不落盘：移出 active，可选写 ring。
+ *
+ * Core Rewrite II：
+ * - cancel_pending：正面确认（invocation/external 均为空 + pending）后才
+ *   取消；有清理义务走 closing，无义务原子关闭；取消不生成 rearm 权利
+ *  （pending_cancellation 证据的清理完成后直接退出，不进 retry_ready）。
+ * - settle 命令只接受 adapter_reconcile（自报结论通道关闭——R07）。
+ * - 计数器饱和（不回绕）；admit 检查 consumerKeys 数量上限（R09）。
  */
 
 import {
   TREASURY_CORE_ACTIVE_LIMIT,
+  TREASURY_CORE_CONSUMER_KEYS_MAX,
+  TREASURY_CORE_COUNTER_SATURATION,
   TREASURY_CORE_ERROR_DETAIL_MAX,
   TREASURY_CORE_RETRY_RIGHT_TICKS,
-  TREASURY_CORE_RING_LIMIT,
   TREASURY_CORE_WORST_CASE_LEGS_MAX,
   type TreasuryCoreMemory,
   type TreasuryCoreOutcome,
@@ -45,6 +54,7 @@ export type TreasuryCoreEffect =
   | { readonly effect: "still_uncertain"; readonly attemptId: string }
   | { readonly effect: "recovered_to_unknown"; readonly attemptId: string }
   | { readonly effect: "retry_ready"; readonly attemptId: string }
+  | { readonly effect: "cancelled"; readonly attemptId: string; readonly ring: TreasuryCoreRingEntry | null }
   | { readonly effect: "closed"; readonly attemptId: string; readonly ring: TreasuryCoreRingEntry | null }
   | { readonly effect: "rearmed"; readonly parentAttemptId: string; readonly attemptId: string };
 
@@ -83,8 +93,9 @@ export interface TreasuryCoreDispatchResultCommand {
 export interface TreasuryCoreSettleCommand {
   readonly type: "settle";
   readonly attemptId: string;
+  /** adapter_reconcile 证据：结论由内核受控编排的 reconciler 得出（唯一通道）。 */
   readonly evidence: {
-    readonly kind: "adapter_reconcile" | "external_settlement_receipt";
+    readonly kind: "adapter_reconcile";
     readonly conclusion: "executed" | "not_executed" | "still_uncertain";
     readonly source: string;
   };
@@ -115,6 +126,12 @@ export interface TreasuryCoreRecoverCommand {
   readonly attemptId: string;
 }
 
+/** 安全取消（§6.1）：只结束确定未开始的当前 attempt。 */
+export interface TreasuryCoreCancelPendingCommand {
+  readonly type: "cancel_pending";
+  readonly attemptId: string;
+}
+
 export type TreasuryCoreCommand =
   | TreasuryCoreAdmitCommand
   | TreasuryCoreDispatchStartCommand
@@ -123,11 +140,20 @@ export type TreasuryCoreCommand =
   | TreasuryCoreAdvanceCleanupCommand
   | TreasuryCoreRearmCommand
   | TreasuryCoreCloseCommand
-  | TreasuryCoreRecoverCommand;
+  | TreasuryCoreRecoverCommand
+  | TreasuryCoreCancelPendingCommand;
 
 // ── 转移实现 ────────────────────────────────────────────────────────────────
 
 const MAX_FRONTIER = 9_999_999_999;
+
+/** 饱和递增（溢出不回绕、不抛错——纯诊断计数不得拖垮安全核心）。 */
+function bumpCounter(memory: TreasuryCoreMemory, key: keyof TreasuryCoreMemory["counters"]): void {
+  const current = memory.counters[key];
+  if (current < TREASURY_CORE_COUNTER_SATURATION) {
+    memory.counters[key] = current + 1;
+  }
+}
 
 function getActive(memory: TreasuryCoreMemory, attemptId: string): TreasuryCoreWorkRecord | undefined {
   return memory.active[attemptId];
@@ -191,6 +217,8 @@ export function applyTreasuryCoreStateCommand(
       return closeCommand(memory, command, ctx);
     case "recover_dispatching":
       return recoverCommand(memory, command, ctx);
+    case "cancel_pending":
+      return cancelPendingCommand(memory, command, ctx);
   }
 }
 
@@ -200,21 +228,35 @@ function admitCommand(
   ctx: TreasuryCoreCommandContext,
 ): TreasuryCoreCommandResult {
   if (Object.keys(memory.active).length >= TREASURY_CORE_ACTIVE_LIMIT) {
-    memory.counters.rejectedAdmissions += 1;
+    bumpCounter(memory, "rejectedAdmissions");
     return { status: "rejected", reason: `活跃集合满载（${String(TREASURY_CORE_ACTIVE_LIMIT)}），拒绝接纳` };
   }
   const conflict = sameWorkKeyActive(memory, command.workKey);
   if (conflict !== null) {
-    memory.counters.rejectedAdmissions += 1;
+    bumpCounter(memory, "rejectedAdmissions");
     return { status: "rejected", reason: conflict };
   }
-  if (command.worstCase.length > TREASURY_CORE_WORST_CASE_LEGS_MAX) {
-    memory.counters.rejectedAdmissions += 1;
-    return { status: "rejected", reason: "worstCase 腿数超上限" };
+  if (command.worstCase.length === 0 || command.worstCase.length > TREASURY_CORE_WORST_CASE_LEGS_MAX) {
+    bumpCounter(memory, "rejectedAdmissions");
+    return { status: "rejected", reason: "worstCase 腿数非法" };
+  }
+  // 消费者数量上限（R09）：超限整体拒绝，不截断一半义务。
+  if (command.externalConsumers.length > TREASURY_CORE_CONSUMER_KEYS_MAX) {
+    bumpCounter(memory, "rejectedAdmissions");
+    return {
+      status: "rejected",
+      reason: `externalConsumers 超过上限 ${String(TREASURY_CORE_CONSUMER_KEYS_MAX)}（超限安全输入整体拒绝）`,
+    };
+  }
+  for (const key of command.externalConsumers) {
+    if (typeof key !== "string" || key.length === 0 || key.length > 128) {
+      bumpCounter(memory, "rejectedAdmissions");
+      return { status: "rejected", reason: "externalConsumers 条目非法" };
+    }
   }
   const nextFrontier = memory.issuance.frontier + 1;
   if (nextFrontier > MAX_FRONTIER) {
-    memory.counters.rejectedAdmissions += 1;
+    bumpCounter(memory, "rejectedAdmissions");
     return { status: "rejected", reason: "发行 frontier 溢出（拒绝分配，不回绕）" };
   }
   const attemptId = mintTreasuryCoreAttemptId(nextFrontier, command.workKey, command.identity.canonicalDigest);
@@ -238,7 +280,7 @@ function admitCommand(
   };
   memory.issuance.frontier = nextFrontier;
   memory.active[attemptId] = record;
-  memory.counters.admitted += 1;
+  bumpCounter(memory, "admitted");
   return { status: "ok", memory, effects: [{ effect: "admitted", attemptId }] };
 }
 
@@ -260,7 +302,7 @@ function dispatchStartCommand(
     };
   }
   withRecord(memory, command.attemptId, (r) => ({ ...r, phase: "dispatching", updatedAtTick: ctx.nowTick }));
-  memory.counters.dispatched += 1;
+  bumpCounter(memory, "dispatched");
   return { status: "ok", memory, effects: [{ effect: "dispatch_started", attemptId: command.attemptId }] };
 }
 
@@ -287,7 +329,7 @@ function dispatchResultCommand(
       lastError: clampError(command.error),
       updatedAtTick: ctx.nowTick,
     }));
-    memory.counters.unknown += 1;
+    bumpCounter(memory, "unknown");
     return { status: "ok", memory, effects: [{ effect: "outcome_recorded", attemptId: command.attemptId, outcome: "unknown" }] };
   }
   if (command.outcome === "committed") {
@@ -300,11 +342,11 @@ function dispatchResultCommand(
       invocation,
       external,
       outcome: "committed",
-      outcomeEvidence: { ...command.evidence, atTick: ctx.nowTick },
+      outcomeEvidence: { ...command.evidence, atTick: ctx.nowTick } as TreasuryCoreSettlementEvidence,
       lastError: clampError(command.error),
       updatedAtTick: ctx.nowTick,
     }));
-    memory.counters.settledCommitted += 1;
+    bumpCounter(memory, "settledCommitted");
     return { status: "ok", memory, effects: [{ effect: "outcome_recorded", attemptId: command.attemptId, outcome: "committed" }] };
   }
   if (command.evidence === null) {
@@ -316,11 +358,11 @@ function dispatchResultCommand(
     invocation,
     external,
     outcome: "not_executed",
-    outcomeEvidence: { ...command.evidence, atTick: ctx.nowTick },
+    outcomeEvidence: { ...command.evidence, atTick: ctx.nowTick } as TreasuryCoreSettlementEvidence,
     lastError: clampError(command.error),
     updatedAtTick: ctx.nowTick,
   }));
-  memory.counters.settledNotExecuted += 1;
+  bumpCounter(memory, "settledNotExecuted");
   return { status: "ok", memory, effects: [{ effect: "outcome_recorded", attemptId: command.attemptId, outcome: "not_executed" }] };
 }
 
@@ -345,8 +387,8 @@ function settleCommand(
     outcomeEvidence: evidence,
     updatedAtTick: ctx.nowTick,
   }));
-  if (outcome === "committed") memory.counters.settledCommitted += 1;
-  else memory.counters.settledNotExecuted += 1;
+  if (outcome === "committed") bumpCounter(memory, "settledCommitted");
+  else bumpCounter(memory, "settledNotExecuted");
   return { status: "ok", memory, effects: [{ effect: "outcome_recorded", attemptId: command.attemptId, outcome }] };
 }
 
@@ -368,10 +410,23 @@ function advanceCleanupCommand(
     const failures = command.releasedDuties.length === 0 ? record.cleanup.failures + 1 : record.cleanup.failures;
     withRecord(memory, command.attemptId, (r) => ({
       ...r,
-      cleanup: { consumerKeys: remaining, failures },
+      cleanup: { consumerKeys: remaining, failures: Math.min(failures, TREASURY_CORE_COUNTER_SATURATION) },
       updatedAtTick: ctx.nowTick,
     }));
     return { status: "ok", memory, effects: [] };
+  }
+  // 安全取消来源的清理完成：直接退出（取消不生成 rearm 权利——§6.1）。
+  if (record.outcomeEvidence?.kind === "pending_cancellation") {
+    const ringEntry: TreasuryCoreRingEntry = {
+      attemptId: record.attemptId,
+      workKey: record.workKey,
+      generation: record.generation,
+      terminalPhase: "abandoned",
+      closedAtTick: ctx.nowTick,
+    };
+    withRecord(memory, command.attemptId, () => "remove");
+    appendTreasuryCoreRingEntry(memory, ringEntry);
+    return { status: "ok", memory, effects: [{ effect: "cancelled", attemptId: command.attemptId, ring: ringEntry }] };
   }
   if (record.outcome === "not_executed") {
     withRecord(memory, command.attemptId, (r) => ({
@@ -457,7 +512,7 @@ function rearmCommand(
     lastError: null,
   };
   memory.issuance.frontier = nextFrontier;
-  memory.counters.rearmings += 1;
+  bumpCounter(memory, "rearmings");
   return {
     status: "ok",
     memory,
@@ -513,6 +568,51 @@ function recoverCommand(
     outcome: "unknown",
     updatedAtTick: ctx.nowTick,
   }));
-  memory.counters.unknown += 1;
+  bumpCounter(memory, "unknown");
   return { status: "ok", memory, effects: [{ effect: "recovered_to_unknown", attemptId: command.attemptId }] };
+}
+
+/**
+ * 安全取消（§6.1）：只结束已知未开始的当前 attempt。
+ * - 正面确认：phase=pending 且 invocation=null 且 external=null（无任何
+ *   “可能已进入动作”的事实）。dispatching/unknown 不能被取消成未执行。
+ * - 有清理义务 → 进入 closing（pending_cancellation 证据）；义务经既有
+ *   幂等释放协议完成后退出（不生成 rearm 权利）。
+ * - 无义务 → 同一命令原子安全关闭（ring terminalPhase=abandoned）。
+ * - 取消写回失败不释放占用、不报告完成（由写协议保证）。
+ */
+function cancelPendingCommand(
+  memory: TreasuryCoreMemory,
+  command: TreasuryCoreCancelPendingCommand,
+  ctx: TreasuryCoreCommandContext,
+): TreasuryCoreCommandResult {
+  const record = getActive(memory, command.attemptId);
+  if (record === undefined) return { status: "rejected", reason: `attempt ${command.attemptId} 不在活跃集合` };
+  const phaseProblem = requirePhase(record, "pending");
+  if (phaseProblem !== null) {
+    return { status: "rejected", reason: `${phaseProblem}（只有确定未开始的 pending 可安全取消）` };
+  }
+  if (record.invocation !== null || record.external !== null) {
+    return { status: "rejected", reason: "存在调用边界事实（不可凭取消抹除已发生的调用）" };
+  }
+  if (record.cleanup.consumerKeys.length > 0) {
+    withRecord(memory, command.attemptId, (r) => ({
+      ...r,
+      phase: "closing",
+      outcome: "not_executed",
+      outcomeEvidence: { kind: "pending_cancellation", conclusion: "not_executed", source: "kernel:safe_cancel", atTick: ctx.nowTick },
+      updatedAtTick: ctx.nowTick,
+    }));
+    return { status: "ok", memory, effects: [{ effect: "cancelled", attemptId: command.attemptId, ring: null }] };
+  }
+  const ringEntry: TreasuryCoreRingEntry = {
+    attemptId: record.attemptId,
+    workKey: record.workKey,
+    generation: record.generation,
+    terminalPhase: "abandoned",
+    closedAtTick: ctx.nowTick,
+  };
+  withRecord(memory, command.attemptId, () => "remove");
+  appendTreasuryCoreRingEntry(memory, ringEntry);
+  return { status: "ok", memory, effects: [{ effect: "cancelled", attemptId: command.attemptId, ring: ringEntry }] };
 }

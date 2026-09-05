@@ -142,7 +142,7 @@ describe("immutable adapter registry", () => {
     // 推进 tick（fresh observation）后 settle：结论由注册 reconciler 快照得出。
     Game.time += 2;
     service.beginTick();
-    const settled = service.settleUnknownOutcome({ attemptId: admission.attemptId, evidenceKind: "adapter_reconcile" });
+    const settled = service.settleUnknownOutcome({ attemptId: admission.attemptId });
     expect(settled.status).toBe("ok");
     // 篡改后的 observed_committed 被无视——聚合按 observed_not_executed 进入 closing。
     const record = service.kernelJournal().active.find((r) => r.attemptId === admission.attemptId);
@@ -261,7 +261,11 @@ describe("immutable policy registry", () => {
     const contract = build(service, "tx-policy-snapshot", { ...transferArgs(), amount: 119_500 });
     const result = service.authorizeTreasuryActionContract(contract, { workKey: "biz:registry:policy-snapshot" });
     expect(result.status).toBe("rejected");
-    if (result.status === "rejected") expect(result.reasonCode).toBe("insufficient_amount");
+    // 统一判定下容量检查（storage 单独不足）先于 policy reserve 拒绝——
+    // 两者都是 fail closed；注册快照篡改（0 reserve）不能让接纳通过。
+    if (result.status === "rejected") {
+      expect(["insufficient_amount", "capacity_insufficient"]).toContain(result.reasonCode);
+    }
   });
 
   it("同 policyId+version 不同实现被拒；policyVersion 非法拒绝", () => {
