@@ -26,7 +26,7 @@ import {
 } from "@/runtime/treasury/policyAuthority";
 import { resetTreasuryCoreStoreForTest } from "@/runtime/treasury/testHarness";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
-import { snapshotWholeMemory, performTreasuryFullReset } from "@mock/treasuryResetHarness";
+import { snapshotWholeMemory, installWholeMemorySnapshot, performTreasuryFullReset } from "@mock/treasuryResetHarness";
 import { createTreasuryCoreKernel, type TreasuryCoreAdmissionInput, type TreasuryCoreKernelPorts } from "@/runtime/treasury/kernel/kernel";
 import type {
   TreasuryCoreIdentityFacts,
@@ -255,76 +255,90 @@ describe("D10 无关推进与范围缺失", () => {
 
 // ── D11：硬终止断点与晚到 reconcile executed ────────────────────────────────
 
-describe("D11 硬终止与晚到结论", () => {
-  function dispatchingFixture(attemptId: string, external: boolean, identity: TreasuryCoreIdentityFacts): Record<string, unknown> {
-    return {
-      workKey: "biz:d11:hard", attemptId, generation: 1, parentAttemptId: null,
-      phase: "dispatching", admittedAtTick: Game.time, updatedAtTick: Game.time,
-      identity,
-      worstCase: kernelLegs(50), invocation: null,
-      external: external ? { accepted: true, atTick: Game.time } : null,
-      outcome: "unknown", outcomeEvidence: null,
-      cleanup: { consumerKeys: [], failures: 0 }, retryDeadlineTick: null, lastError: null,
-    };
-  }
-  function healthyBaseWith(active: Record<string, unknown>): Record<string, unknown> {
-    return {
-      version: 3, installEpochId: "e".repeat(16),
-      issuance: { frontier: 1, burned: 0 },
-      lifecycle: { lastBeginTick: null, lastEndTick: null },
-      recovery: { sweepCursor: 0, cleanupCursor: 0, budgetTick: 0, budgetUsed: 0 },
-      active, ring: [], ringCursor: 0,
-      counters: { admitted: 1, dispatched: 1, settledCommitted: 0, settledNotExecuted: 0, unknown: 0, rearmings: 0, rejectedAdmissions: 0, recoveryAdvances: 0, cleanupFailures: 0 },
-    };
-  }
-
-  it("断点：调用边界已发布、结果未落地（未进端口）——新运行时恢复 unknown 且不重发", () => {
+describe("D11 硬终止与晚到结论（Remediation I/V1：真实路径断点快照）", () => {
+  it("断点：调用边界已发布、adapter 尚未进入——快照恢复 unknown 且不重发", () => {
     const trace: HostTrace = { executions: 0, releaseCalls: [] };
-    installRooms(ROOMS);
-    const attemptId = "tk1_1_aaaaaaaaaaaaaaaa";
-    Memory.runtime = Memory.runtime ?? {};
-    (Memory.runtime as Record<string, unknown>).treasuryCore = healthyBaseWith({ [attemptId]: dispatchingFixture(attemptId, false, kernelIdentity()) });
-    const reset = performTreasuryFullReset({ roomSpecs: ROOMS, adapter: installTracingAdapter(trace), advanceTicks: 1 });
-    // harness 装配时已跑真实 beginTick——恢复在装配内完成（幂等重入零重复）。
-    reset.service.beginTick();
-    const record = activeRecord(attemptId) as { phase: string } | undefined;
+    const captured: string[] = [];
+    // 真实路径断点：adapter execute 入口 = dispatch_start 已发布（含
+    // Remediation I/R1 调用边界）、效果未发生——在此捕获持久快照。
+    // 旧调用栈随后继续走完（结果写回），不进入指定快照建立的新分支。
+    const base = makeTreasuryTestTransferAdapter();
+    const breakpointAdapter: TreasuryActionAdapter = {
+      ...base,
+      execute(args: TreasuryTestTransferArgs): { ok: boolean } {
+        captured.push(snapshotWholeMemory());
+        trace.executions += 1;
+        return base.execute(args);
+      },
+    };
+    replaceTreasuryActionAdapterForTest(breakpointAdapter);
+    const service = makeService();
+    const a = admit(service, "biz:d11:entered", transferArgs({ amount: 100 }));
+    expect(service.executeAuthorizedDispatch(a.dispatch).status).toBe("committed");
+    expect(trace.executions).toBe(1);
+    // 快照事实核查：断点时刻 phase=dispatching、边界已发布、实际调用
+    // 事实未写（external 不被伪造为 accepted）。
+    const snap = JSON.parse(captured[0]) as {
+      runtime: { treasuryCore: { active: Record<string, { phase: string; invocationBoundary: unknown; invocation: unknown; external: unknown }> } };
+    };
+    const snapRecord = snap.runtime.treasuryCore.active[a.attemptId];
+    expect(snapRecord.phase).toBe("dispatching");
+    expect(snapRecord.invocationBoundary).not.toBeNull();
+    expect(snapRecord.invocation).toBeNull();
+    expect(snapRecord.external).toBeNull();
+    // 指定断点快照完整 reset：新 runtime 恢复 unknown、不重发。
+    const reset = performTreasuryFullReset({
+      roomSpecs: ROOMS,
+      adapter: installTracingAdapter(trace),
+      advanceTicks: 1,
+      memorySnapshot: captured[0],
+    });
+    const record = reset.service.kernelJournal().active.find((r) => r.attemptId === a.attemptId);
     expect(record?.phase).toBe("outcome_unknown");
-    expect(trace.executions).toBe(0); // 不重发
+    expect(record?.invocationBoundary).not.toBeNull(); // R1：恢复锚点在
+    expect(record?.invocation).toBeNull(); // 无结果证据——不伪造实际调用事实
+    expect(trace.executions).toBe(1); // 新 runtime 不重发
   });
 
-  it("断点：已进端口（external accepted）结果未落地 + 晚到 reconcile executed → 按观察责任完成退出", () => {
+  it("断点：实际动作后、结果未写 + 晚到 reconcile executed → 观察接管退出，总调用 1", () => {
     const trace: HostTrace = { executions: 0, releaseCalls: [] };
-    const installed = installRooms(ROOMS);
-    // 宿主世界已包含效果（调用发生过——external accepted + 世界更新 + 序号推进）。
-    setStoreResources(installed["W1N57"]!.storage, { energy: 950 });
-    const attemptId = "tk1_1_bbbbbbbbbbbbbbbb";
-    Memory.runtime = Memory.runtime ?? {};
-    const fixtureAdapter = findTreasuryActionAdapter("test.transfer");
-    if (fixtureAdapter === undefined) throw new Error("test.transfer 未注册");
-    const reconcileIdentity: TreasuryCoreIdentityFacts = {
-      actionKind: "test.transfer",
-      adapterVersion: fixtureAdapter.version,
-      adapterRegistrationId: fixtureAdapter.registrationId,
-      adapterSemanticIdentity: fixtureAdapter.semanticIdentity,
-      canonicalDigest: "a".repeat(16),
-      postingsDigest: "b".repeat(16),
-      retryFactsDigest: null,
-      durableFacts: null,
+    const captured: string[] = [];
+    // 真实路径断点：动作已产生同步世界效果、dispatch_result 尚未写入。
+    const base = makeTreasuryTestTransferAdapter("observed_committed");
+    const breakpointAdapter: TreasuryActionAdapter = {
+      ...base,
+      execute(args: TreasuryTestTransferArgs): { ok: boolean } {
+        const result = base.execute(args); // 真实效果（世界已变、世界序推进）
+        trace.executions += 1;
+        captured.push(snapshotWholeMemory());
+        return result;
+      },
     };
-    (Memory.runtime as Record<string, unknown>).treasuryCore = healthyBaseWith({ [attemptId]: dispatchingFixture(attemptId, true, reconcileIdentity) });
-    const reset = performTreasuryFullReset({ roomSpecs: ROOMS, adapter: makeTreasuryTestTransferAdapter("observed_committed"), advanceTicks: 1 });
-    reset.service.beginTick();
-    const afterRecover = activeRecord(attemptId) as { phase: string } | undefined;
+    replaceTreasuryActionAdapterForTest(breakpointAdapter);
+    const service = makeService();
+    const a = admit(service, "biz:d11:after", transferArgs({ amount: 100 }));
+    expect(service.executeAuthorizedDispatch(a.dispatch).status).toBe("committed");
+    const snap = JSON.parse(captured[0]) as {
+      runtime: { treasuryCore: { active: Record<string, { phase: string; invocation: unknown }> } };
+    };
+    expect(snap.runtime.treasuryCore.active[a.attemptId].phase).toBe("dispatching");
+    // 指定断点快照 reset（宿主世界效果由 harness 保留——不重置回初始值）。
+    const reset = performTreasuryFullReset({
+      roomSpecs: ROOMS,
+      adapter: makeTreasuryTestTransferAdapter("observed_committed"),
+      advanceTicks: 1,
+      memorySnapshot: captured[0],
+    });
+    const afterRecover = reset.service.kernelJournal().active.find((r) => r.attemptId === a.attemptId);
     expect(afterRecover?.phase).toBe("outcome_unknown");
-    // 晚到对账：reconciler 依据世界（观察）得出 executed——不凭余额猜测。
-    const settled = reset.service.settleUnknownOutcome({ attemptId });
-    expect(settled.status).toBe("ok");
+    // 晚到对账：reconciler 依据世界（观察含效果）得出 executed。
+    expect(reset.service.settleUnknownOutcome({ attemptId: a.attemptId }).status).toBe("ok");
     Game.time += 1;
-    reset.service.beginTick(); // committed → 观察接管（世界含效果）→ 退出
-    expect(activeRecord(attemptId)).toBeUndefined();
-    // 宿主世界未被 reset 还原。
-    expect(installed["W1N57"]!.storage.store.energy).toBe(950);
-    void trace;
+    reset.service.beginTick(); // R1 边界锚点 → 观察接管 → 真正退出
+    expect(reset.service.kernelJournal().active.find((r) => r.attemptId === a.attemptId)).toBeUndefined();
+    expect(trace.executions).toBe(1); // 实际总调用 1（无重复执行）
+    // 宿主世界未被 reset 还原（效果保留）。
+    expect(reset.rooms["W2N57"]!.terminal.store.energy).toBe(100);
   });
 });
 
@@ -626,15 +640,23 @@ describe("D19 公平推进有限界（失败前置 + 可完成后置 + 混合流
     let targetDone = false;
     let ticks = 0;
     const writeCount = { beginTicks: 0 };
-    // 有限界推导：sticky 记录每次访问耗 3 份（预扣 2 + 诊断 1），每 tick
-    // 8 份访问 ~2-3 条（噪声 sweep 再占 1-3）；cleanupCursor 轮转保证 good
-    // 每 ~4 tick 被访问一次、每次至少 1 个成对单位（清理保底 ≥2 份）——
-    // 8 义务 ≤ 8 次访问 ≈ 32 tick，取 2 倍余量 80。
+    // 有限界推导：sticky 记录每次访问耗 2 份（成对预扣；诊断确认用已预扣
+    // 份额——IV/§6.1），每 tick 8 份至多 4 个单位（噪声 sweep/恢复再占
+    // 1-5 份）；cleanupCursor 轮转保证 good 每 ~3 tick 被访问一次、每次
+    // 至少 1 个成对单位（清理保底 ≥2 份）——8 义务 ≤ 8 次单位 ≈ 8 次访问
+    // ≈ 24 tick，噪声挤占后取 3 倍余量 80。
+    // Remediation I/V3（§7.4）：推进循环每 tick 用上一 tick 的真实序列化
+    // 快照重建运行时（JSON 重载 + 新 kernel 实例；ports 闭包为宿主数据
+    // 跨 tick 持续）。同记录 8 义务前缀失败场景见 E06
+    //（treasuryRemediationIKernel.test.ts，同样逐 tick JSON 重载）。
+    let rolling = createTreasuryCoreKernel(ports);
     for (; ticks < 80 && !targetDone; ticks += 1) {
       Game.time += 1;
-      kernel.beginTick();
+      installWholeMemorySnapshot(snapshotWholeMemory());
+      rolling = createTreasuryCoreKernel(ports);
+      rolling.beginTick();
       writeCount.beginTicks += 1;
-      const pending = kernel.admit({ ...kernelAdmitInput([], `biz:d19:noise-${String(ticks)}`), worstCase: kernelLegs(1), postings: kernelLegs(1) });
+      const pending = rolling.admit({ ...kernelAdmitInput([], `biz:d19:noise-${String(ticks)}`), worstCase: kernelLegs(1), postings: kernelLegs(1) });
       void pending;
       const record = activeRecord(target.attemptId) as { phase?: string; cleanup?: { consumerKeys: string[] } } | undefined;
       if (record === undefined || (record.phase === "retry_ready" && record.cleanup!.consumerKeys.length === 0)) targetDone = true;
@@ -669,11 +691,17 @@ describe("D23 混合规模模型与账目一致", () => {
     service.beginTick();
     let modelOutflow = 0;
     let stuckSeen = 0;
+    // Remediation I/V3（§7.4）：RETRIED 分支真实化——non-ok 父代经
+    // not_executed → 清理完成 → retry_ready → capability 签发 → 合法新
+    // contract → executeRearm → child 实际执行（同 workKey 关联、新 ID）。
+    const rearmedChildren: { parent: string; child: string; workKey: string }[] = [];
+    const legacyParentPermits: unknown[] = [];
     for (let i = 0; i < COMPLETED + RETRIED + STUCK_UNKNOWN; i += 1) {
       const kind = i < COMPLETED ? "ok" : i < COMPLETED + RETRIED ? "non-ok" : "throw";
+      const workKey = `biz:d23:w${String(i)}`;
       const admitted = service.authorizeTreasuryActionContract(
-        buildContract(service, `biz:d23:w${String(i)}`, transferArgs({ amount: 200, outcome: kind as "ok" })),
-        { workKey: `biz:d23:w${String(i)}` },
+        buildContract(service, workKey, transferArgs({ amount: 200, outcome: kind as "ok" })),
+        { workKey },
       );
       if (admitted.status !== "admitted") throw new Error(`w${String(i)} admit failed: ${admitted.reason}`);
       const outcome = service.executeAuthorizedDispatch(admitted.dispatch);
@@ -682,15 +710,44 @@ describe("D23 混合规模模型与账目一致", () => {
         modelOutflow += 200;
       } else if (kind === "non-ok") {
         expect(outcome.status).toBe("not_executed");
+        // 真实 retry 链（V3）：推进到 retry_ready 后签发 capability 并 rearm。
+        Game.time += 1;
+        service.beginTick();
+        const parentReady = service.kernelJournal().active.find((r) => r.attemptId === admitted.attemptId);
+        if (parentReady?.phase !== "retry_ready") throw new Error(`w${String(i)} not retry_ready: ${String(parentReady?.phase)}`);
+        const capability = service.issueTreasuryRearmCapability({ attemptId: admitted.attemptId });
+        if (capability.status !== "ok") throw new Error(`capability failed: ${capability.reason}`);
+        legacyParentPermits.push(admitted.dispatch);
+        // child 用新 contract（同 workKey/同 args 语义——retry facts 一致）。
+        const childContract = buildContract(service, workKey, transferArgs({ amount: 200, outcome: "ok" }));
+        const child = service.executeRearm(capability.rearm, childContract, { workKey });
+        if (child.status !== "admitted") throw new Error(`rearm failed: ${child.reason}`);
+        expect(child.attemptId).not.toBe(admitted.attemptId); // parent/child ID 不同
+        // child 是新 attempt（无消费者义务），实际执行并完成。
+        const childOutcome = service.executeAuthorizedDispatch(child.dispatch);
+        expect(childOutcome.status).toBe("committed");
+        modelOutflow += 200;
+        rearmedChildren.push({ parent: admitted.attemptId, child: child.attemptId, workKey });
+        Game.time += 1;
+        service.beginTick(); // child committed → 观察接管退出 → ring
       } else {
         expect(outcome.status).toBe("unknown");
         stuckSeen += 1;
       }
-      if (i % 8 === 7) {
+      if (i % 4 === 3) {
         Game.time += 1;
-        service.beginTick(); // 周期性清理推进（committed 退出 → ring）；
-        // 每 8 条一 tick 亦匹配执行复验的 fresh 额度上限（IV/R2）。
+        service.beginTick(); // 周期性清理推进（committed 退出 → ring）。
       }
+    }
+    // 真实 retry 事件成立：每对 parent/child ID 不同、同 workKey 关联。
+    expect(rearmedChildren.length).toBe(RETRIED);
+    for (const pair of rearmedChildren) {
+      expect(pair.parent).not.toBe(pair.child);
+      expect(pair.workKey.startsWith("biz:d23:w")).toBe(true);
+    }
+    // 旧许可失效：父代 dispatch permit 回放被拒（WeakSet 身份 + 阶段终态）。
+    for (const legacy of legacyParentPermits.slice(0, 5)) {
+      expect(service.executeAuthorizedDispatch(legacy).status).toBe("rejected");
     }
     Game.time += 1;
     service.beginTick();

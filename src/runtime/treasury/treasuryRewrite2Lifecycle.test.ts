@@ -297,6 +297,7 @@ describe("B13 显式取消与 dispatch 的竞争", () => {
     (store.active[attemptId] as unknown as { cleanup: unknown }).cleanup = {
       consumerKeys: ["ext:b13:consumer"],
       failures: 0,
+      cursor: 0,
     };
     Game.time += 1;
     service.beginTick();
@@ -322,6 +323,9 @@ describe("B19 满载最坏状态的总预算与收尾余量", () => {
         admittedAtTick: Game.time,
         updatedAtTick: Game.time,
         phase: "outcome_unknown",
+        // Remediation I/R1：outcome_unknown 携带调用边界锚点（真实路径由
+        // dispatch_start 同次发布；注入 fixture 对齐合法持久形态）。
+        invocationBoundary: { atTick: Game.time, worldSequence: 1 },
         lastError: "z".repeat(96),
         worstCase: Array.from({ length: 12 }, (_, j) => ({
           roomName: "W1N57",
@@ -329,7 +333,7 @@ describe("B19 满载最坏状态的总预算与收尾余量", () => {
           resource: RESOURCE_ENERGY,
           delta: j % 2 === 0 ? -1_000_000_000 : 1_000_000_000,
         })),
-        cleanup: { consumerKeys: Array.from({ length: 8 }, (_, k) => `ext:b19:${"k".repeat(50)}:${String(k)}`), failures: 999 } as never,
+        cleanup: { consumerKeys: Array.from({ length: 8 }, (_, k) => `ext:b19:${"k".repeat(50)}:${String(k)}`), failures: 999, cursor: 0 } as never,
       } as never;
     }
     store.issuance.frontier = 9999;
@@ -393,8 +397,15 @@ describe("B25 完整 reset 的断点语义与旧许可回放", () => {
     const { attemptId } = admit(service, "biz:b25:entered");
     // 模拟调用边界已发布、动作已进入但结果未写回（宿主轨迹记 1 次）。
     const store = Memory.runtime!.treasuryCore!;
-    (store.active[attemptId] as unknown as { phase: string }).phase = "dispatching";
-    (store.active[attemptId] as unknown as { invocation: unknown }).invocation = { atTick: Game.time };
+    const b25 = store.active[attemptId] as unknown as {
+      phase: string;
+      invocationBoundary: unknown;
+      invocation: unknown;
+    };
+    b25.phase = "dispatching";
+    // Remediation I/R1：合法 dispatching 中断形态携带边界锚点。
+    b25.invocationBoundary = { atTick: Game.time, worldSequence: 1 };
+    b25.invocation = { atTick: Game.time };
     trace.executions.push({ attempt: "biz:b25:entered", amount: 500 });
     const snapshot = snapshotWholeMemory();
     installWholeMemorySnapshot(snapshot);
@@ -417,7 +428,7 @@ describe("B25 完整 reset 的断点语义与旧许可回放", () => {
     const store = Memory.runtime!.treasuryCore!;
     const record = store.active[attemptId] as unknown as { cleanup: unknown; phase: string };
     record.phase = "closing";
-    record.cleanup = { consumerKeys: ["ext:b25:consumer"], failures: 0 };
+    record.cleanup = { consumerKeys: ["ext:b25:consumer"], failures: 0, cursor: 0 };
     trace.releaseCalls.push(`ext:b25:consumer@${attemptId}`);
     // 确认未写回（duty 在持久层保留）→ 完整 reset。
     const snapshot = snapshotWholeMemory();

@@ -69,11 +69,12 @@ function injectActiveWork(service: TreasuryService, phase: TreasuryCoreWorkRecor
       durableFacts: null,
     },
     worstCase: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta }],
+    invocationBoundary: phase === "pending" ? null : { atTick: Game.time, worldSequence: 1 },
     invocation: phase === "pending" ? null : { atTick: Game.time },
     external: null,
     outcome: phase === "closing" ? "committed" : "unknown",
     outcomeEvidence: null,
-    cleanup: { consumerKeys: [], failures: 0 },
+    cleanup: { consumerKeys: [], failures: 0, cursor: 0 },
     retryDeadlineTick: null,
     lastError: null,
   } as TreasuryCoreWorkRecord;

@@ -287,11 +287,12 @@ describe("接纳排他与容量", () => {
           durableFacts: null,
         },
         worstCase: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -1 }],
+        invocationBoundary: null,
         invocation: null,
         external: null,
         outcome: "unknown",
         outcomeEvidence: null,
-        cleanup: { consumerKeys: [], failures: 0 },
+        cleanup: { consumerKeys: [], failures: 0, cursor: 0 },
         retryDeadlineTick: null,
         lastError: null,
       } as TreasuryCoreWorkRecord;
@@ -348,9 +349,16 @@ describe("tick 边界恢复（保守推进，不重发）", () => {
     const service = makeService();
     const { attemptId } = admitTransfer(service, "biz:recover:dispatching", transferArgs());
     // 直接构造 dispatching（模拟硬中断：发布后、结果写入前进程终止）。
+    // Remediation I/R1：真实 dispatch_start 与 phase 同次写入调用边界——
+    // 合法 dispatching 持久形态必须携带边界锚点。
     const record = activeRecord(service, attemptId);
     if (!Memory.runtime) Memory.runtime = {} as never;
-    (Memory.runtime.treasuryCore!.active[attemptId] as { phase: string }).phase = "dispatching";
+    const interrupted = Memory.runtime.treasuryCore!.active[attemptId] as {
+      phase: string;
+      invocationBoundary: { atTick: number; worldSequence?: number } | null;
+    };
+    interrupted.phase = "dispatching";
+    interrupted.invocationBoundary = { atTick: Game.time, worldSequence: 1 };
     void record;
     Game.time += 1;
     const before = readTreasuryTestAdapterSideEffects().executions;

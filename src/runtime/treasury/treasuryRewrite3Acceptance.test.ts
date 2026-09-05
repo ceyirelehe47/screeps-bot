@@ -766,11 +766,12 @@ describe("C11 结果写失败与释放确认写失败", () => {
             durableFacts: null,
           },
           worstCase: [],
+          invocationBoundary: { atTick: Game.time - 1, worldSequence: 1 },
           invocation: { atTick: Game.time - 1 },
           external: { accepted: true, atTick: Game.time - 1 },
           outcome: "committed",
           outcomeEvidence: { kind: "adapter_execution_semantics", conclusion: "executed", source: "test", atTick: Game.time - 1 },
-          cleanup: { consumerKeys: ["ext:c11:z"], failures: 0 },
+          cleanup: { consumerKeys: ["ext:c11:z"], failures: 0, cursor: 0 },
           retryDeadlineTick: null,
           lastError: null,
         },
@@ -910,11 +911,12 @@ describe("C16 释放端口重入共享预算", () => {
         durableFacts: null,
       },
       worstCase: [],
+      invocationBoundary: { atTick: Game.time - 1, worldSequence: 1 },
       invocation: { atTick: Game.time - 1 },
       external: { accepted: true, atTick: Game.time - 1 },
       outcome: "committed" as const,
       outcomeEvidence: { kind: "adapter_execution_semantics" as const, conclusion: "executed" as const, source: "test", atTick: Game.time - 1 },
-      cleanup: { consumerKeys: consumers, failures: 0 },
+      cleanup: { consumerKeys: consumers, failures: 0, cursor: 0 },
       retryDeadlineTick: null,
       lastError: null,
     };
@@ -1045,11 +1047,12 @@ describe("C17 预扣与失败预算", () => {
             durableFacts: null,
           },
           worstCase: [],
+          invocationBoundary: { atTick: Game.time - 1, worldSequence: 1 },
           invocation: { atTick: Game.time - 1 },
           external: { accepted: true, atTick: Game.time - 1 },
           outcome: "committed",
           outcomeEvidence: { kind: "adapter_execution_semantics", conclusion: "executed", source: "test", atTick: Game.time - 1 },
-          cleanup: { consumerKeys: consumers, failures: 0 },
+          cleanup: { consumerKeys: consumers, failures: 0, cursor: 0 },
           retryDeadlineTick: null,
           lastError: null,
         },
@@ -1160,11 +1163,12 @@ describe("C18 公平推进有限界", () => {
           retryFactsDigest: null, durableFacts: null,
         },
         worstCase: [],
+        invocationBoundary: { atTick: Game.time - 1, worldSequence: 1 },
         invocation: { atTick: Game.time - 1 },
         external: { accepted: true, atTick: Game.time - 1 },
         outcome: "committed",
         outcomeEvidence: { kind: "adapter_execution_semantics", conclusion: "executed", source: "test", atTick: Game.time - 1 },
-        cleanup: { consumerKeys: consumers(i), failures: 0 },
+        cleanup: { consumerKeys: consumers(i), failures: 0, cursor: 0 },
         retryDeadlineTick: null,
         lastError: null,
       };
@@ -1363,11 +1367,12 @@ describe("C21 有界解码", () => {
         { roomName: "W1N57", locationKind: "storage", resource: "energy", delta: -80 },
         { roomName: "W2N57", locationKind: "terminal", resource: "energy", delta: 80 },
       ],
+      invocationBoundary: null,
       invocation: null,
       external: null,
       outcome: "unknown",
       outcomeEvidence: null,
-      cleanup: { consumerKeys: [], failures: 0 },
+      cleanup: { consumerKeys: [], failures: 0, cursor: 0 },
       retryDeadlineTick: null,
       lastError: null,
       ...overrides,
@@ -1442,6 +1447,8 @@ describe("C22 槽位上界与满载预算", () => {
     const first = Object.values(store.active)[0];
     for (const [attemptId, record] of Object.entries(store.active)) {
       record.phase = "outcome_unknown";
+      // Remediation I/R1：outcome_unknown 合法形态携带调用边界锚点。
+      record.invocationBoundary = { atTick: Game.time, worldSequence: 999_999 };
       record.invocation = { atTick: Game.time, worldSequence: 999_999 };
       record.lastError = "错\u0000详\\\"情" + "z".repeat(80);
       void attemptId;

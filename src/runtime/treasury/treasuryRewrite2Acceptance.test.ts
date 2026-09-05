@@ -152,6 +152,8 @@ function makeClosingRecord(input: {
       durableFacts: null,
     },
     worstCase: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
+    // Remediation I/R1：实际调用/接受事实存在 ⇒ 调用边界同在（结构一致）。
+    invocationBoundary: { atTick: Game.time, worldSequence: 1 },
     invocation: { atTick: Game.time },
     external: { accepted: true, atTick: Game.time },
     outcome: input.outcome ?? "committed",
@@ -161,7 +163,7 @@ function makeClosingRecord(input: {
       source: "test",
       atTick: Game.time,
     },
-    cleanup: { consumerKeys: [...input.consumerKeys], failures: 0 },
+    cleanup: { consumerKeys: [...input.consumerKeys], failures: 0, cursor: 0 },
     retryDeadlineTick: null,
     lastError: null,
   };
@@ -843,7 +845,13 @@ describe("B20 ring 故障隔离（R10）", () => {
     const service = makeService();
     const { attemptId, dispatch } = admit(service, "biz:b20:recover", { outcome: "throw" });
     const store = Memory.runtime!.treasuryCore!;
-    (store.active[attemptId] as unknown as { phase: string }).phase = "dispatching";
+    const b20 = store.active[attemptId] as unknown as {
+      phase: string;
+      invocationBoundary: { atTick: number; worldSequence?: number } | null;
+    };
+    b20.phase = "dispatching";
+    // Remediation I/R1：合法 dispatching 中断形态携带边界锚点。
+    b20.invocationBoundary = { atTick: Game.time, worldSequence: 1 };
     // ring 注入超限（200 > 128）。
     for (let i = 0; i < 200; i += 1) {
       store.ring.push({

@@ -203,7 +203,13 @@ describe("A04（R1 等价）恢复路径的身份冲突", () => {
     const service = makeService();
     const { attemptId } = admit(service, "biz:a04:recover");
     const store = Memory.runtime!.treasuryCore!;
-    (store.active[attemptId] as unknown as { phase: string }).phase = "dispatching";
+    const a04 = store.active[attemptId] as unknown as {
+      phase: string;
+      invocationBoundary: { atTick: number; worldSequence?: number } | null;
+    };
+    a04.phase = "dispatching";
+    // Remediation I/R1：真实 dispatch_start 与 phase 同次写入调用边界。
+    a04.invocationBoundary = { atTick: Game.time, worldSequence: 1 };
     // 恢复者注入不匹配身份（模拟旧 R1：executing 记录自洽地绑定另一个 opening）。
     (store.active[attemptId] as unknown as { identity: { canonicalDigest: string } }).identity.canonicalDigest = "b".repeat(16);
     // 身份篡改后 store 仍形状合法——恢复按保守语义推进：可能已进入 →
@@ -442,7 +448,13 @@ describe("A12 中断后恢复", () => {
     const service = makeService();
     const { attemptId } = admit(service, "biz:a12:interrupt");
     const store = Memory.runtime!.treasuryCore!;
-    (store.active[attemptId] as unknown as { phase: string }).phase = "dispatching";
+    const a12 = store.active[attemptId] as unknown as {
+      phase: string;
+      invocationBoundary: { atTick: number; worldSequence?: number } | null;
+    };
+    a12.phase = "dispatching";
+    // Remediation I/R1：合法 dispatching 中断形态携带边界锚点。
+    a12.invocationBoundary = { atTick: Game.time, worldSequence: 1 };
     Game.time += 1;
     const before = readTreasuryTestAdapterSideEffects().executions;
     service.beginTick();
@@ -626,11 +638,12 @@ describe("A17 清理责任", () => {
             durableFacts: null,
           },
           worstCase: [{ roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -100 }],
+          invocationBoundary: { atTick: Game.time, worldSequence: 1 },
           invocation: { atTick: Game.time },
           external: { accepted: true, atTick: Game.time },
           outcome: "committed",
           outcomeEvidence: { kind: "adapter_execution_semantics", conclusion: "executed", source: "test", atTick: Game.time },
-          cleanup: { consumerKeys: ["ext:test:confirmed", "ext:test:failing"], failures: 0 },
+          cleanup: { consumerKeys: ["ext:test:confirmed", "ext:test:failing"], failures: 0, cursor: 0 },
           retryDeadlineTick: null,
           lastError: null,
         },
@@ -767,6 +780,8 @@ describe("A20 满载与序列化预算", () => {
       // IV/R1：效果锚点取上一 tick（观察构建 tick 严格大于效果时点才判
       // 覆盖——同 tick 的直塞 invocation 会被 tick 兜底保守保留）。
       (seed as unknown as { invocation: unknown }).invocation = { atTick: Game.time - 1 };
+      // Remediation I/R1：实际调用事实存在 ⇒ 调用边界必须同在（结构一致）。
+      (seed as unknown as { invocationBoundary: unknown }).invocationBoundary = { atTick: Game.time - 1 };
       // 同 tick 内推进（幂等 beginTick 直接进 kernel 恢复；跨 tick 会先
       // 触发 pending sweep 抢占预算——该语义由 B12/B13 单独覆盖）。
       return service.beginTick();

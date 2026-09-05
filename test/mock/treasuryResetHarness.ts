@@ -107,8 +107,15 @@ export function installWholeMemorySnapshot(snapshot: string): void {
 }
 
 /**
- * 执行完整 reset：模块缓存重建 + registry 重装 + 新 facade + 真实
- * beginTick。调用方须先 installWholeMemorySnapshot（或保留既有 Memory）。
+ * 执行完整 reset：内存快照强制 JSON 重载 + 模块缓存重建 + registry 重装 +
+ * 新 facade + 真实 beginTick。
+ *
+ * 契约（Remediation I/§7.1——消除"取了快照却没用"的余地）：
+ * - 指定 memorySnapshot（断点快照）时**严格使用该快照**安装新全局
+ *   Memory——不悄悄重新序列化后来已被 catch/finally 修好的当前 Memory；
+ * - 未指定时由 helper 在入口取得当时快照并**立即重载**（JSON 往返，根与
+ *   全部嵌套引用与旧对象脱离——旧引用修改不进入新运行时）。
+ * 两种路径都保证：构建新运行时前，全局 Memory 是 JSON.parse 的产物。
  */
 export function performTreasuryFullReset(input: {
   readonly roomSpecs: RoomSpec[];
@@ -117,7 +124,15 @@ export function performTreasuryFullReset(input: {
   /** 可选 policy（默认无 reserve）。 */
   readonly policy?: unknown;
   readonly advanceTicks?: number;
+  /**
+   * 明确的序列化 Memory 快照（指定断点时必须提供；缺省 = 入口取得当时
+   * 快照并立即重载）。快照须为 JSON.stringify(Memory) 产物。
+   */
+  readonly memorySnapshot?: string;
 }): TreasuryFullResetResult {
+  // 1) 完整 reset 的第一步：安装 JSON 重载的新全局 Memory（Remediation I
+  //    V2——此前版本允许沿用原 Memory 对象，引用隔离不成立）。
+  installWholeMemorySnapshot(input.memorySnapshot ?? snapshotWholeMemory());
   // 3) 重建模块缓存：WeakSet permit 注册表、adapter/policy registry、
   //    service generation 计数全部归零（旧 heap 许可失去注册）。
   jest.resetModules();

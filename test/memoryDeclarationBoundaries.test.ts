@@ -52,7 +52,10 @@ const MEMORY_BRANCHES = {
     //（单一活跃聚合 + 近期明细环，见 kernel/types.ts）后的 schema 指纹。
     // 【Core Rewrite IV】runtime 根新增 treasuryWorldSequence（受控世界序
     // 持久权威——global 槽退役）后的 schema 指纹。
-    schemaFingerprint: "2d2cd73f6d1c39817a8c9f90f911784395de95bb6710ce05e25b050517d79735",
+    // 【Core Rewrite IV · Remediation I】treasuryCore active 记录新增
+    // invocationBoundary（调用边界事实）与 cleanup.cursor（记录内轮转
+    // 位置）后的 schema 指纹。
+    schemaFingerprint: "1e376a501b45ffc7aee0628a731ecc9859a994911da19e4fd687b4dc482a1bbf",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
