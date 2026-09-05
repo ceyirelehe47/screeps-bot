@@ -158,6 +158,21 @@ function validateWorkRecord(attemptId: string, value: unknown): string | null {
   if (r.outcomeEvidence !== null && !isPlainObject(r.outcomeEvidence)) {
     return `active[${attemptId}].outcomeEvidence 非法`;
   }
+  // 结构矛盾 fail closed（A06/A07）：结果确定必须有结论一致的证据；
+  // not_executed 与 committed 相反证据 / 缺失证据都不构成合法状态。
+  if (r.phase === "closing" || r.phase === "retry_ready") {
+    if (r.outcome === "unknown" || r.outcomeEvidence === null) {
+      return `active[${attemptId}] 阶段 ${r.phase} 但结果未确定或无证据（结构矛盾）`;
+    }
+    const expected = r.outcome === "committed" ? "executed" : "not_executed";
+    const conclusion = (r.outcomeEvidence as Record<string, unknown>).conclusion;
+    if (conclusion !== expected) {
+      return `active[${attemptId}] outcome=${r.outcome} 与证据结论 ${String(conclusion)} 相反（结构矛盾）`;
+    }
+  }
+  if (r.outcome === "unknown" && r.phase !== "pending" && r.phase !== "dispatching" && r.phase !== "outcome_unknown") {
+    return `active[${attemptId}] outcome=unknown 但阶段 ${r.phase}（结构矛盾）`;
+  }
   if (!isPlainObject(r.cleanup) || !Array.isArray(r.cleanup.consumerKeys)) {
     return `active[${attemptId}].cleanup 非法`;
   }
@@ -248,9 +263,19 @@ function validateCoreMemoryContents(root: Record<string, unknown>): string | nul
     if (problem !== null) return problem;
   }
   if (!Array.isArray(root.ring) || root.ring.length > TREASURY_CORE_RING_LIMIT) return "ring 非法";
+  const retiredIds = new Set<string>();
   for (const entry of root.ring) {
     const problem = validateRingEntry(entry);
     if (problem !== null) return problem;
+    // 同一 attemptId 同时出现在 ring（已退役）与 active（活跃）= 结构矛盾
+    //（A06：矛盾必须保留并阻断，不得挑一边继续）。
+    if (root.active[entry.attemptId] !== undefined) {
+      return `attempt ${entry.attemptId} 同时存在于活跃集合与退役环（结构矛盾）`;
+    }
+    if (retiredIds.has(entry.attemptId)) {
+      return `ring 中 attemptId ${entry.attemptId} 重复`;
+    }
+    retiredIds.add(entry.attemptId);
   }
   if (
     typeof root.ringCursor !== "number" ||

@@ -87,6 +87,7 @@ import type {
   TreasuryBalanceView,
 } from "@/runtime/treasury/types";
 import { createTreasuryMetrics } from "@/runtime/treasury/types";
+import { treasuryBoundedDeepFreezeSnapshot } from "@/runtime/treasury/durableSnapshot";
 
 export const TREASURY_FRESH_EPOCH_LIMIT = 8;
 
@@ -137,7 +138,8 @@ export interface TreasuryKernelJournalView {
 }
 
 export interface TreasuryService {
-  beginTick(): void;
+  /** tick 起点：kernel 恢复推进（保守化/期限关闭/公平清理）+ 观察重建（幂等）。 */
+  beginTick(): { readonly recovered: number; readonly closed: number; readonly cleaned: number };
   endTick(): void;
   observation(): TreasuryObservationView;
   beginFreshObservation(): TreasuryObservationView | null;
@@ -376,40 +378,67 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     };
   }
 
-  function kernelOccupancyForAdmission(worstCase: readonly TreasuryCoreWorstCaseLeg[]): string | null {
+  function kernelOccupancyForAdmission(legs: readonly TreasuryCoreWorstCaseLeg[]): string | null {
     // 容量接纳检查（design §6.2）：物理观察 − 本 tick tentative/已发生占用
-    // − kernel 活跃占用（跨 tick 风险），逐腿校验最坏流出可覆盖。
+    // − kernel 活跃占用（跨 tick 风险）。流出腿（负 delta）校验存量可覆盖；
+    // 流入腿（正 delta）校验接收容量（同 tick 多笔不得重复占满接收空间）。
+    // 输入为完整带符号 posting 腿（流出与流入都不得遗漏）。
     const state = ensureTickState(true);
     const health = readTreasuryCoreStoreHealth();
     if (health.status === "healthy") {
       const occupancy = computeTreasuryCoreOccupancy(health.memory);
-      for (const leg of worstCase) {
-        const key = overlayResourceKey(leg.roomName, leg.locationKind, leg.resource);
-        const tentativeOutflow = Math.max(0, -(overlay.tentativeResource.get(key) ?? 0));
-        const appliedDelta = overlay.resourceDeltas.get(key) ?? 0;
-        const available =
-          state.observation.amount(leg.roomName, leg.locationKind as TreasuryLocationKind, leg.resource) +
-          appliedDelta -
-          tentativeOutflow -
-          (occupancy.byKey.get(key) ?? 0);
-        const legOutflow = Math.max(0, -leg.delta);
-        if (available < legOutflow) {
-          return `容量不足：${leg.roomName}/${leg.locationKind}/${leg.resource} 可用 ${String(available)} < 最坏流出 ${String(legOutflow)}`;
-        }
-        // 正流入容量占用（receiver capacity：同 tick 多笔不得重复占满接收空间）。
-        const locationKey = overlayLocationKey(leg.roomName, leg.locationKind);
-        const inflowOccupied =
-          Math.max(0, overlay.capacityDeltas.get(locationKey) ?? 0) +
-          Math.max(0, overlay.tentativeCapacity.get(locationKey) ?? 0);
-        const freeCapacity =
-          state.observation.freeCapacity(leg.roomName, leg.locationKind as TreasuryLocationKind) - inflowOccupied;
-        const legInflow = worstCase
-          .filter((l) => overlayLocationKey(l.roomName, l.locationKind) === locationKey)
+      for (const leg of legs) {
+        if (leg.delta >= 0) continue;
+        const inflowAtLocation = legs
+          .filter((l) => overlayLocationKey(l.roomName, l.locationKind) === overlayLocationKey(leg.roomName, leg.locationKind))
           .reduce((sum, l) => sum + Math.max(0, l.delta), 0);
-        if (legInflow > freeCapacity) {
-          return `接收容量不足：${leg.roomName}/${leg.locationKind} 剩余 ${String(freeCapacity)} < 本笔最坏流入 ${String(legInflow)}`;
-        }
+        const capacityProblem = checkLocationCapacity(state, leg, inflowAtLocation, occupancy);
+        if (capacityProblem !== null) return capacityProblem;
       }
+      // 独立校验纯流入位置的接收容量（该位置可能没有流出腿）。
+      const checkedLocations = new Set<string>(legs.filter((l) => l.delta < 0).map((l) => overlayLocationKey(l.roomName, l.locationKind)));
+      for (const leg of legs) {
+        if (leg.delta <= 0) continue;
+        const locKey = overlayLocationKey(leg.roomName, leg.locationKind);
+        if (checkedLocations.has(locKey)) continue;
+        checkedLocations.add(locKey);
+        const inflowAtLocation = legs
+          .filter((l) => overlayLocationKey(l.roomName, l.locationKind) === locKey)
+          .reduce((sum, l) => sum + Math.max(0, l.delta), 0);
+        const capacityProblem = checkLocationCapacity(state, leg, inflowAtLocation, occupancy);
+        if (capacityProblem !== null) return capacityProblem;
+      }
+    }
+    return null;
+  }
+
+  function checkLocationCapacity(
+    state: TreasuryTickState,
+    leg: TreasuryCoreWorstCaseLeg,
+    inflowAtLocation: number,
+    occupancy: ReturnType<typeof computeTreasuryCoreOccupancy>,
+  ): string | null {
+    const key = overlayResourceKey(leg.roomName, leg.locationKind, leg.resource);
+    const tentativeOutflow = Math.max(0, -(overlay.tentativeResource.get(key) ?? 0));
+    const appliedDelta = overlay.resourceDeltas.get(key) ?? 0;
+    const available =
+      state.observation.amount(leg.roomName, leg.locationKind as TreasuryLocationKind, leg.resource) +
+      appliedDelta -
+      tentativeOutflow -
+      (occupancy.byKey.get(key) ?? 0);
+    const legOutflow = Math.max(0, -leg.delta);
+    if (available < legOutflow) {
+      return `容量不足：${leg.roomName}/${leg.locationKind}/${leg.resource} 可用 ${String(available)} < 最坏流出 ${String(legOutflow)}`;
+    }
+    // 正流入容量占用（receiver capacity：同 tick 多笔不得重复占满接收空间）。
+    const locationKey = overlayLocationKey(leg.roomName, leg.locationKind);
+    const inflowOccupied =
+      Math.max(0, overlay.capacityDeltas.get(locationKey) ?? 0) +
+      Math.max(0, overlay.tentativeCapacity.get(locationKey) ?? 0);
+    const freeCapacity =
+      state.observation.freeCapacity(leg.roomName, leg.locationKind as TreasuryLocationKind) - inflowOccupied;
+    if (inflowAtLocation > freeCapacity) {
+      return `接收容量不足：${leg.roomName}/${leg.locationKind} 剩余 ${String(freeCapacity)} < 本笔最坏流入 ${String(inflowAtLocation)}`;
     }
     return null;
   }
@@ -495,10 +524,13 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     };
   }
 
+  /**
+   * canonical posting 腿（带符号、同键合并、零腿剔除）——持久事实与容量
+   * 检查共用：流出腿校验存量、流入腿校验接收容量、reconciler 获得全集。
+   */
   function worstCaseOfPostings(postings: readonly PostingDelta[]): TreasuryCoreWorstCaseLeg[] {
-    const merged = new Map<string, TreasuryCoreWorstCaseLeg>();
+    const merged = new Map<string, { roomName: string; locationKind: string; resource: string; delta: number }>();
     for (const posting of postings) {
-      if (posting.delta >= 0) continue;
       const key = overlayResourceKey(posting.roomName, posting.locationKind, posting.resource);
       const existing = merged.get(key);
       const delta = posting.delta;
@@ -506,10 +538,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         roomName: posting.roomName,
         locationKind: posting.locationKind,
         resource: posting.resource,
-        delta: (existing?.delta ?? 0) + delta,
+        delta: (existing?.delta ?? 0) + posting.delta,
       });
     }
-    return [...merged.values()];
+    return [...merged.values()].filter((leg) => leg.delta !== 0);
   }
 
   function applyTentativeHold(attemptId: string, postings: readonly PostingDelta[]): void {
@@ -614,11 +646,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   }
 
   const service: TreasuryService = {
-    beginTick(): void {
+    beginTick() {
       if (current !== null && current.tick === Game.time && !current.ended) {
         // 幂等重复 beginTick。
-        kernel.beginTick();
-        return;
+        return kernel.beginTick();
       }
       metrics.lifecycleBeginTicks += 1;
       if (current !== null && current.tick !== Game.time) {
@@ -631,9 +662,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (schemaGate.status === 'rejected') {
         metrics.reservationSchemaActivationFailures += 1;
       }
-      kernel.beginTick();
+      const stats = kernel.beginTick();
       current = null;
       ensureTickState(false);
+      return stats;
     },
 
     endTick(): void {
@@ -949,7 +981,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const postings = postingsOfContract(typed);
       const worstCase = worstCaseOfPostings(postings);
       if (worstCase.length === 0) {
-        return { status: "rejected", reason: "postings 无流出腿（worstCase 为空）", reasonCode: "invalid_input" };
+        return { status: "rejected", reason: "postings 为空（无可持久的动作腿）", reasonCode: "invalid_input" };
       }
       const policyProblem = checkPolicyForAdmission(typed, worstCase, ensureTickState(true));
       if (policyProblem !== null) {
@@ -1109,15 +1141,15 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
 
     kernelJournal(): TreasuryKernelJournalView {
       const health = readTreasuryCoreStoreHealth();
-      const active =
+      const active: readonly TreasuryCoreWorkRecord[] =
         health.status === "healthy"
-          ? listTreasuryCoreActiveWorks(health.memory)
+          ? listTreasuryCoreActiveWorks(health.memory).map((record) => treasuryBoundedDeepFreezeSnapshot(record) as TreasuryCoreWorkRecord)
           : [];
       return {
         health,
         legacyStores: kernel.legacyStores(),
         active,
-        ring: health.status === "healthy" ? health.memory.ring : [],
+        ring: health.status === "healthy" ? Object.freeze([...health.memory.ring]) : [],
       };
     },
 
