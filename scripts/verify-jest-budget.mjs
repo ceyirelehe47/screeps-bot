@@ -12,13 +12,13 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const manifestPath = path.join(repoRoot, "test", "test-suite-budget.json");
 const jestEntrypoint = path.join(repoRoot, "node_modules", "jest", "bin", "jest.js");
 const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data", "node_modules"]);
-// 【Core Rewrite III】新基线：C01-C24 矩阵与完整值校验入库（220/1228，
-// 见 openspec/changes/empire-treasury-core-rewrite/test-migration-map.md）。
-const requiredBaselineCommit = "193ec62f9f7d3d7185d3fa9874fa960d9f1e9ddb";
+// 【Core Rewrite IV】新基线：D01-D24 矩阵 + 成对预算/退出条件/持久世界序
+// （222/1260，见 openspec/changes/empire-treasury-core-rewrite/test-migration-map.md §8）。
+const requiredBaselineCommit = "c33cbd6e59518a2d75ba5a350b88a69559b0767e";
 const requiredTarget = Object.freeze({
-  suites: 220,
-  tests: 1228,
-  passed: 1228,
+  suites: 222,
+  tests: 1260,
+  passed: 1260,
   failed: 0,
   pending: 0,
   todo: 0,

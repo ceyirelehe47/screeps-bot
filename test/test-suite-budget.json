@@ -1,15 +1,15 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "193ec62f9f7d3d7185d3fa9874fa960d9f1e9ddb",
-    "suites": 220,
-    "tests": 1228
+    "commit": "c33cbd6e59518a2d75ba5a350b88a69559b0767e",
+    "suites": 222,
+    "tests": 1260
   },
   "target": {
-    "commit": "193ec62f9f7d3d7185d3fa9874fa960d9f1e9ddb",
-    "suites": 220,
-    "tests": 1228,
-    "passed": 1228,
+    "commit": "c33cbd6e59518a2d75ba5a350b88a69559b0767e",
+    "suites": 222,
+    "tests": 1260,
+    "passed": 1260,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -1792,6 +1792,22 @@
       "pending": 0,
       "todo": 0,
       "tier": "protected-full"
+    },
+    "src/runtime/treasury/treasuryRewrite4Acceptance.test.ts": {
+      "budget": 20,
+      "tests": 20,
+      "passed": 20,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRewrite4Lifecycle.test.ts": {
+      "budget": 12,
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
     }
   }
 }
