@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "c33cbd6e59518a2d75ba5a350b88a69559b0767e",
-    "suites": 222,
-    "tests": 1260
+    "commit": "c18a6bc3c2afae74032c45d35a577d6ab65efa7b",
+    "suites": 225,
+    "tests": 1289
   },
   "target": {
-    "commit": "c33cbd6e59518a2d75ba5a350b88a69559b0767e",
-    "suites": 222,
-    "tests": 1260,
-    "passed": 1260,
+    "commit": "c18a6bc3c2afae74032c45d35a577d6ab65efa7b",
+    "suites": 225,
+    "tests": 1289,
+    "passed": 1289,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Core Rewrite III：C01-C24 矩阵/世界序观察覆盖/预扣预算/逐槽空间预算入库（test-migration-map.md §7）；tier 信息性"
+    "note": "Core Rewrite IV · Remediation I：E01–E20 矩阵/调用边界/记录内公平/许可认证前置/完整 reset 契约入库（test-migration-map.md §Remediation I）；tier 信息性"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1805,6 +1805,30 @@
       "budget": 12,
       "tests": 12,
       "passed": 12,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIKernel.test.ts": {
+      "budget": 13,
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIService.test.ts": {
+      "budget": 11,
+      "tests": 11,
+      "passed": 11,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/baseline/treasuryRemediationIBaseline.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
       "failed": 0,
       "pending": 0,
       "todo": 0
