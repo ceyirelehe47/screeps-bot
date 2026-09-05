@@ -50,14 +50,9 @@ Object.assign(global, {
 
 __resetRoomVisualCalls();
 refreshGlobalMock();
-// 【Round 22 Remediation III】cleanup stage handlers / proof probes /
-// recovery driver 全局装配：模拟生产模块图（facade 加载即装配），使直接
-// 调用 resolutionStore/coordinator/journal 恢复的底层测试与生产入口共享同一阶段外部事实
-// 验证器。延迟到 refreshGlobalMock 之后（模块图中部分模块顶层读取 RESOURCES_ALL）；显式
-// fail-closed 用例仍可在自己的 beforeEach 里
-// registerTreasuryResolutionCleanupHandlersForAssembly(null) 覆盖（测试文件的 beforeEach 在本文件的
-// beforeEach 之后执行）。
-require("@/runtime/treasury/resolutionCleanupStageHandlers");
+// 【Core Rewrite I】旧协议栈（resolution cleanup handlers / proof probes /
+// recovery driver）已退役删除，全局装配不再 require 已删模块。新内核的
+// 装配经 facade 的显式 createTreasuryService 完成（测试各自构造 service）。
 beforeEach(() => {
   __resetRoomVisualCalls();
   refreshGlobalMock();

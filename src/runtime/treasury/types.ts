@@ -442,7 +442,6 @@ export type TreasurySafeExecuteResult<TAction extends { ok: boolean }> =
       /** 【Remediation III 十一】cleanup 完成状态的三层事实报告（settlement
        *  结论 / journal 删除 read-back 后的进度 / 全局 write admission 锁）。
        *  retirement 不得谎称完全完成——pending 阶段在此显式表达。 */
-      readonly cleanup?: import("@/runtime/treasury/resolutionCleanupCoordinator").TreasuryCleanupStatusReport;
       /** 【Round 22 remediation】当前 attempt 的 marker 已 discharge，但全局
        *  write admission 是否仍被其它 attempt 的 marker 锁定（两事实分离）。 */
       readonly globalWriteAdmissionStillLocked?: boolean;

@@ -48,7 +48,9 @@ const MEMORY_BRANCHES = {
     // 【Remediation VI】defenderEngagements 增 reservedPosition（direct
     // actor Rampart 保留事实）、defenderFactsBySlot（真实 role/坐标快照）、
     // fallbackRevision per-slot reservedPosition 后的 schema 指纹。
-    schemaFingerprint: "741155d57d7b691526498675c2d0452342b3fcb9d790d2e2e8f03e155732ce30",
+    // 【Core Rewrite I】旧 treasury 多 store 声明整体替换为 treasuryCore
+    //（单一活跃聚合 + 近期明细环，见 kernel/types.ts）后的 schema 指纹。
+    schemaFingerprint: "87048c182eefc0aa8b77bc932b18b6e16e37f50c1860bb1a3aebb0fc425c060f",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
@@ -85,7 +87,7 @@ const MEMORY_BRANCHES = {
       "resourceReservations",
       "resourceReservationsCorrupted",
       "resourceReservationsOwnerVersion",
-      "treasury",
+      "treasuryCore",
       "treasuryPerf",
       "powerBankBoost",
       "powerBankObserver",

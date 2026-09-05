@@ -36,20 +36,14 @@
  *   可编排副作用与 reconciler 结论）。
  */
 
-import type { TreasuryService } from "@/runtime/treasury/facade";
-import type { TreasuryAuthorizationBundle } from "@/runtime/treasury/authorization";
-import { TREASURY_WRITER_KERNEL, type TreasuryKernelHolder } from "@/runtime/treasury/kernelChannel";
 import type {
-  TreasurySafeExecuteResult,
   TreasuryObservationScope,
   TreasuryPosting,
   TreasuryStructureBindingDescriptor,
 } from "@/runtime/treasury/types";
 import { TREASURY_STRUCTURE_DESCRIPTOR_VERSION } from "@/runtime/treasury/types";
 import { hashTreasuryCanonicalString, isTreasuryRearmAttemptId } from "@/runtime/treasury/transactionId";
-import {
-  checkTreasuryServiceIssuedAttemptId,
-} from "@/runtime/treasury/attemptIssuer";
+import type { TreasuryService } from "@/runtime/treasury/facade";
 import { canonicalizeTreasuryAdapterRetryFacts } from "@/runtime/treasury/adapterRetrySemantics";
 import { canonicalizeTreasuryActionArgs, TREASURY_CANONICAL_ENCODING_VERSION } from "@/runtime/treasury/canonicalEncoding";
 
@@ -156,6 +150,17 @@ export interface TreasuryActionAdapter<TArgs = unknown, TResult extends { ok: bo
    */
   retryFacts?(args: TArgs): Record<string, string | number | boolean> | null;
   reconcile?(facts: TreasuryActionReconcilerFacts, observation: unknown): TreasuryActionReconcilerConclusion;
+  /**
+   * 【Core Rewrite I】三种事实分离的 adapter 声明：外部接口接受（execute
+   * 返回 ok）是否即世界效果确认。默认 false（保守——接受不构成无条件完成
+   * 证明，需要独立 settlement 证据）。
+   */
+  readonly settlesOnAccept?: boolean;
+  /**
+   * 【Core Rewrite I】non-ok 返回的显式语义：'not_executed'（同步 API 拒绝
+   * 即未发生）或 'unknown'（保守）。默认 'unknown'——不凭失败状态释放风险。
+   */
+  readonly nonOkOutcome?: 'not_executed' | 'unknown';
 }
 
 // ── registry（第十一轮 3.13.2：immutable registration records） ───────────────
@@ -189,6 +194,10 @@ export interface TreasuryRegisteredActionAdapter<TArgs = unknown, TResult extend
    */
   retryFacts?(args: TArgs): Record<string, string | number | boolean> | null;
   reconcile?(facts: TreasuryActionReconcilerFacts, observation: unknown): TreasuryActionReconcilerConclusion;
+  /** 【Core Rewrite I】见 TreasuryActionAdapter.settlesOnAccept（默认 false）。 */
+  readonly settlesOnAccept?: boolean;
+  /** 【Core Rewrite I】见 TreasuryActionAdapter.nonOkOutcome（默认 'unknown'）。 */
+  readonly nonOkOutcome?: "not_executed" | "unknown";
 }
 
 /** 内部 registration record（registry 闭包私有；公开视图 + 装配元数据）。 */
@@ -308,8 +317,10 @@ export function registerTreasuryActionAdapter(
     execute: adapter.execute,
     ...(adapter.structureBindings !== undefined ? { structureBindings: adapter.structureBindings } : {}),
     ...(adapter.durableFacts !== undefined ? { durableFacts: adapter.durableFacts } : {}),
-  ...(adapter.retryFacts !== undefined ? { retryFacts: adapter.retryFacts } : {}),
+    ...(adapter.retryFacts !== undefined ? { retryFacts: adapter.retryFacts } : {}),
     ...(adapter.reconcile !== undefined ? { reconcile: adapter.reconcile } : {}),
+    ...(adapter.settlesOnAccept !== undefined ? { settlesOnAccept: adapter.settlesOnAccept } : {}),
+    ...(adapter.nonOkOutcome !== undefined ? { nonOkOutcome: adapter.nonOkOutcome } : {}),
   });
   const record: TreasuryAdapterRegistrationRecord = Object.freeze({
     view: view as TreasuryRegisteredActionAdapter<never, never>,
@@ -632,35 +643,7 @@ export interface TreasuryActionContractRequest {
   readonly source?: string;
 }
 
-/**
- * 执行请求：预构建 contract（伪造对象一律无效）或 actionKind/transactionId/
- * args 构建参数——二选一；authorization 为 contract authorization bundle
- * （contract-first 授权产物，生产路径）或授权 token 数组（每资源一个；
- * test-only 兼容路径）。执行顺序（第九轮 4.2）：contract/adapter/version
- * 校验 → bundle/token 只读预验证（零消费）→ 结构 incarnation 校验（fresh
- * 必需）→ prepare（tentative 接管）→ redeem（一次性消费）→ durable intent
- * → adapter.execute 恰好一次 → commit/abort。
- */
-export interface TreasuryActionExecutionRequest {
-  readonly contract?: TreasuryActionContract;
-  readonly actionKind?: string;
-  readonly transactionId?: string;
-  readonly args?: unknown;
-  readonly source?: string;
-  /**
-   * 【第十二轮 3.10】production 执行入口只接受 opaque authorization bundle
-   * （service 闭包签发对象）。裸 token / token 数组只能出现在明确 test
-   * harness 边界（kernelChannel 的 test-only 低层通道）——类型层即拒绝
-   * production 业务模块误用。
-   */
-  readonly authorization?: TreasuryAuthorizationBundle;
-  /**
-   * 【第十七轮第八节/第十节】tr1_ rearm child 的 opaque rearm capability
-   *（tr1_ contract 必填——经 authorizeTreasuryActionContract 的 options 与
-   * 执行请求透传；Game callback 之前的接管协议验证并消费）。
-   */
-  readonly rearmCapability?: unknown;
-}
+// 【Core Rewrite I】旧统一执行入口已退役：执行统一经 facade 的内核受控 dispatch。
 
 export type TreasuryActionContractResult =
   | { readonly status: "built"; readonly contract: TreasuryActionContract }
@@ -1091,286 +1074,7 @@ function buildTreasuryActionContractInner(
   return { status: "built", contract };
 }
 
-/**
- * 执行 action contract（生产 writer 的唯一入口）：
- * 1. contract 防伪（私有 registry 对象身份——伪造/JSON 副本一律无效）、跨
- *    tick 失效、adapter kind 与 version 匹配（版本演进后旧 contract 失效）；
- * 2. opaque authorization bundle 验证（第十轮 3.12.3）：只接受 service 闭包
- *    registry 签发的 bundle（对象身份）——裸 token、token 数组、手工构造
- *    对象与 JSON 副本一律 authorization_invalid（零消费、零 tentative）；
- * 3. 结构 incarnation 校验（fresh observation 必需——配额耗尽拒绝执行，
- *    不退回 shared 降低验证等级），对全部声明结构重新验证；
- * 4. 经 writer kernel 的 executePreparedAction + authorizationBundle 走
- *    **批量原子 redemption**（全部 legs 一次验证、staged 变更一次发布——
- *    见 facade.redeemAuthorizationBundleAtomic）与第八轮唯一安全顺序
- *    （durable intent → executing → adapter.execute 恰好一次 →
- *    commit/abort/fault 隔离）。
- */
-export function executeTreasuryActionContract<TAction extends { ok: boolean }>(
-  service: TreasuryService,
-  request: TreasuryActionExecutionRequest,
-): TreasurySafeExecuteResult<TAction> | { readonly status: "prepare_rejected"; readonly reason: string; readonly detail?: string } {
-  const built =
-    request.contract !== undefined
-      ? { status: "built" as const, contract: request.contract }
-      : buildTreasuryActionContract(service, {
-          actionKind: request.actionKind ?? "",
-          transactionId: request.transactionId ?? "",
-          args: request.args,
-          ...(request.source !== undefined ? { source: request.source } : {}),
-        });
-  if (built.status === "rejected") {
-    return { status: "prepare_rejected", reason: built.reason, detail: built.detail };
-  }
-  const contract = built.contract;
-  if (!contract || typeof contract !== "object" || !contractRegistry.has(contract)) {
-    actionContractEvents.rejected += 1;
-    return { status: "prepare_rejected", reason: "contract_invalid", detail: "contract 未在本模块构建（伪造对象/JSON 副本一律无效）" };
-  }
-  // ──【Round 22 Remediation VIII 工作流 A / IX 工作流 A】production
-  //    contract 通道的 runtime ID 命名空间 enforcement（不再只依赖架构测试
-  //    约束"生产调用方必须经受控 opening"）：
-  //    - ti2_ initial attempt：完整 service-issued 验证（v2 store watermark
-  //      + v3 确定性重算——同 sequence 错误 checksum 无法冒充；seq >
-  //      watermark 与 hash 篡改同样拒绝）；
-  //    - tr1_ rearm attempt：放行至 facade prepareTransaction 的 opaque
-  //      capability 门禁（单一权威——contract 层不重复验证）；
-  //    - 旧 ti1_ 命名空间：legacy issued namespace——IX 迁移后不再是当前
-  //      发行协议，一律 legacy_unverified 拒绝新执行（既有权威中的旧 ID
-  //      继续 replay 阻断）；
-  //    - arbitrary / ts1_ / tt1_ / 普通字符串：production 装配（registry
-  //      sealed）下一律拒绝——service-issued 命名空间之外不存在合法的
-  //      新 initial attempt ID。测试域（unsealed）保留受控入口，与
-  //      production contract channel 明确隔离。                      ──
-  const productionChannel = adapterRegistrySealed;
-  const isRearmNamespace = isTreasuryRearmAttemptId(contract.transactionId);
-  const issuedCheck = checkTreasuryServiceIssuedAttemptId(contract.transactionId);
-  if (isRearmNamespace) {
-    if (issuedCheck.status !== "not_service_issued") {
-      // tr1_ 前缀与 issuer 命名空间形态重叠属于畸形输入——直接拒绝。
-      actionContractEvents.rejected += 1;
-      return {
-        status: "prepare_rejected",
-        reason: "contract_invalid",
-        detail: "transactionId 同时空闲 rearm 与 issued 命名空间形态（畸形输入——拒绝）",
-      };
-    }
-  } else if (issuedCheck.status === "store_unhealthy") {
-    actionContractEvents.rejected += 1;
-    return {
-      status: "prepare_rejected",
-      reason: "issuer_store_unhealthy",
-      detail: `attempt issuer store unhealthy（${issuedCheck.detail}）——ti2_ ID 发行事实不可判定，fail closed`,
-    };
-  } else if (issuedCheck.status === "forged_future") {
-    actionContractEvents.rejected += 1;
-    return {
-      status: "prepare_rejected",
-      reason: "transaction_id_not_issued",
-      detail: `transactionId ${contract.transactionId.slice(0, 24)} 的发行序号（${String(issuedCheck.sequence)}）超过当前 high-watermark——手工伪造的 service-issued ID 一律拒绝（Game callback 零调用）`,
-    };
-  } else if (issuedCheck.status === "legacy_unverified") {
-    actionContractEvents.rejected += 1;
-    return {
-      status: "prepare_rejected",
-      reason: "transaction_id_not_issued",
-      detail: issuedCheck.namespace === "legacy"
-        ? `transactionId ${contract.transactionId.slice(0, 24)} 属于旧 ti1_ issued namespace（IX 迁移后不再是当前发行协议——不作为新 initial attempt 执行；既有权威中的旧 ID 继续由 durable settlement authority 阻断重放）`
-        : `transactionId ${contract.transactionId.slice(0, 24)} 的发行序号（${String(issuedCheck.sequence)}）已过但完整 ID 与确定性重算不匹配（篡改 checksum）——当前格式唯一合法完整 ID 之外的值一律拒绝（Game callback 零调用）`,
-    };
-  } else if (issuedCheck.status === "not_service_issued" && productionChannel) {
-    actionContractEvents.rejected += 1;
-    return {
-      status: "prepare_rejected",
-      reason: "transaction_id_not_service_issued",
-      detail: `transactionId ${contract.transactionId.slice(0, 24)} 不在 service-issued 命名空间（须为 ti2_ 受控 opening 签发或 tr1_ capability 派生）——production contract writer 不接受 arbitrary / ts1_ / tt1_ / 旧 ti1_ ID（Game callback 零调用）`,
-    };
-  }
-  // ──【Round 22 Remediation X 工作流 A】issued ticket 强制接管门禁不在本层
-  //    执行（模块环：本模块位于 receipts/resolutionStore 初始化链上游，顶部
-  //    import handoff（→ resolver → headroom → receipts）形成 TDZ 环）。
-  //    gate 与接管协议统一在 writer kernel 执行路径（facade.executePrepared
-  //    Action：prepare 层 ticket gate + contract binding gate + execution-
-  //    started 持久化后的 handoff consume）——contract 与低层通道的唯一
-  //    必经点，且先于全部 Game callback。                                ──
-  // 【第十八轮 24.13】execution request 的 source 不得覆盖已授权 contract
-  // source（不同 → callback 前拒绝；相同 → 幂等透传）。
-  if (request.source !== undefined && request.source !== contract.source) {
-    actionContractEvents.rejected += 1;
-    return {
-      status: "prepare_rejected",
-      reason: "contract_invalid",
-      detail: `execution request source "${request.source.slice(0, 32)}" 与 contract source "${contract.source.slice(0, 32)}" 不一致——source 在 contract build 时确定（单一权威），不得覆盖已授权 source（Game callback 零调用）`,
-    };
-  }
-  if (contract.builtAtTick !== Game.time) {
-    actionContractEvents.rejected += 1;
-    return {
-      status: "prepare_rejected",
-      reason: "contract_invalid",
-      detail: `contract 于 tick ${String(contract.builtAtTick)} 构建（当前 ${String(Game.time)}）——跨 tick 失效`,
-    };
-  }
-  const adapter = findTreasuryActionAdapter(contract.actionKind);
-  if (adapter === undefined) {
-    actionContractEvents.rejected += 1;
-    return { status: "prepare_rejected", reason: "adapter_not_registered", detail: `action kind ${contract.actionKind} 的 adapter 已被移除` };
-  }
-  if (adapter.kind !== contract.actionKind) {
-    actionContractEvents.adapterMismatches += 1;
-    return { status: "prepare_rejected", reason: "adapter_kind_mismatch", detail: `adapter kind ${adapter.kind} 与 contract ${contract.actionKind} 不匹配` };
-  }
-  if (adapter.version !== contract.adapterVersion) {
-    actionContractEvents.adapterMismatches += 1;
-    return {
-      status: "prepare_rejected",
-      reason: "contract_invalid",
-      detail: `adapter version 已演进（contract 构建于 v${String(contract.adapterVersion)}，registry 当前 v${String(adapter.version)}）——旧 contract 失效，须重新构建与授权`,
-    };
-  }
-  if (contract.adapterRegistrationId !== undefined && contract.adapterRegistrationId !== adapter.registrationId) {
-    actionContractEvents.adapterMismatches += 1;
-    return {
-      status: "prepare_rejected",
-      reason: "contract_invalid",
-      detail: `adapter registration identity 已变化（contract ${contract.adapterRegistrationId.slice(0, 12)}，registry ${adapter.registrationId.slice(0, 12)}）——旧 contract 失效`,
-    };
-  }
-  if (contract.adapterSemanticIdentity !== undefined && contract.adapterSemanticIdentity !== adapter.semanticIdentity) {
-    actionContractEvents.adapterMismatches += 1;
-    return {
-      status: "prepare_rejected",
-      reason: "contract_invalid",
-      detail: `adapter stable semantic identity 不一致（contract ${contract.adapterSemanticIdentity.slice(0, 48)}，registry ${adapter.semanticIdentity.slice(0, 48)}）——reconciler 语义已变化，旧 contract 失效`,
-    };
-  }
-  const authorization = request.authorization;
-  if (authorization === undefined) {
-    actionContractEvents.rejected += 1;
-    return {
-      status: "prepare_rejected",
-      reason: "authorization_invalid",
-      detail: "action contract 执行必须携带授权（opaque service-issued bundle——真实写动作不得只凭物理可行性通过）",
-    };
-  }
-  // ── opaque bundle 验证（第十轮 3.12.3）：只认 service 闭包 registry 的
-  //    对象身份；裸 token / token 数组 / 手工构造对象 / JSON 副本一律拒绝。
-  //    低层 token 路径仅供 test harness（kernelChannel），不在此处。 ──────
-  const kernel = (service as unknown as TreasuryKernelHolder)[TREASURY_WRITER_KERNEL];
-  if (kernel === undefined) {
-    actionContractEvents.rejected += 1;
-    return {
-      status: "prepare_rejected",
-      reason: "authorization_invalid",
-      detail: "service 不持有 writer kernel（非 treasury 协议栈通道——拒绝执行）",
-    };
-  }
-  const resolvedBundle = kernel.resolveAuthorizationBundle(authorization, {
-    transactionId: contract.transactionId,
-    actionKind: contract.actionKind,
-    digest: contract.digest,
-    adapterVersion: contract.adapterVersion,
-  });
-  if (resolvedBundle.status === "rejected") {
-    actionContractEvents.rejected += 1;
-    return { status: "prepare_rejected", reason: "authorization_invalid", detail: `授权 bundle 验证失败（${resolvedBundle.reason}）: ${resolvedBundle.detail}` };
-  }
-  // 结构 incarnation 校验（第九轮 4.12，先于消费）：fresh observation 必需
-  // ——配额耗尽拒绝执行，不退回 shared observation 降低验证等级；对全部
-  // 声明结构（posting locations + structureBindings）逐项重验。
-  const freshObservation = service.beginFreshObservation();
-  if (freshObservation === null) {
-    actionContractEvents.rejected += 1;
-    return {
-      status: "prepare_rejected",
-      reason: "fresh_observation_unavailable",
-      detail: "fresh observation 配额耗尽——无法在不降低验证等级的前提下确认结构 incarnation（fail closed，拒绝执行）",
-    };
-  }
-  for (const binding of contract.structureBindings) {
-    const label = binding.label ?? `${binding.roomName}:${binding.locationKind}`;
-    const snapshotId = contract.structureSnapshots[label];
-    if (binding.bindingKind === "game_object") {
-      // game_object binding 执行前重验（第十轮 3.12.11）：对象仍存在、类型与
-      // room 归属仍匹配（incarnation = 对象 id 本身——不存在即被替换语义）。
-      const object = (Game as unknown as { getObjectById<T extends object>(id: string): T | null }).getObjectById<{
-        id: string;
-        structureType?: string;
-        room?: { name: string };
-      }>(binding.objectId);
-      const objectMissing =
-        object === null ||
-        object === undefined ||
-        (binding.expectedType !== undefined && object.structureType !== binding.expectedType) ||
-        (binding.expectedRoom !== undefined && object.room?.name !== binding.expectedRoom);
-      if (objectMissing) {
-        actionContractEvents.rejected += 1;
-        return {
-          status: "prepare_rejected",
-          reason: "structure_replaced",
-          detail: `game object binding 失效（${label}: 对象不存在或类型/room 归属不匹配）——必须重新构建 contract`,
-        };
-      }
-      continue;
-    }
-    const currentStructureId = freshObservation.hasRoom(binding.roomName)
-      ? freshObservation.location(binding.roomName, binding.locationKind).structureId
-      : undefined;
-    if (snapshotId !== currentStructureId) {
-      actionContractEvents.rejected += 1;
-      return {
-        status: "prepare_rejected",
-        reason: "structure_replaced",
-        detail: `结构 incarnation 已变化（${label}: ${String(snapshotId)} → ${String(currentStructureId)}）——必须重新构建 contract`,
-      };
-    }
-  }
-  // 经 writer kernel execution options 走批量原子 redemption（第十轮
-  // 3.12.4）：prepare（tentative 接管）→ redeemAuthorizationBundleAtomic
-  //（全部 legs 一次性只读预验证 + staged 变更一次发布；注入故障前缀回滚或
-  // internal authorization fault）→ durable intent（绑定完整合同身份与
-  // bundle digest）→ callback。
-  return kernel.executePreparedAction(
-    {
-      transactionId: contract.transactionId,
-      kind: contract.actionKind,
-      source: contract.source,
-      decision: {
-        scope: contract.epoch.scope,
-        epochSeq: contract.epoch.epochSeq,
-        observedAtTick: contract.epoch.observedAtTick,
-      },
-      postings: contract.postings,
-    },
-    () => adapter.execute(contract.args) as TAction,
-    {
-      authorizationBundle: authorization as TreasuryAuthorizationBundle,
-      // 【第十七轮第八节】tr1_ rearm capability 透传（kernel 内部通道——
-      // prepare 门禁与接管协议验证）。
-      ...(request.rearmCapability !== undefined ? { rearmCapability: request.rearmCapability } : {}),
-      intentContract: {
-        contractId: contract.contractId,
-        contractDigest: contract.digest,
-        adapterVersion: contract.adapterVersion,
-        adapterRegistrationId: contract.adapterRegistrationId,
-        adapterSemanticIdentity: contract.adapterSemanticIdentity,
-        authorizationDigest: resolvedBundle.authorizationDigest,
-        ...(contract.canonicalArgsText !== undefined ? { canonicalArgsText: contract.canonicalArgsText } : {}),
-        ...(contract.durableFacts !== undefined
-          ? { durablePayload: contract.durableFacts.payload, durablePayloadVersion: contract.durableFacts.version }
-          : {}),
-        ...(contract.structureDescriptors.length > 0
-          ? {
-              // 完整 canonical descriptor（第十一轮 3.13.9）——bindingKind/role/
-              // object identity/type/room/required/version 全字段进 durable intent。
-              structureFacts: contract.structureDescriptors.map((descriptor) => ({ ...descriptor })),
-            }
-          : {}),
-        ...(contract.adapterRetryFacts !== undefined ? { adapterRetryFacts: contract.adapterRetryFacts } : {}),
-      },
-    },
-  );
-}
+// 【Core Rewrite I】旧统一执行入口已退役：执行统一经 facade 的内核受控 dispatch。
 
 // ── 测试专用 adapter（本轮唯一内置注册；生产 writer 禁止） ──────────────────
 

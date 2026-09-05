@@ -1,116 +1,63 @@
 /**
- * Treasury 测试专用 harness（第十轮 3.12.5）。
+ * Treasury 测试通道（Core Rewrite I）。
  *
- * 低层 writer 原语（raw authorize / token consume / validate redeem /
- * prepare / execute prepared / direct commit-abort / compat 单阶段入口）已从
- * 生产 TreasuryService 的类型与运行时枚举面移除——它们只经
- * TREASURY_WRITER_KERNEL symbol 通道（non-enumerable）供 treasury 协议栈
- * 内部使用。本模块把 kernel 上的原语展开为**测试视图**（TreasuryTestService
- * = 公共方法 + 低层原语），供既有协议测试与受控实验使用。
- *
- * 架构边界（treasuryWriteArchitecture.test.ts 守护）：
- * - 测试文件（*.test.ts）允许 import 本模块；
- * - treasury 协议栈之外的生产模块不得 import 本模块或 kernelChannel。
+ * 边界：仅 `*.test.ts` 可 import 本模块（架构测试守护）；treasury 协议栈
+ * 之外的生产模块不得 import。旧 writer-kernel symbol 通道已随旧协议栈
+ * 退役——测试统一走公共 API（authorize/executeDispatch/settle/rearm），
+ * 不存在绕开真实 gate 的"方便入口"。本模块只补充测试观察工具：
+ * 活跃聚合/环的直接读取、store 损坏注入与恢复辅助。
  */
 
 import type { TreasuryService } from "@/runtime/treasury/facade";
-import { TREASURY_WRITER_KERNEL, type TreasuryKernelHolder } from "@/runtime/treasury/kernelChannel";
 import {
-  TREASURY_RESOLUTION_KERNEL,
-  type TreasuryResolutionKernelHolder,
-} from "@/runtime/treasury/resolutionKernelChannel";
-import type { TreasuryReconciliationCapabilityConsumption } from "@/runtime/treasury/reconciliation";
+  readTreasuryCoreStoreHealth,
+} from "@/runtime/treasury/kernel/store";
 import type {
-  TreasuryAuthorizationConsumeResult,
-  TreasuryAuthorizationRequest,
-  TreasuryAuthorizationResult,
-  TreasuryAuthorizationToken,
-} from "@/runtime/treasury/authorization";
-import type {
-  TreasuryPreparedAbortResult,
-  TreasuryPreparedCommitResult,
-  TreasuryPreparationResult,
-  TreasurySafeExecuteResult,
-  TreasuryTransactionInput,
-} from "@/runtime/treasury/types";
-import type { TreasuryRecordActionInput, TreasurySettlementResult } from "@/runtime/treasury/types";
-import type { TreasuryPosting } from "@/runtime/treasury/types";
-import type { TreasuryWriterKernelExecution } from "@/runtime/treasury/facade";
-import type { TreasuryPreparedHandle } from "@/runtime/treasury/types";
+  TreasuryCoreMemory,
+  TreasuryCoreRingEntry,
+  TreasuryCoreWorkRecord,
+} from "@/runtime/treasury/kernel/types";
 
-/** 测试视图：公共 TreasuryService + 低层 writer 原语（kernel 展开）。 */
-export type TreasuryTestService = TreasuryService & {
-  authorizeResourceUse(request: TreasuryAuthorizationRequest): TreasuryAuthorizationResult;
-  validateTreasuryAuthorizationForRedeem(
-    tokens: readonly TreasuryAuthorizationToken[],
-    contract: { readonly transactionId: string; readonly actionKind: string; readonly digest: string; readonly adapterVersion: number },
-    postings: readonly TreasuryPosting[],
-  ): { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string; readonly detail: string };
-  consumeTreasuryAuthorization(
-    token: TreasuryAuthorizationToken,
-    options?: { transactionId?: string; postings?: readonly TreasuryPosting[] },
-  ): TreasuryAuthorizationConsumeResult;
-  prepareTransaction(input: TreasuryTransactionInput, prepareOptions?: {
-    /** 【第十七轮第八节】tr1_ rearm child 的 opaque capability（kernel 内部通道）。 */
-    readonly rearmCapability?: unknown;
-  }): TreasuryPreparationResult;
-  executePreparedAction<TAction extends { ok: boolean }>(
-    input: TreasuryTransactionInput,
-    action: () => TAction,
-    execution?: TreasuryWriterKernelExecution,
-  ): TreasurySafeExecuteResult<TAction>;
-  commitPreparedTransaction(handle: TreasuryPreparedHandle): TreasuryPreparedCommitResult;
-  abortPreparedTransaction(handle: TreasuryPreparedHandle): TreasuryPreparedAbortResult;
-  recordAcceptedTransaction(input: TreasuryTransactionInput): TreasurySettlementResult;
-  recordAcceptedAction(input: TreasuryRecordActionInput): TreasurySettlementResult;
-  /** resolution kernel 展开（第十一轮 3.13.8：capability 只读验证/消费——测试专用）。 */
-  validateReconciliationCapability(capability: unknown): TreasuryReconciliationCapabilityConsumption;
-  consumeReconciliationCapability(capability: unknown): TreasuryReconciliationCapabilityConsumption;
-};
+export interface TreasuryTestHarness {
+  /** 活跃聚合只读快照（浅拷贝记录；不修改权威）。 */
+  readonly activeWorks: () => readonly TreasuryCoreWorkRecord[];
+  readonly ring: () => readonly TreasuryCoreRingEntry[];
+  readonly store: () => TreasuryCoreMemory | undefined;
+  /** 直接写 store 根（损坏/边界注入专用；测试外不得调用）。 */
+  readonly writeStoreForTest: (mutate: (root: TreasuryCoreMemory) => void) => boolean;
+}
 
-/**
- * 把生产 service 展开为测试视图（浅合并 kernel 原语——调用面与第九轮前
- * 完全一致）。service 不持有 kernel（伪造/非 treasury 通道）时抛错。
- */
-export function treasuryTestService(service: TreasuryService): TreasuryTestService {
-  const kernel = (service as unknown as TreasuryKernelHolder)[TREASURY_WRITER_KERNEL] as
-    | (TreasuryKernelHolder[typeof TREASURY_WRITER_KERNEL] & Record<string, unknown>)
-    | undefined;
-  if (kernel === undefined) {
-    throw new Error("treasuryTestService: service 不持有 writer kernel（非 createTreasuryService 产物）");
+export function treasuryTestHarness(_service: TreasuryService): TreasuryTestHarness {
+  void _service;
+  return {
+    activeWorks: () => {
+      const health = readTreasuryCoreStoreHealth();
+      if (health.status !== "healthy") return [];
+      return Object.values(health.memory.active).slice().sort((a, b) => (a.attemptId < b.attemptId ? -1 : 1));
+    },
+    ring: () => {
+      const health = readTreasuryCoreStoreHealth();
+      if (health.status !== "healthy") return [];
+      return health.memory.ring;
+    },
+    store: () => {
+      const health = readTreasuryCoreStoreHealth();
+      return health.status === "healthy" ? health.memory : undefined;
+    },
+    writeStoreForTest: (mutate) => {
+      const runtime = Memory.runtime as Record<string, unknown> | undefined;
+      const root = runtime?.treasuryCore as TreasuryCoreMemory | undefined;
+      if (root === undefined) return false;
+      mutate(root);
+      return true;
+    },
+  };
+}
+
+/** 测试辅助：清除 treasuryCore 持久根（等价 service.resetForTest 的存储侧）。 */
+export function resetTreasuryCoreStoreForTest(): void {
+  const runtime = Memory.runtime as Record<string, unknown> | undefined;
+  if (runtime && typeof runtime === "object") {
+    delete runtime.treasuryCore;
   }
-  const view = Object.assign({}, service, {
-    authorizeResourceUse: kernel.authorizeResourceUse,
-    validateTreasuryAuthorizationForRedeem: kernel.validateTreasuryAuthorizationForRedeem,
-    consumeTreasuryAuthorization: kernel.consumeTreasuryAuthorization,
-    prepareTransaction: kernel.prepareTransaction,
-    executePreparedAction: kernel.executePreparedAction,
-    commitPreparedTransaction: kernel.commitPreparedTransaction,
-    abortPreparedTransaction: kernel.abortPreparedTransaction,
-    recordAcceptedTransaction: kernel.recordAcceptedTransaction,
-    recordAcceptedAction: kernel.recordAcceptedAction,
-  }) as TreasuryTestService;
-  // kernel symbol 同步挂载（non-enumerable——视图可再次被包装/传递给协议栈）。
-  Object.defineProperty(view, TREASURY_WRITER_KERNEL, {
-    value: kernel,
-    enumerable: false,
-    writable: false,
-    configurable: false,
-  });
-  // resolution kernel（第十一轮 3.13.8）：service 必须持有（伪造对象无效）。
-  const resolutionKernel = (service as unknown as TreasuryResolutionKernelHolder)[TREASURY_RESOLUTION_KERNEL];
-  if (resolutionKernel === undefined) {
-    throw new Error("treasuryTestService: service 不持有 resolution kernel（非 createTreasuryService 产物）");
-  }
-  Object.defineProperty(view, TREASURY_RESOLUTION_KERNEL, {
-    value: resolutionKernel,
-    enumerable: false,
-    writable: false,
-    configurable: false,
-  });
-  Object.assign(view, {
-    validateReconciliationCapability: resolutionKernel.validateReconciliationCapability,
-    consumeReconciliationCapability: resolutionKernel.consumeReconciliationCapability,
-  });
-  return view;
 }
