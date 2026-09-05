@@ -40,6 +40,7 @@ import {
   type TreasuryCoreWorkRecord,
 } from "@/runtime/treasury/kernel/types";
 import { cloneTreasuryDurableValue } from "@/runtime/treasury/durableClone";
+import { readTreasuryWorldSequence } from "@/runtime/treasury/observation";
 import {
   applyTreasuryCoreStateCommand,
   type TreasuryCoreCommand,
@@ -403,6 +404,8 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
         reason: "adapter 注册身份与聚合不一致（执行环境语义已变化，旧授权失效）",
       };
     }
+    // 调用边界世界序（效果侧锚点——在动作调用之前固定；§6.2 观察覆盖判定）。
+    const invocationWorldSequence = readTreasuryWorldSequence();
     // 1) dispatching 发布（持久 + 发布确认）。失败 → 零调用、保持 pending。
     const start = runCommand({ type: "dispatch_start", attemptId: typed.attemptId, canonicalDigest: typed.canonicalDigest });
     if (start.status === "failed") return { status: "publish_failed", reason: start.reason };
@@ -439,6 +442,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       type: "dispatch_result",
       attemptId: typed.attemptId,
       invocationAtTick: nowTick,
+      invocationWorldSequence,
       external,
       outcome: invocationOutcome,
       evidence,

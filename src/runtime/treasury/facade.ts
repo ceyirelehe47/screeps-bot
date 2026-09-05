@@ -389,14 +389,20 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   }
 
   function kernelOccupancyNow(options: {
-    observationAsOfTick?: number;
+    observation?: TreasuryObservationView;
     excludeAttemptId?: string;
   } = {}): { byKey: ReadonlyMap<string, number>; inflowByLocation: ReadonlyMap<string, number> } {
     const health = readTreasuryCoreStoreHealth();
     if (health.status !== "healthy") {
       return { byKey: new Map(), inflowByLocation: new Map() };
     }
-    const occupancy = computeTreasuryCoreOccupancy(health.memory, options);
+    // 观察覆盖判定锚点（§6.2）：世界序优先（同步生效模型精确判定），
+    // tick 边界兜底（世界序缺失的旧记录保守占用）。
+    const occupancy = computeTreasuryCoreOccupancy(health.memory, {
+      observationWorldSequence: options.observation?.epoch.worldSequence,
+      observationAsOfTick: options.observation?.epoch.observedAtTick,
+      excludeAttemptId: options.excludeAttemptId,
+    });
     return { byKey: occupancy.byKey, inflowByLocation: occupancy.inflowByLocation };
   }
 
@@ -484,13 +490,41 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         ? (context.ownerIdentity as TreasuryOwnerIdentity)
         : undefined;
     const occupancy = kernelOccupancyNow({
-      observationAsOfTick: state.observation.epoch.observedAtTick,
+      observation: state.observation,
       excludeAttemptId: context.excludeAttemptId,
     });
     const sources = buildAdmissionFactSources(state, occupancy, context);
     return evaluateTreasuryAdmissionFacts(sources, candidateLegs, {
       excludeOwner,
     });
+  }
+
+  /**
+   * 执行前复验判定（§4.4）：使用**当前世界的 fresh 观察**（结构 incarnation
+   * 与容量事实以执行时刻为准——同 tick 内结构消失/重建必须被拦截）；fresh
+   * 额度（TREASURY_FRESH_EPOCH_LIMIT）耗尽时退回本 tick 缓存快照（有界退化，
+   * 占用仍从 Memory 实时派生）。复验排除本笔自身占用（§4.3 不自我双扣）。
+   */
+  function evaluateRevalidation(
+    candidateLegs: readonly TreasuryCandidateLeg[],
+    context: TreasuryCoreAdmissionContext,
+  ): { verdict: TreasuryAdmissionVerdict; observation: TreasuryObservationView } {
+    const fresh = service.beginFreshObservation();
+    const observation = fresh ?? ensureTickState(true).observation;
+    const excludeOwner: TreasuryOwnerIdentity | undefined =
+      context.ownerIdentity !== null
+        ? (context.ownerIdentity as TreasuryOwnerIdentity)
+        : undefined;
+    const occupancy = kernelOccupancyNow({
+      observation,
+      excludeAttemptId: context.excludeAttemptId,
+    });
+    const sources = buildAdmissionFactSources(
+      { tick: Game.time, observation, ended: false },
+      occupancy,
+      context,
+    );
+    return { verdict: evaluateTreasuryAdmissionFacts(sources, candidateLegs, { excludeOwner }), observation };
   }
 
   const kernel = createTreasuryCoreKernel({
@@ -801,7 +835,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         // 容量占用口径（R5）：occupancy 流入投影（含未覆盖 committed 流入）；
         // strict 口径为展示值（overlay 缓存）。
         capacityDelta: (roomName, kind) =>
-          kernelUnknownInflowOccupancy(roomName, kind, state.observation.epoch.observedAtTick),
+          kernelUnknownInflowOccupancy(roomName, kind, state.observation),
         strictCapacityDelta: (roomName, kind) =>
           Math.max(0, overlay.capacityDeltas.get(overlayLocationKey(roomName, kind)) ?? 0),
         onExpiredExcluded: () => {
@@ -893,7 +927,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
               : undefined;
           committed += commitments.reservedProduction(roomName, context.resource, excludeOwner);
         }
-        const occupancy = kernelOccupancyNow({ observationAsOfTick: observation.epoch.observedAtTick });
+        const occupancy = kernelOccupancyNow({ observation });
         if (occupancy.byKey.size > 0) {
           for (const roomName of rooms) {
             for (const kind of kinds) {
@@ -927,10 +961,13 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const rawSpendable = authorizable ? base - committed - withhold : 0;
 
       // authorizationSafe 联合判定：owner/承诺完整性 + kernel store 健康 +
-      // 旧业务数据兼容 + 共享 reservation store 健康。
+      // 旧业务数据兼容 + 共享 reservation store 健康 + policy 可用性
+      // （C04/§4.5：严格查询的阻断条件与接纳/执行/rearm 同源——无注册
+      // resolver 时不得宣称任何数字"可授权"）。
       const blockers: string[] = [];
       if (!ownerCheck.valid && context.owner) blockers.push("invalid_owner");
       if (!commitmentComplete) blockers.push("commitment_incomplete");
+      if (findTreasuryPolicyResolver() === undefined) blockers.push("policy_unavailable");
       const kernelHealth = kernel.health();
       if (kernelHealth.status === "unhealthy") blockers.push("kernel_store_unhealthy");
       else if (kernelHealth.status === "incompatible") blockers.push("kernel_store_incompatible");
@@ -989,7 +1026,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const state = ensureTickState(true);
       // 统一占用口径（§6.1/R5）：unknown 的可能流入 + 未被当前观察覆盖的
       // 已确认流入都占接收容量（occupancy 投影），同一责任单次扣减。
-      const kernelInflow = kernelUnknownInflowOccupancy(roomName, kind, state.observation.epoch.observedAtTick);
+      const kernelInflow = kernelUnknownInflowOccupancy(roomName, kind, state.observation);
       return state.observation.freeCapacity(roomName, kind) - kernelInflow;
     },
 
@@ -1103,7 +1140,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       }
       // 复验（§4.4）：当前 policy/承诺/容量/结构事实——同一判定公式，
       // 排除本笔 pending 占用（既有责任继续兑现，不双扣）。
-      const revalidation = evaluateAdmission(
+      const revalidation = evaluateRevalidation(
         permit.postings.map((p) => ({ roomName: p.roomName, locationKind: p.locationKind, resource: p.resource, delta: p.delta })),
         {
           contractId: `ac:${permit.canonicalDigest}`,
@@ -1113,13 +1150,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           excludeAttemptId: permit.attemptId,
         },
       );
-      if (revalidation.status === "rejected") {
-        return { status: "blocked", reasonCode: revalidation.reasonCode, reason: `执行前复验失败：${revalidation.reason}` };
+      if (revalidation.verdict.status === "rejected") {
+        return { status: "blocked", reasonCode: revalidation.verdict.reasonCode, reason: `执行前复验失败：${revalidation.verdict.reason}` };
       }
-      // 结构 incarnation（§4.4）：签发时的结构绑定必须与当前观察一致。
-      const state = ensureTickState(true);
+      // 结构 incarnation（§4.4）：签发时的结构绑定必须与**当前世界**一致。
       for (const binding of Array.isArray(permit.structureBindings) ? permit.structureBindings : []) {
-        const location = state.observation.location(binding.roomName, binding.locationKind as TreasuryLocationKind);
+        const location = revalidation.observation.location(binding.roomName, binding.locationKind as TreasuryLocationKind);
         if (!location.exists || location.structureId !== binding.structureId) {
           return {
             status: "blocked",
@@ -1265,9 +1301,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   };
 
   /** kernel 侧占用流入投影（unknown + 未覆盖 committed；统一 occupancy 口径）。 */
-  function kernelUnknownInflowOccupancy(roomName: string, kind: TreasuryLocationKind, asOfTick: number): number {
+  function kernelUnknownInflowOccupancy(roomName: string, kind: TreasuryLocationKind, observation: TreasuryObservationView): number {
     return (
-      kernelOccupancyNow({ observationAsOfTick: asOfTick }).inflowByLocation.get(overlayLocationKey(roomName, kind)) ?? 0
+      kernelOccupancyNow({ observation }).inflowByLocation.get(overlayLocationKey(roomName, kind)) ?? 0
     );
   }
 

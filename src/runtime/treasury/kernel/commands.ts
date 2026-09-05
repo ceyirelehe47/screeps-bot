@@ -84,6 +84,8 @@ export interface TreasuryCoreDispatchResultCommand {
   readonly type: "dispatch_result";
   readonly attemptId: string;
   readonly invocationAtTick: number;
+  /** 调用边界跨越时刻的受控世界序（观察覆盖判定锚点；§6.2）。 */
+  readonly invocationWorldSequence?: number;
   readonly external: { readonly accepted: boolean } | null;
   readonly outcome: "committed" | "not_executed" | "unknown";
   readonly evidence: TreasuryCoreSettlementEvidence | null;
@@ -317,7 +319,7 @@ function dispatchResultCommand(
   }
   const phaseProblem = requirePhase(record, "dispatching");
   if (phaseProblem !== null) return { status: "rejected", reason: phaseProblem };
-  const invocation = { atTick: command.invocationAtTick };
+  const invocation = { atTick: command.invocationAtTick, worldSequence: command.invocationWorldSequence };
   const external = command.external === null ? null : { accepted: command.external.accepted, atTick: ctx.nowTick };
   if (command.outcome === "unknown") {
     withRecord(memory, command.attemptId, (r) => ({

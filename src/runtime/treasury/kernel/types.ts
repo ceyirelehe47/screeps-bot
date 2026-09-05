@@ -174,9 +174,15 @@ export interface TreasuryCoreWorstCaseLeg {
   readonly delta: number;
 }
 
-/** 三种事实：动作调用发生 / 外部接口接受 / 世界效果确认（outcome 字段）。 */
+/**
+ * 三种事实：动作调用发生 / 外部接口接受 / 世界效果确认（outcome 字段）。
+ * worldSequence（v3）：调用边界跨越时刻的受控世界序（观察覆盖判定的
+ * 效果侧锚点——观察构建序 > 该值即效果已进入该观察；缺失时按 tick
+ * 边界保守判定）。
+ */
 export interface TreasuryCoreInvocationFact {
   readonly atTick: number;
+  readonly worldSequence?: number;
 }
 
 export interface TreasuryCoreExternalFact {
@@ -371,6 +377,13 @@ export interface TreasuryCoreOccupancyOptions {
    * 覆盖）；undefined = 无观察上下文，保守占用。
    */
   readonly observationAsOfTick?: number;
+  /**
+   * 当前授权观察的世界序（epoch.worldSequence）。优先判定：观察构建序
+   * > invocation.worldSequence → 效果已进入该观察（同步生效模型下 fresh
+   * 观察包含本 tick 已发生效果——§6.2）。缺失（旧记录/未提供）时回退
+   * tick 边界保守判定。
+   */
+  readonly observationWorldSequence?: number;
   /** 排除某一 attempt 的占用（执行复验：本笔 pending 是"既有责任继续兑现"）。 */
   readonly excludeAttemptId?: string;
 }

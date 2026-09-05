@@ -22,6 +22,17 @@ import {
   treasuryLocationKey,
 } from "@/runtime/treasury/types";
 
+/** 受控世界序（globalThis 单调计数；global reset 归零不影响保守方向）。 */
+export function readTreasuryWorldSequence(): number {
+  return (globalThis as { __treasuryWorldSequence?: number }).__treasuryWorldSequence ?? 0;
+}
+
+/** 受控世界真实更新时递增（同步 adapter 写世界 / 测试宿主施加效果时调用）。 */
+export function bumpTreasuryWorldSequence(): void {
+  const holder = globalThis as { __treasuryWorldSequence?: number };
+  holder.__treasuryWorldSequence = (holder.__treasuryWorldSequence ?? 0) + 1;
+}
+
 export interface TreasuryObservationBuildOptions {
   readonly scope: TreasuryObservationScope;
   readonly epochSeq: number;
@@ -187,6 +198,7 @@ export function buildTreasuryObservation(
     scope: options.scope,
     epochSeq: options.epochSeq,
     observedAtTick: Game.time,
+    worldSequence: readTreasuryWorldSequence(),
   };
 
   const rooms: TreasuryRoomObservation[] = [];

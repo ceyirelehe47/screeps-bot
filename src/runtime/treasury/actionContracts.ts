@@ -43,6 +43,7 @@ import type {
 } from "@/runtime/treasury/types";
 import { TREASURY_STRUCTURE_DESCRIPTOR_VERSION } from "@/runtime/treasury/types";
 import { hashTreasuryCanonicalString, isTreasuryRearmAttemptId } from "@/runtime/treasury/transactionId";
+import { bumpTreasuryWorldSequence } from "@/runtime/treasury/observation";
 import type { TreasuryService } from "@/runtime/treasury/facade";
 import { canonicalizeTreasuryAdapterRetryFacts } from "@/runtime/treasury/adapterRetrySemantics";
 import { canonicalizeTreasuryActionArgs, TREASURY_CANONICAL_ENCODING_VERSION } from "@/runtime/treasury/canonicalEncoding";
@@ -1106,6 +1107,7 @@ export function resetTreasuryTestAdapterSideEffectsForTest(): void {
 
 /** 测试 adapter 的同步世界写入（受控测试世界；生产 adapter 不使用）。 */
 function applyTestTransferToWorld(args: TreasuryTestTransferArgs): void {
+  // 受控世界真实更新 → 世界序 +1（观察覆盖判定锚点；§6.2）。
   const fromRoom = Game.rooms?.[args.fromRoom];
   const toRoom = Game.rooms?.[args.toRoom];
   const fromStructure =
@@ -1132,6 +1134,7 @@ function applyTestTransferToWorld(args: TreasuryTestTransferArgs): void {
       (toStore as unknown as { __freeCapacity: number }).__freeCapacity = Math.max(0, freeTo - args.amount);
     }
   }
+  bumpTreasuryWorldSequence();
 }
 
 /**

@@ -80,7 +80,17 @@ export function installRooms(specs: RoomSpec[]): Record<string, Room> {
   return rooms;
 }
 
-/** 写入 storage/terminal 资源（模拟 tick 间外部变化）。 */
+/** 测试宿主直接推进世界序（installRooms 重建除外的一切世界真实更新）。 */
+export function bumpTreasuryWorldSequenceForTest(): void {
+  (globalThis as { __treasuryWorldSequence?: number }).__treasuryWorldSequence =
+    ((globalThis as { __treasuryWorldSequence?: number }).__treasuryWorldSequence ?? 0) + 1;
+}
+
+/**
+ * 写入 storage/terminal 资源（模拟 tick 间外部变化）。视为受控世界真实
+ * 更新：世界序 +1（观察覆盖判定——§6.2；installRooms 重建不 bump，重建
+ * 是测试基建行为而非世界推进）。
+ */
 export function setStoreResources(
   structure: StructureStorage | StructureTerminal | undefined,
   resources: Record<string, number>,
@@ -93,6 +103,7 @@ export function setStoreResources(
   for (const [resource, amount] of Object.entries(resources)) {
     record[resource] = amount;
   }
+  bumpTreasuryWorldSequenceForTest();
 }
 
 /**
@@ -116,4 +127,5 @@ export function mutateStoreResource(
   if (typeof free === "number") {
     (structure?.store as unknown as { __freeCapacity: number }).__freeCapacity = Math.max(0, free - delta);
   }
+  bumpTreasuryWorldSequenceForTest();
 }

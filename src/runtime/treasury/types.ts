@@ -40,6 +40,13 @@ export interface TreasuryEpoch {
   readonly scope: TreasuryObservationScope;
   readonly epochSeq: number;
   readonly observedAtTick: number;
+  /**
+   * 观察构建时刻的世界序（Core Rewrite III/§6.2）：受控世界每次真实更新
+   * （同步 adapter 写世界/测试宿主施加效果）单调 +1。观察覆盖判定比较
+   * 该序与聚合调用边界的世界序——"时间过去了"或"净余额碰巧相等"不构成
+   * 覆盖。
+   */
+  readonly worldSequence: number;
 }
 
 /** 单个受管辖位置的稀疏物理桶。amounts 只含非零资源 key（冻结）。 */

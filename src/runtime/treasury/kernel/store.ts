@@ -231,9 +231,12 @@ function validateWorkRecord(attemptId: string, value: unknown): string | null {
   }
   if (r.invocation !== null) {
     if (!isPlainObject(r.invocation)) return `active[${attemptId}].invocation 非法`;
-    problem = rejectUnknownFields(r.invocation, `active[${attemptId}].invocation`, ["atTick"]);
+    problem = rejectUnknownFields(r.invocation, `active[${attemptId}].invocation`, ["atTick", "worldSequence"]);
     if (problem !== null) return problem;
     if (!nonNegativeSafeInteger(r.invocation.atTick)) return `active[${attemptId}].invocation.atTick 非法`;
+    if (r.invocation.worldSequence !== undefined && !nonNegativeSafeInteger(r.invocation.worldSequence)) {
+      return `active[${attemptId}].invocation.worldSequence 非法`;
+    }
   }
   if (r.external !== null) {
     if (!isPlainObject(r.external)) return `active[${attemptId}].external 非法`;

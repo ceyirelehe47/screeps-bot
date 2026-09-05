@@ -7,11 +7,10 @@
  *  流出（max(0, −delta)，占用存量可花费额）与流入（max(0, +delta)，
  *  占用接收容量——unknown 的可能流入不成可花费资产，只占接收空间）。
  * - closing(committed)：**效果被当前授权观察接管前继续占用**。覆盖判定
- *  是观察有效性边界（epoch.observedAtTick）与效果时点
- *  （invocation.atTick——调用边界跨越时刻）的比较：
- *    observedAtTick ≤ invocation.atTick → 该观察不可能包含此效果 → 占用；
- *    observedAtTick > invocation.atTick → 观察已含效果（tick 边界模型，
- *      同步测试 adapter 真实写世界）→ 不占用（由观察承担）。
+ *  优先用受控世界序（epoch.worldSequence vs invocation.worldSequence——
+ *  同步生效模型下 fresh 观察包含本 tick 已发生效果，不与占用双扣）；
+ *  世界序缺失时回退 tick 边界（observedAtTick vs invocation.atTick）：
+ *    观察序未超过效果锚点 → 该观察不可能包含此效果 → 占用（保守）。
  *  该规则天然涵盖同 tick execution_semantics（未覆盖）与晚到 reconcile
  *  （invocation 时刻久远、观察已新 → 已覆盖）。无观察上下文
  *  （observationAsOfTick 未提供）时保守占用。
@@ -45,8 +44,14 @@ export function treasuryCoreWorkHoldsOccupancy(
     case "closing":
       if (record.outcome !== "committed") return false;
       if (record.invocation === null) return true; // 结构上不应发生；保守占用
+      // 世界序判定（§6.2）：观察构建序 > 调用边界世界序 → 受控世界已在
+      // 调用后真实更新且该观察构建于其后 → 效果已进入该观察。
+      if (options.observationWorldSequence !== undefined && record.invocation.worldSequence !== undefined) {
+        return !(options.observationWorldSequence > record.invocation.worldSequence);
+      }
       if (options.observationAsOfTick === undefined) return true; // 无观察上下文：保守
-      // 观察有效性边界 ≤ 效果时点 → 效果尚未被该观察覆盖 → 原聚合继续承担。
+      // tick 边界兜底（旧记录/世界序缺失）：观察 asOfTick ≤ 效果时点 →
+      // 效果尚未被该观察覆盖 → 原聚合继续承担。
       return options.observationAsOfTick <= record.invocation.atTick;
     case "retry_ready":
       return false;
