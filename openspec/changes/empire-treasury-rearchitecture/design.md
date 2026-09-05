@@ -1706,3 +1706,27 @@ v1 retired range 迁移唯一 owner = lifecycle GC coordinator 的前置 tick-bo
 per-namespace quota：current 48 / legacy 16（总和 = 物理 64）。只针对"新增区间"（相邻合并不计数）；超额 legacy 存量保留不裁剪；两域互不驱逐、不跨域合并；current 满载先 coalesce 收敛（current-only）。lifecycle contract 三方登记。
 
 （实现细节与固定反例映射见 evidence/round22-remediation-xi-positive-handoff-canonical-lifecycle-local-validation.md）
+
+## 27. Round 22 Remediation XII——opening-bound 正向所有权、pre-execution ticket 交接、replacement-proven GRA 与全量 query-pure
+
+### 27.1 opening-bound positive ownership（工作流 A）
+
+positiveOwnershipVerifier 成为 ticket handoff 的正向判定唯一权威：expected opening identity 由当前执行状态机内部构造（canonical digest / contract digest / cohort digest / durable identity / proofClass / tr1_ lineage 四字段），14 类 source（Intent/Quarantine/cleanup journal/Authorization Fault/write-fault marker/Resolution tombstone/attempt lineage/live completion/historical completion/settled receipt/GRA proof/retirement summary/certificate/retired range）全部收集后统一裁决（无 first-match）：store_unhealthy > identity_conflict > outcome_conflict > insufficient > retired_only/protocol_only > matching 三态（not_started/execution/terminal owner 严格区分——not-started owner 不得解释为 handoff recovered）。同 ID 不同 digest/cohort/durable 的 owner 一律 identity_conflict；legacy receipt 不得升级 modern exact owner；protocol/retired-only 阻断不消费。通用 lifecycle resolver 保留给 orphan GC / TTL sweep / sequence abandon。ticket binding 升级双维度（AC4 contract digest + prepared canonical transaction digest）。execute 层 early gate（digest-only 完整聚合 verify：unhealthy/conflict 短路；not-started/insufficient/absent 放行至 full verify）。
+
+### 27.2 pre-execution ticket transfer（工作流 B）
+
+facade 时序反转：durable (not_started, ready) owner 写入 + read-back 完整 identity 验证 → positive verify → consume + consume read-back → 才 progress (started_unknown, executing) → Game callback。consume 失败：Intent 保持 callback_not_started（不进 executing、不转 execution-unknown、不进 quarantine）、ticket 回滚 active、瞬态预留释放（tr1_ 另回滚 lineage）。beginTick：not-started owner 安全释放（窗口 B——同 exact opening 可重试）；execution-owner intent 转 quarantine 前幂等 consume（窗口 D）；"transfer 成功而 consume 失败"窗口由 GC coordinator 的 ticket handoff 收敛 sweep（quarantine owner 在位的 active ticket 幂等补 consume）承载。窗口 C（consume 后 executing 前）：beginTick 明确 not-executed 释放、同 ID 不可再执行。
+
+### 27.3 replacement-proven GRA retirement（工作流 C）
+
+destructive primitive 的 mode 只是调用方声明的释放目的——授权由内部 replacement class 验证矩阵：summary_superseded/compaction_orphan → exact Summary full relation（后者亦接受 certificate 覆盖）；orphan_advance → active-lineage advanced（record 在位 + 同 lineage + generation 严格更大 + root 一致）；tombstone_retired → advanced lineage / terminal certificate / retired range 按序验证。"tombstone 缺席 + journal 缺席 + 非当前代 → 删除"的缺席链不再构成授权。exact consumer 关闭扩展到 unresolved intent / quarantine / write-fault marker / authorization fault。lineage health 判定与 record 读取统一到 semantic lineage record source（同源）。
+
+### 27.4 fully query-pure authority reads（工作流 D）
+
+intent/quarantine/authorization fault/receipt(trusted) 零写全量校验视图（absent 不初始化 / 当前版本全表校验 / legacy → migration_required / unknown → unhealthy；heap 引用缓存 + 已 load fast-path）；certificate lookup 零写（absent 不创建，record 写前 ensurePublished，拒绝路径零写）；summary/lineage/GRA loader 迁移分支 forWrite 门禁（读路径遇 legacy fail closed）；cleanup journal / issuer 读取零写。authority store migration owner（lineage/summary/GRA/issuer）作为 facade beginTick 最前置阶段（先于一切恢复逻辑）；migrate 入口带 heap 失效（防缓存视图遮蔽 Memory 直改 store）。
+
+### 27.5 物理分区 retired range（工作流 E）与 certificate issuance proof（工作流 F）
+
+retired range v3：current（独立数组，硬上限 48）/ legacy（配额 16，迁移存量显式 legacyOverflow 至 64）——总上限 112；某分区 overflow 只阻断该分区；不删除旧事实腾槽、不跨域合并；v1/v2 → v3 迁移由 tick-boundary 唯一 owner 执行（namespace 分流 + 区间数守恒 + read-back + 失败还原 + reset 幂等）。certificate 写入的发行事实与 terminal lifecycle 正面证明：current root 的 watermark frontier（future canonical ID 拒绝）、matching terminal retirement summary（五字段 terminal authority 匹配 + ti_ root 发行域一致；arbitrary root 按隔离协议）、root ticket active 拒绝；全部拒绝路径零写。
+
+（实现细节、固定反例映射与实测数字见 evidence/round22-remediation-xii-opening-bound-handoff-and-replacement-proven-gc-local-validation.md）
