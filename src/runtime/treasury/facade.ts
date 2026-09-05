@@ -24,6 +24,7 @@
 
 import {
   buildTreasuryObservation,
+  readTreasuryWorldSequence,
 } from "@/runtime/treasury/observation";
 import {
   buildTreasuryCommitmentIndex,
@@ -436,6 +437,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         occupancy.byKey.get(overlayResourceKey(roomName, locationKind, resource)) ?? 0,
       occupancyInflow: (roomName, locationKind) =>
         occupancy.inflowByLocation.get(overlayLocationKey(roomName, locationKind)) ?? 0,
+      commitmentScopeComplete: (roomName, resource) =>
+        service.commitments().commitmentCompleteness(roomName, resource) === "complete",
       committedOutgoing: (roomName, resource) =>
         service.commitments().pendingOutgoing(roomName, resource),
       reservedProduction: (roomName, resource, excludeOwner) =>
@@ -476,6 +479,21 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   }
 
   /**
+   * 共同就绪门禁（IV/§5.2）：数值判定之外，共享事实的健康/完整性同样
+   * 进入全部真实入口（接纳、执行复验、rearm——与 query 的 blockers 同源）。
+   * reservation 迁移/健康失败 = 授权事实不完整，不得只按剩余数值放行。
+   */
+  function commonReadinessGate(): { reasonCode: string; reason: string } | null {
+    if (!isReservationOwnerMigrationComplete()) {
+      return { reasonCode: "reservation_migration_incomplete", reason: "reservation owner 迁移未完成（共享授权事实不完整——fail closed）" };
+    }
+    if (!validateReservationStoreHealth().healthy) {
+      return { reasonCode: "reservation_store_unhealthy", reason: "共享 reservation store 不健康（fail closed）" };
+    }
+    return null;
+  }
+
+  /**
    * 共同授权判定（唯一公式）：接纳、rearm、kernel 容量端口与执行前复验
    * 都经此入口。context 携带真实 contract 身份、经验证 owner 与复验时的
    * 本笔排除（§4.3：本笔 pending 是"既有责任继续兑现"，不自我双扣）。
@@ -484,6 +502,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     candidateLegs: readonly TreasuryCandidateLeg[],
     context: TreasuryCoreAdmissionContext,
   ): TreasuryAdmissionVerdict {
+    const gate = commonReadinessGate();
+    if (gate !== null) return { status: "rejected", ...gate };
     const state = ensureTickState(true);
     const excludeOwner: TreasuryOwnerIdentity | undefined =
       context.ownerIdentity !== null
@@ -500,17 +520,34 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   }
 
   /**
-   * 执行前复验判定（§4.4）：使用**当前世界的 fresh 观察**（结构 incarnation
-   * 与容量事实以执行时刻为准——同 tick 内结构消失/重建必须被拦截）；fresh
-   * 额度（TREASURY_FRESH_EPOCH_LIMIT）耗尽时退回本 tick 缓存快照（有界退化，
-   * 占用仍从 Memory 实时派生）。复验排除本笔自身占用（§4.3 不自我双扣）。
+   * 执行前复验判定（§4.4；IV/R2/§5.1 修订）：使用**当前世界的 fresh 观察**
+   * （结构 incarnation 与容量事实以执行时刻为准——同 tick 内结构消失/重建
+   * 必须被拦截）。fresh 额度（TREASURY_FRESH_EPOCH_LIMIT）耗尽或观察构建
+   * 失败时**明确阻断**（observation_unavailable）——不回退本 tick 缓存快照
+   * （旧快照的结构/金额事实可能已过期，回退即安全退化）。复验排除本笔
+   * 自身占用（§4.3 不自我双扣）。下一 tick 或 fresh 可用时合法工作恢复。
    */
   function evaluateRevalidation(
     candidateLegs: readonly TreasuryCandidateLeg[],
     context: TreasuryCoreAdmissionContext,
   ): { verdict: TreasuryAdmissionVerdict; observation: TreasuryObservationView } {
+    const gate = commonReadinessGate();
+    if (gate !== null) {
+      return { verdict: { status: "rejected", ...gate }, observation: ensureTickState(true).observation };
+    }
     const fresh = service.beginFreshObservation();
-    const observation = fresh ?? ensureTickState(true).observation;
+    if (fresh === null) {
+      // IV/R2：无安全回退——阻断执行（调用 0、许可不消费、保持 pending）。
+      return {
+        verdict: {
+          status: "rejected",
+          reasonCode: "observation_unavailable",
+          reason: "执行复验 fresh 观察不可用（额度耗尽/构建失败）——阻断而非回退旧快照（IV/R2）",
+        },
+        observation: ensureTickState(true).observation,
+      };
+    }
+    const observation = fresh;
     const excludeOwner: TreasuryOwnerIdentity | undefined =
       context.ownerIdentity !== null
         ? (context.ownerIdentity as TreasuryOwnerIdentity)
@@ -580,6 +617,17 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const conclusion = raw === "observed_committed" ? "executed" : raw === "observed_not_executed" ? "not_executed" : "still_uncertain";
       return { status: "ok" as const, conclusion, source: adapter.semanticIdentity };
     },
+    // 清理观察锚点（IV/R1/§4.1）：committed 退出条件的观察事实来源——
+    // 共享观察（本 tick 构建或时效重建后，含此前全部已发生效果）。
+    observeForCleanup: () => {
+      const observation = ensureTickState(true).observation;
+      return {
+        worldSequence: observation.epoch.worldSequence,
+        atTick: observation.epoch.observedAtTick,
+        locationExists: (roomName: string, locationKind: string) =>
+          observation.locationExists(roomName, locationKind as TreasuryLocationKind),
+      };
+    },
     checkAdmissionCapacity: (worstCase, context) => {
       // kernel 侧容量端口（R2）：与接纳/复验同一判定、同一上下文——
       // context 携带真实 contract 身份与经验证 owner，不存在匿名口径。
@@ -626,7 +674,29 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
 
   function ensureTickState(lazy: boolean): TreasuryTickState {
     if (current !== null && current.tick === Game.time) {
-      metrics.observationReuseHits += 1;
+      // 观察时效（IV/§4.2/R1 后半）：授权观察不得早于最新受控世界序——
+      // 世界真实更新（同步 adapter 效果/宿主效果）后旧观察即旧世界；持有
+      // 旧观察的实例不能借"已删聚合/已转移责任"按旧金额授权。不新鲜 →
+      // 重建观察（仅替换观察与承诺索引缓存；不重置 fresh 额度与许可审计
+      // ——防借重建刷额度）。
+      if (current.observation.epoch.worldSequence >= readTreasuryWorldSequence()) {
+        metrics.observationReuseHits += 1;
+        return current;
+      }
+      metrics.observationRebuilds += 1;
+      epochSeq += 1;
+      const rebuilt = buildTreasuryObservation({
+        scope: "shared",
+        epochSeq,
+        rooms: deps.getRooms(),
+        onStoreScanned: (nonZeroKeys) => {
+          metrics.storeEnumerations += 1;
+          metrics.resourceKeysEnumerated += nonZeroKeys;
+          metrics.nonZeroEntries += nonZeroKeys;
+          metrics.locationsScanned += 1;
+        },
+      });
+      current = { ...current, observation: rebuilt, commitmentIndex: undefined, commitmentBuiltRevision: undefined };
       return current;
     }
     if (lazy) metrics.lifecycleLazyInitializations += 1;

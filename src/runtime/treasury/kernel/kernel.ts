@@ -102,6 +102,18 @@ export interface TreasuryCoreKernelPorts {
   ) => { readonly reason: string; readonly reasonCode?: TreasuryCoreRejectionCode } | null;
   /** 外部消费者幂等释放端口（返回 false = 释放未确认，duty 保留；缺失即无受控释放能力）。 */
   readonly releaseExternalConsumer?: (consumerKey: string, attemptId: string) => boolean;
+  /**
+   * 清理观察锚点端口（IV/R1/§4.1）：为 committed 聚合的退出条件提供可信
+   * 观察事实（世界序 + 观察构建 tick + 位置覆盖谓词）。由 facade 从共享
+   * 观察装配（构建于本 tick 开始或其后重建——含此前全部已发生效果）；
+   * 缺失时 committed 记录保守保留（不退出、不进 ring）。返回 null = 当前
+   * 无可信观察。
+   */
+  readonly observeForCleanup?: () => {
+    readonly worldSequence: number;
+    readonly atTick: number;
+    readonly locationExists: (roomName: string, locationKind: string) => boolean;
+  } | null;
   /** 诊断事件流（可选；测试计量与 metrics 挂载点，不影响权威）。 */
   readonly onEffect?: (effect: TreasuryCoreEffect) => void;
 }
@@ -634,27 +646,74 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
   }
 
   /**
-   * 端口调用前的预算预扣（R6/§7.1）：持久发布 budgetUsed=used+1。
-   * 返回 null（预扣失败——不得调用端口）或预扣后的 used 值。
+   * 消费者单位的成对预算预扣（IV/R6.1/§6.1–§6.2）：进入外部端口前持久
+   * 预扣完整 2 份（端口调用份额 + 对应确认命令份额）；确认使用已预扣的
+   * 份额（applyPrepaidCleanupCommand），不再额外 +1——8 次释放耗尽共享
+   * 预算后确认命令要求第 9 份的死锁（R4）从结构上消除。无其他阶段消耗
+   * 时一 tick 最多 4 个消费者单位；"外部调用 ≤8" 保持。
+   * 预扣发布失败 → 不调用端口（调用 0）。预扣后无论端口 true/false/throw
+   * 或确认写失败，份额不退回（份额是调度许可，不是完成证据）。
    */
-  function prepayReleaseBudget(
+  function prepayReleaseUnitBudget(
     cursors: { sweepCursor: number; cleanupCursor: number },
   ): number | null {
     const nowTick = ports.nowTick();
     const health = readTreasuryCoreStoreHealth();
     if (health.status !== "healthy") return null;
     const usedNow = readBudgetState(health.memory, nowTick);
-    if (usedNow >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) return null;
+    if (usedNow + 2 > TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) return null;
     const write = writeTreasuryCoreMemory((root) => {
       root.recovery = {
         sweepCursor: cursors.sweepCursor,
         cleanupCursor: cursors.cleanupCursor,
         budgetTick: nowTick,
-        budgetUsed: usedNow + 1,
+        budgetUsed: usedNow + 2,
       };
     }, () => undefined);
     if (write.status === "failed") return null;
-    return usedNow + 1;
+    return usedNow + 2;
+  }
+
+  /**
+   * 已预扣份额的确认命令（IV/§6.1）：与 applyBudgetedCommand 同一写入协议，
+   * 但预算记账不递增——本次命令的份额已在端口调用前成对预扣。
+   */
+  function applyPrepaidCleanupCommand(
+    used: number,
+    command: TreasuryCoreCommand,
+    cursors: { sweepCursor: number; cleanupCursor: number },
+  ): { applied: boolean; used: number } {
+    const nowTick = ports.nowTick();
+    const draftHealth = readTreasuryCoreStoreHealth();
+    if (draftHealth.status !== "healthy") return { applied: false, used };
+    const draft = cloneForCommand(draftHealth.memory);
+    if (draftHealth.ringDegraded !== null) resetTreasuryCoreRingLayer(draft);
+    const result = applyTreasuryCoreStateCommand(draft, command, { nowTick });
+    if (result.status === "rejected") return { applied: false, used };
+    const effectiveUsed = Math.max(used, readBudgetState(draftHealth.memory, nowTick));
+    draft.recovery = { sweepCursor: cursors.sweepCursor, cleanupCursor: cursors.cleanupCursor, budgetTick: nowTick, budgetUsed: effectiveUsed };
+    const write = writeTreasuryCoreMemory((root) => {
+      Object.assign(root, draft);
+    }, () => undefined);
+    if (write.status === "failed") return { applied: false, used: effectiveUsed };
+    for (const effect of result.effects) ports.onEffect?.(effect);
+    return { applied: true, used: effectiveUsed };
+  }
+
+  /** 从可信观察构造 committed 退出的观察证明（范围 = worstCase 位置 ∩ 观察覆盖）。 */
+  function observationProofFor(
+    record: TreasuryCoreWorkRecord,
+    observed: NonNullable<ReturnType<NonNullable<TreasuryCoreKernelPorts["observeForCleanup"]>>>,
+  ): { worldSequence: number; atTick: number; coveredLocations: string[] } {
+    const covered: string[] = [];
+    const seen = new Set<string>();
+    for (const leg of record.worstCase) {
+      const key = `${leg.roomName} ${leg.locationKind}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (observed.locationExists(leg.roomName, leg.locationKind)) covered.push(key);
+    }
+    return { worldSequence: observed.worldSequence, atTick: observed.atTick, coveredLocations: covered };
   }
 
   function beginTick(): { recovered: number; closed: number; cleaned: number; cancelled: number } {
@@ -721,25 +780,64 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       }
     }
 
-    // 4) closing 清理公平推进（游标轮转；清理保底 ≥2：前面最多消耗 6）。
-    //    每次外部端口调用前先持久预扣预算（R6）。
+    // 4) closing 清理公平推进（游标轮转；清理保底 ≥2 = 至少 1 个成对消费者
+    //    单位/IV §6.1）。外部端口调用前成对预扣完整 2 份（调用 + 确认）；
+    //    确认命令使用已预扣份额（不再 +1）。committed 记录的退出由观察
+    //    接管证明门控（IV/R1）——观察未覆盖时零写跳过（D01 有界等待）。
     const afterCloses = readTreasuryCoreStoreHealth();
     if (afterCloses.status === "healthy") {
       const closings = sortedActive(afterCloses.memory).filter((r) => r.phase === "closing");
       if (closings.length > 0) {
+        const observe = ports.observeForCleanup;
         const start = cursors.cleanupCursor % closings.length;
         let visited = 0;
         while (visited < closings.length && used < TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) {
           const record = closings[(start + visited) % closings.length];
           visited += 1;
           cursors.cleanupCursor = (cursors.cleanupCursor + 1) % closings.length;
+          // 观察证明（每记录按其 worstCase 惰性派生；端口缺失/观察不可用 → undefined）。
+          let proof: { worldSequence: number; atTick: number; coveredLocations: string[] } | undefined;
+          const obtainProof = (target: TreasuryCoreWorkRecord): boolean => {
+            if (observe === undefined) return false;
+            const observed = observe();
+            if (observed === null) return false;
+            proof = observationProofFor(target, observed);
+            return true;
+          };
           if (record.cleanup.consumerKeys.length === 0) {
+            if (record.outcome === "committed") {
+              // IV/R1/D01：committed 无义务记录先做观察预检（时间序）——观察
+              // 未覆盖/无观察端口时零写跳过（不花预算；范围终判在命令内）。
+              const anchorTick =
+                record.invocation !== null
+                  ? record.invocation.atTick
+                  : record.external !== null
+                    ? record.external.atTick
+                    : null;
+              if (anchorTick === null) continue; // 无调用边界事实；保守保留
+              const anchorSeq = record.invocation?.worldSequence;
+              if (!obtainProof(record) || proof === undefined) continue;
+              const timeReached =
+                anchorSeq !== undefined
+                  ? proof.worldSequence > anchorSeq
+                  : proof.atTick > anchorTick;
+              if (!timeReached) continue;
+              const step = applyBudgetedCommand(
+                used,
+                { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [], observationProof: proof },
+                cursors,
+              );
+              used = step.used;
+              if (step.applied) cleaned += 1;
+              continue;
+            }
+            // not_executed / pending_cancellation 无世界效果义务：直接终态推进。
             const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] }, cursors);
             used = step.used;
             if (step.applied) cleaned += 1;
             continue;
           }
-          // 逐消费者幂等释放：端口调用前预扣预算（预扣失败即停）。
+          // 逐消费者幂等释放：端口调用前成对预扣 2 份（预扣失败即停）。
           const releasePort = ports.releaseExternalConsumer;
           if (releasePort === undefined) {
             // 端口缺失：不默认成功——保留义务并记录失败计数（有界诊断）。
@@ -752,8 +850,8 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
           let portFaulted = false;
           let budgetPrepayFailed = false;
           for (const consumerKey of record.cleanup.consumerKeys) {
-            // 预扣从持久现读（重入/多实例后的单一权威；R6）。
-            const prepaid = prepayReleaseBudget(cursors);
+            // 成对预扣从持久现读（重入/多实例后的单一权威；IV/§6.2）。
+            const prepaid = prepayReleaseUnitBudget(cursors);
             if (prepaid === null) {
               budgetPrepayFailed = true;
               break;
@@ -763,26 +861,44 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
             try {
               ok = releasePort(consumerKey, record.attemptId);
             } catch {
-              // 端口抛错：该 duty 保留（不崩 tick、不默认成功）；预算已耗。
+              // 端口抛错：该 duty 保留（不崩 tick、不默认成功）；份额已耗。
               portFaulted = true;
               ok = false;
             }
             if (ok) released.push(consumerKey);
           }
           if (budgetPrepayFailed && released.length === 0) {
-            // 预算耗尽/预扣失败：本条记录本 tick 不再推进（duty 保留）。
-            continue;
+            // 预算耗尽：立即停止扫描（IV/D19）。continue 空转会把游标推满
+            // 一整圈回到本 tick 起点——后方记录永远落在"预算已尽"的访问
+            // 位（结构性饿死）；§6.2 额度耗尽后廉价返回，不无限扫描。
+            // break 让游标停在耗尽处，下一 tick 从其后记录开始（起点前移）。
+            break;
           }
           if (released.length === 0 && !portFaulted && !budgetPrepayFailed) {
-            // 端口明确未确认（false）：推进失败计数（诊断），duty 保留。
-            const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] }, cursors);
+            // 端口明确未确认（false）：推进失败计数（诊断），duty 保留。诊断
+            // 命令就是本单位的"对应确认命令"（确认结果 = 未确认）——使用
+            // 已预扣份额（IV/§6.1 成对语义；否则失败记录 3 份/条会把每 tick
+            // 预算挤占成"后方可完成记录永远差 1 份"的结构性饿死——D19）。
+            const step = applyPrepaidCleanupCommand(
+              used,
+              { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] },
+              cursors,
+            );
             used = step.used;
             if (step.applied) cleaned += 1;
             continue;
           }
-          // 释放未确认的消费者义务保留（不因端口失败谎报完成）；确认写回
-          // 失败时下次以同一幂等关联重试（§5.2）。
-          const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: released }, cursors);
+          // 释放确认：使用已预扣份额（0 份追加）。释放未确认的消费者义务
+          // 保留（不因端口失败谎报完成）；确认写回失败时下次以同一幂等
+          // 关联重试（§5.2/IV D16——义务不跨 attempt 迁移）。committed 记录
+          // 顺带携带观察证明（全释放 + 观察覆盖时同命令完成退出）。
+          const confirmProof =
+            record.outcome === "committed" && obtainProof(record) && proof !== undefined ? proof : undefined;
+          const step = applyPrepaidCleanupCommand(
+            used,
+            { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: released, observationProof: confirmProof },
+            cursors,
+          );
           used = step.used;
           if (step.applied) cleaned += 1;
         }

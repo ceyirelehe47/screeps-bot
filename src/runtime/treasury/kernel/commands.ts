@@ -39,6 +39,7 @@ import {
   type TreasuryCoreWorstCaseLeg,
   type TreasuryCoreWorkRecord,
   type TreasuryCoreIdentityFacts,
+  type TreasuryCoreObservationProof,
 } from "@/runtime/treasury/kernel/types";
 import { mintTreasuryCoreAttemptId } from "@/runtime/treasury/kernel/identity";
 import { appendTreasuryCoreRingEntry } from "@/runtime/treasury/kernel/store";
@@ -108,6 +109,12 @@ export interface TreasuryCoreAdvanceCleanupCommand {
   readonly attemptId: string;
   /** 释放端口已确认幂等完成的外部消费者 key（kernel 传入；本模块只做状态判定）。 */
   readonly releasedDuties: readonly string[];
+  /**
+   * 观察接管证明（IV/R1/§4.1）：committed 聚合退出的必要条件（非充分——
+   * 还需义务清空）。由 kernel 编排层从 ports.observeForCleanup 取得；
+   * 缺失时 committed 记录保守保留（不退出、不进 ring）。
+   */
+  readonly observationProof?: TreasuryCoreObservationProof;
 }
 
 export interface TreasuryCoreRearmCommand {
@@ -394,6 +401,39 @@ function settleCommand(
   return { status: "ok", memory, effects: [{ effect: "outcome_recorded", attemptId: command.attemptId, outcome }] };
 }
 
+/**
+ * 观察接管判定（IV/R1/§4.1–§4.3）：committed 效果被可信观察覆盖 ⟺
+ * 1) 时间序——观察构建世界序 > 调用边界世界序（同一持久域，同步生效
+ *    模型下该观察构建于效果发生之后，必含效果）；旧记录缺世界序时用
+ *    tick 严格大于兜底（同 tick 观察不判覆盖——保守）；
+ * 2) 范围——观察覆盖 worstCase 涉及的全部位置（部分适用观察不能凭
+ *    全局大序号代表所有源已覆盖——D12）。
+ * 证明由 kernel 编排层从 ports.observeForCleanup（facade 装配的可信
+ * 观察）取得；纯转移函数不构建观察、不接受调用者自报结论。
+ */
+function observationTakesOverEffect(
+  record: TreasuryCoreWorkRecord,
+  proof: TreasuryCoreObservationProof,
+): boolean {
+  // 效果时点锚点：优先调用边界事实；晚到 reconcile 的记录可能只有
+  // external accepted（调用已发生的正面事实）——以其 atTick 兜底。
+  const anchor =
+    record.invocation !== null
+      ? { atTick: record.invocation.atTick, worldSequence: record.invocation.worldSequence }
+      : record.external !== null
+        ? { atTick: record.external.atTick, worldSequence: undefined }
+        : null;
+  if (anchor === null) return false; // 无任何调用边界事实；保守不退出
+  const locationsCovered = record.worstCase.every((leg) =>
+    proof.coveredLocations.includes(`${leg.roomName} ${leg.locationKind}`),
+  );
+  if (!locationsCovered) return false;
+  if (anchor.worldSequence !== undefined) {
+    return proof.worldSequence > anchor.worldSequence;
+  }
+  return proof.atTick > anchor.atTick;
+}
+
 function advanceCleanupCommand(
   memory: TreasuryCoreMemory,
   command: TreasuryCoreAdvanceCleanupCommand,
@@ -417,7 +457,8 @@ function advanceCleanupCommand(
     }));
     return { status: "ok", memory, effects: [] };
   }
-  // 安全取消来源的清理完成：直接退出（取消不生成 rearm 权利——§6.1）。
+  // 安全取消来源的清理完成：直接退出（取消不生成 rearm 权利——§6.1；
+  // pending 取消没有“等待世界效果”的义务，不得让它永久等待观察——§4.1）。
   if (record.outcomeEvidence?.kind === "pending_cancellation") {
     const ringEntry: TreasuryCoreRingEntry = {
       attemptId: record.attemptId,
@@ -431,15 +472,35 @@ function advanceCleanupCommand(
     return { status: "ok", memory, effects: [{ effect: "cancelled", attemptId: command.attemptId, ring: ringEntry }] };
   }
   if (record.outcome === "not_executed") {
+    // not_executed 同样无世界效果义务；义务集合必须持久化为空
+    // （IV/R5/§6.3）——否则 rearm 复制旧集合，child 以新身份重复释放。
     withRecord(memory, command.attemptId, (r) => ({
       ...r,
       phase: "retry_ready",
       retryDeadlineTick: ctx.nowTick + TREASURY_CORE_RETRY_RIGHT_TICKS,
+      cleanup: { consumerKeys: [], failures: r.cleanup.failures },
       updatedAtTick: ctx.nowTick,
     }));
     return { status: "ok", memory, effects: [{ effect: "retry_ready", attemptId: command.attemptId }] };
   }
-  // committed 且清理完成 → 真正退出活跃集合，可选写 ring。
+  // committed 且义务已清空：完整关闭条件（IV/R1/§4.1）——确定执行结论
+  // （outcome+证据已在 validator 强制）+ 效果被可信观察接管 + 义务关闭。
+  // 观察未覆盖（无证明 / 时间序未到 / 范围缺失）→ 不退出：写回真正的
+  // 剩余义务（空集合——§6.3 始终持久化真实 remaining），必要资源与接收
+  // 容量责任继续由本聚合承担（occupancy 投影不变）。
+  if (command.observationProof === undefined || !observationTakesOverEffect(record, command.observationProof)) {
+    if (record.cleanup.consumerKeys.length === 0) {
+      // 已是空集合、观察未接管：无状态变化（零写，由编排层避免进入）。
+      return { status: "ok", memory, effects: [] };
+    }
+    withRecord(memory, command.attemptId, (r) => ({
+      ...r,
+      cleanup: { consumerKeys: [], failures: r.cleanup.failures },
+      updatedAtTick: ctx.nowTick,
+    }));
+    return { status: "ok", memory, effects: [] };
+  }
+  // 观察已接管且义务清空 → 真正退出活跃集合，可选写 ring。
   const ringEntry: TreasuryCoreRingEntry = {
     attemptId: record.attemptId,
     workKey: record.workKey,
@@ -509,7 +570,10 @@ function rearmCommand(
     external: null,
     outcome: "unknown",
     outcomeEvidence: null,
-    cleanup: { consumerKeys: [...parent.cleanup.consumerKeys], failures: 0 },
+    // IV/R5/§6.3：child 不继承父代义务——retry_ready 的父代 cleanup 必为
+    // 空集合（validator 强制）；child 是新 attempt，不带外部消费者义务
+    // （rearm 命令不接受 externalConsumers——不新增 child 义务发行系统）。
+    cleanup: { consumerKeys: [], failures: 0 },
     retryDeadlineTick: null,
     lastError: null,
   };

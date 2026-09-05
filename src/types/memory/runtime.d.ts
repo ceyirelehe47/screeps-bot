@@ -698,6 +698,13 @@ declare global {
      * 等）时内核报告 incompatible 并阻断写入——不解析、不擦除。
      * - treasuryPerf：指标快照（shadow 低频写入，仅诊断）。
      */
+    /**
+     * 受控世界序（Core Rewrite IV）：同步受控世界（test adapter / 未来
+     * 真实 driver）每次真实更新的单调计数。观察覆盖判定的世界侧权威
+     * 锚点——持久化使其跨 global reset 连续（global 槽方案已退役）。
+     * 单安全整数，≤16 位；bump 单字段直写（丢一次只落保守方向）。
+     */
+    treasuryWorldSequence?: number;
     treasuryCore?: {
       version: number;
       installEpochId: string;

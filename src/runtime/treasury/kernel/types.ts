@@ -58,8 +58,13 @@ export const TREASURY_CORE_ERROR_DETAIL_MAX = 96;
 /** durable facts payload 上限（受控字符集：零 JSON 转义膨胀）。 */
 export const TREASURY_CORE_DURABLE_PAYLOAD_MAX = 512;
 
-/** 每聚合最坏占用腿数上限（posting 派生，防数组无界）。 */
-export const TREASURY_CORE_WORST_CASE_LEGS_MAX = 16;
+/**
+ * 每聚合最坏占用腿数上限（posting 派生，防数组无界）。
+ * IV/R6：16 → 12——槽位上界改为构造器实测法（真实 JSON 序列化）后，
+ * 16 腿 × 极值字段的真实最坏表示使 64×槽 + 128×历史槽超出 360,000
+ * 总预算；真实 transfer/sweep 合同腿数远低于 12（流出+流入各侧合计）。
+ */
+export const TREASURY_CORE_WORST_CASE_LEGS_MAX = 12;
 
 /** workKey 长度上限（v3 收紧：受控字符集，槽位预算可精确推导）。 */
 export const TREASURY_CORE_WORK_KEY_MAX = 96;
@@ -94,6 +99,15 @@ export const TREASURY_CORE_COUNTER_SATURATION = 9_999_999_999;
 
 /** 结算证据 source 字段上限。 */
 export const TREASURY_CORE_EVIDENCE_SOURCE_MAX = 64;
+
+/**
+ * generation 上限（IV/R6）：rearm 每代 +1，正常业务链远达不到 9,999；
+ * 上限收紧使槽位上界与 validator 一致（真实强制，不是估算口径）。
+ */
+export const TREASURY_CORE_GENERATION_MAX = 9_999;
+
+/** adapter 版本号上限（IV/R6：与 durableFacts.version 同量级；validator 真实强制）。 */
+export const TREASURY_CORE_ADAPTER_VERSION_MAX = 9_999;
 
 /** attempt ID 前缀（新命名空间；不复用 ti1_/ti2_/tr1_ 旧格式解释新含义）。 */
 export const TREASURY_CORE_ATTEMPT_ID_PREFIX = "tk1_";
@@ -386,6 +400,20 @@ export interface TreasuryCoreOccupancyOptions {
   readonly observationWorldSequence?: number;
   /** 排除某一 attempt 的占用（执行复验：本笔 pending 是"既有责任继续兑现"）。 */
   readonly excludeAttemptId?: string;
+}
+
+/**
+ * committed 聚合退出的观察接管证明（IV/R1/§4.1）：由 kernel 编排层从
+ * ports.observeForCleanup（facade 装配的可信观察）取得，随 advance_cleanup
+ * 命令进入纯转移判定。数据化证明（不带谓词）——调用者无法自报结论。
+ */
+export interface TreasuryCoreObservationProof {
+  /** 观察构建时刻的世界序（epoch.worldSequence——Memory 持久域权威）。 */
+  readonly worldSequence: number;
+  /** 观察构建 tick（旧记录缺 worldSequence 时的边界兜底锚点）。 */
+  readonly atTick: number;
+  /** 观察覆盖的位置键集合（`room location`——worstCase 全部位置须在内）。 */
+  readonly coveredLocations: readonly string[];
 }
 
 /** 许可的结构绑定快照（签发时观察；复验比对 incarnation，§4.4）。 */

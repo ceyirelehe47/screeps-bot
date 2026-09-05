@@ -22,21 +22,36 @@ import {
   treasuryLocationKey,
 } from "@/runtime/treasury/types";
 
-/** 审计全局根上的世界序槽（私有全局槽；global reset 归零不影响保守方向）。 */
-type GlobalWithWorldSequence = typeof global & {
-  __treasuryWorldSequence?: number;
-};
-
-const worldSequenceGlobal = global as GlobalWithWorldSequence;
-
-/** 受控世界序（单调计数；观察覆盖判定的世界侧锚点——§6.2）。 */
+/**
+ * 受控世界序（单调计数；观察覆盖判定的世界侧锚点——§6.2/IV §4.3）。
+ *
+ * Core Rewrite IV：世界序权威移入 Memory 持久层
+ * （`Memory.runtime.treasuryWorldSequence`，单一安全整数）。此前版本把
+ * 计数器放在 global 槽——完整 reset（heap 全清、Memory 保留）后新运行时
+ * 从 0 重新计数，与 Memory 内旧记录的 invocation.worldSequence 跨域不可
+ * 比较：要么永久扣留（安静帝国的 closing(committed) 占用无法解除），要么
+ * 凭无关序号误判覆盖。持久化后比较域即 Memory 持久域：
+ * - 正常 tick / global 重建：不受影响（读同一持久值）；
+ * - 完整 reset（模块缓存+global 清、Memory 保留）：序号连续，观察覆盖
+ *   判定照常成立（宿主世界与 Memory 是同一份）；
+ * - 整份 Memory 丢失：treasuryCore 记录随之丢失，不存在需要判定的
+ *   invocation.worldSequence——无跨域比较需求（旧备份回滚仍是明确
+ *   未验证边界）。
+ * 单字段直写、不走发布确认协议：丢一次 bump 只会让覆盖判定落在保守
+ * 方向（不误放行），不值得为它付整树克隆成本。
+ */
 export function readTreasuryWorldSequence(): number {
-  return worldSequenceGlobal.__treasuryWorldSequence ?? 0;
+  const runtime = Memory.runtime as { treasuryWorldSequence?: number } | undefined;
+  const value = runtime?.treasuryWorldSequence;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
 
 /** 受控世界真实更新时递增（同步 adapter 写世界 / 测试宿主施加效果时调用）。 */
 export function bumpTreasuryWorldSequence(): void {
-  worldSequenceGlobal.__treasuryWorldSequence = (worldSequenceGlobal.__treasuryWorldSequence ?? 0) + 1;
+  if (!Memory.runtime) {
+    Memory.runtime = {} as typeof Memory.runtime;
+  }
+  (Memory.runtime as { treasuryWorldSequence?: number }).treasuryWorldSequence = readTreasuryWorldSequence() + 1;
 }
 
 export interface TreasuryObservationBuildOptions {

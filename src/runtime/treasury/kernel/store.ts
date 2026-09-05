@@ -19,6 +19,7 @@
 
 import {
   TREASURY_CORE_ACTIVE_LIMIT,
+  TREASURY_CORE_ADAPTER_VERSION_MAX,
   TREASURY_CORE_ATTEMPT_ID_PREFIX,
   TREASURY_CORE_CONSUMER_KEY_MAX,
   TREASURY_CORE_CONSUMER_KEYS_MAX,
@@ -26,6 +27,7 @@ import {
   TREASURY_CORE_DURABLE_PAYLOAD_MAX,
   TREASURY_CORE_ERROR_DETAIL_MAX,
   TREASURY_CORE_EVIDENCE_SOURCE_MAX,
+  TREASURY_CORE_GENERATION_MAX,
   TREASURY_CORE_IDENTITY_FIELD_MAX,
   TREASURY_CORE_IDENTITY_LONG_FIELD_MAX,
   TREASURY_CORE_RECOVERY_BUDGET_PER_TICK,
@@ -161,6 +163,9 @@ function validateWorkRecord(attemptId: string, value: unknown): string | null {
   if (typeof r.generation !== "number" || !Number.isSafeInteger(r.generation) || r.generation < 1) {
     return `active[${attemptId}].generation 非法`;
   }
+  if (r.generation > TREASURY_CORE_GENERATION_MAX) {
+    return `active[${attemptId}].generation 超过上限 ${String(TREASURY_CORE_GENERATION_MAX)}（真实强制——槽位上界与 validator 一致）`;
+  }
   if (r.parentAttemptId !== null && !boundedIdentifier(r.parentAttemptId, TREASURY_CORE_IDENTITY_FIELD_MAX)) {
     return `active[${attemptId}].parentAttemptId 非法`;
   }
@@ -178,8 +183,11 @@ function validateWorkRecord(attemptId: string, value: unknown): string | null {
   problem = rejectUnknownFields(identity, `active[${attemptId}].identity`, IDENTITY_FIELDS);
   if (problem !== null) return problem;
   if (!boundedIdentifier(identity.actionKind, TREASURY_CORE_IDENTITY_FIELD_MAX)) return `active[${attemptId}].identity.actionKind 非法`;
-  if (typeof identity.adapterVersion !== "number" || !Number.isSafeInteger(identity.adapterVersion) || identity.adapterVersion < 1) {
-    return `active[${attemptId}].identity.adapterVersion 非法`;
+  if (
+    typeof identity.adapterVersion !== "number" || !Number.isSafeInteger(identity.adapterVersion) ||
+    identity.adapterVersion < 1 || identity.adapterVersion > TREASURY_CORE_ADAPTER_VERSION_MAX
+  ) {
+    return `active[${attemptId}].identity.adapterVersion 非法（1..${String(TREASURY_CORE_ADAPTER_VERSION_MAX)}）`;
   }
   if (!boundedIdentifier(identity.adapterRegistrationId, TREASURY_CORE_IDENTITY_LONG_FIELD_MAX)) return `active[${attemptId}].identity.adapterRegistrationId 非法`;
   if (typeof identity.adapterSemanticIdentity !== "string" || !boundedIdentifier(identity.adapterSemanticIdentity, TREASURY_CORE_IDENTITY_LONG_FIELD_MAX)) {
@@ -270,8 +278,8 @@ function validateWorkRecord(attemptId: string, value: unknown): string | null {
       return `active[${attemptId}].outcomeEvidence.atTick 非法`;
     }
   }
-  // 结构矛盾 fail closed（A06/A07/B21）：结果确定必须有结论一致的证据；
-  // not_executed 与 committed 相反证据 / 缺失证据都不构成合法状态。
+  // 结构矛盾 fail closed（A06/A07/B21/IV §6.4）：结果确定必须有结论一致
+  // 的证据；not_executed 与 committed 相反证据 / 缺失证据都不构成合法状态。
   if (r.phase === "closing" || r.phase === "retry_ready") {
     if (r.outcome === "unknown" || r.outcomeEvidence === null) {
       return `active[${attemptId}] 阶段 ${r.phase} 但结果未确定或无证据（结构矛盾）`;
@@ -281,6 +289,12 @@ function validateWorkRecord(attemptId: string, value: unknown): string | null {
     if (conclusion !== expected) {
       return `active[${attemptId}] outcome=${r.outcome} 与证据结论 ${String(conclusion)} 相反（结构矛盾）`;
     }
+  }
+  // retry_ready 只能是 not_executed + 清理义务已闭合（IV/§6.4）：
+  // committed+retry_ready、非空义务+retry_ready 是本地可识别矛盾——安全
+  // 读取/命令边界拒绝，不自动升级、不修成空集合。
+  if (r.phase === "retry_ready" && r.outcome !== "not_executed") {
+    return `active[${attemptId}] retry_ready 但 outcome=${r.outcome}（只允许 not_executed）`;
   }
   if (r.outcome === "unknown" && r.phase !== "pending" && r.phase !== "dispatching" && r.phase !== "outcome_unknown") {
     return `active[${attemptId}] outcome=unknown 但阶段 ${r.phase}（结构矛盾）`;
@@ -292,6 +306,11 @@ function validateWorkRecord(attemptId: string, value: unknown): string | null {
   // 数量上限（R09）：超限整体拒绝，不截断一半义务。
   if (r.cleanup.consumerKeys.length > TREASURY_CORE_CONSUMER_KEYS_MAX) {
     return `active[${attemptId}].cleanup.consumerKeys 超过上限 ${String(TREASURY_CORE_CONSUMER_KEYS_MAX)}`;
+  }
+  // IV/§6.4：retry_ready ⇒ 清理义务必须已闭合（空集合）——非空义务 +
+  // retry_ready 是本地可识别矛盾，拒绝而不自动清空。
+  if (r.phase === "retry_ready" && r.cleanup.consumerKeys.length > 0) {
+    return `active[${attemptId}] retry_ready 但清理义务非空（${String(r.cleanup.consumerKeys.length)} 项——矛盾状态）`;
   }
   for (const key of r.cleanup.consumerKeys) {
     if (typeof key !== "string" || key.length === 0 || key.length > TREASURY_CORE_CONSUMER_KEY_MAX || !IDENTIFIER_PATTERN.test(key)) {
@@ -640,105 +659,149 @@ export function treasuryCoreSerializedChars(memory: TreasuryCoreMemory): number 
   }
 }
 
-// ── 逐槽完整生命周期序列化上界（§8.3/C22） ────────────────────────────────────
+// ── 逐槽完整生命周期序列化上界（IV/§7.1——构造器实测法） ─────────────────────
 //
-// 推导原则：受控字符集字段（IDENTIFIER_PATTERN/PAYLOAD_PATTERN）JSON 序列化
-// 零转义膨胀，上界 = 键名 + 冒号 + 引号 + 值字符上限；自由文本字段
-// （lastError，可含中文/引号/控制字符）按最坏 6× 转义系数（\uXXXX）计。
-// 数字字段按 13 位（安全整数最坏长度）。单槽上界覆盖完整生命周期演化
-// （pending→dispatching→unknown→closing→retry_ready 全部字段同时取最坏）。
+// III 轮手写公式系统性低估（字段键名两侧引号每处 -2、数字统一按 13 位计
+// 而 validator 允许 16 位安全整数（负 delta 17 位）、漏计 invocation.
+// worldSequence），按公式常量修正重算后合计 ≈373,226 已超 360,000——上界
+// 推导与实际表示漂移不可再靠手算维护。IV 轮改为：构造完整最坏**合法**
+// 记录（全部字段取 validator 允许的极值；generation/adapterVersion ≤9,999
+// 与腿数 ≤12 由 validator 真实强制），对其做真实 JSON.stringify——上界本身
+// 就是一次真实序列化，键引号/冒号/逗号/括号/active 键/数字位宽全部按实际
+// 表示计入，不存在推导盲区。合法性由 D21 对照断言（构造器记录过 validator）
+// 与逐字段极值单测双向验证；手写公式退役删除。
 
-/** JSON 字段（字符串值）的序列化长度：键名 + 引号 + 冒号 + 值。 */
-function jsonFieldChars(key: string, valueChars: number): number {
-  return key.length + 3 + valueChars; // "key":"…" → key + ":" + 开/闭引号
+const WORST_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
+const WORST_IDENTIFIER_FILLER = "a";
+
+function worstIdentifier(max: number): string {
+  return WORST_IDENTIFIER_FILLER.repeat(max);
 }
 
-/** JSON 字段（数值/null）的序列化长度。 */
-function jsonScalarFieldChars(key: string, scalarChars: number): number {
-  return key.length + 1 + scalarChars;
+function worstAttemptId(): string {
+  // tk1_(4) + 9 位数字 + _(1) + 补齐到 IDENTITY_FIELD_MAX。
+  return `tk1_${"9".repeat(9)}_${WORST_IDENTIFIER_FILLER.repeat(TREASURY_CORE_IDENTITY_FIELD_MAX - 14)}`;
 }
 
-/** 单条腿最坏序列化（roomName ≤16 / locationKind ≤8 / resource ≤32 / delta ≤13 位数字）。 */
-const WORST_LEG_CHARS =
-  jsonFieldChars("roomName", TREASURY_CORE_ROOM_NAME_MAX) +
-  jsonFieldChars("locationKind", 8) +
-  jsonFieldChars("resource", 32) +
-  jsonScalarFieldChars("delta", 13) +
-  2 + 1; // 括号 + 逗号
+function worstConsumerKey(index: number): string {
+  // ≤CONSUMER_KEY_MAX 且区分条目（尾号不缩短长度上界）。
+  return `${WORST_IDENTIFIER_FILLER.repeat(TREASURY_CORE_CONSUMER_KEY_MAX - 2)}${String(index % 10)}${String(index % 10)}`;
+}
 
-/** 单活跃聚合完整生命周期最坏序列化字符。 */
+/**
+ * 单活跃聚合完整生命周期最坏合法记录（全部字段取 validator 允许极值；
+ * closing+not_executed+非空义务是合法组合中体积最大的形态——evidence/
+ * worstCase/invocation/cleanup 全部同时取最大）。
+ */
+export function buildTreasuryCoreWorstWorkRecord(): TreasuryCoreWorkRecord {
+  return {
+    workKey: `biz:${worstIdentifier(TREASURY_CORE_WORK_KEY_MAX - 4)}`,
+    attemptId: worstAttemptId(),
+    generation: TREASURY_CORE_GENERATION_MAX,
+    parentAttemptId: worstAttemptId(),
+    phase: "closing",
+    admittedAtTick: WORST_SAFE_INTEGER,
+    updatedAtTick: WORST_SAFE_INTEGER,
+    identity: {
+      actionKind: worstIdentifier(TREASURY_CORE_IDENTITY_FIELD_MAX),
+      adapterVersion: TREASURY_CORE_ADAPTER_VERSION_MAX,
+      adapterRegistrationId: worstIdentifier(TREASURY_CORE_IDENTITY_LONG_FIELD_MAX),
+      adapterSemanticIdentity: worstIdentifier(TREASURY_CORE_IDENTITY_LONG_FIELD_MAX),
+      canonicalDigest: worstIdentifier(TREASURY_CORE_IDENTITY_FIELD_MAX),
+      postingsDigest: worstIdentifier(TREASURY_CORE_IDENTITY_FIELD_MAX),
+      retryFactsDigest: worstIdentifier(TREASURY_CORE_IDENTITY_FIELD_MAX),
+      durableFacts: { version: 9_999, payload: worstIdentifier(TREASURY_CORE_DURABLE_PAYLOAD_MAX) },
+    },
+    worstCase: Array.from({ length: TREASURY_CORE_WORST_CASE_LEGS_MAX }, () => ({
+      roomName: worstIdentifier(TREASURY_CORE_ROOM_NAME_MAX),
+      locationKind: "storage",
+      resource: worstIdentifier(32),
+      delta: -WORST_SAFE_INTEGER,
+    })),
+    invocation: { atTick: WORST_SAFE_INTEGER, worldSequence: WORST_SAFE_INTEGER },
+    external: { accepted: true, atTick: WORST_SAFE_INTEGER },
+    outcome: "not_executed",
+    outcomeEvidence: {
+      kind: "adapter_execution_semantics",
+      conclusion: "not_executed",
+      source: worstIdentifier(TREASURY_CORE_EVIDENCE_SOURCE_MAX),
+      atTick: WORST_SAFE_INTEGER,
+    },
+    cleanup: {
+      consumerKeys: Array.from({ length: TREASURY_CORE_CONSUMER_KEYS_MAX }, (_, i) => worstConsumerKey(i)),
+      failures: WORST_SAFE_INTEGER,
+    },
+    retryDeadlineTick: WORST_SAFE_INTEGER,
+    lastError: " ".repeat(TREASURY_CORE_ERROR_DETAIL_MAX),
+  };
+}
+
+/** 单历史（ring）槽最坏合法条目。 */
+export function buildTreasuryCoreWorstRingEntry(): TreasuryCoreRingEntry {
+  return {
+    attemptId: worstAttemptId(),
+    workKey: `biz:${worstIdentifier(TREASURY_CORE_WORK_KEY_MAX - 4)}`,
+    generation: TREASURY_CORE_GENERATION_MAX,
+    terminalPhase: "retry_expired",
+    closedAtTick: WORST_SAFE_INTEGER,
+  };
+}
+
+/** 根安全/调度元信息最坏合法形态（counters 饱和、tick 极值、空 active/ring 骨架）。 */
+function buildTreasuryCoreWorstMeta(): TreasuryCoreMemory {
+  return {
+    version: TREASURY_CORE_SCHEMA_VERSION,
+    installEpochId: worstIdentifier(32),
+    issuance: { frontier: TREASURY_CORE_COUNTER_SATURATION, burned: TREASURY_CORE_COUNTER_SATURATION },
+    lifecycle: { lastBeginTick: WORST_SAFE_INTEGER, lastEndTick: WORST_SAFE_INTEGER },
+    recovery: {
+      sweepCursor: TREASURY_CORE_ACTIVE_LIMIT,
+      cleanupCursor: TREASURY_CORE_ACTIVE_LIMIT,
+      budgetTick: WORST_SAFE_INTEGER,
+      budgetUsed: TREASURY_CORE_RECOVERY_BUDGET_PER_TICK,
+    },
+    active: {},
+    ring: [],
+    ringCursor: TREASURY_CORE_RING_LIMIT,
+    counters: {
+      admitted: TREASURY_CORE_COUNTER_SATURATION,
+      dispatched: TREASURY_CORE_COUNTER_SATURATION,
+      settledCommitted: TREASURY_CORE_COUNTER_SATURATION,
+      settledNotExecuted: TREASURY_CORE_COUNTER_SATURATION,
+      unknown: TREASURY_CORE_COUNTER_SATURATION,
+      rearmings: TREASURY_CORE_COUNTER_SATURATION,
+      rejectedAdmissions: TREASURY_CORE_COUNTER_SATURATION,
+      recoveryAdvances: TREASURY_CORE_COUNTER_SATURATION,
+      cleanupFailures: TREASURY_CORE_COUNTER_SATURATION,
+    },
+  };
+}
+
+let slotWorstCharsCache: number | undefined;
+let ringSlotWorstCharsCache: number | undefined;
+let metaWorstCharsCache: number | undefined;
+
+/** 单活跃槽完整生命周期最坏序列化字符（真实 JSON 实测，含 active 键）。 */
 export function treasuryCoreSlotWorstChars(): number {
-  const identityChars =
-    jsonFieldChars("actionKind", TREASURY_CORE_IDENTITY_FIELD_MAX) +
-    jsonScalarFieldChars("adapterVersion", 4) +
-    jsonFieldChars("adapterRegistrationId", TREASURY_CORE_IDENTITY_LONG_FIELD_MAX) +
-    jsonFieldChars("adapterSemanticIdentity", TREASURY_CORE_IDENTITY_LONG_FIELD_MAX) +
-    jsonFieldChars("canonicalDigest", TREASURY_CORE_IDENTITY_FIELD_MAX) +
-    jsonFieldChars("postingsDigest", TREASURY_CORE_IDENTITY_FIELD_MAX) +
-    jsonFieldChars("retryFactsDigest", TREASURY_CORE_IDENTITY_FIELD_MAX) +
-    // durableFacts 嵌套：{version,payload}（payload 受控字符集零膨胀）
-    jsonScalarFieldChars("version", 4) + jsonFieldChars("payload", TREASURY_CORE_DURABLE_PAYLOAD_MAX) + 2 + 1 +
-    // identity 对象括号 + 8 字段间逗号
-    2 + 8;
-  const evidenceChars =
-    jsonFieldChars("kind", 26) +
-    jsonFieldChars("conclusion", 13) +
-    jsonFieldChars("source", TREASURY_CORE_EVIDENCE_SOURCE_MAX) +
-    jsonScalarFieldChars("atTick", 13) + 2 + 3;
-  const cleanupChars =
-    jsonFieldChars("consumerKeys", TREASURY_CORE_CONSUMER_KEYS_MAX * (TREASURY_CORE_CONSUMER_KEY_MAX + 3) + 2) +
-    jsonScalarFieldChars("failures", 10) + 2 + 1;
-  return (
-    jsonFieldChars("workKey", TREASURY_CORE_WORK_KEY_MAX) +
-    jsonFieldChars("attemptId", TREASURY_CORE_IDENTITY_FIELD_MAX) +
-    jsonScalarFieldChars("generation", 10) +
-    jsonFieldChars("parentAttemptId", TREASURY_CORE_IDENTITY_FIELD_MAX) +
-    jsonFieldChars("phase", 14) +
-    jsonScalarFieldChars("admittedAtTick", 13) +
-    jsonScalarFieldChars("updatedAtTick", 13) +
-    jsonFieldChars("identity", identityChars) +
-    // worstCase 数组：16 × 腿 + 括号
-    jsonFieldChars("worstCase", TREASURY_CORE_WORST_CASE_LEGS_MAX * WORST_LEG_CHARS + 2) +
-    jsonFieldChars("invocation", jsonScalarFieldChars("atTick", 13) + 2) +
-    jsonFieldChars("external", jsonFieldChars("accepted", 5) + 1 + jsonScalarFieldChars("atTick", 13) + 2) +
-    jsonFieldChars("outcome", 12) +
-    jsonFieldChars("outcomeEvidence", evidenceChars) +
-    jsonFieldChars("cleanup", cleanupChars) +
-    jsonScalarFieldChars("retryDeadlineTick", 13) +
-    // lastError：自由文本，最坏 6× 转义（\uXXXX）
-    jsonFieldChars("lastError", TREASURY_CORE_ERROR_DETAIL_MAX * 6) +
-    // active 对象键（attemptId + 引号冒号）+ 记录括号 + 16 字段间逗号
-    (TREASURY_CORE_IDENTITY_FIELD_MAX + 3) + 2 + 16
-  );
+  if (slotWorstCharsCache === undefined) {
+    const record = buildTreasuryCoreWorstWorkRecord();
+    slotWorstCharsCache = JSON.stringify({ [record.attemptId]: record }).length;
+  }
+  return slotWorstCharsCache;
 }
 
-/** 单历史（ring）槽最坏序列化字符。 */
+/** 单历史槽最坏序列化字符（真实 JSON 实测，含数组内逗号份额）。 */
 export function treasuryCoreRingSlotWorstChars(): number {
-  return (
-    jsonFieldChars("attemptId", TREASURY_CORE_IDENTITY_FIELD_MAX) +
-    jsonFieldChars("workKey", TREASURY_CORE_WORK_KEY_MAX) +
-    jsonScalarFieldChars("generation", 10) +
-    jsonFieldChars("terminalPhase", 12) +
-    jsonScalarFieldChars("closedAtTick", 13) +
-    2 + 4
-  );
+  if (ringSlotWorstCharsCache === undefined) {
+    ringSlotWorstCharsCache = JSON.stringify(buildTreasuryCoreWorstRingEntry()).length + 1; // 数组分隔逗号
+  }
+  return ringSlotWorstCharsCache;
 }
 
-/** 根安全元信息最坏序列化字符（version/issuance/lifecycle/recovery/counters/ring 骨架）。 */
+/** 根安全元信息最坏序列化字符（真实 JSON 实测）。 */
 export function treasuryCoreMetaWorstChars(): number {
-  const countersKeys = ["admitted", "dispatched", "settledCommitted", "settledNotExecuted", "unknown", "rearmings", "rejectedAdmissions", "recoveryAdvances", "cleanupFailures"] as const;
-  let counters = 2 + 8; // 括号 + 逗号
-  for (const key of countersKeys) counters += jsonScalarFieldChars(key, 10) + 1;
-  return (
-    jsonScalarFieldChars("version", 1) + 1 +
-    jsonFieldChars("installEpochId", 32) + 1 +
-    jsonFieldChars("issuance", jsonScalarFieldChars("frontier", 10) + 1 + jsonScalarFieldChars("burned", 10) + 2 + 1) + 1 +
-    jsonFieldChars("lifecycle", jsonScalarFieldChars("lastBeginTick", 13) + 1 + jsonScalarFieldChars("lastEndTick", 13) + 2 + 1) + 1 +
-    jsonFieldChars("recovery", jsonScalarFieldChars("sweepCursor", 4) + 1 + jsonScalarFieldChars("cleanupCursor", 4) + 1 + jsonScalarFieldChars("budgetTick", 13) + 1 + jsonScalarFieldChars("budgetUsed", 1) + 2 + 3) + 1 +
-    jsonFieldChars("active", 2) + 1 +
-    jsonFieldChars("ring", 2) + 1 +
-    jsonScalarFieldChars("ringCursor", 3) + 1 +
-    jsonFieldChars("counters", counters) + 1 +
-    2 // 根括号
-  );
+  if (metaWorstCharsCache === undefined) {
+    metaWorstCharsCache = JSON.stringify(buildTreasuryCoreWorstMeta()).length;
+  }
+  return metaWorstCharsCache;
 }

@@ -50,6 +50,12 @@ export interface TreasuryAdmissionFactSources {
   readonly committedOutgoing: (roomName: string, resource: string) => number;
   /** 业务承诺：合法生产预留（exact owner 验证后可排除自己的那一项）。 */
   readonly reservedProduction: (roomName: string, resource: string, excludeOwner?: TreasuryOwnerIdentity) => number;
+  /**
+   * 承诺 scope 完整性（IV/R3/§5.2）：候选腿涉及的 (room, resource) scope
+   * incomplete（含 global incomplete 的传导）时授权必须 fail closed——
+   * 数值访问器只反映未被跳过记录的剩余数值，不能代表完整账目。
+   */
+  readonly commitmentScopeComplete: (roomName: string, resource: string) => boolean;
   /** policy per (resource, rooms)：返回 withhold+reserve 合计；异常由装配方 fail closed。 */
   readonly policyReserve: (resource: string, rooms: readonly string[]) =>
     | { readonly status: "ok"; readonly reserve: number }
@@ -109,6 +115,18 @@ export function evaluateTreasuryAdmissionFacts(
 ): TreasuryAdmissionVerdict {
   if (legs.length === 0) {
     return { status: "rejected", reasonCode: "invalid_input", reason: "候选 posting 腿为空" };
+  }
+  // 0) 完整性门禁（IV/R3/§5.2）：候选腿涉及的任何 (room, resource) scope
+  //    incomplete → 阻断。跳过坏记录后的剩余数值不构成完整账目——查询、
+  //    接纳、执行复验、rearm 与 kernel 容量端口共用本判定（同一次消费）。
+  for (const leg of legs) {
+    if (!sources.commitmentScopeComplete(leg.roomName, leg.resource)) {
+      return {
+        status: "rejected",
+        reasonCode: "commitment_incomplete",
+        reason: `承诺 scope 不完整（${leg.roomName}/${leg.resource}）——损坏/溢出承诺存在时授权 fail closed`,
+      };
+    }
   }
   // 1) per (room, loc, res) 流出合计 ×（存量观察 − 占用 − 承诺 − 预留）。
   const outflowByKey = new Map<string, { roomName: string; locationKind: string; resource: string; amount: number }>();
