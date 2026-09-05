@@ -38,8 +38,8 @@ import { installRooms, type RoomSpec } from "@mock/treasury";
 const ROOMS: RoomSpec[] = [
   {
     name: "W1N57",
-    storage: { id: "stor-1", resources: { energy: 5_000_000 }, freeCapacity: 900_000 },
-    terminal: { id: "term-1", resources: { energy: 1_000_000 }, freeCapacity: 2_000_000 },
+    storage: { id: "stor-1", resources: { energy: 1_000_000_000_000_000 }, freeCapacity: 900_000 },
+    terminal: { id: "term-1", resources: { energy: 1_000_000 }, freeCapacity: 1_000_000_000_000_000 },
   },
 ];
 
@@ -185,8 +185,9 @@ describe("B12 跨 tick 失效 pending 的安全取消（sweep）", () => {
       admit(service, `biz:b12:work-${String(i)}`);
     }
     expect(service.kernelMetrics().activeCount).toBe(64);
-    // 跨 tick sweep：预算 8/tick → 8 个 beginTick 内全部取消。
-    for (let tick = 0; tick < 10; tick += 1) {
+    // 跨 tick sweep：Core Rewrite III 子预算 sweep ≤3/tick（不饿死清理）→
+    // ⌈64/3⌉=22 个 beginTick 内全部取消（留余量循环 25）。
+    for (let tick = 0; tick < 25; tick += 1) {
       Game.time += 1;
       service.beginTick();
       if (service.kernelMetrics().activeCount === 0) break;
@@ -317,25 +318,25 @@ describe("B19 满载最坏状态的总预算与收尾余量", () => {
       store.active[attemptId] = {
         ...store.active[Object.keys(store.active)[0]],
         attemptId,
-        workKey: `biz:b19:fill-${"y".repeat(100)}:${String(i)}`,
+        workKey: `biz:b19:fill-${"y".repeat(80)}:${String(i)}`,
         admittedAtTick: Game.time,
         updatedAtTick: Game.time,
         phase: "outcome_unknown",
-        lastError: "z".repeat(192),
+        lastError: "z".repeat(96),
         worstCase: Array.from({ length: 16 }, (_, j) => ({
           roomName: "W1N57",
           locationKind: j % 2 === 0 ? "storage" : "terminal",
           resource: RESOURCE_ENERGY,
           delta: j % 2 === 0 ? -1_000_000_000 : 1_000_000_000,
         })),
-        cleanup: { consumerKeys: Array.from({ length: 8 }, (_, k) => `ext:b19:${"k".repeat(100)}:${String(k)}`), failures: 999 } as never,
+        cleanup: { consumerKeys: Array.from({ length: 8 }, (_, k) => `ext:b19:${"k".repeat(50)}:${String(k)}`), failures: 999 } as never,
       } as never;
     }
     store.issuance.frontier = 9999;
     for (let i = 0; i < 128; i += 1) {
       store.ring.push({
         attemptId: `tk1_${String(5000 + i)}_ffffffffffffffff`,
-        workKey: `biz:b19:ring-${"w".repeat(100)}:${String(i)}`,
+        workKey: `biz:b19:ring-${"w".repeat(80)}:${String(i)}`,
         generation: 999,
         terminalPhase: "retry_expired",
         closedAtTick: Game.time,

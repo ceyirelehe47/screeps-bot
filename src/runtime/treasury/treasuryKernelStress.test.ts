@@ -132,8 +132,9 @@ describe("压力：pending sweep 取消流（Core Rewrite II §7.5）", () => {
         const admission = service.authorizeTreasuryActionContract(built.contract, { workKey });
         expect(admission.status).toBe("admitted");
       }
-      // sweep 预算 8/tick：50 笔需 7 个 tick 全部取消（64 槽内不触满载）。
-      for (let t = 0; t < 8; t += 1) {
+      // Core Rewrite III：sweep 子预算 ≤3/tick → 50 笔需 ⌈50/3⌉=17 个 tick
+      // 全部取消（64 槽内不触满载；循环 20 留余量）。
+      for (let t = 0; t < 20; t += 1) {
         Game.time += 1;
         service.beginTick();
       }
@@ -303,27 +304,29 @@ describe("压力：满载与最坏记录", () => {
 describe("小型参考模型对比（2 槽 / 2 资源）", () => {
   interface RefModel {
     active: Map<string, { outflowResA: number; outflowResB: number; settled: boolean; unknown: boolean }>;
-    capacityResA: number;
-    capacityResB: number;
+    /** 世界真实余额（观察重建口径；committed 效果真实离开本池，§6.2）。 */
+    worldResA: number;
+    worldResB: number;
     slots: number;
   }
 
   function refModelInit(capA: number, capB: number): RefModel {
-    return { active: new Map(), capacityResA: capA, capacityResB: capB, slots: 2 };
+    return { active: new Map(), worldResA: capA, worldResB: capB, slots: 2 };
   }
 
-  /** 参考判定：接纳是否应放行（容量 + 槽位 + 排他）。 */
+  /** 参考判定：接纳是否应放行（世界余额 − 活跃占用 + 槽位 + 排他）。 */
   function refAdmit(model: RefModel, id: string, outA: number, outB: number): boolean {
     if (model.active.has(id)) return false;
     if (model.active.size >= model.slots) return false;
     let usedA = 0;
     let usedB = 0;
     for (const record of model.active.values()) {
-      if (record.settled && !record.unknown) continue; // 确定未执行的释放
+      // settled（committed）在推进点（观察接管）前仍计入占用——与生产
+      // "已确认效果未被当前观察覆盖时由原聚合承担"同一语义（§6.1）。
       usedA += record.outflowResA;
       usedB += record.outflowResB;
     }
-    return usedA + outA <= model.capacityResA && usedB + outB <= model.capacityResB;
+    return usedA + outA <= model.worldResA && usedB + outB <= model.worldResB;
   }
 
   it("随机事件序列下，生产 kernel 与参考模型的安全判定一致", () => {
@@ -333,10 +336,12 @@ describe("小型参考模型对比（2 槽 / 2 资源）", () => {
       seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
       return seed / 2_147_483_648;
     };
-    const rooms = installRooms([
-      { name: "W1N57", storage: { id: "stor-1", resources: { energy: 10_000 }, freeCapacity: 1_000 }, terminal: { id: "term-1", resources: { energy: 5_000 }, freeCapacity: 10_000 } },
-    ]);
     for (let round = 0; round < 30; round++) {
+      // 世界每轮重建：committed 效果真实离开世界（§6.2 同步生效模型），
+      // 跨轮累积消耗会使每轮重置的参考模型口径失真。
+      const rooms = installRooms([
+        { name: "W1N57", storage: { id: "stor-1", resources: { energy: 10_000 }, freeCapacity: 1_000 }, terminal: { id: "term-1", resources: { energy: 5_000 }, freeCapacity: 10_000 } },
+      ]);
       resetTreasuryCoreStoreForTest();
       const service = createTreasuryService({ getRooms: () => Object.values(rooms) });
       service.beginTick();
@@ -364,11 +369,14 @@ describe("小型参考模型对比（2 槽 / 2 资源）", () => {
             }
           }
         }
-        // 推进 tick（清理退出 committed）。
+        // 推进 tick（清理退出 committed；效果真实进入世界——世界余额扣减，
+        // 删除记录不返还容量，与生产"观察接管"同一语义）。
         Game.time += 1;
         service.beginTick();
         for (const [key, record] of model.active) {
           if (record.settled) {
+            model.worldResA -= record.outflowResA;
+            model.worldResB -= record.outflowResB;
             model.active.delete(key);
             liveKeys.delete(key);
           }

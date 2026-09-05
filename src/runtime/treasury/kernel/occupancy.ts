@@ -1,33 +1,42 @@
 /**
  * Treasury Core Kernel——资源占用投影（从活跃聚合单一权威派生）。
  *
- * 占用规则（design II §5.2，Core Rewrite II 修正）：
+ * 占用规则（design III §6.1，Core Rewrite III 观察接管闭环）：
  * - pending / dispatching / outcome_unknown：保持 worst-case 全额占用
  *  （未确认的不能花、可能已发出的不能释放）。占用含两个投影：
  *  流出（max(0, −delta)，占用存量可花费额）与流入（max(0, +delta)，
  *  占用接收容量——unknown 的可能流入不成可花费资产，只占接收空间）。
- * - closing（committed 或 not_executed）：不占用。已确认效果的表达转交：
- *  同一 tick 由 facade applied overlay（世界效果已发生、观察快照 stale），
- *  跨 tick 由刷新后的观察承担——同一责任唯一扣减归属，不双扣（B09）。
- * - closing(not_executed) / retry_ready：确定未流出，不占用。
- * - 占用是活跃集合成员资格的投影——不存在第二份 attempt authority，
- *  也不存在“清理完成改一个 done 标签就提前释放”的路径。
+ * - closing(committed)：**效果被当前授权观察接管前继续占用**。覆盖判定
+ *  是观察有效性边界（epoch.observedAtTick）与效果时点
+ *  （invocation.atTick——调用边界跨越时刻）的比较：
+ *    observedAtTick ≤ invocation.atTick → 该观察不可能包含此效果 → 占用；
+ *    observedAtTick > invocation.atTick → 观察已含效果（tick 边界模型，
+ *      同步测试 adapter 真实写世界）→ 不占用（由观察承担）。
+ *  该规则天然涵盖同 tick execution_semantics（未覆盖）与晚到 reconcile
+ *  （invocation 时刻久远、观察已新 → 已覆盖）。无观察上下文
+ *  （observationAsOfTick 未提供）时保守占用。
+ * - closing(not_executed / pending_cancellation) / retry_ready：确定未
+ *  流出，不占用。
+ * - 占用是活跃集合成员资格的投影——实例本地 overlay 只是可重建缓存，
+ *  不是已确认效果的安全载体（R5：多实例/完整 reset 不产生责任空窗）。
  */
 
-import type { TreasuryCoreMemory, TreasuryCoreWorkRecord } from "@/runtime/treasury/kernel/types";
+import type {
+  TreasuryCoreMemory,
+  TreasuryCoreOccupancyOptions,
+  TreasuryCoreWorkRecord,
+} from "@/runtime/treasury/kernel/types";
 
 /**
- * 一条聚合是否持有资源占用。
- *
- * closing 的区分（design II §5.2）：
- * - closing(committed, adapter_execution_semantics)：dispatch 时刻确认的
- *   效果已由本 tick applied overlay 表达（跨 tick 由刷新观察表达）——
- *   不占用（同一责任唯一扣减归属，不双扣）。
- * - closing(committed, adapter_reconcile)：对账确认的效果发生时刻不确定
- *   （观察边界不明）——保守保持占用，直到聚合退出（§3：未能证明具体
- *   效果已进入观察时可保守扣留）。
+ * 一条聚合是否持有资源占用（options 详见 TreasuryCoreOccupancyOptions）。
  */
-export function treasuryCoreWorkHoldsOccupancy(record: TreasuryCoreWorkRecord): boolean {
+export function treasuryCoreWorkHoldsOccupancy(
+  record: TreasuryCoreWorkRecord,
+  options: TreasuryCoreOccupancyOptions = {},
+): boolean {
+  if (options.excludeAttemptId !== undefined && record.attemptId === options.excludeAttemptId) {
+    return false;
+  }
   switch (record.phase) {
     case "pending":
     case "dispatching":
@@ -35,7 +44,10 @@ export function treasuryCoreWorkHoldsOccupancy(record: TreasuryCoreWorkRecord): 
       return true;
     case "closing":
       if (record.outcome !== "committed") return false;
-      return record.outcomeEvidence?.kind === "adapter_reconcile";
+      if (record.invocation === null) return true; // 结构上不应发生；保守占用
+      if (options.observationAsOfTick === undefined) return true; // 无观察上下文：保守
+      // 观察有效性边界 ≤ 效果时点 → 效果尚未被该观察覆盖 → 原聚合继续承担。
+      return options.observationAsOfTick <= record.invocation.atTick;
     case "retry_ready":
       return false;
   }
@@ -53,12 +65,15 @@ function locationKeyOf(roomName: string, locationKind: string): string {
   return `${roomName}\u0000${locationKind}`;
 }
 
-export function computeTreasuryCoreOccupancy(memory: TreasuryCoreMemory): TreasuryCoreOccupancyTotals {
+export function computeTreasuryCoreOccupancy(
+  memory: TreasuryCoreMemory,
+  options: TreasuryCoreOccupancyOptions = {},
+): TreasuryCoreOccupancyTotals {
   const byKey = new Map<string, number>();
   const inflowByLocation = new Map<string, number>();
   let holdingWorkCount = 0;
   for (const record of Object.values(memory.active)) {
-    if (!treasuryCoreWorkHoldsOccupancy(record)) continue;
+    if (!treasuryCoreWorkHoldsOccupancy(record, options)) continue;
     holdingWorkCount += 1;
     for (const leg of record.worstCase) {
       const key = `${leg.roomName}\u0000${leg.locationKind}\u0000${leg.resource}`;
@@ -80,10 +95,11 @@ export function treasuryCoreOccupancyAt(
   roomName: string,
   locationKind: string,
   resource: string,
+  options: TreasuryCoreOccupancyOptions = {},
 ): number {
   let total = 0;
   for (const record of Object.values(memory.active)) {
-    if (!treasuryCoreWorkHoldsOccupancy(record)) continue;
+    if (!treasuryCoreWorkHoldsOccupancy(record, options)) continue;
     for (const leg of record.worstCase) {
       if (leg.roomName === roomName && leg.locationKind === locationKind && leg.resource === resource) {
         total += Math.max(0, -leg.delta);
@@ -98,10 +114,11 @@ export function treasuryCoreInflowOccupancyAt(
   memory: TreasuryCoreMemory,
   roomName: string,
   locationKind: string,
+  options: TreasuryCoreOccupancyOptions = {},
 ): number {
   let total = 0;
   for (const record of Object.values(memory.active)) {
-    if (!treasuryCoreWorkHoldsOccupancy(record)) continue;
+    if (!treasuryCoreWorkHoldsOccupancy(record, options)) continue;
     for (const leg of record.worstCase) {
       if (leg.roomName === roomName && leg.locationKind === locationKind) {
         total += Math.max(0, leg.delta);

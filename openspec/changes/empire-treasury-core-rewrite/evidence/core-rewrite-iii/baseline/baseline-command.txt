@@ -1,0 +1,3 @@
+command: npx jest --config jest.config.cjs --runInBand --testMatch "**/*.baseline.ts" --runTestsByPath scripts/baseline-red/treasury3-boundaries.baseline.ts
+worktree: 383ffc168d338ad93348f1de671f1095035e57c5 (383ffc1 detached)
+exit-code: 1 (13 failed / 4 passed —— 13 个缺陷反例红灯，4 个合法对照通过)

@@ -251,8 +251,8 @@ describe("A05（R2 等价）store 四态区分", () => {
     expect(result.status).toBe("rejected");
     // 原数据保留（不被清库、不重新初始化）。
     expect(Memory.runtime!.treasuryCore!.active[attemptId]).toBeDefined();
-    (Memory.runtime!.treasuryCore as unknown as { version: number }).version = 2;
-    expect(JSON.stringify(Memory.runtime!.treasuryCore)).toBe(snapshot.replace('"version":99', '"version":2'));
+    (Memory.runtime!.treasuryCore as unknown as { version: number }).version = 3;
+    expect(JSON.stringify(Memory.runtime!.treasuryCore)).toBe(snapshot.replace('"version":99', '"version":3'));
   });
 });
 
@@ -317,7 +317,7 @@ describe("A08 dispatching 发布失败", () => {
     expect(executed.status).toBe("rejected");
     expect(readTreasuryTestAdapterSideEffects().executions).toBe(0);
     // 修复 store：聚合保持 pending（有正面未开始证据——不虚构 unknown）。
-    (Memory.runtime!.treasuryCore as unknown as { version: number }).version = 2;
+    (Memory.runtime!.treasuryCore as unknown as { version: number }).version = 3;
     const record = service.kernelJournal().active.find((r) => r.attemptId === attemptId);
     expect(record?.phase).toBe("pending");
     expect(record?.invocation).toBeNull();
@@ -599,7 +599,7 @@ describe("A17 清理责任", () => {
     });
     if (!Memory.runtime) Memory.runtime = {} as never;
     Memory.runtime.treasuryCore = {
-      version: 2,
+      version: 3,
       installEpochId: "0123456789abcdef",
       issuance: { frontier: 2, burned: 0 },
       lifecycle: { lastBeginTick: null, lastEndTick: null },
@@ -736,7 +736,7 @@ describe("A20 满载与序列化预算", () => {
         // 语义由 B12/B13 单独覆盖）。
         admittedAtTick: Game.time,
         updatedAtTick: Game.time,
-        lastError: "x".repeat(192),
+        lastError: "x".repeat(96),
       } as never;
     }
     store.issuance.frontier = 999;

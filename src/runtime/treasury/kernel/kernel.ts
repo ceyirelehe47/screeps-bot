@@ -26,7 +26,11 @@
 import {
   TREASURY_CORE_RECOVERY_BUDGET_PER_TICK,
   TREASURY_CORE_SCHEMA_VERSION,
+  TREASURY_CORE_SUBBUDGET_DISPATCHING,
+  TREASURY_CORE_SUBBUDGET_RETRY_CLOSE,
+  TREASURY_CORE_SUBBUDGET_SWEEP,
   TREASURY_CORE_TOTAL_CHAR_BUDGET,
+  type TreasuryCoreAdmissionContext,
   type TreasuryCoreDispatchPermit,
   type TreasuryCoreIdentityFacts,
   type TreasuryCoreMemory,
@@ -46,7 +50,9 @@ import {
   initializeTreasuryCoreStore,
   readTreasuryCoreStoreHealth,
   resetTreasuryCoreRingLayer,
+  treasuryCoreRingSlotWorstChars,
   treasuryCoreSerializedChars,
+  treasuryCoreSlotWorstChars,
   writeTreasuryCoreMemory,
 } from "@/runtime/treasury/kernel/store";
 import {
@@ -85,10 +91,14 @@ export interface TreasuryCoreKernelPorts {
   /** 受控对账端口（settle 结论唯一来源；缺省即无法结算——unknown 保留）。 */
   readonly reconcileOutcome?: TreasuryCoreReconcileOutcomePort;
   /**
-   * 接纳容量端口：由 facade 用 exact observation + 本 tick overlay +
-   * kernel 占用口径实现。返回拒绝原因或 null（可用）。
+   * 接纳容量端口（III/R2）：由 facade 用 exact observation + kernel 占用 +
+   * 完整授权上下文实现——context 携带真实 contract 身份与经验证的 owner，
+   * 不允许退化为匿名口径。返回拒绝原因或 null（可用）。
    */
-  readonly checkAdmissionCapacity: (worstCase: readonly TreasuryCoreWorstCaseLeg[]) => string | null;
+  readonly checkAdmissionCapacity: (
+    worstCase: readonly TreasuryCoreWorstCaseLeg[],
+    context: TreasuryCoreAdmissionContext | undefined,
+  ) => { readonly reason: string; readonly reasonCode?: TreasuryCoreRejectionCode } | null;
   /** 外部消费者幂等释放端口（返回 false = 释放未确认，duty 保留；缺失即无受控释放能力）。 */
   readonly releaseExternalConsumer?: (consumerKey: string, attemptId: string) => boolean;
   /** 诊断事件流（可选；测试计量与 metrics 挂载点，不影响权威）。 */
@@ -104,6 +114,10 @@ export interface TreasuryCoreAdmissionInput {
   readonly canonicalArgs: unknown;
   /** 签发时的原始 posting 腿（只进 permit，不持久）。 */
   readonly postings: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
+  /** 完整授权上下文（真实 contract 身份 + 验证 owner；端口判定唯一口径）。 */
+  readonly admissionContext: TreasuryCoreAdmissionContext;
+  /** 签发时观察的结构绑定快照（只进 permit；复验比对 incarnation）。 */
+  readonly structureBindings: readonly { roomName: string; locationKind: string; structureId: string }[];
 }
 
 export type TreasuryCoreAdmissionResult =
@@ -128,6 +142,8 @@ export type TreasuryCoreRejectionCode =
   | "capacity_insufficient"
   | "release_port_unavailable"
   | "memory_budget_exceeded"
+  | "lifecycle_closed"
+  | "structure_changed"
   | "write_failed";
 
 export type TreasuryCoreDispatchOutcome =
@@ -136,6 +152,12 @@ export type TreasuryCoreDispatchOutcome =
   | { readonly status: "unknown"; readonly attemptId: string; readonly reason?: string }
   /** 前置拒绝：动作调用 0 次。 */
   | { readonly status: "rejected"; readonly reason: string }
+  /**
+   * 执行门禁阻断（III/§4.4）：当前授权窗口关闭、执行前复验失败或结构
+   * incarnation 变化。动作调用 0 次，不消费许可，记录保持 pending（可
+   * 显式取消或按既定规则过期取消）。
+   */
+  | { readonly status: "blocked"; readonly reasonCode: string; readonly reason: string }
   /** dispatching 发布失败：动作调用 0 次，聚合保持 pending。 */
   | { readonly status: "publish_failed"; readonly reason: string }
   /**
@@ -186,6 +208,8 @@ export interface TreasuryCoreKernel {
       readonly worstCase: readonly TreasuryCoreWorstCaseLeg[];
       readonly canonicalArgs: unknown;
       readonly postings: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
+      readonly admissionContext: TreasuryCoreAdmissionContext;
+      readonly structureBindings: readonly { roomName: string; locationKind: string; structureId: string }[];
     },
   ) => TreasuryCoreAdmissionResult;
   /** 安全取消：只结束确定未开始的当前 pending attempt（§6.1）。 */
@@ -278,21 +302,26 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     }
     const health = requireWritableHealth();
     if (health.status === "blocked") return { status: "rejected", reason: health.reason, reasonCode: health.code };
-    // 总序列化预算（§6.4）：接纳前保证最坏生命周期仍可容纳（满载阻断新增，
-    // 不阻断已接纳工作收尾）。序列化体积按发布确认后的精确布局计算。
+    // 总序列化预算（§8.3）：逐槽完整生命周期上界法——当前实际序列化 +
+    // 新聚合完整生命周期槽上界 + 新历史槽上界 ≤ 总预算。已接纳工作任何
+    // 状态演化都不超过槽上界（受控字符集 + 字段硬上限），不会“先接纳短
+    // pending、后无空间写长 closing”。
     const serializedNow = treasuryCoreSerializedChars(health.memory);
-    if (serializedNow > 0 && serializedNow + estimateAdmissionWorstChars(input) > TREASURY_CORE_TOTAL_CHAR_BUDGET) {
+    const admissionWorst = treasuryCoreSlotWorstChars() + treasuryCoreRingSlotWorstChars();
+    if (serializedNow > 0 && serializedNow + admissionWorst > TREASURY_CORE_TOTAL_CHAR_BUDGET) {
       bumpRejectedCounter();
       return {
         status: "rejected",
-        reason: `treasuryCore 总序列化预算超限（当前 ${String(serializedNow)} + 新聚合最坏 ${String(estimateAdmissionWorstChars(input))} > ${String(TREASURY_CORE_TOTAL_CHAR_BUDGET)} 字符）`,
+        reason: `treasuryCore 总序列化预算超限（当前 ${String(serializedNow)} + 新聚合完整生命周期上界 ${String(admissionWorst)} > ${String(TREASURY_CORE_TOTAL_CHAR_BUDGET)} 字符）`,
         reasonCode: "memory_budget_exceeded",
       };
     }
-    const capacityProblem = ports.checkAdmissionCapacity(input.worstCase);
+    // 容量端口携带完整授权上下文（R2：不退化为匿名裁决——owner/contract
+    // 身份与接纳路径一致，own-reservation 的 exact 排除在端口内同样成立）。
+    const capacityProblem = ports.checkAdmissionCapacity(input.worstCase, input.admissionContext);
     if (capacityProblem !== null) {
       bumpRejectedCounter();
-      return { status: "rejected", reason: capacityProblem, reasonCode: "capacity_insufficient" };
+      return { status: "rejected", reason: capacityProblem.reason, reasonCode: capacityProblem.reasonCode ?? "capacity_insufficient" };
     }
     const run = runCommand({
       type: "admit",
@@ -312,6 +341,8 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       canonicalDigest: input.identity.canonicalDigest,
       canonicalArgs: input.canonicalArgs,
       postings: input.postings,
+      ownerIdentity: input.admissionContext.ownerIdentity,
+      structureBindings: input.structureBindings,
       actionKind: input.identity.actionKind,
       adapterRegistrationId: input.identity.adapterRegistrationId,
       adapterSemanticIdentity: input.identity.adapterSemanticIdentity,
@@ -327,15 +358,6 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     if (reason.includes("externalConsumers")) return "invalid_input";
     if (reason.includes("预算超限")) return "memory_budget_exceeded";
     return "write_failed";
-  }
-
-  /** 单条新聚合的最坏序列化字符（按字段上限构造，不依赖当前观测）。 */
-  function estimateAdmissionWorstChars(input: TreasuryCoreAdmissionInput): number {
-    const worstIdentity = 64 + 8 + 128 + 128 + 64 + 64 + 64 + (input.identity.durableFacts !== null ? 540 : 4);
-    const worstLegs = 16 * 110;
-    const worstConsumers = 8 * 132;
-    const rest = 4800;
-    return worstIdentity + worstLegs + worstConsumers + rest;
   }
 
   function bumpRejectedCounter(): void {
@@ -510,10 +532,10 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     }
     const health = requireWritableHealth();
     if (health.status === "blocked") return { status: "rejected", reason: health.reason, reasonCode: health.code };
-    const capacityProblem = ports.checkAdmissionCapacity(next.worstCase);
+    const capacityProblem = ports.checkAdmissionCapacity(next.worstCase, next.admissionContext);
     if (capacityProblem !== null) {
       bumpRejectedCounter();
-      return { status: "rejected", reason: capacityProblem, reasonCode: "capacity_insufficient" };
+      return { status: "rejected", reason: capacityProblem.reason, reasonCode: capacityProblem.reasonCode ?? "capacity_insufficient" };
     }
     const run = runCommand({
       type: "rearm",
@@ -530,6 +552,8 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       canonicalDigest: next.identity.canonicalDigest,
       canonicalArgs: next.canonicalArgs,
       postings: next.postings,
+      ownerIdentity: next.admissionContext.ownerIdentity,
+      structureBindings: next.structureBindings,
       actionKind: next.identity.actionKind,
       adapterRegistrationId: next.identity.adapterRegistrationId,
       adapterSemanticIdentity: next.identity.adapterSemanticIdentity,
@@ -549,21 +573,36 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     return run.status === "applied" ? { status: "ok" } : { status: "rejected", reason: run.reason };
   }
 
-  // ── beginTick：恢复推进（预算共享 + 公平游标轮转） ─────────────────────────
+  // ── beginTick：恢复推进（子预算公平 + 端口调用前持久预扣） ──────────────────
   //
-  // 预算语义（§6.3）：每 tick 恢复扫描/状态发布/外部清理调用共享
-  // RECOVERY_BUDGET_PER_TICK；同 tick 重复 beginTick / 多实例经持久记账
-  // （recovery.budgetTick/budgetUsed）共享同一份额。游标（sweepCursor/
-  // cleanupCursor）是调度元信息：失效可安全重建，不是完成 proof；前面的
-  // 任务失败也消耗预算并让后续任务在有限轮次获得机会（轮转保证：
-  // active ≤ 64、预算 8/tick → 可完成项最多 ⌈64/8⌉=8 轮内被访问）。
+  // 预算语义（§6.3/§7.1）：每 tick 恢复扫描/状态发布/外部清理调用共享
+  // RECOVERY_BUDGET_PER_TICK；同 tick 重复 beginTick / 多实例 / 端口内重入
+  // 经持久记账（recovery.budgetTick/budgetUsed）共享同一份额。
+  //
+  // 预扣协议（R6）：每次外部释放端口调用**之前**先持久发布
+  // budgetUsed=used+1——预扣发布失败则不调用端口；端口抛错/失败/确认写回
+  // 失败时该份额已消耗（不退回供重入再花）。硬终止（预扣后未进入端口）
+  // 保守损失本 tick 这一次额度，下 tick 正常恢复。
+  //
+  // 子预算（§7.3）：dispatching 恢复 ≤2、pending sweep ≤3、retry 关闭 ≤1、
+  // closing 清理保底 ≥2——持续到来的取消流量不能饿死健康清理。
+  //
+  // 游标（sweepCursor/cleanupCursor）是调度元信息：失效可安全重建，不是
+  // 完成 proof；失败的任务也消耗预算并让后续任务在有限轮次获得机会。
 
   function readBudgetState(memory: TreasuryCoreMemory, nowTick: number): number {
     if (memory.recovery.budgetTick !== nowTick) return 0;
     return memory.recovery.budgetUsed;
   }
 
-  /** 预算内执行一条恢复命令（命令写自身携带预算记账）。 */
+  /** 当前持久预算（每次从 Memory 现读——重入/多实例后的单一权威）。 */
+  function currentBudgetUsed(nowTick: number): number {
+    const health = readTreasuryCoreStoreHealth();
+    if (health.status !== "healthy") return TREASURY_CORE_RECOVERY_BUDGET_PER_TICK;
+    return readBudgetState(health.memory, nowTick);
+  }
+
+  /** 预算内执行一条恢复命令（命令写自身携带预算记账；持久值单调不回退）。 */
   function applyBudgetedCommand(
     used: number,
     command: TreasuryCoreCommand,
@@ -573,15 +612,45 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     const draftHealth = readTreasuryCoreStoreHealth();
     if (draftHealth.status !== "healthy") return { applied: false, used };
     const draft = cloneForCommand(draftHealth.memory);
+    // ring 层损坏在预算命令写入前重建（R7：与 runCommand 同一隔离——
+    // cancel/close 的 ring 追加不得在坏历史上崩溃）。
+    if (draftHealth.ringDegraded !== null) resetTreasuryCoreRingLayer(draft);
     const result = applyTreasuryCoreStateCommand(draft, command, { nowTick });
     if (result.status === "rejected") return { applied: false, used };
-    draft.recovery = { sweepCursor: cursors.sweepCursor, cleanupCursor: cursors.cleanupCursor, budgetTick: nowTick, budgetUsed: used + 1 };
+    // 预算记账从持久现读取 max（R6：重入/多实例可能已推高持久值，本地
+    // used 不得把已消耗份额写回）。
+    const effectiveUsed = Math.max(used, readBudgetState(draftHealth.memory, nowTick));
+    draft.recovery = { sweepCursor: cursors.sweepCursor, cleanupCursor: cursors.cleanupCursor, budgetTick: nowTick, budgetUsed: effectiveUsed + 1 };
     const write = writeTreasuryCoreMemory((root) => {
       Object.assign(root, draft);
     }, () => undefined);
-    if (write.status === "failed") return { applied: false, used };
+    if (write.status === "failed") return { applied: false, used: effectiveUsed };
     for (const effect of result.effects) ports.onEffect?.(effect);
-    return { applied: true, used: used + 1 };
+    return { applied: true, used: effectiveUsed + 1 };
+  }
+
+  /**
+   * 端口调用前的预算预扣（R6/§7.1）：持久发布 budgetUsed=used+1。
+   * 返回 null（预扣失败——不得调用端口）或预扣后的 used 值。
+   */
+  function prepayReleaseBudget(
+    cursors: { sweepCursor: number; cleanupCursor: number },
+  ): number | null {
+    const nowTick = ports.nowTick();
+    const health = readTreasuryCoreStoreHealth();
+    if (health.status !== "healthy") return null;
+    const usedNow = readBudgetState(health.memory, nowTick);
+    if (usedNow >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) return null;
+    const write = writeTreasuryCoreMemory((root) => {
+      root.recovery = {
+        sweepCursor: cursors.sweepCursor,
+        cleanupCursor: cursors.cleanupCursor,
+        budgetTick: nowTick,
+        budgetUsed: usedNow + 1,
+      };
+    }, () => undefined);
+    if (write.status === "failed") return null;
+    return usedNow + 1;
   }
 
   function beginTick(): { recovered: number; closed: number; cleaned: number; cancelled: number } {
@@ -598,18 +667,19 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     const cursors = { sweepCursor: health.memory.recovery.sweepCursor, cleanupCursor: health.memory.recovery.cleanupCursor };
     let used = readBudgetState(health.memory, nowTick);
 
-    // 1) dispatching 残留 → 保守 unknown（可能已进入；不重发）。
+    // 1) dispatching 残留 → 保守 unknown（可能已进入；不重发）。子预算 ≤2。
+    let dispatchingSpent = 0;
     for (const record of sortedActive(health.memory)) {
+      if (dispatchingSpent >= TREASURY_CORE_SUBBUDGET_DISPATCHING) break;
       if (used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) break;
       if (record.phase !== "dispatching") continue;
       const step = applyBudgetedCommand(used, { type: "recover_dispatching", attemptId: record.attemptId }, cursors);
       used = step.used;
+      dispatchingSpent += 1;
       if (step.applied) recovered += 1;
     }
 
-    // 2) 跨 tick 失效 pending 的安全取消（§6.1）：admittedAtTick < nowTick 的
-    //    pending 其旧许可已失效；按预算轮转取消（不是本 tick 接纳的记录
-    //    不会被当作旧残留——admittedAtTick === nowTick 不满足条件）。
+    // 2) 跨 tick 失效 pending 的安全取消（§6.1）。子预算 ≤3。
     const afterRecover = readTreasuryCoreStoreHealth();
     if (afterRecover.status === "healthy") {
       const pendings = sortedActive(afterRecover.memory).filter((r) => r.phase === "pending" && r.admittedAtTick < nowTick);
@@ -617,6 +687,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
         const start = cursors.sweepCursor % pendings.length;
         let visited = 0;
         while (visited < pendings.length && used < TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) {
+          if (used >= TREASURY_CORE_SUBBUDGET_DISPATCHING + TREASURY_CORE_SUBBUDGET_SWEEP) break;
           const record = pendings[(start + visited) % pendings.length];
           visited += 1;
           cursors.sweepCursor = (cursors.sweepCursor + 1) % pendings.length;
@@ -629,21 +700,25 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       }
     }
 
-    // 3) retry 权利期限关闭。
+    // 3) retry 权利期限关闭。子预算 ≤1。
     const afterSweep = readTreasuryCoreStoreHealth();
     if (afterSweep.status === "healthy") {
+      let retryCloses = 0;
       for (const record of sortedActive(afterSweep.memory)) {
+        if (retryCloses >= TREASURY_CORE_SUBBUDGET_RETRY_CLOSE) break;
         if (used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) break;
         if (record.phase !== "retry_ready") continue;
         if (record.retryDeadlineTick !== null && nowTick > record.retryDeadlineTick) {
           const step = applyBudgetedCommand(used, { type: "close", attemptId: record.attemptId, reason: "retry_expired" }, cursors);
           used = step.used;
+          retryCloses += 1;
           if (step.applied) closed += 1;
         }
       }
     }
 
-    // 4) closing 清理公平推进（游标轮转；预算覆盖外部端口调用与状态发布）。
+    // 4) closing 清理公平推进（游标轮转；清理保底 ≥2：前面最多消耗 6）。
+    //    每次外部端口调用前先持久预扣预算（R6）。
     const afterCloses = readTreasuryCoreStoreHealth();
     if (afterCloses.status === "healthy") {
       const closings = sortedActive(afterCloses.memory).filter((r) => r.phase === "closing");
@@ -660,8 +735,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
             if (step.applied) cleaned += 1;
             continue;
           }
-          // 逐消费者幂等释放（每次端口调用消耗预算——无论成败；预算耗尽
-          // 即停，义务保留）。
+          // 逐消费者幂等释放：端口调用前预扣预算（预扣失败即停）。
           const releasePort = ports.releaseExternalConsumer;
           if (releasePort === undefined) {
             // 端口缺失：不默认成功——保留义务并记录失败计数（有界诊断）。
@@ -672,31 +746,38 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
           }
           const released: string[] = [];
           let portFaulted = false;
+          let budgetPrepayFailed = false;
           for (const consumerKey of record.cleanup.consumerKeys) {
-            if (used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) break;
+            // 预扣从持久现读（重入/多实例后的单一权威；R6）。
+            const prepaid = prepayReleaseBudget(cursors);
+            if (prepaid === null) {
+              budgetPrepayFailed = true;
+              break;
+            }
+            used = prepaid;
             let ok: boolean;
             try {
               ok = releasePort(consumerKey, record.attemptId);
             } catch {
-              // 端口抛错：该 duty 保留（不崩 tick、不默认成功）。
+              // 端口抛错：该 duty 保留（不崩 tick、不默认成功）；预算已耗。
               portFaulted = true;
               ok = false;
             }
-            used += 1;
             if (ok) released.push(consumerKey);
           }
-          if (released.length === 0 && portFaulted && used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) {
-            // 端口故障且预算耗尽：本 tick 不写状态（duty 全保留，下 tick 重试）。
+          if (budgetPrepayFailed && released.length === 0) {
+            // 预算耗尽/预扣失败：本条记录本 tick 不再推进（duty 保留）。
             continue;
           }
-          if (released.length === 0 && !portFaulted) {
+          if (released.length === 0 && !portFaulted && !budgetPrepayFailed) {
             // 端口明确未确认（false）：推进失败计数（诊断），duty 保留。
             const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] }, cursors);
             used = step.used;
             if (step.applied) cleaned += 1;
             continue;
           }
-          // 释放未确认的消费者义务保留（不因端口失败谎报完成）。
+          // 释放未确认的消费者义务保留（不因端口失败谎报完成）；确认写回
+          // 失败时下次以同一幂等关联重试（§5.2）。
           const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: released }, cursors);
           used = step.used;
           if (step.applied) cleaned += 1;
@@ -706,10 +787,11 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       }
     }
 
-    // 5) lifecycle 标记 + 游标/预算终态持久化。
+    // 5) lifecycle 标记 + 游标/预算终态持久化（终态预算 = 持久记账现值）。
+    const finalUsed = Math.max(used, currentBudgetUsed(nowTick));
     writeTreasuryCoreMemory((root) => {
       root.lifecycle.lastBeginTick = nowTick;
-      root.recovery = { ...cursors, budgetTick: nowTick, budgetUsed: used };
+      root.recovery = { ...cursors, budgetTick: nowTick, budgetUsed: finalUsed };
     }, () => undefined);
     return { recovered, closed, cleaned, cancelled };
   }
@@ -781,7 +863,8 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       unknownCount,
       closingCount,
       retryReadyCount,
-      ringCount: memory.ring.length,
+      // R7：ring 非数组（healthy + ringDegraded 可达）不得使 metrics 崩溃。
+      ringCount: Array.isArray(memory.ring) ? memory.ring.length : 0,
       frontier: memory.issuance.frontier,
       burned: memory.issuance.burned,
       // 深快照：不泄漏底层持久 counters 引用（R06/B22）。

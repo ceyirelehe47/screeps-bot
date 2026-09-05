@@ -66,6 +66,7 @@ import {
   listTreasuryCoreActiveWorks,
 } from "@/runtime/treasury/kernel/occupancy";
 import type {
+  TreasuryCoreAdmissionContext,
   TreasuryCoreDispatchPermit,
   TreasuryCoreIdentityFacts,
   TreasuryCoreMemory,
@@ -369,6 +370,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   /** 本 tick 签发的 dispatch 许可（leak audit 用）。 */
   let permitsIssuedThisTick = 0;
   const issuedPermits = new WeakSet<TreasuryCoreDispatchPermit>();
+  /** 已签发未进入调用边界的许可 + 签发 tick（真实 leak 计数用）。 */
+  const outstandingPermits = new Set<TreasuryCoreDispatchPermit>();
+  const issuedTickOfPermit = new WeakMap<TreasuryCoreDispatchPermit, number>();
 
   function coreAdapterPort(kind: string): TreasuryCoreActionAdapterPort | undefined {
     const adapter = findTreasuryActionAdapter(kind);
@@ -384,31 +388,48 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     };
   }
 
-  function kernelOccupancyNow(): { byKey: ReadonlyMap<string, number>; inflowByLocation: ReadonlyMap<string, number> } {
+  function kernelOccupancyNow(options: {
+    observationAsOfTick?: number;
+    excludeAttemptId?: string;
+  } = {}): { byKey: ReadonlyMap<string, number>; inflowByLocation: ReadonlyMap<string, number> } {
     const health = readTreasuryCoreStoreHealth();
     if (health.status !== "healthy") {
       return { byKey: new Map(), inflowByLocation: new Map() };
     }
-    const occupancy = computeTreasuryCoreOccupancy(health.memory);
+    const occupancy = computeTreasuryCoreOccupancy(health.memory, options);
     return { byKey: occupancy.byKey, inflowByLocation: occupancy.inflowByLocation };
   }
 
-  // ── 统一授权事实来源（查询严格口径 / 接纳 / rearm / 执行前复验共用） ──────
+  // ── 统一授权事实来源（接纳 / rearm / kernel 容量端口 / 执行前复验共用） ──
+  //
+  // R2/§4.1：判定只此一份——kernel 容量端口与 facade 入口消费同一公式与
+  // 同一上下文（真实 contract 身份 + 验证 owner），不再有匿名二次裁决。
+  // R5/§6.1：已确认未入观察的效果由 occupancy 承担（observationAsOfTick
+  // 覆盖判定），实例本地 overlay 不参与授权。
 
-  function buildAdmissionFactSources(state: TreasuryTickState): TreasuryAdmissionFactSources {
+  function buildAdmissionFactSources(
+    state: TreasuryTickState,
+    occupancy: { byKey: ReadonlyMap<string, number>; inflowByLocation: ReadonlyMap<string, number> },
+    policyContext: {
+      readonly contractId: string;
+      readonly contractDigest: string;
+      readonly actionKind: string;
+      readonly ownerIdentity: TreasuryCoreAdmissionContext["ownerIdentity"];
+    },
+  ): TreasuryAdmissionFactSources {
+    const ownerKeyForPolicy =
+      policyContext.ownerIdentity !== null
+        ? `${policyContext.ownerIdentity.kind}:${policyContext.ownerIdentity.id}`
+        : "anonymous";
     return {
       observedAmount: (roomName, locationKind, resource) =>
         state.observation.amount(roomName, locationKind as TreasuryLocationKind, resource),
       observedFreeCapacity: (roomName, locationKind) =>
         state.observation.freeCapacity(roomName, locationKind as TreasuryLocationKind),
-      appliedResourceDelta: (roomName, locationKind, resource) =>
-        overlay.resourceDeltas.get(overlayResourceKey(roomName, locationKind, resource)) ?? 0,
-      appliedCapacityUsed: (roomName, locationKind) =>
-        Math.max(0, overlay.capacityDeltas.get(overlayLocationKey(roomName, locationKind)) ?? 0),
       occupancyOutflow: (roomName, locationKind, resource) =>
-        kernelOccupancyNow().byKey.get(overlayResourceKey(roomName, locationKind, resource)) ?? 0,
+        occupancy.byKey.get(overlayResourceKey(roomName, locationKind, resource)) ?? 0,
       occupancyInflow: (roomName, locationKind) =>
-        kernelOccupancyNow().inflowByLocation.get(overlayLocationKey(roomName, locationKind)) ?? 0,
+        occupancy.inflowByLocation.get(overlayLocationKey(roomName, locationKind)) ?? 0,
       committedOutgoing: (roomName, resource) =>
         service.commitments().pendingOutgoing(roomName, resource),
       reservedProduction: (roomName, resource, excludeOwner) =>
@@ -421,12 +442,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         let decision: ReturnType<typeof resolver.evaluate>;
         try {
           decision = resolver.evaluate({
-            contractId: "-",
-            contractDigest: "-",
-            actionKind: "-",
+            contractId: policyContext.contractId,
+            contractDigest: policyContext.contractDigest,
+            actionKind: policyContext.actionKind,
             resource,
             rooms: [...rooms],
-            ownerIdentity: "anonymous",
+            ownerIdentity: ownerKeyForPolicy,
             tick: Game.time,
           });
         } catch (error) {
@@ -449,82 +470,26 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   }
 
   /**
-   * 共同授权判定入口（§5.1）：接纳、rearm、执行前复验共用。
-   * candidateLegs 为原始 posting 全集（未合并）。
+   * 共同授权判定（唯一公式）：接纳、rearm、kernel 容量端口与执行前复验
+   * 都经此入口。context 携带真实 contract 身份、经验证 owner 与复验时的
+   * 本笔排除（§4.3：本笔 pending 是"既有责任继续兑现"，不自我双扣）。
    */
-  function evaluateAdmissionForCandidate(
+  function evaluateAdmission(
     candidateLegs: readonly TreasuryCandidateLeg[],
-    owner: TreasuryQueryOwner | undefined,
+    context: TreasuryCoreAdmissionContext,
   ): TreasuryAdmissionVerdict {
     const state = ensureTickState(true);
-    const ownerCheck = resolveOwnerStatus(owner, resolveHolder);
-    if (owner !== undefined && !ownerCheck.valid) {
-      return { status: "rejected", reasonCode: "invalid_input", reason: "owner 声明非法（fail closed）" };
-    }
-    const sources = buildAdmissionFactSources(state);
-    return evaluateTreasuryAdmissionFacts(sources, candidateLegs, {
-      excludeOwner:
-        ownerCheck.valid && ownerCheck.ownerIdentity && owner !== undefined && ownerCheck.ownerRoom !== undefined
-          ? ownerCheck.ownerIdentity
-          : undefined,
+    const excludeOwner: TreasuryOwnerIdentity | undefined =
+      context.ownerIdentity !== null
+        ? (context.ownerIdentity as TreasuryOwnerIdentity)
+        : undefined;
+    const occupancy = kernelOccupancyNow({
+      observationAsOfTick: state.observation.epoch.observedAtTick,
+      excludeAttemptId: context.excludeAttemptId,
     });
-  }
-
-  /** policy 检查带 contract 上下文（contract-first 接纳/rearm 路径）。 */
-  function evaluateAdmissionForContract(
-    contract: TreasuryActionContract,
-    candidateLegs: readonly TreasuryCandidateLeg[],
-    owner: TreasuryQueryOwner | undefined,
-  ): TreasuryAdmissionVerdict {
-    const state = ensureTickState(true);
-    const ownerCheck = resolveOwnerStatus(owner, resolveHolder);
-    if (owner !== undefined && !ownerCheck.valid) {
-      return { status: "rejected", reasonCode: "invalid_input", reason: "owner 声明非法（fail closed）" };
-    }
-    const base = buildAdmissionFactSources(state);
-    const rooms = [...new Set(candidateLegs.map((leg) => leg.roomName))];
-    const sources: TreasuryAdmissionFactSources = {
-      ...base,
-      policyReserve: (resource, policyRooms) => {
-        const resolver = findTreasuryPolicyResolver();
-        if (resolver === undefined) {
-          return { status: "rejected" as const, reasonCode: "policy_unavailable" as const, reason: "无注册 policy resolver（fail closed：不得自报 withhold）" };
-        }
-        const ownerKey = contract.transactionId.length > 0 ? `contract:${contract.digest.slice(0, 8)}` : "anonymous";
-        let decision: ReturnType<typeof resolver.evaluate>;
-        try {
-          decision = resolver.evaluate({
-            contractId: contract.contractId,
-            contractDigest: contract.digest,
-            actionKind: contract.actionKind,
-            resource,
-            rooms: [...policyRooms],
-            ownerIdentity: ownerKey,
-            tick: Game.time,
-          });
-        } catch (error) {
-          return {
-            status: "rejected" as const,
-            reasonCode: "policy_fault" as const,
-            reason: "policy_fault：resolver 抛错 " + String(error instanceof Error ? error.message : error).slice(0, 96),
-          };
-        }
-        if ("status" in decision) {
-          return { status: "rejected" as const, reasonCode: "policy_violation" as const, reason: "policy 拒绝：" + decision.reason };
-        }
-        const validated = validateTreasuryPolicyDecision(decision);
-        if (validated !== null) {
-          return { status: "rejected" as const, reasonCode: "policy_fault" as const, reason: "policy_fault：" + validated };
-        }
-        return { status: "ok" as const, reserve: decision.withhold + decision.strategicReserve };
-      },
-    };
-    void rooms;
+    const sources = buildAdmissionFactSources(state, occupancy, context);
     return evaluateTreasuryAdmissionFacts(sources, candidateLegs, {
-      excludeOwner:
-        ownerCheck.valid && ownerCheck.ownerIdentity && owner !== undefined && ownerCheck.ownerRoom !== undefined
-          ? ownerCheck.ownerIdentity
-          : undefined,
+      excludeOwner,
     });
   }
 
@@ -581,19 +546,49 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const conclusion = raw === "observed_committed" ? "executed" : raw === "observed_not_executed" ? "not_executed" : "still_uncertain";
       return { status: "ok" as const, conclusion, source: adapter.semanticIdentity };
     },
-    checkAdmissionCapacity: (worstCase) => {
-      // kernel 侧容量端口（occupancy 已在其中由 sources 提供）：将持久
-      // worstCase（双向腿）还原为候选腿形状，与接纳同一判定。
+    checkAdmissionCapacity: (worstCase, context) => {
+      // kernel 侧容量端口（R2）：与接纳/复验同一判定、同一上下文——
+      // context 携带真实 contract 身份与经验证 owner，不存在匿名口径。
+      if (context === undefined) {
+        return { reason: "接纳缺少授权上下文（拒绝——不允许匿名裁决）", reasonCode: "invalid_input" as const };
+      }
+      const state = ensureTickState(true);
+      // 观察覆盖（§4.4）：动作目标位置必须被当前观察覆盖（结构存在）。
+      const seenLocations = new Set<string>();
+      for (const leg of worstCase) {
+        const key = `${leg.roomName}\u0000${leg.locationKind}`;
+        if (seenLocations.has(key)) continue;
+        seenLocations.add(key);
+        if (!state.observation.locationExists(leg.roomName, leg.locationKind as TreasuryLocationKind)) {
+          return {
+            reason: `观察未覆盖动作目标位置 ${leg.roomName}/${leg.locationKind}（结构不存在或不可控——fail closed）`,
+            reasonCode: "structure_changed" as const,
+          };
+        }
+      }
       const candidateLegs: TreasuryCandidateLeg[] = worstCase.map((leg) => ({
         roomName: leg.roomName,
         locationKind: leg.locationKind,
         resource: leg.resource,
         delta: leg.delta,
       }));
-      const verdict = evaluateAdmissionForCandidate(candidateLegs, undefined);
-      return verdict.status === "ok" ? null : verdict.reason;
+      const verdict = evaluateAdmission(candidateLegs, context);
+      return verdict.status === "ok" ? null : { reason: verdict.reason, reasonCode: verdict.reasonCode as TreasuryCoreRejectionCode };
     },
   });
+
+  /**
+   * 共享授权窗口（C06/§4.4）：lifecycle.lastEndTick 是持久共享事实——
+   * endTick 后本 tick 任何实例不得接纳/rearm/dispatch；恢复/安全清理仍按
+   * 预算继续（kernel.beginTick 不受此限）。下一 tick 经正常入口开新窗口。
+   */
+  function admissionWindowOpen(): { status: "open" } | { status: "closed"; reason: string } {
+    const health = readTreasuryCoreStoreHealth();
+    if (health.status === "healthy" && health.memory.lifecycle.lastEndTick === Game.time) {
+      return { status: "closed", reason: "本 tick 授权窗口已关闭（endTick 后不得接纳/执行/rearm；恢复与安全清理继续）" };
+    }
+    return { status: "open" };
+  }
 
   function ensureTickState(lazy: boolean): TreasuryTickState {
     if (current !== null && current.tick === Game.time) {
@@ -615,10 +610,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       },
     });
     current = { tick: Game.time, observation, ended: false };
-    overlay = freshOverlay();
-    freshEpochsThisTick = 0;
-    permitsIssuedThisTick = 0;
-    return current;
+      overlay = freshOverlay();
+      freshEpochsThisTick = 0;
+      permitsIssuedThisTick = 0;
+      outstandingPermits.clear();
+      return current;
   }
 
   function buildIdentityFacts(contract: TreasuryActionContract): { status: "ok"; facts: TreasuryCoreIdentityFacts } | { status: "rejected"; reason: string } {
@@ -665,6 +661,52 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     }));
   }
 
+  /**
+   * 构造完整授权上下文（R2/§4.1）：真实 contract 身份 + 验证 owner。
+   * owner 声明非法时返回 rejected（fail closed）。
+   */
+  function buildAdmissionContext(
+    contract: TreasuryActionContract,
+    owner: TreasuryQueryOwner | undefined,
+  ): { status: "ok"; context: TreasuryCoreAdmissionContext } | { status: "rejected"; reason: string } {
+    const ownerCheck = resolveOwnerStatus(owner, resolveHolder);
+    if (owner !== undefined && !ownerCheck.valid) {
+      return { status: "rejected", reason: "owner 声明非法（fail closed）" };
+    }
+    return {
+      status: "ok",
+      context: {
+        contractId: contract.contractId,
+        contractDigest: contract.digest,
+        actionKind: contract.actionKind,
+        ownerIdentity:
+          ownerCheck.valid && ownerCheck.ownerIdentity && owner !== undefined && ownerCheck.ownerRoom !== undefined
+            ? (ownerCheck.ownerIdentity as TreasuryCoreAdmissionContext["ownerIdentity"])
+            : null,
+        excludeAttemptId: null,
+      },
+    };
+  }
+
+  /** 签发时观察的结构绑定快照（位置去重；复验比对 incarnation）。 */
+  function structureBindingsOfLegs(
+    legs: readonly TreasuryCandidateLeg[],
+  ): readonly { roomName: string; locationKind: string; structureId: string }[] {
+    const state = ensureTickState(true);
+    const bindings: { roomName: string; locationKind: string; structureId: string }[] = [];
+    const seen = new Set<string>();
+    for (const leg of legs) {
+      const key = `${leg.roomName}\u0000${leg.locationKind}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const location = state.observation.location(leg.roomName, leg.locationKind as TreasuryLocationKind);
+      if (location.exists && location.structureId !== undefined) {
+        bindings.push({ roomName: leg.roomName, locationKind: leg.locationKind, structureId: location.structureId });
+      }
+    }
+    return bindings;
+  }
+
   /** 已确认效果进入本 tick overlay（世界效果已发生，观察快照 stale）。 */
   function applyCommittedPostings(postings: readonly TreasuryCorePermitPosting[]): void {
     for (const posting of postings) {
@@ -696,6 +738,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       const stats = kernel.beginTick();
       current = null;
       ensureTickState(false);
+      // C06/§4.4：同 tick endTick 之后重复 beginTick（或第二实例）不得重开
+      // 已关闭的授权窗口——恢复/清理照常按预算继续，接纳/执行仍拒绝。
+      if (admissionWindowOpen().status === "closed" && current !== null) {
+        current.ended = true;
+      }
       return stats;
     },
 
@@ -751,11 +798,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         reservations: getReservations(),
         observation: state.observation,
         holderExists: deps.holderExists,
+        // 容量占用口径（R5）：occupancy 流入投影（含未覆盖 committed 流入）；
+        // strict 口径为展示值（overlay 缓存）。
         capacityDelta: (roomName, kind) =>
-          (overlay.capacityDeltas.get(overlayLocationKey(roomName, kind)) ?? 0) +
-          kernelUnknownInflowOccupancy(roomName, kind),
+          kernelUnknownInflowOccupancy(roomName, kind, state.observation.epoch.observedAtTick),
         strictCapacityDelta: (roomName, kind) =>
-          overlay.capacityDeltas.get(overlayLocationKey(roomName, kind)) ?? 0,
+          Math.max(0, overlay.capacityDeltas.get(overlayLocationKey(roomName, kind)) ?? 0),
         onExpiredExcluded: () => {
           metrics.expiredCommitmentsExcluded += 1;
         },
@@ -808,8 +856,8 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         }
       }
 
-      // 本 tick 已发生的世界效果（applied overlay；同一责任单次表达——
-      // tentative 已删除，active 占用见 committed 桶，不双扣）。
+      // 本 tick 已发生的世界效果（applied overlay——展示缓存；授权判定由
+      // occupancy 承担，R5。同一责任单次表达，不双扣）。
       let projected = observed;
       if (allowProjected) {
         for (const roomName of rooms) {
@@ -828,9 +876,9 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
           : "invalid_fail_closed";
 
       const commitments = service.commitments();
-      // 统一扣减桶（§5.1：与接纳/rearm 同一权威）：任务流出 + 生产预留 +
-      // kernel 占用（pending/dispatching/unknown 的最坏流出）。已确认
-      // committed 效果不在此桶（由 applied overlay/刷新观察表达）。
+      // 统一扣减桶（§4.1：与接纳/执行/rearm 同一权威口径）：任务流出 +
+      // 生产预留 + kernel 占用（pending/dispatching/unknown 的最坏流出 +
+      // 未被当前观察覆盖的已确认流出——R5）。
       let committed = 0;
       if (context.subtractOutgoing !== false) {
         for (const roomName of rooms) {
@@ -845,7 +893,7 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
               : undefined;
           committed += commitments.reservedProduction(roomName, context.resource, excludeOwner);
         }
-        const occupancy = kernelOccupancyNow();
+        const occupancy = kernelOccupancyNow({ observationAsOfTick: observation.epoch.observedAtTick });
         if (occupancy.byKey.size > 0) {
           for (const roomName of rooms) {
             for (const kind of kinds) {
@@ -939,15 +987,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     riskAdjustedFreeCapacity(roomName: string, kind: TreasuryLocationKind): number {
       metrics.riskAdjustedCapacityLookups += 1;
       const state = ensureTickState(true);
-      const locationKey = overlayLocationKey(roomName, kind);
-      // 统一占用口径（§5.2）：unknown 的可能流入占用接收容量（occupancy
-      // 投影），committed 效果由 applied overlay 表达——同一责任单次扣减。
-      const kernelInflow = kernelUnknownInflowOccupancy(roomName, kind);
-      return (
-        state.observation.freeCapacity(roomName, kind) -
-        Math.max(0, overlay.capacityDeltas.get(locationKey) ?? 0) -
-        kernelInflow
-      );
+      // 统一占用口径（§6.1/R5）：unknown 的可能流入 + 未被当前观察覆盖的
+      // 已确认流入都占接收容量（occupancy 投影），同一责任单次扣减。
+      const kernelInflow = kernelUnknownInflowOccupancy(roomName, kind, state.observation.epoch.observedAtTick);
+      return state.observation.freeCapacity(roomName, kind) - kernelInflow;
     },
 
     projectionRevision(): number {
@@ -985,6 +1028,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (options === undefined || typeof options.workKey !== "string") {
         return { status: "rejected", reason: "接纳必须提供 workKey（业务任务身份）", reasonCode: "invalid_input" };
       }
+      // 共享授权窗口（C06）：endTick 后本 tick 不再接纳（多实例共享事实）。
+      const window = admissionWindowOpen();
+      if (window.status === "closed") {
+        return { status: "rejected", reason: window.reason, reasonCode: "lifecycle_closed" };
+      }
       const verify = verifyTreasuryActionContractForAuthorization(contract);
       if (verify.status !== "ok") {
         return { status: "rejected", reason: `contract 无效：${verify.detail}`, reasonCode: "invalid_input" };
@@ -999,11 +1047,12 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       if (worstCase.length === 0) {
         return { status: "rejected", reason: "postings 为空（无可持久的动作腿）", reasonCode: "invalid_input" };
       }
-      // 共同授权判定（§5.1）：观察 + applied + 承诺 + 预留 + policy + 占用。
-      const verdict = evaluateAdmissionForContract(typed, candidateLegs, options.owner);
-      if (verdict.status === "rejected") {
+      // 完整授权上下文（R2）：判定在 kernel 容量端口内以同一上下文完成——
+      // facade 不再做第二份匿名预判。
+      const context = buildAdmissionContext(typed, options.owner);
+      if (context.status === "rejected") {
         metrics.transactionsRejectedInvalid += 1;
-        return { status: "rejected", reason: verdict.reason, reasonCode: verdict.reasonCode as TreasuryCoreRejectionCode };
+        return { status: "rejected", reason: context.reason, reasonCode: "invalid_input" };
       }
       const admission = kernel.admit({
         workKey: options.workKey,
@@ -1012,28 +1061,85 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         externalConsumers: options.externalConsumers ?? [],
         canonicalArgs: typed.args,
         postings: candidateLegs.map((leg) => ({ ...leg })),
+        admissionContext: context.context,
+        structureBindings: structureBindingsOfLegs(candidateLegs),
       });
+      if (admission.status === "rejected" && admission.reasonCode === "capacity_insufficient") {
+        metrics.transactionsRejectedInvalid += 1;
+      }
       if (admission.status === "admitted") {
         permitsIssuedThisTick += 1;
         issuedPermits.add(admission.dispatch);
+        outstandingPermits.add(admission.dispatch);
+        issuedTickOfPermit.set(admission.dispatch, Game.time);
       }
       return admission;
     },
 
     executeAuthorizedDispatch(dispatch: unknown): TreasuryCoreDispatchOutcome {
+      // 最终执行门禁（R3/§4.4）：许可对象有效不等于当前可执行——在进入
+      // kernel 调用边界之前复验共享窗口、当前授权事实（policy/承诺/容量，
+      // 排除本笔自身占用——§4.3 不自我双扣）与结构 incarnation。失败时
+      // 动作调用为 0、不消费许可、记录保持 pending（可显式取消或按既定
+      // 规则过期取消）。
+      const window = admissionWindowOpen();
+      if (window.status === "closed") {
+        return { status: "blocked", reasonCode: "lifecycle_closed", reason: window.reason };
+      }
+      if (typeof dispatch !== "object" || dispatch === null) {
+        return { status: "rejected", reason: "dispatch 许可对象缺失" };
+      }
+      const permit = dispatch as TreasuryCoreDispatchPermit;
+      if (
+        typeof permit.attemptId !== "string" ||
+        typeof permit.canonicalDigest !== "string" ||
+        typeof permit.actionKind !== "string" ||
+        !Array.isArray(permit.postings) ||
+        typeof permit.issuedAtTick !== "number" ||
+        permit.issuedAtTick !== Game.time
+      ) {
+        // 形状预检：完整许可校验在 kernel（WeakSet 身份/冻结/generation）。
+        return { status: "rejected", reason: "dispatch 许可形状不可信（kernel 终验前的前置拒绝）" };
+      }
+      // 复验（§4.4）：当前 policy/承诺/容量/结构事实——同一判定公式，
+      // 排除本笔 pending 占用（既有责任继续兑现，不双扣）。
+      const revalidation = evaluateAdmission(
+        permit.postings.map((p) => ({ roomName: p.roomName, locationKind: p.locationKind, resource: p.resource, delta: p.delta })),
+        {
+          contractId: `ac:${permit.canonicalDigest}`,
+          contractDigest: permit.canonicalDigest,
+          actionKind: permit.actionKind,
+          ownerIdentity: permit.ownerIdentity,
+          excludeAttemptId: permit.attemptId,
+        },
+      );
+      if (revalidation.status === "rejected") {
+        return { status: "blocked", reasonCode: revalidation.reasonCode, reason: `执行前复验失败：${revalidation.reason}` };
+      }
+      // 结构 incarnation（§4.4）：签发时的结构绑定必须与当前观察一致。
+      const state = ensureTickState(true);
+      for (const binding of Array.isArray(permit.structureBindings) ? permit.structureBindings : []) {
+        const location = state.observation.location(binding.roomName, binding.locationKind as TreasuryLocationKind);
+        if (!location.exists || location.structureId !== binding.structureId) {
+          return {
+            status: "blocked",
+            reasonCode: "structure_changed",
+            reason: `动作目标结构已变化：${binding.roomName}/${binding.locationKind}（观察 incarnation 与签发时不一致）`,
+          };
+        }
+      }
       const outcome = kernel.executeDispatch(dispatch);
-      // 已确认效果进入本 tick overlay（世界效果已发生；posting 来自许可的
-      // 冻结签发快照——不重新派生）。发布失败/前置拒绝不动 overlay。
+      if (issuedPermits.has(permit)) {
+        outstandingPermits.delete(permit);
+      }
+      // 已确认效果进入本 tick 展示 overlay（可重建缓存——授权判定由
+      // occupancy 承担，R5；此缓存仅供 query projected 展示口径）。
       if (
         outcome.status === "committed" ||
         (outcome.status === "persist_failed" && outcome.observed === "committed")
       ) {
-        if (
-          typeof dispatch === "object" &&
-          dispatch !== null &&
-          issuedPermits.has(dispatch as TreasuryCoreDispatchPermit)
-        ) {
-          applyCommittedPostings((dispatch as TreasuryCoreDispatchPermit).postings);
+        if (issuedPermits.has(permit)) {
+          applyCommittedPostings(permit.postings);
         }
       }
       return outcome;
@@ -1048,6 +1154,10 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       contract: unknown,
       options?: TreasuryContractAuthorizationOptions,
     ): TreasuryCoreAdmissionResult {
+      const window = admissionWindowOpen();
+      if (window.status === "closed") {
+        return { status: "rejected", reason: window.reason, reasonCode: "lifecycle_closed" };
+      }
       const verify = verifyTreasuryActionContractForAuthorization(contract);
       if (verify.status !== "ok") {
         return { status: "rejected", reason: `contract 无效：${verify.detail}`, reasonCode: "invalid_input" };
@@ -1059,21 +1169,25 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
       }
       const candidateLegs = candidateLegsOfContract(typed);
       const worstCase = treasuryWorstCaseOfPostings(candidateLegs);
-      // rearm 与新接纳同一授权口径（§5.3）：policy/承诺/容量/接收占用都在
-      // 共同判定中——rearm 不继承前代余额或 policy 豁免。
-      const verdict = evaluateAdmissionForContract(typed, candidateLegs, options?.owner);
-      if (verdict.status === "rejected") {
-        return { status: "rejected", reason: verdict.reason, reasonCode: verdict.reasonCode as TreasuryCoreRejectionCode };
+      // rearm 与新接纳同一授权口径（§4.1）：判定在 kernel 容量端口以真实
+      // contract/owner 上下文完成——rearm 不继承前代余额或 policy 豁免。
+      const context = buildAdmissionContext(typed, options?.owner);
+      if (context.status === "rejected") {
+        return { status: "rejected", reason: context.reason, reasonCode: "invalid_input" };
       }
       const admission = kernel.executeRearm(rearm, {
         identity: identity.facts,
         worstCase,
         canonicalArgs: typed.args,
         postings: candidateLegs.map((leg) => ({ ...leg })),
+        admissionContext: context.context,
+        structureBindings: structureBindingsOfLegs(candidateLegs),
       });
       if (admission.status === "admitted") {
         permitsIssuedThisTick += 1;
         issuedPermits.add(admission.dispatch);
+        outstandingPermits.add(admission.dispatch);
+        issuedTickOfPermit.set(admission.dispatch, Game.time);
       }
       return admission;
     },
@@ -1094,13 +1208,21 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
 
     dispatchLeakAudit(): { readonly issuedThisTick: number; readonly unconsumed: number } {
-      return { issuedThisTick: permitsIssuedThisTick, unconsumed: permitsIssuedThisTick };
+      // 未消费 = 本 tick 签发且尚未进入调用边界（进入 kernel 调用边界后
+      // 从 outstanding 集合移除；跨 tick 许可本就失效）。
+      let unconsumed = 0;
+      for (const permit of outstandingPermits) {
+        if (issuedTickOfPermit.get(permit) === Game.time) unconsumed += 1;
+      }
+      return { issuedThisTick: permitsIssuedThisTick, unconsumed };
     },
 
     kernelJournal(): TreasuryKernelJournalView {
       const health = readTreasuryCoreStoreHealth();
       // 独立深快照（R06/B22）：health 只给状态与有界诊断（不暴露 memory
       // 引用）；active/ring 逐条深冻结快照（与 Memory 无共享可变引用）。
+      // R7：ring 非数组（healthy + ringDegraded 可达）不得使查询崩溃——
+      // 返回空历史 + ringDegraded 诊断，首次调用零 Memory 写、不修环。
       const publicHealth: TreasuryCorePublicHealth =
         health.status === "healthy"
           ? { status: "healthy", reason: null, ringDegraded: health.ringDegraded }
@@ -1111,10 +1233,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
         health.status === "healthy"
           ? listTreasuryCoreActiveWorks(health.memory).map((record) => treasuryBoundedDeepFreezeSnapshot(record) as TreasuryCoreWorkRecord)
           : [];
-      const ring: readonly TreasuryCoreRingEntry[] =
-        health.status === "healthy"
-          ? health.memory.ring.map((entry) => treasuryBoundedDeepFreezeSnapshot(entry) as TreasuryCoreRingEntry)
-          : [];
+      const ringSource =
+        health.status === "healthy" && Array.isArray(health.memory.ring) ? health.memory.ring : [];
+      const ring: readonly TreasuryCoreRingEntry[] = ringSource.map(
+        (entry) => treasuryBoundedDeepFreezeSnapshot(entry) as TreasuryCoreRingEntry,
+      );
       return {
         health: Object.freeze(publicHealth),
         legacyStores: kernel.legacyStores(),
@@ -1141,9 +1264,11 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
     },
   };
 
-  /** kernel 侧 unknown 的最坏正流入容量占用（统一 occupancy 投影）。 */
-  function kernelUnknownInflowOccupancy(roomName: string, kind: TreasuryLocationKind): number {
-    return kernelOccupancyNow().inflowByLocation.get(overlayLocationKey(roomName, kind)) ?? 0;
+  /** kernel 侧占用流入投影（unknown + 未覆盖 committed；统一 occupancy 口径）。 */
+  function kernelUnknownInflowOccupancy(roomName: string, kind: TreasuryLocationKind, asOfTick: number): number {
+    return (
+      kernelOccupancyNow({ observationAsOfTick: asOfTick }).inflowByLocation.get(overlayLocationKey(roomName, kind)) ?? 0
+    );
   }
 
   return service;

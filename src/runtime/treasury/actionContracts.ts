@@ -1104,6 +1104,36 @@ export function resetTreasuryTestAdapterSideEffectsForTest(): void {
   testAdapterSideEffects.executions = 0;
 }
 
+/** 测试 adapter 的同步世界写入（受控测试世界；生产 adapter 不使用）。 */
+function applyTestTransferToWorld(args: TreasuryTestTransferArgs): void {
+  const fromRoom = Game.rooms?.[args.fromRoom];
+  const toRoom = Game.rooms?.[args.toRoom];
+  const fromStructure =
+    args.fromLocation === "storage" ? fromRoom?.storage : fromRoom?.terminal;
+  const toStructure =
+    args.toLocation === "storage" ? toRoom?.storage : toRoom?.terminal;
+  const fromStore = fromStructure?.store as unknown as Record<string, number> | undefined;
+  const toStore = toStructure?.store as unknown as Record<string, number> | undefined;
+  const freeFrom = fromStore && (fromStore as unknown as { __freeCapacity?: number }).__freeCapacity;
+  const freeTo = toStore && (toStore as unknown as { __freeCapacity?: number }).__freeCapacity;
+  if (fromStore) {
+    const next = (fromStore[args.resource] ?? 0) - args.amount;
+    if (next > 0) fromStore[args.resource] = next;
+    else delete fromStore[args.resource];
+    if (typeof freeFrom === "number") {
+      (fromStore as unknown as { __freeCapacity: number }).__freeCapacity = freeFrom + args.amount;
+    }
+  }
+  if (toStore) {
+    const next = (toStore[args.resource] ?? 0) + args.amount;
+    if (next > 0) toStore[args.resource] = next;
+    else delete toStore[args.resource];
+    if (typeof freeTo === "number") {
+      (toStore as unknown as { __freeCapacity: number }).__freeCapacity = Math.max(0, freeTo - args.amount);
+    }
+  }
+}
+
 /**
  * 测试 adapter（"test.transfer"）：注册边界演示与确定性 fixture。多 posting
  * 派生（转移双腿 + 可选费用腿）；execute 计数副作用并按 outcome 编排结果；
@@ -1155,7 +1185,15 @@ export function makeTreasuryTestTransferAdapter(
     execute(args: TreasuryTestTransferArgs): { ok: boolean } {
       testAdapterSideEffects.executions += 1;
       if (args.outcome === "throw") throw new Error("test.transfer: injected execution failure");
-      return { ok: args.outcome !== "non-ok" };
+      const ok = args.outcome !== "non-ok";
+      if (ok) {
+        // Core Rewrite III（§6.2）：同步生效模型——execute 被接受即真实更新
+        // 受控测试世界（Game.rooms 中的 mock store）。后续 tick 的可信观察
+        // 因此实际包含效果；同 tick 观察仍是 tick 开始的快照（由 occupancy
+        // 承担）。不用"API 接受"冒充"世界已更新"。
+        applyTestTransferToWorld(args);
+      }
+      return { ok };
     },
     structureBindings(args: TreasuryTestTransferArgs): readonly TreasuryActionStructureBinding[] {
       return [

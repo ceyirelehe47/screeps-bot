@@ -21,6 +21,7 @@ import {
   type TreasuryCoreDispatchPermit,
   type TreasuryCoreIdentityFacts,
   type TreasuryCorePermitPosting,
+  type TreasuryCorePermitStructureBinding,
   type TreasuryCoreRearmPermit,
 } from "@/runtime/treasury/kernel/types";
 import { hashTreasuryCanonicalString } from "@/runtime/treasury/transactionId";
@@ -102,6 +103,10 @@ export function mintTreasuryCoreDispatchPermit(input: {
   canonicalDigest: string;
   canonicalArgs: unknown;
   postings: readonly TreasuryCorePermitPosting[];
+  /** 签发时经验证的 owner 身份（III：复验 own-reservation 排除用；可 null）。 */
+  ownerIdentity: TreasuryCoreDispatchPermit["ownerIdentity"];
+  /** 签发时观察的结构绑定快照（III：复验比对结构 incarnation；可空数组）。 */
+  structureBindings: readonly TreasuryCorePermitStructureBinding[];
   actionKind: string;
   adapterRegistrationId: string;
   adapterSemanticIdentity: string;
@@ -113,6 +118,8 @@ export function mintTreasuryCoreDispatchPermit(input: {
     canonicalDigest: input.canonicalDigest,
     canonicalArgs: freezeIssuanceValue(input.canonicalArgs, 0),
     postings: freezeIssuanceValue(input.postings, 0),
+    ownerIdentity: input.ownerIdentity === null ? null : freezeIssuanceValue(input.ownerIdentity, 0),
+    structureBindings: freezeIssuanceValue(input.structureBindings, 0),
     actionKind: input.actionKind,
     adapterRegistrationId: input.adapterRegistrationId,
     adapterSemanticIdentity: input.adapterSemanticIdentity,

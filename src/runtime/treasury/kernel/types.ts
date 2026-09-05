@@ -1,23 +1,26 @@
 /**
- * Treasury Core Kernel——领域类型与集中常量（Core Rewrite II）。
+ * Treasury Core Kernel——领域类型与集中常量（Core Rewrite III）。
  *
- * 语义基线：openspec/changes/empire-treasury-core-rewrite/design.md（II 修订）。
+ * 语义基线：openspec/changes/empire-treasury-core-rewrite/design.md（III 修订）。
  * 一项未完成工作始终由一个有界活跃聚合（active work record）负责；
  * 只有该聚合内当前 attempt 的正向许可可以进入动作调用；历史明细（ring）
  * 不授予任何权限；所有安全依赖关闭后工作可以真正退出活跃集合。
  *
- * v2 变更（Core Rewrite II）：
- * - 结算证据通道收口：删除 external_settlement_receipt（自报结论路径
- *   关闭）；新增 pending_cancellation（安全取消的未开始证据）。
- * - recovery 调度区（持久）：清理/取消公平游标与 per-tick 操作预算记账
- *  （调度元信息，不是完成 proof；失效可安全重建）。
- * - 占用投影规则收紧：closing 不再占用（committed 效果由本 tick overlay
- *   与后续观察表达——同一责任唯一扣减归属）。
- * - 字段完整性上限：consumerKeys 数量、未知字段拒绝、计数器饱和。
+ * v3 变更（Core Rewrite III）：
+ * - 占用规则升级：closing(committed) 在效果被当前授权观察接管前
+ *  （observation.observedAtTick ≤ invocation.atTick）继续占用——已确认
+ *   效果由原聚合承担，观察接管后才释放（不再依赖实例本地 overlay）。
+ * - 完整值校验与字段上限收紧（受控字符集 → 序列化长度可精确推导）；
+ *   槽位完整生命周期序列化上界 + 总预算 360,000 字符。
+ * - 恢复子预算：dispatching 恢复 2 / pending sweep 3 / retry 关闭 1 /
+ *   closing 清理保底 2——持续取消流量不饿死健康清理。
+ * - 许可携带经验证的 owner 身份与结构绑定快照（执行门禁复验用）。
+ * v2 变更（Core Rewrite II）：结算证据通道收口、recovery 调度区、
+ * 字段完整性上限、计数器饱和。
  */
 
 /** 持久 schema 版本。未知版本 fail closed（报告 incompatible，阻断写入）。 */
-export const TREASURY_CORE_SCHEMA_VERSION = 2;
+export const TREASURY_CORE_SCHEMA_VERSION = 3;
 
 /**
  * 活跃聚合上限。接纳时按完整生命周期最坏体积预留（一个聚合覆盖
@@ -34,24 +37,42 @@ export const TREASURY_CORE_RETRY_RIGHT_TICKS = 5_000;
 
 /**
  * 每 tick 恢复/清理操作预算（状态推进与外部释放调用共享；同 tick 多次
- * beginTick / 多实例经持久记账共享同一份额——B17）。
+ * beginTick / 多实例经持久记账共享同一份额——B17）。外部释放端口调用
+ * 前**先持久预扣**（R6/§7.1）：预扣发布失败不调用端口；重入读到已扣值。
  */
 export const TREASURY_CORE_RECOVERY_BUDGET_PER_TICK = 8;
 
-/** 错误摘要长度上限（有界字符串；纯诊断文本允许截断）。 */
-export const TREASURY_CORE_ERROR_DETAIL_MAX = 192;
+/** 子预算：dispatching 保守恢复上限（风险最高优先，数量本身稀少）。 */
+export const TREASURY_CORE_SUBBUDGET_DISPATCHING = 2;
+/** 子预算：跨 tick pending 安全取消上限（持续取消流量不得饿死清理）。 */
+export const TREASURY_CORE_SUBBUDGET_SWEEP = 3;
+/** 子预算：retry 期限关闭上限。 */
+export const TREASURY_CORE_SUBBUDGET_RETRY_CLOSE = 1;
+/** closing 清理保底份额（2+3+1=6 → 清理每 tick 至少 2 次真实推进）。 */
+export const TREASURY_CORE_CLEANUP_FLOOR = TREASURY_CORE_RECOVERY_BUDGET_PER_TICK
+  - TREASURY_CORE_SUBBUDGET_DISPATCHING - TREASURY_CORE_SUBBUDGET_SWEEP - TREASURY_CORE_SUBBUDGET_RETRY_CLOSE;
 
-/** durable facts payload 上限（与旧 adapter 契约一致量级）。 */
+/** 错误摘要长度上限（有界字符串；纯诊断文本允许截断；预算按 6× 转义计）。 */
+export const TREASURY_CORE_ERROR_DETAIL_MAX = 96;
+
+/** durable facts payload 上限（受控字符集：零 JSON 转义膨胀）。 */
 export const TREASURY_CORE_DURABLE_PAYLOAD_MAX = 512;
 
 /** 每聚合最坏占用腿数上限（posting 派生，防数组无界）。 */
 export const TREASURY_CORE_WORST_CASE_LEGS_MAX = 16;
 
-/** workKey 长度上限。 */
-export const TREASURY_CORE_WORK_KEY_MAX = 128;
+/** workKey 长度上限（v3 收紧：受控字符集，槽位预算可精确推导）。 */
+export const TREASURY_CORE_WORK_KEY_MAX = 96;
 
-/** 单个外部消费者 key 长度上限。 */
-export const TREASURY_CORE_CONSUMER_KEY_MAX = 128;
+/** 单个外部消费者 key 长度上限（v3 收紧）。 */
+export const TREASURY_CORE_CONSUMER_KEY_MAX = 64;
+
+/** 房间名上限（Screeps 房间名实际 ≤8 字符；受控字符集）。 */
+export const TREASURY_CORE_ROOM_NAME_MAX = 16;
+
+/** 身份摘要/标识类字段上限（hex/受控格式；零转义膨胀）。 */
+export const TREASURY_CORE_IDENTITY_FIELD_MAX = 64;
+export const TREASURY_CORE_IDENTITY_LONG_FIELD_MAX = 96;
 
 /**
  * 每聚合外部消费者数量上限（R09：超限安全输入整体拒绝，不截断一半义务）。
@@ -59,12 +80,12 @@ export const TREASURY_CORE_CONSUMER_KEY_MAX = 128;
 export const TREASURY_CORE_CONSUMER_KEYS_MAX = 8;
 
 /**
- * treasuryCore 总序列化预算（字符数 = JSON.stringify 长度；受控 ASCII 布局
- * 下与 UTF-8 bytes 一致）。推导（evidence/core-rewrite-ii）：最坏单记录
- * 4,776 + ring 条目 262 + 根骨架 550，64 active + 128 ring 满载合计
- * 339,813；常量取 360,000（≈6% 余量）。接纳前校验：当前序列化体积 +
- * 新聚合最坏体积 + ring 余量超预算即拒绝（新工作阻断，已接纳工作收尾
- * 不受影响）。
+ * treasuryCore 总序列化预算（字符数 = JSON.stringify 长度）。
+ * v3 推导方法（§8.3，evidence/core-rewrite-iii）：逐槽完整生命周期上界——
+ * 受控字符集字段零转义膨胀，自由文本字段（lastError）按 6× 转义系数计；
+ * 64 × 单活跃槽完整生命周期上界 + 128 × 单历史槽上界 + 根元信息 ≤
+ * 360,000。上界推导函数见 store.ts（treasuryCoreSlotWorstChars 等，
+ * C22 断言）；接纳前按"当前序列化 + 新槽上界 + 历史槽上界"检查。
  */
 export const TREASURY_CORE_TOTAL_CHAR_BUDGET = 360_000;
 
@@ -299,8 +320,12 @@ export interface TreasuryCoreDispatchPermit {
   readonly canonicalDigest: string;
   /** 当次调用的 canonical frozen args（深冻结 heap 快照；不持久化）。 */
   readonly canonicalArgs: unknown;
-  /** 签发时的原始 posting 腿快照（深冻结；overlay 修正用同一份）。 */
+  /** 签发时的原始 posting 腿快照（深冻结；执行复验用同一份）。 */
   readonly postings: readonly TreasuryCorePermitPosting[];
+  /** 签发时经验证的 owner 身份快照（深冻结；复验 own-reservation 排除用）。 */
+  readonly ownerIdentity: TreasuryCoreAdmissionContext["ownerIdentity"];
+  /** 签发时观察的结构绑定快照（深冻结；复验比对结构 incarnation）。 */
+  readonly structureBindings: readonly TreasuryCorePermitStructureBinding[];
   readonly actionKind: string;
   readonly adapterRegistrationId: string;
   readonly adapterSemanticIdentity: string;
@@ -316,4 +341,43 @@ export interface TreasuryCoreRearmPermit {
   readonly retryFactsDigest: string | null;
   readonly issuedAtTick: number;
   readonly runtimeGeneration: number;
+}
+
+/**
+ * 接纳/执行复验的完整上下文（facade 构造，kernel 透传给授权端口——
+ * R2/§4.1：kernel 容量判定不得退化为匿名口径）。
+ */
+export interface TreasuryCoreAdmissionContext {
+  /** 真实 contract 身份（policy 上下文；不得用占位符替换）。 */
+  readonly contractId: string;
+  readonly contractDigest: string;
+  readonly actionKind: string;
+  /** 经 facade 验证的 exact owner 身份（null = 未声明）。 */
+  readonly ownerIdentity: {
+    readonly kind: "game-object" | "logical-service";
+    readonly id: string;
+    readonly roomName: string;
+    readonly namespace?: string;
+  } | null;
+  /** 执行复验时排除的本笔 attempt（不自我双扣；接纳时为 null）。 */
+  readonly excludeAttemptId: string | null;
+}
+
+/** 观察覆盖判定的占用选项（R5/§6.1）。 */
+export interface TreasuryCoreOccupancyOptions {
+  /**
+   * 当前授权观察的 asOfTick（epoch.observedAtTick）。closing(committed)
+   * 在 observedAtTick ≤ invocation.atTick 时继续占用（效果尚未被该观察
+   * 覆盖）；undefined = 无观察上下文，保守占用。
+   */
+  readonly observationAsOfTick?: number;
+  /** 排除某一 attempt 的占用（执行复验：本笔 pending 是"既有责任继续兑现"）。 */
+  readonly excludeAttemptId?: string;
+}
+
+/** 许可的结构绑定快照（签发时观察；复验比对 incarnation，§4.4）。 */
+export interface TreasuryCorePermitStructureBinding {
+  readonly roomName: string;
+  readonly locationKind: string;
+  readonly structureId: string;
 }

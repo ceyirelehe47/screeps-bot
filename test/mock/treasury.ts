@@ -94,3 +94,26 @@ export function setStoreResources(
     record[resource] = amount;
   }
 }
+
+/**
+ * 受控世界增量（Core Rewrite III/§6.2）：对 mock store 施加带符号资源变化
+ * 并同步 __freeCapacity（used += delta → free −= delta）。测试 adapter 的
+ * execute 以此把"API 接受"落实为"世界已更新"——观察覆盖依据受控世界
+ * 更新与后续可信观察建立，不以净余额碰巧相等推断。
+ */
+export function mutateStoreResource(
+  structure: StructureStorage | StructureTerminal | undefined,
+  resource: string,
+  delta: number,
+): void {
+  const holder = structure as unknown as { store?: Record<string, number> } | undefined;
+  const record = holder?.store;
+  if (!record) return;
+  const next = (record[resource] ?? 0) + delta;
+  if (next > 0) record[resource] = next;
+  else delete record[resource];
+  const free = (structure?.store as unknown as { __freeCapacity?: number }).__freeCapacity;
+  if (typeof free === "number") {
+    (structure?.store as unknown as { __freeCapacity: number }).__freeCapacity = Math.max(0, free - delta);
+  }
+}

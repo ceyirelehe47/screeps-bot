@@ -169,7 +169,7 @@ function makeClosingRecord(input: {
 function installCoreStoreFixture(active: Record<string, unknown>): void {
   if (!Memory.runtime) Memory.runtime = {} as never;
   (Memory.runtime as unknown as Record<string, unknown>).treasuryCore = {
-    version: 2,
+    version: 3,
     installEpochId: "0123456789abcdef",
     issuance: { frontier: Object.keys(active).length, burned: 0 },
     lifecycle: { lastBeginTick: null, lastEndTick: null },
@@ -697,9 +697,12 @@ describe("B15 释放失败/抛错/幂等重试（R05）", () => {
     const store = (Memory.runtime as unknown as { treasuryCore: { active: Record<string, { cleanup: { consumerKeys: string[] } }> } }).treasuryCore;
     expect(store.active[attemptId]).toBeDefined();
     expect(store.active[attemptId].cleanup.consumerKeys).toEqual(["ext:b15:z"]);
-    // 确认写失败后重试是同一幂等操作：同一 (key, attemptId) 再次调用。
+    // Core Rewrite III（§7.1）：预扣发布失败（存储边界丢弃全部写入）时
+    // 首个 tick 连端口都不调用（调用零次）；写能力恢复后的下 tick 以同一
+    // 幂等 (key, attemptId) 重试——不把一次端口成功变成两次释放操作。
+    expect(releaseCalls.length).toBe(0);
     kernel.beginTick();
-    expect(releaseCalls.length).toBeGreaterThanOrEqual(2);
+    expect(releaseCalls.length).toBe(1);
     expect(new Set(releaseCalls).size).toBe(1);
   });
 });
@@ -806,6 +809,14 @@ describe("B18 consumerKeys 数量上限（R09）", () => {
       externalConsumers: many,
       canonicalArgs: {},
       postings: [],
+      admissionContext: {
+        contractId: "ac:bbbbbbbbbbbbbbbb",
+        contractDigest: "bbbbbbbbbbbbbbbb",
+        actionKind: "test.transfer",
+        ownerIdentity: null,
+        excludeAttemptId: null,
+      },
+      structureBindings: [],
     });
     expect(admission.status).toBe("rejected");
     if (admission.status === "rejected") {
