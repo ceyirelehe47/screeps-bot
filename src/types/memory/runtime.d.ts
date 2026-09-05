@@ -730,7 +730,8 @@ declare global {
         };
         /** 同键流出与流入不互相抵消：分别成腿（一负一正两条）。 */
         worstCase: readonly { roomName: string; locationKind: string; resource: string; delta: number }[];
-        invocation: { atTick: number } | null;
+        /** 调用边界事实（v3：worldSequence = 调用前受控世界序——观察覆盖判定锚点，可选兼容旧记录）。 */
+        invocation: { atTick: number; worldSequence?: number } | null;
         external: { accepted: boolean; atTick: number } | null;
         outcome: "unknown" | "committed" | "not_executed";
         outcomeEvidence: {

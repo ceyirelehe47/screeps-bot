@@ -50,7 +50,7 @@ const MEMORY_BRANCHES = {
     // fallbackRevision per-slot reservedPosition 后的 schema 指纹。
     // 【Core Rewrite I】旧 treasury 多 store 声明整体替换为 treasuryCore
     //（单一活跃聚合 + 近期明细环，见 kernel/types.ts）后的 schema 指纹。
-    schemaFingerprint: "96641c95cc6295f54721ac35e0165bc05e39a3b964cf43c65e0433b1c57b3fa9",
+    schemaFingerprint: "91f70c31beedd020aabf76a3e2838dd680731d859e8b796445ca2b0bbc0d156a",
     imports: [
       "@/runtime/hubPlanner:AllocationLedgerEntry",
       "@/runtime/hubPlanner:DirectRouteDecision",
