@@ -1,0 +1,1 @@
+npx jest --config jest.config.cjs --runInBand src/runtime/treasury/ --json --outputFile=/d/code/screeps/.tmp-iv-evidence/jest-treasury.json 
