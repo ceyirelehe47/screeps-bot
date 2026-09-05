@@ -1,0 +1,11 @@
+--- src/runtime/treasury/kernel/commands.ts (original)
++++ src/runtime/treasury/kernel/commands.ts (variant: v1-no-invocation-boundary)
+@@ -329,7 +329,7 @@
+   withRecord(memory, command.attemptId, (r) => ({
+     ...r,
+     phase: "dispatching",
+-    invocationBoundary: { atTick: ctx.nowTick, worldSequence: command.boundaryWorldSequence },
++    invocationBoundary: null,
+     updatedAtTick: ctx.nowTick,
+   }));
+   bumpCounter(memory, "dispatched");

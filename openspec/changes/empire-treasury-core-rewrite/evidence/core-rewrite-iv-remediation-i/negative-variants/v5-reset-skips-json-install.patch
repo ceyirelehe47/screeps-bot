@@ -1,0 +1,11 @@
+--- test/mock/treasuryResetHarness.ts (original)
++++ test/mock/treasuryResetHarness.ts (variant: v5-reset-skips-json-install)
+@@ -132,7 +132,7 @@
+ }): TreasuryFullResetResult {
+   // 1) 完整 reset 的第一步：安装 JSON 重载的新全局 Memory（Remediation I
+   //    V2——此前版本允许沿用原 Memory 对象，引用隔离不成立）。
+-  installWholeMemorySnapshot(input.memorySnapshot ?? snapshotWholeMemory());
++  void input.memorySnapshot;
+   // 3) 重建模块缓存：WeakSet permit 注册表、adapter/policy registry、
+   //    service generation 计数全部归零（旧 heap 许可失去注册）。
+   jest.resetModules();

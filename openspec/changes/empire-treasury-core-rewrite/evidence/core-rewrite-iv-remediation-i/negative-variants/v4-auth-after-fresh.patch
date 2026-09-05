@@ -1,0 +1,14 @@
+--- src/runtime/treasury/facade.ts (original)
++++ src/runtime/treasury/facade.ts (variant: v4-auth-after-fresh)
+@@ -1214,11 +1214,6 @@
+       // attempt 的真许可——非法克隆/旧 runtime/过期/已消费/已退出工作的
+       // 许可不再占用高成本验证资源（fresh/policy 零增量、实际动作 0）。
+       // 预检是只读的；真正调用边界的终验仍在 kernel.executeDispatch 内。
+-      const permitPreflight = kernel.preflightDispatchPermit(dispatch);
+-      if (permitPreflight.status === "invalid") {
+-        metrics.transactionsRejectedInvalid += 1;
+-        return { status: "rejected", reason: `dispatch 许可认证失败（${permitPreflight.reason}）` };
+-      }
+       // 复验（§4.4）：当前 policy/承诺/容量/结构事实——同一判定公式，
+       // 排除本笔 pending 占用（既有责任继续兑现，不双扣）。
+       const revalidation = evaluateRevalidation(

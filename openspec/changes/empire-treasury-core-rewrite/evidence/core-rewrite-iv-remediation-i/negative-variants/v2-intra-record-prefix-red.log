@@ -1,0 +1,45 @@
+FAIL src/runtime/treasury/treasuryRemediationIKernel.test.ts
+  E05 调用边界发布
+    ○ skipped 发布丢写：实际调用 0、保持 pending、发布不误确认；合法对照调用 1 并收尾
+    ○ skipped 发布原地污染：读回确认拒绝污染载荷，记录不被错误推进
+  E06 记录内公平（8 义务前 4 永久 false）
+    × 每 tick JSON 重载：后 4 在至多 3 个完整预算 tick 内获得服务并确认移除；前 4 保留；后 4 不再重复调用 (17 ms)
+    ○ skipped E07 前 4 随后恢复成功：有限推进后工作结束（先前失败项仍可得到服务）
+    ○ skipped E07 变体：1 义务成功——单 tick 完成
+    ○ skipped E07 变体：8 义务全 false——义务全部保留（不产生虚假完成），游标回绕安全
+    ○ skipped E07 变体：8 义务全 true——至多 3 个完整预算 tick 结束
+  E08 轮转预扣/确认的中断与丢写
+    ○ skipped 预扣丢写：未取得份额调用 0；恢复后继续公平
+    ○ skipped 预扣后中断（端口 throw）：份额已耗不退、义务保留、轮转位置前移
+    ○ skipped 释放成功但确认丢写：duty 保留；恢复后同一 (key, attemptId) 幂等重试
+  E09 端口重入共享预算
+    ○ skipped 端口回调内重入另一 kernel 实例的 beginTick：总份额 ≤8、成对单位 ≤4、旧游标不覆盖内层较新状态
+  E10 跨记录公平（前 8 失败工作 + 后方 8 义务工作 + 混合流量）
+    ○ skipped 每 tick 完整 JSON 重载：后方工作在推导界内真完成；失败风险保留；报告实际最长等待
+  E19 新边界/轮转字段最坏值满载实测
+    ○ skipped worst 构造器（含 invocationBoundary/cursor 极值）过 validator 且实测 ≤ 预算；满 64/128 演化不超界
+
+  ● E06 记录内公平（8 义务前 4 永久 false） › 每 tick JSON 重载：后 4 在至多 3 个完整预算 tick 内获得服务并确认移除；前 4 保留；后 4 不再重复调用
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    [0m [90m 216 |[39m       servedAll [33m=[39m record [33m===[39m undefined [33m||[39m record[33m.[39mcleanup[33m.[39mconsumerKeys[33m.[39mfilter((k) [33m=>[39m [33m![39m[33mSTICKY[39m[33m.[39mincludes(k))[33m.[39mlength [33m===[39m [35m0[39m[33m;[39m
+     [90m 217 |[39m     }
+    [31m[1m>[22m[39m[90m 218 |[39m     expect(servedAll)[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m     |[39m                       [31m[1m^[22m[39m
+     [90m 219 |[39m     expect(ticks)[33m.[39mtoBeLessThanOrEqual([35m3[39m)[33m;[39m [90m// 推导界：tick1 cursor 推进，tick2 后 4 全部服务[39m
+     [90m 220 |[39m     [36mconst[39m record [33m=[39m activeShape(attemptId)[33m;[39m
+     [90m 221 |[39m     expect(record)[33m.[39mtoBeDefined()[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIKernel.test.ts:218:23)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 12 skipped, 13 total
+Snapshots:   0 total
+Time:        3.481 s
+Ran all test suites within paths "src/runtime/treasury/treasuryRemediationIKernel.test.ts".
+
+exit-code-note: see jest summary above

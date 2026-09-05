@@ -165,3 +165,37 @@
 ### 8.4 数量对账（IV 后）
 
 220/1228 → **222 suites / 1260 tests**（+2 套件 = treasuryRewrite4Acceptance/Lifecycle；+32 测试）。全仓零回归；budget manifest 与锚点同步更新（evidence/core-rewrite-iv/final/）。
+
+## Core Rewrite IV · Remediation I（2026-09-06）
+
+### E01–E20 → 实际文件/测试映射
+
+| 编号 | 位置 | 说明 |
+| --- | --- | --- |
+| E01 | treasuryRewrite4Lifecycle.test.ts（D11 改造·"调用边界已发布、adapter 尚未进入"） | 真实 adapter execute 入口快照：phase=dispatching、boundary 非空、invocation/external null、不重发 |
+| E02 | treasuryRemediationIService.test.ts（"E01 快照 reset 后无证据保留 unknown…"） | 无证据保留 unknown；exact not_executed 对账后 retry_ready |
+| E03 | treasuryRewrite4Lifecycle.test.ts（D11 改造·"实际动作后、结果未写…"） | 效果后快照 + 晚到 reconcile executed → 观察接管退出、总调用 1、世界保留 |
+| E04 | treasuryRemediationIService.test.ts（两用例） | dispatch_result 写失败→persist_failed+dispatching（不回 pending）+下 tick 恢复 unknown；committed 观察暂缺保留、源恢复关闭、真实余额授权 |
+| E05 | treasuryRemediationIKernel.test.ts（两用例） | 发布丢写→调用 0 保持 pending+合法对照调用 1 收尾；原地污染→读回确认拒绝+独立 expected 不受污染 |
+| E06 | treasuryRemediationIKernel.test.ts（"每 tick JSON 重载：后 4…"） | 前 4 永久 false：逐 tick JSON 重载、后 4 ≤3 tick 服务并移除、前 4 保留、无重复调用 |
+| E07 | 同文件（"E07 前 4 随后恢复…" + 三变体） | 失败项恢复后仍可服务；1 义务/全 false/全 true 变体与游标回绕 |
+| E08 | 同文件（三用例） | 预扣丢写调用 0；端口 throw 份额不退义务保留；释放成功确认丢写同 (key,attemptId) 幂等重试 |
+| E09 | 同文件（"端口回调内重入…"） | 重入共享预算 ≤8、成对单位 ≤4、旧游标不覆盖内层、可完成义务有限推进 |
+| E10 | 同文件（"每 tick 完整 JSON 重载：后方工作…"） | 前 8 失败工作+后方 8 义务+混合流量，逐 tick JSON 重载，推导界 40 内真完成、失败风险保留 |
+| E11 | treasuryRemediationIService.test.ts（"非空 child externalConsumers…"） | 明确拒绝+理由含"不支持"；frontier/active/父代不变；无 child 无调用；capability 随后合法可用 |
+| E12 | 同文件（"非法类型新义务…"） | null/对象/字符串结构化拒绝；同一 capability 合法请求新 ID 执行；child 不继承义务 |
+| E13 | 同文件（"克隆许可提交次数…"） | 克隆 >fresh 上限：fresh/freshEpochLimitRejections/policy 计数零增量、动作 0、持久状态不变；真许可随后 committed |
+| E14 | 同文件（"过期/旧 runtime/已消费…"） | 过期/已退出工作/已消费/伪造输入全部高成本复验前拒绝（fresh 零增量） |
+| E15 | 同文件（"合法许可 + policy 收紧…"） | 窗口关闭/真实 fresh 耗尽 observation_unavailable 阻断；条件恢复对照可执行 |
+| E16 | 同文件（"旧 runtime 继续变更后 reset 用指定快照…"） | 指定快照严格使用；Memory/active 嵌套引用脱离；旧引用毒字段不污染 |
+| E17 | 同文件（"committed 接管退出…"） | 全清后 committed 接管退出、unknown 不重发、引用隔离、余额不双扣（contract 用新模块句柄构建） |
+| E18 | 同文件（"完成/真实 rearm/长期 unknown…"） | child 实际调用、世界账目一致、ring 旧 ID 不授执行权、旧视图不超额授权 |
+| E19 | treasuryRemediationIKernel.test.ts（"worst 构造器…"） | 新字段极值过 validator；满 64/128 构造 343,817 ≤360,000（bytes=chars）；已接纳收尾余量 |
+| E20 | evidence/core-rewrite-iv-remediation-i/negative-variants/（五变体 patch+红日志+还原绿日志） | 不前置边界/记录内从头/忽略 rearm 义务/认证不前置/reset 跳过 JSON 安装——各自语义红灯后还原全绿 |
+
+### D09/D11/D19/D23 语义纠正（V1–V3）
+
+- **D09（V2）**：此前 `snapshotWholeMemory()` 的结果被弃用（`void snapshot`）且 helper 允许沿用原 Memory——引用隔离不成立。helper 契约修复后无条件 JSON 重载；D09 行为不变（入口快照等价重载），E16/E17 补引用隔离断言。
+- **D11（V1）**：此前 dispatching fixture 为手工填充（phase/external 手填，非真实路径产物）。改为真实 adapter 断点捕获（execute 入口/效果后快照）+ 指定快照 reset。
+- **D19（V3）**：名称声称"公平推进有限界"但同 kernel 连续 tick、无逐 tick 重载。改造为每 tick 用上一 tick 真实序列化快照重建运行时；同记录 8 义务前缀失败场景补于 E06。
+- **D23（V3）**：RETRIED 分支此前只是 non-ok 父代（无真实 rearm）。改造为 60 对完整 retry 链（capability→executeRearm→child 实际执行）+ 旧父代许可回放拒绝。

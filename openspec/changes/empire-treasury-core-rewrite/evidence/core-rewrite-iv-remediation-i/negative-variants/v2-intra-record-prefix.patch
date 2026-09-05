@@ -1,0 +1,11 @@
+--- src/runtime/treasury/kernel/kernel.ts (original)
++++ src/runtime/treasury/kernel/kernel.ts (variant: v2-intra-record-prefix)
+@@ -917,7 +917,7 @@
+           // 成员资格仍是唯一未完成义务事实；调度位置不证明任何义务完成。
+           const dutyKeys = record.cleanup.consumerKeys;
+           const dutyCount = dutyKeys.length;
+-          const dutyStart = record.cleanup.cursor % dutyCount;
++          const dutyStart = 0;
+           let lastAttemptedIndex = -1;
+           for (let offset = 0; offset < dutyCount; offset += 1) {
+             const dutyIndex = (dutyStart + offset) % dutyCount;

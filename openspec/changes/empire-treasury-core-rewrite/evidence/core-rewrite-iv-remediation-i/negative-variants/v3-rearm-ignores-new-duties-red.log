@@ -1,0 +1,44 @@
+FAIL src/runtime/treasury/treasuryRemediationIService.test.ts
+  E02 快照无证据与正面对照
+    ○ skipped E01 快照 reset 后无证据保留 unknown；提供 exact not_executed 对账后按正常路径 retry_ready
+  E04 结果写失败与观察暂不可用
+    ○ skipped dispatch_result 写失败：persist_failed + 保守 unknown 兜底；边界保持、不回 pending
+    ○ skipped 结果已确认 committed 但观察源暂不可用：保留不退出；源恢复后正常关闭
+  E11/E12 rearm 新义务拒绝
+    × E11 非空 child externalConsumers：明确拒绝，frontier/active/父代/许可权利不变，无 child 无调用 (23 ms)
+    ○ skipped E12 非法类型新义务：结构化拒绝；随后同一 capability 合法请求生成新 ID 并执行；child 不继承旧义务
+  E13/E14/E15 许可认证前置
+    ○ skipped E13 克隆许可提交次数 > fresh 上限：fresh/policy 零增量、动作 0、持久状态不变；随后真许可正常执行
+    ○ skipped E14 过期/旧 runtime/已消费/对应工作已退出的许可与普通输入：高成本复验前拒绝
+    ○ skipped E15 合法许可 + policy 收紧/结构变化/窗口关闭/真实 fresh 耗尽：门禁仍阻断；条件恢复的对照可执行
+  E16 指定断点快照与引用隔离
+    ○ skipped 旧 runtime 继续变更后 reset 用指定快照：新 Memory 嵌套引用脱离；旧引用修改不污染新运行时
+  E17 全清后的接管（强化 D09）
+    ○ skipped committed 接管退出、unknown 不重发、嵌套引用隔离、余额不双扣
+  E18 混合负载与真实 retry
+    ○ skipped 完成/真实 rearm/长期 unknown/部分清理/完整 reset：child 实际调用、世界账目一致、旧视图不授执行权
+
+  ● E11/E12 rearm 新义务拒绝 › E11 非空 child externalConsumers：明确拒绝，frontier/active/父代/许可权利不变，无 child 无调用
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 284 |[39m       externalConsumers[33m:[39m [[32m"ext:e11:new-duty"[39m][33m,[39m
+     [90m 285 |[39m     })[33m;[39m
+    [31m[1m>[22m[39m[90m 286 |[39m     expect(rearmed[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 287 |[39m     [36mif[39m (rearmed[33m.[39mstatus [33m===[39m [32m"rejected"[39m) {
+     [90m 288 |[39m       expect(rearmed[33m.[39mreason)[33m.[39mtoContain([32m"不支持"[39m)[33m;[39m [90m// 理由明确表示不支持[39m
+     [90m 289 |[39m       expect(rearmed[33m.[39mreasonCode)[33m.[39mtoBe([32m"invalid_input"[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIService.test.ts:286:28)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 10 skipped, 11 total
+Snapshots:   0 total
+Time:        3.84 s, estimated 13 s
+Ran all test suites within paths "src/runtime/treasury/treasuryRemediationIService.test.ts".
+
+exit-code-note: see jest summary above

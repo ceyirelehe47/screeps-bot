@@ -1,0 +1,101 @@
+FAIL test/baseline/tmp-remediation-i-baseline.test.ts
+  基线 R1 调用后结果未写的中断恢复
+    × 真实 dispatch_start + 实际调用后的持久快照 → 恢复 unknown → 可信 executed 对账 → 观察接管退出 (12 ms)
+  基线 R2 记录内公平
+    × 8 义务前 4 永久 false、后 4 可成功：有限 tick 内后 4 应获得服务并确认移除 (11 ms)
+  基线 R3 rearm 新义务拒绝
+    × safe retry_ready + capability：非空 externalConsumers 应被结构化拒绝 (14 ms)
+  基线 R4 许可认证前置
+    × 克隆许可提交次数 > fresh 上限：fresh/policy 零增量、动作 0；随后真许可正常执行 (6 ms)
+  基线 V2 reset 引用隔离
+    × performTreasuryFullReset 后全局 Memory 应为 JSON 重载的新引用 (22 ms)
+
+  ● 基线 R1 调用后结果未写的中断恢复 › 真实 dispatch_start + 实际调用后的持久快照 → 恢复 unknown → 可信 executed 对账 → 观察接管退出
+
+    expect(received).toBeUndefined()
+
+    Received: {"admittedAtTick": 1, "attemptId": "tk1_1_639ee7af0c72f0ca", "cleanup": {"consumerKeys": [], "failures": 0}, "external": null, "generation": 1, "identity": {"actionKind": "d.kind", "adapterRegistrationId": "reg-d4l", "adapterSemanticIdentity": "d.adapter-l1", "adapterVersion": 1, "canonicalDigest": "aaaaaaaaaaaaaaaa", "durableFacts": null, "postingsDigest": "bbbbbbbbbbbbbbbb", "retryFactsDigest": "cccccccccccccccc"}, "invocation": null, "lastError": null, "outcome": "committed", "outcomeEvidence": {"atTick": 2, "conclusion": "executed", "kind": "adapter_reconcile", "source": "d.adapter-l1"}, "parentAttemptId": null, "phase": "closing", "retryDeadlineTick": null, "updatedAtTick": 2, "workKey": "biz:bl:r1", "worstCase": [{"delta": -50, "locationKind": "storage", "resource": "energy", "roomName": "W1N57"}, {"delta": 50, "locationKind": "terminal", "resource": "energy", "roomName": "W2N57"}]}
+
+    [0m [90m 187 |[39m     [33mGame[39m[33m.[39mtime [33m+=[39m [35m1[39m[33m;[39m
+     [90m 188 |[39m     kernel2[33m.[39mbeginTick()[33m;[39m [90m// committed → 观察接管 → 退出（修复后）[39m
+    [31m[1m>[22m[39m[90m 189 |[39m     expect(activeRecord(admitted[33m.[39mattemptId))[33m.[39mtoBeUndefined()[33m;[39m [90m// ← 基线红灯：当前无锚点永不退出[39m
+     [90m     |[39m                                              [31m[1m^[22m[39m
+     [90m 190 |[39m   })[33m;[39m
+     [90m 191 |[39m })[33m;[39m
+     [90m 192 |[39m[0m
+
+      at Object.<anonymous> (test/baseline/tmp-remediation-i-baseline.test.ts:189:46)
+
+  ● 基线 R2 记录内公平 › 8 义务前 4 永久 false、后 4 可成功：有限 tick 内后 4 应获得服务并确认移除
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 4
+    Received: 0
+
+    [0m [90m 212 |[39m     }
+     [90m 213 |[39m     [36mconst[39m served [33m=[39m [36mnew[39m [33mSet[39m(releaseCalls[33m.[39mfilter((k) [33m=>[39m [33m![39msticky[33m.[39mhas(k)))[33m;[39m
+    [31m[1m>[22m[39m[90m 214 |[39m     expect(served[33m.[39msize)[33m.[39mtoBe([35m4[39m)[33m;[39m [90m// ← 基线红灯：当前每次都从头遍历，后 4 永不被调用[39m
+     [90m     |[39m                         [31m[1m^[22m[39m
+     [90m 215 |[39m     [36mconst[39m record [33m=[39m activeRecord(admitted[33m.[39mattemptId) [36mas[39m { cleanup[33m:[39m { consumerKeys[33m:[39m string[] } }[33m;[39m
+     [90m 216 |[39m     expect(record[33m.[39mcleanup[33m.[39mconsumerKeys[33m.[39msort())[33m.[39mtoEqual([[33m...[39msticky][33m.[39msort())[33m;[39m [90m// 前 4 保留[39m
+     [90m 217 |[39m   })[33m;[39m[0m
+
+      at Object.<anonymous> (test/baseline/tmp-remediation-i-baseline.test.ts:214:25)
+
+  ● 基线 R3 rearm 新义务拒绝 › safe retry_ready + capability：非空 externalConsumers 应被结构化拒绝
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 234 |[39m       externalConsumers[33m:[39m [[32m"ext:bl:new-duty"[39m][33m,[39m
+     [90m 235 |[39m     })[33m;[39m
+    [31m[1m>[22m[39m[90m 236 |[39m     expect(rearmed[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m [90m// ← 基线红灯：当前静默忽略并 admitted[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 237 |[39m     expect([33mString[39m(rearmed[33m.[39mstatus [33m===[39m [32m"rejected"[39m [33m?[39m rearmed[33m.[39mreason [33m:[39m [32m""[39m))[33m.[39mtoContain([32m"不支持"[39m)[33m;[39m [90m// 理由明确[39m
+     [90m 238 |[39m   })[33m;[39m
+     [90m 239 |[39m })[33m;[39m[0m
+
+      at Object.<anonymous> (test/baseline/tmp-remediation-i-baseline.test.ts:236:28)
+
+  ● 基线 R4 许可认证前置 › 克隆许可提交次数 > fresh 上限：fresh/policy 零增量、动作 0；随后真许可正常执行
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "blocked"
+
+    [0m [90m 250 |[39m     [36mfor[39m ([36mlet[39m i [33m=[39m [35m0[39m[33m;[39m i [33m<[39m attempts[33m;[39m i [33m+=[39m [35m1[39m) {
+     [90m 251 |[39m       [36mconst[39m out [33m=[39m service[33m.[39mexecuteAuthorizedDispatch(clone)[33m;[39m
+    [31m[1m>[22m[39m[90m 252 |[39m       expect(out[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m [90m// 认证阶段拒绝（不消耗 fresh）[39m
+     [90m     |[39m                          [31m[1m^[22m[39m
+     [90m 253 |[39m     }
+     [90m 254 |[39m     [36mconst[39m after [33m=[39m service[33m.[39mmetrics()[33m;[39m
+     [90m 255 |[39m     expect(after[33m.[39mfreshObservationBuilds [33m-[39m before[33m.[39mfreshObservationBuilds)[33m.[39mtoBe([35m0[39m)[33m;[39m [90m// ← 基线红灯：当前每次耗 1[39m[0m
+
+      at Object.<anonymous> (test/baseline/tmp-remediation-i-baseline.test.ts:252:26)
+
+  ● 基线 V2 reset 引用隔离 › performTreasuryFullReset 后全局 Memory 应为 JSON 重载的新引用
+
+    expect(received).not.toBe(expected) // Object.is equality
+
+    Expected: not {"creeps": {}, "rooms": {}, "runtime": {"resourceReservations": {}, "resourceReservationsOwnerVersion": 4, "treasuryCore": {"active": {}, "counters": {"admitted": 1, "cleanupFailures": 0, "dispatched": 1, "rearmings": 0, "recoveryAdvances": 0, "rejectedAdmissions": 0, "settledCommitted": 1, "settledNotExecuted": 0, "unknown": 0}, "installEpochId": "98ff78271d17da76", "issuance": {"burned": 0, "frontier": 1}, "lifecycle": {"lastBeginTick": 2, "lastEndTick": null}, "recovery": {"budgetTick": 2, "budgetUsed": 1, "cleanupCursor": 0, "sweepCursor": 0}, "ring": [{"attemptId": "tk1_1_0831c29b3e5fe8fe", "closedAtTick": 2, "generation": 1, "terminalPhase": "committed", "workKey": "biz:bl:v2"}], "ringCursor": 1, "version": 3}, "treasuryWorldSequence": 1}}
+
+    [0m [90m 276 |[39m     [36mconst[39m reset [33m=[39m performTreasuryFullReset({ roomSpecs[33m:[39m [33mROOMS[39m[33m,[39m adapter[33m:[39m makeTreasuryTestTransferAdapter()[33m,[39m advanceTicks[33m:[39m [35m1[39m })[33m;[39m
+     [90m 277 |[39m     reset[33m.[39mservice[33m.[39mbeginTick()[33m;[39m
+    [31m[1m>[22m[39m[90m 278 |[39m     expect([33mMemory[39m)[33m.[39mnot[33m.[39mtoBe(oldMemory)[33m;[39m [90m// ← 基线红灯：当前沿用同一 Memory 对象[39m
+     [90m     |[39m                        [31m[1m^[22m[39m
+     [90m 279 |[39m     expect([33mMemory[39m[33m.[39mruntime[33m![39m[33m.[39mtreasuryCore[33m![39m[33m.[39mactive)[33m.[39mnot[33m.[39mtoBe(oldActive)[33m;[39m [90m// ← 嵌套引用同样未脱离[39m
+     [90m 280 |[39m   })[33m;[39m
+     [90m 281 |[39m })[33m;[39m[0m
+
+      at Object.<anonymous> (test/baseline/tmp-remediation-i-baseline.test.ts:278:24)
+
+Test Suites: 1 failed, 1 total
+Tests:       5 failed, 5 total
+Snapshots:   0 total
+Time:        3.057 s, estimated 4 s
+Ran all test suites within paths "test/baseline/tmp-remediation-i-baseline.test.ts".
+exit=1

@@ -1,0 +1,48 @@
+FAIL src/runtime/treasury/treasuryRewrite4Lifecycle.test.ts
+  D09 全 heap reset 后的观察接管
+    ○ skipped 旧 global 世界序槽清除后：无重复调用、无跨域扣留，新观察接管退出，余额不双扣
+  D10 无关推进与范围缺失
+    ○ skipped heap 清零后只推进无关源：新序更大不判覆盖；目标源恢复后才关闭
+  D11 硬终止与晚到结论（Remediation I/V1：真实路径断点快照）
+    × 断点：调用边界已发布、adapter 尚未进入——快照恢复 unknown 且不重发 (18 ms)
+    ○ skipped 断点：实际动作后、结果未写 + 晚到 reconcile executed → 观察接管退出，总调用 1
+  D13 成对预算下的 8 义务完成
+    ○ skipped 每 tick 端口 >0 且 ≤8、remaining 单调减少、至多 3 个完整预算 tick 结束、后续不再释放
+  D15 混合结果义务的部分推进
+    ○ skipped true/false/throw 混合：只移除明确完成项，成功项不再调用；全部完成后合法 retry_ready
+  D16 预扣/确认丢写的预算语义
+    ○ skipped 预扣写失败：端口调用 0；义务保留；下一 tick 正常恢复
+    ○ skipped 释放成功但确认写失败：保留原 attempt 义务、预算不退回；下 tick 同一幂等关联重试并最终确认
+  D17 重入与份额共享
+    ○ skipped 端口回调内重入 beginTick/endTick + 另一 kernel 同 tick 重复入口：份额共享、不回退、确认不要求第 9 份
+  D18 断点与完整 reset 后的预算/许可/义务
+    ○ skipped 已预扣未进端口（budgetUsed=2 已持久、义务保留）：完整 reset 后旧 heap 许可无效、预算保留、下 tick 恢复
+  D19 公平推进有限界（失败前置 + 可完成后置 + 混合流量）
+    ○ skipped 前 8 条永久失败、第 9 条（8 义务）可完成：持续 pending/恢复流量下在有限 tick 内真完成，失败风险保留
+  D23 混合规模模型与账目一致
+    ○ skipped 批量完成 + 合法 retry + 固定长期 unknown：世界轨迹与账目一致、ring 淘汰不授旧 ID 许可、全 heap reset 后接管
+
+  ● D11 硬终止与晚到结论（Remediation I/V1：真实路径断点快照） › 断点：调用边界已发布、adapter 尚未进入——快照恢复 unknown 且不重发
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "committed"
+    Received: "publish_failed"
+
+    [0m [90m 275 |[39m     [36mconst[39m service [33m=[39m makeService()[33m;[39m
+     [90m 276 |[39m     [36mconst[39m a [33m=[39m admit(service[33m,[39m [32m"biz:d11:entered"[39m[33m,[39m transferArgs({ amount[33m:[39m [35m100[39m }))[33m;[39m
+    [31m[1m>[22m[39m[90m 277 |[39m     expect(service[33m.[39mexecuteAuthorizedDispatch(a[33m.[39mdispatch)[33m.[39mstatus)[33m.[39mtoBe([32m"committed"[39m)[33m;[39m
+     [90m     |[39m                                                                  [31m[1m^[22m[39m
+     [90m 278 |[39m     expect(trace[33m.[39mexecutions)[33m.[39mtoBe([35m1[39m)[33m;[39m
+     [90m 279 |[39m     [90m// 快照事实核查：断点时刻 phase=dispatching、边界已发布、实际调用[39m
+     [90m 280 |[39m     [90m// 事实未写（external 不被伪造为 accepted）。[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite4Lifecycle.test.ts:277:66)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 11 skipped, 12 total
+Snapshots:   0 total
+Time:        3.766 s, estimated 21 s
+Ran all test suites within paths "src/runtime/treasury/treasuryRewrite4Lifecycle.test.ts".
+
+exit-code-note: see jest summary above

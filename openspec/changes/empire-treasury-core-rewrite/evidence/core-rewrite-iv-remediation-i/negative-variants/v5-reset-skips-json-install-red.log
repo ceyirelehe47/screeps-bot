@@ -1,0 +1,43 @@
+FAIL src/runtime/treasury/treasuryRemediationIService.test.ts
+  E02 快照无证据与正面对照
+    ○ skipped E01 快照 reset 后无证据保留 unknown；提供 exact not_executed 对账后按正常路径 retry_ready
+  E04 结果写失败与观察暂不可用
+    ○ skipped dispatch_result 写失败：persist_failed + 保守 unknown 兜底；边界保持、不回 pending
+    ○ skipped 结果已确认 committed 但观察源暂不可用：保留不退出；源恢复后正常关闭
+  E11/E12 rearm 新义务拒绝
+    ○ skipped E11 非空 child externalConsumers：明确拒绝，frontier/active/父代/许可权利不变，无 child 无调用
+    ○ skipped E12 非法类型新义务：结构化拒绝；随后同一 capability 合法请求生成新 ID 并执行；child 不继承旧义务
+  E13/E14/E15 许可认证前置
+    ○ skipped E13 克隆许可提交次数 > fresh 上限：fresh/policy 零增量、动作 0、持久状态不变；随后真许可正常执行
+    ○ skipped E14 过期/旧 runtime/已消费/对应工作已退出的许可与普通输入：高成本复验前拒绝
+    ○ skipped E15 合法许可 + policy 收紧/结构变化/窗口关闭/真实 fresh 耗尽：门禁仍阻断；条件恢复的对照可执行
+  E16 指定断点快照与引用隔离
+    × 旧 runtime 继续变更后 reset 用指定快照：新 Memory 嵌套引用脱离；旧引用修改不污染新运行时 (36 ms)
+  E17 全清后的接管（强化 D09）
+    ○ skipped committed 接管退出、unknown 不重发、嵌套引用隔离、余额不双扣
+  E18 混合负载与真实 retry
+    ○ skipped 完成/真实 rearm/长期 unknown/部分清理/完整 reset：child 实际调用、世界账目一致、旧视图不授执行权
+
+  ● E16 指定断点快照与引用隔离 › 旧 runtime 继续变更后 reset 用指定快照：新 Memory 嵌套引用脱离；旧引用修改不污染新运行时
+
+    expect(received).not.toBe(expected) // Object.is equality
+
+    Expected: not {"creeps": {}, "rooms": {}, "runtime": {"resourceReservations": {}, "resourceReservationsOwnerVersion": 4, "treasuryCore": {"active": {}, "counters": {"admitted": 2, "cleanupFailures": 0, "dispatched": 1, "rearmings": 0, "recoveryAdvances": 0, "rejectedAdmissions": 0, "settledCommitted": 1, "settledNotExecuted": 0, "unknown": 0}, "installEpochId": "476809911c1e7a54", "issuance": {"burned": 0, "frontier": 2}, "lifecycle": {"lastBeginTick": 3, "lastEndTick": null}, "recovery": {"budgetTick": 3, "budgetUsed": 0, "cleanupCursor": 0, "sweepCursor": 0}, "ring": [{"attemptId": "tk1_2_c3b504dd9d636d9a", "closedAtTick": 2, "generation": 1, "terminalPhase": "abandoned", "workKey": "biz:e16:later"}, {"attemptId": "tk1_1_759faa9690e4a0d0", "closedAtTick": 2, "generation": 1, "terminalPhase": "committed", "workKey": "biz:e16:snap"}], "ringCursor": 2, "version": 3}, "treasuryWorldSequence": 1}}
+
+    [0m [90m 458 |[39m     })[33m;[39m
+     [90m 459 |[39m     [90m// 新 Memory 及嵌套引用与旧对象不同。[39m
+    [31m[1m>[22m[39m[90m 460 |[39m     expect([33mMemory[39m)[33m.[39mnot[33m.[39mtoBe(staleMemory)[33m;[39m
+     [90m     |[39m                        [31m[1m^[22m[39m
+     [90m 461 |[39m     expect([33mMemory[39m[33m.[39mruntime[33m![39m[33m.[39mtreasuryCore[33m![39m[33m.[39mactive)[33m.[39mnot[33m.[39mtoBe(staleActive)[33m;[39m
+     [90m 462 |[39m     [90m// 新状态 = 指定快照经正常恢复的结果：只有断点时刻的一笔工作、unknown。[39m
+     [90m 463 |[39m     [36mconst[39m journal [33m=[39m reset[33m.[39mservice[33m.[39mkernelJournal()[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIService.test.ts:460:24)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 10 skipped, 11 total
+Snapshots:   0 total
+Time:        3.665 s, estimated 4 s
+Ran all test suites within paths "src/runtime/treasury/treasuryRemediationIService.test.ts".
+
+exit-code-note: see jest summary above

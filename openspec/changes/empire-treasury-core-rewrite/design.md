@@ -226,3 +226,36 @@ scripts/baseline-red/              基线缺陷重现脚本（R04；显式运行
 - 接纳前检查：当前序列化 + 新槽完整生命周期上界 + 新历史槽上界 ≤ 总预算；已接纳工作收尾始终有余量（D22 真实接纳满载实测）。
 - 恢复预算：总量 8/tick、成对单位 2 份（§1.8）；状态转移/持久发布/扫描有界（每命令一次安全发布 + 每单位一次预扣发布）。
 - 压力实测（D23）：批量完成 + 合法 retry + 固定 unknown 混合，世界轨迹与独立参考模型一致；ring 淘汰不授予旧 ID 许可；全 heap reset 后接管退出、无重复调用。
+
+## 6. 调用边界、两级公平与许可认证（Remediation I 修订）
+
+### 6.1 可能调用边界与实际结果事实的区分
+
+`TreasuryCoreWorkRecord.invocationBoundary`（{ atTick, worldSequence }）在 dispatch_start 与 pending→dispatching **同次发布**（单命令原子——不先发 dispatching 再另写边界，那会重新制造两步之间的恢复空窗）。其语义是"调用已获准进入，此后可能发生"：**不是** executed=true、**不是** external.accepted=true。实际调用/接受事实仍由 `invocation`/`external` 独立表达（dispatch_result 写入）；任何读者不得把前置边界误读成实际成功。
+
+- 边界由受控 kernel 在动作调用之前读取持久世界序生成（boundaryWorldSequence）；不接受外部调用者自报的时间、序号或"已执行"布尔量。
+- 边界发布失败 → 实际 adapter 调用为零、记录保持可取消 pending（E05）。
+- dispatch_result / recover_dispatching / settle 保留边界不改写；恢复不得把边界时间改成"现在"、不得把调用前观察锚点替换成调用后序号。
+- 观察接管 anchor 链：invocation（实际调用）→ external（晚到 reconcile 的正面事实）→ invocationBoundary（保守下界：效果只可能在边界之后发生，观察构建序 > 边界序即覆盖）——结果写回前中断的记录据此仍有退出出口（R1/E03）。
+- rearm child 从 null 起步，不继承父代调用边界或接受事实；旧代许可始终不可再次执行。
+- validator 强制：dispatching/outcome_unknown ⇒ 边界非空（缺锚点旧记录是不完整数据——明确拒绝，不补当前时间修成健康，不做在线迁移）；invocation/external 存在 ⇒ 边界同在；pending 不得持有任何调用侧事实。
+
+### 6.2 两级公平（跨记录轮转 + 记录内轮转）
+
+跨记录轮转沿用 recovery.cleanupCursor（IV）。记录内公平（R2）：`cleanup.cleanup.cursor` 是剩余集合内的服务偏移，**随成对预算的确认命令持久推进**——一次已取得预算的尝试（端口 true/false/throw）都让下次取得服务的位置前进；预算耗尽停止扫描前也持久化已尝试位置（否则失败前缀每 tick 重新占据本记录的尝试预算——实现中发现的缺陷）。集合成员资格仍是唯一未完成义务事实：调度位置不证明任何义务完成；集合缩小/回绕按取模安全重定位（不越界、不永久跳过成员）。预扣失败不调用端口、不减少 remaining；预扣成功端口未进入便中断可保守损失本 tick 份额且位置已由后续轮转覆盖（无需回收票据）。每 tick 至多 4 个成对单位的总预算不变。
+
+### 6.3 rearm 不支持新消费者义务（本轮固定策略）
+
+公共 executeRearm 不提供新 child 消费者义务的发行与释放能力：非空 externalConsumers → 结构化拒绝（理由明确表示当前 rearm 不支持新消费者义务）；类型非法（null/对象/字符串）→ 结构化 invalid input（不抛错、不静默忽略）。拒绝先于父代权利消费、child ID/记录发布和其他可避免的高成本授权处理；父代保持合法 retry_ready，capability 在原 tick/runtime 规则内仍可用于一个不含新义务的合法请求（不延长有效期）。不新增 child 外部义务发行系统；正常接纳对已支持消费者的行为不变。
+
+### 6.4 许可认证先于高成本资源
+
+复用私有签发注册表（WeakSet）与当前许可有效性规则。kernel 暴露**只读** preflight（dispatch/rearm）：确认本 runtime 签发、当前 tick/代数有效、尚未被消费且对应当前可执行活跃 attempt（dispatch 须 pending；rearm 父代须 retry_ready）。facade 在读取外部对象 postings/owner 作为授权输入、使用 excludeAttemptId、调用 policy 或消耗 fresh **之前**完成认证——非法克隆/普通对象/旧运行时/过期/已消费/对应工作已取消退出的许可不再消耗 fresh/policy（零增量、实际动作 0、持久状态不变；允许有界诊断计数）。preflight 结果不是可脱离当前状态复用的执行凭证：真正调用边界的终验仍在 executeDispatch 内（预检后有回调或重入时，实际消费/发布仍确认当前 exact attempt 和阶段未失效）。
+
+### 6.5 完整 reset 契约（V2）
+
+performTreasuryFullReset 消费一份明确的序列化快照：指定 memorySnapshot（断点快照）时严格使用该快照安装新全局 Memory（不悄悄重新序列化后来已被 catch/finally 修好的当前 Memory）；缺省时由 helper 在入口取得当时快照并立即重载。两种路径都保证构建新运行时前全局 Memory 是 JSON.parse 的产物——根与全部嵌套引用（active/record/cleanup）与旧对象脱离，旧引用修改不进入新运行时（E16/E17）。真实断点分支：在真实执行路径的选定位置（adapter execute 入口/效果后、释放端口回调）捕获 Memory + 宿主世界快照，以指定快照建立新测试分支；旧调用栈断点后的写入/fallback/finally 不进入新分支（E01/E03/E08/E16）。普通 throw 被生产 catch/finally 完成后再序列化不算硬终止。
+
+### 6.6 槽位上界（Remediation I 字段并入）
+
+worst 构造器含 invocationBoundary/cursor 极值；满 64 active + 128 ring 构造实测 343,817 字符 ≤ 360,000（E19；受控字符集 bytes=chars）。validator 数值约束同步：cursor 为非负安全整数（不约束 < 集合长度——按取模安全重定位）。

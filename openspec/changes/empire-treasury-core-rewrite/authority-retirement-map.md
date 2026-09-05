@@ -99,3 +99,10 @@ II 轮确认旧证明链未复活，并补充 II 轮新增写权威的封闭性�
 | pending sweep / 清理游标 / 预算记账（recovery 区） | 调度元信息而非权威：失效可安全重建，不构成完成 proof，不授予执行权；treasuryCore 键权威仍只在 kernel/store.ts（架构守护通过） |
 | 测试夹具能力是否泄漏为生产通道 | 否：mint/内部 command 仅 kernel 内部可达（architecture：applyTreasuryCoreStateCommand 唯一 runtime importer = kernel.ts）；reset harness 位于 test/mock（生产模块不 import，架构守护） |
 | 新写入口清单（II 轮终态） | facade.authorizeTreasuryActionContract / executeAuthorizedDispatch / executeRearm / settleUnknownOutcome / cancelPendingWork / closeWork + kernel.beginTick/endTick 恢复——全部收敛到 kernel.runCommand 单一写路径 + commands.ts 封闭命令集（admit/dispatch_start/dispatch_result/settle/advance_cleanup/rearm/close/recover_dispatching/cancel_pending） |
+
+## Core Rewrite IV · Remediation I：原聚合内恢复/调度信息的责任与退出
+
+- `invocationBoundary`（每活跃聚合内，随 phase=pending→dispatching 同次写入）：唯一职责是 committed 退出判定的保守下界锚点与"可能已进入"的恢复事实。退出时随聚合移除进 ring（ring 不含该字段——明细只留终态摘要）；不构成新证明链、不按 attempt/generation 另存。旧 proof 未复活；没有第二执行权威。
+- `cleanup.cursor`（每活跃聚合 cleanup 内，随成对预算确认命令推进）：唯一职责是记录内消费者轮转位置（调度元信息）。义务完成事实仍 solely 由集合成员资格表达；聚合退出/retry_ready 清零。无逐消费者完成记录存储。
+- `recovery.cleanupCursor`（恢复调度区，跨记录轮转）：与记录内 cursor 分层——前者选记录，后者在记录内选成员；两者都不是完成 proof。
+- kernel preflight（只读许可预检）：不是执行凭证——真正调用边界终验仍在 executeDispatch（WeakSet 身份 + 阶段 + 完整身份重验）。未新增许可品牌表或第二签发权威。

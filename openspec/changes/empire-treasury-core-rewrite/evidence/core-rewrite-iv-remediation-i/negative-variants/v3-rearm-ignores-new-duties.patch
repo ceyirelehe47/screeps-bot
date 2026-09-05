@@ -1,0 +1,25 @@
+--- src/runtime/treasury/facade.ts (original)
++++ src/runtime/treasury/facade.ts (variant: v3-rearm-ignores-new-duties)
+@@ -1282,22 +1282,6 @@
+       // input，不抛错。拒绝先于父代权利消费、child ID/记录发布与其他
+       // 可避免的高成本授权处理；父代保持合法 retry_ready，capability
+       // 在原 tick/runtime 规则内仍可用于不含新义务的合法请求。
+-      if (options?.externalConsumers !== undefined) {
+-        if (!Array.isArray(options.externalConsumers)) {
+-          return {
+-            status: "rejected",
+-            reason: "rearm 请求的 externalConsumers 类型非法（须为数组）——结构化拒绝，不静默忽略",
+-            reasonCode: "invalid_input",
+-          };
+-        }
+-        if (options.externalConsumers.length > 0) {
+-          return {
+-            status: "rejected",
+-            reason: `当前 rearm 不支持新消费者义务（收到 ${String(options.externalConsumers.length)} 项——child 不发行外部消费者义务，请求不被静默丢弃）`,
+-            reasonCode: "invalid_input",
+-          };
+-        }
+-      }
+       // 许可认证前置（Remediation I/R4/§6.2）：先于 contract 验证等高成本
+       // 处理确认 rearm 许可真实性（本 runtime 签发/未消费/父代仍
+       // retry_ready）——非法输入不消耗授权资源。

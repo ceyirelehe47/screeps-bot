@@ -1,5 +1,19 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Core Rewrite IV · Remediation I（2026-09-06 完成）
+
+承接 IV（aea7035）及其源码审查的四项实现缺口与三项验证缺口（任务书 treasury-core-rewrite-IV-remediation-I-implementation.md）。
+
+- [x] 影响范围审查（subagent：手写 fixture 清单/下游读者/clone 形状假设/调用链/fresh 观测点/reset 调用方/budget 结构；预计红测 top5 与实际 7 文件 19 红一致）
+- [x] 红灯基线：R1–R4 + V2 反例（5 用例）在 aea7035 上 5/5 红灯（真实路径快照/合法 8 义务/真许可克隆；evidence/core-rewrite-iv-remediation-i/baseline/：日志 sha256 31b01eb0、源码快照 sha256 887bf3f8、退出码）；修复后 5/5 转绿并转为持续回归（test/baseline/treasuryRemediationIBaseline.test.ts）
+- [x] 工作流 A（R1 调用边界恢复）：`invocationBoundary` 与 pending→dispatching **同次发布**（单命令原子；语义="调用已获准进入，此后可能发生"，不是 executed 也不是 external.accepted）；dispatch_result/recover/settle 保留不改写；观察接管 anchor 链 invocation→external→invocationBoundary；rearm child 从 null 起步不继承；validator 强制 dispatching/outcome_unknown ⇒ 边界非空、invocation/external 存在 ⇒ 边界同在、pending 零调用侧事实（缺锚点旧记录明确拒绝不修成健康——不兼容数据不在线迁移）
+- [x] 工作流 B（R2 记录内公平）：cleanup.cursor 持久轮转位置（随成对预算的确认命令推进；true/false/throw 都前移；调度元信息不证明义务完成）；beginTick 消费者遍历从 cursor 旋转（不再每 tick 从第一项开始）；**预算耗尽 break 前也持久化已尝试位置**（否则失败前缀每 tick 重新占据——实现中发现并修复的缺陷）；集合缩小/回绕按取模安全重定位
+- [x] 工作流 C（R3+R4）：executeRearm 对非空 externalConsumers 结构化拒绝（先于父代权利消费与高成本处理；非法类型 invalid input 不抛错；父代保持 retry_ready、capability 随后可用于合法请求）；kernel 只读 preflight（dispatch/rearm 许可 WeakSet 真实性/tick/generation/未消费/活跃记录）前置到 facade 消耗 fresh/policy **之前**（克隆/过期/已消费/已退出工作的许可零增量）；preflight 结果不是可复用执行凭证（真正调用边界终验仍在 executeDispatch）
+- [x] 工作流 D（V1/V2/V3 验证缺口）：performTreasuryFullReset 增加 memorySnapshot 参数并**无条件 JSON 重载**（指定断点严格使用该快照；缺省入口快照立即重载——消除"取了快照却没用"）；D11 从手填 dispatching fixture 改为**真实执行路径断点捕获**（adapter 入口/效果后快照）；D19 推进循环逐 tick JSON 重载重建运行时；D23 RETRIED 分支真实化（60 对 parent/child 完整 retry 链：not_executed→清理→retry_ready→capability→新 contract→executeRearm→child 实际执行）
+- [x] E01–E20 验收矩阵（kernel 13 + service 11；E01/E03=D11 改造版，E05–E10/E19=kernel 文件，E02/E04/E11–E18=service 文件；E20=五负向变体各自语义红灯后还原全绿——evidence/negative-variants/ patch+红日志+还原绿日志）
+- [x] 既有测试适配（7 文件 19 红：手写 fixture 补 invocationBoundary/cursor 的合法持久形态；A04/A12/B20/B25/C22 直改记录同步补边界；runtime.d.ts 镜像类型 + memoryDeclarationBoundaries 指纹更新 2d2cd73f→1e376a50）
+- [x] 全仓回归 225 suites / 1289 tests 零失败；worst 构造器含新字段极值实测 ≤360,000（满 64/128 构造 343,817 字符，bytes 另报=chars——受控全 ASCII）
+
 ## Core Rewrite IV（2026-09-06 完成）
 
 - [x] 侦察与红灯基线（subagent 交叉验证七缺口全部定位；b6c87c1 干净 worktree：8 缺陷反例红灯 / 8 合法对照绿，evidence/core-rewrite-iv/baseline）
