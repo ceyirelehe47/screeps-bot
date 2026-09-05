@@ -19,7 +19,7 @@
 
 import type { TreasuryActionAdapter } from "@/runtime/treasury/actionContracts";
 import type { TreasuryService } from "@/runtime/treasury/facade";
-import { installRooms, type RoomSpec } from "@mock/treasury";
+import { installRooms, type RoomSpec } from "./treasury";
 
 /** 新 runtime 的模块句柄（测试用于断言/进一步操作新 registry）。 */
 export interface TreasuryResetRuntimeHandles {
