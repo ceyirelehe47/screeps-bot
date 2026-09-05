@@ -1,0 +1,18 @@
+PASS test/memoryDeclarationBoundaries.test.ts (18.048 s)
+PASS src/runtime/defenseFocusFire.test.ts
+PASS src/runtime/towerControl.test.ts
+PASS src/runtime/homeDefense.test.ts
+PASS src/runtime/defenseFallbackReallocation.test.ts
+PASS src/runtime/defenseFocusFireStateful.test.ts
+PASS src/runtime/defenseGlobalRampartFootprints.test.ts
+PASS src/runtime/defensePreallocationRampartOwnership.test.ts
+PASS src/runtime/defenseAllActorReservation.test.ts
+PASS src/runtime/defenseStationaryRampartOwnership.test.ts
+PASS src/roles/homeDefender.test.ts
+
+Test Suites: 11 passed, 11 total
+Tests:       118 passed, 118 total
+Snapshots:   0 total
+Time:        19.727 s, estimated 20 s
+Ran all test suites within paths "src/runtime/defenseFocusFire.test.ts", "src/runtime/defenseFocusFireStateful.test.ts", "src/runtime/defenseFallbackReallocation.test.ts", "src/runtime/defenseAllActorReservation.test.ts", "src/runtime/defenseGlobalRampartFootprints.test.ts", "src/runtime/defensePreallocationRampartOwnership.test.ts", "src/runtime/defenseStationaryRampartOwnership.test.ts", "src/runtime/homeDefense.test.ts", "src/runtime/towerControl.test.ts", "src/roles/homeDefender.test.ts", "test/memoryDeclarationBoundaries.test.ts".
+Test results written to: ..\rewrite2-evidence\jest-defense.json

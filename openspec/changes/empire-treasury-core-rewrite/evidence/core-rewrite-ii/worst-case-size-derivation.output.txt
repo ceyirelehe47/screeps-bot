@@ -1,0 +1,1 @@
+worst record=4776 ring=262 root=550 total(64+128)=339813 budget=360000 headroom=20187.0 (5.9%)

@@ -1,0 +1,48 @@
+FAIL src/runtime/treasury/treasuryRewrite2Lifecycle.test.ts
+  B03 每 attempt 实际进入至多一次
+    × 克隆真 dispatch 许可（字段全对的新对象）：拒绝——对象身份即凭证（WeakSet 注册） (20 ms)
+    ○ skipped 同 tick 重复 execute：第二次拒绝，真实调用 1 次，无额外占用变动
+    ○ skipped execute 内重入（adapter 回调中再次 dispatch 同 permit）：重入拒绝，真实调用 1 次
+    ○ skipped 多 facade 同 Memory：同 permit 第二个 facade 执行被拒（模块级消费注册共享）
+  B12 跨 tick 失效 pending 的安全取消（sweep）
+    ○ skipped 64 项接纳不 dispatch：调用总计 0，按预算安全取消，槽位最终恢复可用
+    ○ skipped 同 tick 接纳的 pending 不被当作旧残留（admittedAtTick === nowTick）
+  B13 显式取消与 dispatch 的竞争
+    ○ skipped pending 显式取消成功：旧 permit 永不可执行，记录退出（ring abandoned）
+    ○ skipped dispatching/unknown 不能被取消成未执行（只有确定未开始可取消）
+    ○ skipped 取消确认写失败：不释放占用、不报告完成；重放取消成功后才退出
+    ○ skipped 取消带清理义务的 pending：进入 closing，义务经释放端口确认后退出（无 rearm）
+  B19 满载最坏状态的总预算与收尾余量
+    ○ skipped 满 active + 满 ring + 全字段最大值 + 最坏 unknown/closing：总序列化 ≤ 预算，新增拒绝，已接纳可收尾
+  B25 完整 reset 的断点语义与旧许可回放
+    ○ skipped 断点：pending（未 dispatch）——reset 后旧 permit 拒绝，跨 tick sweep 取消，宿主轨迹零调用
+    ○ skipped 断点：动作已进入、结果写回前（dispatching）——reset 后保守化 unknown，不重发（真调用不变）
+    ○ skipped 断点：释放成功但确认未写回——reset 后 duty 保留，同一 (key, attemptId) 幂等重试
+    ○ skipped 旧 rearm capability 回放：新 runtime 拒绝（不创建 child）
+    ○ skipped reconciler 跨 reset：stable semantic identity 相同——settle 从持久事实推进
+    ○ skipped reconciler 语义变化（semantic identity 不同）：settle 拒绝，unknown 保留
+  B26 有界性综合（长期 unknown / 完成流 / retry 链）
+    ○ skipped 1 笔长期 unknown + 300 笔完成 + 40 代 retry 链：unknown 有界、ring ≤128、无逐代永久记录
+
+  ● B03 每 attempt 实际进入至多一次 › 克隆真 dispatch 许可（字段全对的新对象）：拒绝——对象身份即凭证（WeakSet 注册）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "committed"
+
+    [0m [90m 155 |[39m     [36mconst[39m cloned [33m=[39m { [33m...[39m(dispatch [36mas[39m unknown [36mas[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m) } [36mas[39m never[33m;[39m
+     [90m 156 |[39m     [36mconst[39m replay [33m=[39m service[33m.[39mexecuteAuthorizedDispatch(cloned)[33m;[39m
+    [31m[1m>[22m[39m[90m 157 |[39m     expect(replay[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                           [31m[1m^[22m[39m
+     [90m 158 |[39m     expect(readTreasuryTestAdapterSideEffects()[33m.[39mexecutions)[33m.[39mtoBe([35m0[39m)[33m;[39m
+     [90m 159 |[39m     [90m// 原许可仍有效（未被克隆影响）。[39m
+     [90m 160 |[39m     expect(service[33m.[39mexecuteAuthorizedDispatch(dispatch)[33m.[39mstatus)[33m.[39mtoBe([32m"committed"[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Lifecycle.test.ts:157:27)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 17 skipped, 18 total
+Snapshots:   0 total
+Time:        4.085 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryRewrite2Lifecycle.test.ts/i with tests matching "克隆真 dispatch".

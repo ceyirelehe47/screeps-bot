@@ -1,0 +1,516 @@
+FAIL src/runtime/treasury/treasuryRewrite2Acceptance.test.ts
+  B01 许可内容封闭（R01）
+    × 授权 500 后替换 permit.canonicalArgs 引用为 5000：实际动作不得收到 5000 (13 ms)
+    √ 授权 500 后修改嵌套 args.amount 为 5000：实际动作不得收到 5000 (3 ms)
+    √ 修改 permit 身份字段（attemptId/digest/actionKind/issuedAtTick）：拒绝或无效，不换目标执行 (4 ms)
+    √ 合法未修改对照：正常执行一次 500 (2 ms)
+  B02 rearm 许可封闭（R01）
+    × 修改 rearm 的前代指向另一 retry_ready：不得在错目标上建立 child (8 ms)
+    √ 克隆/伪造 rearm 许可与延寿字段（issuedAtTick/runtime）：不可用 (4 ms)
+  B04 dispatching 发布被丢弃但读回合法旧 pending（R02）
+    × 写被丢弃：publish 失败、实际调用 0、不报告写入完成 (2 ms)
+  B05 读回另一份合法状态 / 单安全字段回退（R02）
+    × 读回为另一份合法 memory（少了本 attempt）：拒绝陈旧发布、零调用 (1 ms)
+    × 读回仅 phase 字段被回退为 pending（其余为 draft）：拒绝陈旧发布、零调用 (2 ms)
+  B06 动作已进入后结果写失败（R02）
+    × 结果持久被丢弃：真调用总计 1，不返回 committed，不回退 pending，风险保留 (3 ms)
+  B07 接收容量竞争（R03）
+    × 接收容量 100：A 流入 80 unknown 后（dispatch），同 tick B 流入 80 拒绝 (3 ms)
+    × 下一 tick：A 仍 unknown，B 流入 80 仍拒绝（unknown 占接收容量跨 tick） (3 ms)
+    √ 对照：无 unknown 占用时 B 流入 80（容量 100）获准 (2 ms)
+  B08 业务预留参与接纳（R03）
+    × 物理 1000、他人生产预留 900：流出 200 的接纳与严格查询都拒绝 (2 ms)
+    √ 对照：物理 1000 无预留：流出 200 获准（不是一律封死） (1 ms)
+  B09 双扣对照（R03）
+    × A pending 流出 200 后 B 流出 700 获准（不因 tentative+active 双扣误拒） (3 ms)
+    × A committed 流出 200 后（同 tick）B 流出 700 获准（效果单次表达） (5 ms)
+    √ A 完成并退出、下一 tick 观察刷新后：B 流出 700 获准且不二次扣减 A (4 ms)
+  B10 同键聚合与对冲腿（5.2）
+    × 同一候选两条同资源流出 60、余额 100：按合计拒绝 (2 ms)
+    √ 同一接收位置两种资源流入各 60、容量 100：按合计拒绝 (2 ms)
+  B11 rearm 使用当前授权口径（R03）
+    × retry_ready 后收紧 policy：相同动作的新代被当前 policy 拒绝 (3 ms)
+  B14 缺释放端口不得默认成功（R05）
+    × 无释放端口时接纳非空 externalConsumers：拒绝 (2 ms)
+    × 已持久化义务 + 端口缺失：duty 保留、不退出、不报 released (1 ms)
+  B15 释放失败/抛错/幂等重试（R05）
+    √ 端口返回 false：duty 保留、不退出、不建立 retry 权利 (1 ms)
+    × 端口抛错：beginTick 不崩、duty 保留 (27 ms)
+    √ 释放成功但确认写失败：duty 保留，之后同一 (key, attemptId) 幂等重试 (2 ms)
+  B16 前 8 条永久失败的公平性（R08）
+    × 前 8 条释放永久失败：第 9 条在有限轮次内获得处理机会 (8 ms)
+  B17 每 tick 释放端口调用预算（R08）
+    × 单条大量 consumer 全失败：一次 beginTick 的端口调用次数受预算约束 (2 ms)
+  B18 consumerKeys 数量上限（R09）
+    × 已持久化记录携带 1000 个 consumer key：有界拒绝（unhealthy），不无限遍历 (1 ms)
+    × 接纳时 externalConsumers 超上限：有界拒绝，不截断一半义务 (2 ms)
+  B20 ring 故障隔离（R10）
+    × ring 超限/损坏：不阻断安全恢复与收尾，查询报告 degraded (2 ms)
+    × ring 声称 attempt 已关闭但 active 仍在：历史 degraded，不阻断核心、不凭 ring 决定关闭 (2 ms)
+  B21 真实安全矛盾仍 fail-closed（对照）
+    √ closing 但无结论证据：unhealthy 阻断（不因 ring 可丢弃而放过安全矛盾） (1 ms)
+    √ 发行元信息不自洽：unhealthy 阻断 (1 ms)
+  B22 查询视图只读（R06）
+    × kernelJournal().health 修改不回写 Memory（health 不泄漏 memory 引用） (2 ms)
+    × ring 元素与 counters 修改不回写 Memory (2 ms)
+    √ 修改 metrics/active 深层嵌套后原始 Memory 与后续判定不受影响 (2 ms)
+  B23 自报 external receipt 关闭（R07）
+    × external_settlement_receipt 自报 not_executed：拒绝且 unknown 不变 (3 ms)
+    × 运行时强制转换传入 external 结论同样拒绝（不留 else 使用调用者结论的路径） (2 ms)
+  B24 受控对账边界（对照+强化）
+    √ still_uncertain / 缺 adapter / reconciler 抛错 / 语义变化：不释放风险 (2 ms)
+    √ 受控 reconciler 给出的可信结论可推进（正常对照） (2 ms)
+  B28 元信息与旧数据（对照）
+    √ frontier 溢出拒绝分配不回绕；legacy store 阻断且不擦除 (3 ms)
+
+  ● B01 许可内容封闭（R01） › 授权 500 后替换 permit.canonicalArgs 引用为 5000：实际动作不得收到 5000
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 500
+    Received: 5000
+
+    [0m [90m 211 |[39m     expect(executed[33m.[39mstatus)[33m.[39mnot[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m 212 |[39m     expect(readTreasuryTestAdapterSideEffects()[33m.[39mexecutions)[33m.[39mtoBe([35m1[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 213 |[39m     expect(trace[33m.[39mlog[[35m0[39m][33m?[39m[33m.[39mamount)[33m.[39mtoBe([35m500[39m)[33m;[39m
+     [90m     |[39m                                  [31m[1m^[22m[39m
+     [90m 214 |[39m   })[33m;[39m
+     [90m 215 |[39m
+     [90m 216 |[39m   it([32m"授权 500 后修改嵌套 args.amount 为 5000：实际动作不得收到 5000"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:213:34)
+
+  ● B02 rearm 许可封闭（R01） › 修改 rearm 的前代指向另一 retry_ready：不得在错目标上建立 child
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 278 |[39m     [36mconst[39m contract [33m=[39m buildContract(service[33m,[39m [32m"biz:b02:retry"[39m[33m,[39m transferArgs())[33m;[39m
+     [90m 279 |[39m     [36mconst[39m result [33m=[39m service[33m.[39mexecuteRearm(capability[33m.[39mrearm[33m,[39m contract[33m,[39m { workKey[33m:[39m [32m"biz:b02:first"[39m })[33m;[39m
+    [31m[1m>[22m[39m[90m 280 |[39m     expect(result[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                           [31m[1m^[22m[39m
+     [90m 281 |[39m     [90m// 错目标未消费：second 仍 retry_ready、无新 child。[39m
+     [90m 282 |[39m     [36mconst[39m journal [33m=[39m service[33m.[39mkernelJournal()[33m;[39m
+     [90m 283 |[39m     expect(journal[33m.[39mactive[33m.[39mfind((r) [33m=>[39m r[33m.[39mattemptId [33m===[39m second)[33m?[39m[33m.[39mphase)[33m.[39mtoBe([32m"retry_ready"[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:280:27)
+
+  ● B04 dispatching 发布被丢弃但读回合法旧 pending（R02） › 写被丢弃：publish 失败、实际调用 0、不报告写入完成
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+    [0m [90m 315 |[39m       expect(executed[33m.[39mstatus)[33m.[39mnot[33m.[39mtoBe([32m"committed"[39m)[33m;[39m
+     [90m 316 |[39m       expect(executed[33m.[39mstatus)[33m.[39mnot[33m.[39mtoBe([32m"not_executed"[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 317 |[39m       expect(readTreasuryTestAdapterSideEffects()[33m.[39mexecutions)[33m.[39mtoBe([35m0[39m)[33m;[39m
+     [90m     |[39m                                                               [31m[1m^[22m[39m
+     [90m 318 |[39m     } [36mfinally[39m {
+     [90m 319 |[39m       restore()[33m;[39m
+     [90m 320 |[39m     }[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:317:63)
+
+  ● B05 读回另一份合法状态 / 单安全字段回退（R02） › 读回为另一份合法 memory（少了本 attempt）：拒绝陈旧发布、零调用
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+    [0m [90m 335 |[39m       [36mconst[39m executed [33m=[39m service[33m.[39mexecuteAuthorizedDispatch(dispatch)[33m;[39m
+     [90m 336 |[39m       expect(executed[33m.[39mstatus)[33m.[39mnot[33m.[39mtoBe([32m"committed"[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 337 |[39m       expect(readTreasuryTestAdapterSideEffects()[33m.[39mexecutions)[33m.[39mtoBe([35m0[39m)[33m;[39m
+     [90m     |[39m                                                               [31m[1m^[22m[39m
+     [90m 338 |[39m     } [36mfinally[39m {
+     [90m 339 |[39m       restore()[33m;[39m
+     [90m 340 |[39m     }[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:337:63)
+
+  ● B05 读回另一份合法状态 / 单安全字段回退（R02） › 读回仅 phase 字段被回退为 pending（其余为 draft）：拒绝陈旧发布、零调用
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+    [0m [90m 355 |[39m       [36mconst[39m executed [33m=[39m service[33m.[39mexecuteAuthorizedDispatch(dispatch)[33m;[39m
+     [90m 356 |[39m       expect(executed[33m.[39mstatus)[33m.[39mnot[33m.[39mtoBe([32m"committed"[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 357 |[39m       expect(readTreasuryTestAdapterSideEffects()[33m.[39mexecutions)[33m.[39mtoBe([35m0[39m)[33m;[39m
+     [90m     |[39m                                                               [31m[1m^[22m[39m
+     [90m 358 |[39m     } [36mfinally[39m {
+     [90m 359 |[39m       restore()[33m;[39m
+     [90m 360 |[39m     }[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:357:63)
+
+  ● B06 动作已进入后结果写失败（R02） › 结果持久被丢弃：真调用总计 1，不返回 committed，不回退 pending，风险保留
+
+    expect(received).not.toBe(expected) // Object.is equality
+
+    Expected: not "pending"
+
+    [0m [90m 382 |[39m     [36mconst[39m record [33m=[39m service[33m.[39mkernelJournal()[33m.[39mactive[33m.[39mfind((r) [33m=>[39m r[33m.[39mattemptId [33m===[39m attemptId)[33m;[39m
+     [90m 383 |[39m     expect(record)[33m.[39mtoBeDefined()[33m;[39m
+    [31m[1m>[22m[39m[90m 384 |[39m     expect(record[33m?[39m[33m.[39mphase)[33m.[39mnot[33m.[39mtoBe([32m"pending"[39m)[33m;[39m
+     [90m     |[39m                               [31m[1m^[22m[39m
+     [90m 385 |[39m     [90m// 已消费的许可不可重复 dispatch（真调用不得变为 2）。[39m
+     [90m 386 |[39m     expect(service[33m.[39mexecuteAuthorizedDispatch(dispatch)[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m 387 |[39m     expect(readTreasuryTestAdapterSideEffects()[33m.[39mexecutions)[33m.[39mtoBe([35m1[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:384:31)
+
+  ● B07 接收容量竞争（R03） › 接收容量 100：A 流入 80 unknown 后（dispatch），同 tick B 流入 80 拒绝
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 409 |[39m     [36mconst[39m contract [33m=[39m buildContract(service[33m,[39m [32m"biz:b07:b"[39m[33m,[39m { [33m...[39mtransferArgs()[33m,[39m amount[33m:[39m [35m80[39m })[33m;[39m
+     [90m 410 |[39m     [36mconst[39m second [33m=[39m service[33m.[39mauthorizeTreasuryActionContract(contract[33m,[39m { workKey[33m:[39m [32m"biz:b07:b"[39m })[33m;[39m
+    [31m[1m>[22m[39m[90m 411 |[39m     expect(second[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                           [31m[1m^[22m[39m
+     [90m 412 |[39m   })[33m;[39m
+     [90m 413 |[39m
+     [90m 414 |[39m   it([32m"下一 tick：A 仍 unknown，B 流入 80 仍拒绝（unknown 占接收容量跨 tick）"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:411:27)
+
+  ● B07 接收容量竞争（R03） › 下一 tick：A 仍 unknown，B 流入 80 仍拒绝（unknown 占接收容量跨 tick）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 420 |[39m     [36mconst[39m contract [33m=[39m buildContract(service[33m,[39m [32m"biz:b07:b2"[39m[33m,[39m { [33m...[39mtransferArgs()[33m,[39m amount[33m:[39m [35m80[39m })[33m;[39m
+     [90m 421 |[39m     [36mconst[39m second [33m=[39m service[33m.[39mauthorizeTreasuryActionContract(contract[33m,[39m { workKey[33m:[39m [32m"biz:b07:b2"[39m })[33m;[39m
+    [31m[1m>[22m[39m[90m 422 |[39m     expect(second[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                           [31m[1m^[22m[39m
+     [90m 423 |[39m   })[33m;[39m
+     [90m 424 |[39m
+     [90m 425 |[39m   it([32m"对照：无 unknown 占用时 B 流入 80（容量 100）获准"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:422:27)
+
+  ● B08 业务预留参与接纳（R03） › 物理 1000、他人生产预留 900：流出 200 的接纳与严格查询都拒绝
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 453 |[39m     [36mconst[39m contract [33m=[39m buildContract(service[33m,[39m [32m"biz:b08:out"[39m[33m,[39m { [33m...[39mtransferArgs()[33m,[39m amount[33m:[39m [35m200[39m })[33m;[39m
+     [90m 454 |[39m     [36mconst[39m admission [33m=[39m service[33m.[39mauthorizeTreasuryActionContract(contract[33m,[39m { workKey[33m:[39m [32m"biz:b08:out"[39m })[33m;[39m
+    [31m[1m>[22m[39m[90m 455 |[39m     expect(admission[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                              [31m[1m^[22m[39m
+     [90m 456 |[39m     [36mconst[39m view [33m=[39m service[33m.[39mquery({ resource[33m:[39m [33mRESOURCE_ENERGY[39m[33m,[39m rooms[33m:[39m [[32m"W1N57"[39m] })[33m;[39m
+     [90m 457 |[39m     expect(view[33m.[39mspendable)[33m.[39mtoBeLessThan([35m200[39m)[33m;[39m
+     [90m 458 |[39m   })[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:455:30)
+
+  ● B09 双扣对照（R03） › A pending 流出 200 后 B 流出 700 获准（不因 tentative+active 双扣误拒）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "admitted"
+    Received: "rejected"
+
+    [0m [90m 480 |[39m     [36mconst[39m contract [33m=[39m buildContract(service[33m,[39m [32m"biz:b09:b"[39m[33m,[39m { [33m...[39mtransferArgs()[33m,[39m amount[33m:[39m [35m700[39m })[33m;[39m
+     [90m 481 |[39m     [36mconst[39m second [33m=[39m service[33m.[39mauthorizeTreasuryActionContract(contract[33m,[39m { workKey[33m:[39m [32m"biz:b09:b"[39m })[33m;[39m
+    [31m[1m>[22m[39m[90m 482 |[39m     expect(second[33m.[39mstatus)[33m.[39mtoBe([32m"admitted"[39m)[33m;[39m
+     [90m     |[39m                           [31m[1m^[22m[39m
+     [90m 483 |[39m   })[33m;[39m
+     [90m 484 |[39m
+     [90m 485 |[39m   it([32m"A committed 流出 200 后（同 tick）B 流出 700 获准（效果单次表达）"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:482:27)
+
+  ● B09 双扣对照（R03） › A committed 流出 200 后（同 tick）B 流出 700 获准（效果单次表达）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "admitted"
+    Received: "rejected"
+
+    [0m [90m 490 |[39m     [36mconst[39m contract [33m=[39m buildContract(service[33m,[39m [32m"biz:b09:b2"[39m[33m,[39m { [33m...[39mtransferArgs()[33m,[39m amount[33m:[39m [35m700[39m })[33m;[39m
+     [90m 491 |[39m     [36mconst[39m second [33m=[39m service[33m.[39mauthorizeTreasuryActionContract(contract[33m,[39m { workKey[33m:[39m [32m"biz:b09:b2"[39m })[33m;[39m
+    [31m[1m>[22m[39m[90m 492 |[39m     expect(second[33m.[39mstatus)[33m.[39mtoBe([32m"admitted"[39m)[33m;[39m
+     [90m     |[39m                           [31m[1m^[22m[39m
+     [90m 493 |[39m   })[33m;[39m
+     [90m 494 |[39m
+     [90m 495 |[39m   it([32m"A 完成并退出、下一 tick 观察刷新后：B 流出 700 获准且不二次扣减 A"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:492:27)
+
+  ● B10 同键聚合与对冲腿（5.2） › 同一候选两条同资源流出 60、余额 100：按合计拒绝
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 525 |[39m     })[33m;[39m
+     [90m 526 |[39m     [36mconst[39m admission [33m=[39m service[33m.[39mauthorizeTreasuryActionContract(contract[33m,[39m { workKey[33m:[39m [32m"biz:b10:aggregate"[39m })[33m;[39m
+    [31m[1m>[22m[39m[90m 527 |[39m     expect(admission[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                              [31m[1m^[22m[39m
+     [90m 528 |[39m   })[33m;[39m
+     [90m 529 |[39m
+     [90m 530 |[39m   it([32m"同一接收位置两种资源流入各 60、容量 100：按合计拒绝"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:527:30)
+
+  ● B11 rearm 使用当前授权口径（R03） › retry_ready 后收紧 policy：相同动作的新代被当前 policy 拒绝
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 568 |[39m     [36mconst[39m contract [33m=[39m buildContract(service[33m,[39m [32m"biz:b11:retry"[39m[33m,[39m transferArgs())[33m;[39m
+     [90m 569 |[39m     [36mconst[39m result [33m=[39m service[33m.[39mexecuteRearm(capability[33m.[39mrearm[33m,[39m contract[33m,[39m { workKey[33m:[39m [32m"biz:b11:gen1"[39m })[33m;[39m
+    [31m[1m>[22m[39m[90m 570 |[39m     expect(result[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                           [31m[1m^[22m[39m
+     [90m 571 |[39m     [90m// 失败不产生可执行 child；前代不被错误消费（仍 retry_ready，可待 policy 放宽后重试）。[39m
+     [90m 572 |[39m     [36mconst[39m journal [33m=[39m service[33m.[39mkernelJournal()[33m;[39m
+     [90m 573 |[39m     expect(journal[33m.[39mactive[33m.[39mfind((r) [33m=>[39m r[33m.[39mattemptId [33m===[39m attemptId)[33m?[39m[33m.[39mphase)[33m.[39mtoBe([32m"retry_ready"[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:570:27)
+
+  ● B14 缺释放端口不得默认成功（R05） › 无释放端口时接纳非空 externalConsumers：拒绝
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 586 |[39m       externalConsumers[33m:[39m [[32m"ext:b14:consumer-1"[39m][33m,[39m
+     [90m 587 |[39m     })[33m;[39m
+    [31m[1m>[22m[39m[90m 588 |[39m     expect(admission[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                              [31m[1m^[22m[39m
+     [90m 589 |[39m   })[33m;[39m
+     [90m 590 |[39m
+     [90m 591 |[39m   it([32m"已持久化义务 + 端口缺失：duty 保留、不退出、不报 released"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:588:30)
+
+  ● B14 缺释放端口不得默认成功（R05） › 已持久化义务 + 端口缺失：duty 保留、不退出、不报 released
+
+    expect(received).toBeDefined()
+
+    Received: undefined
+
+    [0m [90m 602 |[39m     [36mvoid[39m stats[33m;[39m
+     [90m 603 |[39m     [36mconst[39m store [33m=[39m ([33mMemory[39m[33m.[39mruntime [36mas[39m unknown [36mas[39m { treasuryCore[33m:[39m { active[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m { cleanup[33m:[39m { consumerKeys[33m:[39m string[] } }[33m>[39m } })[33m.[39mtreasuryCore[33m;[39m
+    [31m[1m>[22m[39m[90m 604 |[39m     expect(store[33m.[39mactive[attemptId])[33m.[39mtoBeDefined()[33m;[39m
+     [90m     |[39m                                     [31m[1m^[22m[39m
+     [90m 605 |[39m     expect(store[33m.[39mactive[attemptId][33m.[39mcleanup[33m.[39mconsumerKeys)[33m.[39mtoEqual([[32m"ext:b14:x"[39m])[33m;[39m
+     [90m 606 |[39m   })[33m;[39m
+     [90m 607 |[39m })[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:604:37)
+
+  ● B15 释放失败/抛错/幂等重试（R05） › 端口抛错：beginTick 不崩、duty 保留
+
+    expect(received).not.toThrow()
+
+    Error name:    "Error"
+    Error message: "release port fault"
+
+        [0m [90m 632 |[39m       checkAdmissionCapacity[33m:[39m () [33m=>[39m [36mnull[39m[33m,[39m
+         [90m 633 |[39m       releaseExternalConsumer[33m:[39m () [33m=>[39m {
+        [31m[1m>[22m[39m[90m 634 |[39m         [36mthrow[39m [36mnew[39m [33mError[39m([32m"release port fault"[39m)[33m;[39m
+         [90m     |[39m               [31m[1m^[22m[39m
+         [90m 635 |[39m       }[33m,[39m
+         [90m 636 |[39m     })[33m;[39m
+         [90m 637 |[39m     expect(() [33m=>[39m kernel[33m.[39mbeginTick())[33m.[39mnot[33m.[39mtoThrow()[33m;[39m[0m
+
+      at Object.releaseExternalConsumer (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:634:15)
+      at Object.beginTick (src/runtime/treasury/kernel/kernel.ts:518:51)
+      at src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:637:25
+      at Object.<anonymous> (node_modules/expect/build/toThrowMatchers.js:74:11)
+      at Object.throwingMatcher [as toThrow] (node_modules/expect/build/index.js:320:21)
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:637:42)
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:637:42)
+
+  ● B16 前 8 条永久失败的公平性（R08） › 前 8 条释放永久失败：第 9 条在有限轮次内获得处理机会
+
+    expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+    [0m [90m 711 |[39m       [90m// 若第 9 条尚未退出，则它必须已经真实获得过处理（failures 计数或 duty 推进），[39m
+     [90m 712 |[39m       [90m// 而不是被前 8 条永远挡住。[39m
+    [31m[1m>[22m[39m[90m 713 |[39m       expect((ninth [36mas[39m { cleanup[33m?[39m[33m:[39m { failures[33m?[39m[33m:[39m number } })[33m.[39mcleanup[33m?[39m[33m.[39mfailures [33m?[39m[33m?[39m [35m0[39m)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m     |[39m                                                                                     [31m[1m^[22m[39m
+     [90m 714 |[39m     }
+     [90m 715 |[39m     [90m// 前 8 条风险不被删除：duty 仍在。[39m
+     [90m 716 |[39m     [36mconst[39m first [33m=[39m store[33m.[39mactive[[32m"tk1_1_0000000000000001"[39m][33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:713:85)
+
+  ● B17 每 tick 释放端口调用预算（R08） › 单条大量 consumer 全失败：一次 beginTick 的端口调用次数受预算约束
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 8
+    Received:    20
+
+    [0m [90m 737 |[39m     })[33m;[39m
+     [90m 738 |[39m     kernel[33m.[39mbeginTick()[33m;[39m
+    [31m[1m>[22m[39m[90m 739 |[39m     expect(calls)[33m.[39mtoBeLessThanOrEqual([35m8[39m)[33m;[39m
+     [90m     |[39m                   [31m[1m^[22m[39m
+     [90m 740 |[39m     [90m// 同 tick 重复 beginTick：总调用不因重复入口扩大。[39m
+     [90m 741 |[39m     kernel[33m.[39mbeginTick()[33m;[39m
+     [90m 742 |[39m     expect(calls)[33m.[39mtoBeLessThanOrEqual([35m8[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:739:19)
+
+  ● B18 consumerKeys 数量上限（R09） › 已持久化记录携带 1000 个 consumer key：有界拒绝（unhealthy），不无限遍历
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "unhealthy"
+    Received: "healthy"
+
+    [0m [90m 752 |[39m     [36mconst[39m attemptId [33m=[39m [32m"tk1_1_ffffffffffffffff"[39m[33m;[39m
+     [90m 753 |[39m     installCoreStoreFixture({ [attemptId][33m:[39m makeClosingRecord({ attemptId[33m,[39m workKey[33m:[39m [32m"biz:b18:persisted"[39m[33m,[39m consumerKeys[33m:[39m many }) })[33m;[39m
+    [31m[1m>[22m[39m[90m 754 |[39m     expect(readTreasuryCoreStoreHealth()[33m.[39mstatus)[33m.[39mtoBe([32m"unhealthy"[39m)[33m;[39m
+     [90m     |[39m                                                  [31m[1m^[22m[39m
+     [90m 755 |[39m   })[33m;[39m
+     [90m 756 |[39m
+     [90m 757 |[39m   it([32m"接纳时 externalConsumers 超上限：有界拒绝，不截断一半义务"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:754:50)
+
+  ● B18 consumerKeys 数量上限（R09） › 接纳时 externalConsumers 超上限：有界拒绝，不截断一半义务
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 764 |[39m     [90m// 无释放端口时非空义务直接拒绝（B14）；本用例聚焦数量上限语义在[39m
+     [90m 765 |[39m     [90m// 端口可用时同样生效——由生命周期套件（treasuryRewrite2Lifecycle）覆盖。[39m
+    [31m[1m>[22m[39m[90m 766 |[39m     expect(admission[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                              [31m[1m^[22m[39m
+     [90m 767 |[39m   })[33m;[39m
+     [90m 768 |[39m })[33m;[39m
+     [90m 769 |[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:766:30)
+
+  ● B20 ring 故障隔离（R10） › ring 超限/损坏：不阻断安全恢复与收尾，查询报告 degraded
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 0
+
+    [0m [90m 788 |[39m     [33mGame[39m[33m.[39mtime [33m+=[39m [35m1[39m[33m;[39m
+     [90m 789 |[39m     [36mconst[39m stats [33m=[39m service[33m.[39mbeginTick()[33m;[39m
+    [31m[1m>[22m[39m[90m 790 |[39m     expect(stats[33m.[39mrecovered)[33m.[39mtoBe([35m1[39m)[33m;[39m
+     [90m     |[39m                             [31m[1m^[22m[39m
+     [90m 791 |[39m     [36mconst[39m journal [33m=[39m service[33m.[39mkernelJournal()[33m;[39m
+     [90m 792 |[39m     [36mconst[39m record [33m=[39m journal[33m.[39mactive[33m.[39mfind((r) [33m=>[39m r[33m.[39mattemptId [33m===[39m attemptId)[33m;[39m
+     [90m 793 |[39m     expect(record[33m?[39m[33m.[39mphase)[33m.[39mtoBe([32m"outcome_unknown"[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:790:29)
+
+  ● B20 ring 故障隔离（R10） › ring 声称 attempt 已关闭但 active 仍在：历史 degraded，不阻断核心、不凭 ring 决定关闭
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "pending"
+    Received: undefined
+
+    [0m [90m 807 |[39m     [90m// 健康核心继续：active 记录不被 ring 覆盖或关闭。[39m
+     [90m 808 |[39m     [36mconst[39m journal [33m=[39m service[33m.[39mkernelJournal()[33m;[39m
+    [31m[1m>[22m[39m[90m 809 |[39m     expect(journal[33m.[39mactive[33m.[39mfind((r) [33m=>[39m r[33m.[39mattemptId [33m===[39m attemptId)[33m?[39m[33m.[39mphase)[33m.[39mtoBe([32m"pending"[39m)[33m;[39m
+     [90m     |[39m                                                                          [31m[1m^[22m[39m
+     [90m 810 |[39m     [33mGame[39m[33m.[39mtime [33m+=[39m [35m1[39m[33m;[39m
+     [90m 811 |[39m     service[33m.[39mbeginTick()[33m;[39m
+     [90m 812 |[39m     expect(service[33m.[39mkernelJournal()[33m.[39mactive[33m.[39mfind((r) [33m=>[39m r[33m.[39mattemptId [33m===[39m attemptId)[33m?[39m[33m.[39mphase)[33m.[39mtoBe([32m"pending"[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:809:74)
+
+  ● B22 查询视图只读（R06） › kernelJournal().health 修改不回写 Memory（health 不泄漏 memory 引用）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "pending"
+    Received: undefined
+
+    [0m [90m 844 |[39m     [36mif[39m (healthMemory [33m!==[39m undefined) {
+     [90m 845 |[39m       healthMemory[33m.[39mactive[attemptId][33m.[39mphase [33m=[39m [32m"closing"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 846 |[39m       expect(service[33m.[39mkernelJournal()[33m.[39mactive[33m.[39mfind((r) [33m=>[39m r[33m.[39mattemptId [33m===[39m attemptId)[33m?[39m[33m.[39mphase)[33m.[39mtoBe([32m"pending"[39m)[33m;[39m
+     [90m     |[39m                                                                                            [31m[1m^[22m[39m
+     [90m 847 |[39m     }
+     [90m 848 |[39m     [90m// 修改 health 对象本身也不得影响后续读取。[39m
+     [90m 849 |[39m     (journal[33m.[39mhealth [36mas[39m unknown [36mas[39m { status[33m:[39m string })[33m.[39mstatus [33m=[39m [32m"unhealthy"[39m[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:846:92)
+
+  ● B22 查询视图只读（R06） › ring 元素与 counters 修改不回写 Memory
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+    [0m [90m 862 |[39m     [36mif[39m (ringEntry [33m!==[39m undefined) {
+     [90m 863 |[39m       (ringEntry [36mas[39m unknown [36mas[39m { attemptId[33m:[39m string })[33m.[39mattemptId [33m=[39m [32m"tampered"[39m[33m;[39m
+    [31m[1m>[22m[39m[90m 864 |[39m       expect(service[33m.[39mkernelJournal()[33m.[39mring[33m.[39msome((e) [33m=>[39m e[33m.[39mattemptId [33m===[39m [32m"tampered"[39m))[33m.[39mtoBe([36mfalse[39m)[33m;[39m
+     [90m     |[39m                                                                                    [31m[1m^[22m[39m
+     [90m 865 |[39m     }
+     [90m 866 |[39m     [36mconst[39m metrics [33m=[39m service[33m.[39mkernelMetrics()[33m;[39m
+     [90m 867 |[39m     [36mconst[39m before [33m=[39m metrics[33m.[39mcounters[33m.[39madmitted[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:864:84)
+
+  ● B23 自报 external receipt 关闭（R07） › external_settlement_receipt 自报 not_executed：拒绝且 unknown 不变
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "ok"
+
+    [0m [90m 902 |[39m       conclusion[33m:[39m [32m"not_executed"[39m[33m,[39m
+     [90m 903 |[39m     } [36mas[39m never)[33m;[39m
+    [31m[1m>[22m[39m[90m 904 |[39m     expect(settled[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 905 |[39m     [36mconst[39m record [33m=[39m service[33m.[39mkernelJournal()[33m.[39mactive[33m.[39mfind((r) [33m=>[39m r[33m.[39mattemptId [33m===[39m attemptId)[33m;[39m
+     [90m 906 |[39m     expect(record[33m?[39m[33m.[39mphase)[33m.[39mtoBe([32m"outcome_unknown"[39m)[33m;[39m
+     [90m 907 |[39m     expect(record[33m?[39m[33m.[39moutcome)[33m.[39mtoBe([32m"unknown"[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:904:28)
+
+  ● B23 自报 external receipt 关闭（R07） › 运行时强制转换传入 external 结论同样拒绝（不留 else 使用调用者结论的路径）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "ok"
+
+    [0m [90m 917 |[39m       conclusion[33m:[39m [32m"executed"[39m[33m,[39m
+     [90m 918 |[39m     } [36mas[39m never)[33m;[39m
+    [31m[1m>[22m[39m[90m 919 |[39m     expect(settled[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 920 |[39m     expect(service[33m.[39mkernelJournal()[33m.[39mactive[33m.[39mfind((r) [33m=>[39m r[33m.[39mattemptId [33m===[39m attemptId)[33m?[39m[33m.[39mphase)[33m.[39mtoBe([32m"outcome_unknown"[39m)[33m;[39m
+     [90m 921 |[39m   })[33m;[39m
+     [90m 922 |[39m })[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRewrite2Acceptance.test.ts:919:28)
+
+Test Suites: 1 failed, 1 total
+Tests:       26 failed, 16 passed, 42 total
+Snapshots:   0 total
+Time:        3.354 s, estimated 4 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryRewrite2Acceptance.test.ts/i.

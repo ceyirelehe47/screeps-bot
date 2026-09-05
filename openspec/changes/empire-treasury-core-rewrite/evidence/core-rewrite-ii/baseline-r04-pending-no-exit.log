@@ -1,0 +1,9 @@
+PASS scripts/baseline-red/pending-no-exit.baseline.ts
+  基线缺陷重现：pending 没有出口（R04）
+    √ 基线 35ed7f8 上：pending 聚合在所有现有出口被拒、永久滞留（缺陷存在的正面证据） (18 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       1 passed, 1 total
+Snapshots:   0 total
+Time:        4.319 s
+Ran all test suites within paths .

@@ -14,11 +14,11 @@ const jestEntrypoint = path.join(repoRoot, "node_modules", "jest", "bin", "jest.
 const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data", "node_modules"]);
 // 【Core Rewrite I】新基线：旧 Treasury 多 store 协议套件退役（216/1099，
 // 见 openspec/changes/empire-treasury-core-rewrite/test-migration-map.md）。
-const requiredBaselineCommit = "1df0a2801743a2444eb32ec577e2483c3d67dc68";
+const requiredBaselineCommit = "ad50c03e3bb459179c2c5dd6cb4dbd4526428ae6";
 const requiredTarget = Object.freeze({
-  suites: 216,
-  tests: 1099,
-  passed: 1099,
+  suites: 218,
+  tests: 1163,
+  passed: 1163,
   failed: 0,
   pending: 0,
   todo: 0,

@@ -1,4 +1,10 @@
-# Test Migration Map — Core Rewrite I
+# Test Migration Map — Core Rewrite（II 修订）
+
+> II 修订（2026-09-05）：在 I 轮映射之上新增 §6（Core Rewrite II 的行为级
+> 映射：R01–R11 → B01–B28 → 具体测试/断言定位）。I 轮的保留/退役映射保持
+> 为基线记录；II 轮对 I 轮 A 项中不等价的四项（A03/A16/A21/A22）按 R11
+> 修正（见 §6 末尾）。
+
 
 旧 Treasury 测试（基线 cf2ee7b：81 suites / 1,624 tests）→ 新生命周期测试。全仓基线 283/2462 → 本轮实测 216/1099（Treasury 相关 15 suites / 266 tests；测试数量合理下降，每个被移除行为有对应新测试或明确"不再适用"理由）。
 
@@ -50,3 +56,29 @@
 - Defense 冻结清单 11 文件 / 118 tests：全部通过，生产文件零改动。
 - `test/memoryDeclarationBoundaries.test.ts`：6/6 通过（runtime.d.ts treasuryCore 替换后指纹更新——必要兼容修复）。
 - `test/treasuryCommitmentInvalidationBoundaries.test.ts`：2/2 通过。
+
+## 6. Core Rewrite II 行为级映射（R01–R11 → B01–B28 → 测试定位）
+
+新文件：`src/runtime/treasury/treasuryRewrite2Acceptance.test.ts`（B01/B01'–B24/B28，42 tests）、`src/runtime/treasury/treasuryRewrite2Lifecycle.test.ts`（B03/B12/B13/B19/B25/B26，17 tests）、`scripts/baseline-red/pending-no-exit.baseline.ts`（R04 基线证明，显式运行）。
+
+| 审查问题 | B 项 | 测试文件 › describe › it（断言观察量） | 基线红灯 |
+| --- | --- | --- | --- |
+| R01 真许可可变（dispatch） | B01 | Rewrite2Acceptance › B01 › "授权 500 后替换 permit.canonicalArgs…"（宿主 trace.amount === 500；对照用例执行一次 500） | ✅ 红 |
+| R01 真许可可变（rearm） | B02 | Rewrite2Acceptance › B02 › "修改 rearm 的前代…"（second 未被消费、child 属 first）+ Lifecycle › B03 › "克隆真 dispatch 许可…"（WeakSet 身份） | ✅ 红 |
+| 至多一次进入 | B03 | Lifecycle › B03 › 同 tick 重复 / execute 内重入 / 多 facade（真实调用恒 1） | 基线绿（回归保持） |
+| R02 健康读回冒充成功 | B04/B05/B06 | Rewrite2Acceptance › B04（写丢弃→0 调用+pending）/ B05（另一份合法 memory、单字段回退→0 调用）/ B06（结果写丢弃→调用 1、不返回 committed、不回 pending、不可重复 dispatch） | ✅ 红 |
+| R03 授权账目分裂 | B07/B08/B09/B10/B11 | Rewrite2Acceptance › B07（接收竞争同 tick/下一 tick）/ B08（他人预留 900 拒绝+own 对照）/ B09（pending 200+700 获准、committed 单次表达、观察刷新不双扣）/ B10（同键合计+对冲）/ B11（rearm 收紧 policy 拒绝） | ✅ 红 |
+| R04 pending 无出口 | B12/B13 | Lifecycle › B12（64 项 sweep 全取消、调用 0、槽位恢复）/ B13（显式取消竞争、取消写失败重放、义务路径）；基线证明：scripts/baseline-red（基线 PASS=缺陷，修复后翻转 FAIL） | ✅（脚本）红 |
+| R05 缺端口默认成功 | B14/B15 | Rewrite2Acceptance › B14（无端口接纳拒绝+已持久义务保留）/ B15（false/throw/幂等重试同一 key@attemptId） | ✅ 红 |
+| R06 查询泄漏权威引用 | B22 | Rewrite2Acceptance › B22（health 无 memory 引用、ring 元素/counters 修改不回写） | ✅ 红 |
+| R07 未受控结算入口 | B23/B24 | Rewrite2Acceptance › B23（自报字段不生效、unknown 不变）/ B24（still_uncertain/缺 adapter/抛错/语义变化对照） | ✅ 红 |
+| R08 清理不公平 | B16/B17 | Rewrite2Acceptance › B16（前 8 永久失败、第 9 条 ≤12 tick 完成且前 8 duty 保留）/ B17（同 tick 端口调用 ≤8、重复 beginTick 不放大） | ✅ 红 |
+| R09 单记录无完整体积上限 | B18/B19 | Rewrite2Acceptance › B18（1000 keys→unhealthy；端口可用时 20 keys 接纳拒绝且无半截记录）/ Lifecycle › B19（满载全字段最大值 ≤360,000、已接纳仍可收尾） | ✅ 红 |
+| R10 历史环阻断核心 | B20/B21 | Rewrite2Acceptance › B20（ring 超限/重叠→degraded、恢复/收尾/写重建可用）/ B21（closing 无证据、发行不自洽仍 unhealthy 对照） | ✅ 红 |
+| R11 验收覆盖不等价 | A03/A16/A21/A22 修正 | Acceptance › A03 新增"持真许可修改字段"（冻结抛错+原授权执行）；A16 新增"两笔各 60 容量 100 合计拒绝"；A21 扩为 health/ring/counters 全遍历；A22 改为两条真实 unknown 跨 reset 等价（完整 reset 由 B25 harness 承担） | — |
+| 完整 reset | B25 | Lifecycle › B25（五断点：pending/已进入未写回/释放确认丢失/旧 rearm 回放/reconciler 跨 reset 与语义变化；宿主轨迹跨 reset 持续） | 新增（无基线 API） |
+| 长期有界性 | B26 | Lifecycle › B26（1 unknown+300 完成+40 代链：active=1、ring ≤128、无第二历史 store）；Stress 扩展（接收竞争 62/200、sweep 500 项） | — |
+| 负向变体自证 | B27 | 三变体（弱许可校验→克隆用例红；忽略 unknown 接收占用→B07 红；抛错当释放成功→B15 红）红灯后还原（evidence/negative-variant-*.log） | ✅ 红 |
+| 元信息异常对照 | B28 | Rewrite2Acceptance › B28（frontier 溢出/legacy 阻断不擦除） | 基线绿（回归保持） |
+
+数量对账（II 轮）：Treasury 16 suites / 327 tests（I 轮 15/306 + Rewrite2Acceptance 42 + Rewrite2Lifecycle 17 + acceptance 修正后 43；stress 6→8）。

@@ -64,3 +64,16 @@
 - 不迁移旧数据：发现旧 `Memory.runtime.treasury.*` 业务 store → legacy_store_present，写入阻断、数据保留（A24）。
 - `Memory.runtime.treasuryPerf` 保留（shadow 诊断）。
 - `runtime.d.ts` treasury 段（约 520 行声明）替换为 treasuryCore v1（约 60 行）；boundaries schema 指纹更新（必要兼容修复——旧声明 import 已删除模块，类型层不可保留）。
+
+## Core Rewrite II 增补（2026-09-05）
+
+II 轮确认旧证明链未复活，并补充 II 轮新增写权威的封闭性：
+
+| 检查项 | 结论 |
+| --- | --- |
+| 旧多 store proof 链（GRA/certificate/summary/retirement/lineage/receipt） | 未复活：treasuryKernelArchitecture 守护（旧模块不存在 + 无 import + 命令集封闭含 cancel_pending）全部通过 |
+| external_settlement_receipt（外部自报结算） | **已删除**（I 轮保留的显式通道在 II 轮关闭）：类型/validator/运行时均不存在；结算唯一入口 = kernel.settle → 受控 reconcileOutcome 端口（facade 装配注册 reconciler），无 kernel.settle(rawConclusion) 旁路 |
+| tentative ledger（I 轮 heap tentative 预留） | **已删除**：admit 后 active 记录即同 tick 扣减权威——不存在第二份同责任表达（B09 双扣对照守护） |
+| pending sweep / 清理游标 / 预算记账（recovery 区） | 调度元信息而非权威：失效可安全重建，不构成完成 proof，不授予执行权；treasuryCore 键权威仍只在 kernel/store.ts（架构守护通过） |
+| 测试夹具能力是否泄漏为生产通道 | 否：mint/内部 command 仅 kernel 内部可达（architecture：applyTreasuryCoreStateCommand 唯一 runtime importer = kernel.ts）；reset harness 位于 test/mock（生产模块不 import，架构守护） |
+| 新写入口清单（II 轮终态） | facade.authorizeTreasuryActionContract / executeAuthorizedDispatch / executeRearm / settleUnknownOutcome / cancelPendingWork / closeWork + kernel.beginTick/endTick 恢复——全部收敛到 kernel.runCommand 单一写路径 + commands.ts 封闭命令集（admit/dispatch_start/dispatch_result/settle/advance_cleanup/rearm/close/recover_dispatching/cancel_pending） |

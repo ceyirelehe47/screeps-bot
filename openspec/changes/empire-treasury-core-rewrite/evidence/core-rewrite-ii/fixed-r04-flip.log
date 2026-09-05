@@ -1,0 +1,26 @@
+FAIL scripts/baseline-red/pending-no-exit.baseline.ts
+  基线缺陷重现：pending 没有出口（R04）
+    × 基线 35ed7f8 上：pending 聚合在所有现有出口被拒、永久滞留（缺陷存在的正面证据） (18 ms)
+
+  ● 基线缺陷重现：pending 没有出口（R04） › 基线 35ed7f8 上：pending 聚合在所有现有出口被拒、永久滞留（缺陷存在的正面证据）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 74 |[39m     expect(again[33m.[39mstatus)[33m.[39mtoBe([32m"built"[39m)[33m;[39m
+     [90m 75 |[39m     [36mif[39m (again[33m.[39mstatus [33m!==[39m [32m"built"[39m) [36mthrow[39m [36mnew[39m [33mError[39m([32m"unreachable"[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 76 |[39m     expect(service[33m.[39mauthorizeTreasuryActionContract(again[33m.[39mcontract[33m,[39m { workKey[33m:[39m [32m"biz:r04:stuck"[39m })[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m    |[39m                                                                                                          [31m[1m^[22m[39m
+     [90m 77 |[39m     [90m// 多 tick 后仍滞留（无任何 sweep/取消路径）。[39m
+     [90m 78 |[39m     [36mfor[39m ([36mlet[39m i [33m=[39m [35m0[39m[33m;[39m i [33m<[39m [35m10[39m[33m;[39m i [33m+=[39m [35m1[39m) {
+     [90m 79 |[39m       [33mGame[39m[33m.[39mtime [33m+=[39m [35m1[39m[33m;[39m[0m
+
+      at Object.<anonymous> (scripts/baseline-red/pending-no-exit.baseline.ts:76:106)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 total
+Snapshots:   0 total
+Time:        3.451 s, estimated 4 s
+Ran all test suites within paths .
