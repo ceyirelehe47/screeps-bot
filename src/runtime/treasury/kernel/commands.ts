@@ -440,7 +440,7 @@ function observationTakesOverEffect(
   const anchor = treasuryCoreCoverageAnchorOf(record);
   if (anchor === null) return false; // 无任何调用侧事实；保守不退出
   const locationsCovered = record.worstCase.every((leg) =>
-    proof.coveredLocations.includes(`${leg.roomName} ${leg.locationKind}`),
+    proof.coveredLocations.includes(`${leg.roomName}\x00${leg.locationKind}`),
   );
   if (!locationsCovered) return false;
   return treasuryCoreObservationAdvancesPastAnchor(anchor, proof) === true;

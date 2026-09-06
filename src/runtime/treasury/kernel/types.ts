@@ -429,7 +429,7 @@ export interface TreasuryCoreObservationProof {
   readonly worldSequence: number;
   /** 观察构建 tick（旧记录缺 worldSequence 时的边界兜底锚点）。 */
   readonly atTick: number;
-  /** 观察覆盖的位置键集合（`room location`——worstCase 全部位置须在内）。 */
+  /** 观察覆盖的位置键集合（`room\x00location`——worstCase 全部位置须在内）。 */
   readonly coveredLocations: readonly string[];
 }
 

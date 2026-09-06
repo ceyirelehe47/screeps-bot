@@ -438,7 +438,7 @@ export function buildTreasuryCommitmentIndex(
       let roomComplete = !globalIncomplete;
       if (roomComplete) {
         for (const scope of incompleteScopes) {
-          if (scope.startsWith(`${roomName} `)) { roomComplete = false; break; }
+          if (scope.startsWith(`${roomName}\x00`)) { roomComplete = false; break; }
         }
       }
       // 每次动态组合：静态承诺（healthy incoming，点时快照）+ observed 容量

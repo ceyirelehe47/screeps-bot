@@ -818,7 +818,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     const covered: string[] = [];
     const seen = new Set<string>();
     for (const leg of record.worstCase) {
-      const key = `${leg.roomName} ${leg.locationKind}`;
+      const key = `${leg.roomName}\x00${leg.locationKind}`;
       if (seen.has(key)) continue;
       seen.add(key);
       if (observed.locationExists(leg.roomName, leg.locationKind)) covered.push(key);

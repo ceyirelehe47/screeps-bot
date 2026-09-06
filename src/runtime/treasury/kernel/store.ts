@@ -762,7 +762,7 @@ export function buildTreasuryCoreWorstWorkRecord(): TreasuryCoreWorkRecord {
       cursor: WORST_SAFE_INTEGER,
     },
     retryDeadlineTick: WORST_SAFE_INTEGER,
-    lastError: " ".repeat(TREASURY_CORE_ERROR_DETAIL_MAX),
+    lastError: "\x00".repeat(TREASURY_CORE_ERROR_DETAIL_MAX),
   };
 }
 
