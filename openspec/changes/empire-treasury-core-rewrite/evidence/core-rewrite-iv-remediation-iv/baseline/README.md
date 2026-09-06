@@ -1,6 +1,7 @@
 # Remediation IV 基线反例（44593c8）
 
-- `treasuryR4BaselineReplicators.test.ts`：三反例重现器源码（基线 worktree
+- `treasuryR4BaselineReplicators.baseline.ts`：三反例重现器源码（非 .test.ts
+  后缀——不被 Jest 收集；在基线 worktree 内以 .test.ts 运行，基线 worktree
   内运行的原始版本——含 R1-TRACE 轨迹打印；主仓 `src/runtime/treasury/`
   下的同名文件是其修复后语义回归版，V1/V2 用例断言已切换为新包装口径）。
 - `baseline-replicators.log`：基线运行日志（exit=1，3 failed）。
