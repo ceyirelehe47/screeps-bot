@@ -1,0 +1,23 @@
+diff --git a/src/runtime/treasury/kernel/kernel.ts b/src/runtime/treasury/kernel/kernel.ts
+index 8139332..a051eeb 100644
+--- a/src/runtime/treasury/kernel/kernel.ts
++++ b/src/runtime/treasury/kernel/kernel.ts
+@@ -1074,8 +1074,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+         }, () => undefined);
+         return { recoveredToUnknown: 0 };
+       }
+-      lifecycleAdvanceInFlight = true;
+-      try {
++      { // NEGATIVE-VARIANT R1: 不取得推进所有权（回归基线：回调可重入 beginTick）
+         const nowTick = ports.nowTick();
+         let used = readBudgetState(health.memory, nowTick);
+         const cursors = { sweepCursor: health.memory.recovery.sweepCursor, cleanupCursor: health.memory.recovery.cleanupCursor };
+@@ -1101,8 +1100,6 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+           root.lifecycle.lastEndTick = ports.nowTick();
+           root.recovery = { ...finalCursors, budgetTick: nowTick, budgetUsed: finalUsed };
+         }, () => undefined);
+-      } finally {
+-        lifecycleAdvanceInFlight = false;
+       }
+     }
+     return { recoveredToUnknown };

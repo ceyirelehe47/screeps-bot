@@ -375,3 +375,68 @@ journal.runWithInvocation(permit, expectedArgs, fn) 以真实接纳/rearm 返回
 许可变有效；许可仍经生产 preflight、授权复验与执行门禁。真实 rearm 的
 child 即使与父代 args 完全相同也使用新 attempt 身份；父代调用/失败证据不
 可变成 child 的效果，反之亦然。
+
+## 9. 双入口推进互斥、许可直连执行与断点事件来源封闭（Remediation IV 修订）
+
+### 9.1 两个生命周期入口属于同一个推进域
+
+beginTick 与 endTick 共用同一模块级调度 guard（lifecycleAdvanceInFlight）。
+独立 endTick 在运行 dispatching 恢复循环前必须先取得推进所有权：其
+onEffect/release 回调里重入的 beginTick（同实例或同模块其他实例）结构化
+返回零推进；嵌套请求不递归调度、不建立第二个锁、不按 Memory 根引用分锁。
+完整 reset（jest.resetModules）重建模块后 guard 丢失——运行时协调不是
+持久权威，后续从选定持久快照恢复。普通异常经 finally 释放 guard，已成功
+发布的状态与预算保留。
+
+### 9.2 关窗与推进分开处理
+
+嵌套 endTick（推进被持有时回调内请求关窗）只执行有界关窗事实写入
+（lifecycle.lastEndTick），不递归恢复、不覆盖 recovery 的预算与游标——
+防重入不吞关窗语义。关窗及时生效：回调内及外层返回后的
+authorize/dispatch/rearm 被 facade 共享授权窗口拒绝，恢复与安全清理按
+预算继续；同 tick 后续 beginTick 不重新打开已关闭窗口（facade 幂等分支
+current.ended + admissionWindowOpen 双保险）。关窗不能因外层推进的尾写
+重新打开（尾部只写 lastEndTick 同值，不清除）。存储不可验证或关窗发布
+失败时遵守 fail-closed：不假报持久关窗成功（写入失败即窗口事实上未关）。
+
+### 9.3 预算与游标只由当前推进写回
+
+endTick 尾部预算写回取 max(局部 used, 持久现读)——旧局部 used 不覆盖
+当前较大值（对持锁期间第三方写路径的双保险；结构上嵌套推进已被 guard
+阻止，max 不是掩盖嵌套调度的手段）。游标不是单调计数、不做 max：写持久
+现读值（持锁期间无并发推进，恢复循环不动 cleanup/sweep cursor），不从
+入口快照恢复旧位置、不写整个旧 root。同 tick 成功发布的 budgetUsed 单调
+不降；下一 tick 重置是另一语义。
+
+### 9.4 测试包装器直接执行它所记录的那张许可
+
+测试工具收敛为窄的许可直连执行包装 executeTreasuryAdmittedDispatch：
+接受真实接纳/rearm 返回的聚合结果，核对其 attempt 与实际 dispatch 许可
+对象一致（不一致在执行前、作用域建立前明确拒绝），作用域身份与预期参数
+均取自该许可对象（permit.attemptId/permit.canonicalArgs），并由包装器自身
+把同一个许可对象交给生产执行入口。旧公共 runWithInvocation（独立指定
+identity + 任意可执行 fn 的分离错配面）删除——同参数错身份在结构上不可
+表达；低层 runWithPermitScope 仅为模块内部实现。包装不赋予执行权：克隆/
+过期/旧 runtime/已消费许可仍由生产 preflight/复验/终验拒绝；被拒请求不
+计 adapter-entered/effect、不归属任何 attempt。事件归属三阶段（测试提交
+请求/实际进入 adapter/世界效果）由相应真实边界记录，宿主计划只控制测试
+执行结果与捕获时机，不向 reconciler 提供结论。
+
+### 9.5 所选断点决定恢复事件来源
+
+断点分支标记携带捕获来源 journal（marker.source）；oracle adapter 暴露
+其事件来源（adapter.journal）。恢复装配（performTreasuryFullReset）在
+resetRuntimeCore 之前核实"所选断点的事件来源"与"恢复后 adapter 实际使用
+的 journal"一致：缺失来源（旧形态 marker/裸 adapter）或错配（捕获器收
+J2、adapter 用 J1）在对账前、任何状态修改前明确拒绝——不留半恢复混合
+状态。kernel 面（无 adapter、不据此宣称 exact 恢复）不受影响。journal
+entry 逐条冻结：事件快照不受旧日志后续追加或通过查询返回对象的修改影响。
+
+### 9.6 同参数父子与结果写回前断点
+
+测试宿主结果计划（TreasuryOracleHostPlan.results——按调用序编排 ok/
+non-ok/throw，args 不带 outcome 差异）使父代与 child 的完整 canonical
+args 保持相同；afterWorldEffect 回调在产生 world-effect 的调用返回后、
+生产 dispatch_result 写入前触发——此处捕获的断点经完整 reset 恢复后，
+unknown 经恢复分支 exact 对账落定 committed，观察接管后真退出。计划只
+控制测试执行结果，调用与效果仍在真实边界记录。

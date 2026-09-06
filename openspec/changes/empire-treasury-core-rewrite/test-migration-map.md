@@ -279,3 +279,42 @@ test/baseline/treasuryRemediationIIBaseline.test.ts（6 用例）：R1 流出/�
   treasuryRemediationIIService/IService 的 registerAttempt/recordCut/
   startBranch 调用点全部迁移到 runWithInvocation/captureBranch（harness
   reopen 消费）。
+
+## 11. Core Rewrite IV · Remediation IV：H01–H20 定位与旧 G 覆盖修正（2026-09-06）
+
+| 编号 | 入口（文件/用例） | 前提与断言定位 |
+| --- | --- | --- |
+| H01 | treasuryRemediationIVKernel.test.ts `H01 独立 endTick 反向重入` | A=真实执行边界 dispatching 残留（捕获型 adapter 在 dispatch_start 后/结果写入前捕获断点）、C=closing 8 义务、选定 tick 预算 0、runBeginTick:false 后首入口为 endTick。断言：嵌套 beginTick stats 全零；afterEnd(1)≥嵌套时刻预算；beginTick 后 7；releaseCalls=[D0,D1,D2]；C 仍 closing 剩 5 义务；下一 tick 预算 8/累计 7 次释放。基线反例（44593c8）红：嵌套 cleaned:3、轨迹 1→7→1、6 次释放 |
+| H02 | 同文件 `H02 跨实例同域互斥` | kernelB 来自 reset 后 require 的同模块（顶层 import 是旧模块副本不算同模块实例）。断言：onEffect 回调内 kernelB.beginTick/endTick 零推进；afterEnd=1；顺序 beginTick 后 7、endTick 后 7（不下降）；lastEndTick 生效；嵌套期间零释放 |
+| H03 | 同文件 `H03 begin/end 四方向互斥`（2 用例） | end→begin/end 在 onEffect 嵌套；begin→begin/end 在 release 回调嵌套（同模块）。断言：四方向嵌套 stats 全零、关窗仍写入、releaseCalls 时序区分嵌套期/顺序期；多 dispatching（手工补第二条）endTick 恢复 2 条、事件计数一一对应 |
+| H04 | 同文件 `H04 异常路径与关窗共存` | onEffect throw：A 已恢复（成功写保留）、下一 beginTick 清 3 项（guard 释放）；推进持有期间 endTick 关窗生效且预算不被清零；release throw 被当 false 不冒泡 |
+| H05 | 同文件 `H05 共享关窗阻断业务` | mock kernel 清理回调内 service.endTick()（嵌套关窗）+ facade authorize；断言回调内/外层返回后/同 tick 再 begin 后 authorize 均 lifecycle_closed；恢复清理照常（release 3 次）；下一 tick 新窗口接纳成功 |
+| H06 | 同文件 `H06 …故障与硬切点`（2 用例） | interceptor 注入：预扣写失败→端口 0 调用；确认写失败→预算 2 不退、义务仍在、下一 tick 公平续清 [D1,D0]；endTick 尾写失败→lastEndTick 未写（不假报关窗）；硬切点（onAllow 捕获，callsAtBreakpoint=0）完整 reset→义务完整保留→正常窗口完成 |
+| H07 | 同文件 `H07 G01–G08 核心行为保留抽查` | 4 义务 8 份：D0 错误真值（truthy 对象）不释放、D1–D3 释放；每项每 tick 恰一次；失败 failures 累计不删除。完整矩阵仍由 G01–G08 承担 |
+| H08 | treasuryRemediationIVService.test.ts `H08 同参数 A/B 错身份封闭` | 同参数 A/B；错配输入 { attemptId:B, dispatch:A } 被包装在执行前拒绝（toThrow /不一致/）、trace.entered=0；正常包装执行事件只归 A、B 空、世界 900 |
+| H09 | 同文件 `H09 …正序/逆序/单笔/双笔归属`（2 用例） | 正序/逆序均 entered+effect 归各自许可、世界 800（两笔）；只执行 A：B 不借 A 效果、世界 900 |
+| H10 | 同文件 `H10 包装不赋予执行权` | 克隆（WeakSet 身份）、跨 tick 过期、完整 reset 后旧许可均被生产拒绝；被拒不计 entered/effect；同 tick 新接纳真许可 committed；已消费重放不追加 entered |
+| H11 | 同文件 `H11 reset 后新调用` + III Service G14 重组两用例 | 完整 reset 后新模块句柄 admit+包装执行归新 attempt、旧 attempt 无泄漏追加；嵌套经真实 adapter（注册先于接纳）；内层错误配对 throw 冒泡被 kernel 保守捕获（外层 unknown）、作用域无泄漏 |
+| H12 | 同文件 `H12 断点事件来源错配拒绝` | J1 效果、B0 误配 J2 marker、恢复继续用 J1 adapter——toThrow /事件来源/；拒绝后半恢复状态（世界 900 未回滚、J1 事件未 reopen）；J1 自身 marker 恢复成功对照 |
+| H13 | 同文件 `H13 正确来源分支链与重复恢复` | B0 恢复→C 执行→B2；B2 恢复：世界 970、C 效果可见、A 旧分支效果不重现；C 已 committed 完整退出（settle rejected 不重复结算）；重复恢复 B0 互不污染（C 不在该分支） |
+| H14 | 同文件 `H14 来源完整性与快照不可变` | 缺 source 的旧形态 marker、裸 adapter、同世界序不同 journal 均拒；visibleFor 返回 entry 写入不穿透（逐条冻结）；修改后恢复对账仍按真实事件 |
+| H15 | 同文件 `H15 完全同参数父子恢复闭环` | 宿主计划 ["non-ok","ok"]，父子共用同一 args（JSON.stringify canonicalArgs 全等）；父 not_executed→清理→retry_ready→真 capability→rearm child（新 ID）；child 效果后结果前断点（afterWorldEffect 捕获）→完整 reset→child unknown→settle exact committed→下一 tick 观察接管退出；世界 950 一笔；父 entered=1/effect=0、child entered=1/effect=1 |
+| H16 | 同文件 `H16 同参数父子负向` | child 执行前断点恢复→pending（无事件不解除）；父/子事件独立；旧父/child 许可重放 rejected（重放零调用）；正确来源恢复后 committed 完整退出 |
+| H17 | 同文件 `H17 …closing 占用对照`（2 用例） | 效果后断点恢复→unknown：世界 200−保守占用 800→201/200 均拒（unknown 不释放）；非健康核心 settle 拒；settle→committed closing：201 拒/200 纳（先拒后纳）；下一 tick 退出。流入对照：unknown 21/20 均拒、closing 21 拒/20 纳；仅坏 ring 不阻断 |
+| H18 | IVKernel `H18 满载与混合负载` | 64 active 满载（30 closing 含义务+20 unknown+10 retry+4 pending）字符 ≤360,000；12 tick 每 tick 完整 reset+beginTick，每 tick 释放 ≤4；20 条 unknown 全保留；失败义务（C0:D0）不被删除 |
+| H19 | 最终验证流程 | Treasury 29 suites/539、Defense 11/118、全仓 233/1385、typecheck/build/budget、固定验证 HEAD 对应原始 JSON/日志（见 evidence/final） |
+| H20 | evidence/negative-variants | R1（endTick 漏锁→H01 红）、V1（声明身份分离→H08 拒绝断言红+事件归属探针红）、V2（删来源核实→H12 红）；三者还原后均绿 |
+
+### 11.1 旧 G 测试修订说明（Remediation IV）
+
+- G02（III Kernel）：保留原有断言（嵌套关窗写入/预算不回退）——R1 修复
+  使其从"恰好未回退"变为"结构上不可回退"；新增语义由 H01/H02/H03 承担。
+- G11（III Service）：错配事件源对照原为篡改 worldSequence +7 触发断点
+  配对校验；V2 修复后另有 marker.source 维度（H12/H14 覆盖真错 journal）。
+- G14（III Service）：参数错配（scope 200/actual 100）在包装收窄后结构上
+  不可表达——重组为"错误聚合/许可配对拒绝"（H10 同型）；嵌套用例重写为
+  真实 adapter 嵌套（注册先于接纳，kernel 注册身份一致性）；异常弹栈改经
+  内层错误配对 throw 冒泡（kernel 保守捕获）验证。
+- G15（III Service）：改名"普通 rearm 回归"——父 outcome:"non-ok"/child
+  outcome:"ok" 使完整 args 不同、且未实际捕获/恢复断点，不能充当同参数
+  父子与断点组合；该组合由 H15/H16 承担（宿主计划使父子 args 全等）。

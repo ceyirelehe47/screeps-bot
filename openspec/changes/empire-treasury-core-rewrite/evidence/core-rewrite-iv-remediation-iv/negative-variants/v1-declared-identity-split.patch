@@ -1,0 +1,32 @@
+diff --git a/test/mock/treasuryExactOracle.ts b/test/mock/treasuryExactOracle.ts
+index a8b4981..34aef66 100644
+--- a/test/mock/treasuryExactOracle.ts
++++ b/test/mock/treasuryExactOracle.ts
+@@ -166,16 +166,21 @@ export function executeTreasuryAdmittedDispatch(
+   if (typeof dispatch !== "object" || dispatch === null) {
+     throw new Error("聚合结果缺少 dispatch 许可对象——拒绝执行");
+   }
+-  const permit = dispatch as { attemptId?: unknown };
++  const permit = dispatch as { attemptId?: unknown; canonicalArgs?: unknown };
+   if (typeof permit.attemptId !== "string" || permit.attemptId.length === 0) {
+     throw new Error("dispatch 许可缺少 attemptId（身份不可信——拒绝执行）");
+   }
+-  if (permit.attemptId !== admitted.attemptId) {
+-    throw new Error(
+-      `聚合结果 attempt ${String(admitted.attemptId)} 与实际 dispatch 许可 ${permit.attemptId} 不一致（错误配对——拒绝执行，不建立作用域）`,
+-    );
++  // NEGATIVE-VARIANT V1: 作用域身份取自聚合声明（与实际提交的许可分离——
++  // 回归基线"声明 B、实际提交 A"的错配面；不再核对两者一致）。
++  const declaredState = journalStates.get(journal);
++  if (declaredState === undefined) throw new Error("journal 状态缺失");
++  declaredState.invocationStack.push({ attemptId: admitted.attemptId, argsKey: stableStringify(permit.canonicalArgs) });
++  let outcome: unknown;
++  try {
++    outcome = service.executeAuthorizedDispatch(dispatch);
++  } finally {
++    declaredState.invocationStack.pop();
+   }
+-  const outcome = runWithPermitScope(journal, dispatch, () => service.executeAuthorizedDispatch(dispatch));
+   if (outcome === null || typeof outcome !== "object" || typeof (outcome as { status?: unknown }).status !== "string") {
+     throw new Error("生产执行入口返回了不可信的 outcome（缺少 status）");
+   }

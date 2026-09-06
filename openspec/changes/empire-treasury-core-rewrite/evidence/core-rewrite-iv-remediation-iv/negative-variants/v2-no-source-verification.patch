@@ -1,0 +1,32 @@
+diff --git a/test/mock/treasuryResetHarness.ts b/test/mock/treasuryResetHarness.ts
+index d1cde9c..47cab1f 100644
+--- a/test/mock/treasuryResetHarness.ts
++++ b/test/mock/treasuryResetHarness.ts
+@@ -280,24 +280,9 @@ export function performTreasuryFullReset(input: {
+   // 半恢复混合状态留给下一用例；缺失来源（旧形态 marker/裸 adapter）同
+   // 样拒绝（不能静默继续使用旧 oracle 日志宣称 exact 恢复）。kernel 面
+   // （performTreasuryKernelFullReset）无 adapter、不据此宣称 exact 对账。
+-  if (input.breakpoint?.eventBranch !== undefined) {
+-    const branchSource = input.breakpoint.eventBranch.source;
+-    const adapterJournal =
+-      input.adapter !== null && typeof input.adapter === "object"
+-        ? (input.adapter as { journal?: unknown }).journal
+-        : undefined;
+-    if (branchSource === undefined || adapterJournal === undefined || branchSource !== adapterJournal) {
+-      const why =
+-        branchSource === undefined
+-          ? "断点 eventBranch 未携带捕获来源 journal"
+-          : adapterJournal === undefined
+-            ? "恢复 adapter 未暴露事件来源 journal（非 oracle adapter）"
+-            : "断点捕获来源与 adapter 事件来源不是同一 journal";
+-      throw new Error(
+-        `断点事件来源与恢复 adapter 事件来源不一致（${why}）——exact 对账前拒绝；未修改任何 Memory/世界/事件`,
+-      );
+-    }
+-  }
++  // NEGATIVE-VARIANT V2: 不核实所选断点与恢复 adapter 的事件来源关联
++  //（回归基线：捕获器可传任意 journal 的 marker、恢复继续用另一份 journal）。
++  void (input.breakpoint?.eventBranch);
+   const rooms = resetRuntimeCore(input);
+   // eslint-disable-next-line @typescript-eslint/no-require-imports
+   const facadeModule = require("@/runtime/treasury/facade") as typeof import("@/runtime/treasury/facade");

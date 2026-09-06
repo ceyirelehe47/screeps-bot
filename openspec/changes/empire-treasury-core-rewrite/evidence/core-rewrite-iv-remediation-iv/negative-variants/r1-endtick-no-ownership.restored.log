@@ -1,0 +1,25 @@
+PASS src/runtime/treasury/treasuryRemediationIVKernel.test.ts
+  H01 独立 endTick 反向重入
+    √ onEffect 重入同 kernel beginTick：嵌套零推进、预算 1→1→7 不回退、累计释放 3、后续正常窗口真正处理 C (28 ms)
+  H02 跨实例同域互斥
+    ○ skipped kernelB 回调内嵌套 begin/end 零推进；外层返回后顺序 beginTick 处理 C、endTick 预算不下降
+  H03 begin/end 四方向互斥
+    ○ skipped begin→begin / begin→end / end→begin / end→end 均非递归推进；关窗仍执行；已恢复记录不重复推进
+    ○ skipped 多条 dispatching 恢复事件逐条推进、事件计数对应
+  H04 异常路径与关窗共存
+    ○ skipped onEffect throw：持久成功写保留、guard 释放、下一正常调用可继续；release throw 不当完成；已推进时 endTick 关窗不覆盖预算
+  H05 共享关窗阻断业务
+    ○ skipped 推进回调内请求 endTick：回调内及外层返回后 authorize/dispatch/rearm 全拒；恢复清理继续；同 tick begin 不重开窗口
+  H06 预扣/确认/关窗/尾部发布故障与硬切点
+    ○ skipped 预扣写失败→端口不调用；确认写失败→份额不退、义务仍在；下一 tick 完成；endTick 尾写失败→不假报关窗成功
+    ○ skipped 选定硬切点（预扣后调用前）完整 reset：预算与下一位置保留、义务仍在、新 runtime guard 不残留、正常窗口完成
+  H07 G01–G08 核心行为保留抽查
+    ○ skipped 当前成员单步确认、已确认项不再调用、错误真值不释放、记录内外公平推进不退化
+  H18 满载表示与混合负载
+    ○ skipped 64 active 满载字符预算 + 混合 closing/unknown/retry_ready 逐 tick 完整 reset；份额/释放守界、失败责任保留
+
+Test Suites: 1 passed, 1 total
+Tests:       9 skipped, 1 passed, 10 total
+Snapshots:   0 total
+Time:        4.11 s
+Ran all test suites within paths "src/runtime/treasury/treasuryRemediationIVKernel.test.ts".

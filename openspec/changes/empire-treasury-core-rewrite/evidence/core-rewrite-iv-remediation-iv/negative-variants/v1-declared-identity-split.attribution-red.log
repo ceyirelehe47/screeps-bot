@@ -1,0 +1,31 @@
+FAIL src/runtime/treasury/treasuryR4V1VariantProbe.test.ts
+  × v1 variant attribution probe (24 ms)
+
+  ● v1 variant attribution probe
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 4
+    + Received  + 1
+
+    - Array [
+    -   "adapter-entered",
+    -   "world-effect",
+    - ]
+    + Array []
+
+    [0m [90m 37 |[39m   executeTreasuryAdmittedDispatch(journal[33m,[39m service[33m,[39m { status[33m:[39m [32m"admitted"[39m[33m,[39m attemptId[33m:[39m (b [36mas[39m { attemptId[33m:[39m string })[33m.[39mattemptId[33m,[39m dispatch[33m:[39m a[33m.[39mdispatch })[33m;[39m
+     [90m 38 |[39m   [90m// 事件归属断言：必须归实际许可 A（变体下归 B → 红）。[39m
+    [31m[1m>[22m[39m[90m 39 |[39m   expect(journal[33m.[39mvisibleFor((a [36mas[39m { attemptId[33m:[39m string })[33m.[39mattemptId)[33m.[39mmap((e) [33m=>[39m e[33m.[39mkind))[33m.[39mtoEqual([[32m"adapter-entered"[39m[33m,[39m [32m"world-effect"[39m])[33m;[39m
+     [90m    |[39m                                                                                         [31m[1m^[22m[39m
+     [90m 40 |[39m   expect(journal[33m.[39mvisibleFor((b [36mas[39m { attemptId[33m:[39m string })[33m.[39mattemptId))[33m.[39mtoEqual([])[33m;[39m
+     [90m 41 |[39m })[33m;[39m
+     [90m 42 |[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR4V1VariantProbe.test.ts:39:89)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 total
+Snapshots:   0 total
+Time:        4.583 s
+Ran all test suites within paths "src/runtime/treasury/treasuryR4V1VariantProbe.test.ts".

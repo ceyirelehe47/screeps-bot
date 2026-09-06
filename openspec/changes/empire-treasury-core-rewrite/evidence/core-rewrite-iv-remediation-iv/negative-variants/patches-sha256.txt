@@ -1,0 +1,3 @@
+c831eda47a93db3b93b4dd51d442d12e534bfabb9de0103038f238c8f5df9cb8  *openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv-remediation-iv/negative-variants/r1-endtick-no-ownership.patch
+dcd3f2d0253d5c5a1cb12bc704f8448897fc24c7bc593569c179339913514efe  *openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv-remediation-iv/negative-variants/v1-declared-identity-split.patch
+cc567b306fb510ea8bcbc2ec74933c9448ea37ef6a9dbf2b6a3d7241a23d6b77  *openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv-remediation-iv/negative-variants/v2-no-source-verification.patch

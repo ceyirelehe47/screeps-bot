@@ -135,3 +135,20 @@ II 轮确认旧证明链未复活，并补充 II 轮新增写权威的封闭性�
   推导（exact oracle 仍是测试工具，生产对账仍只有注册 reconciler 端口）。
   runWithInvocation 调用作用域是测试侧的同步调用包装，不是第二套生产许可
   机制——许可有效性仍完全由生产 preflight/复验/执行门禁决定。
+
+## Core Rewrite IV · Remediation IV（2026-09-06）
+
+- 双入口推进所有权是 beginTick/endTick 共用的同一模块级运行时 guard：
+  独立 endTick 取锁后回调重入零推进、嵌套 endTick 只写关窗事实。没有第
+  二个锁、没有持久调度票据；guard 经完整 reset 丢失属预期（运行时协调不
+  是持久权威），持久事实（预算/游标/关窗/记录）均在 Memory 安全写协议下。
+- endTick 尾部预算 max 写回与游标现读写回是"当前推进写回"原则的实现，
+  不是新的预算权威；预算单调性的权威仍是 applyBudgetedCommand/
+  applyPrepaidCleanupCommand 的命令写与 Memory 现读。
+- 测试宿主绑定（executeTreasuryAdmittedDispatch 的聚合/许可核对、
+  marker.source 与 adapter.journal 的来源关联核实）是验收工具的输入完整
+  性检查，不产生新生产权威：生产许可有效性仍完全由 preflight/复验/执行
+  门禁决定；事件来源关联失败在对账前拒绝，不修改 Memory/世界/事件。
+- TreasuryOracleHostPlan（results/afterWorldEffect）只在测试宿主内编排
+  执行结果与捕获时机，不进生产、不向 reconciler 提供结论；调用与效果
+  仍在真实边界记录（dispatch_start/adapter.execute/dispatch_result）。

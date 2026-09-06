@@ -1,0 +1,47 @@
+FAIL src/runtime/treasury/treasuryRemediationIVService.test.ts
+  H08 同参数 A/B 错身份封闭
+    × 错误聚合/许可配对在执行前拒绝；正常包装执行事件只归实际许可 A；B 不借 A 效果 (20 ms)
+  H09 同参数 A/B 正序/逆序/单笔/双笔归属
+    ○ skipped 正序 A→B 与逆序 B→A：每笔 entered/effect 与实际提交许可对应，世界变化按真实调用累计
+    ○ skipped 逆序 B→A 与只执行其中一笔：未执行 B 不借 A 效果，世界只一笔变化
+  H10 包装不赋予执行权
+    ○ skipped 克隆/过期/旧runtime/已消费许可被原门禁拒绝；被拒请求不计 adapter-entered/effect；健康真许可仍可执行
+  H11 reset 后新调用无旧上下文
+    ○ skipped 完整 reset 后新模块工厂经恢复宿主执行新许可：事件归新 attempt，旧栈事实不追加
+  H12 断点事件来源错配拒绝
+    ○ skipped J1 产生效果、B0 误配 J2 marker、恢复继续用 J1 adapter——对账前拒绝且不留半恢复状态
+  H13 正确来源分支链与重复恢复
+    ○ skipped B0 恢复后执行 C→B2；B0/B1/B2 分支隔离一致；重复恢复同一断点互不污染；executed 分支能关闭
+  H14 来源完整性与快照不可变
+    ○ skipped 缺来源 marker/裸 adapter 被拒；同世界序不同 journal 被拒；查询对象修改不污染捕获快照
+  H15 完全同参数父子恢复闭环
+    ○ skipped 父无效果→真实 capability→rearm child（canonical args 全等）→child 效果后结果前断点→完整 reset→exact committed→观察接管退出
+  H16 同参数父子负向
+    ○ skipped 无可信证据不解除 unknown；父/子事件独立；旧父/child 许可不能再次执行；正确来源恢复后仍能完成
+  H17 已执行结果前恢复与 closing 占用对照
+    ○ skipped 效果后断点恢复→unknown 保守占用：200 纳/201 拒；committed closing 未退出时同口径；A 未提前删除
+    ○ skipped 流入对照：结果前恢复后空位 100、unknown 占用下 20 纳/21 拒；仅坏 ring 不阻断（健康对照）
+
+  ● H08 同参数 A/B 错身份封闭 › 错误聚合/许可配对在执行前拒绝；正常包装执行事件只归实际许可 A；B 不借 A 效果
+
+    expect(received).toThrow(expected)
+
+    Expected pattern: /不一致/
+
+    Received function did not throw
+
+    [0m [90m 150 |[39m     [90m// 旧工具"声明 B、实际提交 A"的分离路径已删除；等价错配输入：聚合声明[39m
+     [90m 151 |[39m     [90m// B 的 attempt、携带 A 的 dispatch 许可——执行前识别，不建立作用域。[39m
+    [31m[1m>[22m[39m[90m 152 |[39m     expect(() [33m=>[39m executeTreasuryAdmittedDispatch(journal[33m,[39m service[33m,[39m { status[33m:[39m [32m"admitted"[39m[33m,[39m attemptId[33m:[39m b[33m.[39mattemptId[33m,[39m dispatch[33m:[39m a[33m.[39mdispatch }))[33m.[39mtoThrow([35m/不一致/[39m)[33m;[39m
+     [90m     |[39m                                                                                                                                           [31m[1m^[22m[39m
+     [90m 153 |[39m     expect(oracle[33m.[39mtrace[33m.[39mentered)[33m.[39mtoBe([35m0[39m)[33m;[39m [90m// 被拒请求未被记作 adapter-entered/effect[39m
+     [90m 154 |[39m     expect(oracle[33m.[39mtrace[33m.[39meffects)[33m.[39mtoBe([35m0[39m)[33m;[39m
+     [90m 155 |[39m     expect(journal[33m.[39munlinkedCalls)[33m.[39mtoBe([35m0[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIVService.test.ts:152:139)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 11 skipped, 12 total
+Snapshots:   0 total
+Time:        4.746 s
+Ran all test suites within paths "src/runtime/treasury/treasuryRemediationIVService.test.ts".

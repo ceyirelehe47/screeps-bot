@@ -1,0 +1,84 @@
+  console.log
+    R1-TRACE {"budgetTrace":[{"at":"after-nested-beginTick","budgetUsed":7},{"at":"after-endTick","budgetUsed":1},{"at":"after-beginTick","budgetUsed":7}],"releaseCalls":["ext:r1:D0","ext:r1:D1","ext:r1:D2","ext:r1:D3","ext:r1:D4","ext:r1:D5"],"nestedStats":{"recovered":0,"closed":0,"cleaned":3,"cancelled":0},"remaining":2}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR4BaselineReplicators.test.ts:197:13)
+
+FAIL src/runtime/treasury/treasuryR4BaselineReplicators.test.ts
+  R1 基线反例：独立 endTick 未取得推进锁 + 尾部旧预算覆盖持久较新预算
+    × onEffect 重入 beginTick 后：嵌套应零推进、预算不回退、累计释放不超 4——基线三者全红 (88 ms)
+  V1 基线反例：作用域声明 B、实际提交许可 A（同参数）
+    × 事件必须只归实际提交的许可 A——基线上 entered/effect 被错记到 B (15 ms)
+  V2 基线反例：捕获器收 J2 marker、adapter 实际用 J1
+    × 恢复入口必须在对账前拒绝错来源——基线上世界 1000 却误判 committed (22 ms)
+
+  ● R1 基线反例：独立 endTick 未取得推进锁 + 尾部旧预算覆盖持久较新预算 › onEffect 重入 beginTick 后：嵌套应零推进、预算不回退、累计释放不超 4——基线三者全红
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "cancelled": 0,
+    -   "cleaned": 0,
+    +   "cleaned": 3,
+        "closed": 0,
+        "recovered": 0,
+      }
+
+    [0m [90m 198 |[39m
+     [90m 199 |[39m     [90m// 修复后语义（基线全红）：[39m
+    [31m[1m>[22m[39m[90m 200 |[39m     expect(nestedStats)[33m.[39mtoEqual({ recovered[33m:[39m [35m0[39m[33m,[39m closed[33m:[39m [35m0[39m[33m,[39m cleaned[33m:[39m [35m0[39m[33m,[39m cancelled[33m:[39m [35m0[39m })[33m;[39m [90m// 嵌套零推进（基线 cleaned:3）[39m
+     [90m     |[39m                         [31m[1m^[22m[39m
+     [90m 201 |[39m     expect(releaseCalls)[33m.[39mtoEqual([[32m"ext:r1:D0"[39m[33m,[39m [32m"ext:r1:D1"[39m[33m,[39m [32m"ext:r1:D2"[39m])[33m;[39m [90m// 累计 3 次释放（基线 6 次 > 4 上限）[39m
+     [90m 202 |[39m     [36mconst[39m afterNested [33m=[39m budgetTrace[[35m0[39m][33m![39m[33m.[39mbudgetUsed[33m;[39m
+     [90m 203 |[39m     [36mconst[39m afterEnd [33m=[39m budgetTrace[[35m1[39m][33m![39m[33m.[39mbudgetUsed[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR4BaselineReplicators.test.ts:200:25)
+
+  ● V1 基线反例：作用域声明 B、实际提交许可 A（同参数） › 事件必须只归实际提交的许可 A——基线上 entered/effect 被错记到 B
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 4
+    + Received  + 1
+
+    - Array [
+    -   "adapter-entered",
+    -   "world-effect",
+    - ]
+    + Array []
+
+    [0m [90m 228 |[39m
+     [90m 229 |[39m     [90m// 修复后语义（基线红）：[39m
+    [31m[1m>[22m[39m[90m 230 |[39m     expect(journal[33m.[39mvisibleFor(a[33m.[39mattemptId)[33m.[39mmap((e) [33m=>[39m e[33m.[39mkind))[33m.[39mtoEqual([[32m"adapter-entered"[39m[33m,[39m [32m"world-effect"[39m])[33m;[39m [90m// 归实际许可 A[39m
+     [90m     |[39m                                                                [31m[1m^[22m[39m
+     [90m 231 |[39m     expect(journal[33m.[39mvisibleFor(b[33m.[39mattemptId))[33m.[39mtoEqual([])[33m;[39m [90m// B 未执行，不借 A 的事件[39m
+     [90m 232 |[39m     [90m// 世界只发生 A 的一笔变化[39m
+     [90m 233 |[39m     [36mconst[39m [36mfrom[39m [33m=[39m ([33mGame[39m[33m.[39mrooms[[32m"W1N57"[39m] [36mas[39m unknown [36mas[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m { store[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m number[33m>[39m }[33m>[39m)[33m.[39mstorage[33m.[39mstore[33m.[39menergy[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR4BaselineReplicators.test.ts:230:64)
+
+  ● V2 基线反例：捕获器收 J2 marker、adapter 实际用 J1 › 恢复入口必须在对账前拒绝错来源——基线上世界 1000 却误判 committed
+
+    expect(received).toThrow(expected)
+
+    Expected pattern: /事件来源/
+
+    Received function did not throw
+
+    [0m [90m 269 |[39m         breakpoint[33m:[39m b0[33m,[39m
+     [90m 270 |[39m       })[33m,[39m
+    [31m[1m>[22m[39m[90m 271 |[39m     )[33m.[39mtoThrow([35m/事件来源/[39m)[33m;[39m
+     [90m     |[39m       [31m[1m^[22m[39m
+     [90m 272 |[39m   })[33m;[39m
+     [90m 273 |[39m })[33m;[39m
+     [90m 274 |[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR4BaselineReplicators.test.ts:271:7)
+
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 3 total
+Snapshots:   0 total
+Time:        5.121 s
+Ran all test suites within paths "src/runtime/treasury/treasuryR4BaselineReplicators.test.ts".

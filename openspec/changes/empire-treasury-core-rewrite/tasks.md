@@ -54,6 +54,18 @@
 - [x] C24 负向变体三件套（去累计 policy 3 红/载荷作发布目标 1 红/调用后计预算 3 红）各自红灯后还原，58/58 恢复
 - 注：II 轮 evidence 的 validation-head 指向中间 6daf3bc、bundle hash 与最终说明不一致——保留为历史（III 报告已注明）；II 轮"A05–A08 等价"在 v3 下 fixture 已同步升级。
 
+## Core Rewrite IV · Remediation IV（2026-09-06）
+
+- [x] R1：独立 endTick 取得与 beginTick 同一推进所有权；嵌套 endTick 只关窗；尾部预算 max/游标现读写回
+- [x] V1：删除公共 runWithInvocation；新增 executeTreasuryAdmittedDispatch 许可直连包装（身份/参数取自实际许可）
+- [x] V2：marker 携带捕获来源 journal、adapter 暴露 journal；performTreasuryFullReset 恢复前核实来源关联
+- [x] V3：宿主结果计划 + 同参数父子 + 结果写回前断点 + 完整 reset 恢复闭环（H15/H16）
+- [x] H01–H18 矩阵（IVKernel 10 + IVService 12 + 重现器 3）；H19 全仓验证；H20 负向变体三件套
+- [x] 旧 G 修订：G14 重组（错配→错误配对拒绝、嵌套→真实 adapter 嵌套）、G15 改名普通 rearm 回归、G02/G11 映射说明
+- [x] 28 个 runWithInvocation 调用点迁移（III/IIService、IService）
+- [x] evidence：baseline（三反例+轨迹）/final（固定验证 HEAD）/negative-variants（三变体红+还原绿）
+- [ ] 独立审查（下一轮安排；内核候选版不自动升级为部署许可）
+
 ## Core Rewrite IV · Remediation III（2026-09-06）
 
 - [x] 影响范围侦察（subagent：R1/R2 波及 kernel.ts 清理循环+commands advanceCleanup；V1/V2 波及 treasuryExactOracle/treasuryResetHarness 与 Remediation I/II service 测试调用点；cleaned 断言全为宽松 >=1）
