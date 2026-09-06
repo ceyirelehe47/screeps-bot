@@ -10,4 +10,4 @@
 | V2 删来源核实 | v2-no-source-verification.patch | H12（IVService） | 错 journal 断点恢复被放行（toThrow 红） |
 
 每变体附 `.red.log`（exit=1）与 `.restored.log`（exit=0，定向用例绿）。
-V1 的事件归属探针为一次性验证文件（跑完即删，attribution-red.log 存档）。
+V1 的事件归属探针源码补档于 v1-declared-identity-split.attribution-probe.ts（非 .test.ts 后缀不收集；attribution-red.log 为其运行输出）。

@@ -64,7 +64,8 @@
 - [x] 旧 G 修订：G14 重组（错配→错误配对拒绝、嵌套→真实 adapter 嵌套）、G15 改名普通 rearm 回归、G02/G11 映射说明
 - [x] 28 个 runWithInvocation 调用点迁移（III/IIService、IService）
 - [x] evidence：baseline（三反例+轨迹）/final（固定验证 HEAD）/negative-variants（三变体红+还原绿）
-- [ ] 独立审查（下一轮安排；内核候选版不自动升级为部署许可）
+- [x] 独立审查（2026-09-07 Agent 独立验收结论 ACCEPT；内核候选版不自动升级为部署许可）
+- [ ] 下轮待办（独立验收 CONCERN，低危）：performTreasuryFullReset 对"service 面 + 断点无 eventBranch + adapter 暴露 journal"组合明确拒绝（当前该组合静默跳过来源校验且不 reopen 分支——现有测试未走该路径，属工具 API 一致性空隙）
 
 ## Core Rewrite IV · Remediation III（2026-09-06）
 
