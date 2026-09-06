@@ -1,0 +1,3 @@
+--- worst probe ---
+命令: npx jest --config jest.config.cjs src/runtime/treasury/zzWorstProbe.test.ts --runInBand（临时探针，运行后删除、不入库；构造同 E19/F18）
+WORST_FULL_LOAD chars=343817 bytes=343817（64 active + 128 ring 全字段极值；≤360,000）

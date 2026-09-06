@@ -1,0 +1,1 @@
+npx jest --config jest.config.cjs --runInBand --json --outputFile=/tmp/tmp.8buI2imqtH/jest-full.json 
