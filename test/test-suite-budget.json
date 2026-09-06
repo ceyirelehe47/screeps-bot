@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "0f955cf9d4394e1f2dc67551c2da64f95966437d",
-    "suites": 233,
-    "tests": 1385
+    "commit": "e65257dd1f2e848d527682ef7e066920b226644e",
+    "suites": 235,
+    "tests": 1404
   },
   "target": {
-    "commit": "0f955cf9d4394e1f2dc67551c2da64f95966437d",
-    "suites": 233,
-    "tests": 1385,
-    "passed": 1385,
+    "commit": "e65257dd1f2e848d527682ef7e066920b226644e",
+    "suites": 235,
+    "tests": 1404,
+    "passed": 1404,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Core Rewrite IV · Remediation IV 迁移：新增 IVKernel(10)/IVService(12)/R4 基线反例回归(3)；锚点 0f955cf"
+    "note": "Core Rewrite IV · Remediation V 迁移：新增 VKernel(11)/VService(8)；锚点 e65257d（含新测试文件；NUL 卫生/G02 重组/F17 迁移不改计数）"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1885,6 +1885,22 @@
       "budget": 12,
       "tests": 12,
       "passed": 12,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationVKernel.test.ts": {
+      "budget": 11,
+      "tests": 11,
+      "passed": 11,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationVService.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
       "failed": 0,
       "pending": 0,
       "todo": 0
