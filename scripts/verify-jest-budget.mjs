@@ -15,7 +15,7 @@ const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data"
 // 【Core Rewrite IV · Remediation III】新基线：当前义务单步清理/严格成功
 // 确认/断点事件隔离/exact 调用关联 + G01–G20 矩阵（230/1360，见
 // openspec/changes/empire-treasury-core-rewrite/test-migration-map.md §10）。
-const requiredBaselineCommit = "dca0b6d06d6d6fb1afa8ffaa9818470b4d1904cf";
+const requiredBaselineCommit = "0f955cf9d4394e1f2dc67551c2da64f95966437d";
 const requiredTarget = Object.freeze({
   suites: 233,
   tests: 1385,
