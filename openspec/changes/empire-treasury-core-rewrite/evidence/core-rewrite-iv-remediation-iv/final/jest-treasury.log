@@ -1,0 +1,60 @@
+PASS src/runtime/treasury/treasuryKernelStress.test.ts (191.638 s)
+PASS src/runtime/treasury/treasuryRewrite4Lifecycle.test.ts (7.576 s)
+PASS src/runtime/treasury/treasuryRewrite2Lifecycle.test.ts
+PASS src/runtime/treasury/treasuryKernelAcceptance.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIIKernel.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Acceptance.test.ts
+PASS src/runtime/treasury/treasuryRemediationIKernel.test.ts
+PASS src/runtime/treasury/treasuryRewrite4Acceptance.test.ts
+PASS src/runtime/treasury/treasuryKernelArchitecture.test.ts
+PASS src/runtime/treasury/treasuryRemediationIVService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIIService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIVKernel.test.ts
+PASS src/runtime/treasury/treasuryRemediationIService.test.ts
+PASS src/runtime/treasury/treasuryRewrite2Acceptance.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Lifecycle.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIKernel.test.ts
+PASS src/runtime/treasury/treasuryKernel.test.ts
+PASS src/runtime/treasury/treasuryTypedOwnerMigration.test.ts
+PASS src/runtime/treasury/treasuryCore.test.ts
+PASS src/runtime/treasury/treasuryR4BaselineReplicators.test.ts
+  ● Console
+
+    console.log
+      R1-TRACE {"budgetTrace":[{"at":"after-nested-beginTick","budgetUsed":1},{"at":"after-endTick","budgetUsed":1},{"at":"after-beginTick","budgetUsed":7}],"releaseCalls":["ext:r1:D0","ext:r1:D1","ext:r1:D2"],"nestedStats":{"recovered":0,"closed":0,"cleaned":0,"cancelled":0},"remaining":5}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR4BaselineReplicators.test.ts:197:13)
+
+PASS src/runtime/treasury/treasuryImmutableRegistries.test.ts
+PASS src/runtime/treasury/treasuryTransactionIdVectors.test.ts
+PASS src/runtime/treasury/treasuryActionContract.test.ts
+PASS src/runtime/treasury/treasuryCommitmentCompleteness.test.ts
+PASS src/runtime/treasury/treasuryCommitments.test.ts
+PASS src/runtime/treasury/treasuryShadow.test.ts
+  ● Console
+
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5001 newMismatches=1 fields=stale_epoch sample={"checkedAtTick":5001,"field":"stale_epoch","roomName":"*","treasuryValue":5000,"otherValue":5001}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+PASS src/runtime/treasury/treasuryCapacityViews.test.ts
+PASS src/runtime/treasury/treasuryCanonicalEncoding.test.ts
+
+Test Suites: 29 passed, 29 total
+Tests:       539 passed, 539 total
+Snapshots:   0 total
+Time:        214.519 s
+Ran all test suites matching /src\\runtime\\treasury\\/i.
+Test results written to: ..\.tmp-r4-evidence\final\jest-treasury.json
