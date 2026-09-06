@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "78258f4efee013485daf0a0525301cd5d472e4c2",
-    "suites": 230,
-    "tests": 1360
+    "commit": "dca0b6d06d6d6fb1afa8ffaa9818470b4d1904cf",
+    "suites": 233,
+    "tests": 1385
   },
   "target": {
-    "commit": "78258f4efee013485daf0a0525301cd5d472e4c2",
-    "suites": 230,
-    "tests": 1360,
-    "passed": 1360,
+    "commit": "dca0b6d06d6d6fb1afa8ffaa9818470b4d1904cf",
+    "suites": 233,
+    "tests": 1385,
+    "passed": 1385,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Core Rewrite IV · Remediation II：统一覆盖语义/预扣轮转同次发布/preflight 健康门禁 + F01–F20 矩阵与同断点配对测试模型入库（test-migration-map.md §9）；tier 信息性"
+    "note": "Core Rewrite IV · Remediation IV 迁移：新增 IVKernel(10)/IVService(12)/R4 基线反例回归(3)；锚点 dca0b6d"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1869,6 +1869,30 @@
       "budget": 16,
       "tests": 16,
       "passed": 16,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIVKernel.test.ts": {
+      "budget": 10,
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIVService.test.ts": {
+      "budget": 12,
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryR4BaselineReplicators.test.ts": {
+      "budget": 3,
+      "tests": 3,
+      "passed": 3,
       "failed": 0,
       "pending": 0,
       "todo": 0
