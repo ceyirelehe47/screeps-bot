@@ -668,9 +668,10 @@ describe("F17 混合负载与独立宿主账目", () => {
     Game.time += 1;
     service.beginTick();
     expect(service.kernelJournal().active.find((r) => r.attemptId === done.attemptId)).toBeDefined(); // 范围缺失不退出
-    // 5) 完整 reset + 源恢复。
-    const snapshot = snapshotWholeMemory();
-    const reset = performTreasuryFullReset({ roomSpecs: ROOMS, adapter: makeTreasuryExactOracleAdapter(journal), advanceTicks: 1, memorySnapshot: snapshot });
+    // 5) 完整 reset + 源恢复（V1/§3.2 修复后：继续当前世界走入口即时快照——
+    //    oracle 通道不再接受显式 memorySnapshot；此处快照本就是 reset 入口
+    //    时刻的当前 Memory，语义等价迁移）。
+    const reset = performTreasuryFullReset({ roomSpecs: ROOMS, adapter: makeTreasuryExactOracleAdapter(journal), advanceTicks: 1 });
     Game.time += 1;
     reset.service.beginTick();
     const journalAfter = reset.service.kernelJournal();

@@ -269,23 +269,60 @@ export function performTreasuryFullReset(input: {
   /**
    * 明确的序列化 Memory 快照（JSON.stringify(Memory) 产物）。与 breakpoint
    * 互斥；需要世界/事件配对时使用 breakpoint。
+   *
+   * Remediation V/V1/§3.2：**事件 oracle adapter（暴露 journal）+ 旧
+   * memorySnapshot 的组合被拒绝**——旧 Memory 与入口当前世界/当前 journal
+   * 事件无对应关系，不能承担 service 面 exact 恢复（"调用方自行保证一致"
+   * 不再是验收口径）。非 oracle adapter（无事件来源可错配）不受限；低层
+   * 裸 Memory 安装属于 performTreasuryKernelFullReset（不宣称 exact）。
    */
   readonly memorySnapshot?: string;
   /** 原子捕获的宿主断点（Memory+世界+tick+世界序+事件截断）。 */
   readonly breakpoint?: TreasuryHostBreakpoint;
 }): TreasuryFullResetResult {
-  // 事件来源关联核实（Remediation IV/V2/§4.2）：带 eventBranch 的断点，
-  // 其捕获来源必须与恢复装配实际使用的 adapter 事件来源是同一 journal。
-  // 核发生在 resetRuntimeCore 之前——失败不修改 Memory/世界/事件，不把
-  // 半恢复混合状态留给下一用例；缺失来源（旧形态 marker/裸 adapter）同
-  // 样拒绝（不能静默继续使用旧 oracle 日志宣称 exact 恢复）。kernel 面
-  // （performTreasuryKernelFullReset）无 adapter、不据此宣称 exact 对账。
+  // ── 来源完整性核实（Remediation V/V1/§3）───────────────────────────────
+  // 三类使用目的（§3.2）：选定历史断点的 exact service 恢复（oracle 通道必须
+  // 携带该断点的匹配事件分支）；继续当前世界的普通 reset（都不传——入口
+  // 即时快照 Memory/世界，journal 不回滚、其全部事件属于当前世界，一致）；
+  // kernel 纯预算/调度恢复（performTreasuryKernelFullReset，无事件来源可
+  // 继续，但不宣称 exact）。以下校验全部发生在 resetRuntimeCore（Memory
+  // 安装/reopen/resetModules/tick/房间重装）**之前**——拒绝路径零修改
+  // （Memory 根及内容、Game.time、世界、所涉及 journal 的可见事件都不变，
+  // 当前运行时仍可正常使用）。
+  //
+  // 断点配对一致性（纯 JSON.parse 校验、无任何修改）先行：伪造断点（裸
+  // 早/晚断点拼配、worldSequence 改写）保持既有"断点配对不一致"口径。
+  if (input.breakpoint !== undefined) {
+    assertBreakpointConsistency(input.breakpoint);
+  }
+  // adapter 是否暴露事件来源（oracle 通道——唯一能默配旧日志的形态）。
+  const adapterJournal =
+    input.adapter !== null && typeof input.adapter === "object"
+      ? (input.adapter as { journal?: unknown }).journal
+      : undefined;
+  if (adapterJournal !== undefined) {
+    // a) oracle 断点恢复必须携带事件分支：缺失时恢复 adapter 将沿用未随
+    //    断点截断的当前 journal——断点之后旧栈产生的 entered/effect 仍对
+    //    reconciler 可见，可与回滚后的世界组合出错误对账结论（I07）。
+    //    有来源的空分支（count=0）与没有事件来源不同——不混淆。
+    if (input.breakpoint !== undefined && input.breakpoint.eventBranch === undefined) {
+      throw new Error(
+        `断点缺少事件分支（eventBranch）——exact service 恢复必须携带所选断点的完整事件来源：缺失时恢复将沿用未随断点截断的当前 journal 日志。用 captureTreasuryHostBreakpoint(journal.captureBranch()) 重新捕获，或改用 performTreasuryKernelFullReset（kernel 纯预算恢复，不宣称 exact）；未修改任何 Memory/世界/事件`,
+      );
+    }
+    // b) 显式旧 memorySnapshot + 事件 oracle：旧 Memory 与入口当前世界/
+    //    当前 journal 事件无配对——不能承担 service 面 exact 恢复（I08）。
+    if (input.breakpoint === undefined && input.memorySnapshot !== undefined) {
+      throw new Error(
+        `显式旧 memorySnapshot 与事件 oracle 无世界/事件配对——不能承担 service 面 exact 恢复（世界取入口当前值、事件沿用当前 journal，二者与旧 Memory 无对应关系）。恢复到选定状态用 breakpoint（含 eventBranch）；继续当前世界则不传 memorySnapshot；低层裸 Memory 安装属于 performTreasuryKernelFullReset（不宣称 exact）；未修改任何 Memory/世界/事件`,
+      );
+    }
+  }
+  // c) 事件来源关联核实（Remediation IV/V2/§4.2，保留）：带 eventBranch 的
+  //    断点，其捕获来源必须与恢复装配实际使用的 adapter 事件来源是同一
+  //    journal。缺失来源（旧形态 marker）同样视为不可核实。
   if (input.breakpoint?.eventBranch !== undefined) {
     const branchSource = input.breakpoint.eventBranch.source;
-    const adapterJournal =
-      input.adapter !== null && typeof input.adapter === "object"
-        ? (input.adapter as { journal?: unknown }).journal
-        : undefined;
     if (branchSource === undefined || adapterJournal === undefined || branchSource !== adapterJournal) {
       const why =
         branchSource === undefined
