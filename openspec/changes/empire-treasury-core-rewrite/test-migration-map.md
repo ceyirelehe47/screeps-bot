@@ -239,3 +239,43 @@
 ### 9.3 基线反例持续回归
 
 test/baseline/treasuryRemediationIIBaseline.test.ts（6 用例）：R1 流出/流入（200/20 admitted+201/21 rejected+A 保留）、R2（真预扣后确认前快照内 cursor=1+remaining 不变）、R3 三态（两 preflight invalid+reason 非空）。首跑 0f5965e 6/6 红（evidence baseline/），修复后全绿。
+
+
+## 10. Core Rewrite IV · Remediation III：G01–G20 定位与旧 F/E 覆盖修正（2026-09-06）
+
+| 编号 | 入口（文件/describe/it） | 断言定位要点 |
+| --- | --- | --- |
+| G01 | treasuryRemediationIIIKernel "G01 两义务同 kernel 重入" | 重入内层零 stats；D0/D1 各一次（toEqual 全序列）；retry_ready；remaining 空；budgetUsed=4。合法对照（D0=false）同 describe 第二 it |
+| G02 | 同上 "G02 一个调度所有者" | 另一实例重入零推进；嵌套 endTick 关窗写入生效（lastEndTick）；释放 ≤4；顺序调用预算不回退 |
+| G03 | 同上 "G03 端口返回值矩阵" | 13 种错误返回值逐 tick 全注入（单 tick 只触达前 4——矩阵必须全覆盖）均不释放；getter/then 不执行；恢复 true 全部完成；throw 单独 it |
+| G04 | 同上 "G04 集合演化" | 1/2/3/8 义务部分成功：已确认不再调用、失败保留、下一待服务成员正确（consumerKeys[cursor%len] 语义断言） |
+| G05 | 同上 "G05 预扣发布" | 丢写调用 0；单字段篡改（记录内 cursor——单义务集合取模恒 0 无差异，须两义务）独立 expected 拒绝；合法对照推进 |
+| G06 | 同上 "G06 确认丢写" | true 后确认丢写：份额/位置不退款、同 attempt 幂等重试（a×2/b×1）、其他项不重复出现 |
+| G07 | 同上 "G07 硬断点" | 预扣后调用前（callsAtBreakpoint=0——F05 模式）；端口后确认前（确认写断点）；恢复分支各成员恰一次 |
+| G08 | 同上 "G08 失败前置" | 同记录前 4 false 后 4 true ≤3 推进 tick；跨记录失败前置 + 逐 tick 完整 reset 有限完成；端口恢复后收尾 |
+| G09 | treasuryRemediationIIIService "G09" | B0（效果前）恢复：世界 1000/事件空/not_executed；无正面未执行事实（世界序越过）→ settle 仍 still_uncertain 拒绝 |
+| G10 | 同上 "G10" | B1 对照 committed；两次独立恢复 B0 互不污染、C 效果不倒记 |
+| G11 | 同上 "G11 分支链" | B2=B0 祖先+子分支 C、不含旧主分支 A 效果；错配事件源 throw（断点配对不一致） |
+| G12 | 同上 "G12 同参数 A/B" | 只执行 A：entered/effect 仅归 A、B 空、余额 900；B 仍可独立执行（合法同参数不禁用） |
+| G13 | 同上 "G13 逆序" | B→A 逆序及依次：各自恰一次、事件身份稳定 |
+| G14 | 同上 "G14 上下文隔离" | 无作用域不归属（unlinked）；参数不匹配不归属；嵌套内外分离；异常不泄漏；reset 后新模块无旧上下文 |
+| G15 | 同上 "G15 rearm" | 真实 capability→child 新 ID 执行；父代 entered 与 child effect 分离；旧许可重放拒绝；世界只流出 child 一笔 |
+| G16 | 同上 "G16 对照" | 无责任时 1001 拒/800 纳（先拒后纳防占用污染）；流出 800 后 200/201；流入 80 后 20/21；A closing 未提前删 |
+| G17 | 同上 "G17 门禁回归" | unknown 保守占用（800/801）；非健康授权拒；endTick 关窗后新授权拒 |
+| G18 | treasuryRemediationIIIKernel "G18" | 64 active/128 ring/charBudget ≤360,000；份额 ≤8、释放 ≤4；全 false 义务保留 |
+| G19 | 最终验证流程（evidence/core-rewrite-iv-remediation-iii/final） | 全仓收集无 skip/todo、目录内外数字分开、与固定验证 HEAD 一致 |
+| G20 | evidence/.../negative-variants | R1 guard 失效/R2 truthy 回归/V1 不 reopen/V2 忽略参数核对——各自行为红（exit 1）+还原绿 |
+
+### 10.1 旧 F/E 测试修订说明
+
+- F06"重复切点"：逐项确认下写序列 = 预扣1、确认1、预扣2…；第 2 次放行写
+  = 单位 1（f0，sticky 失败）的确认写。断言改为：份额 2、f0 保留、cursor
+  停在 1、恢复续 f1/f2/f3（不从旧前缀重启）、失败义务保留 closing。
+- F08"重入"：内层重入被 guard 结构化拒绝（不再有"内层已发布位置"）；
+  cursor 断言改为下一待服务成员语义。F08"集合缩小回绕"：cursor 数值断言
+  （==4）改为下一待服务成员（w4——旧数值 4 在 [w4..w7] 中指向 w7、跳过
+  w4）。任务书 §7.4：不为保旧数字保留错误的数组索引含义。
+- F04/F05/F07/E04/E02/D19 等保留原有安全要求，数字按新语义修订；
+  treasuryRemediationIIService/IService 的 registerAttempt/recordCut/
+  startBranch 调用点全部迁移到 runWithInvocation/captureBranch（harness
+  reopen 消费）。

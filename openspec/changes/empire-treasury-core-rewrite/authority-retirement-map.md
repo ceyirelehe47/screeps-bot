@@ -115,3 +115,23 @@ II 轮确认旧证明链未复活，并补充 II 轮新增写权威的封闭性�
 - cleanup.cursor 发布时点（ Remediation II/§7.2 修订）：随成对预扣同次发布（端口调用前持久）；advance_cleanup 确认命令的 rotationCursor 字段删除——确认只做结果记账，不得回写游标。义务完成事实仍 solely 由集合成员资格表达；无逐消费者完成记录存储、无调度票据。
 - preflight 健康门禁：非健康核心（absent/incompatible/unhealthy）明确拒绝——未新增 health authority、未新增可复用"预检通过证书"；预检仍是只读且不是执行凭证（调用边界终验在 executeDispatch）。
 - 测试模型（harness/exact oracle/存储拦截器，全部位于 test/mock）：captureTreasuryHostBreakpoint 是断点事实的原子捆绑器（Memory+世界+事件同一时刻），不是生产回滚能力；treasuryExactOracle 的结论从宿主事件/分支世界序推导——不是第二对账权威（生产对账仍只有注册 reconciler 端口）；存储拦截器只模拟故障注入，卸载保留 liveValue 是工具契约而非生产语义。
+
+
+## Core Rewrite IV · Remediation III：单步清理/严格成功/断点事件的责任归属
+
+- 复用原聚合内核与义务事实：本轮未新增任何持久权威——义务完成仍 solely 由
+  cleanup.consumerKeys 集合成员资格表达；budgetUsed/cursor 仍由 Memory
+  recovery 区承担。逐项确认（releasedDuties 单成员）复用 advance_cleanup
+  命令，无新命令类型、无逐消费者日志、无调度票据。
+- 生命周期推进 guard（kernel 模块级 lifecycleAdvanceInFlight）是有界运行时
+  协调，不是持久完成权威：完整 reset（jest.resetModules 重建模块）后丢失；
+  记录事实、预算、游标、remaining 均不依赖它。多实例共享同模块即同调度域；
+  不按 treasuryCore 对象引用分锁（安全写会替换该对象）。
+- cursor 重定位（nextServiceCursor）是 advance_cleanup 内基于记录现值的
+  派生计算（下一待服务成员），不是新的游标权威；与本命令无对应关系时保守
+  保留现值取模回绕——调度元信息失效可安全重建，不证明任何义务完成。
+- 测试分支模型（journal.captureBranch/reopen）不是生产 proof 体系：事件
+  副本只在测试内存中，不进生产 Memory；恢复分支对账结论由受控宿主事件
+  推导（exact oracle 仍是测试工具，生产对账仍只有注册 reconciler 端口）。
+  runWithInvocation 调用作用域是测试侧的同步调用包装，不是第二套生产许可
+  机制——许可有效性仍完全由生产 preflight/复验/执行门禁决定。

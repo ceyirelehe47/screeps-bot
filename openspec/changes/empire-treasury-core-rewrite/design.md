@@ -304,3 +304,74 @@ unhealthy 时一律明确拒绝（可解释 reason）——当前权威不可验
 从宿主事件推导（treasuryExactOracle），不从固定返回值或生产 outcome 来；
 没有事件不盲猜 not-executed。存储拦截器卸载必须保留拦截期间实际最终值
 （liveValue），不恢复安装时快照。
+
+
+## 8. 当前义务单步清理、严格成功确认与断点／attempt 事件隔离（Remediation III 修订）
+
+### 8.1 一个调度所有者：非递归生命周期推进
+
+同一运行时／同一 Treasury 调度域只允许一个生命周期推进栈。kernel 模块级
+guard（lifecycleAdvanceInFlight）实现：不按 treasuryCore 对象引用分锁（安全
+写会替换该对象）、不为每实例单独建锁；所有同模块 kernel 实例共享同一调度
+域。回调重入 beginTick（含另一实例、同 tick 顺序重叠）时结构化返回零推进
+stats——不递归扫描、不调用释放端口；普通异常路径 finally 释放，真正硬终止
+由新运行时（完整 reset 重建模块）从已发布状态恢复。guard 是有界运行时协调，
+不是持久权威：完整 reset 后必须丢失，预算/cursor/remaining 仍由 Memory 承担。
+
+endTick 的关窗事实（lifecycle.lastEndTick——facade 共享授权窗口的关闭条件）
+在 guard 被持有时仍按既有规则写入生效（防重入不吞关窗语义）；仅跳过其
+dispatching 恢复循环（不嵌套运行恢复推进）。外层完成后，后续正常入口按
+剩余持久预算继续推进。
+
+### 8.2 当前 exact 义务为一个完整单位（逐项选择与确认）
+
+closing 清理收敛为：重读健康当前记录与 remaining → 从当前集合按 cursor 选
+择本次 consumerKey → 同次安全发布两份预算 + 下一服务位置（remaining 不变、
+经独立 expected 读回确认）→ 调用该 exact attempt/consumerKey 的释放端口 →
+只对本次实际返回做严格判定 → 从当前记录确认本次结果（成功才移除该项）→
+确认写完成后重新读取当前状态再选下一项。不再持有跨回调的旧工作数组、不再
+累计批末 released[] 整批确认。预扣失败（预算尽/记录变化/核心不可验证）不
+调用端口；确认写失败保留未确认责任并有界结束本记录处理（后续以原
+attempt/consumerKey 幂等重试）；已确认成功并移除的项不得再次调用。
+
+同一次访问不重复尝试刚失败的成员（triedKeys 访问集合，≤8，只是运行时调度
+辅助）；预扣失败时外层停在耗尽处（恢复 IV/D19 语义：空转会把游标推满一整
+圈回到本 tick 起点，后方记录结构性饿死）。
+
+### 8.3 游标语义随集合变化保持一致
+
+记录内 cursor 表示"下一待服务成员位置"。确认移除成员后按当前集合变化
+重新定位到同一个下一待服务成员（[D0,D1,D2] 服务 D0 后 [D1,D2] 中仍指向
+D1，不是保留数字 1 后跳到 D2）——由 advanceCleanupCommand 基于记录现值
+cursor 计算（确认命令不携带游标；与本命令无对应关系时保守保留现值取模
+回绕）。失败成员保留、轮转继续；跨记录外层游标保持公平轮转与有限服务界。
+
+### 8.4 严格成功与不确定确认
+
+端口结果以 unknown 的运行时边界审视：只有原始布尔 true（returned === true）
+是完成确认。不做 Boolean 强转、不解读 {ok:...}、不 await、不调用 then、
+不隐式读取返回对象字段（getter 不触发）。false 是未确认；throw 与错误类型
+是端口异常。均保留当前义务，按原有界计数/诊断处理，不崩整个 tick。true 但
+确认丢写时可再次调用同一项（既有幂等重试契约）；已确认移除项不得再调用。
+
+### 8.5 所选断点是恢复分支事件的唯一输入（测试模型修订）
+
+断点经 journal.captureBranch() 携带捕获时刻本分支可见事件的不可变副本
+（eventBranch 标记）；加载器（reset harness）安装所选断点的 Memory/世界
+后调用 reopen() 从该副本重开独立分支——恢复依据是所选断点，不是"最近一次
+recordCut"的可变全局截断。每分支只看到自己的祖先链事件（封闭视图：
+baseLength 前缀 ∪ 本 epoch），废弃分支的事件不因 cut 增大重新可见；可变
+cut / registerAttempt / startBranch API 删除。B0/B1/B2 分支矩阵与错配
+事件源拒绝（断点配对一致性校验）见 test-migration-map §10。
+
+### 8.6 本次实际调用绑定 exact attempt（受控调用上下文）
+
+测试侧调用关联不再从 args 反查（同参数多 attempt 在单值 Map 下互相覆盖）。
+journal.runWithInvocation(permit, expectedArgs, fn) 以真实接纳/rearm 返回的
+许可身份建立本次调用作用域（栈式，嵌套隔离，异常 finally 弹栈）；adapter
+真实入口读取栈顶并逐次核对实际收到的参数，匹配才记录 entered/effect
+属于该 attempt；无作用域或参数不匹配时不归属任何 attempt（unlinkedCalls
+诊断——不猜测、不沿用上一次作用域）。作用域不是执行成功证据，不使非法
+许可变有效；许可仍经生产 preflight、授权复验与执行门禁。真实 rearm 的
+child 即使与父代 args 完全相同也使用新 attempt 身份；父代调用/失败证据不
+可变成 child 的效果，反之亦然。

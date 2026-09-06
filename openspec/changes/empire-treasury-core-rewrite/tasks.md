@@ -54,6 +54,20 @@
 - [x] C24 负向变体三件套（去累计 policy 3 红/载荷作发布目标 1 红/调用后计预算 3 红）各自红灯后还原，58/58 恢复
 - 注：II 轮 evidence 的 validation-head 指向中间 6daf3bc、bundle hash 与最终说明不一致——保留为历史（III 报告已注明）；II 轮"A05–A08 等价"在 v3 下 fixture 已同步升级。
 
+## Core Rewrite IV · Remediation III（2026-09-06）
+
+- [x] 影响范围侦察（subagent：R1/R2 波及 kernel.ts 清理循环+commands advanceCleanup；V1/V2 波及 treasuryExactOracle/treasuryResetHarness 与 Remediation I/II service 测试调用点；cleaned 断言全为宽松 >=1）
+- [x] 基线反例（干净 worktree 3f4e701，exit=1）：R1 重入轨迹 [D0,D1,D0,D1]、remaining 卡 [D0]、预算 8；R2 {ok:false} → retry_ready；V1 恢复 B0 借 B1 效果 committed；V2 同参数 A/B 事件全归 B（evidence/core-rewrite-iv-remediation-iii/baseline）
+- [x] R1：模块级生命周期 guard（重入零推进/endTick 关窗保持）+ 当前义务逐项选择确认（现读 remaining、预扣绑定成员、按单位确认、批末 released[] 删除）+ triedKeys 防同访问重复 + 预算耗尽停在耗尽处（D19 防空转饿死回归修复）
+- [x] R1 游标：advanceCleanup 集合缩小重定位到同一下一待服务成员（基于记录现值，无对应关系保守保留）
+- [x] R2：严格成功（returned === true；对象/包装布尔/Promise/thenable/getter 不释放不读取）
+- [x] V1：断点携带 journal.captureBranch() 不可变事件副本；harness 安装断点后 reopen 从副本重开独立分支（封闭视图 baseLength∪epoch；废弃分支不因 cut 增大重现）
+- [x] V2：runWithInvocation 受控调用作用域（许可身份+参数逐次核对；无作用域/不匹配 unlinkedCalls 诊断不归属；嵌套栈/异常弹栈/reset 清空）
+- [x] 旧测试迁移：IIService/IService 调用点（registerAttempt/recordCut/startBranch → runWithInvocation/captureBranch）；F06/F08 cursor 断言改下一待服务成员语义（§7.4 不保旧数字）
+- [x] G01–G18 矩阵（treasuryRemediationIIIKernel 16 + treasuryRemediationIIIService 16；G03 修订为逐 tick 全注入——单 tick 只触达前 4 种返回值）；G19 由最终验证流程承担；G20 负向变体四件套（R1 guard 失效/R2 truthy/V1 不 reopen/V2 忽略参数核对）行为红+还原绿
+- [x] Agent 本地验证：typecheck/build/Treasury/Defense 冻结集合/全仓/budget（见 evidence/core-rewrite-iv-remediation-iii/final）
+- [ ] 独立审查（本轮交付后由独立 Agent 执行——本地验证不构成放行）
+
 ## Core Rewrite II（2026-09-05 完成）
 
 - [x] 影响范围侦察（subagent：生产调用方仅 main.ts/productionMonitor/runtimeServices；爆炸面在 16 个 co-located 套件）
