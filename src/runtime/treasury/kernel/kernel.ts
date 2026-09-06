@@ -1061,13 +1061,24 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     let recoveredToUnknown = 0;
     const health = readTreasuryCoreStoreHealth();
     if (health.status === "healthy" && legacyNow().length === 0) {
-      const nowTick = ports.nowTick();
-      let used = readBudgetState(health.memory, nowTick);
-      const cursors = { sweepCursor: health.memory.recovery.sweepCursor, cleanupCursor: health.memory.recovery.cleanupCursor };
-      // Remediation III/R1/§3.1：推进所有权被持有时（回调重入）不嵌套运行
-      // 恢复循环；endTick 的关窗事实（lifecycle.lastEndTick——facade 共享
-      // 授权窗口的关闭条件）仍按既有规则写入生效——防重入不吞关窗语义。
-      if (!lifecycleAdvanceInFlight) {
+      // Remediation IV/R1/§2.2–§2.3：endTick 与 beginTick 属同一推进域——
+      // 独立 endTick 运行恢复循环前必须先取得推进所有权（否则其
+      // onEffect/release 回调可重入 beginTick 取得推进权，旧调用栈的局部
+      // 预算随后覆盖持久较新预算）。
+      if (lifecycleAdvanceInFlight) {
+        // 嵌套 endTick（推进被持有时回调内请求关窗）：只执行有界关窗事实
+        // 写入——不递归恢复、不覆盖 recovery 的预算与游标（§2.3 关窗与
+        // 推进分开处理；防重入不得吞掉关窗语义）。
+        writeTreasuryCoreMemory((root) => {
+          root.lifecycle.lastEndTick = ports.nowTick();
+        }, () => undefined);
+        return { recoveredToUnknown: 0 };
+      }
+      lifecycleAdvanceInFlight = true;
+      try {
+        const nowTick = ports.nowTick();
+        let used = readBudgetState(health.memory, nowTick);
+        const cursors = { sweepCursor: health.memory.recovery.sweepCursor, cleanupCursor: health.memory.recovery.cleanupCursor };
         // dispatching 残留（当次调用异常逃逸）→ 保守 unknown（共享同 tick 预算）。
         for (const record of sortedActive(health.memory)) {
           if (used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) break;
@@ -1076,11 +1087,23 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
           used = step.used;
           if (step.applied) recoveredToUnknown += 1;
         }
+        // 尾部关窗写（§2.4）：预算与游标只由当前推进写回——旧局部 used 不
+        // 覆盖当前较大值（对持锁期间第三方写路径的双保险），游标不因关窗
+        // 回退（写持久现读值，不从入口快照恢复旧位置）。闭窗不重新打开。
+        const finalRead = readTreasuryCoreStoreHealth();
+        const finalUsed =
+          finalRead.status === "healthy" ? Math.max(used, readBudgetState(finalRead.memory, nowTick)) : used;
+        const finalCursors =
+          finalRead.status === "healthy"
+            ? { sweepCursor: finalRead.memory.recovery.sweepCursor, cleanupCursor: finalRead.memory.recovery.cleanupCursor }
+            : cursors;
+        writeTreasuryCoreMemory((root) => {
+          root.lifecycle.lastEndTick = ports.nowTick();
+          root.recovery = { ...finalCursors, budgetTick: nowTick, budgetUsed: finalUsed };
+        }, () => undefined);
+      } finally {
+        lifecycleAdvanceInFlight = false;
       }
-      writeTreasuryCoreMemory((root) => {
-        root.lifecycle.lastEndTick = ports.nowTick();
-        root.recovery = { ...cursors, budgetTick: nowTick, budgetUsed: used };
-      }, () => undefined);
     }
     return { recoveredToUnknown };
   }

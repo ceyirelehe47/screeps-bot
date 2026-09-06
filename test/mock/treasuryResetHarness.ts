@@ -95,6 +95,11 @@ export interface TreasuryHostBreakpoint {
 export interface TreasuryHostBreakpointEventBranch {
   readonly kind: "treasury-journal-branch";
   readonly count: number;
+  /**
+   * 捕获来源 journal（Remediation IV/V2/§4.2）：恢复装配据此核实与
+   * adapter 事件来源的关联。缺失（旧形态/手工构造）同样视为不可核实。
+   */
+  readonly source?: unknown;
   reopen(): void;
 }
 
@@ -269,6 +274,30 @@ export function performTreasuryFullReset(input: {
   /** 原子捕获的宿主断点（Memory+世界+tick+世界序+事件截断）。 */
   readonly breakpoint?: TreasuryHostBreakpoint;
 }): TreasuryFullResetResult {
+  // 事件来源关联核实（Remediation IV/V2/§4.2）：带 eventBranch 的断点，
+  // 其捕获来源必须与恢复装配实际使用的 adapter 事件来源是同一 journal。
+  // 核发生在 resetRuntimeCore 之前——失败不修改 Memory/世界/事件，不把
+  // 半恢复混合状态留给下一用例；缺失来源（旧形态 marker/裸 adapter）同
+  // 样拒绝（不能静默继续使用旧 oracle 日志宣称 exact 恢复）。kernel 面
+  // （performTreasuryKernelFullReset）无 adapter、不据此宣称 exact 对账。
+  if (input.breakpoint?.eventBranch !== undefined) {
+    const branchSource = input.breakpoint.eventBranch.source;
+    const adapterJournal =
+      input.adapter !== null && typeof input.adapter === "object"
+        ? (input.adapter as { journal?: unknown }).journal
+        : undefined;
+    if (branchSource === undefined || adapterJournal === undefined || branchSource !== adapterJournal) {
+      const why =
+        branchSource === undefined
+          ? "断点 eventBranch 未携带捕获来源 journal"
+          : adapterJournal === undefined
+            ? "恢复 adapter 未暴露事件来源 journal（非 oracle adapter）"
+            : "断点捕获来源与 adapter 事件来源不是同一 journal";
+      throw new Error(
+        `断点事件来源与恢复 adapter 事件来源不一致（${why}）——exact 对账前拒绝；未修改任何 Memory/世界/事件`,
+      );
+    }
+  }
   const rooms = resetRuntimeCore(input);
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const facadeModule = require("@/runtime/treasury/facade") as typeof import("@/runtime/treasury/facade");
