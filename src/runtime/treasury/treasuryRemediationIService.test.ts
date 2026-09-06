@@ -1,13 +1,19 @@
 /**
  * Treasury Core Rewrite IV · Remediation I——service/reset 层验收矩阵（任务书 §8）。
  *
- * 覆盖：E02（E01 快照 + exact not-executed 对照）、E04（结果写失败/保守恢复
- * + 观察暂不可用）、E11/E12（rearm 新义务拒绝与合法对照）、E13/E14/E15
- * （许可认证前置与高成本门禁次序）、E16（指定断点快照 + 引用隔离）、
- * E17（全清 heap/global/模块后的接管）、E18（混合负载真实 rearm + 完整
- * reset + 旧视图）。
+ * 覆盖：E02（配对断点：效果前/效果后两分支 + 事件驱动 exact oracle）、
+ * E04（结果写失败/保守恢复 + 观察暂不可用）、E11/E12（rearm 新义务拒绝与
+ * 合法对照）、E13/E14/E15（许可认证前置与高成本门禁次序）、E16（指定断点
+ * 快照 + 引用隔离）、E17（全清 heap/global/模块后的接管）、E18（混合负载
+ * 真实 rearm + 完整 reset + 旧视图）。
  * E01/E03 见 treasuryRewrite4Lifecycle.test.ts（D11）；kernel 层矩阵见
- * treasuryRemediationIKernel.test.ts。
+ * treasuryRemediationIKernel.test.ts；Remediation II F 矩阵见
+ * treasuryRemediationIIService.test.ts。
+ *
+ * Remediation II/V1 修订：E02 不再用"效果前 Memory + 效果后世界 + 固定
+ * not-executed reconciler"的组合——恢复分支的世界与事件必须与断点同一
+ * 时刻（captureTreasuryHostBreakpoint 配对捕获），exact 结论由
+ * treasuryExactOracle（宿主事件驱动）给出。
  */
 import { createTreasuryService, TREASURY_FRESH_EPOCH_LIMIT, type TreasuryService } from "@/runtime/treasury/facade";
 import {
@@ -26,7 +32,18 @@ import {
 } from "@/runtime/treasury/policyAuthority";
 import { resetTreasuryCoreStoreForTest } from "@/runtime/treasury/testHarness";
 import { resetTreasuryCommitmentRevisionForTest } from "@/runtime/treasury/commitmentRevision";
-import { snapshotWholeMemory, performTreasuryFullReset } from "@mock/treasuryResetHarness";
+import {
+  snapshotWholeMemory,
+  performTreasuryFullReset,
+  captureTreasuryHostBreakpoint,
+  type TreasuryHostBreakpoint,
+} from "@mock/treasuryResetHarness";
+import { interceptTreasuryCoreWrites } from "@mock/treasuryStorageInterceptor";
+import {
+  createTreasuryHostJournal,
+  makeTreasuryExactOracleAdapter,
+  type TreasuryHostJournal,
+} from "@mock/treasuryExactOracle";
 import { installRooms, setStoreResources, type RoomSpec } from "@mock/treasury";
 
 const ROOMS: RoomSpec[] = [
@@ -142,34 +159,105 @@ beforeEach(() => {
   registerTreasuryPolicyResolver(makeNoReserveTreasuryPolicy());
 });
 
-// ── E02：E01 快照 + exact not-executed 对照 ─────────────────────────────────
+// ── E02：配对断点（效果前/效果后两分支 + 事件驱动 exact oracle） ───────────
 
-describe("E02 快照无证据与正面对照", () => {
-  it("E01 快照 reset 后无证据保留 unknown；提供 exact not_executed 对账后按正常路径 retry_ready", () => {
-    const capture = installBreakpointAdapter("observed_not_executed");
+describe("E02 配对断点与事件 exact 对账", () => {
+  it("效果前分支：世界未变（1000）、硬停于 adapter 入口→exact not_executed；风险按世界事实释放", () => {
+    const journal = createTreasuryHostJournal();
+    const oracle = makeTreasuryExactOracleAdapter(journal);
+    // 硬停哨兵（效果前断点）：adapter 入口即抛，不产生世界效果；与 oracle
+    // 同 semanticIdentity（跨 reset 对账匹配不看注册序号）。必须在 admit 前
+    // 注册——admit 与 dispatch 之间换 adapter 会因 registrationId 不一致被拒。
+    const sentinel: TreasuryActionAdapter = {
+      ...oracle,
+      execute(): { ok: boolean } {
+        throw new Error("E02: hard stop at adapter entry (pre-effect)");
+      },
+    };
+    replaceTreasuryActionAdapterForTest(sentinel);
     const service = makeService();
-    const a = admit(service, "biz:e2:snap", transferArgs({ amount: 100, outcome: "ok" }));
-    expect(service.executeAuthorizedDispatch(a.dispatch).status).toBe("committed"); // 旧调用栈走完
-    const snapshot = capture.entrySnapshots[0];
-    expect(snapshot).toBeDefined();
-    // 完整 reset（指定断点快照）：新 runtime 恢复 unknown。
+    const args = transferArgs({ amount: 100, outcome: "ok" });
+    const a = admit(service, "biz:e2:pre", args);
+    journal.registerAttempt(args, a.attemptId);
+    // 放行首写（dispatch_start 边界发布），adapter 进入即抛哨兵错误，后续
+    // 全部写（dispatch_result/兜底）被丢弃——持久层停在 dispatching+boundary，
+    // 世界未变。
+    const interceptor = interceptTreasuryCoreWrites({ allow: 1 });
+    const outcome = service.executeAuthorizedDispatch(a.dispatch);
+    interceptor.restore(); // 保留实际最终值（dispatch_start 已持久）
+    // adapter 抛错 + 结果写/兜底写全部被丢弃 → persist_failed（保守路径）。
+    if (outcome.status !== "persist_failed") throw new Error("E02 pre: " + JSON.stringify(outcome));
+    const shape = (Memory.runtime!.treasuryCore as unknown as {
+      active: Record<string, { phase: string; invocation: unknown; invocationBoundary: unknown }>;
+    }).active[a.attemptId];
+    expect(shape.phase).toBe("dispatching"); // 结果写回前断点
+    expect(shape.invocation).toBeNull();
+    expect(shape.invocationBoundary).not.toBeNull();
+    // 断点捕获：Memory/世界/事件同刻（世界 1000、事件无 entered/effect——
+    // 哨兵在进入点硬停，不产生世界效果）。
+    journal.recordCut();
+    const bp = captureTreasuryHostBreakpoint(journal.entries);
+    expect(bp.world.W1N57?.storage?.resources.energy ?? -1).toBe(1000); // 配对世界=效果前
+    // 旧栈继续（catch/finally 只影响旧分支）；恢复分支从断点开始。
+    journal.startBranch();
     const reset = performTreasuryFullReset({
       roomSpecs: ROOMS,
-      adapter: makeTreasuryTestTransferAdapter("observed_not_executed"),
+      adapter: oracle,
       advanceTicks: 1,
-      memorySnapshot: snapshot,
+      breakpoint: bp,
     });
+    // 恢复分支世界与断点一致（1000，不是效果后的 900——V1 核心）。
+    expect((reset.rooms.W1N57 as unknown as { storage: { store: Record<string, number> } }).storage.store.energy ?? 0).toBe(1000);
     const before = reset.service.kernelJournal().active.find((r) => r.attemptId === a.attemptId);
     expect(before?.phase).toBe("outcome_unknown"); // 无证据：不自动重发/取消/成功
-    expect(capture.trace.executions).toBe(1); // 新 runtime 无动作调用
-    // exact not_executed 对账：注册 reconciler 依据世界（无该效果）得出。
+    expect(oracle.trace.entered).toBe(0); // 新 runtime 无动作调用（哨兵未记 entered）
+    // exact not_executed：可见事件无效果 + 分支世界序未越过边界序。
     const settled = reset.service.settleUnknownOutcome({ attemptId: a.attemptId });
     expect(settled.status).toBe("ok");
     expect(reset.service.kernelJournal().active.find((r) => r.attemptId === a.attemptId)?.outcome).toBe("not_executed");
     Game.time += 1;
     reset.service.beginTick(); // 无义务 → 清理完成 → retry_ready
     expect(reset.service.kernelJournal().active.find((r) => r.attemptId === a.attemptId)?.phase).toBe("retry_ready");
-    expect(capture.trace.executions).toBe(1);
+    expect(oracle.trace.effects).toBe(0); // 全程无世界效果
+  });
+
+  it("效果后分支：世界已变（900）、Memory 无结果、事件含 world-effect→exact executed→正常关闭", () => {
+    const journal = createTreasuryHostJournal();
+    const oracle = makeTreasuryExactOracleAdapter(journal);
+    replaceTreasuryActionAdapterForTest(oracle);
+    const service = makeService();
+    const args = transferArgs({ amount: 100, outcome: "ok" });
+    const a = admit(service, "biz:e2:post", args);
+    journal.registerAttempt(args, a.attemptId);
+    const interceptor = interceptTreasuryCoreWrites({ allow: 1 }); // 放行 dispatch_start，丢弃结果写
+    const outcome = service.executeAuthorizedDispatch(a.dispatch);
+    interceptor.restore(); // 保留实际最终值
+    expect(outcome.status).toBe("persist_failed"); // 真实执行已发生、结果写失败
+    expect(oracle.trace.effects).toBe(1);
+    journal.recordCut(); // 断点时刻事件 = entered + world-effect
+    const bp = captureTreasuryHostBreakpoint(journal.entries);
+    expect((bp.world.W1N57?.storage?.resources.energy ?? -1)).toBe(900); // 配对世界=效果后
+    journal.startBranch();
+    const reset = performTreasuryFullReset({
+      roomSpecs: ROOMS,
+      adapter: makeTreasuryExactOracleAdapter(journal),
+      advanceTicks: 1,
+      breakpoint: bp,
+    });
+    expect((reset.rooms.W1N57 as unknown as { storage: { store: Record<string, number> } }).storage.store.energy ?? 0).toBe(900);
+    const before = reset.service.kernelJournal().active.find((r) => r.attemptId === a.attemptId);
+    expect(before?.phase).toBe("outcome_unknown");
+    expect(oracle.trace.entered).toBe(1); // 新 runtime 不重发
+    const settled = reset.service.settleUnknownOutcome({ attemptId: a.attemptId });
+    expect(settled.status).toBe("ok");
+    const closing = reset.service.kernelJournal().active.find((r) => r.attemptId === a.attemptId);
+    expect(closing?.outcome).toBe("committed"); // 事件含 world-effect → executed
+    expect(closing?.phase).toBe("closing");
+    // 观察接管退出（无义务 committed：观察覆盖即关闭）。
+    Game.time += 1;
+    reset.service.beginTick();
+    expect(reset.service.kernelJournal().active.find((r) => r.attemptId === a.attemptId)).toBeUndefined();
+    expect(oracle.trace.effects).toBe(1); // 无重复效果
   });
 });
 
@@ -182,33 +270,15 @@ describe("E04 结果写失败与观察暂不可用", () => {
     const service = makeService();
     const a = admit(service, "biz:e4:persist", transferArgs({ amount: 100 }));
     // 拦截写：放行第一次（dispatch_start 的边界发布），丢弃之后（dispatch_result）。
-    const runtime = Memory.runtime as unknown as Record<string, unknown>;
-    const descriptor = Object.getOwnPropertyDescriptor(runtime, "treasuryCore");
-    let liveValue = descriptor?.value;
-    let writesAllowed = 1;
-    Object.defineProperty(runtime, "treasuryCore", {
-      configurable: true,
-      get: () => liveValue,
-      set(value: unknown) {
-        if (writesAllowed > 0) {
-          writesAllowed -= 1;
-          liveValue = value;
-        }
-      },
-    });
-    let outcome: ReturnType<TreasuryService["executeAuthorizedDispatch"]>;
-    try {
-      outcome = service.executeAuthorizedDispatch(a.dispatch);
-    } finally {
-      // 恢复为拦截器放行链上的最新值（dispatch_start 已持久；丢弃的
-      // dispatch_result/rollback 不倒回已发布的边界）。
-      delete runtime.treasuryCore;
-      runtime.treasuryCore = liveValue;
-    }
+    const interceptor = interceptTreasuryCoreWrites({ allow: 1 });
+    const outcome = service.executeAuthorizedDispatch(a.dispatch);
+    // 卸载保留拦截期间实际保留的 liveValue（V3：dispatch_start 已持久，
+    // 丢弃的 dispatch_result/rollback 不倒回已发布的边界）。
+    interceptor.restore();
     // 动作已发生（调用 1）+ 结果写失败 → 保守 unknown 兜底。
     expect(trace.executions).toBe(1);
-    expect(outcome!.status).toBe("persist_failed");
-    if (outcome!.status === "persist_failed") expect(outcome!.observed).toBe("committed");
+    expect(outcome.status).toBe("persist_failed");
+    if (outcome.status === "persist_failed") expect(outcome.observed).toBe("committed");
     const record = (Memory.runtime!.treasuryCore as unknown as {
       active: Record<string, { phase: string; invocationBoundary: unknown }>;
     }).active[a.attemptId];

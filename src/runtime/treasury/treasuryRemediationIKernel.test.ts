@@ -2,14 +2,23 @@
  * Treasury Core Rewrite IV · Remediation I——内核层验收矩阵（任务书 §8）。
  *
  * 覆盖：E05（调用边界发布失败/污染与合法对照）、E06（记录内公平——前缀
- * 失败 + 逐 tick JSON 重载）、E07（失败项恢复服务/成员变化/游标回绕）、
+ * 失败 + 逐 tick 完整 reset）、E07（失败项恢复服务/成员变化/游标回绕）、
  * E08（轮转预扣丢写/预扣后中断/确认丢写）、E09（端口重入共享预算 + 两级
- * 轮转）、E10（跨记录公平——逐 tick JSON 重载 + 混合流量 + 推导界）、
+ * 轮转）、E10（跨记录公平——逐 tick 完整 reset + 混合流量 + 推导界）、
  * E19（新字段最坏值满载实测）。
  * E01/E03 见 treasuryRewrite4Lifecycle.test.ts（D11 真实路径快照）；
- * service 层矩阵见 treasuryRemediationIService.test.ts。
+ * service 层矩阵见 treasuryRemediationIService.test.ts；Remediation II
+ * F 矩阵见 treasuryRemediationIIKernel.test.ts。
+ *
+ * Remediation II/V2 修订：公平性与组合验收循环全部使用
+ * performTreasuryKernelFullReset（JSON 重载 Memory + jest.resetModules 重建
+ * 模块注册表 + 新 kernel 模块装配——完整 reset）。原 reloadKernel 形态
+ * （JSON 往返后调用旧模块函数/ports）降级为 jsonRoundtripKernel——仅作
+ * 单 tick 序列化健全性探针，不再声称完整 reset（其旧许可不被新注册表
+ * 拒绝的缺口由 F14 反向锚定）。
  */
-import { snapshotWholeMemory, installWholeMemorySnapshot } from "@mock/treasuryResetHarness";
+import { performTreasuryKernelFullReset, snapshotWholeMemory, installWholeMemorySnapshot } from "@mock/treasuryResetHarness";
+import { interceptTreasuryCoreWrites } from "@mock/treasuryStorageInterceptor";
 import { createTreasuryCoreKernel, type TreasuryCoreAdmissionInput, type TreasuryCoreKernel, type TreasuryCoreKernelPorts } from "@/runtime/treasury/kernel/kernel";
 import {
   buildTreasuryCoreWorstWorkRecord,
@@ -84,24 +93,6 @@ function activeShape(attemptId: string): ActiveShape | undefined {
   return store?.active?.[attemptId];
 }
 
-/** 丢弃全部 treasuryCore 写入的存储边界（预扣/确认丢写模拟）。 */
-function interceptTreasuryCoreWrites(): () => void {
-  const runtime = Memory.runtime as unknown as Record<string, unknown>;
-  const descriptor = Object.getOwnPropertyDescriptor(runtime, "treasuryCore");
-  Object.defineProperty(runtime, "treasuryCore", {
-    configurable: true,
-    get: () => descriptor?.value,
-    set() {
-      // 丢弃全部写入。
-    },
-  });
-  return () => {
-    delete runtime.treasuryCore;
-    if (descriptor) Object.defineProperty(runtime, "treasuryCore", descriptor);
-    else runtime.treasuryCore = descriptor?.value;
-  };
-}
-
 /** admit + 保存 permit（本文件统一入口）。 */
 function admitWithPermit(kernel: TreasuryCoreKernel, consumers: readonly string[], workKey: string): { attemptId: string; permit: unknown } {
   const admitted = kernel.admit(kernelAdmitInput(consumers, workKey));
@@ -109,10 +100,19 @@ function admitWithPermit(kernel: TreasuryCoreKernel, consumers: readonly string[
   return { attemptId: admitted.attemptId, permit: admitted.dispatch };
 }
 
-/** 每 tick 真正 JSON 重载（§5.3/E06/E10）：快照→安装新 Memory→新 kernel。 */
-function reloadKernel(ports: TreasuryCoreKernelPorts): TreasuryCoreKernel {
+/**
+ * 序列化健全性探针（原 reloadKernel 降级形态，Remediation II/V2）：
+ * JSON 往返 + 当前模块构造。**不是完整 reset**（模块注册表/permit WeakSet
+ * 未重建——旧许可仍被认可）；只用于断言逐 tick 状态可序列化往返。
+ */
+function jsonRoundtripKernel(ports: TreasuryCoreKernelPorts): TreasuryCoreKernel {
   installWholeMemorySnapshot(snapshotWholeMemory());
   return createTreasuryCoreKernel(ports);
+}
+
+/** 每 tick 完整 reset（V2/F14）：新 Memory 引用 + 新模块注册表 + 新 kernel。 */
+function fullResetTick(ports: TreasuryCoreKernelPorts): TreasuryCoreKernel {
+  return performTreasuryKernelFullReset({ ports }).kernel;
 }
 
 beforeEach(() => {
@@ -132,9 +132,9 @@ describe("E05 调用边界发布", () => {
     });
     const kernel = createTreasuryCoreKernel(ports);
     const { attemptId, permit } = admitWithPermit(kernel, [], "biz:e5:lost");
-    const restore = interceptTreasuryCoreWrites();
+    const interceptor = interceptTreasuryCoreWrites({ allow: 0 });
     const failed = kernel.executeDispatch(permit);
-    restore();
+    interceptor.restore();
     // 发布失败 → 动作调用 0（ Remediation I/R1：边界发布失败时实际调用为零）。
     expect(failed.status).toBe("publish_failed");
     expect(calls.length).toBe(0);
@@ -183,7 +183,7 @@ describe("E05 调用边界发布", () => {
   });
 });
 
-// ── E06/E07：记录内公平（前缀失败 + 逐 tick JSON 重载） ─────────────────────
+// ── E06/E07：记录内公平（前缀失败 + 逐 tick 完整 reset） ─────────────────────
 
 describe("E06 记录内公平（8 义务前 4 永久 false）", () => {
   const STICKY = ["ext:e6:f0", "ext:e6:f1", "ext:e6:f2", "ext:e6:f3"];
@@ -201,7 +201,7 @@ describe("E06 记录内公平（8 义务前 4 永久 false）", () => {
     return { ports, releaseCalls };
   }
 
-  it("每 tick JSON 重载：后 4 在至多 3 个完整预算 tick 内获得服务并确认移除；前 4 保留；后 4 不再重复调用", () => {
+  it("每 tick 完整 reset：后 4 在至多 3 个完整预算 tick 内获得服务并确认移除；前 4 保留；后 4 不再重复调用", () => {
     const { ports, releaseCalls } = setup();
     let kernel = createTreasuryCoreKernel(ports);
     const { attemptId, permit } = admitWithPermit(kernel, CONSUMERS, "biz:e6:fair");
@@ -210,8 +210,7 @@ describe("E06 记录内公平（8 义务前 4 永久 false）", () => {
     let ticks = 0;
     for (; ticks < 3 && !servedAll; ticks += 1) {
       Game.time += 1;
-      kernel = reloadKernel(ports); // 每 tick 真正 JSON 重载（§5.3）
-      kernel.beginTick();
+      kernel = fullResetTick(ports); // 每 tick 完整 reset（V2/F14）
       const record = activeShape(attemptId);
       servedAll = record === undefined || record.cleanup.consumerKeys.filter((k) => !STICKY.includes(k)).length === 0;
     }
@@ -227,11 +226,9 @@ describe("E06 记录内公平（8 义务前 4 永久 false）", () => {
     const callsOfServed = releaseCalls.filter((k) => servedSet.has(k));
     expect(callsOfServed.length).toBe(4);
     Game.time += 1;
-    kernel = reloadKernel(ports);
-    kernel.beginTick();
+    fullResetTick(ports);
     Game.time += 1;
-    kernel = reloadKernel(ports);
-    kernel.beginTick();
+    fullResetTick(ports);
     expect(releaseCalls.filter((k) => servedSet.has(k)).length).toBe(4); // 无重复
   });
 
@@ -250,16 +247,14 @@ describe("E06 记录内公平（8 义务前 4 永久 false）", () => {
     // 阶段 1：后 4 完成（前 4 失败保留）。
     for (let tick = 0; tick < 3; tick += 1) {
       Game.time += 1;
-      kernel = reloadKernel(ports);
-      kernel.beginTick();
+      kernel = fullResetTick(ports);
     }
     expect([...activeShape(attemptId)!.cleanup.consumerKeys].sort()).toEqual([...STICKY].sort());
     // 阶段 2：前 4 恢复成功 → 有限推进后工作结束（retry_ready，义务空）。
     sticky.clear();
     for (let tick = 0; tick < 4; tick += 1) {
       Game.time += 1;
-      kernel = reloadKernel(ports);
-      kernel.beginTick();
+      kernel = fullResetTick(ports);
       const record = activeShape(attemptId);
       if (record?.phase === "retry_ready") break;
     }
@@ -274,8 +269,7 @@ describe("E06 记录内公平（8 义务前 4 永久 false）", () => {
     const { attemptId, permit } = admitWithPermit(kernel, ["ext:e7:solo"], "biz:e7:solo");
     expect(kernel.executeDispatch(permit).status).toBe("not_executed");
     Game.time += 1;
-    kernel = reloadKernel(ports);
-    kernel.beginTick();
+    kernel = fullResetTick(ports);
     expect(activeShape(attemptId)?.phase).toBe("retry_ready");
   });
 
@@ -287,8 +281,7 @@ describe("E06 记录内公平（8 义务前 4 永久 false）", () => {
     expect(kernel.executeDispatch(permit).status).toBe("not_executed");
     for (let tick = 0; tick < 5; tick += 1) {
       Game.time += 1;
-      kernel = reloadKernel(ports);
-      kernel.beginTick();
+      kernel = fullResetTick(ports);
     }
     const record = activeShape(attemptId)!;
     expect(record.phase).toBe("closing");
@@ -307,12 +300,30 @@ describe("E06 记录内公平（8 义务前 4 永久 false）", () => {
     let ticks = 0;
     for (; ticks < 3 && !done; ticks += 1) {
       Game.time += 1;
-      kernel = reloadKernel(ports);
-      kernel.beginTick();
+      kernel = fullResetTick(ports);
       done = activeShape(attemptId)?.phase === "retry_ready";
     }
     expect(done).toBe(true);
     expect(ticks).toBeLessThanOrEqual(3);
+  });
+
+  it("E06 序列化探针（jsonRoundtripKernel）：逐 tick JSON 往返不破坏轮转公平（非完整 reset——仅序列化健全性）", () => {
+    const { ports, releaseCalls } = setup();
+    let kernel = createTreasuryCoreKernel(ports);
+    const { attemptId, permit } = admitWithPermit(kernel, CONSUMERS, "biz:e6:serial");
+    expect(kernel.executeDispatch(permit).status).toBe("not_executed");
+    let servedAll = false;
+    let ticks = 0;
+    for (; ticks < 3 && !servedAll; ticks += 1) {
+      Game.time += 1;
+      kernel = jsonRoundtripKernel(ports); // 序列化探针（V2 降级：不重建注册表）
+      kernel.beginTick();
+      const record = activeShape(attemptId);
+      servedAll = record === undefined || record.cleanup.consumerKeys.filter((k) => !STICKY.includes(k)).length === 0;
+    }
+    expect(servedAll).toBe(true);
+    const servedSet = new Set(["ext:e6:t4", "ext:e6:t5", "ext:e6:t6", "ext:e6:t7"]);
+    expect(releaseCalls.filter((k) => servedSet.has(k)).length).toBe(4);
   });
 });
 
@@ -326,13 +337,13 @@ describe("E08 轮转预扣/确认的中断与丢写", () => {
     const { attemptId, permit } = admitWithPermit(kernel, ["ext:e8:a", "ext:e8:b"], "biz:e8:prepay");
     expect(kernel.executeDispatch(permit).status).toBe("not_executed");
     Game.time += 1;
-    const restore = interceptTreasuryCoreWrites();
+    const interceptor = interceptTreasuryCoreWrites({ allow: 0 });
     kernel.beginTick(); // 预扣发布失败 → 端口调用 0
-    restore();
+    interceptor.restore();
     expect(releaseCalls.length).toBe(0);
+    expect(activeShape(attemptId)?.cleanup.cursor).toBe(0); // 未取得份额：游标不动
     Game.time += 1;
-    const kernel2 = reloadKernel(ports);
-    kernel2.beginTick(); // 写能力恢复：义务得到服务
+    fullResetTick(ports); // 写能力恢复：义务得到服务
     expect(releaseCalls.length).toBe(2);
     expect(activeShape(attemptId)?.phase).toBe("retry_ready");
   });
@@ -354,14 +365,12 @@ describe("E08 轮转预扣/确认的中断与丢写", () => {
     const { attemptId, permit } = admitWithPermit(kernel, ["ext:e8:x", "ext:e8:y"], "biz:e8:throw");
     expect(kernel.executeDispatch(permit).status).toBe("not_executed");
     Game.time += 1;
-    kernel = reloadKernel(ports);
-    kernel.beginTick(); // 第一个端口调用抛错：份额已耗、duty 保留
+    kernel = fullResetTick(ports); // 第一个端口调用抛错：份额已耗、duty 保留
     const mid = activeShape(attemptId)!;
     expect(mid.phase).toBe("closing");
     expect(mid.cleanup.consumerKeys.length).toBeGreaterThanOrEqual(1);
     Game.time += 1;
-    kernel = reloadKernel(ports);
-    kernel.beginTick(); // 后续轮转再访问（幂等同 attemptId）
+    kernel = fullResetTick(ports); // 后续轮转再访问（幂等同 attemptId）
     const after = activeShape(attemptId);
     if (after !== undefined) {
       expect(after.phase).toBe("retry_ready");
@@ -380,38 +389,37 @@ describe("E08 轮转预扣/确认的中断与丢写", () => {
       },
     });
     const kernel = createTreasuryCoreKernel(ports);
-    const { attemptId, permit } = admitWithPermit(kernel, ["ext:e8:confirm"], "biz:e8:confirm");
+    const { attemptId, permit } = admitWithPermit(kernel, ["ext:e8:confirm", "ext:e8:later"], "biz:e8:confirm");
     expect(kernel.executeDispatch(permit).status).toBe("not_executed");
     Game.time += 1;
-    // 端口成功释放，但确认命令写回被丢弃（预扣已持久化——份额已耗）。
-    // 拦截放行第一次写（成对预扣的持久化），丢弃之后的写（确认命令）。
-    const runtime = Memory.runtime as unknown as Record<string, unknown>;
-    const descriptor = Object.getOwnPropertyDescriptor(runtime, "treasuryCore");
-    let liveValue = descriptor?.value;
-    let writesAllowed = 1;
-    Object.defineProperty(runtime, "treasuryCore", {
-      configurable: true,
-      get: () => liveValue,
-      set(value: unknown) {
-        if (writesAllowed > 0) {
-          writesAllowed -= 1;
-          liveValue = value;
-        }
-        // else 丢弃（确认丢写）。
-      },
-    });
+    // 端口成功释放首义务，但确认命令写回被丢弃。预扣发布（首写）被放行
+    // ——其载荷同次含 budgetUsed+2 与记录内下一服务位置（R2：双义务集合
+    // 首单位 → cursor=1）。
+    const interceptor = interceptTreasuryCoreWrites({ allow: 1, capture: true });
     kernel.beginTick();
-    delete runtime.treasuryCore;
-    if (descriptor) Object.defineProperty(runtime, "treasuryCore", descriptor);
-    else runtime.treasuryCore = liveValue;
-    expect(releaseCalls.length).toBe(1);
-    expect(activeShape(attemptId)?.cleanup.consumerKeys).toEqual(["ext:e8:confirm"]); // duty 保留
+    interceptor.restore(); // 卸载保留实际最终值（V3：不回滚已放行预扣）
+    expect(releaseCalls.length).toBe(1); // 仅首义务被调用（确认丢写后预算内停）
+    expect(activeShape(attemptId)?.cleanup.consumerKeys).toEqual(["ext:e8:confirm", "ext:e8:later"]); // duty 保留（确认丢写）
+    // 预扣已持久：份额与下一服务位置在同一发布内（V3：卸载不回滚）。
+    const core = Memory.runtime!.treasuryCore as unknown as { recovery: { budgetUsed: number } };
+    expect(core.recovery.budgetUsed).toBe(2);
+    expect(activeShape(attemptId)?.cleanup.cursor).toBe(1);
+    // 捕获载荷 = 预扣发布瞬间的持久状态（同次发布内两份事实）。
+    const captured = JSON.parse(interceptor.capturedWrites()[0]) as {
+      active: Record<string, { cleanup: { cursor: number; consumerKeys: string[] } }>;
+    };
+    expect(captured.active[attemptId].cleanup.cursor).toBe(1);
+    expect(captured.active[attemptId].cleanup.consumerKeys).toEqual(["ext:e8:confirm", "ext:e8:later"]); // remaining 不变
     Game.time += 1;
-    const kernel2 = reloadKernel(ports);
-    kernel2.beginTick();
-    expect(releaseCalls.length).toBe(2); // 幂等重试
-    expect(releaseCalls[0]).toBe(releaseCalls[1]); // 同一 (key, attemptId)
-    expect(activeShape(attemptId)?.phase).toBe("retry_ready");
+    fullResetTick(ports); // 从已发布位置 1 继续轮转（不从旧前缀重启）
+    const finalShape = activeShape(attemptId);
+    if (finalShape !== undefined) {
+      expect(finalShape.phase).toBe("retry_ready");
+      expect(finalShape.cleanup.consumerKeys).toEqual([]);
+    }
+    // 幂等关联：首义务以同一 (key, attemptId) 重试成功。
+    const firstKeyCalls = releaseCalls.filter((c) => c === `ext:e8:confirm@${attemptId}`);
+    expect(firstKeyCalls.length).toBe(2);
   });
 });
 
@@ -445,12 +453,10 @@ describe("E09 端口重入共享预算", () => {
     const recovery = (Memory.runtime!.treasuryCore as unknown as { recovery: { budgetTick: number; budgetUsed: number } }).recovery;
     expect(recovery.budgetTick).toBe(Game.time);
     expect(recovery.budgetUsed).toBeLessThanOrEqual(8);
-    // 轮转继续：剩余义务在后续 tick（JSON 重载后）完成。
-    let kernel2 = kernel;
+    // 轮转继续：剩余义务在后续 tick（完整 reset 后）完成。
     for (let tick = 0; tick < 6; tick += 1) {
       Game.time += 1;
-      kernel2 = reloadKernel(ports);
-      kernel2.beginTick();
+      fullResetTick(ports);
       const record = Object.values((Memory.runtime!.treasuryCore as unknown as { active: Record<string, ActiveShape> }).active)
         .find((r) => r.cleanup?.consumerKeys?.some((k) => k.startsWith("ext:e9:")));
       if (record === undefined) break;
@@ -461,10 +467,10 @@ describe("E09 端口重入共享预算", () => {
   });
 });
 
-// ── E10：跨记录公平（逐 tick JSON 重载 + 混合流量 + 推导界） ─────────────────
+// ── E10：跨记录公平（逐 tick 完整 reset + 混合流量 + 推导界） ─────────────────
 
 describe("E10 跨记录公平（前 8 失败工作 + 后方 8 义务工作 + 混合流量）", () => {
-  it("每 tick 完整 JSON 重载：后方工作在推导界内真完成；失败风险保留；报告实际最长等待", () => {
+  it("每 tick 完整 reset：后方工作在推导界内真完成；失败风险保留；报告实际最长等待", () => {
     const sticky = new Set(Array.from({ length: 8 }, (_, i) => `ext:e10:s${String(i)}`));
     const releaseCalls: string[] = [];
     const ports = makeKernelPorts({
@@ -486,8 +492,7 @@ describe("E10 跨记录公平（前 8 失败工作 + 后方 8 义务工作 + 混
     const expired = admitWithPermit(kernel, [], "biz:e10:expired");
     expect(kernel.executeDispatch(expired.permit).status).toBe("not_executed");
     Game.time += 1;
-    kernel = reloadKernel(ports);
-    kernel.beginTick(); // expired → retry_ready
+    kernel = fullResetTick(ports); // expired → retry_ready
     const expiredShape = activeShape(expired.attemptId);
     if (expiredShape?.phase !== "retry_ready") throw new Error("expired not retry_ready");
     // 推导界（§5.3/E10）：每 tick 8 份额 = 4 成对单位。9 条 closing 每次访问
@@ -501,8 +506,7 @@ describe("E10 跨记录公平（前 8 失败工作 + 后方 8 义务工作 + 混
     let maxWait = 0;
     for (; ticks < BOUND && !targetDone; ticks += 1) {
       Game.time += 1;
-      kernel = reloadKernel(ports); // 每 tick 完整 JSON 重载
-      kernel.beginTick();
+      kernel = fullResetTick(ports); // 每 tick 完整 reset（V2/F14/F16）
       // 混合流量：注入新 pending（下 tick 被 sweep 安全取消）。
       kernel.admit({ ...kernelAdmitInput([], `biz:e10:noise-${String(ticks)}`), worstCase: kernelLegs(1), postings: kernelLegs(1) });
       // dispatching 残留（真实形态带边界——恢复为 unknown 流量）。
