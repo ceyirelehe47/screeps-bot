@@ -1,0 +1,28 @@
+FAIL src/runtime/treasury/r5BaselineV1.test.ts
+  V1 基线反例（fb5e44b）
+    √ TRACE：缺 eventBranch 恢复得到『世界 1000 + J 含后来 effect + settle committed』错结论（基线缺陷事实） (35 ms)
+    × REJECT：缺 eventBranch 的 exact 恢复必须在对账前、任何状态修改前拒绝（修复后语义） (21 ms)
+
+  ● V1 基线反例（fb5e44b） › REJECT：缺 eventBranch 的 exact 恢复必须在对账前、任何状态修改前拒绝（修复后语义）
+
+    expect(received).toThrow(expected)
+
+    Expected pattern: /事件分支|eventBranch|来源/
+
+    Received function did not throw
+
+    [0m [90m 113 |[39m     expect(() [33m=>[39m
+     [90m 114 |[39m       performTreasuryFullReset({ roomSpecs[33m:[39m [33mROOMS[39m[33m,[39m adapter[33m:[39m makeTreasuryExactOracleAdapter(journal)[33m,[39m breakpoint[33m:[39m b0 })[33m,[39m
+    [31m[1m>[22m[39m[90m 115 |[39m     )[33m.[39mtoThrow([35m/事件分支|eventBranch|来源/[39m)[33m;[39m
+     [90m     |[39m       [31m[1m^[22m[39m
+     [90m 116 |[39m     [90m// 拒绝时零修改：Memory/世界/事件/tick 均不变。[39m
+     [90m 117 |[39m     expect([33mJSON[39m[33m.[39mstringify((globalThis [36mas[39m unknown [36mas[39m { [33mMemory[39m[33m:[39m unknown })[33m.[39m[33mMemory[39m))[33m.[39mtoBe(memoryBefore)[33m;[39m
+     [90m 118 |[39m     expect([33mJSON[39m[33m.[39mstringify((globalThis [36mas[39m unknown [36mas[39m { [33mGame[39m[33m:[39m { rooms[33m:[39m unknown } })[33m.[39m[33mGame[39m[33m.[39mrooms))[33m.[39mtoBe(worldBefore)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/r5BaselineV1.test.ts:115:7)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 passed, 2 total
+Snapshots:   0 total
+Time:        3.229 s, estimated 5 s
+Ran all test suites within paths "src/runtime/treasury/r5BaselineV1.test.ts".

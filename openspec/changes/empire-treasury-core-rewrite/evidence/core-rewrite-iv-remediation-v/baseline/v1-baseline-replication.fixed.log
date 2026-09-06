@@ -1,0 +1,25 @@
+FAIL src/runtime/treasury/r5v1-postfix-probe.test.ts
+  V1 基线反例（fb5e44b）
+    × TRACE：缺 eventBranch 恢复得到『世界 1000 + J 含后来 effect + settle committed』错结论（基线缺陷事实） (21 ms)
+    √ REJECT：缺 eventBranch 的 exact 恢复必须在对账前、任何状态修改前拒绝（修复后语义） (7 ms)
+
+  ● V1 基线反例（fb5e44b） › TRACE：缺 eventBranch 恢复得到『世界 1000 + J 含后来 effect + settle committed』错结论（基线缺陷事实）
+
+    断点缺少事件分支（eventBranch）——exact service 恢复必须携带所选断点的完整事件来源：缺失时恢复将沿用未随断点截断的当前 journal 日志。用 captureTreasuryHostBreakpoint(journal.captureBranch()) 重新捕获，或改用 performTreasuryKernelFullReset（kernel 纯预算恢复，不宣称 exact）；未修改任何 Memory/世界/事件
+
+    [0m [90m 307 |[39m     [90m//    有来源的空分支（count=0）与没有事件来源不同——不混淆。[39m
+     [90m 308 |[39m     [36mif[39m (input[33m.[39mbreakpoint [33m!==[39m undefined [33m&&[39m input[33m.[39mbreakpoint[33m.[39meventBranch [33m===[39m undefined) {
+    [31m[1m>[22m[39m[90m 309 |[39m       [36mthrow[39m [36mnew[39m [33mError[39m(
+     [90m     |[39m             [31m[1m^[22m[39m
+     [90m 310 |[39m         [32m`断点缺少事件分支（eventBranch）——exact service 恢复必须携带所选断点的完整事件来源：缺失时恢复将沿用未随断点截断的当前 journal 日志。用 captureTreasuryHostBreakpoint(journal.captureBranch()) 重新捕获，或改用 performTreasuryKernelFullReset（kernel 纯预算恢复，不宣称 exact）；未修改任何 Memory/世界/事件`[39m[33m,[39m
+     [90m 311 |[39m       )[33m;[39m
+     [90m 312 |[39m     }[0m
+
+      at performTreasuryFullReset (test/mock/treasuryResetHarness.ts:309:13)
+      at Object.<anonymous> (src/runtime/treasury/r5v1-postfix-probe.test.ts:94:43)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 passed, 2 total
+Snapshots:   0 total
+Time:        3.315 s
+Ran all test suites within paths "src/runtime/treasury/r5v1-postfix-probe.test.ts".

@@ -1,0 +1,68 @@
+  console.log
+    I13-COST {"fixture1":{"fixture":"empty-endTick","reads":7,"writeAttempts":1,"writesAllowed":1,"writesDropped":0,"logicalSharesUsed":0,"closurePersisted":true},"fixture2":{"fixture":"recover-A-then-clean-8C","phaseEndTick":{"recoveredToUnknown":1,"closurePersisted":true},"tick1":{"reads":41,"writeAttempts":7,"writesAllowed":7,"cleaned":2,"sharesUsed":7,"releaseCalls":2},"completion":{"ticks":2,"reads":77,"writeAttempts":14,"writesAllowed":14,"totalReleaseCalls":8,"perTickReleases":[4,2],"phaseAfter":"retry_ready"},"awaitingServiceAfterTick1":6}}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:653:13)
+
+  console.log
+    I13-COST {"fixture3":{"fixture":"closure-publish-failure","writeAttempts":2,"writesAllowed":0,"writesDropped":2,"reads":12,"closurePersisted":false},"fixture4":{"fixture":"64-active-mixed-advance","activeCount":64,"beginTick":{"recovered":2,"cleaned":6,"closed":0,"cancelled":0},"endTick":{"recoveredToUnknown":0,"closurePersisted":true},"reads":53,"writeAttempts":10,"writesAllowed":10,"sharesUsed":8}}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:748:13)
+
+FAIL src/runtime/treasury/treasuryRemediationVKernel.test.ts
+  I01/I02 独立 endTick 关窗先行
+    √ I01 对照：未请求关窗时 authorize/dispatch/rearm 三候选全部成功（真实合法输入证明） (48 ms)
+    × I01 首个 onEffect 回调内提交合法新 contract：回调进入前已关闭；authorize 拒 lifecycle_closed、发行/active 增量 0 (31 ms)
+    √ I02 回调内提交当 tick真 dispatch 与真 rearm：实际动作 0、child 0、权利未误消费（下一 tick capability 仍可用）；回调不另调 endTick (34 ms)
+  I03 onEffect 抛错后共享关闭保持
+    × 已发布恢复/关闭不撤销；另一 facade 随后发动作仍拒；guard 可再获取且清理有非零推进 (31 ms)
+  I04 关窗发布失败与篡改
+    √ 丢写：closurePersisted=false 不假报持久成功；跨实例否决业务；不退款、不清空记录；恢复写可确认关闭 (33 ms)
+    √ lastEndTick 被篡改（健康旧 root 仍读得出）：跨实例继续否决；endTick 重申后确认关闭 (30 ms)
+  I05 嵌套/预算满/无永久闩锁
+    √ begin→end→嵌套四方向、预算已满时关窗写仍进行、同 tick begin 不复活窗口、下一 tick 新业务可接纳 (36 ms)
+  I06 关闭事实跨完整 reset
+    √ 成功发布关闭后切点：恢复后同 tick 关闭保持、旧许可拒绝、下一 tick 正常窗口可完成；关闭前切点：窗口开启 (38 ms)
+    √ 关闭前切点：恢复后窗口开启、业务可接纳（不要求恢复从未持久化的关闭请求） (31 ms)
+  I13 成本观察（实测操作计量）
+    √ fixture 1/2：空 endTick 与恢复 1 条 A + 清理 8 项 C 的实测读写/份额/释放 (125 ms)
+    √ fixture 3/4：关窗发布失败的实测写尝试 + 满 64 活跃聚合混合推进的实测 (105 ms)
+
+  ● I01/I02 独立 endTick 关窗先行 › I01 首个 onEffect 回调内提交合法新 contract：回调进入前已关闭；authorize 拒 lifecycle_closed、发行/active 增量 0
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 2
+    Received: null
+
+    [0m [90m 266 |[39m     expect(endStats[33m.[39mclosurePersisted)[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m 267 |[39m     expect(asked)[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 268 |[39m     expect(lastEndTickAtCallback)[33m.[39mtoBe([33mGame[39m[33m.[39mtime)[33m;[39m [90m// 关窗成功早于第一个可回调的恢复动作[39m
+     [90m     |[39m                                   [31m[1m^[22m[39m
+     [90m 269 |[39m     expect(verdictIn)[33m.[39mtoMatchObject({ status[33m:[39m [32m"rejected"[39m[33m,[39m reasonCode[33m:[39m [32m"lifecycle_closed"[39m })[33m;[39m
+     [90m 270 |[39m     expect(rtRef[33m.[39mkernel[33m.[39mmetrics()[33m.[39mfrontier)[33m.[39mtoBe(cRef[33m.[39mfrontierBefore)[33m;[39m [90m// 发行增量 0[39m
+     [90m 271 |[39m     expect(activeCount())[33m.[39mtoBe(cRef[33m.[39mactiveBefore)[33m;[39m [90m// active 增量 0[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:268:35)
+
+  ● I03 onEffect 抛错后共享关闭保持 › 已发布恢复/关闭不撤销；另一 facade 随后发动作仍拒；guard 可再获取且清理有非零推进
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 2
+    Received: null
+
+    [0m [90m 346 |[39m     expect(threw)[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m 347 |[39m     expect(recordOf(fx[33m.[39maId)[33m?[39m[33m.[39mphase)[33m.[39mtoBe([32m"outcome_unknown"[39m)[33m;[39m [90m// 已发布恢复事实保留[39m
+    [31m[1m>[22m[39m[90m 348 |[39m     expect(lastEndTickOf())[33m.[39mtoBe([33mGame[39m[33m.[39mtime)[33m;[39m [90m// 已发布关闭事实保留（关窗先于回调）[39m
+     [90m     |[39m                             [31m[1m^[22m[39m
+     [90m 349 |[39m     [90m// 另一 facade 实例随后发动作：当前 tick 新业务仍拒（否决标记 + 持久关窗）。[39m
+     [90m 350 |[39m     [36mconst[39m serviceB [33m=[39m rt[33m.[39mfacadeModule[33m.[39mcreateTreasuryService({ getRooms[33m:[39m () [33m=>[39m [33mObject[39m[33m.[39mvalues(rt[33m.[39mrooms) })[33m;[39m
+     [90m 351 |[39m     [36mconst[39m builtB [33m=[39m rt[33m.[39mactionContractsModule[33m.[39mbuildTreasuryActionContract(serviceB[33m,[39m { actionKind[33m:[39m [32m"test.transfer"[39m[33m,[39m transactionId[33m:[39m [32m"biz:r5:B"[39m[33m,[39m args[33m:[39m { [33m...[39m[33mTRANSFER_ARGS[39m } })[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:348:29)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 9 passed, 11 total
+Snapshots:   0 total
+Time:        5.053 s
+Ran all test suites within paths "src/runtime/treasury/treasuryRemediationVKernel.test.ts".

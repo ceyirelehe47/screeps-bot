@@ -1,0 +1,12 @@
+PASS src/runtime/treasury/r5-postfix-probe.test.ts
+  R1 基线反例（fb5e44b）
+    √ 对照：未请求关窗时 authorize/dispatch/rearm 三候选全部成功（候选合法性证明） (47 ms)
+    √ 反例 1：独立 endTick 首个恢复回调内 authorize/dispatch/rearm 必须已被关窗拒绝 (31 ms)
+    √ 反例 2：关窗发布失败（全部丢写）后同运行时另一 facade 的合法业务仍必须被拒 (28 ms)
+    √ 反例 3：onEffect 抛错后窗口必须仍关闭、guard 可再获取、已发布恢复保留 (26 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       4 passed, 4 total
+Snapshots:   0 total
+Time:        3.463 s
+Ran all test suites within paths "src/runtime/treasury/r5-postfix-probe.test.ts".

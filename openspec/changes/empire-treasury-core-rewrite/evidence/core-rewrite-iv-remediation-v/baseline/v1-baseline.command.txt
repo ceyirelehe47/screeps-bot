@@ -1,0 +1,1 @@
+npx jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasury/r5BaselineV1.test.ts

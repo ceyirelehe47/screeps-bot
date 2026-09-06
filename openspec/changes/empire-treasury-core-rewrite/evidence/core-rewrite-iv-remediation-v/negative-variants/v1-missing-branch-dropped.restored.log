@@ -1,0 +1,19 @@
+PASS src/runtime/treasury/treasuryRemediationVService.test.ts
+  I07 缺 eventBranch 的 exact 恢复拒绝
+    √ 基线错结论路径已封闭：恢复在任何修改前拒绝、零修改、当前运行时仍可用 (36 ms)
+    √ 正确对照：携带 eventBranch 的同一断点恢复正常（空分支按可信宿主事实判未执行） (24 ms)
+  I08 裸快照与普通数组通道拒绝
+    √ 显式旧 memorySnapshot + 事件 oracle：拒绝（无世界/事件配对不承担 exact） (5 ms)
+    √ 普通数组事件断点 + oracle：拒绝；非 oracle adapter（无事件来源可错配）不受限 (18 ms)
+    √ 合法低层 kernel 恢复仍可用（memorySnapshot + kernel 面不拒）且不宣称 exact (12 ms)
+  I09 事件分支语义矩阵
+    √ 有来源的空 B0 ≠ 缺来源（判未执行）；效果后 B1 对账 committed；B0 子分支 C→B2 废弃事实不重现；错 J 拒绝 (90 ms)
+  I10 正常路径保留
+    √ 无断点『继续当前世界』reset（oracle 通道）正常工作、世界效果与 journal 一致续用、新业务可接纳 (24 ms)
+    √ 完整同参数父子恢复（H15 形态重跑）：父 effect0/child effect1、完整 args 相同、真实恢复/对账/退出 (25 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       8 passed, 8 total
+Snapshots:   0 total
+Time:        3.552 s, estimated 4 s
+Ran all test suites within paths "src/runtime/treasury/treasuryRemediationVService.test.ts".

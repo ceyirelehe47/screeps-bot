@@ -1,0 +1,31 @@
+diff --git a/test/mock/treasuryResetHarness.ts b/test/mock/treasuryResetHarness.ts
+index 59da64b..61668b9 100644
+--- a/test/mock/treasuryResetHarness.ts
++++ b/test/mock/treasuryResetHarness.ts
+@@ -301,22 +301,10 @@ export function performTreasuryFullReset(input: {
+       ? (input.adapter as { journal?: unknown }).journal
+       : undefined;
+   if (adapterJournal !== undefined) {
+-    // a) oracle 断点恢复必须携带事件分支：缺失时恢复 adapter 将沿用未随
+-    //    断点截断的当前 journal——断点之后旧栈产生的 entered/effect 仍对
+-    //    reconciler 可见，可与回滚后的世界组合出错误对账结论（I07）。
+-    //    有来源的空分支（count=0）与没有事件来源不同——不混淆。
+-    if (input.breakpoint !== undefined && input.breakpoint.eventBranch === undefined) {
+-      throw new Error(
+-        `断点缺少事件分支（eventBranch）——exact service 恢复必须携带所选断点的完整事件来源：缺失时恢复将沿用未随断点截断的当前 journal 日志。用 captureTreasuryHostBreakpoint(journal.captureBranch()) 重新捕获，或改用 performTreasuryKernelFullReset（kernel 纯预算恢复，不宣称 exact）；未修改任何 Memory/世界/事件`,
+-      );
+-    }
+-    // b) 显式旧 memorySnapshot + 事件 oracle：旧 Memory 与入口当前世界/
+-    //    当前 journal 事件无配对——不能承担 service 面 exact 恢复（I08）。
+-    if (input.breakpoint === undefined && input.memorySnapshot !== undefined) {
+-      throw new Error(
+-        `显式旧 memorySnapshot 与事件 oracle 无世界/事件配对——不能承担 service 面 exact 恢复（世界取入口当前值、事件沿用当前 journal，二者与旧 Memory 无对应关系）。恢复到选定状态用 breakpoint（含 eventBranch）；继续当前世界则不传 memorySnapshot；低层裸 Memory 安装属于 performTreasuryKernelFullReset（不宣称 exact）；未修改任何 Memory/世界/事件`,
+-      );
+-    }
++    // [R5-负向变体：删缺分支拒绝——恢复到 Remediation IV 的"仅 eventBranch
++    //  存在时校验"语义；memorySnapshot 拒绝一并移除]
++    void adapterJournal;
++    void input;
+   }
+   // c) 事件来源关联核实（Remediation IV/V2/§4.2，保留）：带 eventBranch 的
+   //    断点，其捕获来源必须与恢复装配实际使用的 adapter 事件来源是同一

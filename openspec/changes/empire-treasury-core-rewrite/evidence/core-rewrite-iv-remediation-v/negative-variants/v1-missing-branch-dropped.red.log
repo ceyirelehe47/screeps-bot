@@ -1,0 +1,73 @@
+FAIL src/runtime/treasury/treasuryRemediationVService.test.ts
+  I07 缺 eventBranch 的 exact 恢复拒绝
+    × 基线错结论路径已封闭：恢复在任何修改前拒绝、零修改、当前运行时仍可用 (37 ms)
+    √ 正确对照：携带 eventBranch 的同一断点恢复正常（空分支按可信宿主事实判未执行） (22 ms)
+  I08 裸快照与普通数组通道拒绝
+    × 显式旧 memorySnapshot + 事件 oracle：拒绝（无世界/事件配对不承担 exact） (21 ms)
+    × 普通数组事件断点 + oracle：拒绝；非 oracle adapter（无事件来源可错配）不受限 (23 ms)
+    √ 合法低层 kernel 恢复仍可用（memorySnapshot + kernel 面不拒）且不宣称 exact (13 ms)
+  I09 事件分支语义矩阵
+    √ 有来源的空 B0 ≠ 缺来源（判未执行）；效果后 B1 对账 committed；B0 子分支 C→B2 废弃事实不重现；错 J 拒绝 (94 ms)
+  I10 正常路径保留
+    √ 无断点『继续当前世界』reset（oracle 通道）正常工作、世界效果与 journal 一致续用、新业务可接纳 (24 ms)
+    √ 完整同参数父子恢复（H15 形态重跑）：父 effect0/child effect1、完整 args 相同、真实恢复/对账/退出 (26 ms)
+
+  ● I07 缺 eventBranch 的 exact 恢复拒绝 › 基线错结论路径已封闭：恢复在任何修改前拒绝、零修改、当前运行时仍可用
+
+    expect(received).toThrow(expected)
+
+    Expected pattern: /事件分支/
+
+    Received function did not throw
+
+    [0m [90m 114 |[39m     expect(() [33m=>[39m
+     [90m 115 |[39m       performTreasuryFullReset({ roomSpecs[33m:[39m [33mROOMS[39m[33m,[39m adapter[33m:[39m makeTreasuryExactOracleAdapter(journal)[33m,[39m breakpoint[33m:[39m holder[33m.[39mbreakpoint })[33m,[39m
+    [31m[1m>[22m[39m[90m 116 |[39m     )[33m.[39mtoThrow([35m/事件分支/[39m)[33m;[39m
+     [90m     |[39m       [31m[1m^[22m[39m
+     [90m 117 |[39m     [90m// 拒绝时零修改：Memory/世界/事件/tick 均不变（不留半恢复状态）。[39m
+     [90m 118 |[39m     expect([33mJSON[39m[33m.[39mstringify((globalThis [36mas[39m unknown [36mas[39m { [33mMemory[39m[33m:[39m unknown })[33m.[39m[33mMemory[39m))[33m.[39mtoBe(memoryBefore)[33m;[39m
+     [90m 119 |[39m     expect([33mJSON[39m[33m.[39mstringify((globalThis [36mas[39m unknown [36mas[39m { [33mGame[39m[33m:[39m { rooms[33m:[39m unknown } })[33m.[39m[33mGame[39m[33m.[39mrooms))[33m.[39mtoBe(worldBefore)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVService.test.ts:116:7)
+
+  ● I08 裸快照与普通数组通道拒绝 › 显式旧 memorySnapshot + 事件 oracle：拒绝（无世界/事件配对不承担 exact）
+
+    expect(received).toThrow(expected)
+
+    Expected pattern: /memorySnapshot.*配对|配对.*memorySnapshot/
+
+    Received function did not throw
+
+    [0m [90m 151 |[39m     expect(() [33m=>[39m
+     [90m 152 |[39m       performTreasuryFullReset({ roomSpecs[33m:[39m [33mROOMS[39m[33m,[39m adapter[33m:[39m makeTreasuryExactOracleAdapter(journal)[33m,[39m memorySnapshot[33m:[39m snapshot })[33m,[39m
+    [31m[1m>[22m[39m[90m 153 |[39m     )[33m.[39mtoThrow([35m/memorySnapshot.*配对|配对.*memorySnapshot/[39m)[33m;[39m
+     [90m     |[39m       [31m[1m^[22m[39m
+     [90m 154 |[39m   })[33m;[39m
+     [90m 155 |[39m
+     [90m 156 |[39m   it([32m"普通数组事件断点 + oracle：拒绝；非 oracle adapter（无事件来源可错配）不受限"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVService.test.ts:153:7)
+
+  ● I08 裸快照与普通数组通道拒绝 › 普通数组事件断点 + oracle：拒绝；非 oracle adapter（无事件来源可错配）不受限
+
+    expect(received).toThrow(expected)
+
+    Expected pattern: /事件分支/
+
+    Received function did not throw
+
+    [0m [90m 164 |[39m     expect(() [33m=>[39m
+     [90m 165 |[39m       performTreasuryFullReset({ roomSpecs[33m:[39m [33mROOMS[39m[33m,[39m adapter[33m:[39m makeTreasuryExactOracleAdapter(journal)[33m,[39m breakpoint[33m:[39m holder[33m.[39mbreakpoint })[33m,[39m
+    [31m[1m>[22m[39m[90m 166 |[39m     )[33m.[39mtoThrow([35m/事件分支/[39m)[33m;[39m
+     [90m     |[39m       [31m[1m^[22m[39m
+     [90m 167 |[39m     [90m// 非 oracle adapter + 同一裸断点：service 非精确恢复，不受事件来源限制。[39m
+     [90m 168 |[39m     [36mconst[39m reset [33m=[39m performTreasuryFullReset({ roomSpecs[33m:[39m [33mROOMS[39m[33m,[39m adapter[33m:[39m makeTreasuryTestTransferAdapter()[33m,[39m breakpoint[33m:[39m holder[33m.[39mbreakpoint })[33m;[39m
+     [90m 169 |[39m     expect(reset[33m.[39mservice)[33m.[39mtoBeDefined()[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVService.test.ts:166:7)
+
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 5 passed, 8 total
+Snapshots:   0 total
+Time:        3.673 s
+Ran all test suites within paths "src/runtime/treasury/treasuryRemediationVService.test.ts".

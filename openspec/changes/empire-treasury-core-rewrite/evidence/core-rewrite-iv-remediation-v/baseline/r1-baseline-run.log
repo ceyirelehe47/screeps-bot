@@ -1,0 +1,63 @@
+FAIL src/runtime/treasury/r5BaselineR1.test.ts
+  R1 基线反例（fb5e44b）
+    √ 对照：未请求关窗时 authorize/dispatch/rearm 三候选全部成功（候选合法性证明） (50 ms)
+    × 反例 1：独立 endTick 首个恢复回调内 authorize/dispatch/rearm 必须已被关窗拒绝 (39 ms)
+    × 反例 2：关窗发布失败（全部丢写）后同运行时另一 facade 的合法业务仍必须被拒 (29 ms)
+    × 反例 3：onEffect 抛错后窗口必须仍关闭、guard 可再获取、已发布恢复保留 (31 ms)
+
+  ● R1 基线反例（fb5e44b） › 反例 1：独立 endTick 首个恢复回调内 authorize/dispatch/rearm 必须已被关窗拒绝
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 2
+    Received: null
+
+    [0m [90m 248 |[39m     expect(asked)[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m 249 |[39m     [90m// ── 修复后语义（fb5e44b 红灯：基线把三条业务放行）──[39m
+    [31m[1m>[22m[39m[90m 250 |[39m     expect(inCallback[33m.[39mlastEndTickAtCallback)[33m.[39mtoBe([33mGame[39m[33m.[39mtime)[33m;[39m [90m// 回调进入前已关窗[39m
+     [90m     |[39m                                              [31m[1m^[22m[39m
+     [90m 251 |[39m     expect(inCallback[33m.[39mauthorize)[33m.[39mtoMatchObject({ status[33m:[39m [32m"rejected"[39m[33m,[39m reasonCode[33m:[39m [32m"lifecycle_closed"[39m })[33m;[39m
+     [90m 252 |[39m     expect(inCallback[33m.[39mdispatch)[33m.[39mtoMatchObject({ status[33m:[39m [32m"blocked"[39m[33m,[39m reasonCode[33m:[39m [32m"lifecycle_closed"[39m })[33m;[39m
+     [90m 253 |[39m     expect(inCallback[33m.[39mrearm)[33m.[39mtoMatchObject({ status[33m:[39m [32m"rejected"[39m[33m,[39m reasonCode[33m:[39m [32m"lifecycle_closed"[39m })[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/r5BaselineR1.test.ts:250:46)
+
+  ● R1 基线反例（fb5e44b） › 反例 2：关窗发布失败（全部丢写）后同运行时另一 facade 的合法业务仍必须被拒
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 268 |[39m     [36mconst[39m verdictB [33m=[39m serviceB[33m.[39mauthorizeTreasuryActionContract(builtB[33m.[39mcontract[33m,[39m { workKey[33m:[39m [32m"biz:r5:B"[39m })[33m;[39m
+     [90m 269 |[39m     [90m// ── 修复后语义（fb5e44b 红灯：基线放行 admitted）──[39m
+    [31m[1m>[22m[39m[90m 270 |[39m     expect(verdictB[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                             [31m[1m^[22m[39m
+     [90m 271 |[39m     expect((verdictB [36mas[39m { reasonCode[33m?[39m[33m:[39m string })[33m.[39mreasonCode)[33m.[39mtoBe([32m"lifecycle_closed"[39m)[33m;[39m
+     [90m 272 |[39m     [90m// 恢复正常写后可确认关闭：[39m
+     [90m 273 |[39m     serviceB[33m.[39mendTick()[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/r5BaselineR1.test.ts:270:29)
+
+  ● R1 基线反例（fb5e44b） › 反例 3：onEffect 抛错后窗口必须仍关闭、guard 可再获取、已发布恢复保留
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 2
+    Received: null
+
+    [0m [90m 293 |[39m     expect(advance)[33m.[39mtoBeDefined()[33m;[39m
+     [90m 294 |[39m     [90m// ── 修复后语义（fb5e44b 红灯：异常路径尾写被跳过、窗口仍开、业务放行）──[39m
+    [31m[1m>[22m[39m[90m 295 |[39m     expect(lastEndTickOf())[33m.[39mtoBe([33mGame[39m[33m.[39mtime)[33m;[39m
+     [90m     |[39m                             [31m[1m^[22m[39m
+     [90m 296 |[39m     [36mconst[39m verdict [33m=[39m rt[33m.[39mservice[33m.[39mauthorizeTreasuryActionContract(c[33m.[39mcontractN[33m,[39m { workKey[33m:[39m [32m"biz:r5:N"[39m })[33m;[39m
+     [90m 297 |[39m     expect(verdict[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m 298 |[39m     expect((verdict [36mas[39m { reasonCode[33m?[39m[33m:[39m string })[33m.[39mreasonCode)[33m.[39mtoBe([32m"lifecycle_closed"[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/r5BaselineR1.test.ts:295:29)
+
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 1 passed, 4 total
+Snapshots:   0 total
+Time:        3.404 s, estimated 4 s
+Ran all test suites within paths "src/runtime/treasury/r5BaselineR1.test.ts".

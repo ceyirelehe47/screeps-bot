@@ -1,0 +1,36 @@
+diff --git a/src/runtime/treasury/kernel/kernel.ts b/src/runtime/treasury/kernel/kernel.ts
+index 88e583c..b179186 100644
+--- a/src/runtime/treasury/kernel/kernel.ts
++++ b/src/runtime/treasury/kernel/kernel.ts
+@@ -1162,17 +1162,11 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+       }
+       lifecycleAdvanceInFlight = true;
+       try {
+-        // ① 关窗先行：**成功发布关闭必须早于第一个可回调的恢复动作**——
+-        //    恢复循环（及其 onEffect 回调）运行前 lastEndTick 已发布并
+-        //    确认。发布失败不谎报；否决标记保持本 tick 生效。
+-        const closure = publishTickClosure();
+-        // ② 重读当前权威（不能继续使用关窗前旧草稿）：恢复循环的预算、
+-        //    游标与记录遍历全部来自关窗发布之后的当前持久状态——防
+-        //    Object.assign(root, oldDraft) 一类把已发布关闭按入口旧快照
+-        //    恢复成旧值（§2.3）。
+-        const postClose = readTreasuryCoreStoreHealth();
+-        const base = postClose.status === "healthy" ? postClose : health;
+-        const nowTick = ports.nowTick();
++        // [R5-负向变体：晚关窗——publishTickClosure 被移回恢复循环之后]
++        const nowTickV = ports.nowTick();
++        const postCloseV = readTreasuryCoreStoreHealth();
++        const base = postCloseV.status === "healthy" ? postCloseV : health;
++        const nowTick = nowTickV;
+         let used = readBudgetState(base.memory, nowTick);
+         const cursors = { sweepCursor: base.memory.recovery.sweepCursor, cleanupCursor: base.memory.recovery.cleanupCursor };
+         // dispatching 残留（当次调用异常逃逸）→ 保守 unknown（共享同 tick 预算）。
+@@ -1183,6 +1177,8 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+           used = step.used;
+           if (step.applied) recoveredToUnknown += 1;
+         }
++        // [R5-负向变体：晚关窗——恢复循环之后才发布关窗]
++        const closure = publishTickClosure();
+         // ③ 尾部只维护本推进需要维护的事实：预算/游标写持久现读值（旧
+         //    局部 used 不覆盖当前较大值；游标不因关窗回退），关窗事实
+         //    幂等重申（发布失败或期间被篡改后，此处写入可确认关闭）。
