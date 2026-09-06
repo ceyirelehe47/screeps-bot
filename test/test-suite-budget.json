@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "c18a6bc3c2afae74032c45d35a577d6ab65efa7b",
-    "suites": 225,
-    "tests": 1289
+    "commit": "5af68f8bb635ac259a3ee7e94783b3b2f5052409",
+    "suites": 228,
+    "tests": 1328
   },
   "target": {
-    "commit": "c18a6bc3c2afae74032c45d35a577d6ab65efa7b",
-    "suites": 225,
-    "tests": 1289,
-    "passed": 1289,
+    "commit": "5af68f8bb635ac259a3ee7e94783b3b2f5052409",
+    "suites": 228,
+    "tests": 1328,
+    "passed": 1328,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Core Rewrite IV · Remediation I：E01–E20 矩阵/调用边界/记录内公平/许可认证前置/完整 reset 契约入库（test-migration-map.md §Remediation I）；tier 信息性"
+    "note": "Core Rewrite IV · Remediation II：统一覆盖语义/预扣轮转同次发布/preflight 健康门禁 + F01–F20 矩阵与同断点配对测试模型入库（test-migration-map.md §9）；tier 信息性"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1810,17 +1810,17 @@
       "todo": 0
     },
     "src/runtime/treasury/treasuryRemediationIKernel.test.ts": {
-      "budget": 13,
-      "tests": 13,
-      "passed": 13,
+      "budget": 14,
+      "tests": 14,
+      "passed": 14,
       "failed": 0,
       "pending": 0,
       "todo": 0
     },
     "src/runtime/treasury/treasuryRemediationIService.test.ts": {
-      "budget": 11,
-      "tests": 11,
-      "passed": 11,
+      "budget": 12,
+      "tests": 12,
+      "passed": 12,
       "failed": 0,
       "pending": 0,
       "todo": 0
@@ -1829,6 +1829,30 @@
       "budget": 5,
       "tests": 5,
       "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIIKernel.test.ts": {
+      "budget": 16,
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIIService.test.ts": {
+      "budget": 15,
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/baseline/treasuryRemediationIIBaseline.test.ts": {
+      "budget": 6,
+      "tests": 6,
+      "passed": 6,
       "failed": 0,
       "pending": 0,
       "todo": 0
