@@ -1,0 +1,13 @@
+diff --git a/test/mock/treasuryResetHarness.ts b/test/mock/treasuryResetHarness.ts
+index d68a250..0607949 100644
+--- a/test/mock/treasuryResetHarness.ts
++++ b/test/mock/treasuryResetHarness.ts
+@@ -220,7 +220,7 @@ function resetRuntimeCore(input: {
+     installWholeMemorySnapshot(input.breakpoint.memorySnapshot);
+     // 事件事实同样来自所选断点（V1/§4.1）：从捕获时刻的不可变副本重开
+     // 分支——加载器实际应用所选断点，不依赖最近一次截断的共享可变状态。
+-    input.breakpoint.eventBranch?.reopen();
++    void (input.breakpoint as { eventBranch?: { reopen(): void } }).eventBranch; // NEGATIVE-VARIANT: 不消费所选断点事件分支
+   } else {
+     installWholeMemorySnapshot(input.memorySnapshot ?? snapshotWholeMemory());
+   }

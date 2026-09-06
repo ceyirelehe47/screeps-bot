@@ -1,0 +1,13 @@
+diff --git a/src/runtime/treasury/kernel/kernel.ts b/src/runtime/treasury/kernel/kernel.ts
+index 60d9240..eaf25f6 100644
+--- a/src/runtime/treasury/kernel/kernel.ts
++++ b/src/runtime/treasury/kernel/kernel.ts
+@@ -1024,7 +1024,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+           } catch {
+             returned = false; // 端口异常：义务保留（不默认成功）
+           }
+-          const success = returned === true;
++          const success = Boolean(returned); // NEGATIVE-VARIANT: truthy 判定回归
+           // 即将清空义务的确认顺带携带观察证明（committed 完整关闭条件：
+           // 义务清空 + 观察接管，由同一已预扣命令完成——不追加份额）。
+           const willEmpty = success && keys.length === 1;

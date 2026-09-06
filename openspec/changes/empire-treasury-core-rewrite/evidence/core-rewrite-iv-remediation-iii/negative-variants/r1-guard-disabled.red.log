@@ -1,0 +1,57 @@
+FAIL src/runtime/treasury/treasuryRemediationIIIKernel.test.ts
+  G01 两义务同 kernel 重入（内层原本有剩余预算）
+    × 重入被调度 guard 拒绝：D0/D1 各调用一次、remaining 空、retry_ready、份额 4；不能只断言调用不超限 (18 ms)
+    √ 合法对照：D0=false、D1=true——D1 确认移除、D0 保留；端口恢复后 D0 能完成 (5 ms)
+  G02 一个调度所有者（跨实例/关窗/顺序调用）
+    ○ skipped 另一同域 kernel 重入 + 回调内 endTick 关窗 + 同 tick 顺序调用：嵌套零推进、关窗生效、合计预算≤8、释放≤4、预算不回退
+  G03 端口返回值矩阵（只有原始 true 移除）
+    ○ skipped false/空值/数字/字符串/对象/包装布尔/Promise/thenable/throw 均不释放；对象属性与 then 不被执行；恢复 true 后真完成
+    ○ skipped 端口 throw：义务保留、不崩 tick、恢复后完成；计数有界
+  G04 集合演化（每次选择仍在当前 remaining）
+    ○ skipped 1/2/3 义务部分成功：已确认项不再调用、失败项保留、无 stale cursor 回写或批末连带失败
+    ○ skipped 8 义务混合成功/失败：集合逐项缩小、下一待服务成员正确回绕、无重复调用
+  G05 预扣发布丢写与单字段篡改
+    ○ skipped 预扣发布丢写：释放调用 0、remaining/cursor/预算不变
+    ○ skipped 单字段篡改（预扣发布里的 cursor 回写旧值）：独立 expected 拒绝，调用 0、状态不推进
+    ○ skipped 合法对照：同次发布成立——调用 1、份额 2、cursor 与 remaining 同步推进
+  G06 确认丢写与同 tick 恢复
+    ○ skipped true 后确认写丢弃：份额/轮转不退款、同 attempt 幂等重试、已成功确认的其他项不重新出现
+  G07 实际硬断点（配对快照）
+    ○ skipped 预扣后调用前断点：预算+位置已发布、义务未虚构减少；新运行时 guard 不残留、提供正常窗口后可继续
+    ○ skipped 端口后确认前断点：义务保留、位置已发布；恢复后同 attempt 幂等收尾
+  G08 失败前置与完整预算窗口
+    ○ skipped 一记录 8 义务前 4 持续 false、后 4 可成功：正常窗口下后 4 在 ≤3 个推进 tick 内服务并确认；失败责任保留
+    ○ skipped 跨记录失败前置 + 逐 tick 完整 reset：后方可完成记录在有限 tick 内结束、失败端口恢复后能收尾
+  G18 最大允许表示与操作统计
+    ○ skipped 64 active/128 ring/字符上限：满载记录序列化在预算内；单 tick 份额 ≤8、释放 ≤4
+
+  ● G01 两义务同 kernel 重入（内层原本有剩余预算） › 重入被调度 guard 拒绝：D0/D1 各调用一次、remaining 空、retry_ready、份额 4；不能只断言调用不超限
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+        "cancelled": 0,
+    -   "cleaned": 0,
+    +   "cleaned": 2,
+        "closed": 0,
+        "recovered": 0,
+      }
+
+    [0m [90m 130 |[39m     [33mGame[39m[33m.[39mtime [33m+=[39m [35m1[39m[33m;[39m
+     [90m 131 |[39m     [36mconst[39m outerStats [33m=[39m kernel[33m.[39mbeginTick()[33m;[39m
+    [31m[1m>[22m[39m[90m 132 |[39m     expect(innerStats)[33m.[39mtoEqual({ recovered[33m:[39m [35m0[39m[33m,[39m closed[33m:[39m [35m0[39m[33m,[39m cleaned[33m:[39m [35m0[39m[33m,[39m cancelled[33m:[39m [35m0[39m })[33m;[39m [90m// 内层零推进（不是抛错/递归）[39m
+     [90m     |[39m                        [31m[1m^[22m[39m
+     [90m 133 |[39m     expect(outerStats[33m.[39mcleaned)[33m.[39mtoBeGreaterThanOrEqual([35m1[39m)[33m;[39m [90m// 外层真实推进[39m
+     [90m 134 |[39m     [90m// 精确调用与终态（对照基线缺陷：D1 被调 2 次、确认含已移除项被整体拒绝）。[39m
+     [90m 135 |[39m     expect(releaseCalls)[33m.[39mtoEqual([[32m"ext:g1:D0"[39m[33m,[39m [32m"ext:g1:D1"[39m])[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIIIKernel.test.ts:132:24)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 14 skipped, 1 passed, 16 total
+Snapshots:   0 total
+Time:        4.068 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryRemediationIIIKernel.test.ts/i with tests matching "G01".

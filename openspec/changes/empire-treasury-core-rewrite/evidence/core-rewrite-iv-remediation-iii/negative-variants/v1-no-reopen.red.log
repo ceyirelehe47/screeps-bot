@@ -1,0 +1,83 @@
+FAIL src/runtime/treasury/treasuryRemediationIIIService.test.ts
+  G09 所选断点 B0（效果前）是恢复分支唯一事件输入
+    × 世界/Memory/可见事件/计数均属 B0：not_executed（正面未执行对照），不借 B1 效果 committed (41 ms)
+    × B0 分支无正面未执行事实（世界序已越过进入序）时 still-uncertain——不为反驳 committed 自动 not-executed (25 ms)
+  G10 B1 对照与重复恢复独立性
+    × 两次独立恢复 B0：分支互不污染、废弃分支事件不重现（不通过删事件让 G09 假通过） (25 ms)
+    ○ skipped 选择 B1：包含真实效果并能对账关闭（committed）
+  G11 分支链（B2 继承所选分支祖先事件）
+    ○ skipped B2 = B0 祖先 + B0 子分支的 C；不含旧主分支 B0 之后的 A 效果；B2 恢复各自对账
+    ○ skipped 错配事件源（Memory 世界序与断点捆绑不一致）：明确拒绝，不静默对账
+  G12 同参数 A/B：登记后实际只执行 A
+    ○ skipped entered/effect 仅归 A；B 不被误结算；宿主余额只变化一笔；不改 args、不禁用合法 A/B
+  G13 同参数 A/B 逆序与依次执行
+    ○ skipped 逆序执行 B→A：每笔记录真实参数与对应许可身份、各自恰一次；事件身份不随登记/执行顺序变化
+  G14 受控调用上下文的隔离
+    ○ skipped 无作用域：实际调用计数准确、事件不归属任何 attempt（不猜测）、unlinked 诊断
+    ○ skipped 参数不匹配：不归属该 attempt；正确 args 才归属（逐次核对金额）
+    ○ skipped 嵌套作用域：内层身份只关联内层、外层恢复后续调用；异常后不泄漏前一作用域
+    ○ skipped 完整 reset 后：新模块不持有旧执行上下文（旧栈硬终止恢复不复用）
+  G15 真实 capability→rearm→同参数 child
+    ○ skipped child 新身份执行、父代无效果事实与 child 效果分离、旧许可不可重放；断点组合后各自对账
+  G16 exact committed 后余额/空间对照
+    ○ skipped 流出：世界 1000 无责任时 801 拒（独立分支）；已流出 800 后 200 纳、201 拒；A 仍 closing 未提前删除
+    ○ skipped 流入：空位 100、实际流入 80 后 20 纳、21 拒
+  G17 门禁与保守语义回归
+    ○ skipped healthy 真许可执行、非健康核心拒绝、unknown 不因观察释放、endTick 关窗后新授权拒绝
+
+  ● G09 所选断点 B0（效果前）是恢复分支唯一事件输入 › 世界/Memory/可见事件/计数均属 B0：not_executed（正面未执行对照），不借 B1 效果 committed
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "not_executed"
+    Received: "committed"
+
+    [0m [90m 176 |[39m     [36mif[39m (settled[33m.[39mstatus [33m!==[39m [32m"ok"[39m) [36mthrow[39m [36mnew[39m [33mError[39m([32m"settle failed"[39m)[33m;[39m
+     [90m 177 |[39m     [36mconst[39m record [33m=[39m recordShape(attemptId)[33m![39m[33m;[39m
+    [31m[1m>[22m[39m[90m 178 |[39m     expect(record[33m.[39moutcome)[33m.[39mtoBe([32m"not_executed"[39m)[33m;[39m [90m// B0 分支无该效果事件（不是借 B1 的 committed）[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 179 |[39m     expect(journal[33m.[39mvisibleFor(attemptId)[33m.[39mfilter((e) [33m=>[39m e[33m.[39mkind [33m===[39m [32m"world-effect"[39m)[33m.[39mlength)[33m.[39mtoBe([35m0[39m)[33m;[39m [90m// 恢复分支不可见 B1 效果[39m
+     [90m 180 |[39m   })[33m;[39m
+     [90m 181 |[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIIIService.test.ts:178:28)
+
+  ● G09 所选断点 B0（效果前）是恢复分支唯一事件输入 › B0 分支无正面未执行事实（世界序已越过进入序）时 still-uncertain——不为反驳 committed 自动 not-executed
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "still_uncertain"
+    Received: "ok"
+
+    [0m [90m 189 |[39m     expect(journal[33m.[39mrunWithInvocation(c[33m,[39m argsC[33m,[39m () [33m=>[39m reset[33m.[39mservice[33m.[39mexecuteAuthorizedDispatch(c[33m.[39mdispatch))[33m.[39mstatus)[33m.[39mtoBe([32m"committed"[39m)[33m;[39m
+     [90m 190 |[39m     [36mconst[39m settled [33m=[39m reset[33m.[39mservice[33m.[39msettleUnknownOutcome({ attemptId })[33m;[39m
+    [31m[1m>[22m[39m[90m 191 |[39m     expect(settled[33m.[39mstatus)[33m.[39mtoBe([32m"still_uncertain"[39m)[33m;[39m [90m// 证据不足：拒绝落定（不为反驳 committed 自动 not-executed）[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 192 |[39m     expect(recordShape(attemptId)[33m?[39m[33m.[39moutcome)[33m.[39mtoBe([32m"unknown"[39m)[33m;[39m
+     [90m 193 |[39m     expect(recordShape(attemptId)[33m?[39m[33m.[39mphase)[33m.[39mtoBe([32m"outcome_unknown"[39m)[33m;[39m [90m// 保守保留[39m
+     [90m 194 |[39m   })[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIIIService.test.ts:191:28)
+
+  ● G10 B1 对照与重复恢复独立性 › 两次独立恢复 B0：分支互不污染、废弃分支事件不重现（不通过删事件让 G09 假通过）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "not_executed"
+    Received: "committed"
+
+    [0m [90m 214 |[39m       [36mconst[39m settled [33m=[39m reset[33m.[39mservice[33m.[39msettleUnknownOutcome({ attemptId })[33m;[39m
+     [90m 215 |[39m       [36mif[39m (settled[33m.[39mstatus [33m!==[39m [32m"ok"[39m) [36mthrow[39m [36mnew[39m [33mError[39m([32m"settle failed"[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 216 |[39m       expect(recordShape(attemptId)[33m?[39m[33m.[39moutcome)[33m.[39mtoBe([32m"not_executed"[39m)[33m;[39m
+     [90m     |[39m                                               [31m[1m^[22m[39m
+     [90m 217 |[39m       expect(journal[33m.[39mvisibleFor(attemptId)[33m.[39mfilter((e) [33m=>[39m e[33m.[39mkind [33m===[39m [32m"world-effect"[39m)[33m.[39mlength)[33m.[39mtoBe([35m0[39m)[33m;[39m [90m// 两个 B0 分支都看不到 B1 效果[39m
+     [90m 218 |[39m       [90m// 恢复分支内的动作事件只属于本分支（round 0 的 C 不进入 round 1）。[39m
+     [90m 219 |[39m       [36mconst[39m argsC [33m=[39m transferArgs({ amount[33m:[39m [35m30[39m[33m,[39m outcome[33m:[39m [32m"ok"[39m })[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIIIService.test.ts:216:47)
+
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 13 skipped, 16 total
+Snapshots:   0 total
+Time:        4.424 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryRemediationIIIService.test.ts/i with tests matching "G09".

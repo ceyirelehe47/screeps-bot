@@ -1,0 +1,14 @@
+diff --git a/src/runtime/treasury/kernel/kernel.ts b/src/runtime/treasury/kernel/kernel.ts
+index 60d9240..3ea4a26 100644
+--- a/src/runtime/treasury/kernel/kernel.ts
++++ b/src/runtime/treasury/kernel/kernel.ts
+@@ -830,8 +830,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+     // §3.1：已有推进进行中（回调重入/多实例/同 tick 顺序调用重叠）时结构化
+     // 返回零推进——嵌套请求不递归调度；外层完成后，后续正常入口按剩余
+     // 持久预算继续推进（预算/cursor 单一权威在 Memory）。
+-    if (lifecycleAdvanceInFlight) return { recovered: 0, closed: 0, cleaned: 0, cancelled: 0 };
+-    lifecycleAdvanceInFlight = true;
++    lifecycleAdvanceInFlight = true; // NEGATIVE-VARIANT: guard 检查移除（仍置位/复位但不拦截）
+     try {
+       return runLifecycleAdvance();
+     } finally {

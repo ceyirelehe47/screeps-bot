@@ -1,0 +1,15 @@
+diff --git a/test/mock/treasuryExactOracle.ts b/test/mock/treasuryExactOracle.ts
+index 9a4d64d..914f696 100644
+--- a/test/mock/treasuryExactOracle.ts
++++ b/test/mock/treasuryExactOracle.ts
+@@ -162,8 +162,8 @@ export function makeTreasuryExactOracleAdapter(journal: TreasuryHostJournal): Tr
+       // 受控调用作用域（V2/§5.2）：栈顶身份 + 参数逐次核对；不扫描 active、
+       // 不按 args 反查、不读 outcome 反推归属。
+       const frame = state.invocationStack.length > 0 ? state.invocationStack[state.invocationStack.length - 1] : null;
+-      const argsKey = stableStringify(args);
+-      const attemptId = frame !== null && frame.argsKey === argsKey ? frame.attemptId : null;
++      void stableStringify;
++      const attemptId = frame !== null ? frame.attemptId : null; // NEGATIVE-VARIANT: 忽略参数逐次核对
+       if (attemptId === null) state.unlinkedCalls += 1;
+       if (attemptId !== null) {
+         state.entries.push({

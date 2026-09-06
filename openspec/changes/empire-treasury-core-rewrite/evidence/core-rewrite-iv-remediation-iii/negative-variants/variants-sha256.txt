@@ -1,0 +1,4 @@
+45e21f223d8e8190e8b8a06f11b5c7cd373e7908db854937b5af697c7f10fb7f *openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv-remediation-iii/negative-variants/r1-guard-disabled.patch
+65ef6bf8a9cde8bdce090ed3fa650efaf5d8e9ff1e81193693c4211c08640f28 *openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv-remediation-iii/negative-variants/r2-truthy-regression.patch
+25b8c8ecce00522cbd58aef4497f5d10961e6cdebe5668bde69167cfb53779bb *openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv-remediation-iii/negative-variants/v1-no-reopen.patch
+13324aa173e51e708cb89ba56f42b8066c9f78d11dc4032627bc280dda5b4018 *openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv-remediation-iii/negative-variants/v2-skip-args-check.patch

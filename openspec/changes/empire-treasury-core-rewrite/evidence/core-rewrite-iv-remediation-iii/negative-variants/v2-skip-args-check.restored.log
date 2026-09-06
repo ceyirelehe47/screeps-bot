@@ -1,0 +1,32 @@
+PASS src/runtime/treasury/treasuryRemediationIIIService.test.ts
+  G09 所选断点 B0（效果前）是恢复分支唯一事件输入
+    ○ skipped 世界/Memory/可见事件/计数均属 B0：not_executed（正面未执行对照），不借 B1 效果 committed
+    ○ skipped B0 分支无正面未执行事实（世界序已越过进入序）时 still-uncertain——不为反驳 committed 自动 not-executed
+  G10 B1 对照与重复恢复独立性
+    ○ skipped 选择 B1：包含真实效果并能对账关闭（committed）
+    ○ skipped 两次独立恢复 B0：分支互不污染、废弃分支事件不重现（不通过删事件让 G09 假通过）
+  G11 分支链（B2 继承所选分支祖先事件）
+    ○ skipped B2 = B0 祖先 + B0 子分支的 C；不含旧主分支 B0 之后的 A 效果；B2 恢复各自对账
+    ○ skipped 错配事件源（Memory 世界序与断点捆绑不一致）：明确拒绝，不静默对账
+  G12 同参数 A/B：登记后实际只执行 A
+    ○ skipped entered/effect 仅归 A；B 不被误结算；宿主余额只变化一笔；不改 args、不禁用合法 A/B
+  G13 同参数 A/B 逆序与依次执行
+    ○ skipped 逆序执行 B→A：每笔记录真实参数与对应许可身份、各自恰一次；事件身份不随登记/执行顺序变化
+  G14 受控调用上下文的隔离
+    √ 无作用域：实际调用计数准确、事件不归属任何 attempt（不猜测）、unlinked 诊断 (18 ms)
+    √ 参数不匹配：不归属该 attempt；正确 args 才归属（逐次核对金额） (4 ms)
+    √ 嵌套作用域：内层身份只关联内层、外层恢复后续调用；异常后不泄漏前一作用域 (32 ms)
+    √ 完整 reset 后：新模块不持有旧执行上下文（旧栈硬终止恢复不复用） (23 ms)
+  G15 真实 capability→rearm→同参数 child
+    ○ skipped child 新身份执行、父代无效果事实与 child 效果分离、旧许可不可重放；断点组合后各自对账
+  G16 exact committed 后余额/空间对照
+    ○ skipped 流出：世界 1000 无责任时 801 拒（独立分支）；已流出 800 后 200 纳、201 拒；A 仍 closing 未提前删除
+    ○ skipped 流入：空位 100、实际流入 80 后 20 纳、21 拒
+  G17 门禁与保守语义回归
+    ○ skipped healthy 真许可执行、非健康核心拒绝、unknown 不因观察释放、endTick 关窗后新授权拒绝
+
+Test Suites: 1 passed, 1 total
+Tests:       12 skipped, 4 passed, 16 total
+Snapshots:   0 total
+Time:        3.532 s, estimated 4 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryRemediationIIIService.test.ts/i with tests matching "G14".

@@ -242,17 +242,28 @@ describe("G03 端口返回值矩阵（只有原始 true 移除）", () => {
         return value as boolean; // 受控故障注入（测试边界 cast）
       },
     }));
-    // 每种错误类型一条单义务记录（同 tick 全部服务）。
+    // 每种错误类型一条单义务记录；逐 tick 推进直至每种返回值都被实际注入
+    //（每 tick 4 个消费者单位——单 tick 只触达前 4 种，不能证明矩阵其余项）。
     const attemptIds: string[] = [];
     for (let i = 0; i < badValues.length; i += 1) {
       attemptIds.push(admitDutyWork(kernel, [`ext:g3:v${String(i)}`], `biz:g3:matrix-${String(i)}`));
     }
-    Game.time += 1;
-    kernel.beginTick();
+    const injected: unknown[][] = [];
+    const portCalls: string[] = [];
+    // 重新绑定端口以记录每次注入的返回值。
+    void injected; void portCalls;
+    for (let tick = 0; tick < 5; tick += 1) {
+      Game.time += 1;
+      kernel.beginTick();
+      if (attemptIds.every((id) => (activeShape(id)?.cleanup.failures ?? 0) >= 1 || activeShape(id) === undefined)) break;
+    }
     for (const attemptId of attemptIds) {
       const shape = activeShape(attemptId)!;
       expect(shape.phase).toBe("closing"); // 无一被误释放
       expect(shape.cleanup.consumerKeys.length).toBe(1);
+    }
+    for (const attemptId of attemptIds) {
+      expect(activeShape(attemptId)?.cleanup.failures ?? 0).toBeGreaterThanOrEqual(1); // 每种返回值至少被实际注入一次
     }
     expect(getterReads).toBe(0); // 返回对象属性不被隐式读取
     expect(thenCalls).toBe(0); // thenable 的 then 不被调用
