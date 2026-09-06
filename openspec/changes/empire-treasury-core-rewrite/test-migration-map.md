@@ -233,7 +233,7 @@
 | F16 | 混合流量逐 tick 完整 reset | treasuryRemediationIKernel › E10（V2 改造形态：8 失败工作+8 义务 good+过期 retry+噪声，逐 tick performTreasuryKernelFullReset，界 40 tick，失败义务保留） |
 | F17 | 混合负载独立宿主账目 | treasuryRemediationIIService › F17（完成/真实 rearm/长期 unknown/部分清理/reset/旧视图；hostLedger 独立核算世界 850；unknown 占用→750/751） |
 | F18 | 最坏值+越界拒绝 | treasuryRemediationIIKernel › F18（满 64/128 ≤360,000+bytes 另报；真实路径演化有界；cursor -1/1.5/越界 → unhealthy） |
-| F19 | 全仓最终验证 | 无独立测试：typecheck/build/Treasury 定向（26 套件）/Defense 冻结回归/test/baseline 独立归类/budget 校验——证据见 evidence/core-rewrite-iv-remediation-ii/final/（含 10,000 完成/1,000 retry 既有压力套件在全仓 JSON 内的计数） |
+| F19 | 全仓最终验证 | 无独立测试：typecheck/build/Treasury 定向（24 套件 482 tests）/Defense 冻结回归（11/118）/test/baseline（2 套件 11 tests）独立归类/budget 校验——证据见 evidence/core-rewrite-iv-remediation-ii/final/（含 10,000 完成/1,000 retry 既有压力套件在全仓 JSON 内的计数） |
 | F20 | 负向变体 | evidence/core-rewrite-iv-remediation-ii/negative-variants/（nv1 旧 occupancy 语义→基线 R1+F01 红；nv2 游标移回回调后→基线 R2+F05 红；nv3 preflight healthy-only→基线 R3×3+F09 红；各自还原后全绿）；工具契约负向（错配断点/假 reset/旧 descriptor）由 F15/F14/F13 内联承担 |
 
 ### 9.3 基线反例持续回归
