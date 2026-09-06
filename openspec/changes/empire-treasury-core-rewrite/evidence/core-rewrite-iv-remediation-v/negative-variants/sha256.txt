@@ -1,0 +1,6 @@
+1b6121a1f570dfab5211c7fb4f8bc52a7ea8439bba491bcf1fe61de3aada63be *r1-late-closure.patch
+263035aca5c66521b170ea17f038d80904385c2c182ea5fd232c035019ddf169 *v1-missing-branch-dropped.patch
+3a30f98c09718127f9aa273ed6c1b59589b750db78f4da010bdf803c3cecd382 *r1-late-closure.red.log
+4e4dc11e4a735f2b7955b646318a0e706d73e0d0c97ef7a0206697a2d27f9c94 *v1-missing-branch-dropped.red.log
+02b49ead6b1c4a09634f616b10d77c934d7f3c3fed9d2f45342bd1b5495face9 *r1-late-closure.restored.log
+6df672b2964b272e0fd081046ca0b97a617fb2d6f69814c56f7b5dd34d718bca *v1-missing-branch-dropped.restored.log
