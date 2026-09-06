@@ -65,7 +65,8 @@
 - [x] I01–I10/I13 矩阵（VKernel 11 + VService 8：含成本四 fixture 实测）；I11/I12 由既有 G/H/F/C 套件全量回归承担；I14 负向变体两件套（R1 晚关窗→I01/I03 红、V1 删校验→I07/I08 红；还原 11/11、8/8 绿）；I15/I16 由最终验证与主报告承担
 - [x] 取证修订：上轮 attribution-probe.ts 转 .txt 非执行归档（README 注明二分依据；历史不改写）
 - [x] Agent 本地验证：typecheck/build/Treasury/Defense 冻结集合/全仓/budget（见 evidence/core-rewrite-iv-remediation-v/final）
-- [ ] 独立审查（本轮交付后由独立 Agent 执行——本地验证不构成放行）
+- [x] 独立审查（2026-09-07 Agent 独立验收结论 **ACCEPT**：八项全 PASS——基线反例在 fb5e44b 干净 worktree 独立复现且红灯行号/细节与归档日志一致、R1/V1 逐行核对、I 矩阵断言抽查非空转、19/19 定向复跑、负向变体红→还原绿、git/验证纪律与取证修订闭合；内核候选版不自动升级为部署许可）
+- 下轮待办（独立验收 CONCERN，低危）：VKernel I02 的 `activeBefore + 1 - 1` 冗余写法清理（断言有效，纯风格——涉可执行文件须随下轮验证）；evidence 树历史源码存档（如 treasuryR4BaselineReplicators.baseline.ts 依赖后缀约定不被收集）统一归档策略
 - 观察（非本轮范围）：H18（IVKernel）的手工满载记录 outcome=null/closing 无 outcomeEvidence 不满足结构校验（store unhealthy）——其断言（unknown 保留/释放≤4/失败义务不删）在 unhealthy 下仍成立但部分为空转；下轮应改用合法记录形状获得非空转覆盖
 - 观察（非本轮范围）：facade 旧栈 beginTick 不接线 releaseExternalConsumer 时，经 kernel 面接纳的消费者义务在 service 面清理中不释放（端口缺失保守保留）——与生产装配的差异仅测试可见
 
