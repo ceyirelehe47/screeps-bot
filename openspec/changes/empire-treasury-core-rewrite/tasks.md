@@ -54,6 +54,21 @@
 - [x] C24 负向变体三件套（去累计 policy 3 红/载荷作发布目标 1 红/调用后计预算 3 红）各自红灯后还原，58/58 恢复
 - 注：II 轮 evidence 的 validation-head 指向中间 6daf3bc、bundle hash 与最终说明不一致——保留为历史（III 报告已注明）；II 轮"A05–A08 等价"在 v3 下 fixture 已同步升级。
 
+## Core Rewrite IV · Remediation V（2026-09-07）
+
+- [x] 影响范围侦察（subagent：performTreasuryFullReset 全调用点三类归类、kernel endTick 结构与 admissionWindowOpen 4 消费点、依赖关窗时序的 H/C/G 测试清单、attribution-probe 形态、budget 现状）
+- [x] 前置卫生：5 文件历史 NUL 字节转 \x00 转义（零行为变化；grep/read 工具恢复可用）
+- [x] 基线反例（干净 worktree fb5e44b，两脚本均 exit=1）：R1 对照绿+三反例红（回调内 lastEndTick=null/authorize admitted/dispatch 实际执行/丢写后跨实例 admitted/抛错后窗口仍开）；V1 TRACE 绿（世界回 1000 + J 含后来 effect + settle committed 错结论真实复现）+ REJECT 红（evidence/…-remediation-v/baseline；修复后复跑 R1 4/4 绿、V1 TRACE 红/REJECT 绿）
+- [x] R1：endTick 关窗先行——请求即置模块级按 tick 失效否决标记（admit/executeDispatch/executeRearm + facade admissionWindowOpen 共享消费）→ publishTickClosure 安全写发布确认（幂等/结果如实）→ 关窗后现读驱动恢复循环 → 尾部只维护预算/游标事实并幂等重申关窗（事实一致跳过重复写）；closurePersisted 如实返回；嵌套 endTick 仍有界关窗
+- [x] V1：performTreasuryFullReset 来源必备——配对一致性前置（伪造断点保持既有口径）；oracle 断点缺 eventBranch（含普通数组通道）拒；显式旧 memorySnapshot+oracle 拒；非 oracle 不受限；kernel 面不宣称 exact；F17 调用点等价迁移
+- [x] 跨用例污染治理：resetTreasuryCoreStoreForTest 清模块级生命周期事实（否决标记跨同 Game.time 用例残留——30 处误红由此修复）；G02 断言等价重组（closurePersisted 字段）
+- [x] I01–I10/I13 矩阵（VKernel 11 + VService 8：含成本四 fixture 实测）；I11/I12 由既有 G/H/F/C 套件全量回归承担；I14 负向变体两件套（R1 晚关窗→I01/I03 红、V1 删校验→I07/I08 红；还原 11/11、8/8 绿）；I15/I16 由最终验证与主报告承担
+- [x] 取证修订：上轮 attribution-probe.ts 转 .txt 非执行归档（README 注明二分依据；历史不改写）
+- [x] Agent 本地验证：typecheck/build/Treasury/Defense 冻结集合/全仓/budget（见 evidence/core-rewrite-iv-remediation-v/final）
+- [ ] 独立审查（本轮交付后由独立 Agent 执行——本地验证不构成放行）
+- 观察（非本轮范围）：H18（IVKernel）的手工满载记录 outcome=null/closing 无 outcomeEvidence 不满足结构校验（store unhealthy）——其断言（unknown 保留/释放≤4/失败义务不删）在 unhealthy 下仍成立但部分为空转；下轮应改用合法记录形状获得非空转覆盖
+- 观察（非本轮范围）：facade 旧栈 beginTick 不接线 releaseExternalConsumer 时，经 kernel 面接纳的消费者义务在 service 面清理中不释放（端口缺失保守保留）——与生产装配的差异仅测试可见
+
 ## Core Rewrite IV · Remediation IV（2026-09-06）
 
 - [x] R1：独立 endTick 取得与 beginTick 同一推进所有权；嵌套 endTick 只关窗；尾部预算 max/游标现读写回
@@ -65,7 +80,7 @@
 - [x] 28 个 runWithInvocation 调用点迁移（III/IIService、IService）
 - [x] evidence：baseline（三反例+轨迹）/final（固定验证 HEAD）/negative-variants（三变体红+还原绿）
 - [x] 独立审查（2026-09-07 Agent 独立验收结论 ACCEPT；内核候选版不自动升级为部署许可）
-- [ ] 下轮待办（独立验收 CONCERN，低危）：performTreasuryFullReset 对"service 面 + 断点无 eventBranch + adapter 暴露 journal"组合明确拒绝（当前该组合静默跳过来源校验且不 reopen 分支——现有测试未走该路径，属工具 API 一致性空隙）
+- [x] ~~下轮待办（独立验收 CONCERN，低危）：performTreasuryFullReset 对"service 面 + 断点无 eventBranch + adapter 暴露 journal"组合明确拒绝~~（已由 Remediation V/V1 关闭：缺分支一律在对账前拒绝，I07 验收）
 
 ## Core Rewrite IV · Remediation III（2026-09-06）
 

@@ -152,3 +152,21 @@ II 轮确认旧证明链未复活，并补充 II 轮新增写权威的封闭性�
 - TreasuryOracleHostPlan（results/afterWorldEffect）只在测试宿主内编排
   执行结果与捕获时机，不进生产、不向 reconciler 提供结论；调用与效果
   仍在真实边界记录（dispatch_start/adapter.execute/dispatch_result）。
+
+## Core Rewrite IV · Remediation V（2026-09-07）
+
+- endTick 关窗否决标记（endTickAdmissionVetoTick）是**运行时否决条件**，
+  不是第二许可权威：它只能拒绝新增业务（admit/executeDispatch/
+  executeRearm 与 facade 授权窗口共享消费），不授予任何执行权、不证明
+  持久关闭、不写新永久 store；按 tick 失效（无永久闩锁），完整 reset
+  后丢失——跨运行时的关窗权威仍是持久 lifecycle.lastEndTick 的安全写
+  协议。guard（推进互斥）与否决标记（业务拒绝）职责分离，不能一起清除。
+- endTick 返回的 closurePersisted 是对持久事实的**如实报告**，不是执行
+  权限或关窗证书；发布失败返回 false 不影响否决标记本 tick 生效。
+- performTreasuryFullReset 的来源必备校验是验收工具的输入完整性门禁：
+  拒绝发生在任何状态修改之前、零修改；生产许可有效性仍完全由
+  preflight/复验/执行门禁决定。测试事件分支（captureBranch/reopen）
+  不是生产证书；kernel 面裸 Memory 安装明确不宣称 exact 对账。
+- 关窗不停止旧工作收尾：beginTick/清理/对账/取消/关闭入口不消费否决
+  标记（不加"closed 即全入口返回"总开关）——新增业务拒绝与既有义务
+  兑现是两个口径。

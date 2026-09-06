@@ -318,3 +318,36 @@ test/baseline/treasuryRemediationIIBaseline.test.ts（6 用例）：R1 流出/�
 - G15（III Service）：改名"普通 rearm 回归"——父 outcome:"non-ok"/child
   outcome:"ok" 使完整 args 不同、且未实际捕获/恢复断点，不能充当同参数
   父子与断点组合；该组合由 H15/H16 承担（宿主计划使父子 args 全等）。
+
+## 12. Core Rewrite IV · Remediation V：I01–I16 定位（2026-09-07）
+
+| 编号 | 入口（文件/用例） | 前提与断言定位 |
+| --- | --- | --- |
+| I01 | treasuryRemediationVKernel.test.ts `I01…`（对照 + 主用例） | 真实断点 fixture（service 面 retry_ready 父代 + kernel 捕获 adapter 的 dispatch_start 断点 A）+ 完整 reset（runBeginTick:false）+ 新模块 facade（不调 beginTick——首恢复入口必须是独立 endTick）。对照：真 contract/许可/capability 三候选在未关窗时全部成功；主用例：首个 recovered_to_unknown 回调进入时 lastEndTick===Game.time、authorize 拒 lifecycle_closed、frontier/active 增量 0 |
+| I02 | 同文件 `I02…` | 回调内真 dispatch（blocked lifecycle_closed、动作 0、P 保持 pending）+ 真 rearm（rejected、child 0）；权利未误消费：父代保持 retry_ready、下一 tick 重签 capability + 新建 child 合同 rearm admitted（tick 作用域许可口径） |
+| I03 | 同文件 `I03…` | onEffect 首个恢复效果抛错（只抛一次——后续清理效果放行）：A 已 outcome_unknown、lastEndTick 保持、另一 facade authorize 仍拒、beginTick 清理非零推进（C 义务获服务）、推进后窗口仍关闭 |
+| I04 | 同文件 `I04…`（2 用例） | 丢写：closurePersisted=false、lastEndTick 未写、active/budget 不变、跨实例拒、serviceB.endTick 后确认关闭；篡改：lastEndTick 置 null 后 health 仍 healthy、跨实例仍拒、endTick 幂等重申确认 |
+| I05 | 同文件 `I05…` | 预算写满 8 后 endTick 关窗写仍进行（closurePersisted=true、恢复 0）；同 tick beginTick 可推进且窗口不复活（authorize lifecycle_closed）；断点 fixture + reset 的独立 endTick 回调内嵌套 begin/end（四方向互斥抽查：嵌套 begin 零推进、嵌套 end 零恢复、恢复 1）；下一 tick 新窗口接纳（reset 后新句柄） |
+| I06 | 同文件 `I06…`（2 用例） | 成功发布关闭后同 tick 切点完整 reset：lastEndTick 恢复、authorize 拒、下一 tick 窗口完成 dispatch committed；关闭前切点：窗口开启、authorize admitted |
+| I07 | treasuryRemediationVService.test.ts `I07…`（2 用例） | 基线 TRACE 场景（B0 无 eventBranch、旧栈效果入 J、世界 900）：恢复前拒绝（toThrow /事件分支/）+ 零修改（Memory/世界/事件/tick 逐项 JSON 相等）；对照：携带 eventBranch 同型断点恢复正常（空分支 settle not_executed） |
+| I08 | 同文件 `I08…`（3 用例） | memorySnapshot+oracle 拒；普通数组断点+oracle 拒、非 oracle 同断点不受限；kernel 面 memorySnapshot 正常（healthy、closing 随快照恢复、不宣称 exact） |
+| I09 | 同文件 `I09…` | 有来源空 B0（eventCut=0）≠ 缺来源（settle not_executed）；效果后 B1（afterWorldEffect 捕获）恢复 settle committed；B0 子分支 C→B2：A 在 C 执行前 settle not_executed（不借废弃分支效果）、B2 恢复 C committed、A 有界保留；错 J（J2 marker + J1 adapter）拒 |
+| I10 | 同文件 `I10…`（2 用例） | 无断点当前世界 reset：世界 930 保留、journal 一致续用、新业务 admitted；H15 形态完整同参数父子恢复重跑（父子 canonicalArgs JSON 全等、父 effect0/child effect1、断点恢复→settle committed→观察接管退出） |
+| I11 | 既有套件回归 | G01–G08（IIIKernel）、H07（IVKernel）、F 系列单步清理/严格 true、C16/C17 预扣与失败预算、E 系列覆盖口径/健康 preflight——全量重跑保持绿（I 轮验证流程覆盖） |
+| I12 | 既有套件回归 | H17（IVService）closing 200/201 对照（先拒后纳）、H12/H13/H14 分支矩阵、F15/R10 坏 ring 隔离——全量重跑保持绿 |
+| I13 | treasuryRemediationVKernel.test.ts `I13 成本观察`（2 用例） | 存储边界观察器（属性 get/set 计数）实测四 fixture：空 endTick（7 读/1 写）；恢复 A+清理 8C（tick1 41 读/7 写/7 份额/2 释放；完成 2 tick、逐 tick 释放 [4,2]≤4、终态 retry_ready）；关窗发布失败（0 放行/≤2 次尝试/closurePersisted=false）；64 活跃混合推进（begin+end 真实恢复、份额 ≤8、closurePersisted=true）。计量经 console.log 入 jest 日志（evidence/final 摘录） |
+| I14 | evidence/…/negative-variants | R1 晚关窗（I01/I03 行为红；I02 不红=顺序与否决分层证据）；V1 删缺分支拒绝（I07/I08 两用例红）；还原后 11/11、8/8 绿 |
+| I15 | 最终验证流程 | Treasury 31 suites/569、Defense 11/118、全仓 235/1404、typecheck/build/budget、固定验证 HEAD 原始 JSON/日志（evidence/final） |
+| I16 | evidence + 主报告 | 上轮 attribution-probe.ts 转 .txt 非执行归档（取证修订）；上轮"压力未重跑"口径纠正（jest-full.json 实含 passed 记录）；三种 SHA 与后置文件分类 |
+
+### 12.1 既有测试修订说明（Remediation V）
+
+- G02（IIIKernel）：嵌套 endTick 返回断言等价重组为
+  `{recoveredToUnknown:0, closurePersisted:true}`（R1 新增如实的持久确认
+  字段；原"嵌套不递归恢复"行为断言保留）。
+- F17（IIService）：memorySnapshot+oracle 调用点等价迁移为不传 snapshot
+  （快照本为 reset 入口即时值，语义不变；oracle 通道不再接受显式旧值）。
+- H05/H06（IVKernel）/C06（Rewrite3Acceptance）：断言保持（关窗写生效/
+  尾写失败不假报/安全清理继续）——R1 关窗前移后语义更强，无需修订。
+- resetTreasuryCoreStoreForTest 增清模块级生命周期事实（否决标记按 tick
+  失效会跨同 Game.time 用例残留——修复 30 处跨用例污染）。

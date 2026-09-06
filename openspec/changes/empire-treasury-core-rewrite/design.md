@@ -440,3 +440,63 @@ args 保持相同；afterWorldEffect 回调在产生 world-effect 的调用返�
 生产 dispatch_result 写入前触发——此处捕获的断点经完整 reset 恢复后，
 unknown 经恢复分支 exact 对账落定 committed，观察接管后真退出。计划只
 控制测试执行结果，调用与效果仍在真实边界记录。
+
+## 10. 先关窗后恢复、缺失来源拒绝（Remediation V 修订）
+
+### 10.1 关窗先于独立 endTick 的恢复回调
+
+endTick 请求一经发出即产生两道共享关闭条件，先于任何恢复回调、且独立于
+其后持久发布的成败：
+
+1. **模块级运行时否决标记**（endTickAdmissionVetoTick，单一、固定大小、
+   按 tick 失效）：请求时置位；admit/executeDispatch/executeRearm 与
+   facade 授权窗口（admissionWindowOpen 的全部消费点）共享消费——不能只
+   阻断发起 endTick 的实例。它仅作否决：不授予执行权、不证明持久关闭、
+   不写新永久 store；same-tick beginTick 不清除（清理/恢复继续，业务仍
+   拒）；下一 tick 按 tick 失效、原流程开新窗口（无永久闩锁）；完整
+   reset（模块重建）后丢失——跨运行时的关窗权威仍是持久
+   lifecycle.lastEndTick。全 heap 丢失后不能从未落盘信息重建结束请求
+   （故障模型边界：不设计第二份永久证书）。
+2. **持久关窗发布**（publishTickClosure）：经既有安全写协议发布并确认
+   lifecycle.lastEndTick，幂等（已持有不重复写）；**成功发布关闭必须早于
+   第一个可回调的恢复动作**——恢复循环（及其 onEffect/release 回调）运行
+   前完成。
+
+endTick 返回的 closurePersisted 如实反映关窗事实当前是否已持久确认；
+发布失败不谎报（否决标记与持久确认是不同职责）。恢复循环的全部草稿
+（预算/游标/记录遍历）来自关窗发布之后的当前持久重读，不沿用入口旧
+快照——防把已发布关闭按旧草稿恢复成旧值。尾部只维护预算/游标事实并
+幂等重申关窗（发布失败或被篡改后，恢复写可确认关闭）；事实一致且关窗
+已持有时跳过重复写。嵌套 endTick 仍只做有界关窗发布（不递归恢复）。
+
+### 10.2 失败与异常不开放新业务
+
+onEffect 抛错：已发布恢复/关闭不撤销（finally 释放 guard，恢复写先于
+回调）；关窗发布丢写/lastEndTick 被篡改（健康旧 root 仍可读）：不假报
+持久成功，当前运行时跨实例经否决标记继续拒绝新增业务；不退款、不清空
+记录；恢复正常写入后重申即可确认关闭。核心损坏/不兼容时健康门阻断，
+不通过初始化或清空恢复开放。
+
+### 10.3 关窗不停止旧工作的安全收尾；成本口径
+
+关窗只禁止新的 authorize/dispatch/executeRearm；已经接纳的工作仍按原
+规则恢复 unknown、可信对账、取消已知未开始、幂等清理与关闭（beginTick
+与清理入口不受否决限制——不加"closed 即全入口返回"总开关）。关窗写是
+固定开销安全写，计入实际物理写统计（I13 实测：空 endTick 共 1 次写；
+发布失败路径 ≤2 次有界写尝试）；预算满不阻断必要关窗、也不为其循环
+重试或增加每 tick 份额。8 份逻辑预算与消费者每项 2 份不变。
+
+### 10.4 exact service 恢复的来源必备条件
+
+performTreasuryFullReset 的三类使用目的（校验全部发生在 resetRuntimeCore
+之前，拒绝路径零修改——Memory/世界/事件/tick 不变，当前运行时仍可用）：
+
+| 使用目的 | 条件 |
+| --- | --- |
+| 选定历史断点的 exact service 恢复（oracle 通道） | 断点必须携带匹配事件分支：缺失 eventBranch（含普通数组通道）、捕获来源与 adapter 事件来源不一致、旧形态 marker（无 source）一律在对账前拒绝。有来源的空分支（count=0）与没有事件来源不同——空分支按可信宿主事实判未执行或不确定 |
+| 继续当前世界的普通 reset | 都不传：入口即时快照 Memory/世界，journal 不回滚（其全部事件属于当前世界，一致）。显式旧 memorySnapshot + 事件 oracle 被拒绝（旧 Memory 与入口当前世界/journal 无配对，"调用方自行保证一致"不再是验收口径） |
+| kernel 纯预算/调度恢复 | performTreasuryKernelFullReset：裸 Memory 安装仍可用、断点恢复沿用既有模式，但无事件来源即不启用也不宣称 exact 对账 |
+
+非 oracle adapter（无事件来源可错配）不受事件来源限制（service 非精确
+恢复）。断点配对一致性（纯校验）先行：伪造断点保持"断点配对不一致"
+口径。
