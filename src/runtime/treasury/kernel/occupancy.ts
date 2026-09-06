@@ -6,14 +6,12 @@
  *  （未确认的不能花、可能已发出的不能释放）。占用含两个投影：
  *  流出（max(0, −delta)，占用存量可花费额）与流入（max(0, +delta)，
  *  占用接收容量——unknown 的可能流入不成可花费资产，只占接收空间）。
- * - closing(committed)：**效果被当前授权观察接管前继续占用**。覆盖判定
- *  优先用受控世界序（epoch.worldSequence vs invocation.worldSequence——
- *  同步生效模型下 fresh 观察包含本 tick 已发生效果，不与占用双扣）；
- *  世界序缺失时回退 tick 边界（observedAtTick vs invocation.atTick）：
- *    观察序未超过效果锚点 → 该观察不可能包含此效果 → 占用（保守）。
- *  该规则天然涵盖同 tick execution_semantics（未覆盖）与晚到 reconcile
- *  （invocation 时刻久远、观察已新 → 已覆盖）。无观察上下文
- *  （observationAsOfTick 未提供）时保守占用。
+ * - closing(committed)：**效果被当前可信观察覆盖前继续占用**。覆盖判定
+ *  与 commands/kernel 清理门共用同一共享锚点链与时间序（coverage.ts：
+ *  invocation → external → invocationBoundary；世界序优先、tick 严格大于
+ *  兜底；观察上下文缺失或不可比 → 保守占用）。覆盖成立 → 同一效果已进入
+ *  该观察，不再重复扣减——**记录保留与占用投影分离**（§3.2：仍有外部
+ *  义务或未获清理预算的记录继续留在 active，但其已覆盖效果不占额度）。
  * - closing(not_executed / pending_cancellation) / retry_ready：确定未
  *  流出，不占用。
  * - 占用是活跃集合成员资格的投影——实例本地 overlay 只是可重建缓存，
@@ -25,6 +23,7 @@ import type {
   TreasuryCoreOccupancyOptions,
   TreasuryCoreWorkRecord,
 } from "@/runtime/treasury/kernel/types";
+import { treasuryCoreCoverageAnchorOf, treasuryCoreObservationAdvancesPastAnchor } from "@/runtime/treasury/kernel/coverage";
 
 /**
  * 一条聚合是否持有资源占用（options 详见 TreasuryCoreOccupancyOptions）。
@@ -43,16 +42,18 @@ export function treasuryCoreWorkHoldsOccupancy(
       return true;
     case "closing":
       if (record.outcome !== "committed") return false;
-      if (record.invocation === null) return true; // 结构上不应发生；保守占用
-      // 世界序判定（§6.2）：观察构建序 > 调用边界世界序 → 受控世界已在
-      // 调用后真实更新且该观察构建于其后 → 效果已进入该观察。
-      if (options.observationWorldSequence !== undefined && record.invocation.worldSequence !== undefined) {
-        return !(options.observationWorldSequence > record.invocation.worldSequence);
-      }
-      if (options.observationAsOfTick === undefined) return true; // 无观察上下文：保守
-      // tick 边界兜底（旧记录/世界序缺失）：观察 asOfTick ≤ 效果时点 →
-      // 效果尚未被该观察覆盖 → 原聚合继续承担。
-      return options.observationAsOfTick <= record.invocation.atTick;
+      // 覆盖判定（Remediation II/R1/§3.1——统一共享锚点链 invocation →
+      // external → invocationBoundary）：确定执行结论 + 观察已越过锚点 →
+      // 效果已进入该观察，不再重复扣减（记录保留与占用投影分离——§3.2）。
+      // 结果写回前中断、经 exact 对账 committed 的记录只有 invocationBoundary
+      // （正常恢复状态，不是"结构上不应发生"）——观察越过边界序即覆盖。
+      const anchor = treasuryCoreCoverageAnchorOf(record);
+      if (anchor === null) return true; // 无任何调用侧事实：保守占用
+      const covered = treasuryCoreObservationAdvancesPastAnchor(anchor, {
+        worldSequence: options.observationWorldSequence,
+        atTick: options.observationAsOfTick,
+      });
+      return covered !== true; // 无观察上下文/不可比/未越过 → 保守占用
     case "retry_ready":
       return false;
   }

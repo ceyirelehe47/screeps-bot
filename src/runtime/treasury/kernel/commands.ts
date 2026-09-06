@@ -42,6 +42,10 @@ import {
   type TreasuryCoreObservationProof,
 } from "@/runtime/treasury/kernel/types";
 import { mintTreasuryCoreAttemptId } from "@/runtime/treasury/kernel/identity";
+import {
+  treasuryCoreCoverageAnchorOf,
+  treasuryCoreObservationAdvancesPastAnchor,
+} from "@/runtime/treasury/kernel/coverage";
 import { appendTreasuryCoreRingEntry } from "@/runtime/treasury/kernel/store";
 
 export interface TreasuryCoreCommandContext {
@@ -114,12 +118,6 @@ export interface TreasuryCoreAdvanceCleanupCommand {
   readonly attemptId: string;
   /** 释放端口已确认幂等完成的外部消费者 key（kernel 传入；本模块只做状态判定）。 */
   readonly releasedDuties: readonly string[];
-  /**
-   * 记录内消费者轮转位置（Remediation I/R2/§5.1）：本次成对预算单位的
-   * 最后尝试位置 +1（取模）。无论端口 true/false/throw，只要已取得预算即随确认
-   * 命令持久推进；调度元信息，不证明义务完成。
-   */
-  readonly rotationCursor?: number;
   /**
    * 观察接管证明（IV/R1/§4.1）：committed 聚合退出的必要条件（非充分——
    * 还需义务清空）。由 kernel 编排层从 ports.observeForCleanup 取得；
@@ -436,27 +434,16 @@ function observationTakesOverEffect(
   record: TreasuryCoreWorkRecord,
   proof: TreasuryCoreObservationProof,
 ): boolean {
-  // 效果时点锚点（Remediation I/R1/§4.2）：优先实际调用事实；退到
-  // external accepted（晚到 reconcile 记录的正面事实）；再退到调用边界
-  // （边界发布后效果才可能发生——观察序 > 边界序即覆盖，
-  // 保守下界锚点；结果写回前中断的记录据此仍有退出出口）。
-  const anchor =
-    record.invocation !== null
-      ? { atTick: record.invocation.atTick, worldSequence: record.invocation.worldSequence }
-      : record.external !== null
-        ? { atTick: record.external.atTick, worldSequence: undefined }
-        : record.invocationBoundary !== null
-          ? { atTick: record.invocationBoundary.atTick, worldSequence: record.invocationBoundary.worldSequence }
-          : null;
-  if (anchor === null) return false; // 无任何调用边界事实；保守不退出
+  // 覆盖判定（Remediation II/R1/§3.1）：锚点链与 occupancy 占用投影/
+  // beginTick 清理门共用同一共享判定（invocation → external →
+  // invocationBoundary——coverage.ts），不再各自演化。
+  const anchor = treasuryCoreCoverageAnchorOf(record);
+  if (anchor === null) return false; // 无任何调用侧事实；保守不退出
   const locationsCovered = record.worstCase.every((leg) =>
     proof.coveredLocations.includes(`${leg.roomName} ${leg.locationKind}`),
   );
   if (!locationsCovered) return false;
-  if (anchor.worldSequence !== undefined) {
-    return proof.worldSequence > anchor.worldSequence;
-  }
-  return proof.atTick > anchor.atTick;
+  return treasuryCoreObservationAdvancesPastAnchor(anchor, proof) === true;
 }
 
 function advanceCleanupCommand(
@@ -477,12 +464,13 @@ function advanceCleanupCommand(
     const failures = command.releasedDuties.length === 0 ? record.cleanup.failures + 1 : record.cleanup.failures;
     withRecord(memory, command.attemptId, (r) => ({
       ...r,
-      // Remediation I/R2：轮转位置随确认命令持久推进（集合缩小后由
-      // 消费方按取模重定位——这里存原值，下次读时安全回绕）。
+      // Remediation II/R2：轮转位置已随成对预扣同次持久发布（端口调用
+      // 前）；确认命令不携带游标——保留记录现值，不得用旧调用栈的值
+      // 覆盖较新位置（§4.3）。集合缩小后由消费方按取模安全回绕。
       cleanup: {
         consumerKeys: remaining,
         failures: Math.min(failures, TREASURY_CORE_COUNTER_SATURATION),
-        cursor: command.rotationCursor ?? r.cleanup.cursor,
+        cursor: r.cleanup.cursor,
       },
       updatedAtTick: ctx.nowTick,
     }));
