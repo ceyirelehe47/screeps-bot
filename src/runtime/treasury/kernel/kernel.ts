@@ -83,6 +83,33 @@ import {
  */
 let lifecycleAdvanceInFlight = false;
 
+/**
+ * endTick 关窗否决标记（Remediation V/R1/§2.3）：单一、固定大小、按 tick
+ * 失效的模块级运行时事实——记录"本运行时（本模块全部实例）已请求结束
+ * tick <n>"。endTick 请求一经发出即置位，先于任何恢复回调、且独立于其后
+ * 持久关窗发布的成败；所有接纳/执行/rearm 门禁共享消费（admit/
+ * executeDispatch/executeRearm 与 facade 的授权窗口），不能只阻断发起
+ * endTick 的实例。它**仅作否决条件**：不授予执行权、不证明持久关闭、
+ * 不写新永久 store；same-tick beginTick 不得清除（清理/恢复继续，业务
+ * 仍拒）；下一 tick 按 tick 失效、原流程开新窗口（无永久闩锁）；完整
+ * reset（模块重建）后丢失——跨运行时的关窗权威仍是持久
+ * lifecycle.lastEndTick。全 heap 丢失后不能从未落盘信息重建结束请求
+ * （§2.3 故障模型边界，不设计第二份永久证书）。
+ */
+let endTickAdmissionVetoTick: number | null = null;
+
+/**
+ * 测试辅助：清除模块级运行时生命周期事实（推进 guard 与 endTick 关窗
+ * 否决标记）。完整 reset（jest.resetModules 重建模块）天然清零；同模块内
+ * 的逐用例隔离由 resetTreasuryCoreStoreForTest 调用本函数完成——否决
+ * 标记按 tick 失效的设计使其可能跨用例存活（同一 Game.time），必须随
+ * 持久根一起显式清理（生产路径不调用）。
+ */
+export function resetTreasuryCoreLifecycleFactsForTest(): void {
+  lifecycleAdvanceInFlight = false;
+  endTickAdmissionVetoTick = null;
+}
+
 export interface TreasuryCoreActionAdapterPort {
   readonly kind: string;
   readonly version: number;
@@ -261,7 +288,21 @@ export interface TreasuryCoreKernel {
     reason: "retry_expired" | "abandoned";
   }) => { readonly status: "ok" } | { readonly status: "rejected"; readonly reason: string };
   readonly beginTick: () => { readonly recovered: number; readonly closed: number; readonly cleaned: number; readonly cancelled: number };
-  readonly endTick: () => { readonly recoveredToUnknown: number };
+  /**
+   * 结束当前 tick（Remediation V/R1/§2.3 关窗先行）：请求即置运行时否决
+   * 标记 → 安全写协议发布并确认 lastEndTick → 重读权威后在同一推进所有
+   * 权下运行恢复及回调 → 尾部只维护预算/游标事实（关窗事实幂等重申）。
+   * closurePersisted 如实反映关窗事实当前是否已持久确认（发布失败不
+   * 谎报；否决标记与持久确认是不同职责——前者本 tick 拒绝新增业务，
+   * 后者是跨运行时的关窗权威）。
+   */
+  readonly endTick: () => { readonly recoveredToUnknown: number; readonly closurePersisted: boolean };
+  /**
+   * endTick 关窗否决标记当前是否生效（Remediation V/R1/§2.3）：单一、按
+   * tick 失效的运行时否决事实，所有 facade/核心执行门禁共享消费。只读
+   * 查询，不授予任何执行权。
+   */
+  readonly admissionVetoActive: () => boolean;
 }
 
 export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): TreasuryCoreKernel {
@@ -326,6 +367,11 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
   }
 
   function admit(input: TreasuryCoreAdmissionInput): TreasuryCoreAdmissionResult {
+    // Remediation V/R1/§2.3：endTick 请求后本 tick 不再接纳新业务（运行时
+    // 否决标记与持久 lastEndTick 双口径；恢复/清理入口不受此限）。
+    if (admissionVetoActive()) {
+      return { status: "rejected", reason: admissionVetoReason(), reasonCode: "lifecycle_closed" };
+    }
     if (!isValidTreasuryCoreWorkKey(input.workKey)) {
       return { status: "rejected", reason: `workKey 非法（须 ${"biz:"} 前缀且有界）`, reasonCode: "invalid_input" };
     }
@@ -409,6 +455,11 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
   }
 
   function executeDispatch(permit: unknown): TreasuryCoreDispatchOutcome {
+    // Remediation V/R1/§2.3：endTick 请求后本 tick 不再执行 dispatch（动作
+    // 调用 0、不消费许可——与 facade 执行门禁同一否决条件）。
+    if (admissionVetoActive()) {
+      return { status: "blocked", reasonCode: "lifecycle_closed", reason: admissionVetoReason() };
+    }
     const nowTick = ports.nowTick();
     const permitCheck = validateTreasuryCoreDispatchPermit(permit, nowTick, ports.runtimeGeneration());
     if (permitCheck.status !== "valid") return { status: "rejected", reason: permitCheck.reason };
@@ -632,6 +683,11 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     rearm: unknown,
     next: Parameters<TreasuryCoreKernel["executeRearm"]>[1],
   ): TreasuryCoreAdmissionResult {
+    // Remediation V/R1/§2.3：endTick 请求后本 tick 不再执行 rearm。拒绝先于
+    // 许可认证/父代权利消费——capability 不被误消费，下一 tick 仍可用。
+    if (admissionVetoActive()) {
+      return { status: "rejected", reason: admissionVetoReason(), reasonCode: "lifecycle_closed" };
+    }
     const nowTick = ports.nowTick();
     const check = validateTreasuryCoreRearmPermit(rearm, nowTick, ports.runtimeGeneration());
     if (check.status !== "valid") return { status: "rejected", reason: check.reason, reasonCode: "invalid_input" };
@@ -1057,8 +1113,40 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     return { recovered, closed, cleaned, cancelled };
   }
 
-  function endTick(): { recoveredToUnknown: number } {
+  /** endTick 关窗否决标记当前是否生效（按 tick 失效；只读事实查询）。 */
+  function admissionVetoActive(): boolean {
+    return endTickAdmissionVetoTick !== null && endTickAdmissionVetoTick === ports.nowTick();
+  }
+
+  function admissionVetoReason(): string {
+    return "本 tick 授权窗口已关闭（endTick 请求已发出：持久关窗发布待确认或失败，运行时否决标记生效——新增业务跨实例拒绝；恢复与安全清理继续）";
+  }
+
+  /**
+   * 发布并确认本 tick 关窗事实（Remediation V/R1/§2.3 关窗先行）：经既有
+   * 安全写协议写 lifecycle.lastEndTick；幂等（已持有时不重复写——§2.4
+   * 避免无意义重复写）。发布失败如实返回 persisted=false（不谎报持久
+   * 成功）——运行时否决标记已在 endTick 请求时生效，本 tick 新增业务仍
+   * 被拒；恢复正常写入后再次调用可确认关闭（I04"恢复写可确认关闭"）。
+   */
+  function publishTickClosure(): { persisted: boolean } {
+    const nowTick = ports.nowTick();
+    const current = readTreasuryCoreStoreHealth();
+    if (current.status === "healthy" && current.memory.lifecycle.lastEndTick === nowTick) {
+      return { persisted: true };
+    }
+    const write = writeTreasuryCoreMemory((root) => {
+      root.lifecycle.lastEndTick = nowTick;
+    }, () => undefined);
+    return { persisted: write.status === "written" };
+  }
+
+  function endTick(): { recoveredToUnknown: number; closurePersisted: boolean } {
     let recoveredToUnknown = 0;
+    // Remediation V/R1/§2.3：endTick 请求一经发出，当前运行时共享拒绝新增
+    // 业务——先于持久发布、先于任何恢复回调（onEffect/release）。无论其后
+    // 持久关窗发布成败与否，本 tick 不再放行 authorize/dispatch/rearm。
+    endTickAdmissionVetoTick = ports.nowTick();
     const health = readTreasuryCoreStoreHealth();
     if (health.status === "healthy" && legacyNow().length === 0) {
       // Remediation IV/R1/§2.2–§2.3：endTick 与 beginTick 属同一推进域——
@@ -1067,45 +1155,68 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       // 预算随后覆盖持久较新预算）。
       if (lifecycleAdvanceInFlight) {
         // 嵌套 endTick（推进被持有时回调内请求关窗）：只执行有界关窗事实
-        // 写入——不递归恢复、不覆盖 recovery 的预算与游标（§2.3 关窗与
-        // 推进分开处理；防重入不得吞掉关窗语义）。
-        writeTreasuryCoreMemory((root) => {
-          root.lifecycle.lastEndTick = ports.nowTick();
-        }, () => undefined);
-        return { recoveredToUnknown: 0 };
+        // 发布——不递归恢复、不覆盖 recovery 的预算与游标（§2.3 关窗与
+        // 推进分开处理；防重入不得吞掉关窗语义）。发布结果如实返回。
+        const nested = publishTickClosure();
+        return { recoveredToUnknown: 0, closurePersisted: nested.persisted };
       }
       lifecycleAdvanceInFlight = true;
       try {
+        // ① 关窗先行：**成功发布关闭必须早于第一个可回调的恢复动作**——
+        //    恢复循环（及其 onEffect 回调）运行前 lastEndTick 已发布并
+        //    确认。发布失败不谎报；否决标记保持本 tick 生效。
+        const closure = publishTickClosure();
+        // ② 重读当前权威（不能继续使用关窗前旧草稿）：恢复循环的预算、
+        //    游标与记录遍历全部来自关窗发布之后的当前持久状态——防
+        //    Object.assign(root, oldDraft) 一类把已发布关闭按入口旧快照
+        //    恢复成旧值（§2.3）。
+        const postClose = readTreasuryCoreStoreHealth();
+        const base = postClose.status === "healthy" ? postClose : health;
         const nowTick = ports.nowTick();
-        let used = readBudgetState(health.memory, nowTick);
-        const cursors = { sweepCursor: health.memory.recovery.sweepCursor, cleanupCursor: health.memory.recovery.cleanupCursor };
+        let used = readBudgetState(base.memory, nowTick);
+        const cursors = { sweepCursor: base.memory.recovery.sweepCursor, cleanupCursor: base.memory.recovery.cleanupCursor };
         // dispatching 残留（当次调用异常逃逸）→ 保守 unknown（共享同 tick 预算）。
-        for (const record of sortedActive(health.memory)) {
+        for (const record of sortedActive(base.memory)) {
           if (used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) break;
           if (record.phase !== "dispatching") continue;
           const step = applyBudgetedCommand(used, { type: "recover_dispatching", attemptId: record.attemptId }, cursors);
           used = step.used;
           if (step.applied) recoveredToUnknown += 1;
         }
-        // 尾部关窗写（§2.4）：预算与游标只由当前推进写回——旧局部 used 不
-        // 覆盖当前较大值（对持锁期间第三方写路径的双保险），游标不因关窗
-        // 回退（写持久现读值，不从入口快照恢复旧位置）。闭窗不重新打开。
+        // ③ 尾部只维护本推进需要维护的事实：预算/游标写持久现读值（旧
+        //    局部 used 不覆盖当前较大值；游标不因关窗回退），关窗事实
+        //    幂等重申（发布失败或期间被篡改后，此处写入可确认关闭）。
+        //    不重新开放窗口、不回退预算/游标。事实已一致且关窗已持有时
+        //    跳过（§2.4 正常已关闭场景避免无意义重复写）。
+        let closurePersisted = closure.persisted;
         const finalRead = readTreasuryCoreStoreHealth();
-        const finalUsed =
-          finalRead.status === "healthy" ? Math.max(used, readBudgetState(finalRead.memory, nowTick)) : used;
-        const finalCursors =
-          finalRead.status === "healthy"
-            ? { sweepCursor: finalRead.memory.recovery.sweepCursor, cleanupCursor: finalRead.memory.recovery.cleanupCursor }
-            : cursors;
-        writeTreasuryCoreMemory((root) => {
-          root.lifecycle.lastEndTick = ports.nowTick();
-          root.recovery = { ...finalCursors, budgetTick: nowTick, budgetUsed: finalUsed };
-        }, () => undefined);
+        if (finalRead.status === "healthy") {
+          const persistedUsed = readBudgetState(finalRead.memory, nowTick);
+          const finalUsed = Math.max(used, persistedUsed);
+          const finalCursors =
+            { sweepCursor: finalRead.memory.recovery.sweepCursor, cleanupCursor: finalRead.memory.recovery.cleanupCursor };
+          const closureHeld = finalRead.memory.lifecycle.lastEndTick === nowTick;
+          const factsCurrent =
+            finalRead.memory.recovery.budgetTick === nowTick &&
+            persistedUsed === finalUsed &&
+            finalRead.memory.recovery.sweepCursor === finalCursors.sweepCursor &&
+            finalRead.memory.recovery.cleanupCursor === finalCursors.cleanupCursor;
+          if (!closureHeld || !factsCurrent) {
+            const tailWrite = writeTreasuryCoreMemory((root) => {
+              root.lifecycle.lastEndTick = nowTick;
+              root.recovery = { ...finalCursors, budgetTick: nowTick, budgetUsed: finalUsed };
+            }, () => undefined);
+            if (tailWrite.status === "written") closurePersisted = true;
+          }
+        }
+        return { recoveredToUnknown, closurePersisted };
       } finally {
         lifecycleAdvanceInFlight = false;
       }
     }
-    return { recoveredToUnknown };
+    // 健康门未过（store 损坏/legacy 存在）：关窗事实无法发布——如实返回
+    // 未持久确认（不谎报）；运行时否决标记（请求时已置）本 tick 仍生效。
+    return { recoveredToUnknown, closurePersisted: false };
   }
 
   function sortedActive(memory: TreasuryCoreMemory) {
@@ -1177,6 +1288,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     closeWork,
     beginTick,
     endTick,
+    admissionVetoActive,
   };
 }
 

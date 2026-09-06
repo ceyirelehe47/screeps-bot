@@ -191,7 +191,7 @@ describe("G02 一个调度所有者（跨实例/关窗/顺序调用）", () => {
     Game.time += 1;
     kernelA.beginTick();
     expect(innerBeginStats).toEqual({ recovered: 0, closed: 0, cleaned: 0, cancelled: 0 }); // 嵌套 beginTick 零推进
-    expect(innerEndStats).toEqual({ recoveredToUnknown: 0 }); // 嵌套 endTick 不运行恢复循环
+    expect(innerEndStats).toEqual({ recoveredToUnknown: 0, closurePersisted: true }); // 嵌套 endTick 不运行恢复循环；关窗发布如实确认（R1/§2.3 closurePersisted 口径）
     // 关窗事实已写入（facade 共享授权窗口的关闭条件不被防重入吞掉）。
     const lifecycle = (Memory.runtime!.treasuryCore as unknown as { lifecycle: { lastEndTick: number | null } }).lifecycle;
     expect(lifecycle.lastEndTick).toBe(Game.time);

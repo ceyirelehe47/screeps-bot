@@ -660,14 +660,24 @@ export function createTreasuryService(deps: TreasuryServiceDeps): TreasuryServic
   });
 
   /**
-   * 共享授权窗口（C06/§4.4）：lifecycle.lastEndTick 是持久共享事实——
-   * endTick 后本 tick 任何实例不得接纳/rearm/dispatch；恢复/安全清理仍按
-   * 预算继续（kernel.beginTick 不受此限）。下一 tick 经正常入口开新窗口。
+   * 共享授权窗口（C06/§4.4 + Remediation V/R1/§2.3）：lifecycle.lastEndTick
+   * 是持久共享事实——endTick 后本 tick 任何实例不得接纳/rearm/dispatch；
+   * 恢复/安全清理仍按预算继续（kernel.beginTick 不受此限）。下一 tick 经
+   * 正常入口开新窗口。
+   * R1 关窗先行：持久关窗发布待确认或失败（丢写/篡改/异常路径）时，kernel
+   * 模块级运行时否决标记同样关闭窗口——所有实例共享同一否决条件，不能
+   * 只阻断发起 endTick 的实例。否决按 tick 失效，不是第二许可权威。
    */
   function admissionWindowOpen(): { status: "open" } | { status: "closed"; reason: string } {
     const health = readTreasuryCoreStoreHealth();
     if (health.status === "healthy" && health.memory.lifecycle.lastEndTick === Game.time) {
       return { status: "closed", reason: "本 tick 授权窗口已关闭（endTick 后不得接纳/执行/rearm；恢复与安全清理继续）" };
+    }
+    if (kernel.admissionVetoActive()) {
+      return {
+        status: "closed",
+        reason: "本 tick 授权窗口已关闭（endTick 请求已发出：持久关窗发布待确认或失败，运行时否决标记生效——新增业务跨实例拒绝；恢复与安全清理继续）",
+      };
     }
     return { status: "open" };
   }

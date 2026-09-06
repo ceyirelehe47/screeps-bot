@@ -9,6 +9,7 @@
  */
 
 import type { TreasuryService } from "@/runtime/treasury/facade";
+import { resetTreasuryCoreLifecycleFactsForTest } from "@/runtime/treasury/kernel/kernel";
 import {
   readTreasuryCoreStoreHealth,
 } from "@/runtime/treasury/kernel/store";
@@ -56,6 +57,10 @@ export function treasuryTestHarness(_service: TreasuryService): TreasuryTestHarn
 
 /** 测试辅助：清除 treasuryCore 持久根（等价 service.resetForTest 的存储侧）。 */
 export function resetTreasuryCoreStoreForTest(): void {
+  // Remediation V/R1：同时清除 kernel 模块级运行时生命周期事实（推进
+  // guard 与 endTick 关窗否决标记）——否决标记按 tick 失效，同一
+  // Game.time 的后续用例会被跨用例残留否决（模块不随单测重建）。
+  resetTreasuryCoreLifecycleFactsForTest();
   const runtime = Memory.runtime as Record<string, unknown> | undefined;
   if (runtime && typeof runtime === "object") {
     delete runtime.treasuryCore;
