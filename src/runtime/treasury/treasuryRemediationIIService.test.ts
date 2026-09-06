@@ -40,7 +40,7 @@ import {
   createTreasuryHostJournal,
   makeTreasuryExactOracleAdapter,
   type TreasuryHostJournal,
-} from "@mock/treasuryExactOracle";
+ executeTreasuryAdmittedDispatch, } from "@mock/treasuryExactOracle";
 import { treasuryCoreWorkHoldsOccupancy } from "@/runtime/treasury/kernel/occupancy";
 import type { TreasuryCoreWorkRecord } from "@/runtime/treasury/kernel/types";
 import { installRooms, type RoomSpec } from "@mock/treasury";
@@ -167,7 +167,7 @@ describe("F01/F02 覆盖不双扣（流出/流入固定数值）", () => {
     const args = transferArgs({ amount, outcome: "ok" });
     const a = admit(service, "biz:f:exec", args);
     const interceptor = interceptTreasuryCoreWrites({ allow: 1 });
-    const outcome = journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch));
+    const outcome = executeTreasuryAdmittedDispatch(journal, service, a);
     interceptor.restore();
     if (outcome.status !== "persist_failed") throw new Error(`期望 persist_failed，实际 ${outcome.status}`);
     const bp = captureTreasuryHostBreakpoint(journal.captureBranch());
@@ -221,7 +221,7 @@ describe("F03 覆盖判定的负向与收尾", () => {
     const args = transferArgs({ amount: 800, outcome: "ok" });
     const a = admit(service, "biz:f3:unknown", args);
     const interceptor = interceptTreasuryCoreWrites({ allow: 1 });
-    const outcome = journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch));
+    const outcome = executeTreasuryAdmittedDispatch(journal, service, a);
     interceptor.restore();
     if (outcome.status !== "persist_failed") throw new Error(`期望 persist_failed，实际 ${outcome.status}`);
     const bp = captureTreasuryHostBreakpoint(journal.captureBranch());
@@ -275,7 +275,7 @@ describe("F03 覆盖判定的负向与收尾", () => {
     const args = transferArgs({ amount: 800, outcome: "ok" });
     const a = admit(service, "biz:f3:exit", args);
     const interceptor = interceptTreasuryCoreWrites({ allow: 1 });
-    journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch));
+    executeTreasuryAdmittedDispatch(journal, service, a);
     interceptor.restore();
     const bp = captureTreasuryHostBreakpoint(journal.captureBranch());
     const reset = performTreasuryFullReset({ roomSpecs: ROOMS, adapter: oracle, advanceTicks: 1, breakpoint: bp });
@@ -310,7 +310,7 @@ describe("F09/F10 preflight 健康门禁", () => {
       // 合法 rearm 许可（父代 retry_ready）。
       const argsB = transferArgs({ amount: 50, outcome: "non-ok" });
       const b = admit(service, "biz:f9:r", argsB);
-      expect(journal.runWithInvocation(b, argsB, () => service.executeAuthorizedDispatch(b.dispatch)).status).toBe("not_executed");
+      expect(executeTreasuryAdmittedDispatch(journal, service, b).status).toBe("not_executed");
       Game.time += 1;
       service.beginTick();
       const capability = service.issueTreasuryRearmCapability({ attemptId: b.attemptId });
@@ -327,7 +327,7 @@ describe("F09/F10 preflight 健康门禁", () => {
       const frontierBefore = (Memory.runtime?.treasuryCore as { issuance: { frontier: number } } | undefined)?.issuance.frontier ?? -1;
       const activeBefore = corruption === "absent" ? -1 : Object.keys(runtime.treasuryCore!.active ?? {}).length;
       // facade 路径：两许可均在高成本资源之前拒绝。
-      const dispatchOut = journal.runWithInvocation(a, argsA, () => service.executeAuthorizedDispatch(a.dispatch));
+      const dispatchOut = executeTreasuryAdmittedDispatch(journal, service, a);
       expect(dispatchOut.status).toBe("rejected");
       const rearmOut = service.executeRearm(capability.rearm, rearmContract.contract, { workKey: "biz:f9:r" });
       expect(rearmOut.status).toBe("rejected");
@@ -358,7 +358,7 @@ describe("F09/F10 preflight 健康门禁", () => {
     if (core.ring.length > 0) core.ring[0]!.attemptId = 123; // 非法类型
     else (core as unknown as { ringCursor: number }).ringCursor = -1; // 非法游标
     const freshBefore = service.metrics().freshObservationBuilds;
-    const out = journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch));
+    const out = executeTreasuryAdmittedDispatch(journal, service, a);
     expect(out.status).toBe("committed"); // 健康对照：ring 降级不封死真许可
     expect(oracle.trace.effects).toBe(1);
     expect(service.metrics().freshObservationBuilds).toBe(freshBefore + 1); // 真实复验发生（fresh 观察 +1）
@@ -389,7 +389,7 @@ describe("F11/F11 三同断点分支与 exact 对照", () => {
     const args = transferArgs({ amount: 200, outcome: "ok" });
     const a = admit(service, "biz:f11:pre", args);
     const interceptor = interceptTreasuryCoreWrites({ allow: 1 });
-    journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch));
+    executeTreasuryAdmittedDispatch(journal, service, a);
     interceptor.restore();
     const bp = captureTreasuryHostBreakpoint(journal.captureBranch());
     expect(bp.world.W1N57?.storage?.resources.energy ?? -1).toBe(1000);
@@ -425,13 +425,13 @@ describe("F11/F11 三同断点分支与 exact 对照", () => {
     const argsB = transferArgs({ amount: 50, outcome: "ok" });
     const b = admit(service, "biz:f11:mine", argsB);
     const interceptor = interceptTreasuryCoreWrites({ allow: 1 });
-    journal.runWithInvocation(b, argsB, () => service.executeAuthorizedDispatch(b.dispatch));
+    executeTreasuryAdmittedDispatch(journal, service, b);
     interceptor.restore();
     // A：真实执行（世界效果推进世界序越过 B 的边界序；事件属于 A 不属于 B）。
     replaceTreasuryActionAdapterForTest(oracle);
     const argsA = transferArgs({ amount: 100, outcome: "ok" });
     const a = admit(service, "biz:f11:other", argsA);
-    expect(journal.runWithInvocation(a, argsA, () => service.executeAuthorizedDispatch(a.dispatch)).status).toBe("committed");
+    expect(executeTreasuryAdmittedDispatch(journal, service, a).status).toBe("committed");
     const bp = captureTreasuryHostBreakpoint(journal.captureBranch());
     const reset = performTreasuryFullReset({ roomSpecs: ROOMS, adapter: oracle, advanceTicks: 1, breakpoint: bp });
     // 恢复分支：A 的效果在断点前已发生（世界序已越过 B 的边界序），但
@@ -462,7 +462,7 @@ describe("F12 真实效果后、结果未写断点（无人工 external）", () 
     const service = makeService();
     const args = transferArgs({ amount: 300, outcome: "ok" });
     const a = admit(service, "biz:f12:post", args);
-    const out = journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch));
+    const out = executeTreasuryAdmittedDispatch(journal, service, a);
     expect(out.status).toBe("unknown"); // 旧分支：catch 后保守 unknown（写成功）
     const oldBranchShape = recordShape(a.attemptId)!;
     expect(oldBranchShape.phase).toBe("outcome_unknown");
@@ -581,7 +581,7 @@ describe("F15 断点世界一致与结构保真", () => {
     const service = makeService();
     const args = transferArgs({ amount: 200, outcome: "ok" });
     const a = admit(service, "biz:f15:early", args);
-    expect(journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch)).status).toBe("committed"); // 旧栈走完
+    expect(executeTreasuryAdmittedDispatch(journal, service, a).status).toBe("committed"); // 旧栈走完
     expect(breakpoint).toBeDefined();
     expect(breakpoint!.world.W1N57?.storage?.resources.energy ?? -1).toBe(1000); // 断点世界=效果前
     const reset = performTreasuryFullReset({ roomSpecs: ROOMS, adapter: oracle, advanceTicks: 1, breakpoint: breakpoint! });
@@ -642,7 +642,7 @@ describe("F17 混合负载与独立宿主账目", () => {
     // 1) 真实 rearm：父 non-ok（50）→ retry_ready → child 执行 50（W2 需可见）。
     const argsParent = transferArgs({ amount: 50, outcome: "non-ok" });
     const parent = admit(service, "biz:f17:retry", argsParent);
-    expect(journal.runWithInvocation(parent, argsParent, () => service.executeAuthorizedDispatch(parent.dispatch)).status).toBe("not_executed");
+    expect(executeTreasuryAdmittedDispatch(journal, service, parent).status).toBe("not_executed");
     Game.time += 1;
     service.beginTick();
     const capability = service.issueTreasuryRearmCapability({ attemptId: parent.attemptId });
@@ -652,17 +652,17 @@ describe("F17 混合负载与独立宿主账目", () => {
     const child = service.executeRearm(capability.rearm, childContract.contract, { workKey: "biz:f17:retry" });
     if (child.status !== "admitted") throw new Error(`rearm failed: ${child.reason}`);
     const argsChild = transferArgs({ amount: 50 });
-    expect(journal.runWithInvocation(child, argsChild, () => service.executeAuthorizedDispatch(child.dispatch)).status).toBe("committed");
+    expect(executeTreasuryAdmittedDispatch(journal, service, child).status).toBe("committed");
     hostLedger.push({ attemptId: child.attemptId, amount: 50 });
     // 2) 完成工作（100）——在删除 W2 可见性之前（其收尾在下文观察缺失段）。
     const argsDone = transferArgs({ amount: 100, outcome: "ok" });
     const done = admit(service, "biz:f17:done", argsDone);
-    expect(journal.runWithInvocation(done, argsDone, () => service.executeAuthorizedDispatch(done.dispatch)).status).toBe("committed");
+    expect(executeTreasuryAdmittedDispatch(journal, service, done).status).toBe("committed");
     hostLedger.push({ attemptId: done.attemptId, amount: 100 });
     // 3) 长期 unknown（100 throw——观察缺失来源）。
     const argsUnknown = transferArgs({ amount: 100, outcome: "throw" });
     const unknown = admit(service, "biz:f17:unknown", argsUnknown);
-    expect(journal.runWithInvocation(unknown, argsUnknown, () => service.executeAuthorizedDispatch(unknown.dispatch)).status).toBe("unknown");
+    expect(executeTreasuryAdmittedDispatch(journal, service, unknown).status).toBe("unknown");
     // 4) 部分清理：W2 离开可见范围——done（committed、流入侧不可观察）暂不退出。
     visible.delete("W2N57");
     Game.time += 1;

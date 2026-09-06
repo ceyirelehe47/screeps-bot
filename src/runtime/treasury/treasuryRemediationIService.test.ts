@@ -43,7 +43,7 @@ import {
   createTreasuryHostJournal,
   makeTreasuryExactOracleAdapter,
   type TreasuryHostJournal,
-} from "@mock/treasuryExactOracle";
+ executeTreasuryAdmittedDispatch, } from "@mock/treasuryExactOracle";
 import { installRooms, setStoreResources, type RoomSpec } from "@mock/treasury";
 
 const ROOMS: RoomSpec[] = [
@@ -182,7 +182,7 @@ describe("E02 配对断点与事件 exact 对账", () => {
     // 全部写（dispatch_result/兜底）被丢弃——持久层停在 dispatching+boundary，
     // 世界未变。
     const interceptor = interceptTreasuryCoreWrites({ allow: 1 });
-    const outcome = journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch));
+    const outcome = executeTreasuryAdmittedDispatch(journal, service, a);
     interceptor.restore(); // 保留实际最终值（dispatch_start 已持久）
     // adapter 抛错 + 结果写/兜底写全部被丢弃 → persist_failed（保守路径）。
     if (outcome.status !== "persist_failed") throw new Error("E02 pre: " + JSON.stringify(outcome));
@@ -226,7 +226,7 @@ describe("E02 配对断点与事件 exact 对账", () => {
     const args = transferArgs({ amount: 100, outcome: "ok" });
     const a = admit(service, "biz:e2:post", args);
     const interceptor = interceptTreasuryCoreWrites({ allow: 1 }); // 放行 dispatch_start，丢弃结果写
-    const outcome = journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch));
+    const outcome = executeTreasuryAdmittedDispatch(journal, service, a);
     interceptor.restore(); // 保留实际最终值
     expect(outcome.status).toBe("persist_failed"); // 真实执行已发生、结果写失败
     expect(oracle.trace.effects).toBe(1);

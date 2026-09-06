@@ -25,7 +25,7 @@ import {
   type TreasuryFullResetResult,
   type TreasuryHostBreakpoint,
 } from "@mock/treasuryResetHarness";
-import { createTreasuryHostJournal, makeTreasuryExactOracleAdapter, type TreasuryHostJournal } from "@mock/treasuryExactOracle";
+import { createTreasuryHostJournal, executeTreasuryAdmittedDispatch, makeTreasuryExactOracleAdapter, type TreasuryHostJournal } from "@mock/treasuryExactOracle";
 import { interceptTreasuryCoreWrites } from "@mock/treasuryStorageInterceptor";
 
 const ROOMS: RoomSpec[] = [
@@ -154,7 +154,7 @@ function twoBreakpointFlow(workKey: string, amount: number): {
       b0 = captureTreasuryHostBreakpoint(journal.captureBranch()); // dispatch_start 放行时刻（效果前）
     },
   });
-  const outcome = journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch));
+  const outcome = executeTreasuryAdmittedDispatch(journal, service, a);
   interceptor.restore();
   if (outcome.status !== "persist_failed") throw new Error(`期望 persist_failed，实际 ${outcome.status}`);
   if (b0 === undefined) throw new Error("B0 未捕获");
@@ -186,7 +186,7 @@ describe("G09 所选断点 B0（效果前）是恢复分支唯一事件输入", 
     // 的可见事件无 world-effect，但分支世界序已越过其进入序 → 无正面未执行事实。
     const argsC = transferArgs({ amount: 50, outcome: "ok" });
     const c = admitOn(reset, "biz:g9:c", argsC);
-    expect(journal.runWithInvocation(c, argsC, () => reset.service.executeAuthorizedDispatch(c.dispatch)).status).toBe("committed");
+    expect(executeTreasuryAdmittedDispatch(journal, reset.service, c).status).toBe("committed");
     const settled = reset.service.settleUnknownOutcome({ attemptId });
     expect(settled.status).toBe("still_uncertain"); // 证据不足：拒绝落定（不为反驳 committed 自动 not-executed）
     expect(recordShape(attemptId)?.outcome).toBe("unknown");
@@ -218,7 +218,7 @@ describe("G10 B1 对照与重复恢复独立性", () => {
       // 恢复分支内的动作事件只属于本分支（round 0 的 C 不进入 round 1）。
       const argsC = transferArgs({ amount: 30, outcome: "ok" });
       const c = admitOn(reset, `biz:g10:c${String(round)}`, argsC);
-      expect(journal.runWithInvocation(c, argsC, () => reset.service.executeAuthorizedDispatch(c.dispatch)).status).toBe("committed");
+      expect(executeTreasuryAdmittedDispatch(journal, reset.service, c).status).toBe("committed");
     }
     const visibleAfter = journal.visibleFor(attemptId);
     expect(visibleAfter.filter((e) => e.kind === "world-effect").length).toBe(0); // C 的效果不倒记给 A
@@ -234,7 +234,7 @@ describe("G11 分支链（B2 继承所选分支祖先事件）", () => {
     const reset0 = performTreasuryFullReset({ roomSpecs: ROOMS, adapter: makeTreasuryExactOracleAdapter(journal), advanceTicks: 1, breakpoint: b0 });
     const argsC = transferArgs({ amount: 50, outcome: "ok" });
     const c = admitOn(reset0, "biz:g11:c", argsC);
-    expect(journal.runWithInvocation(c, argsC, () => reset0.service.executeAuthorizedDispatch(c.dispatch)).status).toBe("committed");
+    expect(executeTreasuryAdmittedDispatch(journal, reset0.service, c).status).toBe("committed");
     const b2 = captureTreasuryHostBreakpoint(journal.captureBranch());
     expect(b2.world.W1N57?.storage?.resources.energy).toBe(950); // B2 世界 = B0 + C
     // 再恢复 B2：可见事件含 C（B0 子分支祖先），不含旧主分支 A 的效果。
@@ -271,7 +271,7 @@ describe("G12 同参数 A/B：登记后实际只执行 A", () => {
     const argsA = transferArgs({ amount: 100, outcome: "ok" });
     const a = admit(service, "biz:g12:a", argsA);
     const b = admit(service, "biz:g12:b", argsA); // 参数完全相同、不同 workKey——资源足以支撑两笔
-    expect(journal.runWithInvocation(a, argsA, () => service.executeAuthorizedDispatch(a.dispatch)).status).toBe("committed");
+    expect(executeTreasuryAdmittedDispatch(journal, service, a).status).toBe("committed");
     expect(journal.visibleFor(a.attemptId).filter((e) => e.kind === "adapter-entered").length).toBe(1);
     expect(journal.visibleFor(a.attemptId).filter((e) => e.kind === "world-effect").length).toBe(1);
     expect(journal.visibleFor(b.attemptId).length).toBe(0); // B 不借用 A 的事件
@@ -279,7 +279,7 @@ describe("G12 同参数 A/B：登记后实际只执行 A", () => {
     expect(oracle.trace.effects).toBe(1); // 宿主余额只变化一笔
     expect(((Game.rooms as Record<string, unknown>).W1N57 as unknown as { storage: { store: Record<string, number> } }).storage.store.energy).toBe(900); // 世界（不重装）
     // B 仍可独立执行（合法同参数工作不被禁用）。
-    expect(journal.runWithInvocation(b, argsA, () => service.executeAuthorizedDispatch(b.dispatch)).status).toBe("committed");
+    expect(executeTreasuryAdmittedDispatch(journal, service, b).status).toBe("committed");
     expect(journal.visibleFor(b.attemptId).filter((e) => e.kind === "world-effect").length).toBe(1);
   });
 });
@@ -293,8 +293,8 @@ describe("G13 同参数 A/B 逆序与依次执行", () => {
     const args = transferArgs({ amount: 100, outcome: "ok" });
     const a = admit(service, "biz:g13:a", args);
     const b = admit(service, "biz:g13:b", args);
-    expect(journal.runWithInvocation(b, args, () => service.executeAuthorizedDispatch(b.dispatch)).status).toBe("committed");
-    expect(journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch)).status).toBe("committed");
+    expect(executeTreasuryAdmittedDispatch(journal, service, b).status).toBe("committed");
+    expect(executeTreasuryAdmittedDispatch(journal, service, a).status).toBe("committed");
     expect(journal.visibleFor(a.attemptId).filter((e) => e.kind === "world-effect").length).toBe(1);
     expect(journal.visibleFor(b.attemptId).filter((e) => e.kind === "world-effect").length).toBe(1);
     expect(oracle.trace.effects).toBe(2); // 两笔各自一次
@@ -305,6 +305,33 @@ describe("G13 同参数 A/B 逆序与依次执行", () => {
 });
 
 // ── G14：调用上下文缺失/错配/嵌套/异常/reset ───────────────────────────────
+
+/** 嵌套故障注入 adapter（G14-3）：外层执行内部触发一次内层错误配对（包装在
+ * 作用域建立前 throw）并抛错冒泡——kernel 保守捕获为 unknown。 */
+function faultAdapterOf(oracle: ReturnType<typeof makeTreasuryExactOracleAdapter>, journal: TreasuryHostJournal, service: TreasuryService) {
+  let fired = false;
+  let faultDepth = 0;
+  return {
+    ...oracle,
+    execute(args: TreasuryTestTransferArgs): { ok: boolean } {
+      faultDepth += 1;
+      try {
+        if (faultDepth === 1 && !fired) {
+          fired = true;
+          // 错误配对：声明内层许可身份、实际携带外层执行入口将用的许可——
+          // 包装在 push 作用域前 throw（不消耗许可、不产生实际调用）。
+          const outerArgs = args;
+          const fakeAggregated = { status: "admitted" as const, attemptId: "tk1_fake_inner", dispatch: { attemptId: "tk1_fake_outer", canonicalArgs: outerArgs } };
+          expect(() => executeTreasuryAdmittedDispatch(journal, service, fakeAggregated)).toThrow(/不一致|attemptId/);
+          throw new Error("inner pairing fault");
+        }
+        return oracle.execute(args);
+      } finally {
+        faultDepth -= 1;
+      }
+    },
+  };
+}
 
 describe("G14 受控调用上下文的隔离", () => {
   it("无作用域：实际调用计数准确、事件不归属任何 attempt（不猜测）、unlinked 诊断", () => {
@@ -322,46 +349,74 @@ describe("G14 受控调用上下文的隔离", () => {
     expect(journal.unlinkedCalls).toBe(1); // 明确诊断（不能 exact 对账的调用）
   });
 
-  it("参数不匹配：不归属该 attempt；正确 args 才归属（逐次核对金额）", () => {
+  it("错误聚合/许可配对：包装明确拒绝且不建立作用域（H10；旧参数错配已不可表达）", () => {
     const journal = createTreasuryHostJournal();
     const oracle = makeTreasuryExactOracleAdapter(journal);
     replaceTreasuryActionAdapterForTest(oracle);
     const service = makeService();
     const argsA = transferArgs({ amount: 100, outcome: "ok" });
     const a = admit(service, "biz:g14:mismatch", argsA);
-    // 作用域登记 100，实际执行 200（金额错传——不得因 attempt 正确就忽略）。
-    const wrongArgs = transferArgs({ amount: 200, outcome: "ok" });
-    void wrongArgs;
-    const mismatchScopeArgs = transferArgs({ amount: 200, outcome: "ok" });
-    expect(() => journal.runWithInvocation(a, mismatchScopeArgs, () => service.executeAuthorizedDispatch(a.dispatch))).not.toThrow();
-    expect(journal.visibleFor(a.attemptId).length).toBe(0); // 参数不匹配 → 不归属
-    expect(journal.unlinkedCalls).toBe(1);
-    void argsA;
+    const b = admit(service, "biz:g14:mismatch-b", transferArgs({ amount: 100, outcome: "ok" }));
+    // 旧工具"作用域登记 200、实际执行 100"的错配路径已删除（V1：作用域
+    // 身份与参数均取自实际许可，结构上不可表达）。等价负向：聚合结果声明
+    // B 的 attempt、实际携带 A 的 dispatch 许可——必须在执行前被识别拒绝。
+    expect(() => executeTreasuryAdmittedDispatch(journal, service, { status: "admitted", attemptId: b.attemptId, dispatch: a.dispatch })).toThrow(/不一致/);
+    // 拒绝不消耗许可、不产生实际调用、不归属任何 attempt。
+    expect(oracle.trace.entered).toBe(0);
+    expect(journal.visibleFor(a.attemptId).length).toBe(0);
+    expect(journal.visibleFor(b.attemptId).length).toBe(0);
+    expect(journal.unlinkedCalls).toBe(0);
+    // 被拒请求后真许可仍可正常执行并归属（作用域未被污染）。
+    expect(executeTreasuryAdmittedDispatch(journal, service, a).status).toBe("committed");
+    expect(journal.visibleFor(a.attemptId).filter((e) => e.kind === "world-effect").length).toBe(1);
   });
 
-  it("嵌套作用域：内层身份只关联内层、外层恢复后续调用；异常后不泄漏前一作用域", () => {
+  it("嵌套包装执行：内层许可只关联内层、外层恢复后续；内层拒绝不泄漏外层作用域（H11）", () => {
     const journal = createTreasuryHostJournal();
     const oracle = makeTreasuryExactOracleAdapter(journal);
-    replaceTreasuryActionAdapterForTest(oracle);
-    const service = makeService();
     const argsA = transferArgs({ amount: 60, outcome: "ok" });
     const argsB = transferArgs({ amount: 40, outcome: "ok" });
+    // 真实嵌套（V1 收窄后的表达形态）：注册包装 adapter——A 的执行内部
+    // 经许可直连包装触发内层 b（作用域栈 A→B），随后执行外层自身。
+    // 注册先于接纳（kernel 记录的 adapter 注册身份须与执行时一致）。
+    let pendingInner: { status: "admitted"; attemptId: string; dispatch: unknown } | undefined;
+    let depth = 0;
+    const nestedAdapter = {
+      ...oracle,
+      execute(args: TreasuryTestTransferArgs): { ok: boolean } {
+        depth += 1;
+        try {
+          if (depth === 1 && pendingInner !== undefined) {
+            const inner = pendingInner;
+            pendingInner = undefined;
+            const innerResult = executeTreasuryAdmittedDispatch(journal, service, inner);
+            expect(innerResult.status).toBe("committed");
+          }
+          return oracle.execute(args);
+        } finally {
+          depth -= 1;
+        }
+      },
+    };
+    replaceTreasuryActionAdapterForTest(nestedAdapter);
+    const service = makeService();
     const a = admit(service, "biz:g14:outer", argsA);
     const b = admit(service, "biz:g14:inner", argsB);
-    // 嵌套：外层 fn 内执行 b（内层作用域）——内层事件归 b，不归 a。
-    const outerResult = journal.runWithInvocation(a, argsA, () => {
-      const innerResult = journal.runWithInvocation(b, argsB, () => service.executeAuthorizedDispatch(b.dispatch));
-      expect(innerResult.status).toBe("committed");
-      return service.executeAuthorizedDispatch(a.dispatch);
-    });
+    pendingInner = b;
+    const outerResult = executeTreasuryAdmittedDispatch(journal, service, a);
     expect(outerResult.status).toBe("committed");
     expect(journal.visibleFor(b.attemptId).filter((e) => e.kind === "world-effect").length).toBe(1); // 内层归 b
-    expect(journal.visibleFor(a.attemptId).filter((e) => e.kind === "world-effect").length).toBe(1); // 外层 fn 后半归 a
+    expect(journal.visibleFor(a.attemptId).filter((e) => e.kind === "world-effect").length).toBe(1); // 外层后半归 a
     expect(journal.unlinkedCalls).toBe(0);
-    // 异常后不泄漏：内层抛错 → finally 弹栈 → 后续无作用域调用不归属旧身份。
-    expect(() => journal.runWithInvocation(a, argsA, () => { throw new Error("scoped fault"); })).toThrow("scoped fault");
+    // 异常后不泄漏：内层错误配对在作用域建立前 throw → 冒泡被 kernel 保守
+    // 捕获（外层 unknown）；finally 弹栈——后续无作用域调用不归属旧身份。
+    replaceTreasuryActionAdapterForTest(faultAdapterOf(oracle, journal, service));
+    const d = admit(service, "biz:g14:fault-outer", transferArgs({ amount: 30, outcome: "ok" }));
+    const dOutcome = executeTreasuryAdmittedDispatch(journal, service, d);
+    expect(dOutcome.status).toBe("unknown"); // 外层执行异常被 kernel 保守捕获
+    replaceTreasuryActionAdapterForTest(oracle);
     const c = admit(service, "biz:g14:leak", transferArgs({ amount: 10, outcome: "ok" }));
-    service.executeAuthorizedDispatch(c.dispatch); // 无作用域（不应沿用 a）
+    service.executeAuthorizedDispatch(c.dispatch); // 无作用域（不应沿用外层身份）
     expect(journal.visibleFor(c.attemptId).length).toBe(0);
     expect(journal.visibleFor(a.attemptId).filter((e) => e.kind === "adapter-entered").length).toBe(1); // a 仍是恰一次（无泄漏追加）
   });
@@ -373,7 +428,7 @@ describe("G14 受控调用上下文的隔离", () => {
     const service = makeService();
     const args = transferArgs({ amount: 100, outcome: "ok" });
     const a = admit(service, "biz:g14:reset", args);
-    expect(journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch)).status).toBe("committed");
+    expect(executeTreasuryAdmittedDispatch(journal, service, a).status).toBe("committed");
     // 完整 reset（入口快照重装 + 模块重建）：宿主事件事实保留（祖先链）。
     const reset = performTreasuryFullReset({ roomSpecs: ROOMS, adapter: makeTreasuryExactOracleAdapter(journal), advanceTicks: 1 });
     expect(journal.visibleFor(a.attemptId).filter((e) => e.kind === "world-effect").length).toBe(1); // 旧事实保留（同世界继续）
@@ -389,7 +444,7 @@ describe("G14 受控调用上下文的隔离", () => {
 
 // ── G15：真实 rearm + 同参数 child + 断点组合 ───────────────────────────────
 
-describe("G15 真实 capability→rearm→同参数 child", () => {
+describe("G15 普通 rearm 回归（父子 outcome 编排不同→args 不同；同参数断点组合见 IV/H15）", () => {
   it("child 新身份执行、父代无效果事实与 child 效果分离、旧许可不可重放；断点组合后各自对账", () => {
     const journal = createTreasuryHostJournal();
     const oracle = makeTreasuryExactOracleAdapter(journal);
@@ -398,7 +453,7 @@ describe("G15 真实 capability→rearm→同参数 child", () => {
     const argsParent = transferArgs({ amount: 50, outcome: "non-ok" });
     const parent = admit(service, "biz:g15:retry", argsParent);
     // 父代首轮无效果（non-ok：进入 adapter、无世界效果）。
-    expect(journal.runWithInvocation(parent, argsParent, () => service.executeAuthorizedDispatch(parent.dispatch)).status).toBe("not_executed");
+    expect(executeTreasuryAdmittedDispatch(journal, service, parent).status).toBe("not_executed");
     expect(journal.visibleFor(parent.attemptId).filter((e) => e.kind === "world-effect").length).toBe(0);
     expect(journal.visibleFor(parent.attemptId).filter((e) => e.kind === "adapter-entered").length).toBe(1); // 父代的进入事实
     Game.time += 1;
@@ -414,7 +469,7 @@ describe("G15 真实 capability→rearm→同参数 child", () => {
     expect(service.executeAuthorizedDispatch(parent.dispatch).status).toBe("rejected");
     // child 执行（与父代 args 完全相同——作用域绑定 child 许可身份）。
     const argsChild = transferArgs({ amount: 50 });
-    expect(journal.runWithInvocation(child, argsChild, () => service.executeAuthorizedDispatch(child.dispatch)).status).toBe("committed");
+    expect(executeTreasuryAdmittedDispatch(journal, service, child).status).toBe("committed");
     expect(journal.visibleFor(child.attemptId).filter((e) => e.kind === "world-effect").length).toBe(1); // child 的效果
     expect(journal.visibleFor(parent.attemptId).filter((e) => e.kind === "world-effect").length).toBe(0); // 父代无效果事实（不倒记）
     expect(journal.visibleFor(child.attemptId).filter((e) => e.kind === "adapter-entered").length).toBe(1); // child 自己的进入
@@ -462,7 +517,7 @@ describe("G16 exact committed 后余额/空间对照", () => {
         b0 = captureTreasuryHostBreakpoint(journal.captureBranch());
       },
     });
-    const outcome = journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch));
+    const outcome = executeTreasuryAdmittedDispatch(journal, service, a);
     interceptor.restore();
     if (outcome.status !== "persist_failed") throw new Error("期望 persist_failed");
     if (b0 === undefined) throw new Error("B0 未捕获");
@@ -489,7 +544,7 @@ describe("G17 门禁与保守语义回归", () => {
     // healthy：真许可执行。
     const args = transferArgs({ amount: 100, outcome: "throw" });
     const a = admit(service, "biz:g17:unknown", args);
-    expect(journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch)).status).toBe("unknown");
+    expect(executeTreasuryAdmittedDispatch(journal, service, a).status).toBe("unknown");
     // unknown：保守占用不因观察/边界释放（观察 900 − 占用 100 = 800 可纳、801 拒）。
     Game.time += 1;
     service.beginTick();
