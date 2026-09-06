@@ -1,0 +1,1 @@
+npx jest --config jest.config.cjs --runInBand --runTestsByPath r1-baseline-replicator.test.ts r2-baseline-replicator.test.ts v1-baseline-replicator.test.ts v2-baseline-replicator.test.ts（于干净 worktree baseline-r3-3f4e701，HEAD=3f4e701a6203159183067288c830f88b710d6339）

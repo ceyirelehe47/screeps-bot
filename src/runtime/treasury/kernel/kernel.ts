@@ -24,6 +24,7 @@
  */
 
 import {
+  TREASURY_CORE_CONSUMER_KEYS_MAX,
   TREASURY_CORE_RECOVERY_BUDGET_PER_TICK,
   TREASURY_CORE_SCHEMA_VERSION,
   TREASURY_CORE_SUBBUDGET_DISPATCHING,
@@ -70,6 +71,18 @@ import {
 } from "@/runtime/treasury/kernel/coverage";
 
 /** kernel 依赖的窄 adapter 端口（facade 从注册表适配；kernel 不依赖注册表实现）。 */
+/**
+ * 生命周期推进所有权（Remediation III/R1/§3.1）：同一运行时/同一 Treasury
+ * 调度域只允许一个生命周期推进栈。模块级共享（所有 kernel 实例同一模块
+ * 时同属一个调度域）——不按 treasuryCore 对象引用分锁（安全写会替换该
+ * 对象）、不为每实例单独建锁。回调重入 beginTick 时结构化返回零推进，
+ * 不递归扫描或调用释放端口；普通异常路径由 finally 释放，真正硬终止由
+ * 新运行时（完整 reset 重建模块）从已发布状态恢复。guard 是有界运行时
+ * 协调，不是持久权威——完整 reset 后必须丢失（预算/cursor/remaining 仍
+ * 由 Memory 保持）。
+ */
+let lifecycleAdvanceInFlight = false;
+
 export interface TreasuryCoreActionAdapterPort {
   readonly kind: string;
   readonly version: number;
@@ -814,6 +827,19 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
   }
 
   function beginTick(): { recovered: number; closed: number; cleaned: number; cancelled: number } {
+    // §3.1：已有推进进行中（回调重入/多实例/同 tick 顺序调用重叠）时结构化
+    // 返回零推进——嵌套请求不递归调度；外层完成后，后续正常入口按剩余
+    // 持久预算继续推进（预算/cursor 单一权威在 Memory）。
+    if (lifecycleAdvanceInFlight) return { recovered: 0, closed: 0, cleaned: 0, cancelled: 0 };
+    lifecycleAdvanceInFlight = true;
+    try {
+      return runLifecycleAdvance();
+    } finally {
+      lifecycleAdvanceInFlight = false;
+    }
+  }
+
+  function runLifecycleAdvance(): { recovered: number; closed: number; cleaned: number; cancelled: number } {
     let recovered = 0;
     let closed = 0;
     let cleaned = 0;
@@ -877,156 +903,151 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       }
     }
 
-    // 4) closing 清理公平推进（游标轮转；清理保底 ≥2 = 至少 1 个成对消费者
-    //    单位/IV §6.1）。外部端口调用前成对预扣完整 2 份（调用 + 确认）；
-    //    确认命令使用已预扣份额（不再 +1）。committed 记录的退出由观察
-    //    接管证明门控（IV/R1）——观察未覆盖时零写跳过（D01 有界等待）。
+    // 4) closing 清理公平推进（Remediation III/R1/§3.2–§3.3：当前义务
+    //    逐项清理）。跨记录游标轮转（清理保底 ≥2 = 至少 1 个成对消费者
+    //    单位/IV §6.1）。每记录每次迭代从持久现读当前 remaining——不持有
+    //    跨回调的旧工作数组（内层确认改变集合后，外层不再选择已移除项）；
+    //    预扣绑定当前 attempt/consumerKey 成员资格；端口返回只有原始布尔
+    //    true 才确认移除（R2/§3.4）；确认按单位进行（成功 [key]、失败空
+    //    清单 + 有界失败计数），不再累计跨回调的 released[] 批末确认。
+    //    committed 记录的退出由观察接管证明门控（IV/R1）——观察未覆盖时
+    //    零写跳过（D01 有界等待）。
     const afterCloses = readTreasuryCoreStoreHealth();
     if (afterCloses.status === "healthy") {
-      const closings = sortedActive(afterCloses.memory).filter((r) => r.phase === "closing");
-      if (closings.length > 0) {
-        const observe = ports.observeForCleanup;
+      const observe = ports.observeForCleanup;
+      // 观察证明（每记录按其 worstCase 惰性派生；端口缺失/观察不可用 → undefined）。
+      let proof: { worldSequence: number; atTick: number; coveredLocations: string[] } | undefined;
+      const obtainProof = (target: TreasuryCoreWorkRecord): boolean => {
+        if (observe === undefined) return false;
+        const observed = observe();
+        if (observed === null) return false;
+        proof = observationProofFor(target, observed);
+        return true;
+      };
+      // 本次 beginTick 的记录访问集合（有界：每 closing 记录至多访问一次，
+      // 穷尽后有界返回——只是运行时调度辅助，不是成员资格或完成权威）。
+      const servedRecords = new Set<string>();
+      while (used < TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) {
+        const healthNow = readTreasuryCoreStoreHealth();
+        if (healthNow.status !== "healthy") break;
+        const closings = sortedActive(healthNow.memory).filter((r) => r.phase === "closing");
+        if (closings.length === 0) {
+          cursors.cleanupCursor = 0;
+          break;
+        }
         const start = cursors.cleanupCursor % closings.length;
-        let visited = 0;
-        while (visited < closings.length && used < TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) {
-          const record = closings[(start + visited) % closings.length];
-          visited += 1;
-          cursors.cleanupCursor = (cursors.cleanupCursor + 1) % closings.length;
-          // 观察证明（每记录按其 worstCase 惰性派生；端口缺失/观察不可用 → undefined）。
-          let proof: { worldSequence: number; atTick: number; coveredLocations: string[] } | undefined;
-          const obtainProof = (target: TreasuryCoreWorkRecord): boolean => {
-            if (observe === undefined) return false;
-            const observed = observe();
-            if (observed === null) return false;
-            proof = observationProofFor(target, observed);
-            return true;
-          };
-          if (record.cleanup.consumerKeys.length === 0) {
-            if (record.outcome === "committed") {
-              // IV/R1/D01：committed 无义务记录先做观察预检（时间序）——观察
-              // 未覆盖/无观察端口时零写跳过（不花预算；范围终判在命令内）。
-              // Remediation II/R1：锚点链与命令内/occupancy 同一共享判定
-              //（coverage.ts：invocation → external → invocationBoundary）。
-              const anchor = treasuryCoreCoverageAnchorOf(record);
-              if (anchor === null) continue; // 无调用侧事实；保守保留
-              if (!obtainProof(record) || proof === undefined) continue;
-              if (treasuryCoreObservationAdvancesPastAnchor(anchor, proof) !== true) continue;
-              const step = applyBudgetedCommand(
-                used,
-                { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [], observationProof: proof },
-                cursors,
-              );
-              used = step.used;
-              if (step.applied) cleaned += 1;
-              continue;
-            }
-            // not_executed / pending_cancellation 无世界效果义务：直接终态推进。
-            const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] }, cursors);
-            used = step.used;
-            if (step.applied) cleaned += 1;
-            continue;
-          }
-          // 逐消费者幂等释放：端口调用前成对预扣 2 份（预扣失败即停）。
-          const releasePort = ports.releaseExternalConsumer;
-          if (releasePort === undefined) {
-            // 端口缺失：不默认成功——保留义务并记录失败计数（有界诊断）。
-            const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] }, cursors);
-            used = step.used;
-            if (step.applied) cleaned += 1;
-            continue;
-          }
-          const released: string[] = [];
-          let portFaulted = false;
-          let budgetPrepayFailed = false;
-          // Remediation I/R2/§5.1 + II/R2：记录内轮转——从持久 cursor 位置开始
-          // 旋转遍历，不再每 tick 从第一项开始（失败前缀永久占据本记录的尝试
-          // 预算）。每次已取得预算的尝试（无论 true/false/throw）的下一服务
-          // 位置随预扣同次持久发布；确认命令不携带游标（§4.3：不得用旧调用
-          // 栈的值覆盖预扣已发布或重入后更新的 cursor）。集合成员资格仍是
-          // 唯一未完成义务事实；调度位置不证明任何义务完成。
-          const dutyKeys = record.cleanup.consumerKeys;
-          const dutyCount = dutyKeys.length;
-          const dutyStart = record.cleanup.cursor % dutyCount;
-          let lastAttemptedIndex = -1;
-          for (let offset = 0; offset < dutyCount; offset += 1) {
-            const dutyIndex = (dutyStart + offset) % dutyCount;
-            const consumerKey = dutyKeys[dutyIndex] as string;
-            // 成对预扣从持久现读（重入/多实例后的单一权威；IV/§6.2）。
-            // Remediation II/R2：本次单位的「下一服务位置」随预扣同次发布
-            //（端口调用前持久）。
-            const prepaid = prepayReleaseUnitBudget(cursors, {
-              attemptId: record.attemptId,
-              nextCursor: (dutyIndex + 1) % dutyCount,
-            });
-            if (prepaid === null) {
-              budgetPrepayFailed = true;
-              break;
-            }
-            used = prepaid;
-            lastAttemptedIndex = dutyIndex;
-            let ok: boolean;
-            try {
-              ok = releasePort(consumerKey, record.attemptId);
-            } catch {
-              // 端口抛错：该 duty 保留（不崩 tick、不默认成功）；份额已耗。
-              portFaulted = true;
-              ok = false;
-            }
-            if (ok) released.push(consumerKey);
-          }
-          // 本 tick 已取得预算的尝试的轮转位置（最后尝试位置 +1 对原集合
-          // 长度取模）已随每次预扣同次持久发布；集合缩小后由下次读取时安全回绕。
-          if (budgetPrepayFailed && released.length === 0) {
-            // 预算耗尽：立即停止扫描（IV/D19）。continue 空转会把游标推满
-            // 一整圈回到本 tick 起点——后方记录永远落在"预算已尽"的访问
-            // 位（结构性饿死）；§6.2 额度耗尽后廉价返回，不无限扫描。
-            // break 让游标停在耗尽处，下一 tick 从其后记录开始（起点前移）。
-            // Remediation II/R2：尝试位置已随预扣同次持久发布——此处确认
-            // 只落有界失败诊断（使用已预扣份额），不再携带游标。
-            if (lastAttemptedIndex >= 0) {
-              const step = applyPrepaidCleanupCommand(
-                used,
-                { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] },
-                cursors,
-              );
-              used = step.used;
-              if (step.applied) cleaned += 1;
-            }
-            break;
-          }
-          if (released.length === 0 && !portFaulted && !budgetPrepayFailed) {
-            // 端口明确未确认（false）：推进失败计数（诊断），duty 保留。诊断
-            // 命令就是本单位的"对应确认命令"（确认结果 = 未确认）——使用
-            // 已预扣份额（IV/§6.1 成对语义；否则失败记录 3 份/条会把每 tick
-            // 预算挤占成"后方可完成记录永远差 1 份"的结构性饿死——D19）。
-            const step = applyPrepaidCleanupCommand(
+        const record = closings[start];
+        if (record === undefined || servedRecords.has(record.attemptId)) break;
+        servedRecords.add(record.attemptId);
+        cursors.cleanupCursor = (start + 1) % closings.length;
+        if (record.cleanup.consumerKeys.length === 0) {
+          if (record.outcome === "committed") {
+            // IV/R1/D01：committed 无义务记录先做观察预检（时间序）——观察
+            // 未覆盖/无观察端口时零写跳过（不花预算；范围终判在命令内）。
+            // Remediation II/R1：锚点链与命令内/occupancy 同一共享判定
+            //（coverage.ts：invocation → external → invocationBoundary）。
+            const anchor = treasuryCoreCoverageAnchorOf(record);
+            if (anchor === null) continue; // 无调用侧事实；保守保留
+            if (!obtainProof(record) || proof === undefined) continue;
+            if (treasuryCoreObservationAdvancesPastAnchor(anchor, proof) !== true) continue;
+            const step = applyBudgetedCommand(
               used,
-              { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] },
+              { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [], observationProof: proof },
               cursors,
             );
             used = step.used;
             if (step.applied) cleaned += 1;
             continue;
           }
-          // 释放确认：使用已预扣份额（0 份追加）。释放未确认的消费者义务
-          // 保留（不因端口失败谎报完成）；确认写回失败时下次以同一幂等
-          // 关联重试（§5.2/IV D16——义务不跨 attempt 迁移）。committed 记录
-          // 顺带携带观察证明（全释放 + 观察覆盖时同命令完成退出）。
+          // not_executed / pending_cancellation 无世界效果义务：直接终态推进。
+          const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] }, cursors);
+          used = step.used;
+          if (step.applied) cleaned += 1;
+          continue;
+        }
+        // 端口缺失：不默认成功——保留义务并记录失败计数（有界诊断）。
+        const releasePort = ports.releaseExternalConsumer;
+        if (releasePort === undefined) {
+          const step = applyBudgetedCommand(used, { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] }, cursors);
+          used = step.used;
+          if (step.applied) cleaned += 1;
+          continue;
+        }
+        // 逐消费者单位（§3.2 顺序）：重读当前记录 → 从当前 remaining 选择
+        // 本次成员 → 同次发布两份预算 + 下一服务位置 → 端口 → 严格判定 →
+        // 按单位确认（成功才移除该项）→ 确认写完成后重新读取状态再选下一项。
+        // 每消费者 2 份；确认不追加、不退款；失败成员保留、轮转继续——同
+        // 一次访问不为花完预算重复尝试刚失败的同一项（§3.3：访问集合只是
+        // 运行时调度辅助，不是成员资格或完成权威；全部成员都已尝试过即有
+        // 界结束，失败责任保留到下一 tick）。
+        const triedKeys = new Set<string>();
+        // 预算不足以再预扣一个消费者单位时置位——外层同步停止扫描（IV/D19：
+        // continue 空转会把游标推满一整圈回到本 tick 起点，后方记录永远落在
+        // “预算已尽”的访问位——结构性饿死；停在耗尽处，下一 tick 从其后继开始）。
+        let budgetShortfall = false;
+        while (used < TREASURY_CORE_RECOVERY_BUDGET_PER_TICK && triedKeys.size < TREASURY_CORE_CONSUMER_KEYS_MAX) {
+          const unitHealth = readTreasuryCoreStoreHealth();
+          if (unitHealth.status !== "healthy") break;
+          const current = unitHealth.memory.active[record.attemptId];
+          if (current === undefined || current.phase !== "closing") break; // 记录已变化/退出：不复活旧数组
+          const keys = current.cleanup.consumerKeys;
+          if (keys.length === 0) break; // 义务已清空（观察未接管的空集合留待下 tick 空义务分支）
+          // 从记录现值 cursor（下一服务位置）起选第一个本次未尝试的成员。
+          let dutyIndex = -1;
+          for (let offset = 0; offset < keys.length; offset += 1) {
+            const candidate = (current.cleanup.cursor + offset) % keys.length;
+            const key = keys[candidate];
+            if (key !== undefined && !triedKeys.has(key)) {
+              dutyIndex = candidate;
+              break;
+            }
+          }
+          if (dutyIndex < 0) break; // 本次访问已试过全部成员（单成员失败等）：有界结束
+          const consumerKey = keys[dutyIndex] as string;
+          triedKeys.add(consumerKey);
+          const prepaid = prepayReleaseUnitBudget(cursors, {
+            attemptId: record.attemptId,
+            nextCursor: (dutyIndex + 1) % keys.length,
+          });
+          if (prepaid === null) {
+            budgetShortfall = true;
+            break; // 预扣失败（预算尽/记录变化）：不调用端口，有界结束
+          }
+          used = prepaid;
+          // R2/§3.4 严格成功：端口结果以 unknown 运行时边界审视，只有原始
+          // 布尔 true 是完成确认——不做 Boolean 强转、不解读 {ok:...}、
+          // 不 await、不调用 then、不隐式读取返回对象字段。false 与 throw
+          // 均保留义务（份额已耗；按原有界计数/诊断处理，不崩整个 tick）。
+          let returned: unknown;
+          try {
+            returned = releasePort(consumerKey, record.attemptId);
+          } catch {
+            returned = false; // 端口异常：义务保留（不默认成功）
+          }
+          const success = returned === true;
+          // 即将清空义务的确认顺带携带观察证明（committed 完整关闭条件：
+          // 义务清空 + 观察接管，由同一已预扣命令完成——不追加份额）。
+          const willEmpty = success && keys.length === 1;
           const confirmProof =
-            record.outcome === "committed" && obtainProof(record) && proof !== undefined ? proof : undefined;
+            willEmpty && current.outcome === "committed" && obtainProof(current) && proof !== undefined ? proof : undefined;
           const step = applyPrepaidCleanupCommand(
             used,
-            { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: released, observationProof: confirmProof },
+            {
+              type: "advance_cleanup",
+              attemptId: record.attemptId,
+              releasedDuties: success ? [consumerKey] : [],
+              ...(confirmProof !== undefined ? { observationProof: confirmProof } : {}),
+            },
             cursors,
           );
           used = step.used;
-          if (step.applied) cleaned += 1;
+          if (!step.applied) break; // 确认写失败：保留未确认责任，有界结束本记录（原 attempt 幂等重试）
+          cleaned += 1;
+          // 循环回到顶部：从当前持久状态重新选择下一项（§3.2）。
         }
-      } else {
-        cursors.cleanupCursor = 0;
+        if (budgetShortfall) break; // 游标停在耗尽处（不空转推满一圈）
       }
     }
-
     // 5) lifecycle 标记 + 游标/预算终态持久化（终态预算 = 持久记账现值）。
     const finalUsed = Math.max(used, currentBudgetUsed(nowTick));
     writeTreasuryCoreMemory((root) => {
@@ -1043,13 +1064,18 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
       const nowTick = ports.nowTick();
       let used = readBudgetState(health.memory, nowTick);
       const cursors = { sweepCursor: health.memory.recovery.sweepCursor, cleanupCursor: health.memory.recovery.cleanupCursor };
-      // dispatching 残留（当次调用异常逃逸）→ 保守 unknown（共享同 tick 预算）。
-      for (const record of sortedActive(health.memory)) {
-        if (used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) break;
-        if (record.phase !== "dispatching") continue;
-        const step = applyBudgetedCommand(used, { type: "recover_dispatching", attemptId: record.attemptId }, cursors);
-        used = step.used;
-        if (step.applied) recoveredToUnknown += 1;
+      // Remediation III/R1/§3.1：推进所有权被持有时（回调重入）不嵌套运行
+      // 恢复循环；endTick 的关窗事实（lifecycle.lastEndTick——facade 共享
+      // 授权窗口的关闭条件）仍按既有规则写入生效——防重入不吞关窗语义。
+      if (!lifecycleAdvanceInFlight) {
+        // dispatching 残留（当次调用异常逃逸）→ 保守 unknown（共享同 tick 预算）。
+        for (const record of sortedActive(health.memory)) {
+          if (used >= TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) break;
+          if (record.phase !== "dispatching") continue;
+          const step = applyBudgetedCommand(used, { type: "recover_dispatching", attemptId: record.attemptId }, cursors);
+          used = step.used;
+          if (step.applied) recoveredToUnknown += 1;
+        }
       }
       writeTreasuryCoreMemory((root) => {
         root.lifecycle.lastEndTick = ports.nowTick();

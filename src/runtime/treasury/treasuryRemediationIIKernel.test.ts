@@ -313,14 +313,22 @@ describe("F06 硬断点恢复后的记录内轮转", () => {
     runtime.treasuryCore = liveValue;
     expect(bp).toBeDefined();
     const snap = (JSON.parse(bp!.memorySnapshot) as { runtime: { treasuryCore: { active: Record<string, ActiveShape>; recovery: { budgetUsed: number } } } }).runtime.treasuryCore;
-    expect(snap.recovery.budgetUsed).toBe(4); // 两单位已扣
-    expect(snap.active[attemptId].cleanup.cursor).toBe(2); // 位置保留
+    // Remediation III/R1：逐项确认下写序列 = 预扣1、确认1、预扣2、确认2…
+    // 第 2 次放行写 = 单位 1（f0，sticky 失败）的确认写：份额 2、f0 保留
+    //（false 不移除）、位置停在预扣发布的 1（下一待服务成员 f1——不从
+    // 旧前缀重启，也不重复尝试刚失败的成员）。
+    expect(snap.recovery.budgetUsed).toBe(2); // 单位 1 已扣（成对预扣）
+    expect(snap.active[attemptId].cleanup.consumerKeys).toEqual(["ext:f6:f0", "ext:f6:f1", "ext:f6:f2", "ext:f6:f3", "ext:f6:t4", "ext:f6:t5", "ext:f6:t6", "ext:f6:t7"]);
+    expect(snap.active[attemptId].cleanup.cursor).toBe(1); // 下一待服务成员 = f1
     const callsAfterOldStack = releaseCalls.length;
-    expect(callsAfterOldStack).toBe(2); // 旧栈 f0、f1 各一次
+    expect(callsAfterOldStack).toBe(1); // 旧栈 f0 恰一次（后续写丢弃 → 有界停止）
     performTreasuryKernelFullReset({ ports, breakpoint: bp });
-    // 恢复：同 tick 剩 4 份额 → 续 2/3；位置推进到 4。
-    expect(activeShape(attemptId)!.cleanup.cursor).toBe(4);
-    expect(releaseCalls.slice(callsAfterOldStack)).toEqual(["ext:f6:f2", "ext:f6:f3"]);
+    // 恢复：同 tick 剩 6 份额 → 3 单位续 f1/f2/f3（sticky 失败保留义务，
+    // 不重复 f0）；恢复 tick 最后预扣发布位置 4（下一待服务 t4）。
+    expect(releaseCalls.slice(callsAfterOldStack)).toEqual(["ext:f6:f1", "ext:f6:f2", "ext:f6:f3"]);
+    const after = activeShape(attemptId)!;
+    expect(after.phase).toBe("closing"); // 失败义务保留（不谎报完成）
+    expect(after.cleanup.cursor).toBe(4);
   });
 });
 
@@ -389,10 +397,12 @@ describe("F08 重入与集合演化的份额守恒", () => {
     expect(releaseCalls.length).toBeLessThanOrEqual(4); // 全实例每 tick ≤4 成对单位
     const core = Memory.runtime!.treasuryCore as unknown as { recovery: { budgetUsed: number } };
     expect(core.recovery.budgetUsed).toBeLessThanOrEqual(8);
-    // 旧栈（外层）确认不得把内层已发布的游标位置覆盖回旧值：内层最后预扣
-    // 位置为 4（duty3+1）；外层确认后位置仍 ≥4（集合未缩时恰为 4）。
+    // Remediation III/R1：内层重入被调度 guard 结构化拒绝（零推进——不
+    // 递归调度）；外层独占推进完成 4 单位。游标按“下一待服务成员”语义
+    // 断言（§3.3：集合缩小后重定位，不保留旧数组索引数值）。
     const shape = activeShape(attemptId)!;
-    expect(shape.cleanup.cursor).toBeGreaterThanOrEqual(4);
+    expect(shape.cleanup.consumerKeys).toEqual(["ext:f8:c4", "ext:f8:c5", "ext:f8:c6", "ext:f8:c7"]);
+    expect(shape.cleanup.consumerKeys[shape.cleanup.cursor % shape.cleanup.consumerKeys.length]).toBe("ext:f8:c4");
     // 正常窗口下剩余义务有限完成。
     for (let tick = 0; tick < 6; tick += 1) {
       Game.time += 1;
@@ -414,12 +424,13 @@ describe("F08 重入与集合演化的份额守恒", () => {
     const consumers = Array.from({ length: 8 }, (_, i) => `ext:f8:w${String(i)}`);
     const attemptId = admitDutyWork(kernel, consumers, "biz:f8:wrap");
     Game.time += 1;
-    kernel.beginTick(); // 4 单位：0–3 释放，集合缩为 4，位置 4
+    kernel.beginTick(); // 4 单位：w0–w3 释放并逐项确认，集合缩为 [w4..w7]
     expect(releaseCalls.length).toBe(4);
-    expect(activeShape(attemptId)!.cleanup.consumerKeys).toEqual(["ext:f8:w4", "ext:f8:w5", "ext:f8:w6", "ext:f8:w7"]);
-    expect(activeShape(attemptId)!.cleanup.cursor).toBe(4); // 原集合长度下的位置
+    const shrunk = activeShape(attemptId)!.cleanup;
+    expect(shrunk.consumerKeys).toEqual(["ext:f8:w4", "ext:f8:w5", "ext:f8:w6", "ext:f8:w7"]);
+    expect(shrunk.consumerKeys[shrunk.cursor % shrunk.consumerKeys.length]).toBe("ext:f8:w4"); // 下一待服务成员（重定位——旧数值 4 会指向 w7、跳过 w4）
     Game.time += 1;
-    kernel.beginTick(); // 读时取模回绕：4 % 4 = 0 起，全部完成
+    kernel.beginTick(); // 从 w4 续：全部完成
     expect(activeShape(attemptId)?.phase).toBe("retry_ready");
     expect(releaseCalls.length).toBe(8); // 每项恰好一次
     for (const key of consumers) {

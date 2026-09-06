@@ -1,0 +1,5 @@
+cc87d870ae262c18b49de5149f0a6509e7bc5d59f264fb1ee933893caf8bc106 */d/code/screeps/screeps-bot/openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv-remediation-iii/baseline/r1-baseline-replicator.ts
+2c0de988462e92732188a1f9d077ccb812eaa0e1cb30c8324e32db7e9b882606 */d/code/screeps/screeps-bot/openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv-remediation-iii/baseline/r2-baseline-replicator.ts
+1f73a1ebb5cbbc1da8939af4f7d7e3d61de708c4bf8ce6a7fec35f331604c4d2 */d/code/screeps/screeps-bot/openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv-remediation-iii/baseline/v1-baseline-replicator.ts
+4c772fdc9d2a0b9420191de6842f3a7ffef5ed3fcbf9522018e1b089829da1ad */d/code/screeps/screeps-bot/openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv-remediation-iii/baseline/v2-baseline-replicator.ts
+b77bf0571738b0ea85ec4dfdc4cf759acb4072098a1a63145cbd5fc162b8c253 */d/code/screeps/screeps-bot/openspec/changes/empire-treasury-core-rewrite/evidence/core-rewrite-iv-remediation-iii/baseline/baseline-replicators.log

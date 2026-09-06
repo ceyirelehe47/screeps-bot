@@ -1,8 +1,17 @@
 /**
  * Treasury 事件驱动 exact 对账 oracle（测试专用，非 .test.ts）。
  *
- * Remediation II/V1/§6.2：恢复分支的 exact 结论从**本分支的受控宿主事件**
- * 得出，不从固定返回值得出，也不读生产 outcome 再复述。
+ * Remediation III/V1/§4：断点保存捕获时刻**本分支可见事件的不可变副本**；
+ * 恢复由加载器（performTreasuryFullReset/performTreasuryKernelFullReset
+ * 消费所选断点）调用 marker.reopen() 从该副本开启独立分支。不再存在可变
+ * 的“最近一次 recordCut 截断”——废弃分支（较早断点之后旧栈继续产生的）
+ * 事件不会在恢复较早断点后重新可见；每个分支只看到自己的祖先链事件。
+ *
+ * Remediation III/V2/§5：attempt 身份不再从 args 反查（同参数多 attempt
+ * 的登记在单值 Map 下互相覆盖）。execute 入口读取**受控调用作用域**——
+ * 由测试驱动以真实接纳/rearm 返回的许可身份经 runWithInvocation 建立；
+ * adapter 对实际收到的参数逐次核对，无作用域或参数不匹配时不归属任何
+ * attempt（unlinkedCalls 诊断），也不读取返回对象的属性。
  *
  * 事件模型（受控同步生效世界）：
  * - adapter-entered：动作调用进入 adapter（世界序 = 进入时刻受控世界序）；
@@ -15,11 +24,6 @@
  * - 无任何事件：分支记录的调用边界序仍 ≥ 当前世界序（边界发布后世界未
  *   推进——调用未开始/未产生效果）→ not_executed（正面对照）；
  * - 其余（事件错关联/世界序已越过但无本 attempt 效果事件）→ still_uncertain。
- *
- * 分支事件可见性：捕获断点时 recordJournalCut 记录截断（断点后旧栈继续
- * 产生的事件不得混入恢复分支）；恢复分支开始时宿主调用 startBranch()，
- * 此后新产生的事件属于恢复分支。oracle 只看
- * （截断之前的旧事件）∪（当前分支 epoch 的事件）。
  */
 
 import {
@@ -34,30 +38,50 @@ export interface TreasuryHostJournalEntry {
   readonly kind: "adapter-entered" | "world-effect";
   readonly atTick: number;
   readonly worldSequence: number;
-  /** 分支代号（startBranch 递增；断点前旧栈 = 当时代号）。 */
+  /** 分支代号（从断点恢复重开分支时递增；祖先基础事件保留原代号）。 */
   readonly epoch: number;
 }
 
 interface JournalState {
+  /** 本分支事件日志（祖先基础 + 本分支追加；恢复时整体替换为新基础）。 */
   entries: TreasuryHostJournalEntry[];
-  argsMap: Map<string, string>;
-  cut: number;
+  /** 本分支祖先基础事件数（封闭视图：i < baseLength 属所选断点的祖先事实）。 */
+  baseLength: number;
+  /** 当前分支代号（每次从断点副本重开 +1）。 */
   epoch: number;
+  /** 受控调用作用域栈（栈顶 = 当前正在执行的 attempt 身份；V2）。 */
+  invocationStack: { attemptId: string; argsKey: string }[];
+  /** 无作用域/参数不匹配的实际调用次数（诊断——不归属任何 attempt）。 */
+  unlinkedCalls: number;
+}
+
+/**
+ * 断点的事件分支标记（Remediation III/V1/§4.1–§4.2）：captureBranch 时
+ * 保存本分支可见事件的不可变副本；断点对象携带本标记，加载器恢复该断点
+ * 时调用 reopen() 从副本重开分支。副本不暴露内容——事件可见性只经
+ * visibleFor（封闭视图）查询。
+ */
+export interface TreasuryJournalBranchMarker {
+  readonly kind: "treasury-journal-branch";
+  /** 捕获时刻本分支可见事件数（断点 eventCut 与此一致）。 */
+  readonly count: number;
+  /** 从捕获副本重开分支（harness 安装断点 Memory 后调用；可重复恢复同一断点）。 */
+  reopen(): void;
 }
 
 export interface TreasuryHostJournal {
-  /** 事件日志（传给 captureTreasuryHostBreakpoint 以记录截断长度）。 */
-  readonly entries: readonly TreasuryHostJournalEntry[];
-  /** args JSON → attemptId（宿主 admit 时登记——execute 侧据此关联）。 */
-  registerAttempt(args: unknown, attemptId: string): void;
-  /** 恢复分支开始：新事件计入新 epoch，旧栈断点后事件被排除。 */
-  startBranch(): void;
-  /** 捕获断点时调用：记录事件截断。 */
-  recordCut(): void;
-  /** 当前分支代号。 */
-  readonly epoch: number;
-  /** 只读视图（断言用）。 */
+  /**
+   * 受控调用作用域（V2/§5.2）：以真实接纳/rearm 返回的许可身份执行 fn；
+   * fn 内 adapter 的真实执行入口据此关联本次 attempt。参数逐次核对——
+   * 作用域不匹配时不归属（不猜测 attempt）；异常路径 finally 弹栈不泄漏。
+   */
+  runWithInvocation<T>(identity: { attemptId: string }, expectedArgs: unknown, fn: () => T): T;
+  /** 捕获一次分支断点标记（传给 captureTreasuryHostBreakpoint）。 */
+  captureBranch(): TreasuryJournalBranchMarker;
+  /** 只读视图（断言用：祖先基础 ∪ 本分支当前 epoch 的事件）。 */
   visibleFor(attemptId: string): readonly TreasuryHostJournalEntry[];
+  /** 未能关联到任何 attempt 的实际调用次数（G14 诊断口径）。 */
+  readonly unlinkedCalls: number;
 }
 
 const journalStates = new WeakMap<TreasuryHostJournal, JournalState>();
@@ -77,24 +101,38 @@ function stateOf(journal: TreasuryHostJournal): JournalState {
 }
 
 export function createTreasuryHostJournal(): TreasuryHostJournal {
-  const state: JournalState = { entries: [], argsMap: new Map(), cut: Number.MAX_SAFE_INTEGER, epoch: 0 };
+  const state: JournalState = { entries: [], baseLength: 0, epoch: 0, invocationStack: [], unlinkedCalls: 0 };
   const journal: TreasuryHostJournal = {
-    entries: state.entries,
-    registerAttempt(args: unknown, attemptId: string): void {
-      state.argsMap.set(stableStringify(args), attemptId);
+    runWithInvocation<T>(identity: { attemptId: string }, expectedArgs: unknown, fn: () => T): T {
+      const frame = { attemptId: identity.attemptId, argsKey: stableStringify(expectedArgs) };
+      state.invocationStack.push(frame);
+      try {
+        return fn();
+      } finally {
+        state.invocationStack.pop(); // 异常路径同样弹栈——不泄漏前一作用域
+      }
     },
-    startBranch(): void {
-      state.epoch += 1;
+    captureBranch(): TreasuryJournalBranchMarker {
+      // 不可变副本（冻结）：捕获后旧栈继续追加的事件不影响本副本；恢复
+      // 同一断点多次时每次从同一副本开启（互不污染的独立分支）。
+      const copy = Object.freeze(state.entries.slice()) as readonly TreasuryHostJournalEntry[];
+      return {
+        kind: "treasury-journal-branch",
+        count: copy.length,
+        reopen(): void {
+          state.entries = copy.slice(); // 脱离副本（新分支追加只影响自己）
+          state.baseLength = copy.length;
+          state.epoch += 1;
+          state.invocationStack = []; // 旧执行栈不进入恢复分支（§5.2）
+        },
+      };
     },
-    recordCut(): void {
-      state.cut = state.entries.length;
-    },
-    get epoch(): number {
-      return state.epoch;
+    get unlinkedCalls(): number {
+      return state.unlinkedCalls;
     },
     visibleFor(attemptId: string): readonly TreasuryHostJournalEntry[] {
       return state.entries.filter(
-        (e, i) => e.attemptId === attemptId && (i < state.cut || e.epoch === state.epoch),
+        (e, i) => e.attemptId === attemptId && (i < state.baseLength || e.epoch === state.epoch),
       );
     },
   };
@@ -109,7 +147,9 @@ export interface TreasuryExactOracleAdapter extends TreasuryActionAdapter {
 
 /**
  * 事件驱动 exact oracle adapter（包装测试 transfer adapter；reconcile 结论
- * 从宿主事件/分支世界序推导——不是工厂固定值）。
+ * 从宿主事件/分支世界序推导——不是工厂固定值）。execute 的 attempt 关联
+ * 只来自受控调用作用域（V2）；无作用域/参数不匹配的调用计入宿主 trace
+ * 与 journal.unlinkedCalls，不归属任何 attempt。
  */
 export function makeTreasuryExactOracleAdapter(journal: TreasuryHostJournal): TreasuryExactOracleAdapter {
   const base = makeTreasuryTestTransferAdapter("still_uncertain");
@@ -119,7 +159,12 @@ export function makeTreasuryExactOracleAdapter(journal: TreasuryHostJournal): Tr
     trace,
     execute(args: TreasuryTestTransferArgs): { ok: boolean } {
       const state = stateOf(journal);
-      const attemptId = state.argsMap.get(stableStringify(args)) ?? null;
+      // 受控调用作用域（V2/§5.2）：栈顶身份 + 参数逐次核对；不扫描 active、
+      // 不按 args 反查、不读 outcome 反推归属。
+      const frame = state.invocationStack.length > 0 ? state.invocationStack[state.invocationStack.length - 1] : null;
+      const argsKey = stableStringify(args);
+      const attemptId = frame !== null && frame.argsKey === argsKey ? frame.attemptId : null;
+      if (attemptId === null) state.unlinkedCalls += 1;
       if (attemptId !== null) {
         state.entries.push({
           attemptId,

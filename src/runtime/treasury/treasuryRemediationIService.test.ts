@@ -178,12 +178,11 @@ describe("E02 配对断点与事件 exact 对账", () => {
     const service = makeService();
     const args = transferArgs({ amount: 100, outcome: "ok" });
     const a = admit(service, "biz:e2:pre", args);
-    journal.registerAttempt(args, a.attemptId);
     // 放行首写（dispatch_start 边界发布），adapter 进入即抛哨兵错误，后续
     // 全部写（dispatch_result/兜底）被丢弃——持久层停在 dispatching+boundary，
     // 世界未变。
     const interceptor = interceptTreasuryCoreWrites({ allow: 1 });
-    const outcome = service.executeAuthorizedDispatch(a.dispatch);
+    const outcome = journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch));
     interceptor.restore(); // 保留实际最终值（dispatch_start 已持久）
     // adapter 抛错 + 结果写/兜底写全部被丢弃 → persist_failed（保守路径）。
     if (outcome.status !== "persist_failed") throw new Error("E02 pre: " + JSON.stringify(outcome));
@@ -195,11 +194,9 @@ describe("E02 配对断点与事件 exact 对账", () => {
     expect(shape.invocationBoundary).not.toBeNull();
     // 断点捕获：Memory/世界/事件同刻（世界 1000、事件无 entered/effect——
     // 哨兵在进入点硬停，不产生世界效果）。
-    journal.recordCut();
-    const bp = captureTreasuryHostBreakpoint(journal.entries);
+    const bp = captureTreasuryHostBreakpoint(journal.captureBranch());
     expect(bp.world.W1N57?.storage?.resources.energy ?? -1).toBe(1000); // 配对世界=效果前
     // 旧栈继续（catch/finally 只影响旧分支）；恢复分支从断点开始。
-    journal.startBranch();
     const reset = performTreasuryFullReset({
       roomSpecs: ROOMS,
       adapter: oracle,
@@ -228,16 +225,13 @@ describe("E02 配对断点与事件 exact 对账", () => {
     const service = makeService();
     const args = transferArgs({ amount: 100, outcome: "ok" });
     const a = admit(service, "biz:e2:post", args);
-    journal.registerAttempt(args, a.attemptId);
     const interceptor = interceptTreasuryCoreWrites({ allow: 1 }); // 放行 dispatch_start，丢弃结果写
-    const outcome = service.executeAuthorizedDispatch(a.dispatch);
+    const outcome = journal.runWithInvocation(a, args, () => service.executeAuthorizedDispatch(a.dispatch));
     interceptor.restore(); // 保留实际最终值
     expect(outcome.status).toBe("persist_failed"); // 真实执行已发生、结果写失败
     expect(oracle.trace.effects).toBe(1);
-    journal.recordCut(); // 断点时刻事件 = entered + world-effect
-    const bp = captureTreasuryHostBreakpoint(journal.entries);
+    const bp = captureTreasuryHostBreakpoint(journal.captureBranch());
     expect((bp.world.W1N57?.storage?.resources.energy ?? -1)).toBe(900); // 配对世界=效果后
-    journal.startBranch();
     const reset = performTreasuryFullReset({
       roomSpecs: ROOMS,
       adapter: makeTreasuryExactOracleAdapter(journal),

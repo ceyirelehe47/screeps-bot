@@ -81,8 +81,27 @@ export interface TreasuryHostBreakpoint {
   readonly atTick: number;
   /** 断点时刻的受控世界序（与 Memory.runtime.treasuryWorldSequence 一致）。 */
   readonly worldSequence: number;
-  /** 断点时刻宿主事件日志长度（恢复分支的 exact oracle 按此截断）。 */
+  /** 断点时刻宿主事件日志长度（兼容口径；事件内容由 eventBranch 携带）。 */
   readonly eventCut: number;
+  /**
+   * 所选断点的封闭事件分支（journal.captureBranch() 产物）。加载器恢复
+   * 本断点时调用 reopen() 从不可变副本重开分支（V1/§4.1）；无 journal 的
+   * 断点（kernel 面 Memory/世界配对）无此字段——跳过，不猜测事件。
+   */
+  readonly eventBranch?: TreasuryHostBreakpointEventBranch;
+}
+
+/** 断点携带的宿主事件分支标记（结构匹配 treasuryExactOracle 的 marker）。 */
+export interface TreasuryHostBreakpointEventBranch {
+  readonly kind: "treasury-journal-branch";
+  readonly count: number;
+  reopen(): void;
+}
+
+function isEventBranch(value: unknown): value is TreasuryHostBreakpointEventBranch {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as { kind?: unknown; reopen?: unknown };
+  return candidate.kind === "treasury-journal-branch" && typeof candidate.reopen === "function";
 }
 
 /**
@@ -150,18 +169,25 @@ function readHostWorldSequence(): number {
 }
 
 /**
- * 原子捕获一次宿主断点：Memory JSON + 世界 + tick + 世界序 + 事件截断长度。
- * 传入宿主事件日志（只读引用），捕获其当前长度；恢复分支的 exact oracle
- * 用 eventCut 截断——断点以后旧栈继续产生的事件不混入恢复分支（§6.1）。
+ * 原子捕获一次宿主断点：Memory JSON + 世界 + tick + 世界序 + 事件事实。
+ * 传入 journal.captureBranch() 产物（事件分支标记）时，断点携带该标记——
+ * 恢复由加载器调用 reopen() 从捕获时刻的不可变副本重开分支（V1/§4.1）；
+ * 传入普通事件数组（只读引用）时仅记录长度（kernel 面 Memory/世界配对，
+ * 无事件内容——恢复不猜测）；断点以后旧栈继续产生的事件不混入恢复分支。
  */
-export function captureTreasuryHostBreakpoint(events?: readonly unknown[]): TreasuryHostBreakpoint {
+export function captureTreasuryHostBreakpoint(
+  events?: readonly unknown[] | TreasuryHostBreakpointEventBranch,
+): TreasuryHostBreakpoint {
+  const branch = events !== undefined && isEventBranch(events) ? events : undefined;
+  const plainEvents = events !== undefined && !isEventBranch(events) ? events : undefined;
   return {
     kind: "treasury-host-breakpoint",
     memorySnapshot: snapshotWholeMemory(),
     world: snapshotWorld(),
     atTick: Game.time,
     worldSequence: readHostWorldSequence(),
-    eventCut: events?.length ?? 0,
+    eventCut: branch !== undefined ? branch.count : plainEvents?.length ?? 0,
+    ...(branch !== undefined ? { eventBranch: branch } : {}),
   };
 }
 
@@ -192,6 +218,9 @@ function resetRuntimeCore(input: {
     assertBreakpointConsistency(input.breakpoint);
     // 指定断点：Memory、世界、tick 全部来自断点对象（不混入入口当前值）。
     installWholeMemorySnapshot(input.breakpoint.memorySnapshot);
+    // 事件事实同样来自所选断点（V1/§4.1）：从捕获时刻的不可变副本重开
+    // 分支——加载器实际应用所选断点，不依赖最近一次截断的共享可变状态。
+    input.breakpoint.eventBranch?.reopen();
   } else {
     installWholeMemorySnapshot(input.memorySnapshot ?? snapshotWholeMemory());
   }

@@ -446,6 +446,26 @@ function observationTakesOverEffect(
   return treasuryCoreObservationAdvancesPastAnchor(anchor, proof) === true;
 }
 
+/**
+ * 集合缩小后的下一服务位置重定位（Remediation III/R1/§3.3）：移除成员后
+ * 重新定位到**同一个下一待服务成员**——不同于把旧 cursor 数值原样保留
+ * （[D0,D1,D2] 服务 D0（发布位置 1）后移除 D0，[D1,D2] 中数字 1 指向
+ * D2、跳过 D1）。仅当本次恰好移除 cursor 所指服务的那个成员（逐项确认
+ * 的唯一形态：预扣发布的位置反推本次服务位，且与释放清单一致）时精确
+ * 重定位；其余情况保守保留记录现值（安全取模回绕，不证明任何完成）。
+ */
+function nextServiceCursor(keysBefore: readonly string[], released: readonly string[], cursorNow: number): number {
+  if (released.length !== 1) return cursorNow; // 非单成员确认：保守保留现值
+  const total = keysBefore.length;
+  if (total === 0) return 0;
+  const served = (cursorNow - 1 + total) % total; // 预扣发布的下一位置反推本次服务位
+  if (keysBefore[served] !== released[0]) return cursorNow; // 游标与本命令无对应关系
+  const nextKey = keysBefore[(served + 1) % total]; // 移除前的下一待服务成员
+  const remaining = keysBefore.filter((key) => key !== released[0]);
+  const relocated = remaining.indexOf(nextKey);
+  return relocated >= 0 ? relocated : cursorNow;
+}
+
 function advanceCleanupCommand(
   memory: TreasuryCoreMemory,
   command: TreasuryCoreAdvanceCleanupCommand,
@@ -470,7 +490,10 @@ function advanceCleanupCommand(
       cleanup: {
         consumerKeys: remaining,
         failures: Math.min(failures, TREASURY_CORE_COUNTER_SATURATION),
-        cursor: r.cleanup.cursor,
+        // §3.3：集合缩小后按当前集合变化重新定位到同一个下一待服务成员
+        //（基于记录现值 cursor——确认命令不携带游标，不得用旧调用栈的值
+        // 覆盖较新位置；重定位失败时保守保留现值取模回绕）。
+        cursor: nextServiceCursor(record.cleanup.consumerKeys, command.releasedDuties, r.cleanup.cursor),
       },
       updatedAtTick: ctx.nowTick,
     }));

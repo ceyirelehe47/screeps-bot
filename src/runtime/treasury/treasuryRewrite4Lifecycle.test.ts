@@ -656,6 +656,8 @@ describe("D19 公平推进有限界（失败前置 + 可完成后置 + 混合流
       rolling = createTreasuryCoreKernel(ports);
       rolling.beginTick();
       writeCount.beginTicks += 1;
+      if (ticks < 12) {
+      }
       const pending = rolling.admit({ ...kernelAdmitInput([], `biz:d19:noise-${String(ticks)}`), worstCase: kernelLegs(1), postings: kernelLegs(1) });
       void pending;
       const record = activeRecord(target.attemptId) as { phase?: string; cleanup?: { consumerKeys: string[] } } | undefined;

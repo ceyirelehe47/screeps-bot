@@ -1,0 +1,120 @@
+FAIL ./v2-baseline-replicator.test.ts
+  ● Console
+
+    console.log
+      V2 visibleFor(A): []
+
+      at Object.<anonymous> (v2-baseline-replicator.test.ts:82:13)
+
+    console.log
+      V2 visibleFor(B): [{"attemptId":"tk1_2_d9f04dff2879adbc","kind":"adapter-entered","atTick":1,"worldSequence":0,"epoch":0},{"attemptId":"tk1_2_d9f04dff2879adbc","kind":"world-effect","atTick":1,"worldSequence":1,"epoch":0}]
+
+      at Object.<anonymous> (v2-baseline-replicator.test.ts:83:13)
+
+  ● V2 基线反例：同参数多 attempt 的宿主事件归属被覆盖 › 登记 A→B 后实际执行 A：entered/effect 只归 A，B 不被误结算
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 0
+
+    [0m [90m 83 |[39m     console[33m.[39mlog([32m"V2 visibleFor(B):"[39m[33m,[39m [33mJSON[39m[33m.[39mstringify(journal[33m.[39mvisibleFor(b[33m.[39mattemptId)))[33m;[39m
+     [90m 84 |[39m     [90m// 修复后语义断言（基线上红：事件被归入 B）：[39m
+    [31m[1m>[22m[39m[90m 85 |[39m     expect(journal[33m.[39mvisibleFor(a[33m.[39mattemptId)[33m.[39mfilter((e) [33m=>[39m e[33m.[39mkind [33m===[39m [32m"adapter-entered"[39m)[33m.[39mlength)[33m.[39mtoBe([35m1[39m)[33m;[39m
+     [90m    |[39m                                                                                                [31m[1m^[22m[39m
+     [90m 86 |[39m     expect(journal[33m.[39mvisibleFor(a[33m.[39mattemptId)[33m.[39mfilter((e) [33m=>[39m e[33m.[39mkind [33m===[39m [32m"world-effect"[39m)[33m.[39mlength)[33m.[39mtoBe([35m1[39m)[33m;[39m
+     [90m 87 |[39m     expect(journal[33m.[39mvisibleFor(b[33m.[39mattemptId)[33m.[39mlength)[33m.[39mtoBe([35m0[39m)[33m;[39m [90m// B 无借用[39m
+     [90m 88 |[39m     expect(oracle[33m.[39mtrace[33m.[39mentered)[33m.[39mtoBe([35m1[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (v2-baseline-replicator.test.ts:85:96)
+
+FAIL ./r1-baseline-replicator.test.ts
+  ● Console
+
+    console.log
+      R1 releaseCalls: ["ext:r1:D0","ext:r1:D1","ext:r1:D0","ext:r1:D1"]
+
+      at Object.<anonymous> (r1-baseline-replicator.test.ts:104:13)
+
+    console.log
+      R1 final shape: {"workKey":"biz:r1:reentry","attemptId":"tk1_1_00aaf3b459bcabf4","generation":1,"parentAttemptId":null,"phase":"closing","admittedAtTick":1,"updatedAtTick":2,"identity":{"actionKind":"d.kind","adapterVersion":1,"adapterRegistrationId":"reg-r1","adapterSemanticIdentity":"d.adapter-r1","canonicalDigest":"aaaaaaaaaaaaaaaa","postingsDigest":"bbbbbbbbbbbbbbbb","retryFactsDigest":"cccccccccccccccc","durableFacts":null},"worstCase":[{"roomName":"W1N57","locationKind":"storage","resource":"energy","delta":-50},{"roomName":"W2N57","locationKind":"terminal","resource":"energy","delta":50}],"invocationBoundary":{"atTick":1,"worldSequence":0},"invocation":{"atTick":1,"worldSequence":0},"external":{"accepted":false,"atTick":1},"outcome":"not_executed","outcomeEvidence":{"kind":"adapter_execution_semantics","conclusion":"not_executed","source":"d.adapter-r1","atTick":1},"cleanup":{"consumerKeys":["ext:r1:D0"],"failures":0,"cursor":0},"retryDeadlineTick":null,"lastError":null}
+
+      at Object.<anonymous> (r1-baseline-replicator.test.ts:105:13)
+
+    console.log
+      R1 budgetUsed: 8
+
+      at Object.<anonymous> (r1-baseline-replicator.test.ts:107:13)
+
+  ● R1 基线反例：回调重入后继续使用旧义务数组 › 同 kernel 重入：修复后 D0/D1 各调用一次、remaining 空、retry_ready、份额 4
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 2
+
+    [0m [90m 107 |[39m     console[33m.[39mlog([32m"R1 budgetUsed:"[39m[33m,[39m core[33m.[39mrecovery[33m.[39mbudgetUsed)[33m;[39m
+     [90m 108 |[39m     [90m// 修复后语义断言（基线上红）：[39m
+    [31m[1m>[22m[39m[90m 109 |[39m     expect(releaseCalls[33m.[39mfilter((k) [33m=>[39m k [33m===[39m [32m"ext:r1:D0"[39m)[33m.[39mlength)[33m.[39mtoBe([35m1[39m)[33m;[39m [90m// D0 恰一次[39m
+     [90m     |[39m                                                                  [31m[1m^[22m[39m
+     [90m 110 |[39m     expect(releaseCalls[33m.[39mfilter((k) [33m=>[39m k [33m===[39m [32m"ext:r1:D1"[39m)[33m.[39mlength)[33m.[39mtoBe([35m1[39m)[33m;[39m [90m// D1 恰一次（基线 2 次）[39m
+     [90m 111 |[39m     [36mconst[39m shape [33m=[39m activeShape(admitted[33m.[39mattemptId)[33m![39m[33m;[39m
+     [90m 112 |[39m     expect(shape[33m.[39mphase)[33m.[39mtoBe([32m"retry_ready"[39m)[33m;[39m [90m// 全部确认成功 → not_executed 退出[39m[0m
+
+      at Object.<anonymous> (r1-baseline-replicator.test.ts:109:66)
+
+FAIL ./v1-baseline-replicator.test.ts
+  ● Console
+
+    console.log
+      V1 B0-restore outcome: committed
+
+      at Object.<anonymous> (v1-baseline-replicator.test.ts:113:13)
+
+  ● V1 基线反例：恢复较早断点时 oracle 仍采用最近一次截断 › 恢复 B0（效果前）：修复后世界/事件均属 B0 分支，结论 not_executed 而非 committed
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "not_executed"
+    Received: "committed"
+
+    [0m [90m 113 |[39m     console[33m.[39mlog([32m"V1 B0-restore outcome:"[39m[33m,[39m record[33m?[39m[33m.[39moutcome)[33m;[39m
+     [90m 114 |[39m     [90m// 修复后语义断言（基线上红：借 B1 效果 → committed）：[39m
+    [31m[1m>[22m[39m[90m 115 |[39m     expect(record[33m?[39m[33m.[39moutcome)[33m.[39mtoBe([32m"not_executed"[39m)[33m;[39m [90m// B0 分支无该效果事件（正面未执行对照）[39m
+     [90m     |[39m                             [31m[1m^[22m[39m
+     [90m 116 |[39m   })[33m;[39m
+     [90m 117 |[39m
+     [90m 118 |[39m   it([32m"B1 正向对照：恢复 B1（效果后）→ committed（两分支依据各自事实）"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (v1-baseline-replicator.test.ts:115:29)
+
+FAIL ./r2-baseline-replicator.test.ts
+  ● Console
+
+    console.log
+      R2 after bad shape: {"workKey":"biz:r2:truthy","attemptId":"tk1_1_aa8cc25eaf389708","generation":1,"parentAttemptId":null,"phase":"retry_ready","admittedAtTick":1,"updatedAtTick":2,"identity":{"actionKind":"d.kind","adapterVersion":1,"adapterRegistrationId":"reg-r2","adapterSemanticIdentity":"d.adapter-r2","canonicalDigest":"aaaaaaaaaaaaaaaa","postingsDigest":"bbbbbbbbbbbbbbbb","retryFactsDigest":"cccccccccccccccc","durableFacts":null},"worstCase":[{"roomName":"W1N57","locationKind":"storage","resource":"energy","delta":-50},{"roomName":"W2N57","locationKind":"terminal","resource":"energy","delta":50}],"invocationBoundary":{"atTick":1,"worldSequence":0},"invocation":{"atTick":1,"worldSequence":0},"external":{"accepted":false,"atTick":1},"outcome":"not_executed","outcomeEvidence":{"kind":"adapter_execution_semantics","conclusion":"not_executed","source":"d.adapter-r2","atTick":1},"cleanup":{"consumerKeys":[],"failures":0,"cursor":0},"retryDeadlineTick":5002,"lastError":null}
+
+      at Object.<anonymous> (r2-baseline-replicator.test.ts:82:13)
+
+  ● R2 基线反例：错误类型的真值被当成释放成功 › {ok:false} 对象：修复后义务保留 closing，恢复 true 后真完成
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "closing"
+    Received: "retry_ready"
+
+    [0m [90m 83 |[39m     [90m// 修复后语义断言（基线上红：对象真值被当成成功 → retry_ready）：[39m
+     [90m 84 |[39m     [36mconst[39m shape [33m=[39m activeShape(admitted[33m.[39mattemptId)[33m![39m[33m;[39m
+    [31m[1m>[22m[39m[90m 85 |[39m     expect(shape[33m.[39mphase)[33m.[39mtoBe([32m"closing"[39m)[33m;[39m
+     [90m    |[39m                         [31m[1m^[22m[39m
+     [90m 86 |[39m     expect(shape[33m.[39mcleanup[33m.[39mconsumerKeys)[33m.[39mtoEqual([[32m"ext:r2:D"[39m])[33m;[39m [90m// 义务未被误清理[39m
+     [90m 87 |[39m     [90m// 端口恢复原始 true 后下一正常 tick 真完成。[39m
+     [90m 88 |[39m     mode [33m=[39m [32m"good"[39m[33m;[39m[0m
+
+      at Object.<anonymous> (r2-baseline-replicator.test.ts:85:25)
+
+Test Suites: 4 failed, 4 total
+Tests:       4 failed, 1 passed, 5 total
+Snapshots:   0 total
+Time:        3.903 s, estimated 8 s
+Ran all test suites within paths "r1-baseline-replicator.test.ts", "r2-baseline-replicator.test.ts", "v1-baseline-replicator.test.ts", "v2-baseline-replicator.test.ts".
