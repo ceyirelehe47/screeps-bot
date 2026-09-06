@@ -1,0 +1,20 @@
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5001 newMismatches=1 fields=stale_epoch sample={"checkedAtTick":5001,"field":"stale_epoch","roomName":"*","treasuryValue":5000,"otherValue":5001}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+PASS src/runtime/treasury/treasuryCommitmentCompleteness.test.ts
+PASS src/runtime/treasury/treasuryCanonicalEncoding.test.ts
+PASS src/runtime/treasury/treasuryCapacityViews.test.ts
+
+Test Suites: 26 passed, 26 total
+Tests:       514 passed, 514 total
+Snapshots:   0 total
+Time:        209.122 s, estimated 210 s
+Ran all test suites matching /src\\runtime\\treasury\\/i.
+Test results written to: ..\.tmp-r3-final\jest-treasury.json

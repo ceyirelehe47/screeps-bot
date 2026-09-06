@@ -1,0 +1,20 @@
+PASS src/runtime/roomTypes.test.ts
+PASS src/runtime/roomEnergyPolicy.test.ts
+PASS src/runtime/marketSaleLifecycle.test.ts
+PASS src/runtime/actionLog.test.ts
+PASS src/roles/remoteMiningReserver.test.ts
+PASS src/roles/powerBankScout.test.ts
+PASS src/runtime/reactionMap.test.ts
+PASS src/runtime/marketSaleDiagnostics.test.ts
+PASS src/runtime/configNormalize.test.ts
+PASS src/runtime/taskSystem/model.test.ts
+PASS src/runtime/marketSaleDirectEngineAssumptions.test.ts
+PASS src/runtime/linkNetworkMemory.test.ts
+PASS src/roles/remoteWorker.test.ts
+
+Test Suites: 230 passed, 230 total
+Tests:       1360 passed, 1360 total
+Snapshots:   0 total
+Time:        426.541 s
+Ran all test suites.
+Test results written to: ..\.tmp-r3-final\jest-full.json
