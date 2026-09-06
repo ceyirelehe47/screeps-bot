@@ -1,0 +1,178 @@
+diff --git a/src/runtime/treasury/scratchRemediation2VBaseline.test.ts b/src/runtime/treasury/scratchRemediation2VBaseline.test.ts
+new file mode 100644
+index 0000000..dad7a85
+--- /dev/null
++++ b/src/runtime/treasury/scratchRemediation2VBaseline.test.ts
+@@ -0,0 +1,172 @@
++/**
++ * Remediation II V1–V3 工具契约反例（scratch——仅基线重现用，不入库）。
++ *
++ * 在 0f5965e 基线上用**旧工具形态**证明三个验证缺口：
++ * - V1：E02 的 reset 用效果前 Memory 配 reset 入口的（效果后）世界，
++ *   固定 not-executed reconciler 掩盖矛盾——断言"恢复分支世界应与断点
++ *   时刻一致（效果前 1000）"在旧模型下失败。
++ * - V2：E06/E10 的 reloadKernel（JSON 往返 + 旧模块 createTreasuryCoreKernel）
++ *   不是完整 reset——旧许可（旧模块 WeakSet 注册）在新 kernel 仍 valid，
++ *   断言"完整 reset 后旧许可应被拒"失败。
++ * - V3：E08 确认丢写拦截器卸载时恢复旧 descriptor.value——把拦截期间
++ *   放行的预扣写回滚（budgetUsed 从 2 回 0），断言"卸载保留实际最终值"失败。
++ */
++import { installWholeMemorySnapshot, snapshotWholeMemory } from "@mock/treasuryResetHarness";
++import { createTreasuryCoreKernel, type TreasuryCoreAdmissionInput, type TreasuryCoreKernel, type TreasuryCoreKernelPorts } from "@/runtime/treasury/kernel/kernel";
++import type { TreasuryCoreIdentityFacts, TreasuryCoreWorstCaseLeg } from "@/runtime/treasury/kernel/types";
++import { resetTreasuryCoreStoreForTest } from "@/runtime/treasury/testHarness";
++import { installRooms, setStoreResources, type RoomSpec } from "@mock/treasury";
++
++const ROOMS: RoomSpec[] = [
++  {
++    name: "W1N57",
++    storage: { id: "stor-1", resources: { energy: 1000 }, freeCapacity: 10_000 },
++    terminal: { id: "term-1", resources: { energy: 0 }, freeCapacity: 200_000 },
++  },
++  {
++    name: "W2N57",
++    storage: { id: "stor-2", resources: { energy: 0 }, freeCapacity: 10_000 },
++    terminal: { id: "term-2", resources: { energy: 0 }, freeCapacity: 900_000 },
++  },
++];
++
++function kernelIdentity(): TreasuryCoreIdentityFacts {
++  return {
++    actionKind: "d.kind",
++    adapterVersion: 1,
++    adapterRegistrationId: "reg-v",
++    adapterSemanticIdentity: "d.adapter-v",
++    canonicalDigest: "a".repeat(16),
++    postingsDigest: "b".repeat(16),
++    retryFactsDigest: "c".repeat(16),
++    durableFacts: null,
++  };
++}
++
++function kernelLegs(outflow: number): TreasuryCoreWorstCaseLeg[] {
++  return [
++    { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -outflow },
++    { roomName: "W2N57", locationKind: "terminal", resource: RESOURCE_ENERGY, delta: outflow },
++  ];
++}
++
++function kernelAdmitInput(workKey: string): TreasuryCoreAdmissionInput {
++  return {
++    workKey,
++    identity: kernelIdentity(),
++    worstCase: kernelLegs(50),
++    externalConsumers: [],
++    canonicalArgs: { n: 1 },
++    postings: kernelLegs(50),
++    admissionContext: { contractId: "ac:v", contractDigest: "a".repeat(16), actionKind: "d.kind", ownerIdentity: null, excludeAttemptId: null },
++    structureBindings: [],
++  };
++}
++
++function makeKernelPorts(overrides: Partial<TreasuryCoreKernelPorts> = {}): TreasuryCoreKernelPorts {
++  return {
++    nowTick: () => Game.time,
++    runtimeGeneration: () => 1,
++    findAdapter: (kind) =>
++      kind === "d.kind"
++        ? { kind, version: 1, registrationId: "reg-v", semanticIdentity: "d.adapter-v", execute: () => ({ ok: false }), settlesOnAccept: false, nonOkOutcome: "not_executed" as const }
++        : undefined,
++    checkAdmissionCapacity: () => null,
++    observeForCleanup: () => ({ worldSequence: 9_000_000, atTick: Game.time + 1, locationExists: () => true }),
++    ...overrides,
++  };
++}
++
++/** 旧 reloadKernel 形态（E06/E10 现状）：JSON 往返 + 旧模块构造 + 原 ports。 */
++function reloadKernelOld(ports: TreasuryCoreKernelPorts): TreasuryCoreKernel {
++  installWholeMemorySnapshot(snapshotWholeMemory());
++  return createTreasuryCoreKernel(ports);
++}
++
++beforeEach(() => {
++  resetTreasuryCoreStoreForTest();
++});
++
++describe("V1 断点配对（E02 旧模型反例）", () => {
++  it("恢复效果前 Memory 时，恢复分支世界也应在效果前（1000）——旧模型实际 900", () => {
++    // 复刻 E02 的模型：adapter 入口（效果未发生）拍 Memory 快照；旧栈继续
++    // 完成（世界流出 100）；reset 安装该 Memory 但世界取 reset 入口当前值。
++    const installed = installRooms(ROOMS);
++    const service = (globalThis as unknown as { __v1Service?: unknown }).__v1Service;
++    void service;
++    // 直接用受控世界 + 手动内存构造最小模型：
++    const kernel = createTreasuryCoreKernel(makeKernelPorts());
++    const admitted = kernel.admit(kernelAdmitInput("biz:v1"));
++    if (admitted.status !== "admitted") throw new Error("admit failed");
++    kernel.executeDispatch(admitted.dispatch); // ok:false → not_executed 直接收尾
++    // 入口快照：世界还是 1000（效果未发生）。
++    const rooms = installed;
++    const storage = (rooms.W1N57 as unknown as { storage: StructureStorage }).storage;
++    const worldAtEntry = (storage.store as unknown as Record<string, number>).energy;
++    const entryMemory = snapshotWholeMemory();
++    // 旧栈继续：效果发生（世界 1000 → 900）。
++    setStoreResources(storage, { energy: 900 });
++    // 旧 reset 模型：安装入口 Memory，世界不回退（保持 reset 入口当前值 900）。
++    installWholeMemorySnapshot(entryMemory);
++    const worldInResetBranch = (storage.store as unknown as Record<string, number>).energy;
++    // 断点配对契约：恢复分支世界 === 断点时刻世界（1000）。旧模型下失败
++    //（实际 900——固定 not-executed reconciler 正是在这个矛盾世界上释放了风险）。
++    expect(worldInResetBranch).toBe(worldAtEntry);
++  });
++});
++
++describe("V2 reloadKernel 非完整 reset（E06/E10 旧工具反例）", () => {
++  it("JSON 往返 + 旧模块构造后，旧运行时签发的许可应不再被认可——旧工具实际仍 valid", () => {
++    const ports = makeKernelPorts();
++    const kernelA = createTreasuryCoreKernel(ports);
++    const admitted = kernelA.admit(kernelAdmitInput("biz:v2"));
++    if (admitted.status !== "admitted") throw new Error("admit failed");
++    const permit = admitted.dispatch;
++    // 记录先 dispatch 掉本条，另建一条 pending 用于断言？——直接断言：
++    // 同一 permit 在 reloadKernel 后的新 kernel 预检结果。完整 reset 语义下
++    // 旧许可（旧模块 WeakSet 身份）必须 invalid；旧 reloadKernel 共享模块
++    // 注册表 → 仍 valid。
++    const kernelB = reloadKernelOld(ports);
++    const check = kernelB.preflightDispatchPermit(permit);
++    expect(check.status).toBe("invalid"); // 旧工具实际 valid → 红
++  });
++});
++
++describe("V3 拦截器卸载回滚（E08 旧模式反例）", () => {
++  it("放行成对预扣、丢弃确认后卸载拦截器：实际存储应保留已放行的预扣（budgetUsed=2）", () => {
++    const ports = makeKernelPorts({ releaseExternalConsumer: () => true });
++    const kernel = createTreasuryCoreKernel(ports);
++    const admitted = kernel.admit(kernelAdmitInput2());
++    if (admitted.status !== "admitted") throw new Error("admit failed");
++    if (kernel.executeDispatch(admitted.dispatch).status !== "not_executed") throw new Error("dispatch failed");
++    Game.time += 1;
++    // E08 旧模式拦截器：放行首写（预扣），丢弃确认；卸载恢复旧 descriptor。
++    const runtime = Memory.runtime as unknown as Record<string, unknown>;
++    const descriptor = Object.getOwnPropertyDescriptor(runtime, "treasuryCore");
++    let liveValue = descriptor?.value;
++    let writesAllowed = 1;
++    Object.defineProperty(runtime, "treasuryCore", {
++      configurable: true,
++      get: () => liveValue,
++      set(value: unknown) {
++        if (writesAllowed > 0) {
++          writesAllowed -= 1;
++          liveValue = value;
++        }
++      },
++    });
++    kernel.beginTick();
++    // E08 旧卸载：恢复旧 descriptor（安装时的值）。
++    delete runtime.treasuryCore;
++    if (descriptor) Object.defineProperty(runtime, "treasuryCore", descriptor);
++    else runtime.treasuryCore = liveValue;
++    const core = runtime.treasuryCore as { recovery: { budgetUsed: number } };
++    // 契约：卸载后实际存储 = 拦截期间实际保留的值（预算已扣 2）。
++    // 旧模式恢复安装时快照 → budgetUsed 回 0 → 回滚了合法预扣 → 红。
++    expect(core.recovery.budgetUsed).toBe(2);
++  });
++});
++
++function kernelAdmitInput2(): TreasuryCoreAdmissionInput {
++  return { ...kernelAdmitInput("biz:v3"), externalConsumers: ["ext:v3:one"] };
++}

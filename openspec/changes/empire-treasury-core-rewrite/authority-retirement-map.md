@@ -106,3 +106,12 @@ II 轮确认旧证明链未复活，并补充 II 轮新增写权威的封闭性�
 - `cleanup.cursor`（每活跃聚合 cleanup 内，随成对预算确认命令推进）：唯一职责是记录内消费者轮转位置（调度元信息）。义务完成事实仍 solely 由集合成员资格表达；聚合退出/retry_ready 清零。无逐消费者完成记录存储。
 - `recovery.cleanupCursor`（恢复调度区，跨记录轮转）：与记录内 cursor 分层——前者选记录，后者在记录内选成员；两者都不是完成 proof。
 - kernel preflight（只读许可预检）：不是执行凭证——真正调用边界终验仍在 executeDispatch（WeakSet 身份 + 阶段 + 完整身份重验）。未新增许可品牌表或第二签发权威。
+
+
+## Core Rewrite IV · Remediation II：覆盖判定/游标发布/预检门禁的责任归属
+
+- kernel/coverage.ts（新增共享纯能力）：效果覆盖锚点链（invocation→external→invocationBoundary）与时间序比较的唯一实现——occupancy 投影、commands 观察接管转移、beginTick committed 清理门三处消费同一份判定。它是既有聚合字段（invocation/external/invocationBoundary）的纯派生，不是新权威、不落盘、不产生第二证明链。
+- 覆盖成立的效果不重复扣减：占用投影（occupancy）与记录保留（active 成员资格）分离——同一效果只扣一次；其他业务承诺/消费者义务按原规则计算；无新余额账本。
+- cleanup.cursor 发布时点（ Remediation II/§7.2 修订）：随成对预扣同次发布（端口调用前持久）；advance_cleanup 确认命令的 rotationCursor 字段删除——确认只做结果记账，不得回写游标。义务完成事实仍 solely 由集合成员资格表达；无逐消费者完成记录存储、无调度票据。
+- preflight 健康门禁：非健康核心（absent/incompatible/unhealthy）明确拒绝——未新增 health authority、未新增可复用"预检通过证书"；预检仍是只读且不是执行凭证（调用边界终验在 executeDispatch）。
+- 测试模型（harness/exact oracle/存储拦截器，全部位于 test/mock）：captureTreasuryHostBreakpoint 是断点事实的原子捆绑器（Memory+世界+事件同一时刻），不是生产回滚能力；treasuryExactOracle 的结论从宿主事件/分支世界序推导——不是第二对账权威（生产对账仍只有注册 reconciler 端口）；存储拦截器只模拟故障注入，卸载保留 liveValue 是工具契约而非生产语义。

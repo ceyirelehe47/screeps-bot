@@ -1,0 +1,115 @@
+FAIL test/baseline/treasuryRemediationIIBaseline.test.ts
+  基线 R1 覆盖已含效果不重复扣账（流出）
+    ○ skipped 1000→实际流出 800→结果前断点→完整reset→exact executed：A 仍 closing 时 200 可纳、201 拒，A 未被删除
+  基线 R1 覆盖已含效果不重复扣账（流入）
+    ○ skipped 空位 100→实际流入 80→同断点恢复：20 可纳、21 拒，不再扣一次 80
+  基线 R2 成对预扣同次发布下一服务位置
+    ○ skipped 真预扣成功、端口调用后确认前硬断点：快照内预算已用 2 且记录内 cursor 已前移、义务未减少
+  基线 R3 preflight 非健康核心明确拒绝
+    × absent 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读） (17 ms)
+    × incompatible 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读） (5 ms)
+    × unhealthy 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读） (5 ms)
+
+  ● 基线 R3 preflight 非健康核心明确拒绝 › absent 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "invalid"
+    Received: "valid"
+
+    [0m [90m 359 |[39m       [36mif[39m (dispatchCheck[33m.[39mstatus [33m===[39m [32m"invalid"[39m) expect(dispatchCheck[33m.[39mreason[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m 360 |[39m       [36mconst[39m rearmCheck [33m=[39m kernel[33m.[39mpreflightRearmPermit(rearmPermit)[33m;[39m
+    [31m[1m>[22m[39m[90m 361 |[39m       expect(rearmCheck[33m.[39mstatus)[33m.[39mtoBe([32m"invalid"[39m)[33m;[39m
+     [90m     |[39m                                 [31m[1m^[22m[39m
+     [90m 362 |[39m       [36mif[39m (rearmCheck[33m.[39mstatus [33m===[39m [32m"invalid"[39m) expect(rearmCheck[33m.[39mreason[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m 363 |[39m     }[33m,[39m
+     [90m 364 |[39m   )[33m;[39m[0m
+
+      at test/baseline/treasuryRemediationIIBaseline.test.ts:361:33
+
+  ● 基线 R3 preflight 非健康核心明确拒绝 › incompatible 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "invalid"
+    Received: "valid"
+
+    [0m [90m 359 |[39m       [36mif[39m (dispatchCheck[33m.[39mstatus [33m===[39m [32m"invalid"[39m) expect(dispatchCheck[33m.[39mreason[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m 360 |[39m       [36mconst[39m rearmCheck [33m=[39m kernel[33m.[39mpreflightRearmPermit(rearmPermit)[33m;[39m
+    [31m[1m>[22m[39m[90m 361 |[39m       expect(rearmCheck[33m.[39mstatus)[33m.[39mtoBe([32m"invalid"[39m)[33m;[39m
+     [90m     |[39m                                 [31m[1m^[22m[39m
+     [90m 362 |[39m       [36mif[39m (rearmCheck[33m.[39mstatus [33m===[39m [32m"invalid"[39m) expect(rearmCheck[33m.[39mreason[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m 363 |[39m     }[33m,[39m
+     [90m 364 |[39m   )[33m;[39m[0m
+
+      at test/baseline/treasuryRemediationIIBaseline.test.ts:361:33
+
+  ● 基线 R3 preflight 非健康核心明确拒绝 › unhealthy 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "invalid"
+    Received: "valid"
+
+    [0m [90m 359 |[39m       [36mif[39m (dispatchCheck[33m.[39mstatus [33m===[39m [32m"invalid"[39m) expect(dispatchCheck[33m.[39mreason[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m 360 |[39m       [36mconst[39m rearmCheck [33m=[39m kernel[33m.[39mpreflightRearmPermit(rearmPermit)[33m;[39m
+    [31m[1m>[22m[39m[90m 361 |[39m       expect(rearmCheck[33m.[39mstatus)[33m.[39mtoBe([32m"invalid"[39m)[33m;[39m
+     [90m     |[39m                                 [31m[1m^[22m[39m
+     [90m 362 |[39m       [36mif[39m (rearmCheck[33m.[39mstatus [33m===[39m [32m"invalid"[39m) expect(rearmCheck[33m.[39mreason[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m 363 |[39m     }[33m,[39m
+     [90m 364 |[39m   )[33m;[39m[0m
+
+      at test/baseline/treasuryRemediationIIBaseline.test.ts:361:33
+
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 3 skipped, 6 total
+Snapshots:   0 total
+Time:        4.151 s
+Ran all test suites matching /test\\baseline\\treasuryRemediationIIBaseline.test.ts/i with tests matching "preflight 非健康".
+FAIL src/runtime/treasury/treasuryRemediationIIService.test.ts
+  F01/F02 覆盖不双扣（流出/流入固定数值）
+    ○ skipped F01 流出：1000→实际流出 800→结果前断点→exact executed→A 仍 closing（invocation 空）→200 可纳、201 拒，A 未删除
+    ○ skipped F02 流入：空位 100→实际流入 80→同断点恢复→20 可纳、21 拒，不再扣一次 80
+  F03 覆盖判定的负向与收尾
+    ○ skipped unknown 不因边界释放：无确定结论前 800 全额占用，200 拒（与 F01 对照）
+    ○ skipped 覆盖判定单元对照（共享锚点链——occupancy/命令/清理门同一语义）
+    ○ skipped 覆盖后所有关闭条件成立才删除；退出后额度随观察恢复（旧视图不超额）
+  F09/F10 preflight 健康门禁
+    × F09 非健康核心：facade 路径 fresh/policy/调用/child 增量 0（absent/incompatible/unhealthy 三态） (33 ms)
+    ○ skipped F10 健康对照可执行；仅坏 ring 不伪装核心损坏；克隆许可不花 fresh（E13/E14 语义保持）
+  F11/F11 三同断点分支与 exact 对照
+    ○ skipped 调用前断点（边界已发布、adapter 未进入）：世界 1000；恢复 not_executed→不扣任何占用（800 可纳、801 拒）
+    ○ skipped 错关联对照：他人效果推进世界序越过本 attempt 边界、无本 attempt 事件→still_uncertain（不盲猜 not-executed）
+  F12 真实效果后、结果未写断点（无人工 external）
+    ○ skipped 效果后哨兵抛错→旧栈 catch 写 unknown（旧分支）；恢复分支 Memory 无结果→executed→F01 中间账目→完整关闭
+  F13 拦截器卸载保留实际存储
+    ○ skipped 放行预扣与游标、吞确认：卸载前后实际存储一致（预算/位置未回退）；同 tick 完整 reset 无凭空额度；恢复写后可确认
+  F15 断点世界一致与结构保真
+    ○ skipped 指定早期断点后旧栈继续产生效果：恢复分支世界=断点时刻（不含后来效果）
+    ○ skipped 断点时已消失的结构不被 RoomSpec 复活：授权目标位置拒绝（structure_changed）
+    ○ skipped 配对错误使测试契约失败：伪造断点（Memory 与世界序错配）被入口一致性校验拒绝
+  F17 混合负载与独立宿主账目
+    ○ skipped 完成/真实 rearm/长期 unknown/部分清理/完整 reset/旧视图：宿主账目一致、未结束工作有界
+
+  ● F09/F10 preflight 健康门禁 › F09 非健康核心：facade 路径 fresh/policy/调用/child 增量 0（absent/incompatible/unhealthy 三态）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: -1
+    Received: 0
+
+    [0m [90m 347 |[39m       expect(policy[33m.[39mcalls)[33m.[39mtoBe([35m0[39m)[33m;[39m
+     [90m 348 |[39m       expect(oracle[33m.[39mtrace[33m.[39mentered)[33m.[39mtoBe([35m1[39m)[33m;[39m [90m// 仅 b 的合法一次[39m
+    [31m[1m>[22m[39m[90m 349 |[39m       [36mif[39m (corruption [33m===[39m [32m"absent"[39m) expect(([33mMemory[39m[33m.[39mruntime[33m?[39m[33m.[39mtreasuryCore [36mas[39m { issuance[33m:[39m { frontier[33m:[39m number } } [33m|[39m undefined)[33m?[39m[33m.[39missuance[33m.[39mfrontier [33m?[39m[33m?[39m [33m-[39m[35m1[39m)[33m.[39mtoBe([33m-[39m[35m1[39m)[33m;[39m
+     [90m     |[39m                                                                                                                                                      [31m[1m^[22m[39m
+     [90m 350 |[39m       [36melse[39m {
+     [90m 351 |[39m         expect(([33mMemory[39m[33m.[39mruntime[33m![39m[33m.[39mtreasuryCore [36mas[39m { issuance[33m:[39m { frontier[33m:[39m number } })[33m.[39missuance[33m.[39mfrontier)[33m.[39mtoBe(frontierBefore)[33m;[39m
+     [90m 352 |[39m         expect([33mObject[39m[33m.[39mkeys(([33mMemory[39m[33m.[39mruntime[33m![39m[33m.[39mtreasuryCore [36mas[39m { active[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m })[33m.[39mactive))[33m.[39mtoHaveLength(activeBefore)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIIService.test.ts:349:150)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 14 skipped, 15 total
+Snapshots:   0 total
+Time:        3.657 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryRemediationIIService.test.ts/i with tests matching "F09 非健康".

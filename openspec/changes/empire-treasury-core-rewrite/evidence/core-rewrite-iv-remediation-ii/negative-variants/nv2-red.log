@@ -1,0 +1,57 @@
+FAIL src/runtime/treasury/treasuryRemediationIIKernel.test.ts
+  ● F05 硬断点下的预算/位置/remaining › 真预扣完成后、实际释放前：快照内预算已用 2、下一服务位置已前移、义务未减少、端口调用 0
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 0
+
+    [0m [90m 199 |[39m     [90m// remaining 未凭空减少（不是 catch 执行后的快照——断点在写边界内）。[39m
+     [90m 200 |[39m     expect(snap[33m.[39mrecovery[33m.[39mbudgetUsed)[33m.[39mtoBe([35m2[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 201 |[39m     expect(snap[33m.[39mactive[attemptId][33m.[39mcleanup[33m.[39mcursor)[33m.[39mtoBe([35m1[39m)[33m;[39m
+     [90m     |[39m                                                   [31m[1m^[22m[39m
+     [90m 202 |[39m     expect(snap[33m.[39mactive[attemptId][33m.[39mcleanup[33m.[39mconsumerKeys)[33m.[39mtoEqual([[32m"ext:f5:a"[39m[33m,[39m [32m"ext:f5:b"[39m])[33m;[39m
+     [90m 203 |[39m   })[33m;[39m
+     [90m 204 |[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIIKernel.test.ts:201:51)
+
+Test Suites: 1 failed, 1 skipped, 1 of 2 total
+Tests:       1 failed, 21 skipped, 22 total
+Snapshots:   0 total
+Time:        4.398 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryRemediationIIKernel.test.ts|test\\baseline\\treasuryRemediationIIBaseline.test.ts/i with tests matching "真预扣完成后".
+FAIL test/baseline/treasuryRemediationIIBaseline.test.ts
+  基线 R1 覆盖已含效果不重复扣账（流出）
+    ○ skipped 1000→实际流出 800→结果前断点→完整reset→exact executed：A 仍 closing 时 200 可纳、201 拒，A 未被删除
+  基线 R1 覆盖已含效果不重复扣账（流入）
+    ○ skipped 空位 100→实际流入 80→同断点恢复：20 可纳、21 拒，不再扣一次 80
+  基线 R2 成对预扣同次发布下一服务位置
+    × 真预扣成功、端口调用后确认前硬断点：快照内预算已用 2 且记录内 cursor 已前移、义务未减少 (13 ms)
+  基线 R3 preflight 非健康核心明确拒绝
+    ○ skipped absent 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读）
+    ○ skipped incompatible 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读）
+    ○ skipped unhealthy 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读）
+
+  ● 基线 R2 成对预扣同次发布下一服务位置 › 真预扣成功、端口调用后确认前硬断点：快照内预算已用 2 且记录内 cursor 已前移、义务未减少
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 0
+
+    [0m [90m 301 |[39m     [36mconst[39m cleanup [33m=[39m snap[33m.[39mactive[admitted[33m.[39mattemptId][33m.[39mcleanup[33m;[39m
+     [90m 302 |[39m     expect(cleanup[33m.[39mconsumerKeys)[33m.[39mtoEqual([[32m"ext:ii:a"[39m[33m,[39m [32m"ext:ii:b"[39m])[33m;[39m [90m// remaining 不变[39m
+    [31m[1m>[22m[39m[90m 303 |[39m     expect(cleanup[33m.[39mcursor)[33m.[39mtoBe([35m1[39m)[33m;[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 304 |[39m   })[33m;[39m
+     [90m 305 |[39m })[33m;[39m
+     [90m 306 |[39m[0m
+
+      at Object.<anonymous> (test/baseline/treasuryRemediationIIBaseline.test.ts:303:28)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 5 skipped, 6 total
+Snapshots:   0 total
+Time:        3.289 s
+Ran all test suites matching /test\\baseline\\treasuryRemediationIIBaseline.test.ts/i with tests matching "R2 成对".

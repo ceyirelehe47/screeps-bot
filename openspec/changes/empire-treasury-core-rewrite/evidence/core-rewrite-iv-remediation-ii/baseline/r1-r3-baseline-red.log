@@ -1,0 +1,119 @@
+FAIL test/baseline/treasuryRemediationIIBaseline.test.ts
+  基线 R1 覆盖已含效果不重复扣账（流出）
+    × 1000→实际流出 800→结果前断点→完整reset→exact executed：A 仍 closing 时 200 可纳、201 拒，A 未被删除 (41 ms)
+  基线 R1 覆盖已含效果不重复扣账（流入）
+    × 空位 100→实际流入 80→同断点恢复：20 可纳、21 拒，不再扣一次 80 (24 ms)
+  基线 R2 成对预扣同次发布下一服务位置
+    × 真预扣成功、端口调用后确认前硬断点：快照内预算已用 2 且记录内 cursor 已前移、义务未减少 (6 ms)
+  基线 R3 preflight 非健康核心明确拒绝
+    × absent 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读） (5 ms)
+    × incompatible 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读） (4 ms)
+    × unhealthy 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读） (4 ms)
+
+  ● 基线 R1 覆盖已含效果不重复扣账（流出） › 1000→实际流出 800→结果前断点→完整reset→exact executed：A 仍 closing 时 200 可纳、201 拒，A 未被删除
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "admitted"
+    Received: "rejected"
+
+    [0m [90m 171 |[39m     [90m// 另一工作 200 应获准（覆盖成立不双扣）；201 应拒绝。[39m
+     [90m 172 |[39m     [36mconst[39m fits [33m=[39m authorizeOn(reset[33m,[39m [32m"biz:ii:r1-fits"[39m[33m,[39m transferArgs({ amount[33m:[39m [35m200[39m[33m,[39m outcome[33m:[39m [32m"ok"[39m }))[33m;[39m
+    [31m[1m>[22m[39m[90m 173 |[39m     expect(fits[33m.[39mstatus)[33m.[39mtoBe([32m"admitted"[39m)[33m;[39m
+     [90m     |[39m                         [31m[1m^[22m[39m
+     [90m 174 |[39m     [36mconst[39m tooBig [33m=[39m authorizeOn(reset[33m,[39m [32m"biz:ii:r1-toobig"[39m[33m,[39m transferArgs({ amount[33m:[39m [35m201[39m[33m,[39m outcome[33m:[39m [32m"ok"[39m }))[33m;[39m
+     [90m 175 |[39m     expect(tooBig[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m 176 |[39m     [90m// A 断言时仍在 active（未清义务未被删除；本用例无消费者义务，以[39m[0m
+
+      at Object.<anonymous> (test/baseline/treasuryRemediationIIBaseline.test.ts:173:25)
+
+  ● 基线 R1 覆盖已含效果不重复扣账（流入） › 空位 100→实际流入 80→同断点恢复：20 可纳、21 拒，不再扣一次 80
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "admitted"
+    Received: "rejected"
+
+    [0m [90m 206 |[39m     [36mif[39m (terminal[33m.[39mgetFreeCapacity() [33m!==[39m [35m20[39m) [36mthrow[39m [36mnew[39m [33mError[39m([32m`空位应为 20，实际 ${String(terminal.getFreeCapacity())}`[39m)[33m;[39m
+     [90m 207 |[39m     [36mconst[39m fits [33m=[39m authorizeOn(reset[33m,[39m [32m"biz:ii:r1in-fits"[39m[33m,[39m transferArgs({ amount[33m:[39m [35m20[39m[33m,[39m outcome[33m:[39m [32m"ok"[39m }))[33m;[39m
+    [31m[1m>[22m[39m[90m 208 |[39m     expect(fits[33m.[39mstatus)[33m.[39mtoBe([32m"admitted"[39m)[33m;[39m
+     [90m     |[39m                         [31m[1m^[22m[39m
+     [90m 209 |[39m     [36mconst[39m tooBig [33m=[39m authorizeOn(reset[33m,[39m [32m"biz:ii:r1in-toobig"[39m[33m,[39m transferArgs({ amount[33m:[39m [35m21[39m[33m,[39m outcome[33m:[39m [32m"ok"[39m }))[33m;[39m
+     [90m 210 |[39m     expect(tooBig[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m 211 |[39m     expect(reset[33m.[39mservice[33m.[39mkernelJournal()[33m.[39mactive[33m.[39mfind((r) [33m=>[39m r[33m.[39mattemptId [33m===[39m a[33m.[39mattemptId)[33m?[39m[33m.[39mphase)[33m.[39mtoBe([32m"closing"[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (test/baseline/treasuryRemediationIIBaseline.test.ts:208:25)
+
+  ● 基线 R2 成对预扣同次发布下一服务位置 › 真预扣成功、端口调用后确认前硬断点：快照内预算已用 2 且记录内 cursor 已前移、义务未减少
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 0
+
+    [0m [90m 301 |[39m     [36mconst[39m cleanup [33m=[39m snap[33m.[39mactive[admitted[33m.[39mattemptId][33m.[39mcleanup[33m;[39m
+     [90m 302 |[39m     expect(cleanup[33m.[39mconsumerKeys)[33m.[39mtoEqual([[32m"ext:ii:a"[39m[33m,[39m [32m"ext:ii:b"[39m])[33m;[39m [90m// remaining 不变[39m
+    [31m[1m>[22m[39m[90m 303 |[39m     expect(cleanup[33m.[39mcursor)[33m.[39mtoBe([35m1[39m)[33m;[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 304 |[39m   })[33m;[39m
+     [90m 305 |[39m })[33m;[39m
+     [90m 306 |[39m[0m
+
+      at Object.<anonymous> (test/baseline/treasuryRemediationIIBaseline.test.ts:303:28)
+
+  ● 基线 R3 preflight 非健康核心明确拒绝 › absent 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "invalid"
+    Received: "valid"
+
+    [0m [90m 359 |[39m       [36mif[39m (dispatchCheck[33m.[39mstatus [33m===[39m [32m"invalid"[39m) expect(dispatchCheck[33m.[39mreason[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m 360 |[39m       [36mconst[39m rearmCheck [33m=[39m kernel[33m.[39mpreflightRearmPermit(rearmPermit)[33m;[39m
+    [31m[1m>[22m[39m[90m 361 |[39m       expect(rearmCheck[33m.[39mstatus)[33m.[39mtoBe([32m"invalid"[39m)[33m;[39m
+     [90m     |[39m                                 [31m[1m^[22m[39m
+     [90m 362 |[39m       [36mif[39m (rearmCheck[33m.[39mstatus [33m===[39m [32m"invalid"[39m) expect(rearmCheck[33m.[39mreason[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m 363 |[39m     }[33m,[39m
+     [90m 364 |[39m   )[33m;[39m[0m
+
+      at test/baseline/treasuryRemediationIIBaseline.test.ts:361:33
+
+  ● 基线 R3 preflight 非健康核心明确拒绝 › incompatible 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "invalid"
+    Received: "valid"
+
+    [0m [90m 359 |[39m       [36mif[39m (dispatchCheck[33m.[39mstatus [33m===[39m [32m"invalid"[39m) expect(dispatchCheck[33m.[39mreason[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m 360 |[39m       [36mconst[39m rearmCheck [33m=[39m kernel[33m.[39mpreflightRearmPermit(rearmPermit)[33m;[39m
+    [31m[1m>[22m[39m[90m 361 |[39m       expect(rearmCheck[33m.[39mstatus)[33m.[39mtoBe([32m"invalid"[39m)[33m;[39m
+     [90m     |[39m                                 [31m[1m^[22m[39m
+     [90m 362 |[39m       [36mif[39m (rearmCheck[33m.[39mstatus [33m===[39m [32m"invalid"[39m) expect(rearmCheck[33m.[39mreason[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m 363 |[39m     }[33m,[39m
+     [90m 364 |[39m   )[33m;[39m[0m
+
+      at test/baseline/treasuryRemediationIIBaseline.test.ts:361:33
+
+  ● 基线 R3 preflight 非健康核心明确拒绝 › unhealthy 核心：两个 preflight 均不返回 valid（可解释拒绝，纯读）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "invalid"
+    Received: "valid"
+
+    [0m [90m 359 |[39m       [36mif[39m (dispatchCheck[33m.[39mstatus [33m===[39m [32m"invalid"[39m) expect(dispatchCheck[33m.[39mreason[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m 360 |[39m       [36mconst[39m rearmCheck [33m=[39m kernel[33m.[39mpreflightRearmPermit(rearmPermit)[33m;[39m
+    [31m[1m>[22m[39m[90m 361 |[39m       expect(rearmCheck[33m.[39mstatus)[33m.[39mtoBe([32m"invalid"[39m)[33m;[39m
+     [90m     |[39m                                 [31m[1m^[22m[39m
+     [90m 362 |[39m       [36mif[39m (rearmCheck[33m.[39mstatus [33m===[39m [32m"invalid"[39m) expect(rearmCheck[33m.[39mreason[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m 363 |[39m     }[33m,[39m
+     [90m 364 |[39m   )[33m;[39m[0m
+
+      at test/baseline/treasuryRemediationIIBaseline.test.ts:361:33
+
+Test Suites: 1 failed, 1 total
+Tests:       6 failed, 6 total
+Snapshots:   0 total
+Time:        3.779 s, estimated 4 s
+Ran all test suites matching /test\\baseline\\treasuryRemediationIIBaseline.test.ts/i.

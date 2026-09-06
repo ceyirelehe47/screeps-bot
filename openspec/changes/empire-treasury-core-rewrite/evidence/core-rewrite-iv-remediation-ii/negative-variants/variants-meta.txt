@@ -1,0 +1,6 @@
+0f5965e0704bc4b3081a87e6f7fd4c331ddd58c9
+方法：对生产文件应用单一语义回退补丁→运行目标测试（语义断言红灯，非编译错误）→git diff 保存补丁→还原修复版→同测试绿灯。
+V1 nv1-occupancy-old-semantics.patch：closing+committed+invocation===null 无条件占用（红：基线 R1 流出/流入 + F01）
+V2 nv2-prepay-cursor-after-callback.patch：预扣发布不携带下一服务位置（红：基线 R2 + F05 预扣后断点）
+V3 nv3-preflight-healthy-only.patch：preflight 只在 healthy 检查记录（红：基线 R3 ×3 + F09）
+harness 契约负向（错配断点/假 reset/旧 descriptor）由 F15 配对校验、F14 探针识别、F13 卸载断言内联承担（正文测试）

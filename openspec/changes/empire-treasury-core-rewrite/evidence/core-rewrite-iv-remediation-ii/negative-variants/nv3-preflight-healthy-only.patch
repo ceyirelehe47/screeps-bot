@@ -1,0 +1,179 @@
+diff --git a/src/runtime/treasury/kernel/kernel.ts b/src/runtime/treasury/kernel/kernel.ts
+index 3790890..7abd5b3 100644
+--- a/src/runtime/treasury/kernel/kernel.ts
++++ b/src/runtime/treasury/kernel/kernel.ts
+@@ -64,6 +64,10 @@ import {
+   validateTreasuryCoreDispatchPermit,
+   validateTreasuryCoreRearmPermit,
+ } from "@/runtime/treasury/kernel/identity";
++import {
++  treasuryCoreCoverageAnchorOf,
++  treasuryCoreObservationAdvancesPastAnchor,
++} from "@/runtime/treasury/kernel/coverage";
+ 
+ /** kernel 依赖的窄 adapter 端口（facade 从注册表适配；kernel 不依赖注册表实现）。 */
+ export interface TreasuryCoreActionAdapterPort {
+@@ -501,7 +505,12 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+     if (consumedPermits.has(check.permit)) {
+       return { status: "invalid", reason: "dispatch 许可已消费（同 attempt 实际调用至多一次）" };
+     }
++    // Remediation II/R3/§5.1：非健康核心（absent/incompatible/unhealthy）一律
++    // 明确拒绝——当前权威不可验证时，不把旧签发身份当作当前许可；预检保持
++    // 纯读（不初始化、不修复）。ring 单独 degraded 不等于核心 unhealthy
++    //（readTreasuryCoreStoreHealth 的安全四态与 ringDegraded 分离）。
+     const health = readTreasuryCoreStoreHealth();
++    // 负向变体 V3：恢复 healthy-only 检查——非健康核心落入 valid。
+     if (health.status === "healthy") {
+       const record = health.memory.active[check.permit.attemptId];
+       if (record === undefined) {
+@@ -520,7 +529,10 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+     if (consumedPermits.has(check.permit as unknown as TreasuryCoreDispatchPermit)) {
+       return { status: "invalid", reason: "rearm 许可已消费（不会创建两个 child）" };
+     }
++    // Remediation II/R3/§5.1：同 preflightDispatchPermit——非健康核心一律
++    // 拒绝（纯读：不初始化、不修复核心）。
+     const health = readTreasuryCoreStoreHealth();
++    // 负向变体 V3：恢复 healthy-only 检查——非健康核心落入 valid。
+     if (health.status === "healthy") {
+       const parent = health.memory.active[check.permit.parentAttemptId];
+       if (parent === undefined) {
+@@ -712,13 +724,30 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+    */
+   function prepayReleaseUnitBudget(
+     cursors: { sweepCursor: number; cleanupCursor: number },
++    target: { attemptId: string; nextCursor: number },
+   ): number | null {
+     const nowTick = ports.nowTick();
+     const health = readTreasuryCoreStoreHealth();
+     if (health.status !== "healthy") return null;
++    // 重读当前记录（§4.2）：exact attempt 仍在活跃集合并处 closing 才预扣
++    //（回调重入/并发推进后记录可能已变化——集合成员资格仍是唯一义务事实）。
++    const current = health.memory.active[target.attemptId];
++    if (current === undefined || current.phase !== "closing") return null;
+     const usedNow = readBudgetState(health.memory, nowTick);
+     if (usedNow + 2 > TREASURY_CORE_RECOVERY_BUDGET_PER_TICK) return null;
++    // Remediation II/R2/§4.1–§4.2：同一次安全写发布两份预算消耗与该记录
++    // 下一服务位置（remaining 不变；游标不使任何义务被当成完成）。经独立
++    // expected 读回确认（writeTreasuryCoreMemory 协议）成功后才允许调用
++    // 释放端口——不再出现「预算已写、cursor 等回调回来才写」的两步空窗。
+     const write = writeTreasuryCoreMemory((root) => {
++      const record = root.active[target.attemptId];
++      if (record !== undefined && record.phase === "closing") {
++        root.active[target.attemptId] = {
++          ...record,
++          cleanup: { ...record.cleanup, cursor: target.nextCursor },
++          updatedAtTick: nowTick,
++        };
++      }
+       root.recovery = {
+         sweepCursor: cursors.sweepCursor,
+         cleanupCursor: cursors.cleanupCursor,
+@@ -864,25 +893,12 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+             if (record.outcome === "committed") {
+               // IV/R1/D01：committed 无义务记录先做观察预检（时间序）——观察
+               // 未覆盖/无观察端口时零写跳过（不花预算；范围终判在命令内）。
+-              // Remediation I/R1：anchor 链与命令内同一判定（invocation →
+-              // external → invocationBoundary）——三者都缺时才保守保留。
+-              const anchorTick =
+-                record.invocation !== null
+-                  ? record.invocation.atTick
+-                  : record.external !== null
+-                    ? record.external.atTick
+-                    : record.invocationBoundary !== null
+-                      ? record.invocationBoundary.atTick
+-                      : null;
+-              if (anchorTick === null) continue; // 无调用边界事实；保守保留
+-              const anchorSeq =
+-                record.invocation?.worldSequence ?? record.invocationBoundary?.worldSequence;
++              // Remediation II/R1：锚点链与命令内/occupancy 同一共享判定
++              //（coverage.ts：invocation → external → invocationBoundary）。
++              const anchor = treasuryCoreCoverageAnchorOf(record);
++              if (anchor === null) continue; // 无调用侧事实；保守保留
+               if (!obtainProof(record) || proof === undefined) continue;
+-              const timeReached =
+-                anchorSeq !== undefined
+-                  ? proof.worldSequence > anchorSeq
+-                  : proof.atTick > anchorTick;
+-              if (!timeReached) continue;
++              if (treasuryCoreObservationAdvancesPastAnchor(anchor, proof) !== true) continue;
+               const step = applyBudgetedCommand(
+                 used,
+                 { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [], observationProof: proof },
+@@ -910,11 +926,12 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+           const released: string[] = [];
+           let portFaulted = false;
+           let budgetPrepayFailed = false;
+-          // Remediation I/R2/§5.1：记录内轮转——从持久 cursor 位置开始旋转
+-          // 遍历，不再每 tick 从第一项开始（失败前缀永久占据本记录的尝试预算）。
+-          // 每次已取得预算的尝试（无论 true/false/throw）推进本地最后尝试
+-          // 位置；确认命令（诊断/释放确认）携带 rotationCursor 持久化。集合
+-          // 成员资格仍是唯一未完成义务事实；调度位置不证明任何义务完成。
++          // Remediation I/R2/§5.1 + II/R2：记录内轮转——从持久 cursor 位置开始
++          // 旋转遍历，不再每 tick 从第一项开始（失败前缀永久占据本记录的尝试
++          // 预算）。每次已取得预算的尝试（无论 true/false/throw）的下一服务
++          // 位置随预扣同次持久发布；确认命令不携带游标（§4.3：不得用旧调用
++          // 栈的值覆盖预扣已发布或重入后更新的 cursor）。集合成员资格仍是
++          // 唯一未完成义务事实；调度位置不证明任何义务完成。
+           const dutyKeys = record.cleanup.consumerKeys;
+           const dutyCount = dutyKeys.length;
+           const dutyStart = record.cleanup.cursor % dutyCount;
+@@ -923,7 +940,12 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+             const dutyIndex = (dutyStart + offset) % dutyCount;
+             const consumerKey = dutyKeys[dutyIndex] as string;
+             // 成对预扣从持久现读（重入/多实例后的单一权威；IV/§6.2）。
+-            const prepaid = prepayReleaseUnitBudget(cursors);
++            // Remediation II/R2：本次单位的「下一服务位置」随预扣同次发布
++            //（端口调用前持久）。
++            const prepaid = prepayReleaseUnitBudget(cursors, {
++              attemptId: record.attemptId,
++              nextCursor: (dutyIndex + 1) % dutyCount,
++            });
+             if (prepaid === null) {
+               budgetPrepayFailed = true;
+               break;
+@@ -940,21 +962,19 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+             }
+             if (ok) released.push(consumerKey);
+           }
+-          // 本 tick 已取得预算的尝试推进了轮转位置（最后尝试位置 +1，
+-          // 对原集合长度取模；集合缩小后由下次读取时安全回绕）。
+-          const rotationCursor = lastAttemptedIndex >= 0 ? (lastAttemptedIndex + 1) % dutyCount : undefined;
++          // 本 tick 已取得预算的尝试的轮转位置（最后尝试位置 +1 对原集合
++          // 长度取模）已随每次预扣同次持久发布；集合缩小后由下次读取时安全回绕。
+           if (budgetPrepayFailed && released.length === 0) {
+             // 预算耗尽：立即停止扫描（IV/D19）。continue 空转会把游标推满
+             // 一整圈回到本 tick 起点——后方记录永远落在"预算已尽"的访问
+             // 位（结构性饿死）；§6.2 额度耗尽后廉价返回，不无限扫描。
+             // break 让游标停在耗尽处，下一 tick 从其后记录开始（起点前移）。
+-            // Remediation I/R2：停止前仍须把本 tick 已取得预算的尝试位置持久化
+-            // （证实命令使用已预扣份额）——否则失败前缀每 tick
+-            // 重新占据记录内起始位置（轮转丢失）。
+-            if (rotationCursor !== undefined) {
++            // Remediation II/R2：尝试位置已随预扣同次持久发布——此处确认
++            // 只落有界失败诊断（使用已预扣份额），不再携带游标。
++            if (lastAttemptedIndex >= 0) {
+               const step = applyPrepaidCleanupCommand(
+                 used,
+-                { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [], rotationCursor },
++                { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] },
+                 cursors,
+               );
+               used = step.used;
+@@ -969,7 +989,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+             // 预算挤占成"后方可完成记录永远差 1 份"的结构性饿死——D19）。
+             const step = applyPrepaidCleanupCommand(
+               used,
+-              { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [], rotationCursor },
++              { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: [] },
+               cursors,
+             );
+             used = step.used;
+@@ -984,7 +1004,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+             record.outcome === "committed" && obtainProof(record) && proof !== undefined ? proof : undefined;
+           const step = applyPrepaidCleanupCommand(
+             used,
+-            { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: released, observationProof: confirmProof, rotationCursor },
++            { type: "advance_cleanup", attemptId: record.attemptId, releasedDuties: released, observationProof: confirmProof },
+             cursors,
+           );
+           used = step.used;

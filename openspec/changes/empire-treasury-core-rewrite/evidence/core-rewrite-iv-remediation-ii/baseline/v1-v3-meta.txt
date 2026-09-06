@@ -1,0 +1,5 @@
+dad7a8524fa7a8fc1bb6c9712a5eb85e29739472
+命令: npx jest --config jest.config.cjs src/runtime/treasury/scratchRemediation2VBaseline.test.ts --runInBand
+退出码: 1（预期非零）
+结果: 3 failed / 3 total——V1 世界 900≠1000 / V2 旧许可 valid / V3 budgetUsed 0≠2
+说明: scratch 重现器仅基线运行用，运行后从工作树删除；本 patch 为源码快照（非执行入库）

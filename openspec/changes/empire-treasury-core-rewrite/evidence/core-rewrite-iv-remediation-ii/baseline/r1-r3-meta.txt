@@ -1,0 +1,6 @@
+0f5965e0704bc4b3081a87e6f7fd4c331ddd58c9
+b322c35bd78464f8d5a9af022655e5e283fb9a3b
+v22.19.0
+命令: npx jest --config jest.config.cjs test/baseline/treasuryRemediationIIBaseline.test.ts --runInBand
+退出码: 1（预期非零——基线反例红灯）
+结果: 6 failed / 6 total（R1 流出/R1 流入/R2/R3×3——各红在目标语义断言）

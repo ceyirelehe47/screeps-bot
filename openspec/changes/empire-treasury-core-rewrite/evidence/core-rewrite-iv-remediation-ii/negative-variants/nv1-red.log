@@ -1,0 +1,87 @@
+FAIL test/baseline/treasuryRemediationIIBaseline.test.ts
+  ● 基线 R1 覆盖已含效果不重复扣账（流出） › 1000→实际流出 800→结果前断点→完整reset→exact executed：A 仍 closing 时 200 可纳、201 拒，A 未被删除
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "admitted"
+    Received: "rejected"
+
+    [0m [90m 171 |[39m     [90m// 另一工作 200 应获准（覆盖成立不双扣）；201 应拒绝。[39m
+     [90m 172 |[39m     [36mconst[39m fits [33m=[39m authorizeOn(reset[33m,[39m [32m"biz:ii:r1-fits"[39m[33m,[39m transferArgs({ amount[33m:[39m [35m200[39m[33m,[39m outcome[33m:[39m [32m"ok"[39m }))[33m;[39m
+    [31m[1m>[22m[39m[90m 173 |[39m     expect(fits[33m.[39mstatus)[33m.[39mtoBe([32m"admitted"[39m)[33m;[39m
+     [90m     |[39m                         [31m[1m^[22m[39m
+     [90m 174 |[39m     [36mconst[39m tooBig [33m=[39m authorizeOn(reset[33m,[39m [32m"biz:ii:r1-toobig"[39m[33m,[39m transferArgs({ amount[33m:[39m [35m201[39m[33m,[39m outcome[33m:[39m [32m"ok"[39m }))[33m;[39m
+     [90m 175 |[39m     expect(tooBig[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m 176 |[39m     [90m// A 断言时仍在 active（未清义务未被删除；本用例无消费者义务，以[39m[0m
+
+      at Object.<anonymous> (test/baseline/treasuryRemediationIIBaseline.test.ts:173:25)
+
+  ● 基线 R1 覆盖已含效果不重复扣账（流入） › 空位 100→实际流入 80→同断点恢复：20 可纳、21 拒，不再扣一次 80
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "admitted"
+    Received: "rejected"
+
+    [0m [90m 206 |[39m     [36mif[39m (terminal[33m.[39mgetFreeCapacity() [33m!==[39m [35m20[39m) [36mthrow[39m [36mnew[39m [33mError[39m([32m`空位应为 20，实际 ${String(terminal.getFreeCapacity())}`[39m)[33m;[39m
+     [90m 207 |[39m     [36mconst[39m fits [33m=[39m authorizeOn(reset[33m,[39m [32m"biz:ii:r1in-fits"[39m[33m,[39m transferArgs({ amount[33m:[39m [35m20[39m[33m,[39m outcome[33m:[39m [32m"ok"[39m }))[33m;[39m
+    [31m[1m>[22m[39m[90m 208 |[39m     expect(fits[33m.[39mstatus)[33m.[39mtoBe([32m"admitted"[39m)[33m;[39m
+     [90m     |[39m                         [31m[1m^[22m[39m
+     [90m 209 |[39m     [36mconst[39m tooBig [33m=[39m authorizeOn(reset[33m,[39m [32m"biz:ii:r1in-toobig"[39m[33m,[39m transferArgs({ amount[33m:[39m [35m21[39m[33m,[39m outcome[33m:[39m [32m"ok"[39m }))[33m;[39m
+     [90m 210 |[39m     expect(tooBig[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m 211 |[39m     expect(reset[33m.[39mservice[33m.[39mkernelJournal()[33m.[39mactive[33m.[39mfind((r) [33m=>[39m r[33m.[39mattemptId [33m===[39m a[33m.[39mattemptId)[33m?[39m[33m.[39mphase)[33m.[39mtoBe([32m"closing"[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (test/baseline/treasuryRemediationIIBaseline.test.ts:208:25)
+
+Test Suites: 1 failed, 1 skipped, 1 of 2 total
+Tests:       2 failed, 19 skipped, 21 total
+Snapshots:   0 total
+Time:        4.442 s
+Ran all test suites matching /test\\baseline\\treasuryRemediationIIBaseline.test.ts|src\\runtime\\treasury\\treasuryRemediationIIService.test.ts/i with tests matching "R1 覆盖".
+FAIL src/runtime/treasury/treasuryRemediationIIService.test.ts
+  F01/F02 覆盖不双扣（流出/流入固定数值）
+    × F01 流出：1000→实际流出 800→结果前断点→exact executed→A 仍 closing（invocation 空）→200 可纳、201 拒，A 未删除 (42 ms)
+    ○ skipped F02 流入：空位 100→实际流入 80→同断点恢复→20 可纳、21 拒，不再扣一次 80
+  F03 覆盖判定的负向与收尾
+    ○ skipped unknown 不因边界释放：无确定结论前 800 全额占用，200 拒（与 F01 对照）
+    ○ skipped 覆盖判定单元对照（共享锚点链——occupancy/命令/清理门同一语义）
+    ○ skipped 覆盖后所有关闭条件成立才删除；退出后额度随观察恢复（旧视图不超额）
+  F09/F10 preflight 健康门禁
+    ○ skipped F09 非健康核心：facade 路径 fresh/policy/调用/child 增量 0（absent/incompatible/unhealthy 三态）
+    ○ skipped F10 健康对照可执行；仅坏 ring 不伪装核心损坏；克隆许可不花 fresh（E13/E14 语义保持）
+  F11/F11 三同断点分支与 exact 对照
+    ○ skipped 调用前断点（边界已发布、adapter 未进入）：世界 1000；恢复 not_executed→不扣任何占用（800 可纳、801 拒）
+    ○ skipped 错关联对照：他人效果推进世界序越过本 attempt 边界、无本 attempt 事件→still_uncertain（不盲猜 not-executed）
+  F12 真实效果后、结果未写断点（无人工 external）
+    ○ skipped 效果后哨兵抛错→旧栈 catch 写 unknown（旧分支）；恢复分支 Memory 无结果→executed→F01 中间账目→完整关闭
+  F13 拦截器卸载保留实际存储
+    ○ skipped 放行预扣与游标、吞确认：卸载前后实际存储一致（预算/位置未回退）；同 tick 完整 reset 无凭空额度；恢复写后可确认
+  F15 断点世界一致与结构保真
+    ○ skipped 指定早期断点后旧栈继续产生效果：恢复分支世界=断点时刻（不含后来效果）
+    ○ skipped 断点时已消失的结构不被 RoomSpec 复活：授权目标位置拒绝（structure_changed）
+    ○ skipped 配对错误使测试契约失败：伪造断点（Memory 与世界序错配）被入口一致性校验拒绝
+  F17 混合负载与独立宿主账目
+    ○ skipped 完成/真实 rearm/长期 unknown/部分清理/完整 reset/旧视图：宿主账目一致、未结束工作有界
+
+  ● F01/F02 覆盖不双扣（流出/流入固定数值） › F01 流出：1000→实际流出 800→结果前断点→exact executed→A 仍 closing（invocation 空）→200 可纳、201 拒，A 未删除
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "admitted"
+    Received: "rejected"
+
+    [0m [90m 191 |[39m     expect((reset[33m.[39mrooms[33m.[39m[33mW1N57[39m [36mas[39m unknown [36mas[39m { storage[33m:[39m { store[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m number[33m>[39m } })[33m.[39mstorage[33m.[39mstore[33m.[39menergy)[33m.[39mtoBe([35m200[39m)[33m;[39m
+     [90m 192 |[39m     [36mconst[39m fits [33m=[39m authorizeOn(reset[33m,[39m [32m"biz:f1:fits"[39m[33m,[39m transferArgs({ amount[33m:[39m [35m200[39m[33m,[39m outcome[33m:[39m [32m"ok"[39m }))[33m;[39m
+    [31m[1m>[22m[39m[90m 193 |[39m     expect(fits[33m.[39mstatus)[33m.[39mtoBe([32m"admitted"[39m)[33m;[39m [90m// 覆盖成立：不双扣[39m
+     [90m     |[39m                         [31m[1m^[22m[39m
+     [90m 194 |[39m     [36mconst[39m tooBig [33m=[39m authorizeOn(reset[33m,[39m [32m"biz:f1:toobig"[39m[33m,[39m transferArgs({ amount[33m:[39m [35m201[39m[33m,[39m outcome[33m:[39m [32m"ok"[39m }))[33m;[39m
+     [90m 195 |[39m     expect(tooBig[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m 196 |[39m     [90m// A 断言时仍在 active；调用与效果均不重复。[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIIService.test.ts:193:25)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 14 skipped, 15 total
+Snapshots:   0 total
+Time:        3.259 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryRemediationIIService.test.ts/i with tests matching "F01 流出".

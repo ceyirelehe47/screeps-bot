@@ -199,3 +199,43 @@
 - **D11（V1）**：此前 dispatching fixture 为手工填充（phase/external 手填，非真实路径产物）。改为真实 adapter 断点捕获（execute 入口/效果后快照）+ 指定快照 reset。
 - **D19（V3）**：名称声称"公平推进有限界"但同 kernel 连续 tick、无逐 tick 重载。改造为每 tick 用上一 tick 真实序列化快照重建运行时；同记录 8 义务前缀失败场景补于 E06。
 - **D23（V3）**：RETRIED 分支此前只是 non-ok 父代（无真实 rearm）。改造为 60 对完整 retry 链（capability→executeRearm→child 实际执行）+ 旧父代许可回放拒绝。
+
+
+## 9. Core Rewrite IV · Remediation II：F01–F20 映射与 E 矩阵纠正（2026-09-06）
+
+### 9.1 E 矩阵验证缺口纠正（V1/V2/V3）
+
+| 旧项 | 缺口 | 纠正后形态 |
+| --- | --- | --- |
+| E02 | 效果前 Memory 配 reset 入口的效果后世界 + 固定 not-executed reconciler 冒充 exact | 重写为配对断点两分支：效果前分支（断点世界 1000、哨兵硬停于 adapter 入口→oracle not_executed）与效果后分支（世界 900、事件含 world-effect→oracle executed→观察接管退出）；reconcile 结论从宿主事件/分支世界序推导 |
+| E06/E10 的 reloadKernel | JSON 往返后调用旧模块函数/ports——模块注册表未重建，非完整 reset | 公平循环改 performTreasuryKernelFullReset（每 tick 新 Memory 引用+新模块注册表+新 kernel；F16 混合流量同形态）；原形态降级 jsonRoundtripKernel 序列化探针（E06 独立用例；F14(b) 断言其旧许可仍 valid——即它不是完整 reset 的识别锚） |
+| E08/E04 内联拦截器 | 卸载恢复旧 descriptor.value——回滚拦截期间放行的预扣 | 换共享 interceptTreasuryCoreWrites（test/mock/treasuryStorageInterceptor）：卸载安装拦截期间实际最终 liveValue；E08 确认丢写用例改双义务（cursor 1 可证）并断言捕获载荷同次含预算+位置 |
+
+### 9.2 F01–F20 → 真实路径/断言定位
+
+| F | 场景 | 文件 / describe / it（断言核心） |
+| --- | --- | --- |
+| F01 | 流出 800 覆盖不双扣 | treasuryRemediationIIService › F01/F02 › F01 流出（200 admitted/201 rejected/A 仍 closing/invocation 空）；基线 R1 流出同锚 |
+| F02 | 流入 80 覆盖不双扣 | 同上 › F02 流入（空位 20 可纳/21 拒） |
+| F03 | unknown/旧观察/不可用/最终退出 | 同上 › F03（unknown 200 拒；occupancy 单元锚点链对照含 external tick 兜底/无锚点保守/unknown 不释放；覆盖后退出额度恢复 200/201） |
+| F04 | 同次发布丢写/篡改/合法对照 | treasuryRemediationIIKernel › F04（丢写调用 0 游标 0 预算 0；cursor 单字段篡改被独立 expected 拒绝；合法对照 4 份额完成） |
+| F05 | 两硬断点快照 | 同上 › F05（onAllow 钩子内捕获：断点处端口调用 0、同 Memory 内预算 2+cursor 1+remaining 全；端口入口快照同证+正常收尾） |
+| F06 | 断点恢复轮转+重复切点 | 同上 › F06（恢复续 1/2/3 不再调 f0→cursor 4；第 2 单位切点续 2/3；sticky 保留 closing） |
+| F07 | 确认丢写+同 tick reset+幂等 | 同上 › F07（份额/位置保留；同 tick 从位置 1 续；a 恰 2 次 b 1 次全同 attemptId） |
+| F08 | 重入/缩小回绕/混合 | 同上 › F08（重入后 cursor ≥4 不回退、每 key 恰一次；8 义务两 tick 回绕完成；false/throw/true 混合每 tick ≤4） |
+| F09 | 非健康 preflight+facade 零增量 | treasuryRemediationIIService › F09/F10 › F09（三态×两许可 preflight 拒绝由基线 R3 承担；facade 路径 fresh/policy/trace/frontier/active 增量 0） |
+| F10 | 健康对照/仅坏 ring/克隆 | 同上 › F10（坏 ring 仍 committed+fresh+1；克隆许可零 fresh） |
+| F11 | 三断点分支+错关联 | 同上 › F11/F11（调用前 800 可纳 801 拒；错关联→still_uncertain 状态保留 unknown）；效果前分支见 E02 效果前 |
+| F12 | 效果后结果未写无人工 external | 同上 › F12（效果后哨兵抛错→旧栈 catch 写 unknown 与恢复分支 invocation=null 隔离；executed→700/701→退出；调用/效果各恰 1） |
+| F13 | 拦截器卸载契约 | 同上 › F13（卸载前后 Memory 全等；budgetUsed 2/cursor 不回退；同 tick reset 无凭空额度；正常写后有限完成） |
+| F14 | 完整 reset 识别 | treasuryRemediationIIKernel › F14（旧许可 invalid+旧对象污染无效+新 registry 正常签发；jsonRoundtrip 探针旧许可仍 valid=非完整 reset 的识别锚） |
+| F15 | 早期断点/消失结构/配对错误 | treasuryRemediationIIService › F15（恢复分支世界 1000 不含旧栈后来效果+事件可见集截断；消失 terminal 不复活+构建期拒绝；伪造断点 toThrow 断点配对不一致） |
+| F16 | 混合流量逐 tick 完整 reset | treasuryRemediationIKernel › E10（V2 改造形态：8 失败工作+8 义务 good+过期 retry+噪声，逐 tick performTreasuryKernelFullReset，界 40 tick，失败义务保留） |
+| F17 | 混合负载独立宿主账目 | treasuryRemediationIIService › F17（完成/真实 rearm/长期 unknown/部分清理/reset/旧视图；hostLedger 独立核算世界 850；unknown 占用→750/751） |
+| F18 | 最坏值+越界拒绝 | treasuryRemediationIIKernel › F18（满 64/128 ≤360,000+bytes 另报；真实路径演化有界；cursor -1/1.5/越界 → unhealthy） |
+| F19 | 全仓最终验证 | 无独立测试：typecheck/build/Treasury 定向（26 套件）/Defense 冻结回归/test/baseline 独立归类/budget 校验——证据见 evidence/core-rewrite-iv-remediation-ii/final/（含 10,000 完成/1,000 retry 既有压力套件在全仓 JSON 内的计数） |
+| F20 | 负向变体 | evidence/core-rewrite-iv-remediation-ii/negative-variants/（nv1 旧 occupancy 语义→基线 R1+F01 红；nv2 游标移回回调后→基线 R2+F05 红；nv3 preflight healthy-only→基线 R3×3+F09 红；各自还原后全绿）；工具契约负向（错配断点/假 reset/旧 descriptor）由 F15/F14/F13 内联承担 |
+
+### 9.3 基线反例持续回归
+
+test/baseline/treasuryRemediationIIBaseline.test.ts（6 用例）：R1 流出/流入（200/20 admitted+201/21 rejected+A 保留）、R2（真预扣后确认前快照内 cursor=1+remaining 不变）、R3 三态（两 preflight invalid+reason 非空）。首跑 0f5965e 6/6 红（evidence baseline/），修复后全绿。

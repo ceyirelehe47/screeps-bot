@@ -1,5 +1,19 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Core Rewrite IV · Remediation II（2026-09-06 完成）
+
+承接 Remediation I（0f5965e）及其源码审查的三项实现缺口与三项验证缺口（任务书 treasury-core-rewrite-IV-remediation-II-implementation.md；验收索引 F01–F20）。
+
+- [x] 影响范围审查（subagent：occupancy 消费方仅 facade 五路径、rotationCursor 全仓零测试引用、A08 incompatible 场景两条路径均 rejected、performTreasuryFullReset 新增输入纯增量、budget 需清单+脚本双更新、Defense 冻结零耦合、external 锚点不得补世界序等两条实现风险提示）
+- [x] 红灯基线：R1（流出 1000/800/200/201 + 流入 100/80/20/21 固定数值）、R2（真预扣后确认前硬断点快照内 cursor 未前移）、R3（absent/incompatible/unhealthy 三态 × 两 preflight 均落 valid）在 0f5965e 上 6/6 红灯（evidence/core-rewrite-iv-remediation-ii/baseline/r1-r3-*.log）；修复后转绿并转为持续回归（test/baseline/treasuryRemediationIIBaseline.test.ts）
+- [x] 工具契约反例：V1（效果前 Memory 配效果后世界 900≠1000）、V2（reloadKernel 后旧许可仍 valid）、V3（拦截器卸载回滚已放行预扣 budgetUsed 0≠2）以旧工具形态复现红灯（baseline/v1-v3-*.log + scratch 重现器 patch 快照；新工具以 F13/F14/F15 契约测试承担持续回归）
+- [x] 工作流 D（断点配对/完整 reset/拦截器）：harness 增 captureTreasuryHostBreakpoint 原子捆绑（Memory JSON+世界+tick+世界序+事件截断）与 performTreasuryKernelFullReset（内核装配面——与 service 面共享同一 reset 核心：JSON 重载+jest.resetModules+退役 global 清理）；配对一致性校验（Memory 世界序≠捆绑序即拒绝）；roomSpecsWithWorld 修复“快照缺失结构被 RoomSpec 复活”；共享存储拦截器（liveValue 卸载契约+onAllow 硬断点钩子）；事件驱动 exact oracle（treasuryExactOracle：结论从宿主事件/分支世界序推导，不从固定返回值/生产 outcome 来）
+- [x] 工作流 A（R1 统一覆盖语义）：新建 kernel/coverage.ts 共享纯判定（锚点链 invocation→external→invocationBoundary + 世界序优先/tick 严格大于兜底/无可比事实保守）；occupancy 占用投影、commands.observationTakesOverEffect、beginTick committed 清理门三处消费同一判定（消除三处各自演化）；closing+committed 仅边界（正常恢复状态）在观察越过边界序时不再重复扣减——记录保留与占用投影分离
+- [x] 工作流 B（R2 同次发布）：prepayReleaseUnitBudget 同一次安全写发布 budgetUsed+2 与记录内下一服务位置（重读健康当前记录；经既有 expected 读回确认后才调端口）；确认命令不再携带 rotationCursor（命令字段移除——不得用旧调用栈值覆盖较新位置）；预扣失败调用 0/义务不减；单字段篡改被独立 expected 拒绝
+- [x] 工作流 C（R3 健康门禁）：两个 preflight 在 absent/incompatible/unhealthy 一律明确拒绝（可解释 reason；纯读不初始化不修复；ring 单独 degraded 不伪装核心损坏）
+- [x] F01–F20 验收矩阵（kernel 16 + service 15；F16=E10 V2 改造形态、F19=全仓最终验证；E02 重写为配对断点两分支+事件 oracle、E06–E10 循环改完整 reset、E08 换共享拦截器、reloadKernel 降级 jsonRoundtripKernel 序列化探针）；F20 三生产负向变体（旧 occupancy/游标移回回调后/preflight healthy-only）各自语义红灯后还原全绿
+- [x] 全仓回归与预算（数字见 evidence/core-rewrite-iv-remediation-ii-local-validation.md；Treasury 定向与 test/baseline 独立归类汇总）
+
 ## Core Rewrite IV · Remediation I（2026-09-06 完成）
 
 承接 IV（aea7035）及其源码审查的四项实现缺口与三项验证缺口（任务书 treasury-core-rewrite-IV-remediation-I-implementation.md）。
