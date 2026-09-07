@@ -1,0 +1,150 @@
+#!/usr/bin/env node
+var q = require('q'),
+    _ = require('lodash'),
+    utils = require('./utils'),
+    driver = utils.getDriver(),
+    config = require('./config');
+
+var lastAccessibleRoomsUpdate = 0;
+var roomsQueue, usersQueue;
+
+function loop() {
+
+    var resetInterval, startLoopTime = process.hrtime ? process.hrtime() : Date.now(),
+        stage = 'start';
+
+    driver.config.emit('mainLoopStage',stage);
+
+
+    if(typeof self == 'undefined') {
+        resetInterval = setInterval(() => {
+            console.error('Main loop reset! Stage:',stage);
+            driver.queue.resetAll();
+        }, driver.config.mainLoopResetInterval);
+    }
+
+    driver.notifyTickStarted()
+        .then(() => {
+            stage = 'getUsers';
+            driver.config.emit('mainLoopStage',stage);
+            return driver.getAllUsers();
+        })
+        .then((users) => {
+            stage = 'addUsersToQueue';
+            driver.config.emit('mainLoopStage',stage, users);
+            return usersQueue.addMulti(users.map(user => user._id.toString()));
+        })
+        .then(() => {
+            stage = 'waitForUsers';
+            driver.config.emit('mainLoopStage',stage);
+            return usersQueue.whenAllDone();
+        })
+        .then(() => {
+            stage = 'getRooms';
+            driver.config.emit('mainLoopStage',stage);
+            return driver.getAllRoomsNames();
+        })
+        .then((rooms) => {
+            stage = 'addRoomsToQueue';
+            driver.config.emit('mainLoopStage',stage, rooms);
+            return roomsQueue.addMulti(rooms);
+        })
+        .then(() => {
+            stage = 'waitForRooms';
+            driver.config.emit('mainLoopStage',stage);
+            return roomsQueue.whenAllDone();
+        })
+        .then(() => {
+            stage = 'commit1';
+            driver.config.emit('mainLoopStage',stage);
+            return driver.commitDbBulk();
+        })
+        .then(() => {
+            stage = 'global';
+            driver.config.emit('mainLoopStage',stage);
+            return require('./processor/global')();
+        })
+        .then(() => {
+            stage = 'commit2';
+            driver.config.emit('mainLoopStage',stage);
+            return driver.commitDbBulk();
+        })
+        .then(() => {
+            stage = 'incrementGameTime';
+            driver.config.emit('mainLoopStage',stage);
+            return driver.incrementGameTime()
+        })
+        .then(gameTime => {
+            console.log('Game time set to', gameTime);
+            if(+gameTime > lastAccessibleRoomsUpdate + 20) {
+                driver.updateAccessibleRoomsList();
+                driver.updateRoomStatusData();
+                lastAccessibleRoomsUpdate = +gameTime;
+            }
+
+            stage = 'notifyRoomsDone';
+            driver.config.emit('mainLoopStage',stage);
+            return driver.notifyRoomsDone(gameTime);
+        })
+        .then(() => {
+            stage = 'custom';
+            driver.config.emit('mainLoopStage',stage);
+            return driver.config.mainLoopCustomStage();
+        })
+        .catch((error) => {
+            if(error == 'Simulation paused') {
+                return;
+            }
+            console.error(`Error while main loop (stage ${stage}):`, _.isObject(error) && error.stack ? error.stack : error);
+        })
+        .finally(() => {
+
+            if(resetInterval) {
+                clearInterval(resetInterval);
+            }
+
+            var usedTime;
+            if (process.hrtime) {
+                usedTime = process.hrtime(startLoopTime);
+                usedTime = usedTime[0] * 1e3 + usedTime[1] / 1e6;
+            }
+            else {
+                usedTime = Date.now() - startLoopTime;
+            }
+
+            driver.config.emit('mainLoopStage','finish');
+
+            var delay = driver.config.getNextTickDelay
+                ? driver.config.getNextTickDelay(usedTime)
+                : Math.max(driver.config.mainLoopMinDuration - usedTime, 0);
+            console.log(`Tick done in ${Math.round(usedTime)} ms, next tick in ${Math.round(delay)} ms`);
+            setTimeout(loop, delay);
+        })
+        .catch((error) => {
+            console.error(`'Error while main loop (final):`, _.isObject(error) && error.stack ? error.stack : error);
+        });
+
+}
+
+driver.connect('main')
+    .then(() =>  q.all([
+        driver.queue.create('rooms', 'write'),
+        driver.queue.create('users', 'write'),
+    ]))
+    .catch((error) => {
+        console.error('Error connecting to driver:', error);
+        process.exit(1);
+    })
+    .then((data) => {
+        roomsQueue = data[0];
+        usersQueue = data[1];
+        loop();
+    });
+
+if(typeof self == 'undefined') {
+    setInterval(() => {
+        var rejections = q.getUnhandledReasons();
+        rejections.forEach((i) => console.error('Unhandled rejection:', i));
+        q.resetUnhandledRejections();
+    }, 1000);
+}

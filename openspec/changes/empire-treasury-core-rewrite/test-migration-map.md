@@ -449,3 +449,23 @@ IVKernel 测试侧两文件。
   欠证据"的轨迹，不追溯否定历史证据；旧证据保留历史身份。
 - 合成轨迹不再作为完整性正例；如需结构完整的合成底版，必须补合法风险
   内容（覆盖差异说明见上）。
+
+## 16. Terminal Transfer Slice 0：M01–M08 定位（2026-09-07）
+
+| 索引 | 测试/驱动位置 | 覆盖行为 |
+| --- | --- | --- |
+| M01 | scripts/verify-treasury-evidence.mjs（非 Jest；自测实跑见 evidence/terminal-transfer-slice-0/final/） | 已提交可移植核验驱动在固定 SHA 实跑：H18 trace 核验（expected 用固定夹具 20 unknown/12 观察窗口）+ Jest JSON 检查；正例 0、缺输入/坏 head/版本不匹配非零；旧 .mjs 保留历史身份 |
+| M02 | openspec terminal-transfer-slice-0.md §1（非 Jest） | 源码事实/官方文档/原型假设/待实测四列短报告（固定 SHA 8097782 + driver cf63d8a） |
+| M03 | src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts it「M03」 | 默认注册表无 slice0 kind；canonical args 派生 postings/绑定/facts 三处一致（postings 集合比较——kernel 规范序流入在前）；freeze 零差异由主验证承担 |
+| M04 | 同文件 it「M04」×2 | 合法接纳执行为 unknown（OK 仅调度）；降 H/降费用能源/目标空位/结构替换各拒绝且提交增量 0；amount/resource/关联键/场景外目标超范围拒绝；恢复后成功 |
+| M05 | 同文件 it「M05」 | 当 tick settle 仍 uncertain 且责任保留；处理+新 tick 后唯一全量记录结算退出；源/目标/fee 计数吻合、恰一次提交、退出后无重放 |
+| M06 | 同文件 it「M06」×2 | 无记录/窗口挤出/读异常/他人记录/市场订单/重复交易 ID/部分量（60/100）均不报全量、不补发、不重执行；两视图同一 transactionId 单次计数；正确唯一记录对照可完成 |
+| M07 | 同文件 it「M07」×2 | 提交后结果持久化前（execute 内捕获）与已接受未处理（endTick 后）断点：performTreasuryFullReset 配对重载（宿主 captureBranch reopen；adapter 暴露 journal=host 过来源关联核实）；先 unknown 后事实到达收尾；旧许可拒绝（新模块）；同 workKey 排他从持久 active 读出（恢复后经新模块 buildTreasuryActionContract——resetModules 后旧入口注册无效）；结算完成后同 workKey 可再接纳 |
+| M08 | 主验证 + 第二上下文（evidence final/revalidation） | 固定 SHA 全量验证与第二执行上下文定向复验；旧脚本保留项独立结论；后续引擎实验说明只准备不执行 |
+
+### 16.1 覆盖差异与边界说明
+
+- 旧 `test.transfer` 同步生效模型（settlesOnAccept=true）不改动：历史测试继续用同步模型；延迟生效模型只在新 mock（treasuryTerminalTransferPrototype.ts）表达，二者并存且互不替代。
+- 新 mock 的交易视图/报价端口/处理推进均为离线 fake（模拟公开 API 形态与源码检查链），不是真实引擎运行证据；真实环境待实测项见 terminal-transfer-slice-0.md §1.5/§3。
+- durable facts 用受控编码（`k:..|a:..|f:..|sb:..,..|tb:..`）而非 JSON：kernel payload 字符集排除 `"` 与 `\`（store.ts PAYLOAD_PATTERN），JSON.stringify 默认输出会被 validator 拒绝。
+- 恢复后的新接纳必须经新模块的 buildTreasuryActionContract（resetModules 重建模块图，旧 import 入口的 WeakSet 注册对新 service 无效）——该边界已固化为测试注释与 admitRestored helper。

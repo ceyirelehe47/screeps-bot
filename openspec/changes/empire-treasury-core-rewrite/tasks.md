@@ -1,5 +1,18 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Terminal Transfer Slice 0（2026-09-07）
+
+承接 Evidence Remediation I（1b1279f）的核验脚本交付纪律保留项；固定首条业务（A 房 100 H → B 房 Terminal）并核对真实引擎契约、实现离线延迟生效原型（任务书 treasury-terminal-transfer-slice-0-implementation.md；验收索引 M01–M08）。
+
+- [x] 起点核对：本地=远端=1b1279f 干净、无增量；影响范围审查（subagent：adapter 接口与注册先例/三后置 .mjs 内容/fake 宿主闭包模式/budget 双 commit 联动/固定夹具 20 unknown 与 12 观察窗口确认）
+- [x] 工作 A：`scripts/verify-treasury-evidence.mjs` 整合三个后置驱动（trace 核验 + Jest JSON 检查 + 递归 walk；expected 改用固定夹具约束、不再取待检文件自带值；显式 CLI 参数、无硬编码路径/隐含 cwd）；正例 exit=0、缺参/坏 head/版本不匹配 exit=2、零输入 exit=1；旧原件与日志保留历史身份
+- [x] 工作 B：固定 SHA 8097782（engine）+ cf63d8a（driver）源码逐文件核对——send API 检查链/处理层静默丢弃/executeTransfer 目标空间缩量按实际量继续/交易记录公开字段/费用公式/主循环时序（效果 T+1 可见）/runner 并行保存边界；短报告（四列区分）见 terminal-transfer-slice-0.md §1，源码副本存 evidence sources/
+- [x] 工作 C：`test/mock/treasuryTerminalTransferPrototype.ts`（fake 宿主三段建模 + adapter：settlesOnAccept=false/nonOkOutcome=unknown/三腿+fee 报价端口冻结与漂移拒绝/受控编码 durable facts 含提交前基线/reconcile 只收公开形态证据且永不 not_executed）+ `treasuryTerminalTransferSlice0.test.ts` 8 it 全绿（M03 canonical 一致、M04 六类拒绝零提交、M05 延迟闭环计数吻合、M06 无记录/窗口/异常/他人/市场/重复 ID/部分量不误判、M07 两类断点配对重载先 unknown 后收尾+排他阻断）；无 ADAPTER_GAP
+- [x] Treasury 定向 33/582、全仓回归与预算锚点滚动（数字见 evidence/terminal-transfer-slice-0-local-validation.md）
+- [x] 固定 VALIDATION_HEAD 主验证（§7.2 模板：三组冻结/typecheck×2/build/KEY/Treasury/Defense/全仓/budget/verify-evidence 驱动自测/前后状态干净）
+- [x] 第二上下文定向复验（M 集合/KEY/Defense/核验驱动；独立 reviewer 优先，无则同执行者第二工作树并明确标注）
+- [x] 归档与 push：evidence/terminal-transfer-slice-0/（task/sources/final/revalidation/controls）+ 主报告 + terminal-transfer-slice-0.md 实验说明（§3 只准备不执行）；独立验收结论见下方补记
+
 ## Core Candidate Seal I · Evidence Remediation I（2026-09-07）
 
 承接 Seal I（K01–K08 ACCEPT）审查结论 `EVIDENCE_INCOMPLETE`（任务书 treasury-core-candidate-seal-I-evidence-remediation-I-implementation.md；验收索引 L01–L08）。生产内核继续冻结（相对 869149d 零生产/配置/Defense 差异）；本轮只补证据工具与复验产物。
