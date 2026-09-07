@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "b8fc019ab34d8854003d918c4c6a8343422124b3",
+    "commit": "046e4c06cc442b39b4f05ca48d2c604925c198e1",
     "suites": 236,
-    "tests": 1415
+    "tests": 1417
   },
   "target": {
-    "commit": "b8fc019ab34d8854003d918c4c6a8343422124b3",
+    "commit": "046e4c06cc442b39b4f05ca48d2c604925c198e1",
     "suites": 236,
-    "tests": 1415,
-    "passed": 1415,
+    "tests": 1417,
+    "passed": 1417,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Core Rewrite IV · Remediation VI 迁移：H18 重写拆 3 用例（IVKernel 10→12）+ 新增 VIKernel(J01–J04) 9；锚点 b8fc019 系列（236/1415）"
+    "note": "Core Candidate Seal I：H18 全程轨迹化 + Seal 敏感性 2 用例（IVKernel 12→14）；锚点 046e4c0 系列（236/1417）"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1874,9 +1874,9 @@
       "todo": 0
     },
     "src/runtime/treasury/treasuryRemediationIVKernel.test.ts": {
-      "budget": 12,
-      "tests": 12,
-      "passed": 12,
+      "budget": 14,
+      "tests": 14,
+      "passed": 14,
       "failed": 0,
       "pending": 0,
       "todo": 0
