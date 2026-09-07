@@ -1,0 +1,12 @@
+== sha256sum (worktree) ==
+4388121c0de0b0dd91d6b1a96f5e5f82853e7ace490ce3852e32c01edc57b014 */d/code/screeps/slice0-r1-reviewer/test/mock/treasuryTerminalTransferPrototype.ts
+ecc232aca35c1a0e274671af3e8ecb815e5b4c05512579164c15858c6c90e934 */d/code/screeps/slice0-r1-reviewer/test/mock/treasuryTerminalTransferCoordinator.ts
+3b5e9464d83ec04f3ad3b86849c005f2b5c0e9e571335db95c8c79cbe5db4de7 */d/code/screeps/slice0-r1-reviewer/scripts/verify-treasury-evidence.mjs
+== git hash-object vs HEAD blob (worktree git) ==
+test/mock/treasuryTerminalTransferPrototype.ts worktree=05a6a0e419c5957cb449fe3a6b9781a1c2494e1f HEAD=05a6a0e419c5957cb449fe3a6b9781a1c2494e1f match=YES
+test/mock/treasuryTerminalTransferCoordinator.ts worktree=8b7e085e852917d4060405e28e308e6a1fdac673 HEAD=8b7e085e852917d4060405e28e308e6a1fdac673 match=YES
+scripts/verify-treasury-evidence.mjs worktree=8b81ebc27fcc32d97e10ad4120690ac14bd96a58 HEAD=8b81ebc27fcc32d97e10ad4120690ac14bd96a58 match=YES
+== sha256sum (main tree same paths) ==
+4388121c0de0b0dd91d6b1a96f5e5f82853e7ace490ce3852e32c01edc57b014 */d/code/screeps/screeps-bot/test/mock/treasuryTerminalTransferPrototype.ts
+ecc232aca35c1a0e274671af3e8ecb815e5b4c05512579164c15858c6c90e934 */d/code/screeps/screeps-bot/test/mock/treasuryTerminalTransferCoordinator.ts
+3b5e9464d83ec04f3ad3b86849c005f2b5c0e9e571335db95c8c79cbe5db4de7 */d/code/screeps/screeps-bot/scripts/verify-treasury-evidence.mjs

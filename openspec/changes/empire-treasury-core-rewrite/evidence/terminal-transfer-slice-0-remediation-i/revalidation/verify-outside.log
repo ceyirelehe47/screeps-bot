@@ -1,0 +1,10 @@
+repo-root=D:\code\screeps\slice0-r1-reviewer
+run-dir-resolved=C:\Users\15027\AppData\Local\Temp\slice0-r1-review\revalidation (cwd=C:\Users\15027\AppData\Local\Temp\slice0-r1-review\revalidation\foreign cwd)
+verifier-source=4ea56d0:test/mock/treasurySealEvidence.ts blob=fd930a44c47c7a612fc942e8f1d07c30a95d844d
+driver=D:\code\screeps\slice0-r1-reviewer\scripts\verify-treasury-evidence.mjs sha256=3b5e9464d83ec04f3ad3b86849c005f2b5c0e9e571335db95c8c79cbe5db4de7
+run-dir=C:/Users/15027/AppData/Local/Temp/slice0-r1-review/revalidation fixture=h18 trace-roots=trace-key jest-json=jest-key.json,jest-defense.json
+trace-key/1788797975829-48992/H18-J06.json bytes=1180356 sha256=9d0aca8bbeacaa41847e193e031e7c13f31f5f5b604aa2b88a01240f33dd8230 completed=true checkpoints=54 problems=0
+jest-key.json: suites=7 tests=73 passed=73 failed=0 pending=0 todo=0 runtimeErrors=0
+jest-defense.json: suites=11 tests=118 passed=118 failed=0 pending=0 todo=0 runtimeErrors=0
+TREASURY_EVIDENCE_VERIFY=PASS (0 failures)
+exit=0

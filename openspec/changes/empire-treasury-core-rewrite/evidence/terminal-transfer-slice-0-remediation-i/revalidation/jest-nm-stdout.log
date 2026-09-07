@@ -1,0 +1,10 @@
+PASS src/runtime/treasury/treasuryTerminalTransferSlice0RemediationI.test.ts (6.366 s)
+PASS src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts
+
+Test Suites: 2 passed, 2 total
+Tests:       16 passed, 16 total
+Snapshots:   0 total
+Time:        8.349 s
+Ran all test suites within paths "src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts", "src/runtime/treasury/treasuryTerminalTransferSlice0RemediationI.test.ts".
+Test results written to: C:\Users\15027\AppData\Local\Temp\slice0-r1-review\revalidation\jest-nm.json
+exit=0

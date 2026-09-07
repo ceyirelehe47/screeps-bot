@@ -13,7 +13,8 @@
 - [x] M 用例改造（M03 隔离新模块真实默认装配 jest.isolateModules、M04 各负向补 submits===0、M05/M07 经业务入口重跑且第二需求改单条在途断言（不同 workKey））+ 新文件 treasuryTerminalTransferSlice0RemediationI.test.ts 8 it（N01 矩阵/N02 同 ID与时点/N01N02 注册路径/N03×3/N05 六场景/N06 同源稳定）；M+N 16/16、Treasury 34/590、typecheck 0
 - [x] 三项退化敏感性变异验证（controls/mutation-{1-ownership,2-gate,3-fee}.txt）：归属 includes 化/门禁短路/费用比较短路——各使目标 it 红、还原无残留
 - [x] 回归与预算、固定 VALIDATION_HEAD 主验证（§9 模板含 T1 仓库外含空格 cwd 正负例与坏产物对照）、第二干净上下文定向复验、归档与 push（数字与结论见 evidence/terminal-transfer-slice-0-remediation-i/ 与主报告）
-- [x] 独立验收（结论全文回填本文件与主报告；不构成部署许可）
+- [x] 独立验收（2026-09-07 Agent 独立验收结论 **ACCEPT**：N01–N08 全 PASS——基线在起点 93a6152 亲跑复现 7/7 且 sha256 吻合；reconcile 期望值全来自 payload 且 matched 反推通道不存在（库存核对读 payload.s/d）；协调器门禁从持久 active 读、closed 不落盘佐证不过滤 phase 正确、absent 放行有 store.ts:494 惰性初始化依据；主验证五组 JSON 数字亲解析（2/16、7/73、34/590、11/118、238/1436）+budget PASSED+退出码亲核；M+N 16/16 亲跑复现；三组冻结 diff 亲跑 0/0/0；驱动缺参 exit 2 亲跑；三份变异原件证明注入真实破坏防护且目标 it 以行为差异失败（非抛错假红）；旧报告勘误三条逐条对照 93a6152 旧实现属实；git reflog 纯 commit 链。CONCERN 3 低全处置：C1 文件名引用经核实**不成立**（三处本为完整正确名，验收转述缩略；task/task-brief.md sha256 链完整）；C2 勘误 1 措辞收敛为"sender/recipient 不参与归属身份比对、时点无下界窗、同 ID 一致性不含 order/description/时点"（纯文档已改）；C3 final/ 补注缺参 exit 2 证据位置（revalidation/verify-noargs.log + 验收亲跑；§9 模板未要求 final 自包含）。验收不构成部署许可；生产冻结经亲跑独立确认继续有效）
+- 沿留待办（低危，沿下轮）：M06 部分量场景 fee 按缩量后重算的显式断言（源 energy 扣 60 量对应 fee）；reconcile 函数级矩阵若后续需要 deal/order 与 send 并存的更多组合形态可再扩（现有 order 噪声+正确并存已覆盖核心）
 
 ## Terminal Transfer Slice 0（2026-09-07）
 

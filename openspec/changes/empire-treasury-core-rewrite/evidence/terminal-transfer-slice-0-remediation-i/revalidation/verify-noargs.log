@@ -1,0 +1,4 @@
+缺少必填参数（--validation-head/--run-dir/--fixture 全部必填）
+用法: node scripts/verify-treasury-evidence.mjs --validation-head <git-sha> --run-dir <dir> --fixture h18
+可用夹具: h18
+exit=2

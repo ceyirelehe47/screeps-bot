@@ -1,0 +1,9 @@
+repo-root=D:\code\screeps\screeps-bot
+run-dir-resolved=C:\Users\15027\AppData\Local\Temp\tmp.qhzRmldEMK\tampered-input (cwd=D:\code\screeps\screeps-bot)
+verifier-source=4ea56d0fa2033f3a1bde2e12f236c913970d1daf:test/mock/treasurySealEvidence.ts blob=fd930a44c47c7a612fc942e8f1d07c30a95d844d
+driver=D:\code\screeps\screeps-bot\scripts\verify-treasury-evidence.mjs sha256=3b5e9464d83ec04f3ad3b86849c005f2b5c0e9e571335db95c8c79cbe5db4de7
+run-dir=C:/Users/15027/AppData/Local/Temp/tmp.qhzRmldEMK/tampered-input fixture=h18 trace-roots=trace-key jest-json=jest-key.json
+FAIL trace-key/1788796647693-128936/H18-J06.json: fixture.unknownIds 与固定夹具约束不符（期望 20 个指定 unknown）
+jest-key.json: suites=7 tests=73 passed=73 failed=0 pending=0 todo=0 runtimeErrors=0
+TREASURY_EVIDENCE_VERIFY=FAIL (1 failures)
+- trace-key/1788796647693-128936/H18-J06.json: fixture.unknownIds 与固定夹具约束不符（期望 20 个指定 unknown）

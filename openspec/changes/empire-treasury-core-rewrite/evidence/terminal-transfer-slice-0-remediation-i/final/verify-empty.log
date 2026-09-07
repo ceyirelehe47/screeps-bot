@@ -1,0 +1,10 @@
+repo-root=D:\code\screeps\screeps-bot
+run-dir-resolved=C:\Users\15027\AppData\Local\Temp\tmp.qhzRmldEMK\empty-input (cwd=C:\Users\15027\AppData\Local\Temp\tmp.qhzRmldEMK\foreign cwd)
+verifier-source=4ea56d0fa2033f3a1bde2e12f236c913970d1daf:test/mock/treasurySealEvidence.ts blob=fd930a44c47c7a612fc942e8f1d07c30a95d844d
+driver=D:\code\screeps\screeps-bot\scripts\verify-treasury-evidence.mjs sha256=3b5e9464d83ec04f3ad3b86849c005f2b5c0e9e571335db95c8c79cbe5db4de7
+run-dir=C:/Users/15027/AppData/Local/Temp/tmp.qhzRmldEMK/empty-input fixture=h18 trace-roots= jest-json=
+FAIL run-dir 下不存在任何 trace 目录（trace-key/trace-treasury/trace-full/trace-budget 至少一个）——零输入
+FAIL run-dir 下不存在任何 Jest JSON（jest-key.json/jest-treasury.json/jest-defense.json/jest-full.json 至少一份）——零输入
+TREASURY_EVIDENCE_VERIFY=FAIL (2 failures)
+- run-dir 下不存在任何 trace 目录（trace-key/trace-treasury/trace-full/trace-budget 至少一个）——零输入
+- run-dir 下不存在任何 Jest JSON（jest-key.json/jest-treasury.json/jest-defense.json/jest-full.json 至少一份）——零输入

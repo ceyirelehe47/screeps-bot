@@ -1,0 +1,6 @@
+== cmd: git diff --exit-code $FREEZE_BASE HEAD -- src (excl tests/specs)
+exit=0
+== cmd: git diff --exit-code $FREEZE_BASE HEAD -- config 6 files
+exit=0
+== cmd: git diff --exit-code $FREEZE_BASE HEAD -- defense 7 files
+exit=0

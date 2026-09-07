@@ -132,7 +132,9 @@ facade 直连对照实证（第二张许可可获得；只接纳不提交），�
 
 1. "reconcile 已核对 from/to/双方"——不准确：旧实现只以 `description.includes(k)`
    筛选候选，from/to 仅用于镜像比对与库存核对（且库存核对读的是 `matched.from/to`，
-   恰是 R1-c 认领错路线的通道）；sender/recipient/order/时间不在任何比对中。
+   恰是 R1-c 认领错路线的通道）；sender/recipient 不参与任何归属身份比对，
+   时点只有 `Game.time > matched.time` 上界而无"不早于本请求"下界窗（order
+   字段虽有类型排除，但同 ID 副本间的一致性比对不含 order/description/时点）。
 2. "M07 的第二需求阻断证明单条在途"——不准确：阻断理由是 `sameWorkKeyActive`
    （同 workKey 排他），不同 workKey 的第二请求在基线实测中可获得第二张许可；单条
    在途在本轮才作为业务入口规则建立（N03）。
