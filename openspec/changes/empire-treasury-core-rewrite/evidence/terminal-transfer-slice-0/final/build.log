@@ -1,0 +1,10 @@
+
+> screeps@2026.8.29-6 build
+> rollup -c
+
+No deployment target set. Build only.
+cleared:  D:\code\screeps\screeps-bot\dist
+[36m
+[1msrc/main.ts[22m → [1mdist/main.js[22m...[39m
+[deploy] bundle sha256: e5b12dc58c1533df… (full in Memory.runtime.lastDeployBundleHash)
+[32mcreated [1mdist/main.js[22m in [1m18.2s[22m[39m

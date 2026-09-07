@@ -11,7 +11,9 @@
 - [x] Treasury 定向 33/582、全仓回归与预算锚点滚动（数字见 evidence/terminal-transfer-slice-0-local-validation.md）
 - [x] 固定 VALIDATION_HEAD 主验证（§7.2 模板：三组冻结/typecheck×2/build/KEY/Treasury/Defense/全仓/budget/verify-evidence 驱动自测/前后状态干净）
 - [x] 第二上下文定向复验（M 集合/KEY/Defense/核验驱动；独立 reviewer 优先，无则同执行者第二工作树并明确标注）
-- [x] 归档与 push：evidence/terminal-transfer-slice-0/（task/sources/final/revalidation/controls）+ 主报告 + terminal-transfer-slice-0.md 实验说明（§3 只准备不执行）；独立验收结论见下方补记
+- [x] 归档与 push：evidence/terminal-transfer-slice-0/（task/sources/final/revalidation；负向原件并入 final/selftest——未单设 controls/，§6"不强求目录数量"）+ 主报告 + terminal-transfer-slice-0.md 实验说明（§3 只准备不执行）
+- [x] 独立验收（2026-09-07 Agent 独立验收结论 **ACCEPT**：M01–M08 全 PASS——亲跑驱动正例 exit 0/缺参 exit 2 证实固定夹具约束（FIXTURES.h18 常量而非待检文件值）；三份源码副本与 GitHub 固定 SHA 8097782 逐字节一致、短报告四列区分如实；三组冻结 diff 亲跑 exit 0、src/ 无 slice0 生产引用；8 it 逐条审查断言真实（fee 精确到报价端口实值、部分量 60 非永真（getFreeCapacity 机制真实）、排他断言到拒绝理由、admitRestored 经新模块入口）并亲跑 8/8；归档 140 件完整（四组 Jest JSON 数字复核 6/65、33/582、11/118、237/1428 与预算三方一致；A1 异常双重留痕）；git 纪律（恰两提交、无 reset/rebase、diff --check 0）与任务书 hash 符合。CONCERN 3 低已处置：C1（M04 三个负向场景补 submits===0 断言）与 C2（M03 改为不清空直接 find 更强断言）记入沿留待办——均为测试断言覆盖面改进，改可执行测试须重新固定验证，不在本轮归档边界内追加；C3（controls 措辞）已在上一行定位说明。验收不构成部署许可；生产冻结经亲跑独立确认继续有效）
+- 沿留待办（低危，沿下轮）：C1 M04 各负向场景补提交端口零调用断言；C2 M03 默认注册表断言改"不清空直接 find"；M06 部分量场景 fee 按缩量后重算的显式断言（源 energy 扣 60 量对应 fee 而非 100 量）
 
 ## Core Candidate Seal I · Evidence Remediation I（2026-09-07）
 

@@ -1,0 +1,2 @@
+cd C:/Users/15027/AppData/Local/Temp/slice0-review/worktree
+npx jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts --cacheDirectory C:/Users/15027/AppData/Local/Temp/slice0-review/output/jest-cache --json --outputFile C:/Users/15027/AppData/Local/Temp/slice0-review/output/jest-slice0.json 

@@ -1,0 +1,2 @@
+cd C:/Users/15027/AppData/Local/Temp/slice0-review/worktree
+npm ci --no-audit --no-fund 

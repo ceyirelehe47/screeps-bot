@@ -1,0 +1,6 @@
+src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts
+src/runtime/treasury/treasuryRemediationIVKernel.test.ts
+src/runtime/treasury/treasuryRemediationVIKernel.test.ts
+src/runtime/treasury/treasuryRemediationIVService.test.ts
+src/runtime/treasury/treasuryRemediationVKernel.test.ts
+src/runtime/treasury/treasuryRemediationVService.test.ts

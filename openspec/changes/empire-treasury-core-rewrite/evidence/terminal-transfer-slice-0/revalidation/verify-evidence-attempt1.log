@@ -1,0 +1,7 @@
+verifier-source=0ce9d971bcf72daf19a1fe68fd7bb384e4db56fe:test/mock/treasurySealEvidence.ts blob=fd930a44c47c7a612fc942e8f1d07c30a95d844d
+driver=C:\Users\15027\AppData\Local\Temp\slice0-review\worktree\scripts\verify-treasury-evidence.mjs sha256=6b76043e46774d69428dc2aa17e1d7e654e3ab591ae121ddd2d551b830411aef
+run-dir=C:/Users/15027/AppData/Local/Temp/slice0-review/output/trace-key fixture=h18 trace-roots= jest-json=jest-key.json
+FAIL run-dir 下不存在任何 trace 目录（trace-key/trace-treasury/trace-full/trace-budget 至少一个）——零输入
+jest-key.json: suites=6 tests=65 passed=65 failed=0 pending=0 todo=0 runtimeErrors=0
+TREASURY_EVIDENCE_VERIFY=FAIL (1 failures)
+- run-dir 下不存在任何 trace 目录（trace-key/trace-treasury/trace-full/trace-budget 至少一个）——零输入

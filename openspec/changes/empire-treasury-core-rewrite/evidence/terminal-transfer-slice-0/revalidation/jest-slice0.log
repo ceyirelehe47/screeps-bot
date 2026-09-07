@@ -1,0 +1,17 @@
+PASS src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts (10.198 s)
+  Terminal Transfer Slice 0（M03–M07）
+    √ M03：原型仅测试装配——默认注册表无此 kind；canonical 参数派生一致的三腿/结构绑定/durable facts (30 ms)
+    √ M04：合法 100H+fee 可接纳执行为 unknown；执行前条件变化各自拒绝且提交增量 0 (40 ms)
+    √ M04：超场景输入拒绝（amount/resource/关联键/场景外目标）；恢复合法条件后正常成功 (8 ms)
+    √ M05：延迟完成正向闭环——当 tick 仍 unknown；处理与新观察后唯一全量记录结算退出；计数吻合不双扣 (17 ms)
+    √ M06：无记录/窗口挤出/读异常/他人与市场订单记录/重复交易 ID 均不报全量完成 (70 ms)
+    √ M06：实际部分量不报全量、不补发、不重执行；两视图同一交易不重复计数 (14 ms)
+    √ M07：提交后结果持久化前的断点——配对重载先保持 unknown，事实到达后收尾；旧许可拒绝、同工作不重发 (38 ms)
+    √ M07：已接受未处理的断点——完整重载后先 unknown 再收尾；第二需求阻断直至结算完成 (33 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       8 passed, 8 total
+Snapshots:   0 total
+Time:        12.195 s
+Ran all test suites within paths "src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts".
+Test results written to: ..\output\jest-slice0.json

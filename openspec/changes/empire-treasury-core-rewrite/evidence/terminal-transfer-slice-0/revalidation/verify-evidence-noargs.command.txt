@@ -1,0 +1,2 @@
+cd C:/Users/15027/AppData/Local/Temp/slice0-review/worktree
+node scripts/verify-treasury-evidence.mjs --validation-head 0ce9d971bcf72daf19a1fe68fd7bb384e4db56fe --run-dir C:/Users/15027/AppData/Local/Temp/slice0-review/output/run-key 

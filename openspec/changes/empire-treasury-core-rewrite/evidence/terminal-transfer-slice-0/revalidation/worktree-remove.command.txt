@@ -1,0 +1,1 @@
+git -C D:/code/screeps/screeps-bot worktree remove C:/Users/15027/AppData/Local/Temp/slice0-review/worktree

@@ -1,0 +1,9 @@
+tampered: C:\Users\15027\AppData\Local\Temp\slice0-mainval-run-iyby\selftest\tampered\trace-key\1788778722814-139048\H18-J06.json
+verifier-source=0ce9d971bcf72daf19a1fe68fd7bb384e4db56fe:test/mock/treasurySealEvidence.ts blob=fd930a44c47c7a612fc942e8f1d07c30a95d844d
+driver=D:\code\screeps\screeps-bot\scripts\verify-treasury-evidence.mjs sha256=6b76043e46774d69428dc2aa17e1d7e654e3ab591ae121ddd2d551b830411aef
+run-dir=C:/Users/15027/AppData/Local/Temp/slice0-mainval-run-iyby/selftest/tampered fixture=h18 trace-roots=trace-key jest-json=jest-key.json
+trace-key/1788778722814-139048/H18-J06.json bytes=1159594 sha256=2b4ce575e51174b3cef3fe2e8249d0094b0ad37232ac3d217d19c2bf7e2e0cd3 completed=true checkpoints=54 problems=1 :: 检查点 seq=5（observe/reload-before tick 4） 风险证据缺失（unknownRisk=null；仅 riskCheckedIds 覆盖标签不构成实际风险数据）
+jest-key.json: suites=5 tests=57 passed=57 failed=0 pending=0 todo=0 runtimeErrors=0
+TREASURY_EVIDENCE_VERIFY=FAIL (1 failures)
+- trace-key/1788778722814-139048/H18-J06.json: sealVerifyTraceCompleteness 报告 1 条问题
+MAIN_VALIDATION_DONE OUT=/c/Users/15027/AppData/Local/Temp/slice0-mainval-run-iyby

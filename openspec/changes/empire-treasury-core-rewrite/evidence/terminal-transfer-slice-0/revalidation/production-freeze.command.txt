@@ -1,0 +1,2 @@
+cd C:/Users/15027/AppData/Local/Temp/slice0-review/worktree
+git diff --exit-code 869149dcdd6f2068572354917bf23c52727cf9b6 HEAD -- src :\(glob\,exclude\)src/\*\*/\*.test.ts :\(glob\,exclude\)src/\*\*/\*.spec.ts 
