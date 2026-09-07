@@ -11,6 +11,15 @@
  * 3. 轨迹完整性核验：缺中间窗口、缺终态、序号/段落数与执行时独立记录
  *    的次数不符、风险覆盖缺 ID、事件计数不一致都必须给出 problems。
  *
+ * Evidence Remediation I（L01/L02/L03）补修：
+ * - 原始风险事实经提取、序列化后不得丢失差异——字段缺失用显式哨兵
+ *   SEAL_FIELD_ABSENT 表达，不再抹平成合法 null；基线建立时拒绝缺记录/
+ *   缺字段的不完整事实（sealBuildUnknownRiskBaseline）；比较同时考虑
+ *   存在性与值，且不忽略当前快照新增的风险字段键。
+ * - 每个标准检查点必须用实际风险快照与独立基线逐字段重算——不信任
+ *   riskCheckedIds/riskDiff 派生标签；中间漂移不因终态恢复放行；终态
+ *   标签与 post-close 实际快照矛盾必须报错。
+ *
  * 本模块自身无状态（可变状态只在 createSealTraceRecorder 返回的实例里），
  * 不受被测链路每 tick jest.resetModules 影响；文件写入仅发生在
  * TREASURY_SEAL_EVIDENCE_DIR 已设置且调用 sealWriteEvidence 时，未设置时
@@ -57,6 +66,21 @@ export const SEAL_RISK_FIELDS: readonly string[] = [
 ];
 
 /**
+ * 字段缺失哨兵（Evidence Remediation I/§2.2）：原始记录上字段不存在（或
+ * 显式 undefined）时，提取输出用该标记显式表达"缺失"——JSON 可表示、往返
+ * 不变（NUL 控制字符不会出现在生产字段值里），不与任何合法原值混淆；与
+ * "字段存在且值为 null"（合法原值）严格区分。diff/错误产物中渲染为
+ * { sealFieldAbsent: true }，不会在 JSON 里消失成无法解释的标签。
+ */
+export const SEAL_FIELD_ABSENT = "\u0000seal-field-absent\u0000";
+
+const sealRenderValue = (value: unknown): unknown =>
+  value === SEAL_FIELD_ABSENT ? { sealFieldAbsent: true } : value;
+
+const isMissingPlaceholder = (value: unknown): boolean =>
+  value !== null && typeof value === "object" && "__missing__" in (value as Record<string, unknown>);
+
+/**
  * 允许变化的纯诊断/调度元信息（不参与风险比较）：推进时间戳、最近错误
  * 文本、清理游标与失败计数、准入 tick 与重试期限（调度器自身的记账）。
  * 风险字段不得误归入此清单。
@@ -70,23 +94,38 @@ export const SEAL_MUTABLE_DIAGNOSTIC_FIELDS: readonly string[] = [
   "retryDeadlineTick",
 ];
 
-/** 提取一条记录的风险事实子集（仅白名单字段；调用方负责快照脱离引用）。 */
+/**
+ * 提取一条记录的风险事实子集（仅白名单字段；调用方负责快照脱离引用）。
+ * Evidence Remediation I/§2.2：字段缺失（undefined）不再被抹平成合法
+ * null——提取输出显式写缺失哨兵，"字段不存在"与"字段存在且值为 null"
+ * 经提取、JSON 往返、比较后仍可区分。
+ */
 export function sealUnknownRiskOf(record: Record<string, unknown>): Record<string, unknown> {
+  const at = (value: unknown): unknown => (value === undefined ? SEAL_FIELD_ABSENT : value);
   const cleanup = record.cleanup as { consumerKeys?: unknown } | null | undefined;
+  let consumerKeys: unknown;
+  if (cleanup === undefined || cleanup === null) {
+    consumerKeys = SEAL_FIELD_ABSENT; // 消费者义务路径整体缺失
+  } else if (Array.isArray(cleanup.consumerKeys)) {
+    consumerKeys = [...cleanup.consumerKeys];
+  } else {
+    // consumerKeys=null 合法保留；undefined→哨兵；异常形状原样交给比较器暴露。
+    consumerKeys = at(cleanup.consumerKeys);
+  }
   return {
-    attemptId: record.attemptId,
-    workKey: record.workKey,
-    generation: record.generation,
-    parentAttemptId: record.parentAttemptId,
-    phase: record.phase,
-    identity: record.identity === undefined ? null : record.identity,
-    worstCase: record.worstCase === undefined ? null : record.worstCase,
-    invocationBoundary: record.invocationBoundary === undefined ? null : record.invocationBoundary,
-    invocation: record.invocation === undefined ? null : record.invocation,
-    external: record.external === undefined ? null : record.external,
-    outcome: record.outcome,
-    outcomeEvidence: record.outcomeEvidence === undefined ? null : record.outcomeEvidence,
-    "cleanup.consumerKeys": cleanup && Array.isArray(cleanup.consumerKeys) ? [...cleanup.consumerKeys] : null,
+    attemptId: at(record.attemptId),
+    workKey: at(record.workKey),
+    generation: at(record.generation),
+    parentAttemptId: at(record.parentAttemptId),
+    phase: at(record.phase),
+    identity: at(record.identity),
+    worstCase: at(record.worstCase),
+    invocationBoundary: at(record.invocationBoundary),
+    invocation: at(record.invocation),
+    external: at(record.external),
+    outcome: at(record.outcome),
+    outcomeEvidence: at(record.outcomeEvidence),
+    "cleanup.consumerKeys": consumerKeys,
   };
 }
 
@@ -110,6 +149,36 @@ export function sealSnapshotUnknownRisk(
   return out;
 }
 
+/**
+ * 建立独立风险基线（Evidence Remediation I/§2.2）：任何记录缺失（占位）
+ * 或白名单风险字段在原始记录上不存在（哨兵）都明确拒绝——不能因基线与
+ * 当前恰好缺了同一事实，就把不完整基线当"完整事实"参与比较。基线只生成
+ * 一次、与 Memory 脱离引用；错误信息定位 attempt 与字段。
+ */
+export function sealBuildUnknownRiskBaseline(
+  ids: readonly string[],
+  active: Record<string, Record<string, unknown>>,
+): Record<string, Record<string, unknown>> {
+  const snapshot = sealSnapshotUnknownRisk(ids, active);
+  const missing: string[] = [];
+  for (const id of ids) {
+    const record = snapshot[id];
+    if (record === undefined || isMissingPlaceholder(record)) {
+      missing.push(`${id}: 记录缺失`);
+      continue;
+    }
+    for (const field of SEAL_RISK_FIELDS) {
+      const value = record[field];
+      if (value === undefined) missing.push(`${id}.${field}: 提取输出缺字段`);
+      else if (value === SEAL_FIELD_ABSENT) missing.push(`${id}.${field}: 原始记录上缺失`);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(`无法建立完整 unknown 风险基线（Evidence Remediation I/§2.2）: ${missing.join("; ")}`);
+  }
+  return snapshot;
+}
+
 function sealDeepDiff(
   attemptId: string,
   path: string,
@@ -117,12 +186,16 @@ function sealDeepDiff(
   actual: unknown,
   out: SealRiskDiff[],
 ): void {
+  // diff 产物渲染哨兵为可解释标记：不能让缺失在错误 JSON 中消失成只剩标签。
+  const emit = (field: string, exp: unknown, act: unknown): void => {
+    out.push({ attemptId, field, expected: sealRenderValue(exp), actual: sealRenderValue(act) });
+  };
   const bothObject =
     typeof expected === "object" && expected !== null && typeof actual === "object" && actual !== null;
   if (bothObject && Array.isArray(expected) === Array.isArray(actual)) {
     if (Array.isArray(expected) && Array.isArray(actual)) {
       if (expected.length !== actual.length) {
-        out.push({ attemptId, field: `${path}.length`, expected: expected.length, actual: actual.length });
+        emit(`${path}.length`, expected.length, actual.length);
         return;
       }
       expected.forEach((value, index) => sealDeepDiff(attemptId, `${path}[${index}]`, value, actual[index], out));
@@ -133,23 +206,26 @@ function sealDeepDiff(
     const actualRecord = actual as Record<string, unknown>;
     const expectedRecord = expected as Record<string, unknown>;
     for (const key of expectedKeys) {
-      if (!(key in actualRecord)) out.push({ attemptId, field: `${path}.${key} (missing)`, expected: expectedRecord[key], actual: undefined });
+      if (!(key in actualRecord)) emit(`${path}.${key} (missing)`, expectedRecord[key], undefined);
     }
     for (const key of actualKeys) {
-      if (!(key in expectedRecord)) out.push({ attemptId, field: `${path}.${key} (unexpected)`, expected: undefined, actual: actualRecord[key] });
+      if (!(key in expectedRecord)) emit(`${path}.${key} (unexpected)`, undefined, actualRecord[key]);
     }
     for (const key of expectedKeys) {
       if (key in actualRecord) sealDeepDiff(attemptId, `${path}.${key}`, expectedRecord[key], actualRecord[key], out);
     }
     return;
   }
-  if (expected !== actual) out.push({ attemptId, field: path, expected, actual });
+  if (expected !== actual) emit(path, expected, actual);
 }
 
 /**
  * 字段级比较当前风险事实与独立基线：返回差异清单（空数组=一致）。
- * null 与缺失不得互相替代：JSON 往返后缺失键即"字段不在对象上"，
- * 由 missing/unexpected 分支定位。
+ * null 与缺失不得互相替代：提取输出用 SEAL_FIELD_ABSENT 显式表达缺失，
+ * 直接操作快照的副本删除键即为 undefined——两者都与基线合法 null 构成
+ * 可定位差异。缺记录占位（__missing__）明确报整记录缺失，不把占位键
+ * 当字段逐个比较；当前快照新增的风险字段键也不能被忽略（不能只遍历
+ * 基线中恰好存在的键）。
  */
 export function sealCompareUnknownRisk(
   baseline: Record<string, Record<string, unknown>>,
@@ -163,8 +239,21 @@ export function sealCompareUnknownRisk(
       diffs.push({ attemptId: id, field: "(record)", expected: "present", actual: "missing" });
       continue;
     }
+    if (isMissingPlaceholder(actual)) {
+      diffs.push({ attemptId: id, field: "(record)", expected: isMissingPlaceholder(expected) ? "missing" : "present", actual: "missing" });
+      continue;
+    }
+    if (isMissingPlaceholder(expected)) {
+      diffs.push({ attemptId: id, field: "(record)", expected: "missing", actual: "present" });
+      continue;
+    }
     for (const field of Object.keys(expected).sort()) {
       sealDeepDiff(id, field, expected[field], actual[field], diffs);
+    }
+    for (const field of Object.keys(actual).sort()) {
+      if (!(field in expected)) {
+        diffs.push({ attemptId: id, field: `${field} (unexpected)`, expected: undefined, actual: sealRenderValue(actual[field]) });
+      }
     }
   }
   return diffs;
@@ -287,7 +376,9 @@ export function createSealTraceRecorder(init: {
   readState: () => SealStateView;
 }): SealTraceRecorder {
   const firstState = init.readState();
-  const baseline = sealSnapshotUnknownRisk(init.unknownIds, firstState.activeRecords);
+  // Evidence Remediation I/§2.2：基线建立即拒绝缺记录/缺字段的不完整事实
+  // （合法 null 保留）；此后任何检查点都不得从当前状态重建期望值。
+  const baseline = sealBuildUnknownRiskBaseline(init.unknownIds, firstState.activeRecords);
   const doc: SealTraceDoc = {
     format: "treasury-seal-trace/v1",
     suite: init.suite,
@@ -412,8 +503,28 @@ export function sealVerifyTraceCompleteness(
   if (!trace.completed) push("completed=false（轨迹未完整定格）");
   const expectedIds = [...expected.unknownIds].sort();
   const sameIds = (ids: readonly string[]): boolean => JSON.stringify([...ids].sort()) === JSON.stringify(expectedIds);
+  // —— 基线完整性（Evidence Remediation I/§3.2）：缺记录占位或白名单字段
+  //    缺失/哨兵的基线不是"完整事实"——基线与当前恰好都缺同一风险事实不
+  //    构成完整；合法 null 是实际取值，允许。不能从检查点标签临时改出更小
+  //    的 expected 集合。
   if (!trace.initial || !trace.initial.unknownRiskBaseline) push("initial/基线缺失");
   else if (!sameIds(Object.keys(trace.initial.unknownRiskBaseline))) push("initial 基线未覆盖全部 unknown ID");
+  else {
+    for (const [id, record] of Object.entries(trace.initial.unknownRiskBaseline)) {
+      if (isMissingPlaceholder(record)) {
+        push(`initial 基线 ${id} 为缺记录占位——缺记录不能当完整基线`);
+        continue;
+      }
+      for (const field of SEAL_RISK_FIELDS) {
+        if (!(field in record)) push(`initial 基线 ${id} 缺风险字段 ${field}——基线与当前都缺同一事实不构成完整`);
+        else if (record[field] === SEAL_FIELD_ABSENT) push(`initial 基线 ${id}.${field} 为缺失哨兵——原始风险事实缺失，不得建立完整基线`);
+      }
+    }
+  }
+  const baselineForRecheck =
+    trace.initial && trace.initial.unknownRiskBaseline && sameIds(Object.keys(trace.initial.unknownRiskBaseline))
+      ? (trace.initial.unknownRiskBaseline as Record<string, Record<string, unknown>>)
+      : undefined;
   const checkpoints = trace.checkpoints;
   checkpoints.forEach((checkpoint, index) => {
     if (checkpoint.seq !== index + 1) push(`检查点序号不连续: 位置 ${index} seq=${checkpoint.seq}`);
@@ -479,9 +590,51 @@ export function sealVerifyTraceCompleteness(
       push(`检查点 seq=${checkpoint.seq} tick ${checkpoint.tick} 事件计数与实际事件求和不符`);
     }
   }
+  // —— 逐检查点实证核验（Evidence Remediation I/§3.2）：每个标准检查点
+  //    （observe/bounded/recovery 的 reload-before/after-advance 与
+  //    final-close 的 pre-close/post-close）必须有实际风险快照（非 null、
+  //    覆盖 expected ID 集合、无缺记录占位），并与独立基线逐字段重算——
+  //    不信任 riskCheckedIds/riskDiff 派生标签；中间发生过风险变化、后面
+  //    变回去也不能让保留性验收通过。仅有覆盖标签不等于有实际风险数据。
+  //    核验纯读：不修改轨迹、不补 null/缺字段、不从邻近检查点或 Memory
+  //    补回证据。
   for (const checkpoint of checkpoints) {
+    const standard =
+      ((checkpoint.stage === "observe" || checkpoint.stage === "bounded" || checkpoint.stage === "recovery") &&
+        (checkpoint.point === "reload-before" || checkpoint.point === "after-advance")) ||
+      (checkpoint.stage === "final-close" && (checkpoint.point === "pre-close" || checkpoint.point === "post-close"));
+    if (!standard) continue;
+    const where = `检查点 seq=${checkpoint.seq}（${checkpoint.stage}/${checkpoint.point} tick ${checkpoint.tick}）`;
+    if (checkpoint.unknownRisk === null) {
+      push(`${where} 风险证据缺失（unknownRisk=null；仅 riskCheckedIds 覆盖标签不构成实际风险数据）`);
+      if (checkpoint.riskDiff !== null && checkpoint.riskDiff.length > 0) {
+        push(`${where} 无实际风险快照但 riskDiff 标签非空（标签无原始证据支持）`);
+      }
+      continue;
+    }
+    const snapshot = checkpoint.unknownRisk as Record<string, Record<string, unknown>>;
+    const coveredIds = Object.keys(snapshot);
+    if (!sameIds(coveredIds)) {
+      push(`${where} 实际风险快照未覆盖全部 unknown ID（覆盖 ${coveredIds.length}/${expectedIds.length}）`);
+      continue;
+    }
+    if (baselineForRecheck === undefined) continue; // 基线问题已在前面报告
+    const recheck = sealCompareUnknownRisk(baselineForRecheck, snapshot);
+    if (recheck.length > 0) {
+      const first = recheck[0];
+      if (first === undefined) {
+        push(`${where} 风险与基线重算存在差异（无法定位首条）`);
+      } else {
+        push(`${where} 风险与基线重算存在差异（中间漂移不因后续恢复放行）: ${first.attemptId}.${first.field} expected=${JSON.stringify(first.expected)} actual=${JSON.stringify(first.actual)}${recheck.length > 1 ? `（共 ${recheck.length} 条）` : ""}`);
+      }
+    }
+    // 派生标签必须与实际重算一致：riskDiff=null 语义是"重算后无差异"，
+    // 不是缺少 unknownRisk 的合法理由；标签非空而重算一致也是矛盾。
+    const labelEmpty = checkpoint.riskDiff === null || (Array.isArray(checkpoint.riskDiff) && checkpoint.riskDiff.length === 0);
+    if (recheck.length === 0 && !labelEmpty) push(`${where} riskDiff 标签非空但实际快照与基线重算一致（标签与实际证据矛盾）`);
+    if (recheck.length > 0 && labelEmpty) push(`${where} riskDiff 标签报告一致但实际快照与基线重算存在差异（标签与实际证据矛盾）`);
     if (checkpoint.riskCheckedIds !== null && !sameIds(checkpoint.riskCheckedIds)) {
-      push(`检查点 seq=${checkpoint.seq} 风险比较未覆盖全部 unknown ID`);
+      push(`${where} 风险比较覆盖标签与 expected ID 集合不符`);
     }
   }
   if (trace.terminal === null) {
@@ -490,6 +643,16 @@ export function sealVerifyTraceCompleteness(
     if (!sameIds(trace.terminal.unknownIds)) push("terminal unknown ID 集合与预期不符");
     if (trace.terminal.active !== expected.unknownIds.length) push(`terminal active ${trace.terminal.active} ≠ ${expected.unknownIds.length}`);
     if (trace.terminal.riskDiff !== null && trace.terminal.riskDiff.length > 0) push("terminal 风险事实与基线存在差异");
+    // —— 终态标签与 post-close 实际快照交叉（Evidence Remediation I/§3.2）：
+    //    终态结论复用已核验的 post-close 快照作为实际内容支持；两者矛盾
+    //    必须报错，不能静默采信终态标签。
+    const postClose = checkpoints.find((c) => c.stage === "final-close" && c.point === "post-close");
+    if (postClose !== undefined && postClose.unknownRisk !== null && baselineForRecheck !== undefined) {
+      const postDiffs = sealCompareUnknownRisk(baselineForRecheck, postClose.unknownRisk as Record<string, Record<string, unknown>>);
+      const terminalEmpty = trace.terminal.riskDiff === null || trace.terminal.riskDiff.length === 0;
+      if (postDiffs.length === 0 && !terminalEmpty) push("terminal.riskDiff 标签非空但 post-close 实际快照与基线重算一致（终态标签与实际证据矛盾）");
+      if (postDiffs.length > 0 && terminalEmpty) push("post-close 实际快照与基线重算存在差异但 terminal.riskDiff 标签报告一致（终态标签与实际证据矛盾）");
+    }
   }
   if (trace.finalClose.length === 0) push("finalClose 为空（retry_ready 退出无真实 closeWork 调用记录）");
   return { ok: problems.length === 0, problems };

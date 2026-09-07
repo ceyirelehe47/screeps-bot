@@ -31,12 +31,15 @@ import {
 import { resetTreasuryCoreStoreForTest } from "@/runtime/treasury/testHarness";
 import {
   createSealTraceRecorder,
+  sealBuildUnknownRiskBaseline,
   sealCompareUnknownRisk,
   sealSnapshotUnknownRisk,
   sealVerifyTraceCompleteness,
   sealWriteEvidence,
+  SEAL_FIELD_ABSENT,
   type SealCheckpoint,
   type SealPortEvent,
+  type SealRiskDiff,
   type SealSegmentFacts,
   type SealStateView,
   type SealTraceDoc,
@@ -806,6 +809,18 @@ function buildH18MixedLoad(): H18Fixture {
   };
 }
 
+/**
+ * J06 成功定格后的真实完整轨迹深拷贝（Evidence Remediation I/§3.1）：
+ * 敏感性检查以它为合法底版，变体只作用于隔离副本、原件不变。同文件
+ * it 顺序执行（J06 先于敏感性 describe）；J06 未成功时敏感性用例显式红。
+ */
+let h18SealTraceArchive: SealTraceDoc | undefined;
+
+function h18SealTraceOf(): SealTraceDoc {
+  if (h18SealTraceArchive === undefined) throw new Error("前置 J06 未成功完成——无真实轨迹底版可用");
+  return h18SealTraceArchive;
+}
+
 describe("H18 满载合法混合快照与逐 tick 完整 reset", () => {
   it("J05：64 条合法混合（30 closing×3 义务/20 unknown/10 retry_ready/4 pending）被生产 validator 判 healthy；构成/证据/发行/期限一致；active 64、ring 与字符守界", () => {
     const fx = buildH18MixedLoad();
@@ -1052,6 +1067,9 @@ describe("H18 满载合法混合快照与逐 tick 完整 reset", () => {
         riskDiff: sealCompareUnknownRisk(recorder.current().initial.unknownRiskBaseline as Record<string, Record<string, unknown>>, terminalRisk),
       });
       expect(doc.terminal?.riskDiff).toEqual([]);
+      // Evidence Remediation I/§3.1：真实完整轨迹定格为敏感性检查的合法底版
+      // （隔离副本变体，原件不变）。
+      h18SealTraceArchive = JSON.parse(JSON.stringify(doc)) as SealTraceDoc;
       // —— 完整性核验（Seal I/§2.4）：初始/全部观察窗口/全部追加窗口/失败
       //    恢复/终态都在，序号与段落数和执行时独立记录的次数相符，事件
       //    计数与实际事件求和一致，风险比较覆盖全部 20 个 ID。
@@ -1106,14 +1124,21 @@ describe("H18 满载合法混合快照与逐 tick 完整 reset", () => {
   });
 });
 
-// ── Seal I 敏感性检查（K06）：断言自身必须能发现丢证据与风险漂移 ──────────
+// ── Seal I／Evidence Remediation I 敏感性检查（K06/L01–L04）───────────────
 //
-// 以下两个用例是测试侧负向检查（expect 正常通过的形态），证明轨迹完整性
-// 核验与风险字段级比较对"故意坏掉的隔离副本"敏感——它们不宣称生产已发生
-// 该错误；与生产负向变体（一次性 worktree 中的 heap-only/零推进 patch，
-// Jest 非零失败）在报告中分开分类（Seal I/§5）。
+// 测试侧负向检查（expect 正常通过的形态），证明轨迹完整性核验与风险字段级
+// 比较对"故意坏掉的隔离副本"敏感——它们不宣称生产已发生该错误；与生产
+// 负向变体（一次性 worktree 中的 heap-only/零推进 patch，Jest 非零失败）
+// 在报告中分开分类。Evidence Remediation I 起底版为 J06 定格的真实完整
+// 轨迹（§3.1）；变体只作用于隔离副本，原件不变。合成轨迹（检查点
+// unknownRisk=null、基线仅 2 字段）不再冒充"完整风险证据"，仅用于欠缺
+// 证据的负向测试（§3.3）。
 
-/** 合成一份结构完整的最小真实形态轨迹（字段齐全；供破坏性变体使用的底版）。 */
+/**
+ * 合成一份结构完整但无实际风险数据的最小形态轨迹（检查点 unknownRisk=null、
+ * 基线仅 2 字段）——Evidence Remediation I/§3.3：不再称"完整风险证据"，
+ * 仅用于欠缺风险证据的负向测试（核验必须拒绝它）。
+ */
 function buildSyntheticSealTrace(): SealTraceDoc {
   const ids = ["tk1_synth_00", "tk1_synth_01", "tk1_synth_02"];
   const synthCheckpoint = (
@@ -1191,54 +1216,244 @@ function buildSyntheticSealTrace(): SealTraceDoc {
   };
 }
 
-describe("Seal I 敏感性检查（K06）", () => {
+describe("Seal I／Evidence Remediation I 敏感性检查（K06/L01–L04）", () => {
   const SYNTH_IDS = ["tk1_synth_00", "tk1_synth_01", "tk1_synth_02"];
+  /** 从 J06 定格的真实轨迹深拷贝一份隔离副本（原件永不被变体触碰）。 */
+  const copyOfRealTrace = (): SealTraceDoc => JSON.parse(JSON.stringify(h18SealTraceOf())) as SealTraceDoc;
+  const realExpected = (): { unknownIds: readonly string[]; plannedObserveTicks: number } => {
+    const base = h18SealTraceOf();
+    return { unknownIds: base.fixture.unknownIds, plannedObserveTicks: base.segments.observe.actualTicks };
+  };
 
-  it("轨迹完整性核验：完整轨迹通过；缺失中间窗口/缺失终态/事件计数不符/风险覆盖缺 ID/finalClose 缺失均必须报 problems", () => {
-    const base = buildSyntheticSealTrace();
-    const expected = { unknownIds: SYNTH_IDS, plannedObserveTicks: 2 };
-    expect(sealVerifyTraceCompleteness(base, expected).problems).toEqual([]); // 底版完整通过
+  it("轨迹完整性核验：真实轨迹通过；缺失中间窗口/缺失终态/事件计数不符/覆盖标签缺 ID/finalClose 缺失均必须报 problems", () => {
+    const base = h18SealTraceOf();
+    const expected = realExpected();
+    expect(sealVerifyTraceCompleteness(base, expected).problems).toEqual([]); // 真实底版完整通过
     // 变体 1：删除一个中间观察窗口（reload-before/after-advance 对）。
-    const missingWindow = JSON.parse(JSON.stringify(base)) as SealTraceDoc;
+    const missingWindow = copyOfRealTrace();
     missingWindow.checkpoints.splice(2, 2);
     const v1 = sealVerifyTraceCompleteness(missingWindow, expected);
     expect(v1.ok).toBe(false);
     expect(v1.problems.some((p) => p.includes("observe"))).toBe(true);
     expect(v1.problems.some((p) => p.includes("序号不连续") || p.includes("after-advance 检查点数"))).toBe(true);
     // 变体 2：终态丢失。
-    const missingTerminal = JSON.parse(JSON.stringify(base)) as SealTraceDoc;
+    const missingTerminal = copyOfRealTrace();
     missingTerminal.terminal = null;
     const v2 = sealVerifyTraceCompleteness(missingTerminal, expected);
     expect(v2.ok).toBe(false);
     expect(v2.problems.some((p) => p.includes("terminal 缺失"))).toBe(true);
     // 变体 3：post-close 检查点（终态窗口）丢失。
-    const missingPostClose = JSON.parse(JSON.stringify(base)) as SealTraceDoc;
-    missingPostClose.checkpoints.splice(9, 1);
+    const missingPostClose = copyOfRealTrace();
+    const postIdx = missingPostClose.checkpoints.findIndex((c) => c.stage === "final-close" && c.point === "post-close");
+    if (postIdx < 0) throw new Error("真实底版缺 post-close 检查点");
+    missingPostClose.checkpoints.splice(postIdx, 1);
     const v3 = sealVerifyTraceCompleteness(missingPostClose, expected);
     expect(v3.ok).toBe(false);
     expect(v3.problems.some((p) => p.includes("post-close"))).toBe(true);
     // 变体 4：端口事件少一条（末检查点 eventsUpTo 与实际事件总数不符）。
-    const missingEvent = JSON.parse(JSON.stringify(base)) as SealTraceDoc;
+    const missingEvent = copyOfRealTrace();
     missingEvent.portEvents.pop();
     const v4 = sealVerifyTraceCompleteness(missingEvent, expected);
     expect(v4.ok).toBe(false);
     expect(v4.problems.some((p) => p.includes("端口事件总数"))).toBe(true);
-    // 变体 5：某检查点风险比较缺一个 ID（覆盖不全）。
-    const partialRisk = JSON.parse(JSON.stringify(base)) as SealTraceDoc;
-    const cp = partialRisk.checkpoints[4];
-    partialRisk.checkpoints[4] = { ...cp, riskCheckedIds: SYNTH_IDS.slice(0, 2) };
+    // 变体 5：某检查点风险覆盖标签缺一个 ID（覆盖不全）。
+    const partialRisk = copyOfRealTrace();
+    const cp5 = partialRisk.checkpoints[4];
+    if (cp5 === undefined) throw new Error("真实底版缺检查点 4");
+    partialRisk.checkpoints[4] = { ...cp5, riskCheckedIds: base.fixture.unknownIds.slice(0, 19) };
     const v5 = sealVerifyTraceCompleteness(partialRisk, expected);
     expect(v5.ok).toBe(false);
-    expect(v5.problems.some((p) => p.includes("风险比较未覆盖全部"))).toBe(true);
+    expect(v5.problems.some((p) => p.includes("风险比较覆盖标签与 expected ID 集合不符"))).toBe(true);
     // 变体 6：finalClose 为空（retry_ready 退出无真实调用记录）。
-    const noFinalClose = JSON.parse(JSON.stringify(base)) as SealTraceDoc;
+    const noFinalClose = copyOfRealTrace();
     noFinalClose.finalClose = [];
     const v6 = sealVerifyTraceCompleteness(noFinalClose, expected);
     expect(v6.ok).toBe(false);
     expect(v6.problems.some((p) => p.includes("finalClose 为空"))).toBe(true);
+    // 原件未被任何变体修改（纯核验/隔离副本纪律）。
+    expect(sealVerifyTraceCompleteness(base, expected).problems).toEqual([]);
   });
 
-  it("unknown 风险字段级比较：同 ID/phase/腿数下的单字段漂移被定位到 attempt 与字段路径；null 与缺失不互相替代", () => {
+  it("逐检查点实证核验（L02/L03）：风险证据整项缺失、实际漂移标签仍一致、中间差异被正确终态掩盖、快照缺 ID、终态标签与 post-close 矛盾均必须失败；无证据合成轨迹被拒；核验不修改输入", () => {
+    const expected = realExpected();
+    const problemsOf = (t: SealTraceDoc): string[] => sealVerifyTraceCompleteness(t, expected).problems;
+    const idOf = (i: number): string => (h18SealTraceOf().fixture.unknownIds[i] as string);
+    // 反例 A：中间检查点（observe 第 3 窗 reload-before，seq=5）风险证据整项
+    // 缺失（unknownRisk/riskCheckedIds/riskDiff 全 null）——不能跳过。
+    const a = copyOfRealTrace();
+    const aCp = a.checkpoints[4];
+    if (aCp === undefined) throw new Error("底版缺检查点 4");
+    a.checkpoints[4] = { ...aCp, unknownRisk: null, riskCheckedIds: null, riskDiff: null };
+    const aBefore = JSON.stringify(a);
+    const aProblems = problemsOf(a);
+    expect(aProblems.some((p) => p.includes("seq=5") && p.includes("风险证据缺失"))).toBe(true);
+    expect(JSON.stringify(a)).toBe(aBefore); // 纯核验：输入未被检查器修改或自愈
+    // 反例 B：中间检查点实际快照 worstCase 单腿金额漂移（ID/phase/腿数不变），
+    // riskDiff 标签保持 null——必须从实际快照重算发现，不信任标签。
+    const b = copyOfRealTrace();
+    const bCp = b.checkpoints[6];
+    if (bCp === undefined || bCp.unknownRisk === null) throw new Error("底版缺检查点 6 风险快照");
+    const bSnapshot = bCp.unknownRisk as Record<string, Record<string, unknown>>;
+    const bId = idOf(2);
+    const bLegs = (bSnapshot[bId] as { worstCase: { delta: number }[] }).worstCase;
+    if (bLegs[1] === undefined) throw new Error("底版 worstCase 腿数不足");
+    bLegs[1].delta += 1;
+    const bProblems = problemsOf(b);
+    expect(bProblems.some((p) => p.includes("seq=7") && p.includes("worstCase[1].delta") && p.includes(bId))).toBe(true);
+    expect(bProblems.some((p) => p.includes("标签与实际证据矛盾"))).toBe(true);
+    // 反例 C：中间检查点保存非空 riskDiff（快照实际一致），终态正确——不能
+    // 因终态恢复放行；标签与原始快照矛盾也必须报错。
+    const c = copyOfRealTrace();
+    const cCp = c.checkpoints[8];
+    if (cCp === undefined) throw new Error("底版缺检查点 8");
+    c.checkpoints[8] = {
+      ...cCp,
+      riskDiff: [{ attemptId: idOf(0), field: "worstCase[0].delta", expected: 50, actual: 51 }],
+    };
+    const cProblems = problemsOf(c);
+    expect(cProblems.some((p) => p.includes("seq=9") && p.includes("标签非空但实际快照与基线重算一致"))).toBe(true);
+    expect(cProblems.some((p) => p.includes("中间漂移不因后续恢复放行"))).toBe(false); // C 的快照本身一致，只有标签矛盾
+    // 相邻 1：中间检查点实际快照缺一个 unknown ID（部分覆盖不是实际风险数据）。
+    const d = copyOfRealTrace();
+    const dCp = d.checkpoints[4];
+    if (dCp === undefined || dCp.unknownRisk === null) throw new Error("底版缺检查点 4 风险快照");
+    delete (dCp.unknownRisk as Record<string, Record<string, unknown>>)[idOf(19)];
+    const dProblems = problemsOf(d);
+    expect(dProblems.some((p) => p.includes("seq=5") && p.includes("实际风险快照未覆盖全部 unknown ID"))).toBe(true);
+    // 相邻 2：post-close 实际快照漂移、terminal.riskDiff 标签保持一致——终态
+    // 标签与实际证据矛盾必须报。
+    const e = copyOfRealTrace();
+    const ePost = e.checkpoints.find((cp) => cp.stage === "final-close" && cp.point === "post-close");
+    if (ePost === undefined || ePost.unknownRisk === null) throw new Error("底版缺 post-close 风险快照");
+    const eSnapshot = ePost.unknownRisk as Record<string, Record<string, unknown>>;
+    (eSnapshot[idOf(0)] as { identity: { canonicalDigest: string } }).identity.canonicalDigest = "e".repeat(16);
+    const eProblems = problemsOf(e);
+    expect(eProblems.some((p) => p.includes("post-close") && p.includes("identity.canonicalDigest"))).toBe(true);
+    expect(eProblems.some((p) => p.includes("终态标签与实际证据矛盾"))).toBe(true);
+    // 相邻 3：terminal.riskDiff 标签非空、post-close 实际一致——终态标签矛盾。
+    const f = copyOfRealTrace();
+    if (f.terminal === null) throw new Error("底版缺终态");
+    f.terminal = { ...f.terminal, riskDiff: [{ attemptId: idOf(0), field: "worstCase[0].delta", expected: 50, actual: 51 }] };
+    const fProblems = problemsOf(f);
+    expect(fProblems.some((p) => p.includes("terminal 风险事实与基线存在差异"))).toBe(true);
+    expect(fProblems.some((p) => p.includes("terminal.riskDiff 标签非空但 post-close 实际快照与基线重算一致"))).toBe(true);
+    // 无证据合成轨迹：必须被报风险证据缺失与基线缺字段——欠证据不称完整。
+    const synthProblems = sealVerifyTraceCompleteness(buildSyntheticSealTrace(), {
+      unknownIds: SYNTH_IDS,
+      plannedObserveTicks: 2,
+    }).problems;
+    expect(synthProblems.some((p) => p.includes("风险证据缺失"))).toBe(true);
+    expect(synthProblems.some((p) => p.includes("缺风险字段"))).toBe(true);
+  });
+
+  it("原始记录入口的无损风险提取（L01）：原始记录上 delete 基线 null 字段经提取+JSON 往返+比较仍定位存在性差异；合法 null 与未变记录通过；基线不随副本改变且拒绝不完整事实", () => {
+    const fx = buildH18MixedLoad();
+    expect(readTreasuryCoreStoreHealth().status).toBe("healthy"); // 前提：健康 H18 fixture
+    const ids = fx.unknownIds;
+    const active = h18ActiveRecords();
+    const id0 = ids[0] as string;
+    const baseline = sealBuildUnknownRiskBaseline(ids, active); // 独立基线（只建一次、脱离引用）
+    // 合法对照：未修改记录重复提取、独立深复制、JSON 往返比较一致；合法
+    // null（invocation/external/outcomeEvidence）不是错误。
+    expect(sealCompareUnknownRisk(baseline, sealSnapshotUnknownRisk(ids, active))).toEqual([]);
+    const deepCopy = JSON.parse(JSON.stringify(active)) as Record<string, Record<string, unknown>>;
+    expect(sealCompareUnknownRisk(baseline, sealSnapshotUnknownRisk(ids, deepCopy))).toEqual([]);
+    // 入口反例：基线为合法 null 的字段在"原始记录副本"上被 delete——经提取、
+    // JSON 往返、比较后必须定位 attempt 与字段的存在性差异（Evidence
+    // Remediation I/§2.1：差异发生在原始记录，不绕过提取器）。
+    const deletedNullField = (field: string): SealRiskDiff[] => {
+      const mutated = JSON.parse(JSON.stringify(active)) as Record<string, Record<string, unknown>>;
+      delete mutated[id0][field];
+      return sealCompareUnknownRisk(baseline, sealSnapshotUnknownRisk(ids, mutated));
+    };
+    for (const field of ["invocation", "external", "outcomeEvidence"]) {
+      const diffs = deletedNullField(field);
+      const first = diffs[0];
+      if (first === undefined) throw new Error(`原始记录 delete ${field} 未被定位`);
+      expect(diffs.length).toBe(1);
+      expect(first.attemptId).toBe(id0);
+      expect(first.field).toBe(field);
+      expect(first.expected).toBeNull(); // 基线侧是合法 null（存在且为 null）
+      expect(first.actual).toEqual({ sealFieldAbsent: true }); // 当前侧是显式缺失（哨兵渲染）
+    }
+    // 非 null 字段对照：调用边界/identity/worstCase 的 delete 同样定位存在性差异。
+    for (const field of ["invocationBoundary", "identity", "worstCase"]) {
+      const diffs = deletedNullField(field);
+      const first = diffs[0];
+      if (first === undefined) throw new Error(`原始记录 delete ${field} 未被定位`);
+      expect(first.attemptId).toBe(id0);
+      expect(first.field).toBe(field);
+      expect(first.actual).toEqual({ sealFieldAbsent: true });
+    }
+    // 合法值变化（ID/phase/记录数/腿数不变）：worstCase 单腿金额经入口路径定位。
+    const amountDrift = JSON.parse(JSON.stringify(active)) as Record<string, Record<string, unknown>>;
+    const legs = (amountDrift[id0] as { worstCase: { delta: number }[] }).worstCase;
+    if (legs[1] === undefined) throw new Error("fixture worstCase 腿数不足");
+    legs[1].delta += 1;
+    const dAmount = sealCompareUnknownRisk(baseline, sealSnapshotUnknownRisk(ids, amountDrift));
+    const firstAmount = dAmount[0];
+    if (firstAmount === undefined) throw new Error("worstCase 金额漂移未在入口路径被定位");
+    expect(dAmount.length).toBe(1);
+    expect(firstAmount.field).toBe("worstCase[1].delta");
+    // 基线不随副本改变：副本被破坏后，基线与原始记录再比较仍一致。
+    expect(sealCompareUnknownRisk(baseline, sealSnapshotUnknownRisk(ids, active))).toEqual([]);
+    // 基线完整性拒绝：原始记录缺风险字段或整条记录缺失时，不得建立"完整基线"。
+    const brokenField = JSON.parse(JSON.stringify(active)) as Record<string, Record<string, unknown>>;
+    delete brokenField[id0].invocationBoundary;
+    expect(() => sealBuildUnknownRiskBaseline(ids, brokenField)).toThrow(/invocationBoundary/);
+    const brokenRecord = JSON.parse(JSON.stringify(active)) as Record<string, Record<string, unknown>>;
+    delete brokenRecord[id0];
+    expect(() => sealBuildUnknownRiskBaseline(ids, brokenRecord)).toThrow(/记录缺失/);
+  });
+
+  it("落盘写读往返核验（L04）：合法真实轨迹写文件再 JSON 读取后完整性核验仍通过、存在性区分保留；被破坏副本落盘读回仍报差异", () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodeFs = require("node:fs") as typeof import("node:fs");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodeOs = require("node:os") as typeof import("node:os");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodePath = require("node:path") as typeof import("node:path");
+    const expected = realExpected();
+    const id0 = h18SealTraceOf().fixture.unknownIds[0] as string;
+    const tmpRoot = nodeFs.mkdtempSync(nodePath.join(nodeOs.tmpdir(), "seal-ev1-roundtrip-"));
+    try {
+      // 合法真实轨迹落盘再读取：导出不消除完整性。
+      const written = sealWriteEvidence(tmpRoot, h18SealTraceOf(), "roundtrip");
+      if (written === null) throw new Error("sealWriteEvidence 未落盘");
+      const readBack = JSON.parse(nodeFs.readFileSync(written.file, "utf8")) as SealTraceDoc;
+      expect(sealVerifyTraceCompleteness(readBack, expected).problems).toEqual([]);
+      // 存在性区分经落盘不消除：基线合法 null 读回仍是 null（不是缺失标记）。
+      const baselineRead = readBack.initial.unknownRiskBaseline as Record<string, Record<string, unknown>>;
+      expect(baselineRead[id0]?.invocation).toBeNull();
+      // 缺失哨兵经 JSON 落盘读回仍是哨兵，且被完整性核验拒绝（基线不完整）。
+      const sentinelTrace = JSON.parse(JSON.stringify(readBack)) as SealTraceDoc;
+      (sentinelTrace.initial.unknownRiskBaseline as Record<string, Record<string, unknown>>)[id0]!.invocation = SEAL_FIELD_ABSENT;
+      const sentinelWritten = sealWriteEvidence(tmpRoot, sentinelTrace, "roundtrip-sentinel");
+      if (sentinelWritten === null) throw new Error("哨兵副本未落盘");
+      const sentinelRead = JSON.parse(nodeFs.readFileSync(sentinelWritten.file, "utf8")) as SealTraceDoc;
+      const sentinelBaseline = sentinelRead.initial.unknownRiskBaseline as Record<string, Record<string, unknown>>;
+      expect(sentinelBaseline[id0]?.invocation).toBe(SEAL_FIELD_ABSENT); // 哨兵字节经 JSON 往返保留
+      const sentinelProblems = sealVerifyTraceCompleteness(sentinelRead, expected).problems;
+      expect(sentinelProblems.some((p) => p.includes("缺失哨兵"))).toBe(true);
+      // 被破坏副本（B 型漂移）落盘读回仍被核验发现——导出不消除差异。
+      const broken = copyOfRealTrace();
+      const brokenCp = broken.checkpoints[6];
+      if (brokenCp === undefined || brokenCp.unknownRisk === null) throw new Error("底版缺检查点 6 风险快照");
+      const brokenSnapshot = brokenCp.unknownRisk as Record<string, Record<string, unknown>>;
+      const brokenLegs = (brokenSnapshot[id0] as { worstCase: { delta: number }[] }).worstCase;
+      if (brokenLegs[1] === undefined) throw new Error("底版 worstCase 腿数不足");
+      brokenLegs[1].delta += 1;
+      const brokenWritten = sealWriteEvidence(tmpRoot, broken, "roundtrip-broken");
+      if (brokenWritten === null) throw new Error("破坏副本未落盘");
+      const brokenRead = JSON.parse(nodeFs.readFileSync(brokenWritten.file, "utf8")) as SealTraceDoc;
+      const brokenProblems = sealVerifyTraceCompleteness(brokenRead, expected).problems;
+      expect(brokenProblems.some((p) => p.includes("worstCase[1].delta"))).toBe(true);
+    } finally {
+      nodeFs.rmSync(tmpRoot, { recursive: true, force: true }); // 临时目录在仓库外，用后即清
+    }
+  });
+
+  it("unknown 风险字段级比较（已提取快照上的比较器单测；入口路径由 L01 it 承担）：同 ID/phase/腿数下的单字段漂移被定位到 attempt 与字段路径；null 与缺失不互相替代", () => {
     const fx = buildH18MixedLoad();
     const baseline = sealSnapshotUnknownRisk(fx.unknownIds, h18ActiveRecords());
     // 底版：与自身的隔离副本一致（JSON 往返不产生差异）。
