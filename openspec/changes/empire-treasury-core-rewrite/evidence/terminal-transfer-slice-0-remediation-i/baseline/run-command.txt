@@ -1,0 +1,1 @@
+cd <起点worktree 93a6152> && npx jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasury/slice0RemediationIBaseline.test.ts

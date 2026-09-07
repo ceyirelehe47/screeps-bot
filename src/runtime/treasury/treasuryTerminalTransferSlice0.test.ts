@@ -1,24 +1,27 @@
 /**
- * Terminal Transfer Slice 0——M03–M07 行为验收（任务书 §4–§5）。
+ * Terminal Transfer Slice 0——M03–M07 行为验收（任务书 §4–§5；
+ * Remediation I 后经测试专用业务入口重跑，N04）。
  *
- * - M03：原型仅测试装配（默认注册表无此 kind）；canonical 参数派生一致的
- *   三腿 postings／结构绑定／durable facts。
+ * - M03：原型仅测试装配（隔离新模块的真实默认注册表无此 kind）；canonical
+ *   参数派生一致的三腿 postings／结构绑定／durable facts（payload v2）。
  * - M04：正常 100H+fee 可接纳；资源／费用能源／目标容量／结构替换／超场景
- *   输入各自明确拒绝且提交增量 0；恢复合法条件后成功。
- * - M05：延迟完成正向闭环——OK 当 tick 仍 unknown 且责任保留；处理与新
- *   tick 观察后唯一全量记录结算退出；源/目标/fee 计数吻合、恰一次提交。
+ *   输入各自明确拒绝且提交增量 0（submits 计数直接断言）；恢复合法条件后成功。
+ * - M05/N04：延迟完成正向闭环（经业务入口）——OK 当 tick 仍 unknown 且责任
+ *   保留；处理与新 tick 观察后唯一全量记录结算退出；源/目标/fee 计数吻合、
+ *   恰一次提交。
  * - M06：无记录／窗口缺失／读异常／他人与市场订单记录／重复交易 ID／
  *   实际部分量均不报全量完成、不补发；两视图同一交易不重复计数。
- * - M07：提交后结果持久化前与已接受未处理两类断点，配对宿主状态完整重载；
- *   先保持 unknown，可见事实到达后收尾；旧许可拒绝、同工作不重发。
+ * - M07/N03/N04：提交后结果持久化前与已接受未处理两类断点（经业务入口），
+ *   配对宿主状态完整重载；先保持 unknown，可见事实到达后收尾；旧许可拒绝、
+ *   第二需求（不同 workKey）被单条在途阻断。
  *
  * M01/M02/M08 由 scripts/verify-treasury-evidence.mjs 实跑、openspec
  * terminal-transfer-slice-0.md 短报告与固定 SHA 主验证承担（非 Jest 范围）。
+ * N01–N06 的 Remediation I 反例见 treasuryTerminalTransferSlice0RemediationI.test.ts。
  */
 import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
 import {
   buildTreasuryActionContract,
-  clearTreasuryAdapterRegistryForTest,
   findTreasuryActionAdapter,
   replaceTreasuryActionAdapterForTest,
   type TreasuryActionAdapter,
@@ -27,14 +30,16 @@ import { clearTreasuryPolicyResolversForTest, makeNoReserveTreasuryPolicy, regis
 import { resetTreasuryCoreStoreForTest } from "@/runtime/treasury/testHarness";
 import { installRooms, setStoreResources, type RoomSpec } from "@mock/treasury";
 import { captureTreasuryHostBreakpoint, performTreasuryFullReset, type TreasuryHostBreakpoint } from "@mock/treasuryResetHarness";
+import { createSlice0TransferCoordinator, type Slice0TransferCoordinator } from "@mock/treasuryTerminalTransferCoordinator";
 import {
   SLICE0_ACTION_KIND,
   SLICE0_TRANSFER_AMOUNT,
   SLICE0_TRANSFER_RESOURCE,
+  SLICE0_USERNAME,
   createTerminalTransferFakeHost,
   decodeSlice0DurablePayload,
-  makeSlice0TransferArgs,
   makeTerminalTransferPrototypeAdapter,
+  prepareSlice0TransferArgs,
   slice0SceneRooms,
   type TerminalTransferArgs,
   type TerminalTransferFakeHost,
@@ -48,6 +53,7 @@ const TARGET_ROOM = "W10N57";
 interface Scene {
   readonly host: TerminalTransferFakeHost;
   readonly service: TreasuryService;
+  readonly coordinator: Slice0TransferCoordinator;
   readonly fee: number;
 }
 
@@ -62,24 +68,41 @@ function makeScene(rooms: RoomSpec[] = sceneRooms()): Scene {
   registerTreasuryPolicyResolver(makeNoReserveTreasuryPolicy());
   const service = createTreasuryService({ getRooms: () => Object.values(installed) });
   service.beginTick();
-  return { host, service, fee: host.quoteTransferFee(SLICE0_TRANSFER_AMOUNT, SOURCE_ROOM, TARGET_ROOM) };
+  // 业务入口（§5）：所有验证本业务的用例从这里进入。buildContract 绑定
+  // 当前模块入口（完整 reset 后换绑新模块——见 M07/N03）。
+  const coordinator = createSlice0TransferCoordinator({
+    host,
+    service,
+    buildContract: (args, workKey) => buildTreasuryActionContract(service, { actionKind: SLICE0_ACTION_KIND, transactionId: workKey, args }),
+  });
+  return { host, service, coordinator, fee: host.quoteTransferFee(SLICE0_TRANSFER_AMOUNT, SOURCE_ROOM, TARGET_ROOM) };
+}
+
+/** 矩阵 it 内换场景：清上一场景未收尾的 active（本 it 测归属矩阵，不测单条在途门禁——门禁由 N03 专测）。 */
+function freshScene(rooms?: RoomSpec[]): Scene {
+  resetTreasuryCoreStoreForTest();
+  return makeScene(rooms === undefined ? slice0SceneRooms() : rooms);
 }
 
 type AdmitResult = { status: string; attemptId?: string; dispatch?: { attemptId?: unknown } & object; reason?: string };
 
+/**
+ * 直连 facade 构建/授权（仅用于隔离低层行为的场景——M04 执行前条件变化、
+ * N03 通用层对照；不承担业务门禁证明，§5 入口边界）。
+ */
 function admit(service: TreasuryService, workKey: string, args: unknown): AdmitResult {
   const built = buildTreasuryActionContract(service, { actionKind: SLICE0_ACTION_KIND, transactionId: workKey, args });
   if (built.status !== "built") return { status: `build:${built.status}`, reason: built.status === "rejected" ? built.reason : undefined };
   return service.authorizeTreasuryActionContract(built.contract, { workKey }) as AdmitResult;
 }
 
-/** 提交一条调拨并执行（OK → outcome_unknown）。返回 attemptId。 */
+/** 经业务入口提交一条调拨并执行（OK → outcome_unknown）。返回 attemptId。 */
 function submit(scene: Scene, workKey: string, correlationKey: string): string {
-  const admission = admit(scene.service, workKey, makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, correlationKey));
-  if (admission.status !== "admitted") throw new Error(`admit failed: ${admission.status} ${admission.reason ?? ""}`);
-  const outcome = scene.service.executeAuthorizedDispatch(admission.dispatch);
-  if (outcome.status !== "unknown") throw new Error(`dispatch expected unknown, got ${String(outcome.status)}`);
-  return admission.attemptId as string;
+  const admission = scene.coordinator.requestTransfer({ workKey, correlationKey });
+  if (admission.status !== "admitted") throw new Error(`admit failed: ${admission.status} ${admission.reason}`);
+  const execution = scene.coordinator.executeTransfer(admission);
+  if (execution.status !== "unknown") throw new Error(`dispatch expected unknown, got ${execution.status} ${execution.reason}`);
+  return admission.attemptId;
 }
 
 /** tick 推进：关窗 → tick+1 → 开窗（观察重建）。 */
@@ -87,6 +110,10 @@ function advanceTick(service: TreasuryService): void {
   service.endTick();
   Game.time += 1;
   service.beginTick();
+}
+
+function advanceTicks(service: TreasuryService, count: number): void {
+  for (let i = 0; i < count; i += 1) advanceTick(service);
 }
 
 /** 处理阶段推进 + 新 tick（模拟"用户 tick 结束后处理、下一 tick 可见"）。 */
@@ -134,7 +161,7 @@ function wrapWithPostSubmitCapture(
 
 /** 恢复装配：断点（Memory+世界+宿主分支配对）→ 新 service（beginTick 已跑）。 */
 function restoreFromBreakpoint(
-  scene: Scene,
+  scene: Pick<Scene, "host" | "service">,
   breakpoint: TreasuryHostBreakpoint,
   adapter?: TreasuryActionAdapter,
 ): { service: TreasuryService; contracts: typeof import("@/runtime/treasury/actionContracts") } {
@@ -146,20 +173,16 @@ function restoreFromBreakpoint(
   return { service: restored.service, contracts: restored.handles.actionContractsModule };
 }
 
-/**
- * 恢复后的接纳：resetModules 重建了模块图，contract 必须经**新模块**的
- * buildTreasuryActionContract 构建（旧 import 的入口注册在旧模块 WeakSet，
- * 新 service 一律拒绝——伪造对象无效）。
- */
-function admitRestored(
-  contracts: typeof import("@/runtime/treasury/actionContracts"),
-  service: TreasuryService,
-  workKey: string,
-  args: unknown,
-): AdmitResult & { reason?: string } {
-  const built = contracts.buildTreasuryActionContract(service, { actionKind: SLICE0_ACTION_KIND, transactionId: workKey, args });
-  if (built.status !== "built") return { status: `build:${built.status}` };
-  return service.authorizeTreasuryActionContract(built.contract, { workKey }) as AdmitResult;
+/** 恢复后的业务协调器：绑定新 service 与**新模块**的 contract 构建入口。 */
+function coordinatorRestored(
+  host: TerminalTransferFakeHost,
+  restored: { service: TreasuryService; contracts: typeof import("@/runtime/treasury/actionContracts") },
+): Slice0TransferCoordinator {
+  return createSlice0TransferCoordinator({
+    host,
+    service: restored.service,
+    buildContract: (args, workKey) => restored.contracts.buildTreasuryActionContract(restored.service, { actionKind: SLICE0_ACTION_KIND, transactionId: workKey, args }),
+  });
 }
 
 beforeEach(() => {
@@ -168,34 +191,42 @@ beforeEach(() => {
 });
 
 describe("Terminal Transfer Slice 0（M03–M07）", () => {
-  it("M03：原型仅测试装配——默认注册表无此 kind；canonical 参数派生一致的三腿/结构绑定/durable facts", () => {
-    // 无默认注册：清空注册表后（未装配本原型时）生产注册表不含 slice0 kind。
-    clearTreasuryAdapterRegistryForTest();
-    expect(findTreasuryActionAdapter(SLICE0_ACTION_KIND)).toBeUndefined();
-    const scene = makeScene();
-    const args = makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-0001");
+  it("M03：原型仅测试装配——隔离新模块默认注册表无此 kind；canonical 参数派生一致的三腿/结构绑定/durable facts（payload v2）", () => {
+    // 默认无注册（§7.1 修订）：不再清空待检注册表——用隔离新模块的**真实
+    // 默认装配**断言（actionContracts 的 registry 是模块级 Map；生产装配
+    // runtimeServices 从不注册任何 adapter，只 seal）。
+    let freshFind: typeof findTreasuryActionAdapter | undefined;
+    jest.isolateModules(() => {
+      freshFind = require("@/runtime/treasury/actionContracts").findTreasuryActionAdapter;
+    });
+    expect(freshFind!(SLICE0_ACTION_KIND)).toBeUndefined();
+    const scene = freshScene();
+    const args = prepareSlice0TransferArgs(scene.host, SOURCE_ROOM, TARGET_ROOM, "s0-0001");
     const built = buildTreasuryActionContract(scene.service, { actionKind: SLICE0_ACTION_KIND, transactionId: "biz:slice0:m03", args });
     expect(built.status).toBe("built");
     const admission = scene.service.authorizeTreasuryActionContract(built.status === "built" ? built.contract : undefined as never, { workKey: "biz:slice0:m03" });
     expect(admission.status).toBe("admitted");
-    // canonical 一致（单一参数来源）：dispatch 许可携带的 postings ===
-    // derivePostings(args)；durable facts === durableFacts(args)（含三腿
-    // fee 与提交前基线）。API 参数（description 派生）与持久事实同一 key。
-    const adapter = findTreasuryActionAdapter(SLICE0_ACTION_KIND) as unknown as TerminalTransferPrototypeAdapter;
-    const permit = (admission as unknown as { dispatch: { postings?: unknown[]; canonicalArgs?: unknown } }).dispatch;
     // canonical 一致（单一参数来源）：dispatch 许可携带的 postings 与
     // derivePostings(args) 同一集合（kernel 规范序为流入在前——集合比较）。
+    const adapter = findTreasuryActionAdapter(SLICE0_ACTION_KIND) as unknown as TerminalTransferPrototypeAdapter;
+    const permit = (admission as unknown as { dispatch: { postings?: unknown[]; canonicalArgs?: unknown } }).dispatch;
     const sortedPostings = (items: readonly unknown[]): string[] => items.map((p) => JSON.stringify(p)).sort();
     expect(sortedPostings(permit.postings ?? [])).toEqual(sortedPostings(adapter.derivePostings(args) as unknown as readonly unknown[]));
     const record = recordShape((admission as { attemptId: string }).attemptId);
     expect(record?.phase).toBe("pending");
     const durable = adapter.durableFacts(args);
     const payload = decodeSlice0DurablePayload(durable.payload);
+    // payload v2：期望身份的全部事实（关联键/路线/全量/冻结费用/基线/准备
+    // tick/合成用户）——reconcile 的期望值来源（Remediation I §4.1）。
     expect(payload?.k).toBe("s0-0001");
+    expect(payload?.s).toBe(SOURCE_ROOM);
+    expect(payload?.d).toBe(TARGET_ROOM);
     expect(payload?.a).toBe(SLICE0_TRANSFER_AMOUNT);
     expect(payload?.f).toBe(scene.fee);
     expect(payload?.sb).toEqual([1000, 10_000]);
     expect(payload?.tb).toEqual([0]);
+    expect(payload?.t).toBe(Game.time);
+    expect(payload?.u).toBe(SLICE0_USERNAME);
     // 结构绑定：source/fee_source/target 三声明（无生产注册、无网络发送能力
     // ——execute 只调注入端口，由后续各 it 的 submits 计数与 freeze 断言承担）。
     const bindings = adapter.structureBindings!(args);
@@ -203,7 +234,7 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
   });
 
   it("M04：合法 100H+fee 可接纳执行为 unknown；执行前条件变化各自拒绝且提交增量 0", () => {
-    const scene = makeScene();
+    const scene = freshScene();
     const attemptId = submit(scene, "biz:slice0:m04-ok", "s0-0100");
     expect(scene.host.pendingCount).toBe(1); // OK 只入 pending——延迟生效
     expect(scene.host.submits.length).toBe(1); // 恰一次提交
@@ -212,8 +243,8 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
 
     // 仅降低货物 H（授权后、执行前）→ 拒绝且零提交。
     {
-      const s2 = makeScene();
-      const admission = admit(s2.service, "biz:slice0:m04-h", makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-0101"));
+      const s2 = freshScene();
+      const admission = admit(s2.service, "biz:slice0:m04-h", prepareSlice0TransferArgs(s2.host, SOURCE_ROOM, TARGET_ROOM, "s0-0101"));
       expect(admission.status).toBe("admitted");
       setStoreResources((Game.rooms as unknown as Record<string, { terminal: StructureTerminal }>)[SOURCE_ROOM].terminal, { H: 50, energy: 10_000 });
       const outcome = s2.service.executeAuthorizedDispatch(admission.dispatch);
@@ -223,18 +254,19 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     }
     // 仅降低费用能源（< fee）→ 拒绝且零提交。
     {
-      const s2 = makeScene();
-      const admission = admit(s2.service, "biz:slice0:m04-fee", makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-0102"));
+      const s2 = freshScene();
+      const admission = admit(s2.service, "biz:slice0:m04-fee", prepareSlice0TransferArgs(s2.host, SOURCE_ROOM, TARGET_ROOM, "s0-0102"));
       expect(admission.status).toBe("admitted");
       setStoreResources((Game.rooms as unknown as Record<string, { terminal: StructureTerminal }>)[SOURCE_ROOM].terminal, { H: 1000, energy: scene.fee - 1 });
       const outcome = s2.service.executeAuthorizedDispatch(admission.dispatch);
       expect(outcome.status).not.toBe("committed");
       expect(s2.host.pendingCount).toBe(0);
+      expect(s2.host.submits.length).toBe(0);
     }
     // 目标空位不足（freeCapacity=50 < 100）→ 明确拒绝（授权或执行层）。
     {
-      const s2 = makeScene(slice0SceneRooms({ targetFreeCapacity: 50 }));
-      const admission = admit(s2.service, "biz:slice0:m04-cap", makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-0103"));
+      const s2 = freshScene(slice0SceneRooms({ targetFreeCapacity: 50 }));
+      const admission = admit(s2.service, "biz:slice0:m04-cap", prepareSlice0TransferArgs(s2.host, SOURCE_ROOM, TARGET_ROOM, "s0-0103"));
       if (admission.status === "admitted") {
         const outcome = s2.service.executeAuthorizedDispatch(admission.dispatch);
         expect(outcome.status).not.toBe("committed");
@@ -242,32 +274,34 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
         expect(admission.status).toMatch(/rejected|build/);
       }
       expect(s2.host.pendingCount).toBe(0);
+      expect(s2.host.submits.length).toBe(0);
       expect(stock(TARGET_ROOM, SLICE0_TRANSFER_RESOURCE)).toBe(0);
     }
     // 源结构替换（incarnation 变化）→ 执行层拒绝且零提交。
     {
-      const s2 = makeScene();
-      const admission = admit(s2.service, "biz:slice0:m04-inc", makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-0104"));
+      const s2 = freshScene();
+      const admission = admit(s2.service, "biz:slice0:m04-inc", prepareSlice0TransferArgs(s2.host, SOURCE_ROOM, TARGET_ROOM, "s0-0104"));
       expect(admission.status).toBe("admitted");
       const rooms = Game.rooms as unknown as Record<string, { terminal: { id: string; store: Record<string, number> } }>;
       rooms[SOURCE_ROOM].terminal = { id: "term-A-rebuilt", store: rooms[SOURCE_ROOM].terminal.store };
       const outcome = s2.service.executeAuthorizedDispatch(admission.dispatch);
       expect(outcome.status).not.toBe("committed");
       expect(s2.host.pendingCount).toBe(0);
+      expect(s2.host.submits.length).toBe(0);
     }
   });
 
   it("M04：超场景输入拒绝（amount/resource/关联键/场景外目标）；恢复合法条件后正常成功", () => {
-    const scene = makeScene();
+    const scene = freshScene();
     // amount ≠ 100 / resource ≠ H / 非法关联键——validate 层拒绝（contract 不构建）。
-    const badAmount = admit(scene.service, "biz:slice0:m04-amount", { ...makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-0201"), amount: 101 });
+    const badAmount = admit(scene.service, "biz:slice0:m04-amount", { ...prepareSlice0TransferArgs(scene.host, SOURCE_ROOM, TARGET_ROOM, "s0-0201"), amount: 101 });
     expect(badAmount.status).toMatch(/build:rejected/);
-    const badResource = admit(scene.service, "biz:slice0:m04-resource", { ...makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-0202"), resourceType: "energy" });
+    const badResource = admit(scene.service, "biz:slice0:m04-resource", { ...prepareSlice0TransferArgs(scene.host, SOURCE_ROOM, TARGET_ROOM, "s0-0202"), resourceType: "energy" });
     expect(badResource.status).toMatch(/build:rejected/);
-    const badKey = admit(scene.service, "biz:slice0:m04-key", makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "bad key!"));
+    const badKey = admit(scene.service, "biz:slice0:m04-key", prepareSlice0TransferArgs(scene.host, SOURCE_ROOM, TARGET_ROOM, "bad key!"));
     expect(badKey.status).toMatch(/build:rejected/);
     // 场景外目标（E5N59 无 terminal）——结构不存在，授权层拒绝。
-    const outside = admit(scene.service, "biz:slice0:m04-outside", makeSlice0TransferArgs(SOURCE_ROOM, "E5N59", "s0-0203"));
+    const outside = admit(scene.service, "biz:slice0:m04-outside", prepareSlice0TransferArgs(scene.host, SOURCE_ROOM, "E5N59", "s0-0203"));
     expect(outside.status).not.toBe("admitted");
     expect(scene.host.pendingCount).toBe(0);
     // 恢复合法输入后正常成功（同一场景仍可继续）。
@@ -276,8 +310,8 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     expect(scene.host.pendingCount).toBe(1);
   });
 
-  it("M05：延迟完成正向闭环——当 tick 仍 unknown；处理与新观察后唯一全量记录结算退出；计数吻合不双扣", () => {
-    const scene = makeScene();
+  it("M05/N04：延迟完成正向闭环（经业务入口）——当 tick 仍 unknown；处理与新观察后唯一全量记录结算退出；计数吻合不双扣", () => {
+    const scene = freshScene();
     const attemptId = submit(scene, "biz:slice0:m05", "s0-0300");
     // OK 之后当 tick：无记录、库存未变——settle 仍 unknown，责任保留。
     expect(scene.host.transactions.length).toBe(0);
@@ -292,7 +326,7 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     expect(txn?.resourceType).toBe(SLICE0_TRANSFER_RESOURCE);
     expect(txn?.from).toBe(SOURCE_ROOM);
     expect(txn?.to).toBe(TARGET_ROOM);
-    expect(txn?.description).toContain("s0-0300");
+    expect(txn?.description).toBe(`treasury-slice0 s0-0300`);
     expect(scene.service.settleUnknownOutcome({ attemptId }).status).toBe("ok");
     expect(recordShape(attemptId)?.outcome).toBe("committed");
     expect(recordShape(attemptId)?.phase).toBe("closing"); // 进入退出流程
@@ -314,7 +348,7 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
   it("M06：无记录/窗口挤出/读异常/他人与市场订单记录/重复交易 ID 均不报全量完成", () => {
     // A. 无记录（未处理）——不能证明未执行，也不能报完成。
     {
-      const scene = makeScene();
+      const scene = freshScene();
       const attemptId = submit(scene, "biz:slice0:m06-a", "s0-0401");
       advanceTick(scene.service);
       expect(scene.service.settleUnknownOutcome({ attemptId }).status).toBe("still_uncertain");
@@ -322,7 +356,7 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     }
     // B. 只有库存变化、无交易记录（历史被挤出窗口）。
     {
-      const scene = makeScene();
+      const scene = freshScene();
       const attemptId = submit(scene, "biz:slice0:m06-b", "s0-0402");
       processAndAdvance(scene);
       expect(scene.host.transactions.length).toBe(1); // 库存确实变了
@@ -332,7 +366,7 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     }
     // C. 交易视图读取异常——保守保留 unknown（不因异常而完成/丢弃）。
     {
-      const scene = makeScene();
+      const scene = freshScene();
       const attemptId = submit(scene, "biz:slice0:m06-c", "s0-0403");
       processAndAdvance(scene);
       scene.host.viewConfig.failOutgoing = true;
@@ -343,7 +377,7 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     }
     // D. 相同参数不同关联键（他人/旧请求记录）不误匹配。
     {
-      const scene = makeScene();
+      const scene = freshScene();
       const attemptId = submit(scene, "biz:slice0:m06-d", "s0-0404");
       scene.host.viewConfig.injected = [
         fakeTransaction("txn-9001", "treasury-slice0 s0-OTHER", SLICE0_TRANSFER_AMOUNT),
@@ -354,7 +388,7 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     }
     // E. 市场订单记录（带 order 字段）不作为本动作证据。
     {
-      const scene = makeScene();
+      const scene = freshScene();
       const attemptId = submit(scene, "biz:slice0:m06-e", "s0-0405");
       scene.host.viewConfig.injected = [
         { ...fakeTransaction("txn-9002", "treasury-slice0 s0-0405", SLICE0_TRANSFER_AMOUNT), order: { id: "ord-1" } },
@@ -365,7 +399,7 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     }
     // F. 多个不同交易 ID 同时匹配同一关联键——不能选定唯一事实。
     {
-      const scene = makeScene();
+      const scene = freshScene();
       const attemptId = submit(scene, "biz:slice0:m06-f", "s0-0406");
       scene.host.viewConfig.injected = [
         fakeTransaction("txn-9003", "treasury-slice0 s0-0406", SLICE0_TRANSFER_AMOUNT),
@@ -380,7 +414,7 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
   it("M06：实际部分量不报全量、不补发、不重执行；两视图同一交易不重复计数", () => {
     // 授权时容量充足；处理前目标空间被外部占用到只剩 60（负向测试构造的
     // 条件变化）——处理层按剩余空间缩量（源码事实 executeTransfer）。
-    const scene = makeScene();
+    const scene = freshScene();
     const attemptId = submit(scene, "biz:slice0:m06-partial", "s0-0500");
     scene.service.endTick();
     const targetRoom = (Game.rooms as unknown as Record<string, { terminal: { store: { __freeCapacity?: number } } }>)[TARGET_ROOM];
@@ -401,7 +435,7 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     // 两视图同一交易不重复计数：正常完成场景下 outgoing/incoming 都可见同
     // 一 transactionId（同一条事实），结算一次、计数各变化一次。
     {
-      const s2 = makeScene();
+      const s2 = freshScene();
       const a2 = submit(s2, "biz:slice0:m06-view", "s0-0501");
       processAndAdvance(s2);
       const t2 = s2.host.transactions[0] as TerminalTransactionRecord;
@@ -416,7 +450,7 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     }
   });
 
-  it("M07：提交后结果持久化前的断点——配对重载先保持 unknown，事实到达后收尾；旧许可拒绝、同工作不重发", () => {
+  it("M07/N03/N04：提交后结果持久化前的断点（经业务入口）——配对重载先保持 unknown，事实到达后收尾；旧许可拒绝、第二需求被单条在途阻断", () => {
     const host = createTerminalTransferFakeHost();
     const installed = installRooms(sceneRooms());
     const holder: { breakpoint?: TreasuryHostBreakpoint } = {};
@@ -424,30 +458,37 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     registerTreasuryPolicyResolver(makeNoReserveTreasuryPolicy());
     const service = createTreasuryService({ getRooms: () => Object.values(installed) });
     service.beginTick();
-    const args = makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-0600");
-    const built = buildTreasuryActionContract(service, { actionKind: SLICE0_ACTION_KIND, transactionId: "biz:slice0:m07a", args });
-    expect(built.status).toBe("built");
-    const admission = service.authorizeTreasuryActionContract(built.status === "built" ? built.contract : undefined as never, { workKey: "biz:slice0:m07a" });
+    const coordinator = createSlice0TransferCoordinator({
+      host,
+      service,
+      buildContract: (args, workKey) => buildTreasuryActionContract(service, { actionKind: SLICE0_ACTION_KIND, transactionId: workKey, args }),
+    });
+    const admission = coordinator.requestTransfer({ workKey: "biz:slice0:m07a", correlationKey: "s0-0600" });
     expect(admission.status).toBe("admitted");
-    const dispatch = (admission as { dispatch: object }).dispatch;
-    const attemptId = (admission as { attemptId: string }).attemptId;
+    const attemptId = admission.status === "admitted" ? admission.attemptId : "";
     // 断点 1：submit 已接受（pending 里有请求）、dispatch_result 未写入。
-    expect(service.executeAuthorizedDispatch(dispatch).status).toBe("unknown");
+    const execution = coordinator.executeTransfer(admission);
+    expect(execution.status).toBe("unknown");
     if (holder.breakpoint === undefined) throw new Error("post-submit 断点未捕获");
     // 旧栈继续走完（outcome_unknown 已持久化），但从断点恢复——世界与宿主
     // 状态回到捕获时刻（提交已发生、未处理）。
-    const restored = restoreFromBreakpoint({ host, service, fee: 0 }, holder.breakpoint);
+    const restored = restoreFromBreakpoint({ host, service }, holder.breakpoint);
     const { service: restoredService, contracts } = restored;
     expect(stock(TARGET_ROOM, SLICE0_TRANSFER_RESOURCE)).toBe(0); // 世界回滚
     expect(host.pendingCount).toBe(1); // 宿主配对恢复（挂起请求在）
     // 旧 dispatch 许可（断点前的运行时对象）——新模块下拒绝。
-    const replay = restoredService.executeAuthorizedDispatch(dispatch);
+    const replay = restoredService.executeAuthorizedDispatch((admission as { dispatch: object }).dispatch);
     expect(replay.status).not.toBe("committed");
     expect(host.submits.length).toBe(1); // 不重发（许可失效在调用前拦截）
-    // 同 workKey 第二条需求阻断——从持久 active 工作读出的排他（非局部布尔量）。
-    const second = admitRestored(contracts, restoredService, "biz:slice0:m07a", makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-0600b"));
-    expect(second.status).not.toBe("admitted");
-    expect(String(second.reason)).toMatch(/排他|活跃/);
+    // 第二条需求（不同 workKey、不同关联键）被**单条在途**阻断——从恢复后
+    // 新协调器读持久 active 事实（不是局部布尔量；与 workKey 无关）。
+    const secondCoordinator = coordinatorRestored(host, restored);
+    const second = secondCoordinator.requestTransfer({ workKey: "biz:slice0:m07a-second", correlationKey: "s0-0600b" });
+    expect(second.status).toBe("rejected");
+    if (second.status === "rejected") {
+      expect(second.stage).toBe("single-flight");
+      expect(second.reason).toMatch(/单条在途/);
+    }
     // 恢复后先保持 unknown：无交易记录（处理未发生）。
     const phaseAfterRestore = recordShape(attemptId)?.phase;
     expect(phaseAfterRestore === "outcome_unknown" || phaseAfterRestore === "dispatching").toBe(true);
@@ -470,37 +511,43 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     expect(host.submits.length).toBe(1); // 全程恰一次提交
   });
 
-  it("M07：已接受未处理的断点——完整重载后先 unknown 再收尾；第二需求阻断直至结算完成", () => {
-    const scene = makeScene();
+  it("M07/N03/N04：已接受未处理的断点（经业务入口）——完整重载后先 unknown 再收尾；第二需求阻断直至结算完成", () => {
+    const scene = freshScene();
     const attemptId = submit(scene, "biz:slice0:m07b", "s0-0700");
     scene.service.endTick();
     // 断点 2：outcome_unknown 已持久化、处理阶段未跑。
     const breakpoint = captureTreasuryHostBreakpoint(scene.host.captureBranch());
-    const { service: restored, contracts } = restoreFromBreakpoint(scene, breakpoint);
+    const restored = restoreFromBreakpoint(scene, breakpoint);
+    const restoredService = restored.service;
     expect(scene.host.pendingCount).toBe(1);
     expect(stock(TARGET_ROOM, SLICE0_TRANSFER_RESOURCE)).toBe(0);
     // 先保持 unknown（settle 不受授权窗口限制——恢复与对账继续）。
-    expect(restored.settleUnknownOutcome({ attemptId }).status).toBe("still_uncertain");
-    // 推进到下一 tick 开窗（断点捕获于 endTick 后——本 tick 窗口已关），
-    // attempt 仍 unknown：第二需求（同业务）被持久 active 工作的排他阻断。
-    restored.endTick();
+    expect(restoredService.settleUnknownOutcome({ attemptId }).status).toBe("still_uncertain");
+    // 推进到下一 tick 开窗（断点捕获于 endTick 后——本 tick 窗口已关；开窗
+    // 使 B 的其他条件成立），attempt 仍 unknown：第二需求（不同 workKey）被
+    // 持久 active 事实的**单条在途**阻断——理由指向在途责任而非窗口。
+    restoredService.endTick();
     Game.time += 1;
-    restored.beginTick();
-    const second = admitRestored(contracts, restored, "biz:slice0:m07b", makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-0701"));
-    expect(second.status).not.toBe("admitted");
-    expect(String(second.reason)).toMatch(/排他|活跃/);
+    restoredService.beginTick();
+    const secondCoordinator = coordinatorRestored(scene.host, restored);
+    const second = secondCoordinator.requestTransfer({ workKey: "biz:slice0:m07b-second", correlationKey: "s0-0701" });
+    expect(second.status).toBe("rejected");
+    if (second.status === "rejected") {
+      expect(second.stage).toBe("single-flight");
+      expect(second.reason).toMatch(/单条在途/);
+    }
     // 收尾：处理 → 新 tick → 结算 → 退出。
-    restored.endTick();
+    restoredService.endTick();
     scene.host.processPendingRequests();
     Game.time += 1;
-    restored.beginTick();
-    expect(restored.settleUnknownOutcome({ attemptId }).status).toBe("ok");
-    restored.endTick();
+    restoredService.beginTick();
+    expect(restoredService.settleUnknownOutcome({ attemptId }).status).toBe("ok");
+    restoredService.endTick();
     Game.time += 1;
-    restored.beginTick();
+    restoredService.beginTick();
     expect(activeIds()).not.toContain(attemptId);
-    // 结算完成后同 workKey 的新需求不再被旧工作阻断（经新模块构建）。
-    const third = admitRestored(contracts, restored, "biz:slice0:m07b", makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-0702"));
+    // 结算完成后同 workKey 的新需求不再被旧工作阻断（经恢复后新协调器）。
+    const third = secondCoordinator.requestTransfer({ workKey: "biz:slice0:m07b", correlationKey: "s0-0702" });
     expect(third.status).toBe("admitted");
     expect(scene.host.submits.length).toBe(1); // 第二/第三需求未提交——只接纳
   });
@@ -511,8 +558,8 @@ function fakeTransaction(transactionId: string, description: string, amount: num
   return {
     transactionId,
     time: Game.time,
-    sender: { username: "slice0-user" },
-    recipient: { username: "slice0-user" },
+    sender: { username: SLICE0_USERNAME },
+    recipient: { username: SLICE0_USERNAME },
     resourceType: SLICE0_TRANSFER_RESOURCE,
     amount,
     from: SOURCE_ROOM,

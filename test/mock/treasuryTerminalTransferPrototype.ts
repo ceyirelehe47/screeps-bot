@@ -20,6 +20,23 @@
  * durable facts 里的提交前基线），不读宿主内部 pending/submitLog（那些只
  * 给测试断言）。无交易记录不能证明未执行——reconcile 永不返回
  * observed_not_executed（§4.3）。
+ *
+ * Remediation I（N01–N06）修订：
+ * - §4.1 期望值先存在：canonical 参数在准备时一次取值（冻结费用 q、准备
+ *   tick、余额基线），此后 derivePostings/durableFacts 是纯函数——重复
+ *   派生（build/authorize 的 buildIdentityFacts）不再重新抓取报价/余额，
+ *   digest、postings 与持久事实始终代表同一准备时刻（R7）。
+ * - §4.2 完整交易归属：reconcile 的期望路线/双方/资源/全量/描述/身份/
+ *   时点全部来自持久 payload v2，不从候选记录反推；完整描述严格相等
+ *   （不用 includes）；同 ID 全部副本先验一致性（顺序无关）再归并；旧
+ *   记录（早于准备 tick）不认领；多 ID 不任选；市场订单不作 send 证据。
+ * - §6 冻结费用：移除 lastQuote 作为比较权威（R3）——adapter.execute 在
+ *   调用 submit 端口**之前**以当前可信报价复验冻结 q（与业务前检共享
+ *   verifySlice0FeeQuote 纯比较逻辑）；报价读异常/非法值同样零提交。
+ *   submit 端口保留宿主接受语义，不再替 adapter 隐藏"比较发生在调用
+ *   之后"的错误。
+ * - 旧 v1 payload（无 v2 前缀）不可解释——保守 still_uncertain，不猜测
+ *   补齐身份，不静默升级。
  */
 
 import {
@@ -41,6 +58,8 @@ export const SLICE0_TRANSFER_RESOURCE = "H" as const;
 export const SLICE0_TRANSFER_AMOUNT = 100;
 /** adapter kind（仅测试注册，生产 actionContracts.ts 不注册它）。 */
 export const SLICE0_ACTION_KIND = "slice0.terminal-send" as const;
+/** 合成用户身份（宿主生成记录与 durable payload 的同一权威；§4.1）。 */
+export const SLICE0_USERNAME = "slice0-user" as const;
 
 /** 原型假设：受控世界尺寸（费用距离的环形取短计算用；真实环境待实测核对）。 */
 const PROTOTYPE_WORLD_SIZE = 128;
@@ -49,6 +68,24 @@ const TERMINAL_COOLDOWN_TICKS = 10;
 const ROOM_NAME_PATTERN = /^(W|E)\d+(N|S)\d+$/;
 const CORRELATION_KEY_PATTERN = /^[A-Za-z0-9-]{1,32}$/;
 
+/**
+ * 准备时一次取值的不可变事实（§4.1/§6.1）——由 prepareSlice0TransferArgs
+ * 从可信端口/世界读取，进入 canonical 后不再变化；derivePostings/
+ * durableFacts/execute 全部只从这份固定输入取值。
+ */
+export interface TerminalTransferPreparedFacts {
+  /** 冻结费用 q（可信报价端口一次读取；执行前以当前报价复验）。 */
+  readonly feeQuote: number;
+  /** 准备时 tick（交易时点窗下界：记录不早于本请求合法提交范围）。 */
+  readonly preparedAtTick: number;
+  /** 提交前余额基线（reconcile 终态核对锚点）。 */
+  readonly baseline: {
+    readonly sourceH: number;
+    readonly sourceEnergy: number;
+    readonly targetH: number;
+  };
+}
+
 /** canonical 参数（单一参数来源，§4.1；description 由它派生，调用者不能另传）。 */
 export interface TerminalTransferArgs {
   readonly sourceRoomName: string;
@@ -56,23 +93,51 @@ export interface TerminalTransferArgs {
   readonly resourceType: typeof SLICE0_TRANSFER_RESOURCE;
   readonly amount: typeof SLICE0_TRANSFER_AMOUNT;
   readonly correlationKey: string;
+  /** Remediation I：准备事实随 canonical 冻结（不可变；派生纯函数化）。 */
+  readonly prepared: TerminalTransferPreparedFacts;
 }
 
-export function makeSlice0TransferArgs(
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function readRoomStock(roomName: string, resource: string): number {
+  const store = hostRooms()[roomName]?.terminal?.store;
+  return store === undefined ? 0 : (store[resource] ?? 0);
+}
+
+/**
+ * 准备一条不可变请求：从显式可信假报价端口读取一次 q，同时取准备时
+ * tick 与余额基线（§4.1"期望值先存在，再读取候选记录"；§6.1"报价只读，
+ * 本次预算不可被查询覆盖"）。业务路径只经本函数形成 canonical——对外
+ * 调用者不能自行填写一个更低费用获得预算（执行前复验会拦截）。
+ */
+export function prepareSlice0TransferArgs(
+  host: TerminalTransferFakeHost,
   sourceRoomName: string,
   targetRoomName: string,
   correlationKey: string,
 ): TerminalTransferArgs {
+  const feeQuote = host.quoteTransferFee(SLICE0_TRANSFER_AMOUNT, sourceRoomName, targetRoomName);
   return {
     sourceRoomName,
     targetRoomName,
     resourceType: SLICE0_TRANSFER_RESOURCE,
     amount: SLICE0_TRANSFER_AMOUNT,
     correlationKey,
+    prepared: {
+      feeQuote,
+      preparedAtTick: Game.time,
+      baseline: {
+        sourceH: readRoomStock(sourceRoomName, SLICE0_TRANSFER_RESOURCE),
+        sourceEnergy: readRoomStock(sourceRoomName, "energy"),
+        targetH: readRoomStock(targetRoomName, SLICE0_TRANSFER_RESOURCE),
+      },
+    },
   };
 }
 
-/** 用户可见 description（安全 ASCII 关联键固定嵌入；≤100 字符——§4.3）。 */
+/** 用户可见 description（确定编码；安全 ASCII 关联键固定嵌入；≤100 字符——§4.3）。 */
 function descriptionFor(args: TerminalTransferArgs): string {
   return `treasury-slice0 ${args.correlationKey}`;
 }
@@ -126,15 +191,22 @@ export interface TerminalTransactionsView {
   incomingTransactions(): readonly TerminalTransactionRecord[];
 }
 
-/** 视图行为配置（M06 负向场景；默认全量、无异常。字段可变——测试按场景改写，宿主每次读取当前值）。 */
+/**
+ * 视图行为配置（M06/N02 负向场景；默认全量、无异常。字段可变——测试按
+ * 场景改写，宿主每次读取当前值）。
+ */
 export interface TerminalTransactionsViewConfig {
   /** 模拟历史被挤出（返回空——查询不到不能证明未执行）。 */
   dropAll?: boolean;
   /** 模拟指定视图读取异常（reconcile 须保守保留 unknown）。 */
   failOutgoing?: boolean;
   failIncoming?: boolean;
-  /** 注入额外公开记录（他人交易/旧请求/市场订单/重复 ID 噪声）。 */
+  /** 注入额外公开记录（两视图都拼接——他人交易/旧请求/市场订单/重复 ID 噪声）。 */
   injected?: TerminalTransactionRecord[];
+  /** 仅注入 outgoing 视图（N02 镜像矛盾：同 ID 两视图内容不同）。 */
+  injectedOutgoing?: TerminalTransactionRecord[];
+  /** 仅注入 incoming 视图。 */
+  injectedIncoming?: TerminalTransactionRecord[];
 }
 
 // ── fake 宿主 ───────────────────────────────────────────────────────────────
@@ -181,7 +253,7 @@ export interface TerminalTransferFakeHost {
    * intents 处理 + global-intents 世界层；重放缩量/静默丢弃语义）。
    */
   processPendingRequests(): void;
-  /** 可信费用报价端口（canonical 参数派生 fee；可配置漂移）。 */
+  /** 只读费用报价端口（只读——不保存"最后一次报价"，无跨请求可变权威；可配置漂移/读异常）。 */
   quoteTransferFee(amount: number, fromRoomName: string, toRoomName: string): number;
   /** 只读交易视图（reconcile 的唯一记录来源）。 */
   readonly transactionsView: TerminalTransactionsView;
@@ -189,6 +261,8 @@ export interface TerminalTransferFakeHost {
   readonly viewConfig: TerminalTransactionsViewConfig;
   /** 报价漂移配置：此后每次报价 +driftBy（模拟报价上行——陈旧偏低预算不得继续调用）。 */
   configureFeeDrift(driftBy: number): void;
+  /** 报价读取异常配置（N05：端口 throw——前检/guard 须零提交拒绝）。 */
+  configureQuoteFailure(fail: boolean): void;
   /** 断点分支标记（传 captureTreasuryHostBreakpoint；reopen 从副本重开宿主状态）。 */
   captureBranch(): TerminalTransferHostBranchMarker;
   // ── 测试断言面（不进 reconciler 路径）──
@@ -212,10 +286,9 @@ interface HostState {
   txnSeq: number;
   viewConfig: TerminalTransactionsViewConfig;
   feeDrift: number;
+  quoteFailure: boolean;
   cooldownUntil: Record<string, number>;
   branchEpoch: number;
-  /** 最近一次报价派生（§4.1：execute 前比对——报价上行时拒绝继续调用）。 */
-  lastQuote: { key: string; fee: number } | null;
 }
 
 interface HostWorldRoom {
@@ -238,26 +311,26 @@ export function createTerminalTransferFakeHost(): TerminalTransferFakeHost {
     txnSeq: 0,
     viewConfig: {},
     feeDrift: 0,
+    quoteFailure: false,
     cooldownUntil: {},
     branchEpoch: 0,
-    lastQuote: null,
   };
 
-  const readStore = (roomName: string): Record<string, number> | undefined =>
-    hostRooms()[roomName]?.terminal?.store;
-
   const host: TerminalTransferFakeHost = {
+    // §6.1 报价只读：纯计算（+配置的漂移/读异常），不保存任何"最后一次
+    // 报价"——旧请求的比较权威是 canonical 冻结 q，不是查询历史（R3）。
     quoteTransferFee(amount, fromRoomName, toRoomName): number {
+      if (state.quoteFailure) throw new Error("报价端口读取异常（N05 场景）");
       const range = slice0RoomsDistance(fromRoomName, toRoomName);
       if (range === null) throw new Error(`报价端口：房间名非法（${fromRoomName}→${toRoomName}）`);
-      const fee = slice0TerminalEnergyCost(amount, range) + state.feeDrift;
-      state.lastQuote = { key: `${fromRoomName}>${toRoomName}:${String(amount)}`, fee };
-      return fee;
+      return slice0TerminalEnergyCost(amount, range) + state.feeDrift;
     },
 
     submitTerminalSend(input): TerminalTransferSubmitResult {
       // 重放 engine API 层（structures.js send）的同步前置检查——全部通过
-      // 才"写入 send intent"（这里入 pending）。OK 只表示已调度。
+      // 才"写入 send intent"（这里入 pending）。OK 只表示已调度。宿主只做
+      // 引擎层自身检查（§6.2：不做费用一致性比较——那是 adapter guard 在
+      // 调用本端口**之前**的职责，宿主不得替其隐藏时序错误）。
       state.submits.push({
         atTick: Game.time,
         sourceRoomName: input.sourceRoomName,
@@ -280,12 +353,6 @@ export function createTerminalTransferFakeHost(): TerminalTransferFakeHost {
       const range = slice0RoomsDistance(input.sourceRoomName, input.targetRoomName);
       if (range === null) return { ok: false, code: "ERR_INVALID_ARGS" };
       const cost = slice0TerminalEnergyCost(input.amount, range) + state.feeDrift;
-      // §4.1 报价一致性：与派生时点（postings 冻结值）比对——报价上行
-      // （drift）时不得用陈旧偏低预算继续调用。
-      const quoteKey = `${input.sourceRoomName}>${input.targetRoomName}:${String(input.amount)}`;
-      if (state.lastQuote !== null && state.lastQuote.key === quoteKey && state.lastQuote.fee !== cost) {
-        return { ok: false, code: "ERR_FEE_QUOTE_DRIFTED" };
-      }
       const energyNeeded = input.resourceType === "energy" ? input.amount + cost : cost;
       if ((store.energy ?? 0) < energyNeeded) return { ok: false, code: "ERR_NOT_ENOUGH_RESOURCES" };
       if (input.description.length > 100) return { ok: false, code: "ERR_INVALID_ARGS" };
@@ -332,8 +399,8 @@ export function createTerminalTransferFakeHost(): TerminalTransferFakeHost {
         state.transactions.push({
           transactionId: `txn-${state.txnSeq.toString().padStart(4, "0")}`,
           time: Game.time,
-          sender: { username: "slice0-user" },
-          recipient: { username: "slice0-user" },
+          sender: { username: SLICE0_USERNAME },
+          recipient: { username: SLICE0_USERNAME },
           resourceType: intent.resourceType,
           amount,
           from: intent.sourceRoomName,
@@ -348,12 +415,20 @@ export function createTerminalTransferFakeHost(): TerminalTransferFakeHost {
       outgoingTransactions(): readonly TerminalTransactionRecord[] {
         if (state.viewConfig.failOutgoing) throw new Error("交易视图读取异常（outgoing）——M06 场景");
         if (state.viewConfig.dropAll === true) return [];
-        return [...state.transactions, ...(state.viewConfig.injected ?? [])];
+        return [
+          ...state.transactions,
+          ...(state.viewConfig.injected ?? []),
+          ...(state.viewConfig.injectedOutgoing ?? []),
+        ];
       },
       incomingTransactions(): readonly TerminalTransactionRecord[] {
         if (state.viewConfig.failIncoming) throw new Error("交易视图读取异常（incoming）——M06 场景");
         if (state.viewConfig.dropAll === true) return [];
-        return [...state.transactions, ...(state.viewConfig.injected ?? [])];
+        return [
+          ...state.transactions,
+          ...(state.viewConfig.injected ?? []),
+          ...(state.viewConfig.injectedIncoming ?? []),
+        ];
       },
     },
 
@@ -365,6 +440,10 @@ export function createTerminalTransferFakeHost(): TerminalTransferFakeHost {
       state.feeDrift = driftBy;
     },
 
+    configureQuoteFailure(fail: boolean): void {
+      state.quoteFailure = fail;
+    },
+
     captureBranch(): TerminalTransferHostBranchMarker {
       const copy = {
         pending: state.pending.slice(),
@@ -372,6 +451,7 @@ export function createTerminalTransferFakeHost(): TerminalTransferFakeHost {
         submits: state.submits.slice(),
         txnSeq: state.txnSeq,
         feeDrift: state.feeDrift,
+        quoteFailure: state.quoteFailure,
         cooldownUntil: { ...state.cooldownUntil },
       };
       return {
@@ -384,6 +464,7 @@ export function createTerminalTransferFakeHost(): TerminalTransferFakeHost {
           state.submits = copy.submits.slice();
           state.txnSeq = copy.txnSeq;
           state.feeDrift = copy.feeDrift;
+          state.quoteFailure = copy.quoteFailure;
           state.cooldownUntil = { ...copy.cooldownUntil };
           state.branchEpoch += 1;
         },
@@ -403,43 +484,116 @@ export function createTerminalTransferFakeHost(): TerminalTransferFakeHost {
   return host;
 }
 
+// ── 冻结费用复验（§6.2：业务前检与 adapter guard 共享的纯比较逻辑） ──────────
+
+export type Slice0FeeQuoteCheck =
+  | { readonly ok: true; readonly currentFee: number }
+  | { readonly ok: false; readonly code: "ERR_FEE_QUOTE_DRIFTED" | "ERR_FEE_QUOTE_UNAVAILABLE" };
+
+/**
+ * 以当前可信报价复验 canonical 冻结 q（§6.1/§6.2）。比较基准只能来自该
+ * 请求已绑定许可的 canonical 数据；报价读异常/非法值同样拒绝。本函数纯
+ * 比较——不建立第二授权体系；调用方据此在 submit 端口被调用**之前**拒绝。
+ */
+export function verifySlice0FeeQuote(
+  host: TerminalTransferFakeHost,
+  args: TerminalTransferArgs,
+): Slice0FeeQuoteCheck {
+  let currentFee: number;
+  try {
+    currentFee = host.quoteTransferFee(args.amount, args.sourceRoomName, args.targetRoomName);
+  } catch {
+    return { ok: false, code: "ERR_FEE_QUOTE_UNAVAILABLE" };
+  }
+  if (!Number.isSafeInteger(currentFee) || currentFee < 1) {
+    return { ok: false, code: "ERR_FEE_QUOTE_UNAVAILABLE" };
+  }
+  if (currentFee !== args.prepared.feeQuote) {
+    return { ok: false, code: "ERR_FEE_QUOTE_DRIFTED" };
+  }
+  return { ok: true, currentFee };
+}
+
 // ── adapter 原型（仅测试装配；不进生产 actionContracts.ts 注册表） ──────────
 
-/** durable facts payload（提交前库存基线——reconcile 的终态核对锚点）。 */
+/**
+ * durable facts payload v2（Remediation I）：期望身份的全部事实——关联键、
+ * 期望路线（源/目标）、全量、冻结费用、提交前基线、准备 tick、合成用户
+ * 身份。reconcile 只从这份持久事实生成期望值，不从候选记录反推（R1）。
+ */
 interface Slice0DurablePayload {
   readonly k: string;
+  readonly s: string;
+  readonly d: string;
   readonly a: number;
   readonly f: number;
   readonly sb: readonly [number, number];
   readonly tb: readonly [number];
+  readonly t: number;
+  readonly u: string;
 }
 
-/** 受控编码（kernel payload 字符集排除 `"` 与 `\`；键为安全 ASCII 无分隔符注入）。 */
+/** 受控编码（kernel payload 字符集排除 `"` 与 `\`；键/房间名/用户名为安全 ASCII 无分隔符注入）。 */
 function encodeSlice0Payload(p: Slice0DurablePayload): string {
-  return `k:${p.k}|a:${String(p.a)}|f:${String(p.f)}|sb:${String(p.sb[0])},${String(p.sb[1])}|tb:${String(p.tb[0])}`;
+  return [
+    "v2",
+    `k:${p.k}`,
+    `s:${p.s}`,
+    `d:${p.d}`,
+    `a:${String(p.a)}`,
+    `f:${String(p.f)}`,
+    `sb:${String(p.sb[0])},${String(p.sb[1])}`,
+    `tb:${String(p.tb[0])}`,
+    `t:${String(p.t)}`,
+    `u:${p.u}`,
+  ].join("|");
 }
 
+/** v2 严格解码：10 段、固定字段序、数字段非负安全整数；任何无法解释返回 null（保守，不猜测）。 */
 function decodeSlice0Payload(raw: string): Slice0DurablePayload | null {
   const parts = raw.split("|");
-  if (parts.length !== 5) return null;
-  const [k, a, f, sb, tb] = parts as [string, string, string, string, string];
-  if (!k.startsWith("k:") || !a.startsWith("a:") || !f.startsWith("f:") || !sb.startsWith("sb:") || !tb.startsWith("tb:")) {
+  if (parts.length !== 10 || parts[0] !== "v2") return null;
+  const [k, s, d, a, f, sb, tb, t, u] = parts.slice(1) as [string, string, string, string, string, string, string, string, string];
+  if (!k.startsWith("k:") || !s.startsWith("s:") || !d.startsWith("d:") || !a.startsWith("a:") || !f.startsWith("f:") || !sb.startsWith("sb:") || !tb.startsWith("tb:") || !t.startsWith("t:") || !u.startsWith("u:")) {
     return null;
   }
   const sbParts = sb.slice(3).split(",");
-  const numbers = [Number(a.slice(2)), Number(f.slice(2)), Number(sbParts[0]), Number(sbParts[1] ?? ""), Number(tb.slice(3))];
-  if (numbers.some((n) => !Number.isSafeInteger(n) || n < 0)) return null;
-  return { k: k.slice(2), a: numbers[0]!, f: numbers[1]!, sb: [numbers[2]!, numbers[3]!], tb: [numbers[4]!] };
+  const numbers = [
+    Number(a.slice(2)),
+    Number(f.slice(2)),
+    Number(sbParts[0] ?? ""),
+    Number(sbParts[1] ?? ""),
+    Number(tb.slice(3)),
+    Number(t.slice(2)),
+  ];
+  if (numbers.some((n) => !isNonNegativeSafeInteger(n))) return null;
+  const key = k.slice(2);
+  const src = s.slice(2);
+  const dst = d.slice(2);
+  const user = u.slice(2);
+  if (key.length === 0 || src.length === 0 || dst.length === 0 || user.length === 0) return null;
+  return { k: key, s: src, d: dst, a: numbers[0]!, f: numbers[1]!, sb: [numbers[2]!, numbers[3]!], tb: [numbers[4]!], t: numbers[5]!, u: user };
 }
 
-/** 解码 durable payload（导出测试断言用；不可解释返回 null）。 */
+/** 解码 durable payload（导出测试断言用；不可解释——含旧 v1——返回 null）。 */
 export function decodeSlice0DurablePayload(raw: string): Slice0DurablePayload | null {
   return decodeSlice0Payload(raw);
 }
 
-function readRoomStock(roomName: string, resource: string): number {
-  const store = hostRooms()[roomName]?.terminal?.store;
-  return store === undefined ? 0 : (store[resource] ?? 0);
+/** 同 ID 副本一致性：全部相关字段（描述/双方/身份/路线/资源/金额/时点/order 属性）逐一相等。 */
+function slice0RecordsIdentical(a: TerminalTransactionRecord, b: TerminalTransactionRecord): boolean {
+  return (
+    a.time === b.time &&
+    a.sender?.username === b.sender?.username &&
+    a.recipient?.username === b.recipient?.username &&
+    a.resourceType === b.resourceType &&
+    a.amount === b.amount &&
+    a.from === b.from &&
+    a.to === b.to &&
+    a.description === b.description &&
+    a.order?.id === b.order?.id &&
+    (a.order === undefined) === (b.order === undefined)
+  );
 }
 
 export interface TerminalTransferPrototypeAdapter extends TreasuryActionAdapter<TerminalTransferArgs, TerminalTransferSubmitResult> {
@@ -452,8 +606,11 @@ export function makeTerminalTransferPrototypeAdapter(
 ): TerminalTransferPrototypeAdapter {
   return {
     kind: SLICE0_ACTION_KIND,
-    version: 1,
-    semanticIdentity: "slice0.terminal-send@engine-delayed-transfer-v1",
+    // Remediation I：payload v2 + 冻结费用契约——协议语义变化，版本与
+    // semanticIdentity 同步升级；旧 v1 identity 的记录不会被新 reconciler
+    // 静默认领（facade 按 identity 匹配，不匹配则保持 unknown）。
+    version: 2,
+    semanticIdentity: "slice0.terminal-send@engine-delayed-transfer-v2",
     // §4.2：execute 的 OK 只是 submit 已调度——世界效果发生在后续处理阶段。
     settlesOnAccept: false,
     // §4.2：保守 unknown——不按任意 false/未知数字猜测 not_executed。
@@ -462,7 +619,7 @@ export function makeTerminalTransferPrototypeAdapter(
 
     validate(args: unknown): string | null {
       if (args === null || typeof args !== "object") return "args 非对象";
-      const candidate = args as Partial<TerminalTransferArgs>;
+      const candidate = args as Partial<TerminalTransferArgs> & { prepared?: Partial<TerminalTransferPreparedFacts> };
       if (typeof candidate.sourceRoomName !== "string" || !ROOM_NAME_PATTERN.test(candidate.sourceRoomName)) {
         return "sourceRoomName 非法（须 W/E+N/S 房间名）";
       }
@@ -479,16 +636,32 @@ export function makeTerminalTransferPrototypeAdapter(
       if (typeof candidate.correlationKey !== "string" || !CORRELATION_KEY_PATTERN.test(candidate.correlationKey)) {
         return "correlationKey 非法（安全 ASCII，1..32 字符）";
       }
+      // Remediation I：准备事实必须随 canonical 提供且形状合法（一次取值，
+      // 不接受缺失/畸形的冻结费用与基线）。
+      const prepared = candidate.prepared;
+      if (prepared === null || typeof prepared !== "object") {
+        return "prepared 缺失——须经 prepareSlice0TransferArgs 一次取值（冻结费用/基线/准备 tick）";
+      }
+      if (typeof prepared.feeQuote !== "number" || !Number.isSafeInteger(prepared.feeQuote) || prepared.feeQuote < 1) {
+        return "prepared.feeQuote 非法（正整数——冻结费用）";
+      }
+      if (!isNonNegativeSafeInteger(prepared.preparedAtTick)) {
+        return "prepared.preparedAtTick 非法（非负整数）";
+      }
+      const baseline = prepared.baseline;
+      if (baseline === null || typeof baseline !== "object") return "prepared.baseline 缺失";
+      if (!isNonNegativeSafeInteger(baseline.sourceH) || !isNonNegativeSafeInteger(baseline.sourceEnergy) || !isNonNegativeSafeInteger(baseline.targetH)) {
+        return "prepared.baseline 非法（三项均须非负整数）";
+      }
       return null;
     },
 
+    // §4.1（Remediation I 纯函数化）：三腿责任的 fee 来自 canonical 冻结
+    // q——不在此处查询报价（build/authorize 重复派生得到同一集合）。
     derivePostings(args: TerminalTransferArgs): readonly { roomName: string; locationKind: string; resource: string; delta: number }[] {
-      // §4.1：三腿责任（源 −100H、源 −fee energy、目标 +100H 接收空间）；
-      // fee 从可信报价端口派生（canonical 参数之外无第二参数来源）。
-      const fee = host.quoteTransferFee(args.amount, args.sourceRoomName, args.targetRoomName);
       return [
         { roomName: args.sourceRoomName, locationKind: "terminal", resource: args.resourceType, delta: -args.amount },
-        { roomName: args.sourceRoomName, locationKind: "terminal", resource: "energy", delta: -fee },
+        { roomName: args.sourceRoomName, locationKind: "terminal", resource: "energy", delta: -args.prepared.feeQuote },
         { roomName: args.targetRoomName, locationKind: "terminal", resource: args.resourceType, delta: args.amount },
       ];
     },
@@ -501,23 +674,32 @@ export function makeTerminalTransferPrototypeAdapter(
       ];
     },
 
+    // §4.1（Remediation I 纯函数化）：durable payload 只编码 canonical 已
+    // 冻结的事实——重复派生（build 与 authorize 的 buildIdentityFacts）
+    // 输出恒等，不再重新抓取报价/余额/时间（R7）。
     durableFacts(args: TerminalTransferArgs): TreasuryDurableFacts {
-      const fee = host.quoteTransferFee(args.amount, args.sourceRoomName, args.targetRoomName);
       const payload: Slice0DurablePayload = {
         k: args.correlationKey,
+        s: args.sourceRoomName,
+        d: args.targetRoomName,
         a: args.amount,
-        f: fee,
-        sb: [readRoomStock(args.sourceRoomName, args.resourceType), readRoomStock(args.sourceRoomName, "energy")],
-        tb: [readRoomStock(args.targetRoomName, args.resourceType)],
+        f: args.prepared.feeQuote,
+        sb: [args.prepared.baseline.sourceH, args.prepared.baseline.sourceEnergy],
+        tb: [args.prepared.baseline.targetH],
+        t: args.prepared.preparedAtTick,
+        u: SLICE0_USERNAME,
       };
       // 受控可打印字符集（排除 " 与 \）——不用 JSON.stringify（引号会被
       // validator 拒绝）；correlationKey 限安全 ASCII（不含分隔符，无注入面）。
-      return { version: 1, payload: encodeSlice0Payload(payload) };
+      return { version: 2, payload: encodeSlice0Payload(payload) };
     },
 
     execute(args: TerminalTransferArgs): TerminalTransferSubmitResult {
-      // §4.2：恰好一次 submit；报价一致性比对在 submit 端口内部完成
-      // （与 derivePostings 派生时点的冻结报价比对——漂移即拒绝）。
+      // §6.2：调用 submit 端口**之前**以当前可信报价复验冻结 q（与业务前检
+      // 共享 verifySlice0FeeQuote）——漂移/读异常/非法值时零提交（submit
+      // 端口的接受语义保持引擎层原样，不在此处之后才发现不一致）。
+      const feeCheck = verifySlice0FeeQuote(host, args);
+      if (feeCheck.ok !== true) return { ok: false, code: feeCheck.code };
       return host.submitTerminalSend({
         sourceRoomName: args.sourceRoomName,
         targetRoomName: args.targetRoomName,
@@ -527,8 +709,9 @@ export function makeTerminalTransferPrototypeAdapter(
       });
     },
 
-    // §4.3：只接收公开形态证据。永不返回 observed_not_executed——源码事实
-    // 是处理阶段多条静默丢弃路径无任何记录，查询不到交易不能证明未执行。
+    // §4.2/§4.3（Remediation I 重写）：只接收公开形态证据；期望值全部来自
+    // 持久 payload v2，不从候选记录反推。永不返回 observed_not_executed——
+    // 处理阶段多条静默丢弃路径无任何记录，查询不到交易不能证明未执行。
     reconcile(
       facts: { transactionId: string; durablePayload?: string; postings?: readonly unknown[] },
       _observation: unknown,
@@ -536,12 +719,10 @@ export function makeTerminalTransferPrototypeAdapter(
       let payload: Slice0DurablePayload | null;
       try {
         payload = decodeSlice0Payload(String(facts.durablePayload ?? ""));
-        if (payload === null || typeof payload.k !== "string" || payload.k.length === 0) {
-          return "still_uncertain";
-        }
       } catch {
         return "still_uncertain"; // facts 不可解释——保守保留
       }
+      if (payload === null) return "still_uncertain"; // 旧 v1/畸形——不猜测补齐身份
       let outgoing: readonly TerminalTransactionRecord[];
       let incoming: readonly TerminalTransactionRecord[];
       try {
@@ -550,45 +731,53 @@ export function makeTerminalTransferPrototypeAdapter(
       } catch {
         return "still_uncertain"; // 读异常——保守保留（不被解释为完成）
       }
-      // 关联键匹配 + 排除市场订单记录（order 字段）+ 公开形态字段核对。
-      const matches = outgoing.filter(
-        (record) =>
-          record.description !== undefined &&
-          record.description.includes(payload.k) &&
-          record.order === undefined &&
-          record.resourceType === SLICE0_TRANSFER_RESOURCE,
-      );
-      if (matches.length === 0) return "still_uncertain";
-      // 多个不同交易 ID 同时匹配——不能选定唯一事实。
-      const distinctIds = new Set(matches.map((record) => record.transactionId));
-      if (distinctIds.size > 1) return "still_uncertain";
-      const matched = matches[0]!;
-      // 两视图同一交易 ID 是同一条事实（不重复计数）；同 ID 内容矛盾则阻断。
-      const mirrored = incoming.filter((record) => record.transactionId === matched.transactionId);
-      if (
-        mirrored.some(
-          (record) =>
-            record.resourceType !== matched.resourceType ||
-            record.amount !== matched.amount ||
-            record.from !== matched.from ||
-            record.to !== matched.to,
-        )
-      ) {
-        return "still_uncertain";
+      // 期望值先存在（§4.1）：完整描述确定编码、严格相等——不用
+      // includes/startsWith/模糊匹配。
+      const expectedDescription = `treasury-slice0 ${payload.k}`;
+      // 完整归属匹配：描述、期望路线（源/目标）、双方身份、资源、全量
+      // amount、非市场订单（order 字段）——全部来自持久 payload。
+      const ownershipMatch = (record: TerminalTransactionRecord): boolean =>
+        record.description === expectedDescription &&
+        record.from === payload.s &&
+        record.to === payload.d &&
+        record.sender?.username === payload.u &&
+        record.recipient?.username === payload.u &&
+        record.resourceType === SLICE0_TRANSFER_RESOURCE &&
+        record.order === undefined &&
+        record.amount === payload.a;
+      // 1) 按交易 ID 分组（两视图合并；同视图重复也在组内）。
+      const groups = new Map<string, { view: string; record: TerminalTransactionRecord }[]>();
+      for (const [view, list] of [["outgoing", outgoing], ["incoming", incoming]] as const) {
+        for (const record of list) {
+          const copies = groups.get(record.transactionId) ?? [];
+          copies.push({ view, record });
+          groups.set(record.transactionId, copies);
+        }
       }
-      // 部分转运（请求 100、实际 60）不报全量——保守责任，不补发不重执行。
-      if (matched.amount !== payload.a) return "still_uncertain";
-      // 时点：处理发生在 tick T 后期，效果与记录对 T+1 的脚本可见——
-      // 当前 tick 不早于效果可见时点才允许下结论。
-      if (Game.time <= matched.time) return "still_uncertain";
-      // 隔离场景库存终态核对（提交前基线存 durable facts；§3.1 保证无并发业务）。
-      const sourceH = readRoomStock(matched.from, SLICE0_TRANSFER_RESOURCE);
-      const sourceEnergy = readRoomStock(matched.from, "energy");
-      const targetH = readRoomStock(matched.to, SLICE0_TRANSFER_RESOURCE);
+      // 2) 相关组（组内任一副本完整归属匹配）：先验同 ID 全部副本一致性
+      // （顺序无关——不能把矛盾镜像先过滤掉再比较）；矛盾整体阻断；一致
+      // 归并为一条。无关键录（他人交易/市场订单/无关噪声）不阻断。
+      const candidates: TerminalTransactionRecord[] = [];
+      for (const copies of groups.values()) {
+        if (!copies.some((c) => ownershipMatch(c.record))) continue;
+        if (!copies.every((c) => slice0RecordsIdentical(c.record, copies[0]!.record))) {
+          return "still_uncertain"; // 同 ID 相关记录矛盾——保守阻断
+        }
+        candidates.push(copies[0]!.record);
+      }
+      // 3) 时点窗（§4.2）：不早于本请求合法提交范围（>= 准备 tick——本请求
+      // 之前的旧记录不被认领）；不晚于当前可见时点（< Game.time——当前
+      // tick 未处理完时单纯刷新观察不结算）。
+      const visible = candidates.filter((r) => r.time >= payload.t && Game.time > r.time);
+      // 4) 多个不同交易 ID 都可能属于同一请求——不能任选一个成功记录。
+      if (visible.length !== 1) return "still_uncertain";
+      const matched = visible[0]!;
+      // 5) 库存终态核对——只检查期望端点（源/目标房间来自持久 payload，
+      // 非 matched.from/to）；部分量在此前已因 amount≠全量被排除。
       if (
-        sourceH !== payload.sb[0]! - payload.a ||
-        sourceEnergy !== payload.sb[1]! - payload.f ||
-        targetH !== payload.tb[0]! + payload.a
+        readRoomStock(payload.s, SLICE0_TRANSFER_RESOURCE) !== payload.sb[0]! - payload.a ||
+        readRoomStock(payload.s, "energy") !== payload.sb[1]! - payload.f ||
+        readRoomStock(payload.d, SLICE0_TRANSFER_RESOURCE) !== payload.tb[0]! + payload.a
       ) {
         return "still_uncertain";
       }

@@ -1,0 +1,38 @@
+=== 变异 1-ownership：[test/mock/treasuryTerminalTransferPrototype.ts] ===
+原始串: record.description === expectedDescription &&
+变异串: record.description !== undefined && record.description.includes(payload.k) &&
+已注入变异
+FAIL src/runtime/treasury/treasuryTerminalTransferSlice0RemediationI.test.ts
+  Terminal Transfer Slice 0 · Remediation I（N01–N06）
+    × N01：完整归属矩阵——描述/双方/身份/路线/资源/金额逐项破坏均 uncertain；正确唯一对照 committed（期望值来自持久 payload） (14 ms)
+    ○ skipped N02：同 ID 副本一致去重/矛盾顺序无关阻断；旧记录不认领；多 ID/带 order/当前 tick 保守；无关噪声不阻断正确唯一记录
+    ○ skipped N01/N02：关键错误归属经注册 settle 入口保持 unknown 与持久 phase；正确对照完成
+    ○ skipped N03：不同 workKey/关联键的 B 经第二协调器被拒；通用 facade 直连不受门禁保护（入口边界对照）
+    ○ skipped N03：完整 reset 到开放 tick 后 B 仍被持久 active 阻断（理由为单条在途）；A 收尾退出后 B 正常接纳
+    ○ skipped N03：A closing 期间 B 阻断；A 退出并越过冷却后 B 经业务入口完整闭环（恰两次提交）
+    ○ skipped N05：q→q+5 不再查/再查/其他准备报价/读异常均零提交；前检与 adapter guard 双覆盖；恢复与新报价闭环对照
+    ○ skipped N06：canonical/postings/permit/active/durable 费用与身份同源且重复派生稳定；无 retry、不回填旧事实
+
+  ● Terminal Transfer Slice 0 · Remediation I（N01–N06） › N01：完整归属矩阵——描述/双方/身份/路线/资源/金额逐项破坏均 uncertain；正确唯一对照 committed（期望值来自持久 payload）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "still_uncertain"
+    Received: "observed_committed"
+
+    [0m [90m 216 |[39m       [36mconst[39m scene [33m=[39m makeFnScene([32m"s0-n1-k"[39m)[33m;[39m
+     [90m 217 |[39m       scene[33m.[39mhost[33m.[39mviewConfig[33m.[39minjected [33m=[39m [goodRecord(scene[33m,[39m [32m"txn-0002"[39m[33m,[39m { description[33m:[39m [32m`treasury-slice0 ${scene.key}X`[39m })][33m;[39m
+    [31m[1m>[22m[39m[90m 218 |[39m       expect(reconcileFn(scene))[33m.[39mtoBe([32m"still_uncertain"[39m)[33m;[39m [90m// 前缀碰撞[39m
+     [90m     |[39m                                  [31m[1m^[22m[39m
+     [90m 219 |[39m       [36mconst[39m scene2 [33m=[39m makeFnScene([32m"s0-n1-k"[39m)[33m;[39m
+     [90m 220 |[39m       scene2[33m.[39mhost[33m.[39mviewConfig[33m.[39minjected [33m=[39m [goodRecord(scene2[33m,[39m [32m"txn-0002"[39m[33m,[39m { description[33m:[39m [32m`treasury-slice0 X${scene2.key}`[39m })][33m;[39m
+     [90m 221 |[39m       expect(reconcileFn(scene2))[33m.[39mtoBe([32m"still_uncertain"[39m)[33m;[39m [90m// 后缀碰撞[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryTerminalTransferSlice0RemediationI.test.ts:218:34)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 7 skipped, 8 total
+Snapshots:   0 total
+Time:        3.969 s
+Ran all test suites within paths "src/runtime/treasury/treasuryTerminalTransferSlice0RemediationI.test.ts".
+jest-exit=1

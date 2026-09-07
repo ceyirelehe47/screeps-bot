@@ -469,3 +469,25 @@ IVKernel 测试侧两文件。
 - 新 mock 的交易视图/报价端口/处理推进均为离线 fake（模拟公开 API 形态与源码检查链），不是真实引擎运行证据；真实环境待实测项见 terminal-transfer-slice-0.md §1.5/§3。
 - durable facts 用受控编码（`k:..|a:..|f:..|sb:..,..|tb:..`）而非 JSON：kernel payload 字符集排除 `"` 与 `\`（store.ts PAYLOAD_PATTERN），JSON.stringify 默认输出会被 validator 拒绝。
 - 恢复后的新接纳必须经新模块的 buildTreasuryActionContract（resetModules 重建模块图，旧 import 入口的 WeakSet 注册对新 service 无效）——该边界已固化为测试注释与 admitRestored helper。
+
+## 17. Terminal Transfer Slice 0 · Remediation I：N01–N08 定位（2026-09-07）
+
+| 索引 | 测试/驱动位置 | 覆盖行为 |
+| --- | --- | --- |
+| N01 | src/runtime/treasury/treasuryTerminalTransferSlice0RemediationI.test.ts it「N01」（函数级公开形态夹具） | 期望值全部来自持久 payload v2（一次取值）：前缀/后缀碰撞、sender/recipient 错与缺失、from/to 错、resource/amount 破坏、旧 v1 payload 不可解释、无记录/dropAll/读异常均 still_uncertain；正确唯一对照 observed_committed |
+| N02 | 同文件 it「N02」（函数级）+ it「N01/N02」（注册路径） | 同 ID 一致镜像两视图归并（不重复计数）；镜像描述矛盾两方向顺序无关拒绝；同视图重复仅描述/仅时点矛盾拒绝、一致副本通过；旧记录（time<t）单独不确定、与正确记录并存时正确完成；当前 tick 记录不结算；多 ID/带 order 保守且不阻断正确记录；C→D 错路线/镜像矛盾/双方错经 settleUnknownOutcome 断言 phase=outcome_unknown 与 active 保留；正确对照 committed+closing+退出 |
+| N03 | 同文件 it「N03」×3 | B（不同 workKey/关联键）经第二协调器 single-flight 拒（理由不含窗口/额度）+ facade 直连对照（通用层第二张许可可获得——入口边界）；完整 reset 到开放 tick 仍拒、A 收尾退出后 B 接纳；A closing 阻断、退出并越过 10 tick 冷却后 B 经业务入口完整闭环（submits=2、源 800H、fee×2、目标 200H） |
+| N04 | src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts it「M05/N04」+ it「M07/N03/N04」×2 | 原 M05 延迟闭环与两类配对断点经业务入口重跑；当 tick 未处理不释放、正确记录到达后结算、cleanup 退出；恰一次提交不双扣 |
+| N05 | RemediationI it「N05」 | 漂移后不查询/再查询多次/另一准备过程报价/读异常/非法值——旧请求零提交（submits 直接断言）；业务前检（许可未消费 pending 保留）与绕过前检直连 facade 到 adapter guard（unknown 保留）双覆盖；恢复报价未消费请求与独立 q+5 新请求均完成 100H 闭环（实际费用与各自授权相同） |
+| N06 | RemediationI it「N06」 | durableFacts/derivePostings 重复派生恒等（纯函数）；permit.postings/active worstCase/持久 payload 与 canonical 冻结 q 同源；重复授权同一持久事实；drift+再报价不回填；无 retryFacts |
+| N07 | scripts/verify-treasury-evidence.mjs（非 Jest；主验证 verify-outside/verify-empty/坏产物对照实跑）+ evidence controls/mutation-*.txt | 驱动从仓库外含空格 cwd 以绝对路径运行：正确输入 0、空输入非零、缺输入非零；篡改 trace 副本非零；三项退化变异各使目标 it 红 |
+| N08 | 主验证 + 第二上下文（evidence final/revalidation） | 固定 SHA 全量验证、第二执行上下文定向复验、生产/配置/Defense 冻结、原始产物齐全；报告限定范围（原型修复/驱动 cwd/未实测引擎边界分开） |
+
+### 17.1 覆盖差异与边界说明
+
+- 协调器（treasuryTerminalTransferCoordinator.ts）与 mock 均在 test/mock/（非 Jest 收集、不进生产 bundle）；单条在途是**业务入口**规则，通用 facade 无此全局规则（N03-a 直连对照实证）。
+- `kernelJournal().health` 为 `absent` 时放行：kernel store 惰性初始化（首笔 admit 才建 store）是真实空态，不是不健康视图；`unhealthy/incompatible` 才 fail-closed。
+- payload v2（`v2|k:..|s:..|d:..|a:..|f:..|sb:..,..|tb:..|t:..|u:..`）沿用受控可打印字符集（排除 `"` 与 `\`）；adapter version 2 + semanticIdentity v2——旧 v1 identity 记录不被新 reconciler 静默认领，旧 v1 payload 解码失败保守 uncertain（不迁移不猜测）。
+- lastQuote 机制整体移除：报价端口只读；冻结基准唯一来源是 canonical `prepared.feeQuote`（prepareSlice0TransferArgs 一次取值），业务前检与 adapter guard 共享 verifySlice0FeeQuote 纯比较（不建立第二授权体系）。
+- 矩阵/序列 it 内多场景共享全局 Memory：freshScene（resetTreasuryCoreStoreForTest + makeScene）用于换场景清上一场景未收尾 active——这些 it 测归属/费用矩阵，单条在途门禁由 N03 专测（N03 各场景不 reset、保留 active 与配对宿主状态）。
+- M04/N06 的直连 facade 用例（执行前条件变化、重复授权）在测试注释注明不承担业务门禁证明（§5 入口边界）。

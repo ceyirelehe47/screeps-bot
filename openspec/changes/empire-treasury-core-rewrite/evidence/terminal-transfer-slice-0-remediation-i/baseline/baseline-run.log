@@ -1,0 +1,16 @@
+PASS src/runtime/treasury/slice0RemediationIBaseline.test.ts
+  Slice 0 Remediation I 基线（起点 93a6152 缺陷复现）
+    √ R1 对照：正确唯一记录正常完成（反例的其他成功条件由此证明成立） (36 ms)
+    √ R1a：完整关联键错误但描述包含期望键——被误报 committed (9 ms)
+    √ R1b：sender/recipient 身份错误或缺失——被误报 committed (19 ms)
+    √ R1c：请求 A→B 却认领 C→D 记录（C/D 数值吻合、A/B 不变）——被误报 committed (13 ms)
+    √ R1d：同 ID 镜像描述矛盾（同视图重复、首条匹配）——被误报 committed (7 ms)
+    √ R2：不同 workKey、不同关联键的 B 在 A 未结束时仍被接纳（无单条在途门禁） (9 ms)
+    √ R3：冻结报价涨 5 后再查询一次——旧请求仍被接受进入 submit；未查询分支端口已被调用 (14 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       7 passed, 7 total
+Snapshots:   0 total
+Time:        5.203 s
+Ran all test suites within paths "src/runtime/treasury/slice0RemediationIBaseline.test.ts".
+exit=0

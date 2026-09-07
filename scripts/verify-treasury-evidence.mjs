@@ -36,6 +36,26 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const scriptPath = fileURLToPath(import.meta.url);
 
+/**
+ * 仓库定位（Remediation I · T1/N07）：从脚本实际路径向上找 .git 祖先目录，
+ * 不依赖调用者 cwd——仓库外以绝对路径运行时不再失败或选中另一个仓库。
+ * 所有 Git 调用与依赖解析显式锚定该根；run-dir 相对路径仍按**调用者 cwd**
+ * 解析（见 main），不因切换 Git cwd 改变输入含义。
+ */
+function resolveRepoRoot() {
+  let dir = path.dirname(scriptPath);
+  for (;;) {
+    if (fs.existsSync(path.join(dir, ".git"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  console.error(`无法从脚本路径定位仓库根（未找到 .git 祖先目录）: ${scriptPath}`);
+  process.exit(2);
+}
+
+const REPO_ROOT = resolveRepoRoot();
+
 /** H18 固定夹具约束（来源：treasuryRemediationIVKernel.test.ts J06 fixture，锚点 5360e66 系列：30 closing ×3 + 20 unknown + 10 retry + 4 pending，observe plannedTicks=12）。 */
 const FIXTURES = {
   h18: Object.freeze({
@@ -90,22 +110,22 @@ function parseArgs(argv) {
   return out;
 }
 
-/** 从指定固定提交加载 treasurySealEvidence（git show → transpile → 临时 js require）。 */
+/** 从指定固定提交加载 treasurySealEvidence（git show → transpile → 临时 js require；Git 调用全部锚定 REPO_ROOT）。 */
 function loadVerifierFromCommit(validationHead) {
-  const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
   let src;
   let blobHash;
   try {
     src = execFileSync("git", ["show", `${validationHead}:${HELPER_PATH}`], {
+      cwd: REPO_ROOT,
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
     });
-    blobHash = execFileSync("git", ["rev-parse", `${validationHead}:${HELPER_PATH}`], { encoding: "utf8" }).trim();
+    blobHash = execFileSync("git", ["rev-parse", `${validationHead}:${HELPER_PATH}`], { cwd: REPO_ROOT, encoding: "utf8" }).trim();
   } catch (error) {
     console.error(`无法从提交 ${validationHead} 读取 ${HELPER_PATH}（版本不匹配或提交不可用）: ${String(error.message).slice(0, 160)}`);
     process.exit(2);
   }
-  const ts = require(path.resolve(repoRoot, "node_modules", "typescript"));
+  const ts = require(path.resolve(REPO_ROOT, "node_modules", "typescript"));
   const js = ts.transpileModule(src, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
@@ -239,13 +259,18 @@ function verifyJestJson(runDir, failures, lines) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!fs.existsSync(args.runDir) || !fs.statSync(args.runDir).isDirectory()) {
-    console.error(`--run-dir 不存在或不是目录: ${args.runDir}（零输入）`);
+  // T1/N07：run-dir 相对路径按**调用者 cwd**解析（与 Git cwd 解耦），并记录
+  // 解析结果——输入含义不因脚本内部切换 Git cwd 而改变。
+  const resolvedRunDir = path.resolve(process.cwd(), args.runDir);
+  console.log(`repo-root=${REPO_ROOT}`);
+  console.log(`run-dir-resolved=${resolvedRunDir} (cwd=${process.cwd()})`);
+  if (!fs.existsSync(resolvedRunDir) || !fs.statSync(resolvedRunDir).isDirectory()) {
+    console.error(`--run-dir 不存在或不是目录: ${args.runDir}（解析为 ${resolvedRunDir}；零输入）`);
     process.exit(2);
   }
   // 版本一致性：run-dir 自带 validation-head.txt 时（主验证模板会写入），
   // 必须与 --validation-head 一致，否则视为版本不匹配。
-  const headFile = path.join(args.runDir, "validation-head.txt");
+  const headFile = path.join(resolvedRunDir, "validation-head.txt");
   if (fs.existsSync(headFile)) {
     const recorded = fs.readFileSync(headFile, "utf8").trim();
     if (recorded.length >= 7 && recorded !== args.validationHead && !args.validationHead.startsWith(recorded) && !recorded.startsWith(args.validationHead)) {
@@ -257,8 +282,8 @@ function main() {
   const fixture = FIXTURES[args.fixture];
   const failures = [];
   const lines = [];
-  const traceRoots = verifyTraces(args.runDir, fixture, verifier, failures, lines);
-  const jestFiles = verifyJestJson(args.runDir, failures, lines);
+  const traceRoots = verifyTraces(resolvedRunDir, fixture, verifier, failures, lines);
+  const jestFiles = verifyJestJson(resolvedRunDir, failures, lines);
   const driverSha = createHash("sha256").update(fs.readFileSync(scriptPath)).digest("hex");
   console.log(`verifier-source=${args.validationHead}:${HELPER_PATH} blob=${verifier.blobHash}`);
   console.log(`driver=${scriptPath} sha256=${driverSha}`);

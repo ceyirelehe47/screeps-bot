@@ -1,0 +1,2 @@
+10c767019ce5a7f1da50ac483693c15c9a00416bcd1f195f5997b587da37e622 */d/code/screeps/screeps-bot/openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-slice-0-remediation-i/baseline/baseline-run.log
+8bbac56ec78778390c1797ce4f82e0fd6b98ff8dfd5fbf5260ee77896be277d4 */d/code/screeps/screeps-bot/openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-slice-0-remediation-i/baseline/slice0RemediationIBaseline.test.ts.txt

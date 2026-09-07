@@ -1,5 +1,20 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Terminal Transfer Slice 0 · Remediation I（2026-09-07）
+
+修正测试专用调拨原型三项既有契约（完整交易归属/单条在途/冻结费用）与核验驱动 cwd 定位（任务书 treasury-terminal-transfer-slice-0-remediation-I-implementation.md；验收索引 N01–N08）。生产内核不解冻；100 H 仍是测试夹具值。
+
+- [x] 起点核对：本地=远端=93a6152 干净、无增量；影响范围审查（subagent：durableFacts 在 build/authorize/rearm 三处重复派生并各改写 lastQuote、排他仅 sameWorkKeyActive、kernelJournal/cancelPendingWork/health 四态、驱动三处 git 调用无 cwd、M03/M04 现断言、无 coordinator 先例、预算锚点已滚 44aae61/237/1428 确认）
+- [x] 基线复现（起点隔离 worktree + node_modules junction，7/7 全复现归档 evidence/…-remediation-i/baseline/）：R1a 错误关联键含期望键/R1b 双方身份错与缺失/R1c A→B 认领 C→D 记录（C/D 数值吻合）/R1d 同 ID 镜像描述矛盾——全部经注册 settle 误报 committed；R2 不同 workKey 的 B 拿到第二张许可；R3 lastQuote 刷新后旧请求以陈旧预算被接受（未查询分支端口已被调用）；正确记录对照 committed 证明其余成功条件成立
+- [x] 工作 A：prepareSlice0TransferArgs 一次取值（q/tick/基线进 canonical）→ derivePostings/durableFacts 纯函数（R7 重复派生恒等）；payload v2（k/s/d/a/f/sb/tb/t/u 受控编码；version 2 + semanticIdentity v2，旧 v1 不静默升级）；reconcile 重写——完整描述严格相等、期望路线/双方/身份/资源/全量/时点全来自持久 payload、同 ID 全部副本先验一致性（顺序无关）再归并、时点窗 t<=time<Game.time（旧记录不认领、当前 tick 不结算）、库存只查期望端点、多 ID/无记录/部分量/order/读异常保守
+- [x] 工作 B：test/mock/treasuryTerminalTransferCoordinator.ts——requestTransfer/executeTransfer 统一准备/接纳/执行；单条在途从 kernelJournal() 持久 active 读出（不同 workKey 也拒；closing 占用；absent=真实空态放行、unhealthy/incompatible fail-closed）；协调器无内部可变状态（跨实例/跨 reset）；入口边界以 facade 直连对照注明（通用层无此全局规则）
+- [x] 工作 C：lastQuote 全移除；verifySlice0FeeQuote 纯比较共享给业务前检（许可未消费拒）与 adapter guard（submit 端口调用前拒）；报价读异常/非法值零提交；drift 不回填旧 permit/active/durable；自动重试仍关闭（无 retryFacts）
+- [x] T1：驱动 resolveRepoRoot 从脚本路径定位仓库（.git 祖先）、git 调用显式 cwd、run-dir 按调用者 cwd 解析并打印 repo-root/run-dir-resolved；固定 H18 expected 与版本校验不变；仓库外含空格 cwd 冒烟负例通过（正式退出码断言在主验证）
+- [x] M 用例改造（M03 隔离新模块真实默认装配 jest.isolateModules、M04 各负向补 submits===0、M05/M07 经业务入口重跑且第二需求改单条在途断言（不同 workKey））+ 新文件 treasuryTerminalTransferSlice0RemediationI.test.ts 8 it（N01 矩阵/N02 同 ID与时点/N01N02 注册路径/N03×3/N05 六场景/N06 同源稳定）；M+N 16/16、Treasury 34/590、typecheck 0
+- [x] 三项退化敏感性变异验证（controls/mutation-{1-ownership,2-gate,3-fee}.txt）：归属 includes 化/门禁短路/费用比较短路——各使目标 it 红、还原无残留
+- [x] 回归与预算、固定 VALIDATION_HEAD 主验证（§9 模板含 T1 仓库外含空格 cwd 正负例与坏产物对照）、第二干净上下文定向复验、归档与 push（数字与结论见 evidence/terminal-transfer-slice-0-remediation-i/ 与主报告）
+- [x] 独立验收（结论全文回填本文件与主报告；不构成部署许可）
+
 ## Terminal Transfer Slice 0（2026-09-07）
 
 承接 Evidence Remediation I（1b1279f）的核验脚本交付纪律保留项；固定首条业务（A 房 100 H → B 房 Terminal）并核对真实引擎契约、实现离线延迟生效原型（任务书 treasury-terminal-transfer-slice-0-implementation.md；验收索引 M01–M08）。

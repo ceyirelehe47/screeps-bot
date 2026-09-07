@@ -1,0 +1,208 @@
+/**
+ * Terminal Transfer Slice 0 · Remediation I——基线复现（任务书 §3）。
+ *
+ * 本文件在起点 93a6152 的隔离 worktree 运行，断言**旧行为**（即缺陷存在）：
+ * - R1a/R1b/R1c/R1d：reconcile 用 description.includes 反推期望身份——
+ *   错误关联键、错误双方、错误路线（C/D 数值吻合）、同 ID 镜像矛盾均被
+ *   误报 observed_committed（经由 service.settleUnknownOutcome 真实注册路径）。
+ * - R2：kernel 只有 sameWorkKeyActive 排他——不同 workKey、不同关联键的
+ *   第二笔请求在 A 未结束时仍被接纳（无单条在途门禁）。
+ * - R3：lastQuote 可被后续报价刷新——冻结报价涨 5 后再查询一次，旧请求
+ *   仍被接受进入 submit；未查询分支虽被拒但 submit 端口已被调用一次。
+ *
+ * 本文件是基线证据原件（归档为 .ts.txt），不进入修复后的仓库测试集；
+ * 修复后同一输入应被拒绝（见 treasuryTerminalTransferSlice0RemediationI.test.ts）。
+ */
+import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import {
+  buildTreasuryActionContract,
+  replaceTreasuryActionAdapterForTest,
+} from "@/runtime/treasury/actionContracts";
+import { makeNoReserveTreasuryPolicy, registerTreasuryPolicyResolver } from "@/runtime/treasury/policyAuthority";
+import { resetTreasuryCoreStoreForTest } from "@/runtime/treasury/testHarness";
+import { installRooms, setStoreResources, type RoomSpec } from "@mock/treasury";
+import {
+  SLICE0_ACTION_KIND,
+  SLICE0_TRANSFER_AMOUNT,
+  SLICE0_TRANSFER_RESOURCE,
+  createTerminalTransferFakeHost,
+  makeSlice0TransferArgs,
+  makeTerminalTransferPrototypeAdapter,
+  slice0SceneRooms,
+  type TerminalTransferFakeHost,
+  type TerminalTransactionRecord,
+} from "@mock/treasuryTerminalTransferPrototype";
+
+const SOURCE_ROOM = "W1N57";
+const TARGET_ROOM = "W10N57";
+const WRONG_FROM_ROOM = "W20N57";
+const WRONG_TO_ROOM = "W30N57";
+
+interface Scene { readonly host: TerminalTransferFakeHost; readonly service: TreasuryService; readonly fee: number }
+
+function makeScene(rooms: RoomSpec[] = slice0SceneRooms()): Scene {
+  const host = createTerminalTransferFakeHost();
+  const installed = installRooms(rooms);
+  replaceTreasuryActionAdapterForTest(makeTerminalTransferPrototypeAdapter(host));
+  registerTreasuryPolicyResolver(makeNoReserveTreasuryPolicy());
+  const service = createTreasuryService({ getRooms: () => Object.values(installed) });
+  service.beginTick();
+  return { host, service, fee: host.quoteTransferFee(SLICE0_TRANSFER_AMOUNT, SOURCE_ROOM, TARGET_ROOM) };
+}
+
+function admit(service: TreasuryService, workKey: string, args: unknown): { status: string; dispatch?: object; attemptId?: string; reason?: string } {
+  const built = buildTreasuryActionContract(service, { actionKind: SLICE0_ACTION_KIND, transactionId: workKey, args });
+  if (built.status !== "built") return { status: `build:${built.status}` };
+  return service.authorizeTreasuryActionContract(built.contract, { workKey }) as { status: string; dispatch?: object; attemptId?: string; reason?: string };
+}
+
+function submit(scene: Scene, workKey: string, correlationKey: string): string {
+  const admission = admit(scene.service, workKey, makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, correlationKey));
+  if (admission.status !== "admitted") throw new Error(`admit failed: ${admission.status}`);
+  const outcome = scene.service.executeAuthorizedDispatch(admission.dispatch);
+  if (outcome.status !== "unknown") throw new Error(`dispatch expected unknown, got ${String(outcome.status)}`);
+  return admission.attemptId as string;
+}
+
+function terminal(roomName: string): StructureTerminal {
+  return (Game.rooms as unknown as Record<string, { terminal: StructureTerminal }>)[roomName].terminal;
+}
+
+function fakeTxn(transactionId: string, description: string, overrides: Partial<TerminalTransactionRecord> = {}): TerminalTransactionRecord {
+  return {
+    transactionId,
+    time: Game.time - 1,
+    sender: { username: "slice0-user" },
+    recipient: { username: "slice0-user" },
+    resourceType: SLICE0_TRANSFER_RESOURCE,
+    amount: SLICE0_TRANSFER_AMOUNT,
+    from: SOURCE_ROOM,
+    to: TARGET_ROOM,
+    description,
+    ...overrides,
+  };
+}
+
+function recordShape(attemptId: string): { phase?: string; outcome?: string } | undefined {
+  const store = (Memory.runtime as unknown as { treasuryCore?: { active?: Record<string, { phase?: string; outcome?: string }> } })?.treasuryCore;
+  return store?.active?.[attemptId];
+}
+
+beforeEach(() => {
+  resetTreasuryCoreStoreForTest();
+});
+
+describe("Slice 0 Remediation I 基线（起点 93a6152 缺陷复现）", () => {
+  /** 公共前置：提交一条真实请求（pending 不处理）→ 推进 tick → 手工将世界调成"已发生"终态。 */
+  function prepareCommittedLookingWorld(scene: Scene, key: string): string {
+    const attemptId = submit(scene, `biz:slice0:bl-${key}`, key);
+    scene.service.endTick();
+    Game.time += 1;
+    scene.service.beginTick();
+    setStoreResources(terminal(SOURCE_ROOM), { H: 1000 - SLICE0_TRANSFER_AMOUNT, energy: 10_000 - scene.fee });
+    setStoreResources(terminal(TARGET_ROOM), { H: SLICE0_TRANSFER_AMOUNT, energy: 2000 });
+    return attemptId;
+  }
+
+  it("R1 对照：正确唯一记录正常完成（反例的其他成功条件由此证明成立）", () => {
+    const scene = makeScene();
+    const attemptId = prepareCommittedLookingWorld(scene, "s0-ok");
+    scene.host.viewConfig.injected = [fakeTxn("txn-0001", "treasury-slice0 s0-ok")];
+    expect(scene.service.settleUnknownOutcome({ attemptId }).status).toBe("ok");
+    expect(recordShape(attemptId)?.outcome).toBe("committed");
+  });
+
+  it("R1a：完整关联键错误但描述包含期望键——被误报 committed", () => {
+    const scene = makeScene();
+    const attemptId = prepareCommittedLookingWorld(scene, "s0-r1a");
+    // 请求 key=s0-r1a；记录 key=s0-r1aX（描述包含期望键但完整关联键错误）。
+    scene.host.viewConfig.injected = [fakeTxn("txn-9101", "treasury-slice0 s0-r1aX")];
+    const settled = scene.service.settleUnknownOutcome({ attemptId });
+    expect(settled.status).toBe("ok"); // ← 基线缺陷
+    expect(recordShape(attemptId)?.outcome).toBe("committed");
+  });
+
+  it("R1b：sender/recipient 身份错误或缺失——被误报 committed", () => {
+    const scene = makeScene();
+    const attemptId = prepareCommittedLookingWorld(scene, "s0-r1b");
+    scene.host.viewConfig.injected = [
+      fakeTxn("txn-9102", "treasury-slice0 s0-r1b", { sender: { username: "intruder" } }),
+    ];
+    expect(scene.service.settleUnknownOutcome({ attemptId }).status).toBe("ok"); // ← 基线缺陷
+    // 必要身份缺失同样被认领。
+    const scene2 = makeScene();
+    const attemptId2 = prepareCommittedLookingWorld(scene2, "s0-r1b2");
+    scene2.host.viewConfig.injected = [
+      fakeTxn("txn-9103", "treasury-slice0 s0-r1b2", { sender: undefined, recipient: undefined }),
+    ];
+    expect(scene2.service.settleUnknownOutcome({ attemptId: attemptId2 }).status).toBe("ok"); // ← 基线缺陷
+  });
+
+  it("R1c：请求 A→B 却认领 C→D 记录（C/D 数值吻合、A/B 不变）——被误报 committed", () => {
+    const rooms = [
+      ...slice0SceneRooms(),
+      { name: WRONG_FROM_ROOM, terminal: { id: "term-C", resources: { H: 900, energy: 10_000 - 26 }, freeCapacity: 100_000 } },
+      { name: WRONG_TO_ROOM, terminal: { id: "term-D", resources: { H: 100, energy: 0 }, freeCapacity: 100_000 } },
+    ];
+    const scene = makeScene(rooms);
+    const attemptId = submit(scene, "biz:slice0:bl-r1c", "s0-r1c");
+    scene.service.endTick();
+    Game.time += 1;
+    scene.service.beginTick();
+    // A/B 库存不变（未处理）；C/D 库存恰好等于"已发生"终态（readRoomStock 以 matched.from/to 核对）。
+    scene.host.viewConfig.injected = [
+      fakeTxn("txn-9104", "treasury-slice0 s0-r1c", { from: WRONG_FROM_ROOM, to: WRONG_TO_ROOM }),
+    ];
+    expect(scene.service.settleUnknownOutcome({ attemptId }).status).toBe("ok"); // ← 基线缺陷
+    expect(recordShape(attemptId)?.outcome).toBe("committed");
+  });
+
+  it("R1d：同 ID 镜像描述矛盾（同视图重复、首条匹配）——被误报 committed", () => {
+    const scene = makeScene();
+    const attemptId = prepareCommittedLookingWorld(scene, "s0-r1d");
+    // 两条同 ID 记录仅 description 矛盾（amount/from/to/resourceType 全同）——
+    // 旧镜像比对不含 description 与 time/sender/order，矛盾被漏过。
+    scene.host.viewConfig.injected = [
+      fakeTxn("txn-9105", "treasury-slice0 s0-r1d"),
+      fakeTxn("txn-9105", "treasury-slice0 someone-else"),
+    ];
+    expect(scene.service.settleUnknownOutcome({ attemptId }).status).toBe("ok"); // ← 基线缺陷
+    expect(recordShape(attemptId)?.outcome).toBe("committed");
+  });
+
+  it("R2：不同 workKey、不同关联键的 B 在 A 未结束时仍被接纳（无单条在途门禁）", () => {
+    const scene = makeScene();
+    submit(scene, "biz:slice0:req-A", "s0-keyA");
+    scene.service.endTick();
+    Game.time += 1;
+    scene.service.beginTick();
+    const b = admit(scene.service, "biz:slice0:req-B", makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-keyB"));
+    expect(b.status).toBe("admitted"); // ← 基线缺陷：仅同 workKey 排他，B 顺利拿到第二张许可
+  });
+
+  it("R3：冻结报价涨 5 后再查询一次——旧请求仍被接受进入 submit；未查询分支端口已被调用", () => {
+    // 分支 1（刷新后接受——缺陷主体）。
+    {
+      const scene = makeScene();
+      const admission = admit(scene.service, "biz:slice0:r3a", makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-r3a"));
+      expect(admission.status).toBe("admitted");
+      const q = scene.fee;
+      scene.host.configureFeeDrift(5);
+      expect(scene.host.quoteTransferFee(SLICE0_TRANSFER_AMOUNT, SOURCE_ROOM, TARGET_ROOM)).toBe(q + 5); // 模拟"又查询了一次报价"
+      const outcome = scene.service.executeAuthorizedDispatch(admission.dispatch);
+      expect(outcome.status).toBe("unknown");
+      expect(scene.host.pendingCount).toBe(1); // ← 基线缺陷：旧请求以陈旧预算被接受
+    }
+    // 分支 2（未查询被拒——但 submit 端口已被调用一次，比较发生在调用之后）。
+    {
+      const scene = makeScene();
+      const admission = admit(scene.service, "biz:slice0:r3b", makeSlice0TransferArgs(SOURCE_ROOM, TARGET_ROOM, "s0-r3b"));
+      expect(admission.status).toBe("admitted");
+      scene.host.configureFeeDrift(5);
+      const outcome = scene.service.executeAuthorizedDispatch(admission.dispatch);
+      expect(outcome.status).toBe("unknown");
+      expect(scene.host.pendingCount).toBe(0); // 该分支旧代码正确拒绝
+      expect(scene.host.submits.length).toBe(1); // ← 基线缺陷面：端口仍被调用（拒绝发生在调用之后）
+    }
+  });
+});
