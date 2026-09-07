@@ -300,9 +300,21 @@ export interface TreasuryCoreKernel {
   /**
    * endTick 关窗否决标记当前是否生效（Remediation V/R1/§2.3）：单一、按
    * tick 失效的运行时否决事实，所有 facade/核心执行门禁共享消费。只读
-   * 查询，不授予任何执行权。
+   * 查询，不授予任何执行权。**仅表示 heap 事实**（本运行时是否发出过
+   * endTick 请求）——完整新增业务门禁见 admissionGateStatus。
    */
   readonly admissionVetoActive: () => boolean;
+  /**
+   * 新增业务共享只读门禁（Remediation VI/R1/§2.4）：健康持久核心的
+   * lifecycle.lastEndTick === 当前 tick（持久关窗——跨运行时权威）或本
+   * 运行时 heap 否决标记（endTick 请求已发出：持久发布待确认或失败）任一
+   * 成立即关闭。kernel 三条写入口（admit/executeDispatch/executeRearm）
+   * 与 facade 授权窗口共用同一判定与原因文本；恢复/清理/取消/close 不受
+   * 此门禁限制。查询纯读（不初始化/不迁移/不修 ring/不写 Memory），不
+   * 缓存开放结论——每次现读当前可信记录。非健康核心无持久事实可依，
+   * 退化为 heap 单口径（随后原有健康检查按原语义拒绝，不视为可执行）。
+   */
+  readonly admissionGateStatus: () => { readonly status: "open" } | { readonly status: "closed"; readonly reason: string } ;
 }
 
 export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): TreasuryCoreKernel {
@@ -367,10 +379,13 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
   }
 
   function admit(input: TreasuryCoreAdmissionInput): TreasuryCoreAdmissionResult {
-    // Remediation V/R1/§2.3：endTick 请求后本 tick 不再接纳新业务（运行时
-    // 否决标记与持久 lastEndTick 双口径；恢复/清理入口不受此限）。
-    if (admissionVetoActive()) {
-      return { status: "rejected", reason: admissionVetoReason(), reasonCode: "lifecycle_closed" };
+    // Remediation V/R1/§2.3 + VI/R1/§2.4：endTick 请求后本 tick 不再接纳新
+    // 业务。共享只读门禁（持久 lastEndTick 或 heap 否决）——完整 reset 重建
+    // 模块（heap 否决丢失）后，持久关窗仍拒绝直接 kernel 接纳（恢复/清理
+    // 入口不受此限）。
+    const gate = admissionGateStatus();
+    if (gate.status === "closed") {
+      return { status: "rejected", reason: gate.reason, reasonCode: "lifecycle_closed" };
     }
     if (!isValidTreasuryCoreWorkKey(input.workKey)) {
       return { status: "rejected", reason: `workKey 非法（须 ${"biz:"} 前缀且有界）`, reasonCode: "invalid_input" };
@@ -455,10 +470,12 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
   }
 
   function executeDispatch(permit: unknown): TreasuryCoreDispatchOutcome {
-    // Remediation V/R1/§2.3：endTick 请求后本 tick 不再执行 dispatch（动作
-    // 调用 0、不消费许可——与 facade 执行门禁同一否决条件）。
-    if (admissionVetoActive()) {
-      return { status: "blocked", reasonCode: "lifecycle_closed", reason: admissionVetoReason() };
+    // Remediation V/R1/§2.3 + VI/R1/§2.4：endTick 请求后本 tick 不再执行
+    // dispatch（动作调用 0、不消费许可——共享门禁持久+heap 双口径，完整
+    // reset 后持久关窗同样阻断直接 kernel 执行）。
+    const gate = admissionGateStatus();
+    if (gate.status === "closed") {
+      return { status: "blocked", reasonCode: "lifecycle_closed", reason: gate.reason };
     }
     const nowTick = ports.nowTick();
     const permitCheck = validateTreasuryCoreDispatchPermit(permit, nowTick, ports.runtimeGeneration());
@@ -683,10 +700,13 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     rearm: unknown,
     next: Parameters<TreasuryCoreKernel["executeRearm"]>[1],
   ): TreasuryCoreAdmissionResult {
-    // Remediation V/R1/§2.3：endTick 请求后本 tick 不再执行 rearm。拒绝先于
-    // 许可认证/父代权利消费——capability 不被误消费，下一 tick 仍可用。
-    if (admissionVetoActive()) {
-      return { status: "rejected", reason: admissionVetoReason(), reasonCode: "lifecycle_closed" };
+    // Remediation V/R1/§2.3 + VI/R1/§2.4：endTick 请求后本 tick 不再执行
+    // rearm。拒绝先于许可认证/父代权利消费——capability 不被误消费，下一
+    // tick 仍可用（共享门禁持久+heap 双口径，完整 reset 后持久关窗同样
+    // 阻断直接 kernel rearm）。
+    const gate = admissionGateStatus();
+    if (gate.status === "closed") {
+      return { status: "rejected", reason: gate.reason, reasonCode: "lifecycle_closed" };
     }
     const nowTick = ports.nowTick();
     const check = validateTreasuryCoreRearmPermit(rearm, nowTick, ports.runtimeGeneration());
@@ -1113,13 +1133,33 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     return { recovered, closed, cleaned, cancelled };
   }
 
-  /** endTick 关窗否决标记当前是否生效（按 tick 失效；只读事实查询）。 */
+  /** endTick 关窗否决标记当前是否生效（按 tick 失效；只读事实查询；仅 heap 口径）。 */
   function admissionVetoActive(): boolean {
     return endTickAdmissionVetoTick !== null && endTickAdmissionVetoTick === ports.nowTick();
   }
 
   function admissionVetoReason(): string {
     return "本 tick 授权窗口已关闭（endTick 请求已发出：持久关窗发布待确认或失败，运行时否决标记生效——新增业务跨实例拒绝；恢复与安全清理继续）";
+  }
+
+  /**
+   * 新增业务共享只读门禁（Remediation VI/R1/§2.4）：持久关窗（健康核心的
+   * lifecycle.lastEndTick === 当前 tick）或 heap 否决任一成立即关闭。每次
+   * 现读当前可信记录——不把一次开放的缓存结论留在本函数外。原因区分两种
+   * 来源：持久已关闭 vs heap 否决（持久尚未确认/发布失败），不互相冒充。
+   * 检查顺序持久先于 heap（与原 facade 口径一致——已确认的持久关闭优先
+   * 报告；二者同 tick 并存时语义等价关闭）。
+   */
+  function admissionGateStatus(): { status: "open" } | { status: "closed"; reason: string } {
+    const health = readTreasuryCoreStoreHealth();
+    if (health.status === "healthy" && health.memory.lifecycle.lastEndTick === ports.nowTick()) {
+      return {
+        status: "closed",
+        reason: "本 tick 授权窗口已关闭（endTick 后不得接纳/执行/rearm；恢复与安全清理继续）",
+      };
+    }
+    if (admissionVetoActive()) return { status: "closed", reason: admissionVetoReason() };
+    return { status: "open" };
   }
 
   /**
@@ -1289,6 +1329,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
     beginTick,
     endTick,
     admissionVetoActive,
+    admissionGateStatus,
   };
 }
 
