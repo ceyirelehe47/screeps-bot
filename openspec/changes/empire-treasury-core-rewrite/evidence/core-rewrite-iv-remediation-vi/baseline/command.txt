@@ -1,0 +1,9 @@
+# 干净 worktree（git worktree add ../r6-baseline 4ba065a5d0a2e7306406ae855c06be756f3136e7；node_modules 经 junction 共享）
+# 重现器源码归档为 *.ts.txt（非执行）；复现方式：拷贝到 src/runtime/treasury/ 下按原文件名（.test.ts）运行
+cd r6-baseline
+cp <evidence>/baseline/r1-baseline-replicator.ts.txt src/runtime/treasury/treasuryR6R1BaselineReplicator.test.ts
+cp <evidence>/baseline/h18-health-baseline-replicator.ts.txt src/runtime/treasury/treasuryR6V1BaselineReplicator.test.ts
+npx jest --config jest.config.cjs src/runtime/treasury/treasuryR6R1BaselineReplicator.test.ts --runInBand        # exit 1（R1 反例红 + 两对照绿）
+npx jest --config jest.config.cjs src/runtime/treasury/treasuryR6V1BaselineReplicator.test.ts --runInBand        # exit 1（V1 健康红灯 + 零推进轨迹）
+# 治愈复验（修复后主仓，两文件拷入 src/runtime/treasury/ 后）：
+npx jest --config jest.config.cjs src/runtime/treasury/treasuryR6R1BaselineReplicator.test.ts src/runtime/treasury/treasuryR6V1BaselineReplicator.test.ts --runInBand   # R1 全绿；V1 仍红（预期，见 README）

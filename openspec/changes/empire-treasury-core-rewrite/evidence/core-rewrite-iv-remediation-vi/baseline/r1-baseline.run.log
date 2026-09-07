@@ -1,0 +1,42 @@
+  console.log
+    R6-R1-TRACES
+      parent-admit={"tick":1,"attemptId":"tk1_1_5431df6a93ea92cc"}
+      parent-phase={"tick":2,"phase":"retry_ready"}
+      end-tick={"tick":2,"recoveredToUnknown":0,"closurePersisted":true}
+      persistent-closure={"tick":2,"lastEndTick":2}
+      after-reset={"tick":2,"heapVetoActive":false,"lastEndTick":2,"frontier":1,"activeCount":1}
+      post-reset-admit={"status":"admitted","reason":null,"reasonCode":null,"frontierDelta":1,"activeDelta":1}
+      post-reset-dispatch={"status":"not_executed","adapterCalls":1}
+      post-reset-rearm-capability={"status":"ok"}
+      post-reset-execute-rearm={"status":"admitted","reasonCode":null,"activeDelta":0}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR6R1BaselineReplicator.test.ts:148:13)
+
+FAIL src/runtime/treasury/treasuryR6R1BaselineReplicator.test.ts
+  R1 基线：同 tick 成功关窗 + 完整 reset 后 kernel 直接新增业务
+    × J01 基线反例：持久 lastEndTick=T 仍在新 kernel 拒绝 admit/rearm（修复后语义；基线红） (138 ms)
+    √ 合法对照：未请求关窗时同前提 admit/dispatch/rearm 全部成功（基线绿） (23 ms)
+    √ 下一 tick 对照：关窗后推进到 T+1，新装配正常接纳（无永久闩锁） (17 ms)
+
+  ● R1 基线：同 tick 成功关窗 + 完整 reset 后 kernel 直接新增业务 › J01 基线反例：持久 lastEndTick=T 仍在新 kernel 拒绝 admit/rearm（修复后语义；基线红）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 148 |[39m     console[33m.[39mlog([32m`R6-R1-TRACES\n  ${TRACES.join("\n  ")}`[39m)[33m;[39m
+     [90m 149 |[39m     [90m// —— 修复后语义（基线红 / 修复后绿）——[39m
+    [31m[1m>[22m[39m[90m 150 |[39m     expect(newAdmission[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                                 [31m[1m^[22m[39m
+     [90m 151 |[39m     [36mif[39m (newAdmission[33m.[39mstatus [33m===[39m [32m"rejected"[39m) expect(newAdmission[33m.[39mreasonCode)[33m.[39mtoBe([32m"lifecycle_closed"[39m)[33m;[39m
+     [90m 152 |[39m   })[33m;[39m
+     [90m 153 |[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR6R1BaselineReplicator.test.ts:150:33)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 2 passed, 3 total
+Snapshots:   0 total
+Time:        4.301 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryR6R1BaselineReplicator.test.ts/i.

@@ -1,0 +1,42 @@
+  console.log
+    R6-V1-TRACES health=unhealthy reason=active[tk1_h18_00] 阶段 closing 但结果未确定或无证据（结构矛盾）
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR6V1BaselineReplicator.test.ts:133:13)
+
+  console.log
+    R6-V1-TRACES
+      health={"status":"unhealthy","reason":"active[tk1_h18_00] 阶段 closing 但结果未确定或无证据（结构矛盾）"}
+      per-tick-releases=[0,0,0,0,0,0,0,0,0,0,0,0]
+      total-release-calls=0
+      phases-after-12-ticks={"closing":30,"outcome_unknown":20,"retry_ready":10,"pending":4}
+      chars=54416
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR6V1BaselineReplicator.test.ts:151:13)
+
+FAIL src/runtime/treasury/treasuryR6V1BaselineReplicator.test.ts
+  V1 基线：旧 H18 fixture 的健康红灯与零推进空转
+    × J05 基线反例：旧 H18 满载 fixture 必须被判 healthy（修复后语义；基线红）+ 12 tick 零推进轨迹 (252 ms)
+
+  ● V1 基线：旧 H18 fixture 的健康红灯与零推进空转 › J05 基线反例：旧 H18 满载 fixture 必须被判 healthy（修复后语义；基线红）+ 12 tick 零推进轨迹
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "healthy"
+    Received: "unhealthy"
+
+    [0m [90m 153 |[39m     expect(treasuryCoreSerializedChars([33mMemory[39m[33m.[39mruntime[33m![39m[33m.[39mtreasuryCore [36mas[39m never))[33m.[39mtoBeLessThanOrEqual([33mTREASURY_CORE_TOTAL_CHAR_BUDGET[39m)[33m;[39m
+     [90m 154 |[39m     [90m// 修复后语义：fixture 必须健康（基线在此红——"没有工作就全绿"的测试前提无效）。[39m
+    [31m[1m>[22m[39m[90m 155 |[39m     expect(health[33m.[39mstatus)[33m.[39mtoBe([32m"healthy"[39m)[33m;[39m
+     [90m     |[39m                           [31m[1m^[22m[39m
+     [90m 156 |[39m   })[33m;[39m
+     [90m 157 |[39m })[33m;[39m
+     [90m 158 |[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR6V1BaselineReplicator.test.ts:155:27)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 1 total
+Snapshots:   0 total
+Time:        4.176 s, estimated 5 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryR6V1BaselineReplicator.test.ts/i.
+{"numFailedTestSuites":1,"numFailedTests":1,"numPassedTestSuites":0,"numPassedTests":0,"numPendingTestSuites":0,"numPendingTests":0,"numRuntimeErrorTestSuites":0,"numTodoTests":0,"numTotalTestSuites":1,"numTotalTests":1,"openHandles":[],"snapshot":{"added":0,"didUpdate":false,"failure":false,"filesAdded":0,"filesRemoved":0,"filesRemovedList":[],"filesUnmatched":0,"filesUpdated":0,"matched":0,"total":0,"unchecked":0,"uncheckedKeysByFile":[],"unmatched":0,"updated":0},"startTime":1788742471707,"success":false,"testResults":[{"assertionResults":[{"ancestorTitles":["V1 基线：旧 H18 fixture 的健康红灯与零推进空转"],"duration":252,"failureDetails":[{"matcherResult":{"actual":"unhealthy","expected":"healthy","message":"expect(received).toBe(expected) // Object.is equality\n\nExpected: \"healthy\"\nReceived: \"unhealthy\"","name":"toBe","pass":false}}],"failureMessages":["Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"healthy\"\nReceived: \"unhealthy\"\n    at Object.<anonymous> (D:\\code\\screeps\\r6-baseline\\src\\runtime\\treasury\\treasuryR6V1BaselineReplicator.test.ts:155:27)\n    at Promise.then.completed (D:\\code\\screeps\\screeps-bot\\node_modules\\jest-circus\\build\\utils.js:298:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (D:\\code\\screeps\\screeps-bot\\node_modules\\jest-circus\\build\\utils.js:231:10)\n    at _callCircusTest (D:\\code\\screeps\\screeps-bot\\node_modules\\jest-circus\\build\\run.js:316:40)\n    at _runTest (D:\\code\\screeps\\screeps-bot\\node_modules\\jest-circus\\build\\run.js:252:3)\n    at _runTestsForDescribeBlock (D:\\code\\screeps\\screeps-bot\\node_modules\\jest-circus\\build\\run.js:126:9)\n    at _runTestsForDescribeBlock (D:\\code\\screeps\\screeps-bot\\node_modules\\jest-circus\\build\\run.js:121:9)\n    at run (D:\\code\\screeps\\screeps-bot\\node_modules\\jest-circus\\build\\run.js:71:3)\n    at runAndTransformResultsToJestFormat (D:\\code\\screeps\\screeps-bot\\node_modules\\jest-circus\\build\\legacy-code-todo-rewrite\\jestAdapterInit.js:122:21)\n    at jestAdapter (D:\\code\\screeps\\screeps-bot\\node_modules\\jest-circus\\build\\legacy-code-todo-rewrite\\jestAdapter.js:79:19)\n    at runTestInternal (D:\\code\\screeps\\screeps-bot\\node_modules\\jest-runner\\build\\runTest.js:367:16)\n    at runTest (D:\\code\\screeps\\screeps-bot\\node_modules\\jest-runner\\build\\runTest.js:444:34)"],"fullName":"V1 基线：旧 H18 fixture 的健康红灯与零推进空转 J05 基线反例：旧 H18 满载 fixture 必须被判 healthy（修复后语义；基线红）+ 12 tick 零推进轨迹","invocations":1,"location":null,"numPassingAsserts":2,"retryReasons":[],"status":"failed","title":"J05 基线反例：旧 H18 满载 fixture 必须被判 healthy（修复后语义；基线红）+ 12 tick 零推进轨迹"}],"endTime":1788742475870,"message":"  ● V1 基线：旧 H18 fixture 的健康红灯与零推进空转 › J05 基线反例：旧 H18 满载 fixture 必须被判 healthy（修复后语义；基线红）+ 12 tick 零推进轨迹\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"healthy\"\n    Received: \"unhealthy\"\n\n    \u001b[0m \u001b[90m 153 |\u001b[39m     expect(treasuryCoreSerializedChars(\u001b[33mMemory\u001b[39m\u001b[33m.\u001b[39mruntime\u001b[33m!\u001b[39m\u001b[33m.\u001b[39mtreasuryCore \u001b[36mas\u001b[39m never))\u001b[33m.\u001b[39mtoBeLessThanOrEqual(\u001b[33mTREASURY_CORE_TOTAL_CHAR_BUDGET\u001b[39m)\u001b[33m;\u001b[39m\n     \u001b[90m 154 |\u001b[39m     \u001b[90m// 修复后语义：fixture 必须健康（基线在此红——\"没有工作就全绿\"的测试前提无效）。\u001b[39m\n    \u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 155 |\u001b[39m     expect(health\u001b[33m.\u001b[39mstatus)\u001b[33m.\u001b[39mtoBe(\u001b[32m\"healthy\"\u001b[39m)\u001b[33m;\u001b[39m\n     \u001b[90m     |\u001b[39m                           \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n     \u001b[90m 156 |\u001b[39m   })\u001b[33m;\u001b[39m\n     \u001b[90m 157 |\u001b[39m })\u001b[33m;\u001b[39m\n     \u001b[90m 158 |\u001b[39m\u001b[0m\n\n      at Object.<anonymous> (src/runtime/treasury/treasuryR6V1BaselineReplicator.test.ts:155:27)\n","name":"D:\\code\\screeps\\r6-baseline\\src\\runtime\\treasury\\treasuryR6V1BaselineReplicator.test.ts","startTime":1788742471924,"status":"failed","summary":""}],"wasInterrupted":false}

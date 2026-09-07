@@ -170,3 +170,18 @@ II 轮确认旧证明链未复活，并补充 II 轮新增写权威的封闭性�
 - 关窗不停止旧工作收尾：beginTick/清理/对账/取消/关闭入口不消费否决
   标记（不加"closed 即全入口返回"总开关）——新增业务拒绝与既有义务
   兑现是两个口径。
+
+## Core Rewrite IV · Remediation VI（2026-09-07）
+
+- 只复用既有两个关闭事实：持久 lifecycle.lastEndTick（安全写协议发布，
+  跨运行时权威）与模块级 heap 否决标记（按 tick 失效）。kernel 新增的
+  admissionGateStatus 是二者之上的**只读组合判定**（持久先查、heap 兜底，
+  原因区分来源不冒充），不是第三权威、不授予执行权、不写任何新持久
+  字段；facade admissionWindowOpen 改为消费同一判定——两侧不再各自维护
+  双口径实现。admissionVetoActive 保持 heap-only 语义（运行时否决事实
+  查询）。
+- 门禁不扩大拒绝面：closed 不进 requireWritableHealth；恢复 unknown、
+  可信对账、取消、清理与安全 close 不受关闭限制；非健康核心退化为
+  heap 单口径且原有 unhealthy/incompatible 拒绝不退化。测试工具
+  resetTreasuryCoreLifecycleFactsForTest 仅清 heap 事实（J02 门禁隔离），
+  不新增绕过生产签发的接口。

@@ -1,0 +1,14 @@
+diff --git a/src/runtime/treasury/kernel/kernel.ts b/src/runtime/treasury/kernel/kernel.ts
+index 8a7cc0b..3283de4 100644
+--- a/src/runtime/treasury/kernel/kernel.ts
++++ b/src/runtime/treasury/kernel/kernel.ts
+@@ -927,7 +927,8 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+     if (legacyNow().length > 0) return { recovered, closed, cleaned, cancelled };
+     const nowTick = ports.nowTick();
+     const cursors = { sweepCursor: health.memory.recovery.sweepCursor, cleanupCursor: health.memory.recovery.cleanupCursor };
+-    let used = readBudgetState(health.memory, nowTick);
++    // [NEGATIVE-VARIANT r6-zero-advance] 份额视为已尽——生命周期推进替换为零推进。
++    let used = TREASURY_CORE_RECOVERY_BUDGET_PER_TICK;
+ 
+     // 1) dispatching 残留 → 保守 unknown（可能已进入；不重发）。子预算 ≤2。
+     let dispatchingSpent = 0;

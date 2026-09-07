@@ -1,0 +1,19 @@
+diff --git a/src/runtime/treasury/kernel/kernel.ts b/src/runtime/treasury/kernel/kernel.ts
+index 8a7cc0b..6a619eb 100644
+--- a/src/runtime/treasury/kernel/kernel.ts
++++ b/src/runtime/treasury/kernel/kernel.ts
+@@ -1151,13 +1151,7 @@ export function createTreasuryCoreKernel(ports: TreasuryCoreKernelPorts): Treasu
+    * 报告；二者同 tick 并存时语义等价关闭）。
+    */
+   function admissionGateStatus(): { status: "open" } | { status: "closed"; reason: string } {
+-    const health = readTreasuryCoreStoreHealth();
+-    if (health.status === "healthy" && health.memory.lifecycle.lastEndTick === ports.nowTick()) {
+-      return {
+-        status: "closed",
+-        reason: "本 tick 授权窗口已关闭（endTick 后不得接纳/执行/rearm；恢复与安全清理继续）",
+-      };
+-    }
++    // [NEGATIVE-VARIANT r6-heap-only] 退回仅 heap 门禁（删除持久关窗分支）。
+     if (admissionVetoActive()) return { status: "closed", reason: admissionVetoReason() };
+     return { status: "open" };
+   }

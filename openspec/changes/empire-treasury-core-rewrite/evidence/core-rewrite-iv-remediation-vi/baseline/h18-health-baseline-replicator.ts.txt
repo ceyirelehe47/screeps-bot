@@ -1,0 +1,157 @@
+/**
+ * Remediation VI · V1 基线反例重现器（在 4ba065a 基线上运行必须红）。
+ *
+ * 场景（任务书 §3.1）：旧 H18 fixture（30 closing 有确定 outcome 但
+ * outcomeEvidence=null、retry_ready/pending 的 outcome=null——validator 正确
+ * 拒绝的不合法状态）。validator 判 unhealthy 后所有生命周期调用静默早退：
+ * 释放为 0、无任何推进，而旧断言（释放 ≤4、unknown 数量=20、失败义务仍在）
+ * 仍然通过——"没有工作就全绿"。
+ *
+ * 断言的是**修复后语义**（fixture 必须被生产 validator 判 healthy）；基线上
+ * 运行时以 unhealthy 红灯 + 零推进轨迹变红。
+ */
+import {
+  createTreasuryCoreKernel,
+  type TreasuryCoreAdmissionInput,
+  type TreasuryCoreKernelPorts,
+} from "@/runtime/treasury/kernel/kernel";
+import {
+  readTreasuryCoreStoreHealth,
+  treasuryCoreSerializedChars,
+} from "@/runtime/treasury/kernel/store";
+import { TREASURY_CORE_ACTIVE_LIMIT, TREASURY_CORE_TOTAL_CHAR_BUDGET } from "@/runtime/treasury/kernel/types";
+import type { TreasuryCoreIdentityFacts, TreasuryCoreWorstCaseLeg } from "@/runtime/treasury/kernel/types";
+import { resetTreasuryCoreStoreForTest } from "@/runtime/treasury/testHarness";
+import { performTreasuryKernelFullReset } from "@mock/treasuryResetHarness";
+
+function kernelIdentity(actionKind = "d.kind"): TreasuryCoreIdentityFacts {
+  return {
+    actionKind,
+    adapterVersion: 1,
+    adapterRegistrationId: `reg-${actionKind}`,
+    adapterSemanticIdentity: `d.adapter-${actionKind}`,
+    canonicalDigest: "a".repeat(16),
+    postingsDigest: "b".repeat(16),
+    retryFactsDigest: "c".repeat(16),
+    durableFacts: null,
+  };
+}
+
+function kernelLegs(outflow: number): TreasuryCoreWorstCaseLeg[] {
+  return [
+    { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -outflow },
+    { roomName: "W2N57", locationKind: "terminal", resource: RESOURCE_ENERGY, delta: outflow },
+  ];
+}
+
+function makeKernelPorts(overrides: Partial<TreasuryCoreKernelPorts> = {}): TreasuryCoreKernelPorts {
+  return {
+    nowTick: () => Game.time,
+    runtimeGeneration: () => 1,
+    findAdapter: (kind: string) => ({ kind, version: 1, registrationId: `reg-${kind}`, semanticIdentity: `d.adapter-${kind}`, execute: () => ({ ok: false }), settlesOnAccept: false, nonOkOutcome: "not_executed" as const }),
+    checkAdmissionCapacity: () => null,
+    observeForCleanup: () => ({ worldSequence: 9_000_000, atTick: Game.time + 1, locationExists: () => true }),
+    ...overrides,
+  };
+}
+
+function kernelAdmitInput(consumers: readonly string[], workKey: string): TreasuryCoreAdmissionInput {
+  return {
+    workKey,
+    identity: kernelIdentity(),
+    worstCase: kernelLegs(50),
+    externalConsumers: consumers,
+    canonicalArgs: { n: 1 },
+    postings: kernelLegs(50),
+    admissionContext: { contractId: "ac:d.kind", contractDigest: "a".repeat(16), actionKind: "d.kind", ownerIdentity: null, excludeAttemptId: null },
+    structureBindings: [],
+  };
+}
+
+const TRACES: string[] = [];
+
+beforeEach(() => {
+  resetTreasuryCoreStoreForTest();
+  TRACES.length = 0;
+});
+
+describe("V1 基线：旧 H18 fixture 的健康红灯与零推进空转", () => {
+  it("J05 基线反例：旧 H18 满载 fixture 必须被判 healthy（修复后语义；基线红）+ 12 tick 零推进轨迹", () => {
+    const releaseCalls: string[] = [];
+    const ports = makeKernelPorts({
+      releaseExternalConsumer: (key: string): boolean => {
+        releaseCalls.push(key);
+        return key !== "ext:h18:C0:D0";
+      },
+    });
+    const kernelInit = createTreasuryCoreKernel(ports);
+    const initRecord = kernelInit.admit(kernelAdmitInput([], "biz:h18:init"));
+    if (initRecord.status !== "admitted") throw new Error("init admit failed");
+    // —— 旧 H18 原样 fixture（4ba065a treasuryRemediationIVKernel.test.ts:611-646）——
+    const recordOf = (i: number): Record<string, unknown> => {
+      const consumers = i < 30 ? [`ext:h18:C${i}:D0`, `ext:h18:C${i}:D1`, `ext:h18:C${i}:D2`] : [];
+      const phase = i < 30 ? "closing" : i < 50 ? "outcome_unknown" : i < 60 ? "retry_ready" : "pending";
+      const outcome = phase === "closing" ? (i % 2 === 0 ? "committed" : "not_executed") : phase === "outcome_unknown" ? "unknown" : null;
+      return {
+        workKey: `biz:h18:W${i}`,
+        attemptId: `tk1_h18_${i.toString().padStart(2, "0")}`,
+        generation: 1,
+        parentAttemptId: null,
+        phase,
+        admittedAtTick: Game.time,
+        updatedAtTick: Game.time,
+        identity: { ...kernelIdentity() },
+        worstCase: kernelLegs(50),
+        invocationBoundary: phase === "pending" ? null : { atTick: Game.time, worldSequence: 1 },
+        invocation: null,
+        external: null,
+        outcome,
+        outcomeEvidence: null,
+        cleanup: { consumerKeys: consumers, failures: 0, cursor: 0 },
+        retryDeadlineTick: phase === "retry_ready" ? Game.time + 10 : null,
+        lastError: null,
+      };
+    };
+    const memory = Memory.runtime!.treasuryCore as unknown as {
+      active: Record<string, Record<string, unknown>>;
+      ring: unknown[];
+      ringCursor: number;
+      issuance: { frontier: number; burned: number };
+      lifecycle: { lastBeginTick: number | null; lastEndTick: number | null };
+      recovery: { sweepCursor: number; cleanupCursor: number; budgetTick: number; budgetUsed: number };
+    };
+    delete memory.active[(initRecord as { attemptId: string }).attemptId];
+    for (let i = 0; i < 64; i += 1) {
+      const record = recordOf(i);
+      memory.active[record.attemptId as string] = record;
+    }
+    memory.issuance.frontier = 65;
+    // —— 修复后语义断言（基线红）：生产 validator 必须判该 fixture healthy ——
+    const health = readTreasuryCoreStoreHealth();
+    TRACES.push(`health=${JSON.stringify(health.status === "healthy" ? { status: health.status } : health)}`);
+    // eslint-disable-next-line no-console
+    console.log(`R6-V1-TRACES health=${health.status}${health.status === "unhealthy" ? ` reason=${health.reason}` : ""}`);
+    // —— 零推进轨迹（基线证据）：unhealthy 下 12 tick 完整 reset 全部空转 ——
+    const perTickReleases: number[] = [];
+    for (let t = 0; t < 12; t += 1) {
+      Game.time += 1;
+      const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
+      const before = releaseCalls.length;
+      performTreasuryKernelFullReset({ ports, memorySnapshot: snapshot });
+      perTickReleases.push(releaseCalls.length - before);
+    }
+    TRACES.push(`per-tick-releases=${JSON.stringify(perTickReleases)}`);
+    TRACES.push(`total-release-calls=${JSON.stringify(releaseCalls.length)}`);
+    const core = Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string; cleanup?: { consumerKeys: readonly string[] } }> };
+    const phases = { closing: 0, outcome_unknown: 0, retry_ready: 0, pending: 0 };
+    for (const r of Object.values(core.active)) if (r.phase in phases) phases[r.phase as keyof typeof phases] += 1;
+    TRACES.push(`phases-after-12-ticks=${JSON.stringify(phases)}`);
+    TRACES.push(`chars=${JSON.stringify(treasuryCoreSerializedChars(Memory.runtime!.treasuryCore as never))}`);
+    // eslint-disable-next-line no-console
+    console.log(`R6-V1-TRACES\n  ${TRACES.join("\n  ")}`);
+    expect(Object.keys(memory.active).length).toBe(TREASURY_CORE_ACTIVE_LIMIT);
+    expect(treasuryCoreSerializedChars(Memory.runtime!.treasuryCore as never)).toBeLessThanOrEqual(TREASURY_CORE_TOTAL_CHAR_BUDGET);
+    // 修复后语义：fixture 必须健康（基线在此红——"没有工作就全绿"的测试前提无效）。
+    expect(health.status).toBe("healthy");
+  });
+});

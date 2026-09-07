@@ -1,0 +1,71 @@
+FAIL src/runtime/treasury/treasuryRemediationVIKernel.test.ts
+  J01 成功关窗→同 tick 完整 reset→直接 admit/rearm
+    × 主用例：heap 已随模块重建丢失、持久 lastEndTick=T 仍在——kernel admit/executeRearm 与 facade authorize 全部 lifecycle_closed；frontier/active/动作/child 增量 0 (42 ms)
+    √ 对照：未请求关窗时同前提完整 reset 后新 kernel admit/dispatch/rearm 与 facade 全部成功 (22 ms)
+    √ 对照：关窗后推进到 T+1 完整 reset——无永久闩锁，新窗口正常接纳 (19 ms)
+  J02 执行门禁隔离（真 P/R，仅清 heap 否决）
+    × 主用例：真 dispatch P 与真 rearm R + endTick 持久关闭 → 仅移除模块级 heap 事实 → executeDispatch/executeRearm 因持久关窗拒绝；动作 0、P 仍 pending、父代未替换、许可未消费 (11 ms)
+    √ 对照：同前提未请求关窗（heap 与持久均开放）——P 执行 committed 路径可用、R 执行可用 (11 ms)
+  J03 门禁边界语义
+    √ 仅 heap 否决（关窗发布失败）：admit 仍拒且原因标明 heap 口径（不冒充持久成功）；下一 tick 失效 (7 ms)
+    √ 非健康核心：heap 否决优先拒绝（lifecycle_closed）；无 heap 否决时原有 store_unhealthy 拒绝不退化；门禁查询零写、不修坏 store (5 ms)
+    × 坏 ring（ringDegraded）不阻断持久关窗判定：healthy+degraded 下 gate 仍读 lastEndTick 关闭；恢复/清理既有语义不退化 (5 ms)
+  J04 关窗不影响旧工作收尾与下一 tick 恢复
+    √ 关窗 tick 内：清理推进（义务减少）、cancelPending/closeWork 可用；下一 tick 完整 reset 后新业务 admit 成功 (35 ms)
+
+  ● J01 成功关窗→同 tick 完整 reset→直接 admit/rearm › 主用例：heap 已随模块重建丢失、持久 lastEndTick=T 仍在——kernel admit/executeRearm 与 facade authorize 全部 lifecycle_closed；frontier/active/动作/child 增量 0
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rejected"
+    Received: "admitted"
+
+    [0m [90m 165 |[39m     [36mconst[39m activeBefore [33m=[39m activeCount()[33m;[39m
+     [90m 166 |[39m     [36mconst[39m newAdmission [33m=[39m reset[33m.[39mkernel[33m.[39madmit(kernelAdmitInput([32m"biz:r6:new"[39m))[33m;[39m
+    [31m[1m>[22m[39m[90m 167 |[39m     expect(newAdmission[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m     |[39m                                 [31m[1m^[22m[39m
+     [90m 168 |[39m     [36mif[39m (newAdmission[33m.[39mstatus [33m===[39m [32m"rejected"[39m) {
+     [90m 169 |[39m       expect(newAdmission[33m.[39mreasonCode)[33m.[39mtoBe([32m"lifecycle_closed"[39m)[33m;[39m
+     [90m 170 |[39m       expect(newAdmission[33m.[39mreason)[33m.[39mtoContain([32m"endTick 后不得接纳"[39m)[33m;[39m [90m// 持久口径原因（非 heap 冒充）[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVIKernel.test.ts:167:33)
+
+  ● J02 执行门禁隔离（真 P/R，仅清 heap 否决） › 主用例：真 dispatch P 与真 rearm R + endTick 持久关闭 → 仅移除模块级 heap 事实 → executeDispatch/executeRearm 因持久关窗拒绝；动作 0、P 仍 pending、父代未替换、许可未消费
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "blocked"
+    Received: "not_executed"
+
+    [0m [90m 266 |[39m     [90m// —— P：直接提交仍属于该 runtime/tick 的真 dispatch ——[39m
+     [90m 267 |[39m     [36mconst[39m dispatchOutcome [33m=[39m kernel[33m.[39mexecuteDispatch(pAdmission[33m.[39mdispatch)[33m;[39m
+    [31m[1m>[22m[39m[90m 268 |[39m     expect(dispatchOutcome[33m.[39mstatus)[33m.[39mtoBe([32m"blocked"[39m)[33m;[39m
+     [90m     |[39m                                    [31m[1m^[22m[39m
+     [90m 269 |[39m     [36mif[39m (dispatchOutcome[33m.[39mstatus [33m===[39m [32m"blocked"[39m) {
+     [90m 270 |[39m       expect(dispatchOutcome[33m.[39mreasonCode)[33m.[39mtoBe([32m"lifecycle_closed"[39m)[33m;[39m
+     [90m 271 |[39m       expect(dispatchOutcome[33m.[39mreason)[33m.[39mtoContain([32m"endTick 后不得接纳"[39m)[33m;[39m [90m// 持久口径[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVIKernel.test.ts:268:36)
+
+  ● J03 门禁边界语义 › 坏 ring（ringDegraded）不阻断持久关窗判定：healthy+degraded 下 gate 仍读 lastEndTick 关闭；恢复/清理既有语义不退化
+
+    expect(received).toContain(expected) // indexOf
+
+    Expected substring: "endTick 后不得接纳"
+    Received string:    "本 tick 授权窗口已关闭（endTick 请求已发出：持久关窗发布待确认或失败，运行时否决标记生效——新增业务跨实例拒绝；恢复与安全清理继续）"
+
+    [0m [90m 379 |[39m     [36mconst[39m gate [33m=[39m kernel[33m.[39madmissionGateStatus()[33m;[39m
+     [90m 380 |[39m     expect(gate[33m.[39mstatus)[33m.[39mtoBe([32m"closed"[39m)[33m;[39m [90m// 持久 lastEndTick===当前 tick 仍可判定[39m
+    [31m[1m>[22m[39m[90m 381 |[39m     [36mif[39m (gate[33m.[39mstatus [33m===[39m [32m"closed"[39m) expect(gate[33m.[39mreason)[33m.[39mtoContain([32m"endTick 后不得接纳"[39m)[33m;[39m
+     [90m     |[39m                                                       [31m[1m^[22m[39m
+     [90m 382 |[39m     [36mconst[39m rejected [33m=[39m kernel[33m.[39madmit(kernelAdmitInput([32m"biz:r6:j3r:new"[39m))[33m;[39m
+     [90m 383 |[39m     expect(rejected[33m.[39mstatus)[33m.[39mtoBe([32m"rejected"[39m)[33m;[39m
+     [90m 384 |[39m     [36mif[39m (rejected[33m.[39mstatus [33m===[39m [32m"rejected"[39m) expect(rejected[33m.[39mreasonCode)[33m.[39mtoBe([32m"lifecycle_closed"[39m)[33m;[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVIKernel.test.ts:381:55)
+
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 6 passed, 9 total
+Snapshots:   0 total
+Time:        5.213 s
+Ran all test suites matching /src\\runtime\\treasury\\treasuryRemediationVIKernel.test.ts/i.

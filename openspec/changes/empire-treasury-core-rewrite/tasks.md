@@ -54,6 +54,18 @@
 - [x] C24 负向变体三件套（去累计 policy 3 红/载荷作发布目标 1 红/调用后计预算 3 红）各自红灯后还原，58/58 恢复
 - 注：II 轮 evidence 的 validation-head 指向中间 6daf3bc、bundle hash 与最终说明不一致——保留为历史（III 报告已注明）；II 轮"A05–A08 等价"在 v3 下 fixture 已同步升级。
 
+## Core Rewrite IV · Remediation VI（2026-09-07）
+
+- [x] 影响范围侦察（subagent：admissionVeto 全调用点归类——三写入口须升级、接口导出面 heap-only 保留；readTreasuryCoreStoreHealth 四态下门禁行为顺序推导；lifecycle_closed 断言测试清单语义不变性核对；H18 helper 共享面/budget 条目/complete reset 模块身份陷阱三风险点）
+- [x] R1 基线反例（干净 worktree 4ba065a，exit=1）：同 tick 成功关窗（closurePersisted=true、lastEndTick=T）→ 完整 reset → heap 否决随模块重建丢失 → 新 kernel.admit 错误 admitted（frontier+1/active+1）→ 新签发 dispatch 进入 adapter（adapterCalls=1）→ rearm capability 签发 ok + executeRearm 错误 admitted；两对照（未关窗/下一 tick）绿（evidence/…-remediation-vi/baseline TRACES）
+- [x] V1 基线反例（同 worktree，exit=1）：旧 H18 fixture 被生产 validator 判 unhealthy（"closing 但结果未确定或无证据"结构矛盾）→ 12 tick 完整 reset 全部空转：释放 [0×12]、total 0、四阶段数量零变化——旧断言（≤4/unknown=20/失败义务在）在零推进下仍通过（测试前提无效的完整证据）
+- [x] R1 修复：kernel 新增 admissionGateStatus 共享只读门禁（持久 lastEndTick===当前 tick 先查、heap 否决兜底；原因文本区分来源不冒充）→ admit/executeDispatch/executeRearm 三入口共用；facade admissionWindowOpen 改为消费 kernel.admissionGateStatus（两侧判定与文案统一）；门禁纯读零写、不进 requireWritableHealth、非健康核心退化 heap 单口径原拒绝不退化；修复后基线 replicator 治愈（admitted→rejected/lifecycle_closed/增量 0）
+- [x] V1 修复（H18 整体重写，不放宽 validator）：64 条合法混合（30 closing×3 义务 committed/not_executed 混合+1 项持续失败义务/20 unknown 有调用边界/10 retry_ready exact not-executed 义务空/4 pending 无调用侧事实）validator 判 healthy（J05）；12 tick 完整 reset 观察段逐 tick healthy 前后核验、份额≤8、释放≤4、非零服务、pending 安全取消、20 unknown 按 ID 精确保留、成功义务不再调用、失败项不饿死健康项；40 tick 明确推导上界的有界收尾（实测 13 tick）+ 宿主恢复失败端口后 1 tick 完成收尾 + closeWork abandoned 安全退出 + 终态只剩 20 条不对账 unknown；零推进负向对照（healthy fixture 下进度判别函数判 false——上限/保留断言单独绿不构成通过）
+- [x] J 矩阵：J01（完整 reset 后 kernel admit/executeRearm 与 facade authorize 全拒 + 未关窗/下一 tick 对照 + 旧许可失效单独分类不以替代）；J02（真 P/R + 持久关闭 + 仅清 heap 否决的执行门禁隔离——动作 0/P 仍 pending/父代未替换/许可未消费经 preflight 直接验证）；J03（仅 heap 原因不冒充、unhealthy 拒绝不退化+查询零写、坏 ring 不阻断持久判定）；J04（关窗 tick 内清理推进/cancelPending/closeWork 可用+下一 tick 新业务成功）；J05/J06 见 H18 重写；J07 两负向变体（仅 heap 门禁→J01/J02/J03 持久判定 3 红行为断言非编译错；零推进→J06 红+H 系列进度红、J05/零推进对照仍绿判别准确；还原 21/21 绿）；J08 最终验证与主报告承担
+- [x] 上轮 H18 观察项关闭：手工满载记录改用合法形状（本轮 V1），断言非空转；上轮报告的 H18 空转保证如实更正（见 test-migration-map §13.1），不改写历史
+- [ ] Agent 本地验证：typecheck/build/Treasury/Defense 冻结集合/全仓/budget（见 evidence/core-rewrite-iv-remediation-vi/final）
+- [ ] 独立审查（本轮交付后由独立 Agent 执行——本地验证不构成放行）
+
 ## Core Rewrite IV · Remediation V（2026-09-07）
 
 - [x] 影响范围侦察（subagent：performTreasuryFullReset 全调用点三类归类、kernel endTick 结构与 admissionWindowOpen 4 消费点、依赖关窗时序的 H/C/G 测试清单、attribution-probe 形态、budget 现状）

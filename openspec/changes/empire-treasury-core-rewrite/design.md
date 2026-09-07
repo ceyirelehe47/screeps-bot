@@ -500,3 +500,34 @@ performTreasuryFullReset 的三类使用目的（校验全部发生在 resetRunt
 非 oracle adapter（无事件来源可错配）不受事件来源限制（service 非精确
 恢复）。断点配对一致性（纯校验）先行：伪造断点保持"断点配对不一致"
 口径。
+
+### 10.5 持久关窗统一门禁（Remediation VI 修订）
+
+§10.1 的两道关闭条件在此前只有第二道（heap 否决标记）被 kernel 三条写
+入口直接消费；持久 lifecycle.lastEndTick 只被 facade 的授权窗口读取——
+完整 reset（JSON 重载 + 模块重建）后 heap 否决随模块丢失，新 kernel 的
+admit/executeDispatch/executeRearm 在"持久关窗已成功发布且仍存在"的同
+tick 仍放行新增业务（J01/J02 基线反例：错误 admitted、新签发 dispatch
+进入 adapter、rearm 错误 admitted）。修订为**同一个只读判定服务两侧**：
+
+1. **kernel 共享只读门禁**（admissionGateStatus）：健康持久核心的
+   lifecycle.lastEndTick === 当前 tick（持久关窗——跨运行时权威）或本
+   运行时 heap 否决标记任一成立即关闭；admit/executeDispatch/
+   executeRearm 三条写入口与 facade 授权窗口共用同一判定与原因文本，
+   不再各自维护双口径实现。检查顺序持久先于 heap（与原 facade 口径
+   一致）；**原因区分两种来源**——"持久已关闭"与"heap 否决（持久发布
+   待确认或失败）"不互相冒充。
+2. **判定先于可避免的成本**：关闭检查位于容量/policy 调用、ID 分配、
+   许可消费与动作调用之前（blocked 不消费许可/不替换父代）。每次现读
+   当前可信记录，不缓存开放结论。查询纯读：不初始化、不迁移、不修
+   ring、不写 Memory。
+3. **不扩大拒绝面**：closed 不进入所有命令共用的 requireWritableHealth
+   ——恢复 unknown、可信对账、取消已知未开始、清理义务与安全 close
+   不受关闭限制（§10.3 不变）。非健康核心（absent/unhealthy/
+   incompatible）无持久事实可依，退化为 heap 单口径；随后原有健康检查
+   按原语义拒绝（store_unhealthy/incompatible 不因门禁存在而放过），
+   unhealthy 不是"没有关闭所以可执行"。ring 层单独损坏（ringDegraded）
+   不阻断持久关窗判定。same-tick beginTick 不重开窗口；下一 tick 原关
+   闭不构成闩锁。admissionVetoActive 保持 heap-only 语义（运行时否决
+   事实查询）；本轮不改关窗发布时序、不新增关闭字段、不要求从未成功
+   持久化的结束请求中恢复信息（故障模型边界不变）。

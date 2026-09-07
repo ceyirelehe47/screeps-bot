@@ -351,3 +351,31 @@ test/baseline/treasuryRemediationIIBaseline.test.ts（6 用例）：R1 流出/�
   尾写失败不假报/安全清理继续）——R1 关窗前移后语义更强，无需修订。
 - resetTreasuryCoreStoreForTest 增清模块级生命周期事实（否决标记按 tick
   失效会跨同 Game.time 用例残留——修复 30 处跨用例污染）。
+
+## 13. Core Rewrite IV · Remediation VI：J01–J08 定位与 H18/I06 覆盖纠正（2026-09-07）
+
+| 编号 | 入口（文件/用例） | 前提与断言定位 |
+| --- | --- | --- |
+| J01 | treasuryRemediationVIKernel.test.ts `J01…`（主用例 + 两对照） | 同 tick 成功关窗（closurePersisted=true、lastEndTick=T）→ 完整 reset（memorySnapshot、runBeginTick:false、新模块装配）→ 前提自证（tick 仍 T、heap 否决丢失、持久关闭仍在）→ 新 kernel.admit 拒 lifecycle_closed（原因含"endTick 后不得接纳"持久口径）+ frontier/active 增量 0；rearm：issueRearmPermit 签发 ok（签发面不受限）+ executeRearm 拒、父代仍 retry_ready、child 0；配对 facade：新模块 service authorize 拒 lifecycle_closed；动作增量 0。对照：未关窗同前提 admit/dispatch/rearm + facade 全成功（dispatch 确实进入 adapter）；下一 tick 无闩锁。基线（4ba065a）同场景 admit 错误 admitted、新签发 dispatch 进入 adapter、rearm 错误 admitted——见 evidence/baseline（不以旧许可失效代替：resetModules 后旧许可被真实性校验拒绝单独分类） |
+| J02 | 同文件 `J02…`（主用例 + 对照） | 健康开放窗口正常取得当 tick真 dispatch P（pending）与真 rearm capability R（preflight valid 前置）→ 真实 endTick 持久关闭 → 调用栈退出后仅 resetTreasuryCoreLifecycleFactsForTest 清模块级 heap 事实（不改 Memory/不清许可注册表/不重签发）→ 原 kernel 直接 executeDispatch(P) blocked lifecycle_closed（动作增量 0、P 仍 pending）、executeRearm(R) rejected（父代未替换、child 0、frontier 不变）；许可未消费经 preflightDispatchPermit/preflightRearmPermit valid 直接验证（不靠下一 tick 重签发）。对照：未关窗 P 执行进入 adapter、R admitted |
+| J03 | 同文件 `J03…`（3 用例） | 仅 heap 否决（模拟发布未落盘）：admit 拒且原因标明"运行时否决标记生效"（不冒充持久成功）、下一 tick 失效无闩锁；非健康核心：无 heap 时门禁 open + 原有 store_unhealthy 拒绝不退化、heap 否决优先 lifecycle_closed、全程零写（坏 store 不被修复）；坏 ring（ringDegraded）：持久关窗判定不阻断、恢复/清理入口继续（beginTick 可用） |
+| J04 | 同文件 `J04…` | retry_ready 父代（干净 tick 先造——有义务 closing 占满清理预算）+ 8 义务 closing C + pending P2 → endTick 成功 → 同 tick admit 拒但 beginTick 清理推进（cleaned>0、C 义务减少）、cancelPending(P2) ok、closeWork(父代 abandoned) ok、release 非零 → 下一 tick 完整 reset 新 admit + executeDispatch 成功 |
+| J05 | treasuryRemediationIVKernel.test.ts `H18 … J05` | buildH18MixedLoad 工厂（真实 admit 初始化 + 64 条手工合法记录）：validator 判 healthy（旧 fixture 在此红）；active 64/四类构成精确（30/20/10/4）/remaining 90/chars ≤360,000/ring ≤128/frontier 65；closing evidence 结论与 outcome 一致且有调用边界、unknown 有边界无确定结论、retry_ready exact not-executed+义务空+期限、pending 无任何调用侧事实 |
+| J06 | 同文件 `H18 … J06` | 12 tick 观察段（每 tick JSON.stringify→performTreasuryKernelFullReset→新 store 模块 healthy 前置→beginTick→healthy 后置；份额≤8、释放≤4、20 unknown 按 ID 逐 tick 保留、pending 2 tick 内取消、h18HasProgress 真、completedClosing 真、失败义务在且健康项被服务、成功 key 恰一次）→ 40 tick 明确推导上界的有界收尾（实测 13）→ 宿主恢复失败端口（1 tick 完成 C0 退出）→ closeWork abandoned 清空 retry_ready → 终态 active=20 且 ID 集合精确等于 unknownIds、ring 44 ≤128。H18-TRACE console.log 摘录入 evidence/final |
+| J07 | evidence/…/negative-variants | 仅 heap 门禁（heap-only-gate.patch）：J01/J02 主用例 + J03 持久判定用例 3 红行为断言（编译通过）；healthy 零推进（zero-advance.patch：生命周期份额视为已尽）：J06 红 + H 系列进度用例红、J05/零推进对照仍绿（判别准确）；还原后 21/21 绿（IVKernel 12 + VIKernel 9） |
+| J08 | 最终验证流程 | typecheck/build、Treasury 32 suites/569、Defense 11/118、全仓 236/1415、budget（自带全仓重跑另存）、固定验证 HEAD 原始 JSON/日志/hash（evidence/final）；I13 成本 fixture 随 VKernel 全量真实重跑如实记录；三 SHA 与后置文件分类 |
+
+### 13.1 覆盖纠正与旧 H18 替换说明（Remediation VI）
+
+- **I06 覆盖纠正**：I06（V 轮）在成功关窗后完整 reset 场景只测了 facade
+  authorize 的拒绝——kernel 直接 admit/executeDispatch/executeRearm 的
+  持久关窗口径此前无覆盖（J01/J02 基线反例证明该缺口真实可被触发）。
+  本轮由 J01/J02 补齐，I06 原断言保持不变。
+- **旧 H18 替换**：旧 H18 的满载 fixture（closing 有 outcome 但
+  outcomeEvidence=null、retry_ready/pending 的 outcome=null）不满足生产
+  结构校验——validator 正确判 unhealthy 后所有生命周期调用静默早退
+  （基线证据：12 tick 释放 [0×12]、四阶段零变化），其断言（释放 ≤4、
+  unknown 计数=20、失败义务在）在零推进下空转成立。上轮 Remediation V
+  报告与 tasks.md 观察项记载的该问题由本轮 V1 关闭：新 H18 用合法记录
+  （J05）+ 真实推进断言（J06）+ 零推进负向对照整体替换，不留原空转
+  用例继续宣称通过；上轮报告文字保留为历史不改写。

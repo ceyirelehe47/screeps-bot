@@ -1,0 +1,221 @@
+/**
+ * Remediation VI · R1 基线反例重现器（在 4ba065a 基线上运行必须红）。
+ *
+ * 场景（任务书 §2.2）：tick T 成功关窗（endTick → closurePersisted=true、
+ * 持久 lifecycle.lastEndTick=T）→ 同 tick 完整 JSON reset + jest.resetModules
+ * 新模块装配（runBeginTick:false）→ 旧 heap 否决已随模块重建丢失、持久关闭
+ * 仍在 → 新 kernel.admit(合法新工作)。
+ *
+ * 断言的是**修复后的语义**（同 tick 持久关窗必须拒绝新增业务）；基线
+ * （仅 heap 否决的 kernel 门禁）上运行时以行为差异变红——变红前的轨迹
+ * 记录（TRACES）给出缺陷的实际形态：admit 错误 admitted、新签发许可的
+ * dispatch 进入 adapter、rearm 错误 admitted（child 创建）。
+ */
+import { performTreasuryKernelFullReset } from "@mock/treasuryResetHarness";
+import {
+  createTreasuryCoreKernel,
+  type TreasuryCoreAdmissionInput,
+  type TreasuryCoreKernelPorts,
+} from "@/runtime/treasury/kernel/kernel";
+import type { TreasuryCoreIdentityFacts, TreasuryCoreWorstCaseLeg } from "@/runtime/treasury/kernel/types";
+import { resetTreasuryCoreStoreForTest } from "@/runtime/treasury/testHarness";
+import { installRooms, type RoomSpec } from "@mock/treasury";
+
+const SPECS: RoomSpec[] = [
+  { name: "W1N57", storage: { id: "stor-1", resources: { energy: 1000 }, freeCapacity: 10_000 }, terminal: { id: "term-1", resources: { energy: 0 }, freeCapacity: 200_000 } },
+  { name: "W2N57", storage: { id: "stor-2", resources: { energy: 0 }, freeCapacity: 10_000 }, terminal: { id: "term-2", resources: { energy: 0 }, freeCapacity: 200_000 } },
+];
+
+function kernelIdentity(actionKind = "d.kind"): TreasuryCoreIdentityFacts {
+  return {
+    actionKind,
+    adapterVersion: 1,
+    adapterRegistrationId: `reg-${actionKind}`,
+    adapterSemanticIdentity: `d.adapter-${actionKind}`,
+    canonicalDigest: "a".repeat(16),
+    postingsDigest: "b".repeat(16),
+    retryFactsDigest: "c".repeat(16),
+    durableFacts: null,
+  };
+}
+
+function kernelLegs(outflow: number): TreasuryCoreWorstCaseLeg[] {
+  return [
+    { roomName: "W1N57", locationKind: "storage", resource: RESOURCE_ENERGY, delta: -outflow },
+    { roomName: "W2N57", locationKind: "terminal", resource: RESOURCE_ENERGY, delta: outflow },
+  ];
+}
+
+function kernelAdmitInput(workKey: string, actionKind = "d.kind"): TreasuryCoreAdmissionInput {
+  return {
+    workKey,
+    identity: kernelIdentity(actionKind),
+    worstCase: kernelLegs(50),
+    externalConsumers: [],
+    canonicalArgs: { n: 1 },
+    postings: kernelLegs(50),
+    admissionContext: { contractId: `ac:${actionKind}`, contractDigest: "a".repeat(16), actionKind, ownerIdentity: null, excludeAttemptId: null },
+    structureBindings: [],
+  };
+}
+
+const TRACES: string[] = [];
+
+function trace(label: string, value: unknown): void {
+  TRACES.push(`${label}=${JSON.stringify(value)}`);
+}
+
+function activeShape(): Record<string, { phase: string }> {
+  return (Memory.runtime?.treasuryCore as unknown as { active?: Record<string, { phase: string }> }).active ?? {};
+}
+
+beforeEach(() => {
+  resetTreasuryCoreStoreForTest();
+  TRACES.length = 0;
+});
+
+describe("R1 基线：同 tick 成功关窗 + 完整 reset 后 kernel 直接新增业务", () => {
+  it("J01 基线反例：持久 lastEndTick=T 仍在新 kernel 拒绝 admit/rearm（修复后语义；基线红）", () => {
+    installRooms(SPECS);
+    // —— tick T 前置：合法 retry_ready 父代（kernel 面 not_executed → 清理）——
+    const kernel0 = createTreasuryCoreKernel(makeBaselinePorts());
+    const parent = kernel0.admit(kernelAdmitInput("biz:r6:parent"));
+    if (parent.status !== "admitted") throw new Error("parent admit failed");
+    trace("parent-admit", { tick: Game.time, attemptId: parent.attemptId });
+    if (kernel0.executeDispatch(parent.dispatch).status !== "not_executed") throw new Error("parent dispatch failed");
+    Game.time += 1;
+    const T = Game.time;
+    kernel0.beginTick(); // not_executed 无义务 → retry_ready
+    const parentPhase = activeShape()[parent.attemptId]?.phase;
+    trace("parent-phase", { tick: T, phase: parentPhase });
+    if (parentPhase !== "retry_ready") throw new Error(`parent != retry_ready (${String(parentPhase)})`);
+    // —— 同 tick 成功关窗 ——
+    const endStats = kernel0.endTick();
+    trace("end-tick", { tick: T, recoveredToUnknown: endStats.recoveredToUnknown, closurePersisted: endStats.closurePersisted });
+    if (endStats.closurePersisted !== true) throw new Error("closure not persisted");
+    const lifecycle = (Memory.runtime!.treasuryCore as unknown as { lifecycle: { lastEndTick: number | null } }).lifecycle;
+    trace("persistent-closure", { tick: T, lastEndTick: lifecycle.lastEndTick });
+    if (lifecycle.lastEndTick !== T) throw new Error("lastEndTick != T");
+    // —— 同 tick 完整 reset：JSON 重载 + resetModules + 新模块装配（runBeginTick:false）——
+    const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
+    const adapterCalls = { count: 0 };
+    const reset = performTreasuryKernelFullReset({
+      ports: makeBaselinePorts(adapterCalls),
+      memorySnapshot: snapshot,
+      roomSpecs: SPECS,
+      runBeginTick: false,
+    });
+    trace("after-reset", {
+      tick: Game.time,
+      heapVetoActive: reset.kernel.admissionVetoActive(),
+      lastEndTick: (Memory.runtime!.treasuryCore as unknown as { lifecycle: { lastEndTick: number | null } }).lifecycle.lastEndTick,
+      frontier: reset.kernel.metrics().frontier,
+      activeCount: Object.keys(activeShape()).length,
+    });
+    // 前提自证：当前 tick 仍为 T、持久关窗仍在、旧 heap 否决已丢失。
+    if (Game.time !== T) throw new Error("tick moved");
+    if (reset.kernel.admissionVetoActive()) throw new Error("heap veto unexpectedly active (module not rebuilt)");
+    // —— 缺陷通道 1：新 kernel.admit（合法新工作）——
+    const frontierBefore = reset.kernel.metrics().frontier;
+    const activeBefore = Object.keys(activeShape()).length;
+    const newAdmission = reset.kernel.admit(kernelAdmitInput("biz:r6:new"));
+    trace("post-reset-admit", {
+      status: newAdmission.status,
+      reason: newAdmission.status === "rejected" ? newAdmission.reason : null,
+      reasonCode: newAdmission.status === "rejected" ? newAdmission.reasonCode : null,
+      frontierDelta: reset.kernel.metrics().frontier - frontierBefore,
+      activeDelta: Object.keys(activeShape()).length - activeBefore,
+    });
+    if (newAdmission.status === "admitted") {
+      // 缺陷轨迹：错误接纳的新许可继续执行——记录是否进入 adapter。
+      const dispatchOutcome = reset.kernel.executeDispatch(newAdmission.dispatch);
+      trace("post-reset-dispatch", { status: dispatchOutcome.status, adapterCalls: adapterCalls.count });
+    }
+    // —— 缺陷通道 2：新运行时签发 rearm capability 后直接 executeRearm ——
+    const rearmCap = reset.kernel.issueRearmPermit({ parentAttemptId: parent.attemptId });
+    trace("post-reset-rearm-capability", { status: rearmCap.status });
+    if (rearmCap.status === "ok") {
+      const childBefore = Object.keys(activeShape()).length;
+      const rearmResult = reset.kernel.executeRearm(rearmCap.rearm, kernelAdmitInput("biz:r6:child"));
+      trace("post-reset-execute-rearm", {
+        status: rearmResult.status,
+        reasonCode: rearmResult.status === "rejected" ? rearmResult.reasonCode : null,
+        activeDelta: Object.keys(activeShape()).length - childBefore,
+        parentPhaseAfter: activeShape()[parent.attemptId]?.phase,
+      });
+    }
+    // eslint-disable-next-line no-console
+    console.log(`R6-R1-TRACES\n  ${TRACES.join("\n  ")}`);
+    // —— 修复后语义（基线红 / 修复后绿）——
+    expect(newAdmission.status).toBe("rejected");
+    if (newAdmission.status === "rejected") expect(newAdmission.reasonCode).toBe("lifecycle_closed");
+  });
+
+  it("合法对照：未请求关窗时同前提 admit/dispatch/rearm 全部成功（基线绿）", () => {
+    installRooms(SPECS);
+    const kernel0 = createTreasuryCoreKernel(makeBaselinePorts());
+    const parent = kernel0.admit(kernelAdmitInput("biz:r6:ctrl-parent"));
+    if (parent.status !== "admitted") throw new Error("parent admit failed");
+    if (kernel0.executeDispatch(parent.dispatch).status !== "not_executed") throw new Error("parent dispatch failed");
+    Game.time += 1;
+    kernel0.beginTick();
+    if (activeShape()[parent.attemptId]?.phase !== "retry_ready") throw new Error("parent != retry_ready");
+    // 未 endTick：完整 reset 后新 kernel 正常接纳（无持久关窗事实）。
+    const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
+    const adapterCalls = { count: 0 };
+    const reset = performTreasuryKernelFullReset({
+      ports: makeBaselinePorts(adapterCalls),
+      memorySnapshot: snapshot,
+      roomSpecs: SPECS,
+      runBeginTick: false,
+    });
+    const admission = reset.kernel.admit(kernelAdmitInput("biz:r6:ctrl-new"));
+    if (admission.status !== "admitted") throw new Error("control admit failed");
+    expect(reset.kernel.executeDispatch(admission.dispatch).status).toBe("not_executed");
+    expect(adapterCalls.count).toBe(1); // 合法对照里 dispatch 确实进入 adapter
+    const cap = reset.kernel.issueRearmPermit({ parentAttemptId: parent.attemptId });
+    if (cap.status !== "ok") throw new Error("control rearm capability failed");
+    const rearmResult = reset.kernel.executeRearm(cap.rearm, kernelAdmitInput("biz:r6:ctrl-child"));
+    expect(rearmResult.status).toBe("admitted");
+  });
+
+  it("下一 tick 对照：关窗后推进到 T+1，新装配正常接纳（无永久闩锁）", () => {
+    installRooms(SPECS);
+    const kernel0 = createTreasuryCoreKernel(makeBaselinePorts());
+    const seed = kernel0.admit(kernelAdmitInput("biz:r6:latch-seed"));
+    if (seed.status !== "admitted") throw new Error("seed admit failed");
+    kernel0.beginTick();
+    if (kernel0.endTick().closurePersisted !== true) throw new Error("closure failed");
+    Game.time += 1; // 下一 tick
+    const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
+    const reset = performTreasuryKernelFullReset({
+      ports: makeBaselinePorts(),
+      memorySnapshot: snapshot,
+      roomSpecs: SPECS,
+      runBeginTick: false,
+    });
+    expect(reset.kernel.admissionVetoActive()).toBe(false);
+    expect(reset.kernel.admit(kernelAdmitInput("biz:r6:latch-new")).status).toBe("admitted");
+  });
+});
+
+function makeBaselinePorts(calls?: { count: number }): TreasuryCoreKernelPorts {
+  return {
+    nowTick: () => Game.time,
+    runtimeGeneration: () => 1,
+    findAdapter: (kind: string) => ({
+      kind,
+      version: 1,
+      registrationId: `reg-${kind}`,
+      semanticIdentity: `d.adapter-${kind}`,
+      execute: () => {
+        if (calls) calls.count += 1;
+        return { ok: false };
+      },
+      settlesOnAccept: false,
+      nonOkOutcome: "not_executed" as const,
+    }),
+    checkAdmissionCapacity: () => null,
+    observeForCleanup: () => ({ worldSequence: 9_000_000, atTick: Game.time + 1, locationExists: () => true }),
+  };
+}
