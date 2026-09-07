@@ -1,5 +1,20 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Core Candidate Seal I · Evidence Remediation I（2026-09-07）
+
+承接 Seal I（K01–K08 ACCEPT）审查结论 `EVIDENCE_INCOMPLETE`（任务书 treasury-core-candidate-seal-I-evidence-remediation-I-implementation.md；验收索引 L01–L08）。生产内核继续冻结（相对 869149d 零生产/配置/Defense 差异）；本轮只补证据工具与复验产物。
+
+- [x] 影响范围审查（subagent：helper 唯一消费方 IVKernel、jest 收集不收 mock、typescriptConfigBoundaries 守护 @mock 生产隔离、jest.resetModules 唯一调用点在 resetHarness（模块级变量跨 it 安全）、无已提交轨迹 JSON 读取器（哨兵不破坏解析器）、budget 14→17 同步点）
+- [x] 基线反例（隔离 worktree 7c79071 + node_modules junction，起点实现 6 红 2 绿：V1 原始记录 delete invocation/external/outcomeEvidence 经提取+比较被抹平成空差异（undefined→null）；V2 A（风险证据整项 null 被跳过）/B（实际快照漂移不重算、标签仍一致通过）/C（中间非空 riskDiff 不参与判定）全部漏报；合法对照 2 绿证明红灯非一律报错（evidence/…-remediation-i/baseline/：反例源码、J06 轨迹导出、命令/退出码/日志）
+- [x] V1 无损提取（L01）：sealUnknownRiskOf 字段缺失显式哨兵 SEAL_FIELD_ABSENT（JSON 可表示/往返不变/NUL 不与生产值混淆），"字段不存在"与"存在且 null"经提取、JSON 往返、比较仍可区分；sealBuildUnknownRiskBaseline 拒绝缺记录/缺字段的不完整基线；比较器补缺记录占位专门分支、当前快照新增风险键不忽略、diff 渲染哨兵为 {sealFieldAbsent:true}（错误产物可序列化理解）
+- [x] V2 逐检查点实证核验（L02/L03）：核验器基线完整性（占位/缺字段/哨兵拒绝，不因两侧都缺同一事实而通过）+ 每个标准检查点（observe/bounded/recovery 双点位与 final-close pre/post-close）必须有非 null 实际风险快照、覆盖 expected ID 并与独立基线逐字段重算——不信任 riskCheckedIds/riskDiff 标签（null 语义=重算无差异，不是缺 unknownRisk 的理由）；中间漂移不因终态恢复放行；terminal.riskDiff 与 post-close 实际快照交叉；核验纯读不自愈不修改输入
+- [x] 敏感性检查重构（K06→K06/L01–L04）：底版从合成轨迹换为 J06 定格的真实完整轨迹（隔离副本变体、原件不变、J06 未成功则敏感性显式红）；合成轨迹转为欠缺证据负向（unknownRisk=null 必须被拒）；新增 3 it——原始记录入口反例（delete 基线 null 字段经完整入口路径定位；合法对照/基线不随副本改变/不完整基线拒绝）、逐检查点实证 A/B/C+相邻（快照缺 ID/post-close 漂移+终态标签矛盾/终态标签非空）、落盘写读往返（合法轨迹读回仍过、哨兵经 JSON 往返保留且被拒、破坏副本落盘读回仍报差异、临时目录仓库外用后即清）；旧比较器单测保留并注明入口路径由 L01 it 承担
+- [x] 回归：IVKernel 17/17（14→17）、Treasury 32/574、全仓 236/1420 零失败；40/10 限值与 H18 fixture/断言不变（本轮未触碰生产与主用例语义）
+- [x] budget 滚动：锚点 5360e66 系列（236/1420；IVKernel 14→17）
+- [x] 主验证与固定 VALIDATION_HEAD（freeze/生产-配置-Defense 三组零差异、typecheck×2、build、KEY/Treasury/Defense/全仓/budget、落盘轨迹机器核验；见 evidence/…-remediation-i/final 与主报告）
+- [x] V3 第二执行上下文（未参与实施的 reviewer subagent 于新 VALIDATION_HEAD 独立干净 worktree：冻结三组/typecheck/IVKernel/KEY 五件/Defense 十一件/自身轨迹落盘核验，完整原始命令+退出码+日志+Jest JSON 归档 revalidation/；旧 revalidation 原始输出缺失如实注明不补造）
+- [x] 独立审查（2026-09-07 Agent 独立验收结论见 tasks.md 本段末行与 evidence 主报告；L01–L08 逐项）
+
 ## Core Rewrite IV · Remediation II（2026-09-06 完成）
 
 承接 Remediation I（0f5965e）及其源码审查的三项实现缺口与三项验证缺口（任务书 treasury-core-rewrite-IV-remediation-II-implementation.md；验收索引 F01–F20）。

@@ -405,3 +405,47 @@ test/baseline/treasuryRemediationIIBaseline.test.ts（6 用例）：R1 流出/�
   中产生 Jest 非零失败后还原——两者在报告与证据目录中分开记录。
 - 轨迹导出（TREASURY_SEAL_EVIDENCE_DIR）只控制输出位置，不控制断言
   是否运行：未设置时全部断言与比较照常执行，仅不落盘。
+
+## 15. Evidence Remediation I：L01–L08 定位（2026-09-07）
+
+承接 Seal I 独立验收后的 `EVIDENCE_INCOMPLETE` 结论：旧工具的两处证据缺口
+（提取抹平缺失/null、完整性核验不重算实际快照）与复验原始产物缺失。生产
+实现继续零 diff——本轮全部改动在 test/mock/treasurySealEvidence.ts 与
+IVKernel 测试侧两文件。
+
+**覆盖差异（旧 Seal I 敏感性的实际边界，历史不改写）**：
+- 旧"null→缺失不互替"漂移用例（原 §14/K06 下漂移 4）在**已提取好的
+  快照副本**上 delete 字段再直接调比较器——绕过了提取阶段，未覆盖
+  "原始记录缺失经提取被 undefined→null 抹平"的入口路径（本轮基线反例
+  证实该缺口真实：3 红灯 diffs 为空）。L01 it 补齐入口路径；旧比较器
+  单测保留并注明边界。
+- 旧 sealVerifyTraceCompleteness 只在 `riskCheckedIds !== null` 时检查
+  覆盖标签，不比较检查点 `unknownRisk` 实际快照，中间 `riskDiff` 不参与
+  判定（本轮基线反例 A/B/C 证实三者均漏报）。修复后每个标准检查点必须
+  有实际风险快照并与独立基线逐字段重算；派生标签（riskCheckedIds/
+  riskDiff）与重算矛盾必须报错。
+- 旧 buildSyntheticSealTrace 检查点 `unknownRisk=null` 且基线仅 2 字段，
+  曾作为完整性核验的"完整底版"通过——本轮起仅用于欠缺风险证据的负向
+  测试（核验必须拒绝它）；完整性核验正例底版改为 J06 定格的真实轨迹。
+
+| 编号 | 入口（文件/用例） | 内容 |
+| --- | --- | --- |
+| L01 | `Seal I／Evidence Remediation I 敏感性检查` describe · 原始记录入口 it + sealUnknownRiskOf/sealBuildUnknownRiskBaseline/sealCompareUnknownRisk | 原始记录副本 delete 基线合法 null 字段（invocation/external/outcomeEvidence）经**提取+JSON 往返+比较**仍定位 attempt+字段+存在性差异（期望 null vs 缺失哨兵渲染 {sealFieldAbsent:true}）；非 null 字段（invocationBoundary/identity/worstCase）delete 与 worstCase 单腿金额变化同型定位；未修改记录重复提取/深复制/往返一致；基线不随副本改变；原始记录缺字段/缺记录时 sealBuildUnknownRiskBaseline 明确拒绝（不把两侧都缺同一事实当完整） |
+| L02 | 同 describe · 逐检查点实证核验 it（反例 A + 相邻 1）+ 核验器基线完整性检查 | 检查点 unknownRisk/riskCheckedIds/riskDiff 整项 null → "风险证据缺失"定位 seq/stage（仅覆盖标签不构成实际数据）；实际快照缺一个 unknown ID → "未覆盖全部"；基线占位/缺白名单字段/哨兵 → 拒绝建立完整基线；全部标准检查点（observe/bounded/recovery×{reload-before,after-advance}+final-close×{pre,post}-close）逐一核验 |
+| L03 | 同 it（反例 B/C + 相邻 2/3） | 实际快照 worstCase 单腿金额漂移而 riskDiff 标签仍 null → 逐字段重算发现并定位 attempt+字段，另报标签矛盾；中间保存非空 riskDiff（快照一致、终态正确）→ "标签非空但实际快照与基线重算一致"不放行；post-close 快照漂移+terminal 标签一致 / terminal 标签非空+post-close 一致 → 终态标签与实际证据矛盾必报；合法真实底版通过（非一律报错） |
+| L04 | 同 describe · 落盘写读往返 it + 纯核验断言 | 合法真实轨迹 sealWriteEvidence→读回 JSON→完整性核验仍过；基线合法 null 读回仍 null；缺失哨兵经 JSON 落盘读回仍是哨兵且被核验拒绝；B 型破坏副本落盘读回仍报 worstCase 差异（导出不消除存在性/差异）；核验前后输入 JSON 不变（纯核验不自愈）；临时目录在仓库外（os.tmpdir）用后即清。基线反例红/修复绿证据在 evidence/…-remediation-i/{baseline,negative-controls} |
+| L05 | `H18 … J05/J06` + 零推进对照（未改动） | 64/90/20/10/4 fixture、40/10 限值、非零服务、风险逐点保留、真实退出、closeWork abandoned 全部保持；J06 全轨迹经新核验器（54 检查点逐点重算）通过；失败路径 incomplete 定格行为不变 |
+| L06 | evidence/…-remediation-i/freeze + final | 相对 869149d 生产/配置/Defense 三组 --exit-code 零差异；typecheck×2/build/KEY/Treasury/Defense/全仓 236-1420/budget 实跑于固定 VALIDATION_HEAD；全部执行性改动在验证 HEAD 之前 |
+| L07 | evidence/…-remediation-i/revalidation | 新固定 SHA 第二干净 worktree（独立输出/Jest cache，依赖按 lockfile）：冻结三组/typecheck/IVKernel 17/KEY 五件/Defense 十一件/自身导出轨迹落盘核验——完整原始命令、退出码、stdout/stderr、Jest JSON 与轨迹核验输出；reviewer 身份与任务书读取记录（内容 hash）；旧 Seal I revalidation 无完整原始输出已丢失的事实如实注明（不按摘要重造，不删除旧记录） |
+| L08 | evidence/…-remediation-i-local-validation.md | 新旧锚点/运行/hash 对应；原 Seal I ACCEPT 不撤回、范围勘误（V1/V2 缺口属于证据工具，未证明生产风险漂移）；实际未完成项与部署边界逐项 |
+
+### 15.1 证据表示与兼容性说明
+
+- 缺失哨兵 `SEAL_FIELD_ABSENT`（首尾 NUL 控制字符的字符串）只在**测试侧
+  提取输出**中出现：生产字段值不含 NUL（历史 NUL 卫生已完成），哨兵经
+  `JSON.stringify` 转义往返不变，不与任何合法原值全等。
+- 旧轨迹 JSON（修复前导出）在新核验器下仍通过：旧提取器恒定输出全部
+  白名单键（值或 null），逐点重算与旧标签一致——新检查只拒绝"被破坏/
+  欠证据"的轨迹，不追溯否定历史证据；旧证据保留历史身份。
+- 合成轨迹不再作为完整性正例；如需结构完整的合成底版，必须补合法风险
+  内容（覆盖差异说明见上）。
