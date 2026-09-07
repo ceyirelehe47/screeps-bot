@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "5360e6669d79a514165e4daf9a3af9a46f58ea70",
-    "suites": 236,
-    "tests": 1420
+    "commit": "44aae6142b6dad80a53511448bbccb5c242a1940",
+    "suites": 237,
+    "tests": 1428
   },
   "target": {
-    "commit": "5360e6669d79a514165e4daf9a3af9a46f58ea70",
-    "suites": 236,
-    "tests": 1420,
-    "passed": 1420,
+    "commit": "44aae6142b6dad80a53511448bbccb5c242a1940",
+    "suites": 237,
+    "tests": 1428,
+    "passed": 1428,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Evidence Remediation I：证据工具敏感性 3 用例（IVKernel 14→17）；锚点 5360e66 系列（236/1420）"
+    "note": "Terminal Transfer Slice 0：新增调拨原型 1 suite/8 用例（236/1420→237/1428）；锚点 44aae61 系列"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1596,6 +1596,14 @@
       "budget": 6,
       "tests": 6,
       "passed": 6,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
       "failed": 0,
       "pending": 0,
       "todo": 0
