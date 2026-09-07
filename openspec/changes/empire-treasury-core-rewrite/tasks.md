@@ -13,7 +13,7 @@
 - [x] budget 滚动：锚点 5360e66 系列（236/1420；IVKernel 14→17）
 - [x] 主验证与固定 VALIDATION_HEAD（freeze/生产-配置-Defense 三组零差异、typecheck×2、build、KEY/Treasury/Defense/全仓/budget、落盘轨迹机器核验；见 evidence/…-remediation-i/final 与主报告）
 - [x] V3 第二执行上下文（未参与实施的 reviewer subagent 于新 VALIDATION_HEAD 独立干净 worktree：冻结三组/typecheck/IVKernel/KEY 五件/Defense 十一件/自身轨迹落盘核验，完整原始命令+退出码+日志+Jest JSON 归档 revalidation/；旧 revalidation 原始输出缺失如实注明不补造）
-- [x] 独立审查（2026-09-07 Agent 独立验收结论见 tasks.md 本段末行与 evidence 主报告；L01–L08 逐项）
+- [x] 独立审查（2026-09-07 Agent 独立验收结论 **ACCEPT**：L01–L08 全 PASS——任务书 hash 三方一致；helper/测试逐行核对并与基线反例实录（6 红 2 绿行为断言）比对；亲跑两组冻结 diff exit=0、复核 Jest JSON 57/574/118/1420、verify-seal-trace blob 与 d9cd60e 一致；reviewer 三份 JSON 亲解析 17/57/118、两份核验脚本 SHA256 不同证独立编写、旧 revalidation 原样保留；亲跑 IVKernel 17/17、哨兵 JSON 往返 EQUAL、d9cd60e 已提交核验器对轨迹 problems=0、budget PASSED；J05/J06/零推进主体零语义改动（J06 定格存档 3 行）；869149d..HEAD 线性、旧 ACCEPT 未改写。CONCERN 3 中+3 低均已处置：中 1 隔离运行日志已补交；中 2 主报告 push 表述已改如实（push 于本补交后执行）；中 3 循环引用已消除（结论全文见主报告 §7）；低 1 .mjs 归档说明已补、低 2 行数写实、低 3 hash 回填。验收不构成部署许可；生产冻结经亲跑独立确认继续有效）
 
 ## Core Rewrite IV · Remediation II（2026-09-06 完成）
 

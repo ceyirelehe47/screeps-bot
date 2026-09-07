@@ -24,8 +24,8 @@
       └─ 5360e66  test：V1 无损提取 + V2 逐点核验 + 敏感性 3 it（IVKernel 14→17）   ← 执行性变更
       └─ 6592705  chore(budget)：236/1420，锚点 5360e66                              ← 预算
       └─ d9cd60e  docs(openspec)：L01–L08 + 勘误                                     ← VALIDATION_HEAD（全部可执行改动在此之前）
-      └─ <evidence 提交>  六目录证据 + 主报告（非执行：日志/数据/说明）
-      └─ <验收补交>  独立验收结论
+      └─ 9035f40  六目录证据 + 主报告（非执行：日志/数据/说明；139 文件全在 openspec/ 下）
+      └─ <验收补交>  独立验收结论 ACCEPT + CONCERN 处置（本提交，hash 见 §6/交付回复）
 ```
 
 - 实施起点：7c79071（fetch 后远端=本地，工作树干净）
@@ -67,9 +67,11 @@ reviewer 为未参与实施的独立 subagent；worktree detached d9cd60e、npm 
 ## 6. 交付与推送
 
 - 证据六目录：task/ baseline/ freeze/ final/ revalidation/ negative-controls/（各自 README）
-- 全部验证完成后归档；验证后仅追加日志/数据/说明（无任何可执行改动）
-- git push + ls-remote 核验远端一致；查询 combined status/check-runs——空检查表示无 CI 证据（非 CI PASS）
+- 全部验证完成后归档；验证后仅追加日志/数据/说明（无任何可执行改动）。evidence 提交 = **9035f40**（139 文件全部为 openspec/ 下新增；其中 3 个 `.mjs`（final/verify-seal-trace.mjs、final/check-jest-json.mjs、revalidation/verify-seal-trace.mjs）系验证时所驱动脚本的原件归档——核验逻辑全部来自已提交 helper（blob fd930a4，三个提交同 blob），脚本仅为驱动胶水且位于 evidence/ 下不被构建/Jest 收集，非新增可执行功能；后续同类脚本宜先提交再验证）。
+- push 在独立验收补交提交之后执行（本报告与证据编制于推送前）；ls-remote 核验结果见交付回复（最终交付 HEAD 为验收补交提交，非 9035f40）。查询 combined status/check-runs——空检查表示无 CI 证据（非 CI PASS）。
 
-## 7. 独立验收（补记）
+## 7. 独立验收（2026-09-07，Agent 独立验收结论 **ACCEPT**）
 
-独立验收 subagent 结论与 L01–L08 逐项核验：见 tasks.md Evidence Remediation I 段末行。
+独立验收 Agent（未参与实施与复验）对 L01–L08 逐项核验**全部 PASS**：任务书 hash 三方一致（6e3ff9a4…）；L01/L02/L03/L04 逐行核对 helper 与测试断言并比对基线反例实录（6 红 2 绿均为行为断言、零编译错误）；L05 确认 J05/J06/零推进主体零语义改动（J06 仅新增定格存档 3 行：2 注释+1 代码）；L06 亲跑两组冻结 diff exit=0、复核四份 Jest JSON 数字（57/574/118/1420）与 verify-seal-trace blob 一致性；L07 亲解析三份 reviewer JSON（17/57/118）、两份核验脚本 SHA256 不同证独立编写、旧 revalidation 原样保留；L08 确认 869149d..HEAD 线性、旧 ACCEPT 未改写、勘误与实际一致。亲跑复验四项：IVKernel 17/17、哨兵 JSON 往返 EQUAL、d9cd60e 已提交核验器对 trace-key 轨迹 problems=0、budget PASSED（236/1420）。
+
+CONCERN（3 中 + 3 低）与处置：中 1 隔离运行日志未随目录归档 → 已补交；中 2 主报告原文"git push + ls-remote 核验"表述超前于实际执行顺序 → §6 已改为如实（push 于验收补交后执行）；中 3 主报告 §7 与 tasks.md 互为循环引用且勾选早于验收 → 本节回填实际结论消除循环；低 1（.mjs 归档说明）→ §6 已补；低 2（"两行"实为 3 行）→ 本节写实际数；低 3（最终 HEAD 占位）→ §6 已回填 9035f40 并注明验收补交 HEAD 见交付回复。验收边界：全程零工作树修改、未 push/commit、无游戏 writer、无凭证读取；本验收不构成部署许可，生产冻结经亲跑独立确认继续有效。
