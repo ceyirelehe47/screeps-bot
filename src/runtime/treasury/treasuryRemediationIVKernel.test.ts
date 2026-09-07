@@ -29,6 +29,20 @@ import {
   type TreasuryCoreWorstCaseLeg,
 } from "@/runtime/treasury/kernel/types";
 import { resetTreasuryCoreStoreForTest } from "@/runtime/treasury/testHarness";
+import {
+  createSealTraceRecorder,
+  sealCompareUnknownRisk,
+  sealSnapshotUnknownRisk,
+  sealVerifyTraceCompleteness,
+  sealWriteEvidence,
+  type SealCheckpoint,
+  type SealPortEvent,
+  type SealSegmentFacts,
+  type SealStateView,
+  type SealTraceDoc,
+  type SealTracePoint,
+  type SealTraceStage,
+} from "@mock/treasurySealEvidence";
 import { installRooms, type RoomSpec } from "@mock/treasury";
 
 /** H05 的 facade 授权观察房间（结构存在——授权判定需真实房间）。 */
@@ -592,7 +606,7 @@ describe("H07 G01–G08 核心行为保留抽查", () => {
   });
 });
 
-// ── H18（Remediation VI/V1 重写）：合法满载混合快照的逐 tick 完整 reset ────
+// ── H18（Remediation VI/V1 重写；Core Candidate Seal I 全轨迹化）──────────
 //
 // 旧 H18 的 fixture 不满足生产结构校验（closing 有确定 outcome 但
 // outcomeEvidence=null、retry_ready/pending 的 outcome=null）：validator 正确
@@ -603,14 +617,24 @@ describe("H07 G01–G08 核心行为保留抽查", () => {
 // retry_ready 是 exact not-executed 且义务已空。规模构成不变：30 closing
 // （各 3 项义务，committed/not_executed 混合 + 1 项持续失败义务）、
 // 20 outcome_unknown、10 retry_ready、4 pending，共 64 条。
+//
+// Seal I/§2（K02/K03）补全证据：全程轨迹（初始基线、逐 tick 重载前/推进
+// 后、有限收尾、失败恢复、最终 close——不 slice 截断）+ 20 条 unknown 的
+// 风险事实独立深快照（JSON 往返脱离 Memory 引用）与逐字段基线比较
+// （identity/完整 worstCase 腿/调用边界三件套/outcome/证据/义务归属）。
+// 轨迹导出仅当环境变量 TREASURY_SEAL_EVIDENCE_DIR 已设置时落盘；未设置
+// 时全部断言照常执行（不 skip）。失败路径保留已捕获的部分轨迹并标记
+// incomplete，不在 finally 补造成功终态。
 
-interface H18Phases {
+// type alias（非 interface）：纯数据字段类型获得隐式索引签名，可直接进入
+// Seal 轨迹的 Readonly<Record<string, number>> 视图。
+type H18Phases = {
   closing: number;
   outcome_unknown: number;
   retry_ready: number;
   pending: number;
   other: number;
-}
+};
 
 interface H18State {
   phases: H18Phases;
@@ -618,6 +642,7 @@ interface H18State {
   active: number;
   ring: number;
   chars: number;
+  utf8Bytes: number;
   budgetUsed: number;
 }
 
@@ -647,6 +672,7 @@ function h18StateOf(): H18State {
     active: Object.keys(core.active).length,
     ring: core.ring.length,
     chars: treasuryCoreSerializedChars(Memory.runtime!.treasuryCore as never),
+    utf8Bytes: Buffer.byteLength(JSON.stringify(Memory.runtime!.treasuryCore), "utf8"),
     budgetUsed: core.recovery.budgetUsed,
   };
 }
@@ -662,9 +688,22 @@ function h18HasProgress(before: H18State, after: H18State): boolean {
   );
 }
 
+/** 当前活跃记录原视图（recorder 风险快照在此之上做 JSON 往返脱离引用）。 */
+function h18ActiveRecords(): Record<string, Record<string, unknown>> {
+  return (Memory.runtime!.treasuryCore as unknown as { active: Record<string, Record<string, unknown>> }).active;
+}
+
+/** 推进后当 tick 的健康状态（沿用完整 reset 后 require 新 store 模块惯例）。 */
+function h18HealthNow(): string {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const storeModule = require("@/runtime/treasury/kernel/store") as typeof import("@/runtime/treasury/kernel/store");
+  return storeModule.readTreasuryCoreStoreHealth().status;
+}
+
 interface H18Fixture {
   ports: TreasuryCoreKernelPorts;
-  releaseCalls: string[];
+  /** 原始端口事件流（Seal I/§2.2）：计数一律来自实际事件求和，含成败与 tick。 */
+  releaseEvents: SealPortEvent[];
   failingKey: string;
   closingIds: string[];
   unknownIds: string[];
@@ -682,13 +721,16 @@ interface H18Fixture {
  * 判 healthy（J05 断言）——不通过放宽 validator 过关。
  */
 function buildH18MixedLoad(): H18Fixture {
-  const releaseCalls: string[] = [];
+  const releaseEvents: SealPortEvent[] = [];
   const failingKey = "ext:h18:C0:D0"; // C0（committed）的第一项义务持续失败
   let failing = true;
+  let releaseSeq = 0;
   const ports = makeKernelPorts({
     releaseExternalConsumer: (key: string): boolean => {
-      releaseCalls.push(key);
-      return !(failing && key === failingKey);
+      releaseSeq += 1;
+      const ok = !(failing && key === failingKey);
+      releaseEvents.push({ seq: releaseSeq, tick: Game.time, key, ok });
+      return ok;
     },
   });
   const kernelInit = createTreasuryCoreKernel(ports);
@@ -752,7 +794,7 @@ function buildH18MixedLoad(): H18Fixture {
   memory.recovery = { sweepCursor: 0, cleanupCursor: 0, budgetTick: seedTick, budgetUsed: 0 };
   return {
     ports,
-    releaseCalls,
+    releaseEvents,
     failingKey,
     closingIds,
     unknownIds,
@@ -814,123 +856,238 @@ describe("H18 满载合法混合快照与逐 tick 完整 reset", () => {
     }
   });
 
-  it("J06：12 tick 完整 reset 观察段逐 tick healthy/份额≤8/释放≤4、非零服务与真实进展、20 unknown exact 保留；有界收尾 + 失败恢复 + retry_ready 安全退出；终态只剩不对账 unknown", () => {
+  it("J06（Seal I 全轨迹）：12 tick 观察段逐 tick healthy/份额≤8/释放≤4、非零服务与真实进展、unknown 风险逐字段与独立基线一致；有限收尾在回归测试限值内完成且失败项不提前消失；失败恢复段同上限核验；终态只剩不对账 unknown 且风险事实与基线逐字段一致", () => {
     const fx = buildH18MixedLoad();
     expect(readTreasuryCoreStoreHealth().status).toBe("healthy"); // fixture 工厂失败即终止，不跳过断言
+    const sealStateView = (): SealStateView => {
+      const state = h18StateOf();
+      return {
+        health: h18HealthNow(),
+        phases: state.phases,
+        active: state.active,
+        ring: state.ring,
+        remaining: state.remaining,
+        sharesUsed: state.budgetUsed,
+        chars: state.chars,
+        utf8Bytes: state.utf8Bytes,
+        activeRecords: h18ActiveRecords(),
+      };
+    };
+    const recorder = createSealTraceRecorder({
+      suite: "treasuryRemediationIVKernel.test.ts",
+      test: "H18 J06（Seal I 全轨迹）",
+      fixture: { closing: 30, unknown: 20, retry: 10, pending: 4, obligations: 90, unknownIds: fx.unknownIds },
+      unknownIds: fx.unknownIds,
+      portEvents: fx.releaseEvents,
+      readState: sealStateView,
+    });
     const initial = h18StateOf();
-    const perTick: { tick: number; shares: number; releases: number; phases: H18Phases; remaining: number; active: number; ring: number; chars: number }[] = [];
-    // —— 12 tick 观察段：每 tick 真正 JSON 重载 + 模块重建 + 新工厂 kernel，
-    //    推进前/后各核验一次 healthy（runBeginTick:false 后显式 begin）——
-    //    不用旧工厂重新 new 代替完整 reset。
-    for (let t = 0; t < 12; t += 1) {
-      Game.time += 1;
-      const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
-      const releasesBefore = fx.releaseCalls.length;
-      const reset = performTreasuryKernelFullReset({ ports: fx.ports, memorySnapshot: snapshot, runBeginTick: false });
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const storeModule = require("@/runtime/treasury/kernel/store") as typeof import("@/runtime/treasury/kernel/store");
-      expect(storeModule.readTreasuryCoreStoreHealth().status).toBe("healthy"); // 推进前
-      const stats = reset.kernel.beginTick();
-      expect(storeModule.readTreasuryCoreStoreHealth().status).toBe("healthy"); // 推进后
-      const after = h18StateOf();
-      expect(after.budgetUsed).toBeLessThanOrEqual(8); // 每 tick 逻辑份额 ≤8（所有实例/入口累计）
-      expect(fx.releaseCalls.length - releasesBefore).toBeLessThanOrEqual(4); // 每 tick 实际释放 ≤4
-      // 20 条 unknown 按具体 ID 持续保留（不只数量碰巧等于 20）。
-      for (const id of fx.unknownIds) {
-        const record = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> }).active[id];
-        expect(record?.phase).toBe("outcome_unknown");
+    const segments: SealSegmentFacts = {
+      observe: { plannedTicks: 12, actualTicks: 0, exitReason: "not-run" },
+      bounded: { limitWindows: 40, actualTicks: 0, exitReason: "not-run" },
+      recovery: { limitWindows: 10, actualTicks: 0, failingPortRestoredAtTick: -1, exitReason: "not-run" },
+    };
+    const evidenceDir = process.env.TREASURY_SEAL_EVIDENCE_DIR;
+    try {
+      // —— 12 tick 观察段：每 tick 真正 JSON 重载 + 模块重建 + 新工厂 kernel，
+      //    重载后/推进后各一次检查点（healthy + unknown 风险与基线的字段级
+      //    比较）——不用旧工厂重新 new 代替完整 reset；轨迹全程不截断。
+      for (let t = 0; t < 12; t += 1) {
+        Game.time += 1;
+        const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
+        const reset = performTreasuryKernelFullReset({ ports: fx.ports, memorySnapshot: snapshot, runBeginTick: false });
+        const reloadCp = recorder.checkpoint("observe", "reload-before");
+        expect(reloadCp.health).toBe("healthy"); // 推进前（重载后）
+        expect(reloadCp.riskDiff).toBeNull(); // 每次重载后 unknown 风险与基线逐字段一致
+        const stats = reset.kernel.beginTick();
+        const afterCp = recorder.checkpoint("observe", "after-advance");
+        expect(afterCp.health).toBe("healthy"); // 推进后
+        expect(afterCp.riskDiff).toBeNull();
+        expect(afterCp.sharesUsed).toBeLessThanOrEqual(8); // 每 tick 逻辑份额 ≤8（所有实例/入口累计，持久记账）
+        expect(afterCp.tickEvents).toBeLessThanOrEqual(4); // 每 tick 实际释放 ≤4（实际事件求和）
+        // 20 条 unknown 按具体 ID 持续保留（不只数量碰巧等于 20）。
+        for (const id of fx.unknownIds) {
+          const record = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> }).active[id];
+          expect(record?.phase).toBe("outcome_unknown");
+        }
+        void stats;
       }
-      perTick.push({ tick: Game.time, shares: after.budgetUsed, releases: fx.releaseCalls.length - releasesBefore, phases: after.phases, remaining: after.remaining, active: after.active, ring: after.ring, chars: after.chars });
-      void stats;
-    }
-    // 观察段断言：非零服务 + 真实进展（上限断言单独绿不构成通过）。
-    const afterObs = h18StateOf();
-    expect(fx.releaseCalls.length).toBeGreaterThan(0); // 实际 release 非零
-    expect(h18HasProgress(initial, afterObs)).toBe(true);
-    expect(afterObs.phases.pending).toBe(0); // pending 经安全取消退出（≤3/tick，2 tick 内完成）
-    expect(afterObs.remaining).toBeLessThan(initial.remaining); // 合法 remaining 减少
-    // 至少有可完成的 closing 完成其清理阶段（committed 退出 active 或
-    // not_executed 进入 retry_ready）。
-    const activePhases = Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> };
-    const completedClosing = fx.closingIds.some((id) => activePhases.active[id] === undefined || activePhases.active[id].phase === "retry_ready");
-    expect(completedClosing).toBe(true);
-    // 失败义务不被删除；健康项不被失败项饿死（C1+ 的义务有真实服务）。
-    const c0 = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { cleanup?: { consumerKeys: readonly string[] } }> }).active[fx.closingIds[0] as string];
-    expect(c0?.cleanup?.consumerKeys).toContain(fx.failingKey);
-    const healthyKeysServed = new Set(fx.releaseCalls.filter((k) => k.startsWith("ext:h18:C") && k !== fx.failingKey));
-    expect(healthyKeysServed.size).toBeGreaterThan(0);
-    // 成功确认的义务不再调用（每个成功 key 恰好一次）。
-    for (const key of healthyKeysServed) {
-      expect(fx.releaseCalls.filter((k) => k === key).length).toBe(1);
-    }
+      segments.observe = { ...segments.observe, actualTicks: 12, exitReason: "固定 12 窗口观察完毕（计划即实际）" };
+      recorder.setSegments(segments);
+      // 观察段断言：非零服务 + 真实进展（上限断言单独绿不构成通过）。
+      const afterObs = h18StateOf();
+      expect(fx.releaseEvents.length).toBeGreaterThan(0); // 实际端口事件非零
+      expect(h18HasProgress(initial, afterObs)).toBe(true);
+      expect(afterObs.phases.pending).toBe(0); // pending 经安全取消退出（≤3/tick，2 tick 内完成）
+      expect(afterObs.remaining).toBeLessThan(initial.remaining); // 合法 remaining 减少
+      // 至少有可完成的 closing 完成其清理阶段（committed 退出 active 或
+      // not_executed 进入 retry_ready）。
+      const activePhases = Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> };
+      const completedClosing = fx.closingIds.some((id) => activePhases.active[id] === undefined || activePhases.active[id].phase === "retry_ready");
+      expect(completedClosing).toBe(true);
+      // 失败义务不被删除；健康项不被失败项饿死（C1+ 的义务有真实服务）。
+      const c0 = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { cleanup?: { consumerKeys: readonly string[] } }> }).active[fx.closingIds[0] as string];
+      expect(c0?.cleanup?.consumerKeys).toContain(fx.failingKey);
+      const healthyKeysServedAtObs = new Set(fx.releaseEvents.filter((e) => e.key.startsWith("ext:h18:C") && e.key !== fx.failingKey && e.ok).map((e) => e.key));
+      expect(healthyKeysServedAtObs.size).toBeGreaterThan(0);
 
-    // —— 有界收尾段：静态工作集继续服务。保守上界推导（写明而非无限
-    //    while）：89 个可完成义务 × 2 份 + 30 份 closing 退出/转化 + 失败
-    //    义务恢复前每 tick 至多 2 份重试消耗；每 tick ≤8 份 ⇒ 义务侧
-    //    ⌈(89×2+30)/8⌉ = 26 tick；加游标轮转/子预算调度余量取 40 tick 上界。
-    //    所有 tick 仍真正 JSON 重载，不复制旧数字。
-    let boundedTicks = 0;
-    let stateNow = h18StateOf();
-    while ((stateNow.remaining > 1 || (stateNow.phases.closing ?? 0) > 1) && boundedTicks < 40) {
-      Game.time += 1;
-      const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
-      const releasesBefore = fx.releaseCalls.length;
-      const reset = performTreasuryKernelFullReset({ ports: fx.ports, memorySnapshot: snapshot, runBeginTick: false });
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const storeModule = require("@/runtime/treasury/kernel/store") as typeof import("@/runtime/treasury/kernel/store");
-      expect(storeModule.readTreasuryCoreStoreHealth().status).toBe("healthy");
-      reset.kernel.beginTick();
-      expect(storeModule.readTreasuryCoreStoreHealth().status).toBe("healthy");
-      const after = h18StateOf();
-      expect(after.budgetUsed).toBeLessThanOrEqual(8);
-      expect(fx.releaseCalls.length - releasesBefore).toBeLessThanOrEqual(4);
-      boundedTicks += 1;
-      stateNow = after;
-    }
-    expect(boundedTicks).toBeLessThan(40); // 真实推进在明确上界内完成（非无限循环掩盖）
+      // —— 有限收尾段（Seal I/§3 表述口径）：这是针对固定 H18 fixture 的
+      //    有限回归测试限值——最多 40 个追加收尾窗口（第 40 个窗口出现即
+      //    失败）。限值由 89 项可完成义务 ×2 份额 + 30 份退出/转化份额在每
+      //    tick ≤8 份额下的静态推算加调度余量导出，用于发现回归；它不是
+      //    所有工作负载的完成时间保证，8 份额/tick 是上限而非每 tick 最低
+      //    服务量。所有 tick 仍真正 JSON 重载，不复制旧数字。
+      let boundedTicks = 0;
+      let stateNow = h18StateOf();
+      while ((stateNow.remaining > 1 || (stateNow.phases.closing ?? 0) > 1) && boundedTicks < 40) {
+        Game.time += 1;
+        const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
+        const reset = performTreasuryKernelFullReset({ ports: fx.ports, memorySnapshot: snapshot, runBeginTick: false });
+        const reloadCp = recorder.checkpoint("bounded", "reload-before");
+        expect(reloadCp.health).toBe("healthy");
+        expect(reloadCp.riskDiff).toBeNull();
+        reset.kernel.beginTick();
+        const afterCp = recorder.checkpoint("bounded", "after-advance");
+        expect(afterCp.health).toBe("healthy");
+        expect(afterCp.riskDiff).toBeNull();
+        expect(afterCp.sharesUsed).toBeLessThanOrEqual(8);
+        expect(afterCp.tickEvents).toBeLessThanOrEqual(4);
+        // 持续失败项在宿主恢复端口前不能提前消失（Seal I/§2.3）。
+        const c0Now = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { cleanup?: { consumerKeys: readonly string[] } }> }).active[fx.closingIds[0] as string];
+        expect(c0Now?.cleanup?.consumerKeys).toContain(fx.failingKey);
+        boundedTicks += 1;
+        stateNow = h18StateOf();
+      }
+      // 到达限值但退出条件未满足必须失败：显式断言退出条件达成，且完成
+      // 发生在限值内（"最多 40 个窗口"含第 40 次；实际窗口数如实记录）。
+      expect(stateNow.remaining).toBe(1); // 只剩 C0 的失败义务
+      expect(stateNow.phases.closing).toBe(1); // 只剩 C0 一条 closing
+      expect(boundedTicks).toBeLessThan(40);
+      // 健康工作不因失败项持续失败而饿死：收尾段期间仍有新的成功服务。
+      const healthyKeysServedAtBounded = new Set(fx.releaseEvents.filter((e) => e.key.startsWith("ext:h18:C") && e.key !== fx.failingKey && e.ok).map((e) => e.key));
+      expect(healthyKeysServedAtBounded.size).toBeGreaterThan(healthyKeysServedAtObs.size);
+      segments.bounded = { ...segments.bounded, actualTicks: boundedTicks, exitReason: `退出条件达成（remaining=1/closing=1），实际 ${boundedTicks} 窗口` };
+      recorder.setSegments(segments);
 
-    // —— 失败恢复段：宿主把持续失败义务恢复为 true，剩余安全工作收尾 ——
-    fx.restoreFailingPort();
-    let recoveryTicks = 0;
-    let c0Phase: string | undefined = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> }).active[fx.closingIds[0] as string]?.phase;
-    while (c0Phase !== undefined && recoveryTicks < 10) {
-      Game.time += 1;
-      const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
-      const reset = performTreasuryKernelFullReset({ ports: fx.ports, memorySnapshot: snapshot, runBeginTick: false });
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const storeModule = require("@/runtime/treasury/kernel/store") as typeof import("@/runtime/treasury/kernel/store");
-      expect(storeModule.readTreasuryCoreStoreHealth().status).toBe("healthy");
-      reset.kernel.beginTick();
-      expect(storeModule.readTreasuryCoreStoreHealth().status).toBe("healthy");
-      recoveryTicks += 1;
-      c0Phase = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> }).active[fx.closingIds[0] as string]?.phase;
-    }
-    // C0（committed）义务清空 + 观察接管后退出 active（进 ring 终态）。
-    expect((Memory.runtime!.treasuryCore as unknown as { active: Record<string, unknown> }).active[fx.closingIds[0] as string]).toBeUndefined();
+      // —— 失败恢复段（回归测试限值 10 窗口）：宿主把持续失败义务恢复为
+      //    true，剩余安全工作收尾；本段同样核验健康、风险保留与份额/释放
+      //    上限（不能只在前 12 tick 检查后就假设后续满足同样事实）。
+      fx.restoreFailingPort();
+      const failingPortRestoredAtTick = Game.time; // 宿主恢复时点（此后下一窗口生效）
+      let recoveryTicks = 0;
+      let c0Phase: string | undefined = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> }).active[fx.closingIds[0] as string]?.phase;
+      while (c0Phase !== undefined && recoveryTicks < 10) {
+        Game.time += 1;
+        const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
+        const reset = performTreasuryKernelFullReset({ ports: fx.ports, memorySnapshot: snapshot, runBeginTick: false });
+        const reloadCp = recorder.checkpoint("recovery", "reload-before");
+        expect(reloadCp.health).toBe("healthy");
+        expect(reloadCp.riskDiff).toBeNull();
+        reset.kernel.beginTick();
+        const afterCp = recorder.checkpoint("recovery", "after-advance");
+        expect(afterCp.health).toBe("healthy");
+        expect(afterCp.riskDiff).toBeNull();
+        expect(afterCp.sharesUsed).toBeLessThanOrEqual(8);
+        expect(afterCp.tickEvents).toBeLessThanOrEqual(4);
+        recoveryTicks += 1;
+        c0Phase = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> }).active[fx.closingIds[0] as string]?.phase;
+      }
+      // C0（committed）义务清空 + 观察接管后退出 active（进 ring 终态）；
+      // 若 10 窗口限值内未退出，此处红——不靠循环结束本身判通过。
+      expect((Memory.runtime!.treasuryCore as unknown as { active: Record<string, unknown> }).active[fx.closingIds[0] as string]).toBeUndefined();
+      segments.recovery = { ...segments.recovery, actualTicks: recoveryTicks, failingPortRestoredAtTick, exitReason: `C0 经真实清理退出 active，实际 ${recoveryTicks} 窗口` };
+      recorder.setSegments(segments);
 
-    // —— retry_ready 安全退出：经正常业务放弃（closeWork abandoned），不
-    //    直接 delete Memory。终态 active 只剩 20 条故意不对账的 unknown。
-    const finalReset = performTreasuryKernelFullReset({ ports: fx.ports, runBeginTick: false });
-    const retryLeft = Object.entries((Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> }).active)
-      .filter(([, r]) => r.phase === "retry_ready")
-      .map(([id]) => id);
-    for (const id of retryLeft) {
-      const closed = finalReset.kernel.closeWork({ attemptId: id, reason: "abandoned" });
-      expect(closed.status).toBe("ok");
+      // —— retry_ready 安全退出：经正常业务放弃（closeWork abandoned），不
+      //    直接 delete Memory。显式业务命令与自动恢复预算内的动作在轨迹中
+      //    分开分类（finalClose 与 portEvents 各自记录）；同 tick 多次入口
+      //    的释放累计仍不得超过原上限。
+      const finalReset = performTreasuryKernelFullReset({ ports: fx.ports, runBeginTick: false });
+      const preCp = recorder.checkpoint("final-close", "pre-close");
+      expect(preCp.health).toBe("healthy");
+      expect(preCp.riskDiff).toBeNull();
+      expect(preCp.sharesUsed).toBeLessThanOrEqual(8);
+      const retryLeft = Object.entries((Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> }).active)
+        .filter(([, r]) => r.phase === "retry_ready")
+        .map(([id]) => id);
+      for (const id of retryLeft) {
+        const closed = finalReset.kernel.closeWork({ attemptId: id, reason: "abandoned" });
+        expect(closed.status).toBe("ok");
+        recorder.addFinalClose({ attemptId: id, status: closed.status });
+      }
+      const postCp = recorder.checkpoint("final-close", "post-close");
+      expect(postCp.health).toBe("healthy");
+      expect(postCp.riskDiff).toBeNull(); // 最终 close 后 unknown 风险仍与基线一致
+      expect(postCp.tickEvents).toBeLessThanOrEqual(4); // 同 tick（含恢复段最后窗口）累计释放 ≤4
+      const finalState = h18StateOf();
+      expect(finalState.active).toBe(20); // 只剩 unknown
+      expect(Object.keys((Memory.runtime!.treasuryCore as unknown as { active: Record<string, unknown> }).active).sort()).toEqual([...fx.unknownIds].sort());
+      expect(finalState.phases).toEqual({ closing: 0, outcome_unknown: 20, retry_ready: 0, pending: 0, other: 0 });
+      expect(finalState.ring).toBeLessThanOrEqual(128);
+      expect(finalState.chars).toBeLessThanOrEqual(TREASURY_CORE_TOTAL_CHAR_BUDGET);
+
+      // —— 全程端口事件核验（Seal I/§2.3）：已确认成功的义务真正退出
+      //    remaining 后不再进入端口（每个成功 key 全程恰好一次，含收尾/
+      //    恢复段）；失败 key 的失败尝试全部发生在宿主恢复之前、恢复后
+      //    恰好一次成功。
+      const failingFirstOk = fx.releaseEvents.find((e) => e.key === fx.failingKey && e.ok);
+      if (failingFirstOk === undefined) throw new Error("恢复后失败义务未获得成功释放");
+      for (const event of fx.releaseEvents.filter((e) => e.key === fx.failingKey && !e.ok)) {
+        expect(event.tick).toBeLessThan(failingFirstOk.tick); // 失败尝试全部在恢复前
+      }
+      for (const key of new Set(fx.releaseEvents.filter((e) => e.ok).map((e) => e.key))) {
+        if (key === fx.failingKey) continue;
+        expect(fx.releaseEvents.filter((e) => e.key === key).length).toBe(1); // 成功确认后不再调用
+      }
+
+      // 终态定格：active=20 且每个指定 ID 的风险事实与推进前的独立基线
+      // 逐字段一致（不只是 ID+phase——"记录还在"不等于"记录里的责任没变"）。
+      const terminalRisk = sealSnapshotUnknownRisk(fx.unknownIds, h18ActiveRecords());
+      const doc = recorder.complete({
+        health: "healthy",
+        active: finalState.active,
+        unknownIds: [...fx.unknownIds],
+        ring: finalState.ring,
+        chars: finalState.chars,
+        riskDiff: sealCompareUnknownRisk(recorder.current().initial.unknownRiskBaseline as Record<string, Record<string, unknown>>, terminalRisk),
+      });
+      expect(doc.terminal?.riskDiff).toEqual([]);
+      // —— 完整性核验（Seal I/§2.4）：初始/全部观察窗口/全部追加窗口/失败
+      //    恢复/终态都在，序号与段落数和执行时独立记录的次数相符，事件
+      //    计数与实际事件求和一致，风险比较覆盖全部 20 个 ID。
+      const verdict = sealVerifyTraceCompleteness(doc, { unknownIds: fx.unknownIds, plannedObserveTicks: 12 });
+      expect(verdict.problems).toEqual([]);
+      // —— 敏感性自检之一（真实轨迹的隔离副本，Seal I/§5.1）：删除一个
+      //    中间窗口必须让完整性核验失败（不修改原运行数据、不补伪造窗口）。
+      const mutated = JSON.parse(JSON.stringify(doc)) as SealTraceDoc;
+      mutated.checkpoints.splice(10, 2); // 一个观察窗口的 reload-before/after-advance 对
+      const mutatedVerdict = sealVerifyTraceCompleteness(mutated, { unknownIds: fx.unknownIds, plannedObserveTicks: 12 });
+      expect(mutatedVerdict.ok).toBe(false);
+      expect(mutatedVerdict.problems.length).toBeGreaterThan(0);
+      // —— 敏感性自检之二（真实基线的隔离副本，Seal I/§5.2）：单字段漂移
+      //    （ID/phase/腿数不变）必须被字段级比较抓住。
+      const driftedBaseline = JSON.parse(JSON.stringify(doc.initial.unknownRiskBaseline)) as Record<string, Record<string, unknown>>;
+      ((driftedBaseline[fx.unknownIds[0] as string] as { worstCase: { delta: number }[] }).worstCase[0] as { delta: number }).delta += 1;
+      expect(sealCompareUnknownRisk(driftedBaseline, terminalRisk).length).toBeGreaterThan(0);
+      // —— 导出：仅当 TREASURY_SEAL_EVIDENCE_DIR 已设置时落盘；未设置时
+      //    全部断言已执行（不 skip）。证据路径错误要报告，不静默丢弃。
+      const written = sealWriteEvidence(evidenceDir, doc, "H18-J06");
+      if (evidenceDir !== undefined) expect(written === null ? "" : written.file).not.toBe("");
+      // eslint-disable-next-line no-console
+      console.log(`H18-TRACE completed=true observe=12 bounded=${boundedTicks}/40 recovery=${recoveryTicks}/10 checkpoints=${doc.checkpoints.length} portEvents=${doc.portEvents.length} finalClose=${doc.finalClose.length} final=${JSON.stringify(finalState)}`);
+    } catch (error) {
+      // Seal I/§2.4：测试失败也保留已捕获的部分轨迹并标记 incomplete——
+      // 不在 finally 中补出"成功终态"。
+      recorder.fail("J06", error);
+      sealWriteEvidence(evidenceDir, recorder.current(), "H18-J06");
+      throw error;
     }
-    const finalState = h18StateOf();
-    expect(finalState.active).toBe(20); // 只剩 unknown
-    expect(Object.keys((Memory.runtime!.treasuryCore as unknown as { active: Record<string, unknown> }).active).sort()).toEqual([...fx.unknownIds].sort());
-    expect(finalState.phases).toEqual({ closing: 0, outcome_unknown: 20, retry_ready: 0, pending: 0, other: 0 });
-    expect(finalState.ring).toBeLessThanOrEqual(128);
-    expect(finalState.chars).toBeLessThanOrEqual(TREASURY_CORE_TOTAL_CHAR_BUDGET);
-    // eslint-disable-next-line no-console
-    console.log(`H18-TRACE initial=${JSON.stringify(initial)} per-tick[0..2]=${JSON.stringify(perTick.slice(0, 3))} bounded-ticks=${JSON.stringify(boundedTicks)} recovery-ticks=${JSON.stringify(recoveryTicks)} total-release-calls=${JSON.stringify(fx.releaseCalls.length)} final=${JSON.stringify(finalState)}`);
   });
 
   it("零推进负向对照：healthy fixture 下生命周期推进为零时，J06 的进度/收尾指标全部零变化——上限与 unknown 保留断言单独绿不构成通过", () => {
     const fx = buildH18MixedLoad();
     expect(readTreasuryCoreStoreHealth().status).toBe("healthy"); // 前提保持 healthy（不是又一份损坏数据测试）
+    const baseline = sealSnapshotUnknownRisk(fx.unknownIds, h18ActiveRecords()); // 推进前独立基线
     Game.time += 1;
     const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
     // 完整 reset（真实通道）但不调用 beginTick——受测生命周期推进被替换为
@@ -939,10 +1096,194 @@ describe("H18 满载合法混合快照与逐 tick 完整 reset", () => {
     const before = h18StateOf();
     const after = h18StateOf(); // 同一持久状态：零推进
     expect(readTreasuryCoreStoreHealth().status).toBe("healthy");
-    expect(fx.releaseCalls.length).toBe(0); // 无服务
+    expect(fx.releaseEvents.length).toBe(0); // 无服务
     expect(after.remaining).toBe(before.remaining); // remaining 无减少
     expect(after.phases).toEqual(before.phases); // 无阶段转移
     expect(after.active).toBe(before.active); // 无退出
     expect(h18HasProgress(before, after)).toBe(false); // J06 进度判别函数在零推进轨迹上判 false
+    // 完整 reset 的 JSON 重载通道本身不篡改 unknown 风险事实（K3 对照）。
+    expect(sealCompareUnknownRisk(baseline, sealSnapshotUnknownRisk(fx.unknownIds, h18ActiveRecords()))).toEqual([]);
+  });
+});
+
+// ── Seal I 敏感性检查（K06）：断言自身必须能发现丢证据与风险漂移 ──────────
+//
+// 以下两个用例是测试侧负向检查（expect 正常通过的形态），证明轨迹完整性
+// 核验与风险字段级比较对"故意坏掉的隔离副本"敏感——它们不宣称生产已发生
+// 该错误；与生产负向变体（一次性 worktree 中的 heap-only/零推进 patch，
+// Jest 非零失败）在报告中分开分类（Seal I/§5）。
+
+/** 合成一份结构完整的最小真实形态轨迹（字段齐全；供破坏性变体使用的底版）。 */
+function buildSyntheticSealTrace(): SealTraceDoc {
+  const ids = ["tk1_synth_00", "tk1_synth_01", "tk1_synth_02"];
+  const synthCheckpoint = (
+    seq: number,
+    stage: SealTraceStage,
+    point: SealTracePoint,
+    tick: number,
+    events: { upTo: number; tickEvents: number; tickSucceeded: number; tickFailed: number },
+  ): SealCheckpoint => ({
+    seq,
+    stage,
+    point,
+    tick,
+    health: "healthy",
+    phases: { closing: 1, outcome_unknown: 3, retry_ready: 0, pending: 0, other: 0 },
+    active: 4,
+    ring: 0,
+    remaining: 1,
+    sharesUsed: 2,
+    chars: 120,
+    utf8Bytes: 120,
+    eventsUpTo: events.upTo,
+    tickEvents: events.tickEvents,
+    tickSucceeded: events.tickSucceeded,
+    tickFailed: events.tickFailed,
+    unknownRisk: null,
+    riskCheckedIds: [...ids],
+    riskDiff: null,
+    note: null,
+  });
+  return {
+    format: "treasury-seal-trace/v1",
+    suite: "synthetic",
+    test: "completeness-fixture",
+    recordedAt: "2026-09-07T00:00:00.000Z",
+    comparisonScope: { riskFieldsCompared: [], mutableDiagnosticFieldsNotCompared: [] },
+    fixture: { closing: 1, unknown: 3, retry: 0, pending: 0, obligations: 3, unknownIds: ids },
+    initial: {
+      health: "healthy",
+      phases: { closing: 1, outcome_unknown: 3, retry_ready: 0, pending: 0, other: 0 },
+      active: 4,
+      ring: 0,
+      remaining: 3,
+      chars: 120,
+      utf8Bytes: 120,
+      unknownRiskBaseline: Object.fromEntries(ids.map((id) => [id, { attemptId: id, phase: "outcome_unknown" }])) as Record<string, Record<string, unknown>>,
+    },
+    segments: {
+      observe: { plannedTicks: 2, actualTicks: 2, exitReason: "计划即实际" },
+      bounded: { limitWindows: 40, actualTicks: 1, exitReason: "退出条件达成" },
+      recovery: { limitWindows: 10, actualTicks: 1, failingPortRestoredAtTick: 3, exitReason: "C0 退出" },
+    },
+    checkpoints: [
+      synthCheckpoint(1, "observe", "reload-before", 1, { upTo: 0, tickEvents: 0, tickSucceeded: 0, tickFailed: 0 }),
+      synthCheckpoint(2, "observe", "after-advance", 1, { upTo: 1, tickEvents: 1, tickSucceeded: 1, tickFailed: 0 }),
+      synthCheckpoint(3, "observe", "reload-before", 2, { upTo: 1, tickEvents: 0, tickSucceeded: 0, tickFailed: 0 }),
+      synthCheckpoint(4, "observe", "after-advance", 2, { upTo: 2, tickEvents: 1, tickSucceeded: 0, tickFailed: 1 }),
+      synthCheckpoint(5, "bounded", "reload-before", 3, { upTo: 2, tickEvents: 0, tickSucceeded: 0, tickFailed: 0 }),
+      synthCheckpoint(6, "bounded", "after-advance", 3, { upTo: 3, tickEvents: 1, tickSucceeded: 1, tickFailed: 0 }),
+      synthCheckpoint(7, "recovery", "reload-before", 4, { upTo: 3, tickEvents: 0, tickSucceeded: 0, tickFailed: 0 }),
+      synthCheckpoint(8, "recovery", "after-advance", 4, { upTo: 4, tickEvents: 1, tickSucceeded: 1, tickFailed: 0 }),
+      synthCheckpoint(9, "final-close", "pre-close", 4, { upTo: 4, tickEvents: 1, tickSucceeded: 1, tickFailed: 0 }),
+      synthCheckpoint(10, "final-close", "post-close", 4, { upTo: 4, tickEvents: 1, tickSucceeded: 1, tickFailed: 0 }),
+    ],
+    portEvents: [
+      { seq: 1, tick: 1, key: "ext:synth:0", ok: true },
+      { seq: 2, tick: 2, key: "ext:synth:1", ok: false },
+      { seq: 3, tick: 3, key: "ext:synth:2", ok: true },
+      { seq: 4, tick: 4, key: "ext:synth:0", ok: true },
+    ],
+    finalClose: [{ attemptId: "tk1_synth_retry", status: "ok" }],
+    terminal: { health: "healthy", active: 3, unknownIds: ids, ring: 1, chars: 90, riskDiff: null },
+    completed: true,
+    failure: null,
+  };
+}
+
+describe("Seal I 敏感性检查（K06）", () => {
+  const SYNTH_IDS = ["tk1_synth_00", "tk1_synth_01", "tk1_synth_02"];
+
+  it("轨迹完整性核验：完整轨迹通过；缺失中间窗口/缺失终态/事件计数不符/风险覆盖缺 ID/finalClose 缺失均必须报 problems", () => {
+    const base = buildSyntheticSealTrace();
+    const expected = { unknownIds: SYNTH_IDS, plannedObserveTicks: 2 };
+    expect(sealVerifyTraceCompleteness(base, expected).problems).toEqual([]); // 底版完整通过
+    // 变体 1：删除一个中间观察窗口（reload-before/after-advance 对）。
+    const missingWindow = JSON.parse(JSON.stringify(base)) as SealTraceDoc;
+    missingWindow.checkpoints.splice(2, 2);
+    const v1 = sealVerifyTraceCompleteness(missingWindow, expected);
+    expect(v1.ok).toBe(false);
+    expect(v1.problems.some((p) => p.includes("observe"))).toBe(true);
+    expect(v1.problems.some((p) => p.includes("序号不连续") || p.includes("after-advance 检查点数"))).toBe(true);
+    // 变体 2：终态丢失。
+    const missingTerminal = JSON.parse(JSON.stringify(base)) as SealTraceDoc;
+    missingTerminal.terminal = null;
+    const v2 = sealVerifyTraceCompleteness(missingTerminal, expected);
+    expect(v2.ok).toBe(false);
+    expect(v2.problems.some((p) => p.includes("terminal 缺失"))).toBe(true);
+    // 变体 3：post-close 检查点（终态窗口）丢失。
+    const missingPostClose = JSON.parse(JSON.stringify(base)) as SealTraceDoc;
+    missingPostClose.checkpoints.splice(9, 1);
+    const v3 = sealVerifyTraceCompleteness(missingPostClose, expected);
+    expect(v3.ok).toBe(false);
+    expect(v3.problems.some((p) => p.includes("post-close"))).toBe(true);
+    // 变体 4：端口事件少一条（末检查点 eventsUpTo 与实际事件总数不符）。
+    const missingEvent = JSON.parse(JSON.stringify(base)) as SealTraceDoc;
+    missingEvent.portEvents.pop();
+    const v4 = sealVerifyTraceCompleteness(missingEvent, expected);
+    expect(v4.ok).toBe(false);
+    expect(v4.problems.some((p) => p.includes("端口事件总数"))).toBe(true);
+    // 变体 5：某检查点风险比较缺一个 ID（覆盖不全）。
+    const partialRisk = JSON.parse(JSON.stringify(base)) as SealTraceDoc;
+    const cp = partialRisk.checkpoints[4];
+    partialRisk.checkpoints[4] = { ...cp, riskCheckedIds: SYNTH_IDS.slice(0, 2) };
+    const v5 = sealVerifyTraceCompleteness(partialRisk, expected);
+    expect(v5.ok).toBe(false);
+    expect(v5.problems.some((p) => p.includes("风险比较未覆盖全部"))).toBe(true);
+    // 变体 6：finalClose 为空（retry_ready 退出无真实调用记录）。
+    const noFinalClose = JSON.parse(JSON.stringify(base)) as SealTraceDoc;
+    noFinalClose.finalClose = [];
+    const v6 = sealVerifyTraceCompleteness(noFinalClose, expected);
+    expect(v6.ok).toBe(false);
+    expect(v6.problems.some((p) => p.includes("finalClose 为空"))).toBe(true);
+  });
+
+  it("unknown 风险字段级比较：同 ID/phase/腿数下的单字段漂移被定位到 attempt 与字段路径；null 与缺失不互相替代", () => {
+    const fx = buildH18MixedLoad();
+    const baseline = sealSnapshotUnknownRisk(fx.unknownIds, h18ActiveRecords());
+    // 底版：与自身的隔离副本一致（JSON 往返不产生差异）。
+    expect(sealCompareUnknownRisk(baseline, JSON.parse(JSON.stringify(baseline)) as typeof baseline)).toEqual([]);
+    const id0 = fx.unknownIds[0] as string;
+    // 漂移 1：一条 worstCase 腿的金额（ID/phase/腿数均不变）。
+    const driftAmount = JSON.parse(JSON.stringify(baseline)) as typeof baseline;
+    ((driftAmount[id0] as { worstCase: { delta: number }[] }).worstCase[1] as { delta: number }).delta += 1;
+    const d1 = sealCompareUnknownRisk(baseline, driftAmount);
+    const first1 = d1[0];
+    if (first1 === undefined) throw new Error("worstCase 金额漂移未被抓住");
+    expect(d1.length).toBe(1);
+    expect(first1.attemptId).toBe(id0);
+    expect(first1.field).toBe("worstCase[1].delta");
+    // 漂移 2：调用边界 tick（不确定性来源事实）。
+    const driftBoundary = JSON.parse(JSON.stringify(baseline)) as typeof baseline;
+    ((driftBoundary[id0] as { invocationBoundary: { atTick: number } }).invocationBoundary as { atTick: number }).atTick += 1;
+    const d2 = sealCompareUnknownRisk(baseline, driftBoundary);
+    const first2 = d2[0];
+    if (first2 === undefined) throw new Error("调用边界漂移未被抓住");
+    expect(first2.attemptId).toBe(id0);
+    expect(first2.field).toBe("invocationBoundary.atTick");
+    // 漂移 3：identity 摘要（adapter 身份链）。
+    const driftIdentity = JSON.parse(JSON.stringify(baseline)) as typeof baseline;
+    (driftIdentity[id0] as { identity: { canonicalDigest: string } }).identity.canonicalDigest = "f".repeat(16);
+    const d3 = sealCompareUnknownRisk(baseline, driftIdentity);
+    const first3 = d3[0];
+    if (first3 === undefined) throw new Error("identity 漂移未被抓住");
+    expect(first3.field).toBe("identity.canonicalDigest");
+    // 漂移 4：null 与缺失不互替（invocation=null 被删除为缺失）。
+    const driftMissing = JSON.parse(JSON.stringify(baseline)) as typeof baseline;
+    delete (driftMissing[id0] as { invocation?: unknown }).invocation;
+    const d4 = sealCompareUnknownRisk(baseline, driftMissing);
+    const first4 = d4[0];
+    if (first4 === undefined) throw new Error("null→缺失未被抓住");
+    expect(first4.attemptId).toBe(id0);
+    expect(first4.field).toBe("invocation");
+    expect(first4.expected).toBeNull();
+    expect(first4.actual).toBeUndefined();
+    // 漂移 5：记录整体缺失（ID 还在清单里但记录被删）。
+    const driftGone = JSON.parse(JSON.stringify(baseline)) as typeof baseline;
+    delete driftGone[id0];
+    const d5 = sealCompareUnknownRisk(baseline, driftGone);
+    const first5 = d5[0];
+    if (first5 === undefined) throw new Error("记录缺失未被抓住");
+    expect(first5.field).toBe("(record)");
   });
 });
