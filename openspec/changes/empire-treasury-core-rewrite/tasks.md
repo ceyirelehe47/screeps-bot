@@ -65,7 +65,7 @@
 - [x] Agent 本地验证（K05/K07）：固定 VALIDATION_HEAD 62d6457 全量模板全绿——冻结/配置/Defense 三组零 diff、typecheck×2/build 0、KEY 五件 54/54、Treasury 32/571、Defense 11/118、全仓 236/1417、budget PASSED（锚点 046e4c0）；四个 trace 目录各 1 份 H18-J06.json 互不覆盖；尾段 status-after 首检因实施者验证期间归档 evidence 失败、移出后复检三步全过（final/tail-rerun.log，如实记录）；bundle b2999d8c（构建器嵌入身份，hash 只作追溯）（evidence/core-candidate-seal-i/final）
 - [x] 第二干净 worktree 复验（K05）：独立 reviewer subagent（未参与实施）在 detached@62d6457 worktree（原 lockfile npm ci）实跑——冻结三组零 diff、typecheck 0、KEY 54/54、Defense 118/118（独立 jest cache/轨迹目录）、H18-TRACE 与主运行逐字段一致、轨迹机器核验 27 窗口检查点事件计数不符=0/风险 20/20 全 null diff/终态一致；工作树前后干净；Agent 侧审查不冒称外部人工审计（evidence/core-candidate-seal-i/revalidation）
 - [x] 负向控制（K06）：两旧 patch 在 62d6457 git apply --check 干净可应用（无需等价变体）；一次性 worktree（npm ci 后即用即删）——heap-only：J01/J02 主用例+J03 坏 ring 3 红行为断言（exit=1）→还原 9/9 绿；zero-advance：J06 全轨迹版+H 推进系列 9 红、J05/零推进对照/敏感性仍绿（判别准确，exit=1）→还原 14/14 绿；测试侧敏感性六破坏+五漂移均红并定位（negative-controls 分开分类）
-- [ ] 独立审查（本轮交付后由独立 Agent 执行——本地验证不构成放行）
+- [x] 独立审查（2026-09-07 Agent 独立验收结论 **ACCEPT**：K01–K08 全 PASS——冻结差异 7 文件亲跑逐行一致（生产/配置/Defense 三组零 diff，Defense 用真实平铺路径+cat-file -s 防空比对）、轨迹 54 检查点独立核验（事件计数不符=0、96=90+6、finalClose 25）、风险基线 20/20 全 null diff 且白名单与 §2.3 对应（抽查原始腿值在档）、限值断言与 J05 逐字节不变亲验、reviewer 两份轨迹 recordedAt 不同确系独立运行、四份变体日志数字一致且 IVKernel 亲复跑 14/14、budget 常量/manifest/jest-full 尾部三处自洽、git 线性 4 提交+远端未动+7a2ee36 全部非执行文件；4 低危 CONCERN——(1) 任务书原文件在验收机 Downloads 缺失，验收以清单+tasks §14 K 矩阵替代核对未见矛盾；(2) 失败尝试 tick 26 与恢复同 tick 的时序表述建议后续写恢复生效前窗口（事实按 (tick,seq) 全序成立）；(3) 变体 patch 系 VI 轮原 patch 复用（README 已标注 apply --check 干净），验收读日志+复跑绿侧未重 apply；(4) bundle hash 不同系构建器嵌入身份（口径诚实）；内核候选版不因此轮封板复验获得部署许可）
 
 ## Core Rewrite IV · Remediation VI（2026-09-07）
 
