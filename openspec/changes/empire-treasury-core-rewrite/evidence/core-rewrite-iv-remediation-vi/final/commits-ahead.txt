@@ -1,0 +1,4 @@
+2e15fe3 docs(openspec): Remediation VI——持久关窗统一门禁与合法满载快照的设计、任务、J 矩阵映射与基线/负向变体证据
+c1f61ba chore(budget): Remediation VI 基线滚动——236 suites/1415 tests，锚点 b8fc019
+b8fc019 test(treasury): V1 H18 重写为合法满载混合快照 + J 矩阵（J01–J04）
+335b06d fix(treasury): R1 kernel 三写入口共用持久+heap 双口径只读门禁

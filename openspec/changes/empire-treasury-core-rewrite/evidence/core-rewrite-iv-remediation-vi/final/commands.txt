@@ -1,0 +1,11 @@
+# 最终验证（固定 HEAD 2e15fe375a3be9c4c829d4984ba9528e13877191；工作树 clean，见 status-before.txt）
+node --version && npm --version                                   # node-version.txt / npm-version.txt
+npx tsc --noEmit -p tsconfig.json                                 # typecheck.log，exit 0
+npm run build                                                     # build.log，exit 0；dist/main.js sha256 见 bundle-sha256.txt
+npx jest --config jest.config.cjs src/runtime/treasury/ --runInBand --json --outputFile=jest-treasury.json   # exit 0：32 suites/569 tests
+npx jest --config jest.config.cjs --runInBand --runTestsByPath <11 个 Defense 冻结文件> --json --outputFile=jest-defense.json  # exit 0：11 suites/118 tests
+npx jest --config jest.config.cjs --runInBand --json --outputFile=jest-full.json                              # exit 0：236 suites/1415 tests
+node scripts/verify-jest-budget.mjs                               # budget.log：JEST_TEST_BUDGET=PASSED（自带全仓重跑，结果另存 budget-jest-full-*.json）
+git diff --check                                                  # 工作树口径 exit 0（evidence patch 文本内的上下文空行不在工作树检查范围）
+git rev-parse HEAD > head-after.txt && test "$(cat head-after.txt)" = "$(cat validation-head.txt)"
+git status --porcelain > status-after.txt && test ! -s status-after.txt
