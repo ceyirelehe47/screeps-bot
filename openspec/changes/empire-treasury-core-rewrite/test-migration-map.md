@@ -361,7 +361,7 @@ test/baseline/treasuryRemediationIIBaseline.test.ts（6 用例）：R1 流出/�
 | J03 | 同文件 `J03…`（3 用例） | 仅 heap 否决（模拟发布未落盘）：admit 拒且原因标明"运行时否决标记生效"（不冒充持久成功）、下一 tick 失效无闩锁；非健康核心：无 heap 时门禁 open + 原有 store_unhealthy 拒绝不退化、heap 否决优先 lifecycle_closed、全程零写（坏 store 不被修复）；坏 ring（ringDegraded）：持久关窗判定不阻断、恢复/清理入口继续（beginTick 可用） |
 | J04 | 同文件 `J04…` | retry_ready 父代（干净 tick 先造——有义务 closing 占满清理预算）+ 8 义务 closing C + pending P2 → endTick 成功 → 同 tick admit 拒但 beginTick 清理推进（cleaned>0、C 义务减少）、cancelPending(P2) ok、closeWork(父代 abandoned) ok、release 非零 → 下一 tick 完整 reset 新 admit + executeDispatch 成功 |
 | J05 | treasuryRemediationIVKernel.test.ts `H18 … J05` | buildH18MixedLoad 工厂（真实 admit 初始化 + 64 条手工合法记录）：validator 判 healthy（旧 fixture 在此红）；active 64/四类构成精确（30/20/10/4）/remaining 90/chars ≤360,000/ring ≤128/frontier 65；closing evidence 结论与 outcome 一致且有调用边界、unknown 有边界无确定结论、retry_ready exact not-executed+义务空+期限、pending 无任何调用侧事实 |
-| J06 | 同文件 `H18 … J06` | 12 tick 观察段（每 tick JSON.stringify→performTreasuryKernelFullReset→新 store 模块 healthy 前置→beginTick→healthy 后置；份额≤8、释放≤4、20 unknown 按 ID 逐 tick 保留、pending 2 tick 内取消、h18HasProgress 真、completedClosing 真、失败义务在且健康项被服务、成功 key 恰一次）→ 40 tick 明确推导上界的有界收尾（实测 13）→ 宿主恢复失败端口（1 tick 完成 C0 退出）→ closeWork abandoned 清空 retry_ready → 终态 active=20 且 ID 集合精确等于 unknownIds、ring 44 ≤128。H18-TRACE console.log 摘录入 evidence/final |
+| J06 | 同文件 `H18 … J06` | 12 tick 观察段（每 tick JSON.stringify→performTreasuryKernelFullReset→新 store 模块 healthy 前置→beginTick→healthy 后置；份额≤8、释放≤4、20 unknown 按 ID 逐 tick 保留、pending 2 tick 内取消、h18HasProgress 真、completedClosing 真、失败义务在且健康项被服务、成功 key 恰一次）→ 40 窗口有限收尾（实测 13；Seal I 勘误：40 系固定 fixture 回归测试限值而非通用完成上界）→ 宿主恢复失败端口（1 tick 完成 C0 退出）→ closeWork abandoned 清空 retry_ready → 终态 active=20 且 ID 集合精确等于 unknownIds、ring 44 ≤128。H18-TRACE console.log 摘录入 evidence/final；Seal I 起另落全程机器可读轨迹（§14） |
 | J07 | evidence/…/negative-variants | 仅 heap 门禁（heap-only-gate.patch）：J01/J02 主用例 + J03 持久判定用例 3 红行为断言（编译通过）；healthy 零推进（zero-advance.patch：生命周期份额视为已尽）：J06 红 + H 系列进度用例红、J05/零推进对照仍绿（判别准确）；还原后 21/21 绿（IVKernel 12 + VIKernel 9） |
 | J08 | 最终验证流程 | typecheck/build、Treasury 32 suites/569、Defense 11/118、全仓 236/1415、budget（自带全仓重跑另存）、固定验证 HEAD 原始 JSON/日志/hash（evidence/final）；I13 成本 fixture 随 VKernel 全量真实重跑如实记录；三 SHA 与后置文件分类 |
 
@@ -379,3 +379,29 @@ test/baseline/treasuryRemediationIIBaseline.test.ts（6 用例）：R1 流出/�
   报告与 tasks.md 观察项记载的该问题由本轮 V1 关闭：新 H18 用合法记录
   （J05）+ 真实推进断言（J06）+ 零推进负向对照整体替换，不留原空转
   用例继续宣称通过；上轮报告文字保留为历史不改写。
+
+## 14. Core Candidate Seal I：K01–K08 定位（2026-09-07）
+
+生产实现自冻结基线 869149d 起零源码 diff——本轮只补测试侧证据能力与
+表述勘误，不新增持久字段、权威或协议（K01）。
+
+| 编号 | 入口（文件/用例） | 内容 |
+| --- | --- | --- |
+| K02 | test/mock/treasurySealEvidence.ts + `H18 … J06（Seal I 全轨迹）` | 全程轨迹：初始基线（64 构成/90 义务/20 unknown 风险深快照/health/active/ring/字符与 UTF-8 字节）→ 12 观察窗×重载前+推进后 → 13 收尾窗×2 → 1 恢复窗×2 → close 前后，共 54 检查点不截断；原始端口事件 96 条（tick/key/成败），检查点计数一律实际事件求和；段落实际迭代次数与终止原因（segments）由执行时独立记录，完整性核验交叉；失败路径定格 incomplete 轨迹（catch 内 fail+导出后 rethrow，不在 finally 补成功终态）。导出仅 TREASURY_SEAL_EVIDENCE_DIR 设置时（每 Jest 进程独立子目录），未设置断言照常 |
+| K03 | 同上（sealSnapshotUnknownRisk/sealCompareUnknownRisk） | 20 条 unknown 推进前独立深快照（JSON 往返脱离 Memory 引用，不保存活引用、不每 tick 重建期望）；白名单 13 风险字段（attemptId/workKey/generation/parentAttemptId/phase/identity 完整/worstCase 完整腿/invocationBoundary/invocation/external/outcome/outcomeEvidence/cleanup.consumerKeys），可变诊断字段（admittedAtTick/updatedAtTick/lastError/cleanup.cursor/cleanup.failures/retryDeadlineTick）明确排除并写明范围；每段每次重载后、推进后及最终 close 后字段级比较（diff 定位 attemptId+字段路径，null 与缺失不互替）；终态不止 active=20/ID+phase，风险事实与基线逐字段一致 |
+| K04 | `H18 … J06` 收尾/恢复段 + 注释 | 原 64/90 规模、失败保留与恢复、健康工作正常收尾不变；40/10 写明为固定 fixture 回归测试限值（第 40/10 个窗口出现即失败；由 89 义务×2 份额+30 退出份额在 ≤8 份额/tick 的静态推算加余量导出——上限推不出最低服务量）；收尾段退出条件显式断言 remaining=1/closing=1；持续失败阶段健康项不饿死（新成功 key 严格增长）、失败项不提前消失 |
+| K05 | evidence/core-candidate-seal-i/final + revalidation | 固定 VALIDATION_HEAD 实跑：定向 KEY 五件（IVKernel/VIKernel/IVService/VKernel/VService，含 J05/J06/J01/J02/J04 与 H15/H16、I01–I10 对应套件）、Treasury、Defense 冻结 11、全仓、budget（自带重跑另存）；第二干净 worktree（同 SHA detached）reviewer subagent 独立输出 |
+| K06 | `Seal I 敏感性检查（K06）` describe（IVKernel 12→14）+ negative-controls | 测试侧：合成完整轨迹六种破坏（缺中间观察窗口/缺终态/缺 post-close/事件缺失/风险覆盖缺 ID/finalClose 空）核验全红且定位；真实形状风险漂移五种（worstCase 腿金额/调用边界 tick/identity 摘要/null→缺失/记录缺失，ID/phase/腿数不变）定位 attempt+字段；J06 内嵌真实轨迹删窗口与真实基线漂移自检。生产侧：两旧变体（heap-only-gate/zero-advance 当下可应用版本或最小等价变体）一次性 worktree 复跑红/还原绿——与测试侧检查分开分类 |
+| K07 | evidence/core-candidate-seal-i/final | typecheck×2/build/全仓/budget PASSED；默认收集不缩水（236 suites）；每次运行 SHA/输出/产物 hash 对应；budget 自带全仓重跑另存另标识 |
+| K08 | evidence/core-candidate-seal-i-local-validation.md | 冻结基线/最终验证 HEAD/预算锚点/最终交付 HEAD 四身份分开；完整轨迹段落与窗口数、unknown 逐字段对照结论、实测完成窗口数及其限值性质、两种执行上下文身份与结果、未证明运行模型、部署禁止逐项报告 |
+
+### 14.1 敏感性检查的分类说明（Seal I）
+
+- 测试侧敏感性（`Seal I 敏感性检查` describe 与 J06 内嵌自检）是
+  `expect` 正常通过的用例：证明完整性核验与风险比较对故意坏掉的隔离
+  副本敏感（能发现丢证据与同 ID/phase 的风险漂移），不宣称生产已发生
+  该错误。
+- 生产负向变体（heap-only-gate/zero-advance）在一次性干净 worktree
+  中产生 Jest 非零失败后还原——两者在报告与证据目录中分开记录。
+- 轨迹导出（TREASURY_SEAL_EVIDENCE_DIR）只控制输出位置，不控制断言
+  是否运行：未设置时全部断言与比较照常执行，仅不落盘。

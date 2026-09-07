@@ -54,13 +54,26 @@
 - [x] C24 负向变体三件套（去累计 policy 3 红/载荷作发布目标 1 红/调用后计预算 3 红）各自红灯后还原，58/58 恢复
 - 注：II 轮 evidence 的 validation-head 指向中间 6daf3bc、bundle hash 与最终说明不一致——保留为历史（III 报告已注明）；II 轮"A05–A08 等价"在 v3 下 fixture 已同步升级。
 
+## Core Candidate Seal I（2026-09-07）
+
+- [x] 影响范围侦察（subagent：H18 块 595–948 行与 H01–H07 零共享可整块改写；helper 放 test/mock 走既有 @mock 别名不触碰 tsconfig/jest 配置；风险深快照用 JSON 往返而非超限静默浅拷贝的 durableClone；budget 沿两 commit 锚点滚动流程；H18-TRACE 无自动化依赖；evidence 写文件为仓内首个 fs 测试 helper——仅环境变量设置时惰性 I/O）
+- [x] 冻结起点核验（K01）：远端未前移（869149d）、工作树干净；本轮默认生产零 diff、构建配置/依赖零变更（例外仅当出现可复现生产反例，本轮未出现）
+- [x] 工作流 A（K02/K03）：新增 test/mock/treasurySealEvidence.ts（检查点流水+原始端口事件、计数一律实际事件求和；unknown 风险白名单 13 字段深快照 JSON 往返脱离 Memory 引用、字段级比较定位 attemptId+字段路径、null 与缺失不互替；完整性核验对缺窗口/缺终态/序号段落不符/事件计数不一致/风险覆盖缺 ID 报 problems；TREASURY_SEAL_EVIDENCE_DIR 控制导出——未设置时全部断言照常零 I/O、每 Jest 进程独立子目录、失败定格 incomplete 轨迹不补成功终态）；H18 J06 全程轨迹化：54 检查点（初始基线 + 12 观察×2 + 13 收尾×2 + 1 恢复×2 + close 前后）每检查点 healthy + 风险与基线逐字段比较，收尾/失败恢复段补齐份额≤8/释放≤4/失败项不提前消失/健康项不饿死断言，最终 close 段同 tick 累计释放核验，终态 20 条 unknown 风险与推进前独立基线逐字段一致（不只 ID+phase），全程成功 key 恰一次、失败尝试全部先于宿主恢复；fixture 端口事件流化（releaseEvents 含 tick/成败/序号）
+- [x] 工作流 B（K04）：40/10 表述纠正为固定 H18 fixture 的回归测试限值（非通用完成上界、8 份额/tick 是上限非最低服务量）；收尾段退出条件显式断言（remaining=1/closing=1），到达限值未满足即失败；VI 段与 test-migration-map §13 历史表述同步勘误（旧日志不改写，勘误说明历史口径）
+- [x] K06 敏感性（测试侧）：合成完整轨迹六种破坏（缺中间观察窗口/缺终态/缺 post-close/事件缺失/风险覆盖缺 ID/finalClose 空）核验全红且定位问题；真实 fixture 形状风险漂移五种（worstCase 腿金额/调用边界 tick/identity 摘要/null→缺失/记录缺失，ID/phase/腿数不变）均定位到 attempt 与字段；J06 内嵌真实轨迹隔离副本删窗口自检 + 真实基线隔离副本单字段漂移自检
+- [x] budget 滚动：236 suites/1417 tests（IVKernel 12→14），锚点 046e4c0
+- [ ] Agent 本地验证（K05/K07）：固定 VALIDATION_HEAD 全量模板（冻结 diff/typecheck×2/build/定向 KEY 五件/Treasury/Defense 冻结 11/全仓/budget；TREASURY_SEAL_EVIDENCE_DIR 四个 trace 目录：key/treasury/full/budget 各自独立）
+- [ ] 第二干净 worktree 复验（K05）：reviewer subagent 在同 SHA 独立 worktree 实跑关键 J/H/I 集合 + 冻结检查 + 轨迹核验（独立输出，不复制 final 结果冒充新运行）
+- [ ] 负向控制（K06）：两旧变体（heap-only-gate/zero-advance 当下可应用版本或最小等价变体）在一次性干净 worktree 复跑——分别于持久关窗/非零服务断言红、还原同提交定向绿（行为红非编译错）
+- [ ] 独立审查（本轮交付后由独立 Agent 执行——本地验证不构成放行）
+
 ## Core Rewrite IV · Remediation VI（2026-09-07）
 
 - [x] 影响范围侦察（subagent：admissionVeto 全调用点归类——三写入口须升级、接口导出面 heap-only 保留；readTreasuryCoreStoreHealth 四态下门禁行为顺序推导；lifecycle_closed 断言测试清单语义不变性核对；H18 helper 共享面/budget 条目/complete reset 模块身份陷阱三风险点）
 - [x] R1 基线反例（干净 worktree 4ba065a，exit=1）：同 tick 成功关窗（closurePersisted=true、lastEndTick=T）→ 完整 reset → heap 否决随模块重建丢失 → 新 kernel.admit 错误 admitted（frontier+1/active+1）→ 新签发 dispatch 进入 adapter（adapterCalls=1）→ rearm capability 签发 ok + executeRearm 错误 admitted；两对照（未关窗/下一 tick）绿（evidence/…-remediation-vi/baseline TRACES）
 - [x] V1 基线反例（同 worktree，exit=1）：旧 H18 fixture 被生产 validator 判 unhealthy（"closing 但结果未确定或无证据"结构矛盾）→ 12 tick 完整 reset 全部空转：释放 [0×12]、total 0、四阶段数量零变化——旧断言（≤4/unknown=20/失败义务在）在零推进下仍通过（测试前提无效的完整证据）
 - [x] R1 修复：kernel 新增 admissionGateStatus 共享只读门禁（持久 lastEndTick===当前 tick 先查、heap 否决兜底；原因文本区分来源不冒充）→ admit/executeDispatch/executeRearm 三入口共用；facade admissionWindowOpen 改为消费 kernel.admissionGateStatus（两侧判定与文案统一）；门禁纯读零写、不进 requireWritableHealth、非健康核心退化 heap 单口径原拒绝不退化；修复后基线 replicator 治愈（admitted→rejected/lifecycle_closed/增量 0）
-- [x] V1 修复（H18 整体重写，不放宽 validator）：64 条合法混合（30 closing×3 义务 committed/not_executed 混合+1 项持续失败义务/20 unknown 有调用边界/10 retry_ready exact not-executed 义务空/4 pending 无调用侧事实）validator 判 healthy（J05）；12 tick 完整 reset 观察段逐 tick healthy 前后核验、份额≤8、释放≤4、非零服务、pending 安全取消、20 unknown 按 ID 精确保留、成功义务不再调用、失败项不饿死健康项；40 tick 明确推导上界的有界收尾（实测 13 tick）+ 宿主恢复失败端口后 1 tick 完成收尾 + closeWork abandoned 安全退出 + 终态只剩 20 条不对账 unknown；零推进负向对照（healthy fixture 下进度判别函数判 false——上限/保留断言单独绿不构成通过）
+- [x] V1 修复（H18 整体重写，不放宽 validator）：64 条合法混合（30 closing×3 义务 committed/not_executed 混合+1 项持续失败义务/20 unknown 有调用边界/10 retry_ready exact not-executed 义务空/4 pending 无调用侧事实）validator 判 healthy（J05）；12 tick 完整 reset 观察段逐 tick healthy 前后核验、份额≤8、释放≤4、非零服务、pending 安全取消、20 unknown 按 ID 精确保留、成功义务不再调用、失败项不饿死健康项；40 窗口有限收尾（实测 13 tick；Seal I 勘误：40 系固定 fixture 回归测试限值而非通用完成上界，8 份额/tick 是上限非最低服务量）+ 宿主恢复失败端口后 1 tick 完成收尾 + closeWork abandoned 安全退出 + 终态只剩 20 条不对账 unknown；零推进负向对照（healthy fixture 下进度判别函数判 false——上限/保留断言单独绿不构成通过）
 - [x] J 矩阵：J01（完整 reset 后 kernel admit/executeRearm 与 facade authorize 全拒 + 未关窗/下一 tick 对照 + 旧许可失效单独分类不以替代）；J02（真 P/R + 持久关闭 + 仅清 heap 否决的执行门禁隔离——动作 0/P 仍 pending/父代未替换/许可未消费经 preflight 直接验证）；J03（仅 heap 原因不冒充、unhealthy 拒绝不退化+查询零写、坏 ring 不阻断持久判定）；J04（关窗 tick 内清理推进/cancelPending/closeWork 可用+下一 tick 新业务成功）；J05/J06 见 H18 重写；J07 两负向变体（仅 heap 门禁→J01/J02/J03 持久判定 3 红行为断言非编译错；零推进→J06 红+H 系列进度红、J05/零推进对照仍绿判别准确；还原 21/21 绿）；J08 最终验证与主报告承担
 - [x] 上轮 H18 观察项关闭：手工满载记录改用合法形状（本轮 V1），断言非空转；上轮报告的 H18 空转保证如实更正（见 test-migration-map §13.1），不改写历史
 - [x] Agent 本地验证：typecheck/build/Treasury 32/569/Defense 冻结 11/118/全仓 236/1415/budget PASSED/固定验证 HEAD 2e15fe3（见 evidence/core-rewrite-iv-remediation-vi/final；主报告 …-remediation-vi-local-validation.md）
