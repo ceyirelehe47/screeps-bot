@@ -19,6 +19,7 @@ import { interceptTreasuryCoreWrites } from "@mock/treasuryStorageInterceptor";
 import { createTreasuryCoreKernel, type TreasuryCoreAdmissionInput, type TreasuryCoreKernel, type TreasuryCoreKernelPorts } from "@/runtime/treasury/kernel/kernel";
 import {
   buildTreasuryCoreWorstWorkRecord,
+  readTreasuryCoreStoreHealth,
   treasuryCoreSerializedChars,
 } from "@/runtime/treasury/kernel/store";
 import {
@@ -591,81 +592,357 @@ describe("H07 G01–G08 核心行为保留抽查", () => {
   });
 });
 
-// ── H18：满载与混合负载逐 tick 完整 reset ──────────────────────────────────
+// ── H18（Remediation VI/V1 重写）：合法满载混合快照的逐 tick 完整 reset ────
+//
+// 旧 H18 的 fixture 不满足生产结构校验（closing 有确定 outcome 但
+// outcomeEvidence=null、retry_ready/pending 的 outcome=null）：validator 正确
+// 判 unhealthy → 生命周期静默早退 → 释放 0、零推进，而旧断言（≤4/unknown
+// 计数/失败义务在）仍然通过——"没有工作就全绿"（VI/V1/§3.1 基线红灯）。
+// 新版用合法且有来源解释的记录（VI/V1/§3.2）：pending 无调用侧事实；
+// unknown 的不确定性来自支持的调用边界；closing 的确定结论与证据一致；
+// retry_ready 是 exact not-executed 且义务已空。规模构成不变：30 closing
+// （各 3 项义务，committed/not_executed 混合 + 1 项持续失败义务）、
+// 20 outcome_unknown、10 retry_ready、4 pending，共 64 条。
 
-describe("H18 满载表示与混合负载", () => {
-  it("64 active 满载字符预算 + 混合 closing/unknown/retry_ready 逐 tick 完整 reset；份额/释放守界、失败责任保留", () => {
-    const releaseCalls: string[] = [];
-    const ports = makeKernelPorts({
-      releaseExternalConsumer: (key: string): boolean => {
-        releaseCalls.push(key);
-        return key !== "ext:h18:C0:D0"; // 每组第一个成员永远失败（失败责任不被删除）
-      },
-    });
-    // 先初始化 store（admit 一笔触发安装），再替换为满载混合记录。
-    const kernelInit = createTreasuryCoreKernel(ports);
-    const initRecord = kernelInit.admit(kernelAdmitInput([], "biz:h18:init"));
-    if (initRecord.status !== "admitted") throw new Error("init admit failed");
-    // 直接构造满载持久混合状态（手工记录——业务 admit 走满 64 次太慢且
-    // 受 fresh/policy 门禁干扰；满载口径与 G18 一致）。
-    const recordOf = (i: number): Record<string, unknown> => {
-      const consumers = i < 30 ? [`ext:h18:C${i}:D0`, `ext:h18:C${i}:D1`, `ext:h18:C${i}:D2`] : [];
-      const phase = i < 30 ? "closing" : i < 50 ? "outcome_unknown" : i < 60 ? "retry_ready" : "pending";
-      const outcome = phase === "closing" ? (i % 2 === 0 ? "committed" : "not_executed") : phase === "outcome_unknown" ? "unknown" : null;
-      return {
-        workKey: `biz:h18:W${i}`,
-        attemptId: `tk1_h18_${i.toString().padStart(2, "0")}`,
-        generation: 1,
-        parentAttemptId: null,
-        phase,
-        admittedAtTick: Game.time,
-        updatedAtTick: Game.time,
-        identity: { ...kernelIdentity() },
-        worstCase: kernelLegs(50),
-        invocationBoundary: phase === "pending" ? null : { atTick: Game.time, worldSequence: 1 },
-        invocation: null,
-        external: null,
-        outcome,
-        outcomeEvidence: null,
-        cleanup: { consumerKeys: consumers, failures: 0, cursor: 0 },
-        retryDeadlineTick: phase === "retry_ready" ? Game.time + 10 : null,
-        lastError: null,
-      };
-    };
-    const memory = Memory.runtime!.treasuryCore as unknown as {
-      version: number; installEpochId: string; issuance: { frontier: number; burned: number };
-      lifecycle: { lastBeginTick: number | null; lastEndTick: number | null };
-      recovery: { sweepCursor: number; cleanupCursor: number; budgetTick: number; budgetUsed: number };
-      active: Record<string, unknown>; ring: unknown[]; ringCursor: number; counters: Record<string, number>;
-    };
-    delete memory.active[(initRecord as { attemptId: string }).attemptId];
-    for (let i = 0; i < 64; i += 1) {
-      const record = recordOf(i);
-      memory.active[record.attemptId as string] = record;
+interface H18Phases {
+  closing: number;
+  outcome_unknown: number;
+  retry_ready: number;
+  pending: number;
+  other: number;
+}
+
+interface H18State {
+  phases: H18Phases;
+  remaining: number;
+  active: number;
+  ring: number;
+  chars: number;
+  budgetUsed: number;
+}
+
+function h18PhasesOf(core: { active: Record<string, { phase: string; cleanup?: { consumerKeys: readonly string[] } }>; ring: unknown[] }): H18Phases {
+  const phases: H18Phases = { closing: 0, outcome_unknown: 0, retry_ready: 0, pending: 0, other: 0 };
+  for (const record of Object.values(core.active)) {
+    if (record.phase === "closing" || record.phase === "outcome_unknown" || record.phase === "retry_ready" || record.phase === "pending") {
+      phases[record.phase] += 1;
+    } else {
+      phases.other += 1;
     }
-    memory.issuance.frontier = 65;
-    expect(Object.keys(memory.active).length).toBe(TREASURY_CORE_ACTIVE_LIMIT); // 满载
-    const chars = treasuryCoreSerializedChars(Memory.runtime!.treasuryCore as never);
-    expect(chars).toBeLessThanOrEqual(TREASURY_CORE_TOTAL_CHAR_BUDGET); // ≤360,000
+  }
+  return phases;
+}
 
-    // 逐 tick 推进（每 tick 后完整 reset——满载混合负载的完整 reset 逐 tick
-    // 口径）：closing 清理（每 tick ≤4 释放）、pending sweep 取消、unknown
-    // 保留（不因观察/年龄释放）。
-    const perTickReleases: number[] = [];
+function h18StateOf(): H18State {
+  const core = Memory.runtime!.treasuryCore as unknown as {
+    active: Record<string, { phase: string; cleanup?: { consumerKeys: readonly string[] } }>;
+    ring: unknown[];
+    recovery: { budgetUsed: number };
+  };
+  let remaining = 0;
+  for (const record of Object.values(core.active)) remaining += record.cleanup?.consumerKeys.length ?? 0;
+  return {
+    phases: h18PhasesOf(core),
+    remaining,
+    active: Object.keys(core.active).length,
+    ring: core.ring.length,
+    chars: treasuryCoreSerializedChars(Memory.runtime!.treasuryCore as never),
+    budgetUsed: core.recovery.budgetUsed,
+  };
+}
+
+/** J06 的进度判别函数：remaining 减少、阶段转移或 active 退出任一发生即真。 */
+function h18HasProgress(before: H18State, after: H18State): boolean {
+  return (
+    after.remaining < before.remaining ||
+    after.phases.closing !== before.phases.closing ||
+    after.phases.retry_ready !== before.phases.retry_ready ||
+    after.phases.pending !== before.phases.pending ||
+    after.active !== before.active
+  );
+}
+
+interface H18Fixture {
+  ports: TreasuryCoreKernelPorts;
+  releaseCalls: string[];
+  failingKey: string;
+  closingIds: string[];
+  unknownIds: string[];
+  retryIds: string[];
+  pendingIds: string[];
+  /** 宿主恢复失败端口（VI/V1/§3.3 失败恢复段）：此后失败义务返回原始 true。 */
+  restoreFailingPort(): void;
+}
+
+/**
+ * 构造合法满载混合快照（64 条）并返回宿主端口与记录 ID 集合。先经真实
+ * admit 初始化 store（beginTick 不初始化缺失 store——须先 admit 一笔），再
+ * 手工构造满载记录（业务 admit 走满 64 次受 fresh/policy 门禁干扰且与本
+ * 调度测试无关；满载口径与 G18/I13 一致）。手工记录必须被生产 validator
+ * 判 healthy（J05 断言）——不通过放宽 validator 过关。
+ */
+function buildH18MixedLoad(): H18Fixture {
+  const releaseCalls: string[] = [];
+  const failingKey = "ext:h18:C0:D0"; // C0（committed）的第一项义务持续失败
+  let failing = true;
+  const ports = makeKernelPorts({
+    releaseExternalConsumer: (key: string): boolean => {
+      releaseCalls.push(key);
+      return !(failing && key === failingKey);
+    },
+  });
+  const kernelInit = createTreasuryCoreKernel(ports);
+  const initRecord = kernelInit.admit(kernelAdmitInput([], "biz:h18:init"));
+  if (initRecord.status !== "admitted") throw new Error("init admit failed");
+  const seedTick = Game.time;
+  const idOf = (i: number): string => `tk1_h18_${i.toString().padStart(2, "0")}`;
+  const recordOf = (i: number): Record<string, unknown> => {
+    const consumers = i < 30 ? [`ext:h18:C${i}:D0`, `ext:h18:C${i}:D1`, `ext:h18:C${i}:D2`] : [];
+    const phase = i < 30 ? "closing" : i < 50 ? "outcome_unknown" : i < 60 ? "retry_ready" : "pending";
+    // 合法性来源（VI/V1/§3.2）：closing/retry_ready 的确定结论必须有结论
+    // 一致的 outcomeEvidence；retry_ready 只允许 not_executed 且义务已空；
+    // pending 不得持有任何调用侧事实；unknown 的不确定性来自调用边界。
+    const outcome = phase === "closing" ? (i % 2 === 0 ? "committed" : "not_executed") : phase === "retry_ready" ? "not_executed" : "unknown";
+    return {
+      workKey: `biz:h18:W${i}`,
+      attemptId: idOf(i),
+      generation: 1,
+      parentAttemptId: null,
+      phase,
+      admittedAtTick: seedTick,
+      updatedAtTick: seedTick,
+      identity: { ...kernelIdentity() },
+      worstCase: kernelLegs(50),
+      invocationBoundary: phase === "retry_ready" || phase === "pending" ? null : { atTick: seedTick, worldSequence: 1 },
+      invocation: null,
+      external: null,
+      outcome,
+      outcomeEvidence:
+        phase === "closing" || phase === "retry_ready"
+          ? { kind: "adapter_execution_semantics", conclusion: outcome === "committed" ? "executed" : "not_executed", source: "probe:h18", atTick: seedTick }
+          : null,
+      cleanup: { consumerKeys: consumers, failures: 0, cursor: 0 },
+      retryDeadlineTick: phase === "retry_ready" ? seedTick + 40 : null,
+      lastError: null,
+    };
+  };
+  const memory = Memory.runtime!.treasuryCore as unknown as {
+    active: Record<string, Record<string, unknown>>;
+    ring: unknown[];
+    ringCursor: number;
+    issuance: { frontier: number; burned: number };
+    lifecycle: { lastBeginTick: number | null; lastEndTick: number | null };
+    recovery: { sweepCursor: number; cleanupCursor: number; budgetTick: number; budgetUsed: number };
+  };
+  delete memory.active[(initRecord as { attemptId: string }).attemptId];
+  const closingIds: string[] = [];
+  const unknownIds: string[] = [];
+  const retryIds: string[] = [];
+  const pendingIds: string[] = [];
+  for (let i = 0; i < 64; i += 1) {
+    const record = recordOf(i);
+    memory.active[record.attemptId as string] = record;
+    if (i < 30) closingIds.push(idOf(i));
+    else if (i < 50) unknownIds.push(idOf(i));
+    else if (i < 60) retryIds.push(idOf(i));
+    else pendingIds.push(idOf(i));
+  }
+  memory.issuance.frontier = 65;
+  memory.lifecycle = { lastBeginTick: null, lastEndTick: null };
+  memory.recovery = { sweepCursor: 0, cleanupCursor: 0, budgetTick: seedTick, budgetUsed: 0 };
+  return {
+    ports,
+    releaseCalls,
+    failingKey,
+    closingIds,
+    unknownIds,
+    retryIds,
+    pendingIds,
+    restoreFailingPort(): void {
+      failing = false;
+    },
+  };
+}
+
+describe("H18 满载合法混合快照与逐 tick 完整 reset", () => {
+  it("J05：64 条合法混合（30 closing×3 义务/20 unknown/10 retry_ready/4 pending）被生产 validator 判 healthy；构成/证据/发行/期限一致；active 64、ring 与字符守界", () => {
+    const fx = buildH18MixedLoad();
+    const health = readTreasuryCoreStoreHealth();
+    expect(health.status).toBe("healthy"); // 不通过放宽 validator 过关——旧 fixture 在此红
+    const core = Memory.runtime!.treasuryCore as unknown as {
+      active: Record<string, Record<string, unknown>>;
+      ring: unknown[];
+      issuance: { frontier: number };
+    };
+    expect(Object.keys(core.active).length).toBe(TREASURY_CORE_ACTIVE_LIMIT); // 满载
+    expect(core.ring.length).toBeLessThanOrEqual(128);
+    const state = h18StateOf();
+    expect(state.phases).toEqual({ closing: 30, outcome_unknown: 20, retry_ready: 10, pending: 4, other: 0 });
+    expect(state.remaining).toBe(90); // 30 closing × 3 项义务
+    expect(state.chars).toBeLessThanOrEqual(TREASURY_CORE_TOTAL_CHAR_BUDGET);
+    expect(core.issuance.frontier).toBe(65);
+    // 构成与证据一致性：closing 的 evidence 结论与 outcome 一致；unknown
+    // 无确定结论但有调用边界；retry_ready exact not-executed + 义务空 +
+    // 期限；pending 无任何调用侧事实。
+    for (const [index, id] of fx.closingIds.entries()) {
+      const record = core.active[id] as { outcome: string; outcomeEvidence: { conclusion: string }; invocationBoundary: unknown; cleanup: { consumerKeys: readonly string[] } };
+      expect(record.outcomeEvidence.conclusion).toBe(record.outcome === "committed" ? "executed" : "not_executed");
+      expect(record.invocationBoundary).not.toBeNull();
+      expect(record.cleanup.consumerKeys.length).toBe(3);
+      void index;
+    }
+    for (const id of fx.unknownIds) {
+      const record = core.active[id] as { outcome: string; outcomeEvidence: unknown; invocationBoundary: unknown };
+      expect(record.outcome).toBe("unknown");
+      expect(record.outcomeEvidence).toBeNull();
+      expect(record.invocationBoundary).not.toBeNull(); // 不确定性有支持的调用边界
+    }
+    for (const id of fx.retryIds) {
+      const record = core.active[id] as { outcome: string; outcomeEvidence: { conclusion: string }; cleanup: { consumerKeys: readonly string[] }; retryDeadlineTick: number };
+      expect(record.outcome).toBe("not_executed");
+      expect(record.outcomeEvidence.conclusion).toBe("not_executed");
+      expect(record.cleanup.consumerKeys.length).toBe(0); // exact not-executed 且义务已空
+      expect(record.retryDeadlineTick).toBeGreaterThan(Game.time);
+    }
+    for (const id of fx.pendingIds) {
+      const record = core.active[id] as { outcome: string; outcomeEvidence: unknown; invocationBoundary: unknown; invocation: unknown; external: unknown };
+      expect(record.outcome).toBe("unknown");
+      expect(record.outcomeEvidence).toBeNull();
+      expect(record.invocationBoundary).toBeNull(); // 未开始不得伪造调用事实
+      expect(record.invocation).toBeNull();
+      expect(record.external).toBeNull();
+    }
+  });
+
+  it("J06：12 tick 完整 reset 观察段逐 tick healthy/份额≤8/释放≤4、非零服务与真实进展、20 unknown exact 保留；有界收尾 + 失败恢复 + retry_ready 安全退出；终态只剩不对账 unknown", () => {
+    const fx = buildH18MixedLoad();
+    expect(readTreasuryCoreStoreHealth().status).toBe("healthy"); // fixture 工厂失败即终止，不跳过断言
+    const initial = h18StateOf();
+    const perTick: { tick: number; shares: number; releases: number; phases: H18Phases; remaining: number; active: number; ring: number; chars: number }[] = [];
+    // —— 12 tick 观察段：每 tick 真正 JSON 重载 + 模块重建 + 新工厂 kernel，
+    //    推进前/后各核验一次 healthy（runBeginTick:false 后显式 begin）——
+    //    不用旧工厂重新 new 代替完整 reset。
     for (let t = 0; t < 12; t += 1) {
       Game.time += 1;
       const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
-      const before = releaseCalls.length;
-      performTreasuryKernelFullReset({ ports, memorySnapshot: snapshot }); // reset 内已跑真实 beginTick
-      perTickReleases.push(releaseCalls.length - before);
+      const releasesBefore = fx.releaseCalls.length;
+      const reset = performTreasuryKernelFullReset({ ports: fx.ports, memorySnapshot: snapshot, runBeginTick: false });
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const storeModule = require("@/runtime/treasury/kernel/store") as typeof import("@/runtime/treasury/kernel/store");
+      expect(storeModule.readTreasuryCoreStoreHealth().status).toBe("healthy"); // 推进前
+      const stats = reset.kernel.beginTick();
+      expect(storeModule.readTreasuryCoreStoreHealth().status).toBe("healthy"); // 推进后
+      const after = h18StateOf();
+      expect(after.budgetUsed).toBeLessThanOrEqual(8); // 每 tick 逻辑份额 ≤8（所有实例/入口累计）
+      expect(fx.releaseCalls.length - releasesBefore).toBeLessThanOrEqual(4); // 每 tick 实际释放 ≤4
+      // 20 条 unknown 按具体 ID 持续保留（不只数量碰巧等于 20）。
+      for (const id of fx.unknownIds) {
+        const record = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> }).active[id];
+        expect(record?.phase).toBe("outcome_unknown");
+      }
+      perTick.push({ tick: Game.time, shares: after.budgetUsed, releases: fx.releaseCalls.length - releasesBefore, phases: after.phases, remaining: after.remaining, active: after.active, ring: after.ring, chars: after.chars });
+      void stats;
     }
-    for (const n of perTickReleases) expect(n).toBeLessThanOrEqual(4); // 每 tick 释放 ≤4
-    // unknown 保留（无 reconcile 证据不转结论）；失败义务不被删除。
-    const core = Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string; cleanup?: { consumerKeys: readonly string[]; failures?: number } }> };
-    const unknowns = Object.values(core.active).filter((r) => r.phase === "outcome_unknown");
-    expect(unknowns.length).toBe(20); // 20 条 unknown 全保留
-    const h18c0 = Object.values(core.active).find((r) => (r as { workKey?: string }).workKey === "biz:h18:W0");
-    expect(h18c0).toBeDefined();
-    expect((h18c0 as { cleanup?: { consumerKeys: readonly string[] } }).cleanup?.consumerKeys).toContain("ext:h18:C0:D0"); // 失败义务保留
+    // 观察段断言：非零服务 + 真实进展（上限断言单独绿不构成通过）。
+    const afterObs = h18StateOf();
+    expect(fx.releaseCalls.length).toBeGreaterThan(0); // 实际 release 非零
+    expect(h18HasProgress(initial, afterObs)).toBe(true);
+    expect(afterObs.phases.pending).toBe(0); // pending 经安全取消退出（≤3/tick，2 tick 内完成）
+    expect(afterObs.remaining).toBeLessThan(initial.remaining); // 合法 remaining 减少
+    // 至少有可完成的 closing 完成其清理阶段（committed 退出 active 或
+    // not_executed 进入 retry_ready）。
+    const activePhases = Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> };
+    const completedClosing = fx.closingIds.some((id) => activePhases.active[id] === undefined || activePhases.active[id].phase === "retry_ready");
+    expect(completedClosing).toBe(true);
+    // 失败义务不被删除；健康项不被失败项饿死（C1+ 的义务有真实服务）。
+    const c0 = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { cleanup?: { consumerKeys: readonly string[] } }> }).active[fx.closingIds[0] as string];
+    expect(c0?.cleanup?.consumerKeys).toContain(fx.failingKey);
+    const healthyKeysServed = new Set(fx.releaseCalls.filter((k) => k.startsWith("ext:h18:C") && k !== fx.failingKey));
+    expect(healthyKeysServed.size).toBeGreaterThan(0);
+    // 成功确认的义务不再调用（每个成功 key 恰好一次）。
+    for (const key of healthyKeysServed) {
+      expect(fx.releaseCalls.filter((k) => k === key).length).toBe(1);
+    }
+
+    // —— 有界收尾段：静态工作集继续服务。保守上界推导（写明而非无限
+    //    while）：89 个可完成义务 × 2 份 + 30 份 closing 退出/转化 + 失败
+    //    义务恢复前每 tick 至多 2 份重试消耗；每 tick ≤8 份 ⇒ 义务侧
+    //    ⌈(89×2+30)/8⌉ = 26 tick；加游标轮转/子预算调度余量取 40 tick 上界。
+    //    所有 tick 仍真正 JSON 重载，不复制旧数字。
+    let boundedTicks = 0;
+    let stateNow = h18StateOf();
+    while ((stateNow.remaining > 1 || (stateNow.phases.closing ?? 0) > 1) && boundedTicks < 40) {
+      Game.time += 1;
+      const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
+      const releasesBefore = fx.releaseCalls.length;
+      const reset = performTreasuryKernelFullReset({ ports: fx.ports, memorySnapshot: snapshot, runBeginTick: false });
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const storeModule = require("@/runtime/treasury/kernel/store") as typeof import("@/runtime/treasury/kernel/store");
+      expect(storeModule.readTreasuryCoreStoreHealth().status).toBe("healthy");
+      reset.kernel.beginTick();
+      expect(storeModule.readTreasuryCoreStoreHealth().status).toBe("healthy");
+      const after = h18StateOf();
+      expect(after.budgetUsed).toBeLessThanOrEqual(8);
+      expect(fx.releaseCalls.length - releasesBefore).toBeLessThanOrEqual(4);
+      boundedTicks += 1;
+      stateNow = after;
+    }
+    expect(boundedTicks).toBeLessThan(40); // 真实推进在明确上界内完成（非无限循环掩盖）
+
+    // —— 失败恢复段：宿主把持续失败义务恢复为 true，剩余安全工作收尾 ——
+    fx.restoreFailingPort();
+    let recoveryTicks = 0;
+    let c0Phase: string | undefined = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> }).active[fx.closingIds[0] as string]?.phase;
+    while (c0Phase !== undefined && recoveryTicks < 10) {
+      Game.time += 1;
+      const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
+      const reset = performTreasuryKernelFullReset({ ports: fx.ports, memorySnapshot: snapshot, runBeginTick: false });
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const storeModule = require("@/runtime/treasury/kernel/store") as typeof import("@/runtime/treasury/kernel/store");
+      expect(storeModule.readTreasuryCoreStoreHealth().status).toBe("healthy");
+      reset.kernel.beginTick();
+      expect(storeModule.readTreasuryCoreStoreHealth().status).toBe("healthy");
+      recoveryTicks += 1;
+      c0Phase = (Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> }).active[fx.closingIds[0] as string]?.phase;
+    }
+    // C0（committed）义务清空 + 观察接管后退出 active（进 ring 终态）。
+    expect((Memory.runtime!.treasuryCore as unknown as { active: Record<string, unknown> }).active[fx.closingIds[0] as string]).toBeUndefined();
+
+    // —— retry_ready 安全退出：经正常业务放弃（closeWork abandoned），不
+    //    直接 delete Memory。终态 active 只剩 20 条故意不对账的 unknown。
+    const finalReset = performTreasuryKernelFullReset({ ports: fx.ports, runBeginTick: false });
+    const retryLeft = Object.entries((Memory.runtime!.treasuryCore as unknown as { active: Record<string, { phase: string }> }).active)
+      .filter(([, r]) => r.phase === "retry_ready")
+      .map(([id]) => id);
+    for (const id of retryLeft) {
+      const closed = finalReset.kernel.closeWork({ attemptId: id, reason: "abandoned" });
+      expect(closed.status).toBe("ok");
+    }
+    const finalState = h18StateOf();
+    expect(finalState.active).toBe(20); // 只剩 unknown
+    expect(Object.keys((Memory.runtime!.treasuryCore as unknown as { active: Record<string, unknown> }).active).sort()).toEqual([...fx.unknownIds].sort());
+    expect(finalState.phases).toEqual({ closing: 0, outcome_unknown: 20, retry_ready: 0, pending: 0, other: 0 });
+    expect(finalState.ring).toBeLessThanOrEqual(128);
+    expect(finalState.chars).toBeLessThanOrEqual(TREASURY_CORE_TOTAL_CHAR_BUDGET);
+    // eslint-disable-next-line no-console
+    console.log(`H18-TRACE initial=${JSON.stringify(initial)} per-tick[0..2]=${JSON.stringify(perTick.slice(0, 3))} bounded-ticks=${JSON.stringify(boundedTicks)} recovery-ticks=${JSON.stringify(recoveryTicks)} total-release-calls=${JSON.stringify(fx.releaseCalls.length)} final=${JSON.stringify(finalState)}`);
+  });
+
+  it("零推进负向对照：healthy fixture 下生命周期推进为零时，J06 的进度/收尾指标全部零变化——上限与 unknown 保留断言单独绿不构成通过", () => {
+    const fx = buildH18MixedLoad();
+    expect(readTreasuryCoreStoreHealth().status).toBe("healthy"); // 前提保持 healthy（不是又一份损坏数据测试）
+    Game.time += 1;
+    const snapshot = JSON.stringify((globalThis as unknown as { Memory: unknown }).Memory);
+    // 完整 reset（真实通道）但不调用 beginTick——受测生命周期推进被替换为
+    // 零推进（最小变体：跳过推进入口本身）。
+    performTreasuryKernelFullReset({ ports: fx.ports, memorySnapshot: snapshot, runBeginTick: false });
+    const before = h18StateOf();
+    const after = h18StateOf(); // 同一持久状态：零推进
+    expect(readTreasuryCoreStoreHealth().status).toBe("healthy");
+    expect(fx.releaseCalls.length).toBe(0); // 无服务
+    expect(after.remaining).toBe(before.remaining); // remaining 无减少
+    expect(after.phases).toEqual(before.phases); // 无阶段转移
+    expect(after.active).toBe(before.active); // 无退出
+    expect(h18HasProgress(before, after)).toBe(false); // J06 进度判别函数在零推进轨迹上判 false
   });
 });
