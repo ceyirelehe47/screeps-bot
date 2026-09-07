@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "44aae6142b6dad80a53511448bbccb5c242a1940",
-    "suites": 237,
-    "tests": 1428
+    "commit": "9a83520b0109550bd68215f6f415b21a048a1da4",
+    "suites": 238,
+    "tests": 1436
   },
   "target": {
-    "commit": "44aae6142b6dad80a53511448bbccb5c242a1940",
-    "suites": 237,
-    "tests": 1428,
-    "passed": 1428,
+    "commit": "9a83520b0109550bd68215f6f415b21a048a1da4",
+    "suites": 238,
+    "tests": 1436,
+    "passed": 1436,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Terminal Transfer Slice 0：新增调拨原型 1 suite/8 用例（236/1420→237/1428）；锚点 44aae61 系列"
+    "note": "Terminal Transfer Slice 0 · Remediation I：新增 N 反例 1 suite/8 用例（237/1428→238/1436）；M 用例改造后仍 8 it；锚点 9a83520 系列"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1560,6 +1560,102 @@
       "pending": 0,
       "todo": 0
     },
+    "src/runtime/treasury/treasuryR4BaselineReplicators.test.ts": {
+      "budget": 3,
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIIIKernel.test.ts": {
+      "budget": 16,
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIIIService.test.ts": {
+      "budget": 16,
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIIKernel.test.ts": {
+      "budget": 16,
+      "tests": 16,
+      "passed": 16,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIIService.test.ts": {
+      "budget": 15,
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIKernel.test.ts": {
+      "budget": 14,
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIService.test.ts": {
+      "budget": 12,
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIVKernel.test.ts": {
+      "budget": 17,
+      "tests": 17,
+      "passed": 17,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationIVService.test.ts": {
+      "budget": 12,
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationVIKernel.test.ts": {
+      "budget": 9,
+      "tests": 9,
+      "passed": 9,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationVKernel.test.ts": {
+      "budget": 11,
+      "tests": 11,
+      "passed": 11,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRemediationVService.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
     "src/runtime/treasury/treasuryRewrite2Acceptance.test.ts": {
       "budget": 42,
       "tests": 42,
@@ -1592,6 +1688,22 @@
       "pending": 0,
       "todo": 0
     },
+    "src/runtime/treasury/treasuryRewrite4Acceptance.test.ts": {
+      "budget": 20,
+      "tests": 20,
+      "passed": 20,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryRewrite4Lifecycle.test.ts": {
+      "budget": 12,
+      "tests": 12,
+      "passed": 12,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
     "src/runtime/treasury/treasuryShadow.test.ts": {
       "budget": 6,
       "tests": 6,
@@ -1601,6 +1713,14 @@
       "todo": 0
     },
     "src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryTerminalTransferSlice0RemediationI.test.ts": {
       "budget": 8,
       "tests": 8,
       "passed": 8,
@@ -1688,6 +1808,22 @@
       "pending": 0,
       "todo": 0,
       "tier": "protected-full"
+    },
+    "test/baseline/treasuryRemediationIBaseline.test.ts": {
+      "budget": 5,
+      "tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/baseline/treasuryRemediationIIBaseline.test.ts": {
+      "budget": 6,
+      "tests": 6,
+      "passed": 6,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
     },
     "test/defenseMode.test.ts": {
       "budget": 4,
@@ -1800,134 +1936,6 @@
       "pending": 0,
       "todo": 0,
       "tier": "protected-full"
-    },
-    "src/runtime/treasury/treasuryRewrite4Acceptance.test.ts": {
-      "budget": 20,
-      "tests": 20,
-      "passed": 20,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryRewrite4Lifecycle.test.ts": {
-      "budget": 12,
-      "tests": 12,
-      "passed": 12,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryRemediationIKernel.test.ts": {
-      "budget": 14,
-      "tests": 14,
-      "passed": 14,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryRemediationIService.test.ts": {
-      "budget": 12,
-      "tests": 12,
-      "passed": 12,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "test/baseline/treasuryRemediationIBaseline.test.ts": {
-      "budget": 5,
-      "tests": 5,
-      "passed": 5,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryRemediationIIKernel.test.ts": {
-      "budget": 16,
-      "tests": 16,
-      "passed": 16,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryRemediationIIService.test.ts": {
-      "budget": 15,
-      "tests": 15,
-      "passed": 15,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "test/baseline/treasuryRemediationIIBaseline.test.ts": {
-      "budget": 6,
-      "tests": 6,
-      "passed": 6,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryRemediationIIIKernel.test.ts": {
-      "budget": 16,
-      "tests": 16,
-      "passed": 16,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryRemediationIIIService.test.ts": {
-      "budget": 16,
-      "tests": 16,
-      "passed": 16,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryRemediationIVKernel.test.ts": {
-      "budget": 17,
-      "tests": 17,
-      "passed": 17,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryRemediationIVService.test.ts": {
-      "budget": 12,
-      "tests": 12,
-      "passed": 12,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryRemediationVKernel.test.ts": {
-      "budget": 11,
-      "tests": 11,
-      "passed": 11,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryRemediationVService.test.ts": {
-      "budget": 8,
-      "tests": 8,
-      "passed": 8,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryR4BaselineReplicators.test.ts": {
-      "budget": 3,
-      "tests": 3,
-      "passed": 3,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
-    },
-    "src/runtime/treasury/treasuryRemediationVIKernel.test.ts": {
-      "budget": 9,
-      "tests": 9,
-      "passed": 9,
-      "failed": 0,
-      "pending": 0,
-      "todo": 0
     }
   }
 }

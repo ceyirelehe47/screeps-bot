@@ -15,11 +15,11 @@ const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data"
 // 【Terminal Transfer Slice 0】新基线：Terminal 调拨离线原型 1 suite/8 用例
 //（237/1428，见
 // openspec/changes/empire-treasury-core-rewrite/test-migration-map.md §16）。
-const requiredBaselineCommit = "44aae6142b6dad80a53511448bbccb5c242a1940";
+const requiredBaselineCommit = "9a83520b0109550bd68215f6f415b21a048a1da4";
 const requiredTarget = Object.freeze({
-  suites: 237,
-  tests: 1428,
-  passed: 1428,
+  suites: 238,
+  tests: 1436,
+  passed: 1436,
   failed: 0,
   pending: 0,
   todo: 0,
