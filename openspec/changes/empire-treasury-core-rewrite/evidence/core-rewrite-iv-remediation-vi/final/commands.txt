@@ -3,7 +3,7 @@ node --version && npm --version                                   # node-version
 npx tsc --noEmit -p tsconfig.json                                 # typecheck.log，exit 0
 npm run build                                                     # build.log，exit 0；dist/main.js sha256 见 bundle-sha256.txt
 npx jest --config jest.config.cjs src/runtime/treasury/ --runInBand --json --outputFile=jest-treasury.json   # exit 0：32 suites/569 tests
-npx jest --config jest.config.cjs --runInBand --runTestsByPath <11 个 Defense 冻结文件> --json --outputFile=jest-defense.json  # exit 0：11 suites/118 tests
+npx jest --config jest.config.cjs --runInBand --runTestsByPath   src/runtime/defenseFocusFire.test.ts src/runtime/defenseFocusFireStateful.test.ts   src/runtime/defenseFallbackReallocation.test.ts src/runtime/defenseAllActorReservation.test.ts   src/runtime/defenseGlobalRampartFootprints.test.ts src/runtime/defensePreallocationRampartOwnership.test.ts   src/runtime/defenseStationaryRampartOwnership.test.ts src/runtime/homeDefense.test.ts   src/runtime/towerControl.test.ts src/roles/homeDefender.test.ts   test/memoryDeclarationBoundaries.test.ts   --json --outputFile=jest-defense.json  # exit 0：11 suites/118 tests
 npx jest --config jest.config.cjs --runInBand --json --outputFile=jest-full.json                              # exit 0：236 suites/1415 tests
 node scripts/verify-jest-budget.mjs                               # budget.log：JEST_TEST_BUDGET=PASSED（自带全仓重跑，结果另存 budget-jest-full-*.json）
 git diff --check                                                  # 工作树口径 exit 0（evidence patch 文本内的上下文空行不在工作树检查范围）

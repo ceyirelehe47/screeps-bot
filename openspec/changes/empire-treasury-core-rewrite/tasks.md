@@ -63,8 +63,8 @@
 - [x] V1 修复（H18 整体重写，不放宽 validator）：64 条合法混合（30 closing×3 义务 committed/not_executed 混合+1 项持续失败义务/20 unknown 有调用边界/10 retry_ready exact not-executed 义务空/4 pending 无调用侧事实）validator 判 healthy（J05）；12 tick 完整 reset 观察段逐 tick healthy 前后核验、份额≤8、释放≤4、非零服务、pending 安全取消、20 unknown 按 ID 精确保留、成功义务不再调用、失败项不饿死健康项；40 tick 明确推导上界的有界收尾（实测 13 tick）+ 宿主恢复失败端口后 1 tick 完成收尾 + closeWork abandoned 安全退出 + 终态只剩 20 条不对账 unknown；零推进负向对照（healthy fixture 下进度判别函数判 false——上限/保留断言单独绿不构成通过）
 - [x] J 矩阵：J01（完整 reset 后 kernel admit/executeRearm 与 facade authorize 全拒 + 未关窗/下一 tick 对照 + 旧许可失效单独分类不以替代）；J02（真 P/R + 持久关闭 + 仅清 heap 否决的执行门禁隔离——动作 0/P 仍 pending/父代未替换/许可未消费经 preflight 直接验证）；J03（仅 heap 原因不冒充、unhealthy 拒绝不退化+查询零写、坏 ring 不阻断持久判定）；J04（关窗 tick 内清理推进/cancelPending/closeWork 可用+下一 tick 新业务成功）；J05/J06 见 H18 重写；J07 两负向变体（仅 heap 门禁→J01/J02/J03 持久判定 3 红行为断言非编译错；零推进→J06 红+H 系列进度红、J05/零推进对照仍绿判别准确；还原 21/21 绿）；J08 最终验证与主报告承担
 - [x] 上轮 H18 观察项关闭：手工满载记录改用合法形状（本轮 V1），断言非空转；上轮报告的 H18 空转保证如实更正（见 test-migration-map §13.1），不改写历史
-- [ ] Agent 本地验证：typecheck/build/Treasury/Defense 冻结集合/全仓/budget（见 evidence/core-rewrite-iv-remediation-vi/final）
-- [ ] 独立审查（本轮交付后由独立 Agent 执行——本地验证不构成放行）
+- [x] Agent 本地验证：typecheck/build/Treasury 32/569/Defense 冻结 11/118/全仓 236/1415/budget PASSED/固定验证 HEAD 2e15fe3（见 evidence/core-rewrite-iv-remediation-vi/final；主报告 …-remediation-vi-local-validation.md）
+- [x] 独立审查（2026-09-07 Agent 独立验收结论 **ACCEPT**：八项全 PASS——基线反例 TRACES/行号与归档日志一致、R1 门禁逐行核对（无第二权威/无新持久字段/关窗发布时序未变）、J 矩阵断言非空转抽查、21/21 定向复跑且 H18-TRACE 与摘录逐字一致、budget/验证产物数字自洽、git 线性 + Defense 零 diff + 远端一致、任务书边界无违反；3 低危 CONCERN——commands.txt Defense 占位符已补交完整列表，.ts.txt 归档策略沿下轮待办，baseline-healed exit=1 系 V1 预期红已注 README；内核候选版不自动升级为部署许可）
 
 ## Core Rewrite IV · Remediation V（2026-09-07）
 
