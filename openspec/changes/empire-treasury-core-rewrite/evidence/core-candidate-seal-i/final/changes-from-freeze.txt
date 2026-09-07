@@ -1,0 +1,7 @@
+M	openspec/changes/empire-treasury-core-rewrite/design.md
+M	openspec/changes/empire-treasury-core-rewrite/tasks.md
+M	openspec/changes/empire-treasury-core-rewrite/test-migration-map.md
+M	scripts/verify-jest-budget.mjs
+M	src/runtime/treasury/treasuryRemediationIVKernel.test.ts
+A	test/mock/treasurySealEvidence.ts
+M	test/test-suite-budget.json

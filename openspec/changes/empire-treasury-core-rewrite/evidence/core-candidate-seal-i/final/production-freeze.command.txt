@@ -1,0 +1,1 @@
+git diff --exit-code 869149dcdd6f2068572354917bf23c52727cf9b6 62d645743ac986b9f405cdfebb055e6d171c1d9b -- src :\(glob\,exclude\)src/\*\*/\*.test.ts :\(glob\,exclude\)src/\*\*/\*.spec.ts 

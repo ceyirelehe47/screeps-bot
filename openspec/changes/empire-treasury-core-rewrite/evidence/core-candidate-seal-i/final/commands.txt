@@ -1,0 +1,20 @@
+# Core Candidate Seal I 最终验证——实际执行命令（主工作树，VALIDATION_HEAD=62d6457）
+# 完整模板见 /tmp/seal-validation.sh（内容与任务书 §7.3 一致）；逐步命令记录在 *.command.txt。
+git fetch origin && git status --short && git branch --show-current && git rev-parse HEAD && git rev-parse origin/refactor/empire-treasury-rearchitecture && git log --oneline --decorate -40   # 起点核验
+git diff --name-status --no-renames 869149dcdd6f2068572354917bf23c52727cf9b6 62d645743ac986b9f405cdfebb055e6d171c1d9b
+git diff --exit-code 869149dcdd6f2068572354917bf23c52727cf9b6 62d645743ac986b9f405cdfebb055e6d171c1d9b -- src ':(glob,exclude)src/**/*.test.ts' ':(glob,exclude)src/**/*.spec.ts'
+git diff --exit-code 869149dcdd6f2068572354917bf23c52727cf9b6 62d645743ac986b9f405cdfebb055e6d171c1d9b -- package.json package-lock.json rollup.config.js tsconfig.json tsconfig.build.json jest.config.cjs
+npx tsc --noEmit -p tsconfig.json
+npx tsc --noEmit -p tsconfig.build.json
+npm run build
+node -e 'const fs=require("node:fs"),c=require("node:crypto");console.log(c.createHash("sha256").update(fs.readFileSync("dist/main.js")).digest("hex")+" *dist/main.js")'
+TREASURY_SEAL_EVIDENCE_DIR=<tmp>/trace-key npx jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasury/treasuryRemediationIVKernel.test.ts src/runtime/treasury/treasuryRemediationVIKernel.test.ts src/runtime/treasury/treasuryRemediationIVService.test.ts src/runtime/treasury/treasuryRemediationVKernel.test.ts src/runtime/treasury/treasuryRemediationVService.test.ts --json --outputFile=<tmp>/jest-key.json
+TREASURY_SEAL_EVIDENCE_DIR=<tmp>/trace-treasury npx jest --config jest.config.cjs src/runtime/treasury/ --runInBand --json --outputFile=<tmp>/jest-treasury.json
+TREASURY_SEAL_EVIDENCE_DIR=<tmp>/trace-full npx jest --config jest.config.cjs --runInBand --json --outputFile=<tmp>/jest-full.json
+TREASURY_SEAL_EVIDENCE_DIR=<tmp>/trace-budget node scripts/verify-jest-budget.mjs
+TREASURY_SEAL_EVIDENCE_DIR=<tmp>/trace-budget 同上（budget 自带全仓重跑输出另存 budget.log，与 jest-full.json 为两次独立运行）
+npx jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/defenseFocusFire.test.ts src/runtime/defenseFocusFireStateful.test.ts src/runtime/defenseFallbackReallocation.test.ts src/runtime/defenseAllActorReservation.test.ts src/runtime/defenseGlobalRampartFootprints.test.ts src/runtime/defensePreallocationRampartOwnership.test.ts src/runtime/defenseStationaryRampartOwnership.test.ts src/runtime/homeDefense.test.ts src/runtime/towerControl.test.ts src/roles/homeDefender.test.ts test/memoryDeclarationBoundaries.test.ts --json --outputFile=<tmp>/jest-defense.json
+git diff --check && git rev-parse HEAD && git status --porcelain   # 尾段（首次 status-after 见 README 事件记录；复检 tail-rerun.log）
+# 敏感性/负向与复验：
+TREASURY_SEAL_EVIDENCE_DIR=<selftest> npx jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasury/treasuryRemediationIVKernel.test.ts   # 含失败定格轨迹验证（completed=false 副本另行保留于本 README 说明的对照，不入档）
+git worktree add --detach <tmp> 62d6457 && npm ci --prefer-offline   # 负向变体一次性 worktree（已用后即删）

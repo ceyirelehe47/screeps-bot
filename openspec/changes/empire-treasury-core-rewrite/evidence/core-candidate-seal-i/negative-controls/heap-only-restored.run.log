@@ -1,0 +1,20 @@
+PASS src/runtime/treasury/treasuryRemediationVIKernel.test.ts (5.37 s)
+  J01 成功关窗→同 tick 完整 reset→直接 admit/rearm
+    √ 主用例：heap 已随模块重建丢失、持久 lastEndTick=T 仍在——kernel admit/executeRearm 与 facade authorize 全部 lifecycle_closed；frontier/active/动作/child 增量 0 (1122 ms)
+    √ 对照：未请求关窗时同前提完整 reset 后新 kernel admit/dispatch/rearm 与 facade 全部成功 (25 ms)
+    √ 对照：关窗后推进到 T+1 完整 reset——无永久闩锁，新窗口正常接纳 (19 ms)
+  J02 执行门禁隔离（真 P/R，仅清 heap 否决）
+    √ 主用例：真 dispatch P 与真 rearm R + endTick 持久关闭 → 仅移除模块级 heap 事实 → executeDispatch/executeRearm 因持久关窗拒绝；动作 0、P 仍 pending、父代未替换、许可未消费 (11 ms)
+    √ 对照：同前提未请求关窗（heap 与持久均开放）——P 执行 committed 路径可用、R 执行可用 (10 ms)
+  J03 门禁边界语义
+    √ 仅 heap 否决（关窗发布失败）：admit 仍拒且原因标明 heap 口径（不冒充持久成功）；下一 tick 失效 (5 ms)
+    √ 非健康核心：heap 否决优先拒绝（lifecycle_closed）；无 heap 否决时原有 store_unhealthy 拒绝不退化；门禁查询零写、不修坏 store (3 ms)
+    √ 坏 ring（ringDegraded）不阻断持久关窗判定：healthy+degraded 下 gate 仍读 lastEndTick 关闭；恢复/清理既有语义不退化 (5 ms)
+  J04 关窗不影响旧工作收尾与下一 tick 恢复
+    √ 关窗 tick 内：清理推进（义务减少）、cancelPending/closeWork 可用；下一 tick 完整 reset 后新业务 admit 成功 (43 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       9 passed, 9 total
+Snapshots:   0 total
+Time:        5.554 s, estimated 11 s
+Ran all test suites within paths "src/runtime/treasury/treasuryRemediationVIKernel.test.ts".

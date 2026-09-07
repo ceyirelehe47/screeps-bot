@@ -62,9 +62,9 @@
 - [x] 工作流 B（K04）：40/10 表述纠正为固定 H18 fixture 的回归测试限值（非通用完成上界、8 份额/tick 是上限非最低服务量）；收尾段退出条件显式断言（remaining=1/closing=1），到达限值未满足即失败；VI 段与 test-migration-map §13 历史表述同步勘误（旧日志不改写，勘误说明历史口径）
 - [x] K06 敏感性（测试侧）：合成完整轨迹六种破坏（缺中间观察窗口/缺终态/缺 post-close/事件缺失/风险覆盖缺 ID/finalClose 空）核验全红且定位问题；真实 fixture 形状风险漂移五种（worstCase 腿金额/调用边界 tick/identity 摘要/null→缺失/记录缺失，ID/phase/腿数不变）均定位到 attempt 与字段；J06 内嵌真实轨迹隔离副本删窗口自检 + 真实基线隔离副本单字段漂移自检
 - [x] budget 滚动：236 suites/1417 tests（IVKernel 12→14），锚点 046e4c0
-- [ ] Agent 本地验证（K05/K07）：固定 VALIDATION_HEAD 全量模板（冻结 diff/typecheck×2/build/定向 KEY 五件/Treasury/Defense 冻结 11/全仓/budget；TREASURY_SEAL_EVIDENCE_DIR 四个 trace 目录：key/treasury/full/budget 各自独立）
-- [ ] 第二干净 worktree 复验（K05）：reviewer subagent 在同 SHA 独立 worktree 实跑关键 J/H/I 集合 + 冻结检查 + 轨迹核验（独立输出，不复制 final 结果冒充新运行）
-- [ ] 负向控制（K06）：两旧变体（heap-only-gate/zero-advance 当下可应用版本或最小等价变体）在一次性干净 worktree 复跑——分别于持久关窗/非零服务断言红、还原同提交定向绿（行为红非编译错）
+- [x] Agent 本地验证（K05/K07）：固定 VALIDATION_HEAD 62d6457 全量模板全绿——冻结/配置/Defense 三组零 diff、typecheck×2/build 0、KEY 五件 54/54、Treasury 32/571、Defense 11/118、全仓 236/1417、budget PASSED（锚点 046e4c0）；四个 trace 目录各 1 份 H18-J06.json 互不覆盖；尾段 status-after 首检因实施者验证期间归档 evidence 失败、移出后复检三步全过（final/tail-rerun.log，如实记录）；bundle b2999d8c（构建器嵌入身份，hash 只作追溯）（evidence/core-candidate-seal-i/final）
+- [x] 第二干净 worktree 复验（K05）：独立 reviewer subagent（未参与实施）在 detached@62d6457 worktree（原 lockfile npm ci）实跑——冻结三组零 diff、typecheck 0、KEY 54/54、Defense 118/118（独立 jest cache/轨迹目录）、H18-TRACE 与主运行逐字段一致、轨迹机器核验 27 窗口检查点事件计数不符=0/风险 20/20 全 null diff/终态一致；工作树前后干净；Agent 侧审查不冒称外部人工审计（evidence/core-candidate-seal-i/revalidation）
+- [x] 负向控制（K06）：两旧 patch 在 62d6457 git apply --check 干净可应用（无需等价变体）；一次性 worktree（npm ci 后即用即删）——heap-only：J01/J02 主用例+J03 坏 ring 3 红行为断言（exit=1）→还原 9/9 绿；zero-advance：J06 全轨迹版+H 推进系列 9 红、J05/零推进对照/敏感性仍绿（判别准确，exit=1）→还原 14/14 绿；测试侧敏感性六破坏+五漂移均红并定位（negative-controls 分开分类）
 - [ ] 独立审查（本轮交付后由独立 Agent 执行——本地验证不构成放行）
 
 ## Core Rewrite IV · Remediation VI（2026-09-07）
