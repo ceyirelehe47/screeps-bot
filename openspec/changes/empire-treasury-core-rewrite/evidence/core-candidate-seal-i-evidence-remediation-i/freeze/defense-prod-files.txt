@@ -1,0 +1,7 @@
+src/runtime/defenseFocusFire.ts
+src/runtime/engagementFallbackRevision.ts
+src/runtime/defenderRampartAllocation.ts
+src/runtime/homeDefense.ts
+src/runtime/towerControl.ts
+src/runtime/physicalRampartOwnership.ts
+src/roles/homeDefender.ts

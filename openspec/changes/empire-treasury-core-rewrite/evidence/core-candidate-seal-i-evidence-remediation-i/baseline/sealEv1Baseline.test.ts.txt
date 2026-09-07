@@ -1,0 +1,134 @@
+/**
+ * Core Candidate Seal I · Evidence Remediation I —— 基线反例（一次性，不入库）。
+ * 在起点 7c79071 的当前实现上运行：V1/V2 断言"修复后期望的行为"，
+ * 预期全部红（证明缺口真实）；合法对照预期绿（证明红灯非一律报错）。
+ * 运行前置：先以 TREASURY_SEAL_EVIDENCE_DIR 导出 J06 真实轨迹，再把该
+ * 目录经 SEAL_EV1_TRACE_DIR 传入本文件。
+ */
+import { sealCompareUnknownRisk, sealSnapshotUnknownRisk, sealVerifyTraceCompleteness } from "@mock/treasurySealEvidence";
+import type { SealTraceDoc } from "@mock/treasurySealEvidence";
+
+/** 与 buildH18MixedLoad recordOf 相同字段形状的最小 outcome_unknown 记录。 */
+function unknownRecord(i: number): Record<string, unknown> {
+  return {
+    workKey: `biz:h18:W${i}`,
+    attemptId: `tk1_h18_${i.toString().padStart(2, "0")}`,
+    generation: 1,
+    parentAttemptId: null,
+    phase: "outcome_unknown",
+    admittedAtTick: 1000,
+    updatedAtTick: 1000,
+    identity: { adapterKind: "d.kind", actionKind: "d.kind", canonicalDigest: "a".repeat(16) },
+    worstCase: [
+      { resource: "energy", delta: 50 },
+      { resource: "energy", delta: 60 },
+    ],
+    invocationBoundary: { atTick: 1000, worldSequence: 1 },
+    invocation: null,
+    external: null,
+    outcome: "unknown",
+    outcomeEvidence: null,
+    cleanup: { consumerKeys: [], failures: 0, cursor: 0 },
+    retryDeadlineTick: null,
+    lastError: null,
+  };
+}
+
+function readTrace(): SealTraceDoc {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require("node:fs") as typeof import("node:fs");
+  const dir = process.env.SEAL_EV1_TRACE_DIR;
+  if (dir === undefined || dir === "") throw new Error("SEAL_EV1_TRACE_DIR 未设置（先导出 J06 真实轨迹）");
+  const runDirs = fs.readdirSync(dir).sort();
+  if (runDirs.length === 0) throw new Error("轨迹目录为空");
+  const file = `${dir}/${runDirs[runDirs.length - 1]}/H18-J06.json`;
+  return JSON.parse(fs.readFileSync(file, "utf8")) as SealTraceDoc;
+}
+
+describe("Evidence Remediation I 基线反例（V1 原始记录入口）", () => {
+  const ids = ["tk1_h18_50", "tk1_h18_51"];
+  const active = (): Record<string, Record<string, unknown>> => ({
+    "tk1_h18_50": unknownRecord(50),
+    "tk1_h18_51": unknownRecord(51),
+  });
+
+  it("合法对照：未修改记录集合经提取/JSON 往返/比较一致（起点实现即绿）", () => {
+    const baseline = sealSnapshotUnknownRisk(ids, active());
+    const same = sealCompareUnknownRisk(baseline, sealSnapshotUnknownRisk(ids, JSON.parse(JSON.stringify(active())) as Record<string, Record<string, unknown>>));
+    expect(same).toEqual([]);
+  });
+
+  it("反例：原始记录副本 delete invocation（基线合法 null）经提取+比较必须定位差异", () => {
+    const baseline = sealSnapshotUnknownRisk(ids, active());
+    const mutated = JSON.parse(JSON.stringify(active())) as Record<string, Record<string, unknown>>;
+    delete mutated["tk1_h18_50"].invocation;
+    const diffs = sealCompareUnknownRisk(baseline, sealSnapshotUnknownRisk(ids, mutated));
+    expect(diffs.length).toBeGreaterThan(0);
+    expect(diffs.some((d) => d.attemptId === "tk1_h18_50" && d.field === "invocation")).toBe(true);
+  });
+
+  it("反例：原始记录副本 delete external（基线合法 null）必须定位差异", () => {
+    const baseline = sealSnapshotUnknownRisk(ids, active());
+    const mutated = JSON.parse(JSON.stringify(active())) as Record<string, Record<string, unknown>>;
+    delete mutated["tk1_h18_51"].external;
+    const diffs = sealCompareUnknownRisk(baseline, sealSnapshotUnknownRisk(ids, mutated));
+    expect(diffs.some((d) => d.attemptId === "tk1_h18_51" && d.field === "external")).toBe(true);
+  });
+
+  it("反例：原始记录副本 delete outcomeEvidence（基线合法 null）必须定位差异", () => {
+    const baseline = sealSnapshotUnknownRisk(ids, active());
+    const mutated = JSON.parse(JSON.stringify(active())) as Record<string, Record<string, unknown>>;
+    delete mutated["tk1_h18_50"].outcomeEvidence;
+    const diffs = sealCompareUnknownRisk(baseline, sealSnapshotUnknownRisk(ids, mutated));
+    expect(diffs.some((d) => d.attemptId === "tk1_h18_50" && d.field === "outcomeEvidence")).toBe(true);
+  });
+});
+
+describe("Evidence Remediation I 基线反例（V2 逐检查点实证核验）", () => {
+  it("合法对照：未修改真实轨迹完整性核验通过（起点实现即绿）", () => {
+    const trace = readTrace();
+    const verdict = sealVerifyTraceCompleteness(trace, {
+      unknownIds: trace.fixture.unknownIds,
+      plannedObserveTicks: trace.segments.observe.actualTicks,
+    });
+    expect(verdict.problems).toEqual([]);
+  });
+
+  it("反例 A：中间检查点风险证据整项 null（riskCheckedIds/unknownRisk/riskDiff）必须报风险证据缺失", () => {
+    const trace = readTrace();
+    const cp = trace.checkpoints[4] as { unknownRisk: unknown; riskCheckedIds: unknown; riskDiff: unknown };
+    cp.unknownRisk = null;
+    cp.riskCheckedIds = null;
+    cp.riskDiff = null;
+    const verdict = sealVerifyTraceCompleteness(trace, {
+      unknownIds: trace.fixture.unknownIds,
+      plannedObserveTicks: trace.segments.observe.actualTicks,
+    });
+    expect(verdict.problems.some((p) => p.includes("风险"))).toBe(true);
+  });
+
+  it("反例 B：中间检查点实际快照 worstCase 单腿金额漂移、riskDiff 标签仍 null，必须从实际快照重算发现", () => {
+    const trace = readTrace();
+    const cp = trace.checkpoints[4] as { unknownRisk: Record<string, Record<string, unknown>> | null; riskDiff: unknown };
+    if (cp.unknownRisk === null) throw new Error("底版检查点 4 无风险快照");
+    const id0 = trace.fixture.unknownIds[0] as string;
+    const legs = (cp.unknownRisk[id0] as { worstCase: { delta: number }[] }).worstCase;
+    legs[1].delta += 1;
+    const verdict = sealVerifyTraceCompleteness(trace, {
+      unknownIds: trace.fixture.unknownIds,
+      plannedObserveTicks: trace.segments.observe.actualTicks,
+    });
+    expect(verdict.problems.some((p) => p.includes("worstCase"))).toBe(true);
+  });
+
+  it("反例 C：中间检查点保存非空风险差异、其余（含终态）一致，不得因终态恢复而放行", () => {
+    const trace = readTrace();
+    const cp = trace.checkpoints[6] as { riskDiff: unknown };
+    cp.riskDiff = [{ attemptId: trace.fixture.unknownIds[0] as string, field: "worstCase[0].delta", expected: 50, actual: 51 }];
+    const verdict = sealVerifyTraceCompleteness(trace, {
+      unknownIds: trace.fixture.unknownIds,
+      plannedObserveTicks: trace.segments.observe.actualTicks,
+    });
+    expect(verdict.problems.some((p) => p.includes("风险") || p.includes("riskDiff"))).toBe(true);
+  });
+});

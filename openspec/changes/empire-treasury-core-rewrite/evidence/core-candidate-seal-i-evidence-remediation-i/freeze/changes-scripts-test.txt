@@ -1,0 +1,3 @@
+M	scripts/verify-jest-budget.mjs
+A	test/mock/treasurySealEvidence.ts
+M	test/test-suite-budget.json

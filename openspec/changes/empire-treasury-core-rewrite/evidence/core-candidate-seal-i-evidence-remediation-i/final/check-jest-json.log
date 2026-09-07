@@ -1,0 +1,5 @@
+jest-key.json: suites=5 tests=57 passed=57 failed=0 pending=0 todo=0 runtimeErrors=0
+jest-treasury.json: suites=32 tests=574 passed=574 failed=0 pending=0 todo=0 runtimeErrors=0
+jest-defense.json: suites=11 tests=118 passed=118 failed=0 pending=0 todo=0 runtimeErrors=0
+jest-full.json: suites=236 tests=1420 passed=1420 failed=0 pending=0 todo=0 runtimeErrors=0
+JEST_JSON=PASS

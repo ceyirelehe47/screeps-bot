@@ -1,0 +1,2 @@
+node
+C:/Users/15027/AppData/Local/Temp/seal-ev1-review/output/verify-seal-trace.mjs

@@ -1,0 +1,896 @@
+
+> screeps@2026.8.29-6 build
+> rollup -c
+
+No deployment target set. Build only.
+cleared:  D:\code\screeps\screeps-bot\dist
+[36m
+[1msrc/main.ts[22m → [1mdist/main.js[22m...[39m
+[deploy] bundle sha256: dd368badd115f1b0… (full in Memory.runtime.lastDeployBundleHash)
+[32mcreated [1mdist/main.js[22m in [1m23.5s[22m[39m
+PASS src/runtime/treasury/treasuryRemediationIVKernel.test.ts (7.879 s)
+  ● Console
+
+    console.log
+      H18-TRACE completed=true observe=12 bounded=13/40 recovery=1/10 checkpoints=54 portEvents=96 finalClose=25 final={"phases":{"closing":0,"outcome_unknown":20,"retry_ready":0,"pending":0,"other":0},"remaining":0,"active":20,"ring":44,"chars":21879,"utf8Bytes":21879,"budgetUsed":2}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIVKernel.test.ts:1095:15)
+
+PASS src/runtime/treasury/treasuryRemediationVKernel.test.ts
+  ● Console
+
+    console.log
+      I13-COST {"fixture1":{"fixture":"empty-endTick","reads":7,"writeAttempts":1,"writesAllowed":1,"writesDropped":0,"logicalSharesUsed":0,"closurePersisted":true},"fixture2":{"fixture":"recover-A-then-clean-8C","phaseEndTick":{"recoveredToUnknown":1,"closurePersisted":true},"tick1":{"reads":41,"writeAttempts":7,"writesAllowed":7,"cleaned":2,"sharesUsed":7,"releaseCalls":2},"completion":{"ticks":2,"reads":77,"writeAttempts":14,"writesAllowed":14,"totalReleaseCalls":8,"perTickReleases":[4,2],"phaseAfter":"retry_ready"},"awaitingServiceAfterTick1":6}}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:653:13)
+
+    console.log
+      I13-COST {"fixture3":{"fixture":"closure-publish-failure","writeAttempts":2,"writesAllowed":0,"writesDropped":2,"reads":12,"closurePersisted":false},"fixture4":{"fixture":"64-active-mixed-advance","activeCount":64,"beginTick":{"recovered":2,"cleaned":6,"closed":0,"cancelled":0},"endTick":{"recoveredToUnknown":0,"closurePersisted":true},"reads":53,"writeAttempts":10,"writesAllowed":10,"sharesUsed":8}}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:748:13)
+
+PASS src/runtime/treasury/treasuryRemediationIVService.test.ts
+PASS src/runtime/treasury/treasuryRemediationVService.test.ts
+PASS src/runtime/treasury/treasuryRemediationVIKernel.test.ts
+
+Test Suites: 5 passed, 5 total
+Tests:       57 passed, 57 total
+Snapshots:   0 total
+Time:        10.222 s
+Ran all test suites within paths "src/runtime/treasury/treasuryRemediationIVKernel.test.ts", "src/runtime/treasury/treasuryRemediationVIKernel.test.ts", "src/runtime/treasury/treasuryRemediationIVService.test.ts", "src/runtime/treasury/treasuryRemediationVKernel.test.ts", "src/runtime/treasury/treasuryRemediationVService.test.ts".
+Test results written to: C:\Users\15027\AppData\Local\Temp\tmp.jEQBeLQIyW\jest-key.json
+PASS src/runtime/treasury/treasuryKernelStress.test.ts (291.347 s)
+PASS src/runtime/treasury/treasuryRewrite4Lifecycle.test.ts (10.652 s)
+PASS src/runtime/treasury/treasuryRemediationIVKernel.test.ts
+  ● Console
+
+    console.log
+      H18-TRACE completed=true observe=12 bounded=13/40 recovery=1/10 checkpoints=54 portEvents=96 finalClose=25 final={"phases":{"closing":0,"outcome_unknown":20,"retry_ready":0,"pending":0,"other":0},"remaining":0,"active":20,"ring":44,"chars":21879,"utf8Bytes":21879,"budgetUsed":2}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIVKernel.test.ts:1095:15)
+
+PASS src/runtime/treasury/treasuryRewrite2Lifecycle.test.ts (6.846 s)
+PASS src/runtime/treasury/treasuryKernelAcceptance.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIIKernel.test.ts
+PASS src/runtime/treasury/treasuryRemediationIKernel.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Acceptance.test.ts
+PASS src/runtime/treasury/treasuryRewrite4Acceptance.test.ts
+PASS src/runtime/treasury/treasuryKernelArchitecture.test.ts
+PASS src/runtime/treasury/treasuryRemediationVKernel.test.ts
+  ● Console
+
+    console.log
+      I13-COST {"fixture1":{"fixture":"empty-endTick","reads":7,"writeAttempts":1,"writesAllowed":1,"writesDropped":0,"logicalSharesUsed":0,"closurePersisted":true},"fixture2":{"fixture":"recover-A-then-clean-8C","phaseEndTick":{"recoveredToUnknown":1,"closurePersisted":true},"tick1":{"reads":41,"writeAttempts":7,"writesAllowed":7,"cleaned":2,"sharesUsed":7,"releaseCalls":2},"completion":{"ticks":2,"reads":77,"writeAttempts":14,"writesAllowed":14,"totalReleaseCalls":8,"perTickReleases":[4,2],"phaseAfter":"retry_ready"},"awaitingServiceAfterTick1":6}}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:653:13)
+
+    console.log
+      I13-COST {"fixture3":{"fixture":"closure-publish-failure","writeAttempts":2,"writesAllowed":0,"writesDropped":2,"reads":12,"closurePersisted":false},"fixture4":{"fixture":"64-active-mixed-advance","activeCount":64,"beginTick":{"recovered":2,"cleaned":6,"closed":0,"cancelled":0},"endTick":{"recoveredToUnknown":0,"closurePersisted":true},"reads":53,"writeAttempts":10,"writesAllowed":10,"sharesUsed":8}}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:748:13)
+
+PASS src/runtime/treasury/treasuryRemediationIIIService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIVService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIService.test.ts
+PASS src/runtime/treasury/treasuryRewrite2Acceptance.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Lifecycle.test.ts
+PASS src/runtime/treasury/treasuryRemediationVService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIKernel.test.ts
+PASS src/runtime/treasury/treasuryKernel.test.ts
+PASS src/runtime/treasury/treasuryRemediationVIKernel.test.ts
+PASS src/runtime/treasury/treasuryCore.test.ts
+PASS src/runtime/treasury/treasuryTypedOwnerMigration.test.ts
+PASS src/runtime/treasury/treasuryActionContract.test.ts
+PASS src/runtime/treasury/treasuryR4BaselineReplicators.test.ts
+  ● Console
+
+    console.log
+      R1-TRACE {"budgetTrace":[{"at":"after-nested-beginTick","budgetUsed":1},{"at":"after-endTick","budgetUsed":1},{"at":"after-beginTick","budgetUsed":7}],"releaseCalls":["ext:r1:D0","ext:r1:D1","ext:r1:D2"],"nestedStats":{"recovered":0,"closed":0,"cleaned":0,"cancelled":0},"remaining":5}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR4BaselineReplicators.test.ts:197:13)
+
+PASS src/runtime/treasury/treasuryCommitments.test.ts
+PASS src/runtime/treasury/treasuryImmutableRegistries.test.ts
+PASS src/runtime/treasury/treasuryTransactionIdVectors.test.ts
+PASS src/runtime/treasury/treasuryShadow.test.ts
+  ● Console
+
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5001 newMismatches=1 fields=stale_epoch sample={"checkedAtTick":5001,"field":"stale_epoch","roomName":"*","treasuryValue":5000,"otherValue":5001}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+PASS src/runtime/treasury/treasuryCommitmentCompleteness.test.ts
+PASS src/runtime/treasury/treasuryCapacityViews.test.ts
+PASS src/runtime/treasury/treasuryCanonicalEncoding.test.ts
+
+Test Suites: 32 passed, 32 total
+Tests:       574 passed, 574 total
+Snapshots:   0 total
+Time:        328.57 s, estimated 352 s
+Ran all test suites matching /src\\runtime\\treasury\\/i.
+Test results written to: C:\Users\15027\AppData\Local\Temp\tmp.jEQBeLQIyW\jest-treasury.json
+PASS test/memoryDeclarationBoundaries.test.ts (31.321 s)
+PASS src/runtime/defenseFocusFireStateful.test.ts
+PASS src/runtime/defenseFocusFire.test.ts
+PASS src/roles/homeDefender.test.ts
+PASS src/runtime/towerControl.test.ts
+PASS src/runtime/defenseStationaryRampartOwnership.test.ts
+PASS src/runtime/defenseFallbackReallocation.test.ts
+PASS src/runtime/defenseGlobalRampartFootprints.test.ts
+PASS src/runtime/defensePreallocationRampartOwnership.test.ts
+PASS src/runtime/homeDefense.test.ts
+PASS src/runtime/defenseAllActorReservation.test.ts
+
+Test Suites: 11 passed, 11 total
+Tests:       118 passed, 118 total
+Snapshots:   0 total
+Time:        34.024 s
+Ran all test suites within paths "src/runtime/defenseFocusFire.test.ts", "src/runtime/defenseFocusFireStateful.test.ts", "src/runtime/defenseFallbackReallocation.test.ts", "src/runtime/defenseAllActorReservation.test.ts", "src/runtime/defenseGlobalRampartFootprints.test.ts", "src/runtime/defensePreallocationRampartOwnership.test.ts", "src/runtime/defenseStationaryRampartOwnership.test.ts", "src/runtime/homeDefense.test.ts", "src/runtime/towerControl.test.ts", "src/roles/homeDefender.test.ts", "test/memoryDeclarationBoundaries.test.ts".
+Test results written to: C:\Users\15027\AppData\Local\Temp\tmp.jEQBeLQIyW\jest-defense.json
+PASS src/runtime/treasury/treasuryKernelStress.test.ts (283.002 s)
+PASS src/runtime/marketBaseResourcePermit.test.ts (94.952 s)
+PASS test/localDispatchPerformanceBaseline.test.ts (35.579 s)
+  ● Console
+
+    console.log
+      LOCAL_DISPATCH_PERFORMANCE_BASELINE {"schema":"local-dispatch-performance-baseline/v2","implementation":"full-ref-local-dispatch","fixture":{"rooms":20,"tasksPerRoom":20,"totalTasksPerDomain":400,"actors":50},"protocol":{"clock":"process.hrtime.bigint","timingUnit":"milliseconds","warmupBatches":5,"measuredBatches":30,"iterationsPerBatch":100,"p95":"nearest-rank","timingPassFail":"observation-only; deployment CPU gate is the live same-shard window","complexityPassFail":"deterministic public-input/read-DTO counts"},"preChangeEvidence":{"source":"openspec/changes/local-dispatch-ownership/evidence/pre-change-baseline.md","commit":"df2e1af60a035fd99406888d69bba9903e8a7118","observation":{"workerCurrent":{"median":12.083,"p95":12.378},"workerRelease":{"median":39.879,"p95":40.633},"carrierList":{"median":13.476,"p95":14.086},"carrierClaim":{"median":12.937,"p95":13.586},"carrierReplace":{"median":61.892,"p95":66.713}}},"scenarios":{"workerCurrent":{"samples":[386.9573,361.7049,393.7464,383.1079,357.9659,420.333,369.6766,387.262,392.9251,364.9734,451.8209,513.2734,422.9196,380.6526,392.4332,421.7841,364.6734,423.3085,397.1162,380.2691,415.0815,508.2241,417.5245,442.2636,394.7886,409.387,354.8543,417.0345,368.4413,394.7696],"median":394.258,"p95":508.2241,"min":354.8543,"max":513.2734,"relativeToPreChange":{"median":32.629148,"p95":41.058661}},"workerRelease":{"samples":[292.2209,292.0867,302.3074,297.7791,311.216,294.1657,297.2808,310.2259,295.1248,298.4376,299.8907,308.7184,306.4273,304.984,389.881,305.185,322.6397,306.773,337.455,305.3303,345.7401,324.0905,390.3729,330.1724,317.1017,359.5485,317.3092,312.6346,294.9428,310.9062],"median":307.7457,"p95":389.881,"min":292.0867,"max":390.3729,"relativeToPreChange":{"median":7.716986,"p95":9.595181}},"carrierList":{"samples":[8.0053,7.0612,6.6052,6.6697,7.9726,7.168,8.6365,9.2228,10.0402,9.239,9.0596,8.3307,6.1553,6.7125,6.8168,6.6724,6.3574,6.3853,6.16,7.5015,8.4781,11.8434,5.497,11.1698,8.7113,9.309,7.963,6.958,7.9791,6.5725],"median":7.73225,"p95":11.1698,"min":5.497,"max":11.8434,"relativeToPreChange":{"median":0.573779,"p95":0.792972}},"carrierClaim":{"samples":[58.3926,55.3026,77.3404,89.3491,57.388,57.483,54.8045,66.5554,65.0767,73.8026,64.3672,65.908,58.8472,63.171,83.8115,94.5117,88.4865,71.7042,61.3948,72.7377,60.8006,63.5186,57.0782,66.8888,65.7144,54.866,64.1509,65.3564,68.1661,58.806],"median":64.72195,"p95":89.3491,"min":54.8045,"max":94.5117,"relativeToPreChange":{"median":5.002856,"p95":6.576557}},"carrierReplace":{"samples":[152.4519,174.3988,147.6082,137.1131,157.0262,194.8851,217.2489,199.1275,151.4047,165.1386,169.1436,144.1271,171.1287,166.7341,148.0156,179.2453,187.0495,180.5555,196.3696,187.1391,178.7589,183.802,209.4157,174.4864,169.0401,133.0992,148.1787,148.5047,159.4598,141.6991],"median":169.09185,"p95":209.4157,"min":133.0992,"max":217.2489,"relativeToPreChange":{"median":2.732047,"p95":3.139054}}},"complexityGates":{"workerRelease":{"acquireCalls":5000,"releaseCalls":5000,"exactRoomDescriptorReads":5000,"exactTaskDescriptorReads":5000,"boardEnumerations":0},"workerAcquireReconcile":{"acquireCalls":50,"reconcileCalls":50,"assignedCreepsDescriptorReads":150},"carrier":{"exact":{"exactCalls":400,"exactResults":400,"refDescriptorReads":2400},"list":{"listCalls":20,"listResults":400},"replace":{"replaceCalls":2000,"replaceResults":40000,"draftIndexReads":40000,"stepIndexReads":40000},"claim":{"claimCalls":5000,"successfulClaims":5000,"releasedClaims":5000,"claimStepIndexReads":5000,"actorDescriptorReads":5000,"actorEnumerations":0},"readDto":{"snapshotCalls":1,"snapshotEntries":400,"stepArrayEnumerations":400,"stepEntryDescriptorReads":800}}},"limitations":["Node/Jest wall-clock is not Screeps CPU and old/current samples came from separate processes.","Relative old/current wall-clock ratios are observations, never pass/fail authorization.","Worker current starts bound; Carrier claim is the uncontended immediate-release path.","Carrier complexity probes observe public inputs/read DTOs and never the private Map hierarchy."]}
+
+      at Object.<anonymous> (test/localDispatchPerformanceBaseline.test.ts:761:13)
+
+PASS src/runtime/marketBaseResourceAutomation.test.ts (36.666 s)
+PASS test/memoryDeclarationBoundaries.test.ts (22.455 s)
+PASS test/ambientGlobalAbiBoundaries.test.ts (19.419 s)
+PASS src/runtime/treasury/treasuryRewrite4Lifecycle.test.ts (10.677 s)
+PASS test/typescriptConfigBoundaries.test.ts (9.914 s)
+PASS scripts/monitor-service.test.ts (9.589 s)
+PASS test/localDispatchArchitectureBoundaries.test.ts (8.422 s)
+PASS src/runtime/treasury/treasuryRewrite2Lifecycle.test.ts (6.307 s)
+PASS test/taskSystemArchitectureBoundaries.test.ts
+PASS src/runtime/treasury/treasuryRemediationIVKernel.test.ts
+  ● Console
+
+    console.log
+      H18-TRACE completed=true observe=12 bounded=13/40 recovery=1/10 checkpoints=54 portEvents=96 finalClose=25 final={"phases":{"closing":0,"outcome_unknown":20,"retry_ready":0,"pending":0,"other":0},"remaining":0,"active":20,"ring":44,"chars":21879,"utf8Bytes":21879,"budgetUsed":2}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIVKernel.test.ts:1095:15)
+
+PASS test/roleIdentityCatalogBoundaries.test.ts
+PASS test/taskSystemCatalogBoundaries.test.ts
+PASS src/runtime/marketBaseResourceLedger.test.ts
+PASS src/runtime/bootstrapArchitecture.test.ts
+PASS src/runtime/marketSaleAutomation.test.ts
+PASS src/runtime/treasury/treasuryKernelAcceptance.test.ts
+PASS src/runtime/linkNetworkMemoryOwnership.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIIKernel.test.ts
+PASS src/runtime/treasury/treasuryRemediationIKernel.test.ts
+PASS src/runtime/treasury/treasuryRewrite4Acceptance.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Acceptance.test.ts
+PASS src/runtime/treasury/treasuryKernelArchitecture.test.ts
+PASS src/runtime/treasury/treasuryRemediationVKernel.test.ts
+  ● Console
+
+    console.log
+      I13-COST {"fixture1":{"fixture":"empty-endTick","reads":7,"writeAttempts":1,"writesAllowed":1,"writesDropped":0,"logicalSharesUsed":0,"closurePersisted":true},"fixture2":{"fixture":"recover-A-then-clean-8C","phaseEndTick":{"recoveredToUnknown":1,"closurePersisted":true},"tick1":{"reads":41,"writeAttempts":7,"writesAllowed":7,"cleaned":2,"sharesUsed":7,"releaseCalls":2},"completion":{"ticks":2,"reads":77,"writeAttempts":14,"writesAllowed":14,"totalReleaseCalls":8,"perTickReleases":[4,2],"phaseAfter":"retry_ready"},"awaitingServiceAfterTick1":6}}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:653:13)
+
+    console.log
+      I13-COST {"fixture3":{"fixture":"closure-publish-failure","writeAttempts":2,"writesAllowed":0,"writesDropped":2,"reads":12,"closurePersisted":false},"fixture4":{"fixture":"64-active-mixed-advance","activeCount":64,"beginTick":{"recovered":2,"cleaned":6,"closed":0,"cancelled":0},"endTick":{"recoveredToUnknown":0,"closurePersisted":true},"reads":53,"writeAttempts":10,"writesAllowed":10,"sharesUsed":8}}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:748:13)
+
+PASS src/runtime/treasury/treasuryRemediationIIIService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIService.test.ts
+PASS src/runtime/logistics/resourceTransferTasks.test.ts
+PASS src/runtime/treasury/treasuryRemediationIVService.test.ts
+PASS src/mount/mountCreep.test.ts
+PASS test/treasuryCommitmentInvalidationBoundaries.test.ts
+PASS src/runtime/resourceControl.capacityRegression.test.ts
+PASS src/runtime/defenseFocusFireStateful.test.ts
+PASS src/runtime/hubProductionIntegration.test.ts
+PASS src/runtime/treasury/treasuryRewrite2Acceptance.test.ts
+PASS src/runtime/treasury/treasuryRemediationVService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIService.test.ts
+PASS src/runtime/marketSalePlanningAuthorization.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Lifecycle.test.ts
+PASS src/movement/routing.segmentCache.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIKernel.test.ts
+PASS src/runtime/marketSaleSession.test.ts
+PASS test/warWorkflowLifecycleBoundaries.test.ts
+PASS src/runtime/hubPlanner.test.ts
+PASS src/runtime/treasury/treasuryKernel.test.ts
+PASS src/runtime/powerBankHarvest.test.ts
+PASS src/runtime/memoryCleanup.test.ts
+PASS src/runtime/synthesisControl.test.ts
+PASS src/runtime/treasury/treasuryRemediationVIKernel.test.ts
+PASS src/runtime/bootstrap.test.ts
+PASS src/runtime/warControl.test.ts
+PASS scripts/lib/redactSecrets.test.ts
+PASS src/runtime/marketWriteArchitecture.test.ts
+PASS test/baseline/treasuryRemediationIIBaseline.test.ts
+PASS src/runtime/treasury/treasuryTypedOwnerMigration.test.ts
+PASS src/runtime/marketDirectContinuousPolicy.test.ts
+PASS src/runtime/marketSaleDirectAutomation.test.ts
+PASS src/runtime/externalTelemetry.test.ts
+PASS src/runtime/taskSystem/snapshot.test.ts
+PASS src/runtime/consoleCommands.test.ts
+PASS src/runtime/towerControl.test.ts
+PASS src/runtime/defenseFocusFire.test.ts
+PASS test/baseline/treasuryRemediationIBaseline.test.ts
+PASS src/runtime/treasury/treasuryR4BaselineReplicators.test.ts
+  ● Console
+
+    console.log
+      R1-TRACE {"budgetTrace":[{"at":"after-nested-beginTick","budgetUsed":1},{"at":"after-endTick","budgetUsed":1},{"at":"after-beginTick","budgetUsed":7}],"releaseCalls":["ext:r1:D0","ext:r1:D1","ext:r1:D2"],"nestedStats":{"recovered":0,"closed":0,"cleaned":0,"cancelled":0},"remaining":5}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR4BaselineReplicators.test.ts:197:13)
+
+PASS src/roles/homeDefender.test.ts
+PASS src/runtime/resourceControl.test.ts
+PASS src/runtime/spawnPlanner.test.ts
+PASS src/runtime/empireInventoryShadow.test.ts
+  ● Console
+
+    console.log
+      [inventory-shadow] parity mismatch +5 this check (total 5): tick=10000 room=<empire> resource=energy field=empireTotal index=6200 direct=1200
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +7 this check (total 7): tick=10000 room=<creeps>:cargo resource=- field=oracleStoreTotal index=30 direct=99
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +3 this check (total 3): tick=10040 room=W1N57 resource=- field=factoryUsedCapacity index=40 direct=0
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +3 this check (total 3): tick=10000 room=W1N57 resource=- field=factoryUsedCapacity index=40 direct=0
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +1 this check (total 1): tick=10000 room=W1N57:storage resource=silicon field=oracleResourceAmount index=0 direct=42
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+PASS src/runtime/colonization.travelPath.test.ts
+PASS src/runtime/marketSaleRuntime.test.ts
+PASS src/movement/pathing.crossTickCache.test.ts
+PASS src/runtime/marketSalePlanningGate.test.ts
+PASS src/runtime/treasury/treasuryImmutableRegistries.test.ts
+PASS src/runtime/marketDirectContinuousLedger.test.ts
+PASS src/runtime/treasury/treasuryCore.test.ts
+PASS src/runtime/memorySizeRegression.test.ts
+PASS src/runtime/defenseStationaryRampartOwnership.test.ts
+PASS src/runtime/marketSaleProtectionMemo.test.ts
+PASS src/runtime/localDispatchOwnership.target.test.ts
+PASS src/runtime/powerBankBoost.test.ts
+PASS src/mount/mountCreep.lifecycleCache.test.ts
+PASS src/runtime/marketDirectContinuousAutomation.test.ts
+PASS src/runtime/synthesisControlStateMachine.test.ts
+PASS src/runtime/defensePreallocationRampartOwnership.test.ts
+PASS src/runtime/defenseGlobalRampartFootprints.test.ts
+PASS src/runtime/empireInventoryIndex.test.ts
+PASS src/roles/index.test.ts
+PASS src/runtime/defenseFallbackReallocation.test.ts
+PASS src/runtime/defenseAllActorReservation.test.ts
+PASS test/defenseMode.test.ts
+PASS src/runtime/console/operationsCommands.test.ts
+PASS src/roles/carrier.test.ts
+PASS src/runtime/hubFlag.test.ts
+PASS src/runtime/treasury/treasuryTransactionIdVectors.test.ts
+PASS src/runtime/flagHauling.test.ts
+  ● Console
+
+    console.log
+      [flag-haul] started: flag=HAUL target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:322:13)
+
+PASS src/runtime/homeDefense.test.ts
+PASS src/runtime/treasury/treasuryCommitments.test.ts
+PASS src/runtime/treasury/treasuryActionContract.test.ts
+PASS src/runtime/nukerControl.test.ts
+PASS src/runtime/workerTaskPool.test.ts
+PASS src/roles/powerBankHauler.test.ts
+PASS src/runtime/marketSaleProtectionAdapter.test.ts
+PASS src/runtime/defenseFrontAware.test.ts
+PASS src/runtime/hubProgress.test.ts
+PASS src/movement/routing.backoff.test.ts
+PASS src/runtime/marketSaleConfig.test.ts
+PASS src/runtime/colonization.test.ts
+  ● Console
+
+    console.log
+      [colonization] rescout W1N2: pending scout route invalid or interrupted by dangerous room
+
+      at requestScoutRescan (src/runtime/colonization.ts:983:11)
+
+    console.log
+      [colonization] abandon W1N2: flag removed by player
+
+      at abandonColonization (src/runtime/colonization.ts:1042:11)
+
+    console.log
+      [colonization] abandon W1N2: flag removed by player
+
+      at abandonColonization (src/runtime/colonization.ts:1042:11)
+
+PASS src/main.test.ts
+PASS src/runtime/roomWorkforce.test.ts
+PASS src/roles/carrier.bestCandidate.test.ts
+PASS src/mount/mountSpawn.test.ts
+PASS src/runtime/powerCreepControl.test.ts
+PASS src/runtime/treasury/treasuryCommitmentCompleteness.test.ts
+PASS src/runtime/marketBaseResourcePolicy.test.ts
+PASS src/movement/staticRoomMatrix.test.ts
+PASS src/runtime/crossShardColonization.test.ts
+PASS src/runtime/boostControl.test.ts
+  ● Console
+
+    console.log
+      [boostControl] buy W1N1: XUH2O=1000 price=5.000 cost=100
+
+      at buyBoostIfNeeded (src/runtime/boostControl.ts:151:13)
+
+PASS src/runtime/workerTaskPool.characterization.test.ts
+PASS src/runtime/hubUpgradeControl.test.ts
+PASS src/movement/pathing.test.ts
+PASS src/movement/routing.dynamicObstacles.test.ts
+PASS src/runtime/powerBankObserver.test.ts
+PASS src/roles/energyTargets.test.ts
+PASS src/runtime/treasury/treasuryShadow.test.ts
+  ● Console
+
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5001 newMismatches=1 fields=stale_epoch sample={"checkedAtTick":5001,"field":"stale_epoch","roomName":"*","treasuryValue":5000,"otherValue":5001}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+PASS src/runtime/taskSystem/adapters/spawnProduction.test.ts
+PASS src/config/spawnProfiles.test.ts
+PASS src/runtime/linkControl.test.ts
+PASS src/movement/routing.test.ts
+PASS src/runtime/minerBodyPolicy.test.ts
+PASS src/runtime/marketSalePricingAdapter.test.ts
+PASS src/roles/worker.test.ts
+PASS src/runtime/dispatchOwnership/actorBinding.test.ts
+PASS src/runtime/towerControl.scanThrottle.test.ts
+PASS src/runtime/marketSaleFeeLedger.test.ts
+PASS src/runtime/roomPlannerConstruction.test.ts
+PASS src/roles/shared.test.ts
+PASS src/runtime/resourceReservation.test.ts
+PASS src/roles/remoteMiningCarrier.test.ts
+PASS test/miner.test.ts
+PASS src/runtime/console/resourceTransferCommands.test.ts
+PASS src/runtime/remoteMining.test.ts
+PASS src/runtime/mineralExtraction.test.ts
+PASS src/roles/remoteCarrier.test.ts
+PASS src/runtime/carrierTaskBoard.test.ts
+PASS src/runtime/deployAnnounce.test.ts
+PASS src/runtime/taskSystem/registry.test.ts
+PASS src/runtime/marketSaleLifecycle.test.ts
+PASS src/movement/routing.cachedPathValidation.test.ts
+PASS src/runtime/roomEnergyPolicy.test.ts
+PASS src/runtime/marketSaleDirectShadow.test.ts
+PASS src/runtime/cpuPhaseProfiler.lowOverhead.test.ts
+PASS scripts/lib/deployGuard.test.ts
+PASS src/runtime/powerSpawnControl.test.ts
+PASS src/runtime/hubProtectionSnapshot.test.ts
+PASS src/runtime/spawnQueueOwnership.test.ts
+PASS src/runtime/powerBankStatus.test.ts
+PASS src/runtime/cpuMonitor.test.ts
+PASS src/runtime/taskSystem/adapters/workflowAdapters.test.ts
+PASS src/runtime/taskSystem/adapters/warWorkflow.test.ts
+PASS src/runtime/treasury/treasuryCanonicalEncoding.test.ts
+PASS src/runtime/marketDirectContinuousPlanner.test.ts
+PASS src/roles/scout.test.ts
+PASS src/roles/healer.test.ts
+PASS src/runtime/treasury/treasuryCapacityViews.test.ts
+PASS src/runtime/marketSaleDiagnostics.test.ts
+PASS src/runtime/empireInventoryBenchmark.test.ts
+  ● Console
+
+    console.log
+      [inventory-bench] rooms=8 legacyPerResourceCalls=1344 newKeyEnumeration=61 legacyScanMs=1.245 indexBuildMs=1.090
+
+      at Object.<anonymous> (src/runtime/empireInventoryBenchmark.test.ts:166:13)
+
+PASS src/movement/roomTopologyRevision.test.ts
+PASS src/movement/traffic.naturalObstacles.test.ts
+PASS src/runtime/safeZoneHelpers.test.ts
+PASS src/movement/traffic.test.ts
+PASS src/runtime/carrierTaskBoard.revisionCache.test.ts
+PASS src/runtime/powerBankDiscovery.test.ts
+PASS src/roles/mineralHarvester.test.ts
+PASS src/runtime/productionStateMachine.test.ts
+PASS src/roles/upgrader.test.ts
+PASS src/runtime/emergencySpawning.test.ts
+PASS src/runtime/terminalActionEnergyOwnership.test.ts
+PASS src/runtime/taskSystem/model.test.ts
+PASS src/runtime/marketSaleDirectPending.test.ts
+PASS src/runtime/powerBankViability.test.ts
+PASS src/runtime/taskSystem/adapters/factoryCommand.test.ts
+PASS src/runtime/taskSystem/catalog.test.ts
+PASS src/runtime/roomWorkforceIdentity.test.ts
+PASS src/runtime/linkNetworkMemory.test.ts
+PASS src/runtime/marketSaleDirectEngineAssumptions.test.ts
+PASS src/types/roleCatalog.test.ts
+PASS src/runtime/terminalBootstrapRecovery.test.ts
+PASS src/runtime/marketActionArbiter.test.ts
+PASS src/runtime/configNormalize.test.ts
+PASS src/runtime/safeZone.test.ts
+PASS src/runtime/marketSalePricing.test.ts
+PASS src/runtime/taskSystem/adapters/powerCreepAction.test.ts
+PASS src/runtime/taskSystem/adapters/carrierLogistics.test.ts
+PASS src/runtime/tickContext.typedIndex.test.ts
+PASS src/runtime/marketSaleExposure.test.ts
+PASS src/movement/metrics.flush.test.ts
+PASS src/runtime/logistics/capacityHeadroom.test.ts
+PASS src/runtime/energyPickupReservation.test.ts
+PASS src/roles/meleeAttacker.test.ts
+PASS src/runtime/taskSystem/adapters/resourceTransfer.test.ts
+PASS src/runtime/taskSystem/adapters/powerBankWorkflow.test.ts
+PASS src/runtime/creepAssignmentState.test.ts
+PASS src/roles/powerBankAttacker.test.ts
+PASS test/tickContext.test.ts
+PASS src/runtime/dispatchOwnership/carrierAmountSlice.test.ts
+PASS src/runtime/marketSaleDirectPricing.test.ts
+PASS src/roles/powerBankScout.test.ts
+PASS src/runtime/marketSaleProtection.test.ts
+PASS src/roles/remoteWorker.test.ts
+PASS src/roles/combatBoosts.test.ts
+PASS src/runtime/factoryControl.test.ts
+PASS test/harvester.test.ts
+PASS src/runtime/dispatchOwnership/workerSlot.test.ts
+PASS src/runtime/roomTypes.test.ts
+PASS src/roles/remoteDefender.test.ts
+PASS src/runtime/reactionMap.test.ts
+PASS src/runtime/autoReserveFlag.test.ts
+  ● Console
+
+    console.log
+      [reserve] W1N1 entered reserve mode at 74999 energy
+
+      at runAutoReserveFlags (src/runtime/autoReserveFlag.ts:38:17)
+
+PASS src/visual/palette.test.ts
+PASS src/roles/remoteMiningReserver.test.ts
+PASS src/roles/powerBankHealer.test.ts
+PASS src/runtime/taskSystem/adapters/workerWork.test.ts
+PASS src/runtime/powerBankConstants.test.ts
+PASS src/runtime/logistics/receiverCapacityLedger.test.ts
+PASS src/runtime/dispatchOwnership/ref.test.ts
+PASS src/runtime/upgraderPolicy.test.ts
+PASS src/roles/claimer.test.ts
+PASS src/movement/common.test.ts
+PASS src/roles/colonizerHarvester.test.ts
+PASS src/runtime/localCarrierDestinationCapacity.test.ts
+PASS src/runtime/pixelGenerator.test.ts
+PASS src/runtime/memoryAudit.test.ts
+PASS src/runtime/hostilePriorities.test.ts
+PASS src/visual/panel.test.ts
+PASS src/runtime/carrierBodyPolicy.test.ts
+PASS src/runtime/actionLog.test.ts
+
+Test Suites: 236 passed, 236 total
+Tests:       1420 passed, 1420 total
+Snapshots:   0 total
+Time:        615.784 s, estimated 640 s
+Ran all test suites.
+Test results written to: C:\Users\15027\AppData\Local\Temp\tmp.jEQBeLQIyW\jest-full.json
+PASS src/runtime/treasury/treasuryKernelStress.test.ts (291.797 s)
+PASS src/runtime/marketBaseResourcePermit.test.ts (97.245 s)
+PASS src/runtime/marketBaseResourceAutomation.test.ts (39.107 s)
+PASS test/localDispatchPerformanceBaseline.test.ts (38.284 s)
+  ● Console
+
+    console.log
+      LOCAL_DISPATCH_PERFORMANCE_BASELINE {"schema":"local-dispatch-performance-baseline/v2","implementation":"full-ref-local-dispatch","fixture":{"rooms":20,"tasksPerRoom":20,"totalTasksPerDomain":400,"actors":50},"protocol":{"clock":"process.hrtime.bigint","timingUnit":"milliseconds","warmupBatches":5,"measuredBatches":30,"iterationsPerBatch":100,"p95":"nearest-rank","timingPassFail":"observation-only; deployment CPU gate is the live same-shard window","complexityPassFail":"deterministic public-input/read-DTO counts"},"preChangeEvidence":{"source":"openspec/changes/local-dispatch-ownership/evidence/pre-change-baseline.md","commit":"df2e1af60a035fd99406888d69bba9903e8a7118","observation":{"workerCurrent":{"median":12.083,"p95":12.378},"workerRelease":{"median":39.879,"p95":40.633},"carrierList":{"median":13.476,"p95":14.086},"carrierClaim":{"median":12.937,"p95":13.586},"carrierReplace":{"median":61.892,"p95":66.713}}},"scenarios":{"workerCurrent":{"samples":[465.4671,387.5616,451.119,387.6874,406.4471,403.3449,372.0603,429.9216,404.9963,402.0941,415.163,375.3863,428.0373,395.0148,411.815,456.8289,369.8934,413.5441,408.4198,416.4945,443.0798,499.2474,394.9146,490.4375,578.2927,590.6803,555.521,607.3692,471.7999,411.1142],"median":414.35355,"p95":590.6803,"min":369.8934,"max":607.3692,"relativeToPreChange":{"median":34.292274,"p95":47.720173}},"workerRelease":{"samples":[355.5913,310.9026,297.0722,358.4683,298.5427,315.8856,361.141,308.0647,301.4813,330.9566,324.603,319.5325,320.3275,348.6629,307.2208,314.6315,369.6179,309.2415,297.1737,344.8292,303.716,332.0844,351.5004,338.7346,300.0603,344.0444,309.6858,432.4335,328.015,324.3427],"median":322.3351,"p95":369.6179,"min":297.0722,"max":432.4335,"relativeToPreChange":{"median":8.082828,"p95":9.096495}},"carrierList":{"samples":[8.412,8.8079,7.1107,6.0988,6.4235,5.9491,7.3108,7.2265,6.2033,7.2562,7.6219,8.0434,7.5583,6.6645,6.8233,7.373,6.2304,6.7733,6.7828,6.1894,7.4592,6.9953,7.5309,7.3562,6.54,10.08,5.9768,6.9005,6.8757,6.6592],"median":6.9479,"p95":8.8079,"min":5.9491,"max":10.08,"relativeToPreChange":{"median":0.515576,"p95":0.625295}},"carrierClaim":{"samples":[79.5822,61.2568,59.3862,71.5283,97.6927,90.4005,79.9323,74.6149,82.0571,62.0462,70.0961,66.6149,65.8111,61.7843,64.9783,75.7927,57.9047,68.4028,62.4761,60.4414,62.8517,62.2703,71.2878,80.649,96.2299,71.9431,63.7553,65.1542,62.3857,61.5658],"median":66.213,"p95":96.2299,"min":57.9047,"max":97.6927,"relativeToPreChange":{"median":5.118111,"p95":7.083019}},"carrierReplace":{"samples":[196.5774,173.5697,195.3231,185.5209,175.1691,182.6365,190.0455,193.2967,177.7215,191.1626,180.9949,188.1046,182.0399,212.3479,189.1944,187.3003,179.6467,187.2268,202.0934,179.2772,201.3354,189.4967,200.8743,201.7488,175.8574,193.9593,203.9916,217.6732,193.663,193.357],"median":189.7711,"p95":212.3479,"min":173.5697,"max":217.6732,"relativeToPreChange":{"median":3.066165,"p95":3.183006}}},"complexityGates":{"workerRelease":{"acquireCalls":5000,"releaseCalls":5000,"exactRoomDescriptorReads":5000,"exactTaskDescriptorReads":5000,"boardEnumerations":0},"workerAcquireReconcile":{"acquireCalls":50,"reconcileCalls":50,"assignedCreepsDescriptorReads":150},"carrier":{"exact":{"exactCalls":400,"exactResults":400,"refDescriptorReads":2400},"list":{"listCalls":20,"listResults":400},"replace":{"replaceCalls":2000,"replaceResults":40000,"draftIndexReads":40000,"stepIndexReads":40000},"claim":{"claimCalls":5000,"successfulClaims":5000,"releasedClaims":5000,"claimStepIndexReads":5000,"actorDescriptorReads":5000,"actorEnumerations":0},"readDto":{"snapshotCalls":1,"snapshotEntries":400,"stepArrayEnumerations":400,"stepEntryDescriptorReads":800}}},"limitations":["Node/Jest wall-clock is not Screeps CPU and old/current samples came from separate processes.","Relative old/current wall-clock ratios are observations, never pass/fail authorization.","Worker current starts bound; Carrier claim is the uncontended immediate-release path.","Carrier complexity probes observe public inputs/read DTOs and never the private Map hierarchy."]}
+
+      at Object.<anonymous> (test/localDispatchPerformanceBaseline.test.ts:761:13)
+
+PASS test/memoryDeclarationBoundaries.test.ts (23.964 s)
+PASS test/ambientGlobalAbiBoundaries.test.ts (18.914 s)
+PASS src/runtime/treasury/treasuryRewrite4Lifecycle.test.ts (14.297 s)
+PASS test/typescriptConfigBoundaries.test.ts (11.028 s)
+PASS scripts/monitor-service.test.ts (9.769 s)
+PASS test/localDispatchArchitectureBoundaries.test.ts (9.227 s)
+PASS src/runtime/treasury/treasuryRewrite2Lifecycle.test.ts (6.587 s)
+PASS test/taskSystemArchitectureBoundaries.test.ts
+PASS src/runtime/treasury/treasuryRemediationIVKernel.test.ts
+  ● Console
+
+    console.log
+      H18-TRACE completed=true observe=12 bounded=13/40 recovery=1/10 checkpoints=54 portEvents=96 finalClose=25 final={"phases":{"closing":0,"outcome_unknown":20,"retry_ready":0,"pending":0,"other":0},"remaining":0,"active":20,"ring":44,"chars":21879,"utf8Bytes":21879,"budgetUsed":2}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIVKernel.test.ts:1095:15)
+
+PASS test/taskSystemCatalogBoundaries.test.ts
+PASS test/roleIdentityCatalogBoundaries.test.ts
+PASS src/runtime/linkNetworkMemoryOwnership.test.ts
+PASS src/runtime/bootstrapArchitecture.test.ts
+PASS src/runtime/marketBaseResourceLedger.test.ts
+PASS src/runtime/marketSaleAutomation.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIIKernel.test.ts
+PASS src/runtime/treasury/treasuryKernelAcceptance.test.ts
+PASS src/runtime/treasury/treasuryRemediationIKernel.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Acceptance.test.ts
+PASS src/runtime/treasury/treasuryRewrite4Acceptance.test.ts
+PASS src/runtime/treasury/treasuryRemediationVKernel.test.ts
+  ● Console
+
+    console.log
+      I13-COST {"fixture1":{"fixture":"empty-endTick","reads":7,"writeAttempts":1,"writesAllowed":1,"writesDropped":0,"logicalSharesUsed":0,"closurePersisted":true},"fixture2":{"fixture":"recover-A-then-clean-8C","phaseEndTick":{"recoveredToUnknown":1,"closurePersisted":true},"tick1":{"reads":41,"writeAttempts":7,"writesAllowed":7,"cleaned":2,"sharesUsed":7,"releaseCalls":2},"completion":{"ticks":2,"reads":77,"writeAttempts":14,"writesAllowed":14,"totalReleaseCalls":8,"perTickReleases":[4,2],"phaseAfter":"retry_ready"},"awaitingServiceAfterTick1":6}}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:653:13)
+
+    console.log
+      I13-COST {"fixture3":{"fixture":"closure-publish-failure","writeAttempts":2,"writesAllowed":0,"writesDropped":2,"reads":12,"closurePersisted":false},"fixture4":{"fixture":"64-active-mixed-advance","activeCount":64,"beginTick":{"recovered":2,"cleaned":6,"closed":0,"cancelled":0},"endTick":{"recoveredToUnknown":0,"closurePersisted":true},"reads":53,"writeAttempts":10,"writesAllowed":10,"sharesUsed":8}}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:748:13)
+
+PASS src/runtime/treasury/treasuryKernelArchitecture.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIIService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIVService.test.ts
+PASS test/treasuryCommitmentInvalidationBoundaries.test.ts
+PASS src/runtime/logistics/resourceTransferTasks.test.ts
+PASS src/runtime/treasury/treasuryRemediationIService.test.ts
+PASS src/runtime/treasury/treasuryRewrite2Acceptance.test.ts
+PASS src/mount/mountCreep.test.ts
+PASS src/runtime/treasury/treasuryRemediationVService.test.ts
+PASS src/runtime/resourceControl.capacityRegression.test.ts
+PASS src/runtime/treasury/treasuryKernel.test.ts
+PASS src/runtime/marketSaleSession.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Lifecycle.test.ts
+PASS src/runtime/hubProductionIntegration.test.ts
+PASS src/runtime/consoleCommands.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIKernel.test.ts
+PASS src/movement/routing.segmentCache.test.ts
+PASS src/runtime/hubPlanner.test.ts
+PASS src/runtime/powerBankHarvest.test.ts
+PASS src/runtime/treasury/treasuryRemediationVIKernel.test.ts
+PASS src/runtime/synthesisControl.test.ts
+PASS src/runtime/marketSalePlanningAuthorization.test.ts
+PASS test/warWorkflowLifecycleBoundaries.test.ts
+PASS src/runtime/warControl.test.ts
+PASS src/runtime/bootstrap.test.ts
+PASS src/runtime/resourceControl.test.ts
+PASS src/runtime/taskSystem/snapshot.test.ts
+PASS test/baseline/treasuryRemediationIIBaseline.test.ts
+PASS src/runtime/console/operationsCommands.test.ts
+PASS src/runtime/marketSaleDirectAutomation.test.ts
+PASS src/runtime/hubFlag.test.ts
+PASS src/runtime/treasury/treasuryTypedOwnerMigration.test.ts
+PASS src/runtime/memoryCleanup.test.ts
+PASS src/runtime/externalTelemetry.test.ts
+PASS src/runtime/treasury/treasuryTransactionIdVectors.test.ts
+PASS test/baseline/treasuryRemediationIBaseline.test.ts
+PASS src/runtime/marketDirectContinuousPolicy.test.ts
+PASS src/roles/index.test.ts
+PASS src/runtime/marketDirectContinuousAutomation.test.ts
+PASS scripts/lib/redactSecrets.test.ts
+PASS src/runtime/marketSalePlanningGate.test.ts
+PASS src/runtime/treasury/treasuryCore.test.ts
+PASS src/runtime/nukerControl.test.ts
+PASS src/runtime/spawnPlanner.test.ts
+PASS src/runtime/memorySizeRegression.test.ts
+PASS src/runtime/marketWriteArchitecture.test.ts
+PASS src/runtime/marketSaleRuntime.test.ts
+PASS src/runtime/defenseFocusFireStateful.test.ts
+PASS src/mount/mountCreep.lifecycleCache.test.ts
+PASS src/roles/carrier.test.ts
+PASS src/runtime/marketDirectContinuousLedger.test.ts
+PASS src/movement/pathing.crossTickCache.test.ts
+PASS src/runtime/treasury/treasuryImmutableRegistries.test.ts
+PASS src/runtime/empireInventoryShadow.test.ts
+  ● Console
+
+    console.log
+      [inventory-shadow] parity mismatch +5 this check (total 5): tick=10000 room=<empire> resource=energy field=empireTotal index=6200 direct=1200
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +7 this check (total 7): tick=10000 room=<creeps>:cargo resource=- field=oracleStoreTotal index=30 direct=99
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +3 this check (total 3): tick=10040 room=W1N57 resource=- field=factoryUsedCapacity index=40 direct=0
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +3 this check (total 3): tick=10000 room=W1N57 resource=- field=factoryUsedCapacity index=40 direct=0
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +1 this check (total 1): tick=10000 room=W1N57:storage resource=silicon field=oracleResourceAmount index=0 direct=42
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+PASS src/runtime/powerBankBoost.test.ts
+PASS src/runtime/localDispatchOwnership.target.test.ts
+PASS src/runtime/treasury/treasuryR4BaselineReplicators.test.ts
+  ● Console
+
+    console.log
+      R1-TRACE {"budgetTrace":[{"at":"after-nested-beginTick","budgetUsed":1},{"at":"after-endTick","budgetUsed":1},{"at":"after-beginTick","budgetUsed":7}],"releaseCalls":["ext:r1:D0","ext:r1:D1","ext:r1:D2"],"nestedStats":{"recovered":0,"closed":0,"cleaned":0,"cancelled":0},"remaining":5}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR4BaselineReplicators.test.ts:197:13)
+
+PASS src/runtime/synthesisControlStateMachine.test.ts
+PASS src/runtime/marketSaleProtectionMemo.test.ts
+PASS src/config/spawnProfiles.test.ts
+PASS src/runtime/empireInventoryIndex.test.ts
+PASS src/runtime/marketSaleFeeLedger.test.ts
+PASS src/runtime/treasury/treasuryActionContract.test.ts
+PASS src/runtime/defenseFrontAware.test.ts
+PASS src/runtime/colonization.test.ts
+  ● Console
+
+    console.log
+      [colonization] rescout W1N2: pending scout route invalid or interrupted by dangerous room
+
+      at requestScoutRescan (src/runtime/colonization.ts:983:11)
+
+    console.log
+      [colonization] abandon W1N2: flag removed by player
+
+      at abandonColonization (src/runtime/colonization.ts:1042:11)
+
+    console.log
+      [colonization] abandon W1N2: flag removed by player
+
+      at abandonColonization (src/runtime/colonization.ts:1042:11)
+
+PASS src/runtime/towerControl.test.ts
+PASS src/runtime/treasury/treasuryCommitments.test.ts
+PASS src/runtime/towerControl.scanThrottle.test.ts
+PASS src/movement/routing.backoff.test.ts
+PASS src/roles/carrier.bestCandidate.test.ts
+PASS src/runtime/defenseFocusFire.test.ts
+PASS src/runtime/cpuPhaseProfiler.lowOverhead.test.ts
+PASS src/runtime/boostControl.test.ts
+  ● Console
+
+    console.log
+      [boostControl] buy W1N1: XUH2O=1000 price=5.000 cost=100
+
+      at buyBoostIfNeeded (src/runtime/boostControl.ts:151:13)
+
+PASS src/mount/mountSpawn.test.ts
+PASS src/movement/routing.cachedPathValidation.test.ts
+PASS src/main.test.ts
+PASS src/runtime/colonization.travelPath.test.ts
+PASS src/roles/remoteMiningCarrier.test.ts
+PASS src/movement/routing.test.ts
+PASS src/runtime/treasury/treasuryCapacityViews.test.ts
+PASS src/runtime/roomWorkforce.test.ts
+PASS src/runtime/defensePreallocationRampartOwnership.test.ts
+PASS src/runtime/workerTaskPool.characterization.test.ts
+PASS src/runtime/defenseStationaryRampartOwnership.test.ts
+PASS src/runtime/marketSaleDirectShadow.test.ts
+PASS src/runtime/remoteMining.test.ts
+PASS src/runtime/marketSaleProtectionAdapter.test.ts
+PASS src/runtime/marketSaleConfig.test.ts
+PASS src/runtime/hubProtectionSnapshot.test.ts
+PASS src/runtime/flagHauling.test.ts
+  ● Console
+
+    console.log
+      [flag-haul] started: flag=HAUL target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:322:13)
+
+PASS src/runtime/crossShardColonization.test.ts
+PASS src/movement/roomTopologyRevision.test.ts
+PASS src/runtime/defenseAllActorReservation.test.ts
+PASS src/runtime/roomPlannerConstruction.test.ts
+PASS src/runtime/linkControl.test.ts
+PASS src/runtime/empireInventoryBenchmark.test.ts
+  ● Console
+
+    console.log
+      [inventory-bench] rooms=8 legacyPerResourceCalls=1344 newKeyEnumeration=61 legacyScanMs=0.620 indexBuildMs=0.472
+
+      at Object.<anonymous> (src/runtime/empireInventoryBenchmark.test.ts:166:13)
+
+PASS src/runtime/treasury/treasuryCanonicalEncoding.test.ts
+PASS src/runtime/console/resourceTransferCommands.test.ts
+PASS src/runtime/resourceReservation.test.ts
+PASS src/roles/shared.test.ts
+PASS src/runtime/treasury/treasuryShadow.test.ts
+  ● Console
+
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5001 newMismatches=1 fields=stale_epoch sample={"checkedAtTick":5001,"field":"stale_epoch","roomName":"*","treasuryValue":5000,"otherValue":5001}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+PASS src/runtime/taskSystem/registry.test.ts
+PASS src/runtime/marketDirectContinuousPlanner.test.ts
+PASS src/runtime/cpuMonitor.test.ts
+PASS src/roles/remoteCarrier.test.ts
+PASS src/roles/energyTargets.test.ts
+PASS src/roles/homeDefender.test.ts
+PASS scripts/lib/deployGuard.test.ts
+PASS src/runtime/powerSpawnControl.test.ts
+PASS src/runtime/homeDefense.test.ts
+PASS src/runtime/factoryControl.test.ts
+PASS src/runtime/treasury/treasuryCommitmentCompleteness.test.ts
+PASS src/runtime/defenseGlobalRampartFootprints.test.ts
+PASS src/movement/pathing.test.ts
+PASS src/runtime/taskSystem/adapters/workflowAdapters.test.ts
+PASS src/runtime/safeZoneHelpers.test.ts
+PASS src/runtime/carrierTaskBoard.revisionCache.test.ts
+PASS src/runtime/mineralExtraction.test.ts
+PASS src/runtime/memoryAudit.test.ts
+PASS src/runtime/marketBaseResourcePolicy.test.ts
+PASS src/runtime/hubUpgradeControl.test.ts
+PASS src/runtime/defenseFallbackReallocation.test.ts
+PASS src/roles/powerBankHauler.test.ts
+PASS src/roles/claimer.test.ts
+PASS src/movement/traffic.naturalObstacles.test.ts
+PASS src/runtime/taskSystem/adapters/workerWork.test.ts
+PASS src/runtime/marketSaleDiagnostics.test.ts
+PASS src/types/roleCatalog.test.ts
+PASS src/runtime/actionLog.test.ts
+PASS src/runtime/workerTaskPool.test.ts
+PASS src/runtime/hubProgress.test.ts
+PASS src/roles/healer.test.ts
+PASS src/runtime/dispatchOwnership/workerSlot.test.ts
+PASS src/visual/panel.test.ts
+PASS src/movement/staticRoomMatrix.test.ts
+PASS src/runtime/taskSystem/adapters/warWorkflow.test.ts
+PASS src/runtime/marketSalePricingAdapter.test.ts
+PASS test/harvester.test.ts
+PASS src/runtime/powerBankStatus.test.ts
+PASS test/defenseMode.test.ts
+PASS src/runtime/taskSystem/adapters/spawnProduction.test.ts
+PASS src/runtime/taskSystem/adapters/powerBankWorkflow.test.ts
+PASS src/runtime/spawnQueueOwnership.test.ts
+PASS src/runtime/minerBodyPolicy.test.ts
+PASS src/runtime/deployAnnounce.test.ts
+PASS src/roles/scout.test.ts
+PASS src/movement/routing.dynamicObstacles.test.ts
+PASS src/runtime/dispatchOwnership/actorBinding.test.ts
+PASS src/runtime/roomEnergyPolicy.test.ts
+PASS src/runtime/hostilePriorities.test.ts
+PASS src/runtime/autoReserveFlag.test.ts
+  ● Console
+
+    console.log
+      [reserve] W1N1 entered reserve mode at 74999 energy
+
+      at runAutoReserveFlags (src/runtime/autoReserveFlag.ts:38:17)
+
+PASS src/roles/remoteDefender.test.ts
+PASS src/roles/powerBankHealer.test.ts
+PASS src/runtime/powerBankObserver.test.ts
+PASS src/visual/palette.test.ts
+PASS src/runtime/roomTypes.test.ts
+PASS src/runtime/carrierTaskBoard.test.ts
+PASS src/roles/remoteMiningReserver.test.ts
+PASS src/roles/powerBankAttacker.test.ts
+PASS src/roles/colonizerHarvester.test.ts
+PASS src/runtime/marketSaleDirectPricing.test.ts
+PASS src/runtime/localCarrierDestinationCapacity.test.ts
+PASS src/runtime/carrierBodyPolicy.test.ts
+PASS src/runtime/creepAssignmentState.test.ts
+PASS src/roles/powerBankScout.test.ts
+PASS src/runtime/terminalBootstrapRecovery.test.ts
+PASS src/runtime/marketSaleLifecycle.test.ts
+PASS src/roles/upgrader.test.ts
+PASS src/roles/remoteWorker.test.ts
+PASS src/runtime/marketSaleProtection.test.ts
+PASS src/roles/combatBoosts.test.ts
+PASS test/miner.test.ts
+PASS src/runtime/dispatchOwnership/ref.test.ts
+PASS src/runtime/upgraderPolicy.test.ts
+PASS src/runtime/powerBankConstants.test.ts
+PASS src/roles/mineralHarvester.test.ts
+PASS src/movement/traffic.test.ts
+PASS test/tickContext.test.ts
+PASS src/runtime/logistics/receiverCapacityLedger.test.ts
+PASS src/runtime/dispatchOwnership/carrierAmountSlice.test.ts
+PASS src/runtime/powerCreepControl.test.ts
+PASS src/runtime/pixelGenerator.test.ts
+PASS src/roles/worker.test.ts
+PASS src/movement/common.test.ts
+PASS src/runtime/reactionMap.test.ts
+PASS src/runtime/taskSystem/adapters/carrierLogistics.test.ts
+PASS src/runtime/linkNetworkMemory.test.ts
+PASS src/runtime/roomWorkforceIdentity.test.ts
+PASS src/runtime/emergencySpawning.test.ts
+PASS src/runtime/tickContext.typedIndex.test.ts
+PASS src/runtime/powerBankDiscovery.test.ts
+PASS src/roles/meleeAttacker.test.ts
+PASS src/runtime/taskSystem/adapters/factoryCommand.test.ts
+PASS src/runtime/marketSaleDirectEngineAssumptions.test.ts
+PASS src/runtime/taskSystem/model.test.ts
+PASS src/runtime/marketSalePricing.test.ts
+PASS src/runtime/taskSystem/adapters/powerCreepAction.test.ts
+PASS src/runtime/marketSaleDirectPending.test.ts
+PASS src/runtime/marketSaleExposure.test.ts
+PASS src/runtime/taskSystem/adapters/resourceTransfer.test.ts
+PASS src/runtime/powerBankViability.test.ts
+PASS src/runtime/marketActionArbiter.test.ts
+PASS src/movement/metrics.flush.test.ts
+PASS src/runtime/configNormalize.test.ts
+PASS src/runtime/safeZone.test.ts
+PASS src/runtime/energyPickupReservation.test.ts
+PASS src/runtime/taskSystem/catalog.test.ts
+PASS src/runtime/logistics/capacityHeadroom.test.ts
+PASS src/runtime/terminalActionEnergyOwnership.test.ts
+PASS src/runtime/productionStateMachine.test.ts
+
+Test Suites: 236 passed, 236 total
+Tests:       1420 passed, 1420 total
+Snapshots:   0 total
+Time:        643.508 s
+Ran all test suites.
+Test results written to: C:\Users\15027\AppData\Local\Temp\screeps-jest-budget-XFGOWY\results.json
+{"status":"JEST_TEST_BUDGET=PASSED","suites":236,"tests":1420,"manifest":"test/test-suite-budget.json"}
+node:internal/modules/cjs/loader:1383
+  const err = new Error(message);
+              ^
+
+Error: Cannot find module 'typescript'
+Require stack:
+- C:\Users\15027\AppData\Local\Temp\tmp.jEQBeLQIyW\verify-seal-trace.mjs
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12)
+    at require (node:internal/modules/helpers:147:16)
+    at file:///C:/Users/15027/AppData/Local/Temp/tmp.jEQBeLQIyW/verify-seal-trace.mjs:8:12
+    at ModuleJob.run (node:internal/modules/esm/module_job:345:25) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\15027\\AppData\\Local\\Temp\\tmp.jEQBeLQIyW\\verify-seal-trace.mjs'
+  ]
+}
+
+Node.js v22.19.0

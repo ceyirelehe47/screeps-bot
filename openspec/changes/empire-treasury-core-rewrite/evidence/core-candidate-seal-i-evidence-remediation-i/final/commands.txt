@@ -1,0 +1,42 @@
+# Evidence Remediation I 主验证（任务书 §8.2 模板）
+# 执行目录：D:/code/screeps/screeps-bot（workdir.txt）｜环境：node-version.txt / npm-version.txt
+# 起点：expected-start.txt（7c79071…）｜VALIDATION_HEAD：validation-head.txt（d9cd60e…）
+# 工作树：status-before.txt 空 → …全部步骤… → status-after.txt 空；head-after.txt = validation-head.txt
+# 每步产物：<name>.command.txt（完整参数）+ <name>.log（原始 stdout/stderr）+ <name>.exit-code.txt
+
+# 1. 冻结三组（exit=0 全部零差异）
+production-freeze  git diff --exit-code 869149d… HEAD -- src ':(glob,exclude)src/**/*.test.ts' ':(glob,exclude)src/**/*.spec.ts'
+config-freeze      git diff --exit-code 869149d… HEAD -- package.json package-lock.json rollup.config.js tsconfig.json tsconfig.build.json jest.config.cjs
+defense-freeze     git diff --exit-code 869149d… HEAD -- <defense-prod-files.txt 七个生产文件>
+changes-from-freeze.txt / changes-scripts-test.txt：完整差异清单与 scripts/test 分类（差异仅：IVKernel 测试、
+  test/mock/treasurySealEvidence.ts（非 Jest 收集）、scripts/verify-jest-budget.mjs 与 test/test-suite-budget.json
+  （预算元数据）、openspec 文档/证据——零生产源码/配置/Defense 差异）
+
+# 2. 构建链
+typecheck          npx tsc --noEmit -p tsconfig.json                → exit 0
+typecheck-build    npx tsc --noEmit -p tsconfig.build.json          → exit 0
+build              npm run build                                    → exit 0；bundle-sha256.txt
+                    （91b561fd…——构建嵌入时间与 Git 身份，与上轮 b2999d8c 不同属预期，仅作产物追溯，不判逻辑差异）
+
+# 3. 测试（--runInBand；TREASURY_SEAL_EVIDENCE_DIR 四组独立子目录互不覆盖）
+jest-key           npx jest --runTestsByPath <key-files.txt 五件> --json --outputFile=jest-key.json
+                    → 5 suites / 57 tests 全过（IVKernel 14→17：54+3）；trace-key/…/H18-J06.json
+jest-treasury      npx jest src/runtime/treasury/ --json            → 32 / 574 全过；trace-treasury/…/H18-J06.json
+jest-defense       npx jest --runTestsByPath <defense-files.txt 十一件> --json → 11 / 118 全过
+jest-full          npx jest --runInBand --json                      → 236 / 1420 全过；trace-full/…/H18-J06.json
+budget             node scripts/verify-jest-budget.mjs             → PASSED（236/1420；自带全仓重跑，其临时
+                    results.json 按脚本正常清除——保留 budget.log 完整原始日志与退出码）；trace-budget/…/H18-J06.json
+
+# 4. 尾段
+diff-check         git diff --check                                 → exit 0
+verify-seal-trace  node verify-seal-trace.mjs（调用 VALIDATION_HEAD 已提交核验实现：
+                    git show d9cd60e…:test/mock/treasurySealEvidence.ts → typescript.transpileModule → require；
+                    对四份 H18-J06.json 逐份 sealVerifyTraceCompleteness）
+                    → TRACE_VERIFY=PASS：四份各 bytes=1180356、checkpoints=54、completed=true、problems=0，
+                      各自 sha256 与 verifier 源 blob=fd930a4… 记录于 verify-seal-trace.log
+check-jest-json    node check-jest-json.mjs（四份 Jest JSON 可解析且 failed/pending/todo/runtimeErrors 全 0）
+                    → JEST_JSON=PASS
+
+# 事件记录（如实）：verify-seal-trace 首跑因 /tmp 下 mjs 无法解析 typescript 模块失败（脚本路径问题，
+# 非测试失败；其前全部步骤 exit=0）。修复 require 指向仓库 node_modules 后以 set -e 重跑尾段三步全过
+# （tail-rerun.log；首跑失败现场保留在主验证总日志 mainval-run.log 的归档副本中）。

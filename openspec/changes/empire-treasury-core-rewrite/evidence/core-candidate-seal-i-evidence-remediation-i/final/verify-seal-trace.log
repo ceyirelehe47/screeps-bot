@@ -1,0 +1,6 @@
+verifier-source=d9cd60e07f4c4e7559aec14383ee805aea0e2051:test/mock/treasurySealEvidence.ts blob=fd930a44c47c7a612fc942e8f1d07c30a95d844d
+trace-key/1788778722814-139048/H18-J06.json bytes=1180356 sha256=26ac6de56592fcf584ab305f768fe2c1c8169081f478f999c650ed296cef515d completed=true checkpoints=54 problems=0
+trace-treasury/1788779034992-141404/H18-J06.json bytes=1180356 sha256=fc7d019d42e5009de7d0df571a3414c45ec7fe888777dbbf1f2b5bac3742d97f completed=true checkpoints=54 problems=0
+trace-full/1788779644478-132612/H18-J06.json bytes=1180356 sha256=340812faa73da3da7de683c7e2c8361812d698deeda439a472696e66b33d07eb completed=true checkpoints=54 problems=0
+trace-budget/1788780289591-19996/H18-J06.json bytes=1180356 sha256=fea0a919326ab8b9b34080fe0c0116ae903b2579ef3688a014f8f6f12911a6dd completed=true checkpoints=54 problems=0
+TRACE_VERIFY=PASS (0 failures)

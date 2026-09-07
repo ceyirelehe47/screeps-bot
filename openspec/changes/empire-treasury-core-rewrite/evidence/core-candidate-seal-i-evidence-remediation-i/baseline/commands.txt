@@ -1,0 +1,21 @@
+# 基线反例（起点 7c790712315c0cdde75a262e62b7d728b86a5ed8，隔离 worktree + node_modules junction）
+# worktree: git worktree add --detach /d/code/screeps/seal-ev1-baseline 7c790712315c0cdde75a262e62b7d728b86a5ed8
+#           cmd //c mklink /J D:\code\screeps\seal-ev1-baseline\node_modules D:\code\screeps\screeps-bot\node_modules
+# 工作树状态：起点 HEAD + 未跟踪反例文件 sealEv1Baseline.test.ts（用后即删，不提交）
+
+# 步骤 1：起点实现导出 J06 真实轨迹（V2 反例的合法底版输入）
+TREASURY_SEAL_EVIDENCE_DIR=C:/Users/15027/AppData/Local/Temp/seal-ev1-baseline-evidence/trace \
+  npx jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasury/treasuryRemediationIVKernel.test.ts -t "J06"
+exit=0（12 skipped, 2 passed——-t 过滤下 J06 与其同 it 内断言通过；轨迹导出 trace/1788769298193-98236/H18-J06.json）
+→ j06-export.log
+
+# 步骤 2：基线反例（断言"修复后期望的行为"，起点实现下必须红）
+SEAL_EV1_TRACE_DIR=C:/Users/15027/AppData/Local/Temp/seal-ev1-baseline-evidence/trace \
+  npx jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasury/sealEv1Baseline.test.ts
+exit=1（6 failed, 2 passed, 8 total）
+  红：V1×3（delete invocation/external/outcomeEvidence 经提取+比较 diffs 为空——undefined→null 抹平）
+      V2 A（风险证据整项 null 被跳过）/ B（实际快照漂移不重算、标签仍一致通过）/ C（中间非空 riskDiff 不参与判定）
+  绿：合法对照×2（未修改记录集合一致；未修改真实轨迹完整性核验通过——红灯非一律报错）
+→ baseline-run.log（失败均为行为断言：toBeGreaterThan received 0 / toBe(true) received false；零编译错误/缺模块）
+
+# 反例源码：sealEv1Baseline.test.ts.txt（非执行归档）；输入轨迹：trace/…/H18-J06.json（起点实现导出）

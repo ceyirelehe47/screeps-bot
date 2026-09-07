@@ -1,0 +1,1 @@
+npx jest --config jest.config.cjs src/runtime/treasury/ --runInBand --json --outputFile=/tmp/tmp.jEQBeLQIyW/jest-treasury.json 

@@ -1,0 +1,6 @@
+PASS src/runtime/treasury/treasuryRemediationIVKernel.test.ts (7.879 s)
+      H18-TRACE completed=true observe=12 bounded=13/40 recovery=1/10 checkpoints=54 portEvents=96 finalClose=25 final={"phases":{"closing":0,"outcome_unknown":20,"retry_ready":0,"pending":0,"other":0},"remaining":0,"active":20,"ring":44,"chars":21879,"utf8Bytes":21879,"budgetUsed":2}
+PASS src/runtime/treasury/treasuryRemediationVKernel.test.ts
+PASS src/runtime/treasury/treasuryRemediationIVService.test.ts
+PASS src/runtime/treasury/treasuryRemediationVService.test.ts
+PASS src/runtime/treasury/treasuryRemediationVIKernel.test.ts

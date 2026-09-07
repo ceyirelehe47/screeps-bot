@@ -1,0 +1,15 @@
+{
+  "file": "C:\\Users\\15027\\AppData\\Local\\Temp\\seal-ev1-review\\output\\trace-key\\1788780869682-101808\\H18-J06.json",
+  "bytes": 1180356,
+  "sha256": "8c3bcdc77820e9fa9116be13c5ece2e40319e89d65f2c94ced3554a85addcfff",
+  "completed": true,
+  "checkpointCount": 54,
+  "unknownIdsCount": 20,
+  "plannedObserveTicks": 12,
+  "verifierOk": true,
+  "problemsCount": 0,
+  "problems": [],
+  "verifierSourcePath": "test/mock/treasurySealEvidence.ts",
+  "verifierSourceBlobHash": "fd930a44c47c7a612fc942e8f1d07c30a95d844d",
+  "verifierSourceSha256": "e54dc612602b9ea5cf1f4348dde1cfc801dfa086e21a1e59f778392e2fcfab7c"
+}

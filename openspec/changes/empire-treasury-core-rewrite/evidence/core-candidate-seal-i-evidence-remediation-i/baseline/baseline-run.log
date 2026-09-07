@@ -1,0 +1,119 @@
+FAIL src/runtime/treasury/sealEv1Baseline.test.ts
+  Evidence Remediation I 基线反例（V1 原始记录入口）
+    √ 合法对照：未修改记录集合经提取/JSON 往返/比较一致（起点实现即绿） (8 ms)
+    × 反例：原始记录副本 delete invocation（基线合法 null）经提取+比较必须定位差异 (4 ms)
+    × 反例：原始记录副本 delete external（基线合法 null）必须定位差异 (4 ms)
+    × 反例：原始记录副本 delete outcomeEvidence（基线合法 null）必须定位差异 (2 ms)
+  Evidence Remediation I 基线反例（V2 逐检查点实证核验）
+    √ 合法对照：未修改真实轨迹完整性核验通过（起点实现即绿） (21 ms)
+    × 反例 A：中间检查点风险证据整项 null（riskCheckedIds/unknownRisk/riskDiff）必须报风险证据缺失 (13 ms)
+    × 反例 B：中间检查点实际快照 worstCase 单腿金额漂移、riskDiff 标签仍 null，必须从实际快照重算发现 (16 ms)
+    × 反例 C：中间检查点保存非空风险差异、其余（含终态）一致，不得因终态恢复而放行 (19 ms)
+
+  ● Evidence Remediation I 基线反例（V1 原始记录入口） › 反例：原始记录副本 delete invocation（基线合法 null）经提取+比较必须定位差异
+
+    expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+    [0m [90m 64 |[39m     [36mdelete[39m mutated[[32m"tk1_h18_50"[39m][33m.[39minvocation[33m;[39m
+     [90m 65 |[39m     [36mconst[39m diffs [33m=[39m sealCompareUnknownRisk(baseline[33m,[39m sealSnapshotUnknownRisk(ids[33m,[39m mutated))[33m;[39m
+    [31m[1m>[22m[39m[90m 66 |[39m     expect(diffs[33m.[39mlength)[33m.[39mtoBeGreaterThan([35m0[39m)[33m;[39m
+     [90m    |[39m                          [31m[1m^[22m[39m
+     [90m 67 |[39m     expect(diffs[33m.[39msome((d) [33m=>[39m d[33m.[39mattemptId [33m===[39m [32m"tk1_h18_50"[39m [33m&&[39m d[33m.[39mfield [33m===[39m [32m"invocation"[39m))[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m 68 |[39m   })[33m;[39m
+     [90m 69 |[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/sealEv1Baseline.test.ts:66:26)
+
+  ● Evidence Remediation I 基线反例（V1 原始记录入口） › 反例：原始记录副本 delete external（基线合法 null）必须定位差异
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    [0m [90m 73 |[39m     [36mdelete[39m mutated[[32m"tk1_h18_51"[39m][33m.[39mexternal[33m;[39m
+     [90m 74 |[39m     [36mconst[39m diffs [33m=[39m sealCompareUnknownRisk(baseline[33m,[39m sealSnapshotUnknownRisk(ids[33m,[39m mutated))[33m;[39m
+    [31m[1m>[22m[39m[90m 75 |[39m     expect(diffs[33m.[39msome((d) [33m=>[39m d[33m.[39mattemptId [33m===[39m [32m"tk1_h18_51"[39m [33m&&[39m d[33m.[39mfield [33m===[39m [32m"external"[39m))[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m    |[39m                                                                                       [31m[1m^[22m[39m
+     [90m 76 |[39m   })[33m;[39m
+     [90m 77 |[39m
+     [90m 78 |[39m   it([32m"反例：原始记录副本 delete outcomeEvidence（基线合法 null）必须定位差异"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/runtime/treasury/sealEv1Baseline.test.ts:75:87)
+
+  ● Evidence Remediation I 基线反例（V1 原始记录入口） › 反例：原始记录副本 delete outcomeEvidence（基线合法 null）必须定位差异
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    [0m [90m 81 |[39m     [36mdelete[39m mutated[[32m"tk1_h18_50"[39m][33m.[39moutcomeEvidence[33m;[39m
+     [90m 82 |[39m     [36mconst[39m diffs [33m=[39m sealCompareUnknownRisk(baseline[33m,[39m sealSnapshotUnknownRisk(ids[33m,[39m mutated))[33m;[39m
+    [31m[1m>[22m[39m[90m 83 |[39m     expect(diffs[33m.[39msome((d) [33m=>[39m d[33m.[39mattemptId [33m===[39m [32m"tk1_h18_50"[39m [33m&&[39m d[33m.[39mfield [33m===[39m [32m"outcomeEvidence"[39m))[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m    |[39m                                                                                              [31m[1m^[22m[39m
+     [90m 84 |[39m   })[33m;[39m
+     [90m 85 |[39m })[33m;[39m
+     [90m 86 |[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/sealEv1Baseline.test.ts:83:94)
+
+  ● Evidence Remediation I 基线反例（V2 逐检查点实证核验） › 反例 A：中间检查点风险证据整项 null（riskCheckedIds/unknownRisk/riskDiff）必须报风险证据缺失
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    [0m [90m 105 |[39m       plannedObserveTicks[33m:[39m trace[33m.[39msegments[33m.[39mobserve[33m.[39mactualTicks[33m,[39m
+     [90m 106 |[39m     })[33m;[39m
+    [31m[1m>[22m[39m[90m 107 |[39m     expect(verdict[33m.[39mproblems[33m.[39msome((p) [33m=>[39m p[33m.[39mincludes([32m"风险"[39m)))[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m     |[39m                                                            [31m[1m^[22m[39m
+     [90m 108 |[39m   })[33m;[39m
+     [90m 109 |[39m
+     [90m 110 |[39m   it([32m"反例 B：中间检查点实际快照 worstCase 单腿金额漂移、riskDiff 标签仍 null，必须从实际快照重算发现"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/runtime/treasury/sealEv1Baseline.test.ts:107:60)
+
+  ● Evidence Remediation I 基线反例（V2 逐检查点实证核验） › 反例 B：中间检查点实际快照 worstCase 单腿金额漂移、riskDiff 标签仍 null，必须从实际快照重算发现
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    [0m [90m 119 |[39m       plannedObserveTicks[33m:[39m trace[33m.[39msegments[33m.[39mobserve[33m.[39mactualTicks[33m,[39m
+     [90m 120 |[39m     })[33m;[39m
+    [31m[1m>[22m[39m[90m 121 |[39m     expect(verdict[33m.[39mproblems[33m.[39msome((p) [33m=>[39m p[33m.[39mincludes([32m"worstCase"[39m)))[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m     |[39m                                                                   [31m[1m^[22m[39m
+     [90m 122 |[39m   })[33m;[39m
+     [90m 123 |[39m
+     [90m 124 |[39m   it([32m"反例 C：中间检查点保存非空风险差异、其余（含终态）一致，不得因终态恢复而放行"[39m[33m,[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/runtime/treasury/sealEv1Baseline.test.ts:121:67)
+
+  ● Evidence Remediation I 基线反例（V2 逐检查点实证核验） › 反例 C：中间检查点保存非空风险差异、其余（含终态）一致，不得因终态恢复而放行
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    [0m [90m 130 |[39m       plannedObserveTicks[33m:[39m trace[33m.[39msegments[33m.[39mobserve[33m.[39mactualTicks[33m,[39m
+     [90m 131 |[39m     })[33m;[39m
+    [31m[1m>[22m[39m[90m 132 |[39m     expect(verdict[33m.[39mproblems[33m.[39msome((p) [33m=>[39m p[33m.[39mincludes([32m"风险"[39m) [33m||[39m p[33m.[39mincludes([32m"riskDiff"[39m)))[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m     |[39m                                                                                      [31m[1m^[22m[39m
+     [90m 133 |[39m   })[33m;[39m
+     [90m 134 |[39m })[33m;[39m
+     [90m 135 |[39m[0m
+
+      at Object.<anonymous> (src/runtime/treasury/sealEv1Baseline.test.ts:132:86)
+
+Test Suites: 1 failed, 1 total
+Tests:       6 failed, 2 passed, 8 total
+Snapshots:   0 total
+Time:        4.757 s
+Ran all test suites within paths "src/runtime/treasury/sealEv1Baseline.test.ts".
