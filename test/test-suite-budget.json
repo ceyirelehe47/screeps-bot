@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "046e4c06cc442b39b4f05ca48d2c604925c198e1",
+    "commit": "5360e6669d79a514165e4daf9a3af9a46f58ea70",
     "suites": 236,
-    "tests": 1417
+    "tests": 1420
   },
   "target": {
-    "commit": "046e4c06cc442b39b4f05ca48d2c604925c198e1",
+    "commit": "5360e6669d79a514165e4daf9a3af9a46f58ea70",
     "suites": 236,
-    "tests": 1417,
-    "passed": 1417,
+    "tests": 1420,
+    "passed": 1420,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Core Candidate Seal I：H18 全程轨迹化 + Seal 敏感性 2 用例（IVKernel 12→14）；锚点 046e4c0 系列（236/1417）"
+    "note": "Evidence Remediation I：证据工具敏感性 3 用例（IVKernel 14→17）；锚点 5360e66 系列（236/1420）"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1874,9 +1874,9 @@
       "todo": 0
     },
     "src/runtime/treasury/treasuryRemediationIVKernel.test.ts": {
-      "budget": 14,
-      "tests": 14,
-      "passed": 14,
+      "budget": 17,
+      "tests": 17,
+      "passed": 17,
       "failed": 0,
       "pending": 0,
       "todo": 0
