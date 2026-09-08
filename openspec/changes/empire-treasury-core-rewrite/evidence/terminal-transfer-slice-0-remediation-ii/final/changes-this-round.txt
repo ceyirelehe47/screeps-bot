@@ -1,0 +1,12 @@
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-slice-0-remediation-ii/baseline/jest-baseline.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-slice-0-remediation-ii/baseline/run-command.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-slice-0-remediation-ii/baseline/slice0RemediationIIBaseline.test.ts.txt
+M	openspec/changes/empire-treasury-core-rewrite/tasks.md
+A	openspec/changes/empire-treasury-core-rewrite/terminal-transfer-slice-0-remediation-ii.md
+M	openspec/changes/empire-treasury-core-rewrite/test-migration-map.md
+M	scripts/verify-jest-budget.mjs
+M	src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts
+A	src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts
+M	test/mock/treasuryTerminalTransferCoordinator.ts
+M	test/mock/treasuryTerminalTransferPrototype.ts
+M	test/test-suite-budget.json

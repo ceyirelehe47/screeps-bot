@@ -1,0 +1,1 @@
+npx jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts src/runtime/treasury/treasuryTerminalTransferSlice0RemediationI.test.ts src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts --json --outputFile=/tmp/tmp.NSVYGuwDwW/jest-slice0.json

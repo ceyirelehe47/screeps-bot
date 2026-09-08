@@ -1,0 +1,1 @@
+node D:/code/screeps/screeps-bot/scripts/verify-treasury-evidence.mjs --validation-head fc5edf3bfa057cba254a0d6b4be4109b445f2d37 --run-dir /tmp/tmp.NSVYGuwDwW --fixture h18
