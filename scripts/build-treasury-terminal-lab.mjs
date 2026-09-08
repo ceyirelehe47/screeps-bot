@@ -3,7 +3,10 @@
  * Terminal Transfer Engine Lab Prep I——实验包本地构建入口（任务书 §4.5）。
  *
  * - 默认构建 observer（只读入口）；显式 `--mode single-shot` 只生成未武装
- *   调用版。两种产物均为 Screeps 可装载的 CJS（导出 loop）。
+ *   调用版；显式 `--mode run-i-main` 生成 Lab Run I 薄装配入口 main。三种
+ *   产物均为 Screeps 可装载的 CJS（导出 loop）；run-i-main 在运行时经
+ *   Screeps 模块系统 require("observer")/require("single-shot") 装配另两
+ *   个产物（三模块分别装载、字节各自独立），本模式不改变另两模式产物。
  * - 仅使用仓库现有 TypeScript/Rollup 依赖，**不加载根 rollup 配置及部署
  *   插件**；不读取凭证、不提供上传参数、不回退 DEST 配置；构建过程不
  *   安装/启动引擎、不进行网络请求。
@@ -30,9 +33,9 @@ const rollupPackageInfo = require("rollup/package.json");
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const USAGE = [
-  "用法：node scripts/build-treasury-terminal-lab.mjs --out <dir> [--mode observer|single-shot]",
+  "用法：node scripts/build-treasury-terminal-lab.mjs --out <dir> [--mode observer|single-shot|run-i-main]",
   "  --out <dir>     输出目录（必填；须不存在或为空，且不得位于 dist/源码之内）",
-  "  --mode <name>   observer（默认，只读）或 single-shot（未武装调用版）",
+  "  --mode <name>   observer（默认，只读）、single-shot（未武装调用版）或 run-i-main（Lab Run I 薄装配入口 main）",
   "  --help          打印本说明",
 ].join("\n");
 
@@ -57,7 +60,7 @@ function resolveRepoRoot(startDir) {
 
 const REPO_ROOT = resolveRepoRoot(path.dirname(SCRIPT_PATH));
 const LAB_DIR = path.join(REPO_ROOT, "test", "lab", "terminal-transfer");
-const ENTRIES = { observer: "observer.ts", "single-shot": "singleShot.ts" };
+const ENTRIES = { observer: "observer.ts", "single-shot": "singleShot.ts", "run-i-main": "runIMain.ts" };
 /** 固定参考基准（读取过的源码 SHA，不是已实跑的安装组合；任务书 §5）。 */
 const REFERENCE_SHAS = {
   engine: "80977824199a596d174d392fd0cf8c458c21fcbd",
@@ -74,8 +77,10 @@ function parseArgs(argv) {
       parsed.help = true;
     } else if (token === "--mode") {
       const value = argv[index + 1];
-      if (value === undefined) fail("--mode 需要一个值（observer|single-shot）");
-      if (value !== "observer" && value !== "single-shot") fail(`未知模式：${value}（仅支持 observer|single-shot）`);
+      if (value === undefined) fail("--mode 需要一个值（observer|single-shot|run-i-main）");
+      if (value !== "observer" && value !== "single-shot" && value !== "run-i-main") {
+        fail(`未知模式：${value}（仅支持 observer|single-shot|run-i-main）`);
+      }
       parsed.mode = value;
       index += 1;
     } else if (token === "--out") {
@@ -171,11 +176,16 @@ async function buildMode(mode, resolvedOut) {
       },
     });
     try {
-      const outputName = mode === "observer" ? "observer.js" : "single-shot.js";
-      const banner =
-        mode === "observer"
-          ? "/* Terminal Transfer Engine Lab Prep I——observer（默认只读入口）。PREPARED_NOT_RUN：仅本地构建与离线自测，未在真实引擎上运行。不发送、不写游戏 Memory。生成身份见同目录 manifest.json。 */"
-          : "/* Terminal Transfer Engine Lab Prep I——single-shot（未武装调用版，仅供未来单独授权的隔离实验）。PREPARED_NOT_RUN：仅本地构建与离线自测，未在真实引擎上运行。默认零发送；仅在完整实验配置与一次性控制事实同时匹配的目标 tick，且 attempted 标记写入并读回确认后才尝试一次（标记未确认即零发送）。 */";
+      const outputName = mode === "observer" ? "observer.js" : mode === "single-shot" ? "single-shot.js" : "main.js";
+      const BANNERS = {
+        observer:
+          "/* Terminal Transfer Engine Lab Prep I——observer（默认只读入口）。PREPARED_NOT_RUN：仅本地构建与离线自测，未在真实引擎上运行。不发送、不写游戏 Memory。生成身份见同目录 manifest.json。 */",
+        "single-shot":
+          "/* Terminal Transfer Engine Lab Prep I——single-shot（未武装调用版，仅供未来单独授权的隔离实验）。PREPARED_NOT_RUN：仅本地构建与离线自测，未在真实引擎上运行。默认零发送；仅在完整实验配置与一次性控制事实同时匹配的目标 tick，且 attempted 标记写入并读回确认后才尝试一次（标记未确认即零发送）。 */",
+        "run-i-main":
+          "/* Terminal Transfer Engine Lab Run I——run-i-main（薄装配入口，仅供单独授权的真实隔离实验）。PREPARED_NOT_RUN：仅本地构建与离线自测，未在真实引擎上运行、未上传。窗口内每 tick 先调 observer（只读零写）；仅目标 tick 调既有 single-shot（其自带标记确认与门禁）；本模块零发送、零控制槽写。 */",
+      };
+      const banner = BANNERS[mode];
       const generated = await bundle.write({
         file: path.join(resolvedOut, outputName),
         format: "cjs",

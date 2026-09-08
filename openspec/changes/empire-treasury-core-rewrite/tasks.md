@@ -1,5 +1,18 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Terminal Transfer Engine Lab Run I（2026-09-08）
+
+真实引擎实验：由真实 Screeps runner 执行既有 single-shot，经真实 driver／processor 处理一次 W1N57 → W10N57 的 100H 请求并核对结果（任务书 treasury-terminal-transfer-engine-lab-run-I-execution.md；验收索引 S01–S06）。授权门禁（任务书 §0）：启动本地一次性环境／装载／武装／发送须用户明确授权——本轮在未授权状态只交付离线接线，状态 AUTHORIZATION_REQUIRED，真实引擎 NOT_RUN。
+
+- [x] 起点核对：本地=远端=9158c49 干净；上轮归档产物身份核对（single-shot 27697 字节/SHA-256 7730421d、observer 9160 字节/96721926）；影响范围审查（构建器 mode 分支五处、probe.test 不引用新源、budget 文件集对比要求基线含新测试文件、ambient/typescriptConfig 边界不扫 test/lab、`declare function require` 会与 @types/node 冲突）
+- [x] 薄 main 入口（runIMain.ts）：窗口 T−2..T+20 每 tick 先 observer 后（仅目标 tick）single-shot；模块加载零动作；Screeps 运行时 require("observer")/require("single-shot") 装配（三模块字节独立）；不直接 send、不碰控制槽、不复制门禁；窗口首 tick 一行装配信息（console 零 Memory 写）；窗口外/错过目标 tick 零调用不补调
+- [x] 构建器第三模式（build-treasury-terminal-lab.mjs --mode run-i-main → main.js；manifest 自动派生；旧两模式 banner 逐字不动）
+- [x] 离线接线自测（runI.test.ts，7 it）：三产物真实构建后 VM 按 Screeps 模块系统装配——装载零动作/窗口外零调用/非目标 tick 只采样/目标 tick 先 observer 后 single-shot 恰一次（完整窗口 23 tick、send=1、控制槽 attempted+stopped 且 ≤4096 字节）/无武装 send=0 零控制槽写/错过目标 tick 不补调；并断言 observer/single-shot 产物与 Remediation II 归档逐字节一致（构建器扩展零影响）
+- [x] 文档：terminal-transfer-engine-lab-run-i.md（模块三件套/边界/授权后动作顺序/AUTHORIZATION_REQUIRED）；tasks.md 本段
+- [ ] 预算滚动与 VALIDATION_HEAD 固定
+- [ ] 离线验证命令组与第二树复验
+- [ ] 证据归档与 push（状态 AUTHORIZATION_REQUIRED；environment/、engine-run/ 留待授权后）
+
 ## Terminal Transfer Engine Lab Prep I · Remediation II（2026-09-08）
 
 统一实验控制记录大小语义为完整 JSON 的 UTF-8 字节数 ≤4096（读取/拟写入/发送前读回同一计量），补读写边界与产物级行为验收（任务书 treasury-terminal-transfer-engine-lab-prep-I-remediation-II-implementation.md；验收索引 R01–R04）。生产/配置/Slice 实现/observer 只读语义/发送前标记确认顺序全部冻结；真实引擎仍 NOT_RUN。
