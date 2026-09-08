@@ -1,0 +1,1 @@
+git diff --exit-code 869149dcdd6f2068572354917bf23c52727cf9b6 c8a6d53271b269c25c2b83c3f05cecea41433dab -- src/runtime/defenseFocusFire.ts src/runtime/engagementFallbackRevision.ts src/runtime/defenderRampartAllocation.ts src/runtime/homeDefense.ts src/runtime/towerControl.ts src/runtime/physicalRampartOwnership.ts src/roles/homeDefender.ts

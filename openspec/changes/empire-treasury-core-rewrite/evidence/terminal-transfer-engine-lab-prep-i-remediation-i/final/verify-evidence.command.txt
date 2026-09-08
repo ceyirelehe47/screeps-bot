@@ -1,0 +1,1 @@
+node scripts/verify-treasury-evidence.mjs --validation-head c8a6d53271b269c25c2b83c3f05cecea41433dab --run-dir C:\\Users\\15027\\AppData\\Local\\Temp\\treasury-lab-r1-ousvrqhr --fixture h18

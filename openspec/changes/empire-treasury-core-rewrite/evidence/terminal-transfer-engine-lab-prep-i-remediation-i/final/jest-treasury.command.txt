@@ -1,0 +1,1 @@
+npx jest --config jest.config.cjs src/runtime/treasury/ --runInBand --json --outputFile=C:\\Users\\15027\\AppData\\Local\\Temp\\treasury-lab-r1-ousvrqhr/jest-treasury.json

@@ -1,0 +1,76 @@
+旧产物身份核对通过：bytes=17520 sha256=9d8bfc54d542b9b5e8e37113b87e0f06e29149b7fa3cac1b9a7b8dfc7794ed4f
+
+基线矩阵（旧产物·三时点累计 send：目标 tick 第 1 次 / 第 2 次 / 下一 tick）：
+S1 未武装/Memory 正常 | 初始 72 字符 | send 0/0/0 | 槽终态 attempted=false stopped=undefined | write-refused 行 0
+S2 正常武装/小记录/写入正常 | 初始 72 字符 | send 1/1/1 | 槽终态 attempted=true stopped=true | write-refused 行 0
+S3 send 非 OK/写入正常 | 初始 72 字符 | send 1/1/1 | 槽终态 attempted=true stopped=true | write-refused 行 0
+S4 send 抛错/写入正常 | 初始 72 字符 | send 1/1/1 | 槽终态 attempted=true stopped=true | write-refused 行 0
+S5 控制槽 setter 抛错 | 初始 72 字符 | send 1/2/2 | 槽终态 attempted=false stopped=undefined | write-refused 行 4
+S6 控制槽 setter 静默丢写 | 初始 72 字符 | send 1/2/2 | 槽终态 attempted=false stopped=undefined | write-refused 行 0
+S7 初始 4090 字符/更新后超限 | 初始 4090 字符 | send 1/2/2 | 槽终态 attempted=false stopped=undefined | write-refused 行 4
+
+[
+  {
+    "scenario": "S1 未武装/Memory 正常",
+    "initialCharacters": 72,
+    "sendAfterLoop1": 0,
+    "sendAfterLoop2": 0,
+    "sendAfterNextTick": 0,
+    "slotFinal": "attempted=false stopped=undefined",
+    "writeRefusalLines": 0
+  },
+  {
+    "scenario": "S2 正常武装/小记录/写入正常",
+    "initialCharacters": 72,
+    "sendAfterLoop1": 1,
+    "sendAfterLoop2": 1,
+    "sendAfterNextTick": 1,
+    "slotFinal": "attempted=true stopped=true",
+    "writeRefusalLines": 0
+  },
+  {
+    "scenario": "S3 send 非 OK/写入正常",
+    "initialCharacters": 72,
+    "sendAfterLoop1": 1,
+    "sendAfterLoop2": 1,
+    "sendAfterNextTick": 1,
+    "slotFinal": "attempted=true stopped=true",
+    "writeRefusalLines": 0
+  },
+  {
+    "scenario": "S4 send 抛错/写入正常",
+    "initialCharacters": 72,
+    "sendAfterLoop1": 1,
+    "sendAfterLoop2": 1,
+    "sendAfterNextTick": 1,
+    "slotFinal": "attempted=true stopped=true",
+    "writeRefusalLines": 0
+  },
+  {
+    "scenario": "S5 控制槽 setter 抛错",
+    "initialCharacters": 72,
+    "sendAfterLoop1": 1,
+    "sendAfterLoop2": 2,
+    "sendAfterNextTick": 2,
+    "slotFinal": "attempted=false stopped=undefined",
+    "writeRefusalLines": 4
+  },
+  {
+    "scenario": "S6 控制槽 setter 静默丢写",
+    "initialCharacters": 72,
+    "sendAfterLoop1": 1,
+    "sendAfterLoop2": 2,
+    "sendAfterNextTick": 2,
+    "slotFinal": "attempted=false stopped=undefined",
+    "writeRefusalLines": 0
+  },
+  {
+    "scenario": "S7 初始 4090 字符/更新后超限",
+    "initialCharacters": 4090,
+    "sendAfterLoop1": 1,
+    "sendAfterLoop2": 2,
+    "sendAfterNextTick": 2,
+    "slotFinal": "attempted=false stopped=undefined",
+    "writeRefusalLines": 4
+  }
+]

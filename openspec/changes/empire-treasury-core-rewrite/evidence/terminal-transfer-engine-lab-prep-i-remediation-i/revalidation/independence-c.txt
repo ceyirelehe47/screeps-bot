@@ -1,0 +1,1 @@
+PASS: 主树 git status --porcelain 输出 0 字节，第二树操作未污染主树。

@@ -1,0 +1,14 @@
+repo-root=D:\code\screeps\screeps-bot
+run-dir-resolved=C:\Users\15027\AppData\Local\Temp\treasury-lab-r1-ousvrqhr (cwd=D:\code\screeps\screeps-bot)
+verifier-source=c8a6d53271b269c25c2b83c3f05cecea41433dab:test/mock/treasurySealEvidence.ts blob=fd930a44c47c7a612fc942e8f1d07c30a95d844d
+driver=D:\code\screeps\screeps-bot\scripts\verify-treasury-evidence.mjs sha256=3b5e9464d83ec04f3ad3b86849c005f2b5c0e9e571335db95c8c79cbe5db4de7
+run-dir=C:\Users\15027\AppData\Local\Temp\treasury-lab-r1-ousvrqhr fixture=h18 trace-roots=trace-key,trace-treasury,trace-full,trace-budget jest-json=jest-key.json,jest-treasury.json,jest-defense.json,jest-full.json
+trace-key/1788859512253-133080/H18-J06.json bytes=1180356 sha256=bd60d5e7ea488371a64f17398fb012ea2974f42733bd3c21c8c84017731f9b68 completed=true checkpoints=54 problems=0
+trace-treasury/1788859720060-135720/H18-J06.json bytes=1180356 sha256=a07a6fba8d1413d32456f68db7fcf5f0c13dc3e595bc4af3076bed133081e027 completed=true checkpoints=54 problems=0
+trace-full/1788860124297-138496/H18-J06.json bytes=1180356 sha256=672e7d12d7127a4f570e6d564244e0900d280342f35f3143d1e8b19b2aa35157 completed=true checkpoints=54 problems=0
+trace-budget/1788860535580-122872/H18-J06.json bytes=1180356 sha256=fa8297940e48b4bb852f123872562911e37b3b37486b0376df33ab62ac0a52c7 completed=true checkpoints=54 problems=0
+jest-key.json: suites=9 tests=97 passed=97 failed=0 pending=0 todo=0 runtimeErrors=0
+jest-treasury.json: suites=35 tests=597 passed=597 failed=0 pending=0 todo=0 runtimeErrors=0
+jest-defense.json: suites=11 tests=118 passed=118 failed=0 pending=0 todo=0 runtimeErrors=0
+jest-full.json: suites=240 tests=1460 passed=1460 failed=0 pending=0 todo=0 runtimeErrors=0
+TREASURY_EVIDENCE_VERIFY=PASS (0 failures)

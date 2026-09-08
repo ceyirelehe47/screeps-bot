@@ -1,0 +1,33 @@
+===== 场景甲：控制槽 setter 抛错（发送前标记失败） =====
+send 累计调用: 0
+lab-mark-unconfirmed 行数: 2
+  {"kind":"lab-mark-unconfirmed","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"stage":"mark_write","reason":"assign_failed","note":"探针标记未确认——尚未进入实际发送边界，零 send"}
+  {"kind":"lab-mark-unconfirmed","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"stage":"mark_write","reason":"assign_failed","note":"探针标记未确认——尚未进入实际发送边界，零 send"}
+lab-send-attempt 行数（boundary/pre-call/sync 输出）: 0
+[PASS] 甲: send spy 累计 0 次 — actual=0
+[PASS] 甲: 输出含 lab-mark-unconfirmed — lines=2
+[PASS] 甲: 未打印任何发送边界输出（pre-call/boundary/sync） — lines=0
+
+===== 场景乙：预标记成功、结果写失败（第 2 次 set 起抛错） =====
+send 累计调用: 1
+send 调用参数: ["H",100,"W10N57","lab-prep1 single-shot terminal transfer experiment"]
+lab-result-write-refused 行数: 1
+  {"kind":"lab-result-write-refused","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"reason":"assign_failed","syncResult":{"ok":true,"code":0},"note":"结果/停止状态未保存——attempted 标记保留，零重试"}
+控制槽终态: {"experimentId":"lab-prep1-example-0001","armed":true,"attempted":true,"attemptedTick":12345}
+控制槽 setter set 调用次数: 2
+[PASS] 乙: send spy 累计恰 1 次 — actual=1
+[PASS] 乙: send 参数为 (H, 100, W10N57, 描述) — ["H",100,"W10N57","lab-prep1 single-shot terminal transfer experiment"]
+[PASS] 乙: 槽内终态 attempted === true — {"experimentId":"lab-prep1-example-0001","armed":true,"attempted":true,"attemptedTick":12345}
+[PASS] 乙: 槽内终态无 stopped（结果写失败未落盘为 stopped） — stopped 键不存在
+[PASS] 乙: 输出含 lab-result-write-refused — lines=1
+
+===== 断言汇总 =====
+PASS  甲: send spy 累计 0 次
+PASS  甲: 输出含 lab-mark-unconfirmed
+PASS  甲: 未打印任何发送边界输出（pre-call/boundary/sync）
+PASS  乙: send spy 累计恰 1 次
+PASS  乙: send 参数为 (H, 100, W10N57, 描述)
+PASS  乙: 槽内终态 attempted === true
+PASS  乙: 槽内终态无 stopped（结果写失败未落盘为 stopped）
+PASS  乙: 输出含 lab-result-write-refused
+REVIEWER_VM_CHECK=ALL_PASS

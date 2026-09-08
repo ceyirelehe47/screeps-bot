@@ -1,0 +1,1 @@
+PASS: node_modules 及 jest/typescript/rollup/ts-jest 子目录 lstatSync().isSymbolicLink() 全为 false，非 junction/symlink。全目录实体安装。

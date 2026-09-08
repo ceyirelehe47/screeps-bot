@@ -1,0 +1,10 @@
+M	openspec/changes/empire-treasury-core-rewrite/tasks.md
+M	openspec/changes/empire-treasury-core-rewrite/terminal-transfer-engine-lab-prep-i.md
+M	openspec/changes/empire-treasury-core-rewrite/test-migration-map.md
+M	scripts/build-treasury-terminal-lab.mjs
+M	scripts/verify-jest-budget.mjs
+M	test/lab/terminal-transfer/controlRecord.ts
+M	test/lab/terminal-transfer/labConfig.ts
+M	test/lab/terminal-transfer/probe.test.ts
+M	test/lab/terminal-transfer/singleShot.ts
+M	test/test-suite-budget.json

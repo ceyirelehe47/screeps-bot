@@ -1,0 +1,5 @@
+PASS: 第二树内 require.resolve(jest/typescript/rollup/ts-jest) 全部解析到 labprep1-r1-tree2/node_modules，未落回主树 D:/code/screeps/screeps-bot/node_modules。
+jest -> C:\Users\15027\AppData\Local\Temp\labprep1-r1-tree2\node_modules\jest\build\index.js
+typescript -> C:\Users\15027\AppData\Local\Temp\labprep1-r1-tree2\node_modules\typescript\lib\typescript.js
+rollup -> C:\Users\15027\AppData\Local\Temp\labprep1-r1-tree2\node_modules\rollup\dist\rollup.js
+ts-jest -> C:\Users\15027\AppData\Local\Temp\labprep1-r1-tree2\node_modules\ts-jest\dist\index.js
