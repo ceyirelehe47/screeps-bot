@@ -9,9 +9,9 @@
 - [x] 构建器第三模式（build-treasury-terminal-lab.mjs --mode run-i-main → main.js；manifest 自动派生；旧两模式 banner 逐字不动）
 - [x] 离线接线自测（runI.test.ts，7 it）：三产物真实构建后 VM 按 Screeps 模块系统装配——装载零动作/窗口外零调用/非目标 tick 只采样/目标 tick 先 observer 后 single-shot 恰一次（完整窗口 23 tick、send=1、控制槽 attempted+stopped 且 ≤4096 字节）/无武装 send=0 零控制槽写/错过目标 tick 不补调；并断言 observer/single-shot 产物与 Remediation II 归档逐字节一致（构建器扩展零影响）
 - [x] 文档：terminal-transfer-engine-lab-run-i.md（模块三件套/边界/授权后动作顺序/AUTHORIZATION_REQUIRED）；tasks.md 本段
-- [ ] 预算滚动与 VALIDATION_HEAD 固定
-- [ ] 离线验证命令组与第二树复验
-- [ ] 证据归档与 push（状态 AUTHORIZATION_REQUIRED；environment/、engine-run/ 留待授权后）
+- [x] 预算滚动与 VALIDATION_HEAD 固定（15b027b：241/1472 全绿自跑 PASSED；baseline/target 同滚至实现提交 afe839d——文件集对比要求基线树含新测试文件）
+- [x] 离线验证命令组与第二树复验（19 步全 0：四组冻结+probe-protection 零差异、typecheck×2、build、三 lab 构建（main.js 7430B/44f624cc、observer/single-shot 与归档逐字节一致）、五组 Jest 全绿（lab 2/29、key 10/109、treasury 35/597、defense 11/118、full 241/1472）、budget PASSED、verify-evidence PASS、diff-check 0、前后状态零写入、三次实验构建未触碰 dist/main.js；新观察：rollup.config.js:43 buildTime 令生产构建跨构建非确定——冻结以源码 git 对比为准；第二树独立 npm ci + LAB 29/29 + Slice0 23/23 + 三产物字节一致）
+- [x] 证据归档与 push（evidence/terminal-transfer-engine-lab-run-i/：task/baseline 归档、offline/mainval+second-tree、environment/与engine-run/ 授权占位、主报告状态 AUTHORIZATION_REQUIRED；真实引擎 NOT_RUN 如实分开）
 
 ## Terminal Transfer Engine Lab Prep I · Remediation II（2026-09-08）
 

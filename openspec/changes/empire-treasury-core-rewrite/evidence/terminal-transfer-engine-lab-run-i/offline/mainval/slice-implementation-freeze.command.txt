@@ -1,0 +1,1 @@
+git diff --exit-code 9158c496d77f51072f0899ffa01f60487a031c58 15b027bc3f002b97219001a8766fd6d6e0e78736 -- test/mock/treasuryTerminalTransferPrototype.ts test/mock/treasuryTerminalTransferCoordinator.ts

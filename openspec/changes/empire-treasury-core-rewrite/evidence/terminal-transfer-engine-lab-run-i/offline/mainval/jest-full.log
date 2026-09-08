@@ -1,0 +1,489 @@
+PASS src/runtime/treasury/treasuryKernelStress.test.ts (193.378 s)
+PASS src/runtime/marketBaseResourcePermit.test.ts (65.647 s)
+PASS test/localDispatchPerformanceBaseline.test.ts (24.988 s)
+  ● Console
+
+    console.log
+      LOCAL_DISPATCH_PERFORMANCE_BASELINE {"schema":"local-dispatch-performance-baseline/v2","implementation":"full-ref-local-dispatch","fixture":{"rooms":20,"tasksPerRoom":20,"totalTasksPerDomain":400,"actors":50},"protocol":{"clock":"process.hrtime.bigint","timingUnit":"milliseconds","warmupBatches":5,"measuredBatches":30,"iterationsPerBatch":100,"p95":"nearest-rank","timingPassFail":"observation-only; deployment CPU gate is the live same-shard window","complexityPassFail":"deterministic public-input/read-DTO counts"},"preChangeEvidence":{"source":"openspec/changes/local-dispatch-ownership/evidence/pre-change-baseline.md","commit":"df2e1af60a035fd99406888d69bba9903e8a7118","observation":{"workerCurrent":{"median":12.083,"p95":12.378},"workerRelease":{"median":39.879,"p95":40.633},"carrierList":{"median":13.476,"p95":14.086},"carrierClaim":{"median":12.937,"p95":13.586},"carrierReplace":{"median":61.892,"p95":66.713}}},"scenarios":{"workerCurrent":{"samples":[276.7413,274.1552,275.451,282.0552,287.7656,295.7872,309.3069,286.0876,283.3857,279.7273,286.8289,290.6255,283.5071,288.2547,323.3114,280.6105,279.325,290.8917,284.9332,284.8263,284.0029,286.7398,283.7973,295.8711,288.0463,284.9383,301.6639,293.7722,306.0273,280.9048],"median":285.51295,"p95":309.3069,"min":274.1552,"max":323.3114,"relativeToPreChange":{"median":23.62931,"p95":24.988439}},"workerRelease":{"samples":[253.2651,226.7575,225.3839,231.1085,224.6828,224.6307,243.6334,232.7036,226.4496,219.2062,238.1023,226.4799,233.8773,224.6663,217.608,213.2188,216.5654,229.5046,216.2607,227.7065,211.4209,224.4997,216.0723,224.796,223.5757,223.7019,225.8034,222.3224,231.4298,223.3892],"median":224.7394,"p95":243.6334,"min":211.4209,"max":253.2651,"relativeToPreChange":{"median":5.635532,"p95":5.995949}},"carrierList":{"samples":[5.6199,5.1546,5.0997,6.0279,4.9049,5.304,4.8801,5.3445,6.5994,5.1378,5.4825,5.342,5.2364,5.9325,5.6313,4.9145,5.2318,6.079,5.3022,5.0922,5.2377,5.1159,5.9697,4.9745,5.0092,5.72,4.8806,6.0535,4.9509,4.9381],"median":5.23705,"p95":6.079,"min":4.8801,"max":6.5994,"relativeToPreChange":{"median":0.388621,"p95":0.431563}},"carrierClaim":{"samples":[47.0076,46.7048,48.6373,61.573,52.4457,46.0453,46.738,55.2182,45.3475,46.3334,47.2839,45.3073,47.4276,45.153,46.8681,45.8651,47.212,45.4452,49.7764,51.0349,51.4757,47.0715,47.7959,47.5654,47.7284,47.3587,47.4415,54.2148,47.2627,46.0474],"median":47.2733,"p95":55.2182,"min":45.153,"max":61.573,"relativeToPreChange":{"median":3.654116,"p95":4.064346}},"carrierReplace":{"samples":[120.2793,110.9213,102.1219,110.5368,111.3798,117.4881,105.704,116.1403,117.0769,127.7921,109.1788,113.0086,110.6285,121.2841,107.6512,105.2173,110.147,107.076,106.0874,106.7,103.1448,111.7115,102.0409,105.2337,106.8333,109.8528,102.3712,107.4657,102.2706,104.9132],"median":108.415,"p95":121.2841,"min":102.0409,"max":127.7921,"relativeToPreChange":{"median":1.75168,"p95":1.817998}}},"complexityGates":{"workerRelease":{"acquireCalls":5000,"releaseCalls":5000,"exactRoomDescriptorReads":5000,"exactTaskDescriptorReads":5000,"boardEnumerations":0},"workerAcquireReconcile":{"acquireCalls":50,"reconcileCalls":50,"assignedCreepsDescriptorReads":150},"carrier":{"exact":{"exactCalls":400,"exactResults":400,"refDescriptorReads":2400},"list":{"listCalls":20,"listResults":400},"replace":{"replaceCalls":2000,"replaceResults":40000,"draftIndexReads":40000,"stepIndexReads":40000},"claim":{"claimCalls":5000,"successfulClaims":5000,"releasedClaims":5000,"claimStepIndexReads":5000,"actorDescriptorReads":5000,"actorEnumerations":0},"readDto":{"snapshotCalls":1,"snapshotEntries":400,"stepArrayEnumerations":400,"stepEntryDescriptorReads":800}}},"limitations":["Node/Jest wall-clock is not Screeps CPU and old/current samples came from separate processes.","Relative old/current wall-clock ratios are observations, never pass/fail authorization.","Worker current starts bound; Carrier claim is the uncontended immediate-release path.","Carrier complexity probes observe public inputs/read DTOs and never the private Map hierarchy."]}
+
+      at Object.<anonymous> (test/localDispatchPerformanceBaseline.test.ts:761:13)
+
+PASS src/runtime/marketBaseResourceAutomation.test.ts (24.3 s)
+PASS test/ambientGlobalAbiBoundaries.test.ts (14.171 s)
+PASS test/memoryDeclarationBoundaries.test.ts (16.84 s)
+PASS test/typescriptConfigBoundaries.test.ts (7.877 s)
+PASS test/localDispatchArchitectureBoundaries.test.ts (6.063 s)
+PASS scripts/monitor-service.test.ts (10.88 s)
+PASS src/runtime/treasury/treasuryRewrite4Lifecycle.test.ts (7.615 s)
+PASS test/lab/terminal-transfer/runI.test.ts
+PASS test/taskSystemArchitectureBoundaries.test.ts
+PASS test/taskSystemCatalogBoundaries.test.ts
+PASS src/runtime/treasury/treasuryRewrite2Lifecycle.test.ts
+PASS test/roleIdentityCatalogBoundaries.test.ts
+PASS src/runtime/bootstrapArchitecture.test.ts
+PASS src/runtime/treasury/treasuryRemediationIVKernel.test.ts
+  ● Console
+
+    console.log
+      H18-TRACE completed=true observe=12 bounded=13/40 recovery=1/10 checkpoints=54 portEvents=96 finalClose=25 final={"phases":{"closing":0,"outcome_unknown":20,"retry_ready":0,"pending":0,"other":0},"remaining":0,"active":20,"ring":44,"chars":21879,"utf8Bytes":21879,"budgetUsed":2}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationIVKernel.test.ts:1095:15)
+
+PASS src/runtime/marketBaseResourceLedger.test.ts
+PASS src/runtime/marketSaleAutomation.test.ts
+PASS src/runtime/linkNetworkMemoryOwnership.test.ts
+PASS test/lab/terminal-transfer/probe.test.ts
+  ● Console
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}}
+
+      at Object.loop (C:/Users/15027/AppData/Local/Temp/labprep1-probe-SKNIck/single-shot/single-shot.js:560:17)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345}
+
+      at Object.loop (C:/Users/15027/AppData/Local/Temp/labprep1-probe-SKNIck/single-shot/single-shot.js:568:17)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":true,"code":0}}
+
+      at Object.loop (C:/Users/15027/AppData/Local/Temp/labprep1-probe-SKNIck/single-shot/single-shot.js:579:17)
+
+    console.log
+      {"kind":"lab-precondition-rejection","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"reason":"already_stopped","note":"探针前置拒绝——不是已实测游戏 API 的 ERR 返回"}
+
+      at Object.loop (C:/Users/15027/AppData/Local/Temp/labprep1-probe-SKNIck/single-shot/single-shot.js:528:21)
+
+    console.log
+      {"kind":"lab-precondition-rejection","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12346,"reason":"already_stopped","note":"探针前置拒绝——不是已实测游戏 API 的 ERR 返回"}
+
+      at Object.loop (C:/Users/15027/AppData/Local/Temp/labprep1-probe-SKNIck/single-shot/single-shot.js:528:21)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}}
+
+      at Object.loop (C:/Users/15027/AppData/Local/Temp/labprep1-probe-SKNIck/single-shot/single-shot.js:560:17)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345}
+
+      at Object.loop (C:/Users/15027/AppData/Local/Temp/labprep1-probe-SKNIck/single-shot/single-shot.js:568:17)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":true,"code":0}}
+
+      at Object.loop (C:/Users/15027/AppData/Local/Temp/labprep1-probe-SKNIck/single-shot/single-shot.js:579:17)
+
+    console.log
+      Q01-BASELINE [{"scenario":"S1 未武装/Memory 正常","outcome":{"sendAfterLoop1":0,"sendAfterLoop2":0,"sendAfterNextTick":0,"slotFinalAttempted":false,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":false,\"attempted\":false}","markUnconfirmed":[],"rejections":["not_armed","not_armed","not_armed"],"sendAttemptPhases":[],"sendAttemptRecords":[],"writeRefusedLines":0,"writeRefusedRecords":[]}},{"scenario":"S2 正常武装/小记录/写入正常","outcome":{"sendAfterLoop1":1,"sendAfterLoop2":1,"sendAfterNextTick":1,"slotFinalAttempted":true,"slotFinalStopped":true,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":true,\"attemptedTick\":12345,\"syncResult\":{\"ok\":true,\"code\":0},\"stopped\":true}","markUnconfirmed":[],"rejections":["already_stopped","already_stopped"],"sendAttemptPhases":["pre-call","boundary","sync-return"],"sendAttemptRecords":[{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":true,"code":0}}],"writeRefusedLines":0,"writeRefusedRecords":[]}},{"scenario":"S3 send 非 OK/写入正常","outcome":{"sendAfterLoop1":1,"sendAfterLoop2":1,"sendAfterNextTick":1,"slotFinalAttempted":true,"slotFinalStopped":true,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":true,\"attemptedTick\":12345,\"syncResult\":{\"ok\":false,\"code\":-6},\"stopped\":true}","markUnconfirmed":[],"rejections":["already_stopped","already_stopped"],"sendAttemptPhases":["pre-call","boundary","sync-return"],"sendAttemptRecords":[{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":false,"code":-6}}],"writeRefusedLines":0,"writeRefusedRecords":[]}},{"scenario":"S4 send 抛错/写入正常","outcome":{"sendAfterLoop1":1,"sendAfterLoop2":1,"sendAfterNextTick":1,"slotFinalAttempted":true,"slotFinalStopped":true,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":true,\"attemptedTick\":12345,\"syncResult\":{\"ok\":false,\"error\":\"Error: send stub 同步异常（VM fixture）\"},\"stopped\":true}","markUnconfirmed":[],"rejections":["already_stopped","already_stopped"],"sendAttemptPhases":["pre-call","boundary","sync-throw"],"sendAttemptRecords":[{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-throw","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":false,"error":"Error: send stub 同步异常（VM fixture）"}}],"writeRefusedLines":0,"writeRefusedRecords":[]}},{"scenario":"S5 控制槽 setter 抛错","outcome":{"sendAfterLoop1":1,"sendAfterLoop2":2,"sendAfterNextTick":2,"slotFinalAttempted":false,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":false}","markUnconfirmed":[],"rejections":["tick_missed"],"sendAttemptPhases":["pre-call","boundary","sync-return","pre-call","boundary","sync-return"],"sendAttemptRecords":[{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":true,"code":0}},{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":true,"code":0}}],"writeRefusedLines":4,"writeRefusedRecords":[{"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","error":"Error: 控制槽 setter 故障（VM fixture）"},{"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","error":"Error: 控制槽 setter 故障（VM fixture）"},{"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","error":"Error: 控制槽 setter 故障（VM fixture）"},{"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","error":"Error: 控制槽 setter 故障（VM fixture）"}]}},{"scenario":"S6 控制槽 setter 静默丢写","outcome":{"sendAfterLoop1":1,"sendAfterLoop2":2,"sendAfterNextTick":2,"slotFinalAttempted":false,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":false}","markUnconfirmed":[],"rejections":["tick_missed"],"sendAttemptPhases":["pre-call","boundary","sync-return","pre-call","boundary","sync-return"],"sendAttemptRecords":[{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":true,"code":0}},{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":true,"code":0}}],"writeRefusedLines":0,"writeRefusedRecords":[]}},{"scenario":"S7 初始 4090 字符/更新后超限","outcome":{"sendAfterLoop1":1,"sendAfterLoop2":2,"sendAfterNextTick":2,"slotFinalAttempted":false,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":false,\"note\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}","markUnconfirmed":[],"rejections":["tick_missed"],"sendAttemptPhases":["pre-call","boundary","sync-return","pre-call","boundary","sync-return"],"sendAttemptRecords":[{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":true,"code":0}},{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":true,"code":0}}],"writeRefusedLines":4,"writeRefusedRecords":[{"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","bytes":4111,"limit":4096},{"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","bytes":4160,"limit":4096},{"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","bytes":4111,"limit":4096},{"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","bytes":4160,"limit":4096}]}}]
+
+      at Object.<anonymous> (test/lab/terminal-transfer/probe.test.ts:947:13)
+
+    console.log
+      Q01-FIXED [{"scenario":"S1 未武装/Memory 正常","outcome":{"sendAfterLoop1":0,"sendAfterLoop2":0,"sendAfterNextTick":0,"slotFinalAttempted":false,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":false,\"attempted\":false}","markUnconfirmed":[],"rejections":["not_armed","not_armed","not_armed"],"sendAttemptPhases":[],"sendAttemptRecords":[],"writeRefusedLines":0,"writeRefusedRecords":[]}},{"scenario":"S2 正常武装/小记录/写入正常","outcome":{"sendAfterLoop1":1,"sendAfterLoop2":1,"sendAfterNextTick":1,"slotFinalAttempted":true,"slotFinalStopped":true,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":true,\"attemptedTick\":12345,\"syncResult\":{\"ok\":true,\"code\":0},\"stopped\":true}","markUnconfirmed":[],"rejections":["already_stopped","already_stopped"],"sendAttemptPhases":["pre-call","boundary","sync-return"],"sendAttemptRecords":[{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":true,"code":0}}],"writeRefusedLines":0,"writeRefusedRecords":[]}},{"scenario":"S3 send 非 OK/写入正常","outcome":{"sendAfterLoop1":1,"sendAfterLoop2":1,"sendAfterNextTick":1,"slotFinalAttempted":true,"slotFinalStopped":true,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":true,\"attemptedTick\":12345,\"syncResult\":{\"ok\":false,\"code\":-6},\"stopped\":true}","markUnconfirmed":[],"rejections":["already_stopped","already_stopped"],"sendAttemptPhases":["pre-call","boundary","sync-return"],"sendAttemptRecords":[{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":false,"code":-6}}],"writeRefusedLines":0,"writeRefusedRecords":[]}},{"scenario":"S4 send 抛错/写入正常","outcome":{"sendAfterLoop1":1,"sendAfterLoop2":1,"sendAfterNextTick":1,"slotFinalAttempted":true,"slotFinalStopped":true,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":true,\"attemptedTick\":12345,\"syncResult\":{\"ok\":false,\"error\":\"Error: send stub 同步异常（VM fixture）\"},\"stopped\":true}","markUnconfirmed":[],"rejections":["already_stopped","already_stopped"],"sendAttemptPhases":["pre-call","boundary","sync-throw"],"sendAttemptRecords":[{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-throw","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":false,"error":"Error: send stub 同步异常（VM fixture）"}}],"writeRefusedLines":0,"writeRefusedRecords":[]}},{"scenario":"S5 控制槽 setter 抛错","outcome":{"sendAfterLoop1":0,"sendAfterLoop2":0,"sendAfterNextTick":0,"slotFinalAttempted":false,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":false}","markUnconfirmed":["mark_write/assign_failed","mark_write/assign_failed"],"rejections":["tick_missed"],"sendAttemptPhases":[],"sendAttemptRecords":[],"writeRefusedLines":2,"writeRefusedRecords":[{"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","reason":"assign_failed","error":"Error: 控制槽 setter 故障（VM fixture）"},{"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","reason":"assign_failed","error":"Error: 控制槽 setter 故障（VM fixture）"}]}},{"scenario":"S6 控制槽 setter 静默丢写","outcome":{"sendAfterLoop1":0,"sendAfterLoop2":0,"sendAfterNextTick":0,"slotFinalAttempted":false,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":false}","markUnconfirmed":["mark_readback/readback_not_attempted","mark_readback/readback_not_attempted"],"rejections":["tick_missed"],"sendAttemptPhases":[],"sendAttemptRecords":[],"writeRefusedLines":0,"writeRefusedRecords":[]}},{"scenario":"S7 初始 4090 字符/更新后超限","outcome":{"sendAfterLoop1":0,"sendAfterLoop2":0,"sendAfterNextTick":0,"slotFinalAttempted":false,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":false,\"note\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}","markUnconfirmed":[],"rejections":["control_record_corrupt","control_record_corrupt","control_record_corrupt"],"sendAttemptPhases":[],"sendAttemptRecords":[],"writeRefusedLines":0,"writeRefusedRecords":[]}}]
+
+      at Object.<anonymous> (test/lab/terminal-transfer/probe.test.ts:980:13)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}}
+
+      at Object.loop (C:/Users/15027/AppData/Local/Temp/labprep1-probe-SKNIck/single-shot/single-shot.js:560:17)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345}
+
+      at Object.loop (C:/Users/15027/AppData/Local/Temp/labprep1-probe-SKNIck/single-shot/single-shot.js:568:17)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":true,"code":0}}
+
+      at Object.loop (C:/Users/15027/AppData/Local/Temp/labprep1-probe-SKNIck/single-shot/single-shot.js:579:17)
+
+    console.log
+      {"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","reason":"size_limit","bytes":4249,"characters":4249,"limit":4096,"limitUnits":"utf8-bytes"}
+
+      at writeControlRecord (test/lab/terminal-transfer/controlRecord.ts:217:13)
+
+    console.log
+      {"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","reason":"serialize_failed","error":"TypeError: Converting circular structure to JSON\n    --> starting at object with constructor 'Object'\n    --- property 'self' closes the circle"}
+
+      at writeControlRecord (test/lab/terminal-transfer/controlRecord.ts:205:13)
+
+    console.log
+      {"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","reason":"size_limit","bytes":4097,"characters":4097,"limit":4096,"limitUnits":"utf8-bytes"}
+
+      at writeControlRecord (test/lab/terminal-transfer/controlRecord.ts:217:13)
+
+    console.log
+      {"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","reason":"size_limit","bytes":4097,"characters":1463,"limit":4096,"limitUnits":"utf8-bytes"}
+
+      at writeControlRecord (test/lab/terminal-transfer/controlRecord.ts:217:13)
+
+    console.log
+      R02-BOUNDARY [{"nonAscii":false,"bytes":4095,"characters":4095,"write":"ok","read":"ok"},{"nonAscii":false,"bytes":4096,"characters":4096,"write":"ok","read":"ok"},{"nonAscii":false,"bytes":4097,"characters":4097,"write":"refused","read":"corrupt"},{"nonAscii":true,"bytes":4095,"characters":1463,"write":"ok","read":"ok"},{"nonAscii":true,"bytes":4096,"characters":1462,"write":"ok","read":"ok"},{"nonAscii":true,"bytes":4097,"characters":1463,"write":"refused","read":"corrupt"}]
+
+      at Object.<anonymous> (test/lab/terminal-transfer/probe.test.ts:1278:15)
+
+    console.log
+      R03-B1 {"legacy":{"sendAfterLoop1":1,"sendAfterLoop2":1,"sendAfterNextTick":1,"sendAfterReloadVm":1,"slotFinalAttempted":true,"slotFinalStopped":true,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":true,\"attemptedTick\":12345,\"syncResult\":{\"ok\":false,\"error\":\"Error: 错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错\"},\"stopped\":true}","markUnconfirmed":[],"rejections":["already_stopped","already_stopped","already_stopped"],"sendAttemptPhases":["pre-call","boundary","sync-throw"],"sendAttemptRecords":[{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-throw","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":false,"error":"Error: 错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错"}}],"writeRefusedLines":0,"writeRefusedRecords":[]},"fixed":{"sendAfterLoop1":1,"sendAfterLoop2":1,"sendAfterNextTick":1,"sendAfterReloadVm":1,"slotFinalAttempted":true,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":true,\"attemptedTick\":12345}","markUnconfirmed":[],"rejections":["already_attempted","already_attempted","already_attempted"],"sendAttemptPhases":["pre-call","boundary","sync-throw"],"sendAttemptRecords":[{"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-prep1-example-0001","tick":12345,"fee":26,"sample":{"kind":"lab-sample","experimentId":"lab-prep1-example-0001","mode":"single-shot","tick":12345,"configTargetTick":12345,"source":{"roomName":"W1N57","readStatus":"ok","terminalId":"lab-term-source-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":1000,"energy":10000,"freeCapacity":50000,"cooldown":0},"target":{"roomName":"W10N57","readStatus":"ok","terminalId":"lab-term-target-synthetic","ownerUsername":"lab-synthetic-user","resourceAmount":0,"energy":2000,"freeCapacity":100000,"cooldown":0},"feeQuote":{"status":"ok","energyCost":26},"transactions":{"incoming":{"status":"ok","count":0,"records":[]},"outgoing":{"status":"ok","count":0,"records":[]}}}},{"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-prep1-example-0001","tick":12345},{"kind":"lab-send-attempt","phase":"sync-throw","experimentId":"lab-prep1-example-0001","tick":12345,"result":{"ok":false,"error":"Error: 错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错错"}}],"writeRefusedLines":1,"writeRefusedRecords":[{"kind":"lab-control-write-refused","key":"__labTerminalTransferProbe","reason":"size_limit","bytes":6296,"characters":2200,"limit":4096,"limitUnits":"utf8-bytes"}]}}
+
+      at Object.<anonymous> (test/lab/terminal-transfer/probe.test.ts:1346:13)
+
+    console.log
+      R03-B2 {"legacy":{"sendAfterLoop1":0,"sendAfterLoop2":0,"sendAfterNextTick":0,"slotFinalAttempted":true,"slotFinalStopped":true,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":true,\"attemptedTick\":12345,\"syncResult\":{\"ok\":false,\"error\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"},\"stopped\":true}","markUnconfirmed":[],"rejections":["already_stopped","already_stopped","already_stopped"],"sendAttemptPhases":[],"sendAttemptRecords":[],"writeRefusedLines":0,"writeRefusedRecords":[]},"fixed":{"sendAfterLoop1":0,"sendAfterLoop2":0,"sendAfterNextTick":0,"slotFinalAttempted":true,"slotFinalStopped":true,"slotFinalSerialized":"{\"experimentId\":\"lab-prep1-example-0001\",\"armed\":true,\"attempted\":true,\"attemptedTick\":12345,\"syncResult\":{\"ok\":false,\"error\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"},\"stopped\":true}","markUnconfirmed":[],"rejections":["control_record_corrupt","control_record_corrupt","control_record_corrupt"],"sendAttemptPhases":[],"sendAttemptRecords":[],"writeRefusedLines":0,"writeRefusedRecords":[]}}
+
+      at Object.<anonymous> (test/lab/terminal-transfer/probe.test.ts:1416:13)
+
+PASS test/treasuryCommitmentInvalidationBoundaries.test.ts
+PASS src/runtime/treasury/treasuryKernelAcceptance.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIIKernel.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Acceptance.test.ts
+PASS src/runtime/treasury/treasuryRemediationIKernel.test.ts
+PASS src/runtime/treasury/treasuryRewrite4Acceptance.test.ts
+PASS src/runtime/treasury/treasuryKernelArchitecture.test.ts
+PASS src/runtime/treasury/treasuryRemediationVKernel.test.ts
+  ● Console
+
+    console.log
+      I13-COST {"fixture1":{"fixture":"empty-endTick","reads":7,"writeAttempts":1,"writesAllowed":1,"writesDropped":0,"logicalSharesUsed":0,"closurePersisted":true},"fixture2":{"fixture":"recover-A-then-clean-8C","phaseEndTick":{"recoveredToUnknown":1,"closurePersisted":true},"tick1":{"reads":41,"writeAttempts":7,"writesAllowed":7,"cleaned":2,"sharesUsed":7,"releaseCalls":2},"completion":{"ticks":2,"reads":77,"writeAttempts":14,"writesAllowed":14,"totalReleaseCalls":8,"perTickReleases":[4,2],"phaseAfter":"retry_ready"},"awaitingServiceAfterTick1":6}}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:653:13)
+
+    console.log
+      I13-COST {"fixture3":{"fixture":"closure-publish-failure","writeAttempts":2,"writesAllowed":0,"writesDropped":2,"reads":12,"closurePersisted":false},"fixture4":{"fixture":"64-active-mixed-advance","activeCount":64,"beginTick":{"recovered":2,"cleaned":6,"closed":0,"cancelled":0},"endTick":{"recoveredToUnknown":0,"closurePersisted":true},"reads":53,"writeAttempts":10,"writesAllowed":10,"sharesUsed":8}}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryRemediationVKernel.test.ts:748:13)
+
+PASS src/runtime/treasury/treasuryRemediationIIService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIIService.test.ts
+PASS src/runtime/treasury/treasuryRemediationIVService.test.ts
+PASS src/runtime/hubProductionIntegration.test.ts
+PASS src/mount/mountCreep.test.ts
+PASS src/runtime/resourceControl.capacityRegression.test.ts
+PASS src/movement/routing.segmentCache.test.ts
+PASS src/runtime/treasury/treasuryRewrite2Acceptance.test.ts
+PASS src/runtime/treasury/treasuryRemediationIService.test.ts
+PASS src/runtime/treasury/treasuryRemediationVService.test.ts
+PASS src/runtime/defenseFallbackReallocation.test.ts
+PASS src/runtime/logistics/resourceTransferTasks.test.ts
+PASS src/runtime/treasury/treasuryRewrite3Lifecycle.test.ts
+PASS src/runtime/powerBankHarvest.test.ts
+PASS src/runtime/bootstrap.test.ts
+PASS src/runtime/treasury/treasuryRemediationIIKernel.test.ts
+PASS src/runtime/marketSalePlanningAuthorization.test.ts
+PASS test/warWorkflowLifecycleBoundaries.test.ts
+PASS src/runtime/marketSaleSession.test.ts
+PASS src/runtime/treasury/treasuryKernel.test.ts
+PASS test/baseline/treasuryRemediationIIBaseline.test.ts
+PASS src/runtime/synthesisControl.test.ts
+PASS src/runtime/hubPlanner.test.ts
+PASS scripts/lib/redactSecrets.test.ts
+PASS src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts
+PASS src/runtime/marketSaleDirectAutomation.test.ts
+PASS src/runtime/taskSystem/snapshot.test.ts
+PASS src/runtime/marketSaleRuntime.test.ts
+PASS src/runtime/warControl.test.ts
+PASS src/runtime/memoryCleanup.test.ts
+PASS src/runtime/consoleCommands.test.ts
+PASS src/runtime/marketDirectContinuousAutomation.test.ts
+PASS src/runtime/synthesisControlStateMachine.test.ts
+PASS src/runtime/console/operationsCommands.test.ts
+PASS src/runtime/marketSaleProtectionMemo.test.ts
+PASS src/runtime/marketDirectContinuousPolicy.test.ts
+PASS src/runtime/treasury/treasuryTerminalTransferSlice0RemediationI.test.ts
+PASS src/main.test.ts
+PASS src/roles/index.test.ts
+PASS src/runtime/marketDirectContinuousLedger.test.ts
+PASS src/runtime/memorySizeRegression.test.ts
+PASS src/runtime/treasury/treasuryTypedOwnerMigration.test.ts
+PASS src/runtime/marketWriteArchitecture.test.ts
+PASS src/runtime/externalTelemetry.test.ts
+PASS test/baseline/treasuryRemediationIBaseline.test.ts
+PASS src/runtime/hubFlag.test.ts
+PASS src/runtime/nukerControl.test.ts
+PASS src/mount/mountCreep.lifecycleCache.test.ts
+PASS src/runtime/treasury/treasuryRemediationVIKernel.test.ts
+PASS src/runtime/powerBankBoost.test.ts
+PASS src/runtime/resourceControl.test.ts
+PASS src/runtime/defenseFrontAware.test.ts
+PASS src/roles/carrier.test.ts
+PASS src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts
+  ● Console
+
+    console.log
+      P01-ORDER {"permutation":"100-then-60","order":"txn-0001:100,txn-inj-60:60","spyCalls":2}
+
+      at settleWithPermutedView (src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts:547:13)
+
+    console.log
+      P01-ORDER {"permutation":"60-then-100","order":"txn-inj-60:60,txn-0001:100","spyCalls":2}
+
+      at settleWithPermutedView (src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts:547:13)
+
+    console.log
+      P01-ACCOUNTS {"sourceH":{"observed":900,"committed":0,"spendable":900},"sourceEnergy":{"observed":9974,"committed":0,"spendable":9974},"targetRiskAdjustedFreeCapacity":99900}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts:579:15)
+
+PASS src/runtime/marketSalePlanningGate.test.ts
+PASS src/movement/pathing.crossTickCache.test.ts
+PASS src/runtime/empireInventoryShadow.test.ts
+  ● Console
+
+    console.log
+      [inventory-shadow] parity mismatch +5 this check (total 5): tick=10000 room=<empire> resource=energy field=empireTotal index=6200 direct=1200
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +7 this check (total 7): tick=10000 room=<creeps>:cargo resource=- field=oracleStoreTotal index=30 direct=99
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +3 this check (total 3): tick=10040 room=W1N57 resource=- field=factoryUsedCapacity index=40 direct=0
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +3 this check (total 3): tick=10000 room=W1N57 resource=- field=factoryUsedCapacity index=40 direct=0
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+    console.log
+      [inventory-shadow] parity mismatch +1 this check (total 1): tick=10000 room=W1N57:storage resource=silicon field=oracleResourceAmount index=0 direct=42
+
+      at runEmpireInventoryShadowCheck (src/runtime/empireInventoryShadow.ts:1045:13)
+
+PASS src/mount/mountSpawn.test.ts
+PASS src/runtime/treasury/treasuryR4BaselineReplicators.test.ts
+  ● Console
+
+    console.log
+      R1-TRACE {"budgetTrace":[{"at":"after-nested-beginTick","budgetUsed":1},{"at":"after-endTick","budgetUsed":1},{"at":"after-beginTick","budgetUsed":7}],"releaseCalls":["ext:r1:D0","ext:r1:D1","ext:r1:D2"],"nestedStats":{"recovered":0,"closed":0,"cleaned":0,"cancelled":0},"remaining":5}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryR4BaselineReplicators.test.ts:197:13)
+
+PASS src/runtime/spawnPlanner.test.ts
+PASS src/runtime/localDispatchOwnership.target.test.ts
+PASS src/roles/carrier.bestCandidate.test.ts
+PASS src/runtime/colonization.travelPath.test.ts
+PASS src/runtime/workerTaskPool.test.ts
+PASS src/runtime/colonization.test.ts
+  ● Console
+
+    console.log
+      [colonization] rescout W1N2: pending scout route invalid or interrupted by dangerous room
+
+      at requestScoutRescan (src/runtime/colonization.ts:983:11)
+
+    console.log
+      [colonization] abandon W1N2: flag removed by player
+
+      at abandonColonization (src/runtime/colonization.ts:1042:11)
+
+    console.log
+      [colonization] abandon W1N2: flag removed by player
+
+      at abandonColonization (src/runtime/colonization.ts:1042:11)
+
+PASS src/roles/energyTargets.test.ts
+PASS src/runtime/treasury/treasuryCore.test.ts
+PASS src/runtime/empireInventoryIndex.test.ts
+PASS src/movement/pathing.test.ts
+PASS src/runtime/marketSaleConfig.test.ts
+PASS src/runtime/hubUpgradeControl.test.ts
+PASS src/runtime/roomWorkforce.test.ts
+PASS src/runtime/boostControl.test.ts
+  ● Console
+
+    console.log
+      [boostControl] buy W1N1: XUH2O=1000 price=5.000 cost=100
+
+      at buyBoostIfNeeded (src/runtime/boostControl.ts:151:13)
+
+PASS src/runtime/treasury/treasuryImmutableRegistries.test.ts
+PASS src/runtime/dispatchOwnership/actorBinding.test.ts
+PASS src/runtime/towerControl.scanThrottle.test.ts
+PASS src/runtime/marketSaleFeeLedger.test.ts
+PASS src/roles/mineralHarvester.test.ts
+PASS src/runtime/treasury/treasuryTransactionIdVectors.test.ts
+PASS src/runtime/treasury/treasuryActionContract.test.ts
+PASS src/runtime/defenseStationaryRampartOwnership.test.ts
+PASS src/runtime/defenseFocusFire.test.ts
+PASS src/runtime/workerTaskPool.characterization.test.ts
+PASS src/runtime/flagHauling.test.ts
+  ● Console
+
+    console.log
+      [flag-haul] started: flag=HAUL target=W5N5 source=W1N1
+
+      at upsertFlagHaulTask (src/runtime/flagHauling.ts:322:13)
+
+PASS src/roles/remoteMiningCarrier.test.ts
+PASS src/runtime/towerControl.test.ts
+PASS src/runtime/defenseFocusFireStateful.test.ts
+PASS src/runtime/resourceReservation.test.ts
+PASS src/movement/staticRoomMatrix.test.ts
+PASS src/roles/upgrader.test.ts
+PASS src/runtime/treasury/treasuryCommitments.test.ts
+PASS src/runtime/deployAnnounce.test.ts
+PASS src/runtime/marketBaseResourcePolicy.test.ts
+PASS src/runtime/treasury/treasuryShadow.test.ts
+  ● Console
+
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5000 newMismatches=5 fields=storage_amount,storage_used_capacity,empire_total sample={"checkedAtTick":5000,"field":"storage_amount","roomName":"W1N57","resource":"U","treasuryValue":4000,"otherValue":9999}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+    console.log
+      [treasuryShadow] tick=5001 newMismatches=1 fields=stale_epoch sample={"checkedAtTick":5001,"field":"stale_epoch","roomName":"*","treasuryValue":5000,"otherValue":5001}
+
+      at finishShadow (src/runtime/treasury/shadow.ts:343:13)
+
+PASS src/config/spawnProfiles.test.ts
+PASS scripts/lib/deployGuard.test.ts
+PASS src/runtime/taskSystem/registry.test.ts
+PASS src/runtime/hubProgress.test.ts
+PASS src/runtime/treasury/treasuryCommitmentCompleteness.test.ts
+PASS src/movement/routing.backoff.test.ts
+PASS src/runtime/homeDefense.test.ts
+PASS src/movement/routing.dynamicObstacles.test.ts
+PASS src/roles/shared.test.ts
+PASS src/runtime/marketSaleProtectionAdapter.test.ts
+PASS src/runtime/defenseAllActorReservation.test.ts
+PASS src/roles/powerBankHauler.test.ts
+PASS src/runtime/taskSystem/adapters/workflowAdapters.test.ts
+PASS src/runtime/remoteMining.test.ts
+PASS src/runtime/powerBankObserver.test.ts
+PASS src/runtime/taskSystem/adapters/workerWork.test.ts
+PASS src/runtime/crossShardColonization.test.ts
+PASS src/runtime/safeZoneHelpers.test.ts
+PASS src/runtime/mineralExtraction.test.ts
+PASS src/runtime/defenseGlobalRampartFootprints.test.ts
+PASS src/runtime/marketDirectContinuousPlanner.test.ts
+PASS src/movement/routing.test.ts
+PASS src/runtime/hubProtectionSnapshot.test.ts
+PASS src/runtime/cpuPhaseProfiler.lowOverhead.test.ts
+PASS src/roles/remoteCarrier.test.ts
+PASS src/roles/homeDefender.test.ts
+PASS src/movement/routing.cachedPathValidation.test.ts
+PASS src/roles/worker.test.ts
+PASS src/runtime/minerBodyPolicy.test.ts
+PASS src/runtime/defensePreallocationRampartOwnership.test.ts
+PASS src/runtime/emergencySpawning.test.ts
+PASS src/runtime/roomPlannerConstruction.test.ts
+PASS src/runtime/carrierTaskBoard.test.ts
+PASS src/runtime/roomWorkforceIdentity.test.ts
+PASS src/roles/meleeAttacker.test.ts
+PASS src/runtime/taskSystem/adapters/carrierLogistics.test.ts
+PASS src/runtime/treasury/treasuryCapacityViews.test.ts
+PASS src/roles/powerBankAttacker.test.ts
+PASS src/runtime/marketSalePricingAdapter.test.ts
+PASS src/runtime/empireInventoryBenchmark.test.ts
+  ● Console
+
+    console.log
+      [inventory-bench] rooms=8 legacyPerResourceCalls=1344 newKeyEnumeration=61 legacyScanMs=0.501 indexBuildMs=0.443
+
+      at Object.<anonymous> (src/runtime/empireInventoryBenchmark.test.ts:166:13)
+
+PASS src/movement/roomTopologyRevision.test.ts
+PASS src/runtime/taskSystem/adapters/powerBankWorkflow.test.ts
+PASS src/runtime/treasury/treasuryCanonicalEncoding.test.ts
+PASS src/runtime/marketSaleDirectShadow.test.ts
+PASS src/runtime/carrierTaskBoard.revisionCache.test.ts
+PASS src/roles/healer.test.ts
+PASS src/runtime/tickContext.typedIndex.test.ts
+PASS src/types/roleCatalog.test.ts
+PASS src/runtime/console/resourceTransferCommands.test.ts
+PASS src/runtime/terminalBootstrapRecovery.test.ts
+PASS src/runtime/marketSaleDiagnostics.test.ts
+PASS src/runtime/factoryControl.test.ts
+PASS src/visual/panel.test.ts
+PASS src/runtime/taskSystem/adapters/warWorkflow.test.ts
+PASS src/runtime/dispatchOwnership/workerSlot.test.ts
+PASS src/runtime/dispatchOwnership/carrierAmountSlice.test.ts
+PASS src/runtime/powerSpawnControl.test.ts
+PASS src/runtime/marketSalePricing.test.ts
+PASS src/runtime/cpuMonitor.test.ts
+PASS src/movement/traffic.test.ts
+PASS src/movement/traffic.naturalObstacles.test.ts
+PASS src/roles/scout.test.ts
+PASS src/roles/powerBankHealer.test.ts
+PASS src/runtime/powerCreepControl.test.ts
+PASS src/runtime/linkControl.test.ts
+PASS src/runtime/marketSaleDirectPricing.test.ts
+PASS src/roles/remoteDefender.test.ts
+PASS src/runtime/taskSystem/catalog.test.ts
+PASS src/runtime/marketSaleExposure.test.ts
+PASS src/movement/metrics.flush.test.ts
+PASS test/miner.test.ts
+PASS src/runtime/taskSystem/adapters/spawnProduction.test.ts
+PASS src/runtime/taskSystem/adapters/resourceTransfer.test.ts
+PASS test/defenseMode.test.ts
+PASS src/runtime/energyPickupReservation.test.ts
+PASS src/roles/colonizerHarvester.test.ts
+PASS src/runtime/taskSystem/adapters/factoryCommand.test.ts
+PASS src/runtime/powerBankViability.test.ts
+PASS src/roles/powerBankScout.test.ts
+PASS src/runtime/marketSaleDirectPending.test.ts
+PASS src/runtime/localCarrierDestinationCapacity.test.ts
+PASS src/runtime/linkNetworkMemory.test.ts
+PASS src/runtime/powerBankDiscovery.test.ts
+PASS src/runtime/pixelGenerator.test.ts
+PASS src/runtime/marketActionArbiter.test.ts
+PASS src/runtime/autoReserveFlag.test.ts
+  ● Console
+
+    console.log
+      [reserve] W1N1 entered reserve mode at 74999 energy
+
+      at runAutoReserveFlags (src/runtime/autoReserveFlag.ts:38:17)
+
+PASS src/runtime/taskSystem/adapters/powerCreepAction.test.ts
+PASS src/runtime/terminalActionEnergyOwnership.test.ts
+PASS src/runtime/powerBankStatus.test.ts
+PASS src/roles/combatBoosts.test.ts
+PASS src/runtime/spawnQueueOwnership.test.ts
+PASS src/runtime/marketSaleLifecycle.test.ts
+PASS src/runtime/configNormalize.test.ts
+PASS src/runtime/carrierBodyPolicy.test.ts
+PASS src/runtime/logistics/capacityHeadroom.test.ts
+PASS src/runtime/productionStateMachine.test.ts
+PASS src/runtime/dispatchOwnership/ref.test.ts
+PASS src/runtime/reactionMap.test.ts
+PASS src/runtime/powerBankConstants.test.ts
+PASS src/runtime/marketSaleDirectEngineAssumptions.test.ts
+PASS src/movement/common.test.ts
+PASS test/harvester.test.ts
+PASS src/runtime/safeZone.test.ts
+PASS src/runtime/roomTypes.test.ts
+PASS src/runtime/creepAssignmentState.test.ts
+PASS src/runtime/actionLog.test.ts
+PASS src/roles/remoteMiningReserver.test.ts
+PASS src/roles/claimer.test.ts
+PASS src/runtime/logistics/receiverCapacityLedger.test.ts
+PASS src/runtime/marketSaleProtection.test.ts
+PASS src/roles/remoteWorker.test.ts
+PASS src/runtime/taskSystem/model.test.ts
+PASS src/runtime/memoryAudit.test.ts
+PASS src/visual/palette.test.ts
+PASS test/tickContext.test.ts
+PASS src/runtime/roomEnergyPolicy.test.ts
+PASS src/runtime/upgraderPolicy.test.ts
+PASS src/runtime/hostilePriorities.test.ts
+
+Test Suites: 241 passed, 241 total
+Tests:       1472 passed, 1472 total
+Snapshots:   0 total
+Time:        436.962 s, estimated 557 s
+Ran all test suites.
+Test results written to: C:\Users\15027\AppData\Local\Temp\treasury-lab-run1-WVWKwT\jest-full.json

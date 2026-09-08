@@ -1,0 +1,7 @@
+M	openspec/changes/empire-treasury-core-rewrite/tasks.md
+A	openspec/changes/empire-treasury-core-rewrite/terminal-transfer-engine-lab-run-i.md
+M	scripts/build-treasury-terminal-lab.mjs
+M	scripts/verify-jest-budget.mjs
+A	test/lab/terminal-transfer/runI.test.ts
+A	test/lab/terminal-transfer/runIMain.ts
+M	test/test-suite-budget.json

@@ -1,0 +1,2 @@
+C:\Users\15027\AppData\Local\Temp\labrun1-tree2-run-DZ4rEL\worktree\node_modules\jest\build\index.js
+C:\Users\15027\AppData\Local\Temp\labrun1-tree2-run-DZ4rEL\worktree\node_modules\typescript\lib\typescript.js
