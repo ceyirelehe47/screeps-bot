@@ -1,0 +1,1 @@
+npx jest --config jest.config.cjs --runInBand --runTestsByPath test/lab/terminal-transfer/probe.test.ts test/lab/terminal-transfer/runI.test.ts --json --outputFile=C:\\Users\\15027\\AppData\\Local\\Temp\\treasury-run-i-wiring-KD2ZLu/jest-lab.json

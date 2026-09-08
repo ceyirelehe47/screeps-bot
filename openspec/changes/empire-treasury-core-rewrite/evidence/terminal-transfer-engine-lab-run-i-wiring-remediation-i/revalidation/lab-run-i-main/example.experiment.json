@@ -1,0 +1,17 @@
+{
+  "_doc": "Terminal Transfer Engine Lab Prep I 合成示例实验配置（与 test/lab/terminal-transfer/labConfig.ts 的 LAB_EXAMPLE_EXPERIMENT 保持一致）。全部为明显合成值：默认不可发送，不自动读取正式配置补齐。真实 F0、费用与身份从实验环境读取，不照抄 fake 世界的 100000 空位或 26 能源。",
+  "experimentId": "lab-prep1-example-0001",
+  "mode": "observer",
+  "shardName": "lab-synthetic-shard",
+  "username": "lab-synthetic-user",
+  "sourceRoomName": "W1N57",
+  "targetRoomName": "W10N57",
+  "sourceTerminalId": "lab-term-source-synthetic",
+  "targetTerminalId": "lab-term-target-synthetic",
+  "resourceType": "H",
+  "amount": 100,
+  "description": "lab-prep1 single-shot terminal transfer experiment",
+  "targetTick": 12345,
+  "maxFeeEnergy": 1000,
+  "maxSamples": 32
+}

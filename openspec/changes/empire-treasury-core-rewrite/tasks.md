@@ -9,9 +9,9 @@
 - [x] T01 最小实现（runIMain.ts）：`requireLabModule("observer")` 返回 null 即 `return`（本次不解析 single-shot）；`observer.loop()` 抛错仍沿既有外层 dispatch 异常路径结束；头注释删除"一路不可用不阻断另一路"错误表述、改为单向依赖描述
 - [x] T02/T03 测试（runI.test.ts 7→12 it）：harness 增 moduleFault 谓词（按模块与当前 tick 注入，仅 require/调用边界，不修改 Memory 不取消武装）——observer require 抛错（含同世界正常对照 send=1 证明零发送唯一原因）、导出不合法三变体（T 重复+T+1 恢复观察不补发）、loop 向外抛错（已尝试调用+既有 dispatch 出口+single-shot 零解析）、single-shot 缺失/导出不合法反方向（observer 23 tick 继续采样）、同 T 重复调用不增发（send 恰 1）
 - [x] 文档：lab-run-i.md runIMain 边界补单向依赖语义+自测 12 用例覆盖清单；tasks.md 本段
-- [ ] 预算滚动与 VALIDATION_HEAD 固定（241/1472→241/1477 按真实收集）
-- [ ] 主验证（§7.2）与第二树复验（LAB probe+runI、Slice 0；独立 npm ci）
-- [ ] 归档与 push（evidence/terminal-transfer-engine-lab-run-i-wiring-remediation-i/：task/baseline/final/revalidation+短报告）
+- [x] 预算滚动与 VALIDATION_HEAD 固定（05585e0 实现→69e6373 预算→324f21a 含 task/baseline 证据=VALIDATION_HEAD；全仓真实收集 241/1477 全绿；verify-jest-budget 自跑 PASSED）
+- [x] 主验证（§7.2 19 步全 0：四组冻结零差异（含 existing-implementation：2 mock+9 lab 既有文件+构建器对照起点）、typecheck×2、build、三 lab 构建（新 main 7721B/0a71f720；observer/single-shot 与归档逐字节一致；生产 bundle 实验构建前后未触碰）、六组 Jest 全绿（lab 2/34、slice 3/23、key 10/114、treasury 35/597、defense 11/118、full 241/1477）、budget PASSED、verify-evidence PASS、diff-check 0、前后状态零写入）与第二树复验（独立 npm ci、lockfile 490ee9c7 双树一致、依赖解析落第二树；LAB 2/34+Slice0 3/23；三产物 hash 与主树一致；首跑身份核对相对路径 ENOENT 失败如实归档、修正后 TREE2_COMPLETE；worktree 已清理）
+- [x] 归档与 push（evidence/terminal-transfer-engine-lab-run-i-wiring-remediation-i/：task/baseline/final/revalidation+主报告；T01–T04 离线修复通过；Engine Lab Run I 实机 AUTHORIZATION_REQUIRED／NOT_RUN 如实分开；push 后 ls-remote 远端=本地核验）
 
 ## Terminal Transfer Engine Lab Run I（2026-09-08）
 

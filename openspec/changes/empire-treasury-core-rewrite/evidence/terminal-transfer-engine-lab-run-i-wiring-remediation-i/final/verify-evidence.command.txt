@@ -1,0 +1,1 @@
+node scripts/verify-treasury-evidence.mjs --validation-head 324f21a53ea128661e0555de662db7891b9b3808 --run-dir C:\\Users\\15027\\AppData\\Local\\Temp\\treasury-run-i-wiring-KD2ZLu --fixture h18

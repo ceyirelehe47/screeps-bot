@@ -1,0 +1,10 @@
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i-wiring-remediation-i/baseline/baseline-repro.cjs
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i-wiring-remediation-i/baseline/baseline-results.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i-wiring-remediation-i/baseline/baseline-run.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i-wiring-remediation-i/task/task-brief.md
+M	openspec/changes/empire-treasury-core-rewrite/tasks.md
+M	openspec/changes/empire-treasury-core-rewrite/terminal-transfer-engine-lab-run-i.md
+M	scripts/verify-jest-budget.mjs
+M	test/lab/terminal-transfer/runI.test.ts
+M	test/lab/terminal-transfer/runIMain.ts
+M	test/test-suite-budget.json

@@ -1,0 +1,1 @@
+node scripts/build-treasury-terminal-lab.mjs --mode run-i-main --out C:\\Users\\15027\\AppData\\Local\\Temp\\treasury-run-i-wiring-KD2ZLu/lab-run-i-main
