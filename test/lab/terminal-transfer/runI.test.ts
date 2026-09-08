@@ -12,6 +12,11 @@
  * 场景总 send=1；无武装场景总 send=0；窗口结束不再采样/发送；装载晚错过
  * 目标 tick 不补调。本测试只是接线验证，不构成真实引擎结果。
  *
+ * Wiring Remediation I 追加故障矩阵（main 沙箱 require/调用边界注入）：
+ * observer 装配失败（require 抛错/导出不合法/loop 向外抛错）阻断本次
+ * single-shot 的解析与调用（零 send、控制槽零触碰）；single-shot 不可用
+ * 不阻断观察（反方向对照）；同 T 重复调用目标 tick 不增发。
+ *
  * 另锁一个构建器事实：--mode run-i-main 加入后，observer/single-shot 两
  * 产物必须与 Remediation II 归档产物逐字节一致（构建器扩展零影响）。
  */
@@ -98,7 +103,26 @@ interface RunIWorldOptions {
   readonly slot: "armed" | "absent";
   /** send stub 同步返回码（默认 0=OK）。 */
   readonly sendResult?: number;
+  /**
+   * main 沙箱 require 边界的故障注入谓词（按模块名与当前 Game.time 决定）；
+   * 返回 null（默认）转发真实产物计数包装。注入只发生在模块解析或 loop
+   * 调用边界，不修改 Memory、不取消武装。
+   */
+  readonly moduleFault?: (module: "observer" | "single-shot", tick: number) => LabModuleFault | null;
 }
+
+/**
+ * 模块装配故障模式：require-throw/missing-module=require 边界抛错；
+ * empty-exports/bad-loop-export/null-exports=解析成功但导出不合法；
+ * loop-throw=装配成功、loop 调用时先计数再向外抛错（"已尝试调用"）。
+ */
+type LabModuleFault =
+  | "require-throw"
+  | "missing-module"
+  | "empty-exports"
+  | "bad-loop-export"
+  | "null-exports"
+  | "loop-throw";
 
 interface RunIWorld {
   readonly game: Record<string, unknown>;
@@ -184,15 +208,28 @@ function loadRunIWorld(options: RunIWorldOptions): RunIWorld {
   let observerCalls = 0;
   let singleShotCalls = 0;
   const requireNames: string[] = [];
-  const requireStub = (name: string): { loop(): void } => {
+  const moduleFault = options.moduleFault ?? (() => null);
+  const requireStub = (name: string): unknown => {
     requireNames.push(name);
+    if (name !== "observer" && name !== "single-shot") {
+      throw new Error(`require: unknown module '${name}'`);
+    }
+    const fault = moduleFault(name, game.time as number);
+    if (fault === "require-throw") throw new Error(`测试注入：require('${name}') 抛错`);
+    if (fault === "missing-module") throw new Error(`require: unknown module '${name}'`);
+    if (fault === "empty-exports") return {};
+    if (fault === "bad-loop-export") return { loop: 1 };
+    if (fault === "null-exports") return null;
+    if (fault === "loop-throw") {
+      if (name === "observer") {
+        return { loop: () => { observerCalls += 1; throw new Error("测试注入：observer.loop 向外抛错"); } };
+      }
+      return { loop: () => { singleShotCalls += 1; throw new Error("测试注入：single-shot.loop 向外抛错"); } };
+    }
     if (name === "observer") {
       return { loop: () => { observerCalls += 1; observerExports.loop(); } };
     }
-    if (name === "single-shot") {
-      return { loop: () => { singleShotCalls += 1; singleShotExports.loop(); } };
-    }
-    throw new Error(`require: unknown module '${name}'`);
+    return { loop: () => { singleShotCalls += 1; singleShotExports.loop(); } };
   };
   const mainExports: { loop?: () => void } = {};
   runInNewContext(
@@ -411,5 +448,188 @@ describe("Terminal Transfer Engine Lab Run I——离线接线自测（main × o
       armed: true,
       attempted: false,
     });
+  });
+
+  // ── Wiring Remediation I：发送依赖观察装配的故障矩阵（T02）────────────────
+
+  it("observer require 抛错（目标 T、合法武装）：single-shot 零解析零调用零 send、控制槽内容与引用不变；T 重复调用与 T+1 均无发送；T+1 恢复真实 observer 继续观察不补发", () => {
+    const config = LAB_EXAMPLE_EXPERIMENT;
+    // 同样世界的正常模块对照：除故障谓词外一切相同，send=1 证明零发送的唯一
+    // 原因是 observer 装配故障，而非未武装/错 tick 等其他门禁拒绝。
+    const healthyWorld = loadRunIWorld({ slot: "armed" });
+    healthyWorld.setTick(config.targetTick);
+    healthyWorld.loop();
+    expect(healthyWorld.sendCalls).toHaveLength(1);
+
+    const world = loadRunIWorld({
+      slot: "armed",
+      moduleFault: (module, tick) =>
+        module === "observer" && tick === config.targetTick ? "require-throw" : null,
+    });
+    const slotRef = world.memory[LAB_CONTROL_MEMORY_KEY];
+    const initialSlot = { experimentId: config.experimentId, armed: true, attempted: false };
+
+    world.setTick(config.targetTick - 1);
+    world.loop();
+    world.setTick(config.targetTick);
+    world.loop();
+    world.loop(); // 目标 tick 重复调用：仍不得解析/调用 single-shot
+    runTicks(world, config.targetTick + 1, config.targetTick + 3);
+
+    expect(world.sendCalls).toEqual([]);
+    expect(world.singleShotCalls()).toBe(0);
+    expect(world.requireCalls()).not.toContain("single-shot");
+    // T 两次装配失败 + T−1/T+1..T+3 四次真实采样。
+    expect(world.observerCalls()).toBe(4);
+    const records = world.labRecords();
+    const moduleErrors = records.filter((record) => record.kind === "lab-run-i-module-error");
+    expect(moduleErrors).toHaveLength(2);
+    for (const error of moduleErrors) {
+      expect(error).toMatchObject({ module: "observer", stage: "require" });
+    }
+    expect(records.some((record) => record.kind === "lab-send-attempt")).toBe(false);
+    // T+1 恢复真实 observer：窗口内继续只读采样，不补发。
+    expect(records.filter((record) => record.kind === "lab-sample")).toHaveLength(4);
+    expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toBe(slotRef);
+    expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toEqual(initialSlot);
+  });
+
+  it("observer 导出不合法（{} 缺 loop 与 {loop:1} 非函数，null 同组补充）：模块错误指向 loop-export；single-shot 零解析零 send、槽不变；两固定变体 T 重复+T+1 恢复观察不补发", () => {
+    const config = LAB_EXAMPLE_EXPERIMENT;
+    const initialSlot = { experimentId: config.experimentId, armed: true, attempted: false };
+    const runExportFault = (fault: LabModuleFault) => {
+      const world = loadRunIWorld({
+        slot: "armed",
+        moduleFault: (module, tick) =>
+          module === "observer" && tick === config.targetTick ? fault : null,
+      });
+      const slotRef = world.memory[LAB_CONTROL_MEMORY_KEY];
+      world.setTick(config.targetTick - 1);
+      world.loop();
+      world.setTick(config.targetTick);
+      world.loop();
+      world.loop(); // 目标 tick 重复调用
+      runTicks(world, config.targetTick + 1, config.targetTick + 2);
+      return { world, slotRef };
+    };
+
+    for (const fault of ["empty-exports", "bad-loop-export"] as const) {
+      const { world, slotRef } = runExportFault(fault);
+      expect(world.sendCalls).toEqual([]);
+      expect(world.singleShotCalls()).toBe(0);
+      expect(world.requireCalls()).not.toContain("single-shot");
+      const records = world.labRecords();
+      const moduleErrors = records.filter((record) => record.kind === "lab-run-i-module-error");
+      expect(moduleErrors).toHaveLength(2);
+      for (const error of moduleErrors) {
+        expect(error).toMatchObject({ module: "observer", stage: "loop-export" });
+      }
+      expect(records.some((record) => record.kind === "lab-send-attempt")).toBe(false);
+      expect(world.observerCalls()).toBe(3); // T−1、T+1、T+2（T 两次装配失败零调用）
+      expect(records.filter((record) => record.kind === "lab-sample")).toHaveLength(3);
+      expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toBe(slotRef);
+      expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toEqual(initialSlot);
+    }
+
+    // null 导出同组补充：目标 tick 单点断言（同一 loop-export 拒绝路径）。
+    const world = loadRunIWorld({
+      slot: "armed",
+      moduleFault: (module, tick) =>
+        module === "observer" && tick === config.targetTick ? "null-exports" : null,
+    });
+    world.setTick(config.targetTick);
+    world.loop();
+    expect(world.sendCalls).toEqual([]);
+    expect(world.singleShotCalls()).toBe(0);
+    expect(world.requireCalls()).not.toContain("single-shot");
+    expect(world.labRecords().filter((record) => record.kind === "lab-run-i-module-error")).toHaveLength(1);
+    expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toEqual(initialSlot);
+  });
+
+  it("observer.loop 向外抛错（目标 T、合法武装）：已尝试调用 observer；沿既有 dispatch 错误出口结束、single-shot 零解析零 send；注入不修改 Memory 不取消武装；T+1 恢复观察", () => {
+    const config = LAB_EXAMPLE_EXPERIMENT;
+    const world = loadRunIWorld({
+      slot: "armed",
+      moduleFault: (module, tick) =>
+        module === "observer" && tick === config.targetTick ? "loop-throw" : null,
+    });
+    const slotRef = world.memory[LAB_CONTROL_MEMORY_KEY];
+    const initialSlot = { experimentId: config.experimentId, armed: true, attempted: false };
+
+    world.setTick(config.targetTick - 1);
+    world.loop();
+    world.setTick(config.targetTick);
+    world.loop();
+    world.loop(); // 目标 tick 重复调用：两次都沿既有异常出口结束
+    world.setTick(config.targetTick + 1);
+    world.loop();
+
+    expect(world.sendCalls).toEqual([]);
+    expect(world.singleShotCalls()).toBe(0);
+    expect(world.requireCalls()).not.toContain("single-shot");
+    // observer 已被尝试调用：T 两次（向外抛错）+ T−1/T+1 两次真实采样。
+    expect(world.observerCalls()).toBe(4);
+    const records = world.labRecords();
+    const mainErrors = records.filter(
+      (record) => record.kind === "lab-run-i-main-error" && record.stage === "dispatch",
+    );
+    expect(mainErrors).toHaveLength(2);
+    expect(records.some((record) => record.kind === "lab-send-attempt")).toBe(false);
+    expect(records.filter((record) => record.kind === "lab-sample")).toHaveLength(2);
+    expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toBe(slotRef);
+    expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toEqual(initialSlot);
+  });
+
+  // ── Wiring Remediation I：反方向对照与重复调用（T03）──────────────────────
+
+  it("single-shot 缺失或导出不合法（反方向）：真实 observer 在 T 及后续窗口继续采样；send=0、槽不变", () => {
+    const config = LAB_EXAMPLE_EXPERIMENT;
+    const initialSlot = { experimentId: config.experimentId, armed: true, attempted: false };
+    for (const fault of ["missing-module", "empty-exports"] as const) {
+      const world = loadRunIWorld({
+        slot: "armed",
+        moduleFault: (module) => (module === "single-shot" ? fault : null),
+      });
+      runTicks(world, config.targetTick - 2, config.targetTick + 20);
+      expect(world.observerCalls()).toBe(23);
+      expect(world.singleShotCalls()).toBe(0);
+      expect(world.sendCalls).toEqual([]);
+      const records = world.labRecords();
+      expect(records.filter((record) => record.kind === "lab-sample")).toHaveLength(23);
+      expect(world.requireCalls().filter((name) => name === "single-shot")).toHaveLength(1);
+      const moduleErrors = records.filter(
+        (record) => record.kind === "lab-run-i-module-error" && record.module === "single-shot",
+      );
+      expect(moduleErrors).toHaveLength(1);
+      expect(moduleErrors[0].stage).toBe(fault === "missing-module" ? "require" : "loop-export");
+      expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toEqual(initialSlot);
+    }
+  });
+
+  it("同 T 重复调用目标 tick 不增发（正常三模块独立场景）：send 恰 1、发送边界一组、控制保护与 4096 字节约束保持", () => {
+    const config = LAB_EXAMPLE_EXPERIMENT;
+    const world = loadRunIWorld({ slot: "armed" });
+    runTicks(world, config.targetTick - 2, config.targetTick - 1);
+    world.setTick(config.targetTick);
+    world.loop();
+    world.loop(); // 同 tick 第二次调用：single-shot 自身门禁拒绝重发
+    runTicks(world, config.targetTick + 1, config.targetTick + 20);
+
+    expect(world.sendCalls).toHaveLength(1);
+    expect(world.sendCalls[0]).toEqual([
+      config.resourceType,
+      config.amount,
+      config.targetRoomName,
+      config.description,
+    ]);
+    expect(world.singleShotCalls()).toBe(2); // 两次都被 main 调用，第二次零发送
+    expect(world.observerCalls()).toBe(24); // 23 tick 各一次 + 目标 tick 第二次调用
+    const sendAttempts = world.labRecords().filter((record) => record.kind === "lab-send-attempt");
+    expect(sendAttempts.map((record) => record.phase)).toEqual(["pre-call", "boundary", "sync-return"]);
+    const slot = world.memory[LAB_CONTROL_MEMORY_KEY] as Record<string, any>;
+    expect(slot.attempted).toBe(true);
+    expect(slot.attemptedTick).toBe(config.targetTick);
+    expect(slot.stopped).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(slot), "utf8")).toBeLessThanOrEqual(4096);
   });
 });

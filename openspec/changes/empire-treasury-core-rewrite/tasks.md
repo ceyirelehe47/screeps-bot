@@ -1,5 +1,18 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Terminal Transfer Engine Lab Run I · Wiring Remediation I（2026-09-09）
+
+修复 Run I 新增 main 的装配失败分支：observer 无法加载（require 抛错或导出不合法）时仍继续解析并调用 single-shot 导致发送发生（任务书 treasury-terminal-transfer-engine-lab-run-I-wiring-remediation-I-implementation.md；验收索引 T01–T04）。修复为单向依赖——发送依赖观察装配，观察不依赖发送装配；生产/配置/Slice/构建器/lab 既有源文件全部冻结；真实引擎仍 AUTHORIZATION_REQUIRED／NOT_RUN。
+
+- [x] 起点核对：本地=远端=457b052 干净；影响范围审查（修复点唯一 runIMain.ts:119；既有 7 it 零破坏；构建器 banner 无错误表述零改动；文档更新点定位）
+- [x] T01 基线复现（独立 Node VM 脚本归档 evidence baseline/，旧 main 7430B/44f624cc 三重身份核对后装载）：observer-require-throw/empty-exports/bad-loop-export/null-exports 四场景旧行为均"模块错误后 single-shot 解析/调用各 1、send=1"；observer-loop-throw 对照 send=0（外层 dispatch catch 已阻断）；normal 对照 send=1
+- [x] T01 最小实现（runIMain.ts）：`requireLabModule("observer")` 返回 null 即 `return`（本次不解析 single-shot）；`observer.loop()` 抛错仍沿既有外层 dispatch 异常路径结束；头注释删除"一路不可用不阻断另一路"错误表述、改为单向依赖描述
+- [x] T02/T03 测试（runI.test.ts 7→12 it）：harness 增 moduleFault 谓词（按模块与当前 tick 注入，仅 require/调用边界，不修改 Memory 不取消武装）——observer require 抛错（含同世界正常对照 send=1 证明零发送唯一原因）、导出不合法三变体（T 重复+T+1 恢复观察不补发）、loop 向外抛错（已尝试调用+既有 dispatch 出口+single-shot 零解析）、single-shot 缺失/导出不合法反方向（observer 23 tick 继续采样）、同 T 重复调用不增发（send 恰 1）
+- [x] 文档：lab-run-i.md runIMain 边界补单向依赖语义+自测 12 用例覆盖清单；tasks.md 本段
+- [ ] 预算滚动与 VALIDATION_HEAD 固定（241/1472→241/1477 按真实收集）
+- [ ] 主验证（§7.2）与第二树复验（LAB probe+runI、Slice 0；独立 npm ci）
+- [ ] 归档与 push（evidence/terminal-transfer-engine-lab-run-i-wiring-remediation-i/：task/baseline/final/revalidation+短报告）
+
 ## Terminal Transfer Engine Lab Run I（2026-09-08）
 
 真实引擎实验：由真实 Screeps runner 执行既有 single-shot，经真实 driver／processor 处理一次 W1N57 → W10N57 的 100H 请求并核对结果（任务书 treasury-terminal-transfer-engine-lab-run-I-execution.md；验收索引 S01–S06）。授权门禁（任务书 §0）：启动本地一次性环境／装载／武装／发送须用户明确授权——本轮在未授权状态只交付离线接线，状态 AUTHORIZATION_REQUIRED，真实引擎 NOT_RUN。

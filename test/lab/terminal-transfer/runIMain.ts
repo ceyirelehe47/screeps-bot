@@ -13,8 +13,10 @@
  * - 不直接调用 terminal.send、不初始化/重置/复制控制槽内容、不复制
  *   attempted/费用/归属判断——发送资格完全由既有 single-shot 决定；
  * - 装配用 Screeps 运行时模块系统（require("observer")/require("single-shot")，
- *   即与产物文件同名的模块）；模块缺失或未导出 loop 如实记录一行错误事实，
- *   不抛出、不猜成功——观察路与发送路独立，一路不可用不阻断另一路；
+ *   即与产物文件同名的模块）；observer 模块缺失、未导出 loop 或调用向外
+ *   抛错时如实记录错误事实并立即结束本次 loop——发送依赖观察装配：本次
+ *   不解析、不调用 single-shot；反方向不成立：single-shot 不可用时已完
+ *   成的只读观察与后续窗口采样仍继续（Wiring Remediation I 单向依赖）；
  * - 窗口首个 tick 输出一行装配/窗口信息（外部日志 console，不写游戏
  *   Memory）。窗口标志是模块 heap：普通 global reset 会重置（与 observer
  *   采样窗口状态同一边界，实验已知）。
@@ -117,7 +119,8 @@ export function loop(): void {
       );
     }
     const observer = requireLabModule(OBSERVER_MODULE);
-    if (observer !== null) observer.loop();
+    if (observer === null) return; // 发送依赖观察装配：observer 不可用即结束本次 loop，不解析 single-shot
+    observer.loop();
     if (tick === config.targetTick) {
       const singleShot = requireLabModule(SINGLE_SHOT_MODULE);
       if (singleShot !== null) singleShot.loop();

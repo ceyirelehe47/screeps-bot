@@ -33,17 +33,32 @@ PREPARED_NOT_RUN，未上传、未装载、未武装。
   窗口内每 tick **先** observer **后**（仅 `Game.time === targetTick`）
   single-shot，保留调用 tick 前态；窗口外零调用、错过目标 tick 不补调不续期。
 - 模块加载零动作；经 Screeps 运行时模块系统 `require("observer")` /
-  `require("single-shot")` 装配；模块缺失或未导出 loop 如实记录一行错误事实。
+  `require("single-shot")` 装配。**发送依赖观察装配（Wiring Remediation I
+  单向依赖）**：observer 模块缺失、未导出 loop 或 `observer.loop()` 向外
+  抛错时，如实记录错误事实（复用 `lab-run-i-module-error`／外层
+  `lab-run-i-main-error`）并立即结束本次 `main.loop`——本次不解析、不调用
+  single-shot、零 send、控制槽零触碰；反方向不成立：single-shot 不可用时
+  已完成的只读观察与后续窗口采样仍继续。正常返回 `undefined` 是合法 void
+  语义，不升级为数据健康证明（真实实验仍须外部流程先取得只读基线并在
+  观察失败时停止）。
 - 不直接调用 `terminal.send`、不初始化／重置／复制控制槽、不复制
   attempted／费用／归属判断——发送资格完全由既有 single-shot 决定。
 - 窗口首个 tick 输出一行装配／窗口信息（外部日志 console，不写游戏
   Memory）；窗口标志为模块 heap，global reset 会重置（实验已知边界）。
 
-离线接线自测：`test/lab/terminal-transfer/runI.test.ts`（7 用例）——三产物
+离线接线自测：`test/lab/terminal-transfer/runI.test.ts`（12 用例）——三产物
 真实构建后按 Screeps 模块系统在 VM 装配，覆盖：装载零动作、窗口外零调用、
 非目标 tick 只采样、目标 tick 先 observer 后 single-shot 恰一次、完整窗口
-send=1、无武装 send=0、错过目标 tick 不补调；并断言构建器加入第三模式后
-observer／single-shot 产物与 Remediation II 归档**逐字节一致**。
+send=1、无武装 send=0、错过目标 tick 不补调；Wiring Remediation I 故障
+矩阵（main 沙箱 require／调用边界注入，不修改 Memory 不取消武装）——
+observer require 抛错／导出不合法（`{}` 缺 loop、`{loop:1}` 非函数、null
+补充）时 single-shot 零解析零调用零 send 且控制槽内容与引用不变、目标
+tick 重复调用与 T+1 均无发送、T+1 恢复真实 observer 继续观察不补发；
+`observer.loop()` 向外抛错沿既有 dispatch 错误出口阻断发送；single-shot
+缺失／导出不合法时真实 observer 在目标 tick 及后续窗口继续采样（反方向
+对照）；同 T 重复调用目标 tick 不增发。并断言构建器加入第三模式后
+observer／single-shot 产物与 Remediation II 归档**逐字节一致**（main 按
+本轮实际构建身份核验）。
 
 `labConfig.ts` 仍为唯一编译配置来源；真实实验身份（实验 ID／用户名／shard／
 结构 ID／目标 tick／费用上限）须在真实世界读回后填写并重新提交、构建、
