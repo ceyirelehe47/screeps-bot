@@ -1,0 +1,88 @@
+identity-ok main bytes=7430 sha256=44f624ccaa4a98da7b3441794fe2cd4b4b0c45b52f709c0039fd1ccc47a4d9c0
+identity-ok observer bytes=9160 sha256=96721926941004522d0f77ce76e3648d57aec04bcaa5f07d58493903ce8f48a4
+identity-ok singleShot bytes=27697 sha256=7730421dd7ef5d453387f03e5ad0eedec5b0b3c9d990bdeda805dd1213811391
+{
+  "summary": {
+    "observer-require-throw": {
+      "sendCount": 1,
+      "observerCalls": 0,
+      "singleShotCalls": 1,
+      "requireNames": [
+        "observer",
+        "single-shot"
+      ],
+      "moduleErrorStages": [
+        "observer:require"
+      ],
+      "slotRefUnchanged": false,
+      "slotDeepEqualInitial": false
+    },
+    "observer-empty-exports": {
+      "sendCount": 1,
+      "observerCalls": 0,
+      "singleShotCalls": 1,
+      "requireNames": [
+        "observer",
+        "single-shot"
+      ],
+      "moduleErrorStages": [
+        "observer:loop-export"
+      ],
+      "slotRefUnchanged": false,
+      "slotDeepEqualInitial": false
+    },
+    "observer-bad-loop-export": {
+      "sendCount": 1,
+      "observerCalls": 0,
+      "singleShotCalls": 1,
+      "requireNames": [
+        "observer",
+        "single-shot"
+      ],
+      "moduleErrorStages": [
+        "observer:loop-export"
+      ],
+      "slotRefUnchanged": false,
+      "slotDeepEqualInitial": false
+    },
+    "observer-null-exports": {
+      "sendCount": 1,
+      "observerCalls": 0,
+      "singleShotCalls": 1,
+      "requireNames": [
+        "observer",
+        "single-shot"
+      ],
+      "moduleErrorStages": [
+        "observer:loop-export"
+      ],
+      "slotRefUnchanged": false,
+      "slotDeepEqualInitial": false
+    },
+    "observer-loop-throw": {
+      "sendCount": 0,
+      "observerCalls": 1,
+      "singleShotCalls": 0,
+      "requireNames": [
+        "observer"
+      ],
+      "moduleErrorStages": [],
+      "slotRefUnchanged": true,
+      "slotDeepEqualInitial": true
+    },
+    "normal": {
+      "sendCount": 1,
+      "observerCalls": 1,
+      "singleShotCalls": 1,
+      "requireNames": [
+        "observer",
+        "single-shot"
+      ],
+      "moduleErrorStages": [],
+      "slotRefUnchanged": false,
+      "slotDeepEqualInitial": false
+    }
+  }
+}
+baseline-results.json 写入 C:\Users\15027\AppData\Local\Temp\labrun1-wiring-baseline\baseline-results.json
+BASELINE_REPRO_DONE

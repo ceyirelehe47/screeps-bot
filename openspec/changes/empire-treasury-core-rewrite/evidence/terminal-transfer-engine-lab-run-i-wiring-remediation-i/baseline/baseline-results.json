@@ -1,0 +1,228 @@
+{
+  "results": [
+    {
+      "scenario": "observer-require-throw",
+      "sendCount": 1,
+      "sendArgs": [
+        [
+          "H",
+          100,
+          "W10N57",
+          "lab-prep1 single-shot terminal transfer experiment"
+        ]
+      ],
+      "observerCalls": 0,
+      "singleShotCalls": 1,
+      "requireNames": [
+        "observer",
+        "single-shot"
+      ],
+      "slotAfter": {
+        "experimentId": "lab-prep1-example-0001",
+        "armed": true,
+        "attempted": true,
+        "attemptedTick": 12345,
+        "syncResult": {
+          "ok": true,
+          "code": 0
+        },
+        "stopped": true
+      },
+      "slotRefUnchanged": false,
+      "slotDeepEqualInitial": false,
+      "moduleErrors": [
+        {
+          "kind": "lab-run-i-module-error",
+          "module": "observer",
+          "stage": "require",
+          "error": "Error: baseline 注入：observer require 抛错"
+        }
+      ],
+      "sendBoundaryLines": 3,
+      "mainErrorLines": 0,
+      "sampleLines": 1
+    },
+    {
+      "scenario": "observer-empty-exports",
+      "sendCount": 1,
+      "sendArgs": [
+        [
+          "H",
+          100,
+          "W10N57",
+          "lab-prep1 single-shot terminal transfer experiment"
+        ]
+      ],
+      "observerCalls": 0,
+      "singleShotCalls": 1,
+      "requireNames": [
+        "observer",
+        "single-shot"
+      ],
+      "slotAfter": {
+        "experimentId": "lab-prep1-example-0001",
+        "armed": true,
+        "attempted": true,
+        "attemptedTick": 12345,
+        "syncResult": {
+          "ok": true,
+          "code": 0
+        },
+        "stopped": true
+      },
+      "slotRefUnchanged": false,
+      "slotDeepEqualInitial": false,
+      "moduleErrors": [
+        {
+          "kind": "lab-run-i-module-error",
+          "module": "observer",
+          "stage": "loop-export",
+          "error": "模块未导出 loop 函数"
+        }
+      ],
+      "sendBoundaryLines": 3,
+      "mainErrorLines": 0,
+      "sampleLines": 1
+    },
+    {
+      "scenario": "observer-bad-loop-export",
+      "sendCount": 1,
+      "sendArgs": [
+        [
+          "H",
+          100,
+          "W10N57",
+          "lab-prep1 single-shot terminal transfer experiment"
+        ]
+      ],
+      "observerCalls": 0,
+      "singleShotCalls": 1,
+      "requireNames": [
+        "observer",
+        "single-shot"
+      ],
+      "slotAfter": {
+        "experimentId": "lab-prep1-example-0001",
+        "armed": true,
+        "attempted": true,
+        "attemptedTick": 12345,
+        "syncResult": {
+          "ok": true,
+          "code": 0
+        },
+        "stopped": true
+      },
+      "slotRefUnchanged": false,
+      "slotDeepEqualInitial": false,
+      "moduleErrors": [
+        {
+          "kind": "lab-run-i-module-error",
+          "module": "observer",
+          "stage": "loop-export",
+          "error": "模块未导出 loop 函数"
+        }
+      ],
+      "sendBoundaryLines": 3,
+      "mainErrorLines": 0,
+      "sampleLines": 1
+    },
+    {
+      "scenario": "observer-null-exports",
+      "sendCount": 1,
+      "sendArgs": [
+        [
+          "H",
+          100,
+          "W10N57",
+          "lab-prep1 single-shot terminal transfer experiment"
+        ]
+      ],
+      "observerCalls": 0,
+      "singleShotCalls": 1,
+      "requireNames": [
+        "observer",
+        "single-shot"
+      ],
+      "slotAfter": {
+        "experimentId": "lab-prep1-example-0001",
+        "armed": true,
+        "attempted": true,
+        "attemptedTick": 12345,
+        "syncResult": {
+          "ok": true,
+          "code": 0
+        },
+        "stopped": true
+      },
+      "slotRefUnchanged": false,
+      "slotDeepEqualInitial": false,
+      "moduleErrors": [
+        {
+          "kind": "lab-run-i-module-error",
+          "module": "observer",
+          "stage": "loop-export",
+          "error": "模块未导出 loop 函数"
+        }
+      ],
+      "sendBoundaryLines": 3,
+      "mainErrorLines": 0,
+      "sampleLines": 1
+    },
+    {
+      "scenario": "observer-loop-throw",
+      "sendCount": 0,
+      "sendArgs": [],
+      "observerCalls": 1,
+      "singleShotCalls": 0,
+      "requireNames": [
+        "observer"
+      ],
+      "slotAfter": {
+        "experimentId": "lab-prep1-example-0001",
+        "armed": true,
+        "attempted": false
+      },
+      "slotRefUnchanged": true,
+      "slotDeepEqualInitial": true,
+      "moduleErrors": [],
+      "sendBoundaryLines": 0,
+      "mainErrorLines": 1,
+      "sampleLines": 0
+    },
+    {
+      "scenario": "normal",
+      "sendCount": 1,
+      "sendArgs": [
+        [
+          "H",
+          100,
+          "W10N57",
+          "lab-prep1 single-shot terminal transfer experiment"
+        ]
+      ],
+      "observerCalls": 1,
+      "singleShotCalls": 1,
+      "requireNames": [
+        "observer",
+        "single-shot"
+      ],
+      "slotAfter": {
+        "experimentId": "lab-prep1-example-0001",
+        "armed": true,
+        "attempted": true,
+        "attemptedTick": 12345,
+        "syncResult": {
+          "ok": true,
+          "code": 0
+        },
+        "stopped": true
+      },
+      "slotRefUnchanged": false,
+      "slotDeepEqualInitial": false,
+      "moduleErrors": [],
+      "sendBoundaryLines": 3,
+      "mainErrorLines": 0,
+      "sampleLines": 2
+    }
+  ]
+}
