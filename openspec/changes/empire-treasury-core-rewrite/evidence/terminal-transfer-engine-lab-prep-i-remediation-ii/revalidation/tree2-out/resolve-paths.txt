@@ -1,0 +1,4 @@
+typescript -> C:\Users\15027\AppData\Local\Temp\labprep1-r2-tree2\node_modules\typescript\lib\typescript.js
+jest -> C:\Users\15027\AppData\Local\Temp\labprep1-r2-tree2\node_modules\jest\build\index.js
+ts-jest -> C:\Users\15027\AppData\Local\Temp\labprep1-r2-tree2\node_modules\ts-jest\dist\index.js
+T2 node_modules lstat: isSymbolicLink=false isDirectory=true

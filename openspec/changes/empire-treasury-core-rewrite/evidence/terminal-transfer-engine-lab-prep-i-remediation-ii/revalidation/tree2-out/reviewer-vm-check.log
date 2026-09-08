@@ -1,0 +1,54 @@
+PASS | manifest：output.sha256 与实测 bundle sha256 一致 | sha256=7730421dd7ef5d453387f03e5ad0eedec5b0b3c9d990bdeda805dd1213811391
+PASS | manifest：output.bytes 与实测字节数一致 | bytes=27697
+PASS | manifest：repoSourceCommit === VALIDATION_HEAD | 9bf6625503bc8f697fdc2ba1f30e8fb78c58678f
+
+===== 场景甲（B1：非 ASCII 结果超限拒写，保留 attempted 不重发） =====
+PASS | 甲：沙箱无 Node 注入（Buffer/TextEncoder/process/require 均为 undefined） | {"Buffer":"undefined","TextEncoder":"undefined","process":"undefined","require":"undefined","textEncoderGlobal":"undefined"}
+PASS | 甲：send 恰 1 次（第一 loop） | sendCalls=1
+PASS | 甲：send 入口内槽上 attempted===true
+PASS | 甲：send 入口槽 experimentId 匹配
+PASS | 甲：send 入口槽 attemptedTick===12345
+PASS | 甲：最终槽完整 JSON UTF-8 ≤4096（VM 外独立计算） | bytes=93 chars=93
+PASS | 甲：最终槽不含 syncResult/stopped | experimentId,armed,attempted,attemptedTick
+PASS | 甲：最终槽 attempted===true
+PASS | 甲：日志含 size_limit 拒写行且 bytes>4096 | 6296
+PASS | 甲：产物自报 bytes === VM 外独立 Buffer 计算值 | 产物自报=6296 独立计算=6296
+PASS | 甲：同步异常如实输出（sync-throw 1 次，ok=false） | syncThrow=1
+PASS | 甲：同 tick 二次 loop 后累计 send 仍 1
+PASS | 甲：推进一 tick 后累计 send 仍 1
+PASS | 甲-新VM：沙箱无 Node 注入（Buffer/TextEncoder/process/require 均为 undefined） | {"Buffer":"undefined","TextEncoder":"undefined","process":"undefined","require":"undefined","textEncoderGlobal":"undefined"}
+PASS | 甲：全新 VM 沙箱重建模块再 loop 后累计 send 仍 1 | 旧VM=1 新VM=0
+PASS | 甲：新 VM 拒绝原因 already_attempted（非 tick 门禁掩盖） | already_attempted
+
+===== 场景乙（B2：受支持字段超限读取 → 不健康，零写零 send） =====
+PASS | 乙：预置记录完整 JSON UTF-8 >4096（VM 外独立证明） | bytes=5145 chars=5145
+PASS | 乙：沙箱无 Node 注入（Buffer/TextEncoder/process/require 均为 undefined） | {"Buffer":"undefined","TextEncoder":"undefined","process":"undefined","require":"undefined","textEncoderGlobal":"undefined"}
+PASS | 乙：三次 loop 全部 lab-precondition-rejection 且 reason=control_record_corrupt | control_record_corrupt,control_record_corrupt,control_record_corrupt
+PASS | 乙：拒绝不是 already_stopped
+PASS | 乙：累计 send 0 | sendCalls=0
+PASS | 乙：槽对象引用未变（零写）
+PASS | 乙：槽内容完全未变
+PASS | 乙：无任何控制槽写拒绝/写尝试日志
+
+===== 场景丙（4096/4097 独立边界：同形状已结束记录） =====
+PASS | 丙：记录 A 完整 JSON 恰 4096 字节（实测，误差非 0 即 FAIL） | 实测=4096 errorLen=3951
+PASS | 丙：记录 B 完整 JSON 恰 4097 字节（实测，误差非 0 即 FAIL） | 实测=4097 errorLen=3952
+PASS | 丙：4096 已结束记录 → 产物拒绝原因 already_stopped（读取健康） | already_stopped
+PASS | 丙：4096 记录零 send
+PASS | 丙：4097 已结束记录 → 产物拒绝原因 control_record_corrupt（读取不健康） | control_record_corrupt
+PASS | 丙：4097 记录零 send
+PASS | 丙：typescript 解析自第二树 node_modules | C:\Users\15027\AppData\Local\Temp\labprep1-r2-tree2\node_modules\typescript\lib\typescript.js
+PASS | 丙：readControlRecord(4096 已结束记录) === ok | ok
+PASS | 丙：readControlRecord(4097 已结束记录) === corrupt | corrupt
+PASS | 丙：短合法同形状对照读取 ok（读取未整体禁用） | ok
+PASS | 丙：B2 超限记录直读 corrupt | corrupt
+PASS | 丙：measureUtf8Bytes === Buffer.byteLength（纯 ASCII） | measure=23 buffer=23
+PASS | 丙：measureUtf8Bytes === Buffer.byteLength（中文） | measure=6159 buffer=6159
+PASS | 丙：measureUtf8Bytes === Buffer.byteLength（emoji 代理对） | measure=608 buffer=608
+PASS | 丙：measureUtf8Bytes === Buffer.byteLength（引号/反斜杠/控制字符） | measure=808 buffer=808
+PASS | 丙：measureUtf8Bytes === Buffer.byteLength（孤立高代理(直接字符串)） | measure=6 buffer=6
+PASS | 丙：measureUtf8Bytes === Buffer.byteLength（孤立低代理(直接字符串)） | measure=9 buffer=9
+PASS | 丙：measureUtf8Bytes === Buffer.byteLength（混合） | measure=5098 buffer=5098
+
+===== 汇总 =====
+PASS=45 FAIL=0

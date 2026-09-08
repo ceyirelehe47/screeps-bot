@@ -1,0 +1,3 @@
+LAB: exit=0 suites=1 tests=22 passed=22 failed=0 pending=0 todo=0
+KEY: exit=0 suites=9 tests=102 passed=102 failed=0 pending=0 todo=0
+DEFENSE: exit=0 suites=11 tests=118 passed=118 failed=0 pending=0 todo=0

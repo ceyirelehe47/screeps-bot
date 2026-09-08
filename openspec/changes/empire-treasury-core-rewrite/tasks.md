@@ -9,9 +9,10 @@
 - [x] 实现（controlRecord.ts）：measureUtf8Bytes 纯 JS UTF-8 字节计量（导出；ASCII/双字节/BMP/代理对/孤立代理按替换字符 3 字节，产物零 Node 编码依赖）；CONTROL_MAX_UTF8_BYTES=4096；readControlRecord 形状通过后新增字节检查（超限→corrupt、计量异常→corrupt、零写）；writeControlRecord 超限按字节拒（报告 bytes+limitUnits utf8-bytes，characters 降为诊断字段）；confirmAttemptedMark 经同一读取入口自动消费；singleShot.ts 零改动
 - [x] 测试（probe.test.ts 17→22 it）：R02 读写边界矩阵（4095/4096 通过、4097 拒写且旧槽不变/预置读取 corrupt 零写，ASCII 与非 ASCII 已结束记录，4096 精确合法对照）；R02 计量对照（中文/双字节/emoji/转义/孤立代理项与独立 Buffer 期望一致、短合法 Unicode 正常读写）；R01/R03 B1 产物 it（新产物超限结果拒写+attempted 保留槽 ≤4096 字节+sync-throw 如实外记+同 tick×2/同 tick 新 VM/下一 tick 累计 send=1；旧产物缺口对照 6296 字节落槽；产物静态断言无 Node 编码全局）；R01/R03 B2 产物 it（reader corrupt 零写+短对照健康；产物 loop 控制读取阶段拒绝非 already_stopped+槽原文不变）；R02 发送前读回超限 it（tamper 塞已知字段超长 error——readback_corrupt 零 send 零发送边界日志）；既有 Q 断言口径改字节（3 处）
 - [x] 文档：lab-prep-i.md 头部 Remediation II 引用块+控制记录行字节口径+§4.2 超限说明+22 it；tasks.md 本段；migration-map §19.3 R 表
-- [ ] 预算滚动与 VALIDATION_HEAD 固定
-- [ ] 主验证（§7.2）与第二树复验
-- [ ] 归档与 push
+- [x] 预算滚动与 VALIDATION_HEAD 固定（9bf6625：240/1465 全绿自跑 PASSED；target 锚点=ae991e5，baseline 保持 b6ab29a）
+- [x] 主验证（§7.2：四组冻结零差异、typecheck×2、build+生产 bundle 前后一致 63e4be29、双 lab 构建（single-shot 27697B/SHA-256 7730421d）、LAB 1/22+KEY 9/102+Treasury 35/597+Defense 11/118+full 240/1465 五组 Jest、budget PASSED、verify-evidence PASS、diff-check、前后状态 0 字节）
+- [x] 第二树复验（detached worktree 9bf6625 + 独立 npm ci 896 包 exit 0 + lockfile 双树一致 + 解析路径落第二树；LAB/KEY/Defense 复跑全绿；reviewer 自写 VM 脚本 45 项 PASS——B1 send=1/槽 93B/bytes=6296 独立相等/新 VM 累计 1、B2 control_record_corrupt 零写、4096 健康/4097 corrupt 独立边界、沙箱无 Node 编码全局）
+- [x] 归档与 push（evidence/terminal-transfer-engine-lab-prep-i-remediation-ii/：task/baseline/final/revalidation + 主报告；真实引擎 NOT_RUN 如实分开）
 
 ## Terminal Transfer Engine Lab Prep I · Remediation I（2026-09-08）
 

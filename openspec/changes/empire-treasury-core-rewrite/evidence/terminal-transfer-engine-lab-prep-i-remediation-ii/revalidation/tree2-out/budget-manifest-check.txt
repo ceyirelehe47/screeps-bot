@@ -1,0 +1,8 @@
+target.commit = ae991e5e73a98ca8de69db0e07b06f71927156c5
+target.tests = 1465
+target.suites = 240
+baseline.commit = b6ab29a6f0fb1ea5855e150db883df382bd2acbf (baseline.tests=1454)
+files[test/lab/terminal-transfer/probe.test.ts].budget = 22
+target.tests===1465 : true
+probe.budget===22 : true
+target.commit===9bf6625... : false （实测为 ae991e5e——9bf6625 commit message 明示 target 锚点固定至 ae991e5，属有意设计）

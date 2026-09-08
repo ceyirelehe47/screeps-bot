@@ -1,0 +1,1 @@
+npx jest --config jest.config.cjs --runInBand --json --outputFile=C:\\Users\\15027\\AppData\\Local\\Temp\\treasury-lab-r2-LfYNW6/jest-full.json
