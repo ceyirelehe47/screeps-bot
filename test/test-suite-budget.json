@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "b6ab29a6f0fb1ea5855e150db883df382bd2acbf",
-    "suites": 240,
-    "tests": 1454
+    "commit": "afe839d028b9521592d8493bcfb9a2194d04fec1",
+    "suites": 241,
+    "tests": 1472
   },
   "target": {
-    "commit": "ae991e5e73a98ca8de69db0e07b06f71927156c5",
-    "suites": 240,
-    "tests": 1465,
-    "passed": 1465,
+    "commit": "afe839d028b9521592d8493bcfb9a2194d04fec1",
+    "suites": 241,
+    "tests": 1472,
+    "passed": 1472,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Terminal Transfer Engine Lab Prep I · Remediation II：probe.test.ts 字节口径矩阵 17→22 用例（240/1460→240/1465，B1/B2 基线对照+边界矩阵+计量对照+读回超限）；锚点 ae991e5"
+    "note": "Terminal Transfer Engine Lab Run I：新增离线接线自测 runI.test.ts 7 用例（240/1465→241/1472，三产物 VM 装配/装载零动作/窗口边界/目标 tick 恰一次/无武装/错过不补调+旧两产物与归档逐字节一致）；基线随新文件滚动至 afe839d（文件集对比要求基线含新测试文件）"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1853,6 +1853,14 @@
       "budget": 22,
       "tests": 22,
       "passed": 22,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/lab/terminal-transfer/runI.test.ts": {
+      "budget": 7,
+      "tests": 7,
+      "passed": 7,
       "failed": 0,
       "pending": 0,
       "todo": 0
