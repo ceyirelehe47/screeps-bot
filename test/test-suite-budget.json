@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "9a83520b0109550bd68215f6f415b21a048a1da4",
-    "suites": 238,
-    "tests": 1436
+    "commit": "2099e564bd52ef0908e34b338c16c2a0717fa199",
+    "suites": 239,
+    "tests": 1440
   },
   "target": {
-    "commit": "9a83520b0109550bd68215f6f415b21a048a1da4",
-    "suites": 238,
-    "tests": 1436,
-    "passed": 1436,
+    "commit": "2099e564bd52ef0908e34b338c16c2a0717fa199",
+    "suites": 239,
+    "tests": 1440,
+    "passed": 1440,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Terminal Transfer Slice 0 · Remediation I：新增 N 反例 1 suite/8 用例（237/1428→238/1436）；M 用例改造后仍 8 it；锚点 9a83520 系列"
+    "note": "Terminal Transfer Slice 0 · Remediation II：新增 O 反例 1 suite/4 用例（238/1436→239/1440）；M 文件 8 it 不变（closing 投影断言并入既有 it）；锚点 2099e56 系列"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1724,6 +1724,14 @@
       "budget": 8,
       "tests": 8,
       "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts": {
+      "budget": 4,
+      "tests": 4,
+      "passed": 4,
       "failed": 0,
       "pending": 0,
       "todo": 0

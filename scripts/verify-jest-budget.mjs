@@ -12,14 +12,14 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const manifestPath = path.join(repoRoot, "test", "test-suite-budget.json");
 const jestEntrypoint = path.join(repoRoot, "node_modules", "jest", "bin", "jest.js");
 const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data", "node_modules"]);
-// 【Terminal Transfer Slice 0】新基线：Terminal 调拨离线原型 1 suite/8 用例
-//（237/1428，见
-// openspec/changes/empire-treasury-core-rewrite/test-migration-map.md §16）。
-const requiredBaselineCommit = "9a83520b0109550bd68215f6f415b21a048a1da4";
+// 【Terminal Transfer Slice 0 · Remediation II】新基线：O 反例 1 suite/4 用例
+//（238/1436→239/1440，见
+// openspec/changes/empire-treasury-core-rewrite/test-migration-map.md §18）。
+const requiredBaselineCommit = "2099e564bd52ef0908e34b338c16c2a0717fa199";
 const requiredTarget = Object.freeze({
-  suites: 238,
-  tests: 1436,
-  passed: 1436,
+  suites: 239,
+  tests: 1440,
+  passed: 1440,
   failed: 0,
   pending: 0,
   todo: 0,
