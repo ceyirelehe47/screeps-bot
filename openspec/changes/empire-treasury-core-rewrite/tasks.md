@@ -1,5 +1,18 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Terminal Transfer Engine Lab Prep I · Remediation I（2026-09-08）
+
+修复 single-shot 发送前标记确认缺陷（写入结果化+读回核对）、补实际构建产物的失败路径验收、澄清编译配置交接（任务书 treasury-terminal-transfer-engine-lab-prep-I-remediation-I-implementation.md；验收索引 Q01–Q06）。生产/配置/Slice 实现/observer 只读语义全部冻结；真实引擎仍 NOT_RUN。
+
+- [x] 起点核对：本地=远端=749d44c 干净；旧产物三重身份核对（17520 字节/blob 6ce38daa/SHA-256 9d8bfc54）
+- [x] Q01 基线复现（独立 Node VM 假端口脚本，输出归档 evidence baseline/）：七场景矩阵三时点累计 send——S5 setter 抛错/S6 静默丢写/S7 4090 超限均复现 1/2/2（同 tick 双发，标记没写上仍进 send）；对照 S1 0/0/0、S2/S3/S4 1/1/1；S6 零 write-refused 留痕（无痕缺陷特征）、S5/S7 各 4 条拒写日志但 send 仍发生
+- [x] 工作 A：controlRecord.ts——writeControlRecord 返回 LabControlWrite（serialize_failed/size_limit/assign_failed 明确结果；ok:true 仅表示赋值未抛错）；新增 confirmAttemptedMark（发送前重新读回槽核对实验 ID/attemptedTick/attempted===true/armed/未 stopped——静默丢写/旧值/错 ID/tick/读回异常均 mismatch）；isControlRecord 严格化（未知顶层字段与未知 syncResult 字段按 corrupt 拒——超限 note 记录读取阶段即拒）；4KiB 明确字符数口径。singleShot.ts——构造 attempted 更新值→写入→读回确认→确认后才打 pre-call/boundary 并 send；标记失败打 lab-mark-unconfirmed（stage=mark_write/mark_readback+reason）零发送且无发送边界日志；结果/停止写回失败打 lab-result-write-refused（不回滚 attempted、不重试、不谎报 stopped 保存）
+- [x] 工作 B：probe.test.ts 11→17 it——installLabWorld 扩展控制槽故障注入（setter-throw/silent-drop/read-fail-after/tamper/fail-writes-after）与 onSend 入口回调；Q01 基线复现 it（VM 装载旧产物+身份断言+七场景旧行为断言+Q01-BASELINE 留痕）；Q01/Q02 修复对照 it（新产物同矩阵 0/0/0+零 boundary/sync+S7 如实读取拒绝+正常路径 phases 保持）；Q02 send 入口内 it（入口读 Memory 见匹配 attempted、syncResult/stopped 尚未写）；Q02 读回故障 it（getter 异常 readback_corrupt/篡改 ID readback_experiment_mismatch/篡改 tick readback_tick_mismatch——首次控制读取成功、零 send）；Q03 结果更新失败 it（变体 a：结果写 setter 故障——send 1/attempted 保留/stopped 未写/重载+重建零增发；变体 b：超长诊断 size_limit 拒写——attempted 保留/记录有界/原始返回 ok:false 如实）；Q02 单元 it（超限 size_limit/循环引用 serialize_failed 拒绝不触槽；未知顶层与 syncResult 字段 corrupt；合法读写正常）
+- [x] 工作 C：labConfig.ts 头注释明确编译时配置唯一来源与更换流程；lab-prep-i.md §1 表更新（17 it、标记确认语义、字符口径）+新增 §4.1 配置交接四点；构建器 single-shot banner 补标记确认语义；migration-map §19.2 Q 表
+- [ ] 预算滚动与 VALIDATION_HEAD 固定
+- [ ] 主验证（§8.2）与第二树复验
+- [ ] 归档与 push
+
 ## Terminal Transfer Engine Lab Prep I（2026-09-08）
 
 承接 Slice 0 · Remediation II 的 O01–O06；补齐两项交接保留（注册 settle 两种排列、第二树独立依赖安装），并交付与生产完全隔离的 Terminal 原始 API 探针包与本地构建入口（任务书 treasury-terminal-transfer-engine-lab-prep-I-implementation.md；验收索引 P01–P06）。生产冻结与既有上限不变；本轮不执行任何真实引擎实验（PREPARED_NOT_RUN）。

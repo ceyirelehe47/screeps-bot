@@ -529,3 +529,15 @@ IVKernel 测试侧两文件。
 - probe.test.ts 中所有"send 调用 1 次"均指 stub spy 调用（假 Game/Memory/terminal）——不是真实游戏经济动作；该测试证明包装与采样正确，不证明引擎真的这样运行（真实边界 PREPARED_NOT_RUN）。
 - P01 的 [60,100] 排列由 spy 返回反序独立副本实现（任务书 §3.1 最小做法）——宿主记录在视图物理拼接中仍固定在前；如需原生覆盖该形态需扩展 mock 视图配置（沿留待办）。
 - probe.test.ts 的全局 stub 在 it 内安装（setup.ts 的 refreshGlobalMock beforeEach 先行刷新，互不冲突）；产物 require 前后以 jest.resetModules() 保证 fresh 模块状态。
+
+### 19.2 Lab Prep I · Remediation I：Q01–Q06 定位（2026-09-08）
+
+| 索引 | 测试/驱动位置 | 覆盖行为 |
+| --- | --- | --- |
+| Q01 | probe.test.ts「Q01 基线复现」it（VM 假端口） | 固定旧产物（evidence final/lab-single-shot/single-shot.js，字节/blob 身份由归档提交保证、SHA-256 9d8bfc54…前置断言）七场景矩阵三时点累计 send：未武装 0/0/0、正常/非 OK/throw 对照 1/1/1、setter 抛错/静默丢写/4090 超限三失败场景复现 1/2/2（同 tick 双发）；S6 静默丢写零 write-refused 留痕（无痕缺陷特征）；Q01-BASELINE 行留痕原始结果 |
+| Q02 | probe.test.ts「Q01/Q02 修复对照」+「send 入口内」+「写后读回故障」+「单元断言」its | 新产物同矩阵三失败场景全 0/0/0 且零 boundary/sync 输出（lab-mark-unconfirmed 指向探针标记失败）；S7 超限 note 记录读取阶段即 corrupt（如实读取拒绝口径，不声称走到写入超限分支）；send spy 入口内读 Memory 可见匹配 attempted（syncResult/stopped 尚未写）；读回 getter 异常/篡改 ID/篡改 tick——首次控制读取成功、零发送、无 send-attempt 行；写入函数对超限（size_limit）/循环引用（serialize_failed）候选明确拒绝且不触碰槽 |
+| Q03 | probe.test.ts「Q03 结果更新失败」it | 预标记确认后结果写回 setter 故障：send 恰 1 次、attempted 保留、stopped 未谎报保存、同 tick/下一 tick/保留标记的 JSON 重载+模块重建均零增发、lab-result-write-refused 留痕同步结果；send 抛超长诊断→结果写回 size_limit 拒写不破坏 attempted、控制记录保持 ≤4KiB、原始返回未被改为成功 |
+| Q04 | labConfig.ts 头注释 + terminal-transfer-engine-lab-prep-i.md §4.1 | 编译时配置唯一来源（LAB_EXAMPLE_EXPERIMENT）、example.experiment.json 文档示例身份（运行时不读取）、Memory 控制记录不覆盖编译配置；改配置=源码变化（重新提交/重建/核对新 hash）；不新增 --config/热加载/运行时配置 store/上传器 |
+| Q05 | probe.test.ts 全量回归 + §8.2 五组 Jest | observer/single-shot 产物既有 11 it 原断言不动全绿；P01/P02、M/N/O、KEY/Treasury/Defense 不退化；生产/配置/依赖/Slice 实现四组冻结零差异 |
+| Q06 | evidence/terminal-transfer-engine-lab-prep-i-remediation-i/ | 新 VALIDATION_HEAD 真实预算、主验证完整原始输出、第二干净依赖环境复验（reviewer 重点独立核对标记失败 0 次 send、结果写失败仍 1 次）、执行代码先提交后验证、NOT_RUN 边界 |
+

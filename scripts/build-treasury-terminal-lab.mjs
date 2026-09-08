@@ -175,7 +175,7 @@ async function buildMode(mode, resolvedOut) {
       const banner =
         mode === "observer"
           ? "/* Terminal Transfer Engine Lab Prep I——observer（默认只读入口）。PREPARED_NOT_RUN：仅本地构建与离线自测，未在真实引擎上运行。不发送、不写游戏 Memory。生成身份见同目录 manifest.json。 */"
-          : "/* Terminal Transfer Engine Lab Prep I——single-shot（未武装调用版，仅供未来单独授权的隔离实验）。PREPARED_NOT_RUN：仅本地构建与离线自测，未在真实引擎上运行。默认零发送；仅在完整实验配置与一次性控制事实同时匹配的目标 tick 尝试一次。 */";
+          : "/* Terminal Transfer Engine Lab Prep I——single-shot（未武装调用版，仅供未来单独授权的隔离实验）。PREPARED_NOT_RUN：仅本地构建与离线自测，未在真实引擎上运行。默认零发送；仅在完整实验配置与一次性控制事实同时匹配的目标 tick，且 attempted 标记写入并读回确认后才尝试一次（标记未确认即零发送）。 */";
       const generated = await bundle.write({
         file: path.join(resolvedOut, outputName),
         format: "cjs",

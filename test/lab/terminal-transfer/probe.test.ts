@@ -1,11 +1,18 @@
 /**
- * Terminal Transfer Engine Lab Prep I——探针离线自测（任务书 §4.4；P03/P04）。
+ * Terminal Transfer Engine Lab Prep I——探针离线自测（任务书 §4.4；P03/P04），
+ * Lab Prep I · Remediation I 扩展（Q01–Q03：发送前标记确认与失败路径矩阵）。
  *
  * 在本地 stub/spy 注入的 Game/Memory/Terminal API 上执行**同一源码构建出的
  * 两个真实入口产物**（beforeAll 实际调用构建器到独立临时目录，再 require
  * 产物——不是只检查源码字符串）。这里的"send 调用 1 次"只指 spy 调用，
  * 不是真实游戏经济动作；stub 的 send 返回 OK 时不修改库存、不给交易视图
  * 填记录，后续显式切换"后续 tick 观察 fixture"验证观察器报告输入差异。
+ *
+ * Remediation I 新增：Q01 在固定旧产物（上轮归档 single-shot.js，VM 假端口）
+ * 上复现 7 场景基线矩阵（三失败场景同 tick 双发 1/2/2）；同矩阵跑新产物
+ * 断言 0/0/0 与零 boundary/sync 输出；Q02/Q03 覆盖写后读回异常/旧值/篡改、
+ * send 入口内标记可见性、结果更新失败不回退 attempted、写入函数对超限与
+ * 循环引用候选的明确拒绝、未知字段读取拒绝。
  *
  * 该测试只证明包装与采样正确，不证明引擎真的这样运行（真实引擎边界
  * PREPARED_NOT_RUN，见实验交接说明）。
@@ -15,8 +22,14 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { runInNewContext } from "node:vm";
 import { LAB_EXAMPLE_EXPERIMENT } from "./labConfig";
-import { LAB_CONTROL_MEMORY_KEY } from "./controlRecord";
+import {
+  LAB_CONTROL_MEMORY_KEY,
+  readControlRecord,
+  writeControlRecord,
+  type LabControlRecord,
+} from "./controlRecord";
 
 const REPO_ROOT = resolve(__dirname, "..", "..", "..");
 const BUILDER = join(REPO_ROOT, "scripts", "build-treasury-terminal-lab.mjs");
@@ -84,6 +97,20 @@ interface LabWorldOptions {
   sourceFreeCapacity?: number;
   targetFreeCapacity?: number;
   sourceCooldown?: number;
+  /** 控制槽故障模式（Remediation I：标记写入/读回故障注入；默认普通属性）。 */
+  controlSlot?:
+    | { readonly mode: "setter-throw" }
+    | { readonly mode: "silent-drop" }
+    | { readonly mode: "read-fail-after"; readonly reads: number }
+    | {
+        readonly mode: "tamper";
+        readonly tamper: (record: Record<string, unknown>) => Record<string, unknown>;
+      }
+    | { readonly mode: "fail-writes-after"; readonly writes: number };
+  /** 控制槽初始记录（controlSlot 模式下的 stored 初值）。 */
+  initialControl?: unknown;
+  /** send spy 入口回调（在记录调用后、返回前触发——Q02 入口内观察 Memory）。 */
+  onSend?: () => void;
 }
 
 interface LabWorld {
@@ -111,8 +138,12 @@ function installLabWorld(options: LabWorldOptions = {}): LabWorld {
     store: makeStore(options.sourceResources ?? { H: 1000, energy: 10_000 }, options.sourceFreeCapacity ?? 50_000),
     cooldown: options.sourceCooldown ?? 0,
     // stub 的 send：只记录调用与 this 绑定；返回 OK 时**不**改库存/视图。
+    // onSend 在记录后、返回前触发——Q02"send 入口内读取 Memory"的观察点。
     send(resourceType: unknown, amount: unknown, destination: unknown, description: unknown): number {
       sendCalls.push({ self: this, args: [resourceType, amount, destination, description] });
+      if (options.onSend !== undefined) {
+        options.onSend();
+      }
       const result: number | { throws: Error } = options.sendResult ?? 0;
       if (typeof result === "object") {
         throw result.throws;
@@ -157,6 +188,38 @@ function installLabWorld(options: LabWorldOptions = {}): LabWorld {
     },
   };
   const memory: Record<string, unknown> = {};
+  // 控制槽故障注入（Remediation I）：getter/setter 计数与篡改——enumerable
+  // 保持 true 以便 JSON 序列化往返（模拟世界侧 Memory reload）保留控制事实。
+  if (options.controlSlot !== undefined) {
+    const slot = options.controlSlot;
+    let stored: unknown = options.initialControl ?? armedControl();
+    let readCount = 0;
+    let writeCount = 0;
+    Object.defineProperty(memory, LAB_CONTROL_MEMORY_KEY, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        readCount += 1;
+        if (slot.mode === "read-fail-after" && readCount > slot.reads) {
+          throw new Error("控制槽 getter 读回异常（stub fixture）");
+        }
+        return stored;
+      },
+      set(value) {
+        writeCount += 1;
+        if (slot.mode === "setter-throw") {
+          throw new Error("控制槽 setter 故障（stub fixture）");
+        }
+        if (slot.mode === "silent-drop") return; // 静默丢写：stored 不更新
+        if (slot.mode === "fail-writes-after" && writeCount > slot.writes) {
+          throw new Error(`控制槽 setter 第 ${String(writeCount)} 次写入起故障（stub fixture）`);
+        }
+        stored = slot.mode === "tamper" ? slot.tamper(value as Record<string, unknown>) : value;
+      },
+    });
+  } else if (options.initialControl !== undefined) {
+    memory[LAB_CONTROL_MEMORY_KEY] = options.initialControl;
+  }
   const globalScope = global as unknown as Record<string, unknown>;
   const previousGame = globalScope.Game;
   const previousMemory = globalScope.Memory;
@@ -204,6 +267,163 @@ function armedControl(overrides: Record<string, unknown> = {}): Record<string, u
 
 function requireArtifact(bundlePath: string): { loop: () => void } {
   return require(bundlePath) as { loop: () => void };
+}
+
+// ── Q01 基线复现与新产物对照（VM 假端口，任务书 §3.2 七场景矩阵） ──────────
+
+/** 上一轮归档的旧 single-shot 产物（固定身份——基线反例的唯一来源）。 */
+const LEGACY_SINGLE_SHOT_BUNDLE = join(
+  REPO_ROOT,
+  "openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-prep-i/final/lab-single-shot/single-shot.js",
+);
+const LEGACY_SINGLE_SHOT_BYTES = 17520;
+const LEGACY_SINGLE_SHOT_SHA256 = "9d8bfc54d542b9b5e8e37113b87e0f06e29149b7fa3cac1b9a7b8dfc7794ed4f";
+
+/** 初始 JSON 长度恰为 4090 字符的记录（合法必要字段 + 程序补齐的 ASCII note）。 */
+function buildOversizedControl(): Record<string, unknown> {
+  const bare = JSON.stringify(armedControl()).length;
+  const record = { ...armedControl(), note: "x".repeat(4090 - bare - 10) };
+  if (JSON.stringify(record).length !== 4090) {
+    throw new Error("note 补齐偏差——不应依赖手工数字符");
+  }
+  return record;
+}
+
+type VmSlotMode = "unarmed" | "normal" | "setter-throw" | "silent-drop" | "oversized";
+type VmSendBehavior = "ok" | "non-ok" | "throw";
+
+interface VmScenarioRow {
+  readonly label: string;
+  readonly slotMode: VmSlotMode;
+  readonly sendBehavior: VmSendBehavior;
+}
+
+interface VmRunOutcome {
+  readonly sendAfterLoop1: number;
+  readonly sendAfterLoop2: number;
+  readonly sendAfterNextTick: number;
+  readonly slotFinalAttempted: unknown;
+  readonly slotFinalStopped: unknown;
+  readonly markUnconfirmed: string[];
+  readonly rejections: string[];
+  readonly sendAttemptPhases: string[];
+  readonly writeRefusedLines: number;
+}
+
+/** 七场景固定矩阵（旧产物复现与新产物修复对照共用同一 harness）。 */
+const VM_SCENARIOS: readonly VmScenarioRow[] = [
+  { label: "S1 未武装/Memory 正常", slotMode: "unarmed", sendBehavior: "ok" },
+  { label: "S2 正常武装/小记录/写入正常", slotMode: "normal", sendBehavior: "ok" },
+  { label: "S3 send 非 OK/写入正常", slotMode: "normal", sendBehavior: "non-ok" },
+  { label: "S4 send 抛错/写入正常", slotMode: "normal", sendBehavior: "throw" },
+  { label: "S5 控制槽 setter 抛错", slotMode: "setter-throw", sendBehavior: "ok" },
+  { label: "S6 控制槽 setter 静默丢写", slotMode: "silent-drop", sendBehavior: "ok" },
+  { label: "S7 初始 4090 字符/更新后超限", slotMode: "oversized", sendBehavior: "ok" },
+];
+
+/**
+ * 单场景 VM 执行：全新沙箱（新模块环境）装载产物代码，目标 tick 调两次
+ * loop() 再推进一个 tick 调用——三时点累计 send spy 数即矩阵轨迹。
+ * send spy 只记调用，不修改库存、冷却或交易记录。
+ */
+function runVmScenario(bundleCode: string, scenario: VmScenarioRow): VmRunOutcome {
+  const config = LAB_EXAMPLE_EXPERIMENT;
+  const sendCalls: unknown[][] = [];
+  const makeStore = (resources: Record<string, number>, freeCapacity: number) => ({
+    ...resources,
+    getFreeCapacity: () => freeCapacity,
+    getUsedCapacity: () => 0,
+    getCapacity: () => freeCapacity,
+  });
+  const sourceTerminal = {
+    id: config.sourceTerminalId,
+    owner: { username: config.username },
+    store: makeStore({ H: 1000, energy: 10_000 }, 50_000),
+    cooldown: 0,
+    send(resourceType: unknown, amount: unknown, destination: unknown, description: unknown): number {
+      sendCalls.push([resourceType, amount, destination, description]);
+      if (scenario.sendBehavior === "throw") throw new Error("send stub 同步异常（VM fixture）");
+      return scenario.sendBehavior === "non-ok" ? -6 : 0;
+    },
+  };
+  const targetTerminal = {
+    id: config.targetTerminalId,
+    owner: { username: config.username },
+    store: makeStore({ energy: 2000 }, 100_000),
+    cooldown: 0,
+  };
+  const game = {
+    time: config.targetTick,
+    shard: { name: config.shardName, type: "normal", ptr: false },
+    rooms: {
+      [config.sourceRoomName]: { name: config.sourceRoomName, terminal: sourceTerminal },
+      [config.targetRoomName]: { name: config.targetRoomName, terminal: targetTerminal },
+    },
+    market: { calcTransactionCost: () => 26, incomingTransactions: [], outgoingTransactions: [] },
+  };
+  const memory: Record<string, unknown> = {};
+  let stored: Record<string, unknown> | undefined;
+  if (scenario.slotMode === "setter-throw" || scenario.slotMode === "silent-drop") {
+    stored = armedControl();
+    Object.defineProperty(memory, LAB_CONTROL_MEMORY_KEY, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        return stored;
+      },
+      set(value) {
+        if (scenario.slotMode === "setter-throw") throw new Error("控制槽 setter 故障（VM fixture）");
+      },
+    });
+  } else if (scenario.slotMode === "oversized") {
+    memory[LAB_CONTROL_MEMORY_KEY] = buildOversizedControl();
+  } else if (scenario.slotMode === "unarmed") {
+    memory[LAB_CONTROL_MEMORY_KEY] = { ...armedControl(), armed: false };
+  } else {
+    memory[LAB_CONTROL_MEMORY_KEY] = armedControl();
+  }
+  const logLines: string[] = [];
+  const moduleExports: { loop?: () => void } = {};
+  runInNewContext(
+    bundleCode,
+    {
+      exports: moduleExports,
+      module: { exports: moduleExports },
+      console: { log: (...args: unknown[]) => logLines.push(args.map(String).join(" ")) },
+      Game: game,
+      Memory: memory,
+    },
+    { filename: "vm-single-shot-bundle.js" },
+  );
+  if (typeof moduleExports.loop !== "function") throw new Error("产物未导出 loop");
+  moduleExports.loop();
+  const sendAfterLoop1 = sendCalls.length;
+  moduleExports.loop();
+  const sendAfterLoop2 = sendCalls.length;
+  (game as { time: number }).time = config.targetTick + 1;
+  moduleExports.loop();
+  const sendAfterNextTick = sendCalls.length;
+  const labRecords = logLines
+    .filter((line) => line.startsWith("{") && line.includes('"kind":"lab-'))
+    .map((line) => JSON.parse(line) as Record<string, any>);
+  const slotFinal = memory[LAB_CONTROL_MEMORY_KEY] as Record<string, unknown> | undefined;
+  return {
+    sendAfterLoop1,
+    sendAfterLoop2,
+    sendAfterNextTick,
+    slotFinalAttempted: slotFinal?.attempted,
+    slotFinalStopped: slotFinal?.stopped,
+    markUnconfirmed: labRecords
+      .filter((record) => record.kind === "lab-mark-unconfirmed")
+      .map((record) => `${record.stage}/${record.reason}`),
+    rejections: labRecords
+      .filter((record) => record.kind === "lab-precondition-rejection")
+      .map((record) => record.reason),
+    sendAttemptPhases: labRecords
+      .filter((record) => record.kind === "lab-send-attempt")
+      .map((record) => record.phase),
+    writeRefusedLines: labRecords.filter((record) => record.kind === "lab-control-write-refused").length,
+  };
 }
 
 // ── 用例 ─────────────────────────────────────────────────────────────────────
@@ -603,6 +823,309 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
       expect(later.transactions.incoming.records).toEqual([mirror]);
       expect(later.transactions.outgoing.records).toEqual([mirror]); // 同 ID 镜像
       expect(world.sendCalls).toHaveLength(1); // 观察阶段零新增调用
+    } finally {
+      world.restore();
+    }
+  });
+
+  it("Q01 基线复现：固定旧产物 VM 假端口七场景矩阵——三失败场景同 tick 双发 1/2/2", () => {
+    // 旧产物三重身份（任务书 §3.1：字节 / Git blob 由归档提交保证 / SHA-256）。
+    const bytes = readFileSync(LEGACY_SINGLE_SHOT_BUNDLE);
+    expect(bytes.length).toBe(LEGACY_SINGLE_SHOT_BYTES);
+    expect(createHash("sha256").update(bytes).digest("hex")).toBe(LEGACY_SINGLE_SHOT_SHA256);
+    const code = bytes.toString("utf8");
+    const rows = VM_SCENARIOS.map((scenario) => ({
+      scenario: scenario.label,
+      outcome: runVmScenario(code, scenario),
+    }));
+    console.log(`Q01-BASELINE ${JSON.stringify(rows)}`);
+    const byLabel = new Map(rows.map((row) => [row.scenario, row.outcome]));
+    const triple = (label: string): number[] => {
+      const outcome = byLabel.get(label);
+      if (outcome === undefined) throw new Error(`缺少场景 ${label}`);
+      return [outcome.sendAfterLoop1, outcome.sendAfterLoop2, outcome.sendAfterNextTick];
+    };
+    // 对照组：未武装零发送；正常/非 OK/抛错各恰一次且不重试。
+    expect(triple("S1 未武装/Memory 正常")).toEqual([0, 0, 0]);
+    expect(triple("S2 正常武装/小记录/写入正常")).toEqual([1, 1, 1]);
+    expect(triple("S3 send 非 OK/写入正常")).toEqual([1, 1, 1]);
+    expect(triple("S4 send 抛错/写入正常")).toEqual([1, 1, 1]);
+    // 三失败场景（旧行为基线）：标记没写上 → 同 tick 第二次 loop 再次发送。
+    expect(triple("S5 控制槽 setter 抛错")).toEqual([1, 2, 2]);
+    expect(triple("S6 控制槽 setter 静默丢写")).toEqual([1, 2, 2]);
+    expect(triple("S7 初始 4090 字符/更新后超限")).toEqual([1, 2, 2]);
+    // 旧缺陷特征留痕：S5/S7 写入被拒有日志但 send 仍发生；S6 完全无痕。
+    expect(byLabel.get("S5 控制槽 setter 抛错")?.writeRefusedLines).toBeGreaterThanOrEqual(4);
+    expect(byLabel.get("S7 初始 4090 字符/更新后超限")?.writeRefusedLines).toBeGreaterThanOrEqual(4);
+    expect(byLabel.get("S6 控制槽 setter 静默丢写")?.writeRefusedLines).toBe(0);
+    // 槽终态：旧产物失败后 attempted 仍为 false（正是重发根源）。
+    for (const label of ["S5 控制槽 setter 抛错", "S6 控制槽 setter 静默丢写", "S7 初始 4090 字符/更新后超限"]) {
+      expect(byLabel.get(label)?.slotFinalAttempted).toBe(false);
+    }
+    expect(byLabel.get("S2 正常武装/小记录/写入正常")?.slotFinalAttempted).toBe(true);
+  });
+
+  it("Q01/Q02 修复对照：新产物同矩阵三失败场景全零发送，且不打印 boundary/sync 输出", () => {
+    const code = readFileSync(artifacts.singleShotBundle, "utf8");
+    const rows = VM_SCENARIOS.map((scenario) => ({
+      scenario: scenario.label,
+      outcome: runVmScenario(code, scenario),
+    }));
+    console.log(`Q01-FIXED ${JSON.stringify(rows)}`);
+    const byLabel = new Map(rows.map((row) => [row.scenario, row.outcome]));
+    const triple = (label: string): number[] => {
+      const outcome = byLabel.get(label);
+      if (outcome === undefined) throw new Error(`缺少场景 ${label}`);
+      return [outcome.sendAfterLoop1, outcome.sendAfterLoop2, outcome.sendAfterNextTick];
+    };
+    // 对照组行为保持：未武装 0；正常/非 OK/抛错恰一次。
+    expect(triple("S1 未武装/Memory 正常")).toEqual([0, 0, 0]);
+    expect(triple("S2 正常武装/小记录/写入正常")).toEqual([1, 1, 1]);
+    expect(triple("S3 send 非 OK/写入正常")).toEqual([1, 1, 1]);
+    expect(triple("S4 send 抛错/写入正常")).toEqual([1, 1, 1]);
+    // 修复要求：三失败场景全部 0/0/0。
+    expect(triple("S5 控制槽 setter 抛错")).toEqual([0, 0, 0]);
+    expect(triple("S6 控制槽 setter 静默丢写")).toEqual([0, 0, 0]);
+    expect(triple("S7 初始 4090 字符/更新后超限")).toEqual([0, 0, 0]);
+    // 失败指向探针标记失败：S5 写入拒绝、S6 读回不匹配（静默丢写被真实读回发现）。
+    expect(byLabel.get("S5 控制槽 setter 抛错")?.markUnconfirmed).toEqual([
+      "mark_write/assign_failed",
+      "mark_write/assign_failed",
+    ]);
+    expect(byLabel.get("S6 控制槽 setter 静默丢写")?.markUnconfirmed).toEqual([
+      "mark_readback/readback_not_attempted",
+      "mark_readback/readback_not_attempted",
+    ]);
+    // S7 如实口径：超限 note 记录在读取阶段即按 corrupt 拒绝（未走到写入超限分支）。
+    const s7 = byLabel.get("S7 初始 4090 字符/更新后超限");
+    expect(s7?.rejections).toEqual(["control_record_corrupt", "control_record_corrupt", "control_record_corrupt"]);
+    expect(s7?.markUnconfirmed).toEqual([]);
+    // 三失败场景不打印声称已进入实际发送的任何 phase（无 boundary/sync-return/pre-call）。
+    for (const label of ["S5 控制槽 setter 抛错", "S6 控制槽 setter 静默丢写", "S7 初始 4090 字符/更新后超限"]) {
+      expect(byLabel.get(label)?.sendAttemptPhases).toEqual([]);
+    }
+    // 正常路径仍完整经过 pre-call/boundary/sync（S4 为 throw 变体）。
+    expect(byLabel.get("S2 正常武装/小记录/写入正常")?.sendAttemptPhases).toEqual([
+      "pre-call",
+      "boundary",
+      "sync-return",
+    ]);
+    expect(byLabel.get("S4 send 抛错/写入正常")?.sendAttemptPhases).toEqual(["pre-call", "boundary", "sync-throw"]);
+    expect(byLabel.get("S2 正常武装/小记录/写入正常")?.slotFinalAttempted).toBe(true);
+    expect(byLabel.get("S2 正常武装/小记录/写入正常")?.slotFinalStopped).toBe(true);
+  });
+
+  it("Q02 正常预标记：send 入口内读 Memory 可见匹配 attempted（syncResult/stopped 尚未写入）", () => {
+    let insideSend: unknown;
+    const world = installLabWorld({
+      onSend: () => {
+        insideSend = (global as unknown as Record<string, unknown>).Memory?.[
+          LAB_CONTROL_MEMORY_KEY
+        ];
+      },
+    });
+    world.memory[LAB_CONTROL_MEMORY_KEY] = armedControl();
+    try {
+      requireArtifact(artifacts.singleShotBundle).loop();
+      expect(world.sendCalls).toHaveLength(1);
+      // 入口内观察：不是只在 loop 结束后检查最终记录。
+      expect(insideSend).toMatchObject({
+        experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId,
+        armed: true,
+        attempted: true,
+        attemptedTick: LAB_EXAMPLE_EXPERIMENT.targetTick,
+      });
+      const observed = insideSend as Record<string, unknown>;
+      expect(observed.syncResult).toBeUndefined(); // 结果尚未写（发送还没返回）
+      expect(observed.stopped).toBeUndefined();
+      // loop 结束后最终记录补齐 syncResult/stopped——两时点状态不同。
+      const final = world.memory[LAB_CONTROL_MEMORY_KEY] as Record<string, unknown>;
+      expect(final.syncResult).toEqual({ ok: true, code: 0 });
+      expect(final.stopped).toBe(true);
+    } finally {
+      world.restore();
+    }
+  });
+
+  it("Q02 写后读回故障：getter 异常/篡改实验 ID/篡改 tick——首次控制读取成功，零发送", () => {
+    const cases: readonly {
+      label: string;
+      controlSlot: NonNullable<LabWorldOptions["controlSlot"]>;
+      expectedReason: string;
+      laterRejections: string[];
+    }[] = [
+      {
+        label: "标记后读回 getter 抛错",
+        controlSlot: { mode: "read-fail-after", reads: 1 },
+        expectedReason: "readback_corrupt",
+        // 后续 loop 的 gate 入口读同样抛错——readControlRecord 先于 tick 检查。
+        laterRejections: ["control_record_corrupt", "control_record_corrupt"],
+      },
+      {
+        label: "标记后读回实验 ID 被篡改",
+        controlSlot: {
+          mode: "tamper",
+          tamper: (record) => ({ ...record, experimentId: "tampered-experiment-id" }),
+        },
+        expectedReason: "readback_experiment_mismatch",
+        // 篡改记录 attempted=true 仍保留——后续 loop 均先撞 already_attempted（先于 tick 检查）。
+        laterRejections: ["already_attempted", "already_attempted"],
+      },
+      {
+        label: "标记后读回 attemptedTick 被篡改",
+        controlSlot: {
+          mode: "tamper",
+          tamper: (record) => ({ ...record, attemptedTick: 99999 }),
+        },
+        expectedReason: "readback_tick_mismatch",
+        laterRejections: ["already_attempted", "already_attempted"],
+      },
+    ];
+    for (const item of cases) {
+      const world = installLabWorld({ controlSlot: item.controlSlot });
+      const capture = captureConsoleLog();
+      try {
+        const singleShot = requireArtifact(artifacts.singleShotBundle);
+        singleShot.loop();
+        singleShot.loop(); // 同 tick 重复
+        (world.game as { time: number }).time = LAB_EXAMPLE_EXPERIMENT.targetTick + 1;
+        singleShot.loop(); // 下一 tick
+      } finally {
+        capture.restore();
+      }
+      try {
+        expect(world.sendCalls).toEqual([]);
+        const records = parseLabRecords(capture.lines);
+        // 第一次 loop 确实通过了门禁并进入标记阶段（故障在读回，不在入口读）。
+        const marks = records.filter((record) => record.kind === "lab-mark-unconfirmed");
+        expect(marks).toHaveLength(1);
+        expect(marks[0]).toMatchObject({ stage: "mark_readback", reason: item.expectedReason });
+        // 无任何发送边界输出。
+        expect(records.filter((record) => record.kind === "lab-send-attempt")).toEqual([]);
+        // 第二/三次 loop 的前置拒绝与各自读到的槽状态一致。
+        expect(
+          records.filter((record) => record.kind === "lab-precondition-rejection").map((record) => record.reason),
+        ).toEqual(item.laterRejections);
+      } finally {
+        world.restore();
+      }
+    }
+  });
+
+  it("Q03 预标记成功后结果更新失败：attempted 不回退不重发；诊断超限拒写不破坏标记", () => {
+    // 变体 a：结果/停止写回 setter 故障（第 1 次写成功、第 2 次起抛错）。
+    {
+      const world = installLabWorld({ controlSlot: { mode: "fail-writes-after", writes: 1 } });
+      const capture = captureConsoleLog();
+      try {
+        const singleShot = requireArtifact(artifacts.singleShotBundle);
+        singleShot.loop(); // 标记写（第 1 次）成功 + send 恰一次 + 结果写（第 2 次）抛错
+        expect(world.sendCalls).toHaveLength(1);
+        const afterFirst = world.memory[LAB_CONTROL_MEMORY_KEY] as Record<string, unknown>;
+        expect(afterFirst).toMatchObject({
+          experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId,
+          attempted: true,
+          attemptedTick: LAB_EXAMPLE_EXPERIMENT.targetTick,
+        });
+        expect(afterFirst.stopped).toBeUndefined(); // 未谎报停止已保存
+        singleShot.loop(); // 同 tick：already_attempted 拒——不回退标记以便再发
+        (world.game as { time: number }).time = LAB_EXAMPLE_EXPERIMENT.targetTick + 1;
+        singleShot.loop(); // 下一 tick
+        // 保留该标记的 JSON 重载 + 模块重建（控制事实确实保留的 reset 对照）。
+        (global as unknown as Record<string, unknown>).Memory = JSON.parse(JSON.stringify(world.memory));
+        jest.resetModules();
+        const reloaded = requireArtifact(artifacts.singleShotBundle);
+        reloaded.loop();
+        (world.game as { time: number }).time = LAB_EXAMPLE_EXPERIMENT.targetTick + 2;
+        reloaded.loop();
+        expect(world.sendCalls).toHaveLength(1); // 全程零增发
+        const reloadedControl = ((global as unknown as Record<string, unknown>).Memory as Record<string, unknown>)[
+          LAB_CONTROL_MEMORY_KEY
+        ] as Record<string, unknown>;
+        expect(reloadedControl.attempted).toBe(true); // 标记未被旧值覆盖或回滚
+        expect(reloadedControl.stopped).toBeUndefined();
+        const records = parseLabRecords(capture.lines);
+        const refused = records.filter((record) => record.kind === "lab-result-write-refused");
+        expect(refused.map((record) => record.reason)).toEqual(["assign_failed"]);
+        expect(refused[0].syncResult).toEqual({ ok: true, code: 0 }); // 同步结果如实外记
+      } finally {
+        capture.restore();
+        world.restore();
+      }
+    }
+    // 变体 b：send 抛超长异常 → 结果写回因诊断超限被拒——attempted 保留、原始返回不改。
+    {
+      const world = installLabWorld({ sendResult: { throws: new Error("d".repeat(4500)) } });
+      world.memory[LAB_CONTROL_MEMORY_KEY] = armedControl();
+      const capture = captureConsoleLog();
+      try {
+        const singleShot = requireArtifact(artifacts.singleShotBundle);
+        singleShot.loop();
+        singleShot.loop();
+        (world.game as { time: number }).time = LAB_EXAMPLE_EXPERIMENT.targetTick + 1;
+        singleShot.loop();
+      } finally {
+        capture.restore();
+      }
+      try {
+        expect(world.sendCalls).toHaveLength(1);
+        const control = world.memory[LAB_CONTROL_MEMORY_KEY] as Record<string, unknown>;
+        expect(control.attempted).toBe(true); // 超限拒写未破坏已确认标记
+        expect(control.syncResult).toBeUndefined(); // 超长诊断未落槽
+        expect(control.stopped).toBeUndefined();
+        expect(JSON.stringify(control).length).toBeLessThanOrEqual(4096); // 控制记录保持有界
+        const records = parseLabRecords(capture.lines);
+        const refused = records.filter((record) => record.kind === "lab-result-write-refused");
+        expect(refused.map((record) => record.reason)).toEqual(["size_limit"]);
+        // 原始同步返回未被改为成功：sync-throw 如实记录 ok=false 与超长诊断。
+        const syncThrow = records.find(
+          (record) => record.kind === "lab-send-attempt" && record.phase === "sync-throw",
+        );
+        expect(syncThrow?.result.ok).toBe(false);
+        expect(String(syncThrow?.result.error).length).toBeGreaterThan(4400);
+      } finally {
+        world.restore();
+      }
+    }
+  });
+
+  it("Q02 单元断言：写入函数明确拒绝超限/循环引用候选；未知顶层与 syncResult 字段读取按 corrupt", () => {
+    const world = installLabWorld();
+    try {
+      // 超限候选（合法形状、超长 experimentId）：序列化前即拒，不触碰槽。
+      const oversized: LabControlRecord = {
+        experimentId: "x".repeat(4200),
+        armed: true,
+        attempted: true,
+      };
+      const oversizedWrite = writeControlRecord(oversized);
+      expect(oversizedWrite.ok).toBe(false);
+      expect((oversizedWrite as { reason?: string }).reason).toBe("size_limit");
+      expect((oversizedWrite as { characters?: number }).characters ?? 0).toBeGreaterThan(4096);
+      expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toBeUndefined();
+      // 循环引用：序列化失败明确拒绝（不静默返回 void）。
+      const circular: Record<string, unknown> = { experimentId: "circular", armed: true, attempted: true };
+      circular.self = circular;
+      const circularWrite = writeControlRecord(circular as unknown as LabControlRecord);
+      expect(circularWrite.ok).toBe(false);
+      expect((circularWrite as { reason?: string }).reason).toBe("serialize_failed");
+      expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toBeUndefined();
+      // 未知顶层字段（超限 note 类记录）：读取阶段即 corrupt。
+      world.memory[LAB_CONTROL_MEMORY_KEY] = { ...armedControl(), note: "x".repeat(4090) };
+      expect(readControlRecord().status).toBe("corrupt");
+      // 未知 syncResult 字段：同样拒绝（不展开任意输入）。
+      world.memory[LAB_CONTROL_MEMORY_KEY] = { ...armedControl(), syncResult: { ok: true, extra: 1 } };
+      expect(readControlRecord().status).toBe("corrupt");
+      // 合法记录正常读写。
+      world.memory[LAB_CONTROL_MEMORY_KEY] = armedControl({ attempted: true, attemptedTick: 1 });
+      const legal = readControlRecord();
+      expect(legal.status).toBe("ok");
+      if (legal.status === "ok") {
+        expect(legal.record.attempted).toBe(true);
+      }
+      const legalWrite = writeControlRecord({ experimentId: "legal", armed: true, attempted: false });
+      expect(legalWrite.ok).toBe(true);
+      expect((world.memory[LAB_CONTROL_MEMORY_KEY] as Record<string, unknown>).experimentId).toBe("legal");
     } finally {
       world.restore();
     }
