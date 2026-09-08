@@ -4,6 +4,7 @@
 本文是隔离实验包的可执行交接说明：探针代码与离线自测已完成，**真实引擎运行一律未执行**（PREPARED_NOT_RUN）。
 旧版接线计划见 `terminal-transfer-slice-0.md` §3——其中的归属/费用/单条在途接线细节以 Remediation I/II 的当前实现为准，本文不批量重写历史报告。
 **Lab Prep I · Remediation I（Q01–Q06）更新**：single-shot 发送前置已收紧为"attempted 标记写入并读回确认后才进入 send 边界"（详见 §4 与 `probe.test.ts` 新增失败路径矩阵）；固定旧产物上的基线复现与修复对照见 `evidence/terminal-transfer-engine-lab-prep-i-remediation-i/`。
+**Lab Prep I · Remediation II（R01–R04）更新**：控制记录大小语义统一为**完整 JSON 的 UTF-8 字节数 ≤4096**——读取、拟写入与发送前读回消费同一纯 JS 计量（产物零 Node 编码依赖）；受支持字段组成但超字节的记录读取按 corrupt 拒绝（零写），非 ASCII 超限结果更新拒写且保留匹配的 attempted 标记（4095/4096 通过、4097 拒绝）。基线复现与修复对照见 `evidence/terminal-transfer-engine-lab-prep-i-remediation-ii/`。
 
 ## 1. 交付物组成
 
@@ -12,9 +13,9 @@
 | 探针源码 | `test/lab/terminal-transfer/`（labConfig/worldRead/sample/observer/controlRecord/sendGate/singleShot） | 真实 API 薄包装；不导入生产模块、不进生产 bundle |
 | observer 入口 | `test/lab/terminal-transfer/observer.ts` | 默认只读：采样世界/费用/交易视图，零发送、零 Memory 写；模块及其依赖不含 terminal.send 调用 |
 | single-shot 入口 | `test/lab/terminal-transfer/singleShot.ts` | 仅供未来单独授权的隔离实验：默认未武装，完整实验配置 + 一次性控制记录同时匹配且 `Game.time === targetTick`，**且 attempted 标记写入控制槽并重新读回确认匹配**，才尝试一次 100H 发送；标记未确认（序列化失败/超限/赋值异常/静默丢写/读回异常或不匹配）零发送；send 之后任何失败不重试、不回滚已确认标记 |
-| 实验控制记录 | `Memory.__labTerminalTransferProbe`（独立键，非生产 Memory 根） | 单 run、≤4KiB（JSON 字符数口径）、缺失/损坏/含未知字段不自动初始化；正常完成标记 stopped 不自动再武装；有界保留至世界销毁或只读人工重置（无 TTL 重获发送资格） |
+| 实验控制记录 | `Memory.__labTerminalTransferProbe`（独立键，非生产 Memory 根） | 单 run、完整 JSON 的 UTF-8 字节数 ≤4096（Remediation II 统一口径：读取/写入/发送前读回同一计量，含键名/标点/转义与全部结果文本）、缺失/损坏/含未知字段**或超字节**不自动初始化；正常完成标记 stopped 不自动再武装；有界保留至世界销毁或只读人工重置（无 TTL 重获发送资格） |
 | 构建入口 | `scripts/build-treasury-terminal-lab.mjs` | 默认 observer，`--mode single-shot` 生成未武装调用版；仅本地 TypeScript transpile + Rollup 内联配置（不加载根 rollup 配置/部署插件、无网络、无上传）；输出独立目录 + manifest.json（PREPARED_NOT_RUN） |
-| 离线自测 | `test/lab/terminal-transfer/probe.test.ts`（17 it） | 自行构建到独立临时目录并 require 真实产物执行（门禁矩阵/恰一次/不重试/OK 不自造效果/JSON 重载/读异常/镜像保留 + Remediation I：旧产物 VM 基线复现 7 场景、新产物 0/0/0 对照、send 入口内标记可见、读回故障变体、结果更新失败不回退、写入函数单元拒绝） |
+| 离线自测 | `test/lab/terminal-transfer/probe.test.ts`（22 it） | 自行构建到独立临时目录并 require 真实产物执行（门禁矩阵/恰一次/不重试/OK 不自造效果/JSON 重载/读异常/镜像保留 + Remediation I：旧产物 VM 基线复现 7 场景、新产物 0/0/0 对照、send 入口内标记可见、读回故障变体、结果更新失败不回退、写入函数单元拒绝 + Remediation II：B1/B2 旧缺口基线复现与修复对照、4095/4096/4097 ASCII/非 ASCII 读写边界、Unicode/转义/孤立代理项计量对照、发送前读回超限拒绝） |
 
 构建命令（仓库内或从仓库外含空格路径均可）：
 
@@ -59,7 +60,7 @@ node scripts/build-treasury-terminal-lab.mjs --mode single-shot --out <独立目
 1. 建立一次性新世界与合成用户（同一隔离 shard、无 Power、无其他 writer）；原型房间名 `W1N57`/`W10N57` 是实验固定场景，不是正式服业务配置。
 2. 安装两个 Terminal，放置资源（真实 F0 与费用从环境读取，不照抄 fake 的 100000 空位/26 能源）。
 3. 先载入 **observer** 核对环境（两端读数/报价/视图可见性正常）。
-4. 明确选择一个实验，写入实验控制记录武装 **single-shot**（显式实验 ID、完整关联描述、目标 tick、期望用户/shard/两端结构身份、允许最大费用——示例见 `example.experiment.json`，全部合成值，默认不可发送、不自动读取正式配置补齐）。产物在发送前会自行完成"标记写入→读回确认"；武装方只需提供合法小记录（含未知字段或超限的记录会被读取拒绝）。
+4. 明确选择一个实验，写入实验控制记录武装 **single-shot**（显式实验 ID、完整关联描述、目标 tick、期望用户/shard/两端结构身份、允许最大费用——示例见 `example.experiment.json`，全部合成值，默认不可发送、不自动读取正式配置补齐）。产物在发送前会自行完成"标记写入→读回确认"；武装方只需提供合法小记录（含未知字段或完整 JSON 超过 4096 UTF-8 字节的记录会被读取拒绝）。
 5. 观测窗口固定且有限（默认 32 个采样）；完整样本输出到外部日志，不累计进游戏 Memory；超过可采集容量即标记截断并停止采集——**截断不是无交易**。
 6. 停止步骤：先撤销武装并保留 observer，收集原始产物，再销毁一次性世界；不得把资源反向转回作为自动清理。
 

@@ -3,9 +3,11 @@
  *
  * 任务书 §4.3 边界：
  * - 不写入 Memory.runtime.treasuryCore 或任何生产 Memory 声明（实验侧窄化）；
- * - 固定只存一个 run、序列化不超过 4KiB（字符数口径，ASCII 下与字节数相等；
- *   产物不引入 Node 专属 Buffer 依赖）、不存逐 tick 交易历史、不按 run 追加；
- * - 缺失/损坏时不自动初始化并发送；正常完成标记 stopped，但不自动再次武装；
+ * - 固定只存一个 run、控制记录完整 JSON 的 UTF-8 字节数不超过 4096（不存
+ *   逐 tick 交易历史、不按 run 追加）；计量为纯 JavaScript 实现，产物不引入
+ *   任何 Node 专属编码／文件系统／进程全局；
+ * - 缺失/损坏（含超字节）时不自动初始化并发送；正常完成标记 stopped，但不
+ *   自动再次武装；
  * - 有界保留到实验世界显式销毁或只读状态下的人工重置——不能以 TTL 重获发送资格。
  *
  * Lab Prep I · Remediation I（Q02）：
@@ -19,6 +21,17 @@
  * - 形状校验严格化：未知顶层字段与未知 syncResult 字段按 corrupt 拒绝——
  *   不把任意输入展开成无限可增长历史（附加超长 note 的记录在读取阶段即拒，
  *   不再进入写入超限分支；写入函数对超限候选的拒绝仍独立存在）。
+ *
+ * Lab Prep I · Remediation II（R02：唯一大小语义）：
+ * - 度量对象是控制槽值本身的完整 JSON.stringify(record) 结果按 UTF-8 编码
+ *   的字节数（含键名、标点、转义与全部结果文本，不只算 error 字段）；外层
+ *   Memory 键名不计入。读取、拟写入与发送前读回共用同一 measureUtf8Bytes
+ *   实现——不允许 reader 用字符、writer 用字节。
+ * - 读取侧新增大小检查：形状合法但完整 JSON 超过 4096 UTF-8 字节的记录按
+ *   corrupt 拒绝（零写；不修复/缩短/迁移/重新武装；拒绝读取不等于已回收
+ *   现存超限数据）。confirmAttemptedMark 经同一读取入口自动消费该判定。
+ * - 写入侧超限拒绝报告 bytes（UTF-8 字节数）并保留 characters 作诊断字段
+ *   （UTF-16 code unit 数）——两者单位不同，不得混称。
  *
  * 重要限制：本记录的 Memory read-back 只是普通运行与"控制事实确实保留"的
  * reset 下的防重入/防重试约束，**不是** driver 持久化承诺，更不是 CPU/driver
@@ -56,6 +69,9 @@ export type LabControlRead = {
 export interface LabControlWrite {
   readonly ok: boolean;
   readonly reason?: "serialize_failed" | "size_limit" | "assign_failed";
+  /** 超限候选完整 JSON 的 UTF-8 字节数（Remediation II：报告单位为字节）。 */
+  readonly bytes?: number;
+  /** 诊断字段：字符数（UTF-16 code unit 数）——不是字节，不得混称。 */
   readonly characters?: number;
   readonly error?: string;
 }
@@ -67,8 +83,41 @@ export type AttemptedMarkConfirmation =
 
 /** 实验 Memory 槽（与生产四个 Memory 根完全无关的独立键）。 */
 const CONTROL_MEMORY_KEY = "__labTerminalTransferProbe";
-/** 单记录序列化上限（§4.3：不超过 4KiB——JSON.stringify 的 .length 字符数口径）。 */
-const CONTROL_MAX_CHARACTERS = 4096;
+/** 单记录上限（Remediation II：完整 JSON 的 UTF-8 字节数 ≤4096，读写读回同一口径）。 */
+const CONTROL_MAX_UTF8_BYTES = 4096;
+
+/**
+ * 纯 JavaScript UTF-8 字节计量（R02 唯一大小语义的实现核心）。
+ * 输入是 JSON.stringify 的结果字符串——转义（\n、\"、\uXXXX）已是 ASCII
+ * 反斜杠序列，直接按 code unit 累加编码宽度即可。孤立代理项按替换字符
+ * U+FFFD 计 3 字节（与宿主生态 UTF-8 编码器一致；JSON.stringify 本身会把
+ * 孤立代理转义成 \uXXXX，正常流程不会出现该输入，此处仅为纯函数的确定行为）。
+ */
+export function measureUtf8Bytes(serialized: string): number {
+  let bytes = 0;
+  for (let index = 0; index < serialized.length; index += 1) {
+    const code = serialized.charCodeAt(index);
+    if (code < 0x80) {
+      bytes += 1;
+    } else if (code < 0x800) {
+      bytes += 2;
+    } else if (code < 0xd800 || code >= 0xe000) {
+      bytes += 3;
+    } else if (code < 0xdc00) {
+      // 高代理：下一 code unit 为低代理则合并计 4 字节，否则按孤立代理计 3。
+      const next = index + 1 < serialized.length ? serialized.charCodeAt(index + 1) : 0;
+      if (next >= 0xdc00 && next < 0xe000) {
+        bytes += 4;
+        index += 1;
+      } else {
+        bytes += 3;
+      }
+    } else {
+      bytes += 3; // 孤立低代理——替换字符宽度
+    }
+  }
+  return bytes;
+}
 
 /** 支持的顶层字段（未知字段按 corrupt 拒绝——不展开任意输入）。 */
 const CONTROL_TOP_LEVEL_KEYS = new Set([
@@ -110,7 +159,10 @@ function describeError(error: unknown): string {
   return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 }
 
-/** 读取控制记录：缺失→absent；形状不符（含未知字段）→corrupt（都不自动初始化）。 */
+/**
+ * 读取控制记录：缺失→absent；形状不符（含未知字段）**或完整 JSON 超过
+ * 4096 UTF-8 字节**→corrupt（都不自动初始化、零写、不修复/裁剪）。
+ */
 export function readControlRecord(): LabControlRead {
   let raw: unknown;
   try {
@@ -127,11 +179,22 @@ export function readControlRecord(): LabControlRead {
   }
   if (raw === undefined) return { status: "absent" };
   if (!isControlRecord(raw)) return { status: "corrupt" };
+  // R02：读取侧消费同一字节口径——受支持字段组成的超限记录不再判为健康。
+  // 计量无法形成（宿主 getter 二次抛错等）按明确失败处理，不当 0 字节。
+  try {
+    if (measureUtf8Bytes(JSON.stringify(raw)) > CONTROL_MAX_UTF8_BYTES) {
+      return { status: "corrupt" };
+    }
+  } catch {
+    return { status: "corrupt" };
+  }
   return { status: "ok", record: raw };
 }
 
 /**
  * 写回控制记录（单记录覆盖，不追加历史；序列化失败/超限/赋值异常均明确拒绝）。
+ * 大小检查用完整序列化字符串的 UTF-8 字节数（与读取/读回同一口径）；计量的
+ * JSON 就是随后解析写入槽的那个字符串——不测量一份、写入另一份。
  * ok:true 只代表赋值语句完成——是否真落盘由 confirmAttemptedMark 的读回核对判定。
  */
 export function writeControlRecord(record: LabControlRecord): LabControlWrite {
@@ -149,17 +212,20 @@ export function writeControlRecord(record: LabControlRecord): LabControlWrite {
     );
     return { ok: false, reason: "serialize_failed", error: describeError(error) };
   }
-  if (serialized.length > CONTROL_MAX_CHARACTERS) {
+  const bytes = measureUtf8Bytes(serialized);
+  if (bytes > CONTROL_MAX_UTF8_BYTES) {
     console.log(
       JSON.stringify({
         kind: "lab-control-write-refused",
         key: CONTROL_MEMORY_KEY,
         reason: "size_limit",
+        bytes,
         characters: serialized.length,
-        limit: CONTROL_MAX_CHARACTERS,
+        limit: CONTROL_MAX_UTF8_BYTES,
+        limitUnits: "utf8-bytes",
       }),
     );
-    return { ok: false, reason: "size_limit", characters: serialized.length };
+    return { ok: false, reason: "size_limit", bytes, characters: serialized.length };
   }
   try {
     (Memory as unknown as Record<string, unknown>)[CONTROL_MEMORY_KEY] = JSON.parse(serialized);

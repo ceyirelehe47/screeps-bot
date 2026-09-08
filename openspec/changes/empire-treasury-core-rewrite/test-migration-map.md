@@ -541,3 +541,12 @@ IVKernel 测试侧两文件。
 | Q05 | probe.test.ts 全量回归 + §8.2 五组 Jest | observer/single-shot 产物既有 11 it 原断言不动全绿；P01/P02、M/N/O、KEY/Treasury/Defense 不退化；生产/配置/依赖/Slice 实现四组冻结零差异 |
 | Q06 | evidence/terminal-transfer-engine-lab-prep-i-remediation-i/ | 新 VALIDATION_HEAD 真实预算、主验证完整原始输出、第二干净依赖环境复验（reviewer 重点独立核对标记失败 0 次 send、结果写失败仍 1 次）、执行代码先提交后验证、NOT_RUN 边界 |
 
+
+### 19.3 Lab Prep I · Remediation II：R01–R04 定位（2026-09-08）
+
+| 索引 | 测试/驱动位置 | 覆盖行为 |
+| --- | --- | --- |
+| R01 | baseline/reproduce-baseline.cjs（归档）+ probe.test.ts「B1」「B2」its 内旧产物/旧源码对照段 | 固定旧产物（remediation-i 归档 single-shot.js，24496 字节/blob 447970f3/SHA-256 49960ef8 前置断言）非 ASCII send 异常结果 JSON 2200 字符/6296 UTF-8 字节仍写入（send 1/1/1、stopped 落槽、零 write-refused）；旧源码读取入口（git show 87507f4 → TS 转译 → VM）对受支持字段 5145 字节记录返回 ok（短对照健康、零写）；旧产物 loop 对照 only already_stopped；新行为不再接受对应超限结果/超限读取 |
+| R02 | probe.test.ts「读写边界矩阵」「计量辅助对照」「发送前读回超限」its + controlRecord.ts measureUtf8Bytes | 完整 JSON UTF-8 字节计量在读取/写入/读回一致（同一导出函数）；4095/4096 通过、4097 拒写（旧槽不变）且预置读取 corrupt 零写（ASCII 与非 ASCII 已结束记录，4096 精确合法对照）；中文/双字节/emoji/转义/孤立代理项与独立 Buffer.byteLength 期望一致（被测实现不生成 expected）；发送前读回超限按不健康读回拒绝（readback_corrupt、零 send、零发送边界日志） |
+| R03 | probe.test.ts「B1」「B2」its | 实际生成 single-shot：非 ASCII 结果超限拒写不损坏 attempted（槽 ≤4096 字节）、不重发（同 tick×2/同 tick 新 VM/下一 tick 累计 send=1）、sync-throw 如实外记；超限读回阻断发送；observer 与 Q 流程不退化（既有 17 it 原断言保留）；产物静态断言无 Buffer/TextEncoder/process/require（VM 沙箱只注入 exports/module/console/Game/Memory） |
+| R04 | lab-prep-i.md（现行单位口径）+ evidence/terminal-transfer-engine-lab-prep-i-remediation-ii/ | 说明单位准确（完整 JSON UTF-8 字节，不改写历史报告）；生产/Slice/依赖/Defense 冻结；固定新 SHA、真实 budget 与原始结果、第二干净依赖环境复验（reviewer 独立 Node 字节计算核对 4096/4097、非 ASCII 拒写、超限读取、attempted 不重发）；commit/push 与 NOT_RUN 边界保持 |

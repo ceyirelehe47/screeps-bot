@@ -1,0 +1,21 @@
+旧产物身份核对通过：bytes=24496 blob=447970f3f3a165a25a71d3c481e47d416e030168 sha256=49960ef8d5a147adeb49d6a36ba9df5b56cfd79028918e9be50d522d46f083ca
+
+[B1] 非 ASCII 结果超限（旧产物·字符口径缺口）：
+  send 三时点累计：1/1/1（send 入口内 attempted=true）
+  初始记录：72 字符 / 72 UTF-8 字节
+  结果槽终态 JSON：2200 字符 / 6296 UTF-8 字节（独立 Buffer.byteLength 计量）
+  槽终态字段：attempted=true stopped=true syncResult.error 长度=2055
+  write-refused 行数：0（超限写入未被拒绝——B1 缺口留痕）
+  缺口判定：字符 2200 ≤ 4096 通过旧检查，UTF-8 字节 6296 > 4096 仍写入=true
+
+[B2] 受支持字段超限记录（旧源码 readControlRecord 缺口）：
+  记录 JSON：5145 字符 / 5145 UTF-8 字节（先独立证明 >4096）
+  旧读取入口返回：{"status":"ok","attempted":true}（ok=读取健康误判——B2 缺口留痕）
+  读取零写核验：槽引用不变=true Memory 键不变=true
+  短合法对照（error=10 x）：155 字符 / 155 字节 → ok（读取未被整体禁用）
+
+[B2-loop] 旧产物预置 B2 记录对照：
+  send 调用：0；前置拒绝原因：["already_stopped"]
+  槽终态引用不变=true（loop 未写槽、未删改记录）
+
+BASELINE_DONE

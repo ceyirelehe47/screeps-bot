@@ -1,6 +1,7 @@
 /**
  * Terminal Transfer Engine Lab Prep I——探针离线自测（任务书 §4.4；P03/P04），
- * Lab Prep I · Remediation I 扩展（Q01–Q03：发送前标记确认与失败路径矩阵）。
+ * Lab Prep I · Remediation I 扩展（Q01–Q03：发送前标记确认与失败路径矩阵），
+ * Lab Prep I · Remediation II 扩展（R01–R03：4 KiB UTF-8 字节预算统一读写口径）。
  *
  * 在本地 stub/spy 注入的 Game/Memory/Terminal API 上执行**同一源码构建出的
  * 两个真实入口产物**（beforeAll 实际调用构建器到独立临时目录，再 require
@@ -14,6 +15,15 @@
  * send 入口内标记可见性、结果更新失败不回退 attempted、写入函数对超限与
  * 循环引用候选的明确拒绝、未知字段读取拒绝。
  *
+ * Remediation II 新增：R01 基线复现——固定旧产物（Remediation I 交付归档）
+ * 在非 ASCII send 异常下结果 JSON 2200 字符/6296 UTF-8 字节仍写入（B1），
+ * 受支持字段组成的 5145 字节记录被旧读取入口判为健康（B2，产物 loop 对照
+ * 只撞 already_stopped）；R02——4095/4096/4097（ASCII 与非 ASCII）读写边界、
+ * measureUtf8Bytes 与独立 Buffer 计量对照（中文/双字节/emoji/转义/孤立代理项）、
+ * 发送前读回超限按不健康拒绝；R03——新产物同场景超限结果拒写、attempted
+ * 保留 ≤4096 字节、含同 tick 新 VM 重载累计 send=1，产物零 Node 编码依赖。
+ * 期望字节数一律由 Buffer.byteLength 独立计算，被测实现不生成 expected。
+ *
  * 该测试只证明包装与采样正确，不证明引擎真的这样运行（真实引擎边界
  * PREPARED_NOT_RUN，见实验交接说明）。
  */
@@ -26,6 +36,7 @@ import { runInNewContext } from "node:vm";
 import { LAB_EXAMPLE_EXPERIMENT } from "./labConfig";
 import {
   LAB_CONTROL_MEMORY_KEY,
+  measureUtf8Bytes,
   readControlRecord,
   writeControlRecord,
   type LabControlRecord,
@@ -289,25 +300,78 @@ function buildOversizedControl(): Record<string, unknown> {
   return record;
 }
 
-type VmSlotMode = "unarmed" | "normal" | "setter-throw" | "silent-drop" | "oversized";
-type VmSendBehavior = "ok" | "non-ok" | "throw";
+/** B2 记录（Remediation II §3.3）：受支持字段、合法形状的已结束记录（error 为 ASCII x）。 */
+function b2FinishedRecord(errorLength: number): Record<string, unknown> {
+  return {
+    experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId,
+    armed: true,
+    attempted: true,
+    attemptedTick: LAB_EXAMPLE_EXPERIMENT.targetTick,
+    syncResult: { ok: false, error: "x".repeat(errorLength) },
+    stopped: true,
+  };
+}
+
+/**
+ * 完整 JSON 恰为指定 UTF-8 字节数的已结束记录（R02 边界矩阵构造器）。
+ * 非 ASCII 类用 "错"（3 字节/字符）+ "x"（1 字节）程序补齐；独立自检
+ * Buffer.byteLength（expected 不由被测实现生成）。只测读写用已结束记录，
+ * 避免"未尝试记录还要加标记"的空间问题混进边界结果。
+ */
+function finishedRecordAtBytes(targetBytes: number, nonAscii: boolean): LabControlRecord {
+  const probe = {
+    experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId,
+    armed: true,
+    attempted: true,
+    attemptedTick: LAB_EXAMPLE_EXPERIMENT.targetTick,
+    syncResult: { ok: false, error: "" },
+    stopped: true,
+  };
+  const base = Buffer.byteLength(JSON.stringify(probe), "utf8");
+  const remaining = targetBytes - base;
+  if (remaining < 0) throw new Error(`目标 ${targetBytes} 字节低于基础记录 ${base} 字节`);
+  const error = nonAscii
+    ? "错".repeat(Math.floor(remaining / 3)) + "x".repeat(remaining % 3)
+    : "x".repeat(remaining);
+  const record = { ...probe, syncResult: { ok: false, error } };
+  const actual = Buffer.byteLength(JSON.stringify(record), "utf8");
+  if (actual !== targetBytes) throw new Error(`字节补齐偏差：实际 ${actual} 目标 ${targetBytes}`);
+  return record as LabControlRecord;
+}
+
+type VmSlotMode =
+  | "unarmed"
+  | "normal"
+  | "setter-throw"
+  | "silent-drop"
+  | "oversized"
+  | "b2-oversized";
+type VmSendBehavior = "ok" | "non-ok" | "throw" | "throw-nonascii";
 
 interface VmScenarioRow {
   readonly label: string;
   readonly slotMode: VmSlotMode;
   readonly sendBehavior: VmSendBehavior;
+  /** 同 tick 两次 loop 后：同一 Game/Memory 在全新 VM 沙箱重建模块再 loop（B1 重载对照）。 */
+  readonly reloadAtTargetTick?: boolean;
 }
 
 interface VmRunOutcome {
   readonly sendAfterLoop1: number;
   readonly sendAfterLoop2: number;
   readonly sendAfterNextTick: number;
+  /** reloadAtTargetTick 场景：同 tick 新 VM 重建后的累计 send（其余场景 undefined）。 */
+  readonly sendAfterReloadVm: number | undefined;
   readonly slotFinalAttempted: unknown;
   readonly slotFinalStopped: unknown;
+  /** 槽终态完整 JSON（槽缺失/不可序列化→null）——字节口径断言的对象。 */
+  readonly slotFinalSerialized: string | null;
   readonly markUnconfirmed: string[];
   readonly rejections: string[];
   readonly sendAttemptPhases: string[];
+  readonly sendAttemptRecords: Record<string, any>[];
   readonly writeRefusedLines: number;
+  readonly writeRefusedRecords: Record<string, any>[];
 }
 
 /** 七场景固定矩阵（旧产物复现与新产物修复对照共用同一 harness）。 */
@@ -343,6 +407,7 @@ function runVmScenario(bundleCode: string, scenario: VmScenarioRow): VmRunOutcom
     send(resourceType: unknown, amount: unknown, destination: unknown, description: unknown): number {
       sendCalls.push([resourceType, amount, destination, description]);
       if (scenario.sendBehavior === "throw") throw new Error("send stub 同步异常（VM fixture）");
+      if (scenario.sendBehavior === "throw-nonascii") throw new Error("错".repeat(2048));
       return scenario.sendBehavior === "non-ok" ? -6 : 0;
     },
   };
@@ -377,19 +442,22 @@ function runVmScenario(bundleCode: string, scenario: VmScenarioRow): VmRunOutcom
     });
   } else if (scenario.slotMode === "oversized") {
     memory[LAB_CONTROL_MEMORY_KEY] = buildOversizedControl();
+  } else if (scenario.slotMode === "b2-oversized") {
+    memory[LAB_CONTROL_MEMORY_KEY] = b2FinishedRecord(5000);
   } else if (scenario.slotMode === "unarmed") {
     memory[LAB_CONTROL_MEMORY_KEY] = { ...armedControl(), armed: false };
   } else {
     memory[LAB_CONTROL_MEMORY_KEY] = armedControl();
   }
   const logLines: string[] = [];
+  const vmConsole = { log: (...args: unknown[]) => logLines.push(args.map(String).join(" ")) };
   const moduleExports: { loop?: () => void } = {};
   runInNewContext(
     bundleCode,
     {
       exports: moduleExports,
       module: { exports: moduleExports },
-      console: { log: (...args: unknown[]) => logLines.push(args.map(String).join(" ")) },
+      console: vmConsole,
       Game: game,
       Memory: memory,
     },
@@ -400,29 +468,67 @@ function runVmScenario(bundleCode: string, scenario: VmScenarioRow): VmRunOutcom
   const sendAfterLoop1 = sendCalls.length;
   moduleExports.loop();
   const sendAfterLoop2 = sendCalls.length;
+  let sendAfterReloadVm: number | undefined;
+  if (scenario.reloadAtTargetTick === true) {
+    // 同 tick 新 VM：同一 Game/Memory、全新模块环境（保留控制事实的重载对照——
+    // 避免"错过 tick 门禁"掩盖保留事实失效的情况）。
+    const reloadedExports: { loop?: () => void } = {};
+    runInNewContext(
+      bundleCode,
+      {
+        exports: reloadedExports,
+        module: { exports: reloadedExports },
+        console: vmConsole,
+        Game: game,
+        Memory: memory,
+      },
+      { filename: "vm-single-shot-bundle-reload.js" },
+    );
+    if (typeof reloadedExports.loop !== "function") throw new Error("重载产物未导出 loop");
+    reloadedExports.loop();
+    sendAfterReloadVm = sendCalls.length;
+  }
   (game as { time: number }).time = config.targetTick + 1;
   moduleExports.loop();
   const sendAfterNextTick = sendCalls.length;
   const labRecords = logLines
     .filter((line) => line.startsWith("{") && line.includes('"kind":"lab-'))
     .map((line) => JSON.parse(line) as Record<string, any>);
-  const slotFinal = memory[LAB_CONTROL_MEMORY_KEY] as Record<string, unknown> | undefined;
+  let slotFinal: unknown;
+  try {
+    slotFinal = memory[LAB_CONTROL_MEMORY_KEY];
+  } catch {
+    slotFinal = undefined;
+  }
+  const slotRecord = slotFinal as Record<string, unknown> | undefined;
+  let slotFinalSerialized: string | null = null;
+  if (slotFinal !== undefined) {
+    try {
+      slotFinalSerialized = JSON.stringify(slotFinal);
+    } catch {
+      slotFinalSerialized = null;
+    }
+  }
+  const sendAttemptRecords = labRecords.filter((record) => record.kind === "lab-send-attempt");
+  const writeRefusedRecords = labRecords.filter((record) => record.kind === "lab-control-write-refused");
   return {
     sendAfterLoop1,
     sendAfterLoop2,
     sendAfterNextTick,
-    slotFinalAttempted: slotFinal?.attempted,
-    slotFinalStopped: slotFinal?.stopped,
+    sendAfterReloadVm,
+    slotFinalAttempted: slotRecord?.attempted,
+    slotFinalStopped: slotRecord?.stopped,
+    slotFinalSerialized,
     markUnconfirmed: labRecords
       .filter((record) => record.kind === "lab-mark-unconfirmed")
       .map((record) => `${record.stage}/${record.reason}`),
     rejections: labRecords
       .filter((record) => record.kind === "lab-precondition-rejection")
       .map((record) => record.reason),
-    sendAttemptPhases: labRecords
-      .filter((record) => record.kind === "lab-send-attempt")
-      .map((record) => record.phase),
-    writeRefusedLines: labRecords.filter((record) => record.kind === "lab-control-write-refused").length,
+    sendAttemptPhases: sendAttemptRecords.map((record) => record.phase),
+    sendAttemptRecords,
+    writeRefusedLines: writeRefusedRecords.length,
+    writeRefusedRecords,
   };
 }
 
@@ -692,7 +798,7 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
         syncResult: { ok: true, code: 0 },
         stopped: true,
       });
-      expect(JSON.stringify(control).length).toBeLessThanOrEqual(4096); // 4KiB 上界
+      expect(Buffer.byteLength(JSON.stringify(control), "utf8")).toBeLessThanOrEqual(4096); // 4KiB 字节上界（Remediation II 口径）
       // 三段发送记录：pre-call（含采样）/boundary/sync-return。
       const phases = parseLabRecords(capture.lines)
         .filter((record) => record.kind === "lab-send-attempt")
@@ -1073,7 +1179,7 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
         expect(control.attempted).toBe(true); // 超限拒写未破坏已确认标记
         expect(control.syncResult).toBeUndefined(); // 超长诊断未落槽
         expect(control.stopped).toBeUndefined();
-        expect(JSON.stringify(control).length).toBeLessThanOrEqual(4096); // 控制记录保持有界
+        expect(Buffer.byteLength(JSON.stringify(control), "utf8")).toBeLessThanOrEqual(4096); // 控制记录保持有界（字节口径）
         const records = parseLabRecords(capture.lines);
         const refused = records.filter((record) => record.kind === "lab-result-write-refused");
         expect(refused.map((record) => record.reason)).toEqual(["size_limit"]);
@@ -1101,7 +1207,8 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
       const oversizedWrite = writeControlRecord(oversized);
       expect(oversizedWrite.ok).toBe(false);
       expect((oversizedWrite as { reason?: string }).reason).toBe("size_limit");
-      expect((oversizedWrite as { characters?: number }).characters ?? 0).toBeGreaterThan(4096);
+      expect(oversizedWrite.bytes ?? 0).toBeGreaterThan(4096); // 拒绝单位为 UTF-8 字节
+      expect(oversizedWrite.bytes).toBe(JSON.stringify(oversized).length); // 纯 ASCII 候选下字符=字节（诊断口径互证）
       expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toBeUndefined();
       // 循环引用：序列化失败明确拒绝（不静默返回 void）。
       const circular: Record<string, unknown> = { experimentId: "circular", armed: true, attempted: true };
@@ -1126,6 +1233,236 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
       const legalWrite = writeControlRecord({ experimentId: "legal", armed: true, attempted: false });
       expect(legalWrite.ok).toBe(true);
       expect((world.memory[LAB_CONTROL_MEMORY_KEY] as Record<string, unknown>).experimentId).toBe("legal");
+    } finally {
+      world.restore();
+    }
+  });
+
+  it("R02 读写边界矩阵：4095/4096 通过、4097 拒写且读取不健康——ASCII 与非 ASCII 已结束记录（4096 精确合法对照）", () => {
+    const world = installLabWorld();
+    try {
+      const rows: Record<string, unknown>[] = [];
+      for (const nonAscii of [false, true]) {
+        for (const target of [4095, 4096, 4097]) {
+          const record = finishedRecordAtBytes(target, nonAscii);
+          const serialized = JSON.stringify(record);
+          const independentBytes = Buffer.byteLength(serialized, "utf8"); // expected 独立计算
+          expect(independentBytes).toBe(target);
+          if (target <= 4096) {
+            // 合法值正常读写；精确 4096 是上限内的合法成功对照（不得实现为 >=4096 全拒）。
+            const write = writeControlRecord(record);
+            expect(write.ok).toBe(true);
+            expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toEqual(JSON.parse(serialized));
+            expect(readControlRecord().status).toBe("ok");
+            rows.push({ nonAscii, bytes: independentBytes, characters: serialized.length, write: "ok", read: "ok" });
+          } else {
+            // 4097：先放入一个合法旧值，再试超限写——拒写且旧槽不变。
+            const keeper = finishedRecordAtBytes(4095, nonAscii);
+            expect(writeControlRecord(keeper).ok).toBe(true);
+            const keeperRef = world.memory[LAB_CONTROL_MEMORY_KEY];
+            const refused = writeControlRecord(record);
+            expect(refused.ok).toBe(false);
+            expect((refused as { reason?: string }).reason).toBe("size_limit");
+            expect(refused.bytes).toBe(4097);
+            expect(refused.characters).toBe(serialized.length); // 诊断字段与字节分开报告
+            expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toBe(keeperRef); // 旧槽引用不变
+            // 直接预置该超限值后读取不健康且零写。
+            world.memory[LAB_CONTROL_MEMORY_KEY] = record;
+            const recordRef = world.memory[LAB_CONTROL_MEMORY_KEY];
+            expect(readControlRecord().status).toBe("corrupt");
+            expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toBe(recordRef); // 读取零写
+            rows.push({ nonAscii, bytes: independentBytes, characters: serialized.length, write: "refused", read: "corrupt" });
+          }
+        }
+      }
+      console.log(`R02-BOUNDARY ${JSON.stringify(rows)}`);
+    } finally {
+      world.restore();
+    }
+  });
+
+  it("R02 计量辅助对照：measureUtf8Bytes 与独立 Buffer 计量在中文/双字节/emoji/转义/孤立代理项上一致；短合法 Unicode 正常读写", () => {
+    const cases: readonly string[] = [
+      "",
+      "plain ascii 123",
+      "错",
+      "错".repeat(100),
+      "é", // U+00E9 双字节
+      "ᛃ", // U+16C3 三字节 BMP
+      "😀", // U+1F600 代理对四字节
+      "😀错éx",
+      'quote " back \\ slash',
+      "line\nbreak\ttab",
+      JSON.stringify({ error: 'quo"te\\back\nsl\u00e1sh' }),
+      String.fromCharCode(0xd800), // 孤立高代理
+      String.fromCharCode(0xdfff), // 孤立低代理
+      "a" + String.fromCharCode(0xdbff), // 高代理结尾（无低代理跟随）
+      String.fromCharCode(0xd800, 0xdc00), // 有效代理对
+      String.fromCharCode(0xd800) + "错", // 孤立高代理后跟 BMP
+    ];
+    for (const value of cases) {
+      expect(measureUtf8Bytes(value)).toBe(Buffer.byteLength(value, "utf8")); // expected 由 Buffer 独立生成
+    }
+    // JSON 序列化后的对照：孤立代理被 stringify 转义为 \uXXXX（ASCII 序列）——
+    // 验证的是实际序列化字符串，不引入任意对象序列化协议。
+    const serializedLoneSurrogate = JSON.stringify({ error: String.fromCharCode(0xd800) });
+    expect(serializedLoneSurrogate).toContain("\\ud800");
+    expect(measureUtf8Bytes(serializedLoneSurrogate)).toBe(
+      Buffer.byteLength(serializedLoneSurrogate, "utf8"),
+    );
+    // 短合法 Unicode error 不被一律拒绝。
+    const world = installLabWorld();
+    try {
+      const short: LabControlRecord = {
+        experimentId: "unicode-short",
+        armed: true,
+        attempted: true,
+        syncResult: { ok: false, error: "错é😀" },
+      };
+      expect(writeControlRecord(short).ok).toBe(true);
+      const read = readControlRecord();
+      expect(read.status).toBe("ok");
+      if (read.status === "ok") {
+        expect(read.record.syncResult?.error).toBe("错é😀");
+      }
+    } finally {
+      world.restore();
+    }
+  });
+
+  it("R01/R03 B1 非 ASCII 结果超限：产物拒绝超限结果写回、attempted 保留且槽 ≤4096 字节、异常如实外记、含同 tick 新 VM 重载累计 send=1", () => {
+    // 静态面辅助断言：新产物无 Node 编码依赖（容量路径不依赖 Buffer/TextEncoder/process 注入；
+    // VM 沙箱本身也只提供 exports/module/console/Game/Memory）。
+    const bundleSource = readFileSync(artifacts.singleShotBundle, "utf8");
+    expect(bundleSource).not.toMatch(/\bBuffer\b|\bTextEncoder\b|\bprocess\b|\brequire\s*\(/);
+    const scenario: VmScenarioRow = {
+      label: "B1 非 ASCII 结果超限",
+      slotMode: "normal",
+      sendBehavior: "throw-nonascii",
+      reloadAtTargetTick: true,
+    };
+    const legacy = runVmScenario(readFileSync(LEGACY_SINGLE_SHOT_BUNDLE, "utf8"), scenario);
+    const fixed = runVmScenario(bundleSource, scenario);
+    console.log(`R03-B1 ${JSON.stringify({ legacy, fixed })}`);
+    // 旧产物（R01 基线缺口）：send 恰一次后超限结果仍写入——字符 ≤4096、字节 >4096。
+    expect(
+      [legacy.sendAfterLoop1, legacy.sendAfterLoop2, legacy.sendAfterNextTick, legacy.sendAfterReloadVm],
+    ).toEqual([1, 1, 1, 1]);
+    expect(legacy.slotFinalSerialized).not.toBeNull();
+    const legacyBytes = legacy.slotFinalSerialized === null ? -1 : Buffer.byteLength(legacy.slotFinalSerialized, "utf8");
+    expect(legacyBytes).toBeGreaterThan(4096);
+    const legacyParsed = legacy.slotFinalSerialized === null ? {} : (JSON.parse(legacy.slotFinalSerialized) as Record<string, any>);
+    expect(String(legacyParsed.syncResult?.error ?? "").length).toBeGreaterThan(2048);
+    expect(legacyParsed.stopped).toBe(true); // 超限结果连同 stopped 一并落槽——缺口特征
+    expect(legacy.writeRefusedLines).toBe(0); // 旧字符口径未拒绝
+    // 新产物：合法 send 仍恰一次（结果超限不追溯取消调用），但超限结果写回被拒。
+    expect(
+      [fixed.sendAfterLoop1, fixed.sendAfterLoop2, fixed.sendAfterNextTick, fixed.sendAfterReloadVm],
+    ).toEqual([1, 1, 1, 1]);
+    expect(fixed.slotFinalSerialized).not.toBeNull();
+    const fixedBytes = fixed.slotFinalSerialized === null ? -1 : Buffer.byteLength(fixed.slotFinalSerialized, "utf8");
+    expect(fixedBytes).toBeGreaterThan(0);
+    expect(fixedBytes).toBeLessThanOrEqual(4096); // 槽仅保留匹配的 attempted 标记
+    const fixedParsed = fixed.slotFinalSerialized === null ? {} : (JSON.parse(fixed.slotFinalSerialized) as Record<string, any>);
+    expect(fixedParsed).toMatchObject({
+      experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId,
+      armed: true,
+      attempted: true,
+      attemptedTick: LAB_EXAMPLE_EXPERIMENT.targetTick,
+    });
+    expect(fixedParsed.syncResult).toBeUndefined(); // 超限结果未落槽
+    expect(fixedParsed.stopped).toBeUndefined(); // 不谎报停止已保存
+    // 超限拒写留痕：报告 bytes（UTF-8 字节）并声明单位；characters 仅诊断。
+    const refusals = fixed.writeRefusedRecords.filter((record) => record.reason === "size_limit");
+    expect(refusals).toHaveLength(1);
+    expect(refusals[0].bytes).toBeGreaterThan(4096);
+    expect(refusals[0].limitUnits).toBe("utf8-bytes");
+    expect(refusals[0].characters).toBeLessThan(refusals[0].bytes); // 非 ASCII 下两口径必然不同
+    // 同步异常在外部日志如实记录（sync-throw 含非 ASCII 超长诊断），不改为成功。
+    expect(fixed.sendAttemptPhases).toEqual(["pre-call", "boundary", "sync-throw"]);
+    const syncThrow = fixed.sendAttemptRecords.find((record) => record.phase === "sync-throw");
+    expect(syncThrow?.result?.ok).toBe(false);
+    expect(String(syncThrow?.result?.error ?? "").includes("错")).toBe(true);
+    expect(String(syncThrow?.result?.error ?? "").length).toBeGreaterThan(2048);
+    // 后续 loop（同 tick/新 VM/下一 tick）均因保留的 attempted 拒绝——零增发。
+    expect(fixed.rejections).toEqual(["already_attempted", "already_attempted", "already_attempted"]);
+  });
+
+  it("R01/R03 B2 受支持字段超限记录：读取不健康且零写；产物 loop 在控制读取阶段拒绝（非 already_stopped）；短对照继续健康", () => {
+    // 直接 reader（Node 环境）：受支持字段、合法形状、完整 JSON UTF-8 字节 >4096。
+    const world = installLabWorld();
+    try {
+      const oversized = b2FinishedRecord(5000);
+      const serialized = JSON.stringify(oversized);
+      expect(Buffer.byteLength(serialized, "utf8")).toBeGreaterThan(4096); // 独立证明
+      world.memory[LAB_CONTROL_MEMORY_KEY] = oversized;
+      const recordRef = world.memory[LAB_CONTROL_MEMORY_KEY];
+      expect(readControlRecord().status).toBe("corrupt");
+      expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toBe(recordRef); // 读取零写、不删除/裁剪/重置
+      // 字段相同、短 error 的合法对照——读取没有被整体禁用。
+      world.memory[LAB_CONTROL_MEMORY_KEY] = b2FinishedRecord(10);
+      const short = readControlRecord();
+      expect(short.status).toBe("ok");
+      if (short.status === "ok") {
+        expect(short.record.stopped).toBe(true);
+      }
+    } finally {
+      world.restore();
+    }
+    // 产物 VM 对照：旧产物读取健康误判只撞 already_stopped；新产物在控制读取阶段拒绝。
+    const scenario: VmScenarioRow = { label: "B2 受支持字段超限", slotMode: "b2-oversized", sendBehavior: "ok" };
+    const legacy = runVmScenario(readFileSync(LEGACY_SINGLE_SHOT_BUNDLE, "utf8"), scenario);
+    const fixed = runVmScenario(readFileSync(artifacts.singleShotBundle, "utf8"), scenario);
+    console.log(`R03-B2 ${JSON.stringify({ legacy, fixed })}`);
+    expect(legacy.rejections).toEqual(["already_stopped", "already_stopped", "already_stopped"]); // 旧读取健康误判
+    expect([legacy.sendAfterLoop1, legacy.sendAfterLoop2, legacy.sendAfterNextTick]).toEqual([0, 0, 0]);
+    expect(fixed.rejections).toEqual(["control_record_corrupt", "control_record_corrupt", "control_record_corrupt"]);
+    expect([fixed.sendAfterLoop1, fixed.sendAfterLoop2, fixed.sendAfterNextTick]).toEqual([0, 0, 0]);
+    expect(fixed.sendAttemptPhases).toEqual([]);
+    expect(fixed.slotFinalSerialized).toBe(JSON.stringify(b2FinishedRecord(5000))); // 原输入内容不变（零控制槽写）
+  });
+
+  it("R02 发送前读回超限：标记写后读回返回 ID/tick/attempted 匹配但 error 超限的已知字段对象——按不健康读回拒绝，零 send 零发送边界日志", () => {
+    const world = installLabWorld({
+      controlSlot: {
+        mode: "tamper",
+        // 故障只发生在写后读回阶段：标记写本身合法；读回对象用相同已知字段、
+        // ID/tick/attempted 均匹配、仅 syncResult.error 超限（不含未知键）。
+        tamper: (record) => ({ ...record, syncResult: { ok: false, error: "x".repeat(5000) } }),
+      },
+    });
+    const capture = captureConsoleLog();
+    try {
+      const singleShot = requireArtifact(artifacts.singleShotBundle);
+      singleShot.loop();
+      singleShot.loop(); // 同 tick 重复
+      (world.game as { time: number }).time = LAB_EXAMPLE_EXPERIMENT.targetTick + 1;
+      singleShot.loop(); // 下一 tick
+    } finally {
+      capture.restore();
+    }
+    try {
+      expect(world.sendCalls).toEqual([]);
+      const records = parseLabRecords(capture.lines);
+      const marks = records.filter((record) => record.kind === "lab-mark-unconfirmed");
+      expect(marks).toHaveLength(1);
+      expect(marks[0]).toMatchObject({ stage: "mark_readback", reason: "readback_corrupt" });
+      expect(records.filter((record) => record.kind === "lab-send-attempt")).toEqual([]); // 零发送边界日志
+      // 读回对象确为"已知字段、身份匹配、仅大小超限"——拒绝来自读回大小检查，
+      // 不是身份不匹配或未知键白名单。
+      const tampered = world.memory[LAB_CONTROL_MEMORY_KEY] as Record<string, unknown>;
+      expect(tampered).toMatchObject({
+        experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId,
+        attempted: true,
+        attemptedTick: LAB_EXAMPLE_EXPERIMENT.targetTick,
+      });
+      expect(Object.keys(tampered).sort()).toEqual(
+        ["armed", "attempted", "attemptedTick", "experimentId", "syncResult"].sort(),
+      );
+      // 后续 loop 的 gate 读取同一超限记录——控制读取阶段拒绝（先于 already_stopped 暴露大小问题）。
+      expect(
+        records.filter((record) => record.kind === "lab-precondition-rejection").map((record) => record.reason),
+      ).toEqual(["control_record_corrupt", "control_record_corrupt"]);
     } finally {
       world.restore();
     }

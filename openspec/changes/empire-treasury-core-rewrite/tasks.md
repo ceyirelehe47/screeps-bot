@@ -1,5 +1,18 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Terminal Transfer Engine Lab Prep I · Remediation II（2026-09-08）
+
+统一实验控制记录大小语义为完整 JSON 的 UTF-8 字节数 ≤4096（读取/拟写入/发送前读回同一计量），补读写边界与产物级行为验收（任务书 treasury-terminal-transfer-engine-lab-prep-I-remediation-II-implementation.md；验收索引 R01–R04）。生产/配置/Slice 实现/observer 只读语义/发送前标记确认顺序全部冻结；真实引擎仍 NOT_RUN。
+
+- [x] 起点核对：本地=远端=87507f4 干净；旧产物三重身份核对（24496 字节/blob 447970f3/SHA-256 49960ef8）；影响范围审查（singleShot 只消费 ok/reason 可零改动、characters 唯一消费点、src 零引用、产物零 Node 编码依赖）
+- [x] B1/B2 基线复现（独立 Node 脚本归档 evidence baseline/）：B1 旧产物非 ASCII send 异常（"错"×2048）结果 JSON 2200 字符/6296 UTF-8 字节仍写入（write-refused 0 行、stopped 落槽）；B2 受支持字段 5145 字节记录旧读取入口返回 ok（短对照 155 字节 ok、零写），旧产物 loop 对照只撞 already_stopped（读取健康误判）
+- [x] 实现（controlRecord.ts）：measureUtf8Bytes 纯 JS UTF-8 字节计量（导出；ASCII/双字节/BMP/代理对/孤立代理按替换字符 3 字节，产物零 Node 编码依赖）；CONTROL_MAX_UTF8_BYTES=4096；readControlRecord 形状通过后新增字节检查（超限→corrupt、计量异常→corrupt、零写）；writeControlRecord 超限按字节拒（报告 bytes+limitUnits utf8-bytes，characters 降为诊断字段）；confirmAttemptedMark 经同一读取入口自动消费；singleShot.ts 零改动
+- [x] 测试（probe.test.ts 17→22 it）：R02 读写边界矩阵（4095/4096 通过、4097 拒写且旧槽不变/预置读取 corrupt 零写，ASCII 与非 ASCII 已结束记录，4096 精确合法对照）；R02 计量对照（中文/双字节/emoji/转义/孤立代理项与独立 Buffer 期望一致、短合法 Unicode 正常读写）；R01/R03 B1 产物 it（新产物超限结果拒写+attempted 保留槽 ≤4096 字节+sync-throw 如实外记+同 tick×2/同 tick 新 VM/下一 tick 累计 send=1；旧产物缺口对照 6296 字节落槽；产物静态断言无 Node 编码全局）；R01/R03 B2 产物 it（reader corrupt 零写+短对照健康；产物 loop 控制读取阶段拒绝非 already_stopped+槽原文不变）；R02 发送前读回超限 it（tamper 塞已知字段超长 error——readback_corrupt 零 send 零发送边界日志）；既有 Q 断言口径改字节（3 处）
+- [x] 文档：lab-prep-i.md 头部 Remediation II 引用块+控制记录行字节口径+§4.2 超限说明+22 it；tasks.md 本段；migration-map §19.3 R 表
+- [ ] 预算滚动与 VALIDATION_HEAD 固定
+- [ ] 主验证（§7.2）与第二树复验
+- [ ] 归档与 push
+
 ## Terminal Transfer Engine Lab Prep I · Remediation I（2026-09-08）
 
 修复 single-shot 发送前标记确认缺陷（写入结果化+读回核对）、补实际构建产物的失败路径验收、澄清编译配置交接（任务书 treasury-terminal-transfer-engine-lab-prep-I-remediation-I-implementation.md；验收索引 Q01–Q06）。生产/配置/Slice 实现/observer 只读语义全部冻结；真实引擎仍 NOT_RUN。
