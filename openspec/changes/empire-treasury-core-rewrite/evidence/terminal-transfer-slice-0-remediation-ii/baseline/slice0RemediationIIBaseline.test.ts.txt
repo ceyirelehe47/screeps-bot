@@ -1,0 +1,159 @@
+/**
+ * Terminal Transfer Slice 0 · Remediation II——起点基线（b938a15 隔离
+ * worktree；原件归档 evidence/baseline/slice0RemediationIIBaseline.test.ts.txt）。
+ *
+ * 只保存起点行为，不是修复后标准：
+ * - R-A（§3.1）：已授权 100H 请求由 fake 宿主真实完成后，注入同请求另一条
+ *   60H 记录（不同交易 ID、同描述/路线/双方/资源/时窗）——起点 reconcile
+ *   的 ownershipMatch 含 amount===payload.a，60 在唯一性检查前被过滤，
+ *   settle 误报 committed。
+ * - R-B（§4）：四间受管辖健康房间（A/B + C/D 资源充足）经业务协调器提交
+ *   C→D——起点 requestTransfer 把 sourceRoomName/targetRoomName 当可覆盖
+ *   默认值，非固定路线被接纳（无路线拒绝规则）。
+ */
+import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import {
+  buildTreasuryActionContract,
+  replaceTreasuryActionAdapterForTest,
+} from "@/runtime/treasury/actionContracts";
+import { clearTreasuryPolicyResolversForTest, makeNoReserveTreasuryPolicy, registerTreasuryPolicyResolver } from "@/runtime/treasury/policyAuthority";
+import { resetTreasuryCoreStoreForTest } from "@/runtime/treasury/testHarness";
+import { installRooms, type RoomSpec } from "@mock/treasury";
+import { createSlice0TransferCoordinator, type Slice0TransferCoordinator } from "@mock/treasuryTerminalTransferCoordinator";
+import {
+  SLICE0_TRANSFER_AMOUNT,
+  SLICE0_TRANSFER_RESOURCE,
+  SLICE0_USERNAME,
+  createTerminalTransferFakeHost,
+  makeTerminalTransferPrototypeAdapter,
+  slice0SceneRooms,
+  type TerminalTransferFakeHost,
+  type TerminalTransactionRecord,
+} from "@mock/treasuryTerminalTransferPrototype";
+
+const SOURCE_ROOM = "W1N57";
+const TARGET_ROOM = "W10N57";
+
+interface Scene {
+  readonly host: TerminalTransferFakeHost;
+  readonly service: TreasuryService;
+  readonly coordinator: Slice0TransferCoordinator;
+  readonly fee: number;
+}
+
+function makeScene(rooms: RoomSpec[] = slice0SceneRooms()): Scene {
+  const host = createTerminalTransferFakeHost();
+  const installed = installRooms(rooms);
+  replaceTreasuryActionAdapterForTest(makeTerminalTransferPrototypeAdapter(host));
+  registerTreasuryPolicyResolver(makeNoReserveTreasuryPolicy());
+  const service = createTreasuryService({ getRooms: () => Object.values(installed) });
+  service.beginTick();
+  const coordinator = createSlice0TransferCoordinator({
+    host,
+    service,
+    buildContract: (args, workKey) => buildTreasuryActionContract(service, { actionKind: "slice0.terminal-send", transactionId: workKey, args }),
+  });
+  return { host, service, coordinator, fee: host.quoteTransferFee(SLICE0_TRANSFER_AMOUNT, SOURCE_ROOM, TARGET_ROOM) };
+}
+
+function freshScene(rooms?: RoomSpec[]): Scene {
+  resetTreasuryCoreStoreForTest();
+  return makeScene(rooms === undefined ? slice0SceneRooms() : rooms);
+}
+
+function submit(scene: Scene, workKey: string, correlationKey: string): string {
+  const admission = scene.coordinator.requestTransfer({ workKey, correlationKey });
+  if (admission.status !== "admitted") throw new Error(`admit failed: ${admission.status} ${admission.reason}`);
+  const execution = scene.coordinator.executeTransfer(admission);
+  if (execution.status !== "unknown") throw new Error(`dispatch expected unknown, got ${execution.status} ${execution.reason}`);
+  return admission.attemptId;
+}
+
+function processAndAdvance(scene: Scene): void {
+  scene.service.endTick();
+  scene.host.processPendingRequests();
+  Game.time += 1;
+  scene.service.beginTick();
+}
+
+function stock(roomName: string, resource: string): number {
+  const terminal = (Game.rooms as unknown as Record<string, { terminal?: { store: Record<string, number> } }>)[roomName]?.terminal;
+  return terminal === undefined ? 0 : (terminal.store[resource] ?? 0);
+}
+
+function recordShape(attemptId: string): { phase?: string; outcome?: string } | undefined {
+  const store = (Memory.runtime as unknown as {
+    treasuryCore?: { active?: Record<string, { phase?: string; outcome?: string }> };
+  })?.treasuryCore;
+  return store?.active?.[attemptId];
+}
+
+beforeEach(() => {
+  resetTreasuryCoreStoreForTest();
+  clearTreasuryPolicyResolversForTest();
+});
+
+describe("Slice0 Remediation II baseline（起点 b938a15 行为保存）", () => {
+  it("R-A：真实 100H 完成后注入同请求另一条 60H 记录——settle 仍误报 committed（amount 在唯一性前过滤）", () => {
+    const scene = freshScene();
+    const attemptId = submit(scene, "biz:slice0:r2a", "s0-r2a");
+    // fake 宿主真实完成 100H：库存、费用、时窗等其余成功条件全部成立。
+    processAndAdvance(scene);
+    expect(scene.host.transactions.length).toBe(1);
+    expect(scene.host.transactions[0]?.amount).toBe(SLICE0_TRANSFER_AMOUNT);
+    expect(stock(SOURCE_ROOM, SLICE0_TRANSFER_RESOURCE)).toBe(900);
+    expect(stock(SOURCE_ROOM, "energy")).toBe(10_000 - scene.fee);
+    expect(stock(TARGET_ROOM, SLICE0_TRANSFER_RESOURCE)).toBe(100);
+    // 注入同请求（同关联键/路线/双方/资源/时窗）的另一条 60H 记录——不同交易 ID。
+    scene.host.viewConfig.injected = [
+      {
+        transactionId: "txn-inj-60",
+        time: Game.time - 1,
+        sender: { username: SLICE0_USERNAME },
+        recipient: { username: SLICE0_USERNAME },
+        resourceType: SLICE0_TRANSFER_RESOURCE,
+        amount: 60,
+        from: SOURCE_ROOM,
+        to: TARGET_ROOM,
+        description: "treasury-slice0 s0-r2a",
+      } satisfies TerminalTransactionRecord,
+    ];
+    // 起点行为：60 因 amount!==100 在候选归集阶段被过滤——唯一性检查只见
+    // 真实 100 记录，误报 committed（证据歧义应当拒绝——这是本轮工作 A 的缺陷）。
+    const settled = scene.service.settleUnknownOutcome({ attemptId });
+    expect(settled.status).toBe("ok");
+    expect(recordShape(attemptId)?.outcome).toBe("committed");
+  });
+
+  it("R-A 对照：无注入时同链路 settle committed（正确行为——区别于歧义误报）", () => {
+    const scene = freshScene();
+    const attemptId = submit(scene, "biz:slice0:r2a-ctrl", "s0-r2actrl");
+    processAndAdvance(scene);
+    const settled = scene.service.settleUnknownOutcome({ attemptId });
+    expect(settled.status).toBe("ok");
+    expect(recordShape(attemptId)?.outcome).toBe("committed");
+  });
+
+  it("R-B：四间受管辖健康房间经业务协调器提交 C→D——非固定路线被接纳（起点无路线拒绝规则）", () => {
+    const rooms: RoomSpec[] = [
+      ...slice0SceneRooms(),
+      { name: "W20N57", terminal: { id: "term-C", resources: { H: 1000, energy: 10_000 }, freeCapacity: 100_000 } },
+      { name: "W30N57", terminal: { id: "term-D", resources: { energy: 2000 }, freeCapacity: 100_000 } },
+    ];
+    const scene = freshScene(rooms);
+    const admission = scene.coordinator.requestTransfer({
+      workKey: "biz:slice0:r2b",
+      correlationKey: "s0-r2b",
+      sourceRoomName: "W20N57",
+      targetRoomName: "W30N57",
+    });
+    // 起点行为：sourceRoomName/targetRoomName 是可覆盖默认值——C→D 全条件
+    // 成立时被接纳（prepare/build/authorize 均通过），无"路线不在场景范围"拒绝。
+    expect(admission.status).toBe("admitted");
+    expect(recordShape(admission.status === "admitted" ? admission.attemptId : "")?.phase).toBe("pending");
+    const execution = scene.coordinator.executeTransfer(admission);
+    expect(execution.status).toBe("unknown");
+    expect(scene.host.submits.length).toBe(1); // C→D 已提交——路线未被任何入口挡住
+    expect(scene.host.submits[0]?.sourceRoomName).toBe("W20N57");
+  });
+});

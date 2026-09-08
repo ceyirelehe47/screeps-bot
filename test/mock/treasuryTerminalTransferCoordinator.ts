@@ -19,6 +19,14 @@
  * execute 内的 guard 共享 verifySlice0FeeQuote 纯比较逻辑）；不一致时在
  * 调用 executeAuthorizedDispatch **之前**拒绝——许可未消费、记录仍
  * pending，恢复报价后按原有效期执行。
+ *
+ * Remediation II（O03）修订：
+ * - §4 固定路线是拒绝规则，不是默认值：本原型既定业务路线固定
+ *   W1N57→W10N57。省略路线用固定值；显式传入同一路线可以接受；任一端点
+ *   不同——明确拒绝（stage="route"），不先准备、不构建、不接纳另一条
+ *   路线。运行时收到冲突路线不静默改成固定路线后宣告成功。低层原型夹具
+ *   仍可用 C/D 房间构造反例（经 facade 直连）；通用 facade/kernel 的多
+ *   房间能力不受影响。
  */
 
 import type { TreasuryService } from "@/runtime/treasury/facade";
@@ -30,9 +38,9 @@ import {
   type TerminalTransferFakeHost,
 } from "@mock/treasuryTerminalTransferPrototype";
 
-/** 本原型固定业务路线（§2：指定源 W1N57 与目标 W10N57——C/D 房间只作反例噪声）。 */
-const DEFAULT_SOURCE_ROOM = "W1N57";
-const DEFAULT_TARGET_ROOM = "W10N57";
+/** 本原型固定业务路线（Remediation II §4：拒绝规则，不是可覆盖默认值——省略用固定值，不同即拒；C/D 房间只作反例噪声）。 */
+const FIXED_SOURCE_ROOM = "W1N57";
+const FIXED_TARGET_ROOM = "W10N57";
 
 export interface Slice0TransferCoordinatorDeps {
   readonly service: TreasuryService;
@@ -61,7 +69,7 @@ export type Slice0TransferAdmission =
       readonly args: TerminalTransferArgs;
       readonly dispatch: object;
     }
-  | { readonly status: "rejected"; readonly stage: "single-flight" | "prepare" | "admit"; readonly reason: string };
+  | { readonly status: "rejected"; readonly stage: "single-flight" | "route" | "prepare" | "admit"; readonly reason: string };
 
 export type Slice0TransferExecution =
   | { readonly status: "unknown"; readonly attemptId: string }
@@ -114,12 +122,24 @@ export function createSlice0TransferCoordinator(deps: Slice0TransferCoordinatorD
       // 检查与接纳顺序调用，中间不插入外部回调（§5）。
       const gate = singleFlightGate();
       if (gate.ok !== true) return { status: "rejected", stage: "single-flight", reason: gate.reason };
+      // 固定路线检查（Remediation II §4）：省略用固定值；显式同一路线可
+      // 接受；任一端点不同——在准备/构建/接纳之前明确拒绝，不静默改成
+      // 固定路线后继续。
+      const sourceRoomName = input.sourceRoomName ?? FIXED_SOURCE_ROOM;
+      const targetRoomName = input.targetRoomName ?? FIXED_TARGET_ROOM;
+      if (sourceRoomName !== FIXED_SOURCE_ROOM || targetRoomName !== FIXED_TARGET_ROOM) {
+        return {
+          status: "rejected",
+          stage: "route",
+          reason: `路线不在本场景范围：本原型固定 ${FIXED_SOURCE_ROOM}→${FIXED_TARGET_ROOM}，收到 ${sourceRoomName}→${targetRoomName}——不准备、不构建、不接纳`,
+        };
+      }
       let args: TerminalTransferArgs;
       try {
         args = prepareSlice0TransferArgs(
           deps.host,
-          input.sourceRoomName ?? DEFAULT_SOURCE_ROOM,
-          input.targetRoomName ?? DEFAULT_TARGET_ROOM,
+          sourceRoomName,
+          targetRoomName,
           input.correlationKey,
         );
       } catch (error) {

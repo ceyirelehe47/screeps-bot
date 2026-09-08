@@ -1,5 +1,18 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Terminal Transfer Slice 0 · Remediation II（2026-09-08）
+
+三个剩余项补修（任务书 treasury-terminal-transfer-slice-0-remediation-II-implementation.md；验收索引 O01–O06）：归集与全量分离（A）、固定路线拒绝（B）、closing 投影补验（C）。生产内核不解冻；W1N57→W10N57/100 H 仍是测试夹具值。
+
+- [x] 起点核对：本地=远端=b938a15 干净、无增量；影响范围审查（subagent：ownershipMatch 的 amount===payload.a 耦合点（prototype.ts:747）、coordinator ?? 默认覆盖（119-124）、query subtractReservations/riskAdjustedFreeCapacity/occupancy closing-committed 锚点链、现有 22 个 requestTransfer 调用点全部省略路线零破坏、O 文件不存在）
+- [x] 基线复现（起点隔离 worktree + node_modules junction，3/3 全复现归档 evidence/…-remediation-ii/baseline/）：R-A 真实 100H 完成后注入同请求 60H 记录（不同交易 ID、其余成功条件全部成立）——settle 误报 committed（amount 在唯一性前过滤）；R-A 对照无注入 committed（正确行为）；R-B 四间受管辖健康房间 C→D 经协调器 admitted 且 submits=1（无路线拒绝规则）。修复后退化对照：R-A/R-B 基线用例在修复树转红（行为改变实证）、对照保持绿——按任务书 §6 不另建变异驱动
+- [x] 工作 A：relatedMatch（不含 amount）+ 唯一性后 4b 全量条件 matched.amount!==payload.a→uncertain；结果表全数通过（唯一 100 完成/只有相关 60 拒/100+60 两顺序与跨视图拒/两个 100 拒/同 ID 100/60 矛盾拒/无关 60 不阻断）；adapter version/semanticIdentity 不变（筛选顺序修正，证据语义与 v2 契约一致）
+- [x] 工作 B：requestTransfer 单条在途检查后、准备前新增固定路线检查——省略用固定值、显式相同接受、任一端点不同 rejected(stage=route) 不准备不构建不接纳；FIXED_* 常量更名；通用 facade 多房间能力不变
+- [x] 工作 C 补验（实测通过、生产零改动、无 ADAPTER_GAP）：O04 三段投影（unknown 保守 100/q/F0−100 → closing committed=0/spendable=900/10000−q/容量 F0−100 不双扣 → 退出不重复释放）+ M05/M07a/M07b 两类配对恢复场景接入；lifecycle 语义如实呈现（M07b 断点在 endTick 后：safe=false 且 blockers 恰为 lifecycle_closed，账目数字仍按真实占用计算——非 fail-closed 的 0）
+- [x] 定向与回归：O 文件 4 it + M 文件 8 it + N 文件 8 it 全绿（20/20）；Treasury 35/594 全绿；typecheck×2 通过
+- [x] 回归与预算、固定 VALIDATION_HEAD 主验证（§7.1 模板）、第二干净上下文定向复验、归档与 push（数字与结论见 evidence/terminal-transfer-slice-0-remediation-ii/ 与主报告）
+- 沿留待办（低危，沿下轮）：O01 函数级顺序变体覆盖 injected 列表两种排列（宿主记录与注入记录在视图拼接中的先后由 mock 固定为 transactions 在前——如需覆盖宿主记录在后形态需扩展 mock 视图配置）；M06 部分量 fee 显式断言（沿上轮）
+
 ## Terminal Transfer Slice 0 · Remediation I（2026-09-07）
 
 修正测试专用调拨原型三项既有契约（完整交易归属/单条在途/冻结费用）与核验驱动 cwd 定位（任务书 treasury-terminal-transfer-slice-0-remediation-I-implementation.md；验收索引 N01–N08）。生产内核不解冻；100 H 仍是测试夹具值。

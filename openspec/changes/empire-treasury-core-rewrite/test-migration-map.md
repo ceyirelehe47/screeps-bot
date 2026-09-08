@@ -491,3 +491,21 @@ IVKernel 测试侧两文件。
 - lastQuote 机制整体移除：报价端口只读；冻结基准唯一来源是 canonical `prepared.feeQuote`（prepareSlice0TransferArgs 一次取值），业务前检与 adapter guard 共享 verifySlice0FeeQuote 纯比较（不建立第二授权体系）。
 - 矩阵/序列 it 内多场景共享全局 Memory：freshScene（resetTreasuryCoreStoreForTest + makeScene）用于换场景清上一场景未收尾 active——这些 it 测归属/费用矩阵，单条在途门禁由 N03 专测（N03 各场景不 reset、保留 active 与配对宿主状态）。
 - M04/N06 的直连 facade 用例（执行前条件变化、重复授权）在测试注释注明不承担业务门禁证明（§5 入口边界）。
+
+## 18. Terminal Transfer Slice 0 · Remediation II：O01–O06 定位（2026-09-08）
+
+| 索引 | 测试/驱动位置 | 覆盖行为 |
+| --- | --- | --- |
+| O01 | src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts it「O01」 | 同请求不同交易 ID 的 100+60 不在全量筛选前丢失：函数级两种排列顺序 + 注册路径 a（injected 两视图）/b（仅 outgoing）/c（仅 incoming）经 settleUnknownOutcome 均 still_uncertain、phase=outcome_unknown、active 保留、submit 计数不变；对照（无注入）committed。基线 R-A 误报 committed 的修复对照 |
+| O02 | 同文件 it「O02」 | 归集/全量分离结果表：唯一 100 committed；只有相关 60 uncertain（不补发不报 not_executed）；不同 ID 两个 100 uncertain；同 ID 100/60 矛盾副本 uncertain；唯一 100+不同关联键无关 60 committed（注册路径含退出断言）；注册路径只有 60/同 ID 矛盾镜像 uncertain+责任保留 |
+| O03 | 同文件 it「O03」 | 四间受管辖健康房间（A/B+C/D 资源充足）：C→D、反向 D→C、单端点 A→D/C→B 均 rejected(stage=route) 且理由匹配"路线不在本场景范围"（不因关窗/在途/资源/冷却/结构兜底）、active 无新增、submit 增量 0；显式 A→B 与默认（省略）A→B 均完整闭环、终态计数吻合。基线 R-B admitted 的修复对照 |
+| O04 | 同文件 it「O04」+ Slice0.test.ts M05/M07a/M07b 接入的 projection() 断言 | closing 期间不双扣：源 H/energy 经 query（subtractReservations=true）observed=900/10000−q、committed=0、spendable=900/10000−q；目标 riskAdjustedFreeCapacity=F0−100（非 F0−200）；unknown 阶段保守占用 100/q/F0−100；退出前后数值一致（不重复释放）；M07b 恢复 tick blockers 恰为 lifecycle_closed（endTick 后断点、账目数字仍真实） |
+| O05 | M/N 既有回归（N03 单条在途/N05 费用 guard/N01N02 身份与版本/N07 驱动 cwd）+ 主验证三组冻结 diff | 既有行为保持；生产/配置/依赖/Defense 零差异；无新增持久权威 |
+| O06 | 主验证 + 第二干净上下文（evidence final/revalidation） | 固定 SHA 全量验证、第二执行上下文定向复验、原始结果归档；预算/验证/交付 HEAD 分开；原型限定结论与真实引擎未实测边界分开 |
+
+### 18.1 覆盖差异与边界说明
+
+- reconcile 的相关性谓词改名 relatedMatch（原 ownershipMatch）并移除 amount 条件；全量条件（matched.amount===payload.a）移至唯一性判定之后（步骤 4b）。adapter version/semanticIdentity 不变——筛选顺序修正不改变证据语义，旧 payload/旧身份不被解释为更强证明。
+- 固定路线是协调器（业务入口）的拒绝规则：stage 联合新增 "route"；低层 prepareSlice0TransferArgs/facade 直连仍可指定任意合法房间（M04 场景外目标等低层反例不受影响）——入口边界同 §17.1。
+- O04 的查询口径：query 不传 owner（ownerStatus="none"，resolveOwnerStatus 对 undefined 返回 valid=true——spendable 按真实占用计算）；M07b 恢复 tick 的 lifecycle_closed 是 C06 语义（endTick 后断点、已关窗口不得重开）的如实呈现，测试以精确 blockers 断言区分，不以 fail-closed 数字冒充。
+- 基线用例（R-A/R-B/R-A 对照）按任务书 §6 同时承担起点行为保存与修复后退化对照（修复树转红/对照保持绿），不另建变异测试驱动。

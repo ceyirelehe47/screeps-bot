@@ -141,6 +141,54 @@ function activeIds(): string[] {
   return Object.keys(store?.active ?? {});
 }
 
+/**
+ * O04（Remediation II §5）：账目投影断言口径——经会消费占用的真实接口
+ * （query 保留 subtractOutgoing/subtractReservations，不传 false 绕过
+ * kernel 占用；目标容量用统一风险口径 riskAdjustedFreeCapacity——
+ * strictProjectedFreeCapacity 不承担同一扣减职责）。返回源 H/源 energy
+ * 三元组、目标风险调整容量与 authorizationSafe/blockers（lifecycle 语义
+ * 如实呈现：endTick 后断点的恢复 tick 窗口已关——safe=false 但账目数字
+ * 仍按真实占用计算，authorizable 不含 lifecycle，不是 fail-closed 的 0）。
+ */
+function projection(service: TreasuryService): {
+  sourceH: { observed: number; committed: number; spendable: number };
+  sourceEnergy: { observed: number; committed: number; spendable: number };
+  targetRiskAdjusted: number;
+  safe: boolean;
+  blockers: string[];
+} {
+  const read = (resource: string) => {
+    const view = service.query({
+      resource,
+      rooms: [SOURCE_ROOM],
+      locations: ["terminal"],
+      allowProjected: false,
+      allowIncoming: false,
+      subtractOutgoing: true,
+      subtractReservations: true,
+      withhold: 0,
+    });
+    return { observed: view.observed, committed: view.committed, spendable: view.spendable };
+  };
+  const gate = service.query({
+    resource: SLICE0_TRANSFER_RESOURCE,
+    rooms: [SOURCE_ROOM],
+    locations: ["terminal"],
+    allowProjected: false,
+    allowIncoming: false,
+    subtractOutgoing: true,
+    subtractReservations: true,
+    withhold: 0,
+  });
+  return {
+    sourceH: read(SLICE0_TRANSFER_RESOURCE),
+    sourceEnergy: read("energy"),
+    targetRiskAdjusted: service.riskAdjustedFreeCapacity(TARGET_ROOM, "terminal"),
+    safe: gate.authorizationSafe,
+    blockers: [...gate.authorizationBlockers],
+  };
+}
+
 /** 断点 1 捕获包装：submit 返回后、dispatch_result 写入前捕获宿主断点。 */
 function wrapWithPostSubmitCapture(
   host: TerminalTransferFakeHost,
@@ -319,6 +367,14 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     expect(recordShape(attemptId)?.outcome).toBe("unknown"); // 结论仍是 unknown——无完成覆盖
     expect(recordShape(attemptId)?.phase).toBe("outcome_unknown");
     expect(activeIds()).toContain(attemptId); // 完成前占用保留
+    // O04（Remediation II §5.2）：unknown 阶段保守占用——物理未变
+    // （1000/10000/F0），worstCase 占用保留 100H/fee/100 空位责任。
+    const unknownProj = projection(scene.service);
+    expect(unknownProj.sourceH).toEqual({ observed: 1000, committed: SLICE0_TRANSFER_AMOUNT, spendable: 900 });
+    expect(unknownProj.sourceEnergy).toEqual({ observed: 10_000, committed: scene.fee, spendable: 10_000 - scene.fee });
+    expect(unknownProj.safe).toBe(true);
+    expect(unknownProj.blockers).toEqual([]);
+    expect(unknownProj.targetRiskAdjusted).toBe(100_000 - SLICE0_TRANSFER_AMOUNT);
     // 处理阶段（tick T 后期）→ 新 tick（T+1）效果与记录可见。
     processAndAdvance(scene);
     const txn = scene.host.transactions[0];
@@ -330,9 +386,23 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     expect(scene.service.settleUnknownOutcome({ attemptId }).status).toBe("ok");
     expect(recordShape(attemptId)?.outcome).toBe("committed");
     expect(recordShape(attemptId)?.phase).toBe("closing"); // 进入退出流程
+    // O04（§5.1）：closing 尚未退出时核对国库不双扣——同一效果已进入观察
+    // （占用释放，committed=0），物理扣减后 spendable 与 unknown 阶段同值
+    // （双扣会得到 800/10000−2q/F0−200）；查询不清理责任、不产生提交。
+    const closingProj = projection(scene.service);
+    expect(closingProj.sourceH).toEqual({ observed: 900, committed: 0, spendable: 900 });
+    expect(closingProj.sourceEnergy).toEqual({ observed: 10_000 - scene.fee, committed: 0, spendable: 10_000 - scene.fee });
+    expect(closingProj.safe).toBe(true);
+    expect(closingProj.blockers).toEqual([]);
+    expect(closingProj.targetRiskAdjusted).toBe(100_000 - SLICE0_TRANSFER_AMOUNT);
+    expect(recordShape(attemptId)?.phase).toBe("closing"); // 读取前后记录仍在
+    expect(scene.host.submits.length).toBe(1);
     // 适用新观察后退出（不双扣、不重复执行）。
     advanceTick(scene.service);
     expect(activeIds()).not.toContain(attemptId);
+    // O04：退出不重复释放——金额/容量与 closing 期间一致（删除记录不再
+    // 增加一次）。
+    expect(projection(scene.service)).toEqual(closingProj);
     // 世界终态：源 −100H 与实际 fee、目标 +100H——各恰好一次。
     expect(stock(SOURCE_ROOM, SLICE0_TRANSFER_RESOURCE)).toBe(1000 - SLICE0_TRANSFER_AMOUNT);
     expect(stock(SOURCE_ROOM, "energy")).toBe(10_000 - scene.fee);
@@ -453,6 +523,7 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
   it("M07/N03/N04：提交后结果持久化前的断点（经业务入口）——配对重载先保持 unknown，事实到达后收尾；旧许可拒绝、第二需求被单条在途阻断", () => {
     const host = createTerminalTransferFakeHost();
     const installed = installRooms(sceneRooms());
+    const fee = host.quoteTransferFee(SLICE0_TRANSFER_AMOUNT, SOURCE_ROOM, TARGET_ROOM);
     const holder: { breakpoint?: TreasuryHostBreakpoint } = {};
     replaceTreasuryActionAdapterForTest(wrapWithPostSubmitCapture(host, holder));
     registerTreasuryPolicyResolver(makeNoReserveTreasuryPolicy());
@@ -494,6 +565,14 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     expect(phaseAfterRestore === "outcome_unknown" || phaseAfterRestore === "dispatching").toBe(true);
     const settle1 = restoredService.settleUnknownOutcome({ attemptId });
     if (settle1.status !== "rejected") expect(settle1.status).toBe("still_uncertain");
+    // O04（Remediation II §5.2 恢复路径一）：断点恢复后仍 unknown——世界与
+    // 宿主配对回滚到提交时刻，保守占用保留（1000/10000/F0 − 占用）。
+    const restoredProj = projection(restoredService);
+    expect(restoredProj.sourceH).toEqual({ observed: 1000, committed: SLICE0_TRANSFER_AMOUNT, spendable: 900 });
+    expect(restoredProj.sourceEnergy).toEqual({ observed: 10_000, committed: fee, spendable: 10_000 - fee });
+    expect(restoredProj.safe).toBe(true);
+    expect(restoredProj.blockers).toEqual([]);
+    expect(restoredProj.targetRiskAdjusted).toBe(100_000 - SLICE0_TRANSFER_AMOUNT);
     // 可见事实到达后收尾：处理（宿主从断点分支恢复的挂起请求）→ 新 tick → 结算退出。
     restoredService.endTick();
     host.processPendingRequests();
@@ -502,10 +581,19 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     expect(host.transactions.length).toBe(1);
     expect(restoredService.settleUnknownOutcome({ attemptId }).status).toBe("ok");
     expect(recordShape(attemptId)?.outcome).toBe("committed");
+    // O04（§5.1 恢复路径一）：closing 期间不双扣——效果进入观察后占用释放
+    // （committed=0），spendable 与物理扣减一致。
+    const closingProj = projection(restoredService);
+    expect(closingProj.sourceH).toEqual({ observed: 900, committed: 0, spendable: 900 });
+    expect(closingProj.sourceEnergy).toEqual({ observed: 10_000 - fee, committed: 0, spendable: 10_000 - fee });
+    expect(closingProj.safe).toBe(true);
+    expect(closingProj.blockers).toEqual([]);
+    expect(closingProj.targetRiskAdjusted).toBe(100_000 - SLICE0_TRANSFER_AMOUNT);
     restoredService.endTick();
     Game.time += 1;
     restoredService.beginTick();
     expect(activeIds()).not.toContain(attemptId);
+    expect(projection(restoredService)).toEqual(closingProj); // 退出不重复释放
     expect(stock(SOURCE_ROOM, SLICE0_TRANSFER_RESOURCE)).toBe(1000 - SLICE0_TRANSFER_AMOUNT);
     expect(stock(TARGET_ROOM, SLICE0_TRANSFER_RESOURCE)).toBe(SLICE0_TRANSFER_AMOUNT);
     expect(host.submits.length).toBe(1); // 全程恰一次提交
@@ -523,6 +611,16 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     expect(stock(TARGET_ROOM, SLICE0_TRANSFER_RESOURCE)).toBe(0);
     // 先保持 unknown（settle 不受授权窗口限制——恢复与对账继续）。
     expect(restoredService.settleUnknownOutcome({ attemptId }).status).toBe("still_uncertain");
+    // O04（Remediation II §5.2 恢复路径二）：已接受未处理的断点——完整
+    // 重载后仍 unknown，保守占用保留（物理未变）。
+    const restoredProj = projection(restoredService);
+    expect(restoredProj.sourceH).toEqual({ observed: 1000, committed: SLICE0_TRANSFER_AMOUNT, spendable: 900 });
+    expect(restoredProj.sourceEnergy).toEqual({ observed: 10_000, committed: scene.fee, spendable: 10_000 - scene.fee });
+    // 断点捕获于 endTick 后：本 tick 授权窗口已关（C06——已关窗口不得重开），
+    // lifecycle_closed 如实呈现；账目数字仍按真实占用计算（非 fail-closed 的 0）。
+    expect(restoredProj.safe).toBe(false);
+    expect(restoredProj.blockers).toEqual(["lifecycle_closed"]);
+    expect(restoredProj.targetRiskAdjusted).toBe(100_000 - SLICE0_TRANSFER_AMOUNT);
     // 推进到下一 tick 开窗（断点捕获于 endTick 后——本 tick 窗口已关；开窗
     // 使 B 的其他条件成立），attempt 仍 unknown：第二需求（不同 workKey）被
     // 持久 active 事实的**单条在途**阻断——理由指向在途责任而非窗口。
@@ -542,10 +640,19 @@ describe("Terminal Transfer Slice 0（M03–M07）", () => {
     Game.time += 1;
     restoredService.beginTick();
     expect(restoredService.settleUnknownOutcome({ attemptId }).status).toBe("ok");
+    // O04（§5.1 恢复路径二）：closing 期间不双扣（committed=0、spendable
+    // 与物理一致、容量 F0−100）——退出后不重复释放。
+    const closingProj = projection(restoredService);
+    expect(closingProj.sourceH).toEqual({ observed: 900, committed: 0, spendable: 900 });
+    expect(closingProj.sourceEnergy).toEqual({ observed: 10_000 - scene.fee, committed: 0, spendable: 10_000 - scene.fee });
+    expect(closingProj.safe).toBe(true);
+    expect(closingProj.blockers).toEqual([]);
+    expect(closingProj.targetRiskAdjusted).toBe(100_000 - SLICE0_TRANSFER_AMOUNT);
     restoredService.endTick();
     Game.time += 1;
     restoredService.beginTick();
     expect(activeIds()).not.toContain(attemptId);
+    expect(projection(restoredService)).toEqual(closingProj);
     // 结算完成后同 workKey 的新需求不再被旧工作阻断（经恢复后新协调器）。
     const third = secondCoordinator.requestTransfer({ workKey: "biz:slice0:m07b", correlationKey: "s0-0702" });
     expect(third.status).toBe("admitted");

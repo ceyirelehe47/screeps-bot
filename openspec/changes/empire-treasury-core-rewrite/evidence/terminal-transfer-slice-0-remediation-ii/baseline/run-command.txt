@@ -1,0 +1,1 @@
+cd <baseline-worktree> && npx jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasury/slice0RemediationIIBaseline.test.ts

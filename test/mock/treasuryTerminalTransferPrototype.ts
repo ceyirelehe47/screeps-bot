@@ -37,6 +37,13 @@
  *   之后"的错误。
  * - 旧 v1 payload（无 v2 前缀）不可解释——保守 still_uncertain，不猜测
  *   补齐身份，不静默升级。
+ *
+ * Remediation II（O01/O02）修订：
+ * - §3.2 归集与全量分离："属于本请求"与"满足全量完成条件"是两步——相关
+ *   性依据完整描述/期望路线/双方/资源/send 类别（order 排除）判定，实际
+ *   amount 不是丢弃相关交易的条件；相关 ID 全部副本仍先验一致性。唯一
+ *   相关交易确定后才检查恰好全量（amount===payload.a）及其余完成条件。
+ *   100+60 歧义不再因全量过滤而丢失 60；只有一条相关 60H 同样拒绝。
  */
 
 import {
@@ -734,17 +741,19 @@ export function makeTerminalTransferPrototypeAdapter(
       // 期望值先存在（§4.1）：完整描述确定编码、严格相等——不用
       // includes/startsWith/模糊匹配。
       const expectedDescription = `treasury-slice0 ${payload.k}`;
-      // 完整归属匹配：描述、期望路线（源/目标）、双方身份、资源、全量
-      // amount、非市场订单（order 字段）——全部来自持久 payload。
-      const ownershipMatch = (record: TerminalTransactionRecord): boolean =>
+      // 相关性匹配（Remediation II §3.2：与全量完成条件分离）：描述、期望
+      // 路线（源/目标）、双方身份、资源、非市场订单（order 字段）——全部
+      // 来自持久 payload。**实际 amount 不是丢弃相关交易的条件**——部分量
+      // 记录保留在归集结果里参与唯一性判定（不同 ID 的 100+60 不能先把 60
+      // 过滤掉再宣称唯一）。
+      const relatedMatch = (record: TerminalTransactionRecord): boolean =>
         record.description === expectedDescription &&
         record.from === payload.s &&
         record.to === payload.d &&
         record.sender?.username === payload.u &&
         record.recipient?.username === payload.u &&
         record.resourceType === SLICE0_TRANSFER_RESOURCE &&
-        record.order === undefined &&
-        record.amount === payload.a;
+        record.order === undefined;
       // 1) 按交易 ID 分组（两视图合并；同视图重复也在组内）。
       const groups = new Map<string, { view: string; record: TerminalTransactionRecord }[]>();
       for (const [view, list] of [["outgoing", outgoing], ["incoming", incoming]] as const) {
@@ -754,12 +763,12 @@ export function makeTerminalTransferPrototypeAdapter(
           groups.set(record.transactionId, copies);
         }
       }
-      // 2) 相关组（组内任一副本完整归属匹配）：先验同 ID 全部副本一致性
+      // 2) 相关组（组内任一副本相关匹配）：先验同 ID 全部副本一致性
       // （顺序无关——不能把矛盾镜像先过滤掉再比较）；矛盾整体阻断；一致
       // 归并为一条。无关键录（他人交易/市场订单/无关噪声）不阻断。
       const candidates: TerminalTransactionRecord[] = [];
       for (const copies of groups.values()) {
-        if (!copies.some((c) => ownershipMatch(c.record))) continue;
+        if (!copies.some((c) => relatedMatch(c.record))) continue;
         if (!copies.every((c) => slice0RecordsIdentical(c.record, copies[0]!.record))) {
           return "still_uncertain"; // 同 ID 相关记录矛盾——保守阻断
         }
@@ -772,8 +781,13 @@ export function makeTerminalTransferPrototypeAdapter(
       // 4) 多个不同交易 ID 都可能属于同一请求——不能任选一个成功记录。
       if (visible.length !== 1) return "still_uncertain";
       const matched = visible[0]!;
+      // 4b) 全量完成条件（Remediation II §3.2）：归集与全量分离——唯一性
+      // 判定之前不按 amount 过滤，唯一相关交易确定后才检查恰好全量。只有
+      // 一条相关 60H 同样拒绝（不补发、不报 not_executed、保守保留责任）。
+      if (matched.amount !== payload.a) return "still_uncertain";
       // 5) 库存终态核对——只检查期望端点（源/目标房间来自持久 payload，
-      // 非 matched.from/to）；部分量在此前已因 amount≠全量被排除。
+      // 非 matched.from/to）；部分量已在 4b 被全量条件拒绝（到达此处即
+      // 唯一且全量）。
       if (
         readRoomStock(payload.s, SLICE0_TRANSFER_RESOURCE) !== payload.sb[0]! - payload.a ||
         readRoomStock(payload.s, "energy") !== payload.sb[1]! - payload.f ||

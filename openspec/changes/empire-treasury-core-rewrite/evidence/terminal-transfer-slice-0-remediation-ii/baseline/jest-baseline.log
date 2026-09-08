@@ -1,0 +1,11 @@
+PASS src/runtime/treasury/slice0RemediationIIBaseline.test.ts
+  Slice0 Remediation II baseline（起点 b938a15 行为保存）
+    √ R-A：真实 100H 完成后注入同请求另一条 60H 记录——settle 仍误报 committed（amount 在唯一性前过滤） (21 ms)
+    √ R-A 对照：无注入时同链路 settle committed（正确行为——区别于歧义误报） (6 ms)
+    √ R-B：四间受管辖健康房间经业务协调器提交 C→D——非固定路线被接纳（起点无路线拒绝规则） (5 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       3 passed, 3 total
+Snapshots:   0 total
+Time:        3.166 s, estimated 10 s
+Ran all test suites within paths "src/runtime/treasury/slice0RemediationIIBaseline.test.ts".
