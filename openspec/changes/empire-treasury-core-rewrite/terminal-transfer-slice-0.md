@@ -4,6 +4,8 @@
 
 本文集中放：§1 固定源码契约短报告（M02）、§2 原型接线与适配差异（M03–M07 的实现依据）、§3 后续隔离引擎实验说明（M08，只准备不执行）。
 
+> **Lab Prep I 更新（2026-09-08）**：§3 的隔离实验准备已落地为可构建探针包——见 `terminal-transfer-engine-lab-prep-i.md`（observer/single-shot 双入口、离线自测、待测矩阵与停止清理；PREPARED_NOT_RUN）。本文 §2 的接线细节以 Remediation I/II 当前实现为准。
+
 ---
 
 ## 1. 来源契约短报告（M02）

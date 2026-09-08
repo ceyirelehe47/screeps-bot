@@ -509,3 +509,23 @@ IVKernel 测试侧两文件。
 - 固定路线是协调器（业务入口）的拒绝规则：stage 联合新增 "route"；低层 prepareSlice0TransferArgs/facade 直连仍可指定任意合法房间（M04 场景外目标等低层反例不受影响）——入口边界同 §17.1。
 - O04 的查询口径：query 不传 owner（ownerStatus="none"，resolveOwnerStatus 对 undefined 返回 valid=true——spendable 按真实占用计算）；M07b 恢复 tick 的 lifecycle_closed 是 C06 语义（endTick 后断点、已关窗口不得重开）的如实呈现，测试以精确 blockers 断言区分，不以 fail-closed 数字冒充。
 - 基线用例（R-A/R-B/R-A 对照）按任务书 §6 同时承担起点行为保存与修复后退化对照（修复树转红/对照保持绿），不另建变异测试驱动。
+
+## 19. Terminal Transfer Engine Lab Prep I：P01–P06 定位（2026-09-08）
+
+| 索引 | 测试/驱动位置 | 覆盖行为 |
+| --- | --- | --- |
+| P01 | src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts describe「Lab Prep I（P01）」（3 it） | 注册 settle 入口实际读取两种真实排列：spy/包装器替换 host.transactionsView 两方法返回独立副本（reverse 时反序）——只改排序不改集合/身份/数量/时点；[100,60]（宿主真实记录在前）与 [60,100] 均 still_uncertain+phase=outcome_unknown+outcome=unknown+active 保留+submit 不增；P01-ORDER 行留痕实际 ID:amount 顺序与 spy 调用次数（2）；独立正常场景唯一 100H 闭环 closing 三账目 900/10000−q/F0−100（P01-ACCOUNTS 留痕）+退出后不重复释放；跨视图组合与同 ID 冲突/无关 60/仅部分量对照由 O01/O02 既有用例承担 |
+| P02 | evidence revalidation/（非 Jest） | 新 VALIDATION_HEAD 的 detached worktree 真正独立 npm ci（无 junction/symlink/共享/复制安装；独立 node_modules/Jest cache/output）；本轮 probe+SLICE+KEY 与 Defense 实际复跑；安装输出/退出码/Node/npm 版本/lockfile hash/关键依赖解析路径留痕；reviewer 读任务书全文并独立核对 P01 顺序 |
+| P03 | test/lab/terminal-transfer/probe.test.ts it 1–5 + 探针源码 | 可构建 observer/single-shot 双入口：真实 API 薄包装（Game.rooms/terminal.store/cooldown/owner/id、calcTransactionCost、两交易视图）；原始采样（读异常/缺房间不填 0、无 observed_* 结论、镜像与不同 ID 原样保留）；默认无写无注册；不复制国库协议或对账器（observer 模块链零 terminal.send） |
+| P04 | probe.test.ts it 2、6–11 | 产物行为：模块加载无副作用；未武装/缺记录/损坏/ID/shard/user/structure/tick/cooldown/fee/容量门禁零调用且留前置拒绝原因；合法目标 tick 恰一次参数正确+this 绑定+控制记录 attempted/attemptedTick/syncResult/stopped（≤4KiB）；同 tick 重复与后续 tick 不再调用；非 OK 与 throw 不重试；JSON 重载+模块重建不重发；OK 不自造效果、后续 tick fixture 差异由 observer 如实报告 |
+| P05 | scripts/build-treasury-terminal-lab.mjs + 产物 manifest.json + terminal-transfer-engine-lab-prep-i.md | 独立本地构建入口（transpile+rollup 内联、无部署插件/网络/上传、非空目录拒写、仓库外含空格 cwd 可用）；清单 PREPARED_NOT_RUN 含 repo 源 SHA/bundle hash/lockfile hash/固定 engine/driver 参考 SHA/构建命令；交接说明含版本前置、操作顺序、待测矩阵、停止清理 |
+| P06 | 主验证 + 第二树（evidence final/revalidation） | 生产/配置/依赖/Defense 三组冻结 diff 零差异；生产 bundle 前后一致（探针不进 dist/main.js）；固定 SHA 五组 Jest+预算+verify-evidence；执行代码先提交后验证；commit/push 纪律（不 reset/rebase/force push/amend 已推送提交） |
+
+### 19.1 覆盖差异与边界说明
+
+- 探针包位于 test/lab/terminal-transfer/（非 @mock、非 src/）：不导入生产模块、不进生产 bundle；labConfig 常量与 example.experiment.json 同步由 probe.test 断言（防文档漂移）。
+- observer 与 single-shot 是两个**独立构建产物**——不是同一产物靠运行时可改写布尔开关互转；observer 模块及其依赖不含 terminal.send 调用（probe.test 另以产物文本无 `.send(` 作辅助断言）。
+- 实验控制记录用实验侧窄化独立键 Memory.__labTerminalTransferProbe——不进生产 Memory 声明（memoryDeclarationBoundaries/ambientGlobalAbi 只扫生产程序）；读写均经 cast 窄化，不改 src/global.d.ts。
+- probe.test.ts 中所有"send 调用 1 次"均指 stub spy 调用（假 Game/Memory/terminal）——不是真实游戏经济动作；该测试证明包装与采样正确，不证明引擎真的这样运行（真实边界 PREPARED_NOT_RUN）。
+- P01 的 [60,100] 排列由 spy 返回反序独立副本实现（任务书 §3.1 最小做法）——宿主记录在视图物理拼接中仍固定在前；如需原生覆盖该形态需扩展 mock 视图配置（沿留待办）。
+- probe.test.ts 的全局 stub 在 it 内安装（setup.ts 的 refreshGlobalMock beforeEach 先行刷新，互不冲突）；产物 require 前后以 jest.resetModules() 保证 fresh 模块状态。

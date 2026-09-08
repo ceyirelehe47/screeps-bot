@@ -1,5 +1,20 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Terminal Transfer Engine Lab Prep I（2026-09-08）
+
+承接 Slice 0 · Remediation II 的 O01–O06；补齐两项交接保留（注册 settle 两种排列、第二树独立依赖安装），并交付与生产完全隔离的 Terminal 原始 API 探针包与本地构建入口（任务书 treasury-terminal-transfer-engine-lab-prep-I-implementation.md；验收索引 P01–P06）。生产冻结与既有上限不变；本轮不执行任何真实引擎实验（PREPARED_NOT_RUN）。
+
+- [x] 起点核对：本地=远端=a03cac5 干净；影响范围审查（subagent：memoryDeclaration/ambientGlobalAbi/typescriptConfig 三边界只扫生产程序、probe.test.ts 被 jest/typescriptConfigBoundaries/预算三方一致收集、P01 spy 经 host.transactionsView 动态调用链生效、官方类型签名与预算锚点机制、npm ci 可行（lockfile v3）确认）
+- [x] 工作 A：RemediationII 测试文件补 P01 describe 3 it——wrapTransactionsViewForOrderProbe 以 spy/包装器返回只读视图的独立副本/反序副本（只改排序不改集合/身份/数量/时点），注册 settleUnknownOutcome 实际读取 [100,60] 与 [60,100]（P01-ORDER 行留痕、两视图各读一次、spy 计数 2）均 still_uncertain+phase=outcome_unknown+active 保留+submit 不增；独立正常场景唯一 100H 闭环 closing 三账目 900/10000−q/F0−100（P01-ACCOUNTS 留痕）与退出后不重复释放；既有 O01–O04 原断言不动
+- [x] 工作 B 探针源码：test/lab/terminal-transfer/（labConfig/worldRead/sample/observer/controlRecord/sendGate/singleShot + example.experiment.json）——observer 默认只读零发送零 Memory 写、采样含两端原始读数/报价/两视图/读取错误与截断、32 采样上限标记截断；single-shot 默认未武装，门禁覆盖 no_control_record/control_record_corrupt/not_armed/ID/shard/user/structure/tick_not_reached/tick_missed/already_attempted/already_stopped/cooldown/fee_unreadable/fee_over_budget/容量等前置拒绝（零发送、明示非"已实测 API ERR"），调用前先标记已尝试、任何失败不重试、OK 不自造效果；控制记录独立键 Memory.__labTerminalTransferProbe（≤4KiB、缺失/损坏不自动初始化、完成即 stopped 不再武装）
+- [x] 工作 B 构建器与离线自测：scripts/build-treasury-terminal-lab.mjs（TypeScript transpile + rollup 内联配置，不加载根 rollup 配置/部署插件、无网络无上传、非空目录拒写、仓库外含空格 cwd 可执行、manifest 固定 PREPARED_NOT_RUN 含 repo/lockfile/engine/driver 身份）；probe.test.ts 11 it——beforeAll 实际构建两产物并 require 真实入口：产物/清单与哈希、模块加载无副作用、observer 多 tick 零发送零写、读异常显式报告（不填 0 冒充、无 observed_* 结论）、镜像与不同 ID 原样保留、门禁矩阵零调用、合法 tick 恰一次参数与 this 绑定+同 tick/后续 tick 不再调用、非 OK 与 throw 不重试、JSON 重载+模块重建不重发、OK 后续 tick fixture 差异由 observer 如实报告
+- [x] 工作 C：terminal-transfer-engine-lab-prep-i.md 交接说明（版本前置条件与待实测边界、六步操作顺序、待测矩阵五行、32 tick 观测窗与停止清理、环境隔离由外部流程保证、PREPARED_NOT_RUN）；terminal-transfer-slice-0.md 加索引链接（旧接线细节以 Remediation I/II 为准）；test-migration-map.md §19 定位表
+- [x] 预算滚动与 VALIDATION_HEAD 固定（真实收集数字见 evidence）
+- [x] 主验证（§7.2 模板：三组冻结 diff、typecheck×2、build+生产 bundle 前后一致、lab-observer/lab-single-shot/仓库外含空格 cwd 三次构建、SLICE+LAB+KEY/Treasury/Defense/full 五组 Jest、budget、verify-evidence、diff-check、前后状态干净）
+- [x] 第二树真正独立依赖安装（detached worktree + npm ci --no-audit --no-fund，无 junction/symlink/共享/复制 node_modules；独立 node_modules/Jest cache/output；安装输出/退出码/Node/npm 版本/lockfile hash/关键依赖解析路径留痕）复跑本轮+KEY+Defense，reviewer 读取任务书全文并独立核对 §3.1 实际返回的记录顺序
+- [x] 归档与 push（evidence/terminal-transfer-engine-lab-prep-i/：task/final/revalidation + 主报告；P01 输入顺序/三账目/spy 调用次数以小型日志表达；真实引擎 NOT_RUN 如实分开）
+- 沿留待办（低危，沿下轮）：真实引擎全部实验待单独授权（PREPARED_NOT_RUN，含矩阵五行与 CPU 中断证据采集方法）；M06 部分量 fee 按缩量重算的显式断言（沿前两轮）；P01 的 [60,100] 排列由 spy 反序独立副本实现——宿主记录在视图物理拼接中仍在前的形态如需原生覆盖需扩展 mock 视图配置
+
 ## Terminal Transfer Slice 0 · Remediation II（2026-09-08）
 
 三个剩余项补修（任务书 treasury-terminal-transfer-slice-0-remediation-II-implementation.md；验收索引 O01–O06）：归集与全量分离（A）、固定路线拒绝（B）、closing 投影补验（C）。生产内核不解冻；W1N57→W10N57/100 H 仍是测试夹具值。

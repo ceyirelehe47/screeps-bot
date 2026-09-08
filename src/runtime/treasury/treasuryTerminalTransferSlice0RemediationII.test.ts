@@ -214,6 +214,43 @@ function sixtyRecord(scene: { readonly key: string; readonly preparedTick?: numb
   return goodRecord(scene, id, { amount: 60, ...overrides });
 }
 
+/**
+ * Lab Prep I（P01，任务书 §3.1）：以 spy/包装器替换宿主只读交易视图——
+ * 返回其独立副本（reverse=true 时为反序副本）。**只改变排序**，不改变
+ * 交易集合、身份、数量、时点、来源或世界状态；orders 留痕 adapter 每次
+ * 实际读到的 `transactionId:amount` 顺序（注册 settle 入口两种真实排列
+ * 的证据面；宿主方法动态调用——reconcile 每次经 host.transactionsView
+ * 读取，替换方法属性即刻生效）。
+ */
+function wrapTransactionsViewForOrderProbe(
+  host: TerminalTransferFakeHost,
+  reverse: boolean,
+): {
+  readonly orders: { readonly outgoing: readonly string[]; readonly incoming: readonly string[] };
+  readonly calls: { outgoing: number; incoming: number };
+} {
+  const view = host.transactionsView;
+  const orders = { outgoing: [] as string[], incoming: [] as string[] };
+  const calls = { outgoing: 0, incoming: 0 };
+  const originalOutgoing = view.outgoingTransactions.bind(view);
+  const originalIncoming = view.incomingTransactions.bind(view);
+  view.outgoingTransactions = (): readonly TerminalTransactionRecord[] => {
+    calls.outgoing += 1;
+    const copy = [...originalOutgoing()];
+    if (reverse) copy.reverse();
+    orders.outgoing.push(copy.map((record) => `${record.transactionId}:${record.amount}`).join(","));
+    return copy;
+  };
+  view.incomingTransactions = (): readonly TerminalTransactionRecord[] => {
+    calls.incoming += 1;
+    const copy = [...originalIncoming()];
+    if (reverse) copy.reverse();
+    orders.incoming.push(copy.map((record) => `${record.transactionId}:${record.amount}`).join(","));
+    return copy;
+  };
+  return { orders, calls };
+}
+
 beforeEach(() => {
   resetTreasuryCoreStoreForTest();
   clearTreasuryPolicyResolversForTest();
@@ -468,5 +505,86 @@ describe("Terminal Transfer Slice 0 · Remediation II（O01–O04）", () => {
     expect(scene.host.submits.length).toBe(1);
     // 账目可用 ≠ 允许新调拨：closing 已在上一步退出——本条仅核对查询口径
     // 与门禁独立（门禁语义由 N03/O03 承担）。
+  });
+});
+
+describe("Terminal Transfer Slice 0 · Lab Prep I（P01：注册 settle 入口的两种真实排列）", () => {
+  /**
+   * 注册路径基线流程（§3.1）：协调器 → contract → 真许可 → fake 延迟处理，
+   * 正常完成一次 100H（宿主记录 txn-0001），随后经现有交易视图注入同完整
+   * 描述/路线/双方/资源/合法时窗、不同游戏交易 ID 的 60H 记录——两种排列
+   * 都必须保持 still_uncertain 与责任保留，且注册 settle 实际读到的
+   * ID/amount 顺序被留痕断言（不是只反转注入数组——60/100 由视图包装器
+   * 整体决定，宿主真实记录也参与排列）。
+   */
+  const settleWithPermutedView = (reverse: boolean): {
+    order: string;
+    spyCalls: number;
+  } => {
+    const scene = freshScene();
+    const attemptId = submit(scene, "biz:labprep1:p01", "lp1-p01");
+    processAndAdvance(scene); // 真实 100H 完成进入交易视图
+    expect(scene.host.transactions.length).toBe(1);
+    const realId = scene.host.transactions[0]?.transactionId ?? "txn-real";
+    scene.host.viewConfig.injected = [sixtyRecord({ key: "lp1-p01" }, "txn-inj-60")];
+    const probe = wrapTransactionsViewForOrderProbe(scene.host, reverse);
+    const submitsBefore = scene.host.submits.length;
+    expect(scene.service.settleUnknownOutcome({ attemptId }).status).toBe("still_uncertain");
+    expect(recordShape(attemptId)?.phase).toBe("outcome_unknown");
+    expect(recordShape(attemptId)?.outcome).toBe("unknown");
+    expect(activeIds()).toContain(attemptId); // 责任保留
+    expect(scene.host.submits.length).toBe(submitsBefore); // submit 不增加
+    // adapter 实际读到的顺序（两个视图各读一次；副本不改集合——身份与数量原样）。
+    expect(probe.orders.outgoing.length).toBe(1);
+    expect(probe.orders.incoming.length).toBe(1);
+    const expected = reverse
+      ? `txn-inj-60:60,${realId}:100`
+      : `${realId}:100,txn-inj-60:60`;
+    expect(probe.orders.outgoing[0]).toBe(expected);
+    expect(probe.orders.incoming[0]).toBe(expected);
+    const spyCalls = probe.calls.outgoing + probe.calls.incoming;
+    expect(spyCalls).toBe(2);
+    console.log(`P01-ORDER ${JSON.stringify({ permutation: reverse ? "60-then-100" : "100-then-60", order: expected, spyCalls })}`);
+    return { order: expected, spyCalls };
+  };
+
+  it("P01：注册 settle 实际读取 [100,60]（宿主真实记录在前）——still_uncertain 与责任保留", () => {
+    const { order } = settleWithPermutedView(false);
+    expect(order).toContain(":100");
+    expect(order).toContain(":60");
+  });
+
+  it("P01：注册 settle 实际读取 [60,100]（spy 返回反序独立副本）——同请求责任不因排列改变", () => {
+    const { order } = settleWithPermutedView(true);
+    expect(order.startsWith("txn-inj-60:60")).toBe(true);
+  });
+
+  it("P01：独立正常场景唯一 100H 闭环保持——closing 三账目 900/10000−q/F0−100 与退出后不重复释放留痕", () => {
+    const scene = freshScene();
+    const attemptId = submit(scene, "biz:labprep1:p01-clean", "lp1-cln");
+    processAndAdvance(scene);
+    expect(scene.service.settleUnknownOutcome({ attemptId }).status).toBe("ok");
+    expect(recordShape(attemptId)?.outcome).toBe("committed");
+    expect(recordShape(attemptId)?.phase).toBe("closing");
+    {
+      const h = queryRoom(scene.service, SOURCE_ROOM, SLICE0_TRANSFER_RESOURCE);
+      const energy = queryRoom(scene.service, SOURCE_ROOM, "energy");
+      const targetFree = scene.service.riskAdjustedFreeCapacity(TARGET_ROOM, "terminal");
+      expect(h.observed).toBe(900);
+      expect(h.committed).toBe(0);
+      expect(h.spendable).toBe(900);
+      expect(energy.observed).toBe(10_000 - scene.fee);
+      expect(energy.spendable).toBe(10_000 - scene.fee);
+      expect(targetFree).toBe(TARGET_FREE_CAPACITY - 100);
+      console.log(`P01-ACCOUNTS ${JSON.stringify({ sourceH: { observed: h.observed, committed: h.committed, spendable: h.spendable }, sourceEnergy: { observed: energy.observed, committed: energy.committed, spendable: energy.spendable }, targetRiskAdjustedFreeCapacity: targetFree })}`);
+    }
+    advanceTick(scene.service); // cleanup 退出——金额/容量不重复释放
+    expect(activeIds()).not.toContain(attemptId);
+    expect(queryRoom(scene.service, SOURCE_ROOM, SLICE0_TRANSFER_RESOURCE).spendable).toBe(900);
+    expect(queryRoom(scene.service, SOURCE_ROOM, "energy").spendable).toBe(10_000 - scene.fee);
+    expect(scene.service.riskAdjustedFreeCapacity(TARGET_ROOM, "terminal")).toBe(TARGET_FREE_CAPACITY - 100);
+    expect(scene.host.submits.length).toBe(1);
+    // 对照保持：同 ID 冲突/无关 60/仅部分量语义由 O01/O02 既有用例承担
+    //（本文件上方，不在 P01 重复展开）。
   });
 });
