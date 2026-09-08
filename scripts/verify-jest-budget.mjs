@@ -12,15 +12,15 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const manifestPath = path.join(repoRoot, "test", "test-suite-budget.json");
 const jestEntrypoint = path.join(repoRoot, "node_modules", "jest", "bin", "jest.js");
 const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data", "node_modules"]);
-// 【Terminal Transfer Engine Lab Run I】新基线：新增离线接线自测
-// runI.test.ts 7 用例（240/1465→241/1472，见
-// openspec/changes/empire-treasury-core-rewrite/terminal-transfer-engine-lab-run-i.md）。
-// 基线随新测试文件滚动至实现提交 afe839d（文件集对比要求基线树含该文件）。
-const requiredBaselineCommit = "afe839d028b9521592d8493bcfb9a2194d04fec1";
+// 【Terminal Transfer Engine Lab Run I · Wiring Remediation I】新目标：runI.test.ts
+// 7→12 用例（observer 装配故障矩阵/反方向对照/同 T 重复不增发，
+// 241/1472→241/1477）；基线随实现提交滚动至 05585e0
+// （文件集对比要求基线树含当前测试文件集）。
+const requiredBaselineCommit = "05585e0e163d3774bb81fa7f4b47a8f1f04222b2";
 const requiredTarget = Object.freeze({
   suites: 241,
-  tests: 1472,
-  passed: 1472,
+  tests: 1477,
+  passed: 1477,
   failed: 0,
   pending: 0,
   todo: 0,

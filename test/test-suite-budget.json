@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "afe839d028b9521592d8493bcfb9a2194d04fec1",
+    "commit": "05585e0e163d3774bb81fa7f4b47a8f1f04222b2",
     "suites": 241,
-    "tests": 1472
+    "tests": 1477
   },
   "target": {
-    "commit": "afe839d028b9521592d8493bcfb9a2194d04fec1",
+    "commit": "05585e0e163d3774bb81fa7f4b47a8f1f04222b2",
     "suites": 241,
-    "tests": 1472,
-    "passed": 1472,
+    "tests": 1477,
+    "passed": 1477,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Terminal Transfer Engine Lab Run I：新增离线接线自测 runI.test.ts 7 用例（240/1465→241/1472，三产物 VM 装配/装载零动作/窗口边界/目标 tick 恰一次/无武装/错过不补调+旧两产物与归档逐字节一致）；基线随新文件滚动至 afe839d（文件集对比要求基线含新测试文件）"
+    "note": "Terminal Transfer Engine Lab Run I · Wiring Remediation I：runI.test.ts 7→12 用例（observer 装配故障矩阵/反方向对照/同 T 重复不增发，241/1472→241/1477）；锚点随实现提交滚动至 05585e0（文件集对比要求基线树含当前测试文件集）"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1858,9 +1858,9 @@
       "todo": 0
     },
     "test/lab/terminal-transfer/runI.test.ts": {
-      "budget": 7,
-      "tests": 7,
-      "passed": 7,
+      "budget": 12,
+      "tests": 12,
+      "passed": 12,
       "failed": 0,
       "pending": 0,
       "todo": 0
