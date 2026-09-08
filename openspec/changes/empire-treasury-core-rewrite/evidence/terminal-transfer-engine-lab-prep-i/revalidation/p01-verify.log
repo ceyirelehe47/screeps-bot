@@ -1,0 +1,31 @@
+  console.log
+    P01-ORDER {"permutation":"100-then-60","order":"txn-0001:100,txn-inj-60:60","spyCalls":2}
+
+      at settleWithPermutedView (src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts:547:13)
+
+  console.log
+    P01-ORDER {"permutation":"60-then-100","order":"txn-inj-60:60,txn-0001:100","spyCalls":2}
+
+      at settleWithPermutedView (src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts:547:13)
+
+  console.log
+    P01-ACCOUNTS {"sourceH":{"observed":900,"committed":0,"spendable":900},"sourceEnergy":{"observed":9974,"committed":0,"spendable":9974},"targetRiskAdjustedFreeCapacity":99900}
+
+      at Object.<anonymous> (src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts:579:15)
+
+PASS src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts
+  Terminal Transfer Slice 0 · Remediation II（O01–O04）
+    √ O01：同请求不同 ID 的 100+60 不在全量筛选前丢失——两种顺序/跨视图经注册 settle 保持 unknown 与责任，submit 不增加 (38 ms)
+    √ O02：归集与全量分离结果表——只有部分量/两个全量 ID/同 ID 矛盾继续拒绝；无关部分记录不阻断正确唯一结果 (14 ms)
+    √ O03：非许可路线在业务入口因路线拒绝（无新增 active/许可/submit）；默认与显式 A→B 正常完成 (15 ms)
+    √ O04：closing 期间国库不双扣——源 spendable 与目标 riskAdjustedFreeCapacity 经真实占用接口核对；unknown 保守责任保留；退出不重复释放 (10 ms)
+  Terminal Transfer Slice 0 · Lab Prep I（P01：注册 settle 入口的两种真实排列）
+    √ P01：注册 settle 实际读取 [100,60]（宿主真实记录在前）——still_uncertain 与责任保留 (63 ms)
+    √ P01：注册 settle 实际读取 [60,100]（spy 返回反序独立副本）——同请求责任不因排列改变 (6 ms)
+    √ P01：独立正常场景唯一 100H 闭环保持——closing 三账目 900/10000−q/F0−100 与退出后不重复释放留痕 (19 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       7 passed, 7 total
+Snapshots:   0 total
+Time:        3.2 s
+Ran all test suites within paths "src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts".

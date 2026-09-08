@@ -1,0 +1,17 @@
+M	openspec/changes/empire-treasury-core-rewrite/tasks.md
+A	openspec/changes/empire-treasury-core-rewrite/terminal-transfer-engine-lab-prep-i.md
+M	openspec/changes/empire-treasury-core-rewrite/terminal-transfer-slice-0.md
+M	openspec/changes/empire-treasury-core-rewrite/test-migration-map.md
+A	scripts/build-treasury-terminal-lab.mjs
+M	scripts/verify-jest-budget.mjs
+M	src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts
+A	test/lab/terminal-transfer/controlRecord.ts
+A	test/lab/terminal-transfer/example.experiment.json
+A	test/lab/terminal-transfer/labConfig.ts
+A	test/lab/terminal-transfer/observer.ts
+A	test/lab/terminal-transfer/probe.test.ts
+A	test/lab/terminal-transfer/sample.ts
+A	test/lab/terminal-transfer/sendGate.ts
+A	test/lab/terminal-transfer/singleShot.ts
+A	test/lab/terminal-transfer/worldRead.ts
+M	test/test-suite-budget.json

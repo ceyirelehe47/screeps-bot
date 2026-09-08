@@ -1,0 +1,16 @@
+numTotalTestSuites=9
+numTotalTests=91
+numPassedTests=91
+numFailedTests=0
+numPendingTests=0
+numRuntimeErrorTestSuites=0
+success=true
+SUITE passed tests=17 treasury/treasuryRemediationIVKernel.test.ts
+SUITE passed tests=11 treasury/treasuryRemediationVKernel.test.ts
+SUITE passed tests=8 treasury/treasuryTerminalTransferSlice0.test.ts
+SUITE passed tests=12 treasury/treasuryRemediationIVService.test.ts
+SUITE passed tests=8 treasury/treasuryTerminalTransferSlice0RemediationI.test.ts
+SUITE passed tests=7 treasury/treasuryTerminalTransferSlice0RemediationII.test.ts
+SUITE passed tests=11 terminal-transfer/probe.test.ts
+SUITE passed tests=9 treasury/treasuryRemediationVIKernel.test.ts
+SUITE passed tests=8 treasury/treasuryRemediationVService.test.ts

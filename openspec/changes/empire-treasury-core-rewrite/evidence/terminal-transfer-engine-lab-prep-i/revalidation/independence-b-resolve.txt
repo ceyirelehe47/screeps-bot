@@ -1,0 +1,4 @@
+typescript D:\code\screeps\labprep1-tree2\node_modules\typescript\package.json
+rollup D:\code\screeps\labprep1-tree2\node_modules\rollup\package.json
+jest D:\code\screeps\labprep1-tree2\node_modules\jest\package.json
+ts-jest D:\code\screeps\labprep1-tree2\node_modules\ts-jest\package.json

@@ -1,0 +1,1 @@
+node scripts/verify-treasury-evidence.mjs --validation-head dde2e802007b4153508ddee2715e0e254cfba491 --run-dir C:/Users/15027/AppData/Local/Temp/labprep1-mainval --fixture h18

@@ -1,0 +1,9 @@
+repo-root=D:\code\screeps\labprep1-tree2
+run-dir-resolved=C:\Users\15027\AppData\Local\Temp\labprep1-tree2-out (cwd=D:\code\screeps\labprep1-tree2)
+verifier-source=dde2e802007b4153508ddee2715e0e254cfba491:test/mock/treasurySealEvidence.ts blob=fd930a44c47c7a612fc942e8f1d07c30a95d844d
+driver=D:\code\screeps\labprep1-tree2\scripts\verify-treasury-evidence.mjs sha256=3b5e9464d83ec04f3ad3b86849c005f2b5c0e9e571335db95c8c79cbe5db4de7
+run-dir=C:/Users/15027/AppData/Local/Temp/labprep1-tree2-out fixture=h18 trace-roots=trace-key jest-json=jest-key.json,jest-defense.json
+trace-key/1788844503492-131080/H18-J06.json bytes=1180356 sha256=c533e786904097273216979da6234222737ca42165d989793da7095d6f00b0a1 completed=true checkpoints=54 problems=0
+jest-key.json: suites=9 tests=91 passed=91 failed=0 pending=0 todo=0 runtimeErrors=0
+jest-defense.json: suites=11 tests=118 passed=118 failed=0 pending=0 todo=0 runtimeErrors=0
+TREASURY_EVIDENCE_VERIFY=PASS (0 failures)

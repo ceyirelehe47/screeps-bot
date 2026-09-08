@@ -1,0 +1,14 @@
+name=D:\code\screeps\labprep1-tree2\test\lab\terminal-transfer\probe.test.ts
+status=passed
+tests=11
+passed | 构建产物与清单：两入口真实生成、manifest PREPARED_NOT_RUN、bundle 哈希一致、observer 产物无 send 调用面
+passed | 模块加载无副作用：产物 require 不触 Game、不写 Memory、不发送、不武装
+passed | observer 多 tick 零发送/零 Memory 写：采样行含两端原始读数、报价与两视图计数
+passed | observer 读取异常显式报告：报价/视图 throw、缺房间不填 0 冒充成功；不自带完成结论
+passed | observer 原样保留同 ID 镜像与不同 ID 记录（不删改与预期不一致的数据）
+passed | single-shot 未武装/缺记录/损坏/实验 ID 不符——零调用并留前置拒绝原因
+passed | single-shot 错 shard/用户/结构/tick 与已尝试——零调用，拒绝原因逐项明确
+passed | 合法目标 tick 恰一次参数正确的调用；同 tick 重复 loop 与后续 tick 均不再调用
+passed | 同步非 OK 与同步抛错均不重试（attempted 已先行标记）
+passed | 保留实验控制事实的 JSON 重载与模块重建不重发
+passed | OK 不自造效果：send 返回 OK 后库存/视图不变；后续 tick fixture 的差异由 observer 如实报告
