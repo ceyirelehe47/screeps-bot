@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "6ac563b514119c8107a7a328f4794ac9c9ca9ad8",
+    "commit": "b6ab29a6f0fb1ea5855e150db883df382bd2acbf",
     "suites": 240,
     "tests": 1454
   },
   "target": {
-    "commit": "6ac563b514119c8107a7a328f4794ac9c9ca9ad8",
+    "commit": "b6ab29a6f0fb1ea5855e150db883df382bd2acbf",
     "suites": 240,
-    "tests": 1454,
-    "passed": 1454,
+    "tests": 1460,
+    "passed": 1460,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Terminal Transfer Engine Lab Prep I：新增探针离线自测 1 suite/11 用例 + RemediationII 补 P01 3 用例（239/1440→240/1454）；锚点 6ac563b 系列"
+    "note": "Terminal Transfer Engine Lab Prep I · Remediation I：probe.test.ts 失败路径矩阵 11→17 用例（240/1454→240/1460）；锚点 b6ab29a 系列"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1850,9 +1850,9 @@
       "todo": 0
     },
     "test/lab/terminal-transfer/probe.test.ts": {
-      "budget": 11,
-      "tests": 11,
-      "passed": 11,
+      "budget": 17,
+      "tests": 17,
+      "passed": 17,
       "failed": 0,
       "pending": 0,
       "todo": 0
