@@ -6,16 +6,16 @@
     "tests": 1454
   },
   "target": {
-    "commit": "b6ab29a6f0fb1ea5855e150db883df382bd2acbf",
+    "commit": "ae991e5e73a98ca8de69db0e07b06f71927156c5",
     "suites": 240,
-    "tests": 1460,
-    "passed": 1460,
+    "tests": 1465,
+    "passed": 1465,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Terminal Transfer Engine Lab Prep I · Remediation I：probe.test.ts 失败路径矩阵 11→17 用例（240/1454→240/1460）；锚点 b6ab29a 系列"
+    "note": "Terminal Transfer Engine Lab Prep I · Remediation II：probe.test.ts 字节口径矩阵 17→22 用例（240/1460→240/1465，B1/B2 基线对照+边界矩阵+计量对照+读回超限）；锚点 ae991e5"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1850,9 +1850,9 @@
       "todo": 0
     },
     "test/lab/terminal-transfer/probe.test.ts": {
-      "budget": 17,
-      "tests": 17,
-      "passed": 17,
+      "budget": 22,
+      "tests": 22,
+      "passed": 22,
       "failed": 0,
       "pending": 0,
       "todo": 0

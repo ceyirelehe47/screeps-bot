@@ -12,14 +12,15 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const manifestPath = path.join(repoRoot, "test", "test-suite-budget.json");
 const jestEntrypoint = path.join(repoRoot, "node_modules", "jest", "bin", "jest.js");
 const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data", "node_modules"]);
-// 【Terminal Transfer Engine Lab Prep I · Remediation I】新基线：probe.test.ts
-// 失败路径矩阵 11→17 用例（240/1454→240/1460，见
-// openspec/changes/empire-treasury-core-rewrite/test-migration-map.md §19.2）。
+// 【Terminal Transfer Engine Lab Prep I · Remediation II】新目标：probe.test.ts
+// 字节口径矩阵 17→22 用例（240/1460→240/1465，见
+// openspec/changes/empire-treasury-core-rewrite/test-migration-map.md §19.3）；
+// baseline 仍为 Remediation I 的 b6ab29a（历史锚点不回改）。
 const requiredBaselineCommit = "b6ab29a6f0fb1ea5855e150db883df382bd2acbf";
 const requiredTarget = Object.freeze({
   suites: 240,
-  tests: 1460,
-  passed: 1460,
+  tests: 1465,
+  passed: 1465,
   failed: 0,
   pending: 0,
   todo: 0,
