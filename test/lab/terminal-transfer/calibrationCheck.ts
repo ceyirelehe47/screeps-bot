@@ -104,7 +104,11 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function finiteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** 逐项收集器：任何一项的登记都独立于其他项（无短路）。 */
@@ -131,11 +135,11 @@ class CheckCollector {
 /** 各样本同一标量读数的取值集合（附带出现过的 tick，供差异定位）。 */
 function distinctObserved(samples: readonly CalibrationSampleFacts[], pick: (sample: CalibrationSampleFacts) => unknown): { values: unknown[]; ticks: Record<string, number[]> } {
   const values: unknown[] = [];
-  const ticks: Record<string, number[]> = {};
+  const ticks: Record<string, number[]> = Object.create(null);
   for (const sample of samples) {
     const value = pick(sample);
-    const key = String(value);
-    if (!values.some((existing) => String(existing) === key)) values.push(value);
+    const key = `${typeof value}:${String(value)}`;
+    if (!values.some((existing) => Object.is(existing, value))) values.push(value);
     (ticks[key] ??= []).push(sample.tick);
   }
   return { values, ticks };
@@ -150,9 +154,27 @@ const DESCRIPTION_MAX_CHARS = 100;
 
 export function checkLabCalibration(config: LabExperimentConfig, facts: CalibrationFacts): CalibrationReport {
   const checks = new CheckCollector();
-  const samples = Array.isArray(facts.samples) ? facts.samples : [];
+  // R02: defensive parsing is diagnostic only. Missing values stay missing; no
+  // incomplete row is dropped. Sort a COPY by game tick, never mutate evidence.
+  const rawFacts: Record<string, unknown> = isRecord(facts) ? facts : {};
+  const rawContext = isRecord(rawFacts.context) ? rawFacts.context : {};
+  const rawSamples = Array.isArray(rawFacts.samples) ? rawFacts.samples : [];
+  checks.boolean("time_stability", "input_shape",
+    isRecord(facts) && isRecord(rawFacts.context) && Array.isArray(rawFacts.samples)
+      && rawSamples.every((sample) => isRecord(sample) && isRecord(sample.source) && isRecord(sample.target)),
+    { expected: "facts/context objects; every sample has source and target objects",
+      observed: rawSamples.map((sample, index) => ({ index, valid: isRecord(sample) && isRecord(sample.source) && isRecord(sample.target) })) });
+  facts = { ...rawFacts, context: rawContext, samples: rawSamples } as unknown as CalibrationFacts;
+  const samples = rawSamples.map((sample) => {
+    const row = isRecord(sample) ? sample : {};
+    return { ...row, source: isRecord(row.source) ? row.source : {}, target: isRecord(row.target) ? row.target : {} } as unknown as CalibrationSampleFacts;
+  }).sort((a, b) => finiteNumber(a.tick) && finiteNumber(b.tick) ? a.tick - b.tick : 0);
   const ticks = samples.map((sample) => sample.tick);
-  const maxTick = ticks.length > 0 ? Math.max(...ticks) : undefined;
+  const ticksLegal = ticks.length > 0 && ticks.every(finiteNumber);
+  const maxTick = ticksLegal ? ticks.reduce((max, tick) => Math.max(max, tick), 0) : undefined;
+  checks.boolean("time_stability", "sample_ticks_legal_unique",
+    ticksLegal && new Set(ticks).size === ticks.length,
+    { expected: "nonnegative safe integer ticks, no duplicates", observed: rawSamples.map((sample) => isRecord(sample) ? sample.tick : "<invalid sample>") });
 
   // ── experiment_scope：实验范围（任务书固定值 + 描述可发送性 + 无同描述既有交易） ──
   checks.boolean("experiment_scope", "experiment_id", isNonEmptyString(config.experimentId) && /^[A-Za-z0-9._-]+$/.test(config.experimentId), {
@@ -183,9 +205,19 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
     for (const sample of samples) {
       for (const direction of ["incoming", "outgoing"] as const) {
         const view = sample.transactions?.[direction];
-        if (view === undefined) continue;
+        if (view === undefined || view === null) {
+          unreadable = true;
+          checks.add("experiment_scope", `transactions_${sample.tick}_${direction}`, "missing", { note: "required transaction view absent; another view cannot fill this gap" });
+          continue;
+        }
         if (view.status !== "ok" || !Array.isArray(view.records)) {
           unreadable = true;
+          checks.add("experiment_scope", `transactions_${sample.tick}_${direction}`, "missing", { note: "transaction view unreadable or records is not an array" });
+          continue;
+        }
+        if (!view.records.every(isRecord)) {
+          unreadable = true;
+          checks.add("experiment_scope", `transactions_${sample.tick}_${direction}`, "fail", { note: "transaction records must be objects; malformed records were not discarded" });
           continue;
         }
         checkedViews += 1;
@@ -210,21 +242,21 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
     // 合法性按结构判定（readError/缺 name 均非法），展示值用带标记的字符串。
     const legalEvery =
       samples.length > 0 &&
-      shardEntries.every((shard) => shard !== undefined && shard.readError === undefined && isNonEmptyString(shard.name));
+      shardEntries.every((shard) => shard !== undefined && shard !== null && shard.readError === undefined && isNonEmptyString(shard.name));
     const displayNames = shardEntries.map((shard) =>
-      shard === undefined ? "<missing>" : shard.readError !== undefined ? `<readError>${shard.readError}` : String(shard.name),
+      shard === undefined || shard === null ? "<missing>" : shard.readError !== undefined ? `<readError>${shard.readError}` : String(shard.name),
     );
     checks.boolean("world_user", "shard_legal", legalEvery, {
       expected: "每样本实际读到合法非空 shard 名",
       observed: samples.length === 0 ? "无样本" : JSON.stringify(displayNames),
       note: legalEvery ? undefined : "shard 缺失/读取错误/名字非法——不填约定值",
     });
-    const latestName = latestEntry === undefined || latestEntry.readError !== undefined ? undefined : latestEntry.name;
+    const latestName = latestEntry === undefined || latestEntry === null || latestEntry.readError !== undefined ? undefined : latestEntry.name;
     checks.boolean("world_user", "shard_matches_config", legalEvery && latestName === config.shardName, {
       expected: config.shardName,
       observed: latestName === undefined ? "<missing>" : latestName,
     });
-    const stable = legalEvery && shardEntries.every((shard) => shard !== undefined && shard.name === latestName);
+    const stable = legalEvery && shardEntries.every((shard) => shard !== undefined && shard !== null && shard.name === latestName);
     checks.boolean("world_user", "shard_stable", stable, { expected: "各样本一致", observed: JSON.stringify(displayNames) });
   }
   {
@@ -236,7 +268,7 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
     });
     const userId = facts.context.user?.id;
     const idSource = facts.context.user?.idSource;
-    if (isNonEmptyString(String(userId ?? "")) && isNonEmptyString(String(idSource ?? ""))) {
+    if (isNonEmptyString(userId) && isNonEmptyString(idSource)) {
       checks.boolean("world_user", "user_id_evidence", true, { observed: `${String(userId)}（来源：${String(idSource)}）` });
     } else {
       checks.add("world_user", "user_id_evidence", "missing", { note: "合成用户 ID 或其证据来源缺失，无法核对用户身份" });
@@ -278,11 +310,32 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
       observed: samples.length === 0 ? "无样本" : `my=${JSON.stringify(samples.map((s) => s[side].my))} isActive=${JSON.stringify(samples.map((s) => s[side].isActive))}`,
     });
     const controllers = samples.map((sample) => sample[side].controller);
-    const controllerOk = samples.length > 0 && controllers.every((c) => c !== undefined && c.present === true && c.my === true && finiteNumber(c.level) && c.level >= 6);
+    const controllerOk = samples.length > 0 && controllers.every((c) => c !== undefined && c !== null && c.present === true && c.my === true && finiteNumber(c.level) && c.level >= 6 && c.level <= 8);
     checks.boolean("endpoints", `${side}_controller`, controllerOk, {
       expected: "控制器存在、同主且 level≥6（Terminal 合法）",
       observed: JSON.stringify(controllers),
     });
+  }
+
+  // R02: every submitted baseline row must be complete AND stable. Zero is
+  // real data; absence, null, failed reads and old values are not a baseline.
+  for (const side of ["source", "target"] as const) {
+    for (const field of ["resourceAmount", "energy", "freeCapacity", "cooldown"] as const) {
+      const invalid = samples.filter((sample) => sample[side].readStatus !== "ok" || !finiteNumber(sample[side][field]));
+      const legal = samples.length > 0 && invalid.length === 0;
+      const values = samples.map((sample) => ({ tick: sample.tick, value: sample[side][field] }));
+      checks.boolean("resources", `${side}_${field}_complete`, legal, {
+        expected: "every tick: readable nonnegative safe integer", observed: values,
+        note: legal ? undefined : `invalid/missing at ticks: ${invalid.map((sample) => sample.tick).join(",")}`,
+      });
+      checks.boolean("resources", `${side}_${field}_stable`, legal && samples.every((sample) => sample[side][field] === samples[0][side][field]), {
+        expected: "all submitted baseline samples equal", observed: values,
+      });
+    }
+    const controllerLevels = samples.map((sample) => sample[side].controller?.level);
+    checks.boolean("endpoints", `${side}_controller_stable`,
+      controllerLevels.length > 0 && controllerLevels.every((value) => finiteNumber(value) && value === controllerLevels[0]),
+      { expected: "same controller level across baseline", observed: controllerLevels });
   }
 
   // ── resources：库存/能源/冷却/空位（缺失/不可读按 fail，不转换为 0 或健康） ──
@@ -315,10 +368,10 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
     const latestQuote = samples.length > 0 ? samples[samples.length - 1].feeQuote : undefined;
     const cost = latestQuote?.energyCost;
     const quoteLegal =
-      latestQuote !== undefined && latestQuote.status === "ok" && finiteNumber(cost) && (cost as number) >= 0 && Number.isInteger(cost);
+      samples.length > 0 && samples.every((sample) => sample.feeQuote?.status === "ok" && finiteNumber(sample.feeQuote.energyCost));
     checks.boolean("quote", "quote_legal", quoteLegal, {
       expected: "最新样本报价 ok 且为非负有限整数（真实 calcTransactionCost 读数）",
-      observed: latestQuote === undefined ? "无报价样本" : JSON.stringify(latestQuote),
+      observed: samples.map((sample) => ({ tick: sample.tick, quote: sample.feeQuote })),
     });
     const quoteObservation = distinctObserved(samples, (sample) => sample.feeQuote?.energyCost);
     checks.boolean("quote", "quote_stable", quoteLegal && quoteObservation.values.length === 1, {
@@ -337,7 +390,7 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
     expected: "lab-calibration-facts",
     observed: facts.factsKind,
   });
-  checks.boolean("time_stability", "samples_two_ticks", new Set(ticks).size >= 2, {
+  checks.boolean("time_stability", "samples_two_ticks", ticksLegal && new Set(ticks).size >= 2, {
     expected: "≥2 个互异 tick 的稳定基线",
     observed: JSON.stringify(ticks),
   });
@@ -367,7 +420,10 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
       expected: "已暂停且 T0≥最后基线 tick（重复只读核对后确认）",
       observed: `paused=${String(facts.context.paused)} pauseConfirmedTick=${String(facts.context.pauseConfirmedTick)} 最后样本 tick=${String(maxTick)}`,
     });
-    const reachable = pausedOk && maxTick !== undefined && config.targetTick >= maxTick + 3 && config.targetTick > (facts.context.pauseConfirmedTick ?? Number.NEGATIVE_INFINITY);
+    const pauseTick = facts.context.pauseConfirmedTick;
+    const reachable = pausedOk && maxTick !== undefined && maxTick <= pauseTick
+      && finiteNumber(config.targetTick) && pauseTick <= Number.MAX_SAFE_INTEGER - 3
+      && config.targetTick >= pauseTick + 3;
     checks.boolean("time_stability", "target_tick_reachable", reachable, {
       expected: `T ≥ T0+3（T−2 样本可取得）且晚于暂停确认 tick；当前 T=${config.targetTick}`,
       observed: `最后样本 tick=${String(maxTick)} pauseConfirmedTick=${String(facts.context.pauseConfirmedTick)}`,
@@ -384,12 +440,12 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
       note: runIdOk ? undefined : "不同运行/用户的资料混用或 runId 缺失",
     });
     const sampler = facts.context.sampler;
-    checks.boolean("provenance", "sampler_declared", isNonEmptyString(String(sampler?.name ?? "")) && isNonEmptyString(String(sampler?.version ?? "")), {
+    checks.boolean("provenance", "sampler_declared", isNonEmptyString(sampler?.name) && isNonEmptyString(sampler?.version), {
       expected: "只读采样器名称与版本",
       observed: JSON.stringify(sampler),
     });
     const codeSource = facts.context.codeSource;
-    if (isNonEmptyString(String(codeSource?.repoHead ?? "")) && isNonEmptyString(String(codeSource?.labConfigSha256 ?? ""))) {
+    if (isNonEmptyString(codeSource?.repoHead) && isNonEmptyString(codeSource?.labConfigSha256)) {
       checks.boolean("provenance", "code_source", true, {
         observed: `repoHead=${String(codeSource?.repoHead)} labConfigSha256=${String(codeSource?.labConfigSha256)}`,
       });

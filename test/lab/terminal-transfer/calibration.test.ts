@@ -254,3 +254,133 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
 
 // 场景 A（旧事故链门禁复现）与 C01 严格 shard 拒绝矩阵在 probe.test.ts
 // （门禁函数与真实产物层面）。
+
+/**
+ * Control Remediation I —— Agent 独立增补反例（R02）。
+ *
+ * 与包内 tools/calibration.spec.cjs（P01–P12）互补：这里聚焦配置侧非法
+ * T、报价字段整体缺失、暂停点类型非法、"稳定但不满足发送条件"的数值
+ * （cooldown≠0 / energy<cap / 目标空位不足 / controller level<6），以及
+ * 三样本反序时中间样本缺字段不被排序掩盖。全部用例在深拷贝上改写。
+ */
+describe("Control Remediation I —— Agent 独立增补反例（R02）", () => {
+  it("配置侧 targetTick 非法（小数/负数/字符串/null）→ target_tick_reachable fail 且不崩溃", () => {
+    for (const targetTick of [200.5, -1, "201", null]) {
+      const report = checkLabCalibration(
+        { ...LAB_EXAMPLE_EXPERIMENT, targetTick: targetTick as unknown as number },
+        cloneFacts(loadHealthyFacts(true)),
+      );
+      expect(report.status).toBe("fail");
+      expect(findItem(report, "time_stability", "target_tick_reachable").result).toBe("fail");
+    }
+  });
+
+  it("早期样本 feeQuote 整字段缺失或为 null → quote 三项（legal/stable/cap 绑定）全部 fail，不因最新样本正常而放行", () => {
+    for (const mutate of [
+      (sample: any) => { delete sample.feeQuote; },
+      (sample: any) => { sample.feeQuote = null; },
+    ]) {
+      const facts = cloneFacts(loadHealthyFacts(true));
+      mutate(facts.samples[0]);
+      const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+      expect(findItem(report, "quote", "quote_legal").result).toBe("fail");
+      expect(findItem(report, "quote", "quote_stable").result).toBe("fail");
+      expect(findItem(report, "quote", "cap_binds_quote").result).toBe("fail");
+    }
+  });
+
+  it("pauseConfirmedTick 类型非法（字符串/null/负数）→ paused_confirmed 与 target_tick_reachable 均 fail", () => {
+    for (const pauseConfirmedTick of ["198", null, -1]) {
+      const facts = cloneFacts(loadHealthyFacts(true));
+      facts.context.pauseConfirmedTick = pauseConfirmedTick;
+      const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+      expect(findItem(report, "time_stability", "paused_confirmed").result).toBe("fail");
+      expect(findItem(report, "time_stability", "target_tick_reachable").result).toBe("fail");
+    }
+  });
+
+  it("两端数值『稳定但发送条件不满足』：源 cooldown=10 / 源 energy=20<cap / 目标空位=50<100 → 对应发送条件 fail（稳定性检查本身合法）", () => {
+    const cases: Array<{ mutate: (facts: any) => void; category: string; item: string; stabilityItem: string; side: string; field: string }> = [
+      {
+        mutate: (facts) => { for (const s of facts.samples) s.source.cooldown = 10; },
+        category: "resources", item: "source_cooldown_zero", stabilityItem: "source_cooldown_stable", side: "source", field: "cooldown",
+      },
+      {
+        mutate: (facts) => { for (const s of facts.samples) s.source.energy = 20; },
+        category: "resources", item: "source_energy_covers_cap", stabilityItem: "source_energy_stable", side: "source", field: "energy",
+      },
+      {
+        mutate: (facts) => { for (const s of facts.samples) s.target.freeCapacity = 50; },
+        category: "resources", item: "target_free_sufficient", stabilityItem: "target_freeCapacity_stable", side: "target", field: "freeCapacity",
+      },
+    ];
+    for (const { mutate, category, item, stabilityItem } of cases) {
+      const facts = cloneFacts(loadHealthyFacts(true));
+      mutate(facts);
+      const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+      expect(findItem(report, category, item).result).toBe("fail");
+      // 稳定且完整本身成立：非法的是数值语义，不是基线形状。
+      expect(findItem(report, "resources", stabilityItem).result).toBe("pass");
+    }
+  });
+
+  it("controller level 稳定为 5（<6）→ 两端 controller fail（controller_stable 本身 pass）", () => {
+    const facts = cloneFacts(loadHealthyFacts(true));
+    for (const sample of facts.samples) {
+      sample.source.controller.level = 5;
+      sample.target.controller.level = 5;
+    }
+    const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+    expect(findItem(report, "endpoints", "source_controller").result).toBe("fail");
+    expect(findItem(report, "endpoints", "target_controller").result).toBe("fail");
+    expect(findItem(report, "endpoints", "source_controller_stable").result).toBe("pass");
+    expect(findItem(report, "endpoints", "target_controller_stable").result).toBe("pass");
+  });
+
+  it("三样本基线：反序后中间样本 target.cooldown 缺失仍被完整暴露；健康三样本反序 pass 且输入字节不变", () => {
+    const threeSample = () => {
+      const facts = cloneFacts(loadHealthyFacts(true));
+      const extra = cloneFacts(facts.samples[1]);
+      extra.tick = facts.samples[1].tick + 1;
+      facts.samples.push(extra);
+      return facts;
+    };
+    // 健康三样本（196/197/198，T0=198 仍 ≥ maxTick）：正序与反序均 pass。
+    const healthyForward = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, threeSample());
+    expect(healthyForward.status).toBe("pass");
+    const reversed = threeSample();
+    reversed.samples.reverse();
+    const before = JSON.stringify(reversed);
+    const healthyReversed = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, reversed);
+    expect(healthyReversed.status).toBe("pass");
+    expect(JSON.stringify(reversed)).toBe(before);
+    // 反序 + 中间（按 tick 197）样本 target.cooldown 缺失：完整性与充分性同时暴露，
+    // 不因数组首位（tick 198）健康而掩盖。
+    const withGap = threeSample();
+    withGap.samples.reverse();
+    const mid = withGap.samples.find((sample: any) => sample.tick === 197);
+    delete mid.target.cooldown;
+    const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, withGap);
+    expect(report.status).toBe("fail");
+    expect(findItem(report, "resources", "target_cooldown_complete").result).toBe("fail");
+    expect(findItem(report, "resources", "target_cooldown_stable").result).toBe("fail");
+  });
+
+  it("窗口可达性边界：T=T0+2 fail、T=T0+3 pass（healthy 即此值），不再以 maxSampleTick+3 冒充", () => {
+    const facts = cloneFacts(loadHealthyFacts(true));
+    // maxTick=197、T0=198：旧式 T≥maxTick+3 在 T=200 也会通过（197+3=200），
+    // 但 T0+3=201 才保证 T−2=198 晚于暂停点。
+    const t200 = checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, targetTick: 200 }, facts);
+    expect(findItem(t200, "time_stability", "target_tick_reachable").result).toBe("fail");
+    const t201 = checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, targetTick: 201 }, facts);
+    expect(findItem(t201, "time_stability", "target_tick_reachable").result).toBe("pass");
+    // T0 与最后样本同 tick（197）时的边界：T=T0+3=200 合法（窗口首样本
+    // T−2=198 晚于暂停点），T=199（<T0+3）仍 fail。
+    const latePause = cloneFacts(loadHealthyFacts(true));
+    latePause.context.pauseConfirmedTick = 197;
+    const t200b = checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, targetTick: 200 }, latePause);
+    expect(findItem(t200b, "time_stability", "target_tick_reachable").result).toBe("pass");
+    const t199b = checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, targetTick: 199 }, latePause);
+    expect(findItem(t199b, "time_stability", "target_tick_reachable").result).toBe("fail");
+  });
+});
