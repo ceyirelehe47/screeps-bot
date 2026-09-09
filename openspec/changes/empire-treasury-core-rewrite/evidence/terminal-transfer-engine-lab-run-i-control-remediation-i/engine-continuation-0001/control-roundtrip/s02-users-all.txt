@@ -1,0 +1,3 @@
+Loading mods from "D:\code\screeps\lab-ec0001-env\world\mods.json"
+Connecting to storage
+RESULT [{"u":"Invader","bot":null},{"u":"Source Keeper","bot":null},{"u":"MichaelBot","bot":"simplebot"},{"u":"EmmaBot","bot":"simplebot"},{"u":"AliceBot","bot":"simplebot"},{"u":"JackBot","bot":"simplebot"},{"u":"Screeps","bot":null},{"u":"lab-ec-user-0001","bot":"ecprobe"}]

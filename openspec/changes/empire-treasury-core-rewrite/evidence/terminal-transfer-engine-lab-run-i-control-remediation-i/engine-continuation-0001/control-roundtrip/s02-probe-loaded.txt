@@ -1,0 +1,3 @@
+Loading mods from "D:\code\screeps\lab-ec0001-env\world\mods.json"
+Connecting to storage
+RESULT {"branch":"t1788969451203","modules":["main"],"mainSha":"6ee4e58dcf33fd795116a4466374dab40afb23c9acbdbcc81453d0b1d0930318"}

@@ -1,0 +1,86 @@
+[
+  {
+    "test": "old",
+    "mutation": "none",
+    "command": [
+      "node",
+      "--test",
+      "--test-name-pattern",
+      "^control mode ",
+      "test/lab/terminal-transfer/tools/independent.spec.cjs"
+    ],
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "matched": true
+  },
+  {
+    "test": "old",
+    "mutation": "ignore-armed",
+    "command": [
+      "node",
+      "--test",
+      "--test-name-pattern",
+      "^control mode ",
+      "test/lab/terminal-transfer/tools/independent.spec.cjs"
+    ],
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "matched": true
+  },
+  {
+    "test": "old",
+    "mutation": "reject-all-controls",
+    "command": [
+      "node",
+      "--test",
+      "--test-name-pattern",
+      "^control mode ",
+      "test/lab/terminal-transfer/tools/independent.spec.cjs"
+    ],
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "matched": true
+  },
+  {
+    "test": "refined",
+    "mutation": "none",
+    "command": [
+      "node",
+      "--test",
+      "--test-name-pattern",
+      "^control mode ",
+      "test/lab/terminal-transfer/tools/independent.spec.cjs"
+    ],
+    "exit_code": 0,
+    "expected_exit_code": 0,
+    "matched": true
+  },
+  {
+    "test": "refined",
+    "mutation": "ignore-armed",
+    "command": [
+      "node",
+      "--test",
+      "--test-name-pattern",
+      "^control mode ",
+      "test/lab/terminal-transfer/tools/independent.spec.cjs"
+    ],
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "matched": true
+  },
+  {
+    "test": "refined",
+    "mutation": "reject-all-controls",
+    "command": [
+      "node",
+      "--test",
+      "--test-name-pattern",
+      "^control mode ",
+      "test/lab/terminal-transfer/tools/independent.spec.cjs"
+    ],
+    "exit_code": 1,
+    "expected_exit_code": 1,
+    "matched": true
+  }
+]

@@ -1,0 +1,2831 @@
+[
+ {
+  "tick": 119,
+  "recv": "2026-09-09T15:48:16.380Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 119,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 120,
+  "recv": "2026-09-09T15:48:17.273Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 120,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 121,
+  "recv": "2026-09-09T15:48:18.270Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 121,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 122,
+  "recv": "2026-09-09T15:48:19.285Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 122,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 123,
+  "recv": "2026-09-09T15:48:20.291Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 123,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 124,
+  "recv": "2026-09-09T15:48:21.285Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 124,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 125,
+  "recv": "2026-09-09T15:48:22.298Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 125,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 126,
+  "recv": "2026-09-09T15:48:23.303Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 126,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 127,
+  "recv": "2026-09-09T15:48:24.307Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 127,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 128,
+  "recv": "2026-09-09T15:48:25.317Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 128,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 129,
+  "recv": "2026-09-09T15:48:26.323Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 129,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 130,
+  "recv": "2026-09-09T15:48:27.329Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 130,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 131,
+  "recv": "2026-09-09T15:48:28.335Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 131,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 132,
+  "recv": "2026-09-09T15:48:29.336Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 132,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 133,
+  "recv": "2026-09-09T15:48:30.345Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 133,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 134,
+  "recv": "2026-09-09T15:48:31.347Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 134,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 135,
+  "recv": "2026-09-09T15:48:32.354Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 135,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 136,
+  "recv": "2026-09-09T15:48:33.396Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 136,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 137,
+  "recv": "2026-09-09T15:48:34.375Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 137,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 138,
+  "recv": "2026-09-09T15:48:35.376Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 138,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 139,
+  "recv": "2026-09-09T15:48:36.393Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 139,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 140,
+  "recv": "2026-09-09T15:48:37.411Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 140,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 141,
+  "recv": "2026-09-09T15:48:38.406Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 141,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 142,
+  "recv": "2026-09-09T15:48:39.411Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 142,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 143,
+  "recv": "2026-09-09T15:48:40.410Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 143,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 144,
+  "recv": "2026-09-09T15:48:41.425Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 144,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 145,
+  "recv": "2026-09-09T15:48:42.424Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 145,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 146,
+  "recv": "2026-09-09T15:48:43.424Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 146,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 147,
+  "recv": "2026-09-09T15:48:44.428Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 147,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 148,
+  "recv": "2026-09-09T15:48:45.439Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 148,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 149,
+  "recv": "2026-09-09T15:48:46.446Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 149,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 150,
+  "recv": "2026-09-09T15:48:47.461Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 150,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 151,
+  "recv": "2026-09-09T15:48:48.460Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 151,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 152,
+  "recv": "2026-09-09T15:48:49.458Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 152,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 153,
+  "recv": "2026-09-09T15:48:50.495Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 153,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 154,
+  "recv": "2026-09-09T15:48:51.465Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 154,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 155,
+  "recv": "2026-09-09T15:48:52.480Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 155,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 156,
+  "recv": "2026-09-09T15:48:53.483Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 156,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 157,
+  "recv": "2026-09-09T15:48:54.497Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 157,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 158,
+  "recv": "2026-09-09T15:48:55.506Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 158,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ },
+ {
+  "tick": 159,
+  "recv": "2026-09-09T15:48:56.520Z",
+  "sample": {
+   "kind": "lab-meta-facts-sample",
+   "sampler": {
+    "name": "lab-meta-probe",
+    "version": "1"
+   },
+   "tick": 159,
+   "shard": {
+    "name": "Forst"
+   },
+   "user": {
+    "username": "lab-ec-user-0001"
+   },
+   "worldSize": 59,
+   "source": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000001",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 1000,
+    "energy": 10000,
+    "freeCapacity": 289000,
+    "cooldown": 0
+   },
+   "target": {
+    "readStatus": "ok",
+    "terminalId": "ec0001aa57000002",
+    "ownerUsername": "lab-ec-user-0001",
+    "my": true,
+    "isActive": true,
+    "controller": {
+     "present": true,
+     "my": true,
+     "level": 8,
+     "ownerUsername": "lab-ec-user-0001"
+    },
+    "resourceAmount": 0,
+    "energy": 2000,
+    "freeCapacity": 298000,
+    "cooldown": 0
+   },
+   "feeQuote": {
+    "status": "ok",
+    "energyCost": 26
+   },
+   "transactions": {
+    "incoming": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    },
+    "outgoing": {
+     "status": "ok",
+     "count": 0,
+     "records": []
+    }
+   }
+  }
+ }
+]

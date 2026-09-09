@@ -22,6 +22,23 @@ VALIDATION_HEAD d0103c9、正式回归与第二树全绿（六产物 IDENTICAL�
 工具就绪，获授权后可从 S01 直接开始。证据：
 `evidence/terminal-transfer-engine-lab-run-i-control-remediation-i/`。
 
+**Engine Continuation 0001（2026-09-09，实机执行完成，判读 ENGINE_LAB_PASS）**：
+用户经续接包（screeps-engine-continuation，基线 5773f1a）授权继续 S01–S06。
+测试隔离性修正（8f62ed6）后，新一次性隔离世界 lab-run1-ec-0001（合成用户
+lab-ec-user-0001、双 Terminal ec0001aa57000001/2、shard Forst、报价 26）完成
+准备阶段绑定（378db97，占位 T=400）→控制往返（observe-false 两 tick 读
+armed=false→arm 一次→observe-armed 两 tick 读 armed=true，暂停后 env=玩家读数
+——上轮根因的 env 层通路实证修复）→facts T0=164→正式 T=167 绑定（7f47a0d）
+→C02 真实预检 55/55→全量验证全绿（243/1497、budget PASSED、冻结×3 零差异、
+第二树产物 IDENTICAL）→run-formal **一次正式窗口 23/23 tick（165..187）**：
+T=167 恰好一次真实 terminal.send() 调用同步返回 OK(code 0)，T+1 起源 900H/
+9990E/CD9、目标 100H、空位 −100，交易单 ID 三视图一致——**100H 转运到账**；
+暂停请求延迟 ~6ms、撤装保留 attempted@167、进程树 7 PID 全灭端口清零（工具侧
+PROCESS_STOP_UNCONFIRMED 系其确认回路随树同亡，独立复核解决）。重要发现：
+报价 26（runner 侧 worldSize=59）与实扣 10（engine_main 建房前启动的旧缓存
+worldSize=12 折叠 range 9→3）分裂——standalone 运行时建房未整树重启引擎所致，
+正式服不适用；门禁按报价保守放行、实扣在预算内。本 PASS 不等于国库生产
+writer 集成。证据：上述根 `engine-continuation-0001/`。
 编制日期：2026-09-08（Execution 轮 2026-09-09；Calibration Rerun
 2026-09-09）。任务书：`treasury-terminal-transfer-engine-lab-run-I-execution.md`
 （归档于 `evidence/terminal-transfer-engine-lab-run-i/task/task-brief.md`）；

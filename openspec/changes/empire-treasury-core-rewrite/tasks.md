@@ -1,5 +1,18 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Terminal Transfer Engine Lab Run I · Engine Continuation 0001（2026-09-09，实机执行完成 ENGINE_LAB_PASS）
+
+续接轮（用户附件 screeps-engine-continuation-2026-09-09.zip；包内记载用户对「继续现有 S01–S06」答复「继续吧」2026-09-09T14:49:47Z，范围限本轮一场实验）。起点 5773f1a=上轮交付（本地=远端，干净）；不重应用旧 17 文件包，R01–R03 实现沿已接受版本。
+
+- [x] 包完整性核对（SHA256SUMS 全 OK、七冻结源 blob 逐一一致、补丁 e65322ff/目标 blob fd685c6c→ea6231cb）+ 测试隔离性修正原样应用（8f62ed6；armed 双方向单变量反例+立即暂停+两 tick 确认；independent 6、工具 89、wrapper 4 数量不变；包内 sensitivity 六条 matched 复核）
+- [x] S01 新隔离环境 lab-ec0001-env：screeps@4.3.0 同 lockfile d95c2c12、绝对路径 launcher（首次相对路径树整树终止重来留痕）、监听全回环、server package/lock 原件入库
+- [x] S02 世界与控制往返：建房/合成用户（官方 bots.spawn 自带 env Memory "{}" 初始化）→fixture（双 RCL8+双 Terminal+平原格）→terrain 更新+runner 重启→meta-probe 41 样本（Forst 恒定、报价 26、交易 0、无其他经济 writer）→暂停 T0=160→准备绑定 378db97（占位 T=400；cal-0002 历史场景冻结至 review-base-config、新增本轮真实 facts 副本 fixture）→controlProbe 构建装载（唯一 main 字节一致）→inspect/initialize/observe-false/arm/observe-armed/facts 全绿（两×两 tick 真实玩家读数、暂停后 env=玩家读数、往返零 issues；T0=164）
+- [x] S03 最终绑定 T=167=T0+3（7f47a0d VALIDATION_HEAD）+ C02 真实预检 55/55 + 全量正式验证（双 tsc/生产构建/lab 4-54/Slice0 3-23/Treasury 35-597/Defense 11-118/全仓 243-1497/budget PASSED/冻结×3 零差异/三产物 repoSourceCommit=7f47a0d/dist 未覆盖）+ 第二树（独立 npm ci、全绿、三产物+example 逐一 IDENTICAL）
+- [x] S04 正式窗口（run-formal 单次恢复+180 秒期限）：23/23 tick（165..187）无缺口；T=167 恰好一次真实 terminal.send() 同步返回 OK(code 0)；T+1 起源 900H/9990E/CD9、目标 100H、空位 −100、冷却 9→0；交易单 ID e53e70c19072e81 三视图一致；外部收集器独立通道交叉确认
+- [x] S05 停止与清理：暂停请求 ~6ms、暂停确认（静止 188）、终态快照、撤装保留 attempted@167/syncResult/stopped、进程树 7 PID 全灭、21025–21027 清零、本轮收集器停（流定格 975 行）；上轮遗留孤儿收集器 131696 非本轮进程未动如实记录
+- [x] 重要发现归档：报价 26（runner worldSize=59）vs 实扣 10（engine_main 建房前旧缓存 worldSize=12 折叠 range 9→3）——standalone 运行时建房未整树重启引擎所致；门禁按报价保守放行、实扣在预算内、正式服不适用
+- [x] S06 证据归档（engine-continuation-0001/ 166 文件+主报告）+ 状态更新 + 线性提交推送；判读 ENGINE_LAB_PASS（不等于国库生产 writer 集成，不放行正式部署/自动重试）
+
 ## Terminal Transfer Engine Lab Run I · Control Remediation I（2026-09-09，离线验收完成；实机 AUTHORIZATION_REQUIRED）
 
 Memory 控制通路/预检完整性/及时停止整改轮（用户附件实现包 screeps-control-remediation-I-implementation-2026-09-09.zip，原件归档于新证据根 task/；验收按 AGENT-VERIFY：原样应用→独立验收→预算→正式回归→第二树→实机边界沿 reference-task S01–S06）。起点 BASE=d69726a（本地=远端，干净）。

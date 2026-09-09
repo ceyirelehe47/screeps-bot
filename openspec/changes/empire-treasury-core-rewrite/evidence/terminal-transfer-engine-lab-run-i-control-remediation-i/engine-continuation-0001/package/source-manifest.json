@@ -1,0 +1,79 @@
+{
+  "repository": "ceyirelehe47/screeps-bot",
+  "branch": "refactor/empire-treasury-rearchitecture",
+  "baseCommit": "5773f1a04be8cadebf6cf0b111149ddb2ae752e9",
+  "patchSha256": "e65322ffd9e95fdb1aa295e11a524c7f8a397376a27bd03999545e40f76b434f",
+  "changes": [
+    {
+      "path": "test/lab/terminal-transfer/tools/independent.spec.cjs",
+      "oldGitBlobSha": "fd685c6c0bccdc6c6a80495f548e8344efc2d095",
+      "newGitBlobSha": "ea6231cb4714bff98e7154500b277d905548c5ae",
+      "oldSha256": "2454ba5bfc6f6f69355dfd860968f3a808b11b5a256ae5e4f2206160d7eec5cb",
+      "newSha256": "c2a97b53f05bf26f87c17d8a42fa267ed68724ae9e8283482f297046662a7d17",
+      "oldBytes": 7010,
+      "newBytes": 9364
+    }
+  ],
+  "checkedFrozenSourceIdentities": [
+    {
+      "path": "test/lab/terminal-transfer/controlRecord.ts",
+      "git_blob_sha": "1fb0198e57f8dd8abb037dd77ab1c1ee123ebe5c",
+      "sha256": "b87ca3ee29859fdfb842e0703fa24934c6891552c5f33a90e9af7d35c1768eda",
+      "bytes": 12025
+    },
+    {
+      "path": "test/lab/terminal-transfer/labConfig.ts",
+      "git_blob_sha": "357543a08e7ab899c73339f5b94f91ceb2379f50",
+      "sha256": "3656270af5a3374e79e278bef6ea4e769beadbd92ff379d4502ecec0c6de0a7c",
+      "bytes": 3945
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/memory-control.cjs",
+      "git_blob_sha": "18a6c3cc205eec78370c74b231df2523f7005d37",
+      "sha256": "67fcacf89e1fdf017ff581b8a3d8a251e28a8620fe6111fdc4dd176c633218e8",
+      "bytes": 6143
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/stop-controller.cjs",
+      "git_blob_sha": "6a0a2a65e409833a96ab6fed995d570091b2bf01",
+      "sha256": "32ca59805653371340e07d25cf8dfcbbbfff0b77bd22e5c2fbce59542528eed3",
+      "bytes": 10744
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/lab-control.cjs",
+      "git_blob_sha": "cf0baa7f8442799b1cd977acf292f005ac65c9ed",
+      "sha256": "5a412d638c089fbe4273c2892ad3a194d5cd44f87a23dd02ad6f77483f4231f1",
+      "bytes": 15982
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/local-runtime.cjs",
+      "git_blob_sha": "f4cf93de9917cc36eb1d9c0b4c35e1ac404a571d",
+      "sha256": "1b98f4408fb912796cbd0968cdc6caacfaecd0df72fc082921c880e1c666f71b",
+      "bytes": 7510
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/build-control-probe.cjs",
+      "git_blob_sha": "650797986aa2e7936ece206bebf4b53f9fd0f116",
+      "sha256": "aa54778eeeb7578e3b3500533a541da877a57d61d6d909e2104b4069177ee3a9",
+      "bytes": 3242
+    }
+  ],
+  "localValidation": {
+    "node": "v22.16.0",
+    "typescript": "5.8.3",
+    "workspace": "Selected verified sources, not a full checkout",
+    "related_node_tests": 20,
+    "passed": 20,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "independent_tests_subset": 6,
+    "jest_or_full_repo_rerun": false,
+    "real_engine_run": false,
+    "real_send_calls": 0,
+    "real_process_termination": false,
+    "remote_push": false,
+    "patch_applied_to_pristine_single_file_copy": true,
+    "mutationChecks": "Old targeted test passed both mutants; refined targeted test rejected both mutants; see validation/sensitivity-results.json"
+  }
+}

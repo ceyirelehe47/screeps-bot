@@ -1,0 +1,3 @@
+cwd: /d/code/screeps/screeps-bot
+command: git diff --exit-code bd9570d2c3cf8632202cfee4e3a96d95250add52 HEAD -- scripts/build-treasury-terminal-lab.mjs test/lab/terminal-transfer/runIMain.ts test/lab/terminal-transfer/observer.ts test/lab/terminal-transfer/singleShot.ts test/lab/terminal-transfer/controlRecord.ts test/lab/terminal-transfer/worldRead.ts test/lab/terminal-transfer/sample.ts test/mock/treasuryTerminalTransferPrototype.ts test/mock/treasuryTerminalTransferCoordinator.ts src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts src/runtime/treasury/treasuryTerminalTransferSlice0RemediationI.test.ts src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts
+start: 2026-09-09T16:32:30Z

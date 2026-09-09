@@ -1,0 +1,130 @@
+TAP version 13
+# Subtest: initialize refuses an existing control slot (no reset/overwrite)
+ok 1 - initialize refuses an existing control slot (no reset/overwrite)
+  ---
+  duration_ms: 144.052315
+  type: 'test'
+  ...
+# Subtest: world advancing after the single env write aborts with no repair write
+ok 2 - world advancing after the single env write aborts with no repair write
+  ---
+  duration_ms: 6.193821
+  type: 'test'
+  ...
+# Subtest: post-pause storage differing from player reads is not player confirmation
+ok 3 - post-pause storage differing from player reads is not player confirmation
+  ---
+  duration_ms: 19.162451
+  type: 'test'
+  ...
+# Subtest: formal precondition rejection stops promptly without waiting for the window
+ok 4 - formal precondition rejection stops promptly without waiting for the window
+  ---
+  duration_ms: 5.287958
+  type: 'test'
+  ...
+# Subtest: control-probe output during the formal window means the wrong active entry
+ok 5 - control-probe output during the formal window means the wrong active entry
+  ---
+  duration_ms: 1.326183
+  type: 'test'
+  ...
+# Subtest: control mode isolates the armed flag: first mismatch stops, two matching ticks confirm
+ok 6 - control mode isolates the armed flag: first mismatch stops, two matching ticks confirm
+  ---
+  duration_ms: 24.402518
+  type: 'test'
+  ...
+# Subtest: full 23-tick stream triggers pause at terminal sample, not at 180 seconds
+ok 7 - full 23-tick stream triggers pause at terminal sample, not at 180 seconds
+  ---
+  duration_ms: 4.468307
+  type: 'test'
+  ...
+# Subtest: healthy prefix does not stop early; external timer is immutable
+ok 8 - healthy prefix does not stop early; external timer is immutable
+  ---
+  duration_ms: 2.281061
+  type: 'test'
+  ...
+# Subtest: other users and tickStarted="1" cannot complete this window
+ok 9 - other users and tickStarted="1" cannot complete this window
+  ---
+  duration_ms: 1.014534
+  type: 'test'
+  ...
+# Subtest: late/duplicate/missing tick fails instead of accepting a terminal-only log
+ok 10 - late/duplicate/missing tick fails instead of accepting a terminal-only log
+  ---
+  duration_ms: 1.987014
+  type: 'test'
+  ...
+# Subtest: wrong experiment, malformed view, source mismatch or decode failure stops promptly
+ok 11 - wrong experiment, malformed view, source mismatch or decode failure stops promptly
+  ---
+  duration_ms: 2.696185
+  type: 'test'
+  ...
+# Subtest: duplicate stop signals are idempotent, never resume
+ok 12 - duplicate stop signals are idempotent, never resume
+  ---
+  duration_ms: 1.25763
+  type: 'test'
+  ...
+# Subtest: pause reject/non-OK/synchronous throw all reach process fallback
+ok 13 - pause reject/non-OK/synchronous throw all reach process fallback
+  ---
+  duration_ms: 1.317919
+  type: 'test'
+  ...
+# Subtest: hung pause OR changing tick reaches fallback within 5s
+ok 14 - hung pause OR changing tick reaches fallback within 5s
+  ---
+  duration_ms: 2.237013
+  type: 'test'
+  ...
+# Subtest: kill failure is reported, not silently converted to success
+ok 15 - kill failure is reported, not silently converted to success
+  ---
+  duration_ms: 0.988276
+  type: 'test'
+  ...
+# Subtest: logging failure prevents a healthy result but does not prevent stop
+ok 16 - logging failure prevents a healthy result but does not prevent stop
+  ---
+  duration_ms: 27.235184
+  type: 'test'
+  ...
+# Subtest: HTML entity decoding is one pass; payload/user ID mismatch is rejected
+ok 17 - HTML entity decoding is one pass; payload/user ID mismatch is rejected
+  ---
+  duration_ms: 0.368377
+  type: 'test'
+  ...
+# Subtest: actual runSession wiring: subscription before resume, raw save before stop, disarm then bound kill
+ok 18 - actual runSession wiring: subscription before resume, raw save before stop, disarm then bound kill
+  ---
+  duration_ms: 1512.739225
+  type: 'test'
+  ...
+# Subtest: slow raw persistence/audit cannot hide a >1s pause delay
+ok 19 - slow raw persistence/audit cannot hide a >1s pause delay
+  ---
+  duration_ms: 4.378959
+  type: 'test'
+  ...
+# Subtest: actual preparation session confirms two player ticks without writing or killing
+ok 20 - actual preparation session confirms two player ticks without writing or killing
+  ---
+  duration_ms: 2122.902022
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 20
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4023.589403

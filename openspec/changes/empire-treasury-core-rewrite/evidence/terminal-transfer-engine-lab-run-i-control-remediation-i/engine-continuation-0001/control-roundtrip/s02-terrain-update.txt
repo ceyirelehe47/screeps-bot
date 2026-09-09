@@ -1,0 +1,3 @@
+Loading mods from "D:\code\screeps\lab-ec0001-env\world\mods.json"
+Connecting to storage
+TERRAIN_UPDATE_RESULT "OK"

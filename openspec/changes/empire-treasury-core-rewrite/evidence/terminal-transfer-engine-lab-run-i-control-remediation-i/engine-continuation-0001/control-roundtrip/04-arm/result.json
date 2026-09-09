@@ -1,0 +1,15 @@
+{
+  "beforeRaw": "{\"__labTerminalTransferProbe\":{\"experimentId\":\"lab-run1-ec-0001\",\"armed\":false,\"attempted\":false}}",
+  "afterRaw": "{\"__labTerminalTransferProbe\":{\"experimentId\":\"lab-run1-ec-0001\",\"armed\":true,\"attempted\":false}}",
+  "record": {
+    "experimentId": "lab-run1-ec-0001",
+    "armed": true,
+    "attempted": false
+  },
+  "beforeControlBytes": 67,
+  "controlBytes": 66,
+  "totalMemoryBytes": 97,
+  "tick": 162,
+  "storageConfirmed": true,
+  "playerConfirmed": false
+}

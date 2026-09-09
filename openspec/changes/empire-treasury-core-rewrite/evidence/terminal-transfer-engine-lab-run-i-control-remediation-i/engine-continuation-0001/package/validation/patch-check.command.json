@@ -1,0 +1,1 @@
+["git", "apply", "--check", "/mnt/data/screeps-engine-continuation/changes.patch"]

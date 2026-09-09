@@ -1,0 +1,5 @@
+IDENTICAL observer/observer.js
+IDENTICAL single-shot/single-shot.js
+IDENTICAL main/main.js
+DIFF example.experiment.json a= b=
+IDENTICAL example.experiment.json

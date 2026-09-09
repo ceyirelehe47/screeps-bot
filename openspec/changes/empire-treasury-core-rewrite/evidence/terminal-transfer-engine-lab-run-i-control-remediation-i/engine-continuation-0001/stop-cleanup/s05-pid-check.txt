@@ -1,0 +1,8 @@
+131676 alive=True
+138500 alive=False
+138128 alive=False
+144640 alive=False
+145684 alive=False
+144252 alive=False
+121272 alive=False
+GONE

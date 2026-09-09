@@ -1,0 +1,6 @@
+== 2026-09-09T16:52:15Z 终态进程与监听核对 ==
+-- 实验树进程（应为空）--
+-- 端口 21025-21027（应为空）--
+-- 上轮遗留孤儿收集器（未动）--
+{"ProcessId":131696,"CommandLine":"C:\\nvm4w\\nodejs\\node.exe tools/console-collector.cjs logs/console-all.jsonl"}
+-- 本轮收集器已停 --

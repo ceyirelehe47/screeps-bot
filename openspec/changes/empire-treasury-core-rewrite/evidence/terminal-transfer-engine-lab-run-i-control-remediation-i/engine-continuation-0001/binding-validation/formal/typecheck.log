@@ -1,0 +1,12 @@
+
+> screeps@2026.8.29-6 typecheck
+> npm run typecheck:build && npm run typecheck:test
+
+
+> screeps@2026.8.29-6 typecheck:build
+> tsc -p tsconfig.build.json --noEmit
+
+
+> screeps@2026.8.29-6 typecheck:test
+> tsc -p tsconfig.json --noEmit
+

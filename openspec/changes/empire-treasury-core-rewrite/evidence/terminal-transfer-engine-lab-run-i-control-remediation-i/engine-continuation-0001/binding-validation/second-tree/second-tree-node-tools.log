@@ -1,0 +1,544 @@
+TAP version 13
+# Subtest: P01: archived independent baseline and reversed healthy rows pass without mutation
+ok 1 - P01: archived independent baseline and reversed healthy rows pass without mutation
+  ---
+  duration_ms: 7.9594
+  type: 'test'
+  ...
+# Subtest: P02 missing all outgoing
+ok 2 - P02 missing all outgoing
+  ---
+  duration_ms: 1.0013
+  type: 'test'
+  ...
+# Subtest: P03 missing latest two views
+ok 3 - P03 missing latest two views
+  ---
+  duration_ms: 1.4015
+  type: 'test'
+  ...
+# Subtest: P04 early failed quote retains a number
+ok 4 - P04 early failed quote retains a number
+  ---
+  duration_ms: 0.9107
+  type: 'test'
+  ...
+# Subtest: P05 missing latest target H/energy
+ok 5 - P05 missing latest target H/energy
+  ---
+  duration_ms: 0.8814
+  type: 'test'
+  ...
+# Subtest: P06 source H unstable
+ok 6 - P06 source H unstable
+  ---
+  duration_ms: 0.527
+  type: 'test'
+  ...
+# Subtest: P07 newest deficit cannot hide behind reversed rows
+ok 7 - P07 newest deficit cannot hide behind reversed rows
+  ---
+  duration_ms: 0.5882
+  type: 'test'
+  ...
+# Subtest: P08 pause 200 leaves no full T201 window
+ok 8 - P08 pause 200 leaves no full T201 window
+  ---
+  duration_ms: 0.5603
+  type: 'test'
+  ...
+# Subtest: P08 pause 199 also loses first sample
+ok 9 - P08 pause 199 also loses first sample
+  ---
+  duration_ms: 0.8893
+  type: 'test'
+  ...
+# Subtest: P09 duplicate tick
+ok 10 - P09 duplicate tick
+  ---
+  duration_ms: 1.3933
+  type: 'test'
+  ...
+# Subtest: P09 conflicting same tick
+ok 11 - P09 conflicting same tick
+  ---
+  duration_ms: 0.7475
+  type: 'test'
+  ...
+# Subtest: P09 negative tick
+ok 12 - P09 negative tick
+  ---
+  duration_ms: 0.6111
+  type: 'test'
+  ...
+# Subtest: P09 fractional tick
+ok 13 - P09 fractional tick
+  ---
+  duration_ms: 0.7678
+  type: 'test'
+  ...
+# Subtest: P09 string tick
+ok 14 - P09 string tick
+  ---
+  duration_ms: 0.5175
+  type: 'test'
+  ...
+# Subtest: P09 overflow
+ok 15 - P09 overflow
+  ---
+  duration_ms: 0.6962
+  type: 'test'
+  ...
+# Subtest: P11 exact description conflict
+ok 16 - P11 exact description conflict
+  ---
+  duration_ms: 0.6132
+  type: 'test'
+  ...
+# Subtest: malformed row
+ok 17 - malformed row
+  ---
+  duration_ms: 0.7068
+  type: 'test'
+  ...
+# Subtest: malformed endpoint
+ok 18 - malformed endpoint
+  ---
+  duration_ms: 0.5123
+  type: 'test'
+  ...
+# Subtest: malformed controller
+ok 19 - malformed controller
+  ---
+  duration_ms: 0.4504
+  type: 'test'
+  ...
+# Subtest: malformed transaction record
+ok 20 - malformed transaction record
+  ---
+  duration_ms: 0.5316
+  type: 'test'
+  ...
+# Subtest: missing earlier target view
+ok 21 - missing earlier target view
+  ---
+  duration_ms: 0.5437
+  type: 'test'
+  ...
+# Subtest: null shard
+ok 22 - null shard
+  ---
+  duration_ms: 0.443
+  type: 'test'
+  ...
+# Subtest: prototype-like invalid ID is diagnosed, not executed
+ok 23 - prototype-like invalid ID is diagnosed, not executed
+  ---
+  duration_ms: 0.4756
+  type: 'test'
+  ...
+# Subtest: P05 invalid required number: undefined
+ok 24 - P05 invalid required number: undefined
+  ---
+  duration_ms: 0.403
+  type: 'test'
+  ...
+# Subtest: P05 invalid required number: null
+ok 25 - P05 invalid required number: null
+  ---
+  duration_ms: 0.4613
+  type: 'test'
+  ...
+# Subtest: P05 invalid required number: NaN
+ok 26 - P05 invalid required number: NaN
+  ---
+  duration_ms: 0.4553
+  type: 'test'
+  ...
+# Subtest: P05 invalid required number: Infinity
+ok 27 - P05 invalid required number: Infinity
+  ---
+  duration_ms: 0.5411
+  type: 'test'
+  ...
+# Subtest: P05 invalid required number: -1
+ok 28 - P05 invalid required number: -1
+  ---
+  duration_ms: 0.4009
+  type: 'test'
+  ...
+# Subtest: P05 invalid required number: 0.5
+ok 29 - P05 invalid required number: 0.5
+  ---
+  duration_ms: 0.4538
+  type: 'test'
+  ...
+# Subtest: P05 invalid required number: 0
+ok 30 - P05 invalid required number: 0
+  ---
+  duration_ms: 0.4007
+  type: 'test'
+  ...
+# Subtest: stability source/energy
+ok 31 - stability source/energy
+  ---
+  duration_ms: 0.6165
+  type: 'test'
+  ...
+# Subtest: stability source/freeCapacity
+ok 32 - stability source/freeCapacity
+  ---
+  duration_ms: 0.4278
+  type: 'test'
+  ...
+# Subtest: stability source/cooldown
+ok 33 - stability source/cooldown
+  ---
+  duration_ms: 0.4039
+  type: 'test'
+  ...
+# Subtest: stability target/energy
+ok 34 - stability target/energy
+  ---
+  duration_ms: 0.3309
+  type: 'test'
+  ...
+# Subtest: stability target/freeCapacity
+ok 35 - stability target/freeCapacity
+  ---
+  duration_ms: 0.5528
+  type: 'test'
+  ...
+# Subtest: stability target/cooldown
+ok 36 - stability target/cooldown
+  ---
+  duration_ms: 0.5783
+  type: 'test'
+  ...
+# Subtest: P10 reports shard, source ID, cap together
+ok 37 - P10 reports shard, source ID, cap together
+  ---
+  duration_ms: 0.579
+  type: 'test'
+  ...
+# Subtest: P11 unrelated description allowed; target zero remains valid
+ok 38 - P11 unrelated description allowed; target zero remains valid
+  ---
+  duration_ms: 0.5723
+  type: 'test'
+  ...
+# Subtest: P12 non-26 quote binds exactly; candidate cap never changes itself
+ok 39 - P12 non-26 quote binds exactly; candidate cap never changes itself
+  ---
+  duration_ms: 2.1121
+  type: 'test'
+  ...
+# Subtest: invalid top-level values give diagnostics instead of TypeError
+ok 40 - invalid top-level values give diagnostics instead of TypeError
+  ---
+  duration_ms: 0.8436
+  type: 'test'
+  ...
+# Subtest: actual existing CLI: healthy=0 / missing-view=1 / bad JSON=2, files unchanged
+ok 41 - actual existing CLI: healthy=0 / missing-view=1 / bad JSON=2, files unchanged
+  ---
+  duration_ms: 1877.4865
+  type: 'test'
+  ...
+# Subtest: initialize refuses an existing control slot (no reset/overwrite)
+ok 42 - initialize refuses an existing control slot (no reset/overwrite)
+  ---
+  duration_ms: 126.2282
+  type: 'test'
+  ...
+# Subtest: world advancing after the single env write aborts with no repair write
+ok 43 - world advancing after the single env write aborts with no repair write
+  ---
+  duration_ms: 4.1001
+  type: 'test'
+  ...
+# Subtest: post-pause storage differing from player reads is not player confirmation
+ok 44 - post-pause storage differing from player reads is not player confirmation
+  ---
+  duration_ms: 14.0428
+  type: 'test'
+  ...
+# Subtest: formal precondition rejection stops promptly without waiting for the window
+ok 45 - formal precondition rejection stops promptly without waiting for the window
+  ---
+  duration_ms: 3.252
+  type: 'test'
+  ...
+# Subtest: control-probe output during the formal window means the wrong active entry
+ok 46 - control-probe output during the formal window means the wrong active entry
+  ---
+  duration_ms: 1.4707
+  type: 'test'
+  ...
+# Subtest: control mode isolates the armed flag: first mismatch stops, two matching ticks confirm
+ok 47 - control mode isolates the armed flag: first mismatch stops, two matching ticks confirm
+  ---
+  duration_ms: 29.0051
+  type: 'test'
+  ...
+# Subtest: initialize -> arm once -> disarm preserves foreign Memory
+ok 48 - initialize -> arm once -> disarm preserves foreign Memory
+  ---
+  duration_ms: 133.2821
+  type: 'test'
+  ...
+# Subtest: invalid whole Memory null
+ok 49 - invalid whole Memory null
+  ---
+  duration_ms: 0.272
+  type: 'test'
+  ...
+# Subtest: invalid whole Memory undefined
+ok 50 - invalid whole Memory undefined
+  ---
+  duration_ms: 0.1205
+  type: 'test'
+  ...
+# Subtest: invalid whole Memory 
+ok 51 - invalid whole Memory 
+  ---
+  duration_ms: 0.0986
+  type: 'test'
+  ...
+# Subtest: invalid whole Memory {
+ok 52 - invalid whole Memory {
+  ---
+  duration_ms: 0.1179
+  type: 'test'
+  ...
+# Subtest: invalid whole Memory null
+ok 53 - invalid whole Memory null
+  ---
+  duration_ms: 0.0963
+  type: 'test'
+  ...
+# Subtest: invalid whole Memory []
+ok 54 - invalid whole Memory []
+  ---
+  duration_ms: 0.085
+  type: 'test'
+  ...
+# Subtest: invalid whole Memory 4
+ok 55 - invalid whole Memory 4
+  ---
+  duration_ms: 0.1642
+  type: 'test'
+  ...
+# Subtest: arm refuses historical/corrupt control {"experimentId":"local-offline-test","armed":false,"attempted":true}
+ok 56 - arm refuses historical/corrupt control {"experimentId":"local-offline-test","armed":false,"attempted":true}
+  ---
+  duration_ms: 1.9375
+  type: 'test'
+  ...
+# Subtest: arm refuses historical/corrupt control {"experimentId":"local-offline-test","armed":false,"attempted":false,"stopped":true}
+ok 57 - arm refuses historical/corrupt control {"experimentId":"local-offline-test","armed":false,"attempted":false,"stopped":true}
+  ---
+  duration_ms: 2.7061
+  type: 'test'
+  ...
+# Subtest: arm refuses historical/corrupt control {"experimentId":"local-offline-test","armed":false,"attempted":false,"attemptedTick":1}
+ok 58 - arm refuses historical/corrupt control {"experimentId":"local-offline-test","armed":false,"attempted":false,"attemptedTick":1}
+  ---
+  duration_ms: 2.254
+  type: 'test'
+  ...
+# Subtest: arm refuses historical/corrupt control {"experimentId":"local-offline-test","armed":false,"attempted":false,"syncResult":{"ok":false}}
+ok 59 - arm refuses historical/corrupt control {"experimentId":"local-offline-test","armed":false,"attempted":false,"syncResult":{"ok":false}}
+  ---
+  duration_ms: 2.5122
+  type: 'test'
+  ...
+# Subtest: arm refuses historical/corrupt control {"experimentId":"other","armed":false,"attempted":false}
+ok 60 - arm refuses historical/corrupt control {"experimentId":"other","armed":false,"attempted":false}
+  ---
+  duration_ms: 2.1337
+  type: 'test'
+  ...
+# Subtest: arm refuses historical/corrupt control {"experimentId":"local-offline-test","armed":false,"attempted":false,"extra":1}
+ok 61 - arm refuses historical/corrupt control {"experimentId":"local-offline-test","armed":false,"attempted":false,"extra":1}
+  ---
+  duration_ms: 1.768
+  type: 'test'
+  ...
+# Subtest: disarm never erases attempted, tick or result
+ok 62 - disarm never erases attempted, tick or result
+  ---
+  duration_ms: 4.1759
+  type: 'test'
+  ...
+# Subtest: size 4095/4096 pass, 4097 corrupt; unicode counted as UTF8
+ok 63 - size 4095/4096 pass, 4097 corrupt; unicode counted as UTF8
+  ---
+  duration_ms: 14.6097
+  type: 'test'
+  ...
+# Subtest: exactly one env write; storage confirmation is NOT player confirmation
+ok 64 - exactly one env write; storage confirmation is NOT player confirmation
+  ---
+  duration_ms: 4.9525
+  type: 'test'
+  ...
+# Subtest: stale world/Memory abort before write
+ok 65 - stale world/Memory abort before write
+  ---
+  duration_ms: 4.1798
+  type: 'test'
+  ...
+# Subtest: silent lost env write has no fallback, retry or rollback
+ok 66 - silent lost env write has no fallback, retry or rollback
+  ---
+  duration_ms: 4.568
+  type: 'test'
+  ...
+# Subtest: logging failure prevents the mutation
+ok 67 - logging failure prevents the mutation
+  ---
+  duration_ms: 4.6779
+  type: 'test'
+  ...
+# Subtest: db mirror data cannot stand in for absent runtime control
+ok 68 - db mirror data cannot stand in for absent runtime control
+  ---
+  duration_ms: 13.04
+  type: 'test'
+  ...
+# Subtest: roundtrip requires same user, ID, values and distinct real ticks
+ok 69 - roundtrip requires same user, ID, values and distinct real ticks
+  ---
+  duration_ms: 20.1111
+  type: 'test'
+  ...
+# Subtest: actual probe bundle: module loading is inert, two ticks read only; never touches send
+ok 70 - actual probe bundle: module loading is inert, two ticks read only; never touches send
+  ---
+  duration_ms: 61.5781
+  type: 'test'
+  ...
+# Subtest: probe build cannot overwrite an existing output or repository directory
+ok 71 - probe build cannot overwrite an existing output or repository directory
+  ---
+  duration_ms: 76.9203
+  type: 'test'
+  ...
+# Subtest: process scope rejects unrelated node, reused PID and command changes; no process killed
+ok 72 - process scope rejects unrelated node, reused PID and command changes; no process killed
+  ---
+  duration_ms: 0.5473
+  type: 'test'
+  ...
+# Subtest: CLI requires complete explicit bindings; --help has no side effects
+ok 73 - CLI requires complete explicit bindings; --help has no side effects
+  ---
+  duration_ms: 0.3872
+  type: 'test'
+  ...
+# Subtest: a later config path is not launcher ownership; ancestry excludes unrelated processes
+ok 74 - a later config path is not launcher ownership; ancestry excludes unrelated processes
+  ---
+  duration_ms: 0.3296
+  type: 'test'
+  ...
+# Subtest: missing launcher is not proof of worker exit
+ok 75 - missing launcher is not proof of worker exit
+  ---
+  duration_ms: 0.4107
+  type: 'test'
+  ...
+# Subtest: full 23-tick stream triggers pause at terminal sample, not at 180 seconds
+ok 76 - full 23-tick stream triggers pause at terminal sample, not at 180 seconds
+  ---
+  duration_ms: 6.0517
+  type: 'test'
+  ...
+# Subtest: healthy prefix does not stop early; external timer is immutable
+ok 77 - healthy prefix does not stop early; external timer is immutable
+  ---
+  duration_ms: 1.9436
+  type: 'test'
+  ...
+# Subtest: other users and tickStarted="1" cannot complete this window
+ok 78 - other users and tickStarted="1" cannot complete this window
+  ---
+  duration_ms: 0.7366
+  type: 'test'
+  ...
+# Subtest: late/duplicate/missing tick fails instead of accepting a terminal-only log
+ok 79 - late/duplicate/missing tick fails instead of accepting a terminal-only log
+  ---
+  duration_ms: 1.6561
+  type: 'test'
+  ...
+# Subtest: wrong experiment, malformed view, source mismatch or decode failure stops promptly
+ok 80 - wrong experiment, malformed view, source mismatch or decode failure stops promptly
+  ---
+  duration_ms: 3.2256
+  type: 'test'
+  ...
+# Subtest: duplicate stop signals are idempotent, never resume
+ok 81 - duplicate stop signals are idempotent, never resume
+  ---
+  duration_ms: 1.337
+  type: 'test'
+  ...
+# Subtest: pause reject/non-OK/synchronous throw all reach process fallback
+ok 82 - pause reject/non-OK/synchronous throw all reach process fallback
+  ---
+  duration_ms: 1.672
+  type: 'test'
+  ...
+# Subtest: hung pause OR changing tick reaches fallback within 5s
+ok 83 - hung pause OR changing tick reaches fallback within 5s
+  ---
+  duration_ms: 2.7346
+  type: 'test'
+  ...
+# Subtest: kill failure is reported, not silently converted to success
+ok 84 - kill failure is reported, not silently converted to success
+  ---
+  duration_ms: 0.9673
+  type: 'test'
+  ...
+# Subtest: logging failure prevents a healthy result but does not prevent stop
+ok 85 - logging failure prevents a healthy result but does not prevent stop
+  ---
+  duration_ms: 4.3965
+  type: 'test'
+  ...
+# Subtest: HTML entity decoding is one pass; payload/user ID mismatch is rejected
+ok 86 - HTML entity decoding is one pass; payload/user ID mismatch is rejected
+  ---
+  duration_ms: 0.5857
+  type: 'test'
+  ...
+# Subtest: actual runSession wiring: subscription before resume, raw save before stop, disarm then bound kill
+ok 87 - actual runSession wiring: subscription before resume, raw save before stop, disarm then bound kill
+  ---
+  duration_ms: 1141.926
+  type: 'test'
+  ...
+# Subtest: slow raw persistence/audit cannot hide a >1s pause delay
+ok 88 - slow raw persistence/audit cannot hide a >1s pause delay
+  ---
+  duration_ms: 1.0209
+  type: 'test'
+  ...
+# Subtest: actual preparation session confirms two player ticks without writing or killing
+ok 89 - actual preparation session confirms two player ticks without writing or killing
+  ---
+  duration_ms: 2088.8227
+  type: 'test'
+  ...
+1..89
+# tests 89
+# suites 0
+# pass 89
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3741.1404

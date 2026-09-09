@@ -1,0 +1,176 @@
+{
+  "result": {
+    "reason": "control_confirmed",
+    "observedAt": 7763.9755,
+    "deadline": 186309.838,
+    "stopRequestedAt": 7775.7207,
+    "windowComplete": false,
+    "pauseConfirmed": true,
+    "killConfirmed": false,
+    "triggerLatencyMs": 11.745200000000295,
+    "stableTick": 162,
+    "pauseConfirmedAt": 9149.6902,
+    "extraReasons": [],
+    "logErrors": [],
+    "sampleTicks": [
+      160,
+      161
+    ],
+    "controlSamples": [
+      {
+        "kind": "lab-control-sample",
+        "sampler": {
+          "name": "lab-control-probe",
+          "version": "1"
+        },
+        "tick": 160,
+        "expectedExperimentId": "lab-run1-ec-0001",
+        "shard": {
+          "name": "Forst"
+        },
+        "user": {
+          "username": "lab-ec-user-0001"
+        },
+        "control": {
+          "status": "ok",
+          "record": {
+            "experimentId": "lab-run1-ec-0001",
+            "armed": false,
+            "attempted": false
+          }
+        },
+        "source": {
+          "roomName": "W1N57",
+          "readStatus": "ok",
+          "terminalId": "ec0001aa57000001",
+          "ownerUsername": "lab-ec-user-0001",
+          "resourceAmount": 1000,
+          "energy": 10000,
+          "freeCapacity": 289000,
+          "cooldown": 0,
+          "my": true,
+          "isActive": true,
+          "controller": {
+            "present": true,
+            "my": true,
+            "level": 8,
+            "ownerUsername": "lab-ec-user-0001"
+          }
+        },
+        "target": {
+          "roomName": "W10N57",
+          "readStatus": "ok",
+          "terminalId": "ec0001aa57000002",
+          "ownerUsername": "lab-ec-user-0001",
+          "resourceAmount": 0,
+          "energy": 2000,
+          "freeCapacity": 298000,
+          "cooldown": 0,
+          "my": true,
+          "isActive": true,
+          "controller": {
+            "present": true,
+            "my": true,
+            "level": 8,
+            "ownerUsername": "lab-ec-user-0001"
+          }
+        },
+        "feeQuote": {
+          "status": "ok",
+          "energyCost": 26
+        },
+        "transactions": {
+          "incoming": {
+            "status": "ok",
+            "count": 0,
+            "records": []
+          },
+          "outgoing": {
+            "status": "ok",
+            "count": 0,
+            "records": []
+          }
+        },
+        "userId": "48b86d847499b79"
+      },
+      {
+        "kind": "lab-control-sample",
+        "sampler": {
+          "name": "lab-control-probe",
+          "version": "1"
+        },
+        "tick": 161,
+        "expectedExperimentId": "lab-run1-ec-0001",
+        "shard": {
+          "name": "Forst"
+        },
+        "user": {
+          "username": "lab-ec-user-0001"
+        },
+        "control": {
+          "status": "ok",
+          "record": {
+            "experimentId": "lab-run1-ec-0001",
+            "armed": false,
+            "attempted": false
+          }
+        },
+        "source": {
+          "roomName": "W1N57",
+          "readStatus": "ok",
+          "terminalId": "ec0001aa57000001",
+          "ownerUsername": "lab-ec-user-0001",
+          "resourceAmount": 1000,
+          "energy": 10000,
+          "freeCapacity": 289000,
+          "cooldown": 0,
+          "my": true,
+          "isActive": true,
+          "controller": {
+            "present": true,
+            "my": true,
+            "level": 8,
+            "ownerUsername": "lab-ec-user-0001"
+          }
+        },
+        "target": {
+          "roomName": "W10N57",
+          "readStatus": "ok",
+          "terminalId": "ec0001aa57000002",
+          "ownerUsername": "lab-ec-user-0001",
+          "resourceAmount": 0,
+          "energy": 2000,
+          "freeCapacity": 298000,
+          "cooldown": 0,
+          "my": true,
+          "isActive": true,
+          "controller": {
+            "present": true,
+            "my": true,
+            "level": 8,
+            "ownerUsername": "lab-ec-user-0001"
+          }
+        },
+        "feeQuote": {
+          "status": "ok",
+          "energyCost": 26
+        },
+        "transactions": {
+          "incoming": {
+            "status": "ok",
+            "count": 0,
+            "records": []
+          },
+          "outgoing": {
+            "status": "ok",
+            "count": 0,
+            "records": []
+          }
+        },
+        "userId": "48b86d847499b79"
+      }
+    ],
+    "ok": true
+  },
+  "pausedForNextStage": true
+}

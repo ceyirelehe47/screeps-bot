@@ -1,0 +1,25 @@
+{
+  "environment": {
+    "NODE_PATH": "/opt/nvm/versions/node/v22.16.0/lib/node_modules",
+    "node": "v22.16.0",
+    "typescript": "5.8.3"
+  },
+  "commands": [
+    [
+      "node",
+      "--test",
+      "test/lab/terminal-transfer/tools/independent.spec.cjs"
+    ],
+    [
+      "node",
+      "--test",
+      "test/lab/terminal-transfer/tools/stop.spec.cjs",
+      "test/lab/terminal-transfer/tools/independent.spec.cjs"
+    ],
+    [
+      "python",
+      "check-test-sensitivity.py"
+    ]
+  ],
+  "note": "First two commands run from review-source. Sensitivity script at package root copies review-source to temporary directories. Expected failing mutation results are diagnostics, not failures of delivered implementation."
+}
