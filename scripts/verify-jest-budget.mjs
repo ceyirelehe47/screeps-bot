@@ -12,15 +12,17 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const manifestPath = path.join(repoRoot, "test", "test-suite-budget.json");
 const jestEntrypoint = path.join(repoRoot, "node_modules", "jest", "bin", "jest.js");
 const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data", "node_modules"]);
-// 【Terminal Transfer Engine Lab Run I · Execution】新目标：probe.test.ts
-// 22→23 用例（sendGate 无 shard 引擎修复专项：通过分支+旧产物修复前
-// 行为对照，241/1477→241/1478）；基线随实现提交滚动至 3a9fceb
+// 【Terminal Transfer Engine Lab Run I · Calibration Rerun】新目标：
+// probe.test.ts 23→25 用例（sentinel 专项反转为严格拒绝回归+sentinel 期
+// 归档产物前后对照+场景 A 旧事故链四步+非 26 报价预算边界）、新增
+// calibration.test.ts 6 用例（C02 场景 B–G 实际比较实现），
+// 241/1478→242/1486；基线随实现提交滚动至 13511d8
 // （文件集对比要求基线树含当前测试文件集）。
-const requiredBaselineCommit = "3a9fceb200c1aaf7abd0503d3697c4b4e9e6ddc7";
+const requiredBaselineCommit = "13511d8dd95fc6044fe597b5a019c4a84699882a";
 const requiredTarget = Object.freeze({
-  suites: 241,
-  tests: 1478,
-  passed: 1478,
+  suites: 242,
+  tests: 1486,
+  passed: 1486,
   failed: 0,
   pending: 0,
   todo: 0,
