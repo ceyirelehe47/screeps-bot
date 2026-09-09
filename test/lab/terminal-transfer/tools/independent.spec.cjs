@@ -83,7 +83,9 @@ const envelope = row => ({ channel: 'user:u/console', payload: JSON.stringify({ 
 // control 模式先做 healthySample 检查：控制记录断言样本必须带完整健康端点。
 const facts = require('./fixtures/review-base-facts.json');
 function healthyRow(tick, record) {
+  // 对齐采样来源与停止控制器身份；不替调用者修正 control.record。
   return { ...sample(tick, record),
+    user: { username: cfg.username }, expectedExperimentId: cfg.experimentId,
     experimentId: cfg.experimentId, configTargetTick: cfg.targetTick,
     source: { ...facts.samples[1].source, roomName: cfg.sourceRoomName },
     target: { ...facts.samples[1].target, roomName: cfg.targetRoomName },
@@ -112,18 +114,61 @@ test('control-probe output during the formal window means the wrong active entry
   assert.equal((await f.controller.done).reason, 'wrong_active_entry');
 });
 
-test('control mode rejects a mismatched armed flag on the first sample (no two-bad-row false positive)', async () => {
-  const clock = new Clock(), pauses = [];
-  const ports = {
-    now: clock.now, setTimer: clock.setTimer, clearTimer: clock.clearTimer,
-    audit: () => {}, pause: () => { pauses.push(clock.time); return Promise.resolve('OK'); },
-    readState: async () => ({ paused: true, tick: 99 }), killTree: async () => {},
-  };
-  const controller = createStopController({ userId: 'u', config: cfg, mode: 'control', expectedArmed: true }, ports);
-  controller.start();
-  // 玩家读到 armed=false 而期望 true：第一条即停止，不等凑满两条。
-  controller.ingest(envelope(healthyRow(50, pristine)));
-  assert.equal(pauses.length, 1);
-  await clock.advance(1100);
-  assert.equal((await controller.done).reason, 'control_mismatch');
+test('control mode isolates the armed flag: first mismatch stops, two matching ticks confirm', async () => {
+  function controlFixture(expectedArmed) {
+    const clock = new Clock(), pauses = [], kills = [];
+    const ports = {
+      now: clock.now, setTimer: clock.setTimer, clearTimer: clock.clearTimer,
+      audit: () => {}, pause: () => { pauses.push(clock.time); return Promise.resolve('OK'); },
+      readState: async () => ({ paused: true, tick: 99 }),
+      killTree: async () => { kills.push(clock.time); },
+    };
+    const controller = createStopController({ userId: 'u', config: cfg, mode: 'control', expectedArmed }, ports);
+    controller.start();
+    return { clock, pauses, kills, controller };
+  }
+
+  // 同时覆盖未武装和已武装准备阶段；每个对照使用新的控制器与时钟。
+  // 仍为一个 Node 用例，不改变正常 Jest wrapper 的收集数。
+  for (const expectedArmed of [false, true]) {
+    const expected = { userId: 'u', username: cfg.username, experimentId: cfg.experimentId, armed: expectedArmed };
+    const record = { experimentId: cfg.experimentId, armed: expectedArmed, attempted: false };
+    const good = healthyRow(50, record);
+    const goodNext = healthyRow(51, { ...record });
+    const bad = JSON.parse(JSON.stringify(good));
+    bad.control.record.armed = !expectedArmed;
+
+    // 反例只允许一个差异，不能由另一个用户/实验 ID 提前触发同名拒绝。
+    const restored = JSON.parse(JSON.stringify(bad));
+    restored.control.record.armed = expectedArmed;
+    assert.deepEqual(restored, good);
+    assert.deepEqual(assessControlSamples([good], expected).issues, ['two player ticks required']);
+    assert.equal(assessControlSamples([good, goodNext], expected).ready, true);
+
+    const negative = controlFixture(expectedArmed);
+    negative.controller.ingest(envelope(bad));
+    assert.deepEqual(negative.pauses, [0]); // 第一条即实际请求暂停，不等第二条或 deadline。
+    await negative.clock.advance(1100);
+    const rejected = await negative.controller.done;
+    assert.equal(rejected.reason, 'control_mismatch');
+    assert.equal(rejected.ok, false);
+    assert.deepEqual(rejected.sampleTicks, [50]);
+    assert.deepEqual(negative.kills, []);
+
+    const positive = controlFixture(expectedArmed);
+    positive.controller.ingest(envelope(good));
+    await positive.clock.advance(500);
+    assert.equal(positive.controller.state, 'running');
+    assert.deepEqual(positive.pauses, []); // 单条正确样本不得误停，也不能提前确认。
+    positive.controller.ingest(envelope(goodNext));
+    assert.deepEqual(positive.pauses, [500]);
+    await positive.clock.advance(1100);
+    const confirmed = await positive.controller.done;
+    assert.equal(confirmed.reason, 'control_confirmed');
+    assert.equal(confirmed.ok, true);
+    assert.equal(confirmed.pauseConfirmed, true);
+    assert.deepEqual(confirmed.sampleTicks, [50, 51]);
+    assert.deepEqual(positive.kills, []);
+    assert.equal(positive.clock.timers.size, 0);
+  }
 });
