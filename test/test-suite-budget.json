@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "05585e0e163d3774bb81fa7f4b47a8f1f04222b2",
+    "commit": "3a9fceb200c1aaf7abd0503d3697c4b4e9e6ddc7",
     "suites": 241,
-    "tests": 1477
+    "tests": 1478
   },
   "target": {
-    "commit": "05585e0e163d3774bb81fa7f4b47a8f1f04222b2",
+    "commit": "3a9fceb200c1aaf7abd0503d3697c4b4e9e6ddc7",
     "suites": 241,
-    "tests": 1477,
-    "passed": 1477,
+    "tests": 1478,
+    "passed": 1478,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Terminal Transfer Engine Lab Run I · Wiring Remediation I：runI.test.ts 7→12 用例（observer 装配故障矩阵/反方向对照/同 T 重复不增发，241/1472→241/1477）；锚点随实现提交滚动至 05585e0（文件集对比要求基线树含当前测试文件集）"
+    "note": "Terminal Transfer Engine Lab Run I · Execution：probe.test.ts 22→23 用例（sendGate 无 shard 引擎修复专项：通过分支+旧产物修复前行为对照；241/1477→241/1478）；锚点随实现提交滚动至 3a9fceb（文件集对比要求基线树含当前测试文件集）"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1850,9 +1850,9 @@
       "todo": 0
     },
     "test/lab/terminal-transfer/probe.test.ts": {
-      "budget": 22,
-      "tests": 22,
-      "passed": 22,
+      "budget": 23,
+      "tests": 23,
+      "passed": 23,
       "failed": 0,
       "pending": 0,
       "todo": 0
