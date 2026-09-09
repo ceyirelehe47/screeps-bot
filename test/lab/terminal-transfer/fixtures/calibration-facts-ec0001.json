@@ -1,0 +1,144 @@
+{
+  "factsKind": "lab-calibration-facts",
+  "context": {
+    "collectedAtWallClock": "2026-09-09T15:48:55.506Z",
+    "runId": "lab-run1-ec-0001",
+    "paused": true,
+    "pauseConfirmedTick": 160,
+    "lastAdminChangeWallClock": "2026-09-09T15:47:21.000Z",
+    "user": {
+      "id": "48b86d847499b79",
+      "idSource": "本轮实机装配：管理侧 db.users 按用户名查询与 user:<id>/console 通道交叉核对"
+    },
+    "sampler": {
+      "name": "lab-meta-probe",
+      "version": "1"
+    }
+  },
+  "samples": [
+    {
+      "tick": 158,
+      "collectedAtWallClock": "2026-09-09T15:48:55.506Z",
+      "runId": "lab-run1-ec-0001",
+      "shard": {
+        "name": "Forst"
+      },
+      "user": {
+        "username": "lab-ec-user-0001"
+      },
+      "worldSize": 59,
+      "source": {
+        "readStatus": "ok",
+        "terminalId": "ec0001aa57000001",
+        "ownerUsername": "lab-ec-user-0001",
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-ec-user-0001"
+        },
+        "resourceAmount": 1000,
+        "energy": 10000,
+        "freeCapacity": 289000,
+        "cooldown": 0
+      },
+      "target": {
+        "readStatus": "ok",
+        "terminalId": "ec0001aa57000002",
+        "ownerUsername": "lab-ec-user-0001",
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-ec-user-0001"
+        },
+        "resourceAmount": 0,
+        "energy": 2000,
+        "freeCapacity": 298000,
+        "cooldown": 0
+      },
+      "feeQuote": {
+        "status": "ok",
+        "energyCost": 26
+      },
+      "transactions": {
+        "incoming": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        },
+        "outgoing": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        }
+      }
+    },
+    {
+      "tick": 159,
+      "collectedAtWallClock": "2026-09-09T15:48:56.520Z",
+      "runId": "lab-run1-ec-0001",
+      "shard": {
+        "name": "Forst"
+      },
+      "user": {
+        "username": "lab-ec-user-0001"
+      },
+      "worldSize": 59,
+      "source": {
+        "readStatus": "ok",
+        "terminalId": "ec0001aa57000001",
+        "ownerUsername": "lab-ec-user-0001",
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-ec-user-0001"
+        },
+        "resourceAmount": 1000,
+        "energy": 10000,
+        "freeCapacity": 289000,
+        "cooldown": 0
+      },
+      "target": {
+        "readStatus": "ok",
+        "terminalId": "ec0001aa57000002",
+        "ownerUsername": "lab-ec-user-0001",
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-ec-user-0001"
+        },
+        "resourceAmount": 0,
+        "energy": 2000,
+        "freeCapacity": 298000,
+        "cooldown": 0
+      },
+      "feeQuote": {
+        "status": "ok",
+        "energyCost": 26
+      },
+      "transactions": {
+        "incoming": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        },
+        "outgoing": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        }
+      }
+    }
+  ]
+}

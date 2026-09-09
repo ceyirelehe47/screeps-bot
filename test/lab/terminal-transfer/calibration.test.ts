@@ -26,6 +26,18 @@ const REPO_ROOT = resolve(__dirname, "..", "..", "..");
 const CLI = join(REPO_ROOT, "scripts", "verify-lab-calibration.mjs");
 const FACTS_HEALTHY = join(__dirname, "fixtures", "calibration-facts-healthy.json");
 const FACTS_MISMATCH = join(__dirname, "fixtures", "calibration-facts-mismatch.json");
+const FACTS_EC0001 = join(__dirname, "fixtures", "calibration-facts-ec0001.json");
+
+/**
+ * 冻结的 cal-0002 历史配置：场景 B–F 与 R02 反例表达的是 cal-0002 历史世界
+ * 的 facts fixture（calibration-facts-healthy/mismatch，历史原件不修改），
+ * 与其配对的配置同样冻结为历史原件 tools/fixtures/review-base-config.json
+ * ——既不用当前编译值冒充历史世界，也不用当前 config 自动生成"真实世界"。
+ * 活配置（LAB_EXAMPLE_EXPERIMENT）仅在两处活↔活断言中使用：场景 C 的
+ * labConfig↔example.experiment.json 同步、场景 G 的 CLI experimentId。
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CAL_0002_CONFIG = JSON.parse(readFileSync(join(__dirname, "tools", "fixtures", "review-base-config.json"), "utf8")) as LabExperimentConfig;
 
 /**
  * 独立基线（磁盘 fixture）——唯一事实来源；变体一律在深拷贝上改写。
@@ -58,7 +70,7 @@ function sha256Of(filePath: string): string {
 
 describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核对（C02）", () => {
   it("场景 F 正常对照：独立取得的完整健康基线 + 匹配配置 → 全部通过（无 fail/missing）", () => {
-    const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, loadHealthyFacts(true));
+    const report = checkLabCalibration(CAL_0002_CONFIG, loadHealthyFacts(true));
     console.log(`CALIBRATION-F ${JSON.stringify(report.summary)}`);
     expect(report.status).toBe("pass");
     expect(report.summary.failed).toBe(0);
@@ -73,7 +85,7 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
     const facts = loadHealthyFacts(true);
     const fixtureShaBefore = sha256Of(FACTS_HEALTHY);
     const wrong: LabExperimentConfig = {
-      ...LAB_EXAMPLE_EXPERIMENT,
+      ...CAL_0002_CONFIG,
       shardName: "shard0",
       sourceTerminalId: "aaaaaaaaaaaaaaaa",
       maxFeeEnergy: 999,
@@ -85,15 +97,15 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
     expect(findItem(report, "endpoints", "source_terminal_id").result).toBe("fail");
     expect(findItem(report, "quote", "cap_binds_quote").result).toBe("fail");
     // 逐项修复：每修一项只消掉对应 fail，其余两项仍在。
-    const fixShard = checkLabCalibration({ ...wrong, shardName: LAB_EXAMPLE_EXPERIMENT.shardName }, facts);
+    const fixShard = checkLabCalibration({ ...wrong, shardName: CAL_0002_CONFIG.shardName }, facts);
     expect(findItem(fixShard, "world_user", "shard_matches_config").result).toBe("pass");
     expect(findItem(fixShard, "endpoints", "source_terminal_id").result).toBe("fail");
     expect(findItem(fixShard, "quote", "cap_binds_quote").result).toBe("fail");
-    const fixSource = checkLabCalibration({ ...wrong, sourceTerminalId: LAB_EXAMPLE_EXPERIMENT.sourceTerminalId }, facts);
+    const fixSource = checkLabCalibration({ ...wrong, sourceTerminalId: CAL_0002_CONFIG.sourceTerminalId }, facts);
     expect(findItem(fixSource, "world_user", "shard_matches_config").result).toBe("fail");
     expect(findItem(fixSource, "endpoints", "source_terminal_id").result).toBe("pass");
     expect(findItem(fixSource, "quote", "cap_binds_quote").result).toBe("fail");
-    const fixCap = checkLabCalibration({ ...wrong, maxFeeEnergy: LAB_EXAMPLE_EXPERIMENT.maxFeeEnergy }, facts);
+    const fixCap = checkLabCalibration({ ...wrong, maxFeeEnergy: CAL_0002_CONFIG.maxFeeEnergy }, facts);
     expect(findItem(fixCap, "world_user", "shard_matches_config").result).toBe("fail");
     expect(findItem(fixCap, "endpoints", "source_terminal_id").result).toBe("fail");
     expect(findItem(fixCap, "quote", "cap_binds_quote").result).toBe("pass");
@@ -109,13 +121,13 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
     expect(docJson).toMatchObject({ ...LAB_EXAMPLE_EXPERIMENT });
     const facts = cloneFacts(loadHealthyFacts(true));
     facts.samples = facts.samples.map((sample: any) => ({ ...sample, shard: { name: "shard0" } }));
-    const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+    const report = checkLabCalibration(CAL_0002_CONFIG, facts);
     expect(report.status).toBe("fail");
     expect(findItem(report, "world_user", "shard_matches_config").result).toBe("fail");
     // 反向说明信任模型：把 config 改成迎合错误事实可以让该项通过——这正是
     // facts 必须独立取得（不由 config 生成）的原因；事实本身从未被 config
     // 改写。该分支只作信任模型文档，不构成"用配置修正事实"的支持。
-    const configChasingFacts = checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, shardName: "shard0" }, facts);
+    const configChasingFacts = checkLabCalibration({ ...CAL_0002_CONFIG, shardName: "shard0" }, facts);
     expect(findItem(configChasingFacts, "world_user", "shard_matches_config").result).toBe("pass");
     expect(configChasingFacts.status).toBe("pass");
   });
@@ -126,7 +138,7 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
     {
       const facts = base();
       facts.samples = facts.samples.map((sample: any) => ({ ...sample, shard: { readError: "采样器读取异常" } }));
-      const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+      const report = checkLabCalibration(CAL_0002_CONFIG, facts);
       expect(report.status).toBe("fail");
       expect(findItem(report, "world_user", "shard_legal").result).toBe("fail");
       expect(findItem(report, "endpoints", "source_terminal_id").result).toBe("pass");
@@ -136,14 +148,14 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
     {
       const facts = base();
       facts.samples = facts.samples.map((sample: any) => ({ ...sample, shard: {} }));
-      expect(findItem(checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts), "world_user", "shard_legal").result).toBe("fail");
+      expect(findItem(checkLabCalibration(CAL_0002_CONFIG, facts), "world_user", "shard_legal").result).toBe("fail");
     }
     // (c) 缺 Terminal 身份（readStatus terminal_missing——与 worldRead 行为一致，
     // 缺结构时数值/健康字段一律不出现，不由残留旧值冒充）。
     {
       const facts = base();
       facts.samples = facts.samples.map((sample: any) => ({ ...sample, source: { readStatus: "terminal_missing" } }));
-      const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+      const report = checkLabCalibration(CAL_0002_CONFIG, facts);
       expect(findItem(report, "endpoints", "source_read_ok").result).toBe("fail");
       expect(findItem(report, "endpoints", "source_terminal_id").result).toBe("fail");
       expect(findItem(report, "resources", "source_h_sufficient").result).toBe("fail"); // 不可读不转换为健康
@@ -152,13 +164,13 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
     {
       const facts = base();
       facts.samples = [facts.samples[0]];
-      expect(findItem(checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts), "time_stability", "samples_two_ticks").result).toBe("fail");
+      expect(findItem(checkLabCalibration(CAL_0002_CONFIG, facts), "time_stability", "samples_two_ticks").result).toBe("fail");
     }
     // (e) 端点读取错误 + my 缺失（必要健康字段）。
     {
       const facts = base();
       facts.samples = facts.samples.map((sample: any) => ({ ...sample, target: { ...sample.target, readStatus: "read_error", my: undefined } }));
-      const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+      const report = checkLabCalibration(CAL_0002_CONFIG, facts);
       expect(findItem(report, "endpoints", "target_read_ok").result).toBe("fail");
       expect(findItem(report, "endpoints", "target_my_active").result).toBe("fail");
     }
@@ -166,13 +178,13 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
     {
       const facts = base();
       facts.samples = facts.samples.map((sample: any, index: number) => ({ ...sample, runId: index === 0 ? facts.context.runId : "another-run" }));
-      expect(findItem(checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts), "provenance", "run_id_consistent").result).toBe("fail");
+      expect(findItem(checkLabCalibration(CAL_0002_CONFIG, facts), "provenance", "run_id_consistent").result).toBe("fail");
     }
     // (g) 陈旧：样本早于最后管理修改时刻（管理改过 fixture 后未重新取得新鲜事实）。
     {
       const facts = base();
       facts.samples = facts.samples.map((sample: any) => ({ ...sample, collectedAtWallClock: "2026-09-09T10:03:00.000Z" }));
-      expect(findItem(checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts), "time_stability", "collected_after_admin_change").result).toBe("fail");
+      expect(findItem(checkLabCalibration(CAL_0002_CONFIG, facts), "time_stability", "collected_after_admin_change").result).toBe("fail");
     }
     // (h) 缺失记 missing，不当作健康：未声明管理修改时刻/用户 ID/交易视图/代码来源。
     {
@@ -181,7 +193,7 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
       delete facts.context.user;
       facts.samples = facts.samples.map((sample: any) => ({ ...sample, transactions: {} }));
       delete facts.context.codeSource;
-      const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+      const report = checkLabCalibration(CAL_0002_CONFIG, facts);
       expect(report.status).toBe("fail");
       expect(findItem(report, "time_stability", "collected_after_admin_change").result).toBe("missing");
       expect(findItem(report, "world_user", "user_id_evidence").result).toBe("missing");
@@ -192,7 +204,7 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
     {
       const facts = base();
       facts.samples = facts.samples.map((sample: any) => ({ ...sample, feeQuote: { status: "unavailable", error: "报价端口异常" } }));
-      const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+      const report = checkLabCalibration(CAL_0002_CONFIG, facts);
       expect(findItem(report, "quote", "quote_legal").result).toBe("fail");
       expect(findItem(report, "quote", "cap_binds_quote").result).toBe("fail");
     }
@@ -200,7 +212,7 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
     {
       const facts = base();
       facts.samples = [];
-      const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+      const report = checkLabCalibration(CAL_0002_CONFIG, facts);
       expect(report.status).toBe("fail");
       expect(report.summary.total).toBeGreaterThan(0);
     }
@@ -209,25 +221,28 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
   it("场景 E 报价无硬编码（非 26 报价）：cap=30 与报价 30 绑定通过；29/31 均判绑定不符；非整数/负数报价拒绝", () => {
     const facts = cloneFacts(loadHealthyFacts(true));
     facts.samples = facts.samples.map((sample: any) => ({ ...sample, feeQuote: { status: "ok", energyCost: 30 } }));
-    const bound = checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, maxFeeEnergy: 30 }, facts);
+    const bound = checkLabCalibration({ ...CAL_0002_CONFIG, maxFeeEnergy: 30 }, facts);
     expect(findItem(bound, "quote", "quote_legal").result).toBe("pass");
     expect(findItem(bound, "quote", "quote_stable").result).toBe("pass");
     expect(findItem(bound, "quote", "cap_binds_quote").result).toBe("pass");
-    expect(findItem(checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, maxFeeEnergy: 29 }, facts), "quote", "cap_binds_quote").result).toBe("fail");
-    expect(findItem(checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, maxFeeEnergy: 31 }, facts), "quote", "cap_binds_quote").result).toBe("fail");
+    expect(findItem(checkLabCalibration({ ...CAL_0002_CONFIG, maxFeeEnergy: 29 }, facts), "quote", "cap_binds_quote").result).toBe("fail");
+    expect(findItem(checkLabCalibration({ ...CAL_0002_CONFIG, maxFeeEnergy: 31 }, facts), "quote", "cap_binds_quote").result).toBe("fail");
     // 非法报价值：非整数与负数都不是"新鲜合法报价"。
     for (const energyCost of [30.5, -1]) {
       const bad = cloneFacts(facts);
       bad.samples = bad.samples.map((sample: any) => ({ ...sample, feeQuote: { status: "ok", energyCost } }));
-      expect(findItem(checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, maxFeeEnergy: 30 }, bad), "quote", "quote_legal").result).toBe("fail");
+      expect(findItem(checkLabCalibration({ ...CAL_0002_CONFIG, maxFeeEnergy: 30 }, bad), "quote", "quote_legal").result).toBe("fail");
     }
   });
 
-  it("场景 G CLI 只读与真实命令：健康 fixture 退出 0、三项不一致 fixture 退出 1 且三项齐报、坏输入退出 2；运行前后输入文件字节不变", () => {
-    const watched = [FACTS_HEALTHY, FACTS_MISMATCH, join(__dirname, "labConfig.ts"), join(__dirname, "example.experiment.json")];
+  it("场景 G CLI 只读与真实命令：本轮真实 facts 退出 0、三项不一致 fixture 退出 1 且三项齐报、坏输入退出 2；运行前后输入文件字节不变", () => {
+    const watched = [FACTS_EC0001, FACTS_HEALTHY, FACTS_MISMATCH, join(__dirname, "labConfig.ts"), join(__dirname, "example.experiment.json")];
     const before = watched.map(sha256Of);
-    // 健康：exit 0，报告 pass，config 来源指向实际 labConfig.ts 字节。
-    const healthy = spawnSync(process.execPath, [CLI, "--facts", FACTS_HEALTHY], { encoding: "utf8" });
+    // 健康对照使用当前编译配置匹配的本轮（Engine Continuation 0001）真实
+    // facts 副本：由本轮实机 meta-probe console 流 + 真实暂停点/管理时刻
+    // 装配（证据归档于 engine-continuation-0001/）；cal-0002 历史 healthy
+    // fixture 与冻结历史配置的配对核对由场景 B–F 覆盖。
+    const healthy = spawnSync(process.execPath, [CLI, "--facts", FACTS_EC0001], { encoding: "utf8" });
     expect(healthy.status).toBe(0);
     const healthyOutput = JSON.parse(healthy.stdout as string);
     expect(healthyOutput.report.status).toBe("pass");
@@ -267,7 +282,7 @@ describe("Control Remediation I —— Agent 独立增补反例（R02）", () =>
   it("配置侧 targetTick 非法（小数/负数/字符串/null）→ target_tick_reachable fail 且不崩溃", () => {
     for (const targetTick of [200.5, -1, "201", null]) {
       const report = checkLabCalibration(
-        { ...LAB_EXAMPLE_EXPERIMENT, targetTick: targetTick as unknown as number },
+        { ...CAL_0002_CONFIG, targetTick: targetTick as unknown as number },
         cloneFacts(loadHealthyFacts(true)),
       );
       expect(report.status).toBe("fail");
@@ -282,7 +297,7 @@ describe("Control Remediation I —— Agent 独立增补反例（R02）", () =>
     ]) {
       const facts = cloneFacts(loadHealthyFacts(true));
       mutate(facts.samples[0]);
-      const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+      const report = checkLabCalibration(CAL_0002_CONFIG, facts);
       expect(findItem(report, "quote", "quote_legal").result).toBe("fail");
       expect(findItem(report, "quote", "quote_stable").result).toBe("fail");
       expect(findItem(report, "quote", "cap_binds_quote").result).toBe("fail");
@@ -293,7 +308,7 @@ describe("Control Remediation I —— Agent 独立增补反例（R02）", () =>
     for (const pauseConfirmedTick of ["198", null, -1]) {
       const facts = cloneFacts(loadHealthyFacts(true));
       facts.context.pauseConfirmedTick = pauseConfirmedTick;
-      const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+      const report = checkLabCalibration(CAL_0002_CONFIG, facts);
       expect(findItem(report, "time_stability", "paused_confirmed").result).toBe("fail");
       expect(findItem(report, "time_stability", "target_tick_reachable").result).toBe("fail");
     }
@@ -317,7 +332,7 @@ describe("Control Remediation I —— Agent 独立增补反例（R02）", () =>
     for (const { mutate, category, item, stabilityItem } of cases) {
       const facts = cloneFacts(loadHealthyFacts(true));
       mutate(facts);
-      const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+      const report = checkLabCalibration(CAL_0002_CONFIG, facts);
       expect(findItem(report, category, item).result).toBe("fail");
       // 稳定且完整本身成立：非法的是数值语义，不是基线形状。
       expect(findItem(report, "resources", stabilityItem).result).toBe("pass");
@@ -330,7 +345,7 @@ describe("Control Remediation I —— Agent 独立增补反例（R02）", () =>
       sample.source.controller.level = 5;
       sample.target.controller.level = 5;
     }
-    const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, facts);
+    const report = checkLabCalibration(CAL_0002_CONFIG, facts);
     expect(findItem(report, "endpoints", "source_controller").result).toBe("fail");
     expect(findItem(report, "endpoints", "target_controller").result).toBe("fail");
     expect(findItem(report, "endpoints", "source_controller_stable").result).toBe("pass");
@@ -346,12 +361,12 @@ describe("Control Remediation I —— Agent 独立增补反例（R02）", () =>
       return facts;
     };
     // 健康三样本（196/197/198，T0=198 仍 ≥ maxTick）：正序与反序均 pass。
-    const healthyForward = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, threeSample());
+    const healthyForward = checkLabCalibration(CAL_0002_CONFIG, threeSample());
     expect(healthyForward.status).toBe("pass");
     const reversed = threeSample();
     reversed.samples.reverse();
     const before = JSON.stringify(reversed);
-    const healthyReversed = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, reversed);
+    const healthyReversed = checkLabCalibration(CAL_0002_CONFIG, reversed);
     expect(healthyReversed.status).toBe("pass");
     expect(JSON.stringify(reversed)).toBe(before);
     // 反序 + 中间（按 tick 197）样本 target.cooldown 缺失：完整性与充分性同时暴露，
@@ -360,7 +375,7 @@ describe("Control Remediation I —— Agent 独立增补反例（R02）", () =>
     withGap.samples.reverse();
     const mid = withGap.samples.find((sample: any) => sample.tick === 197);
     delete mid.target.cooldown;
-    const report = checkLabCalibration(LAB_EXAMPLE_EXPERIMENT, withGap);
+    const report = checkLabCalibration(CAL_0002_CONFIG, withGap);
     expect(report.status).toBe("fail");
     expect(findItem(report, "resources", "target_cooldown_complete").result).toBe("fail");
     expect(findItem(report, "resources", "target_cooldown_stable").result).toBe("fail");
@@ -370,17 +385,17 @@ describe("Control Remediation I —— Agent 独立增补反例（R02）", () =>
     const facts = cloneFacts(loadHealthyFacts(true));
     // maxTick=197、T0=198：旧式 T≥maxTick+3 在 T=200 也会通过（197+3=200），
     // 但 T0+3=201 才保证 T−2=198 晚于暂停点。
-    const t200 = checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, targetTick: 200 }, facts);
+    const t200 = checkLabCalibration({ ...CAL_0002_CONFIG, targetTick: 200 }, facts);
     expect(findItem(t200, "time_stability", "target_tick_reachable").result).toBe("fail");
-    const t201 = checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, targetTick: 201 }, facts);
+    const t201 = checkLabCalibration({ ...CAL_0002_CONFIG, targetTick: 201 }, facts);
     expect(findItem(t201, "time_stability", "target_tick_reachable").result).toBe("pass");
     // T0 与最后样本同 tick（197）时的边界：T=T0+3=200 合法（窗口首样本
     // T−2=198 晚于暂停点），T=199（<T0+3）仍 fail。
     const latePause = cloneFacts(loadHealthyFacts(true));
     latePause.context.pauseConfirmedTick = 197;
-    const t200b = checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, targetTick: 200 }, latePause);
+    const t200b = checkLabCalibration({ ...CAL_0002_CONFIG, targetTick: 200 }, latePause);
     expect(findItem(t200b, "time_stability", "target_tick_reachable").result).toBe("pass");
-    const t199b = checkLabCalibration({ ...LAB_EXAMPLE_EXPERIMENT, targetTick: 199 }, latePause);
+    const t199b = checkLabCalibration({ ...CAL_0002_CONFIG, targetTick: 199 }, latePause);
     expect(findItem(t199b, "time_stability", "target_tick_reachable").result).toBe("fail");
   });
 });

@@ -1,15 +1,17 @@
 /**
  * 实验配置（Terminal Transfer Engine Lab Prep I §4.2/§4.3 起源；
  * Run I Execution 2026-09-09 回填；Calibration Rerun 2026-09-09 纠错并
- * 于实机复验轮 S02/S03 重新读回绑定）。
+ * 于实机复验轮 S02/S03 重新读回绑定；Engine Continuation 0001 2026-09-09
+ * 再次绑定新一次性世界）。
  *
- * 当前值是 Calibration Rerun 实机复验轮（lab-run1-cal-0002）的真实绑定
- * 配置：新一次性隔离世界（worldSize 59）实测读回——shard Forst（meta-probe
- * 逐样本实测）、合成用户 lab-cal-user-0002（id c4c7544a1513ce9）、双
- * Terminal aa17545ac3100001/aa17545ac3100002、新鲜报价 q=26（绑定规则
- * cap=q）、T0=198（暂停复读确认）→ T=201=T0+3（窗口 199..221，T−2 可
- * 取得）。绑定经 C02 独立核对（facts：tick 196/197 稳定基线，晚于最后
- * 管理操作 bots.reload）。
+ * 当前值是 Engine Continuation 0001（lab-run1-ec-0001）准备阶段绑定配置：
+ * 新一次性隔离世界（worldSize 59）实测读回——shard Forst（meta-probe 逐样本
+ * 实测恒定）、合成用户 lab-ec-user-0001（id 48b86d847499b79）、双 Terminal
+ * ec0001aa57000001/ec0001aa57000002、新鲜报价 q=26（绑定规则 cap=q，本轮
+ * 41 个基线样本逐样本实测恒定）、暂停点 T0=160（暂停复读确认）。
+ * **targetTick=400 仅为准备阶段占位值**：准备入口（controlProbe）无 send
+ * 路径，该值不构成正式发送窗口；正式 T 在 facts 取得后按 T≥T0'+3 首次
+ * 固定（T0' 为 observe-armed 后的实际暂停点，另行提交）。
  *
  * 配置来源（当前唯一通道，编译时固定）：
  * - 本文件的实验配置是各产物共享的唯一配置来源；singleShot 模块据
@@ -56,20 +58,20 @@ export interface LabExperimentConfig {
   readonly maxSamples: number;
 }
 
-/** Calibration Rerun 实机复验轮真实配置（S02/S03 读回绑定；与 example.experiment.json 保持一致；probe.test 断言同步）。 */
+/** Engine Continuation 0001 准备阶段绑定配置（本轮实测读回；与 example.experiment.json 保持一致；历史 cal-0002 配置冻结于 tools/fixtures/review-base-config.json）。 */
 export const LAB_EXAMPLE_EXPERIMENT: LabExperimentConfig = {
-  experimentId: "lab-run1-cal-0002",
+  experimentId: "lab-run1-ec-0001",
   mode: "observer",
   shardName: "Forst",
-  username: "lab-cal-user-0002",
+  username: "lab-ec-user-0001",
   sourceRoomName: "W1N57",
   targetRoomName: "W10N57",
-  sourceTerminalId: "aa17545ac3100001",
-  targetTerminalId: "aa17545ac3100002",
+  sourceTerminalId: "ec0001aa57000001",
+  targetTerminalId: "ec0001aa57000002",
   resourceType: "H",
   amount: 100,
-  description: "lab-run1-cal-0002 W1N57 to W10N57 100H",
-  targetTick: 201,
+  description: "lab-run1-ec-0001 W1N57 to W10N57 100H",
+  targetTick: 400,
   maxFeeEnergy: 26,
   maxSamples: 32,
 };
