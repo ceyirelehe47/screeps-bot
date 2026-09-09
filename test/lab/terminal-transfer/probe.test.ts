@@ -33,7 +33,29 @@ import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runInNewContext } from "node:vm";
-import { LAB_EXAMPLE_EXPERIMENT } from "./labConfig";
+import { LAB_EXAMPLE_EXPERIMENT, LAB_STANDALONE_NO_SHARD_NAME, type LabExperimentConfig } from "./labConfig";
+
+/**
+ * Lab Prep I 历史配置 fixture（旧产物内嵌身份的完整记录）。Run I Execution
+ * §4.3 合法迁移后当前编译值已回填真实实验身份；旧产物（Remediation 归档
+ * single-shot）的反例/基线复现继续用本旧配置构造假世界——不混用两个身份。
+ */
+const LEGACY_EXPERIMENT: LabExperimentConfig = {
+  experimentId: "lab-prep1-example-0001",
+  mode: "observer",
+  shardName: "lab-synthetic-shard",
+  username: "lab-synthetic-user",
+  sourceRoomName: "W1N57",
+  targetRoomName: "W10N57",
+  sourceTerminalId: "lab-term-source-synthetic",
+  targetTerminalId: "lab-term-target-synthetic",
+  resourceType: "H",
+  amount: 100,
+  description: "lab-prep1 single-shot terminal transfer experiment",
+  targetTick: 12345,
+  maxFeeEnergy: 1000,
+  maxSamples: 32,
+};
 import {
   LAB_CONTROL_MEMORY_KEY,
   measureUtf8Bytes,
@@ -93,6 +115,8 @@ beforeEach(() => {
 interface LabWorldOptions {
   tick?: number;
   shardName?: string;
+  /** 模拟 standalone runtime（screeps@4.3.0）不暴露 Game.shard 的引擎形态。 */
+  noShardRuntime?: boolean;
   username?: string;
   sourceTerminalId?: string;
   targetTerminalId?: string;
@@ -178,11 +202,11 @@ function installLabWorld(options: LabWorldOptions = {}): LabWorld {
   // 交易视图按官方形状为**数组属性**（getter 求值：读异常仍可被探针 catch）。
   const game = {
     time: options.tick ?? config.targetTick,
-    shard: { name: options.shardName ?? config.shardName, type: "normal", ptr: false },
+    shard: options.noShardRuntime === true ? undefined : { name: options.shardName ?? config.shardName, type: "normal", ptr: false },
     rooms,
     market: {
       calcTransactionCost: (): number => {
-        const fee: number | { throws: Error } = options.fee ?? 26;
+        const fee: number | { throws: Error } = options.fee ?? LAB_EXAMPLE_EXPERIMENT.maxFeeEnergy;
         if (typeof fee === "object") {
           throw fee.throws;
         }
@@ -301,9 +325,9 @@ function buildOversizedControl(): Record<string, unknown> {
 }
 
 /** B2 记录（Remediation II §3.3）：受支持字段、合法形状的已结束记录（error 为 ASCII x）。 */
-function b2FinishedRecord(errorLength: number): Record<string, unknown> {
+function b2FinishedRecord(errorLength: number, experimentId: string = LAB_EXAMPLE_EXPERIMENT.experimentId): Record<string, unknown> {
   return {
-    experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId,
+    experimentId,
     armed: true,
     attempted: true,
     attemptedTick: LAB_EXAMPLE_EXPERIMENT.targetTick,
@@ -390,8 +414,27 @@ const VM_SCENARIOS: readonly VmScenarioRow[] = [
  * loop() 再推进一个 tick 调用——三时点累计 send spy 数即矩阵轨迹。
  * send spy 只记调用，不修改库存、冷却或交易记录。
  */
-function runVmScenario(bundleCode: string, scenario: VmScenarioRow): VmRunOutcome {
-  const config = LAB_EXAMPLE_EXPERIMENT;
+function runVmScenario(
+  bundleCode: string,
+  scenario: VmScenarioRow,
+  // 旧产物（Remediation 归档 single-shot，内嵌旧配置）传 LEGACY_EXPERIMENT；
+  // 新产物默认当前编译配置——Run I Execution §4.3 不混用两个身份。
+  experiment: LabExperimentConfig = LAB_EXAMPLE_EXPERIMENT,
+): VmRunOutcome {
+  const config = experiment;
+  const legacyArmed = (): Record<string, unknown> => ({
+    experimentId: config.experimentId,
+    armed: true,
+    attempted: false,
+  });
+  const legacyOversized = (): Record<string, unknown> => {
+    const bare = JSON.stringify(legacyArmed()).length;
+    const record = { ...legacyArmed(), note: "x".repeat(4090 - bare - 10) };
+    if (JSON.stringify(record).length !== 4090) {
+      throw new Error("note 补齐偏差——不应依赖手工数字符");
+    }
+    return record;
+  };
   const sendCalls: unknown[][] = [];
   const makeStore = (resources: Record<string, number>, freeCapacity: number) => ({
     ...resources,
@@ -424,12 +467,12 @@ function runVmScenario(bundleCode: string, scenario: VmScenarioRow): VmRunOutcom
       [config.sourceRoomName]: { name: config.sourceRoomName, terminal: sourceTerminal },
       [config.targetRoomName]: { name: config.targetRoomName, terminal: targetTerminal },
     },
-    market: { calcTransactionCost: () => 26, incomingTransactions: [], outgoingTransactions: [] },
+    market: { calcTransactionCost: () => config.maxFeeEnergy, incomingTransactions: [], outgoingTransactions: [] },
   };
   const memory: Record<string, unknown> = {};
   let stored: Record<string, unknown> | undefined;
   if (scenario.slotMode === "setter-throw" || scenario.slotMode === "silent-drop") {
-    stored = armedControl();
+    stored = legacyArmed();
     Object.defineProperty(memory, LAB_CONTROL_MEMORY_KEY, {
       configurable: true,
       enumerable: true,
@@ -441,13 +484,13 @@ function runVmScenario(bundleCode: string, scenario: VmScenarioRow): VmRunOutcom
       },
     });
   } else if (scenario.slotMode === "oversized") {
-    memory[LAB_CONTROL_MEMORY_KEY] = buildOversizedControl();
+    memory[LAB_CONTROL_MEMORY_KEY] = legacyOversized();
   } else if (scenario.slotMode === "b2-oversized") {
-    memory[LAB_CONTROL_MEMORY_KEY] = b2FinishedRecord(5000);
+    memory[LAB_CONTROL_MEMORY_KEY] = b2FinishedRecord(5000, config.experimentId);
   } else if (scenario.slotMode === "unarmed") {
-    memory[LAB_CONTROL_MEMORY_KEY] = { ...armedControl(), armed: false };
+    memory[LAB_CONTROL_MEMORY_KEY] = { ...legacyArmed(), armed: false };
   } else {
-    memory[LAB_CONTROL_MEMORY_KEY] = armedControl();
+    memory[LAB_CONTROL_MEMORY_KEY] = legacyArmed();
   }
   const logLines: string[] = [];
   const vmConsole = { log: (...args: unknown[]) => logLines.push(args.map(String).join(" ")) };
@@ -627,7 +670,7 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
       expect(sample.target.resourceAmount).toBe(0);
       expect(sample.target.freeCapacity).toBe(100_000);
       expect(sample.feeQuote.status).toBe("ok");
-      expect(sample.feeQuote.energyCost).toBe(26); // 读自 stub 端口（非硬编码进产物）
+      expect(sample.feeQuote.energyCost).toBe(LAB_EXAMPLE_EXPERIMENT.maxFeeEnergy); // 读自 stub 端口（非硬编码进产物）
       expect(sample.transactions.incoming.status).toBe("ok");
       expect(sample.transactions.incoming.count).toBe(0);
       expect(sample.transactions.outgoing.status).toBe("ok");
@@ -731,6 +774,41 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
       expect(rejections[0].note).toContain("探针前置拒绝");
       world.restore();
     }
+  });
+
+  it("Run I Execution 修复提案：standalone 无 Game.shard——配置显式声明约定值才通过；声明具体名仍 shard_mismatch", () => {
+    // 通过分支：引擎无 Game.shard（screeps@4.3.0 standalone 实测形态）+ 配置
+    // 显式声明无 shard 约定值（当前编译配置即 LAB_STANDALONE_NO_SHARD_NAME）。
+    expect(LAB_EXAMPLE_EXPERIMENT.shardName).toBe(LAB_STANDALONE_NO_SHARD_NAME);
+    const okWorld = installLabWorld({ noShardRuntime: true });
+    okWorld.memory[LAB_CONTROL_MEMORY_KEY] = armedControl();
+    let capture = captureConsoleLog();
+    try {
+      requireArtifact(artifacts.singleShotBundle).loop();
+    } finally {
+      capture.restore();
+    }
+    expect(okWorld.sendCalls).toHaveLength(1);
+    expect(okWorld.memory[LAB_CONTROL_MEMORY_KEY]).toMatchObject({ attempted: true, stopped: true });
+    okWorld.restore();
+
+    // 拒绝分支（修复前行为对照）：引擎无 Game.shard + 旧产物（归档字节，
+    // 修复前的 `Game.shard.name` 直接读取）——读取即 throw，以 world_read_error
+    // 拒绝。该对照证明修复前 single-shot 在 standalone 引擎上无法通过 shard
+    // 校验（Run I Execution 修复提案的直接依据）。
+    const legacyWorld = installLabWorld({ noShardRuntime: true });
+    legacyWorld.memory[LAB_CONTROL_MEMORY_KEY] = armedControl({ experimentId: LEGACY_EXPERIMENT.experimentId });
+    capture = captureConsoleLog();
+    try {
+      requireArtifact(LEGACY_SINGLE_SHOT_BUNDLE).loop();
+    } finally {
+      capture.restore();
+    }
+    expect(legacyWorld.sendCalls).toEqual([]);
+    const rejections = parseLabRecords(capture.lines).filter((record) => record.kind === "lab-precondition-rejection");
+    expect(rejections).toHaveLength(1);
+    expect(rejections[0].reason).toBe("world_read_error");
+    legacyWorld.restore();
   });
 
   it("single-shot 错 shard/用户/结构/tick 与已尝试——零调用，拒绝原因逐项明确", () => {
@@ -906,7 +984,7 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
       (world.game as { time: number }).time = LAB_EXAMPLE_EXPERIMENT.targetTick + 1;
       const sourceStore = (world.sourceTerminal as { store: Record<string, number> }).store;
       sourceStore.H = 900;
-      sourceStore.energy = 10_000 - 26;
+      sourceStore.energy = 10_000 - LAB_EXAMPLE_EXPERIMENT.maxFeeEnergy;
       const targetTerminal = ((world.game as { rooms: Record<string, { terminal: { store: Record<string, number> } }> }).rooms)[
         LAB_EXAMPLE_EXPERIMENT.targetRoomName
       ].terminal;
@@ -924,7 +1002,7 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
       const later = samples[0];
       expect(later.tick).toBe(LAB_EXAMPLE_EXPERIMENT.targetTick + 1);
       expect(later.source.resourceAmount).toBe(900);
-      expect(later.source.energy).toBe(10_000 - 26);
+      expect(later.source.energy).toBe(10_000 - LAB_EXAMPLE_EXPERIMENT.maxFeeEnergy);
       expect(later.target.resourceAmount).toBe(100);
       expect(later.transactions.incoming.records).toEqual([mirror]);
       expect(later.transactions.outgoing.records).toEqual([mirror]); // 同 ID 镜像
@@ -942,7 +1020,7 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
     const code = bytes.toString("utf8");
     const rows = VM_SCENARIOS.map((scenario) => ({
       scenario: scenario.label,
-      outcome: runVmScenario(code, scenario),
+      outcome: runVmScenario(code, scenario, LEGACY_EXPERIMENT),
     }));
     console.log(`Q01-BASELINE ${JSON.stringify(rows)}`);
     const byLabel = new Map(rows.map((row) => [row.scenario, row.outcome]));
@@ -1341,7 +1419,7 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
       sendBehavior: "throw-nonascii",
       reloadAtTargetTick: true,
     };
-    const legacy = runVmScenario(readFileSync(LEGACY_SINGLE_SHOT_BUNDLE, "utf8"), scenario);
+    const legacy = runVmScenario(readFileSync(LEGACY_SINGLE_SHOT_BUNDLE, "utf8"), scenario, LEGACY_EXPERIMENT);
     const fixed = runVmScenario(bundleSource, scenario);
     console.log(`R03-B1 ${JSON.stringify({ legacy, fixed })}`);
     // 旧产物（R01 基线缺口）：send 恰一次后超限结果仍写入——字符 ≤4096、字节 >4096。
@@ -1411,7 +1489,7 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
     }
     // 产物 VM 对照：旧产物读取健康误判只撞 already_stopped；新产物在控制读取阶段拒绝。
     const scenario: VmScenarioRow = { label: "B2 受支持字段超限", slotMode: "b2-oversized", sendBehavior: "ok" };
-    const legacy = runVmScenario(readFileSync(LEGACY_SINGLE_SHOT_BUNDLE, "utf8"), scenario);
+    const legacy = runVmScenario(readFileSync(LEGACY_SINGLE_SHOT_BUNDLE, "utf8"), scenario, LEGACY_EXPERIMENT);
     const fixed = runVmScenario(readFileSync(artifacts.singleShotBundle, "utf8"), scenario);
     console.log(`R03-B2 ${JSON.stringify({ legacy, fixed })}`);
     expect(legacy.rejections).toEqual(["already_stopped", "already_stopped", "already_stopped"]); // 旧读取健康误判

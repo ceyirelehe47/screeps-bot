@@ -1,5 +1,20 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Terminal Transfer Engine Lab Run I · Execution（2026-09-09，已授权）
+
+真实引擎实验执行轮（接续任务书 treasury-terminal-transfer-engine-lab-run-I-execution-continuation.md；验收索引 S01–S06）。授权来源：用户会话明确回复「我给予你离线授权, 不接入线上服务器即可」（§0 范围一致：本机一次性隔离环境、最多一次发送 100H、证据保存后停止清理、不接线上/正式服/PTR/真实账号）。
+
+- [x] S01 授权／隔离／版本：专用根目录隔离安装 screeps@4.3.0（子模块 engine 4.3.0/driver 5.3.0/backend 3.3.0/common 2.16.0/launcher 4.2.0/storage 5.1.3；独立 lockfile d95c2c12…；Node 22.19.0/npm 10.9.3）；init 专用世界（合成占位 steam key，认证路径未使用）；host=127.0.0.1 仅本机监听（21025/21026/21027）；环境兼容事实归档：backend CLI 管道断开触发 readline ECONNRESET 崩溃（改用直连 storage 管理脚本绕开）、运行中新增房间使 runner staticTerrainData 过期（map.updateTerrainData+重启 runner 恢复，Terrain buffer 372500B/149 房）
+- [x] S02 真实只读基线：CLI 暂停→map.generateRoom W1N57/W10N57（各 2 source+controller+mineral）→bots.spawn labrun1（合成 bot lab-synthetic-user，gcl 8）→管理员初始化（双 controller level 8 归属、双 Terminal 插入与初始库存 源 1000H+10000E/目标 0H+2000E、init 快照归档）；observer 字节双装载（main+observer，回读 UTF-8 重算 hash=归档 96721926…）作只读启动；修正格式外部收集器（storage pubsub 直订 user:<id>/console）实测收流：干净基线 32 样本 tick 492..523 + phase0 370..402；真实读数：结构 ID/归属/库存/freeCapacity/交易 0/**报价 q=10**（引擎环绕距离公式）；无其他 writer
+- [x] 配置回填与 §4.3 迁移：labConfig.ts 回填真实身份（lab-run1-exec-0001、standalone-no-shard、b0254105a49b92c/c61a4141a4a9fcb、T=557（T0 554+3）、maxFee=10、描述 ≤100 ASCII）；example.experiment.json 同步；probe.test 旧产物反例世界切换 LEGACY_EXPERIMENT fixture（不混用两个身份）、stub fee 引用化；runI.test 断言迁移（三 manifest 自洽、内嵌同一配置、归档历史身份完整、当前产物≠归档字节——逻辑等价由验证命令组源码 diff 证明）
+- [x] sendGate 无 shard 引擎兼容修复（单列提案 terminal-transfer-lab-run1-shard-gate-compatibility.md）：standalone runtime 无 Game.shard→原读取必 world_read_error 永拒；引入 LAB_STANDALONE_NO_SHARD_NAME 约定值仅显式声明才放行（强度不降）；probe.test 新增修复专项用例（通过分支+旧产物修复前行为对照）；实机症状归档 engine-run/api-incompatibility-game-shard.md
+- [x] 三产物真实配置重建：observer 10193B/04fac1c2…、single-shot 29139B/3266d7b2…、main 8754B/3e944685…（PREPARED_NOT_RUN）
+- [ ] 固定 VALIDATION_HEAD + §6.1 离线验证命令组（四组冻结/typecheck×2/构建/三 lab 构建/六组 Jest/budget/diff-check/前后零写入）+ 第二树复验
+- [ ] S03 装载回读：bot AI 目录换正式三模块 + bots.reload 形成新观察窗口 + 活动代码回读 UTF-8 hash 核对 + 控制记录武装（≤4096B）回读确认
+- [ ] S03/S04 单次发送与完整观察：resume 后 main 在 T=557 调 single-shot 真实 API 发送 100H（一次武装一次尝试）；T−2..T+20 全窗口采样、发送边界事实、库存/费用/容量/冷却/交易镜像取证；180 秒或 T+20 保护
+- [ ] S05 停止与无污染：窗口结束暂停/撤装/快照（静止后导出）/停止本次进程组/仅清理本次新建数据
+- [ ] S06 验证归档与判定：主报告（原始产物/版本/顺序/停止事实/离线复验/实机结论分列；状态按事实 ENGINE_LAB_PASS/MISMATCH/INCONCLUSIVE）、线性提交推送、CI 查询
+
 ## Terminal Transfer Engine Lab Run I · Wiring Remediation I（2026-09-09）
 
 修复 Run I 新增 main 的装配失败分支：observer 无法加载（require 抛错或导出不合法）时仍继续解析并调用 single-shot 导致发送发生（任务书 treasury-terminal-transfer-engine-lab-run-I-wiring-remediation-I-implementation.md；验收索引 T01–T04）。修复为单向依赖——发送依赖观察装配，观察不依赖发送装配；生产/配置/Slice/构建器/lab 既有源文件全部冻结；真实引擎仍 AUTHORIZATION_REQUIRED／NOT_RUN。

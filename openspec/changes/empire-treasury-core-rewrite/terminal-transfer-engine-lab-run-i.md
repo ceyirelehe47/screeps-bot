@@ -60,9 +60,47 @@ tick 重复调用与 T+1 均无发送、T+1 恢复真实 observer 继续观察�
 observer／single-shot 产物与 Remediation II 归档**逐字节一致**（main 按
 本轮实际构建身份核验）。
 
-`labConfig.ts` 仍为唯一编译配置来源；真实实验身份（实验 ID／用户名／shard／
-结构 ID／目标 tick／费用上限）须在真实世界读回后填写并重新提交、构建、
-验证（任务书 §4.3），当前仍为合成示例值，不可发送。
+`labConfig.ts` 仍为唯一编译配置来源。**Execution 轮（2026-09-09）已回填
+真实实验身份**（见下节），合成示例值作为旧配置 fixture（LEGACY_EXPERIMENT）
+保留于 probe.test，历史归档产物字节不再与当前产物相等（§4.3 合法迁移）。
+
+## 2a. Execution 轮交付（2026-09-09，已授权执行）
+
+用户授权来源：会话明确回复「我给予你离线授权, 不接入线上服务器即可」
+（范围＝任务书 §0：本机一次性隔离环境、最多一次发送 100H、证据保存后
+停止清理、不接入线上/正式服/PTR/真实账号）。实机结论见主报告与本文件
+`evidence/terminal-transfer-engine-lab-run-i/engine-run/`。
+
+真实实验身份（labConfig 当前编译值，来源＝隔离世界实测读回）：
+
+| 项 | 值 |
+| --- | --- |
+| experimentId | `lab-run1-exec-0001`（描述 `lab-run1-exec-0001 W1N57 to W10N57 100H`） |
+| shardName | `standalone-no-shard`（无 shard 引擎约定值，见修复提案） |
+| username / 房间 | `lab-synthetic-user`；W1N57 → W10N57（同一合成 bot 拥有） |
+| 结构 ID | 源 `b0254105a49b92c`、目标 `c61a4141a4a9fcb`（初始化读回） |
+| targetTick | 557（暂停时刻 T0=554+3；窗口 555..577） |
+| maxFeeEnergy | 10（基线实测报价：引擎环绕距离公式 `ceil(100×(1−e^(−3/30)))`） |
+| 费用口径 | 报价与 send 扣费同走 `calcTerminalEnergyCost(calcRoomsDistance(continuous))`，runner/processor 共用同一实现与启动时 worldSize |
+
+真实配置下的三产物身份（`PREPARED_NOT_RUN`，装载前记录）：
+observer 10193 字节／SHA-256 `04fac1c2e76c0efe95dbc30f5591b2031a299368cfe793a6c3ca8119b7d5d8c2`；
+single-shot 29139 字节／`3266d7b280688bcbc2156adcf1b3876ca5034c52344f2bd0aa3cb1e8373988e3`；
+main 8754 字节／`3e944685b0023b0a41d7dfb6fe80fedd2d08cfe96ef4f940a38ebc12f23cdbdc`。
+
+**sendGate 无 shard 引擎兼容修复（单列提案）**：standalone runtime 的
+`Game` 不暴露 `shard`，原 `Game.shard.name` 直接读取使门禁在该引擎上
+永远 `world_read_error` 拒绝。修复引入 `LAB_STANDALONE_NO_SHARD_NAME`
+约定值：仅当配置**显式声明**该值且引擎读不出 shard 时通过；任何声明与
+读数不符仍拒绝（强度不降）。详见
+`terminal-transfer-lab-run1-shard-gate-compatibility.md` 与
+`evidence/terminal-transfer-engine-lab-run-i/engine-run/api-incompatibility-game-shard.md`。
+
+离线自测相应变化：probe.test 23 用例（新增修复专项用例：无 shard 引擎
+通过分支 + 旧产物修复前 `world_read_error` 行为对照；旧产物反例世界切换
+为 LEGACY_EXPERIMENT 旧配置 fixture——§4.3 不混用两个身份）；runI.test
+12 用例（三 manifest 自洽、内嵌同一配置、归档历史身份完整、当前产物
+不再等于归档字节）。
 
 ## 3. 授权后动作顺序（概要；命令参数以实际安装版本核对为准）
 

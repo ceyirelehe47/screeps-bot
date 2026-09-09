@@ -17,8 +17,11 @@
  * single-shot 的解析与调用（零 send、控制槽零触碰）；single-shot 不可用
  * 不阻断观察（反方向对照）；同 T 重复调用目标 tick 不增发。
  *
- * 另锁一个构建器事实：--mode run-i-main 加入后，observer/single-shot 两
- * 产物必须与 Remediation II 归档产物逐字节一致（构建器扩展零影响）。
+ * 另锁一个构建器身份事实（Run I Execution §4.3 合法迁移后）：三产物
+ * manifest 声明与实际文件 hash 一致；三模块内嵌同一份已固定编译配置；
+ * Remediation II 归档产物保留旧配置下的历史身份（完整性核对不变），
+ * 当前产物因配置回填不再与归档逐字节相等——叶子逻辑等价由验证命令组
+ * 的源码 diff 证明（允许清单：labConfig/sendGate 修复与测试迁移）。
  */
 
 import { spawnSync } from "node:child_process";
@@ -175,7 +178,7 @@ function loadRunIWorld(options: RunIWorldOptions): RunIWorld {
       [config.sourceRoomName]: { name: config.sourceRoomName, terminal: sourceTerminal },
       [config.targetRoomName]: { name: config.targetRoomName, terminal: targetTerminal },
     },
-    market: { calcTransactionCost: () => 26, incomingTransactions: [], outgoingTransactions: [] },
+    market: { calcTransactionCost: () => LAB_EXAMPLE_EXPERIMENT.maxFeeEnergy, incomingTransactions: [], outgoingTransactions: [] },
   };
   const memory: Record<string, unknown> = {};
   const initialControl = { experimentId: config.experimentId, armed: true, attempted: false };
@@ -279,27 +282,42 @@ function runTicks(world: RunIWorld, first: number, last: number): void {
 // ── 用例 ─────────────────────────────────────────────────────────────────────
 
 describe("Terminal Transfer Engine Lab Run I——离线接线自测（main × observer × single-shot）", () => {
-  it("三产物构建与清单：run-i-main manifest 身份自洽；observer/single-shot 与 Remediation II 归档逐字节一致；main 静态面（require 两模块、无 send 调用面、无控制槽键）", () => {
-    // run-i-main 清单身份（自洽式：manifest 声明与实际产物一致）。
+  it("三产物构建与清单：三 manifest 身份自洽且与实际文件一致；三模块内嵌同一已固定配置；Remediation II 归档历史身份完整；main 静态面（require 两模块、无 send 调用面、无控制槽键）", () => {
+    // 三产物清单身份（自洽式：manifest 声明与实际产物一致）。
     expect(artifacts.mainManifest.mode).toBe("run-i-main");
     expect(artifacts.mainManifest.entry).toBe("runIMain.ts");
     expect(artifacts.mainManifest.status).toBe("PREPARED_NOT_RUN");
     expect(artifacts.mainManifest.output.file).toBe("main.js");
+    for (const bundlePath of [artifacts.mainBundle, artifacts.observerBundle, artifacts.singleShotBundle]) {
+      const manifest = JSON.parse(readFileSync(join(bundlePath, "..", "manifest.json"), "utf8"));
+      const body = readFileSync(join(bundlePath, "..", manifest.output.file));
+      expect(body.length).toBe(manifest.output.bytes);
+      expect(createHash("sha256").update(body).digest("hex")).toBe(manifest.output.sha256);
+    }
     const mainBundle = readFileSync(artifacts.mainBundle);
     expect(mainBundle.length).toBe(artifacts.mainManifest.output.bytes);
     expect(createHash("sha256").update(mainBundle).digest("hex")).toBe(artifacts.mainManifest.output.sha256);
 
-    // 构建器加入第三模式后，旧两模式产物必须与 Remediation II 归档逐字节一致。
-    const rebuiltObserver = readFileSync(artifacts.observerBundle);
-    const rebuiltSingleShot = readFileSync(artifacts.singleShotBundle);
+    // observer/single-shot 内嵌同一份已固定编译配置（Run I Execution 真实
+    // 身份；main 是薄装配入口，只内嵌窗口 tick，不复制结构身份）。
+    for (const code of [artifacts.observerCode, artifacts.singleShotCode]) {
+      expect(code).toContain(`"${LAB_EXAMPLE_EXPERIMENT.experimentId}"`);
+      expect(code).toContain(`"${LAB_EXAMPLE_EXPERIMENT.sourceTerminalId}"`);
+      expect(code).toContain(`"${LAB_EXAMPLE_EXPERIMENT.targetTerminalId}"`);
+      expect(code).toContain(`"${LAB_EXAMPLE_EXPERIMENT.shardName}"`);
+    }
+    expect(artifacts.mainCode).toContain(String(LAB_EXAMPLE_EXPERIMENT.targetTick));
+
+    // Remediation II 归档保留旧配置历史身份（证据完整性；当前产物因配置
+    // 回填合法不等——§4.3 迁移，逻辑等价由验证命令组源码 diff 证明）。
     const archivedObserver = readFileSync(ARCHIVED_OBSERVER);
     const archivedSingleShot = readFileSync(ARCHIVED_SINGLE_SHOT);
     expect(archivedObserver.length).toBe(ARCHIVED_OBSERVER_IDENTITY.bytes);
     expect(createHash("sha256").update(archivedObserver).digest("hex")).toBe(ARCHIVED_OBSERVER_IDENTITY.sha256);
     expect(archivedSingleShot.length).toBe(ARCHIVED_SINGLE_SHOT_IDENTITY.bytes);
     expect(createHash("sha256").update(archivedSingleShot).digest("hex")).toBe(ARCHIVED_SINGLE_SHOT_IDENTITY.sha256);
-    expect(rebuiltObserver.equals(archivedObserver)).toBe(true);
-    expect(rebuiltSingleShot.equals(archivedSingleShot)).toBe(true);
+    expect(readFileSync(artifacts.observerBundle).equals(archivedObserver)).toBe(false);
+    expect(readFileSync(artifacts.singleShotBundle).equals(archivedSingleShot)).toBe(false);
     expect(statSync(artifacts.mainBundle).isFile()).toBe(true);
 
     // main 静态面：经 Screeps 模块系统引用两产物；自身零发送面、零控制槽访问。
