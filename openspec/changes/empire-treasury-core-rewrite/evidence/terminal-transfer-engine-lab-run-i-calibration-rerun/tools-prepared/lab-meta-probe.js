@@ -50,7 +50,9 @@ function readEndpoint(roomName) {
       terminalId: terminal.id,
       ownerUsername: terminal.owner !== undefined && terminal.owner !== null ? terminal.owner.username : undefined,
       my: terminal.my === true,
-      isActive: terminal.isActive === true,
+      // 真实引擎 isActive 是方法（准备件初版误当属性读出 false，未武装
+      // 阶段修正）；对方法调用取值，对布尔属性直接读。
+      isActive: typeof terminal.isActive === "function" ? terminal.isActive() === true : terminal.isActive === true,
       controller: readController(room.controller),
       resourceAmount: store[PROBE.resourceType] !== undefined ? store[PROBE.resourceType] : 0,
       energy: store.energy !== undefined ? store.energy : 0,

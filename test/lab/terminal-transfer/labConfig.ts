@@ -1,13 +1,15 @@
 /**
  * 实验配置（Terminal Transfer Engine Lab Prep I §4.2/§4.3 起源；
- * Run I Execution 2026-09-09 回填；Calibration Rerun 2026-09-09 纠错）。
+ * Run I Execution 2026-09-09 回填；Calibration Rerun 2026-09-09 纠错并
+ * 于实机复验轮 S02/S03 重新读回绑定）。
  *
- * 当前值是 Engine Lab Run I 执行轮一次性隔离世界的**历史配置**（已按
- * Calibration Rerun 纠错：源结构 ID 更正为 b0254141a49b92c、shard 更正
- * 为该轮窗口后只读探查实测的 "Forst"、费用上限更正为窗口报价 26）。
- * 该世界已停止并清理，本配置**未绑定任何新实验**：不得据此武装或发送。
- * 新实验必须在 S02 取得稳定只读事实后重新读取并绑定全部身份（实验 ID、
- * 用户、shard、结构 ID、报价、T），经独立配置核对（C02）后再回填本文件。
+ * 当前值是 Calibration Rerun 实机复验轮（lab-run1-cal-0002）的真实绑定
+ * 配置：新一次性隔离世界（worldSize 59）实测读回——shard Forst（meta-probe
+ * 逐样本实测）、合成用户 lab-cal-user-0002（id c4c7544a1513ce9）、双
+ * Terminal aa17545ac3100001/aa17545ac3100002、新鲜报价 q=26（绑定规则
+ * cap=q）、T0=198（暂停复读确认）→ T=201=T0+3（窗口 199..221，T−2 可
+ * 取得）。绑定经 C02 独立核对（facts：tick 196/197 稳定基线，晚于最后
+ * 管理操作 bots.reload）。
  *
  * 配置来源（当前唯一通道，编译时固定）：
  * - 本文件的实验配置是各产物共享的唯一配置来源；singleShot 模块据
@@ -20,12 +22,10 @@
  * - 更换实验配置属于源码变化：改本文件 → 同步文档示例 → 重新固定源码
  *   提交 → 重建入口并核对新产物 hash；不允许只改已构建 JS 而沿用
  *   原 hash 与验证声明。
- * - 历史身份：Lab Prep I / Lab Run I 离线轮的合成示例值
- *   （lab-prep1-example-0001、lab-synthetic-shard、lab-term-*-synthetic、
- *   targetTick 12345、maxFeeEnergy 1000）与 Run I Execution 的 sentinel
- *   期编译值（shardName "standalone-no-shard"、源 ID b0254105a49b92c、
- *   maxFeeEnergy 10）均作为旧配置 fixture 记录于测试与历史归档产物，
- *   不是当前编译值；sentinel 约定本身已随 Calibration Rerun C01 撤销。
+ * - 历史身份：Lab Prep I / Lab Run I 离线轮合成示例值、Run I Execution
+ *   sentinel 期编译值与纠错后历史配置（lab-run1-exec-0001、
+ *   b0254141a49b92c、lab-synthetic-user）均作为旧配置 fixture 记录于
+ *   测试与历史归档产物，不是当前编译值；sentinel 约定已随 C01 撤销。
  *
  * 本文件属于 test/lab 实验包：不导入生产模块，不进入生产 bundle，
  * 不复制国库的授权/重试/清理/对账机制。
@@ -56,20 +56,20 @@ export interface LabExperimentConfig {
   readonly maxSamples: number;
 }
 
-/** Run I 执行轮历史配置（已纠错、未绑定新实验；与 example.experiment.json 保持一致；probe.test 断言同步）。 */
+/** Calibration Rerun 实机复验轮真实配置（S02/S03 读回绑定；与 example.experiment.json 保持一致；probe.test 断言同步）。 */
 export const LAB_EXAMPLE_EXPERIMENT: LabExperimentConfig = {
-  experimentId: "lab-run1-exec-0001",
+  experimentId: "lab-run1-cal-0002",
   mode: "observer",
   shardName: "Forst",
-  username: "lab-synthetic-user",
+  username: "lab-cal-user-0002",
   sourceRoomName: "W1N57",
   targetRoomName: "W10N57",
-  sourceTerminalId: "b0254141a49b92c",
-  targetTerminalId: "c61a4141a4a9fcb",
+  sourceTerminalId: "aa17545ac3100001",
+  targetTerminalId: "aa17545ac3100002",
   resourceType: "H",
   amount: 100,
-  description: "lab-run1-exec-0001 W1N57 to W10N57 100H",
-  targetTick: 557,
+  description: "lab-run1-cal-0002 W1N57 to W10N57 100H",
+  targetTick: 201,
   maxFeeEnergy: 26,
   maxSamples: 32,
 };

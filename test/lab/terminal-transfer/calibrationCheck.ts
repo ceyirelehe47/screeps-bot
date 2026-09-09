@@ -360,9 +360,11 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
     }
   }
   {
+    // 暂停确认不早于最后基线样本（pause 命令后允许在途 tick 完成再静止，
+    // 实机时序：玩家样本止于 197、管理侧复读确认在 198）。
     const pausedOk = facts.context.paused === true && finiteNumber(facts.context.pauseConfirmedTick);
-    checks.boolean("time_stability", "paused_confirmed", pausedOk && maxTick !== undefined && facts.context.pauseConfirmedTick === maxTick, {
-      expected: "已暂停且 T0=最后基线 tick（重复只读核对后确认）",
+    checks.boolean("time_stability", "paused_confirmed", pausedOk && maxTick !== undefined && (facts.context.pauseConfirmedTick as number) >= maxTick, {
+      expected: "已暂停且 T0≥最后基线 tick（重复只读核对后确认）",
       observed: `paused=${String(facts.context.paused)} pauseConfirmedTick=${String(facts.context.pauseConfirmedTick)} 最后样本 tick=${String(maxTick)}`,
     });
     const reachable = pausedOk && maxTick !== undefined && config.targetTick >= maxTick + 3 && config.targetTick > (facts.context.pauseConfirmedTick ?? Number.NEGATIVE_INFINITY);

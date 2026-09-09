@@ -887,14 +887,22 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
       world.restore();
     }
     // 前后对照（接受集合扩大的直接证据，函数级→产物级）：sentinel 期归档产物
-    // 在同一"无 Game.shard"输入、其余条件匹配其内嵌旧配置（源 b0254105…、
-    // 报价 10 ≤ cap 10）时放行并发送一次——该分支即本轮撤销的对象；历史
-    // 归档字节保持不变。
+    // 在同一"无 Game.shard"输入、其余条件匹配其内嵌旧配置（用户
+    // lab-synthetic-user、tick 557、源 b0254105…、目标 c61a4141…、报价 10
+    // ≤ cap 10）时放行并发送一次——该分支即本轮撤销的对象；历史归档字节
+    // 保持不变（绑定迁移后新编译身份与之不同，世界按其内嵌旧身份显式构造）。
     const sentinelBytes = readFileSync(SENTINEL_ERA_BUNDLE);
     expect(sentinelBytes.length).toBe(SENTINEL_ERA_BYTES);
     expect(createHash("sha256").update(sentinelBytes).digest("hex")).toBe(SENTINEL_ERA_SHA256);
-    const sentinelWorld = installLabWorld({ noShardRuntime: true, sourceTerminalId: "b0254105a49b92c", fee: 10 });
-    sentinelWorld.memory[LAB_CONTROL_MEMORY_KEY] = armedControl();
+    const sentinelWorld = installLabWorld({
+      noShardRuntime: true,
+      username: "lab-synthetic-user",
+      tick: 557,
+      sourceTerminalId: "b0254105a49b92c",
+      targetTerminalId: "c61a4141a4a9fcb",
+      fee: 10,
+    });
+    sentinelWorld.memory[LAB_CONTROL_MEMORY_KEY] = armedControl({ experimentId: "lab-run1-exec-0001" });
     const sentinelCapture = captureConsoleLog();
     try {
       requireArtifact(SENTINEL_ERA_BUNDLE).loop();
@@ -910,47 +918,51 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
   });
 
   it("Calibration 场景 A 旧事故链门禁复现（跨时间资料构造的离线诊断场景）：旧编译配置 shard_mismatch → 改 Forst 后 structure_mismatch → 纠正源 ID 后 fee_over_budget → cap 设 26 后 proceed", () => {
-    // 固定独立世界 fixture：源 b0254141a49b92c（该轮初始化/终态实测值）、
-    // 目标 c61a4141a4a9fcb、报价 26、shard Forst（窗口后只读探查实测名）。
-    // 本场景是离线诊断构造，不是 T557 世界的无损重放；26 只用于历史反例
-    // 与合法对照，不能成为新实验常数。
-    const fixedWorld = () => installLabWorld({ shardName: "Forst", sourceTerminalId: "b0254141a49b92c", fee: 26 });
-    const control = {
+    // 固定独立世界 fixture＝上轮事故身份：源 b0254141a49b92c（该轮初始化/
+    // 终态实测值）、目标 c61a4141a4a9fcb、报价 26、shard Forst（窗口后只读
+    // 探查实测名）、用户 lab-synthetic-user、tick 557。本场景是离线诊断
+    // 构造，不是 T557 世界的无损重放；26 只用于历史反例与合法对照，不能
+    // 成为新实验常数。绑定迁移后当前编译身份（lab-run1-cal-0002 世界）
+    // 与本事故族不同，故事故链配置显式声明、不隐式跟随当前编译值。
+    const incidentWorld = () =>
+      installLabWorld({
+        shardName: "Forst",
+        username: "lab-synthetic-user",
+        tick: 557,
+        sourceTerminalId: "b0254141a49b92c",
+        targetTerminalId: "c61a4141a4a9fcb",
+        fee: 26,
+      });
+    const incidentControl = {
       status: "ok" as const,
-      record: { experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId, armed: true, attempted: false },
+      record: { experimentId: "lab-run1-exec-0001", armed: true, attempted: false },
     };
-    // 函数级输入按 singleShot.ts 派生规则自覆盖 mode（调用版模式）。
-    const singleShotVariant = (overrides: Partial<LabExperimentConfig>): LabExperimentConfig => ({
-      ...LAB_EXAMPLE_EXPERIMENT,
-      mode: "single-shot",
-      ...overrides,
-    });
     const steps: readonly { label: string; config: LabExperimentConfig; expected: string }[] = [
       {
         label: "旧编译配置（sentinel shard + 源 ID b0254105 + cap 10）",
-        config: singleShotVariant({ shardName: "standalone-no-shard", sourceTerminalId: "b0254105a49b92c", maxFeeEnergy: 10 }),
+        config: { ...LAB_EXAMPLE_EXPERIMENT, mode: "single-shot", experimentId: "lab-run1-exec-0001", username: "lab-synthetic-user", targetTerminalId: "c61a4141a4a9fcb", targetTick: 557, shardName: "standalone-no-shard", sourceTerminalId: "b0254105a49b92c", maxFeeEnergy: 10 },
         expected: "shard_mismatch",
       },
       {
         label: "只将配置 shard 改为 Forst",
-        config: singleShotVariant({ shardName: "Forst", sourceTerminalId: "b0254105a49b92c", maxFeeEnergy: 10 }),
+        config: { ...LAB_EXAMPLE_EXPERIMENT, mode: "single-shot", experimentId: "lab-run1-exec-0001", username: "lab-synthetic-user", targetTerminalId: "c61a4141a4a9fcb", targetTick: 557, shardName: "Forst", sourceTerminalId: "b0254105a49b92c", maxFeeEnergy: 10 },
         expected: "structure_mismatch",
       },
       {
         label: "再将源 ID 纠正为 b0254141a49b92c",
-        config: singleShotVariant({ shardName: "Forst", sourceTerminalId: "b0254141a49b92c", maxFeeEnergy: 10 }),
+        config: { ...LAB_EXAMPLE_EXPERIMENT, mode: "single-shot", experimentId: "lab-run1-exec-0001", username: "lab-synthetic-user", targetTerminalId: "c61a4141a4a9fcb", targetTick: 557, shardName: "Forst", sourceTerminalId: "b0254141a49b92c", maxFeeEnergy: 10 },
         expected: "fee_over_budget",
       },
       {
         label: "再把费用上限设为 26（=报价）",
-        config: singleShotVariant({ shardName: "Forst", sourceTerminalId: "b0254141a49b92c", maxFeeEnergy: 26 }),
+        config: { ...LAB_EXAMPLE_EXPERIMENT, mode: "single-shot", experimentId: "lab-run1-exec-0001", username: "lab-synthetic-user", targetTerminalId: "c61a4141a4a9fcb", targetTick: 557, shardName: "Forst", sourceTerminalId: "b0254141a49b92c", maxFeeEnergy: 26 },
         expected: "proceed",
       },
     ];
-    const world = fixedWorld();
+    const world = incidentWorld();
     try {
       for (const step of steps) {
-        const decision = evaluateSingleShotGates(step.config, control);
+        const decision = evaluateSingleShotGates(step.config, incidentControl);
         if (step.expected === "proceed") {
           expect(decision.decision).toBe("proceed");
           if (decision.decision === "proceed") {
@@ -963,10 +975,10 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
     } finally {
       world.restore();
     }
-    // 第四步除 mode 自覆盖外恰为当前编译配置（历史配置已纠错；singleShot
-    // 产物内嵌同一派生）——产物级锚定：当前产物在同一固定世界发送一次。
-    expect({ ...steps[3].config, mode: LAB_EXAMPLE_EXPERIMENT.mode }).toEqual(LAB_EXAMPLE_EXPERIMENT);
-    const productWorld = fixedWorld();
+    // 产物级锚定：当前编译配置（lab-run1-cal-0002 新世界身份）在与其匹配的
+    // 世界（installLabWorld 缺省跟随当前值）发送一次——证明事故链终态语义
+    // 对当前绑定同样成立。
+    const productWorld = installLabWorld({ shardName: "Forst" });
     productWorld.memory[LAB_CONTROL_MEMORY_KEY] = armedControl();
     const capture = captureConsoleLog();
     try {
