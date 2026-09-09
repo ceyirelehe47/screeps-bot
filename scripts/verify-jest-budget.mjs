@@ -16,13 +16,13 @@ const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data"
 // probe.test.ts 23→25 用例（sentinel 专项反转为严格拒绝回归+sentinel 期
 // 归档产物前后对照+场景 A 旧事故链四步+非 26 报价预算边界）、新增
 // calibration.test.ts 6 用例（C02 场景 B–G 实际比较实现），
-// 241/1478→242/1486；基线随实现提交滚动至 13511d8
+// Control Remediation I：242/1486→243/1497；基线随实现提交滚动至 b3207f9
 // （文件集对比要求基线树含当前测试文件集）。
-const requiredBaselineCommit = "13511d8dd95fc6044fe597b5a019c4a84699882a";
+const requiredBaselineCommit = "b3207f9d4675d47df9997c80902a9c1313eabb4c";
 const requiredTarget = Object.freeze({
-  suites: 242,
-  tests: 1486,
-  passed: 1486,
+  suites: 243,
+  tests: 1497,
+  passed: 1497,
   failed: 0,
   pending: 0,
   todo: 0,
