@@ -1,0 +1,143 @@
+{
+  "gametime": 370,
+  "rooms": [
+    {
+      "_id": "W1N57",
+      "status": "normal",
+      "sourceKeepers": false,
+      "meta": {
+        "revision": 3,
+        "created": 1788922059748,
+        "version": 0,
+        "updated": 1788922081188
+      },
+      "$loki": 122,
+      "nextForceUpdateTime": 472,
+      "invaderGoal": 1000000
+    },
+    {
+      "_id": "W10N57",
+      "status": "normal",
+      "sourceKeepers": false,
+      "meta": {
+        "revision": 2,
+        "created": 1788922060052,
+        "version": 0,
+        "updated": 1788922070817
+      },
+      "$loki": 123,
+      "nextForceUpdateTime": 477
+    }
+  ],
+  "objects": [
+    {
+      "_id": "d77a4105be50c99",
+      "type": "source",
+      "room": "W1N57",
+      "x": 33,
+      "y": 14
+    },
+    {
+      "_id": "14084105be52ad3",
+      "type": "controller",
+      "room": "W1N57",
+      "x": 39,
+      "y": 17,
+      "user": "e37d410af9f7afe",
+      "level": 8
+    },
+    {
+      "_id": "aacd4105be5cf8f",
+      "type": "source",
+      "room": "W1N57",
+      "x": 30,
+      "y": 22
+    },
+    {
+      "_id": "a1184105be5efac",
+      "type": "mineral",
+      "room": "W1N57",
+      "x": 24,
+      "y": 4
+    },
+    {
+      "_id": "b36e410afa2028d",
+      "type": "spawn",
+      "room": "W1N57",
+      "x": 35,
+      "y": 29,
+      "user": "e37d410af9f7afe",
+      "store": {
+        "energy": 300
+      },
+      "hits": 5000
+    },
+    {
+      "_id": "b0254141a49b92c",
+      "type": "terminal",
+      "room": "W1N57",
+      "x": 20,
+      "y": 20,
+      "user": "e37d410af9f7afe",
+      "store": {
+        "H": 1000,
+        "energy": 10000
+      },
+      "hits": 3000,
+      "cooldownTime": 0
+    },
+    {
+      "_id": "f4cc4105d153183",
+      "type": "source",
+      "room": "W10N57",
+      "x": 10,
+      "y": 7
+    },
+    {
+      "_id": "62614105d159032",
+      "type": "source",
+      "room": "W10N57",
+      "x": 5,
+      "y": 13
+    },
+    {
+      "_id": "41014105d155204",
+      "type": "controller",
+      "room": "W10N57",
+      "x": 32,
+      "y": 43,
+      "user": "e37d410af9f7afe",
+      "level": 8
+    },
+    {
+      "_id": "64614105d158306",
+      "type": "mineral",
+      "room": "W10N57",
+      "x": 17,
+      "y": 35
+    },
+    {
+      "_id": "c61a4141a4a9fcb",
+      "type": "terminal",
+      "room": "W10N57",
+      "x": 20,
+      "y": 20,
+      "user": "e37d410af9f7afe",
+      "store": {
+        "energy": 2000
+      },
+      "hits": 3000,
+      "cooldownTime": 0
+    }
+  ],
+  "terrainSHA256": [
+    {
+      "room": "W1N57",
+      "sha": "5070679ec5587d38981545d2545d71cee24c8f66846b29771e1cfe8d5a183533"
+    },
+    {
+      "room": "W10N57",
+      "sha": "fb63dc40f82e9781a03bae25781739dc93a989689f16e91a8632f68a909a7065"
+    }
+  ]
+}
