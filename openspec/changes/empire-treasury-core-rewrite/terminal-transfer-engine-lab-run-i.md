@@ -1,9 +1,16 @@
 # Terminal Transfer Engine Lab Run I——真实引擎实验说明
 
-状态：**AUTHORIZATION_REQUIRED**（离线接线已完成；真实引擎仍 NOT_RUN）。
+状态：**Execution 轮已运行（2026-09-09，判读 ENGINE_LAB_INCONCLUSIVE：
+T=557 门禁前置拒绝 shard_mismatch、零发送）；Calibration Rerun（同日）
+完成严格 shard 门禁恢复（C01）、独立配置核对（C02）与本文件纠错（C03），
+当前 labConfig 为已纠错的历史配置、未绑定新实验——新的受控实验须按
+Calibration Rerun 任务书取得授权与新鲜事实后重新绑定。**
 
-编制日期：2026-09-08。任务书：`treasury-terminal-transfer-engine-lab-run-I-execution.md`
-（归档于 `evidence/terminal-transfer-engine-lab-run-i/task/task-brief.md`）。验收索引 S01–S06。
+编制日期：2026-09-08（Execution 轮 2026-09-09；Calibration Rerun
+2026-09-09）。任务书：`treasury-terminal-transfer-engine-lab-run-I-execution.md`
+（归档于 `evidence/terminal-transfer-engine-lab-run-i/task/task-brief.md`）；
+Execution 接续任务书与 Calibration Rerun 任务书归档于各证据根 `task/`。
+验收索引 S01–S06。
 
 ## 1. 本轮目标与授权门禁
 
@@ -13,10 +20,10 @@ driver／processor 处理一次 W1N57 → W10N57 的 100H 请求，并从后续�
 
 授权边界（任务书 §0）：启动本地一次性实验环境、创建合成 bot 与两个
 Terminal、装载实验探针、最多一次发送 100H——这些动作**须用户明确授权后**
-才执行。未授权状态只允许源码读取、文档与离线接线；本文所述产物均为
-PREPARED_NOT_RUN，未上传、未装载、未武装。
+才执行。Execution 轮已按用户授权（会话明确回复「我给予你离线授权，
+不接入线上服务器即可」）执行完毕并清理；该授权不自动延伸到新实验。
 
-## 2. 离线接线交付（本轮已完成）
+## 2. 离线接线交付（Lab Run I 离线轮完成）
 
 实验模块三件套（各自独立构建、字节独立，装载时保持 observer／single-shot
 原始产物字节）：
@@ -60,62 +67,88 @@ tick 重复调用与 T+1 均无发送、T+1 恢复真实 observer 继续观察�
 observer／single-shot 产物与 Remediation II 归档**逐字节一致**（main 按
 本轮实际构建身份核验）。
 
-`labConfig.ts` 仍为唯一编译配置来源。**Execution 轮（2026-09-09）已回填
-真实实验身份**（见下节），合成示例值作为旧配置 fixture（LEGACY_EXPERIMENT）
-保留于 probe.test，历史归档产物字节不再与当前产物相等（§4.3 合法迁移）。
+`labConfig.ts` 仍为唯一编译配置来源。Execution 轮曾回填真实实验身份
+（见 §2a，含已纠正的漏诊项）；Calibration Rerun 后当前编译值为**已纠错
+的历史配置**（源 `b0254141a49b92c`、shard `Forst`、maxFeeEnergy 26），该
+世界已清理、未绑定新实验，不得据此武装。合成示例值作为旧配置 fixture
+（LEGACY_EXPERIMENT）保留于 probe.test，历史归档产物字节不再与当前产物
+相等（§4.3 合法迁移）。
 
-## 2a. Execution 轮交付（2026-09-09，已授权执行）
+## 2a. Execution 轮交付（2026-09-09，已授权执行；含 Calibration 纠错标注）
 
 用户授权来源：会话明确回复「我给予你离线授权, 不接入线上服务器即可」
 （范围＝任务书 §0：本机一次性隔离环境、最多一次发送 100H、证据保存后
-停止清理、不接入线上/正式服/PTR/真实账号）。实机结论见主报告与本文件
+停止清理、不接入线上/正式服/PTR/真实账号）。实机结论见主报告与
 `evidence/terminal-transfer-engine-lab-run-i/engine-run/`。
 
-真实实验身份（labConfig 当前编译值，来源＝隔离世界实测读回）：
+Execution 轮当时编译的实验身份（保留历史记录；**粗体标注为 Calibration
+Rerun 纠错项**，纠错依据见
+`evidence/terminal-transfer-engine-lab-run-i-calibration-rerun/corrections.md`）：
 
-| 项 | 值 |
-| --- | --- |
-| experimentId | `lab-run1-exec-0001`（描述 `lab-run1-exec-0001 W1N57 to W10N57 100H`） |
-| shardName | `standalone-no-shard`（无 shard 引擎约定值，见修复提案） |
-| username / 房间 | `lab-synthetic-user`；W1N57 → W10N57（同一合成 bot 拥有） |
-| 结构 ID | 源 `b0254105a49b92c`、目标 `c61a4141a4a9fcb`（初始化读回） |
-| targetTick | 557（暂停时刻 T0=554+3；窗口 555..577） |
-| maxFeeEnergy | 10（基线实测报价：引擎环绕距离公式 `ceil(100×(1−e^(−3/30)))`） |
-| 费用口径 | 报价与 send 扣费同走 `calcTerminalEnergyCost(calcRoomsDistance(continuous))`，runner/processor 共用同一实现与启动时 worldSize |
+| 项 | 当时编译值 | 纠错标注 |
+| --- | --- | --- |
+| experimentId | `lab-run1-exec-0001`（描述 `lab-run1-exec-0001 W1N57 to W10N57 100H`） | — |
+| shardName | `standalone-no-shard` | **漏诊**：真实读数为 `Forst`（窗口后探查实测）；sentinel 约定已撤销 |
+| username / 房间 | `lab-synthetic-user`；W1N57 → W10N57（同一合成 bot 拥有） | — |
+| 源结构 ID | `b0254105a49b92c` | **漏诊**：初始化/终态快照原件均为 `b0254141a49b92c`（engine-run/README.md:21 手写转写错字，回填未对照原件） |
+| 目标结构 ID | `c61a4141a4a9fcb` | — |
+| targetTick | 557（T0=554+3；窗口 555..577） | — |
+| maxFeeEnergy | 10 | **过低**：窗口实际报价 26 > 10，门禁 `fee_over_budget` 拒绝属预算保护**正常工作**（若 shard 校验先行通过） |
 
-真实配置下的三产物身份（`PREPARED_NOT_RUN`，装载前记录）：
-observer 10193 字节／SHA-256 `04fac1c2e76c0efe95dbc30f5591b2031a299368cfe793a6c3ca8119b7d5d8c2`；
+真实配置下的三产物身份（`PREPARED_NOT_RUN`，装载前记录；sentinel 期
+归档字节，现转作接受集合扩大反例）：observer 10193 字节／SHA-256
+`04fac1c2e76c0efe95dbc30f5591b2031a299368cfe793a6c3ca8119b7d5d8c2`；
 single-shot 29139 字节／`3266d7b280688bcbc2156adcf1b3876ca5034c52344f2bd0aa3cb1e8373988e3`；
 main 8754 字节／`3e944685b0023b0a41d7dfb6fe80fedd2d08cfe96ef4f940a38ebc12f23cdbdc`。
 
-**sendGate 无 shard 引擎兼容修复（单列提案）**：standalone runtime 的
-`Game` 不暴露 `shard`，原 `Game.shard.name` 直接读取使门禁在该引擎上
-永远 `world_read_error` 拒绝。修复引入 `LAB_STANDALONE_NO_SHARD_NAME`
-约定值：仅当配置**显式声明**该值且引擎读不出 shard 时通过；任何声明与
-读数不符仍拒绝（强度不降）。详见
+**sendGate 无 shard 引擎兼容修复（历史提案，已撤销）**：该修复引入
+`LAB_STANDALONE_NO_SHARD_NAME` 约定值，事实基础（引擎无 Game.shard）已被
+窗口后探查推翻；且其「shard 存在时行为等价」的声明错误——在 Game 缺
+shard、配置声明 sentinel 的同一输入下接受集合扩大。Calibration Rerun C01
+已恢复严格真实 shard 身份读取并删除 sentinel 导出。详见（历史提案）
 `terminal-transfer-lab-run1-shard-gate-compatibility.md` 与
 `evidence/terminal-transfer-engine-lab-run-i/engine-run/api-incompatibility-game-shard.md`。
 
-**执行结果（窗口结束后记录，含实证纠正）**：状态
+**执行结果（窗口结束后记录；含 Calibration 纠错）**：状态
 **ENGINE_LAB_INCONCLUSIVE**。窗口 555..577 完整执行、observer 采样
 23/23 tick、T=557 single-shot 在发送边界之前被门禁前置拒绝
 （`shard_mismatch`）——单次 send 调用未消费、零交易、零资源变化、
 控制记录保持 armed/attempted=false（撤装后 armed=false）。执行后只读
-探查实证**推翻了修复提案的事实基础**：真实 runtime 的
-`Game.shard={name:"Forst",type:"normal",ptr:false}` 存在（静态源码
-搜索未覆盖其注入路径）；正确回填值应为 `"Forst"`。同时实测
-worldSize 随房间生成漂移（11→58/59）→ 报价 q 从 10 变 26——编译期
-固定 maxFeeEnergy 的设计与该引擎的报价漂移不兼容（即使 shard 校验
-通过也会 `fee_over_budget` 拒绝）。按任务书 §4.5 不改 T/不重试；完整
-事实链与判读见
+探查实证 `Game.shard={name:"Forst",type:"normal",ptr:false}` 存在。当时
+报告的「编译期固定 maxFeeEnergy 的设计与报价漂移不兼容」结论**错误**：
+窗口报价 26 大于固定上限 10 时拒绝正是预算保护正常工作；正确处理是绑定
+新实验时以新鲜报价固定 cap（Calibration Rerun C02），不是扩大上限或实时
+改写授权。报价 10→26 的观测成立，但其完整原因（地图生成、worldSize、
+缓存之间的因果）尚未独立核实。按任务书 §4.5 不改 T/不重试；完整事实链
+与判读见
 `evidence/terminal-transfer-engine-lab-run-i/terminal-transfer-engine-lab-run-i-execution-local-validation.md`。
-未来重开须新任务书（携带本轮两条实证）。
 
-离线自测相应变化：probe.test 23 用例（新增修复专项用例：无 shard 引擎
-通过分支 + 旧产物修复前 `world_read_error` 行为对照；旧产物反例世界切换
-为 LEGACY_EXPERIMENT 旧配置 fixture——§4.3 不混用两个身份）；runI.test
-12 用例（三 manifest 自洽、内嵌同一配置、归档历史身份完整、当前产物
-不再等于归档字节）。
+## 2b. Calibration Rerun 交付（2026-09-09，离线部分）
+
+任务书：`treasury-terminal-transfer-engine-lab-run-I-calibration-rerun-implementation.md`
+（归档于 `evidence/terminal-transfer-engine-lab-run-i-calibration-rerun/task/`）。
+
+- **C01 严格 shard 门禁恢复**：`sendGate.ts` 撤销"缺 shard 以约定值放行"
+  分支——缺失/null/name 非字符串/空串/读取抛错一律 `world_read_error`
+  拒绝，仅实际存在的合法非空字符串参与精确比较；删除
+  `LAB_STANDALONE_NO_SHARD_NAME` 导出/导入（历史归档与历史反例中的字面
+  值不改写）。
+- **C02 独立配置核对**：新增纯比较模块 `calibrationCheck.ts` 与只读 CLI
+  `scripts/verify-lab-calibration.mjs`——读取 labConfig.ts 实际编译配置，
+  与独立落盘的 facts（只读元信息采样 + 收集通道组装）逐项比较，一次报告
+  全部不一致（不因首项失败省略其余；缺失记 missing 不当作健康）；绑定
+  规则 cap=最新真实报价。测试 `calibration.test.ts` 覆盖场景 B–G
+  （A 的门禁复现在 probe.test）。
+- **C03 纠错**：本文件状态统一、shard-gate 提案标记撤销、纠错报告与旧
+  证据缺证清单见新证据根 `corrections.md`；旧证据原件未修改。
+- 离线自测相应变化：probe.test 25 用例（sentinel 专项反转为严格拒绝
+  回归 + sentinel 期归档产物前后对照 + 场景 A 旧事故链四步 + 非 26 报价
+  预算边界）；runI.test 12 用例不变（断言经 LAB_EXAMPLE_EXPERIMENT 传导）；
+  calibration.test 6 用例（场景 B–G）。
+
+新实验前置条件（未满足前不得武装）：新任务书授权 → S01/S02 新世界稳定
+基线 → 全部身份重新读取绑定 → C02 预检通过 → 固定 IMPL_HEAD/
+VALIDATION_HEAD 后装载。
 
 ## 3. 授权后动作顺序（概要；命令参数以实际安装版本核对为准）
 
@@ -124,12 +157,13 @@ worldSize 随房间生成漂移（11→58/59）→ 报价 q 从 10 变 26——�
 2. 管理入口暂停模拟并确认静止；创建两个房间与一个合成 NPC bot；布置合法
    控制器与 Terminal 及 §2 初始库存；回读结构 ID 并归档初始化快照。
 3. 真实 runner 连续执行 observer 取得只读基线（≥2 个不同 tick）；装配
-   外部日志收集通道并证明可用。
-4. 暂停固定 `T0`，读回真实身份填入 `labConfig.ts` → 提交 → 固定
-   VALIDATION_HEAD → 重建三产物并记录 hash → 装载回读核对模块字节。
+   外部日志收集通道并证明可用；独立元信息采样取得 C02 facts。
+4. 暂停固定 `T0`，读回真实身份填入 `labConfig.ts`（cap=新鲜报价）→ C02
+   预检 → 提交 → 固定 VALIDATION_HEAD → 重建三产物并记录 hash → 装载
+   回读核对模块字节。
 5. 写入合法小控制记录（armed=true、attempted=false、完整 JSON ≤4096
-   UTF-8 字节）并回读确认；恢复模拟，让 main×observer×single-shot 在真实
-   runner 中执行一次发送与 T+20 窗口观察。
+   UTF-8 字节）并回读确认；武装前再执行一次 C02 正式命令；恢复模拟，让
+   main×observer×single-shot 在真实 runner 中执行一次发送与 T+20 窗口观察。
 6. 按实际基线判读（H/energy/空位/cooldown/交易镜像）；窗口结束立即暂停、
    切只读、撤销武装；停止完整进程组并只清理本次新建环境。
 
@@ -138,6 +172,14 @@ worldSize 随房间生成漂移（11→58/59）→ 报价 q 从 10 变 26——�
 
 ## 4. 证据
 
-`evidence/terminal-transfer-engine-lab-run-i/`：`task/`（任务书归档）、
-`offline/`（离线验证与第二树复跑）、主报告（含授权状态声明）。
-`environment/`、`engine-run/` 目录在真实实验授权后才会有内容。
+Execution 轮证据根 `evidence/terminal-transfer-engine-lab-run-i/`：
+`task/`（两份任务书归档）、`environment/`（安装摘要与 npm view 记录）、
+`engine-run/`（初始化/终态快照、console 原始流、无 shard 不兼容事实、
+管理/收集工具）、`offline/`（离线验证与第二树复跑）、主报告（含授权
+状态声明）。旧轮缺证清单与纠错见 Calibration Rerun 证据根。
+
+Calibration Rerun 证据根
+`evidence/terminal-transfer-engine-lab-run-i-calibration-rerun/`：
+`task/`（任务书归档）、`corrections.md`（纠错报告与旧证据有界查找）、
+`offline/`（正式离线验证与第二树复现）。实机复验（S01–S06）须新授权，
+未授权时主报告实机部分为 `AUTHORIZATION_REQUIRED`。

@@ -24,6 +24,13 @@
  * 保留 ≤4096 字节、含同 tick 新 VM 重载累计 send=1，产物零 Node 编码依赖。
  * 期望字节数一律由 Buffer.byteLength 独立计算，被测实现不生成 expected。
  *
+ * Calibration Rerun 新增（C01/场景 A/预算边界 E）：撤销"缺 shard 以约定值
+ * 放行"分支——缺 shard/null/name 非法/读取抛错一律 world_read_error 且
+ * 零 send、不进入 attempted 写入；sentinel 期归档产物（Run I Execution
+ * 交付）在同一输入下放行，作为接受集合扩大的前后对照；旧事故链四步复现
+ * （shard_mismatch → structure_mismatch → fee_over_budget → proceed）与
+ * 非 26 报价的 cap=q 预算边界。
+ *
  * 该测试只证明包装与采样正确，不证明引擎真的这样运行（真实引擎边界
  * PREPARED_NOT_RUN，见实验交接说明）。
  */
@@ -33,7 +40,8 @@ import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runInNewContext } from "node:vm";
-import { LAB_EXAMPLE_EXPERIMENT, LAB_STANDALONE_NO_SHARD_NAME, type LabExperimentConfig } from "./labConfig";
+import { LAB_EXAMPLE_EXPERIMENT, type LabExperimentConfig } from "./labConfig";
+import { evaluateSingleShotGates } from "./sendGate";
 
 /**
  * Lab Prep I 历史配置 fixture（旧产物内嵌身份的完整记录）。Run I Execution
@@ -115,8 +123,14 @@ beforeEach(() => {
 interface LabWorldOptions {
   tick?: number;
   shardName?: string;
-  /** 模拟 standalone runtime（screeps@4.3.0）不暴露 Game.shard 的引擎形态。 */
+  /** 模拟 standalone runtime（screeps@4.3.0）不暴露 Game.shard 的引擎形态（C01：缺属性即拒绝）。 */
   noShardRuntime?: boolean;
+  /** 直接指定 Game.shard 值（null/{} /{name:123}/{name:""} 等畸形形态——C01 拒绝矩阵）。 */
+  shardOverride?: unknown;
+  /** Game.shard 属性读取即抛错（C01 读取抛错分支）。 */
+  shardReadThrows?: boolean;
+  /** Game.time 属性读取即抛错（C01 world_read_error 分支）。 */
+  timeReadThrows?: boolean;
   username?: string;
   sourceTerminalId?: string;
   targetTerminalId?: string;
@@ -200,9 +214,8 @@ function installLabWorld(options: LabWorldOptions = {}): LabWorld {
   }
   // 市场端口读 options（引用保持）——测试可在安装后改写 options 模拟后续 tick fixture。
   // 交易视图按官方形状为**数组属性**（getter 求值：读异常仍可被探针 catch）。
-  const game = {
+  const game: Record<string, unknown> = {
     time: options.tick ?? config.targetTick,
-    shard: options.noShardRuntime === true ? undefined : { name: options.shardName ?? config.shardName, type: "normal", ptr: false },
     rooms,
     market: {
       calcTransactionCost: (): number => {
@@ -222,6 +235,27 @@ function installLabWorld(options: LabWorldOptions = {}): LabWorld {
       },
     },
   };
+  // shard/time 形态注入（Calibration Rerun C01）：缺省合法 shard 对象；
+  // noShardRuntime=不定义该属性；shardOverride=直接指定畸形形态；
+  // shardReadThrows/timeReadThrows=属性读取抛错。
+  if (options.shardReadThrows === true) {
+    Object.defineProperty(game, "shard", {
+      get() {
+        throw new Error("Game.shard 读取异常（stub fixture）");
+      },
+    });
+  } else if (options.noShardRuntime !== true) {
+    game.shard =
+      "shardOverride" in options ? options.shardOverride : { name: options.shardName ?? config.shardName, type: "normal", ptr: false };
+  }
+  if (options.timeReadThrows === true) {
+    Object.defineProperty(game, "time", {
+      configurable: true,
+      get() {
+        throw new Error("Game.time 读取异常（stub fixture）");
+      },
+    });
+  }
   const memory: Record<string, unknown> = {};
   // 控制槽故障注入（Remediation I）：getter/setter 计数与篡改——enumerable
   // 保持 true 以便 JSON 序列化往返（模拟世界侧 Memory reload）保留控制事实。
@@ -313,6 +347,19 @@ const LEGACY_SINGLE_SHOT_BUNDLE = join(
 );
 const LEGACY_SINGLE_SHOT_BYTES = 17520;
 const LEGACY_SINGLE_SHOT_SHA256 = "9d8bfc54d542b9b5e8e37113b87e0f06e29149b7fa3cac1b9a7b8dfc7794ed4f";
+
+/**
+ * Run I Execution sentinel 期归档 single-shot 产物（3a9fceb 构建身份）：
+ * 内嵌"缺 shard 放行"分支与旧编译配置（shardName standalone-no-shard、
+ * 源 ID b0254105a49b92c、maxFeeEnergy 10）——接受集合扩大反例的唯一
+ * 来源（Calibration Rerun C01 前后对照；历史归档字节不改写）。
+ */
+const SENTINEL_ERA_BUNDLE = join(
+  REPO_ROOT,
+  "openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i/offline/execution-mainval/lab-single-shot/single-shot.js",
+);
+const SENTINEL_ERA_BYTES = 29139;
+const SENTINEL_ERA_SHA256 = "3266d7b280688bcbc2156adcf1b3876ca5034c52344f2bd0aa3cb1e8373988e3";
 
 /** 初始 JSON 长度恰为 4090 字符的记录（合法必要字段 + 程序补齐的 ASCII note）。 */
 function buildOversizedControl(): Record<string, unknown> {
@@ -776,39 +823,194 @@ describe("Terminal Transfer Engine Lab Prep I——探针离线自测（P03/P04�
     }
   });
 
-  it("Run I Execution 修复提案：standalone 无 Game.shard——配置显式声明约定值才通过；声明具体名仍 shard_mismatch", () => {
-    // 通过分支：引擎无 Game.shard（screeps@4.3.0 standalone 实测形态）+ 配置
-    // 显式声明无 shard 约定值（当前编译配置即 LAB_STANDALONE_NO_SHARD_NAME）。
-    expect(LAB_EXAMPLE_EXPERIMENT.shardName).toBe(LAB_STANDALONE_NO_SHARD_NAME);
-    const okWorld = installLabWorld({ noShardRuntime: true });
-    okWorld.memory[LAB_CONTROL_MEMORY_KEY] = armedControl();
-    let capture = captureConsoleLog();
+  it("Calibration C01 严格 shard 门禁：缺 shard/null/name 非法/读取抛错一律拒绝（零 send、不进入 attempted 写入）；sentinel 期旧产物同输入放行（接受集合扩大已撤销）", () => {
+    // 函数级矩阵：配置显式声明旧 sentinel 字面值（测试局部变体）+ 其余条件合法。
+    // mode 按 singleShot.ts 的派生规则自覆盖为 single-shot（observer 是文档
+    // 默认，调用版内嵌模式才是门禁输入）。
+    const sentinelConfig: LabExperimentConfig = { ...LAB_EXAMPLE_EXPERIMENT, mode: "single-shot", shardName: "standalone-no-shard" };
+    const legalControl = {
+      status: "ok" as const,
+      record: { experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId, armed: true, attempted: false },
+    };
+    const malformed: readonly { label: string; options: LabWorldOptions }[] = [
+      { label: "缺 Game.shard（noShardRuntime）", options: { noShardRuntime: true } },
+      { label: "shard 为 null", options: { shardOverride: null } },
+      { label: "shard 为 {}（name 缺失）", options: { shardOverride: {} } },
+      { label: "name 非字符串（123）", options: { shardOverride: { name: 123 } } },
+      { label: "name 空串", options: { shardOverride: { name: "" } } },
+      { label: "Game.shard 读取抛错", options: { shardReadThrows: true } },
+      { label: "Game.time 读取抛错", options: { timeReadThrows: true } },
+    ];
+    for (const item of malformed) {
+      const world = installLabWorld(item.options);
+      try {
+        const decision = evaluateSingleShotGates(sentinelConfig, legalControl);
+        expect(decision).toEqual({ decision: "reject", reason: "world_read_error" });
+      } finally {
+        world.restore();
+      }
+    }
+    // 信息完整的合法对照（避免"始终拒绝"假通过）：真实合法名与配置精确一致 → proceed。
+    {
+      const world = installLabWorld({}); // 缺省 shard 名 = 当前编译配置值
+      try {
+        const decision = evaluateSingleShotGates({ ...LAB_EXAMPLE_EXPERIMENT, mode: "single-shot" }, legalControl);
+        expect(decision.decision).toBe("proceed");
+        if (decision.decision === "proceed") {
+          expect(decision.fee).toBe(LAB_EXAMPLE_EXPERIMENT.maxFeeEnergy);
+        }
+      } finally {
+        world.restore();
+      }
+    }
+    // 产物级：当前产物在无 shard 引擎上以 world_read_error 前置拒绝。
+    const world = installLabWorld({ noShardRuntime: true });
+    world.memory[LAB_CONTROL_MEMORY_KEY] = armedControl();
+    const capture = captureConsoleLog();
     try {
       requireArtifact(artifacts.singleShotBundle).loop();
     } finally {
       capture.restore();
     }
-    expect(okWorld.sendCalls).toHaveLength(1);
-    expect(okWorld.memory[LAB_CONTROL_MEMORY_KEY]).toMatchObject({ attempted: true, stopped: true });
-    okWorld.restore();
-
-    // 拒绝分支（修复前行为对照）：引擎无 Game.shard + 旧产物（归档字节，
-    // 修复前的 `Game.shard.name` 直接读取）——读取即 throw，以 world_read_error
-    // 拒绝。该对照证明修复前 single-shot 在 standalone 引擎上无法通过 shard
-    // 校验（Run I Execution 修复提案的直接依据）。
-    const legacyWorld = installLabWorld({ noShardRuntime: true });
-    legacyWorld.memory[LAB_CONTROL_MEMORY_KEY] = armedControl({ experimentId: LEGACY_EXPERIMENT.experimentId });
-    capture = captureConsoleLog();
     try {
-      requireArtifact(LEGACY_SINGLE_SHOT_BUNDLE).loop();
+      expect(world.sendCalls).toEqual([]);
+      const rejections = parseLabRecords(capture.lines).filter((record) => record.kind === "lab-precondition-rejection");
+      expect(rejections).toHaveLength(1);
+      expect(rejections[0].reason).toBe("world_read_error");
+      // 门禁在进入发送/标记阶段之前拒绝：控制记录保持原样（attempted 仍 false）。
+      expect(world.memory[LAB_CONTROL_MEMORY_KEY]).toEqual({
+        experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId,
+        armed: true,
+        attempted: false,
+      });
+    } finally {
+      world.restore();
+    }
+    // 前后对照（接受集合扩大的直接证据，函数级→产物级）：sentinel 期归档产物
+    // 在同一"无 Game.shard"输入、其余条件匹配其内嵌旧配置（源 b0254105…、
+    // 报价 10 ≤ cap 10）时放行并发送一次——该分支即本轮撤销的对象；历史
+    // 归档字节保持不变。
+    const sentinelBytes = readFileSync(SENTINEL_ERA_BUNDLE);
+    expect(sentinelBytes.length).toBe(SENTINEL_ERA_BYTES);
+    expect(createHash("sha256").update(sentinelBytes).digest("hex")).toBe(SENTINEL_ERA_SHA256);
+    const sentinelWorld = installLabWorld({ noShardRuntime: true, sourceTerminalId: "b0254105a49b92c", fee: 10 });
+    sentinelWorld.memory[LAB_CONTROL_MEMORY_KEY] = armedControl();
+    const sentinelCapture = captureConsoleLog();
+    try {
+      requireArtifact(SENTINEL_ERA_BUNDLE).loop();
+    } finally {
+      sentinelCapture.restore();
+    }
+    try {
+      expect(sentinelWorld.sendCalls).toHaveLength(1); // 旧实现放行（接受集合扩大）
+      expect(sentinelWorld.memory[LAB_CONTROL_MEMORY_KEY]).toMatchObject({ attempted: true });
+    } finally {
+      sentinelWorld.restore();
+    }
+  });
+
+  it("Calibration 场景 A 旧事故链门禁复现（跨时间资料构造的离线诊断场景）：旧编译配置 shard_mismatch → 改 Forst 后 structure_mismatch → 纠正源 ID 后 fee_over_budget → cap 设 26 后 proceed", () => {
+    // 固定独立世界 fixture：源 b0254141a49b92c（该轮初始化/终态实测值）、
+    // 目标 c61a4141a4a9fcb、报价 26、shard Forst（窗口后只读探查实测名）。
+    // 本场景是离线诊断构造，不是 T557 世界的无损重放；26 只用于历史反例
+    // 与合法对照，不能成为新实验常数。
+    const fixedWorld = () => installLabWorld({ shardName: "Forst", sourceTerminalId: "b0254141a49b92c", fee: 26 });
+    const control = {
+      status: "ok" as const,
+      record: { experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId, armed: true, attempted: false },
+    };
+    // 函数级输入按 singleShot.ts 派生规则自覆盖 mode（调用版模式）。
+    const singleShotVariant = (overrides: Partial<LabExperimentConfig>): LabExperimentConfig => ({
+      ...LAB_EXAMPLE_EXPERIMENT,
+      mode: "single-shot",
+      ...overrides,
+    });
+    const steps: readonly { label: string; config: LabExperimentConfig; expected: string }[] = [
+      {
+        label: "旧编译配置（sentinel shard + 源 ID b0254105 + cap 10）",
+        config: singleShotVariant({ shardName: "standalone-no-shard", sourceTerminalId: "b0254105a49b92c", maxFeeEnergy: 10 }),
+        expected: "shard_mismatch",
+      },
+      {
+        label: "只将配置 shard 改为 Forst",
+        config: singleShotVariant({ shardName: "Forst", sourceTerminalId: "b0254105a49b92c", maxFeeEnergy: 10 }),
+        expected: "structure_mismatch",
+      },
+      {
+        label: "再将源 ID 纠正为 b0254141a49b92c",
+        config: singleShotVariant({ shardName: "Forst", sourceTerminalId: "b0254141a49b92c", maxFeeEnergy: 10 }),
+        expected: "fee_over_budget",
+      },
+      {
+        label: "再把费用上限设为 26（=报价）",
+        config: singleShotVariant({ shardName: "Forst", sourceTerminalId: "b0254141a49b92c", maxFeeEnergy: 26 }),
+        expected: "proceed",
+      },
+    ];
+    const world = fixedWorld();
+    try {
+      for (const step of steps) {
+        const decision = evaluateSingleShotGates(step.config, control);
+        if (step.expected === "proceed") {
+          expect(decision.decision).toBe("proceed");
+          if (decision.decision === "proceed") {
+            expect(decision.fee).toBe(26);
+          }
+        } else {
+          expect(decision).toEqual({ decision: "reject", reason: step.expected });
+        }
+      }
+    } finally {
+      world.restore();
+    }
+    // 第四步除 mode 自覆盖外恰为当前编译配置（历史配置已纠错；singleShot
+    // 产物内嵌同一派生）——产物级锚定：当前产物在同一固定世界发送一次。
+    expect({ ...steps[3].config, mode: LAB_EXAMPLE_EXPERIMENT.mode }).toEqual(LAB_EXAMPLE_EXPERIMENT);
+    const productWorld = fixedWorld();
+    productWorld.memory[LAB_CONTROL_MEMORY_KEY] = armedControl();
+    const capture = captureConsoleLog();
+    try {
+      requireArtifact(artifacts.singleShotBundle).loop();
     } finally {
       capture.restore();
     }
-    expect(legacyWorld.sendCalls).toEqual([]);
-    const rejections = parseLabRecords(capture.lines).filter((record) => record.kind === "lab-precondition-rejection");
-    expect(rejections).toHaveLength(1);
-    expect(rejections[0].reason).toBe("world_read_error");
-    legacyWorld.restore();
+    try {
+      expect(productWorld.sendCalls).toHaveLength(1);
+      expect(productWorld.memory[LAB_CONTROL_MEMORY_KEY]).toMatchObject({ attempted: true, stopped: true });
+    } finally {
+      productWorld.restore();
+    }
+  });
+
+  it("Calibration E 预算边界（非 26 报价，无硬编码）：报价等于 cap 通过、大于 cap 拒绝、读取异常拒绝；cap 不被自动改大", () => {
+    const world = installLabWorld({ fee: 37 });
+    try {
+      const control = {
+        status: "ok" as const,
+        record: { experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId, armed: true, attempted: false },
+      };
+      const capEqualsQuote: LabExperimentConfig = { ...LAB_EXAMPLE_EXPERIMENT, mode: "single-shot", maxFeeEnergy: 37 };
+      const atCap = evaluateSingleShotGates(capEqualsQuote, control);
+      expect(atCap.decision).toBe("proceed");
+      if (atCap.decision === "proceed") {
+        expect(atCap.fee).toBe(37);
+      }
+      expect(capEqualsQuote.maxFeeEnergy).toBe(37); // cap 未被实现自动改大
+      const below = evaluateSingleShotGates({ ...capEqualsQuote, maxFeeEnergy: 36 }, control);
+      expect(below).toEqual({ decision: "reject", reason: "fee_over_budget" });
+    } finally {
+      world.restore();
+    }
+    const errorWorld = installLabWorld({ fee: { throws: new Error("quote stub 异常") } });
+    try {
+      const decision = evaluateSingleShotGates(
+        { ...LAB_EXAMPLE_EXPERIMENT, mode: "single-shot", maxFeeEnergy: 37 },
+        { status: "ok", record: { experimentId: LAB_EXAMPLE_EXPERIMENT.experimentId, armed: true, attempted: false } },
+      );
+      expect(decision).toEqual({ decision: "reject", reason: "fee_unreadable" });
+    } finally {
+      errorWorld.restore();
+    }
   });
 
   it("single-shot 错 shard/用户/结构/tick 与已尝试——零调用，拒绝原因逐项明确", () => {

@@ -8,7 +8,6 @@
  */
 
 import type { LabExperimentConfig } from "./labConfig";
-import { LAB_STANDALONE_NO_SHARD_NAME } from "./labConfig";
 import type { LabControlRecord } from "./controlRecord";
 import { readEndpoint, readFeeQuote } from "./worldRead";
 
@@ -59,11 +58,20 @@ export function evaluateSingleShotGates(
   let shardName: string;
   let tick: number;
   try {
-    // standalone runtime（screeps@4.3.0 组合）不暴露 Game.shard；缺失时以约定常量
-    // 代替读数——仅当配置显式声明该约定值（labConfig 导出）才可能通过校验，
-    // 任何其他声明与读数的不匹配仍拒绝。修复提案见 Run I Execution 证据。
-    const shard = (Game as unknown as { readonly shard?: { readonly name?: unknown } }).shard;
-    shardName = shard === undefined ? LAB_STANDALONE_NO_SHARD_NAME : String(shard.name);
+    // Calibration Rerun C01：恢复严格真实 shard 身份读取。仅接受实际存在
+    // 的合法 shard 名——Game.shard 缺失/null、name 缺失/非字符串/空串或
+    // 读取抛错一律拒绝；不用约定字符串代替缺失身份，也不用 String() 把
+    // 异常值强转成看似可比较的字符串。Run I Execution 的无 shard 放行
+    // 分支已撤销（接受集合扩大属错误修复，见该轮纠错报告）。
+    const shard = (Game as unknown as { readonly shard?: unknown }).shard;
+    if (shard === null || shard === undefined || typeof shard !== "object") {
+      return reject("world_read_error");
+    }
+    const rawName = (shard as { readonly name?: unknown }).name;
+    if (typeof rawName !== "string" || rawName.length === 0) {
+      return reject("world_read_error");
+    }
+    shardName = rawName;
     tick = Game.time;
   } catch {
     return reject("world_read_error");

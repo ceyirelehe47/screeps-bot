@@ -1,0 +1,90 @@
+{
+  "factsKind": "lab-calibration-facts",
+  "_doc": "C02 离线反例 fixture：与当前编译配置同时存在 shard、源结构 ID、费用上限三项不一致（场景 B 的 CLI 侧对应物）——预检必须一次报告全部三项，不因第一项失败而省略。",
+  "context": {
+    "collectedAtWallClock": "2026-09-09T10:06:00.000Z",
+    "runId": "calibration-fixture-run-002",
+    "paused": true,
+    "pauseConfirmedTick": 554,
+    "lastAdminChangeWallClock": "2026-09-09T10:04:30.000Z",
+    "user": {
+      "id": "5f0ab234c000002",
+      "idSource": "fixture 声明：管理侧用户记录按用户名查询与 console 通道交叉（离线 fixture，非真实观测）"
+    },
+    "sampler": { "name": "lab-meta-probe", "version": "1" }
+  },
+  "samples": [
+    {
+      "tick": 553,
+      "collectedAtWallClock": "2026-09-09T10:05:10.000Z",
+      "runId": "calibration-fixture-run-002",
+      "shard": { "name": "shard0" },
+      "user": { "username": "lab-synthetic-user" },
+      "source": {
+        "readStatus": "ok",
+        "terminalId": "aaaaaaaaaaaaaaaa",
+        "ownerUsername": "lab-synthetic-user",
+        "my": true,
+        "isActive": true,
+        "controller": { "present": true, "my": true, "level": 8 },
+        "resourceAmount": 1000,
+        "energy": 10000,
+        "freeCapacity": 50000,
+        "cooldown": 0
+      },
+      "target": {
+        "readStatus": "ok",
+        "terminalId": "c61a4141a4a9fcb",
+        "ownerUsername": "lab-synthetic-user",
+        "my": true,
+        "isActive": true,
+        "controller": { "present": true, "my": true, "level": 8 },
+        "resourceAmount": 0,
+        "energy": 2000,
+        "freeCapacity": 100000,
+        "cooldown": 0
+      },
+      "feeQuote": { "status": "ok", "energyCost": 30 },
+      "transactions": {
+        "incoming": { "status": "ok", "records": [] },
+        "outgoing": { "status": "ok", "records": [] }
+      }
+    },
+    {
+      "tick": 554,
+      "collectedAtWallClock": "2026-09-09T10:05:40.000Z",
+      "runId": "calibration-fixture-run-002",
+      "shard": { "name": "shard0" },
+      "user": { "username": "lab-synthetic-user" },
+      "source": {
+        "readStatus": "ok",
+        "terminalId": "aaaaaaaaaaaaaaaa",
+        "ownerUsername": "lab-synthetic-user",
+        "my": true,
+        "isActive": true,
+        "controller": { "present": true, "my": true, "level": 8 },
+        "resourceAmount": 1000,
+        "energy": 10000,
+        "freeCapacity": 50000,
+        "cooldown": 0
+      },
+      "target": {
+        "readStatus": "ok",
+        "terminalId": "c61a4141a4a9fcb",
+        "ownerUsername": "lab-synthetic-user",
+        "my": true,
+        "isActive": true,
+        "controller": { "present": true, "my": true, "level": 8 },
+        "resourceAmount": 0,
+        "energy": 2000,
+        "freeCapacity": 100000,
+        "cooldown": 0
+      },
+      "feeQuote": { "status": "ok", "energyCost": 30 },
+      "transactions": {
+        "incoming": { "status": "ok", "records": [] },
+        "outgoing": { "status": "ok", "records": [] }
+      }
+    }
+  ]
+}

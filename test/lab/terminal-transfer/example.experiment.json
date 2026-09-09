@@ -1,17 +1,17 @@
 {
-  "_doc": "Terminal Transfer Engine Lab Run I 执行轮真实配置（与 test/lab/terminal-transfer/labConfig.ts 的 LAB_EXAMPLE_EXPERIMENT 保持一致）。2026-09-09 一次性隔离世界实测读回：结构 ID、报价 10（引擎环绕距离公式）、目标 tick 557（暂停时刻 554+3）、无 shard 引擎约定值。文档示例（构建器仅复制，运行时不读取）。",
+  "_doc": "Terminal Transfer Engine Lab Run I 执行轮历史配置（与 test/lab/terminal-transfer/labConfig.ts 的 LAB_EXAMPLE_EXPERIMENT 保持一致；Calibration Rerun 已纠错：源结构 ID b0254141a49b92c、shard Forst、费用上限 26=窗口报价）。该世界已清理，未绑定新实验，不得据此武装。文档示例（构建器仅复制，运行时不读取）。",
   "experimentId": "lab-run1-exec-0001",
   "mode": "observer",
-  "shardName": "standalone-no-shard",
+  "shardName": "Forst",
   "username": "lab-synthetic-user",
   "sourceRoomName": "W1N57",
   "targetRoomName": "W10N57",
-  "sourceTerminalId": "b0254105a49b92c",
+  "sourceTerminalId": "b0254141a49b92c",
   "targetTerminalId": "c61a4141a4a9fcb",
   "resourceType": "H",
   "amount": 100,
   "description": "lab-run1-exec-0001 W1N57 to W10N57 100H",
   "targetTick": 557,
-  "maxFeeEnergy": 10,
+  "maxFeeEnergy": 26,
   "maxSamples": 32
 }
