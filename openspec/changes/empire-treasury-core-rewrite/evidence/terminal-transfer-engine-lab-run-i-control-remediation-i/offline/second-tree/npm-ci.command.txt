@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/wt-ctrl-r1-second
+command: npm ci
+start: 2026-09-09T14:06:55Z
+end: 2026-09-09T14:07:15Z

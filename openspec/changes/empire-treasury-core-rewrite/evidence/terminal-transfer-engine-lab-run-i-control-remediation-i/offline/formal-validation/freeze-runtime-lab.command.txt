@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: git diff --exit-code d69726a92d46c3ab334355a6625ef253c1523a86 HEAD -- test/lab/terminal-transfer/sendGate.ts test/lab/terminal-transfer/controlRecord.ts test/lab/terminal-transfer/worldRead.ts test/lab/terminal-transfer/sample.ts test/lab/terminal-transfer/observer.ts test/lab/terminal-transfer/singleShot.ts test/lab/terminal-transfer/runIMain.ts test/mock/treasuryTerminalTransferPrototype.ts test/mock/treasuryTerminalTransferCoordinator.ts
+start: 2026-09-09T14:02:52Z
+end: 2026-09-09T14:02:52Z

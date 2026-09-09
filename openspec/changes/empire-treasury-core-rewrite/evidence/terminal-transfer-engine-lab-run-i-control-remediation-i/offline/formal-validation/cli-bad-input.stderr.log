@@ -1,0 +1,1 @@
+facts 文件不可读：D:\code\screeps\screeps-bot\test\lab\terminal-transfer\fixtures\does-not-exist.json（Error: ENOENT: no such file or directory, open 'D:\code\screeps\screeps-bot\test\lab\terminal-transfer\fixtures\does-not-exist.json')

@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: git diff --check
+start: 2026-09-09T14:02:52Z
+end: 2026-09-09T14:02:53Z

@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: npx jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/defenseFocusFire.test.ts src/runtime/defenseFocusFireStateful.test.ts src/runtime/defenseFallbackReallocation.test.ts src/runtime/defenseAllActorReservation.test.ts src/runtime/defenseGlobalRampartFootprints.test.ts src/runtime/defensePreallocationRampartOwnership.test.ts src/runtime/defenseStationaryRampartOwnership.test.ts src/runtime/homeDefense.test.ts src/runtime/towerControl.test.ts src/roles/homeDefender.test.ts test/memoryDeclarationBoundaries.test.ts --json --outputFile=/tmp/screeps-ctrl-r1-final/jest-defense.json
+start: 2026-09-09T13:43:22Z
+end: 2026-09-09T13:43:55Z

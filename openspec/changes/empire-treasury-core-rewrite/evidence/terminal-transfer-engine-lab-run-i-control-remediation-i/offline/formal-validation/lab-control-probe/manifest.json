@@ -1,0 +1,32 @@
+{
+  "status": "PREPARED_NOT_RUN",
+  "mode": "control-probe",
+  "repoHead": "d0103c9394e683a3c81e577b8b6f9e585c78f7f0",
+  "config": {
+    "experimentId": "lab-run1-cal-0002",
+    "mode": "observer",
+    "shardName": "Forst",
+    "username": "lab-cal-user-0002",
+    "sourceRoomName": "W1N57",
+    "targetRoomName": "W10N57",
+    "sourceTerminalId": "aa17545ac3100001",
+    "targetTerminalId": "aa17545ac3100002",
+    "resourceType": "H",
+    "amount": 100,
+    "description": "lab-run1-cal-0002 W1N57 to W10N57 100H",
+    "targetTick": 201,
+    "maxFeeEnergy": 26,
+    "maxSamples": 32
+  },
+  "sources": {
+    "labConfig.ts": "3656270af5a3374e79e278bef6ea4e769beadbd92ff379d4502ecec0c6de0a7c",
+    "controlRecord.ts": "b87ca3ee29859fdfb842e0703fa24934c6891552c5f33a90e9af7d35c1768eda",
+    "worldRead.ts": "da2b3f13c3a70dbc63060aef449a749ec7009cc613a5aa9e6a1c4db678c2086d",
+    "tools/controlProbe.ts": "b0b9201e5f09bebaa053d4f38fa526167d8b57b184867df8fc41348e7d20b1bb"
+  },
+  "output": {
+    "file": "main.js",
+    "bytes": 21125,
+    "sha256": "beb2e68c46e21aef0e0743231fe18dd2db94d1f3a6443023bacdae1da41c7a87"
+  }
+}

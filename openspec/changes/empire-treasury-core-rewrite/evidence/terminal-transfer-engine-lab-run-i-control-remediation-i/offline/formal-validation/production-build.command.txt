@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: npm run build
+start: 2026-09-09T13:36:09Z
+end: 2026-09-09T13:36:53Z

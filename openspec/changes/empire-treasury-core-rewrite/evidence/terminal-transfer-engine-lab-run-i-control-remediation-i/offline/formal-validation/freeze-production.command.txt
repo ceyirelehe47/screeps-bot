@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: git diff --exit-code 869149dcdd6f2068572354917bf23c52727cf9b6 HEAD -- src :\(exclude\,glob\)src/\*\*/\*.test.ts :\(exclude\,glob\)src/\*\*/\*.test.tsx :\(exclude\,glob\)src/\*\*/\*.test.js :\(exclude\,glob\)src/\*\*/\*.test.jsx
+start: 2026-09-09T14:02:52Z
+end: 2026-09-09T14:02:52Z

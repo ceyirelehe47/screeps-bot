@@ -1,0 +1,1796 @@
+diff --git a/test/lab/terminal-transfer/calibrationCheck.ts b/test/lab/terminal-transfer/calibrationCheck.ts
+index 0c55cb9e3dff294fccb884a61c6b14e66c02025d..0df832b598453ef1183614339330add1df27050a 100644
+--- a/test/lab/terminal-transfer/calibrationCheck.ts
++++ b/test/lab/terminal-transfer/calibrationCheck.ts
+@@ -104,7 +104,11 @@ function isNonEmptyString(value: unknown): value is string {
+ }
+ 
+ function finiteNumber(value: unknown): value is number {
+-  return typeof value === "number" && Number.isFinite(value);
++  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
++}
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === "object" && value !== null && !Array.isArray(value);
+ }
+ 
+ /** 逐项收集器：任何一项的登记都独立于其他项（无短路）。 */
+@@ -131,11 +135,11 @@ class CheckCollector {
+ /** 各样本同一标量读数的取值集合（附带出现过的 tick，供差异定位）。 */
+ function distinctObserved(samples: readonly CalibrationSampleFacts[], pick: (sample: CalibrationSampleFacts) => unknown): { values: unknown[]; ticks: Record<string, number[]> } {
+   const values: unknown[] = [];
+-  const ticks: Record<string, number[]> = {};
++  const ticks: Record<string, number[]> = Object.create(null);
+   for (const sample of samples) {
+     const value = pick(sample);
+-    const key = String(value);
+-    if (!values.some((existing) => String(existing) === key)) values.push(value);
++    const key = `${typeof value}:${String(value)}`;
++    if (!values.some((existing) => Object.is(existing, value))) values.push(value);
+     (ticks[key] ??= []).push(sample.tick);
+   }
+   return { values, ticks };
+@@ -150,9 +154,27 @@ const DESCRIPTION_MAX_CHARS = 100;
+ 
+ export function checkLabCalibration(config: LabExperimentConfig, facts: CalibrationFacts): CalibrationReport {
+   const checks = new CheckCollector();
+-  const samples = Array.isArray(facts.samples) ? facts.samples : [];
++  // R02: defensive parsing is diagnostic only. Missing values stay missing; no
++  // incomplete row is dropped. Sort a COPY by game tick, never mutate evidence.
++  const rawFacts: Record<string, unknown> = isRecord(facts) ? facts : {};
++  const rawContext = isRecord(rawFacts.context) ? rawFacts.context : {};
++  const rawSamples = Array.isArray(rawFacts.samples) ? rawFacts.samples : [];
++  checks.boolean("time_stability", "input_shape",
++    isRecord(facts) && isRecord(rawFacts.context) && Array.isArray(rawFacts.samples)
++      && rawSamples.every((sample) => isRecord(sample) && isRecord(sample.source) && isRecord(sample.target)),
++    { expected: "facts/context objects; every sample has source and target objects",
++      observed: rawSamples.map((sample, index) => ({ index, valid: isRecord(sample) && isRecord(sample.source) && isRecord(sample.target) })) });
++  facts = { ...rawFacts, context: rawContext, samples: rawSamples } as unknown as CalibrationFacts;
++  const samples = rawSamples.map((sample) => {
++    const row = isRecord(sample) ? sample : {};
++    return { ...row, source: isRecord(row.source) ? row.source : {}, target: isRecord(row.target) ? row.target : {} } as unknown as CalibrationSampleFacts;
++  }).sort((a, b) => finiteNumber(a.tick) && finiteNumber(b.tick) ? a.tick - b.tick : 0);
+   const ticks = samples.map((sample) => sample.tick);
+-  const maxTick = ticks.length > 0 ? Math.max(...ticks) : undefined;
++  const ticksLegal = ticks.length > 0 && ticks.every(finiteNumber);
++  const maxTick = ticksLegal ? ticks.reduce((max, tick) => Math.max(max, tick), 0) : undefined;
++  checks.boolean("time_stability", "sample_ticks_legal_unique",
++    ticksLegal && new Set(ticks).size === ticks.length,
++    { expected: "nonnegative safe integer ticks, no duplicates", observed: rawSamples.map((sample) => isRecord(sample) ? sample.tick : "<invalid sample>") });
+ 
+   // ── experiment_scope：实验范围（任务书固定值 + 描述可发送性 + 无同描述既有交易） ──
+   checks.boolean("experiment_scope", "experiment_id", isNonEmptyString(config.experimentId) && /^[A-Za-z0-9._-]+$/.test(config.experimentId), {
+@@ -183,9 +205,19 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
+     for (const sample of samples) {
+       for (const direction of ["incoming", "outgoing"] as const) {
+         const view = sample.transactions?.[direction];
+-        if (view === undefined) continue;
++        if (view === undefined || view === null) {
++          unreadable = true;
++          checks.add("experiment_scope", `transactions_${sample.tick}_${direction}`, "missing", { note: "required transaction view absent; another view cannot fill this gap" });
++          continue;
++        }
+         if (view.status !== "ok" || !Array.isArray(view.records)) {
+           unreadable = true;
++          checks.add("experiment_scope", `transactions_${sample.tick}_${direction}`, "missing", { note: "transaction view unreadable or records is not an array" });
++          continue;
++        }
++        if (!view.records.every(isRecord)) {
++          unreadable = true;
++          checks.add("experiment_scope", `transactions_${sample.tick}_${direction}`, "fail", { note: "transaction records must be objects; malformed records were not discarded" });
+           continue;
+         }
+         checkedViews += 1;
+@@ -210,21 +242,21 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
+     // 合法性按结构判定（readError/缺 name 均非法），展示值用带标记的字符串。
+     const legalEvery =
+       samples.length > 0 &&
+-      shardEntries.every((shard) => shard !== undefined && shard.readError === undefined && isNonEmptyString(shard.name));
++      shardEntries.every((shard) => shard !== undefined && shard !== null && shard.readError === undefined && isNonEmptyString(shard.name));
+     const displayNames = shardEntries.map((shard) =>
+-      shard === undefined ? "<missing>" : shard.readError !== undefined ? `<readError>${shard.readError}` : String(shard.name),
++      shard === undefined || shard === null ? "<missing>" : shard.readError !== undefined ? `<readError>${shard.readError}` : String(shard.name),
+     );
+     checks.boolean("world_user", "shard_legal", legalEvery, {
+       expected: "每样本实际读到合法非空 shard 名",
+       observed: samples.length === 0 ? "无样本" : JSON.stringify(displayNames),
+       note: legalEvery ? undefined : "shard 缺失/读取错误/名字非法——不填约定值",
+     });
+-    const latestName = latestEntry === undefined || latestEntry.readError !== undefined ? undefined : latestEntry.name;
++    const latestName = latestEntry === undefined || latestEntry === null || latestEntry.readError !== undefined ? undefined : latestEntry.name;
+     checks.boolean("world_user", "shard_matches_config", legalEvery && latestName === config.shardName, {
+       expected: config.shardName,
+       observed: latestName === undefined ? "<missing>" : latestName,
+     });
+-    const stable = legalEvery && shardEntries.every((shard) => shard !== undefined && shard.name === latestName);
++    const stable = legalEvery && shardEntries.every((shard) => shard !== undefined && shard !== null && shard.name === latestName);
+     checks.boolean("world_user", "shard_stable", stable, { expected: "各样本一致", observed: JSON.stringify(displayNames) });
+   }
+   {
+@@ -236,7 +268,7 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
+     });
+     const userId = facts.context.user?.id;
+     const idSource = facts.context.user?.idSource;
+-    if (isNonEmptyString(String(userId ?? "")) && isNonEmptyString(String(idSource ?? ""))) {
++    if (isNonEmptyString(userId) && isNonEmptyString(idSource)) {
+       checks.boolean("world_user", "user_id_evidence", true, { observed: `${String(userId)}（来源：${String(idSource)}）` });
+     } else {
+       checks.add("world_user", "user_id_evidence", "missing", { note: "合成用户 ID 或其证据来源缺失，无法核对用户身份" });
+@@ -278,13 +310,34 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
+       observed: samples.length === 0 ? "无样本" : `my=${JSON.stringify(samples.map((s) => s[side].my))} isActive=${JSON.stringify(samples.map((s) => s[side].isActive))}`,
+     });
+     const controllers = samples.map((sample) => sample[side].controller);
+-    const controllerOk = samples.length > 0 && controllers.every((c) => c !== undefined && c.present === true && c.my === true && finiteNumber(c.level) && c.level >= 6);
++    const controllerOk = samples.length > 0 && controllers.every((c) => c !== undefined && c !== null && c.present === true && c.my === true && finiteNumber(c.level) && c.level >= 6 && c.level <= 8);
+     checks.boolean("endpoints", `${side}_controller`, controllerOk, {
+       expected: "控制器存在、同主且 level≥6（Terminal 合法）",
+       observed: JSON.stringify(controllers),
+     });
+   }
+ 
++  // R02: every submitted baseline row must be complete AND stable. Zero is
++  // real data; absence, null, failed reads and old values are not a baseline.
++  for (const side of ["source", "target"] as const) {
++    for (const field of ["resourceAmount", "energy", "freeCapacity", "cooldown"] as const) {
++      const invalid = samples.filter((sample) => sample[side].readStatus !== "ok" || !finiteNumber(sample[side][field]));
++      const legal = samples.length > 0 && invalid.length === 0;
++      const values = samples.map((sample) => ({ tick: sample.tick, value: sample[side][field] }));
++      checks.boolean("resources", `${side}_${field}_complete`, legal, {
++        expected: "every tick: readable nonnegative safe integer", observed: values,
++        note: legal ? undefined : `invalid/missing at ticks: ${invalid.map((sample) => sample.tick).join(",")}`,
++      });
++      checks.boolean("resources", `${side}_${field}_stable`, legal && samples.every((sample) => sample[side][field] === samples[0][side][field]), {
++        expected: "all submitted baseline samples equal", observed: values,
++      });
++    }
++    const controllerLevels = samples.map((sample) => sample[side].controller?.level);
++    checks.boolean("endpoints", `${side}_controller_stable`,
++      controllerLevels.length > 0 && controllerLevels.every((value) => finiteNumber(value) && value === controllerLevels[0]),
++      { expected: "same controller level across baseline", observed: controllerLevels });
++  }
++
+   // ── resources：库存/能源/冷却/空位（缺失/不可读按 fail，不转换为 0 或健康） ──
+   {
+     const latest = samples.length > 0 ? samples[samples.length - 1] : undefined;
+@@ -315,10 +368,10 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
+     const latestQuote = samples.length > 0 ? samples[samples.length - 1].feeQuote : undefined;
+     const cost = latestQuote?.energyCost;
+     const quoteLegal =
+-      latestQuote !== undefined && latestQuote.status === "ok" && finiteNumber(cost) && (cost as number) >= 0 && Number.isInteger(cost);
++      samples.length > 0 && samples.every((sample) => sample.feeQuote?.status === "ok" && finiteNumber(sample.feeQuote.energyCost));
+     checks.boolean("quote", "quote_legal", quoteLegal, {
+       expected: "最新样本报价 ok 且为非负有限整数（真实 calcTransactionCost 读数）",
+-      observed: latestQuote === undefined ? "无报价样本" : JSON.stringify(latestQuote),
++      observed: samples.map((sample) => ({ tick: sample.tick, quote: sample.feeQuote })),
+     });
+     const quoteObservation = distinctObserved(samples, (sample) => sample.feeQuote?.energyCost);
+     checks.boolean("quote", "quote_stable", quoteLegal && quoteObservation.values.length === 1, {
+@@ -337,7 +390,7 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
+     expected: "lab-calibration-facts",
+     observed: facts.factsKind,
+   });
+-  checks.boolean("time_stability", "samples_two_ticks", new Set(ticks).size >= 2, {
++  checks.boolean("time_stability", "samples_two_ticks", ticksLegal && new Set(ticks).size >= 2, {
+     expected: "≥2 个互异 tick 的稳定基线",
+     observed: JSON.stringify(ticks),
+   });
+@@ -367,7 +420,10 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
+       expected: "已暂停且 T0≥最后基线 tick（重复只读核对后确认）",
+       observed: `paused=${String(facts.context.paused)} pauseConfirmedTick=${String(facts.context.pauseConfirmedTick)} 最后样本 tick=${String(maxTick)}`,
+     });
+-    const reachable = pausedOk && maxTick !== undefined && config.targetTick >= maxTick + 3 && config.targetTick > (facts.context.pauseConfirmedTick ?? Number.NEGATIVE_INFINITY);
++    const pauseTick = facts.context.pauseConfirmedTick;
++    const reachable = pausedOk && maxTick !== undefined && maxTick <= pauseTick
++      && finiteNumber(config.targetTick) && pauseTick <= Number.MAX_SAFE_INTEGER - 3
++      && config.targetTick >= pauseTick + 3;
+     checks.boolean("time_stability", "target_tick_reachable", reachable, {
+       expected: `T ≥ T0+3（T−2 样本可取得）且晚于暂停确认 tick；当前 T=${config.targetTick}`,
+       observed: `最后样本 tick=${String(maxTick)} pauseConfirmedTick=${String(facts.context.pauseConfirmedTick)}`,
+@@ -384,12 +440,12 @@ export function checkLabCalibration(config: LabExperimentConfig, facts: Calibrat
+       note: runIdOk ? undefined : "不同运行/用户的资料混用或 runId 缺失",
+     });
+     const sampler = facts.context.sampler;
+-    checks.boolean("provenance", "sampler_declared", isNonEmptyString(String(sampler?.name ?? "")) && isNonEmptyString(String(sampler?.version ?? "")), {
++    checks.boolean("provenance", "sampler_declared", isNonEmptyString(sampler?.name) && isNonEmptyString(sampler?.version), {
+       expected: "只读采样器名称与版本",
+       observed: JSON.stringify(sampler),
+     });
+     const codeSource = facts.context.codeSource;
+-    if (isNonEmptyString(String(codeSource?.repoHead ?? "")) && isNonEmptyString(String(codeSource?.labConfigSha256 ?? ""))) {
++    if (isNonEmptyString(codeSource?.repoHead) && isNonEmptyString(codeSource?.labConfigSha256)) {
+       checks.boolean("provenance", "code_source", true, {
+         observed: `repoHead=${String(codeSource?.repoHead)} labConfigSha256=${String(codeSource?.labConfigSha256)}`,
+       });
+diff --git a/test/lab/terminal-transfer/controlRemediation.test.ts b/test/lab/terminal-transfer/controlRemediation.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..d2d7c82759748b1b7559843420ca1dce1392a729
+--- /dev/null
++++ b/test/lab/terminal-transfer/controlRemediation.test.ts
+@@ -0,0 +1,19 @@
++/** Node's real lab-tool suites are exercised under the normal Jest collection.
++ * They mock only I/O ports; no game server or real process termination is used. */
++import { spawnSync } from "node:child_process";
++import { join } from "node:path";
++
++describe("Control Remediation I tool integration", () => {
++  for (const suite of ["calibration", "memory", "stop"]) {
++    it(`executes the ${suite} tool suite`, () => {
++      const result = spawnSync(process.execPath, ["--test", join(__dirname, "tools", `${suite}.spec.cjs`)], {
++        encoding: "utf8", timeout: 60000, maxBuffer: 4 * 1024 * 1024,
++      });
++      if (result.error || result.status !== 0) {
++        throw new Error(`${suite} failed: ${String(result.error ?? result.status)}\n${result.stdout}\n${result.stderr}`);
++      }
++      expect(result.stdout).toMatch(/# fail 0/);
++      expect(result.stdout).not.toMatch(/# tests 0\b/);
++    }, 65000);
++  }
++});
+diff --git a/test/lab/terminal-transfer/tools/README.md b/test/lab/terminal-transfer/tools/README.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..7bf7572b523c8ecfe7eb3419acb815bcd3058c97
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/README.md
+@@ -0,0 +1,85 @@
++# Control Remediation I：实验控制工具
++
++这些文件只服务于一次性本机 Terminal 实验，不进入生产 bundle，不实现 Treasury 的授权或结算。`calibrationCheck.ts` 是本补丁唯一修改的既有实现；原有 main、observer、single-shot、sendGate、controlRecord 和原构建器均未修改。
++
++## 验证状态
++
++本实现交付时已经做了 Node 定向测试、实际 CLI 0/1/2 退出码测试和选定 TypeScript 文件的有限检查。尚未在完整仓库、Windows 进程树或真实 Screeps 安装上验收。工具的退出码/`stop-result.ok` 只反映控制流程，不代表 `ENGINE_LAB_PASS`，也不证明已经发生 100H 转运。
++
++所有实际环境操作须有执行会话中覆盖新实验的授权。这里没有安装、创建世界、装载代码或生产上传命令。不要连接既有世界、正式服、PTR、真实账号。
++
++## 代码边界
++
++- `controlProbe.ts` 是只读准备入口，读取现有控制槽和实际世界；根模块只导出 `loop`，不加载 send 入口，不写 Memory。`build-control-probe.cjs` 只构建固定四模块依赖图。
++- `memory-control.cjs` 复用原 `controlRecord.ts` 的校验和 4096 字节语义。初始化、武装、撤装只走实际 env Memory。撤装保留 attempted/结果并设置既有 `stopped=true`，不能重新武装。
++- `stop-controller.cjs` 消费真实 console 封装，按完整窗口或 180 秒先到请求暂停，并确认暂停；故障时走有界进程树终止。
++- `local-runtime.cjs` 使用指定隔离安装的依赖，检查读取/写入 Memory 的源码路径与 hash；不把上游版本名当成本地安装证明。
++- `process-scope.cjs` 只允许绑定一个 `node <隔离根目录内的绝对入口路径>` 进程，核对 PID、出生标记、可执行文件和命令行；不接受 shell/npm 包装或仅把隔离路径放在无关参数中的进程。实际 Windows/Linux 终止行为仍需 Agent 验证。
++- `lab-control.cjs` 连接上述工具。管理侧读回与玩家脚本读回分别记载，前者明确为 `playerConfirmed=false`。
++
++## 离线测试
++
++在完整仓库运行 `npm ci` 后，从仓库根执行：
++
++```bash
++node --test test/lab/terminal-transfer/tools/calibration.spec.cjs \
++  test/lab/terminal-transfer/tools/memory.spec.cjs \
++  test/lab/terminal-transfer/tools/stop.spec.cjs
++npx jest --config jest.config.cjs --runInBand --runTestsByPath \
++  test/lab/terminal-transfer/controlRemediation.test.ts
++```
++
++Jest wrapper 包含三个测试，调用上述真实 Node 测试套件；Node 的内部用例数与 Jest wrapper 用例数不能相加冒充全仓测试数。Node 使用项目实际安装的 TypeScript；交付者本地只用了全局 TypeScript 5.8.3，不能替代仓库锁定版本的验证。
++
++## 命令入口
++
++先执行 `node test/lab/terminal-transfer/tools/lab-control.cjs --help`。所有连接参数必须显式给出：
++
++```text
++--command <inspect|initialize|arm|disarm|observe-false|observe-armed|facts|run-formal>
++--environment <新的隔离实验根目录，内部为 server/ 安装目录>
++--host <127.0.0.1 或 ::1> --port <本实验 storage RPC 端口>
++--pid <本实验 Node launcher PID>
++--user <合成用户 ID> --username <lab- 或 lab_ 开头的合成用户名>
++--experiment <labConfig.ts 中相同的实验 ID>
++--out <此次命令专用的新证据目录，父目录已存在>
++```
++
++每个命令使用不同的 `--out`，拒绝覆盖旧输出。用户名和实验 ID 必须与编译配置相同；CLI 不是第二个运行时配置入口。证据目录应在隔离环境之外，避免环境清理时丢失日志。
++
++额外参数：
++
++| 命令 | 额外参数 |
++|---|---|
++| initialize、arm、observe-false、observe-armed | `--probe <只读准备产物 main.js>` |
++| arm | `--proof <observe-false 的 console.jsonl>` |
++| facts | `--proof <observe-armed 的 console.jsonl>`、`--last-world-change <最后一次 fixture/map 修改的真实 ISO 时间>` |
++| run-formal | `--proof <observe-armed 的 console.jsonl>`、`--facts <facts 命令产出的 calibration-facts.json>`、`--observer <observer.js>`、`--single-shot <single-shot.js>`、`--main <正式 main.js>` |
++
++正式三产物各自从独立构建目录读取同目录 manifest，要求源码 HEAD 和活动模块全部字节匹配。工具只回读和核对装载，不负责上传。
++
++## 操作顺序（Agent 有授权后执行）
++
++1. 创建新隔离环境、合成用户和两端合法 Terminal，完成地图/fixture 初始化，保存原始资料。源/目标仍为 W1N57→W10N57，H/100。实际身份、费用、结构 ID 重新读取；不能复用 cal-0002 的已结束世界。
++2. 在 `labConfig.ts` 中绑定本轮身份和经实测的费用，准备阶段的 T 仅为未使用占位值，不构成正式发送窗口。源码提交后构建只读准备产物：
++   `node test/lab/terminal-transfer/tools/build-control-probe.cjs --out <仓库外的新目录>`。
++   活动代码只装载这个产物的 `main` 模块，不得残留其他经济入口。
++3. 用户正常初始化后 env Memory 须已经是合法 JSON 对象。工具对缺失或损坏的整份 Memory 不会自动替换成 `{}`。若它还没有由真实 runner 初始化，先按已授权只读启动流程取得初始化事实；不要对错误路径写一个空对象蒙混过去。
++4. 暂停并确认稳定，运行 `inspect`、`initialize`。后者仅为缺失控制槽创建 `armed=false, attempted=false`，不覆盖已有记录。
++5. 运行 `observe-false`：工具先订阅并确认外部通道，再恢复一次；同一 bot 两个真实 tick 读到未武装记录后自动暂停。以其原始 `console.jsonl` 运行 `arm`，只做一次 false→true 写入。
++6. 运行 `observe-armed`：同一只读入口、同一个控制记录，经两个真实 tick 读到 armed=true、attempted=false 后自动暂停。暂停后的 env 记录再次与玩家读数比较。任何失败不得重新武装、覆盖旧记录或清除 attempted。
++7. 此时记录稳定 T0，运行 `facts` 保存原始两端观测与暂停事实。**现在才首次固定最终 T≥T0+3**；世界持续暂停。不要改身份、路线、费用或已武装记录。更新 `labConfig.ts` 的最终 T 和同步文档示例，提交、完成受影响验证、重建正式三产物，完整装载回读。
++8. 使用实际 armed 原始日志和 facts 运行 `run-formal`。其再次验证实际 env 记录、活动模块、暂停点、C02 和暂停世界端点；订阅就绪后设置固定期限并仅恢复一次。
++9. 正常收齐 T−2..T+20 后立即请求暂停；180 秒先到、采样异常或发送前拒绝则终止实验。保存终态，撤装并终止绑定进程树。Agent 独立解析 send 边界、实际返回、后续交易与库存变化，不能用工具 exit 0 当成转运成功。
++
++准备阶段的两次恢复没有可达发送路径；正式阶段只有一次恢复和一个固定 T。代码装载及初始化仍由 Agent 在其环境执行并保存证据，本工具不暗中补做它们。
++
++## 停止边界与失败处理
++
++外部期限从恢复请求前使用单调时钟启动，不能在重连或重复样本后续期。完整窗口收到后，请求暂停的实际时刻计入此前日志落盘耗时；延迟超过 1 秒不计为正常及时停止。暂停返回值、暂停标记、稳定 tick 与进程树退出是不同事实。
++
++本轮工具支持约 1 秒/tick 的隔离 fixture；连续 5 秒没有目标用户 console 封装会按通道故障停止，不能解释为“没有执行 send”。这是外部实验保护，不是任意 Screeps 世界的性能保证。若真实环境不满足此条件，应报告环境不适配，不在运行中扩大限制。
++
++暂停或稳定确认 5 秒内失败，会尝试终止已绑定进程树；终止确认也有边界。若无法确认，结果必须保留 `PROCESS_STOP_UNCONFIRMED`，由 Agent 核对原 PID/启动身份及监听状态。绝不 `killall node`、全局 prune、删除未知目录或恢复该实验续跑。
++
++发生失败时先保存输出，不静默修改代码后重新发一笔。当前 `calibrationCheck` 改动不能让旧失败实验升级为成功；库存不变或交易视图为空也不单独构成未执行证明。
+diff --git a/test/lab/terminal-transfer/tools/build-control-probe.cjs b/test/lab/terminal-transfer/tools/build-control-probe.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..650797986aa2e7936ece206bebf4b53f9fd0f116
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/build-control-probe.cjs
+@@ -0,0 +1,44 @@
++#!/usr/bin/env node
++'use strict';
++// A four-module fixed-graph probe build. No changes to the original Rollup builder
++// or its three outputs. Runtime require cannot reach Node, main or singleShot.
++const fs = require('node:fs');
++const path = require('node:path');
++const { createHash } = require('node:crypto');
++const { execFileSync } = require('node:child_process');
++const { LAB, emit } = require('./ts-module.cjs');
++const hash = data => createHash('sha256').update(data).digest('hex');
++const FILES = ['labConfig.ts', 'controlRecord.ts', 'worldRead.ts', 'tools/controlProbe.ts'];
++function buildProbe() {
++  const factories = FILES.map(file => `${JSON.stringify(file.slice(0, -3))}: function(exports,module,require){\n${emit(file)}\n}`).join(',\n');
++  const code = `/* Read-only control probe; PREPARED_NOT_RUN. */\n'use strict';\n(function(){\nconst factories={${factories}};\nconst cache=Object.create(null);\nfunction load(id){\n if(!Object.prototype.hasOwnProperty.call(factories,id)) throw new Error('unregistered probe module: '+id);\n if(cache[id]) return cache[id].exports;\n const m={exports:{}}; cache[id]=m;\n factories[id](m.exports,m,function(name){\n  const target=name.startsWith('../') ? name.slice(3) : name.startsWith('./') ? name.slice(2) : '';\n  if(!['labConfig','controlRecord','worldRead'].includes(target)) throw new Error('probe dependency refused');\n  return load(target);\n });\n return m.exports;\n}\nexports.loop=load('tools/controlProbe').loop;\n})();\n`;
++  return { code, sources: Object.fromEntries(FILES.map(file => [file, hash(fs.readFileSync(path.join(LAB, file)))])) };
++}
++function writeProbe(out) {
++  // mkdir non-recursive with wx files: no overwrite, no symlink output target.
++  const dir = path.resolve(out), parent = fs.realpathSync(path.dirname(dir));
++  const repo = path.resolve(LAB, '../../..');
++  const relative = path.relative(repo, parent);
++  if (relative === '' || (!relative.startsWith('..' + path.sep) && !path.isAbsolute(relative))) {
++    throw new Error('probe output must be a NEW directory outside the repository');
++  }
++  if (fs.existsSync(dir)) throw new Error('output already exists');
++  const result = buildProbe();
++  const config = require('./ts-module.cjs').load('labConfig.ts').LAB_EXAMPLE_EXPERIMENT;
++  let repoHead = 'unknown';
++  try { repoHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim(); } catch {}
++  fs.mkdirSync(dir);
++  fs.writeFileSync(path.join(dir, 'main.js'), result.code, { flag: 'wx' });
++  const manifest = { status: 'PREPARED_NOT_RUN', mode: 'control-probe', repoHead, config,
++    sources: result.sources, output: { file: 'main.js', bytes: Buffer.byteLength(result.code), sha256: hash(result.code) } };
++  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx' });
++  return manifest;
++}
++if (require.main === module) {
++  try {
++    const args = process.argv.slice(2);
++    if (args.length !== 2 || args[0] !== '--out') throw new Error('usage: build-control-probe.cjs --out <new-external-directory>');
++    console.log(JSON.stringify(writeProbe(args[1]), null, 2));
++  } catch (error) { console.error(error.message); process.exitCode = 1; }
++}
++module.exports = { buildProbe, writeProbe };
+diff --git a/test/lab/terminal-transfer/tools/calibration.spec.cjs b/test/lab/terminal-transfer/tools/calibration.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..135e481c7eddf02f7231f78469960b40de5dda57
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/calibration.spec.cjs
+@@ -0,0 +1,87 @@
++'use strict';
++const { test } = require('node:test');
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const path = require('node:path');
++const os = require('node:os');
++const { spawnSync, execFileSync } = require('node:child_process');
++const { LAB, load } = require('./ts-module.cjs');
++const check = load('calibrationCheck.ts').checkLabCalibration;
++const config = require('./fixtures/review-base-config.json');
++const source = fs.readFileSync(path.join(__dirname, 'fixtures/review-base-facts.json'));
++function base() {
++  const facts = JSON.parse(source); facts.context.codeSource = { repoHead: 'archived-source', labConfigSha256: 'archived-config' }; return facts;
++}
++function run(mutate, expected = 'fail') {
++  const facts = base(), cfg = structuredClone(config); mutate(facts, cfg);
++  const before = JSON.stringify(facts); const result = check(cfg, facts);
++  assert.equal(result.status, expected, JSON.stringify(result.summary));
++  assert.equal(JSON.stringify(facts), before, 'checker mutated evidence');
++  return result;
++}
++test('P01: archived independent baseline and reversed healthy rows pass without mutation', () => {
++  run(() => {}, 'pass'); run(f => f.samples.reverse(), 'pass');
++  assert.deepEqual(fs.readFileSync(path.join(__dirname,'fixtures/review-base-facts.json')), source);
++});
++const cases = [
++  ['P02 missing all outgoing', f => f.samples.forEach(s => delete s.transactions.outgoing)],
++  ['P03 missing latest two views', f => delete f.samples.at(-1).transactions],
++  ['P04 early failed quote retains a number', f => f.samples[0].feeQuote.status = 'unavailable'],
++  ['P05 missing latest target H/energy', f => {delete f.samples.at(-1).target.resourceAmount; delete f.samples.at(-1).target.energy;}],
++  ['P06 source H unstable', f => f.samples[0].source.resourceAmount = 0],
++  ['P07 newest deficit cannot hide behind reversed rows', f => {f.samples.at(-1).source.resourceAmount=0;f.samples.reverse();}],
++  ['P08 pause 200 leaves no full T201 window', f => f.context.pauseConfirmedTick=200],
++  ['P08 pause 199 also loses first sample', f => f.context.pauseConfirmedTick=199],
++  ['P09 duplicate tick', f => f.samples[1].tick=f.samples[0].tick],
++  ['P09 conflicting same tick', f => {f.samples[1].tick=f.samples[0].tick;f.samples[1].source.energy=10;}],
++  ['P09 negative tick', f => f.samples[0].tick=-1],
++  ['P09 fractional tick', f => f.samples[0].tick=1.5],
++  ['P09 string tick', f => f.samples[0].tick='196'],
++  ['P09 overflow', (f,c) => { f.context.pauseConfirmedTick=Number.MAX_SAFE_INTEGER;c.targetTick=Number.MAX_SAFE_INTEGER; }],
++  ['P11 exact description conflict', (f,c) => f.samples[0].transactions.outgoing.records.push({description:c.description})],
++  ['malformed row', f => f.samples[0]=null],
++  ['malformed endpoint', f => f.samples[0].source=null],
++  ['malformed controller', f => f.samples[0].source.controller=null],
++  ['malformed transaction record', f => f.samples[1].transactions.outgoing.records.push(null)],
++  ['missing earlier target view', f => delete f.samples[0].transactions.incoming],
++  ['null shard', f => f.samples[0].shard=null],
++  ['prototype-like invalid ID is diagnosed, not executed', f => f.samples[0].source.terminalId='__proto__'],
++];
++for (const [name, mutate] of cases) test(name, () => run(mutate));
++for (const value of [undefined, null, NaN, Infinity, -1, 0.5, '0']) {
++  test('P05 invalid required number: ' + String(value), () => run(f => f.samples[1].target.energy=value));
++}
++for (const side of ['source','target']) for (const field of ['energy','freeCapacity','cooldown']) {
++  test('stability ' + side + '/' + field, () => run(f => f.samples[0][side][field] += 1));
++}
++test('P10 reports shard, source ID, cap together', () => {
++  const result = run((f,c) => {c.shardName='wrong';c.sourceTerminalId='wrong';c.maxFeeEnergy=10;});
++  for (const name of ['shard_matches_config','source_terminal_id','cap_binds_quote']) assert.equal(result.checks.find(c=>c.item===name).result,'fail');
++});
++test('P11 unrelated description allowed; target zero remains valid', () => run(f => {f.samples[0].transactions.outgoing.records.push({description:'unrelated'});}, 'pass'));
++test('P12 non-26 quote binds exactly; candidate cap never changes itself', () => {
++  for(const cap of [36,37,38]) run((f,c)=>{f.samples.forEach(s=>s.feeQuote.energyCost=37);c.maxFeeEnergy=cap;},cap===37?'pass':'fail');
++});
++test('invalid top-level values give diagnostics instead of TypeError', () => {
++  for (const input of [null,undefined,{},[],{context:null,samples:[null]}]) assert.equal(check(config,input).status,'fail');
++});
++test('actual existing CLI: healthy=0 / missing-view=1 / bad JSON=2, files unchanged', () => {
++  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'calibration-cli-'));
++  try {
++    fs.mkdirSync(path.join(tmp,'scripts'));fs.mkdirSync(path.join(tmp,'test/lab/terminal-transfer'),{recursive:true});
++    fs.copyFileSync(path.resolve(LAB,'../../../scripts/verify-lab-calibration.mjs'),path.join(tmp,'scripts/verify-lab-calibration.mjs'));
++    fs.copyFileSync(path.join(LAB,'calibrationCheck.ts'),path.join(tmp,'test/lab/terminal-transfer/calibrationCheck.ts'));
++    fs.writeFileSync(path.join(tmp,'test/lab/terminal-transfer/labConfig.ts'),'export const LAB_EXAMPLE_EXPERIMENT = '+JSON.stringify(config)+';');
++    execFileSync('git',['init','-q'],{cwd:tmp});execFileSync('git',['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--allow-empty','-qm','CLI fixture'],{cwd:tmp});
++    const file=path.join(tmp,'facts.json');
++    for (const [kind,expected] of [['healthy',0],['missing',1],['bad',2]]) {
++      const facts=base();if(kind==='missing') delete facts.samples[1].transactions;
++      const bytes=kind==='bad'?'{':JSON.stringify(facts);fs.writeFileSync(file,bytes);
++      const env={...process.env,NODE_PATH:path.resolve(require.resolve('typescript'),'../../..')};
++      const p=spawnSync(process.execPath,[path.join(tmp,'scripts/verify-lab-calibration.mjs'),'--facts',file],{encoding:'utf8',env});
++      assert.equal(p.status,expected,p.stderr);assert.equal(fs.readFileSync(file,'utf8'),bytes);
++      if(kind!=='bad') assert.equal(JSON.parse(p.stdout).report.status,expected===0?'pass':'fail');
++      else assert.match(p.stderr,/JSON/);
++    }
++  } finally {fs.rmSync(tmp,{recursive:true,force:true});}
++});
+diff --git a/test/lab/terminal-transfer/tools/controlProbe.ts b/test/lab/terminal-transfer/tools/controlProbe.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..62a116b8fa88c5c992840561db4f5c36c2f2e6ec
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/controlProbe.ts
+@@ -0,0 +1,41 @@
++/** Read-only preparation entry. Never loads main/singleShot or writes Memory. */
++import { LAB_EXAMPLE_EXPERIMENT as config } from "../labConfig";
++import { readControlRecord } from "../controlRecord";
++import { readEndpoint, readFeeQuote, readTransactionViews, describeError } from "../worldRead";
++let samples = 0;
++let lastTick: number | undefined;
++
++function endpoint(side: "source" | "target") {
++  const reading = readEndpoint(config, side);
++  if (reading.readStatus !== "ok") return reading;
++  try {
++    const room = Game.rooms[reading.roomName];
++    const terminal = room.terminal;
++    const controller = room.controller;
++    return { ...reading, my: terminal.my, isActive: terminal.isActive(), controller: {
++      present: controller !== undefined, my: controller?.my, level: controller?.level,
++      ownerUsername: controller?.owner?.username,
++    } };
++  } catch (error) { return { ...reading, readStatus: "read_error", error: describeError(error) }; }
++}
++export function loop(): void {
++  const tick = Game.time;
++  if (tick === lastTick) return;
++  lastTick = tick;
++  if (samples >= 32) return; // External controller also has its own finite deadline.
++  samples += 1;
++  const source = endpoint("source");
++  const target = endpoint("target");
++  let shard: { name?: unknown; readError?: string };
++  try { shard = { name: Game.shard?.name }; }
++  catch (error) { shard = { readError: describeError(error) }; }
++  console.log(JSON.stringify({
++    kind: "lab-control-sample", sampler: { name: "lab-control-probe", version: "1" },
++    tick, expectedExperimentId: config.experimentId, shard,
++    // The actual envelope binds userId; this value comes from the observed owner,
++    // NOT from config.username. Final readiness compares both facts externally.
++    user: { username: source.ownerUsername }, control: readControlRecord(), source, target,
++    feeQuote: readFeeQuote(config.amount, config.sourceRoomName, config.targetRoomName),
++    transactions: readTransactionViews(),
++  }));
++}
+diff --git a/test/lab/terminal-transfer/tools/fixtures/README.md b/test/lab/terminal-transfer/tools/fixtures/README.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..0fb079071de25308bc3263999e8b45f3c32ecac8
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/fixtures/README.md
+@@ -0,0 +1,13 @@
++# 固定回归资料来源
++
++基线仓库：`ceyirelehe47/screeps-bot`，提交 `d69726a92d46c3ab334355a6625ef253c1523a86`。
++
++`review-base-facts.json` 是该提交下以下文件的逐字节副本：
++`openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i-calibration-rerun/engine-run/s02-calibration-facts.json`。
++Git blob SHA：`acfbb51894d268d288480ddc2e9a1c8ad4411a9f`。
++
++`review-base-config.json` 是同一提交 `test/lab/terminal-transfer/labConfig.ts` 实际 `LAB_EXAMPLE_EXPERIMENT` 常量的 JSON 表示；原 TS blob SHA：`357543a08e7ab899c73339f5b94f91ceb2379f50`。
++
++这两份分别来自旧配置与独立实测资料，用于固定回归；配置不是由基线事实反向生成的。故障样例只在内存深拷贝上修改，并断言文件字节不变。未来新世界绑定改变时，不将本目录旧资料同步改成新身份。测试用 `codeSource` 字符串是合成来源占位，不冒充新实验源码身份。
++
++旧运行 cal-0002 在 T201 没有有效控制记录，结论仍是 INCONCLUSIVE。本目录合法预检对照通过，只能证明这些历史输入通过比较函数，不能证明旧实验曾武装、send 或转运成功。
+diff --git a/test/lab/terminal-transfer/tools/fixtures/review-base-config.json b/test/lab/terminal-transfer/tools/fixtures/review-base-config.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..5b143b39f4430d3fd43e827ee80a496ccc095324
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/fixtures/review-base-config.json
+@@ -0,0 +1,16 @@
++{
++  "experimentId": "lab-run1-cal-0002",
++  "mode": "observer",
++  "shardName": "Forst",
++  "username": "lab-cal-user-0002",
++  "sourceRoomName": "W1N57",
++  "targetRoomName": "W10N57",
++  "sourceTerminalId": "aa17545ac3100001",
++  "targetTerminalId": "aa17545ac3100002",
++  "resourceType": "H",
++  "amount": 100,
++  "description": "lab-run1-cal-0002 W1N57 to W10N57 100H",
++  "targetTick": 201,
++  "maxFeeEnergy": 26,
++  "maxSamples": 32
++}
+diff --git a/test/lab/terminal-transfer/tools/fixtures/review-base-facts.json b/test/lab/terminal-transfer/tools/fixtures/review-base-facts.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..acfbb51894d268d288480ddc2e9a1c8ad4411a9f
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/fixtures/review-base-facts.json
+@@ -0,0 +1,154 @@
++{
++  "factsKind": "lab-calibration-facts",
++  "context": {
++    "collectedAtWallClock": "2026-09-09T08:28:58.048Z",
++    "runId": "cal-rerun-run-0002",
++    "paused": true,
++    "pauseConfirmedTick": 198,
++    "lastAdminChangeWallClock": "2026-09-09T08:28:20.203Z",
++    "user": {
++      "id": "c4c7544a1513ce9",
++      "idSource": "管理侧 db.users 按 username 查询（s02-user-lookup.txt）+ console 频道 user:c4c7544a1513ce9/console 实际收流交叉"
++    },
++    "sampler": {
++      "name": "lab-meta-probe",
++      "version": "1"
++    }
++  },
++  "samples": [
++    {
++      "kind": "lab-meta-facts-sample",
++      "sampler": {
++        "name": "lab-meta-probe",
++        "version": "1"
++      },
++      "tick": 196,
++      "shard": {
++        "name": "Forst"
++      },
++      "user": {
++        "username": "lab-cal-user-0002"
++      },
++      "worldSize": 59,
++      "source": {
++        "readStatus": "ok",
++        "terminalId": "aa17545ac3100001",
++        "ownerUsername": "lab-cal-user-0002",
++        "my": true,
++        "isActive": true,
++        "controller": {
++          "present": true,
++          "my": true,
++          "level": 8,
++          "ownerUsername": "lab-cal-user-0002"
++        },
++        "resourceAmount": 1000,
++        "energy": 10000,
++        "freeCapacity": 289000,
++        "cooldown": 0
++      },
++      "target": {
++        "readStatus": "ok",
++        "terminalId": "aa17545ac3100002",
++        "ownerUsername": "lab-cal-user-0002",
++        "my": true,
++        "isActive": true,
++        "controller": {
++          "present": true,
++          "my": true,
++          "level": 8,
++          "ownerUsername": "lab-cal-user-0002"
++        },
++        "resourceAmount": 0,
++        "energy": 2000,
++        "freeCapacity": 298000,
++        "cooldown": 0
++      },
++      "feeQuote": {
++        "status": "ok",
++        "energyCost": 26
++      },
++      "transactions": {
++        "incoming": {
++          "status": "ok",
++          "count": 0,
++          "records": []
++        },
++        "outgoing": {
++          "status": "ok",
++          "count": 0,
++          "records": []
++        }
++      },
++      "collectedAtWallClock": "2026-09-09T08:28:57.042Z",
++      "runId": "cal-rerun-run-0002"
++    },
++    {
++      "kind": "lab-meta-facts-sample",
++      "sampler": {
++        "name": "lab-meta-probe",
++        "version": "1"
++      },
++      "tick": 197,
++      "shard": {
++        "name": "Forst"
++      },
++      "user": {
++        "username": "lab-cal-user-0002"
++      },
++      "worldSize": 59,
++      "source": {
++        "readStatus": "ok",
++        "terminalId": "aa17545ac3100001",
++        "ownerUsername": "lab-cal-user-0002",
++        "my": true,
++        "isActive": true,
++        "controller": {
++          "present": true,
++          "my": true,
++          "level": 8,
++          "ownerUsername": "lab-cal-user-0002"
++        },
++        "resourceAmount": 1000,
++        "energy": 10000,
++        "freeCapacity": 289000,
++        "cooldown": 0
++      },
++      "target": {
++        "readStatus": "ok",
++        "terminalId": "aa17545ac3100002",
++        "ownerUsername": "lab-cal-user-0002",
++        "my": true,
++        "isActive": true,
++        "controller": {
++          "present": true,
++          "my": true,
++          "level": 8,
++          "ownerUsername": "lab-cal-user-0002"
++        },
++        "resourceAmount": 0,
++        "energy": 2000,
++        "freeCapacity": 298000,
++        "cooldown": 0
++      },
++      "feeQuote": {
++        "status": "ok",
++        "energyCost": 26
++      },
++      "transactions": {
++        "incoming": {
++          "status": "ok",
++          "count": 0,
++          "records": []
++        },
++        "outgoing": {
++          "status": "ok",
++          "count": 0,
++          "records": []
++        }
++      },
++      "collectedAtWallClock": "2026-09-09T08:28:58.048Z",
++      "runId": "cal-rerun-run-0002"
++    }
++  ]
++}
+diff --git a/test/lab/terminal-transfer/tools/lab-control.cjs b/test/lab/terminal-transfer/tools/lab-control.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf0baa7f8442799b1cd977acf292f005ac65c9ed
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/lab-control.cjs
+@@ -0,0 +1,247 @@
++#!/usr/bin/env node
++'use strict';
++const fs = require('node:fs');
++const path = require('node:path');
++const { createHash, randomUUID } = require('node:crypto');
++const { performance } = require('node:perf_hooks');
++const { execFileSync } = require('node:child_process');
++const { LAB, load } = require('./ts-module.cjs');
++const { readMemory, updateMemory, assessControlSamples } = require('./memory-control.cjs');
++const { buildProbe } = require('./build-control-probe.cjs');
++const { decodeEnvelope, healthySample, createStopController } = require('./stop-controller.cjs');
++const { bounded, connectLocal } = require('./local-runtime.cjs');
++const hash = value => createHash('sha256').update(value).digest('hex');
++const COMMANDS = ['inspect', 'initialize', 'arm', 'disarm', 'observe-false', 'observe-armed', 'facts', 'run-formal'];
++
++function parseArgs(args) {
++  if (args.length === 1 && args[0] === '--help') return { help: true };
++  const options = {}, allowed = new Set(['command','environment','host','port','pid','user','username','experiment','out','probe','proof','facts','last-world-change','observer','single-shot','main']);
++  for (let i = 0; i < args.length; i += 2) {
++    const key = args[i].replace(/^--/, '');
++    if (!args[i].startsWith('--') || !allowed.has(key) || options[key] !== undefined || !args[i + 1] || args[i + 1].startsWith('--')) throw new Error('unknown/duplicate/incomplete argument: ' + args[i]);
++    options[key] = args[i + 1];
++  }
++  for (const key of ['command','environment','host','port','pid','user','username','experiment','out']) if (!options[key]) throw new Error('required --' + key);
++  if (!COMMANDS.includes(options.command)) throw new Error('unknown command');
++  if (['initialize','arm','observe-false','observe-armed'].includes(options.command) && !options.probe) throw new Error('--probe required for no-send entry verification');
++  if (['arm','facts','run-formal'].includes(options.command) && !options.proof) throw new Error('--proof raw player console required');
++  if (options.command === 'facts' && !options['last-world-change']) throw new Error('--last-world-change actual fixture/map change timestamp required');
++  if (options.command === 'run-formal') for (const key of ['facts','observer','single-shot','main']) if (!options[key]) throw new Error('required --' + key);
++  return options;
++}
++function createEvidence(dir) {
++  dir = path.resolve(dir);
++  fs.mkdirSync(dir); // explicitly NEW directory; never merge/overwrite a prior attempt
++  const auditFd = fs.openSync(path.join(dir, 'actions.jsonl'), 'wx');
++  const rawFd = fs.openSync(path.join(dir, 'console.jsonl'), 'wx');
++  const write = (fd, data) => {
++    const bytes = Buffer.from(JSON.stringify(data) + '\n'); let offset = 0;
++    while (offset < bytes.length) offset += fs.writeSync(fd, bytes, offset, bytes.length - offset);
++    fs.fsyncSync(fd);
++  };
++  return {
++    dir, audit: event => write(auditFd, { wallClock: new Date().toISOString(), ...event }),
++    raw: envelope => write(rawFd, envelope),
++    file: (name, value) => fs.writeFileSync(path.join(dir, name), JSON.stringify(value, null, 2) + '\n', { flag: 'wx' }),
++    close() { fs.closeSync(rawFd); fs.closeSync(auditFd); },
++  };
++}
++function proofSamples(file, userId) {
++  const bytes = fs.readFileSync(file);
++  if (bytes.length > 8 * 1024 * 1024) throw new Error('proof unexpectedly large');
++  const samples = [];
++  for (const line of bytes.toString('utf8').split('\n').filter(Boolean)) {
++    const envelope = JSON.parse(line);
++    for (const sample of decodeEnvelope(envelope, userId)) {
++      if (sample.kind === 'lab-control-sample') samples.push({ ...sample, collectedAtWallClock: envelope.recvWallClock });
++      else if (/error|truncated/.test(sample.kind || '')) throw new Error('proof contains an observation error');
++    }
++  }
++  return { samples, sha256: hash(bytes) };
++}
++async function verifyProof(file, io, config, armed) {
++  const proof = proofSamples(file, io.binding.userId);
++  const report = assessControlSamples(proof.samples, { userId: io.binding.userId, username: config.username, experimentId: config.experimentId, armed }, await io.readRuntimeMemory());
++  const tick = await io.assertPausedStable();
++  if (!report.ready || !proof.samples.every(s => healthySample(s, config) && s.tick <= tick)) throw new Error('player roundtrip not confirmed: ' + report.issues.join(';'));
++  return { ...proof, tick };
++}
++async function assertProbe(io, file) {
++  const local = fs.readFileSync(file, 'utf8');
++  if (local !== buildProbe().code) throw new Error('probe file does not match current trusted sources');
++  const modules = await io.activeModules();
++  if (Object.keys(modules).length !== 1 || modules.main !== local) throw new Error('only the byte-verified no-send probe may be active during preparation');
++}
++async function assertFormalModules(io, options) {
++  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: path.resolve(LAB, '../../..'), encoding: 'utf8' }).trim();
++  const modules = await io.activeModules();
++  if (Object.keys(modules).sort().join(',') !== 'main,observer,single-shot') throw new Error('unexpected active module set');
++  for (const name of ['observer','single-shot','main']) {
++    const file = path.resolve(options[name]), bytes = fs.readFileSync(file);
++    const manifest = JSON.parse(fs.readFileSync(path.join(path.dirname(file), 'manifest.json')));
++    if (manifest.repoSourceCommit !== head || manifest.output?.sha256 !== hash(bytes) || manifest.output?.bytes !== bytes.length
++        || modules[name] !== bytes.toString('utf8')) throw new Error('active/generated module identity mismatch: ' + name);
++  }
++}
++
++async function subscribeReady(io, onEnvelope) {
++  // A separate external ping proves subscription works. It NEVER impersonates
++  // user console output and cannot count as a player sample or readiness fact.
++  const channel = 'lab-watcher:' + randomUUID();
++  let acknowledge;
++  const acknowledged = new Promise(resolve => { acknowledge = resolve; });
++  await Promise.resolve(io.pubsub.subscribe('*', function(payload) {
++    const receivedChannel = this.channel;
++    if (receivedChannel === channel && payload === 'ready') acknowledge();
++    else onEnvelope({ channel: receivedChannel, payload, recvWallClock: new Date().toISOString(), recvMonotonicMs: performance.now() });
++  }));
++  await bounded(async () => {
++    for (let i = 0; i < 8; i++) {
++      await io.pubsub.publish(channel, 'ready');
++      const heard = await Promise.race([acknowledged.then(() => true), new Promise(resolve => setTimeout(() => resolve(false), 100))]);
++      if (heard) return;
++    }
++    throw new Error('subscription ping was not received');
++  }, 2000, 'subscription handshake');
++}
++
++async function runSession(io, config, mode, armed, evidence) {
++  let controller, seq = 0, lastConsoleAt, healthTimer, fatalBeforeStart;
++  const audit = evidence.audit;
++  await subscribeReady(io, envelope => {
++    try {
++      evidence.raw({ seq: ++seq, ...envelope }); // durable raw append precedes any decision
++      if (envelope.channel === `user:${io.binding.userId}/console`) lastConsoleAt = performance.now();
++      if (controller) controller.ingest(envelope);
++    } catch (error) {
++      if (controller) controller.fault('collector_write_or_decode_failure');
++      else fatalBeforeStart = error;
++    }
++  });
++  if (fatalBeforeStart) throw fatalBeforeStart;
++  await io.assertIdentity();
++  await io.assertPausedStable();
++  controller = createStopController({ userId: io.binding.userId, config, mode, expectedArmed: armed }, {
++    now: () => performance.now(), setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: handle => clearTimeout(handle),
++    audit, pause: () => io.pause(), readState: () => io.readState(), killTree: () => io.killTree(),
++  });
++  const signal = () => controller.fault('operator_interrupt');
++  process.once('SIGINT', signal); process.once('SIGTERM', signal);
++  controller.start(); // immutable 180s deadline BEFORE the sole resume request
++  lastConsoleAt = performance.now();
++  let healthBusy = false;
++  healthTimer = setInterval(() => {
++    if (controller.state !== 'running' || healthBusy) return;
++    healthBusy = true;
++    bounded(() => io.readState(), 1000, 'storage heartbeat').catch(() => controller.fault('storage_disconnected')).finally(() => { healthBusy = false; });
++    // The isolated one-second-tick fixture emits user console envelopes even
++    // for empty logs. Missing transport for 5 seconds is a failed experiment,
++    // not evidence that send did not execute. No reconnection or deadline reset.
++    if (performance.now() - lastConsoleAt > 5000) controller.fault('user_console_stalled');
++  }, 250);
++  try {
++    if (controller.state === 'running') {
++      audit({ kind: 'resume-request', monotonicMs: performance.now(), deadline: controller.deadline });
++      bounded(() => io.resume(), 2000, 'resume').then(result => {
++        if (result !== 'OK') controller.fault('resume_non_ok');
++        else audit({ kind: 'resume-response', result, monotonicMs: performance.now() });
++      }).catch(() => controller.fault('resume_failed_or_unconfirmed'));
++    }
++    const result = await controller.done;
++    evidence.file('stop-result.json', result);
++    if (!result.pauseConfirmed) throw new Error('pause not confirmed; see stop-result.json');
++    const snapshot = await bounded(() => io.finalSnapshot(), 4000, 'final snapshot');
++    evidence.file('paused-snapshot.json', snapshot);
++    if (mode === 'control') {
++      const report = assessControlSamples(result.controlSamples, { userId: io.binding.userId, username: config.username, experimentId: config.experimentId, armed }, snapshot.memory);
++      evidence.file('roundtrip-result.json', report);
++      if (!result.ok || !report.ready) throw new Error('control roundtrip failed');
++      return { result, pausedForNextStage: true }; // no send reachable; same record retained
++    }
++    // Formal run always remains stopped, even when observation/rejection failed.
++    try { await updateMemory(io, 'disarm', config.experimentId, audit); }
++    finally { await bounded(() => io.killTree(), 5000, 'final process-tree stop'); }
++    return { result, processTreeStopped: true };
++  } finally {
++    clearInterval(healthTimer); process.removeListener('SIGINT', signal); process.removeListener('SIGTERM', signal);
++  }
++}
++
++async function execute(options, evidence) {
++  const config = load('labConfig.ts').LAB_EXAMPLE_EXPERIMENT;
++  if (options.experiment !== config.experimentId || options.username !== config.username) throw new Error('CLI identity must equal compiled labConfig.ts; no runtime override');
++  const io = await connectLocal({ environmentRoot: options.environment, host: options.host, port: options.port,
++    pid: options.pid, userId: options.user, username: options.username }, evidence.audit);
++  try {
++    if (options.command === 'inspect') {
++      const tick = await io.assertPausedStable(); return { tick, ...readMemory(await io.readRuntimeMemory()) };
++    }
++    if (['initialize','arm'].includes(options.command)) await assertProbe(io, options.probe);
++    if (options.command === 'arm') await verifyProof(options.proof, io, config, false);
++    if (['initialize','arm','disarm'].includes(options.command)) return await updateMemory(io, options.command, config.experimentId, evidence.audit);
++    if (options.command === 'facts') {
++      const proof = await verifyProof(options.proof, io, config, true);
++      const stamp = options['last-world-change'];
++      if (!Number.isFinite(Date.parse(stamp)) || !proof.samples.every(s => Date.parse(s.collectedAtWallClock) > Date.parse(stamp))) throw new Error('baseline is not after last world modification');
++      const facts = { factsKind: 'lab-calibration-facts', context: {
++        runId: config.experimentId, paused: true, pauseConfirmedTick: proof.tick, lastAdminChangeWallClock: stamp,
++        user: { id: io.binding.userId, idSource: 'verified local user + player console envelope' },
++        sampler: { name: 'lab-control-probe', version: '1' },
++      }, samples: proof.samples.map(sample => ({ ...sample, runId: config.experimentId })) };
++      evidence.file('calibration-facts.json', facts); return { proofSha256: proof.sha256, facts };
++    }
++    if (options.command.startsWith('observe-')) {
++      await assertProbe(io, options.probe);
++      return await runSession(io, config, 'control', options.command === 'observe-armed', evidence);
++    }
++    await verifyProof(options.proof, io, config, true);
++    await assertFormalModules(io, options);
++    const facts = JSON.parse(fs.readFileSync(options.facts, 'utf8'));
++    const tick = await io.assertPausedStable();
++    if (facts.context?.pauseConfirmedTick !== tick || config.targetTick < tick + 3) throw new Error('stale pause point / unreachable formal window');
++    const effectiveFacts = { ...facts, context: { ...facts.context, codeSource: {
++      repoHead: execFileSync('git', ['rev-parse','HEAD'], { cwd: path.resolve(LAB, '../../..'), encoding: 'utf8' }).trim(),
++      labConfigSha256: hash(fs.readFileSync(path.join(LAB, 'labConfig.ts'))),
++    } } };
++    const calibration = load('calibrationCheck.ts').checkLabCalibration(config, effectiveFacts);
++    evidence.file('formal-preflight.json', { config, factsSha256: hash(fs.readFileSync(options.facts)), report: calibration });
++    if (calibration.status !== 'pass') throw new Error('calibration rejected');
++    // Inspect paused raw world again. C02 labels alone cannot validate changed
++    // endpoint state after code reload or the long offline validation phase.
++    const snapshot = await io.finalSnapshot(); evidence.file('formal-before.json', snapshot);
++    const newest = [...facts.samples].sort((a,b) => a.tick - b.tick).at(-1);
++    for (const side of ['source','target']) {
++      const object = snapshot.objects.find(o => o._id === config[side + 'TerminalId']);
++      const sample = newest[side];
++      if (!object || object.type !== 'terminal' || object.room !== config[side + 'RoomName']
++          || (object.store?.H ?? 0) !== sample.resourceAmount || (object.store?.energy ?? 0) !== sample.energy) throw new Error('paused endpoint differs from baseline');
++    }
++    return await runSession(io, config, 'formal', true, evidence);
++  } catch (error) {
++    // Failure never re-arms, resumes again or clears attempted. Persist what is
++    // obtainable, then stop only the bound environment, including prepare errors.
++    try { evidence.audit({ kind: 'command-failed', error: String(error) }); } catch {}
++    try { await bounded(() => io.pause(), 2000, 'failure pause'); } catch {}
++    try { await bounded(() => io.killTree(), 5000, 'failure process stop'); }
++    catch (killError) { throw new Error(`${error}; PROCESS_STOP_UNCONFIRMED: ${killError}`); }
++    throw error;
++  }
++}
++if (require.main === module) {
++  let evidence;
++  (async () => {
++    const options = parseArgs(process.argv.slice(2));
++    if (options.help) {
++      console.log('lab-control.cjs --command <' + COMMANDS.join('|') + '> --environment <new-lab-dir> --host <127.0.0.1|::1> --port <storage-port> --pid <bound-launcher> --user <synthetic-id> --username <lab-name> --experiment <compiled-id> --out <NEW-evidence-dir> [--probe <main.js>] [--proof <raw-console.jsonl>] [--facts <facts.json>] [--last-world-change <ISO>] [--observer <file> --single-shot <file> --main <file>]'); return 0;
++    }
++    evidence = createEvidence(options.out);
++    evidence.audit({ kind: 'command', options, node: process.version });
++    const result = await execute(options, evidence);
++    evidence.file('result.json', result); console.log(JSON.stringify(result, null, 2));
++    return result?.result && !result.result.ok ? 1 : 0;
++  })().then(code => { evidence?.close(); process.exit(code); }, error => {
++    try { evidence?.audit({ kind: 'fatal', error: String(error) }); evidence?.close(); } catch {}
++    console.error(String(error)); process.exit(1);
++  });
++}
++module.exports = { parseArgs, createEvidence, proofSamples, verifyProof, assertProbe, assertFormalModules, subscribeReady, runSession, execute };
+diff --git a/test/lab/terminal-transfer/tools/local-runtime.cjs b/test/lab/terminal-transfer/tools/local-runtime.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f4cf93de9917cc36eb1d9c0b4c35e1ac404a571d
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/local-runtime.cjs
+@@ -0,0 +1,115 @@
++'use strict';
++const fs = require('node:fs');
++const path = require('node:path');
++const { createHash } = require('node:crypto');
++const { createRequire } = require('node:module');
++const { performance } = require('node:perf_hooks');
++const { LAB } = require('./ts-module.cjs');
++const { captureLauncher, terminateLauncher, identityMatches, inspectProcess } = require('./process-scope.cjs');
++const hash = x => createHash('sha256').update(x).digest('hex');
++const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
++function within(root, file) {
++  const relative = path.relative(root, file);
++  return relative === '' || (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith('..' + path.sep));
++}
++function bounded(work, ms, label) {
++  let timer;
++  return Promise.race([Promise.resolve().then(work), new Promise((_, reject) => {
++    timer = setTimeout(() => reject(new Error(label + ' timeout')), ms);
++  })]).finally(() => clearTimeout(timer));
++}
++function validateBinding(options) {
++  if (!['127.0.0.1', '::1'].includes(options.host)) throw new Error('literal loopback host required');
++  const port = Number(options.port);
++  if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('explicit storage port required');
++  if (!/^[a-zA-Z0-9_-]+$/.test(options.userId || '') || !/^lab[-_]/.test(options.username || '')) throw new Error('explicit synthetic user binding required');
++  const environmentRoot = fs.realpathSync(options.environmentRoot);
++  const serverRoot = fs.realpathSync(path.join(environmentRoot, 'server'));
++  const repo = path.resolve(LAB, '../../..');
++  if (environmentRoot === path.parse(environmentRoot).root || within(environmentRoot, repo)
++      || within(repo, environmentRoot) || !within(environmentRoot, serverRoot)) throw new Error('environment must be isolated from the bot repository');
++  return { ...options, port, environmentRoot, serverRoot };
++}
++
++/** Load only the explicitly selected local installation. Does not launch a
++ * server, load bot credentials, mutate DB rows, reset a world or deploy code. */
++async function connectLocal(options, audit) {
++  const binding = validateBinding(options);
++  const owner = await captureLauncher(binding.pid, binding.environmentRoot);
++  const localRequire = createRequire(path.join(binding.serverRoot, 'package.json'));
++  const files = {};
++  for (const pkg of ['@screeps/common', '@screeps/driver', '@screeps/backend', '@screeps/engine']) {
++    const file = fs.realpathSync(localRequire.resolve(pkg + '/package.json'));
++    if (!within(binding.serverRoot, file)) throw new Error('dependency resolved outside isolated server: ' + pkg);
++    files[pkg] = { path: file, version: JSON.parse(fs.readFileSync(file)).version };
++  }
++  // Inspect the installed bytes, not a guessed upstream tag. These checks locate
++  // this adapter's supported env Memory path; they are not engine verification.
++  const driverRoot = path.dirname(files['@screeps/driver'].path);
++  const backendRoot = path.dirname(files['@screeps/backend'].path);
++  const paths = [path.join(driverRoot, 'lib/runtime/data.js'), path.join(driverRoot, 'lib/index.js'), path.join(backendRoot, 'lib/cli/system.js')];
++  const sources = paths.map(file => ({ path: file, source: fs.readFileSync(file, 'utf8') }));
++  if (!/env\.get\(\s*env\.keys\.MEMORY\s*\+\s*userId\s*\)/.test(sources[0].source)
++      || !/env\.set\(\s*env\.keys\.MEMORY\s*\+\s*userId\s*,\s*memory\.data\s*\)/.test(sources[1].source)
++      || !/MAIN_LOOP_PAUSED/.test(sources[2].source)) throw new Error('installed runtime path differs; refuse unsupported adapter');
++  audit({ kind: 'runtime-binding', binding, owner, packages: files,
++    sources: sources.map(s => ({ path: s.path, sha256: hash(s.source),
++      lines: s.source.split('\n').flatMap((line, index) => /MEMORY|MAIN_LOOP_PAUSED/.test(line) ? [{ line: index + 1, text: line }] : []) })) });
++  // These exact values replace inherited environment configuration before any
++  // local Screeps module is evaluated. No localhost DNS or remote fallback.
++  process.env.STORAGE_HOST = binding.host; process.env.STORAGE_PORT = String(binding.port);
++  const common = localRequire('@screeps/common');
++  const system = localRequire('@screeps/backend/lib/cli/system');
++  await bounded(() => common.storage._connect(), 5000, 'storage connect');
++  const { env, db, pubsub } = common.storage;
++  for (const key of ['MEMORY', 'GAMETIME', 'MAIN_LOOP_PAUSED']) if (typeof env.keys[key] !== 'string' || !env.keys[key]) throw new Error('missing runtime key ' + key);
++  let termination; // Reuse this exact cleanup attempt; a second call is not new evidence.
++  const io = {
++    binding, owner, pubsub, envKeys: env.keys,
++    async assertIdentity() {
++      const user = await bounded(() => db.users.findOne({ _id: binding.userId }), 2000, 'user identity');
++      if (!user || user.username !== binding.username || typeof user.bot !== 'string' || !user.bot) throw new Error('synthetic user identity mismatch');
++      const actual = await inspectProcess(owner.pid);
++      if (!identityMatches(owner, actual)) throw new Error('launcher identity changed');
++    },
++    async readState() {
++      const [tickRaw, paused] = await Promise.all([env.get(env.keys.GAMETIME), env.get(env.keys.MAIN_LOOP_PAUSED)]);
++      if (!(typeof tickRaw === 'number' || (typeof tickRaw === 'string' && /^\d+$/.test(tickRaw)))) throw new Error('gametime unreadable');
++      const tick = Number(tickRaw);
++      if (!Number.isSafeInteger(tick) || tick < 0 || !['0', '1', 0, 1].includes(paused)) throw new Error('invalid simulation state');
++      return { tick, paused: String(paused) === '1' };
++    },
++    async assertPausedStable() {
++      const start = performance.now(); let prior, since;
++      while (performance.now() - start < 4500) {
++        const state = await bounded(() => io.readState(), 1000, 'pause state');
++        if (!state.paused) throw new Error('simulation is not paused');
++        if (state.tick !== prior) { prior = state.tick; since = performance.now(); }
++        if (performance.now() - since >= 1000) { audit({ kind: 'paused-stable', ...state }); return state.tick; }
++        await sleep(250);
++      }
++      throw new Error('paused tick not stable within bound');
++    },
++    readRuntimeMemory: () => bounded(() => env.get(env.keys.MEMORY + binding.userId), 2000, 'Memory read'),
++    writeRuntimeMemory: raw => bounded(() => env.set(env.keys.MEMORY + binding.userId, raw), 2000, 'Memory write'),
++    pause: () => system.pauseSimulation(),
++    resume: () => system.resumeSimulation(),
++    killTree: () => (termination ??= terminateLauncher(owner)),
++    async activeModules() {
++      const code = await bounded(() => db['users.code'].findOne({ $and: [{ user: binding.userId }, { activeWorld: true }] }), 2000, 'active modules');
++      if (!code || !code.modules || typeof code.modules !== 'object') throw new Error('active modules unavailable');
++      audit({ kind: 'active-module-readback', branch: code.branch, modules: code.modules });
++      return code.modules;
++    },
++    async finalSnapshot() {
++      const [memory, transactions, objects, state] = await Promise.all([
++        io.readRuntimeMemory(), db.transactions.find({ $or: [{ sender: binding.userId }, { recipient: binding.userId }] }),
++        db['rooms.objects'].find({ user: binding.userId }), io.readState(),
++      ]);
++      return { memory, transactions, objects, state };
++    },
++  };
++  await io.assertIdentity();
++  return io;
++}
++module.exports = { within, bounded, validateBinding, connectLocal };
+diff --git a/test/lab/terminal-transfer/tools/memory-control.cjs b/test/lab/terminal-transfer/tools/memory-control.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..18a6c3cc205eec78370c74b231df2523f7005d37
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/memory-control.cjs
+@@ -0,0 +1,105 @@
++'use strict';
++const { isDeepStrictEqual } = require('node:util');
++const { load } = require('./ts-module.cjs');
++const SLOT = '__labTerminalTransferProbe';
++const validId = value => typeof value === 'string' && /^[A-Za-z0-9._-]+$/.test(value) && value.length <= 100;
++const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
++
++function readMemory(raw) {
++  if (typeof raw !== 'string' || raw.length === 0) throw new Error('runtime Memory absent/unreadable; do not replace it with {}');
++  let memory;
++  try { memory = JSON.parse(raw); } catch { throw new Error('runtime Memory is invalid JSON'); }
++  if (!plain(memory)) throw new Error('runtime Memory root must be an object');
++  // Reuse the frozen in-game reader/size semantics on a separate parsed snapshot.
++  const reader = load('controlRecord.ts', { Memory: memory, console: { log() {} } });
++  const read = reader.readControlRecord();
++  return { memory, read: JSON.parse(JSON.stringify(read)),
++    totalMemoryBytes: Buffer.byteLength(raw, 'utf8'),
++    controlBytes: Object.hasOwn(memory, SLOT) ? Buffer.byteLength(JSON.stringify(memory[SLOT]), 'utf8') : null };
++}
++
++function planMemoryUpdate(raw, action, experimentId) {
++  if (!validId(experimentId)) throw new Error('invalid experimentId');
++  if (!['initialize', 'arm', 'disarm'].includes(action)) throw new Error('unsupported Memory action');
++  const before = readMemory(raw);
++  const { status, record } = before.read;
++  let next;
++  if (action === 'initialize') {
++    if (status !== 'absent') throw new Error('initialize requires an absent control slot; no reset/overwrite');
++    next = { experimentId, armed: false, attempted: false };
++  } else {
++    if (status !== 'ok' || record.experimentId !== experimentId) throw new Error('control corrupt/absent/experiment mismatch');
++    if (action === 'arm') {
++      if (record.armed !== false || record.attempted !== false || record.stopped === true
++          || record.attemptedTick !== undefined || record.syncResult !== undefined) {
++        throw new Error('arm requires a pristine unarmed record; no rearm');
++      }
++      next = { ...record, armed: true };
++    } else {
++      // Explicit disarm closes this experiment using the existing stopped flag.
++      // Preserve attempted/result facts, including unknown; never make it re-armable.
++      next = { ...record, armed: false, stopped: true };
++    }
++  }
++  const updated = { ...before.memory, [SLOT]: next };
++  const afterRaw = JSON.stringify(updated);
++  const after = readMemory(afterRaw);
++  if (after.read.status !== 'ok') throw new Error('updated control rejected by frozen reader/4096-byte limit');
++  // The driver limit is on the whole serialized string; this conservative bound
++  // avoids a successful admin write which would fail the normal subsequent save.
++  if (afterRaw.length > 2 * 1024 * 1024) throw new Error('whole Memory exceeds driver string limit');
++  return { beforeRaw: raw, afterRaw, record: next,
++    beforeControlBytes: before.controlBytes, controlBytes: after.controlBytes,
++    totalMemoryBytes: after.totalMemoryBytes };
++}
++
++async function updateMemory(io, action, experimentId, audit = () => {}) {
++  // io is the verified env-only adapter. No db.users writer is accepted here.
++  await io.assertIdentity();
++  const tick = await io.assertPausedStable();
++  const beforeRaw = await io.readRuntimeMemory();
++  const plan = planMemoryUpdate(beforeRaw, action, experimentId);
++  if (await io.assertPausedStable() !== tick || await io.readRuntimeMemory() !== beforeRaw) {
++    throw new Error('world/Memory changed during preparation; zero writes');
++  }
++  audit({ kind: 'memory-write-request', action, tick, ...plan }); // must save before mutation
++  await io.writeRuntimeMemory(plan.afterRaw); // exactly one write, never a fallback write
++  const readback = await io.readRuntimeMemory();
++  audit({ kind: 'memory-storage-readback', action, tick, raw: readback });
++  if (readback !== plan.afterRaw) throw new Error('runtime storage readback mismatch; outcome unknown, no retry/rollback');
++  if (await io.assertPausedStable() !== tick) throw new Error('world advanced after write; no automatic repair');
++  return { ...plan, tick, storageConfirmed: true, playerConfirmed: false };
++}
++
++function assessControlSamples(samples, expected, storedRaw) {
++  const issues = [];
++  if (!Array.isArray(samples)) return { ready: false, issues: ['samples must be an array'] };
++  if (samples.length < 2) issues.push('two player ticks required');
++  const seen = new Set();
++  let first;
++  for (const sample of samples) {
++    const record = sample?.control?.record;
++    if (sample?.kind !== 'lab-control-sample' || sample.sampler?.name !== 'lab-control-probe'
++        || sample.userId !== expected.userId || sample.user?.username !== expected.username
++        || sample.expectedExperimentId !== expected.experimentId) issues.push('wrong player/sampler/experiment source');
++    if (!Number.isSafeInteger(sample?.tick) || sample.tick < 0 || seen.has(sample.tick)) issues.push('invalid/duplicate tick');
++    seen.add(sample?.tick);
++    if (sample?.control?.status !== 'ok' || !plain(record)) { issues.push('control not readable'); continue; }
++    const read = readMemory(JSON.stringify({ [SLOT]: record })).read;
++    if (read.status !== 'ok' || record.experimentId !== expected.experimentId
++        || record.armed !== expected.armed || record.attempted !== false
++        || record.stopped === true || record.attemptedTick !== undefined || record.syncResult !== undefined) {
++      issues.push('unexpected control facts');
++    }
++    if (first && !isDeepStrictEqual(first, record)) issues.push('control not stable');
++    first = record;
++  }
++  if (storedRaw !== undefined) {
++    try {
++      const stored = readMemory(storedRaw).read;
++      if (stored.status !== 'ok' || !isDeepStrictEqual(first, stored.record)) issues.push('post-pause runtime storage differs from player');
++    } catch (error) { issues.push(error.message); }
++  }
++  return { ready: issues.length === 0, issues: [...new Set(issues)], ticks: [...seen] };
++}
++module.exports = { SLOT, validId, readMemory, planMemoryUpdate, updateMemory, assessControlSamples };
+diff --git a/test/lab/terminal-transfer/tools/memory.spec.cjs b/test/lab/terminal-transfer/tools/memory.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7ec9c2ecc832619b558468eef4edfd40e58aeaea
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/memory.spec.cjs
+@@ -0,0 +1,111 @@
++'use strict';
++const { test } = require('node:test');
++const assert = require('node:assert/strict');
++const vm = require('node:vm');
++const fs = require('node:fs');
++const os = require('node:os');
++const path = require('node:path');
++const { SLOT, readMemory, planMemoryUpdate, updateMemory, assessControlSamples } = require('./memory-control.cjs');
++const { buildProbe, writeProbe } = require('./build-control-probe.cjs');
++const { load } = require('./ts-module.cjs');
++const { parseArgs } = require('./lab-control.cjs');
++const { identityMatches, belongsToEnvironment } = require('./process-scope.cjs');
++const ID='local-offline-test';
++const pristine={experimentId:ID,armed:false,attempted:false};
++const raw=r=>JSON.stringify({keep:{nested:['保留','😀']},[SLOT]:r});
++const sample=(tick,armed=false)=>({kind:'lab-control-sample',sampler:{name:'lab-control-probe',version:'1'},userId:'u',user:{username:'lab-u'},expectedExperimentId:ID,tick,control:{status:'ok',record:{...pristine,armed}}});
++const expected={userId:'u',username:'lab-u',experimentId:ID,armed:false};
++
++test('initialize -> arm once -> disarm preserves foreign Memory',()=>{
++  const before='{"keep":{"nested":["保留","😀"]}}';
++  const init=planMemoryUpdate(before,'initialize',ID);assert.equal(init.record.armed,false);
++  const armed=planMemoryUpdate(init.afterRaw,'arm',ID);assert.equal(armed.record.armed,true);
++  assert.throws(()=>planMemoryUpdate(armed.afterRaw,'arm',ID),/rearm/);
++  const done=planMemoryUpdate(armed.afterRaw,'disarm',ID);
++  assert.deepEqual(JSON.parse(done.afterRaw).keep,JSON.parse(before).keep);
++  assert.equal(done.totalMemoryBytes,Buffer.byteLength(done.afterRaw));
++  assert.equal(done.record.stopped,true);
++  assert.throws(()=>planMemoryUpdate(done.afterRaw,'arm',ID),/rearm/);
++});
++for(const bad of [null,undefined,'','{','null','[]','4'])test('invalid whole Memory '+String(bad),()=>assert.throws(()=>readMemory(bad)));
++for (const record of [{...pristine,attempted:true},{...pristine,stopped:true},{...pristine,attemptedTick:1},{...pristine,syncResult:{ok:false}},{...pristine,experimentId:'other'},{...pristine,extra:1}]) {
++  test('arm refuses historical/corrupt control '+JSON.stringify(record),()=>assert.throws(()=>planMemoryUpdate(raw(record),'arm',ID)));
++}
++test('disarm never erases attempted, tick or result',()=>{
++  const prior={...pristine,armed:true,attempted:true,attemptedTick:10,syncResult:{ok:false,error:'unknown'},stopped:true};
++  assert.deepEqual(planMemoryUpdate(raw(prior),'disarm',ID).record,{...prior,armed:false});
++});
++test('size 4095/4096 pass, 4097 corrupt; unicode counted as UTF8',()=>{
++  const record={...pristine,armed:true,attempted:true,syncResult:{ok:false,error:'保留😀'}};
++  const initial=Buffer.byteLength(JSON.stringify(record));
++  for(const n of [4095,4096,4097]) {
++    const r=structuredClone(record);r.syncResult.error+='x'.repeat(n-initial);
++    assert.equal(readMemory(raw(r)).controlBytes,n);
++    assert.equal(readMemory(raw(r)).read.status,n<=4096?'ok':'corrupt');
++  }
++});
++test('exactly one env write; storage confirmation is NOT player confirmation',async()=>{
++  let value=raw(pristine),writes=0;
++  const io={assertIdentity:async()=>{},assertPausedStable:async()=>9,readRuntimeMemory:async()=>value,writeRuntimeMemory:async s=>{writes++;value=s;}};
++  const result=await updateMemory(io,'arm',ID);assert.equal(writes,1);assert.equal(result.storageConfirmed,true);assert.equal(result.playerConfirmed,false);
++});
++test('stale world/Memory abort before write',async()=>{
++  let reads=0,writes=0;
++  const io={assertIdentity:async()=>{},assertPausedStable:async()=>9,readRuntimeMemory:async()=>++reads===1?raw(pristine):'{}',writeRuntimeMemory:async()=>writes++};
++  await assert.rejects(updateMemory(io,'arm',ID),/changed/);assert.equal(writes,0);
++});
++test('silent lost env write has no fallback, retry or rollback',async()=>{
++  let writes=0;
++  const io={assertIdentity:async()=>{},assertPausedStable:async()=>9,readRuntimeMemory:async()=>raw(pristine),writeRuntimeMemory:async()=>writes++};
++  await assert.rejects(updateMemory(io,'arm',ID),/readback mismatch/);assert.equal(writes,1);
++});
++test('logging failure prevents the mutation',async()=>{
++  let writes=0;const io={assertIdentity:async()=>{},assertPausedStable:async()=>9,readRuntimeMemory:async()=>raw(pristine),writeRuntimeMemory:async()=>writes++};
++  await assert.rejects(updateMemory(io,'arm',ID,()=>{throw Error('disk');}),/disk/);assert.equal(writes,0);
++});
++test('db mirror data cannot stand in for absent runtime control',()=>{
++  assert.equal(assessControlSamples([sample(1),sample(2)],expected,'{}').ready,false);
++  assert.equal(assessControlSamples([sample(1),sample(2)],expected,raw(pristine)).ready,true);
++});
++test('roundtrip requires same user, ID, values and distinct real ticks',()=>{
++  for(const change of [s=>s.userId='other',s=>s.control.record.experimentId='other',s=>s.control.record.attempted=true,s=>s.tick=1,s=>s.control.status='absent']) {
++    const samples=[sample(1),sample(2)];change(samples[1]);assert.equal(assessControlSamples(samples,expected).ready,false);
++  }
++  assert.equal(assessControlSamples([sample(1)],expected).ready,false);
++});
++test('actual probe bundle: module loading is inert, two ticks read only; never touches send',()=>{
++  const cfg=load('labConfig.ts').LAB_EXAMPLE_EXPERIMENT;
++  let writes=0,sendReads=0;const logs=[];
++  const memory=new Proxy({[SLOT]:{...pristine,experimentId:cfg.experimentId}}, {set(){writes++;throw Error('write');},deleteProperty(){writes++;throw Error('delete');}});
++  function room(id){return {controller:{my:true,level:8,owner:{username:cfg.username}},terminal:{id,my:true,isActive:()=>true,owner:{username:cfg.username},cooldown:0,store:{H:1000,energy:10000,getFreeCapacity:()=>200000},get send(){sendReads++;throw Error('send must not be read');}}};}
++  const game={time:1,shard:{name:cfg.shardName},rooms:{[cfg.sourceRoomName]:room(cfg.sourceTerminalId),[cfg.targetRoomName]:room(cfg.targetTerminalId)},market:{calcTransactionCost:()=>26,incomingTransactions:[],outgoingTransactions:[]}};
++  const e={};vm.runInNewContext(buildProbe().code,{exports:e,Game:game,Memory:memory,console:{log:s=>logs.push(JSON.parse(s))}},{timeout:1000});
++  assert.equal(logs.length,0);e.loop();game.time=2;e.loop();e.loop();assert.equal(logs.length,2);
++  assert.equal(logs[0].control.record.armed,false);assert.equal(logs[0].user.username,cfg.username);
++  assert.equal(writes,0);assert.equal(sendReads,0);
++});
++test('probe build cannot overwrite an existing output or repository directory',()=>{
++  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'probe-build-'));
++  try {const p=path.join(tmp,'out');const manifest=writeProbe(p);assert.equal(manifest.status,'PREPARED_NOT_RUN');assert.throws(()=>writeProbe(p),/exists/);assert.throws(()=>writeProbe(path.join(__dirname,'forbidden')),/repository/);}finally{fs.rmSync(tmp,{recursive:true,force:true});}
++});
++test('process scope rejects unrelated node, reused PID and command changes; no process killed',()=>{
++  const a={pid:42,started:'1',executable:'/usr/bin/node',command:['node','/tmp/new-lab/server/bin.js']};
++  assert.equal(belongsToEnvironment(a,'/tmp/new-lab'),true);assert.equal(belongsToEnvironment(a,'/tmp/other'),false);
++  assert.ok(identityMatches(a,{...a}));assert.ok(!identityMatches(a,{...a,started:'2'}));assert.ok(!identityMatches(a,{...a,command:['other']}));
++});
++test('CLI requires complete explicit bindings; --help has no side effects',()=>{
++  assert.deepEqual(parseArgs(['--help']),{help:true});assert.throws(()=>parseArgs(['--command','arm']),/required/);assert.throws(()=>parseArgs(['--unknown','1']),/unknown/);
++});
++test('a later config path is not launcher ownership; ancestry excludes unrelated processes',()=>{
++  const { descendantIds }=require('./process-scope.cjs');
++  assert.equal(belongsToEnvironment({pid:3,executable:'/usr/bin/node',command:['node','/other/script.js','--config=/tmp/lab/file']},'/tmp/lab'),false);
++  assert.deepEqual(descendantIds([{pid:12,ppid:10},{pid:13,ppid:12},{pid:99,ppid:1}],10),[10,12,13]);
++});
++
++test('missing launcher is not proof of worker exit',()=>{
++  const { requireOwnedRoot }=require('./process-scope.cjs');
++  const owner={pid:42,started:'1',executable:'/usr/bin/node',command:['node','/tmp/lab/start.js']};
++  assert.throws(()=>requireOwnedRoot(owner,null),/descendant cleanup unconfirmed/);
++  assert.throws(()=>requireOwnedRoot(owner,{...owner,started:'2'}),/identity changed/);
++  assert.doesNotThrow(()=>requireOwnedRoot(owner,{...owner}));
++});
+diff --git a/test/lab/terminal-transfer/tools/process-scope.cjs b/test/lab/terminal-transfer/tools/process-scope.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..bb8568a3c4ff4500a7d5fdf9c2dc6dbbe0a52ab5
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/process-scope.cjs
+@@ -0,0 +1,135 @@
++'use strict';
++const fs = require('node:fs');
++const path = require('node:path');
++const { execFile } = require('node:child_process');
++const { promisify } = require('node:util');
++const exec = promisify(execFile);
++
++function pidNumber(pid) {
++  const n = Number(pid);
++  if (!Number.isSafeInteger(n) || n <= 1 || n === process.pid) throw new Error('invalid launcher PID');
++  return n;
++}
++async function inspectProcess(pid) {
++  pid = pidNumber(pid);
++  if (process.platform === 'linux') {
++    try {
++      const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
++      const tail = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
++      if (tail[0] === 'Z') return null;
++      return { pid, ppid: Number(tail[1]), started: tail[19],
++        executable: fs.readlinkSync(`/proc/${pid}/exe`),
++        cwd: fs.readlinkSync(`/proc/${pid}/cwd`),
++        command: fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter(Boolean) };
++    } catch (error) { if (['ENOENT', 'ESRCH'].includes(error.code)) return null; throw error; }
++  }
++  if (process.platform === 'win32') {
++    const command = `$p=Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}'; if($p){ [PSCustomObject]@{pid=$p.ProcessId;ppid=$p.ParentProcessId;started=$p.CreationDate.ToUniversalTime().ToString('o');executable=$p.ExecutablePath;command=$p.CommandLine} | ConvertTo-Json -Compress }`;
++    const { stdout } = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { timeout: 2000, windowsHide: true });
++    return stdout.trim() ? JSON.parse(stdout) : null;
++  }
++  throw new Error('process ownership adapter supports Linux and Windows only');
++}
++function identityMatches(a, b) {
++  return a && b && a.pid === b.pid && a.started === b.started && a.executable === b.executable
++    && JSON.stringify(a.command) === JSON.stringify(b.command);
++}
++function belongsToEnvironment(info, environmentRoot) {
++  if (!info || !/^(node|node\.exe)$/i.test(path.basename(info.executable || ''))) return false;
++  const argv = Array.isArray(info.command) ? info.command : [...String(info.command || '').matchAll(/"([^"]*)"|(\S+)/g)].map(m => m[1] ?? m[2]);
++  // This tool intentionally supports the unambiguous `node <absolute-script>`
++  // launch form only. A random later --config=/lab/path is not ownership proof.
++  const script = argv[1];
++  if (!script || script.startsWith('-') || !path.isAbsolute(script)) return false;
++  const relative = path.relative(environmentRoot, script);
++  return relative !== '' && relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative);
++}
++function descendantIds(rows, root) {
++  const ids = new Set([root]);
++  for (let changed = true; changed;) {
++    changed = false;
++    for (const row of rows) if (ids.has(row.ppid) && !ids.has(row.pid)) { ids.add(row.pid); changed = true; }
++    if (ids.size > 256) throw new Error('unexpectedly large lab process tree');
++  }
++  return [...ids];
++}
++async function treeSnapshot(root) {
++  if (process.platform === 'linux') {
++    // Discover ancestry using stat only; do not read unrelated users' command
++    // lines or executable links (which may legitimately be inaccessible).
++    const rows = [];
++    for (const name of fs.readdirSync('/proc').filter(x => /^\d+$/.test(x))) {
++      try {
++        const text = fs.readFileSync(`/proc/${name}/stat`, 'utf8');
++        const tail = text.slice(text.lastIndexOf(')') + 2).split(' ');
++        rows.push({ pid: Number(name), ppid: Number(tail[1]) });
++      } catch (error) { if (!['ENOENT','ESRCH','EACCES'].includes(error.code)) throw error; }
++    }
++    const result = [];
++    for (const pid of descendantIds(rows, root)) { const p = await inspectProcess(pid); if (p) result.push(p); }
++    return result;
++  }
++  if (process.platform === 'win32') {
++    const command = `$all=@(Get-CimInstance Win32_Process); $ids=@(${root}); do { $n=$ids.Count; $ids=@($ids + @($all | Where-Object {$ids -contains $_.ParentProcessId} | ForEach-Object {$_.ProcessId}) | Select-Object -Unique); if($ids.Count -gt 256){throw 'unexpected process tree'} } while($ids.Count -ne $n); @($all | Where-Object {$ids -contains $_.ProcessId} | ForEach-Object {[PSCustomObject]@{pid=$_.ProcessId;ppid=$_.ParentProcessId;started=$_.CreationDate.ToUniversalTime().ToString('o');executable=$_.ExecutablePath;command=$_.CommandLine}}) | ConvertTo-Json -Compress`;
++    const { stdout } = await exec('powershell.exe', ['-NoProfile','-NonInteractive','-Command',command], { timeout: 2000, windowsHide: true });
++    return stdout.trim() ? [].concat(JSON.parse(stdout)) : [];
++  }
++  throw new Error('unsupported platform');
++}
++async function captureLauncher(pid, environmentRoot) {
++  const info = await inspectProcess(pid);
++  if (!belongsToEnvironment(info, environmentRoot)) throw new Error('launcher is not an explicitly bound Node process in this environment');
++  return info;
++}
++function requireOwnedRoot(owner, current) {
++  // A vanished root does not prove that its former workers exited. Do not report
++  // successful whole-tree cleanup from this single absence fact.
++  if (!current) throw new Error('launcher absent; descendant cleanup unconfirmed');
++  if (!identityMatches(owner, current)) throw new Error('launcher identity changed; refusing to kill a reused/unrelated PID');
++}
++async function terminateLauncher(owner) {
++  const current = await inspectProcess(owner.pid);
++  requireOwnedRoot(owner, current);
++  let targets = await treeSnapshot(owner.pid);
++  const savedRoot = targets.find(p => p.pid === owner.pid);
++  if (!identityMatches(owner, savedRoot)) throw new Error('launcher changed during process snapshot');
++  if (process.platform === 'win32') {
++    await exec('taskkill.exe', ['/PID', String(owner.pid), '/T', '/F'], { timeout: 4000, windowsHide: true });
++  } else if (process.platform === 'linux') {
++    // Freeze the known tree before killing it so a launcher cannot replenish it.
++    // Re-scan to include children created while the first snapshot was taken.
++    const stopped = new Map();
++    for (let pass = 0; pass < 3; pass++) {
++      for (const target of targets) {
++        const fresh = await inspectProcess(target.pid);
++        if (!fresh) continue;
++        if (!identityMatches(target, fresh)) throw new Error('process identity changed; kill refused');
++        try { process.kill(target.pid, 'SIGSTOP'); stopped.set(target.pid, target); }
++        catch (error) { if (error.code !== 'ESRCH') throw error; }
++      }
++      const freshTree = await treeSnapshot(owner.pid);
++      if (freshTree.every(p => stopped.has(p.pid))) break;
++      targets = freshTree;
++      if (pass === 2) throw new Error('process tree did not stabilize');
++    }
++    targets = [...stopped.values()];
++    const ordered = targets.filter(p => p.pid !== owner.pid).reverse().concat(owner);
++    for (const target of ordered) {
++      const fresh = await inspectProcess(target.pid);
++      if (!fresh) continue;
++      if (!identityMatches(target, fresh)) throw new Error('process identity changed; kill refused');
++      try { process.kill(target.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
++    }
++  }
++  for (let i = 0; i < 10; i++) {
++    let remaining = false;
++    for (const target of targets) {
++      const fresh = await inspectProcess(target.pid);
++      if (identityMatches(target, fresh)) { remaining = true; break; }
++    }
++    if (!remaining) return { terminated: true, observedPids: targets.map(p => p.pid) };
++    await new Promise(resolve => setTimeout(resolve, 100));
++  }
++  throw new Error('launcher exit not confirmed');
++}
++module.exports = { pidNumber, inspectProcess, identityMatches, belongsToEnvironment, captureLauncher, terminateLauncher, descendantIds, requireOwnedRoot };
+diff --git a/test/lab/terminal-transfer/tools/stop-controller.cjs b/test/lab/terminal-transfer/tools/stop-controller.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6a0a2a65e409833a96ab6fed995d570091b2bf01
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/stop-controller.cjs
+@@ -0,0 +1,188 @@
++'use strict';
++const { assessControlSamples } = require('./memory-control.cjs');
++const object = x => x !== null && typeof x === 'object' && !Array.isArray(x);
++const integer = x => typeof x === 'number' && Number.isSafeInteger(x) && x >= 0;
++
++// One-pass decoding of the driver's escaped console text. Never decode twice:
++// &amp;quot; must remain literal &quot;, not become a fabricated JSON quote.
++function decodeText(text) {
++  return text.replace(/&(#x[0-9a-f]+|#[0-9]+|quot|apos|amp|lt|gt);/gi, (all, key) => {
++    if (key[0] === '#') {
++      const n = key[1].toLowerCase() === 'x' ? parseInt(key.slice(2), 16) : parseInt(key.slice(1), 10);
++      if (!integer(n) || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) throw new Error('invalid HTML entity');
++      return String.fromCodePoint(n);
++    }
++    return { quot: '"', apos: "'", amp: '&', lt: '<', gt: '>' }[key.toLowerCase()];
++  });
++}
++function decodeEnvelope(envelope, userId) {
++  if (!object(envelope)) throw new Error('invalid console envelope');
++  if (envelope.channel !== `user:${userId}/console`) return [];
++  const payload = typeof envelope.payload === 'string' ? JSON.parse(envelope.payload) : envelope.payload;
++  if (!object(payload) || payload.userId !== userId) throw new Error('console payload/user mismatch');
++  if (payload.error || payload.messages?.error) throw new Error('player console error');
++  if (!object(payload.messages) || !Array.isArray(payload.messages.log)) throw new Error('missing console messages');
++  return payload.messages.log.map(line => {
++    if (typeof line !== 'string') throw new Error('non-string console log');
++    const text = decodeText(line).trim();
++    if (!text.startsWith('{')) return null; // preserve ordinary diagnostic text in raw log
++    const sample = JSON.parse(text);
++    if (!object(sample)) throw new Error('invalid lab log');
++    return { ...sample, userId }; // transport identity, never trust a field in a log
++  }).filter(Boolean);
++}
++function healthySample(sample, config) {
++  if (!integer(sample.tick)) return false;
++  for (const side of ['source', 'target']) {
++    const endpoint = sample[side];
++    if (!object(endpoint) || endpoint.readStatus !== 'ok'
++        || endpoint.terminalId !== config[side + 'TerminalId']
++        || endpoint.roomName !== config[side + 'RoomName']
++        || endpoint.ownerUsername !== config.username
++        || !['resourceAmount', 'energy', 'freeCapacity', 'cooldown'].every(key => integer(endpoint[key]))) return false;
++  }
++  if (sample.feeQuote?.status !== 'ok' || !integer(sample.feeQuote.energyCost)) return false;
++  for (const side of ['incoming', 'outgoing']) {
++    const view = sample.transactions?.[side];
++    if (view?.status !== 'ok' || !Array.isArray(view.records) || !view.records.every(object)) return false;
++  }
++  return true;
++}
++
++/**
++ * Actual stop orchestration; injectable clock/ports for offline tests.
++ * No resume/Memory/write/send port exists here. Deadline is armed before the
++ * caller's sole resume request. A failed pause always reaches a bounded kill.
++ */
++function createStopController(options, ports) {
++  const { userId, config, mode = 'formal', expectedArmed } = options;
++  if (!userId || !config || !['formal', 'control'].includes(mode)) throw new Error('invalid stop binding');
++  if (mode === 'formal' && (!integer(config.targetTick) || config.targetTick < 2 || config.targetTick > Number.MAX_SAFE_INTEGER - 20)) throw new Error('invalid target tick');
++  const LIMIT = 180000, PAUSE_LIMIT = 5000, KILL_LIMIT = 5000;
++  let state = 'idle', deadline, deadlineTimer, pauseTimer, pollTimer, killTimer;
++  let resolveDone, report, lastPausedTick, stableSince, stableReads = 0;
++  const seen = [], controlSamples = [], extraReasons = [], logErrors = [];
++  const done = new Promise(resolve => { resolveDone = resolve; });
++  const now = () => ports.now();
++  function audit(event) {
++    try { ports.audit({ monotonicMs: now(), ...event }); }
++    catch (error) { logErrors.push(String(error)); }
++  }
++  function finish() {
++    if (state === 'done') return;
++    state = 'done';
++    for (const handle of [deadlineTimer, pauseTimer, pollTimer, killTimer]) if (handle !== undefined) ports.clearTimer(handle);
++    report.extraReasons = [...extraReasons]; report.logErrors = [...logErrors];
++    report.sampleTicks = [...seen]; report.controlSamples = [...controlSamples];
++    report.ok = ['window_complete', 'control_confirmed'].includes(report.reason)
++      && report.pauseConfirmed === true && report.triggerLatencyMs <= 1000
++      && logErrors.length === 0 && !report.error;
++    audit({ kind: 'stop-result', ...report });
++    if (logErrors.length) { report.ok = false; report.logErrors = [...logErrors]; }
++    resolveDone(report);
++  }
++  function kill(error) {
++    if (state === 'killing' || state === 'done') return;
++    state = 'killing';
++    ports.clearTimer(pauseTimer); ports.clearTimer(pollTimer);
++    report.error = String(error); report.killRequestedAt = now();
++    audit({ kind: 'kill-request', error: report.error });
++    killTimer = ports.setTimer(() => {
++      report.killConfirmed = false; report.error += '; kill confirmation timeout'; finish();
++    }, KILL_LIMIT);
++    Promise.resolve().then(() => ports.killTree()).then(() => {
++      if (state !== 'killing') return;
++      report.killConfirmed = true; finish();
++    }, err => {
++      if (state !== 'killing') return;
++      report.killConfirmed = false; report.error += '; ' + String(err); finish();
++    });
++  }
++  function confirmPause() {
++    if (state !== 'stopping') return;
++    Promise.resolve().then(() => ports.readState()).then(snapshot => {
++      if (state !== 'stopping') return;
++      audit({ kind: 'pause-state', snapshot });
++      if (snapshot?.paused !== true || !integer(snapshot.tick)) { stableReads = 0; lastPausedTick = undefined; }
++      else { if (snapshot.tick !== lastPausedTick) stableSince = now(); stableReads = snapshot.tick === lastPausedTick ? stableReads + 1 : 1; lastPausedTick = snapshot.tick; }
++      // Stable samples span >= 1000ms. The write adapter independently repeats its
++      // stable check before writes. This is a bounded stop observation, not an
++      // assertion that an in-flight tick is atomically cancelled.
++      if (stableReads >= 3 && now() - stableSince >= 1000) {
++        report.pauseConfirmed = true; report.stableTick = snapshot.tick; report.pauseConfirmedAt = now(); finish();
++      } else pollTimer = ports.setTimer(confirmPause, 250);
++    }, error => kill(error));
++  }
++  function stop(reason, observedAt = now()) {
++    if (state === 'done') return done;
++    if (state === 'stopping' || state === 'killing') { extraReasons.push(reason); return done; }
++    state = 'stopping'; ports.clearTimer(deadlineTimer);
++    report = { reason, observedAt, deadline, stopRequestedAt: now(), windowComplete: reason === 'window_complete', pauseConfirmed: false, killConfirmed: false };
++    report.triggerLatencyMs = report.stopRequestedAt - observedAt;
++    audit({ kind: 'stop-trigger', ...report });
++    pauseTimer = ports.setTimer(() => kill('pause/stability not confirmed within 5 seconds'), PAUSE_LIMIT);
++    // Timestamp the actual call AFTER any preceding disk I/O. Slow audit writes
++    // must not make a late pause look like a zero-latency request.
++    report.stopRequestedAt = now();
++    report.triggerLatencyMs = report.stopRequestedAt - observedAt;
++    try {
++      const request = ports.pause();
++      audit({ kind: 'pause-request', ...report });
++      Promise.resolve(request).then(result => {
++        if (state !== 'stopping') return;
++        audit({ kind: 'pause-response', result });
++        if (result !== 'OK') return kill('pause returned non-OK');
++        confirmPause();
++      }, error => kill(error));
++    } catch (error) { audit({ kind: 'pause-request-threw', ...report }); kill(error); }
++    return done;
++  }
++  function start() {
++    if (state !== 'idle') throw new Error('stop controller cannot restart or renew deadline');
++    state = 'running'; deadline = now() + LIMIT;
++    deadlineTimer = ports.setTimer(() => stop('deadline', deadline), LIMIT);
++    audit({ kind: 'stop-ready', deadline, mode, userId });
++    if (logErrors.length) stop('audit_failure');
++    return deadline;
++  }
++  function receiveTime(envelope) {
++    const received = envelope.recvMonotonicMs;
++    return typeof received === 'number' && Number.isFinite(received) && received >= 0 && received <= now() ? received : now();
++  }
++  function ingest(envelope) {
++    if (state !== 'running') return;
++    if (now() >= deadline) { stop('deadline', deadline); return; }
++    let rows;
++    try { rows = decodeEnvelope(envelope, userId); }
++    catch (error) { stop('console_decode_failure'); return; }
++    for (const sample of rows) {
++      if (state !== 'running') break;
++      if (sample.kind === 'lab-control-read-error' || /(?:error|truncated)$/.test(sample.kind || '')) { stop('player_observation_error'); break; }
++      if (mode === 'control' && sample.kind === 'lab-control-sample') {
++        if (!healthySample(sample, config)) { stop('control_world_unhealthy'); break; }
++        if (controlSamples.some(s => s.tick === sample.tick)) { stop('control_duplicate_tick'); break; }
++        controlSamples.push(sample); seen.push(sample.tick);
++        // Reject wrong control immediately; do not collect two bad rows as a
++        // false positive. The pure checker requires two ticks for readiness.
++        const check = assessControlSamples(controlSamples,
++          { userId, username: config.username, experimentId: config.experimentId, armed: expectedArmed });
++        if (check.issues.some(issue => issue !== 'two player ticks required')) { stop('control_mismatch'); break; }
++        if (controlSamples.length >= 2) stop('control_confirmed', receiveTime(envelope));
++      } else if (mode === 'formal' && sample.kind === 'lab-sample') {
++        if (sample.experimentId !== config.experimentId || sample.configTargetTick !== config.targetTick
++            || !healthySample(sample, config)) { stop('formal_sample_mismatch'); break; }
++        const next = config.targetTick - 2 + seen.length;
++        if (sample.tick !== next) { stop('window_gap_or_duplicate'); break; }
++        seen.push(sample.tick);
++        if (sample.tick === config.targetTick + 20) stop('window_complete', receiveTime(envelope));
++      } else if (mode === 'formal' && sample.kind === 'lab-precondition-rejection') {
++        stop('send_precondition_rejected');
++      } else if (mode === 'formal' && sample.kind === 'lab-control-sample') {
++        stop('wrong_active_entry');
++      }
++    }
++  }
++  return { start, ingest, stop, done, fault: reason => stop(reason),
++    get state() { return state; }, get deadline() { return deadline; } };
++}
++module.exports = { decodeText, decodeEnvelope, healthySample, createStopController };
+diff --git a/test/lab/terminal-transfer/tools/stop.spec.cjs b/test/lab/terminal-transfer/tools/stop.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..51b1f2481efa763722a407ed96d5ae9bab8e8e13
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/stop.spec.cjs
+@@ -0,0 +1,103 @@
++'use strict';
++const { test } = require('node:test');
++const assert = require('node:assert/strict');
++const { createStopController, decodeText, decodeEnvelope } = require('./stop-controller.cjs');
++const { runSession } = require('./lab-control.cjs');
++const cfg=require('./fixtures/review-base-config.json');
++const facts=require('./fixtures/review-base-facts.json');
++const SLOT='__labTerminalTransferProbe';
++const drain=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
++class Clock {
++  time=0;next=0;timers=new Map();
++  now=()=>this.time;
++  setTimer=(fn,ms)=>{const id=++this.next;this.timers.set(id,{at:this.time+ms,fn});return id;};
++  clearTimer=id=>this.timers.delete(id);
++  async advance(ms){const end=this.time+ms;await drain();for(;;){const jobs=[...this.timers].filter(([,v])=>v.at<=end).sort((a,b)=>a[1].at-b[1].at);if(!jobs.length)break;const[id,v]=jobs[0];this.timers.delete(id);this.time=v.at;v.fn();await drain();}this.time=end;await drain();}
++}
++function sample(tick){return {kind:'lab-sample',experimentId:cfg.experimentId,configTargetTick:cfg.targetTick,tick,
++  source:{...facts.samples[1].source,roomName:'W1N57'},target:{...facts.samples[1].target,roomName:'W10N57'},feeQuote:{status:'ok',energyCost:26},transactions:{incoming:{status:'ok',records:[]},outgoing:{status:'ok',records:[]}}};}
++function envelope(s,user='u'){return {channel:`user:${user}/console`,payload:JSON.stringify({userId:user,messages:{log:[JSON.stringify(s)]}})};}
++function fixture(overrides={}){
++  const clock=new Clock(),logs=[],pauses=[],kills=[];
++  const ports={now:clock.now,setTimer:clock.setTimer,clearTimer:clock.clearTimer,audit:e=>logs.push(e),pause:()=>{pauses.push(clock.time);return Promise.resolve('OK');},readState:async()=>({paused:true,tick:cfg.targetTick+21}),killTree:async()=>{kills.push(clock.time);},...overrides};
++  const c=createStopController({userId:'u',config:cfg},ports);c.start();return {clock,logs,pauses,kills,c};
++}
++test('full 23-tick stream triggers pause at terminal sample, not at 180 seconds',async()=>{
++  const f=fixture();for(let t=cfg.targetTick-2;t<=cfg.targetTick+20;t++)f.c.ingest(envelope(sample(t)));
++  assert.deepEqual(f.pauses,[0]);await f.clock.advance(1100);const r=await f.c.done;assert.equal(r.reason,'window_complete');assert.equal(r.ok,true);assert.equal(r.sampleTicks.length,23);assert.equal(f.kills.length,0);
++});
++test('healthy prefix does not stop early; external timer is immutable',async()=>{
++  const f=fixture();f.c.ingest(envelope(sample(cfg.targetTick-2)));await f.clock.advance(1000);assert.equal(f.pauses.length,0);assert.throws(()=>f.c.start(),/cannot restart/);
++  await f.clock.advance(179000);assert.equal(f.pauses[0],180000);await f.clock.advance(1100);const r=await f.c.done;assert.equal(r.reason,'deadline');assert.equal(r.ok,false);
++});
++test('other users and tickStarted="1" cannot complete this window',async()=>{
++  const f=fixture();f.c.ingest(envelope(sample(cfg.targetTick+20),'other'));f.c.ingest({channel:'tickStarted',payload:'1'});assert.equal(f.pauses.length,0);await f.clock.advance(181100);assert.equal((await f.c.done).reason,'deadline');
++});
++test('late/duplicate/missing tick fails instead of accepting a terminal-only log',async()=>{
++  for(const variant of ['late','duplicate']){const f=fixture();f.c.ingest(envelope(sample(cfg.targetTick-2)));f.c.ingest(envelope(sample(variant==='late'?cfg.targetTick+20:cfg.targetTick-2)));await f.clock.advance(1100);assert.equal((await f.c.done).reason,'window_gap_or_duplicate');}
++});
++test('wrong experiment, malformed view, source mismatch or decode failure stops promptly',async()=>{
++  for(const mutate of [s=>s.experimentId='other',s=>delete s.transactions.outgoing,s=>s.source.terminalId='wrong']){const f=fixture();const s=sample(cfg.targetTick-2);mutate(s);f.c.ingest(envelope(s));assert.equal(f.pauses.length,1);await f.clock.advance(1100);assert.equal((await f.c.done).ok,false);}
++  const f=fixture();f.c.ingest({channel:'user:u/console',payload:'{'});assert.equal(f.pauses.length,1);await f.clock.advance(1100);assert.equal((await f.c.done).reason,'console_decode_failure');
++});
++test('duplicate stop signals are idempotent, never resume',async()=>{
++  const f=fixture();f.c.stop('collector_disconnected');f.c.stop('deadline');f.c.stop('other');assert.equal(f.pauses.length,1);await f.clock.advance(1100);assert.deepEqual((await f.c.done).extraReasons,['deadline','other']);
++});
++test('pause reject/non-OK/synchronous throw all reach process fallback',async()=>{
++  for(const pause of [()=>Promise.reject(Error('broken')),()=>Promise.resolve('ERR'),()=>{throw Error('broken');}]){
++    const f=fixture({pause});f.c.stop('deadline');await f.clock.advance(1);const r=await f.c.done;assert.equal(f.kills.length,1);assert.equal(r.killConfirmed,true);assert.equal(r.ok,false);
++  }
++});
++test('hung pause OR changing tick reaches fallback within 5s',async()=>{
++  for(const overrides of [{pause:()=>new Promise(()=>{})},{readState:(()=>{let tick=100;return async()=>({paused:true,tick:tick++});})()}]){
++    const f=fixture(overrides);f.c.stop('deadline');await f.clock.advance(5000);assert.equal(f.kills[0],5000);assert.equal((await f.c.done).ok,false);
++  }
++});
++test('kill failure is reported, not silently converted to success',async()=>{
++  const f=fixture({pause:()=>Promise.reject(Error('pause')),killTree:()=>Promise.reject(Error('cannot kill'))});f.c.stop('deadline');await f.clock.advance(1);const r=await f.c.done;assert.equal(r.killConfirmed,false);assert.match(r.error,/cannot kill/);assert.equal(r.ok,false);
++});
++test('logging failure prevents a healthy result but does not prevent stop',async()=>{
++  const f=fixture({audit:()=>{throw Error('disk full');}});await f.clock.advance(1100);const r=await f.c.done;assert.equal(f.pauses.length,1);assert.equal(r.ok,false);assert.ok(r.logErrors.length);
++});
++test('HTML entity decoding is one pass; payload/user ID mismatch is rejected',()=>{
++  assert.equal(decodeText('&#x22;x&#34;'),'"x"');assert.equal(decodeText('&amp;quot;'),'&quot;');assert.throws(()=>decodeEnvelope({channel:'user:u/console',payload:{userId:'v'}},'u'),/mismatch/);
++});
++test('actual runSession wiring: subscription before resume, raw save before stop, disarm then bound kill',async()=>{
++  let subscribed, memory=JSON.stringify({[SLOT]:{experimentId:cfg.experimentId,armed:true,attempted:true,attemptedTick:cfg.targetTick,syncResult:{ok:true,code:0}}});
++  const events=[],files={};let kills=0,resumes=0;
++  const io={binding:{userId:'u'},pubsub:{subscribe:async(ch,fn)=>{subscribed=fn;},publish:async(ch,p)=>{subscribed.call({channel:ch},p);}},assertIdentity:async()=>{},assertPausedStable:async()=>cfg.targetTick+21,
++    readState:async()=>({paused:true,tick:cfg.targetTick+21}),pause:async()=>{events.push('pause');return 'OK';},killTree:async()=>{kills++;events.push('kill');},
++    readRuntimeMemory:async()=>memory,writeRuntimeMemory:async raw=>{memory=raw;events.push('memory-write');},
++    resume:async()=>{resumes++;events.push('resume');for(let t=cfg.targetTick-2;t<=cfg.targetTick+20;t++){const e=envelope(sample(t));subscribed.call({channel:e.channel},e.payload);}return 'OK';},
++    finalSnapshot:async()=>({memory,transactions:[],objects:[],state:{paused:true,tick:cfg.targetTick+21}}),
++  };
++  const evidence={audit:e=>events.push(e.kind),raw:()=>events.push('raw'),file:(n,v)=>{files[n]=v;}};
++  const result=await runSession(io,cfg,'formal',true,evidence);
++  assert.equal(resumes,1);assert.equal(kills,1);assert.equal(result.result.windowComplete,true);
++  assert.ok(events.indexOf('stop-ready')<events.indexOf('resume'));
++  assert.ok(events.lastIndexOf('raw') < events.indexOf('pause'));
++  assert.ok(events.indexOf('pause') < events.indexOf('pause-request'));
++  assert.ok(events.indexOf('memory-write')<events.indexOf('kill'));assert.equal(JSON.parse(memory)[SLOT].attempted,true);assert.equal(JSON.parse(memory)[SLOT].armed,false);
++});
++
++test('slow raw persistence/audit cannot hide a >1s pause delay',async()=>{
++  const f=fixture();
++  for(let t=cfg.targetTick-2;t<cfg.targetTick+20;t++)f.c.ingest(envelope(sample(t)));
++  const last=envelope(sample(cfg.targetTick+20));last.recvMonotonicMs=0;
++  f.clock.time=1500;f.c.ingest(last);await f.clock.advance(1100);
++  const r=await f.c.done;assert.equal(r.triggerLatencyMs,1500);assert.equal(r.ok,false);
++});
++
++test('actual preparation session confirms two player ticks without writing or killing',async()=>{
++  for(const armed of [false,true]){
++    let subscribed;const record={experimentId:cfg.experimentId,armed,attempted:false};const memory=JSON.stringify({[SLOT]:record});
++    let writes=0,kills=0;const files={};
++    const io={binding:{userId:'u'},pubsub:{subscribe:async(ch,fn)=>{subscribed=fn;},publish:async(ch,p)=>subscribed.call({channel:ch},p)},assertIdentity:async()=>{},assertPausedStable:async()=>99,
++      readState:async()=>({paused:true,tick:99}),pause:async()=> 'OK',killTree:async()=>{kills++;},readRuntimeMemory:async()=>memory,writeRuntimeMemory:async()=>{writes++;},
++      resume:async()=>{for(const tick of [97,98]){const row={...sample(tick),kind:'lab-control-sample',expectedExperimentId:cfg.experimentId,sampler:{name:'lab-control-probe',version:'1'},user:{username:cfg.username},control:{status:'ok',record}};const e=envelope(row);subscribed.call({channel:e.channel},e.payload);}return 'OK';},
++      finalSnapshot:async()=>({memory,state:{paused:true,tick:99},objects:[],transactions:[]}),
++    };
++    const result=await runSession(io,cfg,'control',armed,{audit(){},raw(){},file:(n,v)=>{files[n]=v;}});
++    assert.equal(result.pausedForNextStage,true);assert.equal(files['roundtrip-result.json'].ready,true);assert.equal(writes,0);assert.equal(kills,0);
++  }
++});
+diff --git a/test/lab/terminal-transfer/tools/ts-module.cjs b/test/lab/terminal-transfer/tools/ts-module.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7fd249d846560d3da10a5af80e2efd83be27b22e
+--- /dev/null
++++ b/test/lab/terminal-transfer/tools/ts-module.cjs
+@@ -0,0 +1,34 @@
++'use strict';
++// Node-side loader for trusted lab sources only. No filesystem/runtime fallback
++// is exposed to the evaluated TypeScript module. Does not install dependencies.
++const fs = require('node:fs');
++const path = require('node:path');
++const vm = require('node:vm');
++const ts = require('typescript');
++const LAB = path.resolve(__dirname, '..');
++const cache = new Map();
++function emit(relative) {
++  const filename = path.resolve(LAB, relative);
++  if (path.relative(LAB, filename).startsWith('..')) throw new Error('source outside lab');
++  const source = fs.readFileSync(filename, 'utf8');
++  const cached = cache.get(filename);
++  if (cached && cached.source === source) return cached.code;
++  const result = ts.transpileModule(source, {
++    fileName: filename, reportDiagnostics: true,
++    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
++  });
++  if ((result.diagnostics || []).some(d => d.category === ts.DiagnosticCategory.Error)) {
++    throw new Error('TypeScript transpilation failed: ' + filename);
++  }
++  cache.set(filename, { source, code: result.outputText });
++  return result.outputText;
++}
++function load(relative, globals = {}) {
++  const exports = {};
++  const sandbox = { ...globals, exports, module: { exports }, require(name) {
++    throw new Error('unregistered dependency in standalone lab module: ' + name);
++  } };
++  vm.runInNewContext(emit(relative), sandbox, { filename: relative, timeout: 1000 });
++  return sandbox.module.exports;
++}
++module.exports = { LAB, emit, load };

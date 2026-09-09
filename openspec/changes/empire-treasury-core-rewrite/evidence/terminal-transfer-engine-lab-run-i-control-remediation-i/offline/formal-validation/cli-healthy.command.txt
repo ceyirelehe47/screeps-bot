@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: node scripts/verify-lab-calibration.mjs --facts test/lab/terminal-transfer/fixtures/calibration-facts-healthy.json
+start: 2026-09-09T13:37:40Z
+end: 2026-09-09T13:37:40Z

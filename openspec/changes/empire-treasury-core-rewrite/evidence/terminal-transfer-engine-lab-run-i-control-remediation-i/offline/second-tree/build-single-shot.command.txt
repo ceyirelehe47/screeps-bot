@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/wt-ctrl-r1-second
+command: node scripts/build-treasury-terminal-lab.mjs --mode single-shot --out /tmp/screeps-ctrl-r1-second/lab-single-shot
+start: 2026-09-09T14:08:41Z
+end: 2026-09-09T14:08:43Z

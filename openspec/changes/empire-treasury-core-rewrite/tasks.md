@@ -1,5 +1,19 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Terminal Transfer Engine Lab Run I · Control Remediation I（2026-09-09，离线验收完成；实机 AUTHORIZATION_REQUIRED）
+
+Memory 控制通路/预检完整性/及时停止整改轮（用户附件实现包 screeps-control-remediation-I-implementation-2026-09-09.zip，原件归档于新证据根 task/；验收按 AGENT-VERIFY：原样应用→独立验收→预算→正式回归→第二树→实机边界沿 reference-task S01–S06）。起点 BASE=d69726a（本地=远端，干净）。
+
+- [x] 起点核对（HEAD/远端=d69726a）+ 影响范围审查（subagent：Jest 29 不收 tools/*.spec.cjs、controlProbe.ts 受 tsc 全局类型覆盖、原构建器不吸入 tools/、calibration.test.ts 无 35 项硬编码断言、预算两文件必须滚动）
+- [x] 实现包原样应用：manifest 逐项核对（5 原始 blob/fixture 逐字节 dc8c811c/modified-files sha256/补丁 ac96655c）→ apply_patch.py --check-only OK → 原样应用 17 文件（calibrationCheck.ts 唯一既有修改 + tools/ 十工具 + 三 spec + wrapper + fixtures）
+- [x] 原样首轮定向验证全绿（零环境适配零修复）：npm ci/node --test 83/83/tsc×2/build/定向 Jest 4-46/slice0 3-23 七命令全 exit 0（offline/first-round-directed/）
+- [x] Agent 独立失败输入（AGENT-VERIFY §4）：calibration.test.ts +7（非法 T/feeQuote 整缺失/pauseConfirmedTick 类型/稳定但不满足发送条件三变体/controller 5/三样本反序中间缺失/T0 边界）+ tools/independent.spec.cjs +6（initialize-on-existing/写后推进/存储≠玩家/前置拒绝停/wrong_active_entry/control 即时纠错）+ wrapper 扩展 independent；3 处测试自身修正披露（实现零改动）
+- [x] IMPL_HEAD b3207f9 + 全仓真实收集 243/1497 + 锚点滚动（calibration 6→13、新增 controlRemediation 4；budget PASSED）→ VALIDATION_HEAD d0103c9
+- [x] 正式回归全绿：npm ci/tsc×2/build/jest-lab 4-54/CLI 0-1-2/jest-slice 3-23/jest-treasury 35-597/jest-defense 11-118/jest-full 243-1497/budget PASSED/四产物构建（三模式+control-probe PREPARED_NOT_RUN）/冻结×6 零差异（src 对 BASE、生产对 PROD_BASE 869149d、根配置、冻结 lab 九文件、两旧证据根）/diff-check/终态 HEAD=VALIDATION_HEAD 工作树干净/dist 未覆盖（生产构建后 ed34291d 于四个实验构建后不变；before=dad050be 为上轮遗留 bundle）
+- [x] 第二干净 worktree：独立 npm ci、node --test 89/89（83+6）、jest-lab 4-54、slice0 3-23、四产物重建六产物逐字节 IDENTICAL（offline/second-tree/；worktree 已清理）
+- [x] 证据归档（task 原件+NOTE/offline 三段+主报告+environment、engine-run 未运行标记）+ run-i.md 状态更新 + 线性提交推送（IMPL_HEAD b3207f9 → VALIDATION_HEAD d0103c9 → DELIVERY_HEAD）
+- [ ] S01–S06 实机：**AUTHORIZATION_REQUIRED（未运行）**——离线交付后按 §0.2 做唯一一次范围确认未获答复（上轮授权仅覆盖已结束的 cal-0002）；零服务/零世界/零连接、send 调用确定 0；工具与九步流程就绪（tools/README.md），获授权后从 S01 直接开始，新实验 ID/T/q/结构 ID 从真实新世界读取绑定（严禁用 cal-0002 旧配置武装新世界）
+
 ## Terminal Transfer Engine Lab Run I · Calibration Rerun（2026-09-09，离线交付；实机 AUTHORIZATION_REQUIRED）
 
 实测配置校准与受控复验整改轮（任务书 treasury-terminal-transfer-engine-lab-run-I-calibration-rerun-implementation.md，归档于新证据根 task/；验收索引 C01–C03/S01–S06）。起点 BASE=bd9570d（本地=远端，干净）；会话原始授权语句仅覆盖已结束的旧实验，本轮按 §0.1 不自动续跑新实验——离线整改完成后做一次范围确认，实机部分如实报 AUTHORIZATION_REQUIRED。

@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/wt-ctrl-r1-second
+command: npx jest --config jest.config.cjs --runInBand --runTestsByPath test/lab/terminal-transfer/probe.test.ts test/lab/terminal-transfer/runI.test.ts test/lab/terminal-transfer/calibration.test.ts test/lab/terminal-transfer/controlRemediation.test.ts --json --outputFile=/tmp/screeps-ctrl-r1-second/jest-lab.json
+start: 2026-09-09T14:07:20Z
+end: 2026-09-09T14:08:26Z

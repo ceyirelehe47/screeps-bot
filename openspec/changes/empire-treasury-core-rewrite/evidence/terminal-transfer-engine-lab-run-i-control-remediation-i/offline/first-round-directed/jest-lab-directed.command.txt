@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: npx jest --config jest.config.cjs --runInBand --runTestsByPath test/lab/terminal-transfer/probe.test.ts test/lab/terminal-transfer/runI.test.ts test/lab/terminal-transfer/calibration.test.ts test/lab/terminal-transfer/controlRemediation.test.ts --json --outputFile=/tmp/screeps-ctrl-r1-first/jest-lab-directed.json
+start: 2026-09-09T12:58:47Z
+end: 2026-09-09T12:59:26Z

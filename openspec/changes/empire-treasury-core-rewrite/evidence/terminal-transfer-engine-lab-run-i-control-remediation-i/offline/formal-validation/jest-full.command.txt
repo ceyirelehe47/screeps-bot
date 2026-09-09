@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: npx jest --config jest.config.cjs --runInBand --silent --json --outputFile=/tmp/screeps-ctrl-r1-final/jest-full.json
+start: 2026-09-09T13:44:12Z
+end: 2026-09-09T13:53:12Z

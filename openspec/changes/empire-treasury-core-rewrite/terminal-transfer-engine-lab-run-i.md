@@ -9,6 +9,19 @@ T=557 门禁前置拒绝 shard_mismatch、零发送）；Calibration Rerun（同
 零交易、零资源变化；按纪律不重武装不换 T）。当前 labConfig 为实机复验轮
 绑定配置（lab-run1-cal-0002，该世界已清理）；再次复验须新任务书。**
 
+**Control Remediation I（2026-09-09，离线完成、实机 AUTHORIZATION_REQUIRED）**：
+按用户附件实现包（基线 d69726a）原样应用 17 文件——R01 env Memory 控制工具
+（连接时核对安装字节中 env.get/set MEMORY 通路、复用冻结 controlRecord 语义、
+initialize/arm/disarm 各恰一次 env 写、storageConfirmed≠playerConfirmed 分离）、
+R02 预检完整性修复（calibrationCheck.ts 为唯一既有修改：tick 合法唯一/逐样本
+完整+稳定/报价逐样本可读/T≥T0+3 暂停点公式）、R03 停止控制器（窗口/180 秒先到、
+≤1 秒暂停请求、5 秒稳定确认、有界进程树兜底）与 83 用例 Node 测试。Agent 独立
+增补 R02 +7 / R01R03 +6 失败输入后：IMPL_HEAD b3207f9、预算 243/1497（PASSED）、
+VALIDATION_HEAD d0103c9、正式回归与第二树全绿（六产物 IDENTICAL）、冻结×6 零
+差异。实机 S01–S06 的范围确认未获答复，未启动任何服务（send 调用确定 0）；
+工具就绪，获授权后可从 S01 直接开始。证据：
+`evidence/terminal-transfer-engine-lab-run-i-control-remediation-i/`。
+
 编制日期：2026-09-08（Execution 轮 2026-09-09；Calibration Rerun
 2026-09-09）。任务书：`treasury-terminal-transfer-engine-lab-run-I-execution.md`
 （归档于 `evidence/terminal-transfer-engine-lab-run-i/task/task-brief.md`）；

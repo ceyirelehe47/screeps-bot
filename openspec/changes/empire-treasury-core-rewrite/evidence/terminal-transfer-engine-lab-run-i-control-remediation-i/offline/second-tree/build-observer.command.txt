@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/wt-ctrl-r1-second
+command: node scripts/build-treasury-terminal-lab.mjs --out /tmp/screeps-ctrl-r1-second/lab-observer
+start: 2026-09-09T14:08:39Z
+end: 2026-09-09T14:08:41Z

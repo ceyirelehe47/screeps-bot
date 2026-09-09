@@ -1,0 +1,17 @@
+{
+  "_doc": "Terminal Transfer Engine Lab Run I · Calibration Rerun 实机复验轮真实配置（与 test/lab/terminal-transfer/labConfig.ts 的 LAB_EXAMPLE_EXPERIMENT 保持一致；S02/S03 从本轮新隔离世界读回绑定：结构 ID aa17545ac3100001/aa17545ac3100002、shard Forst、费用上限 26=本轮新鲜实测报价、T=201（T0=198+3））。文档示例（构建器仅复制，运行时不读取）。",
+  "experimentId": "lab-run1-cal-0002",
+  "mode": "observer",
+  "shardName": "Forst",
+  "username": "lab-cal-user-0002",
+  "sourceRoomName": "W1N57",
+  "targetRoomName": "W10N57",
+  "sourceTerminalId": "aa17545ac3100001",
+  "targetTerminalId": "aa17545ac3100002",
+  "resourceType": "H",
+  "amount": 100,
+  "description": "lab-run1-cal-0002 W1N57 to W10N57 100H",
+  "targetTick": 201,
+  "maxFeeEnergy": 26,
+  "maxSamples": 32
+}

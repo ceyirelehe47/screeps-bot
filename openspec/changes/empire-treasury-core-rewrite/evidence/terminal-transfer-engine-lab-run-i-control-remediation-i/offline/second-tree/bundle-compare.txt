@@ -1,0 +1,6 @@
+IDENTICAL lab-observer/observer.js
+IDENTICAL lab-single-shot/single-shot.js
+IDENTICAL lab-run-i-main/main.js
+IDENTICAL lab-observer/example.experiment.json
+IDENTICAL lab-run-i-main/example.experiment.json
+IDENTICAL lab-control-probe/main.js

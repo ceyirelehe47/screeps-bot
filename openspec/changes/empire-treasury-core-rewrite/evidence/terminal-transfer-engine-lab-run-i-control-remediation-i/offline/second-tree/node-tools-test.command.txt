@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/wt-ctrl-r1-second
+command: node --test test/lab/terminal-transfer/tools/calibration.spec.cjs test/lab/terminal-transfer/tools/memory.spec.cjs test/lab/terminal-transfer/tools/stop.spec.cjs test/lab/terminal-transfer/tools/independent.spec.cjs
+start: 2026-09-09T14:07:15Z
+end: 2026-09-09T14:07:20Z

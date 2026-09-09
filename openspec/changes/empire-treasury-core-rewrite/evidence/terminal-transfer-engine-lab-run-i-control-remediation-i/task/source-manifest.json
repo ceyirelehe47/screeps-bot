@@ -1,0 +1,152 @@
+{
+  "repository": "ceyirelehe47/screeps-bot",
+  "branch": "refactor/empire-treasury-rearchitecture",
+  "baseCommit": "d69726a92d46c3ab334355a6625ef253c1523a86",
+  "createdAt": "2026-09-09T12:37:11.944163+00:00",
+  "workingCopy": "Selected source-file reconstruction; not a full checkout. No remote commits or pushes.",
+  "patchSha256": "ac96655cbb8ecbbd12bd3788b472fdb35b3f934cbc3cd5d27533d2c7b7d90943",
+  "files": [
+    {
+      "path": "test/lab/terminal-transfer/calibrationCheck.ts",
+      "change": "modified",
+      "originalGitBlobSha": "0c55cb9e3dff294fccb884a61c6b14e66c02025d",
+      "sha256": "768c453d199abbb7b03436df978eb9ecde3e8c632377b2e24cf75fe89b4db636",
+      "bytes": 26400
+    },
+    {
+      "path": "test/lab/terminal-transfer/controlRemediation.test.ts",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "44779ea580156282750de8d301ec0407aebce54eac32b145b1b821841299febe",
+      "bytes": 913
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/README.md",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "e67fdb67c78ee434df29229910cd54116c00f813f20ca84f224f2253f28a5ec2",
+      "bytes": 8219
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/build-control-probe.cjs",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "aa54778eeeb7578e3b3500533a541da877a57d61d6d909e2104b4069177ee3a9",
+      "bytes": 3242
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/calibration.spec.cjs",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "f6e025e777f37955b64adaae14648d73daedda2d9730051692d2a1687df7ad73",
+      "bytes": 6296
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/controlProbe.ts",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "b0b9201e5f09bebaa053d4f38fa526167d8b57b184867df8fc41348e7d20b1bb",
+      "bytes": 1981
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/fixtures/README.md",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "546218fe453dc31fe21d6176c17d07e534514e885d7394f3551ce3c7a38b233f",
+      "bytes": 1212
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/fixtures/review-base-config.json",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "014e5c295568980935cf0d44b2fe8644c6778d5b654cb0f15bfde36c02bc12d9",
+      "bytes": 428
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/fixtures/review-base-facts.json",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "dc8c811c2035e8cb84fd6972b7f61262bd3bd19f4c772bf1c2d32a57ce6bda2b",
+      "bytes": 3780
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/lab-control.cjs",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "5a412d638c089fbe4273c2892ad3a194d5cd44f87a23dd02ad6f77483f4231f1",
+      "bytes": 15982
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/local-runtime.cjs",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "1b98f4408fb912796cbd0968cdc6caacfaecd0df72fc082921c880e1c666f71b",
+      "bytes": 7510
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/memory-control.cjs",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "67fcacf89e1fdf017ff581b8a3d8a251e28a8620fe6111fdc4dd176c633218e8",
+      "bytes": 6143
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/memory.spec.cjs",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "4c61d17d455c6d7ed6ea47ba1c733dc716cd54dbcbe4b6171932e47a89b16a0b",
+      "bytes": 8496
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/process-scope.cjs",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "1030468c65fe5bfb2dd4ec2bea1abc6c74782548b4380302213f6284277d59dc",
+      "bytes": 7690
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/stop-controller.cjs",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "32ca59805653371340e07d25cf8dfcbbbfff0b77bd22e5c2fbce59542528eed3",
+      "bytes": 10744
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/stop.spec.cjs",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "32923efc74317fdd59f33c3fb4ffed123fe76838ff6b30af003327e514e779c1",
+      "bytes": 9670
+    },
+    {
+      "path": "test/lab/terminal-transfer/tools/ts-module.cjs",
+      "change": "added",
+      "originalGitBlobSha": null,
+      "sha256": "7866108550a3ff903457d36bf6bf86b1d89fcc3dcf858185fee7cacef6b6c556",
+      "bytes": 1524
+    }
+  ],
+  "frozenInputs": [
+    {
+      "path": "test/lab/terminal-transfer/labConfig.ts",
+      "originalGitBlobSha": "357543a08e7ab899c73339f5b94f91ceb2379f50"
+    },
+    {
+      "path": "test/lab/terminal-transfer/controlRecord.ts",
+      "originalGitBlobSha": "1fb0198e57f8dd8abb037dd77ab1c1ee123ebe5c"
+    },
+    {
+      "path": "test/lab/terminal-transfer/worldRead.ts",
+      "originalGitBlobSha": "acf69e8e6331c78a06ac5956cb9feda1c7df7f4f"
+    },
+    {
+      "path": "scripts/verify-lab-calibration.mjs",
+      "originalGitBlobSha": "85f77b867865a7810e6c986c8e7cfb1f23034714"
+    }
+  ],
+  "fixtureProvenance": {
+    "path": "test/lab/terminal-transfer/tools/fixtures/review-base-facts.json",
+    "sourcePath": "openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i-calibration-rerun/engine-run/s02-calibration-facts.json",
+    "originalGitBlobSha": "acfbb51894d268d288480ddc2e9a1c8ad4411a9f"
+  }
+}

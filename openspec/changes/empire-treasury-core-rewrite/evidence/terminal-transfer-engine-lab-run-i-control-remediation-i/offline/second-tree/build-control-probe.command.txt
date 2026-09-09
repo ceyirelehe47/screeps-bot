@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/wt-ctrl-r1-second
+command: node test/lab/terminal-transfer/tools/build-control-probe.cjs --out /tmp/screeps-ctrl-r1-second/lab-control-probe
+start: 2026-09-09T14:08:44Z
+end: 2026-09-09T14:08:45Z
