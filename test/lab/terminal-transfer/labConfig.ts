@@ -9,9 +9,10 @@
  * 实测恒定）、合成用户 lab-ec-user-0001（id 48b86d847499b79）、双 Terminal
  * ec0001aa57000001/ec0001aa57000002、新鲜报价 q=26（绑定规则 cap=q，本轮
  * 41 个基线样本逐样本实测恒定）、暂停点 T0=160（暂停复读确认）。
- * **targetTick=400 仅为准备阶段占位值**：准备入口（controlProbe）无 send
- * 路径，该值不构成正式发送窗口；正式 T 在 facts 取得后按 T≥T0'+3 首次
- * 固定（T0' 为 observe-armed 后的实际暂停点，另行提交）。
+ * targetTick=167=T0+3 为正式窗口（observe-armed 后实际暂停点 T0=164 经
+ * facts 命令复读确认；窗口 165..187 共 23 个样本，T−2 可取得）。此前的
+ * 准备阶段占位值 400 已由本提交替换——占位值从未进入任何 send 路径
+ * （准备入口 controlProbe 无 send 路径）。
  *
  * 配置来源（当前唯一通道，编译时固定）：
  * - 本文件的实验配置是各产物共享的唯一配置来源；singleShot 模块据
@@ -58,7 +59,7 @@ export interface LabExperimentConfig {
   readonly maxSamples: number;
 }
 
-/** Engine Continuation 0001 准备阶段绑定配置（本轮实测读回；与 example.experiment.json 保持一致；历史 cal-0002 配置冻结于 tools/fixtures/review-base-config.json）。 */
+/** Engine Continuation 0001 正式绑定配置（本轮实测读回，T=167=T0+3；与 example.experiment.json 保持一致；历史 cal-0002 配置冻结于 tools/fixtures/review-base-config.json）。 */
 export const LAB_EXAMPLE_EXPERIMENT: LabExperimentConfig = {
   experimentId: "lab-run1-ec-0001",
   mode: "observer",
@@ -71,7 +72,7 @@ export const LAB_EXAMPLE_EXPERIMENT: LabExperimentConfig = {
   resourceType: "H",
   amount: 100,
   description: "lab-run1-ec-0001 W1N57 to W10N57 100H",
-  targetTick: 400,
+  targetTick: 167,
   maxFeeEnergy: 26,
   maxSamples: 32,
 };

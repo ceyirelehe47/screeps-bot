@@ -1,5 +1,5 @@
 {
-  "_doc": "Terminal Transfer Engine Lab Run I · Engine Continuation 0001 准备阶段绑定配置（与 test/lab/terminal-transfer/labConfig.ts 的 LAB_EXAMPLE_EXPERIMENT 保持一致；本轮新隔离世界读回绑定：结构 ID ec0001aa57000001/ec0001aa57000002、shard Forst、费用上限 26=本轮新鲜实测报价、targetTick=400 为准备阶段占位值——准备入口无 send 路径，正式 T 于 facts 后按 T≥T0'+3 另行固定提交）。文档示例（构建器仅复制，运行时不读取）。",
+  "_doc": "Terminal Transfer Engine Lab Run I · Engine Continuation 0001 准备阶段绑定配置（与 test/lab/terminal-transfer/labConfig.ts 的 LAB_EXAMPLE_EXPERIMENT 保持一致；本轮新隔离世界读回绑定：结构 ID ec0001aa57000001/ec0001aa57000002、shard Forst、费用上限 26=本轮新鲜实测报价、T=167=T0+3（observe-armed 后实际暂停点 T0=164 经 facts 复读确认，窗口 165..187）。文档示例（构建器仅复制，运行时不读取）。",
   "experimentId": "lab-run1-ec-0001",
   "mode": "observer",
   "shardName": "Forst",
@@ -11,7 +11,7 @@
   "resourceType": "H",
   "amount": 100,
   "description": "lab-run1-ec-0001 W1N57 to W10N57 100H",
-  "targetTick": 400,
+  "targetTick": 167,
   "maxFeeEnergy": 26,
   "maxSamples": 32
 }
