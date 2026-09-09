@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: npm ci
+start: 2026-09-09T07:22:45Z
+end: 2026-09-09T07:24:19Z

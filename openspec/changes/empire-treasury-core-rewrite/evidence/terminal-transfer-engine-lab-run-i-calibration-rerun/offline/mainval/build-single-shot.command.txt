@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: node scripts/build-treasury-terminal-lab.mjs --mode single-shot --out /tmp/screeps-lab-calibration.SOoO7k/lab-single-shot
+start: 2026-09-09T07:53:42Z
+end: 2026-09-09T07:53:43Z

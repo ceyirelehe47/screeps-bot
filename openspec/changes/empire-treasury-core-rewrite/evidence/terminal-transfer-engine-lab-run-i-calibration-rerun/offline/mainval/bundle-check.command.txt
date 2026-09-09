@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: node /tmp/screeps-lab-calibration.SOoO7k/check-bundles.mjs /tmp/screeps-lab-calibration.SOoO7k
+start: 2026-09-09T07:53:44Z
+end: 2026-09-09T07:53:44Z

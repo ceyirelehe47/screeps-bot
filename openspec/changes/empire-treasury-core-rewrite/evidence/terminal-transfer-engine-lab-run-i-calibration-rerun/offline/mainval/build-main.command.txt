@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: node scripts/build-treasury-terminal-lab.mjs --mode run-i-main --out /tmp/screeps-lab-calibration.SOoO7k/lab-run-i-main
+start: 2026-09-09T07:53:43Z
+end: 2026-09-09T07:53:44Z

@@ -1,0 +1,7 @@
+
+> screeps@2026.8.29-6 build
+> rollup -c
+
+No deployment target set. Build only.
+cleared:  D:\code\screeps\screeps-bot\dist
+[deploy] bundle sha256: 5aa7c0aa867a1a90… (full in Memory.runtime.lastDeployBundleHash)

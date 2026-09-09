@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot/.worktrees/calibration-rerun-2nd
+command: node scripts/build-treasury-terminal-lab.mjs --out /tmp/screeps-lab-calibration-tree2.2EHHOc/bundle-observer
+start: 2026-09-09T07:58:28Z
+end: 2026-09-09T07:58:29Z

@@ -1,0 +1,2 @@
+cwd: /d/code/screeps/screeps-bot
+command: git diff STRICT_BASE HEAD -- test/lab/terminal-transfer/sendGate.ts

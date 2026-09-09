@@ -1,0 +1,17 @@
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i-calibration-rerun/corrections.md
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i-calibration-rerun/task/task-brief-calibration-rerun.md
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i-calibration-rerun/tools-prepared/README.md
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i-calibration-rerun/tools-prepared/lab-meta-probe.js
+M	openspec/changes/empire-treasury-core-rewrite/terminal-transfer-engine-lab-run-i.md
+M	openspec/changes/empire-treasury-core-rewrite/terminal-transfer-lab-run1-shard-gate-compatibility.md
+M	scripts/verify-jest-budget.mjs
+A	scripts/verify-lab-calibration.mjs
+A	test/lab/terminal-transfer/calibration.test.ts
+A	test/lab/terminal-transfer/calibrationCheck.ts
+M	test/lab/terminal-transfer/example.experiment.json
+A	test/lab/terminal-transfer/fixtures/calibration-facts-healthy.json
+A	test/lab/terminal-transfer/fixtures/calibration-facts-mismatch.json
+M	test/lab/terminal-transfer/labConfig.ts
+M	test/lab/terminal-transfer/probe.test.ts
+M	test/lab/terminal-transfer/sendGate.ts
+M	test/test-suite-budget.json

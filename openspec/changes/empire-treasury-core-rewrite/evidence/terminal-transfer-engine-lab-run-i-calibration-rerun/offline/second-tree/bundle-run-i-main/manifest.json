@@ -1,0 +1,25 @@
+{
+  "schema": "treasury-terminal-lab-manifest/v1",
+  "status": "PREPARED_NOT_RUN",
+  "note": "本产物只在本地构建并用假端口离线自测；未启动游戏服务器、未上传、未在真实引擎上运行。真实运行须单独授权。",
+  "mode": "run-i-main",
+  "entry": "runIMain.ts",
+  "output": {
+    "file": "main.js",
+    "bytes": 8496,
+    "sha256": "f22fba60462074f7ab472f31cfe5a1e9e873328d64481ad5169d4f616f1650f7"
+  },
+  "repoSourceCommit": "f8631d031c8732b2f2fe1a0b18983a6fe489c384",
+  "lockfileSha256": "490ee9c70876f8ab72de2dd497331b9e177f63fe41565a837244401dad9c686a",
+  "toolchain": {
+    "node": "v22.19.0",
+    "typescript": "5.9.3",
+    "rollup": "4.59.0"
+  },
+  "referenceShas": {
+    "engine": "80977824199a596d174d392fd0cf8c458c21fcbd",
+    "driver": "cf63d8adf902663e2ebddd7f8c5b7baa425dc928"
+  },
+  "buildCommand": "node scripts/build-treasury-terminal-lab.mjs --mode run-i-main --out <out>",
+  "generatedAt": "2026-09-09T07:58:32.114Z"
+}

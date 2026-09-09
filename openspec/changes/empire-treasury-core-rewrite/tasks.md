@@ -1,5 +1,20 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Terminal Transfer Engine Lab Run I · Calibration Rerun（2026-09-09，离线交付；实机 AUTHORIZATION_REQUIRED）
+
+实测配置校准与受控复验整改轮（任务书 treasury-terminal-transfer-engine-lab-run-I-calibration-rerun-implementation.md，归档于新证据根 task/；验收索引 C01–C03/S01–S06）。起点 BASE=bd9570d（本地=远端，干净）；会话原始授权语句仅覆盖已结束的旧实验，本轮按 §0.1 不自动续跑新实验——离线整改完成后做一次范围确认，实机部分如实报 AUTHORIZATION_REQUIRED。
+
+- [x] 起点核对与影响范围审查（subagent 全仓 sentinel/配置引用/采样面/旧证据盘点；LAB_DIR 新增非入口 .ts 经 rollup 依赖图证实不改变产物字节）
+- [x] C01 严格 shard 门禁恢复：sendGate 撤销"缺 shard 放行"（缺失/null/name 非法/读取抛错一律 world_read_error；仅合法非空字符串精确比较；删 sentinel 导出）；labConfig/example JSON 改为已纠错历史配置（源 b0254141a49b92c、shard Forst、cap 26，标注未绑定新实验不得武装）
+- [x] C01 测试：7 畸形形态拒绝（零 send、不进入 attempted 写入）+ 合法对照 proceed + sentinel 期归档产物（29139B/3266d7b2…）同输入放行的前后对照 + 场景 A 旧事故链四步（shard_mismatch→structure_mismatch→fee_over_budget→proceed，产物级锚定）+ E 非 26 报价预算边界（probe 23→25）
+- [x] C02 独立配置核对：calibrationCheck.ts（35 项 7 类、一次报告全部不一致、missing 不当健康、cap=最新报价绑定）+ verify-lab-calibration.mjs CLI（转译求值 labConfig 实际导出、只读、0/1/2）+ calibration.test.ts 场景 B–G（6 用例）+ fixtures（健康/三项不一致）；正式验证中真实运行离线对照（healthy=0/mismatch=1 三项齐报）；真实预检（武装前）未运行并明确标注
+- [x] C03 纠错：run-i.md 状态统一（Execution 已运行 INCONCLUSIVE+本轮交付段+错误结论更正）；shard-gate 提案标记"事实基础已推翻、实现已撤销"；corrections.md 六项纠错（源 ID 漏诊根因=engine-run README 手写错字、接受集合扩大、费用上限正确拒绝、Forst 时间边界、worldSize 因果未证实、旧轮缺证）+ §6.2 有界查找 found/missing 清单；旧证据根零修改
+- [x] 全量真实收集 242/1486/1486 + 预算锚点滚动（probe 25/calibration 6；基线=IMPL_HEAD 13511d8；budget 自跑 PASSED）
+- [x] §9 正式离线验证 @VALIDATION_HEAD=f8631d0 全绿：npm ci/typecheck×2/build/五组 Jest（lab 3-43、slice 3-23、treasury 35-597、defense 11-118、full 242-1486）/三产物+身份核对（9935B/29281B/8496B，内嵌纠错配置）/三组冻结零差异/sendGate 对 STRICT_BASE 收紧 diff/dist 未覆盖/验证前后零写入；尾部断言误判普通 git diff 退出码已修正补跑并保留原件（offline/README 披露）
+- [x] 第二干净工作树复现：独立 npm ci、LAB 3/43+Slice 3/23 全绿、三产物程序字节逐一 IDENTICAL（offline/second-tree/）
+- [x] 证据归档（offline/mainval+second-tree+README+主报告）+ tools-prepared 只读采样准备件（lab-meta-probe.js PREPARED_NOT_RUN）+ 线性提交推送（IMPL_HEAD 13511d8 → VALIDATION_HEAD f8631d0 → DELIVERY_HEAD）
+- [ ] S01–S06 新的受控实机复验：待授权（新实验 ID/世界/身份全部重新读取绑定，cap=新鲜报价，C02 武装前真实运行；旧轮纠错与新轮实验互不替代）
+
 ## Terminal Transfer Engine Lab Run I · Execution（2026-09-09，已授权）
 
 真实引擎实验执行轮（接续任务书 treasury-terminal-transfer-engine-lab-run-I-execution-continuation.md；验收索引 S01–S06）。授权来源：用户会话明确回复「我给予你离线授权, 不接入线上服务器即可」（§0 范围一致：本机一次性隔离环境、最多一次发送 100H、证据保存后停止清理、不接线上/正式服/PTR/真实账号）。

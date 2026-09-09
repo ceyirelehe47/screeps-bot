@@ -1,0 +1,2 @@
+cwd: /d/code/screeps/screeps-bot
+command: node scripts/verify-lab-calibration.mjs --facts test/lab/terminal-transfer/fixtures/calibration-facts-mismatch.json
