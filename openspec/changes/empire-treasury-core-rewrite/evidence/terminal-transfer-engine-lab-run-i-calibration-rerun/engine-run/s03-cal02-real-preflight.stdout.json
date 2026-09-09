@@ -1,0 +1,286 @@
+{
+  "tool": {
+    "name": "verify-lab-calibration",
+    "schema": "lab-calibration-report/v1"
+  },
+  "inputs": {
+    "factsPath": "D:\\code\\screeps\\lab-cal-rerun-env\\evidence\\s02-calibration-facts.json",
+    "factsSha256": "dc8c811c2035e8cb84fd6972b7f61262bd3bd19f4c772bf1c2d32a57ce6bda2b",
+    "configSource": {
+      "kind": "labConfig.ts（转译求值，唯一编译配置来源）",
+      "path": "test\\lab\\terminal-transfer\\labConfig.ts",
+      "sha256": "3656270af5a3374e79e278bef6ea4e769beadbd92ff379d4502ecec0c6de0a7c",
+      "repoHead": "d3ca7e6536e0457e601c7293349a151679d6e8cb"
+    },
+    "note": "codeSource 由 CLI 从实际读取的 labConfig.ts 字节与仓库 HEAD 注入；世界观测字段全部来自 facts 文件。"
+  },
+  "config": {
+    "experimentId": "lab-run1-cal-0002",
+    "mode": "observer",
+    "shardName": "Forst",
+    "username": "lab-cal-user-0002",
+    "sourceRoomName": "W1N57",
+    "targetRoomName": "W10N57",
+    "sourceTerminalId": "aa17545ac3100001",
+    "targetTerminalId": "aa17545ac3100002",
+    "resourceType": "H",
+    "amount": 100,
+    "description": "lab-run1-cal-0002 W1N57 to W10N57 100H",
+    "targetTick": 201,
+    "maxFeeEnergy": 26,
+    "maxSamples": 32
+  },
+  "report": {
+    "status": "pass",
+    "summary": {
+      "total": 35,
+      "passed": 35,
+      "failed": 0,
+      "missing": 0
+    },
+    "checks": [
+      {
+        "category": "experiment_scope",
+        "item": "experiment_id",
+        "result": "pass",
+        "expected": "非空 ASCII 标识（字母/数字/点/下划线/连字符）",
+        "observed": "lab-run1-cal-0002"
+      },
+      {
+        "category": "experiment_scope",
+        "item": "route",
+        "result": "pass",
+        "expected": "W1N57 -> W10N57",
+        "observed": "W1N57 -> W10N57"
+      },
+      {
+        "category": "experiment_scope",
+        "item": "resource_amount",
+        "result": "pass",
+        "expected": "H / 100",
+        "observed": "H / 100"
+      },
+      {
+        "category": "experiment_scope",
+        "item": "max_samples",
+        "result": "pass",
+        "expected": 32,
+        "observed": 32
+      },
+      {
+        "category": "experiment_scope",
+        "item": "description",
+        "result": "pass",
+        "expected": "非空可打印 ASCII 且 ≤100 字符",
+        "observed": "lab-run1-cal-0002 W1N57 to W10N57 100H"
+      },
+      {
+        "category": "experiment_scope",
+        "item": "description_unique",
+        "result": "pass",
+        "observed": "4 个可读视图无同 description 记录"
+      },
+      {
+        "category": "world_user",
+        "item": "shard_legal",
+        "result": "pass",
+        "expected": "每样本实际读到合法非空 shard 名",
+        "observed": "[\"Forst\",\"Forst\"]"
+      },
+      {
+        "category": "world_user",
+        "item": "shard_matches_config",
+        "result": "pass",
+        "expected": "Forst",
+        "observed": "Forst"
+      },
+      {
+        "category": "world_user",
+        "item": "shard_stable",
+        "result": "pass",
+        "expected": "各样本一致",
+        "observed": "[\"Forst\",\"Forst\"]"
+      },
+      {
+        "category": "world_user",
+        "item": "username_matches",
+        "result": "pass",
+        "expected": "lab-cal-user-0002",
+        "observed": "[\"lab-cal-user-0002\",\"lab-cal-user-0002\"]"
+      },
+      {
+        "category": "world_user",
+        "item": "user_id_evidence",
+        "result": "pass",
+        "observed": "c4c7544a1513ce9（来源：管理侧 db.users 按 username 查询（s02-user-lookup.txt）+ console 频道 user:c4c7544a1513ce9/console 实际收流交叉）"
+      },
+      {
+        "category": "world_user",
+        "item": "endpoint_owners",
+        "result": "pass",
+        "expected": "两端 owner 均为 lab-cal-user-0002",
+        "observed": "全部 2 样本一致"
+      },
+      {
+        "category": "endpoints",
+        "item": "source_read_ok",
+        "result": "pass",
+        "expected": "readStatus=ok",
+        "observed": "[\"ok\",\"ok\"]"
+      },
+      {
+        "category": "endpoints",
+        "item": "source_terminal_id",
+        "result": "pass",
+        "expected": "aa17545ac3100001",
+        "observed": "[\"aa17545ac3100001\"]"
+      },
+      {
+        "category": "endpoints",
+        "item": "source_my_active",
+        "result": "pass",
+        "expected": "my=true 且 isActive=true（每样本）",
+        "observed": "my=[true,true] isActive=[true,true]"
+      },
+      {
+        "category": "endpoints",
+        "item": "source_controller",
+        "result": "pass",
+        "expected": "控制器存在、同主且 level≥6（Terminal 合法）",
+        "observed": "[{\"present\":true,\"my\":true,\"level\":8,\"ownerUsername\":\"lab-cal-user-0002\"},{\"present\":true,\"my\":true,\"level\":8,\"ownerUsername\":\"lab-cal-user-0002\"}]"
+      },
+      {
+        "category": "endpoints",
+        "item": "target_read_ok",
+        "result": "pass",
+        "expected": "readStatus=ok",
+        "observed": "[\"ok\",\"ok\"]"
+      },
+      {
+        "category": "endpoints",
+        "item": "target_terminal_id",
+        "result": "pass",
+        "expected": "aa17545ac3100002",
+        "observed": "[\"aa17545ac3100002\"]"
+      },
+      {
+        "category": "endpoints",
+        "item": "target_my_active",
+        "result": "pass",
+        "expected": "my=true 且 isActive=true（每样本）",
+        "observed": "my=[true,true] isActive=[true,true]"
+      },
+      {
+        "category": "endpoints",
+        "item": "target_controller",
+        "result": "pass",
+        "expected": "控制器存在、同主且 level≥6（Terminal 合法）",
+        "observed": "[{\"present\":true,\"my\":true,\"level\":8,\"ownerUsername\":\"lab-cal-user-0002\"},{\"present\":true,\"my\":true,\"level\":8,\"ownerUsername\":\"lab-cal-user-0002\"}]"
+      },
+      {
+        "category": "resources",
+        "item": "source_h_sufficient",
+        "result": "pass",
+        "expected": "源 H ≥ 100",
+        "observed": 1000
+      },
+      {
+        "category": "resources",
+        "item": "source_energy_covers_cap",
+        "result": "pass",
+        "expected": "源 energy ≥ 固定上限 26",
+        "observed": 10000
+      },
+      {
+        "category": "resources",
+        "item": "source_cooldown_zero",
+        "result": "pass",
+        "expected": 0,
+        "observed": 0
+      },
+      {
+        "category": "resources",
+        "item": "target_free_sufficient",
+        "result": "pass",
+        "expected": "目标空位 ≥ 100",
+        "observed": 298000
+      },
+      {
+        "category": "quote",
+        "item": "quote_legal",
+        "result": "pass",
+        "expected": "最新样本报价 ok 且为非负有限整数（真实 calcTransactionCost 读数）",
+        "observed": "{\"status\":\"ok\",\"energyCost\":26}"
+      },
+      {
+        "category": "quote",
+        "item": "quote_stable",
+        "result": "pass",
+        "expected": "各样本报价一致",
+        "observed": "[26]"
+      },
+      {
+        "category": "quote",
+        "item": "cap_binds_quote",
+        "result": "pass",
+        "expected": "固定费用上限 === 最新真实报价（cap=q 绑定）",
+        "observed": "cap=26 quote=26"
+      },
+      {
+        "category": "time_stability",
+        "item": "facts_kind",
+        "result": "pass",
+        "expected": "lab-calibration-facts",
+        "observed": "lab-calibration-facts"
+      },
+      {
+        "category": "time_stability",
+        "item": "samples_two_ticks",
+        "result": "pass",
+        "expected": "≥2 个互异 tick 的稳定基线",
+        "observed": "[196,197]"
+      },
+      {
+        "category": "time_stability",
+        "item": "collected_after_admin_change",
+        "result": "pass",
+        "expected": "所有样本晚于最后管理修改 2026-09-09T08:28:20.203Z",
+        "observed": "最早样本 2026-09-09T08:28:57.042Z"
+      },
+      {
+        "category": "time_stability",
+        "item": "paused_confirmed",
+        "result": "pass",
+        "expected": "已暂停且 T0≥最后基线 tick（重复只读核对后确认）",
+        "observed": "paused=true pauseConfirmedTick=198 最后样本 tick=197"
+      },
+      {
+        "category": "time_stability",
+        "item": "target_tick_reachable",
+        "result": "pass",
+        "expected": "T ≥ T0+3（T−2 样本可取得）且晚于暂停确认 tick；当前 T=201",
+        "observed": "最后样本 tick=197 pauseConfirmedTick=198"
+      },
+      {
+        "category": "provenance",
+        "item": "run_id_consistent",
+        "result": "pass",
+        "expected": "所有样本与 context 同一 runId",
+        "observed": "[\"cal-rerun-run-0002\"]"
+      },
+      {
+        "category": "provenance",
+        "item": "sampler_declared",
+        "result": "pass",
+        "expected": "只读采样器名称与版本",
+        "observed": "{\"name\":\"lab-meta-probe\",\"version\":\"1\"}"
+      },
+      {
+        "category": "provenance",
+        "item": "code_source",
+        "result": "pass",
+        "observed": "repoHead=d3ca7e6536e0457e601c7293349a151679d6e8cb labConfigSha256=3656270af5a3374e79e278bef6ea4e769beadbd92ff379d4502ecec0c6de0a7c"
+      }
+    ]
+  }
+}

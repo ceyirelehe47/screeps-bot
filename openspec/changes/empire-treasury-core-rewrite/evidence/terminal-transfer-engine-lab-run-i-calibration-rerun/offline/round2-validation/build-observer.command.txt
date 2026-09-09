@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: node scripts/build-treasury-terminal-lab.mjs --out /tmp/screeps-lab-calibration2.fNJdaE/lab-observer
+start: 2026-09-09T09:04:14Z
+end: 2026-09-09T09:04:15Z

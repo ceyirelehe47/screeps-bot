@@ -1,0 +1,1 @@
+RESULT {"gametime":254,"terminals":[{"id":"aa17545ac3100001","store":{"H":1000,"energy":10000},"cd":0},{"id":"aa17545ac3100002","store":{"energy":2000},"cd":0}],"txnCount":0,"envMemory":"{}","dbMemory":"{\"__labTerminalTransferProbe\":{\"experimentId\":\"lab-run1-cal-0002\",\"armed\":true,\"attempted\":false}}"}

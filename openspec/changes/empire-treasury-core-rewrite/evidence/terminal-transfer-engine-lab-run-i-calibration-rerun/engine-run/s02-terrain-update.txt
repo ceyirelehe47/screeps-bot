@@ -1,0 +1,2 @@
+Connecting to storage
+TERRAIN_UPDATE_RESULT "OK"

@@ -1,0 +1,154 @@
+{
+  "factsKind": "lab-calibration-facts",
+  "context": {
+    "collectedAtWallClock": "2026-09-09T08:28:58.048Z",
+    "runId": "cal-rerun-run-0002",
+    "paused": true,
+    "pauseConfirmedTick": 198,
+    "lastAdminChangeWallClock": "2026-09-09T08:28:20.203Z",
+    "user": {
+      "id": "c4c7544a1513ce9",
+      "idSource": "管理侧 db.users 按 username 查询（s02-user-lookup.txt）+ console 频道 user:c4c7544a1513ce9/console 实际收流交叉"
+    },
+    "sampler": {
+      "name": "lab-meta-probe",
+      "version": "1"
+    }
+  },
+  "samples": [
+    {
+      "kind": "lab-meta-facts-sample",
+      "sampler": {
+        "name": "lab-meta-probe",
+        "version": "1"
+      },
+      "tick": 196,
+      "shard": {
+        "name": "Forst"
+      },
+      "user": {
+        "username": "lab-cal-user-0002"
+      },
+      "worldSize": 59,
+      "source": {
+        "readStatus": "ok",
+        "terminalId": "aa17545ac3100001",
+        "ownerUsername": "lab-cal-user-0002",
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-cal-user-0002"
+        },
+        "resourceAmount": 1000,
+        "energy": 10000,
+        "freeCapacity": 289000,
+        "cooldown": 0
+      },
+      "target": {
+        "readStatus": "ok",
+        "terminalId": "aa17545ac3100002",
+        "ownerUsername": "lab-cal-user-0002",
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-cal-user-0002"
+        },
+        "resourceAmount": 0,
+        "energy": 2000,
+        "freeCapacity": 298000,
+        "cooldown": 0
+      },
+      "feeQuote": {
+        "status": "ok",
+        "energyCost": 26
+      },
+      "transactions": {
+        "incoming": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        },
+        "outgoing": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        }
+      },
+      "collectedAtWallClock": "2026-09-09T08:28:57.042Z",
+      "runId": "cal-rerun-run-0002"
+    },
+    {
+      "kind": "lab-meta-facts-sample",
+      "sampler": {
+        "name": "lab-meta-probe",
+        "version": "1"
+      },
+      "tick": 197,
+      "shard": {
+        "name": "Forst"
+      },
+      "user": {
+        "username": "lab-cal-user-0002"
+      },
+      "worldSize": 59,
+      "source": {
+        "readStatus": "ok",
+        "terminalId": "aa17545ac3100001",
+        "ownerUsername": "lab-cal-user-0002",
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-cal-user-0002"
+        },
+        "resourceAmount": 1000,
+        "energy": 10000,
+        "freeCapacity": 289000,
+        "cooldown": 0
+      },
+      "target": {
+        "readStatus": "ok",
+        "terminalId": "aa17545ac3100002",
+        "ownerUsername": "lab-cal-user-0002",
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-cal-user-0002"
+        },
+        "resourceAmount": 0,
+        "energy": 2000,
+        "freeCapacity": 298000,
+        "cooldown": 0
+      },
+      "feeQuote": {
+        "status": "ok",
+        "energyCost": 26
+      },
+      "transactions": {
+        "incoming": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        },
+        "outgoing": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        }
+      },
+      "collectedAtWallClock": "2026-09-09T08:28:58.048Z",
+      "runId": "cal-rerun-run-0002"
+    }
+  ]
+}

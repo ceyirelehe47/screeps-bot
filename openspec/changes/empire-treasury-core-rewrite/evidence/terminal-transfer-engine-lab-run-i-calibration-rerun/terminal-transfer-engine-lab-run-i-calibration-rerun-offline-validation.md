@@ -1,32 +1,46 @@
-# Terminal Transfer Engine Lab Run I · Calibration Rerun——离线交付主报告
+# Terminal Transfer Engine Lab Run I · Calibration Rerun——主报告（离线交付 + 实机复验）
 
 日期：2026-09-09。任务书：`task/task-brief-calibration-rerun.md`
 （treasury-terminal-transfer-engine-lab-run-I-calibration-rerun-implementation.md
-对话附件逐字归档）。
+对话附件逐字归档）。本文先随离线交付（d3ca7e6）落稿；实机复验获授权
+执行后追加 §8（时序与证据均如实分开）。
 
 ## 0. 结论与授权状态
 
-**离线整改（C01–C03）完成并全量验证通过；实机复验（S01–S06）未运行，
-状态 `AUTHORIZATION_REQUIRED`。** 本执行会话中的原始用户授权语句
-「我给予你离线授权， 不接入线上服务器即可」是针对**已结束的旧实验**
-（Run I Execution 轮，其一次性世界已停止并清理）作出的；按任务书 §0.1，
-它不自动覆盖本轮新建一次性世界、最多一次 `send(100H)` 的新实验，且明确
-禁止以"旧轮 send=0、额度未消耗"为由自动续跑。本轮因此只做一次范围确认
-（交付时向用户提出），在此之前完成全部离线修复、测试、文档与提交——
-本文即该离线交付；未编造任何新配置或新运行事实。
+**C01–C03 离线整改完成并全量验证通过；实机复验（S01–S05）已按用户
+后续授权执行完毕，判读 `ENGINE_LAB_INCONCLUSIVE`：T=201 被门禁以
+`no_control_record` 前置拒绝——武装控制记录写入 `db.users.memory` 而
+真实 runner 从 env 层 `memory:<userId>` 装载 Memory（实证见 §8/根因），
+单次 send 调用未消费、零发送边界、零交易、零资源变化；按停止纪律
+不重新武装、不换 T。**
 
-实机状态声明（§11.3）：本轮**服务未启动、真实 runner 未执行、未武装、
-未进入 send 边界、send 调用次数不适用（未装载）、无同步返回、无真实
-100H 转运与交易、无需要停止/清理的本轮资源**（上轮环境已在上轮清理）。
+授权时序：本执行会话中的原始授权语句「我给予你离线授权，
+不接入线上服务器即可」针对已结束的旧实验，不自动覆盖本轮新实验
+（§0.1），离线交付时实机部分如实报 `AUTHORIZATION_REQUIRED`；交付后
+向用户做**唯一一次范围确认**，用户明确答复「授权执行 S01–S06」
+（范围＝新本机一次性隔离世界、合成用户、W1N57→W10N57、最多一次真实
+terminal.send(100H)、不接线上服务器、证据保存后停止清理），随后按
+任务书 §8 执行。
 
-## 1. 提交链与三个 HEAD
+实机状态声明（§11.3）：服务曾启动（已停止，进程树 7 进程全杀、
+21025-21027 无监听）；真实 runner 曾执行（窗口 199..221、observer
+23/23 采样）；曾武装（98 字节回读确认；写入路径口径错误致游戏内
+不可见，见 §8）；T=201 调用了 single-shot 且被 gate 前置拒绝
+（`no_control_record`）——**未进入 send 边界，send 调用次数确定为 0**
+（拒绝行是唯一相关输出，无任何 lab-send-attempt 行）；无同步返回；
+未取得真实 100H 转运与交易（交易表 0 条、两端终态原值）；已停止、
+撤装、取证、清理（空目录壳因句柄暂存，如实记录）。
+
+## 1. 提交链与 HEAD
 
 | 角色 | SHA | 内容 |
 | --- | --- | --- |
 | 起点 BASE | `bd9570d2c3cf8632202cfee4e3a96d95250add52` | 与远端一致、工作树干净（开工核对实际执行） |
-| IMPL_HEAD | `13511d8dd95fc6044fe597b5a019c4a84699882a` | C01–C03 全部源码/测试/工具/配置/文档/任务书归档/纠错报告/准备件（15 文件） |
-| VALIDATION_HEAD | `f8631d031c8732b2f2fe1a0b18983a6fe489c384` | 预算真实收集与锚点滚动（241/1478→242/1486，基线=IMPL_HEAD） |
-| DELIVERY_HEAD | 见最终回复 | 本主报告、验证证据归档、tasks.md（证据追加提交，不要求 SHA 自引用） |
+| IMPL_HEAD（离线） | `13511d8dd95fc6044fe597b5a019c4a84699882a` | C01–C03 源码/测试/工具/配置/文档/任务书/纠错/准备件 |
+| VALIDATION_HEAD（离线） | `f8631d031c8732b2f2fe1a0b18983a6fe489c384` | 预算滚动（241/1478→242/1486） |
+| DELIVERY_HEAD（离线） | `d3ca7e6536e0457e601c7293349a151679d6e8cb` | 离线验证证据+主报告（离线版）+tasks，已推送 |
+| IMPL/VALIDATION_HEAD（实机绑定） | `7b9135985ab3ce02192c853f051e76005562866e` | S02/S03 真实身份绑定+meta-probe 修复+checker 时序校准+fixtures 迁移；第二轮全量验证与第二树在其上完成（锚点 13511d8 仍含当前测试文件集，预算无变更） |
+| DELIVERY_HEAD（实机） | 见最终回复 | 实机证据归档+本报告 §8+文档更新（证据追加提交，不要求 SHA 自引用） |
 
 修改清单（`offline/mainval/full-diff-name-status.txt`）：`sendGate.ts`、
 `labConfig.ts`、`example.experiment.json`、`probe.test.ts`（改）；
@@ -135,14 +149,12 @@
   独立 npm ci（依赖解析到本树）；LAB 3/43、Slice 3/23 全绿；三产物
   程序字节与主树逐一 IDENTICAL。
 
-## 6. S01–S06——实机复验（未运行）
+## 6. S01–S06——实机复验（已获授权执行，详见 §8）
 
-未获覆盖本轮新实验的授权（见 §0）；服务未启动、世界未创建、未装载、
-未武装、未发送。实机部分状态 **AUTHORIZATION_REQUIRED**（非 ENV_BLOCKED
-——不存在环境失败事实，只是未进入）。新实验前置条件与工具准备：
-`tools-prepared/lab-meta-probe.js`（只读元信息采样器，PREPARED_NOT_RUN，
-装载时以实际字节 SHA 为准）+ 复用件与 facts 装配说明（`tools-prepared/README.md`）。
-授权后按任务书 §8 顺序执行；旧轮纠错与新轮实验互不替代。
+离线交付时未获覆盖（当时如实报 AUTHORIZATION_REQUIRED，工具以
+`tools-prepared/` 准备件就位）；交付后用户对唯一一次范围确认答复
+「授权执行 S01–S06」，随后按任务书 §8 执行完毕——判读与完整证据
+链见 §8 与 `engine-run/README.md`。旧轮纠错与新轮实验互不替代。
 
 ## 7. 边界重申
 
@@ -150,3 +162,81 @@
 生产国库接入、故障场景或其他经济 writer；部署仍禁止（未执行
 `npm run push`/`local`；`git push` 仅上传代码）。旧实验结论
 ENGINE_LAB_INCONCLUSIVE 保持不变。
+
+## 8. 实机复验（S01–S05，已授权；时序在 §0）
+
+**S01（达成）**：新隔离环境 `lab-cal-rerun-env`（与仓库分离）；
+`npm install --save-exact screeps@4.3.0`（exit 0）+ `npm ls` + 版本解析
+原件归档（组合与上轮一致，lockfile SHA `d95c2c12…` 一致；**server
+package.json/package-lock.json 原件本次入库** `engine-run/server-package/`
+——补上轮缺证项）；init 专用世界（占位 steam key，认证路径未使用）；
+`.screepsrc host=127.0.0.1`（21025 仅本机、21026/21027 回环）；启动
+unset 全部部署变量；进程树与监听快照归档（launcher 98720→storage/
+backend/engine_main/runner/processor×2）。启动前端口核对空闲。
+
+**S02（达成）**：暂停→建房 W1N57/W10N57（gen-room 尾部 ASSET_DIR 图片
+步骤报错、数据插入成功——直查 rooms/terrain/objects 证实）→合成用户
+`lab-cal-user-0002`（id `c4c7544a1513ce9`）→ fixture（双 RCL8 归属+
+双 Terminal 源 1000H+10000E/目标 0H+2000E，地形平原格）→
+`map.updateTerrainData`+runner 重启（上轮同型经验）→管理侧停改。
+meta-probe 只读装载（初版 `isActive` 误当属性读出 false——真实引擎
+是**方法**；未武装阶段修复 v2 `2ec07978…` 并 reload 生效）。外部
+收集器直订 `user:c4c7544a1513ce9/console` 实测收流 161 行：基线
+tick 37..197 逐样本 shard=**Forst**、两端 my/isActive/controller
+level8 同主、库存原值、**报价恒 26**（worldSize 59）、交易视图 0。
+无其他经济 writer：用户清单仅系统 NPC+init 自带 4 个 simplebot+本
+用户，交易表 0、两端结构唯一归属。再次暂停→在途 tick 完成→管理侧
+复读一致，**T0=198**。facts 装配（tick 196/197，晚于最后管理操作）。
+
+**S03（绑定与验证达成；武装写入口径错误——根因见下）**：绑定
+`lab-run1-cal-0002`（描述 39 字符 ASCII）、shard Forst、双 Terminal
+ID、T=201=T0+3、**cap=26=本轮新鲜实测报价**（数值巧合等于上轮窗口
+值，但来源是本轮逐样本实测）；**C02 真实预检 35/35 pass**（实机
+facts×绑定配置）；提交 7b91359（含 meta-probe 修复与 checker 暂停
+时序语义校准——实机 facts 暴露"暂停确认 tick 允许晚于最后玩家样本"
+的正常时序，均为未武装阶段修复）；其上第二轮全量验证全绿（
+`offline/round2-validation/`：242/1486、budget PASSED、三产物
+BUNDLE_CHECK=OK、三组冻结零差异、dist 未覆盖）+ 第二树复现
+（`offline/round2-second-tree/`：LAB 43/Slice 23、三产物程序字节逐一
+IDENTICAL）。装载：三产物（repoSourceCommit=7b91359）经 bots.reload
+进活动分支 `t1788945341092`，从 `users.code` 集合**完整回读**模块
+内容，UTF-8 字节+SHA-256 与待装载逐一一致（main 8392/de83d0c4…、
+observer 9831/1dd18951…、single-shot 29177/8cf4b364…）。武装前终检：
+世界对象与 facts 一致（reload 为代码装载、零世界对象变化——C02 的
+lastAdminChange 语义按任务书 D 场景理解为 fixture/map 变更，代码装载
+不使世界事实过期，此口径特此声明）、T 未错过、收集器活着、停止保护
+就绪；C02 正式命令再跑 35/35。武装：控制记录 98 字节 ≤4096 写入
+`db.users.memory` 并回读确认——**该写入口径即根因**（见下）。
+
+**S04（窗口执行；gate 前置拒绝）**：恢复墙钟 09:17:19Z，180 秒停止
+保护并行。窗口 199..221 **observer 23/23 tick 采样完整**；**T=201
+single-shot 输出唯一拒绝行 `lab-precondition-rejection` reason=
+`no_control_record`**——门禁顺序中控制事实先于 shard/结构/费用，
+后三项本轮未被评估。零发送边界（无任何 lab-send-attempt 行）、
+零交易、两端零变化。
+
+**根因（实证）**：runner 每 tick 从 **env 层 `memory:<userId>`**
+装载玩家 Memory（`@screeps/driver/lib/runtime/data.js:132`），engine
+`game.js` 的 Memory getter 解析该字符串；`db.users.memory` 只是
+backend 展示副本。终态物证：`envMemory="{}"`（游戏内始终为空）、
+`dbMemory`=我们写入的武装记录原样并存。武装数据从未进入游戏运行时
+——实验操作（管理侧写入口径）错误，非引擎 API 不兼容、非 C01 门禁
+缺陷。上轮武装生效细节已不可考（上轮该项原件缺失，见 corrections.md）。
+
+**S05（达成）**：窗口后请求暂停（T+20=221 之后 33 tick 的停止延迟
+如实记录：主流程 45 秒轮询所致；窗口后 main 零发送零采样、终态原值
+证实无侧影响）；终态取证（gametime 254、两端原值、交易 0、envMemory
+/dbMemory 并存物证）；撤装（db 副本 armed=false 保留 attempted=false，
+99 字节回读）；停收集器（流定格 217 行）→launcher 进程树 taskkill
+/T /F（7 进程）→21025-21027 无监听、实验相关 node 进程 0；证据核对
+可读后清理实验目录（内容 0 文件；空目录壳因 Windows 句柄暂存，会话
+结束后可手动删）。
+
+**S06（判读）**：`ENGINE_LAB_INCONCLUSIVE`——已进入实验、真实 runner
+与采样运行、但被 gate 阻断（no_control_record）、无正常 100H 转运
+证据；按 §4.5/§8 纪律不重新武装、不换 T、不清 attempted 重试。
+单次 send 调用未消费；调用次数确定为 0（拒绝行是唯一输出）。C01–C03
+验收不受影响（离线全部达成；本轮实机未触发 shard/结构/费用门禁）。
+未来重开须新任务书，携带本轮根因（env 层 Memory 装载路径）重新设计
+武装写入口径（候选：直接 `env.set(env.keys.MEMORY+userId, …)`，
+或经 backend CLI `setPassword` 类同源通道——须新任务书评估）。

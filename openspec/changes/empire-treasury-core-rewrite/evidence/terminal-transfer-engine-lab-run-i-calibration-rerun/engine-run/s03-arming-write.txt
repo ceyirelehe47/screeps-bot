@@ -1,0 +1,15 @@
+待写入 JSON：{"__labTerminalTransferProbe":{"experimentId":"lab-run1-cal-0002","armed":true,"attempted":false}}
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module 'D:\code\screeps\lab-cal-rerun-env\const s=process.argv[1]; console.log('UTF-8 bytes before write:', Buffer.byteLength(s,'utf8'))'
+    at node:internal/modules/cjs/loader:1383:15
+    at node:internal/main/check_syntax:33:20 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.19.0
+UTF-8 bytes: 98
+RESULT {"modified":1}

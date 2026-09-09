@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: git diff --exit-code bd9570d2c3cf8632202cfee4e3a96d95250add52 HEAD -- package.json package-lock.json :\(glob\)tsconfig\*.json :\(glob\)jest.config.\* :\(glob\)rollup.config.\*
+start: 2026-09-09T09:04:18Z
+end: 2026-09-09T09:04:18Z

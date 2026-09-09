@@ -1,0 +1,3 @@
+Loading mods from "D:\code\screeps\lab-cal-rerun-env\world\mods.json"
+Connecting to storage
+RESULT [{"_id":"W1N57","status":"normal","sourceKeepers":false,"meta":{"revision":2,"created":1788942215196,"version":0,"updated":1788942219003},"$loki":122,"nextForceUpdateTime":135},{"_id":"W10N57","status":"normal","sourceKeepers":false,"meta":{"revision":2,"created":1788942215529,"version":0,"updated":1788942219003},"$loki":123,"nextForceUpdateTime":144},1,1,[{"room":"W1N57","type":"controller","x":18,"y":27,"level":0,"_id":"5021543e81ca459","meta":{"revision":0,"created":1788942215196,"version":0},"$loki":381}],[{"room":"W10N57","type":"controller","x":35,"y":7,"level":0,"_id":"ad5c543e96b0694","meta":{"revision":0,"created":1788942215531,"version":0},"$loki":384}]]

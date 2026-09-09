@@ -1,0 +1,6 @@
+observer.js 9831 1dd18951965cd94dcff6b15bba45a3f3aae171ad5d8a0d7d1a7bc05c890df293
+single-shot.js 29177 8cf4b364803da264dd18b03b5f89da627e5fd67f23e4790ad40694398a13e6a6
+main.js 8392 de83d0c48f1efff1df6d3fcf4976770dd8aa1f142483efc3a819b1ee6a5586a8
+observer.js manifestBytes:true manifestSha:true repoSourceCommit:7b91359
+single-shot.js manifestBytes:true manifestSha:true repoSourceCommit:7b91359
+main.js manifestBytes:true manifestSha:true repoSourceCommit:7b91359

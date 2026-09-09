@@ -1,0 +1,20 @@
+{
+  "branch": "t1788945341092",
+  "timestamp": 1788945341092,
+  "activeWorld": true,
+  "activeSim": true,
+  "modules": {
+    "main": {
+      "bytes": 8392,
+      "sha256": "de83d0c48f1efff1df6d3fcf4976770dd8aa1f142483efc3a819b1ee6a5586a8"
+    },
+    "observer": {
+      "bytes": 9831,
+      "sha256": "1dd18951965cd94dcff6b15bba45a3f3aae171ad5d8a0d7d1a7bc05c890df293"
+    },
+    "single-shot": {
+      "bytes": 29177,
+      "sha256": "8cf4b364803da264dd18b03b5f89da627e5fd67f23e4790ad40694398a13e6a6"
+    }
+  }
+}

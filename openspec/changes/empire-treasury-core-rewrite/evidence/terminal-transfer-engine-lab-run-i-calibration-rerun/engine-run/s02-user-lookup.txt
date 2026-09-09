@@ -1,0 +1,3 @@
+Loading mods from "D:\code\screeps\lab-cal-rerun-env\world\mods.json"
+Connecting to storage
+RESULT {"username":"lab-cal-user-0002","usernameLower":"lab-cal-user-0002","cpu":100,"gcl":106717414.7996562,"cpuAvailable":0,"registeredDate":"2026-09-09T08:24:22.608Z","bot":"calrun","active":10000,"badge":{"type":7,"color1":"#562400","color2":"#459842","color3":"#b1bd44","flip":false,"param":32},"_id":"c4c7544a1513ce9","meta":{"revision":0,"created":1788942262609,"version":0},"$loki":8}

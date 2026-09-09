@@ -1,0 +1,4 @@
+== 收集器停止后流终态 ==
+217 evidence/s02-console-baseline.jsonl
+== launcher 进程定位 ==
+C:\nvm4w\nodejs\node.exe ../server/node_modules/screeps/bin/screeps.js start                                                                                                                                                           98720      

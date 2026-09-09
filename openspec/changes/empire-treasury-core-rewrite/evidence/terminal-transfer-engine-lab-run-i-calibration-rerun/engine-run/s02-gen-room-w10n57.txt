@@ -1,0 +1,12 @@
+Loading mods from "D:\code\screeps\lab-cal-rerun-env\world\mods.json"
+Connecting to storage
+ADM_FAILED TypeError [ERR_INVALID_ARG_TYPE]: The "paths[0]" argument must be of type string. Received undefined
+    at Object.resolve (node:path:213:9)
+    at D:\code\screeps\lab-cal-rerun-env\server\node_modules\@screeps\backend\lib\cli\map.js:617:18
+    at _fulfilled (D:\code\screeps\lab-cal-rerun-env\server\node_modules\q\q.js:854:54)
+    at D:\code\screeps\lab-cal-rerun-env\server\node_modules\q\q.js:883:30
+    at Promise.promise.promiseDispatch (D:\code\screeps\lab-cal-rerun-env\server\node_modules\q\q.js:816:13)
+    at D:\code\screeps\lab-cal-rerun-env\server\node_modules\q\q.js:624:44
+    at runSingle (D:\code\screeps\lab-cal-rerun-env\server\node_modules\q\q.js:137:13)
+    at flush (D:\code\screeps\lab-cal-rerun-env\server\node_modules\q\q.js:125:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)

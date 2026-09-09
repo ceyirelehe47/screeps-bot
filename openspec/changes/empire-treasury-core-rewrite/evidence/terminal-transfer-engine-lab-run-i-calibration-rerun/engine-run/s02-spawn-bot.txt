@@ -1,0 +1,3 @@
+Loading mods from "D:\code\screeps\lab-cal-rerun-env\world\mods.json"
+Connecting to storage
+RESULT "User lab-cal-user-0002 with bot AI \"calrun\" spawned in W1N57"

@@ -1,0 +1,10 @@
+node-version exit=0
+npm-version exit=0
+npm-ci exit=0
+resolve-deps exit=0
+jest-lab exit=0
+jest-slice exit=0
+build-observer exit=0
+build-single-shot exit=0
+build-main exit=0
+SECOND_TREE_DONE T=/tmp/screeps-lab-calibration-tree2b.npQVlj

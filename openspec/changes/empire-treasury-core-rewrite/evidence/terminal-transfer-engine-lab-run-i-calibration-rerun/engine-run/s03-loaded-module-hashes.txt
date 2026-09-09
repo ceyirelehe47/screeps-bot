@@ -1,0 +1,3 @@
+de83d0c48f1efff1df6d3fcf4976770dd8aa1f142483efc3a819b1ee6a5586a8 *bot-ai-calrun/main.js
+1dd18951965cd94dcff6b15bba45a3f3aae171ad5d8a0d7d1a7bc05c890df293 *bot-ai-calrun/observer.js
+8cf4b364803da264dd18b03b5f89da627e5fd67f23e4790ad40694398a13e6a6 *bot-ai-calrun/single-shot.js

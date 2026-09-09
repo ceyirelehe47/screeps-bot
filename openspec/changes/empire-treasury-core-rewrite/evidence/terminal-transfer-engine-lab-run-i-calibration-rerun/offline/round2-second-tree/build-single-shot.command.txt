@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot/.worktrees/calibration-rerun-2nd-b
+command: node scripts/build-treasury-terminal-lab.mjs --mode single-shot --out /tmp/screeps-lab-calibration-tree2b.npQVlj/bundle-single-shot
+start: 2026-09-09T09:12:45Z
+end: 2026-09-09T09:12:46Z

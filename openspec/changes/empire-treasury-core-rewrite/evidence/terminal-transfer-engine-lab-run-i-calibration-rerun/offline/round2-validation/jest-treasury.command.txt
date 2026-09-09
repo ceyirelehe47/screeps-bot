@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot
+command: npx jest --config jest.config.cjs --runInBand src/runtime/treasury/ --json --outputFile=/tmp/screeps-lab-calibration2.fNJdaE/jest-treasury.json
+start: 2026-09-09T08:37:30Z
+end: 2026-09-09T08:42:54Z

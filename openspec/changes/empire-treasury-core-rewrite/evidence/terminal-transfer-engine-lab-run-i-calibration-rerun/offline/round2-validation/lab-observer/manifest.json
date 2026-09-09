@@ -1,0 +1,25 @@
+{
+  "schema": "treasury-terminal-lab-manifest/v1",
+  "status": "PREPARED_NOT_RUN",
+  "note": "本产物只在本地构建并用假端口离线自测；未启动游戏服务器、未上传、未在真实引擎上运行。真实运行须单独授权。",
+  "mode": "observer",
+  "entry": "observer.ts",
+  "output": {
+    "file": "observer.js",
+    "bytes": 9831,
+    "sha256": "1dd18951965cd94dcff6b15bba45a3f3aae171ad5d8a0d7d1a7bc05c890df293"
+  },
+  "repoSourceCommit": "7b9135985ab3ce02192c853f051e76005562866e",
+  "lockfileSha256": "490ee9c70876f8ab72de2dd497331b9e177f63fe41565a837244401dad9c686a",
+  "toolchain": {
+    "node": "v22.19.0",
+    "typescript": "5.9.3",
+    "rollup": "4.59.0"
+  },
+  "referenceShas": {
+    "engine": "80977824199a596d174d392fd0cf8c458c21fcbd",
+    "driver": "cf63d8adf902663e2ebddd7f8c5b7baa425dc928"
+  },
+  "buildCommand": "node scripts/build-treasury-terminal-lab.mjs --mode observer --out <out>",
+  "generatedAt": "2026-09-09T09:04:15.181Z"
+}

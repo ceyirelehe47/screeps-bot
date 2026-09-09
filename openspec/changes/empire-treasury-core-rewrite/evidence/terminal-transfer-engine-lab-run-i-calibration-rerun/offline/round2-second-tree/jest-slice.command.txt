@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot/.worktrees/calibration-rerun-2nd-b
+command: npx jest --config jest.config.cjs --runInBand --runTestsByPath src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts src/runtime/treasury/treasuryTerminalTransferSlice0RemediationI.test.ts src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts --json --outputFile=/tmp/screeps-lab-calibration-tree2b.npQVlj/jest-slice.json
+start: 2026-09-09T09:12:33Z
+end: 2026-09-09T09:12:44Z

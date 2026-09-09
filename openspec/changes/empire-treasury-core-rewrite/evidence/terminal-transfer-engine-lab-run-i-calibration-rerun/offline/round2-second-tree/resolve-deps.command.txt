@@ -1,0 +1,4 @@
+cwd: /d/code/screeps/screeps-bot/.worktrees/calibration-rerun-2nd-b
+command: node -e console.log\(\'jest@\'\ +\ require\(\'jest/package.json\'\).version\ +\ \'\ -\>\ \'\ +\ require.resolve\(\'jest/package.json\'\)\)\;\ console.log\(\'typescript\ -\>\ \'\ +\ require.resolve\(\'typescript/package.json\'\)\)
+start: 2026-09-09T09:11:55Z
+end: 2026-09-09T09:11:55Z

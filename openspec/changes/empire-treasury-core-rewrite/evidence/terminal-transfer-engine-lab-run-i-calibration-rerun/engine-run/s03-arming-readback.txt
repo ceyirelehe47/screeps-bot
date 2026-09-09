@@ -1,0 +1,1 @@
+RESULT {"memory":"{\"__labTerminalTransferProbe\":{\"experimentId\":\"lab-run1-cal-0002\",\"armed\":true,\"attempted\":false}}","utf8Bytes":98}

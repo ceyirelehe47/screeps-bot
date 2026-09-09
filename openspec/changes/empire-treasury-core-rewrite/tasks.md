@@ -13,7 +13,7 @@
 - [x] §9 正式离线验证 @VALIDATION_HEAD=f8631d0 全绿：npm ci/typecheck×2/build/五组 Jest（lab 3-43、slice 3-23、treasury 35-597、defense 11-118、full 242-1486）/三产物+身份核对（9935B/29281B/8496B，内嵌纠错配置）/三组冻结零差异/sendGate 对 STRICT_BASE 收紧 diff/dist 未覆盖/验证前后零写入；尾部断言误判普通 git diff 退出码已修正补跑并保留原件（offline/README 披露）
 - [x] 第二干净工作树复现：独立 npm ci、LAB 3/43+Slice 3/23 全绿、三产物程序字节逐一 IDENTICAL（offline/second-tree/）
 - [x] 证据归档（offline/mainval+second-tree+README+主报告）+ tools-prepared 只读采样准备件（lab-meta-probe.js PREPARED_NOT_RUN）+ 线性提交推送（IMPL_HEAD 13511d8 → VALIDATION_HEAD f8631d0 → DELIVERY_HEAD）
-- [ ] S01–S06 新的受控实机复验：待授权（新实验 ID/世界/身份全部重新读取绑定，cap=新鲜报价，C02 武装前真实运行；旧轮纠错与新轮实验互不替代）
+- [x] S01–S05 实机复验（用户授权答复「授权执行 S01–S06」）：新隔离环境（同 lockfile d95c2c12，server package/lock 原件入库补上轮缺证；仅本机监听）→ fixture+meta-probe 基线（isActive 方法取值修复）→ T0=198 暂停复读 → 绑定 lab-run1-cal-0002（T=201、cap=26=本轮新鲜报价、C02 真实预检 35/35）→ 7b91359 第二轮全量验证+第二树全绿 → 三产物装载回读逐一一致 → 武装 98B → 窗口 199..221 observer 23/23 采样、**T=201 门禁前置拒绝 no_control_record**（武装写 db.users.memory 而 runner 从 env 层 memory:<userId> 装载，envMemory="{}" 终态物证）→ 零发送/零交易/零变化 → 撤装/进程组停止/端口归零/取证归档/清理（空壳句柄残留如实记录）→ 判读 **ENGINE_LAB_INCONCLUSIVE**（不重武装不换 T；根因=管理侧武装写入口径，非引擎不兼容非门禁缺陷；再次复验须新任务书并携带 env 层 Memory 装载根因）
 
 ## Terminal Transfer Engine Lab Run I · Execution（2026-09-09，已授权）
 

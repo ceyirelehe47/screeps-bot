@@ -2,9 +2,12 @@
 
 状态：**Execution 轮已运行（2026-09-09，判读 ENGINE_LAB_INCONCLUSIVE：
 T=557 门禁前置拒绝 shard_mismatch、零发送）；Calibration Rerun（同日）
-完成严格 shard 门禁恢复（C01）、独立配置核对（C02）与本文件纠错（C03），
-当前 labConfig 为已纠错的历史配置、未绑定新实验——新的受控实验须按
-Calibration Rerun 任务书取得授权与新鲜事实后重新绑定。**
+完成严格 shard 门禁恢复（C01）、独立配置核对（C02）、纠错（C03）与
+**实机复验（S01–S05，已授权；再次判读 ENGINE_LAB_INCONCLUSIVE：T=201
+被门禁以 `no_control_record` 前置拒绝——武装控制记录写入 db.users.memory
+而真实 runner 从 env 层 `memory:<userId>` 装载 Memory，单次 send 未消费、
+零交易、零资源变化；按纪律不重武装不换 T）。当前 labConfig 为实机复验轮
+绑定配置（lab-run1-cal-0002，该世界已清理）；再次复验须新任务书。**
 
 编制日期：2026-09-08（Execution 轮 2026-09-09；Calibration Rerun
 2026-09-09）。任务书：`treasury-terminal-transfer-engine-lab-run-I-execution.md`
@@ -145,10 +148,15 @@ shard、配置声明 sentinel 的同一输入下接受集合扩大。Calibration
   回归 + sentinel 期归档产物前后对照 + 场景 A 旧事故链四步 + 非 26 报价
   预算边界）；runI.test 12 用例不变（断言经 LAB_EXAMPLE_EXPERIMENT 传导）；
   calibration.test 6 用例（场景 B–G）。
-
-新实验前置条件（未满足前不得武装）：新任务书授权 → S01/S02 新世界稳定
-基线 → 全部身份重新读取绑定 → C02 预检通过 → 固定 IMPL_HEAD/
-VALIDATION_HEAD 后装载。
+- **实机复验（S01–S05，已授权执行，判读 ENGINE_LAB_INCONCLUSIVE）**：
+  绑定 lab-run1-cal-0002（T=201、cap=26=本轮新鲜报价、C02 真实预检
+  35/35）→ 第二轮全量验证+第二树全绿（7b91359）→ 三产物装载回读逐一
+  一致 → 武装（98 字节）→ 窗口 199..221 observer 23/23 采样、T=201
+  门禁前置拒绝 `no_control_record`（武装写入 db.users.memory 而 runner
+  从 env 层 `memory:<userId>` 装载——envMemory="{}" 终态物证）→ 零
+  发送/零交易/零变化 → 撤装/停止/取证/清理完成。完整证据链见
+  `evidence/terminal-transfer-engine-lab-run-i-calibration-rerun/engine-run/`
+  与主报告 §8。再次复验须新任务书（携带 env 层 Memory 装载根因）。
 
 ## 3. 授权后动作顺序（概要；命令参数以实际安装版本核对为准）
 
@@ -181,5 +189,6 @@ Execution 轮证据根 `evidence/terminal-transfer-engine-lab-run-i/`：
 Calibration Rerun 证据根
 `evidence/terminal-transfer-engine-lab-run-i-calibration-rerun/`：
 `task/`（任务书归档）、`corrections.md`（纠错报告与旧证据有界查找）、
-`offline/`（正式离线验证与第二树复现）。实机复验（S01–S06）须新授权，
-未授权时主报告实机部分为 `AUTHORIZATION_REQUIRED`。
+`offline/`（离线验证 mainval/second-tree + 实机绑定轮 round2-validation/
+round2-second-tree）、`engine-run/`（实机复验 S01–S05 全部原件，含
+server package/lock 原件与判读）、主报告（离线交付 + 实机复验 §8）。

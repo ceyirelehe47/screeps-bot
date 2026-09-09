@@ -1,4 +1,6 @@
-# offline/——Calibration Rerun 正式离线验证（§9，VALIDATION_HEAD=f8631d0）
+# offline/——Calibration Rerun 正式离线验证（§9）
+
+## 第一轮（离线交付，VALIDATION_HEAD=f8631d0）
 
 - `mainval/`——主树完整验证：npm ci／typecheck×2／生产 build／五组 Jest
   （lab 3/43、slice 3/23、treasury 35/597、defense 11/118、full 242/1486，
@@ -21,6 +23,18 @@
   IDENTICAL；manifest 的 generatedAt/路径差异不参与比对）。同一执行者
   操作，称"第二环境复现"，不是独立 reviewer 或 CI。
 
+## 第二轮（实机绑定轮，VALIDATION_HEAD=7b91359）
+
+- `round2-validation/`——绑定提交上的完整 §9 重跑（脚本 `run-validation2.sh`
+  为第一轮脚本 sed 更新 EXPECT_HEAD 与产物身份断言）：npm ci／typecheck×2
+  ／生产 build／五组 Jest 全绿（full 242/1486/1486）／budget PASSED／
+  三产物（observer 9831B·`1dd18951…`、single-shot 29177B·`8cf4b364…`、
+  main 8392B·`de83d0c4…`，内嵌 lab-run1-cal-0002 绑定身份，BUNDLE_CHECK=OK）
+  ／三组冻结零差异／sendGate diff 非空／C02 离线对照两例（healthy 0/
+  mismatch 1）／dist 未覆盖。
+- `round2-second-tree/`——同 HEAD 第二树（独立 npm ci）：LAB 43、Slice 23
+  全绿；三产物+example JSON 程序字节与主树逐一 IDENTICAL。
+
 ## 工程事故披露（不影响验证结论）
 
 主验证脚本 `mainval/run-validation.sh` 尾部断言把普通 `git diff`（无
@@ -29,5 +43,6 @@
 `tee`，其退出码不代表脚本）。补跑 `run-finish.sh`（记录见 `finish.log`、
 `finish-note.txt`）：先核对 HEAD 仍为 VALIDATION_HEAD 且工作树干净，
 再按正确语义（`sendgate-strict-base-diff.txt` 非空=存在差异）完成剩余
-断言并补写 `validation-head-after.txt`／`status-after.txt`。所有命令的
-执行与退出码均发生在同一 HEAD 的同一次验证内，无重跑、无掩盖。
+断言并补写 `validation-head-after.txt`／`status-after.txt`。第二轮脚本
+已修正该断言语义（无此问题）。所有命令的执行与退出码均发生在同一
+HEAD 的同一次验证内，无重跑、无掩盖。
