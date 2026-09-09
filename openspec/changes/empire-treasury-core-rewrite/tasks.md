@@ -9,11 +9,11 @@
 - [x] 配置回填与 §4.3 迁移：labConfig.ts 回填真实身份（lab-run1-exec-0001、standalone-no-shard、b0254105a49b92c/c61a4141a4a9fcb、T=557（T0 554+3）、maxFee=10、描述 ≤100 ASCII）；example.experiment.json 同步；probe.test 旧产物反例世界切换 LEGACY_EXPERIMENT fixture（不混用两个身份）、stub fee 引用化；runI.test 断言迁移（三 manifest 自洽、内嵌同一配置、归档历史身份完整、当前产物≠归档字节——逻辑等价由验证命令组源码 diff 证明）
 - [x] sendGate 无 shard 引擎兼容修复（单列提案 terminal-transfer-lab-run1-shard-gate-compatibility.md）：standalone runtime 无 Game.shard→原读取必 world_read_error 永拒；引入 LAB_STANDALONE_NO_SHARD_NAME 约定值仅显式声明才放行（强度不降）；probe.test 新增修复专项用例（通过分支+旧产物修复前行为对照）；实机症状归档 engine-run/api-incompatibility-game-shard.md
 - [x] 三产物真实配置重建：observer 10193B/04fac1c2…、single-shot 29139B/3266d7b2…、main 8754B/3e944685…（PREPARED_NOT_RUN）
-- [ ] 固定 VALIDATION_HEAD + §6.1 离线验证命令组（四组冻结/typecheck×2/构建/三 lab 构建/六组 Jest/budget/diff-check/前后零写入）+ 第二树复验
-- [ ] S03 装载回读：bot AI 目录换正式三模块 + bots.reload 形成新观察窗口 + 活动代码回读 UTF-8 hash 核对 + 控制记录武装（≤4096B）回读确认
-- [ ] S03/S04 单次发送与完整观察：resume 后 main 在 T=557 调 single-shot 真实 API 发送 100H（一次武装一次尝试）；T−2..T+20 全窗口采样、发送边界事实、库存/费用/容量/冷却/交易镜像取证；180 秒或 T+20 保护
-- [ ] S05 停止与无污染：窗口结束暂停/撤装/快照（静止后导出）/停止本次进程组/仅清理本次新建数据
-- [ ] S06 验证归档与判定：主报告（原始产物/版本/顺序/停止事实/离线复验/实机结论分列；状态按事实 ENGINE_LAB_PASS/MISMATCH/INCONCLUSIVE）、线性提交推送、CI 查询
+- [x] 固定 VALIDATION_HEAD=54d0676 + §6.1 离线验证命令组全绿（四组冻结/typecheck×2/build/三 lab 构建/六组 Jest 241/1478/budget PASSED/diff-check/前后零写入；sendGate 因单列修复移出 implementation-freeze 另记 shard-gate-fix-diff；生产 bundle 前后 SHA 一致）+ 主验证输出归档 offline/execution-mainval/；第二干净 worktree 独立 npm ci 复跑 LAB+Slice 0+三模块构建核对（offline/execution-second-tree/；首跑脚本路径缺陷如实归档后修复重跑）
+- [x] S03 装载回读：bots.reload 新 branch t1788928675342 三模块 UTF-8 重算 hash 与本轮产物逐一一致；控制记录武装 99B ≤4096 回读确认
+- [x] 窗口执行与判读：555..577 完整（装配行+23/23 采样）；T=557 single-shot 门禁前置拒绝 shard_mismatch——零发送边界/零交易/attempted 未写；执行后只读探查实证 Game.shard={name:"Forst"} 存在（修复提案事实基础错误，提案文档已附实证纠正）且 worldSize 漂移（11→58/59）使 q 由 10 变 26（maxFee 亦失效）；按 §4.5 不改 T 不重试，判读 **ENGINE_LAB_INCONCLUSIVE**（主报告 §3/§5/§6）
+- [x] S05 停止与无污染：窗口后暂停（终 tick 585）→撤装（armed=false 保留事实，218B）→终态快照（Terminal 零变化物证、transactions 0 条）→停收集器×2 与 launcher 进程树（21025-21027 无监听、实验目录 node 进程 0）→仅清理本次新建数据
+- [x] S06 验证归档与判定：主报告（授权/提交链/S01-S05 事实/判读/服务与运行事实分列）、修复提案实证纠正、lab-run-i.md 执行结果、线性提交推送、CI 查询、记忆归档
 
 ## Terminal Transfer Engine Lab Run I · Wiring Remediation I（2026-09-09）
 

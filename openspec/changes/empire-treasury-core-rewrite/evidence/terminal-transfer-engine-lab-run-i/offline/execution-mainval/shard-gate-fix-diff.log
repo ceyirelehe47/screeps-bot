@@ -1,0 +1,25 @@
+diff --git a/test/lab/terminal-transfer/sendGate.ts b/test/lab/terminal-transfer/sendGate.ts
+index 8a5a821..ad77afd 100644
+--- a/test/lab/terminal-transfer/sendGate.ts
++++ b/test/lab/terminal-transfer/sendGate.ts
+@@ -8,6 +8,7 @@
+  */
+ 
+ import type { LabExperimentConfig } from "./labConfig";
++import { LAB_STANDALONE_NO_SHARD_NAME } from "./labConfig";
+ import type { LabControlRecord } from "./controlRecord";
+ import { readEndpoint, readFeeQuote } from "./worldRead";
+ 
+@@ -58,7 +59,11 @@ export function evaluateSingleShotGates(
+   let shardName: string;
+   let tick: number;
+   try {
+-    shardName = Game.shard.name;
++    // standalone runtime（screeps@4.3.0 组合）不暴露 Game.shard；缺失时以约定常量
++    // 代替读数——仅当配置显式声明该约定值（labConfig 导出）才可能通过校验，
++    // 任何其他声明与读数的不匹配仍拒绝。修复提案见 Run I Execution 证据。
++    const shard = (Game as unknown as { readonly shard?: { readonly name?: unknown } }).shard;
++    shardName = shard === undefined ? LAB_STANDALONE_NO_SHARD_NAME : String(shard.name);
+     tick = Game.time;
+   } catch {
+     return reject("world_read_error");

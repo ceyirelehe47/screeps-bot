@@ -1,0 +1,87 @@
+{
+  "gametime": 585,
+  "users": [
+    {
+      "id": "e37d410af9f7afe",
+      "username": "lab-synthetic-user",
+      "bot": "labrun1"
+    }
+  ],
+  "activeBranch": "t1788928675342",
+  "objects": [
+    {
+      "_id": "d77a4105be50c99",
+      "type": "source",
+      "room": "W1N57"
+    },
+    {
+      "_id": "14084105be52ad3",
+      "type": "controller",
+      "room": "W1N57",
+      "level": 8,
+      "user": "e37d410af9f7afe"
+    },
+    {
+      "_id": "aacd4105be5cf8f",
+      "type": "source",
+      "room": "W1N57"
+    },
+    {
+      "_id": "a1184105be5efac",
+      "type": "mineral",
+      "room": "W1N57"
+    },
+    {
+      "_id": "b36e410afa2028d",
+      "type": "spawn",
+      "room": "W1N57",
+      "store": {
+        "energy": 300
+      },
+      "user": "e37d410af9f7afe"
+    },
+    {
+      "_id": "b0254141a49b92c",
+      "type": "terminal",
+      "room": "W1N57",
+      "store": {
+        "H": 1000,
+        "energy": 10000
+      },
+      "cooldownTime": 0,
+      "user": "e37d410af9f7afe"
+    },
+    {
+      "_id": "f4cc4105d153183",
+      "type": "source",
+      "room": "W10N57"
+    },
+    {
+      "_id": "62614105d159032",
+      "type": "source",
+      "room": "W10N57"
+    },
+    {
+      "_id": "41014105d155204",
+      "type": "controller",
+      "room": "W10N57",
+      "level": 8,
+      "user": "e37d410af9f7afe"
+    },
+    {
+      "_id": "64614105d158306",
+      "type": "mineral",
+      "room": "W10N57"
+    },
+    {
+      "_id": "c61a4141a4a9fcb",
+      "type": "terminal",
+      "room": "W10N57",
+      "store": {
+        "energy": 2000
+      },
+      "cooldownTime": 0,
+      "user": "e37d410af9f7afe"
+    }
+  ]
+}

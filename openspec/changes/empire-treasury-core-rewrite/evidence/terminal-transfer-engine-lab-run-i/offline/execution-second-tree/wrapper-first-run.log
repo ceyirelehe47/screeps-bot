@@ -1,0 +1,9 @@
+    at require (node:internal/modules/helpers:147:16)
+    at [eval]:1:9
+    at runScriptInThisContext (node:internal/vm:209:10) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'D:\\code\\screeps\\lab-run-i-exec-env\\tree2\\[eval]' ]
+}
+
+Node.js v22.19.0
+TREE2_EXIT=0

@@ -96,6 +96,21 @@ main 8754 字节／`3e944685b0023b0a41d7dfb6fe80fedd2d08cfe96ef4f940a38ebc12f23c
 `terminal-transfer-lab-run1-shard-gate-compatibility.md` 与
 `evidence/terminal-transfer-engine-lab-run-i/engine-run/api-incompatibility-game-shard.md`。
 
+**执行结果（窗口结束后记录，含实证纠正）**：状态
+**ENGINE_LAB_INCONCLUSIVE**。窗口 555..577 完整执行、observer 采样
+23/23 tick、T=557 single-shot 在发送边界之前被门禁前置拒绝
+（`shard_mismatch`）——单次 send 调用未消费、零交易、零资源变化、
+控制记录保持 armed/attempted=false（撤装后 armed=false）。执行后只读
+探查实证**推翻了修复提案的事实基础**：真实 runtime 的
+`Game.shard={name:"Forst",type:"normal",ptr:false}` 存在（静态源码
+搜索未覆盖其注入路径）；正确回填值应为 `"Forst"`。同时实测
+worldSize 随房间生成漂移（11→58/59）→ 报价 q 从 10 变 26——编译期
+固定 maxFeeEnergy 的设计与该引擎的报价漂移不兼容（即使 shard 校验
+通过也会 `fee_over_budget` 拒绝）。按任务书 §4.5 不改 T/不重试；完整
+事实链与判读见
+`evidence/terminal-transfer-engine-lab-run-i/terminal-transfer-engine-lab-run-i-execution-local-validation.md`。
+未来重开须新任务书（携带本轮两条实证）。
+
 离线自测相应变化：probe.test 23 用例（新增修复专项用例：无 shard 引擎
 通过分支 + 旧产物修复前 `world_read_error` 行为对照；旧产物反例世界切换
 为 LEGACY_EXPERIMENT 旧配置 fixture——§4.3 不混用两个身份）；runI.test

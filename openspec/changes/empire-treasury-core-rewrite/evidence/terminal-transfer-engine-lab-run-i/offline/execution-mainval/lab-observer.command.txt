@@ -1,0 +1,1 @@
+node scripts/build-treasury-terminal-lab.mjs --out C:\\Users\\15027\\AppData\\Local\\Temp\\treasury-run-i-execution-FFgs96/lab-observer 
