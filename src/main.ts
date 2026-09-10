@@ -41,6 +41,7 @@ import { runLiveMarketSaleAutomation } from "@/runtime/marketSaleRuntime";
 import { runEmpireInventoryShadowCheck } from "@/runtime/empireInventoryShadow";
 import { runTreasuryShadowCheck } from "@/runtime/treasury/shadow";
 import { getTreasuryService } from "@/runtime/runtimeServices";
+import { runTreasuryReadOnlyObservation } from "@/runtime/treasuryReadOnlyRuntime";
 
 mountAll();
 registerGlobalApi();
@@ -118,6 +119,8 @@ function gameLoop(): void {
   cpuProfiler.measure("treasuryShadow", () => {
     runTreasuryShadowCheck(getTreasuryService());
   });
+  // 新增诊断默认关闭；内部隔离读取/日志异常，不接纳、不结算、不另开生命周期。
+  cpuProfiler.measure("treasuryReadOnly", runTreasuryReadOnlyObservation);
   // Treasury 生命周期终点：本 tick 全部业务执行之后、最终 profiler flush
   // 之前归档投影终态并关闭本 tick（此后登记一律拒绝）。
   cpuProfiler.measure("treasuryEndTick", () => {

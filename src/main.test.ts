@@ -53,6 +53,7 @@ describe("main loop phase ordering", () => {
     ["creepWork", "<inline>"],
     ["empireInventoryShadow", "runEmpireInventoryShadowCheck"],
     ["treasuryShadow", "<inline>"],
+    ["treasuryReadOnly", "runTreasuryReadOnlyObservation"],
     // Treasury 生命周期终点：全部业务执行之后、最终 flush 之前归档并关闭 tick。
     ["treasuryEndTick", "<inline>"],
   ] as const;
@@ -212,7 +213,7 @@ describe("main loop phase ordering", () => {
 
     expect(phaseContract).toEqual(canonicalTickPhases);
     expect(new Set(order).size).toBe(order.length);
-    expect(order).toHaveLength(41);
+    expect(order).toHaveLength(42);
   });
 
   it("keeps one-time registrations outside and before gameLoop", () => {
