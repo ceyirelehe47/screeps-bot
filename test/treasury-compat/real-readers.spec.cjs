@@ -23,6 +23,12 @@ test('actual observation/index on empty legacy tables, no new Memory keys or wri
   const s=scene({},true);const raw=s.memory,before=JSON.stringify(raw),count={writes:0};s.memory=guard(raw,count);
   assert.equal(s.observer.run().status,'sampled');assert.equal(s.report().commitments.status,'read_complete');
   assert.equal(rrow(s).outgoing,0);assert.equal(rrow(s).productionReserved,0);
+  assert.equal(s.calls.readers,1);assert.equal(s.calls.observation,1);assert.equal(s.calls.commitments,1);
+  // A positive control must prove that real-call counters can become nonzero.
+  assert.equal(s.observer.run().status,'not_due');
+  assert.equal(s.calls.observation,1);assert.equal(s.calls.commitments,1);
+  s.game.time=200;s.observer.run();
+  assert.equal(s.calls.readers,2);assert.equal(s.calls.observation,2);assert.equal(s.calls.commitments,2);
   assert.equal(count.writes,0);assert.equal(JSON.stringify(raw),before);assert.equal(raw.runtime.treasuryCore,undefined);assert.equal(raw.runtime.resourceReservationsOwnerVersion,undefined);
 });
 test('actual canonical readers count nonempty legacy task and unversioned reservation without migration',()=>{
@@ -30,6 +36,8 @@ test('actual canonical readers count nonempty legacy task and unversioned reserv
   const raw=s.memory,before=JSON.stringify(raw),counter={writes:0};s.memory=guard(raw,counter);
   assert.equal(s.observer.run().status,'sampled');assert.equal(rrow(s).outgoing,70);assert.equal(rrow(s).productionReserved,40);
   assert.equal(counter.writes,0);assert.equal(JSON.stringify(raw),before);assert.equal(s.report().spendable,null);
+  assert.equal(s.calls.observation,1);assert.equal(s.calls.commitments,1);
+  assert.equal(s.lastInputs.tick,100);
 });
 test('old writer mutates same reservation/table identity without revision bump, next sample sees it',()=>{
   const s=scene({},true);const t=task(),r=reservation();s.memory.data.resourceControl.tasks['id']=t;s.memory.runtime.resourceReservations.r=r;
@@ -57,5 +65,31 @@ test('8M and then reduced capacity use actual observation functions and invalida
   x.capState.cap=1000000;s.game.time=200;s.observer.run();row=s.report().endpoints.find(r=>r.location==='storage');assert.equal(row.direct.overCapacity,true);assert.equal(row.change.status,'endpoint_or_capacity_changed');assert.equal(row.coreComparison,'match_selected_scope');
 });
 test('missing table is NOT replaced with empty object before invoking canonical index',()=>{
-  const s=scene({},true);delete s.memory.data.resourceControl.tasks;s.observer.run();assert.equal(s.report().legacyInputs.tasks.status,'absent');assert.equal(s.report().commitments.status,'unavailable_legacy_input');assert.equal(s.report().commitments.rows,null);
+  const overBound = () => Object.fromEntries(Array.from({length:257},(_,i)=>['entry-'+i,{}]));
+  const cases = [
+    ['tasks','absent',m=>{delete m.data.resourceControl.tasks;}],
+    ['reservations','absent',m=>{delete m.runtime.resourceReservations;}],
+    ['tasks','invalid_container',m=>{m.data.resourceControl.tasks=null;}],
+    ['tasks','invalid_container',m=>{m.data.resourceControl.tasks=[];}],
+    ['reservations','invalid_container',m=>{m.runtime.resourceReservations=null;}],
+    ['reservations','invalid_container',m=>{m.runtime.resourceReservations=[];}],
+    ['tasks','over_bound',m=>{m.data.resourceControl.tasks=overBound();}],
+    ['reservations','over_bound',m=>{m.runtime.resourceReservations=overBound();}],
+  ];
+  for (const [field,status,mutate] of cases) {
+    const s=scene({},true);mutate(s.memory);const before=JSON.stringify(s.memory);
+    s.observer.run();
+    assert.equal(s.report().legacyInputs[field].status,status);
+    assert.equal(s.report().commitments.status,'unavailable_legacy_input');
+    assert.equal(s.report().commitments.rows,null);
+    assert.equal(s.calls.readers,1);assert.equal(s.calls.observation,1);
+    assert.equal(s.calls.commitments,0,'invalid table must not reach the REAL builder');
+    assert.equal(s.lastInputs,undefined);assert.equal(JSON.stringify(s.memory),before);
+    // Restore the input externally on a DIFFERENT sample tick, not in the reader.
+    s.memory.data.resourceControl.tasks={};s.memory.runtime.resourceReservations={};
+    s.game.time=200;s.observer.run();
+    assert.equal(s.report().commitments.status,'read_complete');
+    assert.equal(s.calls.readers,2);assert.equal(s.calls.observation,2);assert.equal(s.calls.commitments,1);
+    assert.equal(s.lastInputs.tick,200);
+  }
 });

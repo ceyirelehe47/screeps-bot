@@ -85,7 +85,24 @@ function scene(overrides = {}, useReal = false) {
     room: name => { s.calls.room++; return s.game.rooms[name]; },
     memory: () => { s.calls.memory++; return s.memory; },
     resources: () => ['energy', 'H', 'O', 'U'],
-    readers: () => { s.calls.readers++; return useReal ? core.createCompatibilityReadCore() : syntheticReaders(s); },
+    readers: () => {
+      s.calls.readers++;
+      if (!useReal) return syntheticReaders(s);
+      const real = core.createCompatibilityReadCore();
+      // Count attempted calls BEFORE delegation. Preserve receiver, arguments,
+      // result identity and exceptions; never modify the generated readers.
+      return Object.freeze({
+        buildObservation(...args) {
+          s.calls.observation++;
+          return Reflect.apply(real.buildObservation, real, args);
+        },
+        buildCommitments(...args) {
+          s.calls.commitments++;
+          s.lastInputs = args[0];
+          return Reflect.apply(real.buildCommitments, real, args);
+        },
+      });
+    },
     emit: line => { if (s.throwEmit) throw new Error('logger unavailable'); s.lines.push(line); s.cpuValue += s.emitCost; },
   };
   s.ports = ports; s.api = api; s.core = core;
