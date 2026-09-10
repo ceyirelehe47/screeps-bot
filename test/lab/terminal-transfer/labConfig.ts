@@ -4,15 +4,17 @@
  * 于实机复验轮 S02/S03 重新读回绑定；Engine Continuation 0001 2026-09-09
  * 再次绑定新一次性世界）。
  *
- * 当前值是 Engine Continuation 0001（lab-run1-ec-0001）准备阶段绑定配置：
- * 新一次性隔离世界（worldSize 59）实测读回——shard Forst（meta-probe 逐样本
- * 实测恒定）、合成用户 lab-ec-user-0001（id 48b86d847499b79）、双 Terminal
- * ec0001aa57000001/ec0001aa57000002、新鲜报价 q=26（绑定规则 cap=q，本轮
- * 41 个基线样本逐样本实测恒定）、暂停点 T0=160（暂停复读确认）。
- * targetTick=167=T0+3 为正式窗口（observe-armed 后实际暂停点 T0=164 经
- * facts 命令复读确认；窗口 165..187 共 23 个样本，T−2 可取得）。此前的
- * 准备阶段占位值 400 已由本提交替换——占位值从未进入任何 send 路径
- * （准备入口 controlProbe 无 send 路径）。
+ * 当前值是 Treasury Terminal Integration I · Continuation 0002
+ * （lab-ti1-0002）准备阶段绑定配置：新一次性隔离世界（lab-ti2-env）实测
+ * 读回——shard Forst（不是照抄：本项目 standalone 的 Game.shard.name 由
+ * 安装的 driver 取 `os.hostname()`，本机 hostname=Forst，见
+ * @screeps/driver/lib/index.js 的 playerSandbox 段）、合成用户
+ * lab-ti-user-0002（id f6afa65997c093d）、双 Terminal
+ * ti20002aa57000001/ti20002aa57000002（源 W1N57 1000H+10000E、
+ * 目标 W10N57 0H+2000E）。
+ * 新鲜报价 q 与最终暂停点 T0 由本轮 probe 读数与 facts 复读确定后回填；
+ * targetTick 在准备期使用占位值（仅无 send 入口使用，不构成发送窗口），
+ * 最终 T 在 §7 首次固定且此后不可改。
  *
  * 配置来源（当前唯一通道，编译时固定）：
  * - 本文件的实验配置是各产物共享的唯一配置来源；singleShot 模块据
@@ -27,8 +29,9 @@
  *   原 hash 与验证声明。
  * - 历史身份：Lab Prep I / Lab Run I 离线轮合成示例值、Run I Execution
  *   sentinel 期编译值与纠错后历史配置（lab-run1-exec-0001、
- *   b0254141a49b92c、lab-synthetic-user）均作为旧配置 fixture 记录于
- *   测试与历史归档产物，不是当前编译值；sentinel 约定已随 C01 撤销。
+ *   b0254141a49b92c、lab-synthetic-user）、lab-run1-ec-0001、
+ *   lab-ti1-0001 均作为旧配置 fixture 记录于测试与历史归档产物，
+ *   不是当前编译值；sentinel 约定已随 C01 撤销。
  *
  * 本文件属于 test/lab 实验包：不导入生产模块，不进入生产 bundle，
  * 不复制国库的授权/重试/清理/对账机制。
@@ -59,20 +62,20 @@ export interface LabExperimentConfig {
   readonly maxSamples: number;
 }
 
-/** Treasury Terminal Integration I 准备阶段绑定配置（lab-ti1-0001；q=26 为本轮 probe 基线 24 样本逐样本实测恒定值（整树重启后全进程同 worldSize，报价与实扣同源），cap=q；正式 T=332=T0+3（observe-armed 两真实 tick 327/328 后实际稳定暂停点 T0=329 经 facts 复读确认，窗口 330..352 共 23 个采样，T−2 可取得；此前的准备期占位值 400 从未进入任何 send 路径——准备入口 controlProbe 无 send 路径）；与 example.experiment.json 保持一致；历史 cal-0002 配置冻结于 tools/fixtures/review-base-config.json）。 */
+/** Treasury Terminal Integration I · Continuation 0002 准备阶段绑定（lab-ti1-0002）。目标：W1N57→W10N57 单笔 100H，经实际生产 facade/kernel 的关键路径。 */
 export const LAB_EXAMPLE_EXPERIMENT: LabExperimentConfig = {
-  experimentId: "lab-ti1-0001",
+  experimentId: "lab-ti1-0002",
   mode: "observer",
   shardName: "Forst",
-  username: "lab-ti-user-0001",
+  username: "lab-ti-user-0002",
   sourceRoomName: "W1N57",
   targetRoomName: "W10N57",
-  sourceTerminalId: "ti10001aa57000001",
-  targetTerminalId: "ti10001aa57000002",
+  sourceTerminalId: "ti20002aa57000001",
+  targetTerminalId: "ti20002aa57000002",
   resourceType: "H",
   amount: 100,
-  description: "lab-ti1-0001 W1N57 to W10N57 100H",
-  targetTick: 332,
-  maxFeeEnergy: 26,
+  description: "lab-ti1-0002 W1N57 to W10N57 100H",
+  targetTick: 4000,
+  maxFeeEnergy: 1,
   maxSamples: 32,
 };
