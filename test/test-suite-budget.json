@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "3db077061a6c63ce559f2c5cf2c92d9b6df08382",
-    "suites": 246,
-    "tests": 1515
+    "commit": "5c8a9d3ae2414bff7db7684f7d84ff6aaad5638c",
+    "suites": 248,
+    "tests": 1539
   },
   "target": {
-    "commit": "3db077061a6c63ce559f2c5cf2c92d9b6df08382",
-    "suites": 246,
-    "tests": 1515,
-    "passed": 1515,
+    "commit": "5c8a9d3ae2414bff7db7684f7d84ff6aaad5638c",
+    "suites": 248,
+    "tests": 1539,
+    "passed": 1539,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Treasury Terminal Integration I：原样应用实现包 17 文件（新增 integration.test.ts 8 用例 + tools.test.ts 3 用例 wrapper，实际 kernel Jest）+ Agent 独立增补 adversarial 反例 integrationAdversarial.test.ts 7 用例 + Windows 终止路径修复（process.spec 为 node --test 不计 Jest）；243/1497→246/1515；锚点随本轮实现/反例/修复提交滚动至 3db077061a6c63ce559f2c5cf2c92d9b6df08382"
+    "note": "Treasury Read-only Observation I：原样应用实现包 8 文件（新增 treasuryReadOnlyObservation.test.ts 7 用例 = 1 wrapper + 6 真实 facade；main phase 表 41→42 仍 6 用例；local.spec.cjs 54 例为 node --test 不计 Jest）+ Agent 独立增补反例 treasuryReadOnlyIndependent.test.ts 17 用例；246/1515→248/1539；锚点随本轮实现/反例提交滚动至 5c8a9d3"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1947,6 +1947,22 @@
       "budget": 2,
       "tests": 2,
       "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/treasuryReadOnlyIndependent.test.ts": {
+      "budget": 17,
+      "tests": 17,
+      "passed": 17,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/treasuryReadOnlyObservation.test.ts": {
+      "budget": 7,
+      "tests": 7,
+      "passed": 7,
       "failed": 0,
       "pending": 0,
       "todo": 0

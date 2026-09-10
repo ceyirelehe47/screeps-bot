@@ -12,17 +12,18 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const manifestPath = path.join(repoRoot, "test", "test-suite-budget.json");
 const jestEntrypoint = path.join(repoRoot, "node_modules", "jest", "bin", "jest.js");
 const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data", "node_modules"]);
-// 【Treasury Terminal Integration I】新目标：原样应用实现包新增
-// integration.test.ts 8 用例（实际 facade/kernel Jest）与 tools.test.ts
-// 3 用例（node --test wrapper 计入 Jest）、Agent 独立验收反例
-// integrationAdversarial.test.ts 7 用例（单缺陷世界/记录矩阵）；
-// 243/1497→246/1515；基线随实现/反例/Windows 终止修复提交滚动至 3db0770
+// 【Treasury Read-only Observation I】新目标：原样应用实现包新增
+// treasuryReadOnlyObservation.test.ts 7 用例（1 个 node --test wrapper +
+// 6 个真实 facade 读取；local.spec.cjs 的 54 例为 node --test 不计
+// Jest），main phase 表 41→42 但用例数不变；Agent 独立验收反例
+// treasuryReadOnlyIndependent.test.ts 17 用例（§5 七类边界、每反例配
+// 合法对照）；246/1515→248/1539；基线随实现/反例提交滚动至 5c8a9d3
 // （文件集对比要求基线树含当前测试文件集）。
-const requiredBaselineCommit = "3db077061a6c63ce559f2c5cf2c92d9b6df08382";
+const requiredBaselineCommit = "5c8a9d3ae2414bff7db7684f7d84ff6aaad5638c";
 const requiredTarget = Object.freeze({
-  suites: 246,
-  tests: 1515,
-  passed: 1515,
+  suites: 248,
+  tests: 1539,
+  passed: 1539,
   failed: 0,
   pending: 0,
   todo: 0,
