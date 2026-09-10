@@ -27,6 +27,8 @@ const CLI = join(REPO_ROOT, "scripts", "verify-lab-calibration.mjs");
 const FACTS_HEALTHY = join(__dirname, "fixtures", "calibration-facts-healthy.json");
 const FACTS_MISMATCH = join(__dirname, "fixtures", "calibration-facts-mismatch.json");
 const FACTS_EC0001 = join(__dirname, "fixtures", "calibration-facts-ec0001.json");
+// 本轮（Treasury Terminal Integration I）真实 facts；历史 ec0001 文件保留为归档不再配对活配置。
+const FACTS_TI10001 = join(__dirname, "fixtures", "calibration-facts-ti10001.json");
 
 /**
  * 冻结的 cal-0002 历史配置：场景 B–F 与 R02 反例表达的是 cal-0002 历史世界
@@ -236,13 +238,13 @@ describe("Terminal Transfer Lab Run I · Calibration Rerun——独立配置核�
   });
 
   it("场景 G CLI 只读与真实命令：本轮真实 facts 退出 0、三项不一致 fixture 退出 1 且三项齐报、坏输入退出 2；运行前后输入文件字节不变", () => {
-    const watched = [FACTS_EC0001, FACTS_HEALTHY, FACTS_MISMATCH, join(__dirname, "labConfig.ts"), join(__dirname, "example.experiment.json")];
+    const watched = [FACTS_TI10001, FACTS_EC0001, FACTS_HEALTHY, FACTS_MISMATCH, join(__dirname, "labConfig.ts"), join(__dirname, "example.experiment.json")];
     const before = watched.map(sha256Of);
     // 健康对照使用当前编译配置匹配的本轮（Engine Continuation 0001）真实
     // facts 副本：由本轮实机 meta-probe console 流 + 真实暂停点/管理时刻
     // 装配（证据归档于 engine-continuation-0001/）；cal-0002 历史 healthy
     // fixture 与冻结历史配置的配对核对由场景 B–F 覆盖。
-    const healthy = spawnSync(process.execPath, [CLI, "--facts", FACTS_EC0001], { encoding: "utf8" });
+    const healthy = spawnSync(process.execPath, [CLI, "--facts", FACTS_TI10001], { encoding: "utf8" });
     expect(healthy.status).toBe(0);
     const healthyOutput = JSON.parse(healthy.stdout as string);
     expect(healthyOutput.report.status).toBe("pass");

@@ -59,20 +59,20 @@ export interface LabExperimentConfig {
   readonly maxSamples: number;
 }
 
-/** Engine Continuation 0001 正式绑定配置（本轮实测读回，T=167=T0+3；与 example.experiment.json 保持一致；历史 cal-0002 配置冻结于 tools/fixtures/review-base-config.json）。 */
+/** Treasury Terminal Integration I 准备阶段绑定配置（lab-ti1-0001；q=26 为本轮 probe 基线 24 样本逐样本实测恒定值（整树重启后全进程同 worldSize，报价与实扣同源），cap=q；T=400 仍为准备期占位值，从未进入任何 send 路径——准备入口 controlProbe 无 send 路径，正式 T 在 observe-armed 后实际稳定暂停 T0=329 之上以 T0+3=332 首次固定；与 example.experiment.json 保持一致；历史 cal-0002 配置冻结于 tools/fixtures/review-base-config.json）。 */
 export const LAB_EXAMPLE_EXPERIMENT: LabExperimentConfig = {
-  experimentId: "lab-run1-ec-0001",
+  experimentId: "lab-ti1-0001",
   mode: "observer",
   shardName: "Forst",
-  username: "lab-ec-user-0001",
+  username: "lab-ti-user-0001",
   sourceRoomName: "W1N57",
   targetRoomName: "W10N57",
-  sourceTerminalId: "ec0001aa57000001",
-  targetTerminalId: "ec0001aa57000002",
+  sourceTerminalId: "ti10001aa57000001",
+  targetTerminalId: "ti10001aa57000002",
   resourceType: "H",
   amount: 100,
-  description: "lab-run1-ec-0001 W1N57 to W10N57 100H",
-  targetTick: 167,
+  description: "lab-ti1-0001 W1N57 to W10N57 100H",
+  targetTick: 400,
   maxFeeEnergy: 26,
   maxSamples: 32,
 };

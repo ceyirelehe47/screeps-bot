@@ -1,0 +1,175 @@
+{
+  "factsKind": "lab-calibration-facts",
+  "context": {
+    "runId": "lab-ti1-0001",
+    "paused": true,
+    "pauseConfirmedTick": 329,
+    "lastAdminChangeWallClock": "2026-09-10T03:12:23.630Z",
+    "user": {
+      "id": "8fbd94c45d92d16",
+      "idSource": "verified local user + player console envelope"
+    },
+    "sampler": {
+      "name": "lab-control-probe",
+      "version": "1"
+    }
+  },
+  "samples": [
+    {
+      "kind": "lab-control-sample",
+      "sampler": {
+        "name": "lab-control-probe",
+        "version": "1"
+      },
+      "tick": 327,
+      "expectedExperimentId": "lab-ti1-0001",
+      "shard": {
+        "name": "Forst"
+      },
+      "user": {
+        "username": "lab-ti-user-0001"
+      },
+      "control": {
+        "status": "ok",
+        "record": {
+          "experimentId": "lab-ti1-0001",
+          "armed": true,
+          "attempted": false
+        }
+      },
+      "source": {
+        "roomName": "W1N57",
+        "readStatus": "ok",
+        "terminalId": "ti10001aa57000001",
+        "ownerUsername": "lab-ti-user-0001",
+        "resourceAmount": 1000,
+        "energy": 10000,
+        "freeCapacity": 289000,
+        "cooldown": 0,
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-ti-user-0001"
+        }
+      },
+      "target": {
+        "roomName": "W10N57",
+        "readStatus": "ok",
+        "terminalId": "ti10001aa57000002",
+        "ownerUsername": "lab-ti-user-0001",
+        "resourceAmount": 0,
+        "energy": 2000,
+        "freeCapacity": 298000,
+        "cooldown": 0,
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-ti-user-0001"
+        }
+      },
+      "feeQuote": {
+        "status": "ok",
+        "energyCost": 26
+      },
+      "transactions": {
+        "incoming": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        },
+        "outgoing": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        }
+      },
+      "userId": "8fbd94c45d92d16",
+      "collectedAtWallClock": "2026-09-10T03:26:30.050Z",
+      "runId": "lab-ti1-0001"
+    },
+    {
+      "kind": "lab-control-sample",
+      "sampler": {
+        "name": "lab-control-probe",
+        "version": "1"
+      },
+      "tick": 328,
+      "expectedExperimentId": "lab-ti1-0001",
+      "shard": {
+        "name": "Forst"
+      },
+      "user": {
+        "username": "lab-ti-user-0001"
+      },
+      "control": {
+        "status": "ok",
+        "record": {
+          "experimentId": "lab-ti1-0001",
+          "armed": true,
+          "attempted": false
+        }
+      },
+      "source": {
+        "roomName": "W1N57",
+        "readStatus": "ok",
+        "terminalId": "ti10001aa57000001",
+        "ownerUsername": "lab-ti-user-0001",
+        "resourceAmount": 1000,
+        "energy": 10000,
+        "freeCapacity": 289000,
+        "cooldown": 0,
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-ti-user-0001"
+        }
+      },
+      "target": {
+        "roomName": "W10N57",
+        "readStatus": "ok",
+        "terminalId": "ti10001aa57000002",
+        "ownerUsername": "lab-ti-user-0001",
+        "resourceAmount": 0,
+        "energy": 2000,
+        "freeCapacity": 298000,
+        "cooldown": 0,
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-ti-user-0001"
+        }
+      },
+      "feeQuote": {
+        "status": "ok",
+        "energyCost": 26
+      },
+      "transactions": {
+        "incoming": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        },
+        "outgoing": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        }
+      },
+      "userId": "8fbd94c45d92d16",
+      "collectedAtWallClock": "2026-09-10T03:26:31.064Z",
+      "runId": "lab-ti1-0001"
+    }
+  ]
+}
