@@ -29,7 +29,11 @@ async function main() {
     const result=await scope.terminateLauncher(owner,audit);
     const after=await scope.inspectProcesses(targets.map(p=>p.pid));
     if(after.some(p=>targets.some(t=>scope.identityMatches(t,p))))throw new Error('owned survivor after termination');
-    if(!result.terminated||result.observedPids.length!==7||result.auditErrors.length)throw new Error('incomplete termination proof');
+    // Windows attaches a conhost.exe child to each console-holding process, so
+    // the observed tree is larger than the seven owned Node processes on Linux.
+    // The proof is that ALL owned PIDs are in the observed (terminated) set.
+    const owned=[ready.root,...ready.pids];
+    if(!result.terminated||!owned.every(pid=>result.observedPids.includes(pid))||result.auditErrors.length)throw new Error('incomplete termination proof');
     succeeded=true;
     audit({kind:'smoke-result',status:'PASS',platform:process.platform,result});
   } finally {

@@ -19,7 +19,7 @@ function timeoutValue(ms) {
 function validateIdentity(p) {
   if (!p || !Number.isSafeInteger(p.pid) || p.pid <= 1 || p.started === undefined || p.started === null || p.started === ''
       || typeof p.executable !== 'string' || !p.executable || !(typeof p.command === 'string' && p.command.length || Array.isArray(p.command) && p.command.length)) {
-    throw new Error('process identity unreadable; not evidence of exit');
+    throw new Error('process identity unreadable (pid=' + (p && p.pid) + '); not evidence of exit');
   }
   return p;
 }
@@ -101,6 +101,13 @@ function requireOwnedRoot(owner, current) {
 
 /** The small port boundary permits deterministic latency/reuse/error tests. The
  * CLI never accepts ports; real termination below always selects OS adapters. */
+function portReportsDead(ports, pid) {
+  // Synchronous kernel liveness probe: false only on a definite ESRCH ("no such
+  // process"). true, an errored probe or a missing port all mean "must verify
+  // by identity read", never "must be alive".
+  if (typeof ports.pidAlive !== 'function') return false;
+  try { return ports.pidAlive(pid) === false; } catch { return false; }
+}
 async function terminateWithPorts(owner, ports, audit = () => {}) {
   validateIdentity(owner);
   const start = ports.now(), deadline = start + TERMINATION_BUDGET_MS;
@@ -121,8 +128,10 @@ async function terminateWithPorts(owner, ports, audit = () => {}) {
     return result;
   }
   note({ phase: 'start', rootPid: owner.pid, budgetMs: TERMINATION_BUDGET_MS });
-  const current = await call('root-read', ms => ports.inspectMany([owner.pid], ms));
-  requireOwnedRoot(owner, current.find(p => p.pid === owner.pid));
+  // The tree snapshot itself contains the launcher, so one OS query both
+  // re-validates the root identity and captures descendants. On real Windows
+  // every CIM query costs well over a second; a separate root read made the
+  // shared 4500ms budget structurally unreachable (see smoke evidence).
   let targets = await call('tree-read', ms => ports.tree(owner.pid, ms));
   if (!Array.isArray(targets) || targets.length > 256) throw new Error('invalid process tree');
   targets.forEach(validateIdentity);
@@ -159,11 +168,24 @@ async function terminateWithPorts(owner, ports, audit = () => {}) {
   } else throw new Error('unsupported platform');
   let polls = 0;
   for (;;) {
-    const rows = await call('exit-read', ms => ports.inspectMany(targets.map(p => p.pid), ms));
-    rows.forEach(validateIdentity);
+    remaining();
+    // Kernel liveness first: a PID with no process at all is direct evidence of
+    // exit. Only PIDs that still exist (or whose probe is inconclusive) cost an
+    // identity read, keeping whole-tree confirmation inside one real-OS budget.
+    const live = targets.filter(p => !portReportsDead(ports, p.pid));
     polls++;
-    const survivors = targets.filter(p => rows.some(fresh => identityMatches(p, fresh)));
-    const reused = rows.filter(p => targets.some(old => old.pid === p.pid && !identityMatches(old, p)));
+    if (!live.length) {
+      const result = { terminated: true, observedPids: targets.map(p => p.pid), elapsedMs: ports.now() - start, polls, auditErrors };
+      note({ phase: 'exit-snapshot', survivingPids: [], reusedPids: [] });
+      note({ phase: 'confirmed', ...result });
+      remaining(); // final audit time is part of the SAME deadline
+      result.elapsedMs = ports.now() - start;
+      return result;
+    }
+    const rows = await call('exit-read', ms => ports.inspectMany(live.map(p => p.pid), ms));
+    rows.forEach(validateIdentity);
+    const survivors = live.filter(p => rows.some(fresh => identityMatches(p, fresh)));
+    const reused = rows.filter(p => live.some(old => old.pid === p.pid && !identityMatches(old, p)));
     note({ phase: 'exit-snapshot', survivingPids: survivors.map(p => p.pid), reusedPids: reused.map(p => p.pid) });
     if (!survivors.length) {
       const result = { terminated: true, observedPids: targets.map(p => p.pid), elapsedMs: ports.now() - start, polls, auditErrors };
@@ -178,6 +200,9 @@ async function terminateWithPorts(owner, ports, audit = () => {}) {
 async function terminateLauncher(owner, audit) {
   return terminateWithPorts(owner, {
     platform: process.platform, now: () => performance.now(), inspectMany: inspectProcesses, tree: treeSnapshot,
+    // Signal 0 is a pure kernel liveness probe. EPERM on a foreign process is
+    // reported as "alive" so it still gets the full identity verification.
+    pidAlive: pid => { try { process.kill(pid, 0); return true; } catch (error) { return error.code !== 'ESRCH'; } },
     killWindows: async (pid, timeout) => {
       const result = await exec('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { timeout: timeoutValue(timeout), windowsHide: true });
       return { stdout: result.stdout, stderr: result.stderr };

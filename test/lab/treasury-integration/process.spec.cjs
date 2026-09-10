@@ -10,44 +10,55 @@ function portsFixture(latency = 700, count = 7) {
   const p = { platform: 'win32', now: () => time, inspectMany: async (ids, ms) => { await delay('inspect:' + ids.length, ms); return killed ? [] : targets.filter(t => ids.includes(t.pid)); },
     tree: async (root, ms) => { await delay('tree', ms); return targets; },
     killWindows: async (root, ms) => { await delay('kill', ms); killed = true; return { stdout: 'terminated', stderr: '' }; },
+    // Kernel probe: after the tree kill every PID reports "no such process",
+    // which alone is direct evidence of exit and skips identity re-reads.
+    pidAlive: () => !killed,
     sleep: async ms => { time += ms; } };
   return { p, targets, calls, events, get killed() { return killed; }, setTime: t => { time = t; }, audit: e => events.push(e) };
 }
-for (const latency of [10, 700]) test('batch exit verification succeeds with seven PIDs, each operation ' + latency + 'ms', async () => {
+for (const latency of [10, 700]) test('kernel-verified exit succeeds with seven PIDs, each OS operation ' + latency + 'ms', async () => {
   const f = portsFixture(latency), result = await terminateWithPorts(f.targets[0], f.p, f.audit);
-  assert.equal(result.terminated, true); assert.equal(result.observedPids.length, 7); assert.equal(result.elapsedMs, 4 * latency);
-  assert.deepEqual(f.calls.map(x => x.kind), ['inspect:1', 'tree', 'kill', 'inspect:7']);
+  assert.equal(result.terminated, true); assert.equal(result.observedPids.length, 7); assert.equal(result.elapsedMs, 2 * latency);
+  assert.deepEqual(f.calls.map(x => x.kind), ['tree', 'kill']);
   assert.ok(result.elapsedMs < 5000);
 });
-test('100 PID verification still uses one batched exit query', async () => {
-  const f = portsFixture(700, 100); const r = await terminateWithPorts(f.targets[0], f.p); assert.equal(r.elapsedMs, 2800);
+test('100 PID identity verification still uses one batched exit query when probes stay inconclusive', async () => {
+  for (const probe of [() => true, () => { throw Error('EPERM'); }]) {
+    const f = portsFixture(700, 100); f.p.pidAlive = probe;
+    const r = await terminateWithPorts(f.targets[0], f.p);
+    assert.equal(r.elapsedMs, 2100); assert.deepEqual(f.calls.map(x => x.kind), ['tree', 'kill', 'inspect:100']);
+  }
 });
 test('vanished launcher before captured tree is not successful cleanup', async () => {
-  const f = portsFixture(); f.p.inspectMany = async () => [];
+  const f = portsFixture(); f.p.tree = async () => [];
   await assert.rejects(terminateWithPorts(f.targets[0], f.p), /absent/); assert.equal(f.killed, false);
 });
 test('reused launcher PID is refused without any kill', async () => {
-  const f = portsFixture(); f.p.inspectMany = async () => [{ ...f.targets[0], started: 'different' }];
+  const f = portsFixture(); f.p.tree = async () => [{ ...f.targets[0], started: 'different' }, ...f.targets.slice(1)];
   await assert.rejects(terminateWithPorts(f.targets[0], f.p), /identity changed/); assert.equal(f.killed, false);
 });
 test('surviving worker after launcher exit prevents confirmation until deadline', async () => {
   const f = portsFixture(100); const original = f.p.inspectMany;
+  f.p.pidAlive = () => true;
   f.p.inspectMany = async (ids, ms) => f.killed ? [f.targets[1]] : original(ids, ms);
   await assert.rejects(terminateWithPorts(f.targets[0], f.p), /deadline/);
   assert.ok(f.p.now() <= TERMINATION_BUDGET_MS); assert.equal(f.calls.filter(x => x.kind === 'kill').length, 1);
 });
 test('remaining timeout is shared across all stages, not reset per PID', async () => {
-  const f = portsFixture(1400);
+  const f = portsFixture(1400); f.p.pidAlive = () => true; const original = f.p.inspectMany;
+  f.p.inspectMany = async (ids, ms) => { const rows = await original(ids, ms); return f.killed ? [f.targets[1]] : rows; };
   await assert.rejects(terminateWithPorts(f.targets[0], f.p), /OS timeout/);
-  assert.equal(f.p.now(), 4500); assert.equal(f.calls.at(-1).budget, 300);
+  assert.equal(f.p.now(), 4500); assert.equal(f.calls.at(-1).budget, 200);
 });
 test('unreadable exit identity is not interpreted as a reused or exited process', async () => {
   const f = portsFixture(10), original = f.p.inspectMany;
+  f.p.pidAlive = () => true;
   f.p.inspectMany = (ids, ms) => f.killed ? Promise.resolve([{ pid: f.targets[1].pid }]) : original(ids, ms);
   await assert.rejects(terminateWithPorts(f.targets[0], f.p), /unreadable/);
 });
 test('reused worker identity after kill is recorded, never killed again', async () => {
   const f = portsFixture(10), original = f.p.inspectMany;
+  f.p.pidAlive = () => true;
   f.p.inspectMany = (ids, ms) => f.killed ? Promise.resolve([{ ...f.targets[1], started: 'new-process' }]) : original(ids, ms);
   const result = await terminateWithPorts(f.targets[0], f.p, f.audit);
   assert.equal(result.terminated, true); assert.equal(f.calls.filter(x => x.kind === 'kill').length, 1);
