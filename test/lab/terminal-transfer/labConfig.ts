@@ -59,7 +59,7 @@ export interface LabExperimentConfig {
   readonly maxSamples: number;
 }
 
-/** Treasury Terminal Integration I 准备阶段绑定配置（lab-ti1-0001；q=26 为本轮 probe 基线 24 样本逐样本实测恒定值（整树重启后全进程同 worldSize，报价与实扣同源），cap=q；T=400 仍为准备期占位值，从未进入任何 send 路径——准备入口 controlProbe 无 send 路径，正式 T 在 observe-armed 后实际稳定暂停 T0=329 之上以 T0+3=332 首次固定；与 example.experiment.json 保持一致；历史 cal-0002 配置冻结于 tools/fixtures/review-base-config.json）。 */
+/** Treasury Terminal Integration I 准备阶段绑定配置（lab-ti1-0001；q=26 为本轮 probe 基线 24 样本逐样本实测恒定值（整树重启后全进程同 worldSize，报价与实扣同源），cap=q；正式 T=332=T0+3（observe-armed 两真实 tick 327/328 后实际稳定暂停点 T0=329 经 facts 复读确认，窗口 330..352 共 23 个采样，T−2 可取得；此前的准备期占位值 400 从未进入任何 send 路径——准备入口 controlProbe 无 send 路径）；与 example.experiment.json 保持一致；历史 cal-0002 配置冻结于 tools/fixtures/review-base-config.json）。 */
 export const LAB_EXAMPLE_EXPERIMENT: LabExperimentConfig = {
   experimentId: "lab-ti1-0001",
   mode: "observer",
@@ -72,7 +72,7 @@ export const LAB_EXAMPLE_EXPERIMENT: LabExperimentConfig = {
   resourceType: "H",
   amount: 100,
   description: "lab-ti1-0001 W1N57 to W10N57 100H",
-  targetTick: 400,
+  targetTick: 332,
   maxFeeEnergy: 26,
   maxSamples: 32,
 };
