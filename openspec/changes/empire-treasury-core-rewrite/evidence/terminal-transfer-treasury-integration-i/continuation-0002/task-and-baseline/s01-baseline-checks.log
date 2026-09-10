@@ -1,0 +1,251 @@
+=== date ===
+2026-09-10T08:02:01Z
+=== git status --short ===
+=== git branch --show-current ===
+refactor/empire-treasury-rearchitecture
+=== git fetch origin ===
+=== rev-parse HEAD ===
+9aa1c4815ef01ff42ec0d0f205f6297315dc7811
+=== rev-parse origin/refactor/empire-treasury-rearchitecture ===
+9aa1c4815ef01ff42ec0d0f205f6297315dc7811
+=== log --oneline -12 ===
+9aa1c48 Treasury Terminal Integration I 证据归档与状态更新：离线全成、实机 LIVE_FAIL（环境时序事故零 send）
+838dcc7 lab-ti1-0001 正式固定 T=332=T0+3 并启用 treasury-integration 入口（VALIDATION_HEAD）
+2d45e3c lab-ti1-0001 准备期第二轮绑定：q=26 实测回填 + 本轮 facts fixture + 场景 G 演进
+1a6c7a2 预算：243/1497→246/1515，锚点滚动至 3db0770
+3db0770 修复 Windows 终止路径结构性超预算与 smoke 断言（保留首轮失败证据）
+e2966f3 独立验收反例：真实 kernel 单缺陷世界/记录矩阵（AGENT-VERIFY §3.1）
+92e0e50 应用 Treasury Terminal Integration I 实现包（原样 17 文件）
+7314277 Engine Continuation 0001：实机执行完成（ENGINE_LAB_PASS）与证据归档
+7f47a0d test(lab): Engine Continuation 0001 正式窗口 T=167 绑定（VALIDATION_HEAD）
+378db97 test(lab): Engine Continuation 0001 准备阶段身份绑定（占位 T=400）
+8f62ed6 test(lab): control 模式 armed 标志测试隔离性修正（Engine Continuation I）
+5773f1a Control Remediation I：离线验收交付与证据归档（实机 AUTHORIZATION_REQUIRED）
+=== diff --name-status 838dcc7 9aa1c48 ===
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/baseline/baseline-console.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/baseline/decode-console.cjs
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/baseline/w02-baseline-summary.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/budget.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/budget.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/budget.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/budget.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/cli-calibration.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/cli-calibration.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/01-inspect/actions.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/01-inspect/console.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/01-inspect/result.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/02-initialize/actions.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/02-initialize/console.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/02-initialize/result.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/03-observe-false/actions.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/03-observe-false/console.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/03-observe-false/paused-snapshot.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/03-observe-false/result.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/03-observe-false/roundtrip-result.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/03-observe-false/stop-result.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/04-arm/actions.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/04-arm/console.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/04-arm/result.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/05-observe-armed/actions.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/05-observe-armed/console.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/05-observe-armed/paused-snapshot.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/05-observe-armed/result.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/05-observe-armed/roundtrip-result.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/05-observe-armed/stop-result.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/06-facts/actions.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/06-facts/calibration-facts.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/06-facts/console.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/control-roundtrip/06-facts/result.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/dist-main-after-labbuild.sha
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/dist-main-after.sha
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/dist-main-before.sha
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/stop-tree.cjs
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/ti-launcher-stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/ti-launcher-stderr2.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/ti-launcher-stderr3.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/ti-launcher-stderr4.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/ti-launcher-stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/ti-launcher-stdout2.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/ti-launcher-stdout3.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/ti-launcher-stdout4.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/ti-npm-ci.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/ti-screeps-init.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w00-first-stop.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-controller-w10n57.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-controller-w1n57.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-fixture-write.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-gametime.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-gen-room-w10n57.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-gen-room-w1n57.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-pause.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-rooms-raw.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-spawn-bot.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-terminals-after-restart.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-terrain-w1n57.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-tree-restart-stop.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-user-lookup.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-w10n57-check.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-w10n57-check2.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-w10n57-check3.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-w1n57-check.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w01-w1n57-check3.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/environment/w03-live-loaded.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/budget.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/budget.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/budget.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/budget.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/cli-calibration.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/cli-calibration.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/dist-main-after-labbuild.sha
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/dist-main-after.sha
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/dist-main-before.sha
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/frozen-diff.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/git-diff-check.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-full.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-full.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-full.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-full.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-full.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-lab-suite.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-lab-suite.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-lab-suite.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-lab-suite.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-new-integration.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-new-integration.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-new-integration.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-new-integration.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-slice0.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-slice0.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-slice0.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-slice0.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-treasury-dir.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-treasury-dir.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-treasury-dir.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-treasury-dir.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/jest-treasury-dir.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/live-bundle.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/live-bundle.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/npm-build.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/npm-build.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/npm-build.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/npm-build.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/second-tree/bundle-compare.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/second-tree/jest-new-integration.exit
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/second-tree/jest-new-integration.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/second-tree/jest-slice0.exit
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/second-tree/jest-slice0.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/second-tree/second-bundle.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/second-tree/second-tree-run.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/tsc-tsconfig.build.json.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/tsc-tsconfig.build.json.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/tsc-tsconfig.build.json.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/tsc-tsconfig.build.json.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/tsc-tsconfig.json.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/tsc-tsconfig.json.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/tsc-tsconfig.json.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/final-validation/tsc-tsconfig.json.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/first-round/adversarial2.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/first-round/cal-sync.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/first-round/first-new-jest.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/first-round/first-new-node.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/first-round/first-old-tools.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/first-round/npm-ci-integration.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/first-round/tsc-build.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/first-round/tsc-main.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/formal-window/07-run-treasury/actions.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/formal-window/07-run-treasury/console.jsonl
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/formal-window/07-run-treasury/formal-before.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/formal-window/07-run-treasury/formal-preflight.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/formal-window/07-run-treasury/paused-snapshot.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/formal-window/07-run-treasury/process-stop-result.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/formal-window/07-run-treasury/stop-result.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/formal-window/engine_main.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/formal-window/engine_main.log.1
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/formal-window/root-cause-restart-interval.md
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/frozen-diff.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/git-diff-check.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-full.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-full.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-full.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-full.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-full.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-lab-suite.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-lab-suite.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-lab-suite.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-lab-suite.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-new-integration.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-new-integration.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-new-integration.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-new-integration.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-slice0.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-slice0.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-slice0.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-slice0.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-treasury-dir.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-treasury-dir.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-treasury-dir.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-treasury-dir.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/jest-treasury-dir.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/live-bundle.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/live-bundle.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/npm-build.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/npm-build.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/npm-build.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/npm-build.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/package/screeps-treasury-integration-I-implementation-2026-09-10.zip
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/treasury-integration-i-report.md
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/tsc-tsconfig.build.json.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/tsc-tsconfig.build.json.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/tsc-tsconfig.build.json.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/tsc-tsconfig.build.json.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/tsc-tsconfig.json.command.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/tsc-tsconfig.json.exit-code.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/tsc-tsconfig.json.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/tsc-tsconfig.json.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/process-spec-fixed.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/process-spec-fixed2.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-final.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-1.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-1.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-10.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-10.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-2.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-2.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-3.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-3.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-4.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-4.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-5.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-5.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-6.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-6.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-7.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-7.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-8.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-8.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-9.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-fixed-9.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-1.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-1.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-2.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-2.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-3.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-3.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-4.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-4.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-5.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-5.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-6.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-6.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-7.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-7.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-8.err
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/smoke-iter-8.out
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/windows-process-smoke-fixed.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/windows-process-smoke-fixed.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/windows-process-smoke-retry.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/windows-process-smoke-retry.stdout.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/windows-process-smoke.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/windows-smoke/windows-process-smoke.stdout.log
+M	openspec/changes/empire-treasury-core-rewrite/tasks.md
+M	openspec/changes/empire-treasury-core-rewrite/terminal-transfer-engine-lab-run-i.md
