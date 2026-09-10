@@ -1,21 +1,21 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "b3207f9d4675d47df9997c80902a9c1313eabb4c",
-    "suites": 243,
-    "tests": 1497
+    "commit": "3db077061a6c63ce559f2c5cf2c92d9b6df08382",
+    "suites": 246,
+    "tests": 1515
   },
   "target": {
-    "commit": "b3207f9d4675d47df9997c80902a9c1313eabb4c",
-    "suites": 243,
-    "tests": 1497,
-    "passed": 1497,
+    "commit": "3db077061a6c63ce559f2c5cf2c92d9b6df08382",
+    "suites": 246,
+    "tests": 1515,
+    "passed": 1515,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "allocation": {
-    "note": "Terminal Transfer Engine Lab Run I · Control Remediation I：原样应用实现包（17 文件）+ Agent 独立增补——calibration.test.ts 6→13 用例（R02 独立反例：配置侧非法 T/报价字段整体缺失/暂停点类型非法/稳定但不满足发送条件/controller level/三样本反序/T0 边界）、新增 controlRemediation.test.ts 4 用例（Node spec 套件 wrapper 数组扩展 independent）；242/1486→243/1497；锚点随实现提交滚动至 b3207f9d4675d47df9997c80902a9c1313eabb4c"
+    "note": "Treasury Terminal Integration I：原样应用实现包 17 文件（新增 integration.test.ts 8 用例 + tools.test.ts 3 用例 wrapper，实际 kernel Jest）+ Agent 独立增补 adversarial 反例 integrationAdversarial.test.ts 7 用例 + Windows 终止路径修复（process.spec 为 node --test 不计 Jest）；243/1497→246/1515；锚点随本轮实现/反例/修复提交滚动至 3db077061a6c63ce559f2c5cf2c92d9b6df08382"
   },
   "files": {
     "scripts/lib/deployGuard.test.ts": {
@@ -1973,6 +1973,30 @@
       "budget": 4,
       "tests": 4,
       "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/lab/treasury-integration/integration.test.ts": {
+      "budget": 8,
+      "tests": 8,
+      "passed": 8,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/lab/treasury-integration/integrationAdversarial.test.ts": {
+      "budget": 7,
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "pending": 0,
+      "todo": 0
+    },
+    "test/lab/treasury-integration/tools.test.ts": {
+      "budget": 3,
+      "tests": 3,
+      "passed": 3,
       "failed": 0,
       "pending": 0,
       "todo": 0

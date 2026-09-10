@@ -12,17 +12,17 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const manifestPath = path.join(repoRoot, "test", "test-suite-budget.json");
 const jestEntrypoint = path.join(repoRoot, "node_modules", "jest", "bin", "jest.js");
 const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data", "node_modules"]);
-// 【Terminal Transfer Engine Lab Run I · Calibration Rerun】新目标：
-// probe.test.ts 23→25 用例（sentinel 专项反转为严格拒绝回归+sentinel 期
-// 归档产物前后对照+场景 A 旧事故链四步+非 26 报价预算边界）、新增
-// calibration.test.ts 6 用例（C02 场景 B–G 实际比较实现），
-// Control Remediation I：242/1486→243/1497；基线随实现提交滚动至 b3207f9
+// 【Treasury Terminal Integration I】新目标：原样应用实现包新增
+// integration.test.ts 8 用例（实际 facade/kernel Jest）与 tools.test.ts
+// 3 用例（node --test wrapper 计入 Jest）、Agent 独立验收反例
+// integrationAdversarial.test.ts 7 用例（单缺陷世界/记录矩阵）；
+// 243/1497→246/1515；基线随实现/反例/Windows 终止修复提交滚动至 3db0770
 // （文件集对比要求基线树含当前测试文件集）。
-const requiredBaselineCommit = "b3207f9d4675d47df9997c80902a9c1313eabb4c";
+const requiredBaselineCommit = "3db077061a6c63ce559f2c5cf2c92d9b6df08382";
 const requiredTarget = Object.freeze({
-  suites: 243,
-  tests: 1497,
-  passed: 1497,
+  suites: 246,
+  tests: 1515,
+  passed: 1515,
   failed: 0,
   pending: 0,
   todo: 0,
