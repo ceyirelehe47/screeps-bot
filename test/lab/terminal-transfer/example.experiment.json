@@ -1,5 +1,5 @@
 {
-  "_doc": "Treasury Terminal Integration I · Continuation 0002 准备阶段绑定配置（与 test/lab/terminal-transfer/labConfig.ts 的 LAB_EXAMPLE_EXPERIMENT 保持一致；本轮新隔离世界 lab-ti2-env 读回绑定：结构 ID ti20002aa57000001/ti20002aa57000002、合成用户 lab-ti-user-0002（id f6afa65997c093d）、shard Forst（安装的 driver 取 os.hostname() 的实测值）；q 与最终 T 在首次固定时回填；准备期 targetTick=4000 为占位值，从未进入 send 路径。文档示例（构建器仅复制，运行时不读取）。",
+  "_doc": "Treasury Terminal Integration I · Continuation 0002 正式绑定配置（与 test/lab/terminal-transfer/labConfig.ts 的 LAB_EXAMPLE_EXPERIMENT 保持一致；本轮新隔离世界 lab-ti2-env 读回绑定：结构 ID ti20002aa57000001/ti20002aa57000002、合成用户 lab-ti-user-0002（id f6afa65997c093d）、shard Forst（安装的 driver 取 os.hostname() 的实测值）；q=26=本轮基线 24 样本实测恒定报价（cap=q）；正式 T=536=T0+3（observe-armed 后实际稳定暂停 T0=533 经 facts 复读确认，窗口 534..556 共 23 个采样）；准备期占位值 4000 从未进入 send 路径。文档示例（构建器仅复制，运行时不读取）。",
   "experimentId": "lab-ti1-0002",
   "mode": "observer",
   "shardName": "Forst",
@@ -11,7 +11,7 @@
   "resourceType": "H",
   "amount": 100,
   "description": "lab-ti1-0002 W1N57 to W10N57 100H",
-  "targetTick": 4000,
-  "maxFeeEnergy": 1,
+  "targetTick": 536,
+  "maxFeeEnergy": 26,
   "maxSamples": 32
 }
