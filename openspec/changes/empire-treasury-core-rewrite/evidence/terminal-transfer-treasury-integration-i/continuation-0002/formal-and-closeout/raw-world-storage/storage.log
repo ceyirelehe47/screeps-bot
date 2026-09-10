@@ -1,0 +1,33 @@
+Loading mods from "D:\code\screeps\lab-ti2-env\world\mods.json"
+Starting storage server
+Storage listening on 21027
+[::1:54504] Incoming connection
+[::1:57745] Incoming connection
+[::1:57746] Incoming connection
+[::1:57747] Incoming connection
+[::1:57748] Incoming connection
+[::1:57749] Incoming connection
+[::1:57750] Incoming connection
+[::1:57749] Connection error: read ECONNRESET
+[::1:57749] Connection closed
+[::1:63530] Incoming connection
+[::1:59640] Incoming connection
+[::1:59640] Connection error: read ECONNRESET
+[::1:59640] Connection closed
+[::1:51230] Incoming connection
+[::1:51230] Connection error: read ECONNRESET
+[::1:51230] Connection closed
+[::1:64417] Incoming connection
+[::1:64417] Connection error: read ECONNRESET
+[::1:64417] Connection closed
+[::1:58533] Incoming connection
+[::1:58533] Connection error: read ECONNRESET
+[::1:58533] Connection closed
+[::1:64174] Incoming connection
+[::1:64174] Connection error: read ECONNRESET
+[::1:64174] Connection closed
+[::1:60957] Incoming connection
+[::1:60957] Connection error: read ECONNRESET
+[::1:60957] Connection closed
+[::1:57675] Incoming connection
+[::1:52878] Incoming connection

@@ -1,0 +1,2 @@
+bc0ccc79a4b52d0eb9a773862dc8f95c122b2c4fa175a04629d5fed7a9e34279 *D:/code/screeps/screeps-bot/openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/formal-and-closeout/raw-world-storage/world-db.json
+eda7f20f893ef5d2af17f929f269acdfd721be34f21ba6da669917be781298c1 *D:/code/screeps/screeps-bot/openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/formal-and-closeout/raw-world-storage/engine_main.log
