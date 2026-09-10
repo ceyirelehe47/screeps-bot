@@ -1,18 +1,18 @@
 {
   "schema": "screeps-jest-test-budget/v1",
   "baseline": {
-    "commit": "c3284cb",
-    "suites": 193,
-    "tests": 683,
-    "passed": 683,
+    "commit": "6d514b5de2dd518596eab11865f2d841c9cb18e2",
+    "suites": 195,
+    "tests": 685,
+    "passed": 685,
     "failed": 0,
     "pending": 0,
     "todo": 0
   },
   "target": {
-    "suites": 193,
-    "tests": 683,
-    "passed": 683,
+    "suites": 195,
+    "tests": 685,
+    "passed": 685,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -20,7 +20,7 @@
   "allocation": {
     "protectedFullFiles": 15,
     "highRiskFiles": 50,
-    "defaultFiles": 128
+    "defaultFiles": 130
   },
   "files": {
     "scripts/monitor-service.test.ts": {
@@ -987,6 +987,16 @@
       "baseline": 0,
       "budget": 1,
       "tier": "high-risk"
+    },
+    "test/treasuryCompatRead.test.ts": {
+      "baseline": 1,
+      "budget": 1,
+      "tier": "default-max-2"
+    },
+    "test/treasuryCompatIndependent.test.ts": {
+      "baseline": 1,
+      "budget": 1,
+      "tier": "default-max-2"
     }
   }
 }
