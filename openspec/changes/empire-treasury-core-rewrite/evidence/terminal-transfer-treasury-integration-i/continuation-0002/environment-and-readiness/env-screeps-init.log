@@ -1,0 +1,5 @@
+A Steam Web API key is required to run the server without the Steam client installed.
+You can obtain a key on this page: https://steamcommunity.com/dev/apikey
+[90mEnter your Steam API key:[39m Screeps world data created in "D:\code\screeps\lab-ti2-env\world".
+Run "screeps start" to launch your server.
+init_exit=0

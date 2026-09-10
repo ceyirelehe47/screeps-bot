@@ -1,5 +1,34 @@
 # Terminal Transfer Engine Lab Run I——真实引擎实验说明
 
+**Treasury Terminal Integration I · Continuation 0002（2026-09-10，实机
+TREASURY_INTEGRATION_PASS）**：本地实机续测（起点 9aa1c48，`RUN_VALIDATION_HEAD`
+cf29a69）。新一次性世界 lab-ti1-0002（环境 lab-ti2-env、用户 lab-ti-user-0002
+id f6afa65997c093d、双 Terminal ti20002aa57000001/2、shard Forst 实测、
+q=26=24 样本实测恒定、控制往返 T0=533）。先按其 §6.1 把
+`restart_interval` 从 3600 改为 86400（实际安装 launcher 仅对 runner/processor
+传递且递归不再传递，源码指纹留档）并整树重启生效，消除了上一轮滚动窗口根因。
+控制往返全绿（inspect→initialize→observe-false 529/530→arm 一次→
+observe-armed 531/532→facts T0=533），完成屏障以真实 `roomsDone` 事件判定
+（非仅 paused）。**正式运行一次**：T=536 恰好一次真实 `terminal.send("H",100,
+"W10N57",description)` 同步返回 OK(code 0)；100H 经实际生产 facade/kernel
+接纳（committed H100/E26）→ outcome_unknown → T+1 观察
+`observed_committed/exact_transfer_and_fee` → 注册结算 → T+2 占用解除
+（ring closedAtTick=538、counters admitted/dispatched/settledCommitted=1、
+rearmings=0）；唯一交易 455da824072e365 双视图一致；源 H−100/E−26、源空位
++126、目标 H+100/energy 不变、目标空位 −100、冷却 546=536+10。窗口
+534..556 共 23/23 无缺口；窗口末端先到（~34.1s/180s），触发延迟 5.86ms、
+稳定暂停 tick 557；撤装写入+读回（attempted@536/syncResult 保留）；进程树
+自动确认终止（terminated=true、7 PID、3245.77ms、auditErrors=[]）。
+工具 `treasury-verification.json` 原样返回 TREASURY_INTEGRATION_PASS；独立
+验收 subagent 只读判读 22 项全 PASS 并记录 12 项观察（boundary 事件不带实参、
+killConfirmed 字段命名、stderr 的 ECONNRESET 属工具自身连接等）。继承全量
+（838dcc7，246/1515）经差异检查（838dcc7..9aa1c48 仅 openspec 变更）成立；
+本轮定向验证 tsc×2、integration 18/18、LAB 54/54、C02 55/55、bundle
+482336B/bfbc5c55…、第二树 IDENTICAL、冻结 diff 零差异。证据：
+`evidence/terminal-transfer-treasury-integration-i/continuation-0002/`。
+enabled=true 仅随该 VALIDATION_HEAD 提交、只对装载该 bundle 的世界有意义，
+不构成后续实验授权；再次实机须新任务书。
+
 **Treasury Terminal Integration I（2026-09-10，离线交付全成、实机 LIVE_FAIL
 ——环境时序事故，零 send 调用，非被测代码缺陷）**：ChatGPT 实现包（基线
 7314277，patch sha 1a05f5a1…）原样应用 17 文件（IMPL_HEAD 92e0e50：真实

@@ -1,0 +1,68 @@
+Connecting to storage
+{
+  "result": {
+    "reason": "window_complete",
+    "observedAt": 34057.3893,
+    "deadline": 190396.7853,
+    "stopRequestedAt": 34063.2522,
+    "windowComplete": true,
+    "pauseConfirmed": true,
+    "killConfirmed": false,
+    "triggerLatencyMs": 5.8629000000000815,
+    "stableTick": 557,
+    "pauseConfirmedAt": 35418.6673,
+    "extraReasons": [],
+    "logErrors": [],
+    "sampleTicks": [
+      534,
+      535,
+      536,
+      537,
+      538,
+      539,
+      540,
+      541,
+      542,
+      543,
+      544,
+      545,
+      546,
+      547,
+      548,
+      549,
+      550,
+      551,
+      552,
+      553,
+      554,
+      555,
+      556
+    ],
+    "controlSamples": [],
+    "ok": true
+  },
+  "processTreeStopped": true,
+  "processStop": {
+    "terminated": true,
+    "observedPids": [
+      121748,
+      132284,
+      148652,
+      142652,
+      88836,
+      149272,
+      135824
+    ],
+    "elapsedMs": 3245.7737999999954,
+    "polls": 1,
+    "auditErrors": []
+  },
+  "verification": {
+    "status": "TREASURY_INTEGRATION_PASS",
+    "issues": [],
+    "warnings": [],
+    "observedFee": 26,
+    "quotedFee": 26,
+    "attemptId": "tk1_1_20faab99a8378f8a"
+  }
+}

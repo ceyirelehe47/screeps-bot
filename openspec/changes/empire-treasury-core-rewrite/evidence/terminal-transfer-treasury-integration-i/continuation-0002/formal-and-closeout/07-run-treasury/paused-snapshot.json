@@ -1,0 +1,740 @@
+{
+  "memory": "{\"creeps\":{\"u2\":{\"role\":\"upgrader\"},\"u1\":{\"role\":\"upgrader\"},\"h2\":{\"role\":\"harvester\"},\"h1\":{\"role\":\"harvester\",\"_move\":{\"dest\":{\"x\":11,\"y\":35,\"room\":\"W1N57\"},\"time\":515,\"path\":\"123618\",\"room\":\"W1N57\"}}},\"__labTerminalTransferProbe\":{\"experimentId\":\"lab-ti1-0002\",\"armed\":true,\"attempted\":true,\"attemptedTick\":536,\"stopped\":true,\"syncResult\":{\"ok\":true,\"code\":0}},\"runtime\":{\"resourceReservations\":{},\"resourceReservationsOwnerVersion\":4,\"treasuryCore\":{\"version\":3,\"installEpochId\":\"90b6d309c92cf794\",\"issuance\":{\"frontier\":1,\"burned\":0},\"lifecycle\":{\"lastBeginTick\":556,\"lastEndTick\":556},\"recovery\":{\"sweepCursor\":0,\"cleanupCursor\":0,\"budgetTick\":556,\"budgetUsed\":0},\"active\":{},\"ring\":[{\"attemptId\":\"tk1_1_20faab99a8378f8a\",\"workKey\":\"biz:terminal-lab:lab-ti1-0002\",\"generation\":1,\"terminalPhase\":\"committed\",\"closedAtTick\":538}],\"ringCursor\":1,\"counters\":{\"admitted\":1,\"dispatched\":1,\"settledCommitted\":1,\"settledNotExecuted\":0,\"unknown\":1,\"rearmings\":0,\"rejectedAdmissions\":0,\"recoveryAdvances\":0,\"cleanupFailures\":0}},\"treasuryWorldSequence\":1}}",
+  "transactions": [
+    {
+      "time": 536,
+      "sender": "f6afa65997c093d",
+      "recipient": "f6afa65997c093d",
+      "resourceType": "H",
+      "amount": 100,
+      "from": "W1N57",
+      "to": "W10N57",
+      "description": "lab-ti1-0002 W1N57 to W10N57 100H",
+      "_id": "455da824072e365",
+      "meta": {
+        "revision": 0,
+        "created": 1789030187122,
+        "version": 0
+      },
+      "$loki": 1
+    }
+  ],
+  "objects": [
+    {
+      "room": "W1N57",
+      "type": "controller",
+      "x": 36,
+      "y": 26,
+      "level": 8,
+      "_id": "3469a6581559388",
+      "meta": {
+        "revision": 3,
+        "created": 1789028303189,
+        "version": 0,
+        "updated": 1789028339252
+      },
+      "$loki": 444,
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "downgradeTime": 20427,
+      "safeMode": 20426,
+      "safeModeAvailable": 0
+    },
+    {
+      "room": "W10N57",
+      "type": "controller",
+      "x": 27,
+      "y": 6,
+      "level": 8,
+      "_id": "84c1a658278de5d",
+      "meta": {
+        "revision": 2,
+        "created": 1789028303480,
+        "version": 0,
+        "updated": 1789029319681
+      },
+      "$loki": 448,
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "safeModeAvailable": 0,
+      "downgradeTime": 200497
+    },
+    {
+      "type": "spawn",
+      "room": "W1N57",
+      "x": 6,
+      "y": 40,
+      "name": "Spawn1",
+      "user": "f6afa65997c093d",
+      "store": {
+        "energy": 181
+      },
+      "storeCapacityResource": {
+        "energy": 300
+      },
+      "hits": 5000,
+      "hitsMax": 5000,
+      "spawning": null,
+      "notifyWhenAttacked": false,
+      "_id": "7e84a65997fa4a3",
+      "meta": {
+        "revision": 131,
+        "created": 1789028309375,
+        "version": 0,
+        "updated": 1789030207203
+      },
+      "$loki": 451,
+      "off": false
+    },
+    {
+      "name": "h1",
+      "x": 12,
+      "y": 36,
+      "body": [
+        {
+          "type": "move",
+          "hits": 100
+        },
+        {
+          "type": "move",
+          "hits": 100
+        },
+        {
+          "type": "work",
+          "hits": 100
+        },
+        {
+          "type": "carry",
+          "hits": 100
+        }
+      ],
+      "store": {
+        "energy": 10
+      },
+      "storeCapacity": 50,
+      "type": "creep",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "hits": 400,
+      "hitsMax": 400,
+      "spawning": false,
+      "fatigue": 0,
+      "notifyWhenAttacked": true,
+      "_id": "5164a659b4a7750",
+      "meta": {
+        "revision": 20,
+        "created": 1789028309834,
+        "version": 0,
+        "updated": 1789029393010
+      },
+      "$loki": 452,
+      "ageTime": 1937,
+      "actionLog": {
+        "attacked": null,
+        "healed": null,
+        "attack": null,
+        "rangedAttack": null,
+        "rangedMassAttack": null,
+        "rangedHeal": null,
+        "harvest": null,
+        "heal": null,
+        "repair": null,
+        "build": null,
+        "say": null,
+        "upgradeController": null,
+        "reserveController": null
+      }
+    },
+    {
+      "_id": "ti20002aa57000001",
+      "type": "terminal",
+      "room": "W1N57",
+      "x": 18,
+      "y": 18,
+      "user": "f6afa65997c093d",
+      "store": {
+        "H": 900,
+        "energy": 9974
+      },
+      "cooldownTime": 546,
+      "meta": {
+        "revision": 3,
+        "created": 1789028339256,
+        "version": 0,
+        "updated": 1789030187122
+      },
+      "$loki": 453,
+      "storeCapacity": 300000,
+      "send": null
+    },
+    {
+      "_id": "ti20002aa57000002",
+      "type": "terminal",
+      "room": "W10N57",
+      "x": 20,
+      "y": 20,
+      "user": "f6afa65997c093d",
+      "store": {
+        "energy": 2000,
+        "H": 100
+      },
+      "cooldownTime": 0,
+      "meta": {
+        "revision": 2,
+        "created": 1789028339259,
+        "version": 0,
+        "updated": 1789030187122
+      },
+      "$loki": 454,
+      "storeCapacity": 300000
+    },
+    {
+      "structureType": "extension",
+      "x": 10,
+      "y": 38,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "cc69a7507bcec50",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 461
+    },
+    {
+      "structureType": "extension",
+      "x": 11,
+      "y": 41,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "2445a7507bc41c2",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 462
+    },
+    {
+      "structureType": "extension",
+      "x": 7,
+      "y": 37,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "cd00a7507bcacab",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 463
+    },
+    {
+      "structureType": "extension",
+      "x": 9,
+      "y": 45,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "b4bca7507bc2e75",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 464
+    },
+    {
+      "structureType": "extension",
+      "x": 8,
+      "y": 38,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "89efa7507bc5344",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 465
+    },
+    {
+      "structureType": "extension",
+      "x": 7,
+      "y": 43,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "590ea7507bc2b38",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 466
+    },
+    {
+      "structureType": "extension",
+      "x": 6,
+      "y": 42,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "54faa7507bcc42f",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 467
+    },
+    {
+      "structureType": "extension",
+      "x": 6,
+      "y": 38,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "03e0a7507bcb533",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 468
+    },
+    {
+      "structureType": "extension",
+      "x": 7,
+      "y": 41,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "f06ba7507bcab72",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 469
+    },
+    {
+      "structureType": "extension",
+      "x": 10,
+      "y": 44,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "2883a7507bc0b02",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 470
+    },
+    {
+      "structureType": "extension",
+      "x": 6,
+      "y": 44,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "f052a7507bcf196",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 471
+    },
+    {
+      "structureType": "extension",
+      "x": 8,
+      "y": 44,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "41efa7507bc4d6f",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 472
+    },
+    {
+      "structureType": "extension",
+      "x": 5,
+      "y": 35,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "5e30a7507bc65a0",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 473
+    },
+    {
+      "structureType": "extension",
+      "x": 11,
+      "y": 39,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "a6f7a7507bc813d",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 474
+    },
+    {
+      "structureType": "extension",
+      "x": 5,
+      "y": 41,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "eff7a7507bcca69",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 475
+    },
+    {
+      "structureType": "extension",
+      "x": 8,
+      "y": 36,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "6d4aa7507bc1d2a",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 476
+    },
+    {
+      "structureType": "extension",
+      "x": 7,
+      "y": 45,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "712ea7507bc1c63",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 477
+    },
+    {
+      "structureType": "extension",
+      "x": 9,
+      "y": 41,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "1002a7507bc517b",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 478
+    },
+    {
+      "structureType": "extension",
+      "x": 10,
+      "y": 42,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "4fc8a7507bc27b4",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 479
+    },
+    {
+      "structureType": "extension",
+      "x": 9,
+      "y": 39,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "14a3a7507bc3efc",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 480
+    },
+    {
+      "structureType": "extension",
+      "x": 8,
+      "y": 42,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "26b1a7507bce75a",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320636,
+        "version": 0
+      },
+      "$loki": 481
+    },
+    {
+      "structureType": "extension",
+      "x": 4,
+      "y": 40,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "96e2a7507bc79a5",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320637,
+        "version": 0
+      },
+      "$loki": 482
+    },
+    {
+      "structureType": "extension",
+      "x": 10,
+      "y": 40,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "0c21a7507bded7b",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320637,
+        "version": 0
+      },
+      "$loki": 483
+    },
+    {
+      "structureType": "extension",
+      "x": 8,
+      "y": 40,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "b895a7507bd8d5e",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320637,
+        "version": 0
+      },
+      "$loki": 484
+    },
+    {
+      "structureType": "extension",
+      "x": 9,
+      "y": 37,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "776ca7507bd0fc1",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320637,
+        "version": 0
+      },
+      "$loki": 485
+    },
+    {
+      "structureType": "extension",
+      "x": 6,
+      "y": 36,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "e217a7507bd1ad0",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320637,
+        "version": 0
+      },
+      "$loki": 486
+    },
+    {
+      "structureType": "extension",
+      "x": 11,
+      "y": 45,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "cd68a7507bdbd75",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320637,
+        "version": 0
+      },
+      "$loki": 487
+    },
+    {
+      "structureType": "extension",
+      "x": 7,
+      "y": 39,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "0140a7507bd3bae",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320637,
+        "version": 0
+      },
+      "$loki": 488
+    },
+    {
+      "structureType": "extension",
+      "x": 11,
+      "y": 43,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "c665a7507bd752f",
+      "meta": {
+        "revision": 0,
+        "created": 1789029320637,
+        "version": 0
+      },
+      "$loki": 489
+    },
+    {
+      "structureType": "extension",
+      "x": 9,
+      "y": 43,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "6ac9a750afeea7f",
+      "meta": {
+        "revision": 0,
+        "created": 1789029321470,
+        "version": 0
+      },
+      "$loki": 490
+    },
+    {
+      "structureType": "extension",
+      "x": 5,
+      "y": 39,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "3e33a750afeff7e",
+      "meta": {
+        "revision": 0,
+        "created": 1789029321470,
+        "version": 0
+      },
+      "$loki": 491
+    },
+    {
+      "structureType": "extension",
+      "x": 5,
+      "y": 37,
+      "type": "constructionSite",
+      "room": "W1N57",
+      "user": "f6afa65997c093d",
+      "progress": 0,
+      "progressTotal": 3000,
+      "_id": "8467a750ef3485c",
+      "meta": {
+        "revision": 0,
+        "created": 1789029322483,
+        "version": 0
+      },
+      "$loki": 492
+    }
+  ],
+  "state": {
+    "tick": 557,
+    "paused": true
+  }
+}

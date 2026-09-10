@@ -1,0 +1,8 @@
+Server version 4.3.0
+Starting all processes. Ports: 21025 (game), 21026 (cli)
+[storage] process 132284 started
+[backend] process 148652 started
+[engine_main] process 142652 started
+[engine_runner1] process 88836 started
+[engine_processor1] process 149272 started
+[engine_processor2] process 135824 started

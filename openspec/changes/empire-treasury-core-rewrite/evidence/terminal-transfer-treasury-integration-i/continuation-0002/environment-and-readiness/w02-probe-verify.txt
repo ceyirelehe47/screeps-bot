@@ -1,0 +1,2 @@
+EXPR> (async()=>{const c=await storage.db['users.code'].findOne({user:'f6afa65997c093d',activeWorld:true});const m=c.modules;return 'BRANCH '+c.branch+' MODULES '+JSON.stringify(Object.keys(m))+' MAINLEN '+String(m.main.length);})()
+BRANCH probe-ti2-r1 MODULES ["main"] MAINLEN 17164

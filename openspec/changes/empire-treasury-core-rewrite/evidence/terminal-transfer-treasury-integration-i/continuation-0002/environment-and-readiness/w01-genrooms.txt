@@ -1,0 +1,10 @@
+EXPR> (async()=>{const r=await map.generateRoom('W1N57');return 'GEN1 '+String(r);})()
+GEN1 OK
+EXPR> (async()=>{const r=await map.generateRoom('W10N57');return 'GEN2 '+String(r);})()
+GEN2 OK
+EXPR> (async()=>{const r=await map.openRoom('W1N57');return 'OPEN1 '+JSON.stringify(r);})()
+OPEN1 {"modified":1}
+EXPR> (async()=>{const r=await map.openRoom('W10N57');return 'OPEN2 '+JSON.stringify(r);})()
+OPEN2 {"modified":1}
+EXPR> (async()=>{const r=await storage.db['rooms'].find({_id:{$in:['W1N57','W10N57']}});return 'ROOMS '+JSON.stringify(r.map(x=>({_id:x._id,status:x.status})));})()
+ROOMS [{"_id":"W1N57","status":"normal"},{"_id":"W10N57","status":"normal"}]

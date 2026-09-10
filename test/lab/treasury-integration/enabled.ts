@@ -1,6 +1,8 @@
-/** Armed for the authorized single NEW local treasury integration experiment
- * (lab-ti1-0002, Continuation 0002): flipped to true only in the same
- * bound-source change that fixes the final T=536 on the actually-paused
- * T0=533. It is not a runtime Memory override and there is no environment-
- * variable bypass. */
-export const TREASURY_INTEGRATION_ENABLED: boolean = true;
+/** Closeout of the finished experiment lab-ti1-0002: back to the default
+ * disabled state ("已结束实验的默认关闭"). The enabled=true build was the
+ * RUN_VALIDATION_HEAD cf29a69; this file is only the compile-time flag and is
+ * NOT part of that validated artifact. The lab-ti1-0002 control slot is closed
+ * (stopped=true, armed=false, attempted@536 preserved) and this default does
+ * not reopen it. It is not a runtime Memory override and there is no
+ * environment-variable bypass. */
+export const TREASURY_INTEGRATION_ENABLED: boolean = false;

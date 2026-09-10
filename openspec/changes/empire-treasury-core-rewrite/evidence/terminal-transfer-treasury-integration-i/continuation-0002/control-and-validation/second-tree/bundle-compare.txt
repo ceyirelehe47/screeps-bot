@@ -1,0 +1,6 @@
+live   bytes 482336 bfbc5c55a9a231ba2d6eb1d4a41aaabf66339ad2779fbf6ad179c70ac9ae6672
+second bytes 482336 bfbc5c55a9a231ba2d6eb1d4a41aaabf66339ad2779fbf6ad179c70ac9ae6672
+IDENTICAL true
+manifest repoSourceCommit true cf29a69477a7c2ddd863efb800e9e8735e9b3cce
+manifest output equal true
+manifest sources equal true

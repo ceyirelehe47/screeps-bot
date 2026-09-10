@@ -1,0 +1,6 @@
+EXPR> (async()=>{const t=await storage.env.get(storage.env.keys.GAMETIME);const p=await storage.env.get(storage.env.keys.MAIN_LOOP_PAUSED);return 'STATE tick='+String(t)+' paused='+String(p);})()
+STATE tick=456 paused=1
+EXPR> (async()=>{const o=await storage.db['rooms.objects'].find({room:{$in:['W1N57','W10N57']},type:{$in:['terminal','controller']}});return 'WORLD '+JSON.stringify(o.map(x=>({_id:x._id,type:x.type,room:x.room,user:x.user||null,level:x.level===undefined?null:x.level,store:x.store||null})));})()
+WORLD [{"_id":"3469a6581559388","type":"controller","room":"W1N57","user":"f6afa65997c093d","level":8,"store":null},{"_id":"ti20002aa57000001","type":"terminal","room":"W1N57","user":"f6afa65997c093d","level":null,"store":{"H":1000,"energy":10000}},{"_id":"84c1a658278de5d","type":"controller","room":"W10N57","user":"f6afa65997c093d","level":8,"store":null},{"_id":"ti20002aa57000002","type":"terminal","room":"W10N57","user":"f6afa65997c093d","level":null,"store":{"energy":2000}}]
+EXPR> (async()=>{const c=await storage.db['users.code'].find({user:'f6afa65997c093d'});return 'CODE '+JSON.stringify(c.map(x=>({branch:x.branch,activeWorld:x.activeWorld,modules:Object.keys(x.modules||{})})));})()
+CODE [{"branch":"t1789028378870","activeWorld":true,"modules":["building","main","tower","role$DOT$builder","role$DOT$harvester","role$DOT$upgrader"]}]

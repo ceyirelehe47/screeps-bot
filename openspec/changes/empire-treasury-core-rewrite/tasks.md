@@ -1,5 +1,21 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Treasury Terminal Integration I · Continuation 0002（2026-09-10，实机 TREASURY_INTEGRATION_PASS）
+
+本地实机续测任务书（用户会话附件）执行轮；起点 9aa1c48，`RUN_VALIDATION_HEAD` cf29a69。判读与证据见 `evidence/terminal-transfer-treasury-integration-i/continuation-0002/treasury-integration-i-continuation-0002-report.md`（独立验收 `formal-and-closeout/independent-acceptance.md`）。
+
+- [x] S01 基线与继承范围：HEAD=origin=9aa1c48、工作树干净；`838dcc7..9aa1c48` 差异 225A+2M 全在 openspec（非 openspec 文件数 0）→ 继承上轮全量 246/1515 成立；任务原件逐字归档；`enabled.ts` 恢复 false 并单独提交（58ec3f3，「旧 true 不是本轮授权」）
+- [x] S02 新隔离环境 lab-ti2-env（复用上轮已解析 lock d95c2c12…；npm ci 572 包 exit 0）；**restart 策略先于世界准备**：实际安装 `@screeps/launcher/lib/start.js`（sha256 a4d561b9…）确认 restart_interval 只传 runner/processor 且递归不传递，生效值 3600→86400 并整树重启，运行进程树核对无更替、无 Main loop reset
+- [x] S02 世界与 fixture：W1N57/W10N57 建房开放、合成用户 lab-ti-user-0002（f6afa65997c093d）、双 RCL8 controller + 双 Terminal（1000H/10000E、2000E）、terrain 更新；NPC 全在无关房间；fixture 后**整树重启**并复核世界未丢失（3 次受控整树停止均留 process-scope 审计原件）
+- [x] S02 一处环境修正（如实记录）：目标终端初始缺 storeCapacity（W10N57 未在 activeRooms，引擎 terminal/tick.js 仅在处理房间时补）→ freeCapacity=null；处理=加入 activeRooms + 整树重启让引擎实际处理，两端 cap=300000、free 289000/298000，未改引擎或生产 src
+- [x] S02 完成屏障与就绪：以真实 `roomsDone`/`queueDone:usersIvm`/`queueDone:rooms` 事件判定（非仅 paused）；基线 24 样本（q=26 恒定、交易 0、shard Forst）→ inspect(absent)→initialize(armed=false)→observe-false 529/530→arm 一次(armed=true)→observe-armed 531/532→facts **T0=533**（三次复读稳定）
+- [x] S03 绑定与定向验证（cf29a69 = RUN_VALIDATION_HEAD）：T=536=T0+3 首次固定、q=26 回填、enabled=true、本轮 facts fixture+场景 G 配对同步；tsc×2 exit 0、integration 18/18、LAB 54/54、C02 55/55、live bundle 482336B/bfbc5c55…（35 源含生产 facade/kernel 全链、无 mock/singleShot/生产 main）、冻结 diff 零差异、dist/main.js 未变、第二树同 SHA 18/18 且 bundle 逐字节 IDENTICAL
+- [x] S04 单 main 装载（sha256=manifest=磁盘、模块集合仅 main）→ 唯一一次正式恢复 run-treasury
+- [x] S04 实机闭环：**T=536 恰好一次 `terminal.send("H",100,"W10N57",description)` 同步 OK(code 0)**；admitted(committed H100/E26)→outcome_unknown→T+1 reconcile `observed_committed/exact_transfer_and_fee`→settle ok→T+2 active 退出（ring closedAtTick=538，counters 1/1/1，rearmings=0）；100H 到账、源 E−26（=q）、空位/容量/冷却逐项核对通过
+- [x] S05 停止四层：窗口 23/23（534..556）末端先到（~34.1s/180s）、触发延迟 5.86ms、暂停稳定 tick 557、撤装写入+读回（attempted@536/syncResult 保留）、进程树 terminated=true/7 PID/3245.77ms/polls=1/auditErrors=[]；端口与进程独立复核归零；stderr 的 ECONNRESET 与 killConfirmed 语义已如实记录
+- [x] S05 独立验收：只读 subagent 从原始 console/audit/快照重建事实，三问逐一证实、22 项判据全 PASS、记录 12 项观察（boundary 不带实参属证据模型限制等），支持 TREASURY_INTEGRATION_PASS
+- [x] S06 证据归档（95 文件：task-and-baseline/environment-and-readiness/control-and-validation/formal-and-closeout）+ 主报告 + 状态更新 + 线性提交推送
+
 ## Treasury Terminal Integration I（2026-09-10，离线交付全成；实机 LIVE_FAIL——环境时序事故零 send，停止修复首次真实完整实证）
 
 ChatGPT 实现包（基线 7314277、patch 1a05f5a1…，经 mcp-remote SSH 下载 zip 45ad52f5…）原样应用+独立验收+新世界 lab-ti1-0001 实机；判读与证据见 `evidence/terminal-transfer-treasury-integration-i/treasury-integration-i-report.md`。

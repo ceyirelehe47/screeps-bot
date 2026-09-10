@@ -1,0 +1,169 @@
+{
+  "status": "PREPARED_NOT_RUN",
+  "mode": "treasury-integration",
+  "repoSourceCommit": "cf29a69477a7c2ddd863efb800e9e8735e9b3cce",
+  "config": {
+    "experimentId": "lab-ti1-0002",
+    "mode": "observer",
+    "shardName": "Forst",
+    "username": "lab-ti-user-0002",
+    "sourceRoomName": "W1N57",
+    "targetRoomName": "W10N57",
+    "sourceTerminalId": "ti20002aa57000001",
+    "targetTerminalId": "ti20002aa57000002",
+    "resourceType": "H",
+    "amount": 100,
+    "description": "lab-ti1-0002 W1N57 to W10N57 100H",
+    "targetTick": 536,
+    "maxFeeEnergy": 26,
+    "maxSamples": 32
+  },
+  "enabled": true,
+  "sources": {
+    "src/runtime/configNormalize.ts": {
+      "sha256": "7ee1edf48ddf300c0e589a3e32acb2261b126c44238b92c21cb7b7fe42472d9e",
+      "bytes": 841
+    },
+    "src/runtime/logistics/resourceTransferTaskHealth.ts": {
+      "sha256": "cc652ca8c306dcfa9f11c8407b29808b2238a8b141ce9f384e2bf5b1f6a21c5e",
+      "bytes": 5333
+    },
+    "src/runtime/resourceReservation.ts": {
+      "sha256": "ae7a01620c802f33b643ee3ed6494a3c3ef54f6bd36e3d676768e8fe54c4cd1d",
+      "bytes": 36946
+    },
+    "src/runtime/treasury/actionContracts.ts": {
+      "sha256": "c71c639284b860d87653c0da03cb155f0018681e853cc1be691deafc09f2a786",
+      "bytes": 65105
+    },
+    "src/runtime/treasury/adapterRetrySemantics.ts": {
+      "sha256": "d665bb700d691bcbb6427e8138abcbfdb5fdc5f02cb148199829a01f283771f9",
+      "bytes": 4817
+    },
+    "src/runtime/treasury/authorizationFacts.ts": {
+      "sha256": "87efe0da48b682ac15eab42de1000ab41ee9de2cf76594485496e926b5e0ea8e",
+      "bytes": 11677
+    },
+    "src/runtime/treasury/canonicalEncoding.ts": {
+      "sha256": "e95ecf67a0ad5a70123fee0268d4d36fc38518c7e7f9776b33a5b2e6979fdb16",
+      "bytes": 10615
+    },
+    "src/runtime/treasury/commitmentRevision.ts": {
+      "sha256": "c8ce010cc8e0a6e45243881308ceed0a74f85f15e353b7d3f2fa5967bfcf47f3",
+      "bytes": 1244
+    },
+    "src/runtime/treasury/commitments.ts": {
+      "sha256": "85078504b9127fd1ecf78fe28dcdd5c2e20f195f4eb4efbafe8a39daa1e1e41b",
+      "bytes": 23880
+    },
+    "src/runtime/treasury/durableClone.ts": {
+      "sha256": "b8344ef530d61c3f8604a8caa2101490673107e4b7e7ead024bd73aa94c5f7fa",
+      "bytes": 2723
+    },
+    "src/runtime/treasury/durableSnapshot.ts": {
+      "sha256": "dfa927656fac24dbc35fa962f432bf772bb302b0a46b0718c98ec08e813bdd7b",
+      "bytes": 2235
+    },
+    "src/runtime/treasury/facade.ts": {
+      "sha256": "da402d87c61b1b99e72d2cde60c04101eac3f696ce444d51403843f092165b0f",
+      "bytes": 67235
+    },
+    "src/runtime/treasury/holderResolution.ts": {
+      "sha256": "f598bd15b36a58115ab220379433d9fc4978dfddd5a1304d5682b6417bba6df3",
+      "bytes": 3655
+    },
+    "src/runtime/treasury/kernel/commands.ts": {
+      "sha256": "5462de6ea5426f5c2cca5f3afef9a2250188d15e4bde92cb3919b0681169e7c8",
+      "bytes": 33668
+    },
+    "src/runtime/treasury/kernel/coverage.ts": {
+      "sha256": "2bec56e92dd71d7ae50361065733e066e7c7b36ef7115f4acfd8cfa6aea1d913",
+      "bytes": 3283
+    },
+    "src/runtime/treasury/kernel/identity.ts": {
+      "sha256": "f65f48892f299db4f2ff82331c8633b25adc6e93046464507c8d21ff7e91519b",
+      "bytes": 11976
+    },
+    "src/runtime/treasury/kernel/kernel.ts": {
+      "sha256": "723253ede3a80b5ceac86be699d149ef5683f2b126c6531fbf9f86af470704b9",
+      "bytes": 72695
+    },
+    "src/runtime/treasury/kernel/occupancy.ts": {
+      "sha256": "97f68e17058c6c67d757f2fee556441680abdcef0619ddb77f7c4a45153ad2d1",
+      "bytes": 6165
+    },
+    "src/runtime/treasury/kernel/store.ts": {
+      "sha256": "dafbde351596d8b7e2ebd3c834f303ff54ae521989a0679334a5fd789d5ae00a",
+      "bytes": 40799
+    },
+    "src/runtime/treasury/kernel/types.ts": {
+      "sha256": "8176df4c617f2166a7b0220e469989f42b4fe7c4bca51525cdff154cfb5ce174",
+      "bytes": 20082
+    },
+    "src/runtime/treasury/observation.ts": {
+      "sha256": "a17c88dfc9c21cd7408935754b50996f4b433f4228b4c3e512fa47b7d6341941",
+      "bytes": 9878
+    },
+    "src/runtime/treasury/ownerIdentity.ts": {
+      "sha256": "2e9d4440c12fc30b28c6aa65ec761c38db6b34fb3f2605f7929bf0eb27cd554d",
+      "bytes": 8737
+    },
+    "src/runtime/treasury/policyAuthority.ts": {
+      "sha256": "03e95eff54fc6dbf1ded5f9b60c63e07b1e4737abc9c51bbc7d96bc689953fc1",
+      "bytes": 13597
+    },
+    "src/runtime/treasury/transactionId.ts": {
+      "sha256": "af617663e9e785a8de09a2b512d9540ee9b0957a32668acc8e26966a64ed18a2",
+      "bytes": 10354
+    },
+    "src/runtime/treasury/types.ts": {
+      "sha256": "38b6b44ba7713923213e7219bc0d1cfc243842a9420486c58b8105aaf786f667",
+      "bytes": 55763
+    },
+    "test/lab/terminal-transfer/controlRecord.ts": {
+      "sha256": "b87ca3ee29859fdfb842e0703fa24934c6891552c5f33a90e9af7d35c1768eda",
+      "bytes": 12025
+    },
+    "test/lab/terminal-transfer/labConfig.ts": {
+      "sha256": "37946716e69a1afa20f1d8cbc7e55954d2e3cd7a8b7a5284b5a6fef7782bc774",
+      "bytes": 4626
+    },
+    "test/lab/terminal-transfer/observer.ts": {
+      "sha256": "1bccfc1624d0a2b26e89adfd5131d5d179a9a97803120752638189b81668434b",
+      "bytes": 2101
+    },
+    "test/lab/terminal-transfer/sample.ts": {
+      "sha256": "ea9c1762e39efdc77dbdc8c7e7e7ddf5fda2e0c51d19d9a058fb1f236bf0a030",
+      "bytes": 1903
+    },
+    "test/lab/terminal-transfer/worldRead.ts": {
+      "sha256": "da2b3f13c3a70dbc63060aef449a749ec7009cc613a5aa9e6a1c4db678c2086d",
+      "bytes": 5065
+    },
+    "test/lab/treasury-integration/adapter.ts": {
+      "sha256": "5436e8cf060890bbd7b48d043ee839a768bf0c2d0932aec4f867665765f50dbc",
+      "bytes": 18725
+    },
+    "test/lab/treasury-integration/assembly.ts": {
+      "sha256": "6f8413c41de31a74438a5fb26c5599b2bdcb23ff605b1db5d0d3cc6e8bf42b2d",
+      "bytes": 2345
+    },
+    "test/lab/treasury-integration/coordinator.ts": {
+      "sha256": "a6d84052acaf81ef0ebbcda2cbe60ede43fd0de8dbb04a8862ffbdf129bb9ac9",
+      "bytes": 6929
+    },
+    "test/lab/treasury-integration/enabled.ts": {
+      "sha256": "6a86d151d6ac615e58e515915af4ce577da26f61be3386c41d4e8db6e6fc83ac",
+      "bytes": 380
+    },
+    "test/lab/treasury-integration/main.ts": {
+      "sha256": "63411813949214f79325686b6b6982a7d67854cce7e6b08a7793b759193b95ca",
+      "bytes": 1113
+    }
+  },
+  "output": {
+    "file": "main.js",
+    "bytes": 482336,
+    "sha256": "bfbc5c55a9a231ba2d6eb1d4a41aaabf66339ad2779fbf6ad179c70ac9ae6672"
+  }
+}

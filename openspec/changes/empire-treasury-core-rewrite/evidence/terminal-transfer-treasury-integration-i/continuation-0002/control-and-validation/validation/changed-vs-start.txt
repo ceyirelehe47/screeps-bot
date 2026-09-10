@@ -1,0 +1,12 @@
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/control-and-validation/calibration-facts-ti10002.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/control-and-validation/cli-calibration.json
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/control-and-validation/cli-calibration.stderr.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/task-and-baseline/inherited-validation-index.md
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/task-and-baseline/s01-baseline-checks.log
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/task-and-baseline/task-attachment.txt
+A	openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/task-and-baseline/task-original.md
+M	test/lab/terminal-transfer/calibration.test.ts
+M	test/lab/terminal-transfer/example.experiment.json
+A	test/lab/terminal-transfer/fixtures/calibration-facts-ti10002.json
+M	test/lab/terminal-transfer/labConfig.ts
+M	test/lab/treasury-integration/enabled.ts

@@ -1,0 +1,173 @@
+{
+  "reason": "control_confirmed",
+  "observedAt": 8355.2108,
+  "deadline": 186546.7462,
+  "stopRequestedAt": 8365.0045,
+  "windowComplete": false,
+  "pauseConfirmed": true,
+  "killConfirmed": false,
+  "triggerLatencyMs": 9.793699999998353,
+  "stableTick": 533,
+  "pauseConfirmedAt": 9765.4296,
+  "extraReasons": [],
+  "logErrors": [],
+  "sampleTicks": [
+    531,
+    532
+  ],
+  "controlSamples": [
+    {
+      "kind": "lab-control-sample",
+      "sampler": {
+        "name": "lab-control-probe",
+        "version": "1"
+      },
+      "tick": 531,
+      "expectedExperimentId": "lab-ti1-0002",
+      "shard": {
+        "name": "Forst"
+      },
+      "user": {
+        "username": "lab-ti-user-0002"
+      },
+      "control": {
+        "status": "ok",
+        "record": {
+          "experimentId": "lab-ti1-0002",
+          "armed": true,
+          "attempted": false
+        }
+      },
+      "source": {
+        "roomName": "W1N57",
+        "readStatus": "ok",
+        "terminalId": "ti20002aa57000001",
+        "ownerUsername": "lab-ti-user-0002",
+        "resourceAmount": 1000,
+        "energy": 10000,
+        "freeCapacity": 289000,
+        "cooldown": 0,
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-ti-user-0002"
+        }
+      },
+      "target": {
+        "roomName": "W10N57",
+        "readStatus": "ok",
+        "terminalId": "ti20002aa57000002",
+        "ownerUsername": "lab-ti-user-0002",
+        "resourceAmount": 0,
+        "energy": 2000,
+        "freeCapacity": 298000,
+        "cooldown": 0,
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-ti-user-0002"
+        }
+      },
+      "feeQuote": {
+        "status": "ok",
+        "energyCost": 26
+      },
+      "transactions": {
+        "incoming": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        },
+        "outgoing": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        }
+      },
+      "userId": "f6afa65997c093d"
+    },
+    {
+      "kind": "lab-control-sample",
+      "sampler": {
+        "name": "lab-control-probe",
+        "version": "1"
+      },
+      "tick": 532,
+      "expectedExperimentId": "lab-ti1-0002",
+      "shard": {
+        "name": "Forst"
+      },
+      "user": {
+        "username": "lab-ti-user-0002"
+      },
+      "control": {
+        "status": "ok",
+        "record": {
+          "experimentId": "lab-ti1-0002",
+          "armed": true,
+          "attempted": false
+        }
+      },
+      "source": {
+        "roomName": "W1N57",
+        "readStatus": "ok",
+        "terminalId": "ti20002aa57000001",
+        "ownerUsername": "lab-ti-user-0002",
+        "resourceAmount": 1000,
+        "energy": 10000,
+        "freeCapacity": 289000,
+        "cooldown": 0,
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-ti-user-0002"
+        }
+      },
+      "target": {
+        "roomName": "W10N57",
+        "readStatus": "ok",
+        "terminalId": "ti20002aa57000002",
+        "ownerUsername": "lab-ti-user-0002",
+        "resourceAmount": 0,
+        "energy": 2000,
+        "freeCapacity": 298000,
+        "cooldown": 0,
+        "my": true,
+        "isActive": true,
+        "controller": {
+          "present": true,
+          "my": true,
+          "level": 8,
+          "ownerUsername": "lab-ti-user-0002"
+        }
+      },
+      "feeQuote": {
+        "status": "ok",
+        "energyCost": 26
+      },
+      "transactions": {
+        "incoming": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        },
+        "outgoing": {
+          "status": "ok",
+          "count": 0,
+          "records": []
+        }
+      },
+      "userId": "f6afa65997c093d"
+    }
+  ],
+  "ok": true
+}

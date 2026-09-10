@@ -1,0 +1,6 @@
+EXPR> (async()=>{const r=await bots.spawn('simplebot','W1N57',{username:'lab-ti-user-0002',cpu:500,gcl:1});return 'SPAWN '+String(r);})()
+SPAWN User lab-ti-user-0002 with bot AI "simplebot" spawned in W1N57
+EXPR> (async()=>{const u=await storage.db['users'].findOne({username:'lab-ti-user-0002'});return 'USER '+JSON.stringify({_id:u._id,username:u.username,bot:u.bot,cpu:u.cpu,gcl:u.gcl});})()
+USER {"_id":"f6afa65997c093d","username":"lab-ti-user-0002","bot":"simplebot","cpu":500,"gcl":0}
+EXPR> (async()=>{const all=await storage.db['users'].find({});return 'USERS '+JSON.stringify(all.map(u=>({username:u.username,bot:u.bot||null})));})()
+USERS [{"username":"Invader","bot":null},{"username":"Source Keeper","bot":null},{"username":"MichaelBot","bot":"simplebot"},{"username":"EmmaBot","bot":"simplebot"},{"username":"AliceBot","bot":"simplebot"},{"username":"JackBot","bot":"simplebot"},{"username":"Screeps","bot":null},{"username":"lab-ti-user-0002","bot":"simplebot"}]

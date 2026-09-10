@@ -1,0 +1,9 @@
+owner captured pid=146068 started=2026-09-10T08:19:35.5587820Z
+{"kind":"process-termination","elapsedMs":0.04549999999994725,"phase":"start","rootPid":146068,"budgetMs":4500}
+{"kind":"process-termination","elapsedMs":1795.2791999999997,"phase":"tree-read"}
+{"kind":"process-termination","elapsedMs":1795.6377,"phase":"targets","targets":[{"pid":146068,"ppid":135172,"started":"2026-09-10T08:19:35.5587820Z","executable":"C:\\nvm4w\\nodejs\\node.exe","command":"C:\\nvm4w\\nodejs\\node.exe D:/code/screeps/lab-ti2-env/server/node_modules/@screeps/launcher/bi
+{"kind":"process-termination","elapsedMs":3016.4798,"phase":"kill-request-completed"}
+{"kind":"process-termination","elapsedMs":3016.6727,"phase":"kill-response","result":{"stdout":"�ɹ�: ����ֹ PID 144764 (���� PID 146068 �ӽ���)�Ľ��̡�\r\n�ɹ�: ����ֹ PID 122928 (���� PID 146068 �ӽ���)�Ľ��̡�\r\n�ɹ�: ����ֹ PID 148216 (���� PID 146068 �ӽ���)�Ľ��̡�\r\n�ɹ�: ����ֹ PID 97136 (���� PID 146068 �
+{"kind":"process-termination","elapsedMs":3027.8647999999994,"phase":"exit-snapshot","survivingPids":[],"reusedPids":[]}
+{"kind":"process-termination","elapsedMs":3027.8476,"phase":"confirmed","terminated":true,"observedPids":[146068,144764,122928,148216,97136,124820,18996],"polls":1,"auditErrors":[]}
+TERMINATED {"terminated":true,"observed":7,"elapsedMs":3028,"polls":1,"auditErrors":0}

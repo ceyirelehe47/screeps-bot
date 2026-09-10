@@ -1,0 +1,68 @@
+{
+ "lines": 460,
+ "playerConsoleLines": 33,
+ "decoded": 32,
+ "errors": 0
+}
+{
+ "sampleCount": 8,
+ "tickRange": [
+  521,
+  528
+ ],
+ "gaps": false,
+ "quotes": [
+  26
+ ],
+ "shards": [
+  "Forst"
+ ],
+ "ids": [
+  "lab-ti1-0002"
+ ],
+ "users": [
+  "lab-ti-user-0002"
+ ],
+ "srcTid": [
+  "ti20002aa57000001"
+ ],
+ "tgtTid": [
+  "ti20002aa57000002"
+ ],
+ "srcH": [
+  1000
+ ],
+ "srcE": [
+  10000
+ ],
+ "tgtH": [
+  0
+ ],
+ "tgtE": [
+  2000
+ ],
+ "srcFree": [
+  289000
+ ],
+ "tgtFree": [
+  298000
+ ],
+ "srcCd": [
+  0
+ ],
+ "tgtCd": [
+  0
+ ],
+ "srcCtrl": [
+  "{\"present\":true,\"my\":true,\"level\":8,\"ownerUsername\":\"lab-ti-user-0002\"}"
+ ],
+ "tgtCtrl": [
+  "{\"present\":true,\"my\":true,\"level\":8,\"ownerUsername\":\"lab-ti-user-0002\"}"
+ ],
+ "txCounts": [
+  "{\"incoming\":0,\"outgoing\":0}"
+ ],
+ "firstControl": "absent"
+}
+{"kinds":{"unparsed":24,"lab-control-sample":8}}
+{"channels":{"collector-ready":1,"tickStarted":33,"user:f6afa65997c093d/console":33,"user:e3b732c504eb83a/console":33,"user:eea532c5a2f9e44/console":33,"user:a1123272b261687/cpu":33,"user:a1123272b261687/console":33,"user:17c332744f825c7/cpu":33,"user:17c332744f825c7/console":33,"queueDone:usersIvm":33,"queueDone:rooms":33,"roomsDone":33,"user:f6afa65997c093d/cpu":32,"user:e3b732c504eb83a/cpu":32,"user:eea532c5a2f9e44/cpu":32}}

@@ -1,0 +1,30 @@
+time: 2026-09-10T09:05:26Z
+=== ports 21025-21027 ===
+0
+=== lab-ti2-env node processes ===
+=== collector pid 146952 ===
+STOPPED
+=== launcher stdout r3 restart lines ===
+0
+0
+=== engine_main Main loop reset count ===
+0
+0
+=== world db.json contains terminals ===
+     37 ti20002aa57000001
+     37 ti20002aa57000002
+=== git ===
+ M openspec/changes/empire-treasury-core-rewrite/tasks.md
+ M openspec/changes/empire-treasury-core-rewrite/terminal-transfer-engine-lab-run-i.md
+?? openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/control-and-validation/01b-inspect/
+?? openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/control-and-validation/02-initialize/
+?? openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/control-and-validation/03-observe-false/
+?? openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/control-and-validation/04-arm/
+?? openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/control-and-validation/05-observe-armed/
+?? openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/control-and-validation/06-facts/
+?? openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/control-and-validation/second-tree/
+?? openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/control-and-validation/validation/
+?? openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/environment-and-readiness/
+?? openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/formal-and-closeout/
+?? openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-treasury-integration-i/continuation-0002/treasury-integration-i-continuation-0002-report.md
+cf29a69477a7c2ddd863efb800e9e8735e9b3cce

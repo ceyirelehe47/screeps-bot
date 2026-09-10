@@ -1,0 +1,16 @@
+Connecting to storage
+{
+  "beforeRaw": "{\"creeps\":{\"u2\":{\"role\":\"upgrader\"},\"u1\":{\"role\":\"upgrader\"},\"h2\":{\"role\":\"harvester\"},\"h1\":{\"role\":\"harvester\",\"_move\":{\"dest\":{\"x\":11,\"y\":35,\"room\":\"W1N57\"},\"time\":515,\"path\":\"123618\",\"room\":\"W1N57\"}}}}",
+  "afterRaw": "{\"creeps\":{\"u2\":{\"role\":\"upgrader\"},\"u1\":{\"role\":\"upgrader\"},\"h2\":{\"role\":\"harvester\"},\"h1\":{\"role\":\"harvester\",\"_move\":{\"dest\":{\"x\":11,\"y\":35,\"room\":\"W1N57\"},\"time\":515,\"path\":\"123618\",\"room\":\"W1N57\"}}},\"__labTerminalTransferProbe\":{\"experimentId\":\"lab-ti1-0002\",\"armed\":false,\"attempted\":false}}",
+  "record": {
+    "experimentId": "lab-ti1-0002",
+    "armed": false,
+    "attempted": false
+  },
+  "beforeControlBytes": null,
+  "controlBytes": 63,
+  "totalMemoryBytes": 297,
+  "tick": 529,
+  "storageConfirmed": true,
+  "playerConfirmed": false
+}
