@@ -94,7 +94,7 @@ async function connectLocal(options, audit) {
     writeRuntimeMemory: raw => bounded(() => env.set(env.keys.MEMORY + binding.userId, raw), 2000, 'Memory write'),
     pause: () => system.pauseSimulation(),
     resume: () => system.resumeSimulation(),
-    killTree: () => (termination ??= terminateLauncher(owner)),
+    killTree: () => (termination ??= terminateLauncher(owner, audit)),
     async activeModules() {
       const code = await bounded(() => db['users.code'].findOne({ $and: [{ user: binding.userId }, { activeWorld: true }] }), 2000, 'active modules');
       if (!code || !code.modules || typeof code.modules !== 'object') throw new Error('active modules unavailable');

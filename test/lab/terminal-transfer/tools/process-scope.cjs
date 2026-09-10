@@ -3,42 +3,60 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
+const { performance } = require('node:perf_hooks');
 const exec = promisify(execFile);
-
+const TERMINATION_BUDGET_MS = 4500; // one budget; callers retain their 5000ms watchdog
+const FIELDS = "[PSCustomObject]@{pid=$_.ProcessId;ppid=$_.ParentProcessId;started=$_.CreationDate.ToUniversalTime().ToString('o');executable=$_.ExecutablePath;command=$_.CommandLine}";
 function pidNumber(pid) {
   const n = Number(pid);
   if (!Number.isSafeInteger(n) || n <= 1 || n === process.pid) throw new Error('invalid launcher PID');
   return n;
 }
-async function inspectProcess(pid) {
-  pid = pidNumber(pid);
-  if (process.platform === 'linux') {
-    try {
-      const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
-      const tail = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
-      if (tail[0] === 'Z') return null;
-      return { pid, ppid: Number(tail[1]), started: tail[19],
-        executable: fs.readlinkSync(`/proc/${pid}/exe`),
-        cwd: fs.readlinkSync(`/proc/${pid}/cwd`),
-        command: fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter(Boolean) };
-    } catch (error) { if (['ENOENT', 'ESRCH'].includes(error.code)) return null; throw error; }
+function timeoutValue(ms) {
+  if (!Number.isFinite(ms) || ms < 1) throw new Error('process operation deadline exhausted');
+  return Math.max(1, Math.floor(ms));
+}
+function validateIdentity(p) {
+  if (!p || !Number.isSafeInteger(p.pid) || p.pid <= 1 || p.started === undefined || p.started === null || p.started === ''
+      || typeof p.executable !== 'string' || !p.executable || !(typeof p.command === 'string' && p.command.length || Array.isArray(p.command) && p.command.length)) {
+    throw new Error('process identity unreadable; not evidence of exit');
   }
+  return p;
+}
+async function windowsQuery(command, timeoutMs) {
+  const { stdout } = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "$ErrorActionPreference='Stop';" + command],
+    { timeout: timeoutValue(timeoutMs), windowsHide: true, maxBuffer: 2 * 1024 * 1024 });
+  return stdout.trim() ? [].concat(JSON.parse(stdout)).map(validateIdentity) : [];
+}
+function linuxProcess(pid) {
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+    const tail = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+    if (tail[0] === 'Z') return null;
+    return validateIdentity({ pid, ppid: Number(tail[1]), started: tail[19], executable: fs.readlinkSync(`/proc/${pid}/exe`),
+      cwd: fs.readlinkSync(`/proc/${pid}/cwd`), command: fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter(Boolean) });
+  } catch (error) { if (['ENOENT', 'ESRCH'].includes(error.code)) return null; throw error; }
+}
+/** One OS query for ALL target PIDs, never one fresh PowerShell per PID. */
+async function inspectProcesses(pids, timeoutMs = 2000) {
+  const ids = [...new Set(pids.map(pidNumber))];
+  if (!ids.length) return [];
+  if (ids.length > 256) throw new Error('unexpectedly large lab process set');
+  if (process.platform === 'linux') return ids.map(linuxProcess).filter(Boolean);
   if (process.platform === 'win32') {
-    const command = `$p=Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}'; if($p){ [PSCustomObject]@{pid=$p.ProcessId;ppid=$p.ParentProcessId;started=$p.CreationDate.ToUniversalTime().ToString('o');executable=$p.ExecutablePath;command=$p.CommandLine} | ConvertTo-Json -Compress }`;
-    const { stdout } = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { timeout: 2000, windowsHide: true });
-    return stdout.trim() ? JSON.parse(stdout) : null;
+    const filter = ids.map(id => `ProcessId = ${id}`).join(' OR ');
+    return windowsQuery(`@(Get-CimInstance Win32_Process -Filter '${filter}' | ForEach-Object {${FIELDS}}) | ConvertTo-Json -Compress`, timeoutMs);
   }
   throw new Error('process ownership adapter supports Linux and Windows only');
 }
+async function inspectProcess(pid, timeoutMs = 2000) { return (await inspectProcesses([pid], timeoutMs))[0] || null; }
 function identityMatches(a, b) {
-  return a && b && a.pid === b.pid && a.started === b.started && a.executable === b.executable
-    && JSON.stringify(a.command) === JSON.stringify(b.command);
+  return Boolean(a && b && a.pid === b.pid && a.started === b.started && a.executable === b.executable
+    && JSON.stringify(a.command) === JSON.stringify(b.command));
 }
 function belongsToEnvironment(info, environmentRoot) {
   if (!info || !/^(node|node\.exe)$/i.test(path.basename(info.executable || ''))) return false;
   const argv = Array.isArray(info.command) ? info.command : [...String(info.command || '').matchAll(/"([^"]*)"|(\S+)/g)].map(m => m[1] ?? m[2]);
-  // This tool intentionally supports the unambiguous `node <absolute-script>`
-  // launch form only. A random later --config=/lab/path is not ownership proof.
   const script = argv[1];
   if (!script || script.startsWith('-') || !path.isAbsolute(script)) return false;
   const relative = path.relative(environmentRoot, script);
@@ -53,26 +71,21 @@ function descendantIds(rows, root) {
   }
   return [...ids];
 }
-async function treeSnapshot(root) {
+async function treeSnapshot(root, timeoutMs = 2000) {
+  root = pidNumber(root);
   if (process.platform === 'linux') {
-    // Discover ancestry using stat only; do not read unrelated users' command
-    // lines or executable links (which may legitimately be inaccessible).
     const rows = [];
     for (const name of fs.readdirSync('/proc').filter(x => /^\d+$/.test(x))) {
       try {
         const text = fs.readFileSync(`/proc/${name}/stat`, 'utf8');
         const tail = text.slice(text.lastIndexOf(')') + 2).split(' ');
         rows.push({ pid: Number(name), ppid: Number(tail[1]) });
-      } catch (error) { if (!['ENOENT','ESRCH','EACCES'].includes(error.code)) throw error; }
+      } catch (error) { if (!['ENOENT', 'ESRCH', 'EACCES'].includes(error.code)) throw error; }
     }
-    const result = [];
-    for (const pid of descendantIds(rows, root)) { const p = await inspectProcess(pid); if (p) result.push(p); }
-    return result;
+    return inspectProcesses(descendantIds(rows, root), timeoutMs);
   }
   if (process.platform === 'win32') {
-    const command = `$all=@(Get-CimInstance Win32_Process); $ids=@(${root}); do { $n=$ids.Count; $ids=@($ids + @($all | Where-Object {$ids -contains $_.ParentProcessId} | ForEach-Object {$_.ProcessId}) | Select-Object -Unique); if($ids.Count -gt 256){throw 'unexpected process tree'} } while($ids.Count -ne $n); @($all | Where-Object {$ids -contains $_.ProcessId} | ForEach-Object {[PSCustomObject]@{pid=$_.ProcessId;ppid=$_.ParentProcessId;started=$_.CreationDate.ToUniversalTime().ToString('o');executable=$_.ExecutablePath;command=$_.CommandLine}}) | ConvertTo-Json -Compress`;
-    const { stdout } = await exec('powershell.exe', ['-NoProfile','-NonInteractive','-Command',command], { timeout: 2000, windowsHide: true });
-    return stdout.trim() ? [].concat(JSON.parse(stdout)) : [];
+    return windowsQuery(`$all=@(Get-CimInstance Win32_Process); $ids=@(${root}); do { $n=$ids.Count; $ids=@($ids + @($all | Where-Object {$ids -contains $_.ParentProcessId} | ForEach-Object {$_.ProcessId}) | Select-Object -Unique); if($ids.Count -gt 256){throw 'unexpected process tree'} } while($ids.Count -ne $n); @($all | Where-Object {$ids -contains $_.ProcessId} | ForEach-Object {${FIELDS}}) | ConvertTo-Json -Compress`, timeoutMs);
   }
   throw new Error('unsupported platform');
 }
@@ -82,54 +95,95 @@ async function captureLauncher(pid, environmentRoot) {
   return info;
 }
 function requireOwnedRoot(owner, current) {
-  // A vanished root does not prove that its former workers exited. Do not report
-  // successful whole-tree cleanup from this single absence fact.
   if (!current) throw new Error('launcher absent; descendant cleanup unconfirmed');
   if (!identityMatches(owner, current)) throw new Error('launcher identity changed; refusing to kill a reused/unrelated PID');
 }
-async function terminateLauncher(owner) {
-  const current = await inspectProcess(owner.pid);
-  requireOwnedRoot(owner, current);
-  let targets = await treeSnapshot(owner.pid);
-  const savedRoot = targets.find(p => p.pid === owner.pid);
-  if (!identityMatches(owner, savedRoot)) throw new Error('launcher changed during process snapshot');
-  if (process.platform === 'win32') {
-    await exec('taskkill.exe', ['/PID', String(owner.pid), '/T', '/F'], { timeout: 4000, windowsHide: true });
-  } else if (process.platform === 'linux') {
-    // Freeze the known tree before killing it so a launcher cannot replenish it.
-    // Re-scan to include children created while the first snapshot was taken.
+
+/** The small port boundary permits deterministic latency/reuse/error tests. The
+ * CLI never accepts ports; real termination below always selects OS adapters. */
+async function terminateWithPorts(owner, ports, audit = () => {}) {
+  validateIdentity(owner);
+  const start = ports.now(), deadline = start + TERMINATION_BUDGET_MS;
+  const auditErrors = [];
+  const note = e => { try { audit({ kind: 'process-termination', elapsedMs: ports.now() - start, ...e }); } catch (error) { auditErrors.push(String(error)); } };
+  function remaining() {
+    const ms = deadline - ports.now();
+    if (ms <= 0) throw new Error('process-tree termination deadline exhausted');
+    return ms;
+  }
+  // Individual OS commands receive only the remaining budget. They cannot
+  // each independently consume two seconds beyond the caller's five seconds.
+  async function call(label, fn, ceiling = 2000) {
+    const ms = Math.min(remaining(), ceiling);
+    const result = await fn(ms);
+    remaining();
+    note({ phase: label });
+    return result;
+  }
+  note({ phase: 'start', rootPid: owner.pid, budgetMs: TERMINATION_BUDGET_MS });
+  const current = await call('root-read', ms => ports.inspectMany([owner.pid], ms));
+  requireOwnedRoot(owner, current.find(p => p.pid === owner.pid));
+  let targets = await call('tree-read', ms => ports.tree(owner.pid, ms));
+  if (!Array.isArray(targets) || targets.length > 256) throw new Error('invalid process tree');
+  targets.forEach(validateIdentity);
+  requireOwnedRoot(owner, targets.find(p => p.pid === owner.pid));
+  if (targets.some(p => p.pid === process.pid)) throw new Error('control process must not belong to terminated tree');
+  note({ phase: 'targets', targets }); // captured identities survive root exit/reparenting
+  if (ports.platform === 'win32') {
+    const result = await call('kill-request-completed', ms => ports.killWindows(owner.pid, ms), 4000);
+    note({ phase: 'kill-response', result });
+  } else if (ports.platform === 'linux') {
     const stopped = new Map();
     for (let pass = 0; pass < 3; pass++) {
       for (const target of targets) {
-        const fresh = await inspectProcess(target.pid);
+        remaining();
+        const [fresh] = await ports.inspectMany([target.pid], remaining());
         if (!fresh) continue;
         if (!identityMatches(target, fresh)) throw new Error('process identity changed; kill refused');
-        try { process.kill(target.pid, 'SIGSTOP'); stopped.set(target.pid, target); }
+        try { ports.signal(target.pid, 'SIGSTOP'); stopped.set(target.pid, target); }
         catch (error) { if (error.code !== 'ESRCH') throw error; }
       }
-      const freshTree = await treeSnapshot(owner.pid);
+      const freshTree = await call('stopped-tree-read', ms => ports.tree(owner.pid, ms));
       if (freshTree.every(p => stopped.has(p.pid))) break;
       targets = freshTree;
       if (pass === 2) throw new Error('process tree did not stabilize');
     }
     targets = [...stopped.values()];
-    const ordered = targets.filter(p => p.pid !== owner.pid).reverse().concat(owner);
-    for (const target of ordered) {
-      const fresh = await inspectProcess(target.pid);
+    for (const target of targets.filter(p => p.pid !== owner.pid).reverse().concat(owner)) {
+      remaining();
+      const [fresh] = await ports.inspectMany([target.pid], remaining());
       if (!fresh) continue;
       if (!identityMatches(target, fresh)) throw new Error('process identity changed; kill refused');
-      try { process.kill(target.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      try { ports.signal(target.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
     }
-  }
-  for (let i = 0; i < 10; i++) {
-    let remaining = false;
-    for (const target of targets) {
-      const fresh = await inspectProcess(target.pid);
-      if (identityMatches(target, fresh)) { remaining = true; break; }
+  } else throw new Error('unsupported platform');
+  let polls = 0;
+  for (;;) {
+    const rows = await call('exit-read', ms => ports.inspectMany(targets.map(p => p.pid), ms));
+    rows.forEach(validateIdentity);
+    polls++;
+    const survivors = targets.filter(p => rows.some(fresh => identityMatches(p, fresh)));
+    const reused = rows.filter(p => targets.some(old => old.pid === p.pid && !identityMatches(old, p)));
+    note({ phase: 'exit-snapshot', survivingPids: survivors.map(p => p.pid), reusedPids: reused.map(p => p.pid) });
+    if (!survivors.length) {
+      const result = { terminated: true, observedPids: targets.map(p => p.pid), elapsedMs: ports.now() - start, polls, auditErrors };
+      note({ phase: 'confirmed', ...result });
+      remaining(); // final audit time is part of the SAME deadline
+      result.elapsedMs = ports.now() - start;
+      return result;
     }
-    if (!remaining) return { terminated: true, observedPids: targets.map(p => p.pid) };
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await ports.sleep(Math.min(100, remaining()));
   }
-  throw new Error('launcher exit not confirmed');
 }
-module.exports = { pidNumber, inspectProcess, identityMatches, belongsToEnvironment, captureLauncher, terminateLauncher, descendantIds, requireOwnedRoot };
+async function terminateLauncher(owner, audit) {
+  return terminateWithPorts(owner, {
+    platform: process.platform, now: () => performance.now(), inspectMany: inspectProcesses, tree: treeSnapshot,
+    killWindows: async (pid, timeout) => {
+      const result = await exec('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { timeout: timeoutValue(timeout), windowsHide: true });
+      return { stdout: result.stdout, stderr: result.stderr };
+    },
+    signal: (pid, signal) => process.kill(pid, signal), sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
+  }, audit);
+}
+module.exports = { pidNumber, inspectProcess, inspectProcesses, identityMatches, belongsToEnvironment,
+  captureLauncher, terminateLauncher, terminateWithPorts, descendantIds, requireOwnedRoot, TERMINATION_BUDGET_MS };

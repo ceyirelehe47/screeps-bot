@@ -11,7 +11,7 @@ const { buildProbe } = require('./build-control-probe.cjs');
 const { decodeEnvelope, healthySample, createStopController } = require('./stop-controller.cjs');
 const { bounded, connectLocal } = require('./local-runtime.cjs');
 const hash = value => createHash('sha256').update(value).digest('hex');
-const COMMANDS = ['inspect', 'initialize', 'arm', 'disarm', 'observe-false', 'observe-armed', 'facts', 'run-formal'];
+const COMMANDS = ['inspect', 'initialize', 'arm', 'disarm', 'observe-false', 'observe-armed', 'facts', 'run-formal', 'run-treasury'];
 
 function parseArgs(args) {
   if (args.length === 1 && args[0] === '--help') return { help: true };
@@ -24,9 +24,13 @@ function parseArgs(args) {
   for (const key of ['command','environment','host','port','pid','user','username','experiment','out']) if (!options[key]) throw new Error('required --' + key);
   if (!COMMANDS.includes(options.command)) throw new Error('unknown command');
   if (['initialize','arm','observe-false','observe-armed'].includes(options.command) && !options.probe) throw new Error('--probe required for no-send entry verification');
-  if (['arm','facts','run-formal'].includes(options.command) && !options.proof) throw new Error('--proof raw player console required');
+  if (['arm','facts','run-formal','run-treasury'].includes(options.command) && !options.proof) throw new Error('--proof raw player console required');
   if (options.command === 'facts' && !options['last-world-change']) throw new Error('--last-world-change actual fixture/map change timestamp required');
   if (options.command === 'run-formal') for (const key of ['facts','observer','single-shot','main']) if (!options[key]) throw new Error('required --' + key);
+  if (options.command === 'run-treasury') {
+    for (const key of ['facts','main']) if (!options[key]) throw new Error('required --' + key);
+    if (options.observer || options['single-shot']) throw new Error('treasury run takes ONE bundled main, not raw-API modules');
+  }
   return options;
 }
 function createEvidence(dir) {
@@ -81,6 +85,21 @@ async function assertFormalModules(io, options) {
     const manifest = JSON.parse(fs.readFileSync(path.join(path.dirname(file), 'manifest.json')));
     if (manifest.repoSourceCommit !== head || manifest.output?.sha256 !== hash(bytes) || manifest.output?.bytes !== bytes.length
         || modules[name] !== bytes.toString('utf8')) throw new Error('active/generated module identity mismatch: ' + name);
+  }
+}
+
+
+async function assertTreasuryModules(io, options) {
+  const { buildBundle, assertCommittedSources } = require('../../treasury-integration/build.cjs');
+  const trusted = buildBundle();
+  const head = assertCommittedSources(path.resolve(LAB, '../../..'), trusted.sources);
+  const file = path.resolve(options.main), bytes = fs.readFileSync(file);
+  const manifest = JSON.parse(fs.readFileSync(path.join(path.dirname(file), 'manifest.json')));
+  const active = await io.activeModules();
+  if (trusted.enabled !== true || manifest.enabled !== true || manifest.mode !== 'treasury-integration'
+      || manifest.repoSourceCommit !== head || manifest.output?.sha256 !== hash(bytes) || manifest.output?.bytes !== bytes.length
+      || trusted.code !== bytes.toString('utf8') || Object.keys(active).length !== 1 || active.main !== trusted.code) {
+    throw new Error('active Treasury bundle is not the enabled current-source single-main build');
   }
 }
 
@@ -159,9 +178,13 @@ async function runSession(io, config, mode, armed, evidence) {
       return { result, pausedForNextStage: true }; // no send reachable; same record retained
     }
     // Formal run always remains stopped, even when observation/rejection failed.
+    let processStop;
     try { await updateMemory(io, 'disarm', config.experimentId, audit); }
-    finally { await bounded(() => io.killTree(), 5000, 'final process-tree stop'); }
-    return { result, processTreeStopped: true };
+    finally {
+      processStop = await bounded(() => io.killTree(), 5000, 'final process-tree stop');
+      evidence.file('process-stop-result.json', processStop);
+    }
+    return { result, processTreeStopped: processStop?.terminated === true, processStop };
   } finally {
     clearInterval(healthTimer); process.removeListener('SIGINT', signal); process.removeListener('SIGTERM', signal);
   }
@@ -195,7 +218,8 @@ async function execute(options, evidence) {
       return await runSession(io, config, 'control', options.command === 'observe-armed', evidence);
     }
     await verifyProof(options.proof, io, config, true);
-    await assertFormalModules(io, options);
+    if (options.command === 'run-treasury') await assertTreasuryModules(io, options);
+    else await assertFormalModules(io, options);
     const facts = JSON.parse(fs.readFileSync(options.facts, 'utf8'));
     const tick = await io.assertPausedStable();
     if (facts.context?.pauseConfirmedTick !== tick || config.targetTick < tick + 3) throw new Error('stale pause point / unreachable formal window');
@@ -216,7 +240,16 @@ async function execute(options, evidence) {
       if (!object || object.type !== 'terminal' || object.room !== config[side + 'RoomName']
           || (object.store?.H ?? 0) !== sample.resourceAmount || (object.store?.energy ?? 0) !== sample.energy) throw new Error('paused endpoint differs from baseline');
     }
-    return await runSession(io, config, 'formal', true, evidence);
+    const session = await runSession(io, config, 'formal', true, evidence);
+    if (options.command === 'run-treasury') {
+      const { verifyTreasuryRun } = require('../../treasury-integration/verify-run.cjs');
+      const raw = fs.readFileSync(path.join(evidence.dir, 'console.jsonl'), 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line));
+      const after = JSON.parse(fs.readFileSync(path.join(evidence.dir, 'paused-snapshot.json')));
+      const verification = verifyTreasuryRun(config, io.binding.userId, raw, snapshot, after, session.result, session.processStop);
+      evidence.file('treasury-verification.json', verification);
+      return { ...session, verification };
+    }
+    return session;
   } catch (error) {
     // Failure never re-arms, resumes again or clears attempted. Persist what is
     // obtainable, then stop only the bound environment, including prepare errors.
@@ -238,10 +271,10 @@ if (require.main === module) {
     evidence.audit({ kind: 'command', options, node: process.version });
     const result = await execute(options, evidence);
     evidence.file('result.json', result); console.log(JSON.stringify(result, null, 2));
-    return result?.result && !result.result.ok ? 1 : 0;
+    return (result?.result && !result.result.ok) || (result?.verification && result.verification.status !== 'TREASURY_INTEGRATION_PASS') ? 1 : 0;
   })().then(code => { evidence?.close(); process.exit(code); }, error => {
     try { evidence?.audit({ kind: 'fatal', error: String(error) }); evidence?.close(); } catch {}
     console.error(String(error)); process.exit(1);
   });
 }
-module.exports = { parseArgs, createEvidence, proofSamples, verifyProof, assertProbe, assertFormalModules, subscribeReady, runSession, execute };
+module.exports = { parseArgs, createEvidence, proofSamples, verifyProof, assertProbe, assertFormalModules, assertTreasuryModules, subscribeReady, runSession, execute };
