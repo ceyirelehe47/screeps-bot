@@ -87,7 +87,14 @@ stderr 的一行 `Storage connection lost ECONNRESET` 是工具自身连接在 s
 | 58ec3f3 | S01：关闭继承实验开关（enabled=false）+ 任务原件与继承验证索引归档 |
 | 4fb23e6 | 准备期绑定：lab-ti1-0002 世界身份（用户/双 Terminal/shard）写入 labConfig+example |
 | cf29a69 | **RUN_VALIDATION_HEAD**：T=536 固定、q=26 回填、enabled=true、本轮 facts fixture 与场景 G 配对 |
-| （本次） | 证据归档 + 本报告 + 独立验收记录 + 状态更新 |
+| f8b3a26 | 证据归档 + 本报告 + 独立验收记录 + 实验关闭默认 enabled=false |
+| 03f7170 | **DELIVERY_HEAD**：原始持久化存储副本与终态核对（撤装落盘印证）；环境清理完成 |
+
+- `RUN_VALIDATION_HEAD`（实际启用、构建与实测的 SHA）= `cf29a69`，bundle
+  `bfbc5c55…6672`、482336B。
+- `DELIVERY_HEAD` = `03f7170`。二者差异：仅证据/状态文档与 `enabled.ts`
+  收尾关闭；关闭配置做了对应定向检查（tsc×2 exit 0、integration 18/18），
+  **不声称启用产物曾在关闭 SHA 上运行**（启用产物只在 cf29a69 上构建与实测）。
 
 ## 环境与就绪依据（任务书 §6）
 
