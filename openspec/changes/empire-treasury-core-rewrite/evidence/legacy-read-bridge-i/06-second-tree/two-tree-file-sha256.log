@@ -1,0 +1,19 @@
+# 两树 17 变更文件 sha256 对比（2026-09-11）
+SAME docs/treasury-compat-source-manifest.json
+SAME docs/treasury-legacy-read-bridge.md
+SAME scripts/verify-jest-budget.mjs
+SAME src/main.test.ts
+SAME src/main.ts
+SAME src/runtime/treasuryCompatConfig.ts
+SAME src/runtime/treasuryCompatRead.ts
+SAME src/runtime/treasuryCompatReadCore.generated.ts
+SAME src/runtime/treasuryCompatRuntime.ts
+SAME src/runtime/treasuryCompatTypes.ts
+SAME test/test-suite-budget.json
+SAME test/treasury-compat/bridge.spec.cjs
+SAME test/treasury-compat/helpers.cjs
+SAME test/treasury-compat/independent.spec.cjs
+SAME test/treasury-compat/real-readers.spec.cjs
+SAME test/treasuryCompatIndependent.test.ts
+SAME test/treasuryCompatRead.test.ts
+SAME=17 DIFF=0

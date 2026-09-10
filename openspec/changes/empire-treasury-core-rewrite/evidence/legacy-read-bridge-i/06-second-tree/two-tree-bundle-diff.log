@@ -1,0 +1,8 @@
+# 同 SHA(7ceabba) 两 bundle 逐行差异（2026-09-11）
+L37667 A: const BUILD_TAG = "2026.8.29-6+7ceabba@2026-09-10T16:50:47.699Z" ;
+L37667 B: const BUILD_TAG = "2026.8.29-6+7ceabba@2026-09-10T16:49:28.864Z" ;
+L37670 A: const BUILD_DEPLOY_BRANCH = "compat/treasury-read-bridge-i" ;
+L37670 B: const BUILD_DEPLOY_BRANCH = "default" ;
+L105196 A: ;globalThis.__DEPLOY_BUNDLE_HASH__="223bdf0b0c1bbb58b6090902563945dfb3b3b8d50dae14a05fa43a58ae04b55d";
+L105196 B: ;globalThis.__DEPLOY_BUNDLE_HASH__="3d2870c421de3bd6f930193ad82a3e03ce1b9434d7f3449fd26690dffbe1f910";
+差异行数=3（时间戳/分支检测/自引哈希，业务字节一致）

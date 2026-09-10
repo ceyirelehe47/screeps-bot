@@ -1,0 +1,4 @@
+# 两树 bundle 字节与 sha256（2026-09-11）
+候选树(分支 7ceabba) bytes=4586665 sha256=9c7677bfd5c0e7e7bef39d37430f8d23740b05c3f3cf0bd44a349f7d88054725
+第二树(detached 7ceabba) bytes=4586643 sha256=93f756bfba91bbf68c675aab5dc63574e510184a0fc15fe135f17ba6c9f6ca64
+线上 06ffedb default 分支模块=4,494,463 B（出处：tasks.md 线上基线核对段 A2，2026-09-10 采集）
