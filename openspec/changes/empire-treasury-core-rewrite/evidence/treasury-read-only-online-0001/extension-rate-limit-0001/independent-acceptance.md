@@ -22,3 +22,5 @@
 ## 移交级安全发现（非本轮引入，已应急处置）
 
 `evidence/terminal-transfer-engine-lab-run-i-control-remediation-i/engine-continuation-0001/environment/s01-node-processes.json` 含**完整 token**，随提交 `7314277`（2026-09-10 00:55 +0800）进入已推送历史。执行方复核确认：历史 `-S` 全量扫描仅此一处；工作树唯一命中文件已在新提交中脱敏（`<REDACTED-TOKEN-36HEX>`）；**历史不可改写（已推送、禁 amend/force），唯一完全修复=轮换该 token**——已作为最高优先级事项报告用户。该发现与本轮增补无关（早 22 小时的其他任务遗留），本轮所有新增材料经扫描零暴露。
+
+**事后闭合（2026-09-10 晚，用户会话）**：用户已轮换 token（新值仅写入 gitignored 的 `.env` 与 `.secret.json`，全仓扫描 0 命中，不入任何提交）；旧 token 经一次 `GET /api/auth/me` 实测 **HTTP 401 unauthorized**——历史泄露随之失效，本安全事件关闭。新 token 实测 HTTP 200（username=forster）。注：免限流 2 小时窗口属旧 token，新 token 默认受限流；长期运行的既有监控进程若持有旧 token 需重启后生效（未代为重启）。
