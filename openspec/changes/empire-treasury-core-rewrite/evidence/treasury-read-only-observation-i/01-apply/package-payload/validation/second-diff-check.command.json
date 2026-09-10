@@ -1,0 +1,8 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--check"
+  ],
+  "cwdKind": "separate reconstructed selected-source worktree; not complete repository"
+}

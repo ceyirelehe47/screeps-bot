@@ -1,0 +1,26 @@
+[
+  {
+    "mutation": "drop_reservation_deduction",
+    "exitCode": 1,
+    "failedTests": 1,
+    "detected": true
+  },
+  {
+    "mutation": "hide_resource_mismatch",
+    "exitCode": 1,
+    "failedTests": 1,
+    "detected": true
+  },
+  {
+    "mutation": "accidental_memory_write",
+    "exitCode": 1,
+    "failedTests": 32,
+    "detected": true
+  },
+  {
+    "mutation": "escape_observer_fault",
+    "exitCode": 1,
+    "failedTests": 3,
+    "detected": true
+  }
+]

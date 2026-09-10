@@ -1,0 +1,26 @@
+PASS test/treasuryReadOnlyIndependent.test.ts
+  独立反例：只读观察器边界（真实 facade）
+    √ §5.1 生产装配默认关闭：运行级零输出且不抛错（对照：静态默认配置亦关闭） (7 ms)
+    √ §5.1 错 shard：真实服务四读端口零调用（对照：下个采样窗同场景 sampled） (10 ms)
+    √ §5.1 低 bucket / 余量不足：服务零调用即跳过（对照：同场景正常 CPU sampled） (3 ms)
+    √ §5.1 非采样 tick 与同 tick 重复调用零服务读取（对照：due tick 一次读取） (3 ms)
+    √ §5.3 getter 抛异常的 terminal 单独表达为 unreadable（对照：同房间 storage 正常 match） (3 ms)
+    √ §5.3 NaN 库存读数表达为 unreadable（对照：另一房间正常 match） (2 ms)
+    √ §5.3 范围外资源存在时不误报持有范围、不扩大扫描且 match 不受污染 (2 ms)
+    √ §5.4 独立 world 读数与 Treasury 缓存故意不同：mismatch 明细检出（对照：下一 tick 重观察 match） (3 ms)
+    √ §5.4 结构 ID 替换检出为 structure mismatch，不影响其余字段比对 (2 ms)
+    √ §5.5 市场日志合法对照：intent/ok/blocked 原样保留且措辞不冒充转运证据（对照：无日志 absent） (2 ms)
+    √ §5.5 损坏市场日志（未来 tick 条目）表达为 unreadable 而非空/健康 (1 ms)
+    √ §5.5 超限日志：>100 条 over_bound；9 条相关输出 8 条并明示省略 (3 ms)
+    √ §5.2 kernel 损坏时不报 active=0、查询阻断保留且零 Treasury 写端口调用 (4 ms)
+    √ §5.6 UTF-8 计数与 Buffer oracle 随机对拍（含中文/emoji/代理对/未配对代理） (18 ms)
+    √ §5.6 输出超界：整行省略通知为有效 JSON 且不建立隐形基线（对照：正常上限建立单份基线） (3 ms)
+    √ §5.6 慢 getter 协作预算：partial_cpu_budget 与超额可见、kernel/日志显式 not_read（对照：快 getter 全覆盖） (2 ms)
+    √ §5.7 长期运行：连续 6 个采样窗仅保留单份上一次快照、计数有界不膨胀 (7 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       17 passed, 17 total
+Snapshots:   0 total
+Time:        4.573 s
+Ran all test suites within paths "test/treasuryReadOnlyIndependent.test.ts".
+Test results written to: openspec\changes\empire-treasury-core-rewrite\evidence\treasury-read-only-observation-i\03-independent\independent-jest.json

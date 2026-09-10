@@ -1,0 +1,66 @@
+{
+  "package": "Treasury Read-only Observation I",
+  "baseHead": "77d67d6a02cfb55029515e00503b598a78870ae5",
+  "repository": "ceyirelehe47/screeps-bot",
+  "branch": "refactor/empire-treasury-rearchitecture",
+  "status": "IMPLEMENTED_LOCAL_CHECKS_ONLY_NOT_DEPLOYED",
+  "patchSha256": "f280accda952959aa358989ebb12bce904de0ac072e445ecc79db4579b8d2d4b",
+  "changes": [
+    {
+      "path": "docs/treasury-read-only-observation.md",
+      "beforeGitBlob": null,
+      "afterGitBlob": "6b925d2998e2bec5b00f585607aefd2f03598dd0",
+      "afterSha256": "25a465266dfe6a28f8e05f7cc091497b80028f5888de5eee151db50c9ee84190",
+      "afterBytes": 8609
+    },
+    {
+      "path": "src/config/treasuryReadOnly.ts",
+      "beforeGitBlob": null,
+      "afterGitBlob": "1846aefbd4b9fa4b138f9ef9cc991497f8cd2523",
+      "afterSha256": "c0665b9b117b34bc9810d11c18a2fceda8a50d2da46719c2110e747833a471a9",
+      "afterBytes": 629
+    },
+    {
+      "path": "src/main.test.ts",
+      "beforeGitBlob": "7c80d207c2840a50c53b18e4ce3b8bd6ce30b772",
+      "afterGitBlob": "a5f5a701d8553724f682334ba074b267c3ea1d60",
+      "afterSha256": "9d301858f85b427cfddb95c332cc9fdb1a1b78515d9e1cbedc69b99307f81a5c",
+      "afterBytes": 11362
+    },
+    {
+      "path": "src/main.ts",
+      "beforeGitBlob": "8669f0c43826725157252f049e7aca27d8e4415f",
+      "afterGitBlob": "1b9346fd2471d34c4e53237f143a510e999df6bd",
+      "afterSha256": "dbc9b688b476e67422aa36388f78663a22734fbb657432b28b59fd53e889f408",
+      "afterBytes": 7367
+    },
+    {
+      "path": "src/runtime/treasury/readOnlyObservation.ts",
+      "beforeGitBlob": null,
+      "afterGitBlob": "cbca4b014fd3316c78add7aafac37312d46ff3a7",
+      "afterSha256": "a183e20fcde343ea92043af97ca4f7507372c16d57357a998181ed84114cc58e",
+      "afterBytes": 19421
+    },
+    {
+      "path": "src/runtime/treasuryReadOnlyRuntime.ts",
+      "beforeGitBlob": null,
+      "afterGitBlob": "e14fd2d5a0505c43deb2a57de19068eba59855cb",
+      "afterSha256": "a6d03e496009dee83318e4c02561c6dfc1e285744c366cdef3870a428710f4b5",
+      "afterBytes": 1023
+    },
+    {
+      "path": "test/treasury-read-only/local.spec.cjs",
+      "beforeGitBlob": null,
+      "afterGitBlob": "6f24b3a00e302cd9f44093c6631f4dfa2be441ee",
+      "afterSha256": "be324b690081a889ae55d85d044f20dcbb2e463cd417ce417a9911eaa7827ff2",
+      "afterBytes": 22803
+    },
+    {
+      "path": "test/treasuryReadOnlyObservation.test.ts",
+      "beforeGitBlob": null,
+      "afterGitBlob": "49a341b35dde16fe574d4eab0bf1d357b23469cd",
+      "afterSha256": "9eda2b3e6317363c7bb3fdf5b30b664ca5930ff6b42f6585e1f8db662e0b66d9",
+      "afterBytes": 7048
+    }
+  ]
+}

@@ -1,0 +1,816 @@
+TAP version 13
+# Subtest: module has no runtime imports, Game or Memory dependency at evaluation
+ok 1 - module has no runtime imports, Game or Memory dependency at evaluation
+  ---
+  duration_ms: 40.343005
+  type: 'test'
+  ...
+# Subtest: shipped default config is disabled and does not select the experiment rooms
+ok 2 - shipped default config is disabled and does not select the experiment rooms
+  ---
+  duration_ms: 5.256739
+  type: 'test'
+  ...
+# Subtest: non-due tick and repeat invocation do not read service, memory or stores
+not ok 3 - non-due tick and repeat invocation do not read service, memory or stores
+  ---
+  duration_ms: 2.629539
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:92:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'disabled_after_fault'
+    - 'not_due'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'not_due'
+  actual: 'disabled_after_fault'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:95:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"rooms":[]}
+ok 4 - invalid configuration stops without invoking ports: {"rooms":[]}
+  ---
+  duration_ms: 0.209274
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"rooms":["W1N1","W1N1"]}
+ok 5 - invalid configuration stops without invoking ports: {"rooms":["W1N1","W1N1"]}
+  ---
+  duration_ms: 0.15385
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"resources":[]}
+ok 6 - invalid configuration stops without invoking ports: {"resources":[]}
+  ---
+  duration_ms: 0.204316
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"resources":["H","H"]}
+ok 7 - invalid configuration stops without invoking ports: {"resources":["H","H"]}
+  ---
+  duration_ms: 0.106671
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"intervalTicks":0}
+ok 8 - invalid configuration stops without invoking ports: {"intervalTicks":0}
+  ---
+  duration_ms: 0.088219
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"maxSampleCpu":null}
+ok 9 - invalid configuration stops without invoking ports: {"maxSampleCpu":null}
+  ---
+  duration_ms: 0.348664
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"maxLogBytes":10}
+ok 10 - invalid configuration stops without invoking ports: {"maxLogBytes":10}
+  ---
+  duration_ms: 0.354411
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"shardName":""}
+ok 11 - invalid configuration stops without invoking ports: {"shardName":""}
+  ---
+  duration_ms: 0.173619
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"rooms":["__proto__"]}
+ok 12 - invalid configuration stops without invoking ports: {"rooms":["__proto__"]}
+  ---
+  duration_ms: 0.233411
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"rooms":["W1N1","W1N2","W1N3","W1N4","W1N5"]}
+ok 13 - invalid configuration stops without invoking ports: {"rooms":["W1N1","W1N2","W1N3","W1N4","W1N5"]}
+  ---
+  duration_ms: 0.068997
+  type: 'test'
+  ...
+# Subtest: unknown resource and wrong shard skip without service access
+ok 14 - unknown resource and wrong shard skip without service access
+  ---
+  duration_ms: 0.226442
+  type: 'test'
+  ...
+# Subtest: low CPU headroom/bucket skips before querying: {"used":10,"tickLimit":14,"bucket":10000}
+ok 15 - low CPU headroom/bucket skips before querying: {"used":10,"tickLimit":14,"bucket":10000}
+  ---
+  duration_ms: 0.105461
+  type: 'test'
+  ...
+# Subtest: low CPU headroom/bucket skips before querying: {"used":10,"tickLimit":100,"bucket":100}
+ok 16 - low CPU headroom/bucket skips before querying: {"used":10,"tickLimit":100,"bucket":100}
+  ---
+  duration_ms: 0.046434
+  type: 'test'
+  ...
+# Subtest: valid populated world: exact read-only query flags, stock vs occupancy, no Memory writes
+not ok 17 - valid populated world: exact read-only query flags, stock vs occupancy, no Memory writes
+  ---
+  duration_ms: 0.583506
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:111:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'fault_disabled'
+    - 'sampled'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'sampled'
+  actual: 'fault_disabled'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:112:68)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: invisible
+not ok 18 - unavailable facts are explicit, never zero stock: invisible
+  ---
+  duration_ms: 0.390649
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:132:4'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'find')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:133:75)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: not-owned
+not ok 19 - unavailable facts are explicit, never zero stock: not-owned
+  ---
+  duration_ms: 0.449956
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:132:4'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'find')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:133:75)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: no-terminal
+not ok 20 - unavailable facts are explicit, never zero stock: no-terminal
+  ---
+  duration_ms: 0.327218
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:132:4'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'find')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:133:75)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: null-capacity
+not ok 21 - unavailable facts are explicit, never zero stock: null-capacity
+  ---
+  duration_ms: 0.29037
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:132:4'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'find')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:133:75)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: NaN-resource
+not ok 22 - unavailable facts are explicit, never zero stock: NaN-resource
+  ---
+  duration_ms: 0.34399
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:132:4'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'find')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:133:75)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: negative-resource
+not ok 23 - unavailable facts are explicit, never zero stock: negative-resource
+  ---
+  duration_ms: 0.254686
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:132:4'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'find')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:133:75)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: getter-throws
+not ok 24 - unavailable facts are explicit, never zero stock: getter-throws
+  ---
+  duration_ms: 0.35311
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:132:4'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'find')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:133:75)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: real zero stock is distinguishable from unreadable/absent
+not ok 25 - real zero stock is distinguishable from unreadable/absent
+  ---
+  duration_ms: 0.376331
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:136:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading '1')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:137:96)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: stale observation does not query balances or label equivalence
+not ok 26 - stale observation does not query balances or label equivalence
+  ---
+  duration_ms: 0.348041
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:140:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - 'stale'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'stale'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:141:92)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: independent direct store detects wrong cached amount AND wrong structure ID
+not ok 27 - independent direct store detects wrong cached amount AND wrong structure ID
+  ---
+  duration_ms: 0.250295
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:144:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading '1')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:146:46)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: high physical stock never hides query incompleteness and write blockers
+not ok 28 - high physical stock never hides query incompleteness and write blockers
+  ---
+  duration_ms: 0.295998
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:148:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading '1')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:150:43)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: unhealthy kernel is not reported as zero active work
+not ok 29 - unhealthy kernel is not reported as zero active work
+  ---
+  duration_ms: 0.223576
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:152:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'activeCount')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:154:33)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: unresolved kernel phase is reported without calling settle or deleting a record
+not ok 30 - unresolved kernel phase is reported without calling settle or deleting a record
+  ---
+  duration_ms: 0.244859
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:156:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'phases')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:159:33)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: net changes use detached primitives and never claim to know the writer
+not ok 31 - net changes use detached primitives and never claim to know the writer
+  ---
+  duration_ms: 0.184504
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:161:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading '1')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:163:31)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: replacement and stale sample gap invalidate net-change comparison
+not ok 32 - replacement and stale sample gap invalidate net-change comparison
+  ---
+  duration_ms: 0.299598
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:165:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading '1')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:166:125)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: no retained live Store reference is needed on the next sample
+not ok 33 - no retained live Store reference is needed on the next sample
+  ---
+  duration_ms: 0.271139
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:169:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading '1')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:173:36)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: market hints preserve intent vs outcome and have explicit limited coverage
+not ok 34 - market hints preserve intent vs outcome and have explicit limited coverage
+  ---
+  duration_ms: 0.252945
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:175:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'coverage')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:181:18)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: invalid journal does not look empty/healthy: null
+not ok 35 - invalid journal does not look empty/healthy: null
+  ---
+  duration_ms: 0.19458
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:184:3'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'status')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:185:133)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: invalid journal does not look empty/healthy: object
+not ok 36 - invalid journal does not look empty/healthy: object
+  ---
+  duration_ms: 0.358555
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:184:3'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'status')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:185:133)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: invalid journal does not look empty/healthy: oversize
+not ok 37 - invalid journal does not look empty/healthy: oversize
+  ---
+  duration_ms: 0.201703
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:184:3'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'status')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:185:133)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: invalid journal does not look empty/healthy: malformed
+not ok 38 - invalid journal does not look empty/healthy: malformed
+  ---
+  duration_ms: 0.162114
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:184:3'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'status')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:185:133)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: bounded journal keeps recent hints with explicit omissions
+not ok 39 - bounded journal keeps recent hints with explicit omissions
+  ---
+  duration_ms: 0.26617
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:188:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'rows')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:190:48)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: large output yields a small valid JSON omission notice, never a PASS or malformed slice
+not ok 40 - large output yields a small valid JSON omission notice, never a PASS or malformed slice
+  ---
+  duration_ms: 0.301627
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:192:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'fault_disabled'
+    - 'output_limited'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'output_limited'
+  actual: 'fault_disabled'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:193:69)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: UTF-8 byte length equals independent Buffer oracle for unicode, surrogate and escaping cases
+ok 41 - UTF-8 byte length equals independent Buffer oracle for unicode, surrogate and escaping cases
+  ---
+  duration_ms: 0.169808
+  type: 'test'
+  ...
+# Subtest: cooperative budget records partial coverage rather than completing all getters
+ok 42 - cooperative budget records partial coverage rather than completing all getters
+  ---
+  duration_ms: 0.583858
+  type: 'test'
+  ...
+# Subtest: previous total CPU includes serialization/logging phase, not a fictitious zero overhead
+not ok 43 - previous total CPU includes serialization/logging phase, not a fictitious zero overhead
+  ---
+  duration_ms: 0.326865
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:201:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of null (reading 'totalCpuIncludingEmit')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:203:18)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: failure in Treasury query latches this observer off and does not escape
+ok 44 - failure in Treasury query latches this observer off and does not escape
+  ---
+  duration_ms: 0.165755
+  type: 'test'
+  ...
+# Subtest: throwing logger cannot escape or force a Treasury mutation
+not ok 45 - throwing logger cannot escape or force a Treasury mutation
+  ---
+  duration_ms: 0.476365
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:209:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:210:150)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: fresh observer after reset does not invent continuity or persist a disable latch
+not ok 46 - fresh observer after reset does not invent continuity or persist a disable latch
+  ---
+  duration_ms: 0.436488
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:212:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:213:128)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: long sampling run retains at most one bounded previous snapshot
+not ok 47 - long sampling run retains at most one bounded previous snapshot
+  ---
+  duration_ms: 0.448076
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:215:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    0 !== 2
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 2
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:216:114)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: production main keeps the former 41 phases, with exactly one diagnostic before end
+ok 48 - production main keeps the former 41 phases, with exactly one diagnostic before end
+  ---
+  duration_ms: 32.818388
+  type: 'test'
+  ...
+# Subtest: actual observer failure does not prevent production endTick and profiler flush
+ok 49 - actual observer failure does not prevent production endTick and profiler flush
+  ---
+  duration_ms: 19.691214
+  type: 'test'
+  ...
+# Subtest: business errors retain original fail-fast behavior, not swallowed by observer
+ok 50 - business errors retain original fail-fast behavior, not swallowed by observer
+  ---
+  duration_ms: 27.785779
+  type: 'test'
+  ...
+# Subtest: new code never imports lab modules or action writers, and no new Memory root is assigned
+ok 51 - new code never imports lab modules or action writers, and no new Memory root is assigned
+  ---
+  duration_ms: 37.150388
+  type: 'test'
+  ...
+# Subtest: an output-limited notice never creates an invisible previous endpoint baseline
+not ok 52 - an output-limited notice never creates an invisible previous endpoint baseline
+  ---
+  duration_ms: 0.479595
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:263:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'disabled_after_read_or_output_error'
+    - 'output_limited'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'output_limited'
+  actual: 'disabled_after_read_or_output_error'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:264:56)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: caller mutation cannot change the frozen sampling profile midway through a run
+not ok 53 - caller mutation cannot change the frozen sampling profile midway through a run
+  ---
+  duration_ms: 0.2601
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:267:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'resources')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:269:69)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: kernel absence does not erase separately detected legacy stores from diagnostics
+not ok 54 - kernel absence does not erase separately detected legacy stores from diagnostics
+  ---
+  duration_ms: 0.227435
+  type: 'test'
+  location: '/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:273:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'scope')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/tmp/treasury-ro-mutant-qjqttvtd/files/test/treasury-read-only/local.spec.cjs:275:54)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..54
+# tests 54
+# suites 0
+# pass 22
+# fail 32
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 554.547012

@@ -148,3 +148,17 @@ stderr 的一行 `Storage connection lost ECONNRESET` 是工具自身连接在 s
   `ti2-bundle-live`/`ti2-bundle-second`（构建产物）。
 - PASS 仅针对本次限定合成场景，不等于生产上线、并发物流、市场或任意故障
   恢复已通过。
+
+## 勘误（2026-09-10 增补，原文未改动）
+
+按 Treasury Read-only Observation I 验收任务书（AGENT-VERIFY §7）补正本报告
+两处说明，历史成功/失败身份与结论均不变，不因修文档重跑任何实验：
+
+1. **收尾时 `enabled.ts` 实际为 `false`**：L137-139「`enabled.ts` 当前为 true」
+   描述的是 `RUN_VALIDATION_HEAD = cf29a69` 时点的状态；随后收尾提交
+   （f8b3a26，即 DELIVERY 链内）已将其恢复为 `false`，最终交付 HEAD
+   （77d67d6）上默认关闭成立。启用产物只在 cf29a69 上构建与实测。
+2. **独立 CLI 校准的时点归属**：C02 `verify-lab-calibration` 55/55 的
+   独立校准原件所记录的 repoHead 为 `4fb23e6`（绑定配置提交之前）；
+   属于正式窗口的是正式 run（07-run-treasury）内重新执行的 C02 预检，
+   见 `formal-and-closeout/07-run-treasury/` 下的预检产物。

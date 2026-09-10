@@ -1,0 +1,21 @@
+{
+  "baseHead": "77d67d6a02cfb55029515e00503b598a78870ae5",
+  "retrieval": "GitHub connector, 2026-09-10; full Git checkout DNS failed",
+  "reconstructedAndVerified": {
+    "src/main.test.ts": "7c80d207c2840a50c53b18e4ce3b8bd6ce30b772",
+    "src/main.ts": "8669f0c43826725157252f049e7aca27d8e4415f"
+  },
+  "readReferenceBlobs": {
+    "src/runtime/runtimeServices.ts": "4eec261d9657d6c8f523f3c037530bacafa7010b",
+    "src/runtime/treasury/facade.ts": "f9a146c7b7dc7a4aa1f1970d18e0d3f95430845a",
+    "src/runtime/treasury/types.ts": "05c1af2da2ad485f881ed3765344a40f16720625",
+    "src/runtime/marketActionArbiter.ts": "81103e1622bfb1af2ec28c372819a93d9f184b3e",
+    "src/runtime/cpuPhaseProfiler.ts": "0b548a95a9411ef46b213d2d4b57a654200917e1",
+    "src/runtime/resourceControl.ts": "b8aecc3a2469216e31c17768453223b0fc4a7900"
+  },
+  "officialReferences": [
+    "https://docs.screeps.com/api/",
+    "https://docs.screeps.com/cpu-limit.html"
+  ],
+  "localTypeCheckBoundary": "typecheck-context.d.ts uses selected declarations; NOT authoritative replacement for project declarations or @types/screeps"
+}

@@ -1,0 +1,11 @@
+== apply 记录（复盘自执行过程，2026-09-10）==
+命令：python apply_patch.py --repo D:/code/screeps/screeps-bot --check-only
+输出：{"status": "CHECKED_NOT_APPLIED", "baseHead": "77d67d6a02cfb55029515e00503b598a78870ae5", "files": 8} EXIT=0
+命令：python apply_patch.py --repo D:/code/screeps/screeps-bot
+输出：{"status": "APPLIED_NOT_COMMITTED_NOT_DEPLOYED", "baseHead": "77d67d6a02cfb55029515e00503b598a78870ae5", "files": 8} EXIT=0
+git diff --check 通过；git diff --stat：main.test.ts +3-1、main.ts +3，新增 6 文件。
+应用后 8 文件与包内 files/ 逐字节 sha256 比对全部 IDENTICAL（含 LF 工作树）。
+
+== 锚点保护反例（本轮 HEAD 上拒绝重应用）==
+wrong baseline; required 77d67d6a02cfb55029515e00503b598a78870ae5; no auto-reset/rebase
+EXIT=1（非零=拒绝，符合固定基线保护）

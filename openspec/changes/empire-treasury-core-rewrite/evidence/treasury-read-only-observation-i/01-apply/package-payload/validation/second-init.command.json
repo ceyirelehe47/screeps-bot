@@ -1,0 +1,8 @@
+{
+  "command": [
+    "git",
+    "init",
+    "-q"
+  ],
+  "cwdKind": "separate reconstructed selected-source worktree; not complete repository"
+}

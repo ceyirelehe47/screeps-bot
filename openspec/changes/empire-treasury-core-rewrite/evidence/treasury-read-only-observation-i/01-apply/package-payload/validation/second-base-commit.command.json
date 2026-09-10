@@ -1,0 +1,13 @@
+{
+  "command": [
+    "git",
+    "-c",
+    "user.name=Local package verification",
+    "-c",
+    "user.email=verification@example.invalid",
+    "commit",
+    "-qm",
+    "Reconstructed selected source baseline, not repository HEAD"
+  ],
+  "cwdKind": "separate reconstructed selected-source worktree; not complete repository"
+}

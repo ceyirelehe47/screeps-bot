@@ -1,0 +1,18 @@
+{
+  "command": [
+    "node",
+    "--test",
+    "test/treasury-read-only/local.spec.cjs"
+  ],
+  "cwd": "files/ (selected source reconstruction)",
+  "sourceHashes": {
+    "docs/treasury-read-only-observation.md": "25a465266dfe6a28f8e05f7cc091497b80028f5888de5eee151db50c9ee84190",
+    "src/config/treasuryReadOnly.ts": "c0665b9b117b34bc9810d11c18a2fceda8a50d2da46719c2110e747833a471a9",
+    "src/main.test.ts": "9d301858f85b427cfddb95c332cc9fdb1a1b78515d9e1cbedc69b99307f81a5c",
+    "src/main.ts": "dbc9b688b476e67422aa36388f78663a22734fbb657432b28b59fd53e889f408",
+    "src/runtime/treasury/readOnlyObservation.ts": "a183e20fcde343ea92043af97ca4f7507372c16d57357a998181ed84114cc58e",
+    "src/runtime/treasuryReadOnlyRuntime.ts": "a6d03e496009dee83318e4c02561c6dfc1e285744c366cdef3870a428710f4b5",
+    "test/treasury-read-only/local.spec.cjs": "be324b690081a889ae55d85d044f20dcbb2e463cd417ce417a9911eaa7827ff2",
+    "test/treasuryReadOnlyObservation.test.ts": "9eda2b3e6317363c7bb3fdf5b30b664ca5930ff6b42f6585e1f8db662e0b66d9"
+  }
+}

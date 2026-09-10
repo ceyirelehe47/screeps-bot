@@ -1,0 +1,11 @@
+== 全仓 Jest --runInBand 2026-09-10T10:48:58Z ==
+PASS src/runtime/hostilePriorities.test.ts
+
+Test Suites: 248 passed, 248 total
+Tests:       1539 passed, 1539 total
+Snapshots:   0 total
+Time:        711.644 s, estimated 922 s
+Ran all test suites.
+Test results written to: openspec\changes\empire-treasury-core-rewrite\evidence\treasury-read-only-observation-i\04-full-regression\jest-full.json
+JEST_EXIT=0
+suites 248/248 tests 1539/1539 fail-suites 0 fail-tests 0

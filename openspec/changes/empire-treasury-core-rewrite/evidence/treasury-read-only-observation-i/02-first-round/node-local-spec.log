@@ -1,0 +1,336 @@
+== node --test local.spec.cjs 2026-09-10T10:35:13Z ==
+TAP version 13
+# Subtest: module has no runtime imports, Game or Memory dependency at evaluation
+ok 1 - module has no runtime imports, Game or Memory dependency at evaluation
+  ---
+  duration_ms: 51.5735
+  type: 'test'
+  ...
+# Subtest: shipped default config is disabled and does not select the experiment rooms
+ok 2 - shipped default config is disabled and does not select the experiment rooms
+  ---
+  duration_ms: 8.0149
+  type: 'test'
+  ...
+# Subtest: non-due tick and repeat invocation do not read service, memory or stores
+ok 3 - non-due tick and repeat invocation do not read service, memory or stores
+  ---
+  duration_ms: 2.5228
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"rooms":[]}
+ok 4 - invalid configuration stops without invoking ports: {"rooms":[]}
+  ---
+  duration_ms: 0.2274
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"rooms":["W1N1","W1N1"]}
+ok 5 - invalid configuration stops without invoking ports: {"rooms":["W1N1","W1N1"]}
+  ---
+  duration_ms: 0.262
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"resources":[]}
+ok 6 - invalid configuration stops without invoking ports: {"resources":[]}
+  ---
+  duration_ms: 0.1613
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"resources":["H","H"]}
+ok 7 - invalid configuration stops without invoking ports: {"resources":["H","H"]}
+  ---
+  duration_ms: 0.2099
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"intervalTicks":0}
+ok 8 - invalid configuration stops without invoking ports: {"intervalTicks":0}
+  ---
+  duration_ms: 0.1567
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"maxSampleCpu":null}
+ok 9 - invalid configuration stops without invoking ports: {"maxSampleCpu":null}
+  ---
+  duration_ms: 0.342
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"maxLogBytes":10}
+ok 10 - invalid configuration stops without invoking ports: {"maxLogBytes":10}
+  ---
+  duration_ms: 0.4343
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"shardName":""}
+ok 11 - invalid configuration stops without invoking ports: {"shardName":""}
+  ---
+  duration_ms: 0.227
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"rooms":["__proto__"]}
+ok 12 - invalid configuration stops without invoking ports: {"rooms":["__proto__"]}
+  ---
+  duration_ms: 0.1096
+  type: 'test'
+  ...
+# Subtest: invalid configuration stops without invoking ports: {"rooms":["W1N1","W1N2","W1N3","W1N4","W1N5"]}
+ok 13 - invalid configuration stops without invoking ports: {"rooms":["W1N1","W1N2","W1N3","W1N4","W1N5"]}
+  ---
+  duration_ms: 0.0983
+  type: 'test'
+  ...
+# Subtest: unknown resource and wrong shard skip without service access
+ok 14 - unknown resource and wrong shard skip without service access
+  ---
+  duration_ms: 0.2532
+  type: 'test'
+  ...
+# Subtest: low CPU headroom/bucket skips before querying: {"used":10,"tickLimit":14,"bucket":10000}
+ok 15 - low CPU headroom/bucket skips before querying: {"used":10,"tickLimit":14,"bucket":10000}
+  ---
+  duration_ms: 0.1627
+  type: 'test'
+  ...
+# Subtest: low CPU headroom/bucket skips before querying: {"used":10,"tickLimit":100,"bucket":100}
+ok 16 - low CPU headroom/bucket skips before querying: {"used":10,"tickLimit":100,"bucket":100}
+  ---
+  duration_ms: 0.0844
+  type: 'test'
+  ...
+# Subtest: valid populated world: exact read-only query flags, stock vs occupancy, no Memory writes
+ok 17 - valid populated world: exact read-only query flags, stock vs occupancy, no Memory writes
+  ---
+  duration_ms: 0.6213
+  type: 'test'
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: invisible
+ok 18 - unavailable facts are explicit, never zero stock: invisible
+  ---
+  duration_ms: 0.6411
+  type: 'test'
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: not-owned
+ok 19 - unavailable facts are explicit, never zero stock: not-owned
+  ---
+  duration_ms: 0.2612
+  type: 'test'
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: no-terminal
+ok 20 - unavailable facts are explicit, never zero stock: no-terminal
+  ---
+  duration_ms: 0.3397
+  type: 'test'
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: null-capacity
+ok 21 - unavailable facts are explicit, never zero stock: null-capacity
+  ---
+  duration_ms: 0.3499
+  type: 'test'
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: NaN-resource
+ok 22 - unavailable facts are explicit, never zero stock: NaN-resource
+  ---
+  duration_ms: 0.2499
+  type: 'test'
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: negative-resource
+ok 23 - unavailable facts are explicit, never zero stock: negative-resource
+  ---
+  duration_ms: 0.2344
+  type: 'test'
+  ...
+# Subtest: unavailable facts are explicit, never zero stock: getter-throws
+ok 24 - unavailable facts are explicit, never zero stock: getter-throws
+  ---
+  duration_ms: 0.3122
+  type: 'test'
+  ...
+# Subtest: real zero stock is distinguishable from unreadable/absent
+ok 25 - real zero stock is distinguishable from unreadable/absent
+  ---
+  duration_ms: 0.2846
+  type: 'test'
+  ...
+# Subtest: stale observation does not query balances or label equivalence
+ok 26 - stale observation does not query balances or label equivalence
+  ---
+  duration_ms: 0.2525
+  type: 'test'
+  ...
+# Subtest: independent direct store detects wrong cached amount AND wrong structure ID
+ok 27 - independent direct store detects wrong cached amount AND wrong structure ID
+  ---
+  duration_ms: 0.3838
+  type: 'test'
+  ...
+# Subtest: high physical stock never hides query incompleteness and write blockers
+ok 28 - high physical stock never hides query incompleteness and write blockers
+  ---
+  duration_ms: 0.3338
+  type: 'test'
+  ...
+# Subtest: unhealthy kernel is not reported as zero active work
+ok 29 - unhealthy kernel is not reported as zero active work
+  ---
+  duration_ms: 0.3251
+  type: 'test'
+  ...
+# Subtest: unresolved kernel phase is reported without calling settle or deleting a record
+ok 30 - unresolved kernel phase is reported without calling settle or deleting a record
+  ---
+  duration_ms: 0.509
+  type: 'test'
+  ...
+# Subtest: net changes use detached primitives and never claim to know the writer
+ok 31 - net changes use detached primitives and never claim to know the writer
+  ---
+  duration_ms: 0.5116
+  type: 'test'
+  ...
+# Subtest: replacement and stale sample gap invalidate net-change comparison
+ok 32 - replacement and stale sample gap invalidate net-change comparison
+  ---
+  duration_ms: 0.7803
+  type: 'test'
+  ...
+# Subtest: no retained live Store reference is needed on the next sample
+ok 33 - no retained live Store reference is needed on the next sample
+  ---
+  duration_ms: 0.5197
+  type: 'test'
+  ...
+# Subtest: market hints preserve intent vs outcome and have explicit limited coverage
+ok 34 - market hints preserve intent vs outcome and have explicit limited coverage
+  ---
+  duration_ms: 0.4738
+  type: 'test'
+  ...
+# Subtest: invalid journal does not look empty/healthy: null
+ok 35 - invalid journal does not look empty/healthy: null
+  ---
+  duration_ms: 0.3785
+  type: 'test'
+  ...
+# Subtest: invalid journal does not look empty/healthy: object
+ok 36 - invalid journal does not look empty/healthy: object
+  ---
+  duration_ms: 0.2708
+  type: 'test'
+  ...
+# Subtest: invalid journal does not look empty/healthy: oversize
+ok 37 - invalid journal does not look empty/healthy: oversize
+  ---
+  duration_ms: 0.2428
+  type: 'test'
+  ...
+# Subtest: invalid journal does not look empty/healthy: malformed
+ok 38 - invalid journal does not look empty/healthy: malformed
+  ---
+  duration_ms: 0.2643
+  type: 'test'
+  ...
+# Subtest: bounded journal keeps recent hints with explicit omissions
+ok 39 - bounded journal keeps recent hints with explicit omissions
+  ---
+  duration_ms: 0.6763
+  type: 'test'
+  ...
+# Subtest: large output yields a small valid JSON omission notice, never a PASS or malformed slice
+ok 40 - large output yields a small valid JSON omission notice, never a PASS or malformed slice
+  ---
+  duration_ms: 0.3623
+  type: 'test'
+  ...
+# Subtest: UTF-8 byte length equals independent Buffer oracle for unicode, surrogate and escaping cases
+ok 41 - UTF-8 byte length equals independent Buffer oracle for unicode, surrogate and escaping cases
+  ---
+  duration_ms: 0.1476
+  type: 'test'
+  ...
+# Subtest: cooperative budget records partial coverage rather than completing all getters
+ok 42 - cooperative budget records partial coverage rather than completing all getters
+  ---
+  duration_ms: 0.4503
+  type: 'test'
+  ...
+# Subtest: previous total CPU includes serialization/logging phase, not a fictitious zero overhead
+ok 43 - previous total CPU includes serialization/logging phase, not a fictitious zero overhead
+  ---
+  duration_ms: 0.9812
+  type: 'test'
+  ...
+# Subtest: failure in Treasury query latches this observer off and does not escape
+ok 44 - failure in Treasury query latches this observer off and does not escape
+  ---
+  duration_ms: 0.2628
+  type: 'test'
+  ...
+# Subtest: throwing logger cannot escape or force a Treasury mutation
+ok 45 - throwing logger cannot escape or force a Treasury mutation
+  ---
+  duration_ms: 0.4661
+  type: 'test'
+  ...
+# Subtest: fresh observer after reset does not invent continuity or persist a disable latch
+ok 46 - fresh observer after reset does not invent continuity or persist a disable latch
+  ---
+  duration_ms: 0.6323
+  type: 'test'
+  ...
+# Subtest: long sampling run retains at most one bounded previous snapshot
+ok 47 - long sampling run retains at most one bounded previous snapshot
+  ---
+  duration_ms: 35.504
+  type: 'test'
+  ...
+# Subtest: production main keeps the former 41 phases, with exactly one diagnostic before end
+ok 48 - production main keeps the former 41 phases, with exactly one diagnostic before end
+  ---
+  duration_ms: 28.6076
+  type: 'test'
+  ...
+# Subtest: actual observer failure does not prevent production endTick and profiler flush
+ok 49 - actual observer failure does not prevent production endTick and profiler flush
+  ---
+  duration_ms: 21.2092
+  type: 'test'
+  ...
+# Subtest: business errors retain original fail-fast behavior, not swallowed by observer
+ok 50 - business errors retain original fail-fast behavior, not swallowed by observer
+  ---
+  duration_ms: 28.0258
+  type: 'test'
+  ...
+# Subtest: new code never imports lab modules or action writers, and no new Memory root is assigned
+ok 51 - new code never imports lab modules or action writers, and no new Memory root is assigned
+  ---
+  duration_ms: 35.067
+  type: 'test'
+  ...
+# Subtest: an output-limited notice never creates an invisible previous endpoint baseline
+ok 52 - an output-limited notice never creates an invisible previous endpoint baseline
+  ---
+  duration_ms: 0.4309
+  type: 'test'
+  ...
+# Subtest: caller mutation cannot change the frozen sampling profile midway through a run
+ok 53 - caller mutation cannot change the frozen sampling profile midway through a run
+  ---
+  duration_ms: 0.5649
+  type: 'test'
+  ...
+# Subtest: kernel absence does not erase separately detected legacy stores from diagnostics
+ok 54 - kernel absence does not erase separately detected legacy stores from diagnostics
+  ---
+  duration_ms: 0.402
+  type: 'test'
+  ...
+1..54
+# tests 54
+# suites 0
+# pass 54
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 673.1575
+NODE_TEST_EXIT=0

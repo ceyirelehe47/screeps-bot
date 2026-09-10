@@ -1,0 +1,17 @@
+ docs/treasury-read-only-observation.md      |   69 ++++++
+ src/config/treasuryReadOnly.ts              |   16 +
+ src/main.test.ts                            |    3 
+ src/main.ts                                 |    3 
+ src/runtime/treasury/readOnlyObservation.ts |  307 +++++++++++++++++++++++++++
+ src/runtime/treasuryReadOnlyRuntime.ts      |   22 ++
+ test/treasury-read-only/local.spec.cjs      |  276 ++++++++++++++++++++++++
+ test/treasuryReadOnlyObservation.test.ts    |  132 ++++++++++++
+ 8 files changed, 827 insertions(+), 1 deletion(-)
+69	0	docs/treasury-read-only-observation.md
+16	0	src/config/treasuryReadOnly.ts
+2	1	src/main.test.ts
+3	0	src/main.ts
+307	0	src/runtime/treasury/readOnlyObservation.ts
+22	0	src/runtime/treasuryReadOnlyRuntime.ts
+276	0	test/treasury-read-only/local.spec.cjs
+132	0	test/treasuryReadOnlyObservation.test.ts

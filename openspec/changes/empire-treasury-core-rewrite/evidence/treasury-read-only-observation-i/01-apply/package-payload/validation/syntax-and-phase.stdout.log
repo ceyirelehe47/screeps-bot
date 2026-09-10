@@ -1,0 +1,8 @@
+{
+  "compiler": "5.8.3",
+  "syntaxFileCount": 6,
+  "diagnostics": [],
+  "phaseCount": 42,
+  "exactPhaseContractMatch": true,
+  "scope": "syntax + AST only; not full Jest/typecheck"
+}

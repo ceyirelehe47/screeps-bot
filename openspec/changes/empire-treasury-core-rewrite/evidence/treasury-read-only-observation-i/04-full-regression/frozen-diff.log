@@ -1,0 +1,17 @@
+== 77d67d6..HEAD 全部变化（冻结 diff 证明）==
+ docs/treasury-read-only-observation.md      |  69 ++++++
+ scripts/verify-jest-budget.mjs              |  19 +-
+ src/config/treasuryReadOnly.ts              |  16 ++
+ src/main.test.ts                            |   3 +-
+ src/main.ts                                 |   3 +
+ src/runtime/treasury/readOnlyObservation.ts | 307 +++++++++++++++++++++++++++
+ src/runtime/treasuryReadOnlyRuntime.ts      |  22 ++
+ test/test-suite-budget.json                 |  32 ++-
+ test/treasury-read-only/local.spec.cjs      | 276 ++++++++++++++++++++++++
+ test/treasuryReadOnlyIndependent.test.ts    | 318 ++++++++++++++++++++++++++++
+ test/treasuryReadOnlyObservation.test.ts    | 132 ++++++++++++
+ 11 files changed, 1179 insertions(+), 18 deletions(-)
+
+== 受保护路径零改动核对 ==
+0
+（0=零改动）

@@ -1,0 +1,26 @@
+== 定向 Jest×3 2026-09-10T11:14:38Z ==
+Snapshots:   0 total
+Time:        14.833 s
+Ran all test suites within paths "src/main.test.ts", "test/treasuryReadOnlyObservation.test.ts", "test/treasuryReadOnlyIndependent.test.ts".
+Test results written to: ..\screeps-bot\openspec\changes\empire-treasury-core-rewrite\evidence\treasury-read-only-observation-i\05-second-tree\second-jest.json
+JEST_EXIT=0
+suites 3/3 tests 30/30 fail 0
+== tsc build ==
+TSC_BUILD_EXIT=0
+== tsc full ==
+TSC_FULL_EXIT=0
+== 第二树 npm run build（DEST 未设置） 2026-09-10T11:15:56Z ==
+[deploy] bundle sha256: 52d615adf2887dcc… (full in Memory.runtime.lastDeployBundleHash)
+[32mcreated [1mdist/main.js[22m in [1m48.4s[22m[39m
+BUILD_EXIT=0
+7f4a871c23692eb1a1abd5d9fad4f39c24a7aeffab5da17d895c78b8067f72e5 *dist/main.js
+9ce0d201bb92132be08b0d88d02e8e9e9dfbd63f8f570875c47246ffb2866500 *dist/main.js.map.js
+== 与主树产物比较 ==
+fdc7c5345717df64bf82798f830387a28d28ac99c3bc3a8d87656b7113b9b1a7 */d/code/screeps/screeps-bot/dist/main.js
+f386df739168032c47b402da4ae13a30b2c214b6878cd9c1315fdddd5599ccc6 */d/code/screeps/screeps-bot/dist/main.js.map.js
+main.js DIFFER（buildTime 预期差异，记录不強比）
+
+== 产物差分结论（2026-09-10）==
+两树 dist/main.js 仅 10 行差异，全部为构建元数据（BUILD_TAG/BUILD_COMMIT/BUILD_TREE/BUILD_DEPLOY_BRANCH 与 __DEPLOY_BUNDLE_HASH__ 自引行）。
+主树构建于 5c8a9d3 时点（2026-09-10T10:47Z，预算提交前；BUILD_DEPLOY_BRANCH=default 系主树构建时点 git 环境读取差异），第二树构建于 37e3390（2026-09-10T11:16Z）。
+src 源两树完全一致（同 SHA 检出），bundle 业务字节逐字节一致；hash 差异不构成错误，不为比较强改 buildTime。

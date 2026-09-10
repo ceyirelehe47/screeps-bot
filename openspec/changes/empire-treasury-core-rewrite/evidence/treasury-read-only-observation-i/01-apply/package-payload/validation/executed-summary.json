@@ -1,0 +1,64 @@
+{
+  "baseHead": "77d67d6a02cfb55029515e00503b598a78870ae5",
+  "patchSha256": "f280accda952959aa358989ebb12bce904de0ac072e445ecc79db4579b8d2d4b",
+  "localNode": {
+    "total": 54,
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "localLimitedTypecheck": {
+    "compiler": "5.8.3",
+    "newModules": 3,
+    "diagnostics": 0,
+    "notFullProject": true
+  },
+  "syntaxAndPhase": {
+    "tsFiles": 6,
+    "phases": 42,
+    "matched": true
+  },
+  "mutationChecks": [
+    {
+      "mutation": "drop_reservation_deduction",
+      "exitCode": 1,
+      "failedTests": 1,
+      "detected": true
+    },
+    {
+      "mutation": "hide_resource_mismatch",
+      "exitCode": 1,
+      "failedTests": 1,
+      "detected": true
+    },
+    {
+      "mutation": "accidental_memory_write",
+      "exitCode": 1,
+      "failedTests": 32,
+      "detected": true
+    },
+    {
+      "mutation": "escape_observer_fault",
+      "exitCode": 1,
+      "failedTests": 3,
+      "detected": true
+    }
+  ],
+  "reconstructedSecondTree": {
+    "changedFileHashesMatched": 8,
+    "nodeTestsPassed": 54,
+    "fullRepo": false,
+    "independentEnvironment": false
+  },
+  "notExecuted": [
+    "actual-facade Jest tests",
+    "repository-locked full typecheck",
+    "production bundle",
+    "whole-repository Jest/budget",
+    "real Screeps runtime",
+    "online observation/deployment"
+  ],
+  "noPush": true,
+  "noGameActions": true
+}

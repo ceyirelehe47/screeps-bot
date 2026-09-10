@@ -1,0 +1,10 @@
+{
+  "command": [
+    "python",
+    "/mnt/data/treasury-ro-work/apply_patch.py",
+    "--repo",
+    "/tmp/treasury-ro-second-2fikw8rf/repo",
+    "--check-only"
+  ],
+  "cwdKind": "separate reconstructed selected-source worktree; not complete repository"
+}

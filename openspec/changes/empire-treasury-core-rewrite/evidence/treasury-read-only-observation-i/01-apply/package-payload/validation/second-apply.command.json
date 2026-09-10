@@ -1,0 +1,9 @@
+{
+  "command": [
+    "git",
+    "apply",
+    "--whitespace=error-all",
+    "/mnt/data/treasury-ro-work/changes.patch"
+  ],
+  "cwdKind": "separate reconstructed selected-source worktree; not complete repository"
+}

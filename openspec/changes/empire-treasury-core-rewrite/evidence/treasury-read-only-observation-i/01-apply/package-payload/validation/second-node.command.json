@@ -1,0 +1,8 @@
+{
+  "command": [
+    "node",
+    "--test",
+    "test/treasury-read-only/local.spec.cjs"
+  ],
+  "cwdKind": "separate reconstructed selected-source worktree; not complete repository"
+}

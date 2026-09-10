@@ -1,0 +1,34 @@
+== npm run build（DEST 未设置，仅构建） 2026-09-10T10:47:04Z ==
+
+> screeps@2026.8.29-6 build
+> rollup -c
+
+No deployment target set. Build only.
+[deploy-guard] warning: building from a dirty working tree; embedded identity is not a committed state.
+cleared:  D:\code\screeps\screeps-bot\dist
+[36m
+[1msrc/main.ts[22m → [1mdist/main.js[22m...[39m
+[deploy] bundle sha256: 4a00af2eab05bd11… (full in Memory.runtime.lastDeployBundleHash)
+[32mcreated [1mdist/main.js[22m in [1m47.7s[22m[39m
+BUILD_EXIT=0
+== dist 产物 ==
+total 14176
+drwxr-xr-x 1 15027 197609       0 Sep 10 18:48 .
+drwxr-xr-x 1 15027 197609       0 Sep 10 18:48 ..
+-rw-r--r-- 1 15027 197609 4941691 Sep 10 18:48 main.js
+-rw-r--r-- 1 15027 197609 9565049 Sep 10 18:48 main.js.map.js
+fdc7c5345717df64bf82798f830387a28d28ac99c3bc3a8d87656b7113b9b1a7 *dist/main.js
+f386df739168032c47b402da4ae13a30b2c214b6878cd9c1315fdddd5599ccc6 *dist/main.js.map.js
+== bundle 默认关闭证明 ==
+3
+== bundle 配置原样（dist/main.js L111075-111084）默认关闭证明 ==
+const TREASURY_READ_ONLY_CONFIG = Object.freeze({
+    enabled: false,
+    shardName: "",
+    rooms: Object.freeze([]),
+    resources: Object.freeze(["energy", "H"]),
+    intervalTicks: 100,
+    maxSampleCpu: 2,
+    reserveCpu: 5,
+    minBucket: 2000,
+    maxLogBytes: 16384,

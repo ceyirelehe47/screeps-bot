@@ -1,0 +1,9 @@
+PASS test/treasuryReadOnlyObservation.test.ts (8.515 s)
+PASS src/main.test.ts
+
+Test Suites: 2 passed, 2 total
+Tests:       13 passed, 13 total
+Snapshots:   0 total
+Time:        11.04 s
+Ran all test suites within paths "src/main.test.ts", "test/treasuryReadOnlyObservation.test.ts".
+Test results written to: openspec\changes\empire-treasury-core-rewrite\evidence\treasury-read-only-observation-i\02-first-round\first-jest.json

@@ -1,5 +1,16 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Treasury Read-only Observation I（2026-09-10，离线验收 READ_ONLY_CODE_VERIFIED / NOT_DEPLOYED）
+
+交付实现包（zip `7f6c1dd9…`、patch `f280accd…`、基线 77d67d6）原样应用 + Agent 独立验收轮；提交链 d664256（补丁 8 文件）→ 5c8a9d3（独立反例 17 例）→ 37e3390（预算 246/1515→248/1539）。判读与证据见 `evidence/treasury-read-only-observation-i/treasury-read-only-observation-i-report.md`。
+
+- [x] 原样应用：check-only/APPLIED 输出核对、8 文件与包内输出逐字节 IDENTICAL、before/after Git blob 与 manifest 一致、锚点保护在 HEAD 上拒绝重应用实录；冻结 diff 11 文件全落白名单、受保护路径零改动
+- [x] 原样首轮（Node 22.19.0 / TS 5.9.3 完整检查）：node --test 54/54、tsc×2 EXIT=0、定向 Jest 2 套 13 例全绿
+- [x] 独立反例（真实 facade、每反例配合法对照）：新增 treasuryReadOnlyIndependent.test.ts 17 例全绿——门禁零服务调用/Store 异常与 NaN/范围外资源不扩扫/mismatch 明细（库存与结构 ID）/市场日志损坏与越界/UTF-8 Buffer 对拍/output_limited 不建基线/慢 getter 协作预算/长期单快照；kernel 损坏不报 active=0 且八写端口零调用；未发现被测代码缺陷
+- [x] 完整回归与预算：build（DEST 未设置）成功且 bundle 内 `enabled:false` 原样可见；全仓 Jest 248/248 套、1539/1539 例（两次独立全量）；预算锚点滚动 5c8a9d3、verify-jest-budget PASSED
+- [x] 第二干净工作树（SHA 37e3390、独立 npm ci）：定向 Jest 3 套 30 例、tsc×2、默认构建全绿；两树 bundle 仅 10 行构建元数据差异（业务字节一致，不强改 buildTime）
+- [x] 收尾：上轮主报告两处说明勘误（仅追加原文未改：收尾 enabled 实际 false；C02 独立校准 repoHead=4fb23e6 时点归属）；默认关闭三重证据（源码/bundle/运行级测试）；真实 CPU 与线上核对明确未验证
+
 ## Treasury Terminal Integration I · Continuation 0002（2026-09-10，实机 TREASURY_INTEGRATION_PASS）
 
 本地实机续测任务书（用户会话附件）执行轮；起点 9aa1c48，`RUN_VALIDATION_HEAD` cf29a69。判读与证据见 `evidence/terminal-transfer-treasury-integration-i/continuation-0002/treasury-integration-i-continuation-0002-report.md`（独立验收 `formal-and-closeout/independent-acceptance.md`）。

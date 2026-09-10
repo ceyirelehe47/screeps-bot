@@ -1,0 +1,5 @@
+== 第二工作树独立 npm ci（SHA 37e3390） 2026-09-10T11:14:16Z ==
+a different dependency.
+
+Run `npm audit` for details.
+NPM_CI_EXIT=0
