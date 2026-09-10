@@ -1,0 +1,40 @@
+[
+  {
+    "command": [
+      "node",
+      "--check",
+      "/mnt/data/treasury-legacy-read-bridge-I/kit/assemble.cjs"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": [
+      "node",
+      "--test",
+      "/mnt/data/treasury-legacy-read-bridge-I/tests/bridge.spec.cjs",
+      "/mnt/data/treasury-legacy-read-bridge-I/tests/assembler.spec.cjs"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": [
+      "tsc",
+      "-p",
+      "/mnt/data/treasury-compat-work/typecheck/tsconfig.json"
+    ],
+    "exitCode": 0
+  },
+  {
+    "command": [
+      "node",
+      "/mnt/data/treasury-legacy-read-bridge-I/kit/assemble.cjs",
+      "--source-repo",
+      "/mnt/data/treasury-legacy-read-bridge-I",
+      "--target-repo",
+      "/mnt/data/treasury-legacy-read-bridge-I",
+      "--check"
+    ],
+    "exitCode": 1,
+    "expected": "refused"
+  }
+]

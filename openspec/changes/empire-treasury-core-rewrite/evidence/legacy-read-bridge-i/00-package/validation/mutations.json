@@ -1,0 +1,22 @@
+[
+  {
+    "mutation": "invent_spendable",
+    "exitCode": 1,
+    "detected": true
+  },
+  {
+    "mutation": "missing_as_empty",
+    "exitCode": 1,
+    "detected": true
+  },
+  {
+    "mutation": "accidental_memory_write",
+    "exitCode": 1,
+    "detected": true
+  },
+  {
+    "mutation": "reuse_changed_capacity",
+    "exitCode": 1,
+    "detected": true
+  }
+]

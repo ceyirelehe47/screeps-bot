@@ -1,0 +1,10 @@
+PASS src/main.test.ts (7.495 s)
+PASS test/treasuryCompatRead.test.ts
+PASS test/treasuryCompatIndependent.test.ts
+
+Test Suites: 3 passed, 3 total
+Tests:       8 passed, 8 total
+Snapshots:   0 total
+Time:        12.619 s
+Ran all test suites within paths "src/main.test.ts", "test/treasuryCompatRead.test.ts", "test/treasuryCompatIndependent.test.ts".
+EXIT=0

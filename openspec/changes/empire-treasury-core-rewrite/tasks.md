@@ -1,5 +1,17 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Treasury Legacy Read Bridge I（2026-09-11，COMPAT_READ_CANDIDATE_VERIFIED / NOT_DEPLOYED）
+
+执行任务包（用户会话提供 zip `7316e980…`，46 文件 INTEGRITY 全 OK，原件归档 `evidence/legacy-read-bridge-i/00-package/`）：在旧生产基线 `06ffedb` 上生成默认关闭的兼容只读桥候选并独立验收。**结论：候选分支 `compat/treasury-read-bridge-i` 远端=本地=`7ceabba`（ce7d07c 装配 13 文件 → 6d514b5 独立反例 → 7ceabba 预算锚点）；CANDIDATE_VALIDATION_HEAD=6d514b5 全量 195/685 全绿、构建 EXIT=0、预算 PASSED；未上传 Screeps、未采样。** 判读与证据见 `evidence/legacy-read-bridge-i/treasury-legacy-read-bridge-i-report.md`。
+
+- [x] 装配：8 文件真实固定源闭包（01bd983，blob 与 source-plan 锁全一致，仅暴露 buildObservation/buildCommitments）；--check/--apply 成功；交付环境未能执行的 10 项 real-readers 与闭包生成已实际执行
+- [x] 原样首轮：tsc×2 EXIT=0、Node 51/51、定向 Jest 7/7（旧 main 六项原样通过，38→39）
+- [x] 独立反例 19 例（五组合：非空/变更/到期边界、缺失损坏不冒充空表、容量身份非 1M/8M 档位、真实稀疏枚举对拍 mismatch+候选实际 main.ts 39 阶段 fail-fast、窗口泄露边界）全绿 + Jest wrapper 收录
+- [x] 完整候选验证：全量 Jest 195/685、预算锚点按真实收集更新后 verify PASSED（脚本内部重跑全量已如实记录）；构建 bundle 4,586,665B（线上 4,494,463B，+92,202B；账户上限离线不可确证，不因 exit=0 推断可上传）
+- [x] 冻结差异：17 文件全白名单（生产仅 main.ts 恰 2 行 + treasuryCompat* 5 新文件）；27/27 关键路径（resourceControl/resourceReservation/runtimeServices/Defense/logistics/runtime.d.ts/package*/rollup/tsconfig*/deployGuard）字节不变
+- [x] 第二干净工作树（7ceabba 独立 npm ci）：tsc×2、Node 70/70、Jest 8/8、构建；17 文件两树字节一致、同 SHA bundle 仅 3 行构建元数据差异
+- [x] 边界：零 Screeps API、零上传、零 push 到游戏、未动用户监控；证据脱敏扫描通过
+
 ## Treasury Read-only Observation I · 线上基线核对与限定采样 0001（2026-09-10，阶段A ONLINE_BASELINE_REVIEWED / NOT_DEPLOYED）
 
 执行任务书（用户会话提供，原件入库 `evidence/treasury-read-only-online-0001/00-task/`）：先只读取得线上事实→判定部署差异→仅差异与授权均满足才采样。**结论：线上活动分支 `default`=构建 `06ffedb`（2026.8.29-6），与候选 `828a078` 相差 432 提交基础迁移（国库核心 63 文件+Defense 全线+resourceControl 重构+Memory 类型），叠加部署授权未取得——停止部署，阶段B/C 未执行。** 判读与证据见 `evidence/treasury-read-only-online-0001/treasury-read-only-online-0001-report.md`。

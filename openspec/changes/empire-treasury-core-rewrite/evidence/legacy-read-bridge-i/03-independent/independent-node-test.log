@@ -1,0 +1,125 @@
+TAP version 13
+# Subtest: 独立1a：两房非空正对照——done/cancelled 不计 outgoing，manual 计入对侧 incoming
+ok 1 - 独立1a：两房非空正对照——done/cancelled 不计 outgoing，manual 计入对侧 incoming
+  ---
+  duration_ms: 274.4521
+  type: 'test'
+  ...
+# Subtest: 独立1b：expiresAt 等于当前 tick 仍占用（严格小于才到期），跨过才排除且原记录保留
+ok 2 - 独立1b：expiresAt 等于当前 tick 仍占用（严格小于才到期），跨过才排除且原记录保留
+  ---
+  duration_ms: 111.7099
+  type: 'test'
+  ...
+# Subtest: 独立1c：旧 writer 状态迁移与新增记录（无 revision 通知），下一样本如实反映新值
+ok 3 - 独立1c：旧 writer 状态迁移与新增记录（无 revision 通知），下一样本如实反映新值
+  ---
+  duration_ms: 69.3285
+  type: 'test'
+  ...
+# Subtest: 独立2a：reservations 为数组或 null 不冒充空表
+ok 4 - 独立2a：reservations 为数组或 null 不冒充空表
+  ---
+  duration_ms: 136.1873
+  type: 'test'
+  ...
+# Subtest: 独立2b：单条损坏（remaining>amount）→ read_incomplete 且 scope 级 incomplete，原记录不动
+ok 5 - 独立2b：单条损坏（remaining>amount）→ read_incomplete 且 scope 级 incomplete，原记录不动
+  ---
+  duration_ms: 47.9611
+  type: 'test'
+  ...
+# Subtest: 独立2c：限定资源外（U）损坏记录——索引仍完整定位 scope，选定 H 行保持 complete
+ok 6 - 独立2c：限定资源外（U）损坏记录——索引仍完整定位 scope，选定 H 行保持 complete
+  ---
+  duration_ms: 47.9028
+  type: 'test'
+  ...
+# Subtest: 独立2d：catalog 外资源记录 → 全局 incomplete 传染每个 scope（fail closed）
+ok 7 - 独立2d：catalog 外资源记录 → 全局 incomplete 传染每个 scope（fail closed）
+  ---
+  duration_ms: 48.5769
+  type: 'test'
+  ...
+# Subtest: 独立2e：Proxy 守卫真实武装（写尝试被拦截计数），观察全程零写且原型未污染
+ok 8 - 独立2e：Proxy 守卫真实武装（写尝试被拦截计数），观察全程零写且原型未污染
+  ---
+  duration_ms: 50.4036
+  type: 'test'
+  ...
+# Subtest: 独立3a：非 1M/8M 档位的合法容量变化（1M→3M→2.5M）与结构 ID 替换
+ok 9 - 独立3a：非 1M/8M 档位的合法容量变化（1M→3M→2.5M）与结构 ID 替换
+  ---
+  duration_ms: 45.2945
+  type: 'test'
+  ...
+# Subtest: 独立3b：单房一端不可读 → 全房退出 observation/commitments（not_read），readers 零调用
+ok 10 - 独立3b：单房一端不可读 → 全房退出 observation/commitments（not_read），readers 零调用
+  ---
+  duration_ms: 55.6776
+  type: 'test'
+  ...
+# Subtest: 独立3c：单资源方法读数超过总量 used → unreadable，不产出半份数据
+ok 11 - 独立3c：单资源方法读数超过总量 used → unreadable，不产出半份数据
+  ---
+  duration_ms: 48.0164
+  type: 'test'
+  ...
+# Subtest: 独立4a：真实 observation 稀疏键枚举与方法读数故意不一致 → mismatch；恢复后 match
+ok 12 - 独立4a：真实 observation 稀疏键枚举与方法读数故意不一致 → mismatch；恢复后 match
+  ---
+  duration_ms: 47.6559
+  type: 'test'
+  ...
+# Subtest: 独立4b：同 tick 投影但行字段为字符串 → unreadable 而非 match（comparisonPerformed=false）
+ok 13 - 独立4b：同 tick 投影但行字段为字符串 → unreadable 而非 match（comparisonPerformed=false）
+  ---
+  duration_ms: 44.2623
+  type: 'test'
+  ...
+# Subtest: 独立4c：候选实际 main.ts——39 阶段、首阶段业务异常 fail-fast 且 compatRead 未执行、compatRead 异常被包裹
+ok 14 - 独立4c：候选实际 main.ts——39 阶段、首阶段业务异常 fail-fast 且 compatRead 未执行、compatRead 异常被包裹
+  ---
+  duration_ms: 125.3591
+  type: 'test'
+  ...
+# Subtest: 独立4d：默认配置非合法启用 profile——enabled 翻转 alone 仍被拒绝
+ok 15 - 独立4d：默认配置非合法启用 profile——enabled 翻转 alone 仍被拒绝
+  ---
+  duration_ms: 25.2002
+  type: 'test'
+  ...
+# Subtest: 独立5a：绝对窗口结束 + heap 重建不重开窗口，零新增读取
+ok 16 - 独立5a：绝对窗口结束 + heap 重建不重开窗口，零新增读取
+  ---
+  duration_ms: 15.2074
+  type: 'test'
+  ...
+# Subtest: 独立5b：低 bucket 跳过消耗本 tick 尝试名额；同 tick 恢复也不补采
+ok 17 - 独立5b：低 bucket 跳过消耗本 tick 尝试名额；同 tick 恢复也不补采
+  ---
+  duration_ms: 17.0898
+  type: 'test'
+  ...
+# Subtest: 独立5c：fault 清空保留快照，不再以隐形基线比较
+ok 18 - 独立5c：fault 清空保留快照，不再以隐形基线比较
+  ---
+  duration_ms: 18.7031
+  type: 'test'
+  ...
+# Subtest: 独立5d：输出不含原始任务/预留负载、holder 身份串与凭据形态
+ok 19 - 独立5d：输出不含原始任务/预留负载、holder 身份串与凭据形态
+  ---
+  duration_ms: 44.1715
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1612.9831
+EXIT=0

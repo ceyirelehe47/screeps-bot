@@ -1,0 +1,376 @@
+TAP version 13
+# Subtest: deterministic closure uses only reachable runtime dependencies, no type-only expansion
+ok 1 - deterministic closure uses only reachable runtime dependencies, no type-only expansion
+  ---
+  duration_ms: 143.633044
+  type: 'test'
+  ...
+# Subtest: generated read factories execute with static import map, expose only two builders
+ok 2 - generated read factories execute with static import map, expose only two builders
+  ---
+  duration_ms: 62.654528
+  type: 'test'
+  ...
+# Subtest: type-only forbidden dependency does not enter runtime closure
+ok 3 - type-only forbidden dependency does not enter runtime closure
+  ---
+  duration_ms: 10.175534
+  type: 'test'
+  ...
+# Subtest: reject runtime closure escape @/runtime/runtimeServices
+ok 4 - reject runtime closure escape @/runtime/runtimeServices
+  ---
+  duration_ms: 39.097233
+  type: 'test'
+  ...
+# Subtest: reject runtime closure escape @/runtime/treasury/facade
+ok 5 - reject runtime closure escape @/runtime/treasury/facade
+  ---
+  duration_ms: 8.243613
+  type: 'test'
+  ...
+# Subtest: reject runtime closure escape @/runtime/resourceReservation
+ok 6 - reject runtime closure escape @/runtime/resourceReservation
+  ---
+  duration_ms: 14.45744
+  type: 'test'
+  ...
+# Subtest: reject runtime closure escape @/runtime/homeDefense
+ok 7 - reject runtime closure escape @/runtime/homeDefense
+  ---
+  duration_ms: 16.948341
+  type: 'test'
+  ...
+# Subtest: reject runtime closure escape node:fs
+ok 8 - reject runtime closure escape node:fs
+  ---
+  duration_ms: 18.43422
+  type: 'test'
+  ...
+# Subtest: reject runtime closure escape fs
+ok 9 - reject runtime closure escape fs
+  ---
+  duration_ms: 13.938137
+  type: 'test'
+  ...
+# Subtest: reject runtime closure escape ../../../outside
+ok 10 - reject runtime closure escape ../../../outside
+  ---
+  duration_ms: 19.126821
+  type: 'test'
+  ...
+# Subtest: reject dynamic runtime loading require(name)
+ok 11 - reject dynamic runtime loading require(name)
+  ---
+  duration_ms: 77.532586
+  type: 'test'
+  ...
+# Subtest: reject dynamic runtime loading import(name)
+ok 12 - reject dynamic runtime loading import(name)
+  ---
+  duration_ms: 14.239501
+  type: 'test'
+  ...
+# Subtest: reject dynamic runtime loading eval("x")
+ok 13 - reject dynamic runtime loading eval("x")
+  ---
+  duration_ms: 10.097012
+  type: 'test'
+  ...
+# Subtest: reject dynamic runtime loading new Function("return 1")
+ok 14 - reject dynamic runtime loading new Function("return 1")
+  ---
+  duration_ms: 10.062202
+  type: 'test'
+  ...
+# Subtest: fresh factory graph has fresh module-local cache per sample
+ok 15 - fresh factory graph has fresh module-local cache per sample
+  ---
+  duration_ms: 42.733448
+  type: 'test'
+  ...
+# Subtest: old main patch adds only import and diagnostic call before original flush
+ok 16 - old main patch adds only import and diagnostic call before original flush
+  ---
+  duration_ms: 0.6805
+  type: 'test'
+  ...
+# Subtest: main patch does not operate on current development Treasury main
+ok 17 - main patch does not operate on current development Treasury main
+  ---
+  duration_ms: 0.299754
+  type: 'test'
+  ...
+# Subtest: test phase count updated by one without weakening old test contracts
+ok 18 - test phase count updated by one without weakening old test contracts
+  ---
+  duration_ms: 0.784768
+  type: 'test'
+  ...
+# Subtest: missing/duplicate main anchor is rejected, not fuzzy-applied
+ok 19 - missing/duplicate main anchor is rejected, not fuzzy-applied
+  ---
+  duration_ms: 0.32342
+  type: 'test'
+  ...
+# Subtest: source plan is exactly old-base branch plus eight new read files
+ok 20 - source plan is exactly old-base branch plus eight new read files
+  ---
+  duration_ms: 0.195346
+  type: 'test'
+  ...
+# Subtest: disabled profile never reads Game/Memory/builders/CPU, including module construction
+ok 21 - disabled profile never reads Game/Memory/builders/CPU, including module construction
+  ---
+  duration_ms: 240.30693
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: rooms=[]
+ok 22 - invalid profile refuses: rooms=[]
+  ---
+  duration_ms: 86.053609
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: rooms=["W1N1","W1N1"]
+ok 23 - invalid profile refuses: rooms=["W1N1","W1N1"]
+  ---
+  duration_ms: 61.833491
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: rooms=["W1N1","W2N1","W3N1"]
+ok 24 - invalid profile refuses: rooms=["W1N1","W2N1","W3N1"]
+  ---
+  duration_ms: 76.590284
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: endTick=99
+ok 25 - invalid profile refuses: endTick=99
+  ---
+  duration_ms: 94.575643
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: endTick=1301
+ok 26 - invalid profile refuses: endTick=1301
+  ---
+  duration_ms: 55.705054
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: startTick=null
+ok 27 - invalid profile refuses: startTick=null
+  ---
+  duration_ms: 56.406848
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: intervalTicks=1
+ok 28 - invalid profile refuses: intervalTicks=1
+  ---
+  duration_ms: 36.494261
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: resources=[]
+ok 29 - invalid profile refuses: resources=[]
+  ---
+  duration_ms: 65.461007
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: maxLogBytes=100
+ok 30 - invalid profile refuses: maxLogBytes=100
+  ---
+  duration_ms: 64.230965
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: maxSampleCpu=null
+ok 31 - invalid profile refuses: maxSampleCpu=null
+  ---
+  duration_ms: 36.510452
+  type: 'test'
+  ...
+# Subtest: current fields retain explicit empty state, index values are not balances
+ok 32 - current fields retain explicit empty state, index values are not balances
+  ---
+  duration_ms: 42.095266
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: absent m => delete m.data.resourceControl.tasks
+ok 33 - missing/damaged table remains unavailable: absent m => delete m.data.resourceControl.tasks
+  ---
+  duration_ms: 22.120384
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = null
+ok 34 - missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = null
+  ---
+  duration_ms: 20.489458
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = []
+ok 35 - missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = []
+  ---
+  duration_ms: 39.709113
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_parent m => m.data = null
+ok 36 - missing/damaged table remains unavailable: invalid_parent m => m.data = null
+  ---
+  duration_ms: 52.720356
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: accessor_unreadable m => Object.defineProperty(m.data.resourceControl,'tasks',{ get(){throw new Error('should not invoke');} })
+ok 37 - missing/damaged table remains unavailable: accessor_unreadable m => Object.defineProperty(m.data.resourceControl,'tasks',{ get(){throw new Error('should not invoke');} })
+  ---
+  duration_ms: 48.740383
+  type: 'test'
+  ...
+# Subtest: over-bound table does not aggregate a prefix; exact bound accepted
+ok 38 - over-bound table does not aggregate a prefix; exact bound accepted
+  ---
+  duration_ms: 28.956995
+  type: 'test'
+  ...
+# Subtest: existing Treasury core is not summarized as zero, even malformed or null
+ok 39 - existing Treasury core is not summarized as zero, even malformed or null
+  ---
+  duration_ms: 41.255733
+  type: 'test'
+  ...
+# Subtest: off-shard, early/late window and non-due tick use zero source reads
+ok 40 - off-shard, early/late window and non-due tick use zero source reads
+  ---
+  duration_ms: 119.707123
+  type: 'test'
+  ...
+# Subtest: low bucket and CPU headroom gate before reading state; legal next sample runs
+ok 41 - low bucket and CPU headroom gate before reading state; legal next sample runs
+  ---
+  duration_ms: 22.274595
+  type: 'test'
+  ...
+# Subtest: one attempt per tick and frozen profile scope
+ok 42 - one attempt per tick and frozen profile scope
+  ---
+  duration_ms: 25.003416
+  type: 'test'
+  ...
+# Subtest: new sample creates new reader instance, old writers need not bump new revision
+ok 43 - new sample creates new reader instance, old writers need not bump new revision
+  ---
+  duration_ms: 31.297159
+  type: 'test'
+  ...
+# Subtest: 8M storage comes from getCapacity and compares; no 1M hardcode
+ok 44 - 8M storage comes from getCapacity and compares; no 1M hardcode
+  ---
+  duration_ms: 22.07683
+  type: 'test'
+  ...
+# Subtest: capacity drop with inventory above capacity is visible, no comparable old delta
+ok 45 - capacity drop with inventory above capacity is visible, no comparable old delta
+  ---
+  duration_ms: 28.578918
+  type: 'test'
+  ...
+# Subtest: saturated free zero after shrink accepted without inventing capacity
+ok 46 - saturated free zero after shrink accepted without inventing capacity
+  ---
+  duration_ms: 34.06356
+  type: 'test'
+  ...
+# Subtest: missing terminal is absence, not a zero amount
+ok 47 - missing terminal is absence, not a zero amount
+  ---
+  duration_ms: 21.248256
+  type: 'test'
+  ...
+# Subtest: unreadable endpoint is not included in snapshot input; other room is still readable
+ok 48 - unreadable endpoint is not included in snapshot input; other room is still readable
+  ---
+  duration_ms: 20.612471
+  type: 'test'
+  ...
+# Subtest: NaN and inconsistent capacity never become normal
+ok 49 - NaN and inconsistent capacity never become normal
+  ---
+  duration_ms: 52.011173
+  type: 'test'
+  ...
+# Subtest: independent sparse-builder mismatch is detected and legal next sample restores match
+ok 50 - independent sparse-builder mismatch is detected and legal next sample restores match
+  ---
+  duration_ms: 21.073191
+  type: 'test'
+  ...
+# Subtest: legacy projection comparison requires same tick, never yesterday as now
+ok 51 - legacy projection comparison requires same tick, never yesterday as now
+  ---
+  duration_ms: 30.083179
+  type: 'test'
+  ...
+# Subtest: unknown legacy projection values or future tick are explicitly unreadable/future
+ok 52 - unknown legacy projection values or future tick are explicitly unreadable/future
+  ---
+  duration_ms: 19.930235
+  type: 'test'
+  ...
+# Subtest: Memory immutable and identity preserved, no table normalization
+ok 53 - Memory immutable and identity preserved, no table normalization
+  ---
+  duration_ms: 19.655055
+  type: 'test'
+  ...
+# Subtest: output limit emits valid omission without baseline; later delta cannot use unseen report
+ok 54 - output limit emits valid omission without baseline; later delta cannot use unseen report
+  ---
+  duration_ms: 29.288234
+  type: 'test'
+  ...
+# Subtest: CPU cooperating budget stops further work and exposes partial result
+ok 55 - CPU cooperating budget stops further work and exposes partial result
+  ---
+  duration_ms: 20.772321
+  type: 'test'
+  ...
+# Subtest: cost of serialization/emission is reported in following sample, not a hard cap
+ok 56 - cost of serialization/emission is reported in following sample, not a hard cap
+  ---
+  duration_ms: 21.579083
+  type: 'test'
+  ...
+# Subtest: logger and reader exceptions disable only preview and do not rethrow
+ok 57 - logger and reader exceptions disable only preview and do not rethrow
+  ---
+  duration_ms: 50.825032
+  type: 'test'
+  ...
+# Subtest: long run retains one primitive snapshot; absolute end survives module reset
+ok 58 - long run retains one primitive snapshot; absolute end survives module reset
+  ---
+  duration_ms: 23.321029
+  type: 'test'
+  ...
+# Subtest: primitive deltas are not writer attribution or actual fees
+ok 59 - primitive deltas are not writer attribution or actual fees
+  ---
+  duration_ms: 20.167736
+  type: 'test'
+  ...
+# Subtest: UTF-8 JSON length agrees with Buffer oracle
+ok 60 - UTF-8 JSON length agrees with Buffer oracle
+  ---
+  duration_ms: 34.589138
+  type: 'test'
+  ...
+# Subtest: runtime default is disabled, does not evaluate read capsule
+ok 61 - runtime default is disabled, does not evaluate read capsule
+  ---
+  duration_ms: 36.899622
+  type: 'test'
+  ...
+1..61
+# tests 61
+# suites 0
+# pass 61
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2650.196219

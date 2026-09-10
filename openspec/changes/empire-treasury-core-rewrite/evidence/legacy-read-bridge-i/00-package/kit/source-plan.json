@@ -1,0 +1,32 @@
+{
+  "repository": "ceyirelehe47/screeps-bot",
+  "developmentBranch": "refactor/empire-treasury-rearchitecture",
+  "sourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
+  "productionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+  "productionMainBlob": "5f6c49c70d1c916ab47cda30884fddb1fab9931a",
+  "roots": [
+    "src/runtime/treasury/observation.ts",
+    "src/runtime/treasury/commitments.ts"
+  ],
+  "allowedRuntimeSources": [
+    "src/runtime/treasury/observation.ts",
+    "src/runtime/treasury/types.ts",
+    "src/runtime/treasury/commitments.ts",
+    "src/runtime/treasury/commitmentRevision.ts",
+    "src/runtime/treasury/holderResolution.ts",
+    "src/runtime/treasury/ownerIdentity.ts",
+    "src/runtime/logistics/resourceTransferTaskHealth.ts",
+    "src/runtime/configNormalize.ts"
+  ],
+  "knownSourceBlobs": {
+    "src/runtime/treasury/observation.ts": "eb733c07f72785a2697b5b2438571ea1435f6a5c",
+    "src/runtime/treasury/types.ts": "05c1af2da2ad485f881ed3765344a40f16720625",
+    "src/runtime/treasury/commitments.ts": "4b4342785adaa58c196e8a6ba46b369b7ab61f97",
+    "src/runtime/treasury/holderResolution.ts": "078505536b2daece8c9813cc80ab914904599e5c",
+    "src/runtime/treasury/ownerIdentity.ts": "cb34746afe46e1fa29f9ad12428c501da3b5d72c",
+    "src/runtime/logistics/resourceTransferTaskHealth.ts": "c40d9d9893cc6373d876db76c375a815d874886a",
+    "src/runtime/configNormalize.ts": "e938b49f18036b85fd2d009569629614cdaf0450",
+    "src/runtime/treasury/commitmentRevision.ts": "5e71141d63b32f7c172bd749f1fd4131d6fcc0fd"
+  },
+  "productionMainTestBlob": "2d2283b8466c6427a2222b841d8fd72261374f02"
+}

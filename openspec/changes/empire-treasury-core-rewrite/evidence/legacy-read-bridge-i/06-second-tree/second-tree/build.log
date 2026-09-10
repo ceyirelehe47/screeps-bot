@@ -1,0 +1,10 @@
+
+> screeps@2026.8.29-6 build
+> rollup -c
+
+No deployment target set. Build only.
+[36m
+[1msrc/main.ts[22m → [1mdist/main.js[22m...[39m
+[deploy] bundle sha256: 3d2870c421de3bd6… (full in Memory.runtime.lastDeployBundleHash)
+[32mcreated [1mdist/main.js[22m in [1m48.9s[22m[39m
+EXIT=0

@@ -1,0 +1,46 @@
+{
+  "status": "IMPLEMENTED_LOCAL_CHECKS_ONLY_NOT_DEPLOYED",
+  "node": "v22.16.0",
+  "typescript": "Version 5.8.3",
+  "localNodeTests": {
+    "passed": 63,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "41 bridge cases with synthetic reader ports + 22 assembler/main cases"
+  },
+  "mutationChecks": [
+    {
+      "mutation": "invent_spendable",
+      "exitCode": 1,
+      "detected": true
+    },
+    {
+      "mutation": "missing_as_empty",
+      "exitCode": 1,
+      "detected": true
+    },
+    {
+      "mutation": "accidental_memory_write",
+      "exitCode": 1,
+      "detected": true
+    },
+    {
+      "mutation": "reuse_changed_capacity",
+      "exitCode": 1,
+      "detected": true
+    }
+  ],
+  "oldSourceIdentities": {
+    "main": "5f6c49c70d1c916ab47cda30884fddb1fab9931a",
+    "mainTest": "2d2283b8466c6427a2222b841d8fd72261374f02"
+  },
+  "notRun": [
+    "8-file production reader generation from real Git objects",
+    "10 generated real-readers cases",
+    "locked repository full typecheck",
+    "candidate full Jest and budget",
+    "real production Rollup bundle",
+    "Screeps execution or upload"
+  ],
+  "gitAccess": "git ls-remote failed: Could not resolve host: github.com"
+}

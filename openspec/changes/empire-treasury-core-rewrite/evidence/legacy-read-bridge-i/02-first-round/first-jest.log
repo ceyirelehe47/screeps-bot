@@ -1,0 +1,10 @@
+PASS src/main.test.ts (7.52 s)
+PASS test/treasuryCompatRead.test.ts
+
+Test Suites: 2 passed, 2 total
+Tests:       7 passed, 7 total
+Snapshots:   0 total
+Time:        11.027 s
+Ran all test suites within paths "src/main.test.ts", "test/treasuryCompatRead.test.ts".
+Test results written to: ..\compat-read-i-evidence\first-jest.json
+EXIT=0

@@ -1,0 +1,276 @@
+TAP version 13
+# Subtest: disabled profile never reads Game/Memory/builders/CPU, including module construction
+ok 1 - disabled profile never reads Game/Memory/builders/CPU, including module construction
+  ---
+  duration_ms: 222.962205
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: rooms=[]
+ok 2 - invalid profile refuses: rooms=[]
+  ---
+  duration_ms: 73.408279
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: rooms=["W1N1","W1N1"]
+ok 3 - invalid profile refuses: rooms=["W1N1","W1N1"]
+  ---
+  duration_ms: 150.535829
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: rooms=["W1N1","W2N1","W3N1"]
+ok 4 - invalid profile refuses: rooms=["W1N1","W2N1","W3N1"]
+  ---
+  duration_ms: 56.287481
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: endTick=99
+ok 5 - invalid profile refuses: endTick=99
+  ---
+  duration_ms: 65.445615
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: endTick=1301
+ok 6 - invalid profile refuses: endTick=1301
+  ---
+  duration_ms: 37.95746
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: startTick=null
+ok 7 - invalid profile refuses: startTick=null
+  ---
+  duration_ms: 41.262228
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: intervalTicks=1
+ok 8 - invalid profile refuses: intervalTicks=1
+  ---
+  duration_ms: 32.832981
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: resources=[]
+ok 9 - invalid profile refuses: resources=[]
+  ---
+  duration_ms: 61.992952
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: maxLogBytes=100
+ok 10 - invalid profile refuses: maxLogBytes=100
+  ---
+  duration_ms: 62.794502
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: maxSampleCpu=null
+ok 11 - invalid profile refuses: maxSampleCpu=null
+  ---
+  duration_ms: 39.4356
+  type: 'test'
+  ...
+# Subtest: current fields retain explicit empty state, index values are not balances
+ok 12 - current fields retain explicit empty state, index values are not balances
+  ---
+  duration_ms: 34.901937
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: absent m => delete m.data.resourceControl.tasks
+ok 13 - missing/damaged table remains unavailable: absent m => delete m.data.resourceControl.tasks
+  ---
+  duration_ms: 22.654763
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = null
+ok 14 - missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = null
+  ---
+  duration_ms: 22.147467
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = []
+ok 15 - missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = []
+  ---
+  duration_ms: 36.443081
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_parent m => m.data = null
+ok 16 - missing/damaged table remains unavailable: invalid_parent m => m.data = null
+  ---
+  duration_ms: 40.974852
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: accessor_unreadable m => Object.defineProperty(m.data.resourceControl,'tasks',{ get(){throw new Error('should not invoke');} })
+ok 17 - missing/damaged table remains unavailable: accessor_unreadable m => Object.defineProperty(m.data.resourceControl,'tasks',{ get(){throw new Error('should not invoke');} })
+  ---
+  duration_ms: 52.535787
+  type: 'test'
+  ...
+# Subtest: over-bound table does not aggregate a prefix; exact bound accepted
+ok 18 - over-bound table does not aggregate a prefix; exact bound accepted
+  ---
+  duration_ms: 27.252983
+  type: 'test'
+  ...
+# Subtest: existing Treasury core is not summarized as zero, even malformed or null
+ok 19 - existing Treasury core is not summarized as zero, even malformed or null
+  ---
+  duration_ms: 45.685528
+  type: 'test'
+  ...
+# Subtest: off-shard, early/late window and non-due tick use zero source reads
+ok 20 - off-shard, early/late window and non-due tick use zero source reads
+  ---
+  duration_ms: 113.525709
+  type: 'test'
+  ...
+# Subtest: low bucket and CPU headroom gate before reading state; legal next sample runs
+ok 21 - low bucket and CPU headroom gate before reading state; legal next sample runs
+  ---
+  duration_ms: 22.436314
+  type: 'test'
+  ...
+# Subtest: one attempt per tick and frozen profile scope
+ok 22 - one attempt per tick and frozen profile scope
+  ---
+  duration_ms: 21.742123
+  type: 'test'
+  ...
+# Subtest: new sample creates new reader instance, old writers need not bump new revision
+ok 23 - new sample creates new reader instance, old writers need not bump new revision
+  ---
+  duration_ms: 44.592232
+  type: 'test'
+  ...
+# Subtest: 8M storage comes from getCapacity and compares; no 1M hardcode
+ok 24 - 8M storage comes from getCapacity and compares; no 1M hardcode
+  ---
+  duration_ms: 28.575488
+  type: 'test'
+  ...
+# Subtest: capacity drop with inventory above capacity is visible, no comparable old delta
+ok 25 - capacity drop with inventory above capacity is visible, no comparable old delta
+  ---
+  duration_ms: 20.755964
+  type: 'test'
+  ...
+# Subtest: saturated free zero after shrink accepted without inventing capacity
+ok 26 - saturated free zero after shrink accepted without inventing capacity
+  ---
+  duration_ms: 27.3776
+  type: 'test'
+  ...
+# Subtest: missing terminal is absence, not a zero amount
+ok 27 - missing terminal is absence, not a zero amount
+  ---
+  duration_ms: 28.018877
+  type: 'test'
+  ...
+# Subtest: unreadable endpoint is not included in snapshot input; other room is still readable
+ok 28 - unreadable endpoint is not included in snapshot input; other room is still readable
+  ---
+  duration_ms: 21.145012
+  type: 'test'
+  ...
+# Subtest: NaN and inconsistent capacity never become normal
+ok 29 - NaN and inconsistent capacity never become normal
+  ---
+  duration_ms: 48.025597
+  type: 'test'
+  ...
+# Subtest: independent sparse-builder mismatch is detected and legal next sample restores match
+ok 30 - independent sparse-builder mismatch is detected and legal next sample restores match
+  ---
+  duration_ms: 20.807006
+  type: 'test'
+  ...
+# Subtest: legacy projection comparison requires same tick, never yesterday as now
+ok 31 - legacy projection comparison requires same tick, never yesterday as now
+  ---
+  duration_ms: 33.038836
+  type: 'test'
+  ...
+# Subtest: unknown legacy projection values or future tick are explicitly unreadable/future
+ok 32 - unknown legacy projection values or future tick are explicitly unreadable/future
+  ---
+  duration_ms: 20.661244
+  type: 'test'
+  ...
+# Subtest: Memory immutable and identity preserved, no table normalization
+not ok 33 - Memory immutable and identity preserved, no table normalization
+  ---
+  duration_ms: 20.892306
+  type: 'test'
+  location: '/tmp/compat-mutation-qv93hqfd/tests/bridge.spec.cjs:98:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/tmp/compat-mutation-qv93hqfd/tests/bridge.spec.cjs:99:157)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: output limit emits valid omission without baseline; later delta cannot use unseen report
+ok 34 - output limit emits valid omission without baseline; later delta cannot use unseen report
+  ---
+  duration_ms: 32.318894
+  type: 'test'
+  ...
+# Subtest: CPU cooperating budget stops further work and exposes partial result
+ok 35 - CPU cooperating budget stops further work and exposes partial result
+  ---
+  duration_ms: 33.683902
+  type: 'test'
+  ...
+# Subtest: cost of serialization/emission is reported in following sample, not a hard cap
+ok 36 - cost of serialization/emission is reported in following sample, not a hard cap
+  ---
+  duration_ms: 34.924628
+  type: 'test'
+  ...
+# Subtest: logger and reader exceptions disable only preview and do not rethrow
+ok 37 - logger and reader exceptions disable only preview and do not rethrow
+  ---
+  duration_ms: 56.425048
+  type: 'test'
+  ...
+# Subtest: long run retains one primitive snapshot; absolute end survives module reset
+ok 38 - long run retains one primitive snapshot; absolute end survives module reset
+  ---
+  duration_ms: 31.194009
+  type: 'test'
+  ...
+# Subtest: primitive deltas are not writer attribution or actual fees
+ok 39 - primitive deltas are not writer attribution or actual fees
+  ---
+  duration_ms: 32.637526
+  type: 'test'
+  ...
+# Subtest: UTF-8 JSON length agrees with Buffer oracle
+ok 40 - UTF-8 JSON length agrees with Buffer oracle
+  ---
+  duration_ms: 35.884361
+  type: 'test'
+  ...
+# Subtest: runtime default is disabled, does not evaluate read capsule
+ok 41 - runtime default is disabled, does not evaluate read capsule
+  ---
+  duration_ms: 45.062741
+  type: 'test'
+  ...
+1..41
+# tests 41
+# suites 0
+# pass 40
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2686.180062

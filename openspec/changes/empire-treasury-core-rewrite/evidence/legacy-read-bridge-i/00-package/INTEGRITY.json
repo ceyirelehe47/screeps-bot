@@ -1,0 +1,234 @@
+{
+  "files": [
+    {
+      "path": "AGENT-VERIFY.md",
+      "bytes": 14626,
+      "sha256": "48c37f158da77b750c84ce06796ac534dc1f15182f91efb30d6a31b1871a793b"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5109,
+      "sha256": "a392e7377e30d23fd1c65caa556bbfb571244260bb879c3f4220d4f930b47176"
+    },
+    {
+      "path": "kit/assemble.cjs",
+      "bytes": 13149,
+      "sha256": "ef06164c4e332e2082bbbf170e0a1e87c997195b2af085aaa1b7ee3884e411e4"
+    },
+    {
+      "path": "kit/check-package.cjs",
+      "bytes": 994,
+      "sha256": "92c5f1915679953ed81a2bbf7cac40958b4f46afdcb2d027e5048647f6cd9ca8"
+    },
+    {
+      "path": "kit/source-plan.json",
+      "bytes": 1621,
+      "sha256": "d8157b15768f38b397864be4d017caa9d8df0d4378370d52a5d7f84f27fbe85a"
+    },
+    {
+      "path": "references/online-base-main.test.ts",
+      "bytes": 10978,
+      "sha256": "7030458efe1daa22b89aa5294405be9ded81d00e5b3f297de91235d3ec9d6006"
+    },
+    {
+      "path": "references/online-base-main.ts",
+      "bytes": 6130,
+      "sha256": "89d4412151eada98d5de967b0b61bc0f40eba8c7fc13554fd57458e43db47be9"
+    },
+    {
+      "path": "references/source-provenance.json",
+      "bytes": 1303,
+      "sha256": "387c606db8c2d5b44fafbda29b0e45030d66b6a37a51d7fec787cf6bb845ecc6"
+    },
+    {
+      "path": "templates/candidate-doc.md",
+      "bytes": 4854,
+      "sha256": "23352cd61c5725021d5aed3798b714d702f766d41781d1beffd07e87773e4877"
+    },
+    {
+      "path": "templates/treasuryCompatConfig.ts",
+      "bytes": 531,
+      "sha256": "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02"
+    },
+    {
+      "path": "templates/treasuryCompatRead.test.ts",
+      "bytes": 850,
+      "sha256": "24e36af8ff193c259d74a1b9cb2e57e781500b3693572a267cccc4ff7058915b"
+    },
+    {
+      "path": "templates/treasuryCompatRead.ts",
+      "bytes": 17379,
+      "sha256": "a9849e430b4238177653ed10cea085f13af402010e4c414312c64306a966d713"
+    },
+    {
+      "path": "templates/treasuryCompatRuntime.ts",
+      "bytes": 839,
+      "sha256": "1eaf416bbf31110791f2d5ca39561468c17e19c866da16045e3866b4b3ded942"
+    },
+    {
+      "path": "templates/treasuryCompatTypes.ts",
+      "bytes": 2013,
+      "sha256": "9656db9481cd9f513d617bb557fd1874fbf25c4c2a4054aefae77e0362610cad"
+    },
+    {
+      "path": "tests/assembler.spec.cjs",
+      "bytes": 7505,
+      "sha256": "db76d14b90f90644203f7605bc6b68c80e6c627765b7e49ea40c7e189dbec749"
+    },
+    {
+      "path": "tests/bridge.spec.cjs",
+      "bytes": 11489,
+      "sha256": "278491b3c996874db2fe560973708ba1d2a0d34cfc94f413ad36f23a3067a50f"
+    },
+    {
+      "path": "tests/helpers.cjs",
+      "bytes": 5858,
+      "sha256": "f28959c9fcf64fe607ad40a543790433df3572cde7f5797146e43792ee9cf4de"
+    },
+    {
+      "path": "tests/real-readers.spec.cjs",
+      "bytes": 6122,
+      "sha256": "62fd1c33a1b8ffe8a74a0046c5e2ae3f4796a3a31c838b9fcfe0e340b6fe108e"
+    },
+    {
+      "path": "validation/README.md",
+      "bytes": 1744,
+      "sha256": "15b15852a54063d6f4bd278c94517f722050c8fde6fe0e075ae6094ba612c413"
+    },
+    {
+      "path": "validation/bridge-first.tap",
+      "bytes": 8546,
+      "sha256": "f59199a81c101f8547ab1a457b88d7a120affc8ab403e50d83d6ae695c629fcd"
+    },
+    {
+      "path": "validation/commands.json",
+      "bytes": 832,
+      "sha256": "493c58c580770615abfaeda84321544fb3c3a540a299893670c61f84d2b00ae1"
+    },
+    {
+      "path": "validation/executed-summary.json",
+      "bytes": 1194,
+      "sha256": "c80e4d803e6269118215e40b42395b6deda846d7c60f7d37fa9e657e3adffd96"
+    },
+    {
+      "path": "validation/final-0.exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "validation/final-0.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "validation/final-0.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "validation/final-1.exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "validation/final-1.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "validation/final-1.stdout.log",
+      "bytes": 12749,
+      "sha256": "d2dd253d42a4b5448dd116e96bdeefd0f8b13fd95587c648d6ac7be5c5803516"
+    },
+    {
+      "path": "validation/final-2.exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "validation/final-2.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "validation/final-2.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "validation/local-game-type-stubs.d.ts",
+      "bytes": 702,
+      "sha256": "429eead4f9ede14445bea724c5599752cf6856464aeeee3e11751f2835e8939f"
+    },
+    {
+      "path": "validation/local-round2.tap",
+      "bytes": 12266,
+      "sha256": "50b45f5fb78071a22665d99da4065df411bb211bca895ee9bcd17636adc56a34"
+    },
+    {
+      "path": "validation/local-round3.tap",
+      "bytes": 12759,
+      "sha256": "7f0b1024ff45964288b68663b362b1ceb1b0dec83a419d1ced088d683f3bde8c"
+    },
+    {
+      "path": "validation/local-typecheck.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "validation/mutant-accidental_memory_write.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "validation/mutant-accidental_memory_write.stdout.log",
+      "bytes": 9301,
+      "sha256": "410bef0066644ea89dd9058a272387da94380b4e302804cd708d3eae7f97215d"
+    },
+    {
+      "path": "validation/mutant-invent_spendable.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "validation/mutant-invent_spendable.stdout.log",
+      "bytes": 10067,
+      "sha256": "1d2d5c7b209d7069188f0a3c78599de0280711dea70e1612e20a04ea1e27340d"
+    },
+    {
+      "path": "validation/mutant-missing_as_empty.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "validation/mutant-missing_as_empty.stdout.log",
+      "bytes": 10978,
+      "sha256": "e7fdbd9afbb52f364c54ddaadb20debc7798a6c56fb4c7ca8449fa8c9bbd2310"
+    },
+    {
+      "path": "validation/mutant-reuse_changed_capacity.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "validation/mutant-reuse_changed_capacity.stdout.log",
+      "bytes": 9426,
+      "sha256": "34ed141132c9a1a3573e98fea99baca6aa337197398cc55eb282d2022272848a"
+    },
+    {
+      "path": "validation/mutations.json",
+      "bytes": 356,
+      "sha256": "7e1506d0c36248bea18d57bbdfbc881d98d4ec7bf420f28a689badbd1a9f5654"
+    },
+    {
+      "path": "validation/run-mutations.py",
+      "bytes": 1840,
+      "sha256": "bbf48495e5fd0fd14440f643deba71c59dab3f5c46123c6982d9c3c52e2b1b75"
+    },
+    {
+      "path": "validation/same-worktree-refusal.log",
+      "bytes": 81,
+      "sha256": "9ed0edc37a07ea712f7394b11dbab5634f8754e5a15214d71ba1f3cf8413369e"
+    }
+  ]
+}

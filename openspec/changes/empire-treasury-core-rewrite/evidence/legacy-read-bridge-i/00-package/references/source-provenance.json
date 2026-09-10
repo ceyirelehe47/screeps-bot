@@ -1,0 +1,39 @@
+{
+  "checkedDevelopmentHead": "01bd9831454950c4928df98dd8679692b55603e5",
+  "sources": [
+    {
+      "path": "src/runtime/treasury/observation.ts",
+      "gitBlob": "eb733c07f72785a2697b5b2438571ea1435f6a5c"
+    },
+    {
+      "path": "src/runtime/treasury/types.ts",
+      "gitBlob": "05c1af2da2ad485f881ed3765344a40f16720625"
+    },
+    {
+      "path": "src/runtime/treasury/commitments.ts",
+      "gitBlob": "4b4342785adaa58c196e8a6ba46b369b7ab61f97"
+    },
+    {
+      "path": "src/runtime/treasury/holderResolution.ts",
+      "gitBlob": "078505536b2daece8c9813cc80ab914904599e5c"
+    },
+    {
+      "path": "src/runtime/treasury/ownerIdentity.ts",
+      "gitBlob": "cb34746afe46e1fa29f9ad12428c501da3b5d72c"
+    },
+    {
+      "path": "src/runtime/logistics/resourceTransferTaskHealth.ts",
+      "gitBlob": "c40d9d9893cc6373d876db76c375a815d874886a"
+    },
+    {
+      "path": "src/runtime/configNormalize.ts",
+      "gitBlob": "e938b49f18036b85fd2d009569629614cdaf0450"
+    },
+    {
+      "path": "src/runtime/treasury/commitmentRevision.ts",
+      "gitBlob": "5e71141d63b32f7c172bd749f1fd4131d6fcc0fd"
+    }
+  ],
+  "onlineBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+  "note": "GitHub connector source reads; code-generation runtime tests here use fixtures, not full repository objects."
+}
