@@ -1,0 +1,4 @@
+== 免限流状态查询（输出经 sanitize，token= 片段已替换） ==
+429 memory[shard1]/runtime（行为探测） | rateHeaders={"x-ratelimit-limit":"1440","x-ratelimit-remaining":"0","x-ratelimit-reset":"1789061371","retry-after":"10105"} | bodyHead="Rate limit exceeded, retry after 10105540ms or disable rate limiting using this link: https://screeps.com/a/#!/account/auth-tokens/noratelimit?token=<REDACTED>"
+404 auth/tokens（端点探测） | rateHeaders={} | bodyHead="<!DOCTYPE html>...Cannot GET /api/auth/tokens..."
+结论：token 仍处限流状态（行为证据）；无公开 token 属性 API；官方解除流程需网页 UI。

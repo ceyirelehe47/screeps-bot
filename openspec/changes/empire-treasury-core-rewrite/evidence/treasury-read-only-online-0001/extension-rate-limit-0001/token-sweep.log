@@ -1,0 +1,7 @@
+== 历史含完整 token 的提交（-S 全量）==
+7314277 Engine Continuation 0001：实机执行完成（ENGINE_LAB_PASS）与证据归档
+
+== 工作树命中（相对仓库根）==
+openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i-control-remediation-i/engine-continuation-0001/environment/s01-node-processes.json: 完整token×1 前缀×1
+共 1 个文件
+已脱敏: openspec/changes/empire-treasury-core-rewrite/evidence/terminal-transfer-engine-lab-run-i-control-remediation-i/engine-continuation-0001/environment/s01-node-processes.json

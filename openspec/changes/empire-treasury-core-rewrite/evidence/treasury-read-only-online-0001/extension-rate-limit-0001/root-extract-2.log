@@ -1,0 +1,10 @@
+== data.resourceControl.tasks ==
+array len=undefined  rawHead={}
+
+== runtime.resourceControl.rooms ==
+房间数=8 E1N57,E3N59,E4N58,E5N59,E6N59,E7N57,E7N58,W1N57
+E1N57 键: state,capacityState,storageUsedCapacity,storageFreeCapacity,terminalUsedCapacity,terminalFreeCapacity,localOffloadCapacityCommitment,desiredTerminalFreeCapacity,terminalRecoveryGap,recoverableOffloadAmount,stickyHeadroom,capacityReservation,staging,storageEnergy,terminalEnergy,energyFloor,energyTarget,energyExportStart,terminalEnergyReserve,marketEnergyReadiness,nativeMineralType,canMineNative,minerals,taskHealth
+{"state":"balanced","capacityState":"normal","storageUsedCapacity":795268,"storageFreeCapacity":204732,"terminalUsedCapacity":240000,"terminalFreeCapacity":60000,"localOffloadCapacityCommitment":0,"desiredTerminalFreeCapacity":60000,"terminalRecoveryGap":0,"recoverableOffloadAmount":0,"stickyHeadroom":false,"capacityReservation":{"committed":0,"remaining":20000},"staging":{"admittedAmount":0,"admittedTaskCount":0,"admittedByResource":{},"suppressedCount":0,"suppressedByReason":{}},"storageEnergy
+
+== analytics 顶层 ==
+production,hub,cpuMonitor,war,frontTrace,pathTrace,e3After,e3Now,w2Now,w2Heal,w2Combat,w2Attack,w2Tactic,w2Pivot,w2PivotAfter

@@ -1,0 +1,25 @@
+[
+  {
+    "label": "memory[shard1]/runtime（行为探测）",
+    "url": "/user/memory?shard=shard1&path=runtime",
+    "status": 429,
+    "rateHeaders": {
+      "x-ratelimit-limit": "1440",
+      "x-ratelimit-remaining": "0",
+      "x-ratelimit-reset": "1789061371",
+      "retry-after": "10105"
+    },
+    "bodyHead": "Rate limit exceeded, retry after 10105540ms or disable rate limiting using this link: https://screeps.com/a/#!/account/auth-tokens/noratelimit?token=<REDACTED>",
+    "file": "probe-memory-runtime.json",
+    "at": "2026-09-10T14:41:06.407Z"
+  },
+  {
+    "label": "auth/tokens（端点探测）",
+    "url": "/auth/tokens",
+    "status": 404,
+    "rateHeaders": {},
+    "bodyHead": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot GET /api/auth/tokens</pre>\n</body>\n</html>\n",
+    "file": "probe-auth-tokens.json",
+    "at": "2026-09-10T14:41:08.580Z"
+  }
+]

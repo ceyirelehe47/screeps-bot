@@ -1,0 +1,15 @@
+== 部署标签（实时原始）==
+  lastDeployTag = "2026.8.29-6+06ffedb@2026-08-29T14:28:59.403Z"
+  lastDeployCommit = "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c"
+  lastDeployTree = "929fa9557b1a36135a5ef1605231be1d16e87366"
+  lastDeployBundleHash = "7dce727ed4d647e6bace21e6a93cf184281333e7da8cd53eb965578144fc2376"
+  lastDeployBranch = "default"
+  lastDeployAt = 73346496
+
+== resourceReservations（实时）==
+  类型:object 键数=0
+  {}
+
+== runtime.resourceControl 摘要 ==
+  键:updatedAt,capacityIndexBuildCount,taskContributionIndex,capacityPolicy,eligibleReceiverCount,receiverExcludedByReason,suppressedStagingCount,rooms,lastActions,lastMarketActions,taskSummary,recentCapacityReliefRoutes,synthesisBindings,logistics
+  {"updatedAt":73614416,"capacityIndexBuildCount":1,"taskContributionIndex":{"initialTaskCount":0,"syncCount":0,"contributionEvaluationCount":0,"productionReservationScanCount":1,"productionReservationRecordCount":0,"invalidProductionReservationCount":0},"capacityPolicy":{"enabled":true,"terminalHeadroomRecoveryEnabled":true,"storagePressureFreeCapacity":100000,"storageReliefTargetFreeCapacity":200000,"receiverStorageMinFreeCapacity":100000,"terminalPressureFreeCapacity":40000,"terminalReliefTarge

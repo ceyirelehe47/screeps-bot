@@ -10,6 +10,13 @@
 - [x] A4 判定：三选一→「需要单独迁移方案」；最小待迁移差异（resourceControl/reservations→国库衔接、runtime.d.ts 兼容、Defense/控制模块、main 相位表）移交后续实现包
 - [x] 禁止事项：零上传/零切换/零 console 注入/零 Memory 写/未动用户监控；429 体 token 前缀入库前脱敏；未跑 build/push/Jest（零代码变化轮按 §9.3 不额外全仓）
 
+### 免限流解除与实时补齐（2026-09-10 晚，用户授权增补轮；证据 `evidence/treasury-read-only-online-0001/extension-rate-limit-0001/`）
+
+- [x] 状态查询：仍受限（429/remaining=0/retry-after 10105s；/auth/tokens 404 无公开属性 API）；官方解除流程经已登录 Chrome 确认框 Proceed 完成，**有效期 2 小时**（对话框明示）；以实际读取 HTTP 200 证实恢复（仅打开页面实测不生效）
+- [x] 有界补齐（本轮共 6 请求，无轮询）：实时 Memory.runtime 部署标签=06ffedb 链三方一致闭合；`resourceReservations={}`/`data.resourceControl.tasks={}`（实时零预留零任务）；8 房 storage/terminal 容量库存全表（E3N59 原生 H 房）；cpu bucket 10000/56.6 每刻；marketActionJournal 42 条最新 ~38 天前
+- [x] 口径发现：E4N58（hub）storage 容量 8M = PowerCreep `PWR_OPERATE_STORAGE` 生效（49 tick 时间对照实证 + 用户澄清）——迁移实现不得假设容量恒 1M；Storage/Terminal 结构 ID 只读通路无法取得（Memory 不缓存/REST 无房间对象/console 未授权），如实标注
+- [x] 边界：零上传/零写/未动用户监控；token 前缀与含 token 链接零出现于回复/日志/提交；上轮 NOT_DEPLOYED 判定维持不变
+
 ## Treasury Read-only Observation I（2026-09-10，离线验收 READ_ONLY_CODE_VERIFIED / NOT_DEPLOYED）
 
 交付实现包（zip `7f6c1dd9…`、patch `f280accd…`、基线 77d67d6）原样应用 + Agent 独立验收轮；提交链 d664256（补丁 8 文件）→ 5c8a9d3（独立反例 17 例）→ 37e3390（预算 246/1515→248/1539）。判读与证据见 `evidence/treasury-read-only-observation-i/treasury-read-only-observation-i-report.md`。

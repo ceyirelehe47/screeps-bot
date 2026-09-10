@@ -75,4 +75,4 @@ Node 用例使用真实新增源码、模拟只读端口，并在旧业务端口
 - 线上为官方服账号 `forster`（shard1，8 房），世界活动分支 `default` = 构建 `06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c`（2026.8.29-6，2026-08-29），与当前分支相差 432 个提交（含国库核心、Defense、resourceControl 重构与 Memory 类型变更）——**基础迁移差异，观察器未部署、未启用，终态 `ONLINE_BASELINE_REVIEWED / NOT_DEPLOYED`**。
 - 因此本文件所述观察器的全部行为**仍只在离线测试中验证过**；真实引擎 CPU 成本、线上数据覆盖与兼容性均未测量。
 - 启用前提：先由单独的迁移实现包完成 06ffedb→当前分支的国库基础迁移（重点为线上活跃的旧 `resourceControl`/`resourceReservations` 与国库 commitments/reservations 的衔接、`src/types/memory/runtime.d.ts` Memory 兼容），再按迁移后基线另行立项限定采样并取得部署授权。
-- 环境事实：该账号 `/api/user/memory` REST 预算被既有监控长期占满（Retry-After ~5h）；segment 通道独立且健康。后续采样方案应以 console 订阅为主、不依赖 Memory REST。
+- 环境事实：该账号 `/api/user/memory` REST 预算被既有监控长期占满（Retry-After ~5h）；segment 通道独立且健康。后续采样方案应以 console 订阅为主、不依赖 Memory REST。（2026-09-10 晚增补：经用户授权完成一次官方 2 小时免限流窗口内的实时核对——部署标签三方闭合、当前零预留/零任务、8 房容量库存全表取得；限流状态本身未变，窗口自然过期。详见 `evidence/treasury-read-only-online-0001/extension-rate-limit-0001/`。另：hub 房 E4N58 的 Storage 容量随 PowerCreep `PWR_OPERATE_STORAGE` 在 1M↔8M 间波动，任何容量基线不得假设恒 1M。）

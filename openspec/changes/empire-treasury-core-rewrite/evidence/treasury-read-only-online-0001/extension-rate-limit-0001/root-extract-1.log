@@ -1,0 +1,13 @@
+== rooms.E4N58 键 ==
+coreRampartHits,workerConstructionTier
+
+== data.resourceControl 顶层 ==
+rc.tasks: 
+rc.logistics: schemaVersion,wireFormat,s,i,o,f,p,c
+
+rc.rooms 键: 无
+
+== data.marketSaleAutomation 顶层 ==
+managedOrders,pendingMutations,feeEvents,carriedFeeDebtMilli,trustedFloors,processedTransactionKeys,operatorAudit,feeLedger,drain,pendingDirectDeals,canaryLock,marketStaging,marketReservations,directAutomation,marketActionJournal,directLegacyExposureDrain,baseResourceV3ActivationAnchor,baseResourceV3ActivationAnchorMirror
+array len=42
+  最新1条: {"actor":"marketSaleAutomation:continuous-direct","kind":"direct_market_deal","outcome":"ok","roomName":"E6N59","requestId":"continuous:6:72604730:base-x-e6n59-v1","orderId":"6a672002656d0800131ffea7","resultCode":0,"id":"72604730:41:direct_market_deal:continuous:6:72604730:base-x-e6n59-v1","tick":7

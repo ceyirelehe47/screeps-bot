@@ -1,0 +1,120 @@
+tick 参照: resourceControl.updatedAt=73614430
+
+[
+ {
+  "room": "E1N57",
+  "state": "balanced",
+  "capacityState": "normal",
+  "storageUsed": 795268,
+  "storageFree": 204732,
+  "terminalUsed": 240000,
+  "terminalFree": 60000,
+  "storageEnergy": 233306,
+  "terminalEnergy": 15405,
+  "nativeMineral": "X",
+  "minerals": "H/O/U/L/K/Z/X",
+  "taskHealth": "{\"pendingIncoming\":0,\"pendingOutgoing\":0,\"blockedIncoming\":{},\"blockedOutgoing\":"
+ },
+ {
+  "room": "E3N59",
+  "state": "balanced",
+  "capacityState": "normal",
+  "storageUsed": 775689,
+  "storageFree": 224311,
+  "terminalUsed": 205834,
+  "terminalFree": 94166,
+  "storageEnergy": 145027,
+  "terminalEnergy": 34793,
+  "nativeMineral": "H",
+  "minerals": "H/O/U/L/K/Z/X",
+  "taskHealth": "{\"pendingIncoming\":0,\"pendingOutgoing\":0,\"blockedIncoming\":{},\"blockedOutgoing\":"
+ },
+ {
+  "room": "E4N58",
+  "state": "balanced",
+  "capacityState": "normal",
+  "storageUsed": 4462548,
+  "storageFree": 3537452,
+  "terminalUsed": 224615,
+  "terminalFree": 75385,
+  "storageEnergy": 244562,
+  "terminalEnergy": 20000,
+  "nativeMineral": "X",
+  "minerals": "H/O/U/L/K/Z/X",
+  "taskHealth": "{\"pendingIncoming\":0,\"pendingOutgoing\":0,\"blockedIncoming\":{},\"blockedOutgoing\":"
+ },
+ {
+  "room": "E5N59",
+  "state": "balanced",
+  "capacityState": "normal",
+  "storageUsed": 800786,
+  "storageFree": 199214,
+  "terminalUsed": 246225,
+  "terminalFree": 53775,
+  "storageEnergy": 151780,
+  "terminalEnergy": 41037,
+  "nativeMineral": "U",
+  "minerals": "H/O/U/L/K/Z/X",
+  "taskHealth": "{\"pendingIncoming\":0,\"pendingOutgoing\":0,\"blockedIncoming\":{},\"blockedOutgoing\":"
+ },
+ {
+  "room": "E6N59",
+  "state": "balanced",
+  "capacityState": "normal",
+  "storageUsed": 836490,
+  "storageFree": 163510,
+  "terminalUsed": 255720,
+  "terminalFree": 44280,
+  "storageEnergy": 243732,
+  "terminalEnergy": 26000,
+  "nativeMineral": "O",
+  "minerals": "H/O/U/L/K/Z/X",
+  "taskHealth": "{\"pendingIncoming\":0,\"pendingOutgoing\":0,\"blockedIncoming\":{},\"blockedOutgoing\":"
+ },
+ {
+  "room": "E7N57",
+  "state": "balanced",
+  "capacityState": "normal",
+  "storageUsed": 781362,
+  "storageFree": 218638,
+  "terminalUsed": 199253,
+  "terminalFree": 100747,
+  "storageEnergy": 150314,
+  "terminalEnergy": 34156,
+  "nativeMineral": "Z",
+  "minerals": "H/O/U/L/K/Z/X",
+  "taskHealth": "{\"pendingIncoming\":0,\"pendingOutgoing\":0,\"blockedIncoming\":{},\"blockedOutgoing\":"
+ },
+ {
+  "room": "E7N58",
+  "state": "balanced",
+  "capacityState": "normal",
+  "storageUsed": 803408,
+  "storageFree": 196592,
+  "terminalUsed": 239987,
+  "terminalFree": 60013,
+  "storageEnergy": 194206,
+  "terminalEnergy": 34310,
+  "nativeMineral": "L",
+  "minerals": "H/O/U/L/K/Z/X",
+  "taskHealth": "{\"pendingIncoming\":0,\"pendingOutgoing\":0,\"blockedIncoming\":{},\"blockedOutgoing\":"
+ },
+ {
+  "room": "W1N57",
+  "state": "balanced",
+  "capacityState": "normal",
+  "storageUsed": 811534,
+  "storageFree": 188466,
+  "terminalUsed": 240000,
+  "terminalFree": 60000,
+  "storageEnergy": 247722,
+  "terminalEnergy": 10145,
+  "nativeMineral": "K",
+  "minerals": "H/O/U/L/K/Z/X",
+  "taskHealth": "{\"pendingIncoming\":0,\"pendingOutgoing\":0,\"blockedIncoming\":{},\"blockedOutgoing\":"
+ }
+]
+
+== analytics.cpuMonitor latest ==
+keys=version,updatedAt,sampleInterval,historyLimit,latest,summary
+{"tick":73614429,"bucket":10000,"total":56.63617580384016}
