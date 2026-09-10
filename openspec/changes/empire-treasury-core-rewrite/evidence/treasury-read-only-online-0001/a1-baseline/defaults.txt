@@ -1,0 +1,24 @@
+== treasuryReadOnly.ts ==
+import type { TreasuryReadOnlyConfig } from "@/runtime/treasury/readOnlyObservation";
+
+/** Production-side diagnostic ONLY. Enabling or deploying is a separate task.
+ * Empty scope is deliberately NOT interpreted as "all rooms". No Memory flag,
+ * environment-variable override, experiment config or writable console API. */
+export const TREASURY_READ_ONLY_CONFIG: TreasuryReadOnlyConfig = Object.freeze({
+  enabled: false,
+  shardName: "",
+  rooms: Object.freeze([] as string[]),
+  resources: Object.freeze(["energy", "H"]),
+  intervalTicks: 100,
+  maxSampleCpu: 2,
+  reserveCpu: 5,
+  minBucket: 2000,
+  maxLogBytes: 16384,
+});
+
+== LAB enabled.ts 搜索 ==
+test/lab/treasury-integration/enabled.ts
+== dist/main.js 是否入库 ==
+== dist/main.js 摘要 ==
+fdc7c5345717df64bf82798f830387a28d28ac99c3bc3a8d87656b7113b9b1a7 *dist/main.js
+4941691 dist/main.js

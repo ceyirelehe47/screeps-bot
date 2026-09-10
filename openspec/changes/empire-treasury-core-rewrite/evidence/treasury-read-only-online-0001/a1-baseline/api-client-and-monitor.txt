@@ -1,0 +1,51 @@
+== rollup.config.js 头部（ScreepsAPI 来源）==
+import { createRequire } from "node:module";
+import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { assertDeployableGitState, diffRemoteModules } from "./scripts/lib/deployGuard.cjs";
+
+const require = createRequire(import.meta.url);
+const packageJson = require("./package.json");
+const screepsPluginRequire = createRequire(require.resolve("rollup-plugin-screeps/package.json"));
+const { ScreepsAPI } = screepsPluginRequire("screeps-api");
+
+function run(command, fallback) {
+  try {
+    return execSync(command, { encoding: "utf8" }).trim();
+  } catch {
+    return fallback;
+  }
+}
+
+// ─── 构建身份（阶段 B）────────────────────────────────────────────────────────
+// buildGitHash 取 HEAD 引用，而编译输入是 working tree 文件——两者在"先构建
+// push、后提交"的工作流下必然失真（2026-08-24 的 907f837/6fc4bf2 事件）。
+
+== monitor-service.mjs 关键接口 ==
+222:  --once                          Fetch once and print JSON
+223:  --token <token>                 Screeps auth token
+224:  --base-url <url>                API base URL (default: https://screeps.com/)
+227:  --shard <name>                  Optional shard name (e.g. shard2)
+228:  --shards <csv>                  Shard candidates for auto-selection (default: shard0,shard1,shard2,shard3)
+240:  Without --shard, the monitor tries all --shards candidates and selects the
+244:  SCREEPS_TOKEN
+255:  SCREEPS_MONITOR_MEMORY_FIXTURE
+272:    if (arg === "--once") {
+288:      key !== "--base-url" &&
+291:      key !== "--shard" &&
+298:      key !== "--shards"
+313:    } else if (key === "--base-url") {
+319:    } else if (key === "--shard") {
+333:    } else if (key === "--shards") {
+401:    const raw = await readFile(resolve(process.cwd(), ".secret.json"), "utf8");
+425:    process.env.SCREEPS_MONITOR_MEMORY_FIXTURE || args.memoryFixture || null;
+427:  const token = args.token || process.env.SCREEPS_TOKEN || (secretMain && secretMain.token) || null;
+431:    throw new Error("Missing Screeps token. Use --token, SCREEPS_TOKEN, or .secret.json main.token.");
+544:  const response = await fetch(url, {
+1423:    authorizationRevision: boundedStringOrNull(
+1424:      readiness.authorizationRevision,
+1430:    authorized: booleanOrNull(readiness.authorized),
+5115:  const authorization = objectOrNull(value);
+5116:  if (!authorization) return null;

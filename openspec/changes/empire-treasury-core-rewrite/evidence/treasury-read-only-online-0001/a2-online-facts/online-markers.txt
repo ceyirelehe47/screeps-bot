@@ -1,0 +1,7 @@
+== 在线 main 内嵌构建身份 ==
+== 观察器/国库标记探测 ==
+treasuryReadOnly: 0
+readOnlyObservation: 0
+treasuryCore: 0
+kernelJournal: 0
+marketActionJournal: 7

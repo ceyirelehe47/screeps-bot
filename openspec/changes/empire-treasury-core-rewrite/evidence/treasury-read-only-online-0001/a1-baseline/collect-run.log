@@ -1,0 +1,11 @@
+200 ok=1 743B 1500ms auth/me -> a2-api/auth-me.json
+200 ok=1 330B 427ms user/branches -> a2-api/user-branches.json
+200 ok=1 4644631B 1972ms user/code(active-default) -> a2-api/user-code-active.json
+429 ok=? 157B 388ms user/memory[shard0]/runtime -> a2-api/memory-runtime-shard0.json
+429 ok=? 157B 2027ms user/memory[shard1]/runtime -> a2-api/memory-runtime-shard1.json
+429 ok=? 157B 361ms user/memory[shard2]/runtime -> a2-api/memory-runtime-shard2.json
+429 ok=? 157B 351ms user/memory[shard3]/runtime -> a2-api/memory-runtime-shard3.json
+429 ok=? 157B 349ms user/memory[shard1] root -> a2-api/memory-root-shard1.json
+200 ok=1 2913B 430ms user/overview[shard1] -> a2-api/user-overview-shard1.json
+200 ok=1 1237B 441ms game/shards/info -> a2-api/game-shards-info.json
+DONE 10 requests

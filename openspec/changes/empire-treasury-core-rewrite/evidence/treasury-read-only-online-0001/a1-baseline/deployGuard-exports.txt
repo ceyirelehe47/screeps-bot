@@ -1,0 +1,34 @@
+== deployGuard.cjs 导出与函数签名 ==
+17:function parseGitStatusPorcelain(output) {
+41:function assertDeployableGitState({ statusOutput, headSha, currentBranch, configuredBranch, allowDirty }) {
+82:function computeModulesHash(modules) {
+102:function diffRemoteModules(localModules, remoteModules) {
+129:module.exports = { DEPLOY_GUARD_ERROR, parseGitStatusPorcelain, assertDeployableGitState, computeModulesHash, diffRemoteModules };
+
+== module.exports ==
+module.exports = { DEPLOY_GUARD_ERROR, parseGitStatusPorcelain, assertDeployableGitState, computeModulesHash, diffRemoteModules };
+
+== computeModulesHash 实现 ==
+function computeModulesHash(modules) {
+  const hash = createHash("sha256");
+  for (const key of Object.keys(modules).sort()) {
+    const value = modules[key];
+    hash.update(key);
+    hash.update("\0");
+    if (typeof value === "string") {
+      hash.update(value);
+    } else if (value && typeof value.binary === "string") {
+      hash.update("bin:");
+      hash.update(value.binary);
+    } else {
+      hash.update(JSON.stringify(value ?? null));
+    }
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+/** 上传后回读比对：返回一致性与逐 module 差异（不抛错，由调用方决定退出码）。 */
+function diffRemoteModules(localModules, remoteModules) {
+  const localKeys = new Set(Object.keys(localModules));
+  const remoteKeys = new Set(Object.keys(remoteModules ?? {}));

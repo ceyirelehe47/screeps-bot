@@ -1,0 +1,16 @@
+== fetch origin ==
+From https://github.com/ceyirelehe47/screeps-bot
+ * branch            refactor/empire-treasury-rearchitecture -> FETCH_HEAD
+== origin HEAD ==
+828a078473c97562219d9cb5abfdd6df2ef5c79b
+== log --oneline -8 ==
+828a078 证据归档：Treasury Read-only Observation I 独立验收与主报告
+37e3390 预算滚动：246/1515→248/1539（只读观察器验收）
+5c8a9d3 独立验收增补测试：只读观察器 §5 边界反例（真实 facade）
+d664256 新增 Treasury 只读观察器（默认关闭）：原样应用交付实现包
+77d67d6 Continuation 0002 报告补正：提交链表补充 RUN_VALIDATION_HEAD/DELIVERY_HEAD 分离说明与关闭配置定向检查口径
+03f7170 Continuation 0002 补充：原始持久化存储副本与终态核对（撤装 armed=false 落盘印证 + counters/ring/active 终态），环境清理完成
+f8b3a26 Continuation 0002 交付：lab-ti1-0002 实机 TREASURY_INTEGRATION_PASS（T=536 单次 send OK、100H 经国库全链闭环）+ 95 文件证据归档 + 主报告/独立验收 + 实验关闭默认 enabled=false（DELIVERY_HEAD）
+cf29a69 Continuation 0002 正式绑定：lab-ti1-0002 固定 T=536=T0+3（q=26 实测回填、enabled=true、本轮 facts fixture 与场景 G 配对）——RUN_VALIDATION_HEAD
+== untracked residue ==
+0

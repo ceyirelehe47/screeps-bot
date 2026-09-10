@@ -1,0 +1,32 @@
+== screeps-api 鉴权与 raw 接口 ==
+ugrep: warning: node_modules/screeps-api/dist/index.js: No such file or directory
+
+ugrep: warning: node_modules/screeps-api/dist/index.js: No such file or directory
+== screeps-api 包结构 ==
+FUNDING.yml
+LICENSE
+README.md
+bin
+dist
+docs
+examples
+package.json
+rollup.config.js
+test
+tsconfig.json
+== 定位实际文件 ==
+node_modules/screeps-api/bin/screeps-api.js
+node_modules/screeps-api/dist/ScreepsAPI.js
+node_modules/screeps-api/examples/console.js
+node_modules/screeps-api/examples/dev_test.js
+node_modules/screeps-api/examples/download_code.js
+node_modules/screeps-api/examples/download_memory.js
+node_modules/screeps-api/rollup.config.js
+node_modules/screeps-api/test/api.general.js
+node_modules/screeps-api/test/api.raw.auth.js
+node_modules/screeps-api/test/api.raw.game.js
+== 鉴权头 ==
+1178:        'X-Token': this.token,
+1179:        'X-Username': this.token
+1189:      const token = res.headers['x-token'];
+== me/branches/code/memory/overview 端点 ==

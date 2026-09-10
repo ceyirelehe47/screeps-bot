@@ -1,0 +1,56 @@
+== package.json scripts ==
+{
+ "build": "rollup -c",
+ "push": "rollup -c --environment DEST:main",
+ "local": "rollup -c --environment DEST:local",
+ "watch": "rollup -cw",
+ "typecheck": "npm run typecheck:build && npm run typecheck:test",
+ "typecheck:build": "tsc -p tsconfig.build.json --noEmit",
+ "typecheck:test": "tsc -p tsconfig.json --noEmit",
+ "monitor:serve": "node scripts/monitor-service.mjs",
+ "monitor:once": "node scripts/monitor-service.mjs --once",
+ "test": "jest --config jest.config.cjs",
+ "test:budget": "node scripts/verify-jest-budget.mjs",
+ "test-c": "jest --config jest.config.cjs --coverage"
+}
+== rollup.config.js 关键行 ==
+13:import { assertDeployableGitState, diffRemoteModules } from "./scripts/lib/deployGuard.cjs";
+31:// 因此生产 push（DEST:main）先经 deploy guard：clean tree + 可解析 HEAD +
+32:// 明确目标 branch 三者缺一即拒绝（DEPLOY_ALLOW_DIRTY=1 为显式开发 override，
+41:const buildBranch = run("git branch --show-current", "");
+46:if (!process.env.DEST) {
+47:  console.log("No deployment target set. Build only.");
+50:  config = secret[process.env.DEST];
+52:    throw new Error("Invalid DEST. Use DEST:main or DEST:local.");
+56:const isProductionDeploy = process.env.DEST === "main";
+59:// 生产部署前置检查：默认拒绝脏树 / 无法解析 HEAD / branch 映射不明确。
+60:// build-only 与 DEST:local 不走守卫（开发迭代允许 dirty），但身份中的
+62:const deployGuardResult = isProductionDeploy
+67:      configuredBranch: config?.branch ?? "default",
+73:const configuredDeployBranch = config?.branch === "auto" || !config?.branch ? buildBranch || "default" : config.branch;
+74:const deployBranch = deployGuardResult?.branch ?? configuredDeployBranch;
+77:  console.warn("[deploy-guard] warning: building from a dirty working tree; embedded identity is not a committed state.");
+80:  console.warn("[deploy-guard] DEPLOY_ALLOW_DIRTY=1 override active: production identity will report dirty=true. Never use this for canary or production releases.");
+85:function createAwaitedScreepsPlugin(deployConfig) {
+89:  const sourceMapPlugin = screeps({ config: deployConfig, dryRun: true });
+105:      console.log(`[deploy] bundle sha256: ${bundleHash.slice(0, 16)}… (full in Memory.runtime.lastDeployBundleHash)`);
+107:      if (!deployConfig) {
+130:      const api = new ScreepsAPI(deployConfig);
+131:      if (!deployConfig.token) {
+132:        await api.auth();
+134:      const branch = deployGuardResult
+135:        ? deployGuardResult.branch
+136:        : deployConfig.branch === "auto"
+137:          ? run("git branch --show-current", "default")
+138:          : deployConfig.branch || "default";
+139:      const branches = await api.raw.user.branches();
+140:      const response = branches.list.some((entry) => entry.branch === branch)
+141:        ? await api.code.set(branch, modules)
+142:        : await api.raw.user.cloneBranch("", branch, modules);
+147:        `Uploaded ${Object.keys(modules).length} module(s) to Screeps branch ${branch}.`,
+153:      const remote = await api.raw.user.code.get(branch);
+164:          `Screeps upload verification FAILED for branch ${branch}: local sha256 ${verification.localHash.slice(0, 16)}… != remote ${String(verification.remoteHash ?? "none").slice(0, 16)}… (${detail || "module set mismatch"})`,
+167:      console.log(`[deploy] upload verified: remote modules sha256 ${verification.localHash.slice(0, 16)}… matches local.`);
+172:const deployPlugin =
+173:  config && config.copyPath
+178:            dest: config.copyPath,

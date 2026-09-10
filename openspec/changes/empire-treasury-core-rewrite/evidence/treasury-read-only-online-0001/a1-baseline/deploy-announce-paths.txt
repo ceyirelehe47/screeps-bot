@@ -1,0 +1,22 @@
+== rollup ScreepsAPI 导入 ==
+1:import clear from "rollup-plugin-clear";
+2:import screeps from "rollup-plugin-screeps";
+3:import copy from "rollup-plugin-copy";
+4:import typescript from "rollup-plugin-typescript2";
+5:import resolve from "@rollup/plugin-node-resolve";
+6:import commonjs from "@rollup/plugin-commonjs";
+7:import replace from "@rollup/plugin-replace";
+8:import { createRequire } from "node:module";
+
+== deployAnnounce.ts Memory 路径 ==
+2:import { getMemoryService } from "@/runtime/runtimeServices";
+5: * 部署身份宣告：bundle 首个 tick 把构建身份写入 Memory.runtime。
+10: * 旧字段 lastDeployTag 保留（monitor 依赖），新字段增量写入。
+13:  const runtime = getMemoryService().ensureRuntime();
+14:  if (runtime.lastDeployTag === BUILD_INFO.tag && runtime.lastDeployBundleHash === BUILD_INFO.bundleHash) {
+18:  runtime.lastDeployTag = BUILD_INFO.tag;
+19:  runtime.lastDeployCommit = BUILD_INFO.commit;
+20:  runtime.lastDeployTree = BUILD_INFO.tree;
+21:  runtime.lastDeployBundleHash = BUILD_INFO.bundleHash;
+22:  runtime.lastDeployBranch = BUILD_INFO.deployBranch;
+23:  runtime.lastDeployAt = Game.time;

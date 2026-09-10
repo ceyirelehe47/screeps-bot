@@ -1,0 +1,7 @@
+== 2026.8.29-6 上下文 ==
+
+== lastDeploy 上下文 ==
+== TAG 上下文 ==
+" (typeof Creep === \"undefined\" || typeof StructureSpawn === \"undefined\") {\n        return;\n    }\n    mountCreep();\n    mountSpawn();\n    runtimeGlobal$5.__screepsMounted = true;\n}\n\nconst BUILD_TAG = \"2026.8.29-6+06ffedb@2026-08-29T14:28:59.403Z\" ;\nconst BUILD_COMMIT = \"06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c\" ;\nconst BUILD_TREE = \"929fa9557b1a36135a5ef1605231be1d16e87366\" ;\nconst BUILD_DEPLOY_BRA"
+== lastDeployCommit 上下文 ==
+"D_INFO.tag && runtime.lastDeployBundleHash === BUILD_INFO.bundleHash) {\n        return;\n    }\n    runtime.lastDeployTag = BUILD_INFO.tag;\n    runtime.lastDeployCommit = BUILD_INFO.commit;\n    runtime.lastDeployTree = BUILD_INFO.tree;\n    runtime.lastDeployBundleHash = BUILD_INFO.bundleHash;\n    runtime.lastDeployBranch = BUILD_INFO.deployBranch;\n    runtime.lastDeployAt = Game.time;\n    console.lo"

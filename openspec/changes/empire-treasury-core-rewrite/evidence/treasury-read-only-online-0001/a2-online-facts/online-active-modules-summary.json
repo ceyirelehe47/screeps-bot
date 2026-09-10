@@ -1,0 +1,15 @@
+{
+  "fetchedBranch": "default",
+  "activeWorld": null,
+  "activeSim": null,
+  "timestamp": null,
+  "moduleCount": 1,
+  "modules": [
+    {
+      "module": "main",
+      "bytes": 4494463,
+      "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+    }
+  ],
+  "modulesSetHash_computeModulesHash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf"
+}

@@ -1,5 +1,15 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Treasury Read-only Observation I · 线上基线核对与限定采样 0001（2026-09-10，阶段A ONLINE_BASELINE_REVIEWED / NOT_DEPLOYED）
+
+执行任务书（用户会话提供，原件入库 `evidence/treasury-read-only-online-0001/00-task/`）：先只读取得线上事实→判定部署差异→仅差异与授权均满足才采样。**结论：线上活动分支 `default`=构建 `06ffedb`（2026.8.29-6），与候选 `828a078` 相差 432 提交基础迁移（国库核心 63 文件+Defense 全线+resourceControl 重构+Memory 类型），叠加部署授权未取得——停止部署，阶段B/C 未执行。** 判读与证据见 `evidence/treasury-read-only-online-0001/treasury-read-only-online-0001-report.md`。
+
+- [x] A1 起点：HEAD=origin=828a078、树净；交付配置与 LAB enabled.ts 均默认关闭；rollup/deployGuard/monitor 行为复核与任务书一致（dist 候选身份 BUILD_COMMIT=5c8a9d3）
+- [x] A2 线上事实（只读 GET×11：manifest 10 次 5×200+5×429，另有 1 次 429 重试首探；合计 6×429 未获数据）：forster/screeps.com；分支 default(activeWorld)/tutorial-1(activeSim)/2×rollback 遗留；活动分支单模块 main 4,494,463B sha `37d20706…`、集合 hash `84f76975…`、内嵌身份 06ffedb+tree 与 git 全一致、原件受控备份；Memory.runtime 标签直读 429 原样标缺失（canary2 报告旁证）；受影响范围=shard1 全部 8 房（其余 shard 0 房）
+- [x] A3 状态（本地既有快照 2026-09-09T18:55Z + 当日 segment，零新增线上请求）：无 treasury 相位/无 treasuryCore；旧 resourceControl 活跃 roomCount=8；marketSaleAutomation available=false；CPU 69.8/120、bucket 10000、bot 在线（tick 73612588）；Memory REST 限流 ~5h 系用户既有监控占满（不关闭，noratelimit 链接属账号变更明确不用）
+- [x] A4 判定：三选一→「需要单独迁移方案」；最小待迁移差异（resourceControl/reservations→国库衔接、runtime.d.ts 兼容、Defense/控制模块、main 相位表）移交后续实现包
+- [x] 禁止事项：零上传/零切换/零 console 注入/零 Memory 写/未动用户监控；429 体 token 前缀入库前脱敏；未跑 build/push/Jest（零代码变化轮按 §9.3 不额外全仓）
+
 ## Treasury Read-only Observation I（2026-09-10，离线验收 READ_ONLY_CODE_VERIFIED / NOT_DEPLOYED）
 
 交付实现包（zip `7f6c1dd9…`、patch `f280accd…`、基线 77d67d6）原样应用 + Agent 独立验收轮；提交链 d664256（补丁 8 文件）→ 5c8a9d3（独立反例 17 例）→ 37e3390（预算 246/1515→248/1539）。判读与证据见 `evidence/treasury-read-only-observation-i/treasury-read-only-observation-i-report.md`。

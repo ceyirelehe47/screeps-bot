@@ -1,0 +1,10 @@
+== auth/me ==
+{
+ "ok": 1,
+ "id": "634fe406347a7b69b28aeccb",
+ "username": "forster"
+}
+== user/branches ==
+{"ok":1,"list":[{"_id":"6a91c909c12e38deb99031de","branch":"rollback-6fc4bf2-20260829"},{"_id":"6a91e9f3c12e38deb9e8b868","branch":"rollback-pre-canary2-20260828"},{"_id":"634fe406347a7b54b98aeccc","branch":"default","activeWorld":true,"activeSim":false},{"_id":"634fe464b8805ccb56178b53","branch":"tutorial-1","activeSim":true}]}
+== shards ==
+[{"name":"shard0","tick":4306.330552675879},{"name":"shard1","tick":4244.754849355321},{"name":"shard2","tick":5002.225469573496},{"name":"shard3","tick":3818.0333627370364},{"name":"shardX","tick":2255.9455951006566}]

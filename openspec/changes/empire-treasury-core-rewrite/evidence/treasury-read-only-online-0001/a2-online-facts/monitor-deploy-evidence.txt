@@ -1,0 +1,15 @@
+== monitor-data 部署身份旁证（摘要版；完整模块备份保留于仓库外 monitor-data/，不随证据入库）==
+注：本文件初版误将 rollback JSON 全文（8.6MB）复制入库，已按验收 P3 改为摘要+路径引用；原始数据未改动，仍在 monitor-data/rollback-default-*.json。
+
+== rollback-default-6fc4bf2.json（default 分支 2026-08-29 回滚时备份）==
+  BUILD_TAG = "2026.8.24-3+907f837@2026-08-24T11:53:07.771Z"（modules.main 内嵌）
+  无 __DEPLOY_BUNDLE_HASH__ 行（该时代构建器未追加）
+  modules: main 4,346,211B sha256 fae5560adc50846077423e9d17108a199720891dcfb4f9a1b67ae5dc7681a95f
+
+== rollback-default-pre-canary2.json ==
+  与上文件逐字节同尺寸（4,346,211B）——canary2 前的 default 即 8-24 事故回滚产物
+
+== canary2-report-20260829.md 部署身份相关行 ==
+| tag | 2026.8.29-2+cac532b@2026-08-28T21:05:36.927Z |
+| 线上 Memory.runtime | lastDeployCommit/tree/BundleHash/Branch/At 全部写入，与本地一致 |
+| rollback 分支 | rollback-pre-canary2-20260828 + 本地备份 rollback-default-pre-canary2.json（SHA-256 见 manifest）；回滚脚本 monitor-data/rollback-canary2.mjs 备用（未使用） |

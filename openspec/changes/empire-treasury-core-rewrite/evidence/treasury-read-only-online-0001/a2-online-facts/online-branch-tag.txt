@@ -1,0 +1,4 @@
+== BUILD_DEPLOY_BRANCH ==
+"BUILD_DEPLOY_BRANCH = \"default\" ;\nconst runtimeGlobal$4 = global;\nfunction readD"
+== bundleHash 行 ==
+"globalThis.__DEPLOY_BUNDLE_HASH__=\"7dce727ed4d647e6bace21e6a93cf184281333e7da8cd53eb965578144fc2376\";\n"

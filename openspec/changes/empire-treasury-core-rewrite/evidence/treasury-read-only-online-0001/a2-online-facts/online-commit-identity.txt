@@ -1,0 +1,11 @@
+== 06ffedb 提交元数据 ==
+06ffedb chore(release): bump 版本至 2026.8.29-6（oracle 口径修复后的 canary 重部署）
+commit
+06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c
+2026-08-29 22:28:52 +0800
+chore(release): bump 版本至 2026.8.29-6（oracle 口径修复后的 canary 重部署）
+
+== 06ffedb..HEAD 提交数 ==
+432
+== BUILD_TREE 核对 ==
+929fa9557b1a36135a5ef1605231be1d16e87366

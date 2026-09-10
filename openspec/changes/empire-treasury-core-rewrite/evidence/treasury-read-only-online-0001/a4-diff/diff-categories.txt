@@ -1,0 +1,61 @@
+docs: 1
+openspec 证据/规格: 2938
+src 其他业务: 33
+src 国库/只读观察器: 63
+test: 67
+根/其他: 18
+
+== src 其他业务（非国库目录）全部 33 项 ==
+src/main.test.ts
+src/main.ts
+src/roles/homeDefender.test.ts
+src/roles/homeDefender.ts
+src/runtime/defenderFrontEligibility.ts
+src/runtime/defenderRampartAllocation.ts
+src/runtime/defenseAllActorReservation.test.ts
+src/runtime/defenseFallbackReallocation.test.ts
+src/runtime/defenseFocusFire.test.ts
+src/runtime/defenseFocusFire.ts
+src/runtime/defenseFocusFireStateful.test.ts
+src/runtime/defenseFrontAware.test.ts
+src/runtime/defenseGlobalRampartFootprints.test.ts
+src/runtime/defensePreallocationRampartOwnership.test.ts
+src/runtime/defenseStationaryRampartOwnership.test.ts
+src/runtime/engagementFallbackRevision.ts
+src/runtime/factoryControl.ts
+src/runtime/homeDefense.ts
+src/runtime/logistics/resourceTransferTaskHealth.ts
+src/runtime/logistics/resourceTransferTasks.ts
+src/runtime/memoryCleanup.test.ts
+src/runtime/memoryCleanup.ts
+src/runtime/nukerControl.ts
+src/runtime/physicalRampartOwnership.ts
+src/runtime/productionMonitor.ts
+src/runtime/resourceControl.ts
+src/runtime/resourceReservation.test.ts
+src/runtime/resourceReservation.ts
+src/runtime/runtimeServices.ts
+src/runtime/synthesisControl.ts
+src/runtime/towerControl.test.ts
+src/runtime/towerControl.ts
+src/types/memory/runtime.d.ts
+
+== 根/其他 ==
+.gitignore
+monitor-data/apply-budget-treasury-review.mjs
+monitor-data/apply-budget-treasury-round3.mjs
+monitor-data/apply-budget-treasury-round4.mjs
+monitor-data/apply-budget-treasury-round5.mjs
+monitor-data/apply-budget-treasury-round6.mjs
+monitor-data/apply-budget-treasury-round7.mjs
+monitor-data/apply-budget-treasury-round8.mjs
+monitor-data/apply-budget-treasury-round9.mjs
+monitor-data/apply-budget-treasury.mjs
+monitor-data/inventory-shadow-phase3-evidence.md
+scripts/baseline-red/pending-no-exit.baseline.ts
+scripts/baseline-red/treasury3-boundaries.baseline.ts
+scripts/baseline-red/treasury4-boundaries.baseline.ts
+scripts/build-treasury-terminal-lab.mjs
+scripts/verify-jest-budget.mjs
+scripts/verify-lab-calibration.mjs
+scripts/verify-treasury-evidence.mjs

@@ -1,0 +1,24 @@
+== 在线 main 头部 300 字符 ==
+'use strict';
+
+var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
+
+function getDefaultExportFromCjs (x) {
+	return x && x.__esModule && Object.prototype.hasOwn
+
+== 版本标签类字符串 ==
+      1 2026.8.29-6
+== 部署相关字符串 ==
+lastDeployTag: 3
+lastDeployCommit: 1
+lastDeployBundleHash: 2
+deployBranch: 2
+canary: 475
+rollback: 79
+== 候选 dist 头部 300 字符 ==
+'use strict';
+
+var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
+
+function getDefaultExportFromCjs (x) {
+	return x && x.__esModule && Object.prototype.hasOwn

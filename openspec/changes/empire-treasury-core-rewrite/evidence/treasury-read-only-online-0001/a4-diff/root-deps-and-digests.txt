@@ -1,0 +1,7 @@
+== 根构建/依赖文件差异 06ffedb..HEAD ==
+(空=未变化)
+
+== 三摘要分离记录 ==
+最终文件 sha256: 37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b (4494463B)
+内嵌 bundleHash: 7dce727ed4d647e6bace21e6a93cf184281333e7da8cd53eb965578144fc2376 (追加自引行前)
+模块集合 hash(computeModulesHash): 84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf

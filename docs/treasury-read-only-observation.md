@@ -67,3 +67,12 @@ Node 用例使用真实新增源码、模拟只读端口，并在旧业务端口
 - Screeps官方 API：Store返回值、Game.cpu.getUsed/tickLimit/bucket；<https://docs.screeps.com/api/>、<https://docs.screeps.com/cpu-limit.html>。
 
 源代码研究是针对上述固定仓库SHA，不代表已核对实际正式账号的部署状态。
+
+## 线上基线核对结果（2026-09-10 增补，任务「线上基线核对与限定采样 0001」阶段A）
+
+实际线上事实与限制（证据：`openspec/changes/empire-treasury-core-rewrite/evidence/treasury-read-only-online-0001/`）：
+
+- 线上为官方服账号 `forster`（shard1，8 房），世界活动分支 `default` = 构建 `06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c`（2026.8.29-6，2026-08-29），与当前分支相差 432 个提交（含国库核心、Defense、resourceControl 重构与 Memory 类型变更）——**基础迁移差异，观察器未部署、未启用，终态 `ONLINE_BASELINE_REVIEWED / NOT_DEPLOYED`**。
+- 因此本文件所述观察器的全部行为**仍只在离线测试中验证过**；真实引擎 CPU 成本、线上数据覆盖与兼容性均未测量。
+- 启用前提：先由单独的迁移实现包完成 06ffedb→当前分支的国库基础迁移（重点为线上活跃的旧 `resourceControl`/`resourceReservations` 与国库 commitments/reservations 的衔接、`src/types/memory/runtime.d.ts` Memory 兼容），再按迁移后基线另行立项限定采样并取得部署授权。
+- 环境事实：该账号 `/api/user/memory` REST 预算被既有监控长期占满（Retry-After ~5h）；segment 通道独立且健康。后续采样方案应以 console 订阅为主、不依赖 Memory REST。

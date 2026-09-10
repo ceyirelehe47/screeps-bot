@@ -1,0 +1,28 @@
+== 快照来源 ==
+capturedAt: 2026-09-09T18:55:01.377Z  latestTick: 73597160  roomCount: 8
+
+== summary.rooms（每房）==
+{"roomName":"E1N57","updatedAt":73597160,"latest":{"tick":73597160,"looseEnergy":13,"storedEnergy":282927,"sourceEnergy":2724,"workerCount":1,"carrierCount":1,"harvesterCount":0},"signal":{"looseEnerg
+{"roomName":"E3N59","updatedAt":73597160,"latest":{"tick":73597160,"looseEnergy":10,"storedEnergy":287102,"sourceEnergy":3972,"workerCount":0,"carrierCount":1,"harvesterCount":0},"signal":{"looseEnerg
+{"roomName":"E4N58","updatedAt":73597160,"latest":{"tick":73597160,"looseEnergy":7,"storedEnergy":272757,"sourceEnergy":128,"workerCount":1,"carrierCount":1,"harvesterCount":0},"signal":{"looseEnergyT
+{"roomName":"E5N59","updatedAt":73597160,"latest":{"tick":73597160,"looseEnergy":0,"storedEnergy":224218,"sourceEnergy":1920,"workerCount":1,"carrierCount":1,"harvesterCount":0},"signal":{"looseEnergy
+{"roomName":"E6N59","updatedAt":73597160,"latest":{"tick":73597160,"looseEnergy":0,"storedEnergy":286177,"sourceEnergy":0,"workerCount":1,"carrierCount":1,"harvesterCount":0},"signal":{"looseEnergyTre
+{"roomName":"E7N57","updatedAt":73597160,"latest":{"tick":73597160,"looseEnergy":0,"storedEnergy":229181,"sourceEnergy":3240,"workerCount":1,"carrierCount":1,"harvesterCount":0},"signal":{"looseEnergy
+{"roomName":"E7N58","updatedAt":73597160,"latest":{"tick":73597160,"looseEnergy":202,"storedEnergy":219254,"sourceEnergy":6000,"workerCount":1,"carrierCount":1,"harvesterCount":0},"signal":{"looseEner
+{"roomName":"W1N57","updatedAt":73597160,"latest":{"tick":73597160,"looseEnergy":0,"storedEnergy":341029,"sourceEnergy":3504,"workerCount":1,"carrierCount":1,"harvesterCount":0},"signal":{"looseEnergy
+
+== cpuMonitor.latest ==
+{"tick":73597160,"shard":"shard1","totalUsed":69.82600070163608,"bucket":10000,"limit":120,"tickLimit":500,"untracked":0,"emaTotalUsed":64.62043969297817,"phases":{"announceDeploy":0.006155502051115036,"marketSalePreflight":9.970521599054337,"pixelGenerator":0.0009619966149330139,"productionMonitor":2.3312874026596546,"nukerControl":0.712866697460413,"hubPlanner":0.045532502233982086,"hubUpgradeCo
+
+== hub ==
+{"hubRoomName":"E4N58","enabled":true,"stage":"idle","status":"distributing"}
+
+== marketSaleAutomation 顶层 ==
+{"available":false,"requestedMode":null,"phase":null,"managedOrderCount":null}
+
+== resourceControl 顶层 ==
+{"available":true,"roomCount":8,"updatedAt":73597163}
+
+== 当日 segment（最新）==
+segment keys: source,fetchedAt,rateLimit,snapshot
+segment 摘要: {"source":"segment","fetchedAt":"2026-09-09T18:54:59.551Z","rateLimit":{"limit":"360","remaining":"232","reset":"1788980521"},"snapshot":{"segmentId":90,"parsed":{"version":2,"tick":73597160,"shard":"shard1","sampleInterval":7,"segmentId":90,"cpu":{"used":35.703768100589514,"bucket":10000,"limit":120,"tickLimit":500},"gcl":{"level":10,"progress":18338288.492263973,"progressTotal":56122443.643221945},"totals":{"rooms":8,"workers":7,"carriers":8,"harvesters":0,"unassignedWorkers":5,"taskQueueDepth":8,"spawnQueueDepth":0,"activeSpawns":4,"movement":{"pathRequests":4025329,"pathCacheHits":2950788,
