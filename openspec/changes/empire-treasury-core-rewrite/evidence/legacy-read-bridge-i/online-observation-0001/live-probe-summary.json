@@ -1,0 +1,35 @@
+{
+ "at": "2026-09-10T18:21:33.059Z",
+ "server": "wss://screeps.com/socket/websocket",
+ "subscribedConsole": "user:634fe406347a7b69b28aeccb/console",
+ "subscribedCpu": "user:634fe406347a7b69b28aeccb/cpu",
+ "wsFrames": 31,
+ "consoleChannelFrames": 13,
+ "cpuChannelFrames": 14,
+ "maxFrameBytes": 95,
+ "footerReason": "max-minutes",
+ "consoleFrameShape": "[\"user:<id>/console\",{\"messages\":{\"log\":[],\"results\":[]},\"shard\":\"shard1\"}]",
+ "tickAnchorsSeen": [
+  {
+   "source": "/api/game/time?shard=shard1",
+   "at": "2026-09-10T18:04:19.037Z",
+   "time": 73617305
+  },
+  {
+   "source": "/api/game/time?shard=shard1",
+   "at": "probe2",
+   "time": 73617342
+  }
+ ],
+ "ownRoomsShard1": [
+  "W1N57",
+  "E1N57",
+  "E3N59",
+  "E4N58",
+  "E5N59",
+  "E6N59",
+  "E7N58",
+  "E7N57"
+ ],
+ "note": "候选观察房间 E3N59/E4N58 均在自有房间列表；overview 解析口径 shards.shard1.rooms"
+}

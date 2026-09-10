@@ -1,0 +1,50 @@
+{
+ "requestedAt": "2026-09-10T17:41:04.032Z",
+ "server": "https://screeps.com/",
+ "accountUsername": {
+  "_id": "634fe406347a7b69b28aeccb",
+  "username": "forster",
+  "badge": "present"
+ },
+ "userIdOfficial": "634fe406347a7b69b28aeccb",
+ "activeBranch": "default",
+ "branchList": [
+  {
+   "branch": "rollback-6fc4bf2-20260829"
+  },
+  {
+   "branch": "rollback-pre-canary2-20260828"
+  },
+  {
+   "branch": "default",
+   "activeWorld": true,
+   "activeSim": false
+  },
+  {
+   "branch": "tutorial-1",
+   "activeSim": true
+  }
+ ],
+ "modules": {
+  "files": [
+   {
+    "name": "main",
+    "kind": "text",
+    "bytes": 4494463,
+    "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+   }
+  ],
+  "collectionHash": "7049c350682fcde852dbece04bb8d6cfcb0b917c8ebba9d2df4129cc38eef371",
+  "moduleNames": [
+   "main"
+  ]
+ },
+ "embeddedBuildTag": "2026.8.29-6+06ffedb@2026-08-29T14:28:59.403Z",
+ "embeddedBundleHash16": "7dce727ed4d647e6",
+ "provenanceCheck": {
+  "declaredProductionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+  "matchesEmbeddedCommit": true,
+  "note": "远端 main 内嵌 40-hex commit 与任务包声明生产基线一致；另含 5 个其他 40-hex 常量为 source map/依赖内容"
+ },
+ "originalsStoredLocalOutsideRepo": "compat-online-obs-0001-evidence/pre-deploy-originals/（受控本地，不入库）"
+}

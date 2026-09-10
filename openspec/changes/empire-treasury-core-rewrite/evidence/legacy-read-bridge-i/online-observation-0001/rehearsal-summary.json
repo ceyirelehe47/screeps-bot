@@ -1,0 +1,56 @@
+{
+ "passed": 10,
+ "total": 10,
+ "results": [
+  {
+   "name": "A1 收集器完成 auth+subscribe 并收到 console 通道帧",
+   "pass": true,
+   "detail": "console-channel-ws-frames=1"
+  },
+  {
+   "name": "A2 >16KB 单帧原样保存无截断",
+   "pass": true,
+   "detail": "frameBytes=17152, marker完整=true"
+  },
+  {
+   "name": "A3 ws 原帧落盘（含 auth/subscribe 确认链）",
+   "pass": true,
+   "detail": "ws-frames=2, footer=killed-without-footer(预期内)"
+  },
+  {
+   "name": "B1 收集器退出后 ~15s 内触发恢复请求",
+   "pass": true,
+   "detail": "guardExit=0, 耗时ms=15414"
+  },
+  {
+   "name": "B2 恢复请求真实覆盖 mock 远端为备份原件",
+   "pass": true,
+   "detail": "remote==backup:true"
+  },
+  {
+   "name": "B3 guard 判定 RESTORED_AND_VERIFIED",
+   "pass": true,
+   "detail": "[guard] close confirmed: RESTORED_AND_VERIFIED"
+  },
+  {
+   "name": "C1 恢复失败时 guard 非零退出并报 UNCONFIRMED",
+   "pass": true,
+   "detail": "exit=6"
+  },
+  {
+   "name": "C2 失败路径绝不输出\"关闭确认\"措辞",
+   "pass": true,
+   "detail": "[guard] ONLINE_CLOSE_UNCONFIRMED (restore exit=4 status=RESTORE_REQUEST_FAILED)"
+  },
+  {
+   "name": "D1 CONFLICT 拒绝覆盖第三方产物",
+   "pass": true,
+   "detail": "exit=3"
+  },
+  {
+   "name": "E1 当前==备份时 ALREADY_RESTORED 不重复写",
+   "pass": true,
+   "detail": "exit=0"
+  }
+ ]
+}
