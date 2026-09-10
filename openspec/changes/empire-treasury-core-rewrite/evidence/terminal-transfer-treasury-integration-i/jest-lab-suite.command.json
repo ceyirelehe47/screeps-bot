@@ -1,0 +1,1 @@
+{"command":"npx jest --config jest.config.cjs --runInBand --runTestsByPath test/lab/terminal-transfer/probe.test.ts test/lab/terminal-transfer/runI.test.ts test/lab/terminal-transfer/calibration.test.ts test/lab/terminal-transfer/controlRemediation.test.ts"}

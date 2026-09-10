@@ -1,0 +1,145 @@
+  console.log
+    {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0002","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0002","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0002","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+  console.log
+    {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":101,"attemptId":"tk1_1_881e69388896f0ac","conclusion":"still_uncertain","reason":"conflicting_transaction_mirrors"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0002","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0002","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0002","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+  console.log
+    {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":101,"attemptId":"tk1_1_9261c44c2d2780a4","conclusion":"still_uncertain","reason":"no_unique_transaction"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0002","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0002","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0002","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+  console.log
+    {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":101,"attemptId":"tk1_1_047323885f76c55c","conclusion":"still_uncertain","reason":"no_unique_transaction"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0002","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0002","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0002","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+  console.log
+    {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":101,"attemptId":"tk1_1_77860be507c7258e","conclusion":"still_uncertain","reason":"transaction_not_exact_full_send"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+  console.log
+    {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":102,"attemptId":"tk1_1_77860be507c7258e","conclusion":"still_uncertain","reason":"transaction_not_exact_full_send"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0002","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0002","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0002","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+  console.log
+    {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":101,"attemptId":"tk1_1_299970f0bc55f6fc","conclusion":"still_uncertain","reason":"world_delta_not_covered_by_admitted_budget"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+  console.log
+    {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":102,"attemptId":"tk1_1_299970f0bc55f6fc","conclusion":"still_uncertain","reason":"world_delta_not_covered_by_admitted_budget"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0002","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0002","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+  console.log
+    {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0002","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+  console.log
+    {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":101,"attemptId":"tk1_1_cdc48a94108fcdf4","conclusion":"still_uncertain","reason":"read_failed:target identity/health mismatch"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+PASS test/lab/treasury-integration/integrationAdversarial.test.ts (5.594 s)
+  Real Treasury integration, independent single-flaw adversarial worlds
+    √ a contradictory same-ID mirror copy is never filtered into a success (212 ms)
+    √ a physically moved world with zero transaction records stays unknown (22 ms)
+    √ fully matched amounts under a foreign description do not correlate (23 ms)
+    √ swapped route, then a late tick stamp, each stay unknown on the same attempt (30 ms)
+    √ an observed fee above the frozen quote stays unknown and is never retried away (25 ms)
+    √ unarmed, already-attempted and absent control slots never reach send through the real kernel (4 ms)
+    √ a replaced target terminal identity keeps the attempt unknown (20 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       7 passed, 7 total
+Snapshots:   0 total
+Time:        5.854 s, estimated 6 s
+Ran all test suites within paths "test/lab/treasury-integration/integrationAdversarial.test.ts".

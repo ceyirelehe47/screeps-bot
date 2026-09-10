@@ -1,0 +1,278 @@
+PASS test/lab/treasury-integration/tools.test.ts (8.089 s)
+PASS test/lab/treasury-integration/integration.test.ts
+  ● Console
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0001","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0001","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0001","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0001","tick":101,"attemptId":"tk1_1_d343671758d5a71a","conclusion":"observed_committed","reason":"exact_transfer_and_fee","transactionId":"tx100","quotedFee":26,"observedFee":26}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0001","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0001","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0001","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0001","tick":101,"attemptId":"tk1_1_cbe71ac93782a2f2","conclusion":"observed_committed","reason":"exact_transfer_with_lower_observed_fee","transactionId":"tx100","quotedFee":26,"observedFee":10}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0001","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0001","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0001","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0001","tick":101,"attemptId":"tk1_1_449cd25bba996fa6","conclusion":"still_uncertain","reason":"no_unique_transaction"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0001","tick":102,"attemptId":"tk1_1_449cd25bba996fa6","conclusion":"still_uncertain","reason":"no_unique_transaction"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0001","tick":103,"attemptId":"tk1_1_449cd25bba996fa6","conclusion":"still_uncertain","reason":"no_unique_transaction"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0001","tick":104,"attemptId":"tk1_1_449cd25bba996fa6","conclusion":"still_uncertain","reason":"no_unique_transaction"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0001","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0001","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0001","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0001","tick":101,"attemptId":"tk1_1_0bcb46e34ce8623e","conclusion":"still_uncertain","reason":"multiple_related_transactions"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0001","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0001","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0001","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0001","tick":102,"attemptId":"tk1_1_d6fd43a848e0ecac","conclusion":"observed_committed","reason":"exact_transfer_with_lower_observed_fee","transactionId":"tx100","quotedFee":26,"observedFee":10}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0001","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0001","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0001","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0001","tick":101,"attemptId":"tk1_1_958935006ee0719c","conclusion":"still_uncertain","reason":"transactions_unreadable_or_over_bound"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+PASS test/lab/treasury-integration/integrationAdversarial.test.ts
+  ● Console
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0002","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0002","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0002","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":101,"attemptId":"tk1_1_881e69388896f0ac","conclusion":"still_uncertain","reason":"conflicting_transaction_mirrors"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0002","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0002","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0002","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":101,"attemptId":"tk1_1_9261c44c2d2780a4","conclusion":"still_uncertain","reason":"no_unique_transaction"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0002","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0002","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0002","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":101,"attemptId":"tk1_1_047323885f76c55c","conclusion":"still_uncertain","reason":"no_unique_transaction"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0002","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0002","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0002","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":101,"attemptId":"tk1_1_77860be507c7258e","conclusion":"still_uncertain","reason":"transaction_not_exact_full_send"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":102,"attemptId":"tk1_1_77860be507c7258e","conclusion":"still_uncertain","reason":"transaction_not_exact_full_send"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0002","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0002","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0002","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":101,"attemptId":"tk1_1_299970f0bc55f6fc","conclusion":"still_uncertain","reason":"world_delta_not_covered_by_admitted_budget"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":102,"attemptId":"tk1_1_299970f0bc55f6fc","conclusion":"still_uncertain","reason":"world_delta_not_covered_by_admitted_budget"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"pre-call","experimentId":"lab-treasury-kernel-0002","tick":100,"fee":26}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:248:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"boundary","experimentId":"lab-treasury-kernel-0002","tick":100}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:249:15)
+
+    console.log
+      {"kind":"lab-send-attempt","phase":"sync-return","experimentId":"lab-treasury-kernel-0002","tick":100,"result":{"ok":true,"code":0}}
+
+      at Object.execute (test/lab/treasury-integration/adapter.ts:263:15)
+
+    console.log
+      {"kind":"lab-treasury-reconcile","experimentId":"lab-treasury-kernel-0002","tick":101,"attemptId":"tk1_1_cdc48a94108fcdf4","conclusion":"still_uncertain","reason":"read_failed:target identity/health mismatch"}
+
+      at Object.reconcile (test/lab/treasury-integration/adapter.ts:274:15)
+
+
+Test Suites: 3 passed, 3 total
+Tests:       18 passed, 18 total
+Snapshots:   0 total
+Time:        10.702 s
+Ran all test suites within paths "test/lab/treasury-integration/integration.test.ts", "test/lab/treasury-integration/tools.test.ts", "test/lab/treasury-integration/integrationAdversarial.test.ts".

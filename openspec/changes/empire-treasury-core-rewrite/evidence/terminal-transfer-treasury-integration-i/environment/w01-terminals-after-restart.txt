@@ -1,0 +1,26 @@
+< [
+  {
+    _id: 'ti10001aa57000001',
+    type: 'terminal',
+    room: 'W1N57',
+    x: 18,
+    y: 18,
+    user: '8fbd94c45d92d16',
+    store: { H: 1000, energy: 10000 },
+    cooldownTime: 0,
+    meta: { revision: 0, created: 1789009943542, version: 0 },
+    '$loki': 389
+  },
+  {
+    _id: 'ti10001aa57000002',
+    type: 'terminal',
+    room: 'W10N57',
+    x: 20,
+    y: 20,
+    user: '8fbd94c45d92d16',
+    store: { energy: 2000 },
+    cooldownTime: 0,
+    meta: { revision: 0, created: 1789009943630, version: 0 },
+    '$loki': 390
+  }
+]

@@ -1,0 +1,82 @@
+TAP version 13
+# Subtest: kernel-verified exit succeeds with seven PIDs, each OS operation 10ms
+ok 1 - kernel-verified exit succeeds with seven PIDs, each OS operation 10ms
+  ---
+  duration_ms: 3.8105
+  type: 'test'
+  ...
+# Subtest: kernel-verified exit succeeds with seven PIDs, each OS operation 700ms
+ok 2 - kernel-verified exit succeeds with seven PIDs, each OS operation 700ms
+  ---
+  duration_ms: 0.3554
+  type: 'test'
+  ...
+# Subtest: 100 PID identity verification still uses one batched exit query when probes stay inconclusive
+ok 3 - 100 PID identity verification still uses one batched exit query when probes stay inconclusive
+  ---
+  duration_ms: 0.831
+  type: 'test'
+  ...
+# Subtest: vanished launcher before captured tree is not successful cleanup
+ok 4 - vanished launcher before captured tree is not successful cleanup
+  ---
+  duration_ms: 0.5808
+  type: 'test'
+  ...
+# Subtest: reused launcher PID is refused without any kill
+ok 5 - reused launcher PID is refused without any kill
+  ---
+  duration_ms: 0.3925
+  type: 'test'
+  ...
+# Subtest: surviving worker after launcher exit prevents confirmation until deadline
+ok 6 - surviving worker after launcher exit prevents confirmation until deadline
+  ---
+  duration_ms: 1.8081
+  type: 'test'
+  ...
+# Subtest: remaining timeout is shared across all stages, not reset per PID
+ok 7 - remaining timeout is shared across all stages, not reset per PID
+  ---
+  duration_ms: 0.3937
+  type: 'test'
+  ...
+# Subtest: unreadable exit identity is not interpreted as a reused or exited process
+ok 8 - unreadable exit identity is not interpreted as a reused or exited process
+  ---
+  duration_ms: 0.2906
+  type: 'test'
+  ...
+# Subtest: reused worker identity after kill is recorded, never killed again
+ok 9 - reused worker identity after kill is recorded, never killed again
+  ---
+  duration_ms: 0.5655
+  type: 'test'
+  ...
+# Subtest: kill command failure does not become a success or automatic retry
+ok 10 - kill command failure does not become a success or automatic retry
+  ---
+  duration_ms: 0.6813
+  type: 'test'
+  ...
+# Subtest: audit failure does not prevent kill but is retained in the result
+ok 11 - audit failure does not prevent kill but is retained in the result
+  ---
+  duration_ms: 0.3252
+  type: 'test'
+  ...
+# Subtest: final audit latency cannot disguise exceeding the whole termination deadline
+ok 12 - final audit latency cannot disguise exceeding the whole termination deadline
+  ---
+  duration_ms: 0.2442
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 135.9089

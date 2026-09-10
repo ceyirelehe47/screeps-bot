@@ -1,0 +1,15 @@
+== second tree HEAD ==
+838dcc79b33e6e1b76c698afa7cf88be47859091
+Snapshots:   0 total
+Time:        22.36 s
+Ran all test suites within paths "test/lab/treasury-integration/integration.test.ts", "test/lab/treasury-integration/tools.test.ts", "test/lab/treasury-integration/integrationAdversarial.test.ts".
+# tests 117
+# pass 117
+# fail 0
+# tests 48
+# pass 48
+# fail 0
+Snapshots:   0 total
+Time:        9.019 s
+Ran all test suites within paths "src/runtime/treasury/treasuryTerminalTransferSlice0.test.ts", "src/runtime/treasury/treasuryTerminalTransferSlice0RemediationI.test.ts", "src/runtime/treasury/treasuryTerminalTransferSlice0RemediationII.test.ts".
+second_bundle_exit=0

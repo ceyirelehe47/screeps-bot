@@ -1,5 +1,24 @@
 # Terminal Transfer Engine Lab Run I——真实引擎实验说明
 
+**Treasury Terminal Integration I（2026-09-10，离线交付全成、实机 LIVE_FAIL
+——环境时序事故，零 send 调用，非被测代码缺陷）**：ChatGPT 实现包（基线
+7314277，patch sha 1a05f5a1…）原样应用 17 文件（IMPL_HEAD 92e0e50：真实
+adapter/coordinator/assembly 接生产 facade/kernel、默认关闭入口、隔离构建器、
+停止工具修复）→ Agent 独立验收（反例 7 用例 e2966f3；Windows smoke 首轮
+失败→定位 Get-CimInstance 固有 ~1.6s/次、4500ms 结构性不可达→修复 tree 单
+查询+内核探活快路径 3db0770，10/10 PASS）→ 预算 246/1515（1a6c7a2）→ 新
+一次性世界 lab-ti1-0001（用户 lab-ti-user-0001、双 Terminal ti10001aa57
+00001/2、q=26=24 样本实测恒定、控制往返 T0=329、R01 复证）→ VALIDATION_HEAD
+838dcc7（T=332=T0+3、enabled=true）全量全绿（冻结 diff 零差异、live bundle
+482387B、第二树全绿且 bundle 逐字节 IDENTICAL）→ run-treasury 恢复撞上
+restart_interval=3600 滚动重启主循环重置期，5 秒通道判停：零样本、零 send、
+停止路径 3010ms 全 7 PID 确认（本轮修复首次真实完整实证）、控制槽撤装
+（attempted=false 保留）。按纪律不改 ID/T 不 rearm，实验关闭；再次实机须
+新任务书（须携带滚动窗口教训：正式窗口前重启引擎树或核对 restart_interval）。
+enabled=true 仅对装载该 bundle 的世界有意义，不构成后续实验授权。证据：
+`evidence/terminal-transfer-treasury-integration-i/`（含
+treasury-integration-i-report.md 与 formal-window/root-cause-restart-interval.md）。
+
 状态：**Execution 轮已运行（2026-09-09，判读 ENGINE_LAB_INCONCLUSIVE：
 T=557 门禁前置拒绝 shard_mismatch、零发送）；Calibration Rerun（同日）
 完成严格 shard 门禁恢复（C01）、独立配置核对（C02）、纠错（C03）与

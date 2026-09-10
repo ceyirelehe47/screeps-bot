@@ -1,0 +1,714 @@
+TAP version 13
+# Subtest: prepared inputs/postings/payload are frozen facts, not re-quoted derivatives
+ok 1 - prepared inputs/postings/payload are frozen facts, not re-quoted derivatives
+  ---
+  duration_ms: 166.9021
+  type: 'test'
+  ...
+# Subtest: prepare rejects wrong route with no API call
+ok 2 - prepare rejects wrong route with no API call
+  ---
+  duration_ms: 59.5244
+  type: 'test'
+  ...
+# Subtest: prepare rejects wrong shard with no API call
+ok 3 - prepare rejects wrong shard with no API call
+  ---
+  duration_ms: 44.6204
+  type: 'test'
+  ...
+# Subtest: prepare rejects missing shard with no API call
+ok 4 - prepare rejects missing shard with no API call
+  ---
+  duration_ms: 41.9706
+  type: 'test'
+  ...
+# Subtest: prepare rejects missing terminal with no API call
+ok 5 - prepare rejects missing terminal with no API call
+  ---
+  duration_ms: 40.7302
+  type: 'test'
+  ...
+# Subtest: prepare rejects wrong ID with no API call
+ok 6 - prepare rejects wrong ID with no API call
+  ---
+  duration_ms: 34.7111
+  type: 'test'
+  ...
+# Subtest: prepare rejects wrong owner with no API call
+ok 7 - prepare rejects wrong owner with no API call
+  ---
+  duration_ms: 28.3973
+  type: 'test'
+  ...
+# Subtest: prepare rejects not my with no API call
+ok 8 - prepare rejects not my with no API call
+  ---
+  duration_ms: 47.6273
+  type: 'test'
+  ...
+# Subtest: prepare rejects inactive with no API call
+ok 9 - prepare rejects inactive with no API call
+  ---
+  duration_ms: 30.9265
+  type: 'test'
+  ...
+# Subtest: prepare rejects controller too low with no API call
+ok 10 - prepare rejects controller too low with no API call
+  ---
+  duration_ms: 30.4561
+  type: 'test'
+  ...
+# Subtest: prepare rejects power effect with no API call
+ok 11 - prepare rejects power effect with no API call
+  ---
+  duration_ms: 35.6947
+  type: 'test'
+  ...
+# Subtest: prepare rejects other resource with no API call
+ok 12 - prepare rejects other resource with no API call
+  ---
+  duration_ms: 26.1611
+  type: 'test'
+  ...
+# Subtest: prepare rejects cooldown with no API call
+ok 13 - prepare rejects cooldown with no API call
+  ---
+  duration_ms: 28.5963
+  type: 'test'
+  ...
+# Subtest: prepare rejects quote unavailable with no API call
+ok 14 - prepare rejects quote unavailable with no API call
+  ---
+  duration_ms: 20.7244
+  type: 'test'
+  ...
+# Subtest: prepare rejects quote fractional with no API call
+ok 15 - prepare rejects quote fractional with no API call
+  ---
+  duration_ms: 24.53
+  type: 'test'
+  ...
+# Subtest: prepare rejects quote above cap with no API call
+ok 16 - prepare rejects quote above cap with no API call
+  ---
+  duration_ms: 20.3861
+  type: 'test'
+  ...
+# Subtest: prepare rejects quote below frozen experimental quote with no API call
+ok 17 - prepare rejects quote below frozen experimental quote with no API call
+  ---
+  duration_ms: 20.3574
+  type: 'test'
+  ...
+# Subtest: prepare rejects energy shortage with no API call
+ok 18 - prepare rejects energy shortage with no API call
+  ---
+  duration_ms: 25.104
+  type: 'test'
+  ...
+# Subtest: prepare rejects H shortage with no API call
+ok 19 - prepare rejects H shortage with no API call
+  ---
+  duration_ms: 19.4753
+  type: 'test'
+  ...
+# Subtest: prepare rejects capacity shortage with no API call
+ok 20 - prepare rejects capacity shortage with no API call
+  ---
+  duration_ms: 24.6812
+  type: 'test'
+  ...
+# Subtest: prepare rejects missed tick with no API call
+ok 21 - prepare rejects missed tick with no API call
+  ---
+  duration_ms: 21.4333
+  type: 'test'
+  ...
+# Subtest: real adapter uses member send once; OK does not change the world or imply settlement
+ok 22 - real adapter uses member send once; OK does not change the world or imply settlement
+  ---
+  duration_ms: 26.2504
+  type: 'test'
+  ...
+# Subtest: execute rejects absent before send
+ok 23 - execute rejects absent before send
+  ---
+  duration_ms: 21.6259
+  type: 'test'
+  ...
+# Subtest: execute rejects disarmed before send
+ok 24 - execute rejects disarmed before send
+  ---
+  duration_ms: 26.3333
+  type: 'test'
+  ...
+# Subtest: execute rejects attempted before send
+ok 25 - execute rejects attempted before send
+  ---
+  duration_ms: 21.8668
+  type: 'test'
+  ...
+# Subtest: execute rejects wrongID before send
+ok 26 - execute rejects wrongID before send
+  ---
+  duration_ms: 23.2828
+  type: 'test'
+  ...
+# Subtest: execute rejects corrupt before send
+ok 27 - execute rejects corrupt before send
+  ---
+  duration_ms: 29.1511
+  type: 'test'
+  ...
+# Subtest: execute rejects oversized before send
+ok 28 - execute rejects oversized before send
+  ---
+  duration_ms: 30.7917
+  type: 'test'
+  ...
+# Subtest: execute rejects silentWriteLoss before send
+ok 29 - execute rejects silentWriteLoss before send
+  ---
+  duration_ms: 27.49
+  type: 'test'
+  ...
+# Subtest: execute rejects changedQuote before send
+ok 30 - execute rejects changedQuote before send
+  ---
+  duration_ms: 22.2059
+  type: 'test'
+  ...
+# Subtest: execute rejects changedBaseline before send
+ok 31 - execute rejects changedBaseline before send
+  ---
+  duration_ms: 26.8869
+  type: 'test'
+  ...
+# Subtest: API throw/non-OK preserve attempted and never create a second attempt
+ok 32 - API throw/non-OK preserve attempted and never create a second attempt
+  ---
+  duration_ms: 46.5582
+  type: 'test'
+  ...
+# Subtest: exact full transfer reconciles observed fee 26 without rewriting quote
+ok 33 - exact full transfer reconciles observed fee 26 without rewriting quote
+  ---
+  duration_ms: 28.9019
+  type: 'test'
+  ...
+# Subtest: exact full transfer reconciles observed fee 10 without rewriting quote
+ok 34 - exact full transfer reconciles observed fee 10 without rewriting quote
+  ---
+  duration_ms: 21.5062
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: no records
+ok 35 - settlement remains unknown: no records
+  ---
+  duration_ms: 31.1532
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: missing outgoing view
+ok 36 - settlement remains unknown: missing outgoing view
+  ---
+  duration_ms: 24.9063
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: missing outgoing mirror
+ok 37 - settlement remains unknown: missing outgoing mirror
+  ---
+  duration_ms: 26.392
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: partial related second ID
+ok 38 - settlement remains unknown: partial related second ID
+  ---
+  duration_ms: 22.3624
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: second full transaction
+ok 39 - settlement remains unknown: second full transaction
+  ---
+  duration_ms: 24.6486
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: same ID conflicting amount
+ok 40 - settlement remains unknown: same ID conflicting amount
+  ---
+  duration_ms: 24.6033
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: same ID conflicting route
+ok 41 - settlement remains unknown: same ID conflicting route
+  ---
+  duration_ms: 25.1781
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: same ID conflicting description
+ok 42 - settlement remains unknown: same ID conflicting description
+  ---
+  duration_ms: 26.8522
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: wrong parties
+ok 43 - settlement remains unknown: wrong parties
+  ---
+  duration_ms: 20.3598
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: old time
+ok 44 - settlement remains unknown: old time
+  ---
+  duration_ms: 21.2657
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: future time
+ok 45 - settlement remains unknown: future time
+  ---
+  duration_ms: 19.2899
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: market order
+ok 46 - settlement remains unknown: market order
+  ---
+  duration_ms: 25.6832
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: description substring only
+ok 47 - settlement remains unknown: description substring only
+  ---
+  duration_ms: 22.4881
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: target replacement
+ok 48 - settlement remains unknown: target replacement
+  ---
+  duration_ms: 25.086
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: source overspend
+ok 49 - settlement remains unknown: source overspend
+  ---
+  duration_ms: 18.7632
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: zero fee
+ok 50 - settlement remains unknown: zero fee
+  ---
+  duration_ms: 18.5765
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: target energy changed
+ok 51 - settlement remains unknown: target energy changed
+  ---
+  duration_ms: 23.8708
+  type: 'test'
+  ...
+# Subtest: settlement remains unknown: target amount wrong
+ok 52 - settlement remains unknown: target amount wrong
+  ---
+  duration_ms: 19.8131
+  type: 'test'
+  ...
+# Subtest: consistent same-ID copies and unrelated transactions do not create false ambiguity
+ok 53 - consistent same-ID copies and unrelated transactions do not create false ambiguity
+  ---
+  duration_ms: 22.2637
+  type: 'test'
+  ...
+# Subtest: stale Treasury observation cannot be replaced by newer Game data during reconcile
+ok 54 - stale Treasury observation cannot be replaced by newer Game data during reconcile
+  ---
+  duration_ms: 19.8568
+  type: 'test'
+  ...
+# Subtest: malformed durable payloads and different postings/versions stay unknown
+ok 55 - malformed durable payloads and different postings/versions stay unknown
+  ---
+  duration_ms: 22.9208
+  type: 'test'
+  ...
+# Subtest: batch exit verification succeeds with seven PIDs, each operation 10ms
+ok 56 - batch exit verification succeeds with seven PIDs, each operation 10ms
+  ---
+  duration_ms: 3.3812
+  type: 'test'
+  ...
+# Subtest: batch exit verification succeeds with seven PIDs, each operation 700ms
+ok 57 - batch exit verification succeeds with seven PIDs, each operation 700ms
+  ---
+  duration_ms: 0.3179
+  type: 'test'
+  ...
+# Subtest: 100 PID verification still uses one batched exit query
+ok 58 - 100 PID verification still uses one batched exit query
+  ---
+  duration_ms: 0.3012
+  type: 'test'
+  ...
+# Subtest: vanished launcher before captured tree is not successful cleanup
+ok 59 - vanished launcher before captured tree is not successful cleanup
+  ---
+  duration_ms: 0.5438
+  type: 'test'
+  ...
+# Subtest: reused launcher PID is refused without any kill
+ok 60 - reused launcher PID is refused without any kill
+  ---
+  duration_ms: 0.2235
+  type: 'test'
+  ...
+# Subtest: surviving worker after launcher exit prevents confirmation until deadline
+ok 61 - surviving worker after launcher exit prevents confirmation until deadline
+  ---
+  duration_ms: 1.9212
+  type: 'test'
+  ...
+# Subtest: remaining timeout is shared across all stages, not reset per PID
+ok 62 - remaining timeout is shared across all stages, not reset per PID
+  ---
+  duration_ms: 0.3808
+  type: 'test'
+  ...
+# Subtest: unreadable exit identity is not interpreted as a reused or exited process
+ok 63 - unreadable exit identity is not interpreted as a reused or exited process
+  ---
+  duration_ms: 0.4123
+  type: 'test'
+  ...
+# Subtest: reused worker identity after kill is recorded, never killed again
+ok 64 - reused worker identity after kill is recorded, never killed again
+  ---
+  duration_ms: 0.5877
+  type: 'test'
+  ...
+# Subtest: kill command failure does not become a success or automatic retry
+ok 65 - kill command failure does not become a success or automatic retry
+  ---
+  duration_ms: 0.6123
+  type: 'test'
+  ...
+# Subtest: audit failure does not prevent kill but is retained in the result
+ok 66 - audit failure does not prevent kill but is retained in the result
+  ---
+  duration_ms: 0.3788
+  type: 'test'
+  ...
+# Subtest: final audit latency cannot disguise exceeding the whole termination deadline
+ok 67 - final audit latency cannot disguise exceeding the whole termination deadline
+  ---
+  duration_ms: 0.2548
+  type: 'test'
+  ...
+# error: pathspec 'src/new.ts' did not match any file(s) known to git
+# Did you forget to 'git add'?
+# Subtest: full independent evidence passes, observed fee 26
+ok 68 - full independent evidence passes, observed fee 26
+  ---
+  duration_ms: 3.9646
+  type: 'test'
+  ...
+# Subtest: full independent evidence passes, observed fee 10
+ok 69 - full independent evidence passes, observed fee 10
+  ---
+  duration_ms: 1.3373
+  type: 'test'
+  ...
+# Subtest: postflight does not pass missing tick
+ok 70 - postflight does not pass missing tick
+  ---
+  duration_ms: 0.8535
+  type: 'test'
+  ...
+# Subtest: postflight does not pass duplicate tick
+ok 71 - postflight does not pass duplicate tick
+  ---
+  duration_ms: 1.0083
+  type: 'test'
+  ...
+# Subtest: postflight does not pass second API boundary
+ok 72 - postflight does not pass second API boundary
+  ---
+  duration_ms: 0.8675
+  type: 'test'
+  ...
+# Subtest: postflight does not pass other experiment API boundary
+ok 73 - postflight does not pass other experiment API boundary
+  ---
+  duration_ms: 0.7457
+  type: 'test'
+  ...
+# Subtest: postflight does not pass only rejected API
+ok 74 - postflight does not pass only rejected API
+  ---
+  duration_ms: 0.8406
+  type: 'test'
+  ...
+# Subtest: postflight does not pass still unknown active
+ok 75 - postflight does not pass still unknown active
+  ---
+  duration_ms: 1.6551
+  type: 'test'
+  ...
+# Subtest: postflight does not pass no admitted kernel work
+ok 76 - postflight does not pass no admitted kernel work
+  ---
+  duration_ms: 1.296
+  type: 'test'
+  ...
+# Subtest: postflight does not pass no dispatch history
+ok 77 - postflight does not pass no dispatch history
+  ---
+  duration_ms: 1.0153
+  type: 'test'
+  ...
+# Subtest: postflight does not pass cleared attempted
+ok 78 - postflight does not pass cleared attempted
+  ---
+  duration_ms: 0.7932
+  type: 'test'
+  ...
+# Subtest: postflight does not pass old Treasury reused
+ok 79 - postflight does not pass old Treasury reused
+  ---
+  duration_ms: 0.6712
+  type: 'test'
+  ...
+# Subtest: postflight does not pass uncorrelated ring
+ok 80 - postflight does not pass uncorrelated ring
+  ---
+  duration_ms: 0.702
+  type: 'test'
+  ...
+# Subtest: postflight does not pass source H still double deducted
+ok 81 - postflight does not pass source H still double deducted
+  ---
+  duration_ms: 0.7546
+  type: 'test'
+  ...
+# Subtest: postflight does not pass fee still double deducted
+ok 82 - postflight does not pass fee still double deducted
+  ---
+  duration_ms: 0.7078
+  type: 'test'
+  ...
+# Subtest: postflight does not pass target space still double deducted
+ok 83 - postflight does not pass target space still double deducted
+  ---
+  duration_ms: 0.6665
+  type: 'test'
+  ...
+# Subtest: postflight does not pass missing source fee obligation
+ok 84 - postflight does not pass missing source fee obligation
+  ---
+  duration_ms: 0.7457
+  type: 'test'
+  ...
+# Subtest: postflight does not pass no public outgoing proof
+ok 85 - postflight does not pass no public outgoing proof
+  ---
+  duration_ms: 0.8076
+  type: 'test'
+  ...
+# Subtest: postflight does not pass public mirror wrong resource
+ok 86 - postflight does not pass public mirror wrong resource
+  ---
+  duration_ms: 0.831
+  type: 'test'
+  ...
+# Subtest: postflight does not pass public mirror conflicting amount
+ok 87 - postflight does not pass public mirror conflicting amount
+  ---
+  duration_ms: 0.7232
+  type: 'test'
+  ...
+# Subtest: postflight does not pass wrong database route
+ok 88 - postflight does not pass wrong database route
+  ---
+  duration_ms: 0.8069
+  type: 'test'
+  ...
+# Subtest: postflight does not pass database stock disagrees
+ok 89 - postflight does not pass database stock disagrees
+  ---
+  duration_ms: 0.8404
+  type: 'test'
+  ...
+# Subtest: postflight does not pass missing endpoint numeric fields
+ok 90 - postflight does not pass missing endpoint numeric fields
+  ---
+  duration_ms: 1.7788
+  type: 'test'
+  ...
+# Subtest: postflight does not pass missing endpoint object
+ok 91 - postflight does not pass missing endpoint object
+  ---
+  duration_ms: 1.1183
+  type: 'test'
+  ...
+# Subtest: postflight does not pass bad transaction shape
+ok 92 - postflight does not pass bad transaction shape
+  ---
+  duration_ms: 0.9328
+  type: 'test'
+  ...
+# Subtest: postflight does not pass bad Memory
+ok 93 - postflight does not pass bad Memory
+  ---
+  duration_ms: 0.7358
+  type: 'test'
+  ...
+# Subtest: postflight does not pass invalid active scalar
+ok 94 - postflight does not pass invalid active scalar
+  ---
+  duration_ms: 0.7538
+  type: 'test'
+  ...
+# Subtest: postflight does not pass automatic process stop missing
+ok 95 - postflight does not pass automatic process stop missing
+  ---
+  duration_ms: 0.6613
+  type: 'test'
+  ...
+# Subtest: postflight does not pass process stop merely requested
+ok 96 - postflight does not pass process stop merely requested
+  ---
+  duration_ms: 0.6879
+  type: 'test'
+  ...
+# Subtest: postflight does not pass process audit failed
+ok 97 - postflight does not pass process audit failed
+  ---
+  duration_ms: 0.7669
+  type: 'test'
+  ...
+# Subtest: postflight does not pass negative latency
+ok 98 - postflight does not pass negative latency
+  ---
+  duration_ms: 0.7792
+  type: 'test'
+  ...
+# Subtest: postflight does not pass NaN process time
+ok 99 - postflight does not pass NaN process time
+  ---
+  duration_ms: 0.9152
+  type: 'test'
+  ...
+# Subtest: postflight does not pass pause delay exceeded
+ok 100 - postflight does not pass pause delay exceeded
+  ---
+  duration_ms: 0.7449
+  type: 'test'
+  ...
+# Subtest: postflight does not pass runtime error
+ok 101 - postflight does not pass runtime error
+  ---
+  duration_ms: 0.8301
+  type: 'test'
+  ...
+# Subtest: builder resolves real source alias and relative imports into executable static bundle
+ok 102 - builder resolves real source alias and relative imports into executable static bundle
+  ---
+  duration_ms: 118.7943
+  type: 'test'
+  ...
+# Subtest: builder rejects Node dependency
+ok 103 - builder rejects Node dependency
+  ---
+  duration_ms: 22.2074
+  type: 'test'
+  ...
+# Subtest: builder rejects dynamic require
+ok 104 - builder rejects dynamic require
+  ---
+  duration_ms: 23.5876
+  type: 'test'
+  ...
+# Subtest: builder rejects mock dependency
+ok 105 - builder rejects mock dependency
+  ---
+  duration_ms: 25.684
+  type: 'test'
+  ...
+# Subtest: builder rejects old raw send
+ok 106 - builder rejects old raw send
+  ---
+  duration_ms: 23.3819
+  type: 'test'
+  ...
+# Subtest: builder rejects production main
+ok 107 - builder rejects production main
+  ---
+  duration_ms: 25.1639
+  type: 'test'
+  ...
+# Subtest: builder rejects missing source
+ok 108 - builder rejects missing source
+  ---
+  duration_ms: 28.0404
+  type: 'test'
+  ...
+# Subtest: builder handles a legitimate circular source graph once
+ok 109 - builder handles a legitimate circular source graph once
+  ---
+  duration_ms: 31.7055
+  type: 'test'
+  ...
+# Subtest: new CLI mode accepts only explicit bound options and one main
+ok 110 - new CLI mode accepts only explicit bound options and one main
+  ---
+  duration_ms: 0.5804
+  type: 'test'
+  ...
+# Subtest: new CLI rejects missing proof
+ok 111 - new CLI rejects missing proof
+  ---
+  duration_ms: 0.1771
+  type: 'test'
+  ...
+# Subtest: new CLI rejects missing facts
+ok 112 - new CLI rejects missing facts
+  ---
+  duration_ms: 0.2102
+  type: 'test'
+  ...
+# Subtest: new CLI rejects missing main
+ok 113 - new CLI rejects missing main
+  ---
+  duration_ms: 0.1038
+  type: 'test'
+  ...
+# Subtest: new CLI rejects old side-module observer
+ok 114 - new CLI rejects old side-module observer
+  ---
+  duration_ms: 0.1357
+  type: 'test'
+  ...
+# Subtest: new CLI rejects old side-module single-shot
+ok 115 - new CLI rejects old side-module single-shot
+  ---
+  duration_ms: 0.1924
+  type: 'test'
+  ...
+# Subtest: default integration entry has no loop side effects; observer exception blocks activation
+ok 116 - default integration entry has no loop side effects; observer exception blocks activation
+  ---
+  duration_ms: 13.409
+  type: 'test'
+  ...
+# Subtest: official build source guard rejects staged/unstaged/untracked graph bytes
+ok 117 - official build source guard rejects staged/unstaged/untracked graph bytes
+  ---
+  duration_ms: 905.9063
+  type: 'test'
+  ...
+1..117
+# tests 117
+# suites 0
+# pass 117
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1982.8994

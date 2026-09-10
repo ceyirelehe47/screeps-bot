@@ -1,0 +1,9 @@
+owner captured pid=148008 started=2026-09-10T02:59:44.6648110Z
+{"kind":"process-termination","elapsedMs":0.03719999999998436,"phase":"start","rootPid":148008,"budgetMs":4500}
+{"kind":"process-termination","elapsedMs":1845.7019,"phase":"tree-read"}
+{"kind":"process-termination","elapsedMs":1846.2712000000001,"phase":"targets","targets":[{"pid":148008,"ppid":131388,"started":"2026-09-10T02:59:44.6648110Z","executable":"C:\\nvm4w\\nodejs\\node.exe","command":"C:\\nvm4w\\nodejs\\node.exe
+{"kind":"process-termination","elapsedMs":3206.9829,"phase":"kill-request-completed"}
+{"kind":"process-termination","elapsedMs":3207.2396,"phase":"kill-response","result":{"stdout":"�ɹ�: ����ֹ PID 88588 (���� PID 148008 �ӽ���)�Ľ��̡�\r\n�ɹ�: ����ֹ PID 142692 (���� PID 148008 �ӽ���)�Ľ��̡�\r\n�ɹ�: ����ֹ PID 145796 (���� PID 148
+{"kind":"process-termination","elapsedMs":3208.1802,"phase":"exit-snapshot","survivingPids":[],"reusedPids":[]}
+{"kind":"process-termination","elapsedMs":3208.1540999999997,"phase":"confirmed","terminated":true,"observedPids":[148008,88588,142692,145796,143972,148420],"polls":1,"auditErrors":[]}
+TERMINATED {"terminated":true,"observed":6,"elapsedMs":3208,"polls":1,"auditErrors":0}

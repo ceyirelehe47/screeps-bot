@@ -1,0 +1,117 @@
+{
+  "memory": "{\"__labTerminalTransferProbe\":{\"experimentId\":\"lab-ti1-0001\",\"armed\":false,\"attempted\":false}}",
+  "transactions": [],
+  "objects": [
+    {
+      "room": "W1N57",
+      "type": "controller",
+      "x": 16,
+      "y": 18,
+      "level": 8,
+      "_id": "907794771d9e929",
+      "meta": {
+        "revision": 3,
+        "created": 1789009555929,
+        "version": 0,
+        "updated": 1789010503973
+      },
+      "$loki": 382,
+      "user": "8fbd94c45d92d16",
+      "progress": 0,
+      "downgradeTime": 200302,
+      "safeMode": 20301,
+      "safeModeAvailable": 0
+    },
+    {
+      "room": "W10N57",
+      "type": "controller",
+      "x": 35,
+      "y": 35,
+      "level": 8,
+      "_id": "3a5594774dfe040",
+      "meta": {
+        "revision": 2,
+        "created": 1789009556704,
+        "version": 0,
+        "updated": 1789010503967
+      },
+      "$loki": 386,
+      "user": "8fbd94c45d92d16",
+      "progress": 0,
+      "safeModeAvailable": 0,
+      "downgradeTime": 200302
+    },
+    {
+      "type": "spawn",
+      "room": "W1N57",
+      "x": 34,
+      "y": 15,
+      "name": "Spawn1",
+      "user": "8fbd94c45d92d16",
+      "store": {
+        "energy": 300
+      },
+      "storeCapacityResource": {
+        "energy": 300
+      },
+      "hits": 5000,
+      "hitsMax": 5000,
+      "spawning": null,
+      "notifyWhenAttacked": false,
+      "_id": "821d94c45db0bcd",
+      "meta": {
+        "revision": 1,
+        "created": 1789009872347,
+        "version": 0,
+        "updated": 1789010503973
+      },
+      "$loki": 388,
+      "off": false
+    },
+    {
+      "_id": "ti10001aa57000001",
+      "type": "terminal",
+      "room": "W1N57",
+      "x": 18,
+      "y": 18,
+      "user": "8fbd94c45d92d16",
+      "store": {
+        "H": 1000,
+        "energy": 10000
+      },
+      "cooldownTime": 0,
+      "meta": {
+        "revision": 1,
+        "created": 1789009943542,
+        "version": 0,
+        "updated": 1789010503973
+      },
+      "$loki": 389,
+      "storeCapacity": 300000
+    },
+    {
+      "_id": "ti10001aa57000002",
+      "type": "terminal",
+      "room": "W10N57",
+      "x": 20,
+      "y": 20,
+      "user": "8fbd94c45d92d16",
+      "store": {
+        "energy": 2000
+      },
+      "cooldownTime": 0,
+      "meta": {
+        "revision": 1,
+        "created": 1789009943630,
+        "version": 0,
+        "updated": 1789010503967
+      },
+      "$loki": 390,
+      "storeCapacity": 300000
+    }
+  ],
+  "state": {
+    "tick": 327,
+    "paused": true
+  }
+}

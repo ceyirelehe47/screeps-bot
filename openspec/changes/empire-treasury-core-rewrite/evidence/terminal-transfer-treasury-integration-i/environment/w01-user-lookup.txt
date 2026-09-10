@@ -1,0 +1,23 @@
+< [
+  {
+    username: 'lab-ti-user-0001',
+    usernameLower: 'lab-ti-user-0001',
+    cpu: 500,
+    gcl: 106717414.7996562,
+    cpuAvailable: 0,
+    registeredDate: '2026-09-10T03:11:12.345Z',
+    bot: 'ti-probe',
+    active: 10000,
+    badge: {
+      type: 7,
+      color1: '#e6515',
+      color2: '#3522dc',
+      color3: '#e6c6ba',
+      flip: true,
+      param: 14
+    },
+    _id: '8fbd94c45d92d16',
+    meta: { revision: 0, created: 1789009872345, version: 0 },
+    '$loki': 8
+  }
+]

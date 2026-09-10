@@ -1,0 +1,10 @@
+Server version 4.3.0
+Starting all processes. Ports: 21025 (game), 21026 (cli)
+[storage] process 51244 started
+[backend] process 146360 started
+[engine_main] process 138876 started
+[engine_runner1] process 141828 started
+[engine_processor1] process 143296 started
+[engine_processor2] process 138484 started
+[backend] process 146360 exited with code 1, restarting...
+[backend] process 127268 started

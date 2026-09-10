@@ -1,0 +1,15 @@
+< [
+  {
+    _id: 'W10N57',
+    status: 'normal',
+    sourceKeepers: false,
+    meta: {
+      revision: 1,
+      created: 1789009556702,
+      version: 0,
+      updated: 1789009557761
+    },
+    '$loki': 123,
+    nextForceUpdateTime: 409
+  }
+]

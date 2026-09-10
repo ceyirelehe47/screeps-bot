@@ -1,0 +1,44 @@
+  console.log
+    CALIBRATION-F {"total":55,"passed":55,"failed":0,"missing":0}
+
+      at Object.<anonymous> (test/lab/terminal-transfer/calibration.test.ts:74:13)
+
+FAIL test/lab/terminal-transfer/calibration.test.ts (17.77 s)
+  Terminal Transfer Lab Run I · Calibration Rerun——独立配置核对（C02）
+    √ 场景 F 正常对照：独立取得的完整健康基线 + 匹配配置 → 全部通过（无 fail/missing） (253 ms)
+    √ 场景 B 三项同时错误：shard/源结构 ID/费用上限一次性全部暴露；只修一项不减少其余两项；基线文件字节不随 config 变化 (9 ms)
+    √ 场景 C 拒绝虚假自洽：配置侧自洽（labConfig 与文档 JSON 一致）但独立事实不一致 → 仍拒绝 (7 ms)
+    √ 场景 D 缺失与混用：缺 shard/缺身份/单 tick/读取错误/缺健康字段/混用/陈旧均不通过；首项失败不影响其余项继续报告 (15 ms)
+    √ 场景 E 报价无硬编码（非 26 报价）：cap=30 与报价 30 绑定通过；29/31 均判绑定不符；非整数/负数报价拒绝 (5 ms)
+    × 场景 G CLI 只读与真实命令：本轮真实 facts 退出 0、三项不一致 fixture 退出 1 且三项齐报、坏输入退出 2；运行前后输入文件字节不变 (512 ms)
+  Control Remediation I —— Agent 独立增补反例（R02）
+    √ 配置侧 targetTick 非法（小数/负数/字符串/null）→ target_tick_reachable fail 且不崩溃 (4 ms)
+    √ 早期样本 feeQuote 整字段缺失或为 null → quote 三项（legal/stable/cap 绑定）全部 fail，不因最新样本正常而放行 (3 ms)
+    √ pauseConfirmedTick 类型非法（字符串/null/负数）→ paused_confirmed 与 target_tick_reachable 均 fail (7 ms)
+    √ 两端数值『稳定但发送条件不满足』：源 cooldown=10 / 源 energy=20<cap / 目标空位=50<100 → 对应发送条件 fail（稳定性检查本身合法） (4 ms)
+    √ controller level 稳定为 5（<6）→ 两端 controller fail（controller_stable 本身 pass） (2 ms)
+    √ 三样本基线：反序后中间样本 target.cooldown 缺失仍被完整暴露；健康三样本反序 pass 且输入字节不变 (3 ms)
+    √ 窗口可达性边界：T=T0+2 fail、T=T0+3 pass（healthy 即此值），不再以 maxSampleTick+3 冒充 (4 ms)
+
+  ● Terminal Transfer Lab Run I · Calibration Rerun——独立配置核对（C02） › 场景 G CLI 只读与真实命令：本轮真实 facts 退出 0、三项不一致 fixture 退出 1 且三项齐报、坏输入退出 2；运行前后输入文件字节不变
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+    [0m [90m 244 |[39m     [90m// fixture 与冻结历史配置的配对核对由场景 B–F 覆盖。[39m
+     [90m 245 |[39m     [36mconst[39m healthy [33m=[39m spawnSync(process[33m.[39mexecPath[33m,[39m [[33mCLI[39m[33m,[39m [32m"--facts"[39m[33m,[39m [33mFACTS_EC0001[39m][33m,[39m { encoding[33m:[39m [32m"utf8"[39m })[33m;[39m
+    [31m[1m>[22m[39m[90m 246 |[39m     expect(healthy[33m.[39mstatus)[33m.[39mtoBe([35m0[39m)[33m;[39m
+     [90m     |[39m                            [31m[1m^[22m[39m
+     [90m 247 |[39m     [36mconst[39m healthyOutput [33m=[39m [33mJSON[39m[33m.[39mparse(healthy[33m.[39mstdout [36mas[39m string)[33m;[39m
+     [90m 248 |[39m     expect(healthyOutput[33m.[39mreport[33m.[39mstatus)[33m.[39mtoBe([32m"pass"[39m)[33m;[39m
+     [90m 249 |[39m     expect(healthyOutput[33m.[39minputs[33m.[39mconfigSource[33m.[39msha256)[33m.[39mtoBe(sha256Of(join(__dirname[33m,[39m [32m"labConfig.ts"[39m)))[33m;[39m[0m
+
+      at Object.<anonymous> (test/lab/terminal-transfer/calibration.test.ts:246:28)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 12 passed, 13 total
+Snapshots:   0 total
+Time:        19.753 s
+Ran all test suites within paths "test/lab/terminal-transfer/calibration.test.ts".

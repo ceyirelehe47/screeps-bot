@@ -1,0 +1,1 @@
+{"command":"npx jest --config jest.config.cjs --runInBand --runTestsByPath test/lab/treasury-integration/integration.test.ts test/lab/treasury-integration/tools.test.ts test/lab/treasury-integration/integrationAdversarial.test.ts"}

@@ -1,0 +1,6 @@
+{"seq":1,"channel":"tickStarted","payload":"1","recvWallClock":"2026-09-10T04:16:38.544Z","recvMonotonicMs":10924.1976}
+{"seq":2,"channel":"user:17c332744f825c7/cpu","payload":"{\"cpu\":12,\"memory\":508}","recvWallClock":"2026-09-10T04:16:38.659Z","recvMonotonicMs":11039.9635}
+{"seq":3,"channel":"user:17c332744f825c7/console","payload":"{\"messages\":{\"log\":[],\"results\":[]},\"userId\":\"17c332744f825c7\"}","recvWallClock":"2026-09-10T04:16:38.665Z","recvMonotonicMs":11046.0499}
+{"seq":4,"channel":"queueDone:usersIvm","payload":"1","recvWallClock":"2026-09-10T04:16:43.553Z","recvMonotonicMs":15933.2595}
+{"seq":5,"channel":"queueDone:rooms","payload":"1","recvWallClock":"2026-09-10T04:16:48.559Z","recvMonotonicMs":20939.6826}
+{"seq":6,"channel":"roomsDone","payload":330,"recvWallClock":"2026-09-10T04:16:48.563Z","recvMonotonicMs":20944.098}

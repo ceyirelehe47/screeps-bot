@@ -1,0 +1,18 @@
+Screeps server v4.3.0 running on port 21025.
+This CLI interface contains a virtual JavaScript machine which you can use to invoke internal server commands. Any valid JavaScript code is allowed. Type "help()" to learn more about commands.
+
+[
+  {
+    _id: 'W1N57',
+    status: 'normal',
+    sourceKeepers: false,
+    meta: {
+      revision: 1,
+      created: 1789009555928,
+      version: 0,
+      updated: 1789009557761
+    },
+    '$loki': 122,
+    nextForceUpdateTime: 397
+  }
+]

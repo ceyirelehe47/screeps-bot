@@ -1,0 +1,17 @@
+{
+  "reason": "user_console_stalled",
+  "observedAt": 15558.5833,
+  "deadline": 190317.8689,
+  "stopRequestedAt": 15561.0852,
+  "windowComplete": false,
+  "pauseConfirmed": true,
+  "killConfirmed": false,
+  "triggerLatencyMs": 2.5018999999992957,
+  "stableTick": 329,
+  "pauseConfirmedAt": 16619.7607,
+  "extraReasons": [],
+  "logErrors": [],
+  "sampleTicks": [],
+  "controlSamples": [],
+  "ok": false
+}

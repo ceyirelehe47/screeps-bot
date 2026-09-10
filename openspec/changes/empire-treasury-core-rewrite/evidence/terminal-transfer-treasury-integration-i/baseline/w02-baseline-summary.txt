@@ -1,0 +1,41 @@
+{"lines":24,"decoded":24}
+{
+ "sampleCount": 24,
+ "tickRange": [
+  301,
+  324
+ ],
+ "gaps": false,
+ "quotes": [
+  26
+ ],
+ "shards": [
+  "Forst"
+ ],
+ "ids": [
+  "lab-ti1-0001"
+ ],
+ "users": [
+  "lab-ti-user-0001"
+ ],
+ "srcTid": [
+  "ti10001aa57000001"
+ ],
+ "tgtTid": [
+  "ti10001aa57000002"
+ ],
+ "srcH": [
+  null
+ ],
+ "srcE": [
+  null
+ ],
+ "tgtE": [
+  null
+ ],
+ "txCounts": [
+  "{\"incoming\":0,\"outgoing\":0}"
+ ],
+ "firstControl": "absent"
+}
+{"kinds":{"lab-control-sample":24}}

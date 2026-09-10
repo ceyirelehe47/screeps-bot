@@ -1,5 +1,18 @@
 # Tasks — Empire Treasury Core Rewrite
 
+## Treasury Terminal Integration I（2026-09-10，离线交付全成；实机 LIVE_FAIL——环境时序事故零 send，停止修复首次真实完整实证）
+
+ChatGPT 实现包（基线 7314277、patch 1a05f5a1…，经 mcp-remote SSH 下载 zip 45ad52f5…）原样应用+独立验收+新世界 lab-ti1-0001 实机；判读与证据见 `evidence/terminal-transfer-treasury-integration-i/treasury-integration-i-report.md`。
+
+- [x] 包完整性与原样应用：zip/patch/baseHead/17 文件输出哈希全匹配（apply_patch.py guard 全过）；首轮检查全绿（npm ci Node 22.19.0/TS 5.9.3；新 Node 117/117、旧工具 48/48、tsc×2、新 Jest 11）；IMPL_HEAD 92e0e50
+- [x] 独立验收（§3.1）：integrationAdversarial.test.ts 7 反例（同 ID 矛盾/物理变化零交易/外实验 description/路线互换+时间错位/实扣超 q 不重试清除/缺武装三态零调用/结构替换——全部 unknown+占用保持+单飞行+零发布，真实 hook 计数器）→ e2966f3
+- [x] Windows 停止修复（§3.2 真实缺陷）：首轮 smoke 两次失败原件保留；根因=Get-CimInstance 固有 ~1.6s/次×4 次调用>4500ms（结构性）+smoke 断言按 Linux 写死 7（Windows 树含 conhost）；修复 tree 单查询（root 并入）+process.kill(pid,0) 探活快路径+断言改 owned 全集（3db0770，预算 4500 不变）；smoke 10/10 PASS、真实 run 内 3010ms 全确认；间歇 1/19 CIM 缺字段如实记录（安全方向，不自动重试）
+- [x] 构建与预算（§4）：禁用 bundle 依赖图=35 源含生产 facade/kernel 全链、无 mock/singleShot/生产 main/Node 依赖；全量真实收集 246/1515、budget PASSED（1a6c7a2，锚点滚动）
+- [x] §5.1 新世界 lab-ti1-0001：lab-ti1-env（同 lockfile d95c2c12、占位 steam key 后稳定、全回环）→建房/合成用户 8fbd94c45d92d16/fixture（双 RCL8+双 Terminal 1000H/10000E、2000E）→**整树重启**（worldSize 教训执行）→24 样本基线（tick 301–324 无缺口、q=26 恒定、交易 0）→控制往返全绿（inspect absent→initialize 325→observe-false 325/326→arm 327→observe-armed 327/328→facts T0=329）→两轮绑定（2d45e3c：q=26 实测回填+本轮 facts fixture+场景 G 演进；C02 55/55、calibration 13/13）
+- [x] §5.2 VALIDATION_HEAD 838dcc7（T=332=T0+3 首次固定+enabled=true）：tsc×2/build、分层 Jest（18/lab/Slice0 23/treasury 597/全量 246-1515 零失败）、budget PASSED、CLI 55/55（本轮 facts）、冻结 diff 零差异、live bundle 482387B（dist 未触碰）、第二树同 SHA 全绿+bundle 逐字节 IDENTICAL
+- [x] §5.3 正式窗口终态：run-treasury 恢复撞 restart_interval=3600 滚动重启主循环重置期（12:14 滚动/12:16 恢复）→5 秒通道判停 user_console_stalled；**零 terminal.send 调用、零观测样本、两端库存与 fixture 一致**；撤装写入+readback 确认（attempted=false 保留）；停止路径 terminated=true/7 PID/3010ms/polls=1（修复后首次真实完整确认，对照上轮 UNCONFIRMED）；按 §5.3 纪律不改 ID/T、不 rearm，实验关闭；根因分析 formal-window/root-cause-restart-interval.md
+- [x] 收尾：环境全清（进程 0/端口 0/目录删）、收集器停、223+ 证据文件归档、run-i.md 状态段、本报告、提交推送
+
 ## Terminal Transfer Engine Lab Run I · Engine Continuation 0001（2026-09-09，实机执行完成 ENGINE_LAB_PASS）
 
 续接轮（用户附件 screeps-engine-continuation-2026-09-09.zip；包内记载用户对「继续现有 S01–S06」答复「继续吧」2026-09-09T14:49:47Z，范围限本轮一场实验）。起点 5773f1a=上轮交付（本地=远端，干净）；不重应用旧 17 文件包，R01–R03 实现沿已接受版本。

@@ -1,0 +1,3 @@
+Warning: file .screepsrc not found. Did you run "screeps init" in this directory?
+Error: `assetdir` option is not defined!
+    at Object.start (D:\code\screeps\lab-ti1-env\server\node_modules\@screeps\launcher\lib\start.js:46:15)

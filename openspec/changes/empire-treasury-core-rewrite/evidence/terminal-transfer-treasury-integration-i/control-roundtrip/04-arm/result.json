@@ -1,0 +1,15 @@
+{
+  "beforeRaw": "{\"__labTerminalTransferProbe\":{\"experimentId\":\"lab-ti1-0001\",\"armed\":false,\"attempted\":false}}",
+  "afterRaw": "{\"__labTerminalTransferProbe\":{\"experimentId\":\"lab-ti1-0001\",\"armed\":true,\"attempted\":false}}",
+  "record": {
+    "experimentId": "lab-ti1-0001",
+    "armed": true,
+    "attempted": false
+  },
+  "beforeControlBytes": 63,
+  "controlBytes": 62,
+  "totalMemoryBytes": 93,
+  "tick": 327,
+  "storageConfirmed": true,
+  "playerConfirmed": false
+}

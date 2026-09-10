@@ -1,0 +1,12 @@
+< [
+  {
+    room: 'W10N57',
+    type: 'controller',
+    x: 35,
+    y: 35,
+    level: 0,
+    _id: '3a5594774dfe040',
+    meta: { revision: 0, created: 1789009556704, version: 0 },
+    '$loki': 386
+  }
+]
