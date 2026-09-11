@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+'use strict';
+const path=require('node:path');
+const C=require('./common.cjs');const {loadSession}=require('./session.cjs');const D=require('./collector-diagnostics.cjs');
+async function main(argv) {
+  const o=C.options(argv,['repo','run','reason']);C.required(o,'repo','run');
+  const s=loadSession(o.run,C.loadGuard(o.repo)),reason=o.reason||'operator_stop';
+  if(!D.SAFE_STOP_REASONS.has(reason))C.fail('COLLECTOR_STOP_REASON_INVALID');
+  const out={runId:s.runId,reason,requestedAtMs:Date.now(),requestedByPid:process.pid};
+  C.writeNew(path.join(o.run,'collector-stop.json'),out);
+  console.log(JSON.stringify({status:'COLLECTOR_STOP_REQUESTED',runId:s.runId,reason}));
+}
+module.exports={main};if(require.main===module)C.entrypoint(()=>main(process.argv.slice(2)));

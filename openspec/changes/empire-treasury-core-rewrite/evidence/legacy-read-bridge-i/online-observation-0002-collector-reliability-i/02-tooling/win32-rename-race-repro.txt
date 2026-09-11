@@ -1,0 +1,9 @@
+=== win32 rename-over-existing 复现（Node v22.19.0, win32 x64）===
+--- 无并发读者 3 次 ---
+{"mode":"no-concurrent-reader","childExit":0,"iterations":400,"result":{"ok":400,"failed":0,"sample":[]}}
+{"mode":"no-concurrent-reader","childExit":0,"iterations":400,"result":{"ok":400,"failed":0,"sample":[]}}
+{"mode":"no-concurrent-reader","childExit":0,"iterations":400,"result":{"ok":400,"failed":0,"sample":[]}}
+--- 有并发读者（每 5ms 读目标文件）3 次 ---
+{"mode":"concurrent-reader-5ms","childExit":0,"iterations":400,"result":{"ok":389,"failed":11,"sample":[{"i":46,"code":"EPERM","syscall":"rename"},{"i":47,"code":"EPERM","syscall":"rename"},{"i":48,"code":"EPERM","syscall":"rename"},{"i":254,"code":"EPERM","syscall":"rename"},{"i":255,"code":"EPERM","syscall":"rename"}]}}
+{"mode":"concurrent-reader-5ms","childExit":0,"iterations":400,"result":{"ok":381,"failed":19,"sample":[{"i":42,"code":"EPERM","syscall":"rename"},{"i":43,"code":"EPERM","syscall":"rename"},{"i":44,"code":"EPERM","syscall":"rename"},{"i":59,"code":"EPERM","syscall":"rename"},{"i":60,"code":"EPERM","syscall":"rename"}]}}
+{"mode":"concurrent-reader-5ms","childExit":0,"iterations":400,"result":{"ok":375,"failed":25,"sample":[{"i":17,"code":"EPERM","syscall":"rename"},{"i":18,"code":"EPERM","syscall":"rename"},{"i":56,"code":"EPERM","syscall":"rename"},{"i":57,"code":"EPERM","syscall":"rename"},{"i":58,"code":"EPERM","syscall":"rename"}]}}

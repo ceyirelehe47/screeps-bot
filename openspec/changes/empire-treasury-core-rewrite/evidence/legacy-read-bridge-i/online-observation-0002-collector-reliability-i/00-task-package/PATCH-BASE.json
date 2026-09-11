@@ -1,0 +1,84 @@
+{
+  "schema": "screeps-compat-observation-tool-base/v1",
+  "repository": "ceyirelehe47/screeps-bot",
+  "sourceRef": "f4204c2b4c0bc3637ac0347e8d87b23d516bb934",
+  "sourcePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0001-tooling-remediation-i/package-and-tooling",
+  "compatBaseline": "91532745123ca14cddb78385f9a88800fca4bf1a",
+  "productionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+  "files": [
+    {
+      "path": "bounded-child.cjs",
+      "gitBlob": "830cc7f9691f495c89cfde5b312638fc9c6fdc3a"
+    },
+    {
+      "path": "check-profile.cjs",
+      "gitBlob": "56b672c2af67e83328b4ba078380b7704322f29a"
+    },
+    {
+      "path": "common.cjs",
+      "gitBlob": "f7c25381cad33ddcd20ec842db94b7a0a8f12d7c"
+    },
+    {
+      "path": "console-collector.cjs",
+      "gitBlob": "d65cf2658044bbdd23cd1403b1bf013fd7aab442"
+    },
+    {
+      "path": "deadline-guard.cjs",
+      "gitBlob": "737eab88694bfe3e4bd3562cc3f580a86c18b312"
+    },
+    {
+      "path": "operations.cjs",
+      "gitBlob": "d3a46e5ca1e992ae6a408249a3ca50ca89725afe"
+    },
+    {
+      "path": "preflight-read.cjs",
+      "gitBlob": "7e13fafcd0260718bfc263b9fe17552925945bc1"
+    },
+    {
+      "path": "prepare-session.cjs",
+      "gitBlob": "7247a2cf3a8fa1f69b9ea8723fe11fc292701260"
+    },
+    {
+      "path": "profile-smoke.cjs",
+      "gitBlob": "e1d3a1f58734573a53b78d3af815754ff759009a"
+    },
+    {
+      "path": "protocol.cjs",
+      "gitBlob": "cc537ffbd1dba96125787449ce9eb0643cf1e1f5"
+    },
+    {
+      "path": "request-close.cjs",
+      "gitBlob": "3ff9ad0b53ac11eac6b32a1a78444609ab02c98c"
+    },
+    {
+      "path": "restore-modules.cjs",
+      "gitBlob": "5c7dfe954e3c7f87eac95a00d5cebd0b7fe12d9d"
+    },
+    {
+      "path": "session.cjs",
+      "gitBlob": "75e69f71fca37d23e6274c6a6ee416aecc5048be"
+    },
+    {
+      "path": "token-status.cjs",
+      "gitBlob": "94a8af6f9c755f790fc7a5b8d6c2dbcd529daf10"
+    },
+    {
+      "path": "transport.cjs",
+      "gitBlob": "828617ef3d415222c193ed71e102f500f62e51bf"
+    },
+    {
+      "path": "upload-once.cjs",
+      "gitBlob": "146da555d429d643b3c474314a34e63fec32f978"
+    },
+    {
+      "path": "watch.cjs",
+      "gitBlob": "2c2793d1606e5a0beb1da80bf702e08e50f53f84"
+    }
+  ],
+  "patchTargets": [
+    "console-collector.cjs",
+    "deadline-guard.cjs",
+    "session.cjs",
+    "watch.cjs"
+  ]
+}

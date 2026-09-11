@@ -1,0 +1,7 @@
+{
+  "status": "ONLINE_CLOSE_UNCONFIRMED",
+  "requestAttempted": true,
+  "serverAccepted": true,
+  "confirmed": false,
+  "auditFailed": false
+}

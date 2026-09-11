@@ -1,0 +1,42 @@
+{
+  "status": "PROFILE_SOURCE_VALIDATED_ONLY",
+  "mode": "on",
+  "configSha256": "9ab4609fcab27fa398bbee5592a9f8fbd760f8d472e8501bb65f89ef38faafa7",
+  "profile": {
+    "enabled": true,
+    "shardName": "shard1",
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "startTick": 73634100,
+    "endTick": 73635200,
+    "intervalTicks": 100,
+    "minBucket": 2000,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "maxLogBytes": 16384
+  },
+  "dueTicks": [
+    73634100,
+    73634200,
+    73634300,
+    73634400,
+    73634500,
+    73634600,
+    73634700,
+    73634800,
+    73634900,
+    73635000,
+    73635100,
+    73635200
+  ],
+  "observedTick": 73631089,
+  "liveTickIndependentlyVerified": false,
+  "deploymentAuthorized": false,
+  "fullTypecheckPerformed": false
+}

@@ -1,0 +1,36 @@
+--- common.cjs.original-as-shipped
++++ common.cjs
+@@ -17,6 +17,7 @@
+ const blob = b => crypto.createHash('sha1').update(Buffer.from(`blob ${b.length}\0`)).update(b).digest('hex');
+ const clone = x => JSON.parse(JSON.stringify(x));
+ const pause = ms => new Promise(r => setTimeout(r, ms));
++const sleepSync = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+ function integer(x, lo, hi, name) { if (!Number.isSafeInteger(x) || x < lo || x > hi) fail(name || 'INVALID_INTEGER'); return x; }
+ function options(argv, names, flags = []) {
+   const o = {};
+@@ -59,9 +60,24 @@
+   } catch(e) { if (e instanceof Failure) throw e; fail('LOCAL_JSON_UNREADABLE'); }
+ }
+ function writeNew(p, data) { const b = JSON.stringify(data, null, 2) + '\n'; fs.writeFileSync(p, b, { flag:'wx', mode:0o600 }); }
++// Windows refuses to rename over a destination another process holds open, and guard,
++// guard-readiness, probe and parent pollers all read these files while the writer runs.
++// Retry briefly; if the swap stays blocked, overwrite in place rather than lose the
++// evidence — a non-atomic heartbeat is survivable, a missing one terminates the run.
++function replaceOverExisting(tmp, p) {
++  for (let attempt = 0; attempt < 6; attempt++) {
++    try { fs.renameSync(tmp, p); return; }
++    catch(e) {
++      if (e.code !== 'EPERM' && e.code !== 'EACCES' && e.code !== 'EBUSY') throw e;
++      sleepSync(20 * (attempt + 1));
++    }
++  }
++  fs.writeFileSync(p, fs.readFileSync(tmp), { mode:0o600 });
++}
+ function atomicJson(p, data) {
+   const tmp = p + '.' + crypto.randomBytes(6).toString('hex') + '.tmp';
+-  try { writeNew(tmp, data); fs.renameSync(tmp, p); } finally { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); }
++  try { writeNew(tmp, data); replaceOverExisting(tmp, p); }
++  finally { if (fs.existsSync(tmp)) { try { fs.unlinkSync(tmp); } catch {} } }
+ }
+ function audit(p, data, redact = redactor()) {
+   fs.appendFileSync(p, redact(JSON.stringify({ at: new Date().toISOString(), ...data }))+'\n', { mode:0o600 });

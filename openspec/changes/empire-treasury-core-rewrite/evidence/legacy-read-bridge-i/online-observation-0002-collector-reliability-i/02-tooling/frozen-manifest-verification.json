@@ -1,0 +1,15 @@
+{
+  "status": "FROZEN_MANIFEST_UNCHANGED",
+  "frozenCount": 36,
+  "unchanged": 36,
+  "changed": [],
+  "missing": [],
+  "addedAfterFreeze": [
+    "hash-manifest-verify.cjs",
+    "online-state-verdict.cjs",
+    "probe-status.cjs",
+    "rate-limit-check.cjs",
+    "secret-scan.cjs",
+    "window-monitor.cjs"
+  ]
+}

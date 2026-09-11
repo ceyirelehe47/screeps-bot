@@ -1,0 +1,65 @@
+'use strict';
+const test=require('node:test');const assert=require('node:assert/strict');
+const C=require('../common.cjs');const D=require('../collector-diagnostics.cjs');const {createWatch}=require('../watch.cjs');
+const session={runId:'a'.repeat(32),userId:'u1',shard:'shard1',
+  profile:{startTick:100,endTick:1200,rooms:['E3N59','E4N58'],resources:['energy','H']}};
+
+test('collector diagnostics redact, bound and hash arbitrary error text without retaining it',()=>{
+  const secret='1234567890abcdefTOKEN';
+  const redact=C.redactor([secret]);
+  const e=new Error(`failed token=${secret} ${'x'.repeat(6000)}`);
+  e.code='ECONNRESET';e.cause={code:'UND_ERR_SOCKET',syscall:'read'};
+  const safe=D.safeError({type:'error',error:e},redact);
+  assert.equal(safe.code,'ECONNRESET');
+  assert.equal(safe.causeCode,'UND_ERR_SOCKET');
+  assert.equal(safe.syscall,'read');
+  assert.equal(safe.messageTruncated,true);
+  assert.ok(safe.messageBytes<=D.MAX_MESSAGE_BYTES);
+  assert.ok(safe.stackBytes<=D.MAX_STACK_BYTES);
+  assert.equal(typeof safe.messageSha256,'string');
+  assert.equal(typeof safe.stackSha256,'string');
+  assert.equal(safe.redactionChanged,true);
+  assert.equal(Object.hasOwn(safe,'message'),false);
+  assert.equal(Object.hasOwn(safe,'stack'),false);
+});
+
+test('close details retain bounded close code and redacted reason',()=>{
+  const secret='feedfacefeedfacefeedfacefeedfacefeed';
+  const close=D.safeClose({code:1006,reason:`lost token=${secret}`,wasClean:false},C.redactor([secret]));
+  assert.equal(close.code,1006);
+  assert.equal(close.wasClean,false);
+  assert.ok(!close.reason.includes(secret));
+  assert.match(close.reason,/REDACTED/);
+});
+
+test('watch exposes transport lifecycle separately from console and cpu freshness',()=>{
+  const w=createWatch(session,42,1000);
+  assert.equal(w.state.state,'connecting');
+  assert.equal(w.state.socketState,'connecting');
+  w.opened(1100);
+  assert.equal(w.state.socketState,'open');
+  assert.equal(w.state.connectedAtMs,1100);
+  assert.equal(w.frame('auth ok',1200),'auth');
+  assert.equal(w.state.state,'streaming');
+  assert.equal(w.state.authenticatedAtMs,1200);
+  const consoleFrame=JSON.stringify([`user:${session.userId}/console`,
+    {shard:'shard1',messages:{log:[],results:[]}}]);
+  assert.equal(w.frame(consoleFrame,1300),'console');
+  const cpuFrame=JSON.stringify([`user:${session.userId}/cpu`,{cpu:12.5}]);
+  assert.equal(w.frame(cpuFrame,1400),'cpu');
+  assert.equal(w.state.lastConsoleAtMs,1300);
+  assert.equal(w.state.lastCpuAtMs,1400);
+  assert.equal(w.state.lastFrameAtMs,1400);
+  w.terminal('socket_closed',{failed:true,close:{code:1006,reason:'gone',wasClean:false}},1500);
+  assert.equal(w.state.state,'failed');
+  assert.equal(w.state.socketState,'closed');
+  assert.equal(w.state.closeCode,1006);
+  assert.equal(w.state.closedAtMs,1500);
+});
+
+test('valid explicit stop requests are narrow and run-bound',()=>{
+  const request={runId:session.runId,reason:'probe_complete',requestedAtMs:10};
+  assert.equal(D.validStopRequest(request,session.runId),true);
+  assert.equal(D.validStopRequest({...request,runId:'b'.repeat(32)},session.runId),false);
+  assert.equal(D.validStopRequest({...request,reason:'guard_finished'},session.runId),false);
+});

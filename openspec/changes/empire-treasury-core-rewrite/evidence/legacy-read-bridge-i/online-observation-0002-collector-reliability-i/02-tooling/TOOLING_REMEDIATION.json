@@ -1,0 +1,54 @@
+{
+  "kind": "tooling-remediation-v1",
+  "patchSeriesFailingTest": "cross-platform file request produces a clean probe terminal record (collector-process.spec.cjs:66)",
+  "rootCause": "Windows fs.renameSync over an existing destination intermittently returns EPERM when another process holds the target open (parent pollers, guard, probe verifier all read heartbeat.json/collector-result.json while the writer runs). No-concurrent-reader baseline reproduced 0/400 failures; with a 5ms concurrent reader 11-25/400 failures, all EPERM on rename.",
+  "affectedFile": "common.cjs",
+  "affectedFunction": "atomicJson",
+  "diffFile": "TOOLING_REMEDIATION-common-atomic-json.diff",
+  "change": "Retry the tmp->target swap with bounded backoff (6 attempts, 20-120ms) on EPERM/EACCES/EBUSY; if the swap stays blocked, overwrite the target in place instead of losing the evidence. tmp cleanup is now also failure-tolerant.",
+  "scope": "external observation tooling only; candidate source, guard semantics, upload gating and restore conditions unchanged",
+  "evidence": {
+    "asShippedOriginal16": {
+      "tap": "tool-tests-original.tap",
+      "exit": "tool-tests-original.exit.txt",
+      "result": "15/16"
+    },
+    "afterRemediationOriginal16": [
+      {
+        "tap": "tool-tests-r1.tap",
+        "result": "16/16"
+      },
+      {
+        "tap": "tool-tests-r2.tap",
+        "result": "16/16"
+      },
+      {
+        "tap": "tool-tests-r3.tap",
+        "result": "16/16"
+      },
+      {
+        "tap": "tool-tests-r4.tap",
+        "result": "16/16"
+      }
+    ],
+    "independent24AfterRemediation": [
+      {
+        "tap": "independent-cases-r2.tap",
+        "result": "24/24"
+      },
+      {
+        "tap": "independent-cases-r3.tap",
+        "result": "24/24"
+      },
+      {
+        "tap": "independent-cases-r4.tap",
+        "result": "24/24"
+      }
+    ],
+    "independent24WithAsShippedCommon": {
+      "tap": "../../03-independent-tests/independent-cases-as-shipped-common.tap",
+      "result": "22/24 (positive control + concurrent-overwrite fail)"
+    },
+    "rootCauseRepro": "win32-rename-race-repro.cjs / win32-rename-race-repro.txt"
+  }
+}

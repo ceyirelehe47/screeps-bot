@@ -1,0 +1,14 @@
+{
+  "kind": "collector-result-v2",
+  "runId": "2b96a998e955d0642c108e062fb64727",
+  "pid": 19404,
+  "status": "closed",
+  "reason": "probe_complete",
+  "exitCode": 0,
+  "closedAtMs": 1789121163899,
+  "footerWritten": true,
+  "lockRemoved": true,
+  "close": null,
+  "error": null,
+  "diagnosticFile": "collector-private.jsonl"
+}

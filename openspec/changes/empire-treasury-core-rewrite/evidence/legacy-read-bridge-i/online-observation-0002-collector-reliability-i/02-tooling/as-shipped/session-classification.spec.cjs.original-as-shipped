@@ -1,0 +1,37 @@
+'use strict';
+const test=require('node:test');const assert=require('node:assert/strict');
+const {collectorResultReason,heartbeatReason,triggerReason}=require('../session.cjs');
+const now=100000;
+const session={runId:'a'.repeat(32),userId:'u1',shard:'shard1',preparedAtMs:now-1000,wallLimitMs:5400000,
+  profile:{startTick:100,endTick:1200}};
+const healthy={runId:session.runId,pid:12,userId:'u1',shard:'shard1',state:'streaming',socketState:'open',
+  updatedAtMs:now,lastConsoleAtMs:now,lastBridgeTick:null,stopReason:null};
+
+test('healthy collector is accepted',()=>{
+  assert.equal(heartbeatReason(healthy,session,now),null);
+});
+
+test('collector failure classes remain distinct',()=>{
+  assert.equal(heartbeatReason(null,session,now),'collector_heartbeat_missing_or_foreign');
+  assert.equal(heartbeatReason({...healthy,state:'connecting'},session,now),'collector_not_streaming');
+  assert.equal(heartbeatReason({...healthy,socketState:'errored'},session,now),'collector_socket_not_streaming');
+  assert.equal(heartbeatReason({...healthy,updatedAtMs:now-10001},session,now),'collector_heartbeat_stale');
+  assert.equal(heartbeatReason({...healthy,lastConsoleAtMs:null},session,now),'collector_console_never_seen');
+  assert.equal(heartbeatReason({...healthy,lastConsoleAtMs:now-45001},session,now),'collector_console_silent');
+  assert.equal(heartbeatReason({...healthy,stopReason:'bridge_fault'},session,now),'collector_reported_failure');
+});
+
+test('terminal result wins over a stale heartbeat and keeps its stable reason code',()=>{
+  const result={kind:'collector-result-v2',runId:session.runId,status:'failed',reason:'socket_closed',exitCode:1};
+  assert.equal(collectorResultReason(result,session),'collector_exit_socket_closed');
+  assert.equal(heartbeatReason({...healthy,updatedAtMs:0},session,now,{collectorResult:result}),'collector_exit_socket_closed');
+  assert.equal(collectorResultReason({...result,runId:'b'.repeat(32)},session),'collector_result_invalid');
+});
+
+test('trigger reason preserves wall, tick and explicit-close safety gates',()=>{
+  const attempt={startedAtMs:now-100};
+  assert.equal(triggerReason({session,heartbeat:healthy,now,attempt,closing:true}),'explicit_close');
+  assert.equal(triggerReason({session,heartbeat:healthy,now:now+session.wallLimitMs,attempt}),'wall_deadline');
+  assert.equal(triggerReason({session,heartbeat:healthy,now,attempt,tick:1201}),'tick_window_ended');
+  assert.equal(triggerReason({session,heartbeat:healthy,now,attempt,tick:300}),'bridge_sample_stalled');
+});

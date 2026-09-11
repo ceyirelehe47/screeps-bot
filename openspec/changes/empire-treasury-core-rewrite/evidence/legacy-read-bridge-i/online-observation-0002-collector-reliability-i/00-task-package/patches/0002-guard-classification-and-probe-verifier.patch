@@ -1,0 +1,187 @@
+diff --git a/session.cjs b/session.cjs
+--- a/session.cjs
++++ b/session.cjs
+@@ -1,6 +1,6 @@
+ 'use strict';
+ const fs=require('node:fs');const path=require('node:path');
+-const {readJson,fail,sha256,integer,EXPECTED}=require('./common.cjs');
++const {readJson,fail,obj,sha256,integer,EXPECTED}=require('./common.cjs');
+ const P=require('./protocol.cjs');
+ function loadSession(dir,guard) {
+   const s=readJson(path.join(dir,'session.json'),32768);
+@@ -21,17 +21,29 @@
+   if(P.equalModules(s.backup.modules,s.candidate.modules,guard))fail('IDENTICAL_BACKUP_AND_DEPLOYMENT');
+   return s;
+ }
+-function heartbeatReason(h,s,now,{maxAgeMs=10000,maxSilenceMs=45000}={}) {
+-  if(!h||h.runId!==s.runId||!Number.isSafeInteger(h.pid)||h.pid<=0||h.state!=='streaming'
+-    ||h.userId!==s.userId||h.shard!==s.shard) return 'collector_identity_or_state';
+-  for(const key of ['updatedAtMs','lastConsoleAtMs'])if(!Number.isFinite(h[key])||h[key]>now+1000||now-h[key]>(key==='updatedAtMs'?maxAgeMs:maxSilenceMs)) return 'collector_stalled';
++function collectorResultReason(result,s) {
++  if(result===undefined||result===null)return null;
++  if(!obj(result)||result.kind!=='collector-result-v2'||result.runId!==s.runId
++    ||!['closed','failed'].includes(result.status)||!Number.isSafeInteger(result.exitCode)
++    ||typeof result.reason!=='string'||!/^[a-z0-9_]{1,64}$/.test(result.reason))return 'collector_result_invalid';
++  return 'collector_exit_'+result.reason;
++}
++function heartbeatReason(h,s,now,{maxAgeMs=10000,maxSilenceMs=45000,collectorResult}={}) {
++  const terminal=collectorResultReason(collectorResult,s);if(terminal)return terminal;
++  if(!obj(h)||h.runId!==s.runId||!Number.isSafeInteger(h.pid)||h.pid<=0
++    ||h.userId!==s.userId||h.shard!==s.shard)return 'collector_heartbeat_missing_or_foreign';
+   if(h.stopReason)return 'collector_reported_failure';
++  if(h.state!=='streaming')return h.state==='closed'||h.state==='failed'?'collector_terminal_without_result':'collector_not_streaming';
++  if(h.socketState!==undefined&&h.socketState!=='open')return 'collector_socket_not_streaming';
++  if(!Number.isFinite(h.updatedAtMs)||h.updatedAtMs>now+1000||now-h.updatedAtMs>maxAgeMs)return 'collector_heartbeat_stale';
++  if(!Number.isFinite(h.lastConsoleAtMs))return 'collector_console_never_seen';
++  if(h.lastConsoleAtMs>now+1000||now-h.lastConsoleAtMs>maxSilenceMs)return 'collector_console_silent';
+   return null;
+ }
+-function triggerReason({session:s,heartbeat:h,now,attempt,elapsedSinceAttemptMs=0,tick,closing=false}) {
++function triggerReason({session:s,heartbeat:h,collectorResult,now,attempt,elapsedSinceAttemptMs=0,tick,closing=false}) {
+   if(closing)return 'explicit_close';
+   if(attempt && (now-attempt.startedAtMs>=s.wallLimitMs||elapsedSinceAttemptMs>=s.wallLimitMs))return 'wall_deadline';
+-  const bad=heartbeatReason(h,s,now);if(bad)return bad;
++  const bad=heartbeatReason(h,s,now,{collectorResult});if(bad)return bad;
+   if(!attempt)return now-s.preparedAtMs>15*60*1000?'preparation_expired':null;
+   if(Number.isSafeInteger(tick)) {
+     if(tick>s.profile.endTick)return 'tick_window_ended';
+@@ -40,4 +52,4 @@
+   if(h.lastBridgeTick===s.profile.endTick)return 'last_sample_received';
+   return null;
+ }
+-module.exports={loadSession,heartbeatReason,triggerReason};
++module.exports={loadSession,collectorResultReason,heartbeatReason,triggerReason};
+diff --git a/deadline-guard.cjs b/deadline-guard.cjs
+--- a/deadline-guard.cjs
++++ b/deadline-guard.cjs
+@@ -1,7 +1,8 @@
+ #!/usr/bin/env node
+ 'use strict';
+ const fs=require('node:fs');const path=require('node:path');const {performance}=require('node:perf_hooks');
+-const C=require('./common.cjs');const {client}=require('./transport.cjs');const {loadSession,triggerReason,heartbeatReason}=require('./session.cjs');const {runBounded}=require('./bounded-child.cjs');
++const C=require('./common.cjs');const {client}=require('./transport.cjs');
++const {loadSession,triggerReason,heartbeatReason}=require('./session.cjs');const {runBounded}=require('./bounded-child.cjs');
+ async function main(argv) {
+   const o=C.options(argv,['repo','secret','run'],['execute']);C.required(o,'repo','secret','run');
+   if(!o.execute)C.fail('EXPLICIT_EXECUTE_REQUIRED_FOR_GUARD');
+@@ -9,14 +10,17 @@
+   const file=n=>path.join(o.run,n),api=client(secret);
+   C.writeNew(file('guard.lock'),{runId:s.runId,pid:process.pid});
+   const begun=performance.now();let reason=null,lastTimeRead=-Infinity,tick,seenAttemptAt=null,attemptStart=null,initialElapsedMs=0;
+-  let auditFailed=false;
++  let auditFailed=false,lastCollectorAssessment=null,lastCollectorResult=null;
+   const record=x=>{try{C.audit(file('guard.jsonl'),x,secret.redact);}catch{auditFailed=true;}};
+   const signal=()=>{reason='operator_stop';};process.once('SIGINT',signal);process.once('SIGTERM',signal);
+   record({kind:'guard-start',runId:s.runId,pid:process.pid});
+   try {
+     while(!reason) {
+-      let h,attempt;
++      let h,attempt,collectorResult;
+       try {h=C.readJson(file('heartbeat.json'),16384);}catch{}
++      if(fs.existsSync(file('collector-result.json'))){
++        try{collectorResult=C.readJson(file('collector-result.json'),32768);}catch{collectorResult={invalid:true};}
++      }
+       if(fs.existsSync(file('upload-attempt.json'))) {
+         attempt=C.readJson(file('upload-attempt.json'),16384);
+         if(attempt.runId!==s.runId||attempt.candidateHash!==s.candidate.digest.hash||!Number.isSafeInteger(attempt.startedAtMs)||attempt.startedAtMs>Date.now()+1000){reason='attempt_record_invalid';break;}
+@@ -24,10 +28,19 @@
+         if(attemptStart!==attempt.startedAtMs){reason='attempt_record_changed';break;}
+       }
+       if(auditFailed){reason='audit_io_failure';break;}
++      const assessment=heartbeatReason(h,s,Date.now(),{collectorResult});
++      const resultReason=collectorResult&&typeof collectorResult.reason==='string'?collectorResult.reason:null;
++      if(assessment!==lastCollectorAssessment||resultReason!==lastCollectorResult){
++        record({kind:'collector-health',assessment:assessment||'healthy',collectorState:h?.state??null,
++          socketState:h?.socketState??null,collectorResult:resultReason});
++        lastCollectorAssessment=assessment;lastCollectorResult=resultReason;
++      }
+       // Startup is bounded; no guard-ready is published before valid console activity.
+-      if(!attempt&&heartbeatReason(h,s,Date.now())&&performance.now()-begun<15000){await C.pause(250);continue;}
++      if(!attempt&&assessment&&performance.now()-begun<15000&&!assessment.startsWith('collector_exit_')
++        &&assessment!=='collector_result_invalid'){await C.pause(250);continue;}
+       const elapsed=seenAttemptAt===null?0:initialElapsedMs+performance.now()-seenAttemptAt;
+-      reason=triggerReason({session:s,heartbeat:h,now:Date.now(),attempt,elapsedSinceAttemptMs:elapsed,tick,closing:fs.existsSync(file('closing.json'))});
++      reason=triggerReason({session:s,heartbeat:h,collectorResult,now:Date.now(),attempt,
++        elapsedSinceAttemptMs:elapsed,tick,closing:fs.existsSync(file('closing.json'))});
+       if(reason)break;
+       // Retain freshness of the tick watchdog even if the collector process is alive.
+       if(attempt && performance.now()-lastTimeRead>=15000) {
+@@ -35,13 +48,15 @@
+         const r=await api.time(s.shard,budget);
+         if(!Number.isSafeInteger(r.time)||r.time<0){reason='game_tick_unreadable';break;}
+         if(tick!==undefined&&r.time<tick){reason='game_tick_regressed';break;}tick=r.time;lastTimeRead=performance.now();
+-        reason=triggerReason({session:s,heartbeat:h,now:Date.now(),attempt,elapsedSinceAttemptMs:elapsed,tick});if(reason)break;
++        reason=triggerReason({session:s,heartbeat:h,collectorResult,now:Date.now(),attempt,
++          elapsedSinceAttemptMs:elapsed,tick});if(reason)break;
+       }
+-      C.atomicJson(file('guard-ready.json'),{runId:s.runId,pid:process.pid,updatedAtMs:Date.now(),state:'ready'});
++      C.atomicJson(file('guard-ready.json'),{runId:s.runId,pid:process.pid,updatedAtMs:Date.now(),state:'ready',
++        collectorState:h.state,socketState:h.socketState??'legacy'});
+       await C.pause(500);
+     }
+   }catch{reason='guard_read_or_channel_failure';}
+-  record({kind:'close-trigger',reason});
++  record({kind:'close-trigger',reason,collectorResult:lastCollectorResult});
+   try{C.atomicJson(file('closing.json'),{runId:s.runId,reason,atMs:Date.now()});}catch{auditFailed=true;}
+   try{C.atomicJson(file('guard-ready.json'),{runId:s.runId,pid:process.pid,state:'closing',updatedAtMs:Date.now()});}catch{auditFailed=true;}
+   const outcome=await runBounded(process.execPath,[path.join(__dirname,'restore-modules.cjs'),'--repo',path.resolve(o.repo),
+@@ -50,9 +65,11 @@
+   const restored=outcome.code===0&&outcome.childClosed&&!outcome.timedOut&&result?.confirmed===true
+     &&['RESTORED_AND_VERIFIED','ALREADY_RESTORED'].includes(result.status)&&!result.auditFailed;
+   record({kind:'guard-result',reason,restored,childClosed:outcome.childClosed,timedOut:outcome.timedOut,
+-    killRequested:outcome.killRequested,elapsedMs:outcome.elapsedMs,restoreStatus:result?.status||'NO_VALID_RESULT'});
++    killRequested:outcome.killRequested,elapsedMs:outcome.elapsedMs,restoreStatus:result?.status||'NO_VALID_RESULT',
++    collectorResult:lastCollectorResult});
+   const terminal={status:restored&&!auditFailed?'ONLINE_BYTES_RESTORED':'ONLINE_CLOSE_UNCONFIRMED',
+-    runId:s.runId,reason,restored,auditFailed,childClosed:outcome.childClosed,timedOut:outcome.timedOut};
++    runId:s.runId,reason,collectorResult:lastCollectorResult,restored,auditFailed,
++    childClosed:outcome.childClosed,timedOut:outcome.timedOut};
+   try{C.atomicJson(file('guard-result.json'),terminal);}catch{terminal.auditFailed=true;terminal.status='ONLINE_CLOSE_UNCONFIRMED';}
+   try{fs.unlinkSync(file('guard.lock'));}catch{terminal.auditFailed=true;terminal.status='ONLINE_CLOSE_UNCONFIRMED';}
+   console.log(secret.redact(JSON.stringify(terminal)));
+diff --git a/verify-collector-probe.cjs b/verify-collector-probe.cjs
+new file mode 100644
+--- /dev/null
++++ b/verify-collector-probe.cjs
+@@ -0,0 +1,41 @@
++#!/usr/bin/env node
++'use strict';
++const fs=require('node:fs');const path=require('node:path');
++const C=require('./common.cjs');const {loadSession}=require('./session.cjs');
++function verifyProbeEvidence({session,result,heartbeat,footerCount,minDurationMs,uploadAttemptExists}) {
++  if(uploadAttemptExists)C.fail('PROBE_UPLOAD_ATTEMPT_PRESENT');
++  if(!result||result.kind!=='collector-result-v2'||result.runId!==session.runId||result.status!=='closed'
++    ||result.reason!=='probe_complete'||result.exitCode!==0||result.footerWritten!==true)C.fail('PROBE_RESULT_INVALID');
++  if(!heartbeat||heartbeat.runId!==session.runId||heartbeat.state!=='closed'||heartbeat.stopReason!=='probe_complete'
++    ||heartbeat.socketState!=='closed')C.fail('PROBE_HEARTBEAT_INVALID');
++  for(const key of ['authenticatedAtMs','closedAtMs','lastConsoleAtMs','lastCpuAtMs'])
++    if(!Number.isFinite(heartbeat[key])||heartbeat[key]<0)C.fail('PROBE_TIMELINE_INCOMPLETE');
++  const durationMs=heartbeat.closedAtMs-heartbeat.authenticatedAtMs;
++  if(durationMs<minDurationMs||heartbeat.lastConsoleAtMs<heartbeat.authenticatedAtMs
++    ||heartbeat.lastCpuAtMs<heartbeat.authenticatedAtMs)C.fail('PROBE_DURATION_OR_CHANNEL_COVERAGE_INSUFFICIENT');
++  if(footerCount!==1)C.fail('PROBE_FOOTER_COUNT_INVALID');
++  return {status:'COLLECTOR_STABILITY_PROBE_VERIFIED',runId:session.runId,durationMs,
++    lastConsoleAtMs:heartbeat.lastConsoleAtMs,lastCpuAtMs:heartbeat.lastCpuAtMs,
++    lastBridgeTick:heartbeat.lastBridgeTick,bridgeReports:heartbeat.bridgeReports};
++}
++async function main(argv) {
++  const o=C.options(argv,['repo','run','min-ms']);C.required(o,'repo','run','min-ms');
++  const minDurationMs=C.integer(Number(o['min-ms']),1,30*60*1000,'PROBE_MIN_DURATION_INVALID');
++  const session=loadSession(o.run,C.loadGuard(o.repo));
++  const result=C.readJson(path.join(o.run,'collector-result.json'),32768);
++  const heartbeat=C.readJson(path.join(o.run,'heartbeat.json'),32768);
++  const raw=fs.readFileSync(path.join(o.run,'console.jsonl'),'utf8');
++  if(Buffer.byteLength(raw)>64*1024*1024)C.fail('PROBE_LOG_TOO_LARGE');
++  let footerCount=0;
++  for(const line of raw.split('\n').filter(Boolean)){
++    let row;try{row=JSON.parse(line);}catch{C.fail('PROBE_LOG_INVALID');}
++    if(row.kind==='collector-footer'){
++      if(row.runId!==session.runId)C.fail('PROBE_FOREIGN_FOOTER');
++      footerCount++;
++    }
++  }
++  const summary=verifyProbeEvidence({session,result,heartbeat,footerCount,minDurationMs,
++    uploadAttemptExists:fs.existsSync(path.join(o.run,'upload-attempt.json'))});
++  console.log(JSON.stringify(summary));
++}
++module.exports={verifyProbeEvidence,main};if(require.main===module)C.entrypoint(()=>main(process.argv.slice(2)));

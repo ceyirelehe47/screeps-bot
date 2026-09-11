@@ -1,0 +1,37 @@
+{
+  "status": "RUNTIME_CONFIRMATION_MAIN_LOOP_RUNNING",
+  "atUTC": "2026-09-11T10:32:48.513Z",
+  "seconds": 75.1,
+  "authConfirmed": true,
+  "cpuFrames": 19,
+  "consoleFrames": 18,
+  "cpuSampleCount": 6,
+  "cpuSamples": [
+    {
+      "cpu": 0,
+      "atSeconds": 2.9
+    },
+    {
+      "cpu": 88,
+      "atSeconds": 6.2
+    },
+    {
+      "cpu": 63,
+      "atSeconds": 9.5
+    },
+    {
+      "cpu": 58,
+      "atSeconds": 14.4
+    },
+    {
+      "cpu": 59,
+      "atSeconds": 18.2
+    },
+    {
+      "cpu": 65,
+      "atSeconds": 21.9
+    }
+  ],
+  "consoleTagCount": 0,
+  "consoleTags": []
+}

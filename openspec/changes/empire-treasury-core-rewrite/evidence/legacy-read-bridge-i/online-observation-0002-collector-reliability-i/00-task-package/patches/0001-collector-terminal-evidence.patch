@@ -1,0 +1,280 @@
+diff --git a/collector-diagnostics.cjs b/collector-diagnostics.cjs
+new file mode 100644
+--- /dev/null
++++ b/collector-diagnostics.cjs
+@@ -0,0 +1,61 @@
++'use strict';
++const crypto=require('node:crypto');
++const C=require('./common.cjs');
++const MAX_MESSAGE_BYTES=1024;
++const MAX_STACK_BYTES=4096;
++const SAFE_STOP_REASONS=new Set(['probe_complete','operator_stop']);
++function truncateUtf8(value,maxBytes) {
++  let text=String(value??'');
++  if(Buffer.byteLength(text)<=maxBytes)return {text,truncated:false};
++  while(text.length&&Buffer.byteLength(text)>maxBytes)text=text.slice(0,Math.max(0,text.length-Math.max(1,Math.ceil(text.length/8))));
++  return {text,truncated:true};
++}
++function sanitized(value,redact,maxBytes) {
++  return truncateUtf8(redact(String(value??'')),maxBytes);
++}
++function hashText(value) {
++  return typeof value==='string'&&value.length?crypto.createHash('sha256').update(value).digest('hex'):null;
++}
++function safeCode(value) {
++  return (typeof value==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(value))||Number.isSafeInteger(value)?value:null;
++}
++function errorObject(value) {
++  if(value&&typeof value==='object'&&value.error&&typeof value.error==='object')return value.error;
++  return value&&typeof value==='object'?value:{};
++}
++function safeError(value,redact) {
++  const source=errorObject(value),cause=source.cause&&typeof source.cause==='object'?source.cause:{};
++  const message=sanitized(typeof source.message==='string'?source.message:'',redact,MAX_MESSAGE_BYTES);
++  const stack=sanitized(typeof source.stack==='string'?source.stack:'',redact,MAX_STACK_BYTES);
++  return {
++    eventType:value&&typeof value.type==='string'&&value.type.length<=128?value.type:null,
++    name:typeof source.name==='string'&&source.name.length<=128?source.name:null,
++    code:safeCode(source.code),causeName:typeof cause.name==='string'&&cause.name.length<=128?cause.name:null,
++    causeCode:safeCode(cause.code),errno:safeCode(cause.errno??source.errno),
++    syscall:typeof (cause.syscall??source.syscall)==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(cause.syscall??source.syscall)
++      ?(cause.syscall??source.syscall):null,
++    messageBytes:Buffer.byteLength(message.text),messageSha256:hashText(message.text),
++    stackBytes:Buffer.byteLength(stack.text),stackSha256:hashText(stack.text),
++    messageTruncated:message.truncated,stackTruncated:stack.truncated,
++    redactionChanged:message.text!==(typeof source.message==='string'?source.message:'')
++      ||stack.text!==(typeof source.stack==='string'?source.stack:'')
++  };
++}
++function safeClose(value,redact) {
++  const code=Number.isSafeInteger(value?.code)&&value.code>=0&&value.code<=65535?value.code:null;
++  const reason=sanitized(typeof value?.reason==='string'?value.reason:'',redact,MAX_MESSAGE_BYTES);
++  return {code,reason:reason.text,reasonTruncated:reason.truncated,
++    wasClean:typeof value?.wasClean==='boolean'?value.wasClean:null};
++}
++function publicError(detail) {
++  return detail?{...detail}:null;
++}
++function auditPrivate(file,data,redact) {
++  C.audit(file,{kind:'collector-private-diagnostic',...data},redact);
++}
++function validStopRequest(value,runId) {
++  return value&&value.runId===runId&&SAFE_STOP_REASONS.has(value.reason)
++    &&Number.isSafeInteger(value.requestedAtMs)&&value.requestedAtMs>=0;
++}
++module.exports={MAX_MESSAGE_BYTES,MAX_STACK_BYTES,SAFE_STOP_REASONS,truncateUtf8,safeError,safeClose,
++  publicError,auditPrivate,validStopRequest};
+diff --git a/watch.cjs b/watch.cjs
+--- a/watch.cjs
++++ b/watch.cjs
+@@ -6,9 +6,20 @@
+     .replace(/&amp;/g,'&');
+ }
+ function createWatch(s,pid,at=Date.now()) {
+-  const state={runId:s.runId,pid,userId:s.userId,shard:s.shard,state:'connecting',updatedAtMs:at,
+-    lastConsoleAtMs:null,lastCpuAtMs:null,lastBridgeTick:null,badSamples:0,stopReason:null,bridgeReports:0};
++  const state={runId:s.runId,pid,userId:s.userId,shard:s.shard,state:'connecting',socketState:'connecting',
++    updatedAtMs:at,connectedAtMs:null,authenticatedAtMs:null,lastFrameAtMs:null,lastConsoleAtMs:null,
++    lastCpuAtMs:null,closedAtMs:null,closeCode:null,closeReason:null,closeWasClean:null,errorCode:null,
++    lastBridgeTick:null,badSamples:0,stopReason:null,bridgeReports:0};
+   const seen=new Map();
++  function opened(now=Date.now()) {
++    state.socketState='open';state.connectedAtMs=now;state.updatedAtMs=now;
++  }
++  function terminal(reason,{failed=true,close=null,error=null}={},now=Date.now()) {
++    state.state=failed?'failed':'closed';state.socketState='closed';state.stopReason=reason;state.closedAtMs=now;
++    if(close){state.closeCode=close.code;state.closeReason=close.reason;state.closeWasClean=close.wasClean;}
++    if(error)state.errorCode=error.code??error.name??error.eventType??'unknown';
++    state.updatedAtMs=now;
++  }
+   function report(r) {
+     if(!obj(r)||r.kind!=='treasury-legacy-read-bridge')return;
+     if(!Number.isSafeInteger(r.tick)||r.tick<s.profile.startTick||r.tick>s.profile.endTick||r.tick%100!==0){state.stopReason='sample_outside_profile';return;}
+@@ -31,7 +42,10 @@
+     if(state.badSamples>=2)state.stopReason='consecutive_partial_samples';
+   }
+   function frame(text,now=Date.now()) {
+-    if(text==='auth ok'||text.startsWith('auth ok ')){state.state='streaming';state.updatedAtMs=now;return 'auth';}
++    state.lastFrameAtMs=now;state.updatedAtMs=now;
++    if(text==='auth ok'||text.startsWith('auth ok ')){
++      state.state='streaming';state.socketState='open';state.authenticatedAtMs=now;return 'auth';
++    }
+     if(text.startsWith('auth ')){state.state='failed';state.stopReason='authentication_failed';return 'auth-failure';}
+     let x;try{x=JSON.parse(text);}catch{return 'ignored';}
+     if(!Array.isArray(x)||x.length!==2)return 'ignored';
+@@ -43,13 +57,13 @@
+       for(const line of data.messages.log)if(typeof line==='string'){
+         try{report(JSON.parse(decodeLog(line)));}catch{/* Preserve raw frame; do not invent a parsed sample. */}
+       }
+-      state.updatedAtMs=now;return 'console';
++      return 'console';
+     }
+     if(channel===`user:${s.userId}/cpu`&&obj(data)&&Object.values(data).some(n=>typeof n==='number'&&Number.isFinite(n))){
+-      if(state.state!=='streaming')return 'ignored';state.lastCpuAtMs=now;state.updatedAtMs=now;return 'cpu';
++      if(state.state!=='streaming')return 'ignored';state.lastCpuAtMs=now;return 'cpu';
+     }
+     return 'ignored';
+   }
+-  return {state,frame};
++  return {state,frame,opened,terminal};
+ }
+ module.exports={createWatch,decodeLog};
+diff --git a/console-collector.cjs b/console-collector.cjs
+--- a/console-collector.cjs
++++ b/console-collector.cjs
+@@ -1,37 +1,76 @@
+ #!/usr/bin/env node
+ 'use strict';
+ const fs=require('node:fs');const path=require('node:path');
+-const C=require('./common.cjs');const {client}=require('./transport.cjs');const P=require('./protocol.cjs');const {loadSession}=require('./session.cjs');const {createWatch}=require('./watch.cjs');
++const C=require('./common.cjs');const {client}=require('./transport.cjs');const P=require('./protocol.cjs');
++const {loadSession}=require('./session.cjs');const {createWatch}=require('./watch.cjs');const D=require('./collector-diagnostics.cjs');
+ async function main(argv) {
+   const o=C.options(argv,['repo','secret','run']);C.required(o,'repo','secret','run');
+   const secret=C.loadSecret(o.secret),s=loadSession(o.run,C.loadGuard(o.repo));
+   P.account(await client(secret).me());
+   if(typeof WebSocket!=='function')C.fail('NODE_22_WEBSOCKET_REQUIRED');
+-  const hb=path.join(o.run,'heartbeat.json'),raw=path.join(o.run,'console.jsonl');
+-  const lock=path.join(o.run,'collector.lock');C.writeNew(lock,{runId:s.runId,pid:process.pid});
+-  const watch=createWatch(s,process.pid);let bytes=0,closed=false,ws,timer,life,opened=Date.now();
++  const file=n=>path.join(o.run,n),hb=file('heartbeat.json'),raw=file('console.jsonl'),privateLog=file('collector-private.jsonl');
++  const lock=file('collector.lock');C.writeNew(lock,{runId:s.runId,pid:process.pid});
++  const watch=createWatch(s,process.pid);let bytes=0,closed=false,ws,timer,life,errorCloseTimer,opened=Date.now();
++  let footerWritten=false,resultWritten=false,lastSocketError=null;
+   const save=()=>C.atomicJson(hb,{...watch.state,updatedAtMs:Date.now()});
+-  function finish(reason,code=1){
+-    if(closed)return;closed=true;clearInterval(timer);clearTimeout(life);
+-    watch.state.state='closed';watch.state.stopReason=reason;
+-    try{save();C.audit(raw,{kind:'collector-footer',reason,totalLoggedBytes:bytes},secret.redact);}catch{code=1;}
++  const privateRecord=(kind,data={})=>D.auditPrivate(privateLog,{runId:s.runId,pid:process.pid,event:kind,...data},secret.redact);
++  function publicDetails(details) {
++    return {close:details?.close??null,error:D.publicError(details?.error),diagnosticFile:'collector-private.jsonl'};
++  }
++  function writeFooter(reason,code,details) {
++    C.audit(raw,{kind:'collector-footer',runId:s.runId,pid:process.pid,reason,exitCode:code,
++      totalLoggedBytes:bytes,...publicDetails(details)},secret.redact);footerWritten=true;
++  }
++  function writeResult(reason,code,details,lockRemoved) {
++    C.atomicJson(file('collector-result.json'),{kind:'collector-result-v2',runId:s.runId,pid:process.pid,
++      status:code===0?'closed':'failed',reason,exitCode:code,closedAtMs:Date.now(),footerWritten,
++      lockRemoved,...publicDetails(details)});resultWritten=true;
++  }
++  function emergencyExitFooter(exitCode) {
++    if(footerWritten&&resultWritten)return;
++    const reason='process_exit_without_finish';
++    try {
++      if(!footerWritten){C.audit(raw,{kind:'collector-footer',runId:s.runId,pid:process.pid,reason,
++        exitCode,totalLoggedBytes:bytes,emergency:true},secret.redact);footerWritten=true;}
++      if(!resultWritten){C.atomicJson(file('collector-result.json'),{kind:'collector-result-v2',runId:s.runId,
++        pid:process.pid,status:'failed',reason,exitCode,closedAtMs:Date.now(),footerWritten,
++        lockRemoved:!fs.existsSync(lock),emergency:true});resultWritten=true;}
++    }catch{/* A hard process/host failure may still prevent synchronous evidence. */}
++  }
++  function finish(reason,code=1,details={}) {
++    if(closed)return;closed=true;clearInterval(timer);clearTimeout(life);clearTimeout(errorCloseTimer);
++    const failed=code!==0;watch.terminal(reason,{failed,close:details.close,error:details.error});
++    try{save();}catch{code=1;}
++    try{privateRecord('finish',{reason,exitCode:code,close:details.close??null,error:details.error??null});}catch{code=1;}
+     try{if(ws)ws.close();}catch{}
+-    try{fs.unlinkSync(lock);}catch{}
++    let lockRemoved=true;try{fs.unlinkSync(lock);}catch{lockRemoved=false;code=1;}
++    try{writeFooter(reason,code,details);}catch{code=1;}
++    try{writeResult(reason,code,details,lockRemoved);}catch{code=1;}
+     process.exitCode=code;
+     // Own process only. Do not wait forever for a WebSocket close handshake.
+     setTimeout(()=>process.exit(code),300).unref();
+   }
++  const fatal=(reason,value)=>finish(reason,1,{error:D.safeError(value,secret.redact)});
++  process.once('uncaughtException',e=>fatal('uncaught_exception',e));
++  process.once('unhandledRejection',e=>fatal('unhandled_rejection',e));
++  process.once('exit',code=>emergencyExitFooter(code));
+   try {
+-    save();ws=new WebSocket('wss://screeps.com/socket/websocket');
+-    ws.addEventListener('open',()=>ws.send('auth '+secret.token));
++    save();privateRecord('collector_start');
++    ws=new WebSocket('wss://screeps.com/socket/websocket');
++    ws.addEventListener('open',()=>{
++      try{watch.opened();privateRecord('socket_open');save();ws.send('auth '+secret.token);}
++      catch(e){fatal('socket_open_handler_failure',e);}
++    });
+     ws.addEventListener('message',ev=>{
+       try {
+         const text=typeof ev.data==='string'?ev.data:Buffer.from(ev.data).toString('utf8');
+         const n=Buffer.byteLength(text);if(n>1024*1024||bytes+n>64*1024*1024){finish('collector_size_bound');return;}
+         const kind=watch.frame(text);
+         // Never retain auth replies: some server versions echo rotated credentials.
+-        if(kind==='auth'){C.audit(raw,{kind:'auth-confirmed'},secret.redact);ws.send(`subscribe user:${s.userId}/console`);ws.send(`subscribe user:${s.userId}/cpu`);}
+-        else {
++        if(kind==='auth'){
++          C.audit(raw,{kind:'auth-confirmed',runId:s.runId},secret.redact);
++          ws.send(`subscribe user:${s.userId}/console`);ws.send(`subscribe user:${s.userId}/cpu`);
++        } else {
+           const sanitized=secret.redact(text);
+           const line=JSON.stringify({kind:'ws-frame',runId:s.runId,receivedAt:new Date().toISOString(),
+             bytes:n,redacted:sanitized!==text,text:sanitized})+'\n';
+@@ -39,24 +78,39 @@
+           if(kind==='auth-failure')finish('authentication_failed');
+         }
+         if(!closed)save();
+-      }catch{finish('collector_parse_or_io_failure');}
++      }catch(e){fatal('collector_parse_or_io_failure',e);}
+     });
+-    ws.addEventListener('error',()=>finish('socket_error'));
+-    ws.addEventListener('close',()=>finish('socket_closed'));
++    ws.addEventListener('error',ev=>{
++      try {
++        lastSocketError=D.safeError(ev,secret.redact);watch.state.socketState='errored';
++        watch.state.updatedAtMs=Date.now();privateRecord('socket_error',{error:lastSocketError});save();
++        clearTimeout(errorCloseTimer);
++        errorCloseTimer=setTimeout(()=>finish('socket_error_without_close',1,{error:lastSocketError}),2000);
++      }catch(e){fatal('socket_error_handler_failure',e);}
++    });
++    ws.addEventListener('close',ev=>{
++      const close=D.safeClose(ev,secret.redact);
++      finish('socket_closed',1,{close,error:lastSocketError});
++    });
+     timer=setInterval(()=>{
+       try {
+         if(watch.state.state!=='streaming'&&Date.now()-opened>15000){finish('authentication_timeout');return;}
+         if(watch.state.stopReason){finish(watch.state.stopReason);return;}
+-        if(fs.existsSync(path.join(o.run,'guard-result.json'))){
+-          const end=C.readJson(path.join(o.run,'guard-result.json'),16384);
++        if(fs.existsSync(file('collector-stop.json'))){
++          const stop=C.readJson(file('collector-stop.json'),16384);
++          if(!D.validStopRequest(stop,s.runId)){finish('collector_stop_request_invalid');return;}
++          finish(stop.reason,0);return;
++        }
++        if(fs.existsSync(file('guard-result.json'))){
++          const end=C.readJson(file('guard-result.json'),16384);
+           if(end.runId!==s.runId){finish('foreign_guard_result');return;}
+           finish('guard_finished',end.status==='ONLINE_BYTES_RESTORED'?0:1);return;
+         }
+         save();
+-      }catch{finish('heartbeat_io_failure');}
++      }catch(e){fatal('heartbeat_io_failure',e);}
+     },1000);
+-    life=setTimeout(()=>finish('collector_lifetime_ended',0),105*60*1000);
++    life=setTimeout(()=>finish('collector_lifetime_ended',1),105*60*1000);
+     process.once('SIGTERM',()=>finish('operator_stop',0));process.once('SIGINT',()=>finish('operator_stop',0));
+-  }catch{finish('collector_start_failed');}
++  }catch(e){fatal('collector_start_failed',e);}
+ }
+ module.exports={main};if(require.main===module)C.entrypoint(()=>main(process.argv.slice(2)));
+diff --git a/request-collector-stop.cjs b/request-collector-stop.cjs
+new file mode 100644
+--- /dev/null
++++ b/request-collector-stop.cjs
+@@ -0,0 +1,13 @@
++#!/usr/bin/env node
++'use strict';
++const path=require('node:path');
++const C=require('./common.cjs');const {loadSession}=require('./session.cjs');const D=require('./collector-diagnostics.cjs');
++async function main(argv) {
++  const o=C.options(argv,['repo','run','reason']);C.required(o,'repo','run');
++  const s=loadSession(o.run,C.loadGuard(o.repo)),reason=o.reason||'operator_stop';
++  if(!D.SAFE_STOP_REASONS.has(reason))C.fail('COLLECTOR_STOP_REASON_INVALID');
++  const out={runId:s.runId,reason,requestedAtMs:Date.now(),requestedByPid:process.pid};
++  C.writeNew(path.join(o.run,'collector-stop.json'),out);
++  console.log(JSON.stringify({status:'COLLECTOR_STOP_REQUESTED',runId:s.runId,reason}));
++}
++module.exports={main};if(require.main===module)C.entrypoint(()=>main(process.argv.slice(2)));

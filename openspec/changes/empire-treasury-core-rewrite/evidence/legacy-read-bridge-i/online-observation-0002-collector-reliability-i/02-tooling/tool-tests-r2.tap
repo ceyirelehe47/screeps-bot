@@ -1,0 +1,106 @@
+TAP version 13
+# Subtest: abnormal close retains close code, writes exactly one footer/result, and redacts detail
+ok 1 - abnormal close retains close code, writes exactly one footer/result, and redacts detail
+  ---
+  duration_ms: 201.7179
+  type: 'test'
+  ...
+# Subtest: error without close is classified and preserves bounded private diagnostics
+ok 2 - error without close is classified and preserves bounded private diagnostics
+  ---
+  duration_ms: 2216.8558
+  type: 'test'
+  ...
+# Subtest: cross-platform file request produces a clean probe terminal record
+ok 3 - cross-platform file request produces a clean probe terminal record
+  ---
+  duration_ms: 1111.762
+  type: 'test'
+  ...
+# Subtest: collector diagnostics redact, bound and hash arbitrary error text without retaining it
+ok 4 - collector diagnostics redact, bound and hash arbitrary error text without retaining it
+  ---
+  duration_ms: 3.1259
+  type: 'test'
+  ...
+# Subtest: close details retain bounded close code and redacted reason
+ok 5 - close details retain bounded close code and redacted reason
+  ---
+  duration_ms: 0.3607
+  type: 'test'
+  ...
+# Subtest: watch exposes transport lifecycle separately from console and cpu freshness
+ok 6 - watch exposes transport lifecycle separately from console and cpu freshness
+  ---
+  duration_ms: 0.4857
+  type: 'test'
+  ...
+# Subtest: valid explicit stop requests are narrow and run-bound
+ok 7 - valid explicit stop requests are narrow and run-bound
+  ---
+  duration_ms: 0.1712
+  type: 'test'
+  ...
+# Subtest: probe evidence requires duration, both channels, one footer and no upload attempt
+ok 8 - probe evidence requires duration, both channels, one footer and no upload attempt
+  ---
+  duration_ms: 1.6518
+  type: 'test'
+  ...
+# Subtest: probe rejects upload attempt
+ok 9 - probe rejects upload attempt
+  ---
+  duration_ms: 0.7173
+  type: 'test'
+  ...
+# Subtest: probe rejects short duration
+ok 10 - probe rejects short duration
+  ---
+  duration_ms: 0.337
+  type: 'test'
+  ...
+# Subtest: probe rejects missing cpu
+ok 11 - probe rejects missing cpu
+  ---
+  duration_ms: 0.1946
+  type: 'test'
+  ...
+# Subtest: probe rejects duplicate footer
+ok 12 - probe rejects duplicate footer
+  ---
+  duration_ms: 0.1782
+  type: 'test'
+  ...
+# Subtest: healthy collector is accepted
+ok 13 - healthy collector is accepted
+  ---
+  duration_ms: 1.2557
+  type: 'test'
+  ...
+# Subtest: collector failure classes remain distinct
+ok 14 - collector failure classes remain distinct
+  ---
+  duration_ms: 0.3124
+  type: 'test'
+  ...
+# Subtest: terminal result wins over a stale heartbeat and keeps its stable reason code
+ok 15 - terminal result wins over a stale heartbeat and keeps its stable reason code
+  ---
+  duration_ms: 0.4117
+  type: 'test'
+  ...
+# Subtest: trigger reason preserves wall, tick and explicit-close safety gates
+ok 16 - trigger reason preserves wall, tick and explicit-close safety gates
+  ---
+  duration_ms: 0.3628
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3628.8672

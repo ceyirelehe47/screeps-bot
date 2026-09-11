@@ -1,0 +1,154 @@
+TAP version 13
+# Subtest: positive control: clean file-request shutdown produces exactly one footer and one result
+ok 1 - positive control: clean file-request shutdown produces exactly one footer and one result
+  ---
+  duration_ms: 1111.4187
+  type: 'test'
+  ...
+# Subtest: error without close is classified as socket_error_without_close and keeps bounded diagnostics
+ok 2 - error without close is classified as socket_error_without_close and keeps bounded diagnostics
+  ---
+  duration_ms: 2213.6709
+  type: 'test'
+  ...
+# Subtest: late close after error does not produce a second footer or a second result
+ok 3 - late close after error does not produce a second footer or a second result
+  ---
+  duration_ms: 497.3702
+  type: 'test'
+  ...
+# Subtest: abnormal close without details records nulls instead of inventing values
+ok 4 - abnormal close without details records nulls instead of inventing values
+  ---
+  duration_ms: 206.7846
+  type: 'test'
+  ...
+# Subtest: close reason carrying a synthetic credential is redacted in every artifact
+ok 5 - close reason carrying a synthetic credential is redacted in every artifact
+  ---
+  duration_ms: 210.0981
+  type: 'test'
+  ...
+# Subtest: collector-result write failure is contained: footer, exit code and heartbeat stay consistent
+ok 6 - collector-result write failure is contained: footer, exit code and heartbeat stay consistent
+  ---
+  duration_ms: 1134.4386
+  type: 'test'
+  ...
+# Subtest: heartbeat write failure at startup is reported rather than silently continuing
+ok 7 - heartbeat write failure at startup is reported rather than silently continuing
+  ---
+  duration_ms: 1046.2047
+  type: 'test'
+  ...
+# Subtest: redaction removes raw, URL-encoded, and header/query forms of a synthetic credential
+ok 8 - redaction removes raw, URL-encoded, and header/query forms of a synthetic credential
+  ---
+  duration_ms: 1.5325
+  type: 'test'
+  ...
+# Subtest: redaction covers 36-hex and UUID shapes while leaving ordinary hex of other lengths alone
+ok 9 - redaction covers 36-hex and UUID shapes while leaving ordinary hex of other lengths alone
+  ---
+  duration_ms: 0.2252
+  type: 'test'
+  ...
+# Subtest: private diagnostics never retain injected secret text and keep only bounded safe fields
+ok 10 - private diagnostics never retain injected secret text and keep only bounded safe fields
+  ---
+  duration_ms: 15.6682
+  type: 'test'
+  ...
+# Subtest: safeError drops raw message/stack entirely and honours the byte bounds
+ok 11 - safeError drops raw message/stack entirely and honours the byte bounds
+  ---
+  duration_ms: 0.9414
+  type: 'test'
+  ...
+# Subtest: safeClose tolerates missing or hostile close fields without inventing values
+ok 12 - safeClose tolerates missing or hostile close fields without inventing values
+  ---
+  duration_ms: 0.9179
+  type: 'test'
+  ...
+# Subtest: stop request accepts only the run-bound, whitelisted reason set
+ok 13 - stop request accepts only the run-bound, whitelisted reason set
+  ---
+  duration_ms: 1.115
+  type: 'test'
+  ...
+# Subtest: foreign or malformed stop request terminates the run as invalid, never as a clean close
+ok 14 - foreign or malformed stop request terminates the run as invalid, never as a clean close
+  ---
+  duration_ms: 2203.2491
+  type: 'test'
+  ...
+# Subtest: a valid stop request is honoured only for the exact run-bound whitelisted reason
+ok 15 - a valid stop request is honoured only for the exact run-bound whitelisted reason
+  ---
+  duration_ms: 1097.5338
+  type: 'test'
+  ...
+# Subtest: atomicJson survives repeated overwrite while another process reads the target
+ok 16 - atomicJson survives repeated overwrite while another process reads the target
+  ---
+  duration_ms: 3865.4894
+  type: 'test'
+  ...
+# Subtest: writeNew refuses to clobber an existing artifact
+ok 17 - writeNew refuses to clobber an existing artifact
+  ---
+  duration_ms: 3.7571
+  type: 'test'
+  ...
+# Subtest: positive control: a fresh, streaming, both-channel heartbeat yields no trigger reason
+ok 18 - positive control: a fresh, streaming, both-channel heartbeat yields no trigger reason
+  ---
+  duration_ms: 1.2608
+  type: 'test'
+  ...
+# Subtest: terminal result wins over a stale heartbeat and a foreign runId is refused
+ok 19 - terminal result wins over a stale heartbeat and a foreign runId is refused
+  ---
+  duration_ms: 0.3179
+  type: 'test'
+  ...
+# Subtest: corrupted collector-result.json is refused rather than partially trusted
+ok 20 - corrupted collector-result.json is refused rather than partially trusted
+  ---
+  duration_ms: 24.7203
+  type: 'test'
+  ...
+# Subtest: fresh heartbeat with silent console is classified, and the silence boundary is exact
+ok 21 - fresh heartbeat with silent console is classified, and the silence boundary is exact
+  ---
+  duration_ms: 0.2024
+  type: 'test'
+  ...
+# Subtest: fresh console with a closed socket is classified, never reported as healthy streaming
+ok 22 - fresh console with a closed socket is classified, never reported as healthy streaming
+  ---
+  duration_ms: 0.1812
+  type: 'test'
+  ...
+# Subtest: stale heartbeat, foreign heartbeat and not-yet-streaming stay distinct
+ok 23 - stale heartbeat, foreign heartbeat and not-yet-streaming stay distinct
+  ---
+  duration_ms: 0.1621
+  type: 'test'
+  ...
+# Subtest: trigger gates preserve explicit close, wall deadline and tick window ordering
+ok 24 - trigger gates preserve explicit close, wall deadline and tick window ordering
+  ---
+  duration_ms: 0.1807
+  type: 'test'
+  ...
+1..24
+# tests 24
+# suites 0
+# pass 24
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7306.527

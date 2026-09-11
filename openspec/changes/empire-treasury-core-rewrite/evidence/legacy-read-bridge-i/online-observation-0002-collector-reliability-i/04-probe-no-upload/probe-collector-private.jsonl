@@ -1,0 +1,3 @@
+{"at":"2026-09-11T09:45:19.585Z","kind":"collector-private-diagnostic","runId":"2b96a998e955d0642c108e062fb64727","pid":19404,"event":"collector_start"}
+{"at":"2026-09-11T09:45:20.856Z","kind":"collector-private-diagnostic","runId":"2b96a998e955d0642c108e062fb64727","pid":19404,"event":"socket_open"}
+{"at":"2026-09-11T10:06:03.897Z","kind":"collector-private-diagnostic","runId":"2b96a998e955d0642c108e062fb64727","pid":19404,"event":"finish","reason":"probe_complete","exitCode":0,"close":null,"error":null}

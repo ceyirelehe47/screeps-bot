@@ -1,0 +1,26 @@
+'use strict';
+const test=require('node:test');const assert=require('node:assert/strict');
+const C=require('../common.cjs');const {verifyProbeEvidence}=require('../verify-collector-probe.cjs');
+const session={runId:'a'.repeat(32)};
+const result={kind:'collector-result-v2',runId:session.runId,status:'closed',reason:'probe_complete',
+  exitCode:0,footerWritten:true};
+const heartbeat={runId:session.runId,state:'closed',stopReason:'probe_complete',socketState:'closed',
+  authenticatedAtMs:1000,closedAtMs:21000,lastConsoleAtMs:20000,lastCpuAtMs:20500,lastBridgeTick:null,bridgeReports:0};
+
+test('probe evidence requires duration, both channels, one footer and no upload attempt',()=>{
+  const out=verifyProbeEvidence({session,result,heartbeat,footerCount:1,minDurationMs:20000,uploadAttemptExists:false});
+  assert.equal(out.status,'COLLECTOR_STABILITY_PROBE_VERIFIED');
+  assert.equal(out.durationMs,20000);
+});
+
+for(const [name,change,code] of [
+  ['upload attempt',{uploadAttemptExists:true},'PROBE_UPLOAD_ATTEMPT_PRESENT'],
+  ['short duration',{heartbeat:{...heartbeat,closedAtMs:20000}},'PROBE_DURATION_OR_CHANNEL_COVERAGE_INSUFFICIENT'],
+  ['missing cpu',{heartbeat:{...heartbeat,lastCpuAtMs:null}},'PROBE_TIMELINE_INCOMPLETE'],
+  ['duplicate footer',{footerCount:2},'PROBE_FOOTER_COUNT_INVALID'],
+]){
+  test(`probe rejects ${name}`,()=>{
+    const args={session,result,heartbeat,footerCount:1,minDurationMs:20000,uploadAttemptExists:false,...change};
+    assert.throws(()=>verifyProbeEvidence(args),e=>e instanceof C.Failure&&e.code===code);
+  });
+}

@@ -1,0 +1,5 @@
+# 本轮起点核对（2026-09-11T10:38:21Z）
+refactor HEAD: f4204c2b4c0bc3637ac0347e8d87b23d516bb934
+refactor origin: f4204c2b4c0bc3637ac0347e8d87b23d516bb934
+compat HEAD: 91532745123ca14cddb78385f9a88800fca4bf1a
+compat origin: 91532745123ca14cddb78385f9a88800fca4bf1a

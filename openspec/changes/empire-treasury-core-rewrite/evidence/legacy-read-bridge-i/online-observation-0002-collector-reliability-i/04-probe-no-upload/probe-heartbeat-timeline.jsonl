@@ -1,0 +1,14 @@
+{"elapsedSec": 60, "state": "streaming", "socketState": "open", "lastConsoleAgeMs": 1369, "lastCpuAgeMs": 1367, "errorCode": null, "stopReason": null}
+{"elapsedSec": 121, "state": "streaming", "socketState": "open", "lastConsoleAgeMs": 737, "lastCpuAgeMs": 723, "errorCode": null, "stopReason": null}
+{"elapsedSec": 181, "state": "streaming", "socketState": "open", "lastConsoleAgeMs": 2061, "lastCpuAgeMs": 2059, "errorCode": null, "stopReason": null}
+{"elapsedSec": 242, "state": "streaming", "socketState": "open", "lastConsoleAgeMs": 1598, "lastCpuAgeMs": 1600, "errorCode": null, "stopReason": null}
+{"elapsedSec": 302, "state": "streaming", "socketState": "open", "lastConsoleAgeMs": 2133, "lastCpuAgeMs": 2135, "errorCode": null, "stopReason": null}
+{"elapsedSec": 363, "state": "streaming", "socketState": "open", "lastConsoleAgeMs": 2222, "lastCpuAgeMs": 2220, "errorCode": null, "stopReason": null}
+{"elapsedSec": 363, "state": "streaming", "socketState": "open", "lastConsoleAgeMs": 3430, "lastCpuAgeMs": 3432, "errorCode": null, "stopReason": null}
+{"elapsedSec": 423, "state": "streaming", "socketState": "open", "lastConsoleAgeMs": 1746, "lastCpuAgeMs": 1765, "errorCode": null, "stopReason": null}
+{"elapsedSec": 483, "state": "streaming", "socketState": "open", "lastConsoleAgeMs": 1517, "lastCpuAgeMs": 1519, "errorCode": null, "stopReason": null}
+{"elapsedSec": 543, "state": "streaming", "socketState": "open", "lastConsoleAgeMs": 286, "lastCpuAgeMs": 285, "errorCode": null, "stopReason": null}
+{"elapsedSec": 603, "state": "streaming", "socketState": "open", "lastConsoleAgeMs": 1792, "lastCpuAgeMs": 1760, "errorCode": null, "stopReason": null}
+{"elapsedSec": 663, "state": "streaming", "socketState": "open", "lastConsoleAgeMs": 2378, "lastCpuAgeMs": 2377, "errorCode": null, "stopReason": null}
+{"atUTC":"2026-09-11T10:05:42.031Z","state":"streaming","socketState":"open","authenticatedAtMs":1789119921260,"sinceAuthSec":1221,"lastConsoleAgeMs":534,"lastCpuAgeMs":536,"errorCode":null,"stopReason":null,"bridgeReports":0}
+{"atUTC":"2026-09-11T10:06:03.576Z","state":"streaming","socketState":"open","authenticatedAtMs":1789119921260,"sinceAuthSec":1242,"lastConsoleAgeMs":2023,"lastCpuAgeMs":2024,"errorCode":null,"stopReason":null,"bridgeReports":0}

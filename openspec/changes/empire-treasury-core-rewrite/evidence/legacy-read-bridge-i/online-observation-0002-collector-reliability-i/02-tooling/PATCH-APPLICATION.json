@@ -1,0 +1,18 @@
+{
+  "status": "PATCH_SERIES_APPLIED",
+  "at": "2026-09-11T09:35:15.926Z",
+  "patches": [
+    {
+      "name": "0001-collector-terminal-evidence.patch",
+      "sha256": "dfba681f15832ff48006007fe77fa86126d9b0b9618a99c8338a98a1a5f2b345"
+    },
+    {
+      "name": "0002-guard-classification-and-probe-verifier.patch",
+      "sha256": "1fb68c871a27efde6a6806850e5e7887eaba8bd02eeadf74e5acc2881bd56b7f"
+    },
+    {
+      "name": "0003-tooling-regression-tests.patch",
+      "sha256": "4d1a258643a95ece8ebdf92da56492493c60e988dd3c7c77e3057663ea2ed9a0"
+    }
+  ]
+}

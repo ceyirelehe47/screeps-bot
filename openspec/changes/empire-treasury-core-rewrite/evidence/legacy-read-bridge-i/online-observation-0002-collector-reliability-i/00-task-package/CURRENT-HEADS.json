@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-09-11",
+  "repository": "ceyirelehe47/screeps-bot",
+  "branches": {
+    "refactor/empire-treasury-rearchitecture": "f4204c2b4c0bc3637ac0347e8d87b23d516bb934",
+    "compat/treasury-read-bridge-i": "91532745123ca14cddb78385f9a88800fca4bf1a"
+  },
+  "previousOnlineConclusion": "ONLINE_COMPAT_READ_INCONCLUSIVE / RESTORED",
+  "previousSampleCount": 0
+}

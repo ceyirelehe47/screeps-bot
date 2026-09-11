@@ -1,0 +1,240 @@
+TAP version 13
+# Subtest: positive control: clean file-request shutdown produces exactly one footer and one result
+not ok 1 - positive control: clean file-request shutdown produces exactly one footer and one result
+  ---
+  duration_ms: 209.2546
+  type: 'test'
+  location: 'D:\\code\\screeps\\compat-observation-0002-toolkit\\agent-independent\\collector-process.spec.cjs:13:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (D:\code\screeps\compat-observation-0002-toolkit\agent-independent\collector-process.spec.cjs:15:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: error without close is classified as socket_error_without_close and keeps bounded diagnostics
+ok 2 - error without close is classified as socket_error_without_close and keeps bounded diagnostics
+  ---
+  duration_ms: 2220.1953
+  type: 'test'
+  ...
+# Subtest: late close after error does not produce a second footer or a second result
+not ok 3 - late close after error does not produce a second footer or a second result
+  ---
+  duration_ms: 495.6793
+  type: 'test'
+  location: 'D:\\code\\screeps\\compat-observation-0002-toolkit\\agent-independent\\collector-process.spec.cjs:44:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'socket_closed'
+    - 'socket_error_without_close'
+              ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'socket_error_without_close'
+  actual: 'socket_closed'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (D:\code\screeps\compat-observation-0002-toolkit\agent-independent\collector-process.spec.cjs:49:10)
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: abnormal close without details records nulls instead of inventing values
+ok 4 - abnormal close without details records nulls instead of inventing values
+  ---
+  duration_ms: 201.3232
+  type: 'test'
+  ...
+# Subtest: close reason carrying a synthetic credential is redacted in every artifact
+ok 5 - close reason carrying a synthetic credential is redacted in every artifact
+  ---
+  duration_ms: 205.0899
+  type: 'test'
+  ...
+# Subtest: collector-result write failure is contained: footer, exit code and heartbeat stay consistent
+ok 6 - collector-result write failure is contained: footer, exit code and heartbeat stay consistent
+  ---
+  duration_ms: 1123.532
+  type: 'test'
+  ...
+# Subtest: heartbeat write failure at startup is reported rather than silently continuing
+ok 7 - heartbeat write failure at startup is reported rather than silently continuing
+  ---
+  duration_ms: 1031.7672
+  type: 'test'
+  ...
+# Subtest: redaction removes raw, URL-encoded, and header/query forms of a synthetic credential
+ok 8 - redaction removes raw, URL-encoded, and header/query forms of a synthetic credential
+  ---
+  duration_ms: 1.4612
+  type: 'test'
+  ...
+# Subtest: redaction covers 36-hex and UUID shapes while leaving ordinary hex of other lengths alone
+ok 9 - redaction covers 36-hex and UUID shapes while leaving ordinary hex of other lengths alone
+  ---
+  duration_ms: 0.2267
+  type: 'test'
+  ...
+# Subtest: private diagnostics never retain injected secret text and keep only bounded safe fields
+ok 10 - private diagnostics never retain injected secret text and keep only bounded safe fields
+  ---
+  duration_ms: 18.2576
+  type: 'test'
+  ...
+# Subtest: safeError drops raw message/stack entirely and honours the byte bounds
+ok 11 - safeError drops raw message/stack entirely and honours the byte bounds
+  ---
+  duration_ms: 1.3919
+  type: 'test'
+  ...
+# Subtest: safeClose tolerates missing or hostile close fields without inventing values
+ok 12 - safeClose tolerates missing or hostile close fields without inventing values
+  ---
+  duration_ms: 1.3577
+  type: 'test'
+  ...
+# Subtest: stop request accepts only the run-bound, whitelisted reason set
+not ok 13 - stop request accepts only the run-bound, whitelisted reason set
+  ---
+  duration_ms: 1.7058
+  type: 'test'
+  location: 'D:\\code\\screeps\\compat-observation-0002-toolkit\\agent-independent\\stop-and-atomic.spec.cjs:12:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    null !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: ~
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (D:\code\screeps\compat-observation-0002-toolkit\agent-independent\stop-and-atomic.spec.cjs:24:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: foreign stop request cannot terminate a run through the file gate
+ok 14 - foreign stop request cannot terminate a run through the file gate
+  ---
+  duration_ms: 213.2353
+  type: 'test'
+  ...
+# Subtest: atomicJson survives repeated overwrite while another process reads the target
+not ok 15 - atomicJson survives repeated overwrite while another process reads the target
+  ---
+  duration_ms: 804.2379
+  type: 'test'
+  location: 'D:\\code\\screeps\\compat-observation-0002-toolkit\\agent-independent\\stop-and-atomic.spec.cjs:39:1'
+  failureType: 'testCodeFailure'
+  error: 'reader must have observed the file'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (D:\code\screeps\compat-observation-0002-toolkit\agent-independent\stop-and-atomic.spec.cjs:55:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: writeNew refuses to clobber an existing artifact
+ok 16 - writeNew refuses to clobber an existing artifact
+  ---
+  duration_ms: 3.7906
+  type: 'test'
+  ...
+# Subtest: positive control: a fresh, streaming, both-channel heartbeat yields no trigger reason
+not ok 17 - positive control: a fresh, streaming, both-channel heartbeat yields no trigger reason
+  ---
+  duration_ms: 2.0801
+  type: 'test'
+  location: 'D:\\code\\screeps\\compat-observation-0002-toolkit\\agent-independent\\terminal-classification.spec.cjs:19:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'bridge_sample_stalled'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'bridge_sample_stalled'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (D:\code\screeps\compat-observation-0002-toolkit\agent-independent\terminal-classification.spec.cjs:21:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: terminal result wins over a stale heartbeat and a foreign runId is refused
+ok 18 - terminal result wins over a stale heartbeat and a foreign runId is refused
+  ---
+  duration_ms: 0.4321
+  type: 'test'
+  ...
+# Subtest: corrupted collector-result.json is refused rather than partially trusted
+ok 19 - corrupted collector-result.json is refused rather than partially trusted
+  ---
+  duration_ms: 25.6308
+  type: 'test'
+  ...
+# Subtest: fresh heartbeat with silent console is classified, and the silence boundary is exact
+ok 20 - fresh heartbeat with silent console is classified, and the silence boundary is exact
+  ---
+  duration_ms: 0.2834
+  type: 'test'
+  ...
+# Subtest: fresh console with a closed socket is classified, never reported as healthy streaming
+ok 21 - fresh console with a closed socket is classified, never reported as healthy streaming
+  ---
+  duration_ms: 0.1691
+  type: 'test'
+  ...
+# Subtest: stale heartbeat, foreign heartbeat and not-yet-streaming stay distinct
+ok 22 - stale heartbeat, foreign heartbeat and not-yet-streaming stay distinct
+  ---
+  duration_ms: 0.1549
+  type: 'test'
+  ...
+# Subtest: trigger gates preserve explicit close, wall deadline and tick window ordering
+ok 23 - trigger gates preserve explicit close, wall deadline and tick window ordering
+  ---
+  duration_ms: 0.2142
+  type: 'test'
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 18
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5594.4247

@@ -1,0 +1,277 @@
+diff --git a/tests/collector-preload.cjs b/tests/collector-preload.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/collector-preload.cjs
+@@ -0,0 +1,50 @@
++'use strict';
++const Module=require('node:module');const path=require('node:path');
++const common=require(path.resolve(__dirname,'..','common.cjs'));
++const originalLoad=Module._load;
++const runId='a'.repeat(32),userId='u1',shard='shard1';
++const token='TEST_SECRET_TOKEN_123456789';
++const session={kind:'compat-online-run-v1',runId,userId,shard,
++  profile:{startTick:100,endTick:1200,rooms:['E3N59','E4N58'],resources:['energy','H']}};
++const fakeCommon={...common,
++  loadSecret:()=>({token,server:'https://screeps.com',redact:common.redactor([token])}),
++  loadGuard:()=>({})};
++Module._load=function(request,parent,isMain){
++  if(parent&&parent.filename&&parent.filename.endsWith('console-collector.cjs')){
++    if(request==='./common.cjs')return fakeCommon;
++    if(request==='./transport.cjs')return {client:()=>({me:async()=>({ok:1,_id:userId,username:'forster'})})};
++    if(request==='./protocol.cjs')return {account:()=>({})};
++    if(request==='./session.cjs')return {loadSession:()=>session};
++  }
++  return originalLoad.apply(this,arguments);
++};
++class FakeWebSocket {
++  constructor(){this.listeners=new Map();this.subscriptions=0;setImmediate(()=>this.emit('open',{}));}
++  addEventListener(name,fn){if(!this.listeners.has(name))this.listeners.set(name,[]);this.listeners.get(name).push(fn);}
++  emit(name,event){for(const fn of this.listeners.get(name)||[])fn(event);}
++  send(text){
++    if(text.startsWith('auth ')){setImmediate(()=>this.emit('message',{data:'auth ok'}));return;}
++    if(text.startsWith('subscribe ')){
++      this.subscriptions++;
++      const channel=text.slice('subscribe '.length);
++      if(channel.endsWith('/console')){
++        const frame=JSON.stringify([channel,{shard,messages:{log:[],results:[]}}]);
++        setImmediate(()=>this.emit('message',{data:frame}));
++      } else if(channel.endsWith('/cpu')){
++        const frame=JSON.stringify([channel,{cpu:12.5}]);
++        setImmediate(()=>this.emit('message',{data:frame}));
++      }
++      if(this.subscriptions===2)this.scheduleTerminal();
++    }
++  }
++  scheduleTerminal(){
++    const mode=process.env.FAKE_WS_MODE||'stop';
++    if(mode==='close')setTimeout(()=>this.emit('close',{code:1006,reason:`lost token=${token}`,wasClean:false}),100);
++    if(mode==='error')setTimeout(()=>{
++      const error=new Error(`socket failed token=${token}`);error.code='ECONNRESET';
++      this.emit('error',{type:'error',error});
++    },100);
++  }
++  close(){this.closed=true;}
++}
++global.WebSocket=FakeWebSocket;
+diff --git a/tests/collector-process.spec.cjs b/tests/collector-process.spec.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/collector-process.spec.cjs
+@@ -0,0 +1,74 @@
++'use strict';
++const test=require('node:test');const assert=require('node:assert/strict');
++const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const {spawn}=require('node:child_process');
++const collector=path.resolve(__dirname,'..','console-collector.cjs');
++const preload=path.resolve(__dirname,'collector-preload.cjs');
++function run(mode,{stop=false}={}) {
++  return new Promise((resolve,reject)=>{
++    const dir=fs.mkdtempSync(path.join(os.tmpdir(),'collector-v2-'));
++    const child=spawn(process.execPath,['--require',preload,collector,'--repo','unused','--secret','unused','--run',dir],
++      {env:{...process.env,FAKE_WS_MODE:mode},stdio:['ignore','pipe','pipe']});
++    let stdout='',stderr='';child.stdout.on('data',b=>stdout+=b);child.stderr.on('data',b=>stderr+=b);
++    let stopTimer;
++    if(stop)stopTimer=setInterval(()=>{
++      const hb=path.join(dir,'heartbeat.json');
++      if(!fs.existsSync(hb))return;
++      try{
++        const state=JSON.parse(fs.readFileSync(hb,'utf8'));
++        if(state.state==='streaming'&&Number.isFinite(state.lastConsoleAtMs)&&Number.isFinite(state.lastCpuAtMs)){
++          clearInterval(stopTimer);
++          fs.writeFileSync(path.join(dir,'collector-stop.json'),JSON.stringify({
++            runId:'a'.repeat(32),reason:'probe_complete',requestedAtMs:Date.now()})+'\n',{flag:'wx',mode:0o600});
++        }
++      }catch{}
++    },25);
++    const timeout=setTimeout(()=>{child.kill('SIGKILL');reject(new Error(`collector timeout ${mode}`));},8000);
++    child.once('close',(code,signal)=>{
++      clearTimeout(timeout);clearInterval(stopTimer);resolve({dir,code,signal,stdout,stderr});
++    });
++  });
++}
++function evidence(dir) {
++  const result=JSON.parse(fs.readFileSync(path.join(dir,'collector-result.json'),'utf8'));
++  const heartbeat=JSON.parse(fs.readFileSync(path.join(dir,'heartbeat.json'),'utf8'));
++  const lines=fs.readFileSync(path.join(dir,'console.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
++  const privateText=fs.readFileSync(path.join(dir,'collector-private.jsonl'),'utf8');
++  return {result,heartbeat,lines,privateText};
++}
++
++test('abnormal close retains close code, writes exactly one footer/result, and redacts detail',async()=>{
++  const runResult=await run('close');
++  assert.equal(runResult.code,1);
++  const e=evidence(runResult.dir);
++  assert.equal(e.result.reason,'socket_closed');
++  assert.equal(e.result.close.code,1006);
++  assert.equal(e.result.close.wasClean,false);
++  assert.match(e.result.close.reason,/REDACTED/);
++  assert.equal(e.lines.filter(x=>x.kind==='collector-footer').length,1);
++  assert.equal(e.result.footerWritten,true);
++  assert.equal(e.heartbeat.state,'failed');
++  assert.ok(!e.privateText.includes('TEST_SECRET_TOKEN_123456789'));
++  assert.ok(!JSON.stringify(e).includes('TEST_SECRET_TOKEN_123456789'));
++});
++
++test('error without close is classified and preserves bounded private diagnostics',async()=>{
++  const runResult=await run('error');
++  assert.equal(runResult.code,1);
++  const e=evidence(runResult.dir);
++  assert.equal(e.result.reason,'socket_error_without_close');
++  assert.equal(e.result.error.code,'ECONNRESET');
++  assert.equal(typeof e.result.error.messageSha256,'string');
++  assert.match(e.privateText,/ECONNRESET/);
++  assert.ok(!e.privateText.includes('socket failed token='));
++  assert.equal(e.lines.filter(x=>x.kind==='collector-footer').length,1);
++});
++
++test('cross-platform file request produces a clean probe terminal record',async()=>{
++  const runResult=await run('stop',{stop:true});
++  assert.equal(runResult.code,0);
++  const e=evidence(runResult.dir);
++  assert.equal(e.result.reason,'probe_complete');
++  assert.equal(e.result.status,'closed');
++  assert.equal(e.heartbeat.stopReason,'probe_complete');
++  assert.equal(e.lines.filter(x=>x.kind==='collector-footer').length,1);
++});
+diff --git a/tests/diagnostics-watch.spec.cjs b/tests/diagnostics-watch.spec.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/diagnostics-watch.spec.cjs
+@@ -0,0 +1,65 @@
++'use strict';
++const test=require('node:test');const assert=require('node:assert/strict');
++const C=require('../common.cjs');const D=require('../collector-diagnostics.cjs');const {createWatch}=require('../watch.cjs');
++const session={runId:'a'.repeat(32),userId:'u1',shard:'shard1',
++  profile:{startTick:100,endTick:1200,rooms:['E3N59','E4N58'],resources:['energy','H']}};
++
++test('collector diagnostics redact, bound and hash arbitrary error text without retaining it',()=>{
++  const secret='1234567890abcdefTOKEN';
++  const redact=C.redactor([secret]);
++  const e=new Error(`failed token=${secret} ${'x'.repeat(6000)}`);
++  e.code='ECONNRESET';e.cause={code:'UND_ERR_SOCKET',syscall:'read'};
++  const safe=D.safeError({type:'error',error:e},redact);
++  assert.equal(safe.code,'ECONNRESET');
++  assert.equal(safe.causeCode,'UND_ERR_SOCKET');
++  assert.equal(safe.syscall,'read');
++  assert.equal(safe.messageTruncated,true);
++  assert.ok(safe.messageBytes<=D.MAX_MESSAGE_BYTES);
++  assert.ok(safe.stackBytes<=D.MAX_STACK_BYTES);
++  assert.equal(typeof safe.messageSha256,'string');
++  assert.equal(typeof safe.stackSha256,'string');
++  assert.equal(safe.redactionChanged,true);
++  assert.equal(Object.hasOwn(safe,'message'),false);
++  assert.equal(Object.hasOwn(safe,'stack'),false);
++});
++
++test('close details retain bounded close code and redacted reason',()=>{
++  const secret='feedfacefeedfacefeedfacefeedfacefeed';
++  const close=D.safeClose({code:1006,reason:`lost token=${secret}`,wasClean:false},C.redactor([secret]));
++  assert.equal(close.code,1006);
++  assert.equal(close.wasClean,false);
++  assert.ok(!close.reason.includes(secret));
++  assert.match(close.reason,/REDACTED/);
++});
++
++test('watch exposes transport lifecycle separately from console and cpu freshness',()=>{
++  const w=createWatch(session,42,1000);
++  assert.equal(w.state.state,'connecting');
++  assert.equal(w.state.socketState,'connecting');
++  w.opened(1100);
++  assert.equal(w.state.socketState,'open');
++  assert.equal(w.state.connectedAtMs,1100);
++  assert.equal(w.frame('auth ok',1200),'auth');
++  assert.equal(w.state.state,'streaming');
++  assert.equal(w.state.authenticatedAtMs,1200);
++  const consoleFrame=JSON.stringify([`user:${session.userId}/console`,
++    {shard:'shard1',messages:{log:[],results:[]}}]);
++  assert.equal(w.frame(consoleFrame,1300),'console');
++  const cpuFrame=JSON.stringify([`user:${session.userId}/cpu`,{cpu:12.5}]);
++  assert.equal(w.frame(cpuFrame,1400),'cpu');
++  assert.equal(w.state.lastConsoleAtMs,1300);
++  assert.equal(w.state.lastCpuAtMs,1400);
++  assert.equal(w.state.lastFrameAtMs,1400);
++  w.terminal('socket_closed',{failed:true,close:{code:1006,reason:'gone',wasClean:false}},1500);
++  assert.equal(w.state.state,'failed');
++  assert.equal(w.state.socketState,'closed');
++  assert.equal(w.state.closeCode,1006);
++  assert.equal(w.state.closedAtMs,1500);
++});
++
++test('valid explicit stop requests are narrow and run-bound',()=>{
++  const request={runId:session.runId,reason:'probe_complete',requestedAtMs:10};
++  assert.equal(D.validStopRequest(request,session.runId),true);
++  assert.equal(D.validStopRequest({...request,runId:'b'.repeat(32)},session.runId),false);
++  assert.equal(D.validStopRequest({...request,reason:'guard_finished'},session.runId),false);
++});
+diff --git a/tests/session-classification.spec.cjs b/tests/session-classification.spec.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/session-classification.spec.cjs
+@@ -0,0 +1,37 @@
++'use strict';
++const test=require('node:test');const assert=require('node:assert/strict');
++const {collectorResultReason,heartbeatReason,triggerReason}=require('../session.cjs');
++const now=100000;
++const session={runId:'a'.repeat(32),userId:'u1',shard:'shard1',preparedAtMs:now-1000,wallLimitMs:5400000,
++  profile:{startTick:100,endTick:1200}};
++const healthy={runId:session.runId,pid:12,userId:'u1',shard:'shard1',state:'streaming',socketState:'open',
++  updatedAtMs:now,lastConsoleAtMs:now,lastBridgeTick:null,stopReason:null};
++
++test('healthy collector is accepted',()=>{
++  assert.equal(heartbeatReason(healthy,session,now),null);
++});
++
++test('collector failure classes remain distinct',()=>{
++  assert.equal(heartbeatReason(null,session,now),'collector_heartbeat_missing_or_foreign');
++  assert.equal(heartbeatReason({...healthy,state:'connecting'},session,now),'collector_not_streaming');
++  assert.equal(heartbeatReason({...healthy,socketState:'errored'},session,now),'collector_socket_not_streaming');
++  assert.equal(heartbeatReason({...healthy,updatedAtMs:now-10001},session,now),'collector_heartbeat_stale');
++  assert.equal(heartbeatReason({...healthy,lastConsoleAtMs:null},session,now),'collector_console_never_seen');
++  assert.equal(heartbeatReason({...healthy,lastConsoleAtMs:now-45001},session,now),'collector_console_silent');
++  assert.equal(heartbeatReason({...healthy,stopReason:'bridge_fault'},session,now),'collector_reported_failure');
++});
++
++test('terminal result wins over a stale heartbeat and keeps its stable reason code',()=>{
++  const result={kind:'collector-result-v2',runId:session.runId,status:'failed',reason:'socket_closed',exitCode:1};
++  assert.equal(collectorResultReason(result,session),'collector_exit_socket_closed');
++  assert.equal(heartbeatReason({...healthy,updatedAtMs:0},session,now,{collectorResult:result}),'collector_exit_socket_closed');
++  assert.equal(collectorResultReason({...result,runId:'b'.repeat(32)},session),'collector_result_invalid');
++});
++
++test('trigger reason preserves wall, tick and explicit-close safety gates',()=>{
++  const attempt={startedAtMs:now-100};
++  assert.equal(triggerReason({session,heartbeat:healthy,now,attempt,closing:true}),'explicit_close');
++  assert.equal(triggerReason({session,heartbeat:healthy,now:now+session.wallLimitMs,attempt}),'wall_deadline');
++  assert.equal(triggerReason({session,heartbeat:healthy,now,attempt,tick:1201}),'tick_window_ended');
++  assert.equal(triggerReason({session,heartbeat:healthy,now,attempt,tick:300}),'bridge_sample_stalled');
++});
+diff --git a/tests/probe-verifier.spec.cjs b/tests/probe-verifier.spec.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/probe-verifier.spec.cjs
+@@ -0,0 +1,26 @@
++'use strict';
++const test=require('node:test');const assert=require('node:assert/strict');
++const C=require('../common.cjs');const {verifyProbeEvidence}=require('../verify-collector-probe.cjs');
++const session={runId:'a'.repeat(32)};
++const result={kind:'collector-result-v2',runId:session.runId,status:'closed',reason:'probe_complete',
++  exitCode:0,footerWritten:true};
++const heartbeat={runId:session.runId,state:'closed',stopReason:'probe_complete',socketState:'closed',
++  authenticatedAtMs:1000,closedAtMs:21000,lastConsoleAtMs:20000,lastCpuAtMs:20500,lastBridgeTick:null,bridgeReports:0};
++
++test('probe evidence requires duration, both channels, one footer and no upload attempt',()=>{
++  const out=verifyProbeEvidence({session,result,heartbeat,footerCount:1,minDurationMs:20000,uploadAttemptExists:false});
++  assert.equal(out.status,'COLLECTOR_STABILITY_PROBE_VERIFIED');
++  assert.equal(out.durationMs,20000);
++});
++
++for(const [name,change,code] of [
++  ['upload attempt',{uploadAttemptExists:true},'PROBE_UPLOAD_ATTEMPT_PRESENT'],
++  ['short duration',{heartbeat:{...heartbeat,closedAtMs:20000}},'PROBE_DURATION_OR_CHANNEL_COVERAGE_INSUFFICIENT'],
++  ['missing cpu',{heartbeat:{...heartbeat,lastCpuAtMs:null}},'PROBE_TIMELINE_INCOMPLETE'],
++  ['duplicate footer',{footerCount:2},'PROBE_FOOTER_COUNT_INVALID'],
++]){
++  test(`probe rejects ${name}`,()=>{
++    const args={session,result,heartbeat,footerCount:1,minDurationMs:20000,uploadAttemptExists:false,...change};
++    assert.throws(()=>verifyProbeEvidence(args),e=>e instanceof C.Failure&&e.code===code);
++  });
++}

@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+'use strict';
+const fs=require('node:fs');const path=require('node:path');
+const C=require('./common.cjs');const {loadSession}=require('./session.cjs');
+function verifyProbeEvidence({session,result,heartbeat,footerCount,minDurationMs,uploadAttemptExists}) {
+  if(uploadAttemptExists)C.fail('PROBE_UPLOAD_ATTEMPT_PRESENT');
+  if(!result||result.kind!=='collector-result-v2'||result.runId!==session.runId||result.status!=='closed'
+    ||result.reason!=='probe_complete'||result.exitCode!==0||result.footerWritten!==true)C.fail('PROBE_RESULT_INVALID');
+  if(!heartbeat||heartbeat.runId!==session.runId||heartbeat.state!=='closed'||heartbeat.stopReason!=='probe_complete'
+    ||heartbeat.socketState!=='closed')C.fail('PROBE_HEARTBEAT_INVALID');
+  for(const key of ['authenticatedAtMs','closedAtMs','lastConsoleAtMs','lastCpuAtMs'])
+    if(!Number.isFinite(heartbeat[key])||heartbeat[key]<0)C.fail('PROBE_TIMELINE_INCOMPLETE');
+  const durationMs=heartbeat.closedAtMs-heartbeat.authenticatedAtMs;
+  if(durationMs<minDurationMs||heartbeat.lastConsoleAtMs<heartbeat.authenticatedAtMs
+    ||heartbeat.lastCpuAtMs<heartbeat.authenticatedAtMs)C.fail('PROBE_DURATION_OR_CHANNEL_COVERAGE_INSUFFICIENT');
+  if(footerCount!==1)C.fail('PROBE_FOOTER_COUNT_INVALID');
+  return {status:'COLLECTOR_STABILITY_PROBE_VERIFIED',runId:session.runId,durationMs,
+    lastConsoleAtMs:heartbeat.lastConsoleAtMs,lastCpuAtMs:heartbeat.lastCpuAtMs,
+    lastBridgeTick:heartbeat.lastBridgeTick,bridgeReports:heartbeat.bridgeReports};
+}
+async function main(argv) {
+  const o=C.options(argv,['repo','run','min-ms']);C.required(o,'repo','run','min-ms');
+  const minDurationMs=C.integer(Number(o['min-ms']),1,30*60*1000,'PROBE_MIN_DURATION_INVALID');
+  const session=loadSession(o.run,C.loadGuard(o.repo));
+  const result=C.readJson(path.join(o.run,'collector-result.json'),32768);
+  const heartbeat=C.readJson(path.join(o.run,'heartbeat.json'),32768);
+  const raw=fs.readFileSync(path.join(o.run,'console.jsonl'),'utf8');
+  if(Buffer.byteLength(raw)>64*1024*1024)C.fail('PROBE_LOG_TOO_LARGE');
+  let footerCount=0;
+  for(const line of raw.split('\n').filter(Boolean)){
+    let row;try{row=JSON.parse(line);}catch{C.fail('PROBE_LOG_INVALID');}
+    if(row.kind==='collector-footer'){
+      if(row.runId!==session.runId)C.fail('PROBE_FOREIGN_FOOTER');
+      footerCount++;
+    }
+  }
+  const summary=verifyProbeEvidence({session,result,heartbeat,footerCount,minDurationMs,
+    uploadAttemptExists:fs.existsSync(path.join(o.run,'upload-attempt.json'))});
+  console.log(JSON.stringify(summary));
+}
+module.exports={verifyProbeEvidence,main};if(require.main===module)C.entrypoint(()=>main(process.argv.slice(2)));

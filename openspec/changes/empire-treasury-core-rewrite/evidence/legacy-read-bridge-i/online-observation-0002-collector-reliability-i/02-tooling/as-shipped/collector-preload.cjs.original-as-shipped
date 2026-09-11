@@ -1,0 +1,50 @@
+'use strict';
+const Module=require('node:module');const path=require('node:path');
+const common=require(path.resolve(__dirname,'..','common.cjs'));
+const originalLoad=Module._load;
+const runId='a'.repeat(32),userId='u1',shard='shard1';
+const token='TEST_SECRET_TOKEN_123456789';
+const session={kind:'compat-online-run-v1',runId,userId,shard,
+  profile:{startTick:100,endTick:1200,rooms:['E3N59','E4N58'],resources:['energy','H']}};
+const fakeCommon={...common,
+  loadSecret:()=>({token,server:'https://screeps.com',redact:common.redactor([token])}),
+  loadGuard:()=>({})};
+Module._load=function(request,parent,isMain){
+  if(parent&&parent.filename&&parent.filename.endsWith('console-collector.cjs')){
+    if(request==='./common.cjs')return fakeCommon;
+    if(request==='./transport.cjs')return {client:()=>({me:async()=>({ok:1,_id:userId,username:'forster'})})};
+    if(request==='./protocol.cjs')return {account:()=>({})};
+    if(request==='./session.cjs')return {loadSession:()=>session};
+  }
+  return originalLoad.apply(this,arguments);
+};
+class FakeWebSocket {
+  constructor(){this.listeners=new Map();this.subscriptions=0;setImmediate(()=>this.emit('open',{}));}
+  addEventListener(name,fn){if(!this.listeners.has(name))this.listeners.set(name,[]);this.listeners.get(name).push(fn);}
+  emit(name,event){for(const fn of this.listeners.get(name)||[])fn(event);}
+  send(text){
+    if(text.startsWith('auth ')){setImmediate(()=>this.emit('message',{data:'auth ok'}));return;}
+    if(text.startsWith('subscribe ')){
+      this.subscriptions++;
+      const channel=text.slice('subscribe '.length);
+      if(channel.endsWith('/console')){
+        const frame=JSON.stringify([channel,{shard,messages:{log:[],results:[]}}]);
+        setImmediate(()=>this.emit('message',{data:frame}));
+      } else if(channel.endsWith('/cpu')){
+        const frame=JSON.stringify([channel,{cpu:12.5}]);
+        setImmediate(()=>this.emit('message',{data:frame}));
+      }
+      if(this.subscriptions===2)this.scheduleTerminal();
+    }
+  }
+  scheduleTerminal(){
+    const mode=process.env.FAKE_WS_MODE||'stop';
+    if(mode==='close')setTimeout(()=>this.emit('close',{code:1006,reason:`lost token=${token}`,wasClean:false}),100);
+    if(mode==='error')setTimeout(()=>{
+      const error=new Error(`socket failed token=${token}`);error.code='ECONNRESET';
+      this.emit('error',{type:'error',error});
+    },100);
+  }
+  close(){this.closed=true;}
+}
+global.WebSocket=FakeWebSocket;

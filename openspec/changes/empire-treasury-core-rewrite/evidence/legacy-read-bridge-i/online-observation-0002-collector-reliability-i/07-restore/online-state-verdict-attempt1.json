@@ -1,0 +1,16 @@
+{
+  "atUTC": "2026-09-11T10:30:40.954Z",
+  "account": {
+    "_id": "634fe406347a7b69b28aeccb",
+    "username": "forster"
+  },
+  "activeBranch": "default",
+  "currentDigestHash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+  "currentMainBytes": 4494463,
+  "currentMainSha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b",
+  "backupDigestHash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+  "candidateDigestHash": "5e8bda4265e9b1746fe4302a3c6b9469227cf0a52c57daf6803eea4fdb46115b",
+  "sameAsBackup": true,
+  "sameAsCandidate": false,
+  "verdict": "CURRENT_IS_BACKUP"
+}

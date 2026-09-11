@@ -1,0 +1,116 @@
+#!/usr/bin/env node
+'use strict';
+const fs=require('node:fs');const path=require('node:path');
+const C=require('./common.cjs');const {client}=require('./transport.cjs');const P=require('./protocol.cjs');
+const {loadSession}=require('./session.cjs');const {createWatch}=require('./watch.cjs');const D=require('./collector-diagnostics.cjs');
+async function main(argv) {
+  const o=C.options(argv,['repo','secret','run']);C.required(o,'repo','secret','run');
+  const secret=C.loadSecret(o.secret),s=loadSession(o.run,C.loadGuard(o.repo));
+  P.account(await client(secret).me());
+  if(typeof WebSocket!=='function')C.fail('NODE_22_WEBSOCKET_REQUIRED');
+  const file=n=>path.join(o.run,n),hb=file('heartbeat.json'),raw=file('console.jsonl'),privateLog=file('collector-private.jsonl');
+  const lock=file('collector.lock');C.writeNew(lock,{runId:s.runId,pid:process.pid});
+  const watch=createWatch(s,process.pid);let bytes=0,closed=false,ws,timer,life,errorCloseTimer,opened=Date.now();
+  let footerWritten=false,resultWritten=false,lastSocketError=null;
+  const save=()=>C.atomicJson(hb,{...watch.state,updatedAtMs:Date.now()});
+  const privateRecord=(kind,data={})=>D.auditPrivate(privateLog,{runId:s.runId,pid:process.pid,event:kind,...data},secret.redact);
+  function publicDetails(details) {
+    return {close:details?.close??null,error:D.publicError(details?.error),diagnosticFile:'collector-private.jsonl'};
+  }
+  function writeFooter(reason,code,details) {
+    C.audit(raw,{kind:'collector-footer',runId:s.runId,pid:process.pid,reason,exitCode:code,
+      totalLoggedBytes:bytes,...publicDetails(details)},secret.redact);footerWritten=true;
+  }
+  function writeResult(reason,code,details,lockRemoved) {
+    C.atomicJson(file('collector-result.json'),{kind:'collector-result-v2',runId:s.runId,pid:process.pid,
+      status:code===0?'closed':'failed',reason,exitCode:code,closedAtMs:Date.now(),footerWritten,
+      lockRemoved,...publicDetails(details)});resultWritten=true;
+  }
+  function emergencyExitFooter(exitCode) {
+    if(footerWritten&&resultWritten)return;
+    const reason='process_exit_without_finish';
+    try {
+      if(!footerWritten){C.audit(raw,{kind:'collector-footer',runId:s.runId,pid:process.pid,reason,
+        exitCode,totalLoggedBytes:bytes,emergency:true},secret.redact);footerWritten=true;}
+      if(!resultWritten){C.atomicJson(file('collector-result.json'),{kind:'collector-result-v2',runId:s.runId,
+        pid:process.pid,status:'failed',reason,exitCode,closedAtMs:Date.now(),footerWritten,
+        lockRemoved:!fs.existsSync(lock),emergency:true});resultWritten=true;}
+    }catch{/* A hard process/host failure may still prevent synchronous evidence. */}
+  }
+  function finish(reason,code=1,details={}) {
+    if(closed)return;closed=true;clearInterval(timer);clearTimeout(life);clearTimeout(errorCloseTimer);
+    const failed=code!==0;watch.terminal(reason,{failed,close:details.close,error:details.error});
+    try{save();}catch{code=1;}
+    try{privateRecord('finish',{reason,exitCode:code,close:details.close??null,error:details.error??null});}catch{code=1;}
+    try{if(ws)ws.close();}catch{}
+    let lockRemoved=true;try{fs.unlinkSync(lock);}catch{lockRemoved=false;code=1;}
+    try{writeFooter(reason,code,details);}catch{code=1;}
+    try{writeResult(reason,code,details,lockRemoved);}catch{code=1;}
+    process.exitCode=code;
+    // Own process only. Do not wait forever for a WebSocket close handshake.
+    setTimeout(()=>process.exit(code),300).unref();
+  }
+  const fatal=(reason,value)=>finish(reason,1,{error:D.safeError(value,secret.redact)});
+  process.once('uncaughtException',e=>fatal('uncaught_exception',e));
+  process.once('unhandledRejection',e=>fatal('unhandled_rejection',e));
+  process.once('exit',code=>emergencyExitFooter(code));
+  try {
+    save();privateRecord('collector_start');
+    ws=new WebSocket('wss://screeps.com/socket/websocket');
+    ws.addEventListener('open',()=>{
+      try{watch.opened();privateRecord('socket_open');save();ws.send('auth '+secret.token);}
+      catch(e){fatal('socket_open_handler_failure',e);}
+    });
+    ws.addEventListener('message',ev=>{
+      try {
+        const text=typeof ev.data==='string'?ev.data:Buffer.from(ev.data).toString('utf8');
+        const n=Buffer.byteLength(text);if(n>1024*1024||bytes+n>64*1024*1024){finish('collector_size_bound');return;}
+        const kind=watch.frame(text);
+        // Never retain auth replies: some server versions echo rotated credentials.
+        if(kind==='auth'){
+          C.audit(raw,{kind:'auth-confirmed',runId:s.runId},secret.redact);
+          ws.send(`subscribe user:${s.userId}/console`);ws.send(`subscribe user:${s.userId}/cpu`);
+        } else {
+          const sanitized=secret.redact(text);
+          const line=JSON.stringify({kind:'ws-frame',runId:s.runId,receivedAt:new Date().toISOString(),
+            bytes:n,redacted:sanitized!==text,text:sanitized})+'\n';
+          fs.appendFileSync(raw,line,{mode:0o600});bytes+=Buffer.byteLength(line);
+          if(kind==='auth-failure')finish('authentication_failed');
+        }
+        if(!closed)save();
+      }catch(e){fatal('collector_parse_or_io_failure',e);}
+    });
+    ws.addEventListener('error',ev=>{
+      try {
+        lastSocketError=D.safeError(ev,secret.redact);watch.state.socketState='errored';
+        watch.state.updatedAtMs=Date.now();privateRecord('socket_error',{error:lastSocketError});save();
+        clearTimeout(errorCloseTimer);
+        errorCloseTimer=setTimeout(()=>finish('socket_error_without_close',1,{error:lastSocketError}),2000);
+      }catch(e){fatal('socket_error_handler_failure',e);}
+    });
+    ws.addEventListener('close',ev=>{
+      const close=D.safeClose(ev,secret.redact);
+      finish('socket_closed',1,{close,error:lastSocketError});
+    });
+    timer=setInterval(()=>{
+      try {
+        if(watch.state.state!=='streaming'&&Date.now()-opened>15000){finish('authentication_timeout');return;}
+        if(watch.state.stopReason){finish(watch.state.stopReason);return;}
+        if(fs.existsSync(file('collector-stop.json'))){
+          const stop=C.readJson(file('collector-stop.json'),16384);
+          if(!D.validStopRequest(stop,s.runId)){finish('collector_stop_request_invalid');return;}
+          finish(stop.reason,0);return;
+        }
+        if(fs.existsSync(file('guard-result.json'))){
+          const end=C.readJson(file('guard-result.json'),16384);
+          if(end.runId!==s.runId){finish('foreign_guard_result');return;}
+          finish('guard_finished',end.status==='ONLINE_BYTES_RESTORED'?0:1);return;
+        }
+        save();
+      }catch(e){fatal('heartbeat_io_failure',e);}
+    },1000);
+    life=setTimeout(()=>finish('collector_lifetime_ended',1),105*60*1000);
+    process.once('SIGTERM',()=>finish('operator_stop',0));process.once('SIGINT',()=>finish('operator_stop',0));
+  }catch(e){fatal('collector_start_failed',e);}
+}
+module.exports={main};if(require.main===module)C.entrypoint(()=>main(process.argv.slice(2)));

@@ -1,0 +1,12 @@
+{
+  "atUTC": "2026-09-11T10:05:56.304Z",
+  "probes": [
+    {
+      "call": "GET /api/game/time",
+      "ok": true,
+      "httpStatus": 200,
+      "tick": 73631430,
+      "ms": 1619
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "atUTC": "2026-09-11T10:38:32.143Z",
+  "note": "summaries only; full module bodies are retained outside the repository",
+  "backup": {
+    "capturedAtMs": 1789121311103,
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494463,
+        "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+      }
+    ]
+  },
+  "candidate": {
+    "capturedAtMs": 1789121311958,
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "5e8bda4265e9b1746fe4302a3c6b9469227cf0a52c57daf6803eea4fdb46115b",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4586886,
+        "sha256": "6951a3b50b6e044fe9e0d25ebc0bde11c3a23f8551fa8eece26cd1a3b165dc3f"
+      }
+    ]
+  },
+  "delta": {
+    "match": false,
+    "missing": 0,
+    "extra": 0,
+    "changed": 1,
+    "changedNames": [
+      "main"
+    ]
+  }
+}

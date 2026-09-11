@@ -1,0 +1,55 @@
+'use strict';
+const fs=require('node:fs');const path=require('node:path');
+const {readJson,fail,obj,sha256,integer,EXPECTED}=require('./common.cjs');
+const P=require('./protocol.cjs');
+function loadSession(dir,guard) {
+  const s=readJson(path.join(dir,'session.json'),32768);
+  if(s.kind!=='compat-online-run-v1'||typeof s.runId!=='string'||!/^[a-f0-9]{32}$/.test(s.runId))fail('SESSION_INVALID');
+  for(const [k,v] of Object.entries(EXPECTED))if(s[k]!==v)fail('SESSION_IDENTITY_MISMATCH');
+  integer(s.preparedAtMs,0,Number.MAX_SAFE_INTEGER);integer(s.wallLimitMs,1,5400000);
+  const cfg=s.profile;
+  if(!cfg||cfg.enabled!==true||cfg.shardName!==s.shard||!Array.isArray(cfg.rooms)||cfg.rooms.length<1||cfg.rooms.length>2
+    ||cfg.rooms.some(r=>!['E3N59','E4N58'].includes(r))||new Set(cfg.rooms).size!==cfg.rooms.length
+    ||JSON.stringify(cfg.resources)!=='["energy","H"]'||cfg.intervalTicks!==100||cfg.endTick!==cfg.startTick+1100
+    ||!Number.isSafeInteger(cfg.startTick)||cfg.startTick<0||cfg.startTick%100!==0
+    ||cfg.minBucket!==2000||cfg.maxSampleCpu!==2||cfg.reserveCpu!==5||cfg.maxLogBytes!==16384)fail('SESSION_PROFILE_INVALID');
+  for(const name of ['backup','candidate']) {
+    const p=path.join(dir,name+'.json'),raw=fs.readFileSync(p);
+    if(sha256(raw)!==s[name+'FileSha256'])fail('SESSION_SNAPSHOT_CHANGED');
+    s[name]=P.validateSnapshot(JSON.parse(raw),guard);
+  }
+  if(P.equalModules(s.backup.modules,s.candidate.modules,guard))fail('IDENTICAL_BACKUP_AND_DEPLOYMENT');
+  return s;
+}
+function collectorResultReason(result,s) {
+  if(result===undefined||result===null)return null;
+  if(!obj(result)||result.kind!=='collector-result-v2'||result.runId!==s.runId
+    ||!['closed','failed'].includes(result.status)||!Number.isSafeInteger(result.exitCode)
+    ||typeof result.reason!=='string'||!/^[a-z0-9_]{1,64}$/.test(result.reason))return 'collector_result_invalid';
+  return 'collector_exit_'+result.reason;
+}
+function heartbeatReason(h,s,now,{maxAgeMs=10000,maxSilenceMs=45000,collectorResult}={}) {
+  const terminal=collectorResultReason(collectorResult,s);if(terminal)return terminal;
+  if(!obj(h)||h.runId!==s.runId||!Number.isSafeInteger(h.pid)||h.pid<=0
+    ||h.userId!==s.userId||h.shard!==s.shard)return 'collector_heartbeat_missing_or_foreign';
+  if(h.stopReason)return 'collector_reported_failure';
+  if(h.state!=='streaming')return h.state==='closed'||h.state==='failed'?'collector_terminal_without_result':'collector_not_streaming';
+  if(h.socketState!==undefined&&h.socketState!=='open')return 'collector_socket_not_streaming';
+  if(!Number.isFinite(h.updatedAtMs)||h.updatedAtMs>now+1000||now-h.updatedAtMs>maxAgeMs)return 'collector_heartbeat_stale';
+  if(!Number.isFinite(h.lastConsoleAtMs))return 'collector_console_never_seen';
+  if(h.lastConsoleAtMs>now+1000||now-h.lastConsoleAtMs>maxSilenceMs)return 'collector_console_silent';
+  return null;
+}
+function triggerReason({session:s,heartbeat:h,collectorResult,now,attempt,elapsedSinceAttemptMs=0,tick,closing=false}) {
+  if(closing)return 'explicit_close';
+  if(attempt && (now-attempt.startedAtMs>=s.wallLimitMs||elapsedSinceAttemptMs>=s.wallLimitMs))return 'wall_deadline';
+  const bad=heartbeatReason(h,s,now,{collectorResult});if(bad)return bad;
+  if(!attempt)return now-s.preparedAtMs>15*60*1000?'preparation_expired':null;
+  if(Number.isSafeInteger(tick)) {
+    if(tick>s.profile.endTick)return 'tick_window_ended';
+    if(tick>=s.profile.startTick+200 && (!Number.isSafeInteger(h.lastBridgeTick)||h.lastBridgeTick<tick-200))return 'bridge_sample_stalled';
+  }
+  if(h.lastBridgeTick===s.profile.endTick)return 'last_sample_received';
+  return null;
+}
+module.exports={loadSession,collectorResultReason,heartbeatReason,triggerReason};

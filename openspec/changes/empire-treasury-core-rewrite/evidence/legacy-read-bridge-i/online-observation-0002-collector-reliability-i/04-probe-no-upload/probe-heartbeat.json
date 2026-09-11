@@ -1,0 +1,23 @@
+{
+  "runId": "2b96a998e955d0642c108e062fb64727",
+  "pid": 19404,
+  "userId": "634fe406347a7b69b28aeccb",
+  "shard": "shard1",
+  "state": "closed",
+  "socketState": "closed",
+  "updatedAtMs": 1789121163885,
+  "connectedAtMs": 1789119920856,
+  "authenticatedAtMs": 1789119921260,
+  "lastFrameAtMs": 1789121161553,
+  "lastConsoleAtMs": 1789121161553,
+  "lastCpuAtMs": 1789121161552,
+  "closedAtMs": 1789121163885,
+  "closeCode": null,
+  "closeReason": null,
+  "closeWasClean": null,
+  "errorCode": null,
+  "lastBridgeTick": null,
+  "badSamples": 0,
+  "stopReason": "probe_complete",
+  "bridgeReports": 0
+}
