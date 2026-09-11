@@ -15,13 +15,14 @@
 |---|---|
 | 01:50:34 | preflight-initial：线上=原件（4,494,463B，sha256 `37d20706…`，集合摘要 `84f76975…`，BUILD_COMMIT `06ffedb`），tick 73624113 |
 | 01:53:19 | PROFILE_HEAD `63c6f11` 构建完成（bundle 4,586,847B，内嵌 hash `e625a71b…`） |
-| 01:55 | preflight-final：线上仍=原件，tick 73624192 |
-| 01:55:39 | SESSION_PREPARED：runId `ca35ed4a…`，候选集合摘要 `cedf39e3…` |
+| 01:55:39 | preflight-final：线上仍=原件，tick 73624192 |
+| 02:00:26 | SESSION_PREPARED：runId `ca35ed4a…`，候选集合摘要 `cedf39e3…` |
 | 02:02:33 | collector(PID 12792) 与 deadline-guard --execute(PID 28444) 启动；collector streaming、收到 console/cpu 帧，guard ready |
-| 02:10 | upload-once 预演 `DRY_RUN_WOULD_UPLOAD` |
-| 02:11 | upload-once --execute：`UPLOADED_AND_READBACK_VERIFIED`（唯一 attempt，1 次 POST） |
-| 02:12 | console 帧出现 `[deploy] 2026.8.29-6+63c6f11@2026-09-11T01:53:19.664Z`：候选在线运行确认 |
-| 02:16:29 | collector 心跳最后更新（console 流停止，进程随后 exit 1，无 collector-footer） |
+| 02:03:29 | upload-once 预演 `DRY_RUN_WOULD_UPLOAD`（upload.jsonl） |
+| ~02:03:59 | upload-once --execute 的唯一 POST 发出并被服务器接受 |
+| 02:03:59.7 | collector 收到 console 帧 `[deploy] 2026.8.29-6+63c6f11@2026-09-11T01:53:19.664Z`：候选在线运行确认（帧先于本地验证完成属正常顺序） |
+| 02:04:04 | upload-once 输出 `UPLOADED_AND_READBACK_VERIFIED`（回读+活动分支复查完成，唯一 attempt，1 次 POST） |
+| 02:16:25 | 最后有效 console 帧（heartbeat lastConsoleAtMs）；02:16:29 为 console.jsonl 物理尾帧（空 log 帧）与心跳最后更新，进程随后 exit 1，无 collector-footer |
 | 02:16:39 | guard `close-trigger: collector_stalled`（心跳 10s 过期阈值） |
 | 02:16:55 | 恢复子进程完成（15.8s）：`RESTORED_AND_VERIFIED` → guard 终态 `ONLINE_BYTES_RESTORED`，collector 见终态后退出 |
 | 02:19-02:26 | 独立确认：game/time 推进（73624580）；user/code 回读=原件（摘要/字节数/BUILD_COMMIT 全匹配） |
