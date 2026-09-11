@@ -1,0 +1,15 @@
+{
+  "kind": "collector-result-v2",
+  "runId": "9d4b36954b8450f8a657627da71f146d",
+  "pid": 32772,
+  "status": "closed",
+  "reason": "probe_complete",
+  "exitCode": 0,
+  "closedAtMs": 1789142853051,
+  "footerWritten": true,
+  "lockRemoved": true,
+  "sessionKind": "guard-control-plane-probe-session/v2",
+  "close": null,
+  "error": null,
+  "diagnosticFile": "collector-private.jsonl"
+}

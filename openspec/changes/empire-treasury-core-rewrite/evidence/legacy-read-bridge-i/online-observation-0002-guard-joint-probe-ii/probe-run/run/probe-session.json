@@ -1,0 +1,55 @@
+{
+  "kind": "guard-control-plane-probe-session/v2",
+  "runId": "9d4b36954b8450f8a657627da71f146d",
+  "preparedAtMs": 1789141303632,
+  "startDeadlineAtMs": 1789141603632,
+  "durationMs": 1500000,
+  "wallLimitMs": 1680000,
+  "server": "https://screeps.com",
+  "username": "forster",
+  "userId": "634fe406347a7b69b28aeccb",
+  "branch": "default",
+  "shard": "shard1",
+  "baseline": {
+    "kind": "guard-control-plane-probe-baseline/v2",
+    "capturedAtMs": 1789141303632,
+    "server": "https://screeps.com",
+    "username": "forster",
+    "userId": "634fe406347a7b69b28aeccb",
+    "branch": "default",
+    "shard": "shard1",
+    "observedTick": 73636408,
+    "build": {
+      "commit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+      "tree": "929fa9557b1a36135a5ef1605231be1d16e87366",
+      "dirty": "folded_out",
+      "deployBranch": "default",
+      "tag": "2026.8.29-6+06ffedb@2026-08-29T14:28:59.403Z"
+    },
+    "digest": {
+      "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+      "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+      "files": [
+        {
+          "name": "main",
+          "kind": "text",
+          "bytes": 4494463,
+          "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+        }
+      ]
+    },
+    "moduleBodiesPersisted": false
+  },
+  "policy": {
+    "timeIntervalMs": 15000,
+    "startupGraceMs": 15000,
+    "channelSilenceMs": 45000,
+    "minimumSuccessfulReadsFor25m": 98,
+    "maximumTotalFailedCycles": 1,
+    "requiredFinalConsecutiveFailedCycles": 0
+  },
+  "formalProfileUsed": false,
+  "candidateSnapshotUsed": false,
+  "backupSnapshotPersisted": false,
+  "onlineWriteAuthorized": false
+}

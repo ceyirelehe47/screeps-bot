@@ -1,0 +1,193 @@
+{
+  "schema": "screeps-completed-implementation-manifest/v3",
+  "implementationStatus": "complete",
+  "agentRole": "verification-only",
+  "packageName": "screeps-treasury-compat-guard-joint-probe-II-complete-implementation-verification-task-package-2026-09-11",
+  "packageVersion": 1,
+  "repository": "ceyirelehe47/screeps-bot",
+  "pinnedRefactorHead": "eb00879a1ff71275ff32e310378d3590fc910e6a",
+  "pinnedCompatHead": "fcfc125f0e5cd6c3370318b4fee0450f4d09af53",
+  "toolBaseRef": "d6445029e445a09237752cba205baa6b647a7ce0",
+  "toolBaseTree": "536c8921e4897d89ee659723513b73812cee434f",
+  "formalUploadAuthorized": false,
+  "compatMutationAuthorized": false,
+  "probeSessionKind": "guard-control-plane-probe-session/v2",
+  "probeContract": {
+    "durationMs": 1500000,
+    "formalProfileUsed": false,
+    "absoluteTickWindowRequired": false,
+    "candidateSnapshotUsed": false,
+    "backupSnapshotPersisted": false,
+    "readOnlyClientMethods": [
+      "me",
+      "branches",
+      "code",
+      "time"
+    ],
+    "minimumSuccessfulTimeReads": 98,
+    "maximumTotalFailedCycles": 1,
+    "requiredFinalConsecutiveFailedCycles": 0,
+    "channelSilenceMs": 45000,
+    "codeWriteRequests": 0
+  },
+  "toolkitOverlay": [
+    {
+      "path": "check-profile.cjs",
+      "sha256": "d827c4d4a20d009d23eb45317e0a24389f7801d1be247410db1b72f8750f16d3",
+      "bytes": 3665
+    },
+    {
+      "path": "collector-diagnostics.cjs",
+      "sha256": "94307209003c140c278adc37a99e706b175e25d9fc19e95ce97807a9e986fcc8",
+      "bytes": 3231
+    },
+    {
+      "path": "common.cjs",
+      "sha256": "2852ddcb9427dc5b40647f73be10fe3f3b12f4256e7d48135f733e4f14b7befe",
+      "bytes": 8092
+    },
+    {
+      "path": "deadline-guard.cjs",
+      "sha256": "44b0bf05fd32aead06f8d15303762a303a6344877905617867527adfe397b9c1",
+      "bytes": 7884
+    },
+    {
+      "path": "guard-control.cjs",
+      "sha256": "23a61bf0c8dbc507def30fe469bc18fc6a02010399a9625941454751bf02daf9",
+      "bytes": 8683
+    },
+    {
+      "path": "guard-probe.cjs",
+      "sha256": "f9c5fbdc58d9ebaa2c4e3fb045919c545a24cb9be10e8d5f833da25d0cbe3c79",
+      "bytes": 12659
+    },
+    {
+      "path": "postflight-control-plane-probe.cjs",
+      "sha256": "0043ca88e0a1059a1c2c877e823caf0f365f17855dcb357fbe4ae2ee1ff532e8",
+      "bytes": 1240
+    },
+    {
+      "path": "prepare-control-plane-probe.cjs",
+      "sha256": "22df650797e203a03b0b563d7961dd46bb0a46cf9dc5cb0d7b2691e066b003a6",
+      "bytes": 1680
+    },
+    {
+      "path": "probe-console-collector.cjs",
+      "sha256": "acbb1429a8be46929d7f0afd1f8c8b79b43d76fab19c13c1959a67958e3434fd",
+      "bytes": 7306
+    },
+    {
+      "path": "probe-session.cjs",
+      "sha256": "6531dd022b8de2f7588b622c8549391fe10fbea0b77552e5720d945873b7ccb0",
+      "bytes": 9342
+    },
+    {
+      "path": "probe-watch.cjs",
+      "sha256": "cd60b42fb192103de160f2484ca422c8f3946d26017f9c28f7c3c665b236061e",
+      "bytes": 3157
+    },
+    {
+      "path": "read-only-client.cjs",
+      "sha256": "6f25cf4edac63e94b05ce9e88f8acb7537bc4bef6f6f3e7cdceaa67dcb8ff28e",
+      "bytes": 1332
+    },
+    {
+      "path": "tests/check-profile-errors.spec.cjs",
+      "sha256": "faf7727f7c6fb33948b30b4969573d26e282f5b91ab954bdd4fc9fd490ec7c7f",
+      "bytes": 1119
+    },
+    {
+      "path": "tests/common-atomic.spec.cjs",
+      "sha256": "78fd79025325114e0e36c958dc630b2881ffc8a5fcb5fe2bcd14a90e0810f336",
+      "bytes": 1220
+    },
+    {
+      "path": "tests/guard-control.spec.cjs",
+      "sha256": "016520bb9183ad93c02a86a025586ec1ce9222b57de4db90ec08fd7320925735",
+      "bytes": 7968
+    },
+    {
+      "path": "tests/guard-probe-preload.cjs",
+      "sha256": "97f3287cd50536b5050e24257e9983206fde7851fe506e8d1e88051858a74b23",
+      "bytes": 2382
+    },
+    {
+      "path": "tests/guard-probe.spec.cjs",
+      "sha256": "e92e6f12b19e6cb3f12ad9f71bbdfaac21f2c0c6c2dacf302179ffd5ccf3fb60",
+      "bytes": 7731
+    },
+    {
+      "path": "tests/probe-baseline-reader.spec.cjs",
+      "sha256": "806ceed90b9838fac46612500d1391d7cf8d52f5e9b83f218e854025736dd346",
+      "bytes": 2275
+    },
+    {
+      "path": "tests/probe-collector-preload.cjs",
+      "sha256": "89b7b9acbf55cfcdb8913b48e3eb727005ea6d3f907778d58623e443f69239cb",
+      "bytes": 2497
+    },
+    {
+      "path": "tests/probe-collector-process.spec.cjs",
+      "sha256": "e7e83599456e91f9b36ac41c1f6532d8103fc116fb6b00ed8dd8ca9abe992e2d",
+      "bytes": 3657
+    },
+    {
+      "path": "tests/probe-session.spec.cjs",
+      "sha256": "3f9b990576b579dc4a7b9a908382ef914760171c387b9c8c5faf7149822c6d5c",
+      "bytes": 4250
+    },
+    {
+      "path": "tests/probe-watch.spec.cjs",
+      "sha256": "1dca156004db8e787cc6fdb214fc05b1f7895d7073cd96819c4eca37a1b90df0",
+      "bytes": 2340
+    },
+    {
+      "path": "tests/read-only-client.spec.cjs",
+      "sha256": "ba42407dedc494566863c5ac20e05309c047e2d4b177a5441fba35cc41ec3e2c",
+      "bytes": 1311
+    },
+    {
+      "path": "tests/verify-joint-probe.spec.cjs",
+      "sha256": "b5820d636e45ba07a66807d8f188feb1fa00848657ded6e3d815177566066295",
+      "bytes": 8033
+    },
+    {
+      "path": "tests/wait-ready.spec.cjs",
+      "sha256": "98f59a9f65f9fc7ae959453cd7b60a0b893cc36f9642cac1236a5082acc205f0",
+      "bytes": 2759
+    },
+    {
+      "path": "verify-joint-probe.cjs",
+      "sha256": "3dd30949f80a33d69e32e5e5308232cedbeb0d9befcb3153ca7dbc3f0a5128ad",
+      "bytes": 10380
+    },
+    {
+      "path": "wait-probe-collector-ready.cjs",
+      "sha256": "1f1564c288656f4f3b960765f4b131368bf824128d52a886a6d245974e0c25bb",
+      "bytes": 2381
+    }
+  ],
+  "testExpectation": {
+    "implementationTestFiles": 11,
+    "implementationTests": 56,
+    "baseTestFiles": 4,
+    "baseTests": 16,
+    "fullToolkitTests": 72,
+    "failed": 0,
+    "implementationSupportFiles": 2
+  },
+  "acceptedPrerequisites": [
+    "c37b2c18762cc5a2e48f48e23900518e7d569a11",
+    "eb00879a1ff71275ff32e310378d3590fc910e6a"
+  ],
+  "supersedesOnly": "the expired formal-profile-coupled joint-probe execution step from package sha256 44044f2ad971f74cfa1ef755ba5844c59126dfacd0d6e7cf107fa1a417157c04",
+  "verificationHardening": {
+    "sessionBaselineMustMatchPreflight": true,
+    "probePreparedEvidenceVerified": true,
+    "heartbeatEvidenceMinimumRows": 295,
+    "heartbeatEvidenceMinimumSpanMs": 1490000,
+    "timeReadCountersReconciledWithJsonl": true,
+    "collectorStopEvidenceVerified": true,
+    "residualLockArtifactsForbidden": true
+  }
+}

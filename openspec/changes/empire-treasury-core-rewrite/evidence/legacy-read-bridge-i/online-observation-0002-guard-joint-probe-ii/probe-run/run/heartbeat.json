@@ -1,0 +1,22 @@
+{
+  "runId": "9d4b36954b8450f8a657627da71f146d",
+  "pid": 32772,
+  "userId": "634fe406347a7b69b28aeccb",
+  "shard": "shard1",
+  "state": "closed",
+  "socketState": "closed",
+  "updatedAtMs": 1789142853048,
+  "connectedAtMs": 1789141350314,
+  "authenticatedAtMs": 1789141350659,
+  "lastFrameAtMs": 1789142850728,
+  "lastConsoleAtMs": 1789142850728,
+  "lastCpuAtMs": 1789142850727,
+  "closedAtMs": 1789142853048,
+  "closeCode": null,
+  "closeReason": null,
+  "closeWasClean": null,
+  "errorCode": null,
+  "stopReason": "probe_complete",
+  "unexpectedBridgeReports": 0,
+  "sessionKind": "guard-control-plane-probe-session/v2"
+}

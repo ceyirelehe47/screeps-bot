@@ -1,0 +1,20 @@
+D:\code\screeps\guard-joint-probe-II-toolkit\common.cjs:15
+function fail(code, details) { throw new Failure(code, details); }
+                               ^
+
+Failure [Error]: PROBE_HEARTBEAT_TIMELINE_INVALID
+    at Object.fail (D:\code\screeps\guard-joint-probe-II-toolkit\common.cjs:15:38)
+    at verifyRun (D:\code\screeps\guard-joint-probe-II-toolkit\verify-joint-probe.cjs:116:7)
+    at main (D:\code\screeps\guard-joint-probe-II-toolkit\verify-joint-probe.cjs:137:16)
+    at D:\code\screeps\guard-joint-probe-II-toolkit\verify-joint-probe.cjs:143:43
+    at Object.entrypoint (D:\code\screeps\guard-joint-probe-II-toolkit\common.cjs:56:3)
+    at Object.<anonymous> (D:\code\screeps\guard-joint-probe-II-toolkit\verify-joint-probe.cjs:143:28)
+    at Module._compile (node:internal/modules/cjs/loader:1706:14)
+    at Object..js (node:internal/modules/cjs/loader:1839:10)
+    at Module.load (node:internal/modules/cjs/loader:1441:32)
+    at Function._load (node:internal/modules/cjs/loader:1263:12) {
+  code: 'PROBE_HEARTBEAT_TIMELINE_INVALID',
+  details: { expectedAtLeast: 295, actual: 287 }
+}
+
+Node.js v22.19.0

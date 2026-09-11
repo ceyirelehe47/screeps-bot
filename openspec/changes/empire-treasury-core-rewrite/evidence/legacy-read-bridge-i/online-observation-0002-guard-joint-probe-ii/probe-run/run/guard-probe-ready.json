@@ -1,0 +1,22 @@
+{
+  "runId": "9d4b36954b8450f8a657627da71f146d",
+  "pid": 9052,
+  "state": "running",
+  "sessionKind": "guard-control-plane-probe-session/v2",
+  "updatedAtMs": 1789142852394,
+  "elapsedMs": 1499703,
+  "firstTick": 73636421,
+  "lastTick": 73636790,
+  "collectorPid": 32772,
+  "controlPlane": "healthy",
+  "timeChannel": {
+    "createdAtMs": 1789141352690,
+    "consecutiveFailedCycles": 0,
+    "totalAttempts": 102,
+    "totalSuccessfulReads": 99,
+    "totalFailedCycles": 1,
+    "lastSuccessAtMs": 1789142839086,
+    "lastFailureAtMs": null,
+    "lastFailure": null
+  }
+}

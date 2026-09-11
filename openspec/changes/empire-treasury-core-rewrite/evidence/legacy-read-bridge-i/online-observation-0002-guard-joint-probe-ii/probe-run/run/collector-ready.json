@@ -1,0 +1,8 @@
+{
+  "status": "PROBE_COLLECTOR_READY",
+  "runId": "9d4b36954b8450f8a657627da71f146d",
+  "pid": 32772,
+  "readyAtMs": 1789141352405,
+  "lastConsoleAtMs": 1789141352395,
+  "lastCpuAtMs": 1789141352393
+}

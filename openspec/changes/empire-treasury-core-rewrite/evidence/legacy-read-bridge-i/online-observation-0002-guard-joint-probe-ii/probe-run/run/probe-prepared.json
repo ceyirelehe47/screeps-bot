@@ -1,0 +1,11 @@
+{
+  "status": "CONTROL_PLANE_PROBE_SESSION_PREPARED",
+  "runId": "9d4b36954b8450f8a657627da71f146d",
+  "preparedAtMs": 1789141303632,
+  "durationMs": 1500000,
+  "observedTick": 73636408,
+  "digestHash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+  "formalProfileUsed": false,
+  "candidateSnapshotUsed": false,
+  "onlineWriteAuthorized": false
+}
