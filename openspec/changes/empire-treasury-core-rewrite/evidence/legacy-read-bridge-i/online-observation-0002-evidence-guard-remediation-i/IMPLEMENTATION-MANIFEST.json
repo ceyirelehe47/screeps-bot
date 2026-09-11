@@ -1,0 +1,165 @@
+{
+  "schema": "screeps-completed-implementation-manifest/v2",
+  "implementationStatus": "complete",
+  "agentRole": "verification-only",
+  "repository": "ceyirelehe47/screeps-bot",
+  "pinnedRefactorHead": "d6445029e445a09237752cba205baa6b647a7ce0",
+  "pinnedCompatHead": "fcfc125f0e5cd6c3370318b4fee0450f4d09af53",
+  "formalUploadAuthorized": false,
+  "toolkitOverlay": [
+    {
+      "path": "common.cjs",
+      "sha256": "98ca1862fbe736fd34b0d902f9113c0c4197ee37e278423050e7ab162519bac9",
+      "bytes": 7916
+    },
+    {
+      "path": "deadline-guard.cjs",
+      "sha256": "44b0bf05fd32aead06f8d15303762a303a6344877905617867527adfe397b9c1",
+      "bytes": 7884
+    },
+    {
+      "path": "guard-control.cjs",
+      "sha256": "23a61bf0c8dbc507def30fe469bc18fc6a02010399a9625941454751bf02daf9",
+      "bytes": 8683
+    },
+    {
+      "path": "guard-probe.cjs",
+      "sha256": "5d4f4debd1c06ede331d3196d0acd49ae20d360e7a7490ecc768c681a0b205de",
+      "bytes": 9147
+    },
+    {
+      "path": "tests/common-atomic.spec.cjs",
+      "sha256": "78fd79025325114e0e36c958dc630b2881ffc8a5fcb5fe2bcd14a90e0810f336",
+      "bytes": 1220
+    },
+    {
+      "path": "tests/guard-control.spec.cjs",
+      "sha256": "016520bb9183ad93c02a86a025586ec1ce9222b57de4db90ec08fd7320925735",
+      "bytes": 7968
+    },
+    {
+      "path": "tests/guard-probe.spec.cjs",
+      "sha256": "15f79d661b32b2e351a4667e8ac3e5e9f3b3a6c16635f9ac96a793e894fb1dc6",
+      "bytes": 4793
+    }
+  ],
+  "repositoryImplementation": [
+    {
+      "path": "transforms.json",
+      "sha256": "e73e43ef4bba6ff0bcc4e66dc581aafae8b267b053ec622667f17ac6521a554d",
+      "bytes": 11861
+    },
+    {
+      "path": "add/09-remediation/IMPLEMENTATION.md",
+      "sha256": "f27b5e5974fd635b77d0d4aacd254822f6cb0002f9520037c57ea5ac923be679",
+      "bytes": 1848
+    },
+    {
+      "path": "add/09-remediation/guard-verification-tests/common-atomic.spec.cjs",
+      "sha256": "78fd79025325114e0e36c958dc630b2881ffc8a5fcb5fe2bcd14a90e0810f336",
+      "bytes": 1220
+    },
+    {
+      "path": "add/09-remediation/guard-verification-tests/guard-control.spec.cjs",
+      "sha256": "016520bb9183ad93c02a86a025586ec1ce9222b57de4db90ec08fd7320925735",
+      "bytes": 7968
+    },
+    {
+      "path": "add/09-remediation/guard-verification-tests/guard-probe.spec.cjs",
+      "sha256": "15f79d661b32b2e351a4667e8ac3e5e9f3b3a6c16635f9ac96a793e894fb1dc6",
+      "bytes": 4793
+    }
+  ],
+  "makerTestExpectation": {
+    "implementationTests": {
+      "tests": 25,
+      "passed": 25,
+      "failed": 0
+    },
+    "repositoryTransformContract": {
+      "replacementsApplied": 11,
+      "forbiddenMutantsRejected": 2
+    },
+    "materializerLayoutContract": {
+      "archivedFiles": 25,
+      "flattenedMutantsRejected": 1
+    },
+    "fullToolkitTests": {
+      "tests": 41,
+      "passed": 41,
+      "failed": 0
+    }
+  },
+  "packageVersion": 2,
+  "supersedesPackageSha256": "a70d615bbddc22056172ce93b7674a868061769c8f607f58be470f2613583842",
+  "repositoryTransformContract": {
+    "sharedPolicy": "tools/remediation-policy.cjs",
+    "prewritePolicyCheckInApplier": true,
+    "syntheticReplacementApplications": 11,
+    "forbiddenMutantsRejected": 2,
+    "expectedStatus": "REPOSITORY_TRANSFORM_CONTRACT_VERIFIED"
+  },
+  "toolkitVerificationContract": {
+    "layoutManifest": "references/TOOL-BASE-LAYOUT.json",
+    "archivedFiles": 25,
+    "baseTestFilesUnderTests": [
+      "tests/collector-process.spec.cjs",
+      "tests/diagnostics-watch.spec.cjs",
+      "tests/probe-verifier.spec.cjs",
+      "tests/session-classification.spec.cjs"
+    ],
+    "baseSupportFilesUnderTests": [
+      "tests/collector-preload.cjs"
+    ],
+    "implementationTestFilesUnderTests": [
+      "tests/common-atomic.spec.cjs",
+      "tests/guard-control.spec.cjs",
+      "tests/guard-probe.spec.cjs"
+    ],
+    "expectedTests": 41,
+    "expectedPassed": 41,
+    "expectedFailed": 0
+  },
+  "packageSupport": [
+    {
+      "path": "references/TOOL-BASE-LAYOUT.json",
+      "sha256": "637f7b79797f03a76868c6d7fd7ab47fdf5dd1df3e8c655d3742878c4dd2ae4e",
+      "bytes": 2758
+    },
+    {
+      "path": "tools/remediation-policy.cjs",
+      "sha256": "c90871e55d5d0344a968a33194bf2e8924932349896bd000d8858eecb1a330ef",
+      "bytes": 1460
+    },
+    {
+      "path": "tools/apply-repository-remediation.cjs",
+      "sha256": "f7cc2bc67f4b5325df5f7c781019814ee52be7582753b6147f58777cf02e39e4",
+      "bytes": 4850
+    },
+    {
+      "path": "tools/verify-repository-remediation.cjs",
+      "sha256": "847ce3ab6eff1694475589a37c82ae11eafde08e45db7af3d92adee5110c36e4",
+      "bytes": 2329
+    },
+    {
+      "path": "tools/validate-transforms.cjs",
+      "sha256": "d8f11ec6b3de5fa386c103715c09c5b65eef3a009c42f57f03223d27c2efe52e",
+      "bytes": 4118
+    },
+    {
+      "path": "tools/materialize-toolkit.cjs",
+      "sha256": "30787fe5356dbf61e1c5f0104d079c77131d3f160443f43b5a04c7327fbba830",
+      "bytes": 6042
+    },
+    {
+      "path": "tools/validate-materializer-layout.cjs",
+      "sha256": "492a97740bba66a63aeb4eeeb441de58372584cb75c4bcbb6cc110c47ee152c4",
+      "bytes": 2234
+    },
+    {
+      "path": "tools/verify-toolkit.cjs",
+      "sha256": "33e89817653355472ef9b6349a78cd1c58a08bba5f9b8a9f84a30d4e4eee63a3",
+      "bytes": 3641
+    }
+  ]
+}

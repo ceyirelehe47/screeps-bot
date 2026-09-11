@@ -1,0 +1,20 @@
+{
+  "status": "JOINT_PROBE_NOT_RUN_PINNED_WINDOW_EXPIRED",
+  "at": "2026-09-11T14:14:04.144Z",
+  "pinnedProfileCommit": "104e47b9d55adedc35f484045ef333fabb6073f4",
+  "profileWindow": {
+    "startTick": 73631900,
+    "endTick": 73633000,
+    "slots": 12
+  },
+  "liveObservedTickAtPreflight": 73635026,
+  "rule": "check-profile.cjs inspectProfile: cfg.startTick >= observedTick+100",
+  "arithmetic": {
+    "requiredStartTickMinimum": 73635126,
+    "actualStartTick": 73631900,
+    "shortfallTicks": 3226,
+    "windowEndAlreadyPassedByTicks": 2026
+  },
+  "failureSurfacedAs": "prepare-session.cjs → {\"error\":\"UNEXPECTED_LOCAL_FAILURE\"}（check-profile 抛普通 Error 被 safeFailure 掩码；分步复现得到真实原因 insufficient pre-upload lead; do not extend an already uploaded window）",
+  "disposition": "AGENT-RUN §6.4/6.5 禁止换窗口与现场修改阈值；窗口固定于 pinned 提交且线上 tick 单调前进，session 永不可合法构造 → 保存失败原件并停止，未启动 collector/guard-probe，未上传"
+}

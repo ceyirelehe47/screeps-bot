@@ -1,0 +1,16 @@
+{
+  "status": "COMPLETE_IMPLEMENTATION_MATERIALIZED",
+  "sourceRef": "d6445029e445a09237752cba205baa6b647a7ce0",
+  "sourceTree": "536c8921e4897d89ee659723513b73812cee434f",
+  "baseFiles": 25,
+  "overlayFiles": 7,
+  "baseTestFiles": [
+    "tests/collector-process.spec.cjs",
+    "tests/diagnostics-watch.spec.cjs",
+    "tests/probe-verifier.spec.cjs",
+    "tests/session-classification.spec.cjs"
+  ],
+  "baseSupportFilesUnderTests": [
+    "tests/collector-preload.cjs"
+  ]
+}

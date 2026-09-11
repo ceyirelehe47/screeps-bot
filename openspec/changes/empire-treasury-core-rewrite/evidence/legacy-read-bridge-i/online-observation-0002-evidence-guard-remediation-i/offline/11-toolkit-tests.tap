@@ -1,0 +1,257 @@
+TAP version 13
+# Subtest: abnormal close retains close code, writes exactly one footer/result, and redacts detail
+ok 1 - abnormal close retains close code, writes exactly one footer/result, and redacts detail
+  ---
+  duration_ms: 244.7963
+  type: 'test'
+  ...
+# Subtest: error without close is classified and preserves bounded private diagnostics
+ok 2 - error without close is classified and preserves bounded private diagnostics
+  ---
+  duration_ms: 2268.4284
+  type: 'test'
+  ...
+# Subtest: cross-platform file request produces a clean probe terminal record
+ok 3 - cross-platform file request produces a clean probe terminal record
+  ---
+  duration_ms: 1099.7457
+  type: 'test'
+  ...
+# Subtest: atomicJson repeatedly replaces an existing artifact without leaving temp files
+ok 4 - atomicJson repeatedly replaces an existing artifact without leaving temp files
+  ---
+  duration_ms: 440.3804
+  type: 'test'
+  ...
+# Subtest: atomicJson preserves create-once JSON shape across replacement
+ok 5 - atomicJson preserves create-once JSON shape across replacement
+  ---
+  duration_ms: 15.0201
+  type: 'test'
+  ...
+# Subtest: collector diagnostics redact, bound and hash arbitrary error text without retaining it
+ok 6 - collector diagnostics redact, bound and hash arbitrary error text without retaining it
+  ---
+  duration_ms: 3.7342
+  type: 'test'
+  ...
+# Subtest: close details retain bounded close code and redacted reason
+ok 7 - close details retain bounded close code and redacted reason
+  ---
+  duration_ms: 0.5182
+  type: 'test'
+  ...
+# Subtest: watch exposes transport lifecycle separately from console and cpu freshness
+ok 8 - watch exposes transport lifecycle separately from console and cpu freshness
+  ---
+  duration_ms: 0.8437
+  type: 'test'
+  ...
+# Subtest: valid explicit stop requests are narrow and run-bound
+ok 9 - valid explicit stop requests are narrow and run-bound
+  ---
+  duration_ms: 0.315
+  type: 'test'
+  ...
+# Subtest: classifies time transport, deadline and payload failures without a generic catch-all label
+ok 10 - classifies time transport, deadline and payload failures without a generic catch-all label
+  ---
+  duration_ms: 1.8242
+  type: 'test'
+  ...
+# Subtest: classifies immutable attempt reads and readiness writes separately
+ok 11 - classifies immutable attempt reads and readiness writes separately
+  ---
+  duration_ms: 0.2785
+  type: 'test'
+  ...
+# Subtest: safe diagnostics contain no raw message or stack and hash only redacted bounded text
+ok 12 - safe diagnostics contain no raw message or stack and hash only redacted bounded text
+  ---
+  duration_ms: 1.7483
+  type: 'test'
+  ...
+# Subtest: a transient first attempt can recover inside the same bounded cycle
+ok 13 - a transient first attempt can recover inside the same bounded cycle
+  ---
+  duration_ms: 1.4717
+  type: 'test'
+  ...
+# Subtest: one fully failed time-read cycle is degraded, not terminal
+ok 14 - one fully failed time-read cycle is degraded, not terminal
+  ---
+  duration_ms: 0.8277
+  type: 'test'
+  ...
+# Subtest: a second consecutive failed cycle fails closed with the exact last channel class
+ok 15 - a second consecutive failed cycle fails closed with the exact last channel class
+  ---
+  duration_ms: 1.3356
+  type: 'test'
+  ...
+# Subtest: a successful later cycle resets the consecutive failure counter
+ok 16 - a successful later cycle resets the consecutive failure counter
+  ---
+  duration_ms: 1.9406
+  type: 'test'
+  ...
+# Subtest: an unreadable HTTP success payload is classified as payload failure
+ok 17 - an unreadable HTTP success payload is classified as payload failure
+  ---
+  duration_ms: 0.4472
+  type: 'test'
+  ...
+# Subtest: time read budgets stay positive and never exceed the per-attempt cap
+ok 18 - time read budgets stay positive and never exceed the per-attempt cap
+  ---
+  duration_ms: 0.5831
+  type: 'test'
+  ...
+# Subtest: a late first failed cycle is still degraded when there has never been a successful read
+ok 19 - a late first failed cycle is still degraded when there has never been a successful read
+  ---
+  duration_ms: 1.0316
+  type: 'test'
+  ...
+# Subtest: failure audit records do not retain injected credential text
+ok 20 - failure audit records do not retain injected credential text
+  ---
+  duration_ms: 0.9694
+  type: 'test'
+  ...
+# Subtest: stableErrorCode rejects unsafe failure codes instead of echoing arbitrary text
+ok 21 - stableErrorCode rejects unsafe failure codes instead of echoing arbitrary text
+  ---
+  duration_ms: 0.1332
+  type: 'test'
+  ...
+# Subtest: safe diagnostics enforce a true UTF-8 byte ceiling
+ok 22 - safe diagnostics enforce a true UTF-8 byte ceiling
+  ---
+  duration_ms: 0.6388
+  type: 'test'
+  ...
+# Subtest: artifact reads tolerate bounded transient failures and preserve the final value
+ok 23 - artifact reads tolerate bounded transient failures and preserve the final value
+  ---
+  duration_ms: 1.015
+  type: 'test'
+  ...
+# Subtest: artifact reads return undefined for an absent optional file and fail for an absent required file
+ok 24 - artifact reads return undefined for an absent optional file and fail for an absent required file
+  ---
+  duration_ms: 0.818
+  type: 'test'
+  ...
+# Subtest: minimum time-read count keeps a small scheduling margin but requires sustained reads
+ok 25 - minimum time-read count keeps a small scheduling margin but requires sustained reads
+  ---
+  duration_ms: 1.6411
+  type: 'test'
+  ...
+# Subtest: collector probe terminal requires the exact run, clean reason, zero exit and footer
+ok 26 - collector probe terminal requires the exact run, clean reason, zero exit and footer
+  ---
+  duration_ms: 0.3913
+  type: 'test'
+  ...
+# Subtest: stop request is create-once and a conflicting existing request is rejected
+ok 27 - stop request is create-once and a conflicting existing request is rejected
+  ---
+  duration_ms: 24.2041
+  type: 'test'
+  ...
+# Subtest: collector result waiter refuses malformed or unexpected terminal evidence
+ok 28 - collector result waiter refuses malformed or unexpected terminal evidence
+  ---
+  duration_ms: 9.3549
+  type: 'test'
+  ...
+# Subtest: probe implementation is structurally read-only with respect to Screeps code
+ok 29 - probe implementation is structurally read-only with respect to Screeps code
+  ---
+  duration_ms: 1.0844
+  type: 'test'
+  ...
+# Subtest: formal deadline guard consumes classified resilient time reads and drops the old generic label
+ok 30 - formal deadline guard consumes classified resilient time reads and drops the old generic label
+  ---
+  duration_ms: 1.221
+  type: 'test'
+  ...
+# Subtest: joint heartbeat requires a stable collector pid and a fresh CPU channel
+ok 31 - joint heartbeat requires a stable collector pid and a fresh CPU channel
+  ---
+  duration_ms: 0.3208
+  type: 'test'
+  ...
+# Subtest: formal guard uses resilient artifact reads instead of swallowing JSON failures
+ok 32 - formal guard uses resilient artifact reads instead of swallowing JSON failures
+  ---
+  duration_ms: 0.5764
+  type: 'test'
+  ...
+# Subtest: probe evidence requires duration, both channels, one footer and no upload attempt
+ok 33 - probe evidence requires duration, both channels, one footer and no upload attempt
+  ---
+  duration_ms: 2.7408
+  type: 'test'
+  ...
+# Subtest: probe rejects upload attempt
+ok 34 - probe rejects upload attempt
+  ---
+  duration_ms: 0.9128
+  type: 'test'
+  ...
+# Subtest: probe rejects short duration
+ok 35 - probe rejects short duration
+  ---
+  duration_ms: 0.3071
+  type: 'test'
+  ...
+# Subtest: probe rejects missing cpu
+ok 36 - probe rejects missing cpu
+  ---
+  duration_ms: 0.2619
+  type: 'test'
+  ...
+# Subtest: probe rejects duplicate footer
+ok 37 - probe rejects duplicate footer
+  ---
+  duration_ms: 0.2512
+  type: 'test'
+  ...
+# Subtest: healthy collector is accepted
+ok 38 - healthy collector is accepted
+  ---
+  duration_ms: 1.173
+  type: 'test'
+  ...
+# Subtest: collector failure classes remain distinct
+ok 39 - collector failure classes remain distinct
+  ---
+  duration_ms: 0.3244
+  type: 'test'
+  ...
+# Subtest: terminal result wins over a stale heartbeat and keeps its stable reason code
+ok 40 - terminal result wins over a stale heartbeat and keeps its stable reason code
+  ---
+  duration_ms: 0.4572
+  type: 'test'
+  ...
+# Subtest: trigger reason preserves wall, tick and explicit-close safety gates
+ok 41 - trigger reason preserves wall, tick and explicit-close safety gates
+  ---
+  duration_ms: 0.329
+  type: 'test'
+  ...
+1..41
+# tests 41
+# suites 0
+# pass 41
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3717.6896
+exit=0
