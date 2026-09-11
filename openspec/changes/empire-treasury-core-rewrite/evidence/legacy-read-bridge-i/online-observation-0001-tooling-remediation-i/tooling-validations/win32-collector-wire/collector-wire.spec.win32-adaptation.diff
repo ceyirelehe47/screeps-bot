@@ -1,0 +1,14 @@
+--- /d/code/screeps/compat-online-tooling-r1-evidence/collector-wire.spec.cjs.original-as-shipped	2026-09-11 09:42:17.219477100 +0800
++++ tests/collector-wire.spec.cjs	2026-09-11 09:42:25.010568600 +0800
+@@ -24,7 +24,10 @@
+   let err='';child.stderr.on('data',b=>err+=b);const end=new Promise(r=>child.once('close',code=>r(code)));
+   const began=Date.now();while(Date.now()-began<2500){await C.pause(20);try{if(C.readJson(path.join(dir,'heartbeat.json')).lastConsoleAtMs)break;}catch{}}
+   const h=C.readJson(path.join(dir,'heartbeat.json'));a.equal(h.state,'streaming',err);a.equal(h.runId,s.runId);a.ok(h.lastConsoleAtMs);
+-  child.kill('SIGTERM');a.equal(await end,0);
++  // Windows cannot deliver SIGTERM (TerminateProcess kills before any handler runs), so
++  // trigger the same finish() exit path through the collector's own guard-result poll.
++  if(process.platform==='win32')C.atomicJson(path.join(dir,'guard-result.json'),{runId:s.runId,status:'ONLINE_BYTES_RESTORED'});else child.kill('SIGTERM');
++  a.equal(await Promise.race([end,C.pause(10000).then(()=>{throw Error('collector exit timeout '+err);})]),0);
+   const raw=fs.readFileSync(path.join(dir,'console.jsonl'),'utf8');a.equal(raw.includes('LOCAL_ONLY_SYNTHETIC_CREDENTIAL'),false);a.equal(raw.includes('LOCAL_ON'),false);
+   const rows=raw.trim().split('\n').map(JSON.parse),large=rows.find(x=>x.text?.includes('MARKER_START'));
+   a.ok(large.bytes>17000);a.ok(large.text.includes('MARKER_END'));a.equal(large.redacted,true);

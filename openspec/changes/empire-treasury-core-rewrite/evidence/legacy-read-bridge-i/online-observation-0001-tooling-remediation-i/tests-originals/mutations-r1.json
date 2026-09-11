@@ -1,0 +1,32 @@
+{
+  "mutationTests": 5,
+  "detected": 5,
+  "results": [
+    {
+      "name": "activeWorld field regression",
+      "caught": true,
+      "exitCode": 1
+    },
+    {
+      "name": "empty failed response accepted",
+      "caught": true,
+      "exitCode": 1
+    },
+    {
+      "name": "hash-only equality",
+      "caught": true,
+      "exitCode": 1
+    },
+    {
+      "name": "raw error text leakage",
+      "caught": true,
+      "exitCode": 1
+    },
+    {
+      "name": "stale console treated as healthy",
+      "caught": true,
+      "exitCode": 1
+    }
+  ],
+  "productionModified": false
+}

@@ -1,0 +1,29 @@
+{
+  "status": "LOCAL_TOOLING_TESTED_NOT_DEPLOYED",
+  "testCount": 100,
+  "passed": 100,
+  "failed": 0,
+  "skipped": 0,
+  "mutationsDetected": 5,
+  "node": "v22.16.0",
+  "platform": "Linux",
+  "executed": [
+    "module validation and positive controls",
+    "loopback HTTP real requests and timeout abort",
+    "actual CLI with injected loopback client and repository entry",
+    "Node built-in WebSocket and large-frame evidence",
+    "own Node child termination and mocked unconfirmable termination",
+    "snapshot locks and IO",
+    "one enabled upload followed by duplicate rejection and exact restore on mock server"
+  ],
+  "notExecuted": [
+    "full candidate Git checkout",
+    "candidate-boundary against actual repository",
+    "actual TypeScript 5.9.3 profile smoke",
+    "actual Rollup bundle preparation",
+    "Windows process/file behavior",
+    "Screeps server deployment or API access"
+  ],
+  "credentialCount": 0,
+  "screepsNetworkRequests": 0
+}

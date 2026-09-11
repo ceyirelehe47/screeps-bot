@@ -1,0 +1,610 @@
+TAP version 13
+# Subtest: actual restore CLI: dry run, execute, and idempotent re-read
+ok 1 - actual restore CLI: dry run, execute, and idempotent re-read
+  ---
+  duration_ms: 487.8801
+  type: 'test'
+  ...
+# Subtest: actual restore CLI unreadable state cannot exit success
+ok 2 - actual restore CLI unreadable state cannot exit success
+  ---
+  duration_ms: 121.1984
+  type: 'test'
+  ...
+# Subtest: actual restore CLI third-party conflict has zero POST
+ok 3 - actual restore CLI third-party conflict has zero POST
+  ---
+  duration_ms: 128.1595
+  type: 'test'
+  ...
+# Subtest: actual guard CLI detects alive collector missing samples then restores with its child
+ok 4 - actual guard CLI detects alive collector missing samples then restores with its child
+  ---
+  duration_ms: 273.5027
+  type: 'test'
+  ...
+# Subtest: actual guard does not declare restored when child sees corrupt code response
+ok 5 - actual guard does not declare restored when child sees corrupt code response
+  ---
+  duration_ms: 241.457
+  type: 'test'
+  ...
+# Subtest: actual upload CLI + live guard process: one enabled upload, duplicate blocked, exact close
+ok 6 - actual upload CLI + live guard process: one enabled upload, duplicate blocked, exact close
+  ---
+  duration_ms: 761.7229
+  type: 'test'
+  ...
+# Subtest: actual collector CLI + Node WebSocket loopback: large frame preserved, auth and known token redacted, heartbeat bound
+ok 7 - actual collector CLI + Node WebSocket loopback: large frame preserved, auth and known token redacted, heartbeat bound
+  ---
+  duration_ms: 1514.5346
+  type: 'test'
+  ...
+# Subtest: activeWorld uniquely selects explicit world branch, ignores activeSim
+ok 8 - activeWorld uniquely selects explicit world branch, ignores activeSim
+  ---
+  duration_ms: 2.1581
+  type: 'test'
+  ...
+# Subtest: rejects ambiguous/unreadable branch missing
+ok 9 - rejects ambiguous/unreadable branch missing
+  ---
+  duration_ms: 0.5529
+  type: 'test'
+  ...
+# Subtest: rejects ambiguous/unreadable branch failure
+ok 10 - rejects ambiguous/unreadable branch failure
+  ---
+  duration_ms: 0.1195
+  type: 'test'
+  ...
+# Subtest: rejects ambiguous/unreadable branch none
+ok 11 - rejects ambiguous/unreadable branch none
+  ---
+  duration_ms: 0.1024
+  type: 'test'
+  ...
+# Subtest: rejects ambiguous/unreadable branch oldField
+ok 12 - rejects ambiguous/unreadable branch oldField
+  ---
+  duration_ms: 0.096
+  type: 'test'
+  ...
+# Subtest: rejects ambiguous/unreadable branch two
+ok 13 - rejects ambiguous/unreadable branch two
+  ---
+  duration_ms: 0.0923
+  type: 'test'
+  ...
+# Subtest: rejects ambiguous/unreadable branch other
+ok 14 - rejects ambiguous/unreadable branch other
+  ---
+  duration_ms: 0.1093
+  type: 'test'
+  ...
+# Subtest: rejects ambiguous/unreadable branch string
+ok 15 - rejects ambiguous/unreadable branch string
+  ---
+  duration_ms: 0.1106
+  type: 'test'
+  ...
+# Subtest: rejects ambiguous/unreadable branch duplicate
+ok 16 - rejects ambiguous/unreadable branch duplicate
+  ---
+  duration_ms: 0.3135
+  type: 'test'
+  ...
+# Subtest: invalid modules never become empty backup missing
+ok 17 - invalid modules never become empty backup missing
+  ---
+  duration_ms: 0.6469
+  type: 'test'
+  ...
+# Subtest: invalid modules never become empty backup empty
+ok 18 - invalid modules never become empty backup empty
+  ---
+  duration_ms: 0.3801
+  type: 'test'
+  ...
+# Subtest: invalid modules never become empty backup array
+ok 19 - invalid modules never become empty backup array
+  ---
+  duration_ms: 0.1287
+  type: 'test'
+  ...
+# Subtest: invalid modules never become empty backup null
+ok 20 - invalid modules never become empty backup null
+  ---
+  duration_ms: 0.0932
+  type: 'test'
+  ...
+# Subtest: invalid modules never become empty backup failure
+ok 21 - invalid modules never become empty backup failure
+  ---
+  duration_ms: 0.0907
+  type: 'test'
+  ...
+# Subtest: invalid modules never become empty backup mainMissing
+ok 22 - invalid modules never become empty backup mainMissing
+  ---
+  duration_ms: 0.1111
+  type: 'test'
+  ...
+# Subtest: invalid modules never become empty backup mainBlank
+ok 23 - invalid modules never become empty backup mainBlank
+  ---
+  duration_ms: 0.0895
+  type: 'test'
+  ...
+# Subtest: invalid modules never become empty backup badBinary
+ok 24 - invalid modules never become empty backup badBinary
+  ---
+  duration_ms: 0.2381
+  type: 'test'
+  ...
+# Subtest: invalid modules never become empty backup extraBinaryField
+ok 25 - invalid modules never become empty backup extraBinaryField
+  ---
+  duration_ms: 0.1054
+  type: 'test'
+  ...
+# Subtest: nonempty main + exact binary round trip
+ok 26 - nonempty main + exact binary round trip
+  ---
+  duration_ms: 1.238
+  type: 'test'
+  ...
+# Subtest: canonical hash matches ordered NUL fixture rather than old digest-of-digests
+ok 27 - canonical hash matches ordered NUL fixture rather than old digest-of-digests
+  ---
+  duration_ms: 0.2827
+  type: 'test'
+  ...
+# Subtest: text JSON vs binary not equal
+ok 28 - text JSON vs binary not equal
+  ---
+  duration_ms: 1.6256
+  type: 'test'
+  ...
+# Subtest: even canonical hash type collision is rejected by exact changed list
+ok 29 - even canonical hash type collision is rejected by exact changed list
+  ---
+  duration_ms: 0.3701
+  type: 'test'
+  ...
+# Subtest: snapshot identity/content/digest validation
+ok 30 - snapshot identity/content/digest validation
+  ---
+  duration_ms: 0.6457
+  type: 'test'
+  ...
+# Subtest: snapshot wrong target rejected
+ok 31 - snapshot wrong target rejected
+  ---
+  duration_ms: 0.2851
+  type: 'test'
+  ...
+# Subtest: restore already original is idempotent no POST
+ok 32 - restore already original is idempotent no POST
+  ---
+  duration_ms: 1.233
+  type: 'test'
+  ...
+# Subtest: restore candidate sends one POST then confirms exact bytes
+ok 33 - restore candidate sends one POST then confirms exact bytes
+  ---
+  duration_ms: 1.5914
+  type: 'test'
+  ...
+# Subtest: restore dry run no POST
+ok 34 - restore dry run no POST
+  ---
+  duration_ms: 0.4906
+  type: 'test'
+  ...
+# Subtest: restore refuses third-party bytes
+ok 35 - restore refuses third-party bytes
+  ---
+  duration_ms: 0.5789
+  type: 'test'
+  ...
+# Subtest: unreadable current state cannot confirm restored {"ok":0}
+ok 36 - unreadable current state cannot confirm restored {"ok":0}
+  ---
+  duration_ms: 0.6574
+  type: 'test'
+  ...
+# Subtest: unreadable current state cannot confirm restored {"ok":1}
+ok 37 - unreadable current state cannot confirm restored {"ok":1}
+  ---
+  duration_ms: 0.328
+  type: 'test'
+  ...
+# Subtest: unreadable current state cannot confirm restored {"ok":1,"modules":{}}
+ok 38 - unreadable current state cannot confirm restored {"ok":1,"modules":{}}
+  ---
+  duration_ms: 0.3206
+  type: 'test'
+  ...
+# Subtest: unreadable current state cannot confirm restored {"ok":1,"modules":null}
+ok 39 - unreadable current state cannot confirm restored {"ok":1,"modules":null}
+  ---
+  duration_ms: 0.3116
+  type: 'test'
+  ...
+# Subtest: post failure/timeout retains uncertainty and never retries
+ok 40 - post failure/timeout retains uncertainty and never retries
+  ---
+  duration_ms: 0.6731
+  type: 'test'
+  ...
+# Subtest: post ok but readback unavailable is NOT restored
+ok 41 - post ok but readback unavailable is NOT restored
+  ---
+  duration_ms: 0.6192
+  type: 'test'
+  ...
+# Subtest: branch switched before restore prevents POST
+ok 42 - branch switched before restore prevents POST
+  ---
+  duration_ms: 0.5781
+  type: 'test'
+  ...
+# Subtest: failed audit still attempts bounded safety restore but cannot pass whole run
+ok 43 - failed audit still attempts bounded safety restore but cannot pass whole run
+  ---
+  duration_ms: 0.4808
+  type: 'test'
+  ...
+# Subtest: build identity exact and appended hash confirmed
+ok 44 - build identity exact and appended hash confirmed
+  ---
+  duration_ms: 1.0189
+  type: 'test'
+  ...
+# Subtest: preflight wrong active field never fetches code
+ok 45 - preflight wrong active field never fetches code
+  ---
+  duration_ms: 0.4559
+  type: 'test'
+  ...
+# Subtest: preflight success requires baseline identity and explicit code target
+ok 46 - preflight success requires baseline identity and explicit code target
+  ---
+  duration_ms: 0.7669
+  type: 'test'
+  ...
+# Subtest: upload dry run is always read only
+ok 47 - upload dry run is always read only
+  ---
+  duration_ms: 0.7919
+  type: 'test'
+  ...
+# Subtest: upload one marker before one POST
+ok 48 - upload one marker before one POST
+  ---
+  duration_ms: 0.6723
+  type: 'test'
+  ...
+# Subtest: marker write failure means zero upload POST
+ok 49 - marker write failure means zero upload POST
+  ---
+  duration_ms: 0.5105
+  type: 'test'
+  ...
+# Subtest: upload timeout remains unknown and no retry
+ok 50 - upload timeout remains unknown and no retry
+  ---
+  duration_ms: 0.5142
+  type: 'test'
+  ...
+# Subtest: raw exceptions are not serialized
+ok 51 - raw exceptions are not serialized
+  ---
+  duration_ms: 0.2409
+  type: 'test'
+  ...
+# Subtest: redaction before truncation removes token, encoded token, prefix and URL
+ok 52 - redaction before truncation removes token, encoded token, prefix and URL
+  ---
+  duration_ms: 0.9348
+  type: 'test'
+  ...
+# Subtest: token timing extraction never echoes arbitrary string payloads
+ok 53 - token timing extraction never echoes arbitrary string payloads
+  ---
+  duration_ms: 0.4747
+  type: 'test'
+  ...
+# Subtest: Rollup-folded dirty metadata is explicit, never inferred from absence
+ok 54 - Rollup-folded dirty metadata is explicit, never inferred from absence
+  ---
+  duration_ms: 0.7584
+  type: 'test'
+  ...
+# Subtest: quoted credential fields are redacted before evidence serialization
+ok 55 - quoted credential fields are redacted before evidence serialization
+  ---
+  duration_ms: 0.3006
+  type: 'test'
+  ...
+# Subtest: matching embedded commit is insufficient when baseline bytes changed
+ok 56 - matching embedded commit is insufficient when baseline bytes changed
+  ---
+  duration_ms: 0.7559
+  type: 'test'
+  ...
+# Subtest: fresh room ownership failure prevents upload
+ok 57 - fresh room ownership failure prevents upload
+  ---
+  duration_ms: 0.5692
+  type: 'test'
+  ...
+# Subtest: original bytes after an unresolved upload do NOT establish no delayed upload
+ok 58 - original bytes after an unresolved upload do NOT establish no delayed upload
+  ---
+  duration_ms: 0.5544
+  type: 'test'
+  ...
+# Subtest: observing the candidate after lost upload response still permits exact restoration
+ok 59 - observing the candidate after lost upload response still permits exact restoration
+  ---
+  duration_ms: 0.5345
+  type: 'test'
+  ...
+# Subtest: real loopback HTTP preflight + single upload + restore exact bytes and canonical hash
+ok 60 - real loopback HTTP preflight + single upload + restore exact bytes and canonical hash
+  ---
+  duration_ms: 112.0328
+  type: 'test'
+  ...
+# Subtest: HTTP 429 raw body and token link are never included in failure
+ok 61 - HTTP 429 raw body and token link are never included in failure
+  ---
+  duration_ms: 5.801
+  type: 'test'
+  ...
+# Subtest: HTTP 200 invalid JSON is not a successful empty object
+ok 62 - HTTP 200 invalid JSON is not a successful empty object
+  ---
+  duration_ms: 5.8883
+  type: 'test'
+  ...
+# Subtest: HTTP ok:0 is rejected
+ok 63 - HTTP ok:0 is rejected
+  ---
+  duration_ms: 4.6069
+  type: 'test'
+  ...
+# Subtest: redirect is not followed with credentials
+ok 64 - redirect is not followed with credentials
+  ---
+  duration_ms: 4.8252
+  type: 'test'
+  ...
+# Subtest: header/body stall aborted by total timer, not merely idle-socket timer
+ok 65 - header/body stall aborted by total timer, not merely idle-socket timer
+  ---
+  duration_ms: 85.3094
+  type: 'test'
+  ...
+# Subtest: slow trickle response cannot reset total timeout
+ok 66 - slow trickle response cannot reset total timeout
+  ---
+  duration_ms: 77.0658
+  type: 'test'
+  ...
+# Subtest: nonloopback test endpoint cannot redirect credentials
+ok 67 - nonloopback test endpoint cannot redirect credentials
+  ---
+  duration_ms: 0.4408
+  type: 'test'
+  ...
+# Subtest: no implicit code branch and no alternate write branch
+ok 68 - no implicit code branch and no alternate write branch
+  ---
+  duration_ms: 0.5249
+  type: 'test'
+  ...
+# Subtest: query-token path is correct and output policy separate from raw response
+ok 69 - query-token path is correct and output policy separate from raw response
+  ---
+  duration_ms: 5.6038
+  type: 'test'
+  ...
+# Subtest: one-use write rejects overwrite, lock releases without altering data
+ok 70 - one-use write rejects overwrite, lock releases without altering data
+  ---
+  duration_ms: 6.7032
+  type: 'test'
+  ...
+# Subtest: atomic heartbeat writes complete JSON and never leaves temp files
+ok 71 - atomic heartbeat writes complete JSON and never leaves temp files
+  ---
+  duration_ms: 12.4961
+  type: 'test'
+  ...
+# Subtest: session digest detects post-prepare snapshot changes
+ok 72 - session digest detects post-prepare snapshot changes
+  ---
+  duration_ms: 41.7865
+  type: 'test'
+  ...
+# Subtest: loadSecret fixed target prevents use against wrong host/account branch
+ok 73 - loadSecret fixed target prevents use against wrong host/account branch
+  ---
+  duration_ms: 13.7983
+  type: 'test'
+  ...
+# Subtest: only exact account and shard console updates heartbeat
+ok 74 - only exact account and shard console updates heartbeat
+  ---
+  duration_ms: 1.975
+  type: 'test'
+  ...
+# Subtest: unauthenticated console cannot create streaming heartbeat
+ok 75 - unauthenticated console cannot create streaming heartbeat
+  ---
+  duration_ms: 0.2939
+  type: 'test'
+  ...
+# Subtest: CPU frames alone do not satisfy console liveness
+ok 76 - CPU frames alone do not satisfy console liveness
+  ---
+  duration_ms: 0.2869
+  type: 'test'
+  ...
+# Subtest: invalid console shape is not liveness
+ok 77 - invalid console shape is not liveness
+  ---
+  duration_ms: 0.2003
+  type: 'test'
+  ...
+# Subtest: expected empty console frame is connection evidence not a bridge sample
+ok 78 - expected empty console frame is connection evidence not a bridge sample
+  ---
+  duration_ms: 0.3339
+  type: 'test'
+  ...
+# Subtest: complete matching sample counts once and duplicate does not extend sample count
+ok 79 - complete matching sample counts once and duplicate does not extend sample count
+  ---
+  duration_ms: 0.903
+  type: 'test'
+  ...
+# Subtest: conflicting duplicate triggers close
+ok 80 - conflicting duplicate triggers close
+  ---
+  duration_ms: 0.4534
+  type: 'test'
+  ...
+# Subtest: core mismatch triggers close; legacy-only mismatch does not
+ok 81 - core mismatch triggers close; legacy-only mismatch does not
+  ---
+  duration_ms: 0.4844
+  type: 'test'
+  ...
+# Subtest: foreign scope never counts as healthy bridge output
+ok 82 - foreign scope never counts as healthy bridge output
+  ---
+  duration_ms: 0.5934
+  type: 'test'
+  ...
+# Subtest: output-limited twice closes but duplicate same tick does not
+ok 83 - output-limited twice closes but duplicate same tick does not
+  ---
+  duration_ms: 0.5531
+  type: 'test'
+  ...
+# Subtest: first partial + next complete resets consecutive incomplete counter
+ok 84 - first partial + next complete resets consecutive incomplete counter
+  ---
+  duration_ms: 0.3336
+  type: 'test'
+  ...
+# Subtest: complete stage CPU from previous report over threshold closes
+ok 85 - complete stage CPU from previous report over threshold closes
+  ---
+  duration_ms: 0.172
+  type: 'test'
+  ...
+# Subtest: 16KB+ source message parsed without truncation
+ok 86 - 16KB+ source message parsed without truncation
+  ---
+  duration_ms: 0.3535
+  type: 'test'
+  ...
+# Subtest: HTML-escaped JSON console message is decoded for parsing
+ok 87 - HTML-escaped JSON console message is decoded for parsing
+  ---
+  duration_ms: 0.1712
+  type: 'test'
+  ...
+# Subtest: live PID with stale semantic heartbeat closes
+ok 88 - live PID with stale semantic heartbeat closes
+  ---
+  duration_ms: 0.1204
+  type: 'test'
+  ...
+# Subtest: wrong run nonce and closed collector are not live
+ok 89 - wrong run nonce and closed collector are not live
+  ---
+  duration_ms: 0.1606
+  type: 'test'
+  ...
+# Subtest: wall deadline wins even when collector still alive
+ok 90 - wall deadline wins even when collector still alive
+  ---
+  duration_ms: 0.2911
+  type: 'test'
+  ...
+# Subtest: monotonic elapsed prevents backwards wall clock from renewing allowance
+ok 91 - monotonic elapsed prevents backwards wall clock from renewing allowance
+  ---
+  duration_ms: 0.1919
+  type: 'test'
+  ...
+# Subtest: last configured tick sample and tick past end close immediately
+ok 92 - last configured tick sample and tick past end close immediately
+  ---
+  duration_ms: 0.1693
+  type: 'test'
+  ...
+# Subtest: alive collector with empty events and missing bridge slots closes
+ok 93 - alive collector with empty events and missing bridge slots closes
+  ---
+  duration_ms: 0.1546
+  type: 'test'
+  ...
+# Subtest: healthy middle-window control does not close
+ok 94 - healthy middle-window control does not close
+  ---
+  duration_ms: 0.1451
+  type: 'test'
+  ...
+# Subtest: operator close does not require new samples
+ok 95 - operator close does not require new samples
+  ---
+  duration_ms: 0.1212
+  type: 'test'
+  ...
+# Subtest: actual owned child success + output retained
+ok 96 - actual owned child success + output retained
+  ---
+  duration_ms: 95.5363
+  type: 'test'
+  ...
+# Subtest: actual hanging child is terminated and never reported successful
+ok 97 - actual hanging child is terminated and never reported successful
+  ---
+  duration_ms: 128.018
+  type: 'test'
+  ...
+# Subtest: even unconfirmable OS termination returns with childClosed=false
+ok 98 - even unconfirmable OS termination returns with childClosed=false
+  ---
+  duration_ms: 35.9261
+  type: 'test'
+  ...
+# Subtest: child output is redacted as a whole so split token is not leaked
+ok 99 - child output is redacted as a whole so split token is not leaked
+  ---
+  duration_ms: 138.7208
+  type: 'test'
+  ...
+# Subtest: spawn failure is not success
+ok 100 - spawn failure is not success
+  ---
+  duration_ms: 2.9489
+  type: 'test'
+  ...
+1..100
+# tests 100
+# suites 0
+# pass 100
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10417.5202

@@ -1,0 +1,29 @@
+[
+  {
+    "label": "final-tests",
+    "command": [
+      "node",
+      "--test",
+      "/mnt/data/treasury-compat-online-tooling-remediation-I/tests/cli.spec.cjs",
+      "/mnt/data/treasury-compat-online-tooling-remediation-I/tests/collector-wire.spec.cjs",
+      "/mnt/data/treasury-compat-online-tooling-remediation-I/tests/protocol.spec.cjs",
+      "/mnt/data/treasury-compat-online-tooling-remediation-I/tests/transport-io.spec.cjs",
+      "/mnt/data/treasury-compat-online-tooling-remediation-I/tests/watch-process.spec.cjs"
+    ],
+    "cwd": "/mnt/data/treasury-compat-online-tooling-remediation-I",
+    "exitCode": 0,
+    "stdout": "final-tests.tap",
+    "stderr": "final-tests.stderr"
+  },
+  {
+    "label": "mutations",
+    "command": [
+      "node",
+      "tests/mutation-check.cjs"
+    ],
+    "cwd": "/mnt/data/treasury-compat-online-tooling-remediation-I",
+    "exitCode": 0,
+    "stdout": "mutations.json",
+    "stderr": "mutations.stderr"
+  }
+]

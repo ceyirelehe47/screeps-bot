@@ -1,0 +1,42 @@
+{
+  "kind": "compat-online-run-v1",
+  "runId": "ca35ed4a34b2ebca28cde980df5efbf9",
+  "server": "https://screeps.com",
+  "username": "forster",
+  "userId": "634fe406347a7b69b28aeccb",
+  "branch": "default",
+  "shard": "shard1",
+  "preparedAtMs": 1789092026306,
+  "wallLimitMs": 5400000,
+  "profile": {
+    "enabled": true,
+    "shardName": "shard1",
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "startTick": 73624800,
+    "endTick": 73625900,
+    "intervalTicks": 100,
+    "minBucket": 2000,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "maxLogBytes": 16384
+  },
+  "profileHead": "63c6f118cf15a501038b0dbaef9628f689c4f819",
+  "profileTree": "fb15fbf1d7f78ddd9e13ec74946ca683a1245c6f",
+  "build": {
+    "commit": "63c6f118cf15a501038b0dbaef9628f689c4f819",
+    "tree": "fb15fbf1d7f78ddd9e13ec74946ca683a1245c6f",
+    "dirty": "folded_out",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+63c6f11@2026-09-11T01:53:19.664Z",
+    "embeddedBundleHash": "e625a71bbd10957e5ebea9116431981f729352aa2eff6177c4f5118dda78e4dd"
+  },
+  "backupFileSha256": "47d14a126b2b69f458f8808d4d2feae908c21529579164b1344b874bfc7703c3",
+  "candidateFileSha256": "fa6597bf8539f68af1d4cb41518c751217a8de70922fa02047a8494e5a75c74e"
+}

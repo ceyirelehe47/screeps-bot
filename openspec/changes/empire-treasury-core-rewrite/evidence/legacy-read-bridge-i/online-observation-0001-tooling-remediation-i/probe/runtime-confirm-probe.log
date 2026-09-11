@@ -1,0 +1,1 @@
+{"status":"RUNTIME_CONFIRMATION_SAMPLE","seconds":60.054,"cpuFrames":16,"consoleFrames":15,"cpuSample":[{"cpu":0,"t":2495},{"cpu":62,"t":3005},{"cpu":81,"t":7343},{"cpu":62,"t":11005},{"cpu":61,"t":14893}]}

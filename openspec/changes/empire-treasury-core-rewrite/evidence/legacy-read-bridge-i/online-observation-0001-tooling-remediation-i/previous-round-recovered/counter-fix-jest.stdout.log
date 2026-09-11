@@ -1,0 +1,10 @@
+PASS test/treasuryCompatIndependent.test.ts (9.58 s)
+PASS test/treasuryCompatRead.test.ts
+PASS src/main.test.ts
+
+Test Suites: 3 passed, 3 total
+Tests:       8 passed, 8 total
+Snapshots:   0 total
+Time:        15.518 s
+Ran all test suites within paths "src/main.test.ts", "test/treasuryCompatRead.test.ts", "test/treasuryCompatIndependent.test.ts".
+Test results written to: ..\compat-online-obs-0001-evidence\counter-fix-jest.json

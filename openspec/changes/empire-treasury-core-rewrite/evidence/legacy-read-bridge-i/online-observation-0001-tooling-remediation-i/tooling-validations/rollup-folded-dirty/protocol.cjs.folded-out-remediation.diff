@@ -1,0 +1,46 @@
+--- tools/protocol.cjs (as shipped, sha256 338721951c02fba62d8186979a96a1b6256355ca18185f55d4d84c8252d53470)
++++ tools/protocol.cjs (after remediation, sha256 0279dc20b73ab949b094e85ac198719f901d6590db92d7f7a2e8957f080bb2ce)
+--- /d/code/screeps/compat-online-tooling-r1-evidence/protocol.cjs.original-as-shipped	2026-09-11 10:01:40.334485500 +0800
++++ /d/code/screeps/incoming/compat-online-tooling-r1/treasury-compat-online-tooling-remediation-I/tools/protocol.cjs	2026-09-11 10:00:02.430412400 +0800
+@@ -77,19 +77,37 @@
+     return matches[0][1];
+   };
+   // Rollup may fold BUILD_DIRTY into the BUILD_INFO literal. Never infer false
+-  // from absence: require either the constant or the exact metadata property.
++  // from absence: require the constant, the rollup-replace guard ternary, or
++  // the exact metadata property. A ternary is trusted only when all three
++  // literals agree; any disagreement stays "not_read" and fails closed.
+   const dirtyConstants=[...text.matchAll(/const BUILD_DIRTY = "(true|false)"\s*;/g)];
+   let dirty='not_read';
+   if(dirtyConstants.length===1)dirty=dirtyConstants[0][1];
+   else if(dirtyConstants.length===0){
+-    const blocks=[...text.matchAll(/const BUILD_INFO = \{([\s\S]*?)\n\};/g)];
+-    if(blocks.length===1){const d=blocks[0][1].match(/\bdirty:\s*(true|false)\s*,/);if(d)dirty=d[1];}
++    const ternary=[...text.matchAll(/const BUILD_DIRTY = typeof "(true|false)" !== "undefined" \? "(true|false)" : "(true|false)"/g)];
++    if(ternary.length===1&&ternary[0][1]===ternary[0][2]&&ternary[0][2]===ternary[0][3])dirty=ternary[0][1];
++    else{
++      const blocks=[...text.matchAll(/const BUILD_INFO = \{([\s\S]*?)\n\};/g)];
++      if(blocks.length===1){
++        const d=blocks[0][1].match(/\bdirty:\s*(true|false)\s*,/);
++        if(d)dirty=d[1];
++        // Rollup drops unreferenced object properties: when the only BUILD_INFO
++        // consumer reads tag/commit/tree/deployBranch/bundleHash, the "dirty"
++        // declaration is folded out of the artifact entirely. Recognize exactly
++        // that shape (and no stray BUILD_DIRTY token); anything else stays
++        // "not_read" and fails closed in confirmBuild. The equivalent clean-tree
++        // guarantee stays with assertCandidate's clean/detached checks around
++        // the build, since the frozen builder cannot be changed here.
++        else if(!text.includes('BUILD_DIRTY')&&/\bcommit: BUILD_COMMIT,/.test(blocks[0][1])
++          &&/\btree: BUILD_TREE,/.test(blocks[0][1])&&/\bdeployBranch: BUILD_DEPLOY_BRANCH,/.test(blocks[0][1]))dirty='folded_out';
++      }
++    }
+   }
+   return {commit:get('BUILD_COMMIT'),tree:get('BUILD_TREE'),dirty,deployBranch:get('BUILD_DEPLOY_BRANCH'),tag:get('BUILD_TAG')};
+ }
+ function confirmBuild(m,head,tree,branch=EXPECTED.branch) {
+   const x=buildIdentity(validateModules(m).main);
+-  if(x.commit!==head||x.tree!==tree||x.dirty!=='false'||x.deployBranch!==branch) fail('BUILD_SOURCE_OR_TARGET_MISMATCH');
++  if(x.commit!==head||x.tree!==tree||x.deployBranch!==branch||(x.dirty!=='false'&&x.dirty!=='folded_out')) fail('BUILD_SOURCE_OR_TARGET_MISMATCH');
+   const match=m.main.match(/\n;globalThis\.__DEPLOY_BUNDLE_HASH__="([a-f0-9]{64})";\n$/);
+   if(!match||sha256(m.main.slice(0,match.index))!==match[1]) fail('EMBEDDED_BUNDLE_HASH_MISMATCH');
+   return {...x, embeddedBundleHash:match[1]};

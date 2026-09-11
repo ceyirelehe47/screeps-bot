@@ -1,0 +1,14 @@
+{
+  "runId": "ca35ed4a34b2ebca28cde980df5efbf9",
+  "pid": 12792,
+  "userId": "634fe406347a7b69b28aeccb",
+  "shard": "shard1",
+  "state": "streaming",
+  "updatedAtMs": 1789092989668,
+  "lastConsoleAtMs": 1789092985185,
+  "lastCpuAtMs": 1789092989668,
+  "lastBridgeTick": null,
+  "badSamples": 0,
+  "stopReason": null,
+  "bridgeReports": 0
+}

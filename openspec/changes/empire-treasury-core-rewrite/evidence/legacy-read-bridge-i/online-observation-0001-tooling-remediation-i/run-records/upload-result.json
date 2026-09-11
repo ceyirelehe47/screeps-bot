@@ -1,0 +1,11 @@
+{
+  "runId": "ca35ed4a34b2ebca28cde980df5efbf9",
+  "candidateHash": "cedf39e3b4677071447cb93d3c0f320d1fa4d391f5909734b76c73860c855938",
+  "result": {
+    "status": "UPLOADED_AND_READBACK_VERIFIED",
+    "requestAttempted": true,
+    "serverAccepted": true,
+    "confirmed": true
+  },
+  "atMs": 1789092244109
+}

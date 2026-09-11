@@ -1,0 +1,74 @@
+[
+  {
+    "path": "tools/bounded-child.cjs",
+    "sha256": "b782f9f306217176faf4019566c1ba16cd3a7f7c083413f31d65f4c3d5400745"
+  },
+  {
+    "path": "tools/check-profile.cjs",
+    "sha256": "a028a582d9b04d65717408760ec32e5673894d528d9a842d68e2abcdf3a9a431"
+  },
+  {
+    "path": "tools/common.cjs",
+    "sha256": "c8be122a0eafe1d1ac9ebace43f64571985659a98fbaa34a824c7406fdf145f8"
+  },
+  {
+    "path": "tools/console-collector.cjs",
+    "sha256": "b37af875f775f39f8d5525172788c493fd2528478991ff8e877562a2c8e2c9b5"
+  },
+  {
+    "path": "tools/deadline-guard.cjs",
+    "sha256": "8e883872e3ab33661875e9ae2f5fe1b0426a5954b386757d1eae0cb8d9eaf197"
+  },
+  {
+    "path": "tools/operations.cjs",
+    "sha256": "aa56efc302d51fa6ac8573202731d3e36df417d1eb420e62d2228397c10d3fe7"
+  },
+  {
+    "path": "tools/preflight-read.cjs",
+    "sha256": "db1bafae4e1ab88ff5c58acd1c89c1648be67700c36561b42b6bdefaeed5b6b8"
+  },
+  {
+    "path": "tools/prepare-session.cjs",
+    "sha256": "2fac463be787490da462bbb9e26b96be0dcb126681367124929e8766ab6d28e4"
+  },
+  {
+    "path": "tools/profile-smoke.cjs",
+    "sha256": "378625bbd242c29bc8e061efe9e1a266792ed020545abdc84b904e1da5a0843c"
+  },
+  {
+    "path": "tools/protocol.cjs",
+    "sha256": "338721951c02fba62d8186979a96a1b6256355ca18185f55d4d84c8252d53470"
+  },
+  {
+    "path": "tools/request-close.cjs",
+    "sha256": "ca648c9a67e37b0bfe0e5483c589badadd5f3071cd850eb6c7cfa6362743125e"
+  },
+  {
+    "path": "tools/restore-modules.cjs",
+    "sha256": "227be03a8d105582e063310ff90d48778911c9f033cb156db65e112a892d305b"
+  },
+  {
+    "path": "tools/session.cjs",
+    "sha256": "8bcb96f823d7ca740e289bec64c4c91c8b1d0dddcb4950a2239b65736585a941"
+  },
+  {
+    "path": "tools/token-status.cjs",
+    "sha256": "afaf8a5713d90173de04a5486c7eed7af9a6ceb87b4dea6d261b590d011528bc"
+  },
+  {
+    "path": "tools/transport.cjs",
+    "sha256": "bac45cd105ff732aa99a6d57389c3c120f78702d4e64791dcc2ef0c05266fba2"
+  },
+  {
+    "path": "tools/upload-once.cjs",
+    "sha256": "7a4d28a21083217f1edb892092795cc9038ff42cf521d9dbdb48f419cc34d872"
+  },
+  {
+    "path": "tools/verify-package.cjs",
+    "sha256": "354356ade343c1c65927a566a928d22fe218c7e50e6bd536a15ce66b78019f18"
+  },
+  {
+    "path": "tools/watch.cjs",
+    "sha256": "3b9dfbe0eee20c98ce3ac73699c48570aa76f40a2943e63e31e320748cbcd6bf"
+  }
+]
