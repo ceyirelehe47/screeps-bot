@@ -4,7 +4,7 @@
 
 **最终标签：`ONLINE_COMPAT_READ_INCONCLUSIVE / RESTORED`**
 
-一句话结论：collector 可靠性本轮已被证明（20.7 分钟无上传探针通过，上一轮的模糊 `collector_stalled` 已细分为具体终态），唯一一次上传成功并回读校验通过，但 guard 在观察窗口开始前因外部网络中断 fail-closed 关闭，12 个采样点全部缺失；线上已精确恢复为前检备份原字节，并由独立回读与主循环运行帧双重确认。
+一句话结论：collector 可靠性本轮已被证明（20.7 分钟无上传探针通过，上一轮的模糊 `collector_stalled` 已细分为具体终态），唯一一次上传成功并回读校验通过，但 guard 在观察窗口开始前因**未分类控制通路异常** fail-closed 关闭，12 个采样点全部缺失；现有原始证据不能确定该异常来自 HTTP、文件读取还是文件写入，且 collector 在 guard 触发关闭后仍持续收到 WebSocket 帧。线上恢复由稍后的独立回读与主循环运行帧补充确认。
 
 ---
 
@@ -12,7 +12,8 @@
 
 | 项 | 值 |
 |---|---|
-| refactor 分支起点/终点 | `f4204c2b4c0bc3637ac0347e8d87b23d516bb934`（未变更，本轮未改 refactor 源码） |
+| refactor 分支执行起点 | `f4204c2b4c0bc3637ac0347e8d87b23d516bb934` |
+| refactor 分支原始证据提交 | `d6445029e445a09237752cba205baa6b647a7ce0`（只增加本轮 evidence；未改生产源码） |
 | compat 分支起点 | `91532745123ca14cddb78385f9a88800fca4bf1a` |
 | `PROBE_PROFILE_HEAD` | `18d2db62d53bfe317d15025d6a258ce7ba1f5a5b` |
 | `PROFILE_HEAD` | `104e47b9d55adedc35f484045ef333fabb6073f4` |
@@ -64,6 +65,8 @@
 
 反向对照成立，证明修复是这两个用例通过的必要条件。
 
+原始证据提交 `d644502` 只归档了上述独立测试的 TAP/exit 输出，未归档实际执行源码。该来源缺口无法从已推送 Git 证据中逆向恢复；本整改不会根据 TAP 重建或冒充上一轮测试源码。新的 Guard 整改测试由后续实现包完整提供，使用独立身份与独立结果，不能用于回填上一轮 24/24 的可复现性。
+
 工具集在正式探针前固定摘要（36 文件），之后复核 `FROZEN_MANIFEST_UNCHANGED`（`02-tooling/actual-tool-hashes.txt`、`frozen-manifest-verification.json`）。
 
 制作方 16 项与候选历史 195/685、完整 Treasury 248/1539 **未被混为一个总数**。
@@ -105,11 +108,13 @@
 
 ## 7. guard 具体关闭原因
 
-`guard-read_or_channel_failure`（原始产物 `ONLINE_CLOSE_UNCONFIRMED`）。
+原始关闭原因是 `guard_read_or_channel_failure`，原始 guard 产物为 `ONLINE_CLOSE_UNCONFIRMED`。
 
-guard 主循环兜底捕获未保留具体异常，故根因基于证据推断：guard 循环内唯一不受内部保护的抛错源是 `api.time()` 网络调用。同期本 Agent 的只读调用**两次独立遭遇 `HTTP_TRANSPORT_ERROR`**，且 collector 的 WS 帧在关闭前中断。故判定为**外部网络中断**，guard 正确 fail-closed 关闭并触发恢复。详见 `08-analysis/guard-failure-analysis.md`（含完整时间线与逐条排除依据）。
+guard 主循环的统一 `catch` 没有保存异常对象或失败阶段，因此**无法从已提交原始证据确定根因**。当时可能抛错的控制通路至少包括不可变 attempt 记录读取、`guard-ready.json` 写入以及周期性 `api.time()` 请求。稍后的两次 `HTTP_TRANSPORT_ERROR` 使 HTTP/tick 通路成为合理假设，但不是该时刻异常来源的直接证据。
 
-本轮 guard **未**退化为上一轮的笼统 `collector_stalled`。但其自身通道异常仍归入统一兜底，未区分「网络中断」与「文件读取失败」——属本轮新发现的可改进点，**未修改**（超出任务书修复授权范围，且现有行为已满足安全要求：未误报成功、未伪造恢复确认）。
+原报告曾将该异常归因于 collector WebSocket 帧在关闭前已经中断；这一说法不正确：guard 在 `10:21:32.710 UTC` 触发关闭后，collector 仍在 `10:21:35`、`10:21:39`、`10:21:42`、`10:21:48`、`10:21:51` 与 `10:21:56` 收到 console/CPU 帧，并在 `10:22:00` 写出单一 footer。因此本轮只能判定为**guard 控制通路发生未分类异常**，不能把根因写成已证实的外部网络中断，也不能归因于 collector WebSocket 中断。详见经整改的 `08-analysis/guard-failure-analysis.md`。
+
+安全行为仍然成立：guard 没有误报观察成功，并触发了恢复；但控制面诊断粒度和瞬时 HTTP 失败策略必须在再次正式上传前修复并通过 guard+collector 联合无上传探针。
 
 ## 8. 精确恢复与关闭确认
 
@@ -143,7 +148,7 @@ guard 主循环兜底捕获未保留具体异常，故根因基于证据推断�
 未验证事项：
 
 1. **兼容桥的线上行为完全未验证**——零个 bridge 样本，`directStatus`、`coreComparison`、`commitments.status`、`previousRun.cpuIncludingEmit` 等 §10 判据全部未取得任何观测值。
-2. **guard 内部通道异常的细分**——`guard_read_or_channel_failure` 未细分为网络/文件类，未做故障注入验证。
+2. **guard 控制通路异常的细分与耐受边界**——`guard_read_or_channel_failure` 未记录失败阶段；单次 HTTP/tick 读取异常会直接终止正式轮，尚未完成分类、有限重试与联合探针验证。
 3. **collector 未复现上一轮 14 分钟中断**（本轮 20.7 分钟探针通过），但该中断的原始触发条件仍未被独立定位。
 4. Windows 文件锁/信号行为仅在本次实际使用的路径上验证（含本轮发现的 rename 竞态），非全量覆盖。
 5. 制作方声明的「操作系统强制终止/断电无法产生 footer」这一硬限制本轮未做破坏性验证。
@@ -156,15 +161,16 @@ online-observation-0002-collector-reliability-i/
   01-baseline/         起点核对、token 状态、OFF 前检
   02-tooling/          PATCH-APPLICATION、as-shipped 快照、TOOLING_REMEDIATION diff、
                        rename 竞态复现、16 项各轮 TAP、冻结摘要与复核
-  03-independent-tests/24 项各轮 TAP、反向对照 TAP
+  03-independent-tests/24 项各轮 TAP、反向对照 TAP（原始执行源码未入库，缺口永久保留）
   04-probe-no-upload/  探针 profile 校验、session、stdout/stderr/PID/exit、
                        heartbeat 时间线、console、collector-result、验证器输出、秘密扫描
   05-profile-and-build/正式窗口选择、profile 校验、冒烟、双 TS、最终前检、session
   06-online-run/       上传 dry-run/execute、attempt、collector/guard 全部产物、
                        window-monitor 时间线、模块摘要
   07-restore/          独立回读判决 ×2、恢复后主循环确认、off 校验、关闭构建日志
-  08-analysis/         guard 失败分析
+  08-analysis/         经纠错的 guard 失败分析
+  09-remediation/      当前树快照删除、历史披露与新 Guard 实现验证源码
   REPORT.md            本文件
 ```
 
-线上模块完整正文、原始凭据与全量 Memory 保留在受控工作树外（`D:/code/screeps/run-0002/`），仓库内仅存摘要与必要脱敏证据。
+原始证据提交 `d644502` 误将三份完整线上模块快照 `backup.json` 提交进 Git。后续整改提交从**当前树**线性删除这些文件并改存摘要；由于禁止改写已推送历史，相关 blob 仍存在于 Git 历史，`09-remediation/` 必须如实披露并记录独立秘密扫描结果。原始凭据与全量 Memory 仍只保留在受控工作树外。
