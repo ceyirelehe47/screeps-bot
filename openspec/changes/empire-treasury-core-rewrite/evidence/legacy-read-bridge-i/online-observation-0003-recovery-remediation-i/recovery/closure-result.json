@@ -1,0 +1,21 @@
+{
+  "status": "RECOVERY_CLOSURE_COLLECTED",
+  "closureId": "5cea033ba00db1c3b64bfa5e464763b4",
+  "parentRunId": "52ec356bc4c01aaf4197f2962beea646",
+  "readOnly": false,
+  "requestAttempted": true,
+  "serverAccepted": true,
+  "writeError": null,
+  "bytesConfirmed": true,
+  "runtimeCollected": true,
+  "runtimeConfirmed": true,
+  "originalObservationStatus": "ONLINE_COMPAT_READ_INCONCLUSIVE",
+  "newCandidateUploads": 0,
+  "priorIntegrity": {
+    "originalFiles": 32,
+    "unchanged": true,
+    "newRestoreMarker": true
+  },
+  "failure": null,
+  "atMs": 1789188167364
+}

@@ -1,0 +1,10 @@
+{
+  "closureId": "5cea033ba00db1c3b64bfa5e464763b4",
+  "parentRunId": "52ec356bc4c01aaf4197f2962beea646",
+  "atMs": 1789188051714,
+  "executeRecovery": true,
+  "exclusiveTarget": true,
+  "priorWorkersStopped": true,
+  "originalObservationStatus": "ONLINE_COMPAT_READ_INCONCLUSIVE",
+  "newCandidateUploadAuthorized": false
+}

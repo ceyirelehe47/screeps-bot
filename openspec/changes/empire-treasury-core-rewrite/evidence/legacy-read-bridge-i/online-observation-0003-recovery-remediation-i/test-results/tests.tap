@@ -1,0 +1,490 @@
+TAP version 13
+# Subtest: archive is byte-exact through Git with autocrlf true including CRLF stderr
+ok 1 - archive is byte-exact through Git with autocrlf true including CRLF stderr
+  ---
+  duration_ms: 515.0423
+  type: 'test'
+  ...
+# Subtest: archive verifier rejects bytes changed after assembly
+ok 2 - archive verifier rejects bytes changed after assembly
+  ---
+  duration_ms: 204.3106
+  type: 'test'
+  ...
+# Subtest: archive whitelist excludes original private snapshots and old private session
+ok 3 - archive whitelist excludes original private snapshots and old private session
+  ---
+  duration_ms: 0.2834
+  type: 'test'
+  ...
+# Subtest: secret scan detects all supported representations and never returns secret text
+ok 4 - secret scan detects all supported representations and never returns secret text
+  ---
+  duration_ms: 0.4367
+  type: 'test'
+  ...
+# Subtest: package integrity uses exact case and ignores enumeration ordering only
+ok 5 - package integrity uses exact case and ignores enumeration ordering only
+  ---
+  duration_ms: 20.1835
+  type: 'test'
+  ...
+# Subtest: closure, replay, deterministic archive and staged byte checks compose without extra implementation
+ok 6 - closure, replay, deterministic archive and staged byte checks compose without extra implementation
+  ---
+  duration_ms: 1788.1223
+  type: 'test'
+  ...
+# Subtest: assembly recomputes replay and refuses a forged complete sample count
+ok 7 - assembly recomputes replay and refuses a forged complete sample count
+  ---
+  duration_ms: 630.2845
+  type: 'test'
+  ...
+# Subtest: candidate is restored exactly once and fresh runtime proof ignores dead original collector
+ok 8 - candidate is restored exactly once and fresh runtime proof ignores dead original collector
+  ---
+  duration_ms: 416.5831
+  type: 'test'
+  ...
+# Subtest: already restored state requires no code POST
+ok 9 - already restored state requires no code POST
+  ---
+  duration_ms: 345.6644
+  type: 'test'
+  ...
+# Subtest: read-only invocation cannot restore candidate
+ok 10 - read-only invocation cannot restore candidate
+  ---
+  duration_ms: 51.4389
+  type: 'test'
+  ...
+# Subtest: both attestations are required before any recovery network or write
+ok 11 - both attestations are required before any recovery network or write
+  ---
+  duration_ms: 32.1544
+  type: 'test'
+  ...
+# Subtest: third party deployment is never overwritten
+ok 12 - third party deployment is never overwritten
+  ---
+  duration_ms: 53.8541
+  type: 'test'
+  ...
+# Subtest: deployment changing between initial read and locked read is not overwritten
+ok 13 - deployment changing between initial read and locked read is not overwritten
+  ---
+  duration_ms: 70.2764
+  type: 'test'
+  ...
+# Subtest: wrong account fails closed without touching code
+ok 14 - wrong account fails closed without touching code
+  ---
+  duration_ms: 57.7095
+  type: 'test'
+  ...
+# Subtest: bounded transient code reads recover before one POST
+ok 15 - bounded transient code reads recover before one POST
+  ---
+  duration_ms: 372.7343
+  type: 'test'
+  ...
+# Subtest: persistent read failure cannot create restore marker
+ok 16 - persistent read failure cannot create restore marker
+  ---
+  duration_ms: 70.6718
+  type: 'test'
+  ...
+# Subtest: lost POST acknowledgement is resolved only by readback without a second POST
+ok 17 - lost POST acknowledgement is resolved only by readback without a second POST
+  ---
+  duration_ms: 372.0562
+  type: 'test'
+  ...
+# Subtest: failed or uncertain write remains single-use across new output directories
+ok 18 - failed or uncertain write remains single-use across new output directories
+  ---
+  duration_ms: 114.5878
+  type: 'test'
+  ...
+# Subtest: existing restore marker blocks candidate write even with zero prior POST receipt
+ok 19 - existing restore marker blocks candidate write even with zero prior POST receipt
+  ---
+  duration_ms: 77.1386
+  type: 'test'
+  ...
+# Subtest: malformed existing restore marker cannot be erased or ignored
+ok 20 - malformed existing restore marker cannot be erased or ignored
+  ---
+  duration_ms: 63.9602
+  type: 'test'
+  ...
+# Subtest: original action lock is never automatically removed
+ok 21 - original action lock is never automatically removed
+  ---
+  duration_ms: 35.9521
+  type: 'test'
+  ...
+# Subtest: marker creation failure prevents POST
+ok 22 - marker creation failure prevents POST
+  ---
+  duration_ms: 61.1354
+  type: 'test'
+  ...
+# Subtest: runtime failure does not erase confirmed restored bytes
+ok 23 - runtime failure does not erase confirmed restored bytes
+  ---
+  duration_ms: 96.5003
+  type: 'test'
+  ...
+# Subtest: post-runtime third party code invalidates closure without another write
+ok 24 - post-runtime third party code invalidates closure without another write
+  ---
+  duration_ms: 369.1846
+  type: 'test'
+  ...
+# Subtest: operator cancellation before write creates no attempt marker
+ok 25 - operator cancellation before write creates no attempt marker
+  ---
+  duration_ms: 65.1568
+  type: 'test'
+  ...
+# Subtest: original records are immutable except the additional once-only marker
+ok 26 - original records are immutable except the additional once-only marker
+  ---
+  duration_ms: 371.7401
+  type: 'test'
+  ...
+# Subtest: existing output directory is not overwritten
+ok 27 - existing output directory is not overwritten
+  ---
+  duration_ms: 53.153
+  type: 'test'
+  ...
+# Subtest: verifier refuses a forged success with wrong backup digest
+ok 28 - verifier refuses a forged success with wrong backup digest
+  ---
+  duration_ms: 413.1605
+  type: 'test'
+  ...
+# Subtest: decoder handles raw without inventing a complete sample
+ok 29 - decoder handles raw without inventing a complete sample
+  ---
+  duration_ms: 5.5578
+  type: 'test'
+  ...
+# Subtest: decoder handles named without inventing a complete sample
+ok 30 - decoder handles named without inventing a complete sample
+  ---
+  duration_ms: 1.4508
+  type: 'test'
+  ...
+# Subtest: decoder handles decimal without inventing a complete sample
+ok 31 - decoder handles decimal without inventing a complete sample
+  ---
+  duration_ms: 0.8601
+  type: 'test'
+  ...
+# Subtest: decoder handles hex without inventing a complete sample
+ok 32 - decoder handles hex without inventing a complete sample
+  ---
+  duration_ms: 1.0123
+  type: 'test'
+  ...
+# Subtest: decoder handles upperHex without inventing a complete sample
+ok 33 - decoder handles upperHex without inventing a complete sample
+  ---
+  duration_ms: 0.8579
+  type: 'test'
+  ...
+# Subtest: one pass does not recursively decode nested amp escapes
+ok 34 - one pass does not recursively decode nested amp escapes
+  ---
+  duration_ms: 0.1495
+  type: 'test'
+  ...
+# Subtest: raw JSON containing literal entities is not transformed
+ok 35 - raw JSON containing literal entities is not transformed
+  ---
+  duration_ms: 0.874
+  type: 'test'
+  ...
+# Subtest: supported named and decimal entities are decoded once
+ok 36 - supported named and decimal entities are decoded once
+  ---
+  duration_ms: 0.259
+  type: 'test'
+  ...
+# Subtest: invalid scalar rejected: &\#0;
+ok 37 - invalid scalar rejected: &\#0;
+  ---
+  duration_ms: 1.0541
+  type: 'test'
+  ...
+# Subtest: invalid scalar rejected: &\#xD800;
+ok 38 - invalid scalar rejected: &\#xD800;
+  ---
+  duration_ms: 0.5083
+  type: 'test'
+  ...
+# Subtest: invalid scalar rejected: &\#1114112;
+ok 39 - invalid scalar rejected: &\#1114112;
+  ---
+  duration_ms: 0.1972
+  type: 'test'
+  ...
+# Subtest: invalid scalar rejected: &\#999999999999999;
+ok 40 - invalid scalar rejected: &\#999999999999999;
+  ---
+  duration_ms: 0.1055
+  type: 'test'
+  ...
+# Subtest: malformed bridge JSON is not repaired by extra decoding passes
+ok 41 - malformed bridge JSON is not repaired by extra decoding passes
+  ---
+  duration_ms: 0.1644
+  type: 'test'
+  ...
+# Subtest: nonbridge plain log is ignored
+ok 42 - nonbridge plain log is ignored
+  ---
+  duration_ms: 0.189
+  type: 'test'
+  ...
+# Subtest: old decoder negative control reproduces hexadecimal parse failure
+ok 43 - old decoder negative control reproduces hexadecimal parse failure
+  ---
+  duration_ms: 0.3545
+  type: 'test'
+  ...
+# Subtest: replay records receipt separately from qualified sample count
+ok 44 - replay records receipt separately from qualified sample count
+  ---
+  duration_ms: 1.6092
+  type: 'test'
+  ...
+# Subtest: wrong run evidence is rejected rather than silently counted
+ok 45 - wrong run evidence is rejected rather than silently counted
+  ---
+  duration_ms: 0.6901
+  type: 'test'
+  ...
+# Subtest: wrong shard frames do not contribute bridge reports
+ok 46 - wrong shard frames do not contribute bridge reports
+  ---
+  duration_ms: 0.6511
+  type: 'test'
+  ...
+# Subtest: pinned receipts and exact snapshot bytes load without consulting an expired window
+ok 47 - pinned receipts and exact snapshot bytes load without consulting an expired window
+  ---
+  duration_ms: 95.1703
+  type: 'test'
+  ...
+# Subtest: changed backup snapshot bytes reject before any network is available
+ok 48 - changed backup snapshot bytes reject before any network is available
+  ---
+  duration_ms: 74.1022
+  type: 'test'
+  ...
+# Subtest: changed candidate snapshot bytes reject before any network is available
+ok 49 - changed candidate snapshot bytes reject before any network is available
+  ---
+  duration_ms: 73.339
+  type: 'test'
+  ...
+# Subtest: wrong original run receipts cannot be substituted
+ok 50 - wrong original run receipts cannot be substituted
+  ---
+  duration_ms: 58.1892
+  type: 'test'
+  ...
+# Subtest: backup and candidate swap is rejected
+ok 51 - backup and candidate swap is rejected
+  ---
+  duration_ms: 64.4026
+  type: 'test'
+  ...
+# Subtest: missing original backup never triggers a bank-of-old-snapshots fallback
+ok 52 - missing original backup never triggers a bank-of-old-snapshots fallback
+  ---
+  duration_ms: 62.9471
+  type: 'test'
+  ...
+# Subtest: misused credential path does not leak that path or token text
+ok 53 - misused credential path does not leak that path or token text
+  ---
+  duration_ms: 0.6646
+  type: 'test'
+  ...
+# Subtest: nested output and source paths are rejected
+ok 54 - nested output and source paths are rejected
+  ---
+  duration_ms: 55.128
+  type: 'test'
+  ...
+# Subtest: materialization reconstructs an actual pinned Git tree with exact bytes
+ok 55 - materialization reconstructs an actual pinned Git tree with exact bytes
+  ---
+  duration_ms: 1457.9339
+  type: 'test'
+  ...
+# Subtest: materializer rejects wrong tree before producing output
+ok 56 - materializer rejects wrong tree before producing output
+  ---
+  duration_ms: 495.9452
+  type: 'test'
+  ...
+# Subtest: source byte mutation is detected
+ok 57 - source byte mutation is detected
+  ---
+  duration_ms: 1476.0311
+  type: 'test'
+  ...
+# Subtest: changing both nonanchor source bytes and manifest cannot bypass pinned tree identity
+ok 58 - changing both nonanchor source bytes and manifest cannot bypass pinned tree identity
+  ---
+  duration_ms: 1383.6055
+  type: 'test'
+  ...
+# Subtest: extra source files are not silently ignored
+ok 59 - extra source files are not silently ignored
+  ---
+  duration_ms: 1373.0407
+  type: 'test'
+  ...
+# Subtest: tree parser rejects traversal or unsupported file modes
+ok 60 - tree parser rejects traversal or unsupported file modes
+  ---
+  duration_ms: 0.4006
+  type: 'test'
+  ...
+# Subtest: new recovery stream independently proves runtime after old collector has exited
+ok 61 - new recovery stream independently proves runtime after old collector has exited
+  ---
+  duration_ms: 303.9796
+  type: 'test'
+  ...
+# Subtest: observer fails safely for no-console
+ok 62 - observer fails safely for no-console
+  ---
+  duration_ms: 1534.758
+  type: 'test'
+  ...
+# Subtest: observer fails safely for no-cpu
+ok 63 - observer fails safely for no-cpu
+  ---
+  duration_ms: 1526.0401
+  type: 'test'
+  ...
+# Subtest: observer fails safely for wrong-shard
+ok 64 - observer fails safely for wrong-shard
+  ---
+  duration_ms: 1514.298
+  type: 'test'
+  ...
+# Subtest: observer fails safely for zero-cpu
+ok 65 - observer fails safely for zero-cpu
+  ---
+  duration_ms: 292.4479
+  type: 'test'
+  ...
+# Subtest: observer fails safely for bridge
+ok 66 - observer fails safely for bridge
+  ---
+  duration_ms: 31.3048
+  type: 'test'
+  ...
+# Subtest: observer fails safely for close
+ok 67 - observer fails safely for close
+  ---
+  duration_ms: 66.3734
+  type: 'test'
+  ...
+# Subtest: observer fails safely for reauth
+ok 68 - observer fails safely for reauth
+  ---
+  duration_ms: 55.4817
+  type: 'test'
+  ...
+# Subtest: auth echoes and token-bearing console messages are not persisted as credentials
+ok 69 - auth echoes and token-bearing console messages are not persisted as credentials
+  ---
+  duration_ms: 298.3569
+  type: 'test'
+  ...
+# Subtest: independent observer verifier rejects duplicate footer
+ok 70 - independent observer verifier rejects duplicate footer
+  ---
+  duration_ms: 304.4059
+  type: 'test'
+  ...
+# Subtest: independent observer verifier rejects PID substitution
+ok 71 - independent observer verifier rejects PID substitution
+  ---
+  duration_ms: 314.2013
+  type: 'test'
+  ...
+# Subtest: loopback full closure issues exactly one backup POST and only allowed GET endpoints
+ok 72 - loopback full closure issues exactly one backup POST and only allowed GET endpoints
+  ---
+  duration_ms: 494.0203
+  type: 'test'
+  ...
+# Subtest: transport cannot upload a candidate or arbitrary modules
+ok 73 - transport cannot upload a candidate or arbitrary modules
+  ---
+  duration_ms: 5.7341
+  type: 'test'
+  ...
+# Subtest: transport never retries an acknowledged restore
+ok 74 - transport never retries an acknowledged restore
+  ---
+  duration_ms: 5.9758
+  type: 'test'
+  ...
+# Subtest: real lost HTTP acknowledgement remains single-use while GET can reconcile bytes
+ok 75 - real lost HTTP acknowledgement remains single-use while GET can reconcile bytes
+  ---
+  duration_ms: 7.07
+  type: 'test'
+  ...
+# Subtest: HTTP auth returns a stable error without response or credential text
+ok 76 - HTTP auth returns a stable error without response or credential text
+  ---
+  duration_ms: 4.197
+  type: 'test'
+  ...
+# Subtest: HTTP redirect returns a stable error without response or credential text
+ok 77 - HTTP redirect returns a stable error without response or credential text
+  ---
+  duration_ms: 3.8012
+  type: 'test'
+  ...
+# Subtest: HTTP bad-json returns a stable error without response or credential text
+ok 78 - HTTP bad-json returns a stable error without response or credential text
+  ---
+  duration_ms: 4.0177
+  type: 'test'
+  ...
+# Subtest: HTTP hang returns a stable error without response or credential text
+ok 79 - HTTP hang returns a stable error without response or credential text
+  ---
+  duration_ms: 67.0255
+  type: 'test'
+  ...
+# Subtest: test origin cannot point to another external service
+ok 80 - test origin cannot point to another external service
+  ---
+  duration_ms: 0.8706
+  type: 'test'
+  ...
+1..80
+# tests 80
+# suites 0
+# pass 80
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6435.034

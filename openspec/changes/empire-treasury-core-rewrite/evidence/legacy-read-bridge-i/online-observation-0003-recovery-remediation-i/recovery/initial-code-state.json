@@ -1,0 +1,18 @@
+{
+  "state": "CURRENT_IS_CANDIDATE",
+  "capturedAtMs": 1789188060210,
+  "digest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "6ef65a948963bc1247811c4f62ba9f06aadceeadcff8d2518d5df15b8c211a72",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4586615,
+        "sha256": "96fff4fc01c946bf8303955eb73a7723abcda89f7dc7221857d26541e657d182"
+      }
+    ]
+  },
+  "account": "forster",
+  "branch": "default"
+}

@@ -1,0 +1,24 @@
+{
+  "status": "CPU_BUDGET_GAP_RECORDED_NOT_REPAIRED",
+  "reports": [
+    {
+      "tick": 73646500,
+      "status": "partial_cpu_budget",
+      "cpuBeforeSerializationAndEmit": 2.4981476000029943,
+      "budget": 2,
+      "commitmentsStatus": "not_read_cpu_budget",
+      "completeCost": "not_observed_no_following_report",
+      "phaseAttribution": "not_observable_from_existing_report",
+      "budgetChanged": false
+    }
+  ],
+  "sourceModified": false,
+  "budgetModified": false,
+  "productionOptimizationImplemented": false,
+  "unknowns": [
+    "cold-start versus steady-state contribution",
+    "observation builder versus reader-loading cost",
+    "full cost including serialization and emit"
+  ],
+  "conclusion": "One partial first report does not establish a safe higher CPU budget; no new engine experiment authorized."
+}

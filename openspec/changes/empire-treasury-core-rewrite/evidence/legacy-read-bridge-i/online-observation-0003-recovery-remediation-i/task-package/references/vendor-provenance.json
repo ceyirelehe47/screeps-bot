@@ -1,0 +1,40 @@
+{
+  "canonicalGuardGitBlob": "796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8",
+  "vendorFiles": [
+    {
+      "path": "vendor/0003/common.cjs",
+      "bytes": 8092,
+      "sha256": "2852ddcb9427dc5b40647f73be10fe3f3b12f4256e7d48135f733e4f14b7befe",
+      "gitBlob": "c8202b4c306ea49ee996ab5ad48b5eb3c8abf216",
+      "unchangedFromOriginalPackage": true
+    },
+    {
+      "path": "vendor/0003/policy.cjs",
+      "bytes": 2089,
+      "sha256": "6d59a131932c8365b2e930002657dc0954d066a3a3dd7ff8cf2d6308a5c312aa",
+      "gitBlob": "d53a7c3fa81bc786c036c9dd46ea8a450e13e878",
+      "unchangedFromOriginalPackage": true
+    },
+    {
+      "path": "vendor/0003/protocol.cjs",
+      "bytes": 6541,
+      "sha256": "0279dc20b73ab949b094e85ac198719f901d6590db92d7f7a2e8957f080bb2ce",
+      "gitBlob": "cc537ffbd1dba96125787449ce9eb0643cf1e1f5",
+      "unchangedFromOriginalPackage": true
+    },
+    {
+      "path": "vendor/0003/samples.cjs",
+      "bytes": 8061,
+      "sha256": "21aa54189ad072013efbd549c6081ca03ad6d0ba340c338f15159d39b85b5661",
+      "gitBlob": "7186cc20f609df5fe437493442829a0e109adf03",
+      "unchangedFromOriginalPackage": true
+    },
+    {
+      "path": "vendor/deployGuard.cjs",
+      "bytes": 5078,
+      "sha256": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7",
+      "gitBlob": "796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8",
+      "unchangedFromOriginalPackage": false
+    }
+  ]
+}

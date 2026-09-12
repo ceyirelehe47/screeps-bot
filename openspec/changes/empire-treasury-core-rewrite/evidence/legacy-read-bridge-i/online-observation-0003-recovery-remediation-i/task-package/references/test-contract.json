@@ -1,0 +1,16 @@
+{
+  "tests": 80,
+  "files": [
+    "tests/archive.spec.cjs",
+    "tests/closure.spec.cjs",
+    "tests/decoder.spec.cjs",
+    "tests/input.spec.cjs",
+    "tests/materialize.spec.cjs",
+    "tests/observer.spec.cjs",
+    "tests/transport.spec.cjs"
+  ],
+  "fail": 0,
+  "skipped": 0,
+  "todo": 0,
+  "cancelled": 0
+}

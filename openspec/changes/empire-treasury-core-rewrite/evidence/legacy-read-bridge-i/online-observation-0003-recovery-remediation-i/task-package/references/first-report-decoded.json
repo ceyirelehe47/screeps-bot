@@ -1,0 +1,174 @@
+{
+  "kind": "treasury-legacy-read-bridge",
+  "tick": 73646500,
+  "shard": "shard1",
+  "sourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
+  "productionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+  "authorizesActions": false,
+  "scope": {
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "isEmpireTotal": false
+  },
+  "evaluation": "observation_and_legacy_commitments_only",
+  "facadeQueryRun": false,
+  "spendable": null,
+  "kernelLifecycleRun": false,
+  "storageMode": "heap_only",
+  "previousRun": null,
+  "legacyInputs": {
+    "tasks": {
+      "status": "nonempty",
+      "count": 2
+    },
+    "reservations": {
+      "status": "empty",
+      "count": 0
+    },
+    "reservationVersion": {
+      "status": "absent",
+      "value": null
+    },
+    "treasuryCore": {
+      "status": "absent",
+      "activeCount": null
+    }
+  },
+  "endpoints": [
+    {
+      "room": "E3N59",
+      "location": "storage",
+      "directStatus": "ok",
+      "direct": {
+        "id": "69eeae0db590d0089d87b487",
+        "used": 800000,
+        "free": 200000,
+        "capacity": 1000000,
+        "overCapacity": false,
+        "active": true,
+        "cooldown": null,
+        "amounts": {
+          "energy": 179236,
+          "H": 135505
+        }
+      },
+      "legacyProjection": {
+        "status": "match_capacity_and_selected_energy",
+        "updatedAt": 73646500,
+        "comparisonPerformed": true,
+        "mismatches": []
+      },
+      "change": {
+        "status": "no_comparable_previous_sample"
+      },
+      "coreComparison": "match_selected_scope",
+      "coreMismatches": []
+    },
+    {
+      "room": "E3N59",
+      "location": "terminal",
+      "directStatus": "ok",
+      "direct": {
+        "id": "69fcff2ed22e9226307ce4fe",
+        "used": 260000,
+        "free": 40000,
+        "capacity": 300000,
+        "overCapacity": false,
+        "active": true,
+        "cooldown": 0,
+        "amounts": {
+          "energy": 72600,
+          "H": 0
+        }
+      },
+      "legacyProjection": {
+        "status": "match_capacity_and_selected_energy",
+        "updatedAt": 73646500,
+        "comparisonPerformed": true,
+        "mismatches": []
+      },
+      "change": {
+        "status": "no_comparable_previous_sample"
+      },
+      "coreComparison": "match_selected_scope",
+      "coreMismatches": []
+    },
+    {
+      "room": "E4N58",
+      "location": "storage",
+      "directStatus": "ok",
+      "direct": {
+        "id": "69eedb6224f1bd9c6041e6ab",
+        "used": 4633540,
+        "free": 3366460,
+        "capacity": 8000000,
+        "overCapacity": false,
+        "active": true,
+        "cooldown": null,
+        "amounts": {
+          "energy": 249263,
+          "H": 2892
+        }
+      },
+      "legacyProjection": {
+        "status": "match_capacity_and_selected_energy",
+        "updatedAt": 73646500,
+        "comparisonPerformed": true,
+        "mismatches": []
+      },
+      "change": {
+        "status": "no_comparable_previous_sample"
+      },
+      "coreComparison": "match_selected_scope",
+      "coreMismatches": []
+    },
+    {
+      "room": "E4N58",
+      "location": "terminal",
+      "directStatus": "ok",
+      "direct": {
+        "id": "69fc583c60d86221e8bdf547",
+        "used": 231245,
+        "free": 68755,
+        "capacity": 300000,
+        "overCapacity": false,
+        "active": true,
+        "cooldown": 0,
+        "amounts": {
+          "energy": 25412,
+          "H": 0
+        }
+      },
+      "legacyProjection": {
+        "status": "match_capacity_and_selected_energy",
+        "updatedAt": 73646500,
+        "comparisonPerformed": true,
+        "mismatches": []
+      },
+      "change": {
+        "status": "no_comparable_previous_sample"
+      },
+      "coreComparison": "match_selected_scope",
+      "coreMismatches": []
+    }
+  ],
+  "commitments": {
+    "status": "not_read_cpu_budget",
+    "rows": null
+  },
+  "status": "partial_cpu_budget",
+  "coreObservationRooms": [
+    "E3N59",
+    "E4N58"
+  ],
+  "requestedEndpointRows": 4,
+  "collectedEndpointRows": 4,
+  "cpuBeforeSerializationAndEmit": 2.4981476000029943,
+  "cooperativeBudget": true
+}

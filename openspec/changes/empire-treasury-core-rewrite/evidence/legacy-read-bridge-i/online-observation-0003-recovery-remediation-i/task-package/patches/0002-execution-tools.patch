@@ -1,0 +1,475 @@
+diff --git a/references/first-report-decoded.json b/references/first-report-decoded.json
+new file mode 100644
+--- /dev/null
++++ b/references/first-report-decoded.json
+@@ -0,0 +1,174 @@
++{
++  "kind": "treasury-legacy-read-bridge",
++  "tick": 73646500,
++  "shard": "shard1",
++  "sourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
++  "productionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
++  "authorizesActions": false,
++  "scope": {
++    "rooms": [
++      "E3N59",
++      "E4N58"
++    ],
++    "resources": [
++      "energy",
++      "H"
++    ],
++    "isEmpireTotal": false
++  },
++  "evaluation": "observation_and_legacy_commitments_only",
++  "facadeQueryRun": false,
++  "spendable": null,
++  "kernelLifecycleRun": false,
++  "storageMode": "heap_only",
++  "previousRun": null,
++  "legacyInputs": {
++    "tasks": {
++      "status": "nonempty",
++      "count": 2
++    },
++    "reservations": {
++      "status": "empty",
++      "count": 0
++    },
++    "reservationVersion": {
++      "status": "absent",
++      "value": null
++    },
++    "treasuryCore": {
++      "status": "absent",
++      "activeCount": null
++    }
++  },
++  "endpoints": [
++    {
++      "room": "E3N59",
++      "location": "storage",
++      "directStatus": "ok",
++      "direct": {
++        "id": "69eeae0db590d0089d87b487",
++        "used": 800000,
++        "free": 200000,
++        "capacity": 1000000,
++        "overCapacity": false,
++        "active": true,
++        "cooldown": null,
++        "amounts": {
++          "energy": 179236,
++          "H": 135505
++        }
++      },
++      "legacyProjection": {
++        "status": "match_capacity_and_selected_energy",
++        "updatedAt": 73646500,
++        "comparisonPerformed": true,
++        "mismatches": []
++      },
++      "change": {
++        "status": "no_comparable_previous_sample"
++      },
++      "coreComparison": "match_selected_scope",
++      "coreMismatches": []
++    },
++    {
++      "room": "E3N59",
++      "location": "terminal",
++      "directStatus": "ok",
++      "direct": {
++        "id": "69fcff2ed22e9226307ce4fe",
++        "used": 260000,
++        "free": 40000,
++        "capacity": 300000,
++        "overCapacity": false,
++        "active": true,
++        "cooldown": 0,
++        "amounts": {
++          "energy": 72600,
++          "H": 0
++        }
++      },
++      "legacyProjection": {
++        "status": "match_capacity_and_selected_energy",
++        "updatedAt": 73646500,
++        "comparisonPerformed": true,
++        "mismatches": []
++      },
++      "change": {
++        "status": "no_comparable_previous_sample"
++      },
++      "coreComparison": "match_selected_scope",
++      "coreMismatches": []
++    },
++    {
++      "room": "E4N58",
++      "location": "storage",
++      "directStatus": "ok",
++      "direct": {
++        "id": "69eedb6224f1bd9c6041e6ab",
++        "used": 4633540,
++        "free": 3366460,
++        "capacity": 8000000,
++        "overCapacity": false,
++        "active": true,
++        "cooldown": null,
++        "amounts": {
++          "energy": 249263,
++          "H": 2892
++        }
++      },
++      "legacyProjection": {
++        "status": "match_capacity_and_selected_energy",
++        "updatedAt": 73646500,
++        "comparisonPerformed": true,
++        "mismatches": []
++      },
++      "change": {
++        "status": "no_comparable_previous_sample"
++      },
++      "coreComparison": "match_selected_scope",
++      "coreMismatches": []
++    },
++    {
++      "room": "E4N58",
++      "location": "terminal",
++      "directStatus": "ok",
++      "direct": {
++        "id": "69fc583c60d86221e8bdf547",
++        "used": 231245,
++        "free": 68755,
++        "capacity": 300000,
++        "overCapacity": false,
++        "active": true,
++        "cooldown": 0,
++        "amounts": {
++          "energy": 25412,
++          "H": 0
++        }
++      },
++      "legacyProjection": {
++        "status": "match_capacity_and_selected_energy",
++        "updatedAt": 73646500,
++        "comparisonPerformed": true,
++        "mismatches": []
++      },
++      "change": {
++        "status": "no_comparable_previous_sample"
++      },
++      "coreComparison": "match_selected_scope",
++      "coreMismatches": []
++    }
++  ],
++  "commitments": {
++    "status": "not_read_cpu_budget",
++    "rows": null
++  },
++  "status": "partial_cpu_budget",
++  "coreObservationRooms": [
++    "E3N59",
++    "E4N58"
++  ],
++  "requestedEndpointRows": 4,
++  "collectedEndpointRows": 4,
++  "cpuBeforeSerializationAndEmit": 2.4981476000029943,
++  "cooperativeBudget": true
++}
+diff --git a/references/test-contract.json b/references/test-contract.json
+new file mode 100644
+--- /dev/null
++++ b/references/test-contract.json
+@@ -0,0 +1,16 @@
++{
++  "tests": 80,
++  "files": [
++    "tests/archive.spec.cjs",
++    "tests/closure.spec.cjs",
++    "tests/decoder.spec.cjs",
++    "tests/input.spec.cjs",
++    "tests/materialize.spec.cjs",
++    "tests/observer.spec.cjs",
++    "tests/transport.spec.cjs"
++  ],
++  "fail": 0,
++  "skipped": 0,
++  "todo": 0,
++  "cancelled": 0
++}
+diff --git a/references/vendor-provenance.json b/references/vendor-provenance.json
+new file mode 100644
+--- /dev/null
++++ b/references/vendor-provenance.json
+@@ -0,0 +1,40 @@
++{
++  "canonicalGuardGitBlob": "796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8",
++  "vendorFiles": [
++    {
++      "path": "vendor/0003/common.cjs",
++      "bytes": 8092,
++      "sha256": "2852ddcb9427dc5b40647f73be10fe3f3b12f4256e7d48135f733e4f14b7befe",
++      "gitBlob": "c8202b4c306ea49ee996ab5ad48b5eb3c8abf216",
++      "unchangedFromOriginalPackage": true
++    },
++    {
++      "path": "vendor/0003/policy.cjs",
++      "bytes": 2089,
++      "sha256": "6d59a131932c8365b2e930002657dc0954d066a3a3dd7ff8cf2d6308a5c312aa",
++      "gitBlob": "d53a7c3fa81bc786c036c9dd46ea8a450e13e878",
++      "unchangedFromOriginalPackage": true
++    },
++    {
++      "path": "vendor/0003/protocol.cjs",
++      "bytes": 6541,
++      "sha256": "0279dc20b73ab949b094e85ac198719f901d6590db92d7f7a2e8957f080bb2ce",
++      "gitBlob": "cc537ffbd1dba96125787449ce9eb0643cf1e1f5",
++      "unchangedFromOriginalPackage": true
++    },
++    {
++      "path": "vendor/0003/samples.cjs",
++      "bytes": 8061,
++      "sha256": "21aa54189ad072013efbd549c6081ca03ad6d0ba340c338f15159d39b85b5661",
++      "gitBlob": "7186cc20f609df5fe437493442829a0e109adf03",
++      "unchangedFromOriginalPackage": true
++    },
++    {
++      "path": "vendor/deployGuard.cjs",
++      "bytes": 5078,
++      "sha256": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7",
++      "gitBlob": "796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8",
++      "unchangedFromOriginalPackage": false
++    }
++  ]
++}
+diff --git a/tools/archive.cjs b/tools/archive.cjs
+new file mode 100644
+--- /dev/null
++++ b/tools/archive.cjs
+@@ -0,0 +1,65 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path');const R=require('../runtime/replay.cjs');const U=require('./util.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/pins.cjs'),V=require('../runtime/verify-closure.cjs');
++const CLOSURE_FILES=['closure-start.json','closure-events.jsonl','initial-code-state.json','prewrite-code-state.json','restore-marker.json','restore-write-result.json',
++ 'code-before-runtime.json','code-after-runtime.json','runtime-console.jsonl','runtime-observer-result.json','prior-file-hashes-before.json','prior-file-hashes-after.json','closure-result.json','CLOSURE-VERIFICATION.json'];
++function secretScan(b,token){return [token,encodeURIComponent(token),token.slice(0,8),token.slice(0,16)].some(n=>b.toString('utf8').includes(n));}
++function writeArchive(repo,targetRel,files,metadata){
++ const target=path.join(repo,targetRel);if(fs.existsSync(target))C.fail('ARCHIVE_TARGET_EXISTS');
++ const payload=new Map(files);payload.set('.gitattributes',Buffer.from('* -text\n'));
++ const m={...metadata,files:Object.fromEntries([...payload].sort().map(([n,b])=>[n,{bytes:b.length,sha256:C.sha256(b)}]))};
++ payload.set('ARCHIVE-MANIFEST.json',Buffer.from(JSON.stringify(m,null,2)+'\n'));
++ fs.mkdirSync(target,{recursive:false});for(const [n,b]of payload){const f=path.join(target,n);fs.mkdirSync(path.dirname(f),{recursive:true});fs.writeFileSync(f,b,{flag:'wx',mode:0o600});}
++ return {target,files:payload.size,manifest:m};
++}
++function verifyArchive(repo,targetRel=K.evidenceTarget,{staged=false}={}){
++ const root=path.join(repo,targetRel),m=C.json(path.join(root,'ARCHIVE-MANIFEST.json'));
++ if(!C.same(C.list(root),[...Object.keys(m.files),'ARCHIVE-MANIFEST.json'].sort()))C.fail('ARCHIVE_FILE_SET_MISMATCH');
++ for(const [n,e]of Object.entries(m.files)){
++  const b=C.bytes(path.join(root,n));if(b.length!==e.bytes||C.sha256(b)!==e.sha256)C.fail('ARCHIVE_BYTES_CHANGED');
++  if(staged&&!U.gitBytes(repo,['show',':'+targetRel+'/'+n]).equals(b))C.fail('STAGED_BYTES_CHANGED');
++ }
++ if(staged){
++  if(!U.gitBytes(repo,['show',':'+targetRel+'/ARCHIVE-MANIFEST.json']).equals(C.bytes(path.join(root,'ARCHIVE-MANIFEST.json'))))C.fail('STAGED_MANIFEST_CHANGED');
++  const rows=U.git(repo,['diff','--cached','--name-status']).split('\n').filter(Boolean);
++  const actual=rows.map(row=>{if(!row.startsWith('A\t'))C.fail('ONLY_NEW_EVIDENCE_FILES_ALLOWED');return row.slice(2);}).sort();
++  const wanted=C.list(root).map(n=>targetRel+'/'+n).sort();if(!C.same(actual,wanted))C.fail('STAGED_SCOPE_MISMATCH');
++ }
++ return {status:'RECOVERY_0003_ARCHIVE_VERIFIED',files:Object.keys(m.files).length+1,staged,sourceCommit:m.sourceCommit,closure:m.closureStatus};
++}
++function archive(o){
++ U.verifyPackage();U.heads(o.refactor,o.compat);U.verifySource(o.source);
++ const secret=C.loadSecret(o.secret),pub=C.json(path.join(o.source,'run/public-session.json')),v=V.verifyClosure(o.closure,pub);
++ const r=C.json(path.join(o.replay,'replay.json')),rr=R.replay(C.bytes(path.join(o.source,'run/console.jsonl')).toString('utf8'),pub);
++ if(!C.same(r,{...rr,source:U.verifySource(o.source)}))C.fail('REPLAY_OUTPUT_CHANGED');
++ const cpu=C.json(path.join(o.replay,'CPU-EVIDENCE.json'));if(!C.same(cpu.reports,rr.cpuFindings)||cpu.budgetModified!==false||cpu.productionOptimizationImplemented!==false)C.fail('CPU_REPORT_CHANGED');
++ const t=C.json(path.join(o.tests,'summary.json')),contract=C.json(path.join(U.ROOT,'references/test-contract.json'));
++ if(r.status!=='SOURCE_0003_REPLAYED_NOT_OBSERVED'||r.rawBridgeReports!==1||r.completeBridgeReports!==0||r.source?.runTree!==K.runTree)C.fail('REPLAY_GATE_INVALID');
++ if(t.status!=='RECOVERY_0003_IMPLEMENTATION_TESTS_VERIFIED'||t.tests!==contract.tests||t.passed!==contract.tests||t.failed!==0||t.skipped!==0
++ ||t.packageFingerprint!==C.sha256(C.bytes(path.join(U.ROOT,'INTEGRITY.json'))))C.fail('TEST_GATE_INVALID');
++ if(C.list(o.closure).some(n=>!CLOSURE_FILES.includes(n)))C.fail('CLOSURE_ARCHIVE_INPUT_UNEXPECTED');
++ const tap=C.bytes(path.join(o.tests,'tests.tap')).toString('utf8');
++ const count=k=>Number(tap.match(new RegExp('^# '+k+' (\\d+)$','m'))?.[1]??-1);
++ if(count('tests')!==contract.tests||count('pass')!==contract.tests||['fail','skipped','todo','cancelled'].some(k=>count(k)!==0)||C.json(path.join(o.tests,'tests.exit.json')).code!==0)C.fail('RAW_TEST_RESULTS_INVALID');
++ const files=new Map(),put=(n,b)=>{if(secretScan(b,secret.token))C.fail('SECRET_FOUND_ARCHIVE_ABORTED');files.set(n,b);};
++ for(const n of CLOSURE_FILES){const f=path.join(o.closure,n);if(fs.existsSync(f))put('recovery/'+n,C.bytes(f));}
++ for(const n of ['summary.json','tests.tap','tests.stderr','tests.exit.json'])put('test-results/'+n,C.bytes(path.join(o.tests,n)));
++ for(const n of ['replay.json','CPU-EVIDENCE.json'])put('analysis/'+n,C.bytes(path.join(o.replay,n)));
++ put('SOURCE-MANIFEST.json',C.bytes(path.join(o.source,'MANIFEST.json')));
++ for(const n of C.list(U.ROOT))put('task-package/'+n,C.bytes(path.join(U.ROOT,n)));
++ put('FINAL-VERIFICATION.json',Buffer.from(JSON.stringify(v,null,2)+'\n'));
++ const report=`# 0003 Recovery & Evidence Remediation I\n\n`+
++ `恢复闭合裁决：\`${v.status}\`。原始观察仍为 \`ONLINE_COMPAT_READ_INCONCLUSIVE\`。\n\n`+
++ `证据基线：${K.refactor}；compat 保持 ${K.compat}。本轮不生成或上传新的候选，不改 CPU 配置。\n\n`+
++ `本次闭合命令的恢复 POST 边界：${v.restorePostBoundaries}；代码字节确认：${v.bytesConfirmed}；新的恢复专用运行确认：${v.runtimeConfirmed}。\n\n`+
++ `代码字节依据是本轮实时只读回读；不是由 Git 默认 OFF、窗口过期或旧 guard 标签推导。运行确认使用新的 closureId，与 0003 的失败 collector 不拼接。\n\n`+
++ `旧原始日志重新解码后收到 ${r.rawBridgeReports} 条桥报告、${r.completeBridgeReports} 条完整样本。首点 tick=73646500，partial_cpu_budget，commitments=not_read_cpu_budget，序列化/输出前 CPU=2.4981476000029943，配置预算=2。\n\n`+
++ `CPU 子阶段归因、冷启动与稳态的差别及完整输出成本未知；本轮只保留证据，不宣称优化完成，不提高预算。\n\n`+
++ `原 run 已有文件哈希复核：${v.originalRecordsPreserved?'通过':'未通过或未完成，不能声称原件完整性已确认'}。仅允许新增此前未消耗的 restore-attempt.json，另有执行期间的原 action.lock。历史 Git 证据不改写；完整模块正文与凭据不归档。\n\n`+
++ `服务器代码写接口没有 CAS；执行恢复以 --exclusive-target 和 --prior-workers-stopped 的真实确认作为先决条件。读取可有限重试，恢复写入不重试；已有标记、第三方代码或无法确认状态均禁止补发。\n`;
++ put('EXECUTION-REPORT.md',Buffer.from(report));
++ const result=writeArchive(o.refactor,K.evidenceTarget,files,{status:'RECOVERY_0003_ARCHIVED',sourceCommit:K.refactor,compatHead:K.compat,
++  closureStatus:v.status,originalObservationStatus:'ONLINE_COMPAT_READ_INCONCLUSIVE',newCandidateUploads:0,secretScan:{hitCount:0}});
++ verifyArchive(o.refactor);return {status:'RECOVERY_0003_ARCHIVED',target:result.target,files:result.files,closure:v.status};
++}
++module.exports={archive,writeArchive,verifyArchive,secretScan,CLOSURE_FILES};
++if(require.main===module)C.main(async()=>{const o=C.options(process.argv.slice(2),['refactor','compat','source','closure','replay','tests','secret']);C.required(o,'refactor','compat','source','closure','replay','tests','secret');console.log(JSON.stringify(archive(o)));});
+diff --git a/tools/check-baseline.cjs b/tools/check-baseline.cjs
+new file mode 100644
+--- /dev/null
++++ b/tools/check-baseline.cjs
+@@ -0,0 +1,4 @@
++'use strict';
++const U=require('./util.cjs'),C=require('../runtime/common.cjs');
++if(require.main===module)C.main(async()=>{const o=C.options(process.argv.slice(2),['refactor','compat']);C.required(o,'refactor','compat');if(Number(process.versions.node.split('.')[0])!==22)C.fail('NODE22_REQUIRED');
++ console.log(JSON.stringify({package:U.verifyPackage(),baseline:U.heads(o.refactor,o.compat)}));});
+diff --git a/tools/close-0003.cjs b/tools/close-0003.cjs
+new file mode 100644
+--- /dev/null
++++ b/tools/close-0003.cjs
+@@ -0,0 +1,27 @@
++'use strict';
++const path=require('node:path');const C=require('../runtime/common.cjs'),U=require('./util.cjs'),I=require('../runtime/input.cjs');
++const {createClient}=require('../runtime/transport.cjs'),{close0003}=require('../runtime/closure.cjs'),{verifyClosure}=require('../runtime/verify-closure.cjs');
++async function run(o){
++ U.verifyPackage();if(Number(process.versions.node.split('.')[0])!==22)C.fail('NODE22_REQUIRED');U.heads(o.refactor,o.compat);U.verifySource(o.source);
++ if(process.env.NODE_OPTIONS||process.env.DEST||process.env.DEPLOY_ALLOW_DIRTY)C.fail('UNSAFE_EXECUTION_ENVIRONMENT');
++ for(const p of [o.source,o['prior-run'],o.out,U.ROOT])for(const r of [o.refactor,o.compat])C.disjoint(p,r);
++ C.disjoint(o.out,o.source);C.disjoint(o.out,o['prior-run']);C.disjoint(o.out,U.ROOT);C.disjoint(o.out,o.secret);C.disjoint(o.out,o.tests);
++ const tests=C.json(path.join(o.tests,'summary.json')),spec=C.json(path.join(U.ROOT,'references/test-contract.json'));
++ if(tests.status!=='RECOVERY_0003_IMPLEMENTATION_TESTS_VERIFIED'||tests.tests!==spec.tests||tests.failed!==0||tests.skipped!==0
++  ||tests.packageFingerprint!==C.sha256(C.bytes(path.join(U.ROOT,'INTEGRITY.json'))))C.fail('FIXED_TEST_GATE_MISSING');
++ const s=I.loadInput(o.source,o['prior-run']),secret=C.loadSecret(o.secret);
++ let cancelled=false;const signal=()=>{cancelled=true;};process.once('SIGINT',signal);process.once('SIGTERM',signal);
++ let r;
++ try{r=await close0003({api:createClient(secret),s,prior:o['prior-run'],out:o.out,executeRecovery:!!o['execute-recovery'],
++   exclusiveTarget:!!o['exclusive-target'],priorWorkersStopped:!!o['prior-workers-stopped'],secret,isCancelled:()=>cancelled});
++ }finally{process.removeListener('SIGINT',signal);process.removeListener('SIGTERM',signal);}
++ U.verifySource(o.source);U.verifyPackage();const v=verifyClosure(o.out,s);
++ C.durable(path.join(o.out,'CLOSURE-VERIFICATION.json'),v);return {result:r,verification:v};
++}
++module.exports={run};if(require.main===module)C.main(async()=>{const o=C.options(process.argv.slice(2),['refactor','compat','source','prior-run','secret','out','tests'],['execute-recovery','exclusive-target','prior-workers-stopped']);
++ C.required(o,'refactor','compat','source','prior-run','secret','out','tests');const r=await run(o);console.log(JSON.stringify(r.verification));
++ if(r.verification.status!=='RECOVERY_CLOSURE_VERIFIED')process.exitCode=2;
++}).finally(()=>{
++ // The entrypoint has settled on success OR failure; never interrupt an in-flight restore.
++ // Bound only a stranded WebSocket close handshake after HTTP work has finished.
++ setTimeout(()=>process.exit(process.exitCode||0),1000).unref();});
+diff --git a/tools/materialize.cjs b/tools/materialize.cjs
+new file mode 100644
+--- /dev/null
++++ b/tools/materialize.cjs
+@@ -0,0 +1,4 @@
++'use strict';
++const U=require('./util.cjs'),C=require('../runtime/common.cjs');
++if(require.main===module)C.main(async()=>{const o=C.options(process.argv.slice(2),['repo','out']);C.required(o,'repo','out');U.verifyPackage();C.disjoint(o.out,o.repo);C.disjoint(o.out,U.ROOT);
++ console.log(JSON.stringify(U.materialize(o.repo,o.out)));});
+diff --git a/tools/replay.cjs b/tools/replay.cjs
+new file mode 100644
+--- /dev/null
++++ b/tools/replay.cjs
+@@ -0,0 +1,14 @@
++'use strict';
++const path=require('node:path');const U=require('./util.cjs'),C=require('../runtime/common.cjs'),R=require('../runtime/replay.cjs');
++function replaySource(source,out){const before=U.verifySource(source);const pub=C.json(path.join(source,'run/public-session.json'));
++ const r=R.replay(C.bytes(path.join(source,'run/console.jsonl')).toString('utf8'),pub);
++ if(r.rawBridgeReports!==1||r.completeBridgeReports!==0||r.receivedTicks[0]!==73646500||r.decodingFailures.length)C.fail('PINNED_REPLAY_EXPECTATION_MISMATCH');
++ C.mkdirNew(out);C.durable(path.join(out,'replay.json'),{...r,source:before});
++ C.durable(path.join(out,'CPU-EVIDENCE.json'),{status:'CPU_BUDGET_GAP_RECORDED_NOT_REPAIRED',reports:r.cpuFindings,
++  sourceModified:false,budgetModified:false,productionOptimizationImplemented:false,
++  unknowns:['cold-start versus steady-state contribution','observation builder versus reader-loading cost','full cost including serialization and emit'],
++  conclusion:'One partial first report does not establish a safe higher CPU budget; no new engine experiment authorized.'});
++ U.verifySource(source);return r;
++}
++module.exports={replaySource};if(require.main===module)C.main(async()=>{const o=C.options(process.argv.slice(2),['source','out']);C.required(o,'source','out');U.verifyPackage();C.disjoint(o.source,o.out);C.disjoint(o.out,U.ROOT);
++ const r=replaySource(o.source,o.out);console.log(JSON.stringify({status:r.status,rawBridgeReports:r.rawBridgeReports,completeBridgeReports:r.completeBridgeReports,receivedTicks:r.receivedTicks}));});
+diff --git a/tools/run-tests.cjs b/tools/run-tests.cjs
+new file mode 100644
+--- /dev/null
++++ b/tools/run-tests.cjs
+@@ -0,0 +1,18 @@
++'use strict';
++const path=require('node:path'),fs=require('node:fs'),cp=require('node:child_process');const C=require('../runtime/common.cjs'),U=require('./util.cjs');
++function runTests(out){
++ U.verifyPackage();C.disjoint(out,U.ROOT);C.mkdirNew(out);
++ const spec=C.json(path.join(U.ROOT,'references/test-contract.json'));
++ const files=C.list(path.join(U.ROOT,'tests')).filter(n=>n.endsWith('.spec.cjs')).map(n=>'tests/'+n).sort();
++ if(!C.same(files,spec.files))C.fail('TEST_FILE_SET_MISMATCH');
++ const r=cp.spawnSync(process.execPath,['--test',...files],{cwd:U.ROOT,encoding:'utf8',timeout:180000,maxBuffer:16*1048576,windowsHide:true});
++ fs.writeFileSync(path.join(out,'tests.tap'),r.stdout||'',{flag:'wx'});fs.writeFileSync(path.join(out,'tests.stderr'),r.stderr||'',{flag:'wx'});
++ C.durable(path.join(out,'tests.exit.json'),{code:r.status,signal:r.signal,error:r.error?'TEST_PROCESS_FAILED':null});
++ const num=k=>Number((r.stdout||'').match(new RegExp('^# '+k+' (\\d+)$','m'))?.[1]??-1);
++ const ok=r.status===0&&!r.error&&num('tests')===spec.tests&&num('pass')===spec.tests&&['fail','cancelled','skipped','todo'].every(k=>num(k)===0);
++ const summary={status:ok?'RECOVERY_0003_IMPLEMENTATION_TESTS_VERIFIED':'RECOVERY_0003_IMPLEMENTATION_TESTS_FAILED',tests:num('tests'),passed:num('pass'),failed:num('fail'),
++  skipped:num('skipped'),todo:num('todo'),cancelled:num('cancelled'),platform:process.platform,node:process.version,
++  packageFingerprint:C.sha256(C.bytes(path.join(U.ROOT,'INTEGRITY.json'))),testFiles:files};
++ C.durable(path.join(out,'summary.json'),summary);if(!ok)C.fail('FIXED_IMPLEMENTATION_TESTS_FAILED');return summary;
++}
++module.exports={runTests};if(require.main===module)C.main(async()=>{const o=C.options(process.argv.slice(2),['out']);C.required(o,'out');console.log(JSON.stringify(runTests(o.out)));});
+diff --git a/tools/util.cjs b/tools/util.cjs
+new file mode 100644
+--- /dev/null
++++ b/tools/util.cjs
+@@ -0,0 +1,48 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),crypto=require('node:crypto');
++const C=require('../runtime/common.cjs'),K=require('../runtime/pins.cjs');
++const ROOT=path.resolve(__dirname,'..');
++function gitBytes(repo,args){try{return cp.execFileSync('git',['-C',repo,...args],{timeout:15000,maxBuffer:32*1048576,stdio:['ignore','pipe','pipe']});}catch{C.fail('GIT_READ_FAILED');}}
++const git=(repo,args)=>gitBytes(repo,args).toString('utf8').trim();
++function verifyPackage(root=ROOT){
++ const m=C.json(path.join(root,'INTEGRITY.json'));const expected=Object.keys(m.files).sort();
++ const actual=C.list(root).filter(n=>n!=='INTEGRITY.json').sort();if(!C.same(actual,expected))C.fail('PACKAGE_FILE_SET_MISMATCH');
++ for(const n of expected){const b=C.bytes(path.join(root,n));if(b.length!==m.files[n].bytes||C.sha256(b)!==m.files[n].sha256)C.fail('PACKAGE_BYTES_CHANGED');}
++ return {status:'PACKAGE_INTEGRITY_VERIFIED',files:expected.length,exactFileSet:true};
++}
++function heads(repo,compat){
++ for(const [r,branch,sha]of[[repo,'refactor/empire-treasury-rearchitecture',K.refactor],[compat,'compat/treasury-read-bridge-i',K.compat]]){
++  if(git(r,['rev-parse','HEAD'])!==sha||git(r,['branch','--show-current'])!==branch||git(r,['rev-parse','refs/remotes/origin/'+branch])!==sha)C.fail('BASELINE_HEAD_MISMATCH');
++  if(git(r,['status','--porcelain']))C.fail('WORKTREE_NOT_CLEAN');
++ }
++ if(git(compat,['rev-parse','HEAD^{tree}'])!==K.compatTree)C.fail('COMPAT_OFF_TREE_MISMATCH');
++ return {status:'RECOVERY_0003_BASELINE_VERIFIED',refactor:K.refactor,compat:K.compat};
++}
++function parseTree(b){return b.toString('utf8').split('\0').filter(Boolean).map(x=>{const m=x.match(/^100644 blob ([a-f0-9]{40})\t([A-Za-z0-9_.-]+)$/);if(!m)C.fail('SOURCE_TREE_INVALID');return {blob:m[1],name:m[2]};});}
++function materialize(repo,out,policy=K){
++ if(git(repo,['rev-parse',policy.refactor+':'+policy.sourceRoot+'/run'])!==policy.runTree)C.fail('SOURCE_TREE_MISMATCH');
++ const entries=parseTree(gitBytes(repo,['ls-tree','-rz',policy.refactor+':'+policy.sourceRoot+'/run']));
++ if(entries.length!==29)C.fail('SOURCE_FILE_COUNT_MISMATCH');
++ const anchor={'public-session.json':policy.publicBlob,'console.jsonl':policy.consoleBlob,'upload-attempt.json':policy.uploadAttemptBlob,'upload-result.json':policy.uploadResultBlob};
++ for(const [n,h]of Object.entries(anchor))if(entries.find(x=>x.name===n)?.blob!==h)C.fail('SOURCE_ANCHOR_MISMATCH');
++ const files=entries.map(e=>{const b=gitBytes(repo,['cat-file','blob',e.blob]);if(C.blob(b)!==e.blob)C.fail('SOURCE_BLOB_MISMATCH');return {...e,bytes:b.length,sha256:C.sha256(b),body:b};});
++ C.mkdirNew(out);try{fs.mkdirSync(path.join(out,'run'));for(const f of files)fs.writeFileSync(path.join(out,'run',f.name),f.body,{flag:'wx',mode:0o600});
++  C.durable(path.join(out,'MANIFEST.json'),{status:'SOURCE_0003_MATERIALIZED',sourceCommit:policy.refactor,runTree:policy.runTree,
++   files:files.map(({body,...f})=>f)});
++ }catch(e){throw e;} // Do not silently remove a partially materialized forensic directory.
++ return verifySource(out,policy);
++}
++function treeHash(files){const body=Buffer.concat([...files].sort((a,b)=>Buffer.compare(Buffer.from(a.name),Buffer.from(b.name))).map(f=>Buffer.concat([Buffer.from('100644 '+f.name+'\0'),Buffer.from(f.blob,'hex')])));return crypto.createHash('sha1').update(Buffer.from('tree '+body.length+'\0')).update(body).digest('hex');}
++function verifySource(source,policy=K){
++ const m=C.json(path.join(source,'MANIFEST.json'));
++ if(m.sourceCommit!==policy.refactor||m.runTree!==policy.runTree||m.files.length!==29)C.fail('SOURCE_MANIFEST_MISMATCH');
++ if(!C.same(C.list(source).sort(),['MANIFEST.json',...m.files.map(f=>'run/'+f.name)].sort()))C.fail('SOURCE_FILE_SET_CHANGED');
++ const names=new Set();
++ for(const f of m.files){if(!/^[A-Za-z0-9_.-]+$/.test(f.name)||names.has(f.name))C.fail('SOURCE_MANIFEST_INVALID');names.add(f.name);
++  const b=C.bytes(path.join(source,'run',f.name));if(b.length!==f.bytes||C.sha256(b)!==f.sha256||C.blob(b)!==f.blob)C.fail('SOURCE_BYTES_CHANGED');}
++ if(treeHash(m.files)!==policy.runTree)C.fail('SOURCE_MANIFEST_TREE_MISMATCH');
++ const pins={'public-session.json':policy.publicBlob,'console.jsonl':policy.consoleBlob,'upload-attempt.json':policy.uploadAttemptBlob,'upload-result.json':policy.uploadResultBlob};
++ for(const [name,blob]of Object.entries(pins))if(m.files.find(x=>x.name===name)?.blob!==blob)C.fail('SOURCE_ANCHOR_MISMATCH');
++ return {status:'SOURCE_0003_BYTES_VERIFIED',files:m.files.length,sourceCommit:m.sourceCommit,runTree:m.runTree};
++}
++module.exports={ROOT,gitBytes,git,verifyPackage,heads,materialize,verifySource,parseTree,treeHash};
+diff --git a/tools/verify-archive.cjs b/tools/verify-archive.cjs
+new file mode 100644
+--- /dev/null
++++ b/tools/verify-archive.cjs
+@@ -0,0 +1,10 @@
++'use strict';
++const U=require('./util.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/pins.cjs'),A=require('./archive.cjs');
++if(require.main===module)C.main(async()=>{const o=C.options(process.argv.slice(2),['refactor','compat'],['staged','after-commit']);C.required(o,'refactor','compat');U.verifyPackage();
++ if(U.git(o.compat,['rev-parse','HEAD'])!==K.compat||U.git(o.compat,['status','--porcelain']))C.fail('COMPAT_CHANGED');
++ if(o['after-commit']){
++  if(U.git(o.refactor,['rev-parse','HEAD^'])!==K.refactor||U.git(o.refactor,['status','--porcelain']))C.fail('COMMIT_PARENT_OR_CLEAN_STATE_INVALID');
++  const names=U.git(o.refactor,['diff','--name-status',K.refactor,'HEAD']).split('\n').filter(Boolean);
++  if(names.some(x=>!x.startsWith('A\t'+K.evidenceTarget+'/')))C.fail('COMMIT_SCOPE_INVALID');
++ }else if(U.git(o.refactor,['rev-parse','HEAD'])!==K.refactor)C.fail('REFACTOR_BASELINE_CHANGED');
++ console.log(JSON.stringify(A.verifyArchive(o.refactor,K.evidenceTarget,{staged:!!o.staged})));});

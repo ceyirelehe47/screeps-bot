@@ -1,0 +1,21 @@
+{
+  "status": "RECOVERY_0003_IMPLEMENTATION_TESTS_VERIFIED",
+  "tests": 80,
+  "passed": 80,
+  "failed": 0,
+  "skipped": 0,
+  "todo": 0,
+  "cancelled": 0,
+  "platform": "win32",
+  "node": "v22.19.0",
+  "packageFingerprint": "ec3e301640178a983b1a7b56ae23678293cda7859dab9773ecafa9cd6ccd4c81",
+  "testFiles": [
+    "tests/archive.spec.cjs",
+    "tests/closure.spec.cjs",
+    "tests/decoder.spec.cjs",
+    "tests/input.spec.cjs",
+    "tests/materialize.spec.cjs",
+    "tests/observer.spec.cjs",
+    "tests/transport.spec.cjs"
+  ]
+}

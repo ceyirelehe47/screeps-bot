@@ -1,0 +1,22 @@
+'use strict';
+module.exports=Object.freeze({
+ refactor:'6e4ec0e49c01eed2c130191459cd26b8a1c41257',
+ compat:'3292e152b0db465263e4f1fa5c9eac068394acef',
+ compatTree:'cc2f08f676f28a329a78c971e7b066bb83b49658',
+ runId:'52ec356bc4c01aaf4197f2962beea646',
+ profileHead:'d895423b8226d41b6352e1723695e1326fc3e69a',
+ sourceRoot:'openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0003',
+ runTree:'5afeca2ba5923aa0837d9b8309d0d11925f75f34',
+ packageTree:'56d175e1e3b4a42ac41ff6b98b9d33bee6a5eacd',
+ guardBlob:'796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8',
+ publicBlob:'66d1d88ced8ce9122eaa9a092920acb210615aa9',
+ consoleBlob:'4303303b2b745b94b60859c302bf8c8ea2e9d1e0',
+ uploadAttemptBlob:'6e87c2af8e576fca3de601a53df10b395eabb9c2',
+ uploadResultBlob:'ebb390051479931a0dd89d51a1ea0b5fe7741715',
+ backupFileSha256:'26a08737b9fdc5e9908c3a973fe2a982bddd8c7e1c549ce783af0eb970c8d398',
+ candidateFileSha256:'8fa8261637dc24aaac26ef24c925accb06ab229509b78285e8660cb0e59a53b2',
+ backupMainSha256:'37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b',
+ candidateMainSha256:'96fff4fc01c946bf8303955eb73a7723abcda89f7dc7221857d26541e657d182',
+ evidenceTarget:'openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0003-recovery-remediation-i',
+ readAttempts:3,readBackoffMs:[2000,5000],requestMs:8000,runtimeMs:75000,runtimeStartupMs:15000,channelSilenceMs:45000,
+});

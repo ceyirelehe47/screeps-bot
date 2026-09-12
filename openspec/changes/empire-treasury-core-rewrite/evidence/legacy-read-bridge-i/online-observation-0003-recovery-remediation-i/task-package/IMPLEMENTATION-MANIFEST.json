@@ -1,0 +1,213 @@
+{
+  "package": "screeps-0003-recovery-remediation-I-2026-09-12",
+  "version": 1,
+  "implementation": "complete-for-this-round",
+  "agentRole": "verification-and-controlled-recovery-only",
+  "refactorBase": "6e4ec0e49c01eed2c130191459cd26b8a1c41257",
+  "compatBase": "3292e152b0db465263e4f1fa5c9eac068394acef",
+  "sourceRunTree": "5afeca2ba5923aa0837d9b8309d0d11925f75f34",
+  "scope": {
+    "newCandidateUploads": 0,
+    "restorePostsMaximum": 1,
+    "reuseOriginalRestoreAttemptMarker": true,
+    "writeOnlyWhenCurrentEqualsOriginalCandidate": true,
+    "recoveryRuntimeDurationMs": 75000,
+    "runtimeProofDistinctFromOriginalObservation": true,
+    "productionSourceMutation": false,
+    "compatMutation": false,
+    "cpuBudgetChange": false,
+    "cpuOptimizationImplemented": false,
+    "futureFormalObservationDrainModeImplemented": false
+  },
+  "readPolicy": {
+    "maximumCompleteReadAttempts": 3,
+    "perRequestTimeoutMs": 8000,
+    "backoffMs": [
+      2000,
+      5000
+    ],
+    "irrelevantGameTimeGateRemoved": true,
+    "postRetries": 0
+  },
+  "tests": {
+    "count": 80,
+    "skipped": 0,
+    "platformRequiredForAgent": "original Windows Node 22 environment; no WSL requirement"
+  },
+  "code": [
+    {
+      "path": "runtime/closure-observer.cjs",
+      "bytes": 4729,
+      "sha256": "73b5fe5d33aba9023953fda6f07351c927498413b664926bda51d74213c316d9"
+    },
+    {
+      "path": "runtime/closure.cjs",
+      "bytes": 7161,
+      "sha256": "adf954f0023ecec9c39562cc0562903ff8f385e9188138f94f6f5cfda22c5620"
+    },
+    {
+      "path": "runtime/common.cjs",
+      "bytes": 2277,
+      "sha256": "d232755420fd9772215ffa3b4cb41bb398724654d91ae90e6d9caf8285f479f8"
+    },
+    {
+      "path": "runtime/decoder.cjs",
+      "bytes": 1308,
+      "sha256": "46a20895d7c468acc2beb3eb96af205ca3f19a5c1ec5d9b258ea104bd2496212"
+    },
+    {
+      "path": "runtime/input.cjs",
+      "bytes": 2658,
+      "sha256": "fdb46acc0cfb405bdba19977b8bdf3ecf47ad4d3b3c5c5b7b9c1a9fc670cacd9"
+    },
+    {
+      "path": "runtime/pins.cjs",
+      "bytes": 1441,
+      "sha256": "8cbc41429a7d43224ce5615e78e723e660c178a88324249579c499d8ca52c275"
+    },
+    {
+      "path": "runtime/replay.cjs",
+      "bytes": 2220,
+      "sha256": "87c6d7c72e07bc3600f25bea133aa8c32c673d24e2ecf61912aa0a9732da4fb9"
+    },
+    {
+      "path": "runtime/transport.cjs",
+      "bytes": 3087,
+      "sha256": "153029e9d25359502164242e7adba5493ef3ff6a2ed5694b83817d727ed9c149"
+    },
+    {
+      "path": "runtime/verify-closure.cjs",
+      "bytes": 6773,
+      "sha256": "4eae3bf31eb1161312e3e1ab1fdd930d5abfba473c482b958f9723950519f118"
+    },
+    {
+      "path": "tests/archive.spec.cjs",
+      "bytes": 6462,
+      "sha256": "10fecec3b095b3a4f31358407dc5b6977563da0c95c6c68ed5aa54ad19cd2f8a"
+    },
+    {
+      "path": "tests/closure.spec.cjs",
+      "bytes": 8546,
+      "sha256": "2f8b4a698be09a353a1b9dda00c2f3d370cf165fa661c5cd6ac363740cefa7ff"
+    },
+    {
+      "path": "tests/decoder.spec.cjs",
+      "bytes": 2726,
+      "sha256": "e06b9a02a6831871c3ea1d392e5f80de0505042c2970904f30b1b0a5724c3022"
+    },
+    {
+      "path": "tests/fixture.cjs",
+      "bytes": 6956,
+      "sha256": "cfe869db3e0b62a642de8ca06136cd6103d9859b90cf08a984acd9155ac1c319"
+    },
+    {
+      "path": "tests/input.spec.cjs",
+      "bytes": 2601,
+      "sha256": "88f7ae3f7a0adad0c00814cad040289f8b685b6b002bb93c002af27c21238cfb"
+    },
+    {
+      "path": "tests/materialize.spec.cjs",
+      "bytes": 3212,
+      "sha256": "8d679bad0a7f4351a2cc66f79842b082fb32b3313f5ef37018014af9dece11a0"
+    },
+    {
+      "path": "tests/observer.spec.cjs",
+      "bytes": 2415,
+      "sha256": "bb3b6b0807417df01091034cf85c345a6ab2b782ce596d47c92a8e1f13735539"
+    },
+    {
+      "path": "tests/transport.spec.cjs",
+      "bytes": 4749,
+      "sha256": "93122dc047e0d7d0eea8d3dbb62a9273a19afcfb94f7978d271352f32cd098d6"
+    },
+    {
+      "path": "tools/archive.cjs",
+      "bytes": 7523,
+      "sha256": "617ac8b5b80c85b3621fcbf131ef3edf69591871a8dc59ef4fb859fb6d94549b"
+    },
+    {
+      "path": "tools/check-baseline.cjs",
+      "bytes": 398,
+      "sha256": "55ffc5eec6dc61001300b44c564f3ead9d09e0d0269c34bd79f9c02cf6b96fce"
+    },
+    {
+      "path": "tools/close-0003.cjs",
+      "bytes": 2650,
+      "sha256": "41a859b0feff23e70854cdeadbedc3a7382f40e5fb22c5f73d016d91c5ee39e1"
+    },
+    {
+      "path": "tools/materialize.cjs",
+      "bytes": 336,
+      "sha256": "4e1a00fc8830b8b874ba26f6c69962350f2ed25b418e6344f5b30a89d63fb55a"
+    },
+    {
+      "path": "tools/replay.cjs",
+      "bytes": 1554,
+      "sha256": "0467ed144ccc81280c00bba726b871caa9695a1442fa7881dfc3840e91795f43"
+    },
+    {
+      "path": "tools/run-tests.cjs",
+      "bytes": 1826,
+      "sha256": "341827a687732c1cb9aa649e006fa6b3e7213a0409f35881a2145d55cdbffdfa"
+    },
+    {
+      "path": "tools/util.cjs",
+      "bytes": 4687,
+      "sha256": "965b9ba0988534d467075ca44ab8d94bc97917877a24ad844575eb6b33fa0eed"
+    },
+    {
+      "path": "tools/verify-archive.cjs",
+      "bytes": 1014,
+      "sha256": "3bcbb79a36a46440e526c656e64f5434151cb73bbab9bcc222e6c07f72263fc1"
+    },
+    {
+      "path": "vendor/0003/common.cjs",
+      "bytes": 8092,
+      "sha256": "2852ddcb9427dc5b40647f73be10fe3f3b12f4256e7d48135f733e4f14b7befe"
+    },
+    {
+      "path": "vendor/0003/policy.cjs",
+      "bytes": 2089,
+      "sha256": "6d59a131932c8365b2e930002657dc0954d066a3a3dd7ff8cf2d6308a5c312aa"
+    },
+    {
+      "path": "vendor/0003/protocol.cjs",
+      "bytes": 6541,
+      "sha256": "0279dc20b73ab949b094e85ac198719f901d6590db92d7f7a2e8957f080bb2ce"
+    },
+    {
+      "path": "vendor/0003/samples.cjs",
+      "bytes": 8061,
+      "sha256": "21aa54189ad072013efbd549c6081ca03ad6d0ba340c338f15159d39b85b5661"
+    },
+    {
+      "path": "vendor/deployGuard.cjs",
+      "bytes": 5078,
+      "sha256": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7"
+    }
+  ],
+  "patches": [
+    {
+      "path": "patches/0001-recovery-runtime.patch",
+      "bytes": 64358,
+      "sha256": "d1f13962b22c6fa7d596203eb5d462c82964963ae6dc45281d1ce7450eaa3a05"
+    },
+    {
+      "path": "patches/0002-execution-tools.patch",
+      "bytes": 27898,
+      "sha256": "0b3663d3d61f965ecbc433ebbee3ba3d6b781cc68c9a041d6c08ea755e61c9ab"
+    },
+    {
+      "path": "patches/0003-fixed-tests.patch",
+      "bytes": 39033,
+      "sha256": "4c145cd6f79e378ac1f39960e462ae09f9f3b79ad76e4e5ea0ea7c029a44dc44"
+    }
+  ],
+  "limitations": [
+    "Real private snapshots are required from the original run and are not distributed.",
+    "Original observation 0003 remains INCONCLUSIVE in all outcomes.",
+    "Current restored bytes are not assumed from Git OFF config or expired tick windows.",
+    "No server-side CAS; genuine exclusive-target attestation is required.",
+    "Hard host/power/disk failures can leave recovery unconfirmed; durable marker must never be deleted to retry."
+  ]
+}

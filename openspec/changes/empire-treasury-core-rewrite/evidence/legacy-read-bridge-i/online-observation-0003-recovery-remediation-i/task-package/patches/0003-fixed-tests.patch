@@ -1,0 +1,270 @@
+diff --git a/tests/archive.spec.cjs b/tests/archive.spec.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/archive.spec.cjs
+@@ -0,0 +1,46 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const A=require('../tools/archive.cjs'),U=require('../tools/util.cjs'),C=require('../runtime/common.cjs'),F=require('./fixture.cjs');
++test('archive is byte-exact through Git with autocrlf true including CRLF stderr',()=>{const root=F.root(),repo=path.join(root,'repo');try{F.initGit(repo);F.git(repo,['config','core.autocrlf','true']);
++ const payload=new Map([['failure.stderr',Buffer.from('line one\r\nline two\r\n')],['runtime/foo.cjs',Buffer.from('module.exports = {};\n')]]);
++ const r=A.writeArchive(repo,'evidence',payload,{sourceCommit:'fixture',closureStatus:'ONLINE_CLOSE_UNCONFIRMED'});assert.equal(r.files,4);
++ F.git(repo,['add','evidence']);assert.equal(A.verifyArchive(repo,'evidence',{staged:true}).files,4);
++ }finally{fs.rmSync(root,{recursive:true,force:true});}});
++test('archive verifier rejects bytes changed after assembly',()=>{const root=F.root(),repo=path.join(root,'repo');try{F.initGit(repo);A.writeArchive(repo,'evidence',new Map([['result.json',Buffer.from('{}\n')]]),{});fs.appendFileSync(path.join(repo,'evidence/result.json'),' ');assert.throws(()=>A.verifyArchive(repo,'evidence'),{code:'ARCHIVE_BYTES_CHANGED'});}finally{fs.rmSync(root,{recursive:true,force:true});}});
++test('archive whitelist excludes original private snapshots and old private session',()=>{for(const n of ['backup.json','candidate.json','session.json','.secret.json'])assert.equal(A.CLOSURE_FILES.includes(n),false);});
++test('secret scan detects all supported representations and never returns secret text',()=>{const token='SECRET_FIXTURE/slash+long=value';for(const n of [token,encodeURIComponent(token),token.slice(0,8),token.slice(0,16)])assert.equal(A.secretScan(Buffer.from(n),token),true);assert.equal(A.secretScan(Buffer.from('safe report'),token),false);});
++test('package integrity uses exact case and ignores enumeration ordering only',()=>{const root=F.root();try{fs.writeFileSync(path.join(root,'Z-file.txt'),'z',{flag:'wx'});fs.writeFileSync(path.join(root,'a-other.txt'),'a',{flag:'wx'});
++ const files={'a-other.txt':{bytes:1,sha256:C.sha256('a')},'Z-file.txt':{bytes:1,sha256:C.sha256('z')}};C.durable(path.join(root,'INTEGRITY.json'),{files});assert.equal(U.verifyPackage(root).files,2);
++ const m={files:{...files,'z-file.txt':files['Z-file.txt']}};delete m.files['Z-file.txt'];fs.writeFileSync(path.join(root,'INTEGRITY.json'),JSON.stringify(m));assert.throws(()=>U.verifyPackage(root),{code:'PACKAGE_FILE_SET_MISMATCH'});
++ }finally{fs.rmSync(root,{recursive:true,force:true});}});
++async function assemblyFixture(mutate=false){
++ const K=require('../runtime/pins.cjs'),R=require('../runtime/replay.cjs'),V=require('../runtime/verify-closure.cjs'),G=require('../runtime/closure.cjs');
++ const root=F.root(),repo=path.join(root,'repo'),pkg=path.join(root,'package'),source=path.join(root,'source'),prior=path.join(root,'prior'),closure=path.join(root,'closure'),tests=path.join(root,'tests'),replay=path.join(root,'replay');
++ F.initGit(repo);for(const p of [pkg,source,tests,replay])fs.mkdirSync(p);fs.mkdirSync(path.join(pkg,'references'));fs.mkdirSync(path.join(source,'run'));
++ const s=F.session();const pub=F.priorFiles(prior,s),w=F.fakeApi(s);
++ await G.close0003({api:w.api,s,prior,out:closure,executeRecovery:true,exclusiveTarget:true,priorWorkersStopped:true,secret:F.secret,pause:async()=>{},observer:F.fastObserver});
++ C.durable(path.join(source,'run/public-session.json'),pub);fs.writeFileSync(path.join(source,'run/console.jsonl'),F.firstFrame(s));
++ const sourceRecord={status:'SOURCE_0003_BYTES_VERIFIED',files:29,sourceCommit:K.refactor,runTree:K.runTree};
++ C.durable(path.join(source,'MANIFEST.json'),sourceRecord);
++ const rr=R.replay(F.firstFrame(s),pub);C.durable(path.join(replay,'replay.json'),{...rr,source:sourceRecord});
++ C.durable(path.join(replay,'CPU-EVIDENCE.json'),{reports:rr.cpuFindings,budgetModified:false,productionOptimizationImplemented:false});
++ C.durable(path.join(pkg,'INTEGRITY.json'),{files:{}});C.durable(path.join(pkg,'references/test-contract.json'),{tests:1});
++ C.durable(path.join(tests,'summary.json'),{status:'RECOVERY_0003_IMPLEMENTATION_TESTS_VERIFIED',tests:1,passed:1,failed:0,skipped:0,packageFingerprint:C.sha256(C.bytes(path.join(pkg,'INTEGRITY.json')))});
++ fs.writeFileSync(path.join(tests,'tests.tap'),'# tests 1\n# pass 1\n# fail 0\n# skipped 0\n# todo 0\n# cancelled 0\n');fs.writeFileSync(path.join(tests,'tests.stderr'),'');C.durable(path.join(tests,'tests.exit.json'),{code:0});
++ const secretFile=path.join(root,'credential.json');C.durable(secretFile,{main:{hostname:'screeps.com',branch:'default',token:F.secret.token}});
++ fs.mkdirSync(path.dirname(path.join(repo,K.evidenceTarget)),{recursive:true});
++ const saved={root:U.ROOT,heads:U.heads,verifyPackage:U.verifyPackage,verifySource:U.verifySource,verifyClosure:V.verifyClosure};
++ try{
++  // Provenance gates are tested with real Git separately. This case tests deterministic assembly wiring only.
++  U.ROOT=pkg;U.heads=()=>({});U.verifyPackage=()=>({});U.verifySource=()=>sourceRecord;V.verifyClosure=(out,p)=>saved.verifyClosure(out,p,{runtimeMs:250,silenceMs:1000});
++  if(mutate){const r=C.json(path.join(replay,'replay.json'));r.completeBridgeReports=12;fs.writeFileSync(path.join(replay,'replay.json'),JSON.stringify(r));
++   assert.throws(()=>A.archive({refactor:repo,compat:repo,source,closure,replay,tests,secret:secretFile}),{code:'REPLAY_OUTPUT_CHANGED'});assert.equal(fs.existsSync(path.join(repo,K.evidenceTarget)),false);
++  }else{
++   const r=A.archive({refactor:repo,compat:repo,source,closure,replay,tests,secret:secretFile});assert.equal(r.closure,'RECOVERY_CLOSURE_VERIFIED');
++   F.git(repo,['add',K.evidenceTarget]);assert.equal(A.verifyArchive(repo,K.evidenceTarget,{staged:true}).status,'RECOVERY_0003_ARCHIVE_VERIFIED');
++   assert.equal(C.list(r.target).some(n=>n==='recovery/backup.json'||n==='recovery/candidate.json'),false);
++  }
++ }finally{U.ROOT=saved.root;U.heads=saved.heads;U.verifyPackage=saved.verifyPackage;U.verifySource=saved.verifySource;V.verifyClosure=saved.verifyClosure;fs.rmSync(root,{recursive:true,force:true});}
++}
++test('closure, replay, deterministic archive and staged byte checks compose without extra implementation',async()=>assemblyFixture(false));
++test('assembly recomputes replay and refuses a forged complete sample count',async()=>assemblyFixture(true));
+diff --git a/tests/closure.spec.cjs b/tests/closure.spec.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/closure.spec.cjs
+@@ -0,0 +1,32 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const C=require('../runtime/common.cjs'),F=require('./fixture.cjs'),A=require('../runtime/closure.cjs'),V=require('../runtime/verify-closure.cjs');
++async function scenario(worldOptions={},overrides={}){
++ const root=F.root(),prior=path.join(root,'prior'),out=path.join(root,'out'),s=F.session();F.priorFiles(prior,s);const w=F.fakeApi(s,worldOptions);
++ const options={api:w.api,s,prior,out,executeRecovery:true,exclusiveTarget:true,priorWorkersStopped:true,secret:F.secret,pause:async()=>{},observer:F.fastObserver,...overrides};
++ return {root,prior,out,s,w,options,execute:()=>A.close0003(options),clean:()=>fs.rmSync(root,{recursive:true,force:true})};
++}
++test('candidate is restored exactly once and fresh runtime proof ignores dead original collector',async()=>{const x=await scenario();try{const r=await x.execute();assert.equal(r.runtimeConfirmed,true);assert.equal(x.w.posts,1);assert.equal(x.w.times,0);
++ assert.equal(C.json(path.join(x.prior,'collector-result.json')).reason,'BRIDGE_JSON_INVALID');assert.ok(fs.existsSync(path.join(x.prior,'restore-attempt.json')));
++ assert.equal(V.verifyClosure(x.out,x.s,{runtimeMs:250,silenceMs:1000}).status,'RECOVERY_CLOSURE_VERIFIED');}finally{x.clean();}});
++test('already restored state requires no code POST',async()=>{const x=await scenario({initial:'backup'});try{const r=await x.execute();assert.equal(r.runtimeConfirmed,true);assert.equal(x.w.posts,0);assert.equal(fs.existsSync(path.join(x.prior,'restore-attempt.json')),false);}finally{x.clean();}});
++test('read-only invocation cannot restore candidate',async()=>{const x=await scenario({}, {executeRecovery:false,exclusiveTarget:false,priorWorkersStopped:false});try{const r=await x.execute();assert.equal(r.status,'RESTORE_STILL_REQUIRED');assert.equal(x.w.posts,0);assert.equal(fs.existsSync(path.join(x.out,'runtime-console.jsonl')),false);}finally{x.clean();}});
++test('both attestations are required before any recovery network or write',async()=>{const x=await scenario({}, {exclusiveTarget:false});try{await assert.rejects(x.execute(),{code:'EXCLUSIVE_STOPPED_ATTESTATIONS_REQUIRED'});assert.equal(x.w.reads,0);assert.equal(x.w.posts,0);}finally{x.clean();}});
++test('third party deployment is never overwritten',async()=>{const x=await scenario({initial:'third'});try{const r=await x.execute();assert.equal(r.status,'CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT');assert.equal(x.w.posts,0);}finally{x.clean();}});
++test('deployment changing between initial read and locked read is not overwritten',async()=>{const x=await scenario();try{const orig=x.w.api.code;let n=0;x.w.api.code=async()=>{if(++n===2)x.w.modules={main:'foreign replacement'};return orig();};const r=await x.execute();assert.equal(r.status,'CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT');assert.equal(x.w.posts,0);}finally{x.clean();}});
++test('wrong account fails closed without touching code',async()=>{const x=await scenario({authWrong:true});try{const r=await x.execute();assert.equal(r.bytesConfirmed,false);assert.equal(x.w.posts,0);assert.equal(x.w.reads,0);}finally{x.clean();}});
++test('bounded transient code reads recover before one POST',async()=>{const x=await scenario({failCodeReads:2});try{const r=await x.execute();assert.equal(r.runtimeConfirmed,true);assert.equal(x.w.posts,1);const failures=V.jsonl(path.join(x.out,'closure-events.jsonl')).filter(x=>x.kind==='code-read-failed');assert.equal(failures.length,2);assert.equal(failures[0].stage,'code_read');}finally{x.clean();}});
++test('persistent read failure cannot create restore marker',async()=>{const x=await scenario({failCodeReads:99});try{const r=await x.execute();assert.equal(r.status,'ONLINE_CLOSE_UNCONFIRMED');assert.equal(x.w.posts,0);assert.equal(x.w.reads,6);assert.equal(fs.existsSync(path.join(x.prior,'restore-attempt.json')),false);}finally{x.clean();}});
++test('lost POST acknowledgement is resolved only by readback without a second POST',async()=>{const x=await scenario({lostAck:true});try{const r=await x.execute();assert.equal(r.runtimeConfirmed,true);assert.equal(r.serverAccepted,null);assert.equal(r.writeError,'HTTP_DEADLINE');assert.equal(x.w.posts,1);assert.equal(V.verifyClosure(x.out,x.s,{runtimeMs:250,silenceMs:1000}).status,'RECOVERY_CLOSURE_VERIFIED');}finally{x.clean();}});
++test('failed or uncertain write remains single-use across new output directories',async()=>{const x=await scenario({lostAck:true,applyWrite:false});try{const r=await x.execute();assert.equal(r.status,'RESTORE_STILL_REQUIRED');assert.equal(x.w.posts,1);
++ const out2=path.join(x.root,'out2');const again=await A.close0003({...x.options,out:out2});assert.equal(again.status,'RESTORE_STILL_REQUIRED');assert.equal(x.w.posts,1);assert.equal(again.requestAttempted,false);}finally{x.clean();}});
++test('existing restore marker blocks candidate write even with zero prior POST receipt',async()=>{const x=await scenario();try{C.durable(path.join(x.prior,'restore-attempt.json'),{runId:x.s.runId,candidateHash:x.s.candidate.digest.hash,backupHash:x.s.backup.digest.hash,startedAtMs:1});const r=await x.execute();assert.equal(x.w.posts,0);assert.equal(r.status,'RESTORE_STILL_REQUIRED');}finally{x.clean();}});
++test('malformed existing restore marker cannot be erased or ignored',async()=>{const x=await scenario();try{C.durable(path.join(x.prior,'restore-attempt.json'),{runId:'wrong'});const r=await x.execute();assert.equal(r.failure.error,'RESTORE_MARKER_INVALID');assert.equal(x.w.posts,0);}finally{x.clean();}});
++test('original action lock is never automatically removed',async()=>{const x=await scenario();try{fs.writeFileSync(path.join(x.prior,'action.lock'),'occupied');await assert.rejects(x.execute(),{code:'PRIOR_LOCK_PRESENT_NO_AUTOMATIC_REMOVAL'});assert.equal(x.w.posts,0);assert.equal(fs.readFileSync(path.join(x.prior,'action.lock'),'utf8'),'occupied');}finally{x.clean();}});
++test('marker creation failure prevents POST',async()=>{const x=await scenario();const old=C.durable;try{C.durable=(p,v)=>{if(p===path.join(x.prior,'restore-attempt.json'))throw new C.Failure('ARTIFACT_WRITE_FAILED');return old(p,v);};const r=await x.execute();assert.equal(r.failure.error,'ARTIFACT_WRITE_FAILED');assert.equal(x.w.posts,0);}finally{C.durable=old;x.clean();}});
++test('runtime failure does not erase confirmed restored bytes',async()=>{const x=await scenario({}, {observer:async()=>({status:'RECOVERY_RUNTIME_UNCONFIRMED',reason:'SOCKET_ERROR'})});try{const r=await x.execute();assert.equal(r.bytesConfirmed,true);assert.equal(r.runtimeConfirmed,false);assert.equal(V.verifyClosure(x.out,x.s).status,'RESTORED_BYTES_CONFIRMED_RUNTIME_UNCONFIRMED');}finally{x.clean();}});
++test('post-runtime third party code invalidates closure without another write',async()=>{const x=await scenario();try{x.options.observer=async opts=>{const r=await F.fastObserver(opts);x.w.modules={main:'changed during runtime proof'};return r;};const r=await x.execute();assert.equal(r.bytesConfirmed,false);assert.equal(r.status,'CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT');assert.equal(x.w.posts,1);}finally{x.clean();}});
++test('operator cancellation before write creates no attempt marker',async()=>{const x=await scenario({}, {isCancelled:()=>true});try{const r=await x.execute();assert.equal(r.failure.error,'OPERATOR_STOP_BEFORE_WRITE');assert.equal(x.w.posts,0);}finally{x.clean();}});
++test('original records are immutable except the additional once-only marker',async()=>{const x=await scenario();try{x.options.observer=async opts=>{fs.appendFileSync(path.join(x.prior,'collector-result.json'),' ');return F.fastObserver(opts);};const r=await x.execute();assert.equal(r.failure.error,'PRIOR_BYTES_CHANGED');assert.equal(r.bytesConfirmed,false);}finally{x.clean();}});
++test('existing output directory is not overwritten',async()=>{const x=await scenario();try{fs.mkdirSync(x.out);fs.writeFileSync(path.join(x.out,'keep'),'old');await assert.rejects(x.execute(),{code:'OUTPUT_ALREADY_EXISTS'});assert.equal(x.w.posts,0);assert.equal(fs.readFileSync(path.join(x.out,'keep'),'utf8'),'old');}finally{x.clean();}});
++test('verifier refuses a forged success with wrong backup digest',async()=>{const x=await scenario();try{await x.execute();const f=path.join(x.out,'code-after-runtime.json'),a=C.json(f);a.digest.hash='0'.repeat(64);fs.writeFileSync(f,JSON.stringify(a));assert.throws(()=>V.verifyClosure(x.out,x.s,{runtimeMs:250,silenceMs:1000}),{code:'BACKUP_READBACK_MISMATCH'});}finally{x.clean();}});
+diff --git a/tests/decoder.spec.cjs b/tests/decoder.spec.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/decoder.spec.cjs
+@@ -0,0 +1,15 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict');const D=require('../runtime/decoder.cjs'),F=require('./fixture.cjs');
++const old=require('../vendor/0003/samples.cjs'),R=require('../runtime/replay.cjs');
++for(const [name,encode]of Object.entries({raw:x=>x,named:x=>x.replace(/"/g,'&quot;'),decimal:x=>x.replace(/"/g,'&#34;'),hex:x=>x.replace(/"/g,'&#x22;'),upperHex:x=>x.replace(/"/g,'&#X22;')}))
++ test('decoder handles '+name+' without inventing a complete sample',()=>{const p=D.parseBridge(encode(JSON.stringify(F.observedReport())));assert.equal(p.kind,'bridge');assert.equal(p.report.tick,73646500);assert.equal(old.sampleError(p.report,F.session().profile),'SAMPLE_NOT_COMPLETE');});
++test('one pass does not recursively decode nested amp escapes',()=>assert.equal(D.decodeHtmlOnce('&amp;#x22;'),'&#x22;'));
++test('raw JSON containing literal entities is not transformed',()=>{const x={kind:'treasury-legacy-read-bridge',note:'&#x22; &amp;'};assert.deepEqual(D.parseBridge(JSON.stringify(x)).report,x);});
++test('supported named and decimal entities are decoded once',()=>assert.equal(D.decodeHtmlOnce('&lt;&gt;&amp;&apos;&#39;&#x1F600;'),"<>&''😀"));
++for(const entity of ['&#0;','&#xD800;','&#1114112;','&#999999999999999;'])test('invalid scalar rejected: '+entity,()=>assert.throws(()=>D.decodeHtmlOnce(entity),{code:'CONSOLE_ENTITY_INVALID'}));
++test('malformed bridge JSON is not repaired by extra decoding passes',()=>assert.equal(D.parseBridge('{&amp;#x22;kind&amp;#x22;:treasury-legacy-read-bridge}').kind,'invalid'));
++test('nonbridge plain log is ignored',()=>assert.equal(D.parseBridge('ordinary console line').kind,'ignored'));
++test('old decoder negative control reproduces hexadecimal parse failure',()=>assert.throws(()=>JSON.parse(old.decode(JSON.stringify(F.observedReport()).replace(/"/g,'&#x22;')))));
++test('replay records receipt separately from qualified sample count',()=>{const s=F.session(),r=R.replay(F.firstFrame(s),s);assert.equal(r.rawBridgeReports,1);assert.equal(r.completeBridgeReports,0);assert.equal(r.missingRawTicks.length,11);assert.equal(r.missingCompleteTicks.length,12);assert.equal(r.cpuFindings[0].commitmentsStatus,'not_read_cpu_budget');assert.equal(r.cpuFindings[0].budgetChanged,false);});
++test('wrong run evidence is rejected rather than silently counted',()=>assert.throws(()=>R.replay(F.firstFrame(F.session()),{...F.session(),runId:'other'}),{code:'SOURCE_RUN_ID_MISMATCH'}));
++test('wrong shard frames do not contribute bridge reports',()=>{const s=F.session(),line=JSON.parse(F.firstFrame(s));const f=JSON.parse(line.text);f[1].shard='shard2';line.text=JSON.stringify(f);assert.equal(R.replay(JSON.stringify(line),s).rawBridgeReports,0);});
+diff --git a/tests/fixture.cjs b/tests/fixture.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/fixture.cjs
+@@ -0,0 +1,65 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cp=require('node:child_process');
++const C=require('../runtime/common.cjs'),I=require('../runtime/input.cjs'),P=require('../vendor/0003/protocol.cjs');
++const {observeRuntime}=require('../runtime/closure-observer.cjs');
++const root=()=>fs.mkdtempSync(path.join(os.tmpdir(),'screeps-recovery-'));
++function main(commit,tree,tag){const t=`const BUILD_COMMIT = "${commit}";\nconst BUILD_TREE = "${tree}";\nconst BUILD_DIRTY = "false";\nconst BUILD_DEPLOY_BRANCH = "default";\nconst BUILD_TAG = "${tag}";\n`;return t+`\n;globalThis.__DEPLOY_BUNDLE_HASH__="${C.sha256(t)}";\n`;}
++function session(){
++ const backup=P.makeSnapshot({main:main(C.PRODUCTION_BASE,C.PRODUCTION_TREE,'backup-fixture')},I.guard);
++ const candidate=P.makeSnapshot({main:main('a'.repeat(40),'b'.repeat(40),'candidate-fixture')},I.guard);
++ return {kind:'formal-compat-observation-0003-public/v1',runId:'d'.repeat(32),...C.EXPECTED,profileHead:'a'.repeat(40),profileTree:'b'.repeat(40),
++  profile:{enabled:true,shardName:'shard1',rooms:['E3N59','E4N58'],resources:['energy','H'],startTick:73646500,endTick:73647600,intervalTicks:100,minBucket:2000,maxSampleCpu:2,reserveCpu:5,maxLogBytes:16384},
++  backup,candidate,backupDigest:backup.digest,candidateDigest:candidate.digest,build:P.confirmBuild(candidate.modules,'a'.repeat(40),'b'.repeat(40)),backupBuild:P.buildIdentity(backup.modules.main)};
++}
++function priorFiles(prior,s){fs.mkdirSync(prior);
++ const a={runId:s.runId,candidateHash:s.candidate.digest.hash,profileHead:s.profileHead,startedAtMs:1};
++ const u={runId:s.runId,candidateHash:s.candidate.digest.hash,result:{confirmed:true,status:'UPLOADED_AND_READBACK_VERIFIED'}};
++ for(const n of ['backup','candidate']){C.durable(path.join(prior,n+'.json'),s[n]);s[n+'FileSha256']=C.sha256(C.bytes(path.join(prior,n+'.json')));}
++ const {backup,candidate,...pub}=s;C.durable(path.join(prior,'public-session.json'),pub);C.durable(path.join(prior,'upload-attempt.json'),a);C.durable(path.join(prior,'upload-result.json'),u);
++ C.durable(path.join(prior,'collector-result.json'),{status:'failed',reason:'BRIDGE_JSON_INVALID',exitCode:1});return pub;
++}
++function fakeApi(s,{initial='candidate',failCodeReads=0,lostAck=false,applyWrite=true,authWrong=false}={}){
++ let modules=C.clone(s[initial]?.modules||{main:'third party code'}),posts=0,reads=0,times=0;
++ const api={me:async()=>({ok:1,_id:authWrong?'other':s.userId,username:s.username}),branches:async()=>({ok:1,list:[{branch:'default',activeWorld:true}]}),
++  code:async()=>{reads++;if(reads<=failCodeReads)throw new C.Failure('HTTP_TRANSPORT_ECONNRESET');return {ok:1,modules:C.clone(modules)};},
++  time:async()=>{times++;throw new Error('Must not be called by recovery');},
++  restoreBackup:async m=>{posts++;if(applyWrite)modules=C.clone(m);if(lostAck)throw new C.Failure('HTTP_DEADLINE');return {ok:1};}};
++ return {api,get posts(){return posts;},get reads(){return reads;},get times(){return times;},set modules(x){modules=x;}};
++}
++const token='FIXTURE_SECRET_TOKEN_NOT_A_REAL_CREDENTIAL';
++const secret={token,redact:C.redactor([token])};
++function wsClass(mode='healthy'){
++ return class FakeWebSocket{
++  constructor(){this.map=new Map();this.interval=null;this.closed=false;setTimeout(()=>this.emit('open',{}),1);}
++  addEventListener(n,f){this.map.set(n,[...(this.map.get(n)||[]),f]);}
++  emit(n,v){for(const f of this.map.get(n)||[])f(v);}
++  send(t){if(t.startsWith('auth ')){setTimeout(()=>this.emit('message',{data:'auth ok '+token}),1);return;}
++   if(t.endsWith('/cpu')){const send=()=>{if(this.closed)return;
++    const user=C.EXPECTED.userId;const logs=mode==='bridge'?['{&#x22;kind&#x22;:&#x22;treasury-legacy-read-bridge&#x22;}']:mode==='redact'?[token]:[];
++    if(mode!=='no-console')this.emit('message',{data:JSON.stringify([`user:${user}/console`,{shard:mode==='wrong-shard'?'shard2':'shard1',messages:{log:logs,results:[]}}])});
++    if(mode!=='no-cpu')this.emit('message',{data:JSON.stringify([`user:${user}/cpu`,{cpu:mode==='zero-cpu'?0:42}])});};
++    this.interval=setInterval(send,3);send();if(mode==='close')setTimeout(()=>{if(!this.closed)this.emit('close',{});},12);
++    if(mode==='reauth')setTimeout(()=>this.emit('message',{data:'auth ok '+token}),10);
++   }}
++  close(){this.closed=true;clearInterval(this.interval);}
++ };
++}
++const fastObserver=opts=>observeRuntime({...opts,WebSocketClass:wsClass(),durationMs:250,startupMs:1500,silenceMs:1000,pollMs:5});
++function observedReport(){const tick=73646500;
++ const endpoints=[['E3N59','storage','69eeae0db590d0089d87b487',800000,200000,1000000,179236,135505],['E3N59','terminal','69fcff2ed22e9226307ce4fe',260000,40000,300000,72600,0],['E4N58','storage','69eedb6224f1bd9c6041e6ab',4633540,3366460,8000000,249263,2892],['E4N58','terminal','69fc583c60d86221e8bdf547',231245,68755,300000,25412,0]];
++ return {kind:'treasury-legacy-read-bridge',tick,shard:'shard1',sourceCommit:'01bd9831454950c4928df98dd8679692b55603e5',productionBase:C.PRODUCTION_BASE,
++  authorizesActions:false,scope:{rooms:['E3N59','E4N58'],resources:['energy','H'],isEmpireTotal:false},evaluation:'observation_and_legacy_commitments_only',facadeQueryRun:false,
++  spendable:null,kernelLifecycleRun:false,storageMode:'heap_only',previousRun:null,
++  legacyInputs:{tasks:{status:'nonempty',count:2},reservations:{status:'empty',count:0},reservationVersion:{status:'absent',value:null},treasuryCore:{status:'absent',activeCount:null}},
++  endpoints:endpoints.map(([room,location,id,used,free,capacity,energy,H])=>({room,location,directStatus:'ok',direct:{id,used,free,capacity,overCapacity:false,active:true,cooldown:location==='storage'?null:0,amounts:{energy,H}},
++   legacyProjection:{status:'match_capacity_and_selected_energy',updatedAt:tick,comparisonPerformed:true,mismatches:[]},change:{status:'no_comparable_previous_sample'},coreComparison:'match_selected_scope',coreMismatches:[]})),
++  commitments:{status:'not_read_cpu_budget',rows:null},status:'partial_cpu_budget',coreObservationRooms:['E3N59','E4N58'],requestedEndpointRows:4,collectedEndpointRows:4,
++  cpuBeforeSerializationAndEmit:2.4981476000029943,cooperativeBudget:true};
++}
++function firstFrame(s,report=observedReport(),encode=t=>t.replace(/"/g,'&#x22;')){
++ return JSON.stringify({kind:'ws-frame',runId:s.runId,receivedAt:'2026-09-12T03:01:13.049Z',redacted:false,
++ text:JSON.stringify([`user:${s.userId}/console`,{messages:{log:[encode(JSON.stringify(report))],results:[]},shard:s.shard}])})+'\n';
++}
++function git(repo,args){return cp.execFileSync('git',['-C',repo,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();}
++function initGit(repo){fs.mkdirSync(repo);git(repo,['init','-q']);git(repo,['config','user.email','test@example.invalid']);git(repo,['config','user.name','Fixture']);git(repo,['config','core.autocrlf','false']);}
++module.exports={root,main,session,priorFiles,fakeApi,secret,wsClass,fastObserver,observedReport,firstFrame,git,initGit};
+diff --git a/tests/input.spec.cjs b/tests/input.spec.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/input.spec.cjs
+@@ -0,0 +1,14 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const C=require('../runtime/common.cjs'),I=require('../runtime/input.cjs'),F=require('./fixture.cjs');
++function setup(){const root=F.root(),prior=path.join(root,'prior'),source=path.join(root,'source'),s=F.session();F.priorFiles(prior,s);fs.mkdirSync(source);fs.cpSync(prior,path.join(source,'run'),{recursive:true});
++ const policy={runId:s.runId,profileHead:s.profileHead,originalDigest:s.backupDigest,backupFileSha256:s.backupFileSha256,candidateFileSha256:s.candidateFileSha256};
++ return {root,prior,source,s,policy,load:()=>I.loadInput(source,prior,policy),clean:()=>fs.rmSync(root,{recursive:true,force:true})};}
++test('pinned receipts and exact snapshot bytes load without consulting an expired window',()=>{const x=setup();try{assert.equal(x.load().runId,x.s.runId);}finally{x.clean();}});
++test('changed backup snapshot bytes reject before any network is available',()=>{const x=setup();try{fs.appendFileSync(path.join(x.prior,'backup.json'),' ');assert.throws(x.load,{code:'SNAPSHOT_BYTES_CHANGED'});}finally{x.clean();}});
++test('changed candidate snapshot bytes reject before any network is available',()=>{const x=setup();try{fs.appendFileSync(path.join(x.prior,'candidate.json'),' ');assert.throws(x.load,{code:'SNAPSHOT_BYTES_CHANGED'});}finally{x.clean();}});
++test('wrong original run receipts cannot be substituted',()=>{const x=setup();try{fs.appendFileSync(path.join(x.prior,'upload-attempt.json'),' ');assert.throws(x.load,{code:'PRIOR_RUN_RECEIPT_MISMATCH'});}finally{x.clean();}});
++test('backup and candidate swap is rejected',()=>{const x=setup();try{const a=C.bytes(path.join(x.prior,'backup.json')),b=C.bytes(path.join(x.prior,'candidate.json'));fs.writeFileSync(path.join(x.prior,'backup.json'),b);fs.writeFileSync(path.join(x.prior,'candidate.json'),a);assert.throws(x.load,{code:'SNAPSHOT_BYTES_CHANGED'});}finally{x.clean();}});
++test('missing original backup never triggers a bank-of-old-snapshots fallback',()=>{const x=setup();try{fs.unlinkSync(path.join(x.prior,'backup.json'));assert.throws(x.load,{code:'INPUT_FILE_UNREADABLE'});}finally{x.clean();}});
++test('misused credential path does not leak that path or token text',()=>assert.throws(()=>C.loadSecret(F.secret.token),e=>{assert.ok(!e.message.includes(F.secret.token));return true;}));
++test('nested output and source paths are rejected',()=>{const x=setup();try{assert.throws(()=>C.disjoint(x.prior,path.join(x.prior,'new')),{code:'PATHS_MUST_BE_DISJOINT'});}finally{x.clean();}});
+diff --git a/tests/materialize.spec.cjs b/tests/materialize.spec.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/materialize.spec.cjs
+@@ -0,0 +1,15 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const C=require('../runtime/common.cjs'),U=require('../tools/util.cjs'),F=require('./fixture.cjs');
++function setup(){const root=F.root(),repo=path.join(root,'repo');F.initGit(repo);const run=path.join(repo,'evidence/run');fs.mkdirSync(run,{recursive:true});
++ const s=F.session(),special={'public-session.json':JSON.stringify(s),'console.jsonl':F.firstFrame(s),'upload-attempt.json':'{}\n','upload-result.json':'{}\n'};
++ for(const [n,b]of Object.entries(special))fs.writeFileSync(path.join(run,n),b);for(let i=0;i<25;i++)fs.writeFileSync(path.join(run,`entry-${i}.json`),'{}\n');
++ F.git(repo,['add','.']);F.git(repo,['commit','-qm','fixture']);const refactor=F.git(repo,['rev-parse','HEAD']),runTree=F.git(repo,['rev-parse','HEAD:evidence/run']);
++ const p={refactor,sourceRoot:'evidence',runTree,publicBlob:C.blob(C.bytes(path.join(run,'public-session.json'))),consoleBlob:C.blob(C.bytes(path.join(run,'console.jsonl'))),uploadAttemptBlob:C.blob(C.bytes(path.join(run,'upload-attempt.json'))),uploadResultBlob:C.blob(C.bytes(path.join(run,'upload-result.json')))};
++ return {root,repo,p,out:path.join(root,'source'),clean:()=>fs.rmSync(root,{recursive:true,force:true})};}
++test('materialization reconstructs an actual pinned Git tree with exact bytes',()=>{const x=setup();try{assert.equal(U.materialize(x.repo,x.out,x.p).files,29);assert.equal(U.verifySource(x.out,x.p).runTree,x.p.runTree);}finally{x.clean();}});
++test('materializer rejects wrong tree before producing output',()=>{const x=setup();try{assert.throws(()=>U.materialize(x.repo,x.out,{...x.p,runTree:'0'.repeat(40)}),{code:'SOURCE_TREE_MISMATCH'});assert.equal(fs.existsSync(x.out),false);}finally{x.clean();}});
++test('source byte mutation is detected',()=>{const x=setup();try{U.materialize(x.repo,x.out,x.p);fs.appendFileSync(path.join(x.out,'run/entry-3.json'),' ');assert.throws(()=>U.verifySource(x.out,x.p),{code:'SOURCE_BYTES_CHANGED'});}finally{x.clean();}});
++test('changing both nonanchor source bytes and manifest cannot bypass pinned tree identity',()=>{const x=setup();try{U.materialize(x.repo,x.out,x.p);const f=path.join(x.out,'run/entry-4.json');fs.writeFileSync(f,'changed');const m=C.json(path.join(x.out,'MANIFEST.json')),e=m.files.find(f=>f.name==='entry-4.json'),b=C.bytes(f);Object.assign(e,{bytes:b.length,sha256:C.sha256(b),blob:C.blob(b)});fs.writeFileSync(path.join(x.out,'MANIFEST.json'),JSON.stringify(m));assert.throws(()=>U.verifySource(x.out,x.p),{code:'SOURCE_MANIFEST_TREE_MISMATCH'});}finally{x.clean();}});
++test('extra source files are not silently ignored',()=>{const x=setup();try{U.materialize(x.repo,x.out,x.p);fs.writeFileSync(path.join(x.out,'run','extra.json'),'{}');assert.throws(()=>U.verifySource(x.out,x.p),{code:'SOURCE_FILE_SET_CHANGED'});}finally{x.clean();}});
++test('tree parser rejects traversal or unsupported file modes',()=>{assert.throws(()=>U.parseTree(Buffer.from('120000 blob '+'a'.repeat(40)+'\tfile\0')),{code:'SOURCE_TREE_INVALID'});assert.throws(()=>U.parseTree(Buffer.from('100644 blob '+'a'.repeat(40)+'\t../file\0')),{code:'SOURCE_TREE_INVALID'});});
+diff --git a/tests/observer.spec.cjs b/tests/observer.spec.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/observer.spec.cjs
+@@ -0,0 +1,10 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const F=require('./fixture.cjs'),O=require('../runtime/closure-observer.cjs'),V=require('../runtime/verify-closure.cjs'),C=require('../runtime/common.cjs');
++async function run(mode='healthy'){const out=F.root(),closureId='abc',parentRunId='parent';const r=await O.observeRuntime({out,closureId,parentRunId,secret:F.secret,
++ WebSocketClass:F.wsClass(mode),durationMs:250,startupMs:1500,silenceMs:1000,pollMs:5});return {out,r,closureId,parentRunId};}
++test('new recovery stream independently proves runtime after old collector has exited',async()=>{const t=await run();try{assert.equal(t.r.status,'RECOVERY_RUNTIME_COLLECTED');assert.equal(V.verifyObserver(t.out,t.closureId,t.parentRunId,{runtimeMs:250,silenceMs:1000}).status,'RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED');}finally{fs.rmSync(t.out,{recursive:true,force:true});}});
++for(const mode of ['no-console','no-cpu','wrong-shard','zero-cpu','bridge','close','reauth'])test('observer fails safely for '+mode,async()=>{const t=await run(mode);try{assert.equal(t.r.status,'RECOVERY_RUNTIME_UNCONFIRMED');assert.throws(()=>V.verifyObserver(t.out,t.closureId,t.parentRunId,{runtimeMs:250,silenceMs:1000}));}finally{fs.rmSync(t.out,{recursive:true,force:true});}});
++test('auth echoes and token-bearing console messages are not persisted as credentials',async()=>{const t=await run('redact');try{for(const n of C.list(t.out))assert.ok(!C.bytes(path.join(t.out,n)).toString().includes(F.secret.token));}finally{fs.rmSync(t.out,{recursive:true,force:true});}});
++test('independent observer verifier rejects duplicate footer',async()=>{const t=await run();try{const f=path.join(t.out,'runtime-console.jsonl'),rows=V.jsonl(f);fs.appendFileSync(f,JSON.stringify(rows.at(-1))+'\n');assert.throws(()=>V.verifyObserver(t.out,t.closureId,t.parentRunId,{runtimeMs:250,silenceMs:1000}));}finally{fs.rmSync(t.out,{recursive:true,force:true});}});
++test('independent observer verifier rejects PID substitution',async()=>{const t=await run();try{const f=path.join(t.out,'runtime-console.jsonl'),rows=V.jsonl(f);rows[2].pid++;fs.writeFileSync(f,rows.map(x=>JSON.stringify(x)).join('\n')+'\n');assert.throws(()=>V.verifyObserver(t.out,t.closureId,t.parentRunId,{runtimeMs:250,silenceMs:1000}));}finally{fs.rmSync(t.out,{recursive:true,force:true});}});
+diff --git a/tests/transport.spec.cjs b/tests/transport.spec.cjs
+new file mode 100644
+--- /dev/null
++++ b/tests/transport.spec.cjs
+@@ -0,0 +1,33 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),http=require('node:http'),fs=require('node:fs'),path=require('node:path');
++const C=require('../runtime/common.cjs'),F=require('./fixture.cjs'),T=require('../runtime/transport.cjs'),A=require('../runtime/closure.cjs'),V=require('../runtime/verify-closure.cjs');
++async function server(mode='normal'){
++ const s=F.session();let modules=s.candidate.modules,posts=0;const requests=[];
++ const srv=http.createServer((req,res)=>{requests.push(req.method+' '+req.url);let text='';req.on('data',b=>text+=b);req.on('end',()=>{
++  if(mode==='hang')return;if(mode==='auth'){res.writeHead(401);res.end(F.secret.token);return;}if(mode==='redirect'){res.writeHead(302,{Location:'https://example.invalid/'});res.end();return;}
++  if(mode==='bad-json'){res.end('{broken '+F.secret.token);return;}
++  let response={ok:1};
++  if(req.url==='/api/auth/me')response={ok:1,_id:s.userId,username:s.username};
++  else if(req.url==='/api/user/branches')response={ok:1,list:[{branch:'default',activeWorld:true}]};
++  else if(req.method==='GET'&&req.url==='/api/user/code?branch=default')response={ok:1,modules};
++  else if(req.method==='POST'&&req.url==='/api/user/code'){posts++;const b=JSON.parse(text);assert.equal(b.branch,'default');modules=b.modules;if(mode==='lost-ack'){req.socket.destroy();return;}}
++  else{res.writeHead(404);res.end();return;}res.setHeader('Content-Type','application/json');res.end(JSON.stringify(response));
++ });});
++ await new Promise(r=>srv.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+srv.address().port;
++ return {s,origin,srv,requests,get posts(){return posts;},stop:async()=>{srv.closeAllConnections();await new Promise(r=>srv.close(r));}};
++}
++test('loopback full closure issues exactly one backup POST and only allowed GET endpoints',async()=>{const h=await server(),root=F.root();try{
++ const prior=path.join(root,'prior'),out=path.join(root,'out');F.priorFiles(prior,h.s);
++ const api=T.createClient(F.secret,{testOrigin:h.origin,expectedBackupMainSha256:C.sha256(h.s.backup.modules.main)});
++ const r=await A.close0003({api,s:h.s,prior,out,executeRecovery:true,exclusiveTarget:true,priorWorkersStopped:true,secret:F.secret,pause:async()=>{},observer:F.fastObserver});
++ assert.equal(r.runtimeConfirmed,true);assert.equal(h.posts,1);assert.equal(V.verifyClosure(out,h.s,{runtimeMs:250,silenceMs:1000}).status,'RECOVERY_CLOSURE_VERIFIED');
++ assert.ok(h.requests.every(x=>['GET /api/auth/me','GET /api/user/branches','GET /api/user/code?branch=default','POST /api/user/code'].includes(x)));
++ }finally{fs.rmSync(root,{recursive:true,force:true});await h.stop();}});
++test('transport cannot upload a candidate or arbitrary modules',async()=>{const h=await server();try{const api=T.createClient(F.secret,{testOrigin:h.origin,expectedBackupMainSha256:C.sha256(h.s.backup.modules.main)});
++ await assert.rejects(api.restoreBackup(h.s.candidate.modules),{code:'ONLY_PINNED_BACKUP_WRITE_ALLOWED'});assert.equal(h.posts,0);
++ assert.deepEqual(Object.keys(api).sort(),['branches','code','me','restoreBackup']);}finally{await h.stop();}});
++test('transport never retries an acknowledged restore',async()=>{const h=await server();try{const api=T.createClient(F.secret,{testOrigin:h.origin,expectedBackupMainSha256:C.sha256(h.s.backup.modules.main)});await api.restoreBackup(h.s.backup.modules);await assert.rejects(api.restoreBackup(h.s.backup.modules),{code:'RESTORE_CLIENT_ALREADY_USED'});assert.equal(h.posts,1);}finally{await h.stop();}});
++test('real lost HTTP acknowledgement remains single-use while GET can reconcile bytes',async()=>{const h=await server('lost-ack');try{const api=T.createClient(F.secret,{testOrigin:h.origin,expectedBackupMainSha256:C.sha256(h.s.backup.modules.main)});await assert.rejects(api.restoreBackup(h.s.backup.modules));await assert.rejects(api.restoreBackup(h.s.backup.modules),{code:'RESTORE_CLIENT_ALREADY_USED'});assert.deepEqual((await api.code()).modules,h.s.backup.modules);assert.equal(h.posts,1);}finally{await h.stop();}});
++for(const [mode,error]of [['auth','HTTP_AUTH_REJECTED'],['redirect','HTTP_NOT_200'],['bad-json','HTTP_JSON_INVALID'],['hang','HTTP_DEADLINE']])
++ test('HTTP '+mode+' returns a stable error without response or credential text',async()=>{const h=await server(mode);try{const api=T.createClient(F.secret,{testOrigin:h.origin,timeoutMs:50});await assert.rejects(api.me(),e=>{assert.equal(e.code,error);assert.ok(!JSON.stringify(e).includes(F.secret.token));return true;});assert.equal(h.requests.length,1);}finally{await h.stop();}});
++test('test origin cannot point to another external service',()=>assert.throws(()=>T.createClient(F.secret,{testOrigin:'https://example.com/'}),{code:'TEST_ORIGIN_INVALID'}));

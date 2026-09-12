@@ -1,0 +1,126 @@
+{
+  "files": 30,
+  "passed": 30,
+  "checks": [
+    {
+      "path": "runtime/closure-observer.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/closure.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/common.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/decoder.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/input.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/pins.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/replay.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/transport.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/verify-closure.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/archive.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/closure.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/decoder.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/fixture.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/input.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/materialize.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/observer.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/transport.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/archive.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/check-baseline.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/close-0003.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/materialize.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/replay.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/run-tests.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/util.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/verify-archive.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "vendor/0003/common.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "vendor/0003/policy.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "vendor/0003/protocol.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "vendor/0003/samples.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "vendor/deployGuard.cjs",
+      "exitCode": 0
+    }
+  ]
+}

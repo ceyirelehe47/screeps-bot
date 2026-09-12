@@ -1,0 +1,26 @@
+{
+  "status": "RECOVERY_CLOSURE_VERIFIED",
+  "closureId": "5cea033ba00db1c3b64bfa5e464763b4",
+  "parentRunId": "52ec356bc4c01aaf4197f2962beea646",
+  "bytesConfirmed": true,
+  "runtimeConfirmed": true,
+  "runtime": {
+    "status": "RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED",
+    "durationMs": 75003,
+    "collectorPid": 18372,
+    "consoleFrames": 19,
+    "cpuFrames": 20,
+    "positiveCpuFramesAfterReady": 19,
+    "maxConsoleGapMs": 5281,
+    "maxCpuGapMs": 5253,
+    "scope": "fresh shard1 console and account CPU; not a continuation of observation 0003"
+  },
+  "issues": [],
+  "restorePostBoundaries": 1,
+  "newCandidateUploads": 0,
+  "observationStatus": "ONLINE_COMPAT_READ_INCONCLUSIVE",
+  "sourceFailureSuperseded": false,
+  "originalRecordsPreserved": true,
+  "networkUsedByVerifier": false,
+  "checkedAtMs": 1789188167438
+}

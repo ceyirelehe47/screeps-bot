@@ -1,0 +1,33 @@
+{
+  "status": "MAKER_FIXED_TESTS_PASSED",
+  "tests": 80,
+  "passed": 80,
+  "failed": 0,
+  "skipped": 0,
+  "todo": 0,
+  "cancelled": 0,
+  "platform": "linux",
+  "node": "v22.16.0",
+  "includes": [
+    "real temporary Git object materialization",
+    "real loopback HTTP including lost POST acknowledgement",
+    "simulated WebSocket recovery confirmation",
+    "immutable snapshot and marker failure cases",
+    "decoder regression using source-derived first-report fields",
+    "independent raw recovery evidence verification",
+    "staged Git byte preservation with autocrlf true"
+  ],
+  "simulationNotes": [
+    "WebSocket is simulated and durations shortened in tests; production CLI has no duration override.",
+    "Two assembly wiring tests inject provenance gates; separate real Git tests exercise pinned-tree validation.",
+    "The first-report fixture is source-derived, not the entire real console JSONL file."
+  ],
+  "notPerformed": [
+    "native Windows execution",
+    "reading real private module snapshots",
+    "Screeps API requests",
+    "real code restore",
+    "real 75-second runtime confirmation",
+    "repository commits or pushes"
+  ]
+}

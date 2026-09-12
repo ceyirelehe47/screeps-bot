@@ -1,0 +1,242 @@
+{
+  "status": "SOURCE_0003_REPLAYED_NOT_OBSERVED",
+  "runId": "52ec356bc4c01aaf4197f2962beea646",
+  "frames": 311,
+  "rawBridgeReports": 1,
+  "completeBridgeReports": 0,
+  "receivedTicks": [
+    73646500
+  ],
+  "completeTicks": [],
+  "missingRawTicks": [
+    73646600,
+    73646700,
+    73646800,
+    73646900,
+    73647000,
+    73647100,
+    73647200,
+    73647300,
+    73647400,
+    73647500,
+    73647600
+  ],
+  "missingCompleteTicks": [
+    73646500,
+    73646600,
+    73646700,
+    73646800,
+    73646900,
+    73647000,
+    73647100,
+    73647200,
+    73647300,
+    73647400,
+    73647500,
+    73647600
+  ],
+  "decodingFailures": [],
+  "reports": [
+    {
+      "sourceLine": 312,
+      "receivedAt": "2026-09-12T03:01:13.049Z",
+      "encoding": "html-entities-single-layer",
+      "accepted": false,
+      "rejection": "SAMPLE_NOT_COMPLETE",
+      "reportSha256": "3a8488f1d77541630702bbdb85a0daf912f5a3eec53a785dfc673112aa0f13f9",
+      "report": {
+        "kind": "treasury-legacy-read-bridge",
+        "tick": 73646500,
+        "shard": "shard1",
+        "sourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
+        "productionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+        "authorizesActions": false,
+        "scope": {
+          "rooms": [
+            "E3N59",
+            "E4N58"
+          ],
+          "resources": [
+            "energy",
+            "H"
+          ],
+          "isEmpireTotal": false
+        },
+        "evaluation": "observation_and_legacy_commitments_only",
+        "facadeQueryRun": false,
+        "spendable": null,
+        "kernelLifecycleRun": false,
+        "storageMode": "heap_only",
+        "previousRun": null,
+        "legacyInputs": {
+          "tasks": {
+            "status": "nonempty",
+            "count": 2
+          },
+          "reservations": {
+            "status": "empty",
+            "count": 0
+          },
+          "reservationVersion": {
+            "status": "absent",
+            "value": null
+          },
+          "treasuryCore": {
+            "status": "absent",
+            "activeCount": null
+          }
+        },
+        "endpoints": [
+          {
+            "room": "E3N59",
+            "location": "storage",
+            "directStatus": "ok",
+            "direct": {
+              "id": "69eeae0db590d0089d87b487",
+              "used": 800000,
+              "free": 200000,
+              "capacity": 1000000,
+              "overCapacity": false,
+              "active": true,
+              "cooldown": null,
+              "amounts": {
+                "energy": 179236,
+                "H": 135505
+              }
+            },
+            "legacyProjection": {
+              "status": "match_capacity_and_selected_energy",
+              "updatedAt": 73646500,
+              "comparisonPerformed": true,
+              "mismatches": []
+            },
+            "change": {
+              "status": "no_comparable_previous_sample"
+            },
+            "coreComparison": "match_selected_scope",
+            "coreMismatches": []
+          },
+          {
+            "room": "E3N59",
+            "location": "terminal",
+            "directStatus": "ok",
+            "direct": {
+              "id": "69fcff2ed22e9226307ce4fe",
+              "used": 260000,
+              "free": 40000,
+              "capacity": 300000,
+              "overCapacity": false,
+              "active": true,
+              "cooldown": 0,
+              "amounts": {
+                "energy": 72600,
+                "H": 0
+              }
+            },
+            "legacyProjection": {
+              "status": "match_capacity_and_selected_energy",
+              "updatedAt": 73646500,
+              "comparisonPerformed": true,
+              "mismatches": []
+            },
+            "change": {
+              "status": "no_comparable_previous_sample"
+            },
+            "coreComparison": "match_selected_scope",
+            "coreMismatches": []
+          },
+          {
+            "room": "E4N58",
+            "location": "storage",
+            "directStatus": "ok",
+            "direct": {
+              "id": "69eedb6224f1bd9c6041e6ab",
+              "used": 4633540,
+              "free": 3366460,
+              "capacity": 8000000,
+              "overCapacity": false,
+              "active": true,
+              "cooldown": null,
+              "amounts": {
+                "energy": 249263,
+                "H": 2892
+              }
+            },
+            "legacyProjection": {
+              "status": "match_capacity_and_selected_energy",
+              "updatedAt": 73646500,
+              "comparisonPerformed": true,
+              "mismatches": []
+            },
+            "change": {
+              "status": "no_comparable_previous_sample"
+            },
+            "coreComparison": "match_selected_scope",
+            "coreMismatches": []
+          },
+          {
+            "room": "E4N58",
+            "location": "terminal",
+            "directStatus": "ok",
+            "direct": {
+              "id": "69fc583c60d86221e8bdf547",
+              "used": 231245,
+              "free": 68755,
+              "capacity": 300000,
+              "overCapacity": false,
+              "active": true,
+              "cooldown": 0,
+              "amounts": {
+                "energy": 25412,
+                "H": 0
+              }
+            },
+            "legacyProjection": {
+              "status": "match_capacity_and_selected_energy",
+              "updatedAt": 73646500,
+              "comparisonPerformed": true,
+              "mismatches": []
+            },
+            "change": {
+              "status": "no_comparable_previous_sample"
+            },
+            "coreComparison": "match_selected_scope",
+            "coreMismatches": []
+          }
+        ],
+        "commitments": {
+          "status": "not_read_cpu_budget",
+          "rows": null
+        },
+        "status": "partial_cpu_budget",
+        "coreObservationRooms": [
+          "E3N59",
+          "E4N58"
+        ],
+        "requestedEndpointRows": 4,
+        "collectedEndpointRows": 4,
+        "cpuBeforeSerializationAndEmit": 2.4981476000029943,
+        "cooperativeBudget": true
+      }
+    }
+  ],
+  "cpuFindings": [
+    {
+      "tick": 73646500,
+      "status": "partial_cpu_budget",
+      "cpuBeforeSerializationAndEmit": 2.4981476000029943,
+      "budget": 2,
+      "commitmentsStatus": "not_read_cpu_budget",
+      "completeCost": "not_observed_no_following_report",
+      "phaseAttribution": "not_observable_from_existing_report",
+      "budgetChanged": false
+    }
+  ],
+  "observationStatus": "ONLINE_COMPAT_READ_INCONCLUSIVE",
+  "source": {
+    "status": "SOURCE_0003_BYTES_VERIFIED",
+    "files": 29,
+    "sourceCommit": "6e4ec0e49c01eed2c130191459cd26b8a1c41257",
+    "runTree": "5afeca2ba5923aa0837d9b8309d0d11925f75f34"
+  }
+}
