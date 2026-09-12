@@ -1,0 +1,52 @@
+{
+  "status": "GUARD_JOINT_PROBE_EXISTING_EVIDENCE_READJUDICATION_COMPLETE",
+  "sourceCommit": "64d92713352826fb547a0860a963b11b4de4f440",
+  "sourceProbeRunTree": "f6660ce8aafd6e28ce01993c21a233845609f35a",
+  "sourceRunTree": "9469e42799ace7e2ec40a4656bfc9b4f84b53328",
+  "sourceFiles": 30,
+  "verifierStatus": "GUARD_COLLECTOR_CONTROL_PLANE_PROBE_INDEPENDENTLY_VERIFIED",
+  "independentStatus": "EXISTING_GUARD_JOINT_PROBE_EVIDENCE_INDEPENDENTLY_READJUDICATED",
+  "heartbeatEvidence": {
+    "policy": {
+      "producerIntervalMs": 5000,
+      "firstHeartbeatMaxLagMs": 10000,
+      "lastHeartbeatMaxLeadMs": 10000,
+      "minimumCoverageSlackMs": 10000,
+      "ordinaryGapMaxMs": 8000,
+      "retryExplainedGapMaxMs": 15000,
+      "p95GapMaxMs": 8000,
+      "retryAttemptsPerFailedCycle": 3
+    },
+    "rows": 287,
+    "firstAtMs": 1789141352694,
+    "lastAtMs": 1789142847780,
+    "firstLagMs": 4,
+    "lastLeadMs": 4910,
+    "spanMs": 1495086,
+    "minimumGapMs": 5001,
+    "medianGapMs": 5097,
+    "p95GapMs": 5510,
+    "averageGapMs": 5228,
+    "maximumGapMs": 10033,
+    "extendedGapCount": 1,
+    "extendedGaps": [
+      {
+        "index": 164,
+        "fromAtMs": 1789142206461,
+        "toAtMs": 1789142216494,
+        "gapMs": 10033,
+        "explainingFailureCycleAtMs": 1789142215983,
+        "retryAttempts": [
+          1,
+          2,
+          3
+        ]
+      }
+    ]
+  },
+  "rawProbeEvidenceModified": false,
+  "probeRerun": false,
+  "networkUsed": false,
+  "onlineCodeWriteRequests": 0,
+  "notDeployed": true
+}

@@ -1,0 +1,35 @@
+{
+  "status": "GUARD_JOINT_PROBE_VERIFIER_REMEDIATION_APPLIED",
+  "sourceEvidence": {
+    "commit": "64d92713352826fb547a0860a963b11b4de4f440",
+    "probeRunTree": "f6660ce8aafd6e28ce01993c21a233845609f35a",
+    "runTree": "9469e42799ace7e2ec40a4656bfc9b4f84b53328"
+  },
+  "oldVerifierFalseNegative": {
+    "exitCode": 1,
+    "errorCode": "PROBE_HEARTBEAT_TIMELINE_INVALID",
+    "expectedAtLeast": 295,
+    "actual": 287,
+    "stderrSha256": "28e4fe3f8f5c75e83a9d230782c5a6742ecc88e9b7b7c7ced3dd66ffe656aed9"
+  },
+  "replacementVerifier": {
+    "version": "guard-joint-probe-existing-evidence-verifier/v2",
+    "heartbeatDecisionBasis": [
+      "start-boundary",
+      "end-boundary",
+      "coverage-span",
+      "strict-time-order",
+      "maximum-gap",
+      "p95-gap",
+      "retry-cycle-correlation",
+      "collector-state",
+      "console-freshness",
+      "cpu-freshness"
+    ],
+    "fixedHeartbeatRowQuota": null
+  },
+  "rawProbeEvidenceModified": false,
+  "probeRerun": false,
+  "networkUsed": false,
+  "onlineCodeWriteRequests": 0
+}

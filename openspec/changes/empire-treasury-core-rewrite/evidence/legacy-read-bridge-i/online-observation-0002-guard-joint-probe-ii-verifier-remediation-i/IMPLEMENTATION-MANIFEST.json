@@ -1,0 +1,239 @@
+{
+  "schema": "screeps-completed-implementation-manifest/v4",
+  "packageName": "screeps-guard-probe-II-verifier-remediation-I-v2-2026-09-12",
+  "packageVersion": 2,
+  "implementationStatus": "complete",
+  "agentRole": "verification-only",
+  "repository": "ceyirelehe47/screeps-bot",
+  "pinnedRefactorHead": "64d92713352826fb547a0860a963b11b4de4f440",
+  "pinnedCompatHead": "fcfc125f0e5cd6c3370318b4fee0450f4d09af53",
+  "sourceEvidence": {
+    "commit": "64d92713352826fb547a0860a963b11b4de4f440",
+    "probeRunTree": "f6660ce8aafd6e28ce01993c21a233845609f35a",
+    "runTree": "9469e42799ace7e2ec40a4656bfc9b4f84b53328",
+    "rawEvidenceMutationAuthorized": false,
+    "probeRerunAuthorized": false
+  },
+  "oldVerifierFalseNegative": {
+    "code": "PROBE_HEARTBEAT_TIMELINE_INVALID",
+    "expectedAtLeast": 295,
+    "actual": 287,
+    "cause": "fixed row quota assumed near-perfect 5-second scheduling"
+  },
+  "replacementHeartbeatPolicy": {
+    "fixedRowQuota": null,
+    "producerIntervalMs": 5000,
+    "firstHeartbeatMaxLagMs": 10000,
+    "lastHeartbeatMaxLeadMs": 10000,
+    "minimumCoverageSlackMs": 10000,
+    "ordinaryGapMaxMs": 8000,
+    "retryExplainedGapMaxMs": 15000,
+    "p95GapMaxMs": 8000,
+    "retryAttemptsPerFailedCycle": 3,
+    "strictTimestampOrder": true,
+    "extendedGapMustCorrelateWithFailureCycle": true
+  },
+  "expectedExistingEvidenceMetrics": {
+    "durationMs": 1500460,
+    "successfulTimeReads": 99,
+    "failedCycles": 1,
+    "finalConsecutiveFailedCycles": 0,
+    "heartbeatRows": 287,
+    "heartbeatSpanMs": 1495086,
+    "heartbeatMaximumGapMs": 10033,
+    "collectorPid": 32772,
+    "firstTick": 73636421,
+    "lastTick": 73636790,
+    "beforeTick": 73636408,
+    "afterTick": 73636832,
+    "codeWriteRequests": 0
+  },
+  "completeImplementation": [
+    {
+      "path": "implementation/verifier-runtime/common.cjs",
+      "sha256": "04af85f0fe87bbced17d017fb29c776467cb5abb8a7bb55a65eeacdc35155c67",
+      "bytes": 3489
+    },
+    {
+      "path": "implementation/verifier-runtime/evidence-contract.cjs",
+      "sha256": "7840cc0f4805b5aa9f9a3453c4c228ae05f92fbc4a4d2ee04cd1004a1a086746",
+      "bytes": 3893
+    },
+    {
+      "path": "implementation/verifier-runtime/heartbeat-continuity.cjs",
+      "sha256": "9dd4635a77dcbb37e02e01265afa678446582b66aee3fc4215e9c21f690f1a1c",
+      "bytes": 5545
+    },
+    {
+      "path": "implementation/verifier-runtime/verify-joint-probe.cjs",
+      "sha256": "f2b2f885e8f4fa4b2324b084e7977e14f780d1ac361ed968d48949f3d5be786c",
+      "bytes": 11288
+    }
+  ],
+  "implementationTests": [
+    {
+      "path": "implementation/tests/assembly.spec.cjs",
+      "sha256": "47b05c3bbd3a5173147073551c904ef9f499dd03db75f03bf420844566ad8bf5",
+      "bytes": 7672
+    },
+    {
+      "path": "implementation/tests/fixture.cjs",
+      "sha256": "bddb6e3b09713e90f29a47ed44202c2b2f95fc6c0cbafe9c85c65e69d55ca053",
+      "bytes": 8492
+    },
+    {
+      "path": "implementation/tests/heartbeat-continuity.spec.cjs",
+      "sha256": "2eb3fb1baf8ef63ec872b6000566c7136402880284dcc73c44165ab98950941b",
+      "bytes": 4795
+    },
+    {
+      "path": "implementation/tests/materializer.spec.cjs",
+      "sha256": "5fc9b992f2b2cf9cbd9ae7ffd6da1c4174f53bc707301742c241eb59b560b28d",
+      "bytes": 3322
+    },
+    {
+      "path": "implementation/tests/readjudication-chain.spec.cjs",
+      "sha256": "77ad04ef4bc7dd10af59c4216ba2d3e3f7decf786626e9e3c51ad25afc2a2c90",
+      "bytes": 5299
+    },
+    {
+      "path": "implementation/tests/report.spec.cjs",
+      "sha256": "d5f0f394b253e0147183484f67e0f6736ae4787602a69fcf863c58a58e7dd203",
+      "bytes": 1470
+    },
+    {
+      "path": "implementation/tests/verify-joint-probe.spec.cjs",
+      "sha256": "08cdc5f4d1161dd1671f113b55fd1b4b29b5a545b180c7fdf4a9e1531eb007bd",
+      "bytes": 5143
+    }
+  ],
+  "executionTools": [
+    {
+      "path": "tools/adjudicate-existing-evidence.cjs",
+      "sha256": "11e35e108947571f9c958bfd7f00864f24a82b87bc6c756ba5c84cce3b28641e",
+      "bytes": 5110
+    },
+    {
+      "path": "tools/assemble-evidence.cjs",
+      "sha256": "1e1f7adc5d7cb5b7eade1c99ca7c3b482d853021118f326436e4845a92e7da7d",
+      "bytes": 7635
+    },
+    {
+      "path": "tools/materialize-pinned-evidence.cjs",
+      "sha256": "15e3aa27c985338d45f322d7fd7f6473964bfb51b22c5a9cb3a4aeb57e3b84b1",
+      "bytes": 3746
+    },
+    {
+      "path": "tools/run-implementation-tests.cjs",
+      "sha256": "2ab6fb79e6cddf7a920e38d0dc9c8ad96b9d40e7502c533a778038122e366b74",
+      "bytes": 2448
+    },
+    {
+      "path": "tools/tool-common.cjs",
+      "sha256": "f6cd7f779401cc55c08b4be9543f184ab06aacea942ba47413a918480d2dcda5",
+      "bytes": 3608
+    },
+    {
+      "path": "tools/verify-assembled-evidence.cjs",
+      "sha256": "2706bd0b7832768977a3a7500ab3a5d9bf064b282f76ede0b2e01720359d1354",
+      "bytes": 3391
+    },
+    {
+      "path": "tools/verify-current-heads.cjs",
+      "sha256": "427200e4b2b6ac2f97a70e75db3be209e96cba4016b699e7fff02dcc65dcc409",
+      "bytes": 2614
+    },
+    {
+      "path": "tools/verify-package.cjs",
+      "sha256": "f57b42f9c8135a3815e46ac7563a8de29795a9c11b9b8eb85ce475c6e7486752",
+      "bytes": 1629
+    },
+    {
+      "path": "tools/verify-readjudication.cjs",
+      "sha256": "01ebdf22dde94cc9c44cca37993666c587ca826a47b286c8cd8ca01afb392fe5",
+      "bytes": 7169
+    }
+  ],
+  "patchMirrors": [
+    {
+      "path": "patches/0001-verifier-continuity-remediation.patch",
+      "sha256": "9539b500c3349050c7d6412e6e68c5c1a8dd3d261c5c0e93dbff0b1c6192ee51",
+      "bytes": 26043
+    },
+    {
+      "path": "patches/0002-offline-readjudication-tooling.patch",
+      "sha256": "bc24eb8acb910e616fdda5f60169251b244d2f93b58125892b213c489e1e12e0",
+      "bytes": 38439
+    },
+    {
+      "path": "patches/0003-regression-tests.patch",
+      "sha256": "42fa8f5d8de0c80a03c21b14d7416df8e764ca62afb4fb65d87f91c3e95ed468",
+      "bytes": 37275
+    },
+    {
+      "path": "patches/README.md",
+      "sha256": "f1c86ed6273e8fcc042992ccdafa517f4feb7f08c332da796810e6a1cc994340",
+      "bytes": 905
+    },
+    {
+      "path": "patches/SERIES",
+      "sha256": "6058946d3908536c66774e325cfc725cccbc8cd637d881c35622b152f1bc8ea9",
+      "bytes": 113
+    }
+  ],
+  "makerTestExpectation": {
+    "status": "VERIFIER_REMEDIATION_COMPLETE_IMPLEMENTATION_VERIFIED",
+    "tests": 30,
+    "passed": 30,
+    "failed": 0,
+    "syntaxFiles": 21,
+    "testFiles": 6
+  },
+  "successLabels": [
+    "GUARD_JOINT_PROBE_COMPLETE_IMPLEMENTATION_VERIFIED",
+    "PROBE_SESSION_DECOUPLED_FROM_FORMAL_PROFILE",
+    "GUARD_COLLECTOR_CONTROL_PLANE_PROBE_INDEPENDENTLY_VERIFIED",
+    "EXISTING_EVIDENCE_READJUDICATED",
+    "NOT_DEPLOYED"
+  ],
+  "forbiddenOperations": [
+    "Screeps API access",
+    "collector restart",
+    "25-minute probe rerun",
+    "candidate upload",
+    "restore",
+    "compat branch mutation",
+    "production source mutation",
+    "threshold edits",
+    "raw probe evidence mutation"
+  ],
+  "supersedesPackageSha256": "b9d924994dd3f5d52f50406bad2d323c8e604ec036f28c92e268b4063fb464a4",
+  "fixtureRemediation": {
+    "changedTest": "implementation/tests/assembly.spec.cjs",
+    "testNamesUnchanged": true,
+    "fixedTestCount": 30,
+    "skipAdded": false,
+    "caseDistinctNames": [
+      "Z-upper.txt",
+      "a-lower.txt"
+    ],
+    "deterministicTraversalPermutations": 2,
+    "runtimeAndExecutionToolBytesUnchanged": true,
+    "nativeWindowsVerificationRequiredFromAgent": true,
+    "nativeWindowsExecutedByMaker": false
+  },
+  "validationSupport": [
+    {
+      "path": "validation/support/casefold-fixture-preload.cjs",
+      "sha256": "35a6adea10cf3df389a84c44a1c70f8503926d2f932ace83d82a23f41d881db5",
+      "bytes": 1140
+    }
+  ],
+  "reviewOnlyDelta": [
+    {
+      "path": "review/fixture-v1-to-v2.patch",
+      "sha256": "5485cdf886fbdad79cc5e11c29c75a0e85fe0669fd7ca8e89a257e2344da60bb",
+      "bytes": 3617
+    }
+  ]
+}

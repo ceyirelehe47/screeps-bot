@@ -1,0 +1,89 @@
+{
+  "status": "GUARD_COLLECTOR_CONTROL_PLANE_PROBE_INDEPENDENTLY_VERIFIED",
+  "verifierVersion": "guard-joint-probe-existing-evidence-verifier/v2",
+  "sourceEvidence": {
+    "commit": "64d92713352826fb547a0860a963b11b4de4f440",
+    "probeRunTree": "f6660ce8aafd6e28ce01993c21a233845609f35a",
+    "runTree": "9469e42799ace7e2ec40a4656bfc9b4f84b53328",
+    "materializedFiles": 30,
+    "totalBytes": 260168
+  },
+  "runId": "9d4b36954b8450f8a657627da71f146d",
+  "durationMs": 1500460,
+  "collectorPid": 32772,
+  "timeChannel": {
+    "createdAtMs": 1789141352690,
+    "consecutiveFailedCycles": 0,
+    "totalAttempts": 102,
+    "totalSuccessfulReads": 99,
+    "totalFailedCycles": 1,
+    "lastSuccessAtMs": 1789142839086,
+    "lastFailureAtMs": null,
+    "lastFailure": null
+  },
+  "firstTick": 73636421,
+  "lastTick": 73636790,
+  "heartbeatEvidence": {
+    "policy": {
+      "producerIntervalMs": 5000,
+      "firstHeartbeatMaxLagMs": 10000,
+      "lastHeartbeatMaxLeadMs": 10000,
+      "minimumCoverageSlackMs": 10000,
+      "ordinaryGapMaxMs": 8000,
+      "retryExplainedGapMaxMs": 15000,
+      "p95GapMaxMs": 8000,
+      "retryAttemptsPerFailedCycle": 3
+    },
+    "rows": 287,
+    "firstAtMs": 1789141352694,
+    "lastAtMs": 1789142847780,
+    "firstLagMs": 4,
+    "lastLeadMs": 4910,
+    "spanMs": 1495086,
+    "minimumGapMs": 5001,
+    "medianGapMs": 5097,
+    "p95GapMs": 5510,
+    "averageGapMs": 5228,
+    "maximumGapMs": 10033,
+    "extendedGapCount": 1,
+    "extendedGaps": [
+      {
+        "index": 164,
+        "fromAtMs": 1789142206461,
+        "toAtMs": 1789142216494,
+        "gapMs": 10033,
+        "explainingFailureCycleAtMs": 1789142215983,
+        "retryAttempts": [
+          1,
+          2,
+          3
+        ]
+      }
+    ]
+  },
+  "onlineState": {
+    "status": "PROBE_ONLINE_STATE_UNCHANGED",
+    "beforeTick": 73636408,
+    "afterTick": 73636832,
+    "digestHash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "buildCommit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c"
+  },
+  "onlineDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494463,
+        "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+      }
+    ]
+  },
+  "collectorResultSha256": "24f8d3bd55bb9e6366416e1e93fc9a20b702a9377d16dbcd9ff5fcf593a9feee",
+  "guardProbeResultSha256": "644084dfe823d3c334b7ac9d5e0ec38d160fe18f1af0c41ecb5b8c88ba83bf1d",
+  "guardProbeTimelineSha256": "3eff2721f181143056465b3ff320eb80304507f309ff08bf93be8ff32cba6504",
+  "formalProfileUsed": false,
+  "candidateSnapshotUsed": false,
+  "codeWriteRequests": 0
+}

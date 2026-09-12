@@ -1,0 +1,205 @@
+TAP version 13
+# warning: in the working copy of 'evidence/.keep', LF will be replaced by CRLF the next time Git touches it
+# Subtest: deterministic assembler creates only the new evidence directory and final verifier accepts it
+ok 1 - deterministic assembler creates only the new evidence directory and final verifier accepts it
+  ---
+  duration_ms: 757.1678
+  type: 'test'
+  ...
+# Subtest: package verifier compares exact paths independent of locale-aware traversal order
+ok 2 - package verifier compares exact paths independent of locale-aware traversal order
+  ---
+  duration_ms: 37.7864
+  type: 'test'
+  ...
+# Subtest: continuity accepts the observed 287-row shape and explains the one retry gap
+ok 3 - continuity accepts the observed 287-row shape and explains the one retry gap
+  ---
+  duration_ms: 44.9677
+  type: 'test'
+  ...
+# Subtest: continuity is based on coverage and gaps, not a 295-row quota
+ok 4 - continuity is based on coverage and gaps, not a 295-row quota
+  ---
+  duration_ms: 36.4082
+  type: 'test'
+  ...
+# Subtest: many rows cannot hide a long evidence hole
+ok 5 - many rows cannot hide a long evidence hole
+  ---
+  duration_ms: 34.6161
+  type: 'test'
+  ...
+# Subtest: an extended gap must be explained by one recorded failed cycle
+ok 6 - an extended gap must be explained by one recorded failed cycle
+  ---
+  duration_ms: 30.3183
+  type: 'test'
+  ...
+# Subtest: the explaining failed cycle requires the complete three-attempt evidence
+ok 7 - the explaining failed cycle requires the complete three-attempt evidence
+  ---
+  duration_ms: 31.6741
+  type: 'test'
+  ...
+# Subtest: even a retry-explained gap is bounded
+ok 8 - even a retry-explained gap is bounded
+  ---
+  duration_ms: 31.2662
+  type: 'test'
+  ...
+# Subtest: compressed coverage is rejected regardless of row count
+ok 9 - compressed coverage is rejected regardless of row count
+  ---
+  duration_ms: 32.0165
+  type: 'test'
+  ...
+# Subtest: late first evidence and early last evidence are rejected
+ok 10 - late first evidence and early last evidence are rejected
+  ---
+  duration_ms: 68.2251
+  type: 'test'
+  ...
+# Subtest: duplicate or regressing heartbeat timestamps are rejected
+ok 11 - duplicate or regressing heartbeat timestamps are rejected
+  ---
+  duration_ms: 66.8776
+  type: 'test'
+  ...
+# Subtest: a generally slow heartbeat distribution is rejected before it becomes a hidden hole
+ok 12 - a generally slow heartbeat distribution is rejected before it becomes a hidden hole
+  ---
+  duration_ms: 34.8858
+  type: 'test'
+  ...
+# warning: in the working copy of 'evidence/probe-run/prepare.stdout', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/run/collector-result.json', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/run/guard-probe-result.json', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/run/heartbeat.json', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/run/online-state-verification.json', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/run/probe-session.json', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/secret-scan.json', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/prepare.stdout', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/run/collector-result.json', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/run/guard-probe-result.json', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/run/heartbeat.json', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/run/online-state-verification.json', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/run/probe-session.json', LF will be replaced by CRLF the next time Git touches it
+# warning: in the working copy of 'evidence/probe-run/secret-scan.json', LF will be replaced by CRLF the next time Git touches it
+# Subtest: materializer copies the exact pinned Git tree and writes a hash manifest
+ok 13 - materializer copies the exact pinned Git tree and writes a hash manifest
+  ---
+  duration_ms: 1642.8775
+  type: 'test'
+  ...
+# Subtest: materializer rejects a tree identity mismatch before creating output
+ok 14 - materializer rejects a tree identity mismatch before creating output
+  ---
+  duration_ms: 562.3061
+  type: 'test'
+  ...
+# Subtest: ls-tree parser rejects malformed records
+ok 15 - ls-tree parser rejects malformed records
+  ---
+  duration_ms: 0.2605
+  type: 'test'
+  ...
+# Subtest: the complete offline chain re-adjudicates existing evidence and independently verifies it
+ok 16 - the complete offline chain re-adjudicates existing evidence and independently verifies it
+  ---
+  duration_ms: 204.8239
+  type: 'test'
+  ...
+# Subtest: the chain rejects any mutation of the materialized raw evidence
+ok 17 - the chain rejects any mutation of the materialized raw evidence
+  ---
+  duration_ms: 124.7381
+  type: 'test'
+  ...
+# Subtest: the chain refuses to rewrite or reinterpret a different old verifier failure
+ok 18 - the chain refuses to rewrite or reinterpret a different old verifier failure
+  ---
+  duration_ms: 136.8525
+  type: 'test'
+  ...
+# Subtest: independent readjudication rejects a tampered success result
+ok 19 - independent readjudication rejects a tampered success result
+  ---
+  duration_ms: 146.349
+  type: 'test'
+  ...
+# Subtest: generated report uses the independent-verification labels without claiming deployment
+ok 20 - generated report uses the independent-verification labels without claiming deployment
+  ---
+  duration_ms: 1.8286
+  type: 'test'
+  ...
+# Subtest: generated report preserves the source procedural deviation and no-rerun boundary
+ok 21 - generated report preserves the source procedural deviation and no-rerun boundary
+  ---
+  duration_ms: 0.3696
+  type: 'test'
+  ...
+# Subtest: full verifier independently accepts the observed-shape evidence
+ok 22 - full verifier independently accepts the observed-shape evidence
+  ---
+  duration_ms: 52.0961
+  type: 'test'
+  ...
+# Subtest: full verifier accepts continuity with fewer than 295 rows
+ok 23 - full verifier accepts continuity with fewer than 295 rows
+  ---
+  duration_ms: 31.7618
+  type: 'test'
+  ...
+# Subtest: full verifier rejects PID changes and stale channel evidence
+ok 24 - full verifier rejects PID changes and stale channel evidence
+  ---
+  duration_ms: 87.0575
+  type: 'test'
+  ...
+# Subtest: full verifier rejects a long heartbeat hole even when row count remains high
+ok 25 - full verifier rejects a long heartbeat hole even when row count remains high
+  ---
+  duration_ms: 47.1417
+  type: 'test'
+  ...
+# Subtest: full verifier rejects formal-session, upload, restore and lock artifacts
+ok 26 - full verifier rejects formal-session, upload, restore and lock artifacts
+  ---
+  duration_ms: 169.7917
+  type: 'test'
+  ...
+# Subtest: full verifier rejects duplicate footer and malformed stop evidence
+ok 27 - full verifier rejects duplicate footer and malformed stop evidence
+  ---
+  duration_ms: 61.0042
+  type: 'test'
+  ...
+# Subtest: full verifier rejects session/preflight mismatch and changed postflight code
+ok 28 - full verifier rejects session/preflight mismatch and changed postflight code
+  ---
+  duration_ms: 68.0304
+  type: 'test'
+  ...
+# Subtest: full verifier rejects tick regression and counter inconsistency
+ok 29 - full verifier rejects tick regression and counter inconsistency
+  ---
+  duration_ms: 78.1996
+  type: 'test'
+  ...
+# Subtest: source manifest is pinned to the immutable evidence commit and tree
+ok 30 - source manifest is pinned to the immutable evidence commit and tree
+  ---
+  duration_ms: 0.7429
+  type: 'test'
+  ...
+1..30
+# tests 30
+# suites 0
+# pass 30
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2345.4647

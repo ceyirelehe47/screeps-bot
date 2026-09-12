@@ -1,0 +1,13 @@
+{
+  "status": "READJUDICATION_EVIDENCE_PACKAGE_VERIFIED",
+  "baseHead": "64d92713352826fb547a0860a963b11b4de4f440",
+  "target": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0002-guard-joint-probe-ii-verifier-remediation-i",
+  "filesBeforeFinalRecord": 44,
+  "verifierStatus": "GUARD_COLLECTOR_CONTROL_PLANE_PROBE_INDEPENDENTLY_VERIFIED",
+  "independentStatus": "EXISTING_GUARD_JOINT_PROBE_EVIDENCE_INDEPENDENTLY_READJUDICATED",
+  "rawProbeEvidenceCopied": false,
+  "probeRerun": false,
+  "networkUsed": false,
+  "onlineCodeWriteRequests": 0,
+  "notDeployed": true
+}

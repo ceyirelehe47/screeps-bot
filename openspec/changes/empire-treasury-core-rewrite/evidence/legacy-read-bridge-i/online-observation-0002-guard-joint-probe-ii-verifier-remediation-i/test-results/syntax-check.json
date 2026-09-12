@@ -1,0 +1,111 @@
+{
+  "status": "SYNTAX_CHECK_VERIFIED",
+  "files": 21,
+  "results": [
+    {
+      "path": "implementation/tests/assembly.spec.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "implementation/tests/fixture.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "implementation/tests/heartbeat-continuity.spec.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "implementation/tests/materializer.spec.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "implementation/tests/readjudication-chain.spec.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "implementation/tests/report.spec.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "implementation/tests/verify-joint-probe.spec.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "implementation/verifier-runtime/common.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "implementation/verifier-runtime/evidence-contract.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "implementation/verifier-runtime/heartbeat-continuity.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "implementation/verifier-runtime/verify-joint-probe.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "tools/adjudicate-existing-evidence.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "tools/assemble-evidence.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "tools/materialize-pinned-evidence.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "tools/run-implementation-tests.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "tools/tool-common.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "tools/verify-assembled-evidence.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "tools/verify-current-heads.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "tools/verify-package.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "tools/verify-readjudication.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    },
+    {
+      "path": "validation/support/casefold-fixture-preload.cjs",
+      "exitCode": 0,
+      "stderr": ""
+    }
+  ]
+}
