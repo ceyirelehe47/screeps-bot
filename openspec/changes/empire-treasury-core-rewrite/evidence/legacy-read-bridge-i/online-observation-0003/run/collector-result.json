@@ -1,0 +1,11 @@
+{
+  "kind": "collector-result-v3",
+  "runId": "52ec356bc4c01aaf4197f2962beea646",
+  "pid": 13432,
+  "status": "failed",
+  "reason": "BRIDGE_JSON_INVALID",
+  "exitCode": 1,
+  "closedAtMs": 1789182073054,
+  "footerWritten": true,
+  "lockRemoved": true
+}

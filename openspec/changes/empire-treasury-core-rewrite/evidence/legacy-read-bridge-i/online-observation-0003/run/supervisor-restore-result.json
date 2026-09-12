@@ -1,0 +1,5 @@
+{
+  "status": "ONLINE_CLOSE_UNCONFIRMED",
+  "confirmed": false,
+  "error": "HTTP_TRANSPORT_ERROR"
+}

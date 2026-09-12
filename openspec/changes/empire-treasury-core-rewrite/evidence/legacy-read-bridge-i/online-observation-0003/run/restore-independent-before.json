@@ -1,0 +1,18 @@
+{
+  "status": "ONLINE_CLOSE_UNCONFIRMED",
+  "confirmed": false,
+  "checks": [
+    {
+      "atMs": 1789182081447,
+      "error": "HTTP_TRANSPORT_ERROR"
+    },
+    {
+      "atMs": 1789182084030,
+      "error": "HTTP_TRANSPORT_ERROR"
+    },
+    {
+      "atMs": 1789182087489,
+      "error": "HTTP_TRANSPORT_ERROR"
+    }
+  ]
+}

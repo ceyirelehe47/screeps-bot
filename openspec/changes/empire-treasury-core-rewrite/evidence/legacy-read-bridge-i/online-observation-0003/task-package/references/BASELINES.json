@@ -1,0 +1,30 @@
+{
+  "repository": "ceyirelehe47/screeps-bot",
+  "refactor": "ee03fb4a871b1a707a4244d2f3a7819e5982324d",
+  "compat": "fcfc125f0e5cd6c3370318b4fee0450f4d09af53",
+  "productionCommit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+  "productionModuleDigest": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+  "productionMain": {
+    "bytes": 4494463,
+    "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+  },
+  "canonicalDeployGuardGitBlob": "796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8",
+  "account": {
+    "username": "forster",
+    "userId": "634fe406347a7b69b28aeccb",
+    "server": "https://screeps.com",
+    "branch": "default",
+    "shard": "shard1"
+  },
+  "completedPrerequisite": {
+    "evidenceCommit": "ee03fb4a871b1a707a4244d2f3a7819e5982324d",
+    "scope": "Guard Joint Probe II independent re-adjudication only",
+    "rerunRequired": false
+  },
+  "candidateRegression": {
+    "suites": 195,
+    "tests": 685,
+    "mustRunOnAgent": true
+  },
+  "newEvidencePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0003"
+}

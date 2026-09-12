@@ -1,0 +1,20 @@
+{
+  "files": [
+    "tests/actions.spec.cjs",
+    "tests/archive.spec.cjs",
+    "tests/common-atomic.spec.cjs",
+    "tests/guard-control.spec.cjs",
+    "tests/process-chain.spec.cjs",
+    "tests/recovery.spec.cjs",
+    "tests/samples.spec.cjs",
+    "tests/session.spec.cjs",
+    "tests/source-close.spec.cjs",
+    "tests/transport.spec.cjs",
+    "tests/verifier.spec.cjs"
+  ],
+  "count": 92,
+  "requiredFailed": 0,
+  "requiredSkipped": 0,
+  "requiredTodo": 0,
+  "requiredCancelled": 0
+}

@@ -1,0 +1,6 @@
+{
+  "status": "ONLINE_CLOSE_UNCONFIRMED",
+  "confirmed": false,
+  "error": "HTTP_TRANSPORT_ERROR",
+  "atMs": 1789182073749
+}

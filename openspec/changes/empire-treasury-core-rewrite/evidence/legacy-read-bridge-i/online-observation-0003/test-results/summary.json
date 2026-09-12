@@ -1,0 +1,25 @@
+{
+  "status": "FORMAL_0003_TESTS_VERIFIED",
+  "tests": 92,
+  "passed": 92,
+  "failed": 0,
+  "skipped": 0,
+  "todo": 0,
+  "cancelled": 0,
+  "platform": "win32",
+  "node": "v22.19.0",
+  "packageFingerprint": "c45c0e0f5cd45c302d383dbbcb772d37da4122069b23070d846036bcd4a6b161",
+  "testFiles": [
+    "tests/actions.spec.cjs",
+    "tests/archive.spec.cjs",
+    "tests/common-atomic.spec.cjs",
+    "tests/guard-control.spec.cjs",
+    "tests/process-chain.spec.cjs",
+    "tests/recovery.spec.cjs",
+    "tests/samples.spec.cjs",
+    "tests/session.spec.cjs",
+    "tests/source-close.spec.cjs",
+    "tests/transport.spec.cjs",
+    "tests/verifier.spec.cjs"
+  ]
+}

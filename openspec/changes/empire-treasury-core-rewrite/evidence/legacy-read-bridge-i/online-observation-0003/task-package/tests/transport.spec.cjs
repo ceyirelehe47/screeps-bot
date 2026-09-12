@@ -1,0 +1,8 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),http=require('node:http');const{client}=require('../runtime/transport.cjs');
+async function serverTest(handler,fn){const s=http.createServer(handler);await new Promise(r=>s.listen(0,'127.0.0.1',r));try{await fn(client({token:'FAKE_TEST_TOKEN_000000000000'}, {testOrigin:`http://127.0.0.1:${s.address().port}`}));}finally{s.closeAllConnections();await new Promise(r=>s.close(r));}}
+test('real HTTP transport preserves exact code request and issues no retry POST',()=>serverTest((q,r)=>{let body='';q.on('data',b=>body+=b);q.on('end',()=>{assert.equal(q.url,'/api/user/code');assert.equal(q.method,'POST');assert.deepEqual(JSON.parse(body),{branch:'default',modules:{main:'fixture'}});r.end('{"ok":1}');});},async a=>assert.equal((await a.setCode('default',{main:'fixture'})).ok,1)));
+test('real HTTP transport refuses non-200 and does not follow redirects',()=>serverTest((q,r)=>{r.writeHead(302,{Location:'https://other.invalid/'});r.end('{}');},a=>assert.rejects(()=>a.me(),{code:'HTTP_NOT_200'})));
+test('real HTTP transport enforces bounded request time',()=>serverTest((q,r)=>{},a=>assert.rejects(()=>a.me(20),{code:'HTTP_DEADLINE'})));
+test('real HTTP transport refuses malformed API JSON',()=>serverTest((q,r)=>r.end('broken'),a=>assert.rejects(()=>a.me(),{code:'HTTP_JSON_INVALID'})));
+test('loopback-only test origin and explicit write branch are enforced',()=>{assert.throws(()=>client({token:'fake'},{testOrigin:'https://example.com'}),{code:'INVALID_TEST_ORIGIN'});assert.throws(()=>client({token:'fake'}).setCode('other',{}),{code:'WRONG_WRITE_BRANCH'});});

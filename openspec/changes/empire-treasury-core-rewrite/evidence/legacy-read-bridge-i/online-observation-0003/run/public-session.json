@@ -1,0 +1,76 @@
+{
+  "kind": "formal-compat-observation-0003-public/v1",
+  "runId": "52ec356bc4c01aaf4197f2962beea646",
+  "server": "https://screeps.com",
+  "username": "forster",
+  "userId": "634fe406347a7b69b28aeccb",
+  "branch": "default",
+  "shard": "shard1",
+  "refactorBase": "ee03fb4a871b1a707a4244d2f3a7819e5982324d",
+  "compatBase": "fcfc125f0e5cd6c3370318b4fee0450f4d09af53",
+  "observedTick": 73646329,
+  "profile": {
+    "enabled": true,
+    "shardName": "shard1",
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "startTick": 73646500,
+    "endTick": 73647600,
+    "intervalTicks": 100,
+    "minBucket": 2000,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "maxLogBytes": 16384
+  },
+  "profileHead": "d895423b8226d41b6352e1723695e1326fc3e69a",
+  "profileTree": "ab60003ebf47bbaa5d3d2c29e588b5a42b2bfa0b",
+  "build": {
+    "commit": "d895423b8226d41b6352e1723695e1326fc3e69a",
+    "tree": "ab60003ebf47bbaa5d3d2c29e588b5a42b2bfa0b",
+    "dirty": "folded_out",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+d895423@2026-09-12T02:49:59.957Z",
+    "embeddedBundleHash": "150ee255ec637f960abc19b1b2b60b2a41dc6ccc3adc549249d43dc5e25131d0"
+  },
+  "backupBuild": {
+    "commit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+    "tree": "929fa9557b1a36135a5ef1605231be1d16e87366",
+    "dirty": "folded_out",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+06ffedb@2026-08-29T14:28:59.403Z"
+  },
+  "preparedAtMs": 1789181448730,
+  "wallLimitMs": 5400000,
+  "backupFileSha256": "26a08737b9fdc5e9908c3a973fe2a982bddd8c7e1c549ce783af0eb970c8d398",
+  "candidateFileSha256": "8fa8261637dc24aaac26ef24c925accb06ab229509b78285e8660cb0e59a53b2",
+  "backupDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494463,
+        "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+      }
+    ]
+  },
+  "candidateDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "6ef65a948963bc1247811c4f62ba9f06aadceeadcff8d2518d5df15b8c211a72",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4586615,
+        "sha256": "96fff4fc01c946bf8303955eb73a7723abcda89f7dc7221857d26541e657d182"
+      }
+    ]
+  }
+}

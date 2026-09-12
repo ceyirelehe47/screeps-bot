@@ -1,0 +1,166 @@
+{
+  "status": "ALL_CJS_SYNTAX_VALID",
+  "node": "v22.16.0",
+  "files": [
+    {
+      "path": "runtime/actions.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/check-profile.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/collector-diagnostics.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/collector.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/common.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/driver.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/guard-control.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/policy.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/protocol.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/recovery-worker.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/samples.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/store.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/transport.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "runtime/verify-run.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/actions.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/archive.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/common-atomic.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/fixture.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/full-evidence.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/guard-control.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/process-chain.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/process-fixture.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/recovery.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/samples.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/session.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/source-close.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/transport.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tests/verifier.spec.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/archive.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/build.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/check-baseline.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/close-source.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/execute.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/observe.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/prepare.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/publish.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/reconcile.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/run-tests.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/util.cjs",
+      "exitCode": 0
+    },
+    {
+      "path": "tools/verify.cjs",
+      "exitCode": 0
+    }
+  ]
+}

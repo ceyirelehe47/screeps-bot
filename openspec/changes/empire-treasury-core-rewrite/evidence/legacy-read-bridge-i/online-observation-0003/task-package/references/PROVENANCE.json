@@ -1,0 +1,65 @@
+{
+  "borrowedUnmodifiedRuntime": [
+    {
+      "file": "runtime/common.cjs",
+      "sha256": "2852ddcb9427dc5b40647f73be10fe3f3b12f4256e7d48135f733e4f14b7befe",
+      "bytes": 8092,
+      "source": "Previously accepted Guard Joint Probe II task-package.zip at https://github.com/ceyirelehe47/screeps-bot/blob/64d92713352826fb547a0860a963b11b4de4f440/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0002-guard-joint-probe-ii/task-package.zip",
+      "sourcePackageSha256": "69ded1fa9b6c49cc329e5efdcac10230da1c02244d47df848505c8c5ae520dee",
+      "byteIdentical": true
+    },
+    {
+      "file": "runtime/guard-control.cjs",
+      "sha256": "23a61bf0c8dbc507def30fe469bc18fc6a02010399a9625941454751bf02daf9",
+      "bytes": 8683,
+      "source": "Previously accepted Guard Joint Probe II task-package.zip at https://github.com/ceyirelehe47/screeps-bot/blob/64d92713352826fb547a0860a963b11b4de4f440/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0002-guard-joint-probe-ii/task-package.zip",
+      "sourcePackageSha256": "69ded1fa9b6c49cc329e5efdcac10230da1c02244d47df848505c8c5ae520dee",
+      "byteIdentical": true
+    },
+    {
+      "file": "runtime/collector-diagnostics.cjs",
+      "sha256": "94307209003c140c278adc37a99e706b175e25d9fc19e95ce97807a9e986fcc8",
+      "bytes": 3231,
+      "source": "Previously accepted Guard Joint Probe II task-package.zip at https://github.com/ceyirelehe47/screeps-bot/blob/64d92713352826fb547a0860a963b11b4de4f440/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0002-guard-joint-probe-ii/task-package.zip",
+      "sourcePackageSha256": "69ded1fa9b6c49cc329e5efdcac10230da1c02244d47df848505c8c5ae520dee",
+      "byteIdentical": true
+    },
+    {
+      "file": "runtime/check-profile.cjs",
+      "sha256": "d827c4d4a20d009d23eb45317e0a24389f7801d1be247410db1b72f8750f16d3",
+      "bytes": 3665,
+      "source": "Previously accepted Guard Joint Probe II task-package.zip at https://github.com/ceyirelehe47/screeps-bot/blob/64d92713352826fb547a0860a963b11b4de4f440/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0002-guard-joint-probe-ii/task-package.zip",
+      "sourcePackageSha256": "69ded1fa9b6c49cc329e5efdcac10230da1c02244d47df848505c8c5ae520dee",
+      "byteIdentical": true
+    },
+    {
+      "file": "runtime/protocol.cjs",
+      "source": "https://github.com/ceyirelehe47/screeps-bot/blob/ee03fb4a871b1a707a4244d2f3a7819e5982324d/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0002-collector-reliability-i/02-tooling/as-shipped/protocol.cjs.original-as-shipped",
+      "gitBlob": "cc537ffbd1dba96125787449ce9eb0643cf1e1f5",
+      "sha256": "0279dc20b73ab949b094e85ac198719f901d6590db92d7f7a2e8957f080bb2ce",
+      "bytes": 6541,
+      "gitBlobIdentityVerified": true
+    },
+    {
+      "file": "runtime/transport.cjs",
+      "source": "https://github.com/ceyirelehe47/screeps-bot/blob/ee03fb4a871b1a707a4244d2f3a7819e5982324d/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0002-collector-reliability-i/02-tooling/as-shipped/transport.cjs.original-as-shipped",
+      "gitBlob": "828617ef3d415222c193ed71e102f500f62e51bf",
+      "sha256": "bac45cd105ff732aa99a6d57389c3c120f78702d4e64791dcc2ef0c05266fba2",
+      "bytes": 3839,
+      "gitBlobIdentityVerified": true
+    }
+  ],
+  "reviewedFrozenProductionSources": [
+    "https://github.com/ceyirelehe47/screeps-bot/blob/fcfc125f0e5cd6c3370318b4fee0450f4d09af53/src/runtime/treasuryCompatRead.ts",
+    "https://github.com/ceyirelehe47/screeps-bot/blob/fcfc125f0e5cd6c3370318b4fee0450f4d09af53/src/runtime/treasuryCompatConfig.ts",
+    "https://github.com/ceyirelehe47/screeps-bot/blob/fcfc125f0e5cd6c3370318b4fee0450f4d09af53/rollup.config.js",
+    "https://github.com/ceyirelehe47/screeps-bot/blob/fcfc125f0e5cd6c3370318b4fee0450f4d09af53/package.json",
+    "https://github.com/ceyirelehe47/screeps-bot/blob/fcfc125f0e5cd6c3370318b4fee0450f4d09af53/scripts/verify-jest-budget.mjs",
+    "https://github.com/ceyirelehe47/screeps-bot/blob/ee03fb4a871b1a707a4244d2f3a7819e5982324d/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0002-guard-joint-probe-ii-verifier-remediation-i/FINAL-VERIFICATION.json"
+  ],
+  "notes": [
+    "生产修改仅由固定配置生成器输出 ON/OFF；不修改冻结读取器。",
+    "新 runtime 使用已验收的低层读取/摘要/重试代码；新监督器、恢复工作进程与原始日志验收器属于本包新增实现，不能把旧探针验收直接扩张成新正式执行链已实机验证。",
+    "common.cjs 中保留的旧 probe 基线常量不用于本轮正式基线；本轮基线由 runtime/policy.cjs 和 tools/check-baseline.cjs 明确约束。"
+  ]
+}

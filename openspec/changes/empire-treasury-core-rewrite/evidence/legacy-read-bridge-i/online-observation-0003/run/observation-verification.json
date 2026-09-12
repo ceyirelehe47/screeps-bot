@@ -1,0 +1,40 @@
+{
+  "status": "ONLINE_COMPAT_READ_INCONCLUSIVE",
+  "closure": "ONLINE_CLOSE_UNCONFIRMED",
+  "runId": "52ec356bc4c01aaf4197f2962beea646",
+  "profileHead": "d895423b8226d41b6352e1723695e1326fc3e69a",
+  "observed": false,
+  "restored": false,
+  "issues": [
+    "COLLECTOR_TERMINAL_INVALID",
+    "FOOTER_INVALID",
+    "BRIDGE_JSON_INVALID",
+    "EXPECTED_12_SAMPLES",
+    "RESTORE_CONFIRMATION_INCOMPLETE",
+    "RESTORE_ATTEMPT_MISSING",
+    "RESTORED_DEPLOY_FRAME_MISSING",
+    "GUARD_NOT_NORMAL_COMPLETION",
+    "DRIVER_OR_PROCESS_FAILURE"
+  ],
+  "receivedTicks": [],
+  "expectedTicks": [
+    73646500,
+    73646600,
+    73646700,
+    73646800,
+    73646900,
+    73647000,
+    73647100,
+    73647200,
+    73647300,
+    73647400,
+    73647500,
+    73647600
+  ],
+  "cpuIncludingEmit": [],
+  "finalSampleCpuIncludingEmit": "not_observable_with_frozen_reader",
+  "finalSampleCpuBeforeSerializationAndEmit": null,
+  "legacyProjectionComparisons": {},
+  "commitmentEvidence": "12 complete frozen-reader reports required; no independent builder-call counter exists",
+  "coverage": "two rooms, energy/H, storage/terminal; no empire-total or full Treasury lifecycle equivalence claim"
+}

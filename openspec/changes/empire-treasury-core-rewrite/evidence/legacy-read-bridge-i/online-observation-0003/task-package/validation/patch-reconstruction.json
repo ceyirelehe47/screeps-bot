@@ -1,0 +1,63 @@
+{
+  "status": "PATCH_MIRRORS_RECONSTRUCT_EXACT_FILES",
+  "patches": [
+    {
+      "patch": "0001-formal-runtime.patch",
+      "check": true,
+      "apply": true
+    },
+    {
+      "patch": "0002-execution-and-evidence-tools.patch",
+      "check": true,
+      "apply": true
+    },
+    {
+      "patch": "0003-fixed-regression-tests.patch",
+      "check": true,
+      "apply": true
+    }
+  ],
+  "fileCount": 40,
+  "files": [
+    "runtime/actions.cjs",
+    "runtime/check-profile.cjs",
+    "runtime/collector-diagnostics.cjs",
+    "runtime/collector.cjs",
+    "runtime/common.cjs",
+    "runtime/driver.cjs",
+    "runtime/guard-control.cjs",
+    "runtime/policy.cjs",
+    "runtime/protocol.cjs",
+    "runtime/recovery-worker.cjs",
+    "runtime/samples.cjs",
+    "runtime/store.cjs",
+    "runtime/transport.cjs",
+    "runtime/verify-run.cjs",
+    "tools/archive.cjs",
+    "tools/build.cjs",
+    "tools/check-baseline.cjs",
+    "tools/close-source.cjs",
+    "tools/execute.cjs",
+    "tools/observe.cjs",
+    "tools/prepare.cjs",
+    "tools/publish.cjs",
+    "tools/reconcile.cjs",
+    "tools/run-tests.cjs",
+    "tools/util.cjs",
+    "tools/verify.cjs",
+    "tests/actions.spec.cjs",
+    "tests/archive.spec.cjs",
+    "tests/common-atomic.spec.cjs",
+    "tests/fixture.cjs",
+    "tests/full-evidence.cjs",
+    "tests/guard-control.spec.cjs",
+    "tests/process-chain.spec.cjs",
+    "tests/process-fixture.cjs",
+    "tests/recovery.spec.cjs",
+    "tests/samples.spec.cjs",
+    "tests/session.spec.cjs",
+    "tests/source-close.spec.cjs",
+    "tests/transport.spec.cjs",
+    "tests/verifier.spec.cjs"
+  ]
+}

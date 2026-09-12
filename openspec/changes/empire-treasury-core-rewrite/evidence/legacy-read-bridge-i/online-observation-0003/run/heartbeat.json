@@ -1,0 +1,20 @@
+{
+  "runId": "52ec356bc4c01aaf4197f2962beea646",
+  "pid": 13432,
+  "userId": "634fe406347a7b69b28aeccb",
+  "shard": "shard1",
+  "state": "failed",
+  "socketState": "closed",
+  "updatedAtMs": 1789182073051,
+  "authenticatedAtMs": 1789181452614,
+  "lastConsoleAtMs": 1789182073049,
+  "lastCpuAtMs": 1789182069025,
+  "lastPositiveCpuAtMs": 1789182069025,
+  "lastBridgeTick": null,
+  "lastBridgeAtMs": null,
+  "bridgeReports": 0,
+  "stopReason": "BRIDGE_JSON_INVALID",
+  "duplicateSamples": 0,
+  "candidateDeployAtMs": 1789181473270,
+  "restoredDeployAtMs": null
+}

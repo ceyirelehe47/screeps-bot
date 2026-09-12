@@ -1,0 +1,562 @@
+TAP version 13
+# Subtest: actual upload and restore algorithms make one POST each and compare typed readbacks
+ok 1 - actual upload and restore algorithms make one POST each and compare typed readbacks
+  ---
+  duration_ms: 35.6669
+  type: 'test'
+  ...
+# Subtest: second upload is refused by durable one-use marker
+ok 2 - second upload is refused by durable one-use marker
+  ---
+  duration_ms: 16.2479
+  type: 'test'
+  ...
+# Subtest: profile that expires after binding cannot reach a POST
+ok 3 - profile that expires after binding cannot reach a POST
+  ---
+  duration_ms: 4.8238
+  type: 'test'
+  ...
+# Subtest: changed baseline blocks upload and never overwrites third-party code
+ok 4 - changed baseline blocks upload and never overwrites third-party code
+  ---
+  duration_ms: 4.694
+  type: 'test'
+  ...
+# Subtest: third-party code after upload is a restore conflict with no second POST
+ok 5 - third-party code after upload is a restore conflict with no second POST
+  ---
+  duration_ms: 27.1055
+  type: 'test'
+  ...
+# Subtest: a thrown upload request remains unknown and is never silently retried
+ok 6 - a thrown upload request remains unknown and is never silently retried
+  ---
+  duration_ms: 16.3338
+  type: 'test'
+  ...
+# Subtest: an accepted POST with a missing readback is explicitly unconfirmed
+ok 7 - an accepted POST with a missing readback is explicitly unconfirmed
+  ---
+  duration_ms: 15.8079
+  type: 'test'
+  ...
+# Subtest: uncertain upload with baseline currently visible does not prove restoration
+ok 8 - uncertain upload with baseline currently visible does not prove restoration
+  ---
+  duration_ms: 25.2684
+  type: 'test'
+  ...
+# Subtest: durable restore marker blocks a repeated or crashed restore request
+ok 9 - durable restore marker blocks a repeated or crashed restore request
+  ---
+  duration_ms: 32.6867
+  type: 'test'
+  ...
+# Subtest: restore does nothing at all when no candidate upload was attempted
+ok 10 - restore does nothing at all when no candidate upload was attempted
+  ---
+  duration_ms: 3.5347
+  type: 'test'
+  ...
+# Subtest: read-only reconciliation does not call any writer
+ok 11 - read-only reconciliation does not call any writer
+  ---
+  duration_ms: 42.3439
+  type: 'test'
+  ...
+# Subtest: two simultaneous recovery calls are serialized and restore only once
+ok 12 - two simultaneous recovery calls are serialized and restore only once
+  ---
+  duration_ms: 154.0692
+  type: 'test'
+  ...
+# Subtest: guard not ready blocks upload before durable attempt and before POST
+ok 13 - guard not ready blocks upload before durable attempt and before POST
+  ---
+  duration_ms: 5.8932
+  type: 'test'
+  ...
+# Subtest: canonical typed comparison rejects a text/binary alias
+ok 14 - canonical typed comparison rejects a text/binary alias
+  ---
+  duration_ms: 0.5936
+  type: 'test'
+  ...
+# Subtest: branch and account identity remain fail-closed
+ok 15 - branch and account identity remain fail-closed
+  ---
+  duration_ms: 0.3074
+  type: 'test'
+  ...
+# Subtest: real evidence assembly excludes private module snapshots and detects later tampering
+ok 16 - real evidence assembly excludes private module snapshots and detects later tampering
+  ---
+  duration_ms: 999.2432
+  type: 'test'
+  ...
+# Subtest: archive allowlist never contains snapshots and scanner finds token representations
+ok 17 - archive allowlist never contains snapshots and scanner finds token representations
+  ---
+  duration_ms: 0.2476
+  type: 'test'
+  ...
+# Subtest: atomicJson repeatedly replaces an existing artifact without leaving temp files
+ok 18 - atomicJson repeatedly replaces an existing artifact without leaving temp files
+  ---
+  duration_ms: 678.2633
+  type: 'test'
+  ...
+# Subtest: atomicJson preserves create-once JSON shape across replacement
+ok 19 - atomicJson preserves create-once JSON shape across replacement
+  ---
+  duration_ms: 22.0148
+  type: 'test'
+  ...
+# Subtest: classifies time transport, deadline and payload failures without a generic catch-all label
+ok 20 - classifies time transport, deadline and payload failures without a generic catch-all label
+  ---
+  duration_ms: 2.3857
+  type: 'test'
+  ...
+# Subtest: classifies immutable attempt reads and readiness writes separately
+ok 21 - classifies immutable attempt reads and readiness writes separately
+  ---
+  duration_ms: 0.3533
+  type: 'test'
+  ...
+# Subtest: safe diagnostics contain no raw message or stack and hash only redacted bounded text
+ok 22 - safe diagnostics contain no raw message or stack and hash only redacted bounded text
+  ---
+  duration_ms: 2.1559
+  type: 'test'
+  ...
+# Subtest: a transient first attempt can recover inside the same bounded cycle
+ok 23 - a transient first attempt can recover inside the same bounded cycle
+  ---
+  duration_ms: 1.352
+  type: 'test'
+  ...
+# Subtest: one fully failed time-read cycle is degraded, not terminal
+ok 24 - one fully failed time-read cycle is degraded, not terminal
+  ---
+  duration_ms: 1.0677
+  type: 'test'
+  ...
+# Subtest: a second consecutive failed cycle fails closed with the exact last channel class
+ok 25 - a second consecutive failed cycle fails closed with the exact last channel class
+  ---
+  duration_ms: 1.782
+  type: 'test'
+  ...
+# Subtest: a successful later cycle resets the consecutive failure counter
+ok 26 - a successful later cycle resets the consecutive failure counter
+  ---
+  duration_ms: 5.5321
+  type: 'test'
+  ...
+# Subtest: an unreadable HTTP success payload is classified as payload failure
+ok 27 - an unreadable HTTP success payload is classified as payload failure
+  ---
+  duration_ms: 0.7679
+  type: 'test'
+  ...
+# Subtest: time read budgets stay positive and never exceed the per-attempt cap
+ok 28 - time read budgets stay positive and never exceed the per-attempt cap
+  ---
+  duration_ms: 0.953
+  type: 'test'
+  ...
+# Subtest: a late first failed cycle is still degraded when there has never been a successful read
+ok 29 - a late first failed cycle is still degraded when there has never been a successful read
+  ---
+  duration_ms: 1.0997
+  type: 'test'
+  ...
+# Subtest: failure audit records do not retain injected credential text
+ok 30 - failure audit records do not retain injected credential text
+  ---
+  duration_ms: 1.5367
+  type: 'test'
+  ...
+# Subtest: stableErrorCode rejects unsafe failure codes instead of echoing arbitrary text
+ok 31 - stableErrorCode rejects unsafe failure codes instead of echoing arbitrary text
+  ---
+  duration_ms: 0.4245
+  type: 'test'
+  ...
+# Subtest: safe diagnostics enforce a true UTF-8 byte ceiling
+ok 32 - safe diagnostics enforce a true UTF-8 byte ceiling
+  ---
+  duration_ms: 1.3657
+  type: 'test'
+  ...
+# Subtest: artifact reads tolerate bounded transient failures and preserve the final value
+ok 33 - artifact reads tolerate bounded transient failures and preserve the final value
+  ---
+  duration_ms: 1.9461
+  type: 'test'
+  ...
+# Subtest: artifact reads return undefined for an absent optional file and fail for an absent required file
+ok 34 - artifact reads return undefined for an absent optional file and fail for an absent required file
+  ---
+  duration_ms: 1.4177
+  type: 'test'
+  ...
+# Subtest: real supervisor + separate collector + separate recovery worker complete one upload, twelve reports, one restore and runtime tail
+ok 35 - real supervisor + separate collector + separate recovery worker complete one upload, twelve reports, one restore and runtime tail
+  ---
+  duration_ms: 4045.2522
+  type: 'test'
+  ...
+# Subtest: separate processes preserve one-use restoration after crashRecovery
+ok 36 - separate processes preserve one-use restoration after crashRecovery
+  ---
+  duration_ms: 3783.7516
+  type: 'test'
+  ...
+# Subtest: separate processes preserve one-use restoration after failCollector
+ok 37 - separate processes preserve one-use restoration after failCollector
+  ---
+  duration_ms: 1169.9871
+  type: 'test'
+  ...
+# Subtest: normal active observation does not ask for restore
+ok 38 - normal active observation does not ask for restore
+  ---
+  duration_ms: 4.5307
+  type: 'test'
+  ...
+# Subtest: recovery closes on explicit close
+ok 39 - recovery closes on explicit close
+  ---
+  duration_ms: 12.1055
+  type: 'test'
+  ...
+# Subtest: recovery closes on wall deadline
+ok 40 - recovery closes on wall deadline
+  ---
+  duration_ms: 0.6801
+  type: 'test'
+  ...
+# Subtest: recovery closes on stale collector
+ok 41 - recovery closes on stale collector
+  ---
+  duration_ms: 0.5756
+  type: 'test'
+  ...
+# Subtest: recovery closes on stale CPU
+ok 42 - recovery closes on stale CPU
+  ---
+  duration_ms: 0.7599
+  type: 'test'
+  ...
+# Subtest: recovery closes on uncertain upload
+ok 43 - recovery closes on uncertain upload
+  ---
+  duration_ms: 0.6866
+  type: 'test'
+  ...
+# Subtest: recovery closes on all twelve samples
+ok 44 - recovery closes on all twelve samples
+  ---
+  duration_ms: 0.4271
+  type: 'test'
+  ...
+# Subtest: recovery closes on window expired with delivery grace exhausted
+ok 45 - recovery closes on window expired with delivery grace exhausted
+  ---
+  duration_ms: 1.1529
+  type: 'test'
+  ...
+# Subtest: recovery closes on missing samples
+ok 46 - recovery closes on missing samples
+  ---
+  duration_ms: 2.6093
+  type: 'test'
+  ...
+# Subtest: one late tick after end does not race the final console frame
+ok 47 - one late tick after end does not race the final console frame
+  ---
+  duration_ms: 1.0012
+  type: 'test'
+  ...
+# Subtest: twelve source-shaped reports retain eleven attributable post-emit CPU costs
+ok 48 - twelve source-shaped reports retain eleven attributable post-emit CPU costs
+  ---
+  duration_ms: 8.7221
+  type: 'test'
+  ...
+# Subtest: rejects authority
+ok 49 - rejects authority
+  ---
+  duration_ms: 0.996
+  type: 'test'
+  ...
+# Subtest: rejects partial CPU
+ok 50 - rejects partial CPU
+  ---
+  duration_ms: 0.4294
+  type: 'test'
+  ...
+# Subtest: rejects output limit
+ok 51 - rejects output limit
+  ---
+  duration_ms: 0.5081
+  type: 'test'
+  ...
+# Subtest: rejects missing table
+ok 52 - rejects missing table
+  ---
+  duration_ms: 0.6618
+  type: 'test'
+  ...
+# Subtest: rejects damaged table
+ok 53 - rejects damaged table
+  ---
+  duration_ms: 0.373
+  type: 'test'
+  ...
+# Subtest: rejects table over-bound
+ok 54 - rejects table over-bound
+  ---
+  duration_ms: 0.4445
+  type: 'test'
+  ...
+# Subtest: rejects observation mismatch
+ok 55 - rejects observation mismatch
+  ---
+  duration_ms: 0.3416
+  type: 'test'
+  ...
+# Subtest: rejects duplicate endpoint
+ok 56 - rejects duplicate endpoint
+  ---
+  duration_ms: 0.7526
+  type: 'test'
+  ...
+# Subtest: rejects invalid capacity
+ok 57 - rejects invalid capacity
+  ---
+  duration_ms: 0.9877
+  type: 'test'
+  ...
+# Subtest: rejects incomplete commitment
+ok 58 - rejects incomplete commitment
+  ---
+  duration_ms: 0.5481
+  type: 'test'
+  ...
+# Subtest: rejects duplicate commitment
+ok 59 - rejects duplicate commitment
+  ---
+  duration_ms: 0.3559
+  type: 'test'
+  ...
+# Subtest: rejects wrong scope
+ok 60 - rejects wrong scope
+  ---
+  duration_ms: 0.2663
+  type: 'test'
+  ...
+# Subtest: rejects wrong source
+ok 61 - rejects wrong source
+  ---
+  duration_ms: 0.3116
+  type: 'test'
+  ...
+# Subtest: rejects CPU budget
+ok 62 - rejects CPU budget
+  ---
+  duration_ms: 0.2309
+  type: 'test'
+  ...
+# Subtest: a missing scheduled sample cannot be repaired by another tick
+ok 63 - a missing scheduled sample cannot be repaired by another tick
+  ---
+  duration_ms: 2.1136
+  type: 'test'
+  ...
+# Subtest: heap reset and CPU overrun are rejected by previousRun linkage
+ok 64 - heap reset and CPU overrun are rejected by previousRun linkage
+  ---
+  duration_ms: 1.476
+  type: 'test'
+  ...
+# Subtest: fresh binding is computed from execution-time tick rather than a literal window
+ok 65 - fresh binding is computed from execution-time tick rather than a literal window
+  ---
+  duration_ms: 0.2673
+  type: 'test'
+  ...
+# Subtest: configuration limits cannot be enlarged
+ok 66 - configuration limits cannot be enlarged
+  ---
+  duration_ms: 1.0384
+  type: 'test'
+  ...
+# Subtest: WebSocket watch pins authentication, shard and duplicate identity
+ok 67 - WebSocket watch pins authentication, shard and duplicate identity
+  ---
+  duration_ms: 1.4589
+  type: 'test'
+  ...
+# Subtest: channel freshness requires actual CPU rather than merely a memory field
+ok 68 - channel freshness requires actual CPU rather than merely a memory field
+  ---
+  duration_ms: 0.3869
+  type: 'test'
+  ...
+# Subtest: an unknown deploy identity during observation is rejected immediately
+ok 69 - an unknown deploy identity during observation is rejected immediately
+  ---
+  duration_ms: 0.3669
+  type: 'test'
+  ...
+# Subtest: missing aggregate commitment-health fields are not fabricated as healthy zeros
+ok 70 - missing aggregate commitment-health fields are not fabricated as healthy zeros
+  ---
+  duration_ms: 0.3658
+  type: 'test'
+  ...
+# Subtest: full private session validates serialized snapshots, fresh binding and compiled identity
+ok 71 - full private session validates serialized snapshots, fresh binding and compiled identity
+  ---
+  duration_ms: 67.2234
+  type: 'test'
+  ...
+# Subtest: snapshot mutation is refused before a writer can load the run
+ok 72 - snapshot mutation is refused before a writer can load the run
+  ---
+  duration_ms: 44.8077
+  type: 'test'
+  ...
+# Subtest: session cannot silently rebind the absolute tick window
+ok 73 - session cannot silently rebind the absolute tick window
+  ---
+  duration_ms: 65.4856
+  type: 'test'
+  ...
+# Subtest: real Git profile close adds one linear OFF commit and restores the exact original tree
+ok 74 - real Git profile close adds one linear OFF commit and restores the exact original tree
+  ---
+  duration_ms: 1409.0703
+  type: 'test'
+  ...
+# Subtest: a failed profile commit repairs only the recognized task-owned config and index path
+ok 75 - a failed profile commit repairs only the recognized task-owned config and index path
+  ---
+  duration_ms: 663.7451
+  type: 'test'
+  ...
+# Subtest: real HTTP transport preserves exact code request and issues no retry POST
+ok 76 - real HTTP transport preserves exact code request and issues no retry POST
+  ---
+  duration_ms: 78.9706
+  type: 'test'
+  ...
+# Subtest: real HTTP transport refuses non-200 and does not follow redirects
+ok 77 - real HTTP transport refuses non-200 and does not follow redirects
+  ---
+  duration_ms: 12.525
+  type: 'test'
+  ...
+# Subtest: real HTTP transport enforces bounded request time
+ok 78 - real HTTP transport enforces bounded request time
+  ---
+  duration_ms: 28.9444
+  type: 'test'
+  ...
+# Subtest: real HTTP transport refuses malformed API JSON
+ok 79 - real HTTP transport refuses malformed API JSON
+  ---
+  duration_ms: 18.1847
+  type: 'test'
+  ...
+# Subtest: loopback-only test origin and explicit write branch are enforced
+ok 80 - loopback-only test origin and explicit write branch are enforced
+  ---
+  duration_ms: 0.9828
+  type: 'test'
+  ...
+# Subtest: independent raw-log verification accepts a complete 12-slot restored observation
+ok 81 - independent raw-log verification accepts a complete 12-slot restored observation
+  ---
+  duration_ms: 129.7127
+  type: 'test'
+  ...
+# Subtest: independent verifier rejects missing source closure
+ok 82 - independent verifier rejects missing source closure
+  ---
+  duration_ms: 90.6605
+  type: 'test'
+  ...
+# Subtest: independent verifier rejects uncertain upload
+ok 83 - independent verifier rejects uncertain upload
+  ---
+  duration_ms: 88.1373
+  type: 'test'
+  ...
+# Subtest: independent verifier rejects changed restore bytes
+ok 84 - independent verifier rejects changed restore bytes
+  ---
+  duration_ms: 75.9363
+  type: 'test'
+  ...
+# Subtest: independent verifier rejects missing footer flag
+ok 85 - independent verifier rejects missing footer flag
+  ---
+  duration_ms: 81.6479
+  type: 'test'
+  ...
+# Subtest: independent verifier rejects failed guard
+ok 86 - independent verifier rejects failed guard
+  ---
+  duration_ms: 68.3664
+  type: 'test'
+  ...
+# Subtest: independent verifier rejects different runtime PID
+ok 87 - independent verifier rejects different runtime PID
+  ---
+  duration_ms: 72.5787
+  type: 'test'
+  ...
+# Subtest: independent verifier rejects driver failure
+ok 88 - independent verifier rejects driver failure
+  ---
+  duration_ms: 75.5193
+  type: 'test'
+  ...
+# Subtest: raw missing sample cannot be hidden by healthy guard summary
+ok 89 - raw missing sample cannot be hidden by healthy guard summary
+  ---
+  duration_ms: 83.9705
+  type: 'test'
+  ...
+# Subtest: duplicate footer is rejected
+ok 90 - duplicate footer is rejected
+  ---
+  duration_ms: 73.341
+  type: 'test'
+  ...
+# Subtest: long console gap is rejected rather than relying on row counts
+ok 91 - long console gap is rejected rather than relying on row counts
+  ---
+  duration_ms: 69.5319
+  type: 'test'
+  ...
+# Subtest: retained action lock prevents a successful final label
+ok 92 - retained action lock prevents a successful final label
+  ---
+  duration_ms: 69.8288
+  type: 'test'
+  ...
+1..92
+# tests 92
+# suites 0
+# pass 92
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9233.423

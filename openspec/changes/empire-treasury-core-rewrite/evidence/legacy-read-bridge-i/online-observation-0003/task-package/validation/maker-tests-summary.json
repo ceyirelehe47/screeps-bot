@@ -1,0 +1,17 @@
+{
+  "status": "MAKER_FORMAL_0003_TESTS_PASSED",
+  "environment": {
+    "platform": "linux",
+    "node": "v22.16.0"
+  },
+  "tests": 92,
+  "pass": 92,
+  "fail": 0,
+  "cancelled": 0,
+  "skipped": 0,
+  "todo": 0,
+  "tapSha256": "5d166b0fec6d92e6aa4b62dbf14b986ec711852e98a1d7c9882a92cb9fc9ac3d",
+  "officialScreepsNetworkUsed": false,
+  "productionRepositoryJestRun": false,
+  "productionBundleBuilt": false
+}

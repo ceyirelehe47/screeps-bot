@@ -1,0 +1,7 @@
+{
+  "status": "NO_CASE_FOLDED_PATH_COLLISIONS",
+  "checkedFilesBeforeMetadata": 56,
+  "collisionCount": 0,
+  "nativeWindowsTestPerformed": false,
+  "note": "Static portable-name check, not an NTFS runtime test."
+}

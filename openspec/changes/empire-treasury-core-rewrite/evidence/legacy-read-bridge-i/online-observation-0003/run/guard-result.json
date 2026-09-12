@@ -1,0 +1,25 @@
+{
+  "runId": "52ec356bc4c01aaf4197f2962beea646",
+  "status": "ONLINE_CLOSE_UNCONFIRMED",
+  "reason": "BRIDGE_JSON_INVALID",
+  "restoration": {
+    "status": "ONLINE_CLOSE_UNCONFIRMED",
+    "confirmed": false,
+    "error": "HTTP_TRANSPORT_ERROR",
+    "atMs": 1789182073749
+  },
+  "auditFailed": false,
+  "failure": null,
+  "elapsedMs": 620174,
+  "timeChannel": {
+    "createdAtMs": 1789181453592,
+    "consecutiveFailedCycles": 0,
+    "totalAttempts": 36,
+    "totalSuccessfulReads": 36,
+    "totalFailedCycles": 0,
+    "lastSuccessAtMs": 1789182059353,
+    "lastFailureAtMs": null,
+    "lastFailure": null
+  },
+  "atMs": 1789182073765
+}

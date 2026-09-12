@@ -1,0 +1,342 @@
+diff --git a/tools/archive.cjs b/tools/archive.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..216f4dce5f3bd478d9e8fee920a9214839233570
+--- /dev/null
++++ b/tools/archive.cjs
+@@ -0,0 +1,46 @@
++'use strict';
++/** Explicit allowlist; never recursively copy the live run directory. */
++const fs=require('node:fs'),path=require('node:path');const U=require('./util.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs'),S=require('../runtime/store.cjs'),V=require('../runtime/verify-run.cjs');
++const ALLOW=Object.freeze(['binding-intent.json','binding.json','public-session.json','prepare-result.json','preparation-failure.json','close-source-failure.json',
++ 'execution-attempt.json','upload-attempt.json','upload-result.json','restore-attempt.json','restore-result.json','supervisor-restore-result.json',
++ 'guard-events.jsonl','guard-ready.json','guard-result.json','collector-diagnostics.jsonl','collector-result.json','collector-stop.json','heartbeat.json','console.jsonl',
++ 'collector.process.json','collector.exit.json','collector.stdout','collector.stderr','recovery-worker.process.json','recovery-worker.exit.json','recovery-worker.stdout','recovery-worker.stderr',
++ 'restore-independent-before.json','restore-independent-after.json','runtime-confirmation.json','driver-result.json','source-closed.json','observation-verification.json','closing.json']);
++function secretScan(bytes,secret){const text=bytes.toString('utf8'),t=secret.token;return [...new Set([t,encodeURIComponent(t),t.slice(0,8),t.slice(0,16)])].some(x=>text.includes(x));}
++function archive(o){
++ U.verifyPackage();const run=path.resolve(o.run),repo=path.resolve(o.refactor),target=path.join(repo,K.EVIDENCE);U.outside(run,repo);
++ U.exactHead(repo,K.REFACTOR,'refactor/empire-treasury-rearchitecture');if(fs.existsSync(target))C.fail('EVIDENCE_TARGET_ALREADY_EXISTS');
++ const secret=C.loadSecret(o.secret);let verification;
++ if(fs.existsSync(S.file(run,'public-session.json'))){try{verification=V.verifyRun(run);}catch(e){verification={status:'ONLINE_COMPAT_READ_INCONCLUSIVE',observed:false,issues:[e?.code||'EVIDENCE_PARSE_OR_VALIDATION_FAILED']};}}
++ else verification={status:'NOT_DEPLOYED',observed:false,issues:[S.optional(run,'preparation-failure.json')?.error||'PREPARATION_NOT_COMPLETE']};
++ const files=new Map();const put=(name,bytes)=>{if(secretScan(bytes,secret))C.fail('LIVE_SECRET_FOUND_IN_ARCHIVE_INPUT');files.set(name,bytes);};
++ for(const n of ALLOW){const f=S.file(run,n);if(fs.existsSync(f)){
++  const st=fs.lstatSync(f);if(!st.isFile()||st.isSymbolicLink()||st.size>70*1048576)C.fail('ARCHIVE_INPUT_INVALID');put('run/'+n,fs.readFileSync(f));}}
++ for(const n of ['backup.json','candidate.json','session.json'])if(files.has('run/'+n))C.fail('FORBIDDEN_ARCHIVE_FILE');
++ for(const [src,scope]of[[o.tests,'test-results'],[o.offline,'candidate-offline']]){
++  for(const n of fs.readdirSync(src).sort()){
++   const f=path.join(src,n),st=fs.lstatSync(f);if(!st.isFile()||st.isSymbolicLink()||st.size>32*1048576)C.fail('OFFLINE_ARCHIVE_INPUT_INVALID');
++   if(!/^[A-Za-z0-9_.-]+$/.test(n))C.fail('ARCHIVE_FILENAME_INVALID');put(scope+'/'+n,fs.readFileSync(f));
++  }
++ }
++ // Embed the complete package as files so an independent reviewer can reproduce it.
++ function walk(dir){for(const name of fs.readdirSync(dir).sort()){const f=path.join(dir,name),st=fs.lstatSync(f);if(st.isDirectory())walk(f);else{const rel=path.relative(U.ROOT,f).split(path.sep).join('/');put('task-package/'+rel,fs.readFileSync(f));}}}walk(U.ROOT);
++ put('FINAL-VERIFICATION.json',Buffer.from(JSON.stringify(verification,null,2)+'\n'));
++ const sourceClosed=S.optional(run,'source-closed.json'),pub=S.optional(run,'public-session.json');
++ const report=`# 正式兼容观察 0003\n\n终态：\`${verification.status}\`${verification.closure?' / '+verification.closure:''}\n\n`+
++ `refactor 起点：${K.REFACTOR}\n\ncompat 起点：${K.COMPAT}\n\n候选 profile：${pub?.profileHead||'未生成'}\n\n源码关闭 HEAD：${sourceClosed?.closedHead||'未确认'}\n\n`+
++ `收到采样 tick：${JSON.stringify(verification.receivedTicks||[])}\n\n未通过项：${JSON.stringify(verification.issues)}\n\n`+
++ '本轮只审查 E3N59 / E4N58 的 storage、terminal，资源 energy / H。只读桥不签发许可、不运行完整 Treasury 生命周期。\n\n'+
++ 'CPU 口径：12 个样本的序列化/输出前成本，加上由下一样本报告的前 11 个样本完整成本。最后样本完整成本没有后继样本可报告，必须保留不可观测标记。\n\n'+
++ 'legacyProjection 的 stale/absent/mismatch 按原值归档；直接 Store 与核心 observation 的选定范围一致，不等于旧投影、全资源、全帝国或新 Treasury 决策全部等价。\n\n'+
++ '唯一候选 POST 与最多一次恢复 POST 均有执行前持久标记。目标代码 API 没有服务端 CAS；本轮以部署目标排他使用为先决条件。\n\n'+
++ '完整 backup、candidate 模块正文与凭据只留在工作树外，本目录没有复制这些文件。\n';
++ put('EXECUTION-REPORT.md',Buffer.from(report));
++ const manifest={status:'FORMAL_0003_ARCHIVE_ASSEMBLED',refactorBase:K.REFACTOR,compatBase:K.COMPAT,secretScan:{hitCount:0,needleKinds:['raw','url-encoded','prefix8','prefix16']},
++  files:Object.fromEntries([...files].map(([n,b])=>[n,{bytes:b.length,sha256:C.sha256(b)}]))};
++ put('ARCHIVE-MANIFEST.json',Buffer.from(JSON.stringify(manifest,null,2)+'\n'));
++ // All files and secrets are validated before touching the repository.
++ fs.mkdirSync(target,{recursive:false});try{for(const[n,b]of files){const f=path.join(target,n);fs.mkdirSync(path.dirname(f),{recursive:true});fs.writeFileSync(f,b,{flag:'wx'});}}catch(e){fs.rmSync(target,{recursive:true,force:true});throw e;}
++ return {status:'FORMAL_0003_ARCHIVE_ASSEMBLED',target,files:files.size,result:verification.status};
++}
++module.exports={ALLOW,secretScan,archive};if(require.main===module)U.cli(async()=>{const o=U.options(['refactor','run','tests','offline','secret']);C.required(o,'refactor','run','tests','offline','secret');console.log(JSON.stringify(archive(o)));});
+diff --git a/tools/build.cjs b/tools/build.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..4ed9b39b89f58c0d80b469657d5075919d625a4c
+--- /dev/null
++++ b/tools/build.cjs
+@@ -0,0 +1,35 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
++const U=require('./util.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs');
++function runNode(repo,entry,args,out,name,{timeout=900000}={}){
++ if(process.env.DEST||process.env.DEPLOY_ALLOW_DIRTY||process.env.NODE_OPTIONS)C.fail('UNSAFE_BUILD_OR_NODE_ENVIRONMENT');
++ const bin=path.resolve(repo,entry);if(!fs.existsSync(bin))C.fail('LOCKED_DEPENDENCIES_NOT_INSTALLED');
++ const r=cp.spawnSync(process.execPath,[bin,...args],{cwd:repo,encoding:'utf8',timeout,maxBuffer:32*1048576,windowsHide:true});
++ fs.writeFileSync(path.join(out,name+'.stdout'),r.stdout||'',{flag:'wx'});fs.writeFileSync(path.join(out,name+'.stderr'),r.stderr||'',{flag:'wx'});
++ C.writeNew(path.join(out,name+'.exit.json'),{status:r.status,signal:r.signal,error:r.error?'CHILD_FAILURE':null});
++ if(r.status!==0||r.error)C.fail('OFFLINE_CHILD_FAILED',{step:name});return r;
++}
++function baselineOffline(repo,out){
++ U.exactHead(repo,K.COMPAT,'compat/treasury-read-bridge-i');U.newDir(out);
++ runNode(repo,'node_modules/typescript/bin/tsc',['-p','tsconfig.build.json','--noEmit'],out,'typecheck-build');
++ runNode(repo,'node_modules/typescript/bin/tsc',['-p','tsconfig.json','--noEmit'],out,'typecheck-tests');
++ runNode(repo,'scripts/verify-jest-budget.mjs',[],out,'jest-budget');
++ runNode(repo,'node_modules/rollup/dist/bin/rollup',['-c'],out,'warm-build');
++ U.clean(repo);
++ const result={status:'COMPAT_BASELINE_OFFLINE_VERIFIED',head:K.COMPAT,tests:{suites:195,tests:685},atMs:Date.now()};C.writeNew(path.join(out,'result.json'),result);return result;
++}
++function detachedBuild(compat,head,work){
++ const repo=path.join(work,'build');U.git(compat,['worktree','add','--detach',repo,head]);
++ const modules=path.join(compat,'node_modules');fs.symlinkSync(path.resolve(modules),path.join(repo,'node_modules'),'junction');
++ U.clean(repo);const tree=U.textGit(repo,['rev-parse','HEAD^{tree}']);
++ // Detached + no DEST is required: frozen Rollup maps build-only named branches differently.
++ if(U.textGit(repo,['branch','--show-current'])!=='')C.fail('DETACHED_BUILD_REQUIRED');
++ runNode(repo,'node_modules/typescript/bin/tsc',['-p','tsconfig.build.json','--noEmit'],work,'profile-typecheck');
++ runNode(repo,'node_modules/rollup/dist/bin/rollup',['-c'],work,'profile-build');U.clean(repo);
++ if(U.textGit(repo,['rev-parse','HEAD'])!==head||U.textGit(repo,['rev-parse','HEAD^{tree}'])!==tree)C.fail('BUILD_TREE_CHANGED');
++ const names=fs.readdirSync(path.join(repo,'dist')).filter(x=>(x.endsWith('.js')&&!x.endsWith('.map.js'))||x.endsWith('.wasm')).sort();
++ if(JSON.stringify(names)!=='["main.js"]')C.fail('UNEXPECTED_RUNTIME_MODULE_SET');
++ return {repo,head,tree,modules:{main:fs.readFileSync(path.join(repo,'dist/main.js'),'utf8')}};
++}
++module.exports={runNode,baselineOffline,detachedBuild};
++if(require.main===module)U.cli(async()=>{const o=U.options(['compat','out']);C.required(o,'compat','out');U.verifyPackage();U.outside(o.out,o.compat);console.log(JSON.stringify(baselineOffline(path.resolve(o.compat),path.resolve(o.out))));});
+diff --git a/tools/check-baseline.cjs b/tools/check-baseline.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..831d3bc6bf30da493d54de39cf1526c7adf6529e
+--- /dev/null
++++ b/tools/check-baseline.cjs
+@@ -0,0 +1,14 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path');const U=require('./util.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs');
++function check(refactor,compat){
++ if(Number(process.versions.node.split('.')[0])!==22)C.fail('NODE22_REQUIRED');
++ U.exactHead(refactor,K.REFACTOR,'refactor/empire-treasury-rearchitecture');U.exactHead(compat,K.COMPAT,'compat/treasury-read-bridge-i');
++ if(U.remoteHead(refactor,'refactor/empire-treasury-rearchitecture')!==K.REFACTOR||U.remoteHead(compat,'compat/treasury-read-bridge-i')!==K.COMPAT)C.fail('REMOTE_BASELINE_CHANGED');
++ C.loadGuard(compat);
++ const at='openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0002-guard-joint-probe-ii-verifier-remediation-i';
++ const v=JSON.parse(U.git(refactor,['show',K.REFACTOR+':'+at+'/FINAL-VERIFICATION.json']));
++ if(v.verifierStatus!=='GUARD_COLLECTOR_CONTROL_PLANE_PROBE_INDEPENDENTLY_VERIFIED')C.fail('PROBE_PREREQUISITE_NOT_ACCEPTED');
++ if(process.env.DEST||process.env.DEPLOY_ALLOW_DIRTY||process.env.NODE_OPTIONS)C.fail('UNSAFE_BUILD_OR_NODE_ENVIRONMENT');
++ return {status:'FORMAL_0003_BASELINES_VERIFIED',refactor:K.REFACTOR,compat:K.COMPAT,probePrerequisite:true};
++}
++module.exports={check};if(require.main===module)U.cli(async()=>{const o=U.options(['refactor','compat']);C.required(o,'refactor','compat');U.verifyPackage();console.log(JSON.stringify(check(o.refactor,o.compat)));});
+diff --git a/tools/close-source.cjs b/tools/close-source.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..578f342da8f18c9685b2193b483deb0e0e7aecac
+--- /dev/null
++++ b/tools/close-source.cjs
+@@ -0,0 +1,30 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path');const U=require('./util.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs'),S=require('../runtime/store.cjs');
++function closeSource(compat,run){
++ const done=S.optional(run,'source-closed.json');if(done){if(U.textGit(compat,['rev-parse','HEAD'])!==done.closedHead)C.fail('CLOSED_SOURCE_MOVED');return done;}
++ if(U.textGit(compat,['branch','--show-current'])!=='compat/treasury-read-bridge-i')C.fail('COMPAT_BRANCH_CHANGED');
++ const head=U.textGit(compat,['rev-parse','HEAD']);
++ if(head===K.COMPAT){
++  if(U.textGit(compat,['status','--porcelain'])){
++   const intent=S.optional(run,'binding-intent.json');
++   if(!intent||U.textGit(compat,['diff','--name-only','HEAD'])!==K.CONFIG||U.textGit(compat,['ls-files','--others','--exclude-standard'])
++    ||fs.readFileSync(path.join(compat,K.CONFIG),'utf8')!==K.renderConfig(intent.profile))C.fail('UNRECOGNIZED_DIRTY_PROFILE');
++   U.git(compat,['restore','--source='+K.COMPAT,'--staged','--worktree','--',K.CONFIG]);
++  }
++  U.clean(compat);return S.newRecord(run,'source-closed.json',{status:'SOURCE_DEFAULT_OFF_RESTORED',profileHead:null,closedHead:head,sameTreeAsCompatBase:true});
++ }
++ U.clean(compat);let binding=S.optional(run,'binding.json');
++ if(!binding){const intent=S.optional(run,'binding-intent.json');
++  if(intent&&U.textGit(compat,['rev-parse','HEAD^'])===K.COMPAT&&U.textGit(compat,['diff','--name-only',K.COMPAT,head])===K.CONFIG
++   &&U.git(compat,['show','HEAD:'+K.CONFIG])===K.renderConfig(intent.profile))binding={profileHead:head};
++ }
++ if(!binding||head!==binding.profileHead||U.textGit(compat,['rev-parse','HEAD^'])!==K.COMPAT)C.fail('UNRECOGNIZED_PROFILE_HEAD');
++ if(U.textGit(compat,['diff','--name-only',K.COMPAT,head])!==K.CONFIG)C.fail('SOURCE_SCOPE_CHANGED');
++ const original=U.git(compat,['show',K.COMPAT+':'+K.CONFIG],true);
++ fs.writeFileSync(path.join(compat,K.CONFIG),original);
++ U.git(compat,['add','--',K.CONFIG]);U.git(compat,['commit','--no-gpg-sign','-m','evidence(compat): close observation 0003 profile to default OFF']);U.clean(compat);
++ const closedHead=U.textGit(compat,['rev-parse','HEAD']),same=U.textGit(compat,['rev-parse','HEAD^{tree}'])===U.textGit(compat,['rev-parse',K.COMPAT+'^{tree}']);
++ if(!same)C.fail('OFF_TREE_NOT_IDENTICAL');
++ return S.newRecord(run,'source-closed.json',{status:'SOURCE_DEFAULT_OFF_RESTORED',profileHead:head,closedHead,sameTreeAsCompatBase:same,atMs:Date.now()});
++}
++module.exports={closeSource};if(require.main===module)U.cli(async()=>{const o=U.options(['compat','run']);C.required(o,'compat','run');U.verifyPackage();console.log(JSON.stringify(closeSource(o.compat,o.run)));});
+diff --git a/tools/execute.cjs b/tools/execute.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..b17ab1457ef2dc8e96428cd0e61c8001a8fa763f
+--- /dev/null
++++ b/tools/execute.cjs
+@@ -0,0 +1,13 @@
++'use strict';
++const path=require('node:path');const U=require('./util.cjs'),C=require('../runtime/common.cjs'),S=require('../runtime/store.cjs'),K=require('../runtime/policy.cjs');
++const {client}=require('../runtime/transport.cjs'),{execute}=require('../runtime/driver.cjs'),{closeSource}=require('./close-source.cjs');
++if(require.main===module)U.cli(async()=>{
++ const o=U.options(['compat','run','secret'],['execute','exclusive-target']);C.required(o,'compat','run','secret');if(!o.execute||!o['exclusive-target'])C.fail('EXPLICIT_EXCLUSIVE_EXECUTION_REQUIRED');
++ if(process.env.DEST||process.env.DEPLOY_ALLOW_DIRTY||process.env.NODE_OPTIONS)C.fail('UNSAFE_BUILD_OR_NODE_ENVIRONMENT');U.verifyPackage();
++ const compat=path.resolve(o.compat),run=path.resolve(o.run),guard=C.loadGuard(compat),s=S.loadRun(run,guard);U.outside(run,compat);
++ U.exactHead(compat,s.profileHead,'compat/treasury-read-bridge-i');
++ if(U.textGit(compat,['rev-parse',s.profileHead+'^'])!==K.COMPAT||U.textGit(compat,['diff','--name-only',K.COMPAT,s.profileHead])!==K.CONFIG)C.fail('PROFILE_SCOPE_CHANGED');
++ const secret={...C.loadSecret(o.secret),path:path.resolve(o.secret)};
++ try{const result=await execute({repo:compat,run,secret,s,guard,api:client(secret)});console.log(JSON.stringify(result));}
++ finally{closeSource(compat,run);}
++});
+diff --git a/tools/observe.cjs b/tools/observe.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ec04d71e1ef7c9db75de318d28b1d4875c22380b
+--- /dev/null
++++ b/tools/observe.cjs
+@@ -0,0 +1,17 @@
++'use strict';
++/** Single foreground command: fresh binding immediately followed by execution.
++ * Independent recovery worker survives parent exit. No automatic second window. */
++const path=require('node:path');const U=require('./util.cjs'),C=require('../runtime/common.cjs'),S=require('../runtime/store.cjs');
++const {prepare}=require('./prepare.cjs'),{execute}=require('../runtime/driver.cjs'),{client}=require('../runtime/transport.cjs');
++const {closeSource}=require('./close-source.cjs'),{verifyRun}=require('../runtime/verify-run.cjs');
++async function observe(o){
++ U.verifyPackage();if(!o.execute||!o['exclusive-target'])C.fail('EXPLICIT_EXCLUSIVE_EXECUTION_REQUIRED');
++ await prepare(o);const run=path.join(path.resolve(o.work),'run');
++ try{const guard=C.loadGuard(o.compat),s=S.loadRun(run,guard),secret={...C.loadSecret(o.secret),path:path.resolve(o.secret)};
++  await execute({repo:o.compat,run,secret,s,guard,api:client(secret)});
++ }finally{closeSource(o.compat,run);}
++ let result;try{result=verifyRun(run);}catch(e){result={status:'ONLINE_COMPAT_READ_INCONCLUSIVE',closure:'ONLINE_CLOSE_UNCONFIRMED',observed:false,issues:[e?.code||'EVIDENCE_PARSE_OR_VALIDATION_FAILED']};}
++ S.newRecord(run,'observation-verification.json',result);return result;
++}
++module.exports={observe};if(require.main===module)U.cli(async()=>{const o=U.options(['refactor','compat','offline','tests','work','secret'],['execute','exclusive-target']);C.required(o,'refactor','compat','offline','tests','work','secret');
++ const r=await observe(o);console.log(JSON.stringify(r));if(!r.observed)process.exitCode=2;});
+diff --git a/tools/prepare.cjs b/tools/prepare.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..4e404ef064b195a6467fc92f5ec644bbd9255908
+--- /dev/null
++++ b/tools/prepare.cjs
+@@ -0,0 +1,45 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');const {createRequire}=require('node:module');
++const U=require('./util.cjs'),B=require('./build.cjs'),{check}=require('./check-baseline.cjs'),{closeSource}=require('./close-source.cjs');
++const C=require('../runtime/common.cjs'),P=require('../runtime/protocol.cjs'),K=require('../runtime/policy.cjs'),S=require('../runtime/store.cjs'),A=require('../runtime/actions.cjs');
++const {client}=require('../runtime/transport.cjs'),{inspectProfile,validateProfileLead}=require('../runtime/check-profile.cjs');
++async function prepare(o){
++ const compat=path.resolve(o.compat),refactor=path.resolve(o.refactor),work=path.resolve(o.work);
++ check(refactor,compat);U.outside(work,compat);U.outside(work,refactor);U.outside(U.ROOT,compat);U.outside(U.ROOT,refactor);
++ const offline=C.readJson(path.join(o.offline,'result.json'));if(offline.head!==K.COMPAT||offline.status!=='COMPAT_BASELINE_OFFLINE_VERIFIED')C.fail('OFFLINE_BASELINE_GATE_MISSING');
++ const selfTests=C.readJson(path.join(o.tests,'summary.json'));if(selfTests.status!=='FORMAL_0003_TESTS_VERIFIED'||selfTests.packageFingerprint!==C.sha256(fs.readFileSync(path.join(U.ROOT,'INTEGRITY.json'))))C.fail('PACKAGE_TEST_GATE_MISSING');
++ const secret=C.loadSecret(o.secret),api=client(secret),guard=C.loadGuard(compat),ts=createRequire(path.join(compat,'package.json'))('typescript');
++ inspectProfile(compat,'off',undefined,ts);U.newDir(work);const run=path.join(work,'run');U.newDir(run);
++ try{
++  const before=await A.current(api,guard);
++  if(JSON.stringify(before.digest)!==JSON.stringify(C.ORIGINAL_DIGEST)||before.build.commit!==C.PRODUCTION_BASE)C.fail('ONLINE_BASELINE_BYTES_CHANGED');
++  const rooms=P.ownedRooms(await api.overview(C.EXPECTED.shard,8000));if(K.ROOMS.some(r=>!rooms.includes(r)))C.fail('OBSERVATION_ROOM_NOT_OWNED');
++  // Anchor immediately before config binding, AFTER all slow offline validation.
++  const live=await api.time(C.EXPECTED.shard,8000);if(live?.ok!==1)C.fail('GAME_TICK_UNREADABLE');
++  const profile=K.profileFor(live.time),runId=crypto.randomBytes(16).toString('hex');
++  S.newRecord(run,'binding-intent.json',{runId,observedTick:live.time,profile,atMs:Date.now()});
++  fs.writeFileSync(path.join(compat,K.CONFIG),K.renderConfig(profile));
++  U.git(compat,['add','--',K.CONFIG]);U.git(compat,['commit','--no-gpg-sign','-m',`evidence(compat): bind observation 0003 ${profile.startTick}-${profile.endTick}`]);U.clean(compat);
++  const head=U.textGit(compat,['rev-parse','HEAD']);if(U.textGit(compat,['rev-parse','HEAD^'])!==K.COMPAT||U.textGit(compat,['diff','--name-only',K.COMPAT,head])!==K.CONFIG)C.fail('PROFILE_COMMIT_SCOPE_INVALID');
++  S.newRecord(run,'binding.json',{runId,profileHead:head,observedTick:live.time,profile,atMs:Date.now()});
++  inspectProfile(compat,'on',live.time,ts);
++  const b=B.detachedBuild(compat,head,work),build=P.confirmBuild(b.modules,b.head,b.tree);
++  const current=await A.current(api,guard);validateProfileLead(profile,current.observedTick);
++  if(!P.equalModules(before.modules,current.modules,guard))C.fail('BASELINE_CHANGED_DURING_BUILD');
++  const backup=P.makeSnapshot(current.modules,guard),candidate=P.makeSnapshot(b.modules,guard);
++  S.newRecord(run,'backup.json',backup);S.newRecord(run,'candidate.json',candidate);
++  const s={kind:'formal-compat-observation-0003/v1',runId,...C.EXPECTED,refactorBase:K.REFACTOR,compatBase:K.COMPAT,observedTick:live.time,
++   profile,profileHead:head,profileTree:b.tree,build,backupBuild:current.build,preparedAtMs:Date.now(),wallLimitMs:K.WALL_MS,
++   backupFileSha256:C.sha256(fs.readFileSync(S.file(run,'backup.json'))),candidateFileSha256:C.sha256(fs.readFileSync(S.file(run,'candidate.json')))};
++  S.newRecord(run,'session.json',s);S.loadRun(run,guard);
++  const pub={...s,kind:'formal-compat-observation-0003-public/v1',backupDigest:backup.digest,candidateDigest:candidate.digest};
++  S.newRecord(run,'public-session.json',pub);
++  const r={status:'FORMAL_0003_PREPARED_NOT_DEPLOYED',runId,profileHead:head,startTick:profile.startTick,endTick:profile.endTick,latestObservedTick:current.observedTick,work};
++  S.newRecord(run,'prepare-result.json',r);return r;
++ }catch(e){
++  S.newRecord(run,'preparation-failure.json',{error:A.codeOf(e),atMs:Date.now(),noUpload:true});
++  if(S.optional(run,'binding-intent.json')){try{closeSource(compat,run);}catch(err){S.newRecord(run,'close-source-failure.json',{error:A.codeOf(err)});}}
++  throw e;
++ }
++}
++module.exports={prepare};if(require.main===module)U.cli(async()=>{const o=U.options(['refactor','compat','work','secret','offline','tests'],['bind-profile']);C.required(o,'refactor','compat','work','secret','offline','tests');if(!o['bind-profile'])C.fail('EXPLICIT_PROFILE_BINDING_REQUIRED');U.verifyPackage();console.log(JSON.stringify(await prepare(o)));});
+diff --git a/tools/publish.cjs b/tools/publish.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6aeb44897b8ac29d229b7ed7d69320c09de833f1
+--- /dev/null
++++ b/tools/publish.cjs
+@@ -0,0 +1,25 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path');const U=require('./util.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs');
++function verifyArchive(repo){const dir=path.join(repo,K.EVIDENCE),m=C.readJson(path.join(dir,'ARCHIVE-MANIFEST.json'));const list=[];
++ function walk(p){for(const n of fs.readdirSync(p)){const f=path.join(p,n),st=fs.lstatSync(f);if(st.isSymbolicLink())C.fail('ARCHIVE_SYMLINK');if(st.isDirectory())walk(f);else list.push(path.relative(dir,f).split(path.sep).join('/'));}}walk(dir);
++ if(JSON.stringify(list.filter(x=>x!=='ARCHIVE-MANIFEST.json').sort())!==JSON.stringify(Object.keys(m.files).sort()))C.fail('ARCHIVE_FILE_SET_CHANGED');
++ for(const[n,x]of Object.entries(m.files)){const b=fs.readFileSync(path.join(dir,n));if(b.length!==x.bytes||C.sha256(b)!==x.sha256)C.fail('ARCHIVE_BYTES_CHANGED');}
++ return dir;
++}
++function publish(refactor,compat,push){
++ U.verifyPackage();verifyArchive(refactor);
++ if(U.textGit(refactor,['rev-parse','HEAD'])!==K.REFACTOR||U.textGit(refactor,['branch','--show-current'])!=='refactor/empire-treasury-rearchitecture')C.fail('REFACTOR_MOVED');
++ if(U.textGit(refactor,['diff','--name-only'])||U.textGit(refactor,['diff','--cached','--name-only']))C.fail('UNRELATED_TRACKED_CHANGES');
++ const untracked=U.textGit(refactor,['ls-files','--others','--exclude-standard']).split('\n').filter(Boolean);
++ if(untracked.some(x=>!x.startsWith(K.EVIDENCE+'/')))C.fail('UNRELATED_UNTRACKED_FILES');
++ U.clean(compat);const compatHead=U.textGit(compat,['rev-parse','HEAD']);
++ const closedPath=path.join(refactor,K.EVIDENCE,'run/source-closed.json');
++ if(compatHead!==K.COMPAT){const closed=C.readJson(closedPath);if(compatHead!==closed.closedHead||!closed.sameTreeAsCompatBase)C.fail('COMPAT_NOT_CLOSED');
++  if(U.textGit(compat,['rev-parse','HEAD^{tree}'])!==U.textGit(compat,['rev-parse',K.COMPAT+'^{tree}']))C.fail('COMPAT_TREE_NOT_DEFAULT_OFF');}
++ if(U.remoteHead(refactor,'refactor/empire-treasury-rearchitecture')!==K.REFACTOR||U.remoteHead(compat,'compat/treasury-read-bridge-i')!==K.COMPAT)C.fail('REMOTE_MOVED_NO_FORCE_PUSH');
++ U.git(refactor,['add','--',K.EVIDENCE]);const staged=U.textGit(refactor,['diff','--cached','--name-only']).split('\n').filter(Boolean);if(staged.some(p=>!p.startsWith(K.EVIDENCE+'/')))C.fail('COMMIT_SCOPE_INVALID');
++ U.git(refactor,['commit','--no-gpg-sign','-m','evidence(compat): formal observation 0003 execution and closure']);const head=U.textGit(refactor,['rev-parse','HEAD']);
++ if(push){if(compatHead!==K.COMPAT)U.git(compat,['push','origin','HEAD:refs/heads/compat/treasury-read-bridge-i']);U.git(refactor,['push','origin','HEAD:refs/heads/refactor/empire-treasury-rearchitecture']);}
++ return {status:push?'FORMAL_0003_EVIDENCE_PUSHED':'FORMAL_0003_EVIDENCE_COMMITTED',refactorHead:head,compatHead};
++}
++module.exports={verifyArchive,publish};if(require.main===module)U.cli(async()=>{const o=U.options(['refactor','compat'],['push']);C.required(o,'refactor','compat');console.log(JSON.stringify(publish(o.refactor,o.compat,!!o.push)));});
+diff --git a/tools/reconcile.cjs b/tools/reconcile.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..90f62b18d884cd8236cb9726685f3d07b20457a2
+--- /dev/null
++++ b/tools/reconcile.cjs
+@@ -0,0 +1,5 @@
++'use strict';
++const U=require('./util.cjs'),C=require('../runtime/common.cjs'),S=require('../runtime/store.cjs'),A=require('../runtime/actions.cjs'),{client}=require('../runtime/transport.cjs');
++if(require.main===module)U.cli(async()=>{const o=U.options(['compat','run','secret']);C.required(o,'compat','run','secret');U.verifyPackage();
++ const guard=C.loadGuard(o.compat),s=S.loadRun(o.run,guard),secret=C.loadSecret(o.secret);
++ console.log(JSON.stringify(await A.reconcileReadOnly(client(secret),guard,s,o.run)));});
+diff --git a/tools/run-tests.cjs b/tools/run-tests.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d58fe4cbf544277b66eae3d566e6054605650a70
+--- /dev/null
++++ b/tools/run-tests.cjs
+@@ -0,0 +1,17 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');const U=require('./util.cjs'),C=require('../runtime/common.cjs');
++function run(out){
++ U.verifyPackage();U.outside(out,U.ROOT);U.newDir(out);
++ const files=fs.readdirSync(path.join(U.ROOT,'tests')).filter(x=>x.endsWith('.spec.cjs')).sort().map(x=>'tests/'+x);
++ const expected=C.readJson(path.join(U.ROOT,'references/test-contract.json'));
++ if(JSON.stringify(files)!==JSON.stringify(expected.files))C.fail('TEST_FILE_SET_CHANGED');
++ const r=cp.spawnSync(process.execPath,['--test',...files],{cwd:U.ROOT,encoding:'utf8',timeout:180000,maxBuffer:16*1048576,windowsHide:true});
++ fs.writeFileSync(path.join(out,'tests.tap'),r.stdout||'');fs.writeFileSync(path.join(out,'tests.stderr'),r.stderr||'');
++ C.writeNew(path.join(out,'tests.exit.json'),{status:r.status,signal:r.signal,error:r.error?'CHILD_FAILURE':null});
++ const number=n=>Number(r.stdout?.match(new RegExp('^# '+n+' (\\d+)$','m'))?.[1]);
++ const ok=r.status===0&&number('tests')===expected.count&&number('pass')===expected.count&&number('fail')===0&&number('skipped')===0&&number('todo')===0&&number('cancelled')===0;
++ const result={status:ok?'FORMAL_0003_TESTS_VERIFIED':'FORMAL_0003_TESTS_FAILED',tests:number('tests'),passed:number('pass'),failed:number('fail'),skipped:number('skipped'),todo:number('todo'),cancelled:number('cancelled'),
++  platform:process.platform,node:process.version,packageFingerprint:C.sha256(fs.readFileSync(path.join(U.ROOT,'INTEGRITY.json'))),testFiles:files};
++ C.writeNew(path.join(out,'summary.json'),result);if(!ok)C.fail('FORMAL_TESTS_FAILED');return result;
++}
++module.exports={run};if(require.main===module)U.cli(async()=>{const o=U.options(['out']);C.required(o,'out');console.log(JSON.stringify(run(path.resolve(o.out))));});
+diff --git a/tools/util.cjs b/tools/util.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..eebf74a9268f7de7b675b7c09795b7d948ba9001
+--- /dev/null
++++ b/tools/util.cjs
+@@ -0,0 +1,20 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
++const C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs');
++const ROOT=path.resolve(__dirname,'..');
++function git(repo,args,buffer=false){try{return cp.execFileSync('git',['-C',repo,...args],{encoding:buffer?undefined:'utf8',maxBuffer:32*1048576,timeout:30000,stdio:['ignore','pipe','pipe']});}catch{C.fail('GIT_OPERATION_FAILED');}}
++const textGit=(repo,args)=>git(repo,args).trim();
++function clean(repo){if(textGit(repo,['status','--porcelain']))C.fail('WORKTREE_NOT_CLEAN');}
++function exactHead(repo,head,branch){clean(repo);if(textGit(repo,['rev-parse','HEAD'])!==head||textGit(repo,['branch','--show-current'])!==branch)C.fail('BASELINE_HEAD_OR_BRANCH_CHANGED');}
++function remoteHead(repo,branch){const l=textGit(repo,['ls-remote','--exit-code','origin','refs/heads/'+branch]).split(/\s+/);return l[0];}
++function outside(p,repo){const a=path.resolve(p),b=path.resolve(repo);if(a===b||a.startsWith(b+path.sep))C.fail('WORK_MUST_BE_OUTSIDE_REPOSITORY');return a;}
++function verifyPackage(){const m=C.readJson(path.join(ROOT,'INTEGRITY.json'));const files=[];
++ function walk(p){for(const n of fs.readdirSync(p).sort()){const a=path.join(p,n),st=fs.lstatSync(a);if(st.isSymbolicLink())C.fail('PACKAGE_SYMLINK');if(st.isDirectory())walk(a);else files.push(path.relative(ROOT,a).split(path.sep).join('/'));}}walk(ROOT);
++ const payload=files.filter(x=>x!=='INTEGRITY.json').sort();if(JSON.stringify(payload)!==JSON.stringify(Object.keys(m.files).sort()))C.fail('PACKAGE_FILE_SET_MISMATCH');
++ for(const name of payload){const b=fs.readFileSync(path.join(ROOT,name));if(C.sha256(b)!==m.files[name].sha256||b.length!==m.files[name].bytes)C.fail('PACKAGE_BYTES_CHANGED');}
++ return {status:'PACKAGE_INTEGRITY_VERIFIED',files:payload.length};
++}
++async function cli(fn){try{await fn();}catch(e){process.stderr.write(JSON.stringify({error:/^[A-Z0-9_]{1,96}$/.test(e?.code||'')?e.code:'UNEXPECTED_LOCAL_FAILURE'})+'\n');process.exitCode=1;}}
++function options(names,flags=[]){return C.options(process.argv.slice(2),names,flags);}
++function newDir(p){fs.mkdirSync(p,{recursive:false,mode:0o700});}
++module.exports={ROOT,git,textGit,clean,exactHead,remoteHead,outside,verifyPackage,cli,options,newDir};
+diff --git a/tools/verify.cjs b/tools/verify.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..07c6ac07dbe518d16c3ef303d3a071d277d6d657
+--- /dev/null
++++ b/tools/verify.cjs
+@@ -0,0 +1,3 @@
++'use strict';
++const U=require('./util.cjs'),C=require('../runtime/common.cjs'),S=require('../runtime/store.cjs'),{verifyRun}=require('../runtime/verify-run.cjs');
++if(require.main===module)U.cli(async()=>{const o=U.options(['run']);C.required(o,'run');U.verifyPackage();const r=verifyRun(o.run);S.newRecord(o.run,'observation-verification.json',r);console.log(JSON.stringify(r));if(!r.observed)process.exitCode=2;});

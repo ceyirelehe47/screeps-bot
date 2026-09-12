@@ -1,0 +1,1213 @@
+diff --git a/runtime/actions.cjs b/runtime/actions.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..17e6f30b7b62eeca3d495a73834a8a5ba8a99b96
+--- /dev/null
++++ b/runtime/actions.cjs
+@@ -0,0 +1,79 @@
++'use strict';
++/** All remote writes are explicit one-use POSTs under one local action lock.
++ * No server CAS exists. Exclusive ownership of the target branch is a prerequisite. */
++const fs=require('node:fs');const {performance}=require('node:perf_hooks');
++const C=require('./common.cjs'),P=require('./protocol.cjs'),S=require('./store.cjs'),K=require('./policy.cjs');
++const codeOf=e=>/^[A-Z0-9_]{1,96}$/.test(e?.code||'')?e.code:'UNEXPECTED_LOCAL_FAILURE';
++async function current(api,guard,{budgetMs=30000}={}){
++ const deadline=performance.now()+budgetMs,ms=()=>C.remaining(deadline);
++ P.account(await api.me(ms()));P.activeBranch(await api.branches(ms()));
++ const modules=P.modulesFromResponse(await api.code(C.EXPECTED.branch,ms()));
++ P.activeBranch(await api.branches(ms()));
++ const t=await api.time(C.EXPECTED.shard,ms());
++ if(t?.ok!==1||!Number.isSafeInteger(t.time)||t.time<0)C.fail('GAME_TICK_UNREADABLE');
++ return {modules,digest:P.describeModules(modules,guard),build:P.buildIdentity(modules.main),observedTick:t.time,capturedAtMs:Date.now()};
++}
++async function uploadOnce(api,guard,s,run,canStart=()=>{}){
++ return C.actionLock(run,async()=>{
++  if(fs.existsSync(S.file(run,'upload-attempt.json'))||fs.existsSync(S.file(run,'restore-attempt.json'))||fs.existsSync(S.file(run,'closing.json')))C.fail('UPLOAD_ALREADY_ATTEMPTED_OR_CLOSING');
++  const before=await current(api,guard);
++  if(!P.equalModules(before.modules,s.backup.modules,guard))C.fail('ONLINE_BASELINE_CHANGED');
++  const rooms=P.ownedRooms(await api.overview(C.EXPECTED.shard,8000));
++  if(K.ROOMS.some(r=>!rooms.includes(r)))C.fail('OBSERVATION_ROOM_NOT_OWNED');
++  // Re-read live time after every preflight read, not the earlier preparation tick.
++  const live=await api.time(C.EXPECTED.shard,8000);
++  if(live?.ok!==1||!Number.isSafeInteger(live.time)||live.time>s.profile.startTick-100)C.fail('PROFILE_WINDOW_EXPIRED');
++  P.activeBranch(await api.branches(8000));await canStart();
++  const attempt=S.newRecord(run,'upload-attempt.json',{runId:s.runId,candidateHash:s.candidate.digest.hash,profileHead:s.profileHead,startedAtMs:Date.now(),observedTick:live.time});
++  let accepted=null,result;
++  try{
++   const r=await api.setCode(C.EXPECTED.branch,s.candidate.modules,8000);accepted=r?.ok===1;
++   if(!accepted)C.fail('API_RESULT_NOT_SUCCESS');
++   const after=P.modulesFromResponse(await api.code(C.EXPECTED.branch,8000));P.activeBranch(await api.branches(8000));
++   if(!P.equalModules(after,s.candidate.modules,guard))C.fail('UPLOAD_READBACK_MISMATCH');
++   result={status:'UPLOADED_AND_READBACK_VERIFIED',confirmed:true,serverAccepted:true,requestAttempted:true,digest:P.describeModules(after,guard),build:P.buildIdentity(after.main),atMs:Date.now()};
++  }catch(e){result={status:'UPLOAD_UNCONFIRMED',confirmed:false,serverAccepted:accepted,requestAttempted:true,error:codeOf(e),atMs:Date.now()};}
++  S.newRecord(run,'upload-result.json',{runId:s.runId,candidateHash:s.candidate.digest.hash,result});
++  return result;
++ });
++}
++async function restoreOnce(api,guard,s,run){
++ return C.actionLock(run,async()=>{
++  const a=S.optional(run,'upload-attempt.json');
++  if(!a)return {status:'NOT_DEPLOYED_NO_RESTORE_NEEDED',confirmed:true,requestAttempted:false,atMs:Date.now()};
++  S.assertAttempt(a,s);
++  const uploaded=S.optional(run,'upload-result.json');
++  const known=uploaded?.runId===s.runId&&uploaded?.candidateHash===s.candidate.digest.hash&&uploaded?.result?.confirmed===true;
++  const before=await current(api,guard);
++  if(P.equalModules(before.modules,s.backup.modules,guard))return {status:known?'ALREADY_RESTORED':'ONLINE_CLOSE_UNCONFIRMED',
++   confirmed:known,requestAttempted:false,reason:known?null:'UPLOAD_OUTCOME_UNRESOLVED',digest:before.digest,atMs:Date.now()};
++  if(!P.equalModules(before.modules,s.candidate.modules,guard))return {status:'CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT',confirmed:false,requestAttempted:false,atMs:Date.now()};
++  if(fs.existsSync(S.file(run,'restore-attempt.json')))return {status:'ONLINE_CLOSE_UNCONFIRMED',confirmed:false,requestAttempted:false,reason:'RESTORE_ALREADY_ATTEMPTED',atMs:Date.now()};
++  P.activeBranch(await api.branches(8000));
++  S.newRecord(run,'restore-attempt.json',{runId:s.runId,candidateHash:s.candidate.digest.hash,backupHash:s.backup.digest.hash,startedAtMs:Date.now()});
++  let accepted=null;
++  try{
++   const r=await api.setCode(C.EXPECTED.branch,s.backup.modules,8000);accepted=r?.ok===1;
++   if(!accepted)C.fail('API_RESULT_NOT_SUCCESS');
++   const after=P.modulesFromResponse(await api.code(C.EXPECTED.branch,8000));P.activeBranch(await api.branches(8000));
++   if(!P.equalModules(after,s.backup.modules,guard))C.fail('RESTORE_READBACK_MISMATCH');
++   return {status:'RESTORED_AND_VERIFIED',confirmed:true,requestAttempted:true,serverAccepted:true,digest:P.describeModules(after,guard),atMs:Date.now()};
++  }catch(e){return {status:'ONLINE_CLOSE_UNCONFIRMED',confirmed:false,requestAttempted:true,serverAccepted:accepted,error:codeOf(e),atMs:Date.now()};}
++ },10000);
++}
++async function reconcileReadOnly(api,guard,s,run,{pause=C.pause}={}){
++ const checks=[];
++ for(let i=0;i<3;i++){
++  try{
++   const r=await current(api,guard);
++   const sameAsBackup=P.equalModules(r.modules,s.backup.modules,guard),sameAsCandidate=P.equalModules(r.modules,s.candidate.modules,guard);
++   checks.push({atMs:r.capturedAtMs,sameAsBackup,sameAsCandidate,digest:r.digest,build:r.build,observedTick:r.observedTick});
++   if(!sameAsBackup)return {status:sameAsCandidate?'CURRENT_IS_CANDIDATE':'CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT',confirmed:false,checks};
++   const upload=S.optional(run,'upload-result.json'),restore=S.optional(run,'restore-attempt.json');
++   if(upload?.result?.confirmed!==true&&!restore)return {status:'ONLINE_CLOSE_UNCONFIRMED',confirmed:false,reason:'UPLOAD_OUTCOME_UNRESOLVED',checks};
++   return {status:'CURRENT_IS_BACKUP',confirmed:true,checks};
++  }catch(e){checks.push({atMs:Date.now(),error:codeOf(e)});if(i<2)await pause(2000);}
++ }
++ return {status:'ONLINE_CLOSE_UNCONFIRMED',confirmed:false,checks};
++}
++module.exports={codeOf,current,uploadOnce,restoreOnce,reconcileReadOnly};
+diff --git a/runtime/check-profile.cjs b/runtime/check-profile.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..99fcec7e58d37f68dafc38a94a0e8143d2232514
+--- /dev/null
++++ b/runtime/check-profile.cjs
+@@ -0,0 +1,66 @@
++'use strict';
++/** Formal rollout profile validation. Control-plane probes use probe-session.cjs and do not call this file. */
++const fs=require('node:fs');
++const path=require('node:path');
++const vm=require('node:vm');
++const {createRequire}=require('node:module');
++const C=require('./common.cjs');
++const BRIDGE_SHA='a9849e430b4238177653ed10cea085f13af402010e4c414312c64306a966d713';
++
++function load(text,name,ts) {
++  const result=ts.transpileModule(text,{fileName:name,reportDiagnostics:true,
++    compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2019}});
++  if((result.diagnostics||[]).some(d=>d.category===ts.DiagnosticCategory.Error))C.fail('PROFILE_TYPESCRIPT_TRANSPILE_FAILED');
++  const exports={};
++  new vm.Script(result.outputText,{filename:name}).runInNewContext({exports,
++    require(){C.fail('PROFILE_RUNTIME_IMPORT_UNEXPECTED');}}, {timeout:1000});
++  return exports;
++}
++
++function validateProfileLead(cfg,observedTick) {
++  if(!Number.isSafeInteger(observedTick)||observedTick<0)C.fail('OBSERVED_TICK_INVALID');
++  const requiredStartTickMinimum=observedTick+100;
++  if(cfg.startTick<requiredStartTickMinimum)C.fail('PROFILE_WINDOW_EXPIRED',{
++    observedTick,startTick:cfg.startTick,endTick:cfg.endTick,requiredStartTickMinimum,
++  });
++  return requiredStartTickMinimum;
++}
++
++function inspectProfile(repo,mode,observedTick,ts) {
++  if(!['off','on'].includes(mode))C.fail('PROFILE_MODE_INVALID');
++  const bridge=fs.readFileSync(path.join(repo,'src/runtime/treasuryCompatRead.ts'));
++  if(C.sha256(bridge)!==BRIDGE_SHA)C.fail('BRIDGE_SOURCE_CHANGED');
++  const configBytes=fs.readFileSync(path.join(repo,'src/runtime/treasuryCompatConfig.ts'));
++  const api=load(bridge.toString('utf8'),'treasuryCompatRead.ts',ts);
++  const cfg=load(configBytes.toString('utf8'),'treasuryCompatConfig.ts',ts).TREASURY_COMPAT_CONFIG;
++  if(!cfg||typeof cfg!=='object')C.fail('PROFILE_CONFIG_MISSING');
++  if(cfg.intervalTicks!==100||cfg.minBucket!==2000||cfg.maxSampleCpu!==2||cfg.reserveCpu!==5||cfg.maxLogBytes!==16384)
++    C.fail('PROFILE_LIMITS_CHANGED');
++  if(JSON.stringify(cfg.resources)!==JSON.stringify(['energy','H']))C.fail('PROFILE_RESOURCES_CHANGED');
++  let dueTicks=[];
++  if(mode==='off') {
++    if(cfg.enabled!==false||cfg.shardName!==''||!Array.isArray(cfg.rooms)||cfg.rooms.length!==0
++      ||cfg.startTick!==0||cfg.endTick!==0)C.fail('PROFILE_NOT_DEFAULT_OFF');
++  } else {
++    if(cfg.enabled!==true||!api.validCompatConfig(cfg))C.fail('PROFILE_ENABLED_INVALID');
++    if(cfg.shardName!=='shard1')C.fail('PROFILE_SHARD_INVALID');
++    if(cfg.startTick%100!==0||cfg.endTick!==cfg.startTick+1100)C.fail('PROFILE_SLOT_COUNT_INVALID');
++    validateProfileLead(cfg,observedTick);
++    dueTicks=Array.from({length:12},(_,index)=>cfg.startTick+index*100);
++  }
++  return {status:'PROFILE_SOURCE_VALIDATED_ONLY',mode,configSha256:C.sha256(configBytes),profile:cfg,
++    dueTicks,observedTick:mode==='on'?observedTick:null,liveTickIndependentlyVerified:false,
++    deploymentAuthorized:false,fullTypecheckPerformed:false};
++}
++
++async function main(args) {
++  if(![4,6].includes(args.length)||args[0]!=='--repo'||args[2]!=='--mode'
++    ||(args.length===6&&args[4]!=='--observed-tick'))C.fail('PROFILE_CLI_USAGE_INVALID');
++  const repo=path.resolve(args[1]);
++  const ts=createRequire(path.join(repo,'package.json'))('typescript');
++  if(args.length===6&&!/^\d+$/.test(args[5]))C.fail('PROFILE_CLI_TICK_INVALID');
++  console.log(JSON.stringify(inspectProfile(repo,args[3],args.length===6?Number(args[5]):undefined,ts),null,2));
++}
++
++module.exports={BRIDGE_SHA,load,validateProfileLead,inspectProfile,main};
++if(require.main===module)C.entrypoint(()=>main(process.argv.slice(2)));
+diff --git a/runtime/collector-diagnostics.cjs b/runtime/collector-diagnostics.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..06d248bc1ad4615de92236c93d9126d629f11ec4
+--- /dev/null
++++ b/runtime/collector-diagnostics.cjs
+@@ -0,0 +1,47 @@
++'use strict';
++const crypto=require('node:crypto');
++const C=require('./common.cjs');
++const MAX_MESSAGE_BYTES=1024;
++const MAX_STACK_BYTES=4096;
++const SAFE_STOP_REASONS=new Set(['probe_complete','operator_stop']);
++function truncateUtf8(value,maxBytes) {
++  let text=String(value??'');
++  if(Buffer.byteLength(text)<=maxBytes)return {text,truncated:false};
++  while(text.length&&Buffer.byteLength(text)>maxBytes)text=text.slice(0,Math.max(0,text.length-Math.max(1,Math.ceil(text.length/8))));
++  return {text,truncated:true};
++}
++function sanitized(value,redact,maxBytes) {return truncateUtf8(redact(String(value??'')),maxBytes);}
++function hashText(value) {return typeof value==='string'&&value.length?crypto.createHash('sha256').update(value).digest('hex'):null;}
++function safeCode(value) {return (typeof value==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(value))||Number.isSafeInteger(value)?value:null;}
++function errorObject(value) {
++  if(value&&typeof value==='object'&&value.error&&typeof value.error==='object')return value.error;
++  return value&&typeof value==='object'?value:{};
++}
++function safeError(value,redact) {
++  const source=errorObject(value),cause=source.cause&&typeof source.cause==='object'?source.cause:{};
++  const message=sanitized(typeof source.message==='string'?source.message:'',redact,MAX_MESSAGE_BYTES);
++  const stack=sanitized(typeof source.stack==='string'?source.stack:'',redact,MAX_STACK_BYTES);
++  return {eventType:value&&typeof value.type==='string'&&value.type.length<=128?value.type:null,
++    name:typeof source.name==='string'&&source.name.length<=128?source.name:null,
++    code:safeCode(source.code),causeName:typeof cause.name==='string'&&cause.name.length<=128?cause.name:null,
++    causeCode:safeCode(cause.code),errno:safeCode(cause.errno??source.errno),
++    syscall:typeof (cause.syscall??source.syscall)==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(cause.syscall??source.syscall)
++      ?(cause.syscall??source.syscall):null,
++    messageBytes:Buffer.byteLength(message.text),messageSha256:hashText(message.text),
++    stackBytes:Buffer.byteLength(stack.text),stackSha256:hashText(stack.text),
++    messageTruncated:message.truncated,stackTruncated:stack.truncated,
++    redactionChanged:message.text!==(typeof source.message==='string'?source.message:'')
++      ||stack.text!==(typeof source.stack==='string'?source.stack:'')};
++}
++function safeClose(value,redact) {
++  const code=Number.isSafeInteger(value?.code)&&value.code>=0&&value.code<=65535?value.code:null;
++  const reason=sanitized(typeof value?.reason==='string'?value.reason:'',redact,MAX_MESSAGE_BYTES);
++  return {code,reason:reason.text,reasonTruncated:reason.truncated,
++    wasClean:typeof value?.wasClean==='boolean'?value.wasClean:null};
++}
++function publicError(detail) {return detail?{...detail}:null;}
++function auditPrivate(file,data,redact) {C.audit(file,{kind:'collector-private-diagnostic',...data},redact);}
++function validStopRequest(value,runId) {return value&&value.runId===runId&&SAFE_STOP_REASONS.has(value.reason)
++  &&Number.isSafeInteger(value.requestedAtMs)&&value.requestedAtMs>=0;}
++module.exports={MAX_MESSAGE_BYTES,MAX_STACK_BYTES,SAFE_STOP_REASONS,truncateUtf8,safeError,safeClose,
++  publicError,auditPrivate,validStopRequest};
+diff --git a/runtime/collector.cjs b/runtime/collector.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f6e9e24ecc512f474fd90eed3f629ed2b162eb3e
+--- /dev/null
++++ b/runtime/collector.cjs
+@@ -0,0 +1,57 @@
++'use strict';
++const fs=require('node:fs');const C=require('./common.cjs'),S=require('./store.cjs'),P=require('./protocol.cjs');
++const {client}=require('./transport.cjs'),W=require('./samples.cjs'),D=require('./collector-diagnostics.cjs');
++async function collect({s,run,secret,api,WebSocketClass=global.WebSocket,maxLifeMs=5700000}){
++ P.account(await api.me(8000));if(typeof WebSocketClass!=='function')C.fail('NODE22_WEBSOCKET_REQUIRED');
++ S.newRecord(run,'collector.lock',{runId:s.runId,pid:process.pid});
++ const watch=W.createWatch(s,process.pid),out=S.file(run,'console.jsonl');let closed=false,timer,life,ws,bytes=0,resolve;
++ const done=new Promise(r=>resolve=r),opened=Date.now();
++ const save=()=>C.atomicJson(S.file(run,'heartbeat.json'),watch.state);
++ function finish(reason,code){
++  if(closed)return;closed=true;clearInterval(timer);clearTimeout(life);let lockRemoved=false,footerWritten=false;
++  watch.state.state=code===0?'closed':'failed';watch.state.socketState='closed';watch.state.stopReason=reason;watch.state.updatedAtMs=Date.now();
++  try{save();fs.unlinkSync(S.file(run,'collector.lock'));lockRemoved=true;}catch{code=1;}
++  try{ws?.close();}catch{}
++  try{C.audit(out,{kind:'collector-footer',runId:s.runId,pid:process.pid,reason,exitCode:code},secret.redact);footerWritten=true;}catch{code=1;}
++  const result={kind:'collector-result-v3',runId:s.runId,pid:process.pid,status:code===0?'closed':'failed',reason,exitCode:code,closedAtMs:Date.now(),footerWritten,lockRemoved};
++  try{S.newRecord(run,'collector-result.json',result);}catch{code=1;}
++  process.exitCode=code;resolve(result);
++ }
++ const fatal=e=>{try{C.audit(S.file(run,'collector-diagnostics.jsonl'),D.safeError(e,secret.redact),secret.redact);}catch{}finish('COLLECTOR_IO_OR_PARSE_FAILURE',1);};
++ const stop=()=>finish('OPERATOR_STOP',1);
++ process.once('SIGINT',stop);process.once('SIGTERM',stop);
++ try{
++  save();ws=new WebSocketClass('wss://screeps.com/socket/websocket');
++  ws.addEventListener('open',()=>{try{watch.state.socketState='open';watch.state.updatedAtMs=Date.now();save();ws.send('auth '+secret.token);}catch(e){fatal(e);}});
++  ws.addEventListener('message',ev=>{try{
++   const text=typeof ev.data==='string'?ev.data:Buffer.from(ev.data).toString('utf8');
++   if(Buffer.byteLength(text)>1048576||bytes>64*1048576){finish('COLLECTOR_SIZE_LIMIT',1);return;}
++   const kind=watch.frame(text);
++   if(kind==='auth'){
++    C.audit(out,{kind:'auth-confirmed',runId:s.runId,pid:process.pid},secret.redact);
++    ws.send(`subscribe user:${s.userId}/console`);ws.send(`subscribe user:${s.userId}/cpu`);
++   }else if(kind==='auth-failure'){finish('AUTHENTICATION_FAILED',1);return;}
++   else{
++    const safe=secret.redact(text),line=JSON.stringify({kind:'ws-frame',runId:s.runId,receivedAt:new Date().toISOString(),redacted:safe!==text,text:safe})+'\n';
++    fs.appendFileSync(out,line,{mode:0o600});bytes+=Buffer.byteLength(line);
++   }
++   save();if(watch.state.stopReason)finish(watch.state.stopReason,1);
++  }catch(e){fatal(e);}});
++  ws.addEventListener('close',ev=>{if(!closed){try{C.audit(S.file(run,'collector-diagnostics.jsonl'),{kind:'socket-close',...D.safeClose(ev,secret.redact)},secret.redact);}catch{}finish('SOCKET_CLOSED',1);}});
++  ws.addEventListener('error',ev=>{if(!closed)fatal(ev);});
++  timer=setInterval(()=>{try{
++   if(watch.state.state!=='streaming'&&Date.now()-opened>15000){finish('AUTHENTICATION_TIMEOUT',1);return;}
++   const stopRecord=S.optional(run,'collector-stop.json');
++   if(stopRecord){if(stopRecord.runId!==s.runId||!['observation_closed','no_upload'].includes(stopRecord.reason))finish('INVALID_STOP_REQUEST',1);else finish(stopRecord.reason,0);return;}
++   watch.state.updatedAtMs=Date.now();save();
++  }catch(e){fatal(e);}},500);
++  life=setTimeout(()=>finish('COLLECTOR_LIFETIME',1),maxLifeMs);
++ }catch(e){fatal(e);}
++ const result=await done;process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);return result;
++}
++async function main(){const o=C.options(process.argv.slice(2),['repo','run','secret']);C.required(o,'repo','run','secret');
++ const secret=C.loadSecret(o.secret),s=S.loadRun(o.run,C.loadGuard(o.repo));await collect({s,run:o.run,secret,api:client(secret)});
++ // Close-handshake stalls may not retain the process indefinitely.
++ setTimeout(()=>process.exit(process.exitCode||0),500).unref();
++}
++module.exports={collect};if(require.main===module)C.entrypoint(main);
+diff --git a/runtime/common.cjs b/runtime/common.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c8202b4c306ea49ee996ab5ad48b5eb3c8abf216
+--- /dev/null
++++ b/runtime/common.cjs
+@@ -0,0 +1,126 @@
++'use strict';
++const fs = require('node:fs');
++const path = require('node:path');
++const crypto = require('node:crypto');
++const cp = require('node:child_process');
++const { performance } = require('node:perf_hooks');
++const GUARD_BLOB = '796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8';
++const CANDIDATE_BASE = '6a63a2aff064295ef65efc8def26c9865dfd9db3';
++const ORIGINAL_DIGEST = Object.freeze({algorithm:'deployGuard.computeModulesHash/NUL-v1',hash:'84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf',files:[{name:'main',kind:'text',bytes:4494463,sha256:'37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b'}]});
++const PRODUCTION_BASE = '06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c';
++const PRODUCTION_TREE = '929fa9557b1a36135a5ef1605231be1d16e87366';
++const PROBE_REFACTOR_BASE = 'eb00879a1ff71275ff32e310378d3590fc910e6a';
++const EXPECTED = Object.freeze({ server: 'https://screeps.com', username: 'forster', userId: '634fe406347a7b69b28aeccb', branch: 'default', shard: 'shard1' });
++class Failure extends Error { constructor(code, details = {}) { super(code); this.code = code; this.details = details; } }
++function fail(code, details) { throw new Failure(code, details); }
++const obj = x => x !== null && typeof x === 'object' && !Array.isArray(x);
++const own = (x, k) => Object.prototype.hasOwnProperty.call(x, k);
++const sha256 = x => crypto.createHash('sha256').update(x).digest('hex');
++const blob = b => crypto.createHash('sha1').update(Buffer.from(`blob ${b.length}\0`)).update(b).digest('hex');
++const clone = x => JSON.parse(JSON.stringify(x));
++const pause = ms => new Promise(r => setTimeout(r, ms));
++const sleepSync = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
++function integer(x, lo, hi, name) { if (!Number.isSafeInteger(x) || x < lo || x > hi) fail(name || 'INVALID_INTEGER'); return x; }
++function options(argv, names, flags = []) {
++  const o = {};
++  for (let i = 0; i < argv.length; i++) {
++    const k = argv[i];
++    if (!k.startsWith('--') || own(o, k.slice(2))) fail('INVALID_ARGUMENTS');
++    if (flags.includes(k.slice(2))) o[k.slice(2)] = true;
++    else if (names.includes(k.slice(2)) && argv[i + 1] && !argv[i + 1].startsWith('--')) o[k.slice(2)] = argv[++i];
++    else fail('INVALID_ARGUMENTS');
++  }
++  return o;
++}
++function required(o, ...keys) { for (const k of keys) if (!o[k]) fail('MISSING_ARGUMENT'); }
++// Output policy: arbitrary exception messages, stacks, HTTP bodies and headers are NEVER logged.
++// Redaction is an additional barrier for console evidence, not the exception policy.
++function redactor(secrets = []) {
++  const needles = [...new Set(secrets.flatMap(s => typeof s === 'string' && s.length >= 8
++    ? [s, encodeURIComponent(s), s.slice(0, 8)] : []).filter(Boolean))].sort((a,b) => b.length-a.length);
++  return function redact(value) {
++    let s = String(value);
++    for (const needle of needles) s = s.split(needle).join('<REDACTED>');
++    s = s.replace(/(\"(?:_?token|access_token|authorization|x-token)\"\s*:\s*\")[^\"]*/gi, '$1<REDACTED>')
++      .replace(/([?&](?:_?token|access_token)=)[^\s"'<>\\&]+/gi, '$1<REDACTED>')
++      .replace(/((?:x-token|authorization|access_token|token)\s*[=:]\s*["']?)[^\s"',;}]+/gi, '$1<REDACTED>')
++      .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '<REDACTED-UUID>')
++      .replace(/(?<![0-9a-f])[0-9a-f]{36}(?![0-9a-f])/gi, '<REDACTED-36HEX>');
++    return s;
++  };
++}
++function safeFailure(e) {
++  return e instanceof Failure ? { error: e.code, ...e.details } : { error: 'UNEXPECTED_LOCAL_FAILURE' };
++}
++function entrypoint(fn) {
++  fn().catch(e => { process.stderr.write(JSON.stringify(safeFailure(e)) + '\n'); process.exitCode = 1; });
++}
++function readJson(p, max = 20 * 1024 * 1024) {
++  try {
++    const st = fs.statSync(p); if (!st.isFile() || st.size > max) fail('FILE_INVALID_OR_TOO_LARGE');
++    return JSON.parse(fs.readFileSync(p, 'utf8'));
++  } catch(e) { if (e instanceof Failure) throw e; fail('LOCAL_JSON_UNREADABLE'); }
++}
++function writeNew(p, data) { const b = JSON.stringify(data, null, 2) + '\n'; fs.writeFileSync(p, b, { flag:'wx', mode:0o600 }); }
++// Windows refuses to rename over a destination another process holds open, and guard,
++// guard-readiness, probe and parent pollers all read these files while the writer runs.
++// Retry briefly; if the swap stays blocked, overwrite in place rather than lose the
++// evidence — a non-atomic heartbeat is survivable, a missing one terminates the run.
++function replaceOverExisting(tmp, p) {
++  for (let attempt = 0; attempt < 6; attempt++) {
++    try { fs.renameSync(tmp, p); return; }
++    catch(e) {
++      if (e.code !== 'EPERM' && e.code !== 'EACCES' && e.code !== 'EBUSY') throw e;
++      sleepSync(20 * (attempt + 1));
++    }
++  }
++  fs.writeFileSync(p, fs.readFileSync(tmp), { mode:0o600 });
++}
++function atomicJson(p, data) {
++  const tmp = p + '.' + crypto.randomBytes(6).toString('hex') + '.tmp';
++  try { writeNew(tmp, data); replaceOverExisting(tmp, p); }
++  finally { if (fs.existsSync(tmp)) { try { fs.unlinkSync(tmp); } catch {} } }
++}
++function audit(p, data, redact = redactor()) {
++  fs.appendFileSync(p, redact(JSON.stringify({ at: new Date().toISOString(), ...data }))+'\n', { mode:0o600 });
++}
++function loadGuard(repo) {
++  const p = path.resolve(repo, 'scripts/lib/deployGuard.cjs'); let b;
++  try { b = fs.readFileSync(p); } catch { fail('CANONICAL_GUARD_MISSING'); }
++  if (blob(b) !== GUARD_BLOB) fail('CANONICAL_GUARD_CHANGED');
++  return require(p); // Canonical implementation, not a parallel hash definition.
++}
++function loadSecret(p) {
++  const s = readJson(p, 16384)?.main;
++  if (!obj(s) || typeof s.token !== 'string' || s.token.length < 16 || /[\s\r\n]/.test(s.token)) fail('CREDENTIAL_FILE_INVALID');
++  if (s.hostname !== 'screeps.com' || (s.protocol !== undefined && s.protocol !== 'https')
++    || (s.port !== undefined && s.port !== 443) || (s.path !== undefined && s.path !== '/')
++    || s.branch !== EXPECTED.branch) fail('CREDENTIAL_TARGET_MISMATCH');
++  return { token:s.token, server:EXPECTED.server, redact:redactor([s.token]) };
++}
++function git(repo, args) {
++  try { return cp.execFileSync('git', ['-C', repo, ...args], { encoding:'utf8', timeout:10000, stdio:['ignore','pipe','pipe'] }).trim(); }
++  catch { fail('GIT_CHECK_FAILED'); }
++}
++function assertCandidate(repo) {
++  if (process.env.DEST || process.env.DEPLOY_ALLOW_DIRTY) fail('UNSAFE_BUILD_ENVIRONMENT');
++  const guard = loadGuard(repo), head = git(repo, ['rev-parse','HEAD']), tree = git(repo, ['rev-parse','HEAD^{tree}']);
++  const status = git(repo, ['status','--porcelain']);
++  guard.assertDeployableGitState({statusOutput:status, headSha:head, currentBranch:git(repo,['branch','--show-current']), configuredBranch:EXPECTED.branch, allowDirty:false});
++  if (status) fail('DIRTY_CANDIDATE');
++  git(repo,['merge-base','--is-ancestor',CANDIDATE_BASE,head]);
++  const changed = git(repo,['diff','--name-only',CANDIDATE_BASE,head]).split('\n').filter(Boolean);
++  if (changed.some(p => p !== 'src/runtime/treasuryCompatConfig.ts')) fail('CANDIDATE_SCOPE_CHANGED');
++  return {head, tree, guard};
++}
++function remaining(deadline, clock = () => performance.now()) { const n = Math.floor(deadline-clock()); if (n <= 0) fail('OPERATION_DEADLINE'); return n; }
++async function actionLock(dir, fn, waitMs=0) {
++  const p=path.join(dir,'action.lock'); const end=performance.now()+waitMs; let fd;
++  while (fd === undefined) {
++    try { fd=fs.openSync(p,'wx',0o600); }
++    catch(e) { if(e.code!=='EEXIST') fail('ACTION_LOCK_IO'); if(performance.now()>=end) fail('ACTION_BUSY'); await pause(Math.min(100,Math.max(1,end-performance.now()))); }
++  }
++  try { fs.writeFileSync(fd, JSON.stringify({pid:process.pid, at:new Date().toISOString()})); return await fn(); }
++  finally { fs.closeSync(fd); fs.unlinkSync(p); }
++}
++module.exports={Failure,fail,obj,own,sha256,blob,clone,pause,integer,options,required,redactor,safeFailure,entrypoint,readJson,writeNew,atomicJson,audit,loadGuard,loadSecret,git,assertCandidate,remaining,actionLock,EXPECTED,CANDIDATE_BASE,PRODUCTION_BASE,PRODUCTION_TREE,PROBE_REFACTOR_BASE,GUARD_BLOB,ORIGINAL_DIGEST};
+diff --git a/runtime/driver.cjs b/runtime/driver.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..735c8ecad9d50b215c7b25ee5f2614bceea21364
+--- /dev/null
++++ b/runtime/driver.cjs
+@@ -0,0 +1,81 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');const {performance}=require('node:perf_hooks');
++const C=require('./common.cjs'),S=require('./store.cjs'),G=require('./guard-control.cjs'),W=require('./samples.cjs'),A=require('./actions.cjs'),K=require('./policy.cjs');
++function spawnWorker(name,args,run){
++ const stdout=fs.openSync(S.file(run,name+'.stdout'),'wx',0o600),stderr=fs.openSync(S.file(run,name+'.stderr'),'wx',0o600);
++ const child=cp.spawn(process.execPath,[path.join(__dirname,name+'.cjs'),...args],{stdio:['ignore',stdout,stderr],detached:true,windowsHide:true});
++ fs.closeSync(stdout);fs.closeSync(stderr);
++ const p={child,closed:false,exit:null,error:null};
++ child.once('error',()=>{p.error='WORKER_SPAWN_FAILED';p.closed=true;});
++ child.once('close',(code,signal)=>{p.closed=true;p.exit=code;try{S.newRecord(run,name+'.exit.json',{code,signal,pid:child.pid??null});}catch{p.error='EXIT_EVIDENCE_WRITE_FAILED';}});
++ S.newRecord(run,name+'.process.json',{pid:child.pid??null,atMs:Date.now()});return p;
++}
++async function waitFor(fn,ms,{pause=C.pause}={}){const end=performance.now()+ms;while(performance.now()<end){const x=await fn();if(x)return x;await pause(250);}C.fail('WAIT_DEADLINE');}
++async function postRestore(api,guard,s,run,{pause=C.pause,confirmMs=K.CONFIRM_MS,now=Date.now}={}){
++ const before=await A.reconcileReadOnly(api,guard,s,run,{pause});S.newRecord(run,'restore-independent-before.json',before);
++ if(!before.confirmed)return {confirmed:false,reason:'REMOTE_BYTES_NOT_CONFIRMED'};
++ const startedAtMs=now(),end=performance.now()+confirmMs;let pid=null,checks=0;
++ while(performance.now()<end){
++  const h=await G.readJsonArtifact(S.file(run,'heartbeat.json'),16384,{required:true});
++  const bad=W.health(h,s,now(),pid);if(bad)return {confirmed:false,reason:bad};pid=h.pid;checks++;await pause(500);
++ }
++ const h=await G.readJsonArtifact(S.file(run,'heartbeat.json'),16384,{required:true});
++ const after=await A.reconcileReadOnly(api,guard,s,run,{pause});S.newRecord(run,'restore-independent-after.json',after);
++ const confirmed=after.confirmed&&h.lastConsoleAtMs>startedAtMs&&h.lastCpuAtMs>startedAtMs&&h.lastPositiveCpuAtMs>startedAtMs;
++ return {confirmed,status:confirmed?'RESTORED_BYTES_AND_RUNTIME_CONFIRMED':'RESTORE_RUNTIME_UNCONFIRMED',startedAtMs,endedAtMs:now(),durationMs:confirmMs,
++  collectorPid:pid,healthChecks:checks,lastConsoleAtMs:h.lastConsoleAtMs,lastCpuAtMs:h.lastCpuAtMs,lastPositiveCpuAtMs:h.lastPositiveCpuAtMs,
++  cpuChannelScope:'account-channel; shard1 is independently checked by console frames and code readback'};
++}
++async function execute({repo,run,secret,s,guard,api}){
++ S.newRecord(run,'execution-attempt.json',{runId:s.runId,atMs:Date.now()});
++ const args=['--repo',path.resolve(repo),'--run',path.resolve(run),'--secret',secret.path];
++ const workers={};let upload=null,failure=null,post=null;
++ const close=reason=>{try{C.atomicJson(S.file(run,'closing.json'),{runId:s.runId,reason,atMs:Date.now()});}catch{}};
++ const onSignal=()=>close('OPERATOR_STOP');process.once('SIGINT',onSignal);process.once('SIGTERM',onSignal);
++ try{
++  workers.collector=spawnWorker('collector',args,run);
++  await waitFor(async()=>{if(workers.collector.closed)C.fail('COLLECTOR_EARLY_EXIT');const h=await G.readJsonArtifact(S.file(run,'heartbeat.json'),16384);return !W.health(h,s,Date.now())?h:null;},20000);
++  workers.guard=spawnWorker('recovery-worker',[...args,'--execute'],run);
++  const ready=async()=>{if(workers.guard.closed)C.fail('GUARD_EARLY_EXIT');const g=await G.readJsonArtifact(S.file(run,'guard-ready.json'),16384);
++   if(g?.runId!==s.runId||g.state!=='ready'||Date.now()-g.updatedAtMs>5000)return false;
++   const h=await G.readJsonArtifact(S.file(run,'heartbeat.json'),16384);return !W.health(h,s,Date.now(),g.collectorPid);};
++  await waitFor(ready,20000);
++  upload=await A.uploadOnce(api,guard,s,run,async()=>{if(!await ready()||fs.existsSync(S.file(run,'closing.json')))C.fail('GUARD_NOT_READY_FOR_UPLOAD');});
++  if(!upload.confirmed)close('UPLOAD_UNCONFIRMED');
++  const end=performance.now()+s.wallLimitMs+120000;
++  while(performance.now()<end){
++   if(workers.guard.closed)break;
++   if(workers.collector.closed)close('COLLECTOR_EXITED');
++   const r=await G.readJsonArtifact(S.file(run,'guard-ready.json'),16384);
++   // An independent supervisor never kills a potentially restoring worker.
++   // A hung worker triggers a closing request; its action lock protects recovery.
++   if(r&&Date.now()-r.updatedAtMs>30000)close('GUARD_HEARTBEAT_STALE');
++   await C.pause(500);
++  }
++  if(!workers.guard.closed){close('PARENT_WALL_DEADLINE');C.fail('GUARD_DID_NOT_CLOSE');}
++ }catch(e){failure={error:A.codeOf(e),atMs:Date.now()};close(failure.error);}
++ // Give a healthy independent guard time to recover after a parent-side failure.
++ if(workers.guard&&!workers.guard.closed){try{await waitFor(()=>workers.guard.closed,60000);}catch{}}
++ if(!workers.guard||workers.guard.closed){
++  const priorRestore=S.optional(run,'restore-result.json');
++  if(!priorRestore||(!priorRestore.confirmed&&!fs.existsSync(S.file(run,'restore-attempt.json')))){
++   try{const r=await A.restoreOnce(api,guard,s,run);S.newRecord(run,'supervisor-restore-result.json',r);}catch(e){S.newRecord(run,'supervisor-restore-result.json',{status:'ONLINE_CLOSE_UNCONFIRMED',confirmed:false,error:A.codeOf(e)});}
++  }
++ }
++ // A still-running guard forbids another recovery writer. Do not stop its collector.
++ if(workers.guard&&!workers.guard.closed){
++  S.newRecord(run,'driver-result.json',{runId:s.runId,status:'ONLINE_CLOSE_UNCONFIRMED',failure,guardStillRunning:true});
++  process.removeListener('SIGINT',onSignal);process.removeListener('SIGTERM',onSignal);workers.guard.child.unref();workers.collector?.child.unref();return;
++ }
++ if(fs.existsSync(S.file(run,'upload-attempt.json'))){
++  try{post=await postRestore(api,guard,s,run);}catch(e){post={confirmed:false,error:A.codeOf(e)};}
++  S.newRecord(run,'runtime-confirmation.json',post);
++ }
++ if(workers.collector&&!workers.collector.closed){
++  try{S.newRecord(run,'collector-stop.json',{runId:s.runId,reason:upload?'observation_closed':'no_upload',atMs:Date.now()});await waitFor(()=>workers.collector.closed,10000);}catch(e){failure=failure||{error:A.codeOf(e)};}
++ }
++ const result={runId:s.runId,status:!fs.existsSync(S.file(run,'upload-attempt.json'))?'NOT_DEPLOYED':post?.confirmed?'RESTORED':'ONLINE_CLOSE_UNCONFIRMED',
++  upload,failure,post,collectorExit:workers.collector?.exit??null,guardExit:workers.guard?.exit??null,atMs:Date.now()};
++ S.newRecord(run,'driver-result.json',result);process.removeListener('SIGINT',onSignal);process.removeListener('SIGTERM',onSignal);return result;
++}
++module.exports={spawnWorker,waitFor,postRestore,execute};
+diff --git a/runtime/guard-control.cjs b/runtime/guard-control.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..e5249cf2718ba85dbc8431c6f371046bc4582e7a
+--- /dev/null
++++ b/runtime/guard-control.cjs
+@@ -0,0 +1,183 @@
++'use strict';
++const fs=require('node:fs');
++const crypto=require('node:crypto');
++const C=require('./common.cjs');
++
++const DEFAULT_TIME_POLICY=Object.freeze({
++  attemptsPerCycle:3,
++  perAttemptMaxMs:2500,
++  retryDelaysMs:Object.freeze([250,750]),
++  maxConsecutiveFailedCycles:2,
++  maxSuccessAgeMs:45000,
++});
++
++const VALID_STAGES=new Set([
++  'startup','heartbeat_read','collector_result_read','upload_attempt_read',
++  'game_time_read','guard_ready_write','closing_write','restore_dispatch','internal',
++]);
++
++function stableErrorCode(error) {
++  const code=error&&typeof error.code==='string'?error.code:null;
++  return code&&/^[A-Z0-9_.:-]{1,128}$/.test(code)?code:'UNEXPECTED_LOCAL_FAILURE';
++}
++function stableErrorName(error) {
++  return error&&typeof error.name==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(error.name)
++    ?error.name:null;
++}
++function hashText(value) {
++  return value?crypto.createHash('sha256').update(value).digest('hex'):null;
++}
++function truncateUtf8(value,maxBytes) {
++  const text=String(value??'');let out='',bytes=0;
++  for(const ch of text){const size=Buffer.byteLength(ch);if(bytes+size>maxBytes)break;out+=ch;bytes+=size;}
++  return {text:out,bytes,truncated:bytes<Buffer.byteLength(text)};
++}
++function safeGuardDiagnostic(stage,error,redact=C.redactor()) {
++  const raw=error&&typeof error.message==='string'?error.message:'';
++  const redacted=redact(raw);
++  const sanitized=truncateUtf8(redacted,1024);
++  return {
++    stage:VALID_STAGES.has(stage)?stage:'internal',
++    code:stableErrorCode(error),
++    name:stableErrorName(error),
++    messageBytes:sanitized.bytes,
++    messageSha256:hashText(sanitized.text),
++    messageTruncated:sanitized.truncated,
++    redactionChanged:redacted!==raw,
++  };
++}
++function classifyGuardFailure(stage,error) {
++  const code=stableErrorCode(error);
++  if(stage==='game_time_read') {
++    if(code==='HTTP_TRANSPORT_ERROR')return {reason:'guard_time_transport_failure',stage,code};
++    if(code==='HTTP_DEADLINE'||code==='OPERATION_DEADLINE')return {reason:'guard_time_deadline_failure',stage,code};
++    if(code==='GAME_TICK_UNREADABLE')return {reason:'guard_time_payload_failure',stage,code};
++    return {reason:'guard_time_unclassified_failure',stage,code};
++  }
++  if(stage==='upload_attempt_read')return {reason:'guard_upload_attempt_read_failure',stage,code};
++  if(stage==='guard_ready_write'||stage==='closing_write')return {reason:'guard_artifact_write_failure',stage,code};
++  if(stage==='heartbeat_read'||stage==='collector_result_read')return {reason:'guard_artifact_read_failure',stage,code};
++  if(stage==='restore_dispatch')return {reason:'guard_restore_dispatch_failure',stage,code};
++  return {reason:'guard_internal_failure',stage:VALID_STAGES.has(stage)?stage:'internal',code};
++}
++
++async function readJsonArtifact(file,maxBytes,{required=false,attempts=3,retryDelaysMs=[20,50],
++  pause=C.pause,exists=fs.existsSync,read=C.readJson}={}) {
++  if(typeof file!=='string'||!file||!Number.isSafeInteger(maxBytes)||maxBytes<1
++    ||!Number.isSafeInteger(attempts)||attempts<1||attempts>5
++    ||!Array.isArray(retryDelaysMs)||retryDelaysMs.length!==attempts-1
++    ||retryDelaysMs.some(x=>!Number.isSafeInteger(x)||x<0||x>1000)
++    ||typeof pause!=='function'||typeof exists!=='function'||typeof read!=='function')C.fail('ARTIFACT_READ_ARGUMENT_INVALID');
++  if(!exists(file)) {
++    if(required)C.fail('LOCAL_JSON_UNREADABLE');
++    return undefined;
++  }
++  let lastError;
++  for(let attempt=1;attempt<=attempts;attempt++) {
++    try{return read(file,maxBytes);}
++    catch(error){lastError=error;if(attempt<attempts)await pause(retryDelaysMs[attempt-1]);}
++  }
++  if(!required&&!exists(file))return undefined;
++  throw lastError||new C.Failure('LOCAL_JSON_UNREADABLE');
++}
++
++function createTimeChannelState(now=Date.now()) {
++  return {
++    createdAtMs:now,
++    consecutiveFailedCycles:0,
++    totalAttempts:0,
++    totalSuccessfulReads:0,
++    totalFailedCycles:0,
++    lastSuccessAtMs:null,
++    lastFailureAtMs:null,
++    lastFailure:null,
++  };
++}
++function timeChannelSnapshot(state) {
++  return {
++    createdAtMs:state.createdAtMs,
++    consecutiveFailedCycles:state.consecutiveFailedCycles,
++    totalAttempts:state.totalAttempts,
++    totalSuccessfulReads:state.totalSuccessfulReads,
++    totalFailedCycles:state.totalFailedCycles,
++    lastSuccessAtMs:state.lastSuccessAtMs,
++    lastFailureAtMs:state.lastFailureAtMs,
++    lastFailure:state.lastFailure?{...state.lastFailure}:null,
++  };
++}
++function validState(state) {
++  return state&&Number.isSafeInteger(state.createdAtMs)&&state.createdAtMs>=0
++    &&Number.isSafeInteger(state.consecutiveFailedCycles)&&state.consecutiveFailedCycles>=0
++    &&Number.isSafeInteger(state.totalAttempts)&&state.totalAttempts>=0
++    &&Number.isSafeInteger(state.totalSuccessfulReads)&&state.totalSuccessfulReads>=0
++    &&Number.isSafeInteger(state.totalFailedCycles)&&state.totalFailedCycles>=0;
++}
++function validPolicy(policy) {
++  return policy&&Number.isSafeInteger(policy.attemptsPerCycle)&&policy.attemptsPerCycle>=1&&policy.attemptsPerCycle<=5
++    &&Number.isSafeInteger(policy.perAttemptMaxMs)&&policy.perAttemptMaxMs>=100&&policy.perAttemptMaxMs<=8000
++    &&Array.isArray(policy.retryDelaysMs)&&policy.retryDelaysMs.length===policy.attemptsPerCycle-1
++    &&policy.retryDelaysMs.every(x=>Number.isSafeInteger(x)&&x>=0&&x<=5000)
++    &&Number.isSafeInteger(policy.maxConsecutiveFailedCycles)&&policy.maxConsecutiveFailedCycles>=1
++    &&policy.maxConsecutiveFailedCycles<=5
++    &&Number.isSafeInteger(policy.maxSuccessAgeMs)&&policy.maxSuccessAgeMs>=10000&&policy.maxSuccessAgeMs<=120000;
++}
++async function readGameTimeResilient({
++  api,shard,budgetMs,state,record=()=>{},now=Date.now,pause=C.pause,redact=C.redactor(),
++  policy=DEFAULT_TIME_POLICY,
++}) {
++  if(!api||typeof api.time!=='function'||typeof shard!=='string'||!shard.length)C.fail('TIME_CHANNEL_ARGUMENT_INVALID');
++  if(!Number.isSafeInteger(budgetMs)||budgetMs<1||budgetMs>60000)C.fail('TIME_CHANNEL_BUDGET_INVALID');
++  if(!validState(state)||!validPolicy(policy)||typeof now!=='function'||typeof pause!=='function'
++    ||typeof record!=='function'||typeof redact!=='function')C.fail('TIME_CHANNEL_ARGUMENT_INVALID');
++  const cycleStartedAt=now();
++  let lastFailure=null;
++  for(let attempt=1;attempt<=policy.attemptsPerCycle;attempt++) {
++    const elapsed=Math.max(0,now()-cycleStartedAt);
++    const remaining=budgetMs-elapsed;
++    if(remaining<=0) {
++      const error=new C.Failure('OPERATION_DEADLINE');
++      const classified=classifyGuardFailure('game_time_read',error);
++      lastFailure={...classified,diagnostic:safeGuardDiagnostic('game_time_read',error,redact)};
++      record({kind:'guard-time-read-attempt-failed',attempt,...lastFailure});
++      break;
++    }
++    state.totalAttempts++;
++    try {
++      const response=await api.time(shard,Math.max(1,Math.min(policy.perAttemptMaxMs,remaining)));
++      if(!response||response.ok!==1||!Number.isSafeInteger(response.time)||response.time<0) {
++        C.fail('GAME_TICK_UNREADABLE');
++      }
++      const atMs=now();
++      state.consecutiveFailedCycles=0;
++      state.totalSuccessfulReads++;
++      state.lastSuccessAtMs=atMs;
++      state.lastFailureAtMs=null;
++      state.lastFailure=null;
++      record({kind:'guard-time-read-success',attempt,time:response.time,atMs});
++      return {status:'ok',time:response.time,state:timeChannelSnapshot(state)};
++    } catch(error) {
++      const classified=classifyGuardFailure('game_time_read',error);
++      lastFailure={...classified,diagnostic:safeGuardDiagnostic('game_time_read',error,redact)};
++      record({kind:'guard-time-read-attempt-failed',attempt,...lastFailure});
++      if(attempt<policy.attemptsPerCycle)await pause(policy.retryDelaysMs[attempt-1]);
++    }
++  }
++  const atMs=now();
++  state.consecutiveFailedCycles++;
++  state.totalFailedCycles++;
++  state.lastFailureAtMs=atMs;
++  state.lastFailure=lastFailure||{
++    reason:'guard_time_unclassified_failure',stage:'game_time_read',code:'NO_FAILURE_DETAIL',
++    diagnostic:{stage:'game_time_read',code:'NO_FAILURE_DETAIL',name:null,messageBytes:0,
++      messageSha256:null,messageTruncated:false,redactionChanged:false},
++  };
++  const terminal=state.consecutiveFailedCycles>=policy.maxConsecutiveFailedCycles
++    ||(state.lastSuccessAtMs!==null&&atMs-state.lastSuccessAtMs>=policy.maxSuccessAgeMs);
++  record({kind:'guard-time-read-cycle-failed',terminal,atMs,timeChannel:timeChannelSnapshot(state)});
++  return {status:terminal?'terminal':'degraded',failure:{...state.lastFailure},state:timeChannelSnapshot(state)};
++}
++
++module.exports={
++  DEFAULT_TIME_POLICY,stableErrorCode,truncateUtf8,safeGuardDiagnostic,classifyGuardFailure,readJsonArtifact,
++  createTimeChannelState,timeChannelSnapshot,readGameTimeResilient,
++};
+diff --git a/runtime/policy.cjs b/runtime/policy.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d53a7c3fa81bc786c036c9dd46ea8a450e13e878
+--- /dev/null
++++ b/runtime/policy.cjs
+@@ -0,0 +1,27 @@
++'use strict';
++const C=require('./common.cjs');
++const REFACTOR='ee03fb4a871b1a707a4244d2f3a7819e5982324d';
++const COMPAT='fcfc125f0e5cd6c3370318b4fee0450f4d09af53';
++const CONFIG='src/runtime/treasuryCompatConfig.ts';
++const ROOMS=Object.freeze(['E3N59','E4N58']),RESOURCES=Object.freeze(['energy','H']);
++const WALL_MS=5400000, CONFIRM_MS=75000, LEAD_TICKS=150;
++const EVIDENCE='openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0003';
++function profileFor(tick){
++ C.integer(tick,0,Number.MAX_SAFE_INTEGER-2000,'GAME_TICK_UNREADABLE');
++ const startTick=Math.ceil((tick+LEAD_TICKS)/100)*100;
++ return {enabled:true,shardName:'shard1',rooms:[...ROOMS],resources:[...RESOURCES],startTick,endTick:startTick+1100,
++  intervalTicks:100,minBucket:2000,maxSampleCpu:2,reserveCpu:5,maxLogBytes:16384};
++}
++function validProfile(p){
++ if(!p||p.enabled!==true||p.shardName!=='shard1'||JSON.stringify(p.rooms)!==JSON.stringify(ROOMS)
++  ||JSON.stringify(p.resources)!==JSON.stringify(RESOURCES)||!Number.isSafeInteger(p.startTick)||p.startTick<0||p.startTick%100
++  ||p.endTick!==p.startTick+1100||p.intervalTicks!==100||p.minBucket!==2000||p.maxSampleCpu!==2||p.reserveCpu!==5||p.maxLogBytes!==16384)C.fail('FORMAL_PROFILE_INVALID');
++ return p;
++}
++function renderConfig(p){validProfile(p);return 'import type { CompatConfig } from "./treasuryCompatTypes";\n'+
++ '/** Observation 0003: one frozen absolute window; no Memory or environment override. */\n'+
++ 'export const TREASURY_COMPAT_CONFIG: CompatConfig = Object.freeze({\n'+
++ `  enabled: true,\n  shardName: "shard1",\n  rooms: Object.freeze(["E3N59", "E4N58"]),\n  resources: Object.freeze(["energy", "H"]),\n  startTick: ${p.startTick},\n  endTick: ${p.endTick},\n  intervalTicks: 100,\n  minBucket: 2000,\n  maxSampleCpu: 2,\n  reserveCpu: 5,\n  maxLogBytes: 16384,\n});\n`;
++}
++const dueTicks=p=>{validProfile(p);return Array.from({length:12},(_,i)=>p.startTick+i*100);};
++module.exports={REFACTOR,COMPAT,CONFIG,ROOMS,RESOURCES,WALL_MS,CONFIRM_MS,LEAD_TICKS,EVIDENCE,profileFor,validProfile,renderConfig,dueTicks};
+diff --git a/runtime/protocol.cjs b/runtime/protocol.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..cc537ffbd1dba96125787449ce9eb0643cf1e1f5
+--- /dev/null
++++ b/runtime/protocol.cjs
+@@ -0,0 +1,115 @@
++'use strict';
++const {fail,obj,own,sha256,clone,EXPECTED} = require('./common.cjs');
++const ALGORITHM='deployGuard.computeModulesHash/NUL-v1';
++function validateModules(m) {
++  if(!obj(m)) fail('MODULES_NOT_OBJECT');
++  const names=Object.keys(m);
++  if(!names.length || names.length>256 || !own(m,'main') || typeof m.main!=='string' || !m.main.trim()) fail('MODULES_EMPTY_OR_MAIN_MISSING');
++  let total=0;
++  for(const n of names) {
++    if(!n.length || n.length>128 || /[\0\r\n]/.test(n)) fail('MODULE_NAME_INVALID');
++    const v=m[n];
++    if(typeof v==='string') total+=Buffer.byteLength(v);
++    else if(obj(v) && Object.keys(v).length===1 && own(v,'binary') && typeof v.binary==='string'
++      && /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(v.binary)
++      && Buffer.from(v.binary,'base64').toString('base64')===v.binary) total+=Buffer.from(v.binary,'base64').length;
++    else fail('MODULE_VALUE_INVALID');
++  }
++  if(total>16*1024*1024) fail('MODULE_SET_TOO_LARGE');
++  return m;
++}
++function modulesFromResponse(r) {
++  if(!obj(r)||r.ok!==1) fail('API_RESULT_NOT_SUCCESS');
++  if(!own(r,'modules')) fail('MODULES_FIELD_MISSING');
++  return validateModules(r.modules);
++}
++function activeBranch(r, expected=EXPECTED.branch) {
++  if(!obj(r)||r.ok!==1||!Array.isArray(r.list)) fail('BRANCH_RESPONSE_INVALID');
++  const names=new Set();
++  for(const b of r.list) {
++    if(!obj(b)||typeof b.branch!=='string'||!b.branch.length||names.has(b.branch)) fail('BRANCH_RESPONSE_INVALID');
++    if(own(b,'activeWorld')&&typeof b.activeWorld!=='boolean') fail('BRANCH_RESPONSE_INVALID');
++    names.add(b.branch);
++  }
++  const active=r.list.filter(b=>b.activeWorld===true);
++  if(active.length!==1) fail('ACTIVE_WORLD_NOT_UNIQUE');
++  if(active[0].branch!==expected) fail('ACTIVE_WORLD_CHANGED');
++  return active[0].branch;
++}
++function account(r, expected=EXPECTED) {
++  if(!obj(r)||r.ok!==1||r._id!==expected.userId||r.username!==expected.username) fail('ACCOUNT_MISMATCH_OR_UNREADABLE');
++  return {_id:r._id, username:r.username};
++}
++function ownedRooms(r,shard=EXPECTED.shard) {
++  const rooms=r?.shards?.[shard]?.rooms;
++  if(!obj(r)||r.ok!==1||!Array.isArray(rooms)||rooms.some(n=>typeof n!=='string'||!/^[WE]\d{1,3}[NS]\d{1,3}$/.test(n)))fail('ROOM_OVERVIEW_UNREADABLE');
++  return [...new Set(rooms)];
++}
++function describeModules(m, guard) {
++  validateModules(m);
++  return {algorithm:ALGORITHM, hash:guard.computeModulesHash(m), files:Object.keys(m).sort().map(name=>{
++    const v=m[name], binary=typeof v!=='string', bytes=binary?Buffer.from(v.binary,'base64'):Buffer.from(v,'utf8');
++    return {name,kind:binary?'binary':'text',bytes:bytes.length,sha256:sha256(bytes)};
++  })};
++}
++function equalModules(a,b,guard) {
++  validateModules(a);validateModules(b);
++  // Canonical hash alone is insufficient if a text module starts with "bin:".
++  // Require the canonical implementation's exact typed-content diff as well.
++  const d=guard.diffRemoteModules(a,b);
++  return d.match && d.missing.length===0 && d.extra.length===0 && d.changed.length===0;
++}
++function makeSnapshot(modules, guard, identity=EXPECTED, at=Date.now()) {
++  return {kind:'compat-online-modules-v1', ...identity, capturedAtMs:at,
++    modules:clone(validateModules(modules)), digest:describeModules(modules,guard)};
++}
++function validateSnapshot(s,guard,expected=EXPECTED) {
++  if(!obj(s)||s.kind!=='compat-online-modules-v1'||!Number.isSafeInteger(s.capturedAtMs)||s.capturedAtMs<0) fail('SNAPSHOT_INVALID');
++  for(const k of ['server','username','userId','branch','shard']) if(s[k]!==expected[k]) fail('SNAPSHOT_IDENTITY_MISMATCH');
++  const d=describeModules(s.modules,guard);
++  if(JSON.stringify(d)!==JSON.stringify(s.digest)) fail('SNAPSHOT_DIGEST_MISMATCH');
++  return s;
++}
++function buildIdentity(text) {
++  const get = name => {
++    const matches=[...text.matchAll(new RegExp('const '+name+' = "([^"\\r\\n]*)"\\s*;', 'g'))];
++    if(matches.length!==1) fail('BUILD_IDENTITY_NOT_UNIQUE');
++    return matches[0][1];
++  };
++  // Rollup may fold BUILD_DIRTY into the BUILD_INFO literal. Never infer false
++  // from absence: require the constant, the rollup-replace guard ternary, or
++  // the exact metadata property. A ternary is trusted only when all three
++  // literals agree; any disagreement stays "not_read" and fails closed.
++  const dirtyConstants=[...text.matchAll(/const BUILD_DIRTY = "(true|false)"\s*;/g)];
++  let dirty='not_read';
++  if(dirtyConstants.length===1)dirty=dirtyConstants[0][1];
++  else if(dirtyConstants.length===0){
++    const ternary=[...text.matchAll(/const BUILD_DIRTY = typeof "(true|false)" !== "undefined" \? "(true|false)" : "(true|false)"/g)];
++    if(ternary.length===1&&ternary[0][1]===ternary[0][2]&&ternary[0][2]===ternary[0][3])dirty=ternary[0][1];
++    else{
++      const blocks=[...text.matchAll(/const BUILD_INFO = \{([\s\S]*?)\n\};/g)];
++      if(blocks.length===1){
++        const d=blocks[0][1].match(/\bdirty:\s*(true|false)\s*,/);
++        if(d)dirty=d[1];
++        // Rollup drops unreferenced object properties: when the only BUILD_INFO
++        // consumer reads tag/commit/tree/deployBranch/bundleHash, the "dirty"
++        // declaration is folded out of the artifact entirely. Recognize exactly
++        // that shape (and no stray BUILD_DIRTY token); anything else stays
++        // "not_read" and fails closed in confirmBuild. The equivalent clean-tree
++        // guarantee stays with assertCandidate's clean/detached checks around
++        // the build, since the frozen builder cannot be changed here.
++        else if(!text.includes('BUILD_DIRTY')&&/\bcommit: BUILD_COMMIT,/.test(blocks[0][1])
++          &&/\btree: BUILD_TREE,/.test(blocks[0][1])&&/\bdeployBranch: BUILD_DEPLOY_BRANCH,/.test(blocks[0][1]))dirty='folded_out';
++      }
++    }
++  }
++  return {commit:get('BUILD_COMMIT'),tree:get('BUILD_TREE'),dirty,deployBranch:get('BUILD_DEPLOY_BRANCH'),tag:get('BUILD_TAG')};
++}
++function confirmBuild(m,head,tree,branch=EXPECTED.branch) {
++  const x=buildIdentity(validateModules(m).main);
++  if(x.commit!==head||x.tree!==tree||x.deployBranch!==branch||(x.dirty!=='false'&&x.dirty!=='folded_out')) fail('BUILD_SOURCE_OR_TARGET_MISMATCH');
++  const match=m.main.match(/\n;globalThis\.__DEPLOY_BUNDLE_HASH__="([a-f0-9]{64})";\n$/);
++  if(!match||sha256(m.main.slice(0,match.index))!==match[1]) fail('EMBEDDED_BUNDLE_HASH_MISMATCH');
++  return {...x, embeddedBundleHash:match[1]};
++}
++module.exports={ALGORITHM,ownedRooms,validateModules,modulesFromResponse,activeBranch,account,describeModules,equalModules,makeSnapshot,validateSnapshot,buildIdentity,confirmBuild};
+diff --git a/runtime/recovery-worker.cjs b/runtime/recovery-worker.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..29d144650e20aa08d6b3a2941c3dcb1b6ce222b7
+--- /dev/null
++++ b/runtime/recovery-worker.cjs
+@@ -0,0 +1,69 @@
++'use strict';
++const fs=require('node:fs');const {performance}=require('node:perf_hooks');
++const C=require('./common.cjs'),S=require('./store.cjs'),G=require('./guard-control.cjs'),W=require('./samples.cjs'),A=require('./actions.cjs');
++const {client}=require('./transport.cjs');
++function termination({s,h,attempt,upload,now,elapsed,tick,closing}){
++ if(closing)return 'EXPLICIT_CLOSE';
++ if(attempt&&(now-attempt.startedAtMs>=s.wallLimitMs||elapsed>=s.wallLimitMs))return 'WALL_DEADLINE';
++ const health=W.health(h,s,now);if(health)return health;
++ if(!attempt)return now-s.preparedAtMs>300000?'PREPARATION_EXPIRED':null;
++ if(upload&&!upload.result?.confirmed)return 'UPLOAD_UNCONFIRMED';
++ if(!upload&&now-attempt.startedAtMs>60000)return 'UPLOAD_RESULT_MISSING';
++ if(h.lastBridgeTick===s.profile.endTick&&h.bridgeReports===12)return 'LAST_SAMPLE_RECEIVED';
++ if(Number.isSafeInteger(tick)){
++  if(tick>s.profile.endTick+20)return 'TICK_WINDOW_ENDED';
++  if(tick>=s.profile.startTick+200&&(!Number.isSafeInteger(h.lastBridgeTick)||h.lastBridgeTick<tick-200))return 'BRIDGE_SAMPLE_STALLED';
++ }
++ return null;
++}
++async function guardLoop({s,run,api,guard,redact=C.redactor(),pause=C.pause,now=Date.now,mono=()=>performance.now()}){
++ S.newRecord(run,'guard.lock',{runId:s.runId,pid:process.pid});
++ let reason=null,failure=null,tick,seen=null,initialElapsed=0,pid=null,auditFailed=false,nextRead=0,stage='startup';
++ const begun=mono(),state=G.createTimeChannelState(now());
++ const event=v=>{try{C.audit(S.file(run,'guard-events.jsonl'),{runId:s.runId,...v},redact);}catch{auditFailed=true;}};
++ const signal=()=>{reason='OPERATOR_STOP';};process.once('SIGINT',signal);process.once('SIGTERM',signal);
++ event({kind:'guard-start',pid:process.pid});
++ try{
++  while(!reason){
++   stage='heartbeat_read';
++   const h=await G.readJsonArtifact(S.file(run,'heartbeat.json'),16384,{required:true});
++   stage='upload_attempt_read';
++   const a=await G.readJsonArtifact(S.file(run,'upload-attempt.json'),16384);
++   stage='collector_result_read';
++   const upload=await G.readJsonArtifact(S.file(run,'upload-result.json'),16384);
++   if(a){S.assertAttempt(a,s);if(seen===null){seen=mono();initialElapsed=Math.max(0,now()-a.startedAtMs);}}
++   if(pid===null)pid=h.pid;if(pid!==h.pid){reason='COLLECTOR_PID_CHANGED';break;}
++   if(auditFailed){reason='AUDIT_IO_FAILURE';break;}
++   reason=termination({s,h,attempt:a,upload,now:now(),elapsed:seen===null?0:initialElapsed+mono()-seen,tick,closing:fs.existsSync(S.file(run,'closing.json'))});
++   if(reason)break;
++   if(a&&mono()>=nextRead){
++    const remaining=s.wallLimitMs-(initialElapsed+mono()-seen);
++    stage='game_time_read';
++    const r=await G.readGameTimeResilient({api,shard:s.shard,budgetMs:Math.max(1,Math.min(8000,Math.floor(remaining))),state,
++     record:event,redact,now,pause});nextRead=mono()+15000;
++    if(r.status==='terminal'){reason=r.failure.reason;failure=r.failure;break;}
++    if(r.status==='ok'){if(tick!==undefined&&r.time<tick){reason='GAME_TICK_REGRESSED';break;}tick=r.time;}
++   }
++   stage='guard_ready_write';
++   C.atomicJson(S.file(run,'guard-ready.json'),{runId:s.runId,pid:process.pid,state:'ready',updatedAtMs:now(),collectorPid:pid,tick:tick??null,
++    controlPlane:state.consecutiveFailedCycles?'degraded':'healthy'});
++   await pause(500);
++  }
++ }catch(e){const classified=G.classifyGuardFailure(stage,e);reason=classified.reason;failure={...classified,diagnostic:G.safeGuardDiagnostic(stage,e,redact)};event({kind:'guard-control-failure',failure});}
++ event({kind:'close-trigger',reason,timeChannel:G.timeChannelSnapshot(state)});
++ try{C.atomicJson(S.file(run,'closing.json'),{runId:s.runId,reason,atMs:now()});}catch{auditFailed=true;}
++ try{C.atomicJson(S.file(run,'guard-ready.json'),{runId:s.runId,pid:process.pid,state:'closing',updatedAtMs:now()});}catch{auditFailed=true;}
++ let restoration;
++ try{restoration=await A.restoreOnce(api,guard,s,run);}catch(e){restoration={status:'ONLINE_CLOSE_UNCONFIRMED',confirmed:false,error:A.codeOf(e),atMs:now()};}
++ try{S.newRecord(run,'restore-result.json',restoration);}catch{auditFailed=true;}
++ try{fs.unlinkSync(S.file(run,'guard.lock'));}catch{auditFailed=true;}
++ const result={runId:s.runId,status:restoration.confirmed&&!auditFailed?'GUARD_CLOSED_CONFIRMED':'ONLINE_CLOSE_UNCONFIRMED',reason,
++  restoration,auditFailed,failure,elapsedMs:Math.floor(mono()-begun),timeChannel:G.timeChannelSnapshot(state),atMs:now()};
++ event({kind:'guard-finished',status:result.status});S.newRecord(run,'guard-result.json',result);
++ process.removeListener('SIGINT',signal);process.removeListener('SIGTERM',signal);return result;
++}
++async function main(){const o=C.options(process.argv.slice(2),['repo','run','secret'],['execute']);C.required(o,'repo','run','secret');if(!o.execute)C.fail('EXPLICIT_EXECUTE_REQUIRED');
++ const secret=C.loadSecret(o.secret),guard=C.loadGuard(o.repo),s=S.loadRun(o.run,guard);
++ const r=await guardLoop({s,run:o.run,api:client(secret),guard,redact:secret.redact});console.log(JSON.stringify(r));process.exitCode=r.status==='GUARD_CLOSED_CONFIRMED'?0:6;
++}
++module.exports={termination,guardLoop};if(require.main===module)C.entrypoint(main);
+diff --git a/runtime/samples.cjs b/runtime/samples.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7186cc20f609df5fe437493442829a0e109adf03
+--- /dev/null
++++ b/runtime/samples.cjs
+@@ -0,0 +1,106 @@
++'use strict';
++const C=require('./common.cjs'),K=require('./policy.cjs');
++const nn=x=>Number.isSafeInteger(x)&&x>=0;
++const finite=x=>typeof x==='number'&&Number.isFinite(x)&&x>=0;
++function decode(s){return s.replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>')
++ .replace(/&#(\d+);/g,(_,n)=>+n<=0x10ffff?String.fromCodePoint(+n):'\uFFFD').replace(/&amp;/g,'&');}
++function complete(c){return c?.complete===true&&c.globalIncomplete!==true&&(!('invalidRecords' in c)||c.invalidRecords===0)
++ &&(!('incompleteScopeCount' in c)||c.incompleteScopeCount===0);}
++function sampleError(r,p){
++ if(!r||r.kind!=='treasury-legacy-read-bridge'||!K.dueTicks(p).includes(r.tick))return 'SAMPLE_OUTSIDE_WINDOW';
++ if(r.status!=='sampled')return 'SAMPLE_NOT_COMPLETE';
++ if(r.shard!==p.shardName||r.sourceCommit!=='01bd9831454950c4928df98dd8679692b55603e5'||r.productionBase!==C.PRODUCTION_BASE)return 'SAMPLE_SOURCE_MISMATCH';
++ if(r.authorizesActions!==false||r.spendable!==null||r.kernelLifecycleRun!==false||r.facadeQueryRun!==false
++  ||r.storageMode!=='heap_only'||r.evaluation!=='observation_and_legacy_commitments_only')return 'SAMPLE_AUTHORITY_CHANGED';
++ if(JSON.stringify(r.scope?.rooms)!==JSON.stringify(p.rooms)||JSON.stringify(r.scope?.resources)!==JSON.stringify(p.resources)||r.scope?.isEmpireTotal!==false)return 'SAMPLE_SCOPE_MISMATCH';
++ if(!finite(r.cpuBeforeSerializationAndEmit)||r.cpuBeforeSerializationAndEmit>=p.maxSampleCpu||r.cooperativeBudget!==true)return 'SAMPLE_CPU_BUDGET';
++ if(!Array.isArray(r.endpoints)||r.endpoints.length!==4||r.requestedEndpointRows!==4||r.collectedEndpointRows!==4
++  ||JSON.stringify(r.coreObservationRooms)!==JSON.stringify(p.rooms))return 'ENDPOINT_COUNT_MISMATCH';
++ for(const room of p.rooms)for(const kind of ['storage','terminal']){
++  const a=r.endpoints.filter(x=>x.room===room&&x.location===kind);if(a.length!==1)return 'ENDPOINT_DUPLICATE_OR_MISSING';
++  const x=a[0],d=x.direct;
++  if(x.directStatus!=='ok'||x.coreComparison!=='match_selected_scope'||!Array.isArray(x.coreMismatches)||x.coreMismatches.length)return 'CORE_OBSERVATION_MISMATCH';
++  if(!d||typeof d.id!=='string'||!d.id||!nn(d.used)||!nn(d.capacity)||!Number.isSafeInteger(d.free)
++   ||!(d.used+d.free===d.capacity||(d.used>d.capacity&&d.free===0))||d.overCapacity!==(d.used>d.capacity)
++   ||typeof d.active!=='boolean'||(kind==='terminal'?!nn(d.cooldown):d.cooldown!==null)
++   ||p.resources.some(z=>!nn(d.amounts?.[z]))||p.resources.reduce((n,z)=>n+d.amounts[z],0)>d.used)return 'DIRECT_ENDPOINT_INVALID';
++ }
++ for(const key of ['tasks','reservations']){
++  const t=r.legacyInputs?.[key];if(!t||!['empty','nonempty'].includes(t.status)||!nn(t.count)||t.count>256
++   ||(t.status==='empty')!==(t.count===0))return 'LEGACY_TABLE_UNAVAILABLE';
++ }
++ const c=r.commitments;
++ if(c?.status!=='read_complete'||c.allTableScan!==true||c.tableLimitEach!==256||!complete(c.completeness)||typeof c.completeness.globalIncomplete!=='boolean'||!nn(c.completeness.invalidRecords)||!nn(c.completeness.incompleteScopeCount)
++  ||!Array.isArray(c.rows)||c.rows.length!==4)return 'COMMITMENTS_INCOMPLETE';
++ for(const room of p.rooms)for(const resource of p.resources){
++  const a=c.rows.filter(x=>x.room===room&&x.resource===resource);if(a.length!==1)return 'COMMITMENT_ROW_INVALID';
++  const x=a[0];if(x.scope!=='room_not_endpoint'||![x.outgoing,x.incoming,x.productionReserved].every(nn)||!complete(x.completeness))return 'COMMITMENT_ROW_INVALID';
++ }
++ if(Buffer.byteLength(JSON.stringify(r))>p.maxLogBytes)return 'OUTPUT_LIMIT_EXCEEDED';
++ return null;
++}
++function validateSequence(samples,p){
++ const due=K.dueTicks(p),missing=due.filter(t=>!samples.some(r=>r.tick===t));
++ const errors=[];for(const r of samples){const e=sampleError(r,p);if(e)errors.push({tick:r.tick,error:e});}
++ if(samples.length!==12||missing.length)errors.push({error:'EXPECTED_12_SAMPLES',missing});
++ const cpu=[];
++ for(let i=0;i<samples.length;i++){
++  const r=samples[i];if(r.tick!==due[i])errors.push({error:'SAMPLE_ORDER_INVALID',tick:r.tick});
++  if(i===0){if(r.previousRun!==null)errors.push({error:'FIRST_SAMPLE_NOT_FRESH'});continue;}
++  const prev=r.previousRun;
++  if(!prev||prev.tick!==samples[i-1].tick||!finite(prev.cpuIncludingEmit)||prev.cpuIncludingEmit>5
++   ||!nn(prev.emittedBytes)||prev.emittedBytes>p.maxLogBytes||!nn(prev.retainedPrimitiveChars))errors.push({error:'PREVIOUS_SAMPLE_COST_INVALID',tick:r.tick});
++  else cpu.push({tick:prev.tick,cpuIncludingEmit:prev.cpuIncludingEmit});
++ }
++ return {complete:errors.length===0,errors,missing,receivedTicks:samples.map(x=>x.tick),cpuIncludingEmit:cpu,
++  finalSampleCpuIncludingEmit:'not_observable_with_frozen_reader',lastSampleCpuBeforeSerializationAndEmit:samples.at(-1)?.cpuBeforeSerializationAndEmit??null};
++}
++function createWatch(s,pid,at=Date.now()){
++ const state={runId:s.runId,pid,userId:s.userId,shard:s.shard,state:'connecting',socketState:'connecting',updatedAtMs:at,
++  authenticatedAtMs:null,lastConsoleAtMs:null,lastCpuAtMs:null,lastPositiveCpuAtMs:null,lastBridgeTick:null,
++  lastBridgeAtMs:null,bridgeReports:0,stopReason:null,duplicateSamples:0,candidateDeployAtMs:null,restoredDeployAtMs:null};
++ const samples=new Map();let authCount=0;
++ function frame(text,now=Date.now()){
++  state.updatedAtMs=now;
++  if(text==='auth ok'||text.startsWith('auth ok ')){
++   if(++authCount!==1){state.stopReason='AUTHENTICATION_REPEATED';return 'auth-failure';}
++   state.state='streaming';state.socketState='open';state.authenticatedAtMs=now;return 'auth';
++  }
++  if(text.startsWith('auth ')){state.stopReason='AUTHENTICATION_FAILED';return 'auth-failure';}
++  let v;try{v=JSON.parse(text);}catch{return 'ignored';}
++  if(!Array.isArray(v)||v.length!==2||state.state!=='streaming')return 'ignored';
++  const [ch,d]=v;
++  if(ch===`user:${s.userId}/cpu`&&finite(d?.cpu)){
++   state.lastCpuAtMs=now;if(d.cpu>0)state.lastPositiveCpuAtMs=now;return 'cpu';
++  }
++  if(ch!==`user:${s.userId}/console`||d?.shard!==s.shard||!Array.isArray(d.messages?.log)||!Array.isArray(d.messages?.results))return 'ignored';
++  state.lastConsoleAtMs=now;
++  for(const raw of d.messages.log){
++   if(typeof raw!=='string')continue;const line=decode(raw).trim();
++   if(line===`[deploy] ${s.build.tag}`)state.candidateDeployAtMs=now;
++   if(line===`[deploy] ${s.backupBuild.tag}`)state.restoredDeployAtMs=now;
++   if(line.startsWith('[deploy] ')&&line!==`[deploy] ${s.build.tag}`&&line!==`[deploy] ${s.backupBuild.tag}`)state.stopReason='UNEXPECTED_DEPLOY_IDENTITY';
++   let r;try{r=JSON.parse(line);}catch{if(line.includes('treasury-legacy-read-bridge'))state.stopReason='BRIDGE_JSON_INVALID';continue;}
++   if(r?.kind!=='treasury-legacy-read-bridge')continue;
++   const e=sampleError(r,s.profile);if(e){state.stopReason=e;continue;}
++   if(samples.has(r.tick)){
++    if(JSON.stringify(samples.get(r.tick))!==JSON.stringify(r))state.stopReason='CONFLICTING_DUPLICATE_SAMPLE';
++    else state.duplicateSamples++;continue;
++   }
++   if(r.tick!==s.profile.startTick+samples.size*100){state.stopReason='SAMPLE_MISSING_OR_REORDERED';continue;}
++   if(samples.size&&(!r.previousRun||r.previousRun.tick!==state.lastBridgeTick||!finite(r.previousRun.cpuIncludingEmit)||r.previousRun.cpuIncludingEmit>5))state.stopReason='PREVIOUS_SAMPLE_COST_INVALID';
++   samples.set(r.tick,r);state.lastBridgeTick=r.tick;state.lastBridgeAtMs=now;state.bridgeReports=samples.size;
++  }
++  return 'console';
++ }
++ return {state,frame,samples};
++}
++function health(h,s,now,pid){
++ if(!h||h.runId!==s.runId||h.userId!==s.userId||h.shard!==s.shard||!Number.isSafeInteger(h.pid)||h.pid<=0||(pid&&h.pid!==pid))return 'COLLECTOR_IDENTITY_INVALID';
++ if(h.stopReason)return h.stopReason;
++ if(h.state!=='streaming'||h.socketState!=='open')return 'COLLECTOR_NOT_STREAMING';
++ if(!finite(h.updatedAtMs)||now-h.updatedAtMs>10000||h.updatedAtMs>now+1000)return 'COLLECTOR_HEARTBEAT_STALE';
++ for(const k of ['lastConsoleAtMs','lastCpuAtMs'])if(!finite(h[k])||now-h[k]>45000||h[k]>now+1000)return 'COLLECTOR_CHANNEL_STALE';
++ return null;
++}
++module.exports={decode,sampleError,validateSequence,createWatch,health};
+diff --git a/runtime/store.cjs b/runtime/store.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..e5b6d1259e13422157dffe3715a41b46cc4a1d21
+--- /dev/null
++++ b/runtime/store.cjs
+@@ -0,0 +1,31 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path');
++const C=require('./common.cjs'),P=require('./protocol.cjs'),K=require('./policy.cjs');
++function file(run,name){if(!/^[a-zA-Z0-9_.-]+$/.test(name))C.fail('ARTIFACT_NAME_INVALID');return path.join(run,name);}
++function optional(run,name){const p=file(run,name);return fs.existsSync(p)?C.readJson(p):null;}
++function newRecord(run,name,value){
++ const fd=fs.openSync(file(run,name),'wx',0o600);
++ try{fs.writeFileSync(fd,JSON.stringify(value,null,2)+'\n');fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
++ return value;
++}
++function loadRun(run,guard){
++ const s=C.readJson(file(run,'session.json'),65536);
++ if(s.kind!=='formal-compat-observation-0003/v1'||!/^[a-f0-9]{32}$/.test(s.runId)||s.wallLimitMs!==K.WALL_MS
++  ||s.refactorBase!==K.REFACTOR||s.compatBase!==K.COMPAT||!/^[a-f0-9]{40}$/.test(s.profileHead)||!/^[a-f0-9]{40}$/.test(s.profileTree))C.fail('FORMAL_SESSION_INVALID');
++ for(const [k,v] of Object.entries(C.EXPECTED))if(s[k]!==v)C.fail('SESSION_IDENTITY_MISMATCH');
++ K.validProfile(s.profile);
++ if(s.profile.startTick!==K.profileFor(s.observedTick).startTick)C.fail('WINDOW_BINDING_MISMATCH');
++ for(const name of ['backup','candidate']){
++  const snapshotPath=file(run,name+'.json'),st=fs.lstatSync(snapshotPath);if(!st.isFile()||st.isSymbolicLink()||st.size>20*1048576)C.fail('SNAPSHOT_FILE_INVALID');
++  const b=fs.readFileSync(snapshotPath);if(C.sha256(b)!==s[name+'FileSha256'])C.fail('SNAPSHOT_FILE_CHANGED');
++  s[name]=P.validateSnapshot(JSON.parse(b),guard);
++ }
++ if(JSON.stringify(s.backup.digest)!==JSON.stringify(C.ORIGINAL_DIGEST))C.fail('ONLINE_BASELINE_BYTES_CHANGED');
++ if(P.equalModules(s.backup.modules,s.candidate.modules,guard))C.fail('IDENTICAL_BACKUP_AND_CANDIDATE');
++ const build=P.confirmBuild(s.candidate.modules,s.profileHead,s.profileTree);
++ if(JSON.stringify(build)!==JSON.stringify(s.build))C.fail('CANDIDATE_BUILD_CHANGED');
++ return s;
++}
++function assertAttempt(a,s){if(!a||a.runId!==s.runId||a.candidateHash!==s.candidate.digest.hash||a.profileHead!==s.profileHead
++ ||!Number.isSafeInteger(a.startedAtMs)||a.startedAtMs<0)C.fail('ATTEMPT_IDENTITY_INVALID');return a;}
++module.exports={file,optional,newRecord,loadRun,assertAttempt};
+diff --git a/runtime/transport.cjs b/runtime/transport.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..828617ef3d415222c193ed71e102f500f62e51bf
+--- /dev/null
++++ b/runtime/transport.cjs
+@@ -0,0 +1,57 @@
++'use strict';
++const http=require('node:http');
++const https=require('node:https');
++const {performance}=require('node:perf_hooks');
++const {Failure,fail,obj,remaining,EXPECTED}=require('./common.cjs');
++/** Narrow transport: no automatic retries, redirects, console injection, or Memory writes.
++ * Socket destroy bounds LOCAL waiting; it does NOT prove an accepted server write was cancelled. */
++function client(secret, {testOrigin, timeoutMs=8000}={}) {
++  const origin=testOrigin?new URL(testOrigin):new URL(EXPECTED.server);
++  if(testOrigin && !(origin.protocol==='http:' && origin.hostname==='127.0.0.1')) fail('INVALID_TEST_ORIGIN');
++  if(origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash) fail('INVALID_ORIGIN');
++  function request(method, pathname, body, budgetMs=timeoutMs) {
++    return new Promise((resolve,reject)=>{
++      if(!Number.isFinite(budgetMs)||budgetMs<=0) {reject(new Failure('OPERATION_DEADLINE'));return;}
++      const deadline=performance.now()+Math.min(budgetMs,timeoutMs);
++      const payload=body===undefined?null:Buffer.from(JSON.stringify(body));
++      let finished=false,req,timer;
++      const finish=(err,value)=>{if(finished)return;finished=true;clearTimeout(timer);err?reject(err):resolve(value);};
++      try {
++        req=(origin.protocol==='https:'?https:http).request({hostname:origin.hostname,port:origin.port||undefined,
++          method,path:pathname,agent:false,
++          headers:{'X-Token':secret.token,'X-Username':secret.token,Accept:'application/json',
++            ...(payload?{'Content-Type':'application/json','Content-Length':payload.length}:{})}}, res=>{
++          const chunks=[];let size=0;
++          res.on('data', b=>{size+=b.length;if(size>20*1024*1024){finish(new Failure('HTTP_RESPONSE_TOO_LARGE'));req.destroy();}else chunks.push(b);});
++          res.on('aborted',()=>finish(new Failure('HTTP_BODY_ABORTED')));
++          res.on('error',()=>finish(new Failure('HTTP_BODY_ERROR')));
++          res.on('end',()=>{
++            if(finished)return;
++            if(performance.now()>deadline){finish(new Failure('HTTP_DEADLINE'));return;}
++            if(res.statusCode!==200){
++              const n=Number(res.headers['retry-after']);
++              finish(new Failure('HTTP_NOT_200',{httpStatus:res.statusCode,
++                ...(Number.isFinite(n)&&n>=0?{retryAfterSeconds:n}:{})}));return;
++            }
++            let data;try {data=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{finish(new Failure('HTTP_JSON_INVALID'));return;}
++            if(!obj(data)||data.ok!==1){finish(new Failure('API_RESULT_NOT_SUCCESS'));return;}
++            finish(null,data);
++          });
++        });
++        req.on('error',()=>finish(new Failure('HTTP_TRANSPORT_ERROR')));
++        timer=setTimeout(()=>{finish(new Failure('HTTP_DEADLINE'));req.destroy();},Math.max(1,remaining(deadline)));
++        req.end(payload);
++      }catch{if(req)req.destroy();finish(new Failure('HTTP_REQUEST_FAILED'));}
++    });
++  }
++  return Object.freeze({
++    me: ms=>request('GET','/api/auth/me',undefined,ms),
++    branches:ms=>request('GET','/api/user/branches',undefined,ms),
++    code:(branch,ms)=>{if(typeof branch!=='string'||!branch.length)fail('EXPLICIT_BRANCH_REQUIRED');return request('GET','/api/user/code?branch='+encodeURIComponent(branch),undefined,ms);},
++    setCode:(branch,modules,ms)=>{if(branch!==EXPECTED.branch)fail('WRONG_WRITE_BRANCH');return request('POST','/api/user/code',{branch,modules},ms);},
++    overview:(shard,ms)=>request('GET','/api/user/overview?shard='+encodeURIComponent(shard)+'&interval=8',undefined,ms),
++    time:(shard,ms)=>request('GET','/api/game/time?shard='+encodeURIComponent(shard),undefined,ms),
++    queryToken:ms=>request('GET','/api/auth/query-token?token='+encodeURIComponent(secret.token),undefined,ms),
++  });
++}
++module.exports={client};
+diff --git a/runtime/verify-run.cjs b/runtime/verify-run.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ab61e355272238a78affda05f8c0708d138e29f8
+--- /dev/null
++++ b/runtime/verify-run.cjs
+@@ -0,0 +1,85 @@
++'use strict';
++const fs=require('node:fs');const C=require('./common.cjs'),K=require('./policy.cjs'),S=require('./store.cjs'),W=require('./samples.cjs');
++function records(run,name,max=70*1048576){
++ const p=S.file(run,name);if(!fs.existsSync(p))return [];
++ const st=fs.statSync(p);if(!st.isFile()||st.size>max)C.fail('EVIDENCE_FILE_OVERSIZE');
++ const text=fs.readFileSync(p,'utf8');return text.trim()?text.trim().split(/\r?\n/).map(l=>JSON.parse(l)):[];
++}
++function gapsWithin(times,start,end,limit){
++ const t=times.filter(x=>x>=start&&x<=end);if(!t.length)return false;
++ return t[0]-start<=limit&&end-t.at(-1)<=limit&&t.every((x,i)=>!i||x>=t[i-1]&&x-t[i-1]<=limit);
++}
++function verifyRun(run){
++ const s=C.readJson(S.file(run,'public-session.json'),65536);K.validProfile(s.profile);
++ if(s.kind!=='formal-compat-observation-0003-public/v1'||s.compatBase!==K.COMPAT||s.refactorBase!==K.REFACTOR
++  ||!/^[a-f0-9]{40}$/.test(s.profileHead)||!/^[a-f0-9]{40}$/.test(s.profileTree)||s.build?.commit!==s.profileHead||s.build?.tree!==s.profileTree||s.build?.deployBranch!=='default'
++  ||!/^[a-f0-9]{32}$/.test(s.runId)||s.profile.startTick!==K.profileFor(s.observedTick).startTick
++  ||JSON.stringify(s.backupDigest)!==JSON.stringify(C.ORIGINAL_DIGEST))C.fail('PUBLIC_SESSION_INVALID');
++ for(const [k,v] of Object.entries(C.EXPECTED))if(s[k]!==v)C.fail('PUBLIC_SESSION_IDENTITY_INVALID');
++ const issues=[],need=(ok,code)=>{if(!ok)issues.push(code);};
++ const attempt=S.optional(run,'upload-attempt.json'),u=S.optional(run,'upload-result.json'),driver=S.optional(run,'driver-result.json'),closed=S.optional(run,'source-closed.json');
++ if(!attempt)return {status:'NOT_DEPLOYED',runId:s.runId,issues:driver?.failure?[driver.failure.error]:[],observed:false,restored:false,receivedTicks:[]};
++ need(attempt.runId===s.runId&&attempt.profileHead===s.profileHead&&attempt.candidateHash===s.candidateDigest.hash,'ATTEMPT_IDENTITY');
++ need(u?.runId===s.runId&&u.candidateHash===s.candidateDigest.hash&&u.result?.status==='UPLOADED_AND_READBACK_VERIFIED'&&u.result.confirmed===true
++  &&JSON.stringify(u.result.digest)===JSON.stringify(s.candidateDigest)&&u.result.build?.commit===s.profileHead,'UPLOAD_UNCONFIRMED');
++ const frames=records(run,'console.jsonl');const auth=frames.filter(x=>x.kind==='auth-confirmed'),footer=frames.filter(x=>x.kind==='collector-footer');
++ need(auth.length===1&&auth[0].runId===s.runId,'AUTH_SEQUENCE_INVALID');
++ const cr=S.optional(run,'collector-result.json');
++ need(cr?.runId===s.runId&&cr.status==='closed'&&cr.exitCode===0&&cr.footerWritten===true&&cr.lockRemoved===true,'COLLECTOR_TERMINAL_INVALID');
++ need(footer.length===1&&footer[0].runId===s.runId&&footer[0].pid===cr?.pid&&footer[0].exitCode===0&&footer[0].reason==='observation_closed','FOOTER_INVALID');
++ const sampleMap=new Map(),sampleLines=new Map(),consoleTimes=[],cpuTimes=[],positiveCpuTimes=[],candidateDeploy=[],restoreDeploy=[];
++ let previousFrameTime=-1;
++ for(const f of frames){
++  need(f.runId===s.runId,'FOREIGN_LOG_RUN');if(f.kind!=='ws-frame')continue;
++  const at=Date.parse(f.receivedAt);need(Number.isFinite(at)&&at>=previousFrameTime,'FRAME_TIME_ORDER');previousFrameTime=at;
++  if(typeof f.text!=='string'){issues.push('FRAME_TEXT_INVALID');continue;}
++  let parsed;try{parsed=JSON.parse(f.text);}catch{continue;}
++  if(!Array.isArray(parsed)||parsed.length!==2)continue;const[ch,d]=parsed;
++  if(ch===`user:${s.userId}/cpu`&&typeof d?.cpu==='number'&&Number.isFinite(d.cpu)&&d.cpu>=0){cpuTimes.push(at);if(d.cpu>0)positiveCpuTimes.push(at);}
++  if(ch!==`user:${s.userId}/console`||d?.shard!==s.shard||!Array.isArray(d.messages?.log)||!Array.isArray(d.messages?.results))continue;
++  consoleTimes.push(at);
++  for(const line of d.messages.log){if(typeof line!=='string')continue;const text=W.decode(line).trim();
++   if(text===`[deploy] ${s.build.tag}`)candidateDeploy.push(at);
++   if(text===`[deploy] ${s.backupBuild.tag}`)restoreDeploy.push(at);
++   if(text.startsWith('[deploy] ')&&text!==`[deploy] ${s.build.tag}`&&text!==`[deploy] ${s.backupBuild.tag}`)issues.push('UNEXPECTED_DEPLOY_IDENTITY');
++   let r;try{r=JSON.parse(text);}catch{if(text.includes('treasury-legacy-read-bridge'))issues.push('BRIDGE_JSON_INVALID');continue;}
++   if(r?.kind!=='treasury-legacy-read-bridge')continue;
++   need(at>=attempt.startedAtMs,'PRE_UPLOAD_SAMPLE');
++   if(sampleMap.has(r.tick)){need(JSON.stringify(sampleMap.get(r.tick))===JSON.stringify(r),'CONFLICTING_DUPLICATE');continue;}
++   sampleMap.set(r.tick,r);sampleLines.set(r.tick,text);
++  }
++ }
++ const seq=W.validateSequence([...sampleMap.values()],s.profile);issues.push(...seq.errors.map(x=>x.error));
++ const samples=[...sampleMap.values()];for(let i=1;i<samples.length;i++)need(samples[i].previousRun?.emittedBytes===Buffer.byteLength(sampleLines.get(samples[i-1].tick)||''),'EMITTED_BYTES_MISMATCH');
++ need(candidateDeploy.some(t=>t>=attempt.startedAtMs),'CANDIDATE_DEPLOY_FRAME_MISSING');
++ const restoration=S.optional(run,'restore-attempt.json'),before=S.optional(run,'restore-independent-before.json'),after=S.optional(run,'restore-independent-after.json'),runtime=S.optional(run,'runtime-confirmation.json');
++ const checkOriginal=x=>x?.confirmed===true&&x.status==='CURRENT_IS_BACKUP'&&x.checks?.some(c=>c.sameAsBackup===true&&c.sameAsCandidate===false
++  &&JSON.stringify(c.digest)===JSON.stringify(s.backupDigest)&&c.build?.commit===C.PRODUCTION_BASE&&Number.isSafeInteger(c.observedTick)&&c.observedTick>=s.observedTick);
++ const restored=checkOriginal(before)&&checkOriginal(after)&&runtime?.confirmed===true&&runtime.durationMs>=K.CONFIRM_MS
++  &&Number.isFinite(runtime.startedAtMs)&&runtime.endedAtMs-runtime.startedAtMs>=K.CONFIRM_MS;
++ need(restored,'RESTORE_CONFIRMATION_INCOMPLETE');
++ if(restored){
++  const first=before.checks.find(x=>x.sameAsBackup),last=after.checks.find(x=>x.sameAsBackup);need(last.observedTick>=first.observedTick,'POSTFLIGHT_TICK_REGRESSED');
++  need(gapsWithin(consoleTimes,runtime.startedAtMs,runtime.startedAtMs+K.CONFIRM_MS,45000),'RESTORED_CONSOLE_COVERAGE');
++  need(gapsWithin(cpuTimes,runtime.startedAtMs,runtime.startedAtMs+K.CONFIRM_MS,45000),'RESTORED_CPU_COVERAGE');
++  need(positiveCpuTimes.some(t=>t>=runtime.startedAtMs),'NO_POST_RESTORE_CPU');
++  need(runtime.collectorPid===cr?.pid,'POST_RESTORE_PID_CHANGED');
++  need(gapsWithin(consoleTimes,attempt.startedAtMs,runtime.startedAtMs+K.CONFIRM_MS,45000),'CONSOLE_GAP');
++  need(gapsWithin(cpuTimes,attempt.startedAtMs,runtime.startedAtMs+K.CONFIRM_MS,45000),'CPU_GAP');
++ }
++ need(restoration?.runId===s.runId&&restoration?.backupHash===s.backupDigest.hash,'RESTORE_ATTEMPT_MISSING');
++ need(restoreDeploy.some(t=>t>=restoration?.startedAtMs),'RESTORED_DEPLOY_FRAME_MISSING');
++ const g=S.optional(run,'guard-result.json');need(g?.runId===s.runId&&g.reason==='LAST_SAMPLE_RECEIVED'&&!g.auditFailed,'GUARD_NOT_NORMAL_COMPLETION');
++ need(closed?.status==='SOURCE_DEFAULT_OFF_RESTORED'&&closed.profileHead===s.profileHead&&closed.sameTreeAsCompatBase===true,'SOURCE_NOT_CLOSED');
++ for(const n of ['collector.lock','guard.lock','action.lock'])need(!fs.existsSync(S.file(run,n)),'RESIDUAL_'+n.toUpperCase());
++ need(!driver?.failure&&driver?.collectorExit===0&&driver?.guardExit===0,'DRIVER_OR_PROCESS_FAILURE');
++ const unique=[...new Set(issues)];
++ return {status:unique.length?'ONLINE_COMPAT_READ_INCONCLUSIVE':'ONLINE_COMPAT_READ_OBSERVED',closure:restored?'RESTORED':'ONLINE_CLOSE_UNCONFIRMED',
++  runId:s.runId,profileHead:s.profileHead,observed:unique.length===0,restored,issues:unique,receivedTicks:seq.receivedTicks,expectedTicks:K.dueTicks(s.profile),
++  cpuIncludingEmit:seq.cpuIncludingEmit,finalSampleCpuIncludingEmit:seq.finalSampleCpuIncludingEmit,
++  finalSampleCpuBeforeSerializationAndEmit:seq.lastSampleCpuBeforeSerializationAndEmit,
++  legacyProjectionComparisons:samples.flatMap(r=>r.endpoints||[]).reduce((o,x)=>{const k=x.legacyProjection?.status||'not_reported';o[k]=(o[k]||0)+1;return o;},{}),
++  commitmentEvidence:'12 complete frozen-reader reports required; no independent builder-call counter exists',
++  coverage:'two rooms, energy/H, storage/terminal; no empire-total or full Treasury lifecycle equivalence claim'};
++}
++module.exports={records,gapsWithin,verifyRun};

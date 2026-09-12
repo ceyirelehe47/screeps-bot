@@ -1,0 +1,296 @@
+{
+  "packageName": "screeps-compat-observation-0003-2026-09-12",
+  "packageVersion": 1,
+  "implementationStatus": "complete",
+  "agentRole": "verification-only",
+  "repository": "ceyirelehe47/screeps-bot",
+  "refactorBase": "ee03fb4a871b1a707a4244d2f3a7819e5982324d",
+  "compatBase": "fcfc125f0e5cd6c3370318b4fee0450f4d09af53",
+  "onlineObservation": "0003",
+  "officialUploadAuthorizedConditionally": true,
+  "scope": {
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "endpoints": [
+      "storage",
+      "terminal"
+    ],
+    "fullTreasuryDeployment": false
+  },
+  "contract": {
+    "sampleCount": 12,
+    "intervalTicks": 100,
+    "window": "ceil((freshOfficialTick+150)/100)*100 through S+1100",
+    "minimumUploadLeadTicks": 100,
+    "maximumCandidatePosts": 1,
+    "maximumRestorePosts": 1,
+    "wallLimitAfterAttemptMs": 5400000,
+    "restoredRuntimeConfirmationMs": 75000,
+    "cpuBeforeSerializationSamples": 12,
+    "completeCpuSamplesObservable": 11,
+    "lastSampleFullCpu": "not_observable_with_frozen_reader",
+    "nextWindowOnFailure": false,
+    "repeatJointProbe": false
+  },
+  "knownBoundaries": [
+    "No server-side compare-and-swap; exclusive deployment target required",
+    "Unknown upload/restore is not automatically repeated",
+    "Frozen reader has no independent commitment-builder invocation counter",
+    "Final sample full emitted CPU cost is unavailable without an unauthorized additional sample"
+  ],
+  "fixedTestContract": {
+    "files": [
+      "tests/actions.spec.cjs",
+      "tests/archive.spec.cjs",
+      "tests/common-atomic.spec.cjs",
+      "tests/guard-control.spec.cjs",
+      "tests/process-chain.spec.cjs",
+      "tests/recovery.spec.cjs",
+      "tests/samples.spec.cjs",
+      "tests/session.spec.cjs",
+      "tests/source-close.spec.cjs",
+      "tests/transport.spec.cjs",
+      "tests/verifier.spec.cjs"
+    ],
+    "tests": 92,
+    "pass": 92,
+    "fail": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0
+  },
+  "sourceFiles": [
+    {
+      "path": "runtime/actions.cjs",
+      "sha256": "701c495b2030cbe0be3e8d9e5fdd17b7bc6585c48c95b411209daf3c92b62047",
+      "bytes": 6092
+    },
+    {
+      "path": "runtime/check-profile.cjs",
+      "sha256": "d827c4d4a20d009d23eb45317e0a24389f7801d1be247410db1b72f8750f16d3",
+      "bytes": 3665
+    },
+    {
+      "path": "runtime/collector-diagnostics.cjs",
+      "sha256": "94307209003c140c278adc37a99e706b175e25d9fc19e95ce97807a9e986fcc8",
+      "bytes": 3231
+    },
+    {
+      "path": "runtime/collector.cjs",
+      "sha256": "fc92cd53033814bdbad80c8f953ea68f88360b265acdccde008c1ffaffd74e28",
+      "bytes": 4399
+    },
+    {
+      "path": "runtime/common.cjs",
+      "sha256": "2852ddcb9427dc5b40647f73be10fe3f3b12f4256e7d48135f733e4f14b7befe",
+      "bytes": 8092
+    },
+    {
+      "path": "runtime/driver.cjs",
+      "sha256": "4ec5f707d2e8922a4f4208e80dcb803a2b323632afc8735488882ac5e4a6bdf5",
+      "bytes": 6753
+    },
+    {
+      "path": "runtime/guard-control.cjs",
+      "sha256": "23a61bf0c8dbc507def30fe469bc18fc6a02010399a9625941454751bf02daf9",
+      "bytes": 8683
+    },
+    {
+      "path": "runtime/policy.cjs",
+      "sha256": "6d59a131932c8365b2e930002657dc0954d066a3a3dd7ff8cf2d6308a5c312aa",
+      "bytes": 2089
+    },
+    {
+      "path": "runtime/protocol.cjs",
+      "sha256": "0279dc20b73ab949b094e85ac198719f901d6590db92d7f7a2e8957f080bb2ce",
+      "bytes": 6541
+    },
+    {
+      "path": "runtime/recovery-worker.cjs",
+      "sha256": "7710bd54142550b30f8fae42fe25bb48f5877046584dc37c33cded9b52348239",
+      "bytes": 5142
+    },
+    {
+      "path": "runtime/samples.cjs",
+      "sha256": "21aa54189ad072013efbd549c6081ca03ad6d0ba340c338f15159d39b85b5661",
+      "bytes": 8061
+    },
+    {
+      "path": "runtime/store.cjs",
+      "sha256": "123a7a839efd30b820ee18ed9bd6cbae7a9d03ec77371de0c4aa77a0a808a7f2",
+      "bytes": 2227
+    },
+    {
+      "path": "runtime/transport.cjs",
+      "sha256": "bac45cd105ff732aa99a6d57389c3c120f78702d4e64791dcc2ef0c05266fba2",
+      "bytes": 3839
+    },
+    {
+      "path": "runtime/verify-run.cjs",
+      "sha256": "463e5d3bad20eda355f3a2b9398a14b6889ea1bb21cf9feff96021abaf3ef68b",
+      "bytes": 8193
+    },
+    {
+      "path": "tools/archive.cjs",
+      "sha256": "5ae796ecf755dd06934a66fbbf1d91b1320c77326ab7a20626c748008c590bb1",
+      "bytes": 5902
+    },
+    {
+      "path": "tools/build.cjs",
+      "sha256": "382957d36a848a98d14f30ff1bf40aa1293579a3eed06d3a8f1c04263e94383a",
+      "bytes": 3114
+    },
+    {
+      "path": "tools/check-baseline.cjs",
+      "sha256": "48d0016ca74060968645e8aae0e6b47081fe268b961be02317c578adadbda23e",
+      "bytes": 1452
+    },
+    {
+      "path": "tools/close-source.cjs",
+      "sha256": "77394c6c4ab5152a739f46ff1fd3b1d4b989ba56b0454b153dcc02ec96a20101",
+      "bytes": 2685
+    },
+    {
+      "path": "tools/execute.cjs",
+      "sha256": "305f244e8326517f63e89299b32d16644aaeea9b41bbbdb0902eda329a3b8800",
+      "bytes": 1313
+    },
+    {
+      "path": "tools/observe.cjs",
+      "sha256": "74c81c77591f6953b4ef283dd045cc93f68d3376a80536f0613826f36682f142",
+      "bytes": 1592
+    },
+    {
+      "path": "tools/prepare.cjs",
+      "sha256": "8fae5e85e2b3ab6aef4298fdbdfecec425fc6a8085c6208226addc2aa17d8c36",
+      "bytes": 4843
+    },
+    {
+      "path": "tools/publish.cjs",
+      "sha256": "f44eafb12cdedd38e8e5e453a60f8aa5b8a238c0c33ecaaccb72e6b37e4c1ccb",
+      "bytes": 3064
+    },
+    {
+      "path": "tools/reconcile.cjs",
+      "sha256": "b327d5b5e2b0595aaf45de4712999f041a47718038becb4bbae410abf803fff8",
+      "bytes": 519
+    },
+    {
+      "path": "tools/run-tests.cjs",
+      "sha256": "86dd80d09bf0eb317de342091012060633bc396f0216aa0ece202801f5df54e2",
+      "bytes": 1815
+    },
+    {
+      "path": "tools/util.cjs",
+      "sha256": "8c0701c722151f020d75ad2aafd430ec2febb407553e35449af6f08169a09404",
+      "bytes": 2303
+    },
+    {
+      "path": "tools/verify.cjs",
+      "sha256": "bd1a2c2401fc38fe0c545bd07cc047f8b5e55db9906ea4ea21e27b0311601094",
+      "bytes": 416
+    },
+    {
+      "path": "tests/actions.spec.cjs",
+      "sha256": "971c7d41cf0455478c81dff0c17aa438085ff0658b45e8faa7025f8d78f5842d",
+      "bytes": 5265
+    },
+    {
+      "path": "tests/archive.spec.cjs",
+      "sha256": "6f2b00fd585c5d91c8fcbedf6506eb5cd8c66aeb86e3c2901d3f02e45c3a2525",
+      "bytes": 2644
+    },
+    {
+      "path": "tests/common-atomic.spec.cjs",
+      "sha256": "e127e86d1ad3e33ae63dc1a689e88446823668582f4439315ff94ce94887982a",
+      "bytes": 1228
+    },
+    {
+      "path": "tests/fixture.cjs",
+      "sha256": "4f087e4ba08d2612dc3c3d61ff1e87edf01f3078f751d0c711ebb5993b702f05",
+      "bytes": 4530
+    },
+    {
+      "path": "tests/full-evidence.cjs",
+      "sha256": "47212bf5bf92c4a571eaa9b2d525f408ba5822759d1d3c51fae46252e1390875",
+      "bytes": 2589
+    },
+    {
+      "path": "tests/guard-control.spec.cjs",
+      "sha256": "75d204561c926236ce9d5831e9a759735406107203ba18bc85c46be0b5994f13",
+      "bytes": 7984
+    },
+    {
+      "path": "tests/process-chain.spec.cjs",
+      "sha256": "4c64f85a0f37f37a09b8c514fbb34fdf5c4ee8c7eb10ee1aaf2e1b1e54e607e1",
+      "bytes": 3323
+    },
+    {
+      "path": "tests/process-fixture.cjs",
+      "sha256": "bb1aba7f4a26788c9ba5be4840ba86af0d908a031373e18590676202feb486ef",
+      "bytes": 2872
+    },
+    {
+      "path": "tests/recovery.spec.cjs",
+      "sha256": "95734effb08ef701ddc8f31efec283a19469a12187583b2a531c8b3971169a27",
+      "bytes": 1696
+    },
+    {
+      "path": "tests/samples.spec.cjs",
+      "sha256": "3d87d92468dca7059fc134b69a109e9a0c7ecedbfd495fc9f710f8caa53ccde5",
+      "bytes": 4252
+    },
+    {
+      "path": "tests/session.spec.cjs",
+      "sha256": "3d09056f588744900a3838b25a008c688501ff8012aead6db18bc1781dc281ec",
+      "bytes": 1148
+    },
+    {
+      "path": "tests/source-close.spec.cjs",
+      "sha256": "1c22df1545d40c56089934e9d31b8aa025d49570fffae4656314f705a0077601",
+      "bytes": 2835
+    },
+    {
+      "path": "tests/transport.spec.cjs",
+      "sha256": "efa2f8390540f2fa11ddfce1bf427e1ce4814058a75194c4471949498299dab4",
+      "bytes": 1653
+    },
+    {
+      "path": "tests/verifier.spec.cjs",
+      "sha256": "9d51806591a605353873d223ccda8fc7ab7fa697bd6b1bc99f0f08a8166171b4",
+      "bytes": 2921
+    }
+  ],
+  "patchMirrors": [
+    {
+      "path": "patches/0001-formal-runtime.patch",
+      "sha256": "e2b599188b07e47310af27d856f4333376e6e803a2a4cd7740f323db090ae083",
+      "bytes": 81359
+    },
+    {
+      "path": "patches/0002-execution-and-evidence-tools.patch",
+      "sha256": "e5846ac69e4b0af46202ef1cc7f565b33601e7c7832f1283dec1ef49e8070972",
+      "bytes": 31908
+    },
+    {
+      "path": "patches/0003-fixed-regression-tests.patch",
+      "sha256": "7f6fae0c69c62f30a221ec0885b95f65d5ae1296f89ff0c91bf2fa2685abaf9b",
+      "bytes": 48673
+    }
+  ],
+  "makerValidationScope": "Linux Node22 offline fixed tests, temporary Git, real child processes with fake server, loopback HTTP; not full game-engine or official-server verification",
+  "agentRequiredRealEnvironmentChecks": [
+    "Windows/native Node22 fixed tests",
+    "frozen compat TypeScript and195/685 tests and real build",
+    "fresh official binding and single attempt",
+    "raw12-slot evidence and guarded restore",
+    "75second runtime confirmation",
+    "defaultOFF exact tree and new evidence-only commits"
+  ]
+}

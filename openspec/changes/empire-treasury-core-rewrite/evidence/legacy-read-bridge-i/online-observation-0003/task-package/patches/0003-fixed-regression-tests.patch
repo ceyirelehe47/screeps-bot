@@ -1,0 +1,506 @@
+diff --git a/tests/actions.spec.cjs b/tests/actions.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..61c66fd5c63686c889948a5b9069d6f469f8d255
+--- /dev/null
++++ b/tests/actions.spec.cjs
+@@ -0,0 +1,18 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');const F=require('./fixture.cjs'),A=require('../runtime/actions.cjs'),S=require('../runtime/store.cjs'),C=require('../runtime/common.cjs'),P=require('../runtime/protocol.cjs');
++async function withRun(fn){const d=F.runDir();try{await fn(d,F.makeSession());}finally{fs.rmSync(d,{recursive:true,force:true});}}
++test('actual upload and restore algorithms make one POST each and compare typed readbacks',()=>withRun(async(d,s)=>{const w=F.apiWorld(s);const u=await A.uploadOnce(w.api,F.guard,s,d);assert.equal(u.confirmed,true);assert.equal(w.writes,1);const r=await A.restoreOnce(w.api,F.guard,s,d);assert.equal(r.status,'RESTORED_AND_VERIFIED');assert.equal(w.writes,2);assert.equal((await A.restoreOnce(w.api,F.guard,s,d)).status,'ALREADY_RESTORED');assert.equal(w.writes,2);}));
++test('second upload is refused by durable one-use marker',()=>withRun(async(d,s)=>{const w=F.apiWorld(s);await A.uploadOnce(w.api,F.guard,s,d);await assert.rejects(()=>A.uploadOnce(w.api,F.guard,s,d),{code:'UPLOAD_ALREADY_ATTEMPTED_OR_CLOSING'});assert.equal(w.writes,1);}));
++test('profile that expires after binding cannot reach a POST',()=>withRun(async(d,s)=>{const w=F.apiWorld(s);w.time=s.profile.startTick-99;await assert.rejects(()=>A.uploadOnce(w.api,F.guard,s,d),{code:'PROFILE_WINDOW_EXPIRED'});assert.equal(w.writes,0);assert.equal(S.optional(d,'upload-attempt.json'),null);}));
++test('changed baseline blocks upload and never overwrites third-party code',()=>withRun(async(d,s)=>{const w=F.apiWorld(s);w.modules={main:F.main('d'.repeat(40),'e'.repeat(40),'third-party')};await assert.rejects(()=>A.uploadOnce(w.api,F.guard,s,d),{code:'ONLINE_BASELINE_CHANGED'});assert.equal(w.writes,0);}));
++test('third-party code after upload is a restore conflict with no second POST',()=>withRun(async(d,s)=>{const w=F.apiWorld(s);await A.uploadOnce(w.api,F.guard,s,d);w.modules={main:F.main('d'.repeat(40),'e'.repeat(40),'third-party')};assert.equal((await A.restoreOnce(w.api,F.guard,s,d)).status,'CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT');assert.equal(w.writes,1);}));
++test('a thrown upload request remains unknown and is never silently retried',()=>withRun(async(d,s)=>{const w=F.apiWorld(s,{onWrite:()=>{C.fail('HTTP_DEADLINE');}});const r=await A.uploadOnce(w.api,F.guard,s,d);assert.equal(r.status,'UPLOAD_UNCONFIRMED');assert.equal(r.serverAccepted,null);assert.equal(w.writes,1);}));
++test('an accepted POST with a missing readback is explicitly unconfirmed',()=>withRun(async(d,s)=>{const w=F.apiWorld(s,{failReadAfterWrite:true});const r=await A.uploadOnce(w.api,F.guard,s,d);assert.equal(r.status,'UPLOAD_UNCONFIRMED');assert.equal(r.serverAccepted,true);assert.equal(w.writes,1);}));
++test('uncertain upload with baseline currently visible does not prove restoration',()=>withRun(async(d,s)=>{const w=F.apiWorld(s);S.newRecord(d,'upload-attempt.json',{runId:s.runId,candidateHash:s.candidate.digest.hash,profileHead:s.profileHead,startedAtMs:Date.now()});const r=await A.restoreOnce(w.api,F.guard,s,d);assert.equal(r.confirmed,false);assert.equal(r.reason,'UPLOAD_OUTCOME_UNRESOLVED');assert.equal(w.writes,0);}));
++test('durable restore marker blocks a repeated or crashed restore request',()=>withRun(async(d,s)=>{const w=F.apiWorld(s);await A.uploadOnce(w.api,F.guard,s,d);S.newRecord(d,'restore-attempt.json',{runId:s.runId});const r=await A.restoreOnce(w.api,F.guard,s,d);assert.equal(r.reason,'RESTORE_ALREADY_ATTEMPTED');assert.equal(w.writes,1);}));
++test('restore does nothing at all when no candidate upload was attempted',()=>withRun(async(d,s)=>{const w=F.apiWorld(s);const r=await A.restoreOnce(w.api,F.guard,s,d);assert.equal(r.status,'NOT_DEPLOYED_NO_RESTORE_NEEDED');assert.equal(w.writes,0);}));
++test('read-only reconciliation does not call any writer',()=>withRun(async(d,s)=>{const w=F.apiWorld(s);await A.uploadOnce(w.api,F.guard,s,d);await A.restoreOnce(w.api,F.guard,s,d);const r=await A.reconcileReadOnly(w.api,F.guard,s,d);assert.equal(r.confirmed,true);assert.equal(w.writes,2);}));
++test('two simultaneous recovery calls are serialized and restore only once',()=>withRun(async(d,s)=>{const w=F.apiWorld(s);await A.uploadOnce(w.api,F.guard,s,d);const r=await Promise.all([A.restoreOnce(w.api,F.guard,s,d),A.restoreOnce(w.api,F.guard,s,d)]);assert.equal(r.filter(x=>x.requestAttempted).length,1);assert.equal(w.writes,2);}));
++test('guard not ready blocks upload before durable attempt and before POST',()=>withRun(async(d,s)=>{const w=F.apiWorld(s);await assert.rejects(()=>A.uploadOnce(w.api,F.guard,s,d,()=>C.fail('GUARD_NOT_READY')),{code:'GUARD_NOT_READY'});assert.equal(w.writes,0);assert.equal(S.optional(d,'upload-attempt.json'),null);}));
++test('canonical typed comparison rejects a text/binary alias',()=>{assert.equal(P.equalModules({main:'bin:AA=='},{main:'different'},F.guard),false);assert.throws(()=>P.validateModules({main:'ok',x:{binary:'not-base64'}}));});
++test('branch and account identity remain fail-closed',()=>{assert.throws(()=>P.activeBranch({ok:1,list:[{branch:'other',activeWorld:true}]}),{code:'ACTIVE_WORLD_CHANGED'});assert.throws(()=>P.account({ok:1,_id:'other',username:'forster'}),{code:'ACCOUNT_MISMATCH_OR_UNREADABLE'});});
+diff --git a/tests/archive.spec.cjs b/tests/archive.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..5c2319015036caf428c966433b0d59060808d89a
+--- /dev/null
++++ b/tests/archive.spec.cjs
+@@ -0,0 +1,21 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const F=require('./fixture.cjs'),{completeEvidence}=require('./full-evidence.cjs'),U=require('../tools/util.cjs'),K=require('../runtime/policy.cjs'),C=require('../runtime/common.cjs');
++const {archive,secretScan,ALLOW}=require('../tools/archive.cjs'),{verifyArchive}=require('../tools/publish.cjs');
++test('real evidence assembly excludes private module snapshots and detects later tampering',()=>{
++ const root=F.runDir(),repo=path.join(root,'repo'),run=path.join(root,'run'),pkg=path.join(root,'package'),tests=path.join(root,'tests'),offline=path.join(root,'offline');
++ const old={base:K.REFACTOR,root:U.ROOT,verify:U.verifyPackage,digest:C.ORIGINAL_DIGEST};
++ try{
++  for(const d of [repo,run,pkg,tests,offline])fs.mkdirSync(d);
++  U.git(repo,['init','-q']);U.git(repo,['config','user.email','fixture@example.invalid']);U.git(repo,['config','user.name','Fixture']);U.git(repo,['checkout','-b','refactor/empire-treasury-rearchitecture']);
++  fs.mkdirSync(path.dirname(path.join(repo,K.EVIDENCE)),{recursive:true});fs.writeFileSync(path.join(repo,'.keep'),'fixture');U.git(repo,['add','.']);U.git(repo,['commit','-qm','base']);
++  K.REFACTOR=U.textGit(repo,['rev-parse','HEAD']);U.ROOT=pkg;U.verifyPackage=()=>({});
++  const s=F.makeSession();C.ORIGINAL_DIGEST=s.backup.digest;completeEvidence(run,s);
++  fs.writeFileSync(path.join(pkg,'README.md'),'fixture package');fs.writeFileSync(path.join(tests,'summary.json'),'{}');fs.writeFileSync(path.join(offline,'result.json'),'{}');
++  const secret=path.join(root,'secret.json');C.writeNew(secret,{main:{hostname:'screeps.com',branch:'default',token:'FAKE_ARCHIVE_SECRET_LONG_123456789'}});
++  const r=archive({run,refactor:repo,tests,offline,secret});assert.equal(r.result,'ONLINE_COMPAT_READ_OBSERVED');verifyArchive(repo);
++  for(const n of ['backup.json','candidate.json','session.json'])assert.equal(fs.existsSync(path.join(r.target,'run',n)),false);
++  fs.appendFileSync(path.join(r.target,'EXECUTION-REPORT.md'),'changed');assert.throws(()=>verifyArchive(repo),{code:'ARCHIVE_BYTES_CHANGED'});
++ }finally{K.REFACTOR=old.base;U.ROOT=old.root;U.verifyPackage=old.verify;C.ORIGINAL_DIGEST=old.digest;fs.rmSync(root,{recursive:true,force:true});}
++});
++test('archive allowlist never contains snapshots and scanner finds token representations',()=>{assert.equal(ALLOW.includes('candidate.json'),false);const s={token:'FAKE_ARCHIVE_SECRET_LONG_123456789'};assert.equal(secretScan(Buffer.from(s.token),s),true);assert.equal(secretScan(Buffer.from('normal evidence'),s),false);});
+diff --git a/tests/common-atomic.spec.cjs b/tests/common-atomic.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..896b55262531a8725b6a1c6637f3d7dfa5c4f96e
+--- /dev/null
++++ b/tests/common-atomic.spec.cjs
+@@ -0,0 +1,24 @@
++'use strict';
++const test=require('node:test');const assert=require('node:assert/strict');
++const fs=require('node:fs');const os=require('node:os');const path=require('node:path');
++const C=require('../runtime/common.cjs');
++
++test('atomicJson repeatedly replaces an existing artifact without leaving temp files',()=>{
++  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'guard-atomic-'));const file=path.join(dir,'heartbeat.json');
++  try{
++    C.atomicJson(file,{n:0});
++    for(let n=1;n<=200;n++)C.atomicJson(file,{n});
++    assert.deepEqual(JSON.parse(fs.readFileSync(file,'utf8')),{n:200});
++    assert.deepEqual(fs.readdirSync(dir),['heartbeat.json']);
++  }finally{fs.rmSync(dir,{recursive:true,force:true});}
++});
++
++test('atomicJson preserves create-once JSON shape across replacement',()=>{
++  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'guard-atomic-shape-'));const file=path.join(dir,'ready.json');
++  try{
++    C.atomicJson(file,{runId:'a'.repeat(32),state:'ready'});
++    C.atomicJson(file,{runId:'a'.repeat(32),state:'closing'});
++    const value=JSON.parse(fs.readFileSync(file,'utf8'));
++    assert.equal(value.runId,'a'.repeat(32));assert.equal(value.state,'closing');
++  }finally{fs.rmSync(dir,{recursive:true,force:true});}
++});
+diff --git a/tests/fixture.cjs b/tests/fixture.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..83af518600852bb67ffb1128c37961db39e4a534
+--- /dev/null
++++ b/tests/fixture.cjs
+@@ -0,0 +1,30 @@
++'use strict';
++const fs=require('node:fs'),os=require('node:os'),path=require('node:path');const C=require('../runtime/common.cjs'),P=require('../runtime/protocol.cjs'),K=require('../runtime/policy.cjs');
++// Test-only typed comparison; production always loads the pinned deployGuard Git blob.
++const guard={computeModulesHash:m=>C.sha256(JSON.stringify(Object.keys(m).sort().map(k=>[k,m[k]]))),
++ diffRemoteModules:(a,b)=>({match:JSON.stringify(a)===JSON.stringify(b),missing:Object.keys(a).filter(k=>!(k in b)),extra:Object.keys(b).filter(k=>!(k in a)),changed:Object.keys(a).filter(k=>JSON.stringify(a[k])!==JSON.stringify(b[k]))})};
++function main(commit,tree,tag){const b=`const BUILD_COMMIT = "${commit}";\nconst BUILD_TREE = "${tree}";\nconst BUILD_DIRTY = "false";\nconst BUILD_DEPLOY_BRANCH = "default";\nconst BUILD_TAG = "${tag}";\n`;return b+`\n;globalThis.__DEPLOY_BUNDLE_HASH__="${C.sha256(b)}";\n`;}
++function makeSession(){const profile=K.profileFor(1000),head='a'.repeat(40),tree='b'.repeat(40);
++ const backup=P.makeSnapshot({main:main(C.PRODUCTION_BASE,C.PRODUCTION_TREE,'baseline-fixture')},guard),candidate=P.makeSnapshot({main:main(head,tree,'candidate-fixture')},guard);
++ return {kind:'formal-compat-observation-0003/v1',runId:'c'.repeat(32),...C.EXPECTED,refactorBase:K.REFACTOR,compatBase:K.COMPAT,observedTick:1000,profile,profileHead:head,profileTree:tree,
++  build:P.confirmBuild(candidate.modules,head,tree),backupBuild:P.buildIdentity(backup.modules.main),preparedAtMs:Date.now(),wallLimitMs:K.WALL_MS,backup,candidate};}
++function runDir(){return fs.mkdtempSync(path.join(os.tmpdir(),'formal0003-'));}
++function saveSession(run,s){for(const key of ['backup','candidate']){C.writeNew(path.join(run,key+'.json'),s[key]);s[key+'FileSha256']=C.sha256(fs.readFileSync(path.join(run,key+'.json')));}
++ const{backup,candidate,...base}=s;C.writeNew(path.join(run,'session.json'),base);C.writeNew(path.join(run,'public-session.json'),{...base,kind:'formal-compat-observation-0003-public/v1',backupDigest:backup.digest,candidateDigest:candidate.digest});}
++function sample(s,i,previous=null){return {kind:'treasury-legacy-read-bridge',tick:s.profile.startTick+i*100,shard:s.shard,
++ sourceCommit:'01bd9831454950c4928df98dd8679692b55603e5',productionBase:C.PRODUCTION_BASE,authorizesActions:false,
++ scope:{rooms:s.profile.rooms,resources:s.profile.resources,isEmpireTotal:false},evaluation:'observation_and_legacy_commitments_only',facadeQueryRun:false,spendable:null,kernelLifecycleRun:false,storageMode:'heap_only',
++ previousRun:previous?{tick:previous.tick,cpuIncludingEmit:1,emittedBytes:Buffer.byteLength(JSON.stringify(previous)),retainedPrimitiveChars:1200}:null,
++ legacyInputs:{tasks:{status:'empty',count:0},reservations:{status:'nonempty',count:1}},
++ endpoints:s.profile.rooms.flatMap(room=>['storage','terminal'].map(location=>({room,location,directStatus:'ok',coreComparison:'match_selected_scope',coreMismatches:[],
++  direct:{id:room+'-'+location,used:100,free:900,capacity:1000,overCapacity:false,active:true,cooldown:location==='terminal'?0:null,amounts:{energy:50,H:20}},legacyProjection:{status:'stale'}}))),
++ commitments:{status:'read_complete',allTableScan:true,tableLimitEach:256,completeness:{complete:true,globalIncomplete:false,invalidRecords:0,incompleteScopeCount:0},
++  rows:s.profile.rooms.flatMap(room=>s.profile.resources.map(resource=>({room,resource,scope:'room_not_endpoint',outgoing:0,incoming:0,productionReserved:0,completeness:{complete:true}})))},
++ coreObservationRooms:s.profile.rooms,requestedEndpointRows:4,collectedEndpointRows:4,cpuBeforeSerializationAndEmit:0.5,cooperativeBudget:true,status:'sampled'};}
++function allSamples(s){const a=[];for(let i=0;i<12;i++)a.push(sample(s,i,a.at(-1)));return a;}
++function apiWorld(s,{onWrite,failReadAfterWrite=false}={}){let modules=C.clone(s.backup.modules),writes=0,time=1000;
++ const api={me:async()=>({ok:1,_id:s.userId,username:s.username}),branches:async()=>({ok:1,list:[{branch:'default',activeWorld:true}]}),
++  time:async()=>({ok:1,time}),overview:async()=>({ok:1,shards:{shard1:{rooms:K.ROOMS}}}),code:async()=>{if(failReadAfterWrite&&writes)C.fail('HTTP_DEADLINE');return {ok:1,modules:C.clone(modules)};},
++  setCode:async(branch,m)=>{writes++;modules=C.clone(m);if(onWrite)await onWrite(writes);return {ok:1};}};
++ return {api,get writes(){return writes;},get modules(){return modules;},set modules(m){modules=C.clone(m);},set time(t){time=t;}};}
++module.exports={guard,main,makeSession,runDir,saveSession,sample,allSamples,apiWorld};
+diff --git a/tests/full-evidence.cjs b/tests/full-evidence.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..64e85d3821e52fc1555e171eb6b4c787e97f849e
+--- /dev/null
++++ b/tests/full-evidence.cjs
+@@ -0,0 +1,23 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path');const F=require('./fixture.cjs'),C=require('../runtime/common.cjs'),S=require('../runtime/store.cjs'),K=require('../runtime/policy.cjs');
++function completeEvidence(d,s){
++ F.saveSession(d,s);const t=Date.now()-600000,restoreTime=t+150000,confirmStart=restoreTime+2000,stop=confirmStart+75000+1000;
++ const a={runId:s.runId,candidateHash:s.candidate.digest.hash,profileHead:s.profileHead,startedAtMs:t,observedTick:1000};
++ S.newRecord(d,'upload-attempt.json',a);S.newRecord(d,'upload-result.json',{runId:s.runId,candidateHash:s.candidate.digest.hash,result:{status:'UPLOADED_AND_READBACK_VERIFIED',confirmed:true,digest:s.candidate.digest,build:s.build}});
++ const samples=F.allSamples(s),lines=[{kind:'auth-confirmed',runId:s.runId,pid:100}];
++ for(let at=t;at<=stop;at+=1000){
++  const log=[];if(at===t)log.push('[deploy] '+s.build.tag);const i=(at-t)/10000;if(Number.isInteger(i)&&i>=1&&i<=12)log.push(JSON.stringify(samples[i-1]));if(at===restoreTime)log.push('[deploy] '+s.backupBuild.tag);
++  for(const [ch,data]of[[`user:${s.userId}/console`,{shard:s.shard,messages:{log,results:[]}}],[`user:${s.userId}/cpu`,{cpu:50}]] )lines.push({kind:'ws-frame',runId:s.runId,receivedAt:new Date(at).toISOString(),text:JSON.stringify([ch,data])});
++ }
++ lines.push({kind:'collector-footer',runId:s.runId,pid:100,reason:'observation_closed',exitCode:0});
++ fs.writeFileSync(path.join(d,'console.jsonl'),lines.map(x=>JSON.stringify(x)).join('\n')+'\n');
++ S.newRecord(d,'collector-result.json',{runId:s.runId,pid:100,status:'closed',exitCode:0,footerWritten:true,lockRemoved:true});
++ S.newRecord(d,'restore-attempt.json',{runId:s.runId,backupHash:s.backup.digest.hash,startedAtMs:restoreTime});
++ const readback={status:'CURRENT_IS_BACKUP',confirmed:true,checks:[{sameAsBackup:true,sameAsCandidate:false,observedTick:s.profile.endTick+1,digest:s.backup.digest,build:s.backupBuild}]};
++ S.newRecord(d,'restore-independent-before.json',readback);S.newRecord(d,'restore-independent-after.json',readback);
++ S.newRecord(d,'runtime-confirmation.json',{confirmed:true,durationMs:75000,startedAtMs:confirmStart,endedAtMs:confirmStart+75000,collectorPid:100});
++ S.newRecord(d,'guard-result.json',{runId:s.runId,reason:'LAST_SAMPLE_RECEIVED',auditFailed:false});
++ S.newRecord(d,'driver-result.json',{collectorExit:0,guardExit:0,failure:null});S.newRecord(d,'source-closed.json',{status:'SOURCE_DEFAULT_OFF_RESTORED',profileHead:s.profileHead,sameTreeAsCompatBase:true});
++ return {t,restoreTime,confirmStart,lines};
++}
++module.exports={completeEvidence};
+diff --git a/tests/guard-control.spec.cjs b/tests/guard-control.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..b80823d11d662752a2d0d192efc8306e7cac6e40
+--- /dev/null
++++ b/tests/guard-control.spec.cjs
+@@ -0,0 +1,155 @@
++'use strict';
++const test=require('node:test');const assert=require('node:assert/strict');
++const C=require('../runtime/common.cjs');const G=require('../runtime/guard-control.cjs');
++
++function policy(overrides={}) {
++  return {
++    attemptsPerCycle:3,perAttemptMaxMs:500,retryDelaysMs:[0,0],
++    maxConsecutiveFailedCycles:2,maxSuccessAgeMs:10000,...overrides,
++  };
++}
++function queuedApi(values) {
++  let index=0;
++  return {calls:[],async time(shard,budget){
++    this.calls.push({shard,budget});
++    const value=values[index++];
++    if(value instanceof Error)throw value;
++    return value;
++  }};
++}
++test('classifies time transport, deadline and payload failures without a generic catch-all label',()=>{
++  assert.equal(G.classifyGuardFailure('game_time_read',new C.Failure('HTTP_TRANSPORT_ERROR')).reason,
++    'guard_time_transport_failure');
++  assert.equal(G.classifyGuardFailure('game_time_read',new C.Failure('HTTP_DEADLINE')).reason,
++    'guard_time_deadline_failure');
++  assert.equal(G.classifyGuardFailure('game_time_read',new C.Failure('GAME_TICK_UNREADABLE')).reason,
++    'guard_time_payload_failure');
++});
++test('classifies immutable attempt reads and readiness writes separately',()=>{
++  assert.equal(G.classifyGuardFailure('upload_attempt_read',new Error('x')).reason,
++    'guard_upload_attempt_read_failure');
++  assert.equal(G.classifyGuardFailure('guard_ready_write',new Error('x')).reason,
++    'guard_artifact_write_failure');
++});
++test('safe diagnostics contain no raw message or stack and hash only redacted bounded text',()=>{
++  const token='0123456789abcdef0123456789abcdef';
++  const error=new Error(`authorization=${token}`);error.code='HTTP_TRANSPORT_ERROR';
++  const value=G.safeGuardDiagnostic('game_time_read',error,C.redactor([token]));
++  assert.equal('message' in value,false);assert.equal('stack' in value,false);
++  assert.equal(value.code,'HTTP_TRANSPORT_ERROR');assert.equal(value.redactionChanged,true);
++  assert.match(value.messageSha256,/^[a-f0-9]{64}$/);
++  assert.equal(JSON.stringify(value).includes(token),false);
++});
++test('a transient first attempt can recover inside the same bounded cycle',async()=>{
++  let now=1000;
++  const api=queuedApi([new C.Failure('HTTP_TRANSPORT_ERROR'),{ok:1,time:77}]);
++  const state=G.createTimeChannelState(now);
++  const result=await G.readGameTimeResilient({api,shard:'shard1',budgetMs:2000,state,
++    now:()=>now,pause:async ms=>{now+=ms;},policy:policy()});
++  assert.equal(result.status,'ok');assert.equal(result.time,77);assert.equal(api.calls.length,2);
++  assert.equal(result.state.consecutiveFailedCycles,0);
++});
++test('one fully failed time-read cycle is degraded, not terminal',async()=>{
++  let now=1000;
++  const api=queuedApi(Array.from({length:3},()=>new C.Failure('HTTP_TRANSPORT_ERROR')));
++  const state=G.createTimeChannelState(now);
++  const result=await G.readGameTimeResilient({api,shard:'shard1',budgetMs:2000,state,
++    now:()=>now,pause:async ms=>{now+=ms;},policy:policy()});
++  assert.equal(result.status,'degraded');assert.equal(result.failure.reason,'guard_time_transport_failure');
++  assert.equal(result.state.consecutiveFailedCycles,1);
++});
++test('a second consecutive failed cycle fails closed with the exact last channel class',async()=>{
++  let now=1000;
++  const api=queuedApi(Array.from({length:6},()=>new C.Failure('HTTP_DEADLINE')));
++  const state=G.createTimeChannelState(now);
++  const args={api,shard:'shard1',budgetMs:2000,state,now:()=>now,
++    pause:async ms=>{now+=ms;},policy:policy()};
++  assert.equal((await G.readGameTimeResilient(args)).status,'degraded');
++  now+=15000;
++  const result=await G.readGameTimeResilient(args);
++  assert.equal(result.status,'terminal');assert.equal(result.failure.reason,'guard_time_deadline_failure');
++  assert.equal(result.state.consecutiveFailedCycles,2);
++});
++test('a successful later cycle resets the consecutive failure counter',async()=>{
++  let now=1000;
++  const api=queuedApi([
++    new C.Failure('HTTP_TRANSPORT_ERROR'),new C.Failure('HTTP_TRANSPORT_ERROR'),new C.Failure('HTTP_TRANSPORT_ERROR'),
++    {ok:1,time:88},
++  ]);
++  const state=G.createTimeChannelState(now);
++  const args={api,shard:'shard1',budgetMs:2000,state,now:()=>now,
++    pause:async ms=>{now+=ms;},policy:policy()};
++  assert.equal((await G.readGameTimeResilient(args)).status,'degraded');
++  now+=15000;
++  const result=await G.readGameTimeResilient(args);
++  assert.equal(result.status,'ok');assert.equal(result.state.consecutiveFailedCycles,0);
++  assert.equal(result.state.totalFailedCycles,1);assert.equal(result.state.totalSuccessfulReads,1);
++});
++test('an unreadable HTTP success payload is classified as payload failure',async()=>{
++  let now=1000;
++  const api=queuedApi([{ok:1,time:'bad'},{ok:1,time:'bad'},{ok:1,time:'bad'}]);
++  const state=G.createTimeChannelState(now);
++  const result=await G.readGameTimeResilient({api,shard:'shard1',budgetMs:2000,state,
++    now:()=>now,pause:async ms=>{now+=ms;},policy:policy()});
++  assert.equal(result.status,'degraded');assert.equal(result.failure.reason,'guard_time_payload_failure');
++});
++test('time read budgets stay positive and never exceed the per-attempt cap',async()=>{
++  let now=1000;
++  const api=queuedApi([new C.Failure('HTTP_TRANSPORT_ERROR'),{ok:1,time:9}]);
++  const state=G.createTimeChannelState(now);
++  await G.readGameTimeResilient({api,shard:'shard1',budgetMs:600,state,
++    now:()=>now,pause:async ms=>{now+=ms;},policy:policy({perAttemptMaxMs:500})});
++  assert.ok(api.calls.every(x=>x.budget>=1&&x.budget<=500));
++});
++
++test('a late first failed cycle is still degraded when there has never been a successful read',async()=>{
++  let now=60000;
++  const api=queuedApi(Array.from({length:3},()=>new C.Failure('HTTP_TRANSPORT_ERROR')));
++  const state=G.createTimeChannelState(0);
++  const result=await G.readGameTimeResilient({api,shard:'shard1',budgetMs:2000,state,
++    now:()=>now,pause:async ms=>{now+=ms;},policy:policy()});
++  assert.equal(result.status,'degraded');
++  assert.equal(result.state.consecutiveFailedCycles,1);
++});
++
++test('failure audit records do not retain injected credential text',async()=>{
++  let now=1000;const token='feedfacefeedfacefeedfacefeedface';
++  const error=new C.Failure('HTTP_TRANSPORT_ERROR');error.message=`token=${token}`;
++  const api=queuedApi([error,error,error]);const records=[];
++  const state=G.createTimeChannelState(now);
++  await G.readGameTimeResilient({api,shard:'shard1',budgetMs:2000,state,record:x=>records.push(x),
++    now:()=>now,pause:async ms=>{now+=ms;},redact:C.redactor([token]),policy:policy()});
++  assert.equal(JSON.stringify(records).includes(token),false);
++  assert.ok(records.some(x=>x.kind==='guard-time-read-cycle-failed'));
++});
++
++test('stableErrorCode rejects unsafe failure codes instead of echoing arbitrary text',()=>{
++  const error=new C.Failure('not safe secret-shaped code');
++  assert.equal(G.stableErrorCode(error),'UNEXPECTED_LOCAL_FAILURE');
++});
++
++test('safe diagnostics enforce a true UTF-8 byte ceiling',()=>{
++  const error=new Error('界'.repeat(800));
++  const value=G.safeGuardDiagnostic('internal',error,C.redactor());
++  assert.ok(value.messageBytes<=1024);
++  assert.equal(value.messageTruncated,true);
++});
++
++test('artifact reads tolerate bounded transient failures and preserve the final value',async()=>{
++  let calls=0,pauses=[];
++  const value=await G.readJsonArtifact('x.json',1024,{
++    required:true,
++    exists:()=>true,
++    read:()=>{calls++;if(calls<3)throw new C.Failure('LOCAL_JSON_UNREADABLE');return {ok:true};},
++    pause:async ms=>{pauses.push(ms);},
++  });
++  assert.deepEqual(value,{ok:true});
++  assert.equal(calls,3);
++  assert.deepEqual(pauses,[20,50]);
++});
++
++test('artifact reads return undefined for an absent optional file and fail for an absent required file',async()=>{
++  assert.equal(await G.readJsonArtifact('missing.json',1024,{exists:()=>false}),undefined);
++  await assert.rejects(()=>G.readJsonArtifact('missing.json',1024,{required:true,exists:()=>false}),
++    error=>error instanceof C.Failure&&error.code==='LOCAL_JSON_UNREADABLE');
++});
+diff --git a/tests/process-chain.spec.cjs b/tests/process-chain.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..e34f255fbbaadda447515eaf7a04c7b3b57481fd
+--- /dev/null
++++ b/tests/process-chain.spec.cjs
+@@ -0,0 +1,31 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
++const F=require('./fixture.cjs'),{worldApi}=require('./process-fixture.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs'),S=require('../runtime/store.cjs');
++const {execute}=require('../runtime/driver.cjs'),{verifyRun}=require('../runtime/verify-run.cjs');
++test('real supervisor + separate collector + separate recovery worker complete one upload, twelve reports, one restore and runtime tail',async()=>{
++ const root=F.runDir(),run=path.join(root,'run');fs.mkdirSync(run);const s=F.makeSession();F.saveSession(run,s);
++ C.writeNew(path.join(root,'fake-world.json'),{s,modules:s.backup.modules,mode:'backup',changedAtMs:Date.now(),writes:0});
++ const oldSpawn=cp.spawn,oldDigest=C.ORIGINAL_DIGEST,oldConfirm=K.CONFIRM_MS;
++ C.ORIGINAL_DIGEST=s.backup.digest;K.CONFIRM_MS=1500;
++ cp.spawn=function(bin,args,opts){return oldSpawn.call(cp,bin,['--require',path.resolve(__dirname,'process-fixture.cjs'),...args],{...opts,env:{...process.env,FORMAL_0003_FIXTURE_ROOT:root}});};
++ try{
++  const result=await execute({repo:root,run,secret:{path:path.join(root,'unused-secret-path'),token:'FAKE',redact:C.redactor()},s,guard:F.guard,api:worldApi(root)});
++  assert.equal(result.status,'RESTORED',JSON.stringify(result));assert.equal(result.guardExit,0);assert.equal(result.collectorExit,0);
++  assert.equal(C.readJson(path.join(root,'fake-world.json')).writes,2);
++  const cr=S.optional(run,'collector-result.json');assert.equal(cr.reason,'observation_closed');
++  S.newRecord(run,'source-closed.json',{status:'SOURCE_DEFAULT_OFF_RESTORED',profileHead:s.profileHead,sameTreeAsCompatBase:true});
++  const verified=verifyRun(run);assert.equal(verified.observed,true,JSON.stringify(verified));
++ }finally{cp.spawn=oldSpawn;C.ORIGINAL_DIGEST=oldDigest;K.CONFIRM_MS=oldConfirm;fs.rmSync(root,{recursive:true,force:true});}
++});
++for(const mode of ['crashRecovery','failCollector'])test('separate processes preserve one-use restoration after '+mode,async()=>{
++ const root=F.runDir(),run=path.join(root,'run');fs.mkdirSync(run);const s=F.makeSession();F.saveSession(run,s);
++ C.writeNew(path.join(root,'fake-world.json'),{s,modules:s.backup.modules,mode:'backup',changedAtMs:Date.now(),writes:0,[mode]:true});
++ const oldSpawn=cp.spawn,oldDigest=C.ORIGINAL_DIGEST,oldConfirm=K.CONFIRM_MS;C.ORIGINAL_DIGEST=s.backup.digest;K.CONFIRM_MS=1000;
++ cp.spawn=function(bin,args,opts){return oldSpawn.call(cp,bin,['--require',path.resolve(__dirname,'process-fixture.cjs'),...args],{...opts,env:{...process.env,FORMAL_0003_FIXTURE_ROOT:root}});};
++ try{
++  const result=await execute({repo:root,run,secret:{path:path.join(root,'unused-secret-path'),redact:C.redactor()},s,guard:F.guard,api:worldApi(root)});
++  const world=C.readJson(path.join(root,'fake-world.json'));assert.equal(world.writes,2,JSON.stringify(result));assert.deepEqual(world.modules,s.backup.modules);
++  S.newRecord(run,'source-closed.json',{status:'SOURCE_DEFAULT_OFF_RESTORED',profileHead:s.profileHead,sameTreeAsCompatBase:true});
++  assert.equal(verifyRun(run).observed,false);
++ }finally{cp.spawn=oldSpawn;C.ORIGINAL_DIGEST=oldDigest;K.CONFIRM_MS=oldConfirm;fs.rmSync(root,{recursive:true,force:true});}
++});
+diff --git a/tests/process-fixture.cjs b/tests/process-fixture.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f493fb627576ef6f2339e9d9ccbb6580c3cc1e9
+--- /dev/null
++++ b/tests/process-fixture.cjs
+@@ -0,0 +1,32 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path');const F=require('./fixture.cjs'),C=require('../runtime/common.cjs');
++function worldApi(root){
++ const file=path.join(root,'fake-world.json'),read=()=>C.readJson(file);
++ return {me:async()=>({ok:1,_id:C.EXPECTED.userId,username:C.EXPECTED.username}),branches:async()=>({ok:1,list:[{branch:'default',activeWorld:true}]}),
++  time:async()=>{const w=read();return {ok:1,time:w.mode==='candidate'?Math.min(w.s.profile.endTick,w.s.profile.startTick+Math.floor((Date.now()-w.changedAtMs)/100)*100):(w.writes>=2?w.s.profile.endTick+1:w.s.observedTick)};},
++  overview:async()=>({ok:1,shards:{shard1:{rooms:['E3N59','E4N58']}}}),code:async()=>({ok:1,modules:read().modules}),
++  setCode:async(branch,modules)=>{const w=read();w.writes++;w.mode=F.guard.diffRemoteModules(modules,w.s.candidate.modules).match?'candidate':'backup';w.modules=modules;w.changedAtMs=Date.now();C.atomicJson(file,w);return {ok:1};}};
++}
++function preload(root){
++ const world=C.readJson(path.join(root,'fake-world.json')),s=world.s,api=worldApi(root);
++ C.ORIGINAL_DIGEST=s.backup.digest;C.loadGuard=()=>F.guard;C.loadSecret=()=>({token:'FAKE_PROCESS_TOKEN_1234567890',redact:C.redactor(['FAKE_PROCESS_TOKEN_1234567890'])});
++ require('../runtime/transport.cjs').client=()=>api;
++ if(world.crashRecovery&&process.argv[1]?.endsWith('recovery-worker.cjs'))require('../runtime/actions.cjs').restoreOnce=async()=>process.exit(23);
++ const reports=F.allSamples(s);
++ global.WebSocket=class FakeWebSocket{
++  constructor(){this.callbacks={};this.subs=0;this.lastMode=null;this.nextSample=0;setImmediate(()=>this.emit('open',{}));}
++  addEventListener(n,fn){(this.callbacks[n]??=[]).push(fn);}
++  emit(n,x){for(const f of this.callbacks[n]||[])f(x);}
++  send(x){if(x.startsWith('auth '))setImmediate(()=>this.emit('message',{data:'auth ok'}));else if(x.startsWith('subscribe ')&&++this.subs===2){this.timer=setInterval(()=>this.step(),50);this.step();}}
++  step(){try{const w=C.readJson(path.join(root,'fake-world.json'));const log=[];
++   if(w.mode!==this.lastMode){this.lastMode=w.mode;log.push('[deploy] '+(w.mode==='candidate'?s.build.tag:s.backupBuild.tag));}
++   if(w.mode==='candidate'&&w.failCollector){this.emit('error',new Error('synthetic collector failure'));return;}
++   if(w.mode==='candidate'){const index=Math.min(11,Math.floor((Date.now()-w.changedAtMs)/100));while(this.nextSample<=index)log.push(JSON.stringify(reports[this.nextSample++]));}
++   this.emit('message',{data:JSON.stringify([`user:${s.userId}/console`,{shard:s.shard,messages:{log,results:[]}}])});
++   this.emit('message',{data:JSON.stringify([`user:${s.userId}/cpu`,{cpu:50}])});
++  }catch(e){this.emit('error',e);}}
++  close(){clearInterval(this.timer);}
++ };
++}
++if(process.env.FORMAL_0003_FIXTURE_ROOT)preload(process.env.FORMAL_0003_FIXTURE_ROOT);
++module.exports={worldApi,preload};
+diff --git a/tests/recovery.spec.cjs b/tests/recovery.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ef29f863b58694ae0b1574f7d6e5694c4d1f3122
+--- /dev/null
++++ b/tests/recovery.spec.cjs
+@@ -0,0 +1,12 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict');const F=require('./fixture.cjs'),R=require('../runtime/recovery-worker.cjs'),W=require('../runtime/samples.cjs');
++function situation(){const s=F.makeSession(),now=Date.now(),w=W.createWatch(s,9,now);w.frame('auth ok',now);w.frame(JSON.stringify([`user:${s.userId}/console`,{shard:s.shard,messages:{log:[],results:[]}}]),now);w.frame(JSON.stringify([`user:${s.userId}/cpu`,{cpu:50}]),now);return {s,h:w.state,now,attempt:{startedAtMs:now},upload:{result:{confirmed:true}},elapsed:0,tick:s.profile.startTick-10,closing:false};}
++test('normal active observation does not ask for restore',()=>assert.equal(R.termination(situation()),null));
++for(const[n,edit,expect]of[
++ ['explicit close',x=>x.closing=true,'EXPLICIT_CLOSE'],['wall deadline',x=>x.elapsed=x.s.wallLimitMs,'WALL_DEADLINE'],
++ ['stale collector',x=>x.h.updatedAtMs-=10001,'COLLECTOR_HEARTBEAT_STALE'],['stale CPU',x=>x.h.lastCpuAtMs-=45001,'COLLECTOR_CHANNEL_STALE'],
++ ['uncertain upload',x=>x.upload.result.confirmed=false,'UPLOAD_UNCONFIRMED'],['all twelve samples',x=>{x.h.lastBridgeTick=x.s.profile.endTick;x.h.bridgeReports=12;},'LAST_SAMPLE_RECEIVED'],
++ ['window expired with delivery grace exhausted',x=>x.tick=x.s.profile.endTick+21,'TICK_WINDOW_ENDED'],
++ ['missing samples',x=>x.tick=x.s.profile.startTick+201,'BRIDGE_SAMPLE_STALLED']
++])test('recovery closes on '+n,()=>{const x=situation();edit(x);assert.equal(R.termination(x),expect);});
++test('one late tick after end does not race the final console frame',()=>{const x=situation();x.tick=x.s.profile.endTick+1;x.h.lastBridgeTick=x.s.profile.endTick-100;assert.equal(R.termination(x),null);});
+diff --git a/tests/samples.spec.cjs b/tests/samples.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d03ceb985e7b4771227bd7dfe35cd73c86373cb4
+--- /dev/null
++++ b/tests/samples.spec.cjs
+@@ -0,0 +1,24 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict');const F=require('./fixture.cjs'),W=require('../runtime/samples.cjs'),K=require('../runtime/policy.cjs'),C=require('../runtime/common.cjs');
++test('twelve source-shaped reports retain eleven attributable post-emit CPU costs',()=>{const s=F.makeSession(),r=W.validateSequence(F.allSamples(s),s.profile);assert.equal(r.complete,true);assert.equal(r.cpuIncludingEmit.length,11);assert.equal(r.finalSampleCpuIncludingEmit,'not_observable_with_frozen_reader');});
++for(const [name,mutate,code] of [
++ ['authority',r=>r.spendable=100,'SAMPLE_AUTHORITY_CHANGED'],['partial CPU',r=>r.status='partial_cpu_budget','SAMPLE_NOT_COMPLETE'],
++ ['output limit',r=>r.status='output_limited','SAMPLE_NOT_COMPLETE'],['missing table',r=>r.legacyInputs.tasks.status='absent','LEGACY_TABLE_UNAVAILABLE'],
++ ['damaged table',r=>r.legacyInputs.tasks.status='invalid_container','LEGACY_TABLE_UNAVAILABLE'],['table over-bound',r=>r.legacyInputs.reservations.count=257,'LEGACY_TABLE_UNAVAILABLE'],
++ ['observation mismatch',r=>r.endpoints[0].coreComparison='mismatch','CORE_OBSERVATION_MISMATCH'],
++ ['duplicate endpoint',r=>r.endpoints[1]=r.endpoints[0],'ENDPOINT_DUPLICATE_OR_MISSING'],
++ ['invalid capacity',r=>r.endpoints[0].direct.free=1,'DIRECT_ENDPOINT_INVALID'],
++ ['incomplete commitment',r=>r.commitments.completeness.complete=false,'COMMITMENTS_INCOMPLETE'],
++ ['duplicate commitment',r=>r.commitments.rows[1]=r.commitments.rows[0],'COMMITMENT_ROW_INVALID'],
++ ['wrong scope',r=>r.scope.rooms=['E3N59'],'SAMPLE_SCOPE_MISMATCH'],
++ ['wrong source',r=>r.sourceCommit='d'.repeat(40),'SAMPLE_SOURCE_MISMATCH'],
++ ['CPU budget',r=>r.cpuBeforeSerializationAndEmit=2,'SAMPLE_CPU_BUDGET']
++])test('rejects '+name,()=>{const s=F.makeSession(),r=F.sample(s,0);mutate(r);assert.equal(W.sampleError(r,s.profile),code);});
++test('a missing scheduled sample cannot be repaired by another tick',()=>{const s=F.makeSession(),a=F.allSamples(s);a.splice(5,1);assert.equal(W.validateSequence(a,s.profile).complete,false);});
++test('heap reset and CPU overrun are rejected by previousRun linkage',()=>{const s=F.makeSession(),a=F.allSamples(s);a[7].previousRun=null;assert.equal(W.validateSequence(a,s.profile).complete,false);a[7].previousRun={tick:a[6].tick,cpuIncludingEmit:6};assert.equal(W.validateSequence(a,s.profile).complete,false);});
++test('fresh binding is computed from execution-time tick rather than a literal window',()=>{const a=K.profileFor(73635026),b=K.profileFor(73637026);assert.equal(b.startTick-a.startTick,2000);assert.equal(a.endTick-a.startTick,1100);assert.ok(a.startTick>=73635026+150);assert.equal(K.dueTicks(a).length,12);});
++test('configuration limits cannot be enlarged',()=>{const p=K.profileFor(1000);p.rooms.push('E5N59');assert.throws(()=>K.renderConfig(p),{code:'FORMAL_PROFILE_INVALID'});});
++test('WebSocket watch pins authentication, shard and duplicate identity',()=>{const s=F.makeSession(),w=W.createWatch(s,12,100);w.frame('auth ok',101);const r=F.sample(s,0),frame=x=>JSON.stringify([`user:${s.userId}/console`,{shard:'shard1',messages:{log:[JSON.stringify(x)],results:[]}}]);w.frame(frame(r),102);w.frame(frame(r),103);assert.equal(w.state.bridgeReports,1);assert.equal(w.state.duplicateSamples,1);r.cpuBeforeSerializationAndEmit=0.7;w.frame(frame(r),104);assert.equal(w.state.stopReason,'CONFLICTING_DUPLICATE_SAMPLE');});
++test('channel freshness requires actual CPU rather than merely a memory field',()=>{const s=F.makeSession(),w=W.createWatch(s,12,100);w.frame('auth ok',101);w.frame(JSON.stringify([`user:${s.userId}/cpu`,{memory:100}]),102);assert.equal(w.state.lastCpuAtMs,null);});
++test('an unknown deploy identity during observation is rejected immediately',()=>{const s=F.makeSession(),w=W.createWatch(s,12);w.frame('auth ok');w.frame(JSON.stringify([`user:${s.userId}/console`,{shard:s.shard,messages:{log:['[deploy] foreign-code'],results:[]}}]));assert.equal(w.state.stopReason,'UNEXPECTED_DEPLOY_IDENTITY');});
++test('missing aggregate commitment-health fields are not fabricated as healthy zeros',()=>{const s=F.makeSession(),r=F.sample(s,0);delete r.commitments.completeness.invalidRecords;assert.equal(W.sampleError(r,s.profile),'COMMITMENTS_INCOMPLETE');});
+diff --git a/tests/session.spec.cjs b/tests/session.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..0a9977b8de9b0bc4ca4ad3504c6d1736c927b8dc
+--- /dev/null
++++ b/tests/session.spec.cjs
+@@ -0,0 +1,6 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');const F=require('./fixture.cjs'),S=require('../runtime/store.cjs'),C=require('../runtime/common.cjs');
++function trial(fn){const d=F.runDir(),s=F.makeSession(),old=C.ORIGINAL_DIGEST;C.ORIGINAL_DIGEST=s.backup.digest;try{F.saveSession(d,s);fn(d,s);}finally{C.ORIGINAL_DIGEST=old;fs.rmSync(d,{recursive:true,force:true});}}
++test('full private session validates serialized snapshots, fresh binding and compiled identity',()=>trial(d=>assert.equal(S.loadRun(d,F.guard).profileHead,'a'.repeat(40))));
++test('snapshot mutation is refused before a writer can load the run',()=>trial(d=>{fs.appendFileSync(path.join(d,'candidate.json'),' ');assert.throws(()=>S.loadRun(d,F.guard),{code:'SNAPSHOT_FILE_CHANGED'});}));
++test('session cannot silently rebind the absolute tick window',()=>trial(d=>{const p=path.join(d,'session.json'),s=JSON.parse(fs.readFileSync(p));s.profile.startTick+=100;s.profile.endTick+=100;fs.writeFileSync(p,JSON.stringify(s));assert.throws(()=>S.loadRun(d,F.guard),{code:'WINDOW_BINDING_MISMATCH'});}));
+diff --git a/tests/source-close.spec.cjs b/tests/source-close.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..872dce1c94670b2283f96d79571a70b3e1435d63
+--- /dev/null
++++ b/tests/source-close.spec.cjs
+@@ -0,0 +1,19 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const F=require('./fixture.cjs'),U=require('../tools/util.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs'),{closeSource}=require('../tools/close-source.cjs');
++test('real Git profile close adds one linear OFF commit and restores the exact original tree',()=>{
++ const root=F.runDir(),repo=path.join(root,'repo'),run=path.join(root,'run');fs.mkdirSync(repo);fs.mkdirSync(run);const oldBase=K.COMPAT;
++ try{U.git(repo,['init','-q']);U.git(repo,['config','user.email','fixture@example.invalid']);U.git(repo,['config','user.name','Fixture']);U.git(repo,['config','core.autocrlf','false']);U.git(repo,['checkout','-b','compat/treasury-read-bridge-i']);
++  fs.mkdirSync(path.dirname(path.join(repo,K.CONFIG)),{recursive:true});fs.writeFileSync(path.join(repo,K.CONFIG),'default OFF\n');U.git(repo,['add','.']);U.git(repo,['commit','-qm','base']);K.COMPAT=U.textGit(repo,['rev-parse','HEAD']);
++  fs.writeFileSync(path.join(repo,K.CONFIG),K.renderConfig(K.profileFor(1000)));U.git(repo,['add','.']);U.git(repo,['commit','-qm','profile']);const profileHead=U.textGit(repo,['rev-parse','HEAD']);C.writeNew(path.join(run,'binding.json'),{profileHead});
++  const r=closeSource(repo,run);assert.equal(r.sameTreeAsCompatBase,true);assert.equal(U.textGit(repo,['rev-parse','HEAD^']),profileHead);assert.equal(fs.readFileSync(path.join(repo,K.CONFIG),'utf8'),'default OFF\n');assert.deepEqual(closeSource(repo,run),r);
++ }finally{K.COMPAT=oldBase;fs.rmSync(root,{recursive:true,force:true});}
++});
++test('a failed profile commit repairs only the recognized task-owned config and index path',()=>{
++ const root=F.runDir(),repo=path.join(root,'repo'),run=path.join(root,'run');fs.mkdirSync(repo);fs.mkdirSync(run);const oldBase=K.COMPAT;
++ try{U.git(repo,['init','-q']);U.git(repo,['config','user.email','fixture@example.invalid']);U.git(repo,['config','user.name','Fixture']);U.git(repo,['config','core.autocrlf','false']);U.git(repo,['checkout','-b','compat/treasury-read-bridge-i']);
++  fs.mkdirSync(path.dirname(path.join(repo,K.CONFIG)),{recursive:true});fs.writeFileSync(path.join(repo,K.CONFIG),'default OFF\n');U.git(repo,['add','.']);U.git(repo,['commit','-qm','base']);K.COMPAT=U.textGit(repo,['rev-parse','HEAD']);
++  const profile=K.profileFor(1000);C.writeNew(path.join(run,'binding-intent.json'),{profile});fs.writeFileSync(path.join(repo,K.CONFIG),K.renderConfig(profile));U.git(repo,['add','--',K.CONFIG]);
++  const r=closeSource(repo,run);assert.equal(r.closedHead,K.COMPAT);assert.equal(U.textGit(repo,['status','--porcelain']),'');assert.equal(fs.readFileSync(path.join(repo,K.CONFIG),'utf8'),'default OFF\n');
++ }finally{K.COMPAT=oldBase;fs.rmSync(root,{recursive:true,force:true});}
++});
+diff --git a/tests/transport.spec.cjs b/tests/transport.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..2c1f3f9eaca33f8846ed363cd3408c2a4b0c7dae
+--- /dev/null
++++ b/tests/transport.spec.cjs
+@@ -0,0 +1,8 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict'),http=require('node:http');const{client}=require('../runtime/transport.cjs');
++async function serverTest(handler,fn){const s=http.createServer(handler);await new Promise(r=>s.listen(0,'127.0.0.1',r));try{await fn(client({token:'FAKE_TEST_TOKEN_000000000000'}, {testOrigin:`http://127.0.0.1:${s.address().port}`}));}finally{s.closeAllConnections();await new Promise(r=>s.close(r));}}
++test('real HTTP transport preserves exact code request and issues no retry POST',()=>serverTest((q,r)=>{let body='';q.on('data',b=>body+=b);q.on('end',()=>{assert.equal(q.url,'/api/user/code');assert.equal(q.method,'POST');assert.deepEqual(JSON.parse(body),{branch:'default',modules:{main:'fixture'}});r.end('{"ok":1}');});},async a=>assert.equal((await a.setCode('default',{main:'fixture'})).ok,1)));
++test('real HTTP transport refuses non-200 and does not follow redirects',()=>serverTest((q,r)=>{r.writeHead(302,{Location:'https://other.invalid/'});r.end('{}');},a=>assert.rejects(()=>a.me(),{code:'HTTP_NOT_200'})));
++test('real HTTP transport enforces bounded request time',()=>serverTest((q,r)=>{},a=>assert.rejects(()=>a.me(20),{code:'HTTP_DEADLINE'})));
++test('real HTTP transport refuses malformed API JSON',()=>serverTest((q,r)=>r.end('broken'),a=>assert.rejects(()=>a.me(),{code:'HTTP_JSON_INVALID'})));
++test('loopback-only test origin and explicit write branch are enforced',()=>{assert.throws(()=>client({token:'fake'},{testOrigin:'https://example.com'}),{code:'INVALID_TEST_ORIGIN'});assert.throws(()=>client({token:'fake'}).setCode('other',{}),{code:'WRONG_WRITE_BRANCH'});});
+diff --git a/tests/verifier.spec.cjs b/tests/verifier.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..84b0c0acfa5983ea9b61394b944b60782654b5f7
+--- /dev/null
++++ b/tests/verifier.spec.cjs
+@@ -0,0 +1,19 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const F=require('./fixture.cjs'),{completeEvidence}=require('./full-evidence.cjs'),V=require('../runtime/verify-run.cjs'),C=require('../runtime/common.cjs');
++function trial(fn){const d=F.runDir(),s=F.makeSession(),old=C.ORIGINAL_DIGEST;C.ORIGINAL_DIGEST=s.backup.digest;try{const f=completeEvidence(d,s);fn(d,s,f);}finally{C.ORIGINAL_DIGEST=old;fs.rmSync(d,{recursive:true,force:true});}}
++function edit(d,n,fn){const p=path.join(d,n),x=JSON.parse(fs.readFileSync(p));fn(x);fs.writeFileSync(p,JSON.stringify(x));}
++test('independent raw-log verification accepts a complete 12-slot restored observation',()=>trial(d=>{const r=V.verifyRun(d);assert.equal(r.status,'ONLINE_COMPAT_READ_OBSERVED');assert.equal(r.closure,'RESTORED');assert.equal(r.cpuIncludingEmit.length,11);}));
++for(const[n,file,fn,issue]of[
++ ['missing source closure','source-closed.json',x=>x.sameTreeAsCompatBase=false,'SOURCE_NOT_CLOSED'],
++ ['uncertain upload','upload-result.json',x=>x.result.confirmed=false,'UPLOAD_UNCONFIRMED'],
++ ['changed restore bytes','restore-independent-after.json',x=>x.checks[0].sameAsBackup=false,'RESTORE_CONFIRMATION_INCOMPLETE'],
++ ['missing footer flag','collector-result.json',x=>x.footerWritten=false,'COLLECTOR_TERMINAL_INVALID'],
++ ['failed guard','guard-result.json',x=>x.reason='WALL_DEADLINE','GUARD_NOT_NORMAL_COMPLETION'],
++ ['different runtime PID','runtime-confirmation.json',x=>x.collectorPid=101,'POST_RESTORE_PID_CHANGED'],
++ ['driver failure','driver-result.json',x=>x.failure={error:'FAILED'},'DRIVER_OR_PROCESS_FAILURE']
++])test('independent verifier rejects '+n,()=>trial(d=>{edit(d,file,fn);assert.ok(V.verifyRun(d).issues.includes(issue));}));
++test('raw missing sample cannot be hidden by healthy guard summary',()=>trial((d,s,f)=>{const lines=f.lines.filter(x=>!x.text?.includes('\\"tick\\":'+(s.profile.startTick+400)));fs.writeFileSync(path.join(d,'console.jsonl'),lines.map(x=>JSON.stringify(x)).join('\n'));assert.equal(V.verifyRun(d).observed,false);}));
++test('duplicate footer is rejected',()=>trial((d,s,f)=>{fs.appendFileSync(path.join(d,'console.jsonl'),JSON.stringify(f.lines.at(-1))+'\n');assert.ok(V.verifyRun(d).issues.includes('FOOTER_INVALID'));}));
++test('long console gap is rejected rather than relying on row counts',()=>trial((d,s,f)=>{const lines=f.lines.filter(x=>!(x.text?.includes('/console')&&Date.parse(x.receivedAt)>f.confirmStart+1000&&Date.parse(x.receivedAt)<f.confirmStart+60000));fs.writeFileSync(path.join(d,'console.jsonl'),lines.map(x=>JSON.stringify(x)).join('\n'));assert.ok(V.verifyRun(d).issues.includes('RESTORED_CONSOLE_COVERAGE'));}));
++test('retained action lock prevents a successful final label',()=>trial(d=>{fs.writeFileSync(path.join(d,'action.lock'),'{}');assert.ok(V.verifyRun(d).issues.includes('RESIDUAL_ACTION.LOCK'));}));
