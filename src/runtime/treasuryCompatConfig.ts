@@ -1,13 +1,12 @@
 import type { CompatConfig } from "./treasuryCompatTypes";
-/** Both enabled and the absolute tick window must be bound before any rollout.
- * This default is OFF. No Memory or environment-variable override. */
+/** Observation 0003: one frozen absolute window; no Memory or environment override. */
 export const TREASURY_COMPAT_CONFIG: CompatConfig = Object.freeze({
-  enabled: false,
-  shardName: "",
-  rooms: Object.freeze([] as string[]),
+  enabled: true,
+  shardName: "shard1",
+  rooms: Object.freeze(["E3N59", "E4N58"]),
   resources: Object.freeze(["energy", "H"]),
-  startTick: 0,
-  endTick: 0,
+  startTick: 73646500,
+  endTick: 73647600,
   intervalTicks: 100,
   minBucket: 2000,
   maxSampleCpu: 2,
