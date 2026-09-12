@@ -12,5 +12,5 @@ const preview = createTreasuryCompatPreview(TREASURY_COMPAT_CONFIG, {
   resources: () => RESOURCES_ALL,
   readers: createCompatibilityReadCore,
   emit: line => console.log(line),
-});
+}, { cpuDiagnostics: true });
 export function runTreasuryCompatRead(): void { preview.run(); }

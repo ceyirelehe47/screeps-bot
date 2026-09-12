@@ -1,9 +1,11 @@
 /** Read compatibility preview for the old production bot, not a Treasury host.
  * Reuses pinned production observation/commitment builders. Never computes a
  * spendable balance, signs a permit, migrates a store or advances world sequence.
- * One published primitive snapshot is retained; all reader caches are per sample.
+ * One endpoint snapshot and one bounded CPU profile are retained. Reader caches
+ * remain per sample; diagnostic profiles never contain a linked history.
  */
 import type { CompatConfig, CompatPorts, CompatObservation } from "./treasuryCompatTypes";
+import { createCompatCpuAccounting, type CompatCpuPhase, type CompatCpuProfile } from "./treasuryCompatCpu";
 
 type Rec = Record<string, unknown>;
 type Kind = "storage" | "terminal";
@@ -121,7 +123,10 @@ function legacyProjection(memory: unknown, room: string, kind: Kind, d: Direct, 
 }
 
 type Previous = { tick: number; endpoints: Record<string, Direct> };
-export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPorts) {
+export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPorts,
+  options: { cpuDiagnostics?: boolean } = {}) {
+  const cpuDiagnostics = options?.cpuDiagnostics === true;
+  let sampleOrdinal = 0, previousCpuProfile: CompatCpuProfile | null = null;
   let cfg = input, enabled = false, invalid = false;
   try {
     enabled = input.enabled === true;
@@ -135,6 +140,7 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
   let previousRun: { tick: number; cpuIncludingEmit: number; emittedBytes: number; retainedPrimitiveChars: number } | null = null;
   function run(): { status: string } {
     let tick: number | undefined;
+    let accounting: ReturnType<typeof createCompatCpuAccounting> | undefined;
     try {
       if (invalid) { fault = true; return { status: "invalid_config" }; }
       if (!enabled) return { status: "disabled" };
@@ -152,10 +158,13 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
       if (start.bucket < cfg.minBucket || start.tickLimit - start.used < cfg.maxSampleCpu + cfg.reserveCpu) {
         cpuSkips = sat(cpuSkips); return { status: "cpu_skipped" };
       }
+      sampleOrdinal = sat(sampleOrdinal);
+      if (cpuDiagnostics) accounting = createCompatCpuAccounting(start.used, tick, sampleOrdinal);
       let latestCpu = start.used;
-      const budget = () => {
+      const budget = (next?: CompatCpuPhase) => {
         const c = ports.cpu();
         if (!validCpu(c) || c.used < latestCpu) throw new Error("invalid CPU progression");
+        accounting?.checkpoint(c.used, next);
         latestCpu = c.used;
         return c.used - start.used < cfg.maxSampleCpu && c.tickLimit - c.used >= cfg.reserveCpu && c.bucket >= cfg.minBucket;
       };
@@ -178,7 +187,7 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
       const next: Previous = { tick, endpoints: Object.create(null) };
       let limited = false, observations: CompatObservation | undefined;
       for (const name of cfg.rooms) {
-        if (!budget()) { limited = true; break; }
+        if (!budget("directRead")) { limited = true; break; }
         const room = ports.room(name);
         let safe = true;
         for (const kind of KINDS) {
@@ -204,11 +213,16 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
       // Build from actual Game room objects, NOT from the just-produced direct
       // numbers or legacy Memory projection. Independently enumerates Store keys.
       let readers: ReturnType<CompatPorts["readers"]> | undefined;
-      if (validRooms.length && budget()) {
+      if (validRooms.length && budget("readerLoad")) {
+        accounting?.invoked("readerLoad");
         readers = ports.readers();
-        if (budget()) observations = readers.buildObservation({ scope: "market-fresh", epochSeq: 1, rooms: validRooms });
-        else limited = true;
+        if (budget("observationBuild")) {
+          accounting?.invoked("observationBuild");
+          observations = readers.buildObservation({ scope: "market-fresh", epochSeq: 1, rooms: validRooms });
+        } else limited = true;
       } else if (!budget()) limited = true;
+      // Diagnostic-only extra checkpoint: its cost is NOT removed from budget.
+      if (accounting && !budget("coreCompare")) limited = true;
       if (observations && observations.epoch.observedAtTick !== tick) throw new Error("stale builder");
       const included = new Set(validRooms.map(r => r.name));
       for (const row of rows) {
@@ -226,11 +240,12 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
       report.commitments = { status: "not_read", rows: null };
       // Never manufacture empty inputs from missing/damaged/over-bound tables.
       if (!tasks.value || !reservations.value) report.commitments = { status: "unavailable_legacy_input", rows: null };
-      else if (readers && observations && budget()) {
+      else if (readers && observations && budget("commitmentBuild")) {
+        accounting?.invoked("commitmentBuild");
         const index = readers.buildCommitments({ tick, tasks: tasks.value, reservations: reservations.value, observation: observations });
         const fields: Rec[] = [];
         for (const name of validRooms.map(r => r.name)) for (const resource of cfg.resources) {
-          if (!budget()) { limited = true; break; }
+          if (!budget("commitmentProjection")) { limited = true; break; }
           const outgoing = index.outgoing(name, resource), incoming = index.incoming(name, resource), reserved = index.reservedProduction(name, resource);
           if (![outgoing, incoming, reserved].every(nonneg)) throw new Error("invalid index numbers");
           fields.push({ room: name, resource, scope: "room_not_endpoint", outgoing, incoming,
@@ -242,34 +257,60 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
         report.commitments = { status: limited ? "partial_cpu_budget" : c.complete ? "read_complete" : "read_incomplete",
           rows: fields, completeness: { ...c }, allTableScan: true, tableLimitEach: TABLE_LIMIT };
       } else if (!budget()) { limited = true; report.commitments = { status: "not_read_cpu_budget", rows: null }; }
-      if (!budget()) limited = true;
+      if (!budget("report")) limited = true;
       report.status = limited ? "partial_cpu_budget" : "sampled";
       report.coreObservationRooms = validRooms.filter(() => !!observations).map(r => r.name);
       report.requestedEndpointRows = cfg.rooms.length * 2;
       report.collectedEndpointRows = rows.length;
+      if (accounting && !budget("serializationAndSize")) report.status = "partial_cpu_budget";
       report.cpuBeforeSerializationAndEmit = latestCpu - start.used;
+      if (accounting) {
+        // Prefix of THIS sample. Serialization/emit are not known yet. The full
+        // completed measurement is published only by the NEXT emitted sample.
+        report.cpuProfile = accounting.snapshot("beforeSerialization");
+        report.previousCpuProfile = previousCpuProfile;
+      }
       report.cooperativeBudget = true;
       let line = JSON.stringify(report), status = report.status as string;
-      if (compatUtf8Bytes(line) > cfg.maxLogBytes) {
+      // One UTF-8 traversal per distinct output string. Reuse the size after
+      // emit instead of rescanning the identical (immutable) string.
+      let emittedBytes = compatUtf8Bytes(line);
+      if (emittedBytes > cfg.maxLogBytes) {
         status = "output_limited";
         line = JSON.stringify({ kind: "treasury-legacy-read-bridge", tick, status,
           authorizesActions: false, previousRun });
+        emittedBytes = compatUtf8Bytes(line);
       }
+      // Post-serialization sampling cannot retroactively change this report.
+      // The following sample carries the measured total, even when over budget.
+      if (accounting) budget("emit");
       ports.emit(line);
       const end = ports.cpu();
       if (!validCpu(end) || end.used < latestCpu) throw new Error("invalid ending CPU");
+      accounting?.checkpoint(end.used, "retention");
+      latestCpu = end.used;
       previous = status === "output_limited" ? undefined : next;
-      previousRun = { tick, cpuIncludingEmit: end.used - start.used, emittedBytes: compatUtf8Bytes(line),
+      previousRun = { tick, cpuIncludingEmit: end.used - start.used, emittedBytes,
         retainedPrimitiveChars: previous ? JSON.stringify(previous).length : 0 };
       emitted = sat(emitted);
+      if (accounting) {
+        // Includes previous-snapshot sizing/bookkeeping. The final snapshot
+        // copy and return are outside the endpoint and explicitly not claimed.
+        budget();
+        previousCpuProfile = accounting.snapshot("afterRetention");
+      }
       return { status };
     } catch {
       fault = true; previous = undefined;
+      // A fault snapshot stops at the last VALID checkpoint; never guess the
+      // cost of a throwing stage or the catch/reporting path.
+      if (accounting) previousCpuProfile = accounting.snapshot("fault");
       try { ports.emit(JSON.stringify({ kind: "treasury-legacy-read-bridge", tick: nonneg(tick) ? tick : null,
         status: "fault_disabled", authorizesActions: false })); } catch { /* Do not stop old bot. */ }
       return { status: "fault_disabled" };
     }
   }
   return { run, stats: () => ({ fault, emitted, cpuSkips, retainedEndpoints: previous ? Object.keys(previous.endpoints).length : 0,
-    previousRun: previousRun ? { ...previousRun } : null }) };
+    previousRun: previousRun ? { ...previousRun } : null,
+    cpuProfile: previousCpuProfile }) };
 }
