@@ -1,0 +1,28 @@
+{
+  "status": "MAKER_LOCAL_VERIFICATION_PASSED",
+  "tests": {
+    "normal": 128,
+    "systemGlobalAutocrlfTrue": 128,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0
+  },
+  "syntaxFiles": 48,
+  "patchReconstructionFiles": 67,
+  "actualOldNewGeneratedCoreUsed": true,
+  "realChildProcesses": true,
+  "realLoopbackHttp": true,
+  "realTemporaryGitAndBareRemote": true,
+  "syntheticGameMemoryWebSocketAndRemoteState": true,
+  "recoveryWaitsCompressedForTests": true,
+  "checksAgainstCurrentSourceSlice": true,
+  "wholeUserRepositoryTests": false,
+  "nativeWindowsTests": false,
+  "officialScreepsRequests": 0,
+  "candidatePosts": 0,
+  "restorePosts": 0,
+  "exactRuntimeSafetyBaseFiles": 16,
+  "identityOnlyRuntimeChanges": 2,
+  "finalZipRecheck": "external delivery-validation.json avoids a self-referential archive hash"
+}

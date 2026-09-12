@@ -1,0 +1,133 @@
+{
+  "package": "screeps-compat-cpu-recheck-IV-2026-09-12",
+  "implementationStatus": "complete",
+  "agentRole": "fixed-byte verification and controlled execution, not design or implementation",
+  "baselines": {
+    "compat": "ae15ec55b0363933d31c93acc2480b6adbea306a",
+    "refactor": "33cfbd4e2192d65723cf3d9d85ae8cae8e8a06c0"
+  },
+  "lockedGeneratedBlob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3",
+  "productionSourceEdits": [
+    "src/runtime/treasuryCompatConfig.ts (temporary ON then exact OFF)"
+  ],
+  "sourceFrozenPaths": [
+    "src/runtime/treasuryCompatCpu.ts",
+    "src/runtime/treasuryCompatRuntime.ts",
+    "src/runtime/treasuryCompatTypes.ts",
+    "src/runtime/treasuryCompatConfig.ts",
+    "src/runtime/treasuryCompatRead.ts",
+    "src/runtime/treasuryCompatReadCore.generated.ts",
+    "test/treasury-compat/helpers.cjs",
+    "scripts/build-treasury-compat-loader.cjs",
+    "docs/treasury-compat-source-manifest.json",
+    "docs/treasury-compat-loader-optimization.json",
+    "test/treasuryCompatRead.test.ts",
+    "test/treasury-compat/loader-optimization.spec.cjs",
+    "test/treasury-compat/loader-test-support.cjs",
+    "test/treasury-compat/fixtures/core-before-loader-optimization.ts.txt",
+    "scripts/lib/treasury-compat-loader.template.txt"
+  ],
+  "samplerImplementationChanged": false,
+  "cpuCheckpointsChanged": false,
+  "diagnosticSafetyAlgorithmsChanged": false,
+  "sampleCount": 4,
+  "intervalTicks": 100,
+  "sampleBudget": 2,
+  "safetyStopReportedCost": 5,
+  "recoveryRuntimeMs": 75000,
+  "maxCandidatePosts": 1,
+  "maxRestorePosts": 1,
+  "automaticReconnect": false,
+  "automaticNewWindow": false,
+  "tests": {
+    "count": 128,
+    "inheritedRegressionCases": 96,
+    "newCases": 32,
+    "countIsSeparateFromJestBudget": true
+  },
+  "realRepositoryGate": {
+    "loaderRegenerate": true,
+    "typecheck": [
+      "tsconfig.build.json",
+      "tsconfig.json"
+    ],
+    "jest": {
+      "suites": 195,
+      "tests": 685
+    },
+    "buildOnly": true
+  },
+  "newFunctions": [
+    "exact accepted Git prerequisite verification",
+    "current locked loader regeneration check",
+    "four-point diagnostic run rebased to Loader III",
+    "invocation-conditioned historical comparison",
+    "separate first-admission and first-loader metrics",
+    "comparison recomputation in archive and publish"
+  ],
+  "comparison": {
+    "historicalBlob": "5112f9cc691bb1637b3c94e5b9cee0da0d9e9bbb",
+    "source": "exact previous accepted result, not replayed historical raw network stream",
+    "newRun": "reverify from raw evidence",
+    "excludeCallZeroIntervalsFromInvocationMedians": true,
+    "minimumFollowingLoaderInvocationsForDescriptiveRelation": 2,
+    "improvementIsAcceptanceGate": false,
+    "causalPercentComputed": false
+  },
+  "successLabels": [
+    "CPU_DIAGNOSTIC_CAPTURE_VERIFIED",
+    "LOADER_IV_COMPARISON_RECORDED",
+    "RESTORED_BYTES_AND_RUNTIME_VERIFIED"
+  ],
+  "neverInferred": [
+    "engine CPU budget gap repaired",
+    "full 12-point compatibility acceptance",
+    "cold engine startup from first admitted sample",
+    "steady state from a four-point sequential run"
+  ],
+  "files": {
+    "runtime/actions.cjs": "da2aa7d41e23bc84067a9e43273f26003979463bd9b289ce7877fe9a11560883",
+    "runtime/check-profile.cjs": "cfc4f1400ca9c642b0e7df1e2911753cc74be255848592b67fa3deb41ac31722",
+    "runtime/closeout.cjs": "e81371d0820eb8f72863c589a6d497081947bdd1c29430ede4f9c5943dcd6fb1",
+    "runtime/closure-observer.cjs": "a771f16127efa58703210d97f44bd89cf12aeb54870216e8e12e3c06f15f1caf",
+    "runtime/collector-diagnostics.cjs": "94307209003c140c278adc37a99e706b175e25d9fc19e95ce97807a9e986fcc8",
+    "runtime/collector.cjs": "47011ee0de7f550dbf2fd4733bdb1a4a2caed18eb83b63eb9e84aee92be2c2ed",
+    "runtime/common.cjs": "b4847723f50a060cd7eff5fa540296f62c86ad31d9611b801ca3fd128e17502f",
+    "runtime/decoder.cjs": "ca60ec0d27eb4950e5f54f7a5e5dfa868d5ef22f1c8ab2137f1775ead8648306",
+    "runtime/driver.cjs": "c0a31ed458910221295c83d72b96dca076b3ad167d546d693afb325f7d2706bb",
+    "runtime/guard-control.cjs": "23a61bf0c8dbc507def30fe469bc18fc6a02010399a9625941454751bf02daf9",
+    "runtime/policy.cjs": "80ad6acbd04684058ce5ee0a4464be3380dff453c9ae41339f7058221a7d5eba",
+    "runtime/protocol.cjs": "0279dc20b73ab949b094e85ac198719f901d6590db92d7f7a2e8957f080bb2ce",
+    "runtime/recovery-worker.cjs": "9a63ae60bcf8eae547a4dd2eade30b46681149a47c454091e3bdd22b0af3fba8",
+    "runtime/samples.cjs": "c45d134551691f4ca2a67563d73460e85b87e1f940c84de5c06efe1432df5fea",
+    "runtime/store.cjs": "92f5c3cf9c092ebae9ea86bf5356ca7b2324bf1bbb615cf70f443df9ee7a6e10",
+    "runtime/transport.cjs": "d4348e49eb0089401073be89b5640a898a2cde5412759cee414741d7818666fd",
+    "runtime/verify-run.cjs": "fa8e972dcfd7d22938713ebb925448bb1c9aa59a3704272595aa99b141d7117d",
+    "runtime/verify-runtime.cjs": "abff9e49f6d98a2184d3ba24f53fa513bae652a2b77d1a9ad4429f87d6a024a4",
+    "tools/archive.cjs": "ff60e20614b3010689e74fa2dc057fdceb62fa1d263a4382a60fba232d87242e",
+    "tools/build.cjs": "1de2c32457f406d0af0dc47ee7d8f3865dc3a34930998c5c960b4c367c625ea6",
+    "tools/check-baseline.cjs": "af7166419e8dbc96379638d59a445edf8f17e8540f552819e9d975c637bd30d1",
+    "tools/close-source.cjs": "dd08ed187d34cb4cae7588c8a0a55aee3978c797a2a3c90040a3750ee8d4dd7a",
+    "tools/compare.cjs": "794d42bb6f445c762e86a12e1da93de236ead5f190eaae819dd14f31a49808bd",
+    "tools/observe.cjs": "bf7310174f6d8e662c1525268165056731cfe5436cb2ba5684970be75aea0fa5",
+    "tools/prepare.cjs": "5c679eac147e81b54a04c553667a32da0dbac77399908f708fcf49877d1e81fb",
+    "tools/prerequisites.cjs": "47974f478a06e56986ad3bb121b8646c43ee74c7cbd0644545d92cf42ceb4fba",
+    "tools/publish.cjs": "f2022b0a7cc6e09d743a0ee4044781e42d25cb6667f7c3989de12a200bd134d1",
+    "tools/reconcile.cjs": "5e6cd04679d5fcb24b7770653f753083c8a69eb3022a82983339cf987a5abf5f",
+    "tools/recover.cjs": "4ad2c539dc7480e1aec12294f7e8cdb2427808b72a948c8fd5e92dfd7aa8bcb8",
+    "tools/run-tests.cjs": "a7346badb41bcceb3621f06f0ed06f71f956988afd55324e468fdd79878a8711",
+    "tools/util.cjs": "798b8cca695a358085518b888a2d7b85de9d7982b9eeded9f6448c6cfa34a469",
+    "tools/verify.cjs": "5957278d35018cf10424f2ce3f989c28c72acaeeac99d30a03feef13a310c6eb",
+    "tests/comparison.spec.cjs": "14a1531e885f6be7b219861e79164b8ccb727bd783ea580d0a0e35861eace3cc",
+    "tests/diagnostics.spec.cjs": "577007e15d4c1d406701431e0123f36f8d48fc31e7e662a06c5ebc35f6117458",
+    "tests/fixture.cjs": "9803e8bdcf7f6935cb65b6487b1d300503d8c78c90ecdd56196837855bdb4a32",
+    "tests/loader-integration.spec.cjs": "c36680e23a4a67439e8ea3e41002b2ff370f9181029202e84010677b6b99aa9e",
+    "tests/process-fixture.cjs": "7e22bc14950e2a4adce74ac1afff9659ef769755eab22365c1b999e8a366455b",
+    "tests/process-runner.cjs": "e037312c016526802e45bceffd8b1b02a0a52a817cd4154678a2bdc9d241fbfa",
+    "tests/process.spec.cjs": "34cbb6a6ddeecd5532e0b498d9c1642f541720ea3ca4bac00eea51443f9a35aa",
+    "tests/reader-fixture.cjs": "4aae3fc2c462d23bd2faec3735c79c2622d1cac1ef5bdaf8c5775e422def13d3",
+    "tests/recovery.spec.cjs": "d618806a43e38e196167298f91f18bafac4b0a40bc172f74e51a344aad3413a5",
+    "tests/transport.spec.cjs": "3e421b2873d47a27aaf3fc171069a4aaa2a1c0f3d8d31cccca47828116f473c2",
+    "tests/workflow.spec.cjs": "a23e65e0ffc2e865c88b0cfc31164a9135094abc0389093ff925fee5769539bb"
+  }
+}

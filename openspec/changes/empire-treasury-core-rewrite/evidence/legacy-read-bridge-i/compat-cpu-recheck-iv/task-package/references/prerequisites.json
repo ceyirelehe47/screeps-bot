@@ -1,0 +1,18 @@
+{
+  "priorDiagnostic": {
+    "commit": "2d97f0d93a1bf02191bf4712f1201638263e09ea",
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-cpu-diagnostic-ii/run/diagnostic-verification.json",
+    "file": "references/diagnostic-II-result.json",
+    "blob": "5112f9cc691bb1637b3c94e5b9cee0da0d9e9bbb",
+    "sha256": "af127a883d9228401f667fdf4a640a95ba1a3eb9a2dedd1238d8175717561c36",
+    "bytes": 12769
+  },
+  "loaderAcceptance": {
+    "commit": "33cfbd4e2192d65723cf3d9d85ae8cae8e8a06c0",
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-loader-optimization-iii/FINAL-VERIFICATION.json",
+    "file": "references/loader-III-acceptance.json",
+    "blob": "faef7fd6436572d5bc06476cd708a33241b188d8",
+    "sha256": "503ba53a4706ca01a9559f7d2237e94b7aa0a9d5ad3652002accd8bc7818226c",
+    "bytes": 729
+  }
+}

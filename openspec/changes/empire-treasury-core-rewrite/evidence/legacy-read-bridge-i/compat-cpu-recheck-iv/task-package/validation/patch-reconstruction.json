@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "patches": [
+    "0001-frozen-safety-runtime.patch",
+    "0002-execution-and-comparison.patch",
+    "0003-fixed-tests-and-inputs.patch"
+  ],
+  "files": 67,
+  "exactFileSet": true,
+  "byteIdentical": true,
+  "gitGenerated": true,
+  "scope": "empty external toolkit; NOT compat production repository"
+}

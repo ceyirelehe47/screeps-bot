@@ -1,0 +1,81 @@
+{
+  "executionBaseZipSha256": "af24fd786e46a92b069d25475783e945a27753b7fbebd0f73467e828b4d9fae9",
+  "byteIdenticalRuntimeFiles": {
+    "actions.cjs": {
+      "oldSha256": "da2aa7d41e23bc84067a9e43273f26003979463bd9b289ce7877fe9a11560883",
+      "newSha256": "da2aa7d41e23bc84067a9e43273f26003979463bd9b289ce7877fe9a11560883"
+    },
+    "check-profile.cjs": {
+      "oldSha256": "cfc4f1400ca9c642b0e7df1e2911753cc74be255848592b67fa3deb41ac31722",
+      "newSha256": "cfc4f1400ca9c642b0e7df1e2911753cc74be255848592b67fa3deb41ac31722"
+    },
+    "closeout.cjs": {
+      "oldSha256": "e81371d0820eb8f72863c589a6d497081947bdd1c29430ede4f9c5943dcd6fb1",
+      "newSha256": "e81371d0820eb8f72863c589a6d497081947bdd1c29430ede4f9c5943dcd6fb1"
+    },
+    "closure-observer.cjs": {
+      "oldSha256": "a771f16127efa58703210d97f44bd89cf12aeb54870216e8e12e3c06f15f1caf",
+      "newSha256": "a771f16127efa58703210d97f44bd89cf12aeb54870216e8e12e3c06f15f1caf"
+    },
+    "collector-diagnostics.cjs": {
+      "oldSha256": "94307209003c140c278adc37a99e706b175e25d9fc19e95ce97807a9e986fcc8",
+      "newSha256": "94307209003c140c278adc37a99e706b175e25d9fc19e95ce97807a9e986fcc8"
+    },
+    "collector.cjs": {
+      "oldSha256": "47011ee0de7f550dbf2fd4733bdb1a4a2caed18eb83b63eb9e84aee92be2c2ed",
+      "newSha256": "47011ee0de7f550dbf2fd4733bdb1a4a2caed18eb83b63eb9e84aee92be2c2ed"
+    },
+    "decoder.cjs": {
+      "oldSha256": "ca60ec0d27eb4950e5f54f7a5e5dfa868d5ef22f1c8ab2137f1775ead8648306",
+      "newSha256": "ca60ec0d27eb4950e5f54f7a5e5dfa868d5ef22f1c8ab2137f1775ead8648306"
+    },
+    "driver.cjs": {
+      "oldSha256": "c0a31ed458910221295c83d72b96dca076b3ad167d546d693afb325f7d2706bb",
+      "newSha256": "c0a31ed458910221295c83d72b96dca076b3ad167d546d693afb325f7d2706bb"
+    },
+    "guard-control.cjs": {
+      "oldSha256": "23a61bf0c8dbc507def30fe469bc18fc6a02010399a9625941454751bf02daf9",
+      "newSha256": "23a61bf0c8dbc507def30fe469bc18fc6a02010399a9625941454751bf02daf9"
+    },
+    "protocol.cjs": {
+      "oldSha256": "0279dc20b73ab949b094e85ac198719f901d6590db92d7f7a2e8957f080bb2ce",
+      "newSha256": "0279dc20b73ab949b094e85ac198719f901d6590db92d7f7a2e8957f080bb2ce"
+    },
+    "recovery-worker.cjs": {
+      "oldSha256": "9a63ae60bcf8eae547a4dd2eade30b46681149a47c454091e3bdd22b0af3fba8",
+      "newSha256": "9a63ae60bcf8eae547a4dd2eade30b46681149a47c454091e3bdd22b0af3fba8"
+    },
+    "samples.cjs": {
+      "oldSha256": "c45d134551691f4ca2a67563d73460e85b87e1f940c84de5c06efe1432df5fea",
+      "newSha256": "c45d134551691f4ca2a67563d73460e85b87e1f940c84de5c06efe1432df5fea"
+    },
+    "store.cjs": {
+      "oldSha256": "92f5c3cf9c092ebae9ea86bf5356ca7b2324bf1bbb615cf70f443df9ee7a6e10",
+      "newSha256": "92f5c3cf9c092ebae9ea86bf5356ca7b2324bf1bbb615cf70f443df9ee7a6e10"
+    },
+    "transport.cjs": {
+      "oldSha256": "d4348e49eb0089401073be89b5640a898a2cde5412759cee414741d7818666fd",
+      "newSha256": "d4348e49eb0089401073be89b5640a898a2cde5412759cee414741d7818666fd"
+    },
+    "verify-run.cjs": {
+      "oldSha256": "fa8e972dcfd7d22938713ebb925448bb1c9aa59a3704272595aa99b141d7117d",
+      "newSha256": "fa8e972dcfd7d22938713ebb925448bb1c9aa59a3704272595aa99b141d7117d"
+    },
+    "verify-runtime.cjs": {
+      "oldSha256": "abff9e49f6d98a2184d3ba24f53fa513bae652a2b77d1a9ad4429f87d6a024a4",
+      "newSha256": "abff9e49f6d98a2184d3ba24f53fa513bae652a2b77d1a9ad4429f87d6a024a4"
+    }
+  },
+  "identityOnlyChanges": {
+    "common.cjs": {
+      "oldSha256": "18ea939d7a1ff0aa60afa81cf94663220e0c7d9e8e59e9e0c1a224f55c76bd03",
+      "newSha256": "b4847723f50a060cd7eff5fa540296f62c86ad31d9611b801ca3fd128e17502f"
+    },
+    "policy.cjs": {
+      "oldSha256": "11be43ec0ed732e377046c662169db544e8f9564ef5536ce7785cf76e933ed87",
+      "newSha256": "80ad6acbd04684058ce5ee0a4464be3380dff453c9ae41339f7058221a7d5eba"
+    }
+  },
+  "coreSafetyThresholdsChanged": false,
+  "samplerOrCpuAccountingChanged": false
+}

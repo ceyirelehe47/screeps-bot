@@ -1,0 +1,5 @@
+# 完整运行包补丁镜像
+
+三份补丁可在空的工作树外目录按SERIES顺序重构runtime、tools、tests、references。它们不是要应用到compat源码树的生产补丁。Agent直接执行ZIP内固定文件即可，不要把这些路径提交到业务源码位置。
+
+本轮生产修改仅由observe入口临时绑定treasuryCompatConfig.ts，结束后精确恢复默认OFF。加载优化已经包含于固定源码提交，不再次应用Loader III。原生whitespace检查无例外。

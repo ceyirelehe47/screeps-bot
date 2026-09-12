@@ -1,0 +1,30 @@
+{
+  "runId": "1010b2bc507bf29e8ffd6c681ce345c9",
+  "candidateHash": "cd88ea9bdeae38818c9f688e5fa33e13b7e74ca31e2e99e118661edb39a166dd",
+  "result": {
+    "status": "UPLOADED_AND_READBACK_VERIFIED",
+    "confirmed": true,
+    "serverAccepted": true,
+    "requestAttempted": true,
+    "digest": {
+      "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+      "hash": "cd88ea9bdeae38818c9f688e5fa33e13b7e74ca31e2e99e118661edb39a166dd",
+      "files": [
+        {
+          "name": "main",
+          "kind": "text",
+          "bytes": 4593681,
+          "sha256": "2f020525d4c5bda5d8619638b09bbc86ef1132cb181dcb3c889066597cc9d85f"
+        }
+      ]
+    },
+    "build": {
+      "commit": "f1620034de24b783f193b0f8cbdfbf3c1d3d16f6",
+      "tree": "be8dc1c0de3630413e7e406c81fe13620996eb2b",
+      "dirty": "folded_out",
+      "deployBranch": "default",
+      "tag": "2026.8.29-6+f162003@2026-09-12T16:39:40.801Z"
+    },
+    "atMs": 1789231266886
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "cpu-diagnostic-collector-result/v1",
+  "runId": "1010b2bc507bf29e8ffd6c681ce345c9",
+  "pid": 26008,
+  "status": "closed",
+  "reason": "observation_closed",
+  "exitCode": 0,
+  "closedAtMs": 1789233159740,
+  "footerWritten": true,
+  "lockRemoved": true
+}

@@ -1,0 +1,20 @@
+{
+  "executionBase": {
+    "package": "screeps-compat-cpu-diagnostic-II-2026-09-12",
+    "zipSha256": "af24fd786e46a92b069d25475783e945a27753b7fbebd0f73467e828b4d9fae9"
+  },
+  "candidateBase": "ae15ec55b0363933d31c93acc2480b6adbea306a",
+  "evidenceBase": "33cfbd4e2192d65723cf3d9d85ae8cae8e8a06c0",
+  "sourcePackage": "screeps-compat-loader-optimization-III-2026-09-12",
+  "sourcePackageZipSha256": "b2d6d0e5a2096341924628fb375bdd3d87b68d8143a3bc0a0c5fbb7b67ee7f0c",
+  "canonicalBuilderSource": "01bd9831454950c4928df98dd8679692b55603e5",
+  "originalGeneratedBlob": "c44d8a306f2b11986c6556e098be7d2e10315fa6",
+  "loaderIIIGeneratedBlob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3",
+  "historicalComparisonReference": "references/prerequisites.json",
+  "productionEditsAuthorized": [
+    "src/runtime/treasuryCompatConfig.ts:temporary ON then exact OFF"
+  ],
+  "newProductionImplementation": false,
+  "newOnlineMeasurementsByMaker": false,
+  "safetyAlgorithmsRewritten": false
+}

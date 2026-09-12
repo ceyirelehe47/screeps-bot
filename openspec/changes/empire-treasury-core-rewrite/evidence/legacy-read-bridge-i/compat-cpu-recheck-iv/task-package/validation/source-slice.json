@@ -1,0 +1,74 @@
+{
+  "status": "LOCKED_SOURCE_SLICE_AND_PROFILE_VERIFIED",
+  "sourceSliceOnlyNotWholeRepository": true,
+  "typescript": "5.8.3",
+  "regenerate": {
+    "exit": 0,
+    "stdout": "{\"status\":\"COMPAT_LOADER_REGENERATION_VERIFIED\",\"files\":[\"src/runtime/treasuryCompatReadCore.generated.ts\",\"docs/treasury-compat-loader-optimization.json\",\"docs/treasury-compat-source-manifest.json\"],\"factoryBodiesChanged\":false}\n",
+    "stderr": ""
+  },
+  "typecheck": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "off": {
+    "mode": "off",
+    "status": "PROFILE_SOURCE_VALIDATED_ONLY",
+    "configSha256": "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02",
+    "profile": {
+      "enabled": false,
+      "shardName": "",
+      "rooms": [],
+      "resources": [
+        "energy",
+        "H"
+      ],
+      "startTick": 0,
+      "endTick": 0,
+      "intervalTicks": 100,
+      "minBucket": 2000,
+      "maxSampleCpu": 2,
+      "reserveCpu": 5,
+      "maxLogBytes": 16384
+    },
+    "dueTicks": [],
+    "deploymentAuthorized": false
+  },
+  "on": {
+    "mode": "on",
+    "status": "PROFILE_SOURCE_VALIDATED_ONLY",
+    "configSha256": "ebe8cfe5cd285f37cdc75613350cb61a6b85c09b40881fdbe4b09f52f5727a4d",
+    "profile": {
+      "enabled": true,
+      "shardName": "shard1",
+      "rooms": [
+        "E3N59",
+        "E4N58"
+      ],
+      "resources": [
+        "energy",
+        "H"
+      ],
+      "startTick": 73660200,
+      "endTick": 73660500,
+      "intervalTicks": 100,
+      "minBucket": 2000,
+      "maxSampleCpu": 2,
+      "reserveCpu": 5,
+      "maxLogBytes": 16384
+    },
+    "dueTicks": [
+      73660200,
+      73660300,
+      73660400,
+      73660500
+    ],
+    "deploymentAuthorized": false
+  },
+  "changedPathsDuringOn": [
+    "src/runtime/treasuryCompatConfig.ts"
+  ],
+  "backToOriginalConfig": true,
+  "noNetwork": true
+}

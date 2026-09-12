@@ -1,0 +1,9 @@
+{
+  "target": "Windows / Git Bash / Node22",
+  "nativeWindowsTestedByMaker": false,
+  "caseCollidingTestPaths": false,
+  "realRepositoryGitConfigurationModified": false,
+  "localGitLFArguments": true,
+  "fixturesUseLocalIdentityAndBareRemotesOnly": true,
+  "priorWindowsExecutionAcceptedForUnchangedSafetyBase": true
+}

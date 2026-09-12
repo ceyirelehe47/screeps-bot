@@ -1,0 +1,198 @@
+{
+  "status": "PASS",
+  "count": 48,
+  "files": [
+    {
+      "path": "references/deployGuard.cjs",
+      "exit": 0
+    },
+    {
+      "path": "references/loader-III/scripts/build-treasury-compat-loader.cjs",
+      "exit": 0
+    },
+    {
+      "path": "references/loader-III/test/treasury-compat/helpers.cjs",
+      "exit": 0
+    },
+    {
+      "path": "references/loader-III/test/treasury-compat/loader-optimization.spec.cjs",
+      "exit": 0
+    },
+    {
+      "path": "references/loader-III/test/treasury-compat/loader-test-support.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/actions.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/check-profile.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/closeout.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/closure-observer.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/collector-diagnostics.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/collector.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/common.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/decoder.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/driver.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/guard-control.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/policy.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/protocol.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/recovery-worker.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/samples.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/store.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/transport.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/verify-run.cjs",
+      "exit": 0
+    },
+    {
+      "path": "runtime/verify-runtime.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tests/comparison.spec.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tests/diagnostics.spec.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tests/fixture.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tests/loader-integration.spec.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tests/process-fixture.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tests/process-runner.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tests/process.spec.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tests/reader-fixture.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tests/recovery.spec.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tests/transport.spec.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tests/workflow.spec.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/archive.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/build.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/check-baseline.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/close-source.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/compare.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/observe.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/prepare.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/prerequisites.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/publish.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/reconcile.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/recover.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/run-tests.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/util.cjs",
+      "exit": 0
+    },
+    {
+      "path": "tools/verify.cjs",
+      "exit": 0
+    }
+  ]
+}
