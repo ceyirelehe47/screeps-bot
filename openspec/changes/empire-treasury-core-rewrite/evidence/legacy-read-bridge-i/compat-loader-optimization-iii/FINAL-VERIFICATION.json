@@ -1,0 +1,22 @@
+{
+  "status": "LOADER_III_OFFLINE_VERIFIED_NOT_DEPLOYED",
+  "compatHead": "ae15ec55b0363933d31c93acc2480b6adbea306a",
+  "compatBase": "745231048d97fd43fa7613abe988ae324bea10f8",
+  "refactorBase": "2d97f0d93a1bf02191bf4712f1201638263e09ea",
+  "packageFingerprint": "6ac058dc38a41785a9fc2b52b8412d57edfa18a29f566af83bd5a176f640a8b4",
+  "factoryBodiesChanged": false,
+  "runtimeDefinitionReuse": true,
+  "firstSuccessfulFactoryExecutions": 8,
+  "followingFactoryExecutions": 2,
+  "actualEngineMeasurement": false,
+  "directReadOptimized": false,
+  "engineCpuGapRepaired": false,
+  "budget": 2,
+  "enabled": false,
+  "originalCpuDiagnosticII": {
+    "raw": 4,
+    "diagnostic": 4,
+    "complete": 0,
+    "recoveryClosed": true
+  }
+}

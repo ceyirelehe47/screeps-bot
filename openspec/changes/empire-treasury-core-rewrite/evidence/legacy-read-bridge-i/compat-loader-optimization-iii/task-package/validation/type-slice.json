@@ -1,0 +1,5 @@
+{
+  "scope": "minimal declarations, actual TS and generated source, NOT complete repository typecheck",
+  "typescript": "5.8.3",
+  "diagnostics": []
+}

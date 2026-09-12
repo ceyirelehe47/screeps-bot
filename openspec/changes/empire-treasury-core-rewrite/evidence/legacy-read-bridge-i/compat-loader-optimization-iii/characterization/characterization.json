@@ -1,0 +1,511 @@
+{
+  "status": "LOADER_III_REAL_CORE_AB_VERIFIED",
+  "packageFingerprint": "6ac058dc38a41785a9fc2b52b8412d57edfa18a29f566af83bd5a176f640a8b4",
+  "scenarios": [
+    {
+      "name": "empty",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "manual",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "sixteen",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "bound256",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "overBound257",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        0,
+        0
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "invalidRecord",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "invalidResource",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "missingTasks",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        0,
+        0
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "invalidReservationContainer",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        0,
+        0
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "activeReservation",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "expiredReservation",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "exactExpiry",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "missingOwner",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "typedOwner",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "capacity8M",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "saturatedCapacity",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "missingTerminal",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "unseenRoom",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "sparseMismatch",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "legacyMismatch",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "oldFactoryExecutions": 96,
+      "newFactoryExecutions": 30,
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "actualEngineMeasurement": false
+    }
+  ],
+  "oldGeneratedBlob": "c44d8a306f2b11986c6556e098be7d2e10315fa6",
+  "newGeneratedBlob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3",
+  "engineCpuGapRepaired": false,
+  "engineTimingMeasured": false,
+  "directReadOptimized": false
+}

@@ -1,0 +1,10 @@
+{
+  "status": "LOADER_III_FULL_CHECKS_VERIFIED",
+  "packageFingerprint": "6ac058dc38a41785a9fc2b52b8412d57edfa18a29f566af83bd5a176f640a8b4",
+  "compatBase": "745231048d97fd43fa7613abe988ae324bea10f8",
+  "repositoryNodeTests": 116,
+  "jestSuites": 195,
+  "jestTests": 685,
+  "buildOnly": true,
+  "deployed": false
+}

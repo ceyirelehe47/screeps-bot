@@ -1,0 +1,66 @@
+{
+  "revision": "compat-reader-loader-optimization-III",
+  "authoring": "scripts/lib/treasury-compat-loader.template.txt",
+  "baselineCommit": "745231048d97fd43fa7613abe988ae324bea10f8",
+  "baselineBlob": "c44d8a306f2b11986c6556e098be7d2e10315fa6",
+  "baselineSha256": "decc6a2e019ba931041c8d79d341a59658755473b06075a19a458cc6635bd400",
+  "baselineCompiler": "5.9.3",
+  "factoryPrefixSha256": "6615fa89bc77e6e885a49abb2f67c0b8331306eff8eb7f96bc5c4ffaa3517cba",
+  "loaderSha256": "2156c7a9e0aefb82df26bd3e139faaaed39c807e39a3ea7a16140ea7f85f7ba2",
+  "generatedSha256": "9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965",
+  "generatedBlob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3",
+  "factories": [
+    {
+      "path": "src/runtime/configNormalize.ts",
+      "bodySha256": "f42728448afa21d2e743bf9210c0367ff1002df6a2c60b72ffcf160f51ca427b",
+      "lifecycle": "definition-only-reused"
+    },
+    {
+      "path": "src/runtime/logistics/resourceTransferTaskHealth.ts",
+      "bodySha256": "9fea76df1197ac1b6f2aa3793d0a32160d469c156c472c8cd5f1b8e50e8f5657",
+      "lifecycle": "definition-only-reused"
+    },
+    {
+      "path": "src/runtime/treasury/commitmentRevision.ts",
+      "bodySha256": "973b23ce57d91b6318b307747e4f920f5a8ab1d91de0b9a22b109c04307b5b27",
+      "lifecycle": "per-sample"
+    },
+    {
+      "path": "src/runtime/treasury/commitments.ts",
+      "bodySha256": "8cdecbdb0975612ad8770ba23022222aae10529e0647704e75b29f1c764a5b4c",
+      "lifecycle": "per-sample"
+    },
+    {
+      "path": "src/runtime/treasury/holderResolution.ts",
+      "bodySha256": "2021cd397135e7340565a252efab5af5039e89fa442f596fe94559113af9cf84",
+      "lifecycle": "definition-only-reused"
+    },
+    {
+      "path": "src/runtime/treasury/observation.ts",
+      "bodySha256": "168fd5d39b6a72d08ab867eeea319c98e300a14dacaca5169839e257ff4c236c",
+      "lifecycle": "definition-only-reused"
+    },
+    {
+      "path": "src/runtime/treasury/ownerIdentity.ts",
+      "bodySha256": "d9e43b2ba0abecdb87bfe313e1b060d1af2b1fbcd2ae6d3afd48c6553d6e1332",
+      "lifecycle": "definition-only-reused"
+    },
+    {
+      "path": "src/runtime/treasury/types.ts",
+      "bodySha256": "4dc107db3a229cacf36a5f077ff906b4da4860de8796c4fd172af9e4dade3335",
+      "lifecycle": "definition-only-reused"
+    }
+  ],
+  "factoryBodiesChanged": false,
+  "dependencyEdgesChanged": false,
+  "firstSuccessfulFactoryExecutions": 8,
+  "followingFactoryExecutions": 2,
+  "definitionInitializationsMovedOutsideBudget": false,
+  "builderInstanceReused": false,
+  "observationReused": false,
+  "commitmentIndexReused": false,
+  "resourceCatalogCapturedPerSample": true,
+  "engineCpuGapRepaired": false,
+  "engineMeasurementRequired": true,
+  "note": "Only the wrapper output entry is refreshed here; other outputs retain original assembly provenance."
+}

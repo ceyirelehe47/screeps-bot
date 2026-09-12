@@ -1,0 +1,97 @@
+{
+  "repository": "ceyirelehe47/screeps-bot",
+  "compatBase": "745231048d97fd43fa7613abe988ae324bea10f8",
+  "refactorBase": "2d97f0d93a1bf02191bf4712f1201638263e09ea",
+  "compatBranch": "compat/treasury-read-bridge-i",
+  "refactorBranch": "refactor/empire-treasury-rearchitecture",
+  "evidenceTarget": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-loader-optimization-iii",
+  "changes": [
+    {
+      "path": "docs/treasury-compat-loader-optimization.json",
+      "oldBlob": null,
+      "newSha256": "0283dd04d62187d97e5f7ff1ad5e87d712de945a958c2c8eb6067d3ef75aadb9",
+      "newBytes": 2825,
+      "newBlob": "96046b996f55831fd62a2ebdf5831ed9f1130e9c"
+    },
+    {
+      "path": "docs/treasury-compat-source-manifest.json",
+      "oldBlob": "2652d9e2e985bec24f41eed59fb895fde360ecb4",
+      "newSha256": "78db348a74091ddb462d2d6714c6d550b42cd04777c3dc0c293fe66c7daccaf2",
+      "newBytes": 7405,
+      "newBlob": "fefd09e20de57e20796f6566a2e166cc222681d5"
+    },
+    {
+      "path": "scripts/build-treasury-compat-loader.cjs",
+      "oldBlob": null,
+      "newSha256": "3c3a3fb8a00d1e063eb594858c05781ba038eaa0eea872908acfe7cdc25bef7f",
+      "newBytes": 5773,
+      "newBlob": "5a529eb733592dce6c97c74d5ca30f9abdebfd74"
+    },
+    {
+      "path": "scripts/lib/treasury-compat-loader.template.txt",
+      "oldBlob": null,
+      "newSha256": "2156c7a9e0aefb82df26bd3e139faaaed39c807e39a3ea7a16140ea7f85f7ba2",
+      "newBytes": 2582,
+      "newBlob": "e12ef675eced706cda1473b84701ad2028c02a18"
+    },
+    {
+      "path": "src/runtime/treasuryCompatRead.ts",
+      "oldBlob": "7d0c31cc40209f3839b0df32509a63cfe910c456",
+      "newSha256": "6d2f2e24117a585e42739506700c937e11c9925df627f2e76aaee48a68d06ad1",
+      "newBytes": 19895,
+      "newBlob": "574731256e1d6fe0510e80a7282de05d94628544"
+    },
+    {
+      "path": "src/runtime/treasuryCompatReadCore.generated.ts",
+      "oldBlob": "c44d8a306f2b11986c6556e098be7d2e10315fa6",
+      "newSha256": "9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965",
+      "newBytes": 64604,
+      "newBlob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3"
+    },
+    {
+      "path": "src/runtime/treasuryCompatTypes.ts",
+      "oldBlob": "e75b04491ad8da3fc12d147bacb014c6b76b09da",
+      "newSha256": "efc805ac836f23c8fc0d30429c90075503b749b0ef4f4a730c2fb9853833fbe5",
+      "newBytes": 2008,
+      "newBlob": "5530d31a1b65f5b5176fd01c16faa773170ae29e"
+    },
+    {
+      "path": "test/treasury-compat/fixtures/core-before-loader-optimization.ts.txt",
+      "oldBlob": null,
+      "newSha256": "decc6a2e019ba931041c8d79d341a59658755473b06075a19a458cc6635bd400",
+      "newBytes": 62929,
+      "newBlob": "c44d8a306f2b11986c6556e098be7d2e10315fa6"
+    },
+    {
+      "path": "test/treasury-compat/loader-optimization.spec.cjs",
+      "oldBlob": null,
+      "newSha256": "56110eec17a9ee3a71d3ce790344b35599bfcc940370d301dbdb6bd3309803e8",
+      "newBytes": 11971,
+      "newBlob": "16fca23beb950a38ce5d0753b4af9372412d630a"
+    },
+    {
+      "path": "test/treasury-compat/loader-test-support.cjs",
+      "oldBlob": null,
+      "newSha256": "689b5a48efc6cf1668e1b52cc914a65cdac684797356bfa7652f3d584bdb2a6c",
+      "newBytes": 6081,
+      "newBlob": "be6656b882e69247e030081b35909fd019a44cdf"
+    },
+    {
+      "path": "test/treasuryCompatRead.test.ts",
+      "oldBlob": "000f69d9f3cd7b33f2c32467ed9967bb6311586e",
+      "newSha256": "a43daeff61ccbb0ccbb36c6c79b5454f7df50d444bfeae61db6b4c924b7b005d",
+      "newBytes": 924,
+      "newBlob": "b5ead1227b8ef33f7490f33fe38db517691b3dfe"
+    }
+  ],
+  "protectedBlobs": {
+    "src/runtime/treasuryCompatConfig.ts": "8e2214fef5a6a69b7eb40c82eee76dda1646ccbf",
+    "src/runtime/treasuryCompatCpu.ts": "46ba986151dd115250e1c5bebd95c970c0fcf9af",
+    "src/runtime/treasuryCompatRuntime.ts": "5916fbcafbb88d40cf5463d329b683ba0d776ad8",
+    "test/treasury-compat/helpers.cjs": "f7406cf25124324069c08a444683d383477e0a23",
+    "test/treasury-compat/bridge.spec.cjs": "8061a074218ba8a9ce81ec15b5da6e4ad9aa1d83",
+    "test/treasury-compat/real-readers.spec.cjs": "28c78e89a8039518fe9d8d3e4d8027aff0015e8c",
+    "test/treasury-compat/independent.spec.cjs": "3ae252801a7a205ca8ded3d28e587acfba1dfdca",
+    "test/treasuryCompatIndependent.test.ts": "2ccff79e6456481efb027939258ab184bcc022fe"
+  }
+}

@@ -1,0 +1,175 @@
+{
+  "repository": "ceyirelehe47/screeps-bot",
+  "developmentBranch": "refactor/empire-treasury-rearchitecture",
+  "sourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
+  "productionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+  "productionMainBlob": "5f6c49c70d1c916ab47cda30884fddb1fab9931a",
+  "roots": [
+    "src/runtime/treasury/observation.ts",
+    "src/runtime/treasury/commitments.ts"
+  ],
+  "allowedRuntimeSources": [
+    "src/runtime/treasury/observation.ts",
+    "src/runtime/treasury/types.ts",
+    "src/runtime/treasury/commitments.ts",
+    "src/runtime/treasury/commitmentRevision.ts",
+    "src/runtime/treasury/holderResolution.ts",
+    "src/runtime/treasury/ownerIdentity.ts",
+    "src/runtime/logistics/resourceTransferTaskHealth.ts",
+    "src/runtime/configNormalize.ts"
+  ],
+  "knownSourceBlobs": {
+    "src/runtime/treasury/observation.ts": "eb733c07f72785a2697b5b2438571ea1435f6a5c",
+    "src/runtime/treasury/types.ts": "05c1af2da2ad485f881ed3765344a40f16720625",
+    "src/runtime/treasury/commitments.ts": "4b4342785adaa58c196e8a6ba46b369b7ab61f97",
+    "src/runtime/treasury/holderResolution.ts": "078505536b2daece8c9813cc80ab914904599e5c",
+    "src/runtime/treasury/ownerIdentity.ts": "cb34746afe46e1fa29f9ad12428c501da3b5d72c",
+    "src/runtime/logistics/resourceTransferTaskHealth.ts": "c40d9d9893cc6373d876db76c375a815d874886a",
+    "src/runtime/configNormalize.ts": "e938b49f18036b85fd2d009569629614cdaf0450",
+    "src/runtime/treasury/commitmentRevision.ts": "5e71141d63b32f7c172bd749f1fd4131d6fcc0fd"
+  },
+  "productionMainTestBlob": "2d2283b8466c6427a2222b841d8fd72261374f02",
+  "compiler": "5.9.3",
+  "preparedNotDeployed": true,
+  "sourceManifest": [
+    {
+      "path": "src/runtime/configNormalize.ts",
+      "deps": {},
+      "sourceBlob": "e938b49f18036b85fd2d009569629614cdaf0450",
+      "sourceSha256": "7ee1edf48ddf300c0e589a3e32acb2261b126c44238b92c21cb7b7fe42472d9e",
+      "sourceBytes": 841
+    },
+    {
+      "path": "src/runtime/logistics/resourceTransferTaskHealth.ts",
+      "deps": {
+        "@/runtime/configNormalize": "src/runtime/configNormalize.ts"
+      },
+      "sourceBlob": "c40d9d9893cc6373d876db76c375a815d874886a",
+      "sourceSha256": "cc652ca8c306dcfa9f11c8407b29808b2238a8b141ce9f384e2bf5b1f6a21c5e",
+      "sourceBytes": 5333
+    },
+    {
+      "path": "src/runtime/treasury/commitmentRevision.ts",
+      "deps": {},
+      "sourceBlob": "5e71141d63b32f7c172bd749f1fd4131d6fcc0fd",
+      "sourceSha256": "c8ce010cc8e0a6e45243881308ceed0a74f85f15e353b7d3f2fa5967bfcf47f3",
+      "sourceBytes": 1244
+    },
+    {
+      "path": "src/runtime/treasury/commitments.ts",
+      "deps": {
+        "@/runtime/logistics/resourceTransferTaskHealth": "src/runtime/logistics/resourceTransferTaskHealth.ts",
+        "@/runtime/treasury/commitmentRevision": "src/runtime/treasury/commitmentRevision.ts",
+        "@/runtime/treasury/holderResolution": "src/runtime/treasury/holderResolution.ts",
+        "@/runtime/treasury/ownerIdentity": "src/runtime/treasury/ownerIdentity.ts"
+      },
+      "sourceBlob": "4b4342785adaa58c196e8a6ba46b369b7ab61f97",
+      "sourceSha256": "85078504b9127fd1ecf78fe28dcdd5c2e20f195f4eb4efbafe8a39daa1e1e41b",
+      "sourceBytes": 23880
+    },
+    {
+      "path": "src/runtime/treasury/holderResolution.ts",
+      "deps": {},
+      "sourceBlob": "078505536b2daece8c9813cc80ab914904599e5c",
+      "sourceSha256": "f598bd15b36a58115ab220379433d9fc4978dfddd5a1304d5682b6417bba6df3",
+      "sourceBytes": 3655
+    },
+    {
+      "path": "src/runtime/treasury/observation.ts",
+      "deps": {
+        "@/runtime/treasury/types": "src/runtime/treasury/types.ts"
+      },
+      "sourceBlob": "eb733c07f72785a2697b5b2438571ea1435f6a5c",
+      "sourceSha256": "a17c88dfc9c21cd7408935754b50996f4b433f4228b4c3e512fa47b7d6341941",
+      "sourceBytes": 9878
+    },
+    {
+      "path": "src/runtime/treasury/ownerIdentity.ts",
+      "deps": {},
+      "sourceBlob": "cb34746afe46e1fa29f9ad12428c501da3b5d72c",
+      "sourceSha256": "2e9d4440c12fc30b28c6aa65ec761c38db6b34fb3f2605f7929bf0eb27cd554d",
+      "sourceBytes": 8737
+    },
+    {
+      "path": "src/runtime/treasury/types.ts",
+      "deps": {},
+      "sourceBlob": "05c1af2da2ad485f881ed3765344a40f16720625",
+      "sourceSha256": "38b6b44ba7713923213e7219bc0d1cfc243842a9420486c58b8105aaf786f667",
+      "sourceBytes": 55763
+    }
+  ],
+  "outputs": [
+    {
+      "file": "src/main.ts",
+      "bytes": 6271,
+      "sha256": "3bebfb632d40dd989baa9ae70a87cc49810207df6fc0cfd3f9cda53673f9dc57",
+      "gitBlob": "e8bf1c56e6147dfe4fcbb18052e29ee636da62ac"
+    },
+    {
+      "file": "src/main.test.ts",
+      "bytes": 11031,
+      "sha256": "8fbb186cae2a1426496dd539cbc4414ce2317fc4ff848a4bc4ee179ec2d4a0ab",
+      "gitBlob": "9b8b42363e8f687742088dfca094a422d6ecf3b0"
+    },
+    {
+      "file": "src/runtime/treasuryCompatReadCore.generated.ts",
+      "bytes": 62929,
+      "sha256": "decc6a2e019ba931041c8d79d341a59658755473b06075a19a458cc6635bd400",
+      "gitBlob": "c44d8a306f2b11986c6556e098be7d2e10315fa6"
+    },
+    {
+      "file": "src/runtime/treasuryCompatTypes.ts",
+      "bytes": 2013,
+      "sha256": "9656db9481cd9f513d617bb557fd1874fbf25c4c2a4054aefae77e0362610cad",
+      "gitBlob": "e75b04491ad8da3fc12d147bacb014c6b76b09da"
+    },
+    {
+      "file": "src/runtime/treasuryCompatConfig.ts",
+      "bytes": 531,
+      "sha256": "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02",
+      "gitBlob": "8e2214fef5a6a69b7eb40c82eee76dda1646ccbf"
+    },
+    {
+      "file": "src/runtime/treasuryCompatRead.ts",
+      "bytes": 17379,
+      "sha256": "a9849e430b4238177653ed10cea085f13af402010e4c414312c64306a966d713",
+      "gitBlob": "fccb89279f1f92ce6478411ab3f2368210e9d6b1"
+    },
+    {
+      "file": "src/runtime/treasuryCompatRuntime.ts",
+      "bytes": 839,
+      "sha256": "1eaf416bbf31110791f2d5ca39561468c17e19c866da16045e3866b4b3ded942",
+      "gitBlob": "682e603d92b333b1d7112cb05693fdc136736a27"
+    },
+    {
+      "file": "test/treasury-compat/bridge.spec.cjs",
+      "bytes": 11489,
+      "sha256": "278491b3c996874db2fe560973708ba1d2a0d34cfc94f413ad36f23a3067a50f",
+      "gitBlob": "8061a074218ba8a9ce81ec15b5da6e4ad9aa1d83"
+    },
+    {
+      "file": "test/treasury-compat/real-readers.spec.cjs",
+      "bytes": 6122,
+      "sha256": "62fd1c33a1b8ffe8a74a0046c5e2ae3f4796a3a31c838b9fcfe0e340b6fe108e",
+      "gitBlob": "f709decb787c553a2dcc614b768e9d88d5701bf6"
+    },
+    {
+      "file": "test/treasury-compat/helpers.cjs",
+      "bytes": 5858,
+      "sha256": "f28959c9fcf64fe607ad40a543790433df3572cde7f5797146e43792ee9cf4de",
+      "gitBlob": "59b332541bf1029c476c55595918b94cecc6ea1b"
+    },
+    {
+      "file": "test/treasuryCompatRead.test.ts",
+      "bytes": 850,
+      "sha256": "24e36af8ff193c259d74a1b9cb2e57e781500b3693572a267cccc4ff7058915b",
+      "gitBlob": "000f69d9f3cd7b33f2c32467ed9967bb6311586e"
+    },
+    {
+      "file": "docs/treasury-legacy-read-bridge.md",
+      "bytes": 4854,
+      "sha256": "23352cd61c5725021d5aed3798b714d702f766d41781d1beffd07e87773e4877",
+      "gitBlob": "fa47f2b26745cdf45fca2e228726777a9918e8a6"
+    }
+  ]
+}

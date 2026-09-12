@@ -1,0 +1,17 @@
+{
+  "node": "v22.16.0",
+  "checked": 10,
+  "files": [
+    "baseline/test/treasury-compat/bridge.spec.cjs",
+    "baseline/test/treasury-compat/helpers.cjs",
+    "baseline/test/treasury-compat/real-readers.spec.cjs",
+    "implementation/scripts/build-treasury-compat-loader.cjs",
+    "implementation/test/treasury-compat/loader-optimization.spec.cjs",
+    "implementation/test/treasury-compat/loader-test-support.cjs",
+    "tests/workflow.spec.cjs",
+    "tools/common.cjs",
+    "tools/run.cjs",
+    "tools/workflow.cjs"
+  ],
+  "allExitZero": true
+}

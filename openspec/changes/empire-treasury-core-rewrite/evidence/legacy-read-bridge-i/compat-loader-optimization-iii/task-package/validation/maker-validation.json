@@ -1,0 +1,40 @@
+{
+  "status": "MAKER_OFFLINE_VALIDATION_PASSED",
+  "node": "v22.16.0",
+  "typescript": "5.8.3",
+  "git": "2.47.3",
+  "platform": "linux",
+  "readerTests": {
+    "total": 97,
+    "passed": 97,
+    "failed": 0,
+    "skipped": 0,
+    "originalUnmodified": 51,
+    "newLoader": 46
+  },
+  "workflowTests": {
+    "total": 18,
+    "passed": 18,
+    "failed": 0,
+    "skipped": 0
+  },
+  "realCoreSyntheticScenarios": 20,
+  "generatedFactoryBodiesAndDependencies": "exact pinned prefix unchanged",
+  "sourceAndTypeCommentOnly": "compiled JavaScript identical after removeComments",
+  "patchApplyAndPayloadBytes": true,
+  "completePackageNativeWhitespace": {
+    "exit": 0,
+    "exceptions": 0
+  },
+  "workflowEndToEnd": "actual temporary Git repositories and local bare remote; historical full-check records in that test are synthetic",
+  "notExecutedByMaker": [
+    "native Windows/NTFS",
+    "complete user repository Node 116",
+    "complete repository typecheck",
+    "full Jest 195/685",
+    "real repository Rollup build",
+    "Screeps engine CPU measurement",
+    "Screeps calls or writes"
+  ],
+  "scope": "Complete implementation delivered; Agent performs real repository/platform verification, not development"
+}

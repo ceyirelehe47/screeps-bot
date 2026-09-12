@@ -1,0 +1,172 @@
+{
+  "files": {
+    "AGENT-RUN.md": {
+      "bytes": 10202,
+      "sha256": "23989cb39c0e2cb9b04fc9a2ed117022b2511802d393b9e67f176fcaee491c67"
+    },
+    "IMPLEMENTATION-MANIFEST.json": {
+      "bytes": 1284,
+      "sha256": "e7e068e36d2bfc39a1e0f0cb0aece0c3e5acc86170ddb1197d9ca35c48157843"
+    },
+    "README.md": {
+      "bytes": 2703,
+      "sha256": "842b8303da0ecbf665f0b52a31a197ff1e37f0ecc10652ad89f2367981780226"
+    },
+    "baseline/docs/treasury-compat-source-manifest.json": {
+      "bytes": 7135,
+      "sha256": "ff495ada3ea843b4b2e938685a29f016693413f8b2cceafd75ec65ecdb06a3ee"
+    },
+    "baseline/src/runtime/treasuryCompatConfig.ts": {
+      "bytes": 531,
+      "sha256": "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02"
+    },
+    "baseline/src/runtime/treasuryCompatCpu.ts": {
+      "bytes": 2883,
+      "sha256": "103e7a3e115fcc885fc337b91e7336cdb2cd3e890524f0c8b4d2f4082c0207ef"
+    },
+    "baseline/src/runtime/treasuryCompatRead.ts": {
+      "bytes": 19845,
+      "sha256": "c14efedac18f865e1bf04fb5ce3ea8c954598f69add84fa0646b4c5470273d03"
+    },
+    "baseline/src/runtime/treasuryCompatReadCore.generated.ts": {
+      "bytes": 62929,
+      "sha256": "decc6a2e019ba931041c8d79d341a59658755473b06075a19a458cc6635bd400"
+    },
+    "baseline/src/runtime/treasuryCompatRuntime.ts": {
+      "bytes": 865,
+      "sha256": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4"
+    },
+    "baseline/src/runtime/treasuryCompatTypes.ts": {
+      "bytes": 2013,
+      "sha256": "9656db9481cd9f513d617bb557fd1874fbf25c4c2a4054aefae77e0362610cad"
+    },
+    "baseline/test/treasury-compat/bridge.spec.cjs": {
+      "bytes": 11489,
+      "sha256": "278491b3c996874db2fe560973708ba1d2a0d34cfc94f413ad36f23a3067a50f"
+    },
+    "baseline/test/treasury-compat/helpers.cjs": {
+      "bytes": 6806,
+      "sha256": "c200b1f2b6dc55deae8b50ac7ae9f0e5ecb191be6592a42c713fce7d3d289e74"
+    },
+    "baseline/test/treasury-compat/real-readers.spec.cjs": {
+      "bytes": 8178,
+      "sha256": "162630b8712f90fa71bb11eba25d3128dd92408b1474ea8540a2adb02a2f20c2"
+    },
+    "baseline/test/treasuryCompatRead.test.ts": {
+      "bytes": 850,
+      "sha256": "24e36af8ff193c259d74a1b9cb2e57e781500b3693572a267cccc4ff7058915b"
+    },
+    "implementation/docs/treasury-compat-loader-optimization.json": {
+      "bytes": 2825,
+      "sha256": "0283dd04d62187d97e5f7ff1ad5e87d712de945a958c2c8eb6067d3ef75aadb9"
+    },
+    "implementation/docs/treasury-compat-source-manifest.json": {
+      "bytes": 7405,
+      "sha256": "78db348a74091ddb462d2d6714c6d550b42cd04777c3dc0c293fe66c7daccaf2"
+    },
+    "implementation/scripts/build-treasury-compat-loader.cjs": {
+      "bytes": 5773,
+      "sha256": "3c3a3fb8a00d1e063eb594858c05781ba038eaa0eea872908acfe7cdc25bef7f"
+    },
+    "implementation/scripts/lib/treasury-compat-loader.template.txt": {
+      "bytes": 2582,
+      "sha256": "2156c7a9e0aefb82df26bd3e139faaaed39c807e39a3ea7a16140ea7f85f7ba2"
+    },
+    "implementation/src/runtime/treasuryCompatRead.ts": {
+      "bytes": 19895,
+      "sha256": "6d2f2e24117a585e42739506700c937e11c9925df627f2e76aaee48a68d06ad1"
+    },
+    "implementation/src/runtime/treasuryCompatReadCore.generated.ts": {
+      "bytes": 64604,
+      "sha256": "9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965"
+    },
+    "implementation/src/runtime/treasuryCompatTypes.ts": {
+      "bytes": 2008,
+      "sha256": "efc805ac836f23c8fc0d30429c90075503b749b0ef4f4a730c2fb9853833fbe5"
+    },
+    "implementation/test/treasury-compat/fixtures/core-before-loader-optimization.ts.txt": {
+      "bytes": 62929,
+      "sha256": "decc6a2e019ba931041c8d79d341a59658755473b06075a19a458cc6635bd400"
+    },
+    "implementation/test/treasury-compat/loader-optimization.spec.cjs": {
+      "bytes": 11971,
+      "sha256": "56110eec17a9ee3a71d3ce790344b35599bfcc940370d301dbdb6bd3309803e8"
+    },
+    "implementation/test/treasury-compat/loader-test-support.cjs": {
+      "bytes": 6081,
+      "sha256": "689b5a48efc6cf1668e1b52cc914a65cdac684797356bfa7652f3d584bdb2a6c"
+    },
+    "implementation/test/treasuryCompatRead.test.ts": {
+      "bytes": 924,
+      "sha256": "a43daeff61ccbb0ccbb36c6c79b5454f7df50d444bfeae61db6b4c924b7b005d"
+    },
+    "patches/0001-loader-definition-reuse.patch": {
+      "bytes": 102092,
+      "sha256": "26afa62124f1524442ebf498a971007b0854be22109e776fb66d03c2283f2a4a"
+    },
+    "patches/README.md": {
+      "bytes": 628,
+      "sha256": "2364362fe29651c243dd3529cea7edf00468fe8f33e3e95ee9423025972c477f"
+    },
+    "patches/SERIES": {
+      "bytes": 35,
+      "sha256": "f4af97d362e60f5ad998470809888a93bec6f4583b4f4ee750f77926dab42e79"
+    },
+    "references/CPU-II-BASIS.md": {
+      "bytes": 1404,
+      "sha256": "e29f43bdcd80e0540bcfa12ab67906dfd7756d25c73bc9b1f104c3bc384232b1"
+    },
+    "references/source-lock.json": {
+      "bytes": 4313,
+      "sha256": "552a6138196ddbd3c3f726c8af210bf97669a192b7bbf6825e072e2a7d770a8f"
+    },
+    "references/test-set.json": {
+      "bytes": 187,
+      "sha256": "8996a0fc73ca6ee648f739060d5bc903de4a21c4cf70a7b32e633f1a2f80abb2"
+    },
+    "tests/workflow.spec.cjs": {
+      "bytes": 12587,
+      "sha256": "92fb3cc6a4d990a8d03ef545df9ee63dd44594f1917982ae29641afb8c7db118"
+    },
+    "tools/common.cjs": {
+      "bytes": 5871,
+      "sha256": "9678a1e57dab7117a931799fc4040a268805d7f8081e2ff824c6f328f85d1727"
+    },
+    "tools/run.cjs": {
+      "bytes": 7599,
+      "sha256": "8c54f7fc7dd7be2b99b092ee66ddc1ee3ef9912dcaa690ac32bf15ba81649a2a"
+    },
+    "tools/workflow.cjs": {
+      "bytes": 14114,
+      "sha256": "88236875bbf3701c46f450ae6aac2f970cb58bd70fc36676f451e8846a3d764d"
+    },
+    "validation/comment-only-proof.json": {
+      "bytes": 438,
+      "sha256": "1770b4b9bb248bea23f9a7b185424caa32300500653cbf6a2ace919283c43ca4"
+    },
+    "validation/maker-reader-tests.json": {
+      "bytes": 21650,
+      "sha256": "dc8aa2b6db555ea75129ccbcbf890f4c6fdeb22f99a24f881e601a270f19db40"
+    },
+    "validation/maker-real-core-ab.json": {
+      "bytes": 8975,
+      "sha256": "33c5b824d71edf817232d5baedb119594ad284e3ad445b20f4e465608d35b203"
+    },
+    "validation/maker-validation.json": {
+      "bytes": 1213,
+      "sha256": "b83486225ce2b07b251a063993648717bb32e927ac82ea0c03cef1e929b180f3"
+    },
+    "validation/maker-workflow-tests.json": {
+      "bytes": 4733,
+      "sha256": "e2aac766caab124c4d9c84aa47d46d240247a4b7a764fb13cc9acf12a1e988d2"
+    },
+    "validation/syntax.json": {
+      "bytes": 547,
+      "sha256": "3721e8522bd3fbc7672b6999acfbdeacd54e22ccf5f500eeddff719d69559d50"
+    },
+    "validation/type-slice.json": {
+      "bytes": 151,
+      "sha256": "ae8544327fe78f4658a0ef8b02ffd5be246662f6aad101763249d1313fdb38f7"
+    }
+  }
+}

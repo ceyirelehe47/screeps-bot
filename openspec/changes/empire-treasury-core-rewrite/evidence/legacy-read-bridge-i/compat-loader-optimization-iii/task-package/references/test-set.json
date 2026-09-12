@@ -1,0 +1,9 @@
+{
+  "readerTests": 97,
+  "newLoaderCases": 46,
+  "originalReaderCases": 51,
+  "workflowTests": 18,
+  "repositoryTests": 116,
+  "repositoryJestSuites": 195,
+  "repositoryJestTests": 685
+}

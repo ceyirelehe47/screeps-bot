@@ -1,0 +1,10 @@
+{
+  "status": "LOADER_III_FIXED_TESTS_VERIFIED",
+  "readerTests": 97,
+  "workflowTests": 18,
+  "node": "v22.19.0",
+  "platform": "win32",
+  "typescript": "5.9.3",
+  "packageFingerprint": "6ac058dc38a41785a9fc2b52b8412d57edfa18a29f566af83bd5a176f640a8b4",
+  "engineCpuMeasurement": false
+}

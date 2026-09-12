@@ -1,0 +1,15 @@
+{
+  "typescript": "5.8.3",
+  "files": [
+    {
+      "file": "treasuryCompatRead.ts",
+      "emittedJavaScriptIdenticalWithCommentsRemoved": true,
+      "sha256": "a57ab1d4c338779da818df150040af7d91645c26a843c505df1b120624050d15"
+    },
+    {
+      "file": "treasuryCompatTypes.ts",
+      "emittedJavaScriptIdenticalWithCommentsRemoved": true,
+      "sha256": "d43aa81f5bc89faa359e0f97c814ba25155591ff078fbb9bfd40f8c7c9683230"
+    }
+  ]
+}
