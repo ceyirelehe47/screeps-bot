@@ -1,0 +1,11 @@
+{
+  "count": 96,
+  "files": [
+    "tests/diagnostics.spec.cjs",
+    "tests/process.spec.cjs",
+    "tests/recovery.spec.cjs",
+    "tests/transport.spec.cjs",
+    "tests/workflow.spec.cjs"
+  ],
+  "countsAreNotAddedToRepositoryJestBudget": true
+}

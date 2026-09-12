@@ -1,0 +1,1224 @@
+diff --git a/references/0003-first-report.json b/references/0003-first-report.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..f6af163af67564853cd056218d314162d04fe677
+--- /dev/null
++++ b/references/0003-first-report.json
+@@ -0,0 +1,174 @@
++{
++  "kind": "treasury-legacy-read-bridge",
++  "tick": 73646500,
++  "shard": "shard1",
++  "sourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
++  "productionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
++  "authorizesActions": false,
++  "scope": {
++    "rooms": [
++      "E3N59",
++      "E4N58"
++    ],
++    "resources": [
++      "energy",
++      "H"
++    ],
++    "isEmpireTotal": false
++  },
++  "evaluation": "observation_and_legacy_commitments_only",
++  "facadeQueryRun": false,
++  "spendable": null,
++  "kernelLifecycleRun": false,
++  "storageMode": "heap_only",
++  "previousRun": null,
++  "legacyInputs": {
++    "tasks": {
++      "status": "nonempty",
++      "count": 2
++    },
++    "reservations": {
++      "status": "empty",
++      "count": 0
++    },
++    "reservationVersion": {
++      "status": "absent",
++      "value": null
++    },
++    "treasuryCore": {
++      "status": "absent",
++      "activeCount": null
++    }
++  },
++  "endpoints": [
++    {
++      "room": "E3N59",
++      "location": "storage",
++      "directStatus": "ok",
++      "direct": {
++        "id": "69eeae0db590d0089d87b487",
++        "used": 800000,
++        "free": 200000,
++        "capacity": 1000000,
++        "overCapacity": false,
++        "active": true,
++        "cooldown": null,
++        "amounts": {
++          "energy": 179236,
++          "H": 135505
++        }
++      },
++      "legacyProjection": {
++        "status": "match_capacity_and_selected_energy",
++        "updatedAt": 73646500,
++        "comparisonPerformed": true,
++        "mismatches": []
++      },
++      "change": {
++        "status": "no_comparable_previous_sample"
++      },
++      "coreComparison": "match_selected_scope",
++      "coreMismatches": []
++    },
++    {
++      "room": "E3N59",
++      "location": "terminal",
++      "directStatus": "ok",
++      "direct": {
++        "id": "69fcff2ed22e9226307ce4fe",
++        "used": 260000,
++        "free": 40000,
++        "capacity": 300000,
++        "overCapacity": false,
++        "active": true,
++        "cooldown": 0,
++        "amounts": {
++          "energy": 72600,
++          "H": 0
++        }
++      },
++      "legacyProjection": {
++        "status": "match_capacity_and_selected_energy",
++        "updatedAt": 73646500,
++        "comparisonPerformed": true,
++        "mismatches": []
++      },
++      "change": {
++        "status": "no_comparable_previous_sample"
++      },
++      "coreComparison": "match_selected_scope",
++      "coreMismatches": []
++    },
++    {
++      "room": "E4N58",
++      "location": "storage",
++      "directStatus": "ok",
++      "direct": {
++        "id": "69eedb6224f1bd9c6041e6ab",
++        "used": 4633540,
++        "free": 3366460,
++        "capacity": 8000000,
++        "overCapacity": false,
++        "active": true,
++        "cooldown": null,
++        "amounts": {
++          "energy": 249263,
++          "H": 2892
++        }
++      },
++      "legacyProjection": {
++        "status": "match_capacity_and_selected_energy",
++        "updatedAt": 73646500,
++        "comparisonPerformed": true,
++        "mismatches": []
++      },
++      "change": {
++        "status": "no_comparable_previous_sample"
++      },
++      "coreComparison": "match_selected_scope",
++      "coreMismatches": []
++    },
++    {
++      "room": "E4N58",
++      "location": "terminal",
++      "directStatus": "ok",
++      "direct": {
++        "id": "69fc583c60d86221e8bdf547",
++        "used": 231245,
++        "free": 68755,
++        "capacity": 300000,
++        "overCapacity": false,
++        "active": true,
++        "cooldown": 0,
++        "amounts": {
++          "energy": 25412,
++          "H": 0
++        }
++      },
++      "legacyProjection": {
++        "status": "match_capacity_and_selected_energy",
++        "updatedAt": 73646500,
++        "comparisonPerformed": true,
++        "mismatches": []
++      },
++      "change": {
++        "status": "no_comparable_previous_sample"
++      },
++      "coreComparison": "match_selected_scope",
++      "coreMismatches": []
++    }
++  ],
++  "commitments": {
++    "status": "not_read_cpu_budget",
++    "rows": null
++  },
++  "status": "partial_cpu_budget",
++  "coreObservationRooms": [
++    "E3N59",
++    "E4N58"
++  ],
++  "requestedEndpointRows": 4,
++  "collectedEndpointRows": 4,
++  "cpuBeforeSerializationAndEmit": 2.4981476000029943,
++  "cooperativeBudget": true
++}
+diff --git a/references/PROVENANCE.json b/references/PROVENANCE.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..34d1dc829ddc72e4a9ced6cfa9736b9863d286c0
+--- /dev/null
++++ b/references/PROVENANCE.json
+@@ -0,0 +1,18 @@
++{
++  "cpuSource": {
++    "commit": "43b1b8e51caca0c17b975971a71fbbb0951823bf",
++    "sourceLock": "references/source-lock.json",
++    "localInputPackageSha256": "0af7f4fcc759262ba9ea1adcb1cd0de816244e41f4cbda26ffe78683319ebf3f"
++  },
++  "formal0003": {
++    "packageSha256": "3fc8a713a577484600aaface97831ca04efbb9ba1369bdd373787a9c1660802d",
++    "source": "user-provided original ZIP; not a new deployment approval"
++  },
++  "recoveryRemediation": {
++    "commit": "0b09414f90c7144bbff61758fe7cf605576231e7",
++    "packageSha256": "9e4201a214d641caf5fe93941edb1df71a73a4407bf4cb91c687d5f11740914a",
++    "reuse": "single-layer decoder, recovery-only observer and raw-runtime verifier; requires and session wiring adapted"
++  },
++  "upstreamChangesRecorded": "all shipped runtime/tools source is explicitly a new integrated version unless hashes match old input",
++  "productionFunctions": "not modified; only config transiently bound at execution time"
++}
+diff --git a/references/deployGuard.cjs b/references/deployGuard.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8
+--- /dev/null
++++ b/references/deployGuard.cjs
+@@ -0,0 +1,129 @@
++// 部署守卫（阶段 B）：构建身份采集、脏工作树拒绝、bundle 内容哈希与上传回读比对。
++//
++// 背景：2026-08-24 的失真（lastDeployTag=2026.8.24-3+907f837 但线上内容=6fc4bf2）
++// 根因是"先构建 push、后提交"的工作流：buildGitHash 取 HEAD 引用（纯 docs 提交
++// 907f837），而 version 与编译内容来自 dirty working tree（6fc4bf2 的未提交内容，
++// package.json 已手改为 2026.8.24-3）。本模块把"可部署的 git 状态"与"内容身份"
++// 变成显式契约：生产 push 要求 clean tree + 可解析 HEAD + 明确的目标 branch，
++// 上传后回读远端 modules 做哈希比对。
++//
++// 纯函数库：rollup.config.js（ESM）与 Jest 测试共用，不直接执行 git 命令
++// （命令执行由调用方注入，便于测试）。
++const { createHash } = require("node:crypto");
++
++const DEPLOY_GUARD_ERROR = "DEPLOY_GUARD";
++
++/** 解析 `git status --porcelain` 输出。untracked 文件计入 dirty（可能被 rollup 编译进产物）。 */
++function parseGitStatusPorcelain(output) {
++  const entries = String(output ?? "")
++    .split("\n")
++    .map((line) => line.trimEnd())
++    .filter(Boolean);
++  return {
++    entries,
++    dirty: entries.length > 0,
++    staged: entries.some((line) => line[0] !== " " && line[0] !== "?"),
++    untracked: entries.some((line) => line.startsWith("??")),
++  };
++}
++
++/**
++ * 生产部署前置检查。
++ *
++ * @param {object} input
++ * @param {string} input.statusOutput `git status --porcelain` 原始输出
++ * @param {string} input.headSha `git rev-parse HEAD`（空 = 无法解析）
++ * @param {string} input.currentBranch `git branch --show-current`（空 = detached）
++ * @param {string} input.configuredBranch .secret.json 的 branch（可为 "auto"）
++ * @param {boolean} input.allowDirty 显式开发 override（DEPLOY_ALLOW_DIRTY=1）
++ * @returns {{ branch: string, dirty: boolean, status: ReturnType<parseGitStatusPorcelain> }}
++ */
++function assertDeployableGitState({ statusOutput, headSha, currentBranch, configuredBranch, allowDirty }) {
++  const status = parseGitStatusPorcelain(statusOutput);
++  const errors = [];
++
++  if (!headSha) {
++    errors.push("HEAD cannot be resolved (git rev-parse HEAD returned nothing)");
++  }
++  if (status.dirty && !allowDirty) {
++    errors.push(
++      `working tree is dirty (${status.entries.length} uncommitted/untracked entries; ` +
++        "commit them or use DEST:local; production canary must deploy from a clean tree)",
++    );
++  }
++
++  let branch = configuredBranch;
++  if (configuredBranch === "auto") {
++    if (!currentBranch) {
++      errors.push(
++        "detached HEAD or ambiguous branch mapping: cannot determine target Screeps branch (branch=auto)",
++      );
++    } else {
++      branch = currentBranch;
++    }
++  }
++
++  if (errors.length > 0) {
++    const error = new Error(`deploy guard rejected the build:\n  - ${errors.join("\n  - ")}`);
++    error.code = DEPLOY_GUARD_ERROR;
++    error.errors = errors;
++    throw error;
++  }
++
++  return { branch: branch || "default", dirty: status.dirty };
++}
++
++/**
++ * 计算 modules 内容哈希（本地组装与远端回读使用同一规范化，哈希即可比对）：
++ * module 名排序后逐个以 NUL 分隔写入 key 与内容；binary module 写 "bin:" 前缀 + base64。
++ * @param {Record<string, string | { binary: string }>} modules
++ * @returns {string} hex SHA-256
++ */
++function computeModulesHash(modules) {
++  const hash = createHash("sha256");
++  for (const key of Object.keys(modules).sort()) {
++    const value = modules[key];
++    hash.update(key);
++    hash.update("\0");
++    if (typeof value === "string") {
++      hash.update(value);
++    } else if (value && typeof value.binary === "string") {
++      hash.update("bin:");
++      hash.update(value.binary);
++    } else {
++      hash.update(JSON.stringify(value ?? null));
++    }
++    hash.update("\0");
++  }
++  return hash.digest("hex");
++}
++
++/** 上传后回读比对：返回一致性与逐 module 差异（不抛错，由调用方决定退出码）。 */
++function diffRemoteModules(localModules, remoteModules) {
++  const localKeys = new Set(Object.keys(localModules));
++  const remoteKeys = new Set(Object.keys(remoteModules ?? {}));
++  const missing = [...localKeys].filter((key) => !remoteKeys.has(key));
++  const extra = [...remoteKeys].filter((key) => !localKeys.has(key));
++  const changed = [...localKeys]
++    .filter((key) => remoteKeys.has(key))
++    .filter((key) => {
++      const local = localModules[key];
++      const remote = remoteModules[key];
++      if (typeof local === "string" && typeof remote === "string") {
++        return local !== remote;
++      }
++      return JSON.stringify(local) !== JSON.stringify(remote);
++    });
++  const localHash = computeModulesHash(localModules);
++  const remoteHash = remoteModules ? computeModulesHash(remoteModules) : null;
++  return {
++    match: remoteHash === localHash,
++    localHash,
++    remoteHash,
++    missing,
++    extra,
++    changed,
++  };
++}
++
++module.exports = { DEPLOY_GUARD_ERROR, parseGitStatusPorcelain, assertDeployableGitState, computeModulesHash, diffRemoteModules };
+diff --git a/references/source-lock.json b/references/source-lock.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..3df5706ada835837b990ae853cfd4b06ecdb8447
+--- /dev/null
++++ b/references/source-lock.json
+@@ -0,0 +1,28 @@
++{
++  "src/runtime/treasuryCompatCpu.ts": {
++    "blob": "46ba986151dd115250e1c5bebd95c970c0fcf9af",
++    "sha256": "103e7a3e115fcc885fc337b91e7336cdb2cd3e890524f0c8b4d2f4082c0207ef"
++  },
++  "src/runtime/treasuryCompatRuntime.ts": {
++    "blob": "5916fbcafbb88d40cf5463d329b683ba0d776ad8",
++    "sha256": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4"
++  },
++  "src/runtime/treasuryCompatTypes.ts": {
++    "blob": "e75b04491ad8da3fc12d147bacb014c6b76b09da",
++    "sha256": "9656db9481cd9f513d617bb557fd1874fbf25c4c2a4054aefae77e0362610cad"
++  },
++  "src/runtime/treasuryCompatConfig.ts": {
++    "blob": "8e2214fef5a6a69b7eb40c82eee76dda1646ccbf",
++    "sha256": "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02"
++  },
++  "src/runtime/treasuryCompatRead.ts": {
++    "blob": "7d0c31cc40209f3839b0df32509a63cfe910c456",
++    "sha256": "c14efedac18f865e1bf04fb5ce3ea8c954598f69add84fa0646b4c5470273d03"
++  },
++  "src/runtime/treasuryCompatReadCore.generated.ts": {
++    "blob": "c44d8a306f2b11986c6556e098be7d2e10315fa6"
++  },
++  "test/treasury-compat/helpers.cjs": {
++    "blob": "f7406cf25124324069c08a444683d383477e0a23"
++  }
++}
+diff --git a/references/test-contract.json b/references/test-contract.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..ad720b0ed2dd3b6c8a0b450a9d1ce727f9721acf
+--- /dev/null
++++ b/references/test-contract.json
+@@ -0,0 +1,11 @@
++{
++  "count": 96,
++  "files": [
++    "tests/diagnostics.spec.cjs",
++    "tests/process.spec.cjs",
++    "tests/recovery.spec.cjs",
++    "tests/transport.spec.cjs",
++    "tests/workflow.spec.cjs"
++  ],
++  "countsAreNotAddedToRepositoryJestBudget": true
++}
+diff --git a/references/treasuryCompatConfig.ts b/references/treasuryCompatConfig.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..8e2214fef5a6a69b7eb40c82eee76dda1646ccbf
+--- /dev/null
++++ b/references/treasuryCompatConfig.ts
+@@ -0,0 +1,16 @@
++import type { CompatConfig } from "./treasuryCompatTypes";
++/** Both enabled and the absolute tick window must be bound before any rollout.
++ * This default is OFF. No Memory or environment-variable override. */
++export const TREASURY_COMPAT_CONFIG: CompatConfig = Object.freeze({
++  enabled: false,
++  shardName: "",
++  rooms: Object.freeze([] as string[]),
++  resources: Object.freeze(["energy", "H"]),
++  startTick: 0,
++  endTick: 0,
++  intervalTicks: 100,
++  minBucket: 2000,
++  maxSampleCpu: 2,
++  reserveCpu: 5,
++  maxLogBytes: 16384,
++});
+diff --git a/references/treasuryCompatCpu.ts b/references/treasuryCompatCpu.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..46ba986151dd115250e1c5bebd95c970c0fcf9af
+--- /dev/null
++++ b/references/treasuryCompatCpu.ts
+@@ -0,0 +1,54 @@
++/** Bounded diagnostic accounting, NOT an authorization or CPU-budget authority.
++ * Values come only from the caller's existing CPU port. Probe/diagnostic overhead
++ * remains in cumulative costs; no estimated overhead is subtracted. No Game,
++ * Memory, module loading, clocks, I/O or persistent cache are used here.
++ */
++export const COMPAT_CPU_PHASES = Object.freeze([
++  "legacyInputs", "directRead", "readerLoad", "observationBuild",
++  "coreCompare", "commitmentBuild", "commitmentProjection", "report",
++  "serializationAndSize", "emit", "retention",
++] as const);
++export type CompatCpuPhase = typeof COMPAT_CPU_PHASES[number];
++export type CompatCpuCall = "readerLoad" | "observationBuild" | "commitmentBuild";
++export interface CompatCpuProfile {
++  readonly version: 1;
++  readonly tick: number;
++  readonly sampleOrdinal: number;
++  readonly boundary: "beforeSerialization" | "afterRetention" | "fault";
++  readonly elapsed: number;
++  readonly checkpoints: number;
++  readonly calls: Readonly<Record<CompatCpuCall, number>>;
++  readonly phases: Readonly<Partial<Record<CompatCpuPhase, number>>>;
++}
++/** One instance per admitted sample; snapshots contain primitive values only.
++ * Each interval is charged to the phase that was active BEFORE the checkpoint.
++ * Unvisited phases are absent, not invented zero-cost measurements.
++ * Phase costs are inclusive intervals, not profiler-overhead-corrected timings.
++ */
++export function createCompatCpuAccounting(start: number, tick: number, sampleOrdinal: number) {
++  if (![start, tick, sampleOrdinal].every(Number.isFinite) || start < 0
++    || !Number.isSafeInteger(tick) || tick < 0
++    || !Number.isSafeInteger(sampleOrdinal) || sampleOrdinal < 1) throw new Error("invalid CPU accounting start");
++  let last = start, phase: CompatCpuPhase = "legacyInputs", checkpoints = 1;
++  const phases: Partial<Record<CompatCpuPhase, number>> = { legacyInputs: 0 };
++  const calls: Record<CompatCpuCall, number> = { readerLoad: 0, observationBuild: 0, commitmentBuild: 0 };
++  return {
++    checkpoint(used: number, next?: CompatCpuPhase): void {
++      if (!Number.isFinite(used) || used < last || !COMPAT_CPU_PHASES.includes(next ?? phase))
++        throw new Error("invalid CPU accounting checkpoint");
++      phases[phase] = (phases[phase] ?? 0) + (used - last);
++      last = used;
++      checkpoints++;
++      if (next) { phase = next; phases[phase] ??= 0; }
++    },
++    invoked(call: CompatCpuCall): void {
++      if (!Object.prototype.hasOwnProperty.call(calls, call) || calls[call] !== 0)
++        throw new Error("invalid CPU diagnostic invocation");
++      calls[call]++;
++    },
++    snapshot(boundary: CompatCpuProfile["boundary"]): CompatCpuProfile {
++      return Object.freeze({ version: 1, tick, sampleOrdinal, boundary, elapsed: last - start,
++        checkpoints, calls: Object.freeze({ ...calls }), phases: Object.freeze({ ...phases }) });
++    },
++  };
++}
+diff --git a/references/treasuryCompatRead.ts b/references/treasuryCompatRead.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..7d0c31cc40209f3839b0df32509a63cfe910c456
+--- /dev/null
++++ b/references/treasuryCompatRead.ts
+@@ -0,0 +1,316 @@
++/** Read compatibility preview for the old production bot, not a Treasury host.
++ * Reuses pinned production observation/commitment builders. Never computes a
++ * spendable balance, signs a permit, migrates a store or advances world sequence.
++ * One endpoint snapshot and one bounded CPU profile are retained. Reader caches
++ * remain per sample; diagnostic profiles never contain a linked history.
++ */
++import type { CompatConfig, CompatPorts, CompatObservation } from "./treasuryCompatTypes";
++import { createCompatCpuAccounting, type CompatCpuPhase, type CompatCpuProfile } from "./treasuryCompatCpu";
++
++type Rec = Record<string, unknown>;
++type Kind = "storage" | "terminal";
++const KINDS: readonly Kind[] = ["storage", "terminal"];
++const TABLE_LIMIT = 256;
++const sat = (n: number) => Math.min(n + 1, 999999999);
++const obj = (x: unknown): x is Rec => typeof x === "object" && x !== null && !Array.isArray(x);
++const nonneg = (x: unknown): x is number => typeof x === "number" && Number.isSafeInteger(x) && x >= 0;
++const finite = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x) && x >= 0;
++const own = (x: Rec, k: string) => Object.prototype.hasOwnProperty.call(x, k);
++const str = (x: unknown, n: number): x is string => typeof x === "string" && x.length > 0 && x.length <= n;
++
++export function validCompatConfig(c: CompatConfig): boolean {
++  return obj(c) && typeof c.enabled === "boolean" && str(c.shardName, 32)
++    && Array.isArray(c.rooms) && c.rooms.length > 0 && c.rooms.length <= 2
++    && c.rooms.every(r => typeof r === "string" && /^[WE]\d{1,3}[NS]\d{1,3}$/.test(r))
++    && new Set(c.rooms).size === c.rooms.length
++    && Array.isArray(c.resources) && c.resources.length > 0 && c.resources.length <= 4
++    && c.resources.every(r => typeof r === "string" && /^[A-Za-z0-9_]{1,32}$/.test(r))
++    && new Set(c.resources).size === c.resources.length
++    && nonneg(c.startTick) && nonneg(c.endTick) && c.endTick > c.startTick
++    && c.endTick - c.startTick <= 1200
++    && nonneg(c.intervalTicks) && c.intervalTicks >= 20 && c.intervalTicks <= 1000
++    && Math.ceil(c.startTick / c.intervalTicks) * c.intervalTicks <= c.endTick
++    && nonneg(c.minBucket) && c.minBucket <= 10000
++    && finite(c.maxSampleCpu) && c.maxSampleCpu > 0 && c.maxSampleCpu <= 10
++    && finite(c.reserveCpu) && c.reserveCpu >= 1 && c.reserveCpu <= 100
++    && nonneg(c.maxLogBytes) && c.maxLogBytes >= 1024 && c.maxLogBytes <= 16384;
++}
++export function compatUtf8Bytes(s: string): number {
++  let n = 0;
++  for (let i = 0; i < s.length; i++) {
++    const a = s.charCodeAt(i);
++    if (a < 128) n++;
++    else if (a < 2048) n += 2;
++    else if (a >= 0xd800 && a <= 0xdbff && i + 1 < s.length
++      && s.charCodeAt(i + 1) >= 0xdc00 && s.charCodeAt(i + 1) <= 0xdfff) { n += 4; i++; }
++    else n += 3;
++  }
++  return n;
++}
++/** Own-property path read. Missing, null, array, damaged parents and empty object
++ * remain distinct. No ensure()/normalizer or getter invocation on table entries. */
++function pathValue(root: unknown, path: readonly string[]): { status: string; value?: unknown } {
++  let p = root;
++  for (const key of path) {
++    if (!obj(p)) return { status: "invalid_parent" };
++    if (!own(p, key)) return { status: "absent" };
++    const desc = Object.getOwnPropertyDescriptor(p, key);
++    if (!desc || !("value" in desc)) return { status: "accessor_unreadable" };
++    p = desc.value;
++  }
++  return { status: "present", value: p };
++}
++function table(root: unknown, path: readonly string[]) {
++  const found = pathValue(root, path);
++  if (found.status !== "present") return { status: found.status, count: null, value: undefined };
++  if (!obj(found.value)) return { status: "invalid_container", count: null, value: undefined };
++  // Stop enumeration at bound+1. Never aggregate a selected prefix as the table.
++  let count = 0;
++  for (const key in found.value) {
++    if (!own(found.value, key)) continue;
++    const descriptor = Object.getOwnPropertyDescriptor(found.value, key);
++    if (!descriptor || !("value" in descriptor)) return { status: "accessor_unreadable", count: null, value: undefined };
++    if (++count > TABLE_LIMIT) return { status: "over_bound", count: null, value: undefined };
++  }
++  return { status: count === 0 ? "empty" : "nonempty", count, value: found.value };
++}
++function summary(s: { status: string; count: number | null }) { return { status: s.status, count: s.count }; }
++type Direct = { id: string; used: number; free: number; capacity: number;
++  overCapacity: boolean; active: boolean; cooldown: number | null; amounts: Record<string, number> };
++function direct(room: Room | undefined, kind: Kind, resources: readonly string[]): { status: string; value?: Direct } {
++  try {
++    if (!room) return { status: "not_visible" };
++    if (room.controller?.my !== true) return { status: "not_owned" };
++    const s = room[kind];
++    if (!s) return { status: "absent" };
++    if (s.my !== true || !str(s.id, 96) || !s.store || typeof s.isActive !== "function") return { status: "unreadable" };
++    const used = s.store.getUsedCapacity(), free = s.store.getFreeCapacity(), capacity = s.store.getCapacity();
++    const active = s.isActive(), cooldown = kind === "terminal" ? (s as StructureTerminal).cooldown : null;
++    // Capacity reduction may leave inventory above capacity. Preserve signed
++    // free or a saturated zero, rather than inventing capacity=used+free.
++    if (!nonneg(used) || !nonneg(capacity) || !Number.isSafeInteger(free)
++      || !(used + free === capacity || (used > capacity && free === 0))
++      || typeof active !== "boolean" || (kind === "terminal" && !nonneg(cooldown))) return { status: "unreadable" };
++    const amounts: Record<string, number> = Object.create(null);
++    for (const r of resources) {
++      const a = s.store.getUsedCapacity(r as ResourceConstant);
++      if (!nonneg(a) || a > used) return { status: "unreadable" };
++      amounts[r] = a;
++    }
++    if (Object.values(amounts).reduce((a, b) => a + b, 0) > used) return { status: "unreadable" };
++    return { status: "ok", value: { id: s.id, used, free, capacity, overCapacity: used > capacity,
++      active, cooldown, amounts } };
++  } catch { return { status: "unreadable" }; }
++}
++function legacyProjection(memory: unknown, room: string, kind: Kind, d: Direct, tick: number) {
++  const raw = pathValue(memory, ["runtime", "resourceControl"]);
++  if (raw.status !== "present") return { status: raw.status };
++  if (!obj(raw.value) || !nonneg(raw.value.updatedAt)) return { status: "unreadable" };
++  if (raw.value.updatedAt !== tick) return { status: raw.value.updatedAt > tick ? "future_tick" : "stale",
++    updatedAt: raw.value.updatedAt, comparisonPerformed: false };
++  const row = pathValue(raw.value, ["rooms", room]);
++  if (row.status !== "present") return { status: row.status, comparisonPerformed: false };
++  if (!obj(row.value)) return { status: "unreadable" };
++  const fields: Record<string, number> = { [kind + "UsedCapacity"]: d.used, [kind + "FreeCapacity"]: d.free };
++  if (own(d.amounts, "energy")) fields[kind + "Energy"] = d.amounts.energy;
++  const mismatches: string[] = [];
++  for (const key of Object.keys(fields)) {
++    if (!Number.isSafeInteger(row.value[key])) return { status: "unreadable", comparisonPerformed: false };
++    if (row.value[key] !== fields[key]) mismatches.push(key);
++  }
++  return { status: mismatches.length ? "mismatch" : "match_capacity_and_selected_energy",
++    updatedAt: raw.value.updatedAt, comparisonPerformed: true, mismatches };
++}
++
++type Previous = { tick: number; endpoints: Record<string, Direct> };
++export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPorts,
++  options: { cpuDiagnostics?: boolean } = {}) {
++  const cpuDiagnostics = options?.cpuDiagnostics === true;
++  let sampleOrdinal = 0, previousCpuProfile: CompatCpuProfile | null = null;
++  let cfg = input, enabled = false, invalid = false;
++  try {
++    enabled = input.enabled === true;
++    if (enabled) {
++      invalid = !validCompatConfig(input);
++      if (!invalid) cfg = Object.freeze({ ...input, rooms: Object.freeze([...input.rooms]), resources: Object.freeze([...input.resources]) });
++    }
++  } catch { invalid = true; }
++  let fault = false, lastTick: number | undefined, previous: Previous | undefined;
++  let emitted = 0, cpuSkips = 0;
++  let previousRun: { tick: number; cpuIncludingEmit: number; emittedBytes: number; retainedPrimitiveChars: number } | null = null;
++  function run(): { status: string } {
++    let tick: number | undefined;
++    let accounting: ReturnType<typeof createCompatCpuAccounting> | undefined;
++    try {
++      if (invalid) { fault = true; return { status: "invalid_config" }; }
++      if (!enabled) return { status: "disabled" };
++      if (fault) return { status: "disabled_after_fault" };
++      tick = ports.tick();
++      if (!nonneg(tick)) throw new Error("invalid tick");
++      if (tick < cfg.startTick || tick > cfg.endTick) { previous = undefined; return { status: "outside_window" }; }
++      if (tick % cfg.intervalTicks !== 0 || tick === lastTick) return { status: "not_due" };
++      lastTick = tick;
++      if (ports.shard() !== cfg.shardName) return { status: "wrong_shard" };
++      if (!cfg.resources.every(r => ports.resources().includes(r))) throw new Error("invalid resource");
++      const start = ports.cpu();
++      const validCpu = (c: ReturnType<CompatPorts["cpu"]>) => finite(c.used) && finite(c.tickLimit) && nonneg(c.bucket);
++      if (!validCpu(start)) throw new Error("invalid CPU");
++      if (start.bucket < cfg.minBucket || start.tickLimit - start.used < cfg.maxSampleCpu + cfg.reserveCpu) {
++        cpuSkips = sat(cpuSkips); return { status: "cpu_skipped" };
++      }
++      sampleOrdinal = sat(sampleOrdinal);
++      if (cpuDiagnostics) accounting = createCompatCpuAccounting(start.used, tick, sampleOrdinal);
++      let latestCpu = start.used;
++      const budget = (next?: CompatCpuPhase) => {
++        const c = ports.cpu();
++        if (!validCpu(c) || c.used < latestCpu) throw new Error("invalid CPU progression");
++        accounting?.checkpoint(c.used, next);
++        latestCpu = c.used;
++        return c.used - start.used < cfg.maxSampleCpu && c.tickLimit - c.used >= cfg.reserveCpu && c.bucket >= cfg.minBucket;
++      };
++      const memory = ports.memory();
++      const tasks = table(memory, ["data", "resourceControl", "tasks"]);
++      const reservations = table(memory, ["runtime", "resourceReservations"]);
++      const marker = pathValue(memory, ["runtime", "resourceReservationsOwnerVersion"]);
++      const existingCore = pathValue(memory, ["runtime", "treasuryCore"]);
++      const report: Rec = { kind: "treasury-legacy-read-bridge", tick, shard: cfg.shardName,
++        sourceCommit: "01bd9831454950c4928df98dd8679692b55603e5", productionBase: "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
++        authorizesActions: false, scope: { rooms: [...cfg.rooms], resources: [...cfg.resources], isEmpireTotal: false },
++        evaluation: "observation_and_legacy_commitments_only", facadeQueryRun: false,
++        spendable: null, kernelLifecycleRun: false, storageMode: "heap_only", previousRun,
++        legacyInputs: { tasks: summary(tasks), reservations: summary(reservations),
++          reservationVersion: { status: marker.status, value: nonneg(marker.value) ? marker.value : null },
++          treasuryCore: { status: existingCore.status === "present" ? "present_not_interpreted" : existingCore.status, activeCount: null } },
++      };
++      const rows: Rec[] = []; report.endpoints = rows;
++      const validRooms: Room[] = [];
++      const next: Previous = { tick, endpoints: Object.create(null) };
++      let limited = false, observations: CompatObservation | undefined;
++      for (const name of cfg.rooms) {
++        if (!budget("directRead")) { limited = true; break; }
++        const room = ports.room(name);
++        let safe = true;
++        for (const kind of KINDS) {
++          if (!budget()) { limited = true; safe = false; break; }
++          const d = direct(room, kind, cfg.resources);
++          const row: Rec = { room: name, location: kind, directStatus: d.status };
++          rows.push(row);
++          if (d.status !== "ok" && d.status !== "absent") safe = false;
++          if (d.value) {
++            row.direct = d.value;
++            row.legacyProjection = legacyProjection(memory, name, kind, d.value, tick);
++            const key = name + ":" + kind, old = previous?.endpoints[key];
++            next.endpoints[key] = d.value;
++            if (!old || !previous) row.change = { status: "no_comparable_previous_sample" };
++            else if (old.id !== d.value.id || old.capacity !== d.value.capacity) row.change = { status: "endpoint_or_capacity_changed" };
++            else if (tick <= previous.tick || tick - previous.tick > cfg.intervalTicks * 3) row.change = { status: "gap_not_comparable" };
++            else row.change = { status: "net_change_unattributed", fromTick: previous.tick, toTick: tick,
++              amounts: Object.fromEntries(cfg.resources.map(r => [r, d.value!.amounts[r] - old.amounts[r]])) };
++          }
++        }
++        if (safe && room && room.controller?.my === true) validRooms.push(room);
++      }
++      // Build from actual Game room objects, NOT from the just-produced direct
++      // numbers or legacy Memory projection. Independently enumerates Store keys.
++      let readers: ReturnType<CompatPorts["readers"]> | undefined;
++      if (validRooms.length && budget("readerLoad")) {
++        accounting?.invoked("readerLoad");
++        readers = ports.readers();
++        if (budget("observationBuild")) {
++          accounting?.invoked("observationBuild");
++          observations = readers.buildObservation({ scope: "market-fresh", epochSeq: 1, rooms: validRooms });
++        } else limited = true;
++      } else if (!budget()) limited = true;
++      // Diagnostic-only extra checkpoint: its cost is NOT removed from budget.
++      if (accounting && !budget("coreCompare")) limited = true;
++      if (observations && observations.epoch.observedAtTick !== tick) throw new Error("stale builder");
++      const included = new Set(validRooms.map(r => r.name));
++      for (const row of rows) {
++        if (!observations || !included.has(row.room as string)) { row.coreComparison = "not_read"; continue; }
++        const o = observations.location(row.room as string, row.location as Kind), d = row.direct as Direct | undefined;
++        if (!d) { row.coreComparison = row.directStatus === "absent" && !o.exists ? "both_absent" : "existence_mismatch"; continue; }
++        const mismatch: string[] = [];
++        if (!o.exists || o.structureId !== d.id) mismatch.push("structure");
++        if (o.usedCapacity !== d.used) mismatch.push("usedCapacity");
++        if (o.freeCapacity !== d.free) mismatch.push("freeCapacity");
++        for (const r of cfg.resources) if ((o.amounts[r] ?? 0) !== d.amounts[r]) mismatch.push(r);
++        row.coreComparison = mismatch.length ? "mismatch" : "match_selected_scope";
++        row.coreMismatches = mismatch;
++      }
++      report.commitments = { status: "not_read", rows: null };
++      // Never manufacture empty inputs from missing/damaged/over-bound tables.
++      if (!tasks.value || !reservations.value) report.commitments = { status: "unavailable_legacy_input", rows: null };
++      else if (readers && observations && budget("commitmentBuild")) {
++        accounting?.invoked("commitmentBuild");
++        const index = readers.buildCommitments({ tick, tasks: tasks.value, reservations: reservations.value, observation: observations });
++        const fields: Rec[] = [];
++        for (const name of validRooms.map(r => r.name)) for (const resource of cfg.resources) {
++          if (!budget("commitmentProjection")) { limited = true; break; }
++          const outgoing = index.outgoing(name, resource), incoming = index.incoming(name, resource), reserved = index.reservedProduction(name, resource);
++          if (![outgoing, incoming, reserved].every(nonneg)) throw new Error("invalid index numbers");
++          fields.push({ room: name, resource, scope: "room_not_endpoint", outgoing, incoming,
++            productionReserved: reserved, completeness: index.commitmentCompleteness(name, resource) });
++        }
++        const c = index.completeness;
++        if (!c || typeof c.complete !== "boolean" || typeof c.globalIncomplete !== "boolean"
++          || !nonneg(c.invalidRecords) || !nonneg(c.incompleteScopeCount)) throw new Error("invalid index health");
++        report.commitments = { status: limited ? "partial_cpu_budget" : c.complete ? "read_complete" : "read_incomplete",
++          rows: fields, completeness: { ...c }, allTableScan: true, tableLimitEach: TABLE_LIMIT };
++      } else if (!budget()) { limited = true; report.commitments = { status: "not_read_cpu_budget", rows: null }; }
++      if (!budget("report")) limited = true;
++      report.status = limited ? "partial_cpu_budget" : "sampled";
++      report.coreObservationRooms = validRooms.filter(() => !!observations).map(r => r.name);
++      report.requestedEndpointRows = cfg.rooms.length * 2;
++      report.collectedEndpointRows = rows.length;
++      if (accounting && !budget("serializationAndSize")) report.status = "partial_cpu_budget";
++      report.cpuBeforeSerializationAndEmit = latestCpu - start.used;
++      if (accounting) {
++        // Prefix of THIS sample. Serialization/emit are not known yet. The full
++        // completed measurement is published only by the NEXT emitted sample.
++        report.cpuProfile = accounting.snapshot("beforeSerialization");
++        report.previousCpuProfile = previousCpuProfile;
++      }
++      report.cooperativeBudget = true;
++      let line = JSON.stringify(report), status = report.status as string;
++      // One UTF-8 traversal per distinct output string. Reuse the size after
++      // emit instead of rescanning the identical (immutable) string.
++      let emittedBytes = compatUtf8Bytes(line);
++      if (emittedBytes > cfg.maxLogBytes) {
++        status = "output_limited";
++        line = JSON.stringify({ kind: "treasury-legacy-read-bridge", tick, status,
++          authorizesActions: false, previousRun });
++        emittedBytes = compatUtf8Bytes(line);
++      }
++      // Post-serialization sampling cannot retroactively change this report.
++      // The following sample carries the measured total, even when over budget.
++      if (accounting) budget("emit");
++      ports.emit(line);
++      const end = ports.cpu();
++      if (!validCpu(end) || end.used < latestCpu) throw new Error("invalid ending CPU");
++      accounting?.checkpoint(end.used, "retention");
++      latestCpu = end.used;
++      previous = status === "output_limited" ? undefined : next;
++      previousRun = { tick, cpuIncludingEmit: end.used - start.used, emittedBytes,
++        retainedPrimitiveChars: previous ? JSON.stringify(previous).length : 0 };
++      emitted = sat(emitted);
++      if (accounting) {
++        // Includes previous-snapshot sizing/bookkeeping. The final snapshot
++        // copy and return are outside the endpoint and explicitly not claimed.
++        budget();
++        previousCpuProfile = accounting.snapshot("afterRetention");
++      }
++      return { status };
++    } catch {
++      fault = true; previous = undefined;
++      // A fault snapshot stops at the last VALID checkpoint; never guess the
++      // cost of a throwing stage or the catch/reporting path.
++      if (accounting) previousCpuProfile = accounting.snapshot("fault");
++      try { ports.emit(JSON.stringify({ kind: "treasury-legacy-read-bridge", tick: nonneg(tick) ? tick : null,
++        status: "fault_disabled", authorizesActions: false })); } catch { /* Do not stop old bot. */ }
++      return { status: "fault_disabled" };
++    }
++  }
++  return { run, stats: () => ({ fault, emitted, cpuSkips, retainedEndpoints: previous ? Object.keys(previous.endpoints).length : 0,
++    previousRun: previousRun ? { ...previousRun } : null,
++    cpuProfile: previousCpuProfile }) };
++}
+diff --git a/references/treasuryCompatRuntime.ts b/references/treasuryCompatRuntime.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..5916fbcafbb88d40cf5463d329b683ba0d776ad8
+--- /dev/null
++++ b/references/treasuryCompatRuntime.ts
+@@ -0,0 +1,16 @@
++import { TREASURY_COMPAT_CONFIG } from "./treasuryCompatConfig";
++import { createTreasuryCompatPreview } from "./treasuryCompatRead";
++import { createCompatibilityReadCore } from "./treasuryCompatReadCore.generated";
++/** This is attached to the OLD main, with no getTreasuryService()/begin/end.
++ * Factory definitions are lazy. A disabled observer never opens read modules. */
++const preview = createTreasuryCompatPreview(TREASURY_COMPAT_CONFIG, {
++  tick: () => Game.time,
++  shard: () => Game.shard.name,
++  cpu: () => ({ used: Game.cpu.getUsed(), tickLimit: Game.cpu.tickLimit, bucket: Game.cpu.bucket }),
++  room: name => Game.rooms[name],
++  memory: () => Memory,
++  resources: () => RESOURCES_ALL,
++  readers: createCompatibilityReadCore,
++  emit: line => console.log(line),
++}, { cpuDiagnostics: true });
++export function runTreasuryCompatRead(): void { preview.run(); }
+diff --git a/references/treasuryCompatTypes.ts b/references/treasuryCompatTypes.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..e75b04491ad8da3fc12d147bacb014c6b76b09da
+--- /dev/null
++++ b/references/treasuryCompatTypes.ts
+@@ -0,0 +1,48 @@
++/** Structural read ports only. No TreasuryService, lifecycle or dispatch API. */
++export interface CompatConfig {
++  readonly enabled: boolean;
++  readonly shardName: string;
++  readonly rooms: readonly string[];
++  readonly resources: readonly string[];
++  readonly startTick: number;
++  readonly endTick: number;
++  readonly intervalTicks: number;
++  readonly minBucket: number;
++  readonly maxSampleCpu: number;
++  readonly reserveCpu: number;
++  readonly maxLogBytes: number;
++}
++export interface CompatObservation {
++  readonly epoch: { readonly observedAtTick: number };
++  location(room: string, kind: "storage" | "terminal"): {
++    readonly exists: boolean; readonly structureId?: string;
++    readonly amounts: Readonly<Record<string, number>>;
++    readonly usedCapacity: number; readonly freeCapacity: number;
++  };
++}
++export interface CompatIndex {
++  readonly completeness: { readonly complete: boolean; readonly globalIncomplete: boolean;
++    readonly incompleteScopeCount: number; readonly invalidRecords: number };
++  readonly metrics: Readonly<Record<string, number | boolean>>;
++  outgoing(room: string, resource: string): number;
++  incoming(room: string, resource: string): number;
++  reservedProduction(room: string, resource: string): number;
++  commitmentCompleteness(room: string, resource: string): string;
++}
++export interface CompatReadBuilders {
++  buildObservation(options: { scope: "market-fresh"; epochSeq: number;
++    rooms: readonly Room[] }): CompatObservation;
++  buildCommitments(options: { tick: number; tasks: Record<string, unknown>;
++    reservations: Record<string, unknown>; observation: CompatObservation }): CompatIndex;
++}
++export interface CompatPorts {
++  tick(): number;
++  shard(): string;
++  cpu(): { used: number; tickLimit: number; bucket: number };
++  room(name: string): Room | undefined;
++  memory(): unknown;
++  resources(): readonly string[];
++  /** New module-local read cache per sample: old writers do NOT bump new revisions. */
++  readers(): CompatReadBuilders;
++  emit(line: string): void;
++}
+diff --git a/tests/diagnostics.spec.cjs b/tests/diagnostics.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..110ed44be2beba1e7ed9570437e8bcff3ea9a8fd
+--- /dev/null
++++ b/tests/diagnostics.spec.cjs
+@@ -0,0 +1,35 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const F=require('./fixture.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs'),D=require('../runtime/decoder.cjs'),W=require('../runtime/samples.cjs');
++const copy=C.clone;
++test('fixed profile has four fresh points with unchanged budget and bounded absolute window',()=>{
++ const p=K.profileFor(73646525);assert.deepEqual(K.dueTicks(p),[73646700,73646800,73646900,73647000]);assert.equal(p.maxSampleCpu,2);assert.equal(p.reserveCpu,5);});
++for(const field of ['maxSampleCpu','endTick','intervalTicks','minBucket','reserveCpu'])test('profile rejects changed '+field,()=>{const p=K.profileFor(1000);p[field]++;assert.throws(()=>K.validProfile(p));});
++test('raw JSON is not destructively entity-decoded',()=>{const text=JSON.stringify({kind:'treasury-legacy-read-bridge',note:'&#x22; &amp;'});assert.equal(D.parseBridge(text).jsonText,text);assert.equal(D.parseBridge(text).report.note,'&#x22; &amp;');});
++for(const entity of ['&quot;','&#34;','&#x22;','&#X22;'])test('accepts one transport escape layer '+entity,()=>{const text=JSON.stringify({kind:'treasury-legacy-read-bridge',tick:1});const p=D.parseBridge(text.replaceAll('"',entity));assert.equal(p.kind,'bridge');assert.equal(p.jsonText,text);});
++test('double encoded JSON is rejected rather than recursively repaired',()=>{const t=JSON.stringify({kind:'treasury-legacy-read-bridge'}).replaceAll('"','&amp;#x22;');assert.equal(D.parseBridge(t).kind,'invalid');});
++for(const entity of ['&#x110000;','&#xD800;','&#0;','&#99999999999;'])test('bad Unicode entity fails '+entity,()=>assert.throws(()=>D.decodeHtmlOnce(entity)));
++test('actual old partial report is decoded but never a complete sample or new diagnostic',()=>{const r=require('../references/0003-first-report.json'),p=D.parseBridge(JSON.stringify(r).replaceAll('"','&#x22;'));assert.equal(p.kind,'bridge');assert.equal(p.report.status,'partial_cpu_budget');assert.equal(W.sampleError(p.report,K.profileFor(1000)),'SAMPLE_NOT_COMPLETE');});
++test('actual accepted CPU reader emits four valid prefix and three linked tail profiles',()=>{const s=F.session(),a=F.reports(s);assert.equal(a.length,4);a.forEach((r,i)=>{assert.equal(W.diagnosticError(r,s.profile,i,a[i-1],i?JSON.stringify(a[i-1]):null),null);assert.equal(W.sampleError(r,s.profile),null);});});
++test('partial CPU first point is useful diagnosis and does not count as complete',()=>{const s=F.session(),a=F.reports(s,{partialFirst:true});assert.equal(a[0].status,'partial_cpu_budget');assert.equal(a[0].cpuProfile.calls.commitmentBuild,0);a.forEach((r,i)=>assert.equal(W.diagnosticError(r,s.profile,i,a[i-1],i?JSON.stringify(a[i-1]):null),null));assert.equal(W.sampleError(a[0],s.profile),'SAMPLE_NOT_COMPLETE');});
++test('four partial CPU points remain useful but none complete',()=>{const s=F.session(),a=F.reports(s,{partialAll:true});assert.ok(a.every(r=>r.status==='partial_cpu_budget'));a.forEach((r,i)=>assert.equal(W.diagnosticError(r,s.profile,i,a[i-1],i?JSON.stringify(a[i-1]):null),null));});
++for(const[name,mutate]of [
++ ['budget authority',r=>r.authorizesActions=true],['missing profile',r=>delete r.cpuProfile],['wrong ordinal',r=>r.cpuProfile.sampleOrdinal=2],
++ ['wrong source',r=>r.sourceCommit='e'.repeat(40)],['future cost',r=>r.cpuProfile.phases.emit=1],['invalid phase',r=>r.cpuProfile.phases.unknown=0],
++ ['bad call count',r=>r.cpuProfile.calls.readerLoad=2],['nonfinite',r=>r.cpuProfile.elapsed=NaN],['mismatched total',r=>r.cpuBeforeSerializationAndEmit=0.9],
++ ['not fresh',r=>r.previousRun={}],['core mismatch',r=>r.endpoints[0].coreComparison='mismatch'],['output limited',r=>r.status='output_limited'],
++ ['room scope',r=>r.scope.rooms=['W1N1']],['unsafe phase cost',r=>{r.cpuProfile.elapsed=6;r.cpuProfile.phases={legacyInputs:6};r.cpuBeforeSerializationAndEmit=6;}]
++])test('rejects diagnostic '+name,()=>{const s=F.session(),r=copy(F.reports(s)[0]);mutate(r);assert.ok(W.diagnosticError(r,s.profile,0));});
++for(const[name,mutate]of [
++ ['tail absence',r=>delete r.previousCpuProfile],['tail backwards',r=>{r.previousCpuProfile.elapsed=0;r.previousCpuProfile.phases={legacyInputs:0};}],
++ ['wrong previous bytes',r=>r.previousRun.emittedBytes++],['engine reset ordinal',r=>r.cpuProfile.sampleOrdinal=1],['wrong previous tick',r=>r.previousRun.tick++],
++ ['wrong previous calls',r=>r.previousCpuProfile.calls.commitmentBuild=0]
++])test('rejects linked tail '+name,()=>{const s=F.session(),a=F.reports(s);mutate(a[1]);assert.ok(W.diagnosticError(a[1],s.profile,1,a[0],JSON.stringify(a[0])));});
++test('real row completeness string is accepted and invented object is not',()=>{const s=F.session(),r=F.reports(s)[0];assert.equal(r.commitments.rows[0].completeness,'complete');assert.equal(W.sampleError(r,s.profile),null);r.commitments.rows[0].completeness={complete:true};assert.ok(W.sampleError(r,s.profile));});
++test('collector keeps partial raw reports streaming and does not signal a failure',()=>{const s=F.session(),w=W.createWatch(s,12),a=F.reports(s,{partialFirst:true});w.frame('auth ok');w.frame(F.frame(s,a.map(x=>JSON.stringify(x).replaceAll('"','&#x22;'))));assert.equal(w.state.bridgeReports,4);assert.equal(w.state.completeSamples,3);assert.equal(w.state.diagnosticFailure,null);assert.equal(w.state.stopReason,null);});
++test('diagnostic fault is retained without force-closing transport evidence',()=>{const s=F.session(),w=W.createWatch(s,12);w.frame('auth ok');w.frame(F.frame(s,['{&#x22;kind&#x22;:&#x22;treasury-legacy-read-bridge&#x22;,BROKEN}']));assert.equal(w.state.diagnosticFailure,'BRIDGE_JSON_INVALID');assert.equal(w.state.state,'streaming');assert.equal(w.state.stopReason,null);});
++test('wrong-shard report cannot be accepted as CPU evidence',()=>{const s=F.session(),w=W.createWatch(s,12);w.frame('auth ok');const f=JSON.parse(F.frame(s,[JSON.stringify(F.reports(s)[0])]));f[1].shard='shard2';w.frame(JSON.stringify(f));assert.equal(w.state.bridgeReports,0);});
++test('same report duplicate is counted while conflicting duplicate remains fatal',()=>{const s=F.session(),w=W.createWatch(s,12),r=F.reports(s)[0];w.frame('auth ok');w.frame(F.frame(s,[JSON.stringify(r),JSON.stringify(r)]));assert.equal(w.state.duplicateSamples,1);r.note='changed';w.frame(F.frame(s,[JSON.stringify(r)]));assert.equal(w.state.diagnosticFailure,'CONFLICTING_DUPLICATE_SAMPLE');});
++test('authentication repetition is a transport failure',()=>{const s=F.session(),w=W.createWatch(s,12);w.frame('auth ok');assert.equal(w.frame('auth ok'),'auth-failure');});
++
++test('private session is bound to the exact delivered tool fingerprint',()=>{const S=require('../runtime/store.cjs'),s=F.session(),run=F.tmp(),old=C.ORIGINAL_DIGEST;F.save(run,s);try{C.ORIGINAL_DIGEST=s.backup.digest;assert.equal(S.loadRun(run,F.guard).profileHead,s.profileHead);const file=path.join(run,'session.json'),changed=C.readJson(file);changed.toolFingerprint='0'.repeat(64);fs.writeFileSync(file,JSON.stringify(changed));assert.throws(()=>S.loadRun(run,F.guard),e=>e.code==='SESSION_TOOL_FINGERPRINT_MISMATCH');}finally{C.ORIGINAL_DIGEST=old;}});
+diff --git a/tests/fixture.cjs b/tests/fixture.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3667c86dcade4ef3f794a3770469e40e72d34fa2
+--- /dev/null
++++ b/tests/fixture.cjs
+@@ -0,0 +1,29 @@
++'use strict';
++const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
++const C=require('../runtime/common.cjs'),P=require('../runtime/protocol.cjs'),K=require('../runtime/policy.cjs');
++const guard=require('../references/deployGuard.cjs');
++function main(commit,tree,tag){const text=`const BUILD_COMMIT = "${commit}";\nconst BUILD_TREE = "${tree}";\nconst BUILD_DIRTY = "false";\nconst BUILD_DEPLOY_BRANCH = "default";\nconst BUILD_TAG = "${tag}";\n`;return text+`\n;globalThis.__DEPLOY_BUNDLE_HASH__="${C.sha256(text)}";\n`;}
++function session(){const head='a'.repeat(40),tree='b'.repeat(40),profile=K.profileFor(1000);
++ const backup=P.makeSnapshot({main:main(C.PRODUCTION_BASE,C.PRODUCTION_TREE,'fixture-backup')},guard),candidate=P.makeSnapshot({main:main(head,tree,'fixture-candidate')},guard);
++ return {kind:K.KIND,runId:'c'.repeat(32),...C.EXPECTED,refactorBase:K.REFACTOR,compatBase:K.COMPAT,profile,observedTick:1000,profileHead:head,profileTree:tree,
++  build:P.confirmBuild(candidate.modules,head,tree),backupBuild:P.buildIdentity(backup.modules.main),preparedAtMs:Date.now(),wallLimitMs:K.WALL_MS,backup,candidate,
++  toolFingerprint:fs.existsSync(path.join(__dirname,'../INTEGRITY.json'))?C.sha256(fs.readFileSync(path.join(__dirname,'../INTEGRITY.json'))):'f'.repeat(64)};}
++const tmp=()=>fs.mkdtempSync(path.join(os.tmpdir(),'cpuDiag-II-'));
++function save(run,s){for(const key of ['backup','candidate']){C.durable(path.join(run,key+'.json'),s[key]);s[key+'FileSha256']=C.sha256(fs.readFileSync(path.join(run,key+'.json')));}
++ const{backup,candidate,...pub}=s;C.durable(path.join(run,'session.json'),pub);C.durable(path.join(run,'public-session.json'),{...pub,kind:K.PUBLIC_KIND,backupDigest:backup.digest,candidateDigest:candidate.digest});}
++function reports(s,{partialFirst=false,partialAll=false}={}){
++ const H=require('./reader-fixture.cjs'),f=H.fixture({cost:{readerLoad:partialAll?2.2:0.02,observationBuild:0.02},probeCost:0.001});
++ const old=f.ports.readers;let n=0;f.ports.readers=()=>{if(partialFirst&&n++===0)f.charge(2.2);return old();};
++ const reader=H.loadReader().exports.createTreasuryCompatPreview(s.profile,f.ports,{cpuDiagnostics:true});
++ for(const tick of K.dueTicks(s.profile)){f.setTime(tick);reader.run();}
++ return f.logs.map(JSON.parse);
++}
++function world(s){let modules=C.clone(s.backup.modules),writes=0,time=s.observedTick;const api={
++ me:async()=>({ok:1,_id:s.userId,username:s.username}),branches:async()=>({ok:1,list:[{branch:s.branch,activeWorld:true}]}),
++ code:async()=>({ok:1,modules:C.clone(modules)}),time:async()=>({ok:1,time}),overview:async()=>({ok:1,shards:{shard1:{rooms:K.ROOMS}}}),
++ setCode:async(branch,m)=>{if(branch!==s.branch)throw new Error('branch');modules=C.clone(m);writes++;return {ok:1};}};
++ return {api,get modules(){return modules;},set modules(v){modules=C.clone(v);},get writes(){return writes;},set tick(v){time=v;}};
++}
++function frame(s,logs){return JSON.stringify([`user:${s.userId}/console`,{shard:s.shard,messages:{log:logs,results:[]}}]);}
++const secret={token:'FIXTURE_ONLY_TOKEN_1234567890',path:'fixture-secret-unused.json',redact:C.redactor(['FIXTURE_ONLY_TOKEN_1234567890'])};
++module.exports={guard,main,session,tmp,save,reports,world,frame,secret};
+diff --git a/tests/process-fixture.cjs b/tests/process-fixture.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a83377ccb06a52eddca70455612fa74b20955e48
+--- /dev/null
++++ b/tests/process-fixture.cjs
+@@ -0,0 +1,30 @@
++'use strict';
++const path=require('node:path'),fs=require('node:fs');const F=require('./fixture.cjs'),C=require('../runtime/common.cjs');
++function apiWorld(root){const file=path.join(root,'fake-world.json'),read=()=>C.readJson(file);return {
++ me:async()=>({ok:1,_id:C.EXPECTED.userId,username:C.EXPECTED.username}),branches:async()=>({ok:1,list:[{branch:'default',activeWorld:true}]}),
++ code:async()=>({ok:1,modules:read().modules}),overview:async()=>({ok:1,shards:{shard1:{rooms:['E3N59','E4N58']}}}),
++ time:async()=>{const w=read();return {ok:1,time:w.mode==='candidate'?w.s.profile.startTick:w.s.observedTick};},
++ setCode:async(branch,modules)=>{const w=read();w.writes++;w.mode=F.guard.diffRemoteModules(modules,w.s.candidate.modules).match?'candidate':'backup';w.modules=modules;w.changedAtMs=Date.now();C.atomicJson(file,w);if(w.lostRestoreReply&&w.writes===2)C.fail('HTTP_DEADLINE');return {ok:1};}};}
++function preload(root){const w=C.readJson(path.join(root,'fake-world.json')),s=w.s;C.ORIGINAL_DIGEST=s.backup.digest;C.loadGuard=()=>F.guard;C.loadSecret=()=>({...F.secret});
++ const K=require('../runtime/policy.cjs');K.runtimeMs=300;K.CONFIRM_MS=300;
++ require('../runtime/transport.cjs').client=()=>apiWorld(root);
++ if(w.crashGuard&&process.argv[1]?.endsWith('recovery-worker.cjs'))require('../runtime/actions.cjs').restoreOnce=async()=>process.exit(23);
++ global.WebSocket=class FakeWebSocket{
++  constructor(){this.handlers={};this.subs=0;this.lastMode=null;this.next=0;setImmediate(()=>this.emit('open',{}));}
++  addEventListener(k,f){(this.handlers[k]??=[]).push(f);}
++  emit(k,v){for(const f of this.handlers[k]||[])f(v);}
++  send(text){if(text.startsWith('auth '))setImmediate(()=>this.emit('message',{data:'auth ok'}));else if(text.startsWith('subscribe ')&&++this.subs===2){this.timer=setInterval(()=>this.step(),50);this.step();}}
++  step(){try{const w=C.readJson(path.join(root,'fake-world.json')),logs=[];
++   if(w.mode==='candidate'&&w.failCollector){this.emit('error',{});return;}
++   if(this.lastMode!==w.mode){this.lastMode=w.mode;logs.push('[deploy] '+(w.mode==='candidate'?s.build.tag:s.backupBuild.tag));}
++   if(w.mode==='candidate'){
++    const index=Math.min(3,Math.floor((Date.now()-w.changedAtMs)/100));
++    while(this.next<=index){const report=w.reports[this.next++];logs.push(w.corruptReport?'{&#x22;kind&#x22;:&#x22;treasury-legacy-read-bridge&#x22;,INVALID}':JSON.stringify(report).replaceAll('"','&#x22;'));}
++   }
++   this.emit('message',{data:F.frame(s,logs)});this.emit('message',{data:JSON.stringify([`user:${s.userId}/cpu`,{cpu:50}])});
++  }catch{this.emit('error',{});}}
++  close(){clearInterval(this.timer);}
++ };
++}
++if(process.env.CPU_DIAG_FIXTURE_ROOT)preload(process.env.CPU_DIAG_FIXTURE_ROOT);
++module.exports={apiWorld,preload};
+diff --git a/tests/process-runner.cjs b/tests/process-runner.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..77a874254e9bb74c063f4504f6dd89652349683f
+--- /dev/null
++++ b/tests/process-runner.cjs
+@@ -0,0 +1,19 @@
++'use strict';
++const path=require('node:path');const root=process.env.CPU_DIAG_FIXTURE_ROOT;
++const C=require('../runtime/common.cjs'),F=require('./fixture.cjs'),S=require('../runtime/store.cjs'),{apiWorld}=require('./process-fixture.cjs');
++const {execute}=require('../runtime/driver.cjs'),{verifyRun}=require('../runtime/verify-run.cjs');
++(async()=>{const w=C.readJson(path.join(root,'fake-world.json')),s=w.s;
++ const result=await execute({repo:root,run:path.join(root,'run'),secret:F.secret,s,guard:F.guard,api:apiWorld(root)});
++ S.newRecord(path.join(root,'run'),'source-closed.json',{status:'SOURCE_DEFAULT_OFF_RESTORED',profileHead:s.profileHead,closedHead:'d'.repeat(40),sameTreeAsCompatBase:true});
++ if(w.tamper){
++  const fs=require('node:fs'),run=path.join(root,'run');
++  if(w.tamper==='profile'){const file=path.join(run,'console.jsonl'),a=fs.readFileSync(file,'utf8').trimEnd().split('\n').map(JSON.parse);let changed=false;
++   for(const x of a){if(x.kind!=='ws-frame'||changed)continue;const frame=JSON.parse(x.text);if(!Array.isArray(frame[1]?.messages?.log))continue;
++    frame[1].messages.log=frame[1].messages.log.map(t=>{const d=require('../runtime/decoder.cjs').parseBridge(t);if(d.kind==='bridge'&&!changed){changed=true;d.report.cpuProfile.phases.legacyInputs+=1;return JSON.stringify(d.report);}return t;});x.text=JSON.stringify(frame);}
++   fs.writeFileSync(file,a.map(JSON.stringify).join('\n')+'\n');
++  }else if(w.tamper==='runtime-footer'){const file=path.join(run,'recovery-worker/runtime-console.jsonl'),a=fs.readFileSync(file,'utf8').trimEnd().split('\n');a.push(a.at(-1));fs.writeFileSync(file,a.join('\n')+'\n');}
++  else if(w.tamper==='postflight'){const file=path.join(run,'recovery-worker/code-after-runtime.json'),r=C.readJson(file);r.digest.hash='e'.repeat(64);fs.writeFileSync(file,JSON.stringify(r)+'\n');}
++  else if(w.tamper==='write-boundary'){const file=path.join(run,'actions.jsonl'),a=fs.readFileSync(file,'utf8').trimEnd().split('\n').map(JSON.parse);a.push(a.find(x=>x.kind==='code-write-boundary'&&x.action==='candidate'));fs.writeFileSync(file,a.map(JSON.stringify).join('\n')+'\n');}
++ }
++ const verified=verifyRun(path.join(root,'run'));C.durable(path.join(root,'test-result.json'),{result,verified});
++})().catch(e=>{console.error(e);process.exitCode=1;});
+diff --git a/tests/process.spec.cjs b/tests/process.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f2364a85e04985f7c8a847e3ab4d33ac66f8b2dc
+--- /dev/null
++++ b/tests/process.spec.cjs
+@@ -0,0 +1,17 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
++const F=require('./fixture.cjs'),C=require('../runtime/common.cjs');
++function executeFixture(options){const root=F.tmp(),run=path.join(root,'run');fs.mkdirSync(run);const s=F.session();F.save(run,s);
++ C.durable(path.join(root,'fake-world.json'),{s,modules:s.backup.modules,mode:'backup',writes:0,reports:F.reports(s,{partialFirst:true}),...options});
++ const r=cp.spawnSync(process.execPath,[path.join(__dirname,'process-runner.cjs')],{env:{...process.env,CPU_DIAG_FIXTURE_ROOT:root,NODE_OPTIONS:'--require='+JSON.stringify(path.join(__dirname,'process-fixture.cjs').split(path.sep).join('/'))},encoding:'utf8',timeout:20000,maxBuffer:3*1048576});
++ assert.equal(r.status,0,r.stdout+'\n'+r.stderr);return {root,run,world:C.readJson(path.join(root,'fake-world.json')),...C.readJson(path.join(root,'test-result.json'))};}
++test('real child collector and independent recovery worker capture hex-encoded partial then close',()=>{const r=executeFixture({});
++ assert.equal(r.world.writes,2);assert.equal(r.verified.status,'CPU_DIAGNOSTIC_CAPTURE_VERIFIED');assert.equal(r.verified.diagnosticReports,4);assert.equal(r.verified.completeSamples,3);assert.equal(r.verified.partialCpuSamples,1);assert.equal(r.verified.analysis.completeTailProfiles,3);
++ assert.equal(r.verified.closure,'RESTORED_BYTES_AND_RUNTIME_VERIFIED');assert.equal(r.result.guardExit,0);assert.equal(r.result.collectorExit,0);assert.deepEqual(r.verified.issues,[]);});
++test('lost restore POST response is resolved independently without resend',()=>{const r=executeFixture({lostRestoreReply:true});assert.equal(r.world.writes,2);assert.equal(r.verified.captureVerified,true);});
++test('real collector transport failure still reaches new recovery-only stream',()=>{const r=executeFixture({failCollector:true});assert.equal(r.world.writes,2);assert.equal(r.verified.captureVerified,false);assert.equal(r.verified.closure,'RESTORED_BYTES_AND_RUNTIME_VERIFIED');});
++test('sample decoding failure does not cut off safety closeout',()=>{const r=executeFixture({corruptReport:true});assert.equal(r.world.writes,2);assert.equal(r.verified.captureVerified,false);assert.equal(r.verified.closure,'RESTORED_BYTES_AND_RUNTIME_VERIFIED');assert.ok(r.verified.issues.includes('BRIDGE_JSON_INVALID'));});
++test('exited recovery worker enables supervisor using the same one-use marker',()=>{const r=executeFixture({crashGuard:true});assert.equal(r.world.writes,2);assert.equal(r.verified.captureVerified,false);assert.equal(r.verified.closure,'RESTORED_BYTES_AND_RUNTIME_VERIFIED');assert.equal(r.verified.restoration.selectedActor,'supervisor');});
++module.exports={executeFixture};
++
++for(const [tamper,issue] of [['profile','CPU_PHASE_SUM_INVALID'],['runtime-footer','RESTORE_CLOSURE_INCOMPLETE'],['postflight','RESTORE_CLOSURE_INCOMPLETE'],['write-boundary','WRITE_QUOTA_INVALID']])test('independent verifier rejects '+tamper+' raw evidence mutation',()=>{const r=executeFixture({tamper});assert.equal(r.verified.captureVerified,false);assert.ok(r.verified.issues.includes(issue),JSON.stringify(r.verified.issues));});
+diff --git a/tests/reader-fixture.cjs b/tests/reader-fixture.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..20904fc7e2f1a9ca1b067e702ce438b5ed0c5336
+--- /dev/null
++++ b/tests/reader-fixture.cjs
+@@ -0,0 +1,56 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{createRequire}=require('node:module');
++const ROOT=path.resolve(__dirname,'..');
++function typescript(){
++ if(process.env.CPU_DIAG_TS_REPO)return createRequire(path.resolve(process.env.CPU_DIAG_TS_REPO,'package.json'))('typescript');
++ if(process.env.CPU_DIAG_TS_MODULE)return require(process.env.CPU_DIAG_TS_MODULE);
++ throw new Error('TYPESCRIPT_PATH_REQUIRED');
++}
++function compile(source,file,extras={}){
++ const ts=typescript(),out=ts.transpileModule(source,{fileName:file,reportDiagnostics:true,compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,strict:true}});
++ const errors=(out.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);if(errors.length)throw new Error('TS_TRANSPILE_ERROR');
++ const context=vm.createContext({exports:{},...extras});context.globalThis=context;context.global=context;
++ vm.runInContext(out.outputText,context,{filename:file,timeout:5000});return context;
++}
++function loadReader(variant='new',extras={}){
++ const prefix='references';
++ const accounting=compile(fs.readFileSync(path.join(ROOT,'references/treasuryCompatCpu.ts'),'utf8'),'treasuryCompatCpu.ts').exports;
++ const context=compile(fs.readFileSync(path.join(ROOT,prefix,'treasuryCompatRead.ts'),'utf8'),'treasuryCompatRead.ts',{
++  require:id=>{if(id==='./treasuryCompatCpu')return accounting;throw new Error('UNEXPECTED_IMPORT:'+id);},...extras});
++ let scans=0;const count=context.compatUtf8Bytes;context.compatUtf8Bytes=s=>{scans++;return count(s);};
++ return {exports:context.exports,context,scans:()=>scans};
++}
++const profile=()=>({enabled:true,shardName:'shard1',rooms:['E3N59','E4N58'],resources:['energy','H'],startTick:100,endTick:1200,intervalTicks:100,minBucket:2000,maxSampleCpu:2,reserveCpu:5,maxLogBytes:16384});
++function fixture(opts={}){
++ let time=100,used=0,cpuCalls=0;const calls={memory:0,room:0,readerLoad:0,observationBuild:0,commitmentBuild:0,emit:0};
++ const cost={legacyInputs:0,directRead:0,readerLoad:0,observationBuild:0,coreCompare:0,commitmentBuild:0,commitmentProjection:0,emit:0,...opts.cost};
++ const logs=[],health={complete:true,globalIncomplete:false,incompleteScopeCount:0,invalidRecords:0};
++ const memory={cfg:{},data:{resourceControl:{tasks:{}}},runtime:{resourceReservations:{}}};
++ const rooms={};
++ function charge(n){used+=n;}
++ function structure(id,amounts={energy:1000,H:50},capacity=300000){
++  const store={...amounts};
++  Object.defineProperties(store,{
++   getUsedCapacity:{value:r=>{charge(cost.directRead);return r?(store[r]||0):Object.keys(store).reduce((n,k)=>n+store[k],0);}},
++   getCapacity:{value:()=>capacity},getFreeCapacity:{value:()=>capacity-Object.keys(store).reduce((n,k)=>n+store[k],0)}});
++  return {id,my:true,store,isActive:()=>true,cooldown:0};
++ }
++ for(const name of profile().rooms)rooms[name]={name,controller:{my:true},storage:structure(name+'storage',undefined,1000000),terminal:structure(name+'terminal')};
++ const ports={tick:()=>time,shard:()=>opts.shard||'shard1',resources:()=>['energy','H','O','X'],
++  cpu:()=>{cpuCalls++;used+=opts.probeCost||0;return opts.cpu?opts.cpu({used,cpuCalls,emitted:calls.emit}):{used,tickLimit:opts.tickLimit??100,bucket:opts.bucket??10000};},
++  memory:()=>{calls.memory++;charge(cost.legacyInputs);if(opts.memoryThrow)throw new Error('memory');return memory;},
++  room:n=>{calls.room++;return rooms[n];},
++  readers:()=>{calls.readerLoad++;charge(cost.readerLoad);if(opts.loadThrow)throw new Error('loader');return {
++   buildObservation:({rooms:actual})=>{calls.observationBuild++;charge(cost.observationBuild);if(opts.obsThrow)throw new Error('observation');
++    return {epoch:{observedAtTick:time+(opts.stale?1:0)},location:(n,k)=>{charge(cost.coreCompare);const st=actual.find(r=>r.name===n)?.[k];
++     return st?{exists:true,structureId:st.id,usedCapacity:st.store.getUsedCapacity()+(opts.mismatch?1:0),freeCapacity:st.store.getFreeCapacity(),amounts:{energy:st.store.energy||0,H:st.store.H||0}}:{exists:false,usedCapacity:0,freeCapacity:0,amounts:{}};}};},
++   buildCommitments:()=>{calls.commitmentBuild++;charge(cost.commitmentBuild);if(opts.commitThrow)throw new Error('commitment');const value=Object.keys(memory.data.resourceControl.tasks).length;
++    return {completeness:opts.incomplete?{...health,complete:false,invalidRecords:1}:health,metrics:{},outgoing:()=>{charge(cost.commitmentProjection);return opts.invalidNumber?-1:value;},incoming:()=>0,reservedProduction:()=>0,commitmentCompleteness:()=> 'complete'};}
++  };},
++  emit:line=>{calls.emit++;charge(cost.emit);if(opts.emitThrow)throw new Error('emit');logs.push(line);}};
++ return {ports,memory,rooms,logs,calls,charge,used:()=>used,cpuCalls:()=>cpuCalls,setTime:t=>{time=t;used=0;},structure};
++}
++function json(x){return JSON.parse(JSON.stringify(x));}
++function semantic(log){const r=typeof log==='string'?JSON.parse(log):json(log);delete r.cpuProfile;delete r.previousCpuProfile;
++ if(r.previousRun){delete r.previousRun.emittedBytes;delete r.previousRun.cpuIncludingEmit;}delete r.cpuBeforeSerializationAndEmit;return r;}
++module.exports={ROOT,typescript,compile,loadReader,profile,fixture,json,semantic};
+diff --git a/tests/recovery.spec.cjs b/tests/recovery.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..cc01cc3197dc80cbf5ca50366fae3a9217d7b92d
+--- /dev/null
++++ b/tests/recovery.spec.cjs
+@@ -0,0 +1,47 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const F=require('./fixture.cjs'),C=require('../runtime/common.cjs'),A=require('../runtime/actions.cjs'),S=require('../runtime/store.cjs');
++const {termination}=require('../runtime/recovery-worker.cjs'),{closeout}=require('../runtime/closeout.cjs');
++function attempted(run,s){S.newRecord(run,'upload-attempt.json',{runId:s.runId,candidateHash:s.candidate.digest.hash,profileHead:s.profileHead,startedAtMs:Date.now()});}
++const pause=async()=>{};
++test('identity read and restore never depend on time or overview',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);
++ w.api.time=w.api.overview=async()=>{throw new Error('must not call');};const r=await A.restoreOnce(w.api,F.guard,s,run,{pause});assert.equal(r.confirmed,true);assert.equal(w.writes,1);});
++test('read transport failure retries exactly three times with classified stages',async()=>{const s=F.session(),w=F.world(s),logs=[];let n=0;w.api.code=async()=>{n++;C.fail('HTTP_TRANSPORT_ERROR');};await assert.rejects(A.current(w.api,F.guard,{pause,record:x=>logs.push(x)}));assert.equal(n,3);assert.equal(logs.length,3);assert.ok(logs.every(x=>x.stage==='modules'));});
++test('single identity transport failure can recover without aborting',async()=>{const s=F.session(),w=F.world(s),fn=w.api.code;let n=0;w.api.code=async(...a)=>{if(n++===0)C.fail('HTTP_DEADLINE');return fn(...a);};await A.current(w.api,F.guard,{pause});assert.equal(n,2);});
++test('auth failure is not retried',async()=>{const w=F.world(F.session());let n=0;w.api.me=async()=>{n++;C.fail('HTTP_AUTH_REJECTED');};await assert.rejects(A.current(w.api,F.guard,{pause}));assert.equal(n,1);});
++test('wrong user is rejected before code reads',async()=>{const w=F.world(F.session());w.api.me=async()=>({ok:1,_id:'wrong',username:'forster'});let n=0;w.api.code=async()=>n++;await assert.rejects(A.current(w.api,F.guard,{pause}));assert.equal(n,0);});
++test('candidate upload persists marker before the only POST',async()=>{const s=F.session(),w=F.world(s),run=F.tmp(),original=w.api.setCode;
++ w.api.setCode=async(...a)=>{assert.equal(S.optional(run,'upload-attempt.json').profileHead,s.profileHead);return original(...a);};
++ assert.equal((await A.uploadOnce(w.api,F.guard,s,run)).confirmed,true);await assert.rejects(A.uploadOnce(w.api,F.guard,s,run));assert.equal(w.writes,1);});
++test('expired window never writes or rebinds a new window',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.tick=s.profile.startTick-99;
++ await assert.rejects(A.uploadOnce(w.api,F.guard,s,run),e=>e.code==='PROFILE_WINDOW_EXPIRED');assert.equal(w.writes,0);assert.equal(S.optional(run,'upload-attempt.json'),null);});
++test('changed remote baseline refuses candidate POST',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules={main:F.main('d'.repeat(40),'e'.repeat(40),'third')};await assert.rejects(A.uploadOnce(w.api,F.guard,s,run));assert.equal(w.writes,0);});
++test('closing request prevents candidate upload',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();S.newRecord(run,'closing.json',{runId:s.runId});await assert.rejects(A.uploadOnce(w.api,F.guard,s,run));assert.equal(w.writes,0);});
++test('lost candidate reply is not retried and recovery still uses exactly one restore',async()=>{const s=F.session(),w=F.world(s),run=F.tmp(),f=w.api.setCode;
++ w.api.setCode=async(...a)=>{const r=await f(...a);if(w.writes===1)C.fail('HTTP_DEADLINE');return r;};
++ assert.equal((await A.uploadOnce(w.api,F.guard,s,run)).confirmed,false);assert.equal((await A.restoreOnce(w.api,F.guard,s,run,{pause})).confirmed,true);assert.equal(w.writes,2);});
++test('lost restore reply can be resolved by bytes without a repeated POST',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);const f=w.api.setCode;
++ w.api.setCode=async(...a)=>{await f(...a);C.fail('HTTP_DEADLINE');};const r=await A.restoreOnce(w.api,F.guard,s,run,{pause});assert.equal(r.confirmed,true);assert.equal(r.serverAccepted,null);assert.equal(r.postRetryAllowed,false);assert.equal(w.writes,1);assert.equal((await A.restoreOnce(w.api,F.guard,s,run,{pause})).requestAttempted,false);});
++test('existing restore attempt with candidate still online forbids retry',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);
++ S.newRecord(run,'restore-attempt.json',{runId:s.runId,candidateHash:s.candidate.digest.hash,backupHash:s.backup.digest.hash,startedAtMs:Date.now()});
++ const r=await A.restoreOnce(w.api,F.guard,s,run,{pause});assert.equal(r.reason,'RESTORE_ALREADY_ATTEMPTED');assert.equal(w.writes,0);});
++test('wrong restore marker is never overwritten',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();attempted(run,s);S.newRecord(run,'restore-attempt.json',{runId:'x'});await assert.rejects(A.restoreOnce(w.api,F.guard,s,run,{pause}));assert.equal(S.optional(run,'restore-attempt.json').runId,'x');});
++test('third party deployment is not overwritten by recovery',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules={main:F.main('d'.repeat(40),'e'.repeat(40),'third')};attempted(run,s);assert.equal((await A.restoreOnce(w.api,F.guard,s,run,{pause})).status,'CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT');assert.equal(w.writes,0);});
++test('third party change between restore prechecks also refuses write',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);let n=0,read=w.api.code;
++ w.api.code=async(...a)=>{if(++n===2)w.modules={main:F.main('d'.repeat(40),'e'.repeat(40),'third')};return read(...a);};assert.equal((await A.restoreOnce(w.api,F.guard,s,run,{pause})).status,'CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT');assert.equal(w.writes,0);});
++test('no upload marker means no restore request is necessary',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();const r=await A.restoreOnce(w.api,F.guard,s,run);assert.equal(r.status,'NOT_DEPLOYED_NO_RESTORE_NEEDED');assert.equal(w.writes,0);});
++test('marker fsync failure prevents a POST and never deletes the marker',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);const old=fs.fsyncSync,open=fs.openSync;let targetFd;
++ try{fs.openSync=(name,...args)=>{const fd=open(name,...args);if(String(name).endsWith('restore-attempt.json'))targetFd=fd;return fd;};fs.fsyncSync=fd=>{if(fd===targetFd)throw new Error('disk');return old(fd);};await assert.rejects(A.restoreOnce(w.api,F.guard,s,run,{pause}));}finally{fs.fsyncSync=old;fs.openSync=open;}
++ assert.equal(w.writes,0);assert.ok(fs.existsSync(path.join(run,'restore-attempt.json')));});
++test('new recovery stream is independent of a dead diagnostic collector',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();attempted(run,s);S.newRecord(run,'upload-result.json',{result:{confirmed:true}});S.newRecord(run,'heartbeat.json',{state:'failed',stopReason:'BRIDGE_JSON_INVALID'});let called=0;
++ const r=await closeout({api:w.api,guard:F.guard,s,run,secret:F.secret,actor:'worker',pause,observer:async()=>{called++;return {status:'RECOVERY_RUNTIME_COLLECTED'};},verify:()=>({status:'RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED'})});
++ assert.equal(called,1);assert.equal(r.runtimeConfirmed,true);assert.equal(w.writes,0);});
++test('failed recovery stream preserves byte confirmation and final read',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();attempted(run,s);S.newRecord(run,'upload-result.json',{result:{confirmed:true}});
++ const r=await closeout({api:w.api,guard:F.guard,s,run,secret:F.secret,actor:'worker',pause,observer:async()=>{throw new Error('stream');}});
++ assert.equal(r.status,'RESTORED_BYTES_CONFIRMED_RUNTIME_UNCONFIRMED');assert.ok(fs.existsSync(path.join(run,'recovery-worker/code-after-runtime.json')));});
++test('a CPU-partial heartbeat is not an early termination reason',()=>{const s=F.session(),now=Date.now(),h={runId:s.runId,pid:1,userId:s.userId,shard:s.shard,state:'streaming',socketState:'open',updatedAtMs:now,lastConsoleAtMs:now,lastCpuAtMs:now,partialCpuSamples:1,bridgeReports:1,lastBridgeTick:s.profile.startTick};
++ assert.equal(termination({s,h,attempt:{startedAtMs:now},upload:{result:{confirmed:true}},now,elapsed:0,tick:s.profile.startTick}),null);
++ h.diagnosticFailure='CPU_OBSERVED_SAFETY_STOP';assert.equal(termination({s,h,attempt:{startedAtMs:now},now,elapsed:0}),h.diagnosticFailure);});
++test('four diagnostics trigger close even if zero complete samples',()=>{const s=F.session(),now=Date.now(),h={runId:s.runId,pid:1,userId:s.userId,shard:s.shard,state:'streaming',socketState:'open',updatedAtMs:now,lastConsoleAtMs:now,lastCpuAtMs:now,bridgeReports:4,lastBridgeTick:s.profile.endTick,completeSamples:0};assert.equal(termination({s,h,attempt:{startedAtMs:now},upload:{result:{confirmed:true}},now,elapsed:0}),'DIAGNOSTIC_WINDOW_COMPLETE');});
++
++test('baseline readback alone does not resolve a still-unknown upload outcome',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();attempted(run,s);const r=await closeout({api:w.api,guard:F.guard,s,run,secret:F.secret,actor:'worker',pause,observer:async()=>({}),verify:()=>({status:'RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED'})});assert.equal(r.bytesConfirmed,true);assert.equal(r.uploadOutcomeResolved,false);assert.equal(r.status,'ONLINE_CLOSE_UNCONFIRMED');assert.equal(w.writes,0);});
+diff --git a/tests/screeps.d.ts b/tests/screeps.d.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..bb9f07e2a2600415e282f1043e3c84515621e805
+--- /dev/null
++++ b/tests/screeps.d.ts
+@@ -0,0 +1,9 @@
++// Minimal compile-only fixture; not a substitute for the repository's Screeps types.
++type ResourceConstant = string;
++interface FakeStore { getUsedCapacity(resource?: ResourceConstant): number; getFreeCapacity(): number; getCapacity(): number; }
++interface FakeStructure { my: boolean; id: string; store: FakeStore; isActive(): boolean; }
++interface StructureTerminal extends FakeStructure { cooldown: number; }
++interface Room { name: string; controller?: { my: boolean }; storage?: FakeStructure; terminal?: StructureTerminal; }
++declare const Game: { time: number; shard: { name: string }; rooms: Record<string,Room>; cpu: {getUsed():number;tickLimit:number;bucket:number} };
++declare const Memory: unknown;
++declare const RESOURCES_ALL: readonly string[];
+diff --git a/tests/transport.spec.cjs b/tests/transport.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..55de680334f534401fecae8929827ece1ac52caf
+--- /dev/null
++++ b/tests/transport.spec.cjs
+@@ -0,0 +1,9 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),http=require('node:http');const {client}=require('../runtime/transport.cjs');const F=require('./fixture.cjs');
++async function serve(fn,body){const server=http.createServer(fn);await new Promise(r=>server.listen(0,'127.0.0.1',r));try{return await body('http://127.0.0.1:'+server.address().port+'/');}finally{await new Promise(r=>server.close(r));}}
++test('real loopback HTTP client reads expected code field and keeps explicit branch',async()=>serve((req,res)=>{assert.equal(req.url,'/api/user/code?branch=default');res.end(JSON.stringify({ok:1,modules:{main:'fixture'}}));},async origin=>{const a=client(F.secret,{testOrigin:origin});const r=await a.code('default');assert.equal(r.modules.main,'fixture');}));
++test('HTTP redirects are refused and never followed with credentials',async()=>serve((req,res)=>{res.statusCode=302;res.setHeader('Location','https://example.invalid');res.end();},async origin=>{await assert.rejects(client(F.secret,{testOrigin:origin}).me(),e=>e.code==='HTTP_NOT_200');}));
++test('authentication rejection gets stable error without response text',async()=>serve((req,res)=>{res.statusCode=401;res.end('secret-response');},async origin=>{await assert.rejects(client(F.secret,{testOrigin:origin}).me(),e=>e.code==='HTTP_AUTH_REJECTED'&&!JSON.stringify(e).includes('secret-response'));}));
++test('write deadline issues no automatic retry',async()=>{let requests=0;await serve((req,res)=>{requests++;req.resume();},async origin=>{await assert.rejects(client(F.secret,{testOrigin:origin,timeoutMs:30}).setCode('default',{main:'fixture'}),e=>e.code==='HTTP_DEADLINE');assert.equal(requests,1);});});
++test('wrong branch or arbitrary test hostname is refused',()=>{assert.throws(()=>client(F.secret,{testOrigin:'http://example.invalid/'}));assert.throws(()=>client(F.secret).setCode('other',{main:'x'}));});
++test('invalid JSON does not become an empty module response',async()=>serve((req,res)=>res.end('bad'),async origin=>await assert.rejects(client(F.secret,{testOrigin:origin}).me(),e=>e.code==='HTTP_JSON_INVALID')));
+diff --git a/tests/workflow.spec.cjs b/tests/workflow.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..25fe70608d3dd70e382dcc7d6faa2534f54119c6
+--- /dev/null
++++ b/tests/workflow.spec.cjs
+@@ -0,0 +1,43 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
++const F=require('./fixture.cjs'),U=require('../tools/util.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs');
++const A=require('../tools/archive.cjs'),Pub=require('../tools/publish.cjs'),{closeSource}=require('../tools/close-source.cjs');
++function init(dir,branch){fs.mkdirSync(dir);cp.execFileSync('git',['-c','core.autocrlf=false','init','-b',branch,dir],{stdio:'pipe'});
++ const cfg=(k,v)=>U.git(dir,['config','--local',k,v]);cfg('user.name','fixture');cfg('user.email','fixture@example.invalid');cfg('commit.gpgSign','false');
++ fs.mkdirSync(path.join(dir,'.git','empty-hooks'));cfg('core.hooksPath',path.join(dir,'.git','empty-hooks'));
++ fs.writeFileSync(path.join(dir,'seed.txt'),'fixture, not the real repository\n');
++ U.git(dir,['add','.']);U.git(dir,['commit','-m','fixture base']);return U.textGit(dir,['rev-parse','HEAD']);}
++function make(){const root=F.tmp(),ref=path.join(root,'refactor'),compat=path.join(root,'compat'),run=path.join(root,'run'),tests=path.join(root,'tests'),offline=path.join(root,'offline');
++ init(ref,'refactor/empire-treasury-rearchitecture');init(compat,'compat/treasury-read-bridge-i');
++ const parent=path.dirname(path.join(ref,K.EVIDENCE));fs.mkdirSync(parent,{recursive:true});fs.writeFileSync(path.join(parent,'fixture-marker'),'not production evidence\n');U.git(ref,['add','.']);U.git(ref,['commit','-m','fixture evidence parent']);
++ fs.mkdirSync(path.join(compat,'src/runtime'),{recursive:true});fs.copyFileSync(path.join(U.ROOT,'references/treasuryCompatConfig.ts'),path.join(compat,K.CONFIG));U.git(compat,['add','.']);U.git(compat,['commit','-m','fixture config']);
++ const saved={refactor:K.REFACTOR,compat:K.COMPAT,load:C.loadSecret};K.REFACTOR=U.textGit(ref,['rev-parse','HEAD']);K.COMPAT=U.textGit(compat,['rev-parse','HEAD']);const secret={token:require('node:crypto').randomBytes(24).toString('hex')};C.loadSecret=()=>secret;
++ for(const d of [run,tests,offline])fs.mkdirSync(d);
++ for(const n of ['summary.json','tests.tap','tests.stderr','tests.exit.json'])fs.writeFileSync(path.join(tests,n),n.endsWith('.json')?'{}\n':'fixture test evidence \n');
++ for(const n of A.CHECK_ALLOW)fs.writeFileSync(path.join(offline,n),n.endsWith('.json')?'{}\n':'fixture CLI output with whitespace \n');
++ return {root,ref,compat,run,tests,offline,secret,cleanup:()=>{K.REFACTOR=saved.refactor;K.COMPAT=saved.compat;C.loadSecret=saved.load;}};
++}
++function archived(f){return A.archive({refactor:f.ref,run:f.run,tests:f.tests,offline:f.offline,secret:'fixture-only'});}
++test('package inventory and native whitespace gate both accept the SAME final package bytes',()=>{U.verifyPackage();const root=F.tmp(),dir=path.join(root,'git');init(dir,'check');fs.cpSync(U.ROOT,path.join(dir,'task-package'),{recursive:true});U.git(dir,['add','.']);U.git(dir,['diff','--cached','--check']);});
++test('config ON/OFF closes to identical source tree without changing CPU files',()=>{const f=make();try{const p=K.profileFor(1000);C.durable(path.join(f.run,'binding-intent.json'),{profile:p});fs.writeFileSync(path.join(f.compat,K.CONFIG),K.renderConfig(p));U.git(f.compat,['add',K.CONFIG]);U.git(f.compat,['commit','-m','fixture ON']);
++ const on=U.textGit(f.compat,['rev-parse','HEAD']);C.durable(path.join(f.run,'binding.json'),{profileHead:on});const r=closeSource(f.compat,f.run);assert.equal(r.sameTreeAsCompatBase,true);assert.equal(U.textGit(f.compat,['rev-parse','HEAD~2']),K.COMPAT);assert.equal(closeSource(f.compat,f.run).closedHead,r.closedHead);
++ }finally{f.cleanup();}});
++test('unrecognized config edits are refused without clearing worktree',()=>{const f=make();try{fs.appendFileSync(path.join(f.compat,K.CONFIG),'// user change\n');assert.throws(()=>closeSource(f.compat,f.run));assert.ok(U.textGit(f.compat,['status','--porcelain']).includes('M'));}finally{f.cleanup();}});
++test('archive stage bytes whitespace commit and local bare push/readback all agree',()=>{const f=make();try{
++ const cbase=K.COMPAT,rbase=K.REFACTOR;
++ for(const[repo,name,branch]of[[f.ref,'refbare','refactor/empire-treasury-rearchitecture'],[f.compat,'compbare','compat/treasury-read-bridge-i']]){
++  const bare=path.join(f.root,name);cp.execFileSync('git',['init','--bare',bare],{stdio:'pipe'});U.git(repo,['remote','add','origin',bare]);U.git(repo,['push','origin','HEAD:refs/heads/'+branch]);
++ }
++ C.durable(path.join(f.run,'source-closed.json'),{status:'SOURCE_DEFAULT_OFF_RESTORED',closedHead:cbase,profileHead:null,sameTreeAsCompatBase:true});
++ archived(f);Pub.verifyArchive(f.ref);const gate=Pub.stageGate(f.ref,f.compat);assert.equal(gate.whitespaceExceptions,0);
++ const result=Pub.publish(f.ref,f.compat,{push:true,out:path.join(f.root,'receipt.json')});assert.equal(result.pushed,true);assert.equal(result.compatHead,cbase);assert.equal(U.textGit(f.ref,['rev-parse','HEAD^']),rbase);
++ const resume=Pub.publish(f.ref,f.compat,{push:true,out:path.join(f.root,'receipt-resume.json')});assert.equal(resume.refactorHead,result.refactorHead);
++ }finally{f.cleanup();}});
++test('raw CLI trailing spaces are preserved in JSON wrappers, not silently trimmed',()=>{const f=make();try{archived(f);const j=C.readJson(path.join(f.ref,K.EVIDENCE,'tool-tests/tests.tap.json'));assert.ok(j.text.endsWith(' \n'));assert.equal(j.sha256,C.sha256(Buffer.from(j.text)));Pub.stageGate(f.ref,f.compat);}finally{f.cleanup();}});
++test('private modules and session files are never archived',()=>{const f=make();try{for(const n of ['backup.json','candidate.json','session.json'])fs.writeFileSync(path.join(f.run,n),'PRIVATE MODULE BODY');archived(f);for(const n of ['backup.json','candidate.json','session.json'])assert.ok(!fs.existsSync(path.join(f.ref,K.EVIDENCE,'run',n)));}finally{f.cleanup();}});
++test('secret in permitted raw evidence refuses archive before touching repo',()=>{const f=make();try{fs.writeFileSync(path.join(f.run,'collector.stdout'),f.secret.token);assert.throws(()=>archived(f),e=>e.code==='SECRET_IN_ARCHIVE_INPUT');assert.ok(!fs.existsSync(path.join(f.ref,K.EVIDENCE)));}finally{f.cleanup();}});
++test('staged evidence content mismatch is detected',()=>{const f=make();try{archived(f);U.git(f.ref,['add',K.EVIDENCE]);fs.appendFileSync(path.join(f.ref,K.EVIDENCE,'EXECUTION-REPORT.md'),'tampered\n');assert.throws(()=>Pub.verifyArchive(f.ref,{staged:true}));}finally{f.cleanup();}});
++test('unrelated staged file is not swept into evidence commit',()=>{const f=make();try{archived(f);fs.writeFileSync(path.join(f.ref,'unexpected.txt'),'x\n');U.git(f.ref,['add','unexpected.txt']);assert.throws(()=>Pub.stageGate(f.ref,f.compat));assert.equal(U.textGit(f.ref,['rev-parse','HEAD']),K.REFACTOR);}finally{f.cleanup();}});
++test('unknown phase does not bypass exact package inventory check',()=>{const tmp=F.tmp();fs.cpSync(U.ROOT,tmp,{recursive:true});fs.writeFileSync(path.join(tmp,'unknown.txt'),'x');const r=cp.spawnSync(process.execPath,['-e',`require(${JSON.stringify(path.join(tmp,'tools/util.cjs'))}).verifyPackage()`],{encoding:'utf8'});assert.notEqual(r.status,0);});
++test('build environment cannot inject a deployment target',()=>{const B=require('../tools/build.cjs'),old=process.env.DEST;try{process.env.DEST='main';assert.throws(()=>B.runNode('.', 'fake.cjs',[],'.','x'));}finally{if(old===undefined)delete process.env.DEST;else process.env.DEST=old;}});
++test('a live or unresolved action lock blocks archive, without deletion',()=>{const f=make();try{fs.writeFileSync(path.join(f.run,'action.lock'),'locked');assert.throws(()=>archived(f),e=>e.code==='ACTION_LOCK_STILL_PRESENT');assert.ok(fs.existsSync(path.join(f.run,'action.lock')));}finally{f.cleanup();}});

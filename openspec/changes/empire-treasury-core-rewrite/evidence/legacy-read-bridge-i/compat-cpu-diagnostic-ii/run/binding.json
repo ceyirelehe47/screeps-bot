@@ -1,0 +1,25 @@
+{
+  "runId": "5a15bbc9a89d0a348665a9acc9d7d46e",
+  "profileHead": "8d70eb02446f7f59f3dd5ee4a958d9744dc8ca2d",
+  "observedTick": 73654174,
+  "profile": {
+    "enabled": true,
+    "shardName": "shard1",
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "startTick": 73654400,
+    "endTick": 73654700,
+    "intervalTicks": 100,
+    "minBucket": 2000,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "maxLogBytes": 16384
+  },
+  "atMs": 1789213310260
+}

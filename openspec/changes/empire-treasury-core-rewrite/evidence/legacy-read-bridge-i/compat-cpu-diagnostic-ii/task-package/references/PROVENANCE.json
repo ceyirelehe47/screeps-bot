@@ -1,0 +1,18 @@
+{
+  "cpuSource": {
+    "commit": "43b1b8e51caca0c17b975971a71fbbb0951823bf",
+    "sourceLock": "references/source-lock.json",
+    "localInputPackageSha256": "0af7f4fcc759262ba9ea1adcb1cd0de816244e41f4cbda26ffe78683319ebf3f"
+  },
+  "formal0003": {
+    "packageSha256": "3fc8a713a577484600aaface97831ca04efbb9ba1369bdd373787a9c1660802d",
+    "source": "user-provided original ZIP; not a new deployment approval"
+  },
+  "recoveryRemediation": {
+    "commit": "0b09414f90c7144bbff61758fe7cf605576231e7",
+    "packageSha256": "9e4201a214d641caf5fe93941edb1df71a73a4407bf4cb91c687d5f11740914a",
+    "reuse": "single-layer decoder, recovery-only observer and raw-runtime verifier; requires and session wiring adapted"
+  },
+  "upstreamChangesRecorded": "all shipped runtime/tools source is explicitly a new integrated version unless hashes match old input",
+  "productionFunctions": "not modified; only config transiently bound at execution time"
+}

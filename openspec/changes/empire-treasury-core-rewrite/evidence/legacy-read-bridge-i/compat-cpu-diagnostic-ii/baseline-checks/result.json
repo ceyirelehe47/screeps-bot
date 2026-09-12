@@ -1,0 +1,10 @@
+{
+  "status": "COMPAT_BASELINE_OFFLINE_VERIFIED",
+  "head": "43b1b8e51caca0c17b975971a71fbbb0951823bf",
+  "tests": {
+    "suites": 195,
+    "tests": 685
+  },
+  "packageFingerprint": "cf8c5de57b88839ca354772afdeb4ec0261fdc4a8b01cdf9e0c76ecd4973bd1c",
+  "atMs": 1789213233246
+}

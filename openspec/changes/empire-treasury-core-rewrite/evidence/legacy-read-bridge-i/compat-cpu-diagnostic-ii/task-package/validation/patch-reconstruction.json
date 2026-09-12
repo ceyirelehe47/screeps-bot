@@ -1,0 +1,8 @@
+{
+  "patches": 3,
+  "checkAndApply": "PASS",
+  "reconstructedFiles": 50,
+  "allBytesMatch": true,
+  "generation": "git diff --cached new-file mirrors",
+  "nativeWhitespaceExemptions": 0
+}

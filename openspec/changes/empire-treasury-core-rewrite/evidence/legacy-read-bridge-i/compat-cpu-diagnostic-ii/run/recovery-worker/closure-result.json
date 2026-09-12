@@ -1,0 +1,22 @@
+{
+  "status": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+  "closureId": "27d0fac7b7403284fe1039e5c805eb62",
+  "parentRunId": "5a15bbc9a89d0a348665a9acc9d7d46e",
+  "actor": "worker",
+  "bytesConfirmed": true,
+  "uploadOutcomeResolved": true,
+  "runtimeConfirmed": true,
+  "error": null,
+  "runtimeVerification": {
+    "status": "RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED",
+    "durationMs": 75032,
+    "collectorPid": 11440,
+    "consoleFrames": 19,
+    "cpuFrames": 20,
+    "positiveCpuFramesAfterReady": 19,
+    "maxConsoleGapMs": 5230,
+    "maxCpuGapMs": 5258,
+    "scope": "fresh shard1 console and account CPU; not a continuation of diagnostic observation"
+  },
+  "atMs": 1789215606235
+}

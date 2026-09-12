@@ -1,0 +1,9 @@
+{
+  "status": "CPU_DIAGNOSTIC_PREPARED_NOT_DEPLOYED",
+  "runId": "5a15bbc9a89d0a348665a9acc9d7d46e",
+  "profileHead": "8d70eb02446f7f59f3dd5ee4a958d9744dc8ca2d",
+  "startTick": 73654400,
+  "endTick": 73654700,
+  "latestObservedTick": 73654189,
+  "work": "D:\\code\\screeps\\compat-cpu-diagnostic-II-execution\\live"
+}

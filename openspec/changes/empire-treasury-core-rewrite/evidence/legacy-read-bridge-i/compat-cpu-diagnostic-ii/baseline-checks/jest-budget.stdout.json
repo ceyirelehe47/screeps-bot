@@ -1,0 +1,6 @@
+{
+  "encoding": "utf8",
+  "bytes": 103,
+  "sha256": "c4f59057ca4a9c9d3756f2547fffd577ea91b376ea2d7ba0395f60b4be44552b",
+  "text": "{\"status\":\"JEST_TEST_BUDGET=PASSED\",\"suites\":195,\"tests\":685,\"manifest\":\"test/test-suite-budget.json\"}\n"
+}

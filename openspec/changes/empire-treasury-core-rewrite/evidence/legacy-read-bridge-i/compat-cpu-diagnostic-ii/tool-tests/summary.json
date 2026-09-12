@@ -1,0 +1,19 @@
+{
+  "status": "CPU_DIAGNOSTIC_TOOL_TESTS_VERIFIED",
+  "tests": 96,
+  "passed": 96,
+  "failed": 0,
+  "skipped": 0,
+  "todo": 0,
+  "cancelled": 0,
+  "platform": "win32",
+  "node": "v22.19.0",
+  "packageFingerprint": "cf8c5de57b88839ca354772afdeb4ec0261fdc4a8b01cdf9e0c76ecd4973bd1c",
+  "testFiles": [
+    "tests/diagnostics.spec.cjs",
+    "tests/process.spec.cjs",
+    "tests/recovery.spec.cjs",
+    "tests/transport.spec.cjs",
+    "tests/workflow.spec.cjs"
+  ]
+}
