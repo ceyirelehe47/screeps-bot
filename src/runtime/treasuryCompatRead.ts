@@ -2,7 +2,8 @@
  * Reuses pinned production observation/commitment builders. Never computes a
  * spendable balance, signs a permit, migrates a store or advances world sequence.
  * One endpoint snapshot and one bounded CPU profile are retained. Reader caches
- * remain per sample; diagnostic profiles never contain a linked history.
+ * remain per sample; only audited definition modules may be reused. Diagnostic
+ * profiles never contain a linked history.
  */
 import type { CompatConfig, CompatPorts, CompatObservation } from "./treasuryCompatTypes";
 import { createCompatCpuAccounting, type CompatCpuPhase, type CompatCpuProfile } from "./treasuryCompatCpu";

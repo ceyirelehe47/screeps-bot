@@ -42,7 +42,7 @@ export interface CompatPorts {
   room(name: string): Room | undefined;
   memory(): unknown;
   resources(): readonly string[];
-  /** New module-local read cache per sample: old writers do NOT bump new revisions. */
+  /** Fresh mutable reader state per sample; audited definitions may be reused. */
   readers(): CompatReadBuilders;
   emit(line: string): void;
 }

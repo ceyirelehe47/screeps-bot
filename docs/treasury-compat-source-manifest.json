@@ -113,9 +113,9 @@
     },
     {
       "file": "src/runtime/treasuryCompatReadCore.generated.ts",
-      "bytes": 62929,
-      "sha256": "decc6a2e019ba931041c8d79d341a59658755473b06075a19a458cc6635bd400",
-      "gitBlob": "c44d8a306f2b11986c6556e098be7d2e10315fa6"
+      "bytes": 64604,
+      "sha256": "9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965",
+      "gitBlob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3"
     },
     {
       "file": "src/runtime/treasuryCompatTypes.ts",
@@ -171,5 +171,11 @@
       "sha256": "23352cd61c5725021d5aed3798b714d702f766d41781d1beffd07e87773e4877",
       "gitBlob": "fa47f2b26745cdf45fca2e228726777a9918e8a6"
     }
-  ]
+  ],
+  "loaderOptimization": {
+    "revision": "III",
+    "provenance": "docs/treasury-compat-loader-optimization.json",
+    "bodySourceCommitUnchanged": "01bd9831454950c4928df98dd8679692b55603e5",
+    "baselineGeneratedBlob": "c44d8a306f2b11986c6556e098be7d2e10315fa6"
+  }
 }

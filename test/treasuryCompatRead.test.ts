@@ -7,7 +7,8 @@ describe("Treasury old-production read compatibility bridge", () => {
   it("passes bridge boundaries and actual pinned reader compatibility without Memory writes", () => {
     const result = spawnSync(process.execPath, ["--test",
       resolve(__dirname, "treasury-compat/bridge.spec.cjs"),
-      resolve(__dirname, "treasury-compat/real-readers.spec.cjs")], {
+      resolve(__dirname, "treasury-compat/real-readers.spec.cjs"),
+      resolve(__dirname, "treasury-compat/loader-optimization.spec.cjs")], {
       cwd: resolve(__dirname, ".."), encoding: "utf8", timeout: 45000,
     });
     if (result.status !== 0) throw new Error([result.error?.message, result.stdout, result.stderr].filter(Boolean).join("\n"));
