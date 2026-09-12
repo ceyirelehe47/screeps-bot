@@ -1,0 +1,39 @@
+{
+  "repository": "ceyirelehe47/screeps-bot",
+  "refactorHead": "0b09414f90c7144bbff61758fe7cf605576231e7",
+  "compatHead": "3292e152b0db465263e4f1fa5c9eac068394acef",
+  "baselineBlobs": {
+    "src/runtime/treasuryCompatRuntime.ts": "682e603d92b333b1d7112cb05693fdc136736a27",
+    "src/runtime/treasuryCompatRead.ts": "fccb89279f1f92ce6478411ab3f2368210e9d6b1",
+    "src/runtime/treasuryCompatTypes.ts": "e75b04491ad8da3fc12d147bacb014c6b76b09da",
+    "src/runtime/treasuryCompatConfig.ts": "8e2214fef5a6a69b7eb40c82eee76dda1646ccbf",
+    "test/treasury-compat/helpers.cjs": "238caabe0de507c9c026c594290d8e7bfeeca337"
+  },
+  "protectedBlobs": {
+    "src/runtime/treasuryCompatConfig.ts": "8e2214fef5a6a69b7eb40c82eee76dda1646ccbf",
+    "src/runtime/treasuryCompatTypes.ts": "e75b04491ad8da3fc12d147bacb014c6b76b09da",
+    "src/runtime/treasuryCompatReadCore.generated.ts": "c44d8a306f2b11986c6556e098be7d2e10315fa6"
+  },
+  "changes": [
+    {
+      "path": "src/runtime/treasuryCompatCpu.ts",
+      "oldBlob": null,
+      "newSha256": "103e7a3e115fcc885fc337b91e7336cdb2cd3e890524f0c8b4d2f4082c0207ef"
+    },
+    {
+      "path": "src/runtime/treasuryCompatRead.ts",
+      "oldBlob": "fccb89279f1f92ce6478411ab3f2368210e9d6b1",
+      "newSha256": "c14efedac18f865e1bf04fb5ce3ea8c954598f69add84fa0646b4c5470273d03"
+    },
+    {
+      "path": "src/runtime/treasuryCompatRuntime.ts",
+      "oldBlob": "682e603d92b333b1d7112cb05693fdc136736a27",
+      "newSha256": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4"
+    },
+    {
+      "path": "test/treasury-compat/helpers.cjs",
+      "oldBlob": "238caabe0de507c9c026c594290d8e7bfeeca337",
+      "newSha256": "c200b1f2b6dc55deae8b50ac7ae9f0e5ecb191be6592a42c713fce7d3d289e74"
+    }
+  ]
+}

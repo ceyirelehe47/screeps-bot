@@ -1,0 +1,16 @@
+{
+  "status": "COMPAT_FULL_OFFLINE_CHECKS_VERIFIED",
+  "base": "3292e152b0db465263e4f1fa5c9eac068394acef",
+  "repositoryNodeTests": {
+    "tests": 70,
+    "pass": 70,
+    "fail": 0,
+    "skipped": 0
+  },
+  "productionBudgetUnchanged": {
+    "suites": 195,
+    "tests": 685
+  },
+  "buildOnly": true,
+  "notDeployed": true
+}

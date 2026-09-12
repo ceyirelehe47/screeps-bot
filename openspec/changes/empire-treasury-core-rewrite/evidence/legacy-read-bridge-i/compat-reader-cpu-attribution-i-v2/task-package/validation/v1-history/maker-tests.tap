@@ -1,0 +1,424 @@
+TAP version 13
+# Subtest: accounting is additive and attributes the interval before each boundary
+ok 1 - accounting is additive and attributes the interval before each boundary
+  ---
+  duration_ms: 2.550585
+  type: 'test'
+  ...
+# Subtest: accounting rejects clock regression and nonfinite values
+ok 2 - accounting rejects clock regression and nonfinite values
+  ---
+  duration_ms: 2.478266
+  type: 'test'
+  ...
+# Subtest: accounting validates identifiers and duplicate calls
+ok 3 - accounting validates identifiers and duplicate calls
+  ---
+  duration_ms: 0.239513
+  type: 'test'
+  ...
+# Subtest: accounting snapshots are bounded immutable independent values
+ok 4 - accounting snapshots are bounded immutable independent values
+  ---
+  duration_ms: 0.201762
+  type: 'test'
+  ...
+# Subtest: diagnostics preserve default-disabled zero-port execution
+ok 5 - diagnostics preserve default-disabled zero-port execution
+  ---
+  duration_ms: 256.151651
+  type: 'test'
+  ...
+# Subtest: non-sampling gate not-due does not load readers
+ok 6 - non-sampling gate not-due does not load readers
+  ---
+  duration_ms: 68.160318
+  type: 'test'
+  ...
+# Subtest: non-sampling gate outside does not load readers
+ok 7 - non-sampling gate outside does not load readers
+  ---
+  duration_ms: 52.77207
+  type: 'test'
+  ...
+# Subtest: non-sampling gate shard does not load readers
+ok 8 - non-sampling gate shard does not load readers
+  ---
+  duration_ms: 56.592503
+  type: 'test'
+  ...
+# Subtest: non-sampling gate low-bucket does not load readers
+ok 9 - non-sampling gate low-bucket does not load readers
+  ---
+  duration_ms: 48.021026
+  type: 'test'
+  ...
+# Subtest: non-sampling gate low-headroom does not load readers
+ok 10 - non-sampling gate low-headroom does not load readers
+  ---
+  duration_ms: 27.075978
+  type: 'test'
+  ...
+# Subtest: loader, observation, commitment, projection and emit costs are separately observed
+ok 11 - loader, observation, commitment, projection and emit costs are separately observed
+  ---
+  duration_ms: 33.549503
+  type: 'test'
+  ...
+# Subtest: probe overhead is charged to cumulative budget, not subtracted
+ok 12 - probe overhead is charged to cumulative budget, not subtracted
+  ---
+  duration_ms: 37.017631
+  type: 'test'
+  ...
+# Subtest: reader loading exceeding budget prevents observation and commitment calls
+ok 13 - reader loading exceeding budget prevents observation and commitment calls
+  ---
+  duration_ms: 34.845633
+  type: 'test'
+  ...
+# Subtest: observed-budget-shaped overrun is partial and never repaired by diagnostics
+ok 14 - observed-budget-shaped overrun is partial and never repaired by diagnostics
+  ---
+  duration_ms: 33.56939
+  type: 'test'
+  ...
+# Subtest: commitment overrun remains partial instead of publishing complete rows
+ok 15 - commitment overrun remains partial instead of publishing complete rows
+  ---
+  duration_ms: 27.632902
+  type: 'test'
+  ...
+# Subtest: diagnostic admission cannot start a builder after budget has failed
+ok 16 - diagnostic admission cannot start a builder after budget has failed
+  ---
+  duration_ms: 25.117861
+  type: 'test'
+  ...
+# Subtest: next sample carries previous full profile without self-referential history
+ok 17 - next sample carries previous full profile without self-referential history
+  ---
+  duration_ms: 25.35635
+  type: 'test'
+  ...
+# Subtest: last sample full profile is heap-only until there is a following report
+ok 18 - last sample full profile is heap-only until there is a following report
+  ---
+  duration_ms: 27.836115
+  type: 'test'
+  ...
+# Subtest: fault handling remains fail-closed: memoryThrow
+ok 19 - fault handling remains fail-closed: memoryThrow
+  ---
+  duration_ms: 25.594941
+  type: 'test'
+  ...
+# Subtest: fault handling remains fail-closed: loadThrow
+ok 20 - fault handling remains fail-closed: loadThrow
+  ---
+  duration_ms: 21.995687
+  type: 'test'
+  ...
+# Subtest: fault handling remains fail-closed: obsThrow
+ok 21 - fault handling remains fail-closed: obsThrow
+  ---
+  duration_ms: 23.723351
+  type: 'test'
+  ...
+# Subtest: fault handling remains fail-closed: commitThrow
+ok 22 - fault handling remains fail-closed: commitThrow
+  ---
+  duration_ms: 26.446434
+  type: 'test'
+  ...
+# Subtest: fault handling remains fail-closed: emitThrow
+ok 23 - fault handling remains fail-closed: emitThrow
+  ---
+  duration_ms: 30.937205
+  type: 'test'
+  ...
+# Subtest: fault handling remains fail-closed: stale
+ok 24 - fault handling remains fail-closed: stale
+  ---
+  duration_ms: 21.721706
+  type: 'test'
+  ...
+# Subtest: fault handling remains fail-closed: invalidNumber
+ok 25 - fault handling remains fail-closed: invalidNumber
+  ---
+  duration_ms: 22.538673
+  type: 'test'
+  ...
+# Subtest: invalid ending CPU remains a fault, never a completed profile
+ok 26 - invalid ending CPU remains a fault, never a completed profile
+  ---
+  duration_ms: 21.745923
+  type: 'test'
+  ...
+# Subtest: stats cannot mutate subsequent report diagnostics
+ok 27 - stats cannot mutate subsequent report diagnostics
+  ---
+  duration_ms: 22.058512
+  type: 'test'
+  ...
+# Subtest: reader caches remain per sample even when same-tick revision is not bumped
+ok 28 - reader caches remain per sample even when same-tick revision is not bumped
+  ---
+  duration_ms: 23.930829
+  type: 'test'
+  ...
+# Subtest: same tick invocation is not a second sample or profile
+ok 29 - same tick invocation is not a second sample or profile
+  ---
+  duration_ms: 19.881633
+  type: 'test'
+  ...
+# Subtest: unchanged authority flags and bounded diagnostic field set
+ok 30 - unchanged authority flags and bounded diagnostic field set
+  ---
+  duration_ms: 22.872428
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: empty tables
+ok 31 - A/B with diagnostics OFF is byte-identical: empty tables
+  ---
+  duration_ms: 543.249039
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: missing tasks
+ok 32 - A/B with diagnostics OFF is byte-identical: missing tasks
+  ---
+  duration_ms: 106.553192
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: missing reservations
+ok 33 - A/B with diagnostics OFF is byte-identical: missing reservations
+  ---
+  duration_ms: 132.005278
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: invalid tasks array
+ok 34 - A/B with diagnostics OFF is byte-identical: invalid tasks array
+  ---
+  duration_ms: 105.708757
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: oversized table
+ok 35 - A/B with diagnostics OFF is byte-identical: oversized table
+  ---
+  duration_ms: 106.468828
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: exact table bound
+ok 36 - A/B with diagnostics OFF is byte-identical: exact table bound
+  ---
+  duration_ms: 67.940859
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: table accessor must not execute
+ok 37 - A/B with diagnostics OFF is byte-identical: table accessor must not execute
+  ---
+  duration_ms: 63.098177
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: inherited tasks ignored
+ok 38 - A/B with diagnostics OFF is byte-identical: inherited tasks ignored
+  ---
+  duration_ms: 46.082932
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: invisible room
+ok 39 - A/B with diagnostics OFF is byte-identical: invisible room
+  ---
+  duration_ms: 53.05365
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: unowned room
+ok 40 - A/B with diagnostics OFF is byte-identical: unowned room
+  ---
+  duration_ms: 46.584557
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: absent terminal
+ok 41 - A/B with diagnostics OFF is byte-identical: absent terminal
+  ---
+  duration_ms: 62.694062
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: overcapacity store
+ok 42 - A/B with diagnostics OFF is byte-identical: overcapacity store
+  ---
+  duration_ms: 48.056337
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: core mismatch
+ok 43 - A/B with diagnostics OFF is byte-identical: core mismatch
+  ---
+  duration_ms: 41.852006
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: incomplete commitment index
+ok 44 - A/B with diagnostics OFF is byte-identical: incomplete commitment index
+  ---
+  duration_ms: 42.30945
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: same-tick legacy projection
+ok 45 - A/B with diagnostics OFF is byte-identical: same-tick legacy projection
+  ---
+  duration_ms: 50.112578
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: stale legacy projection
+ok 46 - A/B with diagnostics OFF is byte-identical: stale legacy projection
+  ---
+  duration_ms: 44.893319
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: throwing reader
+ok 47 - A/B with diagnostics OFF is byte-identical: throwing reader
+  ---
+  duration_ms: 35.73712
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: throwing observation
+ok 48 - A/B with diagnostics OFF is byte-identical: throwing observation
+  ---
+  duration_ms: 42.011343
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: throwing commitment
+ok 49 - A/B with diagnostics OFF is byte-identical: throwing commitment
+  ---
+  duration_ms: 41.70026
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: overbudget loading
+ok 50 - A/B with diagnostics OFF is byte-identical: overbudget loading
+  ---
+  duration_ms: 48.50069
+  type: 'test'
+  ...
+# Subtest: A/B with diagnostics OFF is byte-identical: overbudget observation
+ok 51 - A/B with diagnostics OFF is byte-identical: overbudget observation
+  ---
+  duration_ms: 59.179363
+  type: 'test'
+  ...
+# Subtest: normal output UTF-8 scan count decreases from two to one
+ok 52 - normal output UTF-8 scan count decreases from two to one
+  ---
+  duration_ms: 34.626814
+  type: 'test'
+  ...
+# Subtest: output-limited fallback sizes the distinct fallback string correctly
+ok 53 - output-limited fallback sizes the distinct fallback string correctly
+  ---
+  duration_ms: 41.740747
+  type: 'test'
+  ...
+# Subtest: UTF-8 sizing matches Buffer for ASCII CJK astral and unpaired surrogates
+ok 54 - UTF-8 sizing matches Buffer for ASCII CJK astral and unpaired surrogates
+  ---
+  duration_ms: 23.20317
+  type: 'test'
+  ...
+# Subtest: diagnostics ON preserve semantic results with known injected costs
+ok 55 - diagnostics ON preserve semantic results with known injected costs
+  ---
+  duration_ms: 37.651179
+  type: 'test'
+  ...
+# Subtest: output limiting cannot leak recursive diagnostic history after 12 samples
+ok 56 - output limiting cannot leak recursive diagnostic history after 12 samples
+  ---
+  duration_ms: 28.641962
+  type: 'test'
+  ...
+# Subtest: actual runtime composition stays OFF and never invokes sampling ports
+ok 57 - actual runtime composition stays OFF and never invokes sampling ports
+  ---
+  duration_ms: 24.59778
+  type: 'test'
+  ...
+# Subtest: both builders still receive independent actual Room objects and original tables
+ok 58 - both builders still receive independent actual Room objects and original tables
+  ---
+  duration_ms: 29.863415
+  type: 'test'
+  ...
+# Subtest: pinned baseline files match independently retrieved Git blob identities
+ok 59 - pinned baseline files match independently retrieved Git blob identities
+  ---
+  duration_ms: 2.01617
+  type: 'test'
+  ...
+# Subtest: implementation changes exactly the reader runtime wrapper and new helper
+ok 60 - implementation changes exactly the reader runtime wrapper and new helper
+  ---
+  duration_ms: 1.155284
+  type: 'test'
+  ...
+# Subtest: fixed byte application succeeds against the exact baseline and is not rerunnable
+ok 61 - fixed byte application succeeds against the exact baseline and is not rerunnable
+  ---
+  duration_ms: 8.478396
+  type: 'test'
+  ...
+# Subtest: write failure rolls back original CRLF bytes and the newly created file
+ok 62 - write failure rolls back original CRLF bytes and the newly created file
+  ---
+  duration_ms: 8.825113
+  type: 'test'
+  ...
+# Subtest: paths with parent traversal or absolute paths are refused
+ok 63 - paths with parent traversal or absolute paths are refused
+  ---
+  duration_ms: 0.471608
+  type: 'test'
+  ...
+# Subtest: package inventory is locale-order independent but exact in case and bytes
+ok 64 - package inventory is locale-order independent but exact in case and bytes
+  ---
+  duration_ms: 1.438654
+  type: 'test'
+  ...
+# Subtest: package verifier rejects extra and missing files
+ok 65 - package verifier rejects extra and missing files
+  ---
+  duration_ms: 0.596171
+  type: 'test'
+  ...
+# Subtest: build environment clears deployment targets and node injection
+ok 66 - build environment clears deployment targets and node injection
+  ---
+  duration_ms: 0.78473
+  type: 'test'
+  ...
+# Subtest: local patches apply and match the full replacement payloads
+ok 67 - local patches apply and match the full replacement payloads
+  ---
+  duration_ms: 32.233566
+  type: 'test'
+  ...
+# Subtest: offline execution surface contains no Screeps transport or write clients
+ok 68 - offline execution surface contains no Screeps transport or write clients
+  ---
+  duration_ms: 0.839798
+  type: 'test'
+  ...
+# Subtest: archive assembler and staged verifier agree on a real temporary Git index with autocrlf
+ok 69 - archive assembler and staged verifier agree on a real temporary Git index with autocrlf
+  ---
+  duration_ms: 860.757605
+  type: 'test'
+  ...
+1..69
+# tests 69
+# suites 0
+# pass 69
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3603.312272

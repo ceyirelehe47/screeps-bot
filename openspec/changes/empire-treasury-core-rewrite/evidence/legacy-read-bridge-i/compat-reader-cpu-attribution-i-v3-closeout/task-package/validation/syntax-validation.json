@@ -1,0 +1,35 @@
+{
+  "status": "PASS",
+  "files": [
+    {
+      "path": "tests/closeout.spec.cjs",
+      "sha256": "ac45127d197b07badf8009eb312a0a08e290905ecd5e4d49234c40340383431f",
+      "exit": 0
+    },
+    {
+      "path": "tests/fixture.cjs",
+      "sha256": "6ec48e75eea93947e2435139b5756a2e6e9e9343615a506110c4fc694213853e",
+      "exit": 0
+    },
+    {
+      "path": "tools/checks.cjs",
+      "sha256": "73242a67754aa5a1daf928c7c14c530be559a3c37ff30765f1f52484b922d694",
+      "exit": 0
+    },
+    {
+      "path": "tools/closeout.cjs",
+      "sha256": "7976b8acbab11deaf21bb52025e515fe7ade97494420f500fa8c816fb58aecdf",
+      "exit": 0
+    },
+    {
+      "path": "tools/common.cjs",
+      "sha256": "fec6a3bb61284118ca1831e21ee3175e3ad745fa50678c5122eaa255ab75757a",
+      "exit": 0
+    },
+    {
+      "path": "tools/run.cjs",
+      "sha256": "be5c6029324225ac1542477b00a00177d47fccd231d1c981ebdbc6f8b31e210d",
+      "exit": 0
+    }
+  ]
+}

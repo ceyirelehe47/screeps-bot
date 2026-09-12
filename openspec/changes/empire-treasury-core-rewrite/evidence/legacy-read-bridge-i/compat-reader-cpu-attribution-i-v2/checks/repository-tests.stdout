@@ -1,0 +1,430 @@
+TAP version 13
+# Subtest: disabled profile never reads Game/Memory/builders/CPU, including module construction
+ok 1 - disabled profile never reads Game/Memory/builders/CPU, including module construction
+  ---
+  duration_ms: 153.697
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: rooms=[]
+ok 2 - invalid profile refuses: rooms=[]
+  ---
+  duration_ms: 76.8519
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: rooms=["W1N1","W1N1"]
+ok 3 - invalid profile refuses: rooms=["W1N1","W1N1"]
+  ---
+  duration_ms: 60.4879
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: rooms=["W1N1","W2N1","W3N1"]
+ok 4 - invalid profile refuses: rooms=["W1N1","W2N1","W3N1"]
+  ---
+  duration_ms: 39.5514
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: endTick=99
+ok 5 - invalid profile refuses: endTick=99
+  ---
+  duration_ms: 43.7385
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: endTick=1301
+ok 6 - invalid profile refuses: endTick=1301
+  ---
+  duration_ms: 31.648
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: startTick=null
+ok 7 - invalid profile refuses: startTick=null
+  ---
+  duration_ms: 35.7615
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: intervalTicks=1
+ok 8 - invalid profile refuses: intervalTicks=1
+  ---
+  duration_ms: 42.0109
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: resources=[]
+ok 9 - invalid profile refuses: resources=[]
+  ---
+  duration_ms: 34.6672
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: maxLogBytes=100
+ok 10 - invalid profile refuses: maxLogBytes=100
+  ---
+  duration_ms: 34.53
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: maxSampleCpu=null
+ok 11 - invalid profile refuses: maxSampleCpu=null
+  ---
+  duration_ms: 32.9619
+  type: 'test'
+  ...
+# Subtest: current fields retain explicit empty state, index values are not balances
+ok 12 - current fields retain explicit empty state, index values are not balances
+  ---
+  duration_ms: 32.279
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: absent m => delete m.data.resourceControl.tasks
+ok 13 - missing/damaged table remains unavailable: absent m => delete m.data.resourceControl.tasks
+  ---
+  duration_ms: 28.1425
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = null
+ok 14 - missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = null
+  ---
+  duration_ms: 27.8967
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = []
+ok 15 - missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = []
+  ---
+  duration_ms: 20.0041
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_parent m => m.data = null
+ok 16 - missing/damaged table remains unavailable: invalid_parent m => m.data = null
+  ---
+  duration_ms: 30.7305
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: accessor_unreadable m => Object.defineProperty(m.data.resourceControl,'tasks',{ get(){throw new Error('should not invoke');} })
+ok 17 - missing/damaged table remains unavailable: accessor_unreadable m => Object.defineProperty(m.data.resourceControl,'tasks',{ get(){throw new Error('should not invoke');} })
+  ---
+  duration_ms: 20.5449
+  type: 'test'
+  ...
+# Subtest: over-bound table does not aggregate a prefix; exact bound accepted
+ok 18 - over-bound table does not aggregate a prefix; exact bound accepted
+  ---
+  duration_ms: 27.1618
+  type: 'test'
+  ...
+# Subtest: existing Treasury core is not summarized as zero, even malformed or null
+ok 19 - existing Treasury core is not summarized as zero, even malformed or null
+  ---
+  duration_ms: 50.5397
+  type: 'test'
+  ...
+# Subtest: off-shard, early/late window and non-due tick use zero source reads
+ok 20 - off-shard, early/late window and non-due tick use zero source reads
+  ---
+  duration_ms: 93.8684
+  type: 'test'
+  ...
+# Subtest: low bucket and CPU headroom gate before reading state; legal next sample runs
+ok 21 - low bucket and CPU headroom gate before reading state; legal next sample runs
+  ---
+  duration_ms: 18.8056
+  type: 'test'
+  ...
+# Subtest: one attempt per tick and frozen profile scope
+ok 22 - one attempt per tick and frozen profile scope
+  ---
+  duration_ms: 22.6955
+  type: 'test'
+  ...
+# Subtest: new sample creates new reader instance, old writers need not bump new revision
+ok 23 - new sample creates new reader instance, old writers need not bump new revision
+  ---
+  duration_ms: 18.5645
+  type: 'test'
+  ...
+# Subtest: 8M storage comes from getCapacity and compares; no 1M hardcode
+ok 24 - 8M storage comes from getCapacity and compares; no 1M hardcode
+  ---
+  duration_ms: 24.2814
+  type: 'test'
+  ...
+# Subtest: capacity drop with inventory above capacity is visible, no comparable old delta
+ok 25 - capacity drop with inventory above capacity is visible, no comparable old delta
+  ---
+  duration_ms: 22.6474
+  type: 'test'
+  ...
+# Subtest: saturated free zero after shrink accepted without inventing capacity
+ok 26 - saturated free zero after shrink accepted without inventing capacity
+  ---
+  duration_ms: 27.52
+  type: 'test'
+  ...
+# Subtest: missing terminal is absence, not a zero amount
+ok 27 - missing terminal is absence, not a zero amount
+  ---
+  duration_ms: 21.7497
+  type: 'test'
+  ...
+# Subtest: unreadable endpoint is not included in snapshot input; other room is still readable
+ok 28 - unreadable endpoint is not included in snapshot input; other room is still readable
+  ---
+  duration_ms: 19.7802
+  type: 'test'
+  ...
+# Subtest: NaN and inconsistent capacity never become normal
+ok 29 - NaN and inconsistent capacity never become normal
+  ---
+  duration_ms: 43.8357
+  type: 'test'
+  ...
+# Subtest: independent sparse-builder mismatch is detected and legal next sample restores match
+ok 30 - independent sparse-builder mismatch is detected and legal next sample restores match
+  ---
+  duration_ms: 20.7068
+  type: 'test'
+  ...
+# Subtest: legacy projection comparison requires same tick, never yesterday as now
+ok 31 - legacy projection comparison requires same tick, never yesterday as now
+  ---
+  duration_ms: 19.2377
+  type: 'test'
+  ...
+# Subtest: unknown legacy projection values or future tick are explicitly unreadable/future
+ok 32 - unknown legacy projection values or future tick are explicitly unreadable/future
+  ---
+  duration_ms: 18.4415
+  type: 'test'
+  ...
+# Subtest: Memory immutable and identity preserved, no table normalization
+ok 33 - Memory immutable and identity preserved, no table normalization
+  ---
+  duration_ms: 21.8558
+  type: 'test'
+  ...
+# Subtest: output limit emits valid omission without baseline; later delta cannot use unseen report
+ok 34 - output limit emits valid omission without baseline; later delta cannot use unseen report
+  ---
+  duration_ms: 17.6374
+  type: 'test'
+  ...
+# Subtest: CPU cooperating budget stops further work and exposes partial result
+ok 35 - CPU cooperating budget stops further work and exposes partial result
+  ---
+  duration_ms: 22.3278
+  type: 'test'
+  ...
+# Subtest: cost of serialization/emission is reported in following sample, not a hard cap
+ok 36 - cost of serialization/emission is reported in following sample, not a hard cap
+  ---
+  duration_ms: 21.5799
+  type: 'test'
+  ...
+# Subtest: logger and reader exceptions disable only preview and do not rethrow
+ok 37 - logger and reader exceptions disable only preview and do not rethrow
+  ---
+  duration_ms: 38.7226
+  type: 'test'
+  ...
+# Subtest: long run retains one primitive snapshot; absolute end survives module reset
+ok 38 - long run retains one primitive snapshot; absolute end survives module reset
+  ---
+  duration_ms: 20.7224
+  type: 'test'
+  ...
+# Subtest: primitive deltas are not writer attribution or actual fees
+ok 39 - primitive deltas are not writer attribution or actual fees
+  ---
+  duration_ms: 20.3448
+  type: 'test'
+  ...
+# Subtest: UTF-8 JSON length agrees with Buffer oracle
+ok 40 - UTF-8 JSON length agrees with Buffer oracle
+  ---
+  duration_ms: 18.7646
+  type: 'test'
+  ...
+# Subtest: runtime default is disabled, does not evaluate read capsule
+ok 41 - runtime default is disabled, does not evaluate read capsule
+  ---
+  duration_ms: 27.7893
+  type: 'test'
+  ...
+# Subtest: 独立1a：两房非空正对照——done/cancelled 不计 outgoing，manual 计入对侧 incoming
+ok 42 - 独立1a：两房非空正对照——done/cancelled 不计 outgoing，manual 计入对侧 incoming
+  ---
+  duration_ms: 275.6704
+  type: 'test'
+  ...
+# Subtest: 独立1b：expiresAt 等于当前 tick 仍占用（严格小于才到期），跨过才排除且原记录保留
+ok 43 - 独立1b：expiresAt 等于当前 tick 仍占用（严格小于才到期），跨过才排除且原记录保留
+  ---
+  duration_ms: 127.3232
+  type: 'test'
+  ...
+# Subtest: 独立1c：旧 writer 状态迁移与新增记录（无 revision 通知），下一样本如实反映新值
+ok 44 - 独立1c：旧 writer 状态迁移与新增记录（无 revision 通知），下一样本如实反映新值
+  ---
+  duration_ms: 94.8409
+  type: 'test'
+  ...
+# Subtest: 独立2a：reservations 为数组或 null 不冒充空表
+ok 45 - 独立2a：reservations 为数组或 null 不冒充空表
+  ---
+  duration_ms: 163.6451
+  type: 'test'
+  ...
+# Subtest: 独立2b：单条损坏（remaining>amount）→ read_incomplete 且 scope 级 incomplete，原记录不动
+ok 46 - 独立2b：单条损坏（remaining>amount）→ read_incomplete 且 scope 级 incomplete，原记录不动
+  ---
+  duration_ms: 60.3552
+  type: 'test'
+  ...
+# Subtest: 独立2c：限定资源外（U）损坏记录——索引仍完整定位 scope，选定 H 行保持 complete
+ok 47 - 独立2c：限定资源外（U）损坏记录——索引仍完整定位 scope，选定 H 行保持 complete
+  ---
+  duration_ms: 58.7328
+  type: 'test'
+  ...
+# Subtest: 独立2d：catalog 外资源记录 → 全局 incomplete 传染每个 scope（fail closed）
+ok 48 - 独立2d：catalog 外资源记录 → 全局 incomplete 传染每个 scope（fail closed）
+  ---
+  duration_ms: 56.8907
+  type: 'test'
+  ...
+# Subtest: 独立2e：Proxy 守卫真实武装（写尝试被拦截计数），观察全程零写且原型未污染
+ok 49 - 独立2e：Proxy 守卫真实武装（写尝试被拦截计数），观察全程零写且原型未污染
+  ---
+  duration_ms: 62.5029
+  type: 'test'
+  ...
+# Subtest: 独立3a：非 1M/8M 档位的合法容量变化（1M→3M→2.5M）与结构 ID 替换
+ok 50 - 独立3a：非 1M/8M 档位的合法容量变化（1M→3M→2.5M）与结构 ID 替换
+  ---
+  duration_ms: 64.191
+  type: 'test'
+  ...
+# Subtest: 独立3b：单房一端不可读 → 全房退出 observation/commitments（not_read），readers 零调用
+ok 51 - 独立3b：单房一端不可读 → 全房退出 observation/commitments（not_read），readers 零调用
+  ---
+  duration_ms: 64.8523
+  type: 'test'
+  ...
+# Subtest: 独立3c：单资源方法读数超过总量 used → unreadable，不产出半份数据
+ok 52 - 独立3c：单资源方法读数超过总量 used → unreadable，不产出半份数据
+  ---
+  duration_ms: 54.1284
+  type: 'test'
+  ...
+# Subtest: 独立4a：真实 observation 稀疏键枚举与方法读数故意不一致 → mismatch；恢复后 match
+ok 53 - 独立4a：真实 observation 稀疏键枚举与方法读数故意不一致 → mismatch；恢复后 match
+  ---
+  duration_ms: 56.566
+  type: 'test'
+  ...
+# Subtest: 独立4b：同 tick 投影但行字段为字符串 → unreadable 而非 match（comparisonPerformed=false）
+ok 54 - 独立4b：同 tick 投影但行字段为字符串 → unreadable 而非 match（comparisonPerformed=false）
+  ---
+  duration_ms: 46.4055
+  type: 'test'
+  ...
+# Subtest: 独立4c：候选实际 main.ts——39 阶段、首阶段业务异常 fail-fast 且 compatRead 未执行、compatRead 异常被包裹
+ok 55 - 独立4c：候选实际 main.ts——39 阶段、首阶段业务异常 fail-fast 且 compatRead 未执行、compatRead 异常被包裹
+  ---
+  duration_ms: 101.065
+  type: 'test'
+  ...
+# Subtest: 独立4d：默认配置非合法启用 profile——enabled 翻转 alone 仍被拒绝
+ok 56 - 独立4d：默认配置非合法启用 profile——enabled 翻转 alone 仍被拒绝
+  ---
+  duration_ms: 20.5161
+  type: 'test'
+  ...
+# Subtest: 独立5a：绝对窗口结束 + heap 重建不重开窗口，零新增读取
+ok 57 - 独立5a：绝对窗口结束 + heap 重建不重开窗口，零新增读取
+  ---
+  duration_ms: 22.0226
+  type: 'test'
+  ...
+# Subtest: 独立5b：低 bucket 跳过消耗本 tick 尝试名额；同 tick 恢复也不补采
+ok 58 - 独立5b：低 bucket 跳过消耗本 tick 尝试名额；同 tick 恢复也不补采
+  ---
+  duration_ms: 18.3134
+  type: 'test'
+  ...
+# Subtest: 独立5c：fault 清空保留快照，不再以隐形基线比较
+ok 59 - 独立5c：fault 清空保留快照，不再以隐形基线比较
+  ---
+  duration_ms: 23.1955
+  type: 'test'
+  ...
+# Subtest: 独立5d：输出不含原始任务/预留负载、holder 身份串与凭据形态
+ok 60 - 独立5d：输出不含原始任务/预留负载、holder 身份串与凭据形态
+  ---
+  duration_ms: 48.2799
+  type: 'test'
+  ...
+# Subtest: pinned runtime graph contains only read dependencies and no facade, kernel, Defense or old writer
+ok 61 - pinned runtime graph contains only read dependencies and no facade, kernel, Defense or old writer
+  ---
+  duration_ms: 282.6196
+  type: 'test'
+  ...
+# Subtest: actual observation/index on empty legacy tables, no new Memory keys or writes
+ok 62 - actual observation/index on empty legacy tables, no new Memory keys or writes
+  ---
+  duration_ms: 134.6531
+  type: 'test'
+  ...
+# Subtest: actual canonical readers count nonempty legacy task and unversioned reservation without migration
+ok 63 - actual canonical readers count nonempty legacy task and unversioned reservation without migration
+  ---
+  duration_ms: 95.2574
+  type: 'test'
+  ...
+# Subtest: old writer mutates same reservation/table identity without revision bump, next sample sees it
+ok 64 - old writer mutates same reservation/table identity without revision bump, next sample sees it
+  ---
+  duration_ms: 94.733
+  type: 'test'
+  ...
+# Subtest: expired reservation excluded by canonical read predicate, original record not deleted
+ok 65 - expired reservation excluded by canonical read predicate, original record not deleted
+  ---
+  duration_ms: 61.815
+  type: 'test'
+  ...
+# Subtest: unresolved owner remains reserved rather than silently orphan-released
+ok 66 - unresolved owner remains reserved rather than silently orphan-released
+  ---
+  duration_ms: 59.8757
+  type: 'test'
+  ...
+# Subtest: malformed record reaches original completeness logic and is not normalized/deleted
+ok 67 - malformed record reaches original completeness logic and is not normalized/deleted
+  ---
+  duration_ms: 117.6211
+  type: 'test'
+  ...
+# Subtest: explicit foreign kernel state is preserved without lifecycle or interpretation
+ok 68 - explicit foreign kernel state is preserved without lifecycle or interpretation
+  ---
+  duration_ms: 67.8331
+  type: 'test'
+  ...
+# Subtest: 8M and then reduced capacity use actual observation functions and invalidate only diagnostic delta
+ok 69 - 8M and then reduced capacity use actual observation functions and invalidate only diagnostic delta
+  ---
+  duration_ms: 53.6101
+  type: 'test'
+  ...
+# Subtest: missing table is NOT replaced with empty object before invoking canonical index
+ok 70 - missing table is NOT replaced with empty object before invoking canonical index
+  ---
+  duration_ms: 415.9502
+  type: 'test'
+  ...
+1..70
+# tests 70
+# suites 0
+# pass 70
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1712.8657

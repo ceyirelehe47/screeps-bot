@@ -1,0 +1,11 @@
+{
+  "status": "COMPAT_CPU_OFFLINE_READY_NOT_DEPLOYED",
+  "compatHead": "43b1b8e51caca0c17b975971a71fbbb0951823bf",
+  "refactorBase": "0b09414f90c7144bbff61758fe7cf605576231e7",
+  "implementationTests": 91,
+  "realCoreScenarios": 10,
+  "engineBudgetGapRepaired": false,
+  "generatedCoreChanged": false,
+  "budgetChanged": false,
+  "onlineCallsAuthorized": false
+}

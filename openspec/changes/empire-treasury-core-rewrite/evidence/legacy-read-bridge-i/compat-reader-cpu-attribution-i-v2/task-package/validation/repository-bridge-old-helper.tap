@@ -1,0 +1,870 @@
+TAP version 13
+# Subtest: disabled profile never reads Game/Memory/builders/CPU, including module construction
+not ok 1 - disabled profile never reads Game/Memory/builders/CPU, including module construction
+  ---
+  duration_ms: 112.657319
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:8:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:9:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: invalid profile refuses: rooms=[]
+not ok 2 - invalid profile refuses: rooms=[]
+  ---
+  duration_ms: 57.338936
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:16:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:17:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: invalid profile refuses: rooms=["W1N1","W1N1"]
+not ok 3 - invalid profile refuses: rooms=["W1N1","W1N1"]
+  ---
+  duration_ms: 32.378282
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:16:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:17:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: invalid profile refuses: rooms=["W1N1","W2N1","W3N1"]
+not ok 4 - invalid profile refuses: rooms=["W1N1","W2N1","W3N1"]
+  ---
+  duration_ms: 26.334397
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:16:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:17:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: invalid profile refuses: endTick=99
+not ok 5 - invalid profile refuses: endTick=99
+  ---
+  duration_ms: 29.692858
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:16:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:17:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: invalid profile refuses: endTick=1301
+not ok 6 - invalid profile refuses: endTick=1301
+  ---
+  duration_ms: 25.144645
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:16:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:17:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: invalid profile refuses: startTick=null
+not ok 7 - invalid profile refuses: startTick=null
+  ---
+  duration_ms: 18.945723
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:16:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:17:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: invalid profile refuses: intervalTicks=1
+not ok 8 - invalid profile refuses: intervalTicks=1
+  ---
+  duration_ms: 19.675566
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:16:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:17:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: invalid profile refuses: resources=[]
+not ok 9 - invalid profile refuses: resources=[]
+  ---
+  duration_ms: 23.800297
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:16:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:17:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: invalid profile refuses: maxLogBytes=100
+not ok 10 - invalid profile refuses: maxLogBytes=100
+  ---
+  duration_ms: 30.504504
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:16:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:17:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: invalid profile refuses: maxSampleCpu=null
+not ok 11 - invalid profile refuses: maxSampleCpu=null
+  ---
+  duration_ms: 15.062248
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:16:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:17:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: current fields retain explicit empty state, index values are not balances
+not ok 12 - current fields retain explicit empty state, index values are not balances
+  ---
+  duration_ms: 14.479689
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:20:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:21:13)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: missing/damaged table remains unavailable: absent m => delete m.data.resourceControl.tasks
+not ok 13 - missing/damaged table remains unavailable: absent m => delete m.data.resourceControl.tasks
+  ---
+  duration_ms: 13.644491
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:30:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:31:13)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = null
+not ok 14 - missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = null
+  ---
+  duration_ms: 14.467752
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:30:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:31:13)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = []
+not ok 15 - missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = []
+  ---
+  duration_ms: 14.66299
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:30:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:31:13)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_parent m => m.data = null
+not ok 16 - missing/damaged table remains unavailable: invalid_parent m => m.data = null
+  ---
+  duration_ms: 14.351692
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:30:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:31:13)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: missing/damaged table remains unavailable: accessor_unreadable m => Object.defineProperty(m.data.resourceControl,'tasks',{ get(){throw new Error('should not invoke');} })
+not ok 17 - missing/damaged table remains unavailable: accessor_unreadable m => Object.defineProperty(m.data.resourceControl,'tasks',{ get(){throw new Error('should not invoke');} })
+  ---
+  duration_ms: 16.088717
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:30:3'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:31:13)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: over-bound table does not aggregate a prefix; exact bound accepted
+not ok 18 - over-bound table does not aggregate a prefix; exact bound accepted
+  ---
+  duration_ms: 12.578722
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:35:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:36:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: existing Treasury core is not summarized as zero, even malformed or null
+not ok 19 - existing Treasury core is not summarized as zero, even malformed or null
+  ---
+  duration_ms: 11.674471
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:40:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:42:13)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: off-shard, early/late window and non-due tick use zero source reads
+not ok 20 - off-shard, early/late window and non-due tick use zero source reads
+  ---
+  duration_ms: 15.722599
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:45:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:47:13)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: low bucket and CPU headroom gate before reading state; legal next sample runs
+not ok 21 - low bucket and CPU headroom gate before reading state; legal next sample runs
+  ---
+  duration_ms: 12.750745
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:50:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:51:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: one attempt per tick and frozen profile scope
+not ok 22 - one attempt per tick and frozen profile scope
+  ---
+  duration_ms: 11.724635
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:55:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:56:32)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: new sample creates new reader instance, old writers need not bump new revision
+not ok 23 - new sample creates new reader instance, old writers need not bump new revision
+  ---
+  duration_ms: 15.320617
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:59:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:60:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: 8M storage comes from getCapacity and compares; no 1M hardcode
+not ok 24 - 8M storage comes from getCapacity and compares; no 1M hardcode
+  ---
+  duration_ms: 12.172134
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:62:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:63:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: capacity drop with inventory above capacity is visible, no comparable old delta
+not ok 25 - capacity drop with inventory above capacity is visible, no comparable old delta
+  ---
+  duration_ms: 11.662734
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:65:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:66:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: saturated free zero after shrink accepted without inventing capacity
+not ok 26 - saturated free zero after shrink accepted without inventing capacity
+  ---
+  duration_ms: 14.454593
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:69:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:70:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: missing terminal is absence, not a zero amount
+not ok 27 - missing terminal is absence, not a zero amount
+  ---
+  duration_ms: 11.93157
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:73:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:74:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: unreadable endpoint is not included in snapshot input; other room is still readable
+not ok 28 - unreadable endpoint is not included in snapshot input; other room is still readable
+  ---
+  duration_ms: 12.140607
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:76:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:77:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: NaN and inconsistent capacity never become normal
+not ok 29 - NaN and inconsistent capacity never become normal
+  ---
+  duration_ms: 14.584104
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:81:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:82:45)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: independent sparse-builder mismatch is detected and legal next sample restores match
+not ok 30 - independent sparse-builder mismatch is detected and legal next sample restores match
+  ---
+  duration_ms: 11.473586
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:84:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:85:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: legacy projection comparison requires same tick, never yesterday as now
+not ok 31 - legacy projection comparison requires same tick, never yesterday as now
+  ---
+  duration_ms: 11.356533
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:88:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:89:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: unknown legacy projection values or future tick are explicitly unreadable/future
+not ok 32 - unknown legacy projection values or future tick are explicitly unreadable/future
+  ---
+  duration_ms: 16.628071
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:94:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:95:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: Memory immutable and identity preserved, no table normalization
+not ok 33 - Memory immutable and identity preserved, no table normalization
+  ---
+  duration_ms: 12.03393
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:98:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:99:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: output limit emits valid omission without baseline; later delta cannot use unseen report
+not ok 34 - output limit emits valid omission without baseline; later delta cannot use unseen report
+  ---
+  duration_ms: 11.960542
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:101:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:102:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: CPU cooperating budget stops further work and exposes partial result
+not ok 35 - CPU cooperating budget stops further work and exposes partial result
+  ---
+  duration_ms: 15.990803
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:104:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:105:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: cost of serialization/emission is reported in following sample, not a hard cap
+not ok 36 - cost of serialization/emission is reported in following sample, not a hard cap
+  ---
+  duration_ms: 12.571782
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:107:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:108:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: logger and reader exceptions disable only preview and do not rethrow
+not ok 37 - logger and reader exceptions disable only preview and do not rethrow
+  ---
+  duration_ms: 11.846084
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:110:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:111:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: long run retains one primitive snapshot; absolute end survives module reset
+not ok 38 - long run retains one primitive snapshot; absolute end survives module reset
+  ---
+  duration_ms: 14.788405
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:114:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:115:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: primitive deltas are not writer attribution or actual fees
+not ok 39 - primitive deltas are not writer attribution or actual fees
+  ---
+  duration_ms: 11.440958
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:118:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    scene (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:79:15)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:119:11)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: UTF-8 JSON length agrees with Buffer oracle
+not ok 40 - UTF-8 JSON length agrees with Buffer oracle
+  ---
+  duration_ms: 11.64675
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:121:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:122:13)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: runtime default is disabled, does not evaluate read capsule
+not ok 41 - runtime default is disabled, does not evaluate read capsule
+  ---
+  duration_ms: 16.583356
+  type: 'test'
+  location: '/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:124:1'
+  failureType: 'testCodeFailure'
+  error: 'unexpected runtime import: ./treasuryCompatCpu'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    require (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:18:32)
+    treasuryCompatRead.ts:6:29
+    Script.runInContext (node:vm:149:12)
+    load (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/helpers.cjs:22:56)
+    TestContext.<anonymous> (/tmp/compat-cpu-repo-v2-o0rMm1/test/treasury-compat/bridge.spec.cjs:125:14)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+1..41
+# tests 41
+# suites 0
+# pass 0
+# fail 41
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1001.773356

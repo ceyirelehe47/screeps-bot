@@ -1,0 +1,67 @@
+{
+  "package": "screeps-compat-reader-cpu-I-v3-closeout-2026-09-12",
+  "mode": "complete implementation / verification-only continuation",
+  "supersedes": "v2 step18 and final commit/push instructions only; v2 bytes remain immutable",
+  "sourceChangeAuthorized": false,
+  "compatCommitMustBeReused": true,
+  "originalArchiveFilesMustRemainIdentical": 77,
+  "newEvidenceDirectory": "compat-reader-cpu-attribution-i-v3-closeout",
+  "refactorBase": "0b09414f90c7144bbff61758fe7cf605576231e7",
+  "compatBase": "3292e152b0db465263e4f1fa5c9eac068394acef",
+  "fixedTests": 37,
+  "productionAndHistoricalTestsRerun": false,
+  "requiredHistoricalEvidence": {
+    "fixedTests": 91,
+    "nodeCases": 70,
+    "suites": 195,
+    "tests": 685,
+    "abScenarios": 10
+  },
+  "gate": "Native full check must show exactly 2 pinned context-line findings; one exact path excluded for second full check; all other paths exit0",
+  "rawNativeCheckResultPreserved": 2,
+  "gitPolicyGlobalWrite": false,
+  "hookBypassAuthorized": false,
+  "sourceCommitFullSHA": "resolved from local existing commit and pinned archived FINAL-VERIFICATION; not inferred from short SHA",
+  "runtime": [
+    {
+      "path": "tests/closeout.spec.cjs",
+      "sha256": "ac45127d197b07badf8009eb312a0a08e290905ecd5e4d49234c40340383431f",
+      "exit": 0
+    },
+    {
+      "path": "tests/fixture.cjs",
+      "sha256": "6ec48e75eea93947e2435139b5756a2e6e9e9343615a506110c4fc694213853e",
+      "exit": 0
+    },
+    {
+      "path": "tools/checks.cjs",
+      "sha256": "73242a67754aa5a1daf928c7c14c530be559a3c37ff30765f1f52484b922d694",
+      "exit": 0
+    },
+    {
+      "path": "tools/closeout.cjs",
+      "sha256": "7976b8acbab11deaf21bb52025e515fe7ade97494420f500fa8c816fb58aecdf",
+      "exit": 0
+    },
+    {
+      "path": "tools/common.cjs",
+      "sha256": "fec6a3bb61284118ca1831e21ee3175e3ad745fa50678c5122eaa255ab75757a",
+      "exit": 0
+    },
+    {
+      "path": "tools/run.cjs",
+      "sha256": "be5c6029324225ac1542477b00a00177d47fccd231d1c981ebdbc6f8b31e210d",
+      "exit": 0
+    }
+  ],
+  "screepsCallsAuthorized": false,
+  "deployAuthorized": false,
+  "engineCpuGapRepaired": false,
+  "makerLimits": [
+    "Linux / Node v22.16.0 / Git 2.47.3; no native Windows execution",
+    "Actual original v2 ZIP bytes and patch syntax reproduced; isolated real Git indexes, commits and local bare push/readback exercised",
+    "Local test repository bases and historical-result records are explicitly synthetic",
+    "Did not fetch or execute unpushed Agent compat commit or 77 staged files",
+    "Did not rerun full user repository Jest/build/A-B or connect to Screeps"
+  ]
+}

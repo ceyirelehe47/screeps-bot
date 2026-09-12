@@ -1,0 +1,85 @@
+{
+  "package": "screeps-compat-reader-cpu-I-v2-2026-09-12",
+  "implementationStatus": "complete",
+  "agentRole": "verification-only",
+  "refactorBase": "0b09414f90c7144bbff61758fe7cf605576231e7",
+  "compatBase": "3292e152b0db465263e4f1fa5c9eac068394acef",
+  "task": "CPU attribution implementation and duplicate UTF-8 scan removal, offline only",
+  "allowedSourceChanges": [
+    "src/runtime/treasuryCompatCpu.ts",
+    "src/runtime/treasuryCompatRead.ts",
+    "src/runtime/treasuryCompatRuntime.ts",
+    "test/treasury-compat/helpers.cjs"
+  ],
+  "implementation": [
+    {
+      "path": "src/runtime/treasuryCompatCpu.ts",
+      "oldBlob": null,
+      "newSha256": "103e7a3e115fcc885fc337b91e7336cdb2cd3e890524f0c8b4d2f4082c0207ef",
+      "bytes": 2883
+    },
+    {
+      "path": "src/runtime/treasuryCompatRead.ts",
+      "oldBlob": "fccb89279f1f92ce6478411ab3f2368210e9d6b1",
+      "newSha256": "c14efedac18f865e1bf04fb5ce3ea8c954598f69add84fa0646b4c5470273d03",
+      "bytes": 19845
+    },
+    {
+      "path": "src/runtime/treasuryCompatRuntime.ts",
+      "oldBlob": "682e603d92b333b1d7112cb05693fdc136736a27",
+      "newSha256": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4",
+      "bytes": 865
+    },
+    {
+      "path": "test/treasury-compat/helpers.cjs",
+      "oldBlob": "238caabe0de507c9c026c594290d8e7bfeeca337",
+      "newSha256": "c200b1f2b6dc55deae8b50ac7ae9f0e5ecb191be6592a42c713fce7d3d289e74",
+      "bytes": 6806
+    }
+  ],
+  "fixedTests": 91,
+  "existingProjectTests": {
+    "suites": 195,
+    "tests": 685,
+    "budgetChangeAuthorized": false
+  },
+  "requiredAgentRealCoreScenarios": 10,
+  "generatedCoreChanged": false,
+  "defaultEnabled": false,
+  "maxSampleCpu": 2,
+  "onlineCallsAuthorized": false,
+  "candidateUploadAuthorized": false,
+  "restoreAuthorized": false,
+  "cpuGapRepairedClaimAllowed": false,
+  "diagnosticCostScope": {
+    "prefix": "original sampled-body start to before-serialization checkpoint",
+    "completed": "same start to after-retention checkpoint; final diagnostic copy and return excluded",
+    "initialModuleLoadAndConfigChecks": "outside original sampled-body scope; not measured",
+    "probeOverheadSubtracted": false,
+    "reportPersistence": "one previous primitive profile; no unbounded history",
+    "coldStartInference": "sampleOrdinal alone does not prove cold/warm state"
+  },
+  "makerLimits": [
+    "Linux / Node v22.16.0 / TypeScript 5.8.3",
+    "Exact Git-blob-verified helper and unchanged 41-case repository bridge suite were executed",
+    "91 fixed tests include import failure reproduction, actual bridge child process, and Git resume/case/line-ending controls",
+    "Full real generated core A/B, full repository TypeScript/Jest/Rollup and native Windows are Agent-required gates; not run by maker",
+    "No credentials, Screeps API, engine CPU, candidate upload or recovery executed"
+  ],
+  "revision": "v2-repository-harness-integration",
+  "supersedesZipSha256": "e15b7c5ff0480dbf91ac7f96928380742a4ab30b2bd136a15012f97bad153978",
+  "productionRuntimeUnchangedFromV1": true,
+  "gitBaselineChanged": false,
+  "fixedTestComposition": {
+    "existingTests": 69,
+    "integrationAndResumeTests": 22,
+    "unchangedRepositoryBridgeChildCases": 41,
+    "childCasesNotAddedToTotal": true
+  },
+  "resumableInputStates": [
+    "CLEAN_BASELINE",
+    "EXACT_V1_SOURCE_APPLIED",
+    "EXACT_V2_APPLIED"
+  ],
+  "applicationInputSnapshotRequired": true
+}

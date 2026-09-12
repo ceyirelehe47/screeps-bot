@@ -1,0 +1,7 @@
+{
+  "check": "PASS",
+  "apply": "PASS",
+  "expectedSha256": "84c6871046af3f2dd9de5e7c8ce71b73b4a64b364531a0817ebf4549a47a0483",
+  "actualSha256": "84c6871046af3f2dd9de5e7c8ce71b73b4a64b364531a0817ebf4549a47a0483",
+  "scope": "isolated temporary copy only; original executed v2 files untouched"
+}

@@ -1,0 +1,22 @@
+diff --git a/test/treasury-compat/helpers.cjs b/test/treasury-compat/helpers.cjs
+--- a/test/treasury-compat/helpers.cjs
++++ b/test/treasury-compat/helpers.cjs
+@@ -14,9 +14,16 @@
+     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2019, strict: true } });
+   assert.deepEqual((result.diagnostics || []).filter(d => d.category === ts.DiagnosticCategory.Error), []);
+   const exports = {};
++  // Explicit sandbox edge introduced by CPU attribution. Never fall back to
++  // the host require or resolve arbitrary filenames. Cache only in this load().
++  let cpuModule;
+   const ctx = vm.createContext({ ...globals, exports, require: k => {
+-    if (!(k in imports)) throw new Error('unexpected runtime import: ' + k);
+-    return imports[k];
++    if (Object.prototype.hasOwnProperty.call(imports, k)) return imports[k];
++    if (name === 'treasuryCompatRead.ts' && k === './treasuryCompatCpu') {
++      if (!cpuModule) cpuModule = load('treasuryCompatCpu.ts', globals);
++      return cpuModule;
++    }
++    throw new Error('unexpected runtime import: ' + k);
+   } });
+   if (globals.__memoryAccessor) Object.defineProperty(ctx, 'Memory', { get: globals.__memoryAccessor });
+   new vm.Script(result.outputText, { filename: name }).runInContext(ctx, { timeout: 5000 });

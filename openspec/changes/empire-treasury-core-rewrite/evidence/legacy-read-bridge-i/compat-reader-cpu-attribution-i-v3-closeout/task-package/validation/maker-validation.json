@@ -1,0 +1,35 @@
+{
+  "status": "MAKER_CLOSEOUT_IMPLEMENTATION_TESTS_PASSED",
+  "tests": 37,
+  "pass": 37,
+  "fail": 0,
+  "skipped": 0,
+  "todo": 0,
+  "cancelled": 0,
+  "platform": "Linux",
+  "node": "v22.16.0",
+  "git": "2.47.3",
+  "originalV2ZipSha256": "0af7f4fcc759262ba9ea1adcb1cd0de816244e41f4cbda26ffe78683319ebf3f",
+  "originalNativeStagedCheckExit": 2,
+  "originalFindingLines": [
+    73,
+    78
+  ],
+  "originalPatchBytesPreserved": true,
+  "newGateChecksEntireStagedSetExceptOneFullyPinnedPatch": true,
+  "realTemporaryGitCoverage": [
+    "original patch check/apply with four exact output payloads",
+    "77-file original archive stage reproduces native whitespace error",
+    "source-commit reuse and parent/tree/byte checks",
+    "v2 archive byte preservation",
+    "separate supplement assembly then entire index gate",
+    "Git commit then immutable tree verification",
+    "push both branches to a local bare repository and read back exact refs"
+  ],
+  "repositoryResultsInFixture": "synthetic and explicitly marked; not the unpushed Agent raw results",
+  "WindowsNTFSExecuted": false,
+  "userRepoFullJestOrBuildExecuted": false,
+  "realUnpushed77FilesExamined": false,
+  "screepsCalls": 0,
+  "validationTiming": "maker-tests.json records the pre-freeze package fingerprint; only documentation/validation inventory additions follow. Final ZIP extraction tests are in the external delivery-validation.json."
+}

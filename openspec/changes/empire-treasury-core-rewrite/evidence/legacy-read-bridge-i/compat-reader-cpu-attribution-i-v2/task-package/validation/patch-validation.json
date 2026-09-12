@@ -1,0 +1,26 @@
+{
+  "commands": [
+    {
+      "patch": "0001-reader-cpu-accounting.patch",
+      "checkOnly": true,
+      "exitCode": 0
+    },
+    {
+      "patch": "0001-reader-cpu-accounting.patch",
+      "checkOnly": false,
+      "exitCode": 0
+    },
+    {
+      "patch": "0002-repository-sandbox-import.patch",
+      "checkOnly": true,
+      "exitCode": 0
+    },
+    {
+      "patch": "0002-repository-sandbox-import.patch",
+      "checkOnly": false,
+      "exitCode": 0
+    }
+  ],
+  "filesByteEqual": 4,
+  "hostileSystemAndGlobalAutocrlf": true
+}

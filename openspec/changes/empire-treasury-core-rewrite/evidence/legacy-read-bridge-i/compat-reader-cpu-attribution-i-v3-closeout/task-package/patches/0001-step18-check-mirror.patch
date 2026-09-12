@@ -1,0 +1,13 @@
+diff --git a/AGENT-RUN.md b/AGENT-RUN.md
+index 20609f3..9949fa2 100644
+--- a/AGENT-RUN.md
++++ b/AGENT-RUN.md
+@@ -167,7 +167,7 @@ step 15-verify-archive node "$PKG/tools/run.cjs" verify-archive --refactor "$REF
+ TARGET='openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-reader-cpu-attribution-i-v2'
+ step 16-stage-evidence git -C "$REFACTOR" add -- "$TARGET"
+ step 17-verify-evidence-index node "$PKG/tools/run.cjs" verify-archive --refactor "$REFACTOR" --staged yes
+-step 18-diff-check git -C "$REFACTOR" diff --cached --check
++step 18-diff-check node "$PKG3/tools/run.cjs" gate --compat "$COMPAT" --refactor "$REFACTOR" --inspection "$WORK3/inspection" --out "$WORK3/final-gate"
+ step 19-commit-evidence git -C "$REFACTOR" commit -m "evidence(compat): verify CPU attribution v2 repository integration"
+ step 20-push-compat git -C "$COMPAT" push origin HEAD:compat/treasury-read-bridge-i
+ step 21-push-refactor git -C "$REFACTOR" push origin HEAD:refactor/empire-treasury-rearchitecture

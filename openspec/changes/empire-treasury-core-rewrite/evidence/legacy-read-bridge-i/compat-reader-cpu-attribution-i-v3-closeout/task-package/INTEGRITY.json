@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "files": {
+    ".gitattributes": {
+      "bytes": 8,
+      "sha256": "705fd4d6451a31d36b3df7de96f83f30ac976c9b4a6d1e51671d8e2f33e2d0da"
+    },
+    "AGENT-RUN.md": {
+      "bytes": 9788,
+      "sha256": "de2b5babb1fa5af4d81cd851010f72a31078810e415a117364db2a3fbf46e5cc"
+    },
+    "IMPLEMENTATION-MANIFEST.json": {
+      "bytes": 2631,
+      "sha256": "8511fa6a48f4479c66e60743c11170d4a0e7920115c2ac596614393b5a19d0d0"
+    },
+    "README.md": {
+      "bytes": 1055,
+      "sha256": "2ca08d8ab0b562cff40491b48cb9d195cdedc553584e629880d4779e987e070a"
+    },
+    "SUPERSEDES.md": {
+      "bytes": 1229,
+      "sha256": "2a2d7bc9cc7179a7d21cec9c2f90e0a3bb03e9e5f78150895846ff550845cce3"
+    },
+    "patches/0001-step18-check-mirror.patch": {
+      "bytes": 1020,
+      "sha256": "bb6c9aa0630da868a63517eab1391a2127620895565360960d84a98c713a510a"
+    },
+    "patches/README.md": {
+      "bytes": 357,
+      "sha256": "9f1d8852ce938210fc5bcc9abbd34db2b74932c949ad7d32b6a0b26ad9ee8c3a"
+    },
+    "patches/SERIES": {
+      "bytes": 31,
+      "sha256": "df495865075660c2f6f33b133a274dfd6e0fa59fd2f0f8c8cfe2efc3b15574cd"
+    },
+    "references/mirror.json": {
+      "bytes": 323,
+      "sha256": "c7a92ba58ae66ebadbfd417b356fce058a918f6a76f821f170b5c52d7b8b7cfd"
+    },
+    "references/policy.json": {
+      "bytes": 14437,
+      "sha256": "56a4109284e057d8b920b598be6239a44e10f9577384a6b2d00993c000d68b19"
+    },
+    "references/test-set.json": {
+      "bytes": 66,
+      "sha256": "59edf7529b04ed254992d7b7e56409eb32b5e3b34f67c53ac42b7d510a2b3110"
+    },
+    "tests/closeout.spec.cjs": {
+      "bytes": 12078,
+      "sha256": "ac45127d197b07badf8009eb312a0a08e290905ecd5e4d49234c40340383431f"
+    },
+    "tests/fixture.cjs": {
+      "bytes": 6284,
+      "sha256": "6ec48e75eea93947e2435139b5756a2e6e9e9343615a506110c4fc694213853e"
+    },
+    "tests/fixtures/v2-bytes.json": {
+      "bytes": 394861,
+      "sha256": "e08ccbd9f6152026956dcddf05b2bf8b39a598953a1ef0a45bf788b717a22612"
+    },
+    "tools/checks.cjs": {
+      "bytes": 11066,
+      "sha256": "73242a67754aa5a1daf928c7c14c530be559a3c37ff30765f1f52484b922d694"
+    },
+    "tools/closeout.cjs": {
+      "bytes": 10981,
+      "sha256": "7976b8acbab11deaf21bb52025e515fe7ade97494420f500fa8c816fb58aecdf"
+    },
+    "tools/common.cjs": {
+      "bytes": 5828,
+      "sha256": "fec6a3bb61284118ca1831e21ee3175e3ad745fa50678c5122eaa255ab75757a"
+    },
+    "tools/run.cjs": {
+      "bytes": 2701,
+      "sha256": "be5c6029324225ac1542477b00a00177d47fccd231d1c981ebdbc6f8b31e210d"
+    },
+    "validation/maker-tests.json": {
+      "bytes": 7752,
+      "sha256": "1fd2836c5c4d0cc93763017f810f8f1cc9c8973b59be65838ee81f7dfd8e6814"
+    },
+    "validation/maker-validation.json": {
+      "bytes": 1408,
+      "sha256": "5298dce13837d4e4485fdc039f355062a89bc854c6f5d5a8e2b4f9776d34bd11"
+    },
+    "validation/mirror-validation.json": {
+      "bytes": 296,
+      "sha256": "86e861f88b7cd0a00d74562610d70f35913c0bd2683d7ff11f55f6e5190c8471"
+    },
+    "validation/original-defect-reproduction.json": {
+      "bytes": 352,
+      "sha256": "b2cffa8909545606aedeb5e65172a848f67dd0d76f2c7e19aa672a0752db3f96"
+    },
+    "validation/syntax-validation.json": {
+      "bytes": 929,
+      "sha256": "b44c06814d401475cdcb024039961b358987bf0e670e9d4804dd2ea59f025cab"
+    }
+  }
+}

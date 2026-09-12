@@ -1,0 +1,14 @@
+{
+  "status": "COMPAT_CPU_IMPLEMENTATION_OFFLINE_VERIFIED",
+  "tests": 91,
+  "passed": 91,
+  "failed": 0,
+  "skipped": 0,
+  "todo": 0,
+  "cancelled": 0,
+  "platform": "win32",
+  "node": "v22.19.0",
+  "typescript": "5.9.3",
+  "packageFingerprint": "5fb8e783aff007c830ff4e43ae3e1a36d602ba2267cfe3858139857ca30dbf3a",
+  "onlineCpuClaim": false
+}

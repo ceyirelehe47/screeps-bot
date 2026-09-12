@@ -1,0 +1,72 @@
+{
+  "status": "MAKER_OFFLINE_VALIDATION_PASSED",
+  "platform": "linux",
+  "node": "v22.16.0",
+  "typescript": "5.8.3",
+  "tests": {
+    "tests": 69,
+    "passed": 69,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0
+  },
+  "syntax": [
+    {
+      "path": "tests/cpu.spec.cjs",
+      "exitCode": 0,
+      "sha256": "227c50fa4aaa4e4a88cb0cef5ba9b119aed6f4798d74043a0654d6b39f8f5ec2"
+    },
+    {
+      "path": "tests/harness.cjs",
+      "exitCode": 0,
+      "sha256": "93463b278962eeccd58e4295de69409af7b47e60c114ef44951afcb397641485"
+    },
+    {
+      "path": "tests/regression.spec.cjs",
+      "exitCode": 0,
+      "sha256": "b58f956b446beb01a8585419ef8531efc6e0a00c6d4fba21b0637bc80f155c0f"
+    },
+    {
+      "path": "tests/workflow.spec.cjs",
+      "exitCode": 0,
+      "sha256": "87c84e485a299d4085add9b416d6db7afb7ff4cc09ad0c033b6971e3b34895aa"
+    },
+    {
+      "path": "tools/characterize.cjs",
+      "exitCode": 0,
+      "sha256": "d9ce13bd18783e9c897f5e77de0010859757bc69a304c19be2219a7b8e3769a3"
+    },
+    {
+      "path": "tools/common.cjs",
+      "exitCode": 0,
+      "sha256": "ffe2b986240d050d6098bcec513be712e2ada8ed7cd8157ce85be94c1a8f67da"
+    },
+    {
+      "path": "tools/run.cjs",
+      "exitCode": 0,
+      "sha256": "43a126997c507b63d4b9376d80a27ee3bf4052ef9d386c8ecea28d9ecb706139"
+    },
+    {
+      "path": "tools/workflow.cjs",
+      "exitCode": 0,
+      "sha256": "3dceeec6e8db64aec8655c0932691486a2fbafb7e60df1ef6c1ab298bd423179"
+    }
+  ],
+  "sourcePatchTest": "applied to exact Git-blob-verified baseline files and byte-compared",
+  "archiveTest": "real temporary Git repositories and staged byte validation with core.autocrlf=true",
+  "notExecuted": [
+    "full real generated-core characterization",
+    "full real project TypeScript/Jest/Rollup checks",
+    "native Windows tests",
+    "Game.cpu profiling",
+    "any Screeps network call, upload or restore"
+  ],
+  "limitation": "Injected port costs and Node wall clock are not calibrated to engine CPU. No 2 CPU budget repair claimed.",
+  "realCoreScenariosRequiredOfAgent": 10,
+  "codeFiles": {
+    "implementation/src/runtime/treasuryCompatCpu.ts": "103e7a3e115fcc885fc337b91e7336cdb2cd3e890524f0c8b4d2f4082c0207ef",
+    "implementation/src/runtime/treasuryCompatRead.ts": "c14efedac18f865e1bf04fb5ce3ea8c954598f69add84fa0646b4c5470273d03",
+    "implementation/src/runtime/treasuryCompatRuntime.ts": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4"
+  }
+}

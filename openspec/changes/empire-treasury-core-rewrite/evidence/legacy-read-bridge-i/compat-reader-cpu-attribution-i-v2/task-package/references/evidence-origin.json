@@ -1,0 +1,14 @@
+{
+  "sourceCommit": "0b09414f90c7144bbff61758fe7cf605576231e7",
+  "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/online-observation-0003-recovery-remediation-i/analysis/CPU-EVIDENCE.json",
+  "blob": "897bf901db889690d41feea49809d52a9f1269e2",
+  "tick": 73646500,
+  "cpuBeforeSerializationAndEmit": 2.4981476000029943,
+  "configuredBudget": 2,
+  "status": "partial_cpu_budget",
+  "commitmentsStatus": "not_read_cpu_budget",
+  "rawReports": 1,
+  "completeReports": 0,
+  "phaseAttribution": "not_observable_from_existing_report",
+  "liveOptimizationClaim": false
+}

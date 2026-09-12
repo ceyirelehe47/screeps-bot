@@ -1,0 +1,10 @@
+{
+  "tests": 91,
+  "files": [
+    "tests/cpu.spec.cjs",
+    "tests/regression.spec.cjs",
+    "tests/workflow.spec.cjs",
+    "tests/integration.spec.cjs",
+    "tests/resume.spec.cjs"
+  ]
+}

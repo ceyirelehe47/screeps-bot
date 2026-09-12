@@ -1,0 +1,20 @@
+{
+  "repository": "ceyirelehe47/screeps-bot",
+  "compatBase": "3292e152b0db465263e4f1fa5c9eac068394acef",
+  "helperBlob": "238caabe0de507c9c026c594290d8e7bfeeca337",
+  "bridgeSpecBlob": "8061a074218ba8a9ce81ec15b5da6e4ad9aa1d83",
+  "specModified": false,
+  "source": "exact GitHub blobs, independently hash-verified after materialization",
+  "fullJestBudget": {
+    "suites": 195,
+    "tests": 685,
+    "unchanged": true
+  },
+  "unchangedFiles": {
+    "test/treasury-compat/bridge.spec.cjs": "8061a074218ba8a9ce81ec15b5da6e4ad9aa1d83",
+    "test/treasury-compat/real-readers.spec.cjs": "28c78e89a8039518fe9d8d3e4d8027aff0015e8c",
+    "test/treasury-compat/independent.spec.cjs": "3ae252801a7a205ca8ded3d28e587acfba1dfdca",
+    "test/treasuryCompatRead.test.ts": "000f69d9f3cd7b33f2c32467ed9967bb6311586e",
+    "test/treasuryCompatIndependent.test.ts": "2ccff79e6456481efb027939258ab184bcc022fe"
+  }
+}

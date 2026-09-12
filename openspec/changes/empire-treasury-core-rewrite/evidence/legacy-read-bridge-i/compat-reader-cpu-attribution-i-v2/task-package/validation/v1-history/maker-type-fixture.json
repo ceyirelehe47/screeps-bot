@@ -1,0 +1,5 @@
+{
+  "compiler": "5.8.3",
+  "diagnostics": [],
+  "scope": "minimal type fixture, not full repository typecheck"
+}

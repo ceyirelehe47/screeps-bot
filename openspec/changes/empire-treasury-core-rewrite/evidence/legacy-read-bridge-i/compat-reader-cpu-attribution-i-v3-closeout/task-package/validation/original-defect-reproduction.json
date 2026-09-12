@@ -1,0 +1,7 @@
+{
+  "exitCode": 2,
+  "stdout": "task-package/patches/0001-reader-cpu-accounting.patch:73: trailing whitespace.\n+ \ntask-package/patches/0001-reader-cpu-accounting.patch:78: trailing whitespace.\n+ \n",
+  "stderr": "",
+  "originalPatchSha256": "5067582c5e52de06c1bb1fac0126b9e6e65e483ec9bc8b0d09eca8ec0d5e5067",
+  "repo": "/tmp/cpu-v3-diff-7txxgv6q"
+}

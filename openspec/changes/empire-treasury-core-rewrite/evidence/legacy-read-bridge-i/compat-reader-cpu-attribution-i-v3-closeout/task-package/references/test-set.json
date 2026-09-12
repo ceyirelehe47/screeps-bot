@@ -1,0 +1,6 @@
+{
+  "tests": 37,
+  "files": [
+    "tests/closeout.spec.cjs"
+  ]
+}

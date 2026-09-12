@@ -1,0 +1,78 @@
+{
+  "status": "MAKER_V2_INTEGRATION_VALIDATED",
+  "platform": "linux",
+  "node": "v22.16.0",
+  "typescript": "5.8.3",
+  "fixedTests": {
+    "tests": 91,
+    "pass": 91,
+    "fail": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0,
+    "exitCode": 0
+  },
+  "systemAndGlobalAutocrlfTrue": {
+    "tests": 91,
+    "pass": 91,
+    "fail": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0,
+    "exitCode": 0
+  },
+  "repositoryBridge": {
+    "originalSpecBlob": "8061a074218ba8a9ce81ec15b5da6e4ad9aa1d83",
+    "specChanged": false,
+    "oldHelperWithV1Runtime": {
+      "tests": 41,
+      "pass": 0,
+      "fail": 41,
+      "error": "unexpected runtime import: ./treasuryCompatCpu"
+    },
+    "v2HelperWithSameRuntime": {
+      "tests": 41,
+      "pass": 41,
+      "fail": 0,
+      "skipped": 0
+    },
+    "countsAreNestedAndNotAddedTo91Or685": true
+  },
+  "productionRuntimeUnchangedFromV1": true,
+  "patches": {
+    "commands": [
+      {
+        "patch": "0001-reader-cpu-accounting.patch",
+        "checkOnly": true,
+        "exitCode": 0
+      },
+      {
+        "patch": "0001-reader-cpu-accounting.patch",
+        "checkOnly": false,
+        "exitCode": 0
+      },
+      {
+        "patch": "0002-repository-sandbox-import.patch",
+        "checkOnly": true,
+        "exitCode": 0
+      },
+      {
+        "patch": "0002-repository-sandbox-import.patch",
+        "checkOnly": false,
+        "exitCode": 0
+      }
+    ],
+    "filesByteEqual": 4,
+    "hostileSystemAndGlobalAutocrlf": true
+  },
+  "syntaxFiles": 14,
+  "snapshotAndResumeTests": "exact Git temporary repositories; clean, known v1, known v2, edits, staged data, extra files, snapshots, CRLF rollback",
+  "notExecuted": [
+    "native Windows / NTFS run",
+    "full actual repository TypeScript checks",
+    "full 195-suite / 685-test project run",
+    "full pinned generated-core ten-scenario A/B",
+    "actual Rollup production build",
+    "Screeps API, credentials, new engine CPU profile, upload or recovery"
+  ]
+}
