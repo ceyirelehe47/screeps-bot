@@ -1,0 +1,682 @@
+{
+  "status": "BUILD_VII_REAL_CORE_AB_VERIFIED",
+  "packageFingerprint": "1741ce49a8b450fcb44aa852419628c410216b84979cae50cbc7ca69436c977b",
+  "scenarios": [
+    {
+      "name": "empty",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "manual",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "sixteen",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "bound256",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "overBound257",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        0,
+        0
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "invalidRecord",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "invalidResource",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "missingTasks",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        0,
+        0
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "invalidReservationContainer",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        0,
+        0
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "activeReservation",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "expiredReservation",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "exactExpiry",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "missingOwner",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "typedOwner",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "capacity8M",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "saturatedCapacity",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "missingTerminal",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "unseenRoom",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "sparseMismatch",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    },
+    {
+      "name": "legacyMismatch",
+      "input": "synthetic",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ],
+      "reports": 12,
+      "oldFactoryExecutions": 7,
+      "newFactoryExecutions": 7,
+      "actualEngineMeasurement": false
+    }
+  ],
+  "oldGeneratedBlob": "fe94ebece8f5118b76701007ce3906adfbb4da08",
+  "newGeneratedBlob": "4f94acf1c06a60de9ca8ff2f0cdd2910cb6913be",
+  "engineCpuGapRepaired": false,
+  "engineTimingMeasured": false,
+  "directReadChanged": false,
+  "taskBucketStorageChanged": true,
+  "observationIntermediatesReduced": true,
+  "operationCounts": {
+    "scenarios": [
+      {
+        "tasks": 0,
+        "resourcesPerEndpointIncludingEnergyH": 34,
+        "baseline": {
+          "observation": {
+            "mapNew": 2,
+            "mapGet": 0,
+            "mapSet": 2,
+            "mapHas": 0,
+            "entryCalls": 4,
+            "entryPairs": 136,
+            "keysCalls": 4,
+            "valuesCalls": 0,
+            "roomCloneCalls": 2
+          },
+          "commitment": {
+            "mapNew": 10,
+            "mapGet": 0,
+            "mapSet": 0,
+            "mapHas": 0,
+            "entryCalls": 0,
+            "entryPairs": 0,
+            "keysCalls": 2,
+            "valuesCalls": 2,
+            "roomCloneCalls": 0
+          }
+        },
+        "candidate": {
+          "observation": {
+            "mapNew": 2,
+            "mapGet": 0,
+            "mapSet": 2,
+            "mapHas": 0,
+            "entryCalls": 0,
+            "entryPairs": 0,
+            "keysCalls": 8,
+            "valuesCalls": 0,
+            "roomCloneCalls": 0
+          },
+          "commitment": {
+            "mapNew": 4,
+            "mapGet": 0,
+            "mapSet": 0,
+            "mapHas": 0,
+            "entryCalls": 0,
+            "entryPairs": 0,
+            "keysCalls": 2,
+            "valuesCalls": 2,
+            "roomCloneCalls": 0
+          }
+        },
+        "fullApiEquivalent": true
+      },
+      {
+        "tasks": 37,
+        "resourcesPerEndpointIncludingEnergyH": 34,
+        "baseline": {
+          "observation": {
+            "mapNew": 2,
+            "mapGet": 0,
+            "mapSet": 2,
+            "mapHas": 0,
+            "entryCalls": 4,
+            "entryPairs": 136,
+            "keysCalls": 4,
+            "valuesCalls": 0,
+            "roomCloneCalls": 2
+          },
+          "commitment": {
+            "mapNew": 11,
+            "mapGet": 333,
+            "mapSet": 334,
+            "mapHas": 37,
+            "entryCalls": 0,
+            "entryPairs": 0,
+            "keysCalls": 2,
+            "valuesCalls": 2,
+            "roomCloneCalls": 0
+          }
+        },
+        "candidate": {
+          "observation": {
+            "mapNew": 2,
+            "mapGet": 0,
+            "mapSet": 2,
+            "mapHas": 0,
+            "entryCalls": 0,
+            "entryPairs": 0,
+            "keysCalls": 8,
+            "valuesCalls": 0,
+            "roomCloneCalls": 0
+          },
+          "commitment": {
+            "mapNew": 5,
+            "mapGet": 185,
+            "mapSet": 42,
+            "mapHas": 37,
+            "entryCalls": 0,
+            "entryPairs": 0,
+            "keysCalls": 2,
+            "valuesCalls": 2,
+            "roomCloneCalls": 0
+          }
+        },
+        "fullApiEquivalent": true
+      },
+      {
+        "tasks": 256,
+        "resourcesPerEndpointIncludingEnergyH": 34,
+        "baseline": {
+          "observation": {
+            "mapNew": 2,
+            "mapGet": 0,
+            "mapSet": 2,
+            "mapHas": 0,
+            "entryCalls": 4,
+            "entryPairs": 136,
+            "keysCalls": 4,
+            "valuesCalls": 0,
+            "roomCloneCalls": 2
+          },
+          "commitment": {
+            "mapNew": 11,
+            "mapGet": 2304,
+            "mapSet": 2305,
+            "mapHas": 256,
+            "entryCalls": 0,
+            "entryPairs": 0,
+            "keysCalls": 2,
+            "valuesCalls": 2,
+            "roomCloneCalls": 0
+          }
+        },
+        "candidate": {
+          "observation": {
+            "mapNew": 2,
+            "mapGet": 0,
+            "mapSet": 2,
+            "mapHas": 0,
+            "entryCalls": 0,
+            "entryPairs": 0,
+            "keysCalls": 8,
+            "valuesCalls": 0,
+            "roomCloneCalls": 0
+          },
+          "commitment": {
+            "mapNew": 5,
+            "mapGet": 1280,
+            "mapSet": 261,
+            "mapHas": 256,
+            "entryCalls": 0,
+            "entryPairs": 0,
+            "keysCalls": 2,
+            "valuesCalls": 2,
+            "roomCloneCalls": 0
+          }
+        },
+        "fullApiEquivalent": true
+      }
+    ],
+    "directStorePropertiesEach": 4,
+    "coreStorePropertiesEach": 12,
+    "candidateDirect": 4,
+    "candidateCore": 12,
+    "apiCallSequenceUnchanged": true,
+    "scope": "synthetic full builds; Map/array counters only, NOT engine CPU"
+  }
+}

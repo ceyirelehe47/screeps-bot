@@ -1,0 +1,10 @@
+{
+  "readerTests": 181,
+  "workflowTests": 21,
+  "repositoryTests": 200,
+  "jestSuites": 195,
+  "jestTests": 685,
+  "abScenarios": 20,
+  "newBuildTests": 58,
+  "seededDifferentialSnapshots": 128
+}

@@ -1,0 +1,41 @@
+{
+  "status": "MAKER_VALIDATION_COMPLETED",
+  "platform": "linux",
+  "node": "v22.16.0",
+  "typescript": "5.8.3",
+  "git": "git version 2.47.3",
+  "fixedReaderTests": 181,
+  "fixedWorkflowTests": 21,
+  "newBuildTestsWithinReader": 58,
+  "seededSnapshotsWithinOneBuildTest": 128,
+  "abScenarios": 20,
+  "operationScenarios": [
+    0,
+    37,
+    256
+  ],
+  "autocrlfSystemAndGlobalTrue": {
+    "reader": 181,
+    "workflow": 21,
+    "failed": 0,
+    "skipped": 0
+  },
+  "patchRoundtripFiles": 11,
+  "allProjectNodeSpecsRunByMaker": false,
+  "fullProjectJestRunByMaker": false,
+  "actualEngineMeasurement": false,
+  "screepsNetworkUsed": false,
+  "sources": {
+    "priorPackageSha256": "09052efbbceb67275a69a4ad6dbd47a5185890c0def7c84faf43e046650e733a",
+    "fixedReadVBlob": "fe94ebece8f5118b76701007ce3906adfbb4da08"
+  },
+  "notExecuted": [
+    "native Windows",
+    "real user repository 200 Node tests",
+    "full user repository 195/685 Jest",
+    "full user repository typechecks and Rollup",
+    "live Screeps or production Memory replay"
+  ],
+  "workflowFixtureBoundary": "Real temporary Git repositories and local bare remotes; history check packets in workflow unit tests are explicitly synthetic. No user repository commit is created by maker.",
+  "testRecordBoundary": "Raw maker test packets are captured before adding these validation records to final integrity inventory; final ZIP is tested again and recorded in external delivery-validation.json."
+}

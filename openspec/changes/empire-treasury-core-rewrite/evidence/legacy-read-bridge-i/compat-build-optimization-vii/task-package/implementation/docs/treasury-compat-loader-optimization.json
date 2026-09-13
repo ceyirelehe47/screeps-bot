@@ -1,0 +1,173 @@
+{
+  "revision": "compat-build-optimization-VII",
+  "authoring": [
+    "scripts/lib/treasury-compat-loader.template.txt",
+    "scripts/lib/treasury-compat-context.cjs",
+    "scripts/lib/treasury-compat-build.cjs"
+  ],
+  "baselineCommit": "cdecde02ec7d364141d71f45bf21dc23969deff0",
+  "baselineReadVBlob": "fe94ebece8f5118b76701007ce3906adfbb4da08",
+  "canonicalInputBlob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3",
+  "canonicalInputSha256": "9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965",
+  "canonicalInputCompiler": "5.9.3",
+  "originalFactoryPrefixSha256": "6615fa89bc77e6e885a49abb2f67c0b8331306eff8eb7f96bc5c4ffaa3517cba",
+  "adaptedFactoryPrefixSha256": "d256a6ae7a9b68e82656526094496495e69042d086c3249300ca1c49f94998ce",
+  "reversibleContextTransform": true,
+  "contextRules": [
+    {
+      "name": "revision-import",
+      "replacements": 1
+    },
+    {
+      "name": "catalog-capture",
+      "replacements": 1
+    },
+    {
+      "name": "task-validator-context",
+      "replacements": 2
+    },
+    {
+      "name": "reservation-validator-context",
+      "replacements": 2
+    },
+    {
+      "name": "builder-context",
+      "replacements": 1
+    },
+    {
+      "name": "revision-value",
+      "replacements": 1
+    },
+    {
+      "name": "catalog-lookup",
+      "replacements": 4
+    }
+  ],
+  "reversibleBuildTransform": true,
+  "buildRules": [
+    {
+      "name": "task-map-storage",
+      "replacements": 1
+    },
+    {
+      "name": "valid-pending-task-aggregation",
+      "replacements": 1
+    },
+    {
+      "name": "outgoing-query",
+      "replacements": 1
+    },
+    {
+      "name": "reason-query",
+      "replacements": 1
+    },
+    {
+      "name": "incoming-query",
+      "replacements": 1
+    },
+    {
+      "name": "pendingIncoming-query",
+      "replacements": 1
+    },
+    {
+      "name": "incomingTaskCount-query",
+      "replacements": 1
+    },
+    {
+      "name": "outgoingTaskCount-query",
+      "replacements": 1
+    },
+    {
+      "name": "receiver-query",
+      "replacements": 1
+    },
+    {
+      "name": "observation-room-wrapper",
+      "replacements": 1
+    },
+    {
+      "name": "observation-no-entry-pairs",
+      "replacements": 1
+    }
+  ],
+  "contextOnlyPrefixSha256": "3c46d505c81659440e5d31902c5d3d17a830639ed8f8f99b1b5282df692b94df",
+  "loaderSha256": "cfc0d3651f7f7755492ce74f69b8943d03230dd6328ce014f759447ad08093d8",
+  "generatedSha256": "1eb28af06a562011dc2c9a02c3aad3bb63b447638c90a76163d3ee323a349ae8",
+  "generatedBlob": "4f94acf1c06a60de9ca8ff2f0cdd2910cb6913be",
+  "factories": [
+    {
+      "path": "src/runtime/configNormalize.ts",
+      "originalBodySha256": "f42728448afa21d2e743bf9210c0367ff1002df6a2c60b72ffcf160f51ca427b",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/logistics/resourceTransferTaskHealth.ts",
+      "originalBodySha256": "9fea76df1197ac1b6f2aa3793d0a32160d469c156c472c8cd5f1b8e50e8f5657",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/commitmentRevision.ts",
+      "originalBodySha256": "973b23ce57d91b6318b307747e4f920f5a8ab1d91de0b9a22b109c04307b5b27",
+      "adaptation": "unchanged",
+      "lifecycle": "unreachable-retained-original-definition"
+    },
+    {
+      "path": "src/runtime/treasury/commitments.ts",
+      "originalBodySha256": "8cdecbdb0975612ad8770ba23022222aae10529e0647704e75b29f1c764a5b4c",
+      "adaptation": "V-explicit-context-and-VII-task-bucket-storage",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/holderResolution.ts",
+      "originalBodySha256": "2021cd397135e7340565a252efab5af5039e89fa442f596fe94559113af9cf84",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/observation.ts",
+      "originalBodySha256": "168fd5d39b6a72d08ab867eeea319c98e300a14dacaca5169839e257ff4c236c",
+      "adaptation": "VII-no-entry-pairs-and-no-room-clone",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/ownerIdentity.ts",
+      "originalBodySha256": "d9e43b2ba0abecdb87bfe313e1b060d1af2b1fbcd2ae6d3afd48c6553d6e1332",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/types.ts",
+      "originalBodySha256": "4dc107db3a229cacf36a5f077ff906b4da4860de8796c4fd172af9e4dade3335",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    }
+  ],
+  "factoryBodiesChanged": [
+    "src/runtime/treasury/commitments.ts",
+    "src/runtime/treasury/observation.ts"
+  ],
+  "dependencyEdgesRemoved": [
+    "commitments -> commitmentRevision"
+  ],
+  "taskIndexStorageRepresentationChanged": true,
+  "validationRulesChanged": false,
+  "aggregationOrderPreserved": true,
+  "querySemanticsPreserved": true,
+  "fullIndexBuiltEagerly": true,
+  "lazySecondaryIndexes": false,
+  "previewSourceChanged": false,
+  "revisionSemantics": "private read-only capsule revision zero per builder; NOT the host revision",
+  "firstSuccessfulFactoryExecutions": 7,
+  "followingFactoryExecutions": 0,
+  "resourceCatalogCapturedPerBuilder": true,
+  "contextGlobalsUsed": false,
+  "definitionInitializationsMovedOutsideBudget": false,
+  "builderInstanceReused": false,
+  "observationReused": false,
+  "commitmentIndexReused": false,
+  "engineCpuGapRepaired": false,
+  "engineMeasurementRequired": true,
+  "note": "Only the compatibility capsule is adapted. Canonical host TS sources remain pinned; generated task aggregation/query storage and observation allocation change. All task validation, full-table reads, safe-integer guards, reason/route/receiver results, owner/expiry, reservation processing and independent Store reads are retained. Reversible provenance is distinct from semantic differential evidence."
+}

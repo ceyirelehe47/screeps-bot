@@ -1,0 +1,106 @@
+{
+  "repository": "ceyirelehe47/screeps-bot",
+  "compatBase": "cdecde02ec7d364141d71f45bf21dc23969deff0",
+  "refactorBase": "04ca086c3d62db5f506389bc59c3fb1bb4b81b66",
+  "compatBranch": "compat/treasury-read-bridge-i",
+  "refactorBranch": "refactor/empire-treasury-rearchitecture",
+  "evidenceTarget": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-build-optimization-vii",
+  "changes": [
+    {
+      "path": "docs/treasury-compat-build-optimization-vii.md",
+      "oldBlob": null,
+      "newBytes": 4869,
+      "newSha256": "4fd2e5ee2c112d056c7893285be3f78063a1ee2ffe3767020aa2f5e3aeb69dcb",
+      "newBlob": "f9fed380eeb5ad2a6b9a0dabddaa93a67aeeb5dc"
+    },
+    {
+      "path": "docs/treasury-compat-loader-optimization.json",
+      "oldBlob": "37ce91b5073044119bbdc008be50b59dd8f5293b",
+      "newBytes": 5873,
+      "newSha256": "7987b10af1aa923585f50c17ce35559fcfbd15fb22edd6618cb29945ed8b0f30",
+      "newBlob": "66fad5d71cc08e0980a81c2eb16d84e0479c35a6"
+    },
+    {
+      "path": "docs/treasury-compat-source-manifest.json",
+      "oldBlob": "d83d9bef24d76eb276e70eda371e0366db4b734d",
+      "newBytes": 7601,
+      "newSha256": "6acc8371959a92d263094ecaa1fde66f6ea9c85e2e6fc8a680f56438c1ff58fb",
+      "newBlob": "c1da4cfddb40e4338f8744aec3fed757d0658b97"
+    },
+    {
+      "path": "scripts/build-treasury-compat-loader.cjs",
+      "oldBlob": "7974a1ed7b17fe7878cc75101e8664fb1e43873d",
+      "newBytes": 7984,
+      "newSha256": "84a8facea05ab1a61d887a1eec7eedcb5ddc8aae545fcd34ab07c7f6e7eb19a2",
+      "newBlob": "59a8dbb789a2f06bddd6e7226b2b4ba926b8da85"
+    },
+    {
+      "path": "scripts/lib/treasury-compat-build.cjs",
+      "oldBlob": null,
+      "newBytes": 14390,
+      "newSha256": "21bc40221b2b64dbad3880e9d24f6cda74c59261d52b8b45c08600887e8d9e2c",
+      "newBlob": "44a0ffda3629c9d6c165a9e3276ea158d3f19e7c"
+    },
+    {
+      "path": "src/runtime/treasuryCompatReadCore.generated.ts",
+      "oldBlob": "fe94ebece8f5118b76701007ce3906adfbb4da08",
+      "newBytes": 65093,
+      "newSha256": "1eb28af06a562011dc2c9a02c3aad3bb63b447638c90a76163d3ee323a349ae8",
+      "newBlob": "4f94acf1c06a60de9ca8ff2f0cdd2910cb6913be"
+    },
+    {
+      "path": "test/treasury-compat/build-optimization.spec.cjs",
+      "oldBlob": null,
+      "newBytes": 15074,
+      "newSha256": "739c68feea6f9499aca575fb39b80a1b6d6148f00f5d10e35970118f4faeb536",
+      "newBlob": "fa01e3df6af2b42ba0978fe94e86f1787f6996f0"
+    },
+    {
+      "path": "test/treasury-compat/build-test-support.cjs",
+      "oldBlob": null,
+      "newBytes": 8680,
+      "newSha256": "837dd6f50545b431395bab18a0aec3b4d4e097c3177168532b2e50ace2f95548",
+      "newBlob": "740be47a5bf428deefffd5016d1111ebfd9ee9f0"
+    },
+    {
+      "path": "test/treasury-compat/fixtures/core-before-build-optimization-vii.ts.txt",
+      "oldBlob": null,
+      "newBytes": 64266,
+      "newSha256": "b7a2c14fc7cf15e32abe7703f2fb47c5516b09f2dc80f7ffdd9a5dc0988f0dac",
+      "newBlob": "fe94ebece8f5118b76701007ce3906adfbb4da08"
+    },
+    {
+      "path": "test/treasury-compat/loader-optimization.spec.cjs",
+      "oldBlob": "6a14ed3864b0536f1842f191292352b5ab68bbf7",
+      "newBytes": 24293,
+      "newSha256": "e1419cb4a1ddb4bc31ccc20fa9b61b8a6f971c42db6dccff00b299c5bfc3a8ad",
+      "newBlob": "b3db2a1d723813f15504d0f63a39193945ab186e"
+    },
+    {
+      "path": "test/treasuryCompatRead.test.ts",
+      "oldBlob": "b5ead1227b8ef33f7490f33fe38db517691b3dfe",
+      "newBytes": 998,
+      "newSha256": "a12568bb51270173b92a7c5450ac978703d013aa0900e8ad0e6f20ea078a7708",
+      "newBlob": "d27dd016ff47d4fbb52b3ec49c008e80a32e0ca5"
+    }
+  ],
+  "protectedBlobs": {
+    "docs/treasury-compat-read-optimization-v.md": "55129e7f85c08fdb40fb4700c3051053e4b72fe5",
+    "scripts/lib/treasury-compat-context.cjs": "408f386060ad9fe9c01be52786541a3023efff22",
+    "scripts/lib/treasury-compat-loader.template.txt": "e31a5eef08aada8b078f0e04a7686b5d1ff16914",
+    "src/runtime/treasuryCompatConfig.ts": "8e2214fef5a6a69b7eb40c82eee76dda1646ccbf",
+    "src/runtime/treasuryCompatCpu.ts": "46ba986151dd115250e1c5bebd95c970c0fcf9af",
+    "src/runtime/treasuryCompatRead.ts": "58f1ca27d217fdd7af3e50bcec5de45bf3ee14ac",
+    "src/runtime/treasuryCompatRuntime.ts": "5916fbcafbb88d40cf5463d329b683ba0d776ad8",
+    "src/runtime/treasuryCompatTypes.ts": "5530d31a1b65f5b5176fd01c16faa773170ae29e",
+    "test/treasury-compat/bridge.spec.cjs": "8061a074218ba8a9ce81ec15b5da6e4ad9aa1d83",
+    "test/treasury-compat/fixtures/core-before-loader-optimization.ts.txt": "c44d8a306f2b11986c6556e098be7d2e10315fa6",
+    "test/treasury-compat/fixtures/core-before-read-optimization-v.ts.txt": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3",
+    "test/treasury-compat/fixtures/reader-before-read-optimization-v.ts.txt": "574731256e1d6fe0510e80a7282de05d94628544",
+    "test/treasury-compat/helpers.cjs": "f7406cf25124324069c08a444683d383477e0a23",
+    "test/treasury-compat/independent.spec.cjs": "3ae252801a7a205ca8ded3d28e587acfba1dfdca",
+    "test/treasury-compat/loader-test-support.cjs": "02e72362495ab0bd6f18cf01f20392725f8697a1",
+    "test/treasury-compat/real-readers.spec.cjs": "28c78e89a8039518fe9d8d3e4d8027aff0015e8c",
+    "test/treasuryCompatIndependent.test.ts": "2ccff79e6456481efb027939258ab184bcc022fe"
+  }
+}

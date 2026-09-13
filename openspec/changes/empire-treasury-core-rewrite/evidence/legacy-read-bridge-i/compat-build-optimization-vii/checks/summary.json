@@ -1,0 +1,10 @@
+{
+  "status": "BUILD_VII_FULL_CHECKS_VERIFIED",
+  "packageFingerprint": "1741ce49a8b450fcb44aa852419628c410216b84979cae50cbc7ca69436c977b",
+  "compatBase": "cdecde02ec7d364141d71f45bf21dc23969deff0",
+  "repositoryNodeTests": 200,
+  "jestSuites": 195,
+  "jestTests": 685,
+  "buildOnly": true,
+  "deployed": false
+}

@@ -1,0 +1,10 @@
+{
+  "status": "BUILD_VII_FIXED_TESTS_VERIFIED",
+  "readerTests": 181,
+  "workflowTests": 21,
+  "node": "v22.19.0",
+  "platform": "win32",
+  "typescript": "5.9.3",
+  "packageFingerprint": "1741ce49a8b450fcb44aa852419628c410216b84979cae50cbc7ca69436c977b",
+  "engineCpuMeasurement": false
+}

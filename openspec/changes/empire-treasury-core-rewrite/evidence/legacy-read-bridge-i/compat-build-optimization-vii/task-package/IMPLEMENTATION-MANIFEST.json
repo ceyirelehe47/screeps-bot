@@ -1,0 +1,41 @@
+{
+  "task": "Compat Build Optimization VII",
+  "delivery": "complete fixed implementation; agent verifies, does not implement",
+  "compatBase": "cdecde02ec7d364141d71f45bf21dc23969deff0",
+  "refactorBase": "04ca086c3d62db5f506389bc59c3fb1bb4b81b66",
+  "sourceFiles": 11,
+  "paths": [
+    "docs/treasury-compat-build-optimization-vii.md",
+    "docs/treasury-compat-loader-optimization.json",
+    "docs/treasury-compat-source-manifest.json",
+    "scripts/build-treasury-compat-loader.cjs",
+    "scripts/lib/treasury-compat-build.cjs",
+    "src/runtime/treasuryCompatReadCore.generated.ts",
+    "test/treasury-compat/build-optimization.spec.cjs",
+    "test/treasury-compat/build-test-support.cjs",
+    "test/treasury-compat/fixtures/core-before-build-optimization-vii.ts.txt",
+    "test/treasury-compat/loader-optimization.spec.cjs",
+    "test/treasuryCompatRead.test.ts"
+  ],
+  "patches": [
+    "patches/0001-full-build-bucket-fusion.patch"
+  ],
+  "tests": {
+    "readerTests": 181,
+    "workflowTests": 21,
+    "repositoryTests": 200,
+    "jestSuites": 195,
+    "jestTests": 685,
+    "abScenarios": 20,
+    "newBuildTests": 58,
+    "seededDifferentialSnapshots": 128
+  },
+  "sourceScope": "read-only compatibility capsule only",
+  "previewChanged": false,
+  "loaderChanged": false,
+  "fullIndexBuiltEagerly": true,
+  "budget": 2,
+  "enabled": false,
+  "onlineAuthorized": false,
+  "engineCpuGapRepaired": false
+}

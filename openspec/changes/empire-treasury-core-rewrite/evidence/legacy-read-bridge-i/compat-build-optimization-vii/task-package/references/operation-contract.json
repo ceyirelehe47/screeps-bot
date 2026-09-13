@@ -1,0 +1,169 @@
+{
+  "scenarios": [
+    {
+      "tasks": 0,
+      "resourcesPerEndpointIncludingEnergyH": 34,
+      "baseline": {
+        "observation": {
+          "mapNew": 2,
+          "mapGet": 0,
+          "mapSet": 2,
+          "mapHas": 0,
+          "entryCalls": 4,
+          "entryPairs": 136,
+          "keysCalls": 4,
+          "valuesCalls": 0,
+          "roomCloneCalls": 2
+        },
+        "commitment": {
+          "mapNew": 10,
+          "mapGet": 0,
+          "mapSet": 0,
+          "mapHas": 0,
+          "entryCalls": 0,
+          "entryPairs": 0,
+          "keysCalls": 2,
+          "valuesCalls": 2,
+          "roomCloneCalls": 0
+        }
+      },
+      "candidate": {
+        "observation": {
+          "mapNew": 2,
+          "mapGet": 0,
+          "mapSet": 2,
+          "mapHas": 0,
+          "entryCalls": 0,
+          "entryPairs": 0,
+          "keysCalls": 8,
+          "valuesCalls": 0,
+          "roomCloneCalls": 0
+        },
+        "commitment": {
+          "mapNew": 4,
+          "mapGet": 0,
+          "mapSet": 0,
+          "mapHas": 0,
+          "entryCalls": 0,
+          "entryPairs": 0,
+          "keysCalls": 2,
+          "valuesCalls": 2,
+          "roomCloneCalls": 0
+        }
+      },
+      "fullApiEquivalent": true
+    },
+    {
+      "tasks": 37,
+      "resourcesPerEndpointIncludingEnergyH": 34,
+      "baseline": {
+        "observation": {
+          "mapNew": 2,
+          "mapGet": 0,
+          "mapSet": 2,
+          "mapHas": 0,
+          "entryCalls": 4,
+          "entryPairs": 136,
+          "keysCalls": 4,
+          "valuesCalls": 0,
+          "roomCloneCalls": 2
+        },
+        "commitment": {
+          "mapNew": 11,
+          "mapGet": 333,
+          "mapSet": 334,
+          "mapHas": 37,
+          "entryCalls": 0,
+          "entryPairs": 0,
+          "keysCalls": 2,
+          "valuesCalls": 2,
+          "roomCloneCalls": 0
+        }
+      },
+      "candidate": {
+        "observation": {
+          "mapNew": 2,
+          "mapGet": 0,
+          "mapSet": 2,
+          "mapHas": 0,
+          "entryCalls": 0,
+          "entryPairs": 0,
+          "keysCalls": 8,
+          "valuesCalls": 0,
+          "roomCloneCalls": 0
+        },
+        "commitment": {
+          "mapNew": 5,
+          "mapGet": 185,
+          "mapSet": 42,
+          "mapHas": 37,
+          "entryCalls": 0,
+          "entryPairs": 0,
+          "keysCalls": 2,
+          "valuesCalls": 2,
+          "roomCloneCalls": 0
+        }
+      },
+      "fullApiEquivalent": true
+    },
+    {
+      "tasks": 256,
+      "resourcesPerEndpointIncludingEnergyH": 34,
+      "baseline": {
+        "observation": {
+          "mapNew": 2,
+          "mapGet": 0,
+          "mapSet": 2,
+          "mapHas": 0,
+          "entryCalls": 4,
+          "entryPairs": 136,
+          "keysCalls": 4,
+          "valuesCalls": 0,
+          "roomCloneCalls": 2
+        },
+        "commitment": {
+          "mapNew": 11,
+          "mapGet": 2304,
+          "mapSet": 2305,
+          "mapHas": 256,
+          "entryCalls": 0,
+          "entryPairs": 0,
+          "keysCalls": 2,
+          "valuesCalls": 2,
+          "roomCloneCalls": 0
+        }
+      },
+      "candidate": {
+        "observation": {
+          "mapNew": 2,
+          "mapGet": 0,
+          "mapSet": 2,
+          "mapHas": 0,
+          "entryCalls": 0,
+          "entryPairs": 0,
+          "keysCalls": 8,
+          "valuesCalls": 0,
+          "roomCloneCalls": 0
+        },
+        "commitment": {
+          "mapNew": 5,
+          "mapGet": 1280,
+          "mapSet": 261,
+          "mapHas": 256,
+          "entryCalls": 0,
+          "entryPairs": 0,
+          "keysCalls": 2,
+          "valuesCalls": 2,
+          "roomCloneCalls": 0
+        }
+      },
+      "fullApiEquivalent": true
+    }
+  ],
+  "directStorePropertiesEach": 4,
+  "coreStorePropertiesEach": 12,
+  "candidateDirect": 4,
+  "candidateCore": 12,
+  "apiCallSequenceUnchanged": true,
+  "scope": "synthetic full builds; Map/array counters only, NOT engine CPU"
+}

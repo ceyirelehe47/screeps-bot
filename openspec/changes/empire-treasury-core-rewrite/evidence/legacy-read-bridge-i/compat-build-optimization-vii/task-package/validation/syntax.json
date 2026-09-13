@@ -1,0 +1,24 @@
+{
+  "status": "SYNTAX_VERIFIED",
+  "files": [
+    "baseline/scripts/build-treasury-compat-loader.cjs",
+    "baseline/scripts/lib/treasury-compat-context.cjs",
+    "baseline/test/treasury-compat/bridge.spec.cjs",
+    "baseline/test/treasury-compat/helpers.cjs",
+    "baseline/test/treasury-compat/loader-optimization.spec.cjs",
+    "baseline/test/treasury-compat/loader-test-support.cjs",
+    "baseline/test/treasury-compat/real-readers.spec.cjs",
+    "implementation/scripts/build-treasury-compat-loader.cjs",
+    "implementation/scripts/lib/treasury-compat-build.cjs",
+    "implementation/test/treasury-compat/build-optimization.spec.cjs",
+    "implementation/test/treasury-compat/build-test-support.cjs",
+    "implementation/test/treasury-compat/loader-optimization.spec.cjs",
+    "tests/workflow.spec.cjs",
+    "tools/common.cjs",
+    "tools/run.cjs",
+    "tools/workflow.cjs"
+  ],
+  "count": 16,
+  "node": "v22.16.0",
+  "platform": "linux"
+}

@@ -1,0 +1,9 @@
+{
+  "status": "PATCH_ROUNDTRIP_VERIFIED",
+  "gitGenerated": true,
+  "checkExit": 0,
+  "applyExit": 0,
+  "changedFiles": 11,
+  "payloadBytesEqual": true,
+  "scope": "actual fixed source slice, not complete user repository"
+}
