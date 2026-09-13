@@ -1,0 +1,62 @@
+{
+  "status": "MAKER_FIXED_IMPLEMENTATION_VERIFIED",
+  "testedIntegritySnapshotSha256": "01cc7f583eb838013d25672c7caa64682662dd5eea373040136697e31d73115c",
+  "note": "The integrity snapshot above was used while running the fixed executable set. Validation records were inserted afterwards, so the final delivery integrity hash is intentionally verified in the external delivery-validation record rather than claimed here.",
+  "normal": {
+    "status": "CPU_DIAGNOSTIC_TOOL_TESTS_VERIFIED",
+    "tests": 176,
+    "passed": 176,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0,
+    "platform": "linux",
+    "node": "v22.16.0",
+    "testFiles": [
+      "tests/build-recheck.spec.cjs",
+      "tests/comparison.spec.cjs",
+      "tests/diagnostics.spec.cjs",
+      "tests/loader-integration.spec.cjs",
+      "tests/process.spec.cjs",
+      "tests/read-recheck.spec.cjs",
+      "tests/recovery.spec.cjs",
+      "tests/transport.spec.cjs",
+      "tests/workflow.spec.cjs"
+    ]
+  },
+  "autocrlfTrue": {
+    "status": "CPU_DIAGNOSTIC_TOOL_TESTS_VERIFIED",
+    "tests": 176,
+    "passed": 176,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0,
+    "platform": "linux",
+    "node": "v22.16.0",
+    "testFiles": [
+      "tests/build-recheck.spec.cjs",
+      "tests/comparison.spec.cjs",
+      "tests/diagnostics.spec.cjs",
+      "tests/loader-integration.spec.cjs",
+      "tests/process.spec.cjs",
+      "tests/read-recheck.spec.cjs",
+      "tests/recovery.spec.cjs",
+      "tests/transport.spec.cjs",
+      "tests/workflow.spec.cjs"
+    ]
+  },
+  "cjsSyntaxFiles": 56,
+  "patchReconstructionFiles": 87,
+  "patchReconstructionByteIdentical": true,
+  "nativeWhitespaceCheck": "exit 0; zero diagnostics",
+  "failed": 0,
+  "skipped": 0,
+  "todo": 0,
+  "cancelled": 0,
+  "limitations": [
+    "Room, Memory, remote state and WebSocket paths in fixed tests are simulated.",
+    "No native Windows or live Screeps execution was performed by the maker.",
+    "Repository 200/200 and Jest 195/685 remain Agent gates in the real checkout."
+  ]
+}

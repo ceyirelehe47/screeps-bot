@@ -1,0 +1,18 @@
+{
+  "kind": "recovery-runtime-observer/v1",
+  "closureId": "1023d4258d782a784dadf305251b2078",
+  "parentRunId": "f253987de8cad520197f9fe3b657612d",
+  "pid": 40556,
+  "createdAtMs": 1789323273037,
+  "startedAtMs": 1789323275910,
+  "endedAtMs": 1789323351049,
+  "monotonicDurationMs": 75135,
+  "requestedDurationMs": 75000,
+  "status": "RECOVERY_RUNTIME_COLLECTED",
+  "reason": "runtime_complete",
+  "authentications": 1,
+  "positiveCpuObserved": true,
+  "observationSamplesAccepted": 0,
+  "continuityWithOriginalCollectorClaimed": false,
+  "scope": "fresh shard1 console plus account-level CPU; code bytes checked separately"
+}

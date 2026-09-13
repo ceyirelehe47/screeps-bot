@@ -1,0 +1,6 @@
+{
+  "encoding": "utf8",
+  "bytes": 339,
+  "sha256": "530c89835e5c9c4e008fc4a38bcb1c3172e06e2c4def4abf8fa26ac5e6180839",
+  "text": "{\"status\":\"COMPAT_LOADER_REGENERATION_VERIFIED\",\"files\":[\"src/runtime/treasuryCompatReadCore.generated.ts\",\"docs/treasury-compat-loader-optimization.json\",\"docs/treasury-compat-source-manifest.json\"],\"canonicalFactoryBodyRecovery\":\"exact\",\"explicitContextAdaptation\":true,\"fullTaskBucketFusion\":true,\"observationAllocationReduction\":true}\n"
+}

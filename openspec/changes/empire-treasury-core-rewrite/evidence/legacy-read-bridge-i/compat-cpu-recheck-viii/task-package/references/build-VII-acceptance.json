@@ -1,0 +1,29 @@
+{
+  "status": "BUILD_VII_OFFLINE_VERIFIED_NOT_DEPLOYED",
+  "compatHead": "2d28a6f146fc81e5b87be7cf5b70648352557797",
+  "compatBase": "cdecde02ec7d364141d71f45bf21dc23969deff0",
+  "refactorBase": "04ca086c3d62db5f506389bc59c3fb1bb4b81b66",
+  "packageFingerprint": "1741ce49a8b450fcb44aa852419628c410216b84979cae50cbc7ca69436c977b",
+  "factoryBodiesChanged": [
+    "commitments: full task-bucket storage",
+    "observation: intermediates"
+  ],
+  "runtimeDefinitionReuse": true,
+  "firstSuccessfulFactoryExecutions": 7,
+  "followingFactoryExecutions": 0,
+  "actualEngineMeasurement": false,
+  "directReadChanged": false,
+  "taskBucketStorageChanged": true,
+  "observationIntermediatesReduced": true,
+  "fullIndexBuiltEagerly": true,
+  "engineCpuGapRepaired": false,
+  "budget": 2,
+  "enabled": false,
+  "originalCpuRecheckVI": {
+    "raw": 4,
+    "diagnostic": 4,
+    "complete": 0,
+    "commitmentBuilds": 3,
+    "recoveryClosed": true
+  }
+}

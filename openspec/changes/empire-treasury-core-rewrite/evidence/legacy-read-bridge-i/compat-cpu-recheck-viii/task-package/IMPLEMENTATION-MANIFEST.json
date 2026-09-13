@@ -1,0 +1,195 @@
+{
+  "package": "screeps-compat-cpu-recheck-VIII-2026-09-14",
+  "purpose": "Controlled four-point engine recheck of the accepted Build Optimization VII read-only compatibility capsule",
+  "baselines": {
+    "compat": "2d28a6f146fc81e5b87be7cf5b70648352557797",
+    "refactor": "a9f4cc04d99c8a8fda11f9c7e980861953341f03"
+  },
+  "candidate": {
+    "implementation": "Build Optimization VII",
+    "generatedCoreBlob": "4f94acf1c06a60de9ca8ff2f0cdd2910cb6913be",
+    "defaultEnabled": false,
+    "maxSampleCpu": 2,
+    "sourceModificationDuringRun": "src/runtime/treasuryCompatConfig.ts only; temporary ON then exact OFF"
+  },
+  "historicalInputs": {
+    "cpuRecheckVI": {
+      "commit": "04ca086c3d62db5f506389bc59c3fb1bb4b81b66",
+      "blob": "d1be370705d4bb3d1a0e522d0afc57f72f52f1f8",
+      "packagedFile": "references/diagnostic-VI-result.json"
+    },
+    "buildVIIAcceptance": {
+      "commit": "a9f4cc04d99c8a8fda11f9c7e980861953341f03",
+      "blob": "f3e46cee63bfb3c42272a28a7d618bdf8e9f03d5",
+      "packagedFile": "references/build-VII-acceptance.json"
+    }
+  },
+  "onlineProtocol": {
+    "points": 4,
+    "intervalTicks": 100,
+    "leadTicks": 150,
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "candidatePostsMaximum": 1,
+    "restorePostsMaximum": 1,
+    "recoveryRuntimeMs": 75000,
+    "externalObservedCostStop": 5
+  },
+  "comparison": {
+    "file": "BUILD-COMPARISON.json",
+    "successLabel": "BUILD_VIII_COMPARISON_RECORDED",
+    "phases": [
+      "readerLoad",
+      "observationBuild",
+      "commitmentBuild",
+      "directRead",
+      "prefixCpu"
+    ],
+    "actualCallsOnlyForFunctionCost": true,
+    "performanceImprovementRequiredForCaptureAcceptance": false,
+    "causalSpeedupPercentageComputed": false
+  },
+  "fixedTests": {
+    "count": 176,
+    "files": 9,
+    "failedAllowed": 0,
+    "skippedAllowed": 0,
+    "todoAllowed": 0,
+    "cancelledAllowed": 0
+  },
+  "repositoryGates": {
+    "nodeSpecs": 5,
+    "repositoryNodeTests": 200,
+    "jestSuites": 195,
+    "jestTests": 685,
+    "typescriptProjects": [
+      "tsconfig.build.json",
+      "tsconfig.json"
+    ],
+    "loaderRegenerationCheck": true,
+    "rollupBuildOnly": true
+  },
+  "runtimeBoundaries": [
+    "single-layer entity decoding",
+    "fresh absolute tick window bound after slow offline checks",
+    "persistent upload and restore attempt markers",
+    "no automatic POST retry after timeout",
+    "third-party code is never overwritten",
+    "independent recovery runtime evidence",
+    "private module snapshots and credentials excluded from Git"
+  ],
+  "allowedFinalLabels": [
+    "CPU_DIAGNOSTIC_CAPTURE_VERIFIED",
+    "BUILD_VIII_COMPARISON_RECORDED",
+    "RESTORED_BYTES_AND_RUNTIME_VERIFIED"
+  ],
+  "forbiddenClaimsWithoutNewEvidence": [
+    "CPU_BUDGET_GAP_REPAIRED",
+    "ONLINE_COMPAT_READ_OBSERVED",
+    "TREASURY_PRODUCTION_READY",
+    "full Treasury production cutover"
+  ],
+  "makerBoundaries": {
+    "networkUsed": false,
+    "realTokenUsed": false,
+    "candidateUploaded": false,
+    "nativeWindowsExecuted": false,
+    "fullUserRepositoryChecksExecuted": false,
+    "engineCpuMeasured": false
+  },
+  "fixedPayloadSha256": {
+    "references/0003-first-report.json": "7f413445b4b414d027faa4c04d13559fe850f808994e6220fe6c992ab87835e5",
+    "references/PROVENANCE.json": "397875c918497d552e01f443c3b81dec04c05c9498e25f574e8ea164933d33df",
+    "references/build-VII/docs/treasury-compat-build-optimization-vii.md": "4fd2e5ee2c112d056c7893285be3f78063a1ee2ffe3767020aa2f5e3aeb69dcb",
+    "references/build-VII/docs/treasury-compat-loader-optimization.json": "7987b10af1aa923585f50c17ce35559fcfbd15fb22edd6618cb29945ed8b0f30",
+    "references/build-VII/docs/treasury-compat-read-optimization-v.md": "9921696a69c11abb289212131dd340e1deb5a0290926a56d74a248affe3ae341",
+    "references/build-VII/docs/treasury-compat-source-manifest.json": "6acc8371959a92d263094ecaa1fde66f6ea9c85e2e6fc8a680f56438c1ff58fb",
+    "references/build-VII/scripts/build-treasury-compat-loader.cjs": "84a8facea05ab1a61d887a1eec7eedcb5ddc8aae545fcd34ab07c7f6e7eb19a2",
+    "references/build-VII/scripts/lib/treasury-compat-build.cjs": "21bc40221b2b64dbad3880e9d24f6cda74c59261d52b8b45c08600887e8d9e2c",
+    "references/build-VII/scripts/lib/treasury-compat-context.cjs": "452fd25074ee513adcdfb3d7212fe696d9a70429711caedecd65a79247d367cf",
+    "references/build-VII/scripts/lib/treasury-compat-loader.template.txt": "cfc0d3651f7f7755492ce74f69b8943d03230dd6328ce014f759447ad08093d8",
+    "references/build-VII/src/runtime/treasuryCompatConfig.ts": "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02",
+    "references/build-VII/src/runtime/treasuryCompatCpu.ts": "103e7a3e115fcc885fc337b91e7336cdb2cd3e890524f0c8b4d2f4082c0207ef",
+    "references/build-VII/src/runtime/treasuryCompatRead.ts": "1141250ec31c12b3439f48b6274267c108c7bb95566d328414f4bd04275bef64",
+    "references/build-VII/src/runtime/treasuryCompatReadCore.generated.ts": "1eb28af06a562011dc2c9a02c3aad3bb63b447638c90a76163d3ee323a349ae8",
+    "references/build-VII/src/runtime/treasuryCompatRuntime.ts": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4",
+    "references/build-VII/src/runtime/treasuryCompatTypes.ts": "efc805ac836f23c8fc0d30429c90075503b749b0ef4f4a730c2fb9853833fbe5",
+    "references/build-VII/test/treasury-compat/bridge.spec.cjs": "278491b3c996874db2fe560973708ba1d2a0d34cfc94f413ad36f23a3067a50f",
+    "references/build-VII/test/treasury-compat/build-optimization.spec.cjs": "739c68feea6f9499aca575fb39b80a1b6d6148f00f5d10e35970118f4faeb536",
+    "references/build-VII/test/treasury-compat/build-test-support.cjs": "837dd6f50545b431395bab18a0aec3b4d4e097c3177168532b2e50ace2f95548",
+    "references/build-VII/test/treasury-compat/fixtures/core-before-build-optimization-vii.ts.txt": "b7a2c14fc7cf15e32abe7703f2fb47c5516b09f2dc80f7ffdd9a5dc0988f0dac",
+    "references/build-VII/test/treasury-compat/fixtures/core-before-loader-optimization.ts.txt": "decc6a2e019ba931041c8d79d341a59658755473b06075a19a458cc6635bd400",
+    "references/build-VII/test/treasury-compat/fixtures/core-before-read-optimization-v.ts.txt": "9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965",
+    "references/build-VII/test/treasury-compat/fixtures/reader-before-read-optimization-v.ts.txt": "6d2f2e24117a585e42739506700c937e11c9925df627f2e76aaee48a68d06ad1",
+    "references/build-VII/test/treasury-compat/helpers.cjs": "c200b1f2b6dc55deae8b50ac7ae9f0e5ecb191be6592a42c713fce7d3d289e74",
+    "references/build-VII/test/treasury-compat/loader-optimization.spec.cjs": "e1419cb4a1ddb4bc31ccc20fa9b61b8a6f971c42db6dccff00b299c5bfc3a8ad",
+    "references/build-VII/test/treasury-compat/loader-test-support.cjs": "a2aca5465eaf44a92fda19ba8ad01c52fdd0a71b02bfd0e1e5c06de73677c47f",
+    "references/build-VII/test/treasury-compat/real-readers.spec.cjs": "162630b8712f90fa71bb11eba25d3128dd92408b1474ea8540a2adb02a2f20c2",
+    "references/build-VII/test/treasuryCompatRead.test.ts": "a12568bb51270173b92a7c5450ac978703d013aa0900e8ad0e6f20ea078a7708",
+    "references/build-VII-acceptance.json": "5d0dd469527342fcb00082d5668ad828f070d82fa7d4cc09266a26f27f21f763",
+    "references/deployGuard.cjs": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7",
+    "references/diagnostic-II-result.json": "af127a883d9228401f667fdf4a640a95ba1a3eb9a2dedd1238d8175717561c36",
+    "references/diagnostic-VI-result.json": "2b6b2339c6fa1459442c3fdf40a075c58413ac63d690c8cf58085b42e94f49d6",
+    "references/prerequisites.json": "7c44591098f6beb414546bc62aed9b0f652437b36964b2a9e4e0ae2bed159ae4",
+    "references/source-lock.json": "27fc7612f1f322076a6d88187fcbf3d81fa4926f254110c68d0c7deed1c3caa0",
+    "references/test-contract.json": "a9deaf29e64157c6606ff8b3b9cde7693bc3a2a9a67fb49ea9f799297f0e8e4d",
+    "references/treasuryCompatConfig.ts": "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02",
+    "references/treasuryCompatCpu.ts": "103e7a3e115fcc885fc337b91e7336cdb2cd3e890524f0c8b4d2f4082c0207ef",
+    "references/treasuryCompatRead.ts": "1141250ec31c12b3439f48b6274267c108c7bb95566d328414f4bd04275bef64",
+    "references/treasuryCompatReadCore.generated.ts": "1eb28af06a562011dc2c9a02c3aad3bb63b447638c90a76163d3ee323a349ae8",
+    "references/treasuryCompatRuntime.ts": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4",
+    "references/treasuryCompatTypes.ts": "efc805ac836f23c8fc0d30429c90075503b749b0ef4f4a730c2fb9853833fbe5",
+    "runtime/actions.cjs": "da2aa7d41e23bc84067a9e43273f26003979463bd9b289ce7877fe9a11560883",
+    "runtime/check-profile.cjs": "cfc4f1400ca9c642b0e7df1e2911753cc74be255848592b67fa3deb41ac31722",
+    "runtime/closeout.cjs": "e81371d0820eb8f72863c589a6d497081947bdd1c29430ede4f9c5943dcd6fb1",
+    "runtime/closure-observer.cjs": "a771f16127efa58703210d97f44bd89cf12aeb54870216e8e12e3c06f15f1caf",
+    "runtime/collector-diagnostics.cjs": "94307209003c140c278adc37a99e706b175e25d9fc19e95ce97807a9e986fcc8",
+    "runtime/collector.cjs": "47011ee0de7f550dbf2fd4733bdb1a4a2caed18eb83b63eb9e84aee92be2c2ed",
+    "runtime/common.cjs": "7c688456e7a9a48c6c210b4a0aee91fb946d4682a99e32f8d64fb37a030c3bb7",
+    "runtime/decoder.cjs": "ca60ec0d27eb4950e5f54f7a5e5dfa868d5ef22f1c8ab2137f1775ead8648306",
+    "runtime/driver.cjs": "c0a31ed458910221295c83d72b96dca076b3ad167d546d693afb325f7d2706bb",
+    "runtime/guard-control.cjs": "23a61bf0c8dbc507def30fe469bc18fc6a02010399a9625941454751bf02daf9",
+    "runtime/policy.cjs": "44de7f712249640753891d68ad885878d4e579d5699a98b5eeeb1569802c612c",
+    "runtime/protocol.cjs": "0279dc20b73ab949b094e85ac198719f901d6590db92d7f7a2e8957f080bb2ce",
+    "runtime/recovery-worker.cjs": "9a63ae60bcf8eae547a4dd2eade30b46681149a47c454091e3bdd22b0af3fba8",
+    "runtime/samples.cjs": "c45d134551691f4ca2a67563d73460e85b87e1f940c84de5c06efe1432df5fea",
+    "runtime/store.cjs": "92f5c3cf9c092ebae9ea86bf5356ca7b2324bf1bbb615cf70f443df9ee7a6e10",
+    "runtime/transport.cjs": "d4348e49eb0089401073be89b5640a898a2cde5412759cee414741d7818666fd",
+    "runtime/verify-run.cjs": "fa8e972dcfd7d22938713ebb925448bb1c9aa59a3704272595aa99b141d7117d",
+    "runtime/verify-runtime.cjs": "abff9e49f6d98a2184d3ba24f53fa513bae652a2b77d1a9ad4429f87d6a024a4",
+    "tests/build-recheck.spec.cjs": "03e8052cfcd029514d84ca3be4409f21bfc874546af39356d4ac3ca7234f525b",
+    "tests/comparison.spec.cjs": "56528445a7f7555d1509f947233ad98b9edf5a4acfae2cf3176b3b292afa99e4",
+    "tests/diagnostics.spec.cjs": "577007e15d4c1d406701431e0123f36f8d48fc31e7e662a06c5ebc35f6117458",
+    "tests/fixture.cjs": "9803e8bdcf7f6935cb65b6487b1d300503d8c78c90ecdd56196837855bdb4a32",
+    "tests/loader-integration.spec.cjs": "47cb40f9b8ea0991221678ebf80bc4251a1b574b38953609872c44c079d60d2e",
+    "tests/process-fixture.cjs": "7e22bc14950e2a4adce74ac1afff9659ef769755eab22365c1b999e8a366455b",
+    "tests/process-runner.cjs": "e037312c016526802e45bceffd8b1b02a0a52a817cd4154678a2bdc9d241fbfa",
+    "tests/process.spec.cjs": "d86668a5d57776611d59d3b389e97b1c5113f5654dbbc8f6651138d78fc68abe",
+    "tests/read-recheck.spec.cjs": "98463822aafc4730025d524ac334fc2e12a661dc19b14f7880aa491527dcfb3c",
+    "tests/reader-fixture.cjs": "4aae3fc2c462d23bd2faec3735c79c2622d1cac1ef5bdaf8c5775e422def13d3",
+    "tests/recovery.spec.cjs": "d618806a43e38e196167298f91f18bafac4b0a40bc172f74e51a344aad3413a5",
+    "tests/screeps.d.ts": "c5d1c06a8ca66be72b1bd5b116cb5136b9a9f1e2a9066b7ed23f0ca7d46e98c6",
+    "tests/transport.spec.cjs": "3e421b2873d47a27aaf3fc171069a4aaa2a1c0f3d8d31cccca47828116f473c2",
+    "tests/workflow.spec.cjs": "f6bcf736c324d5a1f863d631563cb1deccdc0e03766d81b177677fd18ffc0469",
+    "tools/archive.cjs": "af503da23490f38b0dec88c4a167491c158f92e3ef67febcfb8051c050772692",
+    "tools/build.cjs": "3450afb282ffcfb799c72448b949a8a664a3f257ac2d2ccc1290dfe97ebe2c16",
+    "tools/check-baseline.cjs": "af7166419e8dbc96379638d59a445edf8f17e8540f552819e9d975c637bd30d1",
+    "tools/close-source.cjs": "089a0f141f0c12fb32999b25c5c0d0d938611483cd2a669fa31ae5950a1abc8a",
+    "tools/compare.cjs": "6fa747ae8f0a25a9d35aa5aecc8cc8c5d9e73302707976f671e60c83ce1ccff4",
+    "tools/observe.cjs": "bf7310174f6d8e662c1525268165056731cfe5436cb2ba5684970be75aea0fa5",
+    "tools/prepare.cjs": "c1eadb804e498078358e7a3ae1f616ca109e4e3029dc03c61d64892624a52427",
+    "tools/prerequisites.cjs": "da87c0e5e632c53dd5dc48da643f392dd99d90d1567189ee58a910c45c2ced72",
+    "tools/publish.cjs": "193719f1ab60ff5f0f57e1cb12c1ccbb649ec9056031053a65d2422e3c3a2cf0",
+    "tools/reconcile.cjs": "5e6cd04679d5fcb24b7770653f753083c8a69eb3022a82983339cf987a5abf5f",
+    "tools/recover.cjs": "4ad2c539dc7480e1aec12294f7e8cdb2427808b72a948c8fd5e92dfd7aa8bcb8",
+    "tools/run-tests.cjs": "6102fd565af1ca1d93efbfc1783bfd971fcd61ba8632560621cafba0ce2d806f",
+    "tools/util.cjs": "798b8cca695a358085518b888a2d7b85de9d7982b9eeded9f6448c6cfa34a469",
+    "tools/verify.cjs": "5957278d35018cf10424f2ce3f989c28c72acaeeac99d30a03feef13a310c6eb"
+  }
+}

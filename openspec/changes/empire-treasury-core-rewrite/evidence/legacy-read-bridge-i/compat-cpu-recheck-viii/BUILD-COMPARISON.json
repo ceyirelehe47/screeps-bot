@@ -1,0 +1,753 @@
+{
+  "status": "BUILD_VIII_COMPARISON_RECORDED",
+  "currentCaptureVerified": true,
+  "currentCaptureStatus": "CPU_DIAGNOSTIC_CAPTURE_VERIFIED",
+  "currentClosure": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+  "historical": {
+    "sourceCommit": "04ca086c3d62db5f506389bc59c3fb1bb4b81b66",
+    "sourcePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-cpu-recheck-vi/run/diagnostic-verification.json",
+    "sourceBlob": "d1be370705d4bb3d1a0e522d0afc57f72f52f1f8",
+    "sourceSha256": "2b6b2339c6fa1459442c3fdf40a075c58413ac63d690c8cf58085b42e94f49d6",
+    "acceptedCaptureReused": true,
+    "fullHistoricalRunReverifiedHere": false,
+    "runId": "e93e16db89d89e048b5ae40777afca04",
+    "profileHead": "2ed75fd5780f0abb386bd71d9824f364c6cf9dbd",
+    "measurements": {
+      "rawReports": 4,
+      "diagnosticReports": 4,
+      "completeSamples": 0,
+      "partialCpuSamples": 4,
+      "firstAdmittedTick": 73676300,
+      "firstReaderInvocationTick": 73676300,
+      "firstAdmissionIsFirstReaderInvocation": true,
+      "prefixRows": [
+        {
+          "tick": 73676300,
+          "sampleOrdinal": 1,
+          "status": "partial_cpu_budget",
+          "completeSample": false,
+          "prefixCpu": 2.472858700002689,
+          "phaseIntervals": {
+            "legacyInputs": 0.6322237999993376,
+            "directRead": 0.753908999999112,
+            "readerLoad": 0.7310472000026493,
+            "observationBuild": 0.025469599997450132,
+            "coreCompare": 0.29507140000350773,
+            "report": 0.03513770000063232,
+            "serializationAndSize": 0
+          },
+          "calls": {
+            "readerLoad": 1,
+            "observationBuild": 0,
+            "commitmentBuild": 0
+          },
+          "commitmentsStatus": "not_read_cpu_budget",
+          "afterRetentionCpu": 3.0690945999995165
+        },
+        {
+          "tick": 73676400,
+          "sampleOrdinal": 2,
+          "status": "partial_cpu_budget",
+          "completeSample": false,
+          "prefixCpu": 2.9877224000010756,
+          "phaseIntervals": {
+            "legacyInputs": 0.3176277000020491,
+            "directRead": 0.6304480000035255,
+            "readerLoad": 0.12270699999498902,
+            "observationBuild": 0.7566741000046022,
+            "coreCompare": 0.12149149999459041,
+            "commitmentBuild": 0.9307545000046957,
+            "commitmentProjection": 0.03373759999522008,
+            "report": 0.0742820000014035,
+            "serializationAndSize": 0
+          },
+          "calls": {
+            "readerLoad": 1,
+            "observationBuild": 1,
+            "commitmentBuild": 1
+          },
+          "commitmentsStatus": "partial_cpu_budget",
+          "afterRetentionCpu": 3.4484684000053676
+        },
+        {
+          "tick": 73676500,
+          "sampleOrdinal": 3,
+          "status": "partial_cpu_budget",
+          "completeSample": false,
+          "prefixCpu": 2.594202000007499,
+          "phaseIntervals": {
+            "legacyInputs": 0.2393001000091317,
+            "directRead": 0.5768970999924932,
+            "readerLoad": 0.14618370000243885,
+            "observationBuild": 0.5631093000047258,
+            "coreCompare": 0.07763209999393439,
+            "commitmentBuild": 0.9109230000030948,
+            "commitmentProjection": 0.04418179999629501,
+            "report": 0.03597490000538528,
+            "serializationAndSize": 0
+          },
+          "calls": {
+            "readerLoad": 1,
+            "observationBuild": 1,
+            "commitmentBuild": 1
+          },
+          "commitmentsStatus": "partial_cpu_budget",
+          "afterRetentionCpu": 3.1291169000032824
+        },
+        {
+          "tick": 73676600,
+          "sampleOrdinal": 4,
+          "status": "partial_cpu_budget",
+          "completeSample": false,
+          "prefixCpu": 2.297933300011209,
+          "phaseIntervals": {
+            "legacyInputs": 0.3235960000092746,
+            "directRead": 0.6590661999944132,
+            "readerLoad": 0.12191660000826232,
+            "observationBuild": 0.5475717000008444,
+            "coreCompare": 0.08367579999321606,
+            "commitmentBuild": 0.4952947999991011,
+            "commitmentProjection": 0.03260790000058478,
+            "report": 0.03420430000551278,
+            "serializationAndSize": 0
+          },
+          "calls": {
+            "readerLoad": 1,
+            "observationBuild": 1,
+            "commitmentBuild": 1
+          },
+          "commitmentsStatus": "partial_cpu_budget",
+          "afterRetentionCpu": null
+        }
+      ],
+      "invocations": {
+        "readerLoad": {
+          "count": 4,
+          "invokedIntervals": [
+            {
+              "tick": 73676300,
+              "sampleOrdinal": 1,
+              "inclusiveInterval": 0.7310472000026493
+            },
+            {
+              "tick": 73676400,
+              "sampleOrdinal": 2,
+              "inclusiveInterval": 0.12270699999498902
+            },
+            {
+              "tick": 73676500,
+              "sampleOrdinal": 3,
+              "inclusiveInterval": 0.14618370000243885
+            },
+            {
+              "tick": 73676600,
+              "sampleOrdinal": 4,
+              "inclusiveInterval": 0.12191660000826232
+            }
+          ],
+          "firstInvocation": {
+            "tick": 73676300,
+            "sampleOrdinal": 1,
+            "inclusiveInterval": 0.7310472000026493
+          },
+          "followingInvocationCount": 3,
+          "followingInvokedIntervalMedian": 0.12270699999498902,
+          "allInvokedIntervalMedian": 0.13444534999871394,
+          "boundaryOnlyIntervals": []
+        },
+        "observationBuild": {
+          "count": 3,
+          "invokedIntervals": [
+            {
+              "tick": 73676400,
+              "sampleOrdinal": 2,
+              "inclusiveInterval": 0.7566741000046022
+            },
+            {
+              "tick": 73676500,
+              "sampleOrdinal": 3,
+              "inclusiveInterval": 0.5631093000047258
+            },
+            {
+              "tick": 73676600,
+              "sampleOrdinal": 4,
+              "inclusiveInterval": 0.5475717000008444
+            }
+          ],
+          "firstInvocation": {
+            "tick": 73676400,
+            "sampleOrdinal": 2,
+            "inclusiveInterval": 0.7566741000046022
+          },
+          "followingInvocationCount": 2,
+          "followingInvokedIntervalMedian": 0.5553405000027851,
+          "allInvokedIntervalMedian": 0.5631093000047258,
+          "boundaryOnlyIntervals": [
+            {
+              "tick": 73676300,
+              "interval": 0.025469599997450132,
+              "invoked": false
+            }
+          ]
+        },
+        "commitmentBuild": {
+          "count": 3,
+          "invokedIntervals": [
+            {
+              "tick": 73676400,
+              "sampleOrdinal": 2,
+              "inclusiveInterval": 0.9307545000046957
+            },
+            {
+              "tick": 73676500,
+              "sampleOrdinal": 3,
+              "inclusiveInterval": 0.9109230000030948
+            },
+            {
+              "tick": 73676600,
+              "sampleOrdinal": 4,
+              "inclusiveInterval": 0.4952947999991011
+            }
+          ],
+          "firstInvocation": {
+            "tick": 73676400,
+            "sampleOrdinal": 2,
+            "inclusiveInterval": 0.9307545000046957
+          },
+          "followingInvocationCount": 2,
+          "followingInvokedIntervalMedian": 0.7031089000010979,
+          "allInvokedIntervalMedian": 0.9109230000030948,
+          "boundaryOnlyIntervals": []
+        }
+      },
+      "firstDirectReadInterval": 0.753908999999112,
+      "followingDirectReadIntervalMedian": 0.6304480000035255,
+      "allPrefixMedian": 2.533530350005094,
+      "followingPrefixMedian": 2.594202000007499,
+      "successorTailProfiles": 3,
+      "lastSampleTail": "unobservable without a successor; no fifth point",
+      "commitmentActuallyInvoked": true,
+      "reportedTailCostsWithinTwoCpu": false,
+      "reportedTailCountForAboveBoolean": 3
+    }
+  },
+  "current": {
+    "compatBase": "2d28a6f146fc81e5b87be7cf5b70648352557797",
+    "refactorBase": "a9f4cc04d99c8a8fda11f9c7e980861953341f03",
+    "runId": "f253987de8cad520197f9fe3b657612d",
+    "profileHead": "220d8a6902828a8d9643a04098d7d6ec3fbed9e5",
+    "measurements": {
+      "rawReports": 4,
+      "diagnosticReports": 4,
+      "completeSamples": 0,
+      "partialCpuSamples": 4,
+      "firstAdmittedTick": 73680500,
+      "firstReaderInvocationTick": 73680500,
+      "firstAdmissionIsFirstReaderInvocation": true,
+      "prefixRows": [
+        {
+          "tick": 73680500,
+          "sampleOrdinal": 1,
+          "status": "partial_cpu_budget",
+          "completeSample": false,
+          "prefixCpu": 2.2312368000020797,
+          "phaseIntervals": {
+            "legacyInputs": 0.5612958000019717,
+            "directRead": 0.735725900001853,
+            "readerLoad": 0.8288319000021147,
+            "observationBuild": 0.026896999996097293,
+            "coreCompare": 0.054966600004263455,
+            "report": 0.023519599995779572,
+            "serializationAndSize": 0
+          },
+          "calls": {
+            "readerLoad": 1,
+            "observationBuild": 0,
+            "commitmentBuild": 0
+          },
+          "commitmentsStatus": "not_read_cpu_budget",
+          "afterRetentionCpu": 2.879150300002948
+        },
+        {
+          "tick": 73680600,
+          "sampleOrdinal": 2,
+          "status": "partial_cpu_budget",
+          "completeSample": false,
+          "prefixCpu": 2.6924976000009337,
+          "phaseIntervals": {
+            "legacyInputs": 0.29845400000340305,
+            "directRead": 0.617191899997124,
+            "readerLoad": 0.10510239999712212,
+            "observationBuild": 0.6347289000041201,
+            "coreCompare": 0.08793200000218349,
+            "commitmentBuild": 0.873242499998014,
+            "commitmentProjection": 0.03801070000190521,
+            "report": 0.037835199997061864,
+            "serializationAndSize": 0
+          },
+          "calls": {
+            "readerLoad": 1,
+            "observationBuild": 1,
+            "commitmentBuild": 1
+          },
+          "commitmentsStatus": "partial_cpu_budget",
+          "afterRetentionCpu": 3.1281848000071477
+        },
+        {
+          "tick": 73680700,
+          "sampleOrdinal": 3,
+          "status": "partial_cpu_budget",
+          "completeSample": false,
+          "prefixCpu": 2.27590350000537,
+          "phaseIntervals": {
+            "legacyInputs": 0.2189421000002767,
+            "directRead": 0.4983407000036095,
+            "readerLoad": 0.09456979999959003,
+            "observationBuild": 0.4255953000028967,
+            "coreCompare": 0.07425339999463176,
+            "commitmentBuild": 0.8774597000010544,
+            "commitmentProjection": 0.054575299996940885,
+            "report": 0.03216720000636997,
+            "serializationAndSize": 0
+          },
+          "calls": {
+            "readerLoad": 1,
+            "observationBuild": 1,
+            "commitmentBuild": 1
+          },
+          "commitmentsStatus": "partial_cpu_budget",
+          "afterRetentionCpu": 2.6945256000035442
+        },
+        {
+          "tick": 73680800,
+          "sampleOrdinal": 4,
+          "status": "partial_cpu_budget",
+          "completeSample": false,
+          "prefixCpu": 2.7768338000023505,
+          "phaseIntervals": {
+            "legacyInputs": 0.21486790000199107,
+            "directRead": 0.6995703000065987,
+            "readerLoad": 0.12335179999354295,
+            "observationBuild": 0.5091970000066794,
+            "coreCompare": 0.11319489999732468,
+            "commitmentBuild": 1.0527321999979904,
+            "commitmentProjection": 0.030829500006802846,
+            "report": 0.03309019999142038,
+            "serializationAndSize": 0
+          },
+          "calls": {
+            "readerLoad": 1,
+            "observationBuild": 1,
+            "commitmentBuild": 1
+          },
+          "commitmentsStatus": "partial_cpu_budget",
+          "afterRetentionCpu": null
+        }
+      ],
+      "invocations": {
+        "readerLoad": {
+          "count": 4,
+          "invokedIntervals": [
+            {
+              "tick": 73680500,
+              "sampleOrdinal": 1,
+              "inclusiveInterval": 0.8288319000021147
+            },
+            {
+              "tick": 73680600,
+              "sampleOrdinal": 2,
+              "inclusiveInterval": 0.10510239999712212
+            },
+            {
+              "tick": 73680700,
+              "sampleOrdinal": 3,
+              "inclusiveInterval": 0.09456979999959003
+            },
+            {
+              "tick": 73680800,
+              "sampleOrdinal": 4,
+              "inclusiveInterval": 0.12335179999354295
+            }
+          ],
+          "firstInvocation": {
+            "tick": 73680500,
+            "sampleOrdinal": 1,
+            "inclusiveInterval": 0.8288319000021147
+          },
+          "followingInvocationCount": 3,
+          "followingInvokedIntervalMedian": 0.10510239999712212,
+          "allInvokedIntervalMedian": 0.11422709999533254,
+          "boundaryOnlyIntervals": []
+        },
+        "observationBuild": {
+          "count": 3,
+          "invokedIntervals": [
+            {
+              "tick": 73680600,
+              "sampleOrdinal": 2,
+              "inclusiveInterval": 0.6347289000041201
+            },
+            {
+              "tick": 73680700,
+              "sampleOrdinal": 3,
+              "inclusiveInterval": 0.4255953000028967
+            },
+            {
+              "tick": 73680800,
+              "sampleOrdinal": 4,
+              "inclusiveInterval": 0.5091970000066794
+            }
+          ],
+          "firstInvocation": {
+            "tick": 73680600,
+            "sampleOrdinal": 2,
+            "inclusiveInterval": 0.6347289000041201
+          },
+          "followingInvocationCount": 2,
+          "followingInvokedIntervalMedian": 0.46739615000478807,
+          "allInvokedIntervalMedian": 0.5091970000066794,
+          "boundaryOnlyIntervals": [
+            {
+              "tick": 73680500,
+              "interval": 0.026896999996097293,
+              "invoked": false
+            }
+          ]
+        },
+        "commitmentBuild": {
+          "count": 3,
+          "invokedIntervals": [
+            {
+              "tick": 73680600,
+              "sampleOrdinal": 2,
+              "inclusiveInterval": 0.873242499998014
+            },
+            {
+              "tick": 73680700,
+              "sampleOrdinal": 3,
+              "inclusiveInterval": 0.8774597000010544
+            },
+            {
+              "tick": 73680800,
+              "sampleOrdinal": 4,
+              "inclusiveInterval": 1.0527321999979904
+            }
+          ],
+          "firstInvocation": {
+            "tick": 73680600,
+            "sampleOrdinal": 2,
+            "inclusiveInterval": 0.873242499998014
+          },
+          "followingInvocationCount": 2,
+          "followingInvokedIntervalMedian": 0.9650959499995224,
+          "allInvokedIntervalMedian": 0.8774597000010544,
+          "boundaryOnlyIntervals": []
+        }
+      },
+      "firstDirectReadInterval": 0.735725900001853,
+      "followingDirectReadIntervalMedian": 0.617191899997124,
+      "allPrefixMedian": 2.484200550003152,
+      "followingPrefixMedian": 2.6924976000009337,
+      "successorTailProfiles": 3,
+      "lastSampleTail": "unobservable without a successor; no fifth point",
+      "commitmentActuallyInvoked": true,
+      "reportedTailCostsWithinTwoCpu": false,
+      "reportedTailCountForAboveBoolean": 3
+    }
+  },
+  "phaseComparisons": {
+    "readerLoad": {
+      "scope": "after_first_actual_invocation",
+      "baseline": {
+        "count": 3,
+        "median": 0.12270699999498902
+      },
+      "current": {
+        "count": 3,
+        "median": 0.10510239999712212
+      },
+      "relation": "lower_observed_median",
+      "improvementRequiredForCaptureAcceptance": false
+    },
+    "observationBuild": {
+      "scope": "all_actual_invocations",
+      "baseline": {
+        "count": 3,
+        "median": 0.5631093000047258
+      },
+      "current": {
+        "count": 3,
+        "median": 0.5091970000066794
+      },
+      "relation": "lower_observed_median",
+      "improvementRequiredForCaptureAcceptance": false
+    },
+    "commitmentBuild": {
+      "scope": "all_actual_invocations",
+      "baseline": {
+        "count": 3,
+        "median": 0.9109230000030948
+      },
+      "current": {
+        "count": 3,
+        "median": 0.8774597000010544
+      },
+      "relation": "lower_observed_median",
+      "improvementRequiredForCaptureAcceptance": false
+    },
+    "directRead": {
+      "scope": "admitted_samples_after_first",
+      "baseline": {
+        "count": 3,
+        "median": 0.6304480000035255
+      },
+      "current": {
+        "count": 3,
+        "median": 0.617191899997124
+      },
+      "relation": "lower_observed_median",
+      "improvementRequiredForCaptureAcceptance": false
+    },
+    "prefixCpu": {
+      "scope": "all_diagnostic_prefixes",
+      "baseline": {
+        "count": 4,
+        "median": 2.533530350005094
+      },
+      "current": {
+        "count": 4,
+        "median": 2.484200550003152
+      },
+      "relation": "lower_observed_median",
+      "improvementRequiredForCaptureAcceptance": false
+    }
+  },
+  "postFirstReaderInvocationComparison": {
+    "relation": "lower_observed_median",
+    "baselineCount": 3,
+    "currentCount": 3,
+    "baselineMedian": 0.12270699999498902,
+    "currentMedian": 0.10510239999712212,
+    "lowerCostRequiredForCaptureAcceptance": false
+  },
+  "progress": {
+    "baselineObservationBuilds": 3,
+    "currentObservationBuilds": 3,
+    "baselineCommitmentBuilds": 3,
+    "currentCommitmentBuilds": 3,
+    "baselineCompleteSamples": 0,
+    "currentCompleteSamples": 0,
+    "completeSampleRequiredForComparisonRecord": false
+  },
+  "interpretation": {
+    "callZeroExcludedFromFunctionCost": true,
+    "intervalsAreNotNetFunctionCosts": true,
+    "firstAdmittedSampleIsNotNecessarilyFirstLoaderCall": true,
+    "firstLoaderCallIsNotProofOfEngineColdStart": true,
+    "onlyActualCallsCountAsObservationOrCommitmentExecution": true,
+    "workloadsNotControlledAcrossRuns": true,
+    "exactSpeedupPercentNotComputed": true,
+    "causalSpeedupClaim": false,
+    "engineOperationReductionMeasuredOfflineOnly": true,
+    "budget": 2,
+    "engineCpuGapRepaired": false,
+    "fullCompatibilityObserved": false,
+    "comparisonToolNetworkUsed": false,
+    "currentCaptureRequiresOnlineRun": true,
+    "resultCompletenessAndIndexCompletenessRemainDistinct": true
+  },
+  "caution": "Sequential four-point runs, not randomized A/B. Inventory, task count, engine state and diagnostic overhead can differ. A call=0 interval is boundary work, never a measured builder invocation. Preserve insufficient evidence instead of adding samples.",
+  "currentLegacyProjectionDifferences": [
+    {
+      "tick": 73680500,
+      "room": "E3N59",
+      "location": "terminal",
+      "fields": [
+        "terminalUsedCapacity",
+        "terminalFreeCapacity"
+      ],
+      "coreComparison": "not_read"
+    },
+    {
+      "tick": 73680500,
+      "room": "E4N58",
+      "location": "terminal",
+      "fields": [
+        "terminalUsedCapacity",
+        "terminalFreeCapacity",
+        "terminalEnergy"
+      ],
+      "coreComparison": "not_read"
+    }
+  ],
+  "currentReportDetails": [
+    {
+      "tick": 73680500,
+      "sampleOrdinal": 1,
+      "requestedEndpointRows": 4,
+      "collectedEndpointRows": 4,
+      "directOkEndpoints": 4,
+      "coreMatchedEndpoints": 0,
+      "legacyInputs": {
+        "tasks": {
+          "status": "nonempty",
+          "count": 16
+        },
+        "reservations": {
+          "status": "empty",
+          "count": 0
+        },
+        "reservationVersion": {
+          "status": "absent",
+          "value": null
+        },
+        "treasuryCore": {
+          "status": "absent",
+          "activeCount": null
+        }
+      },
+      "commitmentActuallyInvoked": false,
+      "commitmentStatus": "not_read_cpu_budget",
+      "commitmentIndexComplete": null,
+      "commitmentProjectionRows": null,
+      "expectedCommitmentProjectionRows": 4,
+      "commitmentProjectionKeys": null,
+      "emptyRowsProveNoCommitments": false,
+      "completeSample": false,
+      "sampleCompletenessReason": "SAMPLE_NOT_COMPLETE"
+    },
+    {
+      "tick": 73680600,
+      "sampleOrdinal": 2,
+      "requestedEndpointRows": 4,
+      "collectedEndpointRows": 4,
+      "directOkEndpoints": 4,
+      "coreMatchedEndpoints": 4,
+      "legacyInputs": {
+        "tasks": {
+          "status": "nonempty",
+          "count": 15
+        },
+        "reservations": {
+          "status": "empty",
+          "count": 0
+        },
+        "reservationVersion": {
+          "status": "absent",
+          "value": null
+        },
+        "treasuryCore": {
+          "status": "absent",
+          "activeCount": null
+        }
+      },
+      "commitmentActuallyInvoked": true,
+      "commitmentStatus": "partial_cpu_budget",
+      "commitmentIndexComplete": true,
+      "commitmentProjectionRows": 0,
+      "expectedCommitmentProjectionRows": 4,
+      "commitmentProjectionKeys": [],
+      "emptyRowsProveNoCommitments": false,
+      "completeSample": false,
+      "sampleCompletenessReason": "SAMPLE_NOT_COMPLETE"
+    },
+    {
+      "tick": 73680700,
+      "sampleOrdinal": 3,
+      "requestedEndpointRows": 4,
+      "collectedEndpointRows": 4,
+      "directOkEndpoints": 4,
+      "coreMatchedEndpoints": 4,
+      "legacyInputs": {
+        "tasks": {
+          "status": "nonempty",
+          "count": 9
+        },
+        "reservations": {
+          "status": "empty",
+          "count": 0
+        },
+        "reservationVersion": {
+          "status": "absent",
+          "value": null
+        },
+        "treasuryCore": {
+          "status": "absent",
+          "activeCount": null
+        }
+      },
+      "commitmentActuallyInvoked": true,
+      "commitmentStatus": "partial_cpu_budget",
+      "commitmentIndexComplete": true,
+      "commitmentProjectionRows": 0,
+      "expectedCommitmentProjectionRows": 4,
+      "commitmentProjectionKeys": [],
+      "emptyRowsProveNoCommitments": false,
+      "completeSample": false,
+      "sampleCompletenessReason": "SAMPLE_NOT_COMPLETE"
+    },
+    {
+      "tick": 73680800,
+      "sampleOrdinal": 4,
+      "requestedEndpointRows": 4,
+      "collectedEndpointRows": 4,
+      "directOkEndpoints": 4,
+      "coreMatchedEndpoints": 4,
+      "legacyInputs": {
+        "tasks": {
+          "status": "nonempty",
+          "count": 9
+        },
+        "reservations": {
+          "status": "empty",
+          "count": 0
+        },
+        "reservationVersion": {
+          "status": "absent",
+          "value": null
+        },
+        "treasuryCore": {
+          "status": "absent",
+          "activeCount": null
+        }
+      },
+      "commitmentActuallyInvoked": true,
+      "commitmentStatus": "partial_cpu_budget",
+      "commitmentIndexComplete": true,
+      "commitmentProjectionRows": 0,
+      "expectedCommitmentProjectionRows": 4,
+      "commitmentProjectionKeys": [],
+      "emptyRowsProveNoCommitments": false,
+      "completeSample": false,
+      "sampleCompletenessReason": "SAMPLE_NOT_COMPLETE"
+    }
+  ],
+  "historicalProjectionDetails": "not included in the pinned VI verdict; original raw history is not reconstructed here",
+  "currentProjectionSummary": {
+    "reports": 4,
+    "actualCommitmentBuildReports": 3,
+    "indexCompleteReports": 3,
+    "reportsWithAllProjectionRows": 0,
+    "fullSamples": 0,
+    "countsAreDescriptionsNotAcceptanceGates": true
+  },
+  "currentVerificationSha256": "38f86d0ee1d460bc82a5de6e987bf3f11340553eea3eef984e2b6c98faf5b566",
+  "inputDigests": {
+    "public-session.json": {
+      "bytes": 2502,
+      "sha256": "0046ee37d80a8518bc82f54a8a12a4b63dbba5c806dbe40a2da02587bafc53d2"
+    },
+    "console.jsonl": {
+      "bytes": 245274,
+      "sha256": "c44dfc7bde22462d01fc71135a2e5214783bf862fa7543361821991475fa17ef"
+    },
+    "guard-result.json": {
+      "bytes": 1234,
+      "sha256": "0a6fec8b113d1b3ce917ab21ac51ef579d5268f8f586f26f3e2eed5e38f4bef8"
+    },
+    "source-closed.json": {
+      "bytes": 224,
+      "sha256": "8d459f48fca0a78fb8e551ad66e2ca114a95171aa5273f5a37e1ebf8d20658bd"
+    }
+  }
+}

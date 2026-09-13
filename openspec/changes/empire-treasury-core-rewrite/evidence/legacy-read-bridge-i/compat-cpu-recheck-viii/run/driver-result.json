@@ -1,0 +1,56 @@
+{
+  "runId": "f253987de8cad520197f9fe3b657612d",
+  "status": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+  "upload": {
+    "status": "UPLOADED_AND_READBACK_VERIFIED",
+    "confirmed": true,
+    "serverAccepted": true,
+    "requestAttempted": true,
+    "digest": {
+      "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+      "hash": "a35d0af49f69e492ef8bf80fe28916198c985511915473cad895a7430f34eb1c",
+      "files": [
+        {
+          "name": "main",
+          "kind": "text",
+          "bytes": 4594329,
+          "sha256": "5b31b7a460595de183e7945192d3fd116f37fe0d12ac51e24fb6f1354228c90b"
+        }
+      ]
+    },
+    "build": {
+      "commit": "220d8a6902828a8d9643a04098d7d6ec3fbed9e5",
+      "tree": "24bec74d7fd8cfda3a4b97adf964ae59e23937f1",
+      "dirty": "folded_out",
+      "deployBranch": "default",
+      "tag": "2026.8.29-6+220d8a6@2026-09-13T17:38:37.286Z"
+    },
+    "atMs": 1789321206745
+  },
+  "failure": null,
+  "closure": {
+    "status": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+    "closureId": "1023d4258d782a784dadf305251b2078",
+    "parentRunId": "f253987de8cad520197f9fe3b657612d",
+    "actor": "worker",
+    "bytesConfirmed": true,
+    "uploadOutcomeResolved": true,
+    "runtimeConfirmed": true,
+    "error": null,
+    "runtimeVerification": {
+      "status": "RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED",
+      "durationMs": 75135,
+      "collectorPid": 40556,
+      "consoleFrames": 19,
+      "cpuFrames": 20,
+      "positiveCpuFramesAfterReady": 19,
+      "maxConsoleGapMs": 4859,
+      "maxCpuGapMs": 4868,
+      "scope": "fresh shard1 console and account CPU; not a continuation of diagnostic observation"
+    },
+    "atMs": 1789323360653
+  },
+  "collectorExit": 0,
+  "guardExit": 0,
+  "atMs": 1789323360756
+}

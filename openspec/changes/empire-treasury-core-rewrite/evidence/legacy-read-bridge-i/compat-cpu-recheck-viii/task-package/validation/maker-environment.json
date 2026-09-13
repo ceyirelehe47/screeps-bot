@@ -1,0 +1,13 @@
+{
+  "status": "MAKER_ENVIRONMENT_RECORDED",
+  "platform": "linux",
+  "node": "v22.16.0",
+  "typescript": "5.8.3",
+  "git": "2.47.3",
+  "nativeWindowsExecuted": false,
+  "screepsNetworkUsed": false,
+  "realTokenUsed": false,
+  "candidateUploaded": false,
+  "fullUserRepositoryChecksExecuted": false,
+  "engineCpuMeasured": false
+}

@@ -1,0 +1,9 @@
+{
+  "status": "CPU_DIAGNOSTIC_PREPARED_NOT_DEPLOYED",
+  "runId": "f253987de8cad520197f9fe3b657612d",
+  "profileHead": "220d8a6902828a8d9643a04098d7d6ec3fbed9e5",
+  "startTick": 73680500,
+  "endTick": 73680800,
+  "latestObservedTick": 73680307,
+  "work": "D:\\code\\screeps\\compat-cpu-recheck-VIII-execution\\live"
+}

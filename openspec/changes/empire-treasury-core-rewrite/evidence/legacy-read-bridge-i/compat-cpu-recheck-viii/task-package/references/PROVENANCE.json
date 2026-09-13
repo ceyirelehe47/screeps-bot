@@ -1,0 +1,27 @@
+{
+  "executionRevision": "compat-cpu-recheck-VIII",
+  "candidateBase": "2d28a6f146fc81e5b87be7cf5b70648352557797",
+  "evidenceBase": "a9f4cc04d99c8a8fda11f9c7e980861953341f03",
+  "candidateImplementation": "Build Optimization VII",
+  "candidateGeneratedBlob": "4f94acf1c06a60de9ca8ff2f0cdd2910cb6913be",
+  "historicalComparison": {
+    "revision": "CPU Recheck VI",
+    "commit": "04ca086c3d62db5f506389bc59c3fb1bb4b81b66",
+    "blob": "d1be370705d4bb3d1a0e522d0afc57f72f52f1f8",
+    "file": "references/diagnostic-VI-result.json"
+  },
+  "offlineAcceptance": {
+    "revision": "Build Optimization VII",
+    "commit": "a9f4cc04d99c8a8fda11f9c7e980861953341f03",
+    "blob": "f3e46cee63bfb3c42272a28a7d618bdf8e9f03d5",
+    "file": "references/build-VII-acceptance.json"
+  },
+  "canonicalBuilderSource": "01bd9831454950c4928df98dd8679692b55603e5",
+  "productionEditsAuthorized": [
+    "src/runtime/treasuryCompatConfig.ts: temporary ON then exact OFF"
+  ],
+  "newProductionImplementation": false,
+  "newOnlineMeasurementsByMaker": false,
+  "safetyAlgorithmsRewritten": false,
+  "makerNetworkUsed": false
+}
