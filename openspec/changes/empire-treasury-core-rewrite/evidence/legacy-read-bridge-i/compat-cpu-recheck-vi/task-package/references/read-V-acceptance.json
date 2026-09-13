@@ -1,0 +1,25 @@
+{
+  "status": "READ_V_OFFLINE_VERIFIED_NOT_DEPLOYED",
+  "compatHead": "5080fda96418fefecfd8ddccc79a9649f6165bed",
+  "compatBase": "af7cfb7507d42bb12a32b8ea9d85dadd87d97fae",
+  "refactorBase": "838ae7b170e8eedd4bd7a9f53e7ceee24e560ce1",
+  "packageFingerprint": "a64eacb583ab84fd95deca7bde994417cd028a59361e97642ce32cda7ed3840b",
+  "factoryBodiesChanged": [
+    "commitments: explicit context only"
+  ],
+  "runtimeDefinitionReuse": true,
+  "firstSuccessfulFactoryExecutions": 7,
+  "followingFactoryExecutions": 0,
+  "actualEngineMeasurement": false,
+  "directReadOptimized": true,
+  "engineCpuGapRepaired": false,
+  "budget": 2,
+  "enabled": false,
+  "originalCpuRecheckIV": {
+    "raw": 4,
+    "diagnostic": 4,
+    "complete": 0,
+    "commitmentBuilds": 2,
+    "recoveryClosed": true
+  }
+}

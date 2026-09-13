@@ -1,0 +1,21 @@
+{
+  "executionBase": {
+    "package": "screeps-compat-cpu-recheck-IV-2026-09-12",
+    "zipSha256": "5571706d087a06eda4893dccb0bd0e938bd41dd2195ba2b775a3dc992a76a8d6"
+  },
+  "candidateBase": "5080fda96418fefecfd8ddccc79a9649f6165bed",
+  "evidenceBase": "6891de86bd5bd7a2c896384965be1d2f070d087e",
+  "sourcePackage": "screeps-compat-read-optimization-V-2026-09-13",
+  "sourcePackageZipSha256": "09052efbbceb67275a69a4ad6dbd47a5185890c0def7c84faf43e046650e733a",
+  "canonicalBuilderSource": "01bd9831454950c4928df98dd8679692b55603e5",
+  "readVGeneratedBlob": "fe94ebece8f5118b76701007ce3906adfbb4da08",
+  "historicalComparisonReference": "references/prerequisites.json:priorDiagnostic (IV)",
+  "regressionOnlyHistoricalRecord": "references/diagnostic-II-result.json",
+  "regressionOnlyRecordIsRuntimeBaseline": false,
+  "productionEditsAuthorized": [
+    "src/runtime/treasuryCompatConfig.ts:temporary ON then exact OFF"
+  ],
+  "newProductionImplementation": false,
+  "newOnlineMeasurementsByMaker": false,
+  "safetyAlgorithmsRewritten": false
+}

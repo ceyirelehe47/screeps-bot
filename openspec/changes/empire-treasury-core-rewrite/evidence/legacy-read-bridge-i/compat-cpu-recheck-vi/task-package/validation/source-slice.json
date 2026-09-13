@@ -1,0 +1,37 @@
+{
+  "environment": {
+    "platform": "linux",
+    "node": "v22.16.0",
+    "typescript": "5.8.3"
+  },
+  "sourceScope": "fixed V slice only, not full user repository",
+  "frozenFiles": 21,
+  "frozen": true,
+  "off": true,
+  "onWindow": [
+    73660200,
+    73660300,
+    73660400,
+    73660500
+  ],
+  "expired": "PROFILE_WINDOW_EXPIRED",
+  "recoveredDefaultOff": true,
+  "regenerate": {
+    "exit": 0,
+    "result": {
+      "status": "COMPAT_LOADER_REGENERATION_VERIFIED",
+      "files": [
+        "src/runtime/treasuryCompatReadCore.generated.ts",
+        "docs/treasury-compat-loader-optimization.json",
+        "docs/treasury-compat-source-manifest.json"
+      ],
+      "canonicalFactoryBodyRecovery": "exact",
+      "explicitContextAdaptation": true
+    }
+  },
+  "minimalTypeDiagnostics": 0,
+  "sourceBlobs": {
+    "reader": "58f1ca27d217fdd7af3e50bcec5de45bf3ee14ac",
+    "core": "fe94ebece8f5118b76701007ce3906adfbb4da08"
+  }
+}

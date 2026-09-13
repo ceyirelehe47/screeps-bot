@@ -1,0 +1,11 @@
+# VI replaces only the execution package for the next experiment
+
+本包将下一次四点复测的候选源码固定到已验收Read V@5080fda96418fefecfd8ddccc79a9649f6165bed，证据父提交固定到6891de86bd5bd7a2c896384965be1d2f070d087e。
+
+CPU IV包5571706d087a06eda4893dccb0bd0e938bd41dd2195ba2b775a3dc992a76a8d6保留为历史，不能直接运行于V源码。V离线实现包09052efbbceb67275a69a4ad6dbd47a5185890c0def7c84faf43e046650e733a不重应用。
+
+不重裁决、不删除CPU II/IV或V证据，不修改旧窗口。CPU IV仍为4条诊断、0完整、2次承诺构建、恢复已闭合。VI仅创建新的唯一运行，允许结果比旧轮更好、相同、更差或不足；绝不为修绿增加样本或预算。
+
+本包增加当前V冻结文件、CPU IV和Read V固定前置证据、调用与投影分离的比较、仓库142项Node门禁及新集成反例。16个runtime文件逐字节继承IV；common/policy仅更改候选基线、本轮身份/路径/标签。线上解码、采样、安全停止、恢复、证据验证算法不变。运行测试工具的离线总等待上限由3分钟改为15分钟，不改变线上阈值。
+
+旧成功标签不作为VI新实测结果。已发生候选上传又恢复时应明确报告两次写入，不使用NOT_DEPLOYED冒充无线上动作。

@@ -1,0 +1,6 @@
+{
+  "encoding": "utf8",
+  "bytes": 273,
+  "sha256": "9d52cf33aadeb58d9317d9f11015da56ffcdba5a4fc7637be6ef3aa26a74074b",
+  "text": "{\"status\":\"COMPAT_LOADER_REGENERATION_VERIFIED\",\"files\":[\"src/runtime/treasuryCompatReadCore.generated.ts\",\"docs/treasury-compat-loader-optimization.json\",\"docs/treasury-compat-source-manifest.json\"],\"canonicalFactoryBodyRecovery\":\"exact\",\"explicitContextAdaptation\":true}\n"
+}

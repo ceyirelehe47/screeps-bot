@@ -1,0 +1,12 @@
+{
+  "patches": [
+    "0001-frozen-safety-runtime.patch",
+    "0002-execution-and-comparison.patch",
+    "0003-fixed-tests-and-inputs.patch"
+  ],
+  "gitApplyCheck": true,
+  "gitApply": true,
+  "filesCompared": 81,
+  "allByteIdentical": true,
+  "scope": "empty scratch Git workspaces, not production application"
+}

@@ -1,0 +1,6 @@
+{
+  "encoding": "utf8",
+  "bytes": 1006,
+  "sha256": "516eb1ecaae54b0965e2df7c2fc0837bfd5c93537c6bd30f083a56c7ac4eaa38",
+  "text": "{\"runId\":\"e93e16db89d89e048b5ae40777afca04\",\"status\":\"GUARD_CLOSED_CONFIRMED\",\"reason\":\"DIAGNOSTIC_WINDOW_COMPLETE\",\"closure\":{\"status\":\"RESTORED_BYTES_AND_RUNTIME_VERIFIED\",\"closureId\":\"a43a8cb15515b5a1200def47d46053d4\",\"parentRunId\":\"e93e16db89d89e048b5ae40777afca04\",\"actor\":\"worker\",\"bytesConfirmed\":true,\"uploadOutcomeResolved\":true,\"runtimeConfirmed\":true,\"error\":null,\"runtimeVerification\":{\"status\":\"RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED\",\"durationMs\":75062,\"collectorPid\":36464,\"consoleFrames\":19,\"cpuFrames\":20,\"positiveCpuFramesAfterReady\":19,\"maxConsoleGapMs\":5026,\"maxCpuGapMs\":5168,\"scope\":\"fresh shard1 console and account CPU; not a continuation of diagnostic observation\"},\"atMs\":1789305750373},\"auditFailed\":false,\"failure\":null,\"elapsedMs\":2202296,\"timeChannel\":{\"createdAtMs\":1789303548081,\"consecutiveFailedCycles\":0,\"totalAttempts\":131,\"totalSuccessfulReads\":121,\"totalFailedCycles\":0,\"lastSuccessAtMs\":1789305610227,\"lastFailureAtMs\":null,\"lastFailure\":null},\"atMs\":1789305750377}\n"
+}

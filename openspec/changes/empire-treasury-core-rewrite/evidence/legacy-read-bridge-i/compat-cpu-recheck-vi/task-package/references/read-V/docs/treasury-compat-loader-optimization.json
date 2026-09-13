@@ -1,0 +1,116 @@
+{
+  "revision": "compat-read-optimization-V",
+  "authoring": [
+    "scripts/lib/treasury-compat-loader.template.txt",
+    "scripts/lib/treasury-compat-context.cjs"
+  ],
+  "baselineCommit": "af7cfb7507d42bb12a32b8ea9d85dadd87d97fae",
+  "baselineBlob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3",
+  "baselineSha256": "9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965",
+  "baselineCompiler": "5.9.3",
+  "originalFactoryPrefixSha256": "6615fa89bc77e6e885a49abb2f67c0b8331306eff8eb7f96bc5c4ffaa3517cba",
+  "adaptedFactoryPrefixSha256": "3c46d505c81659440e5d31902c5d3d17a830639ed8f8f99b1b5282df692b94df",
+  "reversibleContextTransform": true,
+  "contextRules": [
+    {
+      "name": "revision-import",
+      "replacements": 1
+    },
+    {
+      "name": "catalog-capture",
+      "replacements": 1
+    },
+    {
+      "name": "task-validator-context",
+      "replacements": 2
+    },
+    {
+      "name": "reservation-validator-context",
+      "replacements": 2
+    },
+    {
+      "name": "builder-context",
+      "replacements": 1
+    },
+    {
+      "name": "revision-value",
+      "replacements": 1
+    },
+    {
+      "name": "catalog-lookup",
+      "replacements": 4
+    }
+  ],
+  "loaderSha256": "cfc0d3651f7f7755492ce74f69b8943d03230dd6328ce014f759447ad08093d8",
+  "generatedSha256": "b7a2c14fc7cf15e32abe7703f2fb47c5516b09f2dc80f7ffdd9a5dc0988f0dac",
+  "generatedBlob": "fe94ebece8f5118b76701007ce3906adfbb4da08",
+  "factories": [
+    {
+      "path": "src/runtime/configNormalize.ts",
+      "originalBodySha256": "f42728448afa21d2e743bf9210c0367ff1002df6a2c60b72ffcf160f51ca427b",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/logistics/resourceTransferTaskHealth.ts",
+      "originalBodySha256": "9fea76df1197ac1b6f2aa3793d0a32160d469c156c472c8cd5f1b8e50e8f5657",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/commitmentRevision.ts",
+      "originalBodySha256": "973b23ce57d91b6318b307747e4f920f5a8ab1d91de0b9a22b109c04307b5b27",
+      "adaptation": "unchanged",
+      "lifecycle": "unreachable-retained-original-definition"
+    },
+    {
+      "path": "src/runtime/treasury/commitments.ts",
+      "originalBodySha256": "8cdecbdb0975612ad8770ba23022222aae10529e0647704e75b29f1c764a5b4c",
+      "adaptation": "explicit-context-parameters-only",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/holderResolution.ts",
+      "originalBodySha256": "2021cd397135e7340565a252efab5af5039e89fa442f596fe94559113af9cf84",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/observation.ts",
+      "originalBodySha256": "168fd5d39b6a72d08ab867eeea319c98e300a14dacaca5169839e257ff4c236c",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/ownerIdentity.ts",
+      "originalBodySha256": "d9e43b2ba0abecdb87bfe313e1b060d1af2b1fbcd2ae6d3afd48c6553d6e1332",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/types.ts",
+      "originalBodySha256": "4dc107db3a229cacf36a5f077ff906b4da4860de8796c4fd172af9e4dade3335",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    }
+  ],
+  "factoryBodiesChanged": [
+    "src/runtime/treasury/commitments.ts"
+  ],
+  "dependencyEdgesRemoved": [
+    "commitments -> commitmentRevision"
+  ],
+  "aggregationValidationQueryAlgorithmsChanged": false,
+  "revisionSemantics": "private read-only capsule revision zero per builder; NOT the host revision",
+  "firstSuccessfulFactoryExecutions": 7,
+  "followingFactoryExecutions": 0,
+  "resourceCatalogCapturedPerBuilder": true,
+  "contextGlobalsUsed": false,
+  "definitionInitializationsMovedOutsideBudget": false,
+  "builderInstanceReused": false,
+  "observationReused": false,
+  "commitmentIndexReused": false,
+  "engineCpuGapRepaired": false,
+  "engineMeasurementRequired": true,
+  "note": "The canonical source bodies are not edited; generated commitments code threads explicit private context. All aggregation, owner, expiry and completeness operations are retained. The preview output entry is also refreshed; original assembly provenance for other outputs is unchanged."
+}

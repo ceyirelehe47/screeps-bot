@@ -1,0 +1,12 @@
+{
+  "status": "COMPAT_BASELINE_OFFLINE_VERIFIED",
+  "head": "5080fda96418fefecfd8ddccc79a9649f6165bed",
+  "repositoryNodeTests": 142,
+  "loaderRegenerated": true,
+  "tests": {
+    "suites": 195,
+    "tests": 685
+  },
+  "packageFingerprint": "dbb9e4964e47c9132e274aada9e44a87f7af79cd2cecc49ed76e8ae8ec6c0293",
+  "atMs": 1789303452590
+}

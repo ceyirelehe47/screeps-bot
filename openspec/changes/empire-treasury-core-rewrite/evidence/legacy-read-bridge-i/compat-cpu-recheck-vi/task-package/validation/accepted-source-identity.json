@@ -1,0 +1,68 @@
+{
+  "commit": "5080fda96418fefecfd8ddccc79a9649f6165bed",
+  "sourcePackageSha256": "09052efbbceb67275a69a4ad6dbd47a5185890c0def7c84faf43e046650e733a",
+  "currentRefFetchedThroughConnector": true,
+  "sourceHashEvidence": "accepted V package plus prior uploaded reviewer audit; current generated core blob fetched again",
+  "files": [
+    {
+      "path": "docs/treasury-compat-loader-optimization.json",
+      "blob": "37ce91b5073044119bbdc008be50b59dd8f5293b",
+      "matchesAcceptedVDelivery": true
+    },
+    {
+      "path": "docs/treasury-compat-read-optimization-v.md",
+      "blob": "55129e7f85c08fdb40fb4700c3051053e4b72fe5",
+      "matchesAcceptedVDelivery": true
+    },
+    {
+      "path": "docs/treasury-compat-source-manifest.json",
+      "blob": "d83d9bef24d76eb276e70eda371e0366db4b734d",
+      "matchesAcceptedVDelivery": true
+    },
+    {
+      "path": "scripts/build-treasury-compat-loader.cjs",
+      "blob": "7974a1ed7b17fe7878cc75101e8664fb1e43873d",
+      "matchesAcceptedVDelivery": true
+    },
+    {
+      "path": "scripts/lib/treasury-compat-context.cjs",
+      "blob": "408f386060ad9fe9c01be52786541a3023efff22",
+      "matchesAcceptedVDelivery": true
+    },
+    {
+      "path": "scripts/lib/treasury-compat-loader.template.txt",
+      "blob": "e31a5eef08aada8b078f0e04a7686b5d1ff16914",
+      "matchesAcceptedVDelivery": true
+    },
+    {
+      "path": "src/runtime/treasuryCompatRead.ts",
+      "blob": "58f1ca27d217fdd7af3e50bcec5de45bf3ee14ac",
+      "matchesAcceptedVDelivery": true
+    },
+    {
+      "path": "src/runtime/treasuryCompatReadCore.generated.ts",
+      "blob": "fe94ebece8f5118b76701007ce3906adfbb4da08",
+      "matchesAcceptedVDelivery": true
+    },
+    {
+      "path": "test/treasury-compat/fixtures/core-before-read-optimization-v.ts.txt",
+      "blob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3",
+      "matchesAcceptedVDelivery": true
+    },
+    {
+      "path": "test/treasury-compat/fixtures/reader-before-read-optimization-v.ts.txt",
+      "blob": "574731256e1d6fe0510e80a7282de05d94628544",
+      "matchesAcceptedVDelivery": true
+    },
+    {
+      "path": "test/treasury-compat/loader-optimization.spec.cjs",
+      "blob": "6a14ed3864b0536f1842f191292352b5ab68bbf7",
+      "matchesAcceptedVDelivery": true
+    },
+    {
+      "path": "test/treasury-compat/loader-test-support.cjs",
+      "blob": "02e72362495ab0bd6f18cf01f20392725f8697a1",
+      "matchesAcceptedVDelivery": true
+    }
+  ]
+}

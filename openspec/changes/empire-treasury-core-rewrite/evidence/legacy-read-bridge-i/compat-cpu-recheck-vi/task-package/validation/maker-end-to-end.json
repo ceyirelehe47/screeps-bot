@@ -1,0 +1,16 @@
+{
+  "status": "MAKER_SYNTHETIC_CHILD_RUN_TO_PUBLISHED_ARCHIVE_VERIFIED",
+  "scope": "Synthetic server/Room/Memory, fake WebSocket, 300ms recovery runtime, temporary Git repositories and bare remotes; NOT live service or full user-repository checks",
+  "rawDiagnostic": 4,
+  "completeSamples": 3,
+  "candidateAndRestorePosts": 2,
+  "realConfigCommits": 2,
+  "evidenceCommits": 1,
+  "archiveFiles": 157,
+  "archivedComparisonReverified": true,
+  "stagedBytesVerified": true,
+  "nativeWhitespaceExit": 0,
+  "publishReadback": true,
+  "publishResumeSameHead": true,
+  "packageFingerprint": "f794ad7934879e54c17c53d1d6e3f3282ee10b045728760e51faf2b67e9f1364"
+}
