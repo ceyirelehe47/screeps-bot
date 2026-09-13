@@ -1,0 +1,42 @@
+{
+  "status": "PASS",
+  "canonicalSourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
+  "originalPrefixSha256": "6615fa89bc77e6e885a49abb2f67c0b8331306eff8eb7f96bc5c4ffaa3517cba",
+  "recoveredPrefixSha256": "6615fa89bc77e6e885a49abb2f67c0b8331306eff8eb7f96bc5c4ffaa3517cba",
+  "contextRules": [
+    {
+      "name": "revision-import",
+      "replacements": 1
+    },
+    {
+      "name": "catalog-capture",
+      "replacements": 1
+    },
+    {
+      "name": "task-validator-context",
+      "replacements": 2
+    },
+    {
+      "name": "reservation-validator-context",
+      "replacements": 2
+    },
+    {
+      "name": "builder-context",
+      "replacements": 1
+    },
+    {
+      "name": "revision-value",
+      "replacements": 1
+    },
+    {
+      "name": "catalog-lookup",
+      "replacements": 4
+    }
+  ],
+  "bodyChanges": "only commitments private-context threading",
+  "dependencyChanges": "remove one private revision import edge",
+  "allAggregationAndQueryTextRecoveredExactly": true,
+  "previewOutsideDirectFunctionByteIdentical": true,
+  "cpuCheckpointRegionByteIdentical": true,
+  "scope": "read-only capsule, not full Treasury host"
+}

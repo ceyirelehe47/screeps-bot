@@ -1,0 +1,10 @@
+{
+  "status": "READ_V_FULL_CHECKS_VERIFIED",
+  "packageFingerprint": "a64eacb583ab84fd95deca7bde994417cd028a59361e97642ce32cda7ed3840b",
+  "compatBase": "af7cfb7507d42bb12a32b8ea9d85dadd87d97fae",
+  "repositoryNodeTests": 142,
+  "jestSuites": 195,
+  "jestTests": 685,
+  "buildOnly": true,
+  "deployed": false
+}

@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "files": [
+    "tools/workflow.cjs",
+    "tools/common.cjs",
+    "tools/run.cjs",
+    "tests/workflow.spec.cjs",
+    "baseline/scripts/build-treasury-compat-loader.cjs",
+    "baseline/test/treasury-compat/loader-test-support.cjs",
+    "baseline/test/treasury-compat/real-readers.spec.cjs",
+    "baseline/test/treasury-compat/loader-optimization.spec.cjs",
+    "baseline/test/treasury-compat/bridge.spec.cjs",
+    "baseline/test/treasury-compat/helpers.cjs",
+    "implementation/scripts/build-treasury-compat-loader.cjs",
+    "implementation/test/treasury-compat/loader-test-support.cjs",
+    "implementation/test/treasury-compat/loader-optimization.spec.cjs",
+    "implementation/scripts/lib/treasury-compat-context.cjs"
+  ],
+  "count": 14
+}

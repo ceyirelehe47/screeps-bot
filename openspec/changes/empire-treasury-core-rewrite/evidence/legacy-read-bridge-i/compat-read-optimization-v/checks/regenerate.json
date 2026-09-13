@@ -1,0 +1,21 @@
+{
+  "command": [
+    "D:\\code\\screeps\\screeps-bot-compat-read-i\\scripts\\build-treasury-compat-loader.cjs",
+    "--check"
+  ],
+  "exit": 0,
+  "signal": null,
+  "error": null,
+  "stdout": {
+    "encoding": "utf8",
+    "bytes": 273,
+    "sha256": "9d52cf33aadeb58d9317d9f11015da56ffcdba5a4fc7637be6ef3aa26a74074b",
+    "text": "{\"status\":\"COMPAT_LOADER_REGENERATION_VERIFIED\",\"files\":[\"src/runtime/treasuryCompatReadCore.generated.ts\",\"docs/treasury-compat-loader-optimization.json\",\"docs/treasury-compat-source-manifest.json\"],\"canonicalFactoryBodyRecovery\":\"exact\",\"explicitContextAdaptation\":true}\n"
+  },
+  "stderr": {
+    "encoding": "utf8",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "text": ""
+  }
+}

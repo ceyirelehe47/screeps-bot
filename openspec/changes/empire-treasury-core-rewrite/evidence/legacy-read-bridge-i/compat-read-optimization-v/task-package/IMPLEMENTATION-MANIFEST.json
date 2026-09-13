@@ -1,0 +1,47 @@
+{
+  "package": "screeps-compat-read-optimization-V-2026-09-13",
+  "implementationStatus": "complete",
+  "agentRole": "verification-only",
+  "scope": "offline read-only capsule contextualization and endpoint-local reference reuse",
+  "sourceManifest": "references/source-lock.json",
+  "factoryBodyAdaptation": "commitments-only reversible explicit context threading",
+  "canonicalAggregationAlgorithmsChanged": false,
+  "hostTreasuryRevisionChanged": false,
+  "privateRevision": 0,
+  "resourceCatalogFreshPerBuilder": true,
+  "ambientActiveContext": false,
+  "perBuildFresh": [
+    "observation",
+    "commitment index",
+    "metrics",
+    "query caches"
+  ],
+  "firstDefinitionFactories": 7,
+  "followingDefinitionFactories": 0,
+  "twelveBuildersFactoryCount": {
+    "baseline": 30,
+    "candidate": 7
+  },
+  "twoRoomTwoResourceStoreProperties": {
+    "baselineDirect": 24,
+    "candidateDirect": 4,
+    "coreEach": 12
+  },
+  "methodCallsRemoved": 0,
+  "cpuCheckpointsChanged": false,
+  "budget": 2,
+  "enabled": false,
+  "engineCpuGapRepaired": false,
+  "screepsNetworkAuthorized": false,
+  "candidateUploadAuthorized": false,
+  "recoveryWriteAuthorized": false,
+  "gitPushAuthorizedAfterVerification": true,
+  "testCounts": {
+    "reader": 123,
+    "workflow": 21,
+    "repositoryNode": 142,
+    "jestSuites": 195,
+    "jestTests": 685,
+    "scenarios": 20
+  }
+}

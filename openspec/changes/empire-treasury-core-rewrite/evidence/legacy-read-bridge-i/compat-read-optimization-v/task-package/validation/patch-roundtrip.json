@@ -1,0 +1,6 @@
+{
+  "status": "PASS",
+  "files": 12,
+  "nativeDiffCheckExit": 0,
+  "baseline": "fixed pre-V file slice, synthetic Git commit"
+}

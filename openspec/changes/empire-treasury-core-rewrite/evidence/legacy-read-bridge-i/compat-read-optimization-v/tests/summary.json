@@ -1,0 +1,10 @@
+{
+  "status": "READ_V_FIXED_TESTS_VERIFIED",
+  "readerTests": 123,
+  "workflowTests": 21,
+  "node": "v22.19.0",
+  "platform": "win32",
+  "typescript": "5.9.3",
+  "packageFingerprint": "a64eacb583ab84fd95deca7bde994417cd028a59361e97642ce32cda7ed3840b",
+  "engineCpuMeasurement": false
+}

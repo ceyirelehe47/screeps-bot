@@ -1,0 +1,40 @@
+{
+  "status": "MAKER_FIXED_IMPLEMENTATION_VERIFIED",
+  "environment": {
+    "platform": "linux",
+    "node": "v22.16.0",
+    "typescript": "5.8.3",
+    "git": "2.47.3"
+  },
+  "readerTests": 123,
+  "workflowTests": 21,
+  "realCoreSyntheticScenarios": 20,
+  "canonicalInverseProof": true,
+  "previewOutsideDirectUnchanged": true,
+  "patchFiles": 12,
+  "syntaxFiles": 14,
+  "screepsNetworkCalls": 0,
+  "codeUploads": 0,
+  "engineCpuMeasurement": false,
+  "notExecutedByMaker": [
+    "native Windows/NTFS",
+    "full user-repository 142 Node tests",
+    "full repository TypeScript checks",
+    "195 suites / 685 Jest tests",
+    "user Rollup build",
+    "official-engine CPU diagnostic"
+  ],
+  "limitations": [
+    "Synthetic Room/Memory and CPU ports, not production replay.",
+    "Temporary Git workflow tests include explicitly synthetic project-result packets.",
+    "Minimal TypeScript source slice uses synthetic ambient types.",
+    "Context revision zero is valid only for the pinned read-only capsule, not the Treasury host.",
+    "Arbitrary getters returning a different Store on each access within one synchronous endpoint read are outside equivalence scope."
+  ],
+  "dualAutocrlfTests": {
+    "reader": 123,
+    "workflow": 21,
+    "system": true,
+    "global_": true
+  }
+}
