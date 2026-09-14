@@ -1,0 +1,5 @@
+{
+  "status": "REMEDIATED_GENERATOR_CHECK_VERIFIED",
+  "stdout": "{\"status\":\"COMPAT_LOADER_REGENERATION_VERIFIED\",\"files\":[\"src/runtime/treasuryCompatReadCore.generated.ts\",\"docs/treasury-compat-loader-optimization.json\",\"docs/treasury-compat-source-manifest.json\"],\"canonicalFactoryBodyRecovery\":\"exact\",\"explicitContextAdaptation\":true,\"fullTaskBucketFusion\":true,\"observationAllocationReduction\":true,\"boundedSubphaseAttribution\":true,\"sourceManifestOutputValidation\":\"all-listed-outputs\",\"sourceManifestOutputIdentityCount\":13}\n",
+  "stderr": ""
+}

@@ -1,0 +1,242 @@
+diff --git a/docs/treasury-compat-loader-optimization.json b/docs/treasury-compat-loader-optimization.json
+index 308ab53902f6c2df1fe8e98bffc0fa5c6fa8bdf3..7c08aaa21c2e3ac47ea6dd93471ad89bd426f856 100644
+--- a/docs/treasury-compat-loader-optimization.json
++++ b/docs/treasury-compat-loader-optimization.json
+@@ -233,6 +233,8 @@
+   "publicTypeSurfaceChanged": true,
+   "defaultEnabled": false,
+   "budget": 2,
++  "sourceManifestOutputValidation": "all-listed-outputs",
++  "sourceManifestOutputIdentityCount": 13,
+   "engineCpuGapRepaired": false,
+   "engineMeasurementRequired": true,
+   "note": "IX adds coarse nested timing boundaries and bounded primitive work counters to the read-only compatibility capsule. The boundaries overlap existing parent phases, do not authorize work, and do not sample once per record or key. Canonical host sources remain pinned."
+diff --git a/docs/treasury-compat-source-manifest-remediation-x.md b/docs/treasury-compat-source-manifest-remediation-x.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..76b8d8e5c11a9836967b047a66a38ee7b3c508ac
+--- /dev/null
++++ b/docs/treasury-compat-source-manifest-remediation-x.md
+@@ -0,0 +1,7 @@
++# Compatibility Source Manifest Remediation X
++
++This revision repairs three stale output identities in `docs/treasury-compat-source-manifest.json` and changes the loader generator gate to validate every listed output, not only the files modified by the latest attribution revision.
++
++The corrected identities are `treasuryCompatRuntime.ts`, `real-readers.spec.cjs`, and `helpers.cjs`. The runtime identity now corresponds to the committed version that enables `cpuDiagnostics: true` for the compatibility preview.
++
++`build-treasury-compat-loader.cjs --check` now rejects stale, missing, duplicate, or byte-changed manifest outputs. No business read semantics, authorization, budget, configuration default, or online state is changed by this remediation.
+diff --git a/docs/treasury-compat-source-manifest.json b/docs/treasury-compat-source-manifest.json
+index 34fcd9a28c932e42a9bce74a1764bc94d959918b..89a41c6cd13a1442bb0e4d0871facf1094d11f9f 100644
+--- a/docs/treasury-compat-source-manifest.json
++++ b/docs/treasury-compat-source-manifest.json
+@@ -143,9 +143,9 @@
+     },
+     {
+       "file": "src/runtime/treasuryCompatRuntime.ts",
+-      "bytes": 839,
+-      "sha256": "1eaf416bbf31110791f2d5ca39561468c17e19c866da16045e3866b4b3ded942",
+-      "gitBlob": "682e603d92b333b1d7112cb05693fdc136736a27"
++      "bytes": 865,
++      "sha256": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4",
++      "gitBlob": "5916fbcafbb88d40cf5463d329b683ba0d776ad8"
+     },
+     {
+       "file": "src/runtime/treasuryCompatTypes.ts",
+@@ -161,15 +161,15 @@
+     },
+     {
+       "file": "test/treasury-compat/helpers.cjs",
+-      "bytes": 5858,
+-      "sha256": "f28959c9fcf64fe607ad40a543790433df3572cde7f5797146e43792ee9cf4de",
+-      "gitBlob": "59b332541bf1029c476c55595918b94cecc6ea1b"
++      "bytes": 6806,
++      "sha256": "c200b1f2b6dc55deae8b50ac7ae9f0e5ecb191be6592a42c713fce7d3d289e74",
++      "gitBlob": "f7406cf25124324069c08a444683d383477e0a23"
+     },
+     {
+       "file": "test/treasury-compat/real-readers.spec.cjs",
+-      "bytes": 6122,
+-      "sha256": "62fd1c33a1b8ffe8a74a0046c5e2ae3f4796a3a31c838b9fcfe0e340b6fe108e",
+-      "gitBlob": "f709decb787c553a2dcc614b768e9d88d5701bf6"
++      "bytes": 8178,
++      "sha256": "162630b8712f90fa71bb11eba25d3128dd92408b1474ea8540a2adb02a2f20c2",
++      "gitBlob": "28c78e89a8039518fe9d8d3e4d8027aff0015e8c"
+     },
+     {
+       "file": "test/treasuryCompatRead.test.ts",
+@@ -188,6 +188,8 @@
+     "fullTaskBucketFusion": true,
+     "observationAllocationReduction": true,
+     "boundedSubphaseAttribution": true,
+-    "attributionChangesAuthorization": false
++    "attributionChangesAuthorization": false,
++    "sourceManifestOutputValidation": "all-listed-outputs",
++    "sourceManifestOutputIdentityCount": 13
+   }
+ }
+diff --git a/scripts/build-treasury-compat-loader.cjs b/scripts/build-treasury-compat-loader.cjs
+index 2d52b9da38c7542e2e5db84f52b0897d3d30f125..3f191d662999751aca49756ac8630c20f2de323e 100644
+--- a/scripts/build-treasury-compat-loader.cjs
++++ b/scripts/build-treasury-compat-loader.cjs
+@@ -19,11 +19,20 @@ const MARKER = '/** Loader Optimization III.';
+ const BASELINE_COMMIT = 'ef23c464c83b90b413d43d07857f67d538f512a3';
+ const BUILD_VII_BLOB = '4f94acf1c06a60de9ca8ff2f0cdd2910cb6913be';
+ const FIXED_OUTPUTS = Object.freeze({
+-  'src/runtime/treasuryCompatRead.ts': { bytes: 21526, sha256: '1d5bd4d7f5922dfad3e6c44522d04695b490ba2bb711a83306858544dde70dec', gitBlob: '556c6d565b3962c407bc82a4b5706d5382935c53' },
+-  'src/runtime/treasuryCompatCpu.ts': { bytes: 6724, sha256: 'e7dead62745052c278163281a524d765ef109df9556060a283dac35590fa042c', gitBlob: '076cc6b1a02518b0ff0e4f503e09e74b8c47464e' },
+-  'src/runtime/treasuryCompatTypes.ts': { bytes: 2509, sha256: '0d39f976aad3d95daaa13b72f31cfe7f9a25a9611329faf152a1ded0c6b3e61b', gitBlob: '1f553df048f322a68b445a71d4b7f2b03d096e72' },
+-  'test/treasuryCompatRead.test.ts': { bytes: 1064, sha256: '5703123386542aabf4ab56307f6c433398478d6c2738adc4bf35ed87191a6026', gitBlob: 'c1b5e04c4ac41c881bfc426a3fbce759cc823722' },
++  "docs/treasury-legacy-read-bridge.md": { bytes: 4854, sha256: "23352cd61c5725021d5aed3798b714d702f766d41781d1beffd07e87773e4877", gitBlob: "fa47f2b26745cdf45fca2e228726777a9918e8a6" },
++  "src/main.test.ts": { bytes: 11031, sha256: "8fbb186cae2a1426496dd539cbc4414ce2317fc4ff848a4bc4ee179ec2d4a0ab", gitBlob: "9b8b42363e8f687742088dfca094a422d6ecf3b0" },
++  "src/main.ts": { bytes: 6271, sha256: "3bebfb632d40dd989baa9ae70a87cc49810207df6fc0cfd3f9cda53673f9dc57", gitBlob: "e8bf1c56e6147dfe4fcbb18052e29ee636da62ac" },
++  "src/runtime/treasuryCompatConfig.ts": { bytes: 531, sha256: "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02", gitBlob: "8e2214fef5a6a69b7eb40c82eee76dda1646ccbf" },
++  "src/runtime/treasuryCompatCpu.ts": { bytes: 6724, sha256: "e7dead62745052c278163281a524d765ef109df9556060a283dac35590fa042c", gitBlob: "076cc6b1a02518b0ff0e4f503e09e74b8c47464e" },
++  "src/runtime/treasuryCompatRead.ts": { bytes: 21526, sha256: "1d5bd4d7f5922dfad3e6c44522d04695b490ba2bb711a83306858544dde70dec", gitBlob: "556c6d565b3962c407bc82a4b5706d5382935c53" },
++  "src/runtime/treasuryCompatRuntime.ts": { bytes: 865, sha256: "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4", gitBlob: "5916fbcafbb88d40cf5463d329b683ba0d776ad8" },
++  "src/runtime/treasuryCompatTypes.ts": { bytes: 2509, sha256: "0d39f976aad3d95daaa13b72f31cfe7f9a25a9611329faf152a1ded0c6b3e61b", gitBlob: "1f553df048f322a68b445a71d4b7f2b03d096e72" },
++  "test/treasury-compat/bridge.spec.cjs": { bytes: 11489, sha256: "278491b3c996874db2fe560973708ba1d2a0d34cfc94f413ad36f23a3067a50f", gitBlob: "8061a074218ba8a9ce81ec15b5da6e4ad9aa1d83" },
++  "test/treasury-compat/helpers.cjs": { bytes: 6806, sha256: "c200b1f2b6dc55deae8b50ac7ae9f0e5ecb191be6592a42c713fce7d3d289e74", gitBlob: "f7406cf25124324069c08a444683d383477e0a23" },
++  "test/treasury-compat/real-readers.spec.cjs": { bytes: 8178, sha256: "162630b8712f90fa71bb11eba25d3128dd92408b1474ea8540a2adb02a2f20c2", gitBlob: "28c78e89a8039518fe9d8d3e4d8027aff0015e8c" },
++  "test/treasuryCompatRead.test.ts": { bytes: 1064, sha256: "5703123386542aabf4ab56307f6c433398478d6c2738adc4bf35ed87191a6026", gitBlob: "c1b5e04c4ac41c881bfc426a3fbce759cc823722" },
+ });
++const EXPECTED_OUTPUT_PATHS = Object.freeze([...Object.keys(FIXED_OUTPUTS), GENERATED].sort());
+ const sha = b => crypto.createHash('sha256').update(b).digest('hex');
+ const blob = b => crypto.createHash('sha1').update(Buffer.from('blob ' + b.length + '\0')).update(b).digest('hex');
+ const encode = x => Buffer.from(JSON.stringify(x, null, 2) + '\n');
+@@ -59,13 +68,16 @@ function generate(original, template, manifest) {
+   const m = JSON.parse(JSON.stringify(manifest));
+   check(m.sourceCommit === SOURCE_COMMIT && m.sourceManifest.length === 8, 'SOURCE_MANIFEST_MISMATCH');
+   check(sha(Buffer.from(JSON.stringify(m.sourceManifest))) === 'f9288bb50f8b5b7ccbd729717d902ee0e5a7a905ed9d99602b8171d94bacce8a', 'CANONICAL_SOURCE_IDENTITIES_CHANGED');
++  const outputPaths = m.outputs.map(x => x.file);
++  check(new Set(outputPaths).size === outputPaths.length && JSON.stringify([...outputPaths].sort()) === JSON.stringify(EXPECTED_OUTPUT_PATHS), 'SOURCE_MANIFEST_OUTPUT_SET_MISMATCH');
+   setOutput(m, GENERATED, { bytes: out.length, sha256: sha(out), gitBlob: blob(out) });
+   for (const [file, value] of Object.entries(FIXED_OUTPUTS)) setOutput(m, file, value);
+   m.outputs.sort((a, b) => a.file.localeCompare(b.file));
+   m.loaderOptimization = { revision: 'IX', provenance: PROVENANCE, canonicalSourceCommit: SOURCE_COMMIT,
+     baselineGeneratedBlob: BUILD_VII_BLOB, canonicalInputGeneratedBlob: ORIGINAL_BLOB,
+     explicitReadContextAdaptation: true, fullTaskBucketFusion: true, observationAllocationReduction: true,
+-    boundedSubphaseAttribution: true, attributionChangesAuthorization: false };
++    boundedSubphaseAttribution: true, attributionChangesAuthorization: false,
++    sourceManifestOutputValidation: 'all-listed-outputs', sourceManifestOutputIdentityCount: EXPECTED_OUTPUT_PATHS.length };
+   const provenance = {
+     revision: 'compat-subphase-attribution-IX', authoring: [TEMPLATE, 'scripts/lib/treasury-compat-context.cjs',
+       'scripts/lib/treasury-compat-build.cjs', 'scripts/lib/treasury-compat-attribution.cjs'],
+@@ -83,29 +95,41 @@ function generate(original, template, manifest) {
+     topLevelCpuBudgetAuthorityChanged: false, businessValidationChanged: false, querySemanticsChanged: false,
+     fullIndexBuiltEagerly: true, lazySecondaryIndexes: false, previewSourceChanged: true,
+     cpuAccountingChanged: true, publicTypeSurfaceChanged: true, defaultEnabled: false, budget: 2,
++    sourceManifestOutputValidation: 'all-listed-outputs', sourceManifestOutputIdentityCount: EXPECTED_OUTPUT_PATHS.length,
+     engineCpuGapRepaired: false, engineMeasurementRequired: true,
+     note: 'IX adds coarse nested timing boundaries and bounded primitive work counters to the read-only compatibility capsule. The boundaries overlap existing parent phases, do not authorize work, and do not sample once per record or key. Canonical host sources remain pinned.'
+   };
+   return { [GENERATED]: out, [PROVENANCE]: encode(provenance), [SOURCE_MANIFEST]: encode(m) };
+ }
+-function main(argv) {
+-  check(argv.length === 1 && ['--check', '--write'].includes(argv[0]), 'ARGUMENT_INVALID');
+-  const root = path.resolve(__dirname, '..');
+-  const result = generate(fs.readFileSync(path.join(root, FIXTURE)), fs.readFileSync(path.join(root, TEMPLATE)),
+-    JSON.parse(fs.readFileSync(path.join(root, SOURCE_MANIFEST), 'utf8')));
+-  for (const [file, expected] of Object.entries(FIXED_OUTPUTS)) {
++function verifyOutputIdentities(root, expected = FIXED_OUTPUTS) {
++  for (const [file, identity] of Object.entries(expected)) {
+     const b = lf(fs.readFileSync(path.join(root, file)));
+-    check(b.length === expected.bytes && sha(b) === expected.sha256 && blob(b) === expected.gitBlob, 'FIXED_SOURCE_MISMATCH:' + file);
++    check(b.length === identity.bytes && sha(b) === identity.sha256 && blob(b) === identity.gitBlob, 'FIXED_SOURCE_MISMATCH:' + file);
+   }
++  return Object.keys(expected).length;
++}
++function applyOrCheckGenerated(root, result, mode) {
+   for (const [name, b] of Object.entries(result)) {
+-    if (argv[0] === '--write') fs.writeFileSync(path.join(root, name), b);
++    if (mode === '--write') fs.writeFileSync(path.join(root, name), b);
+     else check(lf(fs.readFileSync(path.join(root, name))).equals(b), 'GENERATED_OUTPUT_MISMATCH:' + name);
+   }
+-  return { status: argv[0] === '--check' ? 'COMPAT_LOADER_REGENERATION_VERIFIED' : 'COMPAT_LOADER_REGENERATED',
++}
++function verifyRoot(root, mode) {
++  check(['--check', '--write'].includes(mode), 'ARGUMENT_INVALID');
++  const result = generate(fs.readFileSync(path.join(root, FIXTURE)), fs.readFileSync(path.join(root, TEMPLATE)),
++    JSON.parse(fs.readFileSync(path.join(root, SOURCE_MANIFEST), 'utf8')));
++  verifyOutputIdentities(root);
++  applyOrCheckGenerated(root, result, mode);
++  return { status: mode === '--check' ? 'COMPAT_LOADER_REGENERATION_VERIFIED' : 'COMPAT_LOADER_REGENERATED',
+     files: Object.keys(result), canonicalFactoryBodyRecovery: 'exact', explicitContextAdaptation: true,
+-    fullTaskBucketFusion: true, observationAllocationReduction: true, boundedSubphaseAttribution: true };
++    fullTaskBucketFusion: true, observationAllocationReduction: true, boundedSubphaseAttribution: true,
++    sourceManifestOutputValidation: 'all-listed-outputs', sourceManifestOutputIdentityCount: EXPECTED_OUTPUT_PATHS.length };
++}
++function main(argv) {
++  check(argv.length === 1, 'ARGUMENT_INVALID');
++  return verifyRoot(path.resolve(__dirname, '..'), argv[0]);
+ }
+ module.exports = { generate, main, sha, blob, GENERATED, FIXTURE, TEMPLATE, PROVENANCE, SOURCE_MANIFEST, MARKER,
+-  X, B, A, FIXED_OUTPUTS, BASELINE_COMMIT, BUILD_VII_BLOB };
++  X, B, A, FIXED_OUTPUTS, EXPECTED_OUTPUT_PATHS, verifyOutputIdentities, applyOrCheckGenerated, verifyRoot, BASELINE_COMMIT, BUILD_VII_BLOB };
+ if (require.main === module) try { console.log(JSON.stringify(main(process.argv.slice(2)))); }
+ catch (e) { console.error(JSON.stringify({ status: 'STOP', code: e.code || 'GENERATOR_FAILED' })); process.exitCode = 1; }
+diff --git a/test/treasury-compat/attribution.spec.cjs b/test/treasury-compat/attribution.spec.cjs
+index a6ecf63f750a5b27ac8ca60145aba97894a22587..57b2f498664918248c030ed59fff3608835fb28f 100644
+--- a/test/treasury-compat/attribution.spec.cjs
++++ b/test/treasury-compat/attribution.spec.cjs
+@@ -2,6 +2,8 @@
+ const { test } = require('node:test');
+ const assert = require('node:assert/strict');
+ const path = require('node:path');
++const fs = require('node:fs');
++const os = require('node:os');
+ const A = require('./attribution-test-support.cjs');
+ const { S, H } = A;
+ const G = require(path.join(H.ROOT, 'scripts/build-treasury-compat-loader.cjs'));
+@@ -53,7 +55,7 @@ test('IX accounting rejects non-monotonic and unlisted subphase boundaries', ()
+ test('IX transform exactly restores the committed Build VII core prefix', () => {
+   const marker = '/** Read Optimization V:';
+   assert.equal(G.A.restore(A.afterText().split(marker)[0]), A.beforeText().split(marker)[0]);
+-  assert.equal(G.A.rules.length, 14); assert.equal(G.main(['--check']).status, 'COMPAT_LOADER_REGENERATION_VERIFIED');
++  assert.equal(G.A.rules.length, 14); const generated = G.generate(fs.readFileSync(path.join(H.ROOT, G.FIXTURE)), fs.readFileSync(path.join(H.ROOT, G.TEMPLATE)), JSON.parse(fs.readFileSync(path.join(H.ROOT, G.SOURCE_MANIFEST), 'utf8'))); assert.equal(generated[G.GENERATED].length, 68416);
+ });
+ test('IX transform refuses shifted source instead of approximately instrumenting it', () => {
+   const prefix = A.beforeText().split('/** Read Optimization V:')[0];
+@@ -161,3 +163,44 @@ for (const name of Object.keys(S.scenarios)) test('IX Build VII/IX diagnostics-o
+   const r = A.compareScenario(name); assert.equal(r.byteEquivalent, true); assert.deepEqual(r.writes, [0,0]);
+   assert.equal(r.readers[0], r.readers[1]); assert.equal(r.observations[0], r.observations[1]); assert.equal(r.commitments[0], r.commitments[1]);
+ });
++
++
++
++function manifestFixture() {
++  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-manifest-gate-'));
++  for (const n of [G.FIXTURE, G.TEMPLATE, G.SOURCE_MANIFEST, G.GENERATED, G.PROVENANCE]) {
++    const src = path.join(H.ROOT, n), dst = path.join(root, n);
++    fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.copyFileSync(src, dst);
++  }
++  return root;
++}
++function withManifestFixture(fn) { const root = manifestFixture(); try { return fn(root); } finally { fs.rmSync(root, { recursive: true, force: true }); } }
++function generatedFor(root) { return G.generate(fs.readFileSync(path.join(root, G.FIXTURE)), fs.readFileSync(path.join(root, G.TEMPLATE)), JSON.parse(fs.readFileSync(path.join(root, G.SOURCE_MANIFEST), 'utf8'))); }
++
++test('IX source manifest gate covers every listed output identity', () => {
++  const m = JSON.parse(fs.readFileSync(path.join(H.ROOT, G.SOURCE_MANIFEST), 'utf8'));
++  assert.deepEqual(m.outputs.map(x => x.file).sort(), G.EXPECTED_OUTPUT_PATHS);
++  assert.equal(Object.keys(G.FIXED_OUTPUTS).length, 12); assert.equal(G.EXPECTED_OUTPUT_PATHS.length, 13);
++  assert.equal(m.loaderOptimization.sourceManifestOutputValidation, 'all-listed-outputs');
++});
++test('IX generated-output gate rejects a stale manifest identity', () => withManifestFixture(root => {
++  const result = generatedFor(root), p = path.join(root, G.SOURCE_MANIFEST), m = JSON.parse(fs.readFileSync(p, 'utf8'));
++  m.outputs.find(x => x.file === 'src/runtime/treasuryCompatRuntime.ts').bytes = 839;
++  fs.writeFileSync(p, JSON.stringify(m, null, 2) + '\n');
++  assert.throws(() => G.applyOrCheckGenerated(root, result, '--check'), /GENERATED_OUTPUT_MISMATCH:docs\/treasury-compat-source-manifest\.json/);
++}));
++test('IX fixed-output gate rejects a byte-changed listed output', () => {
++  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-output-identity-'));
++  try {
++    const rel = 'src/runtime/treasuryCompatRead.ts', dst = path.join(root, rel); fs.mkdirSync(path.dirname(dst), { recursive: true });
++    fs.copyFileSync(path.join(H.ROOT, rel), dst); G.verifyOutputIdentities(root, { [rel]: G.FIXED_OUTPUTS[rel] });
++    fs.appendFileSync(dst, '\n'); assert.throws(() => G.verifyOutputIdentities(root, { [rel]: G.FIXED_OUTPUTS[rel] }), /FIXED_SOURCE_MISMATCH/);
++  } finally { fs.rmSync(root, { recursive: true, force: true }); }
++});
++test('IX source manifest gate rejects missing or duplicate output rows', () => {
++  for (const mutate of [m => m.outputs.pop(), m => m.outputs.push({ ...m.outputs[0] })]) withManifestFixture(root => {
++    const p = path.join(root, G.SOURCE_MANIFEST), m = JSON.parse(fs.readFileSync(p, 'utf8')); mutate(m);
++    fs.writeFileSync(p, JSON.stringify(m, null, 2) + '\n');
++    assert.throws(() => generatedFor(root), /SOURCE_MANIFEST_OUTPUT_SET_MISMATCH/);
++  });
++});

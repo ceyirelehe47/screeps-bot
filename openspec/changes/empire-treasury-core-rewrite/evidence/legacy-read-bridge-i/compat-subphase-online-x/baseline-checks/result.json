@@ -1,0 +1,15 @@
+{
+  "status": "SUBPHASE_X_OFFLINE_VERIFIED",
+  "base": "57987cda22553fcdc842e8d4c72a98b6e94e00fb",
+  "sourceHead": "e1e3161fc354322707e05b74640c27535727a2b1",
+  "sourceTree": "c30d5beeb9c8e17b2a152047521f72691c214fd3",
+  "repositoryNodeTests": 246,
+  "loaderRegenerated": true,
+  "sourceManifestOutputValidation": "all-listed-outputs",
+  "tests": {
+    "suites": 195,
+    "tests": 685
+  },
+  "packageFingerprint": "f1e430035c8c0b9db58fc6468d77ecdfd9e4a6368e8c3f1df66dce15e9a9301b",
+  "atMs": 1789367207117
+}

@@ -1,0 +1,81 @@
+{
+  "repository": "ceyirelehe47/screeps-bot",
+  "compatBranch": "compat/treasury-read-bridge-i",
+  "compatBase": "57987cda22553fcdc842e8d4c72a98b6e94e00fb",
+  "refactorBranch": "refactor/empire-treasury-rearchitecture",
+  "refactorBase": "73726cd44267b0f583f5d08890233ad67a5e803a",
+  "commitMessage": "fix(compat): verify every source manifest output",
+  "changes": [
+    {
+      "path": "docs/treasury-compat-loader-optimization.json",
+      "old": {
+        "bytes": 6903,
+        "sha256": "d8d83d2a85dc459027c2d2cbab8179b2d35f6f7d30cc69a7ce65afeb28ebacb1",
+        "blob": "308ab53902f6c2df1fe8e98bffc0fa5c6fa8bdf3"
+      },
+      "new": {
+        "bytes": 7004,
+        "sha256": "d7fa913c1dd729766d3e706ed23f6374f461e82ce754faf5be91bd9a9c349911",
+        "blob": "7c08aaa21c2e3ac47ea6dd93471ad89bd426f856"
+      }
+    },
+    {
+      "path": "docs/treasury-compat-source-manifest-remediation-x.md",
+      "old": null,
+      "new": {
+        "bytes": 751,
+        "sha256": "274c777a487ea7749b8d144b483e07cf5602e666a23b43470d77cca3343469b2",
+        "blob": "76b8d8e5c11a9836967b047a66a38ee7b3c508ac"
+      }
+    },
+    {
+      "path": "docs/treasury-compat-source-manifest.json",
+      "old": {
+        "bytes": 7915,
+        "sha256": "a6b46a4a25ae24b77f7460e904feaf0c7cca7e406c979865bc514e09294881e9",
+        "blob": "34fcd9a28c932e42a9bce74a1764bc94d959918b"
+      },
+      "new": {
+        "bytes": 8020,
+        "sha256": "6fea2064b2125d8a275b3161831101e519a9286a7717a9d43bac34c3491b9ae5",
+        "blob": "89a41c6cd13a1442bb0e4d0871facf1094d11f9f"
+      }
+    },
+    {
+      "path": "scripts/build-treasury-compat-loader.cjs",
+      "old": {
+        "bytes": 8985,
+        "sha256": "fa05e7e8407b68dd2ecfa55d279cc03227f0a4eee5f2bb7b845490ea24b9032e",
+        "blob": "2d52b9da38c7542e2e5db84f52b0897d3d30f125"
+      },
+      "new": {
+        "bytes": 11527,
+        "sha256": "84fd72a7dbe14917684a900d60d190d2ceae04bc38b974da4875bc7a3c6a1951",
+        "blob": "3f191d662999751aca49756ac8630c20f2de323e"
+      }
+    },
+    {
+      "path": "test/treasury-compat/attribution.spec.cjs",
+      "old": {
+        "bytes": 11805,
+        "sha256": "62e2c55ab0c9db21ee78c19eda3c1041665a88b1c4d6ff82d1d58909e4629049",
+        "blob": "a6ecf63f750a5b27ac8ca60145aba97894a22587"
+      },
+      "new": {
+        "bytes": 14837,
+        "sha256": "1799420e06c7123a48ca25749f93e632ef245f345bf34794bb1ae3206576ee34",
+        "blob": "57b2f498664918248c030ed59fff3608835fb28f"
+      }
+    }
+  ],
+  "completionCommitMessage": "fix(compat): complete source manifest remediation",
+  "legacyPartialPaths": [
+    "docs/treasury-compat-source-manifest-remediation-x.md",
+    "docs/treasury-compat-source-manifest.json",
+    "scripts/build-treasury-compat-loader.cjs",
+    "test/treasury-compat/attribution.spec.cjs"
+  ],
+  "completionPaths": [
+    "docs/treasury-compat-loader-optimization.json"
+  ]
+}

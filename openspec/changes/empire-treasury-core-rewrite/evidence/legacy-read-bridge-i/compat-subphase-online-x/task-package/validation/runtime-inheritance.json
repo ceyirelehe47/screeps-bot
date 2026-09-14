@@ -1,0 +1,46 @@
+{
+  "status": "SUBPHASE_X_V2_RUNTIME_LINEAGE_RECORDED",
+  "sourcePackage": "screeps-compat-cpu-recheck-VIII-2026-09-14",
+  "identicalRuntimeFiles": [
+    "runtime/actions.cjs",
+    "runtime/check-profile.cjs",
+    "runtime/closeout.cjs",
+    "runtime/closure-observer.cjs",
+    "runtime/collector-diagnostics.cjs",
+    "runtime/collector.cjs",
+    "runtime/decoder.cjs",
+    "runtime/driver.cjs",
+    "runtime/guard-control.cjs",
+    "runtime/protocol.cjs",
+    "runtime/recovery-worker.cjs",
+    "runtime/transport.cjs",
+    "runtime/verify-runtime.cjs"
+  ],
+  "changedRuntimeFiles": [
+    "runtime/common.cjs",
+    "runtime/policy.cjs",
+    "runtime/samples.cjs",
+    "runtime/store.cjs",
+    "runtime/verify-run.cjs"
+  ],
+  "identicalToolFiles": [
+    "tools/observe.cjs",
+    "tools/reconcile.cjs",
+    "tools/recover.cjs",
+    "tools/util.cjs",
+    "tools/verify.cjs"
+  ],
+  "changedToolFiles": [
+    "tools/archive.cjs",
+    "tools/build.cjs",
+    "tools/check-baseline.cjs",
+    "tools/close-source.cjs",
+    "tools/compare.cjs",
+    "tools/prepare.cjs",
+    "tools/prerequisites.cjs",
+    "tools/publish.cjs",
+    "tools/remediate.cjs",
+    "tools/run-tests.cjs"
+  ],
+  "note": "Unchanged safety transport/recovery files are inherited byte-for-byte. V2 changes remediation, baseline and publish tools to use NUL-delimited porcelain parsing, include regenerated provenance, and accept either a fresh five-path remediation or an exact four-path partial plus one-path completion before the ON/OFF pair."
+}

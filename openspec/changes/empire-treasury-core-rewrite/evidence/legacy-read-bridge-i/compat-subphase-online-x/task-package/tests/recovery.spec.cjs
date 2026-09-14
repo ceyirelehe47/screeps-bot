@@ -1,0 +1,47 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const F=require('./fixture.cjs'),C=require('../runtime/common.cjs'),A=require('../runtime/actions.cjs'),S=require('../runtime/store.cjs');
+const {termination}=require('../runtime/recovery-worker.cjs'),{closeout}=require('../runtime/closeout.cjs');
+function attempted(run,s){S.newRecord(run,'upload-attempt.json',{runId:s.runId,candidateHash:s.candidate.digest.hash,profileHead:s.profileHead,startedAtMs:Date.now()});}
+const pause=async()=>{};
+test('identity read and restore never depend on time or overview',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);
+ w.api.time=w.api.overview=async()=>{throw new Error('must not call');};const r=await A.restoreOnce(w.api,F.guard,s,run,{pause});assert.equal(r.confirmed,true);assert.equal(w.writes,1);});
+test('read transport failure retries exactly three times with classified stages',async()=>{const s=F.session(),w=F.world(s),logs=[];let n=0;w.api.code=async()=>{n++;C.fail('HTTP_TRANSPORT_ERROR');};await assert.rejects(A.current(w.api,F.guard,{pause,record:x=>logs.push(x)}));assert.equal(n,3);assert.equal(logs.length,3);assert.ok(logs.every(x=>x.stage==='modules'));});
+test('single identity transport failure can recover without aborting',async()=>{const s=F.session(),w=F.world(s),fn=w.api.code;let n=0;w.api.code=async(...a)=>{if(n++===0)C.fail('HTTP_DEADLINE');return fn(...a);};await A.current(w.api,F.guard,{pause});assert.equal(n,2);});
+test('auth failure is not retried',async()=>{const w=F.world(F.session());let n=0;w.api.me=async()=>{n++;C.fail('HTTP_AUTH_REJECTED');};await assert.rejects(A.current(w.api,F.guard,{pause}));assert.equal(n,1);});
+test('wrong user is rejected before code reads',async()=>{const w=F.world(F.session());w.api.me=async()=>({ok:1,_id:'wrong',username:'forster'});let n=0;w.api.code=async()=>n++;await assert.rejects(A.current(w.api,F.guard,{pause}));assert.equal(n,0);});
+test('candidate upload persists marker before the only POST',async()=>{const s=F.session(),w=F.world(s),run=F.tmp(),original=w.api.setCode;
+ w.api.setCode=async(...a)=>{assert.equal(S.optional(run,'upload-attempt.json').profileHead,s.profileHead);return original(...a);};
+ assert.equal((await A.uploadOnce(w.api,F.guard,s,run)).confirmed,true);await assert.rejects(A.uploadOnce(w.api,F.guard,s,run));assert.equal(w.writes,1);});
+test('expired window never writes or rebinds a new window',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.tick=s.profile.startTick-99;
+ await assert.rejects(A.uploadOnce(w.api,F.guard,s,run),e=>e.code==='PROFILE_WINDOW_EXPIRED');assert.equal(w.writes,0);assert.equal(S.optional(run,'upload-attempt.json'),null);});
+test('changed remote baseline refuses candidate POST',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules={main:F.main('d'.repeat(40),'e'.repeat(40),'third')};await assert.rejects(A.uploadOnce(w.api,F.guard,s,run));assert.equal(w.writes,0);});
+test('closing request prevents candidate upload',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();S.newRecord(run,'closing.json',{runId:s.runId});await assert.rejects(A.uploadOnce(w.api,F.guard,s,run));assert.equal(w.writes,0);});
+test('lost candidate reply is not retried and recovery still uses exactly one restore',async()=>{const s=F.session(),w=F.world(s),run=F.tmp(),f=w.api.setCode;
+ w.api.setCode=async(...a)=>{const r=await f(...a);if(w.writes===1)C.fail('HTTP_DEADLINE');return r;};
+ assert.equal((await A.uploadOnce(w.api,F.guard,s,run)).confirmed,false);assert.equal((await A.restoreOnce(w.api,F.guard,s,run,{pause})).confirmed,true);assert.equal(w.writes,2);});
+test('lost restore reply can be resolved by bytes without a repeated POST',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);const f=w.api.setCode;
+ w.api.setCode=async(...a)=>{await f(...a);C.fail('HTTP_DEADLINE');};const r=await A.restoreOnce(w.api,F.guard,s,run,{pause});assert.equal(r.confirmed,true);assert.equal(r.serverAccepted,null);assert.equal(r.postRetryAllowed,false);assert.equal(w.writes,1);assert.equal((await A.restoreOnce(w.api,F.guard,s,run,{pause})).requestAttempted,false);});
+test('existing restore attempt with candidate still online forbids retry',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);
+ S.newRecord(run,'restore-attempt.json',{runId:s.runId,candidateHash:s.candidate.digest.hash,backupHash:s.backup.digest.hash,startedAtMs:Date.now()});
+ const r=await A.restoreOnce(w.api,F.guard,s,run,{pause});assert.equal(r.reason,'RESTORE_ALREADY_ATTEMPTED');assert.equal(w.writes,0);});
+test('wrong restore marker is never overwritten',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();attempted(run,s);S.newRecord(run,'restore-attempt.json',{runId:'x'});await assert.rejects(A.restoreOnce(w.api,F.guard,s,run,{pause}));assert.equal(S.optional(run,'restore-attempt.json').runId,'x');});
+test('third party deployment is not overwritten by recovery',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules={main:F.main('d'.repeat(40),'e'.repeat(40),'third')};attempted(run,s);assert.equal((await A.restoreOnce(w.api,F.guard,s,run,{pause})).status,'CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT');assert.equal(w.writes,0);});
+test('third party change between restore prechecks also refuses write',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);let n=0,read=w.api.code;
+ w.api.code=async(...a)=>{if(++n===2)w.modules={main:F.main('d'.repeat(40),'e'.repeat(40),'third')};return read(...a);};assert.equal((await A.restoreOnce(w.api,F.guard,s,run,{pause})).status,'CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT');assert.equal(w.writes,0);});
+test('no upload marker means no restore request is necessary',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();const r=await A.restoreOnce(w.api,F.guard,s,run);assert.equal(r.status,'NOT_DEPLOYED_NO_RESTORE_NEEDED');assert.equal(w.writes,0);});
+test('marker fsync failure prevents a POST and never deletes the marker',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);const old=fs.fsyncSync,open=fs.openSync;let targetFd;
+ try{fs.openSync=(name,...args)=>{const fd=open(name,...args);if(String(name).endsWith('restore-attempt.json'))targetFd=fd;return fd;};fs.fsyncSync=fd=>{if(fd===targetFd)throw new Error('disk');return old(fd);};await assert.rejects(A.restoreOnce(w.api,F.guard,s,run,{pause}));}finally{fs.fsyncSync=old;fs.openSync=open;}
+ assert.equal(w.writes,0);assert.ok(fs.existsSync(path.join(run,'restore-attempt.json')));});
+test('new recovery stream is independent of a dead diagnostic collector',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();attempted(run,s);S.newRecord(run,'upload-result.json',{result:{confirmed:true}});S.newRecord(run,'heartbeat.json',{state:'failed',stopReason:'BRIDGE_JSON_INVALID'});let called=0;
+ const r=await closeout({api:w.api,guard:F.guard,s,run,secret:F.secret,actor:'worker',pause,observer:async()=>{called++;return {status:'RECOVERY_RUNTIME_COLLECTED'};},verify:()=>({status:'RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED'})});
+ assert.equal(called,1);assert.equal(r.runtimeConfirmed,true);assert.equal(w.writes,0);});
+test('failed recovery stream preserves byte confirmation and final read',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();attempted(run,s);S.newRecord(run,'upload-result.json',{result:{confirmed:true}});
+ const r=await closeout({api:w.api,guard:F.guard,s,run,secret:F.secret,actor:'worker',pause,observer:async()=>{throw new Error('stream');}});
+ assert.equal(r.status,'RESTORED_BYTES_CONFIRMED_RUNTIME_UNCONFIRMED');assert.ok(fs.existsSync(path.join(run,'recovery-worker/code-after-runtime.json')));});
+test('a CPU-partial heartbeat is not an early termination reason',()=>{const s=F.session(),now=Date.now(),h={runId:s.runId,pid:1,userId:s.userId,shard:s.shard,state:'streaming',socketState:'open',updatedAtMs:now,lastConsoleAtMs:now,lastCpuAtMs:now,partialCpuSamples:1,bridgeReports:1,lastBridgeTick:s.profile.startTick};
+ assert.equal(termination({s,h,attempt:{startedAtMs:now},upload:{result:{confirmed:true}},now,elapsed:0,tick:s.profile.startTick}),null);
+ h.diagnosticFailure='CPU_OBSERVED_SAFETY_STOP';assert.equal(termination({s,h,attempt:{startedAtMs:now},now,elapsed:0}),h.diagnosticFailure);});
+test('four diagnostics trigger close even if zero complete samples',()=>{const s=F.session(),now=Date.now(),h={runId:s.runId,pid:1,userId:s.userId,shard:s.shard,state:'streaming',socketState:'open',updatedAtMs:now,lastConsoleAtMs:now,lastCpuAtMs:now,bridgeReports:4,lastBridgeTick:s.profile.endTick,completeSamples:0};assert.equal(termination({s,h,attempt:{startedAtMs:now},upload:{result:{confirmed:true}},now,elapsed:0}),'DIAGNOSTIC_WINDOW_COMPLETE');});
+
+test('baseline readback alone does not resolve a still-unknown upload outcome',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();attempted(run,s);const r=await closeout({api:w.api,guard:F.guard,s,run,secret:F.secret,actor:'worker',pause,observer:async()=>({}),verify:()=>({status:'RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED'})});assert.equal(r.bytesConfirmed,true);assert.equal(r.uploadOutcomeResolved,false);assert.equal(r.status,'ONLINE_CLOSE_UNCONFIRMED');assert.equal(w.writes,0);});

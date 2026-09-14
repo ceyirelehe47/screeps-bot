@@ -1,0 +1,50 @@
+{
+  "executionRevision": "compat-subphase-online-X-v2",
+  "compatRootBase": "57987cda22553fcdc842e8d4c72a98b6e94e00fb",
+  "refactorBase": "73726cd44267b0f583f5d08890233ad67a5e803a",
+  "acceptedImplementation": "Subphase Attribution IX",
+  "acceptedGeneratedCoreBlob": "62752b09e3828e67a9000aeffcda0b2436368bf1",
+  "preOnlineRemediation": {
+    "purpose": "correct three stale source-manifest output identities and make --check validate every listed output",
+    "changedPaths": 5,
+    "commitMessage": "fix(compat): verify every source manifest output",
+    "includesRegeneratedProvenance": true,
+    "acceptedLocalStartModes": [
+      "root",
+      "exact four-path partial",
+      "complete"
+    ],
+    "partialCompletionCommitMessage": "fix(compat): complete source manifest remediation",
+    "porcelainParsing": "NUL-delimited raw status"
+  },
+  "onlineProtocol": {
+    "points": 4,
+    "intervalTicks": 100,
+    "maxSampleCpu": 2,
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "candidatePostsMaximum": 1,
+    "restorePostsMaximum": 1,
+    "recoveryRuntimeMs": 75000
+  },
+  "acceptedInputs": {
+    "cpuRecheckVIII": {
+      "commit": "77b82bff48e9f32a3ac035cf5e0888e1329b1046",
+      "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-cpu-recheck-viii/FINAL-VERIFICATION.json",
+      "blob": "a7938d71511d03226bf0945d284bce7bcd0f0ff5"
+    },
+    "subphaseIX": {
+      "commit": "73726cd44267b0f583f5d08890233ad67a5e803a",
+      "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-subphase-attribution-ix/FINAL-VERIFICATION.json",
+      "blob": "adb03f9fb65561bd20b28b0d7a9220fdadc35537"
+    }
+  },
+  "makerNetworkUsed": false,
+  "makerEngineMeasurement": false
+}

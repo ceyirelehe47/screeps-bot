@@ -1,0 +1,1091 @@
+diff --git a/AGENT-RUN.md b/AGENT-RUN.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..ce8ff02943cafbc8494c8ab0337f41acd49191db
+--- /dev/null
++++ b/AGENT-RUN.md
+@@ -0,0 +1,386 @@
++# Source Manifest Remediation + Subphase Online X v2 · Agent 任务书
++
++## 目标
++
++本修正版包已经包含全部修复、在线执行、恢复、验证、归档和发布实现。它修复旧包的 porcelain 解析与遗漏 provenance 两个确定性缺陷，并可无损接续当前未推送的精确四路径 partial remediation 提交。Agent 不再设计或修改代码，而是在一轮中闭合以下里程碑：
++
++```text
++来源门禁修复
++→ 完整离线验证
++→ IX 四点在线子阶段归因
++→ 旧生产恢复与 75 秒运行确认
++→ 原始证据重验与归因裁决
++→ 唯一 evidence 提交与双分支普通推送
++```
++
++本轮不是十二点正式兼容观察，也不是完整 Treasury 上线。即使首次出现完整业务样本，也只表示本轮有限诊断取得进展。
++
++## 0. 权限与失败纪律
++
++允许：
++
++- 若 compat 本地仍在根基线，创建一个固定的五路径 source-manifest remediation 提交；
++- 若 compat 本地是旧包产生且未推送的精确四路径 partial remediation，保留该提交并追加一个只修改 provenance 的 completion 提交；
++- remediation 后仅修改 `src/runtime/treasuryCompatConfig.ts`，创建一个 ON 提交和一个精确 OFF 提交；
++- 在真实确认部署目标排他使用后，最多一次候选 POST；
++- 沿同一 run 目录、动作锁和持久标记，最多一次恢复 POST；
++- 有界重试只读请求；
++- 创建一个 refactor evidence 提交并普通推送两条分支。
++
++禁止：
++
++- 现场修改本包、测试、阈值、窗口、来源身份或归因算法；
++- 提高 `maxSampleCpu=2`，追加第五点、重选第二窗口或启动第二个 run；
++- 跳过 remediation，或把旧生成器的成功输出当成完整门禁；
++- 部署完整 refactor、执行 Terminal／market／console 注入或工具侧业务 Memory 写入；
++- 删除锁或写入标记后重试 POST；
++- amend、reset、rebase、force-push；本包不要求也不授权回退当前 partial remediation；
++- 把本地 OFF 提交冒充线上恢复；
++- 将 `partial_cpu_budget`、index complete 或空 rows 冒充完整样本。
++
++上传前失败：保存 stdout、stderr、exit 和 Git 状态后停止，绝不上传。上传后失败：不得杀死仍在安全收尾的恢复进程；等待其完成，再按固定只读对账和受限恢复入口处理。
++
++## 1. 固定身份
++
++```text
++repository       ceyirelehe47/screeps-bot
++compat branch    compat/treasury-read-bridge-i
++compat root      57987cda22553fcdc842e8d4c72a98b6e94e00fb
++refactor branch  refactor/empire-treasury-rearchitecture
++refactor root    73726cd44267b0f583f5d08890233ad67a5e803a
++IX generated core blob 62752b09e3828e67a9000aeffcda0b2436368bf1
++server           https://screeps.com
++account          forster / 634fe406347a7b69b28aeccb
++branch           default
++shard            shard1
++rooms            E3N59, E4N58
++resources        energy, H
++old production   06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c
++old module digest 84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf
++```
++
++工具会从 refactor Git 对象库核对：
++
++```text
++CPU Recheck VIII FINAL-VERIFICATION
++commit 77b82bff48e9f32a3ac035cf5e0888e1329b1046
++blob   a7938d71511d03226bf0945d284bce7bcd0f0ff5
++
++Subphase Attribution IX FINAL-VERIFICATION
++commit 73726cd44267b0f583f5d08890233ad67a5e803a
++blob   adb03f9fb65561bd20b28b0d7a9220fdadc35537
++```
++
++## 2. 路径
++
++解压到两个 Git 工作树之外的新目录。旧包、旧 WORK 和旧证据不得覆盖。
++
++```bash
++PKG="D:/code/screeps/incoming/screeps-compat-subphase-online-X-v2-2026-09-14"
++REFACTOR="D:/code/screeps/screeps-bot"
++COMPAT="D:/code/screeps/screeps-bot-compat-read-i"
++WORK="D:/code/screeps/compat-subphase-online-X-v2-execution"
++SECRET="$COMPAT/.secret.json"
++
++test ! -e "$WORK" || exit 1
++mkdir "$WORK" || exit 1
++```
++
++`PKG`、`WORK` 与仓库不得互相包含，也不得经 symlink／junction 指向仓库内部。`SECRET` 只传路径，不打印、复制或入库。
++
++## 3. 包、根基线与固定工具测试
++
++分别保存每条命令的 stdout、stderr 和 exit：
++
++```bash
++node -e 'console.log(JSON.stringify(require(process.argv[1]).verifyPackage()))' "$PKG/tools/util.cjs"
++node "$PKG/tools/check-baseline.cjs" --refactor "$REFACTOR" --compat "$COMPAT"
++node "$PKG/tools/run-tests.cjs" --compat "$COMPAT" --out "$WORK/tool-tests"
++```
++
++必须满足：
++
++```text
++PACKAGE_INTEGRITY_VERIFIED
++SUBPHASE_X_BASELINES_VERIFIED
++compatStartMode = root / partial / complete 之一
++固定工具测试以 references/test-contract.json 的固定总数全部通过
++failed / skipped / todo / cancelled 全部 0
++```
++
++当前 Agent 现场预期为 `compatStartMode=partial`。工具会验证该本地提交的唯一父提交、四路径 scope 和全部 payload 字节；不按短 SHA 放行，也不采用未知本地提交。
++
++## 4. 来源清单与生成门禁修复
++
++执行唯一固定 remediation：
++
++```bash
++node "$PKG/tools/remediate.cjs" \
++  --compat "$COMPAT" --out "$WORK/remediation"
++```
++
++它根据已验证起点执行两种等价路径之一：
++
++```text
++fresh root:
++  创建一个五路径提交
++  fix(compat): verify every source manifest output
++
++exact partial continuation:
++  保留既有四路径提交
++  追加一个仅补 provenance 的提交
++  fix(compat): complete source manifest remediation
++```
++
++最终 remediation tree 允许改变的路径恰好为：
++
++```text
++docs/treasury-compat-loader-optimization.json
++docs/treasury-compat-source-manifest.json
++docs/treasury-compat-source-manifest-remediation-x.md
++scripts/build-treasury-compat-loader.cjs
++test/treasury-compat/attribution.spec.cjs
++```
++
++旧包当前 partial 提交不得 reset、amend 或重写。新工具使用 `git status --porcelain=v1 -z` 原始字节解析路径，不再经过 `.trim()`；随后把生成器实际重生成的 loader optimization provenance 纳入固定 payload 与 LOCK。
++
++修复内容：
++
++- 更新 runtime、real-readers、helpers 三项陈旧 bytes／SHA-256／Git blob；
++- 同步提交重生成后的 `docs/treasury-compat-loader-optimization.json`；
++- source manifest 输出集合固定为 13 项；
++- `--check` 校验每一项 listed output；
++- stale、missing、duplicate、changed output 的负向测试必须失败。
++
++此时**不要推送**。远端 compat 仍必须停在根基线。
++
++## 5. Remediation 后完整离线门禁
++
++```bash
++node "$PKG/tools/build.cjs" \
++  --compat "$COMPAT" --out "$WORK/baseline-checks"
++```
++
++必须满足：
++
++```text
++SUBPHASE_X_OFFLINE_VERIFIED
++真实仓库六份 Node specs   246/246
++Jest                       195 suites / 685 tests
++loader --check             all-listed-outputs 通过
++两套 tsc --noEmit          通过
++Rollup build-only          通过
++```
++
++这些层级存在包含关系，不相加。预热 build-only 产物不得用于上传；候选必须从新的 ON 提交的干净 detached worktree 重新构建。
++
++## 6. 上线前人工事实确认
++
++继续之前真实确认：
++
++- 没有其他 Agent、人、CI、IDE watcher 或自动部署会写 `default`；
++- 旧 collector／guard／recovery 进程全部退出；
++- refactor 仍在固定根基线；compat 本地为已验证的最终 remediation source head（fresh 模式一提交或 continuation 模式两提交），远端仍是 compat 根基线；
++- 两仓工作树和索引干净；
++- 机器可以持续运行到窗口后，并完成恢复与 75 秒运行确认；
++- 包和 run 目录不会在执行中被更新、删除或覆盖。
++
++无法确认时止于离线阶段。`--exclusive-target` 与 `--prior-workers-stopped` 是事实确认，不是形式开关。
++
++## 7. 唯一在线执行入口
++
++```bash
++node "$PKG/tools/observe.cjs" \
++  --refactor "$REFACTOR" --compat "$COMPAT" \
++  --offline "$WORK/baseline-checks" --tests "$WORK/tool-tests" \
++  --work "$WORK/live" --secret "$SECRET" \
++  --execute --exclusive-target --prior-workers-stopped
++```
++
++只运行一次。窗口在所有慢速离线检查之后绑定：
++
++```text
++S = ceil((freshTick + 150) / 100) × 100
++points = S, S+100, S+200, S+300
++```
++
++上传前再次要求至少 100 tick 提前量。窗口失效、线上字节变化或构建太慢时停止，不自动换窗口。
++
++固定参数：
++
++```text
++maxSampleCpu          2
++reserveCpu            5
++minBucket             2000
++maxLogBytes           16384
++wall limit            45 minutes
++recovery runtime      75 seconds
++external observed stop 5 CPU
++```
++
++5 CPU 是外部事后安全中止线，不是采样预算，也不是硬实时抢占保证。
++
++## 8. 九子阶段与工作量口径
++
++每份可归因报告最多包含：
++
++```text
++observationSetup
++observationRooms
++observationFinalize
++observationView
++commitmentSetup
++commitmentTasks
++commitmentReservations
++commitmentFinalize
++projectionRows
++```
++
++完整样本固定 12 次边界。子阶段嵌套在原父阶段内，**不得与父阶段相加**。测量开销不扣除；不按 task、reservation、资源键或 query 逐项采样。
++
++primitive work counters 用于解释工作组成，包括 task、pending、健康检查、route candidate、owner evaluation、bucket、计划／完成投影行和 query 数量。它们不是 CPU 权重。
++
++`partial_cpu_budget` 可以作为归因证据，但仍不是完整样本。`index complete=true` 且 `rows=[]` 仍表示结果投影未完成，不能解释为零承诺。
++
++## 9. 恢复边界
++
++候选 POST 最多一次，恢复 POST 最多一次。所有角色共享：
++
++```text
++action.lock
++upload-attempt.json
++restore-attempt.json
++```
++
++恢复前核对账号、活动分支和当前模块字节；仍是本轮候选才允许写旧生产原件，已是原件则不 POST，第三方代码不覆盖。POST 超时不重发，只允许只读回读判断结果。
++
++字节恢复后创建独立 `closureId`，采集 75 秒 shard1 console 和账号级 CPU，并在运行确认前后回读旧生产字节。这段日志不能补诊断点，也不是原 collector 的连续段。
++
++## 10. 上传后失败的固定收尾入口
++
++只读对账，输出路径必须不存在：
++
++```bash
++node "$PKG/tools/reconcile.cjs" --compat "$COMPAT" \
++  --run "$WORK/live/run" --secret "$SECRET" \
++  --out "$WORK/reconcile-01.json"
++```
++
++仅在原进程已退出、部署仍排他、无遗留锁且恢复额度未消耗时，允许一次 operator 恢复：
++
++```bash
++node "$PKG/tools/recover.cjs" --compat "$COMPAT" \
++  --run "$WORK/live/run" --secret "$SECRET" \
++  --execute-recovery --exclusive-target --prior-workers-stopped
++```
++
++需要关闭本地 ON 配置时：
++
++```bash
++node "$PKG/tools/close-source.cjs" \
++  --compat "$COMPAT" --run "$WORK/live/run"
++```
++
++不得删除锁、标记或 operator 目录后重试。
++
++## 11. 独立验证与子阶段裁决
++
++```bash
++node "$PKG/tools/verify.cjs" --run "$WORK/live/run" \
++  --out "$WORK/independent-verification.json"
++node "$PKG/tools/compare.cjs" --run "$WORK/live/run" \
++  --out "$WORK/subphase-attribution.json"
++```
++
++验证器从原始 console 帧重算，不信任 collector 摘要。裁决必须分别报告：
++
++- raw／diagnostic／attributed／complete 数量；
++- 九个子阶段的逐点值、中位数和 observation／commitment 排名；
++- task／reservation／health／route／owner／bucket／projection counters；
++- 父阶段值，但明确禁止与子阶段相加；
++- commitment index 完整性、投影行数与完整样本判定；
++- 最多 3 个后继尾部；末点尾部不可观测。
++
++性能下降、上升或调用次数不足均须如实归档。不得自动授权某项优化，也不得计算跨轮因果提速百分比。
++
++## 12. 归档、提交和推送
++
++确认所有进程退出、本地配置 OFF 后：
++
++```bash
++node "$PKG/tools/archive.cjs" --refactor "$REFACTOR" \
++  --run "$WORK/live/run" --tests "$WORK/tool-tests" \
++  --offline "$WORK/baseline-checks" \
++  --remediation "$WORK/remediation" --secret "$SECRET"
++
++node "$PKG/tools/publish.cjs" \
++  --refactor "$REFACTOR" --compat "$COMPAT" --check-only
++```
++
++归档位置：
++
++```text
++openspec/changes/empire-treasury-core-rewrite/evidence/
++legacy-read-bridge-i/compat-subphase-online-x
++```
++
++归档必须包含 remediation 原件、`SUBPHASE-ATTRIBUTION.json`、原始 run、离线门禁和完整任务包。私有 `backup.json`、`candidate.json`、`session.json`、凭据和构建产物不得入库。完整原生 `git diff --cached --check` 必须 exit 0，零例外。
++
++创建唯一 evidence 提交并普通推送：
++
++```bash
++node "$PKG/tools/publish.cjs" \
++  --refactor "$REFACTOR" --compat "$COMPAT" \
++  --out "$WORK/publish-receipt.json" --push
++```
++
++最终 compat 链必须是以下之一：
++
++```text
++fresh:
++compat root
++→ five-path remediation
++→ temporary ON
++→ exact OFF（tree 与 remediation source 完全相同）
++
++continued:
++compat root
++→ exact legacy four-path partial
++→ one-path provenance completion
++→ temporary ON
++→ exact OFF（tree 与 remediation source 完全相同）
++```
++
++两种模式的 remediation source tree 必须逐字节一致。
++
++若只在 evidence 提交或推送阶段失败，保留索引和原件，使用新 out 路径续接；不得重跑在线实验、amend 或制造第二个 evidence 提交。
++
++## 13. 回报与终态
++
++回报：完整双分支 HEAD、remediation HEAD、包指纹、146/146、246/246、195/685、新窗口、四个 tick、每点父阶段和九子阶段、primitive counters、raw／diagnostic／attributed／complete、候选／恢复写边界、恢复前后摘要、75 秒运行证据、原生 whitespace 结果与限制。
++
++满足实际证据时允许：
++
++```text
++SOURCE_MANIFEST_REMEDIATION_VERIFIED
++CPU_DIAGNOSTIC_CAPTURE_VERIFIED
++SUBPHASE_X_ATTRIBUTION_RECORDED
++RESTORED_BYTES_AND_RUNTIME_VERIFIED
++```
++
++除非原始数据确实支持相反结论，继续保留：
++
++```text
++ENGINE_CPU_BUDGET_GAP_UNRESOLVED
++```
++
++禁止直接报告：
++
++```text
++ONLINE_COMPAT_READ_OBSERVED
++ENGINE_CPU_BUDGET_GAP_REPAIRED
++TREASURY_PRODUCTION_READY
++完整 Treasury 生产切换
++```
++
++若发生候选与恢复写入，必须如实写明，不能写成“未部署”或“无线上代码写入”。
+diff --git a/IMPLEMENTATION-MANIFEST.json b/IMPLEMENTATION-MANIFEST.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..125ad9fa3294e899dd9ea142eacf4694b6efa9b1
+--- /dev/null
++++ b/IMPLEMENTATION-MANIFEST.json
+@@ -0,0 +1,118 @@
++{
++  "package": "screeps-compat-subphase-online-X-v2-2026-09-14",
++  "purpose": "Corrected combined source-manifest remediation, exact partial-commit continuation, full offline verification, four-point IX engine attribution, restoration and evidence closure",
++  "baselines": {
++    "compatRoot": "57987cda22553fcdc842e8d4c72a98b6e94e00fb",
++    "refactor": "73726cd44267b0f583f5d08890233ad67a5e803a"
++  },
++  "remediation": {
++    "changedPaths": [
++      "docs/treasury-compat-loader-optimization.json",
++      "docs/treasury-compat-source-manifest.json",
++      "docs/treasury-compat-source-manifest-remediation-x.md",
++      "scripts/build-treasury-compat-loader.cjs",
++      "test/treasury-compat/attribution.spec.cjs"
++    ],
++    "manifestOutputsValidated": 13,
++    "negativeCases": [
++      "stale identity",
++      "missing output row",
++      "duplicate output row",
++      "changed listed output"
++    ],
++    "commitMessage": "fix(compat): verify every source manifest output",
++    "freshCommitMessage": "fix(compat): verify every source manifest output",
++    "partialCompletionCommitMessage": "fix(compat): complete source manifest remediation",
++    "acceptedLocalStartModes": [
++      "root baseline",
++      "exact unpushed four-path partial remediation",
++      "already complete remediation"
++    ],
++    "porcelainParsing": "git status --porcelain=v1 -z raw bytes; no trim-based path slicing"
++  },
++  "attribution": {
++    "version": 1,
++    "subphases": [
++      "observationSetup",
++      "observationRooms",
++      "observationFinalize",
++      "observationView",
++      "commitmentSetup",
++      "commitmentTasks",
++      "commitmentReservations",
++      "commitmentFinalize",
++      "projectionRows"
++    ],
++    "completeSampleBoundaryCalls": 12,
++    "perRecordCpuSampling": false,
++    "primitiveWorkCountersOnly": true,
++    "overlapsParentPhases": true
++  },
++  "onlineProtocol": {
++    "points": 4,
++    "intervalTicks": 100,
++    "leadTicks": 150,
++    "rooms": [
++      "E3N59",
++      "E4N58"
++    ],
++    "resources": [
++      "energy",
++      "H"
++    ],
++    "maxSampleCpu": 2,
++    "reserveCpu": 5,
++    "candidatePostsMaximum": 1,
++    "restorePostsMaximum": 1,
++    "recoveryRuntimeMs": 75000,
++    "externalObservedCostStop": 5
++  },
++  "fixedTests": {
++    "count": 146,
++    "files": 10,
++    "failedAllowed": 0,
++    "skippedAllowed": 0,
++    "todoAllowed": 0,
++    "cancelledAllowed": 0
++  },
++  "repositoryGates": {
++    "nodeSpecs": 6,
++    "repositoryNodeTests": 246,
++    "jestSuites": 195,
++    "jestTests": 685,
++    "typescriptProjects": [
++      "tsconfig.build.json",
++      "tsconfig.json"
++    ],
++    "loaderRegenerationCheck": true,
++    "rollupBuildOnly": true
++  },
++  "compatCommitChain": [
++    "fresh mode: five-path source manifest remediation OR continuation mode: existing exact four-path partial + one-path provenance completion",
++    "temporary four-point ON binding",
++    "exact default OFF restoration"
++  ],
++  "evidence": {
++    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-subphase-online-x",
++    "attributionFile": "SUBPHASE-ATTRIBUTION.json",
++    "successLabels": [
++      "CPU_DIAGNOSTIC_CAPTURE_VERIFIED",
++      "SUBPHASE_X_ATTRIBUTION_RECORDED",
++      "RESTORED_BYTES_AND_RUNTIME_VERIFIED"
++    ]
++  },
++  "forbiddenClaimsWithoutNewEvidence": [
++    "ENGINE_CPU_BUDGET_GAP_REPAIRED",
++    "ONLINE_COMPAT_READ_OBSERVED",
++    "TREASURY_PRODUCTION_READY",
++    "full Treasury production cutover"
++  ],
++  "makerBoundaries": {
++    "networkUsed": false,
++    "realTokenUsed": false,
++    "candidateUploaded": false,
++    "nativeWindowsExecuted": false,
++    "fullUserRepositoryChecksExecuted": false,
++    "engineCpuMeasured": false
++  }
++}
+diff --git a/README.md b/README.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..9bb805fabdfd9bc7fa9e46d7560315bb1bac609c
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,20 @@
++# Source Manifest Remediation + Subphase Online X · v2
++
++这是修正版合并闭环任务包。它同时修复上一包在 remediation 阶段暴露的两个确定性缺陷，并继续完成同一轮的离线门禁、四点线上归因、恢复和证据推送。Agent 不需要继续实现代码。
++
++修复内容：
++
++1. 不再用经过 `.trim()` 的文本解析 `git status --porcelain`；remediation 使用 NUL 分隔的原始字节解析。
++2. 将重生成后的 `docs/treasury-compat-loader-optimization.json` 纳入 payload、LOCK、source lock 和提交范围。
++3. 支持两种精确起点：远端根基线上的干净本地根，或 Agent 已创建但未推送的精确四路径 partial remediation 提交。后者不 reset、不改写历史，而是追加一个仅补 provenance 的 completion 提交。
++
++之后继续执行：完整离线门禁 → 四点真实引擎子阶段归因 → 旧生产恢复与 75 秒运行确认 → 归档和普通推送。
++
++固定远端起点仍为：
++
++```text
++compat   57987cda22553fcdc842e8d4c72a98b6e94e00fb
++refactor 73726cd44267b0f583f5d08890233ad67a5e803a
++```
++
++本轮预算仍为 2，房间仍为 E3N59/E4N58，资源仍为 energy/H，不追加第五点，也不把 `partial_cpu_budget` 冒充完整样本。
+diff --git a/SUPERSEDES.md b/SUPERSEDES.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..ffab04057318b2718c13fd69dd2bee54f7b794dd
+--- /dev/null
++++ b/SUPERSEDES.md
+@@ -0,0 +1,5 @@
++# 取代范围
++
++本 v2 包完整取代 `screeps-compat-subphase-online-X-2026-09-14`。旧包及其失败日志必须保留为历史证据，但不得继续执行旧工具。
++
++本包显式接续 Agent 已创建但未推送的精确四路径 remediation 提交；无需也不得 reset。若本地仍在根基线，也可从根基线创建一次五路径完整 remediation 提交。两种路径最终得到同一 source tree，然后继续线上闭环。
+diff --git a/tests/build-recheck.spec.cjs b/tests/build-recheck.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9ab2b506a027abda436cfbf12bc98b3232e049ed
+--- /dev/null
++++ b/tests/build-recheck.spec.cjs
+@@ -0,0 +1,25 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const K=require('../runtime/policy.cjs'),C=require('../runtime/common.cjs'),U=require('../tools/util.cjs'),R=require('../tools/remediate.cjs'),P=require('../tools/prerequisites.cjs');
++const ROOT=path.resolve(__dirname,'..');
++test('X pins IX compat root and IX evidence parent',()=>{assert.equal(K.COMPAT,'57987cda22553fcdc842e8d4c72a98b6e94e00fb');assert.equal(K.REFACTOR,'73726cd44267b0f583f5d08890233ad67a5e803a');});
++test('X evidence path and session kinds are unique',()=>{assert.ok(K.EVIDENCE.endsWith('/compat-subphase-online-x'));assert.match(K.KIND,/online-X\/v1$/);assert.match(K.PUBLIC_KIND,/online-X-public\/v1$/);});
++test('X keeps four points, interval 100 and budget two',()=>{const p=K.profileFor(1000);assert.deepEqual(K.dueTicks(p),[1200,1300,1400,1500]);assert.equal(p.maxSampleCpu,2);assert.equal(p.reserveCpu,5);});
++test('X render config binds only the fixed scope',()=>{const s=K.renderConfig(K.profileFor(1000));assert.match(s,/E3N59/);assert.match(s,/E4N58/);assert.match(s,/maxSampleCpu: 2/);assert.doesNotMatch(s,/maxSampleCpu: [3-9]/);});
++test('remediation payload identities match immutable lock',()=>assert.equal(R.verifyPayload(),true));
++test('remediation has exactly five fixed paths including regenerated provenance',()=>assert.deepEqual(R.paths,[
++ 'docs/treasury-compat-loader-optimization.json','docs/treasury-compat-source-manifest-remediation-x.md','docs/treasury-compat-source-manifest.json','scripts/build-treasury-compat-loader.cjs','test/treasury-compat/attribution.spec.cjs'].sort()));
++test('remediation commit message is fixed',()=>assert.equal(R.LOCK.commitMessage,'fix(compat): verify every source manifest output'));
++test('corrected manifest lists every expected output once',()=>{const m=require('../remediation/implementation/docs/treasury-compat-source-manifest.json');const names=m.outputs.map(x=>x.file);assert.equal(new Set(names).size,names.length);assert.equal(names.length,13);});
++test('corrected runtime output identity is current IX runtime',()=>{const m=require('../remediation/implementation/docs/treasury-compat-source-manifest.json'),x=m.outputs.find(x=>x.file==='src/runtime/treasuryCompatRuntime.ts');assert.deepEqual(x,{file:'src/runtime/treasuryCompatRuntime.ts',bytes:865,sha256:'9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4',gitBlob:'5916fbcafbb88d40cf5463d329b683ba0d776ad8'});});
++test('corrected helper and real-reader identities are current',()=>{const m=require('../remediation/implementation/docs/treasury-compat-source-manifest.json');assert.equal(m.outputs.find(x=>x.file==='test/treasury-compat/helpers.cjs').gitBlob,'f7406cf25124324069c08a444683d383477e0a23');assert.equal(m.outputs.find(x=>x.file==='test/treasury-compat/real-readers.spec.cjs').gitBlob,'28c78e89a8039518fe9d8d3e4d8027aff0015e8c');});
++test('generator explicitly checks all manifest outputs',()=>{const s=fs.readFileSync(path.join(ROOT,'remediation/implementation/scripts/build-treasury-compat-loader.cjs'),'utf8');assert.match(s,/EXPECTED_OUTPUT_PATHS/);assert.match(s,/SOURCE_MANIFEST_OUTPUT_SET_MISMATCH/);assert.match(s,/verifyOutputIdentities/);});
++test('generator negative tests cover stale missing and duplicate identities',()=>{const s=fs.readFileSync(path.join(ROOT,'remediation/implementation/test/treasury-compat/attribution.spec.cjs'),'utf8');for(const x of ['stale','missing','duplicate'])assert.match(s,new RegExp(x,'i'));});
++test('IX source lock pins attribution core and CPU accounting',()=>{const l=require('../references/base-source-lock.json');assert.equal(l['src/runtime/treasuryCompatReadCore.generated.ts'].blob,'62752b09e3828e67a9000aeffcda0b2436368bf1');assert.equal(l['src/runtime/treasuryCompatCpu.ts'].blob,'076cc6b1a02518b0ff0e4f503e09e74b8c47464e');});
++test('post-remediation source lock pins corrected manifest generator and regenerated provenance',()=>{const l=require('../references/source-lock.json');for(const rel of ['docs/treasury-compat-source-manifest.json','scripts/build-treasury-compat-loader.cjs','docs/treasury-compat-loader-optimization.json'])assert.equal(l[rel].blob,R.LOCK.changes.find(x=>x.path===rel).new.blob);});
++test('exact legacy partial shape is fixed and completion changes only provenance',()=>{assert.equal(R.partialPaths.length,4);assert.deepEqual(R.completionPaths,['docs/treasury-compat-loader-optimization.json']);assert.equal(R.LOCK.completionCommitMessage,'fix(compat): complete source manifest remediation');});
++test('attribution contract has nine ordered subphases and 12 boundaries',()=>{const x=require('../references/attribution-contract.json');assert.equal(x.subphases.length,9);assert.equal(x.expectedBoundaryCallsForOneCompleteSample,12);assert.equal(x.perRecordCpuSampling,false);});
++test('prerequisite lock points to CPU VIII and IX acceptance',()=>{assert.equal(P.LOCK.priorDiagnostic.commit,'77b82bff48e9f32a3ac035cf5e0888e1329b1046');assert.equal(P.LOCK.ixAcceptance.commit,'73726cd44267b0f583f5d08890233ad67a5e803a');assert.equal(P.LOCK.ixAcceptance.compatHead,K.COMPAT);});
++test('default IX config stays disabled with zero window',()=>{const s=fs.readFileSync(path.join(ROOT,'references/treasuryCompatConfig.ts'),'utf8');assert.match(s,/enabled: false/);assert.match(s,/startTick: 0/);assert.match(s,/endTick: 0/);});
++test('package contains exact IX generated core',()=>{const b=fs.readFileSync(path.join(ROOT,'references/treasuryCompatReadCore.generated.ts'));assert.equal(C.blob(b),'62752b09e3828e67a9000aeffcda0b2436368bf1');});
++test('package integrity inventory is exact',()=>assert.equal(U.verifyPackage().status,'PACKAGE_INTEGRITY_VERIFIED'));
+diff --git a/tests/comparison.spec.cjs b/tests/comparison.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..1953812921f4c9588ca33bfd46e9c23dece46d16
+--- /dev/null
++++ b/tests/comparison.spec.cjs
+@@ -0,0 +1,15 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict');
++const H=require('./reader-fixture.cjs'),M=require('../tools/compare.cjs'),W=require('../runtime/samples.cjs');
++function reports(opts={}){const f=H.fixture({probeCost:.001,...opts}),p=H.profile(),v=H.loadReader().exports.createTreasuryCompatPreview(p,f.ports,{cpuDiagnostics:true});for(const t of [100,200,300,400]){f.setTime(t);v.run();}return{f,p,rows:f.logs.map(JSON.parse)};}
++test('detail separates attribution from parent phases',()=>{const x=reports(),d=M.detail(x.rows[0],x.p);assert.equal(d.attribution.boundaries,12);assert.ok(d.parentPhases.observationBuild>=0);});
++test('summary emits all nine subphase buckets',()=>{const x=reports(),s=M.summarize(x.rows.map(r=>M.detail(r,x.p)));assert.deepEqual(Object.keys(s.subphases),W.SUBPHASES);});
++test('summary emits all primitive work keys',()=>{const x=reports(),s=M.summarize(x.rows.map(r=>M.detail(r,x.p)));assert.deepEqual(Object.keys(s.work),W.WORK_KEYS);});
++test('observation ranking contains four regions',()=>{const x=reports(),s=M.summarize(x.rows.map(r=>M.detail(r,x.p)));assert.equal(s.observationRanking.length,4);});
++test('commitment ranking contains four regions',()=>{const x=reports(),s=M.summarize(x.rows.map(r=>M.detail(r,x.p)));assert.equal(s.commitmentRanking.length,4);});
++test('projection is reported separately from commitment builder regions',()=>{const x=reports(),s=M.summarize(x.rows.map(r=>M.detail(r,x.p)));assert.equal(s.projection.subphase,undefined);assert.equal(s.projection.count,4);});
++test('complete report details retain four projection rows',()=>{const x=reports();for(const r of x.rows)assert.equal(M.detail(r,x.p).commitmentProjectionRows,4);});
++test('partial report cannot become complete by index completeness alone',()=>{const x=reports({cost:{commitmentBuild:2.2}});for(const r of x.rows){const d=M.detail(r,x.p);assert.equal(d.completeSample,false);assert.notEqual(d.commitmentStatus,'read_complete');}});
++test('work counters are descriptive and not CPU weights',()=>{const x=reports(),s=M.summarize(x.rows.map(r=>M.detail(r,x.p)));assert.equal(s.work.projectionIndexQueries.median,16);assert.ok(s.subphases.projectionRows.median>=0);});
++test('empty run yields inconclusive attribution',()=>{const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),d=fs.mkdtempSync(path.join(os.tmpdir(),'subx-'));assert.equal(M.makeComparison(d).status,'SUBPHASE_X_ATTRIBUTION_INCONCLUSIVE');});
++test('summarization does not mutate reports',()=>{const x=reports(),before=JSON.stringify(x.rows);M.summarize(x.rows.map(r=>M.detail(r,x.p)));assert.equal(JSON.stringify(x.rows),before);});
+diff --git a/tests/diagnostics.spec.cjs b/tests/diagnostics.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..110ed44be2beba1e7ed9570437e8bcff3ea9a8fd
+--- /dev/null
++++ b/tests/diagnostics.spec.cjs
+@@ -0,0 +1,35 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const F=require('./fixture.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs'),D=require('../runtime/decoder.cjs'),W=require('../runtime/samples.cjs');
++const copy=C.clone;
++test('fixed profile has four fresh points with unchanged budget and bounded absolute window',()=>{
++ const p=K.profileFor(73646525);assert.deepEqual(K.dueTicks(p),[73646700,73646800,73646900,73647000]);assert.equal(p.maxSampleCpu,2);assert.equal(p.reserveCpu,5);});
++for(const field of ['maxSampleCpu','endTick','intervalTicks','minBucket','reserveCpu'])test('profile rejects changed '+field,()=>{const p=K.profileFor(1000);p[field]++;assert.throws(()=>K.validProfile(p));});
++test('raw JSON is not destructively entity-decoded',()=>{const text=JSON.stringify({kind:'treasury-legacy-read-bridge',note:'&#x22; &amp;'});assert.equal(D.parseBridge(text).jsonText,text);assert.equal(D.parseBridge(text).report.note,'&#x22; &amp;');});
++for(const entity of ['&quot;','&#34;','&#x22;','&#X22;'])test('accepts one transport escape layer '+entity,()=>{const text=JSON.stringify({kind:'treasury-legacy-read-bridge',tick:1});const p=D.parseBridge(text.replaceAll('"',entity));assert.equal(p.kind,'bridge');assert.equal(p.jsonText,text);});
++test('double encoded JSON is rejected rather than recursively repaired',()=>{const t=JSON.stringify({kind:'treasury-legacy-read-bridge'}).replaceAll('"','&amp;#x22;');assert.equal(D.parseBridge(t).kind,'invalid');});
++for(const entity of ['&#x110000;','&#xD800;','&#0;','&#99999999999;'])test('bad Unicode entity fails '+entity,()=>assert.throws(()=>D.decodeHtmlOnce(entity)));
++test('actual old partial report is decoded but never a complete sample or new diagnostic',()=>{const r=require('../references/0003-first-report.json'),p=D.parseBridge(JSON.stringify(r).replaceAll('"','&#x22;'));assert.equal(p.kind,'bridge');assert.equal(p.report.status,'partial_cpu_budget');assert.equal(W.sampleError(p.report,K.profileFor(1000)),'SAMPLE_NOT_COMPLETE');});
++test('actual accepted CPU reader emits four valid prefix and three linked tail profiles',()=>{const s=F.session(),a=F.reports(s);assert.equal(a.length,4);a.forEach((r,i)=>{assert.equal(W.diagnosticError(r,s.profile,i,a[i-1],i?JSON.stringify(a[i-1]):null),null);assert.equal(W.sampleError(r,s.profile),null);});});
++test('partial CPU first point is useful diagnosis and does not count as complete',()=>{const s=F.session(),a=F.reports(s,{partialFirst:true});assert.equal(a[0].status,'partial_cpu_budget');assert.equal(a[0].cpuProfile.calls.commitmentBuild,0);a.forEach((r,i)=>assert.equal(W.diagnosticError(r,s.profile,i,a[i-1],i?JSON.stringify(a[i-1]):null),null));assert.equal(W.sampleError(a[0],s.profile),'SAMPLE_NOT_COMPLETE');});
++test('four partial CPU points remain useful but none complete',()=>{const s=F.session(),a=F.reports(s,{partialAll:true});assert.ok(a.every(r=>r.status==='partial_cpu_budget'));a.forEach((r,i)=>assert.equal(W.diagnosticError(r,s.profile,i,a[i-1],i?JSON.stringify(a[i-1]):null),null));});
++for(const[name,mutate]of [
++ ['budget authority',r=>r.authorizesActions=true],['missing profile',r=>delete r.cpuProfile],['wrong ordinal',r=>r.cpuProfile.sampleOrdinal=2],
++ ['wrong source',r=>r.sourceCommit='e'.repeat(40)],['future cost',r=>r.cpuProfile.phases.emit=1],['invalid phase',r=>r.cpuProfile.phases.unknown=0],
++ ['bad call count',r=>r.cpuProfile.calls.readerLoad=2],['nonfinite',r=>r.cpuProfile.elapsed=NaN],['mismatched total',r=>r.cpuBeforeSerializationAndEmit=0.9],
++ ['not fresh',r=>r.previousRun={}],['core mismatch',r=>r.endpoints[0].coreComparison='mismatch'],['output limited',r=>r.status='output_limited'],
++ ['room scope',r=>r.scope.rooms=['W1N1']],['unsafe phase cost',r=>{r.cpuProfile.elapsed=6;r.cpuProfile.phases={legacyInputs:6};r.cpuBeforeSerializationAndEmit=6;}]
++])test('rejects diagnostic '+name,()=>{const s=F.session(),r=copy(F.reports(s)[0]);mutate(r);assert.ok(W.diagnosticError(r,s.profile,0));});
++for(const[name,mutate]of [
++ ['tail absence',r=>delete r.previousCpuProfile],['tail backwards',r=>{r.previousCpuProfile.elapsed=0;r.previousCpuProfile.phases={legacyInputs:0};}],
++ ['wrong previous bytes',r=>r.previousRun.emittedBytes++],['engine reset ordinal',r=>r.cpuProfile.sampleOrdinal=1],['wrong previous tick',r=>r.previousRun.tick++],
++ ['wrong previous calls',r=>r.previousCpuProfile.calls.commitmentBuild=0]
++])test('rejects linked tail '+name,()=>{const s=F.session(),a=F.reports(s);mutate(a[1]);assert.ok(W.diagnosticError(a[1],s.profile,1,a[0],JSON.stringify(a[0])));});
++test('real row completeness string is accepted and invented object is not',()=>{const s=F.session(),r=F.reports(s)[0];assert.equal(r.commitments.rows[0].completeness,'complete');assert.equal(W.sampleError(r,s.profile),null);r.commitments.rows[0].completeness={complete:true};assert.ok(W.sampleError(r,s.profile));});
++test('collector keeps partial raw reports streaming and does not signal a failure',()=>{const s=F.session(),w=W.createWatch(s,12),a=F.reports(s,{partialFirst:true});w.frame('auth ok');w.frame(F.frame(s,a.map(x=>JSON.stringify(x).replaceAll('"','&#x22;'))));assert.equal(w.state.bridgeReports,4);assert.equal(w.state.completeSamples,3);assert.equal(w.state.diagnosticFailure,null);assert.equal(w.state.stopReason,null);});
++test('diagnostic fault is retained without force-closing transport evidence',()=>{const s=F.session(),w=W.createWatch(s,12);w.frame('auth ok');w.frame(F.frame(s,['{&#x22;kind&#x22;:&#x22;treasury-legacy-read-bridge&#x22;,BROKEN}']));assert.equal(w.state.diagnosticFailure,'BRIDGE_JSON_INVALID');assert.equal(w.state.state,'streaming');assert.equal(w.state.stopReason,null);});
++test('wrong-shard report cannot be accepted as CPU evidence',()=>{const s=F.session(),w=W.createWatch(s,12);w.frame('auth ok');const f=JSON.parse(F.frame(s,[JSON.stringify(F.reports(s)[0])]));f[1].shard='shard2';w.frame(JSON.stringify(f));assert.equal(w.state.bridgeReports,0);});
++test('same report duplicate is counted while conflicting duplicate remains fatal',()=>{const s=F.session(),w=W.createWatch(s,12),r=F.reports(s)[0];w.frame('auth ok');w.frame(F.frame(s,[JSON.stringify(r),JSON.stringify(r)]));assert.equal(w.state.duplicateSamples,1);r.note='changed';w.frame(F.frame(s,[JSON.stringify(r)]));assert.equal(w.state.diagnosticFailure,'CONFLICTING_DUPLICATE_SAMPLE');});
++test('authentication repetition is a transport failure',()=>{const s=F.session(),w=W.createWatch(s,12);w.frame('auth ok');assert.equal(w.frame('auth ok'),'auth-failure');});
++
++test('private session is bound to the exact delivered tool fingerprint',()=>{const S=require('../runtime/store.cjs'),s=F.session(),run=F.tmp(),old=C.ORIGINAL_DIGEST;F.save(run,s);try{C.ORIGINAL_DIGEST=s.backup.digest;assert.equal(S.loadRun(run,F.guard).profileHead,s.profileHead);const file=path.join(run,'session.json'),changed=C.readJson(file);changed.toolFingerprint='0'.repeat(64);fs.writeFileSync(file,JSON.stringify(changed));assert.throws(()=>S.loadRun(run,F.guard),e=>e.code==='SESSION_TOOL_FINGERPRINT_MISMATCH');}finally{C.ORIGINAL_DIGEST=old;}});
+diff --git a/tests/fixture.cjs b/tests/fixture.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c8321cbc904170b545365ec57b9c7c3cda0d1834
+--- /dev/null
++++ b/tests/fixture.cjs
+@@ -0,0 +1,30 @@
++'use strict';
++const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
++const C=require('../runtime/common.cjs'),P=require('../runtime/protocol.cjs'),K=require('../runtime/policy.cjs');
++const guard=require('../references/deployGuard.cjs');
++function main(commit,tree,tag){const text=`const BUILD_COMMIT = "${commit}";\nconst BUILD_TREE = "${tree}";\nconst BUILD_DIRTY = "false";\nconst BUILD_DEPLOY_BRANCH = "default";\nconst BUILD_TAG = "${tag}";\n`;return text+`\n;globalThis.__DEPLOY_BUNDLE_HASH__="${C.sha256(text)}";\n`;}
++function session(){const head='a'.repeat(40),tree='b'.repeat(40),profile=K.profileFor(1000);
++ const backup=P.makeSnapshot({main:main(C.PRODUCTION_BASE,C.PRODUCTION_TREE,'fixture-backup')},guard),candidate=P.makeSnapshot({main:main(head,tree,'fixture-candidate')},guard);
++ const sourceHead='d'.repeat(40),sourceTree='e'.repeat(40);
++ return {kind:K.KIND,runId:'c'.repeat(32),...C.EXPECTED,refactorBase:K.REFACTOR,compatRootBase:K.COMPAT,compatBase:sourceHead,sourceHead,sourceTree,profile,observedTick:1000,profileHead:head,profileTree:tree,
++  build:P.confirmBuild(candidate.modules,head,tree),backupBuild:P.buildIdentity(backup.modules.main),preparedAtMs:Date.now(),wallLimitMs:K.WALL_MS,backup,candidate,
++  toolFingerprint:fs.existsSync(path.join(__dirname,'../INTEGRITY.json'))?C.sha256(fs.readFileSync(path.join(__dirname,'../INTEGRITY.json'))):'f'.repeat(64)};}
++const tmp=()=>fs.mkdtempSync(path.join(os.tmpdir(),'cpuDiag-II-'));
++function save(run,s){for(const key of ['backup','candidate']){C.durable(path.join(run,key+'.json'),s[key]);s[key+'FileSha256']=C.sha256(fs.readFileSync(path.join(run,key+'.json')));}
++ const{backup,candidate,...pub}=s;C.durable(path.join(run,'session.json'),pub);C.durable(path.join(run,'public-session.json'),{...pub,kind:K.PUBLIC_KIND,backupDigest:backup.digest,candidateDigest:candidate.digest});}
++function reports(s,{partialFirst=false,partialAll=false}={}){
++ const H=require('./reader-fixture.cjs'),f=H.fixture({cost:{readerLoad:partialAll?2.2:0.02,observationBuild:0.02},probeCost:0.001});
++ const old=f.ports.readers;let n=0;f.ports.readers=()=>{if(partialFirst&&n++===0)f.charge(2.2);return old();};
++ const reader=H.loadReader().exports.createTreasuryCompatPreview(s.profile,f.ports,{cpuDiagnostics:true});
++ for(const tick of K.dueTicks(s.profile)){f.setTime(tick);reader.run();}
++ return f.logs.map(JSON.parse);
++}
++function world(s){let modules=C.clone(s.backup.modules),writes=0,time=s.observedTick;const api={
++ me:async()=>({ok:1,_id:s.userId,username:s.username}),branches:async()=>({ok:1,list:[{branch:s.branch,activeWorld:true}]}),
++ code:async()=>({ok:1,modules:C.clone(modules)}),time:async()=>({ok:1,time}),overview:async()=>({ok:1,shards:{shard1:{rooms:K.ROOMS}}}),
++ setCode:async(branch,m)=>{if(branch!==s.branch)throw new Error('branch');modules=C.clone(m);writes++;return {ok:1};}};
++ return {api,get modules(){return modules;},set modules(v){modules=C.clone(v);},get writes(){return writes;},set tick(v){time=v;}};
++}
++function frame(s,logs){return JSON.stringify([`user:${s.userId}/console`,{shard:s.shard,messages:{log:logs,results:[]}}]);}
++const secret={token:'FIXTURE_ONLY_TOKEN_1234567890',path:'fixture-secret-unused.json',redact:C.redactor(['FIXTURE_ONLY_TOKEN_1234567890'])};
++module.exports={guard,main,session,tmp,save,reports,world,frame,secret};
+diff --git a/tests/loader-integration.spec.cjs b/tests/loader-integration.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..b89a1260f1b57c86f18d57c79ba91bf9c22af925
+--- /dev/null
++++ b/tests/loader-integration.spec.cjs
+@@ -0,0 +1,15 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const H=require('./reader-fixture.cjs'),W=require('../runtime/samples.cjs'),C=require('../runtime/common.cjs');
++function run(opts={}){const f=H.fixture({probeCost:.001,...opts}),profile={...H.profile(),endTick:400},preview=H.loadReader().exports.createTreasuryCompatPreview(profile,f.ports,{cpuDiagnostics:true});for(const t of [100,200,300,400]){f.setTime(t);preview.run();}return{f,profile,preview,reports:f.logs.map(JSON.parse)};}
++test('IX real preview emits four complete reports in synthetic low-cost run',()=>{const x=run();assert.equal(x.reports.length,4);assert.ok(x.reports.every(r=>r.status==='sampled'));});
++test('each complete synthetic report has nine intervals and 12 boundaries',()=>{for(const r of run().reports){assert.equal(r.cpuProfile.attribution.boundaries,12);assert.deepEqual(Object.keys(r.cpuProfile.attribution.intervals),W.SUBPHASES);}});
++test('projection work is exactly four rows and sixteen index queries',()=>{for(const r of run().reports){const w=r.cpuProfile.attribution.work;assert.equal(w.projectionRowsPlanned,4);assert.equal(w.projectionRowsCompleted,4);assert.equal(w.projectionIndexQueries,16);}});
++test('complete synthetic reports pass unchanged diagnostic and sample validators',()=>{const x=run();for(const [i,r] of x.reports.entries()){assert.equal(W.diagnosticError(r,x.profile,i,x.reports[i-1]||null,i?x.f.logs[i-1]:null),null);assert.equal(W.sampleError(r,x.profile),null);}});
++test('attribution remains nested in parent phases',()=>{for(const r of run().reports){const a=r.cpuProfile.attribution.intervals,p=r.cpuProfile.phases;assert.ok(Object.values(a).reduce((n,v)=>n+v,0)>0);assert.ok(p.observationBuild>0);assert.ok(p.commitmentBuild>0);}});
++test('CPU-port reads do not scale with task count in synthetic fixture',()=>{const a=run(),b=run();for(let i=0;i<256;i++)b.f.memory.data.resourceControl.tasks['t'+i]={};assert.equal(a.reports[0].cpuProfile.attribution.boundaries,b.reports[0].cpuProfile.attribution.boundaries);});
++test('diagnostics disabled produces no cpuProfile',()=>{const f=H.fixture(),p={...H.profile(),endTick:400},v=H.loadReader().exports.createTreasuryCompatPreview(p,f.ports,{cpuDiagnostics:false});f.setTime(100);v.run();assert.equal(JSON.parse(f.logs[0]).cpuProfile,undefined);});
++test('default OFF performs no reads and emits nothing',()=>{const f=H.fixture(),p={...H.profile(),enabled:false},v=H.loadReader().exports.createTreasuryCompatPreview(p,f.ports,{cpuDiagnostics:true});assert.equal(v.run().status,'disabled');assert.equal(f.calls.memory,0);assert.equal(f.logs.length,0);});
++test('partial budget retains useful attribution without becoming complete',()=>{const x=run({cost:{commitmentBuild:2.2}});for(const r of x.reports){assert.equal(r.status,'partial_cpu_budget');assert.equal(W.sampleError(r,x.profile),'SAMPLE_NOT_COMPLETE');assert.ok(r.cpuProfile.attribution.boundaries>=10);}});
++test('unknown attribution work key faults only the preview',()=>{const f=H.fixture(),old=f.ports.readers;f.ports.readers=()=>{const x=old();const bo=x.buildObservation;x.buildObservation=o=>{o.compatDiagnostics?.work({badKey:1});return bo(o);};return x;};const v=H.loadReader().exports.createTreasuryCompatPreview(H.profile(),f.ports,{cpuDiagnostics:true});f.setTime(100);assert.equal(v.run().status,'fault_disabled');assert.equal(f.memory.data.resourceControl.tasks instanceof Object,true);});
++test('IX reference core and CPU files match source lock',()=>{const root=path.resolve(__dirname,'..'),l=require('../references/source-lock.json');for(const rel of ['src/runtime/treasuryCompatReadCore.generated.ts','src/runtime/treasuryCompatCpu.ts']){const b=fs.readFileSync(path.join(root,'references',path.basename(rel)));assert.equal(C.blob(b),l[rel].blob);}});
+diff --git a/tests/process.spec.cjs b/tests/process.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ad62cceae060d37e7f4c6614bab528529e922069
+--- /dev/null
++++ b/tests/process.spec.cjs
+@@ -0,0 +1,11 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cp=require('node:child_process');
++const C=require('../runtime/common.cjs'),R=require('../tools/remediate.cjs'),U=require('../tools/util.cjs');
++const ROOT=path.resolve(__dirname,'..');
++function assembled(){const d=fs.mkdtempSync(path.join(os.tmpdir(),'genx-'));fs.cpSync(path.join(ROOT,'references/subphase-IX'),d,{recursive:true});for(const rel of ['docs/treasury-compat-loader-optimization.json','docs/treasury-compat-source-manifest.json','scripts/build-treasury-compat-loader.cjs','test/treasury-compat/attribution.spec.cjs','docs/treasury-compat-source-manifest-remediation-x.md']){const src=path.join(ROOT,'remediation/implementation',rel);if(fs.existsSync(src)){const dst=path.join(d,rel);fs.mkdirSync(path.dirname(dst),{recursive:true});fs.copyFileSync(src,dst);}}return d;}
++test('remediation generator parses and exports full-output verifier',()=>{const d=assembled(),g=require(path.join(d,'scripts/build-treasury-compat-loader.cjs'));assert.equal(typeof g.verifyOutputIdentities,'function');assert.equal(g.EXPECTED_OUTPUT_PATHS.length,13);});
++test('stale IX manifest and provenance are corrected deterministically by generator',()=>{const base=assembled(),g=require(path.join(base,'scripts/build-treasury-compat-loader.cjs'));const out=g.generate(fs.readFileSync(path.join(base,g.FIXTURE)),fs.readFileSync(path.join(base,g.TEMPLATE)),JSON.parse(fs.readFileSync(path.join(base,g.SOURCE_MANIFEST))));const m=JSON.parse(out[g.SOURCE_MANIFEST]);assert.equal(m.loaderOptimization.sourceManifestOutputValidation,'all-listed-outputs');assert.equal(m.outputs.find(x=>x.file==='src/runtime/treasuryCompatRuntime.ts').bytes,865);assert.equal(out[g.PROVENANCE].equals(fs.readFileSync(path.join(ROOT,'remediation/implementation',g.PROVENANCE))),true);});
++test('remediation payload changed byte is rejected',()=>{const row=R.LOCK.changes[0],p=path.join(ROOT,'remediation/implementation',row.path),b=fs.readFileSync(p);fs.writeFileSync(p,Buffer.concat([b,Buffer.from('x')]));try{assert.throws(()=>R.verifyPayload(),e=>e.code==='REMEDIATION_PAYLOAD_CHANGED');}finally{fs.writeFileSync(p,b);}});
++test('run-tests requires exact test contract',()=>{const c=require('../references/test-contract.json'),files=fs.readdirSync(path.join(ROOT,'tests')).filter(x=>x.endsWith('.spec.cjs')).sort().map(x=>'tests/'+x);assert.deepEqual(files,c.files);});
++test('package verifier rejects an extra file in a copy',()=>{const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'pkgx-'));fs.cpSync(ROOT,tmp,{recursive:true});fs.writeFileSync(path.join(tmp,'extra.txt'),'x');const r=cp.spawnSync(process.execPath,['-e',`require(${JSON.stringify(path.join(tmp,'tools/util.cjs'))}).verifyPackage()`],{encoding:'utf8'});assert.notEqual(r.status,0);});
++test('CLI argument parser rejects duplicates',()=>assert.throws(()=>C.options(['--x','a','--x','b'],['x']),e=>e.code==='INVALID_ARGUMENTS'));
+diff --git a/tests/read-recheck.spec.cjs b/tests/read-recheck.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..16a38117bb19cd7abdc7e7c071e0ceaa1f6a84b7
+--- /dev/null
++++ b/tests/read-recheck.spec.cjs
+@@ -0,0 +1,14 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict');
++const H=require('./reader-fixture.cjs'),W=require('../runtime/samples.cjs'),V=require('../runtime/verify-run.cjs');
++function one(opts={}){const f=H.fixture({probeCost:.001,...opts}),p={...H.profile(),endTick:400},v=H.loadReader().exports.createTreasuryCompatPreview(p,f.ports,{cpuDiagnostics:true});f.setTime(100);v.run();return{f,p,r:JSON.parse(f.logs[0])};}
++test('attribution validator accepts complete synthetic profile',()=>{const x=one();assert.equal(W.attributionError(x.r.cpuProfile.attribution,x.r.cpuProfile.calls),null);});
++test('unknown subphase is rejected',()=>{const x=one();x.r.cpuProfile.attribution.intervals.unknown=1;assert.equal(W.attributionError(x.r.cpuProfile.attribution,x.r.cpuProfile.calls),'CPU_ATTRIBUTION_VALUE_INVALID');});
++test('negative work count is rejected',()=>{const x=one();x.r.cpuProfile.attribution.work.commitmentTaskRecords=-1;assert.equal(W.attributionError(x.r.cpuProfile.attribution,x.r.cpuProfile.calls),'CPU_ATTRIBUTION_VALUE_INVALID');});
++test('incomplete boundaries reject full sample',()=>{const x=one();x.r.cpuProfile.attribution.boundaries=11;assert.equal(W.sampleError(x.r,x.p),'ATTRIBUTION_SAMPLE_INCOMPLETE');});
++test('partial projection work rejects full sample',()=>{const x=one();x.r.cpuProfile.attribution.work.projectionRowsCompleted=3;assert.equal(W.sampleError(x.r,x.p),'ATTRIBUTION_SAMPLE_INCOMPLETE');});
++test('duplicate commitment row rejects full sample',()=>{const x=one();x.r.commitments.rows[3]=structuredClone(x.r.commitments.rows[0]);assert.equal(W.sampleError(x.r,x.p),'COMMITMENT_ROW_INVALID');});
++test('core mismatch remains diagnostic failure',()=>{const x=one();x.r.endpoints[0].coreComparison='mismatch';assert.equal(W.diagnosticError(x.r,x.p,0),'CORE_COMPARISON_MISMATCH');});
++test('legacy projection mismatch does not falsify direct/core match',()=>{const x=one();x.r.endpoints[0].legacyProjection={status:'mismatch',mismatches:['terminalEnergy']};assert.equal(W.sampleError(x.r,x.p),null);});
++test('summarize retains attribution and primitive work',()=>{const x=one(),s=V.summarize([x.r],x.p);assert.equal(s.rows[0].attribution.boundaries,12);assert.equal(s.workRows[0].work.projectionIndexQueries,16);});
++test('last sample tail remains unobservable without successor',()=>{const x=one(),s=V.summarize([x.r],x.p);assert.equal(s.rows[0].completeProfileReportedBySuccessor,null);});
+diff --git a/tests/reader-fixture.cjs b/tests/reader-fixture.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..3627ddd036e7c66baa6dfd6996cd0d0648a9f47f
+--- /dev/null
++++ b/tests/reader-fixture.cjs
+@@ -0,0 +1,58 @@
++'use strict';
++const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),{createRequire}=require('node:module');
++const ROOT=path.resolve(__dirname,'..');
++function typescript(){
++ if(process.env.CPU_DIAG_TS_REPO)return createRequire(path.resolve(process.env.CPU_DIAG_TS_REPO,'package.json'))('typescript');
++ if(process.env.CPU_DIAG_TS_MODULE)return require(process.env.CPU_DIAG_TS_MODULE);
++ throw new Error('TYPESCRIPT_PATH_REQUIRED');
++}
++function compile(source,file,extras={}){
++ const ts=typescript(),out=ts.transpileModule(source,{fileName:file,reportDiagnostics:true,compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,strict:true}});
++ const errors=(out.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error);if(errors.length)throw new Error('TS_TRANSPILE_ERROR');
++ const context=vm.createContext({exports:{},...extras});context.globalThis=context;context.global=context;
++ vm.runInContext(out.outputText,context,{filename:file,timeout:5000});return context;
++}
++function loadReader(variant='new',extras={}){
++ const prefix='references';
++ const accounting=compile(fs.readFileSync(path.join(ROOT,'references/treasuryCompatCpu.ts'),'utf8'),'treasuryCompatCpu.ts').exports;
++ const context=compile(fs.readFileSync(path.join(ROOT,prefix,'treasuryCompatRead.ts'),'utf8'),'treasuryCompatRead.ts',{
++  require:id=>{if(id==='./treasuryCompatCpu')return accounting;throw new Error('UNEXPECTED_IMPORT:'+id);},...extras});
++ let scans=0;const count=context.compatUtf8Bytes;context.compatUtf8Bytes=s=>{scans++;return count(s);};
++ return {exports:context.exports,context,scans:()=>scans};
++}
++const profile=()=>({enabled:true,shardName:'shard1',rooms:['E3N59','E4N58'],resources:['energy','H'],startTick:100,endTick:1200,intervalTicks:100,minBucket:2000,maxSampleCpu:2,reserveCpu:5,maxLogBytes:16384});
++function fixture(opts={}){
++ let time=100,used=0,cpuCalls=0;const calls={memory:0,room:0,readerLoad:0,observationBuild:0,commitmentBuild:0,emit:0};
++ const cost={legacyInputs:0,directRead:0,readerLoad:0,observationBuild:0,coreCompare:0,commitmentBuild:0,commitmentProjection:0,emit:0,...opts.cost};
++ const logs=[],health={complete:true,globalIncomplete:false,incompleteScopeCount:0,invalidRecords:0};
++ const memory={cfg:{},data:{resourceControl:{tasks:{}}},runtime:{resourceReservations:{}}};
++ const rooms={};
++ function charge(n){used+=n;}
++ function structure(id,amounts={energy:1000,H:50},capacity=300000){
++  const store={...amounts};
++  Object.defineProperties(store,{
++   getUsedCapacity:{value:r=>{charge(cost.directRead);return r?(store[r]||0):Object.keys(store).reduce((n,k)=>n+store[k],0);}},
++   getCapacity:{value:()=>capacity},getFreeCapacity:{value:()=>capacity-Object.keys(store).reduce((n,k)=>n+store[k],0)}});
++  return {id,my:true,store,isActive:()=>true,cooldown:0};
++ }
++ for(const name of profile().rooms)rooms[name]={name,controller:{my:true},storage:structure(name+'storage',undefined,1000000),terminal:structure(name+'terminal')};
++ const ports={tick:()=>time,shard:()=>opts.shard||'shard1',resources:()=>['energy','H','O','X'],
++  cpu:()=>{cpuCalls++;used+=opts.probeCost||0;return opts.cpu?opts.cpu({used,cpuCalls,emitted:calls.emit}):{used,tickLimit:opts.tickLimit??100,bucket:opts.bucket??10000};},
++  memory:()=>{calls.memory++;charge(cost.legacyInputs);if(opts.memoryThrow)throw new Error('memory');return memory;},
++  room:n=>{calls.room++;return rooms[n];},
++  readers:()=>{calls.readerLoad++;charge(cost.readerLoad);if(opts.loadThrow)throw new Error('loader');return {
++   buildObservation:({rooms:actual,compatDiagnostics:d})=>{calls.observationBuild++;charge(cost.observationBuild);if(opts.obsThrow)throw new Error('observation');
++    d?.boundary('observationSetup');d?.boundary('observationRooms');d?.work({observationRooms:actual.length,observationLocations:actual.length*2,observationExistingLocations:actual.length*2,observationResourceKeys:actual.length*4});d?.boundary('observationFinalize');d?.boundary('observationView');d?.boundary();
++    return {epoch:{observedAtTick:time+(opts.stale?1:0)},location:(n,k)=>{charge(cost.coreCompare);const st=actual.find(r=>r.name===n)?.[k];
++     return st?{exists:true,structureId:st.id,usedCapacity:st.store.getUsedCapacity()+(opts.mismatch?1:0),freeCapacity:st.store.getFreeCapacity(),amounts:{energy:st.store.energy||0,H:st.store.H||0}}:{exists:false,usedCapacity:0,freeCapacity:0,amounts:{}};}};},
++   buildCommitments:({tasks,compatDiagnostics:d})=>{calls.commitmentBuild++;charge(cost.commitmentBuild);if(opts.commitThrow)throw new Error('commitment');const value=Object.keys(memory.data.resourceControl.tasks).length;
++    d?.boundary('commitmentSetup');d?.boundary('commitmentTasks');d?.work({commitmentTaskRecords:Object.keys(tasks||{}).length,commitmentPendingTaskRecords:Object.keys(tasks||{}).length,commitmentTaskInvalidEvents:0,commitmentDemandHealthChecks:Object.keys(tasks||{}).length,commitmentReceiverHealthChecks:Object.keys(tasks||{}).length,commitmentRouteCandidates:Object.keys(tasks||{}).length});d?.boundary('commitmentReservations');d?.work({commitmentReservationRecords:0,commitmentReservationInvalidEvents:0,commitmentOwnerEvaluations:0,commitmentActiveReservations:0});d?.boundary('commitmentFinalize');d?.work({commitmentScopeBuckets:value?2:0,commitmentRoomBuckets:value?2:0,commitmentMergeRoutes:value?1:0,commitmentReservationScopes:0});d?.boundary();
++    return {completeness:opts.incomplete?{...health,complete:false,invalidRecords:1}:health,metrics:{},outgoing:()=>{charge(cost.commitmentProjection);return opts.invalidNumber?-1:value;},incoming:()=>0,reservedProduction:()=>0,commitmentCompleteness:()=> 'complete'};}
++  };},
++  emit:line=>{calls.emit++;charge(cost.emit);if(opts.emitThrow)throw new Error('emit');logs.push(line);}};
++ return {ports,memory,rooms,logs,calls,charge,used:()=>used,cpuCalls:()=>cpuCalls,setTime:t=>{time=t;used=0;},structure};
++}
++function json(x){return JSON.parse(JSON.stringify(x));}
++function semantic(log){const r=typeof log==='string'?JSON.parse(log):json(log);delete r.cpuProfile;delete r.previousCpuProfile;
++ if(r.previousRun){delete r.previousRun.emittedBytes;delete r.previousRun.cpuIncludingEmit;}delete r.cpuBeforeSerializationAndEmit;return r;}
++module.exports={ROOT,typescript,compile,loadReader,profile,fixture,json,semantic};
+diff --git a/tests/recovery.spec.cjs b/tests/recovery.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..cc01cc3197dc80cbf5ca50366fae3a9217d7b92d
+--- /dev/null
++++ b/tests/recovery.spec.cjs
+@@ -0,0 +1,47 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const F=require('./fixture.cjs'),C=require('../runtime/common.cjs'),A=require('../runtime/actions.cjs'),S=require('../runtime/store.cjs');
++const {termination}=require('../runtime/recovery-worker.cjs'),{closeout}=require('../runtime/closeout.cjs');
++function attempted(run,s){S.newRecord(run,'upload-attempt.json',{runId:s.runId,candidateHash:s.candidate.digest.hash,profileHead:s.profileHead,startedAtMs:Date.now()});}
++const pause=async()=>{};
++test('identity read and restore never depend on time or overview',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);
++ w.api.time=w.api.overview=async()=>{throw new Error('must not call');};const r=await A.restoreOnce(w.api,F.guard,s,run,{pause});assert.equal(r.confirmed,true);assert.equal(w.writes,1);});
++test('read transport failure retries exactly three times with classified stages',async()=>{const s=F.session(),w=F.world(s),logs=[];let n=0;w.api.code=async()=>{n++;C.fail('HTTP_TRANSPORT_ERROR');};await assert.rejects(A.current(w.api,F.guard,{pause,record:x=>logs.push(x)}));assert.equal(n,3);assert.equal(logs.length,3);assert.ok(logs.every(x=>x.stage==='modules'));});
++test('single identity transport failure can recover without aborting',async()=>{const s=F.session(),w=F.world(s),fn=w.api.code;let n=0;w.api.code=async(...a)=>{if(n++===0)C.fail('HTTP_DEADLINE');return fn(...a);};await A.current(w.api,F.guard,{pause});assert.equal(n,2);});
++test('auth failure is not retried',async()=>{const w=F.world(F.session());let n=0;w.api.me=async()=>{n++;C.fail('HTTP_AUTH_REJECTED');};await assert.rejects(A.current(w.api,F.guard,{pause}));assert.equal(n,1);});
++test('wrong user is rejected before code reads',async()=>{const w=F.world(F.session());w.api.me=async()=>({ok:1,_id:'wrong',username:'forster'});let n=0;w.api.code=async()=>n++;await assert.rejects(A.current(w.api,F.guard,{pause}));assert.equal(n,0);});
++test('candidate upload persists marker before the only POST',async()=>{const s=F.session(),w=F.world(s),run=F.tmp(),original=w.api.setCode;
++ w.api.setCode=async(...a)=>{assert.equal(S.optional(run,'upload-attempt.json').profileHead,s.profileHead);return original(...a);};
++ assert.equal((await A.uploadOnce(w.api,F.guard,s,run)).confirmed,true);await assert.rejects(A.uploadOnce(w.api,F.guard,s,run));assert.equal(w.writes,1);});
++test('expired window never writes or rebinds a new window',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.tick=s.profile.startTick-99;
++ await assert.rejects(A.uploadOnce(w.api,F.guard,s,run),e=>e.code==='PROFILE_WINDOW_EXPIRED');assert.equal(w.writes,0);assert.equal(S.optional(run,'upload-attempt.json'),null);});
++test('changed remote baseline refuses candidate POST',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules={main:F.main('d'.repeat(40),'e'.repeat(40),'third')};await assert.rejects(A.uploadOnce(w.api,F.guard,s,run));assert.equal(w.writes,0);});
++test('closing request prevents candidate upload',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();S.newRecord(run,'closing.json',{runId:s.runId});await assert.rejects(A.uploadOnce(w.api,F.guard,s,run));assert.equal(w.writes,0);});
++test('lost candidate reply is not retried and recovery still uses exactly one restore',async()=>{const s=F.session(),w=F.world(s),run=F.tmp(),f=w.api.setCode;
++ w.api.setCode=async(...a)=>{const r=await f(...a);if(w.writes===1)C.fail('HTTP_DEADLINE');return r;};
++ assert.equal((await A.uploadOnce(w.api,F.guard,s,run)).confirmed,false);assert.equal((await A.restoreOnce(w.api,F.guard,s,run,{pause})).confirmed,true);assert.equal(w.writes,2);});
++test('lost restore reply can be resolved by bytes without a repeated POST',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);const f=w.api.setCode;
++ w.api.setCode=async(...a)=>{await f(...a);C.fail('HTTP_DEADLINE');};const r=await A.restoreOnce(w.api,F.guard,s,run,{pause});assert.equal(r.confirmed,true);assert.equal(r.serverAccepted,null);assert.equal(r.postRetryAllowed,false);assert.equal(w.writes,1);assert.equal((await A.restoreOnce(w.api,F.guard,s,run,{pause})).requestAttempted,false);});
++test('existing restore attempt with candidate still online forbids retry',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);
++ S.newRecord(run,'restore-attempt.json',{runId:s.runId,candidateHash:s.candidate.digest.hash,backupHash:s.backup.digest.hash,startedAtMs:Date.now()});
++ const r=await A.restoreOnce(w.api,F.guard,s,run,{pause});assert.equal(r.reason,'RESTORE_ALREADY_ATTEMPTED');assert.equal(w.writes,0);});
++test('wrong restore marker is never overwritten',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();attempted(run,s);S.newRecord(run,'restore-attempt.json',{runId:'x'});await assert.rejects(A.restoreOnce(w.api,F.guard,s,run,{pause}));assert.equal(S.optional(run,'restore-attempt.json').runId,'x');});
++test('third party deployment is not overwritten by recovery',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules={main:F.main('d'.repeat(40),'e'.repeat(40),'third')};attempted(run,s);assert.equal((await A.restoreOnce(w.api,F.guard,s,run,{pause})).status,'CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT');assert.equal(w.writes,0);});
++test('third party change between restore prechecks also refuses write',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);let n=0,read=w.api.code;
++ w.api.code=async(...a)=>{if(++n===2)w.modules={main:F.main('d'.repeat(40),'e'.repeat(40),'third')};return read(...a);};assert.equal((await A.restoreOnce(w.api,F.guard,s,run,{pause})).status,'CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT');assert.equal(w.writes,0);});
++test('no upload marker means no restore request is necessary',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();const r=await A.restoreOnce(w.api,F.guard,s,run);assert.equal(r.status,'NOT_DEPLOYED_NO_RESTORE_NEEDED');assert.equal(w.writes,0);});
++test('marker fsync failure prevents a POST and never deletes the marker',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();w.modules=s.candidate.modules;attempted(run,s);const old=fs.fsyncSync,open=fs.openSync;let targetFd;
++ try{fs.openSync=(name,...args)=>{const fd=open(name,...args);if(String(name).endsWith('restore-attempt.json'))targetFd=fd;return fd;};fs.fsyncSync=fd=>{if(fd===targetFd)throw new Error('disk');return old(fd);};await assert.rejects(A.restoreOnce(w.api,F.guard,s,run,{pause}));}finally{fs.fsyncSync=old;fs.openSync=open;}
++ assert.equal(w.writes,0);assert.ok(fs.existsSync(path.join(run,'restore-attempt.json')));});
++test('new recovery stream is independent of a dead diagnostic collector',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();attempted(run,s);S.newRecord(run,'upload-result.json',{result:{confirmed:true}});S.newRecord(run,'heartbeat.json',{state:'failed',stopReason:'BRIDGE_JSON_INVALID'});let called=0;
++ const r=await closeout({api:w.api,guard:F.guard,s,run,secret:F.secret,actor:'worker',pause,observer:async()=>{called++;return {status:'RECOVERY_RUNTIME_COLLECTED'};},verify:()=>({status:'RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED'})});
++ assert.equal(called,1);assert.equal(r.runtimeConfirmed,true);assert.equal(w.writes,0);});
++test('failed recovery stream preserves byte confirmation and final read',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();attempted(run,s);S.newRecord(run,'upload-result.json',{result:{confirmed:true}});
++ const r=await closeout({api:w.api,guard:F.guard,s,run,secret:F.secret,actor:'worker',pause,observer:async()=>{throw new Error('stream');}});
++ assert.equal(r.status,'RESTORED_BYTES_CONFIRMED_RUNTIME_UNCONFIRMED');assert.ok(fs.existsSync(path.join(run,'recovery-worker/code-after-runtime.json')));});
++test('a CPU-partial heartbeat is not an early termination reason',()=>{const s=F.session(),now=Date.now(),h={runId:s.runId,pid:1,userId:s.userId,shard:s.shard,state:'streaming',socketState:'open',updatedAtMs:now,lastConsoleAtMs:now,lastCpuAtMs:now,partialCpuSamples:1,bridgeReports:1,lastBridgeTick:s.profile.startTick};
++ assert.equal(termination({s,h,attempt:{startedAtMs:now},upload:{result:{confirmed:true}},now,elapsed:0,tick:s.profile.startTick}),null);
++ h.diagnosticFailure='CPU_OBSERVED_SAFETY_STOP';assert.equal(termination({s,h,attempt:{startedAtMs:now},now,elapsed:0}),h.diagnosticFailure);});
++test('four diagnostics trigger close even if zero complete samples',()=>{const s=F.session(),now=Date.now(),h={runId:s.runId,pid:1,userId:s.userId,shard:s.shard,state:'streaming',socketState:'open',updatedAtMs:now,lastConsoleAtMs:now,lastCpuAtMs:now,bridgeReports:4,lastBridgeTick:s.profile.endTick,completeSamples:0};assert.equal(termination({s,h,attempt:{startedAtMs:now},upload:{result:{confirmed:true}},now,elapsed:0}),'DIAGNOSTIC_WINDOW_COMPLETE');});
++
++test('baseline readback alone does not resolve a still-unknown upload outcome',async()=>{const s=F.session(),w=F.world(s),run=F.tmp();attempted(run,s);const r=await closeout({api:w.api,guard:F.guard,s,run,secret:F.secret,actor:'worker',pause,observer:async()=>({}),verify:()=>({status:'RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED'})});assert.equal(r.bytesConfirmed,true);assert.equal(r.uploadOutcomeResolved,false);assert.equal(r.status,'ONLINE_CLOSE_UNCONFIRMED');assert.equal(w.writes,0);});
+diff --git a/tests/remediation.spec.cjs b/tests/remediation.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..34fa0609bc4a6880e3802f04845afbda4393111f
+--- /dev/null
++++ b/tests/remediation.spec.cjs
+@@ -0,0 +1,27 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cp=require('node:child_process');
++const U=require('../tools/util.cjs'),R=require('../tools/remediate.cjs'),Pub=require('../tools/publish.cjs'),K=require('../runtime/policy.cjs');
++const ROOT=path.resolve(__dirname,'..');
++function copy(src,dst){fs.mkdirSync(path.dirname(dst),{recursive:true});fs.copyFileSync(src,dst);}
++function git(repo,args){return U.textGit(repo,args);}
++function setup(mode){
++ const root=fs.mkdtempSync(path.join(os.tmpdir(),'subx-rem-v2-')),repo=path.join(root,'compat'),bare=path.join(root,'remote.git');fs.mkdirSync(repo);
++ U.git(repo,['init']);U.git(repo,['config','user.email','fixture@example.invalid']);U.git(repo,['config','user.name','fixture']);U.git(repo,['branch','-M',R.LOCK.compatBranch]);
++ for(const row of R.LOCK.changes){if(!row.old)continue;copy(path.join(ROOT,'references/subphase-IX',row.path),path.join(repo,row.path));}copy(path.join(ROOT,'references/treasuryCompatConfig.ts'),path.join(repo,K.CONFIG));
++ U.git(repo,['add','.']);U.git(repo,['commit','-m','root']);const base=git(repo,['rev-parse','HEAD']);
++ U.git(root,['init','--bare',bare]);U.git(repo,['remote','add','origin',bare]);U.git(repo,['push','-u','origin','HEAD']);
++ let partial=null;
++ if(mode==='partial'){
++  for(const rel of R.partialPaths)copy(path.join(ROOT,'remediation/implementation',rel),path.join(repo,rel));
++  U.git(repo,['add','--',...R.partialPaths]);U.git(repo,['commit','-m',R.LOCK.commitMessage]);partial=git(repo,['rev-parse','HEAD']);
++ }
++ return{root,repo,base,partial,out:path.join(root,'out')};
++}
++function withGeneratorStub(fn){const old=cp.spawnSync;cp.spawnSync=function(cmd,args,opts){if(cmd===process.execPath&&String(args?.[0]||'').endsWith('scripts/build-treasury-compat-loader.cjs')&&args?.[1]==='--check')return{status:0,signal:null,error:null,stdout:'{"status":"COMPAT_LOADER_REGENERATION_VERIFIED"}\n',stderr:''};return old.apply(this,arguments);};try{return fn();}finally{cp.spawnSync=old;}}
++function withCompatBase(base,fn){const old=K.COMPAT,oldLock=R.LOCK.compatBase;K.COMPAT=base;R.LOCK.compatBase=base;try{return fn();}finally{K.COMPAT=old;R.LOCK.compatBase=oldLock;}}
++test('remediation porcelain parser preserves a leading-space tracked status and an untracked path',()=>{const f=setup('root');try{fs.appendFileSync(path.join(f.repo,R.LOCK.changes[0].path),'x');fs.writeFileSync(path.join(f.repo,'untracked.txt'),'x');assert.deepEqual(R.statusPaths(f.repo),[R.LOCK.changes[0].path,'untracked.txt'].sort());}finally{fs.rmSync(f.root,{recursive:true,force:true});}});
++test('fresh root creates one exact five-path remediation commit',()=>{const f=setup('root');try{withCompatBase(f.base,()=>withGeneratorStub(()=>{const r=R.execute(f.repo,f.out);assert.equal(r.mode,'fresh-full');assert.equal(r.remediationCommits.length,1);assert.deepEqual(r.paths,R.paths);assert.equal(git(f.repo,['rev-parse','HEAD^']),f.base);}));}finally{fs.rmSync(f.root,{recursive:true,force:true});}});
++test('exact unpushed four-path partial commit is preserved and completed by one follow-up commit',()=>{const f=setup('partial');try{withCompatBase(f.base,()=>withGeneratorStub(()=>{const r=R.execute(f.repo,f.out);assert.equal(r.mode,'continued-exact-partial');assert.equal(r.continuedFromPartial,f.partial);assert.deepEqual(r.remediationCommits,[f.partial,r.head]);assert.equal(git(f.repo,['rev-parse',r.head+'^']),f.partial);assert.deepEqual(U.git(f.repo,['diff','--name-only','-z',f.partial,r.head],true).toString().split('\0').filter(Boolean),R.completionPaths);}));}finally{fs.rmSync(f.root,{recursive:true,force:true});}});
++
++test('publish close-chain verification accepts exact partial plus completion plus ON and OFF',()=>{const f=setup('partial');try{withCompatBase(f.base,()=>withGeneratorStub(()=>{const r=R.execute(f.repo,f.out),source=r.head,original=fs.readFileSync(path.join(f.repo,K.CONFIG));fs.writeFileSync(path.join(f.repo,K.CONFIG),Buffer.from(original.toString('utf8').replace('enabled: false','enabled: true')));U.git(f.repo,['add','--',K.CONFIG]);U.git(f.repo,['commit','-m','on']);const on=git(f.repo,['rev-parse','HEAD']);fs.writeFileSync(path.join(f.repo,K.CONFIG),original);U.git(f.repo,['add','--',K.CONFIG]);U.git(f.repo,['commit','-m','off']);const off=git(f.repo,['rev-parse','HEAD']);assert.equal(Pub.sourceClosed(f.repo,{sourceHead:source,compatClosedHead:off}),off);assert.equal(git(f.repo,['rev-parse',on+'^']),source);}));}finally{fs.rmSync(f.root,{recursive:true,force:true});}});
++test('unknown local commit is not adopted as a partial remediation',()=>{const f=setup('root');try{fs.writeFileSync(path.join(f.repo,'other.txt'),'x');U.git(f.repo,['add','other.txt']);U.git(f.repo,['commit','-m','other']);withCompatBase(f.base,()=>assert.throws(()=>R.inspectStart(f.repo)));}finally{fs.rmSync(f.root,{recursive:true,force:true});}});
+diff --git a/tests/screeps.d.ts b/tests/screeps.d.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..bb9f07e2a2600415e282f1043e3c84515621e805
+--- /dev/null
++++ b/tests/screeps.d.ts
+@@ -0,0 +1,9 @@
++// Minimal compile-only fixture; not a substitute for the repository's Screeps types.
++type ResourceConstant = string;
++interface FakeStore { getUsedCapacity(resource?: ResourceConstant): number; getFreeCapacity(): number; getCapacity(): number; }
++interface FakeStructure { my: boolean; id: string; store: FakeStore; isActive(): boolean; }
++interface StructureTerminal extends FakeStructure { cooldown: number; }
++interface Room { name: string; controller?: { my: boolean }; storage?: FakeStructure; terminal?: StructureTerminal; }
++declare const Game: { time: number; shard: { name: string }; rooms: Record<string,Room>; cpu: {getUsed():number;tickLimit:number;bucket:number} };
++declare const Memory: unknown;
++declare const RESOURCES_ALL: readonly string[];
+diff --git a/tests/transport.spec.cjs b/tests/transport.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..55de680334f534401fecae8929827ece1ac52caf
+--- /dev/null
++++ b/tests/transport.spec.cjs
+@@ -0,0 +1,9 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),http=require('node:http');const {client}=require('../runtime/transport.cjs');const F=require('./fixture.cjs');
++async function serve(fn,body){const server=http.createServer(fn);await new Promise(r=>server.listen(0,'127.0.0.1',r));try{return await body('http://127.0.0.1:'+server.address().port+'/');}finally{await new Promise(r=>server.close(r));}}
++test('real loopback HTTP client reads expected code field and keeps explicit branch',async()=>serve((req,res)=>{assert.equal(req.url,'/api/user/code?branch=default');res.end(JSON.stringify({ok:1,modules:{main:'fixture'}}));},async origin=>{const a=client(F.secret,{testOrigin:origin});const r=await a.code('default');assert.equal(r.modules.main,'fixture');}));
++test('HTTP redirects are refused and never followed with credentials',async()=>serve((req,res)=>{res.statusCode=302;res.setHeader('Location','https://example.invalid');res.end();},async origin=>{await assert.rejects(client(F.secret,{testOrigin:origin}).me(),e=>e.code==='HTTP_NOT_200');}));
++test('authentication rejection gets stable error without response text',async()=>serve((req,res)=>{res.statusCode=401;res.end('secret-response');},async origin=>{await assert.rejects(client(F.secret,{testOrigin:origin}).me(),e=>e.code==='HTTP_AUTH_REJECTED'&&!JSON.stringify(e).includes('secret-response'));}));
++test('write deadline issues no automatic retry',async()=>{let requests=0;await serve((req,res)=>{requests++;req.resume();},async origin=>{await assert.rejects(client(F.secret,{testOrigin:origin,timeoutMs:30}).setCode('default',{main:'fixture'}),e=>e.code==='HTTP_DEADLINE');assert.equal(requests,1);});});
++test('wrong branch or arbitrary test hostname is refused',()=>{assert.throws(()=>client(F.secret,{testOrigin:'http://example.invalid/'}));assert.throws(()=>client(F.secret).setCode('other',{main:'x'}));});
++test('invalid JSON does not become an empty module response',async()=>serve((req,res)=>res.end('bad'),async origin=>await assert.rejects(client(F.secret,{testOrigin:origin}).me(),e=>e.code==='HTTP_JSON_INVALID')));
+diff --git a/tests/workflow.spec.cjs b/tests/workflow.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c3108e5b837651ece3abf9fe32bc7f60cc04a3fa
+--- /dev/null
++++ b/tests/workflow.spec.cjs
+@@ -0,0 +1,27 @@
++'use strict';
++const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
++const U=require('../tools/util.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs'),A=require('../tools/archive.cjs'),Pub=require('../tools/publish.cjs'),R=require('../tools/remediate.cjs');
++function git(repo,args){return U.git(repo,args).trim();}
++function repo(root,name){const p=path.join(root,name);fs.mkdirSync(p);U.git(p,['init']);U.git(p,['config','user.email','fixture@example.invalid']);U.git(p,['config','user.name','fixture']);fs.writeFileSync(path.join(p,'seed.txt'),'seed\n');U.git(p,['add','.']);U.git(p,['commit','-m','seed']);return p;}
++function packet(dir,name,text='ok \n'){fs.writeFileSync(path.join(dir,name+'.stdout'),text);fs.writeFileSync(path.join(dir,name+'.stderr'),'');C.writeNew(path.join(dir,name+'.exit.json'),{status:0,signal:null,error:null});}
++function make(){const root=fs.mkdtempSync(path.join(os.tmpdir(),'subx-wf-')),ref=repo(root,'ref'),compat=repo(root,'compat'),run=path.join(root,'run'),tests=path.join(root,'tests'),offline=path.join(root,'offline'),rem=path.join(root,'remediation');for(const p of [run,tests,offline,rem])fs.mkdirSync(p);
++ const old={R:K.REFACTOR,C:K.COMPAT,load:C.loadSecret,verify:R.verifyHead};K.REFACTOR=git(ref,['rev-parse','HEAD']);K.COMPAT=git(compat,['rev-parse','HEAD']);const source=K.COMPAT,secret={token:crypto.randomBytes(32).toString('hex')};
++ C.loadSecret=()=>secret;R.verifyHead=()=>({status:'SOURCE_MANIFEST_REMEDIATION_COMMIT_VERIFIED',base:K.COMPAT,head:source,tree:git(compat,['rev-parse','HEAD^{tree}']),paths:R.paths});
++ C.writeNew(path.join(run,'source-closed.json'),{status:'SOURCE_DEFAULT_OFF_RESTORED',sourceHead:source,profileHead:null,closedHead:source,sameTreeAsSource:true,atMs:Date.now()});
++ C.writeNew(path.join(rem,'result.json'),{status:'SOURCE_MANIFEST_REMEDIATION_COMMIT_VERIFIED',base:K.COMPAT,head:source,tree:git(compat,['rev-parse','HEAD^{tree}']),paths:R.paths,generatorCheck:'all-listed-outputs'});C.writeNew(path.join(rem,'generator-check.json'),{status:'REMEDIATED_GENERATOR_CHECK_VERIFIED'});
++ C.writeNew(path.join(tests,'summary.json'),{status:'SUBPHASE_X_TOOL_TESTS_VERIFIED',tests:1,passed:1,failed:0,skipped:0,todo:0,cancelled:0});fs.writeFileSync(path.join(tests,'tests.tap'),'ok 1 - fixture \n');fs.writeFileSync(path.join(tests,'tests.stderr'),'');C.writeNew(path.join(tests,'tests.exit.json'),{status:0});
++ for(const n of ['repository-tests','loader-regenerate','typecheck-build','typecheck-tests','jest-budget','warm-build'])packet(offline,n);C.writeNew(path.join(offline,'result.json'),{status:'SUBPHASE_X_OFFLINE_VERIFIED'});
++ const bare=path.join(root,'remote.git');U.git(root,['init','--bare',bare]);for(const p of [ref,compat]){U.git(p,['remote','add','origin',bare]);}
++ fs.mkdirSync(path.dirname(path.join(ref,K.EVIDENCE)),{recursive:true});
++ U.git(ref,['add','.']);if(U.textGit(ref,['status','--porcelain']))U.git(ref,['commit','-m','evidence parent']);K.REFACTOR=git(ref,['rev-parse','HEAD']);
++ U.git(ref,['branch','-M','refactor/empire-treasury-rearchitecture']);U.git(compat,['branch','-M','compat/treasury-read-bridge-i']);U.git(ref,['push','-u','origin','HEAD']);U.git(compat,['push','-u','origin','HEAD']);
++ return{root,ref,compat,run,tests,offline,rem,source,secret,restore(){K.REFACTOR=old.R;K.COMPAT=old.C;C.loadSecret=old.load;R.verifyHead=old.verify;}};}
++function archived(f){return A.archive({refactor:f.ref,run:f.run,tests:f.tests,offline:f.offline,remediation:f.rem,secret:'fixture'});}
++test('archive includes remediation packets and subphase attribution',()=>{const f=make();try{archived(f);const d=path.join(f.ref,K.EVIDENCE);assert.ok(fs.existsSync(path.join(d,'remediation/result.json')));assert.ok(fs.existsSync(path.join(d,'SUBPHASE-ATTRIBUTION.json')));assert.equal(C.readJson(path.join(d,'ARCHIVE-MANIFEST.json')).sourceHead,f.source);}finally{f.restore();}});
++test('archive preserves exact raw stdout bytes in JSON wrapper',()=>{const f=make();try{archived(f);const j=C.readJson(path.join(f.ref,K.EVIDENCE,'tool-tests/tests.tap.json'));assert.ok(j.text.endsWith(' \n'));assert.equal(j.sha256,C.sha256(Buffer.from(j.text)));}finally{f.restore();}});
++test('private module snapshots are excluded from archive',()=>{const f=make();try{for(const n of ['backup.json','candidate.json','session.json'])fs.writeFileSync(path.join(f.run,n),'PRIVATE');archived(f);for(const n of ['backup.json','candidate.json','session.json'])assert.equal(fs.existsSync(path.join(f.ref,K.EVIDENCE,'run',n)),false);}finally{f.restore();}});
++test('secret in permitted evidence rejects archive',()=>{const f=make();try{fs.writeFileSync(path.join(f.run,'collector.stdout'),f.secret.token);assert.throws(()=>archived(f),e=>e.code==='SECRET_IN_ARCHIVE_INPUT');}finally{f.restore();}});
++test('staging gate requires native whitespace clean evidence',()=>{const f=make();try{archived(f);const g=Pub.stageGate(f.ref,f.compat);assert.equal(g.whitespaceExceptions,0);assert.equal(g.status,'SUBPHASE_X_STAGED_BYTES_AND_WHITESPACE_VERIFIED');}finally{f.restore();}});
++test('attribution tampering is detected even when manifest hash is updated',()=>{const f=make();try{archived(f);const d=path.join(f.ref,K.EVIDENCE),name='SUBPHASE-ATTRIBUTION.json',j=C.readJson(path.join(d,name));j.status='SUBPHASE_X_ATTRIBUTION_RECORDED';const b=Buffer.from(JSON.stringify(j,null,2)+'\n');fs.writeFileSync(path.join(d,name),b);const m=C.readJson(path.join(d,'ARCHIVE-MANIFEST.json'));m.files[name]={bytes:b.length,sha256:C.sha256(b)};fs.writeFileSync(path.join(d,'ARCHIVE-MANIFEST.json'),JSON.stringify(m,null,2)+'\n');assert.throws(()=>Pub.verifyArchive(f.ref),e=>e.code==='ATTRIBUTION_EVIDENCE_CHANGED');}finally{f.restore();}});
++test('evidence commit and local bare push read back exactly',()=>{const f=make();try{archived(f);const out=path.join(f.root,'receipt.json'),r=Pub.publish(f.ref,f.compat,{out,push:true});assert.equal(r.pushed,true);assert.equal(U.remoteHead(f.ref,'refactor/empire-treasury-rearchitecture'),r.refactorHead);assert.equal(U.remoteHead(f.compat,'compat/treasury-read-bridge-i'),r.compatHead);}finally{f.restore();}});
++test('unrelated staged path blocks evidence commit',()=>{const f=make();try{archived(f);fs.writeFileSync(path.join(f.ref,'other.txt'),'x\n');U.git(f.ref,['add','other.txt']);assert.throws(()=>Pub.stageGate(f.ref,f.compat),e=>e.code==='UNRELATED_CHANGES');}finally{f.restore();}});
+diff --git a/validation/maker-environment.json b/validation/maker-environment.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..a3b49cd0c71960dce276fa40005729d9efd38569
+--- /dev/null
++++ b/validation/maker-environment.json
+@@ -0,0 +1,14 @@
++{
++  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
++  "node": "v22.16.0",
++  "typescript": "5.8.3",
++  "git": "git version 2.47.3",
++  "networkUsed": false,
++  "realTokenUsed": false,
++  "screepsConnected": false,
++  "candidateUploaded": false,
++  "recoveryExecuted": false,
++  "nativeWindowsExecuted": false,
++  "fullUserRepositoryChecksExecuted": false,
++  "engineCpuMeasured": false
++}
+diff --git a/validation/maker-test-results.json b/validation/maker-test-results.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..ba74aa17a23f82e68347c13c1b7012c229f7f579
+--- /dev/null
++++ b/validation/maker-test-results.json
+@@ -0,0 +1,60 @@
++{
++  "status": "SUBPHASE_X_V2_MAKER_VALIDATION_VERIFIED",
++  "fixedTests": {
++    "normal": {
++      "tests": 146,
++      "passed": 146,
++      "failed": 0,
++      "skipped": 0,
++      "todo": 0,
++      "cancelled": 0
++    },
++    "systemAndGlobalAutocrlfTrue": {
++      "tests": 146,
++      "passed": 146,
++      "failed": 0,
++      "skipped": 0,
++      "todo": 0,
++      "cancelled": 0
++    }
++  },
++  "syntax": {
++    "cjsFiles": 61,
++    "failed": 0
++  },
++  "remediation": {
++    "patchCheckApply": true,
++    "changedPaths": 5,
++    "regeneratedProvenanceIncluded": true,
++    "freshFivePathCommitFlow": true,
++    "exactFourPathPartialContinuationFlow": true,
++    "partialCommitPreservedWithoutReset": true,
++    "nulDelimitedPorcelainParsing": true,
++    "unknownLocalCommitRejected": true,
++    "continuedSourceOnOffPublishChainVerified": true
++  },
++  "generatedOutputs": {
++    "coreMatchesFixedBytes": true,
++    "sourceManifestMatchesFixedBytes": true,
++    "loaderOptimizationProvenanceMatchesFixedBytes": true
++  },
++  "packageWorkflow": {
++    "archiveStageCommitLocalBarePushReadback": true,
++    "nativeWhitespaceExceptions": 0
++  },
++  "attributionSynthetic": {
++    "subphases": 9,
++    "completeBoundaryCalls": 12,
++    "projectionRows": 4,
++    "projectionQueries": 16
++  },
++  "notExecutedByMaker": [
++    "native Windows validation",
++    "real repository 246/246",
++    "Jest 195/685",
++    "two full TypeScript projects",
++    "real Rollup candidate build",
++    "Screeps online capture",
++    "restore POST and 75-second runtime closure"
++  ]
++}
+diff --git a/validation/runtime-inheritance.json b/validation/runtime-inheritance.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..4a19cfc435c67dfcd7ef06cd5a6574840d0826f4
+--- /dev/null
++++ b/validation/runtime-inheritance.json
+@@ -0,0 +1,46 @@
++{
++  "status": "SUBPHASE_X_V2_RUNTIME_LINEAGE_RECORDED",
++  "sourcePackage": "screeps-compat-cpu-recheck-VIII-2026-09-14",
++  "identicalRuntimeFiles": [
++    "runtime/actions.cjs",
++    "runtime/check-profile.cjs",
++    "runtime/closeout.cjs",
++    "runtime/closure-observer.cjs",
++    "runtime/collector-diagnostics.cjs",
++    "runtime/collector.cjs",
++    "runtime/decoder.cjs",
++    "runtime/driver.cjs",
++    "runtime/guard-control.cjs",
++    "runtime/protocol.cjs",
++    "runtime/recovery-worker.cjs",
++    "runtime/transport.cjs",
++    "runtime/verify-runtime.cjs"
++  ],
++  "changedRuntimeFiles": [
++    "runtime/common.cjs",
++    "runtime/policy.cjs",
++    "runtime/samples.cjs",
++    "runtime/store.cjs",
++    "runtime/verify-run.cjs"
++  ],
++  "identicalToolFiles": [
++    "tools/observe.cjs",
++    "tools/reconcile.cjs",
++    "tools/recover.cjs",
++    "tools/util.cjs",
++    "tools/verify.cjs"
++  ],
++  "changedToolFiles": [
++    "tools/archive.cjs",
++    "tools/build.cjs",
++    "tools/check-baseline.cjs",
++    "tools/close-source.cjs",
++    "tools/compare.cjs",
++    "tools/prepare.cjs",
++    "tools/prerequisites.cjs",
++    "tools/publish.cjs",
++    "tools/remediate.cjs",
++    "tools/run-tests.cjs"
++  ],
++  "note": "Unchanged safety transport/recovery files are inherited byte-for-byte. V2 changes remediation, baseline and publish tools to use NUL-delimited porcelain parsing, include regenerated provenance, and accept either a fresh five-path remediation or an exact four-path partial plus one-path completion before the ON/OFF pair."
++}

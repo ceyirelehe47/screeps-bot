@@ -1,0 +1,60 @@
+{
+  "status": "SUBPHASE_X_V2_MAKER_VALIDATION_VERIFIED",
+  "fixedTests": {
+    "normal": {
+      "tests": 146,
+      "passed": 146,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    "systemAndGlobalAutocrlfTrue": {
+      "tests": 146,
+      "passed": 146,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    }
+  },
+  "syntax": {
+    "cjsFiles": 61,
+    "failed": 0
+  },
+  "remediation": {
+    "patchCheckApply": true,
+    "changedPaths": 5,
+    "regeneratedProvenanceIncluded": true,
+    "freshFivePathCommitFlow": true,
+    "exactFourPathPartialContinuationFlow": true,
+    "partialCommitPreservedWithoutReset": true,
+    "nulDelimitedPorcelainParsing": true,
+    "unknownLocalCommitRejected": true,
+    "continuedSourceOnOffPublishChainVerified": true
+  },
+  "generatedOutputs": {
+    "coreMatchesFixedBytes": true,
+    "sourceManifestMatchesFixedBytes": true,
+    "loaderOptimizationProvenanceMatchesFixedBytes": true
+  },
+  "packageWorkflow": {
+    "archiveStageCommitLocalBarePushReadback": true,
+    "nativeWhitespaceExceptions": 0
+  },
+  "attributionSynthetic": {
+    "subphases": 9,
+    "completeBoundaryCalls": 12,
+    "projectionRows": 4,
+    "projectionQueries": 16
+  },
+  "notExecutedByMaker": [
+    "native Windows validation",
+    "real repository 246/246",
+    "Jest 195/685",
+    "two full TypeScript projects",
+    "real Rollup candidate build",
+    "Screeps online capture",
+    "restore POST and 75-second runtime closure"
+  ]
+}

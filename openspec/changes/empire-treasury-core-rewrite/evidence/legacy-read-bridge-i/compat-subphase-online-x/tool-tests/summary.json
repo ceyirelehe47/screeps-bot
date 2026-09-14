@@ -1,0 +1,24 @@
+{
+  "status": "SUBPHASE_X_TOOL_TESTS_VERIFIED",
+  "tests": 146,
+  "passed": 146,
+  "failed": 0,
+  "skipped": 0,
+  "todo": 0,
+  "cancelled": 0,
+  "platform": "linux",
+  "node": "v22.19.0",
+  "packageFingerprint": "f1e430035c8c0b9db58fc6468d77ecdfd9e4a6368e8c3f1df66dce15e9a9301b",
+  "testFiles": [
+    "tests/build-recheck.spec.cjs",
+    "tests/comparison.spec.cjs",
+    "tests/diagnostics.spec.cjs",
+    "tests/loader-integration.spec.cjs",
+    "tests/process.spec.cjs",
+    "tests/read-recheck.spec.cjs",
+    "tests/recovery.spec.cjs",
+    "tests/remediation.spec.cjs",
+    "tests/transport.spec.cjs",
+    "tests/workflow.spec.cjs"
+  ]
+}

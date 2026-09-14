@@ -1,0 +1,11 @@
+{
+  "status": "NOT_DEPLOYED",
+  "captureVerified": false,
+  "closure": "NOT_DEPLOYED",
+  "runId": "e81f97cbb626e7f62902b2bb3852d538",
+  "issues": [
+    "COLLECTOR_EARLY_EXIT"
+  ],
+  "rawReports": 0,
+  "completeSamples": 0
+}

@@ -1,0 +1,118 @@
+{
+  "package": "screeps-compat-subphase-online-X-v2-2026-09-14",
+  "purpose": "Corrected combined source-manifest remediation, exact partial-commit continuation, full offline verification, four-point IX engine attribution, restoration and evidence closure",
+  "baselines": {
+    "compatRoot": "57987cda22553fcdc842e8d4c72a98b6e94e00fb",
+    "refactor": "73726cd44267b0f583f5d08890233ad67a5e803a"
+  },
+  "remediation": {
+    "changedPaths": [
+      "docs/treasury-compat-loader-optimization.json",
+      "docs/treasury-compat-source-manifest.json",
+      "docs/treasury-compat-source-manifest-remediation-x.md",
+      "scripts/build-treasury-compat-loader.cjs",
+      "test/treasury-compat/attribution.spec.cjs"
+    ],
+    "manifestOutputsValidated": 13,
+    "negativeCases": [
+      "stale identity",
+      "missing output row",
+      "duplicate output row",
+      "changed listed output"
+    ],
+    "commitMessage": "fix(compat): verify every source manifest output",
+    "freshCommitMessage": "fix(compat): verify every source manifest output",
+    "partialCompletionCommitMessage": "fix(compat): complete source manifest remediation",
+    "acceptedLocalStartModes": [
+      "root baseline",
+      "exact unpushed four-path partial remediation",
+      "already complete remediation"
+    ],
+    "porcelainParsing": "git status --porcelain=v1 -z raw bytes; no trim-based path slicing"
+  },
+  "attribution": {
+    "version": 1,
+    "subphases": [
+      "observationSetup",
+      "observationRooms",
+      "observationFinalize",
+      "observationView",
+      "commitmentSetup",
+      "commitmentTasks",
+      "commitmentReservations",
+      "commitmentFinalize",
+      "projectionRows"
+    ],
+    "completeSampleBoundaryCalls": 12,
+    "perRecordCpuSampling": false,
+    "primitiveWorkCountersOnly": true,
+    "overlapsParentPhases": true
+  },
+  "onlineProtocol": {
+    "points": 4,
+    "intervalTicks": 100,
+    "leadTicks": 150,
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "candidatePostsMaximum": 1,
+    "restorePostsMaximum": 1,
+    "recoveryRuntimeMs": 75000,
+    "externalObservedCostStop": 5
+  },
+  "fixedTests": {
+    "count": 146,
+    "files": 10,
+    "failedAllowed": 0,
+    "skippedAllowed": 0,
+    "todoAllowed": 0,
+    "cancelledAllowed": 0
+  },
+  "repositoryGates": {
+    "nodeSpecs": 6,
+    "repositoryNodeTests": 246,
+    "jestSuites": 195,
+    "jestTests": 685,
+    "typescriptProjects": [
+      "tsconfig.build.json",
+      "tsconfig.json"
+    ],
+    "loaderRegenerationCheck": true,
+    "rollupBuildOnly": true
+  },
+  "compatCommitChain": [
+    "fresh mode: five-path source manifest remediation OR continuation mode: existing exact four-path partial + one-path provenance completion",
+    "temporary four-point ON binding",
+    "exact default OFF restoration"
+  ],
+  "evidence": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-subphase-online-x",
+    "attributionFile": "SUBPHASE-ATTRIBUTION.json",
+    "successLabels": [
+      "CPU_DIAGNOSTIC_CAPTURE_VERIFIED",
+      "SUBPHASE_X_ATTRIBUTION_RECORDED",
+      "RESTORED_BYTES_AND_RUNTIME_VERIFIED"
+    ]
+  },
+  "forbiddenClaimsWithoutNewEvidence": [
+    "ENGINE_CPU_BUDGET_GAP_REPAIRED",
+    "ONLINE_COMPAT_READ_OBSERVED",
+    "TREASURY_PRODUCTION_READY",
+    "full Treasury production cutover"
+  ],
+  "makerBoundaries": {
+    "networkUsed": false,
+    "realTokenUsed": false,
+    "candidateUploaded": false,
+    "nativeWindowsExecuted": false,
+    "fullUserRepositoryChecksExecuted": false,
+    "engineCpuMeasured": false
+  }
+}
