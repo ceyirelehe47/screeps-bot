@@ -1,0 +1,14 @@
+{
+  "platform": "Linux-6.18.35-x86_64-with-glibc2.41",
+  "node": "v22.16.0",
+  "typescript": "5.8.3",
+  "git": "git version 2.47.3",
+  "networkUsed": false,
+  "realTokenUsed": false,
+  "screepsConnected": false,
+  "candidateUploaded": false,
+  "recoveryExecuted": false,
+  "nativeWindowsExecuted": false,
+  "fullUserRepositoryChecksExecuted": false,
+  "engineCpuMeasured": false
+}

@@ -1,0 +1,18 @@
+{
+  "status": "RETRY_I_PATCH_RECONSTRUCTION_VERIFIED",
+  "baselinePackage": "screeps-compat-subphase-online-X-v2-2026-09-14",
+  "patch": "patches/0001-online-x-retry-I-package-runtime.patch",
+  "series": [
+    "0001-online-x-retry-I-package-runtime.patch"
+  ],
+  "mirroredFiles": 99,
+  "excludedToAvoidSelfReference": [
+    "INTEGRITY.json",
+    "patches/",
+    "validation/"
+  ],
+  "gitApplyIndexWhitespaceErrorAll": true,
+  "reconstructedBytesMatch": true,
+  "emptyContextLinesNormalizedForNativeArchiveWhitespaceGate": 89,
+  "nativeWhitespaceExceptions": 0
+}

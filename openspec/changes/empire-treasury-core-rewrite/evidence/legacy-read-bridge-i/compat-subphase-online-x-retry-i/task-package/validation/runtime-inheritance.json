@@ -1,0 +1,54 @@
+{
+  "status": "SUBPHASE_X_RETRY_I_RUNTIME_LINEAGE_RECORDED",
+  "sourcePackage": "screeps-compat-subphase-online-X-v2-2026-09-14",
+  "identicalRuntimeFiles": [
+    "runtime/check-profile.cjs",
+    "runtime/closeout.cjs",
+    "runtime/closure-observer.cjs",
+    "runtime/collector-diagnostics.cjs",
+    "runtime/decoder.cjs",
+    "runtime/driver.cjs",
+    "runtime/guard-control.cjs",
+    "runtime/protocol.cjs",
+    "runtime/recovery-worker.cjs",
+    "runtime/samples.cjs",
+    "runtime/store.cjs",
+    "runtime/transport.cjs",
+    "runtime/verify-run.cjs",
+    "runtime/verify-runtime.cjs"
+  ],
+  "changedRuntimeFiles": [
+    "runtime/actions.cjs",
+    "runtime/collector.cjs",
+    "runtime/common.cjs",
+    "runtime/policy.cjs"
+  ],
+  "addedRuntimeFiles": [
+    "runtime/read-retry.cjs"
+  ],
+  "identicalToolFiles": [
+    "tools/observe.cjs",
+    "tools/reconcile.cjs",
+    "tools/recover.cjs",
+    "tools/util.cjs",
+    "tools/verify.cjs"
+  ],
+  "changedToolFiles": [
+    "tools/archive.cjs",
+    "tools/build.cjs",
+    "tools/check-baseline.cjs",
+    "tools/close-source.cjs",
+    "tools/compare.cjs",
+    "tools/prepare.cjs",
+    "tools/prerequisites.cjs",
+    "tools/publish.cjs",
+    "tools/run-tests.cjs"
+  ],
+  "addedToolFiles": [
+    "tools/source.cjs"
+  ],
+  "removedToolFiles": [
+    "tools/remediate.cjs"
+  ],
+  "note": "Retry I retains the previously audited write-once candidate and restore path. Only pre-upload read-only account, overview, branch and tick reads use the new bounded retry helper. POST operations remain outside the helper and are never automatically repeated. Source-manifest remediation is inherited as an accepted prerequisite and is not rerun."
+}

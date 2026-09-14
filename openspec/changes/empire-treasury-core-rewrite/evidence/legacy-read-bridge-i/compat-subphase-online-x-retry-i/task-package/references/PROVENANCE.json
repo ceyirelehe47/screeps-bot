@@ -1,0 +1,47 @@
+{
+  "executionRevision": "compat-subphase-online-X-retry-I",
+  "compatBase": "d5e09b623de7391b3f69e51fb80cf7a852618509",
+  "refactorBase": "b6fffa20bfaaa8e6203dee25b09ff050048caa39",
+  "acceptedImplementation": "Subphase Attribution IX with completed source-manifest remediation",
+  "acceptedGeneratedCoreBlob": "62752b09e3828e67a9000aeffcda0b2436368bf1",
+  "acceptedSourceTree": "c30d5beeb9c8e17b2a152047521f72691c214fd3",
+  "priorAttempt": {
+    "status": "NOT_DEPLOYED",
+    "issue": "COLLECTOR_EARLY_EXIT",
+    "transportCode": "HTTP_TRANSPORT_ERROR",
+    "candidatePostAttempted": false,
+    "sourceManifestRemediationVerified": true,
+    "offlineChecksVerified": true
+  },
+  "readOnlyRetry": {
+    "operations": [
+      "collector account preflight",
+      "prepare overview and tick reads",
+      "candidate upload overview, active branch and tick reads"
+    ],
+    "attemptsMaximum": 3,
+    "perAttemptMaximumMs": 2500,
+    "totalBudgetMs": 8000,
+    "delaysMs": [250, 750],
+    "retryableHttpStatuses": [429, 500, 502, 503, 504],
+    "writeRetries": 0,
+    "candidatePostMaximum": 1,
+    "restorePostMaximum": 1
+  },
+  "onlineProtocol": {
+    "points": 4,
+    "intervalTicks": 100,
+    "maxSampleCpu": 2,
+    "rooms": ["E3N59", "E4N58"],
+    "resources": ["energy", "H"],
+    "recoveryRuntimeMs": 75000
+  },
+  "acceptedInput": {
+    "commit": "b6fffa20bfaaa8e6203dee25b09ff050048caa39",
+    "evidencePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-subphase-online-x",
+    "finalVerificationBlob": "338365cd789e1583fb11521633a70c1ae37c84b6",
+    "remediationResultBlob": "ebda970401ae3e3f5e1910ba74d8b28e35530653"
+  },
+  "makerNetworkUsed": false,
+  "makerEngineMeasurement": false
+}

@@ -1,0 +1,54 @@
+{
+  "status": "SUBPHASE_X_RETRY_I_MAKER_VALIDATION_VERIFIED",
+  "fixedTests": {
+    "normal": {
+      "tests": 152,
+      "passed": 152,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    "systemAndGlobalAutocrlfTrue": {
+      "tests": 152,
+      "passed": 152,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    }
+  },
+  "syntax": {
+    "cjsFiles": 60,
+    "failed": 0
+  },
+  "readRetry": {
+    "readOnly": true,
+    "attemptsMaximum": 3,
+    "perAttemptMaximumMs": 2500,
+    "totalBudgetMs": 8000,
+    "delaysMs": [250, 750],
+    "candidatePostRetries": 0,
+    "restorePostRetries": 0,
+    "collectorTransientAccountReadRecovery": true,
+    "candidatePreflightTransientReadRecovery": true,
+    "authenticationFailureIsTerminal": true,
+    "semanticFailureIsTerminal": true,
+    "boundedAuditEvents": true
+  },
+  "packageWorkflow": {
+    "patchReconstructionFiles": 99,
+    "patchNativeWhitespaceClean": true,
+    "archiveStageCommitLocalBarePushReadback": true,
+    "nativeWhitespaceExceptions": 0
+  },
+  "notExecutedByMaker": [
+    "native Windows validation",
+    "real repository 246/246",
+    "Jest 195/685",
+    "two full TypeScript projects",
+    "real Rollup candidate build",
+    "Screeps online capture",
+    "candidate POST, restore POST and 75-second runtime closure"
+  ]
+}

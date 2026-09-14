@@ -1,0 +1,80 @@
+{
+  "kind": "compat-subphase-online-X-retry-I-public/v1",
+  "runId": "b76df9a6b885af7763d3d10fac792ccf",
+  "server": "https://screeps.com",
+  "username": "forster",
+  "userId": "634fe406347a7b69b28aeccb",
+  "branch": "default",
+  "shard": "shard1",
+  "refactorBase": "b6fffa20bfaaa8e6203dee25b09ff050048caa39",
+  "compatRootBase": "d5e09b623de7391b3f69e51fb80cf7a852618509",
+  "compatBase": "d5e09b623de7391b3f69e51fb80cf7a852618509",
+  "sourceHead": "d5e09b623de7391b3f69e51fb80cf7a852618509",
+  "sourceTree": "c30d5beeb9c8e17b2a152047521f72691c214fd3",
+  "observedTick": 73696134,
+  "profile": {
+    "enabled": true,
+    "shardName": "shard1",
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "startTick": 73696300,
+    "endTick": 73696600,
+    "intervalTicks": 100,
+    "minBucket": 2000,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "maxLogBytes": 16384
+  },
+  "profileHead": "88ae07a911c9e4c8ce5380757e2f2db20ec1be88",
+  "profileTree": "741565dddbc01c65a4dcc3c6367173bb7791081e",
+  "build": {
+    "commit": "88ae07a911c9e4c8ce5380757e2f2db20ec1be88",
+    "tree": "741565dddbc01c65a4dcc3c6367173bb7791081e",
+    "dirty": "folded_out",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+88ae07a@2026-09-14T12:05:22.781Z",
+    "embeddedBundleHash": "93b3f24bbefb88ac24c77fdee728783b26e8bd9b9da3cf96dd8b05c7ffac3338"
+  },
+  "backupBuild": {
+    "commit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+    "tree": "929fa9557b1a36135a5ef1605231be1d16e87366",
+    "dirty": "folded_out",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+06ffedb@2026-08-29T14:28:59.403Z"
+  },
+  "preparedAtMs": 1789387583970,
+  "wallLimitMs": 2700000,
+  "toolFingerprint": "5b0fc118a64968cbf5ae3e37167f2efb7fc7547ad6f58002e6b4a737bd3590b7",
+  "backupFileSha256": "f44120f3722fde769c787362d8a95f3a164e7afcc8690c9511c269985985dc57",
+  "candidateFileSha256": "8e0d1d564435909a44c25d1e80c4958b6acf33f60400cf15d5321971d56b3b9e",
+  "backupDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494463,
+        "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+      }
+    ]
+  },
+  "candidateDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "702a46a85eab2d9b89f188d3e56294ceea7f872e9117bf34797a5598cf60b347",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4603380,
+        "sha256": "10a15d06cf5d9382667f6121cca6bfbbb925f2df2e5144defcaa885b61566161"
+      }
+    ]
+  }
+}

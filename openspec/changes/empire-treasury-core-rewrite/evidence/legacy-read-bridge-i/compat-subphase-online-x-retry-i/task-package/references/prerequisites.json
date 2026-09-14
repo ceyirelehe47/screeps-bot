@@ -1,0 +1,30 @@
+{
+  "commit": "b6fffa20bfaaa8e6203dee25b09ff050048caa39",
+  "priorFinal": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-subphase-online-x/FINAL-VERIFICATION.json",
+    "blob": "338365cd789e1583fb11521633a70c1ae37c84b6",
+    "sha256": "b5b96b5336afb281edb7e9bbd32ece0aa39ee7a6078812e774cd88380c62f0c9",
+    "bytes": 224
+  },
+  "priorRemediation": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-subphase-online-x/remediation/result.json",
+    "blob": "ebda970401ae3e3f5e1910ba74d8b28e35530653",
+    "sha256": "f3cd59fc25bc57921cf1c1ffc3fffc93c08542288ca2435e7a0cd36f69ff9ab2",
+    "bytes": 817
+  },
+  "priorOffline": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-subphase-online-x/baseline-checks/result.json",
+    "blob": "da7f618341520ecdc1ef9407bfb20eddc4187052",
+    "sha256": "b94899af6f11b724d991eb9bf9d408f25590db81cbece2d19fe0754a140fd846",
+    "bytes": 508
+  },
+  "priorSourceClosed": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-subphase-online-x/run/source-closed.json",
+    "blob": "96653ba49a1d730f3bd0b8a66fcb19cb2107955c",
+    "sha256": "15d84b1c31ab1dc4a97bbfd47ba0a8047eaf90fd08adad6ceb1ee0ff06e52d71",
+    "bytes": 280
+  },
+  "sourceHead": "e1e3161fc354322707e05b74640c27535727a2b1",
+  "closedCompatHead": "d5e09b623de7391b3f69e51fb80cf7a852618509",
+  "sourceTree": "c30d5beeb9c8e17b2a152047521f72691c214fd3"
+}

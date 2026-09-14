@@ -1,0 +1,124 @@
+{
+  "package": "screeps-compat-subphase-online-X-retry-I-2026-09-14",
+  "purpose": "Bounded pre-upload read-only retry, full offline verification, four-point IX engine attribution, exact restoration and evidence closure",
+  "baselines": {
+    "compat": "d5e09b623de7391b3f69e51fb80cf7a852618509",
+    "compatTree": "c30d5beeb9c8e17b2a152047521f72691c214fd3",
+    "refactor": "b6fffa20bfaaa8e6203dee25b09ff050048caa39"
+  },
+  "priorAcceptedFacts": {
+    "sourceManifestRemediationVerified": true,
+    "allListedOutputs": 13,
+    "priorOnlineStatus": "NOT_DEPLOYED",
+    "priorIssue": "COLLECTOR_EARLY_EXIT / HTTP_TRANSPORT_ERROR",
+    "priorCandidatePostAttempted": false
+  },
+  "packageImplementation": {
+    "newFile": "runtime/read-retry.cjs",
+    "readOnlyOperations": [
+      "collector account preflight",
+      "prepare room overview",
+      "prepare anchor and fresh game tick",
+      "candidate upload room overview",
+      "candidate upload active branch",
+      "candidate upload game tick"
+    ],
+    "attemptsMaximum": 3,
+    "perAttemptMaximumMs": 2500,
+    "totalBudgetMs": 8000,
+    "retryDelaysMs": [250, 750],
+    "retryableTransportCodes": [
+      "HTTP_TRANSPORT_ERROR",
+      "HTTP_DEADLINE",
+      "HTTP_BODY_ABORTED",
+      "HTTP_BODY_ERROR",
+      "HTTP_REQUEST_FAILED"
+    ],
+    "retryableHttpStatuses": [429, 500, 502, 503, 504],
+    "nonRetryableExamples": [
+      "HTTP_AUTH_REJECTED",
+      "HTTP_JSON_INVALID",
+      "API_RESULT_NOT_SUCCESS",
+      "HTTP_RESPONSE_TOO_LARGE"
+    ],
+    "candidatePostRetries": 0,
+    "restorePostRetries": 0
+  },
+  "attribution": {
+    "version": 1,
+    "subphases": [
+      "observationSetup",
+      "observationRooms",
+      "observationFinalize",
+      "observationView",
+      "commitmentSetup",
+      "commitmentTasks",
+      "commitmentReservations",
+      "commitmentFinalize",
+      "projectionRows"
+    ],
+    "completeSampleBoundaryCalls": 12,
+    "perRecordCpuSampling": false,
+    "primitiveWorkCountersOnly": true,
+    "overlapsParentPhases": true
+  },
+  "onlineProtocol": {
+    "points": 4,
+    "intervalTicks": 100,
+    "leadTicks": 150,
+    "rooms": ["E3N59", "E4N58"],
+    "resources": ["energy", "H"],
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "candidatePostsMaximum": 1,
+    "restorePostsMaximum": 1,
+    "recoveryRuntimeMs": 75000,
+    "externalObservedCostStop": 5,
+    "automaticSecondWindow": false
+  },
+  "fixedTests": {
+    "count": 152,
+    "files": 10,
+    "failedAllowed": 0,
+    "skippedAllowed": 0,
+    "todoAllowed": 0,
+    "cancelledAllowed": 0
+  },
+  "repositoryGates": {
+    "nodeSpecs": 6,
+    "repositoryNodeTests": 246,
+    "jestSuites": 195,
+    "jestTests": 685,
+    "sourceManifestOutputs": 13,
+    "typescriptProjects": ["tsconfig.build.json", "tsconfig.json"],
+    "loaderRegenerationCheck": true,
+    "rollupBuildOnly": true
+  },
+  "compatCommitChain": [
+    "temporary four-point ON binding from fixed compat baseline",
+    "exact default OFF restoration with tree equal to fixed compat baseline"
+  ],
+  "evidence": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-subphase-online-x-retry-i",
+    "attributionFile": "SUBPHASE-ATTRIBUTION.json",
+    "successLabels": [
+      "CPU_DIAGNOSTIC_CAPTURE_VERIFIED",
+      "SUBPHASE_X_RETRY_ATTRIBUTION_RECORDED",
+      "RESTORED_BYTES_AND_RUNTIME_VERIFIED"
+    ]
+  },
+  "forbiddenClaimsWithoutNewEvidence": [
+    "ENGINE_CPU_BUDGET_GAP_REPAIRED",
+    "FULL_COMPATIBILITY_OBSERVED",
+    "TREASURY_PRODUCTION_READY",
+    "full Treasury production cutover"
+  ],
+  "makerBoundaries": {
+    "networkUsed": false,
+    "realTokenUsed": false,
+    "candidateUploaded": false,
+    "nativeWindowsExecuted": false,
+    "fullUserRepositoryChecksExecuted": false,
+    "engineCpuMeasured": false
+  }
+}

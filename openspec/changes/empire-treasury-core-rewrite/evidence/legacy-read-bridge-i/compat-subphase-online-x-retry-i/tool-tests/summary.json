@@ -1,0 +1,24 @@
+{
+  "status": "SUBPHASE_X_RETRY_TOOL_TESTS_VERIFIED",
+  "tests": 152,
+  "passed": 152,
+  "failed": 0,
+  "skipped": 0,
+  "todo": 0,
+  "cancelled": 0,
+  "platform": "win32",
+  "node": "v22.19.0",
+  "packageFingerprint": "5b0fc118a64968cbf5ae3e37167f2efb7fc7547ad6f58002e6b4a737bd3590b7",
+  "testFiles": [
+    "tests/build-recheck.spec.cjs",
+    "tests/comparison.spec.cjs",
+    "tests/diagnostics.spec.cjs",
+    "tests/loader-integration.spec.cjs",
+    "tests/process.spec.cjs",
+    "tests/read-recheck.spec.cjs",
+    "tests/read-retry.spec.cjs",
+    "tests/recovery.spec.cjs",
+    "tests/transport.spec.cjs",
+    "tests/workflow.spec.cjs"
+  ]
+}
