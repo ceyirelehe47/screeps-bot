@@ -1,0 +1,185 @@
+{
+  "kind": "compat-hotpath-optimization-XI-implementation/v1",
+  "compatBase": "9adb2739935c03c0450acfebbab94912a5e3e593",
+  "refactorBase": "53cf8a6c07a171eeb8438c5cc07ac66d4968f1fc",
+  "commitMessage": "perf(compat): reduce read hot-path duplication",
+  "paths": [
+    "docs/treasury-compat-hotpath-optimization-xi.md",
+    "docs/treasury-compat-loader-optimization.json",
+    "docs/treasury-compat-source-manifest.json",
+    "scripts/build-treasury-compat-loader.cjs",
+    "scripts/lib/treasury-compat-hotpath.cjs",
+    "scripts/lib/treasury-compat-preview-hotpath.cjs",
+    "src/runtime/treasuryCompatRead.ts",
+    "src/runtime/treasuryCompatReadCore.generated.ts",
+    "test/treasury-compat/attribution-test-support.cjs",
+    "test/treasury-compat/attribution.spec.cjs",
+    "test/treasury-compat/build-optimization.spec.cjs",
+    "test/treasury-compat/fixtures/core-before-hotpath-optimization-xi.ts.txt",
+    "test/treasury-compat/fixtures/reader-before-hotpath-optimization-xi.ts.txt",
+    "test/treasury-compat/hotpath-optimization.spec.cjs",
+    "test/treasury-compat/hotpath-test-support.cjs",
+    "test/treasury-compat/loader-optimization.spec.cjs",
+    "test/treasuryCompatRead.test.ts"
+  ],
+  "existingPaths": [
+    "docs/treasury-compat-loader-optimization.json",
+    "docs/treasury-compat-source-manifest.json",
+    "scripts/build-treasury-compat-loader.cjs",
+    "src/runtime/treasuryCompatRead.ts",
+    "src/runtime/treasuryCompatReadCore.generated.ts",
+    "test/treasury-compat/attribution-test-support.cjs",
+    "test/treasury-compat/attribution.spec.cjs",
+    "test/treasury-compat/build-optimization.spec.cjs",
+    "test/treasury-compat/loader-optimization.spec.cjs",
+    "test/treasuryCompatRead.test.ts"
+  ],
+  "newPaths": [
+    "docs/treasury-compat-hotpath-optimization-xi.md",
+    "scripts/lib/treasury-compat-hotpath.cjs",
+    "scripts/lib/treasury-compat-preview-hotpath.cjs",
+    "test/treasury-compat/fixtures/core-before-hotpath-optimization-xi.ts.txt",
+    "test/treasury-compat/fixtures/reader-before-hotpath-optimization-xi.ts.txt",
+    "test/treasury-compat/hotpath-optimization.spec.cjs",
+    "test/treasury-compat/hotpath-test-support.cjs"
+  ],
+  "baseline": {
+    "docs/treasury-compat-loader-optimization.json": {
+      "blob": "7c08aaa21c2e3ac47ea6dd93471ad89bd426f856",
+      "bytes": 7004,
+      "sha256": "d7fa913c1dd729766d3e706ed23f6374f461e82ce754faf5be91bd9a9c349911"
+    },
+    "docs/treasury-compat-source-manifest.json": {
+      "blob": "89a41c6cd13a1442bb0e4d0871facf1094d11f9f",
+      "bytes": 8020,
+      "sha256": "6fea2064b2125d8a275b3161831101e519a9286a7717a9d43bac34c3491b9ae5"
+    },
+    "scripts/build-treasury-compat-loader.cjs": {
+      "blob": "3f191d662999751aca49756ac8630c20f2de323e",
+      "bytes": 11527,
+      "sha256": "84fd72a7dbe14917684a900d60d190d2ceae04bc38b974da4875bc7a3c6a1951"
+    },
+    "src/runtime/treasuryCompatRead.ts": {
+      "blob": "556c6d565b3962c407bc82a4b5706d5382935c53",
+      "bytes": 21526,
+      "sha256": "1d5bd4d7f5922dfad3e6c44522d04695b490ba2bb711a83306858544dde70dec"
+    },
+    "src/runtime/treasuryCompatReadCore.generated.ts": {
+      "blob": "62752b09e3828e67a9000aeffcda0b2436368bf1",
+      "bytes": 68416,
+      "sha256": "75a600170f04c99520369b0d48b55d385979b5180f47cce3b427143b99956da1"
+    },
+    "test/treasury-compat/attribution-test-support.cjs": {
+      "blob": "7814d5922fafaf9f10a19d0a8fe90274bdee9569",
+      "bytes": 2406,
+      "sha256": "7f65e2c1853895477d34c646e9d7c6fa4aaae35b400faa76ec108c699075b290"
+    },
+    "test/treasury-compat/attribution.spec.cjs": {
+      "blob": "57b2f498664918248c030ed59fff3608835fb28f",
+      "bytes": 14837,
+      "sha256": "1799420e06c7123a48ca25749f93e632ef245f345bf34794bb1ae3206576ee34"
+    },
+    "test/treasury-compat/build-optimization.spec.cjs": {
+      "blob": "e7bd28e90f33016617aff0e17a80b84a1d2175a2",
+      "bytes": 15166,
+      "sha256": "253109eb2b1b6d0e48d7fb6bbd77d8be70c9b083f854826750aae51467fbd63c"
+    },
+    "test/treasury-compat/loader-optimization.spec.cjs": {
+      "blob": "e696275af15084a3b9532e0971ecea8cff81f2ca",
+      "bytes": 24455,
+      "sha256": "460f028e027be2788b99ac1d86b3f5438543725535d43652e0c3f66fd3bc13a8"
+    },
+    "test/treasuryCompatRead.test.ts": {
+      "blob": "c1b5e04c4ac41c881bfc426a3fbce759cc823722",
+      "bytes": 1064,
+      "sha256": "5703123386542aabf4ab56307f6c433398478d6c2738adc4bf35ed87191a6026"
+    }
+  },
+  "implementation": {
+    "docs/treasury-compat-hotpath-optimization-xi.md": {
+      "blob": "a196f883c8e47e5f2f7974f44013c24c0dd14fa6",
+      "bytes": 3755,
+      "sha256": "d81f20b4521de19b1399742a466e29f0043d45c0878d14f4ffe577295cc1190f"
+    },
+    "docs/treasury-compat-loader-optimization.json": {
+      "blob": "93ac1cd17cd4c31282c01882ef5e8f4231e5e66c",
+      "bytes": 8849,
+      "sha256": "5b7a39f882086933b1e4ca51531b530475c77a62b5eb696c7e734717e5d01708"
+    },
+    "docs/treasury-compat-source-manifest.json": {
+      "blob": "4cb8fc7599a0d6b202307b6ac14381046b1f8edf",
+      "bytes": 8283,
+      "sha256": "fa117d613bb42ccbfd77d337f304e96ef743591a8661899ed30d6fc3040bfbdb"
+    },
+    "scripts/build-treasury-compat-loader.cjs": {
+      "blob": "3b0bb31a8af2070cce10df6c0563efb78f618263",
+      "bytes": 13342,
+      "sha256": "7e40a07d5510106f124041a5f222552810c835978521c8d57d0ab2179b4eb61f"
+    },
+    "scripts/lib/treasury-compat-hotpath.cjs": {
+      "blob": "9832f21f914ce30d393bc78c826add6f11184ef3",
+      "bytes": 17430,
+      "sha256": "c1dfc656a0e217970019d102e245c29271b5d0ecb4d004c53f0079784d232b09"
+    },
+    "scripts/lib/treasury-compat-preview-hotpath.cjs": {
+      "blob": "112c4b9e3982796f560a8f7a8b7f49bda5022810",
+      "bytes": 6516,
+      "sha256": "25b96f885b13b830f8580d736e7b6e8fd4b30baa75c0e636ef8579c2d9d5d6be"
+    },
+    "src/runtime/treasuryCompatRead.ts": {
+      "blob": "fe92498f5e76d860e4fef98d842df3c2e8fc48ad",
+      "bytes": 21631,
+      "sha256": "9e454bde732a08ba1880cae02ada391219054c70cb54aff600d7a8bde667bd2f"
+    },
+    "src/runtime/treasuryCompatReadCore.generated.ts": {
+      "blob": "21c4bba26d732ead7df4d6a9f5b9dea357fd9583",
+      "bytes": 69357,
+      "sha256": "3bd42eee815562492a440bef2f0e2879707dba1bd61a78eb15083fe3ef2fc92c"
+    },
+    "test/treasury-compat/attribution-test-support.cjs": {
+      "blob": "fed6a2732d8b915978d90717951af57a9a0bd316",
+      "bytes": 2436,
+      "sha256": "053e2bba23a8b87f2ee8cfc77b3dfc4c66c8994318f45786c1b50b448e3a3d91"
+    },
+    "test/treasury-compat/attribution.spec.cjs": {
+      "blob": "5fdd60bb03f491bc090929025ac20cc94af0dff2",
+      "bytes": 15300,
+      "sha256": "261b9ab186dcbd91d95129671800f6cd46015ea7f679b2efbaa560caa9e9c46a"
+    },
+    "test/treasury-compat/build-optimization.spec.cjs": {
+      "blob": "c5154cd7f6b14825f2529b1b2a961f25199ab822",
+      "bytes": 15676,
+      "sha256": "b1363579a08d2b4bd3941d568084e5f6812c51e94115e48292f989bc08bc04c4"
+    },
+    "test/treasury-compat/fixtures/core-before-hotpath-optimization-xi.ts.txt": {
+      "blob": "62752b09e3828e67a9000aeffcda0b2436368bf1",
+      "bytes": 68416,
+      "sha256": "75a600170f04c99520369b0d48b55d385979b5180f47cce3b427143b99956da1"
+    },
+    "test/treasury-compat/fixtures/reader-before-hotpath-optimization-xi.ts.txt": {
+      "blob": "556c6d565b3962c407bc82a4b5706d5382935c53",
+      "bytes": 21526,
+      "sha256": "1d5bd4d7f5922dfad3e6c44522d04695b490ba2bb711a83306858544dde70dec"
+    },
+    "test/treasury-compat/hotpath-optimization.spec.cjs": {
+      "blob": "d6c2cefb0c6fe2e898a0618dbcf9b747fcf6359d",
+      "bytes": 6518,
+      "sha256": "5a51cd26b060ab87be983e952fa48daef56dea7f040e4711312457d5e4a00579"
+    },
+    "test/treasury-compat/hotpath-test-support.cjs": {
+      "blob": "0bfd11b7f4e71390daca995483a88a72cda24f03",
+      "bytes": 6372,
+      "sha256": "9bbfd978d5657dee5c84916aaab25840c94f404162923d81115cf84a4a6dbf6a"
+    },
+    "test/treasury-compat/loader-optimization.spec.cjs": {
+      "blob": "0f8beee137cbe97407c527bf5450bc0f987e675f",
+      "bytes": 25050,
+      "sha256": "3e57e2424bce5db4643fe26be82ed4ec80cd9b1244bbdd8938cc7438a66882cd"
+    },
+    "test/treasuryCompatRead.test.ts": {
+      "blob": "551a1a3557cdde27f02096487b2e338757038b4f",
+      "bytes": 1139,
+      "sha256": "7e0190e8ca5f7910cca57133e0f044a57868f4c6d768c9c0958a8b167ba6d9d7"
+    }
+  }
+}

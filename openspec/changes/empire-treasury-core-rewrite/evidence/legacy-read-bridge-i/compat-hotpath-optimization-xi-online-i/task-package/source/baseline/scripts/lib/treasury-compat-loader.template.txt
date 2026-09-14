@@ -1,0 +1,40 @@
+/** Read Optimization V: shared function definitions, private per-builder inputs.
+ * Authoring: scripts/build-treasury-compat-loader.cjs + treasury-compat-context.cjs.
+ * This is ONLY the read-only compatibility capsule, NOT a Treasury service.
+ * The old capsule initialized an unreachable mutable revision module to zero on
+ * every factory call. That private zero and a FRESH resource Set now belong to
+ * an explicit context captured by each new builder, never by shared functions.
+ * No ambient active-context slot; nested/alternating builders cannot overwrite it.
+ */
+let compatReadDefinitions;
+function initializeCompatibilityReadDefinitions() {
+  const cache = Object.create(null);
+  function load(id) {
+    if (Object.prototype.hasOwnProperty.call(cache, id)) return cache[id];
+    if (!Object.prototype.hasOwnProperty.call(factories, id)) throw new Error("unlisted read dependency");
+    const exports = Object.create(null);
+    cache[id] = exports;
+    factories[id](exports, spec => {
+      if (!Object.prototype.hasOwnProperty.call(dependencies[id], spec)) throw new Error("unlisted read import");
+      return load(dependencies[id][spec]);
+    });
+    return exports;
+  }
+  const observation = load("src/runtime/treasury/observation.ts");
+  const commitments = load("src/runtime/treasury/commitments.ts");
+  for (const id of Object.keys(cache)) Object.freeze(cache[id]);
+  return Object.freeze({ observation, commitments });
+}
+export function createCompatibilityReadCore(): CompatReadBuilders {
+  // Nothing is prewarmed. Both initialization and per-builder capture remain in
+  // the admitted sample's readerLoad interval, including cold publication cost.
+  const definitions = compatReadDefinitions || initializeCompatibilityReadDefinitions();
+  const context = Object.freeze({ revision: 0, resources: new Set(RESOURCES_ALL) });
+  const builders = Object.freeze({
+    buildObservation: options => definitions.observation.buildTreasuryObservation(options),
+    buildCommitments: options => definitions.commitments.buildTreasuryCommitmentIndex(options, context),
+  });
+  // A failing catalog capture publishes no partial first initialization.
+  if (!compatReadDefinitions) compatReadDefinitions = definitions;
+  return builders;
+}

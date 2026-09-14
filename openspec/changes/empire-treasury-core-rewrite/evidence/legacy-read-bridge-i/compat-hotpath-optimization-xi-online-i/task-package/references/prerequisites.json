@@ -1,0 +1,23 @@
+{
+  "commit": "53cf8a6c07a171eeb8438c5cc07ac66d4968f1fc",
+  "priorFinal": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-subphase-online-x-retry-i/FINAL-VERIFICATION.json",
+    "blob": "bfbf7517433f6381af36ac5c4044acd69f7d341a",
+    "sha256": "00a0456c642a21eec3f616a053b0ca523441da1afe70123e0d17738f4a7d2930",
+    "bytes": 27130
+  },
+  "priorAttribution": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-subphase-online-x-retry-i/SUBPHASE-ATTRIBUTION.json",
+    "blob": "c6eeaae0d9d514c6662bf0d3fd62d69c59181fb6",
+    "sha256": "d4faf6816e91bf0d060dd56008de119ef684e7e116f362bb449c95c42d61bd52",
+    "bytes": 19783
+  },
+  "priorDriver": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-subphase-online-x-retry-i/run/driver-result.json",
+    "blob": "2fea10330e4fceb23c7b5defd836dc999d75c60f",
+    "sha256": "d17bbca483f0f3cdad65cc3a4dee5d35b459b96730a81d3655c0e61a7ee25ba2",
+    "bytes": 1739
+  },
+  "closedCompatHead": "9adb2739935c03c0450acfebbab94912a5e3e593",
+  "sourceTree": "c30d5beeb9c8e17b2a152047521f72691c214fd3"
+}

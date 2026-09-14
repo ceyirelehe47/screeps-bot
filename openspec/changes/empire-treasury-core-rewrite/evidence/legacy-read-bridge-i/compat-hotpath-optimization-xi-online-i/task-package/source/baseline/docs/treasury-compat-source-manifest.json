@@ -1,0 +1,195 @@
+{
+  "repository": "ceyirelehe47/screeps-bot",
+  "developmentBranch": "refactor/empire-treasury-rearchitecture",
+  "sourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
+  "productionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+  "productionMainBlob": "5f6c49c70d1c916ab47cda30884fddb1fab9931a",
+  "roots": [
+    "src/runtime/treasury/observation.ts",
+    "src/runtime/treasury/commitments.ts"
+  ],
+  "allowedRuntimeSources": [
+    "src/runtime/treasury/observation.ts",
+    "src/runtime/treasury/types.ts",
+    "src/runtime/treasury/commitments.ts",
+    "src/runtime/treasury/commitmentRevision.ts",
+    "src/runtime/treasury/holderResolution.ts",
+    "src/runtime/treasury/ownerIdentity.ts",
+    "src/runtime/logistics/resourceTransferTaskHealth.ts",
+    "src/runtime/configNormalize.ts"
+  ],
+  "knownSourceBlobs": {
+    "src/runtime/treasury/observation.ts": "eb733c07f72785a2697b5b2438571ea1435f6a5c",
+    "src/runtime/treasury/types.ts": "05c1af2da2ad485f881ed3765344a40f16720625",
+    "src/runtime/treasury/commitments.ts": "4b4342785adaa58c196e8a6ba46b369b7ab61f97",
+    "src/runtime/treasury/holderResolution.ts": "078505536b2daece8c9813cc80ab914904599e5c",
+    "src/runtime/treasury/ownerIdentity.ts": "cb34746afe46e1fa29f9ad12428c501da3b5d72c",
+    "src/runtime/logistics/resourceTransferTaskHealth.ts": "c40d9d9893cc6373d876db76c375a815d874886a",
+    "src/runtime/configNormalize.ts": "e938b49f18036b85fd2d009569629614cdaf0450",
+    "src/runtime/treasury/commitmentRevision.ts": "5e71141d63b32f7c172bd749f1fd4131d6fcc0fd"
+  },
+  "productionMainTestBlob": "2d2283b8466c6427a2222b841d8fd72261374f02",
+  "compiler": "5.9.3",
+  "preparedNotDeployed": true,
+  "sourceManifest": [
+    {
+      "path": "src/runtime/configNormalize.ts",
+      "deps": {},
+      "sourceBlob": "e938b49f18036b85fd2d009569629614cdaf0450",
+      "sourceSha256": "7ee1edf48ddf300c0e589a3e32acb2261b126c44238b92c21cb7b7fe42472d9e",
+      "sourceBytes": 841
+    },
+    {
+      "path": "src/runtime/logistics/resourceTransferTaskHealth.ts",
+      "deps": {
+        "@/runtime/configNormalize": "src/runtime/configNormalize.ts"
+      },
+      "sourceBlob": "c40d9d9893cc6373d876db76c375a815d874886a",
+      "sourceSha256": "cc652ca8c306dcfa9f11c8407b29808b2238a8b141ce9f384e2bf5b1f6a21c5e",
+      "sourceBytes": 5333
+    },
+    {
+      "path": "src/runtime/treasury/commitmentRevision.ts",
+      "deps": {},
+      "sourceBlob": "5e71141d63b32f7c172bd749f1fd4131d6fcc0fd",
+      "sourceSha256": "c8ce010cc8e0a6e45243881308ceed0a74f85f15e353b7d3f2fa5967bfcf47f3",
+      "sourceBytes": 1244
+    },
+    {
+      "path": "src/runtime/treasury/commitments.ts",
+      "deps": {
+        "@/runtime/logistics/resourceTransferTaskHealth": "src/runtime/logistics/resourceTransferTaskHealth.ts",
+        "@/runtime/treasury/commitmentRevision": "src/runtime/treasury/commitmentRevision.ts",
+        "@/runtime/treasury/holderResolution": "src/runtime/treasury/holderResolution.ts",
+        "@/runtime/treasury/ownerIdentity": "src/runtime/treasury/ownerIdentity.ts"
+      },
+      "sourceBlob": "4b4342785adaa58c196e8a6ba46b369b7ab61f97",
+      "sourceSha256": "85078504b9127fd1ecf78fe28dcdd5c2e20f195f4eb4efbafe8a39daa1e1e41b",
+      "sourceBytes": 23880
+    },
+    {
+      "path": "src/runtime/treasury/holderResolution.ts",
+      "deps": {},
+      "sourceBlob": "078505536b2daece8c9813cc80ab914904599e5c",
+      "sourceSha256": "f598bd15b36a58115ab220379433d9fc4978dfddd5a1304d5682b6417bba6df3",
+      "sourceBytes": 3655
+    },
+    {
+      "path": "src/runtime/treasury/observation.ts",
+      "deps": {
+        "@/runtime/treasury/types": "src/runtime/treasury/types.ts"
+      },
+      "sourceBlob": "eb733c07f72785a2697b5b2438571ea1435f6a5c",
+      "sourceSha256": "a17c88dfc9c21cd7408935754b50996f4b433f4228b4c3e512fa47b7d6341941",
+      "sourceBytes": 9878
+    },
+    {
+      "path": "src/runtime/treasury/ownerIdentity.ts",
+      "deps": {},
+      "sourceBlob": "cb34746afe46e1fa29f9ad12428c501da3b5d72c",
+      "sourceSha256": "2e9d4440c12fc30b28c6aa65ec761c38db6b34fb3f2605f7929bf0eb27cd554d",
+      "sourceBytes": 8737
+    },
+    {
+      "path": "src/runtime/treasury/types.ts",
+      "deps": {},
+      "sourceBlob": "05c1af2da2ad485f881ed3765344a40f16720625",
+      "sourceSha256": "38b6b44ba7713923213e7219bc0d1cfc243842a9420486c58b8105aaf786f667",
+      "sourceBytes": 55763
+    }
+  ],
+  "outputs": [
+    {
+      "file": "docs/treasury-legacy-read-bridge.md",
+      "bytes": 4854,
+      "sha256": "23352cd61c5725021d5aed3798b714d702f766d41781d1beffd07e87773e4877",
+      "gitBlob": "fa47f2b26745cdf45fca2e228726777a9918e8a6"
+    },
+    {
+      "file": "src/main.test.ts",
+      "bytes": 11031,
+      "sha256": "8fbb186cae2a1426496dd539cbc4414ce2317fc4ff848a4bc4ee179ec2d4a0ab",
+      "gitBlob": "9b8b42363e8f687742088dfca094a422d6ecf3b0"
+    },
+    {
+      "file": "src/main.ts",
+      "bytes": 6271,
+      "sha256": "3bebfb632d40dd989baa9ae70a87cc49810207df6fc0cfd3f9cda53673f9dc57",
+      "gitBlob": "e8bf1c56e6147dfe4fcbb18052e29ee636da62ac"
+    },
+    {
+      "file": "src/runtime/treasuryCompatConfig.ts",
+      "bytes": 531,
+      "sha256": "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02",
+      "gitBlob": "8e2214fef5a6a69b7eb40c82eee76dda1646ccbf"
+    },
+    {
+      "file": "src/runtime/treasuryCompatCpu.ts",
+      "bytes": 6724,
+      "sha256": "e7dead62745052c278163281a524d765ef109df9556060a283dac35590fa042c",
+      "gitBlob": "076cc6b1a02518b0ff0e4f503e09e74b8c47464e"
+    },
+    {
+      "file": "src/runtime/treasuryCompatRead.ts",
+      "bytes": 21526,
+      "sha256": "1d5bd4d7f5922dfad3e6c44522d04695b490ba2bb711a83306858544dde70dec",
+      "gitBlob": "556c6d565b3962c407bc82a4b5706d5382935c53"
+    },
+    {
+      "file": "src/runtime/treasuryCompatReadCore.generated.ts",
+      "bytes": 68416,
+      "sha256": "75a600170f04c99520369b0d48b55d385979b5180f47cce3b427143b99956da1",
+      "gitBlob": "62752b09e3828e67a9000aeffcda0b2436368bf1"
+    },
+    {
+      "file": "src/runtime/treasuryCompatRuntime.ts",
+      "bytes": 865,
+      "sha256": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4",
+      "gitBlob": "5916fbcafbb88d40cf5463d329b683ba0d776ad8"
+    },
+    {
+      "file": "src/runtime/treasuryCompatTypes.ts",
+      "bytes": 2509,
+      "sha256": "0d39f976aad3d95daaa13b72f31cfe7f9a25a9611329faf152a1ded0c6b3e61b",
+      "gitBlob": "1f553df048f322a68b445a71d4b7f2b03d096e72"
+    },
+    {
+      "file": "test/treasury-compat/bridge.spec.cjs",
+      "bytes": 11489,
+      "sha256": "278491b3c996874db2fe560973708ba1d2a0d34cfc94f413ad36f23a3067a50f",
+      "gitBlob": "8061a074218ba8a9ce81ec15b5da6e4ad9aa1d83"
+    },
+    {
+      "file": "test/treasury-compat/helpers.cjs",
+      "bytes": 6806,
+      "sha256": "c200b1f2b6dc55deae8b50ac7ae9f0e5ecb191be6592a42c713fce7d3d289e74",
+      "gitBlob": "f7406cf25124324069c08a444683d383477e0a23"
+    },
+    {
+      "file": "test/treasury-compat/real-readers.spec.cjs",
+      "bytes": 8178,
+      "sha256": "162630b8712f90fa71bb11eba25d3128dd92408b1474ea8540a2adb02a2f20c2",
+      "gitBlob": "28c78e89a8039518fe9d8d3e4d8027aff0015e8c"
+    },
+    {
+      "file": "test/treasuryCompatRead.test.ts",
+      "bytes": 1064,
+      "sha256": "5703123386542aabf4ab56307f6c433398478d6c2738adc4bf35ed87191a6026",
+      "gitBlob": "c1b5e04c4ac41c881bfc426a3fbce759cc823722"
+    }
+  ],
+  "loaderOptimization": {
+    "revision": "IX",
+    "provenance": "docs/treasury-compat-loader-optimization.json",
+    "canonicalSourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
+    "baselineGeneratedBlob": "4f94acf1c06a60de9ca8ff2f0cdd2910cb6913be",
+    "canonicalInputGeneratedBlob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3",
+    "explicitReadContextAdaptation": true,
+    "fullTaskBucketFusion": true,
+    "observationAllocationReduction": true,
+    "boundedSubphaseAttribution": true,
+    "attributionChangesAuthorization": false,
+    "sourceManifestOutputValidation": "all-listed-outputs",
+    "sourceManifestOutputIdentityCount": 13
+  }
+}

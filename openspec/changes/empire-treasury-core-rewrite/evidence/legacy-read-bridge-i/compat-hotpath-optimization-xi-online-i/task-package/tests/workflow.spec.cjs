@@ -1,0 +1,37 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
+const U=require('../tools/util.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs'),A=require('../tools/archive.cjs'),Pub=require('../tools/publish.cjs'),X=require('../tools/source.cjs');
+const ROOT=path.resolve(__dirname,'..');
+function git(repo,args){return U.textGit(repo,args);}
+function init(root,name){const p=path.join(root,name);fs.mkdirSync(p);U.git(p,['init']);U.git(p,['config','user.email','fixture@example.invalid']);U.git(p,['config','user.name','fixture']);return p;}
+function copy(root,rel,repo){const src=path.join(ROOT,root,rel),dst=path.join(repo,rel);fs.mkdirSync(path.dirname(dst),{recursive:true});fs.copyFileSync(src,dst);}
+function packet(dir,name,text='ok 1 - fixture \n'){fs.writeFileSync(path.join(dir,name+'.stdout'),text);fs.writeFileSync(path.join(dir,name+'.stderr'),'');C.writeNew(path.join(dir,name+'.exit.json'),{status:0,signal:null,error:null});}
+function make(){
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'hot-xi-wf-')),ref=init(root,'ref'),compat=init(root,'compat'),run=path.join(root,'run'),tests=path.join(root,'tests'),offline=path.join(root,'offline');
+ for(const p of [run,tests,offline])fs.mkdirSync(p);
+ // A compact Git repository containing every path whose bytes/scope are gated.
+ for(const rel of Object.keys(X.BASE_LOCK))copy('source/baseline',rel,compat);
+ fs.writeFileSync(path.join(compat,'seed.txt'),'baseline\n');U.git(compat,['add','.']);U.git(compat,['commit','-m','baseline']);const base=git(compat,['rev-parse','HEAD']);
+ for(const rel of X.IMPL.paths)copy('source/implementation',rel,compat);U.git(compat,['add','--',...X.IMPL.paths]);U.git(compat,['commit','-m',X.IMPL.commitMessage]);const source=git(compat,['rev-parse','HEAD']),sourceTree=git(compat,['rev-parse','HEAD^{tree}']);
+ const profile=K.profileFor(1000);fs.writeFileSync(path.join(compat,K.CONFIG),K.renderConfig(profile));U.git(compat,['add',K.CONFIG]);U.git(compat,['commit','-m','bind window']);const on=git(compat,['rev-parse','HEAD']);
+ copy('source/implementation',K.CONFIG,compat);U.git(compat,['add',K.CONFIG]);U.git(compat,['commit','-m','close off']);const off=git(compat,['rev-parse','HEAD']);assert.equal(git(compat,['rev-parse','HEAD^{tree}']),sourceTree);
+ fs.writeFileSync(path.join(ref,'seed.txt'),'refactor\n');U.git(ref,['add','.']);U.git(ref,['commit','-m','refactor base']);const refBase=git(ref,['rev-parse','HEAD']);
+ U.git(ref,['branch','-M','refactor/empire-treasury-rearchitecture']);U.git(compat,['branch','-M','compat/treasury-read-bridge-i']);
+ const bare=path.join(root,'remote.git');U.git(root,['init','--bare',bare]);for(const p of [ref,compat])U.git(p,['remote','add','origin',bare]);
+ U.git(ref,['push','origin',refBase+':refs/heads/refactor/empire-treasury-rearchitecture']);U.git(compat,['push','origin',base+':refs/heads/compat/treasury-read-bridge-i']);
+ const old={R:K.REFACTOR,C:K.COMPAT,load:C.loadSecret};K.REFACTOR=refBase;K.COMPAT=base;const secret={token:crypto.randomBytes(32).toString('hex')};C.loadSecret=()=>secret;
+ fs.mkdirSync(path.dirname(path.join(ref,K.EVIDENCE)),{recursive:true});
+ C.writeNew(path.join(run,'source-closed.json'),{status:'SOURCE_DEFAULT_OFF_RESTORED',sourceHead:source,profileHead:on,closedHead:off,sameTreeAsSource:true,atMs:Date.now()});
+ C.writeNew(path.join(tests,'summary.json'),{status:'HOTPATH_XI_PACKAGE_TESTS_VERIFIED',tests:1,passed:1,failed:0,skipped:0,todo:0,cancelled:0});fs.writeFileSync(path.join(tests,'tests.tap'),'ok 1 - fixture \n');fs.writeFileSync(path.join(tests,'tests.stderr'),'');C.writeNew(path.join(tests,'tests.exit.json'),{status:0});
+ for(const n of ['repository-tests','loader-regenerate','typecheck-build','typecheck-tests','jest-budget','warm-build'])packet(offline,n);C.writeNew(path.join(offline,'result.json'),{status:'HOTPATH_XI_OFFLINE_VERIFIED',sourceHead:source,sourceTree});
+ const application=path.join(root,'source-application.json');C.writeNew(application,{status:'HOTPATH_XI_SOURCE_APPLIED',base,head:source,tree:sourceTree,changedPaths:X.IMPL.paths.length});
+ return{root,ref,compat,run,tests,offline,application,base,source,on,off,sourceTree,secret,restore(){K.REFACTOR=old.R;K.COMPAT=old.C;C.loadSecret=old.load;}};
+}
+function archived(f){return A.archive({refactor:f.ref,compat:f.compat,run:f.run,tests:f.tests,offline:f.offline,application:f.application,secret:'fixture'});}
+test('archive records source application attribution and comparison',()=>{const f=make();try{const r=archived(f),d=path.join(f.ref,K.EVIDENCE);assert.equal(r.status,'HOTPATH_XI_EVIDENCE_ASSEMBLED');for(const n of ['source-application.json','SUBPHASE-ATTRIBUTION.json','HOTPATH-COMPARISON.json','FINAL-VERIFICATION.json'])assert.ok(fs.existsSync(path.join(d,n)));const m=C.readJson(path.join(d,'ARCHIVE-MANIFEST.json'));assert.equal(m.sourceHead,f.source);assert.equal(m.sourceTree,f.sourceTree);}finally{f.restore();}});
+test('archive preserves exact raw stdout bytes and excludes private snapshots',()=>{const f=make();try{for(const n of ['backup.json','candidate.json','session.json'])fs.writeFileSync(path.join(f.run,n),'PRIVATE');archived(f);const d=path.join(f.ref,K.EVIDENCE),j=C.readJson(path.join(d,'tool-tests/tests.tap.json'));assert.ok(j.text.endsWith(' \n'));assert.equal(j.sha256,C.sha256(Buffer.from(j.text)));for(const n of ['backup.json','candidate.json','session.json'])assert.equal(fs.existsSync(path.join(d,'run',n)),false);}finally{f.restore();}});
+test('secret in permitted evidence rejects archive',()=>{const f=make();try{fs.writeFileSync(path.join(f.run,'collector.stdout'),f.secret.token);assert.throws(()=>archived(f),e=>e.code==='SECRET_IN_ARCHIVE_INPUT');}finally{f.restore();}});
+test('staging gate validates source ON OFF chain and native whitespace',()=>{const f=make();try{archived(f);const g=Pub.stageGate(f.ref,f.compat);assert.equal(g.whitespaceExceptions,0);assert.equal(g.status,'HOTPATH_XI_STAGED_BYTES_AND_WHITESPACE_VERIFIED');}finally{f.restore();}});
+test('attribution tampering is detected even when manifest hash is updated',()=>{const f=make();try{archived(f);const d=path.join(f.ref,K.EVIDENCE),name='SUBPHASE-ATTRIBUTION.json',j=C.readJson(path.join(d,name));j.status='HOTPATH_XI_ATTRIBUTION_RECORDED';const b=Buffer.from(JSON.stringify(j,null,2)+'\n');fs.writeFileSync(path.join(d,name),b);const m=C.readJson(path.join(d,'ARCHIVE-MANIFEST.json'));m.files[name]={bytes:b.length,sha256:C.sha256(b)};fs.writeFileSync(path.join(d,'ARCHIVE-MANIFEST.json'),JSON.stringify(m,null,2)+'\n');assert.throws(()=>Pub.verifyArchive(f.ref),e=>e.code==='ATTRIBUTION_EVIDENCE_CHANGED');}finally{f.restore();}});
+test('evidence commit and local bare push read back exactly',()=>{const f=make();try{archived(f);const out=path.join(f.root,'receipt.json'),r=Pub.publish(f.ref,f.compat,{out,push:true});assert.equal(r.pushed,true);assert.equal(U.remoteHead(f.ref,'refactor/empire-treasury-rearchitecture'),r.refactorHead);assert.equal(U.remoteHead(f.compat,'compat/treasury-read-bridge-i'),r.compatHead);}finally{f.restore();}});
+test('unrelated staged path blocks evidence commit',()=>{const f=make();try{archived(f);fs.writeFileSync(path.join(f.ref,'other.txt'),'x\n');U.git(f.ref,['add','other.txt']);assert.throws(()=>Pub.stageGate(f.ref,f.compat),e=>e.code==='UNRELATED_CHANGES');}finally{f.restore();}});

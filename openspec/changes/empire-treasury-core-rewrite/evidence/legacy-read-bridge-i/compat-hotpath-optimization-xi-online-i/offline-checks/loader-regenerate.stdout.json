@@ -1,0 +1,6 @@
+{
+  "encoding": "utf8",
+  "bytes": 531,
+  "sha256": "4ad3b11f80120cc87de2fb12b27c65baa633f72d80fbf9590ee0937d7cd9968f",
+  "text": "{\"status\":\"COMPAT_LOADER_REGENERATION_VERIFIED\",\"files\":[\"src/runtime/treasuryCompatReadCore.generated.ts\",\"src/runtime/treasuryCompatRead.ts\",\"docs/treasury-compat-loader-optimization.json\",\"docs/treasury-compat-source-manifest.json\"],\"canonicalFactoryBodyRecovery\":\"exact\",\"explicitContextAdaptation\":true,\"fullTaskBucketFusion\":true,\"observationAllocationReduction\":true,\"boundedSubphaseAttribution\":true,\"hotpathOptimizationXI\":true,\"sourceManifestOutputValidation\":\"all-listed-outputs\",\"sourceManifestOutputIdentityCount\":13}\n"
+}

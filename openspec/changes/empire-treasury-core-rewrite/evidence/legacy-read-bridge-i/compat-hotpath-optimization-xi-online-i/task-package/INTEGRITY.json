@@ -1,0 +1,601 @@
+{
+  "kind": "package-integrity/v1",
+  "files": {
+    "AGENT-RUN.md": {
+      "bytes": 10654,
+      "sha256": "bbd4251f7895f9d080c366899d915dd3a9e43b22ed17525f3eef7768208bed3e"
+    },
+    "IMPLEMENTATION-MANIFEST.json": {
+      "bytes": 3243,
+      "sha256": "db94a66d3e34ab86d46781fb1a75d4a104426ad162fe9c83dd9ba05db13ca5fe"
+    },
+    "README.md": {
+      "bytes": 963,
+      "sha256": "b08cbafe862ef68aa4bc95f191da5889e60012c369871097246e52be6684b8b9"
+    },
+    "SUPERSEDES.md": {
+      "bytes": 400,
+      "sha256": "e5ed5cc54b437611fcea72cacff5469795765ee7d4d6c7f4ec8da78a43fe26ad"
+    },
+    "patches/0001-hotpath-optimization-XI.patch": {
+      "bytes": 186947,
+      "sha256": "1e7d949c001005b20ebfcc582fe2e2aa1f5eb94a155eda47cb1eea9b566c5ea3"
+    },
+    "patches/README.md": {
+      "bytes": 502,
+      "sha256": "6177a5d8ba6d65f4f2cf7e980cc5c3c225dae5fe1b9e41bc66ebc6864687ccbf"
+    },
+    "patches/SERIES": {
+      "bytes": 35,
+      "sha256": "d61436e472a1189daa8ee98a991ac7201957bae280344bb33aea2c9186f2f857"
+    },
+    "references/0003-first-report.json": {
+      "bytes": 4175,
+      "sha256": "7f413445b4b414d027faa4c04d13559fe850f808994e6220fe6c992ab87835e5"
+    },
+    "references/PROVENANCE.json": {
+      "bytes": 1242,
+      "sha256": "7e313e2590ddbfd9c15c4bdc54e1b7dbde4683235812e9c0892df52d42ded1ab"
+    },
+    "references/attribution-contract.json": {
+      "bytes": 1265,
+      "sha256": "ca13df13edff27578733cc936adeaf9f8728d09a3f5bbd6eb69ffca77d0faabd"
+    },
+    "references/deployGuard.cjs": {
+      "bytes": 5078,
+      "sha256": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7"
+    },
+    "references/implementation-lock.json": {
+      "bytes": 8302,
+      "sha256": "cfa63087731c44ad3952f87cf6846c011a4691a2df658402a2bea978ddae9163"
+    },
+    "references/prerequisites.json": {
+      "bytes": 1176,
+      "sha256": "22d09d5f5d6a4178295a0e5dd6afbcfb417ad60dd42ae9e5d4a247adc658c7f5"
+    },
+    "references/prior-online-basis.json": {
+      "bytes": 1960,
+      "sha256": "6bd5aeb0e07bedd93f89fb6f454826b325bcf71d3a4d6f075574ca0167116c9a"
+    },
+    "references/source-baseline-lock.json": {
+      "bytes": 7609,
+      "sha256": "d835d5c0e497bc9163f8894105073bb01206bacb26f7beea2dd1d6e92006c039"
+    },
+    "references/source-lock.json": {
+      "bytes": 9169,
+      "sha256": "af365ea44469c90bf7031e32be4699af37ff1b3a2216c564a9798bdcb09f97f3"
+    },
+    "references/test-contract.json": {
+      "bytes": 460,
+      "sha256": "6602fc324b9054cee91be9478cd480672cbf1c77995bd067d41af9155a36737e"
+    },
+    "references/treasuryCompatConfig.ts": {
+      "bytes": 531,
+      "sha256": "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02"
+    },
+    "references/treasuryCompatCpu.ts": {
+      "bytes": 6724,
+      "sha256": "e7dead62745052c278163281a524d765ef109df9556060a283dac35590fa042c"
+    },
+    "references/treasuryCompatRead.ts": {
+      "bytes": 21631,
+      "sha256": "9e454bde732a08ba1880cae02ada391219054c70cb54aff600d7a8bde667bd2f"
+    },
+    "references/treasuryCompatReadCore.generated.ts": {
+      "bytes": 69357,
+      "sha256": "3bd42eee815562492a440bef2f0e2879707dba1bd61a78eb15083fe3ef2fc92c"
+    },
+    "references/treasuryCompatRuntime.ts": {
+      "bytes": 865,
+      "sha256": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4"
+    },
+    "references/treasuryCompatTypes.ts": {
+      "bytes": 2509,
+      "sha256": "0d39f976aad3d95daaa13b72f31cfe7f9a25a9611329faf152a1ded0c6b3e61b"
+    },
+    "runtime/actions.cjs": {
+      "bytes": 6818,
+      "sha256": "8a142957b84406f98502ecfecd131005e28a67d28c653e28dbfc9bb22864421a"
+    },
+    "runtime/check-profile.cjs": {
+      "bytes": 2078,
+      "sha256": "cfc4f1400ca9c642b0e7df1e2911753cc74be255848592b67fa3deb41ac31722"
+    },
+    "runtime/closeout.cjs": {
+      "bytes": 2874,
+      "sha256": "e81371d0820eb8f72863c589a6d497081947bdd1c29430ede4f9c5943dcd6fb1"
+    },
+    "runtime/closure-observer.cjs": {
+      "bytes": 4738,
+      "sha256": "a771f16127efa58703210d97f44bd89cf12aeb54870216e8e12e3c06f15f1caf"
+    },
+    "runtime/collector-diagnostics.cjs": {
+      "bytes": 3231,
+      "sha256": "94307209003c140c278adc37a99e706b175e25d9fc19e95ce97807a9e986fcc8"
+    },
+    "runtime/collector.cjs": {
+      "bytes": 4851,
+      "sha256": "cbf00c0a5148577a17229350baef7acda7a410173014d7202080446c6f844027"
+    },
+    "runtime/common.cjs": {
+      "bytes": 9123,
+      "sha256": "72da5bd96b3d66d2785523aadb67f912fd43265ef3f4f94240bfa6800cd7327f"
+    },
+    "runtime/decoder.cjs": {
+      "bytes": 1349,
+      "sha256": "ca60ec0d27eb4950e5f54f7a5e5dfa868d5ef22f1c8ab2137f1775ead8648306"
+    },
+    "runtime/driver.cjs": {
+      "bytes": 5051,
+      "sha256": "c0a31ed458910221295c83d72b96dca076b3ad167d546d693afb325f7d2706bb"
+    },
+    "runtime/guard-control.cjs": {
+      "bytes": 8683,
+      "sha256": "23a61bf0c8dbc507def30fe469bc18fc6a02010399a9625941454751bf02daf9"
+    },
+    "runtime/policy.cjs": {
+      "bytes": 2400,
+      "sha256": "6571ecb0522d1b92629c4e862775a2a9602785edc132689118b4fc9b79ccd7da"
+    },
+    "runtime/protocol.cjs": {
+      "bytes": 6541,
+      "sha256": "0279dc20b73ab949b094e85ac198719f901d6590db92d7f7a2e8957f080bb2ce"
+    },
+    "runtime/read-retry.cjs": {
+      "bytes": 3528,
+      "sha256": "67f8eb36c581b47676ea5246938ecceeda8f39b522ef618e7bf43a5ecd573ccb"
+    },
+    "runtime/recovery-worker.cjs": {
+      "bytes": 5070,
+      "sha256": "9a63ae60bcf8eae547a4dd2eade30b46681149a47c454091e3bdd22b0af3fba8"
+    },
+    "runtime/samples.cjs": {
+      "bytes": 12021,
+      "sha256": "a2c63cd21c7fb1aa201d1231b79fb062595f86acfbbe714ea6f86b3faadd03eb"
+    },
+    "runtime/store.cjs": {
+      "bytes": 2438,
+      "sha256": "92128c63e3922715a2591a67aeec84355ad91e77cf6b886c30321bbe19ac0fcb"
+    },
+    "runtime/transport.cjs": {
+      "bytes": 3783,
+      "sha256": "d4348e49eb0089401073be89b5640a898a2cde5412759cee414741d7818666fd"
+    },
+    "runtime/verify-run.cjs": {
+      "bytes": 11703,
+      "sha256": "be1ce00170f9b9aa862306d7c767f243a761a92e06479958cd8d58983ed014e2"
+    },
+    "runtime/verify-runtime.cjs": {
+      "bytes": 3328,
+      "sha256": "abff9e49f6d98a2184d3ba24f53fa513bae652a2b77d1a9ad4429f87d6a024a4"
+    },
+    "source/baseline/docs/treasury-compat-build-optimization-vii.md": {
+      "bytes": 4869,
+      "sha256": "4fd2e5ee2c112d056c7893285be3f78063a1ee2ffe3767020aa2f5e3aeb69dcb"
+    },
+    "source/baseline/docs/treasury-compat-loader-optimization.json": {
+      "bytes": 7004,
+      "sha256": "d7fa913c1dd729766d3e706ed23f6374f461e82ce754faf5be91bd9a9c349911"
+    },
+    "source/baseline/docs/treasury-compat-read-optimization-v.md": {
+      "bytes": 3832,
+      "sha256": "9921696a69c11abb289212131dd340e1deb5a0290926a56d74a248affe3ae341"
+    },
+    "source/baseline/docs/treasury-compat-source-manifest-remediation-x.md": {
+      "bytes": 751,
+      "sha256": "274c777a487ea7749b8d144b483e07cf5602e666a23b43470d77cca3343469b2"
+    },
+    "source/baseline/docs/treasury-compat-source-manifest.json": {
+      "bytes": 8020,
+      "sha256": "6fea2064b2125d8a275b3161831101e519a9286a7717a9d43bac34c3491b9ae5"
+    },
+    "source/baseline/docs/treasury-compat-subphase-attribution-ix.md": {
+      "bytes": 2700,
+      "sha256": "ea9feec3139af7a337a804824dd791080f956811c0325af639c4797210e9b05c"
+    },
+    "source/baseline/scripts/build-treasury-compat-loader.cjs": {
+      "bytes": 11527,
+      "sha256": "84fd72a7dbe14917684a900d60d190d2ceae04bc38b974da4875bc7a3c6a1951"
+    },
+    "source/baseline/scripts/lib/treasury-compat-attribution.cjs": {
+      "bytes": 8232,
+      "sha256": "545c7c491a5511053f29083734b2ecc177f9af1a87713b95d6a6cccdbbb5b3b8"
+    },
+    "source/baseline/scripts/lib/treasury-compat-build.cjs": {
+      "bytes": 14390,
+      "sha256": "21bc40221b2b64dbad3880e9d24f6cda74c59261d52b8b45c08600887e8d9e2c"
+    },
+    "source/baseline/scripts/lib/treasury-compat-context.cjs": {
+      "bytes": 3050,
+      "sha256": "452fd25074ee513adcdfb3d7212fe696d9a70429711caedecd65a79247d367cf"
+    },
+    "source/baseline/scripts/lib/treasury-compat-loader.template.txt": {
+      "bytes": 2245,
+      "sha256": "cfc0d3651f7f7755492ce74f69b8943d03230dd6328ce014f759447ad08093d8"
+    },
+    "source/baseline/src/runtime/treasuryCompatConfig.ts": {
+      "bytes": 531,
+      "sha256": "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02"
+    },
+    "source/baseline/src/runtime/treasuryCompatCpu.ts": {
+      "bytes": 6724,
+      "sha256": "e7dead62745052c278163281a524d765ef109df9556060a283dac35590fa042c"
+    },
+    "source/baseline/src/runtime/treasuryCompatRead.ts": {
+      "bytes": 21526,
+      "sha256": "1d5bd4d7f5922dfad3e6c44522d04695b490ba2bb711a83306858544dde70dec"
+    },
+    "source/baseline/src/runtime/treasuryCompatReadCore.generated.ts": {
+      "bytes": 68416,
+      "sha256": "75a600170f04c99520369b0d48b55d385979b5180f47cce3b427143b99956da1"
+    },
+    "source/baseline/src/runtime/treasuryCompatRuntime.ts": {
+      "bytes": 865,
+      "sha256": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4"
+    },
+    "source/baseline/src/runtime/treasuryCompatTypes.ts": {
+      "bytes": 2509,
+      "sha256": "0d39f976aad3d95daaa13b72f31cfe7f9a25a9611329faf152a1ded0c6b3e61b"
+    },
+    "source/baseline/test/treasury-compat/attribution-test-support.cjs": {
+      "bytes": 2406,
+      "sha256": "7f65e2c1853895477d34c646e9d7c6fa4aaae35b400faa76ec108c699075b290"
+    },
+    "source/baseline/test/treasury-compat/attribution.spec.cjs": {
+      "bytes": 14837,
+      "sha256": "1799420e06c7123a48ca25749f93e632ef245f345bf34794bb1ae3206576ee34"
+    },
+    "source/baseline/test/treasury-compat/bridge.spec.cjs": {
+      "bytes": 11489,
+      "sha256": "278491b3c996874db2fe560973708ba1d2a0d34cfc94f413ad36f23a3067a50f"
+    },
+    "source/baseline/test/treasury-compat/build-optimization.spec.cjs": {
+      "bytes": 15166,
+      "sha256": "253109eb2b1b6d0e48d7fb6bbd77d8be70c9b083f854826750aae51467fbd63c"
+    },
+    "source/baseline/test/treasury-compat/build-test-support.cjs": {
+      "bytes": 8814,
+      "sha256": "486d80cc41bcbbeff44726b81f2cee994ffbaf98ce8d0f01eb5d1e5cc91e531e"
+    },
+    "source/baseline/test/treasury-compat/fixtures/core-before-build-optimization-vii.ts.txt": {
+      "bytes": 64266,
+      "sha256": "b7a2c14fc7cf15e32abe7703f2fb47c5516b09f2dc80f7ffdd9a5dc0988f0dac"
+    },
+    "source/baseline/test/treasury-compat/fixtures/core-before-loader-optimization.ts.txt": {
+      "bytes": 62929,
+      "sha256": "decc6a2e019ba931041c8d79d341a59658755473b06075a19a458cc6635bd400"
+    },
+    "source/baseline/test/treasury-compat/fixtures/core-before-read-optimization-v.ts.txt": {
+      "bytes": 64604,
+      "sha256": "9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965"
+    },
+    "source/baseline/test/treasury-compat/fixtures/core-before-subphase-attribution-ix.ts.txt": {
+      "bytes": 65093,
+      "sha256": "1eb28af06a562011dc2c9a02c3aad3bb63b447638c90a76163d3ee323a349ae8"
+    },
+    "source/baseline/test/treasury-compat/fixtures/cpu-before-subphase-attribution-ix.ts.txt": {
+      "bytes": 2883,
+      "sha256": "103e7a3e115fcc885fc337b91e7336cdb2cd3e890524f0c8b4d2f4082c0207ef"
+    },
+    "source/baseline/test/treasury-compat/fixtures/reader-before-read-optimization-v.ts.txt": {
+      "bytes": 19895,
+      "sha256": "6d2f2e24117a585e42739506700c937e11c9925df627f2e76aaee48a68d06ad1"
+    },
+    "source/baseline/test/treasury-compat/fixtures/reader-before-subphase-attribution-ix.ts.txt": {
+      "bytes": 20118,
+      "sha256": "1141250ec31c12b3439f48b6274267c108c7bb95566d328414f4bd04275bef64"
+    },
+    "source/baseline/test/treasury-compat/fixtures/types-before-subphase-attribution-ix.ts.txt": {
+      "bytes": 2008,
+      "sha256": "efc805ac836f23c8fc0d30429c90075503b749b0ef4f4a730c2fb9853833fbe5"
+    },
+    "source/baseline/test/treasury-compat/helpers.cjs": {
+      "bytes": 6806,
+      "sha256": "c200b1f2b6dc55deae8b50ac7ae9f0e5ecb191be6592a42c713fce7d3d289e74"
+    },
+    "source/baseline/test/treasury-compat/loader-optimization.spec.cjs": {
+      "bytes": 24455,
+      "sha256": "460f028e027be2788b99ac1d86b3f5438543725535d43652e0c3f66fd3bc13a8"
+    },
+    "source/baseline/test/treasury-compat/loader-test-support.cjs": {
+      "bytes": 8257,
+      "sha256": "30fd96fb48098e13d99dd1b571cdb7ad6db7ce52adeb9321e0cf659d3f97c47d"
+    },
+    "source/baseline/test/treasury-compat/real-readers.spec.cjs": {
+      "bytes": 8178,
+      "sha256": "162630b8712f90fa71bb11eba25d3128dd92408b1474ea8540a2adb02a2f20c2"
+    },
+    "source/baseline/test/treasuryCompatRead.test.ts": {
+      "bytes": 1064,
+      "sha256": "5703123386542aabf4ab56307f6c433398478d6c2738adc4bf35ed87191a6026"
+    },
+    "source/implementation/docs/treasury-compat-build-optimization-vii.md": {
+      "bytes": 4869,
+      "sha256": "4fd2e5ee2c112d056c7893285be3f78063a1ee2ffe3767020aa2f5e3aeb69dcb"
+    },
+    "source/implementation/docs/treasury-compat-hotpath-optimization-xi.md": {
+      "bytes": 3755,
+      "sha256": "d81f20b4521de19b1399742a466e29f0043d45c0878d14f4ffe577295cc1190f"
+    },
+    "source/implementation/docs/treasury-compat-loader-optimization.json": {
+      "bytes": 8849,
+      "sha256": "5b7a39f882086933b1e4ca51531b530475c77a62b5eb696c7e734717e5d01708"
+    },
+    "source/implementation/docs/treasury-compat-read-optimization-v.md": {
+      "bytes": 3832,
+      "sha256": "9921696a69c11abb289212131dd340e1deb5a0290926a56d74a248affe3ae341"
+    },
+    "source/implementation/docs/treasury-compat-source-manifest-remediation-x.md": {
+      "bytes": 751,
+      "sha256": "274c777a487ea7749b8d144b483e07cf5602e666a23b43470d77cca3343469b2"
+    },
+    "source/implementation/docs/treasury-compat-source-manifest.json": {
+      "bytes": 8283,
+      "sha256": "fa117d613bb42ccbfd77d337f304e96ef743591a8661899ed30d6fc3040bfbdb"
+    },
+    "source/implementation/docs/treasury-compat-subphase-attribution-ix.md": {
+      "bytes": 2700,
+      "sha256": "ea9feec3139af7a337a804824dd791080f956811c0325af639c4797210e9b05c"
+    },
+    "source/implementation/scripts/build-treasury-compat-loader.cjs": {
+      "bytes": 13342,
+      "sha256": "7e40a07d5510106f124041a5f222552810c835978521c8d57d0ab2179b4eb61f"
+    },
+    "source/implementation/scripts/lib/treasury-compat-attribution.cjs": {
+      "bytes": 8232,
+      "sha256": "545c7c491a5511053f29083734b2ecc177f9af1a87713b95d6a6cccdbbb5b3b8"
+    },
+    "source/implementation/scripts/lib/treasury-compat-build.cjs": {
+      "bytes": 14390,
+      "sha256": "21bc40221b2b64dbad3880e9d24f6cda74c59261d52b8b45c08600887e8d9e2c"
+    },
+    "source/implementation/scripts/lib/treasury-compat-context.cjs": {
+      "bytes": 3050,
+      "sha256": "452fd25074ee513adcdfb3d7212fe696d9a70429711caedecd65a79247d367cf"
+    },
+    "source/implementation/scripts/lib/treasury-compat-hotpath.cjs": {
+      "bytes": 17430,
+      "sha256": "c1dfc656a0e217970019d102e245c29271b5d0ecb4d004c53f0079784d232b09"
+    },
+    "source/implementation/scripts/lib/treasury-compat-loader.template.txt": {
+      "bytes": 2245,
+      "sha256": "cfc0d3651f7f7755492ce74f69b8943d03230dd6328ce014f759447ad08093d8"
+    },
+    "source/implementation/scripts/lib/treasury-compat-preview-hotpath.cjs": {
+      "bytes": 6516,
+      "sha256": "25b96f885b13b830f8580d736e7b6e8fd4b30baa75c0e636ef8579c2d9d5d6be"
+    },
+    "source/implementation/src/runtime/treasuryCompatConfig.ts": {
+      "bytes": 531,
+      "sha256": "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02"
+    },
+    "source/implementation/src/runtime/treasuryCompatCpu.ts": {
+      "bytes": 6724,
+      "sha256": "e7dead62745052c278163281a524d765ef109df9556060a283dac35590fa042c"
+    },
+    "source/implementation/src/runtime/treasuryCompatRead.ts": {
+      "bytes": 21631,
+      "sha256": "9e454bde732a08ba1880cae02ada391219054c70cb54aff600d7a8bde667bd2f"
+    },
+    "source/implementation/src/runtime/treasuryCompatReadCore.generated.ts": {
+      "bytes": 69357,
+      "sha256": "3bd42eee815562492a440bef2f0e2879707dba1bd61a78eb15083fe3ef2fc92c"
+    },
+    "source/implementation/src/runtime/treasuryCompatRuntime.ts": {
+      "bytes": 865,
+      "sha256": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4"
+    },
+    "source/implementation/src/runtime/treasuryCompatTypes.ts": {
+      "bytes": 2509,
+      "sha256": "0d39f976aad3d95daaa13b72f31cfe7f9a25a9611329faf152a1ded0c6b3e61b"
+    },
+    "source/implementation/test/treasury-compat/attribution-test-support.cjs": {
+      "bytes": 2436,
+      "sha256": "053e2bba23a8b87f2ee8cfc77b3dfc4c66c8994318f45786c1b50b448e3a3d91"
+    },
+    "source/implementation/test/treasury-compat/attribution.spec.cjs": {
+      "bytes": 15300,
+      "sha256": "261b9ab186dcbd91d95129671800f6cd46015ea7f679b2efbaa560caa9e9c46a"
+    },
+    "source/implementation/test/treasury-compat/bridge.spec.cjs": {
+      "bytes": 11489,
+      "sha256": "278491b3c996874db2fe560973708ba1d2a0d34cfc94f413ad36f23a3067a50f"
+    },
+    "source/implementation/test/treasury-compat/build-optimization.spec.cjs": {
+      "bytes": 15676,
+      "sha256": "b1363579a08d2b4bd3941d568084e5f6812c51e94115e48292f989bc08bc04c4"
+    },
+    "source/implementation/test/treasury-compat/build-test-support.cjs": {
+      "bytes": 8814,
+      "sha256": "486d80cc41bcbbeff44726b81f2cee994ffbaf98ce8d0f01eb5d1e5cc91e531e"
+    },
+    "source/implementation/test/treasury-compat/fixtures/core-before-build-optimization-vii.ts.txt": {
+      "bytes": 64266,
+      "sha256": "b7a2c14fc7cf15e32abe7703f2fb47c5516b09f2dc80f7ffdd9a5dc0988f0dac"
+    },
+    "source/implementation/test/treasury-compat/fixtures/core-before-hotpath-optimization-xi.ts.txt": {
+      "bytes": 68416,
+      "sha256": "75a600170f04c99520369b0d48b55d385979b5180f47cce3b427143b99956da1"
+    },
+    "source/implementation/test/treasury-compat/fixtures/core-before-loader-optimization.ts.txt": {
+      "bytes": 62929,
+      "sha256": "decc6a2e019ba931041c8d79d341a59658755473b06075a19a458cc6635bd400"
+    },
+    "source/implementation/test/treasury-compat/fixtures/core-before-read-optimization-v.ts.txt": {
+      "bytes": 64604,
+      "sha256": "9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965"
+    },
+    "source/implementation/test/treasury-compat/fixtures/core-before-subphase-attribution-ix.ts.txt": {
+      "bytes": 65093,
+      "sha256": "1eb28af06a562011dc2c9a02c3aad3bb63b447638c90a76163d3ee323a349ae8"
+    },
+    "source/implementation/test/treasury-compat/fixtures/cpu-before-subphase-attribution-ix.ts.txt": {
+      "bytes": 2883,
+      "sha256": "103e7a3e115fcc885fc337b91e7336cdb2cd3e890524f0c8b4d2f4082c0207ef"
+    },
+    "source/implementation/test/treasury-compat/fixtures/reader-before-hotpath-optimization-xi.ts.txt": {
+      "bytes": 21526,
+      "sha256": "1d5bd4d7f5922dfad3e6c44522d04695b490ba2bb711a83306858544dde70dec"
+    },
+    "source/implementation/test/treasury-compat/fixtures/reader-before-read-optimization-v.ts.txt": {
+      "bytes": 19895,
+      "sha256": "6d2f2e24117a585e42739506700c937e11c9925df627f2e76aaee48a68d06ad1"
+    },
+    "source/implementation/test/treasury-compat/fixtures/reader-before-subphase-attribution-ix.ts.txt": {
+      "bytes": 20118,
+      "sha256": "1141250ec31c12b3439f48b6274267c108c7bb95566d328414f4bd04275bef64"
+    },
+    "source/implementation/test/treasury-compat/fixtures/types-before-subphase-attribution-ix.ts.txt": {
+      "bytes": 2008,
+      "sha256": "efc805ac836f23c8fc0d30429c90075503b749b0ef4f4a730c2fb9853833fbe5"
+    },
+    "source/implementation/test/treasury-compat/helpers.cjs": {
+      "bytes": 6806,
+      "sha256": "c200b1f2b6dc55deae8b50ac7ae9f0e5ecb191be6592a42c713fce7d3d289e74"
+    },
+    "source/implementation/test/treasury-compat/hotpath-optimization.spec.cjs": {
+      "bytes": 6518,
+      "sha256": "5a51cd26b060ab87be983e952fa48daef56dea7f040e4711312457d5e4a00579"
+    },
+    "source/implementation/test/treasury-compat/hotpath-test-support.cjs": {
+      "bytes": 6372,
+      "sha256": "9bbfd978d5657dee5c84916aaab25840c94f404162923d81115cf84a4a6dbf6a"
+    },
+    "source/implementation/test/treasury-compat/loader-optimization.spec.cjs": {
+      "bytes": 25050,
+      "sha256": "3e57e2424bce5db4643fe26be82ed4ec80cd9b1244bbdd8938cc7438a66882cd"
+    },
+    "source/implementation/test/treasury-compat/loader-test-support.cjs": {
+      "bytes": 8257,
+      "sha256": "30fd96fb48098e13d99dd1b571cdb7ad6db7ce52adeb9321e0cf659d3f97c47d"
+    },
+    "source/implementation/test/treasury-compat/real-readers.spec.cjs": {
+      "bytes": 8178,
+      "sha256": "162630b8712f90fa71bb11eba25d3128dd92408b1474ea8540a2adb02a2f20c2"
+    },
+    "source/implementation/test/treasuryCompatRead.test.ts": {
+      "bytes": 1139,
+      "sha256": "7e0190e8ca5f7910cca57133e0f044a57868f4c6d768c9c0958a8b167ba6d9d7"
+    },
+    "tests/build-recheck.spec.cjs": {
+      "bytes": 6183,
+      "sha256": "af5dd530beddab27c1f4aeed63146c8f72cc4feed9872e9e6a1bad34f007471f"
+    },
+    "tests/comparison.spec.cjs": {
+      "bytes": 3105,
+      "sha256": "9429f36dcf782848da1e1d6ad103bde4c34b34caa913b99699b8db63ef5a44ab"
+    },
+    "tests/diagnostics.spec.cjs": {
+      "bytes": 7166,
+      "sha256": "577007e15d4c1d406701431e0123f36f8d48fc31e7e662a06c5ebc35f6117458"
+    },
+    "tests/fixture.cjs": {
+      "bytes": 3349,
+      "sha256": "1daf7011a203a8691e24a666942f418315466af9b112d92b86313ed8d2a89676"
+    },
+    "tests/hotpath-source.spec.cjs": {
+      "bytes": 3531,
+      "sha256": "0e1e619dc57f72ccac47086fc2817d2e18caf952bdc8ddb100c78a76c67bd926"
+    },
+    "tests/loader-integration.spec.cjs": {
+      "bytes": 3859,
+      "sha256": "3184e636f2a536617fb627a910ba0ca6e43bfea386f0523c09309bb194ca18dd"
+    },
+    "tests/process.spec.cjs": {
+      "bytes": 3215,
+      "sha256": "2fe75903f5869b622a1521a97251a9910b1bc223d208eab9f86d218d7b876a83"
+    },
+    "tests/read-recheck.spec.cjs": {
+      "bytes": 2445,
+      "sha256": "20c09c8b68142e23945514cf02c9fe12e851b30ac52282a957614d765bc01fa3"
+    },
+    "tests/read-retry.spec.cjs": {
+      "bytes": 4826,
+      "sha256": "c6bfe77fe31a904260a1dd5a275c94aa5919ad1a76e502c624d0633409ee1eae"
+    },
+    "tests/reader-fixture.cjs": {
+      "bytes": 6299,
+      "sha256": "e21d8006a853c90978868b36040250fca3e467f8f22e393cec308e71a48f78b1"
+    },
+    "tests/recovery.spec.cjs": {
+      "bytes": 9905,
+      "sha256": "7c726f13dae07e30314e08e4125c887b60829b989c3c6b1fa31f41536bc81deb"
+    },
+    "tests/screeps.d.ts": {
+      "bytes": 754,
+      "sha256": "c5d1c06a8ca66be72b1bd5b116cb5136b9a9f1e2a9066b7ed23f0ca7d46e98c6"
+    },
+    "tests/transport.spec.cjs": {
+      "bytes": 2124,
+      "sha256": "3e421b2873d47a27aaf3fc171069a4aaa2a1c0f3d8d31cccca47828116f473c2"
+    },
+    "tests/workflow.spec.cjs": {
+      "bytes": 7473,
+      "sha256": "8e01d6deb489b3298e67656f1e7c587237a814e6412a840fd7537d22c910a86b"
+    },
+    "tools/apply.cjs": {
+      "bytes": 2392,
+      "sha256": "3123bb7f80c751146ae88a18b00bc16bf29675ab3e231df840c1932ba5ccb549"
+    },
+    "tools/archive.cjs": {
+      "bytes": 7649,
+      "sha256": "0db54b71cbaf71f08a1b3b0bac392234c8e4b066d64c945a458ac56a0104cd04"
+    },
+    "tools/build.cjs": {
+      "bytes": 4786,
+      "sha256": "05862c2cc345f8dbf73f3dc04efc11d8f4b9e6ab5995b35d0afa16d18f077b77"
+    },
+    "tools/check-baseline.cjs": {
+      "bytes": 1234,
+      "sha256": "f318518c8036aef2f808736d54bfcdddd4887e2f8a0084cf632574c527e80914"
+    },
+    "tools/close-source.cjs": {
+      "bytes": 3177,
+      "sha256": "014d8a86ed88938f89def52c8e90374abb2cd965e5caf35432322e59c5715c95"
+    },
+    "tools/compare.cjs": {
+      "bytes": 6996,
+      "sha256": "b93eeabc9e9d14cb830fa71cc77d23e4d7da5694ccb7707a2836d23b0292afff"
+    },
+    "tools/observe.cjs": {
+      "bytes": 1662,
+      "sha256": "bf7310174f6d8e662c1525268165056731cfe5436cb2ba5684970be75aea0fa5"
+    },
+    "tools/prepare.cjs": {
+      "bytes": 6350,
+      "sha256": "356f35b36c39625d5fb78204666e425059e80ab3ea9ecc37bb240e838d6d3e9c"
+    },
+    "tools/prerequisites.cjs": {
+      "bytes": 1739,
+      "sha256": "ad9d9418438c59aa5b0a355f66e0abd6c82d74979c5cedb4b5d4e194e4b2c228"
+    },
+    "tools/publish.cjs": {
+      "bytes": 7471,
+      "sha256": "e71b1770b741d272018c05d54a27254c44d2632d1e157dc3d60052f5421e355d"
+    },
+    "tools/reconcile.cjs": {
+      "bytes": 690,
+      "sha256": "5e6cd04679d5fcb24b7770653f753083c8a69eb3022a82983339cf987a5abf5f"
+    },
+    "tools/recover.cjs": {
+      "bytes": 865,
+      "sha256": "4ad2c539dc7480e1aec12294f7e8cdb2427808b72a948c8fd5e92dfd7aa8bcb8"
+    },
+    "tools/run-tests.cjs": {
+      "bytes": 2142,
+      "sha256": "46ef0aa9eceb39ebc7fb24d625bd631128120dfa926c7fa46cf203edb8c3e157"
+    },
+    "tools/source.cjs": {
+      "bytes": 2365,
+      "sha256": "6429329c9fccfe8f2199252de6d69695475e0cdb4aae2248c74e2dec32dc8ac8"
+    },
+    "tools/util.cjs": {
+      "bytes": 2532,
+      "sha256": "798b8cca695a358085518b888a2d7b85de9d7982b9eeded9f6448c6cfa34a469"
+    },
+    "tools/verify.cjs": {
+      "bytes": 414,
+      "sha256": "5957278d35018cf10424f2ce3f989c28c72acaeeac99d30a03feef13a310c6eb"
+    }
+  }
+}

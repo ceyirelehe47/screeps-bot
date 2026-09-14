@@ -1,0 +1,16 @@
+{
+  "status": "HOTPATH_XI_OFFLINE_VERIFIED",
+  "base": "9adb2739935c03c0450acfebbab94912a5e3e593",
+  "sourceHead": "aa2682a470dcad2ea1890230a43ae65f58e17809",
+  "sourceTree": "3a976cc08a9a850fe7cce286fe1fa4a9079dca63",
+  "repositoryNodeTests": 280,
+  "loaderRegenerated": true,
+  "hotpathOptimizationXI": true,
+  "sourceManifestOutputValidation": "all-listed-outputs",
+  "tests": {
+    "suites": 195,
+    "tests": 685
+  },
+  "packageFingerprint": "cf7913c66133a9b03e7ac0e223bc06b07b22f806c06cc44d13bb09d7558adc5e",
+  "atMs": 1789404470160
+}

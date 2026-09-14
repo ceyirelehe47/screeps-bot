@@ -1,0 +1,316 @@
+{
+  "revision": "compat-hotpath-optimization-XI",
+  "authoring": [
+    "scripts/lib/treasury-compat-loader.template.txt",
+    "scripts/lib/treasury-compat-context.cjs",
+    "scripts/lib/treasury-compat-build.cjs",
+    "scripts/lib/treasury-compat-attribution.cjs",
+    "scripts/lib/treasury-compat-hotpath.cjs",
+    "scripts/lib/treasury-compat-preview-hotpath.cjs"
+  ],
+  "baselineCommit": "9adb2739935c03c0450acfebbab94912a5e3e593",
+  "baselineBuildVIIBlob": "4f94acf1c06a60de9ca8ff2f0cdd2910cb6913be",
+  "baselineIXCoreBlob": "62752b09e3828e67a9000aeffcda0b2436368bf1",
+  "baselineIXPreviewBlob": "556c6d565b3962c407bc82a4b5706d5382935c53",
+  "canonicalInputBlob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3",
+  "canonicalInputSha256": "9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965",
+  "canonicalInputCompiler": "5.9.3",
+  "originalFactoryPrefixSha256": "6615fa89bc77e6e885a49abb2f67c0b8331306eff8eb7f96bc5c4ffaa3517cba",
+  "contextOnlyPrefixSha256": "3c46d505c81659440e5d31902c5d3d17a830639ed8f8f99b1b5282df692b94df",
+  "buildVIIOnlyPrefixSha256": "d256a6ae7a9b68e82656526094496495e69042d086c3249300ca1c49f94998ce",
+  "attributionOnlyPrefixSha256": "89e3e2b82e1c744712ec3b23f3cbe5a706ec4f4c0654887a5fdc5eeec26e7771",
+  "adaptedFactoryPrefixSha256": "827d53ef14c48d5be5302bb5580d241e5f624e71b84d183b0ba38975c4105b5f",
+  "reversibleContextTransform": true,
+  "contextRules": [
+    {
+      "name": "revision-import",
+      "replacements": 1
+    },
+    {
+      "name": "catalog-capture",
+      "replacements": 1
+    },
+    {
+      "name": "task-validator-context",
+      "replacements": 2
+    },
+    {
+      "name": "reservation-validator-context",
+      "replacements": 2
+    },
+    {
+      "name": "builder-context",
+      "replacements": 1
+    },
+    {
+      "name": "revision-value",
+      "replacements": 1
+    },
+    {
+      "name": "catalog-lookup",
+      "replacements": 4
+    }
+  ],
+  "reversibleBuildTransform": true,
+  "buildRules": [
+    {
+      "name": "task-map-storage",
+      "replacements": 1
+    },
+    {
+      "name": "valid-pending-task-aggregation",
+      "replacements": 1
+    },
+    {
+      "name": "outgoing-query",
+      "replacements": 1
+    },
+    {
+      "name": "reason-query",
+      "replacements": 1
+    },
+    {
+      "name": "incoming-query",
+      "replacements": 1
+    },
+    {
+      "name": "pendingIncoming-query",
+      "replacements": 1
+    },
+    {
+      "name": "incomingTaskCount-query",
+      "replacements": 1
+    },
+    {
+      "name": "outgoingTaskCount-query",
+      "replacements": 1
+    },
+    {
+      "name": "receiver-query",
+      "replacements": 1
+    },
+    {
+      "name": "observation-room-wrapper",
+      "replacements": 1
+    },
+    {
+      "name": "observation-no-entry-pairs",
+      "replacements": 1
+    }
+  ],
+  "reversibleAttributionTransform": true,
+  "attributionRules": [
+    {
+      "name": "commitment-entry",
+      "replacements": 1
+    },
+    {
+      "name": "invalid-region",
+      "replacements": 1
+    },
+    {
+      "name": "demand-health-count",
+      "replacements": 1
+    },
+    {
+      "name": "route-count",
+      "replacements": 1
+    },
+    {
+      "name": "receiver-health-count",
+      "replacements": 1
+    },
+    {
+      "name": "reservation-boundary",
+      "replacements": 1
+    },
+    {
+      "name": "owner-count",
+      "replacements": 1
+    },
+    {
+      "name": "finalize-boundary",
+      "replacements": 1
+    },
+    {
+      "name": "commitment-end",
+      "replacements": 1
+    },
+    {
+      "name": "observation-entry",
+      "replacements": 1
+    },
+    {
+      "name": "observation-rooms-boundary",
+      "replacements": 1
+    },
+    {
+      "name": "observation-counts",
+      "replacements": 1
+    },
+    {
+      "name": "observation-finalize",
+      "replacements": 1
+    },
+    {
+      "name": "observation-end",
+      "replacements": 1
+    }
+  ],
+  "reversibleHotpathTransform": true,
+  "hotpathRules": [
+    {
+      "name": "scan-location",
+      "replacements": 1
+    },
+    {
+      "name": "observation-view",
+      "replacements": 1
+    },
+    {
+      "name": "observation-build",
+      "replacements": 1
+    },
+    {
+      "name": "task-enumeration",
+      "replacements": 1
+    },
+    {
+      "name": "self-route-lookup",
+      "replacements": 1
+    },
+    {
+      "name": "demand-health",
+      "replacements": 1
+    },
+    {
+      "name": "reservation-enumeration",
+      "replacements": 1
+    }
+  ],
+  "reversiblePreviewHotpathTransform": true,
+  "previewHotpathRules": [
+    {
+      "name": "direct-selected-total",
+      "replacements": 1
+    },
+    {
+      "name": "resource-catalog",
+      "replacements": 1
+    },
+    {
+      "name": "valid-room-names-decl",
+      "replacements": 1
+    },
+    {
+      "name": "valid-room-push",
+      "replacements": 1
+    },
+    {
+      "name": "included-set",
+      "replacements": 1
+    },
+    {
+      "name": "projection-names",
+      "replacements": 1
+    },
+    {
+      "name": "core-observation-names",
+      "replacements": 1
+    }
+  ],
+  "loaderSha256": "cfc0d3651f7f7755492ce74f69b8943d03230dd6328ce014f759447ad08093d8",
+  "generatedSha256": "3bd42eee815562492a440bef2f0e2879707dba1bd61a78eb15083fe3ef2fc92c",
+  "generatedBlob": "21c4bba26d732ead7df4d6a9f5b9dea357fd9583",
+  "previewSha256": "9e454bde732a08ba1880cae02ada391219054c70cb54aff600d7a8bde667bd2f",
+  "previewBlob": "fe92498f5e76d860e4fef98d842df3c2e8fc48ad",
+  "factories": [
+    {
+      "path": "src/runtime/configNormalize.ts",
+      "originalBodySha256": "f42728448afa21d2e743bf9210c0367ff1002df6a2c60b72ffcf160f51ca427b",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/logistics/resourceTransferTaskHealth.ts",
+      "originalBodySha256": "9fea76df1197ac1b6f2aa3793d0a32160d469c156c472c8cd5f1b8e50e8f5657",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/commitmentRevision.ts",
+      "originalBodySha256": "973b23ce57d91b6318b307747e4f920f5a8ab1d91de0b9a22b109c04307b5b27",
+      "adaptation": "unchanged",
+      "lifecycle": "unreachable-retained-original-definition"
+    },
+    {
+      "path": "src/runtime/treasury/commitments.ts",
+      "originalBodySha256": "8cdecbdb0975612ad8770ba23022222aae10529e0647704e75b29f1c764a5b4c",
+      "adaptation": "V-context+VII-buckets+IX-attribution+XI-hotpath",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/holderResolution.ts",
+      "originalBodySha256": "2021cd397135e7340565a252efab5af5039e89fa442f596fe94559113af9cf84",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/observation.ts",
+      "originalBodySha256": "168fd5d39b6a72d08ab867eeea319c98e300a14dacaca5169839e257ff4c236c",
+      "adaptation": "VII-allocation+IX-attribution+XI-hotpath",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/ownerIdentity.ts",
+      "originalBodySha256": "d9e43b2ba0abecdb87bfe313e1b060d1af2b1fbcd2ae6d3afd48c6553d6e1332",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    },
+    {
+      "path": "src/runtime/treasury/types.ts",
+      "originalBodySha256": "4dc107db3a229cacf36a5f077ff906b4da4860de8796c4fd172af9e4dade3335",
+      "adaptation": "unchanged",
+      "lifecycle": "shared-definition"
+    }
+  ],
+  "factoryBodiesChanged": [
+    "src/runtime/treasury/commitments.ts",
+    "src/runtime/treasury/observation.ts"
+  ],
+  "diagnosticRegions": [
+    "observationSetup",
+    "observationRooms",
+    "observationFinalize",
+    "observationView",
+    "commitmentSetup",
+    "commitmentTasks",
+    "commitmentReservations",
+    "commitmentFinalize",
+    "projectionRows"
+  ],
+  "perRecordCpuSamples": false,
+  "primitiveWorkCountersOnly": true,
+  "diagnosticOverheadSubtracted": false,
+  "topLevelCpuBudgetAuthorityChanged": false,
+  "businessValidationChanged": false,
+  "querySemanticsChanged": false,
+  "fullIndexBuiltEagerly": true,
+  "lazySecondaryIndexes": false,
+  "previewSourceChanged": true,
+  "sparseKeyEnumerationReuse": true,
+  "observationLookupBuiltInRoomPass": true,
+  "singleAuthorityTableEnumeration": true,
+  "canonicalDemandHelperFastPath": true,
+  "previewSelectedTotalSinglePass": true,
+  "previewResourceCatalogSingleRead": true,
+  "cpuAccountingChanged": true,
+  "publicTypeSurfaceChanged": true,
+  "defaultEnabled": false,
+  "budget": 2,
+  "sourceManifestOutputValidation": "all-listed-outputs",
+  "sourceManifestOutputIdentityCount": 13,
+  "engineCpuGapRepaired": false,
+  "engineMeasurementRequired": true,
+  "note": "XI removes repeated sparse-key, room-index, authority-table and preview bookkeeping work while preserving IX attribution, canonical health helpers, full-table validation, eager indexes and default OFF."
+}

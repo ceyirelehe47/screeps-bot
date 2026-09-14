@@ -1,0 +1,124 @@
+{
+  "package": "screeps-compat-hotpath-optimization-XI-online-I-2026-09-14",
+  "purpose": "Apply fixed read hot-path optimization XI, prove offline equivalence, execute one four-point engine comparison, restore old production, and publish evidence in one closed loop",
+  "baselines": {
+    "compat": "9adb2739935c03c0450acfebbab94912a5e3e593",
+    "compatTree": "c30d5beeb9c8e17b2a152047521f72691c214fd3",
+    "refactor": "53cf8a6c07a171eeb8438c5cc07ac66d4968f1fc"
+  },
+  "priorAcceptedFacts": {
+    "rawReports": 4,
+    "diagnosticReports": 4,
+    "attributedReports": 4,
+    "completeSamples": 1,
+    "partialCpuSamples": 3,
+    "recovery": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+    "engineCpuGapRepaired": false
+  },
+  "sourceImplementation": {
+    "commitMessage": "perf(compat): reduce read hot-path duplication",
+    "changedPaths": 17,
+    "existingPaths": 10,
+    "newPaths": 7,
+    "defaultEnabled": false,
+    "maxSampleCpu": 2,
+    "businessResultCacheAdded": false,
+    "oldMemoryProjectionUsedAsAuthority": false
+  },
+  "deterministicWorkReductions": {
+    "observationObjectKeys": [
+      8,
+      4
+    ],
+    "observationViewMapBuilds": [
+      1,
+      0
+    ],
+    "authorityTableObjectValues": [
+      2,
+      0
+    ],
+    "duplicateSelfRouteTaskScopeGet": [
+      1,
+      0
+    ],
+    "previewObjectValuesReductions": [
+      4,
+      0
+    ],
+    "resourceCatalogueReadsPerSample": [
+      2,
+      1
+    ],
+    "notCpuPercentages": true
+  },
+  "onlineProtocol": {
+    "points": 4,
+    "intervalTicks": 100,
+    "leadTicks": 150,
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "candidatePostsMaximum": 1,
+    "restorePostsMaximum": 1,
+    "recoveryRuntimeMs": 75000,
+    "automaticSecondWindow": false
+  },
+  "fixedTests": {
+    "count": 173,
+    "files": 11,
+    "failedAllowed": 0,
+    "skippedAllowed": 0,
+    "todoAllowed": 0,
+    "cancelledAllowed": 0
+  },
+  "repositoryGates": {
+    "nodeSpecs": 7,
+    "repositoryNodeTests": 280,
+    "jestSuites": 195,
+    "jestTests": 685,
+    "sourceManifestOutputs": "all-listed-outputs",
+    "typescriptProjects": [
+      "tsconfig.build.json",
+      "tsconfig.json"
+    ],
+    "loaderRegenerationCheck": true,
+    "rollupBuildOnly": true
+  },
+  "evidence": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-hotpath-optimization-xi-online-i",
+    "files": [
+      "FINAL-VERIFICATION.json",
+      "SUBPHASE-ATTRIBUTION.json",
+      "HOTPATH-COMPARISON.json"
+    ],
+    "successLabels": [
+      "HOTPATH_XI_OFFLINE_VERIFIED",
+      "CPU_DIAGNOSTIC_CAPTURE_VERIFIED",
+      "HOTPATH_XI_ATTRIBUTION_RECORDED",
+      "HOTPATH_XI_COMPARISON_RECORDED",
+      "RESTORED_BYTES_AND_RUNTIME_VERIFIED"
+    ]
+  },
+  "forbiddenClaimsWithoutNewEvidence": [
+    "ENGINE_CPU_BUDGET_GAP_REPAIRED",
+    "FULL_COMPATIBILITY_OBSERVED",
+    "TREASURY_PRODUCTION_READY",
+    "full Treasury production cutover"
+  ],
+  "makerBoundaries": {
+    "networkUsed": false,
+    "realTokenUsed": false,
+    "candidateUploaded": false,
+    "nativeWindowsExecuted": false,
+    "fullUserRepositoryChecksExecuted": false,
+    "engineCpuMeasured": false
+  }
+}

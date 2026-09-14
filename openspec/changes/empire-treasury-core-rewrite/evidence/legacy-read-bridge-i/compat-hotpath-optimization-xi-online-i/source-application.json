@@ -1,0 +1,11 @@
+{
+  "status": "HOTPATH_XI_SOURCE_VERIFIED",
+  "head": "aa2682a470dcad2ea1890230a43ae65f58e17809",
+  "tree": "3a976cc08a9a850fe7cce286fe1fa4a9079dca63",
+  "base": "9adb2739935c03c0450acfebbab94912a5e3e593",
+  "files": 42,
+  "changedPaths": 17,
+  "resumed": false,
+  "implementationFingerprint": "cfa63087731c44ad3952f87cf6846c011a4691a2df658402a2bea978ddae9163",
+  "atMs": 1789404053065
+}

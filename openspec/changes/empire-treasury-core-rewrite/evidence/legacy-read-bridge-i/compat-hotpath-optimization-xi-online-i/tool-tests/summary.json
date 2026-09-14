@@ -1,0 +1,25 @@
+{
+  "status": "HOTPATH_XI_PACKAGE_TESTS_VERIFIED",
+  "tests": 173,
+  "passed": 173,
+  "failed": 0,
+  "skipped": 0,
+  "todo": 0,
+  "cancelled": 0,
+  "platform": "win32",
+  "node": "v22.19.0",
+  "packageFingerprint": "cf7913c66133a9b03e7ac0e223bc06b07b22f806c06cc44d13bb09d7558adc5e",
+  "testFiles": [
+    "tests/build-recheck.spec.cjs",
+    "tests/comparison.spec.cjs",
+    "tests/diagnostics.spec.cjs",
+    "tests/hotpath-source.spec.cjs",
+    "tests/loader-integration.spec.cjs",
+    "tests/process.spec.cjs",
+    "tests/read-recheck.spec.cjs",
+    "tests/read-retry.spec.cjs",
+    "tests/recovery.spec.cjs",
+    "tests/transport.spec.cjs",
+    "tests/workflow.spec.cjs"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "count": 173,
+  "files": [
+    "tests/build-recheck.spec.cjs",
+    "tests/comparison.spec.cjs",
+    "tests/diagnostics.spec.cjs",
+    "tests/hotpath-source.spec.cjs",
+    "tests/loader-integration.spec.cjs",
+    "tests/process.spec.cjs",
+    "tests/read-recheck.spec.cjs",
+    "tests/read-retry.spec.cjs",
+    "tests/recovery.spec.cjs",
+    "tests/transport.spec.cjs",
+    "tests/workflow.spec.cjs"
+  ],
+  "countsAreNotAddedToRepositoryJestBudget": true
+}

@@ -1,0 +1,20 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const C=require('../runtime/common.cjs');
+const ROOT=path.resolve(__dirname,'..'),I=path.join(ROOT,'source/implementation'),B=path.join(ROOT,'source/baseline');
+function text(root,rel){return fs.readFileSync(path.join(root,rel),'utf8');}
+test('core transform has seven exact rules',()=>{const h=require('../source/implementation/scripts/lib/treasury-compat-hotpath.cjs');assert.equal(h.rules.length,7);assert.ok(h.rules.every(x=>x.replacements===1));});
+test('preview transform has seven exact rules',()=>{const h=require('../source/implementation/scripts/lib/treasury-compat-preview-hotpath.cjs');assert.equal(h.rules.length,7);assert.ok(h.rules.every(x=>x.replacements===1));});
+test('core transform restores exact IX generated core',()=>{const h=require('../source/implementation/scripts/lib/treasury-compat-hotpath.cjs');assert.equal(h.restore(text(I,'src/runtime/treasuryCompatReadCore.generated.ts')),text(B,'src/runtime/treasuryCompatReadCore.generated.ts'));});
+test('preview transform restores exact IX reader',()=>{const h=require('../source/implementation/scripts/lib/treasury-compat-preview-hotpath.cjs');assert.equal(h.restore(text(I,'src/runtime/treasuryCompatRead.ts')),text(B,'src/runtime/treasuryCompatRead.ts'));});
+test('optimized core reuses amount keys for totals',()=>{const s=text(I,'src/runtime/treasuryCompatReadCore.generated.ts');assert.match(s,/amountKeys/);assert.match(s,/amountKeys\.length\s*=\s*nonZeroKeys/);});
+test('optimized core builds room lookup during room processing',()=>{const s=text(I,'src/runtime/treasuryCompatReadCore.generated.ts');assert.match(s,/roomByName/);assert.match(s,/Object\.create\(null\)/);});
+test('optimized authority scans avoid Object.values',()=>{const s=text(I,'src/runtime/treasuryCompatReadCore.generated.ts');assert.doesNotMatch(s,/Object\.values\(tasks\)/);assert.doesNotMatch(s,/Object\.values\(reservations\)/);});
+test('optimized preview reads resource catalogue once',()=>{const s=text(I,'src/runtime/treasuryCompatRead.ts');assert.equal((s.match(/ports\.resources\(\)/g)||[]).length,1);});
+test('optimized preview has no Object.values reductions',()=>{const s=text(I,'src/runtime/treasuryCompatRead.ts');assert.doesNotMatch(s,/Object\.values\(/);});
+test('optimization documentation does not claim a CPU percentage',()=>{const s=text(I,'docs/treasury-compat-hotpath-optimization-xi.md');assert.match(s,/operation count/i);assert.doesNotMatch(s,/\b\d+%\b/);});
+test('production config remains unchanged by source optimization',()=>assert.equal(text(I,'src/runtime/treasuryCompatConfig.ts'),text(B,'src/runtime/treasuryCompatConfig.ts')));
+test('CPU accounting remains unchanged by source optimization',()=>assert.equal(text(I,'src/runtime/treasuryCompatCpu.ts'),text(B,'src/runtime/treasuryCompatCpu.ts')));
+test('runtime attachment remains unchanged by source optimization',()=>assert.equal(text(I,'src/runtime/treasuryCompatRuntime.ts'),text(B,'src/runtime/treasuryCompatRuntime.ts')));
+test('fixed hotpath spec and support are present',()=>{for(const n of ['test/treasury-compat/hotpath-optimization.spec.cjs','test/treasury-compat/hotpath-test-support.cjs'])assert.ok(fs.statSync(path.join(I,n)).size>0);});
+test('Jest wrapper includes the hotpath spec exactly once',()=>{const s=text(I,'test/treasuryCompatRead.test.ts');assert.equal((s.match(/hotpath-optimization\.spec\.cjs/g)||[]).length,1);});

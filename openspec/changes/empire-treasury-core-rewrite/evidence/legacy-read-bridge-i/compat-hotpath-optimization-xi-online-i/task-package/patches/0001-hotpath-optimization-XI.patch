@@ -1,0 +1,2768 @@
+diff --git a/docs/treasury-compat-hotpath-optimization-xi.md b/docs/treasury-compat-hotpath-optimization-xi.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..a196f883c8e47e5f2f7974f44013c24c0dd14fa6
+--- /dev/null
++++ b/docs/treasury-compat-hotpath-optimization-xi.md
+@@ -0,0 +1,45 @@
++# Treasury Compatibility Hot-path Optimization XI
++
++## Scope
++
++XI removes repeated bookkeeping from the existing read-only compatibility capsule. It does not change the 2 CPU cooperative budget, the default-OFF gate, authorization, persistence, table limits, source selection, task/reservation validation, eager index construction, or the independent direct/Core Store comparison.
++
++The change is authored as two exact reversible transforms on the already-audited IX sources:
++
++- `treasury-compat-hotpath.cjs` adapts the generated observation and commitment factories.
++- `treasury-compat-preview-hotpath.cjs` adapts the preview/report path.
++
++Reversibility proves source provenance only. Behavioral equivalence is established separately through diagnostics-OFF byte parity, full index API differential tests, seeded snapshots, callback/order checks, malformed-input checks, Memory write guards, and negative controls.
++
++## Observation changes
++
++Each endpoint keeps the first sparse `Object.keys(store)` result, compacts it in place to the non-zero keys already admitted into the numeric snapshot, and reuses that list when folding empire totals. The Store is not reread and its methods keep their existing receivers and call order.
++
++The room-name lookup is populated during the existing room scan with a null-prototype object. Duplicate room names retain the prior last-room-wins lookup behavior, while the ordinal room-name list and totals retain every scanned room. Prototype-like room names remain data keys.
++
++The final frozen observation data, public view API, callback order, epoch behavior, sparse resource semantics, and independent Store reads are unchanged.
++
++## Commitment changes
++
++Task and reservation authority tables are each enumerated once with `Object.keys`; the same key array supplies the authoritative record count and the keyed scan. This removes separate `Object.values` allocations without filtering or truncating the tables.
++
++Self-routes reuse the already-resolved scope bucket rather than performing the identical second lookup. Automatic demand-health evaluation calls the canonical helper directly; manual tasks retain the canonical always-covered result. Full validation, safe-integer guards, incomplete-scope behavior, route first-match behavior, health checks, reservations, owner/expiry handling, and all eager secondary indexes remain present.
++
++## Preview changes
++
++The direct endpoint read accumulates the selected-resource total while the resource amounts are already being read instead of allocating a second `Object.values` traversal. `ports.resources()` is read once per admitted sample. The validated room-name list is retained and reused for the membership set, projection rows, and report output rather than recreating equivalent arrays.
++
++No old Memory projection replaces Game Store reads. The preview still performs independent direct/Core comparison and reports partial CPU results without manufacturing completeness.
++
++## Deterministic work reductions
++
++The fixed synthetic characterization records the following operation reductions while preserving byte-identical diagnostics-OFF reports and full API snapshots:
++
++- observation sparse-key enumerations: 8 → 4 for two rooms and four endpoints;
++- observation room lookup: one Map allocation removed;
++- authority-table `Object.values` arrays: 2 → 0;
++- self-route scope lookups: one duplicate `Map.get` removed per self-route task;
++- preview selected-resource `Object.values`: 4 → 0;
++- preview resource-catalog reads: 2 → 1 per sample.
++
++These are deterministic JavaScript operation counts, not Screeps CPU percentages. XI must be rebuilt from a clean committed source tree and measured in one bounded four-point online window before any engine performance conclusion.
+diff --git a/docs/treasury-compat-loader-optimization.json b/docs/treasury-compat-loader-optimization.json
+index 7c08aaa21c2e3ac47ea6dd93471ad89bd426f856..93ac1cd17cd4c31282c01882ef5e8f4231e5e66c 100644
+--- a/docs/treasury-compat-loader-optimization.json
++++ b/docs/treasury-compat-loader-optimization.json
+@@ -1,20 +1,25 @@
+ {
+-  "revision": "compat-subphase-attribution-IX",
++  "revision": "compat-hotpath-optimization-XI",
+   "authoring": [
+     "scripts/lib/treasury-compat-loader.template.txt",
+     "scripts/lib/treasury-compat-context.cjs",
+     "scripts/lib/treasury-compat-build.cjs",
+-    "scripts/lib/treasury-compat-attribution.cjs"
++    "scripts/lib/treasury-compat-attribution.cjs",
++    "scripts/lib/treasury-compat-hotpath.cjs",
++    "scripts/lib/treasury-compat-preview-hotpath.cjs"
+   ],
+-  "baselineCommit": "ef23c464c83b90b413d43d07857f67d538f512a3",
++  "baselineCommit": "9adb2739935c03c0450acfebbab94912a5e3e593",
+   "baselineBuildVIIBlob": "4f94acf1c06a60de9ca8ff2f0cdd2910cb6913be",
++  "baselineIXCoreBlob": "62752b09e3828e67a9000aeffcda0b2436368bf1",
++  "baselineIXPreviewBlob": "556c6d565b3962c407bc82a4b5706d5382935c53",
+   "canonicalInputBlob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3",
+   "canonicalInputSha256": "9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965",
+   "canonicalInputCompiler": "5.9.3",
+   "originalFactoryPrefixSha256": "6615fa89bc77e6e885a49abb2f67c0b8331306eff8eb7f96bc5c4ffaa3517cba",
+   "contextOnlyPrefixSha256": "3c46d505c81659440e5d31902c5d3d17a830639ed8f8f99b1b5282df692b94df",
+   "buildVIIOnlyPrefixSha256": "d256a6ae7a9b68e82656526094496495e69042d086c3249300ca1c49f94998ce",
+-  "adaptedFactoryPrefixSha256": "89e3e2b82e1c744712ec3b23f3cbe5a706ec4f4c0654887a5fdc5eeec26e7771",
++  "attributionOnlyPrefixSha256": "89e3e2b82e1c744712ec3b23f3cbe5a706ec4f4c0654887a5fdc5eeec26e7771",
++  "adaptedFactoryPrefixSha256": "827d53ef14c48d5be5302bb5580d241e5f624e71b84d183b0ba38975c4105b5f",
+   "reversibleContextTransform": true,
+   "contextRules": [
+     {
+@@ -152,9 +157,73 @@
+       "replacements": 1
+     }
+   ],
++  "reversibleHotpathTransform": true,
++  "hotpathRules": [
++    {
++      "name": "scan-location",
++      "replacements": 1
++    },
++    {
++      "name": "observation-view",
++      "replacements": 1
++    },
++    {
++      "name": "observation-build",
++      "replacements": 1
++    },
++    {
++      "name": "task-enumeration",
++      "replacements": 1
++    },
++    {
++      "name": "self-route-lookup",
++      "replacements": 1
++    },
++    {
++      "name": "demand-health",
++      "replacements": 1
++    },
++    {
++      "name": "reservation-enumeration",
++      "replacements": 1
++    }
++  ],
++  "reversiblePreviewHotpathTransform": true,
++  "previewHotpathRules": [
++    {
++      "name": "direct-selected-total",
++      "replacements": 1
++    },
++    {
++      "name": "resource-catalog",
++      "replacements": 1
++    },
++    {
++      "name": "valid-room-names-decl",
++      "replacements": 1
++    },
++    {
++      "name": "valid-room-push",
++      "replacements": 1
++    },
++    {
++      "name": "included-set",
++      "replacements": 1
++    },
++    {
++      "name": "projection-names",
++      "replacements": 1
++    },
++    {
++      "name": "core-observation-names",
++      "replacements": 1
++    }
++  ],
+   "loaderSha256": "cfc0d3651f7f7755492ce74f69b8943d03230dd6328ce014f759447ad08093d8",
+-  "generatedSha256": "75a600170f04c99520369b0d48b55d385979b5180f47cce3b427143b99956da1",
+-  "generatedBlob": "62752b09e3828e67a9000aeffcda0b2436368bf1",
++  "generatedSha256": "3bd42eee815562492a440bef2f0e2879707dba1bd61a78eb15083fe3ef2fc92c",
++  "generatedBlob": "21c4bba26d732ead7df4d6a9f5b9dea357fd9583",
++  "previewSha256": "9e454bde732a08ba1880cae02ada391219054c70cb54aff600d7a8bde667bd2f",
++  "previewBlob": "fe92498f5e76d860e4fef98d842df3c2e8fc48ad",
+   "factories": [
+     {
+       "path": "src/runtime/configNormalize.ts",
+@@ -177,7 +246,7 @@
+     {
+       "path": "src/runtime/treasury/commitments.ts",
+       "originalBodySha256": "8cdecbdb0975612ad8770ba23022222aae10529e0647704e75b29f1c764a5b4c",
+-      "adaptation": "V-context+VII-buckets+IX-attribution",
++      "adaptation": "V-context+VII-buckets+IX-attribution+XI-hotpath",
+       "lifecycle": "shared-definition"
+     },
+     {
+@@ -189,7 +258,7 @@
+     {
+       "path": "src/runtime/treasury/observation.ts",
+       "originalBodySha256": "168fd5d39b6a72d08ab867eeea319c98e300a14dacaca5169839e257ff4c236c",
+-      "adaptation": "VII-allocation+IX-attribution",
++      "adaptation": "VII-allocation+IX-attribution+XI-hotpath",
+       "lifecycle": "shared-definition"
+     },
+     {
+@@ -229,6 +298,12 @@
+   "fullIndexBuiltEagerly": true,
+   "lazySecondaryIndexes": false,
+   "previewSourceChanged": true,
++  "sparseKeyEnumerationReuse": true,
++  "observationLookupBuiltInRoomPass": true,
++  "singleAuthorityTableEnumeration": true,
++  "canonicalDemandHelperFastPath": true,
++  "previewSelectedTotalSinglePass": true,
++  "previewResourceCatalogSingleRead": true,
+   "cpuAccountingChanged": true,
+   "publicTypeSurfaceChanged": true,
+   "defaultEnabled": false,
+@@ -237,5 +312,5 @@
+   "sourceManifestOutputIdentityCount": 13,
+   "engineCpuGapRepaired": false,
+   "engineMeasurementRequired": true,
+-  "note": "IX adds coarse nested timing boundaries and bounded primitive work counters to the read-only compatibility capsule. The boundaries overlap existing parent phases, do not authorize work, and do not sample once per record or key. Canonical host sources remain pinned."
++  "note": "XI removes repeated sparse-key, room-index, authority-table and preview bookkeeping work while preserving IX attribution, canonical health helpers, full-table validation, eager indexes and default OFF."
+ }
+diff --git a/docs/treasury-compat-source-manifest.json b/docs/treasury-compat-source-manifest.json
+index 89a41c6cd13a1442bb0e4d0871facf1094d11f9f..4cb8fc7599a0d6b202307b6ac14381046b1f8edf 100644
+--- a/docs/treasury-compat-source-manifest.json
++++ b/docs/treasury-compat-source-manifest.json
+@@ -131,15 +131,15 @@
+     },
+     {
+       "file": "src/runtime/treasuryCompatRead.ts",
+-      "bytes": 21526,
+-      "sha256": "1d5bd4d7f5922dfad3e6c44522d04695b490ba2bb711a83306858544dde70dec",
+-      "gitBlob": "556c6d565b3962c407bc82a4b5706d5382935c53"
++      "bytes": 21631,
++      "sha256": "9e454bde732a08ba1880cae02ada391219054c70cb54aff600d7a8bde667bd2f",
++      "gitBlob": "fe92498f5e76d860e4fef98d842df3c2e8fc48ad"
+     },
+     {
+       "file": "src/runtime/treasuryCompatReadCore.generated.ts",
+-      "bytes": 68416,
+-      "sha256": "75a600170f04c99520369b0d48b55d385979b5180f47cce3b427143b99956da1",
+-      "gitBlob": "62752b09e3828e67a9000aeffcda0b2436368bf1"
++      "bytes": 69357,
++      "sha256": "3bd42eee815562492a440bef2f0e2879707dba1bd61a78eb15083fe3ef2fc92c",
++      "gitBlob": "21c4bba26d732ead7df4d6a9f5b9dea357fd9583"
+     },
+     {
+       "file": "src/runtime/treasuryCompatRuntime.ts",
+@@ -173,22 +173,28 @@
+     },
+     {
+       "file": "test/treasuryCompatRead.test.ts",
+-      "bytes": 1064,
+-      "sha256": "5703123386542aabf4ab56307f6c433398478d6c2738adc4bf35ed87191a6026",
+-      "gitBlob": "c1b5e04c4ac41c881bfc426a3fbce759cc823722"
++      "bytes": 1139,
++      "sha256": "7e0190e8ca5f7910cca57133e0f044a57868f4c6d768c9c0958a8b167ba6d9d7",
++      "gitBlob": "551a1a3557cdde27f02096487b2e338757038b4f"
+     }
+   ],
+   "loaderOptimization": {
+-    "revision": "IX",
++    "revision": "XI",
+     "provenance": "docs/treasury-compat-loader-optimization.json",
+     "canonicalSourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
+-    "baselineGeneratedBlob": "4f94acf1c06a60de9ca8ff2f0cdd2910cb6913be",
++    "baselineGeneratedBlob": "62752b09e3828e67a9000aeffcda0b2436368bf1",
+     "canonicalInputGeneratedBlob": "7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3",
+     "explicitReadContextAdaptation": true,
+     "fullTaskBucketFusion": true,
+     "observationAllocationReduction": true,
+     "boundedSubphaseAttribution": true,
+     "attributionChangesAuthorization": false,
++    "sparseKeyEnumerationReuse": true,
++    "observationLookupBuiltInRoomPass": true,
++    "singleAuthorityTableEnumeration": true,
++    "canonicalDemandHelperFastPath": true,
++    "previewSelectedTotalSinglePass": true,
++    "previewResourceCatalogSingleRead": true,
+     "sourceManifestOutputValidation": "all-listed-outputs",
+     "sourceManifestOutputIdentityCount": 13
+   }
+diff --git a/scripts/build-treasury-compat-loader.cjs b/scripts/build-treasury-compat-loader.cjs
+index 3f191d662999751aca49756ac8630c20f2de323e..3b0bb31a8af2070cce10df6c0563efb78f618263 100644
+--- a/scripts/build-treasury-compat-loader.cjs
++++ b/scripts/build-treasury-compat-loader.cjs
+@@ -1,38 +1,44 @@
+ 'use strict';
+ /** Regenerates from the exact pre-V capsule; no network, transpilation or deploy.
+- * V context adaptation, VII build optimization and IX attribution are composed
+- * in order and each layer is exactly reversible. Semantic tests remain the
++ * V context adaptation, VII build optimization, IX attribution and XI hot-path
++ * transforms are composed in order and exactly reversible. Semantic tests remain the
+  * authority; reversibility supplies source provenance only. */
+ const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
+ const X = require('./lib/treasury-compat-context.cjs');
+ const B = require('./lib/treasury-compat-build.cjs');
+ const A = require('./lib/treasury-compat-attribution.cjs');
++const H = require('./lib/treasury-compat-hotpath.cjs');
++const P = require('./lib/treasury-compat-preview-hotpath.cjs');
+ const ORIGINAL_SHA = '9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965';
+ const ORIGINAL_BLOB = '7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3';
+ const SOURCE_COMMIT = '01bd9831454950c4928df98dd8679692b55603e5';
+ const GENERATED = 'src/runtime/treasuryCompatReadCore.generated.ts';
++const PREVIEW = 'src/runtime/treasuryCompatRead.ts';
+ const FIXTURE = 'test/treasury-compat/fixtures/core-before-read-optimization-v.ts.txt';
++const PREVIEW_FIXTURE = 'test/treasury-compat/fixtures/reader-before-hotpath-optimization-xi.ts.txt';
+ const TEMPLATE = 'scripts/lib/treasury-compat-loader.template.txt';
+ const PROVENANCE = 'docs/treasury-compat-loader-optimization.json';
+ const SOURCE_MANIFEST = 'docs/treasury-compat-source-manifest.json';
+ const MARKER = '/** Loader Optimization III.';
+-const BASELINE_COMMIT = 'ef23c464c83b90b413d43d07857f67d538f512a3';
++const BASELINE_COMMIT = '9adb2739935c03c0450acfebbab94912a5e3e593';
+ const BUILD_VII_BLOB = '4f94acf1c06a60de9ca8ff2f0cdd2910cb6913be';
++const IX_CORE_BLOB = '62752b09e3828e67a9000aeffcda0b2436368bf1';
++const IX_PREVIEW_BLOB = '556c6d565b3962c407bc82a4b5706d5382935c53';
++const IX_PREVIEW_SHA = '1d5bd4d7f5922dfad3e6c44522d04695b490ba2bb711a83306858544dde70dec';
+ const FIXED_OUTPUTS = Object.freeze({
+   "docs/treasury-legacy-read-bridge.md": { bytes: 4854, sha256: "23352cd61c5725021d5aed3798b714d702f766d41781d1beffd07e87773e4877", gitBlob: "fa47f2b26745cdf45fca2e228726777a9918e8a6" },
+   "src/main.test.ts": { bytes: 11031, sha256: "8fbb186cae2a1426496dd539cbc4414ce2317fc4ff848a4bc4ee179ec2d4a0ab", gitBlob: "9b8b42363e8f687742088dfca094a422d6ecf3b0" },
+   "src/main.ts": { bytes: 6271, sha256: "3bebfb632d40dd989baa9ae70a87cc49810207df6fc0cfd3f9cda53673f9dc57", gitBlob: "e8bf1c56e6147dfe4fcbb18052e29ee636da62ac" },
+   "src/runtime/treasuryCompatConfig.ts": { bytes: 531, sha256: "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02", gitBlob: "8e2214fef5a6a69b7eb40c82eee76dda1646ccbf" },
+   "src/runtime/treasuryCompatCpu.ts": { bytes: 6724, sha256: "e7dead62745052c278163281a524d765ef109df9556060a283dac35590fa042c", gitBlob: "076cc6b1a02518b0ff0e4f503e09e74b8c47464e" },
+-  "src/runtime/treasuryCompatRead.ts": { bytes: 21526, sha256: "1d5bd4d7f5922dfad3e6c44522d04695b490ba2bb711a83306858544dde70dec", gitBlob: "556c6d565b3962c407bc82a4b5706d5382935c53" },
+   "src/runtime/treasuryCompatRuntime.ts": { bytes: 865, sha256: "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4", gitBlob: "5916fbcafbb88d40cf5463d329b683ba0d776ad8" },
+   "src/runtime/treasuryCompatTypes.ts": { bytes: 2509, sha256: "0d39f976aad3d95daaa13b72f31cfe7f9a25a9611329faf152a1ded0c6b3e61b", gitBlob: "1f553df048f322a68b445a71d4b7f2b03d096e72" },
+   "test/treasury-compat/bridge.spec.cjs": { bytes: 11489, sha256: "278491b3c996874db2fe560973708ba1d2a0d34cfc94f413ad36f23a3067a50f", gitBlob: "8061a074218ba8a9ce81ec15b5da6e4ad9aa1d83" },
+   "test/treasury-compat/helpers.cjs": { bytes: 6806, sha256: "c200b1f2b6dc55deae8b50ac7ae9f0e5ecb191be6592a42c713fce7d3d289e74", gitBlob: "f7406cf25124324069c08a444683d383477e0a23" },
+   "test/treasury-compat/real-readers.spec.cjs": { bytes: 8178, sha256: "162630b8712f90fa71bb11eba25d3128dd92408b1474ea8540a2adb02a2f20c2", gitBlob: "28c78e89a8039518fe9d8d3e4d8027aff0015e8c" },
+-  "test/treasuryCompatRead.test.ts": { bytes: 1064, sha256: "5703123386542aabf4ab56307f6c433398478d6c2738adc4bf35ed87191a6026", gitBlob: "c1b5e04c4ac41c881bfc426a3fbce759cc823722" },
++  "test/treasuryCompatRead.test.ts": { bytes: 1139, sha256: "7e0190e8ca5f7910cca57133e0f044a57868f4c6d768c9c0958a8b167ba6d9d7", gitBlob: "551a1a3557cdde27f02096487b2e338757038b4f" },
+ });
+-const EXPECTED_OUTPUT_PATHS = Object.freeze([...Object.keys(FIXED_OUTPUTS), GENERATED].sort());
++const EXPECTED_OUTPUT_PATHS = Object.freeze([...Object.keys(FIXED_OUTPUTS), GENERATED, PREVIEW].sort());
+ const sha = b => crypto.createHash('sha256').update(b).digest('hex');
+ const blob = b => crypto.createHash('sha1').update(Buffer.from('blob ' + b.length + '\0')).update(b).digest('hex');
+ const encode = x => Buffer.from(JSON.stringify(x, null, 2) + '\n');
+@@ -43,16 +49,20 @@ function setOutput(manifest, file, value) {
+   if (!row) { row = { file }; manifest.outputs.push(row); }
+   Object.assign(row, value);
+ }
+-function generate(original, template, manifest) {
++function generate(original, template, manifest, previewOriginal) {
+   const b = lf(original);
+   check(b.length === 64604 && sha(b) === ORIGINAL_SHA && blob(b) === ORIGINAL_BLOB, 'CORE_BASELINE_MISMATCH');
+   const s = b.toString('utf8'), i = s.indexOf(MARKER);
+   check(i > 0 && s.indexOf(MARKER, i + 1) < 0, 'LOADER_BOUNDARY_AMBIGUOUS');
+-  const originalPrefix = s.slice(0, i), contextPrefix = X.transform(originalPrefix), buildPrefix = B.transform(contextPrefix), prefix = A.transform(buildPrefix);
++  const originalPrefix = s.slice(0, i), contextPrefix = X.transform(originalPrefix), buildPrefix = B.transform(contextPrefix),
++    attributionPrefix = A.transform(buildPrefix), prefix = H.transform(attributionPrefix);
+   const t = lf(template).toString('utf8');
+   check(t.startsWith('/** Read Optimization V:') && t.endsWith('\n') &&
+     t.includes('export function createCompatibilityReadCore(): CompatReadBuilders {'), 'LOADER_TEMPLATE_INVALID');
+   const out = Buffer.from(prefix + t);
++  const previewBase = lf(previewOriginal);
++  check(previewBase.length === 21526 && sha(previewBase) === IX_PREVIEW_SHA && blob(previewBase) === IX_PREVIEW_BLOB, 'PREVIEW_BASELINE_MISMATCH');
++  const previewOut = Buffer.from(P.transform(previewBase.toString('utf8')));
+   const matches = [...originalPrefix.matchAll(/^"([^"]+)": function\(exports, require\) \{\n/gm)];
+   check(matches.length === 8, 'FACTORY_SET_MISMATCH');
+   const dependencyStart = originalPrefix.indexOf('const dependencies = {');
+@@ -61,8 +71,8 @@ function generate(original, template, manifest) {
+     const start = m.index + m[0].length;
+     const end = k + 1 < matches.length ? matches[k + 1].index - 3 : factoryEnd + 1;
+     return { path: m[1], originalBodySha256: sha(Buffer.from(originalPrefix.slice(start, end))),
+-      adaptation: m[1].endsWith('/commitments.ts') ? 'V-context+VII-buckets+IX-attribution' :
+-        m[1].endsWith('/observation.ts') ? 'VII-allocation+IX-attribution' : 'unchanged',
++      adaptation: m[1].endsWith('/commitments.ts') ? 'V-context+VII-buckets+IX-attribution+XI-hotpath' :
++        m[1].endsWith('/observation.ts') ? 'VII-allocation+IX-attribution+XI-hotpath' : 'unchanged',
+       lifecycle: m[1].endsWith('/commitmentRevision.ts') ? 'unreachable-retained-original-definition' : 'shared-definition' };
+   });
+   const m = JSON.parse(JSON.stringify(manifest));
+@@ -71,35 +81,44 @@ function generate(original, template, manifest) {
+   const outputPaths = m.outputs.map(x => x.file);
+   check(new Set(outputPaths).size === outputPaths.length && JSON.stringify([...outputPaths].sort()) === JSON.stringify(EXPECTED_OUTPUT_PATHS), 'SOURCE_MANIFEST_OUTPUT_SET_MISMATCH');
+   setOutput(m, GENERATED, { bytes: out.length, sha256: sha(out), gitBlob: blob(out) });
++  setOutput(m, PREVIEW, { bytes: previewOut.length, sha256: sha(previewOut), gitBlob: blob(previewOut) });
+   for (const [file, value] of Object.entries(FIXED_OUTPUTS)) setOutput(m, file, value);
+   m.outputs.sort((a, b) => a.file.localeCompare(b.file));
+-  m.loaderOptimization = { revision: 'IX', provenance: PROVENANCE, canonicalSourceCommit: SOURCE_COMMIT,
+-    baselineGeneratedBlob: BUILD_VII_BLOB, canonicalInputGeneratedBlob: ORIGINAL_BLOB,
++  m.loaderOptimization = { revision: 'XI', provenance: PROVENANCE, canonicalSourceCommit: SOURCE_COMMIT,
++    baselineGeneratedBlob: IX_CORE_BLOB, canonicalInputGeneratedBlob: ORIGINAL_BLOB,
+     explicitReadContextAdaptation: true, fullTaskBucketFusion: true, observationAllocationReduction: true,
+     boundedSubphaseAttribution: true, attributionChangesAuthorization: false,
++    sparseKeyEnumerationReuse: true, observationLookupBuiltInRoomPass: true,
++    singleAuthorityTableEnumeration: true, canonicalDemandHelperFastPath: true,
++    previewSelectedTotalSinglePass: true, previewResourceCatalogSingleRead: true,
+     sourceManifestOutputValidation: 'all-listed-outputs', sourceManifestOutputIdentityCount: EXPECTED_OUTPUT_PATHS.length };
+   const provenance = {
+-    revision: 'compat-subphase-attribution-IX', authoring: [TEMPLATE, 'scripts/lib/treasury-compat-context.cjs',
+-      'scripts/lib/treasury-compat-build.cjs', 'scripts/lib/treasury-compat-attribution.cjs'],
+-    baselineCommit: BASELINE_COMMIT, baselineBuildVIIBlob: BUILD_VII_BLOB,
++    revision: 'compat-hotpath-optimization-XI', authoring: [TEMPLATE, 'scripts/lib/treasury-compat-context.cjs',
++      'scripts/lib/treasury-compat-build.cjs', 'scripts/lib/treasury-compat-attribution.cjs',
++      'scripts/lib/treasury-compat-hotpath.cjs', 'scripts/lib/treasury-compat-preview-hotpath.cjs'],
++    baselineCommit: BASELINE_COMMIT, baselineBuildVIIBlob: BUILD_VII_BLOB, baselineIXCoreBlob: IX_CORE_BLOB, baselineIXPreviewBlob: IX_PREVIEW_BLOB,
+     canonicalInputBlob: ORIGINAL_BLOB, canonicalInputSha256: ORIGINAL_SHA, canonicalInputCompiler: '5.9.3',
+     originalFactoryPrefixSha256: sha(Buffer.from(originalPrefix)), contextOnlyPrefixSha256: sha(Buffer.from(contextPrefix)),
+-    buildVIIOnlyPrefixSha256: sha(Buffer.from(buildPrefix)), adaptedFactoryPrefixSha256: sha(Buffer.from(prefix)),
++    buildVIIOnlyPrefixSha256: sha(Buffer.from(buildPrefix)), attributionOnlyPrefixSha256: sha(Buffer.from(attributionPrefix)), adaptedFactoryPrefixSha256: sha(Buffer.from(prefix)),
+     reversibleContextTransform: true, contextRules: X.rules, reversibleBuildTransform: true, buildRules: B.rules,
+-    reversibleAttributionTransform: true, attributionRules: A.rules,
+-    loaderSha256: sha(Buffer.from(t)), generatedSha256: sha(out), generatedBlob: blob(out), factories,
++    reversibleAttributionTransform: true, attributionRules: A.rules, reversibleHotpathTransform: true, hotpathRules: H.rules,
++    reversiblePreviewHotpathTransform: true, previewHotpathRules: P.rules,
++    loaderSha256: sha(Buffer.from(t)), generatedSha256: sha(out), generatedBlob: blob(out), previewSha256: sha(previewOut), previewBlob: blob(previewOut), factories,
+     factoryBodiesChanged: ['src/runtime/treasury/commitments.ts', 'src/runtime/treasury/observation.ts'],
+     diagnosticRegions: ['observationSetup','observationRooms','observationFinalize','observationView',
+       'commitmentSetup','commitmentTasks','commitmentReservations','commitmentFinalize','projectionRows'],
+     perRecordCpuSamples: false, primitiveWorkCountersOnly: true, diagnosticOverheadSubtracted: false,
+     topLevelCpuBudgetAuthorityChanged: false, businessValidationChanged: false, querySemanticsChanged: false,
+     fullIndexBuiltEagerly: true, lazySecondaryIndexes: false, previewSourceChanged: true,
++    sparseKeyEnumerationReuse: true, observationLookupBuiltInRoomPass: true,
++    singleAuthorityTableEnumeration: true, canonicalDemandHelperFastPath: true,
++    previewSelectedTotalSinglePass: true, previewResourceCatalogSingleRead: true,
+     cpuAccountingChanged: true, publicTypeSurfaceChanged: true, defaultEnabled: false, budget: 2,
+     sourceManifestOutputValidation: 'all-listed-outputs', sourceManifestOutputIdentityCount: EXPECTED_OUTPUT_PATHS.length,
+     engineCpuGapRepaired: false, engineMeasurementRequired: true,
+-    note: 'IX adds coarse nested timing boundaries and bounded primitive work counters to the read-only compatibility capsule. The boundaries overlap existing parent phases, do not authorize work, and do not sample once per record or key. Canonical host sources remain pinned.'
++    note: 'XI removes repeated sparse-key, room-index, authority-table and preview bookkeeping work while preserving IX attribution, canonical health helpers, full-table validation, eager indexes and default OFF.'
+   };
+-  return { [GENERATED]: out, [PROVENANCE]: encode(provenance), [SOURCE_MANIFEST]: encode(m) };
++  return { [GENERATED]: out, [PREVIEW]: previewOut, [PROVENANCE]: encode(provenance), [SOURCE_MANIFEST]: encode(m) };
+ }
+ function verifyOutputIdentities(root, expected = FIXED_OUTPUTS) {
+   for (const [file, identity] of Object.entries(expected)) {
+@@ -117,12 +136,12 @@ function applyOrCheckGenerated(root, result, mode) {
+ function verifyRoot(root, mode) {
+   check(['--check', '--write'].includes(mode), 'ARGUMENT_INVALID');
+   const result = generate(fs.readFileSync(path.join(root, FIXTURE)), fs.readFileSync(path.join(root, TEMPLATE)),
+-    JSON.parse(fs.readFileSync(path.join(root, SOURCE_MANIFEST), 'utf8')));
++    JSON.parse(fs.readFileSync(path.join(root, SOURCE_MANIFEST), 'utf8')), fs.readFileSync(path.join(root, PREVIEW_FIXTURE)));
+   verifyOutputIdentities(root);
+   applyOrCheckGenerated(root, result, mode);
+   return { status: mode === '--check' ? 'COMPAT_LOADER_REGENERATION_VERIFIED' : 'COMPAT_LOADER_REGENERATED',
+     files: Object.keys(result), canonicalFactoryBodyRecovery: 'exact', explicitContextAdaptation: true,
+-    fullTaskBucketFusion: true, observationAllocationReduction: true, boundedSubphaseAttribution: true,
++    fullTaskBucketFusion: true, observationAllocationReduction: true, boundedSubphaseAttribution: true, hotpathOptimizationXI: true,
+     sourceManifestOutputValidation: 'all-listed-outputs', sourceManifestOutputIdentityCount: EXPECTED_OUTPUT_PATHS.length };
+ }
+ function main(argv) {
+@@ -130,6 +149,6 @@ function main(argv) {
+   return verifyRoot(path.resolve(__dirname, '..'), argv[0]);
+ }
+ module.exports = { generate, main, sha, blob, GENERATED, FIXTURE, TEMPLATE, PROVENANCE, SOURCE_MANIFEST, MARKER,
+-  X, B, A, FIXED_OUTPUTS, EXPECTED_OUTPUT_PATHS, verifyOutputIdentities, applyOrCheckGenerated, verifyRoot, BASELINE_COMMIT, BUILD_VII_BLOB };
++  X, B, A, H, P, FIXED_OUTPUTS, EXPECTED_OUTPUT_PATHS, verifyOutputIdentities, applyOrCheckGenerated, verifyRoot, BASELINE_COMMIT, BUILD_VII_BLOB, IX_CORE_BLOB, IX_PREVIEW_BLOB, PREVIEW, PREVIEW_FIXTURE };
+ if (require.main === module) try { console.log(JSON.stringify(main(process.argv.slice(2)))); }
+ catch (e) { console.error(JSON.stringify({ status: 'STOP', code: e.code || 'GENERATOR_FAILED' })); process.exitCode = 1; }
+diff --git a/scripts/lib/treasury-compat-hotpath.cjs b/scripts/lib/treasury-compat-hotpath.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9832f21f914ce30d393bc78c826add6f11184ef3
+--- /dev/null
++++ b/scripts/lib/treasury-compat-hotpath.cjs
+@@ -0,0 +1,16 @@
++'use strict';
++/** XI: deterministic hot-path transform layered after IX attribution. */
++const RULES = [
++  ["scan-location","function scanLocation(structure) {\n    if (!structure) {\n        return {\n            exists: false,\n            structureId: undefined,\n            amounts: {},\n            usedCapacity: 0,\n            freeCapacity: 0,\n            nonZeroKeys: 0,\n        };\n    }\n    // 单次 Object.keys 稀疏枚举：store 本体即资源→数量记录（ts 类型上隐藏）。\n    const record = structure.store;\n    const amounts = {};\n    let nonZeroKeys = 0;\n    for (const key of Object.keys(record)) {\n        const amount = record[key];\n        if (typeof amount === \"number\" && amount > 0) {\n            amounts[key] = amount;\n            nonZeroKeys += 1;\n        }\n    }\n    return {\n        exists: true,\n        structureId: structure.id,\n        amounts,\n        usedCapacity: structure.store.getUsedCapacity(),\n        freeCapacity: structure.store.getFreeCapacity(),\n        nonZeroKeys,\n    };\n}\n","const EMPTY_AMOUNT_KEYS = Object.freeze([]);\nfunction scanLocation(structure) {\n    if (!structure) {\n        return {\n            exists: false,\n            structureId: undefined,\n            amounts: {},\n            amountKeys: EMPTY_AMOUNT_KEYS,\n            usedCapacity: 0,\n            freeCapacity: 0,\n            nonZeroKeys: 0,\n        };\n    }\n    // XI: retain the FIRST sparse key enumeration for the later empire fold.\n    // The array is compacted in-place after each source index has been read;\n    // callbacks still run before totals and no live Store value is reread.\n    const record = structure.store;\n    const amountKeys = Object.keys(record);\n    const amounts = {};\n    let nonZeroKeys = 0;\n    for (const key of amountKeys) {\n        const amount = record[key];\n        if (typeof amount === \"number\" && amount > 0) {\n            amounts[key] = amount;\n            amountKeys[nonZeroKeys] = key;\n            nonZeroKeys += 1;\n        }\n    }\n    amountKeys.length = nonZeroKeys;\n    return {\n        exists: true,\n        structureId: structure.id,\n        amounts,\n        amountKeys,\n        usedCapacity: structure.store.getUsedCapacity(),\n        freeCapacity: structure.store.getFreeCapacity(),\n        nonZeroKeys,\n    };\n}\n"],
++  ["observation-view","function createObservationView(data) {\n    const roomsByOrdinal = data.rooms;\n    const roomByName = new Map();\n    for (const room of roomsByOrdinal)\n        roomByName.set(room.roomName, room);\n    let cachedEmpireResources;\n    const roomResourcesCache = new Map();\n    const locationOf = (roomName, kind) => {\n        const room = roomByName.get(roomName);\n        if (!room) {\n            return Object.freeze({\n                roomName,\n                kind,\n                exists: false,\n                structureId: undefined,\n                amounts: Object.freeze({}),\n                usedCapacity: 0,\n                freeCapacity: 0,\n            });\n        }\n        return kind === \"storage\" ? room.storage : room.terminal;\n    };\n    return {\n        data,\n        epoch: data.epoch,\n        roomNames() {\n            return roomsByOrdinal.map((room) => room.roomName);\n        },\n        hasRoom(roomName) {\n            return roomByName.has(roomName);\n        },\n        locationExists(roomName, kind) {\n            return locationOf(roomName, kind).exists;\n        },\n        location: locationOf,\n        amount(roomName, kind, resource) {\n            var _a;\n            return (_a = locationOf(roomName, kind).amounts[resource]) !== null && _a !== void 0 ? _a : 0;\n        },\n        roomAmount(roomName, resource) {\n            var _a, _b;\n            const room = roomByName.get(roomName);\n            if (!room)\n                return 0;\n            return ((_a = room.storage.amounts[resource]) !== null && _a !== void 0 ? _a : 0) + ((_b = room.terminal.amounts[resource]) !== null && _b !== void 0 ? _b : 0);\n        },\n        roomResources(roomName) {\n            const cached = roomResourcesCache.get(roomName);\n            if (cached)\n                return cached;\n            const room = roomByName.get(roomName);\n            const merged = new Set();\n            if (room) {\n                for (const key of Object.keys(room.storage.amounts))\n                    merged.add(key);\n                for (const key of Object.keys(room.terminal.amounts))\n                    merged.add(key);\n            }\n            const snapshot = Object.freeze([...merged]);\n            roomResourcesCache.set(roomName, snapshot);\n            return snapshot;\n        },\n        empireTotal(resource) {\n            var _a;\n            return (_a = data.empireTotals[resource]) !== null && _a !== void 0 ? _a : 0;\n        },\n        empireResources() {\n            if (!cachedEmpireResources) {\n                cachedEmpireResources = Object.freeze(Object.keys(data.empireTotals));\n            }\n            return cachedEmpireResources;\n        },\n        usedCapacity(roomName, kind) {\n            return locationOf(roomName, kind).usedCapacity;\n        },\n        freeCapacity(roomName, kind) {\n            return locationOf(roomName, kind).freeCapacity;\n        },\n        isStale() {\n            return data.epoch.observedAtTick !== Game.time;\n        },\n    };\n}\n","function createObservationView(data, roomByName) {\n    const roomsByOrdinal = data.rooms;\n    let cachedEmpireResources;\n    const roomResourcesCache = new Map();\n    const locationOf = (roomName, kind) => {\n        const room = roomByName[roomName];\n        if (!room) {\n            return Object.freeze({\n                roomName,\n                kind,\n                exists: false,\n                structureId: undefined,\n                amounts: Object.freeze({}),\n                usedCapacity: 0,\n                freeCapacity: 0,\n            });\n        }\n        return kind === \"storage\" ? room.storage : room.terminal;\n    };\n    return {\n        data,\n        epoch: data.epoch,\n        roomNames() {\n            return roomsByOrdinal.map((room) => room.roomName);\n        },\n        hasRoom(roomName) {\n            return Object.prototype.hasOwnProperty.call(roomByName, roomName);\n        },\n        locationExists(roomName, kind) {\n            return locationOf(roomName, kind).exists;\n        },\n        location: locationOf,\n        amount(roomName, kind, resource) {\n            var _a;\n            return (_a = locationOf(roomName, kind).amounts[resource]) !== null && _a !== void 0 ? _a : 0;\n        },\n        roomAmount(roomName, resource) {\n            var _a, _b;\n            const room = roomByName[roomName];\n            if (!room)\n                return 0;\n            return ((_a = room.storage.amounts[resource]) !== null && _a !== void 0 ? _a : 0) + ((_b = room.terminal.amounts[resource]) !== null && _b !== void 0 ? _b : 0);\n        },\n        roomResources(roomName) {\n            const cached = roomResourcesCache.get(roomName);\n            if (cached)\n                return cached;\n            const room = roomByName[roomName];\n            const merged = new Set();\n            if (room) {\n                for (const key of Object.keys(room.storage.amounts))\n                    merged.add(key);\n                for (const key of Object.keys(room.terminal.amounts))\n                    merged.add(key);\n            }\n            const snapshot = Object.freeze([...merged]);\n            roomResourcesCache.set(roomName, snapshot);\n            return snapshot;\n        },\n        empireTotal(resource) {\n            var _a;\n            return (_a = data.empireTotals[resource]) !== null && _a !== void 0 ? _a : 0;\n        },\n        empireResources() {\n            if (!cachedEmpireResources) {\n                cachedEmpireResources = Object.freeze(Object.keys(data.empireTotals));\n            }\n            return cachedEmpireResources;\n        },\n        usedCapacity(roomName, kind) {\n            return locationOf(roomName, kind).usedCapacity;\n        },\n        freeCapacity(roomName, kind) {\n            return locationOf(roomName, kind).freeCapacity;\n        },\n        isStale() {\n            return data.epoch.observedAtTick !== Game.time;\n        },\n    };\n}\n"],
++  ["observation-build","function buildTreasuryObservation(options) {\n    var _a, _b, _c, _d, _e;\n    const compatDiagnostics = options.compatDiagnostics;\n    if (compatDiagnostics)\n        compatDiagnostics.boundary(\"observationSetup\");\n    let attributionExistingLocations = 0;\n    let attributionResourceKeys = 0;\n    const epoch = {\n        scope: options.scope,\n        epochSeq: options.epochSeq,\n        observedAtTick: Game.time,\n        worldSequence: readTreasuryWorldSequence(),\n    };\n    const rooms = [];\n    const empireTotals = {};\n    if (compatDiagnostics)\n        compatDiagnostics.boundary(\"observationRooms\");\n    for (const room of options.rooms) {\n        const storageScan = scanLocation((_a = room.storage) !== null && _a !== void 0 ? _a : undefined);\n        const terminalScan = scanLocation((_b = room.terminal) !== null && _b !== void 0 ? _b : undefined);\n        attributionExistingLocations += (storageScan.exists ? 1 : 0) + (terminalScan.exists ? 1 : 0);\n        attributionResourceKeys += storageScan.nonZeroKeys + terminalScan.nonZeroKeys;\n        // 只对真实存在的 Store 计数枚举（missing 位置无枚举成本）；\n        // nonZeroKeys 复用 scanLocation 的单次枚举结果。\n        if (storageScan.exists)\n            (_c = options.onStoreScanned) === null || _c === void 0 ? void 0 : _c.call(options, storageScan.nonZeroKeys);\n        if (terminalScan.exists)\n            (_d = options.onStoreScanned) === null || _d === void 0 ? void 0 : _d.call(options, terminalScan.nonZeroKeys);\n        // VII: freeze the one final room object, not a temporary clone.\n        rooms.push(Object.freeze({\n            roomName: room.name,\n            storage: freezeLocation(room.name, \"storage\", storageScan),\n            terminal: freezeLocation(room.name, \"terminal\", terminalScan),\n        }));\n        // 帝国总量 = 全部位置桶之和（构建期求和；missing 位置贡献 0）。\n        for (const scan of [storageScan, terminalScan]) {\n            // VII: amounts is an owned, frozen primitive snapshot here.\n            // Preserve Object.keys order and additions; avoid [key,value] pairs.\n            for (const resource of Object.keys(scan.amounts)) {\n                const amount = scan.amounts[resource];\n                empireTotals[resource] = ((_e = empireTotals[resource]) !== null && _e !== void 0 ? _e : 0) + amount;\n            }\n        }\n    }\n    if (compatDiagnostics)\n        compatDiagnostics.boundary(\"observationFinalize\");\n    const data = Object.freeze({\n        epoch: Object.freeze(epoch),\n        rooms: Object.freeze(rooms),\n        empireTotals: Object.freeze(empireTotals),\n    });\n    if (compatDiagnostics)\n        compatDiagnostics.boundary(\"observationView\");\n    const view = createObservationView(data);\n    if (compatDiagnostics) {\n        compatDiagnostics.work({\n            observationRooms: options.rooms.length,\n            observationLocations: options.rooms.length * 2,\n            observationExistingLocations: attributionExistingLocations,\n            observationResourceKeys: attributionResourceKeys,\n        });\n        compatDiagnostics.boundary();\n    }\n    return view;\n}\n","function buildTreasuryObservation(options) {\n    var _a, _b, _c, _d, _e;\n    const compatDiagnostics = options.compatDiagnostics;\n    if (compatDiagnostics)\n        compatDiagnostics.boundary(\"observationSetup\");\n    let attributionExistingLocations = 0;\n    let attributionResourceKeys = 0;\n    const epoch = {\n        scope: options.scope,\n        epochSeq: options.epochSeq,\n        observedAtTick: Game.time,\n        worldSequence: readTreasuryWorldSequence(),\n    };\n    const rooms = [];\n    // XI: build the last-room-wins lookup in the existing ordinal pass. A\n    // null-prototype record preserves arbitrary own names without Map setup.\n    const roomByName = Object.create(null);\n    const empireTotals = {};\n    if (compatDiagnostics)\n        compatDiagnostics.boundary(\"observationRooms\");\n    for (const room of options.rooms) {\n        const storageScan = scanLocation((_a = room.storage) !== null && _a !== void 0 ? _a : undefined);\n        const terminalScan = scanLocation((_b = room.terminal) !== null && _b !== void 0 ? _b : undefined);\n        attributionExistingLocations += (storageScan.exists ? 1 : 0) + (terminalScan.exists ? 1 : 0);\n        attributionResourceKeys += storageScan.nonZeroKeys + terminalScan.nonZeroKeys;\n        // 只对真实存在的 Store 计数枚举（missing 位置无枚举成本）；\n        // nonZeroKeys 复用 scanLocation 的单次枚举结果。\n        if (storageScan.exists)\n            (_c = options.onStoreScanned) === null || _c === void 0 ? void 0 : _c.call(options, storageScan.nonZeroKeys);\n        if (terminalScan.exists)\n            (_d = options.onStoreScanned) === null || _d === void 0 ? void 0 : _d.call(options, terminalScan.nonZeroKeys);\n        // XI keeps one final room object and indexes the SAME snapshot.\n        const roomSnapshot = Object.freeze({\n            roomName: room.name,\n            storage: freezeLocation(room.name, \"storage\", storageScan),\n            terminal: freezeLocation(room.name, \"terminal\", terminalScan),\n        });\n        rooms.push(roomSnapshot);\n        roomByName[room.name] = roomSnapshot;\n        // 帝国总量 = 全部位置桶之和（构建期求和；missing 位置贡献 0）。\n        for (const scan of [storageScan, terminalScan]) {\n            // XI: preserve sparse key order and addition order while reusing the\n            // first Store enumeration retained by scanLocation.\n            for (const resource of scan.amountKeys) {\n                const amount = scan.amounts[resource];\n                empireTotals[resource] = ((_e = empireTotals[resource]) !== null && _e !== void 0 ? _e : 0) + amount;\n            }\n        }\n    }\n    if (compatDiagnostics)\n        compatDiagnostics.boundary(\"observationFinalize\");\n    const data = Object.freeze({\n        epoch: Object.freeze(epoch),\n        rooms: Object.freeze(rooms),\n        empireTotals: Object.freeze(empireTotals),\n    });\n    if (compatDiagnostics)\n        compatDiagnostics.boundary(\"observationView\");\n    const view = createObservationView(data, roomByName);\n    if (compatDiagnostics) {\n        compatDiagnostics.work({\n            observationRooms: options.rooms.length,\n            observationLocations: options.rooms.length * 2,\n            observationExistingLocations: attributionExistingLocations,\n            observationResourceKeys: attributionResourceKeys,\n        });\n        compatDiagnostics.boundary();\n    }\n    return view;\n}\n"],
++  ["task-enumeration","    metrics.taskRecords = Object.keys(options.tasks).length;\n    for (const task of Object.values(options.tasks)) {\n","    const taskIds = Object.keys(options.tasks);\n    metrics.taskRecords = taskIds.length;\n    for (const taskId of taskIds) {\n        const task = options.tasks[taskId];\n"],
++  ["self-route-lookup","        let outBucket = taskScopes.get(outKey), inBucket = taskScopes.get(inKey);\n","        let outBucket = taskScopes.get(outKey), inBucket = inKey === outKey ? outBucket : taskScopes.get(inKey);\n"],
++  ["demand-health","        const countsTowardDemand = (0, resourceTransferTaskHealth_1.countsResourceTransferTaskTowardDemand)(task, healthOptions);\n","        // XI: this task is already validated pending. Manual intent is always\n        // covered; automatic expiry still delegates to the canonical helper.\n        const countsTowardDemand = task.origin === \"manual\" ||\n            (0, resourceTransferTaskHealth_1.getResourceTransferTaskDemandCoverageExpirationReason)(task, healthOptions) === null;\n"],
++  ["reservation-enumeration","    metrics.reservationRecords = Object.keys(options.reservations).length;\n    for (const entry of Object.values(options.reservations)) {\n","    const reservationIds = Object.keys(options.reservations);\n    metrics.reservationRecords = reservationIds.length;\n    for (const reservationId of reservationIds) {\n        const entry = options.reservations[reservationId];\n"],
++];
++function check(ok, code) { if (!ok) { const e = new Error(code); e.code = code; throw e; } }
++function substitute(text, before, after, name) { check(text.split(before).length === 2, 'HOTPATH_TRANSFORM_COUNT:' + name); return text.replace(before, () => after); }
++function transform(text) { let result = text; for (const [name,before,after] of RULES) result = substitute(result,before,after,name); check(restore(result) === text, 'HOTPATH_TRANSFORM_NOT_REVERSIBLE'); return result; }
++function restore(text) { for (const [name,before,after] of [...RULES].reverse()) text = substitute(text,after,before,name); return text; }
++module.exports = { transform, restore, rules: RULES.map(([name]) => ({ name, replacements: 1 })) };
+diff --git a/scripts/lib/treasury-compat-preview-hotpath.cjs b/scripts/lib/treasury-compat-preview-hotpath.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..112c4b9e3982796f560a8f7a8b7f49bda5022810
+--- /dev/null
++++ b/scripts/lib/treasury-compat-preview-hotpath.cjs
+@@ -0,0 +1,16 @@
++'use strict';
++/** XI: deterministic preview hot-path transform; business output is unchanged. */
++const RULES = [
++  ["direct-selected-total","function direct(room: Room | undefined, kind: Kind, resources: readonly string[]): { status: string; value?: Direct } {\n  try {\n    if (!room) return { status: \"not_visible\" };\n    if (room.controller?.my !== true) return { status: \"not_owned\" };\n    const s = room[kind];\n    if (!s) return { status: \"absent\" };\n    if (s.my !== true || !str(s.id, 96)) return { status: \"unreadable\" };\n    // Endpoint-local reference only: no value or Store is retained across calls.\n    // Core observation still obtains its own Store and independently enumerates it.\n    const store = s.store;\n    if (!store || typeof s.isActive !== \"function\") return { status: \"unreadable\" };\n    const used = store.getUsedCapacity(), free = store.getFreeCapacity(), capacity = store.getCapacity();\n    const active = s.isActive(), cooldown = kind === \"terminal\" ? (s as StructureTerminal).cooldown : null;\n    // Capacity reduction may leave inventory above capacity. Preserve signed\n    // free or a saturated zero, rather than inventing capacity=used+free.\n    if (!nonneg(used) || !nonneg(capacity) || !Number.isSafeInteger(free)\n      || !(used + free === capacity || (used > capacity && free === 0))\n      || typeof active !== \"boolean\" || (kind === \"terminal\" && !nonneg(cooldown))) return { status: \"unreadable\" };\n    const amounts: Record<string, number> = Object.create(null);\n    for (const r of resources) {\n      const a = store.getUsedCapacity(r as ResourceConstant);\n      if (!nonneg(a) || a > used) return { status: \"unreadable\" };\n      amounts[r] = a;\n    }\n    if (Object.values(amounts).reduce((a, b) => a + b, 0) > used) return { status: \"unreadable\" };\n    return { status: \"ok\", value: { id: s.id, used, free, capacity, overCapacity: used > capacity,\n      active, cooldown, amounts } };\n  } catch { return { status: \"unreadable\" }; }\n}\n","function direct(room: Room | undefined, kind: Kind, resources: readonly string[]): { status: string; value?: Direct } {\n  try {\n    if (!room) return { status: \"not_visible\" };\n    if (room.controller?.my !== true) return { status: \"not_owned\" };\n    const s = room[kind];\n    if (!s) return { status: \"absent\" };\n    if (s.my !== true || !str(s.id, 96)) return { status: \"unreadable\" };\n    // Endpoint-local reference only: no value or Store is retained across calls.\n    // Core observation still obtains its own Store and independently enumerates it.\n    const store = s.store;\n    if (!store || typeof s.isActive !== \"function\") return { status: \"unreadable\" };\n    const used = store.getUsedCapacity(), free = store.getFreeCapacity(), capacity = store.getCapacity();\n    const active = s.isActive(), cooldown = kind === \"terminal\" ? (s as StructureTerminal).cooldown : null;\n    // Capacity reduction may leave inventory above capacity. Preserve signed\n    // free or a saturated zero, rather than inventing capacity=used+free.\n    if (!nonneg(used) || !nonneg(capacity) || !Number.isSafeInteger(free)\n      || !(used + free === capacity || (used > capacity && free === 0))\n      || typeof active !== \"boolean\" || (kind === \"terminal\" && !nonneg(cooldown))) return { status: \"unreadable\" };\n    const amounts: Record<string, number> = Object.create(null);\n    let selectedTotal = 0;\n    for (const r of resources) {\n      const a = store.getUsedCapacity(r as ResourceConstant);\n      if (!nonneg(a) || a > used) return { status: \"unreadable\" };\n      amounts[r] = a;\n      selectedTotal += a;\n    }\n    if (selectedTotal > used) return { status: \"unreadable\" };\n    return { status: \"ok\", value: { id: s.id, used, free, capacity, overCapacity: used > capacity,\n      active, cooldown, amounts } };\n  } catch { return { status: \"unreadable\" }; }\n}\n"],
++  ["resource-catalog","      if (ports.shard() !== cfg.shardName) return { status: \"wrong_shard\" };\n      if (!cfg.resources.every(r => ports.resources().includes(r))) throw new Error(\"invalid resource\");\n","      if (ports.shard() !== cfg.shardName) return { status: \"wrong_shard\" };\n      const availableResources = ports.resources();\n      if (!cfg.resources.every(r => availableResources.includes(r))) throw new Error(\"invalid resource\");\n"],
++  ["valid-room-names-decl","      const validRooms: Room[] = [];\n      const next: Previous = { tick, endpoints: Object.create(null) };\n","      const validRooms: Room[] = [];\n      const validRoomNames: string[] = [];\n      const next: Previous = { tick, endpoints: Object.create(null) };\n"],
++  ["valid-room-push","        if (safe && room && room.controller?.my === true) validRooms.push(room);\n","        if (safe && room && room.controller?.my === true) { validRooms.push(room); validRoomNames.push(name); }\n"],
++  ["included-set","      const included = new Set(validRooms.map(r => r.name));\n","      const included = new Set(validRoomNames);\n"],
++  ["projection-names","        const projectionRowsPlanned = validRooms.length * cfg.resources.length;\n        builderDiagnostics?.boundary(\"projectionRows\");\n        for (const name of validRooms.map(r => r.name)) for (const resource of cfg.resources) {\n","        const projectionRowsPlanned = validRoomNames.length * cfg.resources.length;\n        builderDiagnostics?.boundary(\"projectionRows\");\n        for (const name of validRoomNames) for (const resource of cfg.resources) {\n"],
++  ["core-observation-names","      report.coreObservationRooms = validRooms.filter(() => !!observations).map(r => r.name);\n","      report.coreObservationRooms = observations ? [...validRoomNames] : [];\n"],
++];
++function check(ok, code) { if (!ok) { const e = new Error(code); e.code = code; throw e; } }
++function substitute(text, before, after, name) { check(text.split(before).length === 2, 'PREVIEW_HOTPATH_TRANSFORM_COUNT:' + name); return text.replace(before, () => after); }
++function transform(text) { let result = text; for (const [name,before,after] of RULES) result = substitute(result,before,after,name); check(restore(result) === text, 'PREVIEW_HOTPATH_TRANSFORM_NOT_REVERSIBLE'); return result; }
++function restore(text) { for (const [name,before,after] of [...RULES].reverse()) text = substitute(text,after,before,name); return text; }
++module.exports = { transform, restore, rules: RULES.map(([name]) => ({ name, replacements: 1 })) };
+diff --git a/src/runtime/treasuryCompatRead.ts b/src/runtime/treasuryCompatRead.ts
+index 556c6d565b3962c407bc82a4b5706d5382935c53..fe92498f5e76d860e4fef98d842df3c2e8fc48ad 100644
+--- a/src/runtime/treasuryCompatRead.ts
++++ b/src/runtime/treasuryCompatRead.ts
+@@ -97,12 +97,14 @@ function direct(room: Room | undefined, kind: Kind, resources: readonly string[]
+       || !(used + free === capacity || (used > capacity && free === 0))
+       || typeof active !== "boolean" || (kind === "terminal" && !nonneg(cooldown))) return { status: "unreadable" };
+     const amounts: Record<string, number> = Object.create(null);
++    let selectedTotal = 0;
+     for (const r of resources) {
+       const a = store.getUsedCapacity(r as ResourceConstant);
+       if (!nonneg(a) || a > used) return { status: "unreadable" };
+       amounts[r] = a;
++      selectedTotal += a;
+     }
+-    if (Object.values(amounts).reduce((a, b) => a + b, 0) > used) return { status: "unreadable" };
++    if (selectedTotal > used) return { status: "unreadable" };
+     return { status: "ok", value: { id: s.id, used, free, capacity, overCapacity: used > capacity,
+       active, cooldown, amounts } };
+   } catch { return { status: "unreadable" }; }
+@@ -156,7 +158,8 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
+       if (tick % cfg.intervalTicks !== 0 || tick === lastTick) return { status: "not_due" };
+       lastTick = tick;
+       if (ports.shard() !== cfg.shardName) return { status: "wrong_shard" };
+-      if (!cfg.resources.every(r => ports.resources().includes(r))) throw new Error("invalid resource");
++      const availableResources = ports.resources();
++      if (!cfg.resources.every(r => availableResources.includes(r))) throw new Error("invalid resource");
+       const start = ports.cpu();
+       const validCpu = (c: ReturnType<CompatPorts["cpu"]>) => finite(c.used) && finite(c.tickLimit) && nonneg(c.bucket);
+       if (!validCpu(start)) throw new Error("invalid CPU");
+@@ -205,6 +208,7 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
+       };
+       const rows: Rec[] = []; report.endpoints = rows;
+       const validRooms: Room[] = [];
++      const validRoomNames: string[] = [];
+       const next: Previous = { tick, endpoints: Object.create(null) };
+       let limited = false, observations: CompatObservation | undefined;
+       for (const name of cfg.rooms) {
+@@ -229,7 +233,7 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
+               amounts: Object.fromEntries(cfg.resources.map(r => [r, d.value!.amounts[r] - old.amounts[r]])) };
+           }
+         }
+-        if (safe && room && room.controller?.my === true) validRooms.push(room);
++        if (safe && room && room.controller?.my === true) { validRooms.push(room); validRoomNames.push(name); }
+       }
+       // Build from actual Game room objects, NOT from the just-produced direct
+       // numbers or legacy Memory projection. Independently enumerates Store keys.
+@@ -245,7 +249,7 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
+       // Diagnostic-only extra checkpoint: its cost is NOT removed from budget.
+       if (accounting && !budget("coreCompare")) limited = true;
+       if (observations && observations.epoch.observedAtTick !== tick) throw new Error("stale builder");
+-      const included = new Set(validRooms.map(r => r.name));
++      const included = new Set(validRoomNames);
+       for (const row of rows) {
+         if (!observations || !included.has(row.room as string)) { row.coreComparison = "not_read"; continue; }
+         const o = observations.location(row.room as string, row.location as Kind), d = row.direct as Direct | undefined;
+@@ -265,9 +269,9 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
+         accounting?.invoked("commitmentBuild");
+         const index = readers.buildCommitments({ tick, tasks: tasks.value, reservations: reservations.value, observation: observations, compatDiagnostics: builderDiagnostics });
+         const fields: Rec[] = [];
+-        const projectionRowsPlanned = validRooms.length * cfg.resources.length;
++        const projectionRowsPlanned = validRoomNames.length * cfg.resources.length;
+         builderDiagnostics?.boundary("projectionRows");
+-        for (const name of validRooms.map(r => r.name)) for (const resource of cfg.resources) {
++        for (const name of validRoomNames) for (const resource of cfg.resources) {
+           if (!budget("commitmentProjection")) { limited = true; break; }
+           const outgoing = index.outgoing(name, resource), incoming = index.incoming(name, resource), reserved = index.reservedProduction(name, resource);
+           if (![outgoing, incoming, reserved].every(nonneg)) throw new Error("invalid index numbers");
+@@ -284,7 +288,7 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
+       } else if (!budget()) { limited = true; report.commitments = { status: "not_read_cpu_budget", rows: null }; }
+       if (!budget("report")) limited = true;
+       report.status = limited ? "partial_cpu_budget" : "sampled";
+-      report.coreObservationRooms = validRooms.filter(() => !!observations).map(r => r.name);
++      report.coreObservationRooms = observations ? [...validRoomNames] : [];
+       report.requestedEndpointRows = cfg.rooms.length * 2;
+       report.collectedEndpointRows = rows.length;
+       if (accounting && !budget("serializationAndSize")) report.status = "partial_cpu_budget";
+diff --git a/src/runtime/treasuryCompatReadCore.generated.ts b/src/runtime/treasuryCompatReadCore.generated.ts
+index 62752b09e3828e67a9000aeffcda0b2436368bf1..21c4bba26d732ead7df4d6a9f5b9dea357fd9583 100644
+--- a/src/runtime/treasuryCompatReadCore.generated.ts
++++ b/src/runtime/treasuryCompatReadCore.generated.ts
+@@ -342,8 +342,10 @@ function buildTreasuryCommitmentIndex(options, compatContext) {
+     attributionInvalidRegion = "tasks";
+     if (compatDiagnostics)
+         compatDiagnostics.boundary("commitmentTasks");
+-    metrics.taskRecords = Object.keys(options.tasks).length;
+-    for (const task of Object.values(options.tasks)) {
++    const taskIds = Object.keys(options.tasks);
++    metrics.taskRecords = taskIds.length;
++    for (const taskId of taskIds) {
++        const task = options.tasks[taskId];
+         if (!isValidTreasuryTransferTaskForCommitment(task, compatContext)) {
+             // 损坏任务影响 donor 与 receiver 双侧 bucket：能定位哪侧就标记哪侧
+             // scope incomplete；双侧都不可定位（连资源/房间都读不出）则全局
+@@ -374,7 +376,7 @@ function buildTreasuryCommitmentIndex(options, compatContext) {
+         const fromRoom = task.fromRoomName, toRoom = task.toRoomName;
+         const outKey = taskKey(fromRoom, task.resource);
+         const inKey = taskKey(toRoom, task.resource);
+-        let outBucket = taskScopes.get(outKey), inBucket = taskScopes.get(inKey);
++        let outBucket = taskScopes.get(outKey), inBucket = inKey === outKey ? outBucket : taskScopes.get(inKey);
+         const mergedOutgoing = addSafeInteger(outBucket ? outBucket.outgoing : 0, task.remainingAmount);
+         const mergedPendingIncoming = addSafeInteger(inBucket ? inBucket.pendingIncoming : 0, task.remainingAmount);
+         if (mergedOutgoing === null || mergedPendingIncoming === null) {
+@@ -411,7 +413,10 @@ function buildTreasuryCommitmentIndex(options, compatContext) {
+         }
+         inBucket.pendingIncoming = mergedPendingIncoming;
+         attributionDemandHealthChecks += 1;
+-        const countsTowardDemand = (0, resourceTransferTaskHealth_1.countsResourceTransferTaskTowardDemand)(task, healthOptions);
++        // XI: this task is already validated pending. Manual intent is always
++        // covered; automatic expiry still delegates to the canonical helper.
++        const countsTowardDemand = task.origin === "manual" ||
++            (0, resourceTransferTaskHealth_1.getResourceTransferTaskDemandCoverageExpirationReason)(task, healthOptions) === null;
+         let toBucket;
+         if (countsTowardDemand) {
+             const mergedIncoming = addSafeInteger(inBucket.incoming, task.remainingAmount);
+@@ -460,8 +465,10 @@ function buildTreasuryCommitmentIndex(options, compatContext) {
+         compatDiagnostics.boundary("commitmentReservations");
+     const reservationSnapshot = [];
+     const reservedByRoomResource = new Map();
+-    metrics.reservationRecords = Object.keys(options.reservations).length;
+-    for (const entry of Object.values(options.reservations)) {
++    const reservationIds = Object.keys(options.reservations);
++    metrics.reservationRecords = reservationIds.length;
++    for (const reservationId of reservationIds) {
++        const entry = options.reservations[reservationId];
+         if (!isValidReservationForCommitment(entry, compatContext)) {
+             recordInvalid();
+             const roomLocated = typeof (entry === null || entry === void 0 ? void 0 : entry.roomName) === "string" && entry.roomName.length > 0;
+@@ -819,32 +826,40 @@ function bumpTreasuryWorldSequence() {
+     }
+     Memory.runtime.treasuryWorldSequence = readTreasuryWorldSequence() + 1;
+ }
++const EMPTY_AMOUNT_KEYS = Object.freeze([]);
+ function scanLocation(structure) {
+     if (!structure) {
+         return {
+             exists: false,
+             structureId: undefined,
+             amounts: {},
++            amountKeys: EMPTY_AMOUNT_KEYS,
+             usedCapacity: 0,
+             freeCapacity: 0,
+             nonZeroKeys: 0,
+         };
+     }
+-    // 单次 Object.keys 稀疏枚举：store 本体即资源→数量记录（ts 类型上隐藏）。
++    // XI: retain the FIRST sparse key enumeration for the later empire fold.
++    // The array is compacted in-place after each source index has been read;
++    // callbacks still run before totals and no live Store value is reread.
+     const record = structure.store;
++    const amountKeys = Object.keys(record);
+     const amounts = {};
+     let nonZeroKeys = 0;
+-    for (const key of Object.keys(record)) {
++    for (const key of amountKeys) {
+         const amount = record[key];
+         if (typeof amount === "number" && amount > 0) {
+             amounts[key] = amount;
++            amountKeys[nonZeroKeys] = key;
+             nonZeroKeys += 1;
+         }
+     }
++    amountKeys.length = nonZeroKeys;
+     return {
+         exists: true,
+         structureId: structure.id,
+         amounts,
++        amountKeys,
+         usedCapacity: structure.store.getUsedCapacity(),
+         freeCapacity: structure.store.getFreeCapacity(),
+         nonZeroKeys,
+@@ -868,15 +883,12 @@ function deepFreezeRoom(room) {
+         terminal: room.terminal,
+     });
+ }
+-function createObservationView(data) {
++function createObservationView(data, roomByName) {
+     const roomsByOrdinal = data.rooms;
+-    const roomByName = new Map();
+-    for (const room of roomsByOrdinal)
+-        roomByName.set(room.roomName, room);
+     let cachedEmpireResources;
+     const roomResourcesCache = new Map();
+     const locationOf = (roomName, kind) => {
+-        const room = roomByName.get(roomName);
++        const room = roomByName[roomName];
+         if (!room) {
+             return Object.freeze({
+                 roomName,
+@@ -897,7 +909,7 @@ function createObservationView(data) {
+             return roomsByOrdinal.map((room) => room.roomName);
+         },
+         hasRoom(roomName) {
+-            return roomByName.has(roomName);
++            return Object.prototype.hasOwnProperty.call(roomByName, roomName);
+         },
+         locationExists(roomName, kind) {
+             return locationOf(roomName, kind).exists;
+@@ -909,7 +921,7 @@ function createObservationView(data) {
+         },
+         roomAmount(roomName, resource) {
+             var _a, _b;
+-            const room = roomByName.get(roomName);
++            const room = roomByName[roomName];
+             if (!room)
+                 return 0;
+             return ((_a = room.storage.amounts[resource]) !== null && _a !== void 0 ? _a : 0) + ((_b = room.terminal.amounts[resource]) !== null && _b !== void 0 ? _b : 0);
+@@ -918,7 +930,7 @@ function createObservationView(data) {
+             const cached = roomResourcesCache.get(roomName);
+             if (cached)
+                 return cached;
+-            const room = roomByName.get(roomName);
++            const room = roomByName[roomName];
+             const merged = new Set();
+             if (room) {
+                 for (const key of Object.keys(room.storage.amounts))
+@@ -969,6 +981,9 @@ function buildTreasuryObservation(options) {
+         worldSequence: readTreasuryWorldSequence(),
+     };
+     const rooms = [];
++    // XI: build the last-room-wins lookup in the existing ordinal pass. A
++    // null-prototype record preserves arbitrary own names without Map setup.
++    const roomByName = Object.create(null);
+     const empireTotals = {};
+     if (compatDiagnostics)
+         compatDiagnostics.boundary("observationRooms");
+@@ -983,17 +998,19 @@ function buildTreasuryObservation(options) {
+             (_c = options.onStoreScanned) === null || _c === void 0 ? void 0 : _c.call(options, storageScan.nonZeroKeys);
+         if (terminalScan.exists)
+             (_d = options.onStoreScanned) === null || _d === void 0 ? void 0 : _d.call(options, terminalScan.nonZeroKeys);
+-        // VII: freeze the one final room object, not a temporary clone.
+-        rooms.push(Object.freeze({
++        // XI keeps one final room object and indexes the SAME snapshot.
++        const roomSnapshot = Object.freeze({
+             roomName: room.name,
+             storage: freezeLocation(room.name, "storage", storageScan),
+             terminal: freezeLocation(room.name, "terminal", terminalScan),
+-        }));
++        });
++        rooms.push(roomSnapshot);
++        roomByName[room.name] = roomSnapshot;
+         // 帝国总量 = 全部位置桶之和（构建期求和；missing 位置贡献 0）。
+         for (const scan of [storageScan, terminalScan]) {
+-            // VII: amounts is an owned, frozen primitive snapshot here.
+-            // Preserve Object.keys order and additions; avoid [key,value] pairs.
+-            for (const resource of Object.keys(scan.amounts)) {
++            // XI: preserve sparse key order and addition order while reusing the
++            // first Store enumeration retained by scanLocation.
++            for (const resource of scan.amountKeys) {
+                 const amount = scan.amounts[resource];
+                 empireTotals[resource] = ((_e = empireTotals[resource]) !== null && _e !== void 0 ? _e : 0) + amount;
+             }
+@@ -1008,7 +1025,7 @@ function buildTreasuryObservation(options) {
+     });
+     if (compatDiagnostics)
+         compatDiagnostics.boundary("observationView");
+-    const view = createObservationView(data);
++    const view = createObservationView(data, roomByName);
+     if (compatDiagnostics) {
+         compatDiagnostics.work({
+             observationRooms: options.rooms.length,
+diff --git a/test/treasury-compat/attribution-test-support.cjs b/test/treasury-compat/attribution-test-support.cjs
+index 7814d5922fafaf9f10a19d0a8fe90274bdee9569..fed6a2732d8b915978d90717951af57a9a0bd316 100644
+--- a/test/treasury-compat/attribution-test-support.cjs
++++ b/test/treasury-compat/attribution-test-support.cjs
+@@ -3,7 +3,7 @@ const fs = require('node:fs'), path = require('node:path');
+ const S = require('./loader-test-support.cjs');
+ const H = S.H;
+ const beforeText = () => fs.readFileSync(path.join(__dirname, 'fixtures/core-before-subphase-attribution-ix.ts.txt'), 'utf8').replace(/\r\n/g, '\n');
+-const afterText = () => fs.readFileSync(H.file('treasuryCompatReadCore.generated.ts'), 'utf8').replace(/\r\n/g, '\n');
++const afterText = () => fs.readFileSync(path.join(__dirname, 'fixtures/core-before-hotpath-optimization-xi.ts.txt'), 'utf8').replace(/\r\n/g, '\n');
+ function diagnosticScene(setup = () => {}, step = 0.01) {
+   const s = S.make(afterText(), true);
+   s.cfg = { ...s.cfg, maxSampleCpu: 10 };
+diff --git a/test/treasury-compat/attribution.spec.cjs b/test/treasury-compat/attribution.spec.cjs
+index 57b2f498664918248c030ed59fff3608835fb28f..5fdd60bb03f491bc090929025ac20cc94af0dff2 100644
+--- a/test/treasury-compat/attribution.spec.cjs
++++ b/test/treasury-compat/attribution.spec.cjs
+@@ -7,6 +7,15 @@ const os = require('node:os');
+ const A = require('./attribution-test-support.cjs');
+ const { S, H } = A;
+ const G = require(path.join(H.ROOT, 'scripts/build-treasury-compat-loader.cjs'));
++function generatedCurrent() {
++  return G.generate(fs.readFileSync(path.join(H.ROOT, G.FIXTURE)), fs.readFileSync(path.join(H.ROOT, G.TEMPLATE)),
++    JSON.parse(fs.readFileSync(path.join(H.ROOT, G.SOURCE_MANIFEST), 'utf8')), fs.readFileSync(path.join(H.ROOT, G.PREVIEW_FIXTURE)));
++}
++function assertGeneratedCurrent() {
++  const r = generatedCurrent();
++  for (const [name, bytes] of Object.entries(r)) assert.equal(fs.readFileSync(path.join(H.ROOT, name)).toString('utf8').replace(/\r\n/g, '\n'), bytes.toString('utf8'));
++  return r;
++}
+
+ // CPU-accounting unit boundaries: nested attribution never replaces the parent total.
+ test('IX accounting omits attribution when no boundary or work was recorded', () => {
+@@ -55,7 +64,7 @@ test('IX accounting rejects non-monotonic and unlisted subphase boundaries', ()
+ test('IX transform exactly restores the committed Build VII core prefix', () => {
+   const marker = '/** Read Optimization V:';
+   assert.equal(G.A.restore(A.afterText().split(marker)[0]), A.beforeText().split(marker)[0]);
+-  assert.equal(G.A.rules.length, 14); const generated = G.generate(fs.readFileSync(path.join(H.ROOT, G.FIXTURE)), fs.readFileSync(path.join(H.ROOT, G.TEMPLATE)), JSON.parse(fs.readFileSync(path.join(H.ROOT, G.SOURCE_MANIFEST), 'utf8'))); assert.equal(generated[G.GENERATED].length, 68416);
++  assert.equal(G.A.rules.length, 14); const generated = assertGeneratedCurrent(); assert.equal(generated[G.GENERATED].length, 69357);
+ });
+ test('IX transform refuses shifted source instead of approximately instrumenting it', () => {
+   const prefix = A.beforeText().split('/** Read Optimization V:')[0];
+@@ -168,19 +177,19 @@ for (const name of Object.keys(S.scenarios)) test('IX Build VII/IX diagnostics-o
+
+ function manifestFixture() {
+   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-manifest-gate-'));
+-  for (const n of [G.FIXTURE, G.TEMPLATE, G.SOURCE_MANIFEST, G.GENERATED, G.PROVENANCE]) {
++  for (const n of [G.FIXTURE, G.PREVIEW_FIXTURE, G.TEMPLATE, G.SOURCE_MANIFEST, G.GENERATED, G.PREVIEW, G.PROVENANCE]) {
+     const src = path.join(H.ROOT, n), dst = path.join(root, n);
+     fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.copyFileSync(src, dst);
+   }
+   return root;
+ }
+ function withManifestFixture(fn) { const root = manifestFixture(); try { return fn(root); } finally { fs.rmSync(root, { recursive: true, force: true }); } }
+-function generatedFor(root) { return G.generate(fs.readFileSync(path.join(root, G.FIXTURE)), fs.readFileSync(path.join(root, G.TEMPLATE)), JSON.parse(fs.readFileSync(path.join(root, G.SOURCE_MANIFEST), 'utf8'))); }
++function generatedFor(root) { return G.generate(fs.readFileSync(path.join(root, G.FIXTURE)), fs.readFileSync(path.join(root, G.TEMPLATE)), JSON.parse(fs.readFileSync(path.join(root, G.SOURCE_MANIFEST), 'utf8')), fs.readFileSync(path.join(root, G.PREVIEW_FIXTURE))); }
+
+ test('IX source manifest gate covers every listed output identity', () => {
+   const m = JSON.parse(fs.readFileSync(path.join(H.ROOT, G.SOURCE_MANIFEST), 'utf8'));
+   assert.deepEqual(m.outputs.map(x => x.file).sort(), G.EXPECTED_OUTPUT_PATHS);
+-  assert.equal(Object.keys(G.FIXED_OUTPUTS).length, 12); assert.equal(G.EXPECTED_OUTPUT_PATHS.length, 13);
++  assert.equal(Object.keys(G.FIXED_OUTPUTS).length, 11); assert.equal(G.EXPECTED_OUTPUT_PATHS.length, 13);
+   assert.equal(m.loaderOptimization.sourceManifestOutputValidation, 'all-listed-outputs');
+ });
+ test('IX generated-output gate rejects a stale manifest identity', () => withManifestFixture(root => {
+@@ -192,7 +201,7 @@ test('IX generated-output gate rejects a stale manifest identity', () => withMan
+ test('IX fixed-output gate rejects a byte-changed listed output', () => {
+   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-output-identity-'));
+   try {
+-    const rel = 'src/runtime/treasuryCompatRead.ts', dst = path.join(root, rel); fs.mkdirSync(path.dirname(dst), { recursive: true });
++    const rel = 'src/runtime/treasuryCompatRuntime.ts', dst = path.join(root, rel); fs.mkdirSync(path.dirname(dst), { recursive: true });
+     fs.copyFileSync(path.join(H.ROOT, rel), dst); G.verifyOutputIdentities(root, { [rel]: G.FIXED_OUTPUTS[rel] });
+     fs.appendFileSync(dst, '\n'); assert.throws(() => G.verifyOutputIdentities(root, { [rel]: G.FIXED_OUTPUTS[rel] }), /FIXED_SOURCE_MISMATCH/);
+   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+diff --git a/test/treasury-compat/build-optimization.spec.cjs b/test/treasury-compat/build-optimization.spec.cjs
+index e7bd28e90f33016617aff0e17a80b84a1d2175a2..c5154cd7f6b14825f2529b1b2a961f25199ab822 100644
+--- a/test/treasury-compat/build-optimization.spec.cjs
++++ b/test/treasury-compat/build-optimization.spec.cjs
+@@ -3,9 +3,19 @@ const { test } = require('node:test');
+ const assert = require('node:assert/strict');
+ const crypto = require('node:crypto');
+ const path = require('node:path');
++const fs = require('node:fs');
+ const S = require('./build-test-support.cjs');
+ const { H, beforeText, afterText, make, build, snapshot, task, reservation } = S;
+ const G = require('../../scripts/build-treasury-compat-loader.cjs');
++function generatedCurrent() {
++  return G.generate(fs.readFileSync(path.join(H.ROOT, G.FIXTURE)), fs.readFileSync(path.join(H.ROOT, G.TEMPLATE)),
++    JSON.parse(fs.readFileSync(path.join(H.ROOT, G.SOURCE_MANIFEST), 'utf8')), fs.readFileSync(path.join(H.ROOT, G.PREVIEW_FIXTURE)));
++}
++function assertGeneratedCurrent() {
++  const r = generatedCurrent();
++  for (const [name, bytes] of Object.entries(r)) assert.equal(fs.readFileSync(path.join(H.ROOT, name)).toString('utf8').replace(/\r\n/g, '\n'), bytes.toString('utf8'));
++  return r;
++}
+ function pair(setup, extra) {
+   const a = make(beforeText()), b = make(afterText()); setup(a); setup(b);
+   const ga={writes:0},gb={writes:0}; a.memory=H.guard(a.memory,ga);b.memory=H.guard(b.memory,gb);
+@@ -19,7 +29,7 @@ test('build VII reversible authoring restores all Read V bytes before the unchan
+   const marker='/** Read Optimization V:';
+   assert.equal(G.B.restore(afterText().split(marker)[0]),beforeText().split(marker)[0]);
+   assert.equal(afterText().split(marker)[1],beforeText().split(marker)[1]);
+-  assert.equal(G.main(['--check']).status,'COMPAT_LOADER_REGENERATION_VERIFIED');
++  assertGeneratedCurrent();
+ });
+ test('build VII shifted source is rejected rather than approximately transformed',()=>{
+   assert.throws(()=>G.B.transform(beforeText().replace('const outgoing = new Map();','const outgoing = new Map([]);')),/BUILD_TRANSFORM_COUNT/);
+diff --git a/test/treasury-compat/fixtures/core-before-hotpath-optimization-xi.ts.txt b/test/treasury-compat/fixtures/core-before-hotpath-optimization-xi.ts.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..62752b09e3828e67a9000aeffcda0b2436368bf1
+--- /dev/null
++++ b/test/treasury-compat/fixtures/core-before-hotpath-optimization-xi.ts.txt
+@@ -0,0 +1,1407 @@
++// @ts-nocheck
++/** GENERATED from pinned Git TS objects; do not edit this file.
++ * Original sources are typechecked on the development tree; this is transpiled
++ * runtime output, not a replacement authoring surface. Exports only two builders.
++ * No facade/kernel/registry/runtimeServices/old resource writer is included.
++ * source=01bd9831454950c4928df98dd8679692b55603e5; TypeScript=5.9.3 */
++import type { CompatReadBuilders } from "./treasuryCompatTypes";
++const factories = {
++"src/runtime/configNormalize.ts": function(exports, require) {
++"use strict";
++/**
++ * Shared config normalization helpers.
++ * Extracted from synthesisControl, resourceControl, and synthesisCompatibilityPlanning
++ * to avoid triple duplication while preserving identical semantics.
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.normalizeNumber = normalizeNumber;
++exports.normalizeBoolean = normalizeBoolean;
++exports.normalizeRoomNameList = normalizeRoomNameList;
++function normalizeNumber(value, fallback, min, max) {
++    if (typeof value !== "number" || !Number.isFinite(value)) {
++        return fallback;
++    }
++    const normalized = Math.floor(value);
++    return Math.max(min, Math.min(max, normalized));
++}
++function normalizeBoolean(value, fallback) {
++    return typeof value === "boolean" ? value : fallback;
++}
++function normalizeRoomNameList(value) {
++    if (!Array.isArray(value)) {
++        return [];
++    }
++    return value.filter((item) => typeof item === "string" && item.length > 0);
++}
++
++},
++"src/runtime/logistics/resourceTransferTaskHealth.ts": function(exports, require) {
++"use strict";
++/**
++ * ResourceTransferTask 健康/需求覆盖谓词（canonical）。
++ *
++ * 从 resourceTransferTasks.ts 上提为独立模块：这些判定是跨模块契约
++ * （Hub/Synthesis/ResourceControl/Treasury 共用），必须保持单一实现。
++ * 运行时依赖仅 configNormalize 与 Memory.cfg 直读——不得引入
++ * runtimeServices/logistics 执行层依赖，避免 Treasury 服务挂载链路成环。
++ * resourceTransferTasks.ts 对本模块 re-export，既有 import 路径不变。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.DEFAULT_RECEIVER_CAPACITY_DEMAND_COVERAGE_GRACE_TICKS = exports.DEFAULT_SOURCE_DEPLETED_GRACE_TICKS = exports.DEFAULT_AUTOMATIC_TASK_NO_PROGRESS_TTL = void 0;
++exports.resolveResourceTransferTaskHealthOptions = resolveResourceTransferTaskHealthOptions;
++exports.isHealthyResourceTransferTaskReservation = isHealthyResourceTransferTaskReservation;
++exports.getResourceTransferTaskDemandCoverageExpirationReason = getResourceTransferTaskDemandCoverageExpirationReason;
++exports.countsResourceTransferTaskTowardDemand = countsResourceTransferTaskTowardDemand;
++exports.isHealthyReceiverCapacityCommitment = isHealthyReceiverCapacityCommitment;
++const configNormalize_1 = require("@/runtime/configNormalize");
++exports.DEFAULT_AUTOMATIC_TASK_NO_PROGRESS_TTL = 5000;
++exports.DEFAULT_SOURCE_DEPLETED_GRACE_TICKS = 100;
++exports.DEFAULT_RECEIVER_CAPACITY_DEMAND_COVERAGE_GRACE_TICKS = 500;
++function resolveResourceTransferTaskHealthOptions() {
++    var _a, _b;
++    // Memory root declarations are intentionally frozen by the declaration
++    // boundary test. Keep the backward-compatible optional rollout field local
++    // to this adapter instead of widening the canonical root schema.
++    const raw = (_b = (_a = Memory.cfg) === null || _a === void 0 ? void 0 : _a.resourceControl) === null || _b === void 0 ? void 0 : _b.capacityBalancing;
++    return {
++        automaticTaskNoProgressTtl: (0, configNormalize_1.normalizeNumber)(raw === null || raw === void 0 ? void 0 : raw.automaticTaskNoProgressTtl, exports.DEFAULT_AUTOMATIC_TASK_NO_PROGRESS_TTL, 100, 100000),
++        sourceDepletedGraceTicks: (0, configNormalize_1.normalizeNumber)(raw === null || raw === void 0 ? void 0 : raw.sourceDepletedGraceTicks, exports.DEFAULT_SOURCE_DEPLETED_GRACE_TICKS, 1, 5000),
++        receiverCapacityDemandCoverageGraceTicks: (0, configNormalize_1.normalizeNumber)(raw === null || raw === void 0 ? void 0 : raw.receiverCapacityDemandCoverageGraceTicks, exports.DEFAULT_RECEIVER_CAPACITY_DEMAND_COVERAGE_GRACE_TICKS, 50, 5000),
++    };
++}
++function isHealthyResourceTransferTaskReservation(task, direction = "incoming", sourceDepletedGraceTicks = resolveResourceTransferTaskHealthOptions().sourceDepletedGraceTicks) {
++    if (task.status !== "pending") {
++        return false;
++    }
++    if (direction === "outgoing" || task.blockedReason !== "source_depleted") {
++        return true;
++    }
++    if (!Number.isFinite(task.blockedSince)) {
++        return true;
++    }
++    return Game.time - task.blockedSince < sourceDepletedGraceTicks;
++}
++/**
++ * Returns the automatic lifecycle reason that makes a pending task stop
++ * covering demand. The helper is mutation-free so Hub/Synthesis planning can
++ * use it before this tick's ResourceControl reconciliation phase.
++ */
++function getResourceTransferTaskDemandCoverageExpirationReason(task, options = resolveResourceTransferTaskHealthOptions()) {
++    if (task.status !== "pending" || task.origin !== "automatic") {
++        return null;
++    }
++    if (task.blockedReason === "source_depleted" &&
++        Number.isFinite(task.blockedSince) &&
++        Game.time - task.blockedSince >= options.sourceDepletedGraceTicks) {
++        return "automatic_source_depleted_timeout";
++    }
++    if (task.blockedReason === "receiver_capacity" &&
++        Number.isFinite(task.blockedSince) &&
++        Game.time - task.blockedSince >= options.receiverCapacityDemandCoverageGraceTicks) {
++        return "automatic_receiver_capacity_coverage_timeout";
++    }
++    if (Number.isFinite(task.lastProgressAt) &&
++        Game.time - task.lastProgressAt > options.automaticTaskNoProgressTtl) {
++        return "automatic_no_progress_timeout";
++    }
++    return null;
++}
++/**
++ * Canonical production-demand coverage predicate. Manual pending tasks always
++ * retain operator intent; automatic tasks stop covering demand as soon as a
++ * configured lifecycle limit is reached.
++ */
++function countsResourceTransferTaskTowardDemand(task, options = resolveResourceTransferTaskHealthOptions()) {
++    if (task.status !== "pending") {
++        return false;
++    }
++    if (task.origin === "manual") {
++        return true;
++    }
++    return getResourceTransferTaskDemandCoverageExpirationReason(task, options) === null;
++}
++function isHealthyReceiverCapacityCommitment(task, automaticTaskNoProgressTtl) {
++    if (task.status !== "pending") {
++        return false;
++    }
++    if (task.blockedReason === "receiver_capacity" || task.blockedReason === "source_depleted") {
++        return false;
++    }
++    if (task.origin !== "automatic") {
++        return true;
++    }
++    const noProgressTtl = automaticTaskNoProgressTtl !== null && automaticTaskNoProgressTtl !== void 0 ? automaticTaskNoProgressTtl : resolveResourceTransferTaskHealthOptions().automaticTaskNoProgressTtl;
++    return Game.time - task.lastProgressAt <= noProgressTtl;
++}
++
++},
++"src/runtime/treasury/commitmentRevision.ts": function(exports, require) {
++"use strict";
++/**
++ * Treasury 承诺索引 revision——mutation 侧失效通知。
++ *
++ * 跨 tick 承诺（transfer tasks / production reservations）的权威在 Memory，
++ * 任何 mutation（创建/合并/取消/阻塞/进度/续租/释放/GC）都必须调用
++ * bumpTreasuryCommitmentRevision，使 facade 在下一次 commitments()/query()
++ * 时重建索引——同 tick mutation 后不可再读到陈旧快照。
++ *
++ * revision 只需在单次 heap 生命周期内单调递增：global reset 后模块闭包与
++ * facade 缓存同时归零，不存在跨 reset 的陈旧缓存，因此无需 global 槽或
++ * Memory 持久化（避免第二份状态副本）。
++ *
++ * 架构约束（treasuryCommitmentInvalidationBoundaries 测试守护）：两个权威
++ * 模块的每个导出 mutation 函数都必须包含 bump 调用，新写入口不得绕过。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.bumpTreasuryCommitmentRevision = bumpTreasuryCommitmentRevision;
++exports.readTreasuryCommitmentRevision = readTreasuryCommitmentRevision;
++exports.resetTreasuryCommitmentRevisionForTest = resetTreasuryCommitmentRevisionForTest;
++let commitmentRevision = 0;
++function bumpTreasuryCommitmentRevision() {
++    commitmentRevision += 1;
++}
++function readTreasuryCommitmentRevision() {
++    return commitmentRevision;
++}
++/** 仅供测试：复位 revision（配合 TreasuryService.resetForTest 使用）。 */
++function resetTreasuryCommitmentRevisionForTest() {
++    commitmentRevision = 0;
++}
++
++},
++"src/runtime/treasury/commitments.ts": function(exports, require) {
++"use strict";
++/**
++ * Treasury Commitment Index——跨 tick 承诺的每 tick 只读统一索引。
++ *
++ * 权威边界（不变量：零隐藏写入、零持久化复制）：
++ * - transfer tasks 权威在 Memory.data.resourceControl.tasks，本索引只读聚合；
++ * - production reservations 权威在 Memory.runtime.resourceReservations；
++ *   过期/孤儿条目在读侧排除并计数，删除权保留在 owner/memoryCleanup；
++ * - 健康/需求覆盖判定复用 resourceTransferTaskHealth 的 canonical 谓词，
++ *   不得在 Treasury 内出现第二套解释；
++ * - 索引是点时快照：构建期一次性聚合为 primitive 值（不保留 task/
++ *   reservation 对象引用，外部原地修改原对象不影响已构建快照）；
++ *   权威数据 mutation 由 bumpTreasuryCommitmentRevision 通知 facade 失效
++ *   重建，同 tick 后续查询读到新 revision 的快照；
++ * - receiver headroom 为第一版总量口径（free − healthy incoming remaining，
++ *   observed 与 projected 双轨），不含 ReceiverCapacityLedger 的 safety
++ *   reserve 与独立 reservation——完整语义在该 ledger 并入 Treasury 时提供
++ *   （见 OpenSpec 任务表）。projected 字段每次查询动态组合（静态承诺 +
++ *   当前 overlay 容量聚合），同 tick transaction 后立即反映最新投影，
++ *   绝不缓存到旧结果。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.isValidTreasuryTransferTaskForCommitment = isValidTreasuryTransferTaskForCommitment;
++exports.buildTreasuryCommitmentIndex = buildTreasuryCommitmentIndex;
++const resourceTransferTaskHealth_1 = require("@/runtime/logistics/resourceTransferTaskHealth");
++// V: revision supplied by the private read-only sample context.
++const holderResolution_1 = require("@/runtime/treasury/holderResolution");
++const ownerIdentity_1 = require("@/runtime/treasury/ownerIdentity");
++function defaultHolderExists(holderId) {
++    return (0, holderResolution_1.treasuryHolderExists)(holderId);
++}
++// V: catalog captured once per builder, not at shared module initialization.
++/** task status 合法枚举（与 ResourceTransferTaskStatus 权威一致）。 */
++const VALID_TASK_STATUSES = new Set([
++    "pending",
++    "done",
++    "cancelled",
++    "failed",
++]);
++/** blockedReason 合法枚举（与 ResourceTransferTaskBlockedReason 权威一致；缺省合法）。 */
++const VALID_TASK_BLOCKED_REASONS = new Set([
++    "receiver_capacity",
++    "source_depleted",
++    "insufficient_terminal_resource_or_fee",
++]);
++/** 数值字段完整有效性：有限、整数、安全整数、非负。 */
++function isNonNegativeSafeInteger(value) {
++    return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
++}
++/**
++ * transfer task 记录级验证（第五轮 completeness）：status/resource/房间/
++ * amount/remainingAmount（remaining ≤ amount）/origin/tick 字段的形状与
++ * 数值关系。损坏记录不得进入聚合（负 amount 加进 committed、NaN 污染求和
++ * 都会提高 spendable），也不得被读取路径删除——只标记 scope incomplete。
++ */
++function isValidTreasuryTransferTaskForCommitment(task, compatContext) {
++    if (!task || typeof task !== "object")
++        return false;
++    // status 必须属于合法枚举——未知值（如 "pendng"）是损坏而非"普通非 pending"，
++    // 绝不静默跳过后继续授权。
++    if (typeof task.status !== "string" || !VALID_TASK_STATUSES.has(task.status))
++        return false;
++    if (typeof task.resource !== "string" || !compatContext.resources.has(task.resource))
++        return false;
++    if (typeof task.fromRoomName !== "string" || task.fromRoomName.length === 0)
++        return false;
++    if (typeof task.toRoomName !== "string" || task.toRoomName.length === 0)
++        return false;
++    if (!isNonNegativeSafeInteger(task.amount))
++        return false;
++    if (!isNonNegativeSafeInteger(task.remainingAmount))
++        return false;
++    if (task.remainingAmount > task.amount)
++        return false;
++    if (task.origin !== "manual" && task.origin !== "automatic")
++        return false;
++    if (!isNonNegativeSafeInteger(task.createdAt))
++        return false;
++    if (!isNonNegativeSafeInteger(task.updatedAt))
++        return false;
++    if (!isNonNegativeSafeInteger(task.lastProgressAt))
++        return false;
++    if (task.blockedReason !== undefined && !VALID_TASK_BLOCKED_REASONS.has(task.blockedReason)) {
++        return false; // 枚举外 blockedReason 是损坏，不是"未阻塞"
++    }
++    if (task.blockedSince !== undefined && !isNonNegativeSafeInteger(task.blockedSince))
++        return false;
++    return true;
++}
++function isValidScopePair(roomName, resource) {
++    return typeof roomName === "string" && roomName.length > 0 && typeof resource === "string" && resource.length > 0;
++}
++/** 聚合累加（多条合法安全整数相加后仍须为安全整数；溢出返回 null）。 */
++function addSafeInteger(current, addend) {
++    const next = current + addend;
++    return Number.isSafeInteger(next) ? next : null;
++}
++/** production reservation 记录级验证（数值与 owner identity 形状）。 */
++function isValidReservationForCommitment(entry, compatContext) {
++    if (!entry || typeof entry !== "object")
++        return false;
++    if (typeof entry.roomName !== "string" || entry.roomName.length === 0)
++        return false;
++    if (typeof entry.resource !== "string" || !compatContext.resources.has(entry.resource))
++        return false;
++    if (!isNonNegativeSafeInteger(entry.amount))
++        return false;
++    if (!isNonNegativeSafeInteger(entry.expiresAt))
++        return false;
++    if (typeof entry.holderId !== "string" || entry.holderId.length === 0)
++        return false;
++    if (entry.owner !== undefined && !(0, ownerIdentity_1.isValidTreasuryOwnerIdentity)(entry.owner))
++        return false;
++    return true;
++}
++const taskKey = (roomName, resource) => `${roomName}\u0000${resource}`;
++const mergeKeyOf = (resource, fromRoomName, toRoomName, origin, reason) => `${resource}\u0000${fromRoomName}\u0000${toRoomName}\u0000${origin}\u0000${reason}`;
++function buildTreasuryCommitmentIndex(options, compatContext) {
++    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r;
++    const compatDiagnostics = options.compatDiagnostics;
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("commitmentSetup");
++    let attributionInvalidRegion = "setup";
++    let attributionTaskInvalidEvents = 0;
++    let attributionReservationInvalidEvents = 0;
++    let attributionDemandHealthChecks = 0;
++    let attributionReceiverHealthChecks = 0;
++    let attributionRouteCandidates = 0;
++    let attributionOwnerEvaluations = 0;
++    const tick = options.tick;
++    const revision = compatContext.revision;
++    const healthOptions = (0, resourceTransferTaskHealth_1.resolveResourceTransferTaskHealthOptions)();
++    const holderExists = (_a = options.holderExists) !== null && _a !== void 0 ? _a : defaultHolderExists;
++    const capacityDelta = (_b = options.capacityDelta) !== null && _b !== void 0 ? _b : (() => 0);
++    const strictCapacityDelta = (_c = options.strictCapacityDelta) !== null && _c !== void 0 ? _c : (() => 0);
++    const metrics = {
++        taskRecords: 0,
++        pendingTaskRecords: 0,
++        reservationRecords: 0,
++        activeReservationRecords: 0,
++        expiredReservationsExcluded: 0,
++        missingOwnerStillCommitted: 0,
++        typedOwnerResolved: 0,
++        legacyUnresolvedOwners: 0,
++        invalidCommitmentRecords: 0,
++        incompleteCommitmentScopes: 0,
++        globallyIncomplete: false,
++        indexQueries: 0,
++    };
++    // ── transfer task 索引（pending 维度与旧 amount index 对齐）───────────────
++    // VII: full task indexes share storage by scope/room, not by sample.
++    // These private maps are fresh for EVERY build. Route and reservation
++    // indexes retain their own maps; no validation or query is deferred.
++    const taskScopes = new Map();
++    const taskRooms = new Map();
++    const mergeIndex = new Map();
++    // completeness（第五轮）：损坏记录不进聚合、不删原数据；能定位 bucket 的
++    // 标记 (room,resource) scope incomplete，连 scope 都无法确定的标记全局
++    // incomplete——incomplete scope 的 spendable/授权必须 fail closed。
++    const invalidCommitmentRecords = { count: 0 };
++    const incompleteScopes = new Set();
++    let globalIncomplete = false;
++    const recordInvalid = () => {
++        invalidCommitmentRecords.count += 1;
++        if (attributionInvalidRegion === "tasks")
++            attributionTaskInvalidEvents += 1;
++        else if (attributionInvalidRegion === "reservations")
++            attributionReservationInvalidEvents += 1;
++    };
++    attributionInvalidRegion = "tasks";
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("commitmentTasks");
++    metrics.taskRecords = Object.keys(options.tasks).length;
++    for (const task of Object.values(options.tasks)) {
++        if (!isValidTreasuryTransferTaskForCommitment(task, compatContext)) {
++            // 损坏任务影响 donor 与 receiver 双侧 bucket：能定位哪侧就标记哪侧
++            // scope incomplete；双侧都不可定位（连资源/房间都读不出）则全局
++            // incomplete。绝不静默跳过后给出乐观 spendable，也绝不删除原记录。
++            recordInvalid();
++            // scope 定位要求 (room, resource) 二元均合法：非法 resource（不在官方
++            // catalog）无法构成任何合法 scope——绝不能因"非法资源不会命中合法
++            // 查询"就静默跳过，直接全局 incomplete（一切授权 fail closed）。
++            const resourceKnown = typeof (task === null || task === void 0 ? void 0 : task.resource) === "string" && compatContext.resources.has(task.resource);
++            const fromLocated = resourceKnown && typeof (task === null || task === void 0 ? void 0 : task.fromRoomName) === "string" && task.fromRoomName.length > 0;
++            const toLocated = resourceKnown && typeof (task === null || task === void 0 ? void 0 : task.toRoomName) === "string" && task.toRoomName.length > 0;
++            if (fromLocated)
++                incompleteScopes.add(taskKey(task.fromRoomName, task.resource));
++            if (toLocated)
++                incompleteScopes.add(taskKey(task.toRoomName, task.resource));
++            if (!fromLocated || !toLocated)
++                globalIncomplete = true;
++            continue;
++        }
++        if (task.status !== "pending")
++            continue;
++        metrics.pendingTaskRecords += 1;
++        const reason = task.reason || "";
++        // 聚合安全整数检查：多条合法安全整数相加后仍须安全——溢出即该 task
++        // 影响的全部 scope incomplete（数值不再作为授权依据），不静默丢弃。
++        // Stable JSON record fields. Use the SAME canonical NUL scope keys;
++        // self-routes and key aliases must share the same bucket object.
++        const fromRoom = task.fromRoomName, toRoom = task.toRoomName;
++        const outKey = taskKey(fromRoom, task.resource);
++        const inKey = taskKey(toRoom, task.resource);
++        let outBucket = taskScopes.get(outKey), inBucket = taskScopes.get(inKey);
++        const mergedOutgoing = addSafeInteger(outBucket ? outBucket.outgoing : 0, task.remainingAmount);
++        const mergedPendingIncoming = addSafeInteger(inBucket ? inBucket.pendingIncoming : 0, task.remainingAmount);
++        if (mergedOutgoing === null || mergedPendingIncoming === null) {
++            recordInvalid();
++            incompleteScopes.add(outKey);
++            incompleteScopes.add(inKey);
++            continue;
++        }
++        let fromBucket = taskRooms.get(fromRoom);
++        if (!fromBucket) {
++            fromBucket = { outgoingCount: 0, incomingCount: 0, healthyAmount: 0, healthyCount: 0 };
++            taskRooms.set(fromRoom, fromBucket);
++        }
++        fromBucket.outgoingCount += 1;
++        if (!outBucket) {
++            outBucket = { outgoing: 0, pendingIncoming: 0, incoming: 0, reasons: undefined };
++            taskScopes.set(outKey, outBucket);
++        }
++        outBucket.outgoing = mergedOutgoing;
++        const byReason = outBucket.reasons !== undefined ? outBucket.reasons : new Map();
++        const mergedByReason = addSafeInteger((_h = byReason.get(reason)) !== null && _h !== void 0 ? _h : 0, task.remainingAmount);
++        // Keep the canonical partial-update order on overflow: outgoing and
++        // outgoingCount above remain updated; pendingIncoming is NOT updated.
++        if (mergedByReason === null) {
++            recordInvalid();
++            incompleteScopes.add(outKey);
++            continue;
++        }
++        byReason.set(reason, mergedByReason);
++        outBucket.reasons = byReason;
++        if (!inBucket) {
++            inBucket = inKey === outKey ? outBucket : { outgoing: 0, pendingIncoming: 0, incoming: 0, reasons: undefined };
++            if (inKey !== outKey) taskScopes.set(inKey, inBucket);
++        }
++        inBucket.pendingIncoming = mergedPendingIncoming;
++        attributionDemandHealthChecks += 1;
++        const countsTowardDemand = (0, resourceTransferTaskHealth_1.countsResourceTransferTaskTowardDemand)(task, healthOptions);
++        let toBucket;
++        if (countsTowardDemand) {
++            const mergedIncoming = addSafeInteger(inBucket.incoming, task.remainingAmount);
++            if (mergedIncoming === null) {
++                recordInvalid();
++                incompleteScopes.add(inKey);
++                continue;
++            }
++            inBucket.incoming = mergedIncoming;
++            toBucket = taskRooms.get(toRoom);
++            if (!toBucket) {
++                toBucket = { outgoingCount: 0, incomingCount: 0, healthyAmount: 0, healthyCount: 0 };
++                taskRooms.set(toRoom, toBucket);
++            }
++            toBucket.incomingCount += 1;
++        }
++        if (task.origin === "manual" || countsTowardDemand) {
++            attributionRouteCandidates += 1;
++            // Canonical first-route-wins order, including manual tasks that do
++            // not contribute healthy demand. Do not overwrite an earlier id.
++            const mergeKey = mergeKeyOf(task.resource, fromRoom, toRoom, task.origin, reason);
++            if (!mergeIndex.has(mergeKey)) {
++                mergeIndex.set(mergeKey, task.id);
++            }
++        }
++        attributionReceiverHealthChecks += 1;
++        if ((0, resourceTransferTaskHealth_1.isHealthyReceiverCapacityCommitment)(task, healthOptions.automaticTaskNoProgressTtl)) {
++            if (!toBucket) {
++                toBucket = taskRooms.get(toRoom);
++                if (!toBucket) {
++                    toBucket = { outgoingCount: 0, incomingCount: 0, healthyAmount: 0, healthyCount: 0 };
++                    taskRooms.set(toRoom, toBucket);
++                }
++            }
++            // Keep canonical arithmetic (including its overflow behavior).
++            toBucket.healthyAmount += task.remainingAmount;
++            toBucket.healthyCount += 1;
++        }
++    }
++    // ── production reservation 索引（保守 committed：只有 expiresAt 到期或
++    //    显式 release 解除占用；owner 无法确证失效一律继续全额扣除）──────────
++    //    orphan 语义修正（第五轮）：missing/active-unresolved owner 只是诊断
++    //    分类，不代表库存可重新支配——绝不从 committed 排除。
++    attributionInvalidRegion = "reservations";
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("commitmentReservations");
++    const reservationSnapshot = [];
++    const reservedByRoomResource = new Map();
++    metrics.reservationRecords = Object.keys(options.reservations).length;
++    for (const entry of Object.values(options.reservations)) {
++        if (!isValidReservationForCommitment(entry, compatContext)) {
++            recordInvalid();
++            const roomLocated = typeof (entry === null || entry === void 0 ? void 0 : entry.roomName) === "string" && entry.roomName.length > 0;
++            // resource 必须在官方 catalog 内才能构成合法 scope（与 task 同口径）。
++            const resourceKnown = typeof (entry === null || entry === void 0 ? void 0 : entry.resource) === "string" && compatContext.resources.has(entry.resource);
++            if (roomLocated && resourceKnown)
++                incompleteScopes.add(taskKey(entry.roomName, entry.resource));
++            else
++                globalIncomplete = true;
++            continue;
++        }
++        const expired = entry.expiresAt < tick;
++        attributionOwnerEvaluations += 1;
++        const owner = (0, ownerIdentity_1.isValidTreasuryOwnerIdentity)(entry.owner)
++            ? entry.owner
++            : (0, ownerIdentity_1.classifyTreasuryHolderIdAsOwner)(entry.holderId);
++        const runtimeResolved = !expired &&
++            (owner.kind === "game-object" || owner.kind === "logical-service") &&
++            holderExists(owner.id);
++        const ownerStatus = expired
++            ? "expired"
++            : owner.kind === "legacy-unresolved"
++                ? "missing-owner"
++                : runtimeResolved
++                    ? "active-resolved"
++                    : "active-unresolved";
++        const record = Object.freeze({
++            roomName: entry.roomName,
++            resource: entry.resource,
++            holderId: entry.holderId,
++            owner,
++            amount: entry.amount,
++            expiresAt: entry.expiresAt,
++            expired,
++            ownerStatus,
++        });
++        reservationSnapshot.push(record);
++        if (expired) {
++            metrics.expiredReservationsExcluded += 1;
++            (_o = options.onExpiredExcluded) === null || _o === void 0 ? void 0 : _o.call(options);
++            continue;
++        }
++        // 活跃预留（含 owner 无法确证失效的）全部计入 committed。
++        if (ownerStatus !== "active-resolved") {
++            metrics.missingOwnerStillCommitted += 1;
++            (_p = options.onMissingOwnerCommitted) === null || _p === void 0 ? void 0 : _p.call(options);
++        }
++        else {
++            metrics.typedOwnerResolved += 1;
++        }
++        if (owner.kind === "legacy-unresolved")
++            metrics.legacyUnresolvedOwners += 1;
++        metrics.activeReservationRecords += 1;
++        const key = taskKey(entry.roomName, entry.resource);
++        const bucket = (_q = reservedByRoomResource.get(key)) !== null && _q !== void 0 ? _q : { total: 0, byOwner: new Map() };
++        // 聚合安全整数检查：溢出即该 (room,resource) scope incomplete。
++        const mergedTotal = addSafeInteger(bucket.total, entry.amount);
++        const ownerKey = (0, ownerIdentity_1.treasuryOwnerIdentityKey)(owner);
++        const mergedOwner = addSafeInteger((_r = bucket.byOwner.get(ownerKey)) !== null && _r !== void 0 ? _r : 0, entry.amount);
++        if (mergedTotal === null || mergedOwner === null) {
++            recordInvalid();
++            incompleteScopes.add(key);
++            continue;
++        }
++        bucket.total = mergedTotal;
++        bucket.byOwner.set(ownerKey, mergedOwner);
++        reservedByRoomResource.set(key, bucket);
++    }
++    attributionInvalidRegion = "finalize";
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("commitmentFinalize");
++    metrics.invalidCommitmentRecords = invalidCommitmentRecords.count;
++    metrics.incompleteCommitmentScopes = incompleteScopes.size;
++    metrics.globallyIncomplete = globalIncomplete;
++    const completenessSnapshot = Object.freeze({
++        complete: invalidCommitmentRecords.count === 0,
++        globalIncomplete,
++        incompleteScopeCount: incompleteScopes.size,
++        invalidRecords: invalidCommitmentRecords.count,
++    });
++    const index = { builtAtTick: tick,
++        revision,
++        completeness: completenessSnapshot,
++        commitmentCompleteness(roomName, resource) {
++            metrics.indexQueries += 1;
++            if (globalIncomplete)
++                return "globally-incomplete";
++            return incompleteScopes.has(taskKey(roomName, resource)) ? "incomplete-scope" : "complete";
++        },
++        outgoing(roomName, resource) {
++            metrics.indexQueries += 1;
++            const bucket = taskScopes.get(taskKey(roomName, resource));
++            return bucket ? bucket.outgoing : 0;
++        },
++        pendingOutgoing(roomName, resource, reasonPrefix) {
++            var _a, _b;
++            metrics.indexQueries += 1;
++            const bucket = taskScopes.get(taskKey(roomName, resource));
++            if (!reasonPrefix)
++                return bucket ? bucket.outgoing : 0;
++            let total = 0;
++            for (const [reason, amount] of bucket && bucket.reasons ? bucket.reasons : []) {
++                if (reason.startsWith(reasonPrefix))
++                    total += amount;
++            }
++            return total;
++        },
++        incoming(roomName, resource) {
++            metrics.indexQueries += 1;
++            const bucket = taskScopes.get(taskKey(roomName, resource));
++            return bucket ? bucket.incoming : 0;
++        },
++        pendingIncoming(roomName, resource) {
++            metrics.indexQueries += 1;
++            const bucket = taskScopes.get(taskKey(roomName, resource));
++            return bucket ? bucket.pendingIncoming : 0;
++        },
++        incomingTaskCount(roomName) {
++            metrics.indexQueries += 1;
++            const bucket = taskRooms.get(roomName);
++            return bucket ? bucket.incomingCount : 0;
++        },
++        outgoingTaskCount(roomName) {
++            metrics.indexQueries += 1;
++            const bucket = taskRooms.get(roomName);
++            return bucket ? bucket.outgoingCount : 0;
++        },
++        findMergeableTaskId(resource, fromRoomName, toRoomName, origin, reason) {
++            var _a;
++            metrics.indexQueries += 1;
++            return ((_a = mergeIndex.get(mergeKeyOf(resource, fromRoomName, toRoomName, origin, reason || ""))) !== null && _a !== void 0 ? _a : null);
++        },
++        reservedProduction(roomName, resource, excludeOwner) {
++            var _a;
++            metrics.indexQueries += 1;
++            const bucket = reservedByRoomResource.get(taskKey(roomName, resource));
++            if (!bucket)
++                return 0;
++            if (!excludeOwner)
++                return bucket.total;
++            // 完整 typed identity 比较：同 kind + 同 id + 同 namespace 才排除；
++            // 同字符串不同 kind / legacy-unresolved 不互相排除。
++            return bucket.total - ((_a = bucket.byOwner.get((0, ownerIdentity_1.treasuryOwnerIdentityKey)(excludeOwner))) !== null && _a !== void 0 ? _a : 0);
++        },
++        reservationSnapshot() {
++            metrics.indexQueries += 1;
++            return Object.freeze([...reservationSnapshot]);
++        },
++        receiverCommitments(roomName) {
++            var _a, _b;
++            metrics.indexQueries += 1;
++            let roomComplete = !globalIncomplete;
++            if (roomComplete) {
++                for (const scope of incompleteScopes) {
++                    if (scope.startsWith(`${roomName}\x00`)) {
++                        roomComplete = false;
++                        break;
++                    }
++                }
++            }
++            // 每次动态组合：静态承诺（healthy incoming，点时快照）+ observed 容量
++            // （O(1) map 读）+ 当前 overlay 容量净变化（facade 注入的 O(1) 位置
++            // 聚合）。绝不缓存依赖当前 overlay 的 projected 字段——同 tick 结算
++            // 新 transaction 后的下一次查询必须立即反映最新投影。
++            const roomBucket = taskRooms.get(roomName);
++            const healthyIncomingAmount = roomBucket ? roomBucket.healthyAmount : 0;
++            const healthyIncomingTaskCount = roomBucket ? roomBucket.healthyCount : 0;
++            const storageFreeCapacity = options.observation.freeCapacity(roomName, "storage");
++            const terminalFreeCapacity = options.observation.freeCapacity(roomName, "terminal");
++            const projectedStorageFree = storageFreeCapacity - capacityDelta(roomName, "storage");
++            const projectedTerminalFree = terminalFreeCapacity - capacityDelta(roomName, "terminal");
++            // 严格口径（不含 quarantine/intent 风险占用）。
++            const strictStorageFree = storageFreeCapacity - strictCapacityDelta(roomName, "storage");
++            const strictTerminalFree = terminalFreeCapacity - strictCapacityDelta(roomName, "terminal");
++            return Object.freeze({
++                roomName,
++                healthyIncomingAmount,
++                healthyIncomingTaskCount,
++                storageFreeCapacity,
++                terminalFreeCapacity,
++                // 与旧 ReceiverCapacityLedger.getAvailability 的 min 语义一致：
++                // 入站承接是每结构独立扣全量、取 min；任一结构维度超卖即超卖。
++                storageHeadroom: storageFreeCapacity - healthyIncomingAmount,
++                terminalHeadroom: terminalFreeCapacity - healthyIncomingAmount,
++                overcommitted: healthyIncomingAmount > storageFreeCapacity ||
++                    healthyIncomingAmount > terminalFreeCapacity,
++                projectedStorageHeadroom: projectedStorageFree - healthyIncomingAmount,
++                projectedTerminalHeadroom: projectedTerminalFree - healthyIncomingAmount,
++                projectedOvercommitted: healthyIncomingAmount > projectedStorageFree ||
++                    healthyIncomingAmount > projectedTerminalFree,
++                strictStorageHeadroom: strictStorageFree - healthyIncomingAmount,
++                strictTerminalHeadroom: strictTerminalFree - healthyIncomingAmount,
++                strictOvercommitted: healthyIncomingAmount > strictStorageFree ||
++                    healthyIncomingAmount > strictTerminalFree,
++                riskAdjustedStorageHeadroom: projectedStorageFree - healthyIncomingAmount,
++                riskAdjustedTerminalHeadroom: projectedTerminalFree - healthyIncomingAmount,
++                riskAdjustedOvercommitted: healthyIncomingAmount > projectedStorageFree ||
++                    healthyIncomingAmount > projectedTerminalFree,
++                // 承诺视图完整才可用于 receiver admission 授权。
++                commitmentComplete: roomComplete,
++            });
++        },
++        metrics, };
++    if (compatDiagnostics) {
++        compatDiagnostics.work({
++            commitmentTaskRecords: metrics.taskRecords,
++            commitmentPendingTaskRecords: metrics.pendingTaskRecords,
++            commitmentTaskInvalidEvents: attributionTaskInvalidEvents,
++            commitmentDemandHealthChecks: attributionDemandHealthChecks,
++            commitmentReceiverHealthChecks: attributionReceiverHealthChecks,
++            commitmentRouteCandidates: attributionRouteCandidates,
++            commitmentReservationRecords: metrics.reservationRecords,
++            commitmentReservationInvalidEvents: attributionReservationInvalidEvents,
++            commitmentOwnerEvaluations: attributionOwnerEvaluations,
++            commitmentActiveReservations: metrics.activeReservationRecords,
++            commitmentScopeBuckets: taskScopes.size,
++            commitmentRoomBuckets: taskRooms.size,
++            commitmentMergeRoutes: mergeIndex.size,
++            commitmentReservationScopes: reservedByRoomResource.size,
++        });
++        compatDiagnostics.boundary();
++    }
++    return index;
++}
++
++},
++"src/runtime/treasury/holderResolution.ts": function(exports, require) {
++"use strict";
++/**
++ * Treasury holder 身份解析——typed（game-object / logical）统一入口。
++ *
++ * 背景（第四轮修复）：production reservation 的 holderId 并非一律是
++ * Game object id——nukerControl 写入的形态是 `nuker:<nukerId>:<resource>`
++ * 逻辑名，synthesisControl 自排除使用 `synthesis:<roomName>:<resource>`。
++ * 把 holderId 统一按 Game object id 解释（getObjectById 整串解析）会把全部
++ * 逻辑名 holder 误判为 orphan，导致 committed 被低估、可用量被高估。
++ *
++ * 解析规则（保守 fail closed：无法确证存在的 holder 仍视为不存在）：
++ * 1. 已知逻辑名命名空间（前缀注册表）：`nuker:<objectId>[:<resource>]`
++ *    解析内嵌 objectId 的存在性与归属房间；`synthesis:<roomName>[:<resource>]`
++ *    解析 owned 房间归属；
++ * 2. 其余整串按 Game object id 解析（factory 等直接用结构 id 的 holder）。
++ *
++ * 返回值携带 kind：owner 声明（TreasuryQueryOwner.holderKind）必须与解析
++ * 结果一致——声明 game-object 但 holderId 实为逻辑名时 fail closed，
++ * 杜绝"知道 holderId 字符串就能冒充任意类型 owner"。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.resolveTreasuryHolder = resolveTreasuryHolder;
++exports.treasuryHolderExists = treasuryHolderExists;
++const LOGICAL_HOLDER_NAMESPACES = [
++    {
++        // nukerControl：`nuker:<nukerId>:<resource>`（reserveProductionResource 写入）。
++        prefix: "nuker:",
++        resolveRoom: (nukerId) => {
++            var _a;
++            const resolved = (_a = Game.getObjectById) === null || _a === void 0 ? void 0 : _a.call(Game, nukerId);
++            const room = resolved === null || resolved === void 0 ? void 0 : resolved.room;
++            return room === null || room === void 0 ? void 0 : room.name;
++        },
++    },
++    {
++        // synthesisControl：`synthesis:<roomName>:<resource>`（自排除口径）。
++        prefix: "synthesis:",
++        resolveRoom: (roomName) => {
++            var _a, _b;
++            const room = (_a = Game.rooms) === null || _a === void 0 ? void 0 : _a[roomName];
++            return ((_b = room === null || room === void 0 ? void 0 : room.controller) === null || _b === void 0 ? void 0 : _b.my) ? roomName : undefined;
++        },
++    },
++];
++/** 逻辑名内嵌主体与可选资源后缀：`<subject>[:<resource>]`。 */
++const LOGICAL_SUBJECT_PATTERN = /^([A-Za-z0-9\-]+)(?::[A-Za-z0-9_\-\.]+)?$/;
++/**
++ * 解析 holder 存在性与归属房间：undefined = 无法确证存在（调用方按
++ * orphan / fail-closed 处理）；返回值 kind 供 typed owner 校验。
++ */
++function resolveTreasuryHolder(holderId) {
++    var _a;
++    if (typeof holderId !== "string" || holderId.length === 0)
++        return undefined;
++    for (const namespace of LOGICAL_HOLDER_NAMESPACES) {
++        if (!holderId.startsWith(namespace.prefix))
++            continue;
++        const subject = holderId.slice(namespace.prefix.length);
++        const match = LOGICAL_SUBJECT_PATTERN.exec(subject);
++        if (!match)
++            return undefined; // 已知前缀但主体非法：保守判不存在
++        const roomName = namespace.resolveRoom(match[1]);
++        if (roomName === undefined)
++            return undefined;
++        return { kind: "logical", roomName };
++    }
++    const resolved = (_a = Game.getObjectById) === null || _a === void 0 ? void 0 : _a.call(Game, holderId);
++    const room = resolved === null || resolved === void 0 ? void 0 : resolved.room;
++    if (!(room === null || room === void 0 ? void 0 : room.name))
++        return undefined;
++    return { kind: "game-object", roomName: room.name };
++}
++/** commitments orphan 判定的默认谓词（逻辑名 holder 不再被误判）。 */
++function treasuryHolderExists(holderId) {
++    return resolveTreasuryHolder(holderId) !== undefined;
++}
++
++},
++"src/runtime/treasury/observation.ts": function(exports, require) {
++"use strict";
++/**
++ * Treasury Asset Observation——storage/terminal 不可变稀疏物理观察。
++ *
++ * 构建约束（性能与语义，继承 empireInventoryIndex 已验证的模式）：
++ * - 房间源由外部注入（生产=TickContext.getMyRooms()），本模块零 room.find；
++ * - 每个受管辖 Store 只做一次 Object.keys 稀疏枚举 + 一次无参 capacity 读，
++ *   绝不做 RESOURCES_ALL × getUsedCapacity 全量探测；
++ * - 只保留数值与 structureId，不保留任何 Game Store/Structure 活引用，
++ *   构建后不存在 live 回退读（fallbackLiveReads 恒 0）；
++ * - 全部数据 deepFreeze：同 tick 同 epoch 的 Observed 不可变；
++ * - 物理事实绝不持久化到 Memory。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.treasuryLocationKey = void 0;
++exports.readTreasuryWorldSequence = readTreasuryWorldSequence;
++exports.bumpTreasuryWorldSequence = bumpTreasuryWorldSequence;
++exports.buildTreasuryObservation = buildTreasuryObservation;
++exports.treasuryLocationBuckets = treasuryLocationBuckets;
++const types_1 = require("@/runtime/treasury/types");
++Object.defineProperty(exports, "treasuryLocationKey", { enumerable: true, get: function () { return types_1.treasuryLocationKey; } });
++/**
++ * 受控世界序（单调计数；观察覆盖判定的世界侧锚点——§6.2/IV §4.3）。
++ *
++ * Core Rewrite IV：世界序权威移入 Memory 持久层
++ * （`Memory.runtime.treasuryWorldSequence`，单一安全整数）。此前版本把
++ * 计数器放在 global 槽——完整 reset（heap 全清、Memory 保留）后新运行时
++ * 从 0 重新计数，与 Memory 内旧记录的 invocation.worldSequence 跨域不可
++ * 比较：要么永久扣留（安静帝国的 closing(committed) 占用无法解除），要么
++ * 凭无关序号误判覆盖。持久化后比较域即 Memory 持久域：
++ * - 正常 tick / global 重建：不受影响（读同一持久值）；
++ * - 完整 reset（模块缓存+global 清、Memory 保留）：序号连续，观察覆盖
++ *   判定照常成立（宿主世界与 Memory 是同一份）；
++ * - 整份 Memory 丢失：treasuryCore 记录随之丢失，不存在需要判定的
++ *   invocation.worldSequence——无跨域比较需求（旧备份回滚仍是明确
++ *   未验证边界）。
++ * 单字段直写、不走发布确认协议：丢一次 bump 只会让覆盖判定落在保守
++ * 方向（不误放行），不值得为它付整树克隆成本。
++ */
++function readTreasuryWorldSequence() {
++    const runtime = Memory.runtime;
++    const value = runtime === null || runtime === void 0 ? void 0 : runtime.treasuryWorldSequence;
++    return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
++}
++/** 受控世界真实更新时递增（同步 adapter 写世界 / 测试宿主施加效果时调用）。 */
++function bumpTreasuryWorldSequence() {
++    if (!Memory.runtime) {
++        Memory.runtime = {};
++    }
++    Memory.runtime.treasuryWorldSequence = readTreasuryWorldSequence() + 1;
++}
++function scanLocation(structure) {
++    if (!structure) {
++        return {
++            exists: false,
++            structureId: undefined,
++            amounts: {},
++            usedCapacity: 0,
++            freeCapacity: 0,
++            nonZeroKeys: 0,
++        };
++    }
++    // 单次 Object.keys 稀疏枚举：store 本体即资源→数量记录（ts 类型上隐藏）。
++    const record = structure.store;
++    const amounts = {};
++    let nonZeroKeys = 0;
++    for (const key of Object.keys(record)) {
++        const amount = record[key];
++        if (typeof amount === "number" && amount > 0) {
++            amounts[key] = amount;
++            nonZeroKeys += 1;
++        }
++    }
++    return {
++        exists: true,
++        structureId: structure.id,
++        amounts,
++        usedCapacity: structure.store.getUsedCapacity(),
++        freeCapacity: structure.store.getFreeCapacity(),
++        nonZeroKeys,
++    };
++}
++function freezeLocation(roomName, kind, scan) {
++    return Object.freeze({
++        roomName,
++        kind,
++        exists: scan.exists,
++        structureId: scan.structureId,
++        amounts: Object.freeze(scan.amounts),
++        usedCapacity: scan.usedCapacity,
++        freeCapacity: scan.freeCapacity,
++    });
++}
++function deepFreezeRoom(room) {
++    return Object.freeze({
++        roomName: room.roomName,
++        storage: room.storage,
++        terminal: room.terminal,
++    });
++}
++function createObservationView(data) {
++    const roomsByOrdinal = data.rooms;
++    const roomByName = new Map();
++    for (const room of roomsByOrdinal)
++        roomByName.set(room.roomName, room);
++    let cachedEmpireResources;
++    const roomResourcesCache = new Map();
++    const locationOf = (roomName, kind) => {
++        const room = roomByName.get(roomName);
++        if (!room) {
++            return Object.freeze({
++                roomName,
++                kind,
++                exists: false,
++                structureId: undefined,
++                amounts: Object.freeze({}),
++                usedCapacity: 0,
++                freeCapacity: 0,
++            });
++        }
++        return kind === "storage" ? room.storage : room.terminal;
++    };
++    return {
++        data,
++        epoch: data.epoch,
++        roomNames() {
++            return roomsByOrdinal.map((room) => room.roomName);
++        },
++        hasRoom(roomName) {
++            return roomByName.has(roomName);
++        },
++        locationExists(roomName, kind) {
++            return locationOf(roomName, kind).exists;
++        },
++        location: locationOf,
++        amount(roomName, kind, resource) {
++            var _a;
++            return (_a = locationOf(roomName, kind).amounts[resource]) !== null && _a !== void 0 ? _a : 0;
++        },
++        roomAmount(roomName, resource) {
++            var _a, _b;
++            const room = roomByName.get(roomName);
++            if (!room)
++                return 0;
++            return ((_a = room.storage.amounts[resource]) !== null && _a !== void 0 ? _a : 0) + ((_b = room.terminal.amounts[resource]) !== null && _b !== void 0 ? _b : 0);
++        },
++        roomResources(roomName) {
++            const cached = roomResourcesCache.get(roomName);
++            if (cached)
++                return cached;
++            const room = roomByName.get(roomName);
++            const merged = new Set();
++            if (room) {
++                for (const key of Object.keys(room.storage.amounts))
++                    merged.add(key);
++                for (const key of Object.keys(room.terminal.amounts))
++                    merged.add(key);
++            }
++            const snapshot = Object.freeze([...merged]);
++            roomResourcesCache.set(roomName, snapshot);
++            return snapshot;
++        },
++        empireTotal(resource) {
++            var _a;
++            return (_a = data.empireTotals[resource]) !== null && _a !== void 0 ? _a : 0;
++        },
++        empireResources() {
++            if (!cachedEmpireResources) {
++                cachedEmpireResources = Object.freeze(Object.keys(data.empireTotals));
++            }
++            return cachedEmpireResources;
++        },
++        usedCapacity(roomName, kind) {
++            return locationOf(roomName, kind).usedCapacity;
++        },
++        freeCapacity(roomName, kind) {
++            return locationOf(roomName, kind).freeCapacity;
++        },
++        isStale() {
++            return data.epoch.observedAtTick !== Game.time;
++        },
++    };
++}
++/**
++ * 构建一次观察。shared scope 由 facade 缓存复用；market-fresh scope
++ * 每次调用都新建（调用方保证不落缓存，fresh 语义）。
++ */
++function buildTreasuryObservation(options) {
++    var _a, _b, _c, _d, _e;
++    const compatDiagnostics = options.compatDiagnostics;
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("observationSetup");
++    let attributionExistingLocations = 0;
++    let attributionResourceKeys = 0;
++    const epoch = {
++        scope: options.scope,
++        epochSeq: options.epochSeq,
++        observedAtTick: Game.time,
++        worldSequence: readTreasuryWorldSequence(),
++    };
++    const rooms = [];
++    const empireTotals = {};
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("observationRooms");
++    for (const room of options.rooms) {
++        const storageScan = scanLocation((_a = room.storage) !== null && _a !== void 0 ? _a : undefined);
++        const terminalScan = scanLocation((_b = room.terminal) !== null && _b !== void 0 ? _b : undefined);
++        attributionExistingLocations += (storageScan.exists ? 1 : 0) + (terminalScan.exists ? 1 : 0);
++        attributionResourceKeys += storageScan.nonZeroKeys + terminalScan.nonZeroKeys;
++        // 只对真实存在的 Store 计数枚举（missing 位置无枚举成本）；
++        // nonZeroKeys 复用 scanLocation 的单次枚举结果。
++        if (storageScan.exists)
++            (_c = options.onStoreScanned) === null || _c === void 0 ? void 0 : _c.call(options, storageScan.nonZeroKeys);
++        if (terminalScan.exists)
++            (_d = options.onStoreScanned) === null || _d === void 0 ? void 0 : _d.call(options, terminalScan.nonZeroKeys);
++        // VII: freeze the one final room object, not a temporary clone.
++        rooms.push(Object.freeze({
++            roomName: room.name,
++            storage: freezeLocation(room.name, "storage", storageScan),
++            terminal: freezeLocation(room.name, "terminal", terminalScan),
++        }));
++        // 帝国总量 = 全部位置桶之和（构建期求和；missing 位置贡献 0）。
++        for (const scan of [storageScan, terminalScan]) {
++            // VII: amounts is an owned, frozen primitive snapshot here.
++            // Preserve Object.keys order and additions; avoid [key,value] pairs.
++            for (const resource of Object.keys(scan.amounts)) {
++                const amount = scan.amounts[resource];
++                empireTotals[resource] = ((_e = empireTotals[resource]) !== null && _e !== void 0 ? _e : 0) + amount;
++            }
++        }
++    }
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("observationFinalize");
++    const data = Object.freeze({
++        epoch: Object.freeze(epoch),
++        rooms: Object.freeze(rooms),
++        empireTotals: Object.freeze(empireTotals),
++    });
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("observationView");
++    const view = createObservationView(data);
++    if (compatDiagnostics) {
++        compatDiagnostics.work({
++            observationRooms: options.rooms.length,
++            observationLocations: options.rooms.length * 2,
++            observationExistingLocations: attributionExistingLocations,
++            observationResourceKeys: attributionResourceKeys,
++        });
++        compatDiagnostics.boundary();
++    }
++    return view;
++}
++/** 供 shadow/测试用的位置桶枚举（冻结数据，无 Game 读）。 */
++function treasuryLocationBuckets(observation) {
++    const buckets = [];
++    for (const room of observation.data.rooms) {
++        buckets.push(room.storage, room.terminal);
++    }
++    return buckets;
++}
++
++},
++"src/runtime/treasury/ownerIdentity.ts": function(exports, require) {
++"use strict";
++/**
++ * Treasury production reservation 的 typed owner identity（第五轮）。
++ *
++ * 背景：reservation 权威（Memory.runtime.resourceReservations）此前只持久化
++ * 裸 holderId 字符串——字符串启发式无法区分"Game object id / 逻辑服务名 /
++ * 任务自然键 / 无法识别的 legacy 值"，也无法支撑"同字符串不同 kind 不得
++ * 互相排除"的 owner-aware 查询。
++ *
++ * Owner 类别（kind）：
++ * - game-object：真实 Game 对象 id（factory 等结构）；
++ * - logical-service：逻辑服务名（`nuker:<objectId>[:<resource>]` /
++ *   `synthesis:<roomName>[:<resource>]` 等 namespace 前缀注册表）；
++ * - task / contract：任务/合同自然键（`task:` / `contract:` 前缀）；
++ * - legacy-unresolved：无法识别的 legacy 字符串——保守计入 committed，
++ *   不允许普通 owner declaration 冒充排除。
++ *
++ * 安全默认（不变量）：无法确证 owner 已失效，绝不把 reservation 从
++ * committed 中排除——只有 expiration 或显式 release 才能安全解除占用。
++ * 因此 kind 误分类最坏只影响诊断口径，不改变保守占用语义。
++ *
++ * 兼容性：entry 平铺字段（roomName/resource/holderId/amount/updatedAt/
++ * expiresAt）保持不变，owner 为附加字段；store key（`${room}:${resource}:
++ * ${holderId}`）不变——marketSaleProtectionAdapter 的 stableKey 与既有数据
++ * 完全兼容。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.isValidTreasuryOwnerIdentity = isValidTreasuryOwnerIdentity;
++exports.treasuryOwnerIdentityKey = treasuryOwnerIdentityKey;
++exports.treasuryReservationOwnerToken = treasuryReservationOwnerToken;
++exports.treasuryReservationOwnerTokenV3 = treasuryReservationOwnerTokenV3;
++exports.classifyTreasuryHolderIdAsOwner = classifyTreasuryHolderIdAsOwner;
++const VALID_OWNER_KINDS = new Set([
++    "game-object",
++    "logical-service",
++    "task",
++    "contract",
++    "legacy-unresolved",
++]);
++/** 已知逻辑服务 namespace 前缀注册表（与 holderResolution 保持一致）。 */
++const LOGICAL_SERVICE_PREFIXES = ["nuker:", "synthesis:"];
++/** 旧式 Screeps object id：24 位小写 hex。 */
++const LEGACY_OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/;
++/** 新式 Screeps object id：16 位 base62-ish。 */
++const NEW_OBJECT_ID_PATTERN = /^[A-Za-z0-9]{16}$/;
++const OWNER_ID_MAX = 128;
++const OWNER_NAMESPACE_MIN = 1;
++const OWNER_NAMESPACE_MAX = 64;
++const OWNER_ROOM_NAME_MAX = 32;
++const OWNER_LIFECYCLE_REF_MAX = 128;
++/**
++ * owner identity 的完整形状校验（kind-specific，第七轮收紧）：
++ * - logical-service 的 namespace **必填**（1..64 字符）——namespace 参与
++ *   身份与持久 key，缺失即身份不完整；
++ * - 非 logical-service 的 namespace 必须缺省——禁止"允许携带又在 token 中
++ *   忽略"的双口径；
++ * - id（1..128）参与身份；roomName/lifecycleRef 只是 metadata（长度有界）。
++ */
++function isValidTreasuryOwnerIdentity(owner) {
++    if (!owner || typeof owner !== "object")
++        return false;
++    const candidate = owner;
++    if (typeof candidate.kind !== "string" || !VALID_OWNER_KINDS.has(candidate.kind))
++        return false;
++    if (typeof candidate.id !== "string" || candidate.id.length === 0 || candidate.id.length > OWNER_ID_MAX)
++        return false;
++    if (candidate.kind === "logical-service") {
++        if (typeof candidate.namespace !== "string" ||
++            candidate.namespace.length < OWNER_NAMESPACE_MIN ||
++            candidate.namespace.length > OWNER_NAMESPACE_MAX) {
++            return false;
++        }
++    }
++    else if (candidate.namespace !== undefined) {
++        return false;
++    }
++    if (candidate.roomName !== undefined &&
++        (typeof candidate.roomName !== "string" || candidate.roomName.length === 0 || candidate.roomName.length > OWNER_ROOM_NAME_MAX)) {
++        return false;
++    }
++    if (candidate.lifecycleRef !== undefined &&
++        (typeof candidate.lifecycleRef !== "string" || candidate.lifecycleRef.length > OWNER_LIFECYCLE_REF_MAX)) {
++        return false;
++    }
++    return true;
++}
++/**
++ * owner identity 的规范比较键（第八轮统一）：与持久 key 使用**同一 canonical
++ * owner token 算法**（treasuryReservationOwnerToken 的 `ow2:` 长度前缀编码）
++ * ——聚合 key、self-exclusion、mutation 定位、migration collision 检测全部
++ * 复用同一函数，独立 NUL 分隔比较键已移除。token 相等 ⇔ (kind, namespace,
++ * id) 三元组相等——id/namespace 含 NUL、冒号、Unicode、空格均无边界歧义，
++ * 比较结果与持久 token 恒一致。roomName/lifecycleRef 不参与（metadata）。
++ */
++function treasuryOwnerIdentityKey(owner) {
++    return treasuryReservationOwnerToken(owner);
++}
++/** ownerToken 的 kind 代码注册表（不同 kind 代码互异 ⇒ token 永不跨 kind 碰撞）。 */
++const OWNER_KIND_TOKEN_CODES = {
++    "game-object": "go",
++    "logical-service": "ls",
++    task: "tk",
++    contract: "ct",
++    "legacy-unresolved": "lu",
++};
++/**
++ * 持久 ownerToken（第七轮 v4，长度前缀 canonical 编码）：
++ * `ow2:<kindCode>:<nsLen>:<namespace><id>`。
++ *
++ * 唯一性论证（严格无碰撞）：前三段以冒号定界且 ow2/kindCode/nsLen 均不含
++ * 冒号；剩余串 = namespace 原文 + id 原文直接拼接，nsLen（UTF-16 code unit
++ * 数）唯一决定切分点。token 相等 ⇔ kindCode、nsLen、拼接串全等 ⇔
++ * (kind, namespace, id) 三元组全等——Unicode、冒号、空格、空串在 namespace
++ * 与 id 中均不产生边界歧义（v3 的 `ls:<ns>:<id>` 依赖 namespace 无冒号的
++ * 隐含约定，v4 消除该约定）。id ≤128、namespace ≤64 保证 token 长度有界；
++ * 纯函数无随机数，同输入跨 tick 恒定。identity 字段 = kind + namespace +
++ * id；roomName 由 store key 外层表达、lifecycleRef 是 metadata——均不进
++ * token。该 token 参与 reservation store key（makeReservationStoreKey 的
++ * 唯一拼接权威），mutation/migration/release/renew/query 自排除全部经
++ * 同一 helper。
++ */
++function treasuryReservationOwnerToken(owner) {
++    var _a;
++    const kindCode = OWNER_KIND_TOKEN_CODES[owner.kind];
++    const namespace = owner.kind === "logical-service" ? (_a = owner.namespace) !== null && _a !== void 0 ? _a : "" : "";
++    return `ow2:${kindCode}:${String(namespace.length)}:${namespace}${owner.id}`;
++}
++/**
++ * legacy v3 ownerToken（第六轮格式 `go:<id>` / `ls:<ns>:<id>` / …）：仅供
++ * v3→v4 迁移的旧 key 一致性核验——以经过完整验证的 entry.owner 为权威重算
++ * 新 key，绝不解析 token 字符串反推 identity。生产 mutation 不得使用。
++ */
++function treasuryReservationOwnerTokenV3(owner) {
++    var _a, _b;
++    const kindPrefix = owner.kind === "logical-service" ? "ls" : OWNER_KIND_TOKEN_CODES[owner.kind];
++    if (owner.kind === "logical-service") {
++        const namespace = (_b = (_a = owner.namespace) !== null && _a !== void 0 ? _a : owner.id.split(":")[0]) !== null && _b !== void 0 ? _b : "";
++        return `${kindPrefix}:${namespace}:${owner.id}`;
++    }
++    return `${kindPrefix}:${owner.id}`;
++}
++/**
++ * legacy 裸 holderId 的保守分类（迁移与读侧兜底用）：
++ * - `nuker:` / `synthesis:` 前缀 → logical-service（namespace 同名）；
++ * - `task:` / `contract:` 前缀 → task / contract；
++ * - 旧/新式 Game object id 形状 → game-object；
++ * - 其余 → legacy-unresolved（保守计入 committed，不可被普通声明排除）。
++ */
++function classifyTreasuryHolderIdAsOwner(holderId) {
++    if (typeof holderId === "string") {
++        for (const prefix of LOGICAL_SERVICE_PREFIXES) {
++            if (holderId.startsWith(prefix)) {
++                return { kind: "logical-service", id: holderId, namespace: prefix.slice(0, -1) };
++            }
++        }
++        if (holderId.startsWith("task:"))
++            return { kind: "task", id: holderId };
++        if (holderId.startsWith("contract:"))
++            return { kind: "contract", id: holderId };
++        if (LEGACY_OBJECT_ID_PATTERN.test(holderId) || NEW_OBJECT_ID_PATTERN.test(holderId)) {
++            return { kind: "game-object", id: holderId };
++        }
++    }
++    return { kind: "legacy-unresolved", id: typeof holderId === "string" ? holderId : String(holderId) };
++}
++
++},
++"src/runtime/treasury/types.ts": function(exports, require) {
++"use strict";
++/**
++ * Empire Treasury——帝国国库核心类型。
++ *
++ * 语义分层（详见 openspec/changes/empire-treasury-rearchitecture/design.md）：
++ * - Observed：本 tick 观察到的物理事实（不可变，绝不持久化到 Memory）；
++ * - Projected：Observed + 本 tick 已被 Game 接受的动作增量（transaction 结算）；
++ * - Committed：未执行但已被任务/预留/合同占用（每 tick 从持久权威构建只读索引）。
++ *
++ * 依赖约束：treasury 模块不得 import runtimeServices（服务由其注入房间源），
++ * 查询路径（observation/query/commitments/journal/reconciliation/metrics）
++ * 零写入 Memory 与 Game；只有生命周期（beginTick/endTick）与已接受动作
++ * 登记路径允许写最小 receipt/指标状态。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.TREASURY_STRUCTURE_BINDING_ROLES = exports.TREASURY_STRUCTURE_BINDING_KINDS = exports.TREASURY_STRUCTURE_DESCRIPTOR_VERSION = void 0;
++exports.treasuryLocationKey = treasuryLocationKey;
++exports.createTreasuryMetrics = createTreasuryMetrics;
++function treasuryLocationKey(roomName, kind) {
++    return `${roomName}:${kind}`;
++}
++function createTreasuryMetrics() {
++    return {
++        observationRebuilds: 0,
++        observationReuseHits: 0,
++        freshObservationBuilds: 0,
++        locationsScanned: 0,
++        nonZeroEntries: 0,
++        storeEnumerations: 0,
++        resourceKeysEnumerated: 0,
++        roomFindCalls: 0,
++        fallbackLiveReads: 0,
++        lifecycleBeginTicks: 0,
++        lifecycleEndTicks: 0,
++        lifecycleLazyInitializations: 0,
++        lifecycleMissingEndWarnings: 0,
++        tickGapReconciles: 0,
++        globalResetRecoveries: 0,
++        commitmentRebuilds: 0,
++        commitmentRecords: 0,
++        commitmentIndexQueries: 0,
++        expiredCommitmentsExcluded: 0,
++        missingOwnerStillCommitted: 0,
++        typedOwnerResolvedCount: 0,
++        legacyUnresolvedOwnerCount: 0,
++        invalidCommitmentRecords: 0,
++        incompleteCommitmentScopes: 0,
++        commitmentGloballyIncomplete: false,
++        transactionsRecorded: 0,
++        postingsRecorded: 0,
++        transactionsRejectedInvalid: 0,
++        duplicateSettlementsRejected: 0,
++        staleEpochRejections: 0,
++        unknownEpochRejections: 0,
++        epochScopeMismatches: 0,
++        settlementsAfterEndRejected: 0,
++        receiptsEvictedByRetention: 0,
++        receiptCapacityRejections: 0,
++        receiptStoreMigrationsExecuted: 0,
++        receiptStoreIncompatibleFailures: 0,
++        receiptFullScans: 0,
++        receiptAdmissionFastPaths: 0,
++        receiptAdmissionFullStoreBlocked: 0,
++        receiptExpiryCleanupScans: 0,
++        receiptSlotsRemaining: 0,
++        receiptNextExpiryTick: null,
++        freshEpochLimitRejections: 0,
++        transactionsPrepared: 0,
++        transactionPreparesAborted: 0,
++        prepareConflicts: 0,
++        preparedActive: 0,
++        tentativeResourceKeys: 0,
++        tentativeCapacityKeys: 0,
++        preparedCommits: 0,
++        invalidHandleRejections: 0,
++        digestGenerations: 0,
++        preparedOutstandingAtEnd: 0,
++        preparedExecutingAtEnd: 0,
++        preparedQuarantinedAtBoundary: 0,
++        executionUnknownQuarantines: 0,
++        commitFaults: 0,
++        writeAdmissionLocked: 0,
++        quarantineEntries: 0,
++        quarantineSlotsReserved: 0,
++        quarantineSlotsRemaining: 0,
++        quarantineStoreHealthy: false,
++        quarantineAdmissionRejections: 0,
++        reservationReleaseFailures: 0,
++        unresolvedQuarantines: 0,
++        resolutionCommitted: 0,
++        resolutionNotExecuted: 0,
++        resolutionUncertain: 0,
++        resolutionRejected: 0,
++        receiptEntriesVisited: 0,
++        receiptMigrationScans: 0,
++        receiptLoadValidationEntries: 0,
++        receiptExpiryCleanupEntries: 0,
++        receiptFatalInspectionEntries: 0,
++        queryInvalidContexts: 0,
++        reservationSchemaActivationFailures: 0,
++        reservationMutationRejections: 0,
++        durableIntents: 0,
++        intentSlotsRemaining: 0,
++        intentRecoveries: 0,
++        intentQuarantineConversions: 0,
++        intentStoreHealthy: false,
++        intentWriteFailures: 0,
++        authorizationIssued: 0,
++        authorizationRejected: 0,
++        authorizationInvalidated: 0,
++        authorizationsActive: 0,
++        actionContractsBuilt: 0,
++        actionAdapterMismatches: 0,
++        authorizationRevisionMismatches: 0,
++        resolutionInProgress: 0,
++        resolutionFaulted: 0,
++        resolutionRecovered: 0,
++        resolutionIdentityConflicts: 0,
++        resolutionIdentityInsufficient: 0,
++        receiptRefreshes: 0,
++        reconciliationCapabilitiesIssued: 0,
++        reconciliationCapabilitiesRejected: 0,
++        reservationStoreHealthy: false,
++        riskAdjustedCapacityLookups: 0,
++        reconciliationInflowMismatches: 0,
++        reconciliationOutflowMismatches: 0,
++        reconciliationStructuralChanges: 0,
++        reconciliationChecks: 0,
++    };
++}
++// ── 完整 structure binding descriptor（第十一轮 3.13.9 / AC4） ───────────────
++/** descriptor 版本（字段集演进时递增——旧 descriptor 数据按版本解释）。 */
++exports.TREASURY_STRUCTURE_DESCRIPTOR_VERSION = 1;
++exports.TREASURY_STRUCTURE_BINDING_KINDS = new Set([
++    "governed_location",
++    "game_object",
++]);
++exports.TREASURY_STRUCTURE_BINDING_ROLES = new Set([
++    "source",
++    "target",
++    "fee_source",
++    "production_structure",
++    "auxiliary",
++]);
++
++}
++};
++const dependencies = {
++  "src/runtime/configNormalize.ts": {},
++  "src/runtime/logistics/resourceTransferTaskHealth.ts": {
++    "@/runtime/configNormalize": "src/runtime/configNormalize.ts"
++  },
++  "src/runtime/treasury/commitmentRevision.ts": {},
++  "src/runtime/treasury/commitments.ts": {
++    "@/runtime/logistics/resourceTransferTaskHealth": "src/runtime/logistics/resourceTransferTaskHealth.ts",
++    // V: no mutable revision module imported by the shared read definitions.
++    "@/runtime/treasury/holderResolution": "src/runtime/treasury/holderResolution.ts",
++    "@/runtime/treasury/ownerIdentity": "src/runtime/treasury/ownerIdentity.ts"
++  },
++  "src/runtime/treasury/holderResolution.ts": {},
++  "src/runtime/treasury/observation.ts": {
++    "@/runtime/treasury/types": "src/runtime/treasury/types.ts"
++  },
++  "src/runtime/treasury/ownerIdentity.ts": {},
++  "src/runtime/treasury/types.ts": {}
++};
++/** Read Optimization V: shared function definitions, private per-builder inputs.
++ * Authoring: scripts/build-treasury-compat-loader.cjs + treasury-compat-context.cjs.
++ * This is ONLY the read-only compatibility capsule, NOT a Treasury service.
++ * The old capsule initialized an unreachable mutable revision module to zero on
++ * every factory call. That private zero and a FRESH resource Set now belong to
++ * an explicit context captured by each new builder, never by shared functions.
++ * No ambient active-context slot; nested/alternating builders cannot overwrite it.
++ */
++let compatReadDefinitions;
++function initializeCompatibilityReadDefinitions() {
++  const cache = Object.create(null);
++  function load(id) {
++    if (Object.prototype.hasOwnProperty.call(cache, id)) return cache[id];
++    if (!Object.prototype.hasOwnProperty.call(factories, id)) throw new Error("unlisted read dependency");
++    const exports = Object.create(null);
++    cache[id] = exports;
++    factories[id](exports, spec => {
++      if (!Object.prototype.hasOwnProperty.call(dependencies[id], spec)) throw new Error("unlisted read import");
++      return load(dependencies[id][spec]);
++    });
++    return exports;
++  }
++  const observation = load("src/runtime/treasury/observation.ts");
++  const commitments = load("src/runtime/treasury/commitments.ts");
++  for (const id of Object.keys(cache)) Object.freeze(cache[id]);
++  return Object.freeze({ observation, commitments });
++}
++export function createCompatibilityReadCore(): CompatReadBuilders {
++  // Nothing is prewarmed. Both initialization and per-builder capture remain in
++  // the admitted sample's readerLoad interval, including cold publication cost.
++  const definitions = compatReadDefinitions || initializeCompatibilityReadDefinitions();
++  const context = Object.freeze({ revision: 0, resources: new Set(RESOURCES_ALL) });
++  const builders = Object.freeze({
++    buildObservation: options => definitions.observation.buildTreasuryObservation(options),
++    buildCommitments: options => definitions.commitments.buildTreasuryCommitmentIndex(options, context),
++  });
++  // A failing catalog capture publishes no partial first initialization.
++  if (!compatReadDefinitions) compatReadDefinitions = definitions;
++  return builders;
++}
+diff --git a/test/treasury-compat/fixtures/reader-before-hotpath-optimization-xi.ts.txt b/test/treasury-compat/fixtures/reader-before-hotpath-optimization-xi.ts.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..556c6d565b3962c407bc82a4b5706d5382935c53
+--- /dev/null
++++ b/test/treasury-compat/fixtures/reader-before-hotpath-optimization-xi.ts.txt
+@@ -0,0 +1,341 @@
++/** Read compatibility preview for the old production bot, not a Treasury host.
++ * Reuses pinned production observation/commitment builders. Never computes a
++ * spendable balance, signs a permit, migrates a store or advances world sequence.
++ * One endpoint snapshot and one bounded CPU profile are retained. Reader caches
++ * remain per sample; only audited definition modules may be reused. Diagnostic
++ * profiles never contain a linked history.
++ */
++import type { CompatBuilderDiagnostics, CompatConfig, CompatPorts, CompatObservation } from "./treasuryCompatTypes";
++import { createCompatCpuAccounting, type CompatCpuPhase, type CompatCpuProfile, type CompatCpuSubphase, type CompatCpuWorkKey } from "./treasuryCompatCpu";
++
++type Rec = Record<string, unknown>;
++type Kind = "storage" | "terminal";
++const KINDS: readonly Kind[] = ["storage", "terminal"];
++const TABLE_LIMIT = 256;
++const sat = (n: number) => Math.min(n + 1, 999999999);
++const obj = (x: unknown): x is Rec => typeof x === "object" && x !== null && !Array.isArray(x);
++const nonneg = (x: unknown): x is number => typeof x === "number" && Number.isSafeInteger(x) && x >= 0;
++const finite = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x) && x >= 0;
++const own = (x: Rec, k: string) => Object.prototype.hasOwnProperty.call(x, k);
++const str = (x: unknown, n: number): x is string => typeof x === "string" && x.length > 0 && x.length <= n;
++
++export function validCompatConfig(c: CompatConfig): boolean {
++  return obj(c) && typeof c.enabled === "boolean" && str(c.shardName, 32)
++    && Array.isArray(c.rooms) && c.rooms.length > 0 && c.rooms.length <= 2
++    && c.rooms.every(r => typeof r === "string" && /^[WE]\d{1,3}[NS]\d{1,3}$/.test(r))
++    && new Set(c.rooms).size === c.rooms.length
++    && Array.isArray(c.resources) && c.resources.length > 0 && c.resources.length <= 4
++    && c.resources.every(r => typeof r === "string" && /^[A-Za-z0-9_]{1,32}$/.test(r))
++    && new Set(c.resources).size === c.resources.length
++    && nonneg(c.startTick) && nonneg(c.endTick) && c.endTick > c.startTick
++    && c.endTick - c.startTick <= 1200
++    && nonneg(c.intervalTicks) && c.intervalTicks >= 20 && c.intervalTicks <= 1000
++    && Math.ceil(c.startTick / c.intervalTicks) * c.intervalTicks <= c.endTick
++    && nonneg(c.minBucket) && c.minBucket <= 10000
++    && finite(c.maxSampleCpu) && c.maxSampleCpu > 0 && c.maxSampleCpu <= 10
++    && finite(c.reserveCpu) && c.reserveCpu >= 1 && c.reserveCpu <= 100
++    && nonneg(c.maxLogBytes) && c.maxLogBytes >= 1024 && c.maxLogBytes <= 16384;
++}
++export function compatUtf8Bytes(s: string): number {
++  let n = 0;
++  for (let i = 0; i < s.length; i++) {
++    const a = s.charCodeAt(i);
++    if (a < 128) n++;
++    else if (a < 2048) n += 2;
++    else if (a >= 0xd800 && a <= 0xdbff && i + 1 < s.length
++      && s.charCodeAt(i + 1) >= 0xdc00 && s.charCodeAt(i + 1) <= 0xdfff) { n += 4; i++; }
++    else n += 3;
++  }
++  return n;
++}
++/** Own-property path read. Missing, null, array, damaged parents and empty object
++ * remain distinct. No ensure()/normalizer or getter invocation on table entries. */
++function pathValue(root: unknown, path: readonly string[]): { status: string; value?: unknown } {
++  let p = root;
++  for (const key of path) {
++    if (!obj(p)) return { status: "invalid_parent" };
++    if (!own(p, key)) return { status: "absent" };
++    const desc = Object.getOwnPropertyDescriptor(p, key);
++    if (!desc || !("value" in desc)) return { status: "accessor_unreadable" };
++    p = desc.value;
++  }
++  return { status: "present", value: p };
++}
++function table(root: unknown, path: readonly string[]) {
++  const found = pathValue(root, path);
++  if (found.status !== "present") return { status: found.status, count: null, value: undefined };
++  if (!obj(found.value)) return { status: "invalid_container", count: null, value: undefined };
++  // Stop enumeration at bound+1. Never aggregate a selected prefix as the table.
++  let count = 0;
++  for (const key in found.value) {
++    if (!own(found.value, key)) continue;
++    const descriptor = Object.getOwnPropertyDescriptor(found.value, key);
++    if (!descriptor || !("value" in descriptor)) return { status: "accessor_unreadable", count: null, value: undefined };
++    if (++count > TABLE_LIMIT) return { status: "over_bound", count: null, value: undefined };
++  }
++  return { status: count === 0 ? "empty" : "nonempty", count, value: found.value };
++}
++function summary(s: { status: string; count: number | null }) { return { status: s.status, count: s.count }; }
++type Direct = { id: string; used: number; free: number; capacity: number;
++  overCapacity: boolean; active: boolean; cooldown: number | null; amounts: Record<string, number> };
++function direct(room: Room | undefined, kind: Kind, resources: readonly string[]): { status: string; value?: Direct } {
++  try {
++    if (!room) return { status: "not_visible" };
++    if (room.controller?.my !== true) return { status: "not_owned" };
++    const s = room[kind];
++    if (!s) return { status: "absent" };
++    if (s.my !== true || !str(s.id, 96)) return { status: "unreadable" };
++    // Endpoint-local reference only: no value or Store is retained across calls.
++    // Core observation still obtains its own Store and independently enumerates it.
++    const store = s.store;
++    if (!store || typeof s.isActive !== "function") return { status: "unreadable" };
++    const used = store.getUsedCapacity(), free = store.getFreeCapacity(), capacity = store.getCapacity();
++    const active = s.isActive(), cooldown = kind === "terminal" ? (s as StructureTerminal).cooldown : null;
++    // Capacity reduction may leave inventory above capacity. Preserve signed
++    // free or a saturated zero, rather than inventing capacity=used+free.
++    if (!nonneg(used) || !nonneg(capacity) || !Number.isSafeInteger(free)
++      || !(used + free === capacity || (used > capacity && free === 0))
++      || typeof active !== "boolean" || (kind === "terminal" && !nonneg(cooldown))) return { status: "unreadable" };
++    const amounts: Record<string, number> = Object.create(null);
++    for (const r of resources) {
++      const a = store.getUsedCapacity(r as ResourceConstant);
++      if (!nonneg(a) || a > used) return { status: "unreadable" };
++      amounts[r] = a;
++    }
++    if (Object.values(amounts).reduce((a, b) => a + b, 0) > used) return { status: "unreadable" };
++    return { status: "ok", value: { id: s.id, used, free, capacity, overCapacity: used > capacity,
++      active, cooldown, amounts } };
++  } catch { return { status: "unreadable" }; }
++}
++function legacyProjection(memory: unknown, room: string, kind: Kind, d: Direct, tick: number) {
++  const raw = pathValue(memory, ["runtime", "resourceControl"]);
++  if (raw.status !== "present") return { status: raw.status };
++  if (!obj(raw.value) || !nonneg(raw.value.updatedAt)) return { status: "unreadable" };
++  if (raw.value.updatedAt !== tick) return { status: raw.value.updatedAt > tick ? "future_tick" : "stale",
++    updatedAt: raw.value.updatedAt, comparisonPerformed: false };
++  const row = pathValue(raw.value, ["rooms", room]);
++  if (row.status !== "present") return { status: row.status, comparisonPerformed: false };
++  if (!obj(row.value)) return { status: "unreadable" };
++  const fields: Record<string, number> = { [kind + "UsedCapacity"]: d.used, [kind + "FreeCapacity"]: d.free };
++  if (own(d.amounts, "energy")) fields[kind + "Energy"] = d.amounts.energy;
++  const mismatches: string[] = [];
++  for (const key of Object.keys(fields)) {
++    if (!Number.isSafeInteger(row.value[key])) return { status: "unreadable", comparisonPerformed: false };
++    if (row.value[key] !== fields[key]) mismatches.push(key);
++  }
++  return { status: mismatches.length ? "mismatch" : "match_capacity_and_selected_energy",
++    updatedAt: raw.value.updatedAt, comparisonPerformed: true, mismatches };
++}
++
++type Previous = { tick: number; endpoints: Record<string, Direct> };
++export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPorts,
++  options: { cpuDiagnostics?: boolean } = {}) {
++  const cpuDiagnostics = options?.cpuDiagnostics === true;
++  let sampleOrdinal = 0, previousCpuProfile: CompatCpuProfile | null = null;
++  let cfg = input, enabled = false, invalid = false;
++  try {
++    enabled = input.enabled === true;
++    if (enabled) {
++      invalid = !validCompatConfig(input);
++      if (!invalid) cfg = Object.freeze({ ...input, rooms: Object.freeze([...input.rooms]), resources: Object.freeze([...input.resources]) });
++    }
++  } catch { invalid = true; }
++  let fault = false, lastTick: number | undefined, previous: Previous | undefined;
++  let emitted = 0, cpuSkips = 0;
++  let previousRun: { tick: number; cpuIncludingEmit: number; emittedBytes: number; retainedPrimitiveChars: number } | null = null;
++  function run(): { status: string } {
++    let tick: number | undefined;
++    let accounting: ReturnType<typeof createCompatCpuAccounting> | undefined;
++    try {
++      if (invalid) { fault = true; return { status: "invalid_config" }; }
++      if (!enabled) return { status: "disabled" };
++      if (fault) return { status: "disabled_after_fault" };
++      tick = ports.tick();
++      if (!nonneg(tick)) throw new Error("invalid tick");
++      if (tick < cfg.startTick || tick > cfg.endTick) { previous = undefined; return { status: "outside_window" }; }
++      if (tick % cfg.intervalTicks !== 0 || tick === lastTick) return { status: "not_due" };
++      lastTick = tick;
++      if (ports.shard() !== cfg.shardName) return { status: "wrong_shard" };
++      if (!cfg.resources.every(r => ports.resources().includes(r))) throw new Error("invalid resource");
++      const start = ports.cpu();
++      const validCpu = (c: ReturnType<CompatPorts["cpu"]>) => finite(c.used) && finite(c.tickLimit) && nonneg(c.bucket);
++      if (!validCpu(start)) throw new Error("invalid CPU");
++      if (start.bucket < cfg.minBucket || start.tickLimit - start.used < cfg.maxSampleCpu + cfg.reserveCpu) {
++        cpuSkips = sat(cpuSkips); return { status: "cpu_skipped" };
++      }
++      sampleOrdinal = sat(sampleOrdinal);
++      if (cpuDiagnostics) accounting = createCompatCpuAccounting(start.used, tick, sampleOrdinal);
++      let latestCpu = start.used;
++      const budget = (next?: CompatCpuPhase) => {
++        const c = ports.cpu();
++        if (!validCpu(c) || c.used < latestCpu) throw new Error("invalid CPU progression");
++        accounting?.checkpoint(c.used, next);
++        latestCpu = c.used;
++        return c.used - start.used < cfg.maxSampleCpu && c.tickLimit - c.used >= cfg.reserveCpu && c.bucket >= cfg.minBucket;
++      };
++      // Builder boundaries are diagnostic-only and never authorize work. Each
++      // boundary samples the same CPU port, so its overhead remains in both the
++      // parent phase and the reported subphase interval. Builders emit bounded
++      // primitive work counters instead of sampling once per record/key/query.
++      const builderDiagnostics: CompatBuilderDiagnostics | undefined = accounting ? (() => {
++        const sampleAccounting = accounting;
++        return Object.freeze({
++          boundary(phase?: CompatCpuSubphase) {
++            const c = ports.cpu();
++            if (!validCpu(c) || c.used < latestCpu) throw new Error("invalid CPU progression");
++            sampleAccounting.attributionBoundary(c.used, phase);
++            latestCpu = c.used;
++          },
++          work(values: Readonly<Partial<Record<CompatCpuWorkKey, number>>>) { sampleAccounting.attributionWork(values); },
++        });
++      })() : undefined;
++      const memory = ports.memory();
++      const tasks = table(memory, ["data", "resourceControl", "tasks"]);
++      const reservations = table(memory, ["runtime", "resourceReservations"]);
++      const marker = pathValue(memory, ["runtime", "resourceReservationsOwnerVersion"]);
++      const existingCore = pathValue(memory, ["runtime", "treasuryCore"]);
++      const report: Rec = { kind: "treasury-legacy-read-bridge", tick, shard: cfg.shardName,
++        sourceCommit: "01bd9831454950c4928df98dd8679692b55603e5", productionBase: "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
++        authorizesActions: false, scope: { rooms: [...cfg.rooms], resources: [...cfg.resources], isEmpireTotal: false },
++        evaluation: "observation_and_legacy_commitments_only", facadeQueryRun: false,
++        spendable: null, kernelLifecycleRun: false, storageMode: "heap_only", previousRun,
++        legacyInputs: { tasks: summary(tasks), reservations: summary(reservations),
++          reservationVersion: { status: marker.status, value: nonneg(marker.value) ? marker.value : null },
++          treasuryCore: { status: existingCore.status === "present" ? "present_not_interpreted" : existingCore.status, activeCount: null } },
++      };
++      const rows: Rec[] = []; report.endpoints = rows;
++      const validRooms: Room[] = [];
++      const next: Previous = { tick, endpoints: Object.create(null) };
++      let limited = false, observations: CompatObservation | undefined;
++      for (const name of cfg.rooms) {
++        if (!budget("directRead")) { limited = true; break; }
++        const room = ports.room(name);
++        let safe = true;
++        for (const kind of KINDS) {
++          if (!budget()) { limited = true; safe = false; break; }
++          const d = direct(room, kind, cfg.resources);
++          const row: Rec = { room: name, location: kind, directStatus: d.status };
++          rows.push(row);
++          if (d.status !== "ok" && d.status !== "absent") safe = false;
++          if (d.value) {
++            row.direct = d.value;
++            row.legacyProjection = legacyProjection(memory, name, kind, d.value, tick);
++            const key = name + ":" + kind, old = previous?.endpoints[key];
++            next.endpoints[key] = d.value;
++            if (!old || !previous) row.change = { status: "no_comparable_previous_sample" };
++            else if (old.id !== d.value.id || old.capacity !== d.value.capacity) row.change = { status: "endpoint_or_capacity_changed" };
++            else if (tick <= previous.tick || tick - previous.tick > cfg.intervalTicks * 3) row.change = { status: "gap_not_comparable" };
++            else row.change = { status: "net_change_unattributed", fromTick: previous.tick, toTick: tick,
++              amounts: Object.fromEntries(cfg.resources.map(r => [r, d.value!.amounts[r] - old.amounts[r]])) };
++          }
++        }
++        if (safe && room && room.controller?.my === true) validRooms.push(room);
++      }
++      // Build from actual Game room objects, NOT from the just-produced direct
++      // numbers or legacy Memory projection. Independently enumerates Store keys.
++      let readers: ReturnType<CompatPorts["readers"]> | undefined;
++      if (validRooms.length && budget("readerLoad")) {
++        accounting?.invoked("readerLoad");
++        readers = ports.readers();
++        if (budget("observationBuild")) {
++          accounting?.invoked("observationBuild");
++          observations = readers.buildObservation({ scope: "market-fresh", epochSeq: 1, rooms: validRooms, compatDiagnostics: builderDiagnostics });
++        } else limited = true;
++      } else if (!budget()) limited = true;
++      // Diagnostic-only extra checkpoint: its cost is NOT removed from budget.
++      if (accounting && !budget("coreCompare")) limited = true;
++      if (observations && observations.epoch.observedAtTick !== tick) throw new Error("stale builder");
++      const included = new Set(validRooms.map(r => r.name));
++      for (const row of rows) {
++        if (!observations || !included.has(row.room as string)) { row.coreComparison = "not_read"; continue; }
++        const o = observations.location(row.room as string, row.location as Kind), d = row.direct as Direct | undefined;
++        if (!d) { row.coreComparison = row.directStatus === "absent" && !o.exists ? "both_absent" : "existence_mismatch"; continue; }
++        const mismatch: string[] = [];
++        if (!o.exists || o.structureId !== d.id) mismatch.push("structure");
++        if (o.usedCapacity !== d.used) mismatch.push("usedCapacity");
++        if (o.freeCapacity !== d.free) mismatch.push("freeCapacity");
++        for (const r of cfg.resources) if ((o.amounts[r] ?? 0) !== d.amounts[r]) mismatch.push(r);
++        row.coreComparison = mismatch.length ? "mismatch" : "match_selected_scope";
++        row.coreMismatches = mismatch;
++      }
++      report.commitments = { status: "not_read", rows: null };
++      // Never manufacture empty inputs from missing/damaged/over-bound tables.
++      if (!tasks.value || !reservations.value) report.commitments = { status: "unavailable_legacy_input", rows: null };
++      else if (readers && observations && budget("commitmentBuild")) {
++        accounting?.invoked("commitmentBuild");
++        const index = readers.buildCommitments({ tick, tasks: tasks.value, reservations: reservations.value, observation: observations, compatDiagnostics: builderDiagnostics });
++        const fields: Rec[] = [];
++        const projectionRowsPlanned = validRooms.length * cfg.resources.length;
++        builderDiagnostics?.boundary("projectionRows");
++        for (const name of validRooms.map(r => r.name)) for (const resource of cfg.resources) {
++          if (!budget("commitmentProjection")) { limited = true; break; }
++          const outgoing = index.outgoing(name, resource), incoming = index.incoming(name, resource), reserved = index.reservedProduction(name, resource);
++          if (![outgoing, incoming, reserved].every(nonneg)) throw new Error("invalid index numbers");
++          fields.push({ room: name, resource, scope: "room_not_endpoint", outgoing, incoming,
++            productionReserved: reserved, completeness: index.commitmentCompleteness(name, resource) });
++        }
++        builderDiagnostics?.work({ projectionRowsPlanned, projectionRowsCompleted: fields.length, projectionIndexQueries: fields.length * 4 });
++        builderDiagnostics?.boundary();
++        const c = index.completeness;
++        if (!c || typeof c.complete !== "boolean" || typeof c.globalIncomplete !== "boolean"
++          || !nonneg(c.invalidRecords) || !nonneg(c.incompleteScopeCount)) throw new Error("invalid index health");
++        report.commitments = { status: limited ? "partial_cpu_budget" : c.complete ? "read_complete" : "read_incomplete",
++          rows: fields, completeness: { ...c }, allTableScan: true, tableLimitEach: TABLE_LIMIT };
++      } else if (!budget()) { limited = true; report.commitments = { status: "not_read_cpu_budget", rows: null }; }
++      if (!budget("report")) limited = true;
++      report.status = limited ? "partial_cpu_budget" : "sampled";
++      report.coreObservationRooms = validRooms.filter(() => !!observations).map(r => r.name);
++      report.requestedEndpointRows = cfg.rooms.length * 2;
++      report.collectedEndpointRows = rows.length;
++      if (accounting && !budget("serializationAndSize")) report.status = "partial_cpu_budget";
++      report.cpuBeforeSerializationAndEmit = latestCpu - start.used;
++      if (accounting) {
++        // Prefix of THIS sample. Serialization/emit are not known yet. The full
++        // completed measurement is published only by the NEXT emitted sample.
++        report.cpuProfile = accounting.snapshot("beforeSerialization");
++        report.previousCpuProfile = previousCpuProfile;
++      }
++      report.cooperativeBudget = true;
++      let line = JSON.stringify(report), status = report.status as string;
++      // One UTF-8 traversal per distinct output string. Reuse the size after
++      // emit instead of rescanning the identical (immutable) string.
++      let emittedBytes = compatUtf8Bytes(line);
++      if (emittedBytes > cfg.maxLogBytes) {
++        status = "output_limited";
++        line = JSON.stringify({ kind: "treasury-legacy-read-bridge", tick, status,
++          authorizesActions: false, previousRun });
++        emittedBytes = compatUtf8Bytes(line);
++      }
++      // Post-serialization sampling cannot retroactively change this report.
++      // The following sample carries the measured total, even when over budget.
++      if (accounting) budget("emit");
++      ports.emit(line);
++      const end = ports.cpu();
++      if (!validCpu(end) || end.used < latestCpu) throw new Error("invalid ending CPU");
++      accounting?.checkpoint(end.used, "retention");
++      latestCpu = end.used;
++      previous = status === "output_limited" ? undefined : next;
++      previousRun = { tick, cpuIncludingEmit: end.used - start.used, emittedBytes,
++        retainedPrimitiveChars: previous ? JSON.stringify(previous).length : 0 };
++      emitted = sat(emitted);
++      if (accounting) {
++        // Includes previous-snapshot sizing/bookkeeping. The final snapshot
++        // copy and return are outside the endpoint and explicitly not claimed.
++        budget();
++        previousCpuProfile = accounting.snapshot("afterRetention");
++      }
++      return { status };
++    } catch {
++      fault = true; previous = undefined;
++      // A fault snapshot stops at the last VALID checkpoint; never guess the
++      // cost of a throwing stage or the catch/reporting path.
++      if (accounting) previousCpuProfile = accounting.snapshot("fault");
++      try { ports.emit(JSON.stringify({ kind: "treasury-legacy-read-bridge", tick: nonneg(tick) ? tick : null,
++        status: "fault_disabled", authorizesActions: false })); } catch { /* Do not stop old bot. */ }
++      return { status: "fault_disabled" };
++    }
++  }
++  return { run, stats: () => ({ fault, emitted, cpuSkips, retainedEndpoints: previous ? Object.keys(previous.endpoints).length : 0,
++    previousRun: previousRun ? { ...previousRun } : null,
++    cpuProfile: previousCpuProfile }) };
++}
+diff --git a/test/treasury-compat/hotpath-optimization.spec.cjs b/test/treasury-compat/hotpath-optimization.spec.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d6c2cefb0c6fe2e898a0618dbcf9b747fcf6359d
+--- /dev/null
++++ b/test/treasury-compat/hotpath-optimization.spec.cjs
+@@ -0,0 +1,20 @@
++'use strict';
++const {test}=require('node:test');const assert=require('node:assert/strict');const crypto=require('node:crypto');
++const X=require('./hotpath-test-support.cjs');const G=require('../../scripts/build-treasury-compat-loader.cjs');
++const {S,H,task,beforeCore,afterCore,beforeReader,afterReader,pair,coreBuild,snapshot,operationCounts,readerCounts}=X;
++const sha=s=>crypto.createHash('sha256').update(s).digest('hex');const blob=b=>crypto.createHash('sha1').update(Buffer.from('blob '+b.length+'\0')).update(b).digest('hex');
++test('hotpath XI baseline fixtures are exact IX source bytes',()=>{assert.equal(blob(Buffer.from(beforeCore())),'62752b09e3828e67a9000aeffcda0b2436368bf1');assert.equal(blob(Buffer.from(beforeReader())),'556c6d565b3962c407bc82a4b5706d5382935c53');});
++test('hotpath XI core and preview transforms are exactly reversible',()=>{assert.equal(G.H.transform(beforeCore()),afterCore());assert.equal(G.H.restore(afterCore()),beforeCore());assert.equal(G.P.transform(beforeReader()),afterReader());assert.equal(G.P.restore(afterReader()),beforeReader());});
++test('hotpath XI shifted source is rejected rather than approximately optimized',()=>{assert.throws(()=>G.H.transform(beforeCore().replace('metrics.taskRecords = Object.keys(options.tasks).length;','metrics.taskRecords = 0;')),/HOTPATH_TRANSFORM_COUNT/);assert.throws(()=>G.P.transform(beforeReader().replace('const amounts: Record<string, number> = Object.create(null);','const amounts: Record<string, number> = {};')),/PREVIEW_HOTPATH_TRANSFORM_COUNT/);});
++for(const name of Object.keys(S.scenarios))test('hotpath XI diagnostics-off byte parity: '+name,()=>{const r=pair(name,false);assert.equal(r.byteEquivalent,true);assert.deepEqual(r.writes,[0,0]);assert.deepEqual(r.readers,[12,12]);assert.deepEqual(r.observations,[12,12]);assert.equal(r.commitments[0],r.commitments[1]);});
++test('hotpath XI observation reuses first sparse keys and removes one view Map',()=>{const a=operationCounts(beforeCore(),0,false,32),b=operationCounts(afterCore(),0,false,32);assert.deepEqual(b.semantics,a.semantics);assert.equal(a.observation.keys,8);assert.equal(b.observation.keys,4);assert.equal(a.observation.mapNew-b.observation.mapNew,1);});
++test('hotpath XI task and reservation tables allocate no Object.values arrays',()=>{const a=operationCounts(beforeCore(),37),b=operationCounts(afterCore(),37);assert.deepEqual(b.semantics,a.semantics);assert.equal(a.commitment.values,2);assert.equal(b.commitment.values,0);assert.equal(a.commitment.keys,2);assert.equal(b.commitment.keys,2);});
++test('hotpath XI self routes avoid one duplicate scope lookup per task',()=>{const a=operationCounts(beforeCore(),37,true),b=operationCounts(afterCore(),37,true);assert.deepEqual(b.semantics,a.semantics);assert.equal(a.commitment.mapGet-b.commitment.mapGet,37);});
++test('hotpath XI preview removes selected-resource Object.values and repeated room arrays',()=>{const a=readerCounts(beforeCore(),beforeReader()),b=readerCounts(afterCore(),afterReader());assert.equal(a.line,b.line);assert.equal(a.resourcePortCalls,2);assert.equal(b.resourcePortCalls,1);assert.equal(a.counters.values,4);assert.equal(b.counters.values,0);assert.ok(a.counters.map>b.counters.map);assert.ok(a.counters.filter>b.counters.filter);});
++test('hotpath XI duplicate and prototype-like room names retain last-room-wins lookup',()=>{for(const text of [beforeCore(),afterCore()]){const {s,r}=coreBuild(text);const a=H.makeRoom('__proto__'),b=H.makeRoom('__proto__');a.storage.store.H=7;b.storage.store.H=19;const o=r.buildObservation({scope:'market-fresh',epochSeq:1,rooms:[a,b]});assert.equal(JSON.stringify(o.roomNames()),JSON.stringify(['__proto__','__proto__']));assert.equal(o.amount('__proto__','storage','H'),19);assert.equal(o.hasRoom('__proto__'),true);}});
++test('hotpath XI callback order still precedes totals and snapshot values are never reread',()=>{const out=[];for(const text of [beforeCore(),afterCore()]){const {s,r}=coreBuild(text);const trace=[];const opts={scope:'market-fresh',epochSeq:1,rooms:Object.values(s.game.rooms),onStoreScanned(n){trace.push(n);s.game.rooms.W1N1.storage.store.H=999;}};const o=r.buildObservation(opts);out.push({trace,data:H.json(o.data)});assert.equal(o.amount('W1N1','storage','H'),300);}assert.deepEqual(out[1],out[0]);});
++test('hotpath XI integer-like task key order preserves first route winner',()=>{for(const text of [beforeCore(),afterCore()]){const {s,r}=coreBuild(text);s.memory.data.resourceControl.tasks={20:task({id:'twenty'}),2:task({id:'two'}),a:task({id:'letter'})};const o=r.buildObservation({scope:'market-fresh',epochSeq:1,rooms:Object.values(s.game.rooms)});const i=r.buildCommitments({tick:100,tasks:s.memory.data.resourceControl.tasks,reservations:{},observation:o});assert.equal(i.findMergeableTaskId('H','W1N1','W2N1','manual',''),'two');}});
++test('hotpath XI canonical health behavior stays byte-equivalent for automatic and blocked tasks',()=>{for(const mode of ['fresh','stale','receiver','source']){const setup=s=>{s.game.time=5000;const t=task({origin:'automatic'});if(mode==='stale')t.lastProgressAt=0;if(mode==='receiver'){t.blockedReason='receiver_capacity';t.blockedSince=4999;}if(mode==='source'){t.blockedReason='source_depleted';t.blockedSince=1;}s.memory.data.resourceControl.tasks={t};};const a=coreBuild(beforeCore(),setup),b=coreBuild(afterCore(),setup);assert.deepEqual(snapshot(b),snapshot(a),mode);}});
++test('hotpath XI seeded differential corpus preserves the full API across 128 snapshots',()=>{const BS=require('./build-test-support.cjs');for(let seed=1;seed<=128;seed++){const v=BS.deterministicCorpus(seed,seed%2?37:256);const setup=s=>{s.memory.data.resourceControl.tasks=H.json(v.tasks);s.memory.runtime.resourceReservations=H.json(v.reservations);s.game.time=100+seed;};const a=coreBuild(beforeCore(),setup),b=coreBuild(afterCore(),setup);assert.deepEqual(snapshot(b),snapshot(a),'seed='+seed);}});
++test('hotpath XI negative control catches a lost amount-key fold',()=>{const bad=afterCore().replace('for (const resource of scan.amountKeys) {','for (const resource of []) {');const a=coreBuild(beforeCore()),b=coreBuild(bad);assert.notDeepEqual(snapshot(b),snapshot(a));});
++test('hotpath XI generated bytes are the audited current implementation',()=>{assert.equal(sha(afterCore()),sha(require('node:fs').readFileSync(H.file('treasuryCompatReadCore.generated.ts'),'utf8')));assert.equal(sha(afterReader()),sha(require('node:fs').readFileSync(H.file('treasuryCompatRead.ts'),'utf8')));});
+diff --git a/test/treasury-compat/hotpath-test-support.cjs b/test/treasury-compat/hotpath-test-support.cjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..0bfd11b7f4e71390daca995483a88a72cda24f03
+--- /dev/null
++++ b/test/treasury-compat/hotpath-test-support.cjs
+@@ -0,0 +1,69 @@
++'use strict';
++/** XI differential harness. Synthetic Room/Memory inputs and operation counters
++ * are not Screeps CPU measurements. They prove exact behavior and reduced work. */
++const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
++const S = require('./loader-test-support.cjs');
++const B = require('./build-test-support.cjs');
++const { H, ts, task, reservation } = S;
++const beforeCore = () => fs.readFileSync(path.join(__dirname,'fixtures/core-before-hotpath-optimization-xi.ts.txt'),'utf8').replace(/\r\n/g,'\n');
++const afterCore = () => fs.readFileSync(H.file('treasuryCompatReadCore.generated.ts'),'utf8').replace(/\r\n/g,'\n');
++const beforeReader = () => fs.readFileSync(path.join(__dirname,'fixtures/reader-before-hotpath-optimization-xi.ts.txt'),'utf8').replace(/\r\n/g,'\n');
++const afterReader = () => fs.readFileSync(H.file('treasuryCompatRead.ts'),'utf8').replace(/\r\n/g,'\n');
++function api(text, counters) {
++  const js=ts.transpileModule(text,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2019}}).outputText;
++  const ctx=vm.createContext({exports:{},require:k=>{if(k==='./treasuryCompatCpu')return H.load('treasuryCompatCpu.ts');throw new Error('unexpected reader import:'+k);},__count:k=>{if(counters)counters[k]=(counters[k]||0)+1;}});
++  vm.runInContext(`{
++    const values=Object.values; Object.values=function(o){__count('values');return values(o);};
++    const map=Array.prototype.map, filter=Array.prototype.filter;
++    Array.prototype.map=function(...a){__count('map');return Reflect.apply(map,this,a);};
++    Array.prototype.filter=function(...a){__count('filter');return Reflect.apply(filter,this,a);};
++  }`,ctx);
++  vm.runInContext(js,ctx,{timeout:5000}); return ctx.exports;
++}
++function make(coreText, readerText, diagnostics=false, readerCounters) {
++  const s=H.scene({rooms:['W1N1','W2N1']}); s.game.rooms.W2N1=H.makeRoom('W2N1');
++  s.resources=['energy','H','O','U']; s.resourcePortCalls=0;
++  s.api=api(readerText,readerCounters); s.factories=[];
++  s.core=S.capsule(coreText,s,id=>s.factories.push(id));
++  const baseResources=s.ports.resources; s.ports.resources=()=>{s.resourcePortCalls++;return baseResources();};
++  s.ports.readers=()=>{s.calls.readers++;const c=s.core.createCompatibilityReadCore();return Object.freeze({
++    buildObservation:o=>{s.calls.observation++;return c.buildObservation(o);},
++    buildCommitments:o=>{s.calls.commitments++;return c.buildCommitments(o);},
++  });};
++  s.observer=s.api.createTreasuryCompatPreview(s.cfg,s.ports,{cpuDiagnostics:diagnostics}); return s;
++}
++function pair(name, diagnostics=false) {
++  const a=make(beforeCore(),beforeReader(),diagnostics),b=make(afterCore(),afterReader(),diagnostics);
++  S.scenarios[name](a);S.scenarios[name](b);const ga={writes:0},gb={writes:0};a.memory=H.guard(a.memory,ga);b.memory=H.guard(b.memory,gb);
++  for(let i=1;i<=12;i++){a.game.time=b.game.time=i*100;a.cpuValue=b.cpuValue=.1;a.observer.run();b.observer.run();}
++  return {name,byteEquivalent:JSON.stringify(a.lines)===JSON.stringify(b.lines),writes:[ga.writes,gb.writes],
++    readers:[a.calls.readers,b.calls.readers],observations:[a.calls.observation,b.calls.observation],commitments:[a.calls.commitments,b.calls.commitments],reports:b.lines.length,a,b};
++}
++function coreBuild(text, setup=()=>{}) {
++  const s=make(text,text===beforeCore()?beforeReader():afterReader(),false);setup(s);const r=s.core.createCompatibilityReadCore();
++  const observation=r.buildObservation({scope:'market-fresh',epochSeq:1,rooms:Object.values(s.game.rooms)});
++  const index=r.buildCommitments({tick:s.game.time,tasks:s.memory.data.resourceControl.tasks,reservations:s.memory.runtime.resourceReservations,observation});
++  return {s,r,observation,index};
++}
++function snapshot(build){return B.snapshot(build);}
++const emptyCounts=()=>({mapNew:0,mapGet:0,mapSet:0,mapHas:0,keys:0,values:0});
++function measuredCore(text,s){
++  const ctx=vm.createContext({exports:{},require:x=>{throw new Error('unlisted host import:'+x);},__count:k=>{if(s.measure)s.counts[k]++;}});
++  for(const [n,get] of Object.entries({Game:()=>s.game,Memory:()=>s.memory,RESOURCES_ALL:()=>s.resources}))Object.defineProperty(ctx,n,{get});
++  vm.runInContext(`{
++    const Base=Map;Map=class extends Base{constructor(...a){super(...a);__count('mapNew')}get(k){__count('mapGet');return super.get(k)}set(k,v){__count('mapSet');return super.set(k,v)}has(k){__count('mapHas');return super.has(k)}};
++    const keys=Object.keys,values=Object.values;Object.keys=function(o){__count('keys');return keys(o)};Object.values=function(o){__count('values');return values(o)};
++  }`,ctx);
++  const js=ts.transpileModule(text,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2019}}).outputText;vm.runInContext(js,ctx,{timeout:5000});return ctx.exports;
++}
++function operationCounts(text,count=37,selfRoute=false,resourcesPerEndpoint=32){
++  const s=make(text,text===beforeCore()?beforeReader():afterReader(),false);s.measure=false;s.counts=emptyCounts();s.core=measuredCore(text,s);
++  for(let n=0;n<count;n++)s.memory.data.resourceControl.tasks['t'+n]=task({id:'t'+n,reason:'reason-a',...(selfRoute?{toRoomName:'W1N1'}:{})});
++  for(const room of Object.values(s.game.rooms))for(const kind of ['storage','terminal'])for(let j=0;j<resourcesPerEndpoint;j++)room[kind].store['synthetic_'+j]=j+1;
++  const r=s.core.createCompatibilityReadCore();s.counts=emptyCounts();s.measure=true;
++  const observation=r.buildObservation({scope:'market-fresh',epochSeq:1,rooms:Object.values(s.game.rooms)});s.measure=false;const observationCounts={...s.counts};
++  s.counts=emptyCounts();s.measure=true;const index=r.buildCommitments({tick:100,tasks:s.memory.data.resourceControl.tasks,reservations:{},observation});s.measure=false;
++  return {observation:observationCounts,commitment:{...s.counts},semantics:snapshot({observation,index})};
++}
++function readerCounts(coreText,readerText){const counters={values:0,map:0,filter:0};const s=make(coreText,readerText,false,counters);s.cfg={...s.cfg,maxSampleCpu:10};s.observer=s.api.createTreasuryCompatPreview(s.cfg,s.ports,{cpuDiagnostics:false});s.cpuValue=.1;s.observer.run();return {counters,resourcePortCalls:s.resourcePortCalls,line:s.lines[0]};}
++module.exports={S,H,B,task,reservation,beforeCore,afterCore,beforeReader,afterReader,make,pair,coreBuild,snapshot,operationCounts,readerCounts};
+diff --git a/test/treasury-compat/loader-optimization.spec.cjs b/test/treasury-compat/loader-optimization.spec.cjs
+index e696275af15084a3b9532e0971ecea8cff81f2ca..0f8beee137cbe97407c527bf5450bc0f987e675f 100644
+--- a/test/treasury-compat/loader-optimization.spec.cjs
++++ b/test/treasury-compat/loader-optimization.spec.cjs
+@@ -5,6 +5,15 @@ const crypto = require('node:crypto');
+ const S = require('./loader-test-support.cjs');
+ const { H, fs, path, make, build, task, reservation, oldText, newText } = S;
+ const G = require(path.join(H.ROOT, 'scripts/build-treasury-compat-loader.cjs'));
++function generatedCurrent() {
++  return G.generate(fs.readFileSync(path.join(H.ROOT, G.FIXTURE)), fs.readFileSync(path.join(H.ROOT, G.TEMPLATE)),
++    JSON.parse(fs.readFileSync(path.join(H.ROOT, G.SOURCE_MANIFEST), 'utf8')), fs.readFileSync(path.join(H.ROOT, G.PREVIEW_FIXTURE)));
++}
++function assertGeneratedCurrent() {
++  const r = generatedCurrent();
++  for (const [name, bytes] of Object.entries(r)) assert.equal(fs.readFileSync(path.join(H.ROOT, name)).toString('utf8').replace(/\r\n/g, '\n'), bytes.toString('utf8'));
++  return r;
++}
+ const ids = text => [...text.matchAll(/^"([^"]+)": function\(exports, require\)/gm)].map(x => x[1]);
+ const mutable = ['src/runtime/treasury/commitments.ts', 'src/runtime/treasury/commitmentRevision.ts'];
+ test('read V baseline fixture is the exact original Git blob', () => {
+@@ -12,11 +21,11 @@ test('read V baseline fixture is the exact original Git blob', () => {
+ });
+ test('read V context substitutions recover canonical factories after reversing IX and VII transforms', () => {
+   const before = oldText().split(G.MARKER)[0];
+-  const afterIX = G.A.restore(newText().split('/** Read Optimization V:')[0]);
++  const afterIX = G.A.restore(G.H.restore(newText().split('/** Read Optimization V:')[0]));
+   const afterVII = G.B.restore(afterIX);
+   assert.equal(G.X.restore(afterVII), before);
+   assert.equal(ids(newText()).length, 8); // unused original revision body retained, not invoked
+-  assert.equal(G.main(['--check']).status, 'COMPAT_LOADER_REGENERATION_VERIFIED');
++  assertGeneratedCurrent();
+ });
+ test('read V module import alone performs no Game Memory or catalog read', () => {
+   const s = new Proxy({}, { get() { throw new Error('global touched'); } });
+@@ -149,7 +158,8 @@ test('read V inherited dependency property never becomes a host import', () => {
+ test('read V generator is byte deterministic and idempotent on metadata', () => {
+   const original = Buffer.from(oldText()); const template = fs.readFileSync(path.join(H.ROOT, G.TEMPLATE));
+   const manifest = JSON.parse(fs.readFileSync(path.join(H.ROOT, G.SOURCE_MANIFEST)));
+-  const a = G.generate(original, template, manifest); const b = G.generate(original, template, JSON.parse(a[G.SOURCE_MANIFEST]));
++  const preview = fs.readFileSync(path.join(H.ROOT, G.PREVIEW_FIXTURE));
++  const a = G.generate(original, template, manifest, preview); const b = G.generate(original, template, JSON.parse(a[G.SOURCE_MANIFEST]), preview);
+   for (const name of Object.keys(a)) assert.ok(a[name].equals(b[name]));
+ });
+ test('read V generator provenance keeps all eight canonical source identities', () => {
+@@ -289,7 +299,7 @@ test('read V canonical transform refuses a shifted body rather than approximatin
+   const prefix = oldText().split(G.MARKER)[0]; assert.throws(() => G.X.transform(prefix.replace('new Set(RESOURCES_ALL)', 'new Set([])')), /CONTEXT_TRANSFORM_COUNT/);
+ });
+ test('read V layer only adapts commitment context and its edge after reversing VII layer', () => {
+-  const before = oldText().split(G.MARKER)[0], after = G.B.restore(G.A.restore(newText().split('/** Read Optimization V:')[0]));
++  const before = oldText().split(G.MARKER)[0], after = G.B.restore(G.A.restore(G.H.restore(newText().split('/** Read Optimization V:')[0])));
+   const [a, b] = G.X.region(before), [c, d] = G.X.region(after);
+   assert.equal(before.slice(0, a), after.slice(0, c));
+   assert.equal(G.X.restore(after), before); assert.notEqual(before.slice(a, b), after.slice(c, d));
+diff --git a/test/treasuryCompatRead.test.ts b/test/treasuryCompatRead.test.ts
+index c1b5e04c4ac41c881bfc426a3fbce759cc823722..551a1a3557cdde27f02096487b2e338757038b4f 100644
+--- a/test/treasuryCompatRead.test.ts
++++ b/test/treasuryCompatRead.test.ts
+@@ -10,8 +10,9 @@ describe("Treasury old-production read compatibility bridge", () => {
+       resolve(__dirname, "treasury-compat/real-readers.spec.cjs"),
+       resolve(__dirname, "treasury-compat/loader-optimization.spec.cjs"),
+       resolve(__dirname, "treasury-compat/build-optimization.spec.cjs"),
+-      resolve(__dirname, "treasury-compat/attribution.spec.cjs")], {
+-      cwd: resolve(__dirname, ".."), encoding: "utf8", timeout: 240000,
++      resolve(__dirname, "treasury-compat/attribution.spec.cjs"),
++      resolve(__dirname, "treasury-compat/hotpath-optimization.spec.cjs")], {
++      cwd: resolve(__dirname, ".."), encoding: "utf8", timeout: 360000,
+     });
+     if (result.status !== 0) throw new Error([result.error?.message, result.stdout, result.stderr].filter(Boolean).join("\n"));
+     expect(result.status).toBe(0);
