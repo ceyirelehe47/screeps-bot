@@ -1,0 +1,130 @@
+{
+  "status": "MAKER_PATCH_ROUNDTRIP_VERIFIED",
+  "patch": "patches/0001-subphase-attribution-ix.patch",
+  "files": 20,
+  "matched": 20,
+  "gitApplyCheck": true,
+  "gitDiffCheck": true,
+  "rows": [
+    {
+      "path": "docs/treasury-compat-loader-optimization.json",
+      "equal": true,
+      "bytes": 6903,
+      "sha256": "d8d83d2a85dc459027c2d2cbab8179b2d35f6f7d30cc69a7ce65afeb28ebacb1"
+    },
+    {
+      "path": "docs/treasury-compat-source-manifest.json",
+      "equal": true,
+      "bytes": 7915,
+      "sha256": "a6b46a4a25ae24b77f7460e904feaf0c7cca7e406c979865bc514e09294881e9"
+    },
+    {
+      "path": "docs/treasury-compat-subphase-attribution-ix.md",
+      "equal": true,
+      "bytes": 2700,
+      "sha256": "ea9feec3139af7a337a804824dd791080f956811c0325af639c4797210e9b05c"
+    },
+    {
+      "path": "scripts/build-treasury-compat-loader.cjs",
+      "equal": true,
+      "bytes": 8985,
+      "sha256": "fa05e7e8407b68dd2ecfa55d279cc03227f0a4eee5f2bb7b845490ea24b9032e"
+    },
+    {
+      "path": "scripts/lib/treasury-compat-attribution.cjs",
+      "equal": true,
+      "bytes": 8232,
+      "sha256": "545c7c491a5511053f29083734b2ecc177f9af1a87713b95d6a6cccdbbb5b3b8"
+    },
+    {
+      "path": "src/runtime/treasuryCompatCpu.ts",
+      "equal": true,
+      "bytes": 6724,
+      "sha256": "e7dead62745052c278163281a524d765ef109df9556060a283dac35590fa042c"
+    },
+    {
+      "path": "src/runtime/treasuryCompatRead.ts",
+      "equal": true,
+      "bytes": 21526,
+      "sha256": "1d5bd4d7f5922dfad3e6c44522d04695b490ba2bb711a83306858544dde70dec"
+    },
+    {
+      "path": "src/runtime/treasuryCompatReadCore.generated.ts",
+      "equal": true,
+      "bytes": 68416,
+      "sha256": "75a600170f04c99520369b0d48b55d385979b5180f47cce3b427143b99956da1"
+    },
+    {
+      "path": "src/runtime/treasuryCompatTypes.ts",
+      "equal": true,
+      "bytes": 2509,
+      "sha256": "0d39f976aad3d95daaa13b72f31cfe7f9a25a9611329faf152a1ded0c6b3e61b"
+    },
+    {
+      "path": "test/treasury-compat/attribution-test-support.cjs",
+      "equal": true,
+      "bytes": 2406,
+      "sha256": "7f65e2c1853895477d34c646e9d7c6fa4aaae35b400faa76ec108c699075b290"
+    },
+    {
+      "path": "test/treasury-compat/attribution.spec.cjs",
+      "equal": true,
+      "bytes": 11805,
+      "sha256": "62e2c55ab0c9db21ee78c19eda3c1041665a88b1c4d6ff82d1d58909e4629049"
+    },
+    {
+      "path": "test/treasury-compat/build-optimization.spec.cjs",
+      "equal": true,
+      "bytes": 15166,
+      "sha256": "253109eb2b1b6d0e48d7fb6bbd77d8be70c9b083f854826750aae51467fbd63c"
+    },
+    {
+      "path": "test/treasury-compat/build-test-support.cjs",
+      "equal": true,
+      "bytes": 8814,
+      "sha256": "486d80cc41bcbbeff44726b81f2cee994ffbaf98ce8d0f01eb5d1e5cc91e531e"
+    },
+    {
+      "path": "test/treasury-compat/fixtures/core-before-subphase-attribution-ix.ts.txt",
+      "equal": true,
+      "bytes": 65093,
+      "sha256": "1eb28af06a562011dc2c9a02c3aad3bb63b447638c90a76163d3ee323a349ae8"
+    },
+    {
+      "path": "test/treasury-compat/fixtures/cpu-before-subphase-attribution-ix.ts.txt",
+      "equal": true,
+      "bytes": 2883,
+      "sha256": "103e7a3e115fcc885fc337b91e7336cdb2cd3e890524f0c8b4d2f4082c0207ef"
+    },
+    {
+      "path": "test/treasury-compat/fixtures/reader-before-subphase-attribution-ix.ts.txt",
+      "equal": true,
+      "bytes": 20118,
+      "sha256": "1141250ec31c12b3439f48b6274267c108c7bb95566d328414f4bd04275bef64"
+    },
+    {
+      "path": "test/treasury-compat/fixtures/types-before-subphase-attribution-ix.ts.txt",
+      "equal": true,
+      "bytes": 2008,
+      "sha256": "efc805ac836f23c8fc0d30429c90075503b749b0ef4f4a730c2fb9853833fbe5"
+    },
+    {
+      "path": "test/treasury-compat/loader-optimization.spec.cjs",
+      "equal": true,
+      "bytes": 24455,
+      "sha256": "460f028e027be2788b99ac1d86b3f5438543725535d43652e0c3f66fd3bc13a8"
+    },
+    {
+      "path": "test/treasury-compat/loader-test-support.cjs",
+      "equal": true,
+      "bytes": 8257,
+      "sha256": "30fd96fb48098e13d99dd1b571cdb7ad6db7ce52adeb9321e0cf659d3f97c47d"
+    },
+    {
+      "path": "test/treasuryCompatRead.test.ts",
+      "equal": true,
+      "bytes": 1064,
+      "sha256": "5703123386542aabf4ab56307f6c433398478d6c2738adc4bf35ed87191a6026"
+    }
+  ]
+}

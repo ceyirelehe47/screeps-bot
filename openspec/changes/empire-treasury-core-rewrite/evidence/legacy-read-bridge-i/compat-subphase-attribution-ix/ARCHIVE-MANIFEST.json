@@ -1,0 +1,344 @@
+{
+  "files": {
+    ".gitattributes": {
+      "bytes": 8,
+      "sha256": "705fd4d6451a31d36b3df7de96f83f30ac976c9b4a6d1e51671d8e2f33e2d0da"
+    },
+    "task-package/AGENT-RUN.md": {
+      "bytes": 9312,
+      "sha256": "22c4ebeedd9a9139db0db8462775c6e8de3a705d05ad8d153cea961eb7d4c5c8"
+    },
+    "task-package/IMPLEMENTATION-MANIFEST.json": {
+      "bytes": 927,
+      "sha256": "bd5ea56636318cd232201548f623083737179056fc9e05eb0cfc1b6e78423ccb"
+    },
+    "task-package/INTEGRITY.json": {
+      "bytes": 11793,
+      "sha256": "da1adff0e0c79d4728e27d7f92f3e012a3544331cb2e4ec66d2823ba4250168c"
+    },
+    "task-package/README.md": {
+      "bytes": 703,
+      "sha256": "d2eadca2b16527abc7ad78b6fe21c9d85d2462f6929b87af59e2561019682d45"
+    },
+    "task-package/baseline/docs/treasury-compat-build-optimization-vii.md": {
+      "bytes": 4869,
+      "sha256": "4fd2e5ee2c112d056c7893285be3f78063a1ee2ffe3767020aa2f5e3aeb69dcb"
+    },
+    "task-package/baseline/docs/treasury-compat-loader-optimization.json": {
+      "bytes": 5873,
+      "sha256": "7987b10af1aa923585f50c17ce35559fcfbd15fb22edd6618cb29945ed8b0f30"
+    },
+    "task-package/baseline/docs/treasury-compat-read-optimization-v.md": {
+      "bytes": 3832,
+      "sha256": "9921696a69c11abb289212131dd340e1deb5a0290926a56d74a248affe3ae341"
+    },
+    "task-package/baseline/docs/treasury-compat-source-manifest.json": {
+      "bytes": 7601,
+      "sha256": "6acc8371959a92d263094ecaa1fde66f6ea9c85e2e6fc8a680f56438c1ff58fb"
+    },
+    "task-package/baseline/scripts/build-treasury-compat-loader.cjs": {
+      "bytes": 7984,
+      "sha256": "84a8facea05ab1a61d887a1eec7eedcb5ddc8aae545fcd34ab07c7f6e7eb19a2"
+    },
+    "task-package/baseline/scripts/lib/treasury-compat-build.cjs": {
+      "bytes": 14390,
+      "sha256": "21bc40221b2b64dbad3880e9d24f6cda74c59261d52b8b45c08600887e8d9e2c"
+    },
+    "task-package/baseline/scripts/lib/treasury-compat-context.cjs": {
+      "bytes": 3050,
+      "sha256": "452fd25074ee513adcdfb3d7212fe696d9a70429711caedecd65a79247d367cf"
+    },
+    "task-package/baseline/scripts/lib/treasury-compat-loader.template.txt": {
+      "bytes": 2245,
+      "sha256": "cfc0d3651f7f7755492ce74f69b8943d03230dd6328ce014f759447ad08093d8"
+    },
+    "task-package/baseline/src/runtime/treasuryCompatConfig.ts": {
+      "bytes": 531,
+      "sha256": "ff291683faf1a2a3711f231b9affe7d1cd759416c3482dc77563cfd9a628ab02"
+    },
+    "task-package/baseline/src/runtime/treasuryCompatCpu.ts": {
+      "bytes": 2883,
+      "sha256": "103e7a3e115fcc885fc337b91e7336cdb2cd3e890524f0c8b4d2f4082c0207ef"
+    },
+    "task-package/baseline/src/runtime/treasuryCompatRead.ts": {
+      "bytes": 20118,
+      "sha256": "1141250ec31c12b3439f48b6274267c108c7bb95566d328414f4bd04275bef64"
+    },
+    "task-package/baseline/src/runtime/treasuryCompatReadCore.generated.ts": {
+      "bytes": 65093,
+      "sha256": "1eb28af06a562011dc2c9a02c3aad3bb63b447638c90a76163d3ee323a349ae8"
+    },
+    "task-package/baseline/src/runtime/treasuryCompatRuntime.ts": {
+      "bytes": 865,
+      "sha256": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4"
+    },
+    "task-package/baseline/src/runtime/treasuryCompatTypes.ts": {
+      "bytes": 2008,
+      "sha256": "efc805ac836f23c8fc0d30429c90075503b749b0ef4f4a730c2fb9853833fbe5"
+    },
+    "task-package/baseline/test/treasury-compat/bridge.spec.cjs": {
+      "bytes": 11489,
+      "sha256": "278491b3c996874db2fe560973708ba1d2a0d34cfc94f413ad36f23a3067a50f"
+    },
+    "task-package/baseline/test/treasury-compat/build-optimization.spec.cjs": {
+      "bytes": 15074,
+      "sha256": "739c68feea6f9499aca575fb39b80a1b6d6148f00f5d10e35970118f4faeb536"
+    },
+    "task-package/baseline/test/treasury-compat/build-test-support.cjs": {
+      "bytes": 8680,
+      "sha256": "837dd6f50545b431395bab18a0aec3b4d4e097c3177168532b2e50ace2f95548"
+    },
+    "task-package/baseline/test/treasury-compat/fixtures/core-before-build-optimization-vii.ts.txt": {
+      "bytes": 64266,
+      "sha256": "b7a2c14fc7cf15e32abe7703f2fb47c5516b09f2dc80f7ffdd9a5dc0988f0dac"
+    },
+    "task-package/baseline/test/treasury-compat/fixtures/core-before-loader-optimization.ts.txt": {
+      "bytes": 62929,
+      "sha256": "decc6a2e019ba931041c8d79d341a59658755473b06075a19a458cc6635bd400"
+    },
+    "task-package/baseline/test/treasury-compat/fixtures/core-before-read-optimization-v.ts.txt": {
+      "bytes": 64604,
+      "sha256": "9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965"
+    },
+    "task-package/baseline/test/treasury-compat/fixtures/reader-before-read-optimization-v.ts.txt": {
+      "bytes": 19895,
+      "sha256": "6d2f2e24117a585e42739506700c937e11c9925df627f2e76aaee48a68d06ad1"
+    },
+    "task-package/baseline/test/treasury-compat/helpers.cjs": {
+      "bytes": 6806,
+      "sha256": "c200b1f2b6dc55deae8b50ac7ae9f0e5ecb191be6592a42c713fce7d3d289e74"
+    },
+    "task-package/baseline/test/treasury-compat/loader-optimization.spec.cjs": {
+      "bytes": 24293,
+      "sha256": "e1419cb4a1ddb4bc31ccc20fa9b61b8a6f971c42db6dccff00b299c5bfc3a8ad"
+    },
+    "task-package/baseline/test/treasury-compat/loader-test-support.cjs": {
+      "bytes": 8242,
+      "sha256": "a2aca5465eaf44a92fda19ba8ad01c52fdd0a71b02bfd0e1e5c06de73677c47f"
+    },
+    "task-package/baseline/test/treasury-compat/real-readers.spec.cjs": {
+      "bytes": 8178,
+      "sha256": "162630b8712f90fa71bb11eba25d3128dd92408b1474ea8540a2adb02a2f20c2"
+    },
+    "task-package/baseline/test/treasuryCompatRead.test.ts": {
+      "bytes": 998,
+      "sha256": "a12568bb51270173b92a7c5450ac978703d013aa0900e8ad0e6f20ea078a7708"
+    },
+    "task-package/implementation/docs/treasury-compat-loader-optimization.json": {
+      "bytes": 6903,
+      "sha256": "d8d83d2a85dc459027c2d2cbab8179b2d35f6f7d30cc69a7ce65afeb28ebacb1"
+    },
+    "task-package/implementation/docs/treasury-compat-source-manifest.json": {
+      "bytes": 7915,
+      "sha256": "a6b46a4a25ae24b77f7460e904feaf0c7cca7e406c979865bc514e09294881e9"
+    },
+    "task-package/implementation/docs/treasury-compat-subphase-attribution-ix.md": {
+      "bytes": 2700,
+      "sha256": "ea9feec3139af7a337a804824dd791080f956811c0325af639c4797210e9b05c"
+    },
+    "task-package/implementation/scripts/build-treasury-compat-loader.cjs": {
+      "bytes": 8985,
+      "sha256": "fa05e7e8407b68dd2ecfa55d279cc03227f0a4eee5f2bb7b845490ea24b9032e"
+    },
+    "task-package/implementation/scripts/lib/treasury-compat-attribution.cjs": {
+      "bytes": 8232,
+      "sha256": "545c7c491a5511053f29083734b2ecc177f9af1a87713b95d6a6cccdbbb5b3b8"
+    },
+    "task-package/implementation/src/runtime/treasuryCompatCpu.ts": {
+      "bytes": 6724,
+      "sha256": "e7dead62745052c278163281a524d765ef109df9556060a283dac35590fa042c"
+    },
+    "task-package/implementation/src/runtime/treasuryCompatRead.ts": {
+      "bytes": 21526,
+      "sha256": "1d5bd4d7f5922dfad3e6c44522d04695b490ba2bb711a83306858544dde70dec"
+    },
+    "task-package/implementation/src/runtime/treasuryCompatReadCore.generated.ts": {
+      "bytes": 68416,
+      "sha256": "75a600170f04c99520369b0d48b55d385979b5180f47cce3b427143b99956da1"
+    },
+    "task-package/implementation/src/runtime/treasuryCompatTypes.ts": {
+      "bytes": 2509,
+      "sha256": "0d39f976aad3d95daaa13b72f31cfe7f9a25a9611329faf152a1ded0c6b3e61b"
+    },
+    "task-package/implementation/test/treasury-compat/attribution-test-support.cjs": {
+      "bytes": 2406,
+      "sha256": "7f65e2c1853895477d34c646e9d7c6fa4aaae35b400faa76ec108c699075b290"
+    },
+    "task-package/implementation/test/treasury-compat/attribution.spec.cjs": {
+      "bytes": 11805,
+      "sha256": "62e2c55ab0c9db21ee78c19eda3c1041665a88b1c4d6ff82d1d58909e4629049"
+    },
+    "task-package/implementation/test/treasury-compat/build-optimization.spec.cjs": {
+      "bytes": 15166,
+      "sha256": "253109eb2b1b6d0e48d7fb6bbd77d8be70c9b083f854826750aae51467fbd63c"
+    },
+    "task-package/implementation/test/treasury-compat/build-test-support.cjs": {
+      "bytes": 8814,
+      "sha256": "486d80cc41bcbbeff44726b81f2cee994ffbaf98ce8d0f01eb5d1e5cc91e531e"
+    },
+    "task-package/implementation/test/treasury-compat/fixtures/core-before-subphase-attribution-ix.ts.txt": {
+      "bytes": 65093,
+      "sha256": "1eb28af06a562011dc2c9a02c3aad3bb63b447638c90a76163d3ee323a349ae8"
+    },
+    "task-package/implementation/test/treasury-compat/fixtures/cpu-before-subphase-attribution-ix.ts.txt": {
+      "bytes": 2883,
+      "sha256": "103e7a3e115fcc885fc337b91e7336cdb2cd3e890524f0c8b4d2f4082c0207ef"
+    },
+    "task-package/implementation/test/treasury-compat/fixtures/reader-before-subphase-attribution-ix.ts.txt": {
+      "bytes": 20118,
+      "sha256": "1141250ec31c12b3439f48b6274267c108c7bb95566d328414f4bd04275bef64"
+    },
+    "task-package/implementation/test/treasury-compat/fixtures/types-before-subphase-attribution-ix.ts.txt": {
+      "bytes": 2008,
+      "sha256": "efc805ac836f23c8fc0d30429c90075503b749b0ef4f4a730c2fb9853833fbe5"
+    },
+    "task-package/implementation/test/treasury-compat/loader-optimization.spec.cjs": {
+      "bytes": 24455,
+      "sha256": "460f028e027be2788b99ac1d86b3f5438543725535d43652e0c3f66fd3bc13a8"
+    },
+    "task-package/implementation/test/treasury-compat/loader-test-support.cjs": {
+      "bytes": 8257,
+      "sha256": "30fd96fb48098e13d99dd1b571cdb7ad6db7ce52adeb9321e0cf659d3f97c47d"
+    },
+    "task-package/implementation/test/treasuryCompatRead.test.ts": {
+      "bytes": 1064,
+      "sha256": "5703123386542aabf4ab56307f6c433398478d6c2738adc4bf35ed87191a6026"
+    },
+    "task-package/patches/0001-subphase-attribution-ix.patch": {
+      "bytes": 175126,
+      "sha256": "8bd1dbff7b30ddfeef97d346cb8a390c6af0b64d35d11121ef563ce3d92784fa"
+    },
+    "task-package/patches/README.md": {
+      "bytes": 220,
+      "sha256": "e03843ee14e612a038732132e5ab6e094ef2bd1a5b6a83172409a7c2708ef9db"
+    },
+    "task-package/patches/SERIES": {
+      "bytes": 35,
+      "sha256": "273396211b6c41363c3bab83fa1a36c5429d190b9ed536478109036ceaa0520e"
+    },
+    "task-package/references/CPU-VIII-BASIS.md": {
+      "bytes": 1321,
+      "sha256": "8dc187d0bc1fdca4cb3ad1e90e0e719ad414c5775219c74bdb990251e48dfee8"
+    },
+    "task-package/references/attribution-contract.json": {
+      "bytes": 1265,
+      "sha256": "ca13df13edff27578733cc936adeaf9f8728d09a3f5bbd6eb69ffca77d0faabd"
+    },
+    "task-package/references/evidence-origin.json": {
+      "bytes": 474,
+      "sha256": "8b60aef8a7d4e347cc24b7b51a7c6531f2114d1c0682e262cccb61b5363a6df9"
+    },
+    "task-package/references/source-lock.json": {
+      "bytes": 11352,
+      "sha256": "b0189f2d01ef78701fd67ddd5826446444233f6e1eb32bd89d643fd96e8e0539"
+    },
+    "task-package/references/test-set.json": {
+      "bytes": 115,
+      "sha256": "cefb41760cda4c82bebe01f2b38ec115e87b96522387245f3f06db43d86922e6"
+    },
+    "task-package/tests/workflow.spec.cjs": {
+      "bytes": 14991,
+      "sha256": "5b414471b9a63b93f07c330a737508f510d84ba2063aa3dc6765dd441d65907f"
+    },
+    "task-package/tools/common.cjs": {
+      "bytes": 5871,
+      "sha256": "9678a1e57dab7117a931799fc4040a268805d7f8081e2ff824c6f328f85d1727"
+    },
+    "task-package/tools/run.cjs": {
+      "bytes": 10110,
+      "sha256": "d3532448c5ca51f2f35730fb46121f62fb225fb9a4deacae3bcce9af4dc9316f"
+    },
+    "task-package/tools/workflow.cjs": {
+      "bytes": 15861,
+      "sha256": "7d973a16aecc384f911de6e2bd7f9e0ccf3cfe6dd625210d3840266d97e31718"
+    },
+    "task-package/validation/maker-characterization.json": {
+      "bytes": 12346,
+      "sha256": "31a79adb694f1157f4b9155500aaa8dd8828c5ee9ddf17e6e24bc3ab8a099c45"
+    },
+    "task-package/validation/maker-cjs-syntax.json": {
+      "bytes": 2615,
+      "sha256": "eaa121042eed54e206010923cb8b1fda529cb5e7270b31b3e2136905af76611e"
+    },
+    "task-package/validation/maker-fixed-summary.json": {
+      "bytes": 484,
+      "sha256": "74c499037223f662c2139d2099718b18bb3f6f0d1e0b3284000c6e5210b77c2f"
+    },
+    "task-package/validation/maker-package-whitespace.json": {
+      "bytes": 355,
+      "sha256": "1a2675af44155a795b3e0c273f562811e2055e50011c6aa0b40b51e40ae9af40"
+    },
+    "task-package/validation/maker-reader-tests.json": {
+      "bytes": 49385,
+      "sha256": "07b50be65d1103466e35282033ec2c170141bf2700b490f42a2975b5407bf9dc"
+    },
+    "task-package/validation/maker-regeneration.json": {
+      "bytes": 636,
+      "sha256": "d20e301d359d587d7c60a30c63fb04d9235902aa2f9bc03361dbd044ac00eb65"
+    },
+    "task-package/validation/maker-workflow-tests.json": {
+      "bytes": 5741,
+      "sha256": "cc6287039f78bfad70a6fd59259dad15db0f2ec4ddea1d8f22c5959ad44f8f5f"
+    },
+    "task-package/validation/patch-roundtrip.json": {
+      "bytes": 4287,
+      "sha256": "a097d7b4035283c360ad4ece7b024c8b192738437066032d442c720662353356"
+    },
+    "task-package/validation/type-slice.json": {
+      "bytes": 562,
+      "sha256": "908d75d6d96557464031e9ac5c37826abb25337e680530eea5b665dad8475d37"
+    },
+    "tests/reader-tests.json": {
+      "bytes": 49225,
+      "sha256": "f5531d91d64e3c89d5c9f92d5828e449ed0b9c430358c875df5ac34d552ef315"
+    },
+    "tests/workflow-tests.json": {
+      "bytes": 5783,
+      "sha256": "1194d295dac3286facc22afcb192528cd62c279eb6d198d905146e8b24591f6e"
+    },
+    "tests/summary.json": {
+      "bytes": 313,
+      "sha256": "6b9c90c2d8249b7df822d91d4d81f45cd620068468b14f643c6e6d91ddba38a1"
+    },
+    "checks/repository-tests.json": {
+      "bytes": 54165,
+      "sha256": "53362b96e09384e8baec6116a47f0a8c08d4e785a08569e6b36acb8b95ac7293"
+    },
+    "checks/regenerate.json": {
+      "bytes": 892,
+      "sha256": "6efc51edc3aa7d9a18870d58d8cc46a1e4d397b1063d4b835acc43b199beda51"
+    },
+    "checks/typecheck-build.json": {
+      "bytes": 523,
+      "sha256": "64fcab60372ee8970af64b68ac28429eb14f9dad378de5a785f1c891a15c7a20"
+    },
+    "checks/typecheck-test.json": {
+      "bytes": 517,
+      "sha256": "becea03d7b0de827aee5054235cea0a4763b3d2e08ac624a43cdf6b0f31673e9"
+    },
+    "checks/jest-budget.json": {
+      "bytes": 16762,
+      "sha256": "fcdc17c446bbed48583599af957d352e164f2b7f037f6bb096fc74666925a9fc"
+    },
+    "checks/build-only.json": {
+      "bytes": 968,
+      "sha256": "23bc9e77e7d28448a58f4a65405a205dde762e4aefe32c94deea6e7bb6de5184"
+    },
+    "checks/summary.json": {
+      "bytes": 338,
+      "sha256": "9c5894e782d7d36b3a7d14abc7789212b69fa16c187e2eeafd4a61bc944e5250"
+    },
+    "characterization/characterization.json": {
+      "bytes": 16543,
+      "sha256": "018a90200e52d46e4687333f9e85f9adb46937fdaee09d2a904022b3dc24d649"
+    },
+    "FINAL-VERIFICATION.json": {
+      "bytes": 1123,
+      "sha256": "48301bcbfd711588463a9146434a5e3fe8f99dc4271815e83f962d4fc4c629ba"
+    },
+    "EXECUTION-REPORT.md": {
+      "bytes": 1154,
+      "sha256": "010daa340d1e8cf7fb2a630c72b3f523e650a622455db35a354e788e719ab9c2"
+    }
+  }
+}

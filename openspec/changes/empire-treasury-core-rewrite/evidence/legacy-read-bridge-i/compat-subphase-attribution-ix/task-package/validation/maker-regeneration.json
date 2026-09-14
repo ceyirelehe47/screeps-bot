@@ -1,0 +1,11 @@
+{
+  "status": "MAKER_REGENERATION_VERIFIED",
+  "exit": 0,
+  "stdout": {
+    "bytes": 373,
+    "sha256": "7dd2e5678270e54382dec45aa18fcdcdf200fb1028de2f678fadee15a3fa636d",
+    "text": "{\"status\":\"COMPAT_LOADER_REGENERATION_VERIFIED\",\"files\":[\"src/runtime/treasuryCompatReadCore.generated.ts\",\"docs/treasury-compat-loader-optimization.json\",\"docs/treasury-compat-source-manifest.json\"],\"canonicalFactoryBodyRecovery\":\"exact\",\"explicitContextAdaptation\":true,\"fullTaskBucketFusion\":true,\"observationAllocationReduction\":true,\"boundedSubphaseAttribution\":true}\n"
+  },
+  "platform": "linux",
+  "node": "v22.16.0"
+}

@@ -1,0 +1,705 @@
+{
+  "status": "ATTRIBUTION_IX_REAL_CORE_VERIFIED",
+  "packageFingerprint": "da1adff0e0c79d4728e27d7f92f3e012a3544331cb2e4ec66d2823ba4250168c",
+  "contract": {
+    "profileVersion": 1,
+    "attributionVersion": 1,
+    "subphases": [
+      "observationSetup",
+      "observationRooms",
+      "observationFinalize",
+      "observationView",
+      "commitmentSetup",
+      "commitmentTasks",
+      "commitmentReservations",
+      "commitmentFinalize",
+      "projectionRows"
+    ],
+    "expectedBoundaryCallsForOneCompleteSample": 12,
+    "workKeys": [
+      "observationRooms",
+      "observationLocations",
+      "observationExistingLocations",
+      "observationResourceKeys",
+      "commitmentTaskRecords",
+      "commitmentPendingTaskRecords",
+      "commitmentTaskInvalidEvents",
+      "commitmentDemandHealthChecks",
+      "commitmentReceiverHealthChecks",
+      "commitmentRouteCandidates",
+      "commitmentReservationRecords",
+      "commitmentReservationInvalidEvents",
+      "commitmentOwnerEvaluations",
+      "commitmentActiveReservations",
+      "commitmentScopeBuckets",
+      "commitmentRoomBuckets",
+      "commitmentMergeRoutes",
+      "commitmentReservationScopes",
+      "projectionRowsPlanned",
+      "projectionRowsCompleted",
+      "projectionIndexQueries"
+    ],
+    "perRecordCpuSampling": false,
+    "diagnosticOverheadSubtracted": false,
+    "subphasesOverlapParentPhases": true,
+    "authorizesWork": false,
+    "changesBudgetChecks": false,
+    "engineMeasurementIncluded": false
+  },
+  "scenarios": [
+    {
+      "name": "empty",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "manual",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "sixteen",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "bound256",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "overBound257",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "invalidRecord",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "invalidResource",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "missingTasks",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "invalidReservationContainer",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "activeReservation",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "expiredReservation",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "exactExpiry",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "missingOwner",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "typedOwner",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "capacity8M",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "saturatedCapacity",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "missingTerminal",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "unseenRoom",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "sparseMismatch",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    },
+    {
+      "name": "legacyMismatch",
+      "byteEquivalent": true,
+      "writes": [
+        0,
+        0
+      ],
+      "readers": [
+        12,
+        12
+      ],
+      "observations": [
+        12,
+        12
+      ],
+      "commitments": [
+        12,
+        12
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "name": "empty",
+      "status": "sampled",
+      "commitmentStatus": "read_complete",
+      "boundaries": 12,
+      "active": null,
+      "intervals": {
+        "observationSetup": 0.010000000000000009,
+        "observationRooms": 0.010000000000000009,
+        "observationFinalize": 0.010000000000000009,
+        "observationView": 0.010000000000000009,
+        "commitmentSetup": 0.010000000000000009,
+        "commitmentTasks": 0.010000000000000009,
+        "commitmentReservations": 0.010000000000000009,
+        "commitmentFinalize": 0.010000000000000009,
+        "projectionRows": 0.050000000000000044
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 8,
+        "commitmentTaskRecords": 0,
+        "commitmentPendingTaskRecords": 0,
+        "commitmentTaskInvalidEvents": 0,
+        "commitmentDemandHealthChecks": 0,
+        "commitmentReceiverHealthChecks": 0,
+        "commitmentRouteCandidates": 0,
+        "commitmentReservationRecords": 0,
+        "commitmentReservationInvalidEvents": 0,
+        "commitmentOwnerEvaluations": 0,
+        "commitmentActiveReservations": 0,
+        "commitmentScopeBuckets": 0,
+        "commitmentRoomBuckets": 0,
+        "commitmentMergeRoutes": 0,
+        "commitmentReservationScopes": 0,
+        "projectionRowsPlanned": 4,
+        "projectionRowsCompleted": 4,
+        "projectionIndexQueries": 16
+      },
+      "cpuPortReads": 32,
+      "completeProjection": true,
+      "topLevelCalls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 1
+      },
+      "topLevelPhases": {
+        "legacyInputs": 0.009999999999999995,
+        "directRead": 0.06000000000000004,
+        "readerLoad": 0.010000000000000009,
+        "observationBuild": 0.06000000000000005,
+        "coreCompare": 0.010000000000000009,
+        "commitmentBuild": 0.07000000000000006,
+        "commitmentProjection": 0.050000000000000044,
+        "report": 0.010000000000000009,
+        "serializationAndSize": 0
+      },
+      "note": "synthetic Node CPU increments; interval values are not Screeps engine timing"
+    },
+    {
+      "name": "tasks16",
+      "status": "sampled",
+      "commitmentStatus": "read_complete",
+      "boundaries": 12,
+      "active": null,
+      "intervals": {
+        "observationSetup": 0.010000000000000009,
+        "observationRooms": 0.010000000000000009,
+        "observationFinalize": 0.010000000000000009,
+        "observationView": 0.010000000000000009,
+        "commitmentSetup": 0.010000000000000009,
+        "commitmentTasks": 0.010000000000000009,
+        "commitmentReservations": 0.010000000000000009,
+        "commitmentFinalize": 0.010000000000000009,
+        "projectionRows": 0.050000000000000044
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 8,
+        "commitmentTaskRecords": 16,
+        "commitmentPendingTaskRecords": 16,
+        "commitmentTaskInvalidEvents": 0,
+        "commitmentDemandHealthChecks": 16,
+        "commitmentReceiverHealthChecks": 16,
+        "commitmentRouteCandidates": 16,
+        "commitmentReservationRecords": 0,
+        "commitmentReservationInvalidEvents": 0,
+        "commitmentOwnerEvaluations": 0,
+        "commitmentActiveReservations": 0,
+        "commitmentScopeBuckets": 2,
+        "commitmentRoomBuckets": 2,
+        "commitmentMergeRoutes": 1,
+        "commitmentReservationScopes": 0,
+        "projectionRowsPlanned": 4,
+        "projectionRowsCompleted": 4,
+        "projectionIndexQueries": 16
+      },
+      "cpuPortReads": 32,
+      "completeProjection": true,
+      "topLevelCalls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 1
+      },
+      "topLevelPhases": {
+        "legacyInputs": 0.009999999999999995,
+        "directRead": 0.06000000000000004,
+        "readerLoad": 0.010000000000000009,
+        "observationBuild": 0.06000000000000005,
+        "coreCompare": 0.010000000000000009,
+        "commitmentBuild": 0.07000000000000006,
+        "commitmentProjection": 0.050000000000000044,
+        "report": 0.010000000000000009,
+        "serializationAndSize": 0
+      },
+      "note": "synthetic Node CPU increments; interval values are not Screeps engine timing"
+    },
+    {
+      "name": "tasks256",
+      "status": "sampled",
+      "commitmentStatus": "read_complete",
+      "boundaries": 12,
+      "active": null,
+      "intervals": {
+        "observationSetup": 0.010000000000000009,
+        "observationRooms": 0.010000000000000009,
+        "observationFinalize": 0.010000000000000009,
+        "observationView": 0.010000000000000009,
+        "commitmentSetup": 0.010000000000000009,
+        "commitmentTasks": 0.010000000000000009,
+        "commitmentReservations": 0.010000000000000009,
+        "commitmentFinalize": 0.010000000000000009,
+        "projectionRows": 0.050000000000000044
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 8,
+        "commitmentTaskRecords": 256,
+        "commitmentPendingTaskRecords": 256,
+        "commitmentTaskInvalidEvents": 0,
+        "commitmentDemandHealthChecks": 256,
+        "commitmentReceiverHealthChecks": 256,
+        "commitmentRouteCandidates": 256,
+        "commitmentReservationRecords": 0,
+        "commitmentReservationInvalidEvents": 0,
+        "commitmentOwnerEvaluations": 0,
+        "commitmentActiveReservations": 0,
+        "commitmentScopeBuckets": 2,
+        "commitmentRoomBuckets": 2,
+        "commitmentMergeRoutes": 1,
+        "commitmentReservationScopes": 0,
+        "projectionRowsPlanned": 4,
+        "projectionRowsCompleted": 4,
+        "projectionIndexQueries": 16
+      },
+      "cpuPortReads": 32,
+      "completeProjection": true,
+      "topLevelCalls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 1
+      },
+      "topLevelPhases": {
+        "legacyInputs": 0.009999999999999995,
+        "directRead": 0.06000000000000004,
+        "readerLoad": 0.010000000000000009,
+        "observationBuild": 0.06000000000000005,
+        "coreCompare": 0.010000000000000009,
+        "commitmentBuild": 0.07000000000000006,
+        "commitmentProjection": 0.050000000000000044,
+        "report": 0.010000000000000009,
+        "serializationAndSize": 0
+      },
+      "note": "synthetic Node CPU increments; interval values are not Screeps engine timing"
+    },
+    {
+      "name": "invalid-task-and-reservation",
+      "status": "sampled",
+      "commitmentStatus": "read_incomplete",
+      "boundaries": 12,
+      "active": null,
+      "intervals": {
+        "observationSetup": 0.010000000000000009,
+        "observationRooms": 0.010000000000000009,
+        "observationFinalize": 0.010000000000000009,
+        "observationView": 0.010000000000000009,
+        "commitmentSetup": 0.010000000000000009,
+        "commitmentTasks": 0.010000000000000009,
+        "commitmentReservations": 0.010000000000000009,
+        "commitmentFinalize": 0.010000000000000009,
+        "projectionRows": 0.050000000000000044
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 8,
+        "commitmentTaskRecords": 1,
+        "commitmentPendingTaskRecords": 0,
+        "commitmentTaskInvalidEvents": 1,
+        "commitmentDemandHealthChecks": 0,
+        "commitmentReceiverHealthChecks": 0,
+        "commitmentRouteCandidates": 0,
+        "commitmentReservationRecords": 1,
+        "commitmentReservationInvalidEvents": 1,
+        "commitmentOwnerEvaluations": 0,
+        "commitmentActiveReservations": 0,
+        "commitmentScopeBuckets": 0,
+        "commitmentRoomBuckets": 0,
+        "commitmentMergeRoutes": 0,
+        "commitmentReservationScopes": 0,
+        "projectionRowsPlanned": 4,
+        "projectionRowsCompleted": 4,
+        "projectionIndexQueries": 16
+      },
+      "cpuPortReads": 32,
+      "completeProjection": true,
+      "topLevelCalls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 1
+      },
+      "topLevelPhases": {
+        "legacyInputs": 0.009999999999999995,
+        "directRead": 0.06000000000000004,
+        "readerLoad": 0.010000000000000009,
+        "observationBuild": 0.06000000000000005,
+        "coreCompare": 0.010000000000000009,
+        "commitmentBuild": 0.07000000000000006,
+        "commitmentProjection": 0.050000000000000044,
+        "report": 0.010000000000000009,
+        "serializationAndSize": 0
+      },
+      "note": "synthetic Node CPU increments; interval values are not Screeps engine timing"
+    }
+  ],
+  "oldGeneratedBlob": "4f94acf1c06a60de9ca8ff2f0cdd2910cb6913be",
+  "newGeneratedBlob": "62752b09e3828e67a9000aeffcda0b2436368bf1",
+  "attributionBounded": true,
+  "perRecordCpuSampling": false,
+  "primitiveWorkCountersOnly": true,
+  "diagnosticOverheadSubtracted": false,
+  "subphasesOverlapParentPhases": true,
+  "businessSemanticsChanged": false,
+  "authorizationChanged": false,
+  "onlineRun": false,
+  "actualEngineMeasurement": false,
+  "engineCpuGapRepaired": false
+}

@@ -1,0 +1,11 @@
+{
+  "status": "SUBPHASE_IX_FIXED_TESTS_VERIFIED",
+  "readerTests": 223,
+  "workflowTests": 22,
+  "node": "v22.19.0",
+  "platform": "win32",
+  "typescript": "5.9.3",
+  "packageFingerprint": "da1adff0e0c79d4728e27d7f92f3e012a3544331cb2e4ec66d2823ba4250168c",
+  "onlineRun": false,
+  "engineCpuMeasurement": false
+}

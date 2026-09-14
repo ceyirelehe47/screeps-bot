@@ -1,0 +1,117 @@
+{
+  "status": "MAKER_CJS_SYNTAX_VERIFIED",
+  "files": 22,
+  "passed": 22,
+  "results": [
+    {
+      "file": "baseline/scripts/build-treasury-compat-loader.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "baseline/scripts/lib/treasury-compat-build.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "baseline/scripts/lib/treasury-compat-context.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "baseline/test/treasury-compat/bridge.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "baseline/test/treasury-compat/build-optimization.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "baseline/test/treasury-compat/build-test-support.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "baseline/test/treasury-compat/helpers.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "baseline/test/treasury-compat/loader-optimization.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "baseline/test/treasury-compat/loader-test-support.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "baseline/test/treasury-compat/real-readers.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "implementation/scripts/build-treasury-compat-loader.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "implementation/scripts/lib/treasury-compat-attribution.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "implementation/test/treasury-compat/attribution-test-support.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "implementation/test/treasury-compat/attribution.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "implementation/test/treasury-compat/build-optimization.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "implementation/test/treasury-compat/build-test-support.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "implementation/test/treasury-compat/loader-optimization.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "implementation/test/treasury-compat/loader-test-support.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tests/workflow.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/common.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/run.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/workflow.cjs",
+      "exit": 0,
+      "stderr": ""
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "package": "screeps-compat-subphase-attribution-IX-2026-09-14",
+  "purpose": "bounded offline subphase attribution for the read-only Treasury compatibility capsule",
+  "compatBase": "ef23c464c83b90b413d43d07857f67d538f512a3",
+  "refactorBase": "77b82bff48e9f32a3ac035cf5e0888e1329b1046",
+  "changeFiles": 20,
+  "subphases": 9,
+  "expectedBoundaryCallsForOneCompleteSample": 12,
+  "perRecordCpuSampling": false,
+  "primitiveWorkCountersOnly": true,
+  "diagnosticOverheadSubtracted": false,
+  "businessSemanticsChanged": false,
+  "authorizationChanged": false,
+  "defaultEnabled": false,
+  "maxSampleCpu": 2,
+  "onlineRunAuthorized": false,
+  "actualEngineMeasurementIncluded": false,
+  "engineCpuGapRepaired": false,
+  "fixedTests": {
+    "reader": 223,
+    "workflow": 22,
+    "repositoryNode": 242,
+    "jestSuites": 195,
+    "jestTests": 685
+  },
+  "patchSeries": [
+    "patches/0001-subphase-attribution-ix.patch"
+  ]
+}

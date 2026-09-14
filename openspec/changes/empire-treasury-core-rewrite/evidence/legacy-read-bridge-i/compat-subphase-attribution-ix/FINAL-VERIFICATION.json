@@ -1,0 +1,38 @@
+{
+  "status": "SUBPHASE_IX_OFFLINE_VERIFIED_NOT_DEPLOYED",
+  "compatHead": "57987cda22553fcdc842e8d4c72a98b6e94e00fb",
+  "compatBase": "ef23c464c83b90b413d43d07857f67d538f512a3",
+  "refactorBase": "77b82bff48e9f32a3ac035cf5e0888e1329b1046",
+  "packageFingerprint": "da1adff0e0c79d4728e27d7f92f3e012a3544331cb2e4ec66d2823ba4250168c",
+  "subphases": [
+    "observationSetup",
+    "observationRooms",
+    "observationFinalize",
+    "observationView",
+    "commitmentSetup",
+    "commitmentTasks",
+    "commitmentReservations",
+    "commitmentFinalize",
+    "projectionRows"
+  ],
+  "expectedBoundaryCalls": 12,
+  "perRecordCpuSampling": false,
+  "primitiveWorkCountersOnly": true,
+  "diagnosticOverheadSubtracted": false,
+  "subphasesOverlapParentPhases": true,
+  "businessSemanticsChanged": false,
+  "authorizationChanged": false,
+  "actualEngineMeasurement": false,
+  "onlineRun": false,
+  "engineCpuGapRepaired": false,
+  "budget": 2,
+  "enabled": false,
+  "priorCpuRecheckVIII": {
+    "raw": 4,
+    "diagnostic": 4,
+    "complete": 0,
+    "observationBuilds": 3,
+    "commitmentBuilds": 3,
+    "recoveryClosed": true
+  }
+}

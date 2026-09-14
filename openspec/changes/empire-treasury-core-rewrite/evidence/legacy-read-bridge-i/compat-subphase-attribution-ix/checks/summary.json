@@ -1,0 +1,11 @@
+{
+  "status": "SUBPHASE_IX_FULL_CHECKS_VERIFIED",
+  "packageFingerprint": "da1adff0e0c79d4728e27d7f92f3e012a3544331cb2e4ec66d2823ba4250168c",
+  "compatBase": "ef23c464c83b90b413d43d07857f67d538f512a3",
+  "repositoryNodeTests": 242,
+  "jestSuites": 195,
+  "jestTests": 685,
+  "buildOnly": true,
+  "onlineRun": false,
+  "deployed": false
+}

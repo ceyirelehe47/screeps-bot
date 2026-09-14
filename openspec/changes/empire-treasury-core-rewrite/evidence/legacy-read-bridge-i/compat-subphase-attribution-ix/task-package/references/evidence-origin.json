@@ -1,0 +1,10 @@
+{
+  "repository": "ceyirelehe47/screeps-bot",
+  "compatBase": "ef23c464c83b90b413d43d07857f67d538f512a3",
+  "refactorBase": "77b82bff48e9f32a3ac035cf5e0888e1329b1046",
+  "buildVIIImplementationCommit": "2d28a6f146fc81e5b87be7cf5b70648352557797",
+  "cpuVIIIOnCommit": "220d8a6902828a8d9643a04098d7d6ec3fbed9e5",
+  "cpuVIIIOffCommit": "ef23c464c83b90b413d43d07857f67d538f512a3",
+  "cpuVIIIVerdictBlob": "a7938d71511d03226bf0945d284bce7bcd0f0ff5",
+  "frozenAt": "2026-09-14"
+}

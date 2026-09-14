@@ -1,0 +1,23 @@
+{
+  "status": "MAKER_MINIMAL_TYPE_SLICE_VERIFIED",
+  "exit": 0,
+  "compiler": "5.8.3",
+  "stdout": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "text": ""
+  },
+  "stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "text": ""
+  },
+  "files": [
+    "treasuryCompatConfig.ts",
+    "treasuryCompatCpu.ts",
+    "treasuryCompatRead.ts",
+    "treasuryCompatReadCore.generated.ts",
+    "treasuryCompatRuntime.ts",
+    "treasuryCompatTypes.ts"
+  ]
+}

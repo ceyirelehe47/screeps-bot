@@ -1,0 +1,21 @@
+{
+  "command": [
+    "D:\\code\\screeps\\screeps-bot-compat-read-i\\node_modules\\rollup\\dist\\bin\\rollup",
+    "-c"
+  ],
+  "exit": 0,
+  "signal": null,
+  "error": null,
+  "stdout": {
+    "encoding": "utf8",
+    "bytes": 185,
+    "sha256": "daac314e223a8b477ee05cded09382d47520c32cd4ba4d6345c42dccf3b70ac2",
+    "text": "No deployment target set. Build only.\ncleared:  D:\\code\\screeps\\screeps-bot-compat-read-i\\dist\n[deploy] bundle sha256: 56edae95fcac5253… (full in Memory.runtime.lastDeployBundleHash)\n"
+  },
+  "stderr": {
+    "encoding": "utf8",
+    "bytes": 223,
+    "sha256": "483f97bc07b17db56dc56799b5d2b0b84d1b8fc50c63f16da7bb74ca61d186f7",
+    "text": "[deploy-guard] warning: building from a dirty working tree; embedded identity is not a committed state.\n\u001b[36m\n\u001b[1msrc/main.ts\u001b[22m → \u001b[1mdist/main.js\u001b[22m...\u001b[39m\n\u001b[32mcreated \u001b[1mdist/main.js\u001b[22m in \u001b[1m21.6s\u001b[22m\u001b[39m\n"
+  }
+}

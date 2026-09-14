@@ -1,0 +1,12 @@
+{
+  "status": "SUBPHASE_IX_FIXED_TESTS_VERIFIED",
+  "readerTests": 223,
+  "workflowTests": 22,
+  "node": "v22.16.0",
+  "platform": "linux",
+  "typescript": "5.8.3",
+  "onlineRun": false,
+  "engineCpuMeasurement": false,
+  "preFinalIntegrityFingerprint": "6fbe3c2d7c8c2c2596a4abf4f3fa3b1d16047d933a66773d756a239797a9993b",
+  "note": "Maker fixed-test run preceded insertion of maker validation records; final extracted-package rerun is recorded outside the ZIP delivery validation."
+}
