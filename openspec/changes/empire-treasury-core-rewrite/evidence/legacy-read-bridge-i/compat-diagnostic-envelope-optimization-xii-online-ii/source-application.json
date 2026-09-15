@@ -1,0 +1,13 @@
+{
+  "status": "ENVELOPE_XII_SOURCE_VERIFIED",
+  "head": "982ac514d06428ffd5cea1a38add774438d7bb6e",
+  "tree": "dcec716dfad41cb95e07bbed5988f1d5fde5c531",
+  "base": "91b9a99226a7a135a0e75b8a1d0db255eefe2200",
+  "changedPaths": 11,
+  "resumed": true,
+  "migrated": true,
+  "replacedHead": "ad8a1c60aced831eb356ed30204186fffc49fc80",
+  "migrationMethod": "verified-tree-commit+update-ref-CAS+read-tree",
+  "implementationFingerprint": "df0066d70414132d48c93399ac962ef3c80ada1a4a348122b5eb152db40146ae",
+  "atMs": 1789463329233
+}

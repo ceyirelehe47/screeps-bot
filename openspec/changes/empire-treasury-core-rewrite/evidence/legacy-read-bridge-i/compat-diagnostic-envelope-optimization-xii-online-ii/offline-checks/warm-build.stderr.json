@@ -1,0 +1,6 @@
+{
+  "encoding": "utf8",
+  "bytes": 117,
+  "sha256": "75232e5442fde764f9c49930e8130635ff0f0c45a00e02afbb5c15c8c8f442d8",
+  "text": "\u001b[36m\n\u001b[1msrc/main.ts\u001b[22m → \u001b[1mdist/main.js\u001b[22m...\u001b[39m\n\u001b[32mcreated \u001b[1mdist/main.js\u001b[22m in \u001b[1m25s\u001b[22m\u001b[39m\n"
+}

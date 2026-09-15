@@ -1,0 +1,131 @@
+{
+  "package": "screeps-compat-diagnostic-envelope-optimization-XII-online-II-2026-09-15-v4",
+  "purpose": "Apply corrected diagnostic-envelope optimization XII, repair the current-preview generator contract and cross-realm repository tests, officially migrate the exact unpushed superseded source commit, prove offline equivalence, execute one four-point engine comparison, restore old production, and publish evidence in one closed loop",
+  "deliveryForm": "pinned delta package plus deterministic materialization from the archived XI task package, dual detached exact-base source simulations, and a CAS-protected local superseded-source migration",
+  "baselines": {
+    "compat": "91b9a99226a7a135a0e75b8a1d0db255eefe2200",
+    "compatTree": "3a976cc08a9a850fe7cce286fe1fa4a9079dca63",
+    "refactor": "0c742a1534ebd64af9e483fcd6313c5d156ff6e1",
+    "archivedExecutionPackagePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-hotpath-optimization-xi-online-i/task-package",
+    "archivedExecutionPackageIntegritySha256": "cf7913c66133a9b03e7ac0e223bc06b07b22f806c06cc44d13bb09d7558adc5e"
+  },
+  "sourceImplementation": {
+    "commitMessage": "perf(compat): compact diagnostic envelope and bounded preview work",
+    "changedPaths": 11,
+    "newPaths": 5,
+    "defaultEnabled": false,
+    "maxSampleCpu": 2,
+    "businessResultCacheAdded": false,
+    "oldMemoryProjectionUsedAsAuthority": false,
+    "paths": [
+      "docs/treasury-compat-diagnostic-envelope-optimization-xii.md",
+      "docs/treasury-compat-loader-optimization.json",
+      "docs/treasury-compat-source-manifest.json",
+      "scripts/build-treasury-compat-loader.cjs",
+      "scripts/lib/treasury-compat-envelope.cjs",
+      "src/runtime/treasuryCompatCpu.ts",
+      "src/runtime/treasuryCompatRead.ts",
+      "test/treasury-compat/attribution.spec.cjs",
+      "test/treasury-compat/envelope-optimization.spec.cjs",
+      "test/treasury-compat/fixtures/cpu-before-envelope-optimization-xii.ts.txt",
+      "test/treasury-compat/fixtures/reader-before-envelope-optimization-xii.ts.txt"
+    ]
+  },
+  "fixedChanges": {
+    "afterRetentionProfile": "tail_only continuation containing serializationAndSize, emit, and retention only",
+    "completionVerification": "identity-checked merge with the preceding beforeSerialization prefix; merged phase sum must equal completed elapsed",
+    "memoryRootReads": "data/runtime own-data roots resolved once per admitted sample; tables still fully enumerated",
+    "legacyProjection": "temporary field object and Object.keys removed without changing read/mismatch order",
+    "roomMembership": "bounded two-room includes check replaces Set allocation",
+    "deltaAmounts": "single loop replaces map plus Object.fromEntries",
+    "projectionValidation": "direct scalar checks replace temporary array",
+    "reportArrays": "frozen configured scope and completed valid-room arrays reused without mutation",
+    "writeRetrySafetyGate": "AST-scoped proof that exactly two api.setCode calls are outside direct or locally wrapped readWithRetry; legal read-only retries remain required",
+    "sourceLockPhases": "exact archived XI pre-apply lock plus separately generated 47-entry superseded-v3 and corrected-v4 post locks from detached applications and generator output",
+    "resumeExistingSource": "local state may be base, exact superseded-applied, or exact already-applied; every non-base state requires parent, message, scope, full tree and phase-lock verification",
+    "repositoryRealmBoundary": "cross-vm calls records are compared through primitive JSON serialization instead of strict prototype identity",
+    "currentPreviewTransform": "G.P composes IX-to-XI hotpath and XI-to-XII envelope transforms; G.P_XI remains the audited intermediate transform; both directions are exact",
+    "supersededSourceMigration": "exact v3 source tree is replaced by one corrected base-child commit through commit-tree plus update-ref CAS, then read-tree/checkout-index; no reset, amend or rebase"
+  },
+  "onlineProtocol": {
+    "points": 4,
+    "intervalTicks": 100,
+    "leadTicks": 150,
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "candidatePostsMaximum": 1,
+    "restorePostsMaximum": 1,
+    "recoveryRuntimeMs": 75000,
+    "automaticSecondWindow": false
+  },
+  "repositoryGates": {
+    "nodeSpecs": 8,
+    "repositoryNodeTests": 290,
+    "jestSuites": 195,
+    "jestTests": 685,
+    "sourceManifestOutputs": "all-listed-outputs",
+    "typescriptProjects": [
+      "tsconfig.build.json",
+      "tsconfig.json"
+    ],
+    "loaderRegenerationCheck": true,
+    "rollupBuildOnly": true,
+    "resolvedPackageTests": 35
+  },
+  "evidence": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-diagnostic-envelope-optimization-xii-online-ii",
+    "files": [
+      "FINAL-VERIFICATION.json",
+      "SUBPHASE-ATTRIBUTION.json",
+      "ENVELOPE-COMPARISON.json"
+    ],
+    "successLabels": [
+      "ENVELOPE_XII_OFFLINE_VERIFIED",
+      "CPU_DIAGNOSTIC_CAPTURE_VERIFIED",
+      "ENVELOPE_XII_ATTRIBUTION_RECORDED",
+      "ENVELOPE_XII_COMPARISON_RECORDED",
+      "RESTORED_BYTES_AND_RUNTIME_VERIFIED"
+    ]
+  },
+  "forbiddenClaimsWithoutNewEvidence": [
+    "ENGINE_CPU_BUDGET_GAP_REPAIRED",
+    "FULL_COMPATIBILITY_OBSERVED",
+    "TREASURY_PRODUCTION_READY",
+    "twelve-point compatibility passed",
+    "full Treasury production cutover"
+  ],
+  "makerBoundaries": {
+    "networkUsed": true,
+    "githubReadOnly": true,
+    "realTokenUsed": false,
+    "candidateUploaded": false,
+    "nativeWindowsExecuted": false,
+    "fullUserRepositoryChecksExecuted": false,
+    "engineCpuMeasured": false,
+    "archivedXIWriteRetryFixtureVerified": true,
+    "realArchivedXIExtractionExecuted": false,
+    "localCloneAvailable": false,
+    "phaseLockBuilderSyntheticTestsExecuted": true,
+    "syntheticDetachedCompatWorktreeExecuted": true,
+    "repositoryFailureReproducedFromAgentEvidence": true,
+    "crossRealmRegressionTestsExecuted": true,
+    "previewTransformCompositionTestsExecuted": true,
+    "officialMigrationSyntheticTestsExecuted": true,
+    "resolvedPackage35ExecutedByMaker": false
+  },
+  "deliveryRevision": "v4",
+  "supersedes": {
+    "package": "screeps-compat-diagnostic-envelope-optimization-XII-online-II-2026-09-15-v3",
+    "zipSha256": "9c261aa5effe701ccc476fd8e147d86644cd0b471b9abdc29fd8ae307f6810f2",
+    "scope": "two corrected source-authoring paths, exact superseded-tree recognition, official local commit migration, and repository-gate remediation; runtime CPU/Preview semantics and online protocol otherwise unchanged",
+    "reason": "v3 repository Node gate exposed two cross-realm strict-equality assertions and an IX-to-XI public preview transform contract while live preview was XII"
+  }
+}

@@ -1,0 +1,480 @@
+{
+  "status": "ENVELOPE_XII_COMPARISON_INCONCLUSIVE",
+  "captureVerified": false,
+  "closure": "NOT_DEPLOYED",
+  "priorEvidence": {
+    "refactorCommit": "0c742a1534ebd64af9e483fcd6313c5d156ff6e1",
+    "compatClosedHead": "91b9a99226a7a135a0e75b8a1d0db255eefe2200",
+    "finalVerification": {
+      "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-hotpath-optimization-xi-online-i/FINAL-VERIFICATION.json",
+      "blob": "f15b7f313df150d1ab68547bb6841d6167007244",
+      "bytes": 30270,
+      "sha256": "cb96635f312b6fa216823aacb6652b91ad360517b73280f2e2cf5eb2a72f28ab"
+    },
+    "attribution": {
+      "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-hotpath-optimization-xi-online-i/SUBPHASE-ATTRIBUTION.json",
+      "blob": "24add18f9348ff43e521ebff6986f5db43959650",
+      "bytes": 21104,
+      "sha256": "9c18ab0f3b4b5c1c2876de3d3d18e2a92128052273df9efc2f764c8ec35d92de"
+    },
+    "reports": {
+      "raw": 4,
+      "diagnostic": 4,
+      "attributed": 4,
+      "complete": 2,
+      "partialCpu": 2,
+      "completeTailProfiles": 3
+    }
+  },
+  "current": {
+    "status": "ENVELOPE_XII_ATTRIBUTION_INCONCLUSIVE",
+    "captureVerified": false,
+    "captureStatus": "NOT_DEPLOYED",
+    "closure": "NOT_DEPLOYED",
+    "sourceHead": null,
+    "profileHead": null,
+    "reports": {
+      "raw": 0,
+      "diagnostic": 0,
+      "complete": 0,
+      "partialCpu": 0,
+      "attributed": 0,
+      "completedTails": 0
+    },
+    "details": [],
+    "completions": [],
+    "summary": {
+      "subphases": {
+        "observationSetup": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "observationRooms": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "observationFinalize": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "observationView": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentSetup": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentTasks": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentReservations": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentFinalize": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "projectionRows": {
+          "count": 0,
+          "values": [],
+          "median": null
+        }
+      },
+      "parentPhases": {
+        "legacyInputs": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "directRead": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "readerLoad": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "observationBuild": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "coreCompare": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentBuild": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentProjection": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "report": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "serializationAndSize": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "emit": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "retention": {
+          "count": 0,
+          "values": [],
+          "median": null
+        }
+      },
+      "tailPhases": {
+        "serializationAndSize": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "emit": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "retention": {
+          "count": 0,
+          "values": [],
+          "median": null
+        }
+      },
+      "completedElapsed": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "work": {
+        "observationRooms": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "observationLocations": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "observationExistingLocations": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "observationResourceKeys": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentTaskRecords": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentPendingTaskRecords": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentTaskInvalidEvents": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentDemandHealthChecks": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentReceiverHealthChecks": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentRouteCandidates": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentReservationRecords": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentReservationInvalidEvents": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentOwnerEvaluations": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentActiveReservations": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentScopeBuckets": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentRoomBuckets": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentMergeRoutes": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "commitmentReservationScopes": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "projectionRowsPlanned": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "projectionRowsCompleted": {
+          "count": 0,
+          "values": [],
+          "median": null
+        },
+        "projectionIndexQueries": {
+          "count": 0,
+          "values": [],
+          "median": null
+        }
+      },
+      "observationRanking": [],
+      "commitmentRanking": [],
+      "projection": {
+        "count": 0,
+        "values": [],
+        "median": null
+      }
+    },
+    "interpretation": {
+      "subphasesOverlapParentPhases": true,
+      "intervalsAreInclusive": true,
+      "diagnosticOverheadSubtracted": false,
+      "perRecordCpuSampling": false,
+      "primitiveWorkCountersAreNotCpuWeights": true,
+      "tailOnlyCompletion": true,
+      "completionReconstructedFromPrefix": true,
+      "exactSpeedupPercentNotComputed": true,
+      "causalOptimizationClaim": false,
+      "budget": 2,
+      "engineCpuGapRepaired": false,
+      "fullCompatibilityObserved": false,
+      "lastSampleTailUnobservable": true
+    },
+    "inputDigests": {}
+  },
+  "comparison": {
+    "completeSamples": {
+      "prior": 2,
+      "current": 0,
+      "delta": -2,
+      "multipleCurrent": false
+    },
+    "partialCpuSamples": {
+      "prior": 2,
+      "current": 0,
+      "delta": -2
+    },
+    "completedTails": {
+      "prior": 3,
+      "current": 0,
+      "delta": -3
+    },
+    "subphases": {
+      "commitmentFinalize": {
+        "prior": 0.08691019999969285,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "commitmentReservations": {
+        "prior": 0.008138000004692003,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "commitmentSetup": {
+        "prior": 0.08929569999600062,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "commitmentTasks": {
+        "prior": 0.1900457000010647,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "observationFinalize": {
+        "prior": 0.00986179999745218,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "observationRooms": {
+        "prior": 0.21398909999697935,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "observationSetup": {
+        "prior": 0.06580600000233972,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "observationView": {
+        "prior": 0.1705606500054273,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "projectionRows": {
+        "prior": 0.1386930999942706,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      }
+    },
+    "parentPhases": {
+      "commitmentBuild": {
+        "prior": 0.39935870000044815,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "commitmentProjection": {
+        "prior": 0.1494440999958897,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "coreCompare": {
+        "prior": 0.06561424999745213,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "directRead": {
+        "prior": 0.5419556999950146,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "emit": {
+        "prior": null,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "legacyInputs": {
+        "prior": 0.3194730500035803,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "observationBuild": {
+        "prior": 0.5117229000024963,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "readerLoad": {
+        "prior": 0.10197850000258768,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "report": {
+        "prior": 0.00921570000173233,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "retention": {
+        "prior": null,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "serializationAndSize": {
+        "prior": 0,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      }
+    },
+    "tailPhases": {
+      "emit": {
+        "prior": 0.09765470000274945,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "retention": {
+        "prior": 0.03043170000455575,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      },
+      "serializationAndSize": {
+        "prior": 0.4871541999964393,
+        "current": null,
+        "delta": null,
+        "currentCount": 0
+      }
+    },
+    "completedElapsed": {
+      "prior": 3.3687056000053417,
+      "current": null,
+      "delta": null,
+      "currentCount": 0
+    }
+  },
+  "decisionBoundary": {
+    "performanceImprovementRequiredForCapture": false,
+    "exactCausalSpeedupComputed": false,
+    "automaticProductionCutoverAuthorized": false,
+    "engineCpuGapRepaired": false,
+    "fullCompatibilityObserved": false
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "status": "NOT_DEPLOYED",
+  "captureVerified": false,
+  "closure": "NOT_DEPLOYED",
+  "issues": [
+    "PREPARATION_NOT_COMPLETE"
+  ],
+  "rawReports": 0,
+  "completeSamples": 0
+}

@@ -1,0 +1,32 @@
+{
+  "kind": "xii-materialization/v4",
+  "baseCommit": "0c742a1534ebd64af9e483fcd6313c5d156ff6e1",
+  "basePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-hotpath-optimization-xi-online-i/task-package",
+  "basePackageFingerprint": "cf7913c66133a9b03e7ac0e223bc06b07b22f806c06cc44d13bb09d7558adc5e",
+  "deltaPackageFingerprint": "577585fc501c47ac56554c3245ca476e6f979aa796618d78a1a41d190b59c062",
+  "compatBase": "91b9a99226a7a135a0e75b8a1d0db255eefe2200",
+  "compatLocalState": "superseded-applied",
+  "compatLocalHead": "ad8a1c60aced831eb356ed30204186fffc49fc80",
+  "compatLocalTree": "4a707eb161bc1d78860024553ca5944120faf195",
+  "supersededSourceTree": "4a707eb161bc1d78860024553ca5944120faf195",
+  "expectedSourceTree": "dcec716dfad41cb95e07bbed5988f1d5fde5c531",
+  "migrationRequired": true,
+  "sourceLocks": {
+    "before": {
+      "path": "references/source-lock-before-xii.json",
+      "sha256": "af365ea44469c90bf7031e32be4699af37ff1b3a2216c564a9798bdcb09f97f3",
+      "entries": 42
+    },
+    "superseded": {
+      "path": "references/source-lock-superseded-v3.json",
+      "sha256": "b7d38d7fbbba29b462154b271871e1af81cffb33f211392dc68bf1309ab9bead",
+      "entries": 47
+    },
+    "after": {
+      "path": "references/source-lock.json",
+      "sha256": "20aa70731aab9bd034bc1a30f12d568f069367c63f8dae724a9edadf39d14323",
+      "entries": 47
+    },
+    "generation": "two detached exact-base worktrees: superseded v3 payload and corrected v4 payload, each with generator --write/--check and exact staged scope"
+  }
+}

@@ -1,0 +1,98 @@
+--- a/scripts/build-treasury-compat-loader.cjs
++++ b/scripts/build-treasury-compat-loader.cjs
+@@ -8,8 +8,19 @@
+ const B = require('./lib/treasury-compat-build.cjs');
+ const A = require('./lib/treasury-compat-attribution.cjs');
+ const H = require('./lib/treasury-compat-hotpath.cjs');
+-const P = require('./lib/treasury-compat-preview-hotpath.cjs');
++const P_XI = require('./lib/treasury-compat-preview-hotpath.cjs');
+ const D = require('./lib/treasury-compat-envelope.cjs');
++/** Public current-preview transform. Historical hotpath tests import G.P and
++ * therefore it must map the pinned IX preview directly to the current XII
++ * preview, while P_XI remains available for intermediate provenance checks. */
++const P = Object.freeze({
++  transform(text) { return D.transform(P_XI.transform(text)); },
++  restore(text) { return P_XI.restore(D.restore(text)); },
++  rules: Object.freeze([
++    ...P_XI.rules.map(x => Object.freeze({ ...x, stage: 'XI-hotpath' })),
++    ...D.rules.map(x => Object.freeze({ ...x, stage: 'XII-envelope' })),
++  ]),
++});
+ const ORIGINAL_SHA = '9e28d07181898930a84ff560c73f531935ca6a79c9d6e1e2adbd108555bd9965';
+ const ORIGINAL_BLOB = '7c20e7544bdc45bee11b1ee059ac5df2a12f2bf3';
+ const SOURCE_COMMIT = '01bd9831454950c4928df98dd8679692b55603e5';
+@@ -69,9 +80,10 @@
+   const out = Buffer.from(prefix + t);
+   const previewBase = lf(previewOriginal);
+   check(previewBase.length === 21526 && sha(previewBase) === IX_PREVIEW_SHA && blob(previewBase) === IX_PREVIEW_BLOB, 'PREVIEW_BASELINE_MISMATCH');
+-  const previewXI = Buffer.from(P.transform(previewBase.toString('utf8')));
++  const previewXI = Buffer.from(P_XI.transform(previewBase.toString('utf8')));
+   check(previewXI.length === 21631 && sha(previewXI) === XI_PREVIEW_SHA && blob(previewXI) === XI_PREVIEW_BLOB, 'XI_PREVIEW_MISMATCH');
+-  const previewOut = Buffer.from(D.transform(previewXI.toString('utf8')));
++  const previewOut = Buffer.from(P.transform(previewBase.toString('utf8')));
++  check(previewOut.equals(Buffer.from(D.transform(previewXI.toString('utf8')))), 'CURRENT_PREVIEW_COMPOSITION_MISMATCH');
+   check(previewOut.length === 22660 && sha(previewOut) === XII_PREVIEW_SHA && blob(previewOut) === XII_PREVIEW_BLOB, 'XII_PREVIEW_MISMATCH');
+   const matches = [...originalPrefix.matchAll(/^"([^"]+)": function\(exports, require\) \{\n/gm)];
+   check(matches.length === 8, 'FACTORY_SET_MISMATCH');
+@@ -121,8 +133,9 @@
+     reversibleBuildTransform: true, buildRules: B.rules,
+     reversibleAttributionTransform: true, attributionRules: A.rules,
+     reversibleHotpathTransform: true, hotpathRules: H.rules,
+-    reversiblePreviewHotpathTransform: true, previewHotpathRules: P.rules,
++    reversiblePreviewHotpathTransform: true, previewHotpathRules: P_XI.rules,
+     reversiblePreviewEnvelopeTransform: true, previewEnvelopeRules: D.rules,
++    reversibleCurrentPreviewTransform: true, currentPreviewRules: P.rules,
+     loaderSha256: sha(Buffer.from(t)), generatedSha256: sha(out), generatedBlob: blob(out),
+     previewXISha256: sha(previewXI), previewXIBlob: blob(previewXI),
+     previewSha256: sha(previewOut), previewBlob: blob(previewOut), factories,
+@@ -172,7 +185,7 @@
+   return verifyRoot(path.resolve(__dirname, '..'), argv[0]);
+ }
+ module.exports = { generate, main, sha, blob, GENERATED, FIXTURE, TEMPLATE, PROVENANCE, SOURCE_MANIFEST, MARKER,
+-  X, B, A, H, P, D, FIXED_OUTPUTS, EXPECTED_OUTPUT_PATHS, verifyOutputIdentities, applyOrCheckGenerated, verifyRoot,
++  X, B, A, H, P_XI, P, D, FIXED_OUTPUTS, EXPECTED_OUTPUT_PATHS, verifyOutputIdentities, applyOrCheckGenerated, verifyRoot,
+   BASELINE_COMMIT, BUILD_VII_BLOB, IX_CORE_BLOB, IX_PREVIEW_BLOB, XI_PREVIEW_BLOB,
+   PREVIEW, PREVIEW_FIXTURE, XI_PREVIEW_FIXTURE, CPU_XI_FIXTURE };
+ if (require.main === module) try { console.log(JSON.stringify(main(process.argv.slice(2)))); }
+--- a/test/treasury-compat/envelope-optimization.spec.cjs
++++ b/test/treasury-compat/envelope-optimization.spec.cjs
+@@ -10,6 +10,7 @@
+ const xiReader = () => fs.readFileSync(path.join(__dirname, 'fixtures/reader-before-envelope-optimization-xii.ts.txt'), 'utf8').replace(/\r\n/g, '\n');
+ const xiCpu = () => fs.readFileSync(path.join(__dirname, 'fixtures/cpu-before-envelope-optimization-xii.ts.txt'), 'utf8').replace(/\r\n/g, '\n');
+ const xiiReader = () => fs.readFileSync(H.file('treasuryCompatRead.ts'), 'utf8').replace(/\r\n/g, '\n');
++const realmNeutral = value => JSON.stringify(value);
+ function cpuApi(text) {
+   const js = S.ts.transpileModule(text, { compilerOptions: { module: S.ts.ModuleKind.CommonJS, target: S.ts.ScriptTarget.ES2019 } }).outputText;
+   const ctx = vm.createContext({ exports: {} }); vm.runInContext(js, ctx, { timeout: 5000 }); return ctx.exports;
+@@ -43,18 +44,20 @@
+     JSON.parse(fs.readFileSync(path.join(H.ROOT, G.SOURCE_MANIFEST), 'utf8')), fs.readFileSync(path.join(H.ROOT, G.PREVIEW_FIXTURE)));
+   for (const [name, bytes] of Object.entries(result)) assert.equal(fs.readFileSync(path.join(H.ROOT, name)).toString('utf8').replace(/\r\n/g, '\n'), bytes.toString('utf8'));
+   assert.equal(result[G.PREVIEW].length, 22660); assert.equal(G.D.rules.length, 8);
++  const ix = fs.readFileSync(path.join(H.ROOT, G.PREVIEW_FIXTURE), 'utf8').replace(/\r\n/g, '\n');
++  assert.equal(G.P.transform(ix), xiiReader()); assert.equal(G.P.restore(xiiReader()), ix);
+ });
+ test('XII after-retention profile is a tail-only completion with exact allowed phases', () => {
+   const p = populateAccounting(H.load('treasuryCompatCpu.ts')).completed;
+   assert.equal(p.boundary, 'afterRetention'); assert.equal(p.completion, 'tail_only'); assert.equal(p.attribution, undefined);
+   assert.deepEqual(Object.keys(p.phases).sort(), ['emit','retention','serializationAndSize']);
+-  assert.deepEqual(p.calls, { readerLoad: 0, observationBuild: 0, commitmentBuild: 0 });
++  assert.equal(realmNeutral(p.calls), realmNeutral({ readerLoad: 0, observationBuild: 0, commitmentBuild: 0 }));
+ });
+ test('XII tail-only completion serializes smaller than the prior full completion', () => {
+   const old = populateAccounting(cpuApi(xiCpu())).completed, current = populateAccounting(H.load('treasuryCompatCpu.ts')).completed;
+   assert.equal(old.completion, undefined); assert.ok(old.attribution); assert.equal(current.completion, 'tail_only');
+   assert.ok(JSON.stringify(current).length < JSON.stringify(old).length);
+-  assert.equal(current.elapsed, old.elapsed); assert.deepEqual(current.calls, old.calls);
++  assert.equal(current.elapsed, old.elapsed); assert.equal(realmNeutral(current.calls), realmNeutral(old.calls));
+ });
+ test('XII diagnostics-off reports remain byte-identical to XI for every fixed scenario', () => {
+   for (const name of Object.keys(S.scenarios)) {
+@@ -71,7 +74,7 @@
+   s.game.time = 200; s.cpuValue = 0.1; s.observer.run(); const tail = s.report().previousCpuProfile;
+   assert.equal(first.boundary, 'beforeSerialization'); assert.ok(first.attribution); assert.equal(tail.tick, first.tick);
+   assert.equal(tail.sampleOrdinal, first.sampleOrdinal); assert.equal(tail.completion, 'tail_only'); assert.equal(tail.attribution, undefined);
+-  assert.deepEqual(tail.calls, first.calls); assert.ok(tail.elapsed >= first.elapsed); assert.ok(tail.checkpoints >= first.checkpoints);
++  assert.equal(realmNeutral(tail.calls), realmNeutral(first.calls)); assert.ok(tail.elapsed >= first.elapsed); assert.ok(tail.checkpoints >= first.checkpoints);
+ });
+ test('XII preview allocation changes do not add CPU-port probes', () => {
+   const a = sceneWithReader(xiReader(), true), b = sceneWithReader(xiiReader(), true);

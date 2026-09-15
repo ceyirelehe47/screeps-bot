@@ -1,0 +1,29 @@
+{
+  "commit": "0c742a1534ebd64af9e483fcd6313c5d156ff6e1",
+  "closedCompatHead": "91b9a99226a7a135a0e75b8a1d0db255eefe2200",
+  "sourceTree": "3a976cc08a9a850fe7cce286fe1fa4a9079dca63",
+  "priorFinal": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-hotpath-optimization-xi-online-i/FINAL-VERIFICATION.json",
+    "blob": "f15b7f313df150d1ab68547bb6841d6167007244",
+    "bytes": 30270,
+    "sha256": "cb96635f312b6fa216823aacb6652b91ad360517b73280f2e2cf5eb2a72f28ab"
+  },
+  "priorAttribution": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-hotpath-optimization-xi-online-i/SUBPHASE-ATTRIBUTION.json",
+    "blob": "24add18f9348ff43e521ebff6986f5db43959650",
+    "bytes": 21104,
+    "sha256": "9c18ab0f3b4b5c1c2876de3d3d18e2a92128052273df9efc2f764c8ec35d92de"
+  },
+  "priorComparison": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-hotpath-optimization-xi-online-i/HOTPATH-COMPARISON.json",
+    "blob": "0a0faf1d666575f630f3aa0f8f46c7ead3045efa",
+    "bytes": 27738,
+    "sha256": "ee6176a2fa39fa50834652a4e75add848903a9dacbb5348e87bd488730e2dbb6"
+  },
+  "priorDriver": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-hotpath-optimization-xi-online-i/run/driver-result.json",
+    "blob": "554df08935a4f0040a008bbc7b065ce352aa1a5f",
+    "bytes": 1740,
+    "sha256": "41f43b795a86d4df31fb4356de51505b2f3d099ac479baafe5a4ade323b4eaa7"
+  }
+}

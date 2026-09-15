@@ -1,0 +1,10 @@
+{
+  "count": 35,
+  "files": [
+    "tests/locking.spec.cjs",
+    "tests/migration.spec.cjs",
+    "tests/package.spec.cjs",
+    "tests/safety.spec.cjs",
+    "tests/source.spec.cjs"
+  ]
+}

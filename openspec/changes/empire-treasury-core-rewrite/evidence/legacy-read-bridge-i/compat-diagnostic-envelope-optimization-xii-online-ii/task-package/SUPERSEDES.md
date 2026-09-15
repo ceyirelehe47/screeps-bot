@@ -1,0 +1,1 @@
+本 resolved 包由 XII v4 增量包生成，supersede v1 的过宽写重试测试、v2 的 post-source-lock 混用，以及 v3 的 cross-realm repository assertions、滞后一代的公开 preview transform 和缺失的本地 superseded source 官方迁移。运行时 XII CPU/Preview 优化语义与在线协议保持不变。

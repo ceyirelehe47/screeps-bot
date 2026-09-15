@@ -1,0 +1,276 @@
+{
+  "status": "ENVELOPE_XII_ATTRIBUTION_INCONCLUSIVE",
+  "captureVerified": false,
+  "captureStatus": "NOT_DEPLOYED",
+  "closure": "NOT_DEPLOYED",
+  "sourceHead": null,
+  "profileHead": null,
+  "reports": {
+    "raw": 0,
+    "diagnostic": 0,
+    "complete": 0,
+    "partialCpu": 0,
+    "attributed": 0,
+    "completedTails": 0
+  },
+  "details": [],
+  "completions": [],
+  "summary": {
+    "subphases": {
+      "observationSetup": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "observationRooms": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "observationFinalize": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "observationView": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentSetup": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentTasks": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentReservations": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentFinalize": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "projectionRows": {
+        "count": 0,
+        "values": [],
+        "median": null
+      }
+    },
+    "parentPhases": {
+      "legacyInputs": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "directRead": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "readerLoad": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "observationBuild": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "coreCompare": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentBuild": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentProjection": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "report": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "serializationAndSize": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "emit": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "retention": {
+        "count": 0,
+        "values": [],
+        "median": null
+      }
+    },
+    "tailPhases": {
+      "serializationAndSize": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "emit": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "retention": {
+        "count": 0,
+        "values": [],
+        "median": null
+      }
+    },
+    "completedElapsed": {
+      "count": 0,
+      "values": [],
+      "median": null
+    },
+    "work": {
+      "observationRooms": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "observationLocations": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "observationExistingLocations": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "observationResourceKeys": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentTaskRecords": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentPendingTaskRecords": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentTaskInvalidEvents": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentDemandHealthChecks": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentReceiverHealthChecks": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentRouteCandidates": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentReservationRecords": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentReservationInvalidEvents": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentOwnerEvaluations": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentActiveReservations": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentScopeBuckets": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentRoomBuckets": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentMergeRoutes": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "commitmentReservationScopes": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "projectionRowsPlanned": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "projectionRowsCompleted": {
+        "count": 0,
+        "values": [],
+        "median": null
+      },
+      "projectionIndexQueries": {
+        "count": 0,
+        "values": [],
+        "median": null
+      }
+    },
+    "observationRanking": [],
+    "commitmentRanking": [],
+    "projection": {
+      "count": 0,
+      "values": [],
+      "median": null
+    }
+  },
+  "interpretation": {
+    "subphasesOverlapParentPhases": true,
+    "intervalsAreInclusive": true,
+    "diagnosticOverheadSubtracted": false,
+    "perRecordCpuSampling": false,
+    "primitiveWorkCountersAreNotCpuWeights": true,
+    "tailOnlyCompletion": true,
+    "completionReconstructedFromPrefix": true,
+    "exactSpeedupPercentNotComputed": true,
+    "causalOptimizationClaim": false,
+    "budget": 2,
+    "engineCpuGapRepaired": false,
+    "fullCompatibilityObserved": false,
+    "lastSampleTailUnobservable": true
+  },
+  "inputDigests": {}
+}

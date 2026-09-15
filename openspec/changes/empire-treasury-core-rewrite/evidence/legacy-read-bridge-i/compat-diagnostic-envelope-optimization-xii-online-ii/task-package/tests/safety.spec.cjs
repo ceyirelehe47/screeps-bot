@@ -1,0 +1,9 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');const ROOT=path.resolve(__dirname,'..');
+const text=n=>fs.readFileSync(path.join(ROOT,n),'utf8'),S=require('./safety-support.cjs');
+test('candidate and restore writes remain outside read retry',()=>{const r=S.assertWriteRetrySeparation(text('runtime/actions.cjs'),text('runtime/read-retry.cjs'));assert.equal(r.writes,2);assert.ok(r.retryCalls>=1);});
+test('online policy still caps diagnostic observed cost',()=>{const K=require('../runtime/policy.cjs');assert.equal(K.MAX_DIAGNOSTIC_OBSERVED_COST,5);assert.equal(K.CONFIRM_MS,75000);});
+test('prepare requires XII offline and package gates',()=>{const s=text('tools/prepare.cjs');assert.match(s,/ENVELOPE_XII_OFFLINE_VERIFIED/);assert.match(s,/ENVELOPE_XII_PACKAGE_TESTS_VERIFIED/);assert.match(s,/repositoryNodeTests!==290/);});
+test('archive writes the XII comparison artifact',()=>assert.match(text('tools/archive.cjs'),/ENVELOPE-COMPARISON\.json/));
+test('publish uses a normal XII evidence commit',()=>{const s=text('tools/publish.cjs');assert.match(s,/diagnostic envelope XII online II comparison and recovery/);assert.doesNotMatch(s,/force-push/);});
+test('tail reconstruction rejects identity and phase-sum drift',()=>{const T=require('../runtime/tail-profile.cjs'),prefix={version:1,tick:1,sampleOrdinal:1,boundary:'beforeSerialization',elapsed:1,checkpoints:2,calls:{readerLoad:1,observationBuild:1,commitmentBuild:1},phases:{legacyInputs:1}},tail={version:1,tick:2,sampleOrdinal:1,boundary:'afterRetention',completion:'tail_only',elapsed:1.1,checkpoints:3,calls:prefix.calls,phases:{serializationAndSize:.1}};assert.throws(()=>T.mergeCompletion(prefix,tail),/CPU_TAIL_IDENTITY_INVALID/);tail.tick=1;tail.elapsed=1.2;assert.throws(()=>T.mergeCompletion(prefix,tail),/CPU_COMPLETION_PHASE_SUM_INVALID/);});

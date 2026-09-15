@@ -1,0 +1,16 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+const U=require('./util.cjs'),C=require('../runtime/common.cjs'),K=require('../runtime/policy.cjs'),P=require('./source-patch.cjs'),M=require('../MATERIALIZATION.json');
+const SOURCE_BASE_TREE='3a976cc08a9a850fe7cce286fe1fa4a9079dca63';
+const IMPL=Object.freeze({kind:'compat-diagnostic-envelope-optimization-XII-implementation/v1',commitMessage:'perf(compat): compact diagnostic envelope and bounded preview work',paths:P.PATHS,newPaths:P.NEW});
+function branch(repo){if(U.textGit(repo,['branch','--show-current'])!=='compat/treasury-read-bridge-i')C.fail('COMPAT_BRANCH_CHANGED');}
+function verifyBaseline(repo){U.exactHead(repo,K.COMPAT,'compat/treasury-read-bridge-i');const tree=U.textGit(repo,['rev-parse','HEAD^{tree}']);if(tree!==SOURCE_BASE_TREE)C.fail('SOURCE_BASE_TREE_CHANGED');P.verifyBaseline(repo);return {status:'ENVELOPE_XII_BASE_SOURCE_VERIFIED',head:K.COMPAT,tree,files:Object.keys(P.BASE).length};}
+function expectedAttribution(repo){return P.expectedAttribution(U.git(repo,['show',K.COMPAT+':'+P.ATTRIBUTION],true));}
+function verifyFiles(repo){for(const[rel,x]of Object.entries(P.expectedFixed()))P.checkIdentity(fs.readFileSync(path.join(repo,rel)),x,'ENVELOPE_XII_SOURCE_BYTES_CHANGED');
+ if(!P.lf(fs.readFileSync(path.join(repo,P.ATTRIBUTION))).equals(P.lf(expectedAttribution(repo))))C.fail('ENVELOPE_XII_ATTRIBUTION_BYTES_CHANGED');
+ const r=cp.spawnSync(process.execPath,[path.join(repo,'scripts/build-treasury-compat-loader.cjs'),'--check'],{cwd:repo,encoding:'utf8',timeout:120000,maxBuffer:16*1048576,windowsHide:true});if(r.status!==0||r.error)C.fail('ENVELOPE_XII_GENERATOR_CHECK_FAILED');return true;}
+function verifyCommitShape(repo,expectedTree,status){U.clean(repo);branch(repo);const head=U.textGit(repo,['rev-parse','HEAD']);if(head===K.COMPAT)C.fail('ENVELOPE_XII_SOURCE_NOT_APPLIED');if(U.textGit(repo,['rev-parse','HEAD^'])!==K.COMPAT)C.fail('ENVELOPE_XII_SOURCE_PARENT_INVALID');const names=U.textGit(repo,['diff','--name-only',K.COMPAT,head]).split('\n').filter(Boolean).sort();if(JSON.stringify(names)!==JSON.stringify([...IMPL.paths].sort()))C.fail('ENVELOPE_XII_SOURCE_SCOPE_INVALID');if(U.textGit(repo,['show','-s','--format=%s',head])!==IMPL.commitMessage)C.fail('ENVELOPE_XII_SOURCE_MESSAGE_INVALID');const tree=U.textGit(repo,['rev-parse','HEAD^{tree}']);if(tree!==expectedTree)C.fail('ENVELOPE_XII_SOURCE_TREE_INVALID',{tree,expectedTree});return {status,head,tree,base:K.COMPAT,changedPaths:IMPL.paths.length};}
+function materialization(){if(!M||M.kind!=='xii-materialization/v4'||!/^[0-9a-f]{40}$/.test(M.expectedSourceTree||'')||!/^[0-9a-f]{40}$/.test(M.supersededSourceTree||''))C.fail('MATERIALIZATION_IDENTITY_INVALID');return M;}
+function verifyHead(repo){const m=materialization(),v=verifyCommitShape(repo,m.expectedSourceTree,'ENVELOPE_XII_SOURCE_VERIFIED');verifyFiles(repo);return v;}
+function verifySupersededHead(repo){const m=materialization();return verifyCommitShape(repo,m.supersededSourceTree,'ENVELOPE_XII_SUPERSEDED_SOURCE_VERIFIED');}
+module.exports={IMPL,SOURCE_BASE_TREE,verifyBaseline,verifyHead,verifySupersededHead,verifyFiles,verifyCommitShape,expectedAttribution,materialization};
