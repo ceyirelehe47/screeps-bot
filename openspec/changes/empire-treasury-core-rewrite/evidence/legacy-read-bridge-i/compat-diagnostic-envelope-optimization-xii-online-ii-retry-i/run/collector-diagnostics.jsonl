@@ -1,0 +1,1 @@
+{"at":"2026-09-20T15:01:15.144Z","component":"collector-preflight","kind":"read-only-attempt","operation":"collector.account","attempt":1,"outcome":"success","code":null,"httpStatus":null,"attemptBudgetMs":2500,"elapsedMs":1416}

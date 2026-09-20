@@ -1,0 +1,31 @@
+{
+  "runId": "29f70e2b78cb26a9bec4697ffeab165f",
+  "status": "GUARD_CLOSED_WITH_LIMITATIONS",
+  "reason": "CPU_OBSERVED_SAFETY_STOP",
+  "closure": {
+    "status": "ONLINE_CLOSE_UNCONFIRMED",
+    "closureId": "45cd5a04b69d47b7ea73876694f76733",
+    "parentRunId": "29f70e2b78cb26a9bec4697ffeab165f",
+    "actor": "worker",
+    "bytesConfirmed": false,
+    "uploadOutcomeResolved": true,
+    "runtimeConfirmed": false,
+    "error": null,
+    "runtimeVerification": null,
+    "atMs": 1789918011937
+  },
+  "auditFailed": false,
+  "failure": null,
+  "elapsedMs": 1532132,
+  "timeChannel": {
+    "createdAtMs": 1789916479810,
+    "consecutiveFailedCycles": 0,
+    "totalAttempts": 89,
+    "totalSuccessfulReads": 88,
+    "totalFailedCycles": 0,
+    "lastSuccessAtMs": 1789917956965,
+    "lastFailureAtMs": null,
+    "lastFailure": null
+  },
+  "atMs": 1789918011942
+}

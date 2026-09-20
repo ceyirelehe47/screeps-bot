@@ -1,0 +1,40 @@
+{
+  "executionRevision": "compat-diagnostic-envelope-optimization-XII-online-II",
+  "compatBase": "91b9a99226a7a135a0e75b8a1d0db255eefe2200",
+  "refactorBase": "0c742a1534ebd64af9e483fcd6313c5d156ff6e1",
+  "acceptedSourceTree": "3a976cc08a9a850fe7cce286fe1fa4a9079dca63",
+  "priorOnlineEvidence": {
+    "finalVerificationBlob": "bfbf7517433f6381af36ac5c4044acd69f7d341a",
+    "attributionBlob": "c6eeaae0d9d514c6662bf0d3fd62d69c59181fb6",
+    "driverBlob": "2fea10330e4fceb23c7b5defd836dc999d75c60f",
+    "reports": {
+      "raw": 4,
+      "complete": 1,
+      "partialCpu": 3
+    }
+  },
+  "implementation": {
+    "lock": "references/implementation-lock.json",
+    "paths": 17,
+    "coreBlob": "21c4bba26d732ead7df4d6a9f5b9dea357fd9583",
+    "previewBlob": "fe92498f5e76d860e4fef98d842df3c2e8fc48ad",
+    "reversibleCoreTransform": "scripts/lib/treasury-compat-hotpath.cjs",
+    "reversiblePreviewTransform": "scripts/lib/treasury-compat-preview-hotpath.cjs"
+  },
+  "onlineProtocol": {
+    "points": 4,
+    "intervalTicks": 100,
+    "maxSampleCpu": 2,
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "recoveryRuntimeMs": 75000
+  },
+  "makerNetworkUsed": false,
+  "makerEngineMeasurement": false
+}

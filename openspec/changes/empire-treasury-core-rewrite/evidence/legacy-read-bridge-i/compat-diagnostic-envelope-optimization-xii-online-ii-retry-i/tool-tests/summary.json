@@ -1,0 +1,21 @@
+{
+  "status": "ENVELOPE_XII_RETRY_PACKAGE_TESTS_VERIFIED",
+  "tests": 65,
+  "passed": 65,
+  "failed": 0,
+  "skipped": 0,
+  "todo": 0,
+  "cancelled": 0,
+  "platform": "win32",
+  "node": "v22.19.0",
+  "packageFingerprint": "0ae80b171dfd7890b6946637b281073f74f838c329bceba1fa2b8ae3de3930e1",
+  "testFiles": [
+    "tests/baseline.spec.cjs",
+    "tests/package.spec.cjs",
+    "tests/readiness.spec.cjs",
+    "tests/safety.spec.cjs",
+    "tests/source-scope.spec.cjs",
+    "tests/verify.spec.cjs",
+    "tests/workflow.spec.cjs"
+  ]
+}

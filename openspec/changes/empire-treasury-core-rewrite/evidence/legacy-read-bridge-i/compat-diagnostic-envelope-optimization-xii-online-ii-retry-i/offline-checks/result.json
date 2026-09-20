@@ -1,0 +1,18 @@
+{
+  "status": "ENVELOPE_XII_RETRY_OFFLINE_VERIFIED",
+  "base": "982ac514d06428ffd5cea1a38add774438d7bb6e",
+  "sourceHead": "982ac514d06428ffd5cea1a38add774438d7bb6e",
+  "sourceTree": "dcec716dfad41cb95e07bbed5988f1d5fde5c531",
+  "repositoryNodeTests": 290,
+  "loaderRegenerated": true,
+  "hotpathOptimizationXI": true,
+  "diagnosticEnvelopeOptimizationXII": true,
+  "onlineRetryI": true,
+  "sourceManifestOutputValidation": "all-listed-outputs",
+  "tests": {
+    "suites": 195,
+    "tests": 685
+  },
+  "packageFingerprint": "0ae80b171dfd7890b6946637b281073f74f838c329bceba1fa2b8ae3de3930e1",
+  "atMs": 1789916298098
+}

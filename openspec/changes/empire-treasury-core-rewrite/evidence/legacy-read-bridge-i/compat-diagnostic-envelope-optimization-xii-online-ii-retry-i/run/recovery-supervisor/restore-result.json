@@ -1,0 +1,7 @@
+{
+  "status": "ONLINE_CLOSE_UNCONFIRMED",
+  "confirmed": false,
+  "requestAttempted": false,
+  "reason": "RESTORE_ALREADY_ATTEMPTED",
+  "atMs": 1789918021315
+}

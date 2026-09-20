@@ -1,0 +1,8 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+const U=require('../tools/util.cjs'),ROOT=path.resolve(__dirname,'..');
+test('resolved package integrity inventory is exact',()=>assert.equal(U.verifyPackage().status,'PACKAGE_INTEGRITY_VERIFIED'));
+test('materialization identity is retry v2 and source is not modified',()=>{const m=require('../MATERIALIZATION.json');assert.equal(m.kind,'xii-online-retry-materialization/v2');assert.equal(m.sourceModified,false);assert.equal(m.sourceScopeVerified,true);const v=require('../SOURCE-SCOPE-VERIFICATION.json');assert.equal(v.changedPaths,11);assert.equal(v.implementationFingerprint,m.implementationFingerprint);assert.equal(m.compatSourceHead,'982ac514d06428ffd5cea1a38add774438d7bb6e');});
+test('fixed test contract matches all package specs',()=>{const c=require('../references/test-contract.json'),files=fs.readdirSync(path.join(ROOT,'tests')).filter(x=>x.endsWith('.spec.cjs')).sort().map(x=>'tests/'+x);assert.deepEqual(files,c.files);});
+test('all shipped commonjs files parse under Node',()=>{const files=[];function walk(p){for(const n of fs.readdirSync(p)){const f=path.join(p,n),s=fs.statSync(f);if(s.isDirectory())walk(f);else if(f.endsWith('.cjs'))files.push(f);}}for(const d of ['runtime','tools','tests'])walk(path.join(ROOT,d));for(const f of files){const r=cp.spawnSync(process.execPath,['--check',f],{encoding:'utf8'});assert.equal(r.status,0,f+'\n'+r.stderr);}});
+test('readiness modules are present and nonempty',()=>{for(const n of ['runtime/readiness.cjs','runtime/live-baseline.cjs'])assert.ok(fs.statSync(path.join(ROOT,n)).size>1000);});

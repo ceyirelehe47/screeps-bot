@@ -1,0 +1,23 @@
+{
+  "status": "ENVELOPE_XII_RETRY_SOURCE_VERIFIED",
+  "head": "982ac514d06428ffd5cea1a38add774438d7bb6e",
+  "tree": "dcec716dfad41cb95e07bbed5988f1d5fde5c531",
+  "base": "91b9a99226a7a135a0e75b8a1d0db255eefe2200",
+  "changedPaths": 11,
+  "paths": [
+    "docs/treasury-compat-diagnostic-envelope-optimization-xii.md",
+    "docs/treasury-compat-loader-optimization.json",
+    "docs/treasury-compat-source-manifest.json",
+    "scripts/build-treasury-compat-loader.cjs",
+    "scripts/lib/treasury-compat-envelope.cjs",
+    "src/runtime/treasuryCompatCpu.ts",
+    "src/runtime/treasuryCompatRead.ts",
+    "test/treasury-compat/attribution.spec.cjs",
+    "test/treasury-compat/envelope-optimization.spec.cjs",
+    "test/treasury-compat/fixtures/cpu-before-envelope-optimization-xii.ts.txt",
+    "test/treasury-compat/fixtures/reader-before-envelope-optimization-xii.ts.txt"
+  ],
+  "scopeAuthority": "archived-v4-implementation-lock",
+  "implementationFingerprint": "df0066d70414132d48c93399ac962ef3c80ada1a4a348122b5eb152db40146ae",
+  "implementationBlob": "b94574b9f8a5cd0b6b61842f9200d0f18a3843e7"
+}

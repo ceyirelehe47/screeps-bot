@@ -1,0 +1,21 @@
+{
+  "commit": "4f0cbf7a2a991665d6089841eeb10954e834ddbf",
+  "finalVerification": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-diagnostic-envelope-optimization-xii-online-ii/FINAL-VERIFICATION.json",
+    "blob": "37c7981acf5cfd3133572cc6c93aab4fc79e282b",
+    "bytes": 181,
+    "sha256": "6f875e04721ebe3e50cd6f21c80d2e58c3d1499f27daae6415c3681f93095841"
+  },
+  "offlineResult": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-diagnostic-envelope-optimization-xii-online-ii/offline-checks/result.json",
+    "blob": "4437f33d22611e6e7325ad6c560e001aa84e5cae",
+    "bytes": 588,
+    "sha256": "1997a0270f8e02f394831f30560c45671dd7b5fba138cdb501fa8efed197b648"
+  },
+  "sourceApplication": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-diagnostic-envelope-optimization-xii-online-ii/source-application.json",
+    "blob": "65e0d29fcc4d4c0e47479fae9d33800e31249a00",
+    "bytes": 526,
+    "sha256": "d698cc5fbfcd06148297068f4b345e8e7ab0465e99dd24845311febdc8ebd393"
+  }
+}

@@ -1,0 +1,18 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{createRequire}=require('node:module');
+const ROOT=path.resolve(__dirname,'..'),text=r=>fs.readFileSync(path.join(ROOT,r),'utf8');
+function ts(){if(process.env.CPU_DIAG_TS_MODULE)return require(process.env.CPU_DIAG_TS_MODULE);try{return require('typescript');}catch{return createRequire(path.resolve(process.cwd(),'package.json'))('typescript');}}
+function calls(file){const T=ts(),sf=T.createSourceFile(file,text(file),T.ScriptTarget.Latest,true,T.ScriptKind.JS),out=[];function walk(n,anc=[]){if(T.isCallExpression(n))out.push({n,anc});T.forEachChild(n,c=>walk(c,[n,...anc]));}walk(sf);return{T,sf,out};}
+const calleeName=(T,e)=>T.isIdentifier(e)?e.text:T.isPropertyAccessExpression(e)?e.name.text:null;
+test('candidate and restore remain exactly two direct setCode calls',()=>{const{T,out}=calls('runtime/actions.cjs'),set=out.filter(x=>T.isPropertyAccessExpression(x.n.expression)&&x.n.expression.name.text==='setCode');assert.equal(set.length,2);assert.match(set[0].n.getText(),/candidate\.modules/);assert.match(set[1].n.getText(),/backup\.modules/);});
+test('no setCode call is nested in readWithRetry or local read wrapper',()=>{const{T,out}=calls('runtime/actions.cjs'),set=out.filter(x=>T.isPropertyAccessExpression(x.n.expression)&&x.n.expression.name.text==='setCode');for(const x of set)for(const a of x.anc)if(T.isCallExpression(a))assert.ok(!['readWithRetry','read'].includes(calleeName(T,a.expression)));});
+test('legal read-only retry remains present',()=>{const{T,out}=calls('runtime/actions.cjs');assert.ok(out.some(x=>calleeName(T,x.n.expression)==='readWithRetry'));});
+test('prepare establishes readiness before binding intent and config write',()=>{const s=text('tools/prepare.cjs'),ready=s.indexOf('Q.establish'),intent=s.indexOf("'binding-intent.json'"),write=s.indexOf('fs.writeFileSync(path.join(compat,K.CONFIG)');assert.ok(ready>0&&intent>ready&&write>intent);});
+test('prepare contains no remote write call',()=>assert.doesNotMatch(text('tools/prepare.cjs'),/\.setCode\s*\(/));
+test('observe requires canonical-baseline-only explicitly',()=>{const s=text('tools/observe.cjs');assert.match(s,/canonical-baseline-only/);assert.match(s,/EXPLICIT_EXCLUSIVE_EXECUTION_REQUIRED/);});
+test('there is no switch accepting arbitrary current live bytes',()=>{for(const f of ['runtime/live-baseline.cjs','runtime/readiness.cjs','tools/prepare.cjs','tools/observe.cjs'])assert.doesNotMatch(text(f),/accept-(?:current|stable)-live-baseline/);});
+test('unknown drift is documented as non-authorizing in archive identity',()=>{const s=text('tools/archive.cjs');assert.match(s,/unknownDriftAuthorizesWrite:false/);assert.match(s,/canonicalOnly:true/);});
+test('store binds restoration snapshot to canonical authorization',()=>{const s=text('runtime/store.cjs');assert.match(s,/AUTHORIZED_BACKUP_CHANGED/);assert.match(s,/HISTORICAL_DIGEST/);});
+test('closure verifier compares exact session backup digest and build',()=>{const s=text('runtime/verify-run.cjs');assert.match(s,/C\.same\(x\.digest,s\.backupDigest\)/);assert.match(s,/C\.same\(x\.build,s\.backupBuild\)/);});
+test('source application is read-only reuse with no commit or patch write',()=>{const s=text('tools/apply.cjs');assert.match(s,/SOURCE_REUSED_VERIFIED/);assert.doesNotMatch(s,/\bcommit\b|writeFileSync|update-ref/);});
+test('online retry keeps fixed 2 CPU and four points',()=>{const s=text('runtime/policy.cjs');assert.match(s,/COUNT=4/);assert.match(s,/maxSampleCpu:2/);assert.match(s,/reserveCpu:5/);});

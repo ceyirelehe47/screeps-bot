@@ -1,0 +1,12 @@
+{
+  "count": 65,
+  "files": [
+    "tests/baseline.spec.cjs",
+    "tests/package.spec.cjs",
+    "tests/readiness.spec.cjs",
+    "tests/safety.spec.cjs",
+    "tests/source-scope.spec.cjs",
+    "tests/verify.spec.cjs",
+    "tests/workflow.spec.cjs"
+  ]
+}

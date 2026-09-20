@@ -1,0 +1,48 @@
+{
+  "kind": "compat-diagnostic-envelope-XII-online-II-retry-I-package/v1",
+  "sourceModified": false,
+  "sourceHead": "982ac514d06428ffd5cea1a38add774438d7bb6e",
+  "sourceTree": "dcec716dfad41cb95e07bbed5988f1d5fde5c531",
+  "refactorBase": "4f0cbf7a2a991665d6089841eeb10954e834ddbf",
+  "purpose": [
+    "long pre-binding read-only network readiness",
+    "three consecutive exact live identity reads",
+    "canonical historical baseline authorization only",
+    "bounded byte-drift evidence without raw module archival",
+    "single four-point online retry when and only when canonical baseline is present",
+    "exact session backup restoration and independent 75-second confirmation"
+  ],
+  "onlineWriteLimits": {
+    "candidatePostMaximum": 1,
+    "restorePostMaximum": 1,
+    "postRetries": 0
+  },
+  "diagnosticProtocol": {
+    "points": 4,
+    "intervalTicks": 100,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ]
+  },
+  "baselinePolicy": {
+    "stableReads": 3,
+    "readinessWallMs": 1800000,
+    "canonicalHistoricalBytesOnly": true,
+    "unknownDriftAuthorizesWrite": false
+  },
+  "packageTests": 65,
+  "deliveryRevision": "v2",
+  "sourceScopeAuthority": {
+    "path": "references/implementation-lock.json",
+    "sha256": "df0066d70414132d48c93399ac962ef3c80ada1a4a348122b5eb152db40146ae",
+    "gitBlob": "b94574b9f8a5cd0b6b61842f9200d0f18a3843e7"
+  },
+  "supersedesZipSha256": "9e883996c943073b796e7e26bd62be9d61beb487f61b08d14b96e733d49e487d"
+}

@@ -1,0 +1,45 @@
+{
+  "refactorCommit": "0c742a1534ebd64af9e483fcd6313c5d156ff6e1",
+  "compatClosedHead": "91b9a99226a7a135a0e75b8a1d0db255eefe2200",
+  "finalVerification": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-hotpath-optimization-xi-online-i/FINAL-VERIFICATION.json",
+    "blob": "f15b7f313df150d1ab68547bb6841d6167007244",
+    "bytes": 30270,
+    "sha256": "cb96635f312b6fa216823aacb6652b91ad360517b73280f2e2cf5eb2a72f28ab"
+  },
+  "attribution": {
+    "path": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-hotpath-optimization-xi-online-i/SUBPHASE-ATTRIBUTION.json",
+    "blob": "24add18f9348ff43e521ebff6986f5db43959650",
+    "bytes": 21104,
+    "sha256": "9c18ab0f3b4b5c1c2876de3d3d18e2a92128052273df9efc2f764c8ec35d92de"
+  },
+  "reports": { "raw": 4, "diagnostic": 4, "attributed": 4, "complete": 2, "partialCpu": 2, "completeTailProfiles": 3 },
+  "subphaseMedians": {
+    "observationSetup": 0.06580600000233972,
+    "observationRooms": 0.21398909999697935,
+    "observationFinalize": 0.00986179999745218,
+    "observationView": 0.1705606500054273,
+    "commitmentSetup": 0.08929569999600062,
+    "commitmentTasks": 0.1900457000010647,
+    "commitmentReservations": 0.008138000004692003,
+    "commitmentFinalize": 0.08691019999969285,
+    "projectionRows": 0.1386930999942706
+  },
+  "parentPhaseMedians": {
+    "legacyInputs": 0.3194730500035803,
+    "directRead": 0.5419556999950146,
+    "readerLoad": 0.10197850000258768,
+    "observationBuild": 0.5117229000024963,
+    "coreCompare": 0.06561424999745213,
+    "commitmentBuild": 0.39935870000044815,
+    "commitmentProjection": 0.1494440999958897,
+    "report": 0.00921570000173233,
+    "serializationAndSize": 0
+  },
+  "tailPhaseMedians": {
+    "serializationAndSize": 0.4871541999964393,
+    "emit": 0.09765470000274945,
+    "retention": 0.03043170000455575
+  },
+  "completedElapsedMedian": 3.3687056000053417
+}

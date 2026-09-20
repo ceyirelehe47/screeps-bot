@@ -1,0 +1,14 @@
+{
+  "kind": "xii-online-retry-materialization/v2",
+  "baseCommit": "4f0cbf7a2a991665d6089841eeb10954e834ddbf",
+  "basePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-diagnostic-envelope-optimization-xii-online-ii/task-package",
+  "basePackageFingerprint": "133e53813777ffc88ab9d5c186ec9d2f32578564088dda7c80b08502547f9395",
+  "compatSourceHead": "982ac514d06428ffd5cea1a38add774438d7bb6e",
+  "compatSourceTree": "dcec716dfad41cb95e07bbed5988f1d5fde5c531",
+  "sourceModified": false,
+  "sourceScopeVerified": true,
+  "sourceVerificationFile": "SOURCE-SCOPE-VERIFICATION.json",
+  "implementationFingerprint": "df0066d70414132d48c93399ac962ef3c80ada1a4a348122b5eb152db40146ae",
+  "baselinePolicy": "canonical historical bytes only; unknown live drift never authorizes binding or writes",
+  "materializedAtMs": 1789915682729
+}

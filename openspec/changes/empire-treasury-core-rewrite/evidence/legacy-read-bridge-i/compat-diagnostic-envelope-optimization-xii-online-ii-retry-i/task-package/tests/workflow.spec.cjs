@@ -1,0 +1,12 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const K=require('../runtime/policy.cjs'),X=require('../tools/source.cjs'),P=require('../tools/prerequisites.cjs');
+const archiveText=fs.readFileSync(path.join(__dirname,'../tools/archive.cjs'),'utf8');
+test('retry pins the pushed XII source and evidence heads',()=>{assert.equal(K.COMPAT,'982ac514d06428ffd5cea1a38add774438d7bb6e');assert.equal(K.REFACTOR,'4f0cbf7a2a991665d6089841eeb10954e834ddbf');assert.equal(K.SOURCE_TREE,'dcec716dfad41cb95e07bbed5988f1d5fde5c531');});
+test('retry evidence path is unique and source remains unchanged',()=>{assert.ok(K.EVIDENCE.endsWith('/compat-diagnostic-envelope-optimization-xii-online-ii-retry-i'));assert.equal(X.PATHS.length,11);assert.equal(X.SOURCE_MESSAGE,'perf(compat): compact diagnostic envelope and bounded preview work');});
+test('profile remains four fixed points at interval 100',()=>{const p=K.profileFor(1000);assert.deepEqual(K.dueTicks(p),[1200,1300,1400,1500]);assert.equal(p.maxSampleCpu,2);assert.equal(p.reserveCpu,5);});
+test('retry prerequisite lock points to the pushed NOT_DEPLOYED evidence',()=>{assert.equal(P.LOCK.commit,K.REFACTOR);assert.ok(P.LOCK.finalVerification.path.includes('compat-diagnostic-envelope-optimization-xii-online-ii/FINAL-VERIFICATION.json'));assert.equal(P.LOCK.finalVerification.blob,'37c7981acf5cfd3133572cc6c93aab4fc79e282b');});
+test('archive includes readiness and bounded drift artifacts',()=>{for(const n of ['baseline-readiness-events.jsonl','baseline-readiness.json','baseline-drift-diff.json'])assert.ok(archiveText.includes(n));});
+test('archive never permits private backup or candidate snapshots',()=>{const allow=archiveText.match(/const ALLOW=Object\.freeze\(\[(.*?)\]\);/s)?.[1]||'';for(const n of ['backup.json','candidate.json','session.json'])assert.equal(allow.includes("'"+n+"'"),false);});
+test('canonical contract explicitly forbids unknown-drift writes',()=>{const j=require('../references/canonical-baseline.json');assert.equal(j.unknownDriftAuthorizesWrite,false);assert.equal(j.digest.files[0].bytes,4494463);});
+test('retry package uses a 30 minute pre-binding readiness wall',()=>assert.equal(K.READINESS_WALL_MS,30*60*1000));
