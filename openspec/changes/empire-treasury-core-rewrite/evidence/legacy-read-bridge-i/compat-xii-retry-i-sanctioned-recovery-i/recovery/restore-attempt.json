@@ -1,0 +1,13 @@
+{
+  "authorizationId": "xii-retry-i-recovery-I-2026-09-20",
+  "parentRunId": "29f70e2b78cb26a9bec4697ffeab165f",
+  "invocationId": "ba08e0cb9d2dc4c56943b27c0c171119",
+  "packageFingerprint": "ee98779610a8bc964bbbc010a0f8b2492ef79d6619547fc95027b00b3429df73",
+  "candidateHash": "5b17565088644a367305a6dcb3bac8577b99f5195b0c3d2e85fd1dc9a33496de",
+  "backupHash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+  "quotaConsumed": true,
+  "mayHaveBeenSent": true,
+  "originalRestoreAttempts": 1,
+  "additionalRestoreAttempt": 1,
+  "atMs": 1789921826663
+}

@@ -1,0 +1,10 @@
+{
+  "count": 52,
+  "files": [
+    "tests/end-to-end.spec.cjs",
+    "tests/evidence.spec.cjs",
+    "tests/observer.spec.cjs",
+    "tests/recovery.spec.cjs",
+    "tests/transport.spec.cjs"
+  ]
+}

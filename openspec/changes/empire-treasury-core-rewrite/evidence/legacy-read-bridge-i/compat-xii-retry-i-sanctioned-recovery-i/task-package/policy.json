@@ -1,0 +1,136 @@
+{
+  "kind": "sanctioned-recovery-I-policy/v1",
+  "authorizationId": "xii-retry-i-recovery-I-2026-09-20",
+  "parentRunId": "29f70e2b78cb26a9bec4697ffeab165f",
+  "expected": {
+    "server": "https://screeps.com",
+    "username": "forster",
+    "userId": "634fe406347a7b69b28aeccb",
+    "branch": "default",
+    "shard": "shard1"
+  },
+  "sourceHead": "982ac514d06428ffd5cea1a38add774438d7bb6e",
+  "sourceTree": "dcec716dfad41cb95e07bbed5988f1d5fde5c531",
+  "candidateHead": "2b6f332c172c49eb335962a967b337ddcdbe63e3",
+  "candidateTree": "956135e33e3c5aaa8e56e162cf3a4be6074cd75d",
+  "compatHead": "8c1ddecc126f4aee116d46b88547eafdd0e47d37",
+  "refactorHead": "ed7eb284c38e3bd346c4b8013aec2ee5124f2b4d",
+  "backupBuild": {
+    "commit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+    "tree": "929fa9557b1a36135a5ef1605231be1d16e87366",
+    "dirty": "folded_out",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+06ffedb@2026-08-29T14:28:59.403Z"
+  },
+  "candidateBuild": {
+    "commit": "2b6f332c172c49eb335962a967b337ddcdbe63e3",
+    "tree": "956135e33e3c5aaa8e56e162cf3a4be6074cd75d",
+    "dirty": "folded_out",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+2b6f332@2026-09-20T15:00:19.992Z",
+    "embeddedBundleHash": "3f8aa00ee780977fbd6a6b89fb3f796e1fd9d2a8e7b66911c82f9d54d4d16e0a"
+  },
+  "backupDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494463,
+        "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+      }
+    ]
+  },
+  "candidateDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "5b17565088644a367305a6dcb3bac8577b99f5195b0c3d2e85fd1dc9a33496de",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4606347,
+        "sha256": "5292b7f7db75756708b7f27d67a05f624ae751238ae47356925c65641d6af0ef"
+      }
+    ]
+  },
+  "originFiles": {
+    "session.json": {
+      "bytes": 2803,
+      "sha256": "cb83044e2ff703235f1fa53df818761db801620e9f9819c84c57fc0c85336652"
+    },
+    "public-session.json": {
+      "bytes": 3531,
+      "sha256": "f7ae1067663e895e44c564bf117a0ce9ad52cc7b0a19853da11867d863a3a738"
+    },
+    "backup.json": {
+      "bytes": 4645188,
+      "sha256": "ffd003d8620352b842869c1a0be38ff14a530be2c3e5741f112be94ff45c0109"
+    },
+    "candidate.json": {
+      "bytes": 4759851,
+      "sha256": "3c966ccd92c1b5a87752914ead11a8a747f8b40ca4b6cb510f19ad0762269b83"
+    },
+    "upload-attempt.json": {
+      "bytes": 258,
+      "sha256": "fb9df7644f613b6f7fda8c50d7eeb8d2c985364f9f1acdb6dd0ee7c1cdfb52b7"
+    },
+    "restore-attempt.json": {
+      "bytes": 253,
+      "sha256": "65dd97a9ecb7c2457c94634cf2d698ae77219c0222ca97ed611e9a833cb221dc"
+    },
+    "upload-result.json": {
+      "bytes": 950,
+      "sha256": "bfb8f059a4a4ee81b6be00f60968994492ee54e2652c402960732bb46e3edb40"
+    },
+    "driver-result.json": {
+      "bytes": 1357,
+      "sha256": "d81cad8d154d4524ed821ffbbee1fa5267c4d66f925b386e9c10d0e4f3f680d5"
+    },
+    "source-closed.json": {
+      "bytes": 280,
+      "sha256": "9d9ac9cc7808a68a5ac844c63f50807108eb463c9d62778b66d1ba7f433ec4ba"
+    },
+    "collector.process.json": {
+      "bytes": 44,
+      "sha256": "55a59268b689931406187c7cced62351730ea85e9eb9394426eea191c25b888c"
+    },
+    "collector.exit.json": {
+      "bytes": 50,
+      "sha256": "db6bc29fbd33ad329cc1b864527ed93becc770a6734041ed3922743e89680fb4"
+    },
+    "recovery-worker.process.json": {
+      "bytes": 44,
+      "sha256": "5e924e93ebbb85d57d5421b81f1bfb3f8325f3ea6ea8068bf59486a07d1fa413"
+    },
+    "recovery-worker.exit.json": {
+      "bytes": 50,
+      "sha256": "4bc561a69f1b11b896594dab9c2a6f945bbe17d9ecd77a24f6733cd3766eb946"
+    },
+    "recovery-worker/restore-result.json": {
+      "bytes": 1309,
+      "sha256": "0bb1f0389fe598a1c61c4fe35c4699390191963749f7c5226e7050b5f977f822"
+    },
+    "recovery-supervisor/restore-result.json": {
+      "bytes": 160,
+      "sha256": "930d0bab4a83f3c609f5281a52df1c0c50321b966e6b6fb782c7577afa639402"
+    }
+  },
+  "guardBlob": "796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8",
+  "ledgerDirectory": "sanctioned-recovery-I-2026-09-20",
+  "readDeadlineMs": 600000,
+  "readRequestMaxMs": 60000,
+  "readPauseMs": 5000,
+  "stablePauseMs": 2000,
+  "stableReads": 2,
+  "writeDeadlineMs": 120000,
+  "runtimeMs": 75000,
+  "runtimeStartupMs": 60000,
+  "runtimeSilenceMs": 45000,
+  "additionalRestorePostsMax": 1,
+  "originalRestorePosts": 1,
+  "totalRestorePostsMax": 2,
+  "candidatePostsMax": 0,
+  "evidencePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-xii-retry-i-sanctioned-recovery-i",
+  "previousEvidencePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-diagnostic-envelope-optimization-xii-online-ii-retry-i"
+}

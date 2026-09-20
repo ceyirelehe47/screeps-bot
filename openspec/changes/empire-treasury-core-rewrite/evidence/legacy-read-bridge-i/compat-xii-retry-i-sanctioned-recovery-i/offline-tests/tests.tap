@@ -1,0 +1,322 @@
+TAP version 13
+# Subtest: real-size snapshots traverse HTTP, lost POST reply, readback and fresh observer end to end
+ok 1 - real-size snapshots traverse HTTP, lost POST reply, readback and fresh observer end to end
+  ---
+  duration_ms: 1300.0836
+  type: 'test'
+  ...
+# Subtest: full archive, native Git commit, local bare remote push and idempotent republish
+ok 2 - full archive, native Git commit, local bare remote push and idempotent republish
+  ---
+  duration_ms: 6754.5989
+  type: 'test'
+  ...
+# Subtest: recovery proof independently recomputes runtime and byte ordering
+ok 3 - recovery proof independently recomputes runtime and byte ordering
+  ---
+  duration_ms: 87.6637
+  type: 'test'
+  ...
+# Subtest: a claimed success with substituted final bytes is rejected
+ok 4 - a claimed success with substituted final bytes is rejected
+  ---
+  duration_ms: 78.3011
+  type: 'test'
+  ...
+# Subtest: a claimed success without a full runtime interval is rejected
+ok 5 - a claimed success without a full runtime interval is rejected
+  ---
+  duration_ms: 71.0924
+  type: 'test'
+  ...
+# Subtest: private snapshots and unexpected files are never eligible for archive
+ok 6 - private snapshots and unexpected files are never eligible for archive
+  ---
+  duration_ms: 93.8458
+  type: 'test'
+  ...
+# Subtest: secret scanning covers raw, prefix, encoded, base64 and hex
+ok 7 - secret scanning covers raw, prefix, encoded, base64 and hex
+  ---
+  duration_ms: 0.9872
+  type: 'test'
+  ...
+# Subtest: native Git evidence scope and whitespace gate accept package but reject source edit
+ok 8 - native Git evidence scope and whitespace gate accept package but reject source edit
+  ---
+  duration_ms: 1716.2593
+  type: 'test'
+  ...
+# Subtest: independent 75-second synthetic trace passes
+ok 9 - independent 75-second synthetic trace passes
+  ---
+  duration_ms: 60.2868
+  type: 'test'
+  ...
+# Subtest: missing continuous console evidence is rejected
+ok 10 - missing continuous console evidence is rejected
+  ---
+  duration_ms: 39.4154
+  type: 'test'
+  ...
+# Subtest: zero CPU after readiness is not liveness proof
+ok 11 - zero CPU after readiness is not liveness proof
+  ---
+  duration_ms: 47.2863
+  type: 'test'
+  ...
+# Subtest: a bridge report invalidates recovery liveness
+ok 12 - a bridge report invalidates recovery liveness
+  ---
+  duration_ms: 51.6778
+  type: 'test'
+  ...
+# Subtest: runtime server errors invalidate recovery proof
+ok 13 - runtime server errors invalidate recovery proof
+  ---
+  duration_ms: 67.8007
+  type: 'test'
+  ...
+# Subtest: short duration is rejected
+ok 14 - short duration is rejected
+  ---
+  duration_ms: 45.2592
+  type: 'test'
+  ...
+# Subtest: candidate deploy identity invalidates recovery proof
+ok 15 - candidate deploy identity invalidates recovery proof
+  ---
+  duration_ms: 41.7043
+  type: 'test'
+  ...
+# Subtest: redacted frames cannot sign off runtime liveness
+ok 16 - redacted frames cannot sign off runtime liveness
+  ---
+  duration_ms: 45.8442
+  type: 'test'
+  ...
+# Subtest: repeated auth event is rejected
+ok 17 - repeated auth event is rejected
+  ---
+  duration_ms: 54.102
+  type: 'test'
+  ...
+# Subtest: secret redactor removes token and encoded/prefix forms
+ok 18 - secret redactor removes token and encoded/prefix forms
+  ---
+  duration_ms: 1.1509
+  type: 'test'
+  ...
+# Subtest: observer subscribes only to console/CPU and never sends console evaluation
+ok 19 - observer subscribes only to console/CPU and never sends console evaluation
+  ---
+  duration_ms: 89.483
+  type: 'test'
+  ...
+# Subtest: actual supplied backup and candidate snapshots match pinned hashes and builds
+ok 20 - actual supplied backup and candidate snapshots match pinned hashes and builds
+  ---
+  duration_ms: 11.8335
+  type: 'test'
+  ...
+# Subtest: same main plus extra module is a conflict, never equal
+ok 21 - same main plus extra module is a conflict, never equal
+  ---
+  duration_ms: 28.177
+  type: 'test'
+  ...
+# Subtest: modified backup snapshot is rejected
+ok 22 - modified backup snapshot is rejected
+  ---
+  duration_ms: 55.3052
+  type: 'test'
+  ...
+# Subtest: snapshot identity cannot be switched to another branch
+ok 23 - snapshot identity cannot be switched to another branch
+  ---
+  duration_ms: 0.3155
+  type: 'test'
+  ...
+# Subtest: all exact original evidence files are checked, not just main hashes
+ok 24 - all exact original evidence files are checked, not just main hashes
+  ---
+  duration_ms: 121.098
+  type: 'test'
+  ...
+# Subtest: successful recovery issues exactly one new restore and no candidate write
+ok 25 - successful recovery issues exactly one new restore and no candidate write
+  ---
+  duration_ms: 259.2397
+  type: 'test'
+  ...
+# Subtest: already canonical requires zero POST and still verifies liveness
+ok 26 - already canonical requires zero POST and still verifies liveness
+  ---
+  duration_ms: 119.4732
+  type: 'test'
+  ...
+# Subtest: unknown live code is never overwritten
+ok 27 - unknown live code is never overwritten
+  ---
+  duration_ms: 45.9074
+  type: 'test'
+  ...
+# Subtest: new authorization flags are all mandatory
+ok 28 - new authorization flags are all mandatory
+  ---
+  duration_ms: 2.5743
+  type: 'test'
+  ...
+# Subtest: pre-existing shared action lock prevents all writes
+ok 29 - pre-existing shared action lock prevents all writes
+  ---
+  duration_ms: 4.9506
+  type: 'test'
+  ...
+# Subtest: original collector lock prevents additional recovery
+ok 30 - original collector lock prevents additional recovery
+  ---
+  duration_ms: 3.5762
+  type: 'test'
+  ...
+# Subtest: lost POST response after server applies backup is resolved only by GET
+ok 31 - lost POST response after server applies backup is resolved only by GET
+  ---
+  duration_ms: 197.9941
+  type: 'test'
+  ...
+# Subtest: unsuccessful POST is never retried within or across invocations
+ok 32 - unsuccessful POST is never retried within or across invocations
+  ---
+  duration_ms: 486.8953
+  type: 'test'
+  ...
+# Subtest: a durable marker exists before the first byte of the restore call
+ok 33 - a durable marker exists before the first byte of the restore call
+  ---
+  duration_ms: 217.2766
+  type: 'test'
+  ...
+# Subtest: crash after marker but before POST consumes quota conservatively
+ok 34 - crash after marker but before POST consumes quota conservatively
+  ---
+  duration_ms: 220.6975
+  type: 'test'
+  ...
+# Subtest: corrupt marker cannot silently reopen the quota
+ok 35 - corrupt marker cannot silently reopen the quota
+  ---
+  duration_ms: 22.0131
+  type: 'test'
+  ...
+# Subtest: read-only reconcile can inspect a stale lock but has no POST path
+ok 36 - read-only reconcile can inspect a stale lock but has no POST path
+  ---
+  duration_ms: 112.6799
+  type: 'test'
+  ...
+# Subtest: runtime verification failure preserves byte evidence and performs final read
+ok 37 - runtime verification failure preserves byte evidence and performs final read
+  ---
+  duration_ms: 187.8753
+  type: 'test'
+  ...
+# Subtest: auth failures stop immediately without a write
+ok 38 - auth failures stop immediately without a write
+  ---
+  duration_ms: 19.8026
+  type: 'test'
+  ...
+# Subtest: active branch change stops without a write
+ok 39 - active branch change stops without a write
+  ---
+  duration_ms: 20.8573
+  type: 'test'
+  ...
+# Subtest: transient GET can recover before any quota is consumed
+ok 40 - transient GET can recover before any quota is consumed
+  ---
+  duration_ms: 204.5961
+  type: 'test'
+  ...
+# Subtest: GET timeout cannot cross the shared stable-read deadline silently
+ok 41 - GET timeout cannot cross the shared stable-read deadline silently
+  ---
+  duration_ms: 21.8387
+  type: 'test'
+  ...
+# Subtest: live change to third-party during final prewrite reads is rejected
+ok 42 - live change to third-party during final prewrite reads is rejected
+  ---
+  duration_ms: 81.5457
+  type: 'test'
+  ...
+# Subtest: external restoration during prewrite reads suppresses the new POST
+ok 43 - external restoration during prewrite reads suppresses the new POST
+  ---
+  duration_ms: 160.1508
+  type: 'test'
+  ...
+# Subtest: actual 4.6 MB candidate GET is decoded without truncation
+ok 44 - actual 4.6 MB candidate GET is decoded without truncation
+  ---
+  duration_ms: 192.5333
+  type: 'test'
+  ...
+# Subtest: actual backup POST sends exact byte payload once with content length
+ok 45 - actual backup POST sends exact byte payload once with content length
+  ---
+  duration_ms: 132.1529
+  type: 'test'
+  ...
+# Subtest: lost POST reply results in one request only
+ok 46 - lost POST reply results in one request only
+  ---
+  duration_ms: 80.6283
+  type: 'test'
+  ...
+# Subtest: explicit total timeout destroys stalled local request
+ok 47 - explicit total timeout destroys stalled local request
+  ---
+  duration_ms: 43.8746
+  type: 'test'
+  ...
+# Subtest: HTTP redirects are not followed
+ok 48 - HTTP redirects are not followed
+  ---
+  duration_ms: 9.7201
+  type: 'test'
+  ...
+# Subtest: auth rejection is distinguished from transient failure
+ok 49 - auth rejection is distinguished from transient failure
+  ---
+  duration_ms: 8.3931
+  type: 'test'
+  ...
+# Subtest: malformed success JSON is rejected
+ok 50 - malformed success JSON is rejected
+  ---
+  duration_ms: 8.2359
+  type: 'test'
+  ...
+# Subtest: test transport cannot point to an arbitrary remote origin
+ok 51 - test transport cannot point to an arbitrary remote origin
+  ---
+  duration_ms: 0.4602
+  type: 'test'
+  ...
+# Subtest: transport refuses uploading candidate or arbitrary bytes as restoration
+ok 52 - transport refuses uploading candidate or arbitrary bytes as restoration
+  ---
+  duration_ms: 17.4755
+  type: 'test'
+  ...
+1..52
+# tests 52
+# suites 0
+# pass 52
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8349.5337

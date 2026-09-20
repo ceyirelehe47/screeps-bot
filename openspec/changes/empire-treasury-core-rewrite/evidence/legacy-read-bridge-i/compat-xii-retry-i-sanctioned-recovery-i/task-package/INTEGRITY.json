@@ -1,0 +1,101 @@
+{
+  "kind": "package-integrity/v1",
+  "files": {
+    "AGENT-RUN.md": {
+      "bytes": 8934,
+      "sha256": "3acad65a572227c45810888673fd24aec2f722ce9adb37dbf39685c414a5a2d3"
+    },
+    "README.md": {
+      "bytes": 953,
+      "sha256": "c7f53a15af3df573441bf0fb0f874ed8a3cf09ee523a93601e5cbfef134a44e8"
+    },
+    "policy.json": {
+      "bytes": 4948,
+      "sha256": "c12f0df2e4b6fdd82f08cca6ee87c95dd30b364035ba838f66e1cb8fde299c8a"
+    },
+    "references/PROVENANCE.md": {
+      "bytes": 1909,
+      "sha256": "827636660ccbaa0cc9af440549611c5d9bf33fd4f1f3672f8337baaadce476a5"
+    },
+    "references/public-session.json": {
+      "bytes": 3531,
+      "sha256": "f7ae1067663e895e44c564bf117a0ce9ad52cc7b0a19853da11867d863a3a738"
+    },
+    "references/recovery-supervisor-restore-result.json": {
+      "bytes": 160,
+      "sha256": "930d0bab4a83f3c609f5281a52df1c0c50321b966e6b6fb782c7577afa639402"
+    },
+    "references/recovery-worker-restore-result.json": {
+      "bytes": 1309,
+      "sha256": "0bb1f0389fe598a1c61c4fe35c4699390191963749f7c5226e7050b5f977f822"
+    },
+    "references/test-contract.json": {
+      "bytes": 193,
+      "sha256": "eaccb5fa34b8eedfa5c5e15ff7dcca5a9e28a1571b5a1c6b3ab6e4fdb0d13b71"
+    },
+    "runtime/common.cjs": {
+      "bytes": 3988,
+      "sha256": "9a5dace85fdd95ab49d4cfa50c75d6ef4a8739f4083c87b3b8be1b608df20243"
+    },
+    "runtime/evidence.cjs": {
+      "bytes": 4551,
+      "sha256": "ef8d202a6dad7826df5a3c3b50d147e8dbd8e15b2cf05f823cad5c6ff827b491"
+    },
+    "runtime/identity.cjs": {
+      "bytes": 4655,
+      "sha256": "e8588537a88109bd84e1945fb0c077c6453489354b6c5804ba384a1005f5407a"
+    },
+    "runtime/observer.cjs": {
+      "bytes": 7069,
+      "sha256": "33c9c18014b1ec71513f44eaf62aeede550d468c802f6a51abdd8a27e147456c"
+    },
+    "runtime/recovery.cjs": {
+      "bytes": 6983,
+      "sha256": "ce7515e6a5c59704e67c6b0c25ea787c4843fa642443e17fa81ccd460e7995f1"
+    },
+    "runtime/transport.cjs": {
+      "bytes": 2876,
+      "sha256": "260d4b781ad4eb023db1e814c930c850b5c0d5f646f772db2d6b01465bf90ef7"
+    },
+    "tests/end-to-end.spec.cjs": {
+      "bytes": 6053,
+      "sha256": "fde469c4bdf324d6d128d63cea25283ee7c4768edf651ca8279381a80532dfe2"
+    },
+    "tests/evidence.spec.cjs": {
+      "bytes": 4932,
+      "sha256": "19546a05388ad8739abf5e7658d121707322fea6aa2cb99c9b612e07b2f6e404"
+    },
+    "tests/observer.spec.cjs": {
+      "bytes": 4499,
+      "sha256": "632e458cd8477201428eff4556e479b41688cb4f416b31efe973b4268b210093"
+    },
+    "tests/recovery.spec.cjs": {
+      "bytes": 9353,
+      "sha256": "295df046f75b7508266e322ae0e127d103f1ec68735d0bd3bc707d117c47b46e"
+    },
+    "tests/transport.spec.cjs": {
+      "bytes": 2805,
+      "sha256": "4b106b104b80af2421b78d3354adb58e857d7cb37939eed650d1ef4f1beff8c6"
+    },
+    "tools/archive.cjs": {
+      "bytes": 6937,
+      "sha256": "fbf42329b3df1dd1a2fb315d66435879be5631a3a702b150c56029dfdc7d912e"
+    },
+    "tools/recover.cjs": {
+      "bytes": 1193,
+      "sha256": "a776e0f17f4720c10d22f68148ed7a1dc0cafcd5cf43be3cadc5597074cb0bdc"
+    },
+    "tools/run-tests.cjs": {
+      "bytes": 1641,
+      "sha256": "c00ce3ceb8c5cf84d3555a471c7eb0f62439ad7df3aa87b6cac2cf57fe2d8223"
+    },
+    "tools/verify-package.cjs": {
+      "bytes": 119,
+      "sha256": "8cf8c4516f97de9e26ad77cec5e3664fd71ef7355b68d05bc65f87ad75ee7f70"
+    },
+    "vendor/deployGuard.cjs": {
+      "bytes": 5078,
+      "sha256": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7"
+    }
+  }
+}

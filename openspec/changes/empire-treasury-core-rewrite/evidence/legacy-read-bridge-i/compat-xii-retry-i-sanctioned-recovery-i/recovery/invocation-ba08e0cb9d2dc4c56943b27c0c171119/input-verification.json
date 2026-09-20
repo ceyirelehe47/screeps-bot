@@ -1,0 +1,32 @@
+{
+  "parentRunId": "29f70e2b78cb26a9bec4697ffeab165f",
+  "originalWrites": {
+    "candidate": 1,
+    "restore": 1
+  },
+  "backupDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494463,
+        "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+      }
+    ]
+  },
+  "candidateDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "5b17565088644a367305a6dcb3bac8577b99f5195b0c3d2e85fd1dc9a33496de",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4606347,
+        "sha256": "5292b7f7db75756708b7f27d67a05f624ae751238ae47356925c65641d6af0ef"
+      }
+    ]
+  },
+  "privateSnapshotsVerified": true
+}

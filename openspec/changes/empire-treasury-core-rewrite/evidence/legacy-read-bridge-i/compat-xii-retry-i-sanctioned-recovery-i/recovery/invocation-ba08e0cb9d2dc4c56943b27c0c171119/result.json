@@ -1,0 +1,76 @@
+{
+  "status": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+  "authorizationId": "xii-retry-i-recovery-I-2026-09-20",
+  "parentRunId": "29f70e2b78cb26a9bec4697ffeab165f",
+  "invocationId": "ba08e0cb9d2dc4c56943b27c0c171119",
+  "originalCaptureRemains": "CPU_DIAGNOSTIC_CAPTURE_INCONCLUSIVE",
+  "originalRestorePostAttempts": 1,
+  "additionalRestoreQuotaConsumed": true,
+  "httpRestoreCallsInThisInvocation": 1,
+  "automaticWriteRetry": false,
+  "bytesConfirmed": true,
+  "finalByteReadConfirmed": true,
+  "runtimeConfirmed": true,
+  "before": {
+    "state": "CURRENT_IS_BACKUP",
+    "digest": {
+      "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+      "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+      "files": [
+        {
+          "name": "main",
+          "kind": "text",
+          "bytes": 4494463,
+          "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+        }
+      ]
+    },
+    "build": {
+      "commit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+      "tree": "929fa9557b1a36135a5ef1605231be1d16e87366",
+      "dirty": "folded_out",
+      "deployBranch": "default",
+      "tag": "2026.8.29-6+06ffedb@2026-08-29T14:28:59.403Z"
+    },
+    "atMs": 1789921854944
+  },
+  "after": {
+    "state": "CURRENT_IS_BACKUP",
+    "digest": {
+      "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+      "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+      "files": [
+        {
+          "name": "main",
+          "kind": "text",
+          "bytes": 4494463,
+          "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+        }
+      ]
+    },
+    "build": {
+      "commit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+      "tree": "929fa9557b1a36135a5ef1605231be1d16e87366",
+      "dirty": "folded_out",
+      "deployBranch": "default",
+      "tag": "2026.8.29-6+06ffedb@2026-08-29T14:28:59.403Z"
+    },
+    "atMs": 1789921972783
+  },
+  "runtime": {
+    "status": "RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED",
+    "durationMs": 75005,
+    "consoleFrames": 20,
+    "cpuFrames": 21,
+    "positiveCpuFramesAfterReady": 19,
+    "maxConsoleGapMs": 4987,
+    "maxCpuGapMs": 4988,
+    "closureId": "862f8476e5e2aefb0dbd3216d0db7114"
+  },
+  "error": null,
+  "postOutcome": {
+    "accepted": true,
+    "error": null
+  },
+  "atMs": 1789921972801
+}

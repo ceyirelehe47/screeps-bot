@@ -1,0 +1,10 @@
+{
+  "status": "RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED",
+  "durationMs": 75005,
+  "consoleFrames": 20,
+  "cpuFrames": 21,
+  "positiveCpuFramesAfterReady": 19,
+  "maxConsoleGapMs": 4987,
+  "maxCpuGapMs": 4988,
+  "closureId": "862f8476e5e2aefb0dbd3216d0db7114"
+}

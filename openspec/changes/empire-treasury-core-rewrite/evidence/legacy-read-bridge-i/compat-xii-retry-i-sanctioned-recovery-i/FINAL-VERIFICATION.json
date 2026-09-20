@@ -1,0 +1,20 @@
+{
+  "status": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+  "parentRunId": "29f70e2b78cb26a9bec4697ffeab165f",
+  "authorizationId": "xii-retry-i-recovery-I-2026-09-20",
+  "originalCaptureRemains": "CPU_DIAGNOSTIC_CAPTURE_INCONCLUSIVE",
+  "originalRestorePostAttempts": 1,
+  "additionalBoundaryCount": 1,
+  "additionalQuotaConsumed": true,
+  "results": [
+    {
+      "invocationId": "ba08e0cb9d2dc4c56943b27c0c171119",
+      "status": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+      "runtimeConfirmed": true,
+      "finalByteReadConfirmed": true,
+      "httpRestoreCallsInThisInvocation": 1,
+      "error": null,
+      "atMs": 1789921972801
+    }
+  ]
+}
