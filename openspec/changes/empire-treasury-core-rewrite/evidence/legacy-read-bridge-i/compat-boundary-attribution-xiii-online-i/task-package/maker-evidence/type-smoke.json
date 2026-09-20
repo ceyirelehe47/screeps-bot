@@ -1,0 +1,5 @@
+{
+  "compiler": "5.8.3",
+  "scope": "four real bridge TypeScript modules with permissive Screeps ambient stubs; NOT either repository tsconfig gate",
+  "diagnostics": []
+}

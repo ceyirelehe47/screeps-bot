@@ -1,0 +1,298 @@
+TAP version 13
+# Subtest: candidate one-shot boundary exists before request and refuses repetition
+ok 1 - candidate one-shot boundary exists before request and refuses repetition
+  ---
+  duration_ms: 42.7774
+  type: 'test'
+  ...
+# Subtest: closing raised during preflight prevents candidate POST
+ok 2 - closing raised during preflight prevents candidate POST
+  ---
+  duration_ms: 13.0133
+  type: 'test'
+  ...
+# Subtest: failed restore response is reconciled, never automatically retried
+ok 3 - failed restore response is reconciled, never automatically retried
+  ---
+  duration_ms: 42.1645
+  type: 'test'
+  ...
+# Subtest: lost reply after accepted restore is confirmed using reads only
+ok 4 - lost reply after accepted restore is confirmed using reads only
+  ---
+  duration_ms: 24.3762
+  type: 'test'
+  ...
+# Subtest: already backup consumes no restore marker and performs no POST
+ok 5 - already backup consumes no restore marker and performs no POST
+  ---
+  duration_ms: 14.5352
+  type: 'test'
+  ...
+# Subtest: third-party code is not overwritten
+ok 6 - third-party code is not overwritten
+  ---
+  duration_ms: 11.9218
+  type: 'test'
+  ...
+# Subtest: absence of candidate marker never causes a recovery write
+ok 7 - absence of candidate marker never causes a recovery write
+  ---
+  duration_ms: 4.9169
+  type: 'test'
+  ...
+# Subtest: authorization and schema errors are not classified as network retries
+ok 8 - authorization and schema errors are not classified as network retries
+  ---
+  duration_ms: 0.3676
+  type: 'test'
+  ...
+# Subtest: inherited observer and canonical typed-module guard retain pinned bytes
+ok 9 - inherited observer and canonical typed-module guard retain pinned bytes
+  ---
+  duration_ms: 3.141
+  type: 'test'
+  ...
+# Subtest: real XIII source-generated synthetic four-report protocol validates
+ok 10 - real XIII source-generated synthetic four-report protocol validates
+  ---
+  duration_ms: 4.7391
+  type: 'test'
+  ...
+# Subtest: two actual-call probes are represented without adding them to measured body
+ok 11 - two actual-call probes are represented without adding them to measured body
+  ---
+  duration_ms: 0.3628
+  type: 'test'
+  ...
+# Subtest: trace rejects missing
+ok 12 - trace rejects missing
+  ---
+  duration_ms: 0.4859
+  type: 'test'
+  ...
+# Subtest: trace rejects duplicate
+ok 13 - trace rejects duplicate
+  ---
+  duration_ms: 0.1832
+  type: 'test'
+  ...
+# Subtest: trace rejects negative
+ok 14 - trace rejects negative
+  ---
+  duration_ms: 0.2412
+  type: 'test'
+  ...
+# Subtest: trace rejects nan
+ok 15 - trace rejects nan
+  ---
+  duration_ms: 0.1314
+  type: 'test'
+  ...
+# Subtest: trace rejects reversed
+ok 16 - trace rejects reversed
+  ---
+  duration_ms: 0.2143
+  type: 'test'
+  ...
+# Subtest: trace rejects parent-sum
+ok 17 - trace rejects parent-sum
+  ---
+  duration_ms: 0.1424
+  type: 'test'
+  ...
+# Subtest: trace rejects body-sum
+ok 18 - trace rejects body-sum
+  ---
+  duration_ms: 0.3673
+  type: 'test'
+  ...
+# Subtest: not-called is not represented as a measured zero-cost call
+ok 19 - not-called is not represented as a measured zero-cost call
+  ---
+  duration_ms: 0.5414
+  type: 'test'
+  ...
+# Subtest: tail reconstruction retains cost and rejects a changed sum
+ok 20 - tail reconstruction retains cost and rejects a changed sum
+  ---
+  duration_ms: 0.2999
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted scope
+ok 21 - report rejects corrupted scope
+  ---
+  duration_ms: 0.2696
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted call
+ok 22 - report rejects corrupted call
+  ---
+  duration_ms: 0.175
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted cpu
+ok 23 - report rejects corrupted cpu
+  ---
+  duration_ms: 0.1652
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted authority
+ok 24 - report rejects corrupted authority
+  ---
+  duration_ms: 0.1414
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted endpoint
+ok 25 - report rejects corrupted endpoint
+  ---
+  duration_ms: 0.271
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted freshness
+ok 26 - report rejects corrupted freshness
+  ---
+  duration_ms: 0.2
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted source
+ok 27 - report rejects corrupted source
+  ---
+  duration_ms: 0.1286
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted local-stop
+ok 28 - report rejects corrupted local-stop
+  ---
+  duration_ms: 0.1571
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted output
+ok 29 - report rejects corrupted output
+  ---
+  duration_ms: 0.2821
+  type: 'test'
+  ...
+# Subtest: incomplete projection remains diagnostic but not a complete business sample
+ok 30 - incomplete projection remains diagnostic but not a complete business sample
+  ---
+  duration_ms: 0.4206
+  type: 'test'
+  ...
+# Subtest: single HTML transport layer is decoded, not recursively expanded
+ok 31 - single HTML transport layer is decoded, not recursively expanded
+  ---
+  duration_ms: 2.4314
+  type: 'test'
+  ...
+# Subtest: unsafe raw report is retained and never promoted to an accepted sample
+ok 32 - unsafe raw report is retained and never promoted to an accepted sample
+  ---
+  duration_ms: 0.7022
+  type: 'test'
+  ...
+# Subtest: safety control message is not a fifth sample
+ok 33 - safety control message is not a fifth sample
+  ---
+  duration_ms: 0.2293
+  type: 'test'
+  ...
+# Subtest: analysis keeps rejected raw evidence separate and never creates a zero-cost build
+ok 34 - analysis keeps rejected raw evidence separate and never creates a zero-cost build
+  ---
+  duration_ms: 3.7657
+  type: 'test'
+  ...
+# Subtest: analysis without any session or reports stays empty and inconclusive
+ok 35 - analysis without any session or reports stays empty and inconclusive
+  ---
+  duration_ms: 0.1969
+  type: 'test'
+  ...
+# Subtest: independent observer physically collects bounded synthetic WS and verifier recomputes
+ok 36 - independent observer physically collects bounded synthetic WS and verifier recomputes
+  ---
+  duration_ms: 96.5985
+  type: 'test'
+  ...
+# Subtest: independent observer rejects bridge or runtime-error frames
+ok 37 - independent observer rejects bridge or runtime-error frames
+  ---
+  duration_ms: 0.4427
+  type: 'test'
+  ...
+# Subtest: collector emits terminal footer and remains separate from recovery observation
+ok 38 - collector emits terminal footer and remains separate from recovery observation
+  ---
+  duration_ms: 96.6675
+  type: 'test'
+  ...
+# Subtest: actual-sized loopback module GET and lost restore response never resend POST
+ok 39 - actual-sized loopback module GET and lost restore response never resend POST
+  ---
+  duration_ms: 234.1794
+  type: 'test'
+  ...
+# Subtest: transport refuses non-loopback origin and noncanonical restore content
+ok 40 - transport refuses non-loopback origin and noncanonical restore content
+  ---
+  duration_ms: 0.8659
+  type: 'test'
+  ...
+# Subtest: identity rejects binary, extra modules, altered embedded hash and duplicate build tags
+ok 41 - identity rejects binary, extra modules, altered embedded hash and duplicate build tags
+  ---
+  duration_ms: 1.1376
+  type: 'test'
+  ...
+# Subtest: native apply, new-path scope, exact resume, bind and OFF close run through production tools
+ok 42 - native apply, new-path scope, exact resume, bind and OFF close run through production tools
+  ---
+  duration_ms: 9095.9553
+  type: 'test'
+  ...
+# Subtest: recovery recognizes OFF commit created before its final evidence write
+ok 43 - recovery recognizes OFF commit created before its final evidence write
+  ---
+  duration_ms: 8068.7297
+  type: 'test'
+  ...
+# Subtest: foreign source changes fail closed rather than being reset or amended
+ok 44 - foreign source changes fail closed rather than being reset or amended
+  ---
+  duration_ms: 4062.6647
+  type: 'test'
+  ...
+# Subtest: one experiment authorization remains consumed across output-directory changes
+ok 45 - one experiment authorization remains consumed across output-directory changes
+  ---
+  duration_ms: 3104.4847
+  type: 'test'
+  ...
+# Subtest: native evidence archive, whitespace, local bare push and idempotent republish
+ok 46 - native evidence archive, whitespace, local bare push and idempotent republish
+  ---
+  duration_ms: 10034.9432
+  type: 'test'
+  ...
+# Subtest: secret scan ignores source field names but rejects actual raw and encoded secret forms
+ok 47 - secret scan ignores source field names but rejects actual raw and encoded secret forms
+  ---
+  duration_ms: 4.8959
+  type: 'test'
+  ...
+# Subtest: independent whole-run verifier accepts four source-generated reports only with separate valid recovery
+ok 48 - independent whole-run verifier accepts four source-generated reports only with separate valid recovery
+  ---
+  duration_ms: 7837.4012
+  type: 'test'
+  ...
+1..48
+# tests 48
+# suites 0
+# pass 48
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 43302.7005

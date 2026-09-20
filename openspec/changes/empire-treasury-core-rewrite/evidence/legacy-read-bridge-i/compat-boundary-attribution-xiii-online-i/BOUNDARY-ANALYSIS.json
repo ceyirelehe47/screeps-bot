@@ -1,0 +1,204 @@
+{
+  "kind": "boundary-XIII-analysis/v1",
+  "captureStatus": "CPU_DIAGNOSTIC_CAPTURE_INCONCLUSIVE",
+  "closure": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+  "priorEvidence": {
+    "sourceEvidenceCommit": "ed7eb284c38e3bd346c4b8013aec2ee5124f2b4d",
+    "sourceFile": "compat-diagnostic-envelope-optimization-xii-online-ii-retry-i/run/console.jsonl",
+    "sourceBytesSha256": "81d665c7c7af1ba4545575caef4a26f848c9036842e525c355113aaffb1cdfb6",
+    "interpretation": "Rejected third raw report is forensic evidence, not an accepted business/diagnostic sample. Parent-minus-child is an unassigned interval, not proof of task scan cost.",
+    "reports": [
+      {
+        "tick": 73830500,
+        "prefix": 2.732118999996601,
+        "calls": 0,
+        "parentInterval": 0.0281072999969183,
+        "measuredChildSum": null,
+        "parentMinusChild": null,
+        "acceptedPriorDiagnostic": true,
+        "rootCauseAssigned": false
+      },
+      {
+        "tick": 73830600,
+        "prefix": 3.245044399991457,
+        "calls": 1,
+        "parentInterval": 1.1815635000020848,
+        "measuredChildSum": 0.597541100003582,
+        "parentMinusChild": 0.5840223999985028,
+        "acceptedPriorDiagnostic": true,
+        "rootCauseAssigned": false
+      },
+      {
+        "tick": 73830700,
+        "prefix": 20.92043979999289,
+        "calls": 1,
+        "parentInterval": 19.193335200005095,
+        "measuredChildSum": 0.5313476999945124,
+        "parentMinusChild": 18.661987500010582,
+        "acceptedPriorDiagnostic": false,
+        "rootCauseAssigned": false
+      }
+    ]
+  },
+  "accepted": {
+    "rawRows": 3,
+    "actualCallsWithClosedTrace": 0,
+    "notCalled": 3,
+    "rows": [
+      {
+        "tick": 73833700,
+        "prefix": 2.6581594000017503,
+        "reportedCalls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 0
+        },
+        "trace": {
+          "status": "not_called",
+          "parentInterval": 0.0661179999988235,
+          "actualCallCost": null
+        },
+        "traceError": null,
+        "accepted": true,
+        "claimedComplete": false
+      },
+      {
+        "tick": 73833800,
+        "prefix": 2.095173599998816,
+        "reportedCalls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 0
+        },
+        "trace": {
+          "status": "not_called",
+          "parentInterval": 0.0644657000011648,
+          "actualCallCost": null
+        },
+        "traceError": null,
+        "accepted": true,
+        "claimedComplete": false
+      },
+      {
+        "tick": 73833900,
+        "prefix": 2.3469549999936135,
+        "reportedCalls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 0
+        },
+        "trace": {
+          "status": "not_called",
+          "parentInterval": 0.06514300000708317,
+          "actualCallCost": null
+        },
+        "traceError": null,
+        "accepted": true,
+        "claimedComplete": false
+      }
+    ],
+    "segments": {
+      "callerPreparation": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+      },
+      "callEntryBeforeFirstBodyBoundary": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+      },
+      "measuredBody": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+      },
+      "returnAfterLastBodyBoundary": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+      },
+      "callerPostlude": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+      }
+    }
+  },
+  "rejectedForensicOnly": {
+    "rawRows": 1,
+    "actualCallsWithClosedTrace": 1,
+    "notCalled": 0,
+    "rows": [
+      {
+        "tick": 73834000,
+        "prefix": 16.79227420000825,
+        "reportedCalls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 1
+        },
+        "trace": {
+          "status": "complete",
+          "segments": {
+            "callerPreparation": 0.08407359999546316,
+            "callEntryBeforeFirstBodyBoundary": 0.47002149999752874,
+            "measuredBody": 14.446571100001165,
+            "returnAfterLastBodyBoundary": 0.014404000001377426,
+            "callerPostlude": 0.014871999992465135
+          },
+          "parentInterval": 15.029942199988,
+          "callInterval": 14.930996600000071,
+          "measuredBody": 14.446571100001165,
+          "outsideMeasuredBody": 0.5833710999868345,
+          "rootCause": "unattributed interval, not a function-level causal verdict"
+        },
+        "traceError": null,
+        "accepted": false,
+        "claimedComplete": false
+      }
+    ],
+    "segments": {
+      "callerPreparation": {
+        "count": 1,
+        "median": 0.08407359999546316,
+        "minimum": 0.08407359999546316,
+        "maximum": 0.08407359999546316
+      },
+      "callEntryBeforeFirstBodyBoundary": {
+        "count": 1,
+        "median": 0.47002149999752874,
+        "minimum": 0.47002149999752874,
+        "maximum": 0.47002149999752874
+      },
+      "measuredBody": {
+        "count": 1,
+        "median": 14.446571100001165,
+        "minimum": 14.446571100001165,
+        "maximum": 14.446571100001165
+      },
+      "returnAfterLastBodyBoundary": {
+        "count": 1,
+        "median": 0.014404000001377426,
+        "minimum": 0.014404000001377426,
+        "maximum": 0.014404000001377426
+      },
+      "callerPostlude": {
+        "count": 1,
+        "median": 0.014871999992465135,
+        "minimum": 0.014871999992465135,
+        "maximum": 0.014871999992465135
+      }
+    }
+  },
+  "rootCauseAssigned": false,
+  "engineCpuGapRepaired": false,
+  "comparisonQualification": "XIII adds two CPU observations per completed traced call. Measurements include their overhead. Different ticks/workloads and rejected raw samples do not establish a causal speedup.",
+  "bodyOverlap": "measuredBody overlaps the four existing IX commitment child intervals; never add it again to those intervals.",
+  "scope": "The five intervals locate measured time, not JIT/GC/function-level root causes."
+}

@@ -1,0 +1,132 @@
+{
+  "kind": "boundary-XIII-source/v1",
+  "base": "8c1ddecc126f4aee116d46b88547eafdd0e47d37",
+  "baseTree": "dcec716dfad41cb95e07bbed5988f1d5fde5c531",
+  "expectedSourceTree": "a9af213f779a79aaf852e0b8a4463f135123ccc8",
+  "files": {
+    "docs/treasury-compat-boundary-attribution-xiii.md": {
+      "before": null,
+      "after": {
+        "bytes": 4014,
+        "sha256": "509f6ca541540b6d4a4d964bcfe9795f662a9bd7910e5a8db2c6ff452890a35f",
+        "blob": "2f2bdbef68b9a67f740b06f9d1762505248283a6"
+      }
+    },
+    "docs/treasury-compat-loader-optimization.json": {
+      "before": {
+        "bytes": 11462,
+        "sha256": "bc2760b5b61c892b6a4ab139ed85ba066c94dda97bad7f636fce358a9a623498",
+        "blob": "5da4e33769a17db5fc551309f8bc506c50600d88"
+      },
+      "after": {
+        "bytes": 14244,
+        "sha256": "97e429d9c4a85c33e8c10782d15b30966adec57188eecec76ce66a8c2f8bdbb0",
+        "blob": "cb59a78e29f66cb48dd2e8d3033276b47d47539c"
+      }
+    },
+    "docs/treasury-compat-source-manifest.json": {
+      "before": {
+        "bytes": 8530,
+        "sha256": "8f43eee7f103b9fc986ff6d5fc336dfeacb1cd546b2fafdf1eb183aebec5eff1",
+        "blob": "c6698ef92fac474b72022a8753d88be2de4d8c8d"
+      },
+      "after": {
+        "bytes": 8531,
+        "sha256": "282781aecc53f2c45139619e97ec5e004400c8f1646c9af59dcf30bc18bad5f0",
+        "blob": "b568f5586a4804b663e2a97686648141f0fcbe84"
+      }
+    },
+    "scripts/build-treasury-compat-loader.cjs": {
+      "before": {
+        "bytes": 15694,
+        "sha256": "885ba0f474238211ca14fcec3855ef3e7a59c3384501b5d8ee761beaf7895497",
+        "blob": "e9db58bf204623178ff2eb7ddd947b16db759ad8"
+      },
+      "after": {
+        "bytes": 16364,
+        "sha256": "4252c109e0f9b0303a1ba5f3dad0acceb71926e22c6a914d79ccf42410ea211a",
+        "blob": "51f6506b486f660827d16599e879b70dc394fb27"
+      }
+    },
+    "scripts/lib/treasury-compat-boundary-xiii.cjs": {
+      "before": null,
+      "after": {
+        "bytes": 6749,
+        "sha256": "6c9b1811e22222543c5773f13722aa1aea36184727023cf44ed700604353cd4a",
+        "blob": "f371a1fc7a2e809ebbb521948c85ff397670f3cb"
+      }
+    },
+    "src/runtime/treasuryCompatCpu.ts": {
+      "before": {
+        "bytes": 7697,
+        "sha256": "c2dd2a61294e799f6aac4739b19ce6fc3d0cea00958a10bfaeef453dd4e022bc",
+        "blob": "c66f1a975778a2b4e5ae951f93c581f43ef598e0"
+      },
+      "after": {
+        "bytes": 9836,
+        "sha256": "99cd14bba85e9306ac4e906720c7d518679ffb65909db1e6c43b3187a6c94780",
+        "blob": "0ba1b4671e7c13510d3b0d399c754b98f551b603"
+      }
+    },
+    "src/runtime/treasuryCompatRead.ts": {
+      "before": {
+        "bytes": 22660,
+        "sha256": "9bc900e4d99c12d4cb8573be50db56c8a427927b3c1c5d905c0f0d6e39a6c1ff",
+        "blob": "c3297bce75ad644d60555fe3a578b09e49f41bec"
+      },
+      "after": {
+        "bytes": 25626,
+        "sha256": "9da241f859211d90d529118fe8d84437f6feee69aff17d318b2f941a60261098",
+        "blob": "fe4eb533b30a360c0f0827c188f4b8979aeada89"
+      }
+    },
+    "src/runtime/treasuryCompatRuntime.ts": {
+      "before": {
+        "bytes": 865,
+        "sha256": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4",
+        "blob": "5916fbcafbb88d40cf5463d329b683ba0d776ad8"
+      },
+      "after": {
+        "bytes": 925,
+        "sha256": "2635f501adcb554c47bb39ab93e0b5b89d398a0a9207d9196227595a249cc2b3",
+        "blob": "56747c11a66ddb4c7542eb60fd3d47b770285aa9"
+      }
+    },
+    "test/treasury-compat/boundary-attribution-xiii.spec.cjs": {
+      "before": null,
+      "after": {
+        "bytes": 10777,
+        "sha256": "19a9a6a37c475f86532b159045eb6adc997fb20def6ce4c4e2bf7296cca62041",
+        "blob": "01f51a7f35d83c67fec96187cd611169b1792278"
+      }
+    },
+    "test/treasury-compat/envelope-optimization.spec.cjs": {
+      "before": {
+        "bytes": 7602,
+        "sha256": "e1e5320d952555b10bb5a7b0f4a15b5c64fa1c02d6ce4c845ea1f6ba22502cb4",
+        "blob": "01a716b8b8c1d64c5a1055765857243f64151bd5"
+      },
+      "after": {
+        "bytes": 7768,
+        "sha256": "df3996135046f2fd18392cffdb9c00e482406e2be82c00e79c01878daaa1be4b",
+        "blob": "c880acddeb891a48bdd74942e15921a05047b366"
+      }
+    },
+    "test/treasury-compat/fixtures/cpu-before-boundary-attribution-xiii.ts.txt": {
+      "before": null,
+      "after": {
+        "bytes": 7697,
+        "sha256": "c2dd2a61294e799f6aac4739b19ce6fc3d0cea00958a10bfaeef453dd4e022bc",
+        "blob": "c66f1a975778a2b4e5ae951f93c581f43ef598e0"
+      }
+    },
+    "test/treasury-compat/fixtures/reader-before-boundary-attribution-xiii.ts.txt": {
+      "before": null,
+      "after": {
+        "bytes": 22660,
+        "sha256": "9bc900e4d99c12d4cb8573be50db56c8a427927b3c1c5d905c0f0d6e39a6c1ff",
+        "blob": "c3297bce75ad644d60555fe3a578b09e49f41bec"
+      }
+    }
+  }
+}

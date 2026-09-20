@@ -1,0 +1,1078 @@
+diff --git a/docs/treasury-compat-boundary-attribution-xiii.md b/docs/treasury-compat-boundary-attribution-xiii.md
+new file mode 100644
+index 0000000..2f2bdbe
+--- /dev/null
++++ b/docs/treasury-compat-boundary-attribution-xiii.md
+@@ -0,0 +1,29 @@
++# Boundary Attribution XIII
++
++This diagnostic-only change starts from the exact XII default-OFF tree. It does not change, prewarm or replace the commitment index algorithm. It preserves real independent direct/Core Store reads, complete bounded input-table validation, safe integers, canonical task/reservation semantics, full eager indexes and explicit projection completeness. No action, facade lifecycle, or Memory persistence is added.
++
++## Question and measurement boundaries
++
++The rejected raw report at tick 73830700 recorded a 19.1933352 CPU commitment parent interval but only 0.5313477 CPU in its four existing child intervals. The 18.6619875 difference is an unexplained measurement coverage gap, not proof that task scanning, JIT compilation or garbage collection caused it.
++
++Six offsets from the same admitted sample start delimit the parent start, immediately before the actual call, the existing first inner boundary, existing final inner boundary, immediately after the actual call, and the parent end. Their five consecutive differences partition the measured outer interval. The body span overlaps the four existing IX child intervals and is not added to them again.
++
++There are two additional CPU-port observations per completed traced builder call, independent of record count. A pre-call budget rejection can use one additional observation without invoking the builder. All overhead remains in the outer and child measurements: no estimated overhead is subtracted. A calls=0 result is explicitly not_called, never a zero-cost build.
++
++Incomplete or malformed envelopes are not accepted as complete traces. Tail-only successor profiles remain compact and do not repeat the envelope. Fault reports and raw safety-stop reports are retained separately from validated samples.
++
++## Local containment, not hard preemption
++
++The cooperative admission budget remains 2 CPU with reserve 5. The additional pre-call probe also participates in admission: it cannot authorize a builder after the sampled 2 CPU budget is exhausted.
++
++Any observed sample expenditure above 5 CPU latches localSafetyStop. No further sample is executed in that preview heap instance. This cannot interrupt an already executing synchronous builder, reverse its cost, or roll back online code. A best-effort single treasury-compat-safety-stop control message requests external recovery; it is not a fifth business sample.
++
++A newly constructed preview cannot begin at a later due tick within a bound window. The latch itself is heap-local and not persistent across a reset. There is no claim of durable cross-reset exactly-once sampling, particularly if reset/reconstruction occurs during the first due tick. The absolute end tick and independent restore remain required. When the first scheduled sample is skipped or missed, this stricter admission intentionally aborts later sampling rather than silently shifting the window.
++
++## Verification and experiment contract
++
++Default OFF remains mandatory. The generator composes the authenticated IX-to-XI, XI-to-XII, and new XII-to-XIII transformations in both directions; generated Core bytes are unchanged. Every source-manifest output is checked.
++
++Source regression verifies injected latency before, inside and after the body, constant probe count, business parity, zero Memory writes and local containment. Synthetic CPU values and Node timings are not Screeps engine measurements. Only a newly authorized four-point two-room/two-resource window can provide engine evidence. Threshold-triggered closure is valid containment but leaves capture INCONCLUSIVE; it is not repaired by adding points or changing budgets.
++
++The new execution tool grants one candidate upload and one canonical-backup restore attempt for this new experiment. A failed POST is never automatically resent. Third-party code is not overwritten. Recovery requires exact byte reads bracketing a new independent 75-second console/CPU observation. Existing XII incident authorizations remain consumed and are never reused.
+diff --git a/docs/treasury-compat-loader-optimization.json b/docs/treasury-compat-loader-optimization.json
+index 5da4e33..cb59a78 100644
+--- a/docs/treasury-compat-loader-optimization.json
++++ b/docs/treasury-compat-loader-optimization.json
+@@ -2 +2 @@
+-  "revision": "compat-diagnostic-envelope-optimization-XII",
++  "revision": "compat-boundary-attribution-XIII",
+@@ -10 +10,2 @@
+-    "scripts/lib/treasury-compat-envelope.cjs"
++    "scripts/lib/treasury-compat-envelope.cjs",
++    "scripts/lib/treasury-compat-boundary-xiii.cjs"
+@@ -12 +13 @@
+-  "baselineCommit": "91b9a99226a7a135a0e75b8a1d0db255eefe2200",
++  "baselineCommit": "8c1ddecc126f4aee116d46b88547eafdd0e47d37",
+@@ -258,0 +260,73 @@
++  "reversibleBoundaryTransform": true,
++  "boundaryRules": [
++    {
++      "name": "options",
++      "replacements": 1
++    },
++    {
++      "name": "latch-state",
++      "replacements": 1
++    },
++    {
++      "name": "latched-return",
++      "replacements": 1
++    },
++    {
++      "name": "reset-admission",
++      "replacements": 1
++    },
++    {
++      "name": "trace-accounting",
++      "replacements": 1
++    },
++    {
++      "name": "budget-latch",
++      "replacements": 1
++    },
++    {
++      "name": "boundary-latch",
++      "replacements": 1
++    },
++    {
++      "name": "call-brackets",
++      "replacements": 1
++    },
++    {
++      "name": "invocation-after-guard",
++      "replacements": 1
++    },
++    {
++      "name": "build-options",
++      "replacements": 1
++    },
++    {
++      "name": "guard-close",
++      "replacements": 1
++    },
++    {
++      "name": "report-revision",
++      "replacements": 1
++    },
++    {
++      "name": "ending-latch",
++      "replacements": 1
++    },
++    {
++      "name": "control-notice",
++      "replacements": 1
++    },
++    {
++      "name": "stats-latch",
++      "replacements": 1
++    }
++  ],
++  "commitmentEnvelopeMarks": [
++    "parentStart",
++    "callStart",
++    "bodyStart",
++    "bodyEnd",
++    "callEnd",
++    "parentEnd"
++  ],
++  "extraCpuReadsPerActualTracedBuild": 2,
++  "localSafetyStopCpu": 5,
+@@ -334,0 +409,75 @@
++    },
++    {
++      "name": "options",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "latch-state",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "latched-return",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "reset-admission",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "trace-accounting",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "budget-latch",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "boundary-latch",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "call-brackets",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "invocation-after-guard",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "build-options",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "guard-close",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "report-revision",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "ending-latch",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "control-notice",
++      "replacements": 1,
++      "stage": "XIII-boundary"
++    },
++    {
++      "name": "stats-latch",
++      "replacements": 1,
++      "stage": "XIII-boundary"
+@@ -342,2 +491,2 @@
+-  "previewSha256": "9bc900e4d99c12d4cb8573be50db56c8a427927b3c1c5d905c0f0d6e39a6c1ff",
+-  "previewBlob": "c3297bce75ad644d60555fe3a578b09e49f41bec",
++  "previewSha256": "9da241f859211d90d529118fe8d84437f6feee69aff17d318b2f941a60261098",
++  "previewBlob": "fe4eb533b30a360c0f0827c188f4b8979aeada89",
+@@ -432 +581 @@
+-  "note": "XII compacts successor-carried completion profiles to measured tail phases and removes bounded preview bookkeeping allocations while preserving independent Store reads, full validation, eager indexes, four projection rows and default OFF."
++  "note": "XIII adds bounded call-envelope measurements and local sample containment; it does not optimize or change the commitment index, prewarm it, subtract overhead, or authorize actions."
+diff --git a/docs/treasury-compat-source-manifest.json b/docs/treasury-compat-source-manifest.json
+index c6698ef..b568f55 100644
+--- a/docs/treasury-compat-source-manifest.json
++++ b/docs/treasury-compat-source-manifest.json
+@@ -128,3 +128,3 @@
+-      "bytes": 7697,
+-      "sha256": "c2dd2a61294e799f6aac4739b19ce6fc3d0cea00958a10bfaeef453dd4e022bc",
+-      "gitBlob": "c66f1a975778a2b4e5ae951f93c581f43ef598e0"
++      "bytes": 9836,
++      "sha256": "99cd14bba85e9306ac4e906720c7d518679ffb65909db1e6c43b3187a6c94780",
++      "gitBlob": "0ba1b4671e7c13510d3b0d399c754b98f551b603"
+@@ -134,3 +134,3 @@
+-      "bytes": 22660,
+-      "sha256": "9bc900e4d99c12d4cb8573be50db56c8a427927b3c1c5d905c0f0d6e39a6c1ff",
+-      "gitBlob": "c3297bce75ad644d60555fe3a578b09e49f41bec"
++      "bytes": 25626,
++      "sha256": "9da241f859211d90d529118fe8d84437f6feee69aff17d318b2f941a60261098",
++      "gitBlob": "fe4eb533b30a360c0f0827c188f4b8979aeada89"
+@@ -146,3 +146,3 @@
+-      "bytes": 865,
+-      "sha256": "9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4",
+-      "gitBlob": "5916fbcafbb88d40cf5463d329b683ba0d776ad8"
++      "bytes": 925,
++      "sha256": "2635f501adcb554c47bb39ab93e0b5b89d398a0a9207d9196227595a249cc2b3",
++      "gitBlob": "56747c11a66ddb4c7542eb60fd3d47b770285aa9"
+@@ -182 +182 @@
+-    "revision": "XII",
++    "revision": "XIII",
+diff --git a/scripts/build-treasury-compat-loader.cjs b/scripts/build-treasury-compat-loader.cjs
+index e9db58b..51f6506 100644
+--- a/scripts/build-treasury-compat-loader.cjs
++++ b/scripts/build-treasury-compat-loader.cjs
+@@ -12,0 +13 @@ const D = require('./lib/treasury-compat-envelope.cjs');
++const N = require('./lib/treasury-compat-boundary-xiii.cjs');
+@@ -17,2 +18,2 @@ const P = Object.freeze({
+-  transform(text) { return D.transform(P_XI.transform(text)); },
+-  restore(text) { return P_XI.restore(D.restore(text)); },
++  transform(text) { return N.transform(D.transform(P_XI.transform(text))); },
++  restore(text) { return P_XI.restore(D.restore(N.restore(text))); },
+@@ -21,0 +23 @@ const P = Object.freeze({
++    ...N.rules.map(x => Object.freeze({ ...x, stage: 'XIII-boundary' })),
+@@ -37 +39 @@ const MARKER = '/** Loader Optimization III.';
+-const BASELINE_COMMIT = '91b9a99226a7a135a0e75b8a1d0db255eefe2200';
++const BASELINE_COMMIT = '8c1ddecc126f4aee116d46b88547eafdd0e47d37';
+@@ -51,2 +53,2 @@ const FIXED_OUTPUTS = Object.freeze({
+-  'src/runtime/treasuryCompatCpu.ts': { bytes: 7697, sha256: 'c2dd2a61294e799f6aac4739b19ce6fc3d0cea00958a10bfaeef453dd4e022bc', gitBlob: 'c66f1a975778a2b4e5ae951f93c581f43ef598e0' },
+-  'src/runtime/treasuryCompatRuntime.ts': { bytes: 865, sha256: '9f8736eb9a0a45ba3a6390cada1d9790945e5609252da81d62d258b9f76254f4', gitBlob: '5916fbcafbb88d40cf5463d329b683ba0d776ad8' },
++  'src/runtime/treasuryCompatCpu.ts': { bytes: 9836, sha256: '99cd14bba85e9306ac4e906720c7d518679ffb65909db1e6c43b3187a6c94780', gitBlob: '0ba1b4671e7c13510d3b0d399c754b98f551b603' },
++  'src/runtime/treasuryCompatRuntime.ts': { bytes: 925, sha256: '2635f501adcb554c47bb39ab93e0b5b89d398a0a9207d9196227595a249cc2b3', gitBlob: '56747c11a66ddb4c7542eb60fd3d47b770285aa9' },
+@@ -86,2 +88,4 @@ function generate(original, template, manifest, previewOriginal) {
+-  check(previewOut.equals(Buffer.from(D.transform(previewXI.toString('utf8')))), 'CURRENT_PREVIEW_COMPOSITION_MISMATCH');
+-  check(previewOut.length === 22660 && sha(previewOut) === XII_PREVIEW_SHA && blob(previewOut) === XII_PREVIEW_BLOB, 'XII_PREVIEW_MISMATCH');
++  const previewXII = Buffer.from(D.transform(previewXI.toString('utf8')));
++  check(previewXII.length === 22660 && sha(previewXII) === XII_PREVIEW_SHA && blob(previewXII) === XII_PREVIEW_BLOB, 'XII_PREVIEW_MISMATCH');
++  check(previewOut.equals(Buffer.from(N.transform(previewXII.toString('utf8')))), 'CURRENT_PREVIEW_COMPOSITION_MISMATCH');
++  check(previewOut.length === 25626 && sha(previewOut) === '9da241f859211d90d529118fe8d84437f6feee69aff17d318b2f941a60261098' && blob(previewOut) === 'fe4eb533b30a360c0f0827c188f4b8979aeada89', 'XIII_PREVIEW_MISMATCH');
+@@ -109 +113 @@ function generate(original, template, manifest, previewOriginal) {
+-  m.loaderOptimization = { revision: 'XII', provenance: PROVENANCE, canonicalSourceCommit: SOURCE_COMMIT,
++  m.loaderOptimization = { revision: 'XIII', provenance: PROVENANCE, canonicalSourceCommit: SOURCE_COMMIT,
+@@ -121 +125 @@ function generate(original, template, manifest, previewOriginal) {
+-    revision: 'compat-diagnostic-envelope-optimization-XII',
++    revision: 'compat-boundary-attribution-XIII',
+@@ -124 +128 @@ function generate(original, template, manifest, previewOriginal) {
+-      'scripts/lib/treasury-compat-preview-hotpath.cjs', 'scripts/lib/treasury-compat-envelope.cjs'],
++      'scripts/lib/treasury-compat-preview-hotpath.cjs', 'scripts/lib/treasury-compat-envelope.cjs', 'scripts/lib/treasury-compat-boundary-xiii.cjs'],
+@@ -137,0 +142,3 @@ function generate(original, template, manifest, previewOriginal) {
++    reversibleBoundaryTransform: true, boundaryRules: N.rules,
++    commitmentEnvelopeMarks: ['parentStart','callStart','bodyStart','bodyEnd','callEnd','parentEnd'],
++    extraCpuReadsPerActualTracedBuild: 2, localSafetyStopCpu: 5,
+@@ -154 +161 @@ function generate(original, template, manifest, previewOriginal) {
+-    note: 'XII compacts successor-carried completion profiles to measured tail phases and removes bounded preview bookkeeping allocations while preserving independent Store reads, full validation, eager indexes, four projection rows and default OFF.'
++    note: 'XIII adds bounded call-envelope measurements and local sample containment; it does not optimize or change the commitment index, prewarm it, subtract overhead, or authorize actions.'
+@@ -187 +194 @@ function main(argv) {
+-module.exports = { generate, main, sha, blob, GENERATED, FIXTURE, TEMPLATE, PROVENANCE, SOURCE_MANIFEST, MARKER,
++module.exports = { N, generate, main, sha, blob, GENERATED, FIXTURE, TEMPLATE, PROVENANCE, SOURCE_MANIFEST, MARKER,
+diff --git a/scripts/lib/treasury-compat-boundary-xiii.cjs b/scripts/lib/treasury-compat-boundary-xiii.cjs
+new file mode 100644
+index 0000000..f371a1f
+--- /dev/null
++++ b/scripts/lib/treasury-compat-boundary-xiii.cjs
+@@ -0,0 +1,88 @@
++'use strict';
++/** XIII: exact XII preview transformation; core definitions are unchanged. */
++const RULES = [
++  [
++    "options",
++    "  options: { cpuDiagnostics?: boolean } = {}) {\n  const cpuDiagnostics = options?.cpuDiagnostics === true;",
++    "  options: { cpuDiagnostics?: boolean; commitmentBoundaryDiagnostics?: boolean; localSafetyStop?: boolean } = {}) {\n  const cpuDiagnostics = options?.cpuDiagnostics === true;\n  const traceCommitment = cpuDiagnostics && options?.commitmentBoundaryDiagnostics === true;\n  const localSafetyStop = options?.localSafetyStop === true;"
++  ],
++  [
++    "latch-state",
++    "  let emitted = 0, cpuSkips = 0;",
++    "  let emitted = 0, cpuSkips = 0;\n  // XIII: local containment, never an engine interrupt or a production rollback.\n  // No Memory write. A new heap arriving after the first due tick cannot re-arm.\n  let safetyStop: { tick: number; reason: string; observedCpu: number | null } | undefined;\n  let safetyNoticeAttempted = false;\n  const latch = (tick: number, used: number) => {\n    if (localSafetyStop && used > 5 && !safetyStop)\n      safetyStop = { tick, reason: \"CPU_OBSERVED_SAFETY_STOP\", observedCpu: used };\n  };\n  const notifySafety = () => {\n    if (!safetyStop || safetyNoticeAttempted) return;\n    safetyNoticeAttempted = true;\n    try { ports.emit(JSON.stringify({ kind: \"treasury-compat-safety-stop\", version: 1,\n      ...safetyStop, thresholdCpu: 5, stopsFutureSamples: true,\n      currentCallPreempted: false, scope: \"preview_heap_instance\", authorizesActions: false })); }\n    catch { /* Stop remains latched even if the one control notification fails. */ }\n  };"
++  ],
++  [
++    "latched-return",
++    "      if (fault) return { status: \"disabled_after_fault\" };",
++    "      if (fault) return { status: \"disabled_after_fault\" };\n      if (safetyStop) return { status: \"disabled_after_safety_stop\" };"
++  ],
++  [
++    "reset-admission",
++    "      lastTick = tick;\n      if (ports.shard()",
++    "      lastTick = tick;\n      if (localSafetyStop && sampleOrdinal === 0 && tick !== Math.ceil(cfg.startTick / cfg.intervalTicks) * cfg.intervalTicks) {\n        safetyStop = { tick, reason: \"WINDOW_RESTART_UNPROVEN\", observedCpu: null };\n        notifySafety(); return { status: \"disabled_after_safety_stop\" };\n      }\n      if (ports.shard()"
++  ],
++  [
++    "trace-accounting",
++    "      if (cpuDiagnostics) accounting = createCompatCpuAccounting(start.used, tick, sampleOrdinal);",
++    "      if (cpuDiagnostics) accounting = createCompatCpuAccounting(start.used, tick, sampleOrdinal, traceCommitment);"
++  ],
++  [
++    "budget-latch",
++    "        latestCpu = c.used;\n        return c.used - start.used < cfg.maxSampleCpu",
++    "        latestCpu = c.used;\n        latch(tick!, c.used - start.used);\n        return !safetyStop && c.used - start.used < cfg.maxSampleCpu"
++  ],
++  [
++    "boundary-latch",
++    "            sampleAccounting.attributionBoundary(c.used, phase);\n            latestCpu = c.used;",
++    "            sampleAccounting.attributionBoundary(c.used, phase);\n            latestCpu = c.used;\n            latch(tick!, c.used - start.used);"
++  ],
++  [
++    "call-brackets",
++    "      const memory = ports.memory();",
++    "      // Two added CPU reads per actual traced build. Argument creation stays\n      // inside parentStart -> callStart; wrapper/prologue stays before bodyStart.\n      const markCommitment = (name: \"callStart\" | \"callEnd\") => {\n        if (!traceCommitment || !accounting) return;\n        const c = ports.cpu();\n        if (!validCpu(c) || c.used < latestCpu) throw new Error(\"invalid CPU progression\");\n        accounting.commitmentMark(name, c.used);\n        latestCpu = c.used;\n        latch(tick!, c.used - start.used);\n      };\n      const memory = ports.memory();"
++  ],
++  [
++    "invocation-after-guard",
++    "      else if (readers && observations && budget(\"commitmentBuild\")) {\n        accounting?.invoked(\"commitmentBuild\");\n",
++    "      else if (readers && observations && budget(\"commitmentBuild\")) {\n"
++  ],
++  [
++    "build-options",
++    "        const index = readers.buildCommitments({ tick, tasks: tasks.value, reservations: reservations.value, observation: observations, compatDiagnostics: builderDiagnostics });",
++    "        const commitmentOptions = { tick, tasks: tasks.value, reservations: reservations.value, observation: observations, compatDiagnostics: builderDiagnostics };\n        markCommitment(\"callStart\");\n        if (safetyStop || (traceCommitment && latestCpu - start.used >= cfg.maxSampleCpu)) {\n          limited = true;\n          report.commitments = { status: \"not_read_cpu_budget\", rows: null };\n        } else {\n        accounting?.invoked(\"commitmentBuild\");\n        const index = readers.buildCommitments(commitmentOptions);\n        markCommitment(\"callEnd\");"
++  ],
++  [
++    "guard-close",
++    "          rows: fields, completeness: { ...c }, allTableScan: true, tableLimitEach: TABLE_LIMIT };\n",
++    "          rows: fields, completeness: { ...c }, allTableScan: true, tableLimitEach: TABLE_LIMIT };\n        }\n"
++  ],
++  [
++    "report-revision",
++    "      report.cooperativeBudget = true;",
++    "      report.cooperativeBudget = true;\n      if (traceCommitment) report.diagnosticRevision = \"XIII\";\n      if (localSafetyStop) report.localSafety = { thresholdCpu: 5, latched: !!safetyStop,\n        reason: safetyStop?.reason ?? null, scope: \"preview_heap_instance\", currentCallPreempted: false };"
++  ],
++  [
++    "ending-latch",
++    "      latestCpu = end.used;\n      previous =",
++    "      latestCpu = end.used;\n      latch(tick!, end.used - start.used);\n      previous ="
++  ],
++  [
++    "control-notice",
++    "        previousCpuProfile = accounting.snapshot(\"afterRetention\");\n      }\n      return { status };",
++    "        previousCpuProfile = accounting.snapshot(\"afterRetention\");\n      }\n      notifySafety();\n      return { status };"
++  ],
++  [
++    "stats-latch",
++    "    cpuProfile: previousCpuProfile }) };",
++    "    cpuProfile: previousCpuProfile,\n    ...(localSafetyStop ? { safetyStopped: !!safetyStop, safetyReason: safetyStop?.reason ?? null } : {}) }) };"
++  ]
++];
++function apply(text,reverse=false) {
++  for (const [name,before,after] of reverse ? [...RULES].reverse() : RULES) {
++    const from=reverse?after:before,to=reverse?before:after;
++    if (text.split(from).length!==2) { const e=new Error('BOUNDARY_XIII_TRANSFORM_COUNT:'+name); e.code='BOUNDARY_XIII_TRANSFORM_COUNT'; throw e; }
++    text=text.replace(from,()=>to);
++  }
++  return text;
++}
++module.exports={transform:text=>apply(text),restore:text=>apply(text,true),rules:Object.freeze(RULES.map(([name])=>Object.freeze({name,replacements:1})))};
+diff --git a/src/runtime/treasuryCompatCpu.ts b/src/runtime/treasuryCompatCpu.ts
+index c66f1a9..0ba1b46 100644
+--- a/src/runtime/treasuryCompatCpu.ts
++++ b/src/runtime/treasuryCompatCpu.ts
+@@ -45,0 +46,11 @@ export interface CompatCpuAttribution {
++export const COMPAT_COMMITMENT_MARKS = Object.freeze([
++  "parentStart", "callStart", "bodyStart", "bodyEnd", "callEnd", "parentEnd",
++] as const);
++export type CompatCommitmentMark = typeof COMPAT_COMMITMENT_MARKS[number];
++export interface CompatCommitmentEnvelope {
++  readonly version: 1;
++  readonly status: "not_called" | "complete" | "incomplete";
++  /** Offsets from this sample's start; consecutive differences are inclusive.
++   * The inner body span overlaps the four IX commitment intervals. */
++  readonly marks: Readonly<Partial<Record<CompatCommitmentMark, number>>>;
++}
+@@ -55,0 +67 @@ export interface CompatCpuProfile {
++  readonly commitmentEnvelope?: CompatCommitmentEnvelope;
+@@ -67 +79 @@ export interface CompatCpuProfile {
+-export function createCompatCpuAccounting(start: number, tick: number, sampleOrdinal: number) {
++export function createCompatCpuAccounting(start: number, tick: number, sampleOrdinal: number, traceCommitment = false) {
+@@ -80,0 +93,16 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
++  const commitmentMarks: Partial<Record<CompatCommitmentMark, number>> = {};
++  let markIndex = -1, markLast = start;
++  const mark = (name: CompatCommitmentMark, used: number) => {
++    if (!traceCommitment) return;
++    const i = COMPAT_COMMITMENT_MARKS.indexOf(name);
++    if (i < 0 || i <= markIndex || !Number.isFinite(used) || used < markLast || used < start)
++      throw new Error("invalid commitment envelope boundary");
++    commitmentMarks[name] = used - start;
++    markIndex = i; markLast = used;
++  };
++  const envelope = (): CompatCommitmentEnvelope | undefined => !traceCommitment ? undefined : Object.freeze({
++    version: 1 as const,
++    status: calls.commitmentBuild === 0 ? "not_called" as const
++      : COMPAT_COMMITMENT_MARKS.every(k => commitmentMarks[k] !== undefined) ? "complete" as const : "incomplete" as const,
++    marks: Object.freeze({ ...commitmentMarks }),
++  });
+@@ -81,0 +110 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
++    commitmentMark(name: "callStart" | "callEnd", used: number): void { mark(name, used); },
+@@ -84,0 +114,2 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
++      if (traceCommitment && phase !== "commitmentBuild" && next === "commitmentBuild") mark("parentStart", used);
++      if (traceCommitment && phase === "commitmentBuild" && next && next !== "commitmentBuild") mark("parentEnd", used);
+@@ -98,0 +130,2 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
++      if (traceCommitment && next === "commitmentSetup") mark("bodyStart", used);
++      if (traceCommitment && attributionActive === "commitmentFinalize" && next === undefined) mark("bodyEnd", used);
+@@ -127 +160 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
+-      const a = attribution();
++      const a = attribution(), e = envelope();
+@@ -129 +162,2 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
+-        checkpoints, calls: Object.freeze({ ...calls }), phases: Object.freeze({ ...phases }), ...(a ? { attribution: a } : {}) });
++        checkpoints, calls: Object.freeze({ ...calls }), phases: Object.freeze({ ...phases }),
++        ...(a ? { attribution: a } : {}), ...(e ? { commitmentEnvelope: e } : {}) });
+diff --git a/src/runtime/treasuryCompatRead.ts b/src/runtime/treasuryCompatRead.ts
+index c3297bc..fe4eb53 100644
+--- a/src/runtime/treasuryCompatRead.ts
++++ b/src/runtime/treasuryCompatRead.ts
+@@ -142 +142 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
+-  options: { cpuDiagnostics?: boolean } = {}) {
++  options: { cpuDiagnostics?: boolean; commitmentBoundaryDiagnostics?: boolean; localSafetyStop?: boolean } = {}) {
+@@ -143,0 +144,2 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
++  const traceCommitment = cpuDiagnostics && options?.commitmentBoundaryDiagnostics === true;
++  const localSafetyStop = options?.localSafetyStop === true;
+@@ -154,0 +157,16 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
++  // XIII: local containment, never an engine interrupt or a production rollback.
++  // No Memory write. A new heap arriving after the first due tick cannot re-arm.
++  let safetyStop: { tick: number; reason: string; observedCpu: number | null } | undefined;
++  let safetyNoticeAttempted = false;
++  const latch = (tick: number, used: number) => {
++    if (localSafetyStop && used > 5 && !safetyStop)
++      safetyStop = { tick, reason: "CPU_OBSERVED_SAFETY_STOP", observedCpu: used };
++  };
++  const notifySafety = () => {
++    if (!safetyStop || safetyNoticeAttempted) return;
++    safetyNoticeAttempted = true;
++    try { ports.emit(JSON.stringify({ kind: "treasury-compat-safety-stop", version: 1,
++      ...safetyStop, thresholdCpu: 5, stopsFutureSamples: true,
++      currentCallPreempted: false, scope: "preview_heap_instance", authorizesActions: false })); }
++    catch { /* Stop remains latched even if the one control notification fails. */ }
++  };
+@@ -162,0 +181 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
++      if (safetyStop) return { status: "disabled_after_safety_stop" };
+@@ -167,0 +187,4 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
++      if (localSafetyStop && sampleOrdinal === 0 && tick !== Math.ceil(cfg.startTick / cfg.intervalTicks) * cfg.intervalTicks) {
++        safetyStop = { tick, reason: "WINDOW_RESTART_UNPROVEN", observedCpu: null };
++        notifySafety(); return { status: "disabled_after_safety_stop" };
++      }
+@@ -178 +201 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
+-      if (cpuDiagnostics) accounting = createCompatCpuAccounting(start.used, tick, sampleOrdinal);
++      if (cpuDiagnostics) accounting = createCompatCpuAccounting(start.used, tick, sampleOrdinal, traceCommitment);
+@@ -185 +208,2 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
+-        return c.used - start.used < cfg.maxSampleCpu && c.tickLimit - c.used >= cfg.reserveCpu && c.bucket >= cfg.minBucket;
++        latch(tick!, c.used - start.used);
++        return !safetyStop && c.used - start.used < cfg.maxSampleCpu && c.tickLimit - c.used >= cfg.reserveCpu && c.bucket >= cfg.minBucket;
+@@ -198,0 +223 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
++            latch(tick!, c.used - start.used);
+@@ -202,0 +228,10 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
++      // Two added CPU reads per actual traced build. Argument creation stays
++      // inside parentStart -> callStart; wrapper/prologue stays before bodyStart.
++      const markCommitment = (name: "callStart" | "callEnd") => {
++        if (!traceCommitment || !accounting) return;
++        const c = ports.cpu();
++        if (!validCpu(c) || c.used < latestCpu) throw new Error("invalid CPU progression");
++        accounting.commitmentMark(name, c.used);
++        latestCpu = c.used;
++        latch(tick!, c.used - start.used);
++      };
+@@ -283,0 +319,6 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
++        const commitmentOptions = { tick, tasks: tasks.value, reservations: reservations.value, observation: observations, compatDiagnostics: builderDiagnostics };
++        markCommitment("callStart");
++        if (safetyStop || (traceCommitment && latestCpu - start.used >= cfg.maxSampleCpu)) {
++          limited = true;
++          report.commitments = { status: "not_read_cpu_budget", rows: null };
++        } else {
+@@ -285 +326,2 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
+-        const index = readers.buildCommitments({ tick, tasks: tasks.value, reservations: reservations.value, observation: observations, compatDiagnostics: builderDiagnostics });
++        const index = readers.buildCommitments(commitmentOptions);
++        markCommitment("callEnd");
+@@ -302,0 +345 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
++        }
+@@ -317,0 +361,3 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
++      if (traceCommitment) report.diagnosticRevision = "XIII";
++      if (localSafetyStop) report.localSafety = { thresholdCpu: 5, latched: !!safetyStop,
++        reason: safetyStop?.reason ?? null, scope: "preview_heap_instance", currentCallPreempted: false };
+@@ -335,0 +382 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
++      latch(tick!, end.used - start.used);
+@@ -345,0 +393 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
++      notifySafety();
+@@ -359 +407,2 @@ export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPo
+-    cpuProfile: previousCpuProfile }) };
++    cpuProfile: previousCpuProfile,
++    ...(localSafetyStop ? { safetyStopped: !!safetyStop, safetyReason: safetyStop?.reason ?? null } : {}) }) };
+diff --git a/src/runtime/treasuryCompatRuntime.ts b/src/runtime/treasuryCompatRuntime.ts
+index 5916fbc..56747c1 100644
+--- a/src/runtime/treasuryCompatRuntime.ts
++++ b/src/runtime/treasuryCompatRuntime.ts
+@@ -15 +15 @@ const preview = createTreasuryCompatPreview(TREASURY_COMPAT_CONFIG, {
+-}, { cpuDiagnostics: true });
++}, { cpuDiagnostics: true, commitmentBoundaryDiagnostics: true, localSafetyStop: true });
+diff --git a/test/treasury-compat/boundary-attribution-xiii.spec.cjs b/test/treasury-compat/boundary-attribution-xiii.spec.cjs
+new file mode 100644
+index 0000000..01f51a7
+--- /dev/null
++++ b/test/treasury-compat/boundary-attribution-xiii.spec.cjs
+@@ -0,0 +1,36 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
++const S=require('./loader-test-support.cjs'),H=S.H,G=require('../../scripts/build-treasury-compat-loader.cjs'),N=G.N;
++const marks=['parentStart','callStart','bodyStart','bodyEnd','callEnd','parentEnd'];
++const get=()=>H.load('treasuryCompatCpu.ts');
++const old=()=>fs.readFileSync(path.join(__dirname,'fixtures/reader-before-boundary-attribution-xiii.ts.txt'),'utf8');
++const live=()=>fs.readFileSync(H.file('treasuryCompatRead.ts'),'utf8');
++const reports=s=>s.lines.map(x=>JSON.parse(x)).filter(x=>x.kind==='treasury-legacy-read-bridge');
++function scene(setup=()=>{},trace=true,safety=true){const s=S.make();s.cfg={...s.cfg,startTick:100,endTick:400};s.step=.001;setup(s);s.observer=s.api.createTreasuryCompatPreview(s.cfg,s.ports,{cpuDiagnostics:true,commitmentBoundaryDiagnostics:trace,localSafetyStop:safety});return s;}
++function envelope(s){return reports(s).at(-1).cpuProfile.commitmentEnvelope;}
++const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
++function fakeAccounting(){const a=get().createCompatCpuAccounting(100,100,1,true);a.invoked('readerLoad');a.invoked('observationBuild');a.checkpoint(101,'commitmentBuild');a.commitmentMark('callStart',102);a.invoked('commitmentBuild');a.attributionBoundary(120,'commitmentSetup');a.attributionBoundary(121,'commitmentTasks');a.attributionBoundary(122,'commitmentReservations');a.attributionBoundary(123,'commitmentFinalize');a.attributionBoundary(124);a.commitmentMark('callEnd',125);a.checkpoint(126,'report');return a;}
++test('XIII exact reversible transform and public IX-to-live chain',()=>{assert.equal(N.transform(old()),live());assert.equal(N.restore(live()),old());const ix=fs.readFileSync(path.join(H.ROOT,G.PREVIEW_FIXTURE),'utf8');assert.equal(G.P.transform(ix),live());assert.equal(G.P.restore(live()),ix);assert.throws(()=>N.transform(old().replace('const memory = ports.memory();','const memory=ports.memory();')),/BOUNDARY_XIII_TRANSFORM_COUNT/);});
++test('XIII six marks close parent, call and measured body without subtracting overhead',()=>{const p=fakeAccounting().snapshot('beforeSerialization'),m=p.commitmentEnvelope.marks;assert.equal(p.commitmentEnvelope.status,'complete');assert.deepEqual(H.json(m),{parentStart:1,callStart:2,bodyStart:20,bodyEnd:24,callEnd:25,parentEnd:26});near(m.parentEnd-m.parentStart,p.phases.commitmentBuild);near(m.bodyEnd-m.bodyStart,Object.values(p.attribution.intervals).reduce((n,x)=>n+x,0));near(m.bodyStart-m.callStart,18);});
++test('XIII call-not-made is distinct from zero cost',()=>{const a=get().createCompatCpuAccounting(0,100,1,true);a.checkpoint(.2,'commitmentBuild');a.checkpoint(.3,'report');const p=a.snapshot('beforeSerialization');assert.equal(p.calls.commitmentBuild,0);assert.equal(p.commitmentEnvelope.status,'not_called');assert.equal(p.commitmentEnvelope.marks.callStart,undefined);near(p.phases.commitmentBuild,.1);});
++test('XIII missing inner marks are incomplete rather than synthesized',()=>{const a=get().createCompatCpuAccounting(0,100,1,true);a.checkpoint(.1,'commitmentBuild');a.commitmentMark('callStart',.2);a.invoked('commitmentBuild');a.commitmentMark('callEnd',.3);a.checkpoint(.4,'report');assert.equal(a.snapshot('beforeSerialization').commitmentEnvelope.status,'incomplete');});
++test('XIII duplicate and regressed envelope boundaries fail closed',()=>{const a=get().createCompatCpuAccounting(0,100,1,true);a.checkpoint(.1,'commitmentBuild');a.commitmentMark('callStart',.2);assert.throws(()=>a.commitmentMark('callStart',.3));const b=get().createCompatCpuAccounting(0,100,1,true);b.checkpoint(.4,'commitmentBuild');assert.throws(()=>b.commitmentMark('callStart',.3));});
++test('XIII non-finite envelope boundary is rejected',()=>{for(const v of [NaN,Infinity,-1]){const a=get().createCompatCpuAccounting(0,100,1,true);a.checkpoint(.1,'commitmentBuild');assert.throws(()=>a.commitmentMark('callStart',v));}});
++test('XIII snapshots are immutable and tail does not repeat envelope',()=>{const a=fakeAccounting(),p=a.snapshot('beforeSerialization');assert.ok(Object.isFrozen(p.commitmentEnvelope));assert.ok(Object.isFrozen(p.commitmentEnvelope.marks));assert.equal(a.snapshot('afterRetention').commitmentEnvelope,undefined);const b=get().createCompatCpuAccounting(0,200,2,true);assert.equal(b.snapshot('fault').commitmentEnvelope.marks.callStart,undefined);});
++test('XIII real full builder has complete trace and 4 projection rows',()=>{const s=scene();s.observer.run();const r=reports(s)[0],e=envelope(s);assert.equal(e.status,'complete');assert.deepEqual(Object.keys(e.marks),marks);assert.equal(r.commitments.rows.length,4);assert.equal(r.cpuProfile.attribution.boundaries,12);assert.equal(r.cpuProfile.attribution.work.projectionIndexQueries,16);near(e.marks.parentEnd-e.marks.parentStart,r.cpuProfile.phases.commitmentBuild);near(e.marks.bodyEnd-e.marks.bodyStart,['commitmentSetup','commitmentTasks','commitmentReservations','commitmentFinalize'].reduce((n,k)=>n+r.cpuProfile.attribution.intervals[k],0));});
++for(const count of [0,14,256])test('XIII constant added probes with '+count+' tasks and reservations',()=>{const setup=s=>{for(let i=0;i<count;i++){s.memory.data.resourceControl.tasks[i]=S.task({id:'t'+i});s.memory.runtime.resourceReservations[i]=S.reservation();}};const a=scene(setup,false,false),b=scene(setup,true,false);a.observer.run();b.observer.run();assert.equal(b.calls.cpu-a.calls.cpu,2);assert.equal(envelope(b).status,'complete');assert.equal(reports(b)[0].cpuProfile.attribution.work.commitmentTaskRecords,count);assert.equal(reports(b)[0].cpuProfile.attribution.work.commitmentReservationRecords,count);});
++test('XIII call-entry injection stays outside body, and stops later samples',()=>{const s=scene(s=>{const base=s.ports.readers;s.ports.readers=()=>{const r=base();return {...r,buildCommitments(o){s.cpuValue+=19;return r.buildCommitments(o);}};};});s.observer.run();const e=envelope(s);assert.ok(e.marks.bodyStart-e.marks.callStart>=19);assert.ok(e.marks.bodyEnd-e.marks.bodyStart<1);assert.equal(s.observer.stats().safetyStopped,true);assert.equal(s.lines.filter(x=>JSON.parse(x).kind==='treasury-compat-safety-stop').length,1);const before=JSON.stringify(s.calls),logs=s.lines.length;s.game.time=200;s.observer.run();assert.equal(JSON.stringify(s.calls),before);assert.equal(s.lines.length,logs);});
++test('XIII body injection is inside measured body, not relabeled as entry',()=>{const s=scene(s=>{const base=s.ports.readers;s.ports.readers=()=>{const r=base();return {...r,buildCommitments(o){const d=o.compatDiagnostics;return r.buildCommitments({...o,compatDiagnostics:{...d,boundary(n){if(n==='commitmentTasks')s.cpuValue+=19;d.boundary(n);}}});}};};});s.observer.run();const e=envelope(s);assert.ok(e.marks.bodyEnd-e.marks.bodyStart>=19);assert.ok(e.marks.bodyStart-e.marks.callStart<1);});
++test('XIII call-return injection stays outside measured body',()=>{const s=scene(s=>{const base=s.ports.readers;s.ports.readers=()=>{const r=base();return {...r,buildCommitments(o){const x=r.buildCommitments(o);s.cpuValue+=19;return x;}};};});s.observer.run();const e=envelope(s);assert.ok(e.marks.callEnd-e.marks.bodyEnd>=19);assert.ok(e.marks.bodyEnd-e.marks.bodyStart<1);});
++test('XIII tail overrun latches even when emitted prefix was below five',()=>{const s=scene(s=>{s.emitCost=6;});s.observer.run();assert.ok(reports(s)[0].cpuBeforeSerializationAndEmit<2);assert.equal(s.observer.stats().safetyStopped,true);const calls=H.json(s.calls);s.game.time=200;s.observer.run();assert.deepEqual(s.calls,calls);});
++test('XIII notification exception cannot clear the latch or escape',()=>{const s=scene(s=>{const emit=s.ports.emit;s.ports.emit=line=>{if(JSON.parse(line).kind==='treasury-compat-safety-stop')throw new Error('test log failed');emit(line);};s.emitCost=6;});assert.doesNotThrow(()=>s.observer.run());assert.equal(s.observer.stats().safetyStopped,true);s.game.time=200;assert.equal(s.observer.run().status,'disabled_after_safety_stop');});
++test('XIII reset after first due tick cannot re-arm a later sample',()=>{const s=scene(s=>{s.game.time=200;});assert.equal(s.observer.run().status,'disabled_after_safety_stop');assert.equal(s.calls.memory,0);assert.equal(s.calls.cpu,0);assert.equal(s.calls.readers,0);assert.equal(s.observer.stats().safetyReason,'WINDOW_RESTART_UNPROVEN');});
++test('XIII first due CPU admission skipped cannot silently shift the window',()=>{const s=scene(s=>{s.bucket=0;});assert.equal(s.observer.run().status,'cpu_skipped');s.bucket=9000;s.game.time=200;assert.equal(s.observer.run().status,'disabled_after_safety_stop');assert.equal(s.calls.readers,0);});
++test('XIII OFF does not touch any port',()=>{const s=scene(s=>{s.cfg={...s.cfg,enabled:false};});s.observer.run();assert.equal(Object.values(s.calls).reduce((n,v)=>n+v,0),0);assert.equal(s.lines.length,0);});
++test('XIII no extra probes when builder never called',()=>{const f=s=>{s.memory.data.resourceControl.tasks=null;};const a=scene(f,false,false),b=scene(f,true,false);a.observer.run();b.observer.run();assert.equal(a.calls.cpu,b.calls.cpu);assert.equal(envelope(b).status,'not_called');
++ const t=scene(x=>{let count=0;const port=x.ports.cpu;x.ports.cpu=()=>{count++;if(count===17)x.cpuValue+=2.1;return port();};});
++ t.observer.run();assert.equal(reports(t)[0].cpuProfile.calls.commitmentBuild,0);assert.equal(reports(t)[0].status,'partial_cpu_budget');
++});
++test('XIII measurement fault disables preview and cannot escape old bot',()=>{const s=scene(s=>{let n=0;s.ports.cpu=()=>({used:++n>3?NaN:.1,tickLimit:100,bucket:9000});});assert.doesNotThrow(()=>s.observer.run());assert.equal(s.observer.stats().fault,true);assert.equal(s.observer.run().status,'disabled_after_fault');});
++for(const name of Object.keys(S.scenarios))test('XIII business parity and no writes: '+name,()=>{const a=S.make(),b=S.make();a.api=S.readerApi(old());S.scenarios[name](a);S.scenarios[name](b);a.observer=a.api.createTreasuryCompatPreview(a.cfg,a.ports);b.observer=b.api.createTreasuryCompatPreview(b.cfg,b.ports);const ga={writes:0},gb={writes:0};a.memory=H.guard(a.memory,ga);b.memory=H.guard(b.memory,gb);for(let i=1;i<=4;i++){a.game.time=b.game.time=i*100;a.cpuValue=b.cpuValue=.1;a.observer.run();b.observer.run();}assert.equal(JSON.stringify(a.lines),JSON.stringify(b.lines));assert.deepEqual([ga.writes,gb.writes],[0,0]);});
++test('XIII runtime enables trace and local stop without modifying frozen OFF config',()=>{const text=fs.readFileSync(H.file('treasuryCompatRuntime.ts'),'utf8');assert.match(text,/commitmentBoundaryDiagnostics: true/);assert.match(text,/localSafetyStop: true/);assert.match(fs.readFileSync(H.file('treasuryCompatConfig.ts'),'utf8'),/enabled: false/);});
+diff --git a/test/treasury-compat/envelope-optimization.spec.cjs b/test/treasury-compat/envelope-optimization.spec.cjs
+index 01a716b..c880acd 100644
+--- a/test/treasury-compat/envelope-optimization.spec.cjs
++++ b/test/treasury-compat/envelope-optimization.spec.cjs
+@@ -12 +12,2 @@ const xiCpu = () => fs.readFileSync(path.join(__dirname, 'fixtures/cpu-before-en
+-const xiiReader = () => fs.readFileSync(H.file('treasuryCompatRead.ts'), 'utf8').replace(/\r\n/g, '\n');
++const xiiReader = () => fs.readFileSync(path.join(__dirname, 'fixtures/reader-before-boundary-attribution-xiii.ts.txt'), 'utf8').replace(/\r\n/g, '\n');
++const currentReader = () => fs.readFileSync(H.file('treasuryCompatRead.ts'), 'utf8').replace(/\r\n/g, '\n');
+@@ -46 +47 @@ test('XII generator reproduces committed core, preview, provenance and manifest
+-  assert.equal(result[G.PREVIEW].length, 22660); assert.equal(G.D.rules.length, 8);
++  assert.equal(result[G.PREVIEW].length, 25626); assert.equal(G.D.rules.length, 8);
+@@ -48 +49 @@ test('XII generator reproduces committed core, preview, provenance and manifest
+-  assert.equal(G.P.transform(ix), xiiReader()); assert.equal(G.P.restore(xiiReader()), ix);
++  assert.equal(G.P.transform(ix), currentReader()); assert.equal(G.P.restore(currentReader()), ix);
+@@ -99 +100 @@ test('XII source manifest retains all output identities and records envelope fla
+-  assert.equal(m.loaderOptimization.revision, 'XII'); assert.equal(m.loaderOptimization.diagnosticCompletionTailOnly, true);
++  assert.equal(m.loaderOptimization.revision, 'XIII'); assert.equal(m.loaderOptimization.diagnosticCompletionTailOnly, true);
+diff --git a/test/treasury-compat/fixtures/cpu-before-boundary-attribution-xiii.ts.txt b/test/treasury-compat/fixtures/cpu-before-boundary-attribution-xiii.ts.txt
+new file mode 100644
+index 0000000..c66f1a9
+--- /dev/null
++++ b/test/treasury-compat/fixtures/cpu-before-boundary-attribution-xiii.ts.txt
+@@ -0,0 +1,132 @@
++/** Bounded diagnostic accounting, NOT an authorization or CPU-budget authority.
++ * Values come only from the caller's existing CPU port. Probe/diagnostic overhead
++ * remains in cumulative costs; no estimated overhead is subtracted. No Game,
++ * Memory, module loading, clocks, I/O or persistent cache are used here.
++ */
++export const COMPAT_CPU_PHASES = Object.freeze([
++  "legacyInputs", "directRead", "readerLoad", "observationBuild",
++  "coreCompare", "commitmentBuild", "commitmentProjection", "report",
++  "serializationAndSize", "emit", "retention",
++] as const);
++export type CompatCpuPhase = typeof COMPAT_CPU_PHASES[number];
++export type CompatCpuCall = "readerLoad" | "observationBuild" | "commitmentBuild";
++
++/** Coarse builder intervals. They are intentionally bounded: one boundary per
++ * region, never one CPU read per task, reservation, resource key or query.
++ * A subphase is nested inside an existing top-level phase and MUST NOT be added
++ * to the parent phase to derive total cost.
++ */
++export const COMPAT_CPU_SUBPHASES = Object.freeze([
++  "observationSetup", "observationRooms", "observationFinalize", "observationView",
++  "commitmentSetup", "commitmentTasks", "commitmentReservations", "commitmentFinalize",
++  "projectionRows",
++] as const);
++export type CompatCpuSubphase = typeof COMPAT_CPU_SUBPHASES[number];
++
++/** Primitive work counters describe the composition of the coarse intervals.
++ * They are not CPU weights and are not used for authorization or pass/fail.
++ */
++export const COMPAT_CPU_WORK_KEYS = Object.freeze([
++  "observationRooms", "observationLocations", "observationExistingLocations", "observationResourceKeys",
++  "commitmentTaskRecords", "commitmentPendingTaskRecords", "commitmentTaskInvalidEvents",
++  "commitmentDemandHealthChecks", "commitmentReceiverHealthChecks", "commitmentRouteCandidates",
++  "commitmentReservationRecords", "commitmentReservationInvalidEvents", "commitmentOwnerEvaluations",
++  "commitmentActiveReservations", "commitmentScopeBuckets", "commitmentRoomBuckets",
++  "commitmentMergeRoutes", "commitmentReservationScopes",
++  "projectionRowsPlanned", "projectionRowsCompleted", "projectionIndexQueries",
++] as const);
++export type CompatCpuWorkKey = typeof COMPAT_CPU_WORK_KEYS[number];
++export interface CompatCpuAttribution {
++  readonly version: 1;
++  readonly boundaries: number;
++  readonly active: CompatCpuSubphase | null;
++  readonly intervals: Readonly<Partial<Record<CompatCpuSubphase, number>>>;
++  readonly work: Readonly<Partial<Record<CompatCpuWorkKey, number>>>;
++}
++export interface CompatCpuProfile {
++  readonly version: 1;
++  readonly tick: number;
++  readonly sampleOrdinal: number;
++  readonly boundary: "beforeSerialization" | "afterRetention" | "fault";
++  readonly elapsed: number;
++  readonly checkpoints: number;
++  readonly calls: Readonly<Record<CompatCpuCall, number>>;
++  readonly phases: Readonly<Partial<Record<CompatCpuPhase, number>>>;
++  readonly attribution?: CompatCpuAttribution;
++  /** After-retention snapshots are a continuation for the preceding emitted
++   * prefix. They contain only tail phases; the prior report remains authoritative
++   * for calls, parent-prefix phases and attribution. */
++  readonly completion?: "tail_only";
++}
++/** One instance per admitted sample; snapshots contain primitive values only.
++ * Each interval is charged to the phase that was active BEFORE the checkpoint.
++ * Unvisited phases are absent, not invented zero-cost measurements.
++ * Phase and subphase costs are inclusive intervals, not profiler-overhead-
++ * corrected timings. Subphases overlap their parent phase by design.
++ */
++export function createCompatCpuAccounting(start: number, tick: number, sampleOrdinal: number) {
++  if (![start, tick, sampleOrdinal].every(Number.isFinite) || start < 0
++    || !Number.isSafeInteger(tick) || tick < 0
++    || !Number.isSafeInteger(sampleOrdinal) || sampleOrdinal < 1) throw new Error("invalid CPU accounting start");
++  let last = start, phase: CompatCpuPhase = "legacyInputs", checkpoints = 1;
++  const phases: Partial<Record<CompatCpuPhase, number>> = { legacyInputs: 0 };
++  const calls: Record<CompatCpuCall, number> = { readerLoad: 0, observationBuild: 0, commitmentBuild: 0 };
++  let attributionLast: number | null = null, attributionActive: CompatCpuSubphase | null = null, attributionBoundaries = 0;
++  const intervals: Partial<Record<CompatCpuSubphase, number>> = {};
++  const work: Partial<Record<CompatCpuWorkKey, number>> = {};
++  const attribution = () => attributionBoundaries || Object.keys(work).length
++    ? Object.freeze({ version: 1 as const, boundaries: attributionBoundaries, active: attributionActive,
++      intervals: Object.freeze({ ...intervals }), work: Object.freeze({ ...work }) })
++    : undefined;
++  return {
++    checkpoint(used: number, next?: CompatCpuPhase): void {
++      if (!Number.isFinite(used) || used < last || !COMPAT_CPU_PHASES.includes(next ?? phase))
++        throw new Error("invalid CPU accounting checkpoint");
++      phases[phase] = (phases[phase] ?? 0) + (used - last);
++      last = used;
++      checkpoints++;
++      if (next) { phase = next; phases[phase] ??= 0; }
++    },
++    invoked(call: CompatCpuCall): void {
++      if (!Object.prototype.hasOwnProperty.call(calls, call) || calls[call] !== 0)
++        throw new Error("invalid CPU diagnostic invocation");
++      calls[call]++;
++    },
++    attributionBoundary(used: number, next?: CompatCpuSubphase): void {
++      if (!Number.isFinite(used) || used < start || (attributionLast !== null && used < attributionLast)
++        || (next !== undefined && !COMPAT_CPU_SUBPHASES.includes(next)))
++        throw new Error("invalid CPU attribution boundary");
++      if (attributionActive !== null && attributionLast !== null)
++        intervals[attributionActive] = (intervals[attributionActive] ?? 0) + (used - attributionLast);
++      attributionBoundaries++;
++      attributionActive = next ?? null;
++      attributionLast = next === undefined ? null : used;
++      if (next) intervals[next] ??= 0;
++    },
++    attributionWork(values: Readonly<Partial<Record<CompatCpuWorkKey, number>>>): void {
++      if (!values || typeof values !== "object") throw new Error("invalid CPU attribution work");
++      for (const [key, value] of Object.entries(values)) {
++        if (!COMPAT_CPU_WORK_KEYS.includes(key as CompatCpuWorkKey) || value === undefined
++          || !Number.isSafeInteger(value) || value < 0) throw new Error("invalid CPU attribution work");
++        const next = (work[key as CompatCpuWorkKey] ?? 0) + value;
++        if (!Number.isSafeInteger(next)) throw new Error("invalid CPU attribution work");
++        work[key as CompatCpuWorkKey] = next;
++      }
++    },
++    snapshot(boundary: CompatCpuProfile["boundary"]): CompatCpuProfile {
++      if (boundary === "afterRetention") {
++        // XII: the preceding report already carries the full prefix snapshot.
++        // Publish only the measured serialization/emit/retention continuation
++        // instead of serializing its attribution and parent phases a second time.
++        const tail: Partial<Record<CompatCpuPhase, number>> = {};
++        for (const key of ["serializationAndSize", "emit", "retention"] as const)
++          if (phases[key] !== undefined) tail[key] = phases[key];
++        return Object.freeze({ version: 1, tick, sampleOrdinal, boundary, elapsed: last - start,
++          checkpoints, calls: Object.freeze({ ...calls }), phases: Object.freeze(tail), completion: "tail_only" });
++      }
++      const a = attribution();
++      return Object.freeze({ version: 1, tick, sampleOrdinal, boundary, elapsed: last - start,
++        checkpoints, calls: Object.freeze({ ...calls }), phases: Object.freeze({ ...phases }), ...(a ? { attribution: a } : {}) });
++    },
++  };
++}
+diff --git a/test/treasury-compat/fixtures/reader-before-boundary-attribution-xiii.ts.txt b/test/treasury-compat/fixtures/reader-before-boundary-attribution-xiii.ts.txt
+new file mode 100644
+index 0000000..c3297bc
+--- /dev/null
++++ b/test/treasury-compat/fixtures/reader-before-boundary-attribution-xiii.ts.txt
+@@ -0,0 +1,360 @@
++/** Read compatibility preview for the old production bot, not a Treasury host.
++ * Reuses pinned production observation/commitment builders. Never computes a
++ * spendable balance, signs a permit, migrates a store or advances world sequence.
++ * One endpoint snapshot and one bounded CPU profile are retained. Reader caches
++ * remain per sample; only audited definition modules may be reused. Diagnostic
++ * profiles never contain a linked history.
++ */
++import type { CompatBuilderDiagnostics, CompatConfig, CompatPorts, CompatObservation } from "./treasuryCompatTypes";
++import { createCompatCpuAccounting, type CompatCpuPhase, type CompatCpuProfile, type CompatCpuSubphase, type CompatCpuWorkKey } from "./treasuryCompatCpu";
++
++type Rec = Record<string, unknown>;
++type Kind = "storage" | "terminal";
++const KINDS: readonly Kind[] = ["storage", "terminal"];
++const TABLE_LIMIT = 256;
++const sat = (n: number) => Math.min(n + 1, 999999999);
++const obj = (x: unknown): x is Rec => typeof x === "object" && x !== null && !Array.isArray(x);
++const nonneg = (x: unknown): x is number => typeof x === "number" && Number.isSafeInteger(x) && x >= 0;
++const finite = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x) && x >= 0;
++const own = (x: Rec, k: string) => Object.prototype.hasOwnProperty.call(x, k);
++const str = (x: unknown, n: number): x is string => typeof x === "string" && x.length > 0 && x.length <= n;
++
++export function validCompatConfig(c: CompatConfig): boolean {
++  return obj(c) && typeof c.enabled === "boolean" && str(c.shardName, 32)
++    && Array.isArray(c.rooms) && c.rooms.length > 0 && c.rooms.length <= 2
++    && c.rooms.every(r => typeof r === "string" && /^[WE]\d{1,3}[NS]\d{1,3}$/.test(r))
++    && new Set(c.rooms).size === c.rooms.length
++    && Array.isArray(c.resources) && c.resources.length > 0 && c.resources.length <= 4
++    && c.resources.every(r => typeof r === "string" && /^[A-Za-z0-9_]{1,32}$/.test(r))
++    && new Set(c.resources).size === c.resources.length
++    && nonneg(c.startTick) && nonneg(c.endTick) && c.endTick > c.startTick
++    && c.endTick - c.startTick <= 1200
++    && nonneg(c.intervalTicks) && c.intervalTicks >= 20 && c.intervalTicks <= 1000
++    && Math.ceil(c.startTick / c.intervalTicks) * c.intervalTicks <= c.endTick
++    && nonneg(c.minBucket) && c.minBucket <= 10000
++    && finite(c.maxSampleCpu) && c.maxSampleCpu > 0 && c.maxSampleCpu <= 10
++    && finite(c.reserveCpu) && c.reserveCpu >= 1 && c.reserveCpu <= 100
++    && nonneg(c.maxLogBytes) && c.maxLogBytes >= 1024 && c.maxLogBytes <= 16384;
++}
++export function compatUtf8Bytes(s: string): number {
++  let n = 0;
++  for (let i = 0; i < s.length; i++) {
++    const a = s.charCodeAt(i);
++    if (a < 128) n++;
++    else if (a < 2048) n += 2;
++    else if (a >= 0xd800 && a <= 0xdbff && i + 1 < s.length
++      && s.charCodeAt(i + 1) >= 0xdc00 && s.charCodeAt(i + 1) <= 0xdfff) { n += 4; i++; }
++    else n += 3;
++  }
++  return n;
++}
++/** Own-property path read. Missing, null, array, damaged parents and empty object
++ * remain distinct. No ensure()/normalizer or getter invocation on table entries. */
++function pathValue(root: unknown, path: readonly string[]): { status: string; value?: unknown } {
++  let p = root;
++  for (const key of path) {
++    if (!obj(p)) return { status: "invalid_parent" };
++    if (!own(p, key)) return { status: "absent" };
++    const desc = Object.getOwnPropertyDescriptor(p, key);
++    if (!desc || !("value" in desc)) return { status: "accessor_unreadable" };
++    p = desc.value;
++  }
++  return { status: "present", value: p };
++}
++type Found = { status: string; value?: unknown };
++function pathFrom(found: Found, path: readonly string[]): Found {
++  return found.status === "present" ? pathValue(found.value, path) : { status: found.status };
++}
++function tableFound(found: Found) {
++  if (found.status !== "present") return { status: found.status, count: null, value: undefined };
++  if (!obj(found.value)) return { status: "invalid_container", count: null, value: undefined };
++  // Stop enumeration at bound+1. Never aggregate a selected prefix as the table.
++  let count = 0;
++  for (const key in found.value) {
++    if (!own(found.value, key)) continue;
++    const descriptor = Object.getOwnPropertyDescriptor(found.value, key);
++    if (!descriptor || !("value" in descriptor)) return { status: "accessor_unreadable", count: null, value: undefined };
++    if (++count > TABLE_LIMIT) return { status: "over_bound", count: null, value: undefined };
++  }
++  return { status: count === 0 ? "empty" : "nonempty", count, value: found.value };
++}
++function table(root: unknown, path: readonly string[]) { return tableFound(pathValue(root, path)); }
++function summary(s: { status: string; count: number | null }) { return { status: s.status, count: s.count }; }
++type Direct = { id: string; used: number; free: number; capacity: number;
++  overCapacity: boolean; active: boolean; cooldown: number | null; amounts: Record<string, number> };
++function direct(room: Room | undefined, kind: Kind, resources: readonly string[]): { status: string; value?: Direct } {
++  try {
++    if (!room) return { status: "not_visible" };
++    if (room.controller?.my !== true) return { status: "not_owned" };
++    const s = room[kind];
++    if (!s) return { status: "absent" };
++    if (s.my !== true || !str(s.id, 96)) return { status: "unreadable" };
++    // Endpoint-local reference only: no value or Store is retained across calls.
++    // Core observation still obtains its own Store and independently enumerates it.
++    const store = s.store;
++    if (!store || typeof s.isActive !== "function") return { status: "unreadable" };
++    const used = store.getUsedCapacity(), free = store.getFreeCapacity(), capacity = store.getCapacity();
++    const active = s.isActive(), cooldown = kind === "terminal" ? (s as StructureTerminal).cooldown : null;
++    // Capacity reduction may leave inventory above capacity. Preserve signed
++    // free or a saturated zero, rather than inventing capacity=used+free.
++    if (!nonneg(used) || !nonneg(capacity) || !Number.isSafeInteger(free)
++      || !(used + free === capacity || (used > capacity && free === 0))
++      || typeof active !== "boolean" || (kind === "terminal" && !nonneg(cooldown))) return { status: "unreadable" };
++    const amounts: Record<string, number> = Object.create(null);
++    let selectedTotal = 0;
++    for (const r of resources) {
++      const a = store.getUsedCapacity(r as ResourceConstant);
++      if (!nonneg(a) || a > used) return { status: "unreadable" };
++      amounts[r] = a;
++      selectedTotal += a;
++    }
++    if (selectedTotal > used) return { status: "unreadable" };
++    return { status: "ok", value: { id: s.id, used, free, capacity, overCapacity: used > capacity,
++      active, cooldown, amounts } };
++  } catch { return { status: "unreadable" }; }
++}
++function legacyProjection(memory: unknown, room: string, kind: Kind, d: Direct, tick: number) {
++  const raw = pathValue(memory, ["runtime", "resourceControl"]);
++  if (raw.status !== "present") return { status: raw.status };
++  if (!obj(raw.value) || !nonneg(raw.value.updatedAt)) return { status: "unreadable" };
++  if (raw.value.updatedAt !== tick) return { status: raw.value.updatedAt > tick ? "future_tick" : "stale",
++    updatedAt: raw.value.updatedAt, comparisonPerformed: false };
++  const row = pathValue(raw.value, ["rooms", room]);
++  if (row.status !== "present") return { status: row.status, comparisonPerformed: false };
++  if (!obj(row.value)) return { status: "unreadable" };
++  const mismatches: string[] = [];
++  const usedKey = kind + "UsedCapacity", freeKey = kind + "FreeCapacity";
++  if (!Number.isSafeInteger(row.value[usedKey])) return { status: "unreadable", comparisonPerformed: false };
++  if (row.value[usedKey] !== d.used) mismatches.push(usedKey);
++  if (!Number.isSafeInteger(row.value[freeKey])) return { status: "unreadable", comparisonPerformed: false };
++  if (row.value[freeKey] !== d.free) mismatches.push(freeKey);
++  if (own(d.amounts, "energy")) {
++    const energyKey = kind + "Energy";
++    if (!Number.isSafeInteger(row.value[energyKey])) return { status: "unreadable", comparisonPerformed: false };
++    if (row.value[energyKey] !== d.amounts.energy) mismatches.push(energyKey);
++  }
++  return { status: mismatches.length ? "mismatch" : "match_capacity_and_selected_energy",
++    updatedAt: raw.value.updatedAt, comparisonPerformed: true, mismatches };
++}
++
++type Previous = { tick: number; endpoints: Record<string, Direct> };
++export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPorts,
++  options: { cpuDiagnostics?: boolean } = {}) {
++  const cpuDiagnostics = options?.cpuDiagnostics === true;
++  let sampleOrdinal = 0, previousCpuProfile: CompatCpuProfile | null = null;
++  let cfg = input, enabled = false, invalid = false;
++  try {
++    enabled = input.enabled === true;
++    if (enabled) {
++      invalid = !validCompatConfig(input);
++      if (!invalid) cfg = Object.freeze({ ...input, rooms: Object.freeze([...input.rooms]), resources: Object.freeze([...input.resources]) });
++    }
++  } catch { invalid = true; }
++  let fault = false, lastTick: number | undefined, previous: Previous | undefined;
++  let emitted = 0, cpuSkips = 0;
++  let previousRun: { tick: number; cpuIncludingEmit: number; emittedBytes: number; retainedPrimitiveChars: number } | null = null;
++  function run(): { status: string } {
++    let tick: number | undefined;
++    let accounting: ReturnType<typeof createCompatCpuAccounting> | undefined;
++    try {
++      if (invalid) { fault = true; return { status: "invalid_config" }; }
++      if (!enabled) return { status: "disabled" };
++      if (fault) return { status: "disabled_after_fault" };
++      tick = ports.tick();
++      if (!nonneg(tick)) throw new Error("invalid tick");
++      if (tick < cfg.startTick || tick > cfg.endTick) { previous = undefined; return { status: "outside_window" }; }
++      if (tick % cfg.intervalTicks !== 0 || tick === lastTick) return { status: "not_due" };
++      lastTick = tick;
++      if (ports.shard() !== cfg.shardName) return { status: "wrong_shard" };
++      const availableResources = ports.resources();
++      if (!cfg.resources.every(r => availableResources.includes(r))) throw new Error("invalid resource");
++      const start = ports.cpu();
++      const validCpu = (c: ReturnType<CompatPorts["cpu"]>) => finite(c.used) && finite(c.tickLimit) && nonneg(c.bucket);
++      if (!validCpu(start)) throw new Error("invalid CPU");
++      if (start.bucket < cfg.minBucket || start.tickLimit - start.used < cfg.maxSampleCpu + cfg.reserveCpu) {
++        cpuSkips = sat(cpuSkips); return { status: "cpu_skipped" };
++      }
++      sampleOrdinal = sat(sampleOrdinal);
++      if (cpuDiagnostics) accounting = createCompatCpuAccounting(start.used, tick, sampleOrdinal);
++      let latestCpu = start.used;
++      const budget = (next?: CompatCpuPhase) => {
++        const c = ports.cpu();
++        if (!validCpu(c) || c.used < latestCpu) throw new Error("invalid CPU progression");
++        accounting?.checkpoint(c.used, next);
++        latestCpu = c.used;
++        return c.used - start.used < cfg.maxSampleCpu && c.tickLimit - c.used >= cfg.reserveCpu && c.bucket >= cfg.minBucket;
++      };
++      // Builder boundaries are diagnostic-only and never authorize work. Each
++      // boundary samples the same CPU port, so its overhead remains in both the
++      // parent phase and the reported subphase interval. Builders emit bounded
++      // primitive work counters instead of sampling once per record/key/query.
++      const builderDiagnostics: CompatBuilderDiagnostics | undefined = accounting ? (() => {
++        const sampleAccounting = accounting;
++        return Object.freeze({
++          boundary(phase?: CompatCpuSubphase) {
++            const c = ports.cpu();
++            if (!validCpu(c) || c.used < latestCpu) throw new Error("invalid CPU progression");
++            sampleAccounting.attributionBoundary(c.used, phase);
++            latestCpu = c.used;
++          },
++          work(values: Readonly<Partial<Record<CompatCpuWorkKey, number>>>) { sampleAccounting.attributionWork(values); },
++        });
++      })() : undefined;
++      const memory = ports.memory();
++      // XII: resolve the two own-data roots once for this admitted sample. This
++      // is not a cross-sample business cache; all tables are still fully scanned.
++      const dataRoot = pathValue(memory, ["data"]), runtimeRoot = pathValue(memory, ["runtime"]);
++      const tasks = tableFound(pathFrom(dataRoot, ["resourceControl", "tasks"]));
++      const reservations = tableFound(pathFrom(runtimeRoot, ["resourceReservations"]));
++      const marker = pathFrom(runtimeRoot, ["resourceReservationsOwnerVersion"]);
++      const existingCore = pathFrom(runtimeRoot, ["treasuryCore"]);
++      const report: Rec = { kind: "treasury-legacy-read-bridge", tick, shard: cfg.shardName,
++        sourceCommit: "01bd9831454950c4928df98dd8679692b55603e5", productionBase: "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
++        authorizesActions: false, scope: { rooms: cfg.rooms, resources: cfg.resources, isEmpireTotal: false },
++        evaluation: "observation_and_legacy_commitments_only", facadeQueryRun: false,
++        spendable: null, kernelLifecycleRun: false, storageMode: "heap_only", previousRun,
++        legacyInputs: { tasks: summary(tasks), reservations: summary(reservations),
++          reservationVersion: { status: marker.status, value: nonneg(marker.value) ? marker.value : null },
++          treasuryCore: { status: existingCore.status === "present" ? "present_not_interpreted" : existingCore.status, activeCount: null } },
++      };
++      const rows: Rec[] = []; report.endpoints = rows;
++      const validRooms: Room[] = [];
++      const validRoomNames: string[] = [];
++      const next: Previous = { tick, endpoints: Object.create(null) };
++      let limited = false, observations: CompatObservation | undefined;
++      for (const name of cfg.rooms) {
++        if (!budget("directRead")) { limited = true; break; }
++        const room = ports.room(name);
++        let safe = true;
++        for (const kind of KINDS) {
++          if (!budget()) { limited = true; safe = false; break; }
++          const d = direct(room, kind, cfg.resources);
++          const row: Rec = { room: name, location: kind, directStatus: d.status };
++          rows.push(row);
++          if (d.status !== "ok" && d.status !== "absent") safe = false;
++          if (d.value) {
++            row.direct = d.value;
++            row.legacyProjection = legacyProjection(memory, name, kind, d.value, tick);
++            const key = name + ":" + kind, old = previous?.endpoints[key];
++            next.endpoints[key] = d.value;
++            if (!old || !previous) row.change = { status: "no_comparable_previous_sample" };
++            else if (old.id !== d.value.id || old.capacity !== d.value.capacity) row.change = { status: "endpoint_or_capacity_changed" };
++            else if (tick <= previous.tick || tick - previous.tick > cfg.intervalTicks * 3) row.change = { status: "gap_not_comparable" };
++            else {
++              const amounts: Record<string, number> = Object.create(null);
++              for (const r of cfg.resources) amounts[r] = d.value!.amounts[r] - old.amounts[r];
++              row.change = { status: "net_change_unattributed", fromTick: previous.tick, toTick: tick, amounts };
++            }
++          }
++        }
++        if (safe && room && room.controller?.my === true) { validRooms.push(room); validRoomNames.push(name); }
++      }
++      // Build from actual Game room objects, NOT from the just-produced direct
++      // numbers or legacy Memory projection. Independently enumerates Store keys.
++      let readers: ReturnType<CompatPorts["readers"]> | undefined;
++      if (validRooms.length && budget("readerLoad")) {
++        accounting?.invoked("readerLoad");
++        readers = ports.readers();
++        if (budget("observationBuild")) {
++          accounting?.invoked("observationBuild");
++          observations = readers.buildObservation({ scope: "market-fresh", epochSeq: 1, rooms: validRooms, compatDiagnostics: builderDiagnostics });
++        } else limited = true;
++      } else if (!budget()) limited = true;
++      // Diagnostic-only extra checkpoint: its cost is NOT removed from budget.
++      if (accounting && !budget("coreCompare")) limited = true;
++      if (observations && observations.epoch.observedAtTick !== tick) throw new Error("stale builder");
++      // At most two admitted rooms and four endpoint rows: avoid a Set allocation
++      // while retaining the same bounded membership semantics and row order.
++      for (const row of rows) {
++        if (!observations || !validRoomNames.includes(row.room as string)) { row.coreComparison = "not_read"; continue; }
++        const o = observations.location(row.room as string, row.location as Kind), d = row.direct as Direct | undefined;
++        if (!d) { row.coreComparison = row.directStatus === "absent" && !o.exists ? "both_absent" : "existence_mismatch"; continue; }
++        const mismatch: string[] = [];
++        if (!o.exists || o.structureId !== d.id) mismatch.push("structure");
++        if (o.usedCapacity !== d.used) mismatch.push("usedCapacity");
++        if (o.freeCapacity !== d.free) mismatch.push("freeCapacity");
++        for (const r of cfg.resources) if ((o.amounts[r] ?? 0) !== d.amounts[r]) mismatch.push(r);
++        row.coreComparison = mismatch.length ? "mismatch" : "match_selected_scope";
++        row.coreMismatches = mismatch;
++      }
++      report.commitments = { status: "not_read", rows: null };
++      // Never manufacture empty inputs from missing/damaged/over-bound tables.
++      if (!tasks.value || !reservations.value) report.commitments = { status: "unavailable_legacy_input", rows: null };
++      else if (readers && observations && budget("commitmentBuild")) {
++        accounting?.invoked("commitmentBuild");
++        const index = readers.buildCommitments({ tick, tasks: tasks.value, reservations: reservations.value, observation: observations, compatDiagnostics: builderDiagnostics });
++        const fields: Rec[] = [];
++        const projectionRowsPlanned = validRoomNames.length * cfg.resources.length;
++        builderDiagnostics?.boundary("projectionRows");
++        for (const name of validRoomNames) for (const resource of cfg.resources) {
++          if (!budget("commitmentProjection")) { limited = true; break; }
++          const outgoing = index.outgoing(name, resource), incoming = index.incoming(name, resource), reserved = index.reservedProduction(name, resource);
++          if (!nonneg(outgoing) || !nonneg(incoming) || !nonneg(reserved)) throw new Error("invalid index numbers");
++          fields.push({ room: name, resource, scope: "room_not_endpoint", outgoing, incoming,
++            productionReserved: reserved, completeness: index.commitmentCompleteness(name, resource) });
++        }
++        builderDiagnostics?.work({ projectionRowsPlanned, projectionRowsCompleted: fields.length, projectionIndexQueries: fields.length * 4 });
++        builderDiagnostics?.boundary();
++        const c = index.completeness;
++        if (!c || typeof c.complete !== "boolean" || typeof c.globalIncomplete !== "boolean"
++          || !nonneg(c.invalidRecords) || !nonneg(c.incompleteScopeCount)) throw new Error("invalid index health");
++        report.commitments = { status: limited ? "partial_cpu_budget" : c.complete ? "read_complete" : "read_incomplete",
++          rows: fields, completeness: { ...c }, allTableScan: true, tableLimitEach: TABLE_LIMIT };
++      } else if (!budget()) { limited = true; report.commitments = { status: "not_read_cpu_budget", rows: null }; }
++      if (!budget("report")) limited = true;
++      report.status = limited ? "partial_cpu_budget" : "sampled";
++      report.coreObservationRooms = observations ? validRoomNames : [];
++      report.requestedEndpointRows = cfg.rooms.length * 2;
++      report.collectedEndpointRows = rows.length;
++      if (accounting && !budget("serializationAndSize")) report.status = "partial_cpu_budget";
++      report.cpuBeforeSerializationAndEmit = latestCpu - start.used;
++      if (accounting) {
++        // Prefix of THIS sample. Serialization/emit are not known yet. The full
++        // completed measurement is published only by the NEXT emitted sample.
++        report.cpuProfile = accounting.snapshot("beforeSerialization");
++        report.previousCpuProfile = previousCpuProfile;
++      }
++      report.cooperativeBudget = true;
++      let line = JSON.stringify(report), status = report.status as string;
++      // One UTF-8 traversal per distinct output string. Reuse the size after
++      // emit instead of rescanning the identical (immutable) string.
++      let emittedBytes = compatUtf8Bytes(line);
++      if (emittedBytes > cfg.maxLogBytes) {
++        status = "output_limited";
++        line = JSON.stringify({ kind: "treasury-legacy-read-bridge", tick, status,
++          authorizesActions: false, previousRun });
++        emittedBytes = compatUtf8Bytes(line);
++      }
++      // Post-serialization sampling cannot retroactively change this report.
++      // The following sample carries the measured total, even when over budget.
++      if (accounting) budget("emit");
++      ports.emit(line);
++      const end = ports.cpu();
++      if (!validCpu(end) || end.used < latestCpu) throw new Error("invalid ending CPU");
++      accounting?.checkpoint(end.used, "retention");
++      latestCpu = end.used;
++      previous = status === "output_limited" ? undefined : next;
++      previousRun = { tick, cpuIncludingEmit: end.used - start.used, emittedBytes,
++        retainedPrimitiveChars: previous ? JSON.stringify(previous).length : 0 };
++      emitted = sat(emitted);
++      if (accounting) {
++        // Includes previous-snapshot sizing/bookkeeping. The final snapshot
++        // copy and return are outside the endpoint and explicitly not claimed.
++        budget();
++        previousCpuProfile = accounting.snapshot("afterRetention");
++      }
++      return { status };
++    } catch {
++      fault = true; previous = undefined;
++      // A fault snapshot stops at the last VALID checkpoint; never guess the
++      // cost of a throwing stage or the catch/reporting path.
++      if (accounting) previousCpuProfile = accounting.snapshot("fault");
++      try { ports.emit(JSON.stringify({ kind: "treasury-legacy-read-bridge", tick: nonneg(tick) ? tick : null,
++        status: "fault_disabled", authorizesActions: false })); } catch { /* Do not stop old bot. */ }
++      return { status: "fault_disabled" };
++    }
++  }
++  return { run, stats: () => ({ fault, emitted, cpuSkips, retainedEndpoints: previous ? Object.keys(previous.endpoints).length : 0,
++    previousRun: previousRun ? { ...previousRun } : null,
++    cpuProfile: previousCpuProfile }) };
++}

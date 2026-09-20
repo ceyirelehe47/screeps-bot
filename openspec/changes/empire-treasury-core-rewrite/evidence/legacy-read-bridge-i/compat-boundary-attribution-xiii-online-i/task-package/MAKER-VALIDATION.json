@@ -1,0 +1,74 @@
+{
+  "kind": "boundary-XIII-maker-validation/v1",
+  "sourceBase": "8c1ddecc126f4aee116d46b88547eafdd0e47d37",
+  "sourceBaseTree": "dcec716dfad41cb95e07bbed5988f1d5fde5c531",
+  "expectedSourceTree": "a9af213f779a79aaf852e0b8a4463f135123ccc8",
+  "sourcePaths": 12,
+  "newSourcePaths": 5,
+  "realSourceTree": {
+    "basis": "Entire user-provided candidate build working tree, default-OFF config restored, Git root tree authenticated; exact baseline commit object authenticated. This is not a full historical clone or the user live working directory.",
+    "actualApplyResumeBindOffWorkflowExecuted": true,
+    "generatorWriteAndCheckExecuted": true,
+    "coreGeneratedBytesUnchanged": true,
+    "nativeSourceWhitespaceCheckPassed": true
+  },
+  "sourceTests": {
+    "baselineRepositoryNode": {
+      "tests": 290,
+      "passed": 290
+    },
+    "finalRepositoryNode": {
+      "tests": 332,
+      "passed": 332,
+      "failed": 0,
+      "skipped": 0,
+      "todo": 0,
+      "cancelled": 0
+    },
+    "focusedXIII": {
+      "tests": 42,
+      "passed": 42,
+      "includedIn332": true
+    },
+    "compilerActuallyAvailable": "5.8.3",
+    "agentCompilerRequired": "5.9.3"
+  },
+  "typeSmoke": {
+    "passed": true,
+    "scope": "Four actual bridge TypeScript modules, TS5.8.3, permissive Screeps ambient stubs. Not the real repository tsconfig gates."
+  },
+  "toolTests": {
+    "expectedTests": 48,
+    "loopbackHttpActualSizeBytes": 4494463,
+    "lostResponseNoWriteRetry": true,
+    "temporaryGitApplyBindOffArchiveLocalBarePush": true,
+    "syntheticWholeRunVerifierAndIndependentRuntimeObserver": true,
+    "syntheticObserverDurationShortened": true,
+    "realEngineCpuMeasured": false
+  },
+  "notExecutedByMaker": {
+    "pinnedTypescript593": true,
+    "realRepositoryTwoTsconfigs": true,
+    "jest195x685": true,
+    "rollupBuild": true,
+    "realScreepsHttpOrWebsocket": true,
+    "candidatePost": true,
+    "restorePost": true,
+    "live75SecondRecovery": true,
+    "nativeWindows": true
+  },
+  "dependencyAcquisition": "Pinned dependency download was unavailable in maker container (DNS EAI_AGAIN); no dependency or budget files changed. The Agent must execute all pinned repository gates before online admission.",
+  "priorExperimentStatusRemains": "CPU_DIAGNOSTIC_CAPTURE_INCONCLUSIVE",
+  "budgetGapRemains": "ENGINE_CPU_BUDGET_GAP_UNRESOLVED",
+  "rootCauseAssigned": false,
+  "inheritedByteIdentities": {
+    "runtime/observer.cjs": {
+      "bytes": 7069,
+      "sha256": "33c9c18014b1ec71513f44eaf62aeede550d468c802f6a51abdd8a27e147456c"
+    },
+    "vendor/deployGuard.cjs": {
+      "bytes": 5078,
+      "sha256": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7"
+    }
+  }
+}

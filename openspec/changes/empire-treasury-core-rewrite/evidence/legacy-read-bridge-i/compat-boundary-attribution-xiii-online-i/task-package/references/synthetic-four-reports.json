@@ -1,0 +1,1312 @@
+{
+  "kind": "synthetic-source-generated-fixture",
+  "sourceTree": "a9af213f779a79aaf852e0b8a4463f135123ccc8",
+  "notEngineCpu": true,
+  "reports": [
+    {
+      "kind": "treasury-legacy-read-bridge",
+      "tick": 200,
+      "shard": "shard1",
+      "sourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
+      "productionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+      "authorizesActions": false,
+      "scope": {
+        "rooms": [
+          "E3N59",
+          "E4N58"
+        ],
+        "resources": [
+          "energy",
+          "H"
+        ],
+        "isEmpireTotal": false
+      },
+      "evaluation": "observation_and_legacy_commitments_only",
+      "facadeQueryRun": false,
+      "spendable": null,
+      "kernelLifecycleRun": false,
+      "storageMode": "heap_only",
+      "previousRun": null,
+      "legacyInputs": {
+        "tasks": {
+          "status": "empty",
+          "count": 0
+        },
+        "reservations": {
+          "status": "empty",
+          "count": 0
+        },
+        "reservationVersion": {
+          "status": "absent",
+          "value": null
+        },
+        "treasuryCore": {
+          "status": "absent",
+          "activeCount": null
+        }
+      },
+      "endpoints": [
+        {
+          "room": "E3N59",
+          "location": "storage",
+          "directStatus": "ok",
+          "direct": {
+            "id": "storage-E3N59",
+            "used": 4300,
+            "free": 995700,
+            "capacity": 1000000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": null,
+            "amounts": {
+              "energy": 4000,
+              "H": 300
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "no_comparable_previous_sample"
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        },
+        {
+          "room": "E3N59",
+          "location": "terminal",
+          "directStatus": "ok",
+          "direct": {
+            "id": "terminal-E3N59",
+            "used": 11000,
+            "free": 289000,
+            "capacity": 300000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": 0,
+            "amounts": {
+              "energy": 10000,
+              "H": 1000
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "no_comparable_previous_sample"
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        },
+        {
+          "room": "E4N58",
+          "location": "storage",
+          "directStatus": "ok",
+          "direct": {
+            "id": "storage-E4N58",
+            "used": 4300,
+            "free": 995700,
+            "capacity": 1000000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": null,
+            "amounts": {
+              "energy": 4000,
+              "H": 300
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "no_comparable_previous_sample"
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        },
+        {
+          "room": "E4N58",
+          "location": "terminal",
+          "directStatus": "ok",
+          "direct": {
+            "id": "terminal-E4N58",
+            "used": 11000,
+            "free": 289000,
+            "capacity": 300000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": 0,
+            "amounts": {
+              "energy": 10000,
+              "H": 1000
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "no_comparable_previous_sample"
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        }
+      ],
+      "commitments": {
+        "status": "read_complete",
+        "rows": [
+          {
+            "room": "E3N59",
+            "resource": "energy",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          },
+          {
+            "room": "E3N59",
+            "resource": "H",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          },
+          {
+            "room": "E4N58",
+            "resource": "energy",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          },
+          {
+            "room": "E4N58",
+            "resource": "H",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          }
+        ],
+        "completeness": {
+          "complete": true,
+          "globalIncomplete": false,
+          "incompleteScopeCount": 0,
+          "invalidRecords": 0
+        },
+        "allTableScan": true,
+        "tableLimitEach": 256
+      },
+      "status": "sampled",
+      "coreObservationRooms": [
+        "E3N59",
+        "E4N58"
+      ],
+      "requestedEndpointRows": 4,
+      "collectedEndpointRows": 4,
+      "cpuBeforeSerializationAndEmit": 0.1500000000000001,
+      "cpuProfile": {
+        "version": 1,
+        "tick": 200,
+        "sampleOrdinal": 1,
+        "boundary": "beforeSerialization",
+        "elapsed": 0.1500000000000001,
+        "checkpoints": 17,
+        "calls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 1
+        },
+        "phases": {
+          "legacyInputs": 0.0050000000000000044,
+          "directRead": 0.030000000000000027,
+          "readerLoad": 0.0050000000000000044,
+          "observationBuild": 0.030000000000000027,
+          "coreCompare": 0.0050000000000000044,
+          "commitmentBuild": 0.04500000000000004,
+          "commitmentProjection": 0.025000000000000022,
+          "report": 0.004999999999999977,
+          "serializationAndSize": 0
+        },
+        "attribution": {
+          "version": 1,
+          "boundaries": 12,
+          "active": null,
+          "intervals": {
+            "observationSetup": 0.0050000000000000044,
+            "observationRooms": 0.0050000000000000044,
+            "observationFinalize": 0.0050000000000000044,
+            "observationView": 0.0050000000000000044,
+            "commitmentSetup": 0.0050000000000000044,
+            "commitmentTasks": 0.0050000000000000044,
+            "commitmentReservations": 0.0050000000000000044,
+            "commitmentFinalize": 0.0050000000000000044,
+            "projectionRows": 0.025000000000000022
+          },
+          "work": {
+            "observationRooms": 2,
+            "observationLocations": 4,
+            "observationExistingLocations": 4,
+            "observationResourceKeys": 8,
+            "commitmentTaskRecords": 0,
+            "commitmentPendingTaskRecords": 0,
+            "commitmentTaskInvalidEvents": 0,
+            "commitmentDemandHealthChecks": 0,
+            "commitmentReceiverHealthChecks": 0,
+            "commitmentRouteCandidates": 0,
+            "commitmentReservationRecords": 0,
+            "commitmentReservationInvalidEvents": 0,
+            "commitmentOwnerEvaluations": 0,
+            "commitmentActiveReservations": 0,
+            "commitmentScopeBuckets": 0,
+            "commitmentRoomBuckets": 0,
+            "commitmentMergeRoutes": 0,
+            "commitmentReservationScopes": 0,
+            "projectionRowsPlanned": 4,
+            "projectionRowsCompleted": 4,
+            "projectionIndexQueries": 16
+          }
+        },
+        "commitmentEnvelope": {
+          "version": 1,
+          "status": "complete",
+          "marks": {
+            "parentStart": 0.07500000000000007,
+            "callStart": 0.08000000000000007,
+            "bodyStart": 0.08500000000000008,
+            "bodyEnd": 0.1050000000000001,
+            "callEnd": 0.1100000000000001,
+            "parentEnd": 0.1200000000000001
+          }
+        }
+      },
+      "previousCpuProfile": null,
+      "cooperativeBudget": true,
+      "diagnosticRevision": "XIII",
+      "localSafety": {
+        "thresholdCpu": 5,
+        "latched": false,
+        "reason": null,
+        "scope": "preview_heap_instance",
+        "currentCallPreempted": false
+      }
+    },
+    {
+      "kind": "treasury-legacy-read-bridge",
+      "tick": 300,
+      "shard": "shard1",
+      "sourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
+      "productionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+      "authorizesActions": false,
+      "scope": {
+        "rooms": [
+          "E3N59",
+          "E4N58"
+        ],
+        "resources": [
+          "energy",
+          "H"
+        ],
+        "isEmpireTotal": false
+      },
+      "evaluation": "observation_and_legacy_commitments_only",
+      "facadeQueryRun": false,
+      "spendable": null,
+      "kernelLifecycleRun": false,
+      "storageMode": "heap_only",
+      "previousRun": {
+        "tick": 200,
+        "cpuIncludingEmit": 0.16000000000000011,
+        "emittedBytes": 5140,
+        "retainedPrimitiveChars": 704
+      },
+      "legacyInputs": {
+        "tasks": {
+          "status": "empty",
+          "count": 0
+        },
+        "reservations": {
+          "status": "empty",
+          "count": 0
+        },
+        "reservationVersion": {
+          "status": "absent",
+          "value": null
+        },
+        "treasuryCore": {
+          "status": "absent",
+          "activeCount": null
+        }
+      },
+      "endpoints": [
+        {
+          "room": "E3N59",
+          "location": "storage",
+          "directStatus": "ok",
+          "direct": {
+            "id": "storage-E3N59",
+            "used": 4300,
+            "free": 995700,
+            "capacity": 1000000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": null,
+            "amounts": {
+              "energy": 4000,
+              "H": 300
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "net_change_unattributed",
+            "fromTick": 200,
+            "toTick": 300,
+            "amounts": {
+              "energy": 0,
+              "H": 0
+            }
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        },
+        {
+          "room": "E3N59",
+          "location": "terminal",
+          "directStatus": "ok",
+          "direct": {
+            "id": "terminal-E3N59",
+            "used": 11000,
+            "free": 289000,
+            "capacity": 300000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": 0,
+            "amounts": {
+              "energy": 10000,
+              "H": 1000
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "net_change_unattributed",
+            "fromTick": 200,
+            "toTick": 300,
+            "amounts": {
+              "energy": 0,
+              "H": 0
+            }
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        },
+        {
+          "room": "E4N58",
+          "location": "storage",
+          "directStatus": "ok",
+          "direct": {
+            "id": "storage-E4N58",
+            "used": 4300,
+            "free": 995700,
+            "capacity": 1000000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": null,
+            "amounts": {
+              "energy": 4000,
+              "H": 300
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "net_change_unattributed",
+            "fromTick": 200,
+            "toTick": 300,
+            "amounts": {
+              "energy": 0,
+              "H": 0
+            }
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        },
+        {
+          "room": "E4N58",
+          "location": "terminal",
+          "directStatus": "ok",
+          "direct": {
+            "id": "terminal-E4N58",
+            "used": 11000,
+            "free": 289000,
+            "capacity": 300000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": 0,
+            "amounts": {
+              "energy": 10000,
+              "H": 1000
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "net_change_unattributed",
+            "fromTick": 200,
+            "toTick": 300,
+            "amounts": {
+              "energy": 0,
+              "H": 0
+            }
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        }
+      ],
+      "commitments": {
+        "status": "read_complete",
+        "rows": [
+          {
+            "room": "E3N59",
+            "resource": "energy",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          },
+          {
+            "room": "E3N59",
+            "resource": "H",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          },
+          {
+            "room": "E4N58",
+            "resource": "energy",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          },
+          {
+            "room": "E4N58",
+            "resource": "H",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          }
+        ],
+        "completeness": {
+          "complete": true,
+          "globalIncomplete": false,
+          "incompleteScopeCount": 0,
+          "invalidRecords": 0
+        },
+        "allTableScan": true,
+        "tableLimitEach": 256
+      },
+      "status": "sampled",
+      "coreObservationRooms": [
+        "E3N59",
+        "E4N58"
+      ],
+      "requestedEndpointRows": 4,
+      "collectedEndpointRows": 4,
+      "cpuBeforeSerializationAndEmit": 0.1500000000000001,
+      "cpuProfile": {
+        "version": 1,
+        "tick": 300,
+        "sampleOrdinal": 2,
+        "boundary": "beforeSerialization",
+        "elapsed": 0.1500000000000001,
+        "checkpoints": 17,
+        "calls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 1
+        },
+        "phases": {
+          "legacyInputs": 0.0050000000000000044,
+          "directRead": 0.030000000000000027,
+          "readerLoad": 0.0050000000000000044,
+          "observationBuild": 0.030000000000000027,
+          "coreCompare": 0.0050000000000000044,
+          "commitmentBuild": 0.04500000000000004,
+          "commitmentProjection": 0.025000000000000022,
+          "report": 0.004999999999999977,
+          "serializationAndSize": 0
+        },
+        "attribution": {
+          "version": 1,
+          "boundaries": 12,
+          "active": null,
+          "intervals": {
+            "observationSetup": 0.0050000000000000044,
+            "observationRooms": 0.0050000000000000044,
+            "observationFinalize": 0.0050000000000000044,
+            "observationView": 0.0050000000000000044,
+            "commitmentSetup": 0.0050000000000000044,
+            "commitmentTasks": 0.0050000000000000044,
+            "commitmentReservations": 0.0050000000000000044,
+            "commitmentFinalize": 0.0050000000000000044,
+            "projectionRows": 0.025000000000000022
+          },
+          "work": {
+            "observationRooms": 2,
+            "observationLocations": 4,
+            "observationExistingLocations": 4,
+            "observationResourceKeys": 8,
+            "commitmentTaskRecords": 0,
+            "commitmentPendingTaskRecords": 0,
+            "commitmentTaskInvalidEvents": 0,
+            "commitmentDemandHealthChecks": 0,
+            "commitmentReceiverHealthChecks": 0,
+            "commitmentRouteCandidates": 0,
+            "commitmentReservationRecords": 0,
+            "commitmentReservationInvalidEvents": 0,
+            "commitmentOwnerEvaluations": 0,
+            "commitmentActiveReservations": 0,
+            "commitmentScopeBuckets": 0,
+            "commitmentRoomBuckets": 0,
+            "commitmentMergeRoutes": 0,
+            "commitmentReservationScopes": 0,
+            "projectionRowsPlanned": 4,
+            "projectionRowsCompleted": 4,
+            "projectionIndexQueries": 16
+          }
+        },
+        "commitmentEnvelope": {
+          "version": 1,
+          "status": "complete",
+          "marks": {
+            "parentStart": 0.07500000000000007,
+            "callStart": 0.08000000000000007,
+            "bodyStart": 0.08500000000000008,
+            "bodyEnd": 0.1050000000000001,
+            "callEnd": 0.1100000000000001,
+            "parentEnd": 0.1200000000000001
+          }
+        }
+      },
+      "previousCpuProfile": {
+        "version": 1,
+        "tick": 200,
+        "sampleOrdinal": 1,
+        "boundary": "afterRetention",
+        "elapsed": 0.16500000000000012,
+        "checkpoints": 20,
+        "calls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 1
+        },
+        "phases": {
+          "serializationAndSize": 0.0050000000000000044,
+          "emit": 0.0050000000000000044,
+          "retention": 0.0050000000000000044
+        },
+        "completion": "tail_only"
+      },
+      "cooperativeBudget": true,
+      "diagnosticRevision": "XIII",
+      "localSafety": {
+        "thresholdCpu": 5,
+        "latched": false,
+        "reason": null,
+        "scope": "preview_heap_instance",
+        "currentCallPreempted": false
+      }
+    },
+    {
+      "kind": "treasury-legacy-read-bridge",
+      "tick": 400,
+      "shard": "shard1",
+      "sourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
+      "productionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+      "authorizesActions": false,
+      "scope": {
+        "rooms": [
+          "E3N59",
+          "E4N58"
+        ],
+        "resources": [
+          "energy",
+          "H"
+        ],
+        "isEmpireTotal": false
+      },
+      "evaluation": "observation_and_legacy_commitments_only",
+      "facadeQueryRun": false,
+      "spendable": null,
+      "kernelLifecycleRun": false,
+      "storageMode": "heap_only",
+      "previousRun": {
+        "tick": 300,
+        "cpuIncludingEmit": 0.16000000000000011,
+        "emittedBytes": 5763,
+        "retainedPrimitiveChars": 704
+      },
+      "legacyInputs": {
+        "tasks": {
+          "status": "empty",
+          "count": 0
+        },
+        "reservations": {
+          "status": "empty",
+          "count": 0
+        },
+        "reservationVersion": {
+          "status": "absent",
+          "value": null
+        },
+        "treasuryCore": {
+          "status": "absent",
+          "activeCount": null
+        }
+      },
+      "endpoints": [
+        {
+          "room": "E3N59",
+          "location": "storage",
+          "directStatus": "ok",
+          "direct": {
+            "id": "storage-E3N59",
+            "used": 4300,
+            "free": 995700,
+            "capacity": 1000000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": null,
+            "amounts": {
+              "energy": 4000,
+              "H": 300
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "net_change_unattributed",
+            "fromTick": 300,
+            "toTick": 400,
+            "amounts": {
+              "energy": 0,
+              "H": 0
+            }
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        },
+        {
+          "room": "E3N59",
+          "location": "terminal",
+          "directStatus": "ok",
+          "direct": {
+            "id": "terminal-E3N59",
+            "used": 11000,
+            "free": 289000,
+            "capacity": 300000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": 0,
+            "amounts": {
+              "energy": 10000,
+              "H": 1000
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "net_change_unattributed",
+            "fromTick": 300,
+            "toTick": 400,
+            "amounts": {
+              "energy": 0,
+              "H": 0
+            }
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        },
+        {
+          "room": "E4N58",
+          "location": "storage",
+          "directStatus": "ok",
+          "direct": {
+            "id": "storage-E4N58",
+            "used": 4300,
+            "free": 995700,
+            "capacity": 1000000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": null,
+            "amounts": {
+              "energy": 4000,
+              "H": 300
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "net_change_unattributed",
+            "fromTick": 300,
+            "toTick": 400,
+            "amounts": {
+              "energy": 0,
+              "H": 0
+            }
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        },
+        {
+          "room": "E4N58",
+          "location": "terminal",
+          "directStatus": "ok",
+          "direct": {
+            "id": "terminal-E4N58",
+            "used": 11000,
+            "free": 289000,
+            "capacity": 300000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": 0,
+            "amounts": {
+              "energy": 10000,
+              "H": 1000
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "net_change_unattributed",
+            "fromTick": 300,
+            "toTick": 400,
+            "amounts": {
+              "energy": 0,
+              "H": 0
+            }
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        }
+      ],
+      "commitments": {
+        "status": "read_complete",
+        "rows": [
+          {
+            "room": "E3N59",
+            "resource": "energy",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          },
+          {
+            "room": "E3N59",
+            "resource": "H",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          },
+          {
+            "room": "E4N58",
+            "resource": "energy",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          },
+          {
+            "room": "E4N58",
+            "resource": "H",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          }
+        ],
+        "completeness": {
+          "complete": true,
+          "globalIncomplete": false,
+          "incompleteScopeCount": 0,
+          "invalidRecords": 0
+        },
+        "allTableScan": true,
+        "tableLimitEach": 256
+      },
+      "status": "sampled",
+      "coreObservationRooms": [
+        "E3N59",
+        "E4N58"
+      ],
+      "requestedEndpointRows": 4,
+      "collectedEndpointRows": 4,
+      "cpuBeforeSerializationAndEmit": 0.1500000000000001,
+      "cpuProfile": {
+        "version": 1,
+        "tick": 400,
+        "sampleOrdinal": 3,
+        "boundary": "beforeSerialization",
+        "elapsed": 0.1500000000000001,
+        "checkpoints": 17,
+        "calls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 1
+        },
+        "phases": {
+          "legacyInputs": 0.0050000000000000044,
+          "directRead": 0.030000000000000027,
+          "readerLoad": 0.0050000000000000044,
+          "observationBuild": 0.030000000000000027,
+          "coreCompare": 0.0050000000000000044,
+          "commitmentBuild": 0.04500000000000004,
+          "commitmentProjection": 0.025000000000000022,
+          "report": 0.004999999999999977,
+          "serializationAndSize": 0
+        },
+        "attribution": {
+          "version": 1,
+          "boundaries": 12,
+          "active": null,
+          "intervals": {
+            "observationSetup": 0.0050000000000000044,
+            "observationRooms": 0.0050000000000000044,
+            "observationFinalize": 0.0050000000000000044,
+            "observationView": 0.0050000000000000044,
+            "commitmentSetup": 0.0050000000000000044,
+            "commitmentTasks": 0.0050000000000000044,
+            "commitmentReservations": 0.0050000000000000044,
+            "commitmentFinalize": 0.0050000000000000044,
+            "projectionRows": 0.025000000000000022
+          },
+          "work": {
+            "observationRooms": 2,
+            "observationLocations": 4,
+            "observationExistingLocations": 4,
+            "observationResourceKeys": 8,
+            "commitmentTaskRecords": 0,
+            "commitmentPendingTaskRecords": 0,
+            "commitmentTaskInvalidEvents": 0,
+            "commitmentDemandHealthChecks": 0,
+            "commitmentReceiverHealthChecks": 0,
+            "commitmentRouteCandidates": 0,
+            "commitmentReservationRecords": 0,
+            "commitmentReservationInvalidEvents": 0,
+            "commitmentOwnerEvaluations": 0,
+            "commitmentActiveReservations": 0,
+            "commitmentScopeBuckets": 0,
+            "commitmentRoomBuckets": 0,
+            "commitmentMergeRoutes": 0,
+            "commitmentReservationScopes": 0,
+            "projectionRowsPlanned": 4,
+            "projectionRowsCompleted": 4,
+            "projectionIndexQueries": 16
+          }
+        },
+        "commitmentEnvelope": {
+          "version": 1,
+          "status": "complete",
+          "marks": {
+            "parentStart": 0.07500000000000007,
+            "callStart": 0.08000000000000007,
+            "bodyStart": 0.08500000000000008,
+            "bodyEnd": 0.1050000000000001,
+            "callEnd": 0.1100000000000001,
+            "parentEnd": 0.1200000000000001
+          }
+        }
+      },
+      "previousCpuProfile": {
+        "version": 1,
+        "tick": 300,
+        "sampleOrdinal": 2,
+        "boundary": "afterRetention",
+        "elapsed": 0.16500000000000012,
+        "checkpoints": 20,
+        "calls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 1
+        },
+        "phases": {
+          "serializationAndSize": 0.0050000000000000044,
+          "emit": 0.0050000000000000044,
+          "retention": 0.0050000000000000044
+        },
+        "completion": "tail_only"
+      },
+      "cooperativeBudget": true,
+      "diagnosticRevision": "XIII",
+      "localSafety": {
+        "thresholdCpu": 5,
+        "latched": false,
+        "reason": null,
+        "scope": "preview_heap_instance",
+        "currentCallPreempted": false
+      }
+    },
+    {
+      "kind": "treasury-legacy-read-bridge",
+      "tick": 500,
+      "shard": "shard1",
+      "sourceCommit": "01bd9831454950c4928df98dd8679692b55603e5",
+      "productionBase": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+      "authorizesActions": false,
+      "scope": {
+        "rooms": [
+          "E3N59",
+          "E4N58"
+        ],
+        "resources": [
+          "energy",
+          "H"
+        ],
+        "isEmpireTotal": false
+      },
+      "evaluation": "observation_and_legacy_commitments_only",
+      "facadeQueryRun": false,
+      "spendable": null,
+      "kernelLifecycleRun": false,
+      "storageMode": "heap_only",
+      "previousRun": {
+        "tick": 400,
+        "cpuIncludingEmit": 0.16000000000000011,
+        "emittedBytes": 5763,
+        "retainedPrimitiveChars": 704
+      },
+      "legacyInputs": {
+        "tasks": {
+          "status": "empty",
+          "count": 0
+        },
+        "reservations": {
+          "status": "empty",
+          "count": 0
+        },
+        "reservationVersion": {
+          "status": "absent",
+          "value": null
+        },
+        "treasuryCore": {
+          "status": "absent",
+          "activeCount": null
+        }
+      },
+      "endpoints": [
+        {
+          "room": "E3N59",
+          "location": "storage",
+          "directStatus": "ok",
+          "direct": {
+            "id": "storage-E3N59",
+            "used": 4300,
+            "free": 995700,
+            "capacity": 1000000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": null,
+            "amounts": {
+              "energy": 4000,
+              "H": 300
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "net_change_unattributed",
+            "fromTick": 400,
+            "toTick": 500,
+            "amounts": {
+              "energy": 0,
+              "H": 0
+            }
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        },
+        {
+          "room": "E3N59",
+          "location": "terminal",
+          "directStatus": "ok",
+          "direct": {
+            "id": "terminal-E3N59",
+            "used": 11000,
+            "free": 289000,
+            "capacity": 300000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": 0,
+            "amounts": {
+              "energy": 10000,
+              "H": 1000
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "net_change_unattributed",
+            "fromTick": 400,
+            "toTick": 500,
+            "amounts": {
+              "energy": 0,
+              "H": 0
+            }
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        },
+        {
+          "room": "E4N58",
+          "location": "storage",
+          "directStatus": "ok",
+          "direct": {
+            "id": "storage-E4N58",
+            "used": 4300,
+            "free": 995700,
+            "capacity": 1000000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": null,
+            "amounts": {
+              "energy": 4000,
+              "H": 300
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "net_change_unattributed",
+            "fromTick": 400,
+            "toTick": 500,
+            "amounts": {
+              "energy": 0,
+              "H": 0
+            }
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        },
+        {
+          "room": "E4N58",
+          "location": "terminal",
+          "directStatus": "ok",
+          "direct": {
+            "id": "terminal-E4N58",
+            "used": 11000,
+            "free": 289000,
+            "capacity": 300000,
+            "overCapacity": false,
+            "active": true,
+            "cooldown": 0,
+            "amounts": {
+              "energy": 10000,
+              "H": 1000
+            }
+          },
+          "legacyProjection": {
+            "status": "absent"
+          },
+          "change": {
+            "status": "net_change_unattributed",
+            "fromTick": 400,
+            "toTick": 500,
+            "amounts": {
+              "energy": 0,
+              "H": 0
+            }
+          },
+          "coreComparison": "match_selected_scope",
+          "coreMismatches": []
+        }
+      ],
+      "commitments": {
+        "status": "read_complete",
+        "rows": [
+          {
+            "room": "E3N59",
+            "resource": "energy",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          },
+          {
+            "room": "E3N59",
+            "resource": "H",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          },
+          {
+            "room": "E4N58",
+            "resource": "energy",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          },
+          {
+            "room": "E4N58",
+            "resource": "H",
+            "scope": "room_not_endpoint",
+            "outgoing": 0,
+            "incoming": 0,
+            "productionReserved": 0,
+            "completeness": "complete"
+          }
+        ],
+        "completeness": {
+          "complete": true,
+          "globalIncomplete": false,
+          "incompleteScopeCount": 0,
+          "invalidRecords": 0
+        },
+        "allTableScan": true,
+        "tableLimitEach": 256
+      },
+      "status": "sampled",
+      "coreObservationRooms": [
+        "E3N59",
+        "E4N58"
+      ],
+      "requestedEndpointRows": 4,
+      "collectedEndpointRows": 4,
+      "cpuBeforeSerializationAndEmit": 0.1500000000000001,
+      "cpuProfile": {
+        "version": 1,
+        "tick": 500,
+        "sampleOrdinal": 4,
+        "boundary": "beforeSerialization",
+        "elapsed": 0.1500000000000001,
+        "checkpoints": 17,
+        "calls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 1
+        },
+        "phases": {
+          "legacyInputs": 0.0050000000000000044,
+          "directRead": 0.030000000000000027,
+          "readerLoad": 0.0050000000000000044,
+          "observationBuild": 0.030000000000000027,
+          "coreCompare": 0.0050000000000000044,
+          "commitmentBuild": 0.04500000000000004,
+          "commitmentProjection": 0.025000000000000022,
+          "report": 0.004999999999999977,
+          "serializationAndSize": 0
+        },
+        "attribution": {
+          "version": 1,
+          "boundaries": 12,
+          "active": null,
+          "intervals": {
+            "observationSetup": 0.0050000000000000044,
+            "observationRooms": 0.0050000000000000044,
+            "observationFinalize": 0.0050000000000000044,
+            "observationView": 0.0050000000000000044,
+            "commitmentSetup": 0.0050000000000000044,
+            "commitmentTasks": 0.0050000000000000044,
+            "commitmentReservations": 0.0050000000000000044,
+            "commitmentFinalize": 0.0050000000000000044,
+            "projectionRows": 0.025000000000000022
+          },
+          "work": {
+            "observationRooms": 2,
+            "observationLocations": 4,
+            "observationExistingLocations": 4,
+            "observationResourceKeys": 8,
+            "commitmentTaskRecords": 0,
+            "commitmentPendingTaskRecords": 0,
+            "commitmentTaskInvalidEvents": 0,
+            "commitmentDemandHealthChecks": 0,
+            "commitmentReceiverHealthChecks": 0,
+            "commitmentRouteCandidates": 0,
+            "commitmentReservationRecords": 0,
+            "commitmentReservationInvalidEvents": 0,
+            "commitmentOwnerEvaluations": 0,
+            "commitmentActiveReservations": 0,
+            "commitmentScopeBuckets": 0,
+            "commitmentRoomBuckets": 0,
+            "commitmentMergeRoutes": 0,
+            "commitmentReservationScopes": 0,
+            "projectionRowsPlanned": 4,
+            "projectionRowsCompleted": 4,
+            "projectionIndexQueries": 16
+          }
+        },
+        "commitmentEnvelope": {
+          "version": 1,
+          "status": "complete",
+          "marks": {
+            "parentStart": 0.07500000000000007,
+            "callStart": 0.08000000000000007,
+            "bodyStart": 0.08500000000000008,
+            "bodyEnd": 0.1050000000000001,
+            "callEnd": 0.1100000000000001,
+            "parentEnd": 0.1200000000000001
+          }
+        }
+      },
+      "previousCpuProfile": {
+        "version": 1,
+        "tick": 400,
+        "sampleOrdinal": 3,
+        "boundary": "afterRetention",
+        "elapsed": 0.16500000000000012,
+        "checkpoints": 20,
+        "calls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 1
+        },
+        "phases": {
+          "serializationAndSize": 0.0050000000000000044,
+          "emit": 0.0050000000000000044,
+          "retention": 0.0050000000000000044
+        },
+        "completion": "tail_only"
+      },
+      "cooperativeBudget": true,
+      "diagnosticRevision": "XIII",
+      "localSafety": {
+        "thresholdCpu": 5,
+        "latched": false,
+        "reason": null,
+        "scope": "preview_heap_instance",
+        "currentCallPreempted": false
+      }
+    }
+  ]
+}

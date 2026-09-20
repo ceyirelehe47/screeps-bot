@@ -1,0 +1,19 @@
+{
+  "runId": "b97dcc2576cf2218a6c571261d9d5dbf",
+  "pid": 60692,
+  "atMs": 1789930892810,
+  "streaming": true,
+  "lastConsole": 1789930890078,
+  "lastCpu": 1789930890070,
+  "lastPositiveCpu": 1789930890070,
+  "accepted": 3,
+  "raw": 4,
+  "complete": 0,
+  "issues": [
+    "CPU_OBSERVED_SAFETY_STOP",
+    "LOCAL_SAFETY_STOP"
+  ],
+  "deploySeen": true,
+  "duplicates": 0,
+  "safety": true
+}

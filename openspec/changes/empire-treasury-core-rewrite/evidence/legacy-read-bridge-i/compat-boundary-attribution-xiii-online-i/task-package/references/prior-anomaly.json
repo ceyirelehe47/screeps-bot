@@ -1,0 +1,38 @@
+{
+  "sourceEvidenceCommit": "ed7eb284c38e3bd346c4b8013aec2ee5124f2b4d",
+  "sourceFile": "compat-diagnostic-envelope-optimization-xii-online-ii-retry-i/run/console.jsonl",
+  "sourceBytesSha256": "81d665c7c7af1ba4545575caef4a26f848c9036842e525c355113aaffb1cdfb6",
+  "interpretation": "Rejected third raw report is forensic evidence, not an accepted business/diagnostic sample. Parent-minus-child is an unassigned interval, not proof of task scan cost.",
+  "reports": [
+    {
+      "tick": 73830500,
+      "prefix": 2.732118999996601,
+      "calls": 0,
+      "parentInterval": 0.0281072999969183,
+      "measuredChildSum": null,
+      "parentMinusChild": null,
+      "acceptedPriorDiagnostic": true,
+      "rootCauseAssigned": false
+    },
+    {
+      "tick": 73830600,
+      "prefix": 3.245044399991457,
+      "calls": 1,
+      "parentInterval": 1.1815635000020848,
+      "measuredChildSum": 0.597541100003582,
+      "parentMinusChild": 0.5840223999985028,
+      "acceptedPriorDiagnostic": true,
+      "rootCauseAssigned": false
+    },
+    {
+      "tick": 73830700,
+      "prefix": 20.92043979999289,
+      "calls": 1,
+      "parentInterval": 19.193335200005095,
+      "measuredChildSum": 0.5313476999945124,
+      "parentMinusChild": 18.661987500010582,
+      "acceptedPriorDiagnostic": false,
+      "rootCauseAssigned": false
+    }
+  ]
+}

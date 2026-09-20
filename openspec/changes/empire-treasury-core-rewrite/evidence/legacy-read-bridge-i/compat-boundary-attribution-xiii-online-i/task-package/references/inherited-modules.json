@@ -1,0 +1,10 @@
+{
+  "runtime/observer.cjs": {
+    "bytes": 7069,
+    "sha256": "33c9c18014b1ec71513f44eaf62aeede550d468c802f6a51abdd8a27e147456c"
+  },
+  "vendor/deployGuard.cjs": {
+    "bytes": 5078,
+    "sha256": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7"
+  }
+}

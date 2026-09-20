@@ -1,0 +1,64 @@
+{
+  "kind": "compat-boundary-attribution-XIII/v1",
+  "authorizationId": "compat-boundary-attribution-XIII-2026-09-21",
+  "parentRunId": "b97dcc2576cf2218a6c571261d9d5dbf",
+  "expected": {
+    "server": "https://screeps.com",
+    "username": "forster",
+    "userId": "634fe406347a7b69b28aeccb",
+    "branch": "default",
+    "shard": "shard1"
+  },
+  "backupDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494463,
+        "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+      }
+    ]
+  },
+  "backupBuild": {
+    "commit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+    "tree": "929fa9557b1a36135a5ef1605231be1d16e87366",
+    "dirty": "folded_out",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+06ffedb@2026-08-29T14:28:59.403Z"
+  },
+  "guardBlob": "796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8",
+  "compatBase": "8c1ddecc126f4aee116d46b88547eafdd0e47d37",
+  "compatBaseTree": "dcec716dfad41cb95e07bbed5988f1d5fde5c531",
+  "refactorBase": "bcc5937a8c8fd6679aa8fd5df94765f9379505d1",
+  "compatBranch": "compat/treasury-read-bridge-i",
+  "refactorBranch": "refactor/empire-treasury-rearchitecture",
+  "sourceMessage": "diagnostics(compat): close commitment timing envelope and latch unsafe sampling",
+  "evidenceMessage": "evidence(compat): boundary attribution XIII and independent recovery",
+  "evidencePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-boundary-attribution-xiii-online-i",
+  "runtimeMs": 75000,
+  "runtimeStartupMs": 90000,
+  "runtimeSilenceMs": 45000,
+  "readinessMs": 1800000,
+  "requestMs": 60000,
+  "writeMs": 60000,
+  "recoveryReadMs": 600000,
+  "wallMs": 1800000,
+  "safetyCpu": 5,
+  "points": 4,
+  "rooms": [
+    "E3N59",
+    "E4N58"
+  ],
+  "resources": [
+    "energy",
+    "H"
+  ],
+  "repositoryNodeTests": 332,
+  "jestSuites": 195,
+  "jestTests": 685,
+  "compilerVersion": "5.9.3",
+  "priorRecoveryPath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-xii-retry-i-sanctioned-recovery-i/FINAL-VERIFICATION.json",
+  "priorRecoveryBlob": "2b88474d4896b7998f821002497e251940a23252"
+}

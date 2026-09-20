@@ -1,0 +1,84 @@
+{
+  "kind": "maker-real-source-workflow",
+  "inputAuthenticatedBase": {
+    "head": "8c1ddecc126f4aee116d46b88547eafdd0e47d37",
+    "tree": "dcec716dfad41cb95e07bbed5988f1d5fde5c531"
+  },
+  "source": {
+    "status": "BOUNDARY_XIII_SOURCE_APPLIED",
+    "resumed": false,
+    "head": "a54bb2900a8e841c0590cf3afdc57a787426a36f",
+    "tree": "a9af213f779a79aaf852e0b8a4463f135123ccc8",
+    "base": "8c1ddecc126f4aee116d46b88547eafdd0e47d37",
+    "paths": 12
+  },
+  "resumed": {
+    "status": "BOUNDARY_XIII_SOURCE_REUSED",
+    "resumed": true,
+    "head": "a54bb2900a8e841c0590cf3afdc57a787426a36f",
+    "tree": "a9af213f779a79aaf852e0b8a4463f135123ccc8",
+    "base": "8c1ddecc126f4aee116d46b88547eafdd0e47d37",
+    "paths": 12
+  },
+  "profile": {
+    "runId": "b97dcc2576cf2218a6c571261d9d5dbf",
+    "source": {
+      "head": "a54bb2900a8e841c0590cf3afdc57a787426a36f",
+      "tree": "a9af213f779a79aaf852e0b8a4463f135123ccc8",
+      "base": "8c1ddecc126f4aee116d46b88547eafdd0e47d37",
+      "paths": 12
+    },
+    "profile": {
+      "enabled": true,
+      "shardName": "shard1",
+      "rooms": [
+        "E3N59",
+        "E4N58"
+      ],
+      "resources": [
+        "energy",
+        "H"
+      ],
+      "startTick": 73840200,
+      "endTick": 73840500,
+      "intervalTicks": 100,
+      "minBucket": 2000,
+      "maxSampleCpu": 2,
+      "reserveCpu": 5,
+      "maxLogBytes": 16384
+    },
+    "observedTick": 73840000,
+    "profileHead": "3ebc1cf85080c740f976b1f79d08c016df3493f9",
+    "profileTree": "61bc79e6fb9aca31c224a8fbc283714d43b47e1e"
+  },
+  "closure": {
+    "status": "SOURCE_DEFAULT_OFF_RESTORED",
+    "sourceHead": "a54bb2900a8e841c0590cf3afdc57a787426a36f",
+    "closedHead": "55f5d14d7e4ae3bf1be5e7b4f28fece4b48ff5f6",
+    "sameTreeAsSource": true,
+    "atMs": 1789924745203
+  },
+  "finalTree": "a9af213f779a79aaf852e0b8a4463f135123ccc8",
+  "nativeWhitespaceExit": 0,
+  "generator": {
+    "status": "COMPAT_LOADER_REGENERATION_VERIFIED",
+    "files": [
+      "src/runtime/treasuryCompatReadCore.generated.ts",
+      "src/runtime/treasuryCompatRead.ts",
+      "docs/treasury-compat-loader-optimization.json",
+      "docs/treasury-compat-source-manifest.json"
+    ],
+    "canonicalFactoryBodyRecovery": "exact",
+    "explicitContextAdaptation": true,
+    "fullTaskBucketFusion": true,
+    "observationAllocationReduction": true,
+    "boundedSubphaseAttribution": true,
+    "hotpathOptimizationXI": true,
+    "diagnosticEnvelopeOptimizationXII": true,
+    "sourceManifestOutputValidation": "all-listed-outputs",
+    "sourceManifestOutputIdentityCount": 13
+  },
+  "remoteProductionWrites": 0,
+  "remoteGitPushes": 0,
+  "syntheticOnlineTick": true
+}

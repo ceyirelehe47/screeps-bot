@@ -1,0 +1,262 @@
+TAP version 13
+# Subtest: XIII exact reversible transform and public IX-to-live chain
+ok 1 - XIII exact reversible transform and public IX-to-live chain
+  ---
+  duration_ms: 5.272202
+  type: 'test'
+  ...
+# Subtest: XIII six marks close parent, call and measured body without subtracting overhead
+ok 2 - XIII six marks close parent, call and measured body without subtracting overhead
+  ---
+  duration_ms: 94.735862
+  type: 'test'
+  ...
+# Subtest: XIII call-not-made is distinct from zero cost
+ok 3 - XIII call-not-made is distinct from zero cost
+  ---
+  duration_ms: 28.913522
+  type: 'test'
+  ...
+# Subtest: XIII missing inner marks are incomplete rather than synthesized
+ok 4 - XIII missing inner marks are incomplete rather than synthesized
+  ---
+  duration_ms: 29.868582
+  type: 'test'
+  ...
+# Subtest: XIII duplicate and regressed envelope boundaries fail closed
+ok 5 - XIII duplicate and regressed envelope boundaries fail closed
+  ---
+  duration_ms: 33.472506
+  type: 'test'
+  ...
+# Subtest: XIII non-finite envelope boundary is rejected
+ok 6 - XIII non-finite envelope boundary is rejected
+  ---
+  duration_ms: 66.317637
+  type: 'test'
+  ...
+# Subtest: XIII snapshots are immutable and tail does not repeat envelope
+ok 7 - XIII snapshots are immutable and tail does not repeat envelope
+  ---
+  duration_ms: 37.898731
+  type: 'test'
+  ...
+# Subtest: XIII real full builder has complete trace and 4 projection rows
+ok 8 - XIII real full builder has complete trace and 4 projection rows
+  ---
+  duration_ms: 248.954946
+  type: 'test'
+  ...
+# Subtest: XIII constant added probes with 0 tasks and reservations
+ok 9 - XIII constant added probes with 0 tasks and reservations
+  ---
+  duration_ms: 269.657582
+  type: 'test'
+  ...
+# Subtest: XIII constant added probes with 14 tasks and reservations
+ok 10 - XIII constant added probes with 14 tasks and reservations
+  ---
+  duration_ms: 218.598485
+  type: 'test'
+  ...
+# Subtest: XIII constant added probes with 256 tasks and reservations
+ok 11 - XIII constant added probes with 256 tasks and reservations
+  ---
+  duration_ms: 193.338969
+  type: 'test'
+  ...
+# Subtest: XIII call-entry injection stays outside body, and stops later samples
+ok 12 - XIII call-entry injection stays outside body, and stops later samples
+  ---
+  duration_ms: 104.172522
+  type: 'test'
+  ...
+# Subtest: XIII body injection is inside measured body, not relabeled as entry
+ok 13 - XIII body injection is inside measured body, not relabeled as entry
+  ---
+  duration_ms: 87.026601
+  type: 'test'
+  ...
+# Subtest: XIII call-return injection stays outside measured body
+ok 14 - XIII call-return injection stays outside measured body
+  ---
+  duration_ms: 92.274327
+  type: 'test'
+  ...
+# Subtest: XIII tail overrun latches even when emitted prefix was below five
+ok 15 - XIII tail overrun latches even when emitted prefix was below five
+  ---
+  duration_ms: 84.531984
+  type: 'test'
+  ...
+# Subtest: XIII notification exception cannot clear the latch or escape
+ok 16 - XIII notification exception cannot clear the latch or escape
+  ---
+  duration_ms: 85.076738
+  type: 'test'
+  ...
+# Subtest: XIII reset after first due tick cannot re-arm a later sample
+ok 17 - XIII reset after first due tick cannot re-arm a later sample
+  ---
+  duration_ms: 92.720629
+  type: 'test'
+  ...
+# Subtest: XIII first due CPU admission skipped cannot silently shift the window
+ok 18 - XIII first due CPU admission skipped cannot silently shift the window
+  ---
+  duration_ms: 82.838348
+  type: 'test'
+  ...
+# Subtest: XIII OFF does not touch any port
+ok 19 - XIII OFF does not touch any port
+  ---
+  duration_ms: 91.36452
+  type: 'test'
+  ...
+# Subtest: XIII no extra probes when builder never called
+ok 20 - XIII no extra probes when builder never called
+  ---
+  duration_ms: 275.336965
+  type: 'test'
+  ...
+# Subtest: XIII measurement fault disables preview and cannot escape old bot
+ok 21 - XIII measurement fault disables preview and cannot escape old bot
+  ---
+  duration_ms: 88.778742
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: empty
+ok 22 - XIII business parity and no writes: empty
+  ---
+  duration_ms: 208.681642
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: manual
+ok 23 - XIII business parity and no writes: manual
+  ---
+  duration_ms: 205.161139
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: sixteen
+ok 24 - XIII business parity and no writes: sixteen
+  ---
+  duration_ms: 188.614447
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: bound256
+ok 25 - XIII business parity and no writes: bound256
+  ---
+  duration_ms: 255.740992
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: overBound257
+ok 26 - XIII business parity and no writes: overBound257
+  ---
+  duration_ms: 197.516765
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: invalidRecord
+ok 27 - XIII business parity and no writes: invalidRecord
+  ---
+  duration_ms: 184.108581
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: invalidResource
+ok 28 - XIII business parity and no writes: invalidResource
+  ---
+  duration_ms: 247.807609
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: missingTasks
+ok 29 - XIII business parity and no writes: missingTasks
+  ---
+  duration_ms: 231.713993
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: invalidReservationContainer
+ok 30 - XIII business parity and no writes: invalidReservationContainer
+  ---
+  duration_ms: 217.614574
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: activeReservation
+ok 31 - XIII business parity and no writes: activeReservation
+  ---
+  duration_ms: 207.903243
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: expiredReservation
+ok 32 - XIII business parity and no writes: expiredReservation
+  ---
+  duration_ms: 212.985776
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: exactExpiry
+ok 33 - XIII business parity and no writes: exactExpiry
+  ---
+  duration_ms: 201.824375
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: missingOwner
+ok 34 - XIII business parity and no writes: missingOwner
+  ---
+  duration_ms: 193.264999
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: typedOwner
+ok 35 - XIII business parity and no writes: typedOwner
+  ---
+  duration_ms: 201.417299
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: capacity8M
+ok 36 - XIII business parity and no writes: capacity8M
+  ---
+  duration_ms: 216.284545
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: saturatedCapacity
+ok 37 - XIII business parity and no writes: saturatedCapacity
+  ---
+  duration_ms: 198.324249
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: missingTerminal
+ok 38 - XIII business parity and no writes: missingTerminal
+  ---
+  duration_ms: 188.874886
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: unseenRoom
+ok 39 - XIII business parity and no writes: unseenRoom
+  ---
+  duration_ms: 209.156938
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: sparseMismatch
+ok 40 - XIII business parity and no writes: sparseMismatch
+  ---
+  duration_ms: 259.477666
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: legacyMismatch
+ok 41 - XIII business parity and no writes: legacyMismatch
+  ---
+  duration_ms: 186.009851
+  type: 'test'
+  ...
+# Subtest: XIII runtime enables trace and local stop without modifying frozen OFF config
+ok 42 - XIII runtime enables trace and local stop without modifying frozen OFF config
+  ---
+  duration_ms: 0.422137
+  type: 'test'
+  ...
+1..42
+# tests 42
+# suites 0
+# pass 42
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6826.313648

@@ -1,0 +1,157 @@
+{
+  "kind": "package-integrity/v1",
+  "files": {
+    "AGENT-RUN.md": {
+      "bytes": 12579,
+      "sha256": "10b5a74385219c477bf165a5792eaf4449d67705f217a554e62494b3060d4238"
+    },
+    "MAKER-VALIDATION.json": {
+      "bytes": 2697,
+      "sha256": "18c377a29feae0c8233e65756ad5090d178f9fc5ad6caf25b7f6b0420ed98f9c"
+    },
+    "README.md": {
+      "bytes": 1286,
+      "sha256": "f2d4699eb41afce1455882d02c083ff21793c17d61babae2f6f2814e54f733bb"
+    },
+    "maker-evidence/actual-source-workflow.json": {
+      "bytes": 2657,
+      "sha256": "bf76e5e5e8d24fe3855e67fc90309fbfd76883c7ca952cf34d73e87853779e18"
+    },
+    "maker-evidence/source-focused-42.tap": {
+      "bytes": 7773,
+      "sha256": "47b3ec55266673ba24ef032f25733604f3caed0008c8a838ef0cf9f63fe1a1af"
+    },
+    "maker-evidence/source-node-332.tap": {
+      "bytes": 69489,
+      "sha256": "5c2836f147bbdfaf3d8dfa6f605eb149fbb4c4942fb2436cdaeb56729aa38a76"
+    },
+    "maker-evidence/type-smoke.json": {
+      "bytes": 172,
+      "sha256": "3af58a14243782c63c6cc31b866cdbf1f04082f80f16d7c433d3c680a71929f3"
+    },
+    "patches/source.patch": {
+      "bytes": 75878,
+      "sha256": "c09dea85be03007a608b7c2e3a1f958490618032dfc2322ba5a9f1b33f5892d6"
+    },
+    "policy.json": {
+      "bytes": 2305,
+      "sha256": "4139641f259cd6c1af61d7c5177cabc1ba0ba25aa9f261bb04c7ca2cb2fee372"
+    },
+    "references/inherited-modules.json": {
+      "bytes": 271,
+      "sha256": "689d91354d291742dcc4541dfcf4e7345cd31b8b288ec0f507658a27c71b7bf4"
+    },
+    "references/prior-anomaly.json": {
+      "bytes": 1338,
+      "sha256": "93fad95163bfc1918c187e9102a95381b7e0f7b5a19c3a75ae98d8f89462af26"
+    },
+    "references/synthetic-four-reports.json": {
+      "bytes": 38077,
+      "sha256": "ff9ce5f5dd77d4a433cab2b78a8b3ed0d031d81875557dd0d1bc932ded98413a"
+    },
+    "references/test-contract.json": {
+      "bytes": 13,
+      "sha256": "fc641883789b991e383c42ffe177d3218d43cc31f8492bf2ebce1aead55ac752"
+    },
+    "runtime/actions.cjs": {
+      "bytes": 6136,
+      "sha256": "4753ce901512c4fbbb269fa81397070909065c7dd517d72ccb038e7b39da1a7b"
+    },
+    "runtime/collector.cjs": {
+      "bytes": 2696,
+      "sha256": "0f91da48e9b1c01e8b35263b928db1d87263096611009f6107746f228f949ad4"
+    },
+    "runtime/common.cjs": {
+      "bytes": 5733,
+      "sha256": "b47a7c5874f0c5b8b5dd0a59dfea9c618e0ea77d7c4864d64dba18c0c714d148"
+    },
+    "runtime/identity.cjs": {
+      "bytes": 3080,
+      "sha256": "92f6bcf56724332f7b76093770cdcefc9b3af42b6ebab0c50bbc25af699e1e82"
+    },
+    "runtime/observer.cjs": {
+      "bytes": 7069,
+      "sha256": "33c9c18014b1ec71513f44eaf62aeede550d468c802f6a51abdd8a27e147456c"
+    },
+    "runtime/samples.cjs": {
+      "bytes": 12715,
+      "sha256": "6543f3f9ad4876ac3bdd6a0631760d332d53633691e1648217782b2c22d40b02"
+    },
+    "runtime/transport.cjs": {
+      "bytes": 3213,
+      "sha256": "3564c41f35a96161e272fd8a13f1de51f5b2f5375d63ba9118f39b2416e51c11"
+    },
+    "runtime/worker.cjs": {
+      "bytes": 4948,
+      "sha256": "7c1e7c14f7fe672467369e4e03dd16f2dd0a54bcf9608491a6f3d8df572c1d9e"
+    },
+    "source-manifest.json": {
+      "bytes": 4814,
+      "sha256": "9dfc7f0be75bad8a231ae78941ea01b85fe537dc52084160fd56ac8284866d67"
+    },
+    "tests/actions.spec.cjs": {
+      "bytes": 4897,
+      "sha256": "34705cc74732940a2e2a10f5c3b98550647c953acb755fc7988a588cdc240bfc"
+    },
+    "tests/helpers.cjs": {
+      "bytes": 1229,
+      "sha256": "bad8a8594b2cbabc4894b4bc299cf8fd176ff3f97849207c638f2810db2c121f"
+    },
+    "tests/samples.spec.cjs": {
+      "bytes": 4742,
+      "sha256": "85e59fb2269320cbe21e67f807d99d138ae3168c45c7f933108173f54690356d"
+    },
+    "tests/transport-observer.spec.cjs": {
+      "bytes": 4387,
+      "sha256": "81b3207676afa7dc9e806cbdd3fd6860568ad139b4d16114ea3b378fb390c089"
+    },
+    "tests/workflow.spec.cjs": {
+      "bytes": 11876,
+      "sha256": "8bf71aa41c2455f4e30be178dc97f334de6ed4b8b55df46b384f398f5595ce48"
+    },
+    "tools/analyze.cjs": {
+      "bytes": 1489,
+      "sha256": "81c27d3c94df3d5f01c994c0edb1b5f707fb98594ec63b63e1a8e40a84959679"
+    },
+    "tools/apply.cjs": {
+      "bytes": 441,
+      "sha256": "e00ba3345ea06d173f2d94d07c95d8fe9c09db89586f1fc0fbbb4d4904a2354a"
+    },
+    "tools/archive.cjs": {
+      "bytes": 4888,
+      "sha256": "fa61e7802541129d932a80584ae8150e1b3b5fe101996c9d033e53c73c8d2ecb"
+    },
+    "tools/build.cjs": {
+      "bytes": 2162,
+      "sha256": "b8551778099467b89b7c5cb98aa992966321497a72a990706e1265a0eee07087"
+    },
+    "tools/observe.cjs": {
+      "bytes": 6875,
+      "sha256": "56d6cd92753707d29098bc5ed6d8350e835501bd901d37abc03ec615f5e38848"
+    },
+    "tools/reconcile.cjs": {
+      "bytes": 601,
+      "sha256": "1b9a50872b6070baf8d1c8db20e1586bc055fc4bd7293cc22de15fc00248cdee"
+    },
+    "tools/repository.cjs": {
+      "bytes": 8094,
+      "sha256": "45e11d87e35ada9011410114b3f3b2822e5dd064cd3e17a51f774d6128c57119"
+    },
+    "tools/run-tests.cjs": {
+      "bytes": 1288,
+      "sha256": "148c7722880be6dc0ed6a2fa0892e191765dcf1cdd6fd497332db70e1f395ee6"
+    },
+    "tools/verify-package.cjs": {
+      "bytes": 118,
+      "sha256": "65b12ae5511ceaaf87c8b0229be6a0fec544bad188142e098ebb3997a37b924a"
+    },
+    "tools/verify.cjs": {
+      "bytes": 7032,
+      "sha256": "c81fc0b51b52702fdeedaba1e9cdc480db7408bb0f8dc0a4d0476ce8abe6210f"
+    },
+    "vendor/deployGuard.cjs": {
+      "bytes": 5078,
+      "sha256": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7"
+    }
+  }
+}
