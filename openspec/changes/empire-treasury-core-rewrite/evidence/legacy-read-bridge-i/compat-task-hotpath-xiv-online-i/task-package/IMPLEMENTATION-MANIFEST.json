@@ -1,0 +1,83 @@
+{
+  "kind": "task-hotpath-XIV-implementation/v1",
+  "purpose": "preserve full semantics while removing repeated path/helper work and locating first valid pending versus remaining task cost",
+  "compatBase": "85177467e71dcdbf9873bf6c2cd6cddb207a1c15",
+  "compatBaseTree": "a9af213f779a79aaf852e0b8a4463f135123ccc8",
+  "refactorBase": "1666c5530856239207d32690f2f284cc8633d3d6",
+  "expectedSourceTree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+  "sourceMessage": "perf(compat): streamline task arithmetic and sample path reads",
+  "paths": [
+    "docs/treasury-compat-loader-optimization.json",
+    "docs/treasury-compat-source-manifest.json",
+    "docs/treasury-compat-task-hotpath-xiv.md",
+    "scripts/build-treasury-compat-loader.cjs",
+    "scripts/lib/treasury-compat-task-xiv.cjs",
+    "src/runtime/treasuryCompatCpu.ts",
+    "src/runtime/treasuryCompatRead.ts",
+    "src/runtime/treasuryCompatReadCore.generated.ts",
+    "src/runtime/treasuryCompatRuntime.ts",
+    "src/runtime/treasuryCompatTypes.ts",
+    "test/treasury-compat/attribution.spec.cjs",
+    "test/treasury-compat/boundary-attribution-xiii.spec.cjs",
+    "test/treasury-compat/envelope-optimization.spec.cjs",
+    "test/treasury-compat/fixtures/core-before-task-hotpath-xiv.ts.txt",
+    "test/treasury-compat/fixtures/cpu-before-task-hotpath-xiv.ts.txt",
+    "test/treasury-compat/fixtures/reader-before-task-hotpath-xiv.ts.txt",
+    "test/treasury-compat/task-hotpath-xiv.spec.cjs"
+  ],
+  "newPaths": [
+    "docs/treasury-compat-task-hotpath-xiv.md",
+    "scripts/lib/treasury-compat-task-xiv.cjs",
+    "test/treasury-compat/fixtures/core-before-task-hotpath-xiv.ts.txt",
+    "test/treasury-compat/fixtures/cpu-before-task-hotpath-xiv.ts.txt",
+    "test/treasury-compat/fixtures/reader-before-task-hotpath-xiv.ts.txt",
+    "test/treasury-compat/task-hotpath-xiv.spec.cjs"
+  ],
+  "runtimeChanges": [
+    "one own-property descriptor per path step",
+    "sample-local lazy legacy projection root cursor",
+    "four ordinary pending checked-add helper calls inlined with equivalent safe-integer guards",
+    "at most one first-valid-pending CPU probe pair per complete table",
+    "XIII five-part timing and local safety latch retained"
+  ],
+  "probeReadsPerTable": {
+    "noValidPending": 0,
+    "oneOrMoreValidPending": 2
+  },
+  "businessCacheAcrossSamples": false,
+  "healthHelpersReplaced": false,
+  "fullEagerIndexPreserved": true,
+  "independentDirectCorePreserved": true,
+  "fullTableBounds": 256,
+  "projectionRows": 4,
+  "projectionQueries": 16,
+  "online": {
+    "points": 4,
+    "intervalTicks": 100,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "diagnosticSafetyCpu": 5,
+    "candidatePostsMax": 1,
+    "restorePostsMax": 1,
+    "automaticWriteRetries": 0,
+    "recoveryRuntimeMs": 75000
+  },
+  "gates": {
+    "toolTests": 65,
+    "repositorySpecs": 10,
+    "repositoryTests": 378,
+    "compiler": "5.9.3",
+    "jestSuites": 195,
+    "jestTests": 685,
+    "sourceManifestOutputs": 13,
+    "localReplay": true,
+    "rollupBuildOnly": true
+  },
+  "assertionsNotMade": [
+    "engine CPU repaired",
+    "14 CPU spike reproduced locally",
+    "JIT/GC/function-level cause assigned",
+    "12-point observation passed",
+    "Treasury production cutover authorized"
+  ]
+}

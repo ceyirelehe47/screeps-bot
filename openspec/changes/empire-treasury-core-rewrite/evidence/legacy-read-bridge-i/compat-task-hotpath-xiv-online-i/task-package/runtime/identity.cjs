@@ -1,0 +1,15 @@
+'use strict';
+const C=require('./common.cjs'),P=C.POLICY,G=require('../vendor/deployGuard.cjs');
+function modules(m){if(!C.obj(m)||Object.keys(m).length!==1||typeof m.main!=='string'||!m.main.length||Buffer.byteLength(m.main)>16*1048576)C.fail('UNRECOGNIZED_MODULE_SET');return m;}
+function digest(m){modules(m);const b=Buffer.from(m.main);return {algorithm:'deployGuard.computeModulesHash/NUL-v1',hash:G.computeModulesHash(m),files:[{name:'main',kind:'text',bytes:b.length,sha256:C.sha(b)}]};}
+function eq(a,b){modules(a);modules(b);const d=G.diffRemoteModules(a,b);return d.match&&!d.missing.length&&!d.extra.length&&!d.changed.length;}
+function build(m){modules(m);const get=n=>{const x=[...m.main.matchAll(new RegExp('const '+n+' = "([^"\\r\\n]*)"\\s*;','g'))];if(x.length!==1)C.fail('BUILD_IDENTITY_INVALID');return x[0][1];};return {commit:get('BUILD_COMMIT'),tree:get('BUILD_TREE'),deployBranch:get('BUILD_DEPLOY_BRANCH'),tag:get('BUILD_TAG')};}
+function canonical(m){const d=digest(m),b=build(m);if(!C.same(d,P.backupDigest)||b.commit!==P.backupBuild.commit||b.tree!==P.backupBuild.tree||b.deployBranch!=='default'||b.tag!==P.backupBuild.tag)C.fail('LIVE_BASELINE_DRIFT_UNRESOLVED');return {modules:m,digest:d,build:b};}
+function candidate(m,head,tree){const b=build(m);if(b.commit!==head||b.tree!==tree||b.deployBranch!=='default')C.fail('CANDIDATE_BUILD_IDENTITY_MISMATCH');const x=m.main.match(/\n;globalThis\.__DEPLOY_BUNDLE_HASH__="([a-f0-9]{64})";\n$/);if(!x||C.sha(m.main.slice(0,x.index))!==x[1])C.fail('CANDIDATE_BUNDLE_HASH_MISMATCH');return {...b,embeddedBundleHash:x[1]};}
+function account(x){if(x?.ok!==1||x._id!==P.expected.userId||x.username!==P.expected.username)C.fail('ACCOUNT_MISMATCH');}
+function active(x){if(x?.ok!==1||!Array.isArray(x.list))C.fail('ACTIVE_BRANCH_INVALID');const names=new Set();for(const b of x.list){if(!C.obj(b)||typeof b.branch!=='string'||!b.branch||names.has(b.branch)||(b.activeWorld!==undefined&&typeof b.activeWorld!=='boolean'))C.fail('ACTIVE_BRANCH_INVALID');names.add(b.branch);}const a=x.list.filter(b=>b.activeWorld===true);if(a.length!==1||a[0].branch!==P.expected.branch)C.fail('ACTIVE_BRANCH_CHANGED');}
+function rooms(x){const r=x?.shards?.[P.expected.shard]?.rooms;if(x?.ok!==1||!Array.isArray(r)||P.rooms.some(n=>!r.includes(n)))C.fail('ROOM_OWNERSHIP_INVALID');return r;}
+function tick(x){if(x?.ok!==1||!Number.isSafeInteger(x.time)||x.time<0)C.fail('GAME_TICK_INVALID');return x.time;}
+async function current(api,budget){account(await api.me(budget(15000)));active(await api.branches(budget(15000)));const r=await api.code(budget(P.requestMs));if(r?.ok!==1)C.fail('MODULE_RESPONSE_INVALID');modules(r.modules);active(await api.branches(budget(15000)));return {modules:r.modules,digest:digest(r.modules),build:build(r.modules),atMs:Date.now()};}
+function state(m,s){if(eq(m,s.backup))return 'CURRENT_IS_BACKUP';if(eq(m,s.candidate))return 'CURRENT_IS_CANDIDATE';C.fail('CONFLICT_CURRENT_NOT_OUR_DEPLOYMENT');}
+module.exports={modules,digest,eq,build,canonical,candidate,account,active,rooms,tick,current,state};

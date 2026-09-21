@@ -1,0 +1,16 @@
+{
+  "runId": "fca814ca750585393e8ab656eaa09bbe",
+  "pid": 48396,
+  "atMs": 1790008835341,
+  "streaming": true,
+  "lastConsole": 1790008834863,
+  "lastCpu": 1790008834873,
+  "lastPositiveCpu": 1790008834873,
+  "accepted": 2,
+  "raw": 2,
+  "complete": 0,
+  "issues": [],
+  "deploySeen": true,
+  "duplicates": 0,
+  "safety": false
+}

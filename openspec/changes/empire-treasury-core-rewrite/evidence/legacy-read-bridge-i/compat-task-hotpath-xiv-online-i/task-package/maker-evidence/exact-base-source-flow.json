@@ -1,0 +1,90 @@
+{
+  "kind": "maker-exact-base-source-flow/v1",
+  "before": {
+    "head": "85177467e71dcdbf9873bf6c2cd6cddb207a1c15",
+    "tree": "a9af213f779a79aaf852e0b8a4463f135123ccc8"
+  },
+  "applied": {
+    "status": "TASK_XIV_SOURCE_APPLIED",
+    "resumed": false,
+    "head": "cec9f94578ae4aea3f7dd0757d5eb1c4ed722419",
+    "tree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+    "base": "85177467e71dcdbf9873bf6c2cd6cddb207a1c15",
+    "paths": 17
+  },
+  "resumed": {
+    "status": "TASK_XIV_SOURCE_REUSED",
+    "resumed": true,
+    "head": "cec9f94578ae4aea3f7dd0757d5eb1c4ed722419",
+    "tree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+    "base": "85177467e71dcdbf9873bf6c2cd6cddb207a1c15",
+    "paths": 17
+  },
+  "binding": {
+    "runId": "fca814ca750585393e8ab656eaa09bbe",
+    "source": {
+      "head": "cec9f94578ae4aea3f7dd0757d5eb1c4ed722419",
+      "tree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+      "base": "85177467e71dcdbf9873bf6c2cd6cddb207a1c15",
+      "paths": 17
+    },
+    "profile": {
+      "enabled": true,
+      "shardName": "shard1",
+      "rooms": [
+        "E3N59",
+        "E4N58"
+      ],
+      "resources": [
+        "energy",
+        "H"
+      ],
+      "startTick": 1200,
+      "endTick": 1500,
+      "intervalTicks": 100,
+      "minBucket": 2000,
+      "maxSampleCpu": 2,
+      "reserveCpu": 5,
+      "maxLogBytes": 16384
+    },
+    "observedTick": 1000,
+    "profileHead": "82dbabf8169254cec1072fdc21b401f6ca334503",
+    "profileTree": "d0ddc367c356a644cd63f9dffc350b547fd83884"
+  },
+  "closed": {
+    "status": "SOURCE_DEFAULT_OFF_RESTORED",
+    "sourceHead": "cec9f94578ae4aea3f7dd0757d5eb1c4ed722419",
+    "closedHead": "cfe8bbacf8483f525bd6af0be4529ea2d52330af",
+    "sameTreeAsSource": true,
+    "atMs": 1789965762468
+  },
+  "after": {
+    "head": "cfe8bbacf8483f525bd6af0be4529ea2d52330af",
+    "tree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+    "changes": [
+      "docs/treasury-compat-loader-optimization.json",
+      "docs/treasury-compat-source-manifest.json",
+      "docs/treasury-compat-task-hotpath-xiv.md",
+      "scripts/build-treasury-compat-loader.cjs",
+      "scripts/lib/treasury-compat-task-xiv.cjs",
+      "src/runtime/treasuryCompatCpu.ts",
+      "src/runtime/treasuryCompatRead.ts",
+      "src/runtime/treasuryCompatReadCore.generated.ts",
+      "src/runtime/treasuryCompatRuntime.ts",
+      "src/runtime/treasuryCompatTypes.ts",
+      "test/treasury-compat/attribution.spec.cjs",
+      "test/treasury-compat/boundary-attribution-xiii.spec.cjs",
+      "test/treasury-compat/envelope-optimization.spec.cjs",
+      "test/treasury-compat/fixtures/core-before-task-hotpath-xiv.ts.txt",
+      "test/treasury-compat/fixtures/cpu-before-task-hotpath-xiv.ts.txt",
+      "test/treasury-compat/fixtures/reader-before-task-hotpath-xiv.ts.txt",
+      "test/treasury-compat/task-hotpath-xiv.spec.cjs"
+    ],
+    "clean": true,
+    "commitCount": "3"
+  },
+  "gitContentAuthenticated": true,
+  "repositoryCopyContainsAllCurrentSourceFiles": true,
+  "realNetwork": false,
+  "productionPush": false
+}

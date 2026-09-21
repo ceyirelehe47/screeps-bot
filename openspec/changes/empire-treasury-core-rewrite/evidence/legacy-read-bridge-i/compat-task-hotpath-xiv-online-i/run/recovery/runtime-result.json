@@ -1,0 +1,16 @@
+{
+  "status": "RECOVERY_RUNTIME_COLLECTED",
+  "reason": "runtime_complete",
+  "parentRunId": "fca814ca750585393e8ab656eaa09bbe",
+  "invocationId": "fca814ca750585393e8ab656eaa09bbe",
+  "closureId": "8d877dc5d180d2e6fe364d6dd81259b0",
+  "pid": 5040,
+  "createdAtMs": 1790008855288,
+  "startedAtMs": 1790008858345,
+  "endedAtMs": 1790008933553,
+  "monotonicDurationMs": 75204,
+  "requestedDurationMs": 75000,
+  "authentications": 1,
+  "observationSamplesAccepted": 0,
+  "scope": "fresh shard1 console plus account-level CPU; code bytes verified separately"
+}

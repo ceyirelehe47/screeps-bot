@@ -1,0 +1,17 @@
+{
+  "confirmed": true,
+  "accepted": true,
+  "digest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "a4a020969211a756a1b9ab63a655ac8d4e537dde04d361d60f0390e97b6bc479",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4615913,
+        "sha256": "b68596349e5f599d1bb25f361c975526b73cd1c23df2807e5ddab0946171a587"
+      }
+    ]
+  },
+  "atMs": 1790006994755
+}

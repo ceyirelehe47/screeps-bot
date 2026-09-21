@@ -1,0 +1,34 @@
+{
+  "runtime/common.cjs": {
+    "bytes": 5733,
+    "sha256": "b47a7c5874f0c5b8b5dd0a59dfea9c618e0ea77d7c4864d64dba18c0c714d148"
+  },
+  "runtime/collector.cjs": {
+    "bytes": 2696,
+    "sha256": "0f91da48e9b1c01e8b35263b928db1d87263096611009f6107746f228f949ad4"
+  },
+  "runtime/identity.cjs": {
+    "bytes": 3080,
+    "sha256": "92f6bcf56724332f7b76093770cdcefc9b3af42b6ebab0c50bbc25af699e1e82"
+  },
+  "runtime/transport.cjs": {
+    "bytes": 3213,
+    "sha256": "3564c41f35a96161e272fd8a13f1de51f5b2f5375d63ba9118f39b2416e51c11"
+  },
+  "runtime/observer.cjs": {
+    "bytes": 7069,
+    "sha256": "33c9c18014b1ec71513f44eaf62aeede550d468c802f6a51abdd8a27e147456c"
+  },
+  "runtime/actions.cjs": {
+    "bytes": 6136,
+    "sha256": "4753ce901512c4fbbb269fa81397070909065c7dd517d72ccb038e7b39da1a7b"
+  },
+  "runtime/worker.cjs": {
+    "bytes": 4948,
+    "sha256": "7c1e7c14f7fe672467369e4e03dd16f2dd0a54bcf9608491a6f3d8df572c1d9e"
+  },
+  "vendor/deployGuard.cjs": {
+    "bytes": 5078,
+    "sha256": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7"
+  }
+}

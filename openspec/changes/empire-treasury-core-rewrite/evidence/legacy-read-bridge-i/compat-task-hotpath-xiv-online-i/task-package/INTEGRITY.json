@@ -1,0 +1,173 @@
+{
+  "kind": "package-integrity/v1",
+  "files": {
+    "AGENT-RUN.md": {
+      "bytes": 15725,
+      "sha256": "b26677ee4a632e5604081fe8850f9ba008df9959dc137a5848dcf81585de408b"
+    },
+    "IMPLEMENTATION-MANIFEST.json": {
+      "bytes": 3249,
+      "sha256": "c827629a1a97c2243043d87c96c617c9c6bad8cc18837882baeae85664a62e07"
+    },
+    "MAKER-VALIDATION.json": {
+      "bytes": 1281,
+      "sha256": "ceaf542ea15b42e844efadb114202dfa83e7f6e57b605119775234db15117ce0"
+    },
+    "README.md": {
+      "bytes": 824,
+      "sha256": "a77f011929ad73eac6944b50773aacab4ab2bc12f77820fa1a946ad9bd7b637b"
+    },
+    "maker-evidence/exact-base-source-flow.json": {
+      "bytes": 3043,
+      "sha256": "3c30ba122acfa14e3ebca5a4cd0f6940eaf10a90321bc00b66d68b77761d6e9f"
+    },
+    "maker-evidence/local-replay-5.8.3.json": {
+      "bytes": 6090,
+      "sha256": "b9b959e2f6d41747b876c9d64f4f7f490525f79cebb26eb2917a9334cff8288d"
+    },
+    "maker-evidence/repository-node-5.8.3.tap": {
+      "bytes": 78604,
+      "sha256": "e7ab985b8b5e6d818c1d1bd97b85b49c29064aac0d15463d1f9d59d311f665a4"
+    },
+    "patches/source.patch": {
+      "bytes": 159220,
+      "sha256": "cf4f320c100e81f4fc475a246ef93da2d27c8feb6ac3a67cd5d963ab81f04f37"
+    },
+    "policy.json": {
+      "bytes": 2264,
+      "sha256": "9e8085ec4c8e9f115cc9250e2465fdecebc9d8a1187e488a46d1d48b81c29157"
+    },
+    "references/PROVENANCE.md": {
+      "bytes": 1623,
+      "sha256": "38404b8a3214b361a99ac58ee46327d1219f96120d14d8ddd675c5294e1cd797"
+    },
+    "references/inherited-modules.json": {
+      "bytes": 1066,
+      "sha256": "b515b5af68d2a86bb568ea115f7d71072eb2fd3c0be2c48d5b6a2fbc47364af1"
+    },
+    "references/prior-anomaly.json": {
+      "bytes": 2598,
+      "sha256": "cc5856314042fac707c5bda33c4720e753ef92fbe8941baec9cd24cb42d39360"
+    },
+    "references/synthetic-four-reports.json": {
+      "bytes": 39693,
+      "sha256": "d6c3fb196d93e25b7f5717ffdc7f13c5291354ead23359b2f62e650797a4af1e"
+    },
+    "references/test-contract.json": {
+      "bytes": 13,
+      "sha256": "bf712a68996fc16a6b9e83f68af137b6c4f3a2c8a2d1476edafc39f0b832af9a"
+    },
+    "runtime/actions.cjs": {
+      "bytes": 6136,
+      "sha256": "4753ce901512c4fbbb269fa81397070909065c7dd517d72ccb038e7b39da1a7b"
+    },
+    "runtime/collector.cjs": {
+      "bytes": 2696,
+      "sha256": "0f91da48e9b1c01e8b35263b928db1d87263096611009f6107746f228f949ad4"
+    },
+    "runtime/common.cjs": {
+      "bytes": 5733,
+      "sha256": "b47a7c5874f0c5b8b5dd0a59dfea9c618e0ea77d7c4864d64dba18c0c714d148"
+    },
+    "runtime/identity.cjs": {
+      "bytes": 3080,
+      "sha256": "92f6bcf56724332f7b76093770cdcefc9b3af42b6ebab0c50bbc25af699e1e82"
+    },
+    "runtime/observer.cjs": {
+      "bytes": 7069,
+      "sha256": "33c9c18014b1ec71513f44eaf62aeede550d468c802f6a51abdd8a27e147456c"
+    },
+    "runtime/samples.cjs": {
+      "bytes": 12796,
+      "sha256": "d11aa9bbdcf0801bea69f054e92d21a7ff5af10e0d951a20b6ebfaaf1ef83471"
+    },
+    "runtime/task-trace.cjs": {
+      "bytes": 2798,
+      "sha256": "a2e03246bd191cdbe22664ac7d579f65055dd5400cd4009c257cfb38a0cec653"
+    },
+    "runtime/transport.cjs": {
+      "bytes": 3213,
+      "sha256": "3564c41f35a96161e272fd8a13f1de51f5b2f5375d63ba9118f39b2416e51c11"
+    },
+    "runtime/worker.cjs": {
+      "bytes": 4948,
+      "sha256": "7c1e7c14f7fe672467369e4e03dd16f2dd0a54bcf9608491a6f3d8df572c1d9e"
+    },
+    "source-manifest.json": {
+      "bytes": 6878,
+      "sha256": "35536a34b993e02e7bc94af747b45573d2e9322bd6a9403fccc8ca0bb3209b0b"
+    },
+    "tests/actions.spec.cjs": {
+      "bytes": 4911,
+      "sha256": "3acdf49c4d1a5d32378e5d783d9717a858fbb880821a6bfa9eb106a49d89fe3a"
+    },
+    "tests/helpers.cjs": {
+      "bytes": 1228,
+      "sha256": "769efcdabed69ad2d84d077cdc2179ac35be2735a901baab793572dc65bf058b"
+    },
+    "tests/samples.spec.cjs": {
+      "bytes": 4741,
+      "sha256": "d035bed01900925cb2631c6402d1d5123f74370365d171468c31eb44b4d9af7d"
+    },
+    "tests/task-trace.spec.cjs": {
+      "bytes": 3244,
+      "sha256": "d49be70d7d40f6d091816481524e4cc8587215d26a5dd1edcada47fd1000f847"
+    },
+    "tests/transport-observer.spec.cjs": {
+      "bytes": 4387,
+      "sha256": "81b3207676afa7dc9e806cbdd3fd6860568ad139b4d16114ea3b378fb390c089"
+    },
+    "tests/workflow.spec.cjs": {
+      "bytes": 11865,
+      "sha256": "0636960be08f4461b5c313a325669ebd8f4c8cbf7e6aacaf30e386c72b97d792"
+    },
+    "tools/analyze.cjs": {
+      "bytes": 2085,
+      "sha256": "89ad94d47b24ec170266f95062b4b2057165a2b466bc36c85aedda3947253aad"
+    },
+    "tools/apply.cjs": {
+      "bytes": 441,
+      "sha256": "e00ba3345ea06d173f2d94d07c95d8fe9c09db89586f1fc0fbbb4d4904a2354a"
+    },
+    "tools/archive.cjs": {
+      "bytes": 4860,
+      "sha256": "c782803287c6b029a1a56567460cc451554ea963151525955f73b8c7cf221491"
+    },
+    "tools/build.cjs": {
+      "bytes": 2296,
+      "sha256": "a40760604cf84eada3564b5b8aa469ff31a8568bec50e92e07dcc909c47311b0"
+    },
+    "tools/observe.cjs": {
+      "bytes": 6865,
+      "sha256": "f3cf2d6653761cb31ed7e36d312d643f96aace0dfcebd94204d2ff21912e10b1"
+    },
+    "tools/profile-local.cjs": {
+      "bytes": 3308,
+      "sha256": "617b0888326d735a86ff36f1e3d3474f9528da1893f6ac79d439911d0d29b0d9"
+    },
+    "tools/reconcile.cjs": {
+      "bytes": 601,
+      "sha256": "1b9a50872b6070baf8d1c8db20e1586bc055fc4bd7293cc22de15fc00248cdee"
+    },
+    "tools/repository.cjs": {
+      "bytes": 8069,
+      "sha256": "bfd86aa9b3cbf44e72b95419bf3ae1c4898fa4eb7d7b7f20beb844dc25f855db"
+    },
+    "tools/run-tests.cjs": {
+      "bytes": 1283,
+      "sha256": "ffe132573722d31ebe5bcbb5ec328efb43176f04c583694bf7645390fda2940f"
+    },
+    "tools/verify-package.cjs": {
+      "bytes": 118,
+      "sha256": "65b12ae5511ceaaf87c8b0229be6a0fec544bad188142e098ebb3997a37b924a"
+    },
+    "tools/verify.cjs": {
+      "bytes": 7368,
+      "sha256": "d38808debdf191d0ff0aabdd897d4f673377cf5d57bb28599be8b71bc33fbee0"
+    },
+    "vendor/deployGuard.cjs": {
+      "bytes": 5078,
+      "sha256": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7"
+    }
+  }
+}

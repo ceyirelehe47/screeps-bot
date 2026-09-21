@@ -1,0 +1,145 @@
+{
+  "status": "CPU_DIAGNOSTIC_CAPTURE_INCONCLUSIVE",
+  "captureVerified": false,
+  "closure": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+  "runtime": {
+    "status": "RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED",
+    "durationMs": 75204,
+    "consoleFrames": 19,
+    "cpuFrames": 20,
+    "positiveCpuFramesAfterReady": 18,
+    "maxConsoleGapMs": 4834,
+    "maxCpuGapMs": 4816,
+    "closureId": "8d877dc5d180d2e6fe364d6dd81259b0"
+  },
+  "uploadOutcomeResolved": true,
+  "sourceOff": true,
+  "sourceHead": "90fd49221d1dbf12365d60edea25d8f153d2a1cb",
+  "profileHead": "e7ae9dbfd8a653dfb096d0f00cbc0db769535619",
+  "rawReports": 2,
+  "acceptedReports": 2,
+  "completeSamples": 0,
+  "duplicates": 0,
+  "expectedTicks": [
+    73853300,
+    73853400,
+    73853500,
+    73853600
+  ],
+  "acceptedTicks": [
+    73853300,
+    73853400
+  ],
+  "rawSummary": [
+    {
+      "tick": 73853300,
+      "prefix": 2.654212599998573,
+      "reportedCalls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 0
+      },
+      "trace": {
+        "status": "not_called",
+        "parentInterval": 0.06790290000208188,
+        "actualCallCost": null
+      },
+      "traceError": null,
+      "taskTrace": {
+        "status": "not_called",
+        "firstPendingOrdinal": null,
+        "taskInterval": null
+      },
+      "taskTraceError": null,
+      "preCommitmentCpu": 2.5740935999929206,
+      "phaseIntervals": {
+        "legacyInputs": 0.6241637999992236,
+        "directRead": 0.547550900002534,
+        "readerLoad": 0.5677216999902157,
+        "observationBuild": 0.7613593000060064,
+        "coreCompare": 0.07329789999494096,
+        "commitmentBuild": 0.06790290000208188,
+        "report": 0.012216100003570318,
+        "serializationAndSize": 0
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 60
+      },
+      "accepted": true,
+      "claimedComplete": false
+    },
+    {
+      "tick": 73853400,
+      "prefix": 2.094518399993831,
+      "reportedCalls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 0
+      },
+      "trace": {
+        "status": "not_called",
+        "parentInterval": 0.1169986999957473,
+        "actualCallCost": null
+      },
+      "traceError": null,
+      "taskTrace": {
+        "status": "not_called",
+        "firstPendingOrdinal": null,
+        "taskInterval": null
+      },
+      "taskTraceError": null,
+      "preCommitmentCpu": 1.9626047999990988,
+      "phaseIntervals": {
+        "legacyInputs": 0.48924719999195077,
+        "directRead": 0.46744880000915146,
+        "readerLoad": 0.12377429999469314,
+        "observationBuild": 0.8227219000036712,
+        "coreCompare": 0.05941259999963222,
+        "commitmentBuild": 0.1169986999957473,
+        "report": 0.014914899998984765,
+        "serializationAndSize": 0
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 61
+      },
+      "accepted": true,
+      "claimedComplete": false
+    }
+  ],
+  "completedTailProfiles": [
+    {
+      "tick": 73853300,
+      "elapsed": 3.340667199998279,
+      "phases": {
+        "legacyInputs": 0.6241637999992236,
+        "directRead": 0.547550900002534,
+        "readerLoad": 0.5677216999902157,
+        "observationBuild": 0.7613593000060064,
+        "coreCompare": 0.07329789999494096,
+        "commitmentBuild": 0.06790290000208188,
+        "report": 0.012216100003570318,
+        "serializationAndSize": 0.5193785999945248,
+        "emit": 0.1305564000067534,
+        "retention": 0.03651959999842802
+      }
+    }
+  ],
+  "writeBoundaries": {
+    "candidate": 1,
+    "restore": 1
+  },
+  "issues": [
+    "FOUR_REPORTS_REQUIRED",
+    "GUARD_DID_NOT_COMPLETE"
+  ],
+  "engineCpuGapRepaired": false,
+  "fullCompatibilityObserved": false,
+  "rootCauseAssigned": false,
+  "atMs": 1790009146687
+}

@@ -1,0 +1,2278 @@
+TAP version 13
+# Subtest: IX accounting omits attribution when no boundary or work was recorded
+ok 1 - IX accounting omits attribution when no boundary or work was recorded
+  ---
+  duration_ms: 78.590627
+  type: 'test'
+  ...
+# Subtest: IX accounting records bounded nested intervals and keeps parent elapsed independent
+ok 2 - IX accounting records bounded nested intervals and keeps parent elapsed independent
+  ---
+  duration_ms: 33.631385
+  type: 'test'
+  ...
+# Subtest: IX accounting exposes an active region on a fault snapshot instead of inventing an end
+ok 3 - IX accounting exposes an active region on a fault snapshot instead of inventing an end
+  ---
+  duration_ms: 21.031854
+  type: 'test'
+  ...
+# Subtest: IX accounting accumulates primitive work and freezes snapshots
+ok 4 - IX accounting accumulates primitive work and freezes snapshots
+  ---
+  duration_ms: 15.822407
+  type: 'test'
+  ...
+# Subtest: IX accounting rejects unknown, negative, fractional and overflowing work
+ok 5 - IX accounting rejects unknown, negative, fractional and overflowing work
+  ---
+  duration_ms: 15.802086
+  type: 'test'
+  ...
+# Subtest: IX accounting rejects non-monotonic and unlisted subphase boundaries
+ok 6 - IX accounting rejects non-monotonic and unlisted subphase boundaries
+  ---
+  duration_ms: 18.295262
+  type: 'test'
+  ...
+# Subtest: IX transform exactly restores the committed Build VII core prefix
+ok 7 - IX transform exactly restores the committed Build VII core prefix
+  ---
+  duration_ms: 18.708596
+  type: 'test'
+  ...
+# Subtest: IX transform refuses shifted source instead of approximately instrumenting it
+ok 8 - IX transform refuses shifted source instead of approximately instrumenting it
+  ---
+  duration_ms: 0.540436
+  type: 'test'
+  ...
+# Subtest: IX direct builder callback sequence is coarse and deterministic
+ok 9 - IX direct builder callback sequence is coarse and deterministic
+  ---
+  duration_ms: 150.627257
+  type: 'test'
+  ...
+# Subtest: IX empty direct build reports bounded observation and commitment work
+ok 10 - IX empty direct build reports bounded observation and commitment work
+  ---
+  duration_ms: 131.837739
+  type: 'test'
+  ...
+# Subtest: IX task work counters describe validation, health and route composition
+ok 11 - IX task work counters describe validation, health and route composition
+  ---
+  duration_ms: 144.120214
+  type: 'test'
+  ...
+# Subtest: IX reservation work counters separate invalid events, owner evaluations and active rows
+ok 12 - IX reservation work counters separate invalid events, owner evaluations and active rows
+  ---
+  duration_ms: 138.660538
+  type: 'test'
+  ...
+# Subtest: IX work reports final private index sizes without exposing the maps
+ok 13 - IX work reports final private index sizes without exposing the maps
+  ---
+  duration_ms: 99.454048
+  type: 'test'
+  ...
+# Subtest: IX diagnostics are optional and absent callbacks preserve Build VII direct API bytes
+ok 14 - IX diagnostics are optional and absent callbacks preserve Build VII direct API bytes
+  ---
+  duration_ms: 149.176045
+  type: 'test'
+  ...
+# Subtest: IX real preview emits all nine subphase intervals and closes the active region
+ok 15 - IX real preview emits all nine subphase intervals and closes the active region
+  ---
+  duration_ms: 83.92213
+  type: 'test'
+  ...
+# Subtest: IX real preview reports projection plan, completed rows and exact query count
+ok 16 - IX real preview reports projection plan, completed rows and exact query count
+  ---
+  duration_ms: 72.735435
+  type: 'test'
+  ...
+# Subtest: IX preview attribution remains nested in existing top-level calls and phases
+ok 17 - IX preview attribution remains nested in existing top-level calls and phases
+  ---
+  duration_ms: 81.850842
+  type: 'test'
+  ...
+# Subtest: IX diagnostics-disabled preview emits no cpuProfile and remains byte-identical to Build VII
+ok 18 - IX diagnostics-disabled preview emits no cpuProfile and remains byte-identical to Build VII
+  ---
+  duration_ms: 173.756836
+  type: 'test'
+  ...
+# Subtest: IX CPU-port reads remain bounded rather than scaling with 256 tasks
+ok 19 - IX CPU-port reads remain bounded rather than scaling with 256 tasks
+  ---
+  duration_ms: 157.38914
+  type: 'test'
+  ...
+# Subtest: XII first and later samples retain prefix attribution without duplicating it into completion
+ok 20 - XII first and later samples retain prefix attribution without duplicating it into completion
+  ---
+  duration_ms: 101.393408
+  type: 'test'
+  ...
+# Subtest: IX partial projection reports planned and completed rows without manufacturing completeness
+ok 21 - IX partial projection reports planned and completed rows without manufacturing completeness
+  ---
+  duration_ms: 69.664426
+  type: 'test'
+  ...
+# Subtest: IX invalid work callback faults only the compatibility preview, never old business state
+ok 22 - IX invalid work callback faults only the compatibility preview, never old business state
+  ---
+  duration_ms: 71.473879
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: empty
+ok 23 - IX Build VII/IX diagnostics-off byte parity: empty
+  ---
+  duration_ms: 157.554329
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: manual
+ok 24 - IX Build VII/IX diagnostics-off byte parity: manual
+  ---
+  duration_ms: 134.310754
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: sixteen
+ok 25 - IX Build VII/IX diagnostics-off byte parity: sixteen
+  ---
+  duration_ms: 139.492379
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: bound256
+ok 26 - IX Build VII/IX diagnostics-off byte parity: bound256
+  ---
+  duration_ms: 181.166992
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: overBound257
+ok 27 - IX Build VII/IX diagnostics-off byte parity: overBound257
+  ---
+  duration_ms: 152.200132
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: invalidRecord
+ok 28 - IX Build VII/IX diagnostics-off byte parity: invalidRecord
+  ---
+  duration_ms: 144.132288
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: invalidResource
+ok 29 - IX Build VII/IX diagnostics-off byte parity: invalidResource
+  ---
+  duration_ms: 140.268141
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: missingTasks
+ok 30 - IX Build VII/IX diagnostics-off byte parity: missingTasks
+  ---
+  duration_ms: 136.587622
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: invalidReservationContainer
+ok 31 - IX Build VII/IX diagnostics-off byte parity: invalidReservationContainer
+  ---
+  duration_ms: 140.30027
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: activeReservation
+ok 32 - IX Build VII/IX diagnostics-off byte parity: activeReservation
+  ---
+  duration_ms: 136.665019
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: expiredReservation
+ok 33 - IX Build VII/IX diagnostics-off byte parity: expiredReservation
+  ---
+  duration_ms: 140.196574
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: exactExpiry
+ok 34 - IX Build VII/IX diagnostics-off byte parity: exactExpiry
+  ---
+  duration_ms: 154.559115
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: missingOwner
+ok 35 - IX Build VII/IX diagnostics-off byte parity: missingOwner
+  ---
+  duration_ms: 130.223871
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: typedOwner
+ok 36 - IX Build VII/IX diagnostics-off byte parity: typedOwner
+  ---
+  duration_ms: 134.964921
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: capacity8M
+ok 37 - IX Build VII/IX diagnostics-off byte parity: capacity8M
+  ---
+  duration_ms: 138.886706
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: saturatedCapacity
+ok 38 - IX Build VII/IX diagnostics-off byte parity: saturatedCapacity
+  ---
+  duration_ms: 131.178901
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: missingTerminal
+ok 39 - IX Build VII/IX diagnostics-off byte parity: missingTerminal
+  ---
+  duration_ms: 127.571553
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: unseenRoom
+ok 40 - IX Build VII/IX diagnostics-off byte parity: unseenRoom
+  ---
+  duration_ms: 169.331898
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: sparseMismatch
+ok 41 - IX Build VII/IX diagnostics-off byte parity: sparseMismatch
+  ---
+  duration_ms: 141.95673
+  type: 'test'
+  ...
+# Subtest: IX Build VII/IX diagnostics-off byte parity: legacyMismatch
+ok 42 - IX Build VII/IX diagnostics-off byte parity: legacyMismatch
+  ---
+  duration_ms: 137.389973
+  type: 'test'
+  ...
+# Subtest: IX source manifest gate covers every listed output identity
+ok 43 - IX source manifest gate covers every listed output identity
+  ---
+  duration_ms: 0.319963
+  type: 'test'
+  ...
+# Subtest: IX generated-output gate rejects a stale manifest identity
+ok 44 - IX generated-output gate rejects a stale manifest identity
+  ---
+  duration_ms: 12.598489
+  type: 'test'
+  ...
+# Subtest: IX fixed-output gate rejects a byte-changed listed output
+ok 45 - IX fixed-output gate rejects a byte-changed listed output
+  ---
+  duration_ms: 0.817484
+  type: 'test'
+  ...
+# Subtest: IX source manifest gate rejects missing or duplicate output rows
+ok 46 - IX source manifest gate rejects missing or duplicate output rows
+  ---
+  duration_ms: 13.166587
+  type: 'test'
+  ...
+# Subtest: XIII exact reversible transform and public IX-to-live chain
+ok 47 - XIII exact reversible transform and public IX-to-live chain
+  ---
+  duration_ms: 4.485975
+  type: 'test'
+  ...
+# Subtest: XIII six marks close parent, call and measured body without subtracting overhead
+ok 48 - XIII six marks close parent, call and measured body without subtracting overhead
+  ---
+  duration_ms: 78.154204
+  type: 'test'
+  ...
+# Subtest: XIII call-not-made is distinct from zero cost
+ok 49 - XIII call-not-made is distinct from zero cost
+  ---
+  duration_ms: 34.199946
+  type: 'test'
+  ...
+# Subtest: XIII missing inner marks are incomplete rather than synthesized
+ok 50 - XIII missing inner marks are incomplete rather than synthesized
+  ---
+  duration_ms: 24.753728
+  type: 'test'
+  ...
+# Subtest: XIII duplicate and regressed envelope boundaries fail closed
+ok 51 - XIII duplicate and regressed envelope boundaries fail closed
+  ---
+  duration_ms: 49.921651
+  type: 'test'
+  ...
+# Subtest: XIII non-finite envelope boundary is rejected
+ok 52 - XIII non-finite envelope boundary is rejected
+  ---
+  duration_ms: 42.274551
+  type: 'test'
+  ...
+# Subtest: XIII snapshots are immutable and tail does not repeat envelope
+ok 53 - XIII snapshots are immutable and tail does not repeat envelope
+  ---
+  duration_ms: 28.073572
+  type: 'test'
+  ...
+# Subtest: XIII real full builder has complete trace and 4 projection rows
+ok 54 - XIII real full builder has complete trace and 4 projection rows
+  ---
+  duration_ms: 154.526245
+  type: 'test'
+  ...
+# Subtest: XIII constant added probes with 0 tasks and reservations
+ok 55 - XIII constant added probes with 0 tasks and reservations
+  ---
+  duration_ms: 168.199056
+  type: 'test'
+  ...
+# Subtest: XIII constant added probes with 14 tasks and reservations
+ok 56 - XIII constant added probes with 14 tasks and reservations
+  ---
+  duration_ms: 157.004168
+  type: 'test'
+  ...
+# Subtest: XIII constant added probes with 256 tasks and reservations
+ok 57 - XIII constant added probes with 256 tasks and reservations
+  ---
+  duration_ms: 158.798578
+  type: 'test'
+  ...
+# Subtest: XIII call-entry injection stays outside body, and stops later samples
+ok 58 - XIII call-entry injection stays outside body, and stops later samples
+  ---
+  duration_ms: 73.012358
+  type: 'test'
+  ...
+# Subtest: XIII body injection is inside measured body, not relabeled as entry
+ok 59 - XIII body injection is inside measured body, not relabeled as entry
+  ---
+  duration_ms: 71.747547
+  type: 'test'
+  ...
+# Subtest: XIII call-return injection stays outside measured body
+ok 60 - XIII call-return injection stays outside measured body
+  ---
+  duration_ms: 66.767815
+  type: 'test'
+  ...
+# Subtest: XIII tail overrun latches even when emitted prefix was below five
+ok 61 - XIII tail overrun latches even when emitted prefix was below five
+  ---
+  duration_ms: 68.149913
+  type: 'test'
+  ...
+# Subtest: XIII notification exception cannot clear the latch or escape
+ok 62 - XIII notification exception cannot clear the latch or escape
+  ---
+  duration_ms: 70.110845
+  type: 'test'
+  ...
+# Subtest: XIII reset after first due tick cannot re-arm a later sample
+ok 63 - XIII reset after first due tick cannot re-arm a later sample
+  ---
+  duration_ms: 62.219446
+  type: 'test'
+  ...
+# Subtest: XIII first due CPU admission skipped cannot silently shift the window
+ok 64 - XIII first due CPU admission skipped cannot silently shift the window
+  ---
+  duration_ms: 69.804742
+  type: 'test'
+  ...
+# Subtest: XIII OFF does not touch any port
+ok 65 - XIII OFF does not touch any port
+  ---
+  duration_ms: 67.569006
+  type: 'test'
+  ...
+# Subtest: XIII no extra probes when builder never called
+ok 66 - XIII no extra probes when builder never called
+  ---
+  duration_ms: 251.965136
+  type: 'test'
+  ...
+# Subtest: XIII measurement fault disables preview and cannot escape old bot
+ok 67 - XIII measurement fault disables preview and cannot escape old bot
+  ---
+  duration_ms: 60.587762
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: empty
+ok 68 - XIII business parity and no writes: empty
+  ---
+  duration_ms: 174.891725
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: manual
+ok 69 - XIII business parity and no writes: manual
+  ---
+  duration_ms: 141.868778
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: sixteen
+ok 70 - XIII business parity and no writes: sixteen
+  ---
+  duration_ms: 144.018254
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: bound256
+ok 71 - XIII business parity and no writes: bound256
+  ---
+  duration_ms: 161.729906
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: overBound257
+ok 72 - XIII business parity and no writes: overBound257
+  ---
+  duration_ms: 171.636247
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: invalidRecord
+ok 73 - XIII business parity and no writes: invalidRecord
+  ---
+  duration_ms: 149.857895
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: invalidResource
+ok 74 - XIII business parity and no writes: invalidResource
+  ---
+  duration_ms: 154.477111
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: missingTasks
+ok 75 - XIII business parity and no writes: missingTasks
+  ---
+  duration_ms: 149.241673
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: invalidReservationContainer
+ok 76 - XIII business parity and no writes: invalidReservationContainer
+  ---
+  duration_ms: 141.224925
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: activeReservation
+ok 77 - XIII business parity and no writes: activeReservation
+  ---
+  duration_ms: 146.495175
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: expiredReservation
+ok 78 - XIII business parity and no writes: expiredReservation
+  ---
+  duration_ms: 157.610459
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: exactExpiry
+ok 79 - XIII business parity and no writes: exactExpiry
+  ---
+  duration_ms: 161.506327
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: missingOwner
+ok 80 - XIII business parity and no writes: missingOwner
+  ---
+  duration_ms: 174.098066
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: typedOwner
+ok 81 - XIII business parity and no writes: typedOwner
+  ---
+  duration_ms: 163.130381
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: capacity8M
+ok 82 - XIII business parity and no writes: capacity8M
+  ---
+  duration_ms: 145.264516
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: saturatedCapacity
+ok 83 - XIII business parity and no writes: saturatedCapacity
+  ---
+  duration_ms: 152.466965
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: missingTerminal
+ok 84 - XIII business parity and no writes: missingTerminal
+  ---
+  duration_ms: 152.227562
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: unseenRoom
+ok 85 - XIII business parity and no writes: unseenRoom
+  ---
+  duration_ms: 160.918454
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: sparseMismatch
+ok 86 - XIII business parity and no writes: sparseMismatch
+  ---
+  duration_ms: 160.063619
+  type: 'test'
+  ...
+# Subtest: XIII business parity and no writes: legacyMismatch
+ok 87 - XIII business parity and no writes: legacyMismatch
+  ---
+  duration_ms: 158.223289
+  type: 'test'
+  ...
+# Subtest: XIII runtime enables trace and local stop without modifying frozen OFF config
+ok 88 - XIII runtime enables trace and local stop without modifying frozen OFF config
+  ---
+  duration_ms: 0.534236
+  type: 'test'
+  ...
+# Subtest: disabled profile never reads Game/Memory/builders/CPU, including module construction
+ok 89 - disabled profile never reads Game/Memory/builders/CPU, including module construction
+  ---
+  duration_ms: 156.886368
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: rooms=[]
+ok 90 - invalid profile refuses: rooms=[]
+  ---
+  duration_ms: 54.143313
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: rooms=["W1N1","W1N1"]
+ok 91 - invalid profile refuses: rooms=["W1N1","W1N1"]
+  ---
+  duration_ms: 44.304453
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: rooms=["W1N1","W2N1","W3N1"]
+ok 92 - invalid profile refuses: rooms=["W1N1","W2N1","W3N1"]
+  ---
+  duration_ms: 38.87886
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: endTick=99
+ok 93 - invalid profile refuses: endTick=99
+  ---
+  duration_ms: 37.665846
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: endTick=1301
+ok 94 - invalid profile refuses: endTick=1301
+  ---
+  duration_ms: 41.91806
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: startTick=null
+ok 95 - invalid profile refuses: startTick=null
+  ---
+  duration_ms: 31.022413
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: intervalTicks=1
+ok 96 - invalid profile refuses: intervalTicks=1
+  ---
+  duration_ms: 28.867368
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: resources=[]
+ok 97 - invalid profile refuses: resources=[]
+  ---
+  duration_ms: 28.592384
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: maxLogBytes=100
+ok 98 - invalid profile refuses: maxLogBytes=100
+  ---
+  duration_ms: 27.839125
+  type: 'test'
+  ...
+# Subtest: invalid profile refuses: maxSampleCpu=null
+ok 99 - invalid profile refuses: maxSampleCpu=null
+  ---
+  duration_ms: 26.721017
+  type: 'test'
+  ...
+# Subtest: current fields retain explicit empty state, index values are not balances
+ok 100 - current fields retain explicit empty state, index values are not balances
+  ---
+  duration_ms: 22.961329
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: absent m => delete m.data.resourceControl.tasks
+ok 101 - missing/damaged table remains unavailable: absent m => delete m.data.resourceControl.tasks
+  ---
+  duration_ms: 26.347392
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = null
+ok 102 - missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = null
+  ---
+  duration_ms: 26.423437
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = []
+ok 103 - missing/damaged table remains unavailable: invalid_container m => m.data.resourceControl.tasks = []
+  ---
+  duration_ms: 21.659152
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: invalid_parent m => m.data = null
+ok 104 - missing/damaged table remains unavailable: invalid_parent m => m.data = null
+  ---
+  duration_ms: 25.104326
+  type: 'test'
+  ...
+# Subtest: missing/damaged table remains unavailable: accessor_unreadable m => Object.defineProperty(m.data.resourceControl,'tasks',{ get(){throw new Error('should not invoke');} })
+ok 105 - missing/damaged table remains unavailable: accessor_unreadable m => Object.defineProperty(m.data.resourceControl,'tasks',{ get(){throw new Error('should not invoke');} })
+  ---
+  duration_ms: 21.142222
+  type: 'test'
+  ...
+# Subtest: over-bound table does not aggregate a prefix; exact bound accepted
+ok 106 - over-bound table does not aggregate a prefix; exact bound accepted
+  ---
+  duration_ms: 25.760697
+  type: 'test'
+  ...
+# Subtest: existing Treasury core is not summarized as zero, even malformed or null
+ok 107 - existing Treasury core is not summarized as zero, even malformed or null
+  ---
+  duration_ms: 46.651999
+  type: 'test'
+  ...
+# Subtest: off-shard, early/late window and non-due tick use zero source reads
+ok 108 - off-shard, early/late window and non-due tick use zero source reads
+  ---
+  duration_ms: 92.76854
+  type: 'test'
+  ...
+# Subtest: low bucket and CPU headroom gate before reading state; legal next sample runs
+ok 109 - low bucket and CPU headroom gate before reading state; legal next sample runs
+  ---
+  duration_ms: 22.523147
+  type: 'test'
+  ...
+# Subtest: one attempt per tick and frozen profile scope
+ok 110 - one attempt per tick and frozen profile scope
+  ---
+  duration_ms: 24.067139
+  type: 'test'
+  ...
+# Subtest: new sample creates new reader instance, old writers need not bump new revision
+ok 111 - new sample creates new reader instance, old writers need not bump new revision
+  ---
+  duration_ms: 21.950482
+  type: 'test'
+  ...
+# Subtest: 8M storage comes from getCapacity and compares; no 1M hardcode
+ok 112 - 8M storage comes from getCapacity and compares; no 1M hardcode
+  ---
+  duration_ms: 24.285108
+  type: 'test'
+  ...
+# Subtest: capacity drop with inventory above capacity is visible, no comparable old delta
+ok 113 - capacity drop with inventory above capacity is visible, no comparable old delta
+  ---
+  duration_ms: 24.084134
+  type: 'test'
+  ...
+# Subtest: saturated free zero after shrink accepted without inventing capacity
+ok 114 - saturated free zero after shrink accepted without inventing capacity
+  ---
+  duration_ms: 19.975109
+  type: 'test'
+  ...
+# Subtest: missing terminal is absence, not a zero amount
+ok 115 - missing terminal is absence, not a zero amount
+  ---
+  duration_ms: 21.976281
+  type: 'test'
+  ...
+# Subtest: unreadable endpoint is not included in snapshot input; other room is still readable
+ok 116 - unreadable endpoint is not included in snapshot input; other room is still readable
+  ---
+  duration_ms: 19.528294
+  type: 'test'
+  ...
+# Subtest: NaN and inconsistent capacity never become normal
+ok 117 - NaN and inconsistent capacity never become normal
+  ---
+  duration_ms: 47.40074
+  type: 'test'
+  ...
+# Subtest: independent sparse-builder mismatch is detected and legal next sample restores match
+ok 118 - independent sparse-builder mismatch is detected and legal next sample restores match
+  ---
+  duration_ms: 20.971924
+  type: 'test'
+  ...
+# Subtest: legacy projection comparison requires same tick, never yesterday as now
+ok 119 - legacy projection comparison requires same tick, never yesterday as now
+  ---
+  duration_ms: 25.482387
+  type: 'test'
+  ...
+# Subtest: unknown legacy projection values or future tick are explicitly unreadable/future
+ok 120 - unknown legacy projection values or future tick are explicitly unreadable/future
+  ---
+  duration_ms: 19.49244
+  type: 'test'
+  ...
+# Subtest: Memory immutable and identity preserved, no table normalization
+ok 121 - Memory immutable and identity preserved, no table normalization
+  ---
+  duration_ms: 23.866056
+  type: 'test'
+  ...
+# Subtest: output limit emits valid omission without baseline; later delta cannot use unseen report
+ok 122 - output limit emits valid omission without baseline; later delta cannot use unseen report
+  ---
+  duration_ms: 22.203465
+  type: 'test'
+  ...
+# Subtest: CPU cooperating budget stops further work and exposes partial result
+ok 123 - CPU cooperating budget stops further work and exposes partial result
+  ---
+  duration_ms: 22.330096
+  type: 'test'
+  ...
+# Subtest: cost of serialization/emission is reported in following sample, not a hard cap
+ok 124 - cost of serialization/emission is reported in following sample, not a hard cap
+  ---
+  duration_ms: 24.693405
+  type: 'test'
+  ...
+# Subtest: logger and reader exceptions disable only preview and do not rethrow
+ok 125 - logger and reader exceptions disable only preview and do not rethrow
+  ---
+  duration_ms: 43.557706
+  type: 'test'
+  ...
+# Subtest: long run retains one primitive snapshot; absolute end survives module reset
+ok 126 - long run retains one primitive snapshot; absolute end survives module reset
+  ---
+  duration_ms: 28.917374
+  type: 'test'
+  ...
+# Subtest: primitive deltas are not writer attribution or actual fees
+ok 127 - primitive deltas are not writer attribution or actual fees
+  ---
+  duration_ms: 21.322244
+  type: 'test'
+  ...
+# Subtest: UTF-8 JSON length agrees with Buffer oracle
+ok 128 - UTF-8 JSON length agrees with Buffer oracle
+  ---
+  duration_ms: 22.517459
+  type: 'test'
+  ...
+# Subtest: runtime default is disabled, does not evaluate read capsule
+ok 129 - runtime default is disabled, does not evaluate read capsule
+  ---
+  duration_ms: 36.872038
+  type: 'test'
+  ...
+# Subtest: build VII baseline is exact committed Read V core, not a reconstructed model
+ok 130 - build VII baseline is exact committed Read V core, not a reconstructed model
+  ---
+  duration_ms: 1.789763
+  type: 'test'
+  ...
+# Subtest: build VII reversible authoring restores all Read V bytes before the unchanged loader
+ok 131 - build VII reversible authoring restores all Read V bytes before the unchanged loader
+  ---
+  duration_ms: 18.488334
+  type: 'test'
+  ...
+# Subtest: build VII shifted source is rejected rather than approximately transformed
+ok 132 - build VII shifted source is rejected rather than approximately transformed
+  ---
+  duration_ms: 1.351571
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: empty
+ok 133 - build VII Read V to VII twelve-sample byte parity: empty
+  ---
+  duration_ms: 451.376381
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: manual
+ok 134 - build VII Read V to VII twelve-sample byte parity: manual
+  ---
+  duration_ms: 169.756176
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: sixteen
+ok 135 - build VII Read V to VII twelve-sample byte parity: sixteen
+  ---
+  duration_ms: 181.030744
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: bound256
+ok 136 - build VII Read V to VII twelve-sample byte parity: bound256
+  ---
+  duration_ms: 216.175584
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: overBound257
+ok 137 - build VII Read V to VII twelve-sample byte parity: overBound257
+  ---
+  duration_ms: 156.851015
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: invalidRecord
+ok 138 - build VII Read V to VII twelve-sample byte parity: invalidRecord
+  ---
+  duration_ms: 161.558945
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: invalidResource
+ok 139 - build VII Read V to VII twelve-sample byte parity: invalidResource
+  ---
+  duration_ms: 156.334806
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: missingTasks
+ok 140 - build VII Read V to VII twelve-sample byte parity: missingTasks
+  ---
+  duration_ms: 149.750551
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: invalidReservationContainer
+ok 141 - build VII Read V to VII twelve-sample byte parity: invalidReservationContainer
+  ---
+  duration_ms: 151.1207
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: activeReservation
+ok 142 - build VII Read V to VII twelve-sample byte parity: activeReservation
+  ---
+  duration_ms: 164.109578
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: expiredReservation
+ok 143 - build VII Read V to VII twelve-sample byte parity: expiredReservation
+  ---
+  duration_ms: 144.284014
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: exactExpiry
+ok 144 - build VII Read V to VII twelve-sample byte parity: exactExpiry
+  ---
+  duration_ms: 140.448042
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: missingOwner
+ok 145 - build VII Read V to VII twelve-sample byte parity: missingOwner
+  ---
+  duration_ms: 140.28186
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: typedOwner
+ok 146 - build VII Read V to VII twelve-sample byte parity: typedOwner
+  ---
+  duration_ms: 141.366037
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: capacity8M
+ok 147 - build VII Read V to VII twelve-sample byte parity: capacity8M
+  ---
+  duration_ms: 141.083531
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: saturatedCapacity
+ok 148 - build VII Read V to VII twelve-sample byte parity: saturatedCapacity
+  ---
+  duration_ms: 195.256319
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: missingTerminal
+ok 149 - build VII Read V to VII twelve-sample byte parity: missingTerminal
+  ---
+  duration_ms: 140.581493
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: unseenRoom
+ok 150 - build VII Read V to VII twelve-sample byte parity: unseenRoom
+  ---
+  duration_ms: 137.712641
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: sparseMismatch
+ok 151 - build VII Read V to VII twelve-sample byte parity: sparseMismatch
+  ---
+  duration_ms: 138.416453
+  type: 'test'
+  ...
+# Subtest: build VII Read V to VII twelve-sample byte parity: legacyMismatch
+ok 152 - build VII Read V to VII twelve-sample byte parity: legacyMismatch
+  ---
+  duration_ms: 128.078499
+  type: 'test'
+  ...
+# Subtest: build VII nonempty full task index reduces map work without skipping eager secondary indexes
+ok 153 - build VII nonempty full task index reduces map work without skipping eager secondary indexes
+  ---
+  duration_ms: 180.08794
+  type: 'test'
+  ...
+# Subtest: build VII empty tables avoid six maps but retain all queries and completeness
+ok 154 - build VII empty tables avoid six maps but retain all queries and completeness
+  ---
+  duration_ms: 190.4967
+  type: 'test'
+  ...
+# Subtest: build VII observation removes 136 entry pairs and two room clones without reducing Store enumeration
+ok 155 - build VII observation removes 136 entry pairs and two room clones without reducing Store enumeration
+  ---
+  duration_ms: 174.931512
+  type: 'test'
+  ...
+# Subtest: build VII self routes alias scope buckets without double-counting their different fields
+ok 156 - build VII self routes alias scope buckets without double-counting their different fields
+  ---
+  duration_ms: 127.772838
+  type: 'test'
+  ...
+# Subtest: build VII reciprocal routes reuse buckets while preserving direction and room counts
+ok 157 - build VII reciprocal routes reuse buckets while preserving direction and room counts
+  ---
+  duration_ms: 137.558457
+  type: 'test'
+  ...
+# Subtest: build VII duplicate route keeps the first canonical task id
+ok 158 - build VII duplicate route keeps the first canonical task id
+  ---
+  duration_ms: 173.071893
+  type: 'test'
+  ...
+# Subtest: build VII integer-like table keys keep Object.values route order
+ok 159 - build VII integer-like table keys keep Object.values route order
+  ---
+  duration_ms: 128.882944
+  type: 'test'
+  ...
+# Subtest: build VII safe-integer overflow parity: outgoing
+ok 160 - build VII safe-integer overflow parity: outgoing
+  ---
+  duration_ms: 130.867712
+  type: 'test'
+  ...
+# Subtest: build VII safe-integer overflow parity: pendingIncoming
+ok 161 - build VII safe-integer overflow parity: pendingIncoming
+  ---
+  duration_ms: 132.967644
+  type: 'test'
+  ...
+# Subtest: build VII safe-integer overflow parity: self-route
+ok 162 - build VII safe-integer overflow parity: self-route
+  ---
+  duration_ms: 137.432426
+  type: 'test'
+  ...
+# Subtest: build VII safe-integer overflow parity: different-resource
+ok 163 - build VII safe-integer overflow parity: different-resource
+  ---
+  duration_ms: 123.214584
+  type: 'test'
+  ...
+# Subtest: build VII safe-integer overflow parity: reservations
+ok 164 - build VII safe-integer overflow parity: reservations
+  ---
+  duration_ms: 123.197447
+  type: 'test'
+  ...
+# Subtest: build VII canonical health and status behavior: automatic-stale
+ok 165 - build VII canonical health and status behavior: automatic-stale
+  ---
+  duration_ms: 128.779928
+  type: 'test'
+  ...
+# Subtest: build VII canonical health and status behavior: receiver-blocked
+ok 166 - build VII canonical health and status behavior: receiver-blocked
+  ---
+  duration_ms: 125.740168
+  type: 'test'
+  ...
+# Subtest: build VII canonical health and status behavior: source-blocked
+ok 167 - build VII canonical health and status behavior: source-blocked
+  ---
+  duration_ms: 128.905398
+  type: 'test'
+  ...
+# Subtest: build VII canonical health and status behavior: nonpending
+ok 168 - build VII canonical health and status behavior: nonpending
+  ---
+  duration_ms: 129.445955
+  type: 'test'
+  ...
+# Subtest: build VII canonical health and status behavior: zero
+ok 169 - build VII canonical health and status behavior: zero
+  ---
+  duration_ms: 129.948353
+  type: 'test'
+  ...
+# Subtest: build VII invalid records retain both scope and global incomplete outcomes
+ok 170 - build VII invalid records retain both scope and global incomplete outcomes
+  ---
+  duration_ms: 138.187948
+  type: 'test'
+  ...
+# Subtest: build VII all task values are still enumerated even outside the diagnostic resource scope
+ok 171 - build VII all task values are still enumerated even outside the diagnostic resource scope
+  ---
+  duration_ms: 126.504482
+  type: 'test'
+  ...
+# Subtest: build VII owner identity, conservative commitment and exact expiry behavior are unchanged
+ok 172 - build VII owner identity, conservative commitment and exact expiry behavior are unchanged
+  ---
+  duration_ms: 132.198151
+  type: 'test'
+  ...
+# Subtest: build VII callback order and receiver identity for reservation diagnostics are unchanged
+ok 173 - build VII callback order and receiver identity for reservation diagnostics are unchanged
+  ---
+  duration_ms: 123.059629
+  type: 'test'
+  ...
+# Subtest: build VII receiver capacity callbacks remain live, ordered and uncached
+ok 174 - build VII receiver capacity callbacks remain live, ordered and uncached
+  ---
+  duration_ms: 125.712416
+  type: 'test'
+  ...
+# Subtest: build VII rebuilding same builder never returns an earlier task or observation snapshot
+ok 175 - build VII rebuilding same builder never returns an earlier task or observation snapshot
+  ---
+  duration_ms: 133.007773
+  type: 'test'
+  ...
+# Subtest: build VII interleaved builders keep separate resource catalogs and task buckets
+ok 176 - build VII interleaved builders keep separate resource catalogs and task buckets
+  ---
+  duration_ms: 120.752805
+  type: 'test'
+  ...
+# Subtest: build VII frozen observation data and cached resource views have unchanged identities
+ok 177 - build VII frozen observation data and cached resource views have unchanged identities
+  ---
+  duration_ms: 130.788703
+  type: 'test'
+  ...
+# Subtest: build VII observation callbacks precede totals as before, and post-scan live changes do not alter snapshots
+ok 178 - build VII observation callbacks precede totals as before, and post-scan live changes do not alter snapshots
+  ---
+  duration_ms: 126.822872
+  type: 'test'
+  ...
+# Subtest: build VII sparse key ordering, nonfinite positives and unusual own names preserve canonical results
+ok 179 - build VII sparse key ordering, nonfinite positives and unusual own names preserve canonical results
+  ---
+  duration_ms: 120.871464
+  type: 'test'
+  ...
+# Subtest: build VII duplicate room names preserve totals, ordinal list and last map entry
+ok 180 - build VII duplicate room names preserve totals, ordinal list and last map entry
+  ---
+  duration_ms: 185.333192
+  type: 'test'
+  ...
+# Subtest: build VII snapshot totals do not reread live Store values or reuse direct output
+ok 181 - build VII snapshot totals do not reread live Store values or reuse direct output
+  ---
+  duration_ms: 140.336543
+  type: 'test'
+  ...
+# Subtest: build VII stable accessor and non-enumerable table entries preserve complete index results
+ok 182 - build VII stable accessor and non-enumerable table entries preserve complete index results
+  ---
+  duration_ms: 134.749464
+  type: 'test'
+  ...
+# Subtest: build VII same-key malformed aliases retain original scope query semantics
+ok 183 - build VII same-key malformed aliases retain original scope query semantics
+  ---
+  duration_ms: 127.834781
+  type: 'test'
+  ...
+# Subtest: build VII seeded differential corpus covers full indexes across 128 independent snapshots
+ok 184 - build VII seeded differential corpus covers full indexes across 128 independent snapshots
+  ---
+  duration_ms: 314.508217
+  type: 'test'
+  ...
+# Subtest: build VII semantic negative control catches lost outgoing aggregation
+ok 185 - build VII semantic negative control catches lost outgoing aggregation
+  ---
+  duration_ms: 125.899659
+  type: 'test'
+  ...
+# Subtest: build VII semantic negative control catches last-route-wins corruption
+ok 186 - build VII semantic negative control catches last-route-wins corruption
+  ---
+  duration_ms: 124.527847
+  type: 'test'
+  ...
+# Subtest: build VII baseline fixture proves no preview or CPU checkpoint source edits accompanied VII
+ok 187 - build VII baseline fixture proves no preview or CPU checkpoint source edits accompanied VII
+  ---
+  duration_ms: 0.409368
+  type: 'test'
+  ...
+# Subtest: XII preview transform is exact and exactly reversible over committed XI bytes
+ok 188 - XII preview transform is exact and exactly reversible over committed XI bytes
+  ---
+  duration_ms: 1.386474
+  type: 'test'
+  ...
+# Subtest: XII preview transform refuses shifted source instead of approximate rewriting
+ok 189 - XII preview transform refuses shifted source instead of approximate rewriting
+  ---
+  duration_ms: 0.485754
+  type: 'test'
+  ...
+# Subtest: XII generator reproduces committed core, preview, provenance and manifest bytes
+ok 190 - XII generator reproduces committed core, preview, provenance and manifest bytes
+  ---
+  duration_ms: 18.689617
+  type: 'test'
+  ...
+# Subtest: XII after-retention profile is a tail-only completion with exact allowed phases
+ok 191 - XII after-retention profile is a tail-only completion with exact allowed phases
+  ---
+  duration_ms: 70.252692
+  type: 'test'
+  ...
+# Subtest: XII tail-only completion serializes smaller than the prior full completion
+ok 192 - XII tail-only completion serializes smaller than the prior full completion
+  ---
+  duration_ms: 35.076075
+  type: 'test'
+  ...
+# Subtest: XII diagnostics-off reports remain byte-identical to XI for every fixed scenario
+ok 193 - XII diagnostics-off reports remain byte-identical to XI for every fixed scenario
+  ---
+  duration_ms: 3845.688096
+  type: 'test'
+  ...
+# Subtest: XII prefix keeps full attribution while the successor carries only its tail
+ok 194 - XII prefix keeps full attribution while the successor carries only its tail
+  ---
+  duration_ms: 62.249534
+  type: 'test'
+  ...
+# Subtest: XII preview allocation changes do not add CPU-port probes
+ok 195 - XII preview allocation changes do not add CPU-port probes
+  ---
+  duration_ms: 168.014051
+  type: 'test'
+  ...
+# Subtest: XII root cursors preserve malformed-root and accessor status bytes
+ok 196 - XII root cursors preserve malformed-root and accessor status bytes
+  ---
+  duration_ms: 667.910881
+  type: 'test'
+  ...
+# Subtest: XII source manifest retains all output identities and records envelope flags
+ok 197 - XII source manifest retains all output identities and records envelope flags
+  ---
+  duration_ms: 0.612916
+  type: 'test'
+  ...
+# Subtest: hotpath XI baseline fixtures are exact IX source bytes
+ok 198 - hotpath XI baseline fixtures are exact IX source bytes
+  ---
+  duration_ms: 1.711265
+  type: 'test'
+  ...
+# Subtest: hotpath XI core and preview transforms are exactly reversible
+ok 199 - hotpath XI core and preview transforms are exactly reversible
+  ---
+  duration_ms: 5.675612
+  type: 'test'
+  ...
+# Subtest: hotpath XI shifted source is rejected rather than approximately optimized
+ok 200 - hotpath XI shifted source is rejected rather than approximately optimized
+  ---
+  duration_ms: 0.822653
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: empty
+ok 201 - hotpath XI diagnostics-off byte parity: empty
+  ---
+  duration_ms: 467.069112
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: manual
+ok 202 - hotpath XI diagnostics-off byte parity: manual
+  ---
+  duration_ms: 173.722342
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: sixteen
+ok 203 - hotpath XI diagnostics-off byte parity: sixteen
+  ---
+  duration_ms: 159.951083
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: bound256
+ok 204 - hotpath XI diagnostics-off byte parity: bound256
+  ---
+  duration_ms: 189.834737
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: overBound257
+ok 205 - hotpath XI diagnostics-off byte parity: overBound257
+  ---
+  duration_ms: 152.499629
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: invalidRecord
+ok 206 - hotpath XI diagnostics-off byte parity: invalidRecord
+  ---
+  duration_ms: 156.77116
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: invalidResource
+ok 207 - hotpath XI diagnostics-off byte parity: invalidResource
+  ---
+  duration_ms: 206.068964
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: missingTasks
+ok 208 - hotpath XI diagnostics-off byte parity: missingTasks
+  ---
+  duration_ms: 145.501129
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: invalidReservationContainer
+ok 209 - hotpath XI diagnostics-off byte parity: invalidReservationContainer
+  ---
+  duration_ms: 151.187097
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: activeReservation
+ok 210 - hotpath XI diagnostics-off byte parity: activeReservation
+  ---
+  duration_ms: 155.469515
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: expiredReservation
+ok 211 - hotpath XI diagnostics-off byte parity: expiredReservation
+  ---
+  duration_ms: 140.812448
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: exactExpiry
+ok 212 - hotpath XI diagnostics-off byte parity: exactExpiry
+  ---
+  duration_ms: 145.916397
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: missingOwner
+ok 213 - hotpath XI diagnostics-off byte parity: missingOwner
+  ---
+  duration_ms: 133.811174
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: typedOwner
+ok 214 - hotpath XI diagnostics-off byte parity: typedOwner
+  ---
+  duration_ms: 150.437244
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: capacity8M
+ok 215 - hotpath XI diagnostics-off byte parity: capacity8M
+  ---
+  duration_ms: 147.981415
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: saturatedCapacity
+ok 216 - hotpath XI diagnostics-off byte parity: saturatedCapacity
+  ---
+  duration_ms: 129.712524
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: missingTerminal
+ok 217 - hotpath XI diagnostics-off byte parity: missingTerminal
+  ---
+  duration_ms: 175.615554
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: unseenRoom
+ok 218 - hotpath XI diagnostics-off byte parity: unseenRoom
+  ---
+  duration_ms: 144.768667
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: sparseMismatch
+ok 219 - hotpath XI diagnostics-off byte parity: sparseMismatch
+  ---
+  duration_ms: 141.984812
+  type: 'test'
+  ...
+# Subtest: hotpath XI diagnostics-off byte parity: legacyMismatch
+ok 220 - hotpath XI diagnostics-off byte parity: legacyMismatch
+  ---
+  duration_ms: 135.408359
+  type: 'test'
+  ...
+# Subtest: hotpath XI observation reuses first sparse keys and removes one view Map
+ok 221 - hotpath XI observation reuses first sparse keys and removes one view Map
+  ---
+  duration_ms: 180.913387
+  type: 'test'
+  ...
+# Subtest: hotpath XI task and reservation tables allocate no Object.values arrays
+ok 222 - hotpath XI task and reservation tables allocate no Object.values arrays
+  ---
+  duration_ms: 173.561823
+  type: 'test'
+  ...
+# Subtest: hotpath XI self routes avoid one duplicate scope lookup per task
+ok 223 - hotpath XI self routes avoid one duplicate scope lookup per task
+  ---
+  duration_ms: 183.98191
+  type: 'test'
+  ...
+# Subtest: hotpath XI preview removes selected-resource Object.values and repeated room arrays
+ok 224 - hotpath XI preview removes selected-resource Object.values and repeated room arrays
+  ---
+  duration_ms: 129.164479
+  type: 'test'
+  ...
+# Subtest: hotpath XI duplicate and prototype-like room names retain last-room-wins lookup
+ok 225 - hotpath XI duplicate and prototype-like room names retain last-room-wins lookup
+  ---
+  duration_ms: 126.690092
+  type: 'test'
+  ...
+# Subtest: hotpath XI callback order still precedes totals and snapshot values are never reread
+ok 226 - hotpath XI callback order still precedes totals and snapshot values are never reread
+  ---
+  duration_ms: 129.211069
+  type: 'test'
+  ...
+# Subtest: hotpath XI integer-like task key order preserves first route winner
+ok 227 - hotpath XI integer-like task key order preserves first route winner
+  ---
+  duration_ms: 125.813288
+  type: 'test'
+  ...
+# Subtest: hotpath XI canonical health behavior stays byte-equivalent for automatic and blocked tasks
+ok 228 - hotpath XI canonical health behavior stays byte-equivalent for automatic and blocked tasks
+  ---
+  duration_ms: 495.782597
+  type: 'test'
+  ...
+# Subtest: hotpath XI seeded differential corpus preserves the full API across 128 snapshots
+ok 229 - hotpath XI seeded differential corpus preserves the full API across 128 snapshots
+  ---
+  duration_ms: 17008.894965
+  type: 'test'
+  ...
+# Subtest: hotpath XI negative control catches a lost amount-key fold
+ok 230 - hotpath XI negative control catches a lost amount-key fold
+  ---
+  duration_ms: 150.471389
+  type: 'test'
+  ...
+# Subtest: hotpath XI generated bytes are the audited current implementation
+ok 231 - hotpath XI generated bytes are the audited current implementation
+  ---
+  duration_ms: 3.440176
+  type: 'test'
+  ...
+# Subtest: 独立1a：两房非空正对照——done/cancelled 不计 outgoing，manual 计入对侧 incoming
+ok 232 - 独立1a：两房非空正对照——done/cancelled 不计 outgoing，manual 计入对侧 incoming
+  ---
+  duration_ms: 234.718188
+  type: 'test'
+  ...
+# Subtest: 独立1b：expiresAt 等于当前 tick 仍占用（严格小于才到期），跨过才排除且原记录保留
+ok 233 - 独立1b：expiresAt 等于当前 tick 仍占用（严格小于才到期），跨过才排除且原记录保留
+  ---
+  duration_ms: 92.895661
+  type: 'test'
+  ...
+# Subtest: 独立1c：旧 writer 状态迁移与新增记录（无 revision 通知），下一样本如实反映新值
+ok 234 - 独立1c：旧 writer 状态迁移与新增记录（无 revision 通知），下一样本如实反映新值
+  ---
+  duration_ms: 93.012989
+  type: 'test'
+  ...
+# Subtest: 独立2a：reservations 为数组或 null 不冒充空表
+ok 235 - 独立2a：reservations 为数组或 null 不冒充空表
+  ---
+  duration_ms: 118.083173
+  type: 'test'
+  ...
+# Subtest: 独立2b：单条损坏（remaining>amount）→ read_incomplete 且 scope 级 incomplete，原记录不动
+ok 236 - 独立2b：单条损坏（remaining>amount）→ read_incomplete 且 scope 级 incomplete，原记录不动
+  ---
+  duration_ms: 48.832502
+  type: 'test'
+  ...
+# Subtest: 独立2c：限定资源外（U）损坏记录——索引仍完整定位 scope，选定 H 行保持 complete
+ok 237 - 独立2c：限定资源外（U）损坏记录——索引仍完整定位 scope，选定 H 行保持 complete
+  ---
+  duration_ms: 56.453282
+  type: 'test'
+  ...
+# Subtest: 独立2d：catalog 外资源记录 → 全局 incomplete 传染每个 scope（fail closed）
+ok 238 - 独立2d：catalog 外资源记录 → 全局 incomplete 传染每个 scope（fail closed）
+  ---
+  duration_ms: 53.287931
+  type: 'test'
+  ...
+# Subtest: 独立2e：Proxy 守卫真实武装（写尝试被拦截计数），观察全程零写且原型未污染
+ok 239 - 独立2e：Proxy 守卫真实武装（写尝试被拦截计数），观察全程零写且原型未污染
+  ---
+  duration_ms: 51.205837
+  type: 'test'
+  ...
+# Subtest: 独立3a：非 1M/8M 档位的合法容量变化（1M→3M→2.5M）与结构 ID 替换
+ok 240 - 独立3a：非 1M/8M 档位的合法容量变化（1M→3M→2.5M）与结构 ID 替换
+  ---
+  duration_ms: 53.826164
+  type: 'test'
+  ...
+# Subtest: 独立3b：单房一端不可读 → 全房退出 observation/commitments（not_read），readers 零调用
+ok 241 - 独立3b：单房一端不可读 → 全房退出 observation/commitments（not_read），readers 零调用
+  ---
+  duration_ms: 56.496688
+  type: 'test'
+  ...
+# Subtest: 独立3c：单资源方法读数超过总量 used → unreadable，不产出半份数据
+ok 242 - 独立3c：单资源方法读数超过总量 used → unreadable，不产出半份数据
+  ---
+  duration_ms: 49.131704
+  type: 'test'
+  ...
+# Subtest: 独立4a：真实 observation 稀疏键枚举与方法读数故意不一致 → mismatch；恢复后 match
+ok 243 - 独立4a：真实 observation 稀疏键枚举与方法读数故意不一致 → mismatch；恢复后 match
+  ---
+  duration_ms: 52.817291
+  type: 'test'
+  ...
+# Subtest: 独立4b：同 tick 投影但行字段为字符串 → unreadable 而非 match（comparisonPerformed=false）
+ok 244 - 独立4b：同 tick 投影但行字段为字符串 → unreadable 而非 match（comparisonPerformed=false）
+  ---
+  duration_ms: 54.596759
+  type: 'test'
+  ...
+# Subtest: 独立4c：候选实际 main.ts——39 阶段、首阶段业务异常 fail-fast 且 compatRead 未执行、compatRead 异常被包裹
+ok 245 - 独立4c：候选实际 main.ts——39 阶段、首阶段业务异常 fail-fast 且 compatRead 未执行、compatRead 异常被包裹
+  ---
+  duration_ms: 66.594909
+  type: 'test'
+  ...
+# Subtest: 独立4d：默认配置非合法启用 profile——enabled 翻转 alone 仍被拒绝
+ok 246 - 独立4d：默认配置非合法启用 profile——enabled 翻转 alone 仍被拒绝
+  ---
+  duration_ms: 28.228784
+  type: 'test'
+  ...
+# Subtest: 独立5a：绝对窗口结束 + heap 重建不重开窗口，零新增读取
+ok 247 - 独立5a：绝对窗口结束 + heap 重建不重开窗口，零新增读取
+  ---
+  duration_ms: 35.664094
+  type: 'test'
+  ...
+# Subtest: 独立5b：低 bucket 跳过消耗本 tick 尝试名额；同 tick 恢复也不补采
+ok 248 - 独立5b：低 bucket 跳过消耗本 tick 尝试名额；同 tick 恢复也不补采
+  ---
+  duration_ms: 24.57803
+  type: 'test'
+  ...
+# Subtest: 独立5c：fault 清空保留快照，不再以隐形基线比较
+ok 249 - 独立5c：fault 清空保留快照，不再以隐形基线比较
+  ---
+  duration_ms: 21.612371
+  type: 'test'
+  ...
+# Subtest: 独立5d：输出不含原始任务/预留负载、holder 身份串与凭据形态
+ok 250 - 独立5d：输出不含原始任务/预留负载、holder 身份串与凭据形态
+  ---
+  duration_ms: 53.311036
+  type: 'test'
+  ...
+# Subtest: read V baseline fixture is the exact original Git blob
+ok 251 - read V baseline fixture is the exact original Git blob
+  ---
+  duration_ms: 1.941502
+  type: 'test'
+  ...
+# Subtest: read V context substitutions recover canonical factories after reversing IX and VII transforms
+ok 252 - read V context substitutions recover canonical factories after reversing IX and VII transforms
+  ---
+  duration_ms: 21.560423
+  type: 'test'
+  ...
+# Subtest: read V module import alone performs no Game Memory or catalog read
+ok 253 - read V module import alone performs no Game Memory or catalog read
+  ---
+  duration_ms: 159.274464
+  type: 'test'
+  ...
+# Subtest: read V retains the exact public read-only API
+ok 254 - read V retains the exact public read-only API
+  ---
+  duration_ms: 180.224206
+  type: 'test'
+  ...
+# Subtest: read V twelve fresh builders execute seven definitions instead of thirty
+ok 255 - read V twelve fresh builders execute seven definitions instead of thirty
+  ---
+  duration_ms: 210.887055
+  type: 'test'
+  ...
+# Subtest: read V no definition prewarm before sample admission and CPU skip
+ok 256 - read V no definition prewarm before sample admission and CPU skip
+  ---
+  duration_ms: 84.93603
+  type: 'test'
+  ...
+# Subtest: read V disabled preview never loads definitions
+ok 257 - read V disabled preview never loads definitions
+  ---
+  duration_ms: 99.688536
+  type: 'test'
+  ...
+# Subtest: read V initialization cost remains in the admitted readerLoad interval
+ok 258 - read V initialization cost remains in the admitted readerLoad interval
+  ---
+  duration_ms: 88.507605
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: empty
+ok 259 - read V real-core A/B byte equivalence: empty
+  ---
+  duration_ms: 169.910512
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: manual
+ok 260 - read V real-core A/B byte equivalence: manual
+  ---
+  duration_ms: 140.304544
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: sixteen
+ok 261 - read V real-core A/B byte equivalence: sixteen
+  ---
+  duration_ms: 160.373019
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: bound256
+ok 262 - read V real-core A/B byte equivalence: bound256
+  ---
+  duration_ms: 197.41998
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: overBound257
+ok 263 - read V real-core A/B byte equivalence: overBound257
+  ---
+  duration_ms: 142.594673
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: invalidRecord
+ok 264 - read V real-core A/B byte equivalence: invalidRecord
+  ---
+  duration_ms: 159.504822
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: invalidResource
+ok 265 - read V real-core A/B byte equivalence: invalidResource
+  ---
+  duration_ms: 135.163399
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: missingTasks
+ok 266 - read V real-core A/B byte equivalence: missingTasks
+  ---
+  duration_ms: 121.370357
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: invalidReservationContainer
+ok 267 - read V real-core A/B byte equivalence: invalidReservationContainer
+  ---
+  duration_ms: 127.062034
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: activeReservation
+ok 268 - read V real-core A/B byte equivalence: activeReservation
+  ---
+  duration_ms: 138.896587
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: expiredReservation
+ok 269 - read V real-core A/B byte equivalence: expiredReservation
+  ---
+  duration_ms: 132.776514
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: exactExpiry
+ok 270 - read V real-core A/B byte equivalence: exactExpiry
+  ---
+  duration_ms: 130.93348
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: missingOwner
+ok 271 - read V real-core A/B byte equivalence: missingOwner
+  ---
+  duration_ms: 144.32835
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: typedOwner
+ok 272 - read V real-core A/B byte equivalence: typedOwner
+  ---
+  duration_ms: 131.841131
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: capacity8M
+ok 273 - read V real-core A/B byte equivalence: capacity8M
+  ---
+  duration_ms: 123.982802
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: saturatedCapacity
+ok 274 - read V real-core A/B byte equivalence: saturatedCapacity
+  ---
+  duration_ms: 130.63491
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: missingTerminal
+ok 275 - read V real-core A/B byte equivalence: missingTerminal
+  ---
+  duration_ms: 124.878364
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: unseenRoom
+ok 276 - read V real-core A/B byte equivalence: unseenRoom
+  ---
+  duration_ms: 126.547747
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: sparseMismatch
+ok 277 - read V real-core A/B byte equivalence: sparseMismatch
+  ---
+  duration_ms: 136.320696
+  type: 'test'
+  ...
+# Subtest: read V real-core A/B byte equivalence: legacyMismatch
+ok 278 - read V real-core A/B byte equivalence: legacyMismatch
+  ---
+  duration_ms: 131.567077
+  type: 'test'
+  ...
+# Subtest: read V same-tick task mutation without revision changes is visible
+ok 279 - read V same-tick task mutation without revision changes is visible
+  ---
+  duration_ms: 78.086995
+  type: 'test'
+  ...
+# Subtest: read V observation snapshots and resource caches do not cross builds
+ok 280 - read V observation snapshots and resource caches do not cross builds
+  ---
+  duration_ms: 66.884226
+  type: 'test'
+  ...
+# Subtest: read V same builder still creates fresh observations and indexes on every call
+ok 281 - read V same builder still creates fresh observations and indexes on every call
+  ---
+  duration_ms: 65.445042
+  type: 'test'
+  ...
+# Subtest: read V whole Game and Memory root replacements are observed dynamically
+ok 282 - read V whole Game and Memory root replacements are observed dynamically
+  ---
+  duration_ms: 64.187903
+  type: 'test'
+  ...
+# Subtest: read V changing health configuration is not cached with definitions
+ok 283 - read V changing health configuration is not cached with definitions
+  ---
+  duration_ms: 73.785809
+  type: 'test'
+  ...
+# Subtest: read V changing resource catalog is captured in every fresh commitment module
+ok 284 - read V changing resource catalog is captured in every fresh commitment module
+  ---
+  duration_ms: 63.097747
+  type: 'test'
+  ...
+# Subtest: read V holder resolver uses current ownership instead of first sample ownership
+ok 285 - read V holder resolver uses current ownership instead of first sample ownership
+  ---
+  duration_ms: 63.498432
+  type: 'test'
+  ...
+# Subtest: read V reservation expiration remains strict and records are not deleted
+ok 286 - read V reservation expiration remains strict and records are not deleted
+  ---
+  duration_ms: 62.743241
+  type: 'test'
+  ...
+# Subtest: read V private revision zero is neither global host state nor an exposed mutation API
+ok 287 - read V private revision zero is neither global host state nor an exposed mutation API
+  ---
+  duration_ms: 145.339898
+  type: 'test'
+  ...
+# Subtest: read V failed first initialization does not publish partial shared modules
+ok 288 - read V failed first initialization does not publish partial shared modules
+  ---
+  duration_ms: 61.438922
+  type: 'test'
+  ...
+# Subtest: read V failed later initialization does not poison successful definitions
+ok 289 - read V failed later initialization does not poison successful definitions
+  ---
+  duration_ms: 62.349076
+  type: 'test'
+  ...
+# Subtest: read V build exception does not expose stale index in next sample
+ok 290 - read V build exception does not expose stale index in next sample
+  ---
+  duration_ms: 69.371218
+  type: 'test'
+  ...
+# Subtest: read V global reset repeats initialization and retains no prior snapshot
+ok 291 - read V global reset repeats initialization and retains no prior snapshot
+  ---
+  duration_ms: 133.918212
+  type: 'test'
+  ...
+# Subtest: read V long run initializes only seven definitions with fresh private catalog per builder
+ok 292 - read V long run initializes only seven definitions with fresh private catalog per builder
+  ---
+  duration_ms: 68.588996
+  type: 'test'
+  ...
+# Subtest: read V malformed pinned input is rejected before regeneration
+ok 293 - read V malformed pinned input is rejected before regeneration
+  ---
+  duration_ms: 1.203227
+  type: 'test'
+  ...
+# Subtest: read V inherited dependency property never becomes a host import
+ok 294 - read V inherited dependency property never becomes a host import
+  ---
+  duration_ms: 68.993932
+  type: 'test'
+  ...
+# Subtest: read V generator is byte deterministic and idempotent on metadata
+ok 295 - read V generator is byte deterministic and idempotent on metadata
+  ---
+  duration_ms: 16.544538
+  type: 'test'
+  ...
+# Subtest: read V generator provenance keeps all eight canonical source identities
+ok 296 - read V generator provenance keeps all eight canonical source identities
+  ---
+  duration_ms: 0.629451
+  type: 'test'
+  ...
+# Subtest: read V simultaneously live builders retain distinct catalog snapshots in both call orders
+ok 297 - read V simultaneously live builders retain distinct catalog snapshots in both call orders
+  ---
+  duration_ms: 152.960427
+  type: 'test'
+  ...
+# Subtest: read V catalog mutation in place after factory creation cannot change existing context
+ok 298 - read V catalog mutation in place after factory creation cannot change existing context
+  ---
+  duration_ms: 59.957489
+  type: 'test'
+  ...
+# Subtest: read V nested builder creation during outer reservation validation does not swap contexts
+ok 299 - read V nested builder creation during outer reservation validation does not swap contexts
+  ---
+  duration_ms: 132.591845
+  type: 'test'
+  ...
+# Subtest: read V catalog is captured exactly once per builder, including warm calls
+ok 300 - read V catalog is captured exactly once per builder, including warm calls
+  ---
+  duration_ms: 122.522406
+  type: 'test'
+  ...
+# Subtest: read V catalog capture remains inside readerLoad rather than an unaccounted prewarm
+ok 301 - read V catalog capture remains inside readerLoad rather than an unaccounted prewarm
+  ---
+  duration_ms: 63.883865
+  type: 'test'
+  ...
+# Subtest: read V warm catalog exceptions still fail closed with no old business output fallback
+ok 302 - read V warm catalog exceptions still fail closed with no old business output fallback
+  ---
+  duration_ms: 63.273012
+  type: 'test'
+  ...
+# Subtest: read V changing mutable task data during a nested call leaves earlier index snapshot fixed
+ok 303 - read V changing mutable task data during a nested call leaves earlier index snapshot fixed
+  ---
+  duration_ms: 62.016344
+  type: 'test'
+  ...
+# Subtest: read V complete index API parity: manual
+ok 304 - read V complete index API parity: manual
+  ---
+  duration_ms: 124.103114
+  type: 'test'
+  ...
+# Subtest: read V complete index API parity: automatic
+ok 305 - read V complete index API parity: automatic
+  ---
+  duration_ms: 119.191125
+  type: 'test'
+  ...
+# Subtest: read V complete index API parity: invalid
+ok 306 - read V complete index API parity: invalid
+  ---
+  duration_ms: 123.036793
+  type: 'test'
+  ...
+# Subtest: read V complete index API parity: overflow
+ok 307 - read V complete index API parity: overflow
+  ---
+  duration_ms: 117.905764
+  type: 'test'
+  ...
+# Subtest: read V complete index API parity: typed
+ok 308 - read V complete index API parity: typed
+  ---
+  duration_ms: 135.625376
+  type: 'test'
+  ...
+# Subtest: read V complete index API parity: exactExpiry
+ok 309 - read V complete index API parity: exactExpiry
+  ---
+  duration_ms: 129.888332
+  type: 'test'
+  ...
+# Subtest: read V receiver projections still read per-index dynamic capacity callbacks
+ok 310 - read V receiver projections still read per-index dynamic capacity callbacks
+  ---
+  duration_ms: 66.249106
+  type: 'test'
+  ...
+# Subtest: read V endpoint Store access reuse preserves every method and core read: 1
+ok 311 - read V endpoint Store access reuse preserves every method and core read: 1
+  ---
+  duration_ms: 121.415485
+  type: 'test'
+  ...
+# Subtest: read V endpoint Store access reuse preserves every method and core read: 2
+ok 312 - read V endpoint Store access reuse preserves every method and core read: 2
+  ---
+  duration_ms: 120.003382
+  type: 'test'
+  ...
+# Subtest: read V endpoint Store access reuse preserves every method and core read: 4
+ok 313 - read V endpoint Store access reuse preserves every method and core read: 4
+  ---
+  duration_ms: 123.1666
+  type: 'test'
+  ...
+# Subtest: read V endpoint-local Store reuse never carries a Store into the next sample
+ok 314 - read V endpoint-local Store reuse never carries a Store into the next sample
+  ---
+  duration_ms: 62.512924
+  type: 'test'
+  ...
+# Subtest: read V direct methods still run independently of sparse observation data
+ok 315 - read V direct methods still run independently of sparse observation data
+  ---
+  duration_ms: 63.243768
+  type: 'test'
+  ...
+# Subtest: read V missing or throwing Store remains unreadable and is not replaced with a projection
+ok 316 - read V missing or throwing Store remains unreadable and is not replaced with a projection
+  ---
+  duration_ms: 130.369918
+  type: 'test'
+  ...
+# Subtest: read V native Store method exception preserves fail-closed endpoint behavior
+ok 317 - read V native Store method exception preserves fail-closed endpoint behavior
+  ---
+  duration_ms: 69.173062
+  type: 'test'
+  ...
+# Subtest: read V preview accessor-table guard is unchanged and does not invoke the builder
+ok 318 - read V preview accessor-table guard is unchanged and does not invoke the builder
+  ---
+  duration_ms: 85.890851
+  type: 'test'
+  ...
+# Subtest: read V canonical transform refuses a shifted body rather than approximating a match
+ok 319 - read V canonical transform refuses a shifted body rather than approximating a match
+  ---
+  duration_ms: 0.554277
+  type: 'test'
+  ...
+# Subtest: read V layer only adapts commitment context and its edge after reversing VII layer
+ok 320 - read V layer only adapts commitment context and its edge after reversing VII layer
+  ---
+  duration_ms: 4.499286
+  type: 'test'
+  ...
+# Subtest: read V stale observation epoch is still rejected by the preview
+ok 321 - read V stale observation epoch is still rejected by the preview
+  ---
+  duration_ms: 64.820149
+  type: 'test'
+  ...
+# Subtest: read V catalog omission context mutation is detected by a semantic negative control
+ok 322 - read V catalog omission context mutation is detected by a semantic negative control
+  ---
+  duration_ms: 133.954242
+  type: 'test'
+  ...
+# Subtest: pinned runtime graph contains only read dependencies and no facade, kernel, Defense or old writer
+ok 323 - pinned runtime graph contains only read dependencies and no facade, kernel, Defense or old writer
+  ---
+  duration_ms: 235.284332
+  type: 'test'
+  ...
+# Subtest: actual observation/index on empty legacy tables, no new Memory keys or writes
+ok 324 - actual observation/index on empty legacy tables, no new Memory keys or writes
+  ---
+  duration_ms: 97.175174
+  type: 'test'
+  ...
+# Subtest: actual canonical readers count nonempty legacy task and unversioned reservation without migration
+ok 325 - actual canonical readers count nonempty legacy task and unversioned reservation without migration
+  ---
+  duration_ms: 95.373504
+  type: 'test'
+  ...
+# Subtest: old writer mutates same reservation/table identity without revision bump, next sample sees it
+ok 326 - old writer mutates same reservation/table identity without revision bump, next sample sees it
+  ---
+  duration_ms: 69.408959
+  type: 'test'
+  ...
+# Subtest: expired reservation excluded by canonical read predicate, original record not deleted
+ok 327 - expired reservation excluded by canonical read predicate, original record not deleted
+  ---
+  duration_ms: 61.261384
+  type: 'test'
+  ...
+# Subtest: unresolved owner remains reserved rather than silently orphan-released
+ok 328 - unresolved owner remains reserved rather than silently orphan-released
+  ---
+  duration_ms: 55.732873
+  type: 'test'
+  ...
+# Subtest: malformed record reaches original completeness logic and is not normalized/deleted
+ok 329 - malformed record reaches original completeness logic and is not normalized/deleted
+  ---
+  duration_ms: 116.076431
+  type: 'test'
+  ...
+# Subtest: explicit foreign kernel state is preserved without lifecycle or interpretation
+ok 330 - explicit foreign kernel state is preserved without lifecycle or interpretation
+  ---
+  duration_ms: 60.959097
+  type: 'test'
+  ...
+# Subtest: 8M and then reduced capacity use actual observation functions and invalidate only diagnostic delta
+ok 331 - 8M and then reduced capacity use actual observation functions and invalidate only diagnostic delta
+  ---
+  duration_ms: 55.510739
+  type: 'test'
+  ...
+# Subtest: missing table is NOT replaced with empty object before invoking canonical index
+ok 332 - missing table is NOT replaced with empty object before invoking canonical index
+  ---
+  duration_ms: 453.668388
+  type: 'test'
+  ...
+# Subtest: XIV exact core/preview inverses, including current public H and P chains
+ok 333 - XIV exact core/preview inverses, including current public H and P chains
+  ---
+  duration_ms: 5.879931
+  type: 'test'
+  ...
+# Subtest: XIV authenticates the XIII fixtures instead of inventing historical expected output
+ok 334 - XIV authenticates the XIII fixtures instead of inventing historical expected output
+  ---
+  duration_ms: 0.799217
+  type: 'test'
+  ...
+# Subtest: XIV changed and doubled transform anchors are rejected
+ok 335 - XIV changed and doubled transform anchors are rejected
+  ---
+  duration_ms: 0.899298
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: empty
+ok 336 - XIV complete report parity and no writes: empty
+  ---
+  duration_ms: 379.796529
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: manual
+ok 337 - XIV complete report parity and no writes: manual
+  ---
+  duration_ms: 176.047887
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: sixteen
+ok 338 - XIV complete report parity and no writes: sixteen
+  ---
+  duration_ms: 164.861742
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: bound256
+ok 339 - XIV complete report parity and no writes: bound256
+  ---
+  duration_ms: 172.474029
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: overBound257
+ok 340 - XIV complete report parity and no writes: overBound257
+  ---
+  duration_ms: 159.644462
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: invalidRecord
+ok 341 - XIV complete report parity and no writes: invalidRecord
+  ---
+  duration_ms: 155.198697
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: invalidResource
+ok 342 - XIV complete report parity and no writes: invalidResource
+  ---
+  duration_ms: 158.010123
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: missingTasks
+ok 343 - XIV complete report parity and no writes: missingTasks
+  ---
+  duration_ms: 144.408902
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: invalidReservationContainer
+ok 344 - XIV complete report parity and no writes: invalidReservationContainer
+  ---
+  duration_ms: 168.963477
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: activeReservation
+ok 345 - XIV complete report parity and no writes: activeReservation
+  ---
+  duration_ms: 158.665814
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: expiredReservation
+ok 346 - XIV complete report parity and no writes: expiredReservation
+  ---
+  duration_ms: 153.151436
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: exactExpiry
+ok 347 - XIV complete report parity and no writes: exactExpiry
+  ---
+  duration_ms: 152.825973
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: missingOwner
+ok 348 - XIV complete report parity and no writes: missingOwner
+  ---
+  duration_ms: 161.762686
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: typedOwner
+ok 349 - XIV complete report parity and no writes: typedOwner
+  ---
+  duration_ms: 186.234115
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: capacity8M
+ok 350 - XIV complete report parity and no writes: capacity8M
+  ---
+  duration_ms: 156.205995
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: saturatedCapacity
+ok 351 - XIV complete report parity and no writes: saturatedCapacity
+  ---
+  duration_ms: 152.212863
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: missingTerminal
+ok 352 - XIV complete report parity and no writes: missingTerminal
+  ---
+  duration_ms: 185.781251
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: unseenRoom
+ok 353 - XIV complete report parity and no writes: unseenRoom
+  ---
+  duration_ms: 148.611595
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: sparseMismatch
+ok 354 - XIV complete report parity and no writes: sparseMismatch
+  ---
+  duration_ms: 155.764628
+  type: 'test'
+  ...
+# Subtest: XIV complete report parity and no writes: legacyMismatch
+ok 355 - XIV complete report parity and no writes: legacyMismatch
+  ---
+  duration_ms: 150.432004
+  type: 'test'
+  ...
+# Subtest: XIV full index API matches XIII for seeded mixed, damaged and overflowing corpora
+ok 356 - XIV full index API matches XIII for seeded mixed, damaged and overflowing corpora
+  ---
+  duration_ms: 3228.610765
+  type: 'test'
+  ...
+# Subtest: XIV zero remaining, self routes, key aliases and first-route id behavior are preserved
+ok 357 - XIV zero remaining, self routes, key aliases and first-route id behavior are preserved
+  ---
+  duration_ms: 126.317204
+  type: 'test'
+  ...
+# Subtest: XIV removes four checked-add helper invocations per ordinary pending task without removing arithmetic guards
+ok 358 - XIV removes four checked-add helper invocations per ordinary pending task without removing arithmetic guards
+  ---
+  duration_ms: 529.332999
+  type: 'test'
+  ...
+# Subtest: XIV projection root descriptor lookups reduce from repeated endpoint reads to one sample cursor
+ok 359 - XIV projection root descriptor lookups reduce from repeated endpoint reads to one sample cursor
+  ---
+  duration_ms: 172.688698
+  type: 'test'
+  ...
+# Subtest: XIV cursor does not survive into the next sample or replace independent Store reads
+ok 360 - XIV cursor does not survive into the next sample or replace independent Store reads
+  ---
+  duration_ms: 67.560695
+  type: 'test'
+  ...
+# Subtest: XIV own-data projection boundary: inherited
+ok 361 - XIV own-data projection boundary: inherited
+  ---
+  duration_ms: 165.398127
+  type: 'test'
+  ...
+# Subtest: XIV own-data projection boundary: accessor
+ok 362 - XIV own-data projection boundary: accessor
+  ---
+  duration_ms: 161.717789
+  type: 'test'
+  ...
+# Subtest: XIV own-data projection boundary: null
+ok 363 - XIV own-data projection boundary: null
+  ---
+  duration_ms: 160.842637
+  type: 'test'
+  ...
+# Subtest: XIV own-data projection boundary: array
+ok 364 - XIV own-data projection boundary: array
+  ---
+  duration_ms: 157.524315
+  type: 'test'
+  ...
+# Subtest: XIV own-data projection boundary: nonenumerable
+ok 365 - XIV own-data projection boundary: nonenumerable
+  ---
+  duration_ms: 154.267917
+  type: 'test'
+  ...
+# Subtest: XIV probe count is bounded per table: 0
+ok 366 - XIV probe count is bounded per table: 0
+  ---
+  duration_ms: 150.713419
+  type: 'test'
+  ...
+# Subtest: XIV probe count is bounded per table: 1
+ok 367 - XIV probe count is bounded per table: 1
+  ---
+  duration_ms: 125.929808
+  type: 'test'
+  ...
+# Subtest: XIV probe count is bounded per table: 6
+ok 368 - XIV probe count is bounded per table: 6
+  ---
+  duration_ms: 123.460189
+  type: 'test'
+  ...
+# Subtest: XIV probe count is bounded per table: 256
+ok 369 - XIV probe count is bounded per table: 256
+  ---
+  duration_ms: 131.799914
+  type: 'test'
+  ...
+# Subtest: XIV not-called carries no invented task or task timing
+ok 370 - XIV not-called carries no invented task or task timing
+  ---
+  duration_ms: 73.983125
+  type: 'test'
+  ...
+# Subtest: XIV nonpending/damaged prefix selects first valid pending ordinal, not task zero
+ok 371 - XIV nonpending/damaged prefix selects first valid pending ordinal, not task zero
+  ---
+  duration_ms: 87.835606
+  type: 'test'
+  ...
+# Subtest: XIV later overflow still scans the whole table and cannot drop first-region end
+ok 372 - XIV later overflow still scans the whole table and cannot drop first-region end
+  ---
+  duration_ms: 86.888177
+  type: 'test'
+  ...
+# Subtest: XIV pending processing throw closes first region then disables preview, never skips the fault
+ok 373 - XIV pending processing throw closes first region then disables preview, never skips the fault
+  ---
+  duration_ms: 77.045283
+  type: 'test'
+  ...
+# Subtest: XIV inner latency is assigned to selected first-pending interval and latches subsequent samples
+ok 374 - XIV inner latency is assigned to selected first-pending interval and latches subsequent samples
+  ---
+  duration_ms: 74.396822
+  type: 'test'
+  ...
+# Subtest: XIV latency before selected task is not mislabeled as pending aggregation
+ok 375 - XIV latency before selected task is not mislabeled as pending aggregation
+  ---
+  duration_ms: 64.428106
+  type: 'test'
+  ...
+# Subtest: XIV task profiles are frozen, fresh per sample and absent from tail-only completion
+ok 376 - XIV task profiles are frozen, fresh per sample and absent from tail-only completion
+  ---
+  duration_ms: 85.82962
+  type: 'test'
+  ...
+# Subtest: XIV task marker rejects regression, duplicate, invalid ordinal and inconsistent ordinal
+ok 377 - XIV task marker rejects regression, duplicate, invalid ordinal and inconsistent ordinal
+  ---
+  duration_ms: 33.801912
+  type: 'test'
+  ...
+# Subtest: XIV marker pair is opt-in: historical XIII probe behavior and schema are retained
+ok 378 - XIV marker pair is opt-in: historical XIII probe behavior and schema are retained
+  ---
+  duration_ms: 61.997355
+  type: 'test'
+  ...
+1..378
+# tests 378
+# suites 0
+# pass 378
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 67788.975232

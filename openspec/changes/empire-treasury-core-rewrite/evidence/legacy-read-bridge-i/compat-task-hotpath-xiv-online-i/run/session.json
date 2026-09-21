@@ -1,0 +1,66 @@
+{
+  "runId": "fca814ca750585393e8ab656eaa09bbe",
+  "packageFingerprint": "2d6dae2879d68691813fb85b92cf53d78e6d8430f3943e03e90b6c2f009518c1",
+  "source": {
+    "head": "90fd49221d1dbf12365d60edea25d8f153d2a1cb",
+    "tree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+    "base": "85177467e71dcdbf9873bf6c2cd6cddb207a1c15",
+    "paths": 17
+  },
+  "profileHead": "e7ae9dbfd8a653dfb096d0f00cbc0db769535619",
+  "profileTree": "28580f1d9738029a529f6636cf607f65fcd0339d",
+  "profile": {
+    "enabled": true,
+    "shardName": "shard1",
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "startTick": 73853300,
+    "endTick": 73853600,
+    "intervalTicks": 100,
+    "minBucket": 2000,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "maxLogBytes": 16384
+  },
+  "observedTick": 73853051,
+  "preparedAtMs": 1790006969794,
+  "build": {
+    "commit": "e7ae9dbfd8a653dfb096d0f00cbc0db769535619",
+    "tree": "28580f1d9738029a529f6636cf607f65fcd0339d",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+e7ae9db@2026-09-21T16:08:35.418Z",
+    "embeddedBundleHash": "d6b636dac9d2b87091efa6a7db648acc42398d9ba8c0d21a3710b2f25cbcba08"
+  },
+  "candidateDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "a4a020969211a756a1b9ab63a655ac8d4e537dde04d361d60f0390e97b6bc479",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4615913,
+        "sha256": "b68596349e5f599d1bb25f361c975526b73cd1c23df2807e5ddab0946171a587"
+      }
+    ]
+  },
+  "backupDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494463,
+        "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+      }
+    ]
+  },
+  "backupFileSha256": "0c9761ad2e10428ddf9ee9e2027da5623010a9b7eafcd40a20c2cffe543d4615",
+  "candidateFileSha256": "83925da901089fc8fbf64c2a54de62446925909527f63708c3c7af5fafb5494d"
+}
