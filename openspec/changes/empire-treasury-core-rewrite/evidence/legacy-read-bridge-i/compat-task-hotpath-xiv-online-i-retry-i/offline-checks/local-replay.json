@@ -1,0 +1,244 @@
+{
+  "status": "TASK_XIV_RETRY_LOCAL_REPLAY_VERIFIED",
+  "compiler": "5.9.3",
+  "liveMemoryUsed": false,
+  "engineCpuMeasured": false,
+  "engineSpikeReproduced": null,
+  "exactOnlineTaskRecordsAvailable": false,
+  "interpretation": "Local VM, synthetic shapes and wall-clock milliseconds only. First local actual call is not an engine cold-start measurement. No speedup/GC/JIT conclusion.",
+  "cases": [
+    {
+      "name": "empty",
+      "count": 0,
+      "iterationsPerVersion": 8,
+      "fullApiEquivalent": true,
+      "versions": [
+        {
+          "name": "XIII",
+          "sourceSha256": "3bd42eee815562492a440bef2f0e2879707dba1bd61a78eb15083fe3ef2fc92c",
+          "firstActualLocalCallMs": 0.5903,
+          "followingLocalCallMs": [
+            0.0361,
+            0.0289,
+            0.0284,
+            0.0216,
+            0.0389,
+            0.0695,
+            0.0337
+          ],
+          "observationMs": [
+            0.4879,
+            0.1686,
+            0.1944,
+            0.0596,
+            0.027,
+            0.0473,
+            0.0329,
+            0.0312
+          ],
+          "memoryWrites": 0
+        },
+        {
+          "name": "XIV",
+          "sourceSha256": "8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6",
+          "firstActualLocalCallMs": 0.7953,
+          "followingLocalCallMs": [
+            0.0583,
+            0.0269,
+            0.0213,
+            0.02,
+            0.0199,
+            0.0194,
+            0.0233
+          ],
+          "observationMs": [
+            0.682,
+            0.1548,
+            0.1383,
+            0.0387,
+            0.0261,
+            0.0213,
+            0.0205,
+            0.0228
+          ],
+          "memoryWrites": 0
+        }
+      ]
+    },
+    {
+      "name": "six-five-pending",
+      "count": 6,
+      "iterationsPerVersion": 8,
+      "fullApiEquivalent": true,
+      "versions": [
+        {
+          "name": "XIII",
+          "sourceSha256": "3bd42eee815562492a440bef2f0e2879707dba1bd61a78eb15083fe3ef2fc92c",
+          "firstActualLocalCallMs": 0.363,
+          "followingLocalCallMs": [
+            0.1728,
+            0.4952,
+            0.1101,
+            0.071,
+            0.059,
+            0.0584,
+            0.0577
+          ],
+          "observationMs": [
+            0.142,
+            0.0296,
+            0.0219,
+            0.0239,
+            0.0209,
+            0.02,
+            0.0192,
+            0.019
+          ],
+          "memoryWrites": 0
+        },
+        {
+          "name": "XIV",
+          "sourceSha256": "8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6",
+          "firstActualLocalCallMs": 0.7604,
+          "followingLocalCallMs": [
+            0.263,
+            0.3825,
+            0.1764,
+            0.0802,
+            0.0716,
+            0.0576,
+            0.0745
+          ],
+          "observationMs": [
+            0.1269,
+            0.0643,
+            0.0397,
+            0.0248,
+            0.0351,
+            0.0204,
+            0.0193,
+            0.0195
+          ],
+          "memoryWrites": 0
+        }
+      ]
+    },
+    {
+      "name": "six-mixed-invalid",
+      "count": 6,
+      "invalid": true,
+      "iterationsPerVersion": 8,
+      "fullApiEquivalent": true,
+      "versions": [
+        {
+          "name": "XIII",
+          "sourceSha256": "3bd42eee815562492a440bef2f0e2879707dba1bd61a78eb15083fe3ef2fc92c",
+          "firstActualLocalCallMs": 0.3414,
+          "followingLocalCallMs": [
+            0.0941,
+            0.0475,
+            0.0856,
+            0.0842,
+            0.0708,
+            0.0665,
+            0.0654
+          ],
+          "observationMs": [
+            0.1719,
+            0.0413,
+            0.019,
+            0.0381,
+            0.0367,
+            0.0289,
+            0.0268,
+            0.0265
+          ],
+          "memoryWrites": 0
+        },
+        {
+          "name": "XIV",
+          "sourceSha256": "8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6",
+          "firstActualLocalCallMs": 0.2488,
+          "followingLocalCallMs": [
+            0.1402,
+            0.0785,
+            0.0549,
+            0.048,
+            0.0455,
+            0.0448,
+            0.0465
+          ],
+          "observationMs": [
+            0.1364,
+            0.0286,
+            0.0332,
+            0.0231,
+            0.0196,
+            0.0184,
+            0.0178,
+            0.0189
+          ],
+          "memoryWrites": 0
+        }
+      ]
+    },
+    {
+      "name": "bound256",
+      "count": 256,
+      "iterationsPerVersion": 8,
+      "fullApiEquivalent": true,
+      "versions": [
+        {
+          "name": "XIII",
+          "sourceSha256": "3bd42eee815562492a440bef2f0e2879707dba1bd61a78eb15083fe3ef2fc92c",
+          "firstActualLocalCallMs": 3.4169,
+          "followingLocalCallMs": [
+            2.0325,
+            1.8797,
+            1.7148,
+            1.7611,
+            1.6784,
+            1.6837,
+            1.6755
+          ],
+          "observationMs": [
+            0.2056,
+            0.0318,
+            0.0289,
+            0.0236,
+            0.0203,
+            0.0207,
+            0.0191,
+            0.0192
+          ],
+          "memoryWrites": 0
+        },
+        {
+          "name": "XIV",
+          "sourceSha256": "8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6",
+          "firstActualLocalCallMs": 2.9911,
+          "followingLocalCallMs": [
+            2.5937,
+            2.1766,
+            1.9445,
+            2.0088,
+            1.974,
+            3.1945,
+            2.0264
+          ],
+          "observationMs": [
+            0.132,
+            0.0388,
+            0.0279,
+            0.0238,
+            0.0209,
+            0.0201,
+            0.0197,
+            0.0419
+          ],
+          "memoryWrites": 0
+        }
+      ]
+    }
+  ]
+}

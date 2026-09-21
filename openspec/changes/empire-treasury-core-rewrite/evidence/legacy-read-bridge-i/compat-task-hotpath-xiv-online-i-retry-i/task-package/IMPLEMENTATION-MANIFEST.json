@@ -1,0 +1,40 @@
+{
+  "kind": "XIV-online-retry-I-implementation/v1",
+  "repositorySourceChanges": 0,
+  "sourcePatchIncluded": false,
+  "reusedCompatHead": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+  "reusedTree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+  "sourceLockPaths": 17,
+  "allowedCompatCommits": "zero commits if unbound; otherwise one ON and one exact OFF configuration commit",
+  "executionChanges": [
+    "runtime/time-budget.cjs: tick-rate evidence, admission and fixed exposure guard",
+    "runtime/actions.cjs: log readiness/game time and pre-upload admission; restoreOnce unchanged",
+    "runtime/worker.cjs: successful game-time logging and dual-clock deadline enforcement",
+    "tools/repository.cjs: exact source reuse without patch/commit; gated binding and OFF lineage",
+    "tools/observe.cjs: measure and admit before binding; carry timing evidence into session",
+    "tools/verify.cjs: independent timing evidence recalculation",
+    "tools/timing-analysis.cjs: timing/termination summary",
+    "tools/archive.cjs: timing analysis included, source reuse lineage required"
+  ],
+  "unchangedRuntimeFiles": [
+    "runtime/transport.cjs",
+    "runtime/task-trace.cjs",
+    "runtime/collector.cjs",
+    "runtime/common.cjs",
+    "runtime/observer.cjs",
+    "runtime/samples.cjs",
+    "runtime/identity.cjs",
+    "vendor/deployGuard.cjs"
+  ],
+  "onlineBusinessProtocol": {
+    "points": 4,
+    "intervalTicks": 100,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "safetyCpu": 5,
+    "candidatePostMax": 1,
+    "restorePostMax": 1,
+    "writeRetries": 0
+  },
+  "newFiniteObservationBudgetMs": 4500000
+}

@@ -1,0 +1,74 @@
+{
+  "status": "EXACT_XIV_SOURCE_REUSE_ON_OFF_VERIFIED",
+  "baseHead": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+  "source": {
+    "head": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+    "tree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+    "base": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+    "paths": 17,
+    "sourceModified": false,
+    "implementationHead": "90fd49221d1dbf12365d60edea25d8f153d2a1cb",
+    "status": "TASK_XIV_RETRY_SOURCE_REUSED_VERIFIED",
+    "resumed": true
+  },
+  "secondReuse": {
+    "head": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+    "tree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+    "base": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+    "paths": 17,
+    "sourceModified": false,
+    "implementationHead": "90fd49221d1dbf12365d60edea25d8f153d2a1cb",
+    "status": "TASK_XIV_RETRY_SOURCE_REUSED_VERIFIED",
+    "resumed": true
+  },
+  "bind": {
+    "runId": "063d654ab37a4e91a16ca89cc6e17f78",
+    "source": {
+      "head": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+      "tree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+      "base": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+      "paths": 17,
+      "sourceModified": false,
+      "implementationHead": "90fd49221d1dbf12365d60edea25d8f153d2a1cb"
+    },
+    "profile": {
+      "enabled": true,
+      "shardName": "shard1",
+      "rooms": [
+        "E3N59",
+        "E4N58"
+      ],
+      "resources": [
+        "energy",
+        "H"
+      ],
+      "startTick": 200,
+      "endTick": 500,
+      "intervalTicks": 100,
+      "minBucket": 2000,
+      "maxSampleCpu": 2,
+      "reserveCpu": 5,
+      "maxLogBytes": 16384
+    },
+    "observedTick": 50,
+    "profileHead": "08d8a6242750ea3e8b615dc89b0c1cdddd832d14",
+    "profileTree": "ff90a8a0b02bb0148551432c51c52b1f297b478c"
+  },
+  "off": {
+    "status": "SOURCE_DEFAULT_OFF_RESTORED",
+    "sourceHead": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+    "closedHead": "8a3a8c020d533e32b2bb8d97b9f04ab8a961e6d5",
+    "sameTreeAsSource": true,
+    "atMs": 1790018136381
+  },
+  "closed": {
+    "head": "8a3a8c020d533e32b2bb8d97b9f04ab8a961e6d5",
+    "bound": true,
+    "profileHead": "08d8a6242750ea3e8b615dc89b0c1cdddd832d14"
+  },
+  "commitCount": "2",
+  "finalTree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+  "worktreeClean": true,
+  "networkWrites": 0,
+  "scope": "Authenticated source tree and shallow HEAD; synthetic time-read fixtures; no deployment"
+}

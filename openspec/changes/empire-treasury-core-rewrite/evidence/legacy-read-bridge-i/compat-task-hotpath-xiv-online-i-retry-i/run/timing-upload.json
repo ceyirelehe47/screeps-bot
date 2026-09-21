@@ -1,0 +1,22 @@
+{
+  "kind": "tick-window-admission/v1",
+  "runId": "063d654ab37a4e91a16ca89cc6e17f78",
+  "stage": "upload",
+  "status": "TIME_BUDGET_ADMITTED",
+  "measurementSha256": "0e030569630ea33a5b31f5e0f33d0e9eb678a67386416e1084764a3b2e6dd978",
+  "readId": "22d98433385689d0672455c7a493c564",
+  "currentTick": 73857526,
+  "startTick": 73857700,
+  "endTick": 73858000,
+  "remainingTicks": 474,
+  "conservativeMsPerTick": 6990,
+  "estimatedRemainingMs": 3313260,
+  "deliveryReserveMs": 240000,
+  "requiredMs": 3553260,
+  "exposureLimitMs": 4500000,
+  "slackMs": 946740,
+  "measurementAgeMs": 80287.907,
+  "readAtMs": 1790025056807,
+  "readMonoMs": 276397.8019,
+  "noAutomaticExtension": true
+}

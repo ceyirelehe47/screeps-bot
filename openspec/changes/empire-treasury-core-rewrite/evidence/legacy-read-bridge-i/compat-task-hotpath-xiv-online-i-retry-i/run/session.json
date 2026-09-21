@@ -1,0 +1,70 @@
+{
+  "runId": "063d654ab37a4e91a16ca89cc6e17f78",
+  "packageFingerprint": "e2437b851e2303b20766d283859f20f100aabe9ba44404606927baa51740ab31",
+  "timingMeasurementFileSha256": "ecf1bd7c8f6e5d6109e70a1e353f784e3b067f91463a2538b400f3d7fdfd7c16",
+  "timingBindingFileSha256": "6a7fdac633456e631917ea925b31df027cec0717341cee2bbfbf7f4b778c27f7",
+  "source": {
+    "head": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+    "tree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+    "base": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+    "paths": 17,
+    "sourceModified": false,
+    "implementationHead": "90fd49221d1dbf12365d60edea25d8f153d2a1cb"
+  },
+  "profileHead": "c11abcf621ca939b0a30c92e2809402400d039c0",
+  "profileTree": "88b2b7ac3fcfeee536abfbe0569a0b65b0f3eb64",
+  "profile": {
+    "enabled": true,
+    "shardName": "shard1",
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "startTick": 73857700,
+    "endTick": 73858000,
+    "intervalTicks": 100,
+    "minBucket": 2000,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "maxLogBytes": 16384
+  },
+  "observedTick": 73857507,
+  "preparedAtMs": 1790025042960,
+  "build": {
+    "commit": "c11abcf621ca939b0a30c92e2809402400d039c0",
+    "tree": "88b2b7ac3fcfeee536abfbe0569a0b65b0f3eb64",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+c11abcf@2026-09-21T21:09:41.315Z",
+    "embeddedBundleHash": "65f40bcf24d0cccee8ff7ba8546a8eba41f9638d112352530910e9102cbbac93"
+  },
+  "candidateDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "5fbc2647cdaee3be12a5b88404489e5c4e4b93c09fb56915dd4c0a97a98ae042",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4615913,
+        "sha256": "e9bbb486a9537fb079f281c55d03fdbe49206c9cfc04cb354d9762a51b37ba02"
+      }
+    ]
+  },
+  "backupDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494463,
+        "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+      }
+    ]
+  },
+  "backupFileSha256": "0c9761ad2e10428ddf9ee9e2027da5623010a9b7eafcd40a20c2cffe543d4615",
+  "candidateFileSha256": "0b1f15de093f7209bb017b7ad1576d198617d76fc6031c4997d02f72fe8430c1"
+}

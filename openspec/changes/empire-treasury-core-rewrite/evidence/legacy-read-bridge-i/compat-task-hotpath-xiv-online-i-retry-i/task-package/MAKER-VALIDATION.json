@@ -1,0 +1,57 @@
+{
+  "kind": "XIV-retry-I-maker-validation/v1",
+  "date": "2026-09-22",
+  "packageTests": {
+    "expected": 108,
+    "passed": 108,
+    "newTimingTests": 43
+  },
+  "exactSourceFlow": {
+    "authenticatedHead": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+    "tree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+    "sourceReuseExecuted": true,
+    "sourceCommitsCreated": 0,
+    "onOffExecuted": true,
+    "onOffCommitCount": 2,
+    "finalTreeUnchanged": true,
+    "realRemoteWrites": 0,
+    "realGameTimeUsed": false
+  },
+  "repositoryNodeRegression": {
+    "tests": 378,
+    "passed": 378,
+    "failed": 0,
+    "compiler": "5.8.3",
+    "sourceBytesChanged": false,
+    "generatorCheckPassed": true
+  },
+  "localEnvironmentRemediation": {
+    "initialBroadRun": "377/378 because the historical production commit object was not present in the reconstructed shallow repository",
+    "repair": "Restored SHA-authenticated legacy commit, root/src trees and original main blob; no test or source changes",
+    "fullRerun": "378/378"
+  },
+  "localHTTPAndGitTests": {
+    "syntheticFullRunVerifierWithTiming": true,
+    "sizeMatchedHTTPGetAndLostRestoreReply": true,
+    "sourceReuseBindOffAndBareRemotePublish": true,
+    "declinedTimeBudgetSendsZeroPost": true,
+    "monotonicFixedLimitAndClockJumps": true,
+    "identityAndQuotaRegressionRetained": true
+  },
+  "makerBoundaries": {
+    "completeCurrentSourceTreeAvailable": true,
+    "currentHeadGitObjectAuthenticated": true,
+    "completeHistoryCloneAvailable": false,
+    "actualRefactorCloneBaselineExecuted": false,
+    "pinnedTypescript593FullGatesExecuted": false,
+    "jestExecuted": false,
+    "rollupExecuted": false,
+    "windowsExecuted": false,
+    "liveGameTimeMeasured": false,
+    "screepsHttpExecuted": false,
+    "candidatePostExecuted": false,
+    "restorePostExecuted": false,
+    "realRuntime75SecondObservationExecuted": false
+  },
+  "interpretation": "Local virtual clocks, loopback HTTP, fixture Git remotes, and TS5.8.3 source regressions are not engine CPU evidence. The Agent must execute the complete locked real repository gates and new bounded online run."
+}

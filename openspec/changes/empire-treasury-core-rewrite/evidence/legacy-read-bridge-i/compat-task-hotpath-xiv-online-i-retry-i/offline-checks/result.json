@@ -1,0 +1,17 @@
+{
+  "status": "TASK_XIV_RETRY_OFFLINE_VERIFIED",
+  "source": {
+    "head": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+    "tree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+    "base": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+    "paths": 17,
+    "sourceModified": false,
+    "implementationHead": "90fd49221d1dbf12365d60edea25d8f153d2a1cb"
+  },
+  "packageFingerprint": "e2437b851e2303b20766d283859f20f100aabe9ba44404606927baa51740ab31",
+  "repositoryNodeTests": 378,
+  "compiler": "5.9.3",
+  "jestSuites": 195,
+  "jestTests": 685,
+  "atMs": 1790024766127
+}

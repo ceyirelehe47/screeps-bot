@@ -1,0 +1,349 @@
+{
+  "kind": "task-XIV-independent-review/v1",
+  "reviewDate": "2026-09-22",
+  "executionDateUTC": "2026-09-21",
+  "conclusion": {
+    "sourceDelivery": "matches pinned source tree",
+    "offlineGate": "TASK_XIV_OFFLINE_VERIFIED (archived evidence reviewed; full repository suite not rerun in this review)",
+    "capture": "CPU_DIAGNOSTIC_CAPTURE_INCONCLUSIVE",
+    "recovery": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+    "terminationReason": "WALL_DEADLINE",
+    "engineCpuGapRepaired": false,
+    "taskHotpathOnlineBenefitVerified": false,
+    "rootCauseAssigned": false,
+    "newRecoveryNeededOnReviewedEvidence": false,
+    "twelvePointObservationAuthorized": false
+  },
+  "anchors": {
+    "compatBase": "85177467e71dcdbf9873bf6c2cd6cddb207a1c15",
+    "sourceHead": "90fd49221d1dbf12365d60edea25d8f153d2a1cb",
+    "profileHead": "e7ae9dbfd8a653dfb096d0f00cbc0db769535619",
+    "compatHead": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+    "expectedAndFinalOffTree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+    "refactorBase": "1666c5530856239207d32690f2f284cc8633d3d6",
+    "refactorHead": "43ee4bf495b86002fccccc22d682e2527498ef82",
+    "onCommitChangedFiles": [
+      "src/runtime/treasuryCompatConfig.ts"
+    ],
+    "singleParentChainVerified": true,
+    "refactorRootTreeDelta": [
+      "openspec"
+    ],
+    "unchangedRefactorRootEntries": [
+      "src",
+      "scripts",
+      "test",
+      "docs",
+      "package.json",
+      "package-lock.json",
+      "rollup.config.js",
+      "jest.config.cjs",
+      "tsconfig.json",
+      "tsconfig.build.json"
+    ]
+  },
+  "package": {
+    "zipName": "screeps-compat-task-hotpath-XIV-online-I-2026-09-21.zip",
+    "zipBytes": 138887,
+    "zipSha256": "33bf0b03776cadacda4933307b4570dad110d7ccad14fd76a697c9f51bb9ff72",
+    "payloadFiles": 42,
+    "integritySha256": "2d6dae2879d68691813fb85b92cf53d78e6d8430f3943e03e90b6c2f009518c1",
+    "localComputedTree": "33c44d8778072aa8a4ca17e0af28ea736dab84e7",
+    "remoteArchivedPackageTree": "33c44d8778072aa8a4ca17e0af28ea736dab84e7",
+    "wholePackageTreeMatch": true,
+    "toolTestsRerun": {
+      "status": "TASK_XIV_PACKAGE_TESTS_VERIFIED",
+      "packageFingerprint": "2d6dae2879d68691813fb85b92cf53d78e6d8430f3943e03e90b6c2f009518c1",
+      "tests": 65,
+      "passed": 65,
+      "failed": 0,
+      "atMs": 1790009401557
+    },
+    "reviewEnvironmentNote": "Initial verify refused inherited NODE_PATH as designed; rerun in a subprocess with the package-prohibited environment variables absent. No package files or tests were changed."
+  },
+  "archivedOfflineResult": {
+    "status": "TASK_XIV_OFFLINE_VERIFIED",
+    "compiler": "5.9.3",
+    "nodeTests": 378,
+    "jestSuites": 195,
+    "jestTests": 685,
+    "sourcePaths": 17,
+    "localReplay": "TASK_XIV_LOCAL_REPLAY_VERIFIED",
+    "localReplayIsEngineMeasurement": false
+  },
+  "capture": {
+    "expectedTicks": [
+      73853300,
+      73853400,
+      73853500,
+      73853600
+    ],
+    "rawReports": 2,
+    "acceptedReports": 2,
+    "completeSamples": 0,
+    "duplicates": 0,
+    "actualCommitmentCalls": 0,
+    "completeTaskTraces": 0,
+    "localSafetyLatchedOnReadReports": false,
+    "issues": [
+      "FOUR_REPORTS_REQUIRED",
+      "GUARD_DID_NOT_COMPLETE"
+    ],
+    "reports": [
+      {
+        "tick": 73853300,
+        "tasksTableCount": 39,
+        "reservationsTableCount": 0,
+        "prefixCpu": 2.654212599998573,
+        "preCommitmentCpu": 2.5740935999929206,
+        "commitmentCalls": 0,
+        "taskTrace": "not_called",
+        "directCoreMatches": 4,
+        "resourceKeys": 60
+      },
+      {
+        "tick": 73853400,
+        "tasksTableCount": 37,
+        "reservationsTableCount": 0,
+        "prefixCpu": 2.094518399993831,
+        "preCommitmentCpu": 1.9626047999990988,
+        "preCallProbeCpu": 2.0574371999900904,
+        "commitmentCalls": 0,
+        "taskTrace": "not_called",
+        "directCoreMatches": 4,
+        "resourceKeys": 61
+      }
+    ],
+    "legacyProjectionDiscrepancy": {
+      "endpoint": "E4N58/terminal",
+      "observedAtTicks": [
+        73853300,
+        73853400
+      ],
+      "fields": [
+        "terminalUsedCapacity",
+        "terminalFreeCapacity",
+        "terminalEnergy"
+      ],
+      "directCoreComparison": "match_selected_scope for all endpoints in both reports",
+      "causeNotDetermined": true,
+      "notCountedAsDirectCoreMismatch": true
+    }
+  },
+  "independentProfileChecks": {
+    "sourceBasis": "Field extraction from the two remote raw console reports; full original diagnostic stream not replayed.",
+    "profiles": [
+      {
+        "tick": 73853300,
+        "trace": {
+          "status": "not_called",
+          "parentInterval": 0.06790290000208188,
+          "actualCallCost": null
+        },
+        "taskTrace": {
+          "status": "not_called",
+          "firstPendingOrdinal": null,
+          "taskInterval": null
+        },
+        "phaseSum": 2.654212599998573,
+        "prefix": 2.654212599998573,
+        "preCommitmentCpu": 2.5740935999929206,
+        "preCallProbe": null
+      },
+      {
+        "tick": 73853400,
+        "trace": {
+          "status": "not_called",
+          "parentInterval": 0.1169986999957473,
+          "actualCallCost": null
+        },
+        "taskTrace": {
+          "status": "not_called",
+          "firstPendingOrdinal": null,
+          "taskInterval": null
+        },
+        "phaseSum": 2.094518399993831,
+        "prefix": 2.094518399993831,
+        "preCommitmentCpu": 1.9626047999990988,
+        "preCallProbe": 2.0574371999900904
+      }
+    ],
+    "mergedTail": {
+      "tick": 73853300,
+      "elapsed": 3.340667199998279,
+      "phases": {
+        "legacyInputs": 0.6241637999992236,
+        "directRead": 0.547550900002534,
+        "readerLoad": 0.5677216999902157,
+        "observationBuild": 0.7613593000060064,
+        "coreCompare": 0.07329789999494096,
+        "commitmentBuild": 0.06790290000208188,
+        "report": 0.012216100003570318,
+        "serializationAndSize": 0.5193785999945248,
+        "emit": 0.1305564000067534,
+        "retention": 0.03651959999842802
+      }
+    },
+    "tailOverhead": 0.6864545999997063,
+    "secondBudgetAtParentStart": 0.03739520000090124,
+    "secondBudgetAtCallStart": -0.05743719999009045
+  },
+  "timing": {
+    "sourceBasis": "actions.jsonl timestamps and raw console reports at file lines 474 and 674; receipt times include delivery effects",
+    "timestamps": {
+      "readinessEnd": {
+        "atMs": 1790006910524,
+        "UTC": "2026-09-21T16:08:30.524000+00:00"
+      },
+      "candidateWriteBoundary": {
+        "atMs": 1790006983637,
+        "UTC": "2026-09-21T16:09:43.637000+00:00"
+      },
+      "firstReportReceived": {
+        "atMs": 1790008192117,
+        "UTC": "2026-09-21T16:29:52.117000+00:00"
+      },
+      "secondReportReceived": {
+        "atMs": 1790008596091,
+        "UTC": "2026-09-21T16:36:36.091000+00:00"
+      },
+      "deadlineCloseTrigger": {
+        "atMs": 1790008783923,
+        "UTC": "2026-09-21T16:39:43.923000+00:00"
+      },
+      "restoreWriteBoundary": {
+        "atMs": 1790008812307,
+        "UTC": "2026-09-21T16:40:12.307000+00:00"
+      },
+      "runtimeReady": {
+        "atMs": 1790008858345,
+        "UTC": "2026-09-21T16:40:58.345000+00:00"
+      },
+      "runtimeEnd": {
+        "atMs": 1790008933553,
+        "UTC": "2026-09-21T16:42:13.553000+00:00"
+      },
+      "finalByteRead": {
+        "atMs": 1790008953268,
+        "UTC": "2026-09-21T16:42:33.268000+00:00"
+      }
+    },
+    "observedTickAtBinding": 73853051,
+    "firstDueTick": 73853300,
+    "lastDueTick": 73853600,
+    "leadFromBindingObservationTicks": 249,
+    "observedToFinalDueTicks": 549,
+    "wallLimitMs": 1800000,
+    "candidateWriteToFirstReceiptMs": 1208480,
+    "betweenSampleReceiptsMs": 403974,
+    "secondReceiptToCloseMs": 187832,
+    "candidateWriteToCloseMs": 1800286,
+    "extrapolation": {
+      "assumption": "The remaining 100-tick intervals take the same elapsed receipt-to-receipt duration as the observed first-to-second interval. This is not a measured time for missing reports.",
+      "predictedCandidateWriteToFourthReceiptMs": 2420402,
+      "predictedFourthWouldExceedWallLimitMs": 620402
+    },
+    "interpretation": "Evidence supports a wall-time scheduling/admission shortfall. No CPU safety-stop event caused this close; engine/network root cause of tick or delivery delays is not established. Do not extend the old run or reset its write markers."
+  },
+  "recovery": {
+    "candidateWriteBoundaries": 1,
+    "restoreWriteBoundaries": 1,
+    "restoreAcceptedAsArchived": true,
+    "observerIndependentlyRerun": {
+      "status": "RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED",
+      "durationMs": 75204,
+      "consoleFrames": 19,
+      "cpuFrames": 20,
+      "positiveCpuFramesAfterReady": 18,
+      "maxConsoleGapMs": 4834,
+      "maxCpuGapMs": 4816,
+      "closureId": "8d877dc5d180d2e6fe364d6dd81259b0"
+    },
+    "preAndPostByteTimeOrderVerified": true,
+    "finalMainBytes": 4494463,
+    "finalMainSha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b",
+    "finalBuildCommit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+    "finalByteReadAtMs": 1790008953268,
+    "liveScreepsReadPerformedByReviewer": false
+  },
+  "byteVerifiedRemoteRecords": [
+    {
+      "path": "recovery/runtime-result.json",
+      "bytes": 557,
+      "gitBlob": "1d04af6bba615c589746b640c109af1fa7361f29",
+      "sha256": "c0a282608cfdb6c22e4eaea5ee79c9d939cc5ec656239b1e2c91a511fb0ce7fc"
+    },
+    {
+      "path": "recovery/code-before-runtime.json",
+      "bytes": 634,
+      "gitBlob": "fe87c58f020d60e5de12a5b8f2a1f66a2e7d6641",
+      "sha256": "922ed6157313c51ad0a5c51e52b63591ba7a679b3d2450e9d16a288ac474d52f"
+    },
+    {
+      "path": "recovery/code-after-runtime.json",
+      "bytes": 634,
+      "gitBlob": "0f0d470c828d6c7276cc237a60f04b794e830812",
+      "sha256": "f2493e109e16c04db3494725b5e7a62c055a8c5c90c8b5286f1669c595432088"
+    },
+    {
+      "path": "recovery/runtime-console.jsonl",
+      "bytes": 14137,
+      "gitBlob": "7d4a4daa0960b3efe5f97e7ade717e46285e0c26",
+      "sha256": "184e220749720ee8dbce6d1d0960faa0207a8aac9c673be383b9574620b61b73"
+    }
+  ],
+  "verificationBoundary": {
+    "githubReadOnly": true,
+    "screepsCredentialsUsed": false,
+    "screepsNetworkOrWritesPerformed": false,
+    "packageTests65Rerun": true,
+    "entirePackageTreeCompared": true,
+    "recoveryRawLogCompleteAndBlobVerified": true,
+    "recoveryObserverVerifierRerun": true,
+    "twoRawCpuProfilesAndFirstTailRecomputed": true,
+    "fullDiagnosticConsoleStreamReplayed": false,
+    "fullVerifyToolRerunAgainstRealCompatClone": false,
+    "fullRepository378TestsRerun": false,
+    "tscJestRollupRerun": false,
+    "allArchiveFilesRehashed": false,
+    "exactEvidenceSubdirectoryOnlyDiffProven": false,
+    "refactorRootOutsideOpenSpecUnchangedVerified": true
+  },
+  "nextStepRecommendation": {
+    "retainCurrentXIVSource": true,
+    "priority": "Correct bounded wall-time feasibility admission and use a new explicitly authorized online-only retry; preserve old run and evidence",
+    "keepFixed": [
+      "2 CPU per sample",
+      "4 points",
+      "100-tick intervals",
+      "independent direct/Core Store reads",
+      "full task/reservation semantics",
+      "no automatic write retries",
+      "default OFF at closure"
+    ],
+    "requireBeforeAnotherUpload": [
+      "Recent tick-progress measurement with conservative margin",
+      "Budget check covering lead, remaining sample intervals and preparation/readback costs",
+      "Finite wall ceiling fixed in the new package, not silently extended during the old run"
+    ],
+    "doNotInfer": [
+      "task spike fixed from zero actual calls",
+      "engine speedup from local replay or different workloads",
+      "legacy projection mismatch cause from timestamps alone"
+    ]
+  },
+  "sources": {
+    "FINAL-VERIFICATION.json": "https://github.com/ceyirelehe47/screeps-bot/blob/43ee4bf495b86002fccccc22d682e2527498ef82/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/FINAL-VERIFICATION.json",
+    "TASK-ANALYSIS.json": "https://github.com/ceyirelehe47/screeps-bot/blob/43ee4bf495b86002fccccc22d682e2527498ef82/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/TASK-ANALYSIS.json",
+    "offline-checks/result.json": "https://github.com/ceyirelehe47/screeps-bot/blob/43ee4bf495b86002fccccc22d682e2527498ef82/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/offline-checks/result.json",
+    "offline-checks/local-replay.json": "https://github.com/ceyirelehe47/screeps-bot/blob/43ee4bf495b86002fccccc22d682e2527498ef82/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/offline-checks/local-replay.json",
+    "run/session.json": "https://github.com/ceyirelehe47/screeps-bot/blob/43ee4bf495b86002fccccc22d682e2527498ef82/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/run/session.json",
+    "run/worker-result.json": "https://github.com/ceyirelehe47/screeps-bot/blob/43ee4bf495b86002fccccc22d682e2527498ef82/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/run/worker-result.json",
+    "run/actions.jsonl": "https://github.com/ceyirelehe47/screeps-bot/blob/43ee4bf495b86002fccccc22d682e2527498ef82/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/run/actions.jsonl",
+    "run/console.jsonl": "https://github.com/ceyirelehe47/screeps-bot/blob/43ee4bf495b86002fccccc22d682e2527498ef82/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/run/console.jsonl",
+    "run/recovery/runtime-console.jsonl": "https://github.com/ceyirelehe47/screeps-bot/blob/43ee4bf495b86002fccccc22d682e2527498ef82/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/run/recovery/runtime-console.jsonl",
+    "run/recovery/runtime-result.json": "https://github.com/ceyirelehe47/screeps-bot/blob/43ee4bf495b86002fccccc22d682e2527498ef82/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/run/recovery/runtime-result.json",
+    "run/recovery/code-before-runtime.json": "https://github.com/ceyirelehe47/screeps-bot/blob/43ee4bf495b86002fccccc22d682e2527498ef82/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/run/recovery/code-before-runtime.json",
+    "run/recovery/code-after-runtime.json": "https://github.com/ceyirelehe47/screeps-bot/blob/43ee4bf495b86002fccccc22d682e2527498ef82/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/run/recovery/code-after-runtime.json"
+  }
+}

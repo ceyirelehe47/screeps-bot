@@ -1,0 +1,79 @@
+{
+  "kind": "compat-task-XIV-online-I-retry-I/v1",
+  "authorizationId": "compat-task-XIV-online-I-retry-I-2026-09-22",
+  "parentRunId": "063d654ab37a4e91a16ca89cc6e17f78",
+  "expected": {
+    "server": "https://screeps.com",
+    "username": "forster",
+    "userId": "634fe406347a7b69b28aeccb",
+    "branch": "default",
+    "shard": "shard1"
+  },
+  "backupDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494463,
+        "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+      }
+    ]
+  },
+  "backupBuild": {
+    "commit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+    "tree": "929fa9557b1a36135a5ef1605231be1d16e87366",
+    "dirty": "folded_out",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+06ffedb@2026-08-29T14:28:59.403Z"
+  },
+  "guardBlob": "796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8",
+  "compatBase": "0b354262fb5f3686166e3af0189d88a1690f0c6b",
+  "compatBaseTree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+  "refactorBase": "43ee4bf495b86002fccccc22d682e2527498ef82",
+  "compatBranch": "compat/treasury-read-bridge-i",
+  "refactorBranch": "refactor/empire-treasury-rearchitecture",
+  "sourceMessage": "perf(compat): streamline task arithmetic and sample path reads",
+  "evidenceMessage": "evidence(compat): XIV retry I time admission and independent recovery",
+  "evidencePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i-retry-i",
+  "runtimeMs": 75000,
+  "runtimeStartupMs": 90000,
+  "runtimeSilenceMs": 45000,
+  "readinessMs": 1800000,
+  "requestMs": 60000,
+  "writeMs": 60000,
+  "recoveryReadMs": 600000,
+  "wallMs": 4500000,
+  "safetyCpu": 5,
+  "points": 4,
+  "rooms": [
+    "E3N59",
+    "E4N58"
+  ],
+  "resources": [
+    "energy",
+    "H"
+  ],
+  "repositoryNodeTests": 378,
+  "jestSuites": 195,
+  "jestTests": 685,
+  "compilerVersion": "5.9.3",
+  "priorRecoveryPath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-task-hotpath-xiv-online-i/run/recovery/result.json",
+  "priorRecoveryBlob": "7860df0bc2853a801f07204d9f8eb2cd06ee93ee",
+  "priorSourceHead": "90fd49221d1dbf12365d60edea25d8f153d2a1cb",
+  "timing": {
+    "measurementMaxMs": 300000,
+    "minSamples": 7,
+    "minSpanMs": 120000,
+    "minTickAdvance": 20,
+    "pollMs": 20000,
+    "requestMs": 15000,
+    "safetyFactor": 1.5,
+    "floorMsPerTick": 5000,
+    "deliveryReserveMs": 240000,
+    "maxAgeMs": 600000,
+    "freshReadMaxMs": 5000,
+    "clockDriftMs": 2000
+  }
+}
