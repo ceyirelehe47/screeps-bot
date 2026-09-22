@@ -1,0 +1,14 @@
+{
+  "runId": "76d46d162053085c41485ce712c733c1",
+  "round": 1,
+  "reason": "SELECTED",
+  "selectedOrdinal": 2,
+  "started": {
+    "atMs": 1790107918111,
+    "monoMs": 67028.7403
+  },
+  "ended": {
+    "atMs": 1790108060401,
+    "monoMs": 209318.7239
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "kind": "XV-retry-I-window-selection-analysis/v1",
+  "runId": "76d46d162053085c41485ce712c733c1",
+  "capture": "CPU_DIAGNOSTIC_CAPTURE_VERIFIED",
+  "closure": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+  "selection": {
+    "kind": "pre-binding-selection-result/v1",
+    "runId": "76d46d162053085c41485ce712c733c1",
+    "outcome": "WINDOW_SELECTED",
+    "reason": "FIRST_ADMISSIBLE_REVALIDATED_PROPOSAL",
+    "rounds": 1,
+    "selected": {
+      "round": 1,
+      "decisionOrdinal": 2,
+      "readId": "bbfb6ff18a7343a61867e8c6eb65d517",
+      "identityId": "0f9a93ec71f233229dace789f225863f",
+      "currentTick": 73877380,
+      "profile": {
+        "enabled": true,
+        "shardName": "shard1",
+        "rooms": [
+          "E3N59",
+          "E4N58"
+        ],
+        "resources": [
+          "energy",
+          "H"
+        ],
+        "startTick": 73877600,
+        "endTick": 73877900,
+        "intervalTicks": 100,
+        "minBucket": 2000,
+        "maxSampleCpu": 2,
+        "reserveCpu": 5,
+        "maxLogBytes": 16384
+      },
+      "plan": {
+        "kind": "tick-window-admission/v1",
+        "runId": "76d46d162053085c41485ce712c733c1",
+        "stage": "binding",
+        "status": "TIME_BUDGET_ADMITTED",
+        "measurementSha256": "8814aef69b5956e4cb287126e6b80846ef9ffa7df4b51674d6396825387cf8e0",
+        "readId": "bbfb6ff18a7343a61867e8c6eb65d517",
+        "currentTick": 73877380,
+        "startTick": 73877600,
+        "endTick": 73877900,
+        "remainingTicks": 520,
+        "conservativeMsPerTick": 6984,
+        "estimatedRemainingMs": 3631680,
+        "deliveryReserveMs": 240000,
+        "requiredMs": 3871680,
+        "exposureLimitMs": 4500000,
+        "slackMs": 628320,
+        "minimumSlackMs": 180000,
+        "measurementAgeMs": 11546.123500000016,
+        "readAtMs": 1790108060377,
+        "readMonoMs": 209294.3898,
+        "noAutomaticExtension": true
+      },
+      "measurementFileSha256": "5e175417f080fb409f8a74e5c154d2a7e69b92b9562a8f289d25b5ec16d08bec",
+      "bindingFileSha256": "86b350b74ec50145bcaea334cfddb956771a1cbfbef5fa7cec123a658052ca04"
+    },
+    "startedAtMs": 1790107918106,
+    "endedAtMs": 1790108060441,
+    "elapsedMs": 142335.40290000002,
+    "maximumMs": 1800000,
+    "maximumRounds": 6,
+    "noCodeWrittenBySelector": true,
+    "files": {
+      "round-01/decisions.jsonl": {
+        "bytes": 2157,
+        "sha256": "47a38835e2d39463ac2d5838cdef1e2853297c1aa2905db7580396561eb7b90c"
+      },
+      "round-01/identities.jsonl": {
+        "bytes": 776,
+        "sha256": "862f6cc05efa0a052d95f8d5fd8c70860c3c53af60892f521223e1592781a5d9"
+      },
+      "round-01/result.json": {
+        "bytes": 255,
+        "sha256": "535b36a3d1ce49bfcbaf96b5924198a5b209d58c03fe70fbe43a835ef3b50fe8"
+      },
+      "round-01/start.json": {
+        "bytes": 113,
+        "sha256": "ca119424c53467ac59329085138e16081cd5154d923e0d73dde8264d2072b7cb"
+      },
+      "round-01/time-observations.jsonl": {
+        "bytes": 2735,
+        "sha256": "d697f4a47527194f09e214e30ec61e15a6d321fd05b1b657dc8377010d13b514"
+      },
+      "round-01/timing-measurement.json": {
+        "bytes": 1082,
+        "sha256": "5e175417f080fb409f8a74e5c154d2a7e69b92b9562a8f289d25b5ec16d08bec"
+      },
+      "start.json": {
+        "bytes": 445,
+        "sha256": "147a7240d01857667443b7fc25b2399686a779608083e1edab360bbe3b95e6d2"
+      }
+    }
+  },
+  "independentVerification": {
+    "status": "WINDOW_SELECTION_INDEPENDENTLY_VERIFIED",
+    "outcome": "WINDOW_SELECTED",
+    "reason": "FIRST_ADMISSIBLE_REVALIDATED_PROPOSAL",
+    "rounds": 1,
+    "decisions": 2,
+    "rejectedDecisions": 0,
+    "successfulTimeReads": 9,
+    "failedTimeReads": 0,
+    "elapsedMs": 142335.40290000002,
+    "maximumMs": 1800000,
+    "currentTick": 73877380,
+    "selectedRound": 1,
+    "minimumSlackMs": 180000,
+    "noCodeWrittenBySelector": true
+  },
+  "error": null,
+  "sourceImplementationRevision": "XV",
+  "newSourceCommits": 0,
+  "interpretation": "Only unbound read-only proposals may be reconsidered. Every calibration and rejection is retained. The first revalidated admissible proposal is selected. No second ON window, POST retry or wall extension is authorized."
+}

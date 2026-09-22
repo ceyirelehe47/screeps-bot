@@ -1,0 +1,265 @@
+{
+  "kind": "read-envelope-XV-overhead-analysis/v1",
+  "captureStatus": "CPU_DIAGNOSTIC_CAPTURE_VERIFIED",
+  "closure": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+  "baseline": {
+    "file": "references/prior-XIV-retry-I-review.json",
+    "sha256": "cb9b13a212fbdf52bbe06ff00356e467518a0a948037fd91112e619fc674e4a5",
+    "evidenceCommit": "b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba"
+  },
+  "accepted": {
+    "count": 4,
+    "commitmentCalls": 3,
+    "completeBusinessSamples": 0,
+    "prefixCpu": {
+      "count": 4,
+      "minimum": 2.5914564000049722,
+      "median": 2.7468700999979774,
+      "maximum": 3.076170500000444
+    },
+    "preCommitmentCpu": {
+      "count": 4,
+      "minimum": 1.4189214000070933,
+      "median": 1.7020120000015595,
+      "maximum": 2.5972635000034643
+    },
+    "actualCommitmentCallCpu": {
+      "count": 3,
+      "minimum": 1.0377497000008589,
+      "median": 1.0750700999960827,
+      "maximum": 1.0924471999969683
+    },
+    "tailCpu": {
+      "count": 3,
+      "minimum": 0.4849441999976989,
+      "median": 0.5414448000046832,
+      "maximum": 0.5857682999994722
+    }
+  },
+  "rejectedForensicOnly": [],
+  "rows": [
+    {
+      "tick": 73877600,
+      "accepted": true,
+      "businessComplete": false,
+      "prefixCpu": 2.6799357000018063,
+      "preCommitmentCpu": 2.5972635000034643,
+      "calls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 0
+      },
+      "observationCalled": true,
+      "commitmentCalled": false,
+      "actualCommitmentCallInterval": null,
+      "phaseIntervals": {
+        "legacyInputs": 0.5312918000017817,
+        "directRead": 0.57946069999889,
+        "readerLoad": 0.640499599998293,
+        "observationBuild": 0.766708800001652,
+        "coreCompare": 0.07930260000284761,
+        "commitmentBuild": 0.07002579999971204,
+        "report": 0.012646399998629931,
+        "serializationAndSize": 0
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 70
+      },
+      "tail": {
+        "status": "observed",
+        "cpu": 0.5857682999994722,
+        "parts": {
+          "serializationAndSize": 0.3509154999992461,
+          "emit": 0.1272062999996706,
+          "retention": 0.10764650000055553
+        },
+        "totalIncludingTail": 3.2657040000012785
+      }
+    },
+    {
+      "tick": 73877700,
+      "accepted": true,
+      "businessComplete": false,
+      "prefixCpu": 3.076170500000444,
+      "preCommitmentCpu": 1.8312905000057071,
+      "calls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 1
+      },
+      "observationCalled": true,
+      "commitmentCalled": true,
+      "actualCommitmentCallInterval": 1.0750700999960827,
+      "phaseIntervals": {
+        "legacyInputs": 0.521706900002755,
+        "directRead": 0.44993520000207354,
+        "readerLoad": 0.09406409999792231,
+        "observationBuild": 0.6593288000003668,
+        "coreCompare": 0.10625550000258954,
+        "commitmentBuild": 1.180388299999322,
+        "commitmentProjection": 0.05514469999616267,
+        "report": 0.009346999999252148,
+        "serializationAndSize": 0
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 70,
+        "commitmentTaskRecords": 7,
+        "commitmentPendingTaskRecords": 3,
+        "commitmentTaskInvalidEvents": 0,
+        "commitmentDemandHealthChecks": 3,
+        "commitmentReceiverHealthChecks": 3,
+        "commitmentRouteCandidates": 3,
+        "commitmentReservationRecords": 0,
+        "commitmentReservationInvalidEvents": 0,
+        "commitmentOwnerEvaluations": 0,
+        "commitmentActiveReservations": 0,
+        "commitmentScopeBuckets": 5,
+        "commitmentRoomBuckets": 4,
+        "commitmentMergeRoutes": 3,
+        "commitmentReservationScopes": 0,
+        "projectionRowsPlanned": 4,
+        "projectionRowsCompleted": 0,
+        "projectionIndexQueries": 0
+      },
+      "tail": {
+        "status": "observed",
+        "cpu": 0.5414448000046832,
+        "parts": {
+          "serializationAndSize": 0.4176913000010245,
+          "emit": 0.09383660000094096,
+          "retention": 0.02991690000271774
+        },
+        "totalIncludingTail": 3.617615300005127
+      }
+    },
+    {
+      "tick": 73877800,
+      "accepted": true,
+      "businessComplete": false,
+      "prefixCpu": 2.8138044999941485,
+      "preCommitmentCpu": 1.5727334999974119,
+      "calls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 1
+      },
+      "observationCalled": true,
+      "commitmentCalled": true,
+      "actualCommitmentCallInterval": 1.0924471999969683,
+      "phaseIntervals": {
+        "legacyInputs": 0.5202924999975949,
+        "directRead": 0.487453200003074,
+        "readerLoad": 0.09358439999778057,
+        "observationBuild": 0.41930459999275627,
+        "coreCompare": 0.05209880000620615,
+        "commitmentBuild": 1.187395299995842,
+        "commitmentProjection": 0.04560270000365563,
+        "report": 0.008072999997239094,
+        "serializationAndSize": 0
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 71,
+        "commitmentTaskRecords": 9,
+        "commitmentPendingTaskRecords": 4,
+        "commitmentTaskInvalidEvents": 0,
+        "commitmentDemandHealthChecks": 4,
+        "commitmentReceiverHealthChecks": 4,
+        "commitmentRouteCandidates": 4,
+        "commitmentReservationRecords": 0,
+        "commitmentReservationInvalidEvents": 0,
+        "commitmentOwnerEvaluations": 0,
+        "commitmentActiveReservations": 0,
+        "commitmentScopeBuckets": 6,
+        "commitmentRoomBuckets": 4,
+        "commitmentMergeRoutes": 4,
+        "commitmentReservationScopes": 0,
+        "projectionRowsPlanned": 4,
+        "projectionRowsCompleted": 0,
+        "projectionIndexQueries": 0
+      },
+      "tail": {
+        "status": "observed",
+        "cpu": 0.4849441999976989,
+        "parts": {
+          "serializationAndSize": 0.37769680000201333,
+          "emit": 0.08523579999746289,
+          "retention": 0.022011599998222664
+        },
+        "totalIncludingTail": 3.2987486999918474
+      }
+    },
+    {
+      "tick": 73877900,
+      "accepted": true,
+      "businessComplete": false,
+      "prefixCpu": 2.5914564000049722,
+      "preCommitmentCpu": 1.4189214000070933,
+      "calls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 1
+      },
+      "observationCalled": true,
+      "commitmentCalled": true,
+      "actualCommitmentCallInterval": 1.0377497000008589,
+      "phaseIntervals": {
+        "legacyInputs": 0.4592159000094398,
+        "directRead": 0.40873949998785974,
+        "readerLoad": 0.1033721000130754,
+        "observationBuild": 0.3919590999939828,
+        "coreCompare": 0.055634800002735574,
+        "commitmentBuild": 1.131391300004907,
+        "commitmentProjection": 0.033162999992782716,
+        "report": 0.007980700000189245,
+        "serializationAndSize": 0
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 71,
+        "commitmentTaskRecords": 11,
+        "commitmentPendingTaskRecords": 4,
+        "commitmentTaskInvalidEvents": 0,
+        "commitmentDemandHealthChecks": 4,
+        "commitmentReceiverHealthChecks": 4,
+        "commitmentRouteCandidates": 4,
+        "commitmentReservationRecords": 0,
+        "commitmentReservationInvalidEvents": 0,
+        "commitmentOwnerEvaluations": 0,
+        "commitmentActiveReservations": 0,
+        "commitmentScopeBuckets": 7,
+        "commitmentRoomBuckets": 5,
+        "commitmentMergeRoutes": 4,
+        "commitmentReservationScopes": 0,
+        "projectionRowsPlanned": 4,
+        "projectionRowsCompleted": 0,
+        "projectionIndexQueries": 0
+      },
+      "tail": {
+        "status": "unobserved",
+        "cpu": null,
+        "parts": null,
+        "totalIncludingTail": null
+      }
+    }
+  ],
+  "instrumentationCostSubtracted": false,
+  "estimatedMissingTails": 0,
+  "newCpuProbes": 0,
+  "diagnosticWireRevision": "XIV",
+  "sourceImplementationRevision": "XV",
+  "engineCpuGapRepaired": false,
+  "rootCauseAssigned": false,
+  "fullCompatibilityObserved": false,
+  "interpretation": "Prefix and measured tail are disjoint. Nested call/body/task intervals overlap parent phases and are never added twice. A not-called builder has no measured call cost. Missing tails stay null. Different ticks and workloads are not a causal speedup comparison."
+}

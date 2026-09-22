@@ -1,0 +1,36 @@
+{
+  "kind": "tick-rate-measurement/v1",
+  "runId": "76d46d162053085c41485ce712c733c1",
+  "clockId": "a8f95e97398ac69cdf671b367b944b1b",
+  "readIds": [
+    "f11e0f5e61548c0b7360b05d4e97e295",
+    "6d8f1391c8d15ade5b0008c7182916dd",
+    "30ca5869fe139df2b720e60c0eab913a",
+    "1f46d38f1299524cd852b69b0559a880",
+    "3faa6b63b2de3e515fa3c2d03cb9bada",
+    "ccf8f0b6cbe6f859b59992b545a8551f",
+    "b0d9c8de299d5b7af3326378690600eb"
+  ],
+  "samples": 7,
+  "spanMs": 129312.42619999999,
+  "tickAdvance": 34,
+  "firstTick": 73877343,
+  "lastTick": 73877377,
+  "lastRead": {
+    "runId": "76d46d162053085c41485ce712c733c1",
+    "id": "b0d9c8de299d5b7af3326378690600eb",
+    "clockId": "a8f95e97398ac69cdf671b367b944b1b",
+    "pid": 19372,
+    "purpose": "rate-measurement",
+    "sentMonoMs": 196170.3104,
+    "sentAtMs": 1790108047253,
+    "tick": 73877377,
+    "receivedMonoMs": 197748.2663,
+    "receivedAtMs": 1790108048830,
+    "ok": true
+  },
+  "worstObservedMsPerTick": 4655.647320000001,
+  "conservativeMsPerTick": 6984,
+  "safetyFactor": 1.5,
+  "notAFutureSpeedGuarantee": true
+}

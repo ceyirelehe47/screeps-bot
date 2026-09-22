@@ -1,0 +1,10 @@
+{
+  "runId": "76d46d162053085c41485ce712c733c1",
+  "candidateHash": "a8754d8c457e6717dc07e9762224af6d6ef02a7184f952d3955fe49eeec26571",
+  "profileHead": "5c67298767fc19e017f67402b9cbad1d2352028d",
+  "atMs": 1790108135799,
+  "mayHaveBeenSent": true,
+  "wallBudgetMs": 4500000,
+  "wallDeadlineAtMs": 1790112635799,
+  "timingAdmissionSha256": "b52f3108e4ad24778ffa9f8b34a0fbc50eab691fde5406c4e387438c9e329ce0"
+}

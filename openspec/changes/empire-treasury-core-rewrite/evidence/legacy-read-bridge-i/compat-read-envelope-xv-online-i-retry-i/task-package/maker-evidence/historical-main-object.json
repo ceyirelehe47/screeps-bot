@@ -1,0 +1,10 @@
+{
+  "status": "AUTHENTIC_HISTORICAL_OBJECT_SUBSET_INSTALLED",
+  "commit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+  "tree": "929fa9557b1a36135a5ef1605231be1d16e87366",
+  "mainGitBlob": "5f6c49c70d1c916ab47cda30884fddb1fab9931a",
+  "mainBytes": 6130,
+  "timezone": "+0800",
+  "workingTreeChanged": false,
+  "note": "Only commit/root/src/main object path was added for existing test git-show. Source and tests not changed. Not a full history clone."
+}

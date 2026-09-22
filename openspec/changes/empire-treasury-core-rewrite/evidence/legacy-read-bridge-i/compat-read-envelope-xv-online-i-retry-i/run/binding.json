@@ -1,0 +1,33 @@
+{
+  "runId": "76d46d162053085c41485ce712c733c1",
+  "source": {
+    "head": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "tree": "cf3169d5e14892249488b333837b7e840b565cce",
+    "base": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "paths": 16,
+    "sourceModified": false,
+    "implementationHead": "01205865d975878d04c9993a0c97a6ccab952be5"
+  },
+  "profile": {
+    "enabled": true,
+    "shardName": "shard1",
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "startTick": 73877600,
+    "endTick": 73877900,
+    "intervalTicks": 100,
+    "minBucket": 2000,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "maxLogBytes": 16384
+  },
+  "observedTick": 73877380,
+  "profileHead": "5c67298767fc19e017f67402b9cbad1d2352028d",
+  "profileTree": "3be05c9a8a7cdb0cc1b400c64401716194e049ef"
+}
