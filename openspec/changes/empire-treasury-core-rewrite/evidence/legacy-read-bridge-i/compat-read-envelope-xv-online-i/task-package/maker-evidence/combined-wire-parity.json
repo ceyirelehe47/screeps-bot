@@ -1,0 +1,148 @@
+{
+  "status": "COMBINED_XIV_XV_FULL_WIRE_PARITY_VERIFIED",
+  "independentHistoricalCpuUsed": true,
+  "compiler": "5.8.3",
+  "cases": [
+    {
+      "name": "empty",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "manual",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "sixteen",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "bound256",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "overBound257",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "invalidRecord",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "invalidResource",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "missingTasks",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "invalidReservationContainer",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "activeReservation",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "expiredReservation",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "exactExpiry",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "missingOwner",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "typedOwner",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "capacity8M",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "saturatedCapacity",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "missingTerminal",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "unseenRoom",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "sparseMismatch",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    },
+    {
+      "name": "legacyMismatch",
+      "reportCount": 4,
+      "byteEquivalent": true,
+      "cpuObservationsEqual": true,
+      "memoryWrites": 0
+    }
+  ],
+  "engineCpuMeasured": false
+}

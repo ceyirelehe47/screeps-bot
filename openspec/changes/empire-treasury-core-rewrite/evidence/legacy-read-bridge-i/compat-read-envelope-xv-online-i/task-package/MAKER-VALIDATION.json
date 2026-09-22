@@ -1,0 +1,97 @@
+{
+  "kind": "read-envelope-XV-maker-validation/v1",
+  "sourceBase": "eba6a0df574c9cb6101bd3d7e5ebae729d3dd976",
+  "sourceBaseTree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+  "expectedSourceTree": "cf3169d5e14892249488b333837b7e840b565cce",
+  "sourcePaths": 16,
+  "newPaths": 6,
+  "sourcePatchSha256": "e8fa88ef9f03e113f14e215a1fed23de7fb43be3e9c1cd7a80eb5c902288f395",
+  "sourcePatchBytes": 157042,
+  "executed": {
+    "repositoryNode": {
+      "compiler": "5.8.3",
+      "tests": 424,
+      "passed": 424,
+      "runs": 2,
+      "secondRunOnProductionToolAppliedAndClosedTree": true
+    },
+    "sourceSpecialized": {
+      "tests": 46,
+      "passed": 46,
+      "includedInRepositoryTotal": true
+    },
+    "combinedOldNewCpuReaderCoreWireParity": {
+      "cases": 20,
+      "independentHistoricalCpuUsed": true,
+      "allReportBytesEqual": true,
+      "cpuPortCallsEqual": true,
+      "memoryWrites": 0
+    },
+    "localReplay": {
+      "cases": 4,
+      "versions": [
+        "XIV",
+        "XV"
+      ],
+      "iterationsPerVersionPerCase": 8,
+      "fullApiEquivalent": true,
+      "memoryWrites": 0,
+      "engineCpuMeasured": false
+    },
+    "nativeSourceWorkflow": {
+      "apply": true,
+      "resumed": true,
+      "timingAdmittedBind": true,
+      "defaultOffClose": true,
+      "newSourceCommits": 1,
+      "newConfigCommits": 2,
+      "onlineRequests": 0
+    },
+    "packageToolsBeforeFinalPackaging": {
+      "tests": 124,
+      "passed": 124,
+      "realRuntimeNetwork": false,
+      "simulatedHttpWebsocket": true,
+      "localBareGitPublish": true
+    },
+    "cjsSyntax": {
+      "files": 33,
+      "passed": 33
+    },
+    "generator": "all-listed-outputs 13 verified",
+    "runtimeInheritedBytes": {
+      "files": 11,
+      "allExact": true
+    }
+  },
+  "deterministicChanges": {
+    "ascii8192OldCharCodeAtCalls": 8192,
+    "ascii8192NewCharCodeAtCalls": 0,
+    "asciiScanStillHasCost": true,
+    "redundantOwnHelperCallsRemovedIn54Tasks12Reservations": 66,
+    "observationQueryMemoMapsBeforeAnyQuery": {
+      "old": 1,
+      "new": 0
+    },
+    "newCpuProbes": 0,
+    "wireFieldsRemoved": 0
+  },
+  "notExecuted": {
+    "fullRemoteClone": true,
+    "lockedCompiler593FullRepositoryGates": true,
+    "fullProjectTsc": true,
+    "jest195685": true,
+    "rollup": true,
+    "windowsNative": true,
+    "screepsNetwork": true,
+    "liveCandidateOrRestorePost": true,
+    "live75SecondRuntime": true,
+    "engineCpuMeasurements": true
+  },
+  "limits": [
+    "Real complete source content reconstructed from provided snapshot and exact historical patches; tree authenticated. Git history is only an authenticated subset/shallow baseline.",
+    "Synthetic report and timing fixtures are not prior live task snapshots.",
+    "Port/operation counts are not engine CPU speedup or spike attribution.",
+    "Final ZIP CRC, extraction identity and extracted CLI gate are reported in the separate delivery-validation JSON."
+  ]
+}

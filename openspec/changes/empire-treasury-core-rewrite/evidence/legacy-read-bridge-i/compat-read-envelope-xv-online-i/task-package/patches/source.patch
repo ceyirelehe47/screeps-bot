@@ -1,0 +1,2572 @@
+diff --git a/docs/treasury-compat-loader-optimization.json b/docs/treasury-compat-loader-optimization.json
+index 44cc36f..8f3ef90 100644
+--- a/docs/treasury-compat-loader-optimization.json
++++ b/docs/treasury-compat-loader-optimization.json
+@@ -2 +2 @@
+-  "revision": "compat-task-hotpath-XIV",
++  "revision": "compat-read-envelope-XV",
+@@ -12 +12,2 @@
+-    "scripts/lib/treasury-compat-task-xiv.cjs"
++    "scripts/lib/treasury-compat-task-xiv.cjs",
++    "scripts/lib/treasury-compat-read-envelope-xv.cjs"
+@@ -14 +15 @@
+-  "baselineCommit": "85177467e71dcdbf9873bf6c2cd6cddb207a1c15",
++  "baselineCommit": "eba6a0df574c9cb6101bd3d7e5ebae729d3dd976",
+@@ -26 +27 @@
+-  "adaptedFactoryPrefixSha256": "3c75350c84f46b4c592f72cd5dc388ee016d043059d9423b756b52fcd3b5f158",
++  "adaptedFactoryPrefixSha256": "b5d13a374f3d4a5c9a5d49674984b0027bd4191f339ea5bf6a56a9248ce41faa",
+@@ -220,0 +222,10 @@
++    },
++    {
++      "id": "lazy-query-memo-container",
++      "before": "    const roomResourcesCache = new Map();",
++      "after": "    // XV: query results were already lazy. Allocate their private memo container\n    // only if roomResources is queried; no index or view capability is deferred.\n    let roomResourcesCache;"
++    },
++    {
++      "id": "ensure-query-memo-on-use",
++      "before": "        roomResources(roomName) {\n            const cached = roomResourcesCache.get(roomName);",
++      "after": "        roomResources(roomName) {\n            if (!roomResourcesCache) roomResourcesCache = new Map();\n            const cached = roomResourcesCache.get(roomName);"
+@@ -434,0 +446,71 @@
++  "readEnvelopeRules": [
++    {
++      "id": "ascii-byte-length-fast-path",
++      "before": "export function compatUtf8Bytes(s: string): number {\n  let n = 0;",
++      "after": "// XV: stateless ASCII detection; non-ASCII retains the exact surrogate-aware path.\n// The reported byte limit is unchanged. No truncation, dropped fields or estimate.\nconst COMPAT_NON_ASCII = /[^\\x00-\\x7f]/;\nexport function compatUtf8Bytes(s: string): number {\n  if (typeof s === \"string\" && !COMPAT_NON_ASCII.test(s)) return s.length;\n  let n = 0;"
++    },
++    {
++      "id": "one-own-descriptor-per-table-entry",
++      "before": "    if (!own(found.value, key)) continue;\n    const descriptor = Object.getOwnPropertyDescriptor(found.value, key);\n    if (!descriptor || !(\"value\" in descriptor)) return { status: \"accessor_unreadable\", count: null, value: undefined };",
++      "after": "    // XV: the descriptor lookup itself establishes own membership. Inherited\n    // enumerable keys are ignored; own accessors still reject the WHOLE table.\n    const descriptor = Object.getOwnPropertyDescriptor(found.value, key);\n    if (!descriptor) continue;\n    if (!(\"value\" in descriptor)) return { status: \"accessor_unreadable\", count: null, value: undefined };"
++    }
++  ],
++  "diagnosticMembershipRules": [
++    {
++      "id": "private-definition-lookups",
++      "before": "/** One instance per admitted sample; snapshots contain primitive values only.",
++      "after": "// XV: private, definition-only membership sets, never business/input caches.\n// No mutator or set reference escapes this module. Snapshot/validation semantics\n// and every CPU observation stay unchanged; no diagnostic overhead is subtracted.\nconst CPU_PHASE_NAMES = new Set<string>(COMPAT_CPU_PHASES);\nconst CPU_SUBPHASE_NAMES = new Set<string>(COMPAT_CPU_SUBPHASES);\nconst CPU_WORK_NAMES = new Set<string>(COMPAT_CPU_WORK_KEYS);\nconst CPU_TAIL_PHASES = Object.freeze([\"serializationAndSize\", \"emit\", \"retention\"] as const);\n/** One instance per admitted sample; snapshots contain primitive values only."
++    },
++    {
++      "id": "scalar-start-validation",
++      "before": "  if (![start, tick, sampleOrdinal].every(Number.isFinite) || start < 0",
++      "after": "  if (!Number.isFinite(start) || !Number.isFinite(tick) || !Number.isFinite(sampleOrdinal) || start < 0"
++    },
++    {
++      "id": "phase-membership",
++      "before": "!COMPAT_CPU_PHASES.includes(next ?? phase)",
++      "after": "!CPU_PHASE_NAMES.has(next ?? phase)"
++    },
++    {
++      "id": "subphase-membership",
++      "before": "!COMPAT_CPU_SUBPHASES.includes(next)",
++      "after": "!CPU_SUBPHASE_NAMES.has(next)"
++    },
++    {
++      "id": "work-membership",
++      "before": "!COMPAT_CPU_WORK_KEYS.includes(key as CompatCpuWorkKey)",
++      "after": "!CPU_WORK_NAMES.has(key)"
++    },
++    {
++      "id": "bounded-work-presence",
++      "before": "  const work: Partial<Record<CompatCpuWorkKey, number>> = {};\n  const attribution = () => attributionBoundaries || Object.keys(work).length",
++      "after": "  const work: Partial<Record<CompatCpuWorkKey, number>> = {};\n  let hasWork = false;\n  const attribution = () => attributionBoundaries || hasWork"
++    },
++    {
++      "id": "work-presence-update",
++      "before": "        work[key as CompatCpuWorkKey] = next;",
++      "after": "        work[key as CompatCpuWorkKey] = next;\n        hasWork = true;"
++    },
++    {
++      "id": "reuse-tail-key-definition",
++      "before": "for (const key of [\"serializationAndSize\", \"emit\", \"retention\"] as const)",
++      "after": "for (const key of CPU_TAIL_PHASES)"
++    }
++  ],
++  "observationMemoRules": [
++    {
++      "id": "lazy-query-memo-container",
++      "before": "    const roomResourcesCache = new Map();",
++      "after": "    // XV: query results were already lazy. Allocate their private memo container\n    // only if roomResources is queried; no index or view capability is deferred.\n    let roomResourcesCache;"
++    },
++    {
++      "id": "ensure-query-memo-on-use",
++      "before": "        roomResources(roomName) {\n            const cached = roomResourcesCache.get(roomName);",
++      "after": "        roomResources(roomName) {\n            if (!roomResourcesCache) roomResourcesCache = new Map();\n            const cached = roomResourcesCache.get(roomName);"
++    }
++  ],
++  "wireDiagnosticRevision": "XIV",
++  "asciiUtf8ExactFastPath": true,
++  "tableOwnDescriptorSingleLookup": true,
++  "lazyObservationQueryMemoContainerOnly": true,
++  "newCpuObservations": 0,
+@@ -630,0 +713,12 @@
++    },
++    {
++      "id": "ascii-byte-length-fast-path",
++      "before": "export function compatUtf8Bytes(s: string): number {\n  let n = 0;",
++      "after": "// XV: stateless ASCII detection; non-ASCII retains the exact surrogate-aware path.\n// The reported byte limit is unchanged. No truncation, dropped fields or estimate.\nconst COMPAT_NON_ASCII = /[^\\x00-\\x7f]/;\nexport function compatUtf8Bytes(s: string): number {\n  if (typeof s === \"string\" && !COMPAT_NON_ASCII.test(s)) return s.length;\n  let n = 0;",
++      "stage": "XV-read-envelope"
++    },
++    {
++      "id": "one-own-descriptor-per-table-entry",
++      "before": "    if (!own(found.value, key)) continue;\n    const descriptor = Object.getOwnPropertyDescriptor(found.value, key);\n    if (!descriptor || !(\"value\" in descriptor)) return { status: \"accessor_unreadable\", count: null, value: undefined };",
++      "after": "    // XV: the descriptor lookup itself establishes own membership. Inherited\n    // enumerable keys are ignored; own accessors still reject the WHOLE table.\n    const descriptor = Object.getOwnPropertyDescriptor(found.value, key);\n    if (!descriptor) continue;\n    if (!(\"value\" in descriptor)) return { status: \"accessor_unreadable\", count: null, value: undefined };",
++      "stage": "XV-read-envelope"
+@@ -634,2 +728,2 @@
+-  "generatedSha256": "8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6",
+-  "generatedBlob": "08cd1d6f6db42160775c9990c6ba5b52296e0a1f",
++  "generatedSha256": "e03c09619b8b47097e234ff81a5fe0a28c57b1b20180ba0a818139eb0fc05a9d",
++  "generatedBlob": "614e97c72a54cef8385ae6fd0a1a9c756dcb564d",
+@@ -638,2 +732,2 @@
+-  "previewSha256": "75438e82c4b891fea5debe55d92d8de400252758d7b7e26139608eceab0f2e4e",
+-  "previewBlob": "19e4366d67d30fd00dab430799e1fa7951a978f5",
++  "previewSha256": "2d22e3a9726d88892282f20017e01ecfbf4bc884cb21395e8ea25727c5efc135",
++  "previewBlob": "f1bece4ea0a86e5be5e92079f4d19c4c1fbb4c3c",
+@@ -728 +822 @@
+-  "note": "XIV removes repeated path/checked-addition dispatch work and adds one bounded first-pending probe pair per table. Canonical validation, full indexes, exact arithmetic/update order, and local containment remain. No engine speedup or root cause is inferred from offline timing."
++  "note": "XV preserves XIV diagnostic wire shape and every CPU observation. Optimizes ASCII byte counting with exact Unicode fallback, redundant own checks, diagnostic enum membership, and unused observation query memo allocation. Commitment algorithms and eager full indexes are unchanged. No engine speedup, stability or spike root cause is inferred from offline work counts."
+diff --git a/docs/treasury-compat-read-envelope-xv.md b/docs/treasury-compat-read-envelope-xv.md
+new file mode 100644
+index 0000000..b3dd1fe
+--- /dev/null
++++ b/docs/treasury-compat-read-envelope-xv.md
+@@ -0,0 +1,64 @@
++# Read Envelope Cost Reduction XV
++
++## Scope and provenance
++
++The accepted XIV default-OFF tree is `0391f4b73522f02829f5151b455a5e5b45d0ab9c`.
++The next source commit is based on `eba6a0df574c9cb6101bd3d7e5ebae729d3dd976`.
++This is a read-only diagnostic bridge; it does not authorize Treasury actions.
++The diagnostic wire version remains XIV. Source/deployment identities still bind
++this XV implementation; schema labels are not deployment identities.
++
++## Changes
++
++1. ASCII output strings use a stateless non-ASCII regular expression and their
++   exact UTF-16 length (identical to UTF-8 for ASCII). Non-ASCII strings use the
++   unchanged surrogate-aware counter. The byte cap, JSON serializer, complete
++   report fields, output-limit fallback and retained snapshot shape are unchanged.
++2. The bounded legacy table scan uses its own-property descriptor as the own-key
++   membership check. Enumerable inherited entries are ignored. Any own accessor
++   rejects the whole table without invoking it. Enumeration and the 256 bound
++   remain. This intentionally reduces descriptor traps on synthetic proxies;
++   it does not promise equivalence of adversarial state-changing proxy traps.
++3. CPU accounting uses private static sets for enum membership, scalar finite
++   start validation, an exact has-work flag and a shared tail-key definition.
++   Sets contain only fixed diagnostic names, are not exported, and hold no live
++   inputs or business results. All snapshots remain frozen copies. All probes,
++   work keys, failure semantics and measured overhead remain included.
++4. Observation room-resource query results were already memoized on demand. Only
++   their empty Map container is now allocated at first query. Every observation
++   location, amount and total is still built eagerly. All view methods exist at
++   return; the commitment index, reservation processing and projection are NOT
++   deferred or narrowed. Cache state belongs to a single observation instance.
++
++## Deterministic checks, not engine CPU predictions
++
++An 8192-character ASCII string causes 8192 calls to charCodeAt on the old path
++and zero on the new common path. This does not mean string scanning is free.
++A 54-task / 12-reservation table removes 66 redundant own-membership helper
++calls; it does not remove any records or safe-integer / health validation.
++Observation creation allocates zero roomResources memo Maps until queried,
++instead of one. First roomResources query allocates one, later queries reuse it.
++
++The package includes byte-authenticated XIV reader, CPU and Core fixtures and
++exact reversible transforms. The public generator chains map their canonical
++old input all the way to XV and restore it exactly. Generation, source manifest,
++provenance, immutable API, invalid input, Unicode and no-write tests are gates.
++
++## Online interpretation
++
++The goal is lower total cost, not more or cheaper-looking probes. CPU budget is
++2, reserve is 5, and the existing observation/commitment/task probes and 5 CPU
++heap safety latch are unchanged. No prewarming, cross-sample business cache,
++per-record probe, skipped index, partial-table-as-complete or synthetic CPU
++subtraction is introduced. There are four points, not five. The final point's
++post-serialization tail remains unobservable without a successor and must be
++reported as unavailable, not estimated. Earlier accepted tails remain measured.
++
++The validated 75-minute finite time-admission execution and original exact-byte
++recovery are reused, with one candidate and one restore maximum for this new
++experiment. A read-only refusal or incomplete sample is a valid outcome, not an
++instruction to modify the package or rerun the window.
++
++History's large CPU spikes have not been causally explained. Local operation
++counts and synthetic millisecond measurements cannot prove engine speedup,
++stability, JIT/GC attribution, a 12-point observation, or production readiness.
+diff --git a/docs/treasury-compat-source-manifest.json b/docs/treasury-compat-source-manifest.json
+index 7942c1a..7f32271 100644
+--- a/docs/treasury-compat-source-manifest.json
++++ b/docs/treasury-compat-source-manifest.json
+@@ -128,3 +128,3 @@
+-      "bytes": 12149,
+-      "sha256": "e95f80f679d7f36987294d6f8049c2f6987959fc9b95302289b66d27d0e44c1a",
+-      "gitBlob": "211837e149159618756545f784f2e3c52a5a8a74"
++      "bytes": 12653,
++      "sha256": "5599ff052819b5842875ed78bfa67afefd9a182ad6ad4bb4ae55a59f6dd58100",
++      "gitBlob": "52bd3edbf77b1a35e7c59bef41888f47c5636613"
+@@ -134,3 +134,3 @@
+-      "bytes": 26415,
+-      "sha256": "75438e82c4b891fea5debe55d92d8de400252758d7b7e26139608eceab0f2e4e",
+-      "gitBlob": "19e4366d67d30fd00dab430799e1fa7951a978f5"
++      "bytes": 26831,
++      "sha256": "2d22e3a9726d88892282f20017e01ecfbf4bc884cb21395e8ea25727c5efc135",
++      "gitBlob": "f1bece4ea0a86e5be5e92079f4d19c4c1fbb4c3c"
+@@ -140,3 +140,3 @@
+-      "bytes": 70224,
+-      "sha256": "8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6",
+-      "gitBlob": "08cd1d6f6db42160775c9990c6ba5b52296e0a1f"
++      "bytes": 70443,
++      "sha256": "e03c09619b8b47097e234ff81a5fe0a28c57b1b20180ba0a818139eb0fc05a9d",
++      "gitBlob": "614e97c72a54cef8385ae6fd0a1a9c756dcb564d"
+@@ -182 +182 @@
+-    "revision": "XIV",
++    "revision": "XV",
+diff --git a/scripts/build-treasury-compat-loader.cjs b/scripts/build-treasury-compat-loader.cjs
+index 1a28436..acfe875 100644
+--- a/scripts/build-treasury-compat-loader.cjs
++++ b/scripts/build-treasury-compat-loader.cjs
+@@ -11,0 +12 @@ const T = require('./lib/treasury-compat-task-xiv.cjs');
++const V = require('./lib/treasury-compat-read-envelope-xv.cjs');
+@@ -13,3 +14,3 @@ const H = Object.freeze({
+-  transform(text) { return T.coreTransform(H_XI.transform(text)); },
+-  restore(text) { return H_XI.restore(T.coreRestore(text)); },
+-  rules: Object.freeze([...H_XI.rules, ...T.coreRules]),
++  transform(text) { return V.coreTransform(T.coreTransform(H_XI.transform(text))); },
++  restore(text) { return H_XI.restore(T.coreRestore(V.coreRestore(text))); },
++  rules: Object.freeze([...H_XI.rules, ...T.coreRules, ...V.coreRules]),
+@@ -24,2 +25,2 @@ const P = Object.freeze({
+-  transform(text) { return T.previewTransform(N.transform(D.transform(P_XI.transform(text)))); },
+-  restore(text) { return P_XI.restore(D.restore(N.restore(T.previewRestore(text)))); },
++  transform(text) { return V.previewTransform(T.previewTransform(N.transform(D.transform(P_XI.transform(text))))); },
++  restore(text) { return P_XI.restore(D.restore(N.restore(T.previewRestore(V.previewRestore(text))))); },
+@@ -30,0 +32 @@ const P = Object.freeze({
++    ...V.previewRules.map(x => Object.freeze({ ...x, stage: 'XV-read-envelope' })),
+@@ -46 +48 @@ const MARKER = '/** Loader Optimization III.';
+-const BASELINE_COMMIT = '85177467e71dcdbf9873bf6c2cd6cddb207a1c15';
++const BASELINE_COMMIT = 'eba6a0df574c9cb6101bd3d7e5ebae729d3dd976';
+@@ -60 +62 @@ const FIXED_OUTPUTS = Object.freeze({
+-  'src/runtime/treasuryCompatCpu.ts': { bytes: 12149, sha256: 'e95f80f679d7f36987294d6f8049c2f6987959fc9b95302289b66d27d0e44c1a', gitBlob: '211837e149159618756545f784f2e3c52a5a8a74' },
++  'src/runtime/treasuryCompatCpu.ts': { bytes: 12653, sha256: '5599ff052819b5842875ed78bfa67afefd9a182ad6ad4bb4ae55a59f6dd58100', gitBlob: '52bd3edbf77b1a35e7c59bef41888f47c5636613' },
+@@ -97,2 +99,4 @@ function generate(original, template, manifest, previewOriginal) {
+-  check(previewOut.equals(Buffer.from(T.previewTransform(N.transform(previewXII.toString('utf8'))))), 'CURRENT_PREVIEW_COMPOSITION_MISMATCH');
+-  check(previewOut.length === 26415 && sha(previewOut) === '75438e82c4b891fea5debe55d92d8de400252758d7b7e26139608eceab0f2e4e' && blob(previewOut) === '19e4366d67d30fd00dab430799e1fa7951a978f5', 'XIV_PREVIEW_MISMATCH');
++  const previewXIV = Buffer.from(T.previewTransform(N.transform(previewXII.toString('utf8'))));
++  check(previewXIV.length === 26415 && sha(previewXIV) === '75438e82c4b891fea5debe55d92d8de400252758d7b7e26139608eceab0f2e4e', 'XIV_PREVIEW_MISMATCH');
++  check(previewOut.equals(Buffer.from(V.previewTransform(previewXIV.toString('utf8')))), 'CURRENT_PREVIEW_COMPOSITION_MISMATCH');
++  check(previewOut.length === 26831 && sha(previewOut) === '2d22e3a9726d88892282f20017e01ecfbf4bc884cb21395e8ea25727c5efc135' && blob(previewOut) === 'f1bece4ea0a86e5be5e92079f4d19c4c1fbb4c3c', 'XV_PREVIEW_MISMATCH');
+@@ -120 +124 @@ function generate(original, template, manifest, previewOriginal) {
+-  m.loaderOptimization = { revision: 'XIV', provenance: PROVENANCE, canonicalSourceCommit: SOURCE_COMMIT,
++  m.loaderOptimization = { revision: 'XV', provenance: PROVENANCE, canonicalSourceCommit: SOURCE_COMMIT,
+@@ -132 +136 @@ function generate(original, template, manifest, previewOriginal) {
+-    revision: 'compat-task-hotpath-XIV',
++    revision: 'compat-read-envelope-XV',
+@@ -135 +139 @@ function generate(original, template, manifest, previewOriginal) {
+-      'scripts/lib/treasury-compat-preview-hotpath.cjs', 'scripts/lib/treasury-compat-envelope.cjs', 'scripts/lib/treasury-compat-boundary-xiii.cjs', 'scripts/lib/treasury-compat-task-xiv.cjs'],
++      'scripts/lib/treasury-compat-preview-hotpath.cjs', 'scripts/lib/treasury-compat-envelope.cjs', 'scripts/lib/treasury-compat-boundary-xiii.cjs', 'scripts/lib/treasury-compat-task-xiv.cjs', 'scripts/lib/treasury-compat-read-envelope-xv.cjs'],
+@@ -154,0 +159,3 @@ function generate(original, template, manifest, previewOriginal) {
++    readEnvelopeRules: V.previewRules, diagnosticMembershipRules: V.cpuRules, observationMemoRules: V.coreRules,
++    wireDiagnosticRevision: "XIV", asciiUtf8ExactFastPath: true, tableOwnDescriptorSingleLookup: true,
++    lazyObservationQueryMemoContainerOnly: true, newCpuObservations: 0,
+@@ -171 +178 @@ function generate(original, template, manifest, previewOriginal) {
+-    note: 'XIV removes repeated path/checked-addition dispatch work and adds one bounded first-pending probe pair per table. Canonical validation, full indexes, exact arithmetic/update order, and local containment remain. No engine speedup or root cause is inferred from offline timing.'
++    note: 'XV preserves XIV diagnostic wire shape and every CPU observation. Optimizes ASCII byte counting with exact Unicode fallback, redundant own checks, diagnostic enum membership, and unused observation query memo allocation. Commitment algorithms and eager full indexes are unchanged. No engine speedup, stability or spike root cause is inferred from offline work counts.'
+@@ -204 +211 @@ function main(argv) {
+-module.exports = { T, H_XI, N, generate, main, sha, blob, GENERATED, FIXTURE, TEMPLATE, PROVENANCE, SOURCE_MANIFEST, MARKER,
++module.exports = { V, T, H_XI, N, generate, main, sha, blob, GENERATED, FIXTURE, TEMPLATE, PROVENANCE, SOURCE_MANIFEST, MARKER,
+diff --git a/scripts/lib/treasury-compat-read-envelope-xv.cjs b/scripts/lib/treasury-compat-read-envelope-xv.cjs
+new file mode 100644
+index 0000000..7ecd4ce
+--- /dev/null
++++ b/scripts/lib/treasury-compat-read-envelope-xv.cjs
+@@ -0,0 +1,84 @@
++'use strict';
++/** XV: reversible read/diagnostic allocation reductions, not alternate business
++ * semantics. Full Store scans, full commitments and old diagnostic wire shape
++ * remain. CPU trace count, budget checkpoints and output limits are unchanged. */
++const PREVIEW = [
++  [
++    "ascii-byte-length-fast-path",
++    "export function compatUtf8Bytes(s: string): number {\n  let n = 0;",
++    "// XV: stateless ASCII detection; non-ASCII retains the exact surrogate-aware path.\n// The reported byte limit is unchanged. No truncation, dropped fields or estimate.\nconst COMPAT_NON_ASCII = /[^\\x00-\\x7f]/;\nexport function compatUtf8Bytes(s: string): number {\n  if (typeof s === \"string\" && !COMPAT_NON_ASCII.test(s)) return s.length;\n  let n = 0;"
++  ],
++  [
++    "one-own-descriptor-per-table-entry",
++    "    if (!own(found.value, key)) continue;\n    const descriptor = Object.getOwnPropertyDescriptor(found.value, key);\n    if (!descriptor || !(\"value\" in descriptor)) return { status: \"accessor_unreadable\", count: null, value: undefined };",
++    "    // XV: the descriptor lookup itself establishes own membership. Inherited\n    // enumerable keys are ignored; own accessors still reject the WHOLE table.\n    const descriptor = Object.getOwnPropertyDescriptor(found.value, key);\n    if (!descriptor) continue;\n    if (!(\"value\" in descriptor)) return { status: \"accessor_unreadable\", count: null, value: undefined };"
++  ]
++];
++const CPU = [
++  [
++    "private-definition-lookups",
++    "/** One instance per admitted sample; snapshots contain primitive values only.",
++    "// XV: private, definition-only membership sets, never business/input caches.\n// No mutator or set reference escapes this module. Snapshot/validation semantics\n// and every CPU observation stay unchanged; no diagnostic overhead is subtracted.\nconst CPU_PHASE_NAMES = new Set<string>(COMPAT_CPU_PHASES);\nconst CPU_SUBPHASE_NAMES = new Set<string>(COMPAT_CPU_SUBPHASES);\nconst CPU_WORK_NAMES = new Set<string>(COMPAT_CPU_WORK_KEYS);\nconst CPU_TAIL_PHASES = Object.freeze([\"serializationAndSize\", \"emit\", \"retention\"] as const);\n/** One instance per admitted sample; snapshots contain primitive values only."
++  ],
++  [
++    "scalar-start-validation",
++    "  if (![start, tick, sampleOrdinal].every(Number.isFinite) || start < 0",
++    "  if (!Number.isFinite(start) || !Number.isFinite(tick) || !Number.isFinite(sampleOrdinal) || start < 0"
++  ],
++  [
++    "phase-membership",
++    "!COMPAT_CPU_PHASES.includes(next ?? phase)",
++    "!CPU_PHASE_NAMES.has(next ?? phase)"
++  ],
++  [
++    "subphase-membership",
++    "!COMPAT_CPU_SUBPHASES.includes(next)",
++    "!CPU_SUBPHASE_NAMES.has(next)"
++  ],
++  [
++    "work-membership",
++    "!COMPAT_CPU_WORK_KEYS.includes(key as CompatCpuWorkKey)",
++    "!CPU_WORK_NAMES.has(key)"
++  ],
++  [
++    "bounded-work-presence",
++    "  const work: Partial<Record<CompatCpuWorkKey, number>> = {};\n  const attribution = () => attributionBoundaries || Object.keys(work).length",
++    "  const work: Partial<Record<CompatCpuWorkKey, number>> = {};\n  let hasWork = false;\n  const attribution = () => attributionBoundaries || hasWork"
++  ],
++  [
++    "work-presence-update",
++    "        work[key as CompatCpuWorkKey] = next;",
++    "        work[key as CompatCpuWorkKey] = next;\n        hasWork = true;"
++  ],
++  [
++    "reuse-tail-key-definition",
++    "for (const key of [\"serializationAndSize\", \"emit\", \"retention\"] as const)",
++    "for (const key of CPU_TAIL_PHASES)"
++  ]
++];
++const CORE = [
++  [
++    "lazy-query-memo-container",
++    "    const roomResourcesCache = new Map();",
++    "    // XV: query results were already lazy. Allocate their private memo container\n    // only if roomResources is queried; no index or view capability is deferred.\n    let roomResourcesCache;"
++  ],
++  [
++    "ensure-query-memo-on-use",
++    "        roomResources(roomName) {\n            const cached = roomResourcesCache.get(roomName);",
++    "        roomResources(roomName) {\n            if (!roomResourcesCache) roomResourcesCache = new Map();\n            const cached = roomResourcesCache.get(roomName);"
++  ]
++];
++function transform(text, rules, inverse=false) {
++  const order=inverse?[...rules].reverse():rules;
++  for(const [id,before,after] of order) {
++    const from=inverse?after:before, to=inverse?before:after;
++    if(text.split(from).length!==2)throw new Error('READ_ENVELOPE_XV_TRANSFORM_COUNT:'+id);
++    text=text.replace(from,to);
++  }
++  return text;
++}
++const descriptions=rules=>Object.freeze(rules.map(([id,before,after])=>Object.freeze({id,before,after})));
++module.exports={previewTransform:s=>transform(s,PREVIEW),previewRestore:s=>transform(s,PREVIEW,true),
++  cpuTransform:s=>transform(s,CPU),cpuRestore:s=>transform(s,CPU,true),
++  coreTransform:s=>transform(s,CORE),coreRestore:s=>transform(s,CORE,true),
++  previewRules:descriptions(PREVIEW),cpuRules:descriptions(CPU),coreRules:descriptions(CORE)};
+diff --git a/src/runtime/treasuryCompatCpu.ts b/src/runtime/treasuryCompatCpu.ts
+index 211837e..52bd3ed 100644
+--- a/src/runtime/treasuryCompatCpu.ts
++++ b/src/runtime/treasuryCompatCpu.ts
+@@ -81,0 +82,7 @@ export interface CompatCpuProfile {
++// XV: private, definition-only membership sets, never business/input caches.
++// No mutator or set reference escapes this module. Snapshot/validation semantics
++// and every CPU observation stay unchanged; no diagnostic overhead is subtracted.
++const CPU_PHASE_NAMES = new Set<string>(COMPAT_CPU_PHASES);
++const CPU_SUBPHASE_NAMES = new Set<string>(COMPAT_CPU_SUBPHASES);
++const CPU_WORK_NAMES = new Set<string>(COMPAT_CPU_WORK_KEYS);
++const CPU_TAIL_PHASES = Object.freeze(["serializationAndSize", "emit", "retention"] as const);
+@@ -89 +96 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
+-  if (![start, tick, sampleOrdinal].every(Number.isFinite) || start < 0
++  if (!Number.isFinite(start) || !Number.isFinite(tick) || !Number.isFinite(sampleOrdinal) || start < 0
+@@ -98 +105,2 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
+-  const attribution = () => attributionBoundaries || Object.keys(work).length
++  let hasWork = false;
++  const attribution = () => attributionBoundaries || hasWork
+@@ -145 +153 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
+-      if (!Number.isFinite(used) || used < last || !COMPAT_CPU_PHASES.includes(next ?? phase))
++      if (!Number.isFinite(used) || used < last || !CPU_PHASE_NAMES.has(next ?? phase))
+@@ -161 +169 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
+-        || (next !== undefined && !COMPAT_CPU_SUBPHASES.includes(next)))
++        || (next !== undefined && !CPU_SUBPHASE_NAMES.has(next)))
+@@ -177 +185 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
+-        if (!COMPAT_CPU_WORK_KEYS.includes(key as CompatCpuWorkKey) || value === undefined
++        if (!CPU_WORK_NAMES.has(key) || value === undefined
+@@ -181,0 +190 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
++        hasWork = true;
+@@ -190 +199 @@ export function createCompatCpuAccounting(start: number, tick: number, sampleOrd
+-        for (const key of ["serializationAndSize", "emit", "retention"] as const)
++        for (const key of CPU_TAIL_PHASES)
+diff --git a/src/runtime/treasuryCompatRead.ts b/src/runtime/treasuryCompatRead.ts
+index 19e4366..f1bece4 100644
+--- a/src/runtime/treasuryCompatRead.ts
++++ b/src/runtime/treasuryCompatRead.ts
+@@ -38,0 +39,3 @@ export function validCompatConfig(c: CompatConfig): boolean {
++// XV: stateless ASCII detection; non-ASCII retains the exact surrogate-aware path.
++// The reported byte limit is unchanged. No truncation, dropped fields or estimate.
++const COMPAT_NON_ASCII = /[^\x00-\x7f]/;
+@@ -39,0 +43 @@ export function compatUtf8Bytes(s: string): number {
++  if (typeof s === "string" && !COMPAT_NON_ASCII.test(s)) return s.length;
+@@ -74 +78,2 @@ function tableFound(found: Found) {
+-    if (!own(found.value, key)) continue;
++    // XV: the descriptor lookup itself establishes own membership. Inherited
++    // enumerable keys are ignored; own accessors still reject the WHOLE table.
+@@ -76 +81,2 @@ function tableFound(found: Found) {
+-    if (!descriptor || !("value" in descriptor)) return { status: "accessor_unreadable", count: null, value: undefined };
++    if (!descriptor) continue;
++    if (!("value" in descriptor)) return { status: "accessor_unreadable", count: null, value: undefined };
+diff --git a/src/runtime/treasuryCompatReadCore.generated.ts b/src/runtime/treasuryCompatReadCore.generated.ts
+index 08cd1d6..614e97c 100644
+--- a/src/runtime/treasuryCompatReadCore.generated.ts
++++ b/src/runtime/treasuryCompatReadCore.generated.ts
+@@ -904 +904,3 @@ function createObservationView(data, roomByName) {
+-    const roomResourcesCache = new Map();
++    // XV: query results were already lazy. Allocate their private memo container
++    // only if roomResources is queried; no index or view capability is deferred.
++    let roomResourcesCache;
+@@ -944,0 +947 @@ function createObservationView(data, roomByName) {
++            if (!roomResourcesCache) roomResourcesCache = new Map();
+diff --git a/test/treasury-compat/attribution.spec.cjs b/test/treasury-compat/attribution.spec.cjs
+index 6d0c2c2..5617c5d 100644
+--- a/test/treasury-compat/attribution.spec.cjs
++++ b/test/treasury-compat/attribution.spec.cjs
+@@ -67 +67 @@ test('IX transform exactly restores the committed Build VII core prefix', () =>
+-  assert.equal(G.A.rules.length, 14); const generated = assertGeneratedCurrent(); assert.equal(generated[G.GENERATED].length, 70224);
++  assert.equal(G.A.rules.length, 14); const generated = assertGeneratedCurrent(); assert.equal(generated[G.GENERATED].length, 70443);
+diff --git a/test/treasury-compat/envelope-optimization.spec.cjs b/test/treasury-compat/envelope-optimization.spec.cjs
+index 0fecf9c..27861e7 100644
+--- a/test/treasury-compat/envelope-optimization.spec.cjs
++++ b/test/treasury-compat/envelope-optimization.spec.cjs
+@@ -47 +47 @@ test('XII generator reproduces committed core, preview, provenance and manifest
+-  assert.equal(result[G.PREVIEW].length, 26415); assert.equal(G.D.rules.length, 8);
++  assert.equal(result[G.PREVIEW].length, 26831); assert.equal(G.D.rules.length, 8);
+@@ -100 +100 @@ test('XII source manifest retains all output identities and records envelope fla
+-  assert.equal(m.loaderOptimization.revision, 'XIV'); assert.equal(m.loaderOptimization.diagnosticCompletionTailOnly, true);
++  assert.equal(m.loaderOptimization.revision, 'XV'); assert.equal(m.loaderOptimization.diagnosticCompletionTailOnly, true);
+diff --git a/test/treasury-compat/fixtures/core-before-read-envelope-xv.ts.txt b/test/treasury-compat/fixtures/core-before-read-envelope-xv.ts.txt
+new file mode 100644
+index 0000000..08cd1d6
+--- /dev/null
++++ b/test/treasury-compat/fixtures/core-before-read-envelope-xv.ts.txt
+@@ -0,0 +1,1439 @@
++// @ts-nocheck
++/** GENERATED from pinned Git TS objects; do not edit this file.
++ * Original sources are typechecked on the development tree; this is transpiled
++ * runtime output, not a replacement authoring surface. Exports only two builders.
++ * No facade/kernel/registry/runtimeServices/old resource writer is included.
++ * source=01bd9831454950c4928df98dd8679692b55603e5; TypeScript=5.9.3 */
++import type { CompatReadBuilders } from "./treasuryCompatTypes";
++const factories = {
++"src/runtime/configNormalize.ts": function(exports, require) {
++"use strict";
++/**
++ * Shared config normalization helpers.
++ * Extracted from synthesisControl, resourceControl, and synthesisCompatibilityPlanning
++ * to avoid triple duplication while preserving identical semantics.
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.normalizeNumber = normalizeNumber;
++exports.normalizeBoolean = normalizeBoolean;
++exports.normalizeRoomNameList = normalizeRoomNameList;
++function normalizeNumber(value, fallback, min, max) {
++    if (typeof value !== "number" || !Number.isFinite(value)) {
++        return fallback;
++    }
++    const normalized = Math.floor(value);
++    return Math.max(min, Math.min(max, normalized));
++}
++function normalizeBoolean(value, fallback) {
++    return typeof value === "boolean" ? value : fallback;
++}
++function normalizeRoomNameList(value) {
++    if (!Array.isArray(value)) {
++        return [];
++    }
++    return value.filter((item) => typeof item === "string" && item.length > 0);
++}
++
++},
++"src/runtime/logistics/resourceTransferTaskHealth.ts": function(exports, require) {
++"use strict";
++/**
++ * ResourceTransferTask 健康/需求覆盖谓词（canonical）。
++ *
++ * 从 resourceTransferTasks.ts 上提为独立模块：这些判定是跨模块契约
++ * （Hub/Synthesis/ResourceControl/Treasury 共用），必须保持单一实现。
++ * 运行时依赖仅 configNormalize 与 Memory.cfg 直读——不得引入
++ * runtimeServices/logistics 执行层依赖，避免 Treasury 服务挂载链路成环。
++ * resourceTransferTasks.ts 对本模块 re-export，既有 import 路径不变。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.DEFAULT_RECEIVER_CAPACITY_DEMAND_COVERAGE_GRACE_TICKS = exports.DEFAULT_SOURCE_DEPLETED_GRACE_TICKS = exports.DEFAULT_AUTOMATIC_TASK_NO_PROGRESS_TTL = void 0;
++exports.resolveResourceTransferTaskHealthOptions = resolveResourceTransferTaskHealthOptions;
++exports.isHealthyResourceTransferTaskReservation = isHealthyResourceTransferTaskReservation;
++exports.getResourceTransferTaskDemandCoverageExpirationReason = getResourceTransferTaskDemandCoverageExpirationReason;
++exports.countsResourceTransferTaskTowardDemand = countsResourceTransferTaskTowardDemand;
++exports.isHealthyReceiverCapacityCommitment = isHealthyReceiverCapacityCommitment;
++const configNormalize_1 = require("@/runtime/configNormalize");
++exports.DEFAULT_AUTOMATIC_TASK_NO_PROGRESS_TTL = 5000;
++exports.DEFAULT_SOURCE_DEPLETED_GRACE_TICKS = 100;
++exports.DEFAULT_RECEIVER_CAPACITY_DEMAND_COVERAGE_GRACE_TICKS = 500;
++function resolveResourceTransferTaskHealthOptions() {
++    var _a, _b;
++    // Memory root declarations are intentionally frozen by the declaration
++    // boundary test. Keep the backward-compatible optional rollout field local
++    // to this adapter instead of widening the canonical root schema.
++    const raw = (_b = (_a = Memory.cfg) === null || _a === void 0 ? void 0 : _a.resourceControl) === null || _b === void 0 ? void 0 : _b.capacityBalancing;
++    return {
++        automaticTaskNoProgressTtl: (0, configNormalize_1.normalizeNumber)(raw === null || raw === void 0 ? void 0 : raw.automaticTaskNoProgressTtl, exports.DEFAULT_AUTOMATIC_TASK_NO_PROGRESS_TTL, 100, 100000),
++        sourceDepletedGraceTicks: (0, configNormalize_1.normalizeNumber)(raw === null || raw === void 0 ? void 0 : raw.sourceDepletedGraceTicks, exports.DEFAULT_SOURCE_DEPLETED_GRACE_TICKS, 1, 5000),
++        receiverCapacityDemandCoverageGraceTicks: (0, configNormalize_1.normalizeNumber)(raw === null || raw === void 0 ? void 0 : raw.receiverCapacityDemandCoverageGraceTicks, exports.DEFAULT_RECEIVER_CAPACITY_DEMAND_COVERAGE_GRACE_TICKS, 50, 5000),
++    };
++}
++function isHealthyResourceTransferTaskReservation(task, direction = "incoming", sourceDepletedGraceTicks = resolveResourceTransferTaskHealthOptions().sourceDepletedGraceTicks) {
++    if (task.status !== "pending") {
++        return false;
++    }
++    if (direction === "outgoing" || task.blockedReason !== "source_depleted") {
++        return true;
++    }
++    if (!Number.isFinite(task.blockedSince)) {
++        return true;
++    }
++    return Game.time - task.blockedSince < sourceDepletedGraceTicks;
++}
++/**
++ * Returns the automatic lifecycle reason that makes a pending task stop
++ * covering demand. The helper is mutation-free so Hub/Synthesis planning can
++ * use it before this tick's ResourceControl reconciliation phase.
++ */
++function getResourceTransferTaskDemandCoverageExpirationReason(task, options = resolveResourceTransferTaskHealthOptions()) {
++    if (task.status !== "pending" || task.origin !== "automatic") {
++        return null;
++    }
++    if (task.blockedReason === "source_depleted" &&
++        Number.isFinite(task.blockedSince) &&
++        Game.time - task.blockedSince >= options.sourceDepletedGraceTicks) {
++        return "automatic_source_depleted_timeout";
++    }
++    if (task.blockedReason === "receiver_capacity" &&
++        Number.isFinite(task.blockedSince) &&
++        Game.time - task.blockedSince >= options.receiverCapacityDemandCoverageGraceTicks) {
++        return "automatic_receiver_capacity_coverage_timeout";
++    }
++    if (Number.isFinite(task.lastProgressAt) &&
++        Game.time - task.lastProgressAt > options.automaticTaskNoProgressTtl) {
++        return "automatic_no_progress_timeout";
++    }
++    return null;
++}
++/**
++ * Canonical production-demand coverage predicate. Manual pending tasks always
++ * retain operator intent; automatic tasks stop covering demand as soon as a
++ * configured lifecycle limit is reached.
++ */
++function countsResourceTransferTaskTowardDemand(task, options = resolveResourceTransferTaskHealthOptions()) {
++    if (task.status !== "pending") {
++        return false;
++    }
++    if (task.origin === "manual") {
++        return true;
++    }
++    return getResourceTransferTaskDemandCoverageExpirationReason(task, options) === null;
++}
++function isHealthyReceiverCapacityCommitment(task, automaticTaskNoProgressTtl) {
++    if (task.status !== "pending") {
++        return false;
++    }
++    if (task.blockedReason === "receiver_capacity" || task.blockedReason === "source_depleted") {
++        return false;
++    }
++    if (task.origin !== "automatic") {
++        return true;
++    }
++    const noProgressTtl = automaticTaskNoProgressTtl !== null && automaticTaskNoProgressTtl !== void 0 ? automaticTaskNoProgressTtl : resolveResourceTransferTaskHealthOptions().automaticTaskNoProgressTtl;
++    return Game.time - task.lastProgressAt <= noProgressTtl;
++}
++
++},
++"src/runtime/treasury/commitmentRevision.ts": function(exports, require) {
++"use strict";
++/**
++ * Treasury 承诺索引 revision——mutation 侧失效通知。
++ *
++ * 跨 tick 承诺（transfer tasks / production reservations）的权威在 Memory，
++ * 任何 mutation（创建/合并/取消/阻塞/进度/续租/释放/GC）都必须调用
++ * bumpTreasuryCommitmentRevision，使 facade 在下一次 commitments()/query()
++ * 时重建索引——同 tick mutation 后不可再读到陈旧快照。
++ *
++ * revision 只需在单次 heap 生命周期内单调递增：global reset 后模块闭包与
++ * facade 缓存同时归零，不存在跨 reset 的陈旧缓存，因此无需 global 槽或
++ * Memory 持久化（避免第二份状态副本）。
++ *
++ * 架构约束（treasuryCommitmentInvalidationBoundaries 测试守护）：两个权威
++ * 模块的每个导出 mutation 函数都必须包含 bump 调用，新写入口不得绕过。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.bumpTreasuryCommitmentRevision = bumpTreasuryCommitmentRevision;
++exports.readTreasuryCommitmentRevision = readTreasuryCommitmentRevision;
++exports.resetTreasuryCommitmentRevisionForTest = resetTreasuryCommitmentRevisionForTest;
++let commitmentRevision = 0;
++function bumpTreasuryCommitmentRevision() {
++    commitmentRevision += 1;
++}
++function readTreasuryCommitmentRevision() {
++    return commitmentRevision;
++}
++/** 仅供测试：复位 revision（配合 TreasuryService.resetForTest 使用）。 */
++function resetTreasuryCommitmentRevisionForTest() {
++    commitmentRevision = 0;
++}
++
++},
++"src/runtime/treasury/commitments.ts": function(exports, require) {
++"use strict";
++/**
++ * Treasury Commitment Index——跨 tick 承诺的每 tick 只读统一索引。
++ *
++ * 权威边界（不变量：零隐藏写入、零持久化复制）：
++ * - transfer tasks 权威在 Memory.data.resourceControl.tasks，本索引只读聚合；
++ * - production reservations 权威在 Memory.runtime.resourceReservations；
++ *   过期/孤儿条目在读侧排除并计数，删除权保留在 owner/memoryCleanup；
++ * - 健康/需求覆盖判定复用 resourceTransferTaskHealth 的 canonical 谓词，
++ *   不得在 Treasury 内出现第二套解释；
++ * - 索引是点时快照：构建期一次性聚合为 primitive 值（不保留 task/
++ *   reservation 对象引用，外部原地修改原对象不影响已构建快照）；
++ *   权威数据 mutation 由 bumpTreasuryCommitmentRevision 通知 facade 失效
++ *   重建，同 tick 后续查询读到新 revision 的快照；
++ * - receiver headroom 为第一版总量口径（free − healthy incoming remaining，
++ *   observed 与 projected 双轨），不含 ReceiverCapacityLedger 的 safety
++ *   reserve 与独立 reservation——完整语义在该 ledger 并入 Treasury 时提供
++ *   （见 OpenSpec 任务表）。projected 字段每次查询动态组合（静态承诺 +
++ *   当前 overlay 容量聚合），同 tick transaction 后立即反映最新投影，
++ *   绝不缓存到旧结果。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.isValidTreasuryTransferTaskForCommitment = isValidTreasuryTransferTaskForCommitment;
++exports.buildTreasuryCommitmentIndex = buildTreasuryCommitmentIndex;
++const resourceTransferTaskHealth_1 = require("@/runtime/logistics/resourceTransferTaskHealth");
++// V: revision supplied by the private read-only sample context.
++const holderResolution_1 = require("@/runtime/treasury/holderResolution");
++const ownerIdentity_1 = require("@/runtime/treasury/ownerIdentity");
++function defaultHolderExists(holderId) {
++    return (0, holderResolution_1.treasuryHolderExists)(holderId);
++}
++// V: catalog captured once per builder, not at shared module initialization.
++/** task status 合法枚举（与 ResourceTransferTaskStatus 权威一致）。 */
++const VALID_TASK_STATUSES = new Set([
++    "pending",
++    "done",
++    "cancelled",
++    "failed",
++]);
++/** blockedReason 合法枚举（与 ResourceTransferTaskBlockedReason 权威一致；缺省合法）。 */
++const VALID_TASK_BLOCKED_REASONS = new Set([
++    "receiver_capacity",
++    "source_depleted",
++    "insufficient_terminal_resource_or_fee",
++]);
++/** 数值字段完整有效性：有限、整数、安全整数、非负。 */
++function isNonNegativeSafeInteger(value) {
++    return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
++}
++/**
++ * transfer task 记录级验证（第五轮 completeness）：status/resource/房间/
++ * amount/remainingAmount（remaining ≤ amount）/origin/tick 字段的形状与
++ * 数值关系。损坏记录不得进入聚合（负 amount 加进 committed、NaN 污染求和
++ * 都会提高 spendable），也不得被读取路径删除——只标记 scope incomplete。
++ */
++function isValidTreasuryTransferTaskForCommitment(task, compatContext) {
++    if (!task || typeof task !== "object")
++        return false;
++    // status 必须属于合法枚举——未知值（如 "pendng"）是损坏而非"普通非 pending"，
++    // 绝不静默跳过后继续授权。
++    if (typeof task.status !== "string" || !VALID_TASK_STATUSES.has(task.status))
++        return false;
++    if (typeof task.resource !== "string" || !compatContext.resources.has(task.resource))
++        return false;
++    if (typeof task.fromRoomName !== "string" || task.fromRoomName.length === 0)
++        return false;
++    if (typeof task.toRoomName !== "string" || task.toRoomName.length === 0)
++        return false;
++    if (!isNonNegativeSafeInteger(task.amount))
++        return false;
++    if (!isNonNegativeSafeInteger(task.remainingAmount))
++        return false;
++    if (task.remainingAmount > task.amount)
++        return false;
++    if (task.origin !== "manual" && task.origin !== "automatic")
++        return false;
++    if (!isNonNegativeSafeInteger(task.createdAt))
++        return false;
++    if (!isNonNegativeSafeInteger(task.updatedAt))
++        return false;
++    if (!isNonNegativeSafeInteger(task.lastProgressAt))
++        return false;
++    if (task.blockedReason !== undefined && !VALID_TASK_BLOCKED_REASONS.has(task.blockedReason)) {
++        return false; // 枚举外 blockedReason 是损坏，不是"未阻塞"
++    }
++    if (task.blockedSince !== undefined && !isNonNegativeSafeInteger(task.blockedSince))
++        return false;
++    return true;
++}
++function isValidScopePair(roomName, resource) {
++    return typeof roomName === "string" && roomName.length > 0 && typeof resource === "string" && resource.length > 0;
++}
++/** 聚合累加（多条合法安全整数相加后仍须为安全整数；溢出返回 null）。 */
++function addSafeInteger(current, addend) {
++    const next = current + addend;
++    return Number.isSafeInteger(next) ? next : null;
++}
++/** production reservation 记录级验证（数值与 owner identity 形状）。 */
++function isValidReservationForCommitment(entry, compatContext) {
++    if (!entry || typeof entry !== "object")
++        return false;
++    if (typeof entry.roomName !== "string" || entry.roomName.length === 0)
++        return false;
++    if (typeof entry.resource !== "string" || !compatContext.resources.has(entry.resource))
++        return false;
++    if (!isNonNegativeSafeInteger(entry.amount))
++        return false;
++    if (!isNonNegativeSafeInteger(entry.expiresAt))
++        return false;
++    if (typeof entry.holderId !== "string" || entry.holderId.length === 0)
++        return false;
++    if (entry.owner !== undefined && !(0, ownerIdentity_1.isValidTreasuryOwnerIdentity)(entry.owner))
++        return false;
++    return true;
++}
++const taskKey = (roomName, resource) => `${roomName}\u0000${resource}`;
++const mergeKeyOf = (resource, fromRoomName, toRoomName, origin, reason) => `${resource}\u0000${fromRoomName}\u0000${toRoomName}\u0000${origin}\u0000${reason}`;
++function buildTreasuryCommitmentIndex(options, compatContext) {
++    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r;
++    const compatDiagnostics = options.compatDiagnostics;
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("commitmentSetup");
++    let attributionInvalidRegion = "setup";
++    let attributionTaskInvalidEvents = 0;
++    let attributionReservationInvalidEvents = 0;
++    let attributionDemandHealthChecks = 0;
++    let attributionReceiverHealthChecks = 0;
++    let attributionRouteCandidates = 0;
++    let attributionOwnerEvaluations = 0;
++    const tick = options.tick;
++    const revision = compatContext.revision;
++    const healthOptions = (0, resourceTransferTaskHealth_1.resolveResourceTransferTaskHealthOptions)();
++    const holderExists = (_a = options.holderExists) !== null && _a !== void 0 ? _a : defaultHolderExists;
++    const capacityDelta = (_b = options.capacityDelta) !== null && _b !== void 0 ? _b : (() => 0);
++    const strictCapacityDelta = (_c = options.strictCapacityDelta) !== null && _c !== void 0 ? _c : (() => 0);
++    const metrics = {
++        taskRecords: 0,
++        pendingTaskRecords: 0,
++        reservationRecords: 0,
++        activeReservationRecords: 0,
++        expiredReservationsExcluded: 0,
++        missingOwnerStillCommitted: 0,
++        typedOwnerResolved: 0,
++        legacyUnresolvedOwners: 0,
++        invalidCommitmentRecords: 0,
++        incompleteCommitmentScopes: 0,
++        globallyIncomplete: false,
++        indexQueries: 0,
++    };
++    // ── transfer task 索引（pending 维度与旧 amount index 对齐）───────────────
++    // VII: full task indexes share storage by scope/room, not by sample.
++    // These private maps are fresh for EVERY build. Route and reservation
++    // indexes retain their own maps; no validation or query is deferred.
++    const taskScopes = new Map();
++    const taskRooms = new Map();
++    const mergeIndex = new Map();
++    // completeness（第五轮）：损坏记录不进聚合、不删原数据；能定位 bucket 的
++    // 标记 (room,resource) scope incomplete，连 scope 都无法确定的标记全局
++    // incomplete——incomplete scope 的 spendable/授权必须 fail closed。
++    const invalidCommitmentRecords = { count: 0 };
++    const incompleteScopes = new Set();
++    let globalIncomplete = false;
++    const recordInvalid = () => {
++        invalidCommitmentRecords.count += 1;
++        if (attributionInvalidRegion === "tasks")
++            attributionTaskInvalidEvents += 1;
++        else if (attributionInvalidRegion === "reservations")
++            attributionReservationInvalidEvents += 1;
++    };
++    attributionInvalidRegion = "tasks";
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("commitmentTasks");
++    const taskIds = Object.keys(options.tasks);
++    metrics.taskRecords = taskIds.length;
++    // At most one selected first-pending region per whole table, not per-record sampling.
++    const firstPendingProbe = compatDiagnostics && compatDiagnostics.taskBoundary;
++    let firstPendingObserved = false, taskOrdinal = 0;
++    for (const taskId of taskIds) {
++        taskOrdinal += 1;
++        const task = options.tasks[taskId];
++        if (!isValidTreasuryTransferTaskForCommitment(task, compatContext)) {
++            // 损坏任务影响 donor 与 receiver 双侧 bucket：能定位哪侧就标记哪侧
++            // scope incomplete；双侧都不可定位（连资源/房间都读不出）则全局
++            // incomplete。绝不静默跳过后给出乐观 spendable，也绝不删除原记录。
++            recordInvalid();
++            // scope 定位要求 (room, resource) 二元均合法：非法 resource（不在官方
++            // catalog）无法构成任何合法 scope——绝不能因"非法资源不会命中合法
++            // 查询"就静默跳过，直接全局 incomplete（一切授权 fail closed）。
++            const resourceKnown = typeof (task === null || task === void 0 ? void 0 : task.resource) === "string" && compatContext.resources.has(task.resource);
++            const fromLocated = resourceKnown && typeof (task === null || task === void 0 ? void 0 : task.fromRoomName) === "string" && task.fromRoomName.length > 0;
++            const toLocated = resourceKnown && typeof (task === null || task === void 0 ? void 0 : task.toRoomName) === "string" && task.toRoomName.length > 0;
++            if (fromLocated)
++                incompleteScopes.add(taskKey(task.fromRoomName, task.resource));
++            if (toLocated)
++                incompleteScopes.add(taskKey(task.toRoomName, task.resource));
++            if (!fromLocated || !toLocated)
++                globalIncomplete = true;
++            continue;
++        }
++        if (task.status !== "pending")
++            continue;
++        metrics.pendingTaskRecords += 1;
++        const traceThisPending = !firstPendingObserved && typeof firstPendingProbe === "function";
++        if (traceThisPending) {
++            firstPendingObserved = true;
++            firstPendingProbe.call(compatDiagnostics, "firstPendingStart", taskOrdinal);
++        }
++        try {
++        const reason = task.reason || "";
++        // 聚合安全整数检查：多条合法安全整数相加后仍须安全——溢出即该 task
++        // 影响的全部 scope incomplete（数值不再作为授权依据），不静默丢弃。
++        // Stable JSON record fields. Use the SAME canonical NUL scope keys;
++        // self-routes and key aliases must share the same bucket object.
++        const fromRoom = task.fromRoomName, toRoom = task.toRoomName;
++        const outKey = taskKey(fromRoom, task.resource);
++        const inKey = taskKey(toRoom, task.resource);
++        let outBucket = taskScopes.get(outKey), inBucket = inKey === outKey ? outBucket : taskScopes.get(inKey);
++        // XIV: same additions and safe-integer guards, without per-record helper calls.
++        const mergedOutgoing = (outBucket ? outBucket.outgoing : 0) + task.remainingAmount;
++        const mergedPendingIncoming = (inBucket ? inBucket.pendingIncoming : 0) + task.remainingAmount;
++        if (!Number.isSafeInteger(mergedOutgoing) || !Number.isSafeInteger(mergedPendingIncoming)) {
++            recordInvalid();
++            incompleteScopes.add(outKey);
++            incompleteScopes.add(inKey);
++            continue;
++        }
++        let fromBucket = taskRooms.get(fromRoom);
++        if (!fromBucket) {
++            fromBucket = { outgoingCount: 0, incomingCount: 0, healthyAmount: 0, healthyCount: 0 };
++            taskRooms.set(fromRoom, fromBucket);
++        }
++        fromBucket.outgoingCount += 1;
++        if (!outBucket) {
++            outBucket = { outgoing: 0, pendingIncoming: 0, incoming: 0, reasons: undefined };
++            taskScopes.set(outKey, outBucket);
++        }
++        outBucket.outgoing = mergedOutgoing;
++        const byReason = outBucket.reasons !== undefined ? outBucket.reasons : new Map();
++        const mergedByReason = ((_h = byReason.get(reason)) !== null && _h !== void 0 ? _h : 0) + task.remainingAmount;
++        // Keep the canonical partial-update order on overflow: outgoing and
++        // outgoingCount above remain updated; pendingIncoming is NOT updated.
++        if (!Number.isSafeInteger(mergedByReason)) {
++            recordInvalid();
++            incompleteScopes.add(outKey);
++            continue;
++        }
++        byReason.set(reason, mergedByReason);
++        outBucket.reasons = byReason;
++        if (!inBucket) {
++            inBucket = inKey === outKey ? outBucket : { outgoing: 0, pendingIncoming: 0, incoming: 0, reasons: undefined };
++            if (inKey !== outKey) taskScopes.set(inKey, inBucket);
++        }
++        inBucket.pendingIncoming = mergedPendingIncoming;
++        attributionDemandHealthChecks += 1;
++        // XI: this task is already validated pending. Manual intent is always
++        // covered; automatic expiry still delegates to the canonical helper.
++        const countsTowardDemand = task.origin === "manual" ||
++            (0, resourceTransferTaskHealth_1.getResourceTransferTaskDemandCoverageExpirationReason)(task, healthOptions) === null;
++        let toBucket;
++        if (countsTowardDemand) {
++            const mergedIncoming = inBucket.incoming + task.remainingAmount;
++            if (!Number.isSafeInteger(mergedIncoming)) {
++                recordInvalid();
++                incompleteScopes.add(inKey);
++                continue;
++            }
++            inBucket.incoming = mergedIncoming;
++            toBucket = taskRooms.get(toRoom);
++            if (!toBucket) {
++                toBucket = { outgoingCount: 0, incomingCount: 0, healthyAmount: 0, healthyCount: 0 };
++                taskRooms.set(toRoom, toBucket);
++            }
++            toBucket.incomingCount += 1;
++        }
++        if (task.origin === "manual" || countsTowardDemand) {
++            attributionRouteCandidates += 1;
++            // Canonical first-route-wins order, including manual tasks that do
++            // not contribute healthy demand. Do not overwrite an earlier id.
++            const mergeKey = mergeKeyOf(task.resource, fromRoom, toRoom, task.origin, reason);
++            if (!mergeIndex.has(mergeKey)) {
++                mergeIndex.set(mergeKey, task.id);
++            }
++        }
++        attributionReceiverHealthChecks += 1;
++        if ((0, resourceTransferTaskHealth_1.isHealthyReceiverCapacityCommitment)(task, healthOptions.automaticTaskNoProgressTtl)) {
++            if (!toBucket) {
++                toBucket = taskRooms.get(toRoom);
++                if (!toBucket) {
++                    toBucket = { outgoingCount: 0, incomingCount: 0, healthyAmount: 0, healthyCount: 0 };
++                    taskRooms.set(toRoom, toBucket);
++                }
++            }
++            // Keep canonical arithmetic (including its overflow behavior).
++            toBucket.healthyAmount += task.remainingAmount;
++            toBucket.healthyCount += 1;
++        }
++        } finally {
++            // Includes every overflow/early-continue path, without inventing a successful task.
++            if (traceThisPending) firstPendingProbe.call(compatDiagnostics, "firstPendingEnd", taskOrdinal);
++        }
++    }
++    // ── production reservation 索引（保守 committed：只有 expiresAt 到期或
++    //    显式 release 解除占用；owner 无法确证失效一律继续全额扣除）──────────
++    //    orphan 语义修正（第五轮）：missing/active-unresolved owner 只是诊断
++    //    分类，不代表库存可重新支配——绝不从 committed 排除。
++    attributionInvalidRegion = "reservations";
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("commitmentReservations");
++    const reservationSnapshot = [];
++    const reservedByRoomResource = new Map();
++    const reservationIds = Object.keys(options.reservations);
++    metrics.reservationRecords = reservationIds.length;
++    for (const reservationId of reservationIds) {
++        const entry = options.reservations[reservationId];
++        if (!isValidReservationForCommitment(entry, compatContext)) {
++            recordInvalid();
++            const roomLocated = typeof (entry === null || entry === void 0 ? void 0 : entry.roomName) === "string" && entry.roomName.length > 0;
++            // resource 必须在官方 catalog 内才能构成合法 scope（与 task 同口径）。
++            const resourceKnown = typeof (entry === null || entry === void 0 ? void 0 : entry.resource) === "string" && compatContext.resources.has(entry.resource);
++            if (roomLocated && resourceKnown)
++                incompleteScopes.add(taskKey(entry.roomName, entry.resource));
++            else
++                globalIncomplete = true;
++            continue;
++        }
++        const expired = entry.expiresAt < tick;
++        attributionOwnerEvaluations += 1;
++        const owner = (0, ownerIdentity_1.isValidTreasuryOwnerIdentity)(entry.owner)
++            ? entry.owner
++            : (0, ownerIdentity_1.classifyTreasuryHolderIdAsOwner)(entry.holderId);
++        const runtimeResolved = !expired &&
++            (owner.kind === "game-object" || owner.kind === "logical-service") &&
++            holderExists(owner.id);
++        const ownerStatus = expired
++            ? "expired"
++            : owner.kind === "legacy-unresolved"
++                ? "missing-owner"
++                : runtimeResolved
++                    ? "active-resolved"
++                    : "active-unresolved";
++        const record = Object.freeze({
++            roomName: entry.roomName,
++            resource: entry.resource,
++            holderId: entry.holderId,
++            owner,
++            amount: entry.amount,
++            expiresAt: entry.expiresAt,
++            expired,
++            ownerStatus,
++        });
++        reservationSnapshot.push(record);
++        if (expired) {
++            metrics.expiredReservationsExcluded += 1;
++            (_o = options.onExpiredExcluded) === null || _o === void 0 ? void 0 : _o.call(options);
++            continue;
++        }
++        // 活跃预留（含 owner 无法确证失效的）全部计入 committed。
++        if (ownerStatus !== "active-resolved") {
++            metrics.missingOwnerStillCommitted += 1;
++            (_p = options.onMissingOwnerCommitted) === null || _p === void 0 ? void 0 : _p.call(options);
++        }
++        else {
++            metrics.typedOwnerResolved += 1;
++        }
++        if (owner.kind === "legacy-unresolved")
++            metrics.legacyUnresolvedOwners += 1;
++        metrics.activeReservationRecords += 1;
++        const key = taskKey(entry.roomName, entry.resource);
++        const bucket = (_q = reservedByRoomResource.get(key)) !== null && _q !== void 0 ? _q : { total: 0, byOwner: new Map() };
++        // 聚合安全整数检查：溢出即该 (room,resource) scope incomplete。
++        const mergedTotal = addSafeInteger(bucket.total, entry.amount);
++        const ownerKey = (0, ownerIdentity_1.treasuryOwnerIdentityKey)(owner);
++        const mergedOwner = addSafeInteger((_r = bucket.byOwner.get(ownerKey)) !== null && _r !== void 0 ? _r : 0, entry.amount);
++        if (mergedTotal === null || mergedOwner === null) {
++            recordInvalid();
++            incompleteScopes.add(key);
++            continue;
++        }
++        bucket.total = mergedTotal;
++        bucket.byOwner.set(ownerKey, mergedOwner);
++        reservedByRoomResource.set(key, bucket);
++    }
++    attributionInvalidRegion = "finalize";
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("commitmentFinalize");
++    metrics.invalidCommitmentRecords = invalidCommitmentRecords.count;
++    metrics.incompleteCommitmentScopes = incompleteScopes.size;
++    metrics.globallyIncomplete = globalIncomplete;
++    const completenessSnapshot = Object.freeze({
++        complete: invalidCommitmentRecords.count === 0,
++        globalIncomplete,
++        incompleteScopeCount: incompleteScopes.size,
++        invalidRecords: invalidCommitmentRecords.count,
++    });
++    const index = { builtAtTick: tick,
++        revision,
++        completeness: completenessSnapshot,
++        commitmentCompleteness(roomName, resource) {
++            metrics.indexQueries += 1;
++            if (globalIncomplete)
++                return "globally-incomplete";
++            return incompleteScopes.has(taskKey(roomName, resource)) ? "incomplete-scope" : "complete";
++        },
++        outgoing(roomName, resource) {
++            metrics.indexQueries += 1;
++            const bucket = taskScopes.get(taskKey(roomName, resource));
++            return bucket ? bucket.outgoing : 0;
++        },
++        pendingOutgoing(roomName, resource, reasonPrefix) {
++            var _a, _b;
++            metrics.indexQueries += 1;
++            const bucket = taskScopes.get(taskKey(roomName, resource));
++            if (!reasonPrefix)
++                return bucket ? bucket.outgoing : 0;
++            let total = 0;
++            for (const [reason, amount] of bucket && bucket.reasons ? bucket.reasons : []) {
++                if (reason.startsWith(reasonPrefix))
++                    total += amount;
++            }
++            return total;
++        },
++        incoming(roomName, resource) {
++            metrics.indexQueries += 1;
++            const bucket = taskScopes.get(taskKey(roomName, resource));
++            return bucket ? bucket.incoming : 0;
++        },
++        pendingIncoming(roomName, resource) {
++            metrics.indexQueries += 1;
++            const bucket = taskScopes.get(taskKey(roomName, resource));
++            return bucket ? bucket.pendingIncoming : 0;
++        },
++        incomingTaskCount(roomName) {
++            metrics.indexQueries += 1;
++            const bucket = taskRooms.get(roomName);
++            return bucket ? bucket.incomingCount : 0;
++        },
++        outgoingTaskCount(roomName) {
++            metrics.indexQueries += 1;
++            const bucket = taskRooms.get(roomName);
++            return bucket ? bucket.outgoingCount : 0;
++        },
++        findMergeableTaskId(resource, fromRoomName, toRoomName, origin, reason) {
++            var _a;
++            metrics.indexQueries += 1;
++            return ((_a = mergeIndex.get(mergeKeyOf(resource, fromRoomName, toRoomName, origin, reason || ""))) !== null && _a !== void 0 ? _a : null);
++        },
++        reservedProduction(roomName, resource, excludeOwner) {
++            var _a;
++            metrics.indexQueries += 1;
++            const bucket = reservedByRoomResource.get(taskKey(roomName, resource));
++            if (!bucket)
++                return 0;
++            if (!excludeOwner)
++                return bucket.total;
++            // 完整 typed identity 比较：同 kind + 同 id + 同 namespace 才排除；
++            // 同字符串不同 kind / legacy-unresolved 不互相排除。
++            return bucket.total - ((_a = bucket.byOwner.get((0, ownerIdentity_1.treasuryOwnerIdentityKey)(excludeOwner))) !== null && _a !== void 0 ? _a : 0);
++        },
++        reservationSnapshot() {
++            metrics.indexQueries += 1;
++            return Object.freeze([...reservationSnapshot]);
++        },
++        receiverCommitments(roomName) {
++            var _a, _b;
++            metrics.indexQueries += 1;
++            let roomComplete = !globalIncomplete;
++            if (roomComplete) {
++                for (const scope of incompleteScopes) {
++                    if (scope.startsWith(`${roomName}\x00`)) {
++                        roomComplete = false;
++                        break;
++                    }
++                }
++            }
++            // 每次动态组合：静态承诺（healthy incoming，点时快照）+ observed 容量
++            // （O(1) map 读）+ 当前 overlay 容量净变化（facade 注入的 O(1) 位置
++            // 聚合）。绝不缓存依赖当前 overlay 的 projected 字段——同 tick 结算
++            // 新 transaction 后的下一次查询必须立即反映最新投影。
++            const roomBucket = taskRooms.get(roomName);
++            const healthyIncomingAmount = roomBucket ? roomBucket.healthyAmount : 0;
++            const healthyIncomingTaskCount = roomBucket ? roomBucket.healthyCount : 0;
++            const storageFreeCapacity = options.observation.freeCapacity(roomName, "storage");
++            const terminalFreeCapacity = options.observation.freeCapacity(roomName, "terminal");
++            const projectedStorageFree = storageFreeCapacity - capacityDelta(roomName, "storage");
++            const projectedTerminalFree = terminalFreeCapacity - capacityDelta(roomName, "terminal");
++            // 严格口径（不含 quarantine/intent 风险占用）。
++            const strictStorageFree = storageFreeCapacity - strictCapacityDelta(roomName, "storage");
++            const strictTerminalFree = terminalFreeCapacity - strictCapacityDelta(roomName, "terminal");
++            return Object.freeze({
++                roomName,
++                healthyIncomingAmount,
++                healthyIncomingTaskCount,
++                storageFreeCapacity,
++                terminalFreeCapacity,
++                // 与旧 ReceiverCapacityLedger.getAvailability 的 min 语义一致：
++                // 入站承接是每结构独立扣全量、取 min；任一结构维度超卖即超卖。
++                storageHeadroom: storageFreeCapacity - healthyIncomingAmount,
++                terminalHeadroom: terminalFreeCapacity - healthyIncomingAmount,
++                overcommitted: healthyIncomingAmount > storageFreeCapacity ||
++                    healthyIncomingAmount > terminalFreeCapacity,
++                projectedStorageHeadroom: projectedStorageFree - healthyIncomingAmount,
++                projectedTerminalHeadroom: projectedTerminalFree - healthyIncomingAmount,
++                projectedOvercommitted: healthyIncomingAmount > projectedStorageFree ||
++                    healthyIncomingAmount > projectedTerminalFree,
++                strictStorageHeadroom: strictStorageFree - healthyIncomingAmount,
++                strictTerminalHeadroom: strictTerminalFree - healthyIncomingAmount,
++                strictOvercommitted: healthyIncomingAmount > strictStorageFree ||
++                    healthyIncomingAmount > strictTerminalFree,
++                riskAdjustedStorageHeadroom: projectedStorageFree - healthyIncomingAmount,
++                riskAdjustedTerminalHeadroom: projectedTerminalFree - healthyIncomingAmount,
++                riskAdjustedOvercommitted: healthyIncomingAmount > projectedStorageFree ||
++                    healthyIncomingAmount > projectedTerminalFree,
++                // 承诺视图完整才可用于 receiver admission 授权。
++                commitmentComplete: roomComplete,
++            });
++        },
++        metrics, };
++    if (compatDiagnostics) {
++        compatDiagnostics.work({
++            commitmentTaskRecords: metrics.taskRecords,
++            commitmentPendingTaskRecords: metrics.pendingTaskRecords,
++            commitmentTaskInvalidEvents: attributionTaskInvalidEvents,
++            commitmentDemandHealthChecks: attributionDemandHealthChecks,
++            commitmentReceiverHealthChecks: attributionReceiverHealthChecks,
++            commitmentRouteCandidates: attributionRouteCandidates,
++            commitmentReservationRecords: metrics.reservationRecords,
++            commitmentReservationInvalidEvents: attributionReservationInvalidEvents,
++            commitmentOwnerEvaluations: attributionOwnerEvaluations,
++            commitmentActiveReservations: metrics.activeReservationRecords,
++            commitmentScopeBuckets: taskScopes.size,
++            commitmentRoomBuckets: taskRooms.size,
++            commitmentMergeRoutes: mergeIndex.size,
++            commitmentReservationScopes: reservedByRoomResource.size,
++        });
++        compatDiagnostics.boundary();
++    }
++    return index;
++}
++
++},
++"src/runtime/treasury/holderResolution.ts": function(exports, require) {
++"use strict";
++/**
++ * Treasury holder 身份解析——typed（game-object / logical）统一入口。
++ *
++ * 背景（第四轮修复）：production reservation 的 holderId 并非一律是
++ * Game object id——nukerControl 写入的形态是 `nuker:<nukerId>:<resource>`
++ * 逻辑名，synthesisControl 自排除使用 `synthesis:<roomName>:<resource>`。
++ * 把 holderId 统一按 Game object id 解释（getObjectById 整串解析）会把全部
++ * 逻辑名 holder 误判为 orphan，导致 committed 被低估、可用量被高估。
++ *
++ * 解析规则（保守 fail closed：无法确证存在的 holder 仍视为不存在）：
++ * 1. 已知逻辑名命名空间（前缀注册表）：`nuker:<objectId>[:<resource>]`
++ *    解析内嵌 objectId 的存在性与归属房间；`synthesis:<roomName>[:<resource>]`
++ *    解析 owned 房间归属；
++ * 2. 其余整串按 Game object id 解析（factory 等直接用结构 id 的 holder）。
++ *
++ * 返回值携带 kind：owner 声明（TreasuryQueryOwner.holderKind）必须与解析
++ * 结果一致——声明 game-object 但 holderId 实为逻辑名时 fail closed，
++ * 杜绝"知道 holderId 字符串就能冒充任意类型 owner"。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.resolveTreasuryHolder = resolveTreasuryHolder;
++exports.treasuryHolderExists = treasuryHolderExists;
++const LOGICAL_HOLDER_NAMESPACES = [
++    {
++        // nukerControl：`nuker:<nukerId>:<resource>`（reserveProductionResource 写入）。
++        prefix: "nuker:",
++        resolveRoom: (nukerId) => {
++            var _a;
++            const resolved = (_a = Game.getObjectById) === null || _a === void 0 ? void 0 : _a.call(Game, nukerId);
++            const room = resolved === null || resolved === void 0 ? void 0 : resolved.room;
++            return room === null || room === void 0 ? void 0 : room.name;
++        },
++    },
++    {
++        // synthesisControl：`synthesis:<roomName>:<resource>`（自排除口径）。
++        prefix: "synthesis:",
++        resolveRoom: (roomName) => {
++            var _a, _b;
++            const room = (_a = Game.rooms) === null || _a === void 0 ? void 0 : _a[roomName];
++            return ((_b = room === null || room === void 0 ? void 0 : room.controller) === null || _b === void 0 ? void 0 : _b.my) ? roomName : undefined;
++        },
++    },
++];
++/** 逻辑名内嵌主体与可选资源后缀：`<subject>[:<resource>]`。 */
++const LOGICAL_SUBJECT_PATTERN = /^([A-Za-z0-9\-]+)(?::[A-Za-z0-9_\-\.]+)?$/;
++/**
++ * 解析 holder 存在性与归属房间：undefined = 无法确证存在（调用方按
++ * orphan / fail-closed 处理）；返回值 kind 供 typed owner 校验。
++ */
++function resolveTreasuryHolder(holderId) {
++    var _a;
++    if (typeof holderId !== "string" || holderId.length === 0)
++        return undefined;
++    for (const namespace of LOGICAL_HOLDER_NAMESPACES) {
++        if (!holderId.startsWith(namespace.prefix))
++            continue;
++        const subject = holderId.slice(namespace.prefix.length);
++        const match = LOGICAL_SUBJECT_PATTERN.exec(subject);
++        if (!match)
++            return undefined; // 已知前缀但主体非法：保守判不存在
++        const roomName = namespace.resolveRoom(match[1]);
++        if (roomName === undefined)
++            return undefined;
++        return { kind: "logical", roomName };
++    }
++    const resolved = (_a = Game.getObjectById) === null || _a === void 0 ? void 0 : _a.call(Game, holderId);
++    const room = resolved === null || resolved === void 0 ? void 0 : resolved.room;
++    if (!(room === null || room === void 0 ? void 0 : room.name))
++        return undefined;
++    return { kind: "game-object", roomName: room.name };
++}
++/** commitments orphan 判定的默认谓词（逻辑名 holder 不再被误判）。 */
++function treasuryHolderExists(holderId) {
++    return resolveTreasuryHolder(holderId) !== undefined;
++}
++
++},
++"src/runtime/treasury/observation.ts": function(exports, require) {
++"use strict";
++/**
++ * Treasury Asset Observation——storage/terminal 不可变稀疏物理观察。
++ *
++ * 构建约束（性能与语义，继承 empireInventoryIndex 已验证的模式）：
++ * - 房间源由外部注入（生产=TickContext.getMyRooms()），本模块零 room.find；
++ * - 每个受管辖 Store 只做一次 Object.keys 稀疏枚举 + 一次无参 capacity 读，
++ *   绝不做 RESOURCES_ALL × getUsedCapacity 全量探测；
++ * - 只保留数值与 structureId，不保留任何 Game Store/Structure 活引用，
++ *   构建后不存在 live 回退读（fallbackLiveReads 恒 0）；
++ * - 全部数据 deepFreeze：同 tick 同 epoch 的 Observed 不可变；
++ * - 物理事实绝不持久化到 Memory。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.treasuryLocationKey = void 0;
++exports.readTreasuryWorldSequence = readTreasuryWorldSequence;
++exports.bumpTreasuryWorldSequence = bumpTreasuryWorldSequence;
++exports.buildTreasuryObservation = buildTreasuryObservation;
++exports.treasuryLocationBuckets = treasuryLocationBuckets;
++const types_1 = require("@/runtime/treasury/types");
++Object.defineProperty(exports, "treasuryLocationKey", { enumerable: true, get: function () { return types_1.treasuryLocationKey; } });
++/**
++ * 受控世界序（单调计数；观察覆盖判定的世界侧锚点——§6.2/IV §4.3）。
++ *
++ * Core Rewrite IV：世界序权威移入 Memory 持久层
++ * （`Memory.runtime.treasuryWorldSequence`，单一安全整数）。此前版本把
++ * 计数器放在 global 槽——完整 reset（heap 全清、Memory 保留）后新运行时
++ * 从 0 重新计数，与 Memory 内旧记录的 invocation.worldSequence 跨域不可
++ * 比较：要么永久扣留（安静帝国的 closing(committed) 占用无法解除），要么
++ * 凭无关序号误判覆盖。持久化后比较域即 Memory 持久域：
++ * - 正常 tick / global 重建：不受影响（读同一持久值）；
++ * - 完整 reset（模块缓存+global 清、Memory 保留）：序号连续，观察覆盖
++ *   判定照常成立（宿主世界与 Memory 是同一份）；
++ * - 整份 Memory 丢失：treasuryCore 记录随之丢失，不存在需要判定的
++ *   invocation.worldSequence——无跨域比较需求（旧备份回滚仍是明确
++ *   未验证边界）。
++ * 单字段直写、不走发布确认协议：丢一次 bump 只会让覆盖判定落在保守
++ * 方向（不误放行），不值得为它付整树克隆成本。
++ */
++function readTreasuryWorldSequence() {
++    const runtime = Memory.runtime;
++    const value = runtime === null || runtime === void 0 ? void 0 : runtime.treasuryWorldSequence;
++    return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
++}
++/** 受控世界真实更新时递增（同步 adapter 写世界 / 测试宿主施加效果时调用）。 */
++function bumpTreasuryWorldSequence() {
++    if (!Memory.runtime) {
++        Memory.runtime = {};
++    }
++    Memory.runtime.treasuryWorldSequence = readTreasuryWorldSequence() + 1;
++}
++const EMPTY_AMOUNT_KEYS = Object.freeze([]);
++function scanLocation(structure) {
++    if (!structure) {
++        return {
++            exists: false,
++            structureId: undefined,
++            amounts: {},
++            amountKeys: EMPTY_AMOUNT_KEYS,
++            usedCapacity: 0,
++            freeCapacity: 0,
++            nonZeroKeys: 0,
++        };
++    }
++    // XI: retain the FIRST sparse key enumeration for the later empire fold.
++    // The array is compacted in-place after each source index has been read;
++    // callbacks still run before totals and no live Store value is reread.
++    const record = structure.store;
++    const amountKeys = Object.keys(record);
++    const amounts = {};
++    let nonZeroKeys = 0;
++    for (const key of amountKeys) {
++        const amount = record[key];
++        if (typeof amount === "number" && amount > 0) {
++            amounts[key] = amount;
++            amountKeys[nonZeroKeys] = key;
++            nonZeroKeys += 1;
++        }
++    }
++    amountKeys.length = nonZeroKeys;
++    return {
++        exists: true,
++        structureId: structure.id,
++        amounts,
++        amountKeys,
++        usedCapacity: structure.store.getUsedCapacity(),
++        freeCapacity: structure.store.getFreeCapacity(),
++        nonZeroKeys,
++    };
++}
++function freezeLocation(roomName, kind, scan) {
++    return Object.freeze({
++        roomName,
++        kind,
++        exists: scan.exists,
++        structureId: scan.structureId,
++        amounts: Object.freeze(scan.amounts),
++        usedCapacity: scan.usedCapacity,
++        freeCapacity: scan.freeCapacity,
++    });
++}
++function deepFreezeRoom(room) {
++    return Object.freeze({
++        roomName: room.roomName,
++        storage: room.storage,
++        terminal: room.terminal,
++    });
++}
++function createObservationView(data, roomByName) {
++    const roomsByOrdinal = data.rooms;
++    let cachedEmpireResources;
++    const roomResourcesCache = new Map();
++    const locationOf = (roomName, kind) => {
++        const room = roomByName[roomName];
++        if (!room) {
++            return Object.freeze({
++                roomName,
++                kind,
++                exists: false,
++                structureId: undefined,
++                amounts: Object.freeze({}),
++                usedCapacity: 0,
++                freeCapacity: 0,
++            });
++        }
++        return kind === "storage" ? room.storage : room.terminal;
++    };
++    return {
++        data,
++        epoch: data.epoch,
++        roomNames() {
++            return roomsByOrdinal.map((room) => room.roomName);
++        },
++        hasRoom(roomName) {
++            return Object.prototype.hasOwnProperty.call(roomByName, roomName);
++        },
++        locationExists(roomName, kind) {
++            return locationOf(roomName, kind).exists;
++        },
++        location: locationOf,
++        amount(roomName, kind, resource) {
++            var _a;
++            return (_a = locationOf(roomName, kind).amounts[resource]) !== null && _a !== void 0 ? _a : 0;
++        },
++        roomAmount(roomName, resource) {
++            var _a, _b;
++            const room = roomByName[roomName];
++            if (!room)
++                return 0;
++            return ((_a = room.storage.amounts[resource]) !== null && _a !== void 0 ? _a : 0) + ((_b = room.terminal.amounts[resource]) !== null && _b !== void 0 ? _b : 0);
++        },
++        roomResources(roomName) {
++            const cached = roomResourcesCache.get(roomName);
++            if (cached)
++                return cached;
++            const room = roomByName[roomName];
++            const merged = new Set();
++            if (room) {
++                for (const key of Object.keys(room.storage.amounts))
++                    merged.add(key);
++                for (const key of Object.keys(room.terminal.amounts))
++                    merged.add(key);
++            }
++            const snapshot = Object.freeze([...merged]);
++            roomResourcesCache.set(roomName, snapshot);
++            return snapshot;
++        },
++        empireTotal(resource) {
++            var _a;
++            return (_a = data.empireTotals[resource]) !== null && _a !== void 0 ? _a : 0;
++        },
++        empireResources() {
++            if (!cachedEmpireResources) {
++                cachedEmpireResources = Object.freeze(Object.keys(data.empireTotals));
++            }
++            return cachedEmpireResources;
++        },
++        usedCapacity(roomName, kind) {
++            return locationOf(roomName, kind).usedCapacity;
++        },
++        freeCapacity(roomName, kind) {
++            return locationOf(roomName, kind).freeCapacity;
++        },
++        isStale() {
++            return data.epoch.observedAtTick !== Game.time;
++        },
++    };
++}
++/**
++ * 构建一次观察。shared scope 由 facade 缓存复用；market-fresh scope
++ * 每次调用都新建（调用方保证不落缓存，fresh 语义）。
++ */
++function buildTreasuryObservation(options) {
++    var _a, _b, _c, _d, _e;
++    const compatDiagnostics = options.compatDiagnostics;
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("observationSetup");
++    let attributionExistingLocations = 0;
++    let attributionResourceKeys = 0;
++    const epoch = {
++        scope: options.scope,
++        epochSeq: options.epochSeq,
++        observedAtTick: Game.time,
++        worldSequence: readTreasuryWorldSequence(),
++    };
++    const rooms = [];
++    // XI: build the last-room-wins lookup in the existing ordinal pass. A
++    // null-prototype record preserves arbitrary own names without Map setup.
++    const roomByName = Object.create(null);
++    const empireTotals = {};
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("observationRooms");
++    for (const room of options.rooms) {
++        const storageScan = scanLocation((_a = room.storage) !== null && _a !== void 0 ? _a : undefined);
++        const terminalScan = scanLocation((_b = room.terminal) !== null && _b !== void 0 ? _b : undefined);
++        attributionExistingLocations += (storageScan.exists ? 1 : 0) + (terminalScan.exists ? 1 : 0);
++        attributionResourceKeys += storageScan.nonZeroKeys + terminalScan.nonZeroKeys;
++        // 只对真实存在的 Store 计数枚举（missing 位置无枚举成本）；
++        // nonZeroKeys 复用 scanLocation 的单次枚举结果。
++        if (storageScan.exists)
++            (_c = options.onStoreScanned) === null || _c === void 0 ? void 0 : _c.call(options, storageScan.nonZeroKeys);
++        if (terminalScan.exists)
++            (_d = options.onStoreScanned) === null || _d === void 0 ? void 0 : _d.call(options, terminalScan.nonZeroKeys);
++        // XI keeps one final room object and indexes the SAME snapshot.
++        const roomSnapshot = Object.freeze({
++            roomName: room.name,
++            storage: freezeLocation(room.name, "storage", storageScan),
++            terminal: freezeLocation(room.name, "terminal", terminalScan),
++        });
++        rooms.push(roomSnapshot);
++        roomByName[room.name] = roomSnapshot;
++        // 帝国总量 = 全部位置桶之和（构建期求和；missing 位置贡献 0）。
++        for (const scan of [storageScan, terminalScan]) {
++            // XI: preserve sparse key order and addition order while reusing the
++            // first Store enumeration retained by scanLocation.
++            for (const resource of scan.amountKeys) {
++                const amount = scan.amounts[resource];
++                empireTotals[resource] = ((_e = empireTotals[resource]) !== null && _e !== void 0 ? _e : 0) + amount;
++            }
++        }
++    }
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("observationFinalize");
++    const data = Object.freeze({
++        epoch: Object.freeze(epoch),
++        rooms: Object.freeze(rooms),
++        empireTotals: Object.freeze(empireTotals),
++    });
++    if (compatDiagnostics)
++        compatDiagnostics.boundary("observationView");
++    const view = createObservationView(data, roomByName);
++    if (compatDiagnostics) {
++        compatDiagnostics.work({
++            observationRooms: options.rooms.length,
++            observationLocations: options.rooms.length * 2,
++            observationExistingLocations: attributionExistingLocations,
++            observationResourceKeys: attributionResourceKeys,
++        });
++        compatDiagnostics.boundary();
++    }
++    return view;
++}
++/** 供 shadow/测试用的位置桶枚举（冻结数据，无 Game 读）。 */
++function treasuryLocationBuckets(observation) {
++    const buckets = [];
++    for (const room of observation.data.rooms) {
++        buckets.push(room.storage, room.terminal);
++    }
++    return buckets;
++}
++
++},
++"src/runtime/treasury/ownerIdentity.ts": function(exports, require) {
++"use strict";
++/**
++ * Treasury production reservation 的 typed owner identity（第五轮）。
++ *
++ * 背景：reservation 权威（Memory.runtime.resourceReservations）此前只持久化
++ * 裸 holderId 字符串——字符串启发式无法区分"Game object id / 逻辑服务名 /
++ * 任务自然键 / 无法识别的 legacy 值"，也无法支撑"同字符串不同 kind 不得
++ * 互相排除"的 owner-aware 查询。
++ *
++ * Owner 类别（kind）：
++ * - game-object：真实 Game 对象 id（factory 等结构）；
++ * - logical-service：逻辑服务名（`nuker:<objectId>[:<resource>]` /
++ *   `synthesis:<roomName>[:<resource>]` 等 namespace 前缀注册表）；
++ * - task / contract：任务/合同自然键（`task:` / `contract:` 前缀）；
++ * - legacy-unresolved：无法识别的 legacy 字符串——保守计入 committed，
++ *   不允许普通 owner declaration 冒充排除。
++ *
++ * 安全默认（不变量）：无法确证 owner 已失效，绝不把 reservation 从
++ * committed 中排除——只有 expiration 或显式 release 才能安全解除占用。
++ * 因此 kind 误分类最坏只影响诊断口径，不改变保守占用语义。
++ *
++ * 兼容性：entry 平铺字段（roomName/resource/holderId/amount/updatedAt/
++ * expiresAt）保持不变，owner 为附加字段；store key（`${room}:${resource}:
++ * ${holderId}`）不变——marketSaleProtectionAdapter 的 stableKey 与既有数据
++ * 完全兼容。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.isValidTreasuryOwnerIdentity = isValidTreasuryOwnerIdentity;
++exports.treasuryOwnerIdentityKey = treasuryOwnerIdentityKey;
++exports.treasuryReservationOwnerToken = treasuryReservationOwnerToken;
++exports.treasuryReservationOwnerTokenV3 = treasuryReservationOwnerTokenV3;
++exports.classifyTreasuryHolderIdAsOwner = classifyTreasuryHolderIdAsOwner;
++const VALID_OWNER_KINDS = new Set([
++    "game-object",
++    "logical-service",
++    "task",
++    "contract",
++    "legacy-unresolved",
++]);
++/** 已知逻辑服务 namespace 前缀注册表（与 holderResolution 保持一致）。 */
++const LOGICAL_SERVICE_PREFIXES = ["nuker:", "synthesis:"];
++/** 旧式 Screeps object id：24 位小写 hex。 */
++const LEGACY_OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/;
++/** 新式 Screeps object id：16 位 base62-ish。 */
++const NEW_OBJECT_ID_PATTERN = /^[A-Za-z0-9]{16}$/;
++const OWNER_ID_MAX = 128;
++const OWNER_NAMESPACE_MIN = 1;
++const OWNER_NAMESPACE_MAX = 64;
++const OWNER_ROOM_NAME_MAX = 32;
++const OWNER_LIFECYCLE_REF_MAX = 128;
++/**
++ * owner identity 的完整形状校验（kind-specific，第七轮收紧）：
++ * - logical-service 的 namespace **必填**（1..64 字符）——namespace 参与
++ *   身份与持久 key，缺失即身份不完整；
++ * - 非 logical-service 的 namespace 必须缺省——禁止"允许携带又在 token 中
++ *   忽略"的双口径；
++ * - id（1..128）参与身份；roomName/lifecycleRef 只是 metadata（长度有界）。
++ */
++function isValidTreasuryOwnerIdentity(owner) {
++    if (!owner || typeof owner !== "object")
++        return false;
++    const candidate = owner;
++    if (typeof candidate.kind !== "string" || !VALID_OWNER_KINDS.has(candidate.kind))
++        return false;
++    if (typeof candidate.id !== "string" || candidate.id.length === 0 || candidate.id.length > OWNER_ID_MAX)
++        return false;
++    if (candidate.kind === "logical-service") {
++        if (typeof candidate.namespace !== "string" ||
++            candidate.namespace.length < OWNER_NAMESPACE_MIN ||
++            candidate.namespace.length > OWNER_NAMESPACE_MAX) {
++            return false;
++        }
++    }
++    else if (candidate.namespace !== undefined) {
++        return false;
++    }
++    if (candidate.roomName !== undefined &&
++        (typeof candidate.roomName !== "string" || candidate.roomName.length === 0 || candidate.roomName.length > OWNER_ROOM_NAME_MAX)) {
++        return false;
++    }
++    if (candidate.lifecycleRef !== undefined &&
++        (typeof candidate.lifecycleRef !== "string" || candidate.lifecycleRef.length > OWNER_LIFECYCLE_REF_MAX)) {
++        return false;
++    }
++    return true;
++}
++/**
++ * owner identity 的规范比较键（第八轮统一）：与持久 key 使用**同一 canonical
++ * owner token 算法**（treasuryReservationOwnerToken 的 `ow2:` 长度前缀编码）
++ * ——聚合 key、self-exclusion、mutation 定位、migration collision 检测全部
++ * 复用同一函数，独立 NUL 分隔比较键已移除。token 相等 ⇔ (kind, namespace,
++ * id) 三元组相等——id/namespace 含 NUL、冒号、Unicode、空格均无边界歧义，
++ * 比较结果与持久 token 恒一致。roomName/lifecycleRef 不参与（metadata）。
++ */
++function treasuryOwnerIdentityKey(owner) {
++    return treasuryReservationOwnerToken(owner);
++}
++/** ownerToken 的 kind 代码注册表（不同 kind 代码互异 ⇒ token 永不跨 kind 碰撞）。 */
++const OWNER_KIND_TOKEN_CODES = {
++    "game-object": "go",
++    "logical-service": "ls",
++    task: "tk",
++    contract: "ct",
++    "legacy-unresolved": "lu",
++};
++/**
++ * 持久 ownerToken（第七轮 v4，长度前缀 canonical 编码）：
++ * `ow2:<kindCode>:<nsLen>:<namespace><id>`。
++ *
++ * 唯一性论证（严格无碰撞）：前三段以冒号定界且 ow2/kindCode/nsLen 均不含
++ * 冒号；剩余串 = namespace 原文 + id 原文直接拼接，nsLen（UTF-16 code unit
++ * 数）唯一决定切分点。token 相等 ⇔ kindCode、nsLen、拼接串全等 ⇔
++ * (kind, namespace, id) 三元组全等——Unicode、冒号、空格、空串在 namespace
++ * 与 id 中均不产生边界歧义（v3 的 `ls:<ns>:<id>` 依赖 namespace 无冒号的
++ * 隐含约定，v4 消除该约定）。id ≤128、namespace ≤64 保证 token 长度有界；
++ * 纯函数无随机数，同输入跨 tick 恒定。identity 字段 = kind + namespace +
++ * id；roomName 由 store key 外层表达、lifecycleRef 是 metadata——均不进
++ * token。该 token 参与 reservation store key（makeReservationStoreKey 的
++ * 唯一拼接权威），mutation/migration/release/renew/query 自排除全部经
++ * 同一 helper。
++ */
++function treasuryReservationOwnerToken(owner) {
++    var _a;
++    const kindCode = OWNER_KIND_TOKEN_CODES[owner.kind];
++    const namespace = owner.kind === "logical-service" ? (_a = owner.namespace) !== null && _a !== void 0 ? _a : "" : "";
++    return `ow2:${kindCode}:${String(namespace.length)}:${namespace}${owner.id}`;
++}
++/**
++ * legacy v3 ownerToken（第六轮格式 `go:<id>` / `ls:<ns>:<id>` / …）：仅供
++ * v3→v4 迁移的旧 key 一致性核验——以经过完整验证的 entry.owner 为权威重算
++ * 新 key，绝不解析 token 字符串反推 identity。生产 mutation 不得使用。
++ */
++function treasuryReservationOwnerTokenV3(owner) {
++    var _a, _b;
++    const kindPrefix = owner.kind === "logical-service" ? "ls" : OWNER_KIND_TOKEN_CODES[owner.kind];
++    if (owner.kind === "logical-service") {
++        const namespace = (_b = (_a = owner.namespace) !== null && _a !== void 0 ? _a : owner.id.split(":")[0]) !== null && _b !== void 0 ? _b : "";
++        return `${kindPrefix}:${namespace}:${owner.id}`;
++    }
++    return `${kindPrefix}:${owner.id}`;
++}
++/**
++ * legacy 裸 holderId 的保守分类（迁移与读侧兜底用）：
++ * - `nuker:` / `synthesis:` 前缀 → logical-service（namespace 同名）；
++ * - `task:` / `contract:` 前缀 → task / contract；
++ * - 旧/新式 Game object id 形状 → game-object；
++ * - 其余 → legacy-unresolved（保守计入 committed，不可被普通声明排除）。
++ */
++function classifyTreasuryHolderIdAsOwner(holderId) {
++    if (typeof holderId === "string") {
++        for (const prefix of LOGICAL_SERVICE_PREFIXES) {
++            if (holderId.startsWith(prefix)) {
++                return { kind: "logical-service", id: holderId, namespace: prefix.slice(0, -1) };
++            }
++        }
++        if (holderId.startsWith("task:"))
++            return { kind: "task", id: holderId };
++        if (holderId.startsWith("contract:"))
++            return { kind: "contract", id: holderId };
++        if (LEGACY_OBJECT_ID_PATTERN.test(holderId) || NEW_OBJECT_ID_PATTERN.test(holderId)) {
++            return { kind: "game-object", id: holderId };
++        }
++    }
++    return { kind: "legacy-unresolved", id: typeof holderId === "string" ? holderId : String(holderId) };
++}
++
++},
++"src/runtime/treasury/types.ts": function(exports, require) {
++"use strict";
++/**
++ * Empire Treasury——帝国国库核心类型。
++ *
++ * 语义分层（详见 openspec/changes/empire-treasury-rearchitecture/design.md）：
++ * - Observed：本 tick 观察到的物理事实（不可变，绝不持久化到 Memory）；
++ * - Projected：Observed + 本 tick 已被 Game 接受的动作增量（transaction 结算）；
++ * - Committed：未执行但已被任务/预留/合同占用（每 tick 从持久权威构建只读索引）。
++ *
++ * 依赖约束：treasury 模块不得 import runtimeServices（服务由其注入房间源），
++ * 查询路径（observation/query/commitments/journal/reconciliation/metrics）
++ * 零写入 Memory 与 Game；只有生命周期（beginTick/endTick）与已接受动作
++ * 登记路径允许写最小 receipt/指标状态。
++ */
++Object.defineProperty(exports, "__esModule", { value: true });
++exports.TREASURY_STRUCTURE_BINDING_ROLES = exports.TREASURY_STRUCTURE_BINDING_KINDS = exports.TREASURY_STRUCTURE_DESCRIPTOR_VERSION = void 0;
++exports.treasuryLocationKey = treasuryLocationKey;
++exports.createTreasuryMetrics = createTreasuryMetrics;
++function treasuryLocationKey(roomName, kind) {
++    return `${roomName}:${kind}`;
++}
++function createTreasuryMetrics() {
++    return {
++        observationRebuilds: 0,
++        observationReuseHits: 0,
++        freshObservationBuilds: 0,
++        locationsScanned: 0,
++        nonZeroEntries: 0,
++        storeEnumerations: 0,
++        resourceKeysEnumerated: 0,
++        roomFindCalls: 0,
++        fallbackLiveReads: 0,
++        lifecycleBeginTicks: 0,
++        lifecycleEndTicks: 0,
++        lifecycleLazyInitializations: 0,
++        lifecycleMissingEndWarnings: 0,
++        tickGapReconciles: 0,
++        globalResetRecoveries: 0,
++        commitmentRebuilds: 0,
++        commitmentRecords: 0,
++        commitmentIndexQueries: 0,
++        expiredCommitmentsExcluded: 0,
++        missingOwnerStillCommitted: 0,
++        typedOwnerResolvedCount: 0,
++        legacyUnresolvedOwnerCount: 0,
++        invalidCommitmentRecords: 0,
++        incompleteCommitmentScopes: 0,
++        commitmentGloballyIncomplete: false,
++        transactionsRecorded: 0,
++        postingsRecorded: 0,
++        transactionsRejectedInvalid: 0,
++        duplicateSettlementsRejected: 0,
++        staleEpochRejections: 0,
++        unknownEpochRejections: 0,
++        epochScopeMismatches: 0,
++        settlementsAfterEndRejected: 0,
++        receiptsEvictedByRetention: 0,
++        receiptCapacityRejections: 0,
++        receiptStoreMigrationsExecuted: 0,
++        receiptStoreIncompatibleFailures: 0,
++        receiptFullScans: 0,
++        receiptAdmissionFastPaths: 0,
++        receiptAdmissionFullStoreBlocked: 0,
++        receiptExpiryCleanupScans: 0,
++        receiptSlotsRemaining: 0,
++        receiptNextExpiryTick: null,
++        freshEpochLimitRejections: 0,
++        transactionsPrepared: 0,
++        transactionPreparesAborted: 0,
++        prepareConflicts: 0,
++        preparedActive: 0,
++        tentativeResourceKeys: 0,
++        tentativeCapacityKeys: 0,
++        preparedCommits: 0,
++        invalidHandleRejections: 0,
++        digestGenerations: 0,
++        preparedOutstandingAtEnd: 0,
++        preparedExecutingAtEnd: 0,
++        preparedQuarantinedAtBoundary: 0,
++        executionUnknownQuarantines: 0,
++        commitFaults: 0,
++        writeAdmissionLocked: 0,
++        quarantineEntries: 0,
++        quarantineSlotsReserved: 0,
++        quarantineSlotsRemaining: 0,
++        quarantineStoreHealthy: false,
++        quarantineAdmissionRejections: 0,
++        reservationReleaseFailures: 0,
++        unresolvedQuarantines: 0,
++        resolutionCommitted: 0,
++        resolutionNotExecuted: 0,
++        resolutionUncertain: 0,
++        resolutionRejected: 0,
++        receiptEntriesVisited: 0,
++        receiptMigrationScans: 0,
++        receiptLoadValidationEntries: 0,
++        receiptExpiryCleanupEntries: 0,
++        receiptFatalInspectionEntries: 0,
++        queryInvalidContexts: 0,
++        reservationSchemaActivationFailures: 0,
++        reservationMutationRejections: 0,
++        durableIntents: 0,
++        intentSlotsRemaining: 0,
++        intentRecoveries: 0,
++        intentQuarantineConversions: 0,
++        intentStoreHealthy: false,
++        intentWriteFailures: 0,
++        authorizationIssued: 0,
++        authorizationRejected: 0,
++        authorizationInvalidated: 0,
++        authorizationsActive: 0,
++        actionContractsBuilt: 0,
++        actionAdapterMismatches: 0,
++        authorizationRevisionMismatches: 0,
++        resolutionInProgress: 0,
++        resolutionFaulted: 0,
++        resolutionRecovered: 0,
++        resolutionIdentityConflicts: 0,
++        resolutionIdentityInsufficient: 0,
++        receiptRefreshes: 0,
++        reconciliationCapabilitiesIssued: 0,
++        reconciliationCapabilitiesRejected: 0,
++        reservationStoreHealthy: false,
++        riskAdjustedCapacityLookups: 0,
++        reconciliationInflowMismatches: 0,
++        reconciliationOutflowMismatches: 0,
++        reconciliationStructuralChanges: 0,
++        reconciliationChecks: 0,
++    };
++}
++// ── 完整 structure binding descriptor（第十一轮 3.13.9 / AC4） ───────────────
++/** descriptor 版本（字段集演进时递增——旧 descriptor 数据按版本解释）。 */
++exports.TREASURY_STRUCTURE_DESCRIPTOR_VERSION = 1;
++exports.TREASURY_STRUCTURE_BINDING_KINDS = new Set([
++    "governed_location",
++    "game_object",
++]);
++exports.TREASURY_STRUCTURE_BINDING_ROLES = new Set([
++    "source",
++    "target",
++    "fee_source",
++    "production_structure",
++    "auxiliary",
++]);
++
++}
++};
++const dependencies = {
++  "src/runtime/configNormalize.ts": {},
++  "src/runtime/logistics/resourceTransferTaskHealth.ts": {
++    "@/runtime/configNormalize": "src/runtime/configNormalize.ts"
++  },
++  "src/runtime/treasury/commitmentRevision.ts": {},
++  "src/runtime/treasury/commitments.ts": {
++    "@/runtime/logistics/resourceTransferTaskHealth": "src/runtime/logistics/resourceTransferTaskHealth.ts",
++    // V: no mutable revision module imported by the shared read definitions.
++    "@/runtime/treasury/holderResolution": "src/runtime/treasury/holderResolution.ts",
++    "@/runtime/treasury/ownerIdentity": "src/runtime/treasury/ownerIdentity.ts"
++  },
++  "src/runtime/treasury/holderResolution.ts": {},
++  "src/runtime/treasury/observation.ts": {
++    "@/runtime/treasury/types": "src/runtime/treasury/types.ts"
++  },
++  "src/runtime/treasury/ownerIdentity.ts": {},
++  "src/runtime/treasury/types.ts": {}
++};
++/** Read Optimization V: shared function definitions, private per-builder inputs.
++ * Authoring: scripts/build-treasury-compat-loader.cjs + treasury-compat-context.cjs.
++ * This is ONLY the read-only compatibility capsule, NOT a Treasury service.
++ * The old capsule initialized an unreachable mutable revision module to zero on
++ * every factory call. That private zero and a FRESH resource Set now belong to
++ * an explicit context captured by each new builder, never by shared functions.
++ * No ambient active-context slot; nested/alternating builders cannot overwrite it.
++ */
++let compatReadDefinitions;
++function initializeCompatibilityReadDefinitions() {
++  const cache = Object.create(null);
++  function load(id) {
++    if (Object.prototype.hasOwnProperty.call(cache, id)) return cache[id];
++    if (!Object.prototype.hasOwnProperty.call(factories, id)) throw new Error("unlisted read dependency");
++    const exports = Object.create(null);
++    cache[id] = exports;
++    factories[id](exports, spec => {
++      if (!Object.prototype.hasOwnProperty.call(dependencies[id], spec)) throw new Error("unlisted read import");
++      return load(dependencies[id][spec]);
++    });
++    return exports;
++  }
++  const observation = load("src/runtime/treasury/observation.ts");
++  const commitments = load("src/runtime/treasury/commitments.ts");
++  for (const id of Object.keys(cache)) Object.freeze(cache[id]);
++  return Object.freeze({ observation, commitments });
++}
++export function createCompatibilityReadCore(): CompatReadBuilders {
++  // Nothing is prewarmed. Both initialization and per-builder capture remain in
++  // the admitted sample's readerLoad interval, including cold publication cost.
++  const definitions = compatReadDefinitions || initializeCompatibilityReadDefinitions();
++  const context = Object.freeze({ revision: 0, resources: new Set(RESOURCES_ALL) });
++  const builders = Object.freeze({
++    buildObservation: options => definitions.observation.buildTreasuryObservation(options),
++    buildCommitments: options => definitions.commitments.buildTreasuryCommitmentIndex(options, context),
++  });
++  // A failing catalog capture publishes no partial first initialization.
++  if (!compatReadDefinitions) compatReadDefinitions = definitions;
++  return builders;
++}
+diff --git a/test/treasury-compat/fixtures/cpu-before-read-envelope-xv.ts.txt b/test/treasury-compat/fixtures/cpu-before-read-envelope-xv.ts.txt
+new file mode 100644
+index 0000000..211837e
+--- /dev/null
++++ b/test/treasury-compat/fixtures/cpu-before-read-envelope-xv.ts.txt
+@@ -0,0 +1,201 @@
++/** Bounded diagnostic accounting, NOT an authorization or CPU-budget authority.
++ * Values come only from the caller's existing CPU port. Probe/diagnostic overhead
++ * remains in cumulative costs; no estimated overhead is subtracted. No Game,
++ * Memory, module loading, clocks, I/O or persistent cache are used here.
++ */
++export const COMPAT_CPU_PHASES = Object.freeze([
++  "legacyInputs", "directRead", "readerLoad", "observationBuild",
++  "coreCompare", "commitmentBuild", "commitmentProjection", "report",
++  "serializationAndSize", "emit", "retention",
++] as const);
++export type CompatCpuPhase = typeof COMPAT_CPU_PHASES[number];
++export type CompatCpuCall = "readerLoad" | "observationBuild" | "commitmentBuild";
++
++/** Coarse builder intervals. They are intentionally bounded: one boundary per
++ * region, never one CPU read per task, reservation, resource key or query.
++ * A subphase is nested inside an existing top-level phase and MUST NOT be added
++ * to the parent phase to derive total cost.
++ */
++export const COMPAT_CPU_SUBPHASES = Object.freeze([
++  "observationSetup", "observationRooms", "observationFinalize", "observationView",
++  "commitmentSetup", "commitmentTasks", "commitmentReservations", "commitmentFinalize",
++  "projectionRows",
++] as const);
++export type CompatCpuSubphase = typeof COMPAT_CPU_SUBPHASES[number];
++
++/** Primitive work counters describe the composition of the coarse intervals.
++ * They are not CPU weights and are not used for authorization or pass/fail.
++ */
++export const COMPAT_CPU_WORK_KEYS = Object.freeze([
++  "observationRooms", "observationLocations", "observationExistingLocations", "observationResourceKeys",
++  "commitmentTaskRecords", "commitmentPendingTaskRecords", "commitmentTaskInvalidEvents",
++  "commitmentDemandHealthChecks", "commitmentReceiverHealthChecks", "commitmentRouteCandidates",
++  "commitmentReservationRecords", "commitmentReservationInvalidEvents", "commitmentOwnerEvaluations",
++  "commitmentActiveReservations", "commitmentScopeBuckets", "commitmentRoomBuckets",
++  "commitmentMergeRoutes", "commitmentReservationScopes",
++  "projectionRowsPlanned", "projectionRowsCompleted", "projectionIndexQueries",
++] as const);
++export type CompatCpuWorkKey = typeof COMPAT_CPU_WORK_KEYS[number];
++export interface CompatCpuAttribution {
++  readonly version: 1;
++  readonly boundaries: number;
++  readonly active: CompatCpuSubphase | null;
++  readonly intervals: Readonly<Partial<Record<CompatCpuSubphase, number>>>;
++  readonly work: Readonly<Partial<Record<CompatCpuWorkKey, number>>>;
++}
++export const COMPAT_COMMITMENT_MARKS = Object.freeze([
++  "parentStart", "callStart", "bodyStart", "bodyEnd", "callEnd", "parentEnd",
++] as const);
++export type CompatCommitmentMark = typeof COMPAT_COMMITMENT_MARKS[number];
++export interface CompatCommitmentEnvelope {
++  readonly version: 1;
++  readonly status: "not_called" | "complete" | "incomplete";
++  /** Offsets from this sample's start; consecutive differences are inclusive.
++   * The inner body span overlaps the four IX commitment intervals. */
++  readonly marks: Readonly<Partial<Record<CompatCommitmentMark, number>>>;
++}
++export const COMPAT_TASK_MARKS = Object.freeze(["tasksStart", "firstPendingStart", "firstPendingEnd", "tasksEnd"] as const);
++export type CompatTaskMark = typeof COMPAT_TASK_MARKS[number];
++export interface CompatTaskEnvelope {
++  readonly version: 1;
++  readonly status: "not_called" | "no_pending" | "complete" | "incomplete";
++  readonly firstPendingOrdinal: number | null;
++  readonly marks: Readonly<Partial<Record<CompatTaskMark, number>>>;
++}
++export interface CompatCpuProfile {
++  readonly version: 1;
++  readonly tick: number;
++  readonly sampleOrdinal: number;
++  readonly boundary: "beforeSerialization" | "afterRetention" | "fault";
++  readonly elapsed: number;
++  readonly checkpoints: number;
++  readonly calls: Readonly<Record<CompatCpuCall, number>>;
++  readonly phases: Readonly<Partial<Record<CompatCpuPhase, number>>>;
++  readonly attribution?: CompatCpuAttribution;
++  readonly commitmentEnvelope?: CompatCommitmentEnvelope;
++  readonly taskEnvelope?: CompatTaskEnvelope;
++  /** After-retention snapshots are a continuation for the preceding emitted
++   * prefix. They contain only tail phases; the prior report remains authoritative
++   * for calls, parent-prefix phases and attribution. */
++  readonly completion?: "tail_only";
++}
++/** One instance per admitted sample; snapshots contain primitive values only.
++ * Each interval is charged to the phase that was active BEFORE the checkpoint.
++ * Unvisited phases are absent, not invented zero-cost measurements.
++ * Phase and subphase costs are inclusive intervals, not profiler-overhead-
++ * corrected timings. Subphases overlap their parent phase by design.
++ */
++export function createCompatCpuAccounting(start: number, tick: number, sampleOrdinal: number, traceCommitment = false, traceTasks = false) {
++  if (![start, tick, sampleOrdinal].every(Number.isFinite) || start < 0
++    || !Number.isSafeInteger(tick) || tick < 0
++    || !Number.isSafeInteger(sampleOrdinal) || sampleOrdinal < 1) throw new Error("invalid CPU accounting start");
++  let last = start, phase: CompatCpuPhase = "legacyInputs", checkpoints = 1;
++  const phases: Partial<Record<CompatCpuPhase, number>> = { legacyInputs: 0 };
++  const calls: Record<CompatCpuCall, number> = { readerLoad: 0, observationBuild: 0, commitmentBuild: 0 };
++  let attributionLast: number | null = null, attributionActive: CompatCpuSubphase | null = null, attributionBoundaries = 0;
++  const intervals: Partial<Record<CompatCpuSubphase, number>> = {};
++  const work: Partial<Record<CompatCpuWorkKey, number>> = {};
++  const attribution = () => attributionBoundaries || Object.keys(work).length
++    ? Object.freeze({ version: 1 as const, boundaries: attributionBoundaries, active: attributionActive,
++      intervals: Object.freeze({ ...intervals }), work: Object.freeze({ ...work }) })
++    : undefined;
++  const commitmentMarks: Partial<Record<CompatCommitmentMark, number>> = {};
++  let markIndex = -1, markLast = start;
++  const mark = (name: CompatCommitmentMark, used: number) => {
++    if (!traceCommitment) return;
++    const i = COMPAT_COMMITMENT_MARKS.indexOf(name);
++    if (i < 0 || i <= markIndex || !Number.isFinite(used) || used < markLast || used < start)
++      throw new Error("invalid commitment envelope boundary");
++    commitmentMarks[name] = used - start;
++    markIndex = i; markLast = used;
++  };
++  const envelope = (): CompatCommitmentEnvelope | undefined => !traceCommitment ? undefined : Object.freeze({
++    version: 1 as const,
++    status: calls.commitmentBuild === 0 ? "not_called" as const
++      : COMPAT_COMMITMENT_MARKS.every(k => commitmentMarks[k] !== undefined) ? "complete" as const : "incomplete" as const,
++    marks: Object.freeze({ ...commitmentMarks }),
++  });
++  const taskMarks: Partial<Record<CompatTaskMark, number>> = {};
++  let taskMarkIndex = -1, taskMarkLast = start, firstPendingOrdinal: number | null = null;
++  const taskMark = (name: CompatTaskMark, used: number, ordinal?: number) => {
++    if (!traceTasks) return;
++    const i = COMPAT_TASK_MARKS.indexOf(name);
++    if (i < 0 || i <= taskMarkIndex || !Number.isFinite(used) || used < taskMarkLast || used < start)
++      throw new Error("invalid first pending task boundary");
++    if (name === "firstPendingStart" || name === "firstPendingEnd") {
++      if (!Number.isSafeInteger(ordinal) || ordinal! < 1 || ordinal! > 256
++        || (firstPendingOrdinal !== null && ordinal !== firstPendingOrdinal))
++        throw new Error("invalid first pending task ordinal");
++      firstPendingOrdinal = ordinal!;
++    }
++    taskMarks[name] = used - start; taskMarkIndex = i; taskMarkLast = used;
++  };
++  const taskEnvelope = (): CompatTaskEnvelope | undefined => !traceTasks ? undefined : Object.freeze({
++    version: 1 as const,
++    status: calls.commitmentBuild === 0 ? "not_called" as const
++      : COMPAT_TASK_MARKS.every(k => taskMarks[k] !== undefined) ? "complete" as const
++      : taskMarks.tasksStart !== undefined && taskMarks.tasksEnd !== undefined && firstPendingOrdinal === null
++        ? "no_pending" as const : "incomplete" as const,
++    firstPendingOrdinal, marks: Object.freeze({ ...taskMarks }),
++  });
++  return {
++    taskMark(name: "firstPendingStart" | "firstPendingEnd", used: number, ordinal: number): void { taskMark(name, used, ordinal); },
++    commitmentMark(name: "callStart" | "callEnd", used: number): void { mark(name, used); },
++    checkpoint(used: number, next?: CompatCpuPhase): void {
++      if (!Number.isFinite(used) || used < last || !COMPAT_CPU_PHASES.includes(next ?? phase))
++        throw new Error("invalid CPU accounting checkpoint");
++      if (traceCommitment && phase !== "commitmentBuild" && next === "commitmentBuild") mark("parentStart", used);
++      if (traceCommitment && phase === "commitmentBuild" && next && next !== "commitmentBuild") mark("parentEnd", used);
++      phases[phase] = (phases[phase] ?? 0) + (used - last);
++      last = used;
++      checkpoints++;
++      if (next) { phase = next; phases[phase] ??= 0; }
++    },
++    invoked(call: CompatCpuCall): void {
++      if (!Object.prototype.hasOwnProperty.call(calls, call) || calls[call] !== 0)
++        throw new Error("invalid CPU diagnostic invocation");
++      calls[call]++;
++    },
++    attributionBoundary(used: number, next?: CompatCpuSubphase): void {
++      if (!Number.isFinite(used) || used < start || (attributionLast !== null && used < attributionLast)
++        || (next !== undefined && !COMPAT_CPU_SUBPHASES.includes(next)))
++        throw new Error("invalid CPU attribution boundary");
++      if (traceTasks && next === "commitmentTasks") taskMark("tasksStart", used);
++      if (traceTasks && attributionActive === "commitmentTasks" && next === "commitmentReservations") taskMark("tasksEnd", used);
++      if (traceCommitment && next === "commitmentSetup") mark("bodyStart", used);
++      if (traceCommitment && attributionActive === "commitmentFinalize" && next === undefined) mark("bodyEnd", used);
++      if (attributionActive !== null && attributionLast !== null)
++        intervals[attributionActive] = (intervals[attributionActive] ?? 0) + (used - attributionLast);
++      attributionBoundaries++;
++      attributionActive = next ?? null;
++      attributionLast = next === undefined ? null : used;
++      if (next) intervals[next] ??= 0;
++    },
++    attributionWork(values: Readonly<Partial<Record<CompatCpuWorkKey, number>>>): void {
++      if (!values || typeof values !== "object") throw new Error("invalid CPU attribution work");
++      for (const [key, value] of Object.entries(values)) {
++        if (!COMPAT_CPU_WORK_KEYS.includes(key as CompatCpuWorkKey) || value === undefined
++          || !Number.isSafeInteger(value) || value < 0) throw new Error("invalid CPU attribution work");
++        const next = (work[key as CompatCpuWorkKey] ?? 0) + value;
++        if (!Number.isSafeInteger(next)) throw new Error("invalid CPU attribution work");
++        work[key as CompatCpuWorkKey] = next;
++      }
++    },
++    snapshot(boundary: CompatCpuProfile["boundary"]): CompatCpuProfile {
++      if (boundary === "afterRetention") {
++        // XII: the preceding report already carries the full prefix snapshot.
++        // Publish only the measured serialization/emit/retention continuation
++        // instead of serializing its attribution and parent phases a second time.
++        const tail: Partial<Record<CompatCpuPhase, number>> = {};
++        for (const key of ["serializationAndSize", "emit", "retention"] as const)
++          if (phases[key] !== undefined) tail[key] = phases[key];
++        return Object.freeze({ version: 1, tick, sampleOrdinal, boundary, elapsed: last - start,
++          checkpoints, calls: Object.freeze({ ...calls }), phases: Object.freeze(tail), completion: "tail_only" });
++      }
++      const a = attribution(), e = envelope(), t = taskEnvelope();
++      return Object.freeze({ version: 1, tick, sampleOrdinal, boundary, elapsed: last - start,
++        checkpoints, calls: Object.freeze({ ...calls }), phases: Object.freeze({ ...phases }),
++        ...(a ? { attribution: a } : {}), ...(e ? { commitmentEnvelope: e } : {}), ...(t ? { taskEnvelope: t } : {}) });
++    },
++  };
++}
+diff --git a/test/treasury-compat/fixtures/reader-before-read-envelope-xv.ts.txt b/test/treasury-compat/fixtures/reader-before-read-envelope-xv.ts.txt
+new file mode 100644
+index 0000000..19e4366
+--- /dev/null
++++ b/test/treasury-compat/fixtures/reader-before-read-envelope-xv.ts.txt
+@@ -0,0 +1,421 @@
++/** Read compatibility preview for the old production bot, not a Treasury host.
++ * Reuses pinned production observation/commitment builders. Never computes a
++ * spendable balance, signs a permit, migrates a store or advances world sequence.
++ * One endpoint snapshot and one bounded CPU profile are retained. Reader caches
++ * remain per sample; only audited definition modules may be reused. Diagnostic
++ * profiles never contain a linked history.
++ */
++import type { CompatBuilderDiagnostics, CompatConfig, CompatPorts, CompatObservation } from "./treasuryCompatTypes";
++import { createCompatCpuAccounting, type CompatCpuPhase, type CompatCpuProfile, type CompatCpuSubphase, type CompatCpuWorkKey } from "./treasuryCompatCpu";
++
++type Rec = Record<string, unknown>;
++type Kind = "storage" | "terminal";
++const KINDS: readonly Kind[] = ["storage", "terminal"];
++const TABLE_LIMIT = 256;
++const sat = (n: number) => Math.min(n + 1, 999999999);
++const obj = (x: unknown): x is Rec => typeof x === "object" && x !== null && !Array.isArray(x);
++const nonneg = (x: unknown): x is number => typeof x === "number" && Number.isSafeInteger(x) && x >= 0;
++const finite = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x) && x >= 0;
++const own = (x: Rec, k: string) => Object.prototype.hasOwnProperty.call(x, k);
++const str = (x: unknown, n: number): x is string => typeof x === "string" && x.length > 0 && x.length <= n;
++
++export function validCompatConfig(c: CompatConfig): boolean {
++  return obj(c) && typeof c.enabled === "boolean" && str(c.shardName, 32)
++    && Array.isArray(c.rooms) && c.rooms.length > 0 && c.rooms.length <= 2
++    && c.rooms.every(r => typeof r === "string" && /^[WE]\d{1,3}[NS]\d{1,3}$/.test(r))
++    && new Set(c.rooms).size === c.rooms.length
++    && Array.isArray(c.resources) && c.resources.length > 0 && c.resources.length <= 4
++    && c.resources.every(r => typeof r === "string" && /^[A-Za-z0-9_]{1,32}$/.test(r))
++    && new Set(c.resources).size === c.resources.length
++    && nonneg(c.startTick) && nonneg(c.endTick) && c.endTick > c.startTick
++    && c.endTick - c.startTick <= 1200
++    && nonneg(c.intervalTicks) && c.intervalTicks >= 20 && c.intervalTicks <= 1000
++    && Math.ceil(c.startTick / c.intervalTicks) * c.intervalTicks <= c.endTick
++    && nonneg(c.minBucket) && c.minBucket <= 10000
++    && finite(c.maxSampleCpu) && c.maxSampleCpu > 0 && c.maxSampleCpu <= 10
++    && finite(c.reserveCpu) && c.reserveCpu >= 1 && c.reserveCpu <= 100
++    && nonneg(c.maxLogBytes) && c.maxLogBytes >= 1024 && c.maxLogBytes <= 16384;
++}
++export function compatUtf8Bytes(s: string): number {
++  let n = 0;
++  for (let i = 0; i < s.length; i++) {
++    const a = s.charCodeAt(i);
++    if (a < 128) n++;
++    else if (a < 2048) n += 2;
++    else if (a >= 0xd800 && a <= 0xdbff && i + 1 < s.length
++      && s.charCodeAt(i + 1) >= 0xdc00 && s.charCodeAt(i + 1) <= 0xdfff) { n += 4; i++; }
++    else n += 3;
++  }
++  return n;
++}
++/** Own-property path read. Missing, null, array, damaged parents and empty object
++ * remain distinct. No ensure()/normalizer or getter invocation on table entries. */
++function pathValue(root: unknown, path: readonly string[]): { status: string; value?: unknown } {
++  let p = root;
++  for (const key of path) {
++    if (!obj(p)) return { status: "invalid_parent" };
++    const desc = Object.getOwnPropertyDescriptor(p, key);
++    if (!desc) return { status: "absent" };
++    if (!("value" in desc)) return { status: "accessor_unreadable" };
++    p = desc.value;
++  }
++  return { status: "present", value: p };
++}
++type Found = { status: string; value?: unknown };
++function pathFrom(found: Found, path: readonly string[]): Found {
++  return found.status === "present" ? pathValue(found.value, path) : { status: found.status };
++}
++function tableFound(found: Found) {
++  if (found.status !== "present") return { status: found.status, count: null, value: undefined };
++  if (!obj(found.value)) return { status: "invalid_container", count: null, value: undefined };
++  // Stop enumeration at bound+1. Never aggregate a selected prefix as the table.
++  let count = 0;
++  for (const key in found.value) {
++    if (!own(found.value, key)) continue;
++    const descriptor = Object.getOwnPropertyDescriptor(found.value, key);
++    if (!descriptor || !("value" in descriptor)) return { status: "accessor_unreadable", count: null, value: undefined };
++    if (++count > TABLE_LIMIT) return { status: "over_bound", count: null, value: undefined };
++  }
++  return { status: count === 0 ? "empty" : "nonempty", count, value: found.value };
++}
++function table(root: unknown, path: readonly string[]) { return tableFound(pathValue(root, path)); }
++function summary(s: { status: string; count: number | null }) { return { status: s.status, count: s.count }; }
++type Direct = { id: string; used: number; free: number; capacity: number;
++  overCapacity: boolean; active: boolean; cooldown: number | null; amounts: Record<string, number> };
++function direct(room: Room | undefined, kind: Kind, resources: readonly string[]): { status: string; value?: Direct } {
++  try {
++    if (!room) return { status: "not_visible" };
++    if (room.controller?.my !== true) return { status: "not_owned" };
++    const s = room[kind];
++    if (!s) return { status: "absent" };
++    if (s.my !== true || !str(s.id, 96)) return { status: "unreadable" };
++    // Endpoint-local reference only: no value or Store is retained across calls.
++    // Core observation still obtains its own Store and independently enumerates it.
++    const store = s.store;
++    if (!store || typeof s.isActive !== "function") return { status: "unreadable" };
++    const used = store.getUsedCapacity(), free = store.getFreeCapacity(), capacity = store.getCapacity();
++    const active = s.isActive(), cooldown = kind === "terminal" ? (s as StructureTerminal).cooldown : null;
++    // Capacity reduction may leave inventory above capacity. Preserve signed
++    // free or a saturated zero, rather than inventing capacity=used+free.
++    if (!nonneg(used) || !nonneg(capacity) || !Number.isSafeInteger(free)
++      || !(used + free === capacity || (used > capacity && free === 0))
++      || typeof active !== "boolean" || (kind === "terminal" && !nonneg(cooldown))) return { status: "unreadable" };
++    const amounts: Record<string, number> = Object.create(null);
++    let selectedTotal = 0;
++    for (const r of resources) {
++      const a = store.getUsedCapacity(r as ResourceConstant);
++      if (!nonneg(a) || a > used) return { status: "unreadable" };
++      amounts[r] = a;
++      selectedTotal += a;
++    }
++    if (selectedTotal > used) return { status: "unreadable" };
++    return { status: "ok", value: { id: s.id, used, free, capacity, overCapacity: used > capacity,
++      active, cooldown, amounts } };
++  } catch { return { status: "unreadable" }; }
++}
++function legacyProjection(raw: Found, room: string, kind: Kind, d: Direct, tick: number) {
++  if (raw.status !== "present") return { status: raw.status };
++  if (!obj(raw.value) || !nonneg(raw.value.updatedAt)) return { status: "unreadable" };
++  if (raw.value.updatedAt !== tick) return { status: raw.value.updatedAt > tick ? "future_tick" : "stale",
++    updatedAt: raw.value.updatedAt, comparisonPerformed: false };
++  const row = pathValue(raw.value, ["rooms", room]);
++  if (row.status !== "present") return { status: row.status, comparisonPerformed: false };
++  if (!obj(row.value)) return { status: "unreadable" };
++  const mismatches: string[] = [];
++  const usedKey = kind + "UsedCapacity", freeKey = kind + "FreeCapacity";
++  if (!Number.isSafeInteger(row.value[usedKey])) return { status: "unreadable", comparisonPerformed: false };
++  if (row.value[usedKey] !== d.used) mismatches.push(usedKey);
++  if (!Number.isSafeInteger(row.value[freeKey])) return { status: "unreadable", comparisonPerformed: false };
++  if (row.value[freeKey] !== d.free) mismatches.push(freeKey);
++  if (own(d.amounts, "energy")) {
++    const energyKey = kind + "Energy";
++    if (!Number.isSafeInteger(row.value[energyKey])) return { status: "unreadable", comparisonPerformed: false };
++    if (row.value[energyKey] !== d.amounts.energy) mismatches.push(energyKey);
++  }
++  return { status: mismatches.length ? "mismatch" : "match_capacity_and_selected_energy",
++    updatedAt: raw.value.updatedAt, comparisonPerformed: true, mismatches };
++}
++
++type Previous = { tick: number; endpoints: Record<string, Direct> };
++export function createTreasuryCompatPreview(input: CompatConfig, ports: CompatPorts,
++  options: { cpuDiagnostics?: boolean; commitmentBoundaryDiagnostics?: boolean; localSafetyStop?: boolean; taskBoundaryDiagnostics?: boolean } = {}) {
++  const cpuDiagnostics = options?.cpuDiagnostics === true;
++  const traceCommitment = cpuDiagnostics && options?.commitmentBoundaryDiagnostics === true;
++  const taskBoundaryDiagnostics = traceCommitment && options?.taskBoundaryDiagnostics === true;
++  const localSafetyStop = options?.localSafetyStop === true;
++  let sampleOrdinal = 0, previousCpuProfile: CompatCpuProfile | null = null;
++  let cfg = input, enabled = false, invalid = false;
++  try {
++    enabled = input.enabled === true;
++    if (enabled) {
++      invalid = !validCompatConfig(input);
++      if (!invalid) cfg = Object.freeze({ ...input, rooms: Object.freeze([...input.rooms]), resources: Object.freeze([...input.resources]) });
++    }
++  } catch { invalid = true; }
++  let fault = false, lastTick: number | undefined, previous: Previous | undefined;
++  let emitted = 0, cpuSkips = 0;
++  // XIII: local containment, never an engine interrupt or a production rollback.
++  // No Memory write. A new heap arriving after the first due tick cannot re-arm.
++  let safetyStop: { tick: number; reason: string; observedCpu: number | null } | undefined;
++  let safetyNoticeAttempted = false;
++  const latch = (tick: number, used: number) => {
++    if (localSafetyStop && used > 5 && !safetyStop)
++      safetyStop = { tick, reason: "CPU_OBSERVED_SAFETY_STOP", observedCpu: used };
++  };
++  const notifySafety = () => {
++    if (!safetyStop || safetyNoticeAttempted) return;
++    safetyNoticeAttempted = true;
++    try { ports.emit(JSON.stringify({ kind: "treasury-compat-safety-stop", version: 1,
++      ...safetyStop, thresholdCpu: 5, stopsFutureSamples: true,
++      currentCallPreempted: false, scope: "preview_heap_instance", authorizesActions: false })); }
++    catch { /* Stop remains latched even if the one control notification fails. */ }
++  };
++  let previousRun: { tick: number; cpuIncludingEmit: number; emittedBytes: number; retainedPrimitiveChars: number } | null = null;
++  function run(): { status: string } {
++    let tick: number | undefined;
++    let accounting: ReturnType<typeof createCompatCpuAccounting> | undefined;
++    try {
++      if (invalid) { fault = true; return { status: "invalid_config" }; }
++      if (!enabled) return { status: "disabled" };
++      if (fault) return { status: "disabled_after_fault" };
++      if (safetyStop) return { status: "disabled_after_safety_stop" };
++      tick = ports.tick();
++      if (!nonneg(tick)) throw new Error("invalid tick");
++      if (tick < cfg.startTick || tick > cfg.endTick) { previous = undefined; return { status: "outside_window" }; }
++      if (tick % cfg.intervalTicks !== 0 || tick === lastTick) return { status: "not_due" };
++      lastTick = tick;
++      if (localSafetyStop && sampleOrdinal === 0 && tick !== Math.ceil(cfg.startTick / cfg.intervalTicks) * cfg.intervalTicks) {
++        safetyStop = { tick, reason: "WINDOW_RESTART_UNPROVEN", observedCpu: null };
++        notifySafety(); return { status: "disabled_after_safety_stop" };
++      }
++      if (ports.shard() !== cfg.shardName) return { status: "wrong_shard" };
++      const availableResources = ports.resources();
++      if (!cfg.resources.every(r => availableResources.includes(r))) throw new Error("invalid resource");
++      const start = ports.cpu();
++      const validCpu = (c: ReturnType<CompatPorts["cpu"]>) => finite(c.used) && finite(c.tickLimit) && nonneg(c.bucket);
++      if (!validCpu(start)) throw new Error("invalid CPU");
++      if (start.bucket < cfg.minBucket || start.tickLimit - start.used < cfg.maxSampleCpu + cfg.reserveCpu) {
++        cpuSkips = sat(cpuSkips); return { status: "cpu_skipped" };
++      }
++      sampleOrdinal = sat(sampleOrdinal);
++      if (cpuDiagnostics) accounting = createCompatCpuAccounting(start.used, tick, sampleOrdinal, traceCommitment, taskBoundaryDiagnostics);
++      let latestCpu = start.used;
++      const budget = (next?: CompatCpuPhase) => {
++        const c = ports.cpu();
++        if (!validCpu(c) || c.used < latestCpu) throw new Error("invalid CPU progression");
++        accounting?.checkpoint(c.used, next);
++        latestCpu = c.used;
++        latch(tick!, c.used - start.used);
++        return !safetyStop && c.used - start.used < cfg.maxSampleCpu && c.tickLimit - c.used >= cfg.reserveCpu && c.bucket >= cfg.minBucket;
++      };
++      // Builder boundaries are diagnostic-only and never authorize work. Each
++      // boundary samples the same CPU port, so its overhead remains in both the
++      // parent phase and the reported subphase interval. Builders emit bounded
++      // primitive work counters instead of sampling once per record/key/query.
++      const builderDiagnostics: CompatBuilderDiagnostics | undefined = accounting ? (() => {
++        const sampleAccounting = accounting;
++        return Object.freeze({
++          boundary(phase?: CompatCpuSubphase) {
++            const c = ports.cpu();
++            if (!validCpu(c) || c.used < latestCpu) throw new Error("invalid CPU progression");
++            sampleAccounting.attributionBoundary(c.used, phase);
++            latestCpu = c.used;
++            latch(tick!, c.used - start.used);
++          },
++          work(values: Readonly<Partial<Record<CompatCpuWorkKey, number>>>) { sampleAccounting.attributionWork(values); },
++          ...(taskBoundaryDiagnostics ? {
++            taskBoundary(mark: "firstPendingStart" | "firstPendingEnd", recordOrdinal: number) {
++              const c = ports.cpu();
++              if (!validCpu(c) || c.used < latestCpu) throw new Error("invalid CPU progression");
++              sampleAccounting.taskMark(mark, c.used, recordOrdinal);
++              latestCpu = c.used;
++              latch(tick!, c.used - start.used);
++            },
++          } : {}),
++        });
++      })() : undefined;
++      // Two added CPU reads per actual traced build. Argument creation stays
++      // inside parentStart -> callStart; wrapper/prologue stays before bodyStart.
++      const markCommitment = (name: "callStart" | "callEnd") => {
++        if (!traceCommitment || !accounting) return;
++        const c = ports.cpu();
++        if (!validCpu(c) || c.used < latestCpu) throw new Error("invalid CPU progression");
++        accounting.commitmentMark(name, c.used);
++        latestCpu = c.used;
++        latch(tick!, c.used - start.used);
++      };
++      const memory = ports.memory();
++      // XII: resolve the two own-data roots once for this admitted sample. This
++      // is not a cross-sample business cache; all tables are still fully scanned.
++      const dataRoot = pathValue(memory, ["data"]), runtimeRoot = pathValue(memory, ["runtime"]);
++      const tasks = tableFound(pathFrom(dataRoot, ["resourceControl", "tasks"]));
++      const reservations = tableFound(pathFrom(runtimeRoot, ["resourceReservations"]));
++      const marker = pathFrom(runtimeRoot, ["resourceReservationsOwnerVersion"]);
++      const existingCore = pathFrom(runtimeRoot, ["treasuryCore"]);
++      const report: Rec = { kind: "treasury-legacy-read-bridge", tick, shard: cfg.shardName,
++        sourceCommit: "01bd9831454950c4928df98dd8679692b55603e5", productionBase: "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
++        authorizesActions: false, scope: { rooms: cfg.rooms, resources: cfg.resources, isEmpireTotal: false },
++        evaluation: "observation_and_legacy_commitments_only", facadeQueryRun: false,
++        spendable: null, kernelLifecycleRun: false, storageMode: "heap_only", previousRun,
++        legacyInputs: { tasks: summary(tasks), reservations: summary(reservations),
++          reservationVersion: { status: marker.status, value: nonneg(marker.value) ? marker.value : null },
++          treasuryCore: { status: existingCore.status === "present" ? "present_not_interpreted" : existingCore.status, activeCount: null } },
++      };
++      // XIV: own-data path cursor, local to this admitted sample; never Store authority.
++      let projectionSource: Found | undefined;
++      const rows: Rec[] = []; report.endpoints = rows;
++      const validRooms: Room[] = [];
++      const validRoomNames: string[] = [];
++      const next: Previous = { tick, endpoints: Object.create(null) };
++      let limited = false, observations: CompatObservation | undefined;
++      for (const name of cfg.rooms) {
++        if (!budget("directRead")) { limited = true; break; }
++        const room = ports.room(name);
++        let safe = true;
++        for (const kind of KINDS) {
++          if (!budget()) { limited = true; safe = false; break; }
++          const d = direct(room, kind, cfg.resources);
++          const row: Rec = { room: name, location: kind, directStatus: d.status };
++          rows.push(row);
++          if (d.status !== "ok" && d.status !== "absent") safe = false;
++          if (d.value) {
++            row.direct = d.value;
++            projectionSource ??= pathFrom(runtimeRoot, ["resourceControl"]);
++            row.legacyProjection = legacyProjection(projectionSource, name, kind, d.value, tick);
++            const key = name + ":" + kind, old = previous?.endpoints[key];
++            next.endpoints[key] = d.value;
++            if (!old || !previous) row.change = { status: "no_comparable_previous_sample" };
++            else if (old.id !== d.value.id || old.capacity !== d.value.capacity) row.change = { status: "endpoint_or_capacity_changed" };
++            else if (tick <= previous.tick || tick - previous.tick > cfg.intervalTicks * 3) row.change = { status: "gap_not_comparable" };
++            else {
++              const amounts: Record<string, number> = Object.create(null);
++              for (const r of cfg.resources) amounts[r] = d.value!.amounts[r] - old.amounts[r];
++              row.change = { status: "net_change_unattributed", fromTick: previous.tick, toTick: tick, amounts };
++            }
++          }
++        }
++        if (safe && room && room.controller?.my === true) { validRooms.push(room); validRoomNames.push(name); }
++      }
++      // Build from actual Game room objects, NOT from the just-produced direct
++      // numbers or legacy Memory projection. Independently enumerates Store keys.
++      let readers: ReturnType<CompatPorts["readers"]> | undefined;
++      if (validRooms.length && budget("readerLoad")) {
++        accounting?.invoked("readerLoad");
++        readers = ports.readers();
++        if (budget("observationBuild")) {
++          accounting?.invoked("observationBuild");
++          observations = readers.buildObservation({ scope: "market-fresh", epochSeq: 1, rooms: validRooms, compatDiagnostics: builderDiagnostics });
++        } else limited = true;
++      } else if (!budget()) limited = true;
++      // Diagnostic-only extra checkpoint: its cost is NOT removed from budget.
++      if (accounting && !budget("coreCompare")) limited = true;
++      if (observations && observations.epoch.observedAtTick !== tick) throw new Error("stale builder");
++      // At most two admitted rooms and four endpoint rows: avoid a Set allocation
++      // while retaining the same bounded membership semantics and row order.
++      for (const row of rows) {
++        if (!observations || !validRoomNames.includes(row.room as string)) { row.coreComparison = "not_read"; continue; }
++        const o = observations.location(row.room as string, row.location as Kind), d = row.direct as Direct | undefined;
++        if (!d) { row.coreComparison = row.directStatus === "absent" && !o.exists ? "both_absent" : "existence_mismatch"; continue; }
++        const mismatch: string[] = [];
++        if (!o.exists || o.structureId !== d.id) mismatch.push("structure");
++        if (o.usedCapacity !== d.used) mismatch.push("usedCapacity");
++        if (o.freeCapacity !== d.free) mismatch.push("freeCapacity");
++        for (const r of cfg.resources) if ((o.amounts[r] ?? 0) !== d.amounts[r]) mismatch.push(r);
++        row.coreComparison = mismatch.length ? "mismatch" : "match_selected_scope";
++        row.coreMismatches = mismatch;
++      }
++      report.commitments = { status: "not_read", rows: null };
++      // Never manufacture empty inputs from missing/damaged/over-bound tables.
++      if (!tasks.value || !reservations.value) report.commitments = { status: "unavailable_legacy_input", rows: null };
++      else if (readers && observations && budget("commitmentBuild")) {
++        const commitmentOptions = { tick, tasks: tasks.value, reservations: reservations.value, observation: observations, compatDiagnostics: builderDiagnostics };
++        markCommitment("callStart");
++        if (safetyStop || (traceCommitment && latestCpu - start.used >= cfg.maxSampleCpu)) {
++          limited = true;
++          report.commitments = { status: "not_read_cpu_budget", rows: null };
++        } else {
++        accounting?.invoked("commitmentBuild");
++        const index = readers.buildCommitments(commitmentOptions);
++        markCommitment("callEnd");
++        const fields: Rec[] = [];
++        const projectionRowsPlanned = validRoomNames.length * cfg.resources.length;
++        builderDiagnostics?.boundary("projectionRows");
++        for (const name of validRoomNames) for (const resource of cfg.resources) {
++          if (!budget("commitmentProjection")) { limited = true; break; }
++          const outgoing = index.outgoing(name, resource), incoming = index.incoming(name, resource), reserved = index.reservedProduction(name, resource);
++          if (!nonneg(outgoing) || !nonneg(incoming) || !nonneg(reserved)) throw new Error("invalid index numbers");
++          fields.push({ room: name, resource, scope: "room_not_endpoint", outgoing, incoming,
++            productionReserved: reserved, completeness: index.commitmentCompleteness(name, resource) });
++        }
++        builderDiagnostics?.work({ projectionRowsPlanned, projectionRowsCompleted: fields.length, projectionIndexQueries: fields.length * 4 });
++        builderDiagnostics?.boundary();
++        const c = index.completeness;
++        if (!c || typeof c.complete !== "boolean" || typeof c.globalIncomplete !== "boolean"
++          || !nonneg(c.invalidRecords) || !nonneg(c.incompleteScopeCount)) throw new Error("invalid index health");
++        report.commitments = { status: limited ? "partial_cpu_budget" : c.complete ? "read_complete" : "read_incomplete",
++          rows: fields, completeness: { ...c }, allTableScan: true, tableLimitEach: TABLE_LIMIT };
++        }
++      } else if (!budget()) { limited = true; report.commitments = { status: "not_read_cpu_budget", rows: null }; }
++      if (!budget("report")) limited = true;
++      report.status = limited ? "partial_cpu_budget" : "sampled";
++      report.coreObservationRooms = observations ? validRoomNames : [];
++      report.requestedEndpointRows = cfg.rooms.length * 2;
++      report.collectedEndpointRows = rows.length;
++      if (accounting && !budget("serializationAndSize")) report.status = "partial_cpu_budget";
++      report.cpuBeforeSerializationAndEmit = latestCpu - start.used;
++      if (accounting) {
++        // Prefix of THIS sample. Serialization/emit are not known yet. The full
++        // completed measurement is published only by the NEXT emitted sample.
++        report.cpuProfile = accounting.snapshot("beforeSerialization");
++        report.previousCpuProfile = previousCpuProfile;
++      }
++      report.cooperativeBudget = true;
++      if (traceCommitment) report.diagnosticRevision = taskBoundaryDiagnostics ? "XIV" : "XIII";
++      if (localSafetyStop) report.localSafety = { thresholdCpu: 5, latched: !!safetyStop,
++        reason: safetyStop?.reason ?? null, scope: "preview_heap_instance", currentCallPreempted: false };
++      let line = JSON.stringify(report), status = report.status as string;
++      // One UTF-8 traversal per distinct output string. Reuse the size after
++      // emit instead of rescanning the identical (immutable) string.
++      let emittedBytes = compatUtf8Bytes(line);
++      if (emittedBytes > cfg.maxLogBytes) {
++        status = "output_limited";
++        line = JSON.stringify({ kind: "treasury-legacy-read-bridge", tick, status,
++          authorizesActions: false, previousRun });
++        emittedBytes = compatUtf8Bytes(line);
++      }
++      // Post-serialization sampling cannot retroactively change this report.
++      // The following sample carries the measured total, even when over budget.
++      if (accounting) budget("emit");
++      ports.emit(line);
++      const end = ports.cpu();
++      if (!validCpu(end) || end.used < latestCpu) throw new Error("invalid ending CPU");
++      accounting?.checkpoint(end.used, "retention");
++      latestCpu = end.used;
++      latch(tick!, end.used - start.used);
++      previous = status === "output_limited" ? undefined : next;
++      previousRun = { tick, cpuIncludingEmit: end.used - start.used, emittedBytes,
++        retainedPrimitiveChars: previous ? JSON.stringify(previous).length : 0 };
++      emitted = sat(emitted);
++      if (accounting) {
++        // Includes previous-snapshot sizing/bookkeeping. The final snapshot
++        // copy and return are outside the endpoint and explicitly not claimed.
++        budget();
++        previousCpuProfile = accounting.snapshot("afterRetention");
++      }
++      notifySafety();
++      return { status };
++    } catch {
++      fault = true; previous = undefined;
++      // A fault snapshot stops at the last VALID checkpoint; never guess the
++      // cost of a throwing stage or the catch/reporting path.
++      if (accounting) previousCpuProfile = accounting.snapshot("fault");
++      try { ports.emit(JSON.stringify({ kind: "treasury-legacy-read-bridge", tick: nonneg(tick) ? tick : null,
++        status: "fault_disabled", authorizesActions: false })); } catch { /* Do not stop old bot. */ }
++      return { status: "fault_disabled" };
++    }
++  }
++  return { run, stats: () => ({ fault, emitted, cpuSkips, retainedEndpoints: previous ? Object.keys(previous.endpoints).length : 0,
++    previousRun: previousRun ? { ...previousRun } : null,
++    cpuProfile: previousCpuProfile,
++    ...(localSafetyStop ? { safetyStopped: !!safetyStop, safetyReason: safetyStop?.reason ?? null } : {}) }) };
++}
+diff --git a/test/treasury-compat/hotpath-optimization.spec.cjs b/test/treasury-compat/hotpath-optimization.spec.cjs
+index d6c2cef..f16f397 100644
+--- a/test/treasury-compat/hotpath-optimization.spec.cjs
++++ b/test/treasury-compat/hotpath-optimization.spec.cjs
+@@ -10 +10 @@ for(const name of Object.keys(S.scenarios))test('hotpath XI diagnostics-off byte
+-test('hotpath XI observation reuses first sparse keys and removes one view Map',()=>{const a=operationCounts(beforeCore(),0,false,32),b=operationCounts(afterCore(),0,false,32);assert.deepEqual(b.semantics,a.semantics);assert.equal(a.observation.keys,8);assert.equal(b.observation.keys,4);assert.equal(a.observation.mapNew-b.observation.mapNew,1);});
++test('hotpath XI observation reuses sparse keys; XI and XV remove two eager view Maps',()=>{const a=operationCounts(beforeCore(),0,false,32),b=operationCounts(afterCore(),0,false,32);assert.deepEqual(b.semantics,a.semantics);assert.equal(a.observation.keys,8);assert.equal(b.observation.keys,4);assert.equal(a.observation.mapNew-b.observation.mapNew,2);});
+diff --git a/test/treasury-compat/read-envelope-xv.spec.cjs b/test/treasury-compat/read-envelope-xv.spec.cjs
+new file mode 100644
+index 0000000..dd0bb54
+--- /dev/null
++++ b/test/treasury-compat/read-envelope-xv.spec.cjs
+@@ -0,0 +1,28 @@
++'use strict';
++const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),crypto=require('node:crypto');
++const S=require('./loader-test-support.cjs'),H=S.H,fs=S.fs,path=S.path,ts=S.ts;
++const G=require('../../scripts/build-treasury-compat-loader.cjs'),B=require('./build-test-support.cjs');
++const read=n=>fs.readFileSync(H.file(n),'utf8');
++const old=n=>fs.readFileSync(path.join(__dirname,'fixtures/'+n+'-before-read-envelope-xv.ts.txt'),'utf8');
++const liveCore=()=>read('treasuryCompatReadCore.generated.ts'),liveReader=()=>read('treasuryCompatRead.ts');
++const sha=t=>crypto.createHash('sha256').update(t).digest('hex');
++function cpuApi(text){const c=vm.createContext({exports:{}});vm.runInContext(ts.transpileModule(text,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2019}}).outputText,c);return c.exports;}
++const beforeCpu=cpuApi(old('cpu')),afterCpu=cpuApi(read('treasuryCompatCpu.ts'));
++function pair(setup=()=>{},diagnostics=false){const a=S.make(old('core'),diagnostics),b=S.make(liveCore(),diagnostics);a.api=S.readerApi(old('reader'));for(const s of [a,b]){setup(s);const writes={writes:0};s.memory=H.guard(s.memory,writes);s.writes=writes;s.observer=s.api.createTreasuryCompatPreview(s.cfg,s.ports,{cpuDiagnostics:diagnostics,commitmentBoundaryDiagnostics:diagnostics,taskBoundaryDiagnostics:diagnostics,localSafetyStop:diagnostics});}for(let n=1;n<=4;n++){for(const s of [a,b]){s.game.time=n*100;s.cpuValue=.1;s.observer.run();}}assert.deepEqual(a.lines,b.lines);assert.deepEqual(H.json(a.observer.stats()),H.json(b.observer.stats()));assert.equal(a.writes.writes,0);assert.equal(b.writes.writes,0);assert.deepEqual(a.calls,b.calls);return {a,b};}
++test('XV historical fixtures authenticate exact accepted XIV bytes',()=>{assert.equal(sha(old('reader')),'75438e82c4b891fea5debe55d92d8de400252758d7b7e26139608eceab0f2e4e');assert.equal(sha(old('cpu')),'e95f80f679d7f36987294d6f8049c2f6987959fc9b95302289b66d27d0e44c1a');assert.equal(sha(old('core')),'8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6');});
++test('XV current generation and exact inverses retain every historical stage',()=>{for(const[n,f,inv,file]of [['reader',G.V.previewTransform,G.V.previewRestore,'treasuryCompatRead.ts'],['cpu',G.V.cpuTransform,G.V.cpuRestore,'treasuryCompatCpu.ts'],['core',G.V.coreTransform,G.V.coreRestore,'treasuryCompatReadCore.generated.ts']]){assert.equal(f(old(n)),read(file));assert.equal(inv(read(file)),old(n));assert.throws(()=>f(old(n)+old(n)),/READ_ENVELOPE_XV_TRANSFORM_COUNT/);assert.throws(()=>inv('shifted'),/READ_ENVELOPE_XV_TRANSFORM_COUNT/);}const ix=fs.readFileSync(path.join(H.ROOT,G.PREVIEW_FIXTURE),'utf8');assert.equal(G.P.transform(ix),liveReader());assert.equal(G.P.restore(liveReader()),ix);});
++const reader=S.readerApi(liveReader()),oldReader=S.readerApi(old('reader'));
++for(const[name,text]of Object.entries({empty:'',ascii:'ASCII\n\t\0"\\'.repeat(2000),bmp:'中文héllø'.repeat(100),astral:'😀𐐀'.repeat(500),loneHigh:'\ud800x\udbff',loneLow:'\udc00\udfff',mixed:'head\ud800\udc00\ud800tail中文',json:JSON.stringify({id:'中文😀\ud800',resource:'H',values:Array(100).fill(123)})}))test('XV exact UTF-8 size and historical equality: '+name,()=>{assert.equal(reader.compatUtf8Bytes(text),Buffer.byteLength(text));assert.equal(reader.compatUtf8Bytes(text),oldReader.compatUtf8Bytes(text));});
++test('XV UTF-8 deterministic random UTF-16 differential corpus preserves lone surrogates',()=>{let seed=13;for(let n=0;n<256;n++){let s='';for(let j=0;j<n%127;j++){seed=(Math.imul(seed,1664525)+1013904223)>>>0;s+=String.fromCharCode(seed>>>16);}assert.equal(reader.compatUtf8Bytes(s),Buffer.byteLength(s));assert.equal(reader.compatUtf8Bytes(s),oldReader.compatUtf8Bytes(s));}});
++test('XV ASCII path invokes no JS per-character loop; Unicode executes unchanged fallback',()=>{function count(text,input){const ctx=vm.createContext({exports:{},require:k=>H.load('treasuryCompatCpu.ts')});vm.runInContext('globalThis.charReads=0; const old=String.prototype.charCodeAt; String.prototype.charCodeAt=function(i){charReads++;return old.call(this,i);};'+ts.transpileModule(text,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2019}}).outputText,ctx);return {bytes:ctx.exports.compatUtf8Bytes(input),count:ctx.charReads};}const text='x'.repeat(8192);assert.deepEqual(count(old('reader'),text),{bytes:8192,count:8192});assert.deepEqual(count(liveReader(),text),{bytes:8192,count:0});assert.deepEqual(count(liveReader(),'x中😀'),count(old('reader'),'x中😀'));});
++for(const name of Object.keys(S.scenarios))test('XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: '+name,()=>pair(S.scenarios[name],true));
++for(const mode of ['inherited-accessor','own-accessor','nonenumerable','symbol','null-prototype','257-own'])test('XV full table own-data boundary preserved: '+mode,()=>pair(s=>{let table={t:S.task()};if(mode==='inherited-accessor')Object.setPrototypeOf(table,Object.defineProperty({},'evil',{enumerable:true,get(){throw Error('inherited getter invoked');}}));if(mode==='own-accessor')Object.defineProperty(table,'bad',{enumerable:true,get(){throw Error('own getter invoked');}});if(mode==='nonenumerable')Object.defineProperty(table,'hidden',{enumerable:false,value:S.task()});if(mode==='symbol')table[Symbol('hidden')]=S.task();if(mode==='null-prototype')table=Object.assign(Object.create(null),table);if(mode==='257-own')for(let n=0;n<257;n++)table[n]=S.task({id:'t'+n});s.memory.data.resourceControl.tasks=table;},true));
++test('XV removes exactly one redundant own-membership dispatch per enumerable table item',()=>{function measure(text){const apiText=text.replace('const own = (x: Rec, k: string) => Object.prototype.hasOwnProperty.call(x, k);','const own = (x: Rec, k: string) => { globalThis.__ownCalls++; return Object.prototype.hasOwnProperty.call(x, k); };');const s=S.make(liveCore(),false);const c=vm.createContext({exports:{},__ownCalls:0,require:k=>H.load('treasuryCompatCpu.ts')});vm.runInContext(ts.transpileModule(apiText,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2019}}).outputText,c);for(let n=0;n<54;n++)s.memory.data.resourceControl.tasks[n]=S.task({id:'t'+n});for(let n=0;n<12;n++)s.memory.runtime.resourceReservations[n]=S.reservation({holderId:'h'+n});const p=c.exports.createTreasuryCompatPreview(s.cfg,s.ports);p.run();return {calls:c.__ownCalls,line:s.lines[0]};}const a=measure(old('reader')),b=measure(liveReader());assert.equal(a.line,b.line);assert.equal(a.calls-b.calls,66);});
++test('XV observation query memo allocates only on first query, preserves frozen cache identity and sample isolation',()=>{function run(text){const s=S.make(text,false);let allocations=0;const marked=text.replace('let roomResourcesCache;','let roomResourcesCache;').replace('roomResourcesCache = new Map();','roomResourcesCache = (globalThis.__mapAllocations++, new Map());');const c=vm.createContext({exports:{},__mapAllocations:0,Game:s.game,Memory:s.memory,RESOURCES_ALL:s.resources});vm.runInContext(ts.transpileModule(marked,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2019}}).outputText,c);const r=c.exports.createCompatibilityReadCore();const o=r.buildObservation({scope:'market-fresh',epochSeq:1,rooms:Object.values(s.game.rooms)});allocations=c.__mapAllocations;const first=o.roomResources('W1N1');assert.ok(Object.isFrozen(first));assert.equal(o.roomResources('W1N1'),first);o.roomResources('__proto__');assert.equal(c.__mapAllocations,1);const other=r.buildObservation({scope:'market-fresh',epochSeq:2,rooms:Object.values(s.game.rooms)});assert.notEqual(other.roomResources('W1N1'),first);assert.equal(c.__mapAllocations,2);return {allocations,data:H.json(o.data),first:H.json(first)};}const a=run(old('core')),b=run(liveCore());assert.equal(a.allocations,1);assert.equal(b.allocations,0);assert.deepEqual(a.data,b.data);assert.deepEqual(a.first,b.first);});
++test('XV full index API remains equivalent on mixed, overflow and nonempty reservation corpus',()=>{for(let seed=1;seed<=16;seed++){const corpus=B.deterministicCorpus(seed,seed%2?57:256);const a=S.make(old('core'),false),b=S.make(liveCore(),false);for(const s of [a,b]){s.memory.data.resourceControl.tasks=H.json(corpus.tasks);s.memory.runtime.resourceReservations=H.json(corpus.reservations);s.game.time=300+seed;}assert.deepEqual(B.snapshot(S.build(a)),B.snapshot(S.build(b)));}});
++function both(actions){let results=[];for(const api of [beforeCpu,afterCpu]){const a=api.createCompatCpuAccounting(0,100,1,true,true),out=[];for(const [f,...args]of actions){try{a[f](...args);out.push({ok:true});}catch(e){out.push({error:e.message});}out.push(H.json(a.snapshot('fault')));}results.push(out);}assert.deepEqual(results[1],results[0]);}
++test('XV accounting membership retains strict unknown-key rejection, prefix partial updates and getter evaluation order',()=>{const values={observationRooms:2};Object.defineProperty(values,'bad',{enumerable:true,get(){return 1;}});both([['attributionWork',values],['checkpoint',.1,'directRead'],['checkpoint',.2,'__proto__'],['checkpoint',.2,'toString'],['attributionBoundary',.3,'toString'],['invoked','constructor'],['attributionWork',{observationRooms:Number.MAX_SAFE_INTEGER}],['attributionWork',{observationRooms:1}],['attributionWork',{}]]);});
++test('XV work snapshots distinguish absent keys from measured zero without allocating a key list',()=>{both([['attributionWork',{}],['attributionWork',{observationRooms:0}],['attributionWork',{observationRooms:2}],['attributionWork',{observationExistingLocations:-1}],['attributionWork',{observationExistingLocations:0}]]);});
++test('XV CPU start values and runtime null-next compatibility remain identical',()=>{for(const n of [NaN,Infinity,-1,0,.25])for(const api of [beforeCpu,afterCpu]){if(!Number.isFinite(n)||n<0)assert.throws(()=>api.createCompatCpuAccounting(n,100,1));else assert.doesNotThrow(()=>api.createCompatCpuAccounting(n,100,1));}both([['checkpoint',.1,null],['checkpoint',.2,undefined],['checkpoint',.3,'commitmentBuild'],['invoked','commitmentBuild'],['commitmentMark','callStart',.4],['attributionBoundary',.5,'commitmentSetup'],['attributionBoundary',.6,'commitmentTasks'],['taskMark','firstPendingStart',.7,1],['taskMark','firstPendingEnd',.8,1],['attributionBoundary',.9,'commitmentReservations'],['attributionBoundary',1,'commitmentFinalize'],['attributionBoundary',1.1],['commitmentMark','callEnd',1.2],['checkpoint',1.3,'report']]);});
++test('XV snapshot copies and tail-only completion remain immutable and unlinked',()=>{for(const api of [beforeCpu,afterCpu]){const a=api.createCompatCpuAccounting(0,100,1,true,true);a.attributionWork({observationRooms:0});const p=a.snapshot('beforeSerialization');a.attributionWork({observationRooms:2});assert.equal(p.attribution.work.observationRooms,0);assert.ok(Object.isFrozen(p));assert.ok(Object.isFrozen(p.attribution.work));a.checkpoint(.1,'serializationAndSize');a.checkpoint(.2,'emit');a.checkpoint(.3,'retention');a.checkpoint(.4);const tail=a.snapshot('afterRetention');assert.equal(tail.completion,'tail_only');assert.equal(tail.attribution,undefined);assert.equal(tail.commitmentEnvelope,undefined);assert.equal(tail.taskEnvelope,undefined);}});
++test('XV CPU observations, full report schema and output-limit decisions are not reduced',()=>{for(const maxLogBytes of [1024,4096,16384])pair(s=>{s.cfg={...s.cfg,maxLogBytes};s.memory.data.resourceControl.tasks={t:S.task()};s.game.rooms.W1N1.storage.id='多字节😀'.repeat(8);},true);});
+diff --git a/test/treasury-compat/task-hotpath-xiv.spec.cjs b/test/treasury-compat/task-hotpath-xiv.spec.cjs
+index 051bba8..5725619 100644
+--- a/test/treasury-compat/task-hotpath-xiv.spec.cjs
++++ b/test/treasury-compat/task-hotpath-xiv.spec.cjs
+@@ -12 +12 @@ function oldNew(setup){const a=S.make(beforeCore(),false),b=S.make(liveCore(),fa
+-test('XIV exact core/preview inverses, including current public H and P chains',()=>{assert.equal(G.T.coreTransform(beforeCore()),liveCore());assert.equal(G.T.coreRestore(liveCore()),beforeCore());assert.equal(G.T.previewTransform(beforeReader()),liveReader());assert.equal(G.T.previewRestore(liveReader()),beforeReader());const ix=fs.readFileSync(path.join(__dirname,'fixtures/core-before-hotpath-optimization-xi.ts.txt'),'utf8');assert.equal(G.H.transform(ix),liveCore());assert.equal(G.H.restore(liveCore()),ix);});
++test('XIV exact core/preview inverses, including current public H and P chains',()=>{assert.equal(G.T.coreTransform(beforeCore()),G.V.coreRestore(liveCore()));assert.equal(G.T.coreRestore(G.V.coreRestore(liveCore())),beforeCore());assert.equal(G.T.previewTransform(beforeReader()),G.V.previewRestore(liveReader()));assert.equal(G.T.previewRestore(G.V.previewRestore(liveReader())),beforeReader());const ix=fs.readFileSync(path.join(__dirname,'fixtures/core-before-hotpath-optimization-xi.ts.txt'),'utf8');assert.equal(G.H.transform(ix),liveCore());assert.equal(G.H.restore(liveCore()),ix);});

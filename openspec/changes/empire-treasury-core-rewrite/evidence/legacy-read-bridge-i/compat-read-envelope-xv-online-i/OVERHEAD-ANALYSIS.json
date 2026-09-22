@@ -1,0 +1,50 @@
+{
+  "kind": "read-envelope-XV-overhead-analysis/v1",
+  "captureStatus": "NOT_DEPLOYED",
+  "closure": "NOT_DEPLOYED",
+  "baseline": {
+    "file": "references/prior-XIV-retry-I-review.json",
+    "sha256": "cb9b13a212fbdf52bbe06ff00356e467518a0a948037fd91112e619fc674e4a5",
+    "evidenceCommit": "427080341d08fcfe5569149c6fefcbb8e4059840"
+  },
+  "accepted": {
+    "count": 0,
+    "commitmentCalls": 0,
+    "completeBusinessSamples": 0,
+    "prefixCpu": {
+      "count": 0,
+      "minimum": null,
+      "median": null,
+      "maximum": null
+    },
+    "preCommitmentCpu": {
+      "count": 0,
+      "minimum": null,
+      "median": null,
+      "maximum": null
+    },
+    "actualCommitmentCallCpu": {
+      "count": 0,
+      "minimum": null,
+      "median": null,
+      "maximum": null
+    },
+    "tailCpu": {
+      "count": 0,
+      "minimum": null,
+      "median": null,
+      "maximum": null
+    }
+  },
+  "rejectedForensicOnly": [],
+  "rows": [],
+  "instrumentationCostSubtracted": false,
+  "estimatedMissingTails": 0,
+  "newCpuProbes": 0,
+  "diagnosticWireRevision": "XIV",
+  "sourceImplementationRevision": "XV",
+  "engineCpuGapRepaired": false,
+  "rootCauseAssigned": false,
+  "fullCompatibilityObserved": false,
+  "interpretation": "Prefix and measured tail are disjoint. Nested call/body/task intervals overlap parent phases and are never added twice. A not-called builder has no measured call cost. Missing tails stay null. Different ticks and workloads are not a causal speedup comparison."
+}

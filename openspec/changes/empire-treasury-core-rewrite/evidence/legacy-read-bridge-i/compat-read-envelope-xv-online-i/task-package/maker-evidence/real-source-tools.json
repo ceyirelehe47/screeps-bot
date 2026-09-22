@@ -1,0 +1,35 @@
+{
+  "status": "REAL_SOURCE_PATCH_RESUME_ON_OFF_VERIFIED",
+  "base": "eba6a0df574c9cb6101bd3d7e5ebae729d3dd976",
+  "baseTree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+  "apply": {
+    "head": "41452f42156ddab714d8246826c9c62c601f2986",
+    "tree": "cf3169d5e14892249488b333837b7e840b565cce",
+    "base": "eba6a0df574c9cb6101bd3d7e5ebae729d3dd976",
+    "paths": 16,
+    "status": "READ_XV_SOURCE_APPLIED",
+    "resumed": false
+  },
+  "resumed": {
+    "head": "41452f42156ddab714d8246826c9c62c601f2986",
+    "tree": "cf3169d5e14892249488b333837b7e840b565cce",
+    "base": "eba6a0df574c9cb6101bd3d7e5ebae729d3dd976",
+    "paths": 16,
+    "status": "READ_XV_SOURCE_REUSED_VERIFIED",
+    "resumed": true
+  },
+  "onHead": "e0849862fc7037e86061881922436457595d4637",
+  "offHead": "3e34027e248225ddb174c3383422bf7d6c37d40f",
+  "finalTree": "cf3169d5e14892249488b333837b7e840b565cce",
+  "sourceCommits": 1,
+  "configurationCommits": 2,
+  "closed": {
+    "head": "3e34027e248225ddb174c3383422bf7d6c37d40f",
+    "bound": true,
+    "sourceHead": "41452f42156ddab714d8246826c9c62c601f2986",
+    "profileHead": "e0849862fc7037e86061881922436457595d4637"
+  },
+  "onlineRequests": 0,
+  "syntheticTickClock": true,
+  "historyCoverage": "authentic shallow baseline object and complete source tree, not full remote history"
+}

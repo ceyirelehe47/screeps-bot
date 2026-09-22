@@ -1,0 +1,286 @@
+TAP version 13
+# Subtest: XV historical fixtures authenticate exact accepted XIV bytes
+ok 1 - XV historical fixtures authenticate exact accepted XIV bytes
+  ---
+  duration_ms: 4.328899
+  type: 'test'
+  ...
+# Subtest: XV current generation and exact inverses retain every historical stage
+ok 2 - XV current generation and exact inverses retain every historical stage
+  ---
+  duration_ms: 8.504858
+  type: 'test'
+  ...
+# Subtest: XV exact UTF-8 size and historical equality: empty
+ok 3 - XV exact UTF-8 size and historical equality: empty
+  ---
+  duration_ms: 0.413529
+  type: 'test'
+  ...
+# Subtest: XV exact UTF-8 size and historical equality: ascii
+ok 4 - XV exact UTF-8 size and historical equality: ascii
+  ---
+  duration_ms: 1.362886
+  type: 'test'
+  ...
+# Subtest: XV exact UTF-8 size and historical equality: bmp
+ok 5 - XV exact UTF-8 size and historical equality: bmp
+  ---
+  duration_ms: 0.336881
+  type: 'test'
+  ...
+# Subtest: XV exact UTF-8 size and historical equality: astral
+ok 6 - XV exact UTF-8 size and historical equality: astral
+  ---
+  duration_ms: 0.605401
+  type: 'test'
+  ...
+# Subtest: XV exact UTF-8 size and historical equality: loneHigh
+ok 7 - XV exact UTF-8 size and historical equality: loneHigh
+  ---
+  duration_ms: 0.138184
+  type: 'test'
+  ...
+# Subtest: XV exact UTF-8 size and historical equality: loneLow
+ok 8 - XV exact UTF-8 size and historical equality: loneLow
+  ---
+  duration_ms: 0.090788
+  type: 'test'
+  ...
+# Subtest: XV exact UTF-8 size and historical equality: mixed
+ok 9 - XV exact UTF-8 size and historical equality: mixed
+  ---
+  duration_ms: 0.688581
+  type: 'test'
+  ...
+# Subtest: XV exact UTF-8 size and historical equality: json
+ok 10 - XV exact UTF-8 size and historical equality: json
+  ---
+  duration_ms: 0.842301
+  type: 'test'
+  ...
+# Subtest: XV UTF-8 deterministic random UTF-16 differential corpus preserves lone surrogates
+ok 11 - XV UTF-8 deterministic random UTF-16 differential corpus preserves lone surrogates
+  ---
+  duration_ms: 17.060262
+  type: 'test'
+  ...
+# Subtest: XV ASCII path invokes no JS per-character loop; Unicode executes unchanged fallback
+ok 12 - XV ASCII path invokes no JS per-character loop; Unicode executes unchanged fallback
+  ---
+  duration_ms: 385.759444
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: empty
+ok 13 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: empty
+  ---
+  duration_ms: 462.395372
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: manual
+ok 14 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: manual
+  ---
+  duration_ms: 404.67908
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: sixteen
+ok 15 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: sixteen
+  ---
+  duration_ms: 400.984895
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: bound256
+ok 16 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: bound256
+  ---
+  duration_ms: 378.133149
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: overBound257
+ok 17 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: overBound257
+  ---
+  duration_ms: 340.239618
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: invalidRecord
+ok 18 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: invalidRecord
+  ---
+  duration_ms: 436.142462
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: invalidResource
+ok 19 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: invalidResource
+  ---
+  duration_ms: 315.457386
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: missingTasks
+ok 20 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: missingTasks
+  ---
+  duration_ms: 315.209525
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: invalidReservationContainer
+ok 21 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: invalidReservationContainer
+  ---
+  duration_ms: 379.546572
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: activeReservation
+ok 22 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: activeReservation
+  ---
+  duration_ms: 294.365943
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: expiredReservation
+ok 23 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: expiredReservation
+  ---
+  duration_ms: 299.784928
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: exactExpiry
+ok 24 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: exactExpiry
+  ---
+  duration_ms: 304.877371
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: missingOwner
+ok 25 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: missingOwner
+  ---
+  duration_ms: 353.900565
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: typedOwner
+ok 26 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: typedOwner
+  ---
+  duration_ms: 369.484207
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: capacity8M
+ok 27 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: capacity8M
+  ---
+  duration_ms: 289.991952
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: saturatedCapacity
+ok 28 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: saturatedCapacity
+  ---
+  duration_ms: 298.638672
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: missingTerminal
+ok 29 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: missingTerminal
+  ---
+  duration_ms: 295.550707
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: unseenRoom
+ok 30 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: unseenRoom
+  ---
+  duration_ms: 295.119957
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: sparseMismatch
+ok 31 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: sparseMismatch
+  ---
+  duration_ms: 278.169633
+  type: 'test'
+  ...
+# Subtest: XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: legacyMismatch
+ok 32 - XV all diagnostic fields byte-parity, CPU port calls and no Memory writes: legacyMismatch
+  ---
+  duration_ms: 298.772167
+  type: 'test'
+  ...
+# Subtest: XV full table own-data boundary preserved: inherited-accessor
+ok 33 - XV full table own-data boundary preserved: inherited-accessor
+  ---
+  duration_ms: 287.075229
+  type: 'test'
+  ...
+# Subtest: XV full table own-data boundary preserved: own-accessor
+ok 34 - XV full table own-data boundary preserved: own-accessor
+  ---
+  duration_ms: 264.790481
+  type: 'test'
+  ...
+# Subtest: XV full table own-data boundary preserved: nonenumerable
+ok 35 - XV full table own-data boundary preserved: nonenumerable
+  ---
+  duration_ms: 266.662499
+  type: 'test'
+  ...
+# Subtest: XV full table own-data boundary preserved: symbol
+ok 36 - XV full table own-data boundary preserved: symbol
+  ---
+  duration_ms: 265.291063
+  type: 'test'
+  ...
+# Subtest: XV full table own-data boundary preserved: null-prototype
+ok 37 - XV full table own-data boundary preserved: null-prototype
+  ---
+  duration_ms: 275.958551
+  type: 'test'
+  ...
+# Subtest: XV full table own-data boundary preserved: 257-own
+ok 38 - XV full table own-data boundary preserved: 257-own
+  ---
+  duration_ms: 270.30034
+  type: 'test'
+  ...
+# Subtest: XV removes exactly one redundant own-membership dispatch per enumerable table item
+ok 39 - XV removes exactly one redundant own-membership dispatch per enumerable table item
+  ---
+  duration_ms: 316.825355
+  type: 'test'
+  ...
+# Subtest: XV observation query memo allocates only on first query, preserves frozen cache identity and sample isolation
+ok 40 - XV observation query memo allocates only on first query, preserves frozen cache identity and sample isolation
+  ---
+  duration_ms: 334.656832
+  type: 'test'
+  ...
+# Subtest: XV full index API remains equivalent on mixed, overflow and nonempty reservation corpus
+ok 41 - XV full index API remains equivalent on mixed, overflow and nonempty reservation corpus
+  ---
+  duration_ms: 3799.906558
+  type: 'test'
+  ...
+# Subtest: XV accounting membership retains strict unknown-key rejection, prefix partial updates and getter evaluation order
+ok 42 - XV accounting membership retains strict unknown-key rejection, prefix partial updates and getter evaluation order
+  ---
+  duration_ms: 3.197715
+  type: 'test'
+  ...
+# Subtest: XV work snapshots distinguish absent keys from measured zero without allocating a key list
+ok 43 - XV work snapshots distinguish absent keys from measured zero without allocating a key list
+  ---
+  duration_ms: 0.699724
+  type: 'test'
+  ...
+# Subtest: XV CPU start values and runtime null-next compatibility remain identical
+ok 44 - XV CPU start values and runtime null-next compatibility remain identical
+  ---
+  duration_ms: 2.104355
+  type: 'test'
+  ...
+# Subtest: XV snapshot copies and tail-only completion remain immutable and unlinked
+ok 45 - XV snapshot copies and tail-only completion remain immutable and unlinked
+  ---
+  duration_ms: 0.533717
+  type: 'test'
+  ...
+# Subtest: XV CPU observations, full report schema and output-limit decisions are not reduced
+ok 46 - XV CPU observations, full report schema and output-limit decisions are not reduced
+  ---
+  duration_ms: 801.762749
+  type: 'test'
+  ...
+1..46
+# tests 46
+# suites 0
+# pass 46
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 15615.093804
