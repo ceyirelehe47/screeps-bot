@@ -1,0 +1,37 @@
+{
+  "kind": "resolved-read-path-R1/v1",
+  "receipt": {
+    "package": {
+      "files": 35,
+      "fingerprint": "ff46734752633d9c703d1f7fe582ab6938769c5538138ed60dee38b03e1bdb6f"
+    },
+    "prior": {
+      "finalBlob": "f26c353bcd1dd037978d5c4388a1f0d6859c185b",
+      "recoveryBlob": "27e2fca9554a61d7e8bd37a9d486ca08667ab30e",
+      "status": "CPU_DIAGNOSTIC_CAPTURE_VERIFIED"
+    },
+    "repairOfPackage": "16748d84263e823f06282c45a35e8bc4d85f307bc1c8494df5da25726106ac68",
+    "at": "2026-09-23T15:18:21.192Z"
+  },
+  "source": {
+    "head": "9c57330f262d9a52924c4696811fd4de15a0e017",
+    "tree": "6355f63048720ac3edfbeef91de526f3deaca203",
+    "base": "3b631372213e5e616426434954f29b0792557cb7",
+    "paths": 2,
+    "repaired": true,
+    "originalR1Head": "3b631372213e5e616426434954f29b0792557cb7"
+  },
+  "sourcePaths": [
+    "test/treasury-compat/attribution.spec.cjs",
+    "test/treasury-compat/hotpath-optimization.spec.cjs"
+  ],
+  "inheritedIntegrity": "82f7dbfec7c20fa81001daa54a61553d23b5dd05e97176ade0fece2d9985a712",
+  "changedInheritedFiles": [
+    "policy.json",
+    "source-manifest.json"
+  ],
+  "reusedRuntimeBytesUnchanged": true,
+  "inheritedStatusLabelsAreProtocolOnly": true,
+  "historicalPriorAttempt": "XV zero-deployment record remains an inherited historical gate; the outer preparer additionally pins the latest successful XV trial and recovery.",
+  "makerBoundary": "See r1-delivery/MAKER-VALIDATION.json for actual maker coverage. The complete 165-tool and 467-repository gates, both tsc projects, replay, Jest and Rollup remain mandatory on the execution host before upload."
+}

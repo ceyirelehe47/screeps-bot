@@ -1,0 +1,68 @@
+{
+  "status": "R1_V2_FORWARD_REPAIR_COMMITTED_NOT_YET_PUBLISHED",
+  "source": {
+    "head": "9c57330f262d9a52924c4696811fd4de15a0e017",
+    "tree": "6355f63048720ac3edfbeef91de526f3deaca203",
+    "base": "3b631372213e5e616426434954f29b0792557cb7",
+    "paths": 2,
+    "repaired": true,
+    "originalR1Head": "3b631372213e5e616426434954f29b0792557cb7"
+  },
+  "manifest": {
+    "kind": "read-path-R1-v2-source/v1",
+    "base": "3b631372213e5e616426434954f29b0792557cb7",
+    "baseTree": "2520a0b89429c2ae89fe12453047eecb7c14c0cd",
+    "expectedSourceTree": "6355f63048720ac3edfbeef91de526f3deaca203",
+    "files": {
+      "test/treasury-compat/attribution.spec.cjs": {
+        "before": {
+          "bytes": 15452,
+          "sha256": "18315cb5505d8a222acc9319218311354d4bcfe36654d4c40f518092bf7fa13c",
+          "blob": "5617c5dbc3a2981a76b46f341f2fb51d7cdd27b3"
+        },
+        "after": {
+          "bytes": 15861,
+          "sha256": "a4e7f72cbf5c77e74d3de3135feaa67a6fc27acd31eadb5199c4b6b8831f16ea",
+          "blob": "2c2c99de6951ad7c3cecf10c7f34d39bd3c3e49d"
+        }
+      },
+      "test/treasury-compat/hotpath-optimization.spec.cjs": {
+        "before": {
+          "bytes": 6525,
+          "sha256": "0244f57a98f0df3a054a11fd6c77280bc6f15f934f9204ff2021e4f960df5750",
+          "blob": "f16f3975c6bc0cfa92df89cb7b9417e60a3027f4"
+        },
+        "after": {
+          "bytes": 6817,
+          "sha256": "f2c33b4a6db24e9436745623b86608ef691efd9eea57a58b0dde120ea5fb3c7a",
+          "blob": "5ac625f6d87b056fac0f4c67fbc5f2db9b134c07"
+        }
+      }
+    }
+  },
+  "inheritance": {
+    "commit": "0e2b71adb095b5ff8dd78540480c5ae53dfcc320",
+    "prefix": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i-retry-i/task-package",
+    "files": 66,
+    "integritySha256": "82f7dbfec7c20fa81001daa54a61553d23b5dd05e97176ade0fece2d9985a712"
+  },
+  "receipt": {
+    "package": {
+      "files": 35,
+      "fingerprint": "ff46734752633d9c703d1f7fe582ab6938769c5538138ed60dee38b03e1bdb6f"
+    },
+    "prior": {
+      "finalBlob": "f26c353bcd1dd037978d5c4388a1f0d6859c185b",
+      "recoveryBlob": "27e2fca9554a61d7e8bd37a9d486ca08667ab30e",
+      "status": "CPU_DIAGNOSTIC_CAPTURE_VERIFIED"
+    },
+    "repairOfPackage": "16748d84263e823f06282c45a35e8bc4d85f307bc1c8494df5da25726106ac68",
+    "at": "2026-09-23T15:18:21.192Z"
+  },
+  "originalR1": {
+    "head": "3b631372213e5e616426434954f29b0792557cb7",
+    "tree": "2520a0b89429c2ae89fe12453047eecb7c14c0cd",
+    "base": "477a20c9e9480598d911226f555a84ec5098c3fe",
+    "paths": 9
+  }
+}

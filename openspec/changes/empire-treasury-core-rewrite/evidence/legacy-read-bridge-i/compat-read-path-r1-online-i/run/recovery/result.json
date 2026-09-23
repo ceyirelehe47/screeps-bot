@@ -1,0 +1,38 @@
+{
+  "status": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+  "runtimeConfirmed": true,
+  "bytesConfirmed": true,
+  "uploadOutcomeResolved": true,
+  "error": null,
+  "restoration": {
+    "status": "RESTORED_BYTES_CONFIRMED",
+    "confirmed": true,
+    "requestAttempted": true,
+    "accepted": true,
+    "error": null,
+    "digest": {
+      "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+      "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+      "files": [
+        {
+          "name": "main",
+          "kind": "text",
+          "bytes": 4494463,
+          "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+        }
+      ]
+    },
+    "atMs": 1790180015100
+  },
+  "runtime": {
+    "status": "RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED",
+    "durationMs": 75147,
+    "consoleFrames": 20,
+    "cpuFrames": 21,
+    "positiveCpuFramesAfterReady": 20,
+    "maxConsoleGapMs": 4889,
+    "maxCpuGapMs": 4889,
+    "closureId": "618bd9ae86f1942aa73534924e9d7046"
+  },
+  "atMs": 1790180137505
+}

@@ -1,0 +1,21 @@
+{
+  "status": "R1_V2_PREPARED",
+  "source": {
+    "head": "9c57330f262d9a52924c4696811fd4de15a0e017",
+    "tree": "6355f63048720ac3edfbeef91de526f3deaca203",
+    "base": "3b631372213e5e616426434954f29b0792557cb7",
+    "paths": 2,
+    "repaired": true,
+    "originalR1Head": "3b631372213e5e616426434954f29b0792557cb7"
+  },
+  "executor": "D:\\code\\screeps\\treasury-read-path-R1-v2-repair-execution\\executor",
+  "executorFingerprint": "8a80fe883e00a743f706934479042ddb718f3c025d36561b8c3e8745b6bd2a12",
+  "inheritance": {
+    "commit": "0e2b71adb095b5ff8dd78540480c5ae53dfcc320",
+    "prefix": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i-retry-i/task-package",
+    "files": 66,
+    "integritySha256": "82f7dbfec7c20fa81001daa54a61553d23b5dd05e97176ade0fece2d9985a712"
+  },
+  "fullOfflineGatePassed": false,
+  "onlinePosts": 0
+}

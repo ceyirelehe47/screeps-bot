@@ -1,0 +1,71 @@
+{
+  "runId": "abad5bd5374cbb8df077c6d0d778ef5a",
+  "packageFingerprint": "8a80fe883e00a743f706934479042ddb718f3c025d36561b8c3e8745b6bd2a12",
+  "windowSelectionFileSha256": "6177cd5a4565184eff3b4de3988991272cf0cc124a8f293e3dd053378d48e2f6",
+  "timingMeasurementFileSha256": "5d64b86802917c3a9639486bf4f8dcac65f79977e5490755c66d4a77982e9b38",
+  "timingBindingFileSha256": "0f1846fd6855b56527d6d5dd2887ff988504557484f748dc1c9e999931351c30",
+  "source": {
+    "head": "9c57330f262d9a52924c4696811fd4de15a0e017",
+    "tree": "6355f63048720ac3edfbeef91de526f3deaca203",
+    "base": "9c57330f262d9a52924c4696811fd4de15a0e017",
+    "paths": 2,
+    "sourceModified": false,
+    "implementationHead": "9c57330f262d9a52924c4696811fd4de15a0e017"
+  },
+  "profileHead": "95cee5fcb15c94d04b1af8b130dbf41f52e60fb6",
+  "profileTree": "bd33d1d2e793ecca828985b0ba4061212297fc5d",
+  "profile": {
+    "enabled": true,
+    "shardName": "shard1",
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "startTick": 73895200,
+    "endTick": 73895500,
+    "intervalTicks": 100,
+    "minBucket": 2000,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "maxLogBytes": 16384
+  },
+  "observedTick": 73894952,
+  "preparedAtMs": 1790177833261,
+  "build": {
+    "commit": "95cee5fcb15c94d04b1af8b130dbf41f52e60fb6",
+    "tree": "bd33d1d2e793ecca828985b0ba4061212297fc5d",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+95cee5f@2026-09-23T15:36:22.110Z",
+    "embeddedBundleHash": "4fa5c77a64dd97f894ee3acdacd938a5ff2e3b54daacde99aa2a1b5130ec8e0d"
+  },
+  "candidateDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "4c8c288d37b8374869fcaf3136e998834a05d5cf4f32be0a73f8366cb35e4d63",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4621972,
+        "sha256": "04818ad82dcd9dc97a96cb9ef0d0dda916ee62077025fe2903568a395fa847ae"
+      }
+    ]
+  },
+  "backupDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494463,
+        "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+      }
+    ]
+  },
+  "backupFileSha256": "0c9761ad2e10428ddf9ee9e2027da5623010a9b7eafcd40a20c2cffe543d4615",
+  "candidateFileSha256": "bb0a321b91bb48fc5361ea7c6f05ff4a38983eb987cbab2bc849f9de32d48127"
+}

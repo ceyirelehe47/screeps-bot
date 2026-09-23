@@ -1,0 +1,93 @@
+{
+  "kind": "compat-read-envelope-XV-online-I-retry-I/v1",
+  "authorizationId": "treasury-read-path-R1-online-I-2026-09-23",
+  "parentRunId": "abad5bd5374cbb8df077c6d0d778ef5a",
+  "expected": {
+    "server": "https://screeps.com",
+    "username": "forster",
+    "userId": "634fe406347a7b69b28aeccb",
+    "branch": "default",
+    "shard": "shard1"
+  },
+  "backupDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494463,
+        "sha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b"
+      }
+    ]
+  },
+  "backupBuild": {
+    "commit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+    "tree": "929fa9557b1a36135a5ef1605231be1d16e87366",
+    "dirty": "folded_out",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+06ffedb@2026-08-29T14:28:59.403Z"
+  },
+  "guardBlob": "796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8",
+  "compatBase": "9c57330f262d9a52924c4696811fd4de15a0e017",
+  "compatBaseTree": "6355f63048720ac3edfbeef91de526f3deaca203",
+  "refactorBase": "0e2b71adb095b5ff8dd78540480c5ae53dfcc320",
+  "compatBranch": "compat/treasury-read-bridge-i",
+  "refactorBranch": "refactor/empire-treasury-rearchitecture",
+  "sourceMessage": "test(compat): isolate historical assertions from R1 read-path changes",
+  "evidenceMessage": "evidence(compat): read path R1 bounded trial and independent recovery",
+  "evidencePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-path-r1-online-i",
+  "runtimeMs": 75000,
+  "runtimeStartupMs": 90000,
+  "runtimeSilenceMs": 45000,
+  "readinessMs": 1800000,
+  "requestMs": 60000,
+  "writeMs": 60000,
+  "recoveryReadMs": 600000,
+  "wallMs": 4500000,
+  "safetyCpu": 5,
+  "points": 4,
+  "rooms": [
+    "E3N59",
+    "E4N58"
+  ],
+  "resources": [
+    "energy",
+    "H"
+  ],
+  "repositoryNodeTests": 467,
+  "jestSuites": 195,
+  "jestTests": 685,
+  "compilerVersion": "5.9.3",
+  "priorRecoveryPath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i-retry-i/run/recovery/result.json",
+  "priorRecoveryBlob": "27e2fca9554a61d7e8bd37a9d486ca08667ab30e",
+  "timing": {
+    "measurementMaxMs": 300000,
+    "minSamples": 7,
+    "minSpanMs": 120000,
+    "minTickAdvance": 20,
+    "pollMs": 20000,
+    "requestMs": 15000,
+    "safetyFactor": 1.5,
+    "floorMsPerTick": 5000,
+    "deliveryReserveMs": 240000,
+    "maxAgeMs": 600000,
+    "freshReadMaxMs": 5000,
+    "clockDriftMs": 2000
+  },
+  "implementationHead": "9c57330f262d9a52924c4696811fd4de15a0e017",
+  "implementationBase": "3b631372213e5e616426434954f29b0792557cb7",
+  "priorAttemptPath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i/FINAL-VERIFICATION.json",
+  "priorAttemptBlob": "5aab63fdd94f7cabbc42292f4f17f76aa66feb3e",
+  "selection": {
+    "maxMs": 1800000,
+    "maxRounds": 6,
+    "probeMaxMs": 240000,
+    "probePollMs": 20000,
+    "maxProbesPerRound": 16,
+    "identityMaxMs": 90000,
+    "minimumSlackMs": 180000
+  },
+  "readPathImplementation": "READ-PATH-R1",
+  "inheritedExecutionProtocol": "compat-read-envelope-XV-online-I-retry-I/v1"
+}

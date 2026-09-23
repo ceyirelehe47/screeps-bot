@@ -1,0 +1,171 @@
+{
+  "kind": "read-path-R1-milestone/v1",
+  "experimentStatus": "CPU_DIAGNOSTIC_CAPTURE_VERIFIED",
+  "recoveryStatus": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+  "sourceOff": true,
+  "fullCompatibilityObserved": false,
+  "productionSwitchAuthorized": false,
+  "secondWindowAuthorized": false,
+  "fifthPointAuthorized": false,
+  "rootCauseAssigned": false,
+  "readPathBudget": 2,
+  "clearMarginTargetCpu": 0.2,
+  "legacyProjectionMismatches": [
+    {
+      "tick": 73895200,
+      "room": "E4N58",
+      "location": "terminal",
+      "fields": [
+        "terminalUsedCapacity",
+        "terminalFreeCapacity",
+        "terminalEnergy"
+      ]
+    },
+    {
+      "tick": 73895400,
+      "room": "E4N58",
+      "location": "terminal",
+      "fields": [
+        "terminalUsedCapacity",
+        "terminalFreeCapacity",
+        "terminalEnergy"
+      ]
+    },
+    {
+      "tick": 73895500,
+      "room": "E4N58",
+      "location": "terminal",
+      "fields": [
+        "terminalUsedCapacity",
+        "terminalFreeCapacity",
+        "terminalEnergy"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "tick": 73895200,
+      "complete": false,
+      "prefixCpu": 2.8842814000017825,
+      "errors": [
+        "BUSINESS_STATUS",
+        "CPU_BUDGET",
+        "ACTUAL_BUILDERS",
+        "PROJECTION_WORK",
+        "COMMITMENT_COUNT",
+        "COMMITMENT_HEALTH",
+        "PROJECTION:E3N59:energy",
+        "PROJECTION:E3N59:H",
+        "PROJECTION:E4N58:energy",
+        "PROJECTION:E4N58:H"
+      ]
+    },
+    {
+      "tick": 73895300,
+      "complete": false,
+      "prefixCpu": 3.215179500002705,
+      "errors": [
+        "BUSINESS_STATUS",
+        "CPU_BUDGET",
+        "PROJECTION_WORK",
+        "COMMITMENT_COUNT",
+        "PROJECTION:E3N59:energy",
+        "PROJECTION:E3N59:H",
+        "PROJECTION:E4N58:energy",
+        "PROJECTION:E4N58:H"
+      ]
+    },
+    {
+      "tick": 73895400,
+      "complete": false,
+      "prefixCpu": 2.557102600010694,
+      "errors": [
+        "BUSINESS_STATUS",
+        "CPU_BUDGET",
+        "PROJECTION_WORK",
+        "COMMITMENT_COUNT",
+        "PROJECTION:E3N59:energy",
+        "PROJECTION:E3N59:H",
+        "PROJECTION:E4N58:energy",
+        "PROJECTION:E4N58:H"
+      ]
+    },
+    {
+      "tick": 73895500,
+      "complete": false,
+      "prefixCpu": 2.4822537999934866,
+      "errors": [
+        "BUSINESS_STATUS",
+        "CPU_BUDGET",
+        "PROJECTION_WORK",
+        "COMMITMENT_COUNT",
+        "PROJECTION:E3N59:energy",
+        "PROJECTION:E3N59:H",
+        "PROJECTION:E4N58:energy",
+        "PROJECTION:E4N58:H"
+      ]
+    }
+  ],
+  "note": "The 0.2 margin is an explicit readiness target, not a replacement for the unchanged 2 CPU business gate. Final-sample tail remains unobserved. Nonempty online reservation coverage is reported separately.",
+  "captureTrusted": true,
+  "completeBusinessSamples": 0,
+  "businessGatePassed": false,
+  "maximumPrefixCpu": 3.215179500002705,
+  "minimumMarginCpu": -1.215179500002705,
+  "completedTails": [
+    {
+      "tick": 73895200,
+      "elapsed": 3.4189571000024443,
+      "phases": {
+        "legacyInputs": 0.5683859999990091,
+        "directRead": 0.7111143000001903,
+        "readerLoad": 0.6609940999987884,
+        "observationBuild": 0.7950020000025688,
+        "coreCompare": 0.06894809999721474,
+        "commitmentBuild": 0.06764420000035898,
+        "report": 0.012192700003652135,
+        "serializationAndSize": 0.37090170000010403,
+        "emit": 0.12778740000067046,
+        "retention": 0.0359865999998874
+      }
+    },
+    {
+      "tick": 73895300,
+      "elapsed": 3.8434630000047036,
+      "phases": {
+        "legacyInputs": 0.5293261999977403,
+        "directRead": 0.46136610000394285,
+        "readerLoad": 0.08799439999711467,
+        "observationBuild": 0.6478354999999283,
+        "coreCompare": 0.07825610000145389,
+        "commitmentBuild": 1.3500253000020166,
+        "commitmentProjection": 0.05178029999660794,
+        "report": 0.008595600003900472,
+        "serializationAndSize": 0.5165744999976596,
+        "emit": 0.08468849999917438,
+        "retention": 0.02702050000516465
+      }
+    },
+    {
+      "tick": 73895400,
+      "elapsed": 3.035955000006652,
+      "phases": {
+        "legacyInputs": 0.4461678000079701,
+        "directRead": 0.410370999998122,
+        "readerLoad": 0.08645780000369996,
+        "observationBuild": 0.3572594999932335,
+        "coreCompare": 0.054557100011152215,
+        "commitmentBuild": 1.1483055999924545,
+        "commitmentProjection": 0.04525689999718452,
+        "report": 0.008726900006877258,
+        "serializationAndSize": 0.3733170999912545,
+        "emit": 0.08341840000502998,
+        "retention": 0.02211689999967348
+      }
+    }
+  ],
+  "finalSampleTailObserved": false,
+  "nonemptyReservationsOnlineCovered": false,
+  "milestone": "STRUCTURAL_REVIEW_REQUIRED",
+  "nextAction": "Stop automatic hot-spot iteration. Review the compatibility bridge structure and validation route using this trial plus XV evidence. No budget increase, simplified indexes, or repeated unchanged run."
+}

@@ -1,0 +1,43 @@
+{
+  "kind": "read-envelope-XV-retry-I-implementation/v1",
+  "name": "Read Envelope XV · Online I Retry I — Bounded Pre-binding Selection",
+  "sourceRevision": "XV",
+  "diagnosticWireRevision": "XIV",
+  "compatBase": "01205865d975878d04c9993a0c97a6ccab952be5",
+  "refactorBase": "b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba",
+  "sourceTree": "cf3169d5e14892249488b333837b7e840b565cce",
+  "newSourceCommits": 0,
+  "sourceChanges": false,
+  "sourcePathsVerified": 16,
+  "runtimeChangeScope": [
+    "bounded unbound window selection and evidence",
+    "calibration clipped to a shared deadline",
+    "strict extra admission margin",
+    "selection proof bound to source, session and verifier"
+  ],
+  "packageTests": 165,
+  "repositoryNodeTests": 424,
+  "compilerVersionRequired": "5.9.3",
+  "selectionPolicy": {
+    "maxMs": 1800000,
+    "maxRounds": 6,
+    "probeMaxMs": 240000,
+    "probePollMs": 20000,
+    "maxProbesPerRound": 16,
+    "identityMaxMs": 90000,
+    "minimumSlackMs": 180000
+  },
+  "onlinePolicy": {
+    "wallMs": 4500000,
+    "maxSampleCpu": 2,
+    "reserveCpu": 5,
+    "points": 4,
+    "intervalTicks": 100,
+    "candidatePostsMax": 1,
+    "restorePostsMax": 1,
+    "writeRetries": 0,
+    "runtimeConfirmationMs": 75000
+  },
+  "noMaterialize": true,
+  "noSourcePatch": true
+}

@@ -1,0 +1,26 @@
+{
+  "status": "R1_HISTORICAL_ASSERTIONS_REPAIRED",
+  "originalSource": {
+    "head": "3b631372213e5e616426434954f29b0792557cb7",
+    "tree": "2520a0b89429c2ae89fe12453047eecb7c14c0cd",
+    "base": "477a20c9e9480598d911226f555a84ec5098c3fe",
+    "paths": 9
+  },
+  "source": {
+    "head": "9c57330f262d9a52924c4696811fd4de15a0e017",
+    "tree": "6355f63048720ac3edfbeef91de526f3deaca203",
+    "base": "3b631372213e5e616426434954f29b0792557cb7",
+    "paths": 2,
+    "repaired": true,
+    "originalR1Head": "3b631372213e5e616426434954f29b0792557cb7"
+  },
+  "runtimeCoreUnchanged": true,
+  "changedPaths": [
+    "test/treasury-compat/attribution.spec.cjs",
+    "test/treasury-compat/hotpath-optimization.spec.cjs"
+  ],
+  "authorizationId": "treasury-read-path-R1-online-I-2026-09-23",
+  "authorizationRefreshed": false,
+  "priorAttemptDirectory": "D:\\code\\screeps\\treasury-read-path-R1-online-I-execution",
+  "at": "2026-09-23T15:18:28.005Z"
+}

@@ -1,0 +1,104 @@
+{
+  "kind": "read-path-R1-v2-maker-validation/v1",
+  "status": "FIXED_REPAIR_AND_RESUME_PACKAGE_VERIFIED_NOT_FULL_REPOSITORY",
+  "createdAt": "2026-09-23T14:59:02.864168+00:00",
+  "node": "v22.16.0",
+  "tests": {
+    "total": 133,
+    "passed": 133,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0,
+    "originalCoreTests": 43,
+    "originalToolTests": 59,
+    "repairAndResumeTests": 31,
+    "seededMixedCasesWithinOneCoreTest": 512,
+    "rawTap": "evidence/v2-maker-tests.tap"
+  },
+  "syntax": {
+    "cjsFiles": 12,
+    "passed": 12,
+    "raw": "evidence/v2-maker-syntax.json"
+  },
+  "repair": {
+    "modifiedProjectFiles": [
+      "test/treasury-compat/attribution.spec.cjs",
+      "test/treasury-compat/hotpath-optimization.spec.cjs"
+    ],
+    "currentCoreUnchangedFromV1": true,
+    "candidateCore": {
+      "bytes": 74835,
+      "sha256": "4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08"
+    },
+    "sourceTestsRemoved": 0,
+    "sourceTestsAddedByRepair": 0,
+    "repositoryTestsRequired": 467,
+    "authorizationIdUnchanged": true,
+    "runIdUnchanged": true,
+    "priorFingerprint": "16748d84263e823f06282c45a35e8bc4d85f307bc1c8494df5da25726106ac68"
+  },
+  "actualCoverage": [
+    "Real complete XV and R1 Core execution and 512 seeded mixed-input differential scenarios",
+    "Actual original stale 70443-byte assertion reproduced against 74835-byte R1 Core",
+    "Actual 37-self-route builder instrumentation: XV/R1 Map.get delta 111 with matching queried semantics",
+    "Fixed assertion excerpts: predecessor restoration, unchanged 37 historical assertion, independent R1 hash/semantics, negative controls",
+    "Native Git synthetic fixtures: forward-only two-file repair, exact existing-repair reuse, dirty/unlisted/mode/forged-receipt rejection",
+    "Synthetic old-stop/executor identity and raw TAP validation fixtures; consumed authorization preservation",
+    "Resolved-executor fixture verifies unchanged inherited bytes and correct direct parent/source message"
+  ],
+  "notRunByMaker": [
+    "The full actual repository Node suite (467)",
+    "Both complete historical test files against the whole generator/repository context",
+    "Actual resolved inherited executor suite (165)",
+    "TypeScript 5.9.3 with both repository projects and the repository lockfile",
+    "Repository local replay, Jest 195 suites / 685 tests, and Rollup",
+    "Full driver on actual Windows worktrees",
+    "Agent original D:/ execution log inspection or independent verification of local 3b631372 commit",
+    "Any live Screeps identity, write, WebSocket, CPU sample or recovery"
+  ],
+  "environmentBoundary": "The container could not access the full repository archive or lockfile dependencies. GitHub connector reads authenticated the remote anchors and historical assertions; package-local and synthetic Git tests do not replace full repository gates.",
+  "agentReportFactsAreNotIndependentlyVerified": {
+    "localHeadAbbreviation": "3b631372",
+    "localTreeAbbreviation": "2520a0b8",
+    "oldStopTime": "2026-09-23T14:37:27Z",
+    "candidatePostsReported": 0,
+    "restorePostsReported": 0
+  },
+  "verifiedRemoteAnchors": {
+    "compat": "477a20c9e9480598d911226f555a84ec5098c3fe",
+    "refactor": "0e2b71adb095b5ff8dd78540480c5ae53dfcc320",
+    "source": "GitHub connector reads in current conversation"
+  },
+  "mandatoryExecutionHostGates": {
+    "packageTests": 133,
+    "inheritedToolTests": 165,
+    "repositoryNodeTests": 467,
+    "compiler": "5.9.3",
+    "generatorCheckWriteCheck": true,
+    "bothTscProjects": true,
+    "fullSyntheticReplay": true,
+    "jestSuites": 195,
+    "jestTests": 685,
+    "rollupBuildOnly": true
+  },
+  "noPerformanceClaim": true,
+  "evidenceIdentities": {
+    "v2-maker-tests.tap": {
+      "bytes": 26494,
+      "sha256": "0be20042bef41762c0640c255acf0e045a0c56f351c538518440dcad9d14cd9e"
+    },
+    "v2-maker-tests.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "v2-maker-syntax.json": {
+      "bytes": 1128,
+      "sha256": "1b6ea680421ce41a05e9bbb7eda5a014a656d7a1d39fd0c508441dc8cab62734"
+    },
+    "v2-whitespace.json": {
+      "bytes": 133,
+      "sha256": "8c82d232b0079971360d542b5253188db85fa39fb80389957684b417192806d8"
+    }
+  }
+}

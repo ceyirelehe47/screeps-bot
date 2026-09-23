@@ -1,0 +1,27 @@
+{
+  "kind": "R1-source-review/v1",
+  "repository": "ceyirelehe47/screeps-bot",
+  "compatBase": "477a20c9e9480598d911226f555a84ec5098c3fe",
+  "refactorBase": "0e2b71adb095b5ff8dd78540480c5ae53dfcc320",
+  "reviewed": {
+    "src/runtime/treasuryCompatReadCore.generated.ts": {
+      "blob": "614e97c72a54cef8385ae6fd0a1a9c756dcb564d",
+      "fullByteCopyAuthenticated": true
+    },
+    "scripts/build-treasury-compat-loader.cjs": {
+      "blob": "acfe875282e2c9c0f65d010a87807fa156181e01",
+      "integrationAnchorsReviewed": true,
+      "fullLocalRegeneration": false
+    },
+    "test/treasury-compat/read-envelope-xv.spec.cjs": {
+      "blob": "dd0bb54c7515d248975bbbe8e8cbfc1866509cea",
+      "fixedAssertionPreservingAdaptation": true
+    },
+    "test/treasury-compat/task-hotpath-xiv.spec.cjs": {
+      "blob": "57256192920c950c2460bd319e2c2bf060f2704a",
+      "fixedInverseLayerAdaptation": true
+    }
+  },
+  "fullRepositoryNotClonedInMakerEnvironment": true,
+  "allOtherOriginalSourceFilesRemainGovernedByPinnedBaseTreeAndExecutionHostChecks": true
+}

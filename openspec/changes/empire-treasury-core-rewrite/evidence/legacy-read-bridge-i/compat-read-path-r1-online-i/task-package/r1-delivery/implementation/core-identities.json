@@ -1,0 +1,26 @@
+{
+  "baselineCommit": "477a20c9e9480598d911226f555a84ec5098c3fe",
+  "baselineTree": "cf3169d5e14892249488b333837b7e840b565cce",
+  "baselineCore": {
+    "bytes": 70443,
+    "sha256": "e03c09619b8b47097e234ff81a5fe0a28c57b1b20180ba0a818139eb0fc05a9d",
+    "gitBlob": "614e97c72a54cef8385ae6fd0a1a9c756dcb564d"
+  },
+  "candidateCore": {
+    "bytes": 74835,
+    "sha256": "4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08",
+    "gitBlob": "5d3433d1d756ea6912bef4933bea2b5b189a819f"
+  },
+  "rules": [
+    {
+      "name": "commitment-build-and-query-lifetime",
+      "beforeSha256": "e4f3559491ef27e63d7e7716545fc8877b4e589da2e73fc6cf74af81d227807b",
+      "afterSha256": "807b0405d98d23688f93692eb1766925ad92c15d6a8421cde72901216cc54d00"
+    },
+    {
+      "name": "observation-view-and-fold-lifetime",
+      "beforeSha256": "304310dcf5c2b1ab9cb6c8cb86164605a0f9ff94f13c7d79c4f41a93083768b5",
+      "afterSha256": "9d4f4ee8d61546d6685843f105fc796d24cba0c60577e4b26ff522c0b825c1b4"
+    }
+  ]
+}

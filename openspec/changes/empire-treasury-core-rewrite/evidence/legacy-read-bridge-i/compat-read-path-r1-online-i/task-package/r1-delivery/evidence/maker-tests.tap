@@ -1,0 +1,622 @@
+TAP version 13
+# Subtest: unsafe inherited archive path rejects: "../x"
+ok 1 - unsafe inherited archive path rejects: "../x"
+  ---
+  duration_ms: 2.194887
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "a/../b"
+ok 2 - unsafe inherited archive path rejects: "a/../b"
+  ---
+  duration_ms: 0.294263
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "/root"
+ok 3 - unsafe inherited archive path rejects: "/root"
+  ---
+  duration_ms: 0.074693
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "a\\\\b"
+ok 4 - unsafe inherited archive path rejects: "a\\\\b"
+  ---
+  duration_ms: 0.065439
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "C:/x"
+ok 5 - unsafe inherited archive path rejects: "C:/x"
+  ---
+  duration_ms: 0.12654
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "a:b"
+ok 6 - unsafe inherited archive path rejects: "a:b"
+  ---
+  duration_ms: 0.056455
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "a//b"
+ok 7 - unsafe inherited archive path rejects: "a//b"
+  ---
+  duration_ms: 0.218198
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "a/"
+ok 8 - unsafe inherited archive path rejects: "a/"
+  ---
+  duration_ms: 0.06626
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "a\\u0000b"
+ok 9 - unsafe inherited archive path rejects: "a\\u0000b"
+  ---
+  duration_ms: 0.247873
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "CON"
+ok 10 - unsafe inherited archive path rejects: "CON"
+  ---
+  duration_ms: 0.272471
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "a/NUL.txt"
+ok 11 - unsafe inherited archive path rejects: "a/NUL.txt"
+  ---
+  duration_ms: 0.120802
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "a/end."
+ok 12 - unsafe inherited archive path rejects: "a/end."
+  ---
+  duration_ms: 0.072399
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "a/end "
+ok 13 - unsafe inherited archive path rejects: "a/end "
+  ---
+  duration_ms: 0.050526
+  type: 'test'
+  ...
+# Subtest: unsafe inherited archive path rejects: "a?b"
+ok 14 - unsafe inherited archive path rejects: "a?b"
+  ---
+  duration_ms: 0.039249
+  type: 'test'
+  ...
+# Subtest: regular nested archive path accepted
+ok 15 - regular nested archive path accepted
+  ---
+  duration_ms: 0.104137
+  type: 'test'
+  ...
+# Subtest: package seal rejects mutation, missing and extra files
+ok 16 - package seal rejects mutation, missing and extra files
+  ---
+  duration_ms: 3.323848
+  type: 'test'
+  ...
+# Subtest: symbolic links are not an authorized payload
+ok 17 - symbolic links are not an authorized payload
+  ---
+  duration_ms: 0.533624
+  type: 'test'
+  ...
+# Subtest: durable evidence refuses to overwrite an existing result
+ok 18 - durable evidence refuses to overwrite an existing result
+  ---
+  duration_ms: 0.354574
+  type: 'test'
+  ...
+# Subtest: work directory isolation checks real paths and descendants
+ok 19 - work directory isolation checks real paths and descendants
+  ---
+  duration_ms: 0.90933
+  type: 'test'
+  ...
+# Subtest: fixed integration anchors compose and reverse without deleting assertions: scripts/build-treasury-compat-loader.cjs
+ok 20 - fixed integration anchors compose and reverse without deleting assertions: scripts/build-treasury-compat-loader.cjs
+  ---
+  duration_ms: 0.324529
+  type: 'test'
+  ...
+# Subtest: fixed integration anchors compose and reverse without deleting assertions: test/treasury-compat/task-hotpath-xiv.spec.cjs
+ok 21 - fixed integration anchors compose and reverse without deleting assertions: test/treasury-compat/task-hotpath-xiv.spec.cjs
+  ---
+  duration_ms: 0.203046
+  type: 'test'
+  ...
+# Subtest: fixed integration anchors compose and reverse without deleting assertions: test/treasury-compat/read-envelope-xv.spec.cjs
+ok 22 - fixed integration anchors compose and reverse without deleting assertions: test/treasury-compat/read-envelope-xv.spec.cjs
+  ---
+  duration_ms: 0.100661
+  type: 'test'
+  ...
+# Subtest: fixed current core identity and canonical inverse verified
+ok 23 - fixed current core identity and canonical inverse verified
+  ---
+  duration_ms: 2.747268
+  type: 'test'
+  ...
+# Subtest: inherited manifest accepts only its entire fixed file set
+ok 24 - inherited manifest accepts only its entire fixed file set
+  ---
+  duration_ms: 1.257635
+  type: 'test'
+  ...
+# Subtest: inherited git modes reject symlink and executable substitutions
+ok 25 - inherited git modes reject symlink and executable substitutions
+  ---
+  duration_ms: 1.259478
+  type: 'test'
+  ...
+# Subtest: inherited duplicate case names are rejected before writing
+ok 26 - inherited duplicate case names are rejected before writing
+  ---
+  duration_ms: 0.496658
+  type: 'test'
+  ...
+# Subtest: inherited byte extraction really uses pinned Git objects
+ok 27 - inherited byte extraction really uses pinned Git objects
+  ---
+  duration_ms: 175.288138
+  type: 'test'
+  ...
+# Subtest: runtime policy binds a new one-shot authorization without loosening timing/recovery
+ok 28 - runtime policy binds a new one-shot authorization without loosening timing/recovery
+  ---
+  duration_ms: 0.58419
+  type: 'test'
+  ...
+# Subtest: new source allowlist cannot change config, preview, CPU probes, main, dependency locks or writer
+ok 29 - new source allowlist cannot change config, preview, CPU probes, main, dependency locks or writer
+  ---
+  duration_ms: 0.155274
+  type: 'test'
+  ...
+# Subtest: milestone requires the complete four-point business path and reports tails separately
+ok 30 - milestone requires the complete four-point business path and reports tails separately
+  ---
+  duration_ms: 1.111094
+  type: 'test'
+  ...
+# Subtest: unchanged CPU gate and explicit margin target: 1.8
+ok 31 - unchanged CPU gate and explicit margin target: 1.8
+  ---
+  duration_ms: 0.271349
+  type: 'test'
+  ...
+# Subtest: unchanged CPU gate and explicit margin target: 1.800001
+ok 32 - unchanged CPU gate and explicit margin target: 1.800001
+  ---
+  duration_ms: 0.237899
+  type: 'test'
+  ...
+# Subtest: unchanged CPU gate and explicit margin target: 1.99
+ok 33 - unchanged CPU gate and explicit margin target: 1.99
+  ---
+  duration_ms: 0.148344
+  type: 'test'
+  ...
+# Subtest: unchanged CPU gate and explicit margin target: 2
+ok 34 - unchanged CPU gate and explicit margin target: 2
+  ---
+  duration_ms: 0.113521
+  type: 'test'
+  ...
+# Subtest: unchanged CPU gate and explicit margin target: 2.000001
+ok 35 - unchanged CPU gate and explicit margin target: 2.000001
+  ---
+  duration_ms: 0.079089
+  type: 'test'
+  ...
+# Subtest: unchanged CPU gate and explicit margin target: NaN
+ok 36 - unchanged CPU gate and explicit margin target: NaN
+  ---
+  duration_ms: 0.076004
+  type: 'test'
+  ...
+# Subtest: unchanged CPU gate and explicit margin target: Infinity
+ok 37 - unchanged CPU gate and explicit margin target: Infinity
+  ---
+  duration_ms: 0.502097
+  type: 'test'
+  ...
+# Subtest: unchanged CPU gate and explicit margin target: -1
+ok 38 - unchanged CPU gate and explicit margin target: -1
+  ---
+  duration_ms: 0.130116
+  type: 'test'
+  ...
+# Subtest: business gate rejects noObservation
+ok 39 - business gate rejects noObservation
+  ---
+  duration_ms: 0.150286
+  type: 'test'
+  ...
+# Subtest: business gate rejects noCommitment
+ok 40 - business gate rejects noCommitment
+  ---
+  duration_ms: 0.098268
+  type: 'test'
+  ...
+# Subtest: business gate rejects zeroRows
+ok 41 - business gate rejects zeroRows
+  ---
+  duration_ms: 0.101973
+  type: 'test'
+  ...
+# Subtest: business gate rejects noProjection
+ok 42 - business gate rejects noProjection
+  ---
+  duration_ms: 0.101974
+  type: 'test'
+  ...
+# Subtest: business gate rejects missingQueries
+ok 43 - business gate rejects missingQueries
+  ---
+  duration_ms: 0.127973
+  type: 'test'
+  ...
+# Subtest: business gate rejects coreMismatch
+ok 44 - business gate rejects coreMismatch
+  ---
+  duration_ms: 0.150596
+  type: 'test'
+  ...
+# Subtest: business gate rejects scope
+ok 45 - business gate rejects scope
+  ---
+  duration_ms: 0.153772
+  type: 'test'
+  ...
+# Subtest: business gate rejects authorization
+ok 46 - business gate rejects authorization
+  ---
+  duration_ms: 0.09953
+  type: 'test'
+  ...
+# Subtest: business gate rejects partial
+ok 47 - business gate rejects partial
+  ---
+  duration_ms: 0.087712
+  type: 'test'
+  ...
+# Subtest: business gate rejects damagedIndex
+ok 48 - business gate rejects damagedIndex
+  ---
+  duration_ms: 0.128784
+  type: 'test'
+  ...
+# Subtest: business gate rejects safety
+ok 49 - business gate rejects safety
+  ---
+  duration_ms: 0.096536
+  type: 'test'
+  ...
+# Subtest: business gate rejects duplicateEndpoint
+ok 50 - business gate rejects duplicateEndpoint
+  ---
+  duration_ms: 0.108544
+  type: 'test'
+  ...
+# Subtest: business gate rejects invalidValue
+ok 51 - business gate rejects invalidValue
+  ---
+  duration_ms: 0.120852
+  type: 'test'
+  ...
+# Subtest: legacy projection mismatch stays separate from direct/Core parity
+ok 52 - legacy projection mismatch stays separate from direct/Core parity
+  ---
+  duration_ms: 0.150157
+  type: 'test'
+  ...
+# Subtest: zero online reservations do not claim nonempty coverage
+ok 53 - zero online reservations do not claim nonempty coverage
+  ---
+  duration_ms: 0.108503
+  type: 'test'
+  ...
+# Subtest: partial, duplicated and shifted reports cannot be promoted
+ok 54 - partial, duplicated and shifted reports cannot be promoted
+  ---
+  duration_ms: 0.390979
+  type: 'test'
+  ...
+# Subtest: capture issues and extra write boundaries remain inconclusive
+ok 55 - capture issues and extra write boundaries remain inconclusive
+  ---
+  duration_ms: 0.754787
+  type: 'test'
+  ...
+# Subtest: successful business output cannot replace independent recovery
+ok 56 - successful business output cannot replace independent recovery
+  ---
+  duration_ms: 0.378921
+  type: 'test'
+  ...
+# Subtest: no-deployment is not a performance failure or budget success
+ok 57 - no-deployment is not a performance failure or budget success
+  ---
+  duration_ms: 0.182755
+  type: 'test'
+  ...
+# Subtest: HTML escaped reports decode, wrong channels ignore, wrong run rejects
+ok 58 - HTML escaped reports decode, wrong channels ignore, wrong run rejects
+  ---
+  duration_ms: 1.407491
+  type: 'test'
+  ...
+# Subtest: outer runner contains one observe call, no direct network uploader or write retry
+ok 59 - outer runner contains one observe call, no direct network uploader or write retry
+  ---
+  duration_ms: 0.210457
+  type: 'test'
+  ...
+# Subtest: authentic XV Git object and complete source fixture
+ok 60 - authentic XV Git object and complete source fixture
+  ---
+  duration_ms: 1.361581
+  type: 'test'
+  ...
+# Subtest: fixed candidate bytes and complete forward transform
+ok 61 - fixed candidate bytes and complete forward transform
+  ---
+  duration_ms: 0.665443
+  type: 'test'
+  ...
+# Subtest: exact reverse transform preserves all predecessor bytes
+ok 62 - exact reverse transform preserves all predecessor bytes
+  ---
+  duration_ms: 0.259591
+  type: 'test'
+  ...
+# Subtest: double application is rejected
+ok 63 - double application is rejected
+  ---
+  duration_ms: 0.33883
+  type: 'test'
+  ...
+# Subtest: tampered predecessor is rejected rather than patched approximately
+ok 64 - tampered predecessor is rejected rather than patched approximately
+  ---
+  duration_ms: 0.194824
+  type: 'test'
+  ...
+# Subtest: tampered candidate cannot satisfy inverse provenance
+ok 65 - tampered candidate cannot satisfy inverse provenance
+  ---
+  duration_ms: 0.277137
+  type: 'test'
+  ...
+# Subtest: both complete runtime bodies parse and export only two builders
+ok 66 - both complete runtime bodies parse and export only two builders
+  ---
+  duration_ms: 4.02944
+  type: 'test'
+  ...
+# Subtest: zero task and zero reservation retain complete zero indexes
+ok 67 - zero task and zero reservation retain complete zero indexes
+  ---
+  duration_ms: 4.826341
+  type: 'test'
+  ...
+# Subtest: single manual transfer and active owner reservation
+ok 68 - single manual transfer and active owner reservation
+  ---
+  duration_ms: 3.281594
+  type: 'test'
+  ...
+# Subtest: all canonical task statuses still undergo full validation
+ok 69 - all canonical task statuses still undergo full validation
+  ---
+  duration_ms: 2.624464
+  type: 'test'
+  ...
+# Subtest: unknown status fails closed rather than looking non-pending
+ok 70 - unknown status fails closed rather than looking non-pending
+  ---
+  duration_ms: 2.352434
+  type: 'test'
+  ...
+# Subtest: manual and automatic health and receiver predicates retain meaning
+ok 71 - manual and automatic health and receiver predicates retain meaning
+  ---
+  duration_ms: 3.235023
+  type: 'test'
+  ...
+# Subtest: first-route-wins retains an undefined id and does not overwrite it
+ok 72 - first-route-wins retains an undefined id and does not overwrite it
+  ---
+  duration_ms: 2.71499
+  type: 'test'
+  ...
+# Subtest: self-route aliases share the correct eager scope and room buckets
+ok 73 - self-route aliases share the correct eager scope and room buckets
+  ---
+  duration_ms: 2.391984
+  type: 'test'
+  ...
+# Subtest: null-prototype scope and room dictionaries preserve hostile names
+ok 74 - null-prototype scope and room dictionaries preserve hostile names
+  ---
+  duration_ms: 3.665241
+  type: 'test'
+  ...
+# Subtest: safe-integer aggregation overflow retains partial update order
+ok 75 - safe-integer aggregation overflow retains partial update order
+  ---
+  duration_ms: 2.6025
+  type: 'test'
+  ...
+# Subtest: damaged task fields and global/scope incompleteness agree
+ok 76 - damaged task fields and global/scope incompleteness agree
+  ---
+  duration_ms: 3.316136
+  type: 'test'
+  ...
+# Subtest: all non-pending malformed records still cause incompleteness
+ok 77 - all non-pending malformed records still cause incompleteness
+  ---
+  duration_ms: 2.41686
+  type: 'test'
+  ...
+# Subtest: zero-amount pending records remain visible in counts and routes
+ok 78 - zero-amount pending records remain visible in counts and routes
+  ---
+  duration_ms: 2.621509
+  type: 'test'
+  ...
+# Subtest: reservation expiry is strictly earlier than the current tick
+ok 79 - reservation expiry is strictly earlier than the current tick
+  ---
+  duration_ms: 2.316901
+  type: 'test'
+  ...
+# Subtest: unresolved and missing owners remain fully committed
+ok 80 - unresolved and missing owners remain fully committed
+  ---
+  duration_ms: 3.131898
+  type: 'test'
+  ...
+# Subtest: typed identity namespace and kind self-exclusion are preserved
+ok 81 - typed identity namespace and kind self-exclusion are preserved
+  ---
+  duration_ms: 2.004259
+  type: 'test'
+  ...
+# Subtest: reservation integer overflow and invalid identity fail closed
+ok 82 - reservation integer overflow and invalid identity fail closed
+  ---
+  duration_ms: 3.713804
+  type: 'test'
+  ...
+# Subtest: nonempty maximum-size task and reservation paths are both tested offline
+ok 83 - nonempty maximum-size task and reservation paths are both tested offline
+  ---
+  duration_ms: 19.870279
+  type: 'test'
+  ...
+# Subtest: callbacks retain options receiver, order, and expiration behavior
+ok 84 - callbacks retain options receiver, order, and expiration behavior
+  ---
+  duration_ms: 3.041627
+  type: 'test'
+  ...
+# Subtest: detached and rebound public query methods keep their originating state
+ok 85 - detached and rebound public query methods keep their originating state
+  ---
+  duration_ms: 2.233485
+  type: 'test'
+  ...
+# Subtest: delta callbacks retain unbound strict this and remain dynamic
+ok 86 - delta callbacks retain unbound strict this and remain dynamic
+  ---
+  duration_ms: 2.169168
+  type: 'test'
+  ...
+# Subtest: snapshot indexes do not reread task data after construction
+ok 87 - snapshot indexes do not reread task data after construction
+  ---
+  duration_ms: 1.870948
+  type: 'test'
+  ...
+# Subtest: alternating reader instances capture a fresh resource catalog
+ok 88 - alternating reader instances capture a fresh resource catalog
+  ---
+  duration_ms: 1.93138
+  type: 'test'
+  ...
+# Subtest: nested builders cannot replace the outer input context
+ok 89 - nested builders cannot replace the outer input context
+  ---
+  duration_ms: 2.017799
+  type: 'test'
+  ...
+# Subtest: observation APIs, missing locations, sparse resources, freezing and query order
+ok 90 - observation APIs, missing locations, sparse resources, freezing and query order
+  ---
+  duration_ms: 2.259955
+  type: 'test'
+  ...
+# Subtest: observation memo arrays stay private to each snapshot
+ok 91 - observation memo arrays stay private to each snapshot
+  ---
+  duration_ms: 1.683746
+  type: 'test'
+  ...
+# Subtest: detached observation methods ignore unrelated public receivers
+ok 92 - detached observation methods ignore unrelated public receivers
+  ---
+  duration_ms: 1.610226
+  type: 'test'
+  ...
+# Subtest: observation remains stale by Game.time and never rereads Store on query
+ok 93 - observation remains stale by Game.time and never rereads Store on query
+  ---
+  duration_ms: 1.600211
+  type: 'test'
+  ...
+# Subtest: duplicate room ordering and last-room-wins lookup remain unchanged
+ok 94 - duplicate room ordering and last-room-wins lookup remain unchanged
+  ---
+  duration_ms: 1.645269
+  type: 'test'
+  ...
+# Subtest: over-capacity signed free and absent Store remain physical observations
+ok 95 - over-capacity signed free and absent Store remain physical observations
+  ---
+  duration_ms: 6.240391
+  type: 'test'
+  ...
+# Subtest: Store scanning callback order remains before empire folding
+ok 96 - Store scanning callback order remains before empire folding
+  ---
+  duration_ms: 2.105251
+  type: 'test'
+  ...
+# Subtest: complete projection executes all four rows and sixteen index queries
+ok 97 - complete projection executes all four rows and sixteen index queries
+  ---
+  duration_ms: 2.864135
+  type: 'test'
+  ...
+# Subtest: diagnostics disabled retains full business semantics
+ok 98 - diagnostics disabled retains full business semantics
+  ---
+  duration_ms: 4.873647
+  type: 'test'
+  ...
+# Subtest: query views no longer contain build-local method definitions
+ok 99 - query views no longer contain build-local method definitions
+  ---
+  duration_ms: 0.166882
+  type: 'test'
+  ...
+# Subtest: instrumented allocation count removes exactly two Map constructions per empty eager index
+ok 100 - instrumented allocation count removes exactly two Map constructions per empty eager index
+  ---
+  duration_ms: 1.633531
+  type: 'test'
+  ...
+# Subtest: 512 seeded mixed-input differential scenarios across full index APIs
+ok 101 - 512 seeded mixed-input differential scenarios across full index APIs
+  ---
+  duration_ms: 1516.412477
+  type: 'test'
+  ...
+# Subtest: room-count queries preserve native Map key types without implicit string coercion
+ok 102 - room-count queries preserve native Map key types without implicit string coercion
+  ---
+  duration_ms: 3.853364
+  type: 'test'
+  ...
+1..102
+# tests 102
+# suites 0
+# pass 102
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2008.249165

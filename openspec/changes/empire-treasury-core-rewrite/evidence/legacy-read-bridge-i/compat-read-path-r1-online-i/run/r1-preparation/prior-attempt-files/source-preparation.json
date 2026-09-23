@@ -1,0 +1,131 @@
+{
+  "status": "R1_FIXED_SOURCE_COMMITTED_NOT_YET_PUBLISHED",
+  "source": {
+    "head": "3b631372213e5e616426434954f29b0792557cb7",
+    "tree": "2520a0b89429c2ae89fe12453047eecb7c14c0cd",
+    "base": "477a20c9e9480598d911226f555a84ec5098c3fe",
+    "paths": 9
+  },
+  "manifest": {
+    "kind": "read-path-R1-source/v1",
+    "base": "477a20c9e9480598d911226f555a84ec5098c3fe",
+    "baseTree": "cf3169d5e14892249488b333837b7e840b565cce",
+    "expectedSourceTree": "2520a0b89429c2ae89fe12453047eecb7c14c0cd",
+    "files": {
+      "docs/treasury-compat-loader-optimization.json": {
+        "before": {
+          "bytes": 23984,
+          "sha256": "02be3df1217480e1de3c8f145a2c421a1d59c57a4ad35185e5d95d88793201f7",
+          "blob": "8f3ef90cfa95610ba684981c833c6f5506d0f518"
+        },
+        "after": {
+          "bytes": 25501,
+          "sha256": "e1b8051352b86c8e73cf46a0cd7df48eaaceda6e1c9bb234c9164437a8ef51b9",
+          "blob": "9bc48c77c7adcf7f1e0cc26c98f9027de8d838a8"
+        }
+      },
+      "docs/treasury-compat-source-manifest.json": {
+        "before": {
+          "bytes": 8530,
+          "sha256": "3dee4a11214d27e019e3998033a9de64604f6103232bcbd0ef06adefdd7d6656",
+          "blob": "7f32271ff43a0058a670e360cbf58f31213e7ebc"
+        },
+        "after": {
+          "bytes": 9558,
+          "sha256": "6395f350275de6ad3a3bf12b810e304bcd430afbb5c78aeefabd7166d52b985b",
+          "blob": "2423ea0fa2d4af1369a2a2423c4910e24a9de55f"
+        }
+      },
+      "scripts/build-treasury-compat-loader.cjs": {
+        "before": {
+          "bytes": 18077,
+          "sha256": "89f33e92e285adeccaffe4c0f8d0b9b04765b56833367f015499c0f094dd53b1",
+          "blob": "acfe875282e2c9c0f65d010a87807fa156181e01"
+        },
+        "after": {
+          "bytes": 18913,
+          "sha256": "63a2cf7799935c4767c409840c6e677cc11d0a5ecbcfb993cec967d997651060",
+          "blob": "b72a7deefd542ae1514d2082af84253b543c7ff0"
+        }
+      },
+      "scripts/lib/treasury-compat-read-path-r1.cjs": {
+        "before": null,
+        "after": {
+          "bytes": 89157,
+          "sha256": "7d7471404bbd5b8b5ff87c5ea37ea322bec7b638b790d11a1d6cdc0e2d0ee4e6",
+          "blob": "8aa5665b9e2dc84c736d08c4f00bcd69312c1198"
+        }
+      },
+      "src/runtime/treasuryCompatReadCore.generated.ts": {
+        "before": {
+          "bytes": 70443,
+          "sha256": "e03c09619b8b47097e234ff81a5fe0a28c57b1b20180ba0a818139eb0fc05a9d",
+          "blob": "614e97c72a54cef8385ae6fd0a1a9c756dcb564d"
+        },
+        "after": {
+          "bytes": 74835,
+          "sha256": "4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08",
+          "blob": "5d3433d1d756ea6912bef4933bea2b5b189a819f"
+        }
+      },
+      "test/treasury-compat/fixtures/core-before-read-path-r1.ts.txt": {
+        "before": null,
+        "after": {
+          "bytes": 70443,
+          "sha256": "e03c09619b8b47097e234ff81a5fe0a28c57b1b20180ba0a818139eb0fc05a9d",
+          "blob": "614e97c72a54cef8385ae6fd0a1a9c756dcb564d"
+        }
+      },
+      "test/treasury-compat/read-envelope-xv.spec.cjs": {
+        "before": {
+          "bytes": 11593,
+          "sha256": "4f2587b981bf782d85efd3441f02d2c2f4fa8a510168ddfe60fe959ede3b4592",
+          "blob": "dd0bb54c7515d248975bbbe8e8cbfc1866509cea"
+        },
+        "after": {
+          "bytes": 11660,
+          "sha256": "df6af77f28d21d6723ca84aaa7aa367910dedafe8a1972e72cdaadcd8e6741c2",
+          "blob": "06ef90d0baccf3b6a73f2b9a5113ce117a12ceee"
+        }
+      },
+      "test/treasury-compat/read-path-r1.spec.cjs": {
+        "before": null,
+        "after": {
+          "bytes": 21458,
+          "sha256": "91284c352f5f697c3984a0ceea731299501eb0f9e444a8fbdeda0fac20dc8524",
+          "blob": "052037a716e3c326d151b1598e82755dc9d3c677"
+        }
+      },
+      "test/treasury-compat/task-hotpath-xiv.spec.cjs": {
+        "before": {
+          "bytes": 12537,
+          "sha256": "33f9dedff06474a6558c72701a1ee164194fc19d02d64384f5632ff3ba65b64d",
+          "blob": "57256192920c950c2460bd319e2c2bf060f2704a"
+        },
+        "after": {
+          "bytes": 12571,
+          "sha256": "2cfb8b0f114e811548e36f30eb5632500bf993d8979b85789d4bdfd666df9de5",
+          "blob": "dc2ff7e7fbac11d62fa3cf48449f7cb650d43bd6"
+        }
+      }
+    }
+  },
+  "inheritance": {
+    "commit": "0e2b71adb095b5ff8dd78540480c5ae53dfcc320",
+    "prefix": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i-retry-i/task-package",
+    "files": 66,
+    "integritySha256": "82f7dbfec7c20fa81001daa54a61553d23b5dd05e97176ade0fece2d9985a712"
+  },
+  "receipt": {
+    "package": {
+      "files": 22,
+      "fingerprint": "16748d84263e823f06282c45a35e8bc4d85f307bc1c8494df5da25726106ac68"
+    },
+    "prior": {
+      "finalBlob": "f26c353bcd1dd037978d5c4388a1f0d6859c185b",
+      "recoveryBlob": "27e2fca9554a61d7e8bd37a9d486ca08667ab30e",
+      "status": "CPU_DIAGNOSTIC_CAPTURE_VERIFIED"
+    },
+    "at": "2026-09-23T14:34:27.491Z"
+  }
+}

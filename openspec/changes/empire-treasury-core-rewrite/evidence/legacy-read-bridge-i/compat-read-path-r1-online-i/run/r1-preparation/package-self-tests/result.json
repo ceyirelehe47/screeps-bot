@@ -1,0 +1,14 @@
+{
+  "status": "R1_V2_PACKAGE_TESTS_VERIFIED",
+  "tests": 133,
+  "passed": 133,
+  "failed": 0,
+  "coreTests": 43,
+  "v1ToolTests": 59,
+  "repairTests": 31,
+  "seededMixedCases": 512,
+  "syntaxFiles": 12,
+  "packageFingerprint": "ff46734752633d9c703d1f7fe582ab6938769c5538138ed60dee38b03e1bdb6f",
+  "node": "22.19.0",
+  "engineCpuMeasurement": false
+}

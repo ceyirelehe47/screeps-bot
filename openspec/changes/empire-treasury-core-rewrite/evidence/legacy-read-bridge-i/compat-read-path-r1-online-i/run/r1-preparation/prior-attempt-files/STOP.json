@@ -1,0 +1,8 @@
+{
+  "status": "STOP",
+  "phase": "full-offline-gates",
+  "code": "COMMAND_FAILED:build",
+  "at": "2026-09-23T14:37:27.945Z",
+  "automaticRetryAuthorized": false,
+  "instruction": "Preserve all files and current source state. Do not repair the package, edit tests, reset/rebase, clear experiment markers, or start another upload. If observe began, inspect its worker/collector and recovery evidence before any other action."
+}

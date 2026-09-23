@@ -1,0 +1,244 @@
+{
+  "status": "READ_XV_LOCAL_REPLAY_VERIFIED",
+  "compiler": "5.9.3",
+  "liveMemoryUsed": false,
+  "engineCpuMeasured": false,
+  "engineSpikeReproduced": null,
+  "exactOnlineTaskRecordsAvailable": false,
+  "interpretation": "Local VM, synthetic shapes and wall-clock milliseconds only. First local actual call is not an engine cold-start measurement. No speedup/GC/JIT conclusion.",
+  "cases": [
+    {
+      "name": "empty",
+      "count": 0,
+      "iterationsPerVersion": 8,
+      "fullApiEquivalent": true,
+      "versions": [
+        {
+          "name": "XIV",
+          "sourceSha256": "8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6",
+          "firstActualLocalCallMs": 0.9033,
+          "followingLocalCallMs": [
+            0.0362,
+            0.0298,
+            0.0221,
+            0.0214,
+            0.0193,
+            0.0182,
+            0.0186
+          ],
+          "observationMs": [
+            1.0444,
+            0.1398,
+            0.158,
+            0.0459,
+            0.0258,
+            0.0189,
+            0.0186,
+            0.0179
+          ],
+          "memoryWrites": 0
+        },
+        {
+          "name": "XV",
+          "sourceSha256": "4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08",
+          "firstActualLocalCallMs": 0.6985,
+          "followingLocalCallMs": [
+            0.0325,
+            0.0431,
+            0.0409,
+            0.0376,
+            0.0406,
+            0.0377,
+            0.0416
+          ],
+          "observationMs": [
+            0.4117,
+            0.0873,
+            0.2083,
+            0.066,
+            0.0425,
+            0.0409,
+            0.0361,
+            0.038
+          ],
+          "memoryWrites": 0
+        }
+      ]
+    },
+    {
+      "name": "six-five-pending",
+      "count": 6,
+      "iterationsPerVersion": 8,
+      "fullApiEquivalent": true,
+      "versions": [
+        {
+          "name": "XIV",
+          "sourceSha256": "8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6",
+          "firstActualLocalCallMs": 0.4473,
+          "followingLocalCallMs": [
+            0.1119,
+            0.3538,
+            0.1129,
+            0.0691,
+            0.101,
+            0.1156,
+            0.0628
+          ],
+          "observationMs": [
+            0.1795,
+            0.0314,
+            0.0204,
+            0.0232,
+            0.0215,
+            0.0195,
+            0.0367,
+            0.0233
+          ],
+          "memoryWrites": 0
+        },
+        {
+          "name": "XV",
+          "sourceSha256": "4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08",
+          "firstActualLocalCallMs": 0.3518,
+          "followingLocalCallMs": [
+            0.1196,
+            0.313,
+            0.1416,
+            0.0743,
+            0.0658,
+            0.0656,
+            0.0668
+          ],
+          "observationMs": [
+            0.1222,
+            0.0333,
+            0.0216,
+            0.0221,
+            0.0216,
+            0.0196,
+            0.0195,
+            0.02
+          ],
+          "memoryWrites": 0
+        }
+      ]
+    },
+    {
+      "name": "six-mixed-invalid",
+      "count": 6,
+      "invalid": true,
+      "iterationsPerVersion": 8,
+      "fullApiEquivalent": true,
+      "versions": [
+        {
+          "name": "XIV",
+          "sourceSha256": "8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6",
+          "firstActualLocalCallMs": 0.2464,
+          "followingLocalCallMs": [
+            0.0635,
+            0.0466,
+            0.0442,
+            0.0432,
+            0.0431,
+            0.0471,
+            0.0894
+          ],
+          "observationMs": [
+            0.1354,
+            0.0302,
+            0.0183,
+            0.0172,
+            0.0167,
+            0.0164,
+            0.0173,
+            0.0164
+          ],
+          "memoryWrites": 0
+        },
+        {
+          "name": "XV",
+          "sourceSha256": "4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08",
+          "firstActualLocalCallMs": 0.226,
+          "followingLocalCallMs": [
+            0.0984,
+            0.0828,
+            0.0541,
+            0.0522,
+            0.0512,
+            0.05,
+            0.0515
+          ],
+          "observationMs": [
+            0.1564,
+            0.0406,
+            0.0274,
+            0.0193,
+            0.0187,
+            0.0186,
+            0.018,
+            0.0181
+          ],
+          "memoryWrites": 0
+        }
+      ]
+    },
+    {
+      "name": "bound256",
+      "count": 256,
+      "iterationsPerVersion": 8,
+      "fullApiEquivalent": true,
+      "versions": [
+        {
+          "name": "XIV",
+          "sourceSha256": "8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6",
+          "firstActualLocalCallMs": 2.4101,
+          "followingLocalCallMs": [
+            1.8248,
+            1.7788,
+            1.6462,
+            1.7928,
+            1.6356,
+            1.6541,
+            1.6419
+          ],
+          "observationMs": [
+            0.1718,
+            0.0299,
+            0.0274,
+            0.0241,
+            0.0309,
+            0.0245,
+            0.0195,
+            0.0198
+          ],
+          "memoryWrites": 0
+        },
+        {
+          "name": "XV",
+          "sourceSha256": "4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08",
+          "firstActualLocalCallMs": 2.8251,
+          "followingLocalCallMs": [
+            2.2347,
+            2.0714,
+            2.0535,
+            2.3696,
+            2.0068,
+            1.9548,
+            1.8931
+          ],
+          "observationMs": [
+            0.2097,
+            0.0327,
+            0.0244,
+            0.0224,
+            0.0291,
+            0.0337,
+            0.0295,
+            0.0247
+          ],
+          "memoryWrites": 0
+        }
+      ]
+    }
+  ]
+}

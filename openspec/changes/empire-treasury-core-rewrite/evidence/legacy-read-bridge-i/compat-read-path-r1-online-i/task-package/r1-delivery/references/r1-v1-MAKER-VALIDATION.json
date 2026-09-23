@@ -1,0 +1,85 @@
+{
+  "kind": "read-path-R1-maker-validation/v1",
+  "artifactDate": "2026-09-23",
+  "status": "FOCUSED_IMPLEMENTATION_AND_PACKAGE_TESTS_VERIFIED",
+  "node": "22.16.0",
+  "tests": {
+    "total": 102,
+    "passed": 102,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0,
+    "coreTests": 43,
+    "packageToolTests": 59,
+    "seededMixedCasesWithinOneCoreTest": 512,
+    "rawTap": "evidence/maker-tests.tap"
+  },
+  "syntax": {
+    "cjsFiles": 10,
+    "passed": 10,
+    "raw": "evidence/maker-syntax.json"
+  },
+  "authenticatedBaselineCore": {
+    "bytes": 70443,
+    "sha256": "e03c09619b8b47097e234ff81a5fe0a28c57b1b20180ba0a818139eb0fc05a9d",
+    "gitBlob": "614e97c72a54cef8385ae6fd0a1a9c756dcb564d"
+  },
+  "fixedCandidateCore": {
+    "bytes": 74835,
+    "sha256": "4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08",
+    "gitBlob": "5d3433d1d756ea6912bef4933bea2b5b189a819f"
+  },
+  "sourcePaths": 9,
+  "reversibleTransform": true,
+  "inheritance": {
+    "referenceCommit": "0e2b71adb095b5ff8dd78540480c5ae53dfcc320",
+    "integritySha256": "82f7dbfec7c20fa81001daa54a61553d23b5dd05e97176ade0fece2d9985a712",
+    "payloadFiles": 66,
+    "resolution": "pinned Git tree, all hashes checked, no network download",
+    "runtimeToolTestVendorChanges": 0,
+    "changedInheritedFiles": [
+      "policy.json",
+      "source-manifest.json"
+    ]
+  },
+  "executionHostMandatoryGates": {
+    "compiler": "5.9.3",
+    "repositoryNodeTests": 467,
+    "inheritedToolTests": 165,
+    "jestSuites": 195,
+    "jestTests": 685,
+    "generatorCheckWriteCheck": true,
+    "bothTscConfigurations": true,
+    "syntheticLocalReplay": true,
+    "rollupBuildOnly": true
+  },
+  "notRunByMaker": [
+    "full repository generator integration",
+    "TypeScript 5.9.3 and both repository tsc configurations",
+    "all 467 repository Node tests",
+    "resolved inherited 165-tool test suite",
+    "Jest 195 suites / 685 tests",
+    "Rollup with the repository lockfile",
+    "whole driver against the actual Windows worktrees",
+    "any Screeps API or WebSocket experiment",
+    "engine CPU measurements or production recovery"
+  ],
+  "interpretation": {
+    "makerPassedDoesNotEqualRepositoryPassed": true,
+    "offlineDoesNotProveEngineCpu": true,
+    "noCpuGainPrediction": true,
+    "noFunctionJitGcRootCauseAssigned": true,
+    "noProductionReadinessClaim": true
+  },
+  "evidenceHashes": {
+    "maker-tests.tap": {
+      "bytes": 19084,
+      "sha256": "6721960bda68da496497a61c6632df58013b46ec55cfc71cc56089c6a9082ec7"
+    },
+    "maker-syntax.json": {
+      "bytes": 977,
+      "sha256": "31a352e521c9a377b03a53928a3fcfc58f169d449a44ae95a1d66afac3be229d"
+    }
+  }
+}

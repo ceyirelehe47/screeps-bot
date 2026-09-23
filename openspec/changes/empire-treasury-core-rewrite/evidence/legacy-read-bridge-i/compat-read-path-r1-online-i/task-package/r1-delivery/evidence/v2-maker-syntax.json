@@ -1,0 +1,66 @@
+{
+  "files": 12,
+  "passed": 12,
+  "results": [
+    {
+      "file": "implementation/treasury-compat-read-path-r1.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tests/package-tools.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tests/read-path-r1.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tests/repair-v2.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/common.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/integration.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/milestone.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/prepare.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/repair.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/run-tests.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/run.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/verify-package.cjs",
+      "exit": 0,
+      "stderr": ""
+    }
+  ]
+}

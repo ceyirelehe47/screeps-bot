@@ -1,0 +1,15 @@
+{
+  "source": "User-pasted Agent report; original Windows logs not available to maker",
+  "reportedAt": "2026-09-23T14:45:30Z",
+  "stopAt": "2026-09-23T14:37:27Z",
+  "phase": "full-offline-gates",
+  "code": "COMMAND_FAILED:build",
+  "tests": 467,
+  "pass": 465,
+  "fail": 2,
+  "sourceHeadAbbreviated": "3b631372",
+  "sourceTreeAbbreviated": "2520a0b8",
+  "candidatePostsReported": 0,
+  "restorePostsReported": 0,
+  "onlineStateIndependentlyReadByMaker": false
+}

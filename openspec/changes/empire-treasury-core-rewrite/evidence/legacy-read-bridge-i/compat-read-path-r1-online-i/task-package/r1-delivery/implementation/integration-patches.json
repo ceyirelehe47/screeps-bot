@@ -1,0 +1,62 @@
+{
+  "scripts/build-treasury-compat-loader.cjs": {
+    "beforeBlob": "acfe875282e2c9c0f65d010a87807fa156181e01",
+    "changes": [
+      {
+        "before": "const V = require('./lib/treasury-compat-read-envelope-xv.cjs');",
+        "after": "const V = require('./lib/treasury-compat-read-envelope-xv.cjs');\nconst Q = require('./lib/treasury-compat-read-path-r1.cjs');",
+        "count": 1
+      },
+      {
+        "before": "transform(text) { return V.coreTransform(T.coreTransform(H_XI.transform(text))); }",
+        "after": "transform(text) { return Q.coreTransform(V.coreTransform(T.coreTransform(H_XI.transform(text)))); }",
+        "count": 1
+      },
+      {
+        "before": "restore(text) { return H_XI.restore(T.coreRestore(V.coreRestore(text))); }",
+        "after": "restore(text) { return H_XI.restore(T.coreRestore(V.coreRestore(Q.coreRestore(text)))); }",
+        "count": 1
+      },
+      {
+        "before": "rules: Object.freeze([...H_XI.rules, ...T.coreRules, ...V.coreRules]),",
+        "after": "rules: Object.freeze([...H_XI.rules, ...T.coreRules, ...V.coreRules, ...Q.coreRules]),",
+        "count": 1
+      },
+      {
+        "before": "  return { [GENERATED]: out, [PREVIEW]: previewOut, [PROVENANCE]: encode(provenance), [SOURCE_MANIFEST]: encode(m) };",
+        "after": "  // R1 is a new outer, reversible authoring stage. Historical revision fields\n  // describe the inherited XV pipeline; the current implementation is explicit.\n  const readPathR1 = { implementationRevision: 'READ-PATH-R1',\n    inheritedRevision: 'XV', wireDiagnosticRevision: 'XIV',\n    authoring: 'scripts/lib/treasury-compat-read-path-r1.cjs',\n    rules: Q.coreRules, privateScopeDictionaries: true, sharedBoundQueryDefinitions: true,\n    fullIndexBuiltEagerly: true, newCpuObservations: 0, businessBudget: 2,\n    tableEnumerationPointUnchanged: true, cpuImprovementVerified: false };\n  m.loaderOptimization.readPathR1 = readPathR1;\n  provenance.readPathR1 = readPathR1;\n  provenance.authoring.push(readPathR1.authoring);\n  return { [GENERATED]: out, [PREVIEW]: previewOut, [PROVENANCE]: encode(provenance), [SOURCE_MANIFEST]: encode(m) };",
+        "count": 1
+      },
+      {
+        "before": "module.exports = { V, T, H_XI, N, generate,",
+        "after": "module.exports = { Q, V, T, H_XI, N, generate,",
+        "count": 1
+      }
+    ]
+  },
+  "test/treasury-compat/task-hotpath-xiv.spec.cjs": {
+    "beforeBlob": "57256192920c950c2460bd319e2c2bf060f2704a",
+    "changes": [
+      {
+        "before": "G.V.coreRestore(liveCore())",
+        "after": "G.V.coreRestore(G.Q.coreRestore(liveCore()))",
+        "count": 2
+      }
+    ]
+  },
+  "test/treasury-compat/read-envelope-xv.spec.cjs": {
+    "beforeBlob": "dd0bb54c7515d248975bbbe8e8cbfc1866509cea",
+    "changes": [
+      {
+        "before": "assert.equal(f(old(n)),read(file));assert.equal(inv(read(file)),old(n));",
+        "after": "const stageBytes=n==='core'?G.Q.coreRestore(read(file)):read(file);assert.equal(f(old(n)),stageBytes);assert.equal(inv(stageBytes),old(n));",
+        "count": 1
+      },
+      {
+        "before": ".replace('roomResourcesCache = new Map();','roomResourcesCache = (globalThis.__mapAllocations++, new Map());')",
+        "after": ".replace(/((?:this\\.)?roomResourcesCache) = new Map\\(\\);/g,'$1 = (globalThis.__mapAllocations++, new Map());')",
+        "count": 1
+      }
+    ]
+  }
+}

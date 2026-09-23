@@ -1,0 +1,22 @@
+{
+  "test/treasury-compat/attribution.spec.cjs": {
+    "beforeBlob": "5617c5dbc3a2981a76b46f341f2fb51d7cdd27b3",
+    "changes": [
+      {
+        "before": "assert.equal(G.A.rules.length, 14); const generated = assertGeneratedCurrent(); assert.equal(generated[G.GENERATED].length, 70443);",
+        "after": "assert.equal(G.A.rules.length, 14); const generated = assertGeneratedCurrent();\n  // Preserve the predecessor length check at the XV boundary; R1 has its own\n  // exact artifact identity and full-API regression suite, not a new IX budget.\n  const currentCore = generated[G.GENERATED];\n  assert.equal(Buffer.byteLength(G.Q.coreRestore(currentCore.toString('utf8'))), 70443);\n  assert.equal(require('node:crypto').createHash('sha256').update(currentCore).digest('hex'),\n    '4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08');",
+        "count": 1
+      }
+    ]
+  },
+  "test/treasury-compat/hotpath-optimization.spec.cjs": {
+    "beforeBlob": "f16f3975c6bc0cfa92df89cb7b9417e60a3027f4",
+    "changes": [
+      {
+        "before": "test('hotpath XI self routes avoid one duplicate scope lookup per task',()=>{const a=operationCounts(beforeCore(),37,true),b=operationCounts(afterCore(),37,true);assert.deepEqual(b.semantics,a.semantics);assert.equal(a.commitment.mapGet-b.commitment.mapGet,37);});",
+        "after": "test('hotpath XI self routes avoid one duplicate scope lookup per task',()=>{\n  // The historical Map delta belongs to the predecessor path. R1 replaces\n  // private Maps, so compare its semantics separately without changing 37.\n  const a=operationCounts(beforeCore(),37,true);\n  const b=operationCounts(G.Q.coreRestore(afterCore()),37,true);\n  const current=operationCounts(afterCore(),37,true);\n  assert.deepEqual(b.semantics,a.semantics);\n  assert.deepEqual(current.semantics,b.semantics);\n  assert.equal(a.commitment.mapGet-b.commitment.mapGet,37);\n});",
+        "count": 1
+      }
+    ]
+  }
+}

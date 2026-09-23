@@ -1,0 +1,23 @@
+[
+  {
+    "file": "runtime/actions.cjs",
+    "start": "async function uploadOnce(",
+    "end": "async function restoreOnce(",
+    "bytes": 1617,
+    "sha256": "1d636808af3eae1ce365f8ac5f9f74a8a761756081217771b98c8bc639ac5d0a"
+  },
+  {
+    "file": "runtime/actions.cjs",
+    "start": "async function restoreOnce(",
+    "end": "function loadSession(",
+    "bytes": 1623,
+    "sha256": "c6ee059b15e9e5c0309653feafcd07891720945bb7a3782d5a241a406097b8bd"
+  },
+  {
+    "file": "runtime/time-budget.cjs",
+    "start": "function exposureGuard(",
+    "end": "module.exports=",
+    "bytes": 846,
+    "sha256": "75d8b0d0ae06c45d41dbb2fd64e6c202f54158590000f516a5ba5bd78a58ad75"
+  }
+]

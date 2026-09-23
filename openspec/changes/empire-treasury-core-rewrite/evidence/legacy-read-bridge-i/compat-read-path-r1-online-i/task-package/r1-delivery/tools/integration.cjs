@@ -1,0 +1,6 @@
+'use strict';
+const C=require('./common.cjs'),PATCHES=require('../implementation/integration-patches.json'),I=require('../implementation/core-identities.json');
+function rewrite(text,changes,reverse=false){const rows=reverse?[...changes].reverse():changes;for(const r of rows){const from=reverse?r.after:r.before,to=reverse?r.before:r.after;C.check(text.split(from).length-1===r.count,'INTEGRATION_ANCHOR_COUNT');text=text.split(from).join(to);}return text;}
+function patch(file,bytes){const p=PATCHES[file];C.check(p&&C.blob(bytes)===p.beforeBlob,'INTEGRATION_BASE_CHANGED:'+file);const out=Buffer.from(rewrite(bytes.toString('utf8'),p.changes));C.check(Buffer.from(rewrite(out.toString('utf8'),p.changes,true)).equals(bytes),'INTEGRATION_NOT_REVERSIBLE');return out;}
+function verifyCurrentCore(b){C.check(b.length===I.candidateCore.bytes&&C.sha(b)===I.candidateCore.sha256&&C.blob(b)===I.candidateCore.gitBlob,'GENERATED_R1_IDENTITY_CHANGED');const Q=require('../implementation/treasury-compat-read-path-r1.cjs'),old=Buffer.from(Q.coreRestore(b.toString('utf8')));C.check(C.blob(old)===I.baselineCore.gitBlob&&C.sha(old)===I.baselineCore.sha256,'CORE_INVERSE_MISMATCH');}
+module.exports={patch,rewrite,verifyCurrentCore,PATCHES};

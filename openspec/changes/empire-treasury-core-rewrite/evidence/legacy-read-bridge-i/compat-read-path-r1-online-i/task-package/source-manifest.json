@@ -1,0 +1,32 @@
+{
+  "kind": "read-path-R1-v2-source/v1",
+  "base": "3b631372213e5e616426434954f29b0792557cb7",
+  "baseTree": "2520a0b89429c2ae89fe12453047eecb7c14c0cd",
+  "expectedSourceTree": "6355f63048720ac3edfbeef91de526f3deaca203",
+  "files": {
+    "test/treasury-compat/attribution.spec.cjs": {
+      "before": {
+        "bytes": 15452,
+        "sha256": "18315cb5505d8a222acc9319218311354d4bcfe36654d4c40f518092bf7fa13c",
+        "blob": "5617c5dbc3a2981a76b46f341f2fb51d7cdd27b3"
+      },
+      "after": {
+        "bytes": 15861,
+        "sha256": "a4e7f72cbf5c77e74d3de3135feaa67a6fc27acd31eadb5199c4b6b8831f16ea",
+        "blob": "2c2c99de6951ad7c3cecf10c7f34d39bd3c3e49d"
+      }
+    },
+    "test/treasury-compat/hotpath-optimization.spec.cjs": {
+      "before": {
+        "bytes": 6525,
+        "sha256": "0244f57a98f0df3a054a11fd6c77280bc6f15f934f9204ff2021e4f960df5750",
+        "blob": "f16f3975c6bc0cfa92df89cb7b9417e60a3027f4"
+      },
+      "after": {
+        "bytes": 6817,
+        "sha256": "f2c33b4a6db24e9436745623b86608ef691efd9eea57a58b0dde120ea5fb3c7a",
+        "blob": "5ac625f6d87b056fac0f4c67fbc5f2db9b134c07"
+      }
+    }
+  }
+}

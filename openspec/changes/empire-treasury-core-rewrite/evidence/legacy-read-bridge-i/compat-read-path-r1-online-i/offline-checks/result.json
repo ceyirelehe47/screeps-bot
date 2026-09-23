@@ -1,0 +1,17 @@
+{
+  "status": "READ_XV_RETRY_OFFLINE_VERIFIED",
+  "source": {
+    "head": "9c57330f262d9a52924c4696811fd4de15a0e017",
+    "tree": "6355f63048720ac3edfbeef91de526f3deaca203",
+    "base": "9c57330f262d9a52924c4696811fd4de15a0e017",
+    "paths": 2,
+    "sourceModified": false,
+    "implementationHead": "9c57330f262d9a52924c4696811fd4de15a0e017"
+  },
+  "packageFingerprint": "8a80fe883e00a743f706934479042ddb718f3c025d36561b8c3e8745b6bd2a12",
+  "repositoryNodeTests": 467,
+  "compiler": "5.9.3",
+  "jestSuites": 195,
+  "jestTests": 685,
+  "atMs": 1790177182380
+}
