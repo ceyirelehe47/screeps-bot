@@ -1,0 +1,56 @@
+{
+  "kind": "full-cost-FC1-resolution/v1",
+  "source": {
+    "head": "0cdbd061c2645366bd409dbdbd262881d277cb35",
+    "tree": "70dff5366fabf4586aef30acd2c62c290824a772",
+    "base": "e34a19fa72f71d9e6deeae5351222d16cef36231",
+    "paths": 6,
+    "defaultOff": true,
+    "readersUnchanged": true
+  },
+  "receipt": {
+    "package": {
+      "files": 32,
+      "fingerprint": "57369eece8704f2b5b4daf864bf3c41a3bff09cca33584f71d95fc340990c3fd"
+    },
+    "prior": {
+      "finalBlob": "b8fc2c07e81c1120a12a3f34294ae67afaa43f10",
+      "recoveryBlob": "84633393f03ef20f032aa914db3a67f9f4f13865",
+      "unchangedHistoricalVerdict": "STRUCTURAL_REVIEW_REQUIRED"
+    },
+    "protocol": "FC1",
+    "performanceTargetCpu": null,
+    "at": "2026-09-23T18:26:22.065Z"
+  },
+  "changedInheritedPaths": [
+    "policy.json",
+    "references/test-contract.json",
+    "runtime/cost-receipts.cjs",
+    "runtime/samples.cjs",
+    "runtime/worker.cjs",
+    "source-manifest.json",
+    "tests/executor-fixtures.cjs",
+    "tests/full-cost-executor.spec.cjs",
+    "tools/archive.cjs",
+    "tools/raw-whitespace.cjs",
+    "tools/repository.cjs",
+    "tools/run-tests.cjs",
+    "tools/verify.cjs"
+  ],
+  "preserved": [
+    "canonical source builders",
+    "preview algorithm",
+    "native CPU samples",
+    "full validation and eager indexes",
+    "actions/transport/observer",
+    "one candidate and one restore with no write retries",
+    "window selection and absolute deadlines"
+  ],
+  "changedProtocol": [
+    "sampled above 2 is no longer rejected",
+    "explicit ON ceiling 10 / reserve 25 / entry headroom 55",
+    "outer heap latch replaces old 5-CPU latch",
+    "four cost receipts required as well as four original reports",
+    "raw-log whitespace proof"
+  ]
+}

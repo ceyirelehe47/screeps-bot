@@ -1,0 +1,19 @@
+{
+  "status": "READ_XV_RETRY_PACKAGE_TESTS_VERIFIED",
+  "protocol": "FC1",
+  "packageFingerprint": "cfbf7a44fc1201756049ae8945a7a6f4441647d56583871632455f995676d5ec",
+  "tests": 189,
+  "passed": 189,
+  "failed": 0,
+  "baseline": {
+    "tests": 165,
+    "passed": 165,
+    "protocol": "unaltered XV retry executor"
+  },
+  "measurement": {
+    "tests": 24,
+    "passed": 24,
+    "protocol": "resolved FC1"
+  },
+  "atMs": 1790188064939
+}

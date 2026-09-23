@@ -1,0 +1,22 @@
+{
+  "references/samples.original.cjs": {
+    "bytes": 12796,
+    "sha256": "d11aa9bbdcf0801bea69f054e92d21a7ff5af10e0d951a20b6ebfaaf1ef83471",
+    "gitBlob": "c691674e066d6b3dabbd6c9168215a2985e4ad13"
+  },
+  "references/task-trace.original.cjs": {
+    "bytes": 2798,
+    "sha256": "a2e03246bd191cdbe22664ac7d579f65055dd5400cd4009c257cfb38a0cec653",
+    "gitBlob": "ddb5545ea7297eb299a318a78341ac1d11d05cff"
+  },
+  "fixtures/runtime-before-full-cost-fc1.ts.txt": {
+    "bytes": 956,
+    "sha256": "7250f9554baca9c2431d109f14c45ebece7df04de95e79e53146f9996dfffe6c",
+    "gitBlob": "13e8e356784da1c606e9c1cc8fccdaaa8d436b0c"
+  },
+  "fixtures/core-R1.expected.ts.txt": {
+    "bytes": 74835,
+    "sha256": "4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08",
+    "gitBlob": "5d3433d1d756ea6912bef4933bea2b5b189a819f"
+  }
+}

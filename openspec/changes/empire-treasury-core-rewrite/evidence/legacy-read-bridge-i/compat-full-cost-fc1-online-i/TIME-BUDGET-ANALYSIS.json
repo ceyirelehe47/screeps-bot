@@ -1,0 +1,46 @@
+{
+  "kind": "XV-retry-I-time-budget-analysis/v1",
+  "runId": "d6ecc012d2d74b119c42b7b3f0f9f91a",
+  "capture": "NOT_DEPLOYED",
+  "closure": "NOT_DEPLOYED",
+  "windowSelection": {
+    "status": "WINDOW_SELECTION_INDEPENDENTLY_VERIFIED",
+    "outcome": "WINDOW_SELECTION_FAILED",
+    "reason": "TIMING_PROFILE_INVALID",
+    "rounds": 1,
+    "decisions": 0,
+    "rejectedDecisions": 0,
+    "successfulTimeReads": 8,
+    "failedTimeReads": 0,
+    "elapsedMs": 132144.79959999997,
+    "maximumMs": 1800000,
+    "currentTick": null,
+    "selectedRound": null,
+    "minimumSlackMs": 180000,
+    "noCodeWrittenBySelector": true
+  },
+  "measurement": null,
+  "binding": null,
+  "upload": null,
+  "independentVerification": null,
+  "successfulTimeReads": 3,
+  "failedTimeReads": 0,
+  "workerProgress": {
+    "count": 0,
+    "firstTick": null,
+    "lastTick": null
+  },
+  "closing": {
+    "runId": "d6ecc012d2d74b119c42b7b3f0f9f91a",
+    "reason": "TIMING_PROFILE_INVALID",
+    "atMs": 1790188668043
+  },
+  "failure": {
+    "runId": "d6ecc012d2d74b119c42b7b3f0f9f91a",
+    "error": "TIMING_PROFILE_INVALID",
+    "noUpload": true,
+    "atMs": 1790188668037
+  },
+  "interpretation": "Admission is a conservative estimate, not a guarantee. Fixed wall limit is never extended. Missing samples and not_called remain distinct from zero-cost work.",
+  "engineCpuGapRepaired": false
+}

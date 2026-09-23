@@ -1,0 +1,212 @@
+{
+  "kind": "read-envelope-XV-independent-review/v1",
+  "conclusion": {
+    "sourceDelivery": "ACCEPTED_PINNED_TREE",
+    "offlineGateEvidence": "READ_XV_OFFLINE_VERIFIED",
+    "timeRejection": "INDEPENDENTLY_RECOMPUTED_CORRECT",
+    "deployment": "NOT_DEPLOYED",
+    "terminationReason": "TIME_BUDGET_INSUFFICIENT",
+    "candidatePostBoundaries": 0,
+    "restorePostBoundaries": 0,
+    "rawReports": 0,
+    "acceptedReports": 0,
+    "completeSamples": 0,
+    "enginePerformanceVerified": false,
+    "recoveryNeededForThisRun": false,
+    "newRecoveryPerformed": false,
+    "engineCpuBudgetGap": "UNRESOLVED",
+    "twelvePointObservationAuthorized": false,
+    "productionSwitchAuthorized": false
+  },
+  "repository": {
+    "name": "ceyirelehe47/screeps-bot",
+    "compatBranch": "compat/treasury-read-bridge-i",
+    "compatBase": "eba6a0df574c9cb6101bd3d7e5ebae729d3dd976",
+    "compatHead": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "compatTree": "cf3169d5e14892249488b333837b7e840b565cce",
+    "expectedSourceTreeMatches": true,
+    "sourceCommitSubject": "perf(compat): reduce read and diagnostic envelope overhead",
+    "sourceCommitParentIsBase": true,
+    "newSourceCommits": 1,
+    "newOnCommits": 0,
+    "newOffCommits": 0,
+    "defaultOffConfigConfirmed": true,
+    "refactorBase": "427080341d08fcfe5569149c6fefcbb8e4059840",
+    "refactorHead": "b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba",
+    "newEvidenceCommits": 1,
+    "refactorRootTreeDiff": [
+      "openspec"
+    ],
+    "deepEvidenceOnlyScopeSeparatelyCompared": false
+  },
+  "package": {
+    "zipFilename": "screeps-compat-read-envelope-XV-online-I-2026-09-23.zip",
+    "zipBytes": 181248,
+    "zipSha256": "c83cf51ab12a905795463de15584456ed4a326321de27a45917848e69e24a065",
+    "payloadFiles": 55,
+    "integritySha256": "a36cbb02cf733f9af777bb6eff858040b530017bd34bf8eb67f91dbf06e6444a",
+    "nativeGitTree": "1e3d31b8b3b2dc5553a3271933b52d356eb380ed",
+    "archiveGitTree": "1e3d31b8b3b2dc5553a3271933b52d356eb380ed",
+    "packageTreeMatchesArchive": true,
+    "testsReexecuted": {
+      "status": "READ_XV_PACKAGE_TESTS_VERIFIED",
+      "packageFingerprint": "a36cbb02cf733f9af777bb6eff858040b530017bd34bf8eb67f91dbf06e6444a",
+      "tests": 124,
+      "passed": 124,
+      "failed": 0,
+      "atMs": 1790104838268
+    },
+    "testEnvironment": "Node v22.16.0 on Linux; inherited NODE_PATH unset for the child process to satisfy the unmodified package guard",
+    "initialLocalCliAttempt": "UNSAFE_ENVIRONMENT due to inherited NODE_PATH; no package files changed; clean-environment CLI passed"
+  },
+  "rawEvidenceIdentityChecks": {
+    "time-observations.jsonl": {
+      "bytes": 3321,
+      "sha256": "ef8670387f6b355a51fecfe6d944e059100a68dd8c56d57e415eb82a2ba4187e",
+      "gitBlob": "23c1906da1d423b612adfa7aeae75affc047be78",
+      "matchedRemote": true
+    },
+    "actions.jsonl": {
+      "bytes": 1379,
+      "sha256": "f897edbdf2b0cb5115eb4d531b8e7c7a1e0d2d8f4b61e0f5b81bff69cd4eb434",
+      "gitBlob": "76ee6d3097ce35fcee7f848b5f58d4c8c9f381a6",
+      "matchedRemote": true
+    }
+  },
+  "timeRecomputation": {
+    "status": "RAW_TIMING_REJECTION_INDEPENDENTLY_RECOMPUTED",
+    "successfulReads": 11,
+    "failedReads": 0,
+    "measurement": {
+      "kind": "tick-rate-measurement/v1",
+      "runId": "9e5f98fd7204bd48606c70feaf5e6456",
+      "clockId": "bcb9e6a277a9960fc29db0e131cc82c3",
+      "readIds": [
+        "1ffdc036b95c469d8bb388dff1f32f3d",
+        "10f1cc123793397221b60898757632b2",
+        "a986fb4ce55fef5a9c39adc4e4888b21",
+        "b2d812de6ff35ce15bdb444d90268c68",
+        "8d46c3c7a1e4b6275730f8a7a2ec551e",
+        "3b990b5f5a773511e8374b5fc973baf4",
+        "0dc77e819bfc3c29e59e43f21d1662ff"
+      ],
+      "samples": 7,
+      "spanMs": 128313.84700000001,
+      "tickAdvance": 29,
+      "firstTick": 73876223,
+      "lastTick": 73876252,
+      "lastRead": {
+        "runId": "9e5f98fd7204bd48606c70feaf5e6456",
+        "id": "0dc77e819bfc3c29e59e43f21d1662ff",
+        "clockId": "bcb9e6a277a9960fc29db0e131cc82c3",
+        "pid": 20448,
+        "purpose": "rate-measurement",
+        "sentMonoMs": 194096.147,
+        "sentAtMs": 1790103767673,
+        "tick": 73876252,
+        "receivedMonoMs": 195498.5167,
+        "receivedAtMs": 1790103769076,
+        "ok": true
+      },
+      "worstObservedMsPerTick": 5678.583575000001,
+      "conservativeMsPerTick": 8518,
+      "safetyFactor": 1.5,
+      "notAFutureSpeedGuarantee": true
+    },
+    "binding": {
+      "kind": "tick-window-admission/v1",
+      "runId": "9e5f98fd7204bd48606c70feaf5e6456",
+      "stage": "binding",
+      "status": "TIME_BUDGET_INSUFFICIENT",
+      "measurementSha256": "9cba680cc9e76855ac28ea7e4a10697323dd48750b55c8b7cb045d01ad1434fe",
+      "readId": "20ca591b55eacc940ac9541318152a59",
+      "currentTick": 73876253,
+      "startTick": 73876500,
+      "endTick": 73876800,
+      "remainingTicks": 547,
+      "conservativeMsPerTick": 8518,
+      "estimatedRemainingMs": 4659346,
+      "deliveryReserveMs": 240000,
+      "requiredMs": 4899346,
+      "exposureLimitMs": 4500000,
+      "slackMs": -399346,
+      "measurementAgeMs": 1364.2950999999885,
+      "readAtMs": 1790103770440,
+      "readMonoMs": 196862.8118,
+      "noAutomaticExtension": true
+    },
+    "measurementAndBindingBothGitBlobIdentical": true,
+    "admittedOnlyVerifierRejectedUnadmittedPlan": "TIME_ADMISSION_INVALID",
+    "writeBoundaries": 0,
+    "counterfactual": {
+      "kind": "arithmetic_only_not_a_new_authorization",
+      "fixedRateMsPerTick": 8518,
+      "minimumLeadTicks": 150,
+      "maximumAlignedLeadTicks": 249,
+      "idealMinimumLeadWindowRequiredMs": 4073100,
+      "actualChosenLeadTicks": 247,
+      "actualRoundingExtraTicks": 97,
+      "roundingExtraConservativeMs": 826246,
+      "maximumRemainingTicksThatFit": 500,
+      "warning": "Future rate, clock/transport behavior and pre-upload freshness are unknown. This is not permission to rerun the existing package."
+    }
+  },
+  "productionEvidence": {
+    "lastThisRunCanonicalReadAtMs": 1790103639310,
+    "lastThisRunCanonicalReadUTC": "2026-09-22T19:00:39.310Z",
+    "stableCanonicalReads": 3,
+    "canonicalMainBytes": 4494463,
+    "canonicalMainSha256": "37d20706908220a157fc30fbf668ed98c880fdb47a34ed34b6a0302e3f11f74b",
+    "canonicalModulesDigest": "84f769750c3a1b5ab5b4b70d13be603ff9b6acd709aa2c0a0fb61cacd8b410bf",
+    "remoteLiveQueryByReviewer": false,
+    "statement": "This archived preflight confirms canonical bytes at its recorded reads, not the live state at review time. No new restore or 75-second recovery observation occurred because deployment was rejected."
+  },
+  "offlineReportedNotRerun": {
+    "status": "READ_XV_OFFLINE_VERIFIED",
+    "sourcePaths": 16,
+    "repositoryNodeTests": 424,
+    "compiler": "5.9.3",
+    "jestSuites": 195,
+    "jestTests": 685,
+    "aggregateBuildGatesRecordedPass": true,
+    "rawRepositoryLogsCompletelyReexecuted": false
+  },
+  "reviewBoundaries": {
+    "githubReadOnly": true,
+    "screepsCredentialUsed": false,
+    "screepsGetExecutedByReviewer": false,
+    "screepsPostExecutedByReviewer": false,
+    "fullRepositoryTestsReexecuted": false,
+    "fullBuildReexecuted": false,
+    "nativePackageTreeCalculated": true,
+    "unmodifiedPackageTestsReexecuted": true,
+    "all11RawTimeReadsReconstructedAndGitBlobMatched": true,
+    "all4RawActionsReconstructedAndGitBlobMatched": true,
+    "originalTimingMeasurementAndPlanFunctionsReexecuted": true,
+    "generatedTimingMeasurementAndBindingGitBlobsMatchRemote": true,
+    "fullFinalVerificationCliReexecuted": false,
+    "reasonFinalCliNotReexecuted": "No complete live clone assembled. The raw time rejection and package were independently recomputed, not the entire repository/CLI pipeline."
+  },
+  "nextRoundRecommendation": {
+    "name": "XV Online Retry with bounded pre-binding scheduling",
+    "sourceChanges": false,
+    "reuseSourceHead": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "preserveCpuBudget": 2,
+    "preserveFourPoints": true,
+    "preserveIntervalTicks": 100,
+    "preservePostRetryProhibition": true,
+    "doNotRerunOldObserve": true,
+    "proposalOnly": "Add bounded read-only waiting and fresh time admission before any ON commit or candidate write; account for alignment-induced lead overhead, persist every rejected decision, and preserve the hard exposure cap. A new authorized package and fresh run are required. Do not weaken safeguards or claim the 81m39s estimate is actual execution duration."
+  },
+  "sources": {
+    "FINAL-VERIFICATION.json": "https://github.com/ceyirelehe47/screeps-bot/blob/b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i/FINAL-VERIFICATION.json",
+    "TIME-BUDGET-ANALYSIS.json": "https://github.com/ceyirelehe47/screeps-bot/blob/b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i/TIME-BUDGET-ANALYSIS.json",
+    "OVERHEAD-ANALYSIS.json": "https://github.com/ceyirelehe47/screeps-bot/blob/b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i/OVERHEAD-ANALYSIS.json",
+    "offline-checks/result.json": "https://github.com/ceyirelehe47/screeps-bot/blob/b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i/offline-checks/result.json",
+    "run/actions.jsonl": "https://github.com/ceyirelehe47/screeps-bot/blob/b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i/run/actions.jsonl",
+    "run/time-observations.jsonl": "https://github.com/ceyirelehe47/screeps-bot/blob/b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i/run/time-observations.jsonl",
+    "run/timing-binding.json": "https://github.com/ceyirelehe47/screeps-bot/blob/b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i/run/timing-binding.json",
+    "run/timing-measurement.json": "https://github.com/ceyirelehe47/screeps-bot/blob/b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i/run/timing-measurement.json",
+    "task-package/tools/repository.cjs": "https://github.com/ceyirelehe47/screeps-bot/blob/b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba/openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i/task-package/tools/repository.cjs"
+  }
+}

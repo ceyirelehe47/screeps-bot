@@ -1,0 +1,20 @@
+{
+  "status": "FC1_PREPARED",
+  "source": {
+    "head": "0cdbd061c2645366bd409dbdbd262881d277cb35",
+    "tree": "70dff5366fabf4586aef30acd2c62c290824a772",
+    "base": "e34a19fa72f71d9e6deeae5351222d16cef36231",
+    "paths": 6,
+    "defaultOff": true,
+    "readersUnchanged": true
+  },
+  "executor": "D:\\code\\screeps\\treasury-full-cost-FC1-execution\\executor",
+  "executorFingerprint": "cfbf7a44fc1201756049ae8945a7a6f4441647d56583871632455f995676d5ec",
+  "inheritance": {
+    "commit": "7d3dbeed9a1c24729529cbec8a75d0cb8ae9454d",
+    "prefix": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-envelope-xv-online-i-retry-i/task-package",
+    "files": 66,
+    "integritySha256": "82f7dbfec7c20fa81001daa54a61553d23b5dd05e97176ade0fece2d9985a712"
+  },
+  "onlineAttempted": false
+}

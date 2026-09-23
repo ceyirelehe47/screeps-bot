@@ -1,0 +1,32 @@
+{
+  "status": "NOT_DEPLOYED",
+  "captureVerified": false,
+  "closure": "NOT_DEPLOYED",
+  "terminationReason": "TIMING_PROFILE_INVALID",
+  "sourceOff": true,
+  "windowSelection": {
+    "status": "WINDOW_SELECTION_INDEPENDENTLY_VERIFIED",
+    "outcome": "WINDOW_SELECTION_FAILED",
+    "reason": "TIMING_PROFILE_INVALID",
+    "rounds": 1,
+    "decisions": 0,
+    "rejectedDecisions": 0,
+    "successfulTimeReads": 8,
+    "failedTimeReads": 0,
+    "elapsedMs": 132144.79959999997,
+    "maximumMs": 1800000,
+    "currentTick": null,
+    "selectedRound": null,
+    "minimumSlackMs": 180000,
+    "noCodeWrittenBySelector": true
+  },
+  "rawReports": 0,
+  "acceptedReports": 0,
+  "completeSamples": 0,
+  "writeBoundaries": {
+    "candidate": 0,
+    "restore": 0
+  },
+  "issues": [],
+  "atMs": 1790188675254
+}

@@ -1,0 +1,17 @@
+{
+  "kind": "pre-binding-selection/v1",
+  "runId": "d6ecc012d2d74b119c42b7b3f0f9f91a",
+  "clockId": "72a7dbdc581d7a92720469f8d61e2394",
+  "pid": 11536,
+  "startedAtMs": 1790188535880,
+  "startedMonoMs": 65831.3797,
+  "maxMs": 1800000,
+  "maxRounds": 6,
+  "minimumSlackMs": 180000,
+  "probeMaxMs": 240000,
+  "probePollMs": 20000,
+  "maxProbesPerRound": 16,
+  "identityMaxMs": 90000,
+  "measurementMaxMs": 300000,
+  "noAutomaticExtension": true
+}

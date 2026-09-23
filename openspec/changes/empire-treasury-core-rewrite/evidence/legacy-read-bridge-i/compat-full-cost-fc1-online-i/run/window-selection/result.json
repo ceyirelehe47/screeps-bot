@@ -1,0 +1,40 @@
+{
+  "kind": "pre-binding-selection-result/v1",
+  "runId": "d6ecc012d2d74b119c42b7b3f0f9f91a",
+  "outcome": "WINDOW_SELECTION_FAILED",
+  "reason": "TIMING_PROFILE_INVALID",
+  "rounds": 1,
+  "selected": null,
+  "startedAtMs": 1790188535880,
+  "endedAtMs": 1790188668025,
+  "elapsedMs": 132144.79959999997,
+  "maximumMs": 1800000,
+  "maximumRounds": 6,
+  "noCodeWrittenBySelector": true,
+  "files": {
+    "round-01/errors.jsonl": {
+      "bytes": 130,
+      "sha256": "6d44ddeecbecf75cd976e45ef1a293723b0f005c59899e37d1e9746f09aa3d88"
+    },
+    "round-01/result.json": {
+      "bytes": 272,
+      "sha256": "ae442ba2e0b2ef7d8d2f76e1091bff7a1df1b02fb6be844864b157c23151c2fc"
+    },
+    "round-01/start.json": {
+      "bytes": 113,
+      "sha256": "d89ac877d40169a5bcdf241bb36ccd6b294b19f4ce84a64d842c8692e84c6bd6"
+    },
+    "round-01/time-observations.jsonl": {
+      "bytes": 2432,
+      "sha256": "281036233ca279b6eb655e02c4c0032ec33b82cbd6c3bdcf42c59e67f6d6b9cf"
+    },
+    "round-01/timing-measurement.json": {
+      "bytes": 1077,
+      "sha256": "d5c1b80d78ab88b5a07010552f0f9cb797aa1977ea2bd4f58f6415a49b55050f"
+    },
+    "start.json": {
+      "bytes": 445,
+      "sha256": "cf830906548cfdff745c99fb2a2cd56276b951e4e24e540769915078cf0c46fb"
+    }
+  }
+}

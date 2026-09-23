@@ -1,0 +1,32 @@
+{
+  "kind": "full-cost-FC1-analysis/v1",
+  "experimentStatus": "NOT_DEPLOYED",
+  "recoveryStatus": "NOT_DEPLOYED",
+  "sourceOff": true,
+  "performanceTargetCpu": null,
+  "oldR1VerdictUnchanged": true,
+  "captureTrusted": false,
+  "rows": [],
+  "executionCompleteSamples": 0,
+  "correctAndCompleteSamples": 0,
+  "costAssessment": "Measured evidence is not a production CPU allocation approval.",
+  "mainReportTailsObserved": [],
+  "knownReceiptInclusiveCosts": [],
+  "finalReceiptOwnTailObserved": false,
+  "excludedCosts": [
+    "non-due scheduler checks",
+    "module startup before the wrapper entry mark",
+    "cpuProfiler.flush and engine Memory serialization after the wrapper",
+    "last receipt preparation/emission tail; earlier receipt overhead is separately carried forward"
+  ],
+  "nonemptyReservationsOnlineCovered": false,
+  "legacyProjectionMismatches": [],
+  "nativeBucketTrendConclusion": "Four sparse sample snapshots do not establish long-term CPU/bucket sustainability.",
+  "fullCompatibilityObserved": false,
+  "productionSwitchAuthorized": false,
+  "secondWindowAuthorized": false,
+  "fifthBusinessSampleAuthorized": false,
+  "rootCauseAssigned": false,
+  "milestone": "NOT_DEPLOYED_NO_COST_CONCLUSION",
+  "nextAction": "Independent review of functional completeness, correctness, actual measured cost and native headroom. Do not automatically optimize, change the exposure ceiling, run another window, or switch production."
+}

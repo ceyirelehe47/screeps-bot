@@ -1,0 +1,6 @@
+{
+  "kind": "full-cost-FC1-test-contract/v1",
+  "count": 189,
+  "baselineTests": 165,
+  "measurementTests": 24
+}

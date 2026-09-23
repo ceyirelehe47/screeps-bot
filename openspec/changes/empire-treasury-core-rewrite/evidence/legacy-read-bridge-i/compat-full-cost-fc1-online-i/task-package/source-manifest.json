@@ -1,0 +1,72 @@
+{
+  "kind": "full-cost-FC1-source/v1",
+  "base": "e34a19fa72f71d9e6deeae5351222d16cef36231",
+  "baseTree": "6355f63048720ac3edfbeef91de526f3deaca203",
+  "expectedSourceTree": "70dff5366fabf4586aef30acd2c62c290824a772",
+  "files": {
+    "docs/treasury-compat-source-manifest.json": {
+      "before": {
+        "bytes": 9558,
+        "sha256": "6395f350275de6ad3a3bf12b810e304bcd430afbb5c78aeefabd7166d52b985b",
+        "gitBlob": "2423ea0fa2d4af1369a2a2423c4910e24a9de55f"
+      },
+      "after": {
+        "bytes": 9559,
+        "sha256": "6925945172172693a3e2b6d71fdd8852cc35116fc42e951874e84c2f54740967",
+        "gitBlob": "ca2f538e8b2161491e4f00c65b435bce11ab70cc"
+      }
+    },
+    "scripts/build-treasury-compat-loader.cjs": {
+      "before": {
+        "bytes": 18913,
+        "sha256": "63a2cf7799935c4767c409840c6e677cc11d0a5ecbcfb993cec967d997651060",
+        "gitBlob": "b72a7deefd542ae1514d2082af84253b543c7ff0"
+      },
+      "after": {
+        "bytes": 18914,
+        "sha256": "54b0939d31828fb940945b2aeba9aa133bd3540b69a2090513e7e66bdd5e6a9c",
+        "gitBlob": "fcb0371bea5a3a9207c1426c59a11585fff6d65c"
+      }
+    },
+    "src/runtime/treasuryCompatRuntime.ts": {
+      "before": {
+        "bytes": 956,
+        "sha256": "7250f9554baca9c2431d109f14c45ebece7df04de95e79e53146f9996dfffe6c",
+        "gitBlob": "13e8e356784da1c606e9c1cc8fccdaaa8d436b0c"
+      },
+      "after": {
+        "bytes": 7549,
+        "sha256": "dec7d710779248e0689b673a473557c07728a93d422fee7524f3a79082549967",
+        "gitBlob": "4e5ee3c2b3ed126a8d4c4dbb0f9e57ef5479fcc7"
+      }
+    },
+    "test/treasury-compat/boundary-attribution-xiii.spec.cjs": {
+      "before": {
+        "bytes": 10887,
+        "sha256": "f6dda014c423e7aa829e5ca9995d6a2f15f1e0b04f8dc1be944d787254ef8713",
+        "gitBlob": "d06bacf843f8d1e9d38b00fedb66c4bf99ada05a"
+      },
+      "after": {
+        "bytes": 11333,
+        "sha256": "c6f78717af32a7436b67d2ddba2dce9160f254a7de4f75db5de20a7fbd4b251d",
+        "gitBlob": "4f0648c5b2d342f9564969b75409344ae8b0b516"
+      }
+    },
+    "test/treasury-compat/fixtures/runtime-before-full-cost-fc1.ts.txt": {
+      "before": null,
+      "after": {
+        "bytes": 956,
+        "sha256": "7250f9554baca9c2431d109f14c45ebece7df04de95e79e53146f9996dfffe6c",
+        "gitBlob": "13e8e356784da1c606e9c1cc8fccdaaa8d436b0c"
+      }
+    },
+    "test/treasury-compat/full-cost-fc1.spec.cjs": {
+      "before": null,
+      "after": {
+        "bytes": 12236,
+        "sha256": "58c5393e87ecdc8750199d9b3d9cea08208ae72e14ebe852c8b6688daa993f66",
+        "gitBlob": "61f798d6318cc311f7c2f5224286427fb75d1801"
+      }
+    }
+  }
+}

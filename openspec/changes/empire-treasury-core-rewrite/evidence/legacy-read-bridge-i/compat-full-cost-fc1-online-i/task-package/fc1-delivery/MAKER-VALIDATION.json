@@ -1,0 +1,65 @@
+{
+  "kind": "full-cost-FC1-maker-validation/v1",
+  "package": "treasury-full-cost-FC1-online-I-2026-09-24",
+  "environment": {
+    "node": "v22.16.0",
+    "os": "Linux",
+    "typescript": "5.8.3",
+    "lockedUserCompilerUsed": false,
+    "fullRepositoryAvailable": false
+  },
+  "packageTests": {
+    "status": "PASS",
+    "tests": 118,
+    "pass": 118,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "groups": {
+      "retainedActualR1CoreRegression": 43,
+      "newWrapperWithStubbedPreview": 29,
+      "authenticAdaptedParserProtocolTests": 24,
+      "packagingAndGitBoundaryTests": 22
+    },
+    "coreSeededDifferentialCorpus": 512,
+    "log": "evidence/maker-tests.tap",
+    "stderr": "evidence/maker-tests.stderr"
+  },
+  "syntax": {
+    "status": "PASS",
+    "files": 19,
+    "evidence": "evidence/syntax-check.json"
+  },
+  "provenance": {
+    "status": "PASS",
+    "evidence": "evidence/authenticated-fixtures.json",
+    "coreImplementationChanged": false,
+    "previewImplementationChanged": false,
+    "runtimeAndProtocolChanged": true
+  },
+  "nativeGitTests": {
+    "executed": true,
+    "scope": "Isolated temporary repositories: preserve raw bytes, reject unlisted/source whitespace and staged hash drift, commit tree identity, consumed authorization. Not a production repository test."
+  },
+  "parserTestScope": "Original Git-authenticated samples/task-trace bytes adapted with actual FC1 transforms, loaded with a test common shim; real inherited executor is reconstructed and checked by Agent.",
+  "notRunHere": [
+    "499-test full repository Node suite, including 3 real runtime/preview/Core integration tests",
+    "165-test complete inherited executor regression and its full repository/session/archive fixtures",
+    "Full resolved executor workflow and 189-test combined gate",
+    "TypeScript 5.9.3 dual tsc",
+    "Full-repository generator check/write/check",
+    "Repository full-API replay",
+    "Jest 195 suites / 685 tests",
+    "Detached Rollup production bundle",
+    "Live Screeps experiment, cost receipt capture, or recovery"
+  ],
+  "agentMustRunAllGates": true,
+  "networkActions": {
+    "screepsWrites": 0,
+    "githubWrites": 0,
+    "onlineSamples": 0
+  },
+  "measurementConclusion": "No real Screeps CPU performance or complete-path cost has been established by maker tests.",
+  "deliveryReextractValidation": "Reported in the external package-info JSON after the final ZIP is created; no self-referential archive hash is embedded."
+}

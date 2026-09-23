@@ -1,0 +1,14 @@
+{
+  "runId": "d6ecc012d2d74b119c42b7b3f0f9f91a",
+  "round": 1,
+  "reason": "TIMING_PROFILE_INVALID",
+  "selectedOrdinal": null,
+  "started": {
+    "atMs": 1790188535886,
+    "monoMs": 65837.4372
+  },
+  "ended": {
+    "atMs": 1790188668020,
+    "monoMs": 197971.6726
+  }
+}

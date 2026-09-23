@@ -1,0 +1,1000 @@
+TAP version 13
+# Subtest: candidate one-shot boundary exists before request and refuses repetition
+ok 1 - candidate one-shot boundary exists before request and refuses repetition
+  ---
+  duration_ms: 153.5651
+  type: 'test'
+  ...
+# Subtest: closing raised during preflight prevents candidate POST
+ok 2 - closing raised during preflight prevents candidate POST
+  ---
+  duration_ms: 84.9132
+  type: 'test'
+  ...
+# Subtest: failed restore response is reconciled, never automatically retried
+ok 3 - failed restore response is reconciled, never automatically retried
+  ---
+  duration_ms: 98.5375
+  type: 'test'
+  ...
+# Subtest: lost reply after accepted restore is confirmed using reads only
+ok 4 - lost reply after accepted restore is confirmed using reads only
+  ---
+  duration_ms: 88.21
+  type: 'test'
+  ...
+# Subtest: already backup consumes no restore marker and performs no POST
+ok 5 - already backup consumes no restore marker and performs no POST
+  ---
+  duration_ms: 69.9503
+  type: 'test'
+  ...
+# Subtest: third-party code is not overwritten
+ok 6 - third-party code is not overwritten
+  ---
+  duration_ms: 67.9464
+  type: 'test'
+  ...
+# Subtest: absence of candidate marker never causes a recovery write
+ok 7 - absence of candidate marker never causes a recovery write
+  ---
+  duration_ms: 68.3931
+  type: 'test'
+  ...
+# Subtest: authorization and schema errors are not classified as network retries
+ok 8 - authorization and schema errors are not classified as network retries
+  ---
+  duration_ms: 0.2226
+  type: 'test'
+  ...
+# Subtest: unchanged execution modules and canonical typed-module guard retain pinned bytes
+ok 9 - unchanged execution modules and canonical typed-module guard retain pinned bytes
+  ---
+  duration_ms: 4.1374
+  type: 'test'
+  ...
+# Subtest: XV empty and not-deployed analysis never invents CPU or complete samples
+ok 10 - XV empty and not-deployed analysis never invents CPU or complete samples
+  ---
+  duration_ms: 2.1057
+  type: 'test'
+  ...
+# Subtest: XV not_called has null actual call cost even when a parent interval exists
+ok 11 - XV not_called has null actual call cost even when a parent interval exists
+  ---
+  duration_ms: 0.7836
+  type: 'test'
+  ...
+# Subtest: XV observation call counter zero is not converted into an executed build
+ok 12 - XV observation call counter zero is not converted into an executed build
+  ---
+  duration_ms: 0.4574
+  type: 'test'
+  ...
+# Subtest: XV missing or final tail remains unobserved and is never estimated
+ok 13 - XV missing or final tail remains unobserved and is never estimated
+  ---
+  duration_ms: 0.4025
+  type: 'test'
+  ...
+# Subtest: XV observed tail reconciles with prefix without nested double counting
+ok 14 - XV observed tail reconciles with prefix without nested double counting
+  ---
+  duration_ms: 0.6583
+  type: 'test'
+  ...
+# Subtest: XV orphan tail is not silently adopted into accepted evidence
+ok 15 - XV orphan tail is not silently adopted into accepted evidence
+  ---
+  duration_ms: 0.4955
+  type: 'test'
+  ...
+# Subtest: XV duplicate tails are rejected rather than counted twice
+ok 16 - XV duplicate tails are rejected rather than counted twice
+  ---
+  duration_ms: 0.2315
+  type: 'test'
+  ...
+# Subtest: XV corrupt tail sum cannot fabricate a lower total
+ok 17 - XV corrupt tail sum cannot fabricate a lower total
+  ---
+  duration_ms: 0.151
+  type: 'test'
+  ...
+# Subtest: XV nonfinite or negative tail parts are rejected
+ok 18 - XV nonfinite or negative tail parts are rejected
+  ---
+  duration_ms: 0.474
+  type: 'test'
+  ...
+# Subtest: XV invalid or duplicated raw prefix rows cannot form a summary
+ok 19 - XV invalid or duplicated raw prefix rows cannot form a summary
+  ---
+  duration_ms: 1.1648
+  type: 'test'
+  ...
+# Subtest: XV rejected complete-looking report does not count as business complete
+ok 20 - XV rejected complete-looking report does not count as business complete
+  ---
+  duration_ms: 0.4915
+  type: 'test'
+  ...
+# Subtest: XV complete counts are derived from accepted reports, not supplied total
+ok 21 - XV complete counts are derived from accepted reports, not supplied total
+  ---
+  duration_ms: 0.6704
+  type: 'test'
+  ...
+# Subtest: XV source revision is separate from retained wire revision and includes all overhead
+ok 22 - XV source revision is separate from retained wire revision and includes all overhead
+  ---
+  duration_ms: 0.4791
+  type: 'test'
+  ...
+# Subtest: XV analysis leaves original profiles and frozen input untouched
+ok 23 - XV analysis leaves original profiles and frozen input untouched
+  ---
+  duration_ms: 0.8254
+  type: 'test'
+  ...
+# Subtest: XV baseline binds exact prior review bytes and pinned evidence commit
+ok 24 - XV baseline binds exact prior review bytes and pinned evidence commit
+  ---
+  duration_ms: 0.676
+  type: 'test'
+  ...
+# Subtest: XV statistics preserve zero while excluding null and have defined empty behavior
+ok 25 - XV statistics preserve zero while excluding null and have defined empty behavior
+  ---
+  duration_ms: 1.0206
+  type: 'test'
+  ...
+# Subtest: real XIV source-generated synthetic four-report protocol validates
+ok 26 - real XIV source-generated synthetic four-report protocol validates
+  ---
+  duration_ms: 5.8118
+  type: 'test'
+  ...
+# Subtest: two actual-call probes are represented without adding them to measured body
+ok 27 - two actual-call probes are represented without adding them to measured body
+  ---
+  duration_ms: 0.267
+  type: 'test'
+  ...
+# Subtest: trace rejects missing
+ok 28 - trace rejects missing
+  ---
+  duration_ms: 0.3816
+  type: 'test'
+  ...
+# Subtest: trace rejects duplicate
+ok 29 - trace rejects duplicate
+  ---
+  duration_ms: 0.154
+  type: 'test'
+  ...
+# Subtest: trace rejects negative
+ok 30 - trace rejects negative
+  ---
+  duration_ms: 0.235
+  type: 'test'
+  ...
+# Subtest: trace rejects nan
+ok 31 - trace rejects nan
+  ---
+  duration_ms: 0.1312
+  type: 'test'
+  ...
+# Subtest: trace rejects reversed
+ok 32 - trace rejects reversed
+  ---
+  duration_ms: 0.1991
+  type: 'test'
+  ...
+# Subtest: trace rejects parent-sum
+ok 33 - trace rejects parent-sum
+  ---
+  duration_ms: 0.1322
+  type: 'test'
+  ...
+# Subtest: trace rejects body-sum
+ok 34 - trace rejects body-sum
+  ---
+  duration_ms: 0.342
+  type: 'test'
+  ...
+# Subtest: not-called is not represented as a measured zero-cost call
+ok 35 - not-called is not represented as a measured zero-cost call
+  ---
+  duration_ms: 0.4954
+  type: 'test'
+  ...
+# Subtest: tail reconstruction retains cost and rejects a changed sum
+ok 36 - tail reconstruction retains cost and rejects a changed sum
+  ---
+  duration_ms: 0.2768
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted scope
+ok 37 - report rejects corrupted scope
+  ---
+  duration_ms: 0.2394
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted call
+ok 38 - report rejects corrupted call
+  ---
+  duration_ms: 0.1514
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted cpu
+ok 39 - report rejects corrupted cpu
+  ---
+  duration_ms: 0.136
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted authority
+ok 40 - report rejects corrupted authority
+  ---
+  duration_ms: 0.1211
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted endpoint
+ok 41 - report rejects corrupted endpoint
+  ---
+  duration_ms: 0.2675
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted freshness
+ok 42 - report rejects corrupted freshness
+  ---
+  duration_ms: 0.3361
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted source
+ok 43 - report rejects corrupted source
+  ---
+  duration_ms: 0.1289
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted local-stop
+ok 44 - report rejects corrupted local-stop
+  ---
+  duration_ms: 0.1806
+  type: 'test'
+  ...
+# Subtest: report rejects corrupted output
+ok 45 - report rejects corrupted output
+  ---
+  duration_ms: 0.2757
+  type: 'test'
+  ...
+# Subtest: incomplete projection remains diagnostic but not a complete business sample
+ok 46 - incomplete projection remains diagnostic but not a complete business sample
+  ---
+  duration_ms: 0.86
+  type: 'test'
+  ...
+# Subtest: single HTML transport layer is decoded, not recursively expanded
+ok 47 - single HTML transport layer is decoded, not recursively expanded
+  ---
+  duration_ms: 1.5872
+  type: 'test'
+  ...
+# Subtest: unsafe raw report is retained and never promoted to an accepted sample
+ok 48 - unsafe raw report is retained and never promoted to an accepted sample
+  ---
+  duration_ms: 0.5555
+  type: 'test'
+  ...
+# Subtest: safety control message is not a fifth sample
+ok 49 - safety control message is not a fifth sample
+  ---
+  duration_ms: 0.1696
+  type: 'test'
+  ...
+# Subtest: analysis keeps rejected raw evidence separate and never creates a zero-cost build
+ok 50 - analysis keeps rejected raw evidence separate and never creates a zero-cost build
+  ---
+  duration_ms: 2.8244
+  type: 'test'
+  ...
+# Subtest: analysis without any session or reports stays empty and inconclusive
+ok 51 - analysis without any session or reports stays empty and inconclusive
+  ---
+  duration_ms: 0.2316
+  type: 'test'
+  ...
+# Subtest: XIV source-generated first-pending partition closes exact task parent
+ok 52 - XIV source-generated first-pending partition closes exact task parent
+  ---
+  duration_ms: 1.5094
+  type: 'test'
+  ...
+# Subtest: XIV task trace rejects missing
+ok 53 - XIV task trace rejects missing
+  ---
+  duration_ms: 0.386
+  type: 'test'
+  ...
+# Subtest: XIV task trace rejects unknown
+ok 54 - XIV task trace rejects unknown
+  ---
+  duration_ms: 0.1979
+  type: 'test'
+  ...
+# Subtest: XIV task trace rejects reversed
+ok 55 - XIV task trace rejects reversed
+  ---
+  duration_ms: 0.1241
+  type: 'test'
+  ...
+# Subtest: XIV task trace rejects negative
+ok 56 - XIV task trace rejects negative
+  ---
+  duration_ms: 0.1224
+  type: 'test'
+  ...
+# Subtest: XIV task trace rejects ordinal-zero
+ok 57 - XIV task trace rejects ordinal-zero
+  ---
+  duration_ms: 0.8004
+  type: 'test'
+  ...
+# Subtest: XIV task trace rejects ordinal-over-table
+ok 58 - XIV task trace rejects ordinal-over-table
+  ---
+  duration_ms: 0.1337
+  type: 'test'
+  ...
+# Subtest: XIV task trace rejects sum
+ok 59 - XIV task trace rejects sum
+  ---
+  duration_ms: 0.1259
+  type: 'test'
+  ...
+# Subtest: XIV task trace rejects outside-body
+ok 60 - XIV task trace rejects outside-body
+  ---
+  duration_ms: 0.3221
+  type: 'test'
+  ...
+# Subtest: XIV task trace rejects no-pending-lie
+ok 61 - XIV task trace rejects no-pending-lie
+  ---
+  duration_ms: 0.4429
+  type: 'test'
+  ...
+# Subtest: XIV task trace rejects missing-end
+ok 62 - XIV task trace rejects missing-end
+  ---
+  duration_ms: 0.2613
+  type: 'test'
+  ...
+# Subtest: XIV task trace rejects nan
+ok 63 - XIV task trace rejects nan
+  ---
+  duration_ms: 0.116
+  type: 'test'
+  ...
+# Subtest: XIV task trace rejects wrong-status
+ok 64 - XIV task trace rejects wrong-status
+  ---
+  duration_ms: 0.102
+  type: 'test'
+  ...
+# Subtest: XIV no valid pending and no builder call have different meanings
+ok 65 - XIV no valid pending and no builder call have different meanings
+  ---
+  duration_ms: 0.2354
+  type: 'test'
+  ...
+# Subtest: XIV tail cannot carry another task history or task envelope
+ok 66 - XIV tail cannot carry another task history or task envelope
+  ---
+  duration_ms: 0.2061
+  type: 'test'
+  ...
+# Subtest: XIV whole profile validation requires task envelope even when five-part envelope is valid
+ok 67 - XIV whole profile validation requires task envelope even when five-part envelope is valid
+  ---
+  duration_ms: 1.6885
+  type: 'test'
+  ...
+# Subtest: XIV accepted and rejected task-region statistics remain separate
+ok 68 - XIV accepted and rejected task-region statistics remain separate
+  ---
+  duration_ms: 3.3538
+  type: 'test'
+  ...
+# Subtest: seven successful reads spanning two minutes yield measured and padded rate
+ok 69 - seven successful reads spanning two minutes yield measured and padded rate
+  ---
+  duration_ms: 2.0339
+  type: 'test'
+  ...
+# Subtest: latency is conservatively included instead of pretending responses mark server instants
+ok 70 - latency is conservatively included instead of pretending responses mark server instants
+  ---
+  duration_ms: 0.2658
+  type: 'test'
+  ...
+# Subtest: fast observed ticks retain a five-second conservative floor
+ok 71 - fast observed ticks retain a five-second conservative floor
+  ---
+  duration_ms: 0.2275
+  type: 'test'
+  ...
+# Subtest: insufficient sample count is rejected
+ok 72 - insufficient sample count is rejected
+  ---
+  duration_ms: 0.4542
+  type: 'test'
+  ...
+# Subtest: insufficient elapsed span is rejected even with enough ticks
+ok 73 - insufficient elapsed span is rejected even with enough ticks
+  ---
+  duration_ms: 0.1725
+  type: 'test'
+  ...
+# Subtest: insufficient tick progress is rejected even with long wall time
+ok 74 - insufficient tick progress is rejected even with long wall time
+  ---
+  duration_ms: 0.1565
+  type: 'test'
+  ...
+# Subtest: a tick regression fails closed
+ok 75 - a tick regression fails closed
+  ---
+  duration_ms: 0.1767
+  type: 'test'
+  ...
+# Subtest: mixing monotonic timestamps from different processes is rejected
+ok 76 - mixing monotonic timestamps from different processes is rejected
+  ---
+  duration_ms: 0.1529
+  type: 'test'
+  ...
+# Subtest: clock offset discontinuity across reads is rejected
+ok 77 - clock offset discontinuity across reads is rejected
+  ---
+  duration_ms: 0.3682
+  type: 'test'
+  ...
+# Subtest: duplicate read IDs cannot inflate measurement count
+ok 78 - duplicate read IDs cannot inflate measurement count
+  ---
+  duration_ms: 0.4265
+  type: 'test'
+  ...
+# Subtest: stalled reads remain in the time denominator when advancement resumes
+ok 79 - stalled reads remain in the time denominator when advancement resumes
+  ---
+  duration_ms: 0.268
+  type: 'test'
+  ...
+# Subtest: read-only calibration uses an injected clock and stores every successful read
+ok 80 - read-only calibration uses an injected clock and stores every successful read
+  ---
+  duration_ms: 71.8447
+  type: 'test'
+  ...
+# Subtest: transient calibration GET failure is logged and bounded, not erased
+ok 81 - transient calibration GET failure is logged and bounded, not erased
+  ---
+  duration_ms: 62.0411
+  type: 'test'
+  ...
+# Subtest: a halted shard reaches finite calibration deadline and writes no candidate marker
+ok 82 - a halted shard reaches finite calibration deadline and writes no candidate marker
+  ---
+  duration_ms: 103.7698
+  type: 'test'
+  ...
+# Subtest: invalid game-time response is not retried
+ok 83 - invalid game-time response is not retried
+  ---
+  duration_ms: 4.0737
+  type: 'test'
+  ...
+# Subtest: a single read cannot silently outlive its supplied outer budget
+ok 84 - a single read cannot silently outlive its supplied outer budget
+  ---
+  duration_ms: 3.8427
+  type: 'test'
+  ...
+# Subtest: reported XIV timeline demonstrates old 30-minute cap is insufficient
+ok 85 - reported XIV timeline demonstrates old 30-minute cap is insufficient
+  ---
+  duration_ms: 0.1583
+  type: 'test'
+  ...
+# Subtest: same conservative four-point plan fits fixed 75 minutes but not old 30
+ok 86 - same conservative four-point plan fits fixed 75 minutes but not old 30
+  ---
+  duration_ms: 0.9579
+  type: 'test'
+  ...
+# Subtest: slow sampled shard is declined rather than stretching the fixed cap
+ok 87 - slow sampled shard is declined rather than stretching the fixed cap
+  ---
+  duration_ms: 0.2197
+  type: 'test'
+  ...
+# Subtest: time budget includes the final report delivery allowance
+ok 88 - time budget includes the final report delivery allowance
+  ---
+  duration_ms: 0.2059
+  type: 'test'
+  ...
+# Subtest: newly observed slowdown before upload increases the conservative rate
+ok 89 - newly observed slowdown before upload increases the conservative rate
+  ---
+  duration_ms: 0.1856
+  type: 'test'
+  ...
+# Subtest: calibration age cannot be refreshed by copying its JSON into another directory
+ok 90 - calibration age cannot be refreshed by copying its JSON into another directory
+  ---
+  duration_ms: 0.2154
+  type: 'test'
+  ...
+# Subtest: no tick progress after a full polling interval prevents upload
+ok 91 - no tick progress after a full polling interval prevents upload
+  ---
+  duration_ms: 0.2628
+  type: 'test'
+  ...
+# Subtest: pre-upload check requires at least 100 ticks before first point
+ok 92 - pre-upload check requires at least 100 ticks before first point
+  ---
+  duration_ms: 0.1896
+  type: 'test'
+  ...
+# Subtest: modified CPU, interval, scope or fifth point cannot pass time admission
+ok 93 - modified CPU, interval, scope or fifth point cannot pass time admission
+  ---
+  duration_ms: 0.3416
+  type: 'test'
+  ...
+# Subtest: independent recalculation rejects a forged rate estimate
+ok 94 - independent recalculation rejects a forged rate estimate
+  ---
+  duration_ms: 25.0526
+  type: 'test'
+  ...
+# Subtest: independent recalculation rejects altered admission slack
+ok 95 - independent recalculation rejects altered admission slack
+  ---
+  duration_ms: 38.4638
+  type: 'test'
+  ...
+# Subtest: stale final read is rejected immediately before any write boundary
+ok 96 - stale final read is rejected immediately before any write boundary
+  ---
+  duration_ms: 0.3236
+  type: 'test'
+  ...
+# Subtest: wall-clock jump between admission and marker is rejected
+ok 97 - wall-clock jump between admission and marker is rejected
+  ---
+  duration_ms: 0.2242
+  type: 'test'
+  ...
+# Subtest: slowdown in production upload path leaves zero POST and no quota marker
+ok 98 - slowdown in production upload path leaves zero POST and no quota marker
+  ---
+  duration_ms: 104.1926
+  type: 'test'
+  ...
+# Subtest: read age cannot grow during canStart and still send POST
+ok 99 - read age cannot grow during canStart and still send POST
+  ---
+  duration_ms: 82.8109
+  type: 'test'
+  ...
+# Subtest: successful upload persists an immutable finite deadline and timing proof
+ok 100 - successful upload persists an immutable finite deadline and timing proof
+  ---
+  duration_ms: 90.4756
+  type: 'test'
+  ...
+# Subtest: monotonic exposure guard reaches exactly the fixed deadline, never renews
+ok 101 - monotonic exposure guard reaches exactly the fixed deadline, never renews
+  ---
+  duration_ms: 0.3165
+  type: 'test'
+  ...
+# Subtest: starting a later worker retains remaining time, not a fresh full budget
+ok 102 - starting a later worker retains remaining time, not a fresh full budget
+  ---
+  duration_ms: 0.1106
+  type: 'test'
+  ...
+# Subtest: wall-clock rollback and forward jump both trigger close rather than extending exposure
+ok 103 - wall-clock rollback and forward jump both trigger close rather than extending exposure
+  ---
+  duration_ms: 0.1367
+  type: 'test'
+  ...
+# Subtest: malformed or expanded deadline marker is rejected
+ok 104 - malformed or expanded deadline marker is rejected
+  ---
+  duration_ms: 0.1388
+  type: 'test'
+  ...
+# Subtest: worker honors an expired marker and calls closer once without new POST loops
+ok 105 - worker honors an expired marker and calls closer once without new POST loops
+  ---
+  duration_ms: 17.9253
+  type: 'test'
+  ...
+# Subtest: tick regression between readiness and calibration is also rejected
+ok 106 - tick regression between readiness and calibration is also rejected
+  ---
+  duration_ms: 11.5104
+  type: 'test'
+  ...
+# Subtest: worker progress reads preserve the successful game-time values as evidence
+ok 107 - worker progress reads preserve the successful game-time values as evidence
+  ---
+  duration_ms: 9.1153
+  type: 'test'
+  ...
+# Subtest: a missing timing measurement cannot authorize upload
+ok 108 - a missing timing measurement cannot authorize upload
+  ---
+  duration_ms: 76.9641
+  type: 'test'
+  ...
+# Subtest: proof from an admitted binding stage cannot substitute for upload-stage evidence
+ok 109 - proof from an admitted binding stage cannot substitute for upload-stage evidence
+  ---
+  duration_ms: 77.4729
+  type: 'test'
+  ...
+# Subtest: in-flight time read respects outer calibration deadline rather than a new full timeout
+ok 110 - in-flight time read respects outer calibration deadline rather than a new full timeout
+  ---
+  duration_ms: 9.4092
+  type: 'test'
+  ...
+# Subtest: worker request and polling budgets shrink to the remaining exposure time
+ok 111 - worker request and polling budgets shrink to the remaining exposure time
+  ---
+  duration_ms: 0.2326
+  type: 'test'
+  ...
+# Subtest: independent observer physically collects bounded synthetic WS and verifier recomputes
+ok 112 - independent observer physically collects bounded synthetic WS and verifier recomputes
+  ---
+  duration_ms: 97.1332
+  type: 'test'
+  ...
+# Subtest: independent observer rejects bridge or runtime-error frames
+ok 113 - independent observer rejects bridge or runtime-error frames
+  ---
+  duration_ms: 0.3465
+  type: 'test'
+  ...
+# Subtest: collector emits terminal footer and remains separate from recovery observation
+ok 114 - collector emits terminal footer and remains separate from recovery observation
+  ---
+  duration_ms: 100.2962
+  type: 'test'
+  ...
+# Subtest: actual-sized loopback module GET and lost restore response never resend POST
+ok 115 - actual-sized loopback module GET and lost restore response never resend POST
+  ---
+  duration_ms: 180.6608
+  type: 'test'
+  ...
+# Subtest: transport refuses non-loopback origin and noncanonical restore content
+ok 116 - transport refuses non-loopback origin and noncanonical restore content
+  ---
+  duration_ms: 0.5903
+  type: 'test'
+  ...
+# Subtest: identity rejects binary, extra modules, altered embedded hash and duplicate build tags
+ok 117 - identity rejects binary, extra modules, altered embedded hash and duplicate build tags
+  ---
+  duration_ms: 0.662
+  type: 'test'
+  ...
+# Subtest: a complete read-only selector waits and remeasures before choosing a phase with sufficient slack
+ok 118 - a complete read-only selector waits and remeasures before choosing a phase with sufficient slack
+  ---
+  duration_ms: 759.4399
+  type: 'test'
+  ...
+# Subtest: all rejected round files remain intact after selection; only selected calibration is promoted
+ok 119 - all rejected round files remain intact after selection; only selected calibration is promoted
+  ---
+  duration_ms: 744.9532
+  type: 'test'
+  ...
+# Subtest: an immediately admissible proposal is used without exploring later better proposals
+ok 120 - an immediately admissible proposal is used without exploring later better proposals
+  ---
+  duration_ms: 505.4514
+  type: 'test'
+  ...
+# Subtest: a selected proposal receives a new canonical and room revalidation followed by a fresh time read
+ok 121 - a selected proposal receives a new canonical and room revalidation followed by a fresh time read
+  ---
+  duration_ms: 507.7223
+  type: 'test'
+  ...
+# Subtest: persistent slow progress is bounded by the single total read-only deadline, not six new deadlines
+ok 122 - persistent slow progress is bounded by the single total read-only deadline, not six new deadlines
+  ---
+  duration_ms: 1412.231
+  type: 'test'
+  ...
+# Subtest: six unsuccessful short rounds stop at round cap without an unbounded seventh round
+ok 123 - six unsuccessful short rounds stop at round cap without an unbounded seventh round
+  ---
+  duration_ms: 978.0608
+  type: 'test'
+  ...
+# Subtest: a halted shard cannot get an invented rate or consume a write quota
+ok 124 - a halted shard cannot get an invented rate or consume a write quota
+  ---
+  duration_ms: 1212.5274
+  type: 'test'
+  ...
+# Subtest: transient game-time errors are preserved and may recover during read-only selection
+ok 125 - transient game-time errors are preserved and may recover during read-only selection
+  ---
+  duration_ms: 725.3604
+  type: 'test'
+  ...
+# Subtest: invalid game-time response fails closed without another round or any write
+ok 126 - invalid game-time response fails closed without another round or any write
+  ---
+  duration_ms: 365.7269
+  type: 'test'
+  ...
+# Subtest: a regression inside a calibration is fatal
+ok 127 - a regression inside a calibration is fatal
+  ---
+  duration_ms: 382.1288
+  type: 'test'
+  ...
+# Subtest: a regression across different calibration rounds is not hidden by separate files
+ok 128 - a regression across different calibration rounds is not hidden by separate files
+  ---
+  duration_ms: 553.4328
+  type: 'test'
+  ...
+# Subtest: wall-clock discontinuity is not treated as a transient network error
+ok 129 - wall-clock discontinuity is not treated as a transient network error
+  ---
+  duration_ms: 395.0082
+  type: 'test'
+  ...
+# Subtest: a backward monotonic clock is rejected
+ok 130 - a backward monotonic clock is rejected
+  ---
+  duration_ms: 392.1026
+  type: 'test'
+  ...
+# Subtest: third-party live modules discovered after waiting stop selection instead of becoming a new backup
+ok 131 - third-party live modules discovered after waiting stop selection instead of becoming a new backup
+  ---
+  duration_ms: 663.7402
+  type: 'test'
+  ...
+# Subtest: account mismatch during the new identity recheck is fatal
+ok 132 - account mismatch during the new identity recheck is fatal
+  ---
+  duration_ms: 644.5757
+  type: 'test'
+  ...
+# Subtest: activeWorld change during waiting remains fatal
+ok 133 - activeWorld change during waiting remains fatal
+  ---
+  duration_ms: 648.8164
+  type: 'test'
+  ...
+# Subtest: room ownership loss during waiting remains fatal
+ok 134 - room ownership loss during waiting remains fatal
+  ---
+  duration_ms: 634.2846
+  type: 'test'
+  ...
+# Subtest: transient identity recheck failure is recorded then reconsidered before any binding
+ok 135 - transient identity recheck failure is recorded then reconsidered before any binding
+  ---
+  duration_ms: 743.7194
+  type: 'test'
+  ...
+# Subtest: measurement deadline is clipped to the selection deadline even mid-request
+ok 136 - measurement deadline is clipped to the selection deadline even mid-request
+  ---
+  duration_ms: 439.8843
+  type: 'test'
+  ...
+# Subtest: existing ON intent forbids restarting selection
+ok 137 - existing ON intent forbids restarting selection
+  ---
+  duration_ms: 316.7533
+  type: 'test'
+  ...
+# Subtest: existing candidate marker forbids restarting selection
+ok 138 - existing candidate marker forbids restarting selection
+  ---
+  duration_ms: 334.7989
+  type: 'test'
+  ...
+# Subtest: same directory cannot refresh a consumed read-only selection run
+ok 139 - same directory cannot refresh a consumed read-only selection run
+  ---
+  duration_ms: 702.0386
+  type: 'test'
+  ...
+# Subtest: removing a failed calibration directory is detected even if the outer hashes are recomputed
+ok 140 - removing a failed calibration directory is detected even if the outer hashes are recomputed
+  ---
+  duration_ms: 629.6627
+  type: 'test'
+  ...
+# Subtest: tampering with an unsuccessful decision rate is detected by recomputation not merely hashes
+ok 141 - tampering with an unsuccessful decision rate is detected by recomputation not merely hashes
+  ---
+  duration_ms: 609.8328
+  type: 'test'
+  ...
+# Subtest: altered selection limits in the persisted start record are rejected
+ok 142 - altered selection limits in the persisted start record are rejected
+  ---
+  duration_ms: 720.586
+  type: 'test'
+  ...
+# Subtest: forged canonical recheck digest is rejected even after rehashing
+ok 143 - forged canonical recheck digest is rejected even after rehashing
+  ---
+  duration_ms: 728.7076
+  type: 'test'
+  ...
+# Subtest: a mismatching promoted measurement cannot be used for upload
+ok 144 - a mismatching promoted measurement cannot be used for upload
+  ---
+  duration_ms: 706.697
+  type: 'test'
+  ...
+# Subtest: duplicating the promoted time read cannot create a valid proof
+ok 145 - duplicating the promoted time read cannot create a valid proof
+  ---
+  duration_ms: 703.434
+  type: 'test'
+  ...
+# Subtest: time plan remains four points, two CPU and fixed 75 minutes after selection
+ok 146 - time plan remains four points, two CPU and fixed 75 minutes after selection
+  ---
+  duration_ms: 727.0044
+  type: 'test'
+  ...
+# Subtest: an uncommitted plan may become admissible solely as alignment lead shortens; its sampling interval never changes
+ok 147 - an uncommitted plan may become admissible solely as alignment lead shortens; its sampling interval never changes
+  ---
+  duration_ms: 2.8919
+  type: 'test'
+  ...
+# Subtest: crossing the alignment boundary is allowed to reject a previously admissible proposal, never silently moving a bound one
+ok 148 - crossing the alignment boundary is allowed to reject a previously admissible proposal, never silently moving a bound one
+  ---
+  duration_ms: 0.121
+  type: 'test'
+  ...
+# Subtest: an exact previous failed estimate is not described as actual elapsed deployment time
+ok 149 - an exact previous failed estimate is not described as actual elapsed deployment time
+  ---
+  duration_ms: 0.0898
+  type: 'test'
+  ...
+# Subtest: the additional slack is stricter than merely fitting under the exposure cap
+ok 150 - the additional slack is stricter than merely fitting under the exposure cap
+  ---
+  duration_ms: 77.2723
+  type: 'test'
+  ...
+# Subtest: real previous eleven time reads and their measurement/plan retain exact Git blob identities
+ok 151 - real previous eleven time reads and their measurement/plan retain exact Git blob identities
+  ---
+  duration_ms: 1.369
+  type: 'test'
+  ...
+# Subtest: the new estimator independently reproduces the real XV rejection without weakening its bound
+ok 152 - the new estimator independently reproduces the real XV rejection without weakening its bound
+  ---
+  duration_ms: 1.2626
+  type: 'test'
+  ...
+# Subtest: forged shortened total duration does not make prematurely exhausted selection verified
+ok 153 - forged shortened total duration does not make prematurely exhausted selection verified
+  ---
+  duration_ms: 1389.7032
+  type: 'test'
+  ...
+# Subtest: stored selection cannot claim a larger authorized round count
+ok 154 - stored selection cannot claim a larger authorized round count
+  ---
+  duration_ms: 744.4317
+  type: 'test'
+  ...
+# Subtest: identity recheck can cross an alignment boundary and reject that proposal without binding it
+ok 155 - identity recheck can cross an alignment boundary and reject that proposal without binding it
+  ---
+  duration_ms: 726.2253
+  type: 'test'
+  ...
+# Subtest: already applied source is reused without a commit, then ONE admitted ON/OFF runs through production tools
+ok 156 - already applied source is reused without a commit, then ONE admitted ON/OFF runs through production tools
+  ---
+  duration_ms: 5964.234
+  type: 'test'
+  ...
+# Subtest: recovery recognizes OFF commit created before its final evidence write
+ok 157 - recovery recognizes OFF commit created before its final evidence write
+  ---
+  duration_ms: 4698.6507
+  type: 'test'
+  ...
+# Subtest: foreign source changes fail closed rather than being reset or amended
+ok 158 - foreign source changes fail closed rather than being reset or amended
+  ---
+  duration_ms: 2796.4299
+  type: 'test'
+  ...
+# Subtest: one experiment authorization remains consumed across output-directory changes
+ok 159 - one experiment authorization remains consumed across output-directory changes
+  ---
+  duration_ms: 2497.4132
+  type: 'test'
+  ...
+# Subtest: native evidence archive, whitespace, local bare push and idempotent republish
+ok 160 - native evidence archive, whitespace, local bare push and idempotent republish
+  ---
+  duration_ms: 10054.2546
+  type: 'test'
+  ...
+# Subtest: secret scan ignores source field names but rejects actual raw and encoded secret forms
+ok 161 - secret scan ignores source field names but rejects actual raw and encoded secret forms
+  ---
+  duration_ms: 3.6079
+  type: 'test'
+  ...
+# Subtest: independent whole-run verifier accepts four source-generated reports only with separate valid recovery
+ok 162 - independent whole-run verifier accepts four source-generated reports only with separate valid recovery
+  ---
+  duration_ms: 7553.9427
+  type: 'test'
+  ...
+# Subtest: source-reused private session loader accepts exact selected ON source; an old parent claim is rejected
+ok 163 - source-reused private session loader accepts exact selected ON source; an old parent claim is rejected
+  ---
+  duration_ms: 4073.3408
+  type: 'test'
+  ...
+# Subtest: a missing selection proof cannot bind a window even when a standalone timing plan exists
+ok 164 - a missing selection proof cannot bind a window even when a standalone timing plan exists
+  ---
+  duration_ms: 2895.9878
+  type: 'test'
+  ...
+# Subtest: a no-deployment archive retains all rejected selection evidence and does not advance compat
+ok 165 - a no-deployment archive retains all rejected selection evidence and does not advance compat
+  ---
+  duration_ms: 8060.5041
+  type: 'test'
+  ...
+1..165
+# tests 165
+# suites 0
+# pass 165
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 73055.7288

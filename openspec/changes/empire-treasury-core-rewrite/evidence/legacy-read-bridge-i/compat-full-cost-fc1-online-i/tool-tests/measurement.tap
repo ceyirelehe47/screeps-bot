@@ -1,0 +1,154 @@
+TAP version 13
+# Subtest: FC1 accepted sampled report above 2 retains all original profile validation
+ok 1 - FC1 accepted sampled report above 2 retains all original profile validation
+  ---
+  duration_ms: 11.9473
+  type: 'test'
+  ...
+# Subtest: FC1 sampled report above 5 is not a legacy safety failure
+ok 2 - FC1 sampled report above 5 is not a legacy safety failure
+  ---
+  duration_ms: 1.4514
+  type: 'test'
+  ...
+# Subtest: FC1 four reports plus four separately bound cost receipts close measurement
+ok 3 - FC1 four reports plus four separately bound cost receipts close measurement
+  ---
+  duration_ms: 4.7556
+  type: 'test'
+  ...
+# Subtest: FC1 last main tail is available without fabricating a successor sample
+ok 4 - FC1 last main tail is available without fabricating a successor sample
+  ---
+  duration_ms: 0.3405
+  type: 'test'
+  ...
+# Subtest: FC1 main reports alone are insufficient cost evidence
+ok 5 - FC1 main reports alone are insufficient cost evidence
+  ---
+  duration_ms: 1.9416
+  type: 'test'
+  ...
+# Subtest: FC1 does not accept a legacy localSafety block as new runtime evidence
+ok 6 - FC1 does not accept a legacy localSafety block as new runtime evidence
+  ---
+  duration_ms: 0.5924
+  type: 'test'
+  ...
+# Subtest: FC1 rejects forged receipt experiment
+ok 7 - FC1 rejects forged receipt experiment
+  ---
+  duration_ms: 0.3126
+  type: 'test'
+  ...
+# Subtest: FC1 rejects forged receipt tick
+ok 8 - FC1 rejects forged receipt tick
+  ---
+  duration_ms: 0.1934
+  type: 'test'
+  ...
+# Subtest: FC1 rejects forged receipt window
+ok 9 - FC1 rejects forged receipt window
+  ---
+  duration_ms: 0.4586
+  type: 'test'
+  ...
+# Subtest: FC1 rejects forged receipt nativeDelta
+ok 10 - FC1 rejects forged receipt nativeDelta
+  ---
+  duration_ms: 0.4899
+  type: 'test'
+  ...
+# Subtest: FC1 rejects forged receipt tailTotal
+ok 11 - FC1 rejects forged receipt tailTotal
+  ---
+  duration_ms: 0.2772
+  type: 'test'
+  ...
+# Subtest: FC1 rejects forged receipt admission
+ok 12 - FC1 rejects forged receipt admission
+  ---
+  duration_ms: 0.1846
+  type: 'test'
+  ...
+# Subtest: FC1 rejects forged receipt missingTail
+ok 13 - FC1 rejects forged receipt missingTail
+  ---
+  duration_ms: 0.184
+  type: 'test'
+  ...
+# Subtest: FC1 rejects forged receipt policy
+ok 14 - FC1 rejects forged receipt policy
+  ---
+  duration_ms: 0.2124
+  type: 'test'
+  ...
+# Subtest: FC1 receipt preceding its main report is rejected, not joined speculatively
+ok 15 - FC1 receipt preceding its main report is rejected, not joined speculatively
+  ---
+  duration_ms: 0.3231
+  type: 'test'
+  ...
+# Subtest: FC1 duplicate receipt is a visible evidence issue
+ok 16 - FC1 duplicate receipt is a visible evidence issue
+  ---
+  duration_ms: 0.4845
+  type: 'test'
+  ...
+# Subtest: FC1 partial projection is never promoted by the absence of the 2-CPU line
+ok 17 - FC1 partial projection is never promoted by the absence of the 2-CPU line
+  ---
+  duration_ms: 0.1653
+  type: 'test'
+  ...
+# Subtest: FC1 Core mismatch still rejects the sample
+ok 18 - FC1 Core mismatch still rejects the sample
+  ---
+  duration_ms: 0.2628
+  type: 'test'
+  ...
+# Subtest: FC1 damaged indexes cannot become complete through new measurement policy
+ok 19 - FC1 damaged indexes cannot become complete through new measurement policy
+  ---
+  duration_ms: 0.1556
+  type: 'test'
+  ...
+# Subtest: FC1 native receipt stop state must match actual measured overshoot
+ok 20 - FC1 native receipt stop state must match actual measured overshoot
+  ---
+  duration_ms: 0.2637
+  type: 'test'
+  ...
+# Subtest: FC1 cannot continue after predecessor receipt exposed an overshoot
+ok 21 - FC1 cannot continue after predecessor receipt exposed an overshoot
+  ---
+  duration_ms: 0.2888
+  type: 'test'
+  ...
+# Subtest: FC1 previous main byte-length and tail identity remain enforced
+ok 22 - FC1 previous main byte-length and tail identity remain enforced
+  ---
+  duration_ms: 0.3343
+  type: 'test'
+  ...
+# Subtest: FC1 root phase sum cannot be faked to hide cost
+ok 23 - FC1 root phase sum cannot be faked to hide cost
+  ---
+  duration_ms: 0.225
+  type: 'test'
+  ...
+# Subtest: FC1 cannot label a cooperative-ceiling-truncated prefix as sampled
+ok 24 - FC1 cannot label a cooperative-ceiling-truncated prefix as sampled
+  ---
+  duration_ms: 0.2806
+  type: 'test'
+  ...
+1..24
+# tests 24
+# suites 0
+# pass 24
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 123.5203
