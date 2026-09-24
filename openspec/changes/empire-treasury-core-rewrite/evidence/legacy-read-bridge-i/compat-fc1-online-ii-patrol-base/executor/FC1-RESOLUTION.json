@@ -1,0 +1,84 @@
+{
+  "kind": "full-cost-FC1-resolution/v1",
+  "source": {
+    "head": "0cdbd061c2645366bd409dbdbd262881d277cb35",
+    "tree": "70dff5366fabf4586aef30acd2c62c290824a772",
+    "base": "e34a19fa72f71d9e6deeae5351222d16cef36231",
+    "paths": 6,
+    "sourceModified": false,
+    "implementationHead": "0cdbd061c2645366bd409dbdbd262881d277cb35",
+    "runtimeEmitterId": "treasury-full-cost-FC1-online-I-2026-09-24",
+    "runtimeArtifacts": {
+      "compilerVersion": "5.9.3",
+      "modules": 4
+    }
+  },
+  "receipt": {
+    "kind": "fc1-offline-assembly/v1",
+    "authorizationStatus": "WAITING_FOR_EXPLICIT_AUTHORIZATION",
+    "source": {
+      "head": "0cdbd061c2645366bd409dbdbd262881d277cb35",
+      "tree": "70dff5366fabf4586aef30acd2c62c290824a772",
+      "base": "e34a19fa72f71d9e6deeae5351222d16cef36231",
+      "paths": 6,
+      "sourceModified": false,
+      "implementationHead": "0cdbd061c2645366bd409dbdbd262881d277cb35",
+      "runtimeEmitterId": "treasury-full-cost-FC1-online-I-2026-09-24",
+      "runtimeArtifacts": {
+        "compilerVersion": "5.9.3",
+        "modules": 4
+      }
+    },
+    "onlineAttempted": false,
+    "networkWrites": 0,
+    "atMs": 1790243615768
+  },
+  "changedInheritedPaths": [
+    "AGENT-RUN.md",
+    "policy.json",
+    "references/test-contract.json",
+    "runtime-source-manifest.json",
+    "runtime-source/treasuryCompatCpu.cjs",
+    "runtime-source/treasuryCompatRead.cjs",
+    "runtime-source/treasuryCompatReadCore.generated.cjs",
+    "runtime-source/treasuryCompatRuntime.cjs",
+    "runtime/cost-receipts.cjs",
+    "runtime/samples.cjs",
+    "runtime/test-results.cjs",
+    "runtime/time-budget.cjs",
+    "runtime/worker.cjs",
+    "source-manifest.json",
+    "tests/admission-fixtures.cjs",
+    "tests/entry-closure.integration.spec.cjs",
+    "tests/executor-fixtures.cjs",
+    "tests/full-cost-admission.spec.cjs",
+    "tests/full-cost-executor.spec.cjs",
+    "tests/full-cost-source-custody.spec.cjs",
+    "tests/test-results.spec.cjs",
+    "tools/archive.cjs",
+    "tools/build.cjs",
+    "tools/observe.cjs",
+    "tools/raw-whitespace.cjs",
+    "tools/repository.cjs",
+    "tools/run-tests.cjs",
+    "tools/verify.cjs"
+  ],
+  "preserved": [
+    "canonical source builders",
+    "preview algorithm",
+    "native CPU samples",
+    "full validation and eager indexes",
+    "actions/transport/observer",
+    "one candidate and one restore with no write retries",
+    "window selection and absolute deadlines"
+  ],
+  "changedProtocol": [
+    "sampled above 2 is no longer rejected",
+    "explicit ON ceiling 10 / reserve 25 / entry headroom 55",
+    "FC1 time admission matches the exact generated profile",
+    "online entry requires a separate new-round authorization",
+    "outer heap latch replaces old 5-CPU latch",
+    "four cost receipts required as well as four original reports",
+    "raw-log whitespace proof"
+  ]
+}

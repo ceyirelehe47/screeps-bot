@@ -1,0 +1,126 @@
+{
+  "kind": "read-envelope-XV-retry-I-maker-validation/v1",
+  "name": "Read Envelope XV Online I Retry I - Bounded Pre-binding Selection",
+  "sourceImplementationRevision": "XV",
+  "diagnosticWireRevision": "XIV",
+  "baselines": {
+    "compat": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "tree": "cf3169d5e14892249488b333837b7e840b565cce",
+    "refactor": "b7d63b4ae0f4af89f635e48d3451f1fe6e21aeba"
+  },
+  "newSourceCommits": 0,
+  "sourcePatchIncluded": false,
+  "materializationRequired": false,
+  "toolTests": {
+    "passed": 165,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0,
+    "originalRegressionsRetainedAndAdapted": 124,
+    "addedSelectionAndReuseRegressions": 41,
+    "raw": "maker-evidence/package-tests.tap"
+  },
+  "repositoryNodeTests": {
+    "passed": 424,
+    "failed": 0,
+    "compiler": "5.8.3",
+    "raw": "maker-evidence/repository-node-424.tap",
+    "sourceContentTreeAuthenticated": true,
+    "sourceTestsModified": false,
+    "fullProductionBuildCliExecuted": false,
+    "historySubsetOnly": true,
+    "runner": "node --test (all eleven repository treasury-compat spec files; maker run used default test-file concurrency)",
+    "initialMakerRun": {
+      "passed": 423,
+      "failed": 1,
+      "cause": "Historical 06ffedb7 Git object was absent in the local object subset; the existing independent test uses git show for original main.ts.",
+      "resolution": "Installed SHA-authenticated commit, root tree, src tree and main blob. Did not change working source or tests. The complete rerun passed 424/424."
+    }
+  },
+  "authenticSourceTools": {
+    "sourceReuseExecuted": true,
+    "repeatReadOnlyResumeExecuted": true,
+    "onOffExecuted": true,
+    "configurationCommits": 2,
+    "finalTreeSame": true,
+    "timingEvidenceSynthetic": true,
+    "raw": "maker-evidence/authentic-source-tools.json"
+  },
+  "priorActualRejection": {
+    "rawTimeReadCount": 11,
+    "rawTimeReadGitBlob": "23c1906da1d423b612adfa7aeae75affc047be78",
+    "measurementGitBlob": "87022fea3bf55f228fc8e6491ba188af50de96bc",
+    "bindingGitBlob": "d16267b3dd51d4af5a1fa797a89694445ce2ed80",
+    "requiredMs": 4899346,
+    "priorWallLimitMs": 4500000,
+    "recomputedRejectionTestExecuted": true,
+    "historicalRowsNeverUsedForLiveAdmission": true
+  },
+  "selectionIntegration": {
+    "virtualClock": true,
+    "fakeGetApi": true,
+    "actualFutureTickRateKnown": false,
+    "cases": [
+      "reject_then_remeasure_then_select",
+      "persistent_slow_exhaustion",
+      "identity_recheck_crossing_alignment_boundary"
+    ],
+    "selectorWrites": 0,
+    "raw": "maker-evidence/selector-integration.json"
+  },
+  "generator": {
+    "allListedOutputsVerified": true,
+    "outputIdentityCount": 13,
+    "compiler": "5.8.3",
+    "raw": "maker-evidence/generator-check.json"
+  },
+  "syntax": {
+    "cjsFiles": 37,
+    "passed": true,
+    "raw": "maker-evidence/syntax-check.json"
+  },
+  "inheritance": {
+    "wholeRuntimeFilesUnchanged": 8,
+    "vendorFilesUnchanged": 1,
+    "exactFunctionBodiesUnchanged": [
+      "uploadOnce",
+      "restoreOnce",
+      "exposureGuard"
+    ],
+    "fullBoundaryFile": "references/execution-boundaries.json"
+  },
+  "agentRequiredGates": {
+    "packageTests": 165,
+    "repositoryNodeTests": 424,
+    "compiler": "5.9.3",
+    "tsconfigs": [
+      "tsconfig.build.json",
+      "tsconfig.json"
+    ],
+    "jestSuites": 195,
+    "jestTests": 685,
+    "rollupBuildOnly": true,
+    "syntheticApiReplay": true
+  },
+  "makerBoundaries": {
+    "userTokenUsed": false,
+    "realScreepsGet": false,
+    "realScreepsPost": false,
+    "liveFourPointWindow": false,
+    "live75SecondRecoveryObservation": false,
+    "windowsExecution": false,
+    "fullRefactorCloneAvailable": false,
+    "completeRemoteGitHistoryAvailable": false,
+    "fullAgentBaselineCliExecuted": false,
+    "lockedTypescript593FullProjectChecksExecuted": false,
+    "jestExecuted": false,
+    "rollupExecuted": false,
+    "realRemotePushExecuted": false,
+    "localBareRemoteWorkflowTestsExecuted": true
+  },
+  "noPerformanceClaim": true,
+  "engineCpuGapRepaired": false,
+  "fullCompatibilityObserved": false,
+  "verificationNote": "Tool test layers overlap. Do not add 165 and 424 as an engine performance count. Final sealed ZIP and extracted CLI verification are separately recorded in delivery-validation.json."
+}

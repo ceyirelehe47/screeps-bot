@@ -1,0 +1,9 @@
+{
+  "kind": "FC1-offline-candidate-build/v1",
+  "sourceCommit": "387013b60a7594150b09093d5ef4f9ffd2c05e5c",
+  "sourceTree": "25e0b6fb827f131be4c3215a97576f78a34a3455",
+  "bundleBytes": 4629860,
+  "bundleSha256": "055dd856903e44e32164f7326c1bd073d32f1d79bead0970eae618f31d9bbdcb",
+  "onlineProfileBound": false,
+  "screepsUploads": 0
+}

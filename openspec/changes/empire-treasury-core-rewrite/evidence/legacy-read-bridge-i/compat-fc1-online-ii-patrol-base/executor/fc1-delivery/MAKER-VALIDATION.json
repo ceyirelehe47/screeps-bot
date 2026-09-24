@@ -1,0 +1,101 @@
+{
+  "kind": "fc1-entry-closure-r2-validation/v1",
+  "environment": {
+    "os": "Darwin arm64",
+    "node": "v22.23.3",
+    "typescript": "5.9.3"
+  },
+  "historicalBlocker": {
+    "status": "BLOCKER_REPRODUCED",
+    "commit": "11b818fb250900273ee485cc60766c10a493b375",
+    "result": "OFFLINE_GATES_MISSING",
+    "authenticResultRejected": true,
+    "filesystemBarrierCalls": 0,
+    "networkCalls": 0
+  },
+  "makerTests": {
+    "status": "PASS",
+    "tests": 131,
+    "passed": 131,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0,
+    "syntaxFiles": 27,
+    "deploymentGate": false
+  },
+  "finalExecutorTests": {
+    "status": "PASS",
+    "tests": 145,
+    "passed": 145,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "cancelled": 0,
+    "legacyRiskRegressions": 100,
+    "finalFc1Composition": 45,
+    "fullHistoricalExecutorSuiteRun": false,
+    "onlineAttempted": false
+  },
+  "entryClosure": {
+    "status": "PASS",
+    "tests": 2,
+    "passed": 2,
+    "failed": 0,
+    "authenticRunTestsResult": true,
+    "positiveCaseStopsAtFirstWorkDirectoryWrite": true,
+    "negativeCases": [
+      "missing required group",
+      "zero executed tests",
+      "failed group",
+      "stale package fingerprint",
+      "contradictory summary"
+    ],
+    "negativeCasesBeforeWriteBarrier": true
+  },
+  "runtimeReceiptCustody": {
+    "status": "PASS",
+    "finalExecutorTests": 1,
+    "sourceHead": "0cdbd061c2645366bd409dbdbd262881d277cb35",
+    "sourceRuntimeEmitterId": "treasury-full-cost-FC1-online-I-2026-09-24",
+    "externalAuthorizationId": "treasury-full-cost-FC1-online-II-2026-09-24",
+    "externalRunId": "4d9fb3da-29c7-4313-9d53-925fcbdbcb5d",
+    "emittedBusinessReports": 4,
+    "emittedCostReceipts": 4,
+    "collectorAcceptedReports": 4,
+    "collectorAcceptedCostReceipts": 4,
+    "runtimeArtifacts": 4,
+    "compilerVersion": "5.9.3"
+  },
+  "offlineLifecycle": {
+    "status": "PASS",
+    "scope": "synthetic API/clock/Git fixture only",
+    "candidateCalls": 1,
+    "restoreCalls": 1,
+    "byteAndRuntimeClosure": true
+  },
+  "authorization": {
+    "status": "WAITING_FOR_EXPLICIT_AUTHORIZATION",
+    "newRoundAuthorizationId": null,
+    "newRoundRunId": null,
+    "onlineExecutionReady": false
+  },
+  "onlineActions": {
+    "deployed": false,
+    "screepsApiCalls": 0,
+    "networkCandidatePosts": 0,
+    "networkRestorePosts": 0,
+    "experimentMarkersWritten": 0,
+    "completeBusinessSamples": 0,
+    "onlineCostReceipts": 0,
+    "recovery": "NOT_APPLICABLE_NO_DEPLOYMENT"
+  },
+  "notRun": [
+    "499-test repository Node suite",
+    "685-test full Jest suite",
+    "full repository build and deployment bundle",
+    "live canonical-production identity check",
+    "live FC1 measurement and recovery"
+  ],
+  "measurementConclusion": "The executor and collector were verified offline. No live CPU cost, deployment, production recovery, or business sample was measured."
+}

@@ -1,0 +1,140 @@
+{
+  "kind": "treasury-full-cost-FC1/v1",
+  "authorizationId": "treasury-full-cost-FC1-online-II-2026-09-24",
+  "parentRunId": "4d9fb3da-29c7-4313-9d53-925fcbdbcb5d",
+  "expected": {
+    "server": "https://screeps.com",
+    "username": "forster",
+    "userId": "634fe406347a7b69b28aeccb",
+    "branch": "default",
+    "shard": "shard1"
+  },
+  "backupDigest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "50295c19de66f7d34b2bd4e54f08317b212ea3a54054385a2abdeb6ef8aa74fe",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494748,
+        "sha256": "62a993bf917f1a74ef708584eaee1fc3d2deb5aaf8b0c751f8f9d72ff3c08032"
+      }
+    ]
+  },
+  "backupBuild": {
+    "commit": "5cef62c5bce37c00c4fc35f9fc3881e21128b00b",
+    "tree": "151b77b71ae42ec5b429f4ae4fcc9cd4650fc541",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+5cef62c@2026-09-24T15:04:28.806Z"
+  },
+  "guardBlob": "796e71d9b5572014fd2ce8e9a0ee797e4e04c7a8",
+  "compatBase": "387013b60a7594150b09093d5ef4f9ffd2c05e5c",
+  "compatBaseTree": "25e0b6fb827f131be4c3215a97576f78a34a3455",
+  "refactorBase": "b17979591d8308088c774fbb92a43f4cf5a80df7",
+  "compatBranch": "codex/fc1-online-ii-patrol-base",
+  "refactorBranch": "refactor/empire-treasury-rearchitecture",
+  "sourceMessage": "feat(compat): measure full read-path cost with native headroom protection",
+  "evidenceMessage": "evidence(compat): FC1 Online II patrol-safe result",
+  "evidencePath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-fc1-online-ii-patrol-base/online",
+  "runtimeMs": 75000,
+  "runtimeStartupMs": 90000,
+  "runtimeSilenceMs": 45000,
+  "readinessMs": 1800000,
+  "requestMs": 60000,
+  "writeMs": 60000,
+  "recoveryReadMs": 600000,
+  "wallMs": 4500000,
+  "safetyCpu": 10,
+  "points": 4,
+  "rooms": [
+    "E3N59",
+    "E4N58"
+  ],
+  "resources": [
+    "energy",
+    "H"
+  ],
+  "repositoryNodeTests": 499,
+  "jestSuites": 195,
+  "jestTests": 688,
+  "compilerVersion": "5.9.3",
+  "priorRecoveryPath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-path-r1-online-i/run/recovery/result.json",
+  "priorRecoveryBlob": "84633393f03ef20f032aa914db3a67f9f4f13865",
+  "timing": {
+    "measurementMaxMs": 300000,
+    "minSamples": 7,
+    "minSpanMs": 120000,
+    "minTickAdvance": 20,
+    "pollMs": 20000,
+    "requestMs": 15000,
+    "safetyFactor": 1.5,
+    "floorMsPerTick": 5000,
+    "deliveryReserveMs": 240000,
+    "maxAgeMs": 600000,
+    "freshReadMaxMs": 5000,
+    "clockDriftMs": 2000
+  },
+  "implementationHead": "0cdbd061c2645366bd409dbdbd262881d277cb35",
+  "implementationBase": "e34a19fa72f71d9e6deeae5351222d16cef36231",
+  "priorAttemptPath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-full-cost-fc1-online-i/FINAL-VERIFICATION.json",
+  "priorAttemptBlob": "56025614f5913ed07881be2c46e3628b1c9be83b",
+  "selection": {
+    "maxMs": 1800000,
+    "maxRounds": 6,
+    "probeMaxMs": 240000,
+    "probePollMs": 20000,
+    "maxProbesPerRound": 16,
+    "identityMaxMs": 90000,
+    "minimumSlackMs": 180000
+  },
+  "historicalAuthorizationId": "treasury-full-cost-FC1-online-I-2026-09-24",
+  "historicalRunId": "d6ecc012d2d74b119c42b7b3f0f9f91a",
+  "inheritedExecutorAuthorizationId": "compat-read-envelope-XV-online-I-retry-I-2026-09-23",
+  "inheritedExecutorRunId": "76d46d162053085c41485ce712c733c1",
+  "newRoundAuthorization": {
+    "status": "WAITING_FOR_EXPLICIT_AUTHORIZATION",
+    "authorizationId": null,
+    "runId": null
+  },
+  "onlineExecutionReady": false,
+  "runId": "4d9fb3da-29c7-4313-9d53-925fcbdbcb5d",
+  "priorAttemptTerminationReason": "TIMING_PROFILE_INVALID",
+  "priorFinalPath": "openspec/changes/empire-treasury-core-rewrite/evidence/legacy-read-bridge-i/compat-read-path-r1-online-i/FINAL-VERIFICATION.json",
+  "priorFinalBlob": "b8fc2c07e81c1120a12a3f34294ae67afaa43f10",
+  "runtimePath": "src/runtime/treasuryCompatRuntime.ts",
+  "runtimeEmitterId": "treasury-full-cost-FC1-online-I-2026-09-24",
+  "executorMeasurementTests": 45,
+  "fullCostMeasurement": true,
+  "measurementProtocol": "FC1",
+  "performanceTargetCpu": null,
+  "measurementPolicy": {
+    "performanceTargetCpu": null,
+    "cooperativeCeilingCpu": 10,
+    "retainedReserveCpu": 25,
+    "admissionHeadroomCpu": 55,
+    "minBucket": 2000,
+    "intervalTicks": 100,
+    "points": 4,
+    "receiptBytes": 16384
+  },
+  "measurementSourceBaseCommit": "06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c",
+  "patrolOverlay": {
+    "originalSourceHead": "0cdbd061c2645366bd409dbdbd262881d277cb35",
+    "originalSourceTree": "70dff5366fabf4586aef30acd2c62c290824a772",
+    "patrolCommit": "b46696a24d7afa7f5e123db9cea4b1b0162ebfe8",
+    "head": "387013b60a7594150b09093d5ef4f9ffd2c05e5c",
+    "livePatrolCommit": "5cef62c5bce37c00c4fc35f9fc3881e21128b00b",
+    "patrolPaths": [
+      "src/roles/meleeAttacker.test.ts",
+      "src/roles/meleeAttacker.ts"
+    ],
+    "budgetPaths": [
+      "scripts/verify-jest-budget.mjs",
+      "test/test-suite-budget.json"
+    ],
+    "budgetBlobs": {
+      "scripts/verify-jest-budget.mjs": "ec307a3d275eb3c5be98ec5de64ae105b970ddf6",
+      "test/test-suite-budget.json": "ea79df1902273bc227c72203e085214d6bec2f1d"
+    }
+  }
+}

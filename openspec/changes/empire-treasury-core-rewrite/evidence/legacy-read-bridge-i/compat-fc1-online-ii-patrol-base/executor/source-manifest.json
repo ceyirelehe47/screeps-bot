@@ -1,0 +1,106 @@
+{
+  "kind": "full-cost-FC1-source/v1",
+  "expectedSourceTree": "25e0b6fb827f131be4c3215a97576f78a34a3455",
+  "runtimeEmitterId": "treasury-full-cost-FC1-online-I-2026-09-24",
+  "runtimeArtifacts": {
+    "compilerVersion": "5.9.3",
+    "files": {
+      "treasuryCompatRuntime.cjs": {
+        "sourcePath": "src/runtime/treasuryCompatRuntime.ts",
+        "sourceBytes": 7549,
+        "sourceSha256": "dec7d710779248e0689b673a473557c07728a93d422fee7524f3a79082549967",
+        "sourceGitBlob": "4e5ee3c2b3ed126a8d4c4dbb0f9e57ef5479fcc7",
+        "outputBytes": 8909,
+        "outputSha256": "bdb524d60ed3be78d9e51374232caa9c3df12c90982ff01c7cfc8738aee64837"
+      },
+      "treasuryCompatRead.cjs": {
+        "sourcePath": "src/runtime/treasuryCompatRead.ts",
+        "sourceBytes": 26831,
+        "sourceSha256": "2d22e3a9726d88892282f20017e01ecfbf4bc884cb21395e8ea25727c5efc135",
+        "sourceGitBlob": "f1bece4ea0a86e5be5e92079f4d19c4c1fbb4c3c",
+        "outputBytes": 30108,
+        "outputSha256": "988e6dd1f5c569c7a87ed504178765c0c0ff8c5ee531649b13a58bc0be9a25c0"
+      },
+      "treasuryCompatReadCore.generated.cjs": {
+        "sourcePath": "src/runtime/treasuryCompatReadCore.generated.ts",
+        "sourceBytes": 74835,
+        "sourceSha256": "4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08",
+        "sourceGitBlob": "5d3433d1d756ea6912bef4933bea2b5b189a819f",
+        "outputBytes": 86432,
+        "outputSha256": "87221d2b7330d88b7c6b6f3dc3f2c7e99afe72685d5c8cfa89736a85103e3948"
+      },
+      "treasuryCompatCpu.cjs": {
+        "sourcePath": "src/runtime/treasuryCompatCpu.ts",
+        "sourceBytes": 12653,
+        "sourceSha256": "5599ff052819b5842875ed78bfa67afefd9a182ad6ad4bb4ae55a59f6dd58100",
+        "sourceGitBlob": "52bd3edbf77b1a35e7c59bef41888f47c5636613",
+        "outputBytes": 11112,
+        "outputSha256": "dad9d919212fb4d7710cf8865a54bb0b1bbe4ee919ca298450f257fbc788697e"
+      }
+    }
+  },
+  "files": {
+    "docs/treasury-compat-source-manifest.json": {
+      "after": {
+        "bytes": 9559,
+        "sha256": "6925945172172693a3e2b6d71fdd8852cc35116fc42e951874e84c2f54740967",
+        "gitBlob": "ca2f538e8b2161491e4f00c65b435bce11ab70cc"
+      }
+    },
+    "scripts/build-treasury-compat-loader.cjs": {
+      "after": {
+        "bytes": 18914,
+        "sha256": "54b0939d31828fb940945b2aeba9aa133bd3540b69a2090513e7e66bdd5e6a9c",
+        "gitBlob": "fcb0371bea5a3a9207c1426c59a11585fff6d65c"
+      }
+    },
+    "src/runtime/treasuryCompatRuntime.ts": {
+      "after": {
+        "bytes": 7549,
+        "sha256": "dec7d710779248e0689b673a473557c07728a93d422fee7524f3a79082549967",
+        "gitBlob": "4e5ee3c2b3ed126a8d4c4dbb0f9e57ef5479fcc7"
+      }
+    },
+    "test/treasury-compat/boundary-attribution-xiii.spec.cjs": {
+      "after": {
+        "bytes": 11333,
+        "sha256": "c6f78717af32a7436b67d2ddba2dce9160f254a7de4f75db5de20a7fbd4b251d",
+        "gitBlob": "4f0648c5b2d342f9564969b75409344ae8b0b516"
+      }
+    },
+    "test/treasury-compat/fixtures/runtime-before-full-cost-fc1.ts.txt": {
+      "after": {
+        "bytes": 956,
+        "sha256": "7250f9554baca9c2431d109f14c45ebece7df04de95e79e53146f9996dfffe6c",
+        "gitBlob": "13e8e356784da1c606e9c1cc8fccdaaa8d436b0c"
+      }
+    },
+    "test/treasury-compat/full-cost-fc1.spec.cjs": {
+      "after": {
+        "bytes": 12236,
+        "sha256": "58c5393e87ecdc8750199d9b3d9cea08208ae72e14ebe852c8b6688daa993f66",
+        "gitBlob": "61f798d6318cc311f7c2f5224286427fb75d1801"
+      }
+    }
+  },
+  "originalSourceHead": "0cdbd061c2645366bd409dbdbd262881d277cb35",
+  "patrolOverlay": {
+    "originalSourceHead": "0cdbd061c2645366bd409dbdbd262881d277cb35",
+    "originalSourceTree": "70dff5366fabf4586aef30acd2c62c290824a772",
+    "patrolCommit": "b46696a24d7afa7f5e123db9cea4b1b0162ebfe8",
+    "head": "387013b60a7594150b09093d5ef4f9ffd2c05e5c",
+    "livePatrolCommit": "5cef62c5bce37c00c4fc35f9fc3881e21128b00b",
+    "patrolPaths": [
+      "src/roles/meleeAttacker.test.ts",
+      "src/roles/meleeAttacker.ts"
+    ],
+    "budgetPaths": [
+      "scripts/verify-jest-budget.mjs",
+      "test/test-suite-budget.json"
+    ],
+    "budgetBlobs": {
+      "scripts/verify-jest-budget.mjs": "ec307a3d275eb3c5be98ec5de64ae105b970ddf6",
+      "test/test-suite-budget.json": "ea79df1902273bc227c72203e085214d6bec2f1d"
+    }
+  }
+}

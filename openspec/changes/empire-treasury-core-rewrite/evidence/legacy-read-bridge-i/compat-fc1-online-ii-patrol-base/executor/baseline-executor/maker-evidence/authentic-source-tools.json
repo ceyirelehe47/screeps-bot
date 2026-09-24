@@ -1,0 +1,78 @@
+{
+  "kind": "maker-authentic-source-reuse/v1",
+  "source": "01205865d975878d04c9993a0c97a6ccab952be5",
+  "tree": "cf3169d5e14892249488b333837b7e840b565cce",
+  "apply": {
+    "head": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "tree": "cf3169d5e14892249488b333837b7e840b565cce",
+    "base": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "paths": 16,
+    "sourceModified": false,
+    "implementationHead": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "status": "READ_XV_RETRY_SOURCE_REUSED_VERIFIED",
+    "resumed": true
+  },
+  "repeat": {
+    "head": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "tree": "cf3169d5e14892249488b333837b7e840b565cce",
+    "base": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "paths": 16,
+    "sourceModified": false,
+    "implementationHead": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "status": "READ_XV_RETRY_SOURCE_REUSED_VERIFIED",
+    "resumed": true
+  },
+  "newSourceCommits": 0,
+  "on": {
+    "runId": "76d46d162053085c41485ce712c733c1",
+    "source": {
+      "head": "01205865d975878d04c9993a0c97a6ccab952be5",
+      "tree": "cf3169d5e14892249488b333837b7e840b565cce",
+      "base": "01205865d975878d04c9993a0c97a6ccab952be5",
+      "paths": 16,
+      "sourceModified": false,
+      "implementationHead": "01205865d975878d04c9993a0c97a6ccab952be5"
+    },
+    "profile": {
+      "enabled": true,
+      "shardName": "shard1",
+      "rooms": [
+        "E3N59",
+        "E4N58"
+      ],
+      "resources": [
+        "energy",
+        "H"
+      ],
+      "startTick": 200,
+      "endTick": 500,
+      "intervalTicks": 100,
+      "minBucket": 2000,
+      "maxSampleCpu": 2,
+      "reserveCpu": 5,
+      "maxLogBytes": 16384
+    },
+    "observedTick": 50,
+    "profileHead": "22134cd2672bcf42c793f668a84ce8c61a9959c5",
+    "profileTree": "a158c9b595c6c3437bf27dac11bab333fbc56a04"
+  },
+  "off": {
+    "status": "SOURCE_DEFAULT_OFF_RESTORED",
+    "sourceHead": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "closedHead": "d67562a4524edf0ea0153ea92fe09c4b6560c226",
+    "sameTreeAsSource": true,
+    "atMs": 1790106331626
+  },
+  "lineageCount": "2",
+  "clean": true,
+  "closed": {
+    "head": "d67562a4524edf0ea0153ea92fe09c4b6560c226",
+    "bound": true,
+    "sourceHead": "01205865d975878d04c9993a0c97a6ccab952be5",
+    "profileHead": "22134cd2672bcf42c793f668a84ce8c61a9959c5"
+  },
+  "syntheticSelectionEvidence": true,
+  "realScreepsGet": false,
+  "realScreepsPost": false,
+  "fullRefactorClone": false
+}

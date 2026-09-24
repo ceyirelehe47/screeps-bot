@@ -1,0 +1,176 @@
+{
+  "kind": "read-envelope-XV-source/v1",
+  "base": "eba6a0df574c9cb6101bd3d7e5ebae729d3dd976",
+  "baseTree": "0391f4b73522f02829f5151b455a5e5b45d0ab9c",
+  "expectedSourceTree": "cf3169d5e14892249488b333837b7e840b565cce",
+  "files": {
+    "docs/treasury-compat-loader-optimization.json": {
+      "before": {
+        "bytes": 17343,
+        "sha256": "d71fb9845a1c0c1ec1a6352c017c2162eeb72d6366947c7813afdb5ad4e22451",
+        "blob": "44cc36fb3f7c3a9427bbfc389ece3de8ae2a6237"
+      },
+      "after": {
+        "bytes": 23984,
+        "sha256": "02be3df1217480e1de3c8f145a2c421a1d59c57a4ad35185e5d95d88793201f7",
+        "blob": "8f3ef90cfa95610ba684981c833c6f5506d0f518"
+      }
+    },
+    "docs/treasury-compat-read-envelope-xv.md": {
+      "before": null,
+      "after": {
+        "bytes": 3896,
+        "sha256": "778c7d3a2165dd275b61b4935ad71d08135aa58556c2ef209537525c36386806",
+        "blob": "b3dd1fe9bf2a8be7e56041bf5df401569cd6bb1d"
+      }
+    },
+    "docs/treasury-compat-source-manifest.json": {
+      "before": {
+        "bytes": 8531,
+        "sha256": "db63bf899e7cb3fc99b6b545ac1a2b8c11afe9e522d3f4eb65d7645b2f7e3bf1",
+        "blob": "7942c1ab802bb128cf2c0bfddf8e6b5cb70f9599"
+      },
+      "after": {
+        "bytes": 8530,
+        "sha256": "3dee4a11214d27e019e3998033a9de64604f6103232bcbd0ef06adefdd7d6656",
+        "blob": "7f32271ff43a0058a670e360cbf58f31213e7ebc"
+      }
+    },
+    "scripts/build-treasury-compat-loader.cjs": {
+      "before": {
+        "bytes": 17174,
+        "sha256": "a8ca4ec7ba1234f2f8f84505f1465f43166497fb74a935ffc0a6a2fbbc9b63a0",
+        "blob": "1a2843627603dac32670aa647c0c3152f384f82c"
+      },
+      "after": {
+        "bytes": 18077,
+        "sha256": "89f33e92e285adeccaffe4c0f8d0b9b04765b56833367f015499c0f094dd53b1",
+        "blob": "acfe875282e2c9c0f65d010a87807fa156181e01"
+      }
+    },
+    "scripts/lib/treasury-compat-read-envelope-xv.cjs": {
+      "before": null,
+      "after": {
+        "bytes": 4912,
+        "sha256": "7d9ad80e2f3058f6fc0b05b4ba122255027e49e124ce1246f2d57ec702da694b",
+        "blob": "7ecd4ce647cb9ff6a5ac83b896b701981838dfd9"
+      }
+    },
+    "src/runtime/treasuryCompatCpu.ts": {
+      "before": {
+        "bytes": 12149,
+        "sha256": "e95f80f679d7f36987294d6f8049c2f6987959fc9b95302289b66d27d0e44c1a",
+        "blob": "211837e149159618756545f784f2e3c52a5a8a74"
+      },
+      "after": {
+        "bytes": 12653,
+        "sha256": "5599ff052819b5842875ed78bfa67afefd9a182ad6ad4bb4ae55a59f6dd58100",
+        "blob": "52bd3edbf77b1a35e7c59bef41888f47c5636613"
+      }
+    },
+    "src/runtime/treasuryCompatRead.ts": {
+      "before": {
+        "bytes": 26415,
+        "sha256": "75438e82c4b891fea5debe55d92d8de400252758d7b7e26139608eceab0f2e4e",
+        "blob": "19e4366d67d30fd00dab430799e1fa7951a978f5"
+      },
+      "after": {
+        "bytes": 26831,
+        "sha256": "2d22e3a9726d88892282f20017e01ecfbf4bc884cb21395e8ea25727c5efc135",
+        "blob": "f1bece4ea0a86e5be5e92079f4d19c4c1fbb4c3c"
+      }
+    },
+    "src/runtime/treasuryCompatReadCore.generated.ts": {
+      "before": {
+        "bytes": 70224,
+        "sha256": "8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6",
+        "blob": "08cd1d6f6db42160775c9990c6ba5b52296e0a1f"
+      },
+      "after": {
+        "bytes": 70443,
+        "sha256": "e03c09619b8b47097e234ff81a5fe0a28c57b1b20180ba0a818139eb0fc05a9d",
+        "blob": "614e97c72a54cef8385ae6fd0a1a9c756dcb564d"
+      }
+    },
+    "test/treasury-compat/attribution.spec.cjs": {
+      "before": {
+        "bytes": 15452,
+        "sha256": "0264b1e8397ed4d5e863798e582314749ab1d1e8f011a09060d02272a3d0657d",
+        "blob": "6d0c2c27c8019d8de4dd1bc522f2af1a2d4fd147"
+      },
+      "after": {
+        "bytes": 15452,
+        "sha256": "18315cb5505d8a222acc9319218311354d4bcfe36654d4c40f518092bf7fa13c",
+        "blob": "5617c5dbc3a2981a76b46f341f2fb51d7cdd27b3"
+      }
+    },
+    "test/treasury-compat/envelope-optimization.spec.cjs": {
+      "before": {
+        "bytes": 7767,
+        "sha256": "08312284fd4087f2d3728f0e85995a55ca03c232324d7f2211d38c34df33dd9a",
+        "blob": "0fecf9cfd1644eae59a248066f55f52b668bd5c7"
+      },
+      "after": {
+        "bytes": 7766,
+        "sha256": "8aa44dd47b6defa07d2af1a47c5f274f3b1a5a0f1f657dcf4c618fb5361322e0",
+        "blob": "27861e70a1f2962a266d82033917872c25c83d91"
+      }
+    },
+    "test/treasury-compat/fixtures/core-before-read-envelope-xv.ts.txt": {
+      "before": null,
+      "after": {
+        "bytes": 70224,
+        "sha256": "8eab90fbf64c47da27cf665aa5b13c0f4a18410af17690a81c132275c58904c6",
+        "blob": "08cd1d6f6db42160775c9990c6ba5b52296e0a1f"
+      }
+    },
+    "test/treasury-compat/fixtures/cpu-before-read-envelope-xv.ts.txt": {
+      "before": null,
+      "after": {
+        "bytes": 12149,
+        "sha256": "e95f80f679d7f36987294d6f8049c2f6987959fc9b95302289b66d27d0e44c1a",
+        "blob": "211837e149159618756545f784f2e3c52a5a8a74"
+      }
+    },
+    "test/treasury-compat/fixtures/reader-before-read-envelope-xv.ts.txt": {
+      "before": null,
+      "after": {
+        "bytes": 26415,
+        "sha256": "75438e82c4b891fea5debe55d92d8de400252758d7b7e26139608eceab0f2e4e",
+        "blob": "19e4366d67d30fd00dab430799e1fa7951a978f5"
+      }
+    },
+    "test/treasury-compat/hotpath-optimization.spec.cjs": {
+      "before": {
+        "bytes": 6518,
+        "sha256": "5a51cd26b060ab87be983e952fa48daef56dea7f040e4711312457d5e4a00579",
+        "blob": "d6c2cefb0c6fe2e898a0618dbcf9b747fcf6359d"
+      },
+      "after": {
+        "bytes": 6525,
+        "sha256": "0244f57a98f0df3a054a11fd6c77280bc6f15f934f9204ff2021e4f960df5750",
+        "blob": "f16f3975c6bc0cfa92df89cb7b9417e60a3027f4"
+      }
+    },
+    "test/treasury-compat/read-envelope-xv.spec.cjs": {
+      "before": null,
+      "after": {
+        "bytes": 11593,
+        "sha256": "4f2587b981bf782d85efd3441f02d2c2f4fa8a510168ddfe60fe959ede3b4592",
+        "blob": "dd0bb54c7515d248975bbbe8e8cbfc1866509cea"
+      }
+    },
+    "test/treasury-compat/task-hotpath-xiv.spec.cjs": {
+      "before": {
+        "bytes": 12463,
+        "sha256": "e92daafeda816566566ae247faae81469f6d80069cd05f8b15deb4529171e0e6",
+        "blob": "051bba8ef7084c19751fbe7381f29bdf376bac83"
+      },
+      "after": {
+        "bytes": 12537,
+        "sha256": "33f9dedff06474a6558c72701a1ee164194fc19d02d64384f5632ff3ba65b64d",
+        "blob": "57256192920c950c2460bd319e2c2bf060f2704a"
+      }
+    }
+  }
+}
