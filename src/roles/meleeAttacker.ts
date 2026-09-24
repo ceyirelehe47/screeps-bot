@@ -658,6 +658,19 @@ function attackRouteBreachWhileTraveling(creep: Creep): boolean {
   return true;
 }
 
+function travelToWarTargetRoom(creep: Creep, targetRoom: string, encodedRouteRooms?: string): void {
+  const moveCode = moveToTargetRoom(creep, targetRoom, encodedRouteRooms, TRAVEL_OPTIONS);
+  if (moveCode === ERR_NO_PATH) {
+    attackRouteBreachWhileTraveling(creep);
+    return;
+  }
+
+  // A wall beside the squad is not a reason to stop a valid patrol route.
+  delete creep.memory._warBreachTargetId;
+  delete creep.memory._warBreachResumeUntil;
+  attackAdjacentHostileOnRoute(creep);
+}
+
 function findPairedWarHealer(creep: Creep): Creep | null {
   const healerConfigName = creep.memory._warPartnerConfigName;
   if (!healerConfigName) return null;
@@ -831,8 +844,7 @@ export const meleeAttackerRole: RoleFactory = (
     }
 
     if (targetRoom && creep.room.name !== targetRoom) {
-      if (attackRouteBreachWhileTraveling(creep)) return false;
-      moveToTargetRoom(creep, targetRoom, encodedRouteRooms, TRAVEL_OPTIONS);
+      travelToWarTargetRoom(creep, targetRoom, encodedRouteRooms);
       return false;
     }
 
@@ -846,8 +858,7 @@ export const meleeAttackerRole: RoleFactory = (
     }
 
     if (targetRoom && creep.room.name !== targetRoom) {
-      if (attackRouteBreachWhileTraveling(creep)) return false;
-      moveToTargetRoom(creep, targetRoom, encodedRouteRooms, TRAVEL_OPTIONS);
+      travelToWarTargetRoom(creep, targetRoom, encodedRouteRooms);
       return false;
     }
 
