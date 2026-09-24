@@ -14,6 +14,8 @@
 
 冻结测量器日志中的 `productionBase=06ffedb7` 表示它的**测量源码血统**，不是此刻要恢复的正式服字节。本副本用 `measurementSourceBaseCommit` 校验该日志字段，独立用 `backupDigest`、`backupBuild` 校验实际 `5cef62c5` 备份。没有改测量器源码来伪造新的日志身份。
 
+2026-09-25 01:39:47 又执行一次只读正式服核对：账号、活动 branch、两房归属、`BUILD_COMMIT`、部署 tag、模块集合 hash 和 `main` SHA 与上述快照仍完全一致。这只是上传前的当前性检查，正式执行仍须即时重读。
+
 ## 离线验证
 
 - 包完整性通过；`source()` 校验旧 FC1 提交、巡逻文件 blob、第二层门禁 blob、新 HEAD/tree、固定 runtime emitter 均通过。
