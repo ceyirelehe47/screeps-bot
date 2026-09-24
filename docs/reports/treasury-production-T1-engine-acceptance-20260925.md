@@ -43,4 +43,4 @@
 
 - 真实引擎已覆盖默认 OFF、shadow、非空旧任务与预约、一次原生发送、费用和库存、下一 tick 对账、drain、OFF 交回及重启不重发。`outcome_unknown`、冲突 writer、坏预约和结构替换等故障注入由定向 Jest 测试覆盖，**没有**声称这些故障在真实引擎中发生。
 - 模块距十进制 5 MB 仅约 53,786 字节；构建通过不代表正式 API 上传已验证。正式灰度前须重新确认候选字节、平台限制及现役代码差异。
-- G2 正式 shard1 灰度与独立审查尚未执行；G1 FC1 Online II 四点测量与精确恢复也尚未执行。G1 包内旧恢复字节不含已部署的巡逻修复，不能直接当作当前恢复基线。任务包整体仍为 **PARTIAL**。首次 writer 灰度的前置、切换和停止条件见 [灰度说明](treasury-production-T1-first-gray-20260925.md)。
+- G2 正式 shard1 灰度与独立审查尚未执行。G1 后续已使用包含现役巡逻修复的独立候选，完成 shard1 四点测量、精确恢复和运行确认；原 G1 包内旧恢复字节并未直接用于线上。两项任务包工程交付的当前状态见 [最终状态](treasury-production-T1-final-status-20260925.md)。首次 writer 灰度的前置、切换和停止条件见 [灰度说明](treasury-production-T1-first-gray-20260925.md)。
