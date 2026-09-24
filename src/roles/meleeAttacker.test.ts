@@ -93,6 +93,55 @@ describe("meleeAttackerRole war duo staging", () => {
     );
   });
 
+  it.each(["source", "target"] as const)(
+    "keeps moving through a cleared room instead of attacking an adjacent wall in %s phase",
+    (phase) => {
+      const wall = hostileStructure(STRUCTURE_WALL, "leftover-wall", 25, 24, 500_000);
+      const attacker = createMockPowerBankCreep("meleeAttacker", {
+        roomName: TARGET_ROOM,
+        x: 24,
+        y: 24,
+        memory: {
+          role: "meleeAttacker",
+          configName: ATTACKER_CONFIG,
+          _warBreachTargetId: wall.id as Id<StructureWall>,
+        },
+      });
+      attacker.pos.findInRange = jest.fn((type: FindConstant) =>
+        type === FIND_STRUCTURES ? [wall] : [],
+      ) as unknown as RoomPosition["findInRange"];
+      Game.creeps = { [attacker.name]: attacker };
+
+      const role = meleeAttackerRole("E2N54", "", "", "", "");
+      if (phase === "source") role.source?.(attacker);
+      else role.target(attacker);
+
+      expect(moveToTargetRoom).toHaveBeenCalledWith(attacker, "E2N54", "", expect.any(Object));
+      expect(attacker.attack).not.toHaveBeenCalled();
+      expect(attacker.memory._warBreachTargetId).toBeUndefined();
+    },
+  );
+
+  it("attacks an adjacent wall only when travel has no path", () => {
+    moveToTargetRoom.mockReturnValue(ERR_NO_PATH);
+    const wall = hostileStructure(STRUCTURE_WALL, "route-blocking-wall", 25, 24, 500_000);
+    const attacker = createMockPowerBankCreep("meleeAttacker", {
+      roomName: TARGET_ROOM,
+      x: 24,
+      y: 24,
+      memory: { role: "meleeAttacker", configName: ATTACKER_CONFIG },
+    });
+    attacker.pos.findInRange = jest.fn((type: FindConstant) =>
+      type === FIND_STRUCTURES ? [wall] : [],
+    ) as unknown as RoomPosition["findInRange"];
+    Game.creeps = { [attacker.name]: attacker };
+
+    meleeAttackerRole("E2N54", "", "", "", "").source?.(attacker);
+
+    expect(attacker.attack).toHaveBeenCalledWith(wall);
+    expect(attacker.memory._warBreachTargetId).toBe(wall.id);
+  });
+
   it("focuses hostile spawn before non-adjacent creeps and towers for war objectives", () => {
     const hostile = hostileCreep("hostile-defender", 800, { [ATTACK]: 5 });
     const spawn = hostileStructure(STRUCTURE_SPAWN, "spawn-war-objective", 20, 20, 5000);

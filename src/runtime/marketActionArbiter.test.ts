@@ -1,8 +1,11 @@
 import {
   clearMarketActionArbiterForTest,
   executeMarketDeal,
+  executeTerminalAction,
+  executeTerminalSend,
   getMarketActionJournal,
 } from "@/runtime/marketActionArbiter";
+import { TREASURY_T1_RUN_ID } from "@/runtime/treasuryT1Facts";
 import {
   clearMarketSaleExposureReservationsForTest,
   getTerminalAmountOutsideMarketSaleExposure,
@@ -72,6 +75,7 @@ describe("market action arbiter", () => {
   beforeEach(() => {
     Game.time = 100;
     Memory.data = undefined;
+    Memory.runtime = undefined;
     clearMarketActionArbiterForTest();
     clearMarketSaleExposureReservationsForTest();
     for (const roomName of ["W1N1", "W2N2", "W8N8", "W9N9"]) {
@@ -80,6 +84,41 @@ describe("market action arbiter", () => {
         [RESOURCE_KEANIUM]: 100_000,
       });
     }
+  });
+
+  it("holds both bounded terminal scopes during an unresolved Treasury dispatch", () => {
+    const market = installMarketMock();
+    const sender = installTerminal("E5N59", {
+      [RESOURCE_HYDROGEN]: 100,
+      [RESOURCE_ENERGY]: 100,
+    });
+    sender.send = jest.fn(() => OK);
+    installTerminal("E4N58", { [RESOURCE_ENERGY]: 1_000 });
+    Memory.runtime = {
+      treasuryProductionT1Quota: { runId: TREASURY_T1_RUN_ID, status: "dispatching" },
+    } as unknown as Memory["runtime"];
+
+    const sourceAction = jest.fn(() => OK);
+    expect(executeTerminalAction("E3N59", "legacy-source", "terminal_send", sourceAction)).toBe(ERR_BUSY);
+    expect(sourceAction).not.toHaveBeenCalled();
+    expect(executeTerminalSend({
+      terminal: sender,
+      resourceType: RESOURCE_HYDROGEN,
+      amount: 100,
+      transactionCost: 10,
+      destinationRoomName: "E4N58",
+      actor: "legacy-other-source",
+    })).toBe(ERR_BUSY);
+    expect(sender.send).not.toHaveBeenCalled();
+    expect(executeProductionBuy("buy", 10, "E4N58", "legacy-target")).toBe(ERR_BUSY);
+    expect(market.deal).not.toHaveBeenCalled();
+
+    const outsideAction = jest.fn(() => OK);
+    expect(executeTerminalAction("E6N59", "unrelated", "terminal_send", outsideAction)).toBe(OK);
+    (Memory.runtime as unknown as { treasuryProductionT1Quota: { status: string } })
+      .treasuryProductionT1Quota.status = "drained";
+    expect(executeTerminalAction("E3N59", "legacy-source", "terminal_send", sourceAction)).toBe(OK);
+    expect(sourceAction).toHaveBeenCalledTimes(1);
   });
 
   it("Direct gap 后生产购买不能消耗 transaction-energy exposure", () => {

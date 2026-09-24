@@ -9,6 +9,12 @@ import {
   claimTerminalAmountOutsideMarketSaleExposure,
   claimTerminalSendOutsideMarketSaleExposure,
 } from "@/runtime/marketSaleExposure";
+import { hasTreasuryT1TerminalFence } from "@/runtime/treasuryTaskCommitmentBridge";
+import {
+  TREASURY_T1_RUN_ID,
+  TREASURY_T1_SOURCE_ROOM,
+  TREASURY_T1_TARGET_ROOM,
+} from "@/runtime/treasuryT1Facts";
 
 export type TerminalActionKind = "market_deal" | "terminal_send";
 export type MarketAccountActionKind =
@@ -81,6 +87,14 @@ export interface TerminalSendRequest {
   destinationRoomName: string;
   actor: string;
   description?: string;
+}
+
+function blockedByTreasuryT1(roomName: string, actor: string, destinationRoomName?: string): boolean {
+  if (actor === `treasury:${TREASURY_T1_RUN_ID}`) return false;
+  return hasTreasuryT1TerminalFence() && (
+    roomName === TREASURY_T1_SOURCE_ROOM || roomName === TREASURY_T1_TARGET_ROOM ||
+    destinationRoomName === TREASURY_T1_TARGET_ROOM
+  );
 }
 
 let claimTick: number | undefined;
@@ -353,6 +367,7 @@ export function claimPreparedDirectMarketClaims(
   ) {
     return false;
   }
+  if (blockedByTreasuryT1(request.roomName, request.actor)) return false;
 
   syncClaimTick();
   if (corruptPersistentMarketAccountClaim) return false;
@@ -438,6 +453,7 @@ export function executeTerminalAction(
   action: () => ScreepsReturnCode,
 ): ScreepsReturnCode {
   syncClaimTick();
+  if (blockedByTreasuryT1(roomName, actor)) return ERR_BUSY;
   if (terminalClaims.has(roomName) || terminalActionsInFlight.has(roomName)) return ERR_BUSY;
 
   terminalActionsInFlight.add(roomName);
@@ -690,6 +706,9 @@ export function executePreparedDirectMarketDeal(
 export function executeTerminalSend(
   request: TerminalSendRequest,
 ): ScreepsReturnCode {
+  if (blockedByTreasuryT1(request.terminal.room.name, request.actor, request.destinationRoomName)) {
+    return ERR_BUSY;
+  }
   const exposureClaim = claimTerminalSendOutsideMarketSaleExposure(
     request.terminal,
     request.resourceType,

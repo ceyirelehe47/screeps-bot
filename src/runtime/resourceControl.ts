@@ -28,6 +28,8 @@ import {
   recordResourceTransferTaskProgress,
   type ResourceTransferTask,
 } from "@/runtime/logistics/resourceTransferTasks";
+import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
+import { runTreasuryTerminalTransferTask } from "@/runtime/treasuryTerminalTransfer";
 import {
   DEFAULT_CAPACITY_HEADROOM_POLICY,
   getReceiverSafeCapacity,
@@ -1919,6 +1921,9 @@ function syncResourceControlTransferTask(
   context: ResourceControlTransferContext,
   task: ResourceTransferTask,
 ): void {
+  // Direct task-field mutations in ResourceControl invalidate Treasury's
+  // same-tick commitment snapshot before another admission can reuse it.
+  bumpTreasuryCommitmentRevision();
   if (!context.taskById.has(task.id)) {
     context.tasks.push(task);
   }
@@ -2385,8 +2390,9 @@ function applyPostSendDelta(
   receiver: ResourceControlSnapshot,
   resource: ResourceConstant,
   amount: number,
+  quotedTransactionCost?: number,
 ): number {
-  const transferCost = Game.market.calcTransactionCost(
+  const transferCost = quotedTransactionCost ?? Game.market.calcTransactionCost(
     amount,
     donor.roomName,
     receiver.roomName,
@@ -5399,6 +5405,33 @@ function executeTransferTasks(
 
   for (const task of tasks) {
     if (task.status !== "pending") {
+      continue;
+    }
+
+    const treasuryDisposition = runTreasuryTerminalTransferTask(
+      task,
+      context.receiverCapacityLedger,
+      sendBudget.remaining > 0 &&
+        !terminalBusy.has(task.fromRoomName) && !terminalBusy.has(task.toRoomName),
+      (amount, fee) => {
+        const donor = byRoomName[task.fromRoomName];
+        const receiver = byRoomName[task.toRoomName];
+        if (donor && receiver) {
+          applyPostSendDelta(donor, receiver, task.resource, amount, fee);
+        } else {
+          actions.push(`treasury-t1-local-snapshot-missing:${task.id}`);
+        }
+        // Reserve the accepted work in this tick's shared receiver ledger even
+        // if a diagnostic snapshot disappeared after the final API checks.
+        context.receiverCapacityLedger.applySend(task.toRoomName, task.resource, amount, task.id);
+        terminalBusy.add(task.fromRoomName);
+        sendBudget.remaining -= 1;
+        recordFixedCpuAction("resourceControl");
+        actions.push(`treasury-t1-scheduled:${task.id}:${amount}`);
+      },
+    );
+    if (treasuryDisposition.handled) {
+      actions.push(`treasury-t1-${treasuryDisposition.status || "held"}:${task.id}`);
       continue;
     }
 
