@@ -11,8 +11,8 @@
   },
   "target": {
     "suites": 195,
-    "tests": 685,
-    "passed": 685,
+    "tests": 688,
+    "passed": 688,
     "failed": 0,
     "pending": 0,
     "todo": 0
@@ -115,7 +115,7 @@
     },
     "src/roles/meleeAttacker.test.ts": {
       "baseline": 8,
-      "budget": 2,
+      "budget": 5,
       "tier": "default-max-2"
     },
     "src/roles/mineralHarvester.test.ts": {

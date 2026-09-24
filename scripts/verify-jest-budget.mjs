@@ -15,8 +15,8 @@ const ignoredDirectories = new Set([".git", ".worktrees", "dist", "monitor-data"
 const requiredBaselineCommit = "6d514b5de2dd518596eab11865f2d841c9cb18e2";
 const requiredTarget = Object.freeze({
   suites: 195,
-  tests: 685,
-  passed: 685,
+  tests: 688,
+  passed: 688,
   failed: 0,
   pending: 0,
   todo: 0
