@@ -1,0 +1,114 @@
+{
+  "kind": "pre-binding-selection-result/v1",
+  "runId": "4d9fb3da-29c7-4313-9d53-925fcbdbcb5d",
+  "outcome": "WINDOW_SELECTED",
+  "reason": "FIRST_ADMISSIBLE_REVALIDATED_PROPOSAL",
+  "rounds": 2,
+  "selected": {
+    "round": 2,
+    "decisionOrdinal": 2,
+    "readId": "2b98c8b7df706019c18174cbc1d4b535",
+    "identityId": "28657ef06491913723b0a12ccf3dd03e",
+    "currentTick": 73918718,
+    "profile": {
+      "enabled": true,
+      "shardName": "shard1",
+      "rooms": [
+        "E3N59",
+        "E4N58"
+      ],
+      "resources": [
+        "energy",
+        "H"
+      ],
+      "startTick": 73918900,
+      "endTick": 73919200,
+      "intervalTicks": 100,
+      "minBucket": 2000,
+      "maxSampleCpu": 10,
+      "reserveCpu": 25,
+      "maxLogBytes": 16384
+    },
+    "plan": {
+      "kind": "tick-window-admission/v1",
+      "runId": "4d9fb3da-29c7-4313-9d53-925fcbdbcb5d",
+      "stage": "binding",
+      "status": "TIME_BUDGET_ADMITTED",
+      "measurementSha256": "37571cdd2f91cdbdedaaa5c3b3f1292a6bf702841b6e49e1caacfc8d98f76e15",
+      "readId": "2b98c8b7df706019c18174cbc1d4b535",
+      "currentTick": 73918718,
+      "startTick": 73918900,
+      "endTick": 73919200,
+      "remainingTicks": 482,
+      "conservativeMsPerTick": 6899,
+      "estimatedRemainingMs": 3325318,
+      "deliveryReserveMs": 240000,
+      "requiredMs": 3565318,
+      "exposureLimitMs": 4500000,
+      "slackMs": 934682,
+      "minimumSlackMs": 180000,
+      "measurementAgeMs": 12113.628750000033,
+      "readAtMs": 1790273884716,
+      "readMonoMs": 575532.797958,
+      "noAutomaticExtension": true
+    },
+    "measurementFileSha256": "920f302e3e032baeaf4b20912d1c7792205fb9016d2607c6b645abefd28416d0",
+    "bindingFileSha256": "35fe5c476e6ff725cec7bff17ea51641951ed50df7c98d53c08c2c632f480844"
+  },
+  "startedAtMs": 1790273372972,
+  "endedAtMs": 1790273884792,
+  "elapsedMs": 511817.58079100004,
+  "maximumMs": 1800000,
+  "maximumRounds": 6,
+  "noCodeWrittenBySelector": true,
+  "files": {
+    "round-01/decisions.jsonl": {
+      "bytes": 12938,
+      "sha256": "1df902a7541d3248f78258301d9f5bb175fcfe0ad8d304e3f466bd607be2ff91"
+    },
+    "round-01/result.json": {
+      "bytes": 280,
+      "sha256": "18acd9045be37cbe3933bb5c223b062fd09062a01f26a4aabf2fc950bf1e348e"
+    },
+    "round-01/start.json": {
+      "bytes": 119,
+      "sha256": "47e9f9c79b9227663c2df80c1a573a6d6595e6685d7b4e065a1100dca62a8c6e"
+    },
+    "round-01/time-observations.jsonl": {
+      "bytes": 5916,
+      "sha256": "398df11c22b285da7bbfd522c7265a78d6ec687835c18d7b39f5e86cbed318ac"
+    },
+    "round-01/timing-measurement.json": {
+      "bytes": 1094,
+      "sha256": "1ba91e0587cebb915c55fbeec10c9e1748d34fe9a70ee8be49bf91ff948db9aa"
+    },
+    "round-02/decisions.jsonl": {
+      "bytes": 2185,
+      "sha256": "d2132fac9e69fedea41a603e98f38548cc5926d15240ec0df031dae385572013"
+    },
+    "round-02/identities.jsonl": {
+      "bytes": 782,
+      "sha256": "1d697f1e082a9dfe6f9abfd274f4a269669fd56cd98864139b65653f8f0b7b2e"
+    },
+    "round-02/result.json": {
+      "bytes": 264,
+      "sha256": "836283405b8115134e919854a367529648362e82a367bcdc92310b49a88da5a6"
+    },
+    "round-02/start.json": {
+      "bytes": 120,
+      "sha256": "febf289c59dd52df93e240ae2e060ba965529cd3b4c05b9a6fe61f64412a44b3"
+    },
+    "round-02/time-observations.jsonl": {
+      "bytes": 2813,
+      "sha256": "787d89d0cb6ee03888261d7173a926ae95db75e4a0f4f18d6eb97ce1a04e3e3a"
+    },
+    "round-02/timing-measurement.json": {
+      "bytes": 1094,
+      "sha256": "920f302e3e032baeaf4b20912d1c7792205fb9016d2607c6b645abefd28416d0"
+    },
+    "start.json": {
+      "bytes": 451,
+      "sha256": "eb58f2c75f18fde525b31e3e7708a1ad3cadd4010c7a9e860ec0246f3b13b4af"
+    }
+  }
+}

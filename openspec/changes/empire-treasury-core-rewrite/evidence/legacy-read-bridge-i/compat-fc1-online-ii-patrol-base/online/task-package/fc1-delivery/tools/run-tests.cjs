@@ -1,0 +1,10 @@
+'use strict';
+const C=require('./common.cjs'),{fs,path,cp,ROOT,P}=C;
+function counts(text){const n=k=>Number(text.match(new RegExp('^# '+k+' (\\d+)\\r?$','m'))?.[1]);return{tests:n('tests'),passed:n('pass'),failed:n('fail'),skipped:n('skipped'),todo:n('todo'),cancelled:n('cancelled')};}
+function run(o){C.verify();C.required(o,['out']);C.check(!!o.compat!==!!o['maker-ts'],'SELECT_TEST_ENVIRONMENT');const tsPath=o.compat?path.join(path.resolve(o.compat),'node_modules/typescript'):path.resolve(o['maker-ts']);const version=C.json(path.join(tsPath,'package.json')).version;if(o.compat)C.check(version===P.compilerVersion,'PINNED_TYPESCRIPT_REQUIRED');C.check(!fs.existsSync(o.out),'TEST_OUTPUT_EXISTS');fs.mkdirSync(o.out,{recursive:true});
+ const specs=fs.readdirSync(path.join(ROOT,'tests')).filter(n=>n.endsWith('.spec.cjs')).sort().map(n=>path.join(ROOT,'tests',n));const r=cp.spawnSync(process.execPath,['--test','--test-concurrency=1',...specs],{cwd:ROOT,encoding:'utf8',maxBuffer:64*1048576,timeout:1200000,env:{...process.env,FC1_TS_PATH:tsPath}});
+ C.write(path.join(o.out,'tests.tap'),r.stdout||'');C.write(path.join(o.out,'tests.stderr'),r.stderr||'');const c=counts(r.stdout||'');C.check(!r.error&&r.status===0&&c.tests===P.packageTests&&c.passed===c.tests&&[c.failed,c.skipped,c.todo,c.cancelled].every(n=>n===0),'PACKAGE_TESTS_FAILED');
+ const syntax=[];for(const n of C.list(ROOT).filter(n=>n.endsWith('.cjs'))){const v=cp.spawnSync(process.execPath,['--check',path.join(ROOT,n)],{encoding:'utf8'});syntax.push({file:n,exit:v.status});C.check(v.status===0&&!v.error,'CJS_SYNTAX_FAILED:'+n);}
+ C.durable(path.join(o.out,'syntax.json'),syntax);const result={status:o.compat?'FC1_PACKAGE_TESTS_VERIFIED':'FC1_MAKER_TESTS_VERIFIED_NOT_DEPLOYMENT_GATE',packageFingerprint:C.verify().fingerprint,compiler:version,...c,syntaxFiles:syntax.length,fullRepositoryGate:false,realPreviewIntegrationTestsRun:false,at:new Date().toISOString()};C.durable(path.join(o.out,'result.json'),result);return result;
+}
+module.exports={counts,run};if(require.main===module)C.cli(()=>run(C.args(['compat','maker-ts','out'])));

@@ -1,0 +1,20 @@
+{
+  "status": "RESTORED_BYTES_CONFIRMED",
+  "confirmed": true,
+  "requestAttempted": true,
+  "accepted": true,
+  "error": null,
+  "digest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "50295c19de66f7d34b2bd4e54f08317b212ea3a54054385a2abdeb6ef8aa74fe",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494748,
+        "sha256": "62a993bf917f1a74ef708584eaee1fc3d2deb5aaf8b0c751f8f9d72ff3c08032"
+      }
+    ]
+  },
+  "atMs": 1790275857885
+}

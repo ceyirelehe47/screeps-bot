@@ -1,0 +1,19 @@
+{
+  "runId": "4d9fb3da-29c7-4313-9d53-925fcbdbcb5d",
+  "pid": 61446,
+  "reason": "REQUESTED_STOP",
+  "authentications": 1,
+  "createdAtMs": 1790273916033,
+  "endedAtMs": 1790275858141,
+  "costReceipts": 4,
+  "lastConsole": 1790275855895,
+  "lastCpu": 1790275855918,
+  "lastPositiveCpu": 1790275855918,
+  "accepted": 4,
+  "raw": 4,
+  "complete": 4,
+  "issues": [],
+  "deploySeen": true,
+  "duplicates": 0,
+  "safety": false
+}

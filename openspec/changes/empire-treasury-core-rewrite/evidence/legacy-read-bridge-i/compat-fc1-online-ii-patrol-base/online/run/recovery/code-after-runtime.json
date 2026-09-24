@@ -1,0 +1,22 @@
+{
+  "state": "CURRENT_IS_BACKUP",
+  "digest": {
+    "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+    "hash": "50295c19de66f7d34b2bd4e54f08317b212ea3a54054385a2abdeb6ef8aa74fe",
+    "files": [
+      {
+        "name": "main",
+        "kind": "text",
+        "bytes": 4494748,
+        "sha256": "62a993bf917f1a74ef708584eaee1fc3d2deb5aaf8b0c751f8f9d72ff3c08032"
+      }
+    ]
+  },
+  "build": {
+    "commit": "5cef62c5bce37c00c4fc35f9fc3881e21128b00b",
+    "tree": "151b77b71ae42ec5b429f4ae4fcc9cd4650fc541",
+    "deployBranch": "default",
+    "tag": "2026.8.29-6+5cef62c@2026-09-24T15:04:28.806Z"
+  },
+  "atMs": 1790275975441
+}

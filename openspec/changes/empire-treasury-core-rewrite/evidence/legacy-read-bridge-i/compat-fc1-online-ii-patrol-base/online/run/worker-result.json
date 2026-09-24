@@ -1,0 +1,43 @@
+{
+  "runId": "4d9fb3da-29c7-4313-9d53-925fcbdbcb5d",
+  "reason": "FOUR_REPORTS_CAPTURED",
+  "closure": {
+    "status": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+    "runtimeConfirmed": true,
+    "bytesConfirmed": true,
+    "uploadOutcomeResolved": true,
+    "error": null,
+    "restoration": {
+      "status": "RESTORED_BYTES_CONFIRMED",
+      "confirmed": true,
+      "requestAttempted": true,
+      "accepted": true,
+      "error": null,
+      "digest": {
+        "algorithm": "deployGuard.computeModulesHash/NUL-v1",
+        "hash": "50295c19de66f7d34b2bd4e54f08317b212ea3a54054385a2abdeb6ef8aa74fe",
+        "files": [
+          {
+            "name": "main",
+            "kind": "text",
+            "bytes": 4494748,
+            "sha256": "62a993bf917f1a74ef708584eaee1fc3d2deb5aaf8b0c751f8f9d72ff3c08032"
+          }
+        ]
+      },
+      "atMs": 1790275857885
+    },
+    "runtime": {
+      "status": "RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED",
+      "durationMs": 75179,
+      "consoleFrames": 20,
+      "cpuFrames": 21,
+      "positiveCpuFramesAfterReady": 20,
+      "maxConsoleGapMs": 4800,
+      "maxCpuGapMs": 4790,
+      "closureId": "4f4c84ed60c642ea206b49a9d8d1f1ff"
+    },
+    "atMs": 1790275975484
+  },
+  "atMs": 1790275975650
+}

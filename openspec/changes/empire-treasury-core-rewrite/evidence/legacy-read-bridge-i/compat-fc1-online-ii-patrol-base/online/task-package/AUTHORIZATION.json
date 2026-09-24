@@ -1,0 +1,13 @@
+{
+  "kind": "FC1-online-II-patrol-safe-authorization/v1",
+  "sourceThreadId": "01a0d3b3-1aff-7f90-b15a-b0eabf055502",
+  "directUserReply": "批准",
+  "approvedScope": "Push prepared branches to ceyirelehe47/screeps-bot, then one shard1 FC1 read-only measurement if immediate baseline checks pass: one candidate upload, four samples 100 ticks apart, one exact restore upload, no write retry or fifth point.",
+  "authorizationId": "treasury-full-cost-FC1-online-II-2026-09-24",
+  "runId": "4d9fb3da-29c7-4313-9d53-925fcbdbcb5d",
+  "priorPreparedFingerprint": "3af924b890e8d2078c30ed19e092f79df17e754dd06ab460fa130ec59289c0bd",
+  "candidatePostsMax": 1,
+  "restorePostsMax": 1,
+  "automaticRetries": 0,
+  "recordedAtUtc": "2026-09-24T17:57:35Z"
+}

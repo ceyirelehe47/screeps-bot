@@ -1,0 +1,777 @@
+{
+  "kind": "package-integrity/v1",
+  "files": {
+    "AGENT-RUN.md": {
+      "bytes": 1448,
+      "sha256": "2bce9532ce7bc32c689b4e8de6964b9cb8abbdc739dd5247ac426344ba4cfce7"
+    },
+    "AUTHORIZATION.json": {
+      "bytes": 745,
+      "sha256": "f9a86b720ef0e84ad959354c51d5d573f59ab91755827d8501cacdbbe849d080"
+    },
+    "FC1-RESOLUTION.json": {
+      "bytes": 2870,
+      "sha256": "3848499acbe58ee7366682efc3a35bd9c2cce27d6fe4f9659094076de11a564c"
+    },
+    "IMPLEMENTATION-MANIFEST.json": {
+      "bytes": 1291,
+      "sha256": "2cca0210282d32b0d891fd386829df1024541d477c22a05e1cf1d161c0da235b"
+    },
+    "MAKER-VALIDATION.json": {
+      "bytes": 4335,
+      "sha256": "31be41cbda3be6989831150c522acba94ff98d05883fcc76833c131185b83618"
+    },
+    "README.md": {
+      "bytes": 1713,
+      "sha256": "9623671e3a784fc7c90963216b2e26fc4f7f87100faa6d694caea2d7540000d4"
+    },
+    "baseline-executor/AGENT-RUN.md": {
+      "bytes": 13411,
+      "sha256": "68e263e501e27fac3a6853fa1866af2e779ee612c102f91bfc2dc62c70c04024"
+    },
+    "baseline-executor/IMPLEMENTATION-MANIFEST.json": {
+      "bytes": 1291,
+      "sha256": "2cca0210282d32b0d891fd386829df1024541d477c22a05e1cf1d161c0da235b"
+    },
+    "baseline-executor/INTEGRITY.json": {
+      "bytes": 9798,
+      "sha256": "82f7dbfec7c20fa81001daa54a61553d23b5dd05e97176ade0fece2d9985a712"
+    },
+    "baseline-executor/MAKER-VALIDATION.json": {
+      "bytes": 4335,
+      "sha256": "31be41cbda3be6989831150c522acba94ff98d05883fcc76833c131185b83618"
+    },
+    "baseline-executor/README.md": {
+      "bytes": 861,
+      "sha256": "f6dcee0f34f86fa804d9590e2b2cdc2e13978c16f2f9652499652d971c4da8f5"
+    },
+    "baseline-executor/maker-evidence/authentic-base-objects.json": {
+      "bytes": 443,
+      "sha256": "a8be1b855d6e835b6eadd380d37584e74e8e78bd69af4d4dc6d4650988cd71a8"
+    },
+    "baseline-executor/maker-evidence/authentic-source-tools.json": {
+      "bytes": 2458,
+      "sha256": "af5b9a79d9b14ab3e94a94993e49779cfa0cb4d141bba7943e46449319b592ba"
+    },
+    "baseline-executor/maker-evidence/generator-check.json": {
+      "bytes": 572,
+      "sha256": "ea3349db757d57105d130b3767c8c506631f6277136fdd40a481a382aee832f2"
+    },
+    "baseline-executor/maker-evidence/generator-check.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "baseline-executor/maker-evidence/historical-main-object.json": {
+      "bytes": 454,
+      "sha256": "8ba15012a6a711e6df327610d1447826b4b8b9c714b7c6c51032610694c24f9d"
+    },
+    "baseline-executor/maker-evidence/package-tests.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "baseline-executor/maker-evidence/package-tests.tap": {
+      "bytes": 33041,
+      "sha256": "1cf4386884eb32c80194c5fd2f3ccc6ad8ffba00ccf33dace582e3e1306fb057"
+    },
+    "baseline-executor/maker-evidence/repository-node-424.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "baseline-executor/maker-evidence/repository-node-424.tap": {
+      "bytes": 89097,
+      "sha256": "d12bd285b387dfb52a9530cd447cddb92e804893485aadc33a4b6862d827624e"
+    },
+    "baseline-executor/maker-evidence/selector-integration.json": {
+      "bytes": 5363,
+      "sha256": "2a5a9e40f3ecf9a15b5c792a7f09a717023c4eae84ab0f4b4fefd352cb3abdb8"
+    },
+    "baseline-executor/maker-evidence/syntax-check.json": {
+      "bytes": 1163,
+      "sha256": "60a7becda9d18917adf7ca3f0b35b759aa033ceb3746c97b99bc1e6533f950a1"
+    },
+    "baseline-executor/policy.json": {
+      "bytes": 3203,
+      "sha256": "89f21b0b3333e2e0e134798a5c94d07220bcef4dd6c38399020469a1a3bcdcb6"
+    },
+    "baseline-executor/references/PROVENANCE.md": {
+      "bytes": 1787,
+      "sha256": "fdcf6cb702e94e2768ba3c73d1d625a0e524a1a3e6583dfa70cfa7aff5c41831"
+    },
+    "baseline-executor/references/execution-boundaries.json": {
+      "bytes": 673,
+      "sha256": "ed70f1d9d8461837b0a9c4435c7c3cc037dada3a1f09fffe64e1c6617e0fc4df"
+    },
+    "baseline-executor/references/inherited-modules.json": {
+      "bytes": 1202,
+      "sha256": "0912d532f1a20ced13237db61a4c1d92ebcd46a1cc999805d38f07ac905e8869"
+    },
+    "baseline-executor/references/prior-XIV-retry-I-review.json": {
+      "bytes": 16893,
+      "sha256": "cb9b13a212fbdf52bbe06ff00356e467518a0a948037fd91112e619fc674e4a5"
+    },
+    "baseline-executor/references/prior-XV-independent-review.json": {
+      "bytes": 10847,
+      "sha256": "19c2e0f47327a1fd041f10326cc78bcf82f45b44bcfc20c42f50226dbd637859"
+    },
+    "baseline-executor/references/prior-XV-time-observations.jsonl": {
+      "bytes": 3321,
+      "sha256": "ef8670387f6b355a51fecfe6d944e059100a68dd8c56d57e415eb82a2ba4187e"
+    },
+    "baseline-executor/references/prior-XV-timing-binding.json": {
+      "bytes": 697,
+      "sha256": "2b9fb3d9841a1eb2d3e04201d3f4dce757fc48d2551ea6443fcf418f7e9d8388"
+    },
+    "baseline-executor/references/prior-XV-timing-identities.json": {
+      "bytes": 713,
+      "sha256": "a9a9cef9c38edb1c23f517606dc4cdae4badbcdcff4e9b6e9d76bdc7907eed97"
+    },
+    "baseline-executor/references/prior-XV-timing-measurement.json": {
+      "bytes": 1081,
+      "sha256": "2e5235b60bc209ac07c1546a304b663da700a55c937367189f62a88bd9788af9"
+    },
+    "baseline-executor/references/prior-anomaly.json": {
+      "bytes": 2598,
+      "sha256": "cc5856314042fac707c5bda33c4720e753ef92fbe8941baec9cd24cb42d39360"
+    },
+    "baseline-executor/references/synthetic-four-reports.json": {
+      "bytes": 39572,
+      "sha256": "6eb6c5d8745d51a229fb2a6dddd2d0aa818611792bbe33a42474efc6aa8d8710"
+    },
+    "baseline-executor/references/test-contract.json": {
+      "bytes": 57,
+      "sha256": "f7e85e60446ec9d04be459d63a9fa165211a3e8dabc735bf65c664c9e2c0fecf"
+    },
+    "baseline-executor/runtime/actions.cjs": {
+      "bytes": 6982,
+      "sha256": "8e07294a72b89b6797a57b31b3f5b6866c3dc08f0a2435c6b11e073be245f21c"
+    },
+    "baseline-executor/runtime/collector.cjs": {
+      "bytes": 2696,
+      "sha256": "0f91da48e9b1c01e8b35263b928db1d87263096611009f6107746f228f949ad4"
+    },
+    "baseline-executor/runtime/common.cjs": {
+      "bytes": 5733,
+      "sha256": "b47a7c5874f0c5b8b5dd0a59dfea9c618e0ea77d7c4864d64dba18c0c714d148"
+    },
+    "baseline-executor/runtime/identity.cjs": {
+      "bytes": 3080,
+      "sha256": "92f6bcf56724332f7b76093770cdcefc9b3af42b6ebab0c50bbc25af699e1e82"
+    },
+    "baseline-executor/runtime/observer.cjs": {
+      "bytes": 7069,
+      "sha256": "33c9c18014b1ec71513f44eaf62aeede550d468c802f6a51abdd8a27e147456c"
+    },
+    "baseline-executor/runtime/samples.cjs": {
+      "bytes": 12796,
+      "sha256": "d11aa9bbdcf0801bea69f054e92d21a7ff5af10e0d951a20b6ebfaaf1ef83471"
+    },
+    "baseline-executor/runtime/task-trace.cjs": {
+      "bytes": 2798,
+      "sha256": "a2e03246bd191cdbe22664ac7d579f65055dd5400cd4009c257cfb38a0cec653"
+    },
+    "baseline-executor/runtime/time-budget.cjs": {
+      "bytes": 10042,
+      "sha256": "c49dd9b448e9b7dea6c7b4a8d2feeea813805cede325b4224f4cf845a9df5ac1"
+    },
+    "baseline-executor/runtime/transport.cjs": {
+      "bytes": 3213,
+      "sha256": "3564c41f35a96161e272fd8a13f1de51f5b2f5375d63ba9118f39b2416e51c11"
+    },
+    "baseline-executor/runtime/window-selection.cjs": {
+      "bytes": 15299,
+      "sha256": "2f6d63bd69e3f62739824edfd73563b247cc2c8175f3fa38dc10666e6bcebeea"
+    },
+    "baseline-executor/runtime/worker.cjs": {
+      "bytes": 5291,
+      "sha256": "de5aad58c47f342158283beb66d0507e31655d742bbcb7f05b2c72fa2627bba4"
+    },
+    "baseline-executor/source-manifest.json": {
+      "bytes": 6456,
+      "sha256": "b85ba289fefd0259ae9cf39e99d7918be4b928c6f557e5ab9a913f18c0bd5916"
+    },
+    "baseline-executor/tests/actions.spec.cjs": {
+      "bytes": 4333,
+      "sha256": "1e46adb31d4917f02d8cbc6624be9fc34e70e297c5aa2e54f0b1b97d9ab9de5f"
+    },
+    "baseline-executor/tests/helpers.cjs": {
+      "bytes": 1335,
+      "sha256": "d9b83af23e0f358ee5eaa9e793b4c89d4dc69336167ea11f2f71cddd091ed0bc"
+    },
+    "baseline-executor/tests/overhead-analysis.spec.cjs": {
+      "bytes": 5168,
+      "sha256": "727dada4b6fc1adab712ad631fd3f348b5ab386583ff1818244416540331ba6f"
+    },
+    "baseline-executor/tests/samples.spec.cjs": {
+      "bytes": 4741,
+      "sha256": "d035bed01900925cb2631c6402d1d5123f74370365d171468c31eb44b4d9af7d"
+    },
+    "baseline-executor/tests/selection-fixture.cjs": {
+      "bytes": 2913,
+      "sha256": "26a4475df0554ad433a9b030c0c5c0fd8d6170ed2179d0661e14e2d156ef53e7"
+    },
+    "baseline-executor/tests/task-trace.spec.cjs": {
+      "bytes": 3244,
+      "sha256": "d49be70d7d40f6d091816481524e4cc8587215d26a5dd1edcada47fd1000f847"
+    },
+    "baseline-executor/tests/time-budget.spec.cjs": {
+      "bytes": 14459,
+      "sha256": "281717f535a150f6a6ad66f72b9d23e4f0f746fce51b57051e16dc426aec8f87"
+    },
+    "baseline-executor/tests/time-helper.cjs": {
+      "bytes": 3268,
+      "sha256": "a8e869292e737178dd4aca7757d32b689f7d2e7bedf43319122582555ccb57e7"
+    },
+    "baseline-executor/tests/transport-observer.spec.cjs": {
+      "bytes": 4387,
+      "sha256": "81b3207676afa7dc9e806cbdd3fd6860568ad139b4d16114ea3b378fb390c089"
+    },
+    "baseline-executor/tests/window-selection.spec.cjs": {
+      "bytes": 15980,
+      "sha256": "664dc60de9585b0358efb406333d9639947c2abbf90da3db926224ec91e08e36"
+    },
+    "baseline-executor/tests/workflow.spec.cjs": {
+      "bytes": 17314,
+      "sha256": "7e48ebbdcd5383994ced0d8275787a7c30264304a4450f484ed5d1597e8eaf85"
+    },
+    "baseline-executor/tools/analyze.cjs": {
+      "bytes": 2135,
+      "sha256": "03fb1300f182ab719a4de37a568a886a1c2f9a49605fa18d6c94ebbb5cff2b95"
+    },
+    "baseline-executor/tools/apply.cjs": {
+      "bytes": 441,
+      "sha256": "e00ba3345ea06d173f2d94d07c95d8fe9c09db89586f1fc0fbbb4d4904a2354a"
+    },
+    "baseline-executor/tools/archive.cjs": {
+      "bytes": 5308,
+      "sha256": "ac014a0080a3ef5803d74c133fad68472e2006d0dcd266b635f1191566333b6b"
+    },
+    "baseline-executor/tools/build.cjs": {
+      "bytes": 2301,
+      "sha256": "7fac7edaadcac02b7ae249559e149c97c1fa9cdc60a45bfebeb51760793bc349"
+    },
+    "baseline-executor/tools/observe.cjs": {
+      "bytes": 7260,
+      "sha256": "ab597bf8b55a99aa4a85b187f3d2c16bbdec2d3220d78f86f3ae36dc00a27555"
+    },
+    "baseline-executor/tools/overhead-analysis.cjs": {
+      "bytes": 3437,
+      "sha256": "d3062f9d8b19c27898e8abceabd5edce83caa6dbe3f6ea839fdc06a113ec97bf"
+    },
+    "baseline-executor/tools/profile-local.cjs": {
+      "bytes": 3305,
+      "sha256": "38a20bcac2669e0536f9a6e171c89c8b5050be11f354b2008bad39851269286c"
+    },
+    "baseline-executor/tools/reconcile.cjs": {
+      "bytes": 601,
+      "sha256": "1b9a50872b6070baf8d1c8db20e1586bc055fc4bd7293cc22de15fc00248cdee"
+    },
+    "baseline-executor/tools/repository.cjs": {
+      "bytes": 9002,
+      "sha256": "865d3a08f775109b24088bd6e1ee8264a3a288c46f50a3619cbbc2d4708c8466"
+    },
+    "baseline-executor/tools/run-tests.cjs": {
+      "bytes": 1288,
+      "sha256": "aa61785c42ac45fc343adf94cd4b8307a08e68774b00d953a8881fe22b20aba4"
+    },
+    "baseline-executor/tools/selection-analysis.cjs": {
+      "bytes": 927,
+      "sha256": "34b2a39f178b0e3fc35d395c4ea1b8934a9bb7b5992932bae84abba14e198f57"
+    },
+    "baseline-executor/tools/timing-analysis.cjs": {
+      "bytes": 1227,
+      "sha256": "655b9606bb46f277e3ebe3a3a39201c07d98d382bea661e2690143101ee3de5f"
+    },
+    "baseline-executor/tools/verify-package.cjs": {
+      "bytes": 118,
+      "sha256": "65b12ae5511ceaaf87c8b0229be6a0fec544bad188142e098ebb3997a37b924a"
+    },
+    "baseline-executor/tools/verify.cjs": {
+      "bytes": 7819,
+      "sha256": "9908409b327dbf95a192ea3c2ab861d04187b9c321bd08be84a8bf975a8b35c2"
+    },
+    "baseline-executor/vendor/deployGuard.cjs": {
+      "bytes": 5078,
+      "sha256": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7"
+    },
+    "fc1-delivery/AGENT-RUN.md": {
+      "bytes": 2377,
+      "sha256": "793c11fb940805a2a8fcfdad5317eaf0de4a89fddec17e2d3c6f30dc334fe741"
+    },
+    "fc1-delivery/INTEGRITY.json": {
+      "bytes": 6329,
+      "sha256": "b7d8353295a930df805c7c7fe84d793a0a6a14f020c9fcbc9809a3042d1c2ff2"
+    },
+    "fc1-delivery/MAKER-VALIDATION.json": {
+      "bytes": 2914,
+      "sha256": "2604bbc133be45d2492a920d77592c87d40f0e6b3617e7adad5d74c494655130"
+    },
+    "fc1-delivery/PACKAGE.json": {
+      "bytes": 3893,
+      "sha256": "ba53023778c20872a428cbaf3344005d8061b79804367ebf0afae1649e68b993"
+    },
+    "fc1-delivery/README.md": {
+      "bytes": 2553,
+      "sha256": "67da483269f483e0de16ed1d8246da1a4ee613349440a89c8ad788ef44157fa9"
+    },
+    "fc1-delivery/evidence/authenticated-fixtures.json": {
+      "bytes": 833,
+      "sha256": "fd18cc1f8ce88cfadafd11440107b88f801ba9709890b0d360d7df4bb3ac028d"
+    },
+    "fc1-delivery/evidence/maker-tests.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fc1-delivery/evidence/maker-tests.tap": {
+      "bytes": 22275,
+      "sha256": "8367ec8e49def2bd2ccabdf3f080a0bb2831780e4b6cac8db5f1f4c67571deba"
+    },
+    "fc1-delivery/evidence/syntax-check.json": {
+      "bytes": 1816,
+      "sha256": "1371bb298d1805fe9ca4e39b35336aaa4d06804bebb8d0e1de358f47161e4ec1"
+    },
+    "fc1-delivery/fixtures/core-R1.expected.ts.txt": {
+      "bytes": 74835,
+      "sha256": "4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08"
+    },
+    "fc1-delivery/fixtures/core-XV.ts.txt": {
+      "bytes": 70443,
+      "sha256": "e03c09619b8b47097e234ff81a5fe0a28c57b1b20180ba0a818139eb0fc05a9d"
+    },
+    "fc1-delivery/fixtures/runtime-before-full-cost-fc1.ts.txt": {
+      "bytes": 956,
+      "sha256": "7250f9554baca9c2431d109f14c45ebece7df04de95e79e53146f9996dfffe6c"
+    },
+    "fc1-delivery/implementation/cost-receipts.cjs": {
+      "bytes": 2941,
+      "sha256": "44fba960459c38e97ba7d3e3a52ce96494a5b3011b9dabbb0cfae167d7a16136"
+    },
+    "fc1-delivery/implementation/executor-AGENT-RUN.md": {
+      "bytes": 1141,
+      "sha256": "e8ed211efe23a4c8630fad30ac6c98f944ec444f75a8afc250262ff0c711076e"
+    },
+    "fc1-delivery/implementation/executor-run-tests.cjs": {
+      "bytes": 3719,
+      "sha256": "39d22afd865d77b52f55f4913b3ad7a7f32249a5676d9da6edd61cad03567cff"
+    },
+    "fc1-delivery/implementation/raw-whitespace.cjs": {
+      "bytes": 2313,
+      "sha256": "286dab45a7e2c8923179b499dec25dc151b0d05de9575e170fdeb75cb4701ea1"
+    },
+    "fc1-delivery/implementation/test-results.cjs": {
+      "bytes": 1999,
+      "sha256": "3e51dc4ce858ff0cab21546c8ace47e3153a3b908219cfbe9a25545283be1371"
+    },
+    "fc1-delivery/implementation/treasury-compat-read-path-r1.cjs": {
+      "bytes": 89157,
+      "sha256": "7d7471404bbd5b8b5ff87c5ea37ea322bec7b638b790d11a1d6cdc0e2d0ee4e6"
+    },
+    "fc1-delivery/implementation/treasuryCompatRuntime.ts": {
+      "bytes": 7549,
+      "sha256": "dec7d710779248e0689b673a473557c07728a93d422fee7524f3a79082549967"
+    },
+    "fc1-delivery/integration/entry-closure.integration.spec.cjs": {
+      "bytes": 4938,
+      "sha256": "d96138a9009fa764efa10e271308877cfd3a81164655f0128a6582d99d1574ce"
+    },
+    "fc1-delivery/integration/full-cost-source-custody.integration.spec.cjs": {
+      "bytes": 4654,
+      "sha256": "1b6bf57d6022112273af45f0a4fb88df210cdd69cb91ab7c38753b0cd69b57ca"
+    },
+    "fc1-delivery/references/DESIGN-DECISION.md": {
+      "bytes": 2185,
+      "sha256": "fe0a00baccee7c5f7e4a09f32ac87db3f1d0ca2af3ef642a0d15c8606958aa24"
+    },
+    "fc1-delivery/references/observe.original.cjs": {
+      "bytes": 7260,
+      "sha256": "ab597bf8b55a99aa4a85b187f3d2c16bbdec2d3220d78f86f3ae36dc00a27555"
+    },
+    "fc1-delivery/references/samples.original.cjs": {
+      "bytes": 12796,
+      "sha256": "d11aa9bbdcf0801bea69f054e92d21a7ff5af10e0d951a20b6ebfaaf1ef83471"
+    },
+    "fc1-delivery/references/task-trace.original.cjs": {
+      "bytes": 2798,
+      "sha256": "a2e03246bd191cdbe22664ac7d579f65055dd5400cd4009c257cfb38a0cec653"
+    },
+    "fc1-delivery/references/test-contract.json": {
+      "bytes": 461,
+      "sha256": "54a91d2a60144472dc1798e8001e2d37d625b588d0c9a6ebbb3816b12244c9fc"
+    },
+    "fc1-delivery/references/time-budget.original.cjs": {
+      "bytes": 10042,
+      "sha256": "c49dd9b448e9b7dea6c7b4a8d2feeea813805cede325b4224f4cf845a9df5ac1"
+    },
+    "fc1-delivery/tests/admission-fixtures.cjs": {
+      "bytes": 2973,
+      "sha256": "c97578b0ce54feb8aee4c262d0d5ab5f4652de85d26165952fae32f83127b4fe"
+    },
+    "fc1-delivery/tests/executor-fixtures.cjs": {
+      "bytes": 6473,
+      "sha256": "d3ab477874fcb0df275d2b4ba1402cdea12e8185db527b8a5e6387ba536cf9de"
+    },
+    "fc1-delivery/tests/full-cost-admission.spec.cjs": {
+      "bytes": 12680,
+      "sha256": "a3e87a843079e6cc7e0cb15cab0a843ad84cc1834d30c129a15d2e1b79ce2022"
+    },
+    "fc1-delivery/tests/full-cost-executor.spec.cjs": {
+      "bytes": 5107,
+      "sha256": "149e76b1231a26bb5d2f22ac656cc28b4cdb69b3a26a9fe63ce3104b29686fd1"
+    },
+    "fc1-delivery/tests/full-cost-fc1.spec.cjs": {
+      "bytes": 12236,
+      "sha256": "58c5393e87ecdc8750199d9b3d9cea08208ae72e14ebe852c8b6688daa993f66"
+    },
+    "fc1-delivery/tests/package-tools.spec.cjs": {
+      "bytes": 8282,
+      "sha256": "dafd7f2391ad286cc6e1a404e24d1f78f6b19ea791a2bfceb37ecbafc501e008"
+    },
+    "fc1-delivery/tests/read-path-r1.spec.cjs": {
+      "bytes": 21458,
+      "sha256": "91284c352f5f697c3984a0ceea731299501eb0f9e444a8fbdeda0fac20dc8524"
+    },
+    "fc1-delivery/tests/test-results.spec.cjs": {
+      "bytes": 3264,
+      "sha256": "640a5fc289b4cd0b06cc75e46f81eadbd7f0eeeda4c4cbba02dacec212faea75"
+    },
+    "fc1-delivery/tools/adapt-executor.cjs": {
+      "bytes": 14026,
+      "sha256": "a15802558a5524e1e3e7ed0c34ddbc625572fdd6179c7d3406a6fca9269e912b"
+    },
+    "fc1-delivery/tools/analyze.cjs": {
+      "bytes": 5209,
+      "sha256": "93455fd3da829abdfe7c176ff6ceba0483802fb6895ea15a620c9d76b14dc121"
+    },
+    "fc1-delivery/tools/common.cjs": {
+      "bytes": 5921,
+      "sha256": "c32000f145919236b35f6e61306599a263068b8a7b7cdfd4260b93255bfb2bb7"
+    },
+    "fc1-delivery/tools/prepare.cjs": {
+      "bytes": 3530,
+      "sha256": "9b864235670da375bf22dd41d7a47cdbfb7e2308d21d80db6902805d0117ecb9"
+    },
+    "fc1-delivery/tools/run-tests.cjs": {
+      "bytes": 2117,
+      "sha256": "005d5e3ac0e3af3ef37f294822e6034759b97601b3ddc72014093dca44fa8a33"
+    },
+    "fc1-delivery/tools/run.cjs": {
+      "bytes": 5835,
+      "sha256": "a228e1abeb124dd2c933332ec377d05c12656498852319bfc7c65338e38303d9"
+    },
+    "fc1-delivery/tools/source.cjs": {
+      "bytes": 7558,
+      "sha256": "4fe3db7abd4ca4d79ca3f830937fa694ee48d35cd8192f1726047e9bc89f4a26"
+    },
+    "fc1-delivery/tools/verify-package.cjs": {
+      "bytes": 93,
+      "sha256": "d71cb1bdd78f3614820be44ab6161b08a409dec75adb644372399219d9443d7a"
+    },
+    "maker-evidence/authentic-base-objects.json": {
+      "bytes": 443,
+      "sha256": "a8be1b855d6e835b6eadd380d37584e74e8e78bd69af4d4dc6d4650988cd71a8"
+    },
+    "maker-evidence/authentic-source-tools.json": {
+      "bytes": 2458,
+      "sha256": "af5b9a79d9b14ab3e94a94993e49779cfa0cb4d141bba7943e46449319b592ba"
+    },
+    "maker-evidence/generator-check.json": {
+      "bytes": 572,
+      "sha256": "ea3349db757d57105d130b3767c8c506631f6277136fdd40a481a382aee832f2"
+    },
+    "maker-evidence/generator-check.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "maker-evidence/historical-main-object.json": {
+      "bytes": 454,
+      "sha256": "8ba15012a6a711e6df327610d1447826b4b8b9c714b7c6c51032610694c24f9d"
+    },
+    "maker-evidence/package-tests.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "maker-evidence/package-tests.tap": {
+      "bytes": 33041,
+      "sha256": "1cf4386884eb32c80194c5fd2f3ccc6ad8ffba00ccf33dace582e3e1306fb057"
+    },
+    "maker-evidence/repository-node-424.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "maker-evidence/repository-node-424.tap": {
+      "bytes": 89097,
+      "sha256": "d12bd285b387dfb52a9530cd447cddb92e804893485aadc33a4b6862d827624e"
+    },
+    "maker-evidence/selector-integration.json": {
+      "bytes": 5363,
+      "sha256": "2a5a9e40f3ecf9a15b5c792a7f09a717023c4eae84ab0f4b4fefd352cb3abdb8"
+    },
+    "maker-evidence/syntax-check.json": {
+      "bytes": 1163,
+      "sha256": "60a7becda9d18917adf7ca3f0b35b759aa033ceb3746c97b99bc1e6533f950a1"
+    },
+    "policy.json": {
+      "bytes": 5298,
+      "sha256": "f331208d8808222a2138df7574c7813130f4203cc4856df306d9d27b67bcdaed"
+    },
+    "references/PROVENANCE.md": {
+      "bytes": 1787,
+      "sha256": "fdcf6cb702e94e2768ba3c73d1d625a0e524a1a3e6583dfa70cfa7aff5c41831"
+    },
+    "references/execution-boundaries.json": {
+      "bytes": 673,
+      "sha256": "ed70f1d9d8461837b0a9c4435c7c3cc037dada3a1f09fffe64e1c6617e0fc4df"
+    },
+    "references/inherited-modules.json": {
+      "bytes": 1202,
+      "sha256": "0912d532f1a20ced13237db61a4c1d92ebcd46a1cc999805d38f07ac905e8869"
+    },
+    "references/prior-XIV-retry-I-review.json": {
+      "bytes": 16893,
+      "sha256": "cb9b13a212fbdf52bbe06ff00356e467518a0a948037fd91112e619fc674e4a5"
+    },
+    "references/prior-XV-independent-review.json": {
+      "bytes": 10847,
+      "sha256": "19c2e0f47327a1fd041f10326cc78bcf82f45b44bcfc20c42f50226dbd637859"
+    },
+    "references/prior-XV-time-observations.jsonl": {
+      "bytes": 3321,
+      "sha256": "ef8670387f6b355a51fecfe6d944e059100a68dd8c56d57e415eb82a2ba4187e"
+    },
+    "references/prior-XV-timing-binding.json": {
+      "bytes": 697,
+      "sha256": "2b9fb3d9841a1eb2d3e04201d3f4dce757fc48d2551ea6443fcf418f7e9d8388"
+    },
+    "references/prior-XV-timing-identities.json": {
+      "bytes": 713,
+      "sha256": "a9a9cef9c38edb1c23f517606dc4cdae4badbcdcff4e9b6e9d76bdc7907eed97"
+    },
+    "references/prior-XV-timing-measurement.json": {
+      "bytes": 1081,
+      "sha256": "2e5235b60bc209ac07c1546a304b663da700a55c937367189f62a88bd9788af9"
+    },
+    "references/prior-anomaly.json": {
+      "bytes": 2598,
+      "sha256": "cc5856314042fac707c5bda33c4720e753ef92fbe8941baec9cd24cb42d39360"
+    },
+    "references/synthetic-four-reports.json": {
+      "bytes": 39572,
+      "sha256": "6eb6c5d8745d51a229fb2a6dddd2d0aa818611792bbe33a42474efc6aa8d8710"
+    },
+    "references/test-contract.json": {
+      "bytes": 461,
+      "sha256": "54a91d2a60144472dc1798e8001e2d37d625b588d0c9a6ebbb3816b12244c9fc"
+    },
+    "runtime/actions.cjs": {
+      "bytes": 6982,
+      "sha256": "8e07294a72b89b6797a57b31b3f5b6866c3dc08f0a2435c6b11e073be245f21c"
+    },
+    "runtime/collector.cjs": {
+      "bytes": 2696,
+      "sha256": "0f91da48e9b1c01e8b35263b928db1d87263096611009f6107746f228f949ad4"
+    },
+    "runtime/common.cjs": {
+      "bytes": 5733,
+      "sha256": "b47a7c5874f0c5b8b5dd0a59dfea9c618e0ea77d7c4864d64dba18c0c714d148"
+    },
+    "runtime/cost-receipts.cjs": {
+      "bytes": 2941,
+      "sha256": "44fba960459c38e97ba7d3e3a52ce96494a5b3011b9dabbb0cfae167d7a16136"
+    },
+    "runtime/identity.cjs": {
+      "bytes": 3080,
+      "sha256": "92f6bcf56724332f7b76093770cdcefc9b3af42b6ebab0c50bbc25af699e1e82"
+    },
+    "runtime/observer.cjs": {
+      "bytes": 7069,
+      "sha256": "33c9c18014b1ec71513f44eaf62aeede550d468c802f6a51abdd8a27e147456c"
+    },
+    "runtime/samples.cjs": {
+      "bytes": 13610,
+      "sha256": "44bf7c041622cd94939431a4048cde201b74276244d50e4a9fad882b59723de9"
+    },
+    "runtime/task-trace.cjs": {
+      "bytes": 2798,
+      "sha256": "a2e03246bd191cdbe22664ac7d579f65055dd5400cd4009c257cfb38a0cec653"
+    },
+    "runtime/test-results.cjs": {
+      "bytes": 1999,
+      "sha256": "3e51dc4ce858ff0cab21546c8ace47e3153a3b908219cfbe9a25545283be1371"
+    },
+    "runtime/time-budget.cjs": {
+      "bytes": 10661,
+      "sha256": "58466ca3634d758c61f79d6d23226bfebbd6396e48223ab1f82d03ddeefa9ea7"
+    },
+    "runtime/transport.cjs": {
+      "bytes": 3213,
+      "sha256": "3564c41f35a96161e272fd8a13f1de51f5b2f5375d63ba9118f39b2416e51c11"
+    },
+    "runtime/window-selection.cjs": {
+      "bytes": 15299,
+      "sha256": "2f6d63bd69e3f62739824edfd73563b247cc2c8175f3fa38dc10666e6bcebeea"
+    },
+    "runtime/worker.cjs": {
+      "bytes": 5337,
+      "sha256": "303e96bd43c16f891f069a6480d92762b7b1545e52e3f7ccd8b621dd0ac86285"
+    },
+    "runtime-source/treasuryCompatCpu.cjs": {
+      "bytes": 11112,
+      "sha256": "dad9d919212fb4d7710cf8865a54bb0b1bbe4ee919ca298450f257fbc788697e"
+    },
+    "runtime-source/treasuryCompatRead.cjs": {
+      "bytes": 30108,
+      "sha256": "988e6dd1f5c569c7a87ed504178765c0c0ff8c5ee531649b13a58bc0be9a25c0"
+    },
+    "runtime-source/treasuryCompatReadCore.generated.cjs": {
+      "bytes": 86432,
+      "sha256": "87221d2b7330d88b7c6b6f3dc3f2c7e99afe72685d5c8cfa89736a85103e3948"
+    },
+    "runtime-source/treasuryCompatRuntime.cjs": {
+      "bytes": 8909,
+      "sha256": "bdb524d60ed3be78d9e51374232caa9c3df12c90982ff01c7cfc8738aee64837"
+    },
+    "runtime-source-manifest.json": {
+      "bytes": 2227,
+      "sha256": "06b46100419c33d9ce86dede097f1e8f8508c3e48c0bdf76d50195be8b8a4bb9"
+    },
+    "source-manifest.json": {
+      "bytes": 4341,
+      "sha256": "be8de3048869f3afd18fd2537dcd9840b5613ab1f9eac62382d73963d6cabd25"
+    },
+    "tests/actions.spec.cjs": {
+      "bytes": 4333,
+      "sha256": "1e46adb31d4917f02d8cbc6624be9fc34e70e297c5aa2e54f0b1b97d9ab9de5f"
+    },
+    "tests/admission-fixtures.cjs": {
+      "bytes": 2996,
+      "sha256": "45938216b37db4b9691e3a49efa83a149f17ab2609a81d779d92a3dd0601b60c"
+    },
+    "tests/entry-closure.integration.spec.cjs": {
+      "bytes": 4938,
+      "sha256": "d96138a9009fa764efa10e271308877cfd3a81164655f0128a6582d99d1574ce"
+    },
+    "tests/executor-fixtures.cjs": {
+      "bytes": 6509,
+      "sha256": "06d50f41c9a4b80054e190b82a14e1511caaaa8d3550f1216ad7aaf3e015efba"
+    },
+    "tests/full-cost-admission.spec.cjs": {
+      "bytes": 12878,
+      "sha256": "cedf442bccbf6a5edbe859685e370d2dc430d1029989ee0a0296e8bcff691fe2"
+    },
+    "tests/full-cost-executor.spec.cjs": {
+      "bytes": 5107,
+      "sha256": "149e76b1231a26bb5d2f22ac656cc28b4cdb69b3a26a9fe63ce3104b29686fd1"
+    },
+    "tests/full-cost-source-custody.spec.cjs": {
+      "bytes": 4922,
+      "sha256": "bc84500b7d9ac38227f2f975237c46716d7d0cf087529feb7746469e56f94e53"
+    },
+    "tests/helpers.cjs": {
+      "bytes": 1335,
+      "sha256": "d9b83af23e0f358ee5eaa9e793b4c89d4dc69336167ea11f2f71cddd091ed0bc"
+    },
+    "tests/overhead-analysis.spec.cjs": {
+      "bytes": 5168,
+      "sha256": "727dada4b6fc1adab712ad631fd3f348b5ab386583ff1818244416540331ba6f"
+    },
+    "tests/samples.spec.cjs": {
+      "bytes": 4741,
+      "sha256": "d035bed01900925cb2631c6402d1d5123f74370365d171468c31eb44b4d9af7d"
+    },
+    "tests/selection-fixture.cjs": {
+      "bytes": 2913,
+      "sha256": "26a4475df0554ad433a9b030c0c5c0fd8d6170ed2179d0661e14e2d156ef53e7"
+    },
+    "tests/task-trace.spec.cjs": {
+      "bytes": 3244,
+      "sha256": "d49be70d7d40f6d091816481524e4cc8587215d26a5dd1edcada47fd1000f847"
+    },
+    "tests/test-results.spec.cjs": {
+      "bytes": 3264,
+      "sha256": "640a5fc289b4cd0b06cc75e46f81eadbd7f0eeeda4c4cbba02dacec212faea75"
+    },
+    "tests/time-budget.spec.cjs": {
+      "bytes": 14459,
+      "sha256": "281717f535a150f6a6ad66f72b9d23e4f0f746fce51b57051e16dc426aec8f87"
+    },
+    "tests/time-helper.cjs": {
+      "bytes": 3268,
+      "sha256": "a8e869292e737178dd4aca7757d32b689f7d2e7bedf43319122582555ccb57e7"
+    },
+    "tests/transport-observer.spec.cjs": {
+      "bytes": 4387,
+      "sha256": "7ddcf9e653153ab2ec62fc4fb997c78c5a128146a6b7b649fb6b07c26be3940b"
+    },
+    "tests/window-selection.spec.cjs": {
+      "bytes": 15980,
+      "sha256": "664dc60de9585b0358efb406333d9639947c2abbf90da3db926224ec91e08e36"
+    },
+    "tests/workflow.spec.cjs": {
+      "bytes": 17337,
+      "sha256": "1d4aa4b006138dec1af99d70e7a7292b56221c961dab36d78e178a1c76c4301e"
+    },
+    "tools/analyze.cjs": {
+      "bytes": 2135,
+      "sha256": "03fb1300f182ab719a4de37a568a886a1c2f9a49605fa18d6c94ebbb5cff2b95"
+    },
+    "tools/apply.cjs": {
+      "bytes": 441,
+      "sha256": "e00ba3345ea06d173f2d94d07c95d8fe9c09db89586f1fc0fbbb4d4904a2354a"
+    },
+    "tools/archive.cjs": {
+      "bytes": 5377,
+      "sha256": "8170dd8bcb93f10afbdb951cbf238ad3c9fc500554f6486310369206cf62f7b5"
+    },
+    "tools/build.cjs": {
+      "bytes": 2313,
+      "sha256": "cea700c76316591b557b58069631c84a17545e9892e33fb0fb0aeaf0e37ff813"
+    },
+    "tools/observe.cjs": {
+      "bytes": 7575,
+      "sha256": "6893e29ab6d8af8cbbace931211556801f68baca98af5106503a55b78218fdf9"
+    },
+    "tools/overhead-analysis.cjs": {
+      "bytes": 3437,
+      "sha256": "d3062f9d8b19c27898e8abceabd5edce83caa6dbe3f6ea839fdc06a113ec97bf"
+    },
+    "tools/profile-local.cjs": {
+      "bytes": 3305,
+      "sha256": "38a20bcac2669e0536f9a6e171c89c8b5050be11f354b2008bad39851269286c"
+    },
+    "tools/raw-whitespace.cjs": {
+      "bytes": 2313,
+      "sha256": "286dab45a7e2c8923179b499dec25dc151b0d05de9575e170fdeb75cb4701ea1"
+    },
+    "tools/reconcile.cjs": {
+      "bytes": 601,
+      "sha256": "1b9a50872b6070baf8d1c8db20e1586bc055fc4bd7293cc22de15fc00248cdee"
+    },
+    "tools/repository.cjs": {
+      "bytes": 10471,
+      "sha256": "5e188992a523b9386e333d64520c436be25b3b20b08e60e38ac2b6e429eecac9"
+    },
+    "tools/run-tests.cjs": {
+      "bytes": 3719,
+      "sha256": "39d22afd865d77b52f55f4913b3ad7a7f32249a5676d9da6edd61cad03567cff"
+    },
+    "tools/selection-analysis.cjs": {
+      "bytes": 927,
+      "sha256": "34b2a39f178b0e3fc35d395c4ea1b8934a9bb7b5992932bae84abba14e198f57"
+    },
+    "tools/timing-analysis.cjs": {
+      "bytes": 1227,
+      "sha256": "655b9606bb46f277e3ebe3a3a39201c07d98d382bea661e2690143101ee3de5f"
+    },
+    "tools/verify-package.cjs": {
+      "bytes": 118,
+      "sha256": "65b12ae5511ceaaf87c8b0229be6a0fec544bad188142e098ebb3997a37b924a"
+    },
+    "tools/verify.cjs": {
+      "bytes": 7968,
+      "sha256": "7faea30452f46b2dcb89971a2b5c9aee89ab06032a0c3945b477ff4c029d3fbb"
+    },
+    "vendor/deployGuard.cjs": {
+      "bytes": 5078,
+      "sha256": "f438b3b9cae3f195398e97a6adb7bb9f0bf944b3e295e9ede6076cf7501cfaf7"
+    }
+  }
+}

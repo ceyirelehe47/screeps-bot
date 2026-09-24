@@ -1,0 +1,5 @@
+{
+  "kind": "raw-log-preservation/v1",
+  "policy": "Preserve raw bytes. Exact SHA-bound raw-log paths only; source/config/docs are not exempt.",
+  "files": []
+}

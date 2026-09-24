@@ -1,0 +1,698 @@
+{
+  "status": "CPU_DIAGNOSTIC_CAPTURE_VERIFIED",
+  "captureVerified": true,
+  "closure": "RESTORED_BYTES_AND_RUNTIME_VERIFIED",
+  "runtime": {
+    "status": "RECOVERY_RUNTIME_INDEPENDENTLY_VERIFIED",
+    "durationMs": 75179,
+    "consoleFrames": 20,
+    "cpuFrames": 21,
+    "positiveCpuFramesAfterReady": 20,
+    "maxConsoleGapMs": 4800,
+    "maxCpuGapMs": 4790,
+    "closureId": "4f4c84ed60c642ea206b49a9d8d1f1ff"
+  },
+  "uploadOutcomeResolved": true,
+  "sourceOff": true,
+  "windowSelection": {
+    "status": "WINDOW_SELECTION_INDEPENDENTLY_VERIFIED",
+    "outcome": "WINDOW_SELECTED",
+    "reason": "FIRST_ADMISSIBLE_REVALIDATED_PROPOSAL",
+    "rounds": 2,
+    "decisions": 14,
+    "rejectedDecisions": 12,
+    "successfulTimeReads": 28,
+    "failedTimeReads": 0,
+    "elapsedMs": 511817.58079100004,
+    "maximumMs": 1800000,
+    "currentTick": 73918718,
+    "selectedRound": 2,
+    "minimumSlackMs": 180000,
+    "noCodeWrittenBySelector": true
+  },
+  "timeAdmission": {
+    "status": "TIME_ADMISSION_INDEPENDENTLY_VERIFIED",
+    "binding": {
+      "kind": "tick-window-admission/v1",
+      "runId": "4d9fb3da-29c7-4313-9d53-925fcbdbcb5d",
+      "stage": "binding",
+      "status": "TIME_BUDGET_ADMITTED",
+      "measurementSha256": "37571cdd2f91cdbdedaaa5c3b3f1292a6bf702841b6e49e1caacfc8d98f76e15",
+      "readId": "2b98c8b7df706019c18174cbc1d4b535",
+      "currentTick": 73918718,
+      "startTick": 73918900,
+      "endTick": 73919200,
+      "remainingTicks": 482,
+      "conservativeMsPerTick": 6899,
+      "estimatedRemainingMs": 3325318,
+      "deliveryReserveMs": 240000,
+      "requiredMs": 3565318,
+      "exposureLimitMs": 4500000,
+      "slackMs": 934682,
+      "minimumSlackMs": 180000,
+      "measurementAgeMs": 12113.628750000033,
+      "readAtMs": 1790273884716,
+      "readMonoMs": 575532.797958,
+      "noAutomaticExtension": true
+    },
+    "upload": {
+      "kind": "tick-window-admission/v1",
+      "runId": "4d9fb3da-29c7-4313-9d53-925fcbdbcb5d",
+      "stage": "upload",
+      "status": "TIME_BUDGET_ADMITTED",
+      "measurementSha256": "37571cdd2f91cdbdedaaa5c3b3f1292a6bf702841b6e49e1caacfc8d98f76e15",
+      "readId": "409f52a1d759ba69521a5c6c9df580ea",
+      "currentTick": 73918730,
+      "startTick": 73918900,
+      "endTick": 73919200,
+      "remainingTicks": 470,
+      "conservativeMsPerTick": 6899,
+      "estimatedRemainingMs": 3242530,
+      "deliveryReserveMs": 240000,
+      "requiredMs": 3482530,
+      "exposureLimitMs": 4500000,
+      "slackMs": 1017470,
+      "minimumSlackMs": 180000,
+      "measurementAgeMs": 57110.53275000001,
+      "readAtMs": 1790273929713,
+      "readMonoMs": 620529.701958,
+      "noAutomaticExtension": true
+    },
+    "fixedCloseDeadlineAtMs": 1790278429729
+  },
+  "terminationReason": "FOUR_REPORTS_CAPTURED",
+  "sourceHead": "387013b60a7594150b09093d5ef4f9ffd2c05e5c",
+  "profileHead": "fd8391f27f1fada33fb3d668d86dfa1718335215",
+  "rawReports": 4,
+  "acceptedReports": 4,
+  "completeSamples": 4,
+  "duplicates": 0,
+  "expectedTicks": [
+    73918900,
+    73919000,
+    73919100,
+    73919200
+  ],
+  "acceptedTicks": [
+    73918900,
+    73919000,
+    73919100,
+    73919200
+  ],
+  "rawSummary": [
+    {
+      "tick": 73918900,
+      "prefix": 3.980986099999427,
+      "reportedCalls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 1
+      },
+      "trace": {
+        "status": "complete",
+        "segments": {
+          "callerPreparation": 0.10856690000218805,
+          "callEntryBeforeFirstBodyBoundary": 0.4313464999977441,
+          "measuredBody": 0.7157449000005727,
+          "returnAfterLastBodyBoundary": 0.012698400001681875,
+          "callerPostlude": 0.010020399997301865
+        },
+        "parentInterval": 1.2783770999994886,
+        "callInterval": 1.1597897999999986,
+        "measuredBody": 0.7157449000005727,
+        "outsideMeasuredBody": 0.5626321999989159,
+        "rootCause": "unattributed interval, not a function-level causal verdict"
+      },
+      "traceError": null,
+      "taskTrace": {
+        "status": "complete",
+        "firstPendingOrdinal": 7,
+        "segments": {
+          "beforeFirstValidPending": 0.16129100000034668,
+          "firstPendingProcessing": 0.1244879999976547,
+          "remainingTable": 0.18692440000086208
+        },
+        "taskInterval": 0.47270339999886346,
+        "interpretation": "first valid pending record region only; before includes enumeration/validation and earlier records; remaining includes every later record. Not a function/JIT/GC causal verdict."
+      },
+      "taskTraceError": null,
+      "preCommitmentCpu": 2.5175526999992144,
+      "phaseIntervals": {
+        "legacyInputs": 0.4723732000020391,
+        "directRead": 0.5803433999972185,
+        "readerLoad": 0.6185425999974541,
+        "observationBuild": 0.7573553000038373,
+        "coreCompare": 0.08893819999866537,
+        "commitmentBuild": 1.2783770999994886,
+        "commitmentProjection": 0.17650750000029802,
+        "report": 0.008548800000426127,
+        "serializationAndSize": 0
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 75,
+        "commitmentTaskRecords": 22,
+        "commitmentPendingTaskRecords": 12,
+        "commitmentTaskInvalidEvents": 0,
+        "commitmentDemandHealthChecks": 12,
+        "commitmentReceiverHealthChecks": 12,
+        "commitmentRouteCandidates": 12,
+        "commitmentReservationRecords": 0,
+        "commitmentReservationInvalidEvents": 0,
+        "commitmentOwnerEvaluations": 0,
+        "commitmentActiveReservations": 0,
+        "commitmentScopeBuckets": 18,
+        "commitmentRoomBuckets": 8,
+        "commitmentMergeRoutes": 12,
+        "commitmentReservationScopes": 0,
+        "projectionRowsPlanned": 4,
+        "projectionRowsCompleted": 4,
+        "projectionIndexQueries": 16
+      },
+      "accepted": true,
+      "claimedComplete": true
+    },
+    {
+      "tick": 73919000,
+      "prefix": 2.223323700000037,
+      "reportedCalls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 1
+      },
+      "trace": {
+        "status": "complete",
+        "segments": {
+          "callerPreparation": 0.08498229999531759,
+          "callEntryBeforeFirstBodyBoundary": 0.0332319000044663,
+          "measuredBody": 0.5369090999993205,
+          "returnAfterLastBodyBoundary": 0.012780299999576528,
+          "callerPostlude": 0.008998599998449208
+        },
+        "parentInterval": 0.6769021999971301,
+        "callInterval": 0.5829213000033633,
+        "measuredBody": 0.5369090999993205,
+        "outsideMeasuredBody": 0.13999309999780962,
+        "rootCause": "unattributed interval, not a function-level causal verdict"
+      },
+      "traceError": null,
+      "taskTrace": {
+        "status": "complete",
+        "firstPendingOrdinal": 8,
+        "segments": {
+          "beforeFirstValidPending": 0.1061918000013975,
+          "firstPendingProcessing": 0.08363159999862546,
+          "remainingTable": 0.0845182000011846
+        },
+        "taskInterval": 0.27434160000120755,
+        "interpretation": "first valid pending record region only; before includes enumeration/validation and earlier records; remaining includes every later record. Not a function/JIT/GC causal verdict."
+      },
+      "taskTraceError": null,
+      "preCommitmentCpu": 1.3508105000000796,
+      "phaseIntervals": {
+        "legacyInputs": 0.34496539999963716,
+        "directRead": 0.4756855999985419,
+        "readerLoad": 0.08679969999866444,
+        "observationBuild": 0.3901937000009639,
+        "coreCompare": 0.05316610000227229,
+        "commitmentBuild": 0.6769021999971301,
+        "commitmentProjection": 0.1854176999986521,
+        "report": 0.010193300004175398,
+        "serializationAndSize": 0
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 72,
+        "commitmentTaskRecords": 19,
+        "commitmentPendingTaskRecords": 9,
+        "commitmentTaskInvalidEvents": 0,
+        "commitmentDemandHealthChecks": 9,
+        "commitmentReceiverHealthChecks": 9,
+        "commitmentRouteCandidates": 9,
+        "commitmentReservationRecords": 0,
+        "commitmentReservationInvalidEvents": 0,
+        "commitmentOwnerEvaluations": 0,
+        "commitmentActiveReservations": 0,
+        "commitmentScopeBuckets": 15,
+        "commitmentRoomBuckets": 8,
+        "commitmentMergeRoutes": 9,
+        "commitmentReservationScopes": 0,
+        "projectionRowsPlanned": 4,
+        "projectionRowsCompleted": 4,
+        "projectionIndexQueries": 16
+      },
+      "accepted": true,
+      "claimedComplete": true
+    },
+    {
+      "tick": 73919100,
+      "prefix": 2.0811947000038344,
+      "reportedCalls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 1
+      },
+      "trace": {
+        "status": "complete",
+        "segments": {
+          "callerPreparation": 0.08747569999832194,
+          "callEntryBeforeFirstBodyBoundary": 0.03261960000236286,
+          "measuredBody": 0.490248199996131,
+          "returnAfterLastBodyBoundary": 0.009369100007461384,
+          "callerPostlude": 0.009912499997881241
+        },
+        "parentInterval": 0.6296251000021584,
+        "callInterval": 0.5322369000059552,
+        "measuredBody": 0.490248199996131,
+        "outsideMeasuredBody": 0.13937690000602743,
+        "rootCause": "unattributed interval, not a function-level causal verdict"
+      },
+      "traceError": null,
+      "taskTrace": {
+        "status": "complete",
+        "firstPendingOrdinal": 5,
+        "segments": {
+          "beforeFirstValidPending": 0.10639459999947576,
+          "firstPendingProcessing": 0.11127480000141077,
+          "remainingTable": 0.04081869999936316
+        },
+        "taskInterval": 0.2584881000002497,
+        "interpretation": "first valid pending record region only; before includes enumeration/validation and earlier records; remaining includes every later record. Not a function/JIT/GC causal verdict."
+      },
+      "taskTraceError": null,
+      "preCommitmentCpu": 1.2782861000014236,
+      "phaseIntervals": {
+        "legacyInputs": 0.355552599998191,
+        "directRead": 0.41975440000533126,
+        "readerLoad": 0.08912019999843324,
+        "observationBuild": 0.35943959999713115,
+        "coreCompare": 0.05441930000233697,
+        "commitmentBuild": 0.6296251000021584,
+        "commitmentProjection": 0.16542240000126185,
+        "report": 0.00786109999899054,
+        "serializationAndSize": 0
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 74,
+        "commitmentTaskRecords": 13,
+        "commitmentPendingTaskRecords": 7,
+        "commitmentTaskInvalidEvents": 0,
+        "commitmentDemandHealthChecks": 7,
+        "commitmentReceiverHealthChecks": 7,
+        "commitmentRouteCandidates": 7,
+        "commitmentReservationRecords": 0,
+        "commitmentReservationInvalidEvents": 0,
+        "commitmentOwnerEvaluations": 0,
+        "commitmentActiveReservations": 0,
+        "commitmentScopeBuckets": 12,
+        "commitmentRoomBuckets": 7,
+        "commitmentMergeRoutes": 7,
+        "commitmentReservationScopes": 0,
+        "projectionRowsPlanned": 4,
+        "projectionRowsCompleted": 4,
+        "projectionIndexQueries": 16
+      },
+      "accepted": true,
+      "claimedComplete": true
+    },
+    {
+      "tick": 73919200,
+      "prefix": 2.3500216999964323,
+      "reportedCalls": {
+        "readerLoad": 1,
+        "observationBuild": 1,
+        "commitmentBuild": 1
+      },
+      "trace": {
+        "status": "complete",
+        "segments": {
+          "callerPreparation": 0.09781849999853875,
+          "callEntryBeforeFirstBodyBoundary": 0.03692130000126781,
+          "measuredBody": 0.46018959999491926,
+          "returnAfterLastBodyBoundary": 0.009179300010146108,
+          "callerPostlude": 0.008405799999309238
+        },
+        "parentInterval": 0.6125145000041812,
+        "callInterval": 0.5062902000063332,
+        "measuredBody": 0.46018959999491926,
+        "outsideMeasuredBody": 0.1523249000092619,
+        "rootCause": "unattributed interval, not a function-level causal verdict"
+      },
+      "traceError": null,
+      "taskTrace": {
+        "status": "complete",
+        "firstPendingOrdinal": 4,
+        "segments": {
+          "beforeFirstValidPending": 0.13063959999999497,
+          "firstPendingProcessing": 0.06051369999477174,
+          "remainingTable": 0.04846659999748226
+        },
+        "taskInterval": 0.23961989999224897,
+        "interpretation": "first valid pending record region only; before includes enumeration/validation and earlier records; remaining includes every later record. Not a function/JIT/GC causal verdict."
+      },
+      "taskTraceError": null,
+      "preCommitmentCpu": 1.5602456999986316,
+      "phaseIntervals": {
+        "legacyInputs": 0.38756639999337494,
+        "directRead": 0.608757499998319,
+        "readerLoad": 0.1007071000058204,
+        "observationBuild": 0.40073539999866625,
+        "coreCompare": 0.062479300002451055,
+        "commitmentBuild": 0.6125145000041812,
+        "commitmentProjection": 0.167004499999166,
+        "report": 0.010256999994453508,
+        "serializationAndSize": 0
+      },
+      "work": {
+        "observationRooms": 2,
+        "observationLocations": 4,
+        "observationExistingLocations": 4,
+        "observationResourceKeys": 75,
+        "commitmentTaskRecords": 13,
+        "commitmentPendingTaskRecords": 6,
+        "commitmentTaskInvalidEvents": 0,
+        "commitmentDemandHealthChecks": 6,
+        "commitmentReceiverHealthChecks": 6,
+        "commitmentRouteCandidates": 6,
+        "commitmentReservationRecords": 0,
+        "commitmentReservationInvalidEvents": 0,
+        "commitmentOwnerEvaluations": 0,
+        "commitmentActiveReservations": 0,
+        "commitmentScopeBuckets": 10,
+        "commitmentRoomBuckets": 7,
+        "commitmentMergeRoutes": 6,
+        "commitmentReservationScopes": 0,
+        "projectionRowsPlanned": 4,
+        "projectionRowsCompleted": 4,
+        "projectionIndexQueries": 16
+      },
+      "accepted": true,
+      "claimedComplete": true
+    }
+  ],
+  "costReceipts": [
+    {
+      "kind": "treasury-full-cost-sample",
+      "version": 1,
+      "experimentId": "treasury-full-cost-FC1-online-I-2026-09-24",
+      "tick": 73918900,
+      "sampleOrdinal": 1,
+      "windowStart": 73918900,
+      "windowEnd": 73919200,
+      "authorizesActions": false,
+      "performanceTargetCpu": null,
+      "policy": {
+        "cooperativeCeilingCpu": 10,
+        "retainedReserveCpu": 25,
+        "admissionHeadroomCpu": 55,
+        "minBucket": 2000,
+        "maxReceiptBytes": 16384
+      },
+      "nativeEntry": {
+        "used": 72.18863600000259,
+        "limit": 120,
+        "tickLimit": 500,
+        "bucket": 10000
+      },
+      "nativeReturn": {
+        "used": 77.4851662000001,
+        "limit": 120,
+        "tickLimit": 500,
+        "bucket": 10000
+      },
+      "elapsedThroughPreviewReturn": 5.296530199997505,
+      "previewStatus": "sampled",
+      "currentTailProfile": {
+        "version": 1,
+        "tick": 73918900,
+        "sampleOrdinal": 1,
+        "boundary": "afterRetention",
+        "elapsed": 4.4552481999999145,
+        "checkpoints": 20,
+        "calls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 1
+        },
+        "phases": {
+          "serializationAndSize": 0.4007978000008734,
+          "emit": 0.04301829999894835,
+          "retention": 0.030446000000665663
+        },
+        "completion": "tail_only"
+      },
+      "previousReceiptOverhead": null,
+      "stopsFutureSamples": false,
+      "stopReason": null,
+      "measurementBoundary": "before-preview-run_to_after-preview-return",
+      "exclusions": "receipt preparation/emission is carried by the next receipt; final receipt tail and outer scheduler/flush are not measured here"
+    },
+    {
+      "kind": "treasury-full-cost-sample",
+      "version": 1,
+      "experimentId": "treasury-full-cost-FC1-online-I-2026-09-24",
+      "tick": 73919000,
+      "sampleOrdinal": 2,
+      "windowStart": 73918900,
+      "windowEnd": 73919200,
+      "authorizesActions": false,
+      "performanceTargetCpu": null,
+      "policy": {
+        "cooperativeCeilingCpu": 10,
+        "retainedReserveCpu": 25,
+        "admissionHeadroomCpu": 55,
+        "minBucket": 2000,
+        "maxReceiptBytes": 16384
+      },
+      "nativeEntry": {
+        "used": 105.92207580000104,
+        "limit": 120,
+        "tickLimit": 500,
+        "bucket": 10000
+      },
+      "nativeReturn": {
+        "used": 109.51950729999953,
+        "limit": 120,
+        "tickLimit": 500,
+        "bucket": 10000
+      },
+      "elapsedThroughPreviewReturn": 3.5974314999984927,
+      "previewStatus": "sampled",
+      "currentTailProfile": {
+        "version": 1,
+        "tick": 73919000,
+        "sampleOrdinal": 2,
+        "boundary": "afterRetention",
+        "elapsed": 2.691348399999697,
+        "checkpoints": 20,
+        "calls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 1
+        },
+        "phases": {
+          "serializationAndSize": 0.39473589999761316,
+          "emit": 0.04615650000050664,
+          "retention": 0.02713230000153999
+        },
+        "completion": "tail_only"
+      },
+      "previousReceiptOverhead": {
+        "tick": 73918900,
+        "elapsedAfterPreviewReturn": 0.10565100000167149
+      },
+      "stopsFutureSamples": false,
+      "stopReason": null,
+      "measurementBoundary": "before-preview-run_to_after-preview-return",
+      "exclusions": "receipt preparation/emission is carried by the next receipt; final receipt tail and outer scheduler/flush are not measured here"
+    },
+    {
+      "kind": "treasury-full-cost-sample",
+      "version": 1,
+      "experimentId": "treasury-full-cost-FC1-online-I-2026-09-24",
+      "tick": 73919100,
+      "sampleOrdinal": 3,
+      "windowStart": 73918900,
+      "windowEnd": 73919200,
+      "authorizesActions": false,
+      "performanceTargetCpu": null,
+      "policy": {
+        "cooperativeCeilingCpu": 10,
+        "retainedReserveCpu": 25,
+        "admissionHeadroomCpu": 55,
+        "minBucket": 2000,
+        "maxReceiptBytes": 16384
+      },
+      "nativeEntry": {
+        "used": 62.83932510000159,
+        "limit": 120,
+        "tickLimit": 500,
+        "bucket": 10000
+      },
+      "nativeReturn": {
+        "used": 66.09702760000073,
+        "limit": 120,
+        "tickLimit": 500,
+        "bucket": 10000
+      },
+      "elapsedThroughPreviewReturn": 3.257702499999141,
+      "previewStatus": "sampled",
+      "currentTailProfile": {
+        "version": 1,
+        "tick": 73919100,
+        "sampleOrdinal": 3,
+        "boundary": "afterRetention",
+        "elapsed": 2.5142273000019486,
+        "checkpoints": 20,
+        "calls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 1
+        },
+        "phases": {
+          "serializationAndSize": 0.36914669999532634,
+          "emit": 0.0392781999980798,
+          "retention": 0.024607700004708022
+        },
+        "completion": "tail_only"
+      },
+      "previousReceiptOverhead": {
+        "tick": 73919000,
+        "elapsedAfterPreviewReturn": 0.1127502999988792
+      },
+      "stopsFutureSamples": false,
+      "stopReason": null,
+      "measurementBoundary": "before-preview-run_to_after-preview-return",
+      "exclusions": "receipt preparation/emission is carried by the next receipt; final receipt tail and outer scheduler/flush are not measured here"
+    },
+    {
+      "kind": "treasury-full-cost-sample",
+      "version": 1,
+      "experimentId": "treasury-full-cost-FC1-online-I-2026-09-24",
+      "tick": 73919200,
+      "sampleOrdinal": 4,
+      "windowStart": 73918900,
+      "windowEnd": 73919200,
+      "authorizesActions": false,
+      "performanceTargetCpu": null,
+      "policy": {
+        "cooperativeCeilingCpu": 10,
+        "retainedReserveCpu": 25,
+        "admissionHeadroomCpu": 55,
+        "minBucket": 2000,
+        "maxReceiptBytes": 16384
+      },
+      "nativeEntry": {
+        "used": 68.46352219999244,
+        "limit": 120,
+        "tickLimit": 500,
+        "bucket": 10000
+      },
+      "nativeReturn": {
+        "used": 72.15208369999891,
+        "limit": 120,
+        "tickLimit": 500,
+        "bucket": 10000
+      },
+      "elapsedThroughPreviewReturn": 3.6885615000064718,
+      "previewStatus": "sampled",
+      "currentTailProfile": {
+        "version": 1,
+        "tick": 73919200,
+        "sampleOrdinal": 4,
+        "boundary": "afterRetention",
+        "elapsed": 2.837983199999144,
+        "checkpoints": 20,
+        "calls": {
+          "readerLoad": 1,
+          "observationBuild": 1,
+          "commitmentBuild": 1
+        },
+        "phases": {
+          "serializationAndSize": 0.41939950000232784,
+          "emit": 0.04220709999935934,
+          "retention": 0.02635490000102436
+        },
+        "completion": "tail_only"
+      },
+      "previousReceiptOverhead": {
+        "tick": 73919100,
+        "elapsedAfterPreviewReturn": 0.1039844000042649
+      },
+      "stopsFutureSamples": false,
+      "stopReason": null,
+      "measurementBoundary": "before-preview-run_to_after-preview-return",
+      "exclusions": "receipt preparation/emission is carried by the next receipt; final receipt tail and outer scheduler/flush are not measured here"
+    }
+  ],
+  "measurementProtocol": "FC1",
+  "completedTailProfiles": [
+    {
+      "tick": 73918900,
+      "elapsed": 4.4552481999999145,
+      "phases": {
+        "legacyInputs": 0.4723732000020391,
+        "directRead": 0.5803433999972185,
+        "readerLoad": 0.6185425999974541,
+        "observationBuild": 0.7573553000038373,
+        "coreCompare": 0.08893819999866537,
+        "commitmentBuild": 1.2783770999994886,
+        "commitmentProjection": 0.17650750000029802,
+        "report": 0.008548800000426127,
+        "serializationAndSize": 0.4007978000008734,
+        "emit": 0.04301829999894835,
+        "retention": 0.030446000000665663
+      }
+    },
+    {
+      "tick": 73919000,
+      "elapsed": 2.691348399999697,
+      "phases": {
+        "legacyInputs": 0.34496539999963716,
+        "directRead": 0.4756855999985419,
+        "readerLoad": 0.08679969999866444,
+        "observationBuild": 0.3901937000009639,
+        "coreCompare": 0.05316610000227229,
+        "commitmentBuild": 0.6769021999971301,
+        "commitmentProjection": 0.1854176999986521,
+        "report": 0.010193300004175398,
+        "serializationAndSize": 0.39473589999761316,
+        "emit": 0.04615650000050664,
+        "retention": 0.02713230000153999
+      }
+    },
+    {
+      "tick": 73919100,
+      "elapsed": 2.5142273000019486,
+      "phases": {
+        "legacyInputs": 0.355552599998191,
+        "directRead": 0.41975440000533126,
+        "readerLoad": 0.08912019999843324,
+        "observationBuild": 0.35943959999713115,
+        "coreCompare": 0.05441930000233697,
+        "commitmentBuild": 0.6296251000021584,
+        "commitmentProjection": 0.16542240000126185,
+        "report": 0.00786109999899054,
+        "serializationAndSize": 0.36914669999532634,
+        "emit": 0.0392781999980798,
+        "retention": 0.024607700004708022
+      }
+    }
+  ],
+  "writeBoundaries": {
+    "candidate": 1,
+    "restore": 1
+  },
+  "issues": [],
+  "engineCpuGapRepaired": false,
+  "fullCompatibilityObserved": false,
+  "rootCauseAssigned": false,
+  "atMs": 1790276052040
+}

@@ -1,0 +1,34 @@
+{
+  "runId": "4d9fb3da-29c7-4313-9d53-925fcbdbcb5d",
+  "source": {
+    "head": "387013b60a7594150b09093d5ef4f9ffd2c05e5c",
+    "tree": "25e0b6fb827f131be4c3215a97576f78a34a3455",
+    "base": "387013b60a7594150b09093d5ef4f9ffd2c05e5c",
+    "paths": 6,
+    "sourceModified": false,
+    "implementationHead": "0cdbd061c2645366bd409dbdbd262881d277cb35",
+    "runtimeEmitterId": "treasury-full-cost-FC1-online-I-2026-09-24"
+  },
+  "profile": {
+    "enabled": true,
+    "shardName": "shard1",
+    "rooms": [
+      "E3N59",
+      "E4N58"
+    ],
+    "resources": [
+      "energy",
+      "H"
+    ],
+    "startTick": 73918900,
+    "endTick": 73919200,
+    "intervalTicks": 100,
+    "minBucket": 2000,
+    "maxSampleCpu": 10,
+    "reserveCpu": 25,
+    "maxLogBytes": 16384
+  },
+  "observedTick": 73918718,
+  "profileHead": "fd8391f27f1fada33fb3d668d86dfa1718335215",
+  "profileTree": "99c9dbb8fd25d301698d4148ff9de6368989d25b"
+}
