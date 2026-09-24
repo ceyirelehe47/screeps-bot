@@ -1,0 +1,100 @@
+{
+  "status": "PASS",
+  "files": [
+    {
+      "file": "implementation/cost-receipts.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "implementation/executor-run-tests.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "implementation/raw-whitespace.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "implementation/treasury-compat-read-path-r1.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "references/samples.original.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "references/task-trace.original.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tests/executor-fixtures.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tests/full-cost-executor.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tests/full-cost-fc1.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tests/package-tools.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tests/read-path-r1.spec.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/adapt-executor.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/analyze.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/common.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/prepare.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/run-tests.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/run.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/source.cjs",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "file": "tools/verify-package.cjs",
+      "exit": 0,
+      "stderr": ""
+    }
+  ]
+}

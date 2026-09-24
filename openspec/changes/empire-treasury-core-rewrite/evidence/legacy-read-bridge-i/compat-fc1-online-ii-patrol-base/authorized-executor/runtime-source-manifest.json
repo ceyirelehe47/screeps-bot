@@ -1,0 +1,46 @@
+{
+  "kind": "full-cost-FC1-runtime-source-artifacts/v1",
+  "sourceHead": "387013b60a7594150b09093d5ef4f9ffd2c05e5c",
+  "sourceTree": "25e0b6fb827f131be4c3215a97576f78a34a3455",
+  "runtimeEmitterId": "treasury-full-cost-FC1-online-I-2026-09-24",
+  "compilerVersion": "5.9.3",
+  "files": {
+    "treasuryCompatRuntime.cjs": {
+      "path": "runtime-source/treasuryCompatRuntime.cjs",
+      "sourcePath": "src/runtime/treasuryCompatRuntime.ts",
+      "sourceBytes": 7549,
+      "sourceSha256": "dec7d710779248e0689b673a473557c07728a93d422fee7524f3a79082549967",
+      "sourceGitBlob": "4e5ee3c2b3ed126a8d4c4dbb0f9e57ef5479fcc7",
+      "outputBytes": 8909,
+      "outputSha256": "bdb524d60ed3be78d9e51374232caa9c3df12c90982ff01c7cfc8738aee64837"
+    },
+    "treasuryCompatRead.cjs": {
+      "path": "runtime-source/treasuryCompatRead.cjs",
+      "sourcePath": "src/runtime/treasuryCompatRead.ts",
+      "sourceBytes": 26831,
+      "sourceSha256": "2d22e3a9726d88892282f20017e01ecfbf4bc884cb21395e8ea25727c5efc135",
+      "sourceGitBlob": "f1bece4ea0a86e5be5e92079f4d19c4c1fbb4c3c",
+      "outputBytes": 30108,
+      "outputSha256": "988e6dd1f5c569c7a87ed504178765c0c0ff8c5ee531649b13a58bc0be9a25c0"
+    },
+    "treasuryCompatReadCore.generated.cjs": {
+      "path": "runtime-source/treasuryCompatReadCore.generated.cjs",
+      "sourcePath": "src/runtime/treasuryCompatReadCore.generated.ts",
+      "sourceBytes": 74835,
+      "sourceSha256": "4d95104a44554f40065f65501c506f176653f3cb44c4fba0bcd0409cd5830f08",
+      "sourceGitBlob": "5d3433d1d756ea6912bef4933bea2b5b189a819f",
+      "outputBytes": 86432,
+      "outputSha256": "87221d2b7330d88b7c6b6f3dc3f2c7e99afe72685d5c8cfa89736a85103e3948"
+    },
+    "treasuryCompatCpu.cjs": {
+      "path": "runtime-source/treasuryCompatCpu.cjs",
+      "sourcePath": "src/runtime/treasuryCompatCpu.ts",
+      "sourceBytes": 12653,
+      "sourceSha256": "5599ff052819b5842875ed78bfa67afefd9a182ad6ad4bb4ae55a59f6dd58100",
+      "sourceGitBlob": "52bd3edbf77b1a35e7c59bef41888f47c5636613",
+      "outputBytes": 11112,
+      "outputSha256": "dad9d919212fb4d7710cf8865a54bb0b1bbe4ee919ca298450f257fbc788697e"
+    }
+  },
+  "preservedRuntimeSourceHead": "0cdbd061c2645366bd409dbdbd262881d277cb35"
+}

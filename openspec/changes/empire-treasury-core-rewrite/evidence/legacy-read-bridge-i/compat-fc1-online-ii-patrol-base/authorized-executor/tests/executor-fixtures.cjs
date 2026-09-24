@@ -1,0 +1,32 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const finalExecutor=fs.existsSync(path.join(__dirname,'../runtime/cost-receipts.cjs'));
+const packaged=finalExecutor||fs.existsSync(path.join(__dirname,'../implementation/cost-receipts.cjs'));
+const base={authorizationId:'treasury-full-cost-FC1-online-II-2026-09-24',runtimeEmitterId:'treasury-full-cost-FC1-online-I-2026-09-24',parentRunId:'4d9fb3da-29c7-4313-9d53-925fcbdbcb5d',fullCostMeasurement:true,measurementProtocol:'FC1',rooms:['E3N59','E4N58'],resources:['energy','H'],expected:{userId:'634fe406347a7b69b28aeccb'},backupBuild:{commit:'06ffedb7c558e0bc625f4a2ff450c474fb9d6f1c',tag:'backup'},safetyCpu:10};
+const policy=finalExecutor?require('../runtime/common.cjs').POLICY:base;
+function load(){if(finalExecutor)return{W:require('../runtime/samples.cjs'),K:require('../runtime/cost-receipts.cjs'),policy:require('../runtime/common.cjs').POLICY};
+ if(!packaged)return{W:require('../runtime/samples.cjs'),K:require('../runtime/cost-receipts.cjs'),policy};
+ const C={POLICY:policy,obj:x=>!!x&&typeof x==='object'&&!Array.isArray(x),same:(a,b)=>JSON.stringify(a)===JSON.stringify(b),code:e=>e.code||'LOCAL_OPERATION_FAILED',fail(c){const e=new Error(c);e.code=c;throw e;}},cache={};
+ const texts={samples:require('../tools/adapt-executor.cjs').samples(fs.readFileSync(path.join(__dirname,'../references/samples.original.cjs'),'utf8')),'task-trace':fs.readFileSync(path.join(__dirname,'../references/task-trace.original.cjs'),'utf8'),'cost-receipts':fs.readFileSync(path.join(__dirname,'../implementation/cost-receipts.cjs'),'utf8')};
+ function mod(n){if(n==='common')return C;if(cache[n])return cache[n].exports;const m={exports:{}};cache[n]=m;const ctx=vm.createContext({module:m,exports:m.exports,Buffer,require:f=>mod(f.replace(/^\.\//,'').replace(/\.cjs$/,''))});new vm.Script(texts[n],{filename:n}).runInContext(ctx);return m.exports;}
+ return{W:mod('samples'),K:mod('cost-receipts'),policy};
+}
+const clone=x=>JSON.parse(JSON.stringify(x));
+function session(){return{profile:{startTick:100,endTick:400,maxSampleCpu:10,reserveCpu:25},build:{tag:'candidate'}};}
+function report(i=0,previous=null,prefix=2.6){
+ const tick=100+i*100,calls={readerLoad:1,observationBuild:1,commitmentBuild:1};
+ const phases={legacyInputs:.4,directRead:.4,readerLoad:.1,observationBuild:.4,coreCompare:.1,commitmentBuild:1,commitmentProjection:.1,report:prefix-2.5,serializationAndSize:0};
+ const work={observationRooms:2,observationLocations:4,observationExistingLocations:4,observationResourceKeys:8,commitmentTaskRecords:5,commitmentPendingTaskRecords:5,commitmentReservationRecords:1,projectionRowsPlanned:4,projectionRowsCompleted:4,projectionIndexQueries:16};
+ const profile={version:1,tick,sampleOrdinal:i+1,boundary:'beforeSerialization',elapsed:prefix,checkpoints:15,calls,phases,
+  attribution:{version:1,boundaries:12,active:null,intervals:{observationSetup:.05,observationRooms:.2,observationFinalize:.05,observationView:.1,commitmentSetup:.1,commitmentTasks:.4,commitmentReservations:.1,commitmentFinalize:.2,projectionRows:.1},work},
+  commitmentEnvelope:{version:1,status:'complete',marks:{parentStart:1.4,callStart:1.45,bodyStart:1.5,bodyEnd:2.3,callEnd:2.35,parentEnd:2.4}},
+  taskEnvelope:{version:1,status:'complete',firstPendingOrdinal:1,marks:{tasksStart:1.6,firstPendingStart:1.7,firstPendingEnd:1.8,tasksEnd:2.0}}};
+ const endpoints=policy.rooms.flatMap(room=>['storage','terminal'].map(location=>({room,location,directStatus:'ok',coreComparison:'match_selected_scope',coreMismatches:[],direct:{id:room+location,used:100,free:900,capacity:1000,overCapacity:false,active:true,cooldown:location==='terminal'?0:null,amounts:{energy:100,H:0}},legacyProjection:{status:'match_capacity_and_selected_energy'}})));
+ const r={kind:'treasury-legacy-read-bridge',tick,shard:'shard1',sourceCommit:'01bd9831454950c4928df98dd8679692b55603e5',productionBase:policy.measurementSourceBaseCommit||policy.backupBuild.commit,authorizesActions:false,scope:{rooms:policy.rooms,resources:policy.resources,isEmpireTotal:false},evaluation:'observation_and_legacy_commitments_only',facadeQueryRun:false,spendable:null,kernelLifecycleRun:false,storageMode:'heap_only',previousRun:previous?{tick:previous.tick,cpuIncludingEmit:previous.cpuProfile.elapsed+.4,emittedBytes:Buffer.byteLength(JSON.stringify(previous)),retainedPrimitiveChars:100}:null,
+  legacyInputs:{tasks:{status:'nonempty',count:5},reservations:{status:'nonempty',count:1}},endpoints,
+  commitments:{status:'read_complete',allTableScan:true,tableLimitEach:256,completeness:{complete:true,globalIncomplete:false,incompleteScopeCount:0,invalidRecords:0},rows:policy.rooms.flatMap(room=>policy.resources.map(resource=>({room,resource,scope:'room_not_endpoint',outgoing:70,incoming:70,productionReserved:resource==='H'?60:0,completeness:'complete'})))},status:'sampled',coreObservationRooms:policy.rooms,requestedEndpointRows:4,collectedEndpointRows:4,cpuBeforeSerializationAndEmit:prefix,cpuProfile:profile,previousCpuProfile:previous?tail(previous):null,cooperativeBudget:true,diagnosticRevision:'XIV'};return clone(r);
+}
+function tail(r){return{version:1,tick:r.tick,sampleOrdinal:r.cpuProfile.sampleOrdinal,boundary:'afterRetention',completion:'tail_only',elapsed:r.cpuProfile.elapsed+.5,checkpoints:18,calls:clone(r.cpuProfile.calls),phases:{serializationAndSize:.3,emit:.1,retention:.1}};}
+function cost(r,previous=null){const elapsed=r.cpuProfile.elapsed+.6;return{kind:'treasury-full-cost-sample',version:1,experimentId:policy.runtimeEmitterId,tick:r.tick,sampleOrdinal:r.cpuProfile.sampleOrdinal,windowStart:100,windowEnd:400,authorizesActions:false,performanceTargetCpu:null,policy:{cooperativeCeilingCpu:10,retainedReserveCpu:25,admissionHeadroomCpu:55,minBucket:2000,maxReceiptBytes:16384},nativeEntry:{used:50,limit:100,tickLimit:500,bucket:6000},nativeReturn:{used:50+elapsed,limit:100,tickLimit:500,bucket:6000},elapsedThroughPreviewReturn:elapsed,previewStatus:r.status,currentTailProfile:tail(r),previousReceiptOverhead:previous?{tick:previous.tick,elapsedAfterPreviewReturn:.1}:null,stopsFutureSamples:false,stopReason:null,measurementBoundary:'before-preview-run_to_after-preview-return'};}
+function frame(logs){return JSON.stringify([`user:${policy.expected.userId}/console`,{shard:'shard1',messages:{log:logs.map(x=>typeof x==='string'?x:JSON.stringify(x)),results:[]}}]);}
+module.exports={packaged,load,policy,clone,session,report,tail,cost,frame};

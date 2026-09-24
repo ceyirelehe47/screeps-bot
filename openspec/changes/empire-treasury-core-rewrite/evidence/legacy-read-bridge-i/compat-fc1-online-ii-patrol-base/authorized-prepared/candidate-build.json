@@ -1,0 +1,9 @@
+{
+  "kind": "FC1-authorized-offline-build/v1",
+  "packageFingerprint": "58e531ec76dbbbbb1d735a6885d28095fe1818de1c5de78d8a4f206043449606",
+  "sourceCommit": "387013b60a7594150b09093d5ef4f9ffd2c05e5c",
+  "bundleBytes": 4629860,
+  "bundleSha256": "e3d7fb15ac568ac12aa9789232b96fde04d3709dbdc8ee8673eb477e8524a30b",
+  "onlineProfileBound": false,
+  "screepsUploads": 0
+}

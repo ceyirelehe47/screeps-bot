@@ -1,0 +1,177 @@
+{
+  "kind": "maker-selector-integration/v1",
+  "realScreepsRequests": false,
+  "cases": [
+    {
+      "name": "wait_then_select",
+      "kind": "virtual-clock-fake-GET-integration",
+      "actualLiveInput": false,
+      "rateMs": 4500,
+      "requestLatencyMs": 1400,
+      "error": null,
+      "verified": {
+        "status": "WINDOW_SELECTION_INDEPENDENTLY_VERIFIED",
+        "outcome": "WINDOW_SELECTED",
+        "reason": "FIRST_ADMISSIBLE_REVALIDATED_PROPOSAL",
+        "rounds": 2,
+        "decisions": 14,
+        "rejectedDecisions": 12,
+        "successfulTimeReads": 28,
+        "failedTimeReads": 0,
+        "elapsedMs": 509400,
+        "maximumMs": 1800000,
+        "currentTick": 73876336,
+        "selectedRound": 2,
+        "minimumSlackMs": 180000,
+        "noCodeWrittenBySelector": true
+      },
+      "selected": {
+        "round": 2,
+        "currentTick": 73876336,
+        "profile": {
+          "enabled": true,
+          "shardName": "shard1",
+          "rooms": [
+            "E3N59",
+            "E4N58"
+          ],
+          "resources": [
+            "energy",
+            "H"
+          ],
+          "startTick": 73876500,
+          "endTick": 73876800,
+          "intervalTicks": 100,
+          "minBucket": 2000,
+          "maxSampleCpu": 2,
+          "reserveCpu": 5,
+          "maxLogBytes": 16384
+        },
+        "plan": {
+          "kind": "tick-window-admission/v1",
+          "runId": "76d46d162053085c41485ce712c733c1",
+          "stage": "binding",
+          "status": "TIME_BUDGET_ADMITTED",
+          "measurementSha256": "fa5c6a4a45d06fc1c05999ebec52a0b812b4a4553df17eac5b19d9736c3a5aa3",
+          "readId": "9cca72365d5b0444e4db6e7f929213ea",
+          "currentTick": 73876336,
+          "startTick": 73876500,
+          "endTick": 73876800,
+          "remainingTicks": 464,
+          "conservativeMsPerTick": 8550,
+          "estimatedRemainingMs": 3967200,
+          "deliveryReserveMs": 240000,
+          "requiredMs": 4207200,
+          "exposureLimitMs": 4500000,
+          "slackMs": 292800,
+          "minimumSlackMs": 180000,
+          "measurementAgeMs": 9800,
+          "readAtMs": 1700000509400,
+          "readMonoMs": 509400,
+          "noAutomaticExtension": true
+        }
+      },
+      "writes": 0,
+      "noBindingOrSession": true
+    },
+    {
+      "name": "too_slow",
+      "kind": "virtual-clock-fake-GET-integration",
+      "actualLiveInput": false,
+      "rateMs": 9000,
+      "requestLatencyMs": 1400,
+      "error": "WINDOW_SELECTION_EXHAUSTED",
+      "verified": {
+        "status": "WINDOW_SELECTION_INDEPENDENTLY_VERIFIED",
+        "outcome": "WINDOW_SELECTION_EXHAUSTED",
+        "reason": "READ_ONLY_SELECTION_DEADLINE",
+        "rounds": 5,
+        "decisions": 48,
+        "rejectedDecisions": 48,
+        "successfulTimeReads": 91,
+        "failedTimeReads": 0,
+        "elapsedMs": 1800000,
+        "maximumMs": 1800000,
+        "currentTick": null,
+        "selectedRound": null,
+        "minimumSlackMs": 180000,
+        "noCodeWrittenBySelector": true
+      },
+      "selected": null,
+      "writes": 0,
+      "noBindingOrSession": true
+    },
+    {
+      "name": "alignment_crossed_during_identity",
+      "kind": "virtual-clock-fake-GET-integration",
+      "actualLiveInput": false,
+      "rateMs": 4500,
+      "requestLatencyMs": 1400,
+      "error": null,
+      "verified": {
+        "status": "WINDOW_SELECTION_INDEPENDENTLY_VERIFIED",
+        "outcome": "WINDOW_SELECTED",
+        "reason": "FIRST_ADMISSIBLE_REVALIDATED_PROPOSAL",
+        "rounds": 2,
+        "decisions": 14,
+        "rejectedDecisions": 11,
+        "successfulTimeReads": 28,
+        "failedTimeReads": 0,
+        "elapsedMs": 509400,
+        "maximumMs": 1800000,
+        "currentTick": 73876433,
+        "selectedRound": 2,
+        "minimumSlackMs": 180000,
+        "noCodeWrittenBySelector": true
+      },
+      "selected": {
+        "round": 2,
+        "currentTick": 73876433,
+        "profile": {
+          "enabled": true,
+          "shardName": "shard1",
+          "rooms": [
+            "E3N59",
+            "E4N58"
+          ],
+          "resources": [
+            "energy",
+            "H"
+          ],
+          "startTick": 73876600,
+          "endTick": 73876900,
+          "intervalTicks": 100,
+          "minBucket": 2000,
+          "maxSampleCpu": 2,
+          "reserveCpu": 5,
+          "maxLogBytes": 16384
+        },
+        "plan": {
+          "kind": "tick-window-admission/v1",
+          "runId": "76d46d162053085c41485ce712c733c1",
+          "stage": "binding",
+          "status": "TIME_BUDGET_ADMITTED",
+          "measurementSha256": "52a64ef26d93cad39f61759aa7280bb8254809cc69c27dcbcc75eba7f56e7928",
+          "readId": "c86d92a0e60fcb7e7bf63c09cf17255a",
+          "currentTick": 73876433,
+          "startTick": 73876600,
+          "endTick": 73876900,
+          "remainingTicks": 467,
+          "conservativeMsPerTick": 8550,
+          "estimatedRemainingMs": 3992850,
+          "deliveryReserveMs": 240000,
+          "requiredMs": 4232850,
+          "exposureLimitMs": 4500000,
+          "slackMs": 267150,
+          "minimumSlackMs": 180000,
+          "measurementAgeMs": 9800,
+          "readAtMs": 1700000509400,
+          "readMonoMs": 509400,
+          "noAutomaticExtension": true
+        }
+      },
+      "writes": 0,
+      "noBindingOrSession": true
+    }
+  ]
+}
