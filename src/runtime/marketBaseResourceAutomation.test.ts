@@ -355,7 +355,9 @@ function v3Config() {
     maxDirectDealAmount: 1_000,
     maxDirectDealsPerCycle: 1,
     minDirectOrderAmount: 1_000,
-    minDirectOrderNotional: 480_000,
+    minDirectOrderNotional: Math.max(
+      ...MARKET_BASE_RESOURCE_POLICIES.map((policy) => policy.minOrderNotional),
+    ),
     maxDirectRawOrdersScannedPerCycle: 1_000,
     maxDirectEligibleOrdersPricedPerCycle: 200,
     maxDirectTransactionEnergy: 1_000,
@@ -1423,7 +1425,7 @@ describe("Market Base V3 运行时重合同（高风险决策/WAL/证据隔离/o
     expect(x.bookEma).toBe(700);
     expect(x.lastObservedPrice).toBe(700);
     expect(x.dynamicFloor).not.toBeNull();
-    expect(x.dynamicFloor!).toBeLessThanOrEqual(700 * (1 + 0.03));
+    expect(x.dynamicFloor!).toBeLessThanOrEqual(700);
     const h = projection!.entries.find(
       (candidate) => candidate.resource === RESOURCE_HYDROGEN,
     )!;
@@ -1433,7 +1435,7 @@ describe("Market Base V3 运行时重合同（高风险决策/WAL/证据隔离/o
 
   const scenarioObserveProjectionNoSelection = () => {
     const { state, deps, input } = v3RuntimeFixture();
-    // 490 eligible（490k ≥ minOrderNotional 480k）但低于有效地板
+    // 490 eligible（490k ≥ 当前 minOrderNotional）但低于有效地板
     // （fixture X trusted floor 559.43）→ planner 无可成交订单。断流
     // 回归：该路径必须仍把 book 观测转交投影，否则 EMA 恰在市场价低于
     // 地板（最需要跟踪的场景）时断流。
@@ -1449,8 +1451,37 @@ describe("Market Base V3 运行时重合同（高风险决策/WAL/证据隔离/o
     )!;
     expect(x.bookEma).toBe(490);
     expect(x.lastObservedPrice).toBe(490);
-    // df = min(ratchet 559.43, 490×1.03) = 504.7（受 ratchet 只降不升）。
-    expect(x.dynamicFloor).toBeCloseTo(490 * 1.03, 6);
+    // 保护后盈余足够时 Direct 净价按盘口折让，且受硬底价兜底。
+    expect(x.dynamicFloor).toBeCloseTo(490 * 0.85, 6);
+
+    // terminal 暂无货也要按 storage 中真实的保护后盈余定价；执行
+    // 仍由 terminal-backed protection.sellableAmount=0 阻止。
+    const storageOnly = v3RuntimeFixture();
+    storageOnly.harness.terminalResource = 0;
+    const storageInput = storageOnly.input();
+    const originalReadCandidates = storageInput.readCandidates!;
+    storageInput.readCandidates = () => originalReadCandidates().map((candidate) =>
+      candidate.resourceType === RESOURCE_CATALYST
+        ? {
+            ...candidate,
+            protectionEntry: {
+              ...candidate.protectionEntry,
+              terminalStock: 0,
+              sellableAmount: 0,
+            },
+          }
+        : candidate,
+    );
+    expect(runMarketBaseResourceAutomation(
+      storageOnly.state,
+      storageInput,
+      storageOnly.deps,
+    ).planComplete).toBe(true);
+    const storageProjection = storageOnly.state.dynamicFloorProjection?.entries.find(
+      (candidate) => candidate.resource === RESOURCE_CATALYST,
+    );
+    expect(storageProjection?.surplusRatio).toBeGreaterThan(1);
+    expect(storageOnly.state.lastPlanningSnapshot?.selected).toBeUndefined();
   };
 
   const scenarioCandidateIsolation = () => {
@@ -1565,17 +1596,28 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     policies: typeof MARKET_BASE_RESOURCE_POLICIES;
     shared: ReturnType<typeof createMarketBaseSharedPolicy>;
   } {
+    // 精确复原现役 r3 的字段形状：旧 permit 没有 directNetBidRatio，
+    // engineRevision=v1，X 的旧 hard/economic 都是 480。
+    const oldPrices = {
+      H: { hard: 428, economic: 451, revision: "base-h-v3-r2" },
+      K: { hard: 96, economic: 101, revision: "base-k-v3-r2" },
+      L: { hard: 161, economic: 169, revision: "base-l-v3-r2" },
+      O: { hard: 138, economic: 145, revision: "base-o-v3-r2" },
+      U: { hard: 44, economic: 46, revision: "base-u-v3-r2" },
+      X: { hard: 480, economic: 480, revision: "base-x-v3-r3" },
+      Z: { hard: 43, economic: 45, revision: "base-z-v3-r2" },
+    } as const;
     const policies = MARKET_BASE_RESOURCE_POLICIES.map((policy) => {
-      const { fingerprint: _fp, ...raw } = policy;
-      const altered =
-        raw.resource === RESOURCE_HYDROGEN
-          ? {
-              ...raw,
-              hardFloor: 400,
-              economicFloor: 410,
-              minOrderNotional: 410_000,
-            }
-          : raw;
+      const { fingerprint: _fp, directNetBidRatio: _ratio, ...raw } = policy;
+      const old = oldPrices[raw.resource];
+      const altered = {
+        ...raw,
+        policyRevision: old.revision,
+        hardFloor: old.hard,
+        economicFloor: old.economic,
+        minOrderNotional: old.economic * 1_000,
+        dynamicFloorMode: "observe" as const,
+      };
       return {
         ...altered,
         fingerprint: canonicalStableHashV1({
@@ -1588,12 +1630,16 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     const base = createMarketBaseSharedPolicy(V3_TEST_ACCOUNT);
     const { fingerprint: _sf, ...payload } = base;
     const fingerprints = policies.map((policy) => policy.fingerprint).sort();
-    const shared = {
-      ...base,
+    const oldPayload = {
+      ...payload,
+      engineRevision: "market-base-resource-engine-v1",
       resourcePolicyFingerprints: fingerprints,
+    };
+    const shared = {
+      ...oldPayload,
       fingerprint: canonicalStableHashV1({
         domain: "market-base-resource:shared-policy-v1",
-        payload: { ...payload, resourcePolicyFingerprints: fingerprints },
+        payload: oldPayload,
       }),
     } as ReturnType<typeof createMarketBaseSharedPolicy>;
     return { policies, shared };
@@ -1607,6 +1653,7 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     } = {},
   ): {
     laneIds: string[];
+    canaryLaneId?: string;
     retiredLaneId?: string;
     data: NonNullable<Memory["data"]>["marketSaleAutomation"];
   } {
@@ -1641,7 +1688,7 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
       ],
     });
     if (!reconciled.ok) throw new Error("fixture scope rejected");
-    const allPastLanes = reconciled.state.laneLifecycles.map((lane, index) => {
+    const allPastLanes = reconciled.state.laneLifecycles.map((lane) => {
       const policy = past.policies.find(
         (candidate) => candidate.resource === lane.resource,
       )!;
@@ -1657,7 +1704,7 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
       };
       // armCanary 时首条 lane 已晋级 canary 并持 enabled 新成交授权——
       // 这是"迁移前必须先解决 armed canary"协议的拒绝场景。
-      const canary = options.armCanary === true && index === 0;
+      const canary = options.armCanary === true && lane.resource === RESOURCE_CATALYST;
       return {
         ...stable,
         stage: canary ? ("canary" as const) : ("shadow" as const),
@@ -1954,6 +2001,7 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     } as unknown as Memory["data"];
     return {
       laneIds: pastLanes.map((lane) => lane.laneId),
+      canaryLaneId: pastLanes.find((lane) => lane.stage === "canary")?.laneId,
       retiredLaneId: retiredLane?.laneId,
       data: Memory.data.marketSaleAutomation,
     };
@@ -2069,14 +2117,38 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
   expect(result.ok).toBe(false);
   expect(result.error).toContain("base_resource");
 
-    { // --- armed canary 未解决 ---
-  installPastV3World({ armCanary: true });
-  const result = proposeMarketBaseResourcePolicyMigration() as {
+    { // --- 已授权 canary 原位重签，不要求先成交 ---
+  const world = installPastV3World({ armCanary: true });
+  const before = (Memory.data!.marketSaleAutomation as {
+    directAutomation: { baseResourceV3: MarketBaseResourceV3RuntimeState };
+  }).directAutomation.baseResourceV3;
+  const receiptHead = before.ledger!.receiptHeadHash;
+  const confirmed = before.ledger!.lifetimeConfirmed;
+  const propose = proposeMarketBaseResourcePolicyMigration() as {
+    ok: boolean;
+    error?: string;
+    proposalId?: string;
+  };
+  expect(propose.error).toBeUndefined();
+  expect(propose.ok).toBe(true);
+  const accept = acceptMarketBaseResourcePermit(propose.proposalId!) as {
     ok: boolean;
     error?: string;
   };
-  expect(result.ok).toBe(false);
-  expect(result.error).toContain("market_base_migration_canary_unresolved");
+  expect(accept.ok).toBe(true);
+  const after = (Memory.data!.marketSaleAutomation as {
+    directAutomation: { baseResourceV3: MarketBaseResourceV3RuntimeState };
+  }).directAutomation.baseResourceV3;
+  const lane = after.scope!.laneLifecycles.find((entry) => entry.laneId === world.canaryLaneId);
+  const records = after.permitChain!.retainedPermits;
+  const permit = records[records.length - 1];
+  const grant = permit?.schemaVersion === 3
+    ? permit.signedLaneGrants.find((entry) => entry.laneId === world.canaryLaneId)
+    : undefined;
+  expect(lane).toMatchObject({ stage: "canary", status: "writable" });
+  expect(grant).toMatchObject({ stage: "canary", newDealGrant: "enabled" });
+  expect(after.ledger!.receiptHeadHash).toBe(receiptHead);
+  expect(after.ledger!.lifetimeConfirmed).toEqual(confirmed);
 
     }
     { // --- 闩锁态 blocker 清除 ---
@@ -2151,7 +2223,7 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     }
   };
 
-  it("round-trip/tombstone 零损失保留，cfg/canary/闩锁/源变化五类拒绝覆盖同一合同面", () => {
+  it("round-trip/tombstone/canary 零损失保留及 cfg/闩锁/源变化拒绝", () => {
     scenarioMigrationRoundTrip();
     scenarioMigrationTombstone();
     scenarioMigrationRejections();

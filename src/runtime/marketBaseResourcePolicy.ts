@@ -15,7 +15,7 @@ import { canonicalStableHashV1 } from "@/runtime/marketDirectContinuousPolicy";
 export const MARKET_BASE_RESOURCE_SCHEMA_VERSION = 3 as const;
 export const MARKET_BASE_RESOURCE_CATALOG_REVISION = "base-mineral-v1" as const;
 export const MARKET_BASE_RESOURCE_ENGINE_REVISION =
-  "market-base-resource-engine-v1" as const;
+  "market-base-resource-engine-v2" as const;
 export const MARKET_BASE_RESOURCE_BOOTSTRAP_REVISION =
   "floor-bootstrap-v1" as const;
 export const MARKET_BASE_RESOURCE_BOOTSTRAP_HISTORY_DATE =
@@ -25,7 +25,7 @@ export const MARKET_BASE_RESOURCE_EVIDENCE_SHA256 =
 export const MARKET_BASE_RESOURCE_EVIDENCE_IMPLEMENTATION_BLOB =
   "f55503b3d45352e14513e9928706251c82992ecc" as const;
 export const MARKET_BASE_RESOURCE_CONFIG_REVISION =
-  "market-base-resource-v3-r3" as const;
+  "market-base-resource-v3-r5" as const;
 
 export const MARKET_BASE_RESOURCE_MAX_ROOMS = 16 as const;
 export const MARKET_BASE_RESOURCE_MAX_KNOWN_ROOM_NAMES = 32 as const;
@@ -143,11 +143,14 @@ export interface MarketBaseResourcePolicy {
   readonly terminalEnergyReserve: 25000;
   /**
    * 动态价格阈值（observe/enforce 共用参数；mode=observe 时只投影不参与
-   * planner 合成）。listingBuffer 是 bookEMA 之上的最低溢价缓冲，
-   * maxDailyDynamicDrop 是 dynamicFloor 单日最大下移比例，surplusLow/High
-   * 把保护后盈余倍数线性映射为 inventoryFactor ∈ [0,1]。
+   * planner 合成）。listingBuffer 保留挂单溢价合同；Direct 净价使用
+   * directNetBidRatio，从可信买价 EMA 与库存压力得出可执行的净价下限。
+   * maxDailyDynamicDrop 限制单日下移，surplusLow/High 把保护后盈余
+   * 倍数线性映射为 inventoryFactor ∈ [0,1]。
    */
   readonly listingBuffer: number;
+  /** Direct 净价相对可信买价 EMA 的最低比例；库存压力越大越接近此值。 */
+  readonly directNetBidRatio: number;
   readonly maxDailyDynamicDrop: number;
   readonly surplusLow: number;
   readonly surplusHigh: number;
@@ -165,7 +168,7 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
 >([
   {
     policyId: "base-h-v3-r1",
-    policyRevision: "base-h-v3-r2",
+    policyRevision: "base-h-v3-r3",
     resource: "H",
     resourceClass: "base-mineral",
     hardFloor: 428,
@@ -183,21 +186,22 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxTransactionEnergy: 1_000,
     terminalEnergyReserve: 25_000,
     listingBuffer: 0.03,
+    directNetBidRatio: 0.85,
     maxDailyDynamicDrop: 0.15,
     surplusLow: 1,
     surplusHigh: 3,
-    dynamicFloorMode: "observe",
+    dynamicFloorMode: "enforce",
   },
   {
     policyId: "base-k-v3-r1",
-    policyRevision: "base-k-v3-r2",
+    policyRevision: "base-k-v3-r3",
     resource: "K",
     resourceClass: "base-mineral",
-    hardFloor: 96,
-    economicFloor: 101,
+    hardFloor: 33,
+    economicFloor: 34,
     laneReserve: 100_000,
     minOrderAmount: 1_000,
-    minOrderNotional: 101_000,
+    minOrderNotional: 34_000,
     maxDealAmount: 1_000,
     cooldownTicks: 1_000,
     rollingWindowTicks: 30_000,
@@ -208,14 +212,15 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxTransactionEnergy: 1_000,
     terminalEnergyReserve: 25_000,
     listingBuffer: 0.03,
+    directNetBidRatio: 0.85,
     maxDailyDynamicDrop: 0.15,
     surplusLow: 1,
     surplusHigh: 3,
-    dynamicFloorMode: "observe",
+    dynamicFloorMode: "enforce",
   },
   {
     policyId: "base-l-v3-r1",
-    policyRevision: "base-l-v3-r2",
+    policyRevision: "base-l-v3-r3",
     resource: "L",
     resourceClass: "base-mineral",
     hardFloor: 161,
@@ -233,21 +238,22 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxTransactionEnergy: 1_000,
     terminalEnergyReserve: 25_000,
     listingBuffer: 0.03,
+    directNetBidRatio: 0.85,
     maxDailyDynamicDrop: 0.15,
     surplusLow: 1,
     surplusHigh: 3,
-    dynamicFloorMode: "observe",
+    dynamicFloorMode: "enforce",
   },
   {
     policyId: "base-o-v3-r1",
-    policyRevision: "base-o-v3-r2",
+    policyRevision: "base-o-v3-r3",
     resource: "O",
     resourceClass: "base-mineral",
-    hardFloor: 138,
-    economicFloor: 145,
+    hardFloor: 71,
+    economicFloor: 74,
     laneReserve: 100_000,
     minOrderAmount: 1_000,
-    minOrderNotional: 145_000,
+    minOrderNotional: 74_000,
     maxDealAmount: 1_000,
     cooldownTicks: 1_000,
     rollingWindowTicks: 30_000,
@@ -258,21 +264,22 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxTransactionEnergy: 1_000,
     terminalEnergyReserve: 25_000,
     listingBuffer: 0.03,
+    directNetBidRatio: 0.85,
     maxDailyDynamicDrop: 0.15,
     surplusLow: 1,
     surplusHigh: 3,
-    dynamicFloorMode: "observe",
+    dynamicFloorMode: "enforce",
   },
   {
     policyId: "base-u-v3-r1",
-    policyRevision: "base-u-v3-r2",
+    policyRevision: "base-u-v3-r3",
     resource: "U",
     resourceClass: "base-mineral",
-    hardFloor: 44,
-    economicFloor: 46,
+    hardFloor: 31,
+    economicFloor: 32,
     laneReserve: 100_000,
     minOrderAmount: 1_000,
-    minOrderNotional: 46_000,
+    minOrderNotional: 32_000,
     maxDealAmount: 1_000,
     cooldownTicks: 1_000,
     rollingWindowTicks: 30_000,
@@ -283,21 +290,22 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxTransactionEnergy: 1_000,
     terminalEnergyReserve: 25_000,
     listingBuffer: 0.03,
+    directNetBidRatio: 0.85,
     maxDailyDynamicDrop: 0.15,
     surplusLow: 1,
     surplusHigh: 3,
-    dynamicFloorMode: "observe",
+    dynamicFloorMode: "enforce",
   },
   {
     policyId: "base-x-v3-r2",
-    policyRevision: "base-x-v3-r3",
+    policyRevision: "base-x-v3-r4",
     resource: "X",
     resourceClass: "base-mineral",
-    hardFloor: 480,
-    economicFloor: 480,
+    hardFloor: 371,
+    economicFloor: 390,
     laneReserve: 100_000,
     minOrderAmount: 1_000,
-    minOrderNotional: 480_000,
+    minOrderNotional: 390_000,
     maxDealAmount: 1_000,
     cooldownTicks: 1_000,
     rollingWindowTicks: 30_000,
@@ -308,14 +316,15 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxTransactionEnergy: 1_000,
     terminalEnergyReserve: 25_000,
     listingBuffer: 0.03,
+    directNetBidRatio: 0.85,
     maxDailyDynamicDrop: 0.15,
     surplusLow: 1,
     surplusHigh: 3,
-    dynamicFloorMode: "observe",
+    dynamicFloorMode: "enforce",
   },
   {
     policyId: "base-z-v3-r1",
-    policyRevision: "base-z-v3-r2",
+    policyRevision: "base-z-v3-r3",
     resource: "Z",
     resourceClass: "base-mineral",
     hardFloor: 43,
@@ -333,10 +342,11 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxTransactionEnergy: 1_000,
     terminalEnergyReserve: 25_000,
     listingBuffer: 0.03,
+    directNetBidRatio: 0.85,
     maxDailyDynamicDrop: 0.15,
     surplusLow: 1,
     surplusHigh: 3,
-    dynamicFloorMode: "observe",
+    dynamicFloorMode: "enforce",
   },
 ]);
 
@@ -579,17 +589,29 @@ function sameNumber(left: unknown, right: number): boolean {
   );
 }
 
+// 2026-07-28 的 bootstrap 证据是历史事实，后续签名 policy 迁移不应
+// 反过来改写该文件。新价格校准另附当期市场证据。
+const JULY_BOOTSTRAP_POLICY = deepFreeze({
+  H: { hard: 428, economic: 451 },
+  K: { hard: 96, economic: 101 },
+  L: { hard: 161, economic: 169 },
+  O: { hard: 138, economic: 145 },
+  U: { hard: 44, economic: 46 },
+  X: { hard: 480, economic: 480 },
+  Z: { hard: 43, economic: 45 },
+} as const);
+
 function evidencePolicyMatches(
   raw: Record<string, unknown>,
   resource: MarketBaseResource,
 ): boolean {
   const entry = raw[resource];
-  const policy = MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[resource];
+  const policy = JULY_BOOTSTRAP_POLICY[resource];
   const bootstrap = MARKET_BASE_RESOURCE_FLOOR_BOOTSTRAP.resources[resource];
   return Boolean(
     isPlainRecord(entry) &&
-    entry.hard === policy.hardFloor &&
-    entry.economic === policy.economicFloor &&
+    entry.hard === policy.hard &&
+    entry.economic === policy.economic &&
     entry.bootstrapRatchet === bootstrap.ratchetFloor &&
     exactStringArray(Object.keys(entry).sort(), [
       "bootstrapRatchet",
@@ -2689,9 +2711,10 @@ export interface MarketBaseDynamicFloorComputation {
 
 /**
  * 动态地板纯计算（observe 投影与未来 enforce 共用）：
- * dynamicFloor = max(hardFloor, min(ratchetFloor, bookEma × (1 + listingBuffer × inventoryFactor)))。
- * bookFloor 只降不升地板上界、永不击穿 hardFloor；surplusRatio 缺失时
- * inventoryFactor=0（退化为纯 ratchet）。日降幅钳制由调用方基于持久化
+ * dynamicFloor = max(hardFloor, min(ratchetFloor,
+ *   bookEma × (1 − (1 − directNetBidRatio) × inventoryFactor)))。
+ * Direct 与 Maker 挂单溢价分离；最大折让只在保护后盈余充分时生效，
+ * 且不击穿硬下限。日降幅钳制由调用方基于持久化
  * 的前值另行应用（clampMarketBaseDynamicFloorDailyDrop）。
  */
 export function computeMarketBaseDynamicFloor(input: {
@@ -2726,13 +2749,14 @@ export function computeMarketBaseDynamicFloor(input: {
   ) {
     return { inventoryFactor, rawDynamicFloor: input.ratchetFloor };
   }
-  const listingFloor =
-    input.bookEma * (1 + policy.listingBuffer * inventoryFactor);
+  const bookNetFloor =
+    input.bookEma *
+    (1 - (1 - policy.directNetBidRatio) * inventoryFactor);
   return {
     inventoryFactor,
     rawDynamicFloor: Math.max(
       policy.hardFloor,
-      Math.min(input.ratchetFloor, listingFloor),
+      Math.min(input.ratchetFloor, bookNetFloor),
     ),
   };
 }

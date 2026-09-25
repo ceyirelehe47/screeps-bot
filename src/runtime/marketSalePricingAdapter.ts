@@ -824,7 +824,22 @@ export function collectMarketSalePriceSnapshots(
               previousEntry.marketDate !== advanced.state.historyDate,
           );
           if (advanced.reason === "older_history_day") {
-            addRejection(rejections, "history_date_rollback");
+            // Robust history filtering can reclassify yesterday's accepted
+            // day as an outlier when a new complete day enters the window.
+            // Keep the newer cached floor and its date. This is safe only
+            // when that exact day is still present and was rejected solely
+            // by the outlier filter; missing or incomplete history remains
+            // a fail-closed rollback.
+            const retainedOutlierDay =
+              previousEntry !== undefined &&
+              freshHistory.value.result.rejectedDays.some(
+                (day) =>
+                  day.date === previousEntry.marketDate &&
+                  day.reason === "log_mad_outlier",
+              );
+            if (!retainedOutlierDay) {
+              addRejection(rejections, "history_date_rollback");
+            }
           } else if (successorChanged) {
             try {
               if (!dataStore.trustedFloors) {

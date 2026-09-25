@@ -2685,6 +2685,72 @@ function stageRank(stage: MarketBaseLaneStage): number {
   }
 }
 
+/** 策略重签只延续原 canary 权限，不接受新 lane 或更高成交额度。 */
+function isPreservedCanaryPolicyMigration(
+  prior: MarketBaseResourcePermit,
+  next: MarketBaseResourcePermit,
+  old: MarketBaseResourceSignedLaneGrant | undefined,
+  grant: MarketBaseResourceSignedLaneGrant,
+): boolean {
+  if (
+    !old ||
+    prior.sharedPolicy.fingerprint === next.sharedPolicy.fingerprint ||
+    old.status !== "active" || grant.status !== "active" ||
+    old.stage !== "canary" || grant.stage !== "canary" ||
+    old.newDealGrant !== "enabled" || grant.newDealGrant !== "enabled" ||
+    !sameCanonical({
+      laneId: old.laneId, resource: old.resource,
+      resourcePolicyId: old.resourcePolicyId,
+      roomInstanceId: old.roomInstanceId,
+      sellerRoom: old.sellerRoom, roomFingerprint: old.roomFingerprint,
+    }, {
+      laneId: grant.laneId, resource: grant.resource,
+      resourcePolicyId: grant.resourcePolicyId,
+      roomInstanceId: grant.roomInstanceId,
+      sellerRoom: grant.sellerRoom, roomFingerprint: grant.roomFingerprint,
+    }) ||
+    !sameCanonical({
+      schemaVersion: prior.sharedPolicy.schemaVersion,
+      catalogRevision: prior.sharedPolicy.catalogRevision,
+      catalog: prior.sharedPolicy.catalog,
+      energyDisposition: prior.sharedPolicy.energyDisposition,
+      roomAdmissionPolicy: prior.sharedPolicy.roomAdmissionPolicy,
+      laneDerivationPolicy: prior.sharedPolicy.laneDerivationPolicy,
+    }, {
+      schemaVersion: next.sharedPolicy.schemaVersion,
+      catalogRevision: next.sharedPolicy.catalogRevision,
+      catalog: next.sharedPolicy.catalog,
+      energyDisposition: next.sharedPolicy.energyDisposition,
+      roomAdmissionPolicy: next.sharedPolicy.roomAdmissionPolicy,
+      laneDerivationPolicy: next.sharedPolicy.laneDerivationPolicy,
+    })
+  ) return false;
+  const oldPolicy = prior.resourcePolicies.find((policy) => policy.resource === old.resource);
+  const newPolicy = next.resourcePolicies.find((policy) => policy.resource === grant.resource);
+  if (!oldPolicy || !newPolicy) return false;
+  const executionShape = (policy: MarketBaseResourcePolicy) => ({
+    policyId: policy.policyId,
+    resource: policy.resource,
+    resourceClass: policy.resourceClass,
+    laneReserve: policy.laneReserve,
+    minOrderAmount: policy.minOrderAmount,
+    maxDealAmount: policy.maxDealAmount,
+    cooldownTicks: policy.cooldownTicks,
+    rollingWindowTicks: policy.rollingWindowTicks,
+    rollingMaxAmount: policy.rollingMaxAmount,
+    rollingOpportunityReserveAmount: policy.rollingOpportunityReserveAmount,
+    maxRawOrdersScanned: policy.maxRawOrdersScanned,
+    maxEligibleOrdersPriced: policy.maxEligibleOrdersPriced,
+    maxTransactionEnergy: policy.maxTransactionEnergy,
+    terminalEnergyReserve: policy.terminalEnergyReserve,
+  });
+  const oldQualification = evidenceFor(prior, old.laneId, "shadow_qualification");
+  const newQualification = evidenceFor(next, grant.laneId, "shadow_qualification");
+  return sameCanonical(executionShape(oldPolicy), executionShape(newPolicy)) &&
+    oldQualification?.digest === old.lifecycleEvidenceDigest &&
+    newQualification?.digest === grant.lifecycleEvidenceDigest;
+}
+
 function tombstoneDischargeFromGrant(
   grant: MarketBaseResourceSignedLaneGrant,
   successor: MarketBaseResourcePermit,
@@ -2834,6 +2900,9 @@ function validateGrantTransition(
       return "tombstoned_grant_rewrite";
     }
     if (identityChanged) {
+      if (isPreservedCanaryPolicyMigration(prior, next, old, grant)) {
+        continue;
+      }
       if (grant.stage !== "shadow" || grant.newDealGrant !== "suspended") {
         return "new_or_changed_grant_must_be_shadow_suspended";
       }

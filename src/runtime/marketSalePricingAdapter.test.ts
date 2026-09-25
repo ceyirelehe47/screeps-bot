@@ -247,4 +247,58 @@ describe("collectMarketSalePriceSnapshots", () => {
     );
     expect(dominant.snapshots[RESOURCE_KEANIUM]?.effectiveNetFloor).toBe(1.4);
   });
+
+  it("历史窗口重分类旧日异常值时保留较新的缓存底价，缺失旧日仍拒绝", () => {
+    const cfg = config();
+    const api = readMarket();
+    const recentOutlier = [
+      ...history(RESOURCE_KEANIUM, 0.8).slice(0, 5),
+      {
+        ...history(RESOURCE_KEANIUM, 2)[5],
+        avgPrice: 2,
+      },
+    ];
+    api.getHistory.mockImplementation((resource: MarketResourceConstant = RESOURCE_ENERGY) =>
+      resource === RESOURCE_KEANIUM
+        ? recentOutlier
+        : history(resource, 0.8),
+    );
+    const cached = {
+      value: 1.5,
+      marketDate: "2026-07-25",
+      updatedAt: 200,
+    };
+    const dataStore: MarketSalePricingDataStore = {
+      trustedFloors: { [RESOURCE_KEANIUM]: { ...cached } },
+    };
+    const result = collectMarketSalePriceSnapshots(
+      cfg,
+      dataStore,
+      [{ resource: RESOURCE_KEANIUM, makerAmount: 1_000, feeDebtMilli: 0 }],
+      { market: api.market, gameTime: 300, utcNow: UTC_NOW },
+    );
+    const snapshot = result.snapshots[RESOURCE_KEANIUM];
+    expect(snapshot?.historyDate).toBe("2026-07-24");
+    expect(snapshot?.ratchetFloor).toBe(1.5);
+    expect(snapshot?.rejections.map((entry) => entry.reason)).not.toContain(
+      "history_date_rollback",
+    );
+    expect(dataStore.trustedFloors?.[RESOURCE_KEANIUM]).toEqual(cached);
+
+    api.getHistory.mockImplementation((resource: MarketResourceConstant = RESOURCE_ENERGY) =>
+      history(resource, 0.8, [
+        "2026-07-19", "2026-07-20", "2026-07-21",
+        "2026-07-22", "2026-07-23", "2026-07-24",
+      ]),
+    );
+    const missing = collectMarketSalePriceSnapshots(
+      cfg,
+      { trustedFloors: { [RESOURCE_KEANIUM]: { ...cached } } },
+      [{ resource: RESOURCE_KEANIUM, makerAmount: 1_000, feeDebtMilli: 0 }],
+      { market: api.market, gameTime: 301, utcNow: UTC_NOW },
+    );
+    expect(
+      missing.snapshots[RESOURCE_KEANIUM]?.rejections.map((entry) => entry.reason),
+    ).toContain("history_date_rollback");
+  });
 });

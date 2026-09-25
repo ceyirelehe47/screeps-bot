@@ -4,6 +4,7 @@ import {
   MARKET_BASE_BOOK_EMA_MAX_AGE_TICKS,
   MARKET_BASE_BOOK_EMA_TICK_TIME_CONSTANT,
   MARKET_BASE_RESOURCE_FLOOR_BOOTSTRAP,
+  MARKET_BASE_RESOURCE_CATALOG,
   MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE,
   buildMarketBaseDynamicFloorState,
   marketBaseDerivedLaneSetFingerprint,
@@ -131,6 +132,34 @@ describe("marketBaseResourcePolicy 重合同（bootstrap 准入 + 房/lane 建�
   });
 });
 
+describe("2026-09-25 价格再校准", () => {
+  it("以 14 个完整日 p25 保留旧底价或重定较低底价，并维持 Direct 动态界", () => {
+    const p25 = {
+      H: 609.405, K: 37.623, L: 546.789, O: 81.802,
+      U: 34.92, X: 433.099, Z: 62.857,
+    } as const;
+    const old = {
+      H: { hard: 428, economic: 451 },
+      K: { hard: 96, economic: 101 },
+      L: { hard: 161, economic: 169 },
+      O: { hard: 138, economic: 145 },
+      U: { hard: 44, economic: 46 },
+      X: { hard: 480, economic: 480 },
+      Z: { hard: 43, economic: 45 },
+    } as const;
+    for (const resource of MARKET_BASE_RESOURCE_CATALOG) {
+      const policy = MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[resource];
+      const economic = Math.min(old[resource].economic, Math.ceil(p25[resource] * 0.9));
+      expect(policy.economicFloor).toBe(economic);
+      expect(policy.hardFloor).toBe(Math.min(old[resource].hard, Math.ceil(economic * 0.95)));
+      expect(policy.minOrderNotional).toBe(economic * 1_000);
+      expect(policy.directNetBidRatio).toBe(0.85);
+      expect(policy.dynamicFloorMode).toBe("enforce");
+      expect(policy.laneReserve).toBe(100_000);
+    }
+  });
+});
+
 describe("Market Base 动态地板投影（bookEMA + 库存分量 + 日限幅）", () => {
   // Jest 预算归并：EMA 边界、地板合成+跨日锚、无盈余退化三个参数化
   // 变体合并为单一代表性重合同用例。
@@ -180,9 +209,9 @@ describe("Market Base 动态地板投影（bookEMA + 库存分量 + 日限幅）
     expect(h.bookEma).toBe(460);
     expect(h.surplusRatio).toBe(2.5);
     expect(h.inventoryFactor).toBeCloseTo(0.75, 10);
-    // rawDynamic = max(hard, min(520, 460×(1+0.03×0.75))) = 470.35
-    expect(h.dynamicFloor).toBeCloseTo(460 * (1 + 0.03 * 0.75), 10);
-    expect(h.dailyAnchor).toBeCloseTo(460 * (1 + 0.03 * 0.75), 10);
+    // 高库存时按 Direct 净价比例下探，但硬底价仍兜底。
+    expect(h.dynamicFloor).toBe(hPolicy.hardFloor);
+    expect(h.dailyAnchor).toBe(hPolicy.hardFloor);
     expect(h.anchorDate).toBe("2026-08-22");
     // 其余资源无观测：EMA null、dynamicFloor null、状态安全。
     const x = state.entries.find((entry) => entry.resource === "X")!;
@@ -204,11 +233,11 @@ describe("Market Base 动态地板投影（bookEMA + 库存分量 + 日限幅）
     const hNext = decayed.entries.find((entry) => entry.resource === "H")!;
     expect(hNext.inventoryFactor).toBe(1);
     const anchor = h.dailyAnchor;
-    // 次日 EMA≈302.8（Δt≈4 个时间常数）→ rawDynamic=max(hard 428, 302.8×1.03)。
-    // 跨日限幅下限 = 前日锚×0.85 ≈ 399.8 < 428 → 投影落在 hardFloor，
+    // 次日 EMA≈302.8，库存折让后的值低于 hard 428。
+    // 跨日限幅下限 = 前日锚×0.85 < 428 → 投影落在 hardFloor，
     // 且新日锚立为限幅后的实际投影值。
     expect(hNext.dynamicFloor).toBeCloseTo(
-      Math.max(hPolicy.hardFloor, anchor * 0.85, 300 * 1.03),
+      Math.max(hPolicy.hardFloor, anchor * 0.85, 300 * 0.85),
       10,
     );
     expect(hNext.dailyAnchor).toBeCloseTo(hNext.dynamicFloor as number, 10);
@@ -228,12 +257,11 @@ describe("Market Base 动态地板投影（bookEMA + 库存分量 + 日限幅）
     const hStale = stale.entries.find((entry) => entry.resource === "H")!;
     expect(hStale.bookEma).toBe(460);
     expect(hStale.dynamicFloor).toBeNull();
-    expect(hStale.dailyAnchor).toBeCloseTo(460 * (1 + 0.03 * 0.75), 10);
+    expect(hStale.dailyAnchor).toBe(hPolicy.hardFloor);
 
     // 观测中断 3 日后恢复：跨日限幅按日序差叠加——下限 = 前锚×0.85³。
-    // X seed 590（ratchet 同值）→ 3 日后观测 300：raw = max(480, 309)=480，
-    // 多日下限 590×0.85³≈361.8 → df=480。旧的单日硬编码会错误地给出
-    // max(480, 501.5)=501.5（阻止下探）。
+    // X seed 590（ratchet 同值）→ 3 日后观测 300：硬底价 371 兜底，
+    // 多日下限 590×0.85³≈362.3；单日限幅则仍会卡在 501.5。
     const xSeed = buildMarketBaseDynamicFloorState({
       previous: undefined,
       tick: 2_000,
@@ -254,11 +282,11 @@ describe("Market Base 动态地板投影（bookEMA + 库存分量 + 日限幅）
       (entry) => entry.resource === "X",
     )!;
     expect(xNext.dynamicFloor).toBeCloseTo(
-      Math.max(480, 590 * Math.pow(0.85, 3), 300 * 1.03),
+      Math.max(MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE.X.hardFloor, 590 * Math.pow(0.85, 3), 300),
       6,
     );
     expect(xNext.dynamicFloor).not.toBeCloseTo(
-      Math.max(480, 590 * 0.85, 300 * 1.03),
+      Math.max(MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE.X.hardFloor, 590 * 0.85, 300),
       6,
     );
 
@@ -275,7 +303,7 @@ describe("Market Base 动态地板投影（bookEMA + 库存分量 + 日限幅）
     )!;
     expect(xNoSurplus.surplusRatio).toBeNull();
     expect(xNoSurplus.inventoryFactor).toBe(0);
-    // listingFloor = 505×(1+0)=505 < ratchet → rawDynamic=505（仍受日锚=505）。
+    // 无盈余时不折让，bookEMA 505 仍可作为动态观察值。
     expect(xNoSurplus.dynamicFloor).toBeCloseTo(505, 10);
   });
 });

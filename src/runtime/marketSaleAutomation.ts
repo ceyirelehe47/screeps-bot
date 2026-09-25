@@ -4114,6 +4114,33 @@ function toMarketBaseResourceRuntimeCandidates(
     );
 }
 
+function marketBaseCandidateProjectionReasons(
+  candidate: MarketSalePlanCandidate,
+): string[] {
+  const reasons = new Set(
+    toMarketBaseResourceRuntimeCandidates([candidate])[0]?.rejectionReasons ?? [],
+  );
+  const entry = candidate.protectionEntry;
+  if (!isMarketProtectionEntryFresh(entry, Game.time) || entry.blocked) {
+    reasons.add("direct_protection_not_current");
+  } else if (
+    getMarketProtectionSellableAmount(entry, Game.time, {
+      requireTerminalBacking: false,
+    }) < 1_000
+  ) {
+    reasons.add("direct_no_protected_surplus");
+  } else if (getMarketProtectionSellableAmount(entry, Game.time) < 1_000) {
+    reasons.add("direct_terminal_stock_shortage");
+  }
+  if (candidate.capacityState === undefined) {
+    reasons.add("direct_capacity_state_unknown");
+  }
+  if (candidate.isHubRoom === undefined) {
+    reasons.add("direct_hub_state_unknown");
+  }
+  return [...reasons].sort();
+}
+
 function makerExposurePresent(context: RunContext): boolean {
   return Boolean(
     Object.keys(context.data.managedOrders).length > 0 ||
@@ -6622,7 +6649,9 @@ export function runMarketSaleAutomation(
         projectCandidate(
           context,
           candidate,
-          directCandidateRejectionReasons(context, candidate),
+          baseResourceV3.activeV3Successor
+            ? marketBaseCandidateProjectionReasons(candidate)
+            : directCandidateRejectionReasons(context, candidate),
         );
       }
     }
@@ -10091,15 +10120,9 @@ function buildMarketBasePolicyMigrationProposal(
         `market_base_migration_lane_missing:${priorGrant.laneId}`,
       );
     }
-    if (
-      priorGrant.stage === "canary" &&
-      priorGrant.newDealGrant === "enabled"
-    ) {
-      // 单 canary 坑位：armed canary 必须先成交（review_paused）再迁移。
-      throw new TypeError(
-        `market_base_migration_canary_unresolved:${priorGrant.laneId}`,
-      );
-    }
+    // 常量升级保留已签发的 canary 授权及其资格证据。策略/底价变更
+    // 不会重置成交额度或确认记录；append 与 ledger rebind 必须同时
+    // 验证旧链的高水位和新 grant，失败则整个提案原子拒绝。
     const grant = buildMarketBaseResourceSignedLaneGrant({
       lane: {
         ...lane,

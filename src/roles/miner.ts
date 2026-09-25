@@ -3,6 +3,7 @@ import { moveToTarget } from "@/roles/shared";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { getPlannedSourceContainerPos } from "@/runtime/roomPlannerConstruction";
 import { getSourceAdjacentLink } from "@/runtime/sourceLink";
+import { shouldPauseEnergyExtraction } from "@/runtime/energyInflowGuard";
 
 function getSource(sourceId?: string): Source | null {
   if (!sourceId) {
@@ -41,6 +42,10 @@ export const minerRole: RoleFactory = (sourceId?: string) => ({
           return false;
         }
       }
+    }
+
+    if (shouldPauseEnergyExtraction(creep.room.name)) {
+      return false;
     }
 
     const harvestCode = measureCreepIntent(() => creep.harvest(source));

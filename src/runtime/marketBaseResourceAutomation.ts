@@ -811,6 +811,13 @@ export interface MarketBaseResourceCanonicalReadinessRead {
     roomInstanceId: string;
     terminalId: string;
   }>;
+  /** 仅当前 permit/ledger 允许新成交的 V3 lane，可用于既有 carrier 搬运准备。 */
+  cargoLanes?: Array<{
+    roomName: string;
+    resource: MarketBaseResource;
+    terminalId: string;
+    maxDealAmount: number;
+  }>;
 }
 
 function jsonEvidence(value: unknown): unknown {
@@ -2172,6 +2179,8 @@ export function collectLiveMarketBaseRoomObservations(
 type V3LaneInput = MarketDirectContinuousLaneInput & {
   laneId: string;
   roomInstanceId: string;
+  /** 保护后总库存盈余，含 storage；只用于动态价格库存分量。 */
+  inventorySurplus?: number;
   lane: MarketDirectContinuousLaneInput["lane"] & {
     authorization?: "writable" | "suspended_shadow";
   };
@@ -4898,8 +4907,8 @@ const MARKET_BASE_RESOURCE_ACTOR = "marketSaleAutomation:base-resource-v3";
 const MAX_OUTGOING_TRANSACTIONS = 100;
 
 /**
- * 从 full-read 的 scope snapshot 提取每 lane 盈余输入（保护后可售量 /
- * lane 滚动上限），供 observe 模式动态地板投影聚合到资源级。
+ * 从 full-read 的 scope snapshot 提取每 lane 保护后总盈余（包括 storage，
+ * 不受 terminal 当前装载量影响），供动态底价聚合到资源级。
  */
 function laneSurplusInputsFromRead(
   read: FullReadResult,
@@ -4907,7 +4916,7 @@ function laneSurplusInputsFromRead(
   const inputs: MarketBaseDynamicFloorSurplusLane[] = [];
   for (const entry of read.scope.entries) {
     for (const lane of entry.lanes) {
-      const sellable = lane.protection?.sellableAmount;
+      const sellable = lane.inventorySurplus ?? lane.protection?.sellableAmount;
       const rollingMax = lane.quota?.laneRollingCap;
       if (
         typeof sellable === "number" &&
@@ -6502,6 +6511,27 @@ export function registerMarketBaseResourceCanonicalReadinessRuntimeCapability(in
         rooms: derived.readinessAuthorization.rooms.map(
           ({ status: _status, ...basis }) => basis,
         ),
+        cargoLanes: capability.state.scope.laneLifecycles
+          .filter((lane) =>
+            laneAllowsRuntimeWrite(capability.session, "shard1", lane),
+          )
+          .map((lane) => ({
+            roomName: lane.sellerRoomName,
+            resource: lane.resource,
+            terminalId: capability.state.scope!.sellerRooms.find(
+              (room) => room.roomName === lane.sellerRoomName,
+            )?.terminalId ?? "",
+            maxDealAmount:
+              MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[lane.resource]
+                .maxDealAmount,
+          }))
+          .filter((lane) =>
+            derived.readinessAuthorization.rooms.some(
+              (room) =>
+                room.roomName === lane.roomName &&
+                room.terminalId === lane.terminalId,
+            ),
+          ),
       });
     }
 
@@ -7980,6 +8010,13 @@ function liveScopeForRead(
                 )
               : 0,
           },
+          inventorySurplus: protectionComplete
+            ? getMarketProtectionSellableAmount(
+                candidate.protectionEntry,
+                input.tick,
+                { requireTerminalBacking: false },
+              )
+            : 0,
           terminal: {
             revision: "market-base-resource:terminal-unread",
             normal: false,

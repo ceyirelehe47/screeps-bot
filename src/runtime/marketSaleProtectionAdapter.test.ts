@@ -1,5 +1,7 @@
 jest.mock("@/runtime/resourceControl", () => ({
   collectResourceControlSnapshots: jest.fn(),
+}));
+jest.mock("@/runtime/resourceControlRoomConfig", () => ({
   resolveRoomConfig: jest.fn(),
 }));
 
@@ -23,7 +25,7 @@ import {
   resolveMarketSaleAutomationConfig,
   type MarketSaleAutomationConfig,
 } from "@/runtime/marketSaleConfig";
-import { resolveRoomConfig } from "@/runtime/resourceControl";
+import { resolveRoomConfig } from "@/runtime/resourceControlRoomConfig";
 import {
   beginHubProtectionAttempt,
   buildCommittedHubProtectionSnapshot,

@@ -10,6 +10,12 @@ import {
 } from "@/runtime/dispatchOwnership/ref";
 import { reserveProductionResource } from "@/runtime/resourceReservation";
 import * as marketBaseResourceAutomationModule from "@/runtime/marketBaseResourceAutomation";
+import * as marketSaleProtectionAdapterModule from "@/runtime/marketSaleProtectionAdapter";
+import {
+  MARKET_BASE_RESOURCE_CATALOG,
+  MARKET_BASE_RESOURCE_CONFIG_REVISION,
+  MARKET_BASE_RESOURCE_POLICIES,
+} from "@/runtime/marketBaseResourcePolicy";
 import {
   type MarketTerminalEnergyReadinessAuthorizationProjection,
   runResourceControl,
@@ -20,6 +26,7 @@ import {
 import {
   clearMarketActionArbiterForTest,
 } from "@/runtime/marketActionArbiter";
+import { ensureCreepAssignmentState } from "@/runtime/creepAssignmentState";
 
 type RuntimeGlobal = typeof global & {
   __runtimeServices?: unknown;
@@ -407,5 +414,145 @@ describe("runResourceControl terminal feed tasks", () => {
     )?.task).toMatchObject({
       steps: [expect.objectContaining({ amount: 7_347 })],
     });
+  });
+
+  it("已签发 V3 lane 在满 terminal 下先腾挪 Energy，再用原 carrier task 补一批货", () => {
+    const room = createRoom({
+      name: "E1N57",
+      storageResources: {
+        [RESOURCE_ENERGY]: 300_000,
+        [RESOURCE_CATALYST]: 200_000,
+      },
+      storageFreeCapacity: 1_000,
+      terminalResources: {
+        [RESOURCE_ENERGY]: 299_000,
+        [RESOURCE_KEANIUM]: 1_000,
+      },
+    });
+    Game.rooms[room.name] = room;
+    authorizeMarketTerminalEnergyReadiness(room, 3);
+    const policies = MARKET_BASE_RESOURCE_POLICIES;
+    Memory.cfg!.marketSaleAutomation = {
+      mode: "direct",
+      directCapability: "continuous-v3",
+      configRevision: MARKET_BASE_RESOURCE_CONFIG_REVISION,
+      sellResources: [...MARKET_BASE_RESOURCE_CATALOG],
+      hardFloor: Object.fromEntries(policies.map((policy) => [policy.resource, policy.hardFloor])),
+      economicFloor: Object.fromEntries(policies.map((policy) => [policy.resource, policy.economicFloor])),
+      forecastBuffer: Object.fromEntries(policies.map((policy) => [policy.resource, policy.laneReserve])),
+      minDealAmount: 1_000,
+      makerBatchAmount: 5_000,
+      creditReserve: 0,
+      terminalEnergyReserve: 25_000,
+      maxDirectDealAmount: 1_000,
+      maxDirectDealsPerCycle: 1,
+      minDirectOrderAmount: 1_000,
+      minDirectOrderNotional: Math.max(...policies.map((policy) => policy.minOrderNotional)),
+      maxDirectRawOrdersScannedPerCycle: 1_000,
+      maxDirectEligibleOrdersPricedPerCycle: 200,
+      maxDirectTransactionEnergy: 1_000,
+      directCanaryMaxConfirmedDeals: 1,
+      energyShadowHardFloor: 20,
+      planningSnapshotMaxAgeTicks: 10,
+      minHistoryDays: 7,
+      minHistoryTransactions: 100,
+      minHistoryVolume: 100_000,
+      historyFloorRatio: 0.95,
+      historyMaxAgeDays: 2,
+      canary: { enabled: true, allowExpansion: false },
+    } as NonNullable<Memory["cfg"]>["marketSaleAutomation"];
+    (Memory.data!.marketSaleAutomation as unknown as {
+      directAutomation: { baseResourceV3: { ledger?: unknown } };
+    }).directAutomation.baseResourceV3.ledger = {};
+    resourceControlReadinessDeriveSpy?.mockReturnValue({
+      ok: true,
+      revision: `permit:${Game.time}`,
+      maxTransactionEnergy: 1_000,
+      sourcePermitVersion: 3,
+      rooms: [{ roomName: room.name, roomInstanceId: `room:${room.name}:1`, terminalId: room.terminal!.id }],
+      cargoLanes: [{ roomName: room.name, resource: RESOURCE_CATALYST, terminalId: room.terminal!.id, maxDealAmount: 1_000 }],
+    });
+    const protectionSpy = jest.spyOn(
+      marketSaleProtectionAdapterModule,
+      "collectLiveMarketSaleProtectionLedger",
+    ).mockImplementation(() => ({
+      globalBlocked: false,
+      entries: {
+        [`${room.name}:${RESOURCE_CATALYST}`]: {
+          roomName: room.name,
+          resource: RESOURCE_CATALYST,
+          revision: Game.time,
+          observedAt: Game.time,
+          expiresAt: Game.time,
+          fresh: true,
+          blocked: false,
+          grossSurplus: 100_000,
+          terminalStock: 0,
+          sourceContributions: [],
+        },
+      },
+    } as ReturnType<typeof marketSaleProtectionAdapterModule.collectLiveMarketSaleProtectionLedger>));
+    try {
+      runResourceControl();
+      expect(getCarrierTasksByRoom(room.name)[
+        `resourceControl:terminal_offload:${room.name}:${RESOURCE_ENERGY}`
+      ]).toMatchObject({
+        type: "terminal_offload",
+        steps: [expect.objectContaining({ resource: RESOURCE_ENERGY, amount: 1_000 })],
+      });
+
+      Game.time = 20;
+      const nextRoom = createRoom({
+        name: room.name,
+        storageResources: {
+          [RESOURCE_ENERGY]: 301_000,
+          [RESOURCE_CATALYST]: 200_000,
+        },
+        storageFreeCapacity: 0,
+        terminalResources: {
+          [RESOURCE_ENERGY]: 298_000,
+          [RESOURCE_KEANIUM]: 1_000,
+        },
+      });
+      Game.rooms[room.name] = nextRoom;
+      resourceControlReadinessDeriveSpy?.mockReturnValue({
+        ok: true,
+        revision: `permit:${Game.time}`,
+        maxTransactionEnergy: 1_000,
+        sourcePermitVersion: 3,
+        rooms: [{ roomName: room.name, roomInstanceId: `room:${room.name}:1`, terminalId: room.terminal!.id }],
+        cargoLanes: [{ roomName: room.name, resource: RESOURCE_CATALYST, terminalId: room.terminal!.id, maxDealAmount: 1_000 }],
+      });
+      runResourceControl();
+      expect(getCarrierTasksByRoom(room.name)[
+        `resourceControl:terminal_feed:${room.name}:${RESOURCE_CATALYST}`
+      ]).toMatchObject({
+        type: "terminal_feed",
+        dispatchClass: "market_egress",
+        steps: [expect.objectContaining({ resource: RESOURCE_CATALYST, amount: 1_000 })],
+      });
+
+      // 下一 tick 已有 carrier 把整批 1k 取在路上时，不再重建第二批备货。
+      Game.time = 21;
+      Game.creeps = {
+        "market-cargo-carrier": {
+          name: "market-cargo-carrier",
+          room: nextRoom,
+          store: {
+            getUsedCapacity: (resource?: ResourceConstant) =>
+              resource === RESOURCE_CATALYST || resource === undefined ? 1_000 : 0,
+          },
+        } as Creep,
+      };
+      const inFlight = ensureCreepAssignmentState("market-cargo-carrier");
+      inFlight.synthesisCarrierPendingToId = nextRoom.terminal!.id;
+      inFlight.synthesisCarrierPendingResource = RESOURCE_CATALYST;
+      runResourceControl();
+      expect(getCarrierTasksByRoom(room.name)[
+        `resourceControl:terminal_feed:${room.name}:${RESOURCE_CATALYST}`
+      ]).toBeUndefined();
+    } finally {
+      protectionSpy.mockRestore();
+    }
   });
 });

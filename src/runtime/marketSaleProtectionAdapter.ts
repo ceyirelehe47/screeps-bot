@@ -27,7 +27,7 @@ import type { MarketSaleAutomationConfig } from "@/runtime/marketSaleConfig";
 import { getProductReagents } from "@/runtime/reactionMap";
 import {
   resolveRoomConfig,
-} from "@/runtime/resourceControl";
+} from "@/runtime/resourceControlRoomConfig";
 import { POWER_BANK_BOOST_REQUIREMENTS } from "@/runtime/powerBankConstants";
 import {
   readFreshCommittedHubProtectionSnapshot,

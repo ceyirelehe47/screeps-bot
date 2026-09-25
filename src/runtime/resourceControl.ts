@@ -88,9 +88,14 @@ import {
 } from "@/runtime/runtimeServices";
 import { normalizeBoolean, normalizeNumber } from "@/runtime/configNormalize";
 import {
-  resolveRoomEnergyPolicy,
-  type RoomEnergyPolicy,
-} from "@/runtime/roomEnergyPolicy";
+  RESOURCE_CONTROL_BASE_MINERALS as BASE_MINERALS,
+  DEFAULT_RESOURCE_CONTROL_ROOM_CONFIG as DEFAULT_ROOM_CONFIG,
+  normalizeResourceThresholdMap,
+  resolveRoomConfig,
+  type ResourceControlRoomConfig,
+  type ResourceThresholdMap,
+} from "@/runtime/resourceControlRoomConfig";
+export { resolveRoomConfig } from "@/runtime/resourceControlRoomConfig";
 import {
   getReservedProductionAmount,
   listProductionReservations,
@@ -111,6 +116,17 @@ import {
   getTerminalAmountsOutsideMarketSaleExposure,
 } from "@/runtime/marketSaleExposure";
 import { deriveMarketBaseResourceCanonicalReadinessAuthorization } from "@/runtime/marketBaseResourceAutomation";
+import {
+  isMarketBaseResource,
+  MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE,
+} from "@/runtime/marketBaseResourcePolicy";
+import { resolveMarketSaleAutomationConfig } from "@/runtime/marketSaleConfig";
+import {
+  getMarketProtectionEntryKey,
+  getMarketProtectionSellableAmount,
+  isMarketProtectionEntryFresh,
+} from "@/runtime/marketSaleProtection";
+import { collectLiveMarketSaleProtectionLedger } from "@/runtime/marketSaleProtectionAdapter";
 import { getLocalCarrierDestinationCommittedAmount } from "@/runtime/localCarrierDestinationCapacity";
 import {
   getTerminalActionEnergyOwnershipBudget,
@@ -119,17 +135,6 @@ import {
 
 type ResourceControlState = "survival" | "balanced" | "export";
 type ResourceCapacityState = CapacityState;
-type ResourceThresholdMap = Partial<Record<ResourceConstant, number>>;
-
-const BASE_MINERALS: ResourceConstant[] = [
-  RESOURCE_HYDROGEN,
-  RESOURCE_OXYGEN,
-  RESOURCE_UTRIUM,
-  RESOURCE_LEMERGIUM,
-  RESOURCE_KEANIUM,
-  RESOURCE_ZYNTHIUM,
-  RESOURCE_CATALYST,
-];
 const DEFAULT_MARKET_SELL_RESOURCES: ResourceConstant[] = [...BASE_MINERALS];
 
 const HUB_INTERMEDIATES: ResourceConstant[] = [
@@ -158,12 +163,6 @@ const HUB_INTERMEDIATES: ResourceConstant[] = [
   RESOURCE_GHODIUM_ACID,
   RESOURCE_GHODIUM_ALKALIDE,
 ];
-
-interface ResourceControlRoomConfig extends RoomEnergyPolicy {
-  transferBatchSize: number;
-  mineralFloor: ResourceThresholdMap;
-  mineralExportStart: ResourceThresholdMap;
-}
 
 interface ResourceControlMarketConfig {
   enabled: boolean;
@@ -418,6 +417,12 @@ export interface MarketTerminalEnergyAuthorizationRead {
   revision?: string;
   maxTransactionEnergy?: number;
   rooms: MarketTerminalEnergyAuthorizedRoom[];
+  cargoLanes?: Array<{
+    roomName: string;
+    resource: ResourceConstant;
+    terminalId: string;
+    maxDealAmount: number;
+  }>;
 }
 
 interface TerminalStagingAttempt {
@@ -712,31 +717,6 @@ const DEFAULT_CAPACITY_CONFIG: ResourceCapacityConfig = {
   t3ReservePerRoom: 5_000,
 };
 
-const DEFAULT_ROOM_CONFIG: Omit<
-  ResourceControlRoomConfig,
-  keyof RoomEnergyPolicy
-> = {
-  transferBatchSize: 10_000,
-  mineralFloor: {
-    [RESOURCE_HYDROGEN]: 5_000,
-    [RESOURCE_OXYGEN]: 5_000,
-    [RESOURCE_UTRIUM]: 5_000,
-    [RESOURCE_LEMERGIUM]: 5_000,
-    [RESOURCE_KEANIUM]: 5_000,
-    [RESOURCE_ZYNTHIUM]: 5_000,
-    [RESOURCE_CATALYST]: 3_000,
-  },
-  mineralExportStart: {
-    [RESOURCE_HYDROGEN]: 15_000,
-    [RESOURCE_OXYGEN]: 15_000,
-    [RESOURCE_UTRIUM]: 15_000,
-    [RESOURCE_LEMERGIUM]: 15_000,
-    [RESOURCE_KEANIUM]: 15_000,
-    [RESOURCE_ZYNTHIUM]: 15_000,
-    [RESOURCE_CATALYST]: 10_000,
-  },
-};
-
 const DEFAULT_MARKET_CONFIG: ResourceControlMarketConfig = {
   enabled: false,
   emergencyBuyEnabled: true,
@@ -764,41 +744,6 @@ function normalizeTaskMaxPerRun(value: unknown): number {
     MIN_TASK_MAX_PER_RUN,
     MAX_TASK_MAX_PER_RUN,
   );
-}
-
-function normalizeResourceThresholdMap(
-  value: unknown,
-  fallback: ResourceThresholdMap,
-  min: number,
-  max: number,
-): ResourceThresholdMap {
-  const map =
-    value && typeof value === "object"
-      ? (value as Partial<Record<ResourceConstant, unknown>>)
-      : {};
-  const next: ResourceThresholdMap = {};
-
-  for (const resource of Object.keys(fallback) as ResourceConstant[]) {
-    next[resource] = normalizeNumber(
-      map[resource],
-      fallback[resource] || 0,
-      min,
-      max,
-    );
-  }
-
-  for (const resource of BASE_MINERALS) {
-    if (next[resource] === undefined) {
-      next[resource] = normalizeNumber(
-        map[resource],
-        fallback[resource] || 0,
-        min,
-        max,
-      );
-    }
-  }
-
-  return next;
 }
 
 function normalizeResourceList(
@@ -863,6 +808,7 @@ export function parseMarketTerminalEnergyReadinessAuthorization(
     revision: canonical.revision,
     maxTransactionEnergy: canonical.maxTransactionEnergy,
     rooms: canonical.rooms,
+    cargoLanes: canonical.cargoLanes,
   };
 }
 
@@ -875,47 +821,6 @@ function readMarketTerminalEnergyReadinessAuthorization(): MarketTerminalEnergyA
     Memory.cfg?.marketSaleAutomation?.mode,
     Game.time,
   );
-}
-
-function normalizeRoomConfig(value: unknown): ResourceControlRoomConfig {
-  const config =
-    value && typeof value === "object"
-      ? (value as Partial<ResourceControlRoomConfig>)
-      : {};
-  const energyPolicy = resolveRoomEnergyPolicy(config);
-  const transferBatchSize = normalizeNumber(
-    config.transferBatchSize,
-    DEFAULT_ROOM_CONFIG.transferBatchSize,
-    100,
-    50_000,
-  );
-  const mineralFloor = normalizeResourceThresholdMap(
-    config.mineralFloor,
-    DEFAULT_ROOM_CONFIG.mineralFloor,
-    0,
-    500_000,
-  );
-  const mineralExportStart = normalizeResourceThresholdMap(
-    config.mineralExportStart,
-    DEFAULT_ROOM_CONFIG.mineralExportStart,
-    0,
-    1_000_000,
-  );
-
-  for (const resource of BASE_MINERALS) {
-    const floor = mineralFloor[resource] || 0;
-    const exportStart = mineralExportStart[resource] || 0;
-    if (exportStart < floor) {
-      mineralExportStart[resource] = floor;
-    }
-  }
-
-  return {
-    ...energyPolicy,
-    transferBatchSize,
-    mineralFloor,
-    mineralExportStart,
-  };
 }
 
 function normalizeMarketConfig(value: unknown): ResourceControlMarketConfig {
@@ -1031,12 +936,6 @@ export function normalizeCapacityConfig(
       500_000,
     ),
   };
-}
-
-export function resolveRoomConfig(roomName: string): ResourceControlRoomConfig {
-  const cfg = Memory.cfg?.resourceControl;
-  const roomConfigRaw = cfg?.rooms ? cfg.rooms[roomName] : undefined;
-  return normalizeRoomConfig(roomConfigRaw);
 }
 
 function resolveMarketConfig(): ResourceControlMarketConfig {
@@ -6183,7 +6082,8 @@ function appendTerminalResourceFeedDrafts(
   >,
 ): void {
   // 永久闩：ResourceControl 不再为 native/Hub legacy seller 搬运待售货物。
-  // desiredFeedByResource 只能来自已存在的内部 transfer staging。
+  // desiredFeedByResource 来自既有内部 transfer staging 或已签名的
+  // V3 市场出货货物准备；本函数不创建新的市场 writer。
 
   let feedCapacity = initialFeedCapacity;
   for (const [resource, target] of desiredFeedByResource.entries()) {
@@ -7028,6 +6928,89 @@ function reserveEnergyDeficitStagingBatch(
   return undefined;
 }
 
+interface AuthorizedMarketCargoTarget {
+  resource: ResourceConstant;
+  targetStock: number;
+}
+
+/**
+ * 仅为当前 V3 permit 允许的新成交搬运一批货。可售量仍由原保护账本
+ * 扣除生产、在途与其他 exposure；这里不签发市场写权限。
+ */
+function planAuthorizedMarketCargoTargets(
+  snapshots: ResourceControlSnapshot[],
+  authorization: MarketTerminalEnergyAuthorizationRead,
+): Map<string, AuthorizedMarketCargoTarget> {
+  const targets = new Map<string, AuthorizedMarketCargoTarget>();
+  if (!authorization.ok || !authorization.cargoLanes?.length) return targets;
+  const marketData = Memory.data?.marketSaleAutomation as unknown;
+  if (!isPlainRecord(marketData) ||
+      !isPlainRecord(marketData.managedOrders) ||
+      Object.keys(marketData.managedOrders).length > 0) {
+    return targets;
+  }
+  const direct = isPlainRecord(marketData.directAutomation)
+    ? marketData.directAutomation
+    : undefined;
+  const v3 = direct && isPlainRecord(direct.baseResourceV3)
+    ? direct.baseResourceV3
+    : undefined;
+  const ledgerState = v3 && isPlainRecord(v3.ledger) ? v3.ledger : undefined;
+  if (!ledgerState || ledgerState.pending !== undefined || ledgerState.blocker !== undefined) {
+    return targets;
+  }
+  const config = resolveMarketSaleAutomationConfig(
+    Memory.cfg?.marketSaleAutomation,
+  );
+  if (!config.validForPlanning || config.mode !== "direct") return targets;
+
+  const snapshotByRoom = new Map(snapshots.map((snapshot) => [snapshot.roomName, snapshot] as const));
+  const lanes = authorization.cargoLanes.filter((lane) => {
+    const snapshot = snapshotByRoom.get(lane.roomName);
+    return isMarketBaseResource(lane.resource) &&
+      snapshot?.terminal?.id === lane.terminalId &&
+      snapshot.storage !== undefined &&
+      lane.maxDealAmount === MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[lane.resource].maxDealAmount &&
+      getTerminalResourceAmount(snapshot, lane.resource) < lane.maxDealAmount &&
+      snapshot.storage.store.getUsedCapacity(lane.resource) > 0;
+  });
+  if (lanes.length === 0) return targets;
+  const protection = collectLiveMarketSaleProtectionLedger(config, [], {
+    candidates: lanes.map((lane) => ({
+      roomName: lane.roomName,
+      resource: lane.resource,
+    })),
+    laneReserveByEntry: Object.fromEntries(lanes.map((lane) => [
+      getMarketProtectionEntryKey(lane.roomName, lane.resource),
+      MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[lane.resource as keyof typeof MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE].laneReserve,
+    ])),
+  });
+  if (protection.globalBlocked) return targets;
+  const ranked = lanes.flatMap((lane) => {
+    const entry = protection.entries[getMarketProtectionEntryKey(lane.roomName, lane.resource)];
+    if (!entry || !isMarketProtectionEntryFresh(entry, Game.time)) return [];
+    const surplus = getMarketProtectionSellableAmount(entry, Game.time, {
+      requireTerminalBacking: false,
+    });
+    return surplus >= lane.maxDealAmount
+      ? [{ lane, surplus }]
+      : [];
+  }).sort((left, right) =>
+    right.surplus - left.surplus ||
+    left.lane.roomName.localeCompare(right.lane.roomName) ||
+    left.lane.resource.localeCompare(right.lane.resource),
+  );
+  for (const { lane } of ranked) {
+    if (!targets.has(lane.roomName)) {
+      targets.set(lane.roomName, {
+        resource: lane.resource,
+        targetStock: lane.maxDealAmount,
+      });
+    }
+  }
+  return targets;
+}
+
 function syncTerminalFeedTasks(
   snapshots: ResourceControlSnapshot[],
   marketCfg: ResourceControlMarketConfig,
@@ -7049,6 +7032,10 @@ function syncTerminalFeedTasks(
   }
 
   const stagingBatchByRoom = new Map<string, TerminalStagingBatch>();
+  const marketCargoTargets = planAuthorizedMarketCargoTargets(
+    snapshots,
+    authorization,
+  );
   const planningEnergyNeedByRoom = new Map(remainingEnergyNeedByRoom);
   const snapshotByRoom = new Map(
     snapshots.map((snapshot) => [snapshot.roomName, snapshot] as const),
@@ -7246,6 +7233,16 @@ function syncTerminalFeedTasks(
     }
     const drafts: CarrierTaskDraft[] = [];
     const stagingBatch = stagingBatchByRoom.get(snapshot.roomName);
+    const marketCargoTarget = !stagingBatch && !terminalBusy.has(snapshot.roomName)
+      ? marketCargoTargets.get(snapshot.roomName)
+      : undefined;
+    // 已接货/在途的所有 terminal 投递都先占物理容量；保守地从单批
+    // 待售目标中扣除，避免跨 tick 的第二名 carrier 重复搬同一批货。
+    const marketCargoOutstanding = marketCargoTarget
+      ? Math.max(0, marketCargoTarget.targetStock -
+          getTerminalResourceAmount(snapshot, marketCargoTarget.resource) -
+          getLocalCarrierDestinationCommittedAmount(snapshot.terminal.id))
+      : 0;
     const energyDraft = createEnergyTerminalTask(snapshot, snapshots, context, {
       stagingBatch,
     });
@@ -7321,7 +7318,51 @@ function syncTerminalFeedTasks(
       },
     );
 
-    let feedCapacity = safeFeedCapacity;
+    // 出货准备只需物理空位。普通入库的 80k terminal / 200k storage
+    // 安全容量不得阻断 terminal -> storage 的临时腾挪；仍保留全部
+    // 生产/市场 Energy 预约，并且每房最多为一笔已授权货物腾出 1k。
+    if (marketCargoTarget && snapshot.storage) {
+      const missingHeadroom = Math.max(
+        0,
+        marketCargoOutstanding - snapshot.terminalFreeCapacity,
+      );
+      const physicalStorageFree = Math.max(
+        0,
+        snapshot.storage.store.getFreeCapacity() -
+          getLocalCarrierDestinationCommittedAmount(snapshot.storage.id),
+      );
+      const unclaimedEnergy = Math.max(
+        0,
+        getTerminalAmountOutsideMarketSaleExposure(
+          snapshot.terminal,
+          RESOURCE_ENERGY,
+          snapshot.roomName,
+        ) - getProtectedTerminalEnergy(snapshot, snapshots, context, { stagingBatch }),
+      );
+      const offloadAmount = Math.min(
+        missingHeadroom,
+        physicalStorageFree,
+        unclaimedEnergy,
+        snapshot.transferBatchSize,
+      );
+      if (offloadAmount > 0 && !offloadedResources.has(RESOURCE_ENERGY)) {
+        const draft = createTerminalOffloadTask(
+          snapshot,
+          RESOURCE_ENERGY,
+          offloadAmount,
+          unclaimedEnergy,
+        );
+        if (draft) {
+          drafts.push(draft);
+          offloadedResources.add(RESOURCE_ENERGY);
+        }
+      }
+    }
+
+    const marketCargoFeedCapacity = marketCargoTarget
+      ? Math.min(snapshot.terminalFreeCapacity, marketCargoOutstanding)
+      : 0;
+    let feedCapacity = Math.max(safeFeedCapacity, marketCargoFeedCapacity);
     if (
       energyDraft?.type === "terminal_feed" &&
       !offloadedResources.has(RESOURCE_ENERGY)
@@ -7365,6 +7406,14 @@ function syncTerminalFeedTasks(
         Math.min(snapshot.transferBatchSize, stagingBatch.amount),
       );
     }
+    if (marketCargoTarget && marketCargoOutstanding > 0 &&
+        !offloadedResources.has(marketCargoTarget.resource)) {
+      desiredFeedByResource.set(
+        marketCargoTarget.resource,
+        getTerminalResourceAmount(snapshot, marketCargoTarget.resource) +
+          marketCargoOutstanding,
+      );
+    }
 
     appendTerminalResourceFeedDrafts(
       snapshot,
@@ -7374,11 +7423,14 @@ function syncTerminalFeedTasks(
       desiredFeedByResource,
       feedCapacity,
       true,
-      stagingBatch?.dispatchClass && stagingBatch.resource !== RESOURCE_ENERGY
-        ? new Map([
-            [stagingBatch.resource, stagingBatch.dispatchClass],
-          ])
-        : undefined,
+      new Map([
+        ...(stagingBatch?.dispatchClass && stagingBatch.resource !== RESOURCE_ENERGY
+          ? [[stagingBatch.resource, stagingBatch.dispatchClass] as const]
+          : []),
+        ...(marketCargoTarget && marketCargoOutstanding > 0
+          ? [[marketCargoTarget.resource, "market_egress" as const] as const]
+          : []),
+      ]),
     );
     const validDraftSet = mergeMarketTerminalEnergyReadinessDraft(
       snapshot,

@@ -12,7 +12,7 @@ import {
 } from "@/runtime/dispatchOwnership/carrierAmountSlice";
 
 export type CarrierTaskType = "lab_supply" | "lab_cleanup" | "lab_product_unload" | "mineral_haul" | "terminal_feed" | "terminal_offload" | "factory_supply" | "factory_unload" | "power_spawn_supply" | "nuker_supply";
-export type CarrierTaskDispatchClass = "capacity_relief";
+export type CarrierTaskDispatchClass = "capacity_relief" | "market_egress";
 
 export type CarrierStructureKind = "lab" | "terminal" | "storage" | "container" | "factory" | "power_spawn" | "nuker";
 

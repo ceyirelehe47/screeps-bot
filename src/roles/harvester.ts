@@ -2,6 +2,7 @@ import type { RoleFactory } from "@/types/system";
 import { moveToTarget } from "@/roles/shared";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
 import { getPlannedSourceContainerPos } from "@/runtime/roomPlannerConstruction";
+import { shouldPauseEnergyExtraction } from "@/runtime/energyInflowGuard";
 
 interface HarvesterRoleOptions {
   shouldSkipHarvestIntent?: (creep: Creep, source: Source) => boolean;
@@ -51,7 +52,10 @@ export function createHarvesterRole(
         }
       }
 
-      if (options.shouldSkipHarvestIntent?.(creep, source)) {
+      if (
+        shouldPauseEnergyExtraction(creep.room.name) ||
+        options.shouldSkipHarvestIntent?.(creep, source)
+      ) {
         return false;
       }
 

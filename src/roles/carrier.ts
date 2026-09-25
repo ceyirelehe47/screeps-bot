@@ -854,6 +854,11 @@ function isCapacityReliefTerminalPreloadTask(task: CarrierTask): boolean {
     task.dispatchClass === "capacity_relief";
 }
 
+function isMarketEgressTerminalPreloadTask(task: CarrierTask): boolean {
+  return isResourceControlTerminalPreloadTask(task) &&
+    task.dispatchClass === "market_egress";
+}
+
 function isBackgroundNonNukerEnergyCarrierTask(task: CarrierTask): boolean {
   return isNonNukerEnergyCarrierTask(task) &&
     !isCapacityReliefTerminalPreloadTask(task);
@@ -1143,13 +1148,16 @@ function pickupSynthesisCarrierResource(
   const isCapacityReliefPreload = isCapacityReliefTerminalPreloadTask(
     assignment.task,
   );
+  const isMarketEgressPreload = isMarketEgressTerminalPreloadTask(
+    assignment.task,
+  );
   const requiresTaskAmountClaim = isTerminalOffload ||
-    isCapacityReliefPreload || (
+    isCapacityReliefPreload || isMarketEgressPreload || (
     isNukerEnergySupplyCarrierTask(assignment.task) &&
     assignment.step.resource === RESOURCE_ENERGY
   );
   const requiresDestinationCapacityClaim = isTerminalOffload ||
-    isCapacityReliefPreload;
+    isCapacityReliefPreload || isMarketEgressPreload;
   let claimRequestedAmount = withdrawAmount;
   let destinationTarget: AnyStoreStructure | null = null;
   if (requiresDestinationCapacityClaim) {
