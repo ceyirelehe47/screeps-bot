@@ -1005,6 +1005,30 @@ describe("Market Base V3 运行时重合同（高风险决策/WAL/证据隔离/o
       ).toHaveLength(0);
     }
 
+    // 价格/库存证据完整但提交 WAL 所需 CPU 余量不足时，先保留一次性
+    // canary；不能先写 pending 再被同窗口 CPU 门禁截断。
+    {
+      const { state, deps, input } = v3RuntimeFixture();
+      let used = 1;
+      deps.cpuUsed.mockImplementation(() => used);
+      const originalBookRead = deps.readCurrentBuyOrders.getMockImplementation()!;
+      deps.readCurrentBuyOrders.mockImplementation((resource: ResourceConstant) => {
+        used = 16;
+        return originalBookRead(resource);
+      });
+
+      const result = runMarketBaseResourceAutomation(state, input(), deps);
+
+      expect(result.rejectedByReason).toHaveProperty(
+        "market_base_v3_prepare_cpu_headroom_insufficient",
+      );
+      expect(state.lastPlanningSnapshot?.selected).toBeDefined();
+      expect(state.ledger?.pending).toBeUndefined();
+      expect(deps.commitPreparedState).not.toHaveBeenCalled();
+      expect(deps.claimPrepared).not.toHaveBeenCalled();
+      expect(deps.executePrepared).not.toHaveBeenCalled();
+    }
+
     // 子场景 2：fresh runtime fixture，第二读只改变 protection contribution 也必须零写拒绝。
     {
       const { state, harness, deps, input } = v3RuntimeFixture();

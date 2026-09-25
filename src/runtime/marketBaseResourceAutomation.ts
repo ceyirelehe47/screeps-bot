@@ -135,6 +135,9 @@ export const MARKET_BASE_RESOURCE_MAX_ELIGIBLE_ORDERS_PER_RESOURCE = 200;
 export const MARKET_BASE_RESOURCE_MAX_DISTINCT_ORDER_ROOMS = 128;
 export const MARKET_BASE_RESOURCE_MAX_TRANSACTION_COST_EVALUATIONS = 4_096;
 export const MARKET_BASE_RESOURCE_PLANNING_CPU_CEILING = 25;
+// 准备 WAL 后还需 canonical root 提交、claim 与 deal；仅在剩余预算
+// 足以覆盖这段写前路径时才消耗一次性 canary grant。
+const MARKET_BASE_RESOURCE_PREPARE_MIN_REMAINING_CPU = 12;
 export const MARKET_BASE_RESOURCE_CPU_TRACE_MAX = 100;
 const MARKET_BASE_RESOURCE_SHADOW_CURSOR_V2_PREFIX =
   "mbr-shadow-cursor-v2|" as const;
@@ -9249,12 +9252,18 @@ export function runMarketBaseResourceAutomation(
     rejectOnce(reason);
     return finish(false);
   }
-  const nextScope = applyMarketBaseResourceShadowObservations(
-    scopeBeforePlanning,
-    input.tick,
-    plan.shadowObservations,
-    plan.nextShadowCursor,
-  );
+  const nextScope =
+    scopeBeforePlanning.updatedAt === input.tick &&
+    plan.sampledShadowLaneIds.length === 0 &&
+    plan.shadowObservations.length === 0 &&
+    plan.nextShadowCursor === scopeBeforePlanning.shadowCursor
+      ? scopeBeforePlanning
+      : applyMarketBaseResourceShadowObservations(
+          scopeBeforePlanning,
+          input.tick,
+          plan.shadowObservations,
+          plan.nextShadowCursor,
+        );
   const nextRatchet = plan.nextPricingRatchet;
   if (
     !nextRatchet ||
@@ -9484,6 +9493,34 @@ export function runMarketBaseResourceAutomation(
     state.blocker = runtimeMismatchAtWriteGate;
     rejectOnce(runtimeMismatchAtWriteGate);
     return finish(false);
+  }
+  const prepareCpu = observeMarketBaseResourceCpuTrace(
+    cpuTraceRecorder,
+    dependencies,
+    "cpuAfterInnerApply",
+    "inner_apply",
+  );
+  if (prepareCpu.exceeded || prepareCpu.rawDelta === undefined) {
+    rollbackPlanningState(plan.shadowObservations);
+    markPlanningCpuExceeded(
+      state,
+      input.tick,
+      planningCpuStartedAt,
+      dependencies,
+      cpuTraceRecorder,
+      "inner_apply",
+    );
+    rejectOnce("market_base_cpu_ceiling_exceeded");
+    return finish(false);
+  }
+  if (
+    prepareCpu.rawDelta >
+    MARKET_BASE_RESOURCE_PLANNING_CPU_CEILING -
+      MARKET_BASE_RESOURCE_PREPARE_MIN_REMAINING_CPU
+  ) {
+    rejectOnce("market_base_v3_prepare_cpu_headroom_insufficient");
+    actions.push("market-base-v3-prepare-deferred-cpu-headroom");
+    return finish(true);
   }
 
   const requestId = canonicalStableHashV1({
