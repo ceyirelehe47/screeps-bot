@@ -9184,6 +9184,44 @@ function sameMarketBaseGrantExceptDealGrant(
   );
 }
 
+/**
+ * 没有任何 V3 attempt 的 canary 只有在原保护账本确认整房已无一笔可售
+ * 余量时才可主动暂停。这里读取 storage+terminal 的保护后总量，避免
+ * terminal 暂时没备货就假装无库存；事实缺失一律不放行。
+ */
+function canSuspendUnattemptedMarketBaseCanaryForNoSurplus(
+  data: MarketSaleDataState,
+  config: ResolvedMarketSaleAutomationConfig,
+  lane: MarketBaseDerivedLaneLifecycle,
+  tick: number,
+): boolean {
+  const policy = MARKET_BASE_RESOURCE_POLICIES.find(
+    (candidate) => candidate.resource === lane.resource,
+  );
+  if (!policy) return false;
+  const key = getMarketProtectionEntryKey(lane.sellerRoomName, lane.resource);
+  let protectionLedger: ReturnType<typeof collectLiveMarketSaleProtectionLedger>;
+  try {
+    protectionLedger = collectLiveMarketSaleProtectionLedger(
+      config,
+      Object.values(data.managedOrders),
+      {
+        candidates: [{ roomName: lane.sellerRoomName, resource: lane.resource }],
+        laneReserveByEntry: { [key]: policy.laneReserve },
+      },
+    );
+  } catch {
+    return false;
+  }
+  const entry = protectionLedger.entries[key];
+  return !protectionLedger.globalBlocked &&
+    !!entry && !entry.blocked &&
+    isMarketProtectionEntryFresh(entry, tick) &&
+    getMarketProtectionSellableAmount(entry, tick, {
+      requireTerminalBacking: false,
+    }) < policy.minOrderAmount;
+}
+
 function buildMarketBaseV3SuccessorProposal(
   data: MarketSaleDataState,
   direct: MarketDirectContinuousAutomationState,
@@ -9544,6 +9582,12 @@ function buildMarketBaseV3SuccessorProposal(
       ledger,
       priorTargetGrant.laneId,
       permitChain,
+    ) &&
+    !canSuspendUnattemptedMarketBaseCanaryForNoSurplus(
+      data,
+      config,
+      targetLane,
+      tick,
     )
   ) {
     throw new TypeError(

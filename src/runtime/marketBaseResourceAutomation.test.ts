@@ -52,8 +52,10 @@ import {
 } from "@/runtime/marketBaseResourcePermit";
 import {
   acceptMarketBaseResourcePermit,
+  proposeMarketBaseResourcePermit,
   proposeMarketBaseResourcePolicyMigration,
 } from "@/runtime/marketSaleAutomation";
+import * as marketSaleProtectionAdapterModule from "@/runtime/marketSaleProtectionAdapter";
 import {
   buildMarketBaseResourceAuthenticatedV2LedgerMigrationBasis,
   buildMarketBaseResourceLedgerRuntimeAnchor,
@@ -2235,5 +2237,80 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     scenarioMigrationRoundTrip();
     scenarioMigrationTombstone();
     scenarioMigrationRejections();
+  });
+
+  it("未尝试的 armed canary 仅在保护后总余量不足一单时允许原位暂停", () => {
+    const run = (grossSurplus: number, globalBlocked = false) => {
+      const world = installPastV3World({ armCanary: true, qualifiedSuspended: true });
+      const migration = proposeMarketBaseResourcePolicyMigration() as {
+        ok: boolean; proposalId?: string; error?: string;
+      };
+      expect(migration.error).toBeUndefined();
+      expect(acceptMarketBaseResourcePermit(migration.proposalId!)).toMatchObject({ ok: true });
+      const before = (Memory.data!.marketSaleAutomation as {
+        directAutomation: { baseResourceV3: MarketBaseResourceV3RuntimeState };
+      }).directAutomation.baseResourceV3;
+      const receiptHead = before.ledger!.receiptHeadHash;
+      const permitHead = before.permitChain!.permitChainHead;
+      Game.time = Math.max(101, Game.time + 1);
+      const spy = jest.spyOn(
+        marketSaleProtectionAdapterModule,
+        "collectLiveMarketSaleProtectionLedger",
+      ).mockImplementation(() => ({
+        globalBlocked,
+        entries: {
+          [`${V3_TEST_ROOM}:${RESOURCE_CATALYST}`]: {
+            roomName: V3_TEST_ROOM,
+            resource: RESOURCE_CATALYST,
+            revision: Game.time,
+            observedAt: Game.time,
+            expiresAt: Game.time,
+            fresh: true,
+            blocked: false,
+            grossSurplus,
+            terminalStock: 0,
+            sourceContributions: [],
+          },
+        },
+      } as ReturnType<typeof marketSaleProtectionAdapterModule.collectLiveMarketSaleProtectionLedger>));
+      try {
+        const proposal = proposeMarketBaseResourcePermit({
+          laneId: world.canaryLaneId,
+          targetStage: "suspend",
+        }) as { ok: boolean; proposalId?: string; error?: string };
+        const after = (Memory.data!.marketSaleAutomation as {
+          directAutomation: { baseResourceV3: MarketBaseResourceV3RuntimeState };
+        }).directAutomation.baseResourceV3;
+        expect(after.ledger!.receiptHeadHash).toBe(receiptHead);
+        expect(after.permitChain!.permitChainHead).toBe(permitHead);
+        return { proposal, world, receiptHead };
+      } finally {
+        spy.mockRestore();
+      }
+    };
+    const blocked = run(1_000);
+    expect(blocked.proposal).toMatchObject({
+      ok: false,
+      error: "market_base_canary_suspension_requires_terminal_attempt",
+    });
+    const incomplete = run(0, true);
+    expect(incomplete.proposal).toMatchObject({
+      ok: false,
+      error: "market_base_canary_suspension_requires_terminal_attempt",
+    });
+    const allowed = run(0);
+    expect(allowed.proposal.error).toBeUndefined();
+    expect(allowed.proposal.ok).toBe(true);
+    expect(acceptMarketBaseResourcePermit(allowed.proposal.proposalId!)).toMatchObject({ ok: true });
+    const after = (Memory.data!.marketSaleAutomation as {
+      directAutomation: { baseResourceV3: MarketBaseResourceV3RuntimeState };
+    }).directAutomation.baseResourceV3;
+    const permit = after.permitChain!.retainedPermits[after.permitChain!.retainedPermits.length - 1];
+    const grant = permit.schemaVersion === 3
+      ? permit.signedLaneGrants.find((entry) => entry.laneId === allowed.world.canaryLaneId)
+      : undefined;
+    expect(grant).toMatchObject({ stage: "canary", newDealGrant: "suspended" });
+    expect(after.ledger!.receiptHeadHash).toBe(allowed.receiptHead);
+    expect(after.ledger!.pending).toBeUndefined();
   });
 });
