@@ -2,6 +2,7 @@ import { hasSourceAdjacentLink } from "@/runtime/sourceLink";
 import { isRoomInReserveMode } from "@/runtime/roomReserve";
 import { peekWorkerTasksByRoom } from "@/runtime/workerTaskPool";
 import { formatRoomWorkforceConfigName } from "@/runtime/roomWorkforceIdentity";
+import { shouldPauseNativeMineralHarvest } from "@/runtime/mineralHarvestPolicy";
 
 const DEFAULT_WORKER_MAX = 8;
 const DEFAULT_WORKER_BASE = 1;
@@ -70,7 +71,10 @@ function isMineralEligibleForHarvest(mineral: Mineral): boolean {
 export function getEligibleMineralIds(room: Room): Id<Mineral>[] {
   return room
     .find(FIND_MINERALS)
-    .filter((mineral) => isMineralEligibleForHarvest(mineral))
+    .filter((mineral) =>
+      isMineralEligibleForHarvest(mineral) &&
+      !shouldPauseNativeMineralHarvest(room, mineral.mineralType),
+    )
     .map((mineral) => mineral.id);
 }
 

@@ -1,6 +1,7 @@
 import type { RoleFactory } from "@/types/system";
 import { moveToTarget } from "@/roles/shared";
 import { measureCreepIntent } from "@/runtime/cpuPhaseProfiler";
+import { shouldPauseNativeMineralHarvest } from "@/runtime/mineralHarvestPolicy";
 
 function getMineral(mineralId?: string): Mineral | null {
   if (!mineralId) {
@@ -22,6 +23,9 @@ export const mineralHarvesterRole: RoleFactory = (mineralId?: string) => ({
   source: (creep): boolean => {
     const mineral = getMineral(mineralId);
     if (!mineral || mineral.mineralAmount <= 0) {
+      return false;
+    }
+    if (shouldPauseNativeMineralHarvest(creep.room, mineral.mineralType)) {
       return false;
     }
 

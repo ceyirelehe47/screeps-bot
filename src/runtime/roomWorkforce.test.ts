@@ -23,6 +23,7 @@ function createMineral(
     hasExtractor?: boolean;
     hasContainer?: boolean;
     amount?: number;
+    mineralType?: MineralConstant;
   } = {},
 ): Mineral {
   const structures: Structure[] = [];
@@ -36,6 +37,7 @@ function createMineral(
   return {
     id,
     mineralAmount: options.amount ?? 1000,
+    mineralType: options.mineralType ?? RESOURCE_UTRIUM,
     pos: {
       findInRange: () => structures,
     } as unknown as RoomPosition,
@@ -291,6 +293,21 @@ describe("roomWorkforce", () => {
       "W1N5:carrier:0",
       "W1N5:worker:0",
     ]);
+  });
+
+  it("stops scheduling a replacement harvester while native X stock is over the buffer", () => {
+    const room = createRoom({
+      minerals: [createMineral("mineral-x", {
+        mineralType: RESOURCE_CATALYST,
+        hasExtractor: true,
+        hasContainer: true,
+      })],
+    });
+    room.storage = {
+      store: { getUsedCapacity: () => 300_000 },
+    } as unknown as StructureStorage;
+
+    expect(getInventoryConfigNames(room)).not.toContain("W1N1:mineralHarvester:mineral-x");
   });
 
   it("keeps inventory observation pure until effects apply and preserves Reserve state", () => {

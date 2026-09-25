@@ -5,6 +5,7 @@ import {
   type CarrierTaskStep,
 } from "@/runtime/carrierTaskBoard";
 import { getTickContextService } from "@/runtime/runtimeServices";
+import { shouldPauseNativeMineralHarvest } from "@/runtime/mineralHarvestPolicy";
 
 const MINERAL_EXTRACTION_CARRIER_TASK_PRODUCER = "mineralExtraction";
 const MINERAL_EXTRACTION_SAMPLE_INTERVAL = 10;
@@ -63,6 +64,7 @@ function createRoomTasks(room: Room): CarrierTaskDraft[] {
   const tasks: CarrierTaskDraft[] = [];
   for (const mineral of minerals) {
     const resource = mineral.mineralType;
+    if (shouldPauseNativeMineralHarvest(room, resource)) continue;
     const container = getAdjacentMineralContainer(mineral);
     if (!container || !hasExtractor(mineral)) {
       continue;

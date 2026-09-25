@@ -5,7 +5,7 @@ jest.mock("@/roles/shared", () => ({
   moveToTarget: jest.fn(),
 }));
 
-function createMineral(id: string): Mineral {
+function createMineral(id: string, mineralType: MineralConstant = RESOURCE_UTRIUM): Mineral {
   let freeCapacity = 1000;
   const container = {
     id: `${id}-container`,
@@ -23,7 +23,7 @@ function createMineral(id: string): Mineral {
   return {
     id,
     mineralAmount: 2000,
-    mineralType: RESOURCE_UTRIUM,
+    mineralType,
     pos: {
       x: 11,
       y: 10,
@@ -75,5 +75,22 @@ describe("mineralHarvesterRole", () => {
     expect(role.source?.(creep)).toBe(false);
     expect(creep.harvest).toHaveBeenCalledWith(mineral);
     expect(role.target(creep)).toBe(false);
+  });
+
+  it("does not harvest or move toward X when protected room stock already exceeds the production buffer", () => {
+    const mineral = createMineral("mineral-x", RESOURCE_CATALYST);
+    (Game as Game & { getObjectById: Game["getObjectById"] }).getObjectById = jest.fn(() => mineral) as Game["getObjectById"];
+    const creep = {
+      room: {
+        storage: { store: { getUsedCapacity: () => 2_942_223 } },
+        terminal: { store: { getUsedCapacity: () => 1_408 } },
+      },
+      pos: { isEqualTo: () => true },
+      harvest: jest.fn(() => OK),
+    } as unknown as Creep;
+
+    expect(mineralHarvesterRole(mineral.id).source?.(creep)).toBe(false);
+    expect(creep.harvest).not.toHaveBeenCalled();
+    expect(moveToTarget).not.toHaveBeenCalled();
   });
 });
