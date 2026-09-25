@@ -1,6 +1,7 @@
 import {
   acceptMarketBaseResourcePermit,
   acceptMarketDirectContinuousPermit,
+  marketBaseResourceActivationPendingHighWaterValid,
   proposeMarketBaseResourcePermit,
   proposeMarketDirectContinuousPermit,
   resolveMarketSaleOrderDisappearance,
@@ -395,6 +396,12 @@ function proposeMarketBaseV3CutoverFixture(): string {
 
 
 describe("marketSaleAutomation 编排", () => {
+  it("允许 receipt_written 保留 pending 的合法高水位，拒绝倒退和越界", () => {
+    expect(marketBaseResourceActivationPendingHighWaterValid(7, 6, 8)).toBe(true);
+    expect(marketBaseResourceActivationPendingHighWaterValid(7, 7, 8)).toBe(true);
+    expect(marketBaseResourceActivationPendingHighWaterValid(6, 7, 8)).toBe(false);
+    expect(marketBaseResourceActivationPendingHighWaterValid(8, 7, 8)).toBe(false);
+  });
   beforeEach(() => {
     clearMarketActionArbiterForTest();
     installMarket();

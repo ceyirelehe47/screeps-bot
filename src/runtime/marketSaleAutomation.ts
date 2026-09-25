@@ -1099,6 +1099,18 @@ export function advanceMarketBaseResourceActivationAnchor(
   };
 }
 
+export function marketBaseResourceActivationPendingHighWaterValid(
+  pendingAttemptSeq: number | null,
+  finalizedAttemptSeq: number,
+  nextAttemptSeq: number,
+): boolean {
+  return pendingAttemptSeq === null || (
+    Number.isSafeInteger(pendingAttemptSeq) &&
+    pendingAttemptSeq >= finalizedAttemptSeq &&
+    pendingAttemptSeq < nextAttemptSeq
+  );
+}
+
 function validateMarketBaseResourceActivationAnchor(
   value: unknown,
 ): value is MarketBaseResourceActivationAnchor {
@@ -1248,10 +1260,13 @@ function validateMarketBaseResourceActivationAnchor(
       (typeof anchor.ledger.pendingFrozenEvidenceHash !== "string" ||
         anchor.ledger.pendingFrozenEvidenceHash.length === 0 ||
         anchor.ledger.pendingFrozenEvidenceHash.length > 256)) ||
-    (anchor.ledger.pendingAttemptSeq !== null &&
-      (!Number.isSafeInteger(anchor.ledger.pendingAttemptSeq) ||
-        anchor.ledger.pendingAttemptSeq <= anchor.ledger.finalizedAttemptSeq ||
-        anchor.ledger.pendingAttemptSeq >= anchor.ledger.nextAttemptSeq)) ||
+    // receipt_written / processed_key_written 仍保留 pending，且 receipt
+    // 已把 finalizedAttemptSeq 推进到该 attempt。真正的倒退是严格小于。
+    !marketBaseResourceActivationPendingHighWaterValid(
+      anchor.ledger.pendingAttemptSeq,
+      anchor.ledger.finalizedAttemptSeq,
+      anchor.ledger.nextAttemptSeq,
+    ) ||
     !Number.isSafeInteger(anchor.ledger.prunedThroughAttemptSeq) ||
     anchor.ledger.prunedThroughAttemptSeq < 0 ||
     !Number.isSafeInteger(anchor.ledger.coverageStartTick) ||
@@ -2083,13 +2098,82 @@ function blockedMarketBaseRuntimeState(
   return base;
 }
 
+function recoverReceiptWrittenActivationValidationLatch(
+  data: MarketSaleDataState,
+  existing: MarketBaseResourceV3RuntimeState | undefined,
+): MarketBaseResourceV3RuntimeState | undefined {
+  const blocker = data.baseResourceV3ActivationBlocker;
+  const primary = data.baseResourceV3ActivationAnchor;
+  const mirror = data.baseResourceV3ActivationAnchorMirror;
+  const ledger = existing?.ledger;
+  const permitChain = existing?.permitChain;
+  const pending = ledger?.pending;
+  const receipt = ledger?.receipts[ledger.receipts.length - 1];
+  if (
+    !validateMarketBaseResourceActivationBlocker(blocker) ||
+    blocker.code !== "market_base_activation_anchor_invalid" ||
+    !existing ||
+    existing.blocker !== blocker.code ||
+    existing.hardBlocker !== undefined ||
+    !ledger ||
+    !permitChain ||
+    !pending ||
+    !receipt ||
+    ledger.finalizedAttemptSeq !== pending.attemptSeq ||
+    receipt.attemptSeq !== pending.attemptSeq ||
+    receipt.status !== "not_filled" ||
+    receipt.actualAmount !== 0 ||
+    receipt.reason !== "complete_window_and_physical_state_unchanged" ||
+    ledger.processedEvidenceKeys.some(
+      (entry) => entry.attemptSeq === pending.attemptSeq,
+    )
+  ) {
+    return undefined;
+  }
+  freezeMarketBaseOuterCanonicalValue(primary);
+  freezeMarketBaseOuterCanonicalValue(mirror);
+  if (
+    !validateMarketBaseResourceActivationAnchor(primary) ||
+    !validateMarketBaseResourceActivationAnchorMirror(mirror, primary) ||
+    primary.activationBlocker !== null ||
+    primary.updatedAt >= blocker.detectedAt ||
+    primary.ledger.pendingAttemptSeq !== pending.attemptSeq ||
+    primary.ledger.finalizedAttemptSeq !== pending.attemptSeq ||
+    primary.ledger.pendingFrozenEvidenceHash !== pending.frozenEvidenceHash ||
+    primary.ledger.receiptHeadHash !== ledger.receiptHeadHash ||
+    !validateMarketBaseResourceLedger(
+      ledger,
+      Game.time,
+      permitChain,
+    ).ok ||
+    !validateMarketBaseResourceLedgerRuntimeGate(
+      ledger,
+      permitChain,
+      primary.ledger,
+      Game.time,
+    ).ok
+  ) {
+    return undefined;
+  }
+  const recovered = { ...existing };
+  delete recovered.blocker;
+  return validateMarketBaseNestedActivationState(
+    recovered,
+    primary,
+    data.trustedFloors,
+    { allowTrustedFloorAdvance: true },
+  ) === undefined
+    ? recovered
+    : undefined;
+}
+
 function reconcileBaseResourceV3State(context: RunContext): {
   activeV3Successor: boolean;
   state?: MarketBaseResourceV3RuntimeState;
   ledgerRuntimeAnchor?: MarketBaseResourceLedgerRuntimeAnchor;
   readinessRuntimeCapability?: MarketBaseResourceReadinessRuntimeCapability;
 } {
-  const sourceDirect = context.data.directAutomation;
+  let sourceDirect = context.data.directAutomation;
   if (
     hasRegisteredMarketBaseResourceCanonicalRootThisTick() &&
     !isRegisteredMarketBaseResourceCanonicalRootThisTick(context.data)
@@ -2108,7 +2192,7 @@ function reconcileBaseResourceV3State(context: RunContext): {
   if (!isContinuousDirectState(sourceDirect)) {
     return { activeV3Successor: false };
   }
-  const existing = sourceDirect.baseResourceV3 as
+  let existing = sourceDirect.baseResourceV3 as
     MarketBaseResourceV3RuntimeState | undefined;
   const canonical = marketBaseResourceCanonicalRootProvenance.get(context.data);
   if (
@@ -2145,6 +2229,32 @@ function reconcileBaseResourceV3State(context: RunContext): {
       ledgerRuntimeAnchor: canonical.ledgerRuntimeAnchor,
       readinessRuntimeCapability: canonical.runtimeCapability,
     };
+  }
+  const recovered = recoverReceiptWrittenActivationValidationLatch(
+    context.data,
+    existing,
+  );
+  if (recovered) {
+    const source = context.data;
+    const nextDirect = { ...sourceDirect, baseResourceV3: recovered };
+    const nextData: MarketSaleDataState = {
+      ...source,
+      directAutomation: nextDirect,
+    };
+    delete nextData.baseResourceV3ActivationBlocker;
+    if (!commitExactContextMarketSaleData(context, source, nextData)) {
+      reject(context, "market_base_activation_recovery_cas_failed");
+      return {
+        activeV3Successor: true,
+        state: blockedMarketBaseRuntimeState(
+          existing,
+          context,
+          "market_base_activation_recovery_cas_failed",
+        ),
+      };
+    }
+    sourceDirect = nextDirect;
+    existing = recovered;
   }
   const activation = marketBaseResourceActivationState(context.data, existing);
   const failClosed = (
