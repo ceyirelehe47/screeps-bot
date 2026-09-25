@@ -7865,17 +7865,52 @@ function liveScopeForRead(
         quota,
       ]),
     );
+    const writableLaneIds = new Set(
+      scope.laneLifecycles
+        .filter((lane) => laneAllowsRuntimeWrite(session, executorShard, lane))
+        .map((lane) => lane.laneId),
+    );
+    const hasWritableLane = writableLaneIds.size > 0;
+    const writableCandidateKeys = new Set(
+      scope.laneLifecycles
+        .filter((lane) => writableLaneIds.has(lane.laneId))
+        .map((lane) =>
+          runtimeCandidateKey(lane.sellerRoomName, lane.resource),
+        ),
+    );
     const protectionRevisionByKey = new Map<string, string>();
+    const inventorySurplusByKey = new Map<string, number>();
     const candidateEvidence = candidates
       .map((candidate) => {
-        const protectionRevision = canonicalStableHashV1({
-          domain: "market-base-resource:protection-v1",
-          entry: candidate.protectionEntry,
-        });
+        const key = runtimeCandidateKey(
+          candidate.roomName,
+          candidate.resourceType,
+        );
+        const protectionComplete = candidateProtectionComplete(
+          candidate,
+          input.tick,
+        );
+        const inventorySurplus = protectionComplete
+          ? getMarketProtectionSellableAmount(
+              candidate.protectionEntry,
+              input.tick,
+              { requireTerminalBacking: false },
+            )
+          : 0;
+        // 可写 lane 存在时 Shadow cohort 本轮暂停：非可写条目仍 fresh
+        // 校验并承诺库存余量，但其完整保护树不参与任何成交/qualification。
+        const protectionRevision =
+          !hasWritableLane || writableCandidateKeys.has(key)
+            ? canonicalStableHashV1({
+                domain: "market-base-resource:protection-v1",
+                entry: candidate.protectionEntry,
+              })
+            : "market-base-resource:suspended-protection-unread-v1";
         protectionRevisionByKey.set(
-          runtimeCandidateKey(candidate.roomName, candidate.resourceType),
+          key,
           protectionRevision,
         );
+        inventorySurplusByKey.set(key, inventorySurplus);
         return {
           capacityState: candidate.capacityState,
           effectiveEnergyShadowPrice: candidate.effectiveEnergyShadowPrice,
@@ -7884,7 +7919,9 @@ function liveScopeForRead(
           effectiveNetFloor: candidate.effectiveNetFloor,
           historyFloor: candidate.historyFloor,
           historyTrusted: candidate.historyTrusted,
+          inventorySurplus,
           isHubRoom: candidate.isHubRoom,
+          protectionComplete,
           protectionRevision,
           ratchetFloor: candidate.ratchetFloor,
           rejectionReasons: [...candidate.rejectionReasons],
@@ -7971,7 +8008,7 @@ function liveScopeForRead(
           )
         ) {
           const resourceHasWritableLane = resourceLanes.some((lane) =>
-            laneAllowsRuntimeWrite(session, executorShard, lane),
+            writableLaneIds.has(lane.laneId),
           );
           if (!resourceHasWritableLane) {
             candidateIsolatedResources.add(resource);
@@ -7997,7 +8034,7 @@ function liveScopeForRead(
         energyPrice = candidate.effectiveEnergyShadowPrice;
       }
       const writableLane = resourceLanes.find((lane) =>
-        laneAllowsRuntimeWrite(session, executorShard, lane),
+        writableLaneIds.has(lane.laneId),
       );
       const currentGrant =
         writableLane &&
@@ -8020,11 +8057,12 @@ function liveScopeForRead(
         if (!laneQuota) {
           throw new Error(`market_base_v3_lane_quota_missing:${lane.laneId}`);
         }
-        const writable = laneAllowsRuntimeWrite(session, executorShard, lane);
-        const protectionComplete = candidateProtectionComplete(
-          candidate,
-          input.tick,
+        const key = runtimeCandidateKey(
+          candidate.roomName,
+          candidate.resourceType,
         );
+        const writable = writableLaneIds.has(lane.laneId);
+        const protectionComplete = candidateProtectionComplete(candidate, input.tick);
         return {
           laneId: lane.laneId,
           roomInstanceId: lane.roomInstanceId,
@@ -8038,23 +8076,16 @@ function liveScopeForRead(
           },
           protection: {
             complete: protectionComplete,
-            revision: protectionRevisionByKey.get(
-              runtimeCandidateKey(candidate.roomName, candidate.resourceType),
-            )!,
-            sellableAmount: protectionComplete
+            revision: protectionRevisionByKey.get(key)!,
+            sellableAmount: protectionComplete &&
+                (!hasWritableLane || writable)
               ? getMarketProtectionSellableAmount(
                   candidate.protectionEntry,
                   input.tick,
                 )
               : 0,
           },
-          inventorySurplus: protectionComplete
-            ? getMarketProtectionSellableAmount(
-                candidate.protectionEntry,
-                input.tick,
-                { requireTerminalBacking: false },
-              )
-            : 0,
+          inventorySurplus: inventorySurplusByKey.get(key) ?? 0,
           terminal: {
             revision: "market-base-resource:terminal-unread",
             normal: false,
@@ -8066,10 +8097,12 @@ function liveScopeForRead(
           },
           quota: {
             complete: true,
-            revision: canonicalStableHashV1({
-              domain: "market-base-resource:lane-quota-v1",
-              quota: laneQuota,
-            }),
+            revision: !hasWritableLane || writable
+              ? canonicalStableHashV1({
+                  domain: "market-base-resource:lane-quota-v1",
+                  quota: laneQuota,
+                })
+              : "market-base-resource:suspended-quota-unread-v1",
             roomRollingCap: laneQuota.room.limit,
             roomConfirmedAmount: laneQuota.room.confirmedActual,
             roomUnmatchedPlannedAmount: laneQuota.room.unmatchedPlanned,
