@@ -2798,6 +2798,10 @@ export const MARKET_BASE_BOOK_EMA_TICK_TIME_CONSTANT = 7_200;
 export const MARKET_BASE_BOOK_EMA_MAX_AGE_TICKS =
   MARKET_BASE_BOOK_EMA_TICK_TIME_CONSTANT * 2;
 
+/** 旧 observe 上浮报价的日锚不得成为 Direct 净价模型的执行地板。 */
+export const MARKET_BASE_DYNAMIC_FLOOR_MODEL_REVISION =
+  "direct-net-v2" as const;
+
 function marketBaseIsoDayNumber(date: string): number {
   return (
     Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10)) /
@@ -2866,6 +2870,7 @@ export interface MarketBaseDynamicFloorEntryState {
 
 export interface MarketBaseDynamicFloorState {
   readonly schemaVersion: 1;
+  readonly modelRevision: typeof MARKET_BASE_DYNAMIC_FLOOR_MODEL_REVISION;
   readonly updatedAt: number;
   readonly entries: readonly MarketBaseDynamicFloorEntryState[];
 }
@@ -2882,7 +2887,10 @@ export function marketBaseEnforcedDynamicFloors(
   projection: MarketBaseDynamicFloorState | undefined,
 ): Partial<Record<MarketBaseResource, number>> {
   const enforced: Partial<Record<MarketBaseResource, number>> = {};
-  if (!projection) return enforced;
+  if (
+    !projection ||
+    projection.modelRevision !== MARKET_BASE_DYNAMIC_FLOOR_MODEL_REVISION
+  ) return enforced;
   for (const entry of projection.entries) {
     if (
       MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[entry.resource]
@@ -2929,8 +2937,15 @@ export function buildMarketBaseDynamicFloorState(input: {
     Record<string, number | undefined>
   >;
 }): MarketBaseDynamicFloorState {
+  // 持久化的旧 observe 投影可以留作历史，但不能把旧 listingBuffer
+  // 锚点移植到新 Direct 净价模型。新模型仅从本次可信 book/保护后
+  // 盈余首次立锚；之后仍执行同一模型内的日降幅限制。
+  const previousState =
+    input.previous?.modelRevision === MARKET_BASE_DYNAMIC_FLOOR_MODEL_REVISION
+      ? input.previous
+      : undefined;
   const previousByResource = new Map(
-    (input.previous?.entries ?? []).map((entry) => [entry.resource, entry]),
+    (previousState?.entries ?? []).map((entry) => [entry.resource, entry]),
   );
   const priceByResource = new Map(
     input.bookBestPrices.map((entry) => [entry.resource, entry.price]),
@@ -3052,6 +3067,7 @@ export function buildMarketBaseDynamicFloorState(input: {
   });
   return {
     schemaVersion: 1,
+    modelRevision: MARKET_BASE_DYNAMIC_FLOOR_MODEL_REVISION,
     updatedAt: input.tick,
     entries,
   };

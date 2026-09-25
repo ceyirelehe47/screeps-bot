@@ -3,11 +3,13 @@ import {
   createMarketBaseSharedPolicy,
   MARKET_BASE_BOOK_EMA_MAX_AGE_TICKS,
   MARKET_BASE_BOOK_EMA_TICK_TIME_CONSTANT,
+  MARKET_BASE_DYNAMIC_FLOOR_MODEL_REVISION,
   MARKET_BASE_RESOURCE_FLOOR_BOOTSTRAP,
   MARKET_BASE_RESOURCE_CATALOG,
   MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE,
   buildMarketBaseDynamicFloorState,
   marketBaseDerivedLaneSetFingerprint,
+  marketBaseEnforcedDynamicFloors,
   reconcileMarketBaseDerivedLanes,
   reconcileMarketBaseSellerRooms,
   updateMarketBaseBookEma,
@@ -305,5 +307,25 @@ describe("Market Base 动态地板投影（bookEMA + 库存分量 + 日限幅）
     expect(xNoSurplus.inventoryFactor).toBe(0);
     // 无盈余时不折让，bookEMA 505 仍可作为动态观察值。
     expect(xNoSurplus.dynamicFloor).toBeCloseTo(505, 10);
+
+    // 旧 observe 上浮报价留下的 590 同日锚不得挟持新 Direct 净价模型。
+    const legacyObserve = {
+      ...xSeed,
+      modelRevision: undefined,
+    } as unknown as typeof xSeed;
+    expect(marketBaseEnforcedDynamicFloors(legacyObserve).X).toBeUndefined();
+    const migrated = buildMarketBaseDynamicFloorState({
+      previous: legacyObserve,
+      tick: 2_001,
+      marketDate: "2026-08-22",
+      bookBestPrices: [{ resource: "X", price: 448 }],
+      laneSurplus: [{ resource: "X", sellable: 100_000, rollingMax: 3_000 }],
+      ratchetFloorByResource: { X: 590 },
+    });
+    const migratedX = migrated.entries.find((entry) => entry.resource === "X")!;
+    expect(migrated.modelRevision).toBe(MARKET_BASE_DYNAMIC_FLOOR_MODEL_REVISION);
+    expect(migratedX.dynamicFloor).toBeCloseTo(448 * 0.85, 6);
+    expect(migratedX.dailyAnchor).toBeCloseTo(448 * 0.85, 6);
+    expect(marketBaseEnforcedDynamicFloors(migrated).X).toBeCloseTo(448 * 0.85, 3);
   });
 });
