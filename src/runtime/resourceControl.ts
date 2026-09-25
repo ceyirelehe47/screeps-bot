@@ -353,6 +353,7 @@ export type MarketTerminalEnergyReadinessBlocker =
   | "storage_energy_floor"
   | "production_energy_ownership"
   | "terminal_capacity"
+  | "terminal_in_flight"
   | "energy_offload_conflict"
   | "draft_invalid";
 
@@ -5708,7 +5709,8 @@ function createTerminalFeedTask(
   const missing = Math.min(
     storageAmount,
     terminalFree,
-    Math.max(0, targetStock - terminalAmount),
+    Math.max(0, targetStock - terminalAmount -
+      getLocalCarrierDestinationCommittedAmount(room.terminal.id, resource)),
   );
   if (missing <= 0) {
     return null;
@@ -6298,11 +6300,19 @@ function mergeMarketTerminalEnergyReadinessDraft(
     return true;
   }
 
+  const inFlightEnergy = getLocalCarrierDestinationCommittedAmount(
+    snapshot.terminal.id,
+    RESOURCE_ENERGY,
+  );
   const desiredFeedAmount = Math.max(
     0,
-    observation.desiredTerminalEnergy - snapshot.terminalEnergy,
+    observation.desiredTerminalEnergy - snapshot.terminalEnergy - inFlightEnergy,
   );
   if (desiredFeedAmount <= 0) {
+    if (snapshot.terminalEnergy < observation.desiredTerminalEnergy) {
+      blockMarketTerminalEnergyReadiness(observation, "terminal_in_flight");
+      return true;
+    }
     observation.status = "ready";
     observation.plannedFeedAmount = 0;
     delete observation.blocker;
@@ -6348,7 +6358,8 @@ function mergeMarketTerminalEnergyReadinessDraft(
     .filter((draft) => draft.type === "terminal_feed")
     .reduce((sum, draft) => sum + getCarrierDraftAmount(draft), 0);
   const projectedTerminalFree =
-    snapshot.terminalFreeCapacity - totalTerminalFeed;
+    snapshot.terminalFreeCapacity - totalTerminalFeed -
+    getLocalCarrierDestinationCommittedAmount(snapshot.terminal.id);
   const minimumTerminalFree = Math.max(
     MARKET_TERMINAL_ENERGY_MIN_FREE_CAPACITY,
     capacityConfig.terminalPressureFreeCapacity,

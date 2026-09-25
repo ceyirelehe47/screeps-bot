@@ -1140,16 +1140,18 @@ function pickupSynthesisCarrierResource(
     | null = null;
   let taskAmountClaim: CarrierAmountSliceClaim | null = null;
   const isTerminalOffload = assignment.task.type === "terminal_offload";
-  const isCapacityReliefPreload = isCapacityReliefTerminalPreloadTask(
+  // 任何 ResourceControl terminal feed 都可能由多名 carrier 同 tick
+  // 领取；普通生产补货与容量泄压使用同一数量和目标容量账本。
+  const isTerminalPreload = isResourceControlTerminalPreloadTask(
     assignment.task,
   );
   const requiresTaskAmountClaim = isTerminalOffload ||
-    isCapacityReliefPreload || (
+    isTerminalPreload || (
     isNukerEnergySupplyCarrierTask(assignment.task) &&
     assignment.step.resource === RESOURCE_ENERGY
   );
   const requiresDestinationCapacityClaim = isTerminalOffload ||
-    isCapacityReliefPreload;
+    isTerminalPreload;
   let claimRequestedAmount = withdrawAmount;
   let destinationTarget: AnyStoreStructure | null = null;
   if (requiresDestinationCapacityClaim) {

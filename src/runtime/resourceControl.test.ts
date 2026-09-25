@@ -20,6 +20,7 @@ import {
 import {
   clearMarketActionArbiterForTest,
 } from "@/runtime/marketActionArbiter";
+import { ensureCreepAssignmentState } from "@/runtime/creepAssignmentState";
 
 type RuntimeGlobal = typeof global & {
   __runtimeServices?: unknown;
@@ -278,6 +279,44 @@ describe("runResourceControl terminal feed tasks", () => {
       marketTerminalEnergyTarget: 26_000,
       desiredTerminalEnergy: 26_000,
       plannedFeedAmount: 2_347,
+      status: "feed_planned",
+    });
+  });
+
+  it("跨 tick 普通 terminal feed 扣除已取货在途的同资源额度", () => {
+    const room = createRoom({
+      name: "E6N59",
+      storageResources: { [RESOURCE_ENERGY]: 300_000 },
+      terminalResources: {
+        [RESOURCE_ENERGY]: 23_653,
+        [RESOURCE_KEANIUM]: 231_449,
+      },
+    });
+    Game.rooms[room.name] = room;
+    Game.time = 20;
+    authorizeMarketTerminalEnergyReadiness(room, 2);
+    Game.creeps = {
+      "feed-carrier": {
+        name: "feed-carrier",
+        room,
+        store: {
+          getUsedCapacity: (resource?: ResourceConstant) =>
+            resource === RESOURCE_ENERGY || resource === undefined ? 800 : 0,
+        },
+      } as Creep,
+    };
+    const state = ensureCreepAssignmentState("feed-carrier");
+    state.synthesisCarrierPendingToId = room.terminal!.id;
+    state.synthesisCarrierPendingResource = RESOURCE_ENERGY;
+    runResourceControl();
+    expect(getCarrierTasksByRoom(room.name)[
+      `resourceControl:terminal_feed:${room.name}:${RESOURCE_ENERGY}`
+    ]).toMatchObject({
+      type: "terminal_feed",
+      steps: [expect.objectContaining({ amount: 1_547 })],
+    });
+    expect(getMarketEnergyReadinessObservation(room.name)).toMatchObject({
+      plannedFeedAmount: 1_547,
       status: "feed_planned",
     });
   });

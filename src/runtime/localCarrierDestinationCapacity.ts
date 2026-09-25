@@ -15,6 +15,7 @@ export interface LocalCarrierDestinationCapacityObservation {
 interface DestinationClaimRecord {
   claimantId: string;
   targetId: string;
+  resource?: ResourceConstant;
   amount: number;
   committed: boolean;
   seeded: boolean;
@@ -57,6 +58,7 @@ function seedCarrierCommitment(
   claimantId: string,
   targetId: string,
   amount: number,
+  resource?: ResourceConstant,
 ): boolean {
   const normalizedAmount = normalizeCapacity(amount);
   if (normalizedAmount <= 0) return false;
@@ -64,6 +66,7 @@ function seedCarrierCommitment(
   const record: DestinationClaimRecord = {
     claimantId,
     targetId,
+    ...(resource ? { resource } : {}),
     amount: normalizedAmount,
     committed: true,
     seeded: true,
@@ -84,6 +87,7 @@ function seedLiveCarrierCommitments(target: DestinationCapacityLedger): void {
         creep.name,
         snapshotTargetId,
         creep.store.getUsedCapacity(snapshotResource),
+        snapshotResource,
       )) {
         continue;
       }
@@ -270,6 +274,7 @@ export function claimLocalCarrierDestinationCapacity(params: {
   const record: DestinationClaimRecord = {
     claimantId: params.claimantId,
     targetId: params.target.id,
+    resource: params.resource,
     amount,
     committed: false,
     seeded: false,
@@ -304,8 +309,19 @@ export function claimLocalCarrierDestinationCapacity(params: {
 
 export function getLocalCarrierDestinationCommittedAmount(
   targetId: string,
+  resource?: ResourceConstant,
 ): number {
-  return ensureLedger().committedByTargetId.get(targetId) || 0;
+  const current = ensureLedger();
+  if (resource === undefined) return current.committedByTargetId.get(targetId) || 0;
+  let amount = 0;
+  for (const claim of current.claimByClaimantId.values()) {
+    // 未记录资源的普通投递按总量计入，宁可暂缓补货也不重复搬运。
+    if (claim.targetId === targetId &&
+        (claim.resource === undefined || claim.resource === resource)) {
+      amount += claim.amount;
+    }
+  }
+  return amount;
 }
 
 export function getLocalCarrierDestinationCapacityObservation(

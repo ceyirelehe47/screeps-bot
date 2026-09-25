@@ -452,6 +452,53 @@ describe("carrierRole mineral hauling", () => {
     getProtoControllerLinkContainer.mockReturnValue(null);
   }
 
+  it("普通 terminal feed 的两名 carrier 同 tick 合计不超过任务量", () => {
+    resetCarrierFixture();
+    const room = createRoom("W3N2");
+    const storage = room.storage as StructureStorage;
+    const terminal = room.terminal as StructureTerminal;
+    Object.assign(storage, {
+      room,
+      pos: { x: 10, y: 10, roomName: room.name },
+      store: {
+        getUsedCapacity: (resource?: ResourceConstant) =>
+          resource === RESOURCE_CATALYST ? 5_000 : 0,
+        getFreeCapacity: () => 1_000,
+      },
+    });
+    Object.assign(terminal, {
+      room,
+      pos: { x: 11, y: 10, roomName: room.name },
+      store: {
+        getUsedCapacity: () => 0,
+        getFreeCapacity: () => 5_000,
+      },
+    });
+    installCarrierTaskTestObjects([storage, terminal]);
+    replaceCarrierTasksForProducerRoom("resourceControl:preload", room.name, [{
+      id: `resourceControl:terminal_feed:${room.name}:${RESOURCE_CATALYST}`,
+      type: "terminal_feed",
+      priority: 80,
+      steps: [{
+        id: "X:storage->terminal",
+        resource: RESOURCE_CATALYST,
+        fromKind: "storage",
+        toKind: "terminal",
+        fromId: storage.id,
+        toId: terminal.id,
+        amount: 1_000,
+      }],
+    }]);
+    getEnergyStoreTarget.mockReturnValue(null);
+    const first = createCreep(room);
+    const second = { ...createCreep(room), name: "carrier-2", withdraw: jest.fn(() => OK) } as Creep;
+    Game.creeps = { [first.name]: first, [second.name]: second };
+    carrierRole().source?.(first);
+    carrierRole().source?.(second);
+    expect(first.withdraw).toHaveBeenCalledWith(storage, RESOURCE_CATALYST, 800);
+    expect(second.withdraw).toHaveBeenCalledWith(storage, RESOURCE_CATALYST, 200);
+  });
+
   beforeEach(resetCarrierFixture);
 
 

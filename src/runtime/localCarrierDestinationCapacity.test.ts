@@ -99,6 +99,8 @@ describe("localCarrierDestinationCapacity", () => {
     expect(first?.amount).toBe(800);
     expect(second?.amount).toBe(200);
     expect(getLocalCarrierDestinationCommittedAmount(storage.id)).toBe(1_000);
+    expect(getLocalCarrierDestinationCommittedAmount(storage.id, RESOURCE_HYDROGEN)).toBe(800);
+    expect(getLocalCarrierDestinationCommittedAmount(storage.id, RESOURCE_OXYGEN)).toBe(200);
 
     second?.release();
     expect(
