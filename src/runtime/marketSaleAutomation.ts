@@ -92,6 +92,7 @@ import {
   MARKET_BASE_RESOURCE_POLICIES,
   createMarketBaseSharedPolicy,
   isMarketBaseResource,
+  marketBaseEnforcedDynamicFloors,
   marketBaseDerivedLaneLifecycleCheckpointCommitment,
   migrateMarketBaseDerivedLanes,
   validateMarketBaseDerivedLaneLifecycle,
@@ -2752,10 +2753,11 @@ export interface MarketBaseResourcePermitRequest {
 
 export interface MarketBaseResourceContinuousReviewSnapshot {
   schemaVersion: 1;
-  hashRevision: "market-base-resource-continuous-review-v1";
+  hashRevision: "market-base-resource-continuous-review-v2";
   laneId: string;
   resource: MarketBaseResource;
   sellerRoom: string;
+  effectiveNetFloor: number;
   observedAt: number;
   sourceFreshThrough: number;
   confirmedCanary: {
@@ -2781,8 +2783,11 @@ export interface MarketBaseResourceContinuousReviewSnapshot {
   terminal: {
     terminalId: string;
     resourceAmount: number;
+    freeCapacity: number;
+    storageResourceAmount: number;
+    stagingShortfall: number;
     energy: number;
-    effectivePostDealEnergyReserve: number;
+    minimumReviewEnergyReserve: number;
     readinessRevision: string;
   };
   protection: {
@@ -2791,6 +2796,7 @@ export interface MarketBaseResourceContinuousReviewSnapshot {
     expiresAt: number;
     entryCommitment: string;
     sellableAmount: number;
+    totalSellableAmount: number;
     protectedAmount: number;
     productionDemand: number;
     protectedOutgoing: number;
@@ -8886,19 +8892,24 @@ function continuousReviewStablePayload(
     laneId: snapshot.laneId,
     resource: snapshot.resource,
     sellerRoom: snapshot.sellerRoom,
+    effectiveNetFloor: snapshot.effectiveNetFloor,
     confirmedCanary: snapshot.confirmedCanary,
     permit: snapshot.permit,
     ledger: snapshot.ledger,
     terminal: {
       terminalId: snapshot.terminal.terminalId,
       resourceAmount: snapshot.terminal.resourceAmount,
+      freeCapacity: snapshot.terminal.freeCapacity,
+      storageResourceAmount: snapshot.terminal.storageResourceAmount,
+      stagingShortfall: snapshot.terminal.stagingShortfall,
       energy: snapshot.terminal.energy,
-      effectivePostDealEnergyReserve:
-        snapshot.terminal.effectivePostDealEnergyReserve,
+      minimumReviewEnergyReserve:
+        snapshot.terminal.minimumReviewEnergyReserve,
     },
     protection: {
       entryCommitment: snapshot.protection.entryCommitment,
       sellableAmount: snapshot.protection.sellableAmount,
+      totalSellableAmount: snapshot.protection.totalSellableAmount,
       protectedAmount: snapshot.protection.protectedAmount,
       productionDemand: snapshot.protection.productionDemand,
       protectedOutgoing: snapshot.protection.protectedOutgoing,
@@ -8929,11 +8940,13 @@ function validateMarketBaseContinuousReviewSnapshot(
     value as unknown as MarketBaseResourceContinuousReviewSnapshot;
   if (
     snapshot.schemaVersion !== 1 ||
-    snapshot.hashRevision !== "market-base-resource-continuous-review-v1" ||
+    snapshot.hashRevision !== "market-base-resource-continuous-review-v2" ||
     typeof snapshot.laneId !== "string" ||
     snapshot.laneId.length === 0 ||
     snapshot.laneId.length > 256 ||
     !isMarketBaseResource(snapshot.resource) ||
+    !Number.isFinite(snapshot.effectiveNetFloor) ||
+    snapshot.effectiveNetFloor <= 0 ||
     typeof snapshot.sellerRoom !== "string" ||
     snapshot.sellerRoom.length === 0 ||
     snapshot.sellerRoom.length > 64 ||
@@ -8957,6 +8970,29 @@ function validateMarketBaseContinuousReviewSnapshot(
     !isPlainRecord(snapshot.terminal) ||
     !isPlainRecord(snapshot.protection) ||
     !isPlainRecord(snapshot.quota) ||
+    !Number.isSafeInteger(snapshot.terminal.freeCapacity) ||
+    snapshot.terminal.freeCapacity < 0 ||
+    !Number.isSafeInteger(snapshot.terminal.storageResourceAmount) ||
+    snapshot.terminal.storageResourceAmount < 0 ||
+    !Number.isSafeInteger(snapshot.terminal.stagingShortfall) ||
+    snapshot.terminal.stagingShortfall < 0 ||
+    !Number.isSafeInteger(snapshot.terminal.minimumReviewEnergyReserve) ||
+    snapshot.terminal.minimumReviewEnergyReserve < 25_000 ||
+    !Number.isSafeInteger(snapshot.protection.totalSellableAmount) ||
+    snapshot.protection.totalSellableAmount < 0 ||
+    !marketBaseContinuousReviewCargoReady({
+      terminalBackedSellable: snapshot.protection.sellableAmount,
+      totalSellable: snapshot.protection.totalSellableAmount,
+      terminalFreeCapacity: snapshot.terminal.freeCapacity,
+      storageResourceAmount: snapshot.terminal.storageResourceAmount,
+    }).ready ||
+    snapshot.terminal.stagingShortfall !==
+      marketBaseContinuousReviewCargoReady({
+        terminalBackedSellable: snapshot.protection.sellableAmount,
+        totalSellable: snapshot.protection.totalSellableAmount,
+        terminalFreeCapacity: snapshot.terminal.freeCapacity,
+        storageResourceAmount: snapshot.terminal.storageResourceAmount,
+      }).stagingShortfall ||
     typeof snapshot.stableReviewDigest !== "string" ||
     snapshot.stableReviewDigest.length === 0 ||
     snapshot.stableReviewDigest.length > 256
@@ -8968,6 +9004,30 @@ function validateMarketBaseContinuousReviewSnapshot(
     snapshot.stableReviewDigest ===
     sealMarketBaseContinuousReviewSnapshot(payload).stableReviewDigest
   );
+}
+
+export function marketBaseContinuousReviewCargoReady(input: {
+  terminalBackedSellable: number;
+  totalSellable: number;
+  terminalFreeCapacity: number;
+  storageResourceAmount: number;
+}): { ready: boolean; stagingShortfall: number } {
+  const required = 1_000;
+  const values = Object.values(input);
+  if (values.some((value) => !Number.isSafeInteger(value) || value < 0)) {
+    return { ready: false, stagingShortfall: required };
+  }
+  const stagingShortfall = Math.max(
+    0,
+    required - input.terminalBackedSellable,
+  );
+  return {
+    ready:
+      input.totalSellable >= required &&
+      input.terminalFreeCapacity >= stagingShortfall &&
+      input.storageResourceAmount >= stagingShortfall,
+    stagingShortfall,
+  };
 }
 
 function buildCurrentMarketBaseContinuousReviewSnapshot(
@@ -9019,10 +9079,13 @@ function buildCurrentMarketBaseContinuousReviewSnapshot(
   const ratchet = state.pricingRatchet?.entries.find(
     (candidate) => candidate.resource === lane.resource,
   );
+  const dynamicFloor = marketBaseEnforcedDynamicFloors(
+    state.dynamicFloorProjection,
+  )[lane.resource];
   const effectiveFloor = Math.max(
     policy?.hardFloor ?? Infinity,
     policy?.economicFloor ?? Infinity,
-    ratchet?.value ?? Infinity,
+    dynamicFloor ?? ratchet?.value ?? Infinity,
   );
   if (
     !policy ||
@@ -9039,12 +9102,8 @@ function buildCurrentMarketBaseContinuousReviewSnapshot(
   if (
     !terminal ||
     !terminal.owned ||
-    !terminal.ready ||
     terminal.cooldown !== 0 ||
-    !Number.isSafeInteger(terminal.effectivePostDealEnergyReserve) ||
-    (terminal.effectivePostDealEnergyReserve ?? -1) < 25_000 ||
-    terminal.energy < (terminal.effectivePostDealEnergyReserve ?? Infinity) ||
-    terminal.resourceAmount < 1_000
+    terminal.energy < policy.terminalEnergyReserve + policy.maxTransactionEnergy
   ) {
     throw new TypeError("market_base_continuous_review_terminal_not_ready");
   }
@@ -9068,11 +9127,31 @@ function buildCurrentMarketBaseContinuousReviewSnapshot(
     protectionLedger.entries[
       getMarketProtectionEntryKey(lane.sellerRoomName, lane.resource)
     ];
+  const liveRoom = Game.rooms[lane.sellerRoomName];
+  const physicalTerminal = liveRoom?.terminal;
+  const terminalFreeCapacity = physicalTerminal?.store.getFreeCapacity() ?? -1;
+  const storageResourceAmount =
+    liveRoom?.storage?.store.getUsedCapacity(lane.resource) ?? 0;
+  const terminalBackedSellable = protection
+    ? getMarketProtectionSellableAmount(protection, tick)
+    : 0;
+  const totalSellable = protection
+    ? getMarketProtectionSellableAmount(protection, tick, {
+        requireTerminalBacking: false,
+      })
+    : 0;
+  const cargoReady = marketBaseContinuousReviewCargoReady({
+    terminalBackedSellable,
+    totalSellable,
+    terminalFreeCapacity,
+    storageResourceAmount,
+  });
   if (
     protectionLedger.globalBlocked ||
     !protection ||
     !isMarketProtectionEntryFresh(protection, tick) ||
-    getMarketProtectionSellableAmount(protection, tick) < 1_000
+    physicalTerminal?.id !== terminal.terminalId ||
+    !cargoReady.ready
   ) {
     throw new TypeError("market_base_continuous_review_protection_incomplete");
   }
@@ -9111,10 +9190,11 @@ function buildCurrentMarketBaseContinuousReviewSnapshot(
     .sort((left, right) => left.dedupeKey.localeCompare(right.dedupeKey));
   return sealMarketBaseContinuousReviewSnapshot({
     schemaVersion: 1,
-    hashRevision: "market-base-resource-continuous-review-v1",
+    hashRevision: "market-base-resource-continuous-review-v2",
     laneId,
     resource: lane.resource,
     sellerRoom: lane.sellerRoomName,
+    effectiveNetFloor: effectiveFloor,
     observedAt: tick,
     sourceFreshThrough: protection.expiresAt,
     confirmedCanary: {
@@ -9140,8 +9220,13 @@ function buildCurrentMarketBaseContinuousReviewSnapshot(
     terminal: {
       terminalId: terminal.terminalId,
       resourceAmount: terminal.resourceAmount,
+      freeCapacity: terminalFreeCapacity,
+      storageResourceAmount,
+      stagingShortfall: cargoReady.stagingShortfall,
       energy: terminal.energy,
-      effectivePostDealEnergyReserve: terminal.effectivePostDealEnergyReserve!,
+      // 这是复核的策略最低储备；continuous 授权后正式 deal 仍重新读取
+      // ResourceControl 对生产与发送承诺的完整有效储备。
+      minimumReviewEnergyReserve: policy.terminalEnergyReserve,
       readinessRevision: terminal.revision,
     },
     protection: {
@@ -9169,7 +9254,8 @@ function buildCurrentMarketBaseContinuousReviewSnapshot(
         sellableAmount: protection.sellableAmount,
         contributions: contributionProjection,
       }),
-      sellableAmount: getMarketProtectionSellableAmount(protection, tick),
+      sellableAmount: terminalBackedSellable,
+      totalSellableAmount: totalSellable,
       protectedAmount: protection.protectedAmount,
       productionDemand: protection.productionDemand,
       protectedOutgoing: protection.protectedOutgoing,

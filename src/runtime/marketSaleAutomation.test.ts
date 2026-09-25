@@ -2,6 +2,7 @@ import {
   acceptMarketBaseResourcePermit,
   acceptMarketDirectContinuousPermit,
   marketBaseResourceActivationPendingHighWaterValid,
+  marketBaseContinuousReviewCargoReady,
   proposeMarketBaseResourcePermit,
   proposeMarketDirectContinuousPermit,
   resolveMarketSaleOrderDisappearance,
@@ -401,6 +402,26 @@ describe("marketSaleAutomation 编排", () => {
     expect(marketBaseResourceActivationPendingHighWaterValid(7, 7, 8)).toBe(true);
     expect(marketBaseResourceActivationPendingHighWaterValid(6, 7, 8)).toBe(false);
     expect(marketBaseResourceActivationPendingHighWaterValid(8, 7, 8)).toBe(false);
+  });
+  it("canary 成交后允许有保护余量和物理空位的货物补齐复核", () => {
+    expect(marketBaseContinuousReviewCargoReady({
+      terminalBackedSellable: 704,
+      totalSellable: 2_800_000,
+      terminalFreeCapacity: 26_184,
+      storageResourceAmount: 2_942_223,
+    })).toEqual({ ready: true, stagingShortfall: 296 });
+    expect(marketBaseContinuousReviewCargoReady({
+      terminalBackedSellable: 704,
+      totalSellable: 2_800_000,
+      terminalFreeCapacity: 0,
+      storageResourceAmount: 2_942_223,
+    }).ready).toBe(false);
+    expect(marketBaseContinuousReviewCargoReady({
+      terminalBackedSellable: 704,
+      totalSellable: 704,
+      terminalFreeCapacity: 26_184,
+      storageResourceAmount: 2_942_223,
+    }).ready).toBe(false);
   });
   beforeEach(() => {
     clearMarketActionArbiterForTest();
