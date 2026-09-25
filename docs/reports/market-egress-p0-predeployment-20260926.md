@@ -22,6 +22,7 @@
 ## 市场事实与故障分类
 
 - 请求与生效均为 `direct`，配置 revision `market-base-resource-v3-r3`，V3 共有八房七资源、56 条 lane。只有 `E6N59:X` 持有 `canary/enabled` 新成交签名，其余 lane 均为 suspended。旧 ResourceControl market seller 关闭，热修不启用第二个写入者。
+- 现役 `E6N59` 的 X 在 storage 约 71k、terminal 为 0，低于该 lane 不变的 100k 保护储备。故**唯一已授权 lane 目前没有可售余量**；即使 X 买价越过新底价也不能由它出货。其他房间的大宗库存必须按既有 permit 协议逐 lane 晋级，不能把「仅修价格」等同于已恢复真实成交。
 - V3 WAL 的 `pending=null`、quarantine=0、blocker=null；累计六笔已确认 X 成交，每笔 1,000。通过只读 money-history 核对，最近真实市场交易仍在 **2026-07-27**，价格约 683.814，本次调查没有执行市场动作。已确认历史与「近期正在出货」是两件事。
 - 当前 V3 单笔计划 1,000，全局滚动额度每 30,000 tick 12,000；room 5,000、lane 3,000，X 资源上限 8,000，确认后冷却 1,000 tick。监控里的 V3 quota 为 `null`，不能把旧 V2 的 quota 数字冒充当前实时可用额度。签名与规则共同决定有效额度，不能因看到 12,000 就假定所有房间可卖。
 - 最新完整 V3 planning（tick `73941369`）读到 40 个原始买单、0 个满足当轮资源与最小名义金额等条件的订单，`selected=null`、`blocker=null`；该轮抽样的 shadow 资源是 O，不代表 X 全市场无买单。现役 X 买价约 443.666 低于旧 X 硬底价 480 和旧最小订单名义额 480,000；这是价格和订单筛选缺口。`market_base_v3_not_full_planning_tick` 是调度诊断，不是完整 planning 故障。
