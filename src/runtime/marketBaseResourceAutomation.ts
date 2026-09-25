@@ -8094,22 +8094,32 @@ function liveScopeForRead(
         : canonicalLedger.pending
           ? "active"
           : "none";
+    // The runtime session has already authenticated the exact, deeply frozen
+    // scope; the permit head commits to the fully validated signed permit.
+    // Carry those commitments into each live read instead of serializing both
+    // large immutable trees again. Fresh candidates, quotas and write facts
+    // remain in the read-local evidence below, and the second read still
+    // independently checks their contents before a deal can be prepared.
+    const scopeCommitment =
+      scope === session.scopeContext?.snapshot
+        ? session.scopeContext.commitment
+        : marketBaseResourceRuntimeScopeCommitment(scope);
     const scopeEvidence = canonicalStableHashV1({
       arbiter,
       candidateEvidence,
-      domain: "market-base-resource:live-scope-v1",
+      domain: "market-base-resource:live-scope-v2",
       emergencyStop: input.emergencyStop,
       entries,
       ledgerHead: canonicalLedger.receiptHeadHash,
       makerExposurePresent: input.makerExposurePresent,
       outgoingWindow,
-      permit,
+      permitHead: permit.permitHead,
       pricingRatchet: {
         current: currentPricingRatchet,
         next: nextPricingRatchet,
       },
       quotas,
-      scope,
+      scopeCommitment,
       tick: input.tick,
     });
     return {
