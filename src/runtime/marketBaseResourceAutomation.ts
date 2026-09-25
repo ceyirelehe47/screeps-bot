@@ -7515,6 +7515,38 @@ function authenticatedStableMarketBaseResourceScope(
   return scope;
 }
 
+function sameMarketBaseQuotaLayer(
+  left: MarketBaseResourceQuotaSnapshot["global"],
+  right: MarketBaseResourceQuotaSnapshot["global"],
+): boolean {
+  return (
+    left.key === right.key &&
+    left.limit === right.limit &&
+    left.confirmedActual === right.confirmedActual &&
+    left.unmatchedPlanned === right.unmatchedPlanned &&
+    left.used === right.used &&
+    left.remaining === right.remaining
+  );
+}
+
+function sameMarketBasePricingBasis(
+  left: MarketBaseResourceRuntimeCandidate,
+  right: MarketBaseResourceRuntimeCandidate,
+): boolean {
+  return (
+    Object.is(left.effectiveNetFloor, right.effectiveNetFloor) &&
+    Object.is(left.historyFloor, right.historyFloor) &&
+    left.historyTrusted === right.historyTrusted &&
+    Object.is(left.ratchetFloor, right.ratchetFloor) &&
+    Array.isArray(left.rejectionReasons) &&
+    Array.isArray(right.rejectionReasons) &&
+    left.rejectionReasons.length === right.rejectionReasons.length &&
+    left.rejectionReasons.every(
+      (reason, index) => reason === right.rejectionReasons[index],
+    )
+  );
+}
+
 function liveScopeForRead(
   state: MarketBaseResourceV3RuntimeState,
   input: MarketBaseResourceAutomationInput,
@@ -7798,22 +7830,14 @@ function liveScopeForRead(
       ),
     );
     const firstQuota = quotas[0];
-    const globalQuotaEvidence = firstQuota
-      ? canonicalStableHashV1({
-          confirmedCooldownNotBefore: firstQuota.confirmedCooldownNotBefore,
-          global: firstQuota.global,
-          retryNotBefore: firstQuota.retryNotBefore,
-        })
-      : undefined;
     if (
       firstQuota &&
       quotas.some(
         (quota) =>
-          canonicalStableHashV1({
-            confirmedCooldownNotBefore: quota.confirmedCooldownNotBefore,
-            global: quota.global,
-            retryNotBefore: quota.retryNotBefore,
-          }) !== globalQuotaEvidence,
+          quota.confirmedCooldownNotBefore !==
+            firstQuota.confirmedCooldownNotBefore ||
+          quota.retryNotBefore !== firstQuota.retryNotBefore ||
+          !sameMarketBaseQuotaLayer(quota.global, firstQuota.global),
       )
     ) {
       return incomplete("market_base_v3_global_quota_conflict");
@@ -7826,8 +7850,10 @@ function liveScopeForRead(
         resourceQuotas.length > 1 &&
         resourceQuotas.some(
           (quota) =>
-            canonicalStableHashV1(quota.resourceQuota) !==
-            canonicalStableHashV1(resourceQuotas[0].resourceQuota),
+            !sameMarketBaseQuotaLayer(
+              quota.resourceQuota,
+              resourceQuotas[0].resourceQuota,
+            ),
         )
       ) {
         return incomplete(`market_base_v3_resource_quota_conflict:${resource}`);
@@ -7915,23 +7941,13 @@ function liveScopeForRead(
       }
       const typedResourceCandidates =
         resourceCandidates as MarketBaseResourceRuntimeCandidate[];
-      const pricingBasis = canonicalStableHashV1({
-        effectiveNetFloor: typedResourceCandidates[0].effectiveNetFloor,
-        historyFloor: typedResourceCandidates[0].historyFloor,
-        historyTrusted: typedResourceCandidates[0].historyTrusted,
-        ratchetFloor: typedResourceCandidates[0].ratchetFloor,
-        rejectionReasons: typedResourceCandidates[0].rejectionReasons,
-      });
       if (
         typedResourceCandidates.some(
           (candidate) =>
-            canonicalStableHashV1({
-              effectiveNetFloor: candidate.effectiveNetFloor,
-              historyFloor: candidate.historyFloor,
-              historyTrusted: candidate.historyTrusted,
-              ratchetFloor: candidate.ratchetFloor,
-              rejectionReasons: candidate.rejectionReasons,
-            }) !== pricingBasis,
+            !sameMarketBasePricingBasis(
+              candidate,
+              typedResourceCandidates[0],
+            ),
         )
       ) {
         return incomplete(
