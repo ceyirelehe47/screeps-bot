@@ -1648,6 +1648,7 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
   function installPastV3World(
     options: {
       armCanary?: boolean;
+      qualifiedSuspended?: boolean;
       persistentBlocker?: string;
       retireFirstLane?: boolean;
     } = {},
@@ -1707,10 +1708,11 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
       const canary = options.armCanary === true && lane.resource === RESOURCE_CATALYST;
       return {
         ...stable,
-        stage: canary ? ("canary" as const) : ("shadow" as const),
+        stage: canary ? ("canary" as const) :
+          options.qualifiedSuspended ? ("qualified" as const) : ("shadow" as const),
         status: canary ? ("writable" as const) : ("suspended" as const),
         shadowEvidence: {
-          completeCycles: canary ? 100 : 42,
+          completeCycles: canary || options.qualifiedSuspended ? 100 : 42,
           lastCompleteTick: 99,
           evidenceDigest: v3Digest("past-lane-evidence"),
         },
@@ -1820,7 +1822,7 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
         }),
     });
     let effectiveLedger = ledger;
-    if (options.armCanary || retiredLane) {
+    if (options.armCanary || options.qualifiedSuspended || retiredLane) {
       // canary 授权与 lane 退役都由 successor permit 承载（首张 v3
       // permit 必须全 shadow+suspended active），并 rebind ledger anchor。
       const grants = [
@@ -1843,7 +1845,7 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
               })
             : buildMarketBaseResourceSignedLaneGrant({
                 lane,
-                stage: "shadow",
+                stage: lane.stage,
               }),
         ),
       ];
@@ -2118,7 +2120,7 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
   expect(result.error).toContain("base_resource");
 
     { // --- 已授权 canary 原位重签，不要求先成交 ---
-  const world = installPastV3World({ armCanary: true });
+  const world = installPastV3World({ armCanary: true, qualifiedSuspended: true });
   const before = (Memory.data!.marketSaleAutomation as {
     directAutomation: { baseResourceV3: MarketBaseResourceV3RuntimeState };
   }).directAutomation.baseResourceV3;
@@ -2147,6 +2149,12 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     : undefined;
   expect(lane).toMatchObject({ stage: "canary", status: "writable" });
   expect(grant).toMatchObject({ stage: "canary", newDealGrant: "enabled" });
+  const qualified = after.scope!.laneLifecycles.find((entry) => entry.laneId !== world.canaryLaneId);
+  const qualifiedGrant = permit?.schemaVersion === 3
+    ? permit.signedLaneGrants.find((entry) => entry.laneId === qualified?.laneId)
+    : undefined;
+  expect(qualified).toMatchObject({ stage: "qualified", status: "suspended" });
+  expect(qualifiedGrant).toMatchObject({ stage: "qualified", newDealGrant: "suspended" });
   expect(after.ledger!.receiptHeadHash).toBe(receiptHead);
   expect(after.ledger!.lifetimeConfirmed).toEqual(confirmed);
 

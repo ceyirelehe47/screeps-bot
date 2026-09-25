@@ -2685,8 +2685,8 @@ function stageRank(stage: MarketBaseLaneStage): number {
   }
 }
 
-/** 策略重签只延续原 canary 权限，不接受新 lane 或更高成交额度。 */
-function isPreservedCanaryPolicyMigration(
+/** 策略重签只延续原 qualified/canary 状态，不接受新 lane 或更高成交额度。 */
+function isPreservedPolicyMigrationGrant(
   prior: MarketBaseResourcePermit,
   next: MarketBaseResourcePermit,
   old: MarketBaseResourceSignedLaneGrant | undefined,
@@ -2696,8 +2696,12 @@ function isPreservedCanaryPolicyMigration(
     !old ||
     prior.sharedPolicy.fingerprint === next.sharedPolicy.fingerprint ||
     old.status !== "active" || grant.status !== "active" ||
-    old.stage !== "canary" || grant.stage !== "canary" ||
-    old.newDealGrant !== "enabled" || grant.newDealGrant !== "enabled" ||
+    old.stage !== grant.stage ||
+    old.newDealGrant !== grant.newDealGrant ||
+    !(
+      (old.stage === "qualified" && old.newDealGrant === "suspended") ||
+      (old.stage === "canary" && old.newDealGrant === "enabled")
+    ) ||
     !sameCanonical({
       laneId: old.laneId, resource: old.resource,
       resourcePolicyId: old.resourcePolicyId,
@@ -2744,10 +2748,13 @@ function isPreservedCanaryPolicyMigration(
     maxTransactionEnergy: policy.maxTransactionEnergy,
     terminalEnergyReserve: policy.terminalEnergyReserve,
   });
+  if (!sameCanonical(executionShape(oldPolicy), executionShape(newPolicy))) {
+    return false;
+  }
+  if (old.stage === "qualified") return true;
   const oldQualification = evidenceFor(prior, old.laneId, "shadow_qualification");
   const newQualification = evidenceFor(next, grant.laneId, "shadow_qualification");
-  return sameCanonical(executionShape(oldPolicy), executionShape(newPolicy)) &&
-    oldQualification?.digest === old.lifecycleEvidenceDigest &&
+  return oldQualification?.digest === old.lifecycleEvidenceDigest &&
     newQualification?.digest === grant.lifecycleEvidenceDigest;
 }
 
@@ -2900,7 +2907,7 @@ function validateGrantTransition(
       return "tombstoned_grant_rewrite";
     }
     if (identityChanged) {
-      if (isPreservedCanaryPolicyMigration(prior, next, old, grant)) {
+      if (isPreservedPolicyMigrationGrant(prior, next, old, grant)) {
         continue;
       }
       if (grant.stage !== "shadow" || grant.newDealGrant !== "suspended") {
