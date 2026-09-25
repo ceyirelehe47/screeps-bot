@@ -7836,22 +7836,33 @@ function liveScopeForRead(
         quota,
       ]),
     );
+    const protectionRevisionByKey = new Map<string, string>();
     const candidateEvidence = candidates
-      .map((candidate) => ({
-        capacityState: candidate.capacityState,
-        effectiveEnergyShadowPrice: candidate.effectiveEnergyShadowPrice,
-        energyShadowComponents: candidate.energyShadowComponents,
-        energyShadowObservedAt: candidate.energyShadowObservedAt,
-        effectiveNetFloor: candidate.effectiveNetFloor,
-        historyFloor: candidate.historyFloor,
-        historyTrusted: candidate.historyTrusted,
-        isHubRoom: candidate.isHubRoom,
-        protectionEntry: candidate.protectionEntry,
-        ratchetFloor: candidate.ratchetFloor,
-        rejectionReasons: [...candidate.rejectionReasons],
-        resourceType: candidate.resourceType,
-        roomName: candidate.roomName,
-      }))
+      .map((candidate) => {
+        const protectionRevision = canonicalStableHashV1({
+          domain: "market-base-resource:protection-v1",
+          entry: candidate.protectionEntry,
+        });
+        protectionRevisionByKey.set(
+          runtimeCandidateKey(candidate.roomName, candidate.resourceType),
+          protectionRevision,
+        );
+        return {
+          capacityState: candidate.capacityState,
+          effectiveEnergyShadowPrice: candidate.effectiveEnergyShadowPrice,
+          energyShadowComponents: candidate.energyShadowComponents,
+          energyShadowObservedAt: candidate.energyShadowObservedAt,
+          effectiveNetFloor: candidate.effectiveNetFloor,
+          historyFloor: candidate.historyFloor,
+          historyTrusted: candidate.historyTrusted,
+          isHubRoom: candidate.isHubRoom,
+          protectionRevision,
+          ratchetFloor: candidate.ratchetFloor,
+          rejectionReasons: [...candidate.rejectionReasons],
+          resourceType: candidate.resourceType,
+          roomName: candidate.roomName,
+        };
+      })
       .sort(
         (left, right) =>
           stableCompare(left.resourceType, right.resourceType) ||
@@ -8008,10 +8019,9 @@ function liveScopeForRead(
           },
           protection: {
             complete: protectionComplete,
-            revision: canonicalStableHashV1({
-              domain: "market-base-resource:protection-v1",
-              entry: candidate.protectionEntry,
-            }),
+            revision: protectionRevisionByKey.get(
+              runtimeCandidateKey(candidate.roomName, candidate.resourceType),
+            )!,
             sellableAmount: protectionComplete
               ? getMarketProtectionSellableAmount(
                   candidate.protectionEntry,
@@ -8103,43 +8113,43 @@ function liveScopeForRead(
         : canonicalLedger.pending
           ? "active"
           : "none";
-    // The runtime session has already authenticated the exact, deeply frozen
-    // scope; the permit head commits to the fully validated signed permit.
-    // Carry those commitments into each live read instead of serializing both
-    // large immutable trees again. Fresh candidates, quotas and write facts
-    // remain in the read-local evidence below, and the second read still
-    // independently checks their contents before a deal can be prepared.
+    // session 承诺完整冻结 scope、ledger 与 permit；本读证据只需绑定这些
+    // 既有承诺和每次 fresh 读取的候选/arbiter/outgoing/ratchet。entry 与
+    // quota 是上述冻结状态、catalog 常量及候选的确定性投影，重复深哈希
+    // 整份 56-lane 派生树只会占用可写 lane 的两读 CPU 预算。
     const scopeCommitment =
       scope === session.scopeContext?.snapshot
         ? session.scopeContext.commitment
         : marketBaseResourceRuntimeScopeCommitment(scope);
-    const scopeEvidence = measureMarketSubPhase("v3ScopeEvidenceHash", () => canonicalStableHashV1({
-      arbiter,
-      candidateEvidence,
-      domain: "market-base-resource:live-scope-v2",
-      emergencyStop: input.emergencyStop,
-      entries,
-      ledgerHead: canonicalLedger.receiptHeadHash,
-      makerExposurePresent: input.makerExposurePresent,
-      outgoingWindow,
-      permitHead: permit.permitHead,
-      pricingRatchet: {
-        current: currentPricingRatchet,
-        next: nextPricingRatchet,
-      },
-      quotas,
-      scopeCommitment,
-      tick: input.tick,
-    }));
+    const scopeEvidence = measureMarketSubPhase(
+      "v3ScopeEvidenceHash",
+      () =>
+        canonicalStableHashV1({
+          arbiter,
+          candidateEvidence,
+          domain: "market-base-resource:live-scope-v3",
+          emergencyStop: input.emergencyStop,
+          ledgerHead: canonicalLedger.receiptHeadHash,
+          makerExposurePresent: input.makerExposurePresent,
+          outgoingWindow,
+          permitHead: permit.permitHead,
+          pricingRatchet: {
+            current: currentPricingRatchet,
+            next: nextPricingRatchet,
+          },
+          scopeCommitment,
+          tick: input.tick,
+        }),
+    );
     return {
       complete: true,
       scopeEvidence,
       currentRosterFingerprint: scope.rosterFingerprint,
       currentLaneSetFingerprint: scope.laneSetFingerprint,
       protectionFingerprint: canonicalStableHashV1({
-        domain: "market-base-resource:scope-protection-v1",
+        domain: "market-base-resource:scope-protection-v2",
         protection: candidateEvidence.map((candidate) => ({
-          protectionEntry: candidate.protectionEntry,
+          protectionRevision: candidate.protectionRevision,
           resourceType: candidate.resourceType,
           roomName: candidate.roomName,
         })),
