@@ -22,7 +22,7 @@ function createSource(id: string, roomName: string, hasLink = false): Source {
 
 function createMineral(
   id: string,
-  options: { hasExtractor?: boolean; hasContainer?: boolean; amount?: number } = {},
+  options: { hasExtractor?: boolean; hasContainer?: boolean; amount?: number; mineralType?: MineralConstant } = {},
 ): Mineral {
   const structures: Structure[] = [];
   if (options.hasExtractor) structures.push({ structureType: STRUCTURE_EXTRACTOR } as StructureExtractor);
@@ -30,6 +30,7 @@ function createMineral(
   return {
     id,
     mineralAmount: options.amount ?? 1000,
+    mineralType: options.mineralType ?? RESOURCE_UTRIUM,
     pos: { findInRange: () => structures } as unknown as RoomPosition,
   } as Mineral;
 }
@@ -157,6 +158,43 @@ describe("bootstrapRooms", () => {
     Game.time += 1;
     bootstrapRooms();
     expect(getCreepConfigService().get("W8N8:worker:1")).toBeUndefined();
+  });
+
+  it("orphans a live mineral harvester and clears its replacement queue when native stock is over the buffer", () => {
+    const room = createRoom({
+      minerals: [createMineral("mineral-x", {
+        hasExtractor: true,
+        hasContainer: true,
+        mineralType: RESOURCE_CATALYST,
+      })],
+    });
+    room.storage = {
+      store: { getUsedCapacity: () => 2_942_223 },
+    } as unknown as StructureStorage;
+    const configName = "W1N1:mineralHarvester:mineral-x";
+    const spawn = createSpawn(room, [configName, "manual:keep"]);
+    Game.rooms[room.name] = room;
+    Game.spawns.Spawn1 = spawn;
+    Memory.data = {
+      creepConfigs: {
+        [configName]: { role: "mineralHarvester", args: ["mineral-x"], roomName: room.name },
+      },
+    } as Memory["data"];
+    Game.creeps.mineralLive = {
+      name: "mineralLive",
+      room,
+      memory: { role: "mineralHarvester", configName },
+    } as unknown as Creep;
+
+    bootstrapRooms();
+
+    expect(getCreepConfigService().get(configName)?.roomName).toBeUndefined();
+    expect(spawn.memory.spawnList).toEqual(["manual:keep"]);
+
+    delete Game.creeps.mineralLive;
+    Game.time += 1;
+    bootstrapRooms();
+    expect(getCreepConfigService().get(configName)).toBeUndefined();
   });
 
   it("fails closed for reserved room types while RESERVE flags drain only worker ownership", () => {

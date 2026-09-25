@@ -20,12 +20,17 @@ function cleanupConfigsByPrefix(
   prefix: string,
   validConfigNames: Set<string>,
   tickContext: TickContextService,
+  orphanInvalidLiveConfig = false,
 ): void {
   const creepConfigs = getCreepConfigService();
   const configs = creepConfigs.list(`${roomName}:${prefix}:`);
   for (const configName of Object.keys(configs)) {
-    if (!validConfigNames.has(configName) && !hasLiveCreepForConfig(configName, tickContext)) {
+    if (validConfigNames.has(configName)) continue;
+    if (!hasLiveCreepForConfig(configName, tickContext)) {
       creepConfigs.remove(configName);
+    } else if (orphanInvalidLiveConfig) {
+      const config = creepConfigs.get(configName);
+      if (config) delete config.roomName;
     }
   }
 }
@@ -33,7 +38,7 @@ function cleanupConfigsByPrefix(
 function cleanupSourceConfigs(roomName: string, validConfigNames: Set<string>, tickContext: TickContextService): void {
   cleanupConfigsByPrefix(roomName, "harvester", validConfigNames, tickContext);
   cleanupConfigsByPrefix(roomName, "miner", validConfigNames, tickContext);
-  cleanupConfigsByPrefix(roomName, "mineralHarvester", validConfigNames, tickContext);
+  cleanupConfigsByPrefix(roomName, "mineralHarvester", validConfigNames, tickContext, true);
 }
 
 function cleanupWorkerConfigs(roomName: string, validConfigNames: Set<string>, tickContext: TickContextService): void {
