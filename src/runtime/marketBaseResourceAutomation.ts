@@ -41,6 +41,7 @@ import {
   type MarketDirectContinuousLedger,
 } from "@/runtime/marketDirectContinuousLedger";
 import type { MarketOrderSnapshot } from "@/runtime/marketSalePricing";
+import { measureMarketSubPhase } from "@/runtime/marketSaleDiagnostics";
 import {
   directSafetyFingerprint,
   MARKET_BASE_RESOURCE_CANONICAL_DIRECT_SAFETY_FINGERPRINT,
@@ -7777,18 +7778,21 @@ function liveScopeForRead(
     ) {
       return incomplete("market_base_v3_outgoing_window_incomplete");
     }
-    const quotas = marketBaseResourceQuotaProjectionWithRuntimeContext(
-      session.ledgerContext,
-      {
-        tick: input.tick,
-        lanes: scope.laneLifecycles.map((lane) => ({
-          resource: lane.resource,
-          sellerRoom: lane.sellerRoomName,
-          resourceLimit:
-            MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[lane.resource]
-              .rollingMaxAmount,
-        })),
-      },
+    const quotas = measureMarketSubPhase(
+      "v3QuotaRead",
+      () => marketBaseResourceQuotaProjectionWithRuntimeContext(
+        session.ledgerContext,
+        {
+          tick: input.tick,
+          lanes: scope.laneLifecycles.map((lane) => ({
+            resource: lane.resource,
+            sellerRoom: lane.sellerRoomName,
+            resourceLimit:
+              MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[lane.resource]
+                .rollingMaxAmount,
+          })),
+        },
+      ),
     );
     const firstQuota = quotas[0];
     const globalQuotaEvidence = firstQuota
@@ -8109,7 +8113,7 @@ function liveScopeForRead(
       scope === session.scopeContext?.snapshot
         ? session.scopeContext.commitment
         : marketBaseResourceRuntimeScopeCommitment(scope);
-    const scopeEvidence = canonicalStableHashV1({
+    const scopeEvidence = measureMarketSubPhase("v3ScopeEvidenceHash", () => canonicalStableHashV1({
       arbiter,
       candidateEvidence,
       domain: "market-base-resource:live-scope-v2",
@@ -8126,7 +8130,7 @@ function liveScopeForRead(
       quotas,
       scopeCommitment,
       tick: input.tick,
-    });
+    }));
     return {
       complete: true,
       scopeEvidence,
@@ -9111,7 +9115,7 @@ export function runMarketBaseResourceAutomation(
             dependencies,
             runtimeSession,
           );
-        return liveScopeForRead(
+        return measureMarketSubPhase("v3LiveScopeRead", () => liveScopeForRead(
           state,
           input,
           dependencies,
@@ -9119,7 +9123,7 @@ export function runMarketBaseResourceAutomation(
           staticReadAttestationResult,
           cpuTraceRecorder,
           liveScopeReadCount >= 2 ? 2 : 1,
-        );
+        ));
       },
       readCurrentBuyOrders: dependencies.readCurrentBuyOrders,
       readOwnOrders: dependencies.readOwnOrders,
