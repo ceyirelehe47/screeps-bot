@@ -3004,12 +3004,22 @@ export function buildMarketBaseDynamicFloorState(input: {
       bookEma !== null &&
       (!Number.isSafeInteger(latestObservedAt) ||
         input.tick - latestObservedAt > MARKET_BASE_BOOK_EMA_MAX_AGE_TICKS);
+    // 库存已远超保护量时，可信的当轮可执行买价下跌应立即反映到
+    // Direct 底价；EMA 继续平滑上行和一般库存。日跌幅、硬/经济底价
+    // 仍对下行设限，不能由不可执行小单或瞬时低价直接击穿。
+    const pricingBookReference =
+      bookEma !== null &&
+      observedPrice !== undefined &&
+      surplusRatio !== null &&
+      surplusRatio >= policy.surplusHigh
+        ? Math.min(bookEma, observedPrice)
+        : bookEma;
     const computation =
-      !emaStale && ratchet !== null && bookEma !== null
+      !emaStale && ratchet !== null && pricingBookReference !== null
         ? computeMarketBaseDynamicFloor({
             policy,
             ratchetFloor: ratchet,
-            bookEma,
+            bookEma: pricingBookReference,
             surplusRatio,
           })
         : null;
@@ -3022,7 +3032,8 @@ export function buildMarketBaseDynamicFloorState(input: {
         // 首次建立投影：当日首个投影值直接立锚，无限幅历史可比。
         dynamicFloor = computation.rawDynamicFloor;
       } else {
-        // 同日沿用当日锚；跨日限幅基准是前日锚，限幅后的投影成为新日锚。
+        // 同日始终沿用当日首次锚作为单日跌幅基准，不按观测次数叠降；
+        // 跨日限幅基准是前日锚，限幅后的投影成为新日锚。
         // 观测中断数日时按日序差叠加限幅（允许 N 日累积降幅），否则一次
         // 跨多日的恢复会跌穿本应逐日约束的下界。
         const dayGap = previous
@@ -3034,7 +3045,7 @@ export function buildMarketBaseDynamicFloorState(input: {
           previous: previousAnchor,
           maxDailyDynamicDrop: policy.maxDailyDynamicDrop,
           daysAdvanced: sameDay
-            ? 0
+            ? 1
             : Number.isSafeInteger(dayGap) && dayGap >= 1
               ? dayGap
               : 1,

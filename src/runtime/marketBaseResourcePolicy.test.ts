@@ -246,6 +246,34 @@ describe("Market Base 动态地板投影（bookEMA + 库存分量 + 日限幅）
     expect(hNext.dynamicFloor).toBeGreaterThanOrEqual(anchor * 0.85 - 1e-9);
     expect(hNext.dynamicFloor).toBeGreaterThanOrEqual(hPolicy.hardFloor);
 
+    // 大量 L 库存下，前一笔 279 买单已缩到不足 1,000，当前可执行
+    // 买价为 252。EMA 仍接近 279，但同日允许在首锚 15% 范围内响应
+    // 真实可执行买价，不能把旧高价锁成一整天的出货底线。
+    const lSeed = buildMarketBaseDynamicFloorState({
+      previous: undefined,
+      tick: 1_000,
+      marketDate: "2026-08-22",
+      bookBestPrices: [{ resource: "L", price: 279 }],
+      laneSurplus: [{ resource: "L", sellable: 500_000, rollingMax: 3_000 }],
+      ratchetFloorByResource: { L: 883 },
+    });
+    const lUpdated = buildMarketBaseDynamicFloorState({
+      previous: lSeed,
+      tick: 1_100,
+      marketDate: "2026-08-22",
+      bookBestPrices: [{ resource: "L", price: 252 }],
+      laneSurplus: [{ resource: "L", sellable: 500_000, rollingMax: 3_000 }],
+      ratchetFloorByResource: { L: 883 },
+    });
+    const lPrior = lSeed.entries.find((entry) => entry.resource === "L")!;
+    const lNow = lUpdated.entries.find((entry) => entry.resource === "L")!;
+    expect(lNow.bookEma).toBeGreaterThan(278);
+    expect(lNow.dynamicFloor).toBeCloseTo(
+      Math.max(252 * 0.85, lPrior.dailyAnchor * 0.85),
+      6,
+    );
+    expect(lNow.dailyAnchor).toBe(lPrior.dailyAnchor);
+
     // EMA 停滞超过两个时间常数（2τ=14400 tick）：df 降级 null（回退
     // ratchet 语义），EMA 状态与日锚保留。
     const stale = buildMarketBaseDynamicFloorState({
