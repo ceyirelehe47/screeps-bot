@@ -966,6 +966,45 @@ describe("Market Base V3 运行时重合同（高风险决策/WAL/证据隔离/o
       expect(result.actualTransactionEnergyEvaluations).toBe(4);
     }
 
+    // 可写 lane 存在时暂停 Shadow cohort：仍完整双读可写订单，保留
+    // Shadow cursor/资格证据，不让观察成本挤掉本轮实际出货预算。
+    {
+      const x = entry(RESOURCE_CATALYST, ["W2N2"], "writable");
+      const k = entry(RESOURCE_KEANIUM, ["W1N1"], "suspended_shadow");
+      const deps = dependencies({
+        scope: scope([x, k]),
+        books: {
+          [RESOURCE_CATALYST]: [
+            order("x-canary", RESOURCE_CATALYST, 700, 1_000, "E21S21"),
+          ],
+          [RESOURCE_KEANIUM]: [
+            order("k-shadow", RESOURCE_KEANIUM, 100, 1_000, "E20S20"),
+          ],
+        },
+      });
+      const cursor = "mbr-shadow-cursor-v2|K|lane:K:W1N1";
+      const result = planMarketBaseResourceTwoRead(deps, cursor);
+
+      expect(result.complete).toBe(true);
+      expect(result.selected).toMatchObject({
+        resourceType: RESOURCE_CATALYST,
+        order: { id: "x-canary" },
+      });
+      expect(result.sampledShadowLaneIds).toEqual([]);
+      expect(result.nextShadowCursor).toBe(cursor);
+      expect(result.shadowObservations).toEqual([]);
+      expect(
+        deps.readCurrentBuyOrders.mock.calls.filter(
+          ([resource]) => resource === RESOURCE_CATALYST,
+        ),
+      ).toHaveLength(2);
+      expect(
+        deps.readCurrentBuyOrders.mock.calls.filter(
+          ([resource]) => resource === RESOURCE_KEANIUM,
+        ),
+      ).toHaveLength(0);
+    }
+
     // 子场景 2：fresh runtime fixture，第二读只改变 protection contribution 也必须零写拒绝。
     {
       const { state, harness, deps, input } = v3RuntimeFixture();

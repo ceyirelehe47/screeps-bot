@@ -3765,7 +3765,15 @@ function collectFullRead(
   ) {
     return blockedFullRead(scope, "market_base_own_orders_invalid");
   }
-  const shadow = selectedShadowLaneIds(scope.entries, cursor);
+  // 有可写 lane 时优先完成其两次全量读取和交易准备。Shadow lane 仍在
+  // live scope/candidate/protection 中逐项读验，但本轮暂停 cohort 采样，
+  // 不消耗订单与 terminal 读取预算，也不推进 cursor 或资格周期。
+  const scopeHasWritableLane = scope.entries.some((entry) =>
+    entry.lanes.some((lane) => lane.lane.authorization === "writable"),
+  );
+  const shadow = scopeHasWritableLane
+    ? { selected: [] as string[], nextCursor: cursor }
+    : selectedShadowLaneIds(scope.entries, cursor);
   const sampledShadowSet = new Set(shadow.selected);
   const evaluatedShadowResourceCount = new Set(
     scope.entries
@@ -4007,9 +4015,6 @@ function collectFullRead(
     return value;
   };
 
-  const scopeHasWritableLane = scope.entries.some((entry) =>
-    entry.lanes.some((lane) => lane.lane.authorization === "writable"),
-  );
   const plannerEntries: MarketDirectContinuousEntryInput[] = [];
   const preparedShadowLanes: PreparedShadowPlanningLane[] = [];
   const shadowObservations: MarketBaseResourceShadowObservation[] = [];
