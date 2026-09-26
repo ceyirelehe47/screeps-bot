@@ -1,0 +1,14 @@
+{
+  "schema": "screeps-market-egress-r2-live-trial-verification/v1",
+  "status": "passed",
+  "deployedSha256": "0f13b0c4814686567e7ed3c72a3c22376a6b22ae304e02b3c17858763cfe0a4f",
+  "runId": "market-base-egress-r2-2026-09-26",
+  "startTick": 73958367,
+  "endReason": "capacity_recovered",
+  "heartbeats": 118,
+  "nativeCallsReserved": 0,
+  "newConfirmedSales": 0,
+  "finalizedAttemptSeq": 15,
+  "empireFreeChangeInMonitorWindow": 20048,
+  "terminalXAtBlocker": 0
+}

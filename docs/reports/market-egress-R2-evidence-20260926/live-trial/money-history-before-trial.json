@@ -1,0 +1,407 @@
+{
+  "ok": 1,
+  "page": 0,
+  "list": [
+    {
+      "_id": "6ab7ba21a2ce580013e7d91f",
+      "date": "2026-09-26T12:27:13.085Z",
+      "tick": 73957767,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 748817634.785,
+      "change": 267490,
+      "market": {
+        "resourceType": "L",
+        "roomName": "W36S33",
+        "targetRoomName": "E1N57",
+        "price": 267.49,
+        "npc": false,
+        "owner": "54dcbb939facf360034a39a2",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6ab79c3aa2ce580013dfe44b",
+      "date": "2026-09-26T10:19:38.819Z",
+      "tick": 73955752,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 748550144.785,
+      "change": 269540,
+      "market": {
+        "resourceType": "L",
+        "roomName": "E11N9",
+        "targetRoomName": "E1N57",
+        "price": 269.54,
+        "npc": false,
+        "owner": "5f5da9629ffefe4f2ffccbc1",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6ab78d42a2ce580013dc0449",
+      "date": "2026-09-26T09:15:46.255Z",
+      "tick": 73954752,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 748280604.785,
+      "change": 456774,
+      "market": {
+        "resourceType": "X",
+        "roomName": "E51N18",
+        "targetRoomName": "E4N58",
+        "price": 456.774,
+        "npc": false,
+        "owner": "578c55f93fd9069e6b589717",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6ab77d8ea2ce580013d80903",
+      "date": "2026-09-26T08:08:46.291Z",
+      "tick": 73953712,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 747823830.785,
+      "change": 447770,
+      "market": {
+        "resourceType": "X",
+        "roomName": "E49S23",
+        "targetRoomName": "E4N58",
+        "price": 447.77,
+        "npc": false,
+        "owner": "66c4529e47a51f0012dd7a7a",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6ab7175ba2ce580013bbe51f",
+      "date": "2026-09-26T00:52:43.272Z",
+      "tick": 73946742,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 747376060.785,
+      "change": 275599,
+      "market": {
+        "resourceType": "L",
+        "roomName": "E21S49",
+        "targetRoomName": "E1N57",
+        "price": 275.599,
+        "npc": false,
+        "owner": "583f3653b14a695e0d852d1b",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6ab708afa2ce580013b7b5ca",
+      "date": "2026-09-25T23:50:07.867Z",
+      "tick": 73945737,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 747100461.785,
+      "change": 452586,
+      "market": {
+        "resourceType": "X",
+        "roomName": "E51N18",
+        "targetRoomName": "E4N58",
+        "price": 452.586,
+        "npc": false,
+        "owner": "578c55f93fd9069e6b589717",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6ab6fa20a2ce580013b3842f",
+      "date": "2026-09-25T22:48:00.159Z",
+      "tick": 73944737,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 746647875.785,
+      "change": 452586,
+      "market": {
+        "resourceType": "X",
+        "roomName": "E51N18",
+        "targetRoomName": "E4N58",
+        "price": 452.586,
+        "npc": false,
+        "owner": "578c55f93fd9069e6b589717",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6ab6eb4ca2ce580013af3b91",
+      "date": "2026-09-25T21:44:44.537Z",
+      "tick": 73943717,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 746195289.785,
+      "change": 448104,
+      "market": {
+        "resourceType": "X",
+        "roomName": "E51N18",
+        "targetRoomName": "E4N58",
+        "price": 448.104,
+        "npc": false,
+        "owner": "578c55f93fd9069e6b589717",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6a6720e4656d08001320391a",
+      "date": "2026-07-27T09:12:04.606Z",
+      "tick": 72604730,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 745747185.785,
+      "change": 683814,
+      "market": {
+        "resourceType": "X",
+        "roomName": "E21S49",
+        "targetRoomName": "E6N59",
+        "price": 683.814,
+        "npc": false,
+        "owner": "583f3653b14a695e0d852d1b",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6a66df6e656d0800130f1f35",
+      "date": "2026-07-27T04:32:46.460Z",
+      "tick": 72600390,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 745063371.785,
+      "change": 676354,
+      "market": {
+        "resourceType": "X",
+        "roomName": "E51S9",
+        "targetRoomName": "E6N59",
+        "price": 676.354,
+        "npc": false,
+        "owner": "5844b76db14a695e0d8cae9d",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6a66b385656d080013037f44",
+      "date": "2026-07-27T01:25:25.365Z",
+      "tick": 72597480,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 744387017.785,
+      "change": 634275,
+      "market": {
+        "resourceType": "X",
+        "roomName": "E21S49",
+        "targetRoomName": "E6N59",
+        "price": 634.275,
+        "npc": false,
+        "owner": "583f3653b14a695e0d852d1b",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6a666d3a656d080013f115f1",
+      "date": "2026-07-26T20:25:30.318Z",
+      "tick": 72592990,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 743752742.785,
+      "change": 672121,
+      "market": {
+        "resourceType": "X",
+        "roomName": "E51S9",
+        "targetRoomName": "E6N59",
+        "price": 672.121,
+        "npc": false,
+        "owner": "5844b76db14a695e0d8cae9d",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6a6647fb656d080013e755a9",
+      "date": "2026-07-26T17:46:35.359Z",
+      "tick": 72590590,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 743080621.785,
+      "change": 672121,
+      "market": {
+        "resourceType": "X",
+        "roomName": "E51S9",
+        "targetRoomName": "E6N59",
+        "price": 672.121,
+        "npc": false,
+        "owner": "5844b76db14a695e0d8cae9d",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6a65f8e1656d080013d32206",
+      "date": "2026-07-26T12:09:05.871Z",
+      "tick": 72585530,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 742408500.785,
+      "change": 694963,
+      "market": {
+        "resourceType": "X",
+        "roomName": "E21S49",
+        "targetRoomName": "E6N59",
+        "price": 694.963,
+        "npc": false,
+        "owner": "583f3653b14a695e0d852d1b",
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 1000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6a64f77e656d080013906d61",
+      "date": "2026-07-25T17:50:54.099Z",
+      "tick": 72568900,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 741713537.785,
+      "change": 5960,
+      "market": {
+        "resourceType": "H",
+        "roomName": "W0S50",
+        "targetRoomName": "E3N59",
+        "price": 0.596,
+        "npc": true,
+        "owner": null,
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 10000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6a64c7c2656d080013840b5a",
+      "date": "2026-07-25T14:27:14.101Z",
+      "tick": 72565830,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 741707577.785,
+      "change": 1810,
+      "market": {
+        "resourceType": "H",
+        "roomName": "W0S60",
+        "targetRoomName": "E3N59",
+        "price": 0.181,
+        "npc": true,
+        "owner": null,
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 10000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6a649d9e656d08001379313b",
+      "date": "2026-07-25T11:27:26.077Z",
+      "tick": 72563150,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 741705767.785,
+      "change": 19000,
+      "market": {
+        "resourceType": "K",
+        "roomName": "E0N50",
+        "targetRoomName": "W1N57",
+        "price": 1.9,
+        "npc": true,
+        "owner": null,
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 10000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6a646f42656d0800136d94e4",
+      "date": "2026-07-25T08:09:38.207Z",
+      "tick": 72560210,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 741686767.785,
+      "change": 7740,
+      "market": {
+        "resourceType": "L",
+        "roomName": "W0N50",
+        "targetRoomName": "E7N58",
+        "price": 0.774,
+        "npc": true,
+        "owner": null,
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 10000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6a62edeb656d0800130994e2",
+      "date": "2026-07-24T04:45:31.863Z",
+      "tick": 72535430,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 741679027.785,
+      "change": 8600,
+      "market": {
+        "resourceType": "L",
+        "roomName": "W0N50",
+        "targetRoomName": "E7N58",
+        "price": 0.86,
+        "npc": true,
+        "owner": null,
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 10000
+      },
+      "shard": "shard1"
+    },
+    {
+      "_id": "6a6232ee656d080013d9f2f8",
+      "date": "2026-07-23T15:27:42.680Z",
+      "tick": 72523230,
+      "user": "634fe406347a7b69b28aeccb",
+      "type": "market.sell",
+      "balance": 741670427.785,
+      "change": 19440,
+      "market": {
+        "resourceType": "K",
+        "roomName": "E10N50",
+        "targetRoomName": "W1N57",
+        "price": 1.944,
+        "npc": true,
+        "owner": null,
+        "dealer": "634fe406347a7b69b28aeccb",
+        "amount": 10000
+      },
+      "shard": "shard1"
+    }
+  ],
+  "hasMore": true
+}

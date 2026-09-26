@@ -1,0 +1,16 @@
+{
+  "atUtc": "2026-09-26T12:48:38.051Z",
+  "localBytes": 4558659,
+  "remoteBytes": 4558659,
+  "localSha256": "0f13b0c4814686567e7ed3c72a3c22376a6b22ae304e02b3c17858763cfe0a4f",
+  "remoteSha256": "0f13b0c4814686567e7ed3c72a3c22376a6b22ae304e02b3c17858763cfe0a4f",
+  "matches": true,
+  "deployTag": "2026.8.29-6+f69f799@2026-09-26T12:48:09.938Z",
+  "bundleHash": "4bab22f3611830ae869297176d585db72e407d727488a5f437cbd854efe0dbc4",
+  "cfgRevision": "market-base-resource-v3-r6",
+  "permitEpoch": 16,
+  "receiptHead": "csh1:8ca735c4bdcdce158e8a379e175f4a5b",
+  "pending": null,
+  "finalizedSeq": 15,
+  "blocker": null
+}

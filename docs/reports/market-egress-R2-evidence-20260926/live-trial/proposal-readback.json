@@ -1,0 +1,18 @@
+{
+  "atUtc": "2026-09-26T12:49:59.218Z",
+  "proposalId": "csh1:9fcaa2f4052093c97cecf29a95017277",
+  "kind": "v3-policy-migration",
+  "sourceStateFingerprint": "csh1:dcda0ec3e4f8e6921cb9511d480f1f0a",
+  "targetPermitEpoch": 17,
+  "targetLedgerReceiptHead": "csh1:8ca735c4bdcdce158e8a379e175f4a5b",
+  "currentPermitEpoch": 16,
+  "receiptHead": "csh1:8ca735c4bdcdce158e8a379e175f4a5b",
+  "finalizedSeq": 15,
+  "pending": null,
+  "quarantine": 0,
+  "recentAudit": [
+    "market_base_permit_proposed:v3-policy-migration",
+    "market_base_permit_accepted:v3-policy-migration",
+    "market_base_permit_proposed:v3-policy-migration"
+  ]
+}

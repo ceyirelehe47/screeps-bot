@@ -1,0 +1,25 @@
+{
+  "atUtc": "2026-09-26T13:06:49.265Z",
+  "state": {
+    "schemaVersion": 1,
+    "runId": "market-base-egress-r2-2026-09-26",
+    "status": "active",
+    "startedAtTick": 73958367,
+    "endTick": 73961367,
+    "startedAtMs": 1790427990658,
+    "endMs": 1790431590658,
+    "controlUntilMs": 1790428050658,
+    "originalNotBefore": 73958767,
+    "permitId": "mbr-permit-v3:17:csh1:eed4ece99b5b6668b20a61c210ec050b",
+    "permitEpoch": 17,
+    "startAttemptSeq": 16,
+    "lastAttemptSeq": 15,
+    "callsReserved": 0,
+    "amountReserved": 0,
+    "lastReservedAtTick": 0,
+    "closeReason": "",
+    "hash": "csh1:438b068bef5e72002433d23c088da416"
+  },
+  "mirrorMatches": true,
+  "remainingControlMs": 41386
+}
