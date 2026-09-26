@@ -4135,21 +4135,10 @@ function collectFullRead(
           ? "market_base_terminal_incomplete"
           : "market_base_protection_incomplete";
         if (writable) {
-          return blockedFullRead(scope, `${blocker}:${lane.laneId}`, {
-            sampledShadowLaneIds: shadow.selected,
-            nextShadowCursor:
-              new Set(
-                shadowObservations.map((observation) => observation.laneId),
-              ).size === shadow.selected.length
-                ? shadow.nextCursor
-                : undefined,
-            shadowObservations,
-            rawOrderCount,
-            eligibleOrderCount,
-            distinctOrderRoomCount: evaluatedDistinctOrderRooms.size,
-            transactionCostEvaluationBudget,
-            ...currentShadowPlanningTelemetry(),
-          });
+          // 保护/终端证据只属于这个房间的出货资格。剔除该 lane 后
+          // 其库存不会进入 planner；其他房间继续使用原有双读、WAL 和
+          // 全域指纹校验。一次缺失的 H 保护快照不能饿死 X 的出货。
+          continue;
         }
         shadowObservations.push({
           laneId: lane.laneId,

@@ -967,6 +967,35 @@ describe("Market Base V3 运行时重合同（高风险决策/WAL/证据隔离/o
       expect(result.actualTransactionEnergyEvaluations).toBe(4);
     }
 
+    // H 房间保护账本未刷新时，只隔离 H；X 仍须完整双读才可成交。
+    {
+      const h = entry(RESOURCE_HYDROGEN, ["W1N1"], "writable");
+      const x = entry(RESOURCE_CATALYST, ["W2N2"], "writable");
+      h.lanes[0].protection.complete = false;
+      const deps = dependencies({
+        scope: scope([h, x]),
+        books: {
+          [RESOURCE_HYDROGEN]: [
+            order("h-blocked", RESOURCE_HYDROGEN, 900, 1_000, "E20S20"),
+          ],
+          [RESOURCE_CATALYST]: [
+            order("x-eligible", RESOURCE_CATALYST, 700, 1_000, "E21S21"),
+          ],
+        },
+      });
+      const result = planMarketBaseResourceTwoRead(deps);
+      expect(result.complete).toBe(true);
+      expect(result.selected).toMatchObject({
+        resourceType: RESOURCE_CATALYST,
+        order: { id: "x-eligible" },
+      });
+      expect(
+        deps.readCurrentBuyOrders.mock.calls.filter(
+          ([resource]) => resource === RESOURCE_CATALYST,
+        ),
+      ).toHaveLength(2);
+    }
+
     // 可写 lane 存在时暂停 Shadow cohort：仍完整双读可写订单，保留
     // Shadow cursor/资格证据，不让观察成本挤掉本轮实际出货预算。
     {
