@@ -249,6 +249,48 @@ describe("runResourceControl terminal feed tasks", () => {
     resourceControlReadinessDeriveSpy = undefined;
   });
 
+  it("终端已有可入库 Energy 时不重复跨房补货并占用卖货终端", () => {
+    const seller = createRoom({
+      name: "E4N58",
+      storageResources: { [RESOURCE_ENERGY]: 1_300_000 },
+      terminalResources: { [RESOURCE_ENERGY]: 140_000 },
+    });
+    const receiver = createRoom({
+      name: "E5N59",
+      storageResources: { [RESOURCE_ENERGY]: 170_000 },
+      terminalResources: { [RESOURCE_ENERGY]: 240_000 },
+    });
+    Game.rooms = { [seller.name]: seller, [receiver.name]: receiver };
+
+    runResourceControl();
+
+    expect(seller.terminal!.send).not.toHaveBeenCalled();
+    expect(receiver.terminal!.send).not.toHaveBeenCalled();
+  });
+
+  it("本地 Energy 总量确实不足时仍允许跨房补货", () => {
+    const donor = createRoom({
+      name: "E4N58",
+      storageResources: { [RESOURCE_ENERGY]: 1_300_000 },
+      terminalResources: { [RESOURCE_ENERGY]: 140_000 },
+    });
+    const receiver = createRoom({
+      name: "E5N59",
+      storageResources: { [RESOURCE_ENERGY]: 80_000 },
+      terminalResources: { [RESOURCE_ENERGY]: 20_000 },
+    });
+    Game.rooms = { [donor.name]: donor, [receiver.name]: receiver };
+
+    runResourceControl();
+
+    expect(donor.terminal!.send).toHaveBeenCalledWith(
+      RESOURCE_ENERGY,
+      expect.any(Number),
+      receiver.name,
+      expect.any(String),
+    );
+  });
+
   it("creates the exact E6 2,347 Energy readiness feed above the ordinary used-cap", () => {
     const room = createRoom({
       name: "E6N59",

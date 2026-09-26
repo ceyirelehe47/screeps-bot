@@ -8658,7 +8658,15 @@ export function runResourceControl(): void {
   const remainingEnergyNeedByRoom = new Map(
     snapshots.map((snapshot) => [
       snapshot.roomName,
-      Math.max(0, snapshot.energyTarget - snapshot.storageEnergy),
+      // Terminal 中超出手续费储备的 Energy 已在本房，可由 carrier 入库。
+      // 只看 Storage 会在 Terminal 积压时仍从别房补货，造成两房往返
+      // send 并连续占用卖货房间的 Terminal cooldown。
+      Math.max(
+        0,
+        snapshot.energyTarget -
+          snapshot.storageEnergy -
+          Math.max(0, snapshot.terminalEnergy - snapshot.terminalEnergyReserve),
+      ),
     ]),
   );
   if (!fullPlanningTick) {
