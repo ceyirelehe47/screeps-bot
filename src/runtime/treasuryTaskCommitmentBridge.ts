@@ -5,6 +5,8 @@ import {
   decodeTreasuryT1DurableFacts,
   TREASURY_T1_ACTION_KIND,
   TREASURY_T1_RUN_ID,
+  TREASURY_T1_SOURCE_ROOM,
+  TREASURY_T1_TARGET_ROOM,
   treasuryT1WorkKey,
   type DurableT1Facts,
 } from "@/runtime/treasuryT1Facts";
@@ -12,6 +14,8 @@ import {
 export {
   TREASURY_T1_ACTION_KIND,
   TREASURY_T1_RUN_ID,
+  TREASURY_T1_SOURCE_ROOM,
+  TREASURY_T1_TARGET_ROOM,
   TREASURY_T1_WORK_KEY_PREFIX,
   treasuryT1WorkKey,
 } from "@/runtime/treasuryT1Facts";
@@ -49,6 +53,25 @@ export function hasTreasuryT1TerminalFence(): boolean {
   const tasks = Memory.data?.resourceControl?.tasks;
   return !!tasks && Object.values(tasks).some((task) =>
     (task as ResourceTransferTask & { treasurySlice?: unknown }).treasurySlice !== undefined);
+}
+
+/** Keep the exact business row until its native responsibility has closed. */
+export function hasTreasuryT1TaskRetention(task: ResourceTransferTask): boolean {
+  if (task.treasurySlice !== undefined) return true;
+  if (task.fromRoomName !== TREASURY_T1_SOURCE_ROOM ||
+      task.toRoomName !== TREASURY_T1_TARGET_ROOM ||
+      task.resource !== RESOURCE_HYDROGEN) return false;
+  const runtime = (Memory as unknown as { runtime?: Record<string, unknown> }).runtime;
+  const quota = runtime?.treasuryProductionT1Quota;
+  if (quota !== undefined &&
+      (!isPlainObject(quota) ||
+       (quota.status !== "drained" &&
+        (quota.taskId === task.id || typeof quota.taskId !== "string")))) return true;
+  const core = runtime?.treasuryCore;
+  if (!isPlainObject(core) || core.active === undefined) return false;
+  if (!isPlainObject(core.active)) return true;
+  return Object.values(core.active).some((record) =>
+    isPlainObject(record) && record.workKey === treasuryT1WorkKey(task.id));
 }
 
 function isSafePositiveInteger(value: unknown): value is number {

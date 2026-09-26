@@ -3,6 +3,7 @@ import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/
 import { treasuryTaskCommitmentView } from "@/runtime/treasuryTaskCommitmentBridge";
 import { ReceiverCapacityLedger } from "@/runtime/logistics/receiverCapacityLedger";
 import type { ResourceTransferTask } from "@/runtime/logistics/resourceTransferTasks";
+import { cleanupResourceTransferTaskStore } from "@/runtime/logistics/resourceTransferTasks";
 import {
   beginTreasuryProductionTick,
   endTreasuryProductionTick,
@@ -51,14 +52,14 @@ function makeRoom(name: string, hydrogen: number, energy: number): Room {
   return room;
 }
 
-function makeTask(): ResourceTransferTask {
+function makeTask(amount = 250): ResourceTransferTask {
   return {
     id: "existing-H-task",
     resource: RESOURCE_HYDROGEN,
     fromRoomName: sourceName,
     toRoomName: targetName,
-    amount: 250,
-    remainingAmount: 250,
+    amount,
+    remainingAmount: amount,
     status: "pending",
     origin: "manual",
     createdAt: 90,
@@ -184,6 +185,63 @@ describe("production Treasury T1 real facade task path", () => {
     expect(currentTask.remainingAmount).toBe(150);
     expect(source.terminal!.send).toHaveBeenCalledTimes(1);
     endTreasuryProductionTick();
+  });
+
+  it("closes a 100 to 0 task from lifecycle after reset without a second send", () => {
+    task = makeTask(100);
+    Memory.data!.resourceControl!.tasks = { [task.id]: task };
+    const ledger = makeLedger(target, task);
+    expect(beginTreasuryProductionTick()).toBe(true);
+    expect(runTreasuryTerminalTransferTask(task, ledger, true, jest.fn()).handled).toBe(true);
+    expect(source.terminal!.send).toHaveBeenCalledTimes(1);
+    const description = (source.terminal!.send as jest.Mock).mock.calls[0][3] as string;
+    endTreasuryProductionTick();
+
+    (source.terminal!.store as unknown as { H: number; energy: number }).H -= 100;
+    (source.terminal!.store as unknown as { H: number; energy: number }).energy -= 10;
+    (target.terminal!.store as unknown as { H: number }).H += 100;
+    const transaction = {
+      transactionId: "engine-generated-100", time: 100,
+      sender: { username: "forster" }, recipient: { username: "forster" },
+      from: sourceName, to: targetName,
+      resourceType: RESOURCE_HYDROGEN, amount: 100, description,
+    } as unknown as Transaction;
+    Game.market.incomingTransactions = [transaction];
+    Game.market.outgoingTransactions = [transaction];
+    Game.time = 101;
+    expect(beginTreasuryProductionTick()).toBe(true);
+    expect(Memory.data!.resourceControl!.tasks[task.id]).toMatchObject({
+      status: "done", remainingAmount: 0,
+      treasurySlice: { phase: "closing", amount: 0, outcome: "committed" },
+    });
+    endTreasuryProductionTick();
+
+    treasury = createTreasuryService({
+      getRooms: () => [source, target],
+      getTasks: () => treasuryTaskCommitmentView(
+        Memory.data?.resourceControl?.tasks ?? {}, treasury.kernelJournal().active,
+      ),
+    });
+    serviceSpy.mockReturnValue(treasury);
+    Game.time = 102;
+    expect(beginTreasuryProductionTick()).toBe(true);
+    expect(Memory.data!.resourceControl!.tasks[task.id].remainingAmount).toBe(0);
+    expect(source.terminal!.send).toHaveBeenCalledTimes(1);
+    endTreasuryProductionTick();
+    expect(cleanupResourceTransferTaskStore(new Set([sourceName, targetName]), 0)).toBe(0);
+
+    Memory.cfg = { treasuryTerminalTransferSlice0: { mode: "off" } } as unknown as Memory["cfg"];
+    const currentTask = () => Memory.data!.resourceControl!.tasks[task.id] as ResourceTransferTask;
+    for (let i = 0; i < 15 && currentTask().treasurySlice; i += 1) {
+      Game.time += 1;
+      expect(beginTreasuryProductionTick()).toBe(true);
+      endTreasuryProductionTick();
+    }
+    expect(Memory.data!.resourceControl!.tasks[task.id]).toMatchObject({ status: "done", remainingAmount: 0 });
+    expect(currentTask().treasurySlice).toBeUndefined();
+    expect((Memory.runtime as unknown as { treasuryProductionT1Quota: { status: string } }).treasuryProductionT1Quota.status).toBe("drained");
+    expect(source.terminal!.send).toHaveBeenCalledTimes(1);
+    expect(cleanupResourceTransferTaskStore(new Set([sourceName, targetName]), 0)).toBe(1);
   });
 
   it("retains an unknown native attempt across a new service and OFF", () => {

@@ -163,9 +163,9 @@ describe("production Treasury terminal settlement", () => {
     Memory.cfg = {};
     Memory.data = { resourceControl: { tasks: { [task.id]: task } } } as unknown as Memory["data"];
     Memory.runtime = { treasuryProductionT1Quota: {
-      schemaVersion: 1, runId: TREASURY_T1_RUN_ID, status: "dispatching",
+      schemaVersion: 2, runId: TREASURY_T1_RUN_ID, status: "dispatching",
       taskId: task.id, workKey: treasuryT1WorkKey(task.id), attemptId: "tk1_lost",
-      amount: 100, reservedAtTick: 100,
+      taskCreatedAt: 80, taskAmount: 100, amount: 100, reservedAtTick: 100,
     } } as unknown as Memory["runtime"];
     expect(runTreasuryTerminalTransferTask(
       task, {} as ReceiverCapacityLedger, true,

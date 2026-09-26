@@ -1,5 +1,6 @@
 import { getMemoryService } from "@/runtime/runtimeServices";
 import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
+import { hasTreasuryT1TaskRetention } from "@/runtime/treasuryTaskCommitmentBridge";
 import {
   countsResourceTransferTaskTowardDemand,
   getResourceTransferTaskDemandCoverageExpirationReason,
@@ -560,7 +561,7 @@ export function cleanupResourceTransferTaskStore(
     const terminalStale =
       (task.status === "done" || task.status === "cancelled" || task.status === "failed") &&
       Game.time - task.updatedAt > terminalTaskTtl;
-    if (sourceOrTargetLost || terminalStale) {
+    if ((sourceOrTargetLost || terminalStale) && !hasTreasuryT1TaskRetention(task)) {
       delete tasks[taskId];
       removed += 1;
     }
