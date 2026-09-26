@@ -11,6 +11,7 @@ import {
 } from "@/runtime/marketActionArbiter";
 import { clearMarketSaleExposureReservationsForTest } from "@/runtime/marketSaleExposure";
 import { clearLocalCarrierDestinationCapacityForTest } from "@/runtime/localCarrierDestinationCapacity";
+import { TREASURY_T1_RUN_ID } from "@/runtime/treasuryTaskCommitmentBridge";
 
 jest.mock("@/roles/energyTargets", () => ({
   getEnergyStoreTarget: jest.fn(),
@@ -764,6 +765,89 @@ describe("carrierRole mineral hauling", () => {
       RESOURCE_KEANIUM,
       800,
     );
+  });
+
+  it("holds a real carrier terminal withdraw during T1 and resumes after drain", () => {
+    const { room, terminal } = installTerminalKeaniumPickupScenario("E3N59", 1_800);
+    const carrier = createCreep(room);
+    getEnergyStoreTarget.mockReturnValue(null);
+    Memory.runtime = {
+      treasuryProductionT1Quota: { runId: TREASURY_T1_RUN_ID, status: "dispatching" },
+    } as unknown as Memory["runtime"];
+
+    carrierRole().source?.(carrier);
+    expect(carrier.withdraw).not.toHaveBeenCalled();
+
+    (Memory.runtime as unknown as { treasuryProductionT1Quota: { status: string } })
+      .treasuryProductionT1Quota.status = "drained";
+    Game.time += 1;
+    carrierRole().source?.(carrier);
+    expect(carrier.withdraw).toHaveBeenCalledWith(terminal, RESOURCE_KEANIUM, 800);
+  });
+
+  it("holds cargo already carried toward the T1 destination terminal", () => {
+    const room = createRoom("E4N58");
+    const storage = room.storage as StructureStorage;
+    const terminal = room.terminal as StructureTerminal;
+    Object.assign(storage, {
+      room,
+      pos: { x: 10, y: 10, roomName: room.name },
+      store: {
+        getUsedCapacity: (resource?: ResourceConstant) =>
+          resource === RESOURCE_ENERGY ? 500 : 0,
+        getFreeCapacity: () => 100_000,
+      },
+    });
+    Object.assign(terminal, {
+      room,
+      pos: { x: 11, y: 10, roomName: room.name },
+      store: {
+        getUsedCapacity: () => 0,
+        getFreeCapacity: () => 100_000,
+      },
+    });
+    installCarrierTaskTestObjects([storage, terminal]);
+    replaceCarrierTasksForProducerRoom("resourceControl:preload", room.name, [{
+      id: "T1-destination-energy-preload",
+      type: "terminal_feed",
+      dispatchClass: "capacity_relief",
+      priority: 80,
+      steps: [{
+        id: "energy:storage->terminal",
+        resource: RESOURCE_ENERGY,
+        fromKind: "storage",
+        toKind: "terminal",
+        fromId: storage.id,
+        toId: terminal.id,
+        amount: 100,
+      }],
+    }]);
+    let carried = 0;
+    const carrier = {
+      ...createCreep(room),
+      store: {
+        getUsedCapacity: (resource?: ResourceConstant) =>
+          resource === undefined || resource === RESOURCE_ENERGY ? carried : 0,
+        getFreeCapacity: () => 800 - carried,
+      },
+      withdraw: jest.fn(() => { carried = 100; return OK; }),
+      transfer: jest.fn(() => { carried = 0; return OK; }),
+    } as unknown as Creep;
+    getEnergyStoreTarget.mockReturnValue(null);
+    carrierRole().source?.(carrier);
+    expect(carrier.withdraw).toHaveBeenCalledWith(storage, RESOURCE_ENERGY, 100);
+
+    Memory.runtime = {
+      treasuryProductionT1Quota: { runId: TREASURY_T1_RUN_ID, status: "dispatching" },
+    } as unknown as Memory["runtime"];
+    carrierRole().target(carrier);
+    expect(carrier.transfer).not.toHaveBeenCalled();
+
+    (Memory.runtime as unknown as { treasuryProductionT1Quota: { status: string } })
+      .treasuryProductionT1Quota.status = "drained";
+    Game.time += 1;
+    carrierRole().target(carrier);
+    expect(carrier.transfer).toHaveBeenCalledWith(terminal, RESOURCE_ENERGY);
   });
 
   it("keeps exact producer stickiness and reselects by priority after owner removal", () => {

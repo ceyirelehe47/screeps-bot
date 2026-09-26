@@ -63,7 +63,13 @@ describe("main loop phase ordering", () => {
     return declaration;
   }
 
-  /** Extract direct top-level cpuProfiler.measure(...) calls from gameLoop in order. */
+  function getProductionPhaseBlock(): ts.Block {
+    const guarded = getGameLoopDeclaration().body!.statements.find(ts.isTryStatement);
+    if (!guarded?.finallyBlock) throw new Error("Treasury lifecycle guard not found");
+    return guarded.tryBlock;
+  }
+
+  /** Extract the canonical production phases inside the lifecycle guard in order. */
   function extractMeasureCalls(): Array<{
     phase: string;
     callback: string;
@@ -74,7 +80,7 @@ describe("main loop phase ordering", () => {
       callback: string;
       call: ts.CallExpression;
     }> = [];
-    for (const statement of getGameLoopDeclaration().body!.statements) {
+    for (const statement of getProductionPhaseBlock().statements) {
       if (!ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) {
         continue;
       }
@@ -105,13 +111,13 @@ describe("main loop phase ordering", () => {
     return calls;
   }
 
-  function containsTryStatement(node: ts.Node): boolean {
-    if (ts.isTryStatement(node)) {
+  function containsCatchClause(node: ts.Node): boolean {
+    if (ts.isCatchClause(node)) {
       return true;
     }
     let found = false;
     node.forEachChild((child) => {
-      found ||= containsTryStatement(child);
+      found ||= containsCatchClause(child);
     });
     return found;
   }
@@ -236,28 +242,18 @@ describe("main loop phase ordering", () => {
     expect(registrationCalls.every(({ index }) => index < gameLoopIndex)).toBe(true);
   });
 
-  it("keeps fail-fast propagation and flush on the complete success path", () => {
+  it("keeps fail-fast propagation and flush even if Treasury cleanup throws", () => {
     const gameLoop = getGameLoopDeclaration();
-    const statements = gameLoop.body!.statements;
-    const lastStatement = statements[statements.length - 1];
-
-    expect(containsTryStatement(gameLoop)).toBe(false);
+    const lifecycleGuard = gameLoop.body!.statements.find(ts.isTryStatement);
+    expect(lifecycleGuard?.finallyBlock).toBeDefined();
+    expect(containsCatchClause(gameLoop)).toBe(false);
     expect(countCalls(gameLoop, "cpuProfiler.flush")).toBe(1);
-    expect(ts.isExpressionStatement(lastStatement)).toBe(true);
-    if (!ts.isExpressionStatement(lastStatement)) {
-      return;
-    }
-    expect(ts.isCallExpression(lastStatement.expression)).toBe(true);
-    if (!ts.isCallExpression(lastStatement.expression)) {
-      return;
-    }
-    const flushCallee = lastStatement.expression.expression;
-    expect(ts.isPropertyAccessExpression(flushCallee)).toBe(true);
-    if (!ts.isPropertyAccessExpression(flushCallee)) {
-      return;
-    }
-    expect(flushCallee.expression.getText(mainAst)).toBe("cpuProfiler");
-    expect(flushCallee.name.text).toBe("flush");
+    expect(lifecycleGuard!.finallyBlock!.getText(mainAst)).toContain(
+      'cpuProfiler.measure("treasuryEndTick", endTreasuryProductionTick)',
+    );
+    const cleanupGuard = lifecycleGuard!.finallyBlock!.statements.find(ts.isTryStatement);
+    expect(cleanupGuard?.finallyBlock).toBeDefined();
+    expect(countCalls(cleanupGuard!.finallyBlock!, "cpuProfiler.flush")).toBe(1);
     expect(mainSrc).toContain("export const loop = errorMapper(gameLoop);");
   });
 

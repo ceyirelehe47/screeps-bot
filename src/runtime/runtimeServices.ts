@@ -1,5 +1,9 @@
 import { createRuntimeMemoryService, type RuntimeMemoryService } from "@/runtime/memoryService";
 import { createTickContextService, type TickContextService } from "@/runtime/tickContext";
+import { createTreasuryService, type TreasuryService } from "@/runtime/treasury/facade";
+import { sealTreasuryAdapterRegistryForProduction } from "@/runtime/treasury/actionContracts";
+import { sealTreasuryPolicyRegistryForProduction } from "@/runtime/treasury/policyAuthority";
+import { treasuryTaskCommitmentView } from "@/runtime/treasuryTaskCommitmentBridge";
 import type { CreepApi, CreepConfig, RoleName } from "@/types/system";
 
 export interface CreepConfigService extends CreepApi {
@@ -10,6 +14,7 @@ export interface RuntimeServices {
   memory: RuntimeMemoryService;
   creepConfigs: CreepConfigService;
   tickContext: TickContextService;
+  treasury: TreasuryService;
 }
 
 type RuntimeGlobalWithServices = typeof global & {
@@ -96,10 +101,22 @@ function createRuntimeServices(): RuntimeServices {
   const memory = createRuntimeMemoryService();
   const creepConfigs = createCreepConfigService(memory);
   const tickContext = createTickContextService();
+  let treasuryRef: TreasuryService | undefined;
+  const treasury = createTreasuryService({
+    getRooms: () => tickContext.getMyRooms(),
+    getTasks: () => treasuryTaskCommitmentView(
+      Memory.data?.resourceControl?.tasks ?? {},
+      treasuryRef?.kernelJournal().active ?? [],
+    ),
+  });
+  treasuryRef = treasury;
+  sealTreasuryAdapterRegistryForProduction();
+  sealTreasuryPolicyRegistryForProduction();
   return {
     memory,
     creepConfigs,
     tickContext,
+    treasury,
   };
 }
 
@@ -124,4 +141,8 @@ export function getMemoryService(): RuntimeMemoryService {
 
 export function getTickContextService(): TickContextService {
   return getRuntimeServices().tickContext;
+}
+
+export function getTreasuryService(): TreasuryService {
+  return getRuntimeServices().treasury;
 }

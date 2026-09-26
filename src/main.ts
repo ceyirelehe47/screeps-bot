@@ -39,7 +39,14 @@ import { runRemoteMining } from "@/runtime/remoteMining";
 import { runMarketSalePreflight } from "@/runtime/marketSaleAutomation";
 import { runLiveMarketSaleAutomation } from "@/runtime/marketSaleRuntime";
 import { runEmpireInventoryShadowCheck } from "@/runtime/empireInventoryShadow";
+import {
+  beginTreasuryProductionTick,
+  endTreasuryProductionTick,
+  registerTreasuryProductionTerminalTransfer,
+  runTreasuryT1ShadowObservation,
+} from "@/runtime/treasuryTerminalTransfer";
 
+registerTreasuryProductionTerminalTransfer();
 mountAll();
 registerGlobalApi();
 registerConsoleCommands();
@@ -55,58 +62,72 @@ function gameLoop(): void {
   // 本 tick 的 spawn/creep 快照由 TickContext 统一维护，避免与各模块重复
   // Object.values 扫描；快照在 tick 内不可变。
   const tickContext = getTickContextService();
-
-  cpuProfiler.measure("announceDeploy", announceDeploy);
-  cpuProfiler.measure("marketSalePreflight", runMarketSalePreflight);
-  // 保留冻结生产顺序中的 phase；模块本身由代码级闩永久关闭。
-  cpuProfiler.measure("pixelGenerator", runPixelGenerator);
-  cpuProfiler.measure("productionMonitor", runProductionMonitor);
-  cpuProfiler.measure("nukerControl", runNukerControl);
-  cpuProfiler.measure("hubPlanner", runHubPlanner);
-  cpuProfiler.measure("hubUpgradeControl", runHubUpgradeControl);
-  cpuProfiler.measure("synthesisControl", runSynthesisControl);
-  cpuProfiler.measure("factoryControl", runFactoryControl);
-  cpuProfiler.measure("mineralExtraction", runMineralExtraction);
-  cpuProfiler.measure("resourceControl", runResourceControl);
-  cpuProfiler.measure("marketSaleAutomation", runLiveMarketSaleAutomation);
-  cpuProfiler.measure("hubProgressAnalytics", runHubProgressAnalytics);
-  cpuProfiler.measure("hubProgressOverlay", renderHubProgressOverlays);
-  cpuProfiler.measure("externalTelemetryExport", runExternalTelemetryExport);
-  cpuProfiler.measure("memoryCleanup", runMemoryCleanup);
-  cpuProfiler.measure("portalDiscovery", runPortalDiscovery);
-  cpuProfiler.measure("flagControl", runFlagControl);
-  cpuProfiler.measure("crossShardSignals", runCrossShardSignals);
-  cpuProfiler.measure("interShardControl", runInterShardControl);
-  cpuProfiler.measure("warControl", runWarControl);
-  cpuProfiler.measure("powerBankObserver", runPowerBankObserver);
-  cpuProfiler.measure("powerBankHarvest", runPowerBankHarvest);
-  cpuProfiler.measure("powerCreepControl", runPowerCreepControl);
-  cpuProfiler.measure("powerSpawnControl", runPowerSpawnControl);
-  cpuProfiler.measure("roomPlannerConstruction", runRoomPlannerConstruction);
-  cpuProfiler.measure("linkControl", runLinkControl);
-  cpuProfiler.measure("coreDefense", runCoreDefense);
-  cpuProfiler.measure("defenseMode", runDefenseMode);
-  cpuProfiler.measure("homeDefense", runHomeDefense);
-  cpuProfiler.measure("towerControl", runTowerControl);
-  cpuProfiler.measure("refreshWorkerTasks", refreshWorkerTasks);
-  cpuProfiler.measure("bootstrapRooms", bootstrapRooms);
-  cpuProfiler.measure("remoteMining", runRemoteMining);
-  cpuProfiler.measure("scheduleSpawnTasks", scheduleSpawnTasks);
-
-  cpuProfiler.measure("spawnWork", () => {
-    tickContext.getAllSpawns().forEach((spawn) => {
-      cpuProfiler.measureRoomPhase("spawnWork", spawn.room.name, () => spawn.work());
-    });
+  let treasuryLifecycleStarted = false;
+  cpuProfiler.measure("treasuryBeginTick", () => {
+    treasuryLifecycleStarted = beginTreasuryProductionTick();
   });
-  cpuProfiler.measure("creepWork", () => {
-    tickContext.getAllCreeps().forEach((creep) => {
-      cpuProfiler.measureCreep(creep, () => creep.work());
+
+  try {
+    cpuProfiler.measure("announceDeploy", announceDeploy);
+    cpuProfiler.measure("marketSalePreflight", runMarketSalePreflight);
+    // 保留冻结生产顺序中的 phase；模块本身由代码级闩永久关闭。
+    cpuProfiler.measure("pixelGenerator", runPixelGenerator);
+    cpuProfiler.measure("productionMonitor", runProductionMonitor);
+    cpuProfiler.measure("nukerControl", runNukerControl);
+    cpuProfiler.measure("hubPlanner", runHubPlanner);
+    cpuProfiler.measure("hubUpgradeControl", runHubUpgradeControl);
+    cpuProfiler.measure("synthesisControl", runSynthesisControl);
+    cpuProfiler.measure("factoryControl", runFactoryControl);
+    cpuProfiler.measure("mineralExtraction", runMineralExtraction);
+    cpuProfiler.measure("resourceControl", runResourceControl);
+    cpuProfiler.measure("marketSaleAutomation", runLiveMarketSaleAutomation);
+    cpuProfiler.measure("hubProgressAnalytics", runHubProgressAnalytics);
+    cpuProfiler.measure("hubProgressOverlay", renderHubProgressOverlays);
+    cpuProfiler.measure("externalTelemetryExport", runExternalTelemetryExport);
+    cpuProfiler.measure("memoryCleanup", runMemoryCleanup);
+    cpuProfiler.measure("portalDiscovery", runPortalDiscovery);
+    cpuProfiler.measure("flagControl", runFlagControl);
+    cpuProfiler.measure("crossShardSignals", runCrossShardSignals);
+    cpuProfiler.measure("interShardControl", runInterShardControl);
+    cpuProfiler.measure("warControl", runWarControl);
+    cpuProfiler.measure("powerBankObserver", runPowerBankObserver);
+    cpuProfiler.measure("powerBankHarvest", runPowerBankHarvest);
+    cpuProfiler.measure("powerCreepControl", runPowerCreepControl);
+    cpuProfiler.measure("powerSpawnControl", runPowerSpawnControl);
+    cpuProfiler.measure("roomPlannerConstruction", runRoomPlannerConstruction);
+    cpuProfiler.measure("linkControl", runLinkControl);
+    cpuProfiler.measure("coreDefense", runCoreDefense);
+    cpuProfiler.measure("defenseMode", runDefenseMode);
+    cpuProfiler.measure("homeDefense", runHomeDefense);
+    cpuProfiler.measure("towerControl", runTowerControl);
+    cpuProfiler.measure("refreshWorkerTasks", refreshWorkerTasks);
+    cpuProfiler.measure("bootstrapRooms", bootstrapRooms);
+    cpuProfiler.measure("remoteMining", runRemoteMining);
+    cpuProfiler.measure("scheduleSpawnTasks", scheduleSpawnTasks);
+
+    cpuProfiler.measure("spawnWork", () => {
+      tickContext.getAllSpawns().forEach((spawn) => {
+        cpuProfiler.measureRoomPhase("spawnWork", spawn.room.name, () => spawn.work());
+      });
     });
-  });
-  // 库存影子等价验证（Phase 1 只读观察者）：低频对账新索引与直读 Store，
-  // 不参与任何生产决策；详见 empireInventoryShadow.ts。
-  cpuProfiler.measure("empireInventoryShadow", runEmpireInventoryShadowCheck);
-  cpuProfiler.flush();
+    cpuProfiler.measure("creepWork", () => {
+      tickContext.getAllCreeps().forEach((creep) => {
+        cpuProfiler.measureCreep(creep, () => creep.work());
+      });
+    });
+    // 库存影子等价验证（Phase 1 只读观察者）：低频对账新索引与直读 Store，
+    // 不参与任何生产决策；详见 empireInventoryShadow.ts。
+    cpuProfiler.measure("empireInventoryShadow", runEmpireInventoryShadowCheck);
+  } finally {
+    try {
+      cpuProfiler.measure("treasuryT1Shadow", runTreasuryT1ShadowObservation);
+      if (treasuryLifecycleStarted) {
+        cpuProfiler.measure("treasuryEndTick", endTreasuryProductionTick);
+      }
+    } finally {
+      cpuProfiler.flush();
+    }
+  }
 }
 
 export const loop = errorMapper(gameLoop);
