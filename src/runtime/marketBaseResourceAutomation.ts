@@ -440,6 +440,8 @@ export interface MarketBaseResourcePermitProposal {
   laneSetFingerprint: string;
   targetScope: MarketBaseResourceScopeState;
   targetPermitChain: MarketBaseResourcePermitChainState;
+  /** 策略迁移只持久化新增 permit；accept 从现役链重建并校验完整目标链。 */
+  migrationChainEncoding?: "appended-permit-only-v1";
   targetLedger: MarketBaseResourceLedger;
   targetPricingRatchet: MarketBaseResourcePricingRatchetState;
   targetTrustedFloors: Partial<

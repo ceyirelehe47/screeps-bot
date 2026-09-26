@@ -2089,6 +2089,21 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
       proposalId?: string;
     };
     expect(propose.ok).toBe(true);
+    const proposedState = (Memory.data!.marketSaleAutomation as {
+      directAutomation: { baseResourceV3: MarketBaseResourceV3RuntimeState };
+    }).directAutomation.baseResourceV3;
+    const compact = proposedState.proposedPermit!;
+    expect(compact.migrationChainEncoding).toBe("appended-permit-only-v1");
+    expect(compact.targetPermitChain.retainedPermits).toHaveLength(1);
+    expect(JSON.stringify(compact.targetPermitChain).length).toBeLessThan(
+      JSON.stringify({
+        ...compact.targetPermitChain,
+        retainedPermits: [
+          ...proposedState.permitChain!.retainedPermits,
+          ...compact.targetPermitChain.retainedPermits,
+        ],
+      }).length,
+    );
     const accept = acceptMarketBaseResourcePermit(
       propose.proposalId!,
     ) as unknown as { ok: boolean; error?: string; permitEpoch?: number };

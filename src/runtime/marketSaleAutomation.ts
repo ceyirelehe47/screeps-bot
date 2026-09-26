@@ -10193,13 +10193,37 @@ function validateFrozenMarketBaseProposal(
   proposal: MarketBaseResourcePermitProposal,
 ): boolean {
   const { proposalId: _proposalId, ...payload } = proposal;
-  return (
-    proposal.schemaVersion === 3 &&
-    proposal.proposalId ===
+  if (
+    proposal.schemaVersion !== 3 ||
+    proposal.proposalId !==
       canonicalStableHashV1({
         domain: "market-base-resource:operator-proposal-v1",
         proposal: payload,
-      }) &&
+      })
+  ) {
+    return false;
+  }
+  if (proposal.migrationChainEncoding === "appended-permit-only-v1") {
+    const records = proposal.targetPermitChain?.retainedPermits;
+    return (
+      proposal.kind === "v3-policy-migration" &&
+      Array.isArray(records) &&
+      records.length === 1 &&
+      records[0]?.schemaVersion === 3 &&
+      records[0].permitId === proposal.targetPermitChain.currentPermitId &&
+      records[0].epoch === proposal.targetPermitChain.currentPermitEpoch
+    );
+  }
+  return (
+    proposal.migrationChainEncoding === undefined &&
+    validateMarketBaseProposalPayload(proposal)
+  );
+}
+
+function validateMarketBaseProposalPayload(
+  proposal: MarketBaseResourcePermitProposal,
+): boolean {
+  return (
     validateMarketBaseResourcePermitChain(proposal.targetPermitChain).ok &&
     validateMarketBaseResourceLedger(
       proposal.targetLedger,
@@ -10221,6 +10245,67 @@ function validateFrozenMarketBaseProposal(
         : undefined,
     )
   );
+}
+
+function materializeMarketBasePolicyMigrationProposal(
+  proposal: MarketBaseResourcePermitProposal,
+  state: MarketBaseResourceV3RuntimeState,
+): MarketBaseResourcePermitProposal | undefined {
+  if (
+    proposal.kind !== "v3-policy-migration" ||
+    proposal.migrationChainEncoding !== "appended-permit-only-v1" ||
+    !state.permitChain ||
+    !state.ledger
+  ) {
+    return undefined;
+  }
+  const permit = proposal.targetPermitChain.retainedPermits[0];
+  if (!permit || permit.schemaVersion !== 3) {
+    return undefined;
+  }
+  const ledger = state.ledger;
+  const chain = state.permitChain;
+  const appended = appendMarketBaseResourcePermit(chain, permit, {
+    tick: proposal.proposedAt,
+    currentShard: "shard1",
+    currentLedgerHead: ledger.receiptHeadHash,
+    currentLedgerCheckpointHash: ledger.checkpoint.checkpointHash,
+    currentLedgerPermitAnchorHash: ledger.permitAnchor.anchorHash,
+    currentDerivedLanes: proposal.targetScope.laneLifecycles,
+    currentLifecycleCheckpointCommitment:
+      marketBaseDerivedLaneLifecycleCheckpointCommitment(
+        proposal.targetScope.laneLifecycles,
+      ),
+    hasPending: false,
+    hasQuarantine: false,
+    hasGap: false,
+    hasUnmatchedReservation: false,
+    receiptPermitReferences:
+      marketBaseResourceRetainedReceiptPermitReferences(ledger, chain),
+  });
+  if (appended.status !== "appended") {
+    return undefined;
+  }
+  const compactChain = {
+    ...appended.state,
+    retainedPermits: [permit],
+  };
+  const reboundLedger = rebindMarketBaseResourceLedgerPermitAnchor(
+    ledger,
+    appended.state,
+  );
+  if (
+    canonicalStableHashV1(compactChain) !==
+      canonicalStableHashV1(proposal.targetPermitChain) ||
+    canonicalStableHashV1(reboundLedger) !==
+      canonicalStableHashV1(proposal.targetLedger)
+  ) {
+    return undefined;
+  }
+  return {
+    ...proposal,
+    targetPermitChain: appended.state,
+  };
 }
 
 function copyMarketSaleDataForOperator(
@@ -10519,7 +10604,11 @@ function buildMarketBasePolicyMigrationProposal(
     rosterFingerprint: targetScope.rosterFingerprint,
     laneSetFingerprint: targetScope.laneSetFingerprint,
     targetScope,
-    targetPermitChain: appended.state,
+    targetPermitChain: {
+      ...appended.state,
+      retainedPermits: [permit],
+    },
+    migrationChainEncoding: "appended-permit-only-v1",
     targetLedger: reboundLedger,
     targetPricingRatchet: state.pricingRatchet,
     targetTrustedFloors: cloneMarketBaseOperatorValue(data.trustedFloors),
@@ -11080,11 +11169,22 @@ export function acceptMarketBaseResourcePermit(
           `market_base_migration_blocker_unrecoverable:${persistentBlocker.code}`,
         );
       }
+      const materializedProposal = proposal.migrationChainEncoding
+        ? materializeMarketBasePolicyMigrationProposal(proposal, state)
+        : proposal;
+      if (
+        !materializedProposal ||
+        !validateMarketBaseProposalPayload(materializedProposal)
+      ) {
+        throw new TypeError("market_base_migration_delta_invalid");
+      }
       const migrationNext: MarketBaseResourceV3RuntimeState = {
         ...state,
-        scope: cloneMarketBaseOperatorValue(proposal.targetScope),
-        permitChain: cloneMarketBaseOperatorValue(proposal.targetPermitChain),
-        ledger: cloneMarketBaseOperatorValue(proposal.targetLedger),
+        scope: cloneMarketBaseOperatorValue(materializedProposal.targetScope),
+        permitChain: cloneMarketBaseOperatorValue(
+          materializedProposal.targetPermitChain,
+        ),
+        ledger: cloneMarketBaseOperatorValue(materializedProposal.targetLedger),
         pricingRatchet: state.pricingRatchet!,
         cutoverLatched: true,
         lastLifecycleAppliedAttemptSeq:
@@ -11100,7 +11200,7 @@ export function acceptMarketBaseResourcePermit(
         Game.time,
       );
       const migrationAnchor = buildMarketBasePolicyMigrationAnchor({
-        proposal,
+        proposal: materializedProposal,
         scope: migrationNext.scope!,
         direct,
         acceptedAt: Game.time,
@@ -11139,10 +11239,10 @@ export function acceptMarketBaseResourcePermit(
         proposalId: normalizedId,
         kind: proposal.kind,
         permitId:
-          proposal.targetPermitChain.retainedPermits[
-            proposal.targetPermitChain.retainedPermits.length - 1
+          materializedProposal.targetPermitChain.retainedPermits[
+            materializedProposal.targetPermitChain.retainedPermits.length - 1
           ].permitId,
-        permitEpoch: proposal.targetPermitChain.currentPermitEpoch,
+        permitEpoch: materializedProposal.targetPermitChain.currentPermitEpoch,
       };
     }
     const sourceBlocker =
