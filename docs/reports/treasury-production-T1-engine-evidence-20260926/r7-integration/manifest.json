@@ -1,0 +1,7 @@
+{
+  "schema": "screeps-treasury-t1-r7-integration-candidate/v1",
+  "sourceCommit": "c926ddeb01710c685a5546c4a19d1eaaf14a02d0",
+  "bytes": 5015322,
+  "fileSha256": "62b83ecf6b3b330c6f54febbe37cc858c1bcbda5e83dc82c97570dddcb7b0966",
+  "target": "isolated-engine-4.3.0"
+}

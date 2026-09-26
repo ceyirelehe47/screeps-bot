@@ -1,0 +1,9 @@
+{
+  "schema": "screeps-treasury-t1-r3-setup/v1",
+  "tick": 518,
+  "taskId": "lab-r3-100H",
+  "codeSha256": "62b83ecf6b3b330c6f54febbe37cc858c1bcbda5e83dc82c97570dddcb7b0966",
+  "beforeMemorySha256": "5eea740c613f51b823511cab8f29c1d7faeaacabf795f6900268ca9d240cccbd",
+  "afterMemorySha256": "54501edab9a340d55d98d7597c5dde15da2d8ba94c2f76891624619e5eec9c76",
+  "isolatedWorldOnly": true
+}

@@ -16,6 +16,8 @@
 
 ## 正式 writer 灰度前置
 
-2026-09-26 12:50 UTC，市场 r7 已实际部署并完成 epoch 17 签名迁移。后继默认 OFF 集成提交 `1204891d` 已将市场 R2 分支完整合入本 T1 候选，未触碰现役 shard1 的 Treasury 模式；`readMode()` 在无 `treasuryTerminalTransferSlice0` 配置时返回 `off`。合并后相关市场/T1/carrier/仲裁/物流 12 个 Jest suite、47 项通过，`npm run typecheck`、`npm run build` 通过；干净合并提交的 `main` 为 5,015,322 字节、SHA-256 `4902e7e25423c26d4fec2f6f5f1ff6ee192fee087ea27a2aa5f5189b786ccdf1`，低于 5 MiB 边界。前文 `cd0d550e` 的隔离引擎结果只证明此前 r6+T1 代码，未把 r7+T1 合并包冒充再次引擎实测。本轮 G2 仍无正式服上传或 writer 灰度。
+2026-09-26 12:50 UTC，市场 r7 已实际部署并完成 epoch 17 签名迁移。后继默认 OFF 集成提交 `1204891d` 已将市场 R2 分支完整合入本 T1 候选，未触碰现役 shard1 的 Treasury 模式；`readMode()` 在无 `treasuryTerminalTransferSlice0` 配置时返回 `off`。合并后相关市场/T1/carrier/仲裁/物流 12 个 Jest suite、47 项通过，`npm run typecheck`、`npm run build` 通过；干净合并提交的 `main` 为 5,015,322 字节、SHA-256 `4902e7e25423c26d4fec2f6f5f1ff6ee192fee087ea27a2aa5f5189b786ccdf1`，低于 5 MiB 边界。
+
+随后从干净提交 `c926ddeb01710c685a5546c4a19d1eaaf14a02d0` 构建的最终 r7+T1 包，在独立 Screeps Engine 4.3.0 以 SHA-256 `62b83ecf6b3b330c6f54febbe37cc858c1bcbda5e83dc82c97570dddcb7b0966` 实测：tick 520 原生发送 100 H，4 Energy 手续费；任务 `done/0` 且关闭租约保留责任；原生产 carrier 同时取走 50 Energy，T1 fence 期间持货；drain 不丢责任，OFF 后清除租约、quota 为 drained、carrier 把 50 Energy 交给目标 Terminal；重启再跑 tick 532，交易总数仍为 7。原始快照与 `verify-r7.py` 见 [最终集成证据](treasury-production-T1-engine-evidence-20260926/r7-integration/verification.json)。旧 `cd0d550e` 实测与这次最终组合分开保存。本轮 G2 仍无正式服上传或 writer 灰度，隔离服务已停止。
 
 当前交付是默认 OFF 候选。首次正式 writer 灰度仍需重新核对现役市场代码与 task 身份、是否有合规的 E3N59→E4N58 H 任务、两房真实 Store 与结构、CPU/Memory 和当前上传大小；按新代码身份重新冻结包体并做独立审查。停止新增接纳、关闭内核责任、终端交回旧 writer 分开验证，未决/未知结果不能通过切 OFF 清除。旧 FC1 恢复字节不能充当本候选的回退包。正式服迁移或 `send` 尚未授权，也没有执行。
