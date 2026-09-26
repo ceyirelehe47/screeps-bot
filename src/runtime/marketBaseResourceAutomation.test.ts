@@ -991,6 +991,11 @@ describe("Market Base V3 运行时重合同（高风险决策/WAL/证据隔离/o
       });
       expect(
         deps.readCurrentBuyOrders.mock.calls.filter(
+          ([resource]) => resource === RESOURCE_HYDROGEN,
+        ),
+      ).toHaveLength(0);
+      expect(
+        deps.readCurrentBuyOrders.mock.calls.filter(
           ([resource]) => resource === RESOURCE_CATALYST,
         ),
       ).toHaveLength(2);

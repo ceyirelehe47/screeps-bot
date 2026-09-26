@@ -3807,7 +3807,8 @@ function collectFullRead(
 
   // 资源级完整 book 每次 full read 只调用一次。即使只有 Shadow lane，
   // 也读取其资源 book；同资源的 writable/shadow lane 共享一个 clone。
-  // 候选证据被隔离的资源（全部 lane 都会记 incomplete）不再读 book。
+  // 候选证据被隔离或所有可写 lane 保护证据不完整的资源不读 book；
+  // 它们本轮不会出货，省下的 CPU 留给可执行 lane 的 WAL 准备。
   const evaluatedResources = scope.entries
     .filter(
       (entry) =>
@@ -3816,7 +3817,9 @@ function collectFullRead(
         ) &&
         entry.lanes.some(
           (lane) =>
-            lane.lane.authorization === "writable" ||
+            (lane.lane.authorization === "writable" &&
+              lane.protection.complete &&
+              Boolean(lane.protection.revision)) ||
             sampledShadowSet.has(lane.laneId),
         ),
     )
