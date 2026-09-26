@@ -133,6 +133,12 @@ import {
   type MarketBaseResourceQuotaReceipt,
 } from "@/runtime/marketBaseResourceLedger";
 import {
+  readMarketEgressTrialR2,
+  heartbeatMarketEgressTrialR2 as heartbeatEgressTrialState,
+  startMarketEgressTrialR2 as startEgressTrialState,
+  stopMarketEgressTrialR2 as stopEgressTrialState,
+} from "@/runtime/marketBaseResourceEgressTrialR2";
+import {
   computeContinuousQuotaBatch,
   validateContinuousLedger,
 } from "@/runtime/marketDirectContinuousLedger";
@@ -2869,6 +2875,10 @@ type OperatorGlobals = typeof global & {
   proposeMarketBaseResourcePolicyMigration?: () => OperatorResult;
   acceptMarketBaseResourcePermit?: (proposalId: string) => OperatorResult;
   marketBaseResourceStatus?: () => unknown;
+  startMarketBaseResourceEgressTrialR2?: () => OperatorResult;
+  stopMarketBaseResourceEgressTrialR2?: (reason?: string) => OperatorResult;
+  heartbeatMarketBaseResourceEgressTrialR2?: () => OperatorResult;
+  marketBaseResourceEgressTrialR2Status?: () => unknown;
 };
 
 const operatorGlobals = global as OperatorGlobals;
@@ -6595,6 +6605,10 @@ function registerOperatorControls(): void {
   operatorGlobals.acceptMarketBaseResourcePermit =
     acceptMarketBaseResourcePermit;
   operatorGlobals.marketBaseResourceStatus = marketBaseResourceStatus;
+  operatorGlobals.startMarketBaseResourceEgressTrialR2 = startMarketBaseResourceEgressTrialR2;
+  operatorGlobals.stopMarketBaseResourceEgressTrialR2 = stopMarketBaseResourceEgressTrialR2;
+  operatorGlobals.heartbeatMarketBaseResourceEgressTrialR2 = heartbeatMarketBaseResourceEgressTrialR2;
+  operatorGlobals.marketBaseResourceEgressTrialR2Status = marketBaseResourceEgressTrialR2Status;
 }
 
 export function runMarketSalePreflight(): MarketSaleAutomationResult {
@@ -10691,6 +10705,71 @@ export function proposeMarketBaseResourcePolicyMigration(): OperatorResult {
     }
     return { ok: false, error: reason };
   }
+}
+
+/** One frozen R2 run; accepting a policy permit does not start the trial. */
+export function startMarketBaseResourceEgressTrialR2(): OperatorResult {
+  enforceLegacyMarketSafetyLatch();
+  const data = ensureDataState();
+  const direct = data.directAutomation;
+  const config = resolveMarketSaleAutomationConfig();
+  const blocker = marketBaseResourceV3ConfigBlocker(config);
+  if (blocker || !isContinuousDirectState(direct) || config.mode !== "direct") {
+    return { ok: false, error: blocker || "continuous_direct_required" };
+  }
+  const state = direct.baseResourceV3;
+  const permit = state ? currentMarketBaseV3Permit(state) : undefined;
+  if (!state?.ledger || !state.permitChain || !state.scope || !permit ||
+      state.ledger.pending || state.ledger.blocker || state.hardBlocker ||
+      Object.keys(direct.quarantinedPendingDirectDeals).length > 0 ||
+      Object.keys(direct.pendingDirectDeals).length > 0 ||
+      !validateMarketBaseResourceLedger(state.ledger, Game.time, state.permitChain).ok ||
+      !validateMarketBaseResourcePermitChain(state.permitChain).ok) {
+    return { ok: false, error: "trial_wal_or_permit_not_quiescent" };
+  }
+  const eligible = ([ ["E4N58", "X"], ["E1N57", "L"] ] as const).filter(
+    ([roomName, resource]) => {
+      const lane = state.scope!.laneLifecycles.find((value) =>
+        value.sellerRoomName === roomName && value.resource === resource &&
+        value.stage === "continuous" && value.status === "writable");
+      const grant = lane && permit.signedLaneGrants.find((value) =>
+        value.laneId === lane.laneId && value.roomInstanceId === lane.roomInstanceId &&
+        value.stage === "continuous" && value.status === "active" &&
+        value.newDealGrant === "enabled");
+      const policy = permit.resourcePolicies.find((value) =>
+        value.resource === resource && value.cooldownTicks === 100);
+      return !!grant && !!policy;
+    },
+  );
+  if (eligible.length === 0) {
+    return { ok: false, error: "trial_no_current_continuous_lane" };
+  }
+  const started = startEgressTrialState({
+    tick: Game.time,
+    permitId: permit.permitId,
+    permitEpoch: permit.epoch,
+    originalNotBefore: state.ledger.confirmedCooldownNotBefore,
+    nextAttemptSeq: state.ledger.nextAttemptSeq,
+  });
+  if ("reason" in started) return { ok: false, error: started.reason };
+  return { ok: true, runId: started.trial.runId, endTick: started.trial.endTick,
+    originalNotBefore: started.trial.originalNotBefore, eligibleLanes: eligible };
+}
+
+export function stopMarketBaseResourceEgressTrialR2(reason = "operator_stop"): OperatorResult {
+  return stopEgressTrialState(reason)
+    ? { ok: true, trial: readMarketEgressTrialR2() }
+    : { ok: false, error: "trial_stop_failed_or_corrupt" };
+}
+
+export function heartbeatMarketBaseResourceEgressTrialR2(): OperatorResult {
+  return heartbeatEgressTrialState(Game.time)
+    ? { ok: true, trial: readMarketEgressTrialR2() }
+    : { ok: false, error: "trial_heartbeat_rejected_or_expired" };
+}
+
+export function marketBaseResourceEgressTrialR2Status(): unknown {
+  return readMarketEgressTrialR2();
 }
 
 export function proposeMarketBaseResourcePermit(

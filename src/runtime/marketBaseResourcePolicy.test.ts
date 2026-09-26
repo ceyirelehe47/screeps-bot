@@ -164,7 +164,9 @@ describe("2026-09-25 价格再校准", () => {
         resource === "H" || resource === "X" ? 8_000 : 5_000,
       );
       expect(policy.maxDealAmount).toBe(1_000);
-      expect(policy.cooldownTicks).toBe(1_000);
+      expect(policy.cooldownTicks).toBe(
+        policy.resource === "L" || policy.resource === "X" ? 100 : 1_000,
+      );
     }
   });
 });

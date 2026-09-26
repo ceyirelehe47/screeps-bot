@@ -25,7 +25,7 @@ export const MARKET_BASE_RESOURCE_EVIDENCE_SHA256 =
 export const MARKET_BASE_RESOURCE_EVIDENCE_IMPLEMENTATION_BLOB =
   "f55503b3d45352e14513e9928706251c82992ecc" as const;
 export const MARKET_BASE_RESOURCE_CONFIG_REVISION =
-  "market-base-resource-v3-r6" as const;
+  "market-base-resource-v3-r7" as const;
 /** 冷却期间最多约 30 笔，十亿是有限整数运算中的非约束哨值。 */
 export const MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT = 1_000_000_000 as const;
 
@@ -135,7 +135,8 @@ export interface MarketBaseResourcePolicy {
   readonly minOrderAmount: 1000;
   readonly minOrderNotional: number;
   readonly maxDealAmount: 1000;
-  readonly cooldownTicks: 1000;
+  /** Signed lower bound. A durable, scoped trial must still authorize 100. */
+  readonly cooldownTicks: 100 | 1000;
   readonly rollingWindowTicks: 30000;
   readonly rollingMaxAmount: number;
   /** 仅用于库存压力和生产缓冲标尺；滚动成交额度另行放开。 */
@@ -226,7 +227,7 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-l-v3-r1",
-    policyRevision: "base-l-v3-r4",
+    policyRevision: "base-l-v3-r5",
     resource: "L",
     resourceClass: "base-mineral",
     hardFloor: 161,
@@ -235,7 +236,7 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     minOrderAmount: 1_000,
     minOrderNotional: 169_000,
     maxDealAmount: 1_000,
-    cooldownTicks: 1_000,
+    cooldownTicks: 100,
     rollingWindowTicks: 30_000,
     rollingMaxAmount: MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT,
     inventoryReferenceAmount: 5_000,
@@ -307,7 +308,7 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-x-v3-r2",
-    policyRevision: "base-x-v3-r5",
+    policyRevision: "base-x-v3-r6",
     resource: "X",
     resourceClass: "base-mineral",
     hardFloor: 371,
@@ -316,7 +317,7 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     minOrderAmount: 1_000,
     minOrderNotional: 390_000,
     maxDealAmount: 1_000,
-    cooldownTicks: 1_000,
+    cooldownTicks: 100,
     rollingWindowTicks: 30_000,
     rollingMaxAmount: MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT,
     inventoryReferenceAmount: 8_000,
