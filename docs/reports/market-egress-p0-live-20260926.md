@@ -1,5 +1,22 @@
 # 市场出货 P0：线上成交、底价与空位趋势
 
+## 2026-09-26 08:10 UTC 现役更新
+
+下文的 2026-09-25 晚间数字保留为历史基线；本节是当前读回。shard1 部署标签为 `2026.8.29-6+529245b@2026-09-26T08:07:39.599Z`，上传模块与本地 bundle 哈希核对成功。请求/生效模式均为 Direct，cfg 为 r6，V3 permit epoch 16，签发的可写 grant 为 E4N58:X continuous、E1N57:L continuous、E3N59:H canary。V3 原账本 receipt head 从迁移前 `csh1:d35a928b6cce23f5d9085756ac249b3d` 保留到迁移后；迁移接受时 finalizedSeq 仍为 11、pending 与 quarantine 均为零，未清空保护/预约。滚动资源、房间、lane、全局**数量**额度现为十亿的非约束值；现役投影在新成交后显示全局已确认 5,000、E4N58:X 已确认 4,000。单笔 1,000、手续费上限与全局确认后 1,000 tick 冷却仍在，下一可成交 tick 为 `73954712`。
+
+迁移曾被 Screeps 的 2 MiB Memory 限制拦住：完整提案会使总 Memory 达约 2,121,000 字节，console 返回成功但提案未持久化。提交 `799022cd` 后只保存新增 permit 及目标承诺（提案约 115,631 字节），accept 用原链和账本重建并逐项校验。提案确实持久化，原 `proposeMarketBaseResourcePolicyMigration → acceptMarketBaseResourcePermit` 在 tick `73953439` 接受，permit epoch 15→16，回退闩锁清除。随后修复 E3N59:H 保护证据不完整导致所有资源规划退出的局部隔离，以及 E4N58 与缺口已被 Terminal Energy 覆盖的房间之间重复 Energy `send` 占用终端冷却；无可售保护余量的 lane 不读买单，节省原双读/WAL 所需 CPU。未新增卖货 writer。
+
+tick `73953712` 的原 writer 又售出 **1,000 X**：E4N58 → E49S23，订单 `6ab7679fa2ce580013d264fa`，真实交易 `6ab77d8ea2ce580013d8090a`，手续费 777 Energy，实际单位净价 420.505847。tick `73953713` receipt `confirmed`，tick `73953715` pending 删除，receipt head 变为 `csh1:7fddcf102a8f69301cac8245d9bbc5dc`；V3 lifetime 为 11 笔 / 11,000（含此次修复前的 6,000）。`Game.market.outgoingTransactions` 独立读到同一交易。E4N58 terminal 空位从卖前 46,902 增至 48,679（差 1,777，吻合 X 1,000 + Energy 777）；同时其他搬运持续进行，不能把全房间空位变化归给此单。
+
+| UTC / tick | 八房 storage+terminal 空位 | 八房 Energy | emergency / pressure 房间 |
+| --- | ---: | ---: | ---: |
+| 07:56 / 73953551 | 1,905,494 | 4,412,049 | 0 / 6 |
+| 08:04 / 73953670 | 1,906,601 | 4,410,497 | 0 / 6 |
+| 08:08 / 73953703 | 1,902,174 | 4,416,919 | 0 / 6 |
+| 08:10 / 73953735 | 1,903,926 | 4,417,477 | 0 / 6 |
+
+近期空位维持约 190 万、没有 emergency；从 19:18 UTC 的 376,437 空位改善约 153 万，主要是 Energy 净库存下降和常规消耗，市场总销量仅 5,000，不能单独解释该增量。E4N58 的 X 仍约 294 万在 Storage，不能以这一笔成交宣布 P0 结案。最新买盘中 X 有约 452 的千量买单，E4N58 保护后可售约 54,434；L 最高千量买价已降至约 0.831，低于动态净价底线；E3N59:H 有未完成的合成发货保护及 terminal 零实货，属于没有可售余量/证据不完整。下一观察重点是冷却结束后的复卖、八房空位和净 Energy 趋势，以及是否有不必要的补货重新占满 Terminal。
+
 ## 现役身份与账本
 
 本报告在 2026-09-25 UTC 晚间只读核对 shard1。正式代码由原现役 `5cef62c5` 起修，市场分支 `codex/market-egress-p0` 单独提交；Treasury、Observer/PowerBank 未混入。`origin` 是 `https://github.com/ceyirelehe47/screeps-bot.git`。最近部署标签为 `2026.8.29-6+58cdfeb@2026-09-25T22:28:22.045Z`，上传脚本将远端 `main` 模块与本地产物逐字节哈希核对成功。市场请求与生效均为 Direct，V3 cfg 为 r5，permit epoch 11，E4N58:X 为 `continuous/enabled`，E1N57:L 为 `canary/enabled`。只有既有 V3 writer 可执行卖单。
