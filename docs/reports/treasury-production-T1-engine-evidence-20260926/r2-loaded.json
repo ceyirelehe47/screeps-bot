@@ -1,0 +1,365 @@
+{
+  "schema": "screeps-treasury-t1-engine-snapshot/v1",
+  "phase": "r2-loaded",
+  "capturedAtUtc": "2026-09-26T11:23:49.056Z",
+  "tick": 491,
+  "paused": true,
+  "user": {
+    "_id": "7dad41a4bfc9d96",
+    "username": "lab_treasury_t1",
+    "cpu": 100,
+    "cpuAvailable": 10000
+  },
+  "code": {
+    "branch": "default",
+    "sha256": "a06c967360673e4766a9d4cf139f6e06a34f3c49f10f593d405fce3f9e8c3dcb",
+    "bytes": 4992628
+  },
+  "rawMemory": "{\"labT1Probe\":{\"tick\":212,\"shard\":\"VM-0-7-ubuntu\",\"quote100\":4,\"rooms\":{\"E3N59\":{\"visible\":true,\"controllerMy\":true,\"controllerLevel\":8,\"terminalId\":\"a67d41dd18b97eb\",\"terminalMy\":true,\"terminalActive\":true,\"terminalH\":1000,\"terminalEnergy\":10000,\"terminalFree\":289000,\"storageId\":\"702141dd18c0a7a\",\"storageEnergy\":100000},\"E4N58\":{\"visible\":true,\"controllerMy\":true,\"controllerLevel\":8,\"terminalId\":\"370f41dd18e91de\",\"terminalMy\":true,\"terminalActive\":true,\"terminalH\":200,\"terminalEnergy\":2000,\"terminalFree\":297800,\"storageId\":\"d7dc41dd18efd58\",\"storageEnergy\":100000}}},\"cfg\":{\"resourceControl\":{\"enabled\":true,\"sampleInterval\":10,\"taskMaxPerRun\":1,\"market\":{\"enabled\":false}},\"treasuryTerminalTransferSlice0\":{\"mode\":\"off\"},\"pixelGenerator\":{\"enabled\":false},\"factoryControl\":{\"market\":{\"enabled\":false}},\"cpuProfiler\":{\"enabled\":true,\"sampleInterval\":1,\"historyLimit\":5,\"roomRoleAggregation\":false,\"heapStats\":false}},\"data\":{\"resourceControl\":{\"taskSchemaVersion\":2,\"tasks\":{\"lab-existing-H-task\":{\"id\":\"lab-existing-H-task\",\"resource\":\"H\",\"fromRoomName\":\"E3N59\",\"toRoomName\":\"E4N58\",\"amount\":250,\"remainingAmount\":0,\"status\":\"done\",\"origin\":\"manual\",\"createdAt\":203,\"updatedAt\":370,\"lastProgressAt\":370},\"lab-cpu-H-task\":{\"id\":\"lab-cpu-H-task\",\"resource\":\"H\",\"fromRoomName\":\"E3N59\",\"toRoomName\":\"E4N58\",\"amount\":250,\"remainingAmount\":0,\"status\":\"done\",\"origin\":\"manual\",\"createdAt\":394,\"updatedAt\":480,\"lastProgressAt\":480}}},\"marketSaleAutomation\":{\"managedOrders\":{},\"pendingMutations\":{},\"feeEvents\":[],\"carriedFeeDebtMilli\":{},\"trustedFloors\":{},\"processedTransactionKeys\":[],\"operatorAudit\":[],\"feeLedger\":{\"feeEvents\":[],\"sameTickReservations\":[],\"processedFills\":[],\"carriedFeeDebtMilli\":{}},\"drain\":{\"phase\":\"off\",\"targetMode\":\"off\",\"zeroConfirmations\":237,\"lastZeroConfirmationTick\":490},\"marketStaging\":{},\"marketReservations\":{},\"pendingDirectDeals\":{},\"directAutomation\":{\"schemaVersion\":2,\"capability\":\"market-direct-continuous\",\"migrationStatus\":\"blocked\",\"migrationBlockedReason\":\"direct_state_missing\",\"rollbackEvidenceMarker\":\"market-direct-continuous:v2:blocked:direct_state_missing\",\"legacyStateDigest\":\"\",\"reviewedLegacyOutcomeDigest\":\"\",\"lifecycleByEntry\":{},\"permitChain\":{\"currentPermitEpoch\":0,\"currentPermitId\":\"\",\"permitChainHead\":\"market-direct-continuous:v2:permit-genesis\",\"permitEpochHighWater\":0,\"permitChainHeadHighWater\":\"market-direct-continuous:v2:permit-genesis\",\"permits\":[]},\"ledger\":{\"schema\":2,\"coverageStartTick\":0,\"receiptHeadHash\":\"market-direct-continuous:v2:receipt-genesis\",\"finalizedAttemptSeq\":0,\"nextAttemptSeq\":1,\"receipts\":[],\"outcomes\":[],\"processedEvidenceKeys\":[],\"checkpoint\":{\"prunedThroughSeq\":0,\"prunedHeadHash\":\"market-direct-continuous:v2:receipt-genesis\",\"confirmed\":{\"global\":{\"count\":0,\"amount\":0},\"resources\":{}},\"confirmedCanaries\":{},\"confirmedCanaryCommitment\":\"csh1:4e207c660f785169500b2b9c0a4d6f0c\"},\"lifetimeConfirmed\":{\"global\":{\"count\":0,\"amount\":0},\"resources\":{}},\"confirmedCanaries\":{},\"retryNotBefore\":0,\"permitEpochHighWater\":0,\"permitChainHeadHighWater\":\"market-direct-continuous:v2:permit-genesis\",\"blocker\":{\"code\":\"direct_state_missing\",\"detectedAt\":254,\"detailHash\":\"csh1:4dcc7570ebb6e8963d6742ca6cfb53b8\"}},\"lastLifecycleAppliedAttemptSeq\":0,\"pendingDirectDeals\":{},\"quarantinedPendingDirectDeals\":{\"__continuous_blocked__:direct_state_missing\":{\"invalidContinuousState\":null}},\"directDealOutcomes\":[],\"processedDirectTransactionKeys\":[],\"directConfirmedDealCount\":0,\"directPausedForReview\":true,\"baseResourceV3\":{\"schemaVersion\":3,\"catalog\":{\"revision\":\"base-mineral-v1\",\"configRevision\":\"market-base-resource-v3-r3\",\"resources\":[\"H\",\"K\",\"L\",\"O\",\"U\",\"X\",\"Z\"]},\"scope\":{\"schemaVersion\":1,\"accountIdentity\":\"lab_treasury_t1\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"roomRegistry\":{\"schemaVersion\":1,\"admissionPolicyFingerprint\":\"csh1:285544bed01da32475d991360f448644\",\"lastReconciledTick\":490,\"lastObservationFingerprint\":\"csh1:de4c193befbe9a92a9e9962c74ff54ff\",\"knownRoomNames\":[\"E3N59\",\"E4N58\"],\"rooms\":{\"E3N59\":{\"roomName\":\"E3N59\",\"incarnationHighWater\":1,\"lastInstanceId\":\"mbr-room:csh1:99f99106cda1ea6e8f75d9e39287c1b2\",\"admitted\":true,\"current\":{\"roomInstanceId\":\"mbr-room:csh1:99f99106cda1ea6e8f75d9e39287c1b2\",\"roomName\":\"E3N59\",\"incarnation\":1,\"previousInstanceId\":null,\"roomClass\":\"normal\",\"controllerOwner\":\"lab_treasury_t1\",\"terminalId\":\"a67d41dd18b97eb\",\"admissionRevision\":\"owned-visible-terminal-v1\",\"status\":\"admitted\",\"fingerprint\":\"csh1:e8cbde0ca6cad91c215ba5d62b224e2a\"}},\"E4N58\":{\"roomName\":\"E4N58\",\"incarnationHighWater\":1,\"lastInstanceId\":\"mbr-room:csh1:b5e68717e6241cc511565e78364ed90f\",\"admitted\":true,\"current\":{\"roomInstanceId\":\"mbr-room:csh1:b5e68717e6241cc511565e78364ed90f\",\"roomName\":\"E4N58\",\"incarnation\":1,\"previousInstanceId\":null,\"roomClass\":\"normal\",\"controllerOwner\":\"lab_treasury_t1\",\"terminalId\":\"370f41dd18e91de\",\"admissionRevision\":\"owned-visible-terminal-v1\",\"status\":\"admitted\",\"fingerprint\":\"csh1:d6b52d8d30e906c40e2eaad6d3fbd217\"}}},\"tombstonePrefixCheckpoint\":{\"schemaVersion\":1,\"hashRevision\":\"market-base-resource-room-tombstones-v1\",\"compressedCount\":0,\"compressedFirstTombstoneFingerprint\":\"csh1:44a12f3ce7d15d91e6d514a61290fae8\",\"compressedLastTombstoneFingerprint\":\"csh1:44a12f3ce7d15d91e6d514a61290fae8\",\"compressedPrefixHead\":\"csh1:44a12f3ce7d15d91e6d514a61290fae8\",\"roomHighWater\":[],\"checkpointCommitment\":\"csh1:68e3a1be0e6be8faed12c2f3381956ea\"},\"recentTombstones\":[],\"checkpointCommitment\":\"csh1:1a4fcc9d1e4e131367662475c6aed49b\"},\"sellerRooms\":[{\"roomInstanceId\":\"mbr-room:csh1:99f99106cda1ea6e8f75d9e39287c1b2\",\"roomName\":\"E3N59\",\"incarnation\":1,\"previousInstanceId\":null,\"roomClass\":\"normal\",\"controllerOwner\":\"lab_treasury_t1\",\"terminalId\":\"a67d41dd18b97eb\",\"admissionRevision\":\"owned-visible-terminal-v1\",\"status\":\"admitted\",\"fingerprint\":\"csh1:e8cbde0ca6cad91c215ba5d62b224e2a\"},{\"roomInstanceId\":\"mbr-room:csh1:b5e68717e6241cc511565e78364ed90f\",\"roomName\":\"E4N58\",\"incarnation\":1,\"previousInstanceId\":null,\"roomClass\":\"normal\",\"controllerOwner\":\"lab_treasury_t1\",\"terminalId\":\"370f41dd18e91de\",\"admissionRevision\":\"owned-visible-terminal-v1\",\"status\":\"admitted\",\"fingerprint\":\"csh1:d6b52d8d30e906c40e2eaad6d3fbd217\"}],\"laneLifecycles\":[{\"laneId\":\"mbr-lane:csh1:08cb9e3e1f88205b697d09a7c7021dac\",\"resource\":\"X\",\"resourcePolicyId\":\"base-x-v3-r2\",\"resourcePolicyFingerprint\":\"csh1:0cc2a90f653f8a5a667b80eaf95d46c0\",\"roomInstanceId\":\"mbr-room:csh1:99f99106cda1ea6e8f75d9e39287c1b2\",\"sellerRoomName\":\"E3N59\",\"roomFingerprint\":\"csh1:e8cbde0ca6cad91c215ba5d62b224e2a\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:b60bcdfc3481449b1f093265219edeca\"},{\"laneId\":\"mbr-lane:csh1:29a1f7eee6e1046599289fbdb4233859\",\"resource\":\"H\",\"resourcePolicyId\":\"base-h-v3-r1\",\"resourcePolicyFingerprint\":\"csh1:2eacd95f1b553a0b8d0613ecefbe3bb4\",\"roomInstanceId\":\"mbr-room:csh1:99f99106cda1ea6e8f75d9e39287c1b2\",\"sellerRoomName\":\"E3N59\",\"roomFingerprint\":\"csh1:e8cbde0ca6cad91c215ba5d62b224e2a\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:cef8769cd4198e26782562565c1729d4\"},{\"laneId\":\"mbr-lane:csh1:3076618d77f53d89d7442adcd16ac590\",\"resource\":\"H\",\"resourcePolicyId\":\"base-h-v3-r1\",\"resourcePolicyFingerprint\":\"csh1:2eacd95f1b553a0b8d0613ecefbe3bb4\",\"roomInstanceId\":\"mbr-room:csh1:b5e68717e6241cc511565e78364ed90f\",\"sellerRoomName\":\"E4N58\",\"roomFingerprint\":\"csh1:d6b52d8d30e906c40e2eaad6d3fbd217\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:32a0439fe229322d541e5219412505d8\"},{\"laneId\":\"mbr-lane:csh1:3348e81badf844ade9499ee657858390\",\"resource\":\"O\",\"resourcePolicyId\":\"base-o-v3-r1\",\"resourcePolicyFingerprint\":\"csh1:f6ee5d8a933c40cbfea3bbe0dbd9247d\",\"roomInstanceId\":\"mbr-room:csh1:b5e68717e6241cc511565e78364ed90f\",\"sellerRoomName\":\"E4N58\",\"roomFingerprint\":\"csh1:d6b52d8d30e906c40e2eaad6d3fbd217\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:a28e7003d57cb6f828fe2db7f8ba57be\"},{\"laneId\":\"mbr-lane:csh1:486541f95be611bd65d1795ed4eebcc8\",\"resource\":\"U\",\"resourcePolicyId\":\"base-u-v3-r1\",\"resourcePolicyFingerprint\":\"csh1:563d5d712137c497e4a208931887f176\",\"roomInstanceId\":\"mbr-room:csh1:99f99106cda1ea6e8f75d9e39287c1b2\",\"sellerRoomName\":\"E3N59\",\"roomFingerprint\":\"csh1:e8cbde0ca6cad91c215ba5d62b224e2a\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:456d5e56c328bd74a5a94e9c98f7d248\"},{\"laneId\":\"mbr-lane:csh1:490ea7c0e01dcba289424b7ba952013b\",\"resource\":\"O\",\"resourcePolicyId\":\"base-o-v3-r1\",\"resourcePolicyFingerprint\":\"csh1:f6ee5d8a933c40cbfea3bbe0dbd9247d\",\"roomInstanceId\":\"mbr-room:csh1:99f99106cda1ea6e8f75d9e39287c1b2\",\"sellerRoomName\":\"E3N59\",\"roomFingerprint\":\"csh1:e8cbde0ca6cad91c215ba5d62b224e2a\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:60d67dcba3e6616504cfb340ca38484f\"},{\"laneId\":\"mbr-lane:csh1:4d7e345ba92f0ae570b72ca797d71709\",\"resource\":\"Z\",\"resourcePolicyId\":\"base-z-v3-r1\",\"resourcePolicyFingerprint\":\"csh1:fdb2bac69a374c3001bedd9918932cdc\",\"roomInstanceId\":\"mbr-room:csh1:99f99106cda1ea6e8f75d9e39287c1b2\",\"sellerRoomName\":\"E3N59\",\"roomFingerprint\":\"csh1:e8cbde0ca6cad91c215ba5d62b224e2a\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:e184b47196a60abc927bde6f4634faa2\"},{\"laneId\":\"mbr-lane:csh1:56446685d8c6a7916a1566e2bd5501e1\",\"resource\":\"K\",\"resourcePolicyId\":\"base-k-v3-r1\",\"resourcePolicyFingerprint\":\"csh1:8936f09543d04942488382358d0385a0\",\"roomInstanceId\":\"mbr-room:csh1:b5e68717e6241cc511565e78364ed90f\",\"sellerRoomName\":\"E4N58\",\"roomFingerprint\":\"csh1:d6b52d8d30e906c40e2eaad6d3fbd217\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:3b9e592fa3e20ddea891651a910a2296\"},{\"laneId\":\"mbr-lane:csh1:5bd5b3f5461b887c9dcc6503f320cee5\",\"resource\":\"K\",\"resourcePolicyId\":\"base-k-v3-r1\",\"resourcePolicyFingerprint\":\"csh1:8936f09543d04942488382358d0385a0\",\"roomInstanceId\":\"mbr-room:csh1:99f99106cda1ea6e8f75d9e39287c1b2\",\"sellerRoomName\":\"E3N59\",\"roomFingerprint\":\"csh1:e8cbde0ca6cad91c215ba5d62b224e2a\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:1cfdc414059af53936c3e7f868471e1f\"},{\"laneId\":\"mbr-lane:csh1:76bcb4ff1d20b6b65783e3f292bfbf05\",\"resource\":\"X\",\"resourcePolicyId\":\"base-x-v3-r2\",\"resourcePolicyFingerprint\":\"csh1:0cc2a90f653f8a5a667b80eaf95d46c0\",\"roomInstanceId\":\"mbr-room:csh1:b5e68717e6241cc511565e78364ed90f\",\"sellerRoomName\":\"E4N58\",\"roomFingerprint\":\"csh1:d6b52d8d30e906c40e2eaad6d3fbd217\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:5df2300330e4e067fd652f7fba806eb5\"},{\"laneId\":\"mbr-lane:csh1:af5023b61f8fb2edce3b973743d97496\",\"resource\":\"L\",\"resourcePolicyId\":\"base-l-v3-r1\",\"resourcePolicyFingerprint\":\"csh1:6c245c2d338f7d6954714414f4d4ce62\",\"roomInstanceId\":\"mbr-room:csh1:b5e68717e6241cc511565e78364ed90f\",\"sellerRoomName\":\"E4N58\",\"roomFingerprint\":\"csh1:d6b52d8d30e906c40e2eaad6d3fbd217\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:ce7ca84f3d3984273b19a7deb9c67828\"},{\"laneId\":\"mbr-lane:csh1:ece17331b795091660184b70e166d2ad\",\"resource\":\"U\",\"resourcePolicyId\":\"base-u-v3-r1\",\"resourcePolicyFingerprint\":\"csh1:563d5d712137c497e4a208931887f176\",\"roomInstanceId\":\"mbr-room:csh1:b5e68717e6241cc511565e78364ed90f\",\"sellerRoomName\":\"E4N58\",\"roomFingerprint\":\"csh1:d6b52d8d30e906c40e2eaad6d3fbd217\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:9829b37544bf51645dafb57ff3e379fa\"},{\"laneId\":\"mbr-lane:csh1:f473398030ec970d789cfba46366f0cf\",\"resource\":\"Z\",\"resourcePolicyId\":\"base-z-v3-r1\",\"resourcePolicyFingerprint\":\"csh1:fdb2bac69a374c3001bedd9918932cdc\",\"roomInstanceId\":\"mbr-room:csh1:b5e68717e6241cc511565e78364ed90f\",\"sellerRoomName\":\"E4N58\",\"roomFingerprint\":\"csh1:d6b52d8d30e906c40e2eaad6d3fbd217\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:bbbefe12a7e9aca0a699f1cf56815846\"},{\"laneId\":\"mbr-lane:csh1:fe54ec26fc3ccab8f60b6f1128591714\",\"resource\":\"L\",\"resourcePolicyId\":\"base-l-v3-r1\",\"resourcePolicyFingerprint\":\"csh1:6c245c2d338f7d6954714414f4d4ce62\",\"roomInstanceId\":\"mbr-room:csh1:99f99106cda1ea6e8f75d9e39287c1b2\",\"sellerRoomName\":\"E3N59\",\"roomFingerprint\":\"csh1:e8cbde0ca6cad91c215ba5d62b224e2a\",\"sharedPolicyFingerprint\":\"csh1:b8ece8c8d71a3dd369b0ffdf922ee4f5\",\"stage\":\"shadow\",\"status\":\"suspended\",\"shadowEvidence\":{\"completeCycles\":0},\"stableFingerprint\":\"csh1:ccf0508d31c2e177236f3e53ac0b7d7c\"}],\"recentLaneTombstones\":[],\"laneTombstoneDischargeCheckpoint\":{\"schemaVersion\":1,\"hashRevision\":\"market-base-resource-scope-lane-tombstones-v1\",\"dischargedCount\":0,\"dischargedPrefixHead\":\"csh1:e05f2b36a36b2e11baf13683c5751be9\",\"lastPermitCheckpointCommitment\":\"csh1:e05f2b36a36b2e11baf13683c5751be9\",\"checkpointCommitment\":\"csh1:d48195c49da5787b75c41d51fe6cc136\"},\"rosterFingerprint\":\"csh1:3cb381b2b7b3d8c6577c942abdf83975\",\"laneSetFingerprint\":\"csh1:942c7a002e62228b1dbb6a23d9a68bc0\",\"updatedAt\":490}}}},\"creepConfigs\":{\"E3N59:harvester:dbf141a99846cab\":{\"role\":\"harvester\",\"args\":[\"dbf141a99846cab\"],\"roomName\":\"E3N59\"},\"E3N59:carrier:0\":{\"role\":\"carrier\",\"args\":[],\"roomName\":\"E3N59\"},\"E4N58:harvester:b04e41ac1ac536c\":{\"role\":\"harvester\",\"args\":[\"b04e41ac1ac536c\"],\"roomName\":\"E4N58\"},\"E4N58:carrier:0\":{\"role\":\"carrier\",\"args\":[],\"roomName\":\"E4N58\"}},\"manualUpgraders\":{},\"colonization\":{},\"crossShardColonization\":{},\"flagHauling\":{},\"war\":{},\"powerBankHarvest\":{},\"roomPlanner\":{\"E3N59\":{\"layout\":{\"link\":[{\"x\":38,\"y\":35},{\"x\":35,\"y\":34}],\"storage\":[{\"x\":37,\"y\":36}],\"powerSpawn\":[{\"x\":36,\"y\":37}],\"terminal\":[{\"x\":36,\"y\":35}],\"factory\":[{\"x\":35,\"y\":36}],\"road\":[{\"x\":31,\"y\":41},{\"x\":32,\"y\":40},{\"x\":33,\"y\":39},{\"x\":34,\"y\":40},{\"x\":34,\"y\":41},{\"x\":35,\"y\":35},{\"x\":35,\"y\":39},{\"x\":36,\"y\":34},{\"x\":36,\"y\":36},{\"x\":36,\"y\":38},{\"x\":37,\"y\":35},{\"x\":37,\"y\":37},{\"x\":37,\"y\":40},{\"x\":37,\"y\":42},{\"x\":38,\"y\":34},{\"x\":38,\"y\":36},{\"x\":38,\"y\":37},{\"x\":38,\"y\":39},{\"x\":38,\"y\":41},{\"x\":39,\"y\":33},{\"x\":39,\"y\":38},{\"x\":39,\"y\":43},{\"x\":40,\"y\":32},{\"x\":40,\"y\":34},{\"x\":40,\"y\":39},{\"x\":40,\"y\":42},{\"x\":41,\"y\":31},{\"x\":41,\"y\":33},{\"x\":41,\"y\":35},{\"x\":41,\"y\":40},{\"x\":41,\"y\":41},{\"x\":42,\"y\":30},{\"x\":42,\"y\":32},{\"x\":42,\"y\":36},{\"x\":42,\"y\":39}],\"rampart\":[{\"x\":47,\"y\":32},{\"x\":47,\"y\":33},{\"x\":47,\"y\":34},{\"x\":47,\"y\":35},{\"x\":47,\"y\":36},{\"x\":47,\"y\":37},{\"x\":47,\"y\":38},{\"x\":47,\"y\":39},{\"x\":47,\"y\":40},{\"x\":47,\"y\":41},{\"x\":34,\"y\":47},{\"x\":35,\"y\":47},{\"x\":36,\"y\":47},{\"x\":37,\"y\":47},{\"x\":38,\"y\":47},{\"x\":39,\"y\":47},{\"x\":40,\"y\":47},{\"x\":41,\"y\":47},{\"x\":42,\"y\":47},{\"x\":48,\"y\":32},{\"x\":42,\"y\":48},{\"x\":45,\"y\":45},{\"x\":46,\"y\":45},{\"x\":47,\"y\":45},{\"x\":48,\"y\":45},{\"x\":28,\"y\":35},{\"x\":38,\"y\":25},{\"x\":38,\"y\":26},{\"x\":39,\"y\":25},{\"x\":41,\"y\":25},{\"x\":43,\"y\":25},{\"x\":40,\"y\":25},{\"x\":42,\"y\":25},{\"x\":27,\"y\":35},{\"x\":27,\"y\":37},{\"x\":27,\"y\":36},{\"x\":26,\"y\":38},{\"x\":26,\"y\":37},{\"x\":26,\"y\":45},{\"x\":26,\"y\":46},{\"x\":26,\"y\":47},{\"x\":26,\"y\":48}],\"container\":[],\"work_pos\":[{\"x\":34,\"y\":35}],\"tower\":[{\"x\":37,\"y\":43},{\"x\":38,\"y\":42},{\"x\":38,\"y\":43},{\"x\":41,\"y\":30},{\"x\":42,\"y\":29},{\"x\":42,\"y\":31}],\"lab\":[{\"x\":37,\"y\":38},{\"x\":36,\"y\":39},{\"x\":37,\"y\":39},{\"x\":34,\"y\":38},{\"x\":34,\"y\":39},{\"x\":36,\"y\":40},{\"x\":33,\"y\":40},{\"x\":33,\"y\":38},{\"x\":35,\"y\":38},{\"x\":35,\"y\":40}],\"extension\":[{\"x\":39,\"y\":36},{\"x\":39,\"y\":35},{\"x\":38,\"y\":38},{\"x\":39,\"y\":34},{\"x\":38,\"y\":33},{\"x\":34,\"y\":36},{\"x\":39,\"y\":39},{\"x\":40,\"y\":38},{\"x\":40,\"y\":37},{\"x\":40,\"y\":33},{\"x\":39,\"y\":32},{\"x\":39,\"y\":40},{\"x\":38,\"y\":40},{\"x\":40,\"y\":40},{\"x\":41,\"y\":39},{\"x\":41,\"y\":38},{\"x\":41,\"y\":32},{\"x\":40,\"y\":31},{\"x\":40,\"y\":35},{\"x\":41,\"y\":34},{\"x\":35,\"y\":41},{\"x\":33,\"y\":41},{\"x\":37,\"y\":41},{\"x\":36,\"y\":41},{\"x\":42,\"y\":41},{\"x\":40,\"y\":41},{\"x\":42,\"y\":40},{\"x\":42,\"y\":34},{\"x\":42,\"y\":33},{\"x\":41,\"y\":36},{\"x\":40,\"y\":36},{\"x\":42,\"y\":35},{\"x\":32,\"y\":39},{\"x\":35,\"y\":42},{\"x\":34,\"y\":42},{\"x\":33,\"y\":42},{\"x\":39,\"y\":42},{\"x\":39,\"y\":41},{\"x\":43,\"y\":40},{\"x\":43,\"y\":39},{\"x\":42,\"y\":38},{\"x\":42,\"y\":42},{\"x\":41,\"y\":42},{\"x\":43,\"y\":31},{\"x\":43,\"y\":30},{\"x\":43,\"y\":29},{\"x\":43,\"y\":33},{\"x\":43,\"y\":32},{\"x\":43,\"y\":37},{\"x\":42,\"y\":37},{\"x\":41,\"y\":37},{\"x\":43,\"y\":36},{\"x\":43,\"y\":35},{\"x\":32,\"y\":41},{\"x\":31,\"y\":40},{\"x\":31,\"y\":39},{\"x\":36,\"y\":43},{\"x\":36,\"y\":42},{\"x\":40,\"y\":43},{\"x\":32,\"y\":42}],\"spawn\":[{\"x\":37,\"y\":34},{\"x\":35,\"y\":37},{\"x\":39,\"y\":37}],\"observer\":[{\"x\":30,\"y\":41}],\"nuker\":[{\"x\":31,\"y\":42}]},\"timestamp\":254,\"savedAt\":254},\"E4N58\":{\"layout\":{\"link\":[{\"x\":16,\"y\":30},{\"x\":15,\"y\":29},{\"x\":11,\"y\":41}],\"storage\":[{\"x\":15,\"y\":31}],\"powerSpawn\":[{\"x\":14,\"y\":32}],\"terminal\":[{\"x\":14,\"y\":30}],\"factory\":[{\"x\":13,\"y\":31}],\"road\":[{\"x\":9,\"y\":27},{\"x\":10,\"y\":28},{\"x\":10,\"y\":37},{\"x\":10,\"y\":38},{\"x\":11,\"y\":28},{\"x\":11,\"y\":36},{\"x\":12,\"y\":29},{\"x\":12,\"y\":33},{\"x\":12,\"y\":35},{\"x\":13,\"y\":28},{\"x\":13,\"y\":30},{\"x\":13,\"y\":34},{\"x\":14,\"y\":27},{\"x\":14,\"y\":29},{\"x\":14,\"y\":31},{\"x\":14,\"y\":33},{\"x\":15,\"y\":30},{\"x\":15,\"y\":32},{\"x\":15,\"y\":35},{\"x\":16,\"y\":31},{\"x\":16,\"y\":32},{\"x\":16,\"y\":34},{\"x\":16,\"y\":36},{\"x\":17,\"y\":31},{\"x\":17,\"y\":33},{\"x\":18,\"y\":30},{\"x\":18,\"y\":34},{\"x\":19,\"y\":31},{\"x\":19,\"y\":35},{\"x\":20,\"y\":32},{\"x\":20,\"y\":35},{\"x\":20,\"y\":36}],\"rampart\":[{\"x\":4,\"y\":25},{\"x\":4,\"y\":27},{\"x\":4,\"y\":26},{\"x\":4,\"y\":24},{\"x\":4,\"y\":22},{\"x\":4,\"y\":23},{\"x\":10,\"y\":41},{\"x\":12,\"y\":41},{\"x\":11,\"y\":41},{\"x\":14,\"y\":41},{\"x\":13,\"y\":41},{\"x\":16,\"y\":41},{\"x\":15,\"y\":41},{\"x\":18,\"y\":41},{\"x\":17,\"y\":41},{\"x\":20,\"y\":41},{\"x\":19,\"y\":41},{\"x\":22,\"y\":41},{\"x\":21,\"y\":41},{\"x\":24,\"y\":41},{\"x\":23,\"y\":41},{\"x\":25,\"y\":40},{\"x\":25,\"y\":41},{\"x\":25,\"y\":39},{\"x\":25,\"y\":38},{\"x\":25,\"y\":37},{\"x\":25,\"y\":36},{\"x\":6,\"y\":22},{\"x\":5,\"y\":22},{\"x\":8,\"y\":22},{\"x\":7,\"y\":22},{\"x\":10,\"y\":22},{\"x\":9,\"y\":22},{\"x\":11,\"y\":22},{\"x\":24,\"y\":26},{\"x\":23,\"y\":26},{\"x\":24,\"y\":27},{\"x\":25,\"y\":27},{\"x\":25,\"y\":28},{\"x\":25,\"y\":29},{\"x\":25,\"y\":30},{\"x\":25,\"y\":31},{\"x\":25,\"y\":32},{\"x\":25,\"y\":33},{\"x\":25,\"y\":34},{\"x\":25,\"y\":35},{\"x\":20,\"y\":26},{\"x\":21,\"y\":26},{\"x\":22,\"y\":26}],\"container\":[],\"work_pos\":[{\"x\":16,\"y\":29},{\"x\":10,\"y\":41}],\"tower\":[{\"x\":8,\"y\":28},{\"x\":9,\"y\":28},{\"x\":9,\"y\":29},{\"x\":20,\"y\":34},{\"x\":21,\"y\":34},{\"x\":21,\"y\":35}],\"lab\":[{\"x\":13,\"y\":32},{\"x\":14,\"y\":34},{\"x\":13,\"y\":35},{\"x\":14,\"y\":35},{\"x\":11,\"y\":32},{\"x\":11,\"y\":33},{\"x\":11,\"y\":34},{\"x\":11,\"y\":35},{\"x\":13,\"y\":33},{\"x\":12,\"y\":34}],\"extension\":[{\"x\":15,\"y\":33},{\"x\":13,\"y\":29},{\"x\":15,\"y\":28},{\"x\":14,\"y\":28},{\"x\":12,\"y\":31},{\"x\":12,\"y\":30},{\"x\":18,\"y\":32},{\"x\":18,\"y\":31},{\"x\":15,\"y\":34},{\"x\":17,\"y\":34},{\"x\":18,\"y\":33},{\"x\":12,\"y\":28},{\"x\":13,\"y\":27},{\"x\":12,\"y\":27},{\"x\":11,\"y\":30},{\"x\":11,\"y\":29},{\"x\":19,\"y\":30},{\"x\":17,\"y\":35},{\"x\":16,\"y\":35},{\"x\":18,\"y\":35},{\"x\":19,\"y\":34},{\"x\":19,\"y\":33},{\"x\":15,\"y\":27},{\"x\":15,\"y\":26},{\"x\":14,\"y\":26},{\"x\":10,\"y\":29},{\"x\":11,\"y\":27},{\"x\":10,\"y\":27},{\"x\":19,\"y\":32},{\"x\":20,\"y\":31},{\"x\":20,\"y\":30},{\"x\":12,\"y\":32},{\"x\":13,\"y\":36},{\"x\":12,\"y\":36},{\"x\":15,\"y\":36},{\"x\":14,\"y\":36},{\"x\":19,\"y\":36},{\"x\":18,\"y\":36},{\"x\":21,\"y\":33},{\"x\":20,\"y\":33},{\"x\":21,\"y\":32},{\"x\":21,\"y\":31},{\"x\":12,\"y\":37},{\"x\":11,\"y\":37},{\"x\":10,\"y\":36},{\"x\":10,\"y\":35},{\"x\":17,\"y\":37},{\"x\":16,\"y\":37},{\"x\":15,\"y\":37},{\"x\":17,\"y\":36},{\"x\":21,\"y\":36},{\"x\":21,\"y\":37},{\"x\":20,\"y\":37},{\"x\":19,\"y\":37},{\"x\":10,\"y\":26}],\"spawn\":[{\"x\":17,\"y\":32},{\"x\":17,\"y\":30},{\"x\":16,\"y\":33}],\"observer\":[{\"x\":8,\"y\":26}],\"nuker\":[{\"x\":9,\"y\":26}]},\"timestamp\":254,\"savedAt\":254}},\"remoteMining\":{},\"interShardPortals\":{},\"rescue\":{}},\"runtime\":{\"resourceReservations\":{\"E3N59:H:ow2:ls:9:synthesissynthesis:E3N59:H\":{\"roomName\":\"E3N59\",\"resource\":\"H\",\"holderId\":\"synthesis:E3N59:H\",\"amount\":50,\"updatedAt\":203,\"expiresAt\":5213,\"owner\":{\"kind\":\"logical-service\",\"id\":\"synthesis:E3N59:H\",\"namespace\":\"synthesis\"}}},\"lastDeployTag\":\"2026.8.29-6+69bf15c@2026-09-24T15:09:11.248Z\",\"lastDeployCommit\":\"69bf15cf2a533a8adc3f642f7de16bc529915d53\",\"lastDeployTree\":\"07d4061f571263ff7a358727c19e8c21e2fec641\",\"lastDeployBundleHash\":\"3c402b56c13c5a2da44b756470ed7b184bf999078c01609bba40c40c794b0af1\",\"lastDeployBranch\":\"codex/treasury-production-candidate-t1\",\"lastDeployAt\":254,\"marketSaleAutomation\":{\"updatedAt\":490,\"requestedMode\":\"off\",\"phase\":\"off\",\"shadowConsecutiveCycles\":0,\"zeroConfirmations\":237,\"managedOrderCount\":0,\"pendingCreateCount\":0,\"pendingMutationCount\":0,\"stagingAmount\":0,\"reservationAmount\":0,\"exposureAmount\":0,\"rollingFeeMilli\":0,\"terminalClaims\":[],\"rejectedByReason\":{},\"candidates\":{},\"recentActions\":[],\"safetyViolationCount\":0,\"lastZeroConfirmationTick\":490,\"managedOrders\":[],\"managedOrderSummaryTruncated\":false,\"backoffSummary\":{\"activeCount\":0},\"orderSlots\":{\"total\":300,\"current\":0,\"free\":300,\"reserved\":0,\"minFree\":5},\"creditSummary\":{\"credits\":0,\"reservedFeesThisTick\":0},\"direct\":{\"strategyActive\":false,\"schemaVersion\":2,\"capability\":\"market-direct-continuous\",\"migrationStatus\":\"blocked\",\"migrationBlockedReason\":\"direct_state_missing\",\"lifecycleByEntry\":{},\"entries\":[{\"entryId\":\"base-h-e3n59-v1\",\"resourceType\":\"H\",\"allowedRoomNames\":[\"E3N59\"],\"hardFloor\":428,\"economicFloor\":451,\"laneReserve\":100000,\"rollingWindowTicks\":30000,\"rollingMaxAmount\":8000,\"opportunityReserveAmount\":1000,\"quota\":{\"tick\":490,\"windowStartTick\":-29509,\"resource\":\"H\",\"resourceLimit\":8000,\"globalLimit\":12000,\"resourceConfirmedActual\":0,\"resourceUnmatchedPlanned\":0,\"resourceRemaining\":8000,\"globalConfirmedActual\":0,\"globalUnmatchedPlanned\":0,\"globalRemaining\":12000,\"confirmedCooldownNotBefore\":0,\"retryNotBefore\":0}},{\"entryId\":\"base-x-e6n59-v1\",\"resourceType\":\"X\",\"allowedRoomNames\":[\"E6N59\"],\"hardFloor\":600,\"economicFloor\":600,\"laneReserve\":100000,\"rollingWindowTicks\":30000,\"rollingMaxAmount\":8000,\"opportunityReserveAmount\":1000,\"quota\":{\"tick\":490,\"windowStartTick\":-29509,\"resource\":\"X\",\"resourceLimit\":8000,\"globalLimit\":12000,\"resourceConfirmedActual\":0,\"resourceUnmatchedPlanned\":0,\"resourceRemaining\":8000,\"globalConfirmedActual\":0,\"globalUnmatchedPlanned\":0,\"globalRemaining\":12000,\"confirmedCooldownNotBefore\":0,\"retryNotBefore\":0}},{\"entryId\":\"base-z-e7n57-v1\",\"resourceType\":\"Z\",\"allowedRoomNames\":[\"E7N57\"],\"hardFloor\":43,\"economicFloor\":45,\"laneReserve\":100000,\"rollingWindowTicks\":30000,\"rollingMaxAmount\":5000,\"opportunityReserveAmount\":1000,\"quota\":{\"tick\":490,\"windowStartTick\":-29509,\"resource\":\"Z\",\"resourceLimit\":5000,\"globalLimit\":12000,\"resourceConfirmedActual\":0,\"resourceUnmatchedPlanned\":0,\"resourceRemaining\":5000,\"globalConfirmedActual\":0,\"globalUnmatchedPlanned\":0,\"globalRemaining\":12000,\"confirmedCooldownNotBefore\":0,\"retryNotBefore\":0}}],\"ledger\":{\"receiptHeadHash\":\"market-direct-continuous:v2:receipt-genesis\",\"finalizedAttemptSeq\":0,\"nextAttemptSeq\":1,\"coverageStartTick\":0,\"permitEpochHighWater\":0,\"permitChainHeadHighWater\":\"market-direct-continuous:v2:permit-genesis\",\"lifetimeConfirmed\":{\"global\":{\"count\":0,\"amount\":0},\"resources\":{}},\"blocker\":{\"code\":\"direct_state_missing\",\"detectedAt\":254,\"detailHash\":\"csh1:4dcc7570ebb6e8963d6742ca6cfb53b8\"},\"quarantinedCount\":1}}},\"nukerControl\":{\"updatedAt\":490,\"ghodiumProductionDemand\":0,\"lastActions\":[],\"rooms\":{}},\"resourceControl\":{\"updatedAt\":490,\"capacityIndexBuildCount\":1,\"taskContributionIndex\":{\"initialTaskCount\":2,\"syncCount\":0,\"contributionEvaluationCount\":2,\"productionReservationScanCount\":1,\"productionReservationRecordCount\":1,\"invalidProductionReservationCount\":0},\"capacityPolicy\":{\"enabled\":true,\"terminalHeadroomRecoveryEnabled\":true,\"storagePressureFreeCapacity\":100000,\"storageReliefTargetFreeCapacity\":200000,\"receiverStorageMinFreeCapacity\":100000,\"terminalPressureFreeCapacity\":40000,\"terminalReliefTargetFreeCapacity\":80000,\"receiverTerminalMinFreeCapacity\":50000},\"eligibleReceiverCount\":2,\"receiverExcludedByReason\":{},\"suppressedStagingCount\":{},\"rooms\":{\"E3N59\":{\"state\":\"survival\",\"capacityState\":\"normal\",\"storageUsedCapacity\":100000,\"storageFreeCapacity\":900000,\"terminalUsedCapacity\":10482,\"terminalFreeCapacity\":289518,\"localOffloadCapacityCommitment\":0,\"desiredTerminalFreeCapacity\":60000,\"terminalRecoveryGap\":0,\"recoverableOffloadAmount\":0,\"stickyHeadroom\":false,\"capacityReservation\":{\"committed\":0,\"remaining\":249518},\"staging\":{\"admittedAmount\":0,\"admittedTaskCount\":0,\"admittedByResource\":{},\"suppressedCount\":0,\"suppressedByReason\":{}},\"storageEnergy\":100000,\"terminalEnergy\":9982,\"energyFloor\":120000,\"energyTarget\":200000,\"energyExportStart\":250000,\"terminalEnergyReserve\":20000,\"marketEnergyReadiness\":{\"schemaVersion\":3,\"revision\":\"market-terminal-energy-v3:490\",\"observedAt\":490,\"expiresAt\":491,\"terminalId\":\"a67d41dd18b97eb\",\"authorized\":false,\"effectivePostDealEnergyReserve\":25000,\"marketTerminalEnergyTarget\":26000,\"ordinaryTerminalEnergyTarget\":20000,\"unresolvedEnergySendAmount\":0,\"unresolvedInternalSendFees\":0,\"terminalScopedProductionEnergyCommitments\":0,\"maxTransactionEnergy\":1000,\"contributionCount\":1,\"contributions\":[{\"id\":\"ordinary-terminal-target:E3N59\",\"amount\":20000,\"kind\":\"ordinary_terminal_target\"}],\"desiredTerminalEnergy\":20000,\"plannedFeedAmount\":0,\"status\":\"blocked\",\"blocker\":\"not_authorized\"},\"canMineNative\":false,\"minerals\":{\"H\":500,\"O\":0,\"U\":0,\"L\":0,\"K\":0,\"Z\":0,\"X\":0},\"taskHealth\":{\"pendingIncoming\":0,\"pendingOutgoing\":0,\"blockedIncoming\":{},\"blockedOutgoing\":{}}},\"E4N58\":{\"state\":\"survival\",\"capacityState\":\"normal\",\"storageUsedCapacity\":100000,\"storageFreeCapacity\":900000,\"terminalUsedCapacity\":2700,\"terminalFreeCapacity\":297300,\"localOffloadCapacityCommitment\":0,\"desiredTerminalFreeCapacity\":60000,\"terminalRecoveryGap\":0,\"recoverableOffloadAmount\":0,\"stickyHeadroom\":false,\"capacityReservation\":{\"committed\":0,\"remaining\":257300},\"staging\":{\"admittedAmount\":0,\"admittedTaskCount\":0,\"admittedByResource\":{},\"suppressedCount\":0,\"suppressedByReason\":{}},\"storageEnergy\":100000,\"terminalEnergy\":2000,\"energyFloor\":120000,\"energyTarget\":200000,\"energyExportStart\":250000,\"terminalEnergyReserve\":20000,\"marketEnergyReadiness\":{\"schemaVersion\":3,\"revision\":\"market-terminal-energy-v3:490\",\"observedAt\":490,\"expiresAt\":491,\"terminalId\":\"370f41dd18e91de\",\"authorized\":false,\"effectivePostDealEnergyReserve\":25000,\"marketTerminalEnergyTarget\":26000,\"ordinaryTerminalEnergyTarget\":20000,\"unresolvedEnergySendAmount\":0,\"unresolvedInternalSendFees\":0,\"terminalScopedProductionEnergyCommitments\":0,\"maxTransactionEnergy\":1000,\"contributionCount\":1,\"contributions\":[{\"id\":\"ordinary-terminal-target:E4N58\",\"amount\":20000,\"kind\":\"ordinary_terminal_target\"}],\"desiredTerminalEnergy\":20000,\"plannedFeedAmount\":0,\"status\":\"blocked\",\"blocker\":\"not_authorized\"},\"canMineNative\":false,\"minerals\":{\"H\":700,\"O\":0,\"U\":0,\"L\":0,\"K\":0,\"Z\":0,\"X\":0},\"taskHealth\":{\"pendingIncoming\":0,\"pendingOutgoing\":0,\"blockedIncoming\":{},\"blockedOutgoing\":{}}}},\"lastActions\":[\"terminal-logistics:E3N59:count=1\",\"terminal-logistics:E4N58:count=1\"],\"lastMarketActions\":[],\"taskSummary\":{\"pending\":0,\"manualPending\":0,\"automaticPending\":0,\"demandCoveringIncoming\":0,\"coverageExpiredIncoming\":0,\"coverageExpiredByReason\":{},\"blockedByReason\":{}},\"recentCapacityReliefRoutes\":[],\"synthesisBindings\":{},\"logistics\":{\"schemaVersion\":2,\"updatedAt\":490,\"expiresAt\":510,\"requestedMode\":\"disabled\",\"effectiveAuthority\":\"legacy\",\"available\":false,\"complete\":false,\"projectionTruncated\":false,\"blocker\":\"mode_disabled\",\"inScopeByOrigin\":{},\"outOfScopeByOrigin\":{},\"intent\":{\"total\":0,\"active\":0,\"fresh\":0,\"stale\":0,\"paired\":0,\"inputDrift\":0,\"emitted\":0,\"dropped\":0,\"truncated\":false},\"comparison\":{\"total\":0,\"matched\":0,\"different\":0,\"unresolved\":0,\"byReason\":{},\"byDecisionDelta\":{},\"byCausalCode\":{},\"dimensions\":{\"donor\":{\"matched\":0,\"different\":0,\"unresolved\":0},\"route\":{\"matched\":0,\"different\":0,\"unresolved\":0},\"priority\":{\"matched\":0,\"different\":0,\"unresolved\":0},\"demandCoverage\":{\"matched\":0,\"different\":0,\"unresolved\":0},\"receiverHeadroom\":{\"matched\":0,\"different\":0,\"unresolved\":0},\"predictedStagingEligibility\":{\"matched\":0,\"different\":0,\"unresolved\":0}},\"sampled\":0,\"detailsDropped\":0,\"samples\":[]},\"matcher\":{\"indexBuilds\":0,\"candidateEvaluations\":0,\"transactionCostEvaluations\":0,\"totalTransactionCostEvaluations\":0,\"candidateBudget\":128,\"budgetExhausted\":false},\"safety\":{\"measurementBoundary\":\"observable_state_diff_v1\",\"nonLegacyAuthorityRecords\":0,\"activeContracts\":0,\"activeLeases\":0,\"activeClaims\":0,\"shadowArbiterActorRecords\":0,\"shadowClaimRecords\":0,\"shadowJournalRecords\":0,\"shadowCarrierTaskRecords\":0,\"shadowReceiverReservationRecords\":0,\"violations\":[]},\"resources\":{\"dataItems\":0,\"runtimeItems\":0,\"dataBytes\":0,\"runtimeBytes\":1591,\"totalBytes\":1591,\"withinLimit\":true},\"cpu\":{\"attributionVersion\":2,\"sampleTick\":490,\"measurementAvailable\":true,\"producerUsed\":0,\"consumerUsed\":0.089}},\"marketEnergyReadinessRevokedTaskHighWater\":490},\"crossShard\":{\"remotes\":{},\"claims\":{\"E3N59\":{\"updatedAt\":490},\"E4N58\":{\"updatedAt\":490}},\"rooms\":{\"E3N59\":{\"updatedAt\":490,\"hasSpawn\":false,\"hasStorage\":true},\"E4N58\":{\"updatedAt\":490,\"hasSpawn\":false,\"hasStorage\":true}}},\"powerBankObserver\":{\"patrolIndex\":0,\"updatedAt\":490,\"lastObservedRooms\":[],\"coveredRooms\":[]},\"roomPlannerBuild\":{\"rooms\":{\"E3N59\":{\"lastRunAt\":454},\"E4N58\":{\"lastRunAt\":454}}},\"linkNetwork\":{\"E3N59\":{\"updatedAt\":485,\"senderIds\":[],\"receiverIds\":[]},\"E4N58\":{\"updatedAt\":485,\"senderIds\":[],\"receiverIds\":[]}},\"remoteMining\":{\"lastScanAt\":454},\"inventoryPerf\":{\"inventoryBuilds\":3,\"inventoryReuseHits\":10,\"storeObjectsScanned\":12,\"resourceKeysEnumerated\":18,\"coreLayerBuilds\":3,\"productionLayerBuilds\":1,\"containerLayerBuilds\":1,\"looseResourceLayerBuilds\":0,\"deadStoreLayerBuilds\":0,\"creepCargoLayerBuilds\":1,\"powerCreepCargoLayerBuilds\":1,\"parityChecks\":64,\"parityMismatches\":0,\"lastCheckMismatches\":0,\"lastLayer\":\"field\",\"lastOracleRan\":false,\"oracleChecks\":0,\"oracleMismatches\":0,\"mismatchSampleTicks\":[],\"committedAtTick\":484},\"marketPerf\":{\"marketDataStateDeepRecoveries\":47,\"marketFastPathTicks\":47,\"committedAtTick\":450},\"resourceReservationsOwnerVersion\":4,\"treasuryCore\":{\"version\":3,\"installEpochId\":\"803df4eedcc4a264\",\"issuance\":{\"frontier\":2,\"burned\":0},\"lifecycle\":{\"lastBeginTick\":480,\"lastEndTick\":480},\"recovery\":{\"sweepCursor\":0,\"cleanupCursor\":0,\"budgetTick\":480,\"budgetUsed\":0},\"active\":{},\"ring\":[{\"attemptId\":\"tk1_1_f3ac6fc8a7ecc9ac\",\"workKey\":\"biz:treasury-production-T1-2026-09-24:d3e5156ffadcda08\",\"generation\":1,\"terminalPhase\":\"committed\",\"closedAtTick\":322},{\"attemptId\":\"tk1_2_8b818380795c61d4\",\"workKey\":\"biz:treasury-production-T1-2026-09-24:148af774f9ec4e74\",\"generation\":1,\"terminalPhase\":\"committed\",\"closedAtTick\":442}],\"ringCursor\":2,\"counters\":{\"admitted\":2,\"dispatched\":2,\"settledCommitted\":2,\"settledNotExecuted\":0,\"unknown\":2,\"rearmings\":0,\"rejectedAdmissions\":0,\"recoveryAdvances\":0,\"cleanupFailures\":0}},\"treasuryWorldSequence\":2,\"treasuryProductionT1Quota\":{\"schemaVersion\":1,\"runId\":\"treasury-production-T1-2026-09-24\",\"status\":\"drained\",\"taskId\":\"lab-cpu-H-task\",\"workKey\":\"biz:treasury-production-T1-2026-09-24:148af774f9ec4e74\",\"attemptId\":\"tk1_2_8b818380795c61d4\",\"amount\":100,\"reservedAtTick\":440},\"synthesisControl\":{\"updatedAt\":490,\"generatedTaskCount\":0,\"failedTaskCount\":0,\"successfulRunCount\":0,\"lastActions\":[],\"bindings\":{},\"rooms\":{}}},\"analytics\":{\"war\":{\"updatedAt\":490,\"clearDebounceTicks\":20,\"tasks\":{}},\"production\":{\"rooms\":{\"E3N59\":{\"updatedAt\":490,\"latest\":{\"tick\":490,\"looseEnergy\":0,\"storedEnergy\":109982,\"sourceEnergy\":3000,\"workerCount\":0,\"carrierCount\":0,\"harvesterCount\":0,\"spawnSpawning\":0,\"controllerLevel\":8,\"controllerProgress\":0},\"signal\":{\"looseEnergyTrend\":0,\"sourceEnergyTrend\":17.647058823529413,\"upgradeRate\":0,\"spawnBusy\":0}},\"E4N58\":{\"updatedAt\":490,\"latest\":{\"tick\":490,\"looseEnergy\":0,\"storedEnergy\":102000,\"sourceEnergy\":3000,\"workerCount\":0,\"carrierCount\":0,\"harvesterCount\":0,\"spawnSpawning\":0,\"controllerLevel\":8,\"controllerProgress\":0},\"signal\":{\"looseEnergyTrend\":0,\"sourceEnergyTrend\":17.647058823529413,\"upgradeRate\":0,\"spawnBusy\":0}}}},\"cpuMonitor\":{\"version\":2,\"updatedAt\":490,\"sampleInterval\":1,\"historyLimit\":10,\"latest\":{\"tick\":490,\"shard\":\"VM-0-7-ubuntu\",\"totalUsed\":9.616755000000012,\"bucket\":10000,\"limit\":100,\"tickLimit\":500,\"phases\":{\"treasuryBeginTick\":0.01613500000030399,\"announceDeploy\":0.006499999999959982,\"marketSalePreflight\":1.0478809999999612,\"pixelGenerator\":0.000980999999683263,\"productionMonitor\":0.16526199999998425,\"nukerControl\":0.06184299999995346,\"hubPlanner\":0.0019949999996242695,\"hubUpgradeControl\":0.03537099999994098,\"synthesisControl\":5.266711000000214,\"factoryControl\":0.012113000000226748,\"mineralExtraction\":0.028042999999797757,\"resourceControl\":2.2770329999998467,\"marketSaleAutomation\":0.1741820000002008,\"hubProgressAnalytics\":0.001655999999911728,\"hubProgressOverlay\":0.001352000000224507,\"externalTelemetryExport\":0.001307999999880849,\"memoryCleanup\":0.000905999999758933,\"portalDiscovery\":0.0013530000001082954,\"flagControl\":0.10310100000015154,\"crossShardSignals\":0.01670300000023417,\"interShardControl\":0.0027769999996962724,\"warControl\":0.006300000000010186,\"powerBankObserver\":0.015898999999990338,\"powerBankHarvest\":0.01834000000008018,\"powerCreepControl\":0.0031850000000304135,\"powerSpawnControl\":0.01899699999967197,\"roomPlannerConstruction\":0.007829000000128872,\"linkControl\":0.006314000000202213,\"coreDefense\":0.07003199999962817,\"defenseMode\":0.032455999999911,\"homeDefense\":0.021988999999848602,\"towerControl\":0.00802499999963402,\"refreshWorkerTasks\":0.0012669999996433035,\"bootstrapRooms\":0.08577399999967383,\"remoteMining\":0.00948000000016691,\"scheduleSpawnTasks\":0.023887999999715248,\"spawnWork\":0.0016739999996389088,\"creepWork\":0.0012630000001081498,\"empireInventoryShadow\":0.0071290000000772125,\"treasuryT1Shadow\":0.001558999999815569},\"fixedActionCounts\":{},\"untracked\":0.052149000002373214,\"emaTotalUsed\":6.446507837472323,\"rooms\":{},\"heap\":null},\"summary\":{\"ticks\":10,\"avgTotalUsed\":5.8879750000000515,\"maxTotalUsed\":14.515004999999974,\"minBucket\":10000,\"maxBucket\":10000,\"avgBucket\":10000,\"avgUntracked\":0.08921750000022258,\"avgPhases\":{\"treasuryBeginTick\":0.019016599999986283,\"announceDeploy\":0.0072047000000111435,\"marketSalePreflight\":1.020760099999984,\"pixelGenerator\":0.0009652999999161694,\"productionMonitor\":0.03268099999995684,\"nukerControl\":0.08803699999998571,\"hubPlanner\":0.002312000000029002,\"hubUpgradeControl\":0.4761160000000245,\"synthesisControl\":0.5483782000000474,\"factoryControl\":0.9189032000000225,\"mineralExtraction\":0.012067100000012942,\"resourceControl\":0.45201789999996433,\"marketSaleAutomation\":0.6021914000000379,\"hubProgressAnalytics\":0.002363299999979063,\"hubProgressOverlay\":0.01277829999999085,\"externalTelemetryExport\":0.001438400000006368,\"memoryCleanup\":0.0010147999999389867,\"portalDiscovery\":0.0264035000000149,\"flagControl\":0.08168910000006235,\"crossShardSignals\":0.01889699999996992,\"interShardControl\":0.0032852999999931853,\"warControl\":0.007165200000008554,\"powerBankObserver\":0.034293600000023614,\"powerBankHarvest\":0.438723600000003,\"powerCreepControl\":0.003998900000033246,\"powerSpawnControl\":0.038133899999979806,\"roomPlannerConstruction\":0.007965399999989131,\"linkControl\":0.037240799999995036,\"coreDefense\":0.07885909999999967,\"defenseMode\":0.01740270000000237,\"homeDefense\":0.03430819999994128,\"towerControl\":0.010684799999944516,\"refreshWorkerTasks\":0.11047189999992497,\"bootstrapRooms\":0.14026249999999435,\"remoteMining\":0.01254340000002685,\"scheduleSpawnTasks\":0.19392859999995835,\"spawnWork\":0.0023692999999639142,\"creepWork\":0.0018068000000312167,\"empireInventoryShadow\":0.29774970000005396,\"treasuryT1Shadow\":0.0023289000000204394},\"avgFixedActionCounts\":{},\"emaTotalUsed\":6.446507837472323}}},\"rooms\":{\"E3N59\":{\"coreRampartHits\":{}},\"E4N58\":{\"coreRampartHits\":{}}}}",
+  "objects": [
+    {
+      "room": "E3N59",
+      "type": "source",
+      "x": 34,
+      "y": 33,
+      "energy": 3000,
+      "energyCapacity": 3000,
+      "ticksToRegeneration": 300,
+      "_id": "dbf141a99846cab",
+      "meta": {
+        "revision": 3,
+        "created": 1790264908164,
+        "version": 0,
+        "updated": 1790268121284
+      },
+      "$loki": 370,
+      "nextRegenerationTime": null
+    },
+    {
+      "room": "E3N59",
+      "type": "controller",
+      "x": 33,
+      "y": 34,
+      "level": 8,
+      "_id": "cfbb41a9984f364",
+      "meta": {
+        "revision": 1,
+        "created": 1790264908164,
+        "version": 0,
+        "updated": 1790265119114
+      },
+      "$loki": 371,
+      "user": "7dad41a4bfc9d96",
+      "progress": 0,
+      "downgradeTime": 200187,
+      "safeMode": null
+    },
+    {
+      "type": "terminal",
+      "room": "E3N59",
+      "x": 25,
+      "y": 25,
+      "user": "7dad41a4bfc9d96",
+      "store": {
+        "H": 500,
+        "energy": 9982
+      },
+      "storeCapacity": 300000,
+      "cooldown": 0,
+      "hits": 3000,
+      "hitsMax": 3000,
+      "notifyWhenAttacked": false,
+      "_id": "a67d41dd18b97eb",
+      "meta": {
+        "revision": 8,
+        "created": 1790265119115,
+        "version": 0,
+        "updated": 1790268113385
+      },
+      "$loki": 374,
+      "send": null,
+      "cooldownTime": 490
+    },
+    {
+      "type": "storage",
+      "room": "E3N59",
+      "x": 26,
+      "y": 25,
+      "user": "7dad41a4bfc9d96",
+      "store": {
+        "energy": 100000
+      },
+      "storeCapacity": 1000000,
+      "hits": 10000,
+      "hitsMax": 10000,
+      "notifyWhenAttacked": false,
+      "_id": "702141dd18c0a7a",
+      "meta": {
+        "revision": 0,
+        "created": 1790265119116,
+        "version": 0
+      },
+      "$loki": 375
+    },
+    {
+      "structureType": "spawn",
+      "x": 37,
+      "y": 34,
+      "type": "constructionSite",
+      "room": "E3N59",
+      "user": "7dad41a4bfc9d96",
+      "progress": 0,
+      "progressTotal": 15000,
+      "name": "Spawn1",
+      "_id": "297c43302b89530",
+      "meta": {
+        "revision": 0,
+        "created": 1790266507960,
+        "version": 0
+      },
+      "$loki": 382
+    },
+    {
+      "structureType": "spawn",
+      "x": 35,
+      "y": 37,
+      "type": "constructionSite",
+      "room": "E3N59",
+      "user": "7dad41a4bfc9d96",
+      "progress": 0,
+      "progressTotal": 15000,
+      "name": "Spawn2",
+      "_id": "da3843302b8594a",
+      "meta": {
+        "revision": 0,
+        "created": 1790266507960,
+        "version": 0
+      },
+      "$loki": 383
+    },
+    {
+      "structureType": "spawn",
+      "x": 39,
+      "y": 37,
+      "type": "constructionSite",
+      "room": "E3N59",
+      "user": "7dad41a4bfc9d96",
+      "progress": 0,
+      "progressTotal": 15000,
+      "name": "Spawn5",
+      "_id": "455643a9a52c892",
+      "meta": {
+        "revision": 0,
+        "created": 1790267005522,
+        "version": 0
+      },
+      "$loki": 423
+    },
+    {
+      "room": "E4N58",
+      "type": "controller",
+      "x": 17,
+      "y": 28,
+      "level": 8,
+      "_id": "e35341ac1ac4787",
+      "meta": {
+        "revision": 1,
+        "created": 1790264918444,
+        "version": 0,
+        "updated": 1790265119117
+      },
+      "$loki": 372,
+      "user": "7dad41a4bfc9d96",
+      "progress": 0,
+      "downgradeTime": 200187,
+      "safeMode": null
+    },
+    {
+      "room": "E4N58",
+      "type": "source",
+      "x": 9,
+      "y": 40,
+      "energy": 3000,
+      "energyCapacity": 3000,
+      "ticksToRegeneration": 300,
+      "_id": "b04e41ac1ac536c",
+      "meta": {
+        "revision": 3,
+        "created": 1790264918444,
+        "version": 0,
+        "updated": 1790268121111
+      },
+      "$loki": 373,
+      "nextRegenerationTime": null
+    },
+    {
+      "type": "terminal",
+      "room": "E4N58",
+      "x": 25,
+      "y": 25,
+      "user": "7dad41a4bfc9d96",
+      "store": {
+        "H": 700,
+        "energy": 2000
+      },
+      "storeCapacity": 300000,
+      "cooldown": 0,
+      "hits": 3000,
+      "hitsMax": 3000,
+      "notifyWhenAttacked": false,
+      "_id": "370f41dd18e91de",
+      "meta": {
+        "revision": 4,
+        "created": 1790265119118,
+        "version": 0,
+        "updated": 1790268113385
+      },
+      "$loki": 376
+    },
+    {
+      "type": "storage",
+      "room": "E4N58",
+      "x": 26,
+      "y": 25,
+      "user": "7dad41a4bfc9d96",
+      "store": {
+        "energy": 100000
+      },
+      "storeCapacity": 1000000,
+      "hits": 10000,
+      "hitsMax": 10000,
+      "notifyWhenAttacked": false,
+      "_id": "d7dc41dd18efd58",
+      "meta": {
+        "revision": 0,
+        "created": 1790265119118,
+        "version": 0
+      },
+      "$loki": 377
+    },
+    {
+      "structureType": "spawn",
+      "x": 17,
+      "y": 32,
+      "type": "constructionSite",
+      "room": "E4N58",
+      "user": "7dad41a4bfc9d96",
+      "progress": 0,
+      "progressTotal": 15000,
+      "name": "Spawn3",
+      "_id": "ee9643303c6dd1f",
+      "meta": {
+        "revision": 0,
+        "created": 1790266508230,
+        "version": 0
+      },
+      "$loki": 384
+    },
+    {
+      "structureType": "spawn",
+      "x": 17,
+      "y": 30,
+      "type": "constructionSite",
+      "room": "E4N58",
+      "user": "7dad41a4bfc9d96",
+      "progress": 0,
+      "progressTotal": 15000,
+      "name": "Spawn4",
+      "_id": "899043303c639ad",
+      "meta": {
+        "revision": 0,
+        "created": 1790266508230,
+        "version": 0
+      },
+      "$loki": 385
+    },
+    {
+      "structureType": "spawn",
+      "x": 16,
+      "y": 33,
+      "type": "constructionSite",
+      "room": "E4N58",
+      "user": "7dad41a4bfc9d96",
+      "progress": 0,
+      "progressTotal": 15000,
+      "name": "Spawn6",
+      "_id": "120d43a9afd154e",
+      "meta": {
+        "revision": 0,
+        "created": 1790267005693,
+        "version": 0
+      },
+      "$loki": 424
+    }
+  ],
+  "transactions": [
+    {
+      "time": 320,
+      "sender": "7dad41a4bfc9d96",
+      "recipient": "7dad41a4bfc9d96",
+      "resourceType": "H",
+      "amount": 100,
+      "from": "E3N59",
+      "to": "E4N58",
+      "description": "treasury-T1-2026-09-24:tk1_1_f3ac6fc8a7ecc9ac",
+      "_id": "cce5438235819e1",
+      "meta": {
+        "revision": 0,
+        "created": 1790266843992,
+        "version": 0
+      },
+      "$loki": 1
+    },
+    {
+      "time": 370,
+      "sender": "7dad41a4bfc9d96",
+      "recipient": "7dad41a4bfc9d96",
+      "resourceType": "H",
+      "amount": 150,
+      "from": "E3N59",
+      "to": "E4N58",
+      "description": "resourceControl:task:lab-existing-H-task",
+      "_id": "9a5743bf04d557c",
+      "meta": {
+        "revision": 0,
+        "created": 1790267093069,
+        "version": 0
+      },
+      "$loki": 2
+    },
+    {
+      "time": 440,
+      "sender": "7dad41a4bfc9d96",
+      "recipient": "7dad41a4bfc9d96",
+      "resourceType": "H",
+      "amount": 100,
+      "from": "E3N59",
+      "to": "E4N58",
+      "description": "treasury-T1-2026-09-24:tk1_2_8b818380795c61d4",
+      "_id": "ad17449416dec54",
+      "meta": {
+        "revision": 0,
+        "created": 1790267965805,
+        "version": 0
+      },
+      "$loki": 3
+    },
+    {
+      "time": 480,
+      "sender": "7dad41a4bfc9d96",
+      "recipient": "7dad41a4bfc9d96",
+      "resourceType": "H",
+      "amount": 150,
+      "from": "E3N59",
+      "to": "E4N58",
+      "description": "resourceControl:task:lab-cpu-H-task",
+      "_id": "26ff44b81e9509c",
+      "meta": {
+        "revision": 0,
+        "created": 1790268113385,
+        "version": 0
+      },
+      "$loki": 4
+    }
+  ]
+}

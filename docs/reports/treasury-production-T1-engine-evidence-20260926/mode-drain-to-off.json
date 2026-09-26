@@ -1,0 +1,8 @@
+{
+  "schema": "screeps-treasury-t1-r2-mode/v1",
+  "tick": 505,
+  "expected": "drain",
+  "next": "off",
+  "beforeMemorySha256": "ae4fb9d2826d5513d957ffb0d881c9706c682b4a2531fafbbe3220388a7512d2",
+  "afterMemorySha256": "6a247af1258f161fa6c180385413ad3705a9b8f1f0dcab3e4913123bb2a683d7"
+}

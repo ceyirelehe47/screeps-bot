@@ -1,0 +1,11 @@
+{
+  "schema": "screeps-treasury-t1-r2-carrier-setup/v1",
+  "tick": 508,
+  "taskId": "lab-r2-carrier-100H",
+  "creepName": "lab-r2-carrier",
+  "creepId": "f7add81659a2190",
+  "codeSha256": "bd78c0719da582dbf090a9dd5f46be3c1618f17e6940eb872e6e3a98b6dfa592",
+  "beforeMemorySha256": "562bf1f8ad4c3ae0983d657288c27169ee316aaf45b7ffe399d3ab76a0bf9a9d",
+  "afterMemorySha256": "d8b5b27ac5a32c73ac0fbe69771530e7ddcdee1162dd5f00c3a3af4ba2eae8c9",
+  "isolatedWorldOnly": true
+}

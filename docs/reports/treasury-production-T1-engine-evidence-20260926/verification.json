@@ -1,0 +1,15 @@
+{
+  "schema": "screeps-treasury-t1-r2-verification/v1",
+  "status": "passed",
+  "engineVersion": "4.3.0",
+  "closureCodeSha256": "a06c967360673e4766a9d4cf139f6e06a34f3c49f10f593d405fce3f9e8c3dcb",
+  "finalCodeSha256": "bd78c0719da582dbf090a9dd5f46be3c1618f17e6940eb872e6e3a98b6dfa592",
+  "firstAttempt": "tk1_3_7f48f8eee5ce5648",
+  "carrierAttempt": "tk1_4_4a646240e9cbf6c4",
+  "firstSendTick": 500,
+  "carrierSendTick": 510,
+  "carrierEnergyHeld": 50,
+  "carrierEnergyDeliveredAfterOff": 50,
+  "transactionCountAfterRestart": 6,
+  "snapshotCount": 11
+}

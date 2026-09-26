@@ -1,0 +1,12 @@
+{
+  "schema": "screeps-treasury-t1-r2-lab-artifact/v1",
+  "sourceCommit": "cd0d550e3ff3637229e687eefa09fbb90a2dfb20",
+  "baseMarketCommit": "d690ee8087510aa79b0e3518dd7ae4ff0764c1cd",
+  "module": "main",
+  "fileSha256": "bd78c0719da582dbf090a9dd5f46be3c1618f17e6940eb872e6e3a98b6dfa592",
+  "bytes": 4992931,
+  "builtAtUtc": "2026-09-26T11:34:47.434133+00:00",
+  "engineVersion": "4.3.0",
+  "mode": "offline-lab-only",
+  "treasuryDefault": "off"
+}
