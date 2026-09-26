@@ -90,6 +90,7 @@ import {
   MARKET_BASE_RESOURCE_CATALOG,
   MARKET_BASE_RESOURCE_FLOOR_BOOTSTRAP,
   MARKET_BASE_RESOURCE_POLICIES,
+  MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE,
   createMarketBaseSharedPolicy,
   isMarketBaseResource,
   marketBaseEnforcedDynamicFloors,
@@ -9418,6 +9419,33 @@ function canSuspendUnattemptedMarketBaseCanaryForNoSurplus(
     }) < policy.minOrderAmount;
 }
 
+/** 买盘最高毛价也低于签名经济下界时，手续费只会让净价更低。 */
+function canSuspendUnattemptedMarketBaseCanaryForNoBid(
+  lane: MarketBaseDerivedLaneLifecycle,
+): boolean {
+  const policy = MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[lane.resource];
+  if (!policy || !Game.market?.getAllOrders) return false;
+  try {
+    const orders = Game.market.getAllOrders({
+      type: ORDER_BUY,
+      resourceType: lane.resource as MarketResourceConstant,
+    });
+    return Array.isArray(orders) &&
+      orders.length <= policy.maxRawOrdersScanned &&
+      orders.every((order) =>
+        order &&
+        order.type === ORDER_BUY &&
+        order.resourceType === lane.resource &&
+        typeof order.price === "number" &&
+        Number.isFinite(order.price) &&
+        order.price >= 0 &&
+        order.price < Math.max(policy.hardFloor, policy.economicFloor),
+      );
+  } catch {
+    return false;
+  }
+}
+
 function buildMarketBaseV3SuccessorProposal(
   data: MarketSaleDataState,
   direct: MarketDirectContinuousAutomationState,
@@ -9486,6 +9514,15 @@ function buildMarketBaseV3SuccessorProposal(
     priorPermit.signedLaneGrants.map((grant) => [grant.laneId, grant]),
   );
   const priorTargetGrant = priorByLane.get(laneId);
+  const unattemptedCanarySuspension =
+    targetStage === "suspend" &&
+    priorTargetGrant?.stage === "canary" &&
+    priorTargetGrant.newDealGrant === "enabled" &&
+    !marketBaseResourceCanaryReviewFactsFor(
+      ledger,
+      laneId,
+      permitChain,
+    );
   const retainedV3Permits = permitChain.retainedPermits.filter(
     (record): record is MarketBaseResourcePermit => record.schemaVersion === 3,
   );
@@ -9703,6 +9740,42 @@ function buildMarketBaseV3SuccessorProposal(
           .map((grant) => grant.laneId)
       : [],
   );
+  if (unattemptedCanarySuspension) {
+    const beforeCanary = retainedV3Permits[retainedV3Permits.length - 2];
+    const beforeTarget = beforeCanary?.signedLaneGrants.find(
+      (grant) => grant.laneId === laneId,
+    );
+    if (
+      beforeTarget?.status === "active" &&
+      beforeTarget.newDealGrant === "suspended" &&
+      beforeTarget.stage === "qualified"
+    ) {
+      for (const currentGrant of priorPermit.signedLaneGrants) {
+        const beforeGrant = beforeCanary.signedLaneGrants.find(
+          (grant) => grant.laneId === currentGrant.laneId,
+        );
+        const currentLane = currentScope.laneLifecycles.find(
+          (candidate) => candidate.laneId === currentGrant.laneId,
+        );
+        if (
+          currentGrant.laneId !== laneId &&
+          currentGrant.resource === targetLane.resource &&
+          currentGrant.status === "active" &&
+          currentGrant.stage === "continuous" &&
+          currentGrant.newDealGrant === "suspended" &&
+          beforeGrant?.status === "active" &&
+          beforeGrant.stage === "continuous" &&
+          beforeGrant.newDealGrant === "enabled" &&
+          sameMarketBaseGrantExceptDealGrant(beforeGrant, currentGrant) &&
+          currentLane?.stage === "continuous" &&
+          currentLane.status === "suspended" &&
+          currentLane.stableFingerprint === currentGrant.laneStableFingerprint
+        ) {
+          recoverableInterruptedContinuousLaneIds.add(currentGrant.laneId);
+        }
+      }
+    }
+  }
   const otherEnabledCanary = priorPermit.signedLaneGrants.find(
     (grant) =>
       grant.stage === "canary" &&
@@ -9773,18 +9846,14 @@ function buildMarketBaseV3SuccessorProposal(
   ) {
     throw new TypeError("market_base_lane_not_writable_for_suspension");
   } else if (
-    priorTargetGrant.stage === "canary" &&
-    !marketBaseResourceCanaryReviewFactsFor(
-      ledger,
-      priorTargetGrant.laneId,
-      permitChain,
-    ) &&
+    unattemptedCanarySuspension &&
     !canSuspendUnattemptedMarketBaseCanaryForNoSurplus(
       data,
       config,
       targetLane,
       tick,
-    )
+    ) &&
+    !canSuspendUnattemptedMarketBaseCanaryForNoBid(targetLane)
   ) {
     throw new TypeError(
       "market_base_canary_suspension_requires_terminal_attempt",
@@ -9889,7 +9958,7 @@ function buildMarketBaseV3SuccessorProposal(
       newDealGrant = "suspended";
     }
     const resumeForTargetResourceContinuous =
-      targetStage === "continuous" &&
+      (targetStage === "continuous" || unattemptedCanarySuspension) &&
       lane.laneId !== laneId &&
       lane.resource === targetLane.resource &&
       recoverableInterruptedContinuousLaneIds.has(lane.laneId) &&
@@ -11137,6 +11206,35 @@ export function acceptMarketBaseResourcePermit(
       throw new TypeError(lifecycleBlocker);
     }
     if (proposal.kind === "v3-successor" && transition) {
+      if (transition.targetStage === "suspend") {
+        const lane = state.scope?.laneLifecycles.find(
+          (candidate) => candidate.laneId === transition.laneId,
+        );
+        const currentGrant = currentMarketBaseV3Permit(state)?.signedLaneGrants.find(
+          (candidate) => candidate.laneId === transition.laneId,
+        );
+        if (
+          lane &&
+          currentGrant?.stage === "canary" &&
+          currentGrant.newDealGrant === "enabled" &&
+          !marketBaseResourceCanaryReviewFactsFor(
+            state.ledger!,
+            lane.laneId,
+            state.permitChain!,
+          ) &&
+          !canSuspendUnattemptedMarketBaseCanaryForNoSurplus(
+            data,
+            config,
+            lane,
+            Game.time,
+          ) &&
+          !canSuspendUnattemptedMarketBaseCanaryForNoBid(lane)
+        ) {
+          throw new TypeError(
+            "market_base_canary_suspension_requires_terminal_attempt",
+          );
+        }
+      }
       const reviewBlocker = validateMarketBaseProposedContinuousReviews(
         data,
         state,

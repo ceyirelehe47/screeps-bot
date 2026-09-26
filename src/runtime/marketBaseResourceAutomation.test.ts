@@ -2302,8 +2302,8 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     scenarioMigrationRejections();
   });
 
-  it("未尝试的 armed canary 仅在保护后总余量不足一单时允许原位暂停", () => {
-    const run = (grossSurplus: number, globalBlocked = false) => {
+  it("未尝试的 armed canary 仅在无保护后余量或无合适买盘时暂停，并在 accept 重查", () => {
+    const run = (grossSurplus: number, globalBlocked = false, buyPrice = 500, reboundPrice?: number) => {
       const world = installPastV3World({ armCanary: true, qualifiedSuspended: true });
       const migration = proposeMarketBaseResourcePolicyMigration() as {
         ok: boolean; proposalId?: string; error?: string;
@@ -2336,6 +2336,19 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
           },
         },
       } as ReturnType<typeof marketSaleProtectionAdapterModule.collectLiveMarketSaleProtectionLedger>));
+      const previousMarket = Game.market;
+      Game.market = {
+        ...(previousMarket || {}),
+        getAllOrders: jest.fn(() => [{
+        id: "buy-test",
+        type: ORDER_BUY,
+        resourceType: RESOURCE_CATALYST,
+        price: buyPrice,
+        remainingAmount: 1_000,
+        amount: 1_000,
+        roomName: "W1N1",
+        }] as unknown as Order[]),
+      } as Market;
       try {
         const proposal = proposeMarketBaseResourcePermit({
           laneId: world.canaryLaneId,
@@ -2346,9 +2359,24 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
         }).directAutomation.baseResourceV3;
         expect(after.ledger!.receiptHeadHash).toBe(receiptHead);
         expect(after.permitChain!.permitChainHead).toBe(permitHead);
-        return { proposal, world, receiptHead };
+        if (reboundPrice !== undefined) {
+          Game.market.getAllOrders = jest.fn(() => [{
+            id: "buy-rebound",
+            type: ORDER_BUY,
+            resourceType: RESOURCE_CATALYST,
+            price: reboundPrice,
+            remainingAmount: 1_000,
+            amount: 1_000,
+            roomName: "W1N1",
+          }] as unknown as Order[]);
+        }
+        const accept = proposal.ok
+          ? acceptMarketBaseResourcePermit(proposal.proposalId!)
+          : undefined;
+        return { proposal, accept, world, receiptHead };
       } finally {
         spy.mockRestore();
+        Game.market = previousMarket;
       }
     };
     const blocked = run(1_000);
@@ -2364,7 +2392,7 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     const allowed = run(0);
     expect(allowed.proposal.error).toBeUndefined();
     expect(allowed.proposal.ok).toBe(true);
-    expect(acceptMarketBaseResourcePermit(allowed.proposal.proposalId!)).toMatchObject({ ok: true });
+    expect(allowed.accept).toMatchObject({ ok: true });
     const after = (Memory.data!.marketSaleAutomation as {
       directAutomation: { baseResourceV3: MarketBaseResourceV3RuntimeState };
     }).directAutomation.baseResourceV3;
@@ -2375,5 +2403,15 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
     expect(grant).toMatchObject({ stage: "canary", newDealGrant: "suspended" });
     expect(after.ledger!.receiptHeadHash).toBe(allowed.receiptHead);
     expect(after.ledger!.pending).toBeUndefined();
+
+    const noBid = run(1_000, false, 1);
+    expect(noBid.proposal).toMatchObject({ ok: true });
+    expect(noBid.accept).toMatchObject({ ok: true });
+    const rebound = run(1_000, false, 1, 500);
+    expect(rebound.proposal).toMatchObject({ ok: true });
+    expect(rebound.accept).toMatchObject({
+      ok: false,
+      error: "market_base_canary_suspension_requires_terminal_attempt",
+    });
   });
 });
