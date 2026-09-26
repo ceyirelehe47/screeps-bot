@@ -842,6 +842,8 @@ describe("carrierRole mineral hauling", () => {
     } as unknown as Memory["runtime"];
     carrierRole().target(carrier);
     expect(carrier.transfer).not.toHaveBeenCalled();
+    expect(getCreepAssignmentState(carrier.name)?.synthesisCarrierPendingToId)
+      .toBe(terminal.id);
 
     (Memory.runtime as unknown as { treasuryProductionT1Quota: { status: string } })
       .treasuryProductionT1Quota.status = "drained";

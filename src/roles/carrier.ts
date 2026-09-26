@@ -1479,6 +1479,7 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
         moveToTarget(creep, _cdTarget);
         return true;
       }
+      if (_cdCode === ERR_BUSY) return true;
       if (_cdCode === OK) {
         if (_cdTransfer.acceptedAmount >= _cdTransfer.requestedAmount) {
           clearSynthesisCarrierTaskPlan(creep);
@@ -1530,6 +1531,7 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
         moveToTarget(creep, target);
         return true;
       }
+      if (code === ERR_BUSY) return true;
       if (code === OK) {
         if (transfer.acceptedAmount < transfer.requestedAmount) {
           state.synthesisCarrierPendingDeliveryTick = Game.time;
@@ -1570,6 +1572,7 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
             moveToTarget(creep, snapshotTarget);
             return true;
           }
+          if (code === ERR_BUSY) return true;
           if (code === OK) {
             if (transfer.acceptedAmount < transfer.requestedAmount) {
               state.synthesisCarrierPendingDeliveryTick = Game.time;
@@ -1674,6 +1677,7 @@ function deliverSynthesisCarrierResource(creep: Creep): boolean {
     moveToTarget(creep, target);
     return true;
   }
+  if (code === ERR_BUSY) return true;
   if (code !== OK) {
     return creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0;
   }
@@ -2074,6 +2078,8 @@ export const carrierRole: RoleFactory = () => ({
       clearPostTransferPlan(creep);
       return false;
     }
+
+    if (transferCode === ERR_BUSY) return false;
 
     if (transferCode !== OK) {
       clearPostTransferPlan(creep);
