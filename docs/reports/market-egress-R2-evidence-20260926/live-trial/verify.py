@@ -73,7 +73,7 @@ assert all(event.get("callsReserved", 0) == 0 and event.get("amountReserved", 0)
            for event in events)
 
 samples = sorted(ROOT.glob("sample-*.json"))
-assert len(samples) == 6
+assert len(samples) == 7
 for path in samples:
     sample = json.loads(path.read_text())
     value = sample["runtime"]["marketBaseResourceEgressTrialR2"]
@@ -86,6 +86,11 @@ for path in samples:
     assert ledger["finalizedAttemptSeq"] == 15 and ledger.get("pending") is None
     assert not [row for row in sample["moneyHistory"]["list"]
                 if row["type"] == "market.sell" and row["tick"] >= trial["startedAtTick"]]
+post_close = load("sample-2026-09-26T135410-689Z.json")
+assert post_close["runtime"]["marketBaseResourceEgressTrialR2"]["status"] == "closed"
+assert post_close["runtime"]["marketBaseResourceEgressTrialR2"]["closeReason"] == "capacity_recovered"
+assert post_close["planning"]["complete"] is True
+assert post_close["ledger"].get("pending") is None
 
 open_monitor = load("trial-monitor-open.json")["memory"]
 later_monitor = load("trial-monitor-1339.json")["memory"]

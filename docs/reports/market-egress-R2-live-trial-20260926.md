@@ -6,7 +6,7 @@
 
 唯一试运行 `market-base-egress-r2-2026-09-26` 在 tick `73958367` 启动，固定截止 tick `73961367` 或 2026-09-26 14:06:30 UTC，以先到者为准。`notBefore=73958767` 没有倒拨。外部观察者完成 118 次有读回的心跳，operation ID 无重复；在约 13:46 UTC，因两条候选房间容量均恢复 `normal`，游戏内状态自动变为 `closed/capacity_recovered`，观察者随即退出。本实例 **0 次新增 native 调用、0 计划/确认数量、0 市场手续费 Energy、0 市场 credits 入账、0 经济净价**。原 V3 receipt head 仍为 `csh1:8ca735c4bdcdce158e8a379e175f4a5b`，无 pending/quarantine，最终代码与 cfg/permit 身份正确，Direct 规划仍完整。关闭的主镜像一致且同一 run 不能重新启动。
 
-这证明了上线、协议迁移、原冷却保留、观察者控制与容量恢复退出；**没有证明线上 100 tick 连续成交吞吐**。退出后尚无新一笔市场成交，不能用静态回归冒充线上恢复 1,000 tick 的实际后继间隔。旧 r6 在本实例之前自主完成的第 13–15 笔见 [上线前报告](market-egress-R2-20260926.md)，不计入本次额度。
+这证明了上线、协议迁移、原冷却保留、观察者控制与容量恢复退出；**没有证明线上 100 tick 连续成交吞吐**。退出约八分钟后的 tick `73959008`，Direct 市场仍完整规划、无 blocker，试运行保持关闭，说明退出没有永久关闭原市场。此时尚无新一笔市场成交，不能用静态回归冒充线上恢复 1,000 tick 的实际后继间隔。旧 r6 在本实例之前自主完成的第 13–15 笔见 [上线前报告](market-egress-R2-20260926.md)，不计入本次额度。
 
 ## 逐动作与读回
 
@@ -45,4 +45,4 @@ ResourceControl 在上述窗口为 E4N58 接纳了一笔 UH 内部 staging 批�
 
 ## 可复核原件
 
-原始 API 读回、监控快照、money-history、房间 Store、观察者 JSONL 与六个关键时点快照位于 [live-trial 证据目录](market-egress-R2-evidence-20260926/live-trial/verification.json)。运行 `python3 docs/reports/market-egress-R2-evidence-20260926/live-trial/verify.py` 得到 `status=passed`，逐项复核身份、协议、额度、WAL、终端缺货、容量与退出。证据不含 token/secret/cookie 字段。原上传前 `main` 字节另留在本机临时封存目录；迁移后的 Memory 与旧二进制不应盲目组合回滚。
+原始 API 读回、监控快照、money-history、房间 Store、观察者 JSONL 与七个关键时点快照位于 [live-trial 证据目录](market-egress-R2-evidence-20260926/live-trial/verification.json)。运行 `python3 docs/reports/market-egress-R2-evidence-20260926/live-trial/verify.py` 得到 `status=passed`，逐项复核身份、协议、额度、WAL、终端缺货、容量与退出后的规划。证据不含 token/secret/cookie 字段。原上传前 `main` 字节另留在本机临时封存目录；迁移后的 Memory 与旧二进制不应盲目组合回滚。
