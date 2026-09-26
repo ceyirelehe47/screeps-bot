@@ -711,6 +711,9 @@ export interface PrepareMarketBaseResourceAttemptInput extends Omit<
   readonly permitChain: MarketBaseResourcePermitChainState;
   readonly firstDynamicScope: MarketBaseResourceDynamicScopeRead;
   readonly secondDynamicScope: MarketBaseResourceDynamicScopeRead;
+  /** Scoped one-run trial gate; the persisted quota snapshot stays at 1,000. */
+  readonly trialCooldownNotBefore?: number;
+  readonly trialPermitId?: string;
 }
 
 export interface MarketBaseResourceOutcome {
@@ -4691,6 +4694,20 @@ function prepareMarketBaseResourceAttemptCore(
   skipFullValidation: boolean,
   authenticatedQuotaReceipts?: readonly MarketBaseResourceQuotaReceipt[],
 ): MarketBaseResourceLedgerOperation {
+  const trialPermit = input.trialCooldownNotBefore === undefined
+    ? undefined
+    : input.permitChain.retainedPermits.find((record) =>
+        record.schemaVersion === 3 &&
+        record.permitId === input.trialPermitId &&
+        record.permitId === input.permitChain.currentPermitId);
+  const trialPolicy = trialPermit?.schemaVersion === 3
+    ? trialPermit.resourcePolicies.find((policy) =>
+        policy.resource === input.historicalLane.resource)
+    : undefined;
+  const trialGrant = trialPermit?.schemaVersion === 3
+    ? trialPermit.signedLaneGrants.find((grant) =>
+        grant.laneId === input.historicalLane.laneId)
+    : undefined;
   if (
     !isSafeInteger(input.tick) ||
     !isPositiveSafeInteger(input.resourceLimit) ||
@@ -4701,6 +4718,22 @@ function prepareMarketBaseResourceAttemptCore(
     !isPositiveSafeInteger(input.plannedNetCreditsMilli) ||
     !isPositiveSafeInteger(input.worstUnitNetCreditsMilli) ||
     !isDigest(input.evidenceKeyHint) ||
+    (input.trialCooldownNotBefore !== undefined &&
+      (!isSafeInteger(input.trialCooldownNotBefore) ||
+       input.trialCooldownNotBefore <
+         state.checkpoint.confirmedCooldownNotBeforeHighWater ||
+       input.executionPolicy !== "continuous" ||
+       !((input.historicalLane.sellerRoom === "E4N58" &&
+          input.historicalLane.resource === "X") ||
+         (input.historicalLane.sellerRoom === "E1N57" &&
+          input.historicalLane.resource === "L")) ||
+       input.trialPermitId !== input.historicalPermit.permitId ||
+       trialPolicy?.cooldownTicks !== 100 ||
+       trialPolicy.fingerprint !== input.historicalLane.resourcePolicyFingerprint ||
+       trialGrant?.stage !== "continuous" ||
+       trialGrant.newDealGrant !== "enabled" ||
+       trialGrant.status !== "active" ||
+       trialGrant.roomInstanceId !== input.historicalLane.roomInstanceId)) ||
     !validExecutionEvidence(
       input.executionEvidence,
       input.tick,
@@ -4775,8 +4808,9 @@ function prepareMarketBaseResourceAttemptCore(
     [quota.global, quota.resourceQuota, quota.room, quota.lane].some(
       (layer) => layer.remaining < MARKET_BASE_RESOURCE_PLANNED_AMOUNT,
     ) ||
-    input.tick < quota.confirmedCooldownNotBefore ||
-    input.tick < working.confirmedCooldownNotBefore ||
+    input.tick < (input.trialCooldownNotBefore ??
+      Math.max(quota.confirmedCooldownNotBefore,
+        working.confirmedCooldownNotBefore)) ||
     input.tick < quota.retryNotBefore
   ) {
     return {

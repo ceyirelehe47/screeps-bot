@@ -2735,7 +2735,6 @@ function isPreservedPolicyMigrationGrant(
     laneReserve: policy.laneReserve,
     minOrderAmount: policy.minOrderAmount,
     maxDealAmount: policy.maxDealAmount,
-    cooldownTicks: policy.cooldownTicks,
     rollingWindowTicks: policy.rollingWindowTicks,
     rollingOpportunityReserveAmount: policy.rollingOpportunityReserveAmount,
     maxRawOrdersScanned: policy.maxRawOrdersScanned,
@@ -2746,6 +2745,37 @@ function isPreservedPolicyMigrationGrant(
   if (!sameCanonical(executionShape(oldPolicy), executionShape(newPolicy))) {
     return false;
   }
+  const boundedR2CooldownUpgrade =
+    ((old.resource === "X" && oldPolicy.policyRevision === "base-x-v3-r5") ||
+     (old.resource === "L" && oldPolicy.policyRevision === "base-l-v3-r4")) &&
+    oldPolicy.cooldownTicks === 1_000 && newPolicy.cooldownTicks === 100 &&
+    sameCanonical(newPolicy, MARKET_BASE_RESOURCE_POLICIES.find((policy) =>
+      policy.resource === old.resource)) &&
+    sameCanonical({
+      hardFloor: oldPolicy.hardFloor,
+      economicFloor: oldPolicy.economicFloor,
+      minOrderNotional: oldPolicy.minOrderNotional,
+      inventoryReferenceAmount: oldPolicy.inventoryReferenceAmount,
+      listingBuffer: oldPolicy.listingBuffer,
+      directNetBidRatio: oldPolicy.directNetBidRatio,
+      maxDailyDynamicDrop: oldPolicy.maxDailyDynamicDrop,
+      surplusLow: oldPolicy.surplusLow,
+      surplusHigh: oldPolicy.surplusHigh,
+      dynamicFloorMode: oldPolicy.dynamicFloorMode,
+    }, {
+      hardFloor: newPolicy.hardFloor,
+      economicFloor: newPolicy.economicFloor,
+      minOrderNotional: newPolicy.minOrderNotional,
+      inventoryReferenceAmount: newPolicy.inventoryReferenceAmount,
+      listingBuffer: newPolicy.listingBuffer,
+      directNetBidRatio: newPolicy.directNetBidRatio,
+      maxDailyDynamicDrop: newPolicy.maxDailyDynamicDrop,
+      surplusLow: newPolicy.surplusLow,
+      surplusHigh: newPolicy.surplusHigh,
+      dynamicFloorMode: newPolicy.dynamicFloorMode,
+    });
+  if (oldPolicy.cooldownTicks !== newPolicy.cooldownTicks &&
+      !boundedR2CooldownUpgrade) return false;
   const sameVolumeCap =
     oldPolicy.rollingMaxAmount === newPolicy.rollingMaxAmount;
   const authorizedUnboundedUpgrade =

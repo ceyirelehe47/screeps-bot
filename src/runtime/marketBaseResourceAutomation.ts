@@ -123,6 +123,14 @@ import {
   type MarketProtectionEntry,
 } from "@/runtime/marketSaleProtection";
 import { priceToMilliDown } from "@/runtime/marketSalePricing";
+import {
+  activeMarketEgressTrialR2,
+  closeExpiredMarketEgressTrialR2,
+  readMarketEgressTrialCapacityState,
+  reserveMarketEgressTrialNative,
+  trialCooldownNotBefore,
+  trialLaneEligible,
+} from "@/runtime/marketBaseResourceEgressTrialR2";
 
 export const MARKET_BASE_RESOURCE_MAX_ACTIVE_ROOMS = 16;
 export const MARKET_BASE_RESOURCE_MAX_KNOWN_ROOM_NAMES = 32;
@@ -7861,9 +7869,30 @@ function liveScopeForRead(
         quota,
       ]),
     );
+    const trial = activeMarketEgressTrialR2({
+      tick: input.tick,
+      permitId: permit.permitId,
+      permitEpoch: permit.epoch,
+    });
+    const trialOnlyDuringBaselineCooldown = trial !== null &&
+      input.tick < canonicalLedger.confirmedCooldownNotBefore;
     const writableLaneIds = new Set(
       scope.laneLifecycles
-        .filter((lane) => laneAllowsRuntimeWrite(session, executorShard, lane))
+        .filter((lane) => {
+          if (!laneAllowsRuntimeWrite(session, executorShard, lane)) return false;
+          if (!trialOnlyDuringBaselineCooldown) return true;
+          const candidate = candidateByKey.get(runtimeCandidateKey(
+            lane.sellerRoomName, lane.resource));
+          const signedPolicy = permit.resourcePolicies.find((value) =>
+            value.resource === lane.resource);
+          return !!candidate && !!signedPolicy && trialLaneEligible({
+            roomName: lane.sellerRoomName,
+            resource: lane.resource,
+            stage: lane.stage,
+            capacityState: candidate.capacityState,
+            policyCooldownTicks: signedPolicy.cooldownTicks,
+          });
+        })
         .map((lane) => lane.laneId),
     );
     const hasWritableLane = writableLaneIds.size > 0;
@@ -8926,6 +8955,7 @@ export function runMarketBaseResourceAutomation(
   input: MarketBaseResourceAutomationInput,
   dependencies: MarketBaseResourceRuntimeDependencies = defaultMarketBaseResourceRuntimeDependencies,
 ): MarketBaseResourceAutomationResult {
+  closeExpiredMarketEgressTrialR2(input.tick);
   const actions: string[] = [];
   const rejectedByReason: Record<string, number> = {};
   let writes = 0;
@@ -9430,6 +9460,26 @@ export function runMarketBaseResourceAutomation(
     MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[
       selected.resourceType as MarketBaseResource
     ];
+  const trial = permit ? activeMarketEgressTrialR2({
+    tick: input.tick,
+    permitId: permit.permitId,
+    permitEpoch: permit.epoch,
+  }) : null;
+  const signedPolicy = permit?.resourcePolicies.find((value) =>
+    value.resource === selected.resourceType);
+  const capacityState = readMarketEgressTrialCapacityState(
+    selected.roomName, input.tick);
+  const accelerated = !!trial && !!grant && !!signedPolicy &&
+    capacityState !== null && trialLaneEligible({
+      roomName: selected.roomName,
+      resource: selected.resourceType,
+      stage: grant.stage,
+      capacityState,
+      policyCooldownTicks: signedPolicy.cooldownTicks,
+    });
+  const trialNotBefore = accelerated && trial && state.ledger
+    ? trialCooldownNotBefore(trial, state.ledger.confirmedCooldownNotBefore)
+    : undefined;
   const outgoing = plan.secondOutgoingWindow;
   const terminal = plan.selectedTerminalRead;
   const outgoingKeys = outgoing ? sortedOutgoingKeys(outgoing) : [];
@@ -9650,6 +9700,9 @@ export function runMarketBaseResourceAutomation(
       plannedNetCreditsMilli: selected.netCreditsMilli,
       worstUnitNetCreditsMilli: selected.worstCaseNetCreditsMilli,
       evidenceKeyHint: requestId,
+      ...(trialNotBefore !== undefined && permit
+        ? { trialCooldownNotBefore: trialNotBefore, trialPermitId: permit.permitId }
+        : {}),
     },
   );
   applyMarketBaseResourceRuntimeLedgerOperation(
@@ -9887,6 +9940,48 @@ export function runMarketBaseResourceAutomation(
   }
 
   let result: unknown;
+  if (accelerated && permit && state.ledger?.pending) {
+    const pending = state.ledger.pending;
+    let reserved = false;
+    try {
+      reserved = reserveMarketEgressTrialNative({
+        tick: input.tick,
+        permitId: permit.permitId,
+        permitEpoch: permit.epoch,
+        attemptSeq: pending.attemptSeq,
+        pendingEvidenceHash: pending.frozenEvidenceHash,
+        roomName: selected.roomName,
+        resource: selected.resourceType,
+        stage: grant!.stage,
+        capacityState: capacityState!,
+        policyCooldownTicks: signedPolicy!.cooldownTicks,
+        amount: selected.plannedAmount,
+        baselineNotBefore: state.ledger.confirmedCooldownNotBefore,
+      });
+    } catch {
+      reserved = false;
+    }
+    if (!reserved) {
+      try { dependencies.releasePrepared(requestId); } catch { /* bounded claim TTL */ }
+      rejectOnce("market_egress_r2_reservation_failed");
+      return finish(false);
+    }
+    if (marketBaseResourceCpuExceededSince(
+      dependencies,
+      planningCpuStartedAt,
+      cpuTraceRecorder,
+      "cpuAfterInnerApply",
+      "inner_apply",
+    )) {
+      try { dependencies.releasePrepared(requestId); } catch { /* bounded claim TTL */ }
+      markPlanningCpuExceeded(
+        state, input.tick, planningCpuStartedAt, dependencies,
+        cpuTraceRecorder, "inner_apply",
+      );
+      rejectOnce("market_base_cpu_ceiling_exceeded");
+      return finish(false);
+    }
+  }
   try {
     writes += 1;
     result = dependencies.executePrepared({
