@@ -22,6 +22,6 @@ export function shouldPauseNativeMineralHarvest(
   }
   return (
     stored + terminal >=
-    policy.laneReserve + Math.max(100_000, policy.rollingMaxAmount * 2)
+    policy.laneReserve + Math.max(100_000, policy.inventoryReferenceAmount * 2)
   );
 }

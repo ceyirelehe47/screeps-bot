@@ -7,6 +7,7 @@ import {
   MARKET_BASE_RESOURCE_FLOOR_BOOTSTRAP,
   MARKET_BASE_RESOURCE_CATALOG,
   MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE,
+  MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT,
   buildMarketBaseDynamicFloorState,
   marketBaseDerivedLaneSetFingerprint,
   marketBaseEnforcedDynamicFloors,
@@ -158,6 +159,12 @@ describe("2026-09-25 价格再校准", () => {
       expect(policy.directNetBidRatio).toBe(0.85);
       expect(policy.dynamicFloorMode).toBe("enforce");
       expect(policy.laneReserve).toBe(100_000);
+      expect(policy.rollingMaxAmount).toBe(MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT);
+      expect(policy.inventoryReferenceAmount).toBe(
+        resource === "H" || resource === "X" ? 8_000 : 5_000,
+      );
+      expect(policy.maxDealAmount).toBe(1_000);
+      expect(policy.cooldownTicks).toBe(1_000);
     }
   });
 });

@@ -10405,15 +10405,6 @@ function buildMarketBasePolicyMigrationProposal(
       .filter((entry) => entry.kind === "shadow_qualification")
       .map((entry) => [entry.laneId, entry]),
   );
-  if (
-    priorPermit.reviewedEvidence.some(
-      (entry) => entry.kind !== "shadow_qualification",
-    )
-  ) {
-    // canary/continuous/suspension review 绑定尚未支持跨策略迁移；出现时
-    // 需先按各自协议解决（成交确认/复核），再执行迁移。
-    throw new TypeError("market_base_migration_active_reviews_unsupported");
-  }
   const activeGrants: MarketBaseResourceSignedLaneGrant[] = [];
   const reviewedEvidence: MarketBaseResourceReviewedEvidence[] = [];
   for (const priorGrant of priorPermit.signedLaneGrants) {
@@ -10441,6 +10432,9 @@ function buildMarketBasePolicyMigrationProposal(
       stage: priorGrant.stage,
       status: "active",
       newDealGrant: priorGrant.newDealGrant,
+      ...(["continuous", "review_paused"].includes(priorGrant.stage)
+        ? { reviewDigest: priorGrant.reviewDigest }
+        : {}),
     });
     activeGrants.push(grant);
     if (priorQualificationByLane.has(priorGrant.laneId)) {

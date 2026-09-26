@@ -2685,7 +2685,7 @@ function stageRank(stage: MarketBaseLaneStage): number {
   }
 }
 
-/** 策略重签只延续原 qualified/canary 状态，不接受新 lane 或更高成交额度。 */
+/** 策略重签保留原 lane 状态；v3 显式放开数量帽时仍须保留执行安全参数。 */
 function isPreservedPolicyMigrationGrant(
   prior: MarketBaseResourcePermit,
   next: MarketBaseResourcePermit,
@@ -2698,10 +2698,6 @@ function isPreservedPolicyMigrationGrant(
     old.status !== "active" || grant.status !== "active" ||
     old.stage !== grant.stage ||
     old.newDealGrant !== grant.newDealGrant ||
-    !(
-      (old.stage === "qualified" && old.newDealGrant === "suspended") ||
-      (old.stage === "canary" && old.newDealGrant === "enabled")
-    ) ||
     !sameCanonical({
       laneId: old.laneId, resource: old.resource,
       resourcePolicyId: old.resourcePolicyId,
@@ -2741,7 +2737,6 @@ function isPreservedPolicyMigrationGrant(
     maxDealAmount: policy.maxDealAmount,
     cooldownTicks: policy.cooldownTicks,
     rollingWindowTicks: policy.rollingWindowTicks,
-    rollingMaxAmount: policy.rollingMaxAmount,
     rollingOpportunityReserveAmount: policy.rollingOpportunityReserveAmount,
     maxRawOrdersScanned: policy.maxRawOrdersScanned,
     maxEligibleOrdersPriced: policy.maxEligibleOrdersPriced,
@@ -2751,7 +2746,21 @@ function isPreservedPolicyMigrationGrant(
   if (!sameCanonical(executionShape(oldPolicy), executionShape(newPolicy))) {
     return false;
   }
+  const sameVolumeCap =
+    oldPolicy.rollingMaxAmount === newPolicy.rollingMaxAmount;
+  const authorizedUnboundedUpgrade =
+    prior.sharedPolicy.engineRevision !== "market-base-resource-engine-v3" &&
+    next.sharedPolicy.engineRevision === "market-base-resource-engine-v3" &&
+    newPolicy.rollingMaxAmount === 1_000_000_000 &&
+    newPolicy.inventoryReferenceAmount === oldPolicy.rollingMaxAmount;
+  if (!sameVolumeCap && !authorizedUnboundedUpgrade) return false;
+  if (
+    (old.stage === "continuous" || old.stage === "review_paused") &&
+    old.reviewDigest !== grant.reviewDigest
+  ) return false;
   if (old.stage === "qualified") return true;
+  if (old.stage === "continuous" || old.stage === "review_paused") return true;
+  if (old.stage === "canary" && old.newDealGrant === "suspended") return true;
   const oldQualification = evidenceFor(prior, old.laneId, "shadow_qualification");
   const newQualification = evidenceFor(next, grant.laneId, "shadow_qualification");
   return oldQualification?.digest === old.lifecycleEvidenceDigest &&

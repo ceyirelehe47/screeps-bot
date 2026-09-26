@@ -21,6 +21,9 @@ import {
   type MarketBaseResourcePermitChainState,
 } from "@/runtime/marketBaseResourcePermit";
 import {
+  MARKET_BASE_RESOURCE_GLOBAL_QUOTA_LIMIT,
+  MARKET_BASE_RESOURCE_LANE_QUOTA_LIMIT,
+  MARKET_BASE_RESOURCE_ROOM_QUOTA_LIMIT,
   MARKET_BASE_RESOURCE_OUTCOME_HASH_REVISION,
   advanceMarketBaseResourceWal,
   buildMarketBaseResourceAuthenticatedV2LedgerMigrationBasis,
@@ -28,6 +31,7 @@ import {
   buildMarketBaseResourceLedgerRuntimeAnchor,
   createMarketBaseResourceLedgerRuntimeContext,
   createMarketBaseResourceLedger,
+  computeMarketBaseResourceQuota,
   marketBaseResourceRetainedReceiptPermitReferences,
   prepareMarketBaseResourceAttempt,
   rebindMarketBaseResourceLedgerPermitAnchor,
@@ -599,6 +603,43 @@ function settlePreparedCanary(
 
 
 describe("marketBaseResourceLedger", () => {
+
+  test("滚动成交记录超过旧四层帽后仍保留确认量与全局冷却", () => {
+    const receipts: MarketBaseResourceQuotaReceipt[] = Array.from({ length: 9 }, (_, index) => ({
+      sourceVersion: 3,
+      attemptSeq: index + 1,
+      evidenceKey: digest(`unbounded:${index}`),
+      status: "confirmed",
+      resource: RESOURCE_CATALYST,
+      sellerRoom: "E4N58",
+      plannedAmount: 1_000,
+      actualAmount: 1_000,
+      transactionTime: (index + 1) * 1_000,
+      resolvedAt: (index + 1) * 1_000 + 1,
+      retentionTick: (index + 1) * 1_000,
+    }));
+    const quota = computeMarketBaseResourceQuota({
+      tick: 10_000,
+      resource: RESOURCE_CATALYST,
+      sellerRoom: "E4N58",
+      resourceLimit: 1_000_000_000,
+      receipts,
+    });
+    expect([
+      quota.global.limit,
+      quota.resourceQuota.limit,
+      quota.room.limit,
+      quota.lane.limit,
+    ]).toEqual([
+      MARKET_BASE_RESOURCE_GLOBAL_QUOTA_LIMIT,
+      1_000_000_000,
+      MARKET_BASE_RESOURCE_ROOM_QUOTA_LIMIT,
+      MARKET_BASE_RESOURCE_LANE_QUOTA_LIMIT,
+    ]);
+    expect(quota.lane.confirmedActual).toBe(9_000);
+    expect(quota.global.confirmedActual).toBe(9_000);
+    expect(quota.confirmedCooldownNotBefore).toBe(10_000);
+  });
 
   test("V2 迁移后的 V3 pending 冻结历史 scope，owned terminal incarnation 变化后仍按旧 WAL 收敛再授权新 lane", () => {
     const { canary, currentLane } = permitChains();

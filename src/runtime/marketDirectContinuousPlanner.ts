@@ -457,8 +457,8 @@ function laneQuotaIsValid(quota: MarketDirectContinuousLaneQuota): boolean {
     quota.complete &&
     typeof quota.revision === "string" &&
     quota.revision.length > 0 &&
-    quota.roomRollingCap === MARKET_DIRECT_CONTINUOUS_ROOM_ROLLING_CAP &&
-    quota.laneRollingCap === MARKET_DIRECT_CONTINUOUS_LANE_ROLLING_CAP &&
+    isPositiveSafeInteger(quota.roomRollingCap) &&
+    isPositiveSafeInteger(quota.laneRollingCap) &&
     isNonNegativeSafeInteger(quota.roomConfirmedAmount) &&
     isNonNegativeSafeInteger(quota.roomUnmatchedPlannedAmount) &&
     isNonNegativeSafeInteger(quota.laneConfirmedAmount) &&

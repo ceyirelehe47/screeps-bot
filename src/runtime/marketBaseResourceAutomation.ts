@@ -12,9 +12,7 @@ import {
   createMarketDirectContinuousDetachedBookSnapshot,
   isExactMarketDirectContinuousSecondRead,
   issueMarketDirectContinuousInvocationBookCapability,
-  MARKET_DIRECT_CONTINUOUS_LANE_ROLLING_CAP,
   MARKET_DIRECT_CONTINUOUS_PLANNED_AMOUNT,
-  MARKET_DIRECT_CONTINUOUS_ROOM_ROLLING_CAP,
   planMarketDirectContinuous,
   type MarketDirectContinuousBook,
   type MarketDirectContinuousDetachedBookSnapshot,
@@ -97,6 +95,8 @@ import {
   createMarketBaseResourceLedgerRuntimeContext,
   hasMarketBaseResourceProcessedEvidenceKeyWithRuntimeContext,
   MARKET_BASE_RESOURCE_GLOBAL_QUOTA_LIMIT,
+  MARKET_BASE_RESOURCE_LANE_QUOTA_LIMIT,
+  MARKET_BASE_RESOURCE_ROOM_QUOTA_LIMIT,
   inspectMarketBaseResourceCanaryGrantAvailability,
   inspectMarketBaseResourceCanaryGrantAvailabilityWithRuntimeContext,
   marketBaseResourceCurrentWalProjectionWithRuntimeContext,
@@ -2935,9 +2935,9 @@ function scopeIsBounded(
           return Boolean(
             lane.quota?.complete &&
             lane.quota.roomRollingCap ===
-              MARKET_DIRECT_CONTINUOUS_ROOM_ROLLING_CAP &&
+              MARKET_BASE_RESOURCE_ROOM_QUOTA_LIMIT &&
             lane.quota.laneRollingCap ===
-              MARKET_DIRECT_CONTINUOUS_LANE_ROLLING_CAP,
+              MARKET_BASE_RESOURCE_LANE_QUOTA_LIMIT,
           );
         })
       );
@@ -4926,7 +4926,9 @@ function laneSurplusInputsFromRead(
   for (const entry of read.scope.entries) {
     for (const lane of entry.lanes) {
       const sellable = lane.inventorySurplus ?? lane.protection?.sellableAmount;
-      const rollingMax = lane.quota?.laneRollingCap;
+      const rollingMax = MARKET_BASE_RESOURCE_POLICY_BY_RESOURCE[
+        entry.policy.resourceType as MarketBaseResource
+      ]?.inventoryReferenceAmount;
       if (
         typeof sellable === "number" &&
         Number.isFinite(sellable) &&

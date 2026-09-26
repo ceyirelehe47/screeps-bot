@@ -15,7 +15,7 @@ import { canonicalStableHashV1 } from "@/runtime/marketDirectContinuousPolicy";
 export const MARKET_BASE_RESOURCE_SCHEMA_VERSION = 3 as const;
 export const MARKET_BASE_RESOURCE_CATALOG_REVISION = "base-mineral-v1" as const;
 export const MARKET_BASE_RESOURCE_ENGINE_REVISION =
-  "market-base-resource-engine-v2" as const;
+  "market-base-resource-engine-v3" as const;
 export const MARKET_BASE_RESOURCE_BOOTSTRAP_REVISION =
   "floor-bootstrap-v1" as const;
 export const MARKET_BASE_RESOURCE_BOOTSTRAP_HISTORY_DATE =
@@ -25,7 +25,9 @@ export const MARKET_BASE_RESOURCE_EVIDENCE_SHA256 =
 export const MARKET_BASE_RESOURCE_EVIDENCE_IMPLEMENTATION_BLOB =
   "f55503b3d45352e14513e9928706251c82992ecc" as const;
 export const MARKET_BASE_RESOURCE_CONFIG_REVISION =
-  "market-base-resource-v3-r5" as const;
+  "market-base-resource-v3-r6" as const;
+/** 冷却期间最多约 30 笔，十亿是有限整数运算中的非约束哨值。 */
+export const MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT = 1_000_000_000 as const;
 
 export const MARKET_BASE_RESOURCE_MAX_ROOMS = 16 as const;
 export const MARKET_BASE_RESOURCE_MAX_KNOWN_ROOM_NAMES = 32 as const;
@@ -136,6 +138,8 @@ export interface MarketBaseResourcePolicy {
   readonly cooldownTicks: 1000;
   readonly rollingWindowTicks: 30000;
   readonly rollingMaxAmount: number;
+  /** 仅用于库存压力和生产缓冲标尺；滚动成交额度另行放开。 */
+  readonly inventoryReferenceAmount: number;
   readonly rollingOpportunityReserveAmount: 1000;
   readonly maxRawOrdersScanned: 1000;
   readonly maxEligibleOrdersPriced: 200;
@@ -168,7 +172,7 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
 >([
   {
     policyId: "base-h-v3-r1",
-    policyRevision: "base-h-v3-r3",
+    policyRevision: "base-h-v3-r4",
     resource: "H",
     resourceClass: "base-mineral",
     hardFloor: 428,
@@ -179,7 +183,8 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxDealAmount: 1_000,
     cooldownTicks: 1_000,
     rollingWindowTicks: 30_000,
-    rollingMaxAmount: 8_000,
+    rollingMaxAmount: MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT,
+    inventoryReferenceAmount: 8_000,
     rollingOpportunityReserveAmount: 1_000,
     maxRawOrdersScanned: 1_000,
     maxEligibleOrdersPriced: 200,
@@ -194,7 +199,7 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-k-v3-r1",
-    policyRevision: "base-k-v3-r3",
+    policyRevision: "base-k-v3-r4",
     resource: "K",
     resourceClass: "base-mineral",
     hardFloor: 33,
@@ -205,7 +210,8 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxDealAmount: 1_000,
     cooldownTicks: 1_000,
     rollingWindowTicks: 30_000,
-    rollingMaxAmount: 5_000,
+    rollingMaxAmount: MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT,
+    inventoryReferenceAmount: 5_000,
     rollingOpportunityReserveAmount: 1_000,
     maxRawOrdersScanned: 1_000,
     maxEligibleOrdersPriced: 200,
@@ -220,7 +226,7 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-l-v3-r1",
-    policyRevision: "base-l-v3-r3",
+    policyRevision: "base-l-v3-r4",
     resource: "L",
     resourceClass: "base-mineral",
     hardFloor: 161,
@@ -231,7 +237,8 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxDealAmount: 1_000,
     cooldownTicks: 1_000,
     rollingWindowTicks: 30_000,
-    rollingMaxAmount: 5_000,
+    rollingMaxAmount: MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT,
+    inventoryReferenceAmount: 5_000,
     rollingOpportunityReserveAmount: 1_000,
     maxRawOrdersScanned: 1_000,
     maxEligibleOrdersPriced: 200,
@@ -246,7 +253,7 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-o-v3-r1",
-    policyRevision: "base-o-v3-r3",
+    policyRevision: "base-o-v3-r4",
     resource: "O",
     resourceClass: "base-mineral",
     hardFloor: 71,
@@ -257,7 +264,8 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxDealAmount: 1_000,
     cooldownTicks: 1_000,
     rollingWindowTicks: 30_000,
-    rollingMaxAmount: 5_000,
+    rollingMaxAmount: MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT,
+    inventoryReferenceAmount: 5_000,
     rollingOpportunityReserveAmount: 1_000,
     maxRawOrdersScanned: 1_000,
     maxEligibleOrdersPriced: 200,
@@ -272,7 +280,7 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-u-v3-r1",
-    policyRevision: "base-u-v3-r3",
+    policyRevision: "base-u-v3-r4",
     resource: "U",
     resourceClass: "base-mineral",
     hardFloor: 31,
@@ -283,7 +291,8 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxDealAmount: 1_000,
     cooldownTicks: 1_000,
     rollingWindowTicks: 30_000,
-    rollingMaxAmount: 5_000,
+    rollingMaxAmount: MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT,
+    inventoryReferenceAmount: 5_000,
     rollingOpportunityReserveAmount: 1_000,
     maxRawOrdersScanned: 1_000,
     maxEligibleOrdersPriced: 200,
@@ -298,7 +307,7 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-x-v3-r2",
-    policyRevision: "base-x-v3-r4",
+    policyRevision: "base-x-v3-r5",
     resource: "X",
     resourceClass: "base-mineral",
     hardFloor: 371,
@@ -309,7 +318,8 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxDealAmount: 1_000,
     cooldownTicks: 1_000,
     rollingWindowTicks: 30_000,
-    rollingMaxAmount: 8_000,
+    rollingMaxAmount: MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT,
+    inventoryReferenceAmount: 8_000,
     rollingOpportunityReserveAmount: 1_000,
     maxRawOrdersScanned: 1_000,
     maxEligibleOrdersPriced: 200,
@@ -324,7 +334,7 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
   },
   {
     policyId: "base-z-v3-r1",
-    policyRevision: "base-z-v3-r3",
+    policyRevision: "base-z-v3-r4",
     resource: "Z",
     resourceClass: "base-mineral",
     hardFloor: 43,
@@ -335,7 +345,8 @@ const RAW_MARKET_BASE_RESOURCE_POLICIES = deepFreeze<
     maxDealAmount: 1_000,
     cooldownTicks: 1_000,
     rollingWindowTicks: 30_000,
-    rollingMaxAmount: 5_000,
+    rollingMaxAmount: MARKET_BASE_RESOURCE_UNBOUNDED_QUOTA_LIMIT,
+    inventoryReferenceAmount: 5_000,
     rollingOpportunityReserveAmount: 1_000,
     maxRawOrdersScanned: 1_000,
     maxEligibleOrdersPriced: 200,

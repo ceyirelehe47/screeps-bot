@@ -16,11 +16,12 @@ import {
   type MarketBaseResourceV3RuntimeState,
   type MarketBaseResourceTerminalRead,
 } from "@/runtime/marketBaseResourceAutomation";
+import { type MarketDirectContinuousEntryInput } from "@/runtime/marketDirectContinuousPlanner";
 import {
-  MARKET_DIRECT_CONTINUOUS_LANE_ROLLING_CAP,
-  MARKET_DIRECT_CONTINUOUS_ROOM_ROLLING_CAP,
-  type MarketDirectContinuousEntryInput,
-} from "@/runtime/marketDirectContinuousPlanner";
+  MARKET_BASE_RESOURCE_GLOBAL_QUOTA_LIMIT,
+  MARKET_BASE_RESOURCE_LANE_QUOTA_LIMIT,
+  MARKET_BASE_RESOURCE_ROOM_QUOTA_LIMIT,
+} from "@/runtime/marketBaseResourceLedger";
 import type { MarketOrderSnapshot } from "@/runtime/marketSalePricing";
 import {
   MARKET_BASE_RESOURCE_CATALOG,
@@ -134,7 +135,7 @@ function entry(
       complete: true,
       revision: `quota:${resource}`,
       resourceType: resource,
-      rollingCap: 8_000,
+      rollingCap: immutable?.rollingMaxAmount || 8_000,
       confirmedAmount: 0,
       unmatchedPlannedAmount: 0,
       opportunityReserveSatisfied: true,
@@ -168,10 +169,10 @@ function entry(
       quota: {
         complete: true,
         revision: `lane-quota:${roomName}:${resource}`,
-        roomRollingCap: MARKET_DIRECT_CONTINUOUS_ROOM_ROLLING_CAP,
+        roomRollingCap: MARKET_BASE_RESOURCE_ROOM_QUOTA_LIMIT,
         roomConfirmedAmount: 0,
         roomUnmatchedPlannedAmount: 0,
-        laneRollingCap: MARKET_DIRECT_CONTINUOUS_LANE_ROLLING_CAP,
+        laneRollingCap: MARKET_BASE_RESOURCE_LANE_QUOTA_LIMIT,
         laneConfirmedAmount: 0,
         laneUnmatchedPlannedAmount: 0,
       },
@@ -219,7 +220,7 @@ function scope(
     globalQuota: {
       complete: true,
       revision: "global-quota",
-      rollingCap: 12_000,
+      rollingCap: MARKET_BASE_RESOURCE_GLOBAL_QUOTA_LIMIT,
       confirmedAmount: 0,
       unmatchedPlannedAmount: 0,
     },
@@ -1673,7 +1674,12 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
       Z: { hard: 43, economic: 45, revision: "base-z-v3-r2" },
     } as const;
     const policies = MARKET_BASE_RESOURCE_POLICIES.map((policy) => {
-      const { fingerprint: _fp, directNetBidRatio: _ratio, ...raw } = policy;
+      const {
+        fingerprint: _fp,
+        directNetBidRatio: _ratio,
+        inventoryReferenceAmount: _inventoryReference,
+        ...raw
+      } = policy;
       const old = oldPrices[raw.resource];
       const altered = {
         ...raw,
@@ -1681,6 +1687,7 @@ describe("Market Base policy migration 重合同（re-sign 常量升级）", () 
         hardFloor: old.hard,
         economicFloor: old.economic,
         minOrderNotional: old.economic * 1_000,
+        rollingMaxAmount: raw.resource === "H" || raw.resource === "X" ? 8_000 : 5_000,
         dynamicFloorMode: "observe" as const,
       };
       return {
