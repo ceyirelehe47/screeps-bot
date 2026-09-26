@@ -128,6 +128,7 @@ import {
   closeExpiredMarketEgressTrialR2,
   readMarketEgressTrialCapacityState,
   reserveMarketEgressTrialNative,
+  stopMarketEgressTrialR2,
   trialCooldownNotBefore,
   trialLaneEligible,
 } from "@/runtime/marketBaseResourceEgressTrialR2";
@@ -8884,6 +8885,7 @@ function markPlanningCpuExceeded(
   cpuTraceRecorder?: MarketBaseResourceCpuTraceRecorder,
   phase?: MarketBaseResourceCpuCutPhase,
 ): void {
+  stopMarketEgressTrialR2("cpu_guard");
   const field: MarketBaseResourceCpuTraceField =
     phase === "outer_session"
       ? "cpuAfterOuterSession"
@@ -9963,6 +9965,7 @@ export function runMarketBaseResourceAutomation(
     }
     if (!reserved) {
       try { dependencies.releasePrepared(requestId); } catch { /* bounded claim TTL */ }
+      stopMarketEgressTrialR2("reservation_failed");
       rejectOnce("market_egress_r2_reservation_failed");
       return finish(false);
     }
