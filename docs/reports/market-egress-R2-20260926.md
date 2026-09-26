@@ -37,7 +37,9 @@
 
 以 12:00 UTC 真实 r6 cfg/V3 状态复放：r7 读取旧 permit/账本通过；原 `notBefore` 前没有试运行时 prepare 拒绝；`propose→accept` 后 epoch 16→17，receipt head、finalizedSeq 和 `notBefore` 均不变。测试又从真实账本准备第 15 笔、预占一次、写入 confirmed outcome 并完整推进 WAL；第二笔在 99 tick 被挡、100 tick 可准备，撤掉实例放行则继续受旧 1,000 tick 冷却。主/镜像损坏、同 attempt 重占、10 次额度、固定截止、控制失联和容量恢复均有拒绝/退出回归。该组合模拟交易边界，不能冒充正式服新策略成交。
 
-以 `npx jest --runInBand` 跑市场 V3 automation/ledger/permit/policy、R2 两组、MarketSale 两组及共享 Direct planner/automation，共 10 suite、30 项通过；`npm run typecheck` 通过。观察脚本 `node --check scripts/market-egress-r2-observe.mjs` 与四份 JSON 解析检查通过。最终干净提交构建和独立工作树审查在冻结候选后记录。上线前仍需重新读正式服代码与 WAL/cfg/permit/容量/CPU/Memory、完成直接生产授权边界核对；只有这些门槛通过才可进行本次有限发布与观察。正式服无新策略 native 调用、无新策略确认成交、无退出后真实节奏数据。积压长期解除也尚未证明。
+以 `npx jest --runInBand` 跑市场 V3 automation/ledger/permit/policy、R2 两组、MarketSale 两组及共享 Direct planner/automation，共 10 suite、30 项通过；`npm run typecheck` 通过。独立工作树审查发现 CPU 或试运行预占保护触发后需要立刻关闭加速，已在后继源码提交 `b95b03289a8e352a5302075e23285b8a746267f3` 修复；随后受影响的 2 suite/10 项和类型检查通过。审查确认 diff 没有新增 market deal writer、价格/储备/费用常量没有下降，局部放行只含两条原 continuous lane，旧 receipt/冷却不清空。该干净源码提交的 `dist/main.js` 为 4,558,659 字节，文件 SHA-256 `eadae0149b00fa52feed2e08916193a4115d5c097c0389bf81ade85f7bc5b230`，低于 5 MiB；文档提交之后若重新构建，嵌入的提交身份会使字节哈希改变。观察脚本 `node --check scripts/market-egress-r2-observe.mjs` 与四份 JSON 解析检查通过。
+
+上线前仍需重新读正式服代码与 WAL/cfg/permit/容量/CPU/Memory、完成直接生产授权边界核对；只有这些门槛通过才可进行本次有限发布与观察。`scripts/market-egress-r2-observe.mjs --output <绝对 JSONL 路径>` 只负责已启动实例的单次心跳与读回，不会发起市场交易；心跳结果不明时不重发，控制租约会在 60 秒内失效。正式服无新策略 native 调用、无新策略确认成交、无退出后真实节奏数据。积压长期解除也尚未证明。
 
 ## 原始证据
 
