@@ -1,0 +1,4985 @@
+[monitor] base=https://screeps.com/ shard=auto memoryInterval=60000ms segment=off output=off memoryFixture=off leanMemory=false
+{
+  "capturedAt": "2026-09-27T07:16:29.694Z",
+  "memory": {
+    "source": "memory",
+    "fetchedAt": "2026-09-27T07:16:24.981Z",
+    "rateLimit": {
+      "limit": "1440",
+      "remaining": "1345",
+      "reset": "1790573354"
+    },
+    "summary": {
+      "roomCount": 8,
+      "latestTick": 73974030,
+      "totals": {
+        "looseEnergy": 399,
+        "storedEnergy": 4479731,
+        "sourceEnergy": 23972,
+        "workers": 8,
+        "carriers": 10,
+        "harvesters": 0
+      },
+      "rooms": [
+        {
+          "roomName": "E1N57",
+          "updatedAt": 73974030,
+          "latest": {
+            "tick": 73974030,
+            "looseEnergy": 0,
+            "storedEnergy": 355507,
+            "sourceEnergy": 720,
+            "workerCount": 1,
+            "carrierCount": 2,
+            "harvesterCount": 0
+          },
+          "signal": {
+            "looseEnergyTrend": -0.5,
+            "sourceEnergyTrend": -24,
+            "upgradeRate": 0,
+            "spawnBusy": 1
+          }
+        },
+        {
+          "roomName": "E3N59",
+          "updatedAt": 73974030,
+          "latest": {
+            "tick": 73974030,
+            "looseEnergy": 0,
+            "storedEnergy": 494922,
+            "sourceEnergy": 5436,
+            "workerCount": 1,
+            "carrierCount": 1,
+            "harvesterCount": 0
+          },
+          "signal": {
+            "looseEnergyTrend": -0.5,
+            "sourceEnergyTrend": 278.4,
+            "upgradeRate": 0,
+            "spawnBusy": 1
+          }
+        },
+        {
+          "roomName": "E4N58",
+          "updatedAt": 73974030,
+          "latest": {
+            "tick": 73974030,
+            "looseEnergy": 5,
+            "storedEnergy": 1432856,
+            "sourceEnergy": 3296,
+            "workerCount": 1,
+            "carrierCount": 1,
+            "harvesterCount": 0
+          },
+          "signal": {
+            "looseEnergyTrend": 0.1,
+            "sourceEnergyTrend": -3.2,
+            "upgradeRate": 0,
+            "spawnBusy": 0
+          }
+        },
+        {
+          "roomName": "E5N59",
+          "updatedAt": 73974030,
+          "latest": {
+            "tick": 73974030,
+            "looseEnergy": 0,
+            "storedEnergy": 374857,
+            "sourceEnergy": 4308,
+            "workerCount": 1,
+            "carrierCount": 1,
+            "harvesterCount": 0
+          },
+          "signal": {
+            "looseEnergyTrend": 0,
+            "sourceEnergyTrend": -10.8,
+            "upgradeRate": 0,
+            "spawnBusy": 0
+          }
+        },
+        {
+          "roomName": "E6N59",
+          "updatedAt": 73974030,
+          "latest": {
+            "tick": 73974030,
+            "looseEnergy": 0,
+            "storedEnergy": 317123,
+            "sourceEnergy": 5628,
+            "workerCount": 1,
+            "carrierCount": 1,
+            "harvesterCount": 0
+          },
+          "signal": {
+            "looseEnergyTrend": 0,
+            "sourceEnergyTrend": 0,
+            "upgradeRate": 0,
+            "spawnBusy": 0
+          }
+        },
+        {
+          "roomName": "E7N57",
+          "updatedAt": 73974030,
+          "latest": {
+            "tick": 73974030,
+            "looseEnergy": 0,
+            "storedEnergy": 480847,
+            "sourceEnergy": 0,
+            "workerCount": 1,
+            "carrierCount": 1,
+            "harvesterCount": 0
+          },
+          "signal": {
+            "looseEnergyTrend": 0,
+            "sourceEnergyTrend": 0,
+            "upgradeRate": 0,
+            "spawnBusy": 1
+          }
+        },
+        {
+          "roomName": "E7N58",
+          "updatedAt": 73974030,
+          "latest": {
+            "tick": 73974030,
+            "looseEnergy": 0,
+            "storedEnergy": 525204,
+            "sourceEnergy": 3252,
+            "workerCount": 1,
+            "carrierCount": 1,
+            "harvesterCount": 0
+          },
+          "signal": {
+            "looseEnergyTrend": 0,
+            "sourceEnergyTrend": -13.2,
+            "upgradeRate": 0,
+            "spawnBusy": 1
+          }
+        },
+        {
+          "roomName": "W1N57",
+          "updatedAt": 73974030,
+          "latest": {
+            "tick": 73974030,
+            "looseEnergy": 394,
+            "storedEnergy": 498415,
+            "sourceEnergy": 1332,
+            "workerCount": 1,
+            "carrierCount": 2,
+            "harvesterCount": 0
+          },
+          "signal": {
+            "looseEnergyTrend": -1,
+            "sourceEnergyTrend": -24,
+            "upgradeRate": 0,
+            "spawnBusy": 0
+          }
+        }
+      ]
+    },
+    "cpuMonitor": {
+      "available": true,
+      "version": 2,
+      "source": "cpuMonitor",
+      "updatedAt": 73974026,
+      "sampleInterval": 7,
+      "historyLimit": 120,
+      "config": null,
+      "historySize": null,
+      "latest": {
+        "tick": 73974026,
+        "shard": "shard1",
+        "totalUsed": 99.94322660000012,
+        "bucket": 10000,
+        "limit": 120,
+        "tickLimit": 500,
+        "untracked": 0,
+        "emaTotalUsed": 98.3808194,
+        "phases": {
+          "treasuryBeginTick": 0.021556599999939863,
+          "announceDeploy": 0.010043799999948533,
+          "marketSalePreflight": 31.767977799999926,
+          "pixelGenerator": 0.0022152000001369743,
+          "productionMonitor": 0.002379000000019005,
+          "nukerControl": 2.369927299999972,
+          "hubPlanner": 0.11954539999987901,
+          "hubUpgradeControl": 0.34994050000000243,
+          "synthesisControl": 0.6922071000001324,
+          "factoryControl": 0.2914768999999069,
+          "mineralExtraction": 0.015791100000114966,
+          "resourceControl": 3.5829742000000806,
+          "marketSaleAutomation": 1.298677900000257,
+          "hubProgressAnalytics": 0.0028717000000142434,
+          "hubProgressOverlay": 0.27410630000008496,
+          "externalTelemetryExport": 2.5484667000000627,
+          "memoryCleanup": 0.001714699999865843,
+          "portalDiscovery": 0.0014728999999533698,
+          "flagControl": 0.1576419000000442,
+          "crossShardSignals": 0.16086590000008982,
+          "interShardControl": 0.004461600000013277,
+          "warControl": 0.01793479999992087,
+          "powerBankObserver": 1.8464722000001075,
+          "powerBankHarvest": 0.2303756000001158,
+          "powerCreepControl": 2.7317588999999316,
+          "powerSpawnControl": 0.35973859999990054,
+          "roomPlannerConstruction": 0.011802700000089317,
+          "linkControl": 0.15106390000005376,
+          "coreDefense": 0.15876249999996617,
+          "defenseMode": 0.02462979999995696,
+          "homeDefense": 0.17154279999999744,
+          "towerControl": 0.8648133000001508,
+          "refreshWorkerTasks": 0.0009178000000247266,
+          "bootstrapRooms": 1.2257700000000114,
+          "remoteMining": 5.958137899999883,
+          "scheduleSpawnTasks": 20.48480459999996,
+          "spawnWork": 0.06201650000002701,
+          "creepWork:decision": 3.4200178999994932,
+          "creepWork:intent": 10.723864699999012,
+          "creepWork:pathing": 2.5187798999997995,
+          "creepWork": 21.754029499999888,
+          "empireInventoryShadow": 0.006028100000094128,
+          "treasuryT1Shadow": 0.0017185999997764156
+        },
+        "topPhases": [
+          {
+            "phase": "marketSalePreflight",
+            "used": 31.767977799999926
+          },
+          {
+            "phase": "creepWork",
+            "used": 21.754029499999888
+          },
+          {
+            "phase": "scheduleSpawnTasks",
+            "used": 20.48480459999996
+          },
+          {
+            "phase": "creepWork:intent",
+            "used": 10.723864699999012
+          },
+          {
+            "phase": "remoteMining",
+            "used": 5.958137899999883
+          }
+        ],
+        "fixedActionEstimate": 10,
+        "topRooms": [
+          {
+            "room": "E5N59",
+            "totalUsed": 3.1020248000002084
+          },
+          {
+            "room": "E1N57",
+            "totalUsed": 2.677258699999129
+          },
+          {
+            "room": "E7N57",
+            "totalUsed": 2.0229850000000624
+          },
+          {
+            "room": "W1N57",
+            "totalUsed": 1.9063611000001401
+          },
+          {
+            "room": "E7N58",
+            "totalUsed": 1.7229518999995435
+          }
+        ],
+        "topRoomRoles": [
+          {
+            "room": "E5N59",
+            "role": "remoteMiningCarrier",
+            "avgUsed": 1.7418417999999747,
+            "count": 2
+          },
+          {
+            "room": "E5N59",
+            "role": "miner",
+            "avgUsed": 0.7457544999997481,
+            "count": 2
+          },
+          {
+            "room": "E5N59",
+            "role": "carrier",
+            "avgUsed": 0.3300584999999501,
+            "count": 1
+          },
+          {
+            "room": "E1N57",
+            "role": "carrier",
+            "avgUsed": 1.47768939999969,
+            "count": 2
+          },
+          {
+            "room": "E1N57",
+            "role": "miner",
+            "avgUsed": 0.4950507999999445,
+            "count": 2
+          },
+          {
+            "room": "E1N57",
+            "role": "remoteMiningCarrier",
+            "avgUsed": 0.3868905999997878,
+            "count": 1
+          },
+          {
+            "room": "E7N57",
+            "role": "remoteWorker",
+            "avgUsed": 0.936059799999839,
+            "count": 1
+          },
+          {
+            "room": "E7N57",
+            "role": "carrier",
+            "avgUsed": 0.4258890999999494,
+            "count": 1
+          },
+          {
+            "room": "E7N57",
+            "role": "remoteMiningCarrier",
+            "avgUsed": 0.331677000000127,
+            "count": 1
+          },
+          {
+            "room": "W1N57",
+            "role": "carrier",
+            "avgUsed": 1.1142769999999018,
+            "count": 2
+          },
+          {
+            "room": "W1N57",
+            "role": "miner",
+            "avgUsed": 0.46359080000001995,
+            "count": 2
+          },
+          {
+            "room": "W1N57",
+            "role": "worker",
+            "avgUsed": 0.28760829999987436,
+            "count": 1
+          },
+          {
+            "room": "E7N58",
+            "role": "remoteMiningCarrier",
+            "avgUsed": 1.1047156999998151,
+            "count": 1
+          },
+          {
+            "room": "E7N58",
+            "role": "carrier",
+            "avgUsed": 0.3154659999997875,
+            "count": 1
+          },
+          {
+            "room": "E7N58",
+            "role": "miner",
+            "avgUsed": 0.26424729999985175,
+            "count": 2
+          }
+        ],
+        "heap": {
+          "used_heap_size": 88869816,
+          "total_heap_size": 234954752,
+          "heap_size_limit": 775946240
+        }
+      },
+      "summary": {
+        "ticks": 2,
+        "avgTotalUsed": 99.07522260000005,
+        "maxTotalUsed": 99.94322660000012,
+        "avgBucket": 9920,
+        "minBucket": 9840,
+        "emaTotalUsed": 98.3808194,
+        "fixedActionEstimate": 12.100000000000001,
+        "topPhases": [
+          {
+            "phase": "creepWork",
+            "avgUsed": 26.029221949999965
+          },
+          {
+            "phase": "marketSalePreflight",
+            "avgUsed": 25.53484894999997
+          },
+          {
+            "phase": "scheduleSpawnTasks",
+            "avgUsed": 11.95610455000002
+          },
+          {
+            "phase": "creepWork:intent",
+            "avgUsed": 11.245749899999396
+          },
+          {
+            "phase": "externalTelemetryExport",
+            "avgUsed": 5.5617432000000235
+          },
+          {
+            "phase": "remoteMining",
+            "avgUsed": 5.2053397499999505
+          },
+          {
+            "phase": "creepWork:decision",
+            "avgUsed": 5.1437996999998745
+          },
+          {
+            "phase": "resourceControl",
+            "avgUsed": 4.234410050000065
+          }
+        ],
+        "topRoomRoles": []
+      }
+    },
+    "moduleCpu": {
+      "available": false,
+      "source": "legacy",
+      "updatedAt": null,
+      "sampleInterval": null,
+      "historyLimit": null,
+      "latest": null
+    },
+    "hub": {
+      "available": true,
+      "updatedAt": 73974030,
+      "enabled": true,
+      "hubRoomName": "E4N58",
+      "hubRoomVisible": true,
+      "status": "importing",
+      "stage": "synthesizing",
+      "activeProduct": "XUH2O",
+      "missingResources": [],
+      "lastError": null,
+      "needsPlan": false,
+      "hubStorageEnergy": 1278761,
+      "hubTerminalEnergy": 133707,
+      "hubInventory": {
+        "XUH2O": 20000,
+        "XUHO2": 56628,
+        "XKH2O": 72528,
+        "XKHO2": 69588,
+        "XLH2O": 51382,
+        "XLHO2": 24285,
+        "XZH2O": 116409,
+        "XZHO2": 50777,
+        "XGH2O": 91616,
+        "XGHO2": 19760,
+        "X": 2921178,
+        "K": 1109560,
+        "L": 918089,
+        "Z": 660708,
+        "U": 287895,
+        "KH": 16905,
+        "LH": 16610,
+        "KO": 14607,
+        "UO": 10115,
+        "ZH": 9712
+      },
+      "pendingImports": 0,
+      "pendingReclaims": 0,
+      "pendingExports": 0,
+      "pendingTaskCount": 0,
+      "roomTerminalBlockers": [
+        {
+          "room": "E1N57",
+          "terminalEnergy": 0,
+          "reserve": 20000,
+          "pendingNonEnergy": 0
+        },
+        {
+          "room": "E3N59",
+          "terminalEnergy": 240939,
+          "reserve": 20000,
+          "pendingNonEnergy": 1
+        },
+        {
+          "room": "E5N59",
+          "terminalEnergy": 137319,
+          "reserve": 20000,
+          "pendingNonEnergy": 0
+        },
+        {
+          "room": "E6N59",
+          "terminalEnergy": 0,
+          "reserve": 20000,
+          "pendingNonEnergy": 1
+        },
+        {
+          "room": "E7N57",
+          "terminalEnergy": 200018,
+          "reserve": 20000,
+          "pendingNonEnergy": 1
+        },
+        {
+          "room": "E7N58",
+          "terminalEnergy": 224586,
+          "reserve": 20000,
+          "pendingNonEnergy": 3
+        },
+        {
+          "room": "W1N57",
+          "terminalEnergy": 174106,
+          "reserve": 20000,
+          "pendingNonEnergy": 0
+        }
+      ],
+      "protectionAttempt": {
+        "attemptRevision": 39252,
+        "configIncarnation": 1,
+        "startedAt": 73974000,
+        "finishedAt": 73974000,
+        "configFingerprint": "hubcfg-v1:24339be8",
+        "status": "committed",
+        "valid": true,
+        "reason": null
+      },
+      "committedProtectionMarker": {
+        "schema": "hub-protection-snapshot-v1",
+        "planRevision": 39252,
+        "configIncarnation": 1,
+        "observedAt": 73974000,
+        "expiresAt": 73974050,
+        "configFingerprint": "hubcfg-v1:24339be8",
+        "status": "committed",
+        "valid": true,
+        "marker": {
+          "revision": 39252,
+          "configIncarnation": 1,
+          "configFingerprint": "hubcfg-v1:24339be8",
+          "hubRoomName": "E4N58",
+          "planMode": "distributed"
+        },
+        "components": {
+          "synthesisConfig": {
+            "revision": 39252,
+            "configIncarnation": 1,
+            "configFingerprint": "hubcfg-v1:24339be8"
+          },
+          "transferTasks": {
+            "revision": 39252,
+            "configIncarnation": 1,
+            "configFingerprint": "hubcfg-v1:24339be8"
+          },
+          "distributed": {
+            "revision": 39252,
+            "configIncarnation": 1,
+            "configFingerprint": "hubcfg-v1:24339be8"
+          },
+          "baseMineralSurplus": {
+            "revision": 39252,
+            "configIncarnation": 1,
+            "configFingerprint": "hubcfg-v1:24339be8"
+          }
+        },
+        "consistent": true,
+        "failureReason": null
+      },
+      "distributedSynthesis": {
+        "livenessAvailable": true,
+        "blockedTargets": [],
+        "invariantViolations": [],
+        "configReconcile": {
+          "revision": 39252,
+          "refreshedRooms": [
+            "E7N58"
+          ],
+          "clearedRooms": [],
+          "skippedBusyRooms": [
+            "E1N57",
+            "E6N59"
+          ],
+          "foreignOwnerRooms": []
+        }
+      }
+    },
+    "resourceControl": {
+      "available": true,
+      "updatedAt": 73974032,
+      "roomCount": 8,
+      "rooms": [
+        {
+          "roomName": "E1N57",
+          "state": "export",
+          "capacityState": "pressure",
+          "storageUsedCapacity": 886053,
+          "storageFreeCapacity": 113947,
+          "terminalUsedCapacity": 70274,
+          "terminalFreeCapacity": 229726,
+          "localOffloadCapacityCommitment": 0,
+          "storageEnergy": 333719,
+          "terminalEnergy": 0,
+          "energyFloor": 120000,
+          "energyTarget": 200000,
+          "energyExportStart": 250000,
+          "terminalEnergyReserve": 20000,
+          "desiredTerminalFreeCapacity": 80000,
+          "terminalRecoveryGap": 0,
+          "recoverableOffloadAmount": 0,
+          "stickyHeadroom": false,
+          "stickyHeadroomReason": null,
+          "capacityReservation": {
+            "committed": 0,
+            "remaining": 13947
+          },
+          "staging": {
+            "admittedAmount": 6307,
+            "admittedTaskCount": 1,
+            "admittedByResource": {
+              "energy": 6307
+            },
+            "suppressedCount": 0,
+            "suppressedByReason": {}
+          },
+          "taskHealth": {
+            "pendingIncoming": 0,
+            "pendingOutgoing": 1,
+            "blockedIncoming": {},
+            "blockedOutgoing": {}
+          },
+          "marketEnergyReadiness": {
+            "schemaVersion": 3,
+            "revision": "market-terminal-energy-v3:73974032",
+            "observedAt": 73974032,
+            "expiresAt": 73974033,
+            "authorizationRevision": "csh1:5519584c9b37041807f576298e845f33",
+            "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+            "terminalId": "69fe4e87e810942b688bb6f1",
+            "authorized": true,
+            "effectivePostDealEnergyReserve": 26714,
+            "marketTerminalEnergyTarget": 27714,
+            "ordinaryTerminalEnergyTarget": 20000,
+            "unresolvedEnergySendAmount": 6307,
+            "unresolvedInternalSendFees": 407,
+            "terminalScopedProductionEnergyCommitments": 0,
+            "maxTransactionEnergy": 1000,
+            "contributionCount": 3,
+            "desiredTerminalEnergy": 27714,
+            "plannedFeedAmount": 0,
+            "status": "blocked",
+            "blocker": "terminal_claimed"
+          }
+        },
+        {
+          "roomName": "E3N59",
+          "state": "balanced",
+          "capacityState": "normal",
+          "storageUsedCapacity": 776062,
+          "storageFreeCapacity": 223938,
+          "terminalUsedCapacity": 240939,
+          "terminalFreeCapacity": 59061,
+          "localOffloadCapacityCommitment": 0,
+          "storageEnergy": 234922,
+          "terminalEnergy": 240939,
+          "energyFloor": 120000,
+          "energyTarget": 200000,
+          "energyExportStart": 250000,
+          "terminalEnergyReserve": 20000,
+          "desiredTerminalFreeCapacity": 60000,
+          "terminalRecoveryGap": 939,
+          "recoverableOffloadAmount": 939,
+          "stickyHeadroom": false,
+          "stickyHeadroomReason": null,
+          "capacityReservation": {
+            "committed": 6307,
+            "remaining": 12754
+          },
+          "staging": {
+            "admittedAmount": 0,
+            "admittedTaskCount": 0,
+            "admittedByResource": {},
+            "suppressedCount": 1,
+            "suppressedByReason": {
+              "terminal_headroom": 1
+            }
+          },
+          "taskHealth": {
+            "pendingIncoming": 1,
+            "pendingOutgoing": 1,
+            "blockedIncoming": {},
+            "blockedOutgoing": {
+              "insufficient_terminal_resource_or_fee": 1
+            }
+          },
+          "marketEnergyReadiness": {
+            "schemaVersion": 3,
+            "revision": "market-terminal-energy-v3:73974032",
+            "observedAt": 73974032,
+            "expiresAt": 73974033,
+            "authorizationRevision": "csh1:5519584c9b37041807f576298e845f33",
+            "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+            "terminalId": "69fcff2ed22e9226307ce4fe",
+            "authorized": true,
+            "effectivePostDealEnergyReserve": 25000,
+            "marketTerminalEnergyTarget": 26000,
+            "ordinaryTerminalEnergyTarget": 20000,
+            "unresolvedEnergySendAmount": 0,
+            "unresolvedInternalSendFees": 67,
+            "terminalScopedProductionEnergyCommitments": 0,
+            "maxTransactionEnergy": 1000,
+            "contributionCount": 2,
+            "desiredTerminalEnergy": 240000,
+            "plannedFeedAmount": 0,
+            "status": "ready",
+            "blocker": null
+          }
+        },
+        {
+          "roomName": "E4N58",
+          "state": "export",
+          "capacityState": "normal",
+          "storageUsedCapacity": 7757797,
+          "storageFreeCapacity": 242203,
+          "terminalUsedCapacity": 218057,
+          "terminalFreeCapacity": 81943,
+          "localOffloadCapacityCommitment": 0,
+          "storageEnergy": 1278761,
+          "terminalEnergy": 133707,
+          "energyFloor": 120000,
+          "energyTarget": 200000,
+          "energyExportStart": 250000,
+          "terminalEnergyReserve": 20000,
+          "desiredTerminalFreeCapacity": 60000,
+          "terminalRecoveryGap": 0,
+          "recoverableOffloadAmount": 0,
+          "stickyHeadroom": false,
+          "stickyHeadroomReason": null,
+          "capacityReservation": {
+            "committed": 0,
+            "remaining": 41943
+          },
+          "staging": {
+            "admittedAmount": 0,
+            "admittedTaskCount": 0,
+            "admittedByResource": {},
+            "suppressedCount": 0,
+            "suppressedByReason": {}
+          },
+          "taskHealth": {
+            "pendingIncoming": 0,
+            "pendingOutgoing": 0,
+            "blockedIncoming": {},
+            "blockedOutgoing": {}
+          },
+          "marketEnergyReadiness": {
+            "schemaVersion": 3,
+            "revision": "market-terminal-energy-v3:73974032",
+            "observedAt": 73974032,
+            "expiresAt": 73974033,
+            "authorizationRevision": "csh1:5519584c9b37041807f576298e845f33",
+            "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+            "terminalId": "69fc583c60d86221e8bdf547",
+            "authorized": true,
+            "effectivePostDealEnergyReserve": 25000,
+            "marketTerminalEnergyTarget": 26000,
+            "ordinaryTerminalEnergyTarget": 20000,
+            "unresolvedEnergySendAmount": 0,
+            "unresolvedInternalSendFees": 0,
+            "terminalScopedProductionEnergyCommitments": 0,
+            "maxTransactionEnergy": 1000,
+            "contributionCount": 1,
+            "desiredTerminalEnergy": 133707,
+            "plannedFeedAmount": 0,
+            "status": "ready",
+            "blocker": null
+          }
+        },
+        {
+          "roomName": "E5N59",
+          "state": "balanced",
+          "capacityState": "normal",
+          "storageUsedCapacity": 830018,
+          "storageFreeCapacity": 169982,
+          "terminalUsedCapacity": 249563,
+          "terminalFreeCapacity": 50437,
+          "localOffloadCapacityCommitment": 0,
+          "storageEnergy": 216951,
+          "terminalEnergy": 137319,
+          "energyFloor": 120000,
+          "energyTarget": 200000,
+          "energyExportStart": 250000,
+          "terminalEnergyReserve": 20000,
+          "desiredTerminalFreeCapacity": 60000,
+          "terminalRecoveryGap": 9563,
+          "recoverableOffloadAmount": 0,
+          "stickyHeadroom": true,
+          "stickyHeadroomReason": "storage_full",
+          "capacityReservation": {
+            "committed": 0,
+            "remaining": 10437
+          },
+          "staging": {
+            "admittedAmount": 0,
+            "admittedTaskCount": 0,
+            "admittedByResource": {},
+            "suppressedCount": 0,
+            "suppressedByReason": {}
+          },
+          "taskHealth": {
+            "pendingIncoming": 0,
+            "pendingOutgoing": 0,
+            "blockedIncoming": {},
+            "blockedOutgoing": {}
+          },
+          "marketEnergyReadiness": {
+            "schemaVersion": 3,
+            "revision": "market-terminal-energy-v3:73974032",
+            "observedAt": 73974032,
+            "expiresAt": 73974033,
+            "authorizationRevision": "csh1:5519584c9b37041807f576298e845f33",
+            "roomInstanceId": null,
+            "terminalId": "6a0152c38f6bc74885722036",
+            "authorized": false,
+            "effectivePostDealEnergyReserve": 25000,
+            "marketTerminalEnergyTarget": 26000,
+            "ordinaryTerminalEnergyTarget": 20000,
+            "unresolvedEnergySendAmount": 0,
+            "unresolvedInternalSendFees": 0,
+            "terminalScopedProductionEnergyCommitments": 0,
+            "maxTransactionEnergy": 1000,
+            "contributionCount": 1,
+            "desiredTerminalEnergy": 20000,
+            "plannedFeedAmount": 0,
+            "status": "blocked",
+            "blocker": "not_authorized"
+          }
+        },
+        {
+          "roomName": "E6N59",
+          "state": "export",
+          "capacityState": "pressure",
+          "storageUsedCapacity": 848772,
+          "storageFreeCapacity": 151228,
+          "terminalUsedCapacity": 25163,
+          "terminalFreeCapacity": 274837,
+          "localOffloadCapacityCommitment": 0,
+          "storageEnergy": 293948,
+          "terminalEnergy": 0,
+          "energyFloor": 120000,
+          "energyTarget": 200000,
+          "energyExportStart": 250000,
+          "terminalEnergyReserve": 20000,
+          "desiredTerminalFreeCapacity": 80000,
+          "terminalRecoveryGap": 0,
+          "recoverableOffloadAmount": 0,
+          "stickyHeadroom": false,
+          "stickyHeadroomReason": null,
+          "capacityReservation": {
+            "committed": 0,
+            "remaining": 51228
+          },
+          "staging": {
+            "admittedAmount": 300,
+            "admittedTaskCount": 1,
+            "admittedByResource": {
+              "UH": 300
+            },
+            "suppressedCount": 1,
+            "suppressedByReason": {
+              "window_limit": 1
+            }
+          },
+          "taskHealth": {
+            "pendingIncoming": 0,
+            "pendingOutgoing": 2,
+            "blockedIncoming": {},
+            "blockedOutgoing": {
+              "insufficient_terminal_resource_or_fee": 2
+            }
+          },
+          "marketEnergyReadiness": {
+            "schemaVersion": 3,
+            "revision": "market-terminal-energy-v3:73974032",
+            "observedAt": 73974032,
+            "expiresAt": 73974033,
+            "authorizationRevision": "csh1:5519584c9b37041807f576298e845f33",
+            "roomInstanceId": null,
+            "terminalId": "69ff7ca684056e1ec0219abd",
+            "authorized": false,
+            "effectivePostDealEnergyReserve": 34964,
+            "marketTerminalEnergyTarget": 35964,
+            "ordinaryTerminalEnergyTarget": 20000,
+            "unresolvedEnergySendAmount": 14309,
+            "unresolvedInternalSendFees": 655,
+            "terminalScopedProductionEnergyCommitments": 0,
+            "maxTransactionEnergy": 1000,
+            "contributionCount": 4,
+            "desiredTerminalEnergy": 20000,
+            "plannedFeedAmount": 0,
+            "status": "blocked",
+            "blocker": "not_authorized"
+          }
+        },
+        {
+          "roomName": "E7N57",
+          "state": "export",
+          "capacityState": "normal",
+          "storageUsedCapacity": 849035,
+          "storageFreeCapacity": 150965,
+          "terminalUsedCapacity": 221368,
+          "terminalFreeCapacity": 78632,
+          "localOffloadCapacityCommitment": 0,
+          "storageEnergy": 260086,
+          "terminalEnergy": 200018,
+          "energyFloor": 120000,
+          "energyTarget": 200000,
+          "energyExportStart": 250000,
+          "terminalEnergyReserve": 20000,
+          "desiredTerminalFreeCapacity": 60000,
+          "terminalRecoveryGap": 0,
+          "recoverableOffloadAmount": 0,
+          "stickyHeadroom": false,
+          "stickyHeadroomReason": null,
+          "capacityReservation": {
+            "committed": 14541,
+            "remaining": 24091
+          },
+          "staging": {
+            "admittedAmount": 0,
+            "admittedTaskCount": 0,
+            "admittedByResource": {},
+            "suppressedCount": 0,
+            "suppressedByReason": {}
+          },
+          "taskHealth": {
+            "pendingIncoming": 2,
+            "pendingOutgoing": 0,
+            "blockedIncoming": {
+              "insufficient_terminal_resource_or_fee": 1
+            },
+            "blockedOutgoing": {}
+          },
+          "marketEnergyReadiness": {
+            "schemaVersion": 3,
+            "revision": "market-terminal-energy-v3:73974032",
+            "observedAt": 73974032,
+            "expiresAt": 73974033,
+            "authorizationRevision": "csh1:5519584c9b37041807f576298e845f33",
+            "roomInstanceId": null,
+            "terminalId": "6a2f7bb6c6bdc56da9833aed",
+            "authorized": false,
+            "effectivePostDealEnergyReserve": 25000,
+            "marketTerminalEnergyTarget": 26000,
+            "ordinaryTerminalEnergyTarget": 20000,
+            "unresolvedEnergySendAmount": 0,
+            "unresolvedInternalSendFees": 0,
+            "terminalScopedProductionEnergyCommitments": 0,
+            "maxTransactionEnergy": 1000,
+            "contributionCount": 1,
+            "desiredTerminalEnergy": 20000,
+            "plannedFeedAmount": 0,
+            "status": "blocked",
+            "blocker": "not_authorized"
+          }
+        },
+        {
+          "roomName": "E7N58",
+          "state": "export",
+          "capacityState": "normal",
+          "storageUsedCapacity": 868919,
+          "storageFreeCapacity": 131081,
+          "terminalUsedCapacity": 239227,
+          "terminalFreeCapacity": 60773,
+          "localOffloadCapacityCommitment": 0,
+          "storageEnergy": 279029,
+          "terminalEnergy": 224586,
+          "energyFloor": 120000,
+          "energyTarget": 200000,
+          "energyExportStart": 250000,
+          "terminalEnergyReserve": 20000,
+          "desiredTerminalFreeCapacity": 60000,
+          "terminalRecoveryGap": 0,
+          "recoverableOffloadAmount": 0,
+          "stickyHeadroom": false,
+          "stickyHeadroomReason": null,
+          "capacityReservation": {
+            "committed": 830,
+            "remaining": 19170
+          },
+          "staging": {
+            "admittedAmount": 232,
+            "admittedTaskCount": 1,
+            "admittedByResource": {
+              "UH2O": 232
+            },
+            "suppressedCount": 0,
+            "suppressedByReason": {}
+          },
+          "taskHealth": {
+            "pendingIncoming": 2,
+            "pendingOutgoing": 1,
+            "blockedIncoming": {
+              "insufficient_terminal_resource_or_fee": 2
+            },
+            "blockedOutgoing": {}
+          },
+          "marketEnergyReadiness": {
+            "schemaVersion": 3,
+            "revision": "market-terminal-energy-v3:73974032",
+            "observedAt": 73974032,
+            "expiresAt": 73974033,
+            "authorizationRevision": "csh1:5519584c9b37041807f576298e845f33",
+            "roomInstanceId": null,
+            "terminalId": "6a013443469482a312a12828",
+            "authorized": false,
+            "effectivePostDealEnergyReserve": 25000,
+            "marketTerminalEnergyTarget": 26000,
+            "ordinaryTerminalEnergyTarget": 20000,
+            "unresolvedEnergySendAmount": 0,
+            "unresolvedInternalSendFees": 8,
+            "terminalScopedProductionEnergyCommitments": 0,
+            "maxTransactionEnergy": 1000,
+            "contributionCount": 2,
+            "desiredTerminalEnergy": 20000,
+            "plannedFeedAmount": 0,
+            "status": "blocked",
+            "blocker": "not_authorized"
+          }
+        },
+        {
+          "roomName": "W1N57",
+          "state": "export",
+          "capacityState": "normal",
+          "storageUsedCapacity": 827462,
+          "storageFreeCapacity": 172538,
+          "terminalUsedCapacity": 254582,
+          "terminalFreeCapacity": 45418,
+          "localOffloadCapacityCommitment": 0,
+          "storageEnergy": 254309,
+          "terminalEnergy": 174106,
+          "energyFloor": 120000,
+          "energyTarget": 200000,
+          "energyExportStart": 250000,
+          "terminalEnergyReserve": 20000,
+          "desiredTerminalFreeCapacity": 60000,
+          "terminalRecoveryGap": 14582,
+          "recoverableOffloadAmount": 0,
+          "stickyHeadroom": true,
+          "stickyHeadroomReason": "storage_full",
+          "capacityReservation": {
+            "committed": 0,
+            "remaining": 5418
+          },
+          "staging": {
+            "admittedAmount": 0,
+            "admittedTaskCount": 0,
+            "admittedByResource": {},
+            "suppressedCount": 0,
+            "suppressedByReason": {}
+          },
+          "taskHealth": {
+            "pendingIncoming": 0,
+            "pendingOutgoing": 0,
+            "blockedIncoming": {},
+            "blockedOutgoing": {}
+          },
+          "marketEnergyReadiness": {
+            "schemaVersion": 3,
+            "revision": "market-terminal-energy-v3:73974032",
+            "observedAt": 73974032,
+            "expiresAt": 73974033,
+            "authorizationRevision": "csh1:5519584c9b37041807f576298e845f33",
+            "roomInstanceId": null,
+            "terminalId": "69feb11e40403c73d452551b",
+            "authorized": false,
+            "effectivePostDealEnergyReserve": 25000,
+            "marketTerminalEnergyTarget": 26000,
+            "ordinaryTerminalEnergyTarget": 20000,
+            "unresolvedEnergySendAmount": 0,
+            "unresolvedInternalSendFees": 0,
+            "terminalScopedProductionEnergyCommitments": 0,
+            "maxTransactionEnergy": 1000,
+            "contributionCount": 1,
+            "desiredTerminalEnergy": 20000,
+            "plannedFeedAmount": 0,
+            "status": "blocked",
+            "blocker": "not_authorized"
+          }
+        }
+      ],
+      "capacityPolicy": {
+        "enabled": true,
+        "terminalHeadroomRecoveryEnabled": true,
+        "storagePressureFreeCapacity": 100000,
+        "storageReliefTargetFreeCapacity": 200000,
+        "receiverStorageMinFreeCapacity": 100000,
+        "terminalPressureFreeCapacity": 40000,
+        "terminalReliefTargetFreeCapacity": 80000,
+        "receiverTerminalMinFreeCapacity": 50000
+      },
+      "eligibleReceiverCount": 5,
+      "receiverExcludedByReason": {
+        "capacity_state": 2,
+        "terminal_headroom": 1
+      },
+      "suppressedStagingCount": {
+        "terminal_headroom": 1,
+        "window_limit": 1
+      },
+      "capacityIndexBuildCount": 1,
+      "taskSummary": {
+        "pending": 5,
+        "manualPending": 0,
+        "automaticPending": 5,
+        "blockedByReason": {
+          "insufficient_terminal_resource_or_fee": 3
+        },
+        "livenessAvailable": true,
+        "demandCoveringIncoming": 5,
+        "coverageExpiredIncoming": 0,
+        "coverageExpiredByReason": {}
+      },
+      "recentCapacityReliefRoutes": [
+        {
+          "tick": 73973650,
+          "taskId": "73973630:1:energy:E1N57->E5N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E5N59",
+          "resource": "energy",
+          "amount": 10000,
+          "transferCost": 1249
+        },
+        {
+          "tick": 73973660,
+          "taskId": "73973630:1:energy:E1N57->E5N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E5N59",
+          "resource": "energy",
+          "amount": 10000,
+          "transferCost": 1249
+        },
+        {
+          "tick": 73973670,
+          "taskId": "73973630:1:energy:E1N57->E5N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E5N59",
+          "resource": "energy",
+          "amount": 10000,
+          "transferCost": 1249
+        },
+        {
+          "tick": 73973680,
+          "taskId": "73973680:2:energy:E1N57->E7N57",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E7N57",
+          "resource": "energy",
+          "amount": 10000,
+          "transferCost": 1813
+        },
+        {
+          "tick": 73973690,
+          "taskId": "73973680:2:energy:E1N57->E7N57",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E7N57",
+          "resource": "energy",
+          "amount": 10000,
+          "transferCost": 1813
+        },
+        {
+          "tick": 73973700,
+          "taskId": "73973680:2:energy:E1N57->E7N57",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E7N57",
+          "resource": "energy",
+          "amount": 10000,
+          "transferCost": 1813
+        },
+        {
+          "tick": 73973710,
+          "taskId": "73973680:2:energy:E1N57->E7N57",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E7N57",
+          "resource": "energy",
+          "amount": 10000,
+          "transferCost": 1813
+        },
+        {
+          "tick": 73973720,
+          "taskId": "73973680:2:energy:E1N57->E7N57",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E7N57",
+          "resource": "energy",
+          "amount": 1164,
+          "transferCost": 211
+        },
+        {
+          "tick": 73973730,
+          "taskId": "73973730:1:energy:E1N57->E3N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E3N59",
+          "resource": "energy",
+          "amount": 10000,
+          "transferCost": 645
+        },
+        {
+          "tick": 73973740,
+          "taskId": "73973730:1:energy:E1N57->E3N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E3N59",
+          "resource": "energy",
+          "amount": 10000,
+          "transferCost": 645
+        },
+        {
+          "tick": 73973800,
+          "taskId": "73973730:1:energy:E1N57->E3N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E3N59",
+          "resource": "energy",
+          "amount": 939,
+          "transferCost": 61
+        },
+        {
+          "tick": 73973840,
+          "taskId": "73973730:1:energy:E1N57->E3N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E3N59",
+          "resource": "energy",
+          "amount": 939,
+          "transferCost": 61
+        },
+        {
+          "tick": 73973850,
+          "taskId": "73973730:1:energy:E1N57->E3N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E3N59",
+          "resource": "energy",
+          "amount": 1878,
+          "transferCost": 122
+        },
+        {
+          "tick": 73973870,
+          "taskId": "73973730:1:energy:E1N57->E3N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E3N59",
+          "resource": "energy",
+          "amount": 939,
+          "transferCost": 61
+        },
+        {
+          "tick": 73973880,
+          "taskId": "73973730:1:energy:E1N57->E3N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E3N59",
+          "resource": "energy",
+          "amount": 939,
+          "transferCost": 61
+        },
+        {
+          "tick": 73973910,
+          "taskId": "73973730:1:energy:E1N57->E3N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E3N59",
+          "resource": "energy",
+          "amount": 1878,
+          "transferCost": 122
+        },
+        {
+          "tick": 73973940,
+          "taskId": "73973730:1:energy:E1N57->E3N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E3N59",
+          "resource": "energy",
+          "amount": 1878,
+          "transferCost": 122
+        },
+        {
+          "tick": 73973970,
+          "taskId": "73973730:1:energy:E1N57->E3N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E3N59",
+          "resource": "energy",
+          "amount": 1878,
+          "transferCost": 122
+        },
+        {
+          "tick": 73974010,
+          "taskId": "73973730:1:energy:E1N57->E3N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E3N59",
+          "resource": "energy",
+          "amount": 1878,
+          "transferCost": 122
+        },
+        {
+          "tick": 73974030,
+          "taskId": "73973730:1:energy:E1N57->E3N59",
+          "fromRoomName": "E1N57",
+          "toRoomName": "E3N59",
+          "resource": "energy",
+          "amount": 939,
+          "transferCost": 61
+        }
+      ],
+      "logistics": {
+        "available": true,
+        "livenessAvailable": true,
+        "snapshotIncoherent": false,
+        "inconclusive": false,
+        "snapshotAttestationMatched": true,
+        "coherenceRetryCount": 0,
+        "initialEpochSkew": false,
+        "schemaVersion": 2,
+        "updatedAt": 73974030,
+        "expiresAt": 73974050,
+        "requestedMode": "shadow",
+        "effectiveAuthority": "legacy",
+        "blocker": null,
+        "complete": true,
+        "projectionTruncated": false,
+        "inScopeByOrigin": {
+          "synthesis_room": 2
+        },
+        "outOfScopeByOrigin": {
+          "capacity_relief": 2,
+          "synthesis_distributed_demand": 2,
+          "synthesis_room": 1
+        },
+        "intent": {
+          "total": 2,
+          "active": 2,
+          "fresh": 2,
+          "stale": 0,
+          "paired": 2,
+          "inputDrift": 0,
+          "emitted": 2,
+          "dropped": 0,
+          "truncated": false
+        },
+        "comparison": {
+          "total": 2,
+          "matched": 2,
+          "different": 0,
+          "unresolved": 0,
+          "byReason": {
+            "equal": 2
+          },
+          "byDecisionDelta": {
+            "both_no_route": 2
+          },
+          "byCausalCode": {
+            "matched": 2
+          },
+          "dimensions": {
+            "donor": {
+              "matched": 2,
+              "different": 0,
+              "unresolved": 0
+            },
+            "route": {
+              "matched": 2,
+              "different": 0,
+              "unresolved": 0
+            },
+            "priority": {
+              "matched": 2,
+              "different": 0,
+              "unresolved": 0
+            },
+            "demandCoverage": {
+              "matched": 2,
+              "different": 0,
+              "unresolved": 0
+            },
+            "receiverHeadroom": {
+              "matched": 2,
+              "different": 0,
+              "unresolved": 0
+            },
+            "predictedStagingEligibility": {
+              "matched": 2,
+              "different": 0,
+              "unresolved": 0
+            }
+          },
+          "sampled": 2,
+          "detailsDropped": 0,
+          "samples": [
+            {
+              "intentId": "[\"logistics-demand/v1\",\"synthesisControl:room\",\"[\\\"synthesis_room/v1\\\",\\\"E7N58\\\",\\\"UH2O\\\",\\\"OH\\\"]\",14537]",
+              "targetRoomName": "E7N58",
+              "resource": "OH",
+              "status": "equal",
+              "reason": "equal",
+              "producerReason": null,
+              "decisionDelta": "both_no_route",
+              "direction": "same",
+              "causalCode": "matched",
+              "differingDimensions": [],
+              "legacy": {
+                "kind": "none",
+                "blocker": "demand_already_covered",
+                "coverage": "covered",
+                "capacity": "unknown",
+                "staging": "unknown"
+              },
+              "shadow": {
+                "kind": "unmatched",
+                "reason": "demand_already_covered",
+                "coverage": "covered",
+                "capacity": "unknown",
+                "staging": "unknown",
+                "uncoveredAmount": 0
+              },
+              "candidate": {
+                "donorCount": 8,
+                "evaluatedCount": 0,
+                "feasibleCount": 0,
+                "rejectedCount": 0,
+                "selectedRejection": null,
+                "rejectionCounts": [],
+                "topSourceRoom": null,
+                "legacySource": null,
+                "receiver": {
+                  "kind": "present",
+                  "receiverEligible": true,
+                  "storageHeadroom": 30251,
+                  "terminalHeadroom": 19170,
+                  "resourceHeadroom": 59470
+                }
+              }
+            },
+            {
+              "intentId": "[\"logistics-demand/v1\",\"synthesisControl:room\",\"[\\\"synthesis_room/v1\\\",\\\"E7N58\\\",\\\"UH2O\\\",\\\"UH\\\"]\",14538]",
+              "targetRoomName": "E7N58",
+              "resource": "UH",
+              "status": "equal",
+              "reason": "equal",
+              "producerReason": null,
+              "decisionDelta": "both_no_route",
+              "direction": "same",
+              "causalCode": "matched",
+              "differingDimensions": [],
+              "legacy": {
+                "kind": "none",
+                "blocker": "demand_already_covered",
+                "coverage": "covered",
+                "capacity": "unknown",
+                "staging": "unknown"
+              },
+              "shadow": {
+                "kind": "unmatched",
+                "reason": "demand_already_covered",
+                "coverage": "covered",
+                "capacity": "unknown",
+                "staging": "unknown",
+                "uncoveredAmount": 0
+              },
+              "candidate": {
+                "donorCount": 8,
+                "evaluatedCount": 0,
+                "feasibleCount": 0,
+                "rejectedCount": 0,
+                "selectedRejection": null,
+                "rejectionCounts": [],
+                "topSourceRoom": null,
+                "legacySource": null,
+                "receiver": {
+                  "kind": "present",
+                  "receiverEligible": true,
+                  "storageHeadroom": 30251,
+                  "terminalHeadroom": 19170,
+                  "resourceHeadroom": 59700
+                }
+              }
+            }
+          ]
+        },
+        "matcher": {
+          "indexBuilds": 1,
+          "candidateEvaluations": 0,
+          "transactionCostEvaluations": 0,
+          "totalTransactionCostEvaluations": 0,
+          "candidateBudget": 128,
+          "budgetExhausted": false,
+          "continuationCursor": null
+        },
+        "safety": {
+          "measurementBoundary": "observable_state_diff_v1",
+          "nonLegacyAuthorityRecords": 0,
+          "activeContracts": 0,
+          "activeLeases": 0,
+          "activeClaims": 0,
+          "shadowArbiterActorRecords": 0,
+          "shadowClaimRecords": 0,
+          "shadowJournalRecords": 0,
+          "shadowCarrierTaskRecords": 0,
+          "shadowReceiverReservationRecords": 0,
+          "violations": []
+        },
+        "resources": {
+          "dataItems": 15,
+          "runtimeItems": 9,
+          "dataBytes": 1644,
+          "runtimeBytes": 3345,
+          "totalBytes": 4989,
+          "withinLimit": true,
+          "observedDataItems": 15,
+          "observedDataBytes": 1644,
+          "observedRuntimeItems": 9,
+          "observedRuntimeBytes": 3345
+        },
+        "cpu": {
+          "attributionVersion": 2,
+          "sampleTick": 73974030,
+          "measurementAvailable": true,
+          "producerUsed": 2.598,
+          "consumerUsed": 1.066,
+          "shadowUsed": 3.6639999999999997,
+          "outerResourceControlUsed": null,
+          "gateUsed": null,
+          "cpuGateEligible": false,
+          "gateInconclusive": true
+        }
+      },
+      "pendingTaskCount": 5,
+      "pendingTasks": [
+        {
+          "id": "73973340:1:energy:E6N59->E7N57",
+          "resource": "energy",
+          "origin": "automatic",
+          "reason": "capacity:relief:energy",
+          "sourceRoom": "E6N59",
+          "destinationRoom": "E7N57",
+          "remainingAmount": 14309,
+          "age": 692,
+          "blocker": "insufficient_terminal_resource_or_fee",
+          "blockerAge": 452,
+          "lastProgressAge": 462
+        },
+        {
+          "id": "73973680:1:UH:E6N59->E7N58",
+          "resource": "UH",
+          "origin": "automatic",
+          "reason": "synthesis:E7N58:UH2O",
+          "sourceRoom": "E6N59",
+          "destinationRoom": "E7N58",
+          "remainingAmount": 300,
+          "age": 352,
+          "blocker": "insufficient_terminal_resource_or_fee",
+          "blockerAge": 352,
+          "lastProgressAge": 352
+        },
+        {
+          "id": "73973730:1:energy:E1N57->E3N59",
+          "resource": "energy",
+          "origin": "automatic",
+          "reason": "capacity:relief:energy",
+          "sourceRoom": "E1N57",
+          "destinationRoom": "E3N59",
+          "remainingAmount": 6307,
+          "age": 302,
+          "blocker": null,
+          "blockerAge": null,
+          "lastProgressAge": 2
+        },
+        {
+          "id": "73974000:1:OH:E3N59->E7N58",
+          "resource": "OH",
+          "origin": "automatic",
+          "reason": "synthesis:direct:OH",
+          "sourceRoom": "E3N59",
+          "destinationRoom": "E7N58",
+          "remainingAmount": 530,
+          "age": 32,
+          "blocker": "insufficient_terminal_resource_or_fee",
+          "blockerAge": 32,
+          "lastProgressAge": 32
+        },
+        {
+          "id": "73974000:2:UH2O:E7N58->E7N57",
+          "resource": "UH2O",
+          "origin": "automatic",
+          "reason": "synthesis:direct:UH2O",
+          "sourceRoom": "E7N58",
+          "destinationRoom": "E7N57",
+          "remainingAmount": 232,
+          "age": 32,
+          "blocker": null,
+          "blockerAge": null,
+          "lastProgressAge": 2
+        }
+      ]
+    },
+    "marketSaleAutomation": {
+      "available": true,
+      "updatedAt": 73974032,
+      "requestedMode": "direct",
+      "phase": "direct",
+      "configRevision": "market-base-resource-v3-r7",
+      "shadowConfigRevision": "market-base-resource-v3-r7",
+      "shadowConsecutiveCycles": 0,
+      "managedOrderCount": 0,
+      "managedOrders": [],
+      "managedOrderSummaryTruncated": false,
+      "orderSlots": {
+        "total": 300,
+        "current": 0,
+        "free": 300,
+        "reserved": 0,
+        "minFree": 5
+      },
+      "backoffSummary": {
+        "activeCount": 0,
+        "nextUntil": null
+      },
+      "pendingCreateCount": 0,
+      "pendingMutationCount": 0,
+      "stagingAmount": 0,
+      "reservationAmount": 0,
+      "exposureAmount": 0,
+      "rollingFeeMilli": 0,
+      "creditReserve": 0,
+      "creditSummary": {
+        "credits": 753108813.785,
+        "reserve": 0,
+        "reservedFeesThisTick": 0,
+        "availableAfterReserve": 753108813.785
+      },
+      "terminalClaims": [],
+      "rejectedByReason": {
+        "candidate:direct_no_protected_surplus": 25,
+        "candidate:direct_protection_not_current": 14,
+        "candidate:direct_terminal_stock_shortage": 10
+      },
+      "candidates": [
+        {
+          "key": "E1N57:H",
+          "roomName": "E1N57",
+          "resource": "H",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 428,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 12,
+          "historyFloor": 585.257,
+          "ratchetFloor": 629.193,
+          "effectiveNetFloor": 478.982,
+          "makerPrice": 717.963,
+          "makerNetPrice": 682.06485,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E1N57:K",
+          "roomName": "E1N57",
+          "resource": "K",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 33,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 13,
+          "historyFloor": 41.164,
+          "ratchetFloor": 100.914,
+          "effectiveNetFloor": 100.914,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E1N57:L",
+          "roomName": "E1N57",
+          "resource": "L",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 3347,
+          "protectedAmount": 100000,
+          "hardFloor": 161,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 532.901,
+          "ratchetFloor": 883.482,
+          "effectiveNetFloor": 239.956,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": null
+        },
+        {
+          "key": "E1N57:O",
+          "roomName": "E1N57",
+          "resource": "O",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 71,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 79.585,
+          "ratchetFloor": 151.782,
+          "effectiveNetFloor": 151.782,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "E1N57:U",
+          "roomName": "E1N57",
+          "resource": "U",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 31,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 38.816,
+          "ratchetFloor": 47.718,
+          "effectiveNetFloor": 47.718,
+          "makerPrice": 51.371,
+          "makerNetPrice": 48.80245,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E1N57:X",
+          "roomName": "E1N57",
+          "resource": "X",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 103655,
+          "hardFloor": 371,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 447.792,
+          "ratchetFloor": 589.857,
+          "effectiveNetFloor": 467.35,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "E1N57:Z",
+          "roomName": "E1N57",
+          "resource": "Z",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 43,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 63.243,
+          "ratchetFloor": 63.868,
+          "effectiveNetFloor": 63.868,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E3N59:H",
+          "roomName": "E3N59",
+          "resource": "H",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 127147,
+          "hardFloor": 428,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 12,
+          "historyFloor": 585.257,
+          "ratchetFloor": 629.193,
+          "effectiveNetFloor": 478.982,
+          "makerPrice": 717.963,
+          "makerNetPrice": 682.06485,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E3N59:K",
+          "roomName": "E3N59",
+          "resource": "K",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 33,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 13,
+          "historyFloor": 41.164,
+          "ratchetFloor": 100.914,
+          "effectiveNetFloor": 100.914,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_terminal_stock_shortage"
+        },
+        {
+          "key": "E3N59:L",
+          "roomName": "E3N59",
+          "resource": "L",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 161,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 532.901,
+          "ratchetFloor": 883.482,
+          "effectiveNetFloor": 239.956,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_terminal_stock_shortage"
+        },
+        {
+          "key": "E3N59:O",
+          "roomName": "E3N59",
+          "resource": "O",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 127147,
+          "hardFloor": 71,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 79.585,
+          "ratchetFloor": 151.782,
+          "effectiveNetFloor": 151.782,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E3N59:U",
+          "roomName": "E3N59",
+          "resource": "U",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 31,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 38.816,
+          "ratchetFloor": 47.718,
+          "effectiveNetFloor": 47.718,
+          "makerPrice": 51.371,
+          "makerNetPrice": 48.80245,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E3N59:X",
+          "roomName": "E3N59",
+          "resource": "X",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 371,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 447.792,
+          "ratchetFloor": 589.857,
+          "effectiveNetFloor": 467.35,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "E3N59:Z",
+          "roomName": "E3N59",
+          "resource": "Z",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 43,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 63.243,
+          "ratchetFloor": 63.868,
+          "effectiveNetFloor": 63.868,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E4N58:H",
+          "roomName": "E4N58",
+          "resource": "H",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 428,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 12,
+          "historyFloor": 585.257,
+          "ratchetFloor": 629.193,
+          "effectiveNetFloor": 478.982,
+          "makerPrice": 717.963,
+          "makerNetPrice": 682.06485,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E4N58:K",
+          "roomName": "E4N58",
+          "resource": "K",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 8306,
+          "protectedAmount": 100000,
+          "hardFloor": 33,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 13,
+          "historyFloor": 41.164,
+          "ratchetFloor": 100.914,
+          "effectiveNetFloor": 100.914,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": null
+        },
+        {
+          "key": "E4N58:L",
+          "roomName": "E4N58",
+          "resource": "L",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 30575,
+          "protectedAmount": 100000,
+          "hardFloor": 161,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 532.901,
+          "ratchetFloor": 883.482,
+          "effectiveNetFloor": 239.956,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": null
+        },
+        {
+          "key": "E4N58:O",
+          "roomName": "E4N58",
+          "resource": "O",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 71,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 79.585,
+          "ratchetFloor": 151.782,
+          "effectiveNetFloor": 151.782,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "E4N58:U",
+          "roomName": "E4N58",
+          "resource": "U",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 31,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 38.816,
+          "ratchetFloor": 47.718,
+          "effectiveNetFloor": 47.718,
+          "makerPrice": 51.371,
+          "makerNetPrice": 48.80245,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_terminal_stock_shortage"
+        },
+        {
+          "key": "E4N58:X",
+          "roomName": "E4N58",
+          "resource": "X",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 122840,
+          "hardFloor": 371,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 447.792,
+          "ratchetFloor": 589.857,
+          "effectiveNetFloor": 467.35,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "E4N58:Z",
+          "roomName": "E4N58",
+          "resource": "Z",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 25862,
+          "protectedAmount": 100000,
+          "hardFloor": 43,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 63.243,
+          "ratchetFloor": 63.868,
+          "effectiveNetFloor": 63.868,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": null
+        },
+        {
+          "key": "E5N59:H",
+          "roomName": "E5N59",
+          "resource": "H",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 428,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 12,
+          "historyFloor": 585.257,
+          "ratchetFloor": 629.193,
+          "effectiveNetFloor": 478.982,
+          "makerPrice": 717.963,
+          "makerNetPrice": 682.06485,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E5N59:K",
+          "roomName": "E5N59",
+          "resource": "K",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 13759,
+          "protectedAmount": 100000,
+          "hardFloor": 33,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 13,
+          "historyFloor": 41.164,
+          "ratchetFloor": 100.914,
+          "effectiveNetFloor": 100.914,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": null
+        },
+        {
+          "key": "E5N59:L",
+          "roomName": "E5N59",
+          "resource": "L",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 9635,
+          "protectedAmount": 100000,
+          "hardFloor": 161,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 532.901,
+          "ratchetFloor": 883.482,
+          "effectiveNetFloor": 239.956,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": null
+        },
+        {
+          "key": "E5N59:O",
+          "roomName": "E5N59",
+          "resource": "O",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 71,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 79.585,
+          "ratchetFloor": 151.782,
+          "effectiveNetFloor": 151.782,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "E5N59:U",
+          "roomName": "E5N59",
+          "resource": "U",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 3800,
+          "protectedAmount": 100000,
+          "hardFloor": 31,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 38.816,
+          "ratchetFloor": 47.718,
+          "effectiveNetFloor": 47.718,
+          "makerPrice": 51.371,
+          "makerNetPrice": 48.80245,
+          "bestDirectNetPrice": null,
+          "rejectedReason": null
+        },
+        {
+          "key": "E5N59:X",
+          "roomName": "E5N59",
+          "resource": "X",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 118310,
+          "hardFloor": 371,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 447.792,
+          "ratchetFloor": 589.857,
+          "effectiveNetFloor": 467.35,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "E5N59:Z",
+          "roomName": "E5N59",
+          "resource": "Z",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 43,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 63.243,
+          "ratchetFloor": 63.868,
+          "effectiveNetFloor": 63.868,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E6N59:H",
+          "roomName": "E6N59",
+          "resource": "H",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 428,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 12,
+          "historyFloor": 585.257,
+          "ratchetFloor": 629.193,
+          "effectiveNetFloor": 478.982,
+          "makerPrice": 717.963,
+          "makerNetPrice": 682.06485,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E6N59:K",
+          "roomName": "E6N59",
+          "resource": "K",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 33,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 13,
+          "historyFloor": 41.164,
+          "ratchetFloor": 100.914,
+          "effectiveNetFloor": 100.914,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E6N59:L",
+          "roomName": "E6N59",
+          "resource": "L",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 161,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 532.901,
+          "ratchetFloor": 883.482,
+          "effectiveNetFloor": 239.956,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E6N59:O",
+          "roomName": "E6N59",
+          "resource": "O",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 71,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 79.585,
+          "ratchetFloor": 151.782,
+          "effectiveNetFloor": 151.782,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "E6N59:U",
+          "roomName": "E6N59",
+          "resource": "U",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 31,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 38.816,
+          "ratchetFloor": 47.718,
+          "effectiveNetFloor": 47.718,
+          "makerPrice": 51.371,
+          "makerNetPrice": 48.80245,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E6N59:X",
+          "roomName": "E6N59",
+          "resource": "X",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 101778,
+          "hardFloor": 371,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 447.792,
+          "ratchetFloor": 589.857,
+          "effectiveNetFloor": 467.35,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "E6N59:Z",
+          "roomName": "E6N59",
+          "resource": "Z",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 43,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 63.243,
+          "ratchetFloor": 63.868,
+          "effectiveNetFloor": 63.868,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E7N57:H",
+          "roomName": "E7N57",
+          "resource": "H",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 428,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 12,
+          "historyFloor": 585.257,
+          "ratchetFloor": 629.193,
+          "effectiveNetFloor": 478.982,
+          "makerPrice": 717.963,
+          "makerNetPrice": 682.06485,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E7N57:K",
+          "roomName": "E7N57",
+          "resource": "K",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 33,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 13,
+          "historyFloor": 41.164,
+          "ratchetFloor": 100.914,
+          "effectiveNetFloor": 100.914,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_terminal_stock_shortage"
+        },
+        {
+          "key": "E7N57:L",
+          "roomName": "E7N57",
+          "resource": "L",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 161,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 532.901,
+          "ratchetFloor": 883.482,
+          "effectiveNetFloor": 239.956,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_terminal_stock_shortage"
+        },
+        {
+          "key": "E7N57:O",
+          "roomName": "E7N57",
+          "resource": "O",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 71,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 79.585,
+          "ratchetFloor": 151.782,
+          "effectiveNetFloor": 151.782,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "E7N57:U",
+          "roomName": "E7N57",
+          "resource": "U",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 31,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 38.816,
+          "ratchetFloor": 47.718,
+          "effectiveNetFloor": 47.718,
+          "makerPrice": 51.371,
+          "makerNetPrice": 48.80245,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E7N57:X",
+          "roomName": "E7N57",
+          "resource": "X",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 125980,
+          "hardFloor": 371,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 447.792,
+          "ratchetFloor": 589.857,
+          "effectiveNetFloor": 467.35,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E7N57:Z",
+          "roomName": "E7N57",
+          "resource": "Z",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 43,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 63.243,
+          "ratchetFloor": 63.868,
+          "effectiveNetFloor": 63.868,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_terminal_stock_shortage"
+        },
+        {
+          "key": "E7N58:H",
+          "roomName": "E7N58",
+          "resource": "H",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 428,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 12,
+          "historyFloor": 585.257,
+          "ratchetFloor": 629.193,
+          "effectiveNetFloor": 478.982,
+          "makerPrice": 717.963,
+          "makerNetPrice": 682.06485,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E7N58:K",
+          "roomName": "E7N58",
+          "resource": "K",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 33,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 13,
+          "historyFloor": 41.164,
+          "ratchetFloor": 100.914,
+          "effectiveNetFloor": 100.914,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_terminal_stock_shortage"
+        },
+        {
+          "key": "E7N58:L",
+          "roomName": "E7N58",
+          "resource": "L",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 161,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 532.901,
+          "ratchetFloor": 883.482,
+          "effectiveNetFloor": 239.956,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_terminal_stock_shortage"
+        },
+        {
+          "key": "E7N58:O",
+          "roomName": "E7N58",
+          "resource": "O",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 71,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 79.585,
+          "ratchetFloor": 151.782,
+          "effectiveNetFloor": 151.782,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "E7N58:U",
+          "roomName": "E7N58",
+          "resource": "U",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 31,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 38.816,
+          "ratchetFloor": 47.718,
+          "effectiveNetFloor": 47.718,
+          "makerPrice": 51.371,
+          "makerNetPrice": 48.80245,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "E7N58:X",
+          "roomName": "E7N58",
+          "resource": "X",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 371,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 447.792,
+          "ratchetFloor": 589.857,
+          "effectiveNetFloor": 467.35,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "E7N58:Z",
+          "roomName": "E7N58",
+          "resource": "Z",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 43,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 63.243,
+          "ratchetFloor": 63.868,
+          "effectiveNetFloor": 63.868,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "W1N57:H",
+          "roomName": "W1N57",
+          "resource": "H",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 126040,
+          "hardFloor": 428,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 12,
+          "historyFloor": 585.257,
+          "ratchetFloor": 629.193,
+          "effectiveNetFloor": 478.982,
+          "makerPrice": 717.963,
+          "makerNetPrice": 682.06485,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "W1N57:K",
+          "roomName": "W1N57",
+          "resource": "K",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 68,
+          "protectedAmount": 100000,
+          "hardFloor": 33,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 13,
+          "historyFloor": 41.164,
+          "ratchetFloor": 100.914,
+          "effectiveNetFloor": 100.914,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_terminal_stock_shortage"
+        },
+        {
+          "key": "W1N57:L",
+          "roomName": "W1N57",
+          "resource": "L",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 161,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 532.901,
+          "ratchetFloor": 883.482,
+          "effectiveNetFloor": 239.956,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_terminal_stock_shortage"
+        },
+        {
+          "key": "W1N57:O",
+          "roomName": "W1N57",
+          "resource": "O",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 126040,
+          "hardFloor": 71,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 79.585,
+          "ratchetFloor": 151.782,
+          "effectiveNetFloor": 151.782,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "W1N57:U",
+          "roomName": "W1N57",
+          "resource": "U",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 31,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 38.816,
+          "ratchetFloor": 47.718,
+          "effectiveNetFloor": 47.718,
+          "makerPrice": 51.371,
+          "makerNetPrice": 48.80245,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        },
+        {
+          "key": "W1N57:X",
+          "roomName": "W1N57",
+          "resource": "X",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 371,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 447.792,
+          "ratchetFloor": 589.857,
+          "effectiveNetFloor": 467.35,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_protection_not_current"
+        },
+        {
+          "key": "W1N57:Z",
+          "roomName": "W1N57",
+          "resource": "Z",
+          "revision": 73974032,
+          "observedAt": 73974032,
+          "expiresAt": 73974032,
+          "sellableAmount": 0,
+          "protectedAmount": 100000,
+          "hardFloor": 43,
+          "historyTrusted": true,
+          "historyCompleteDayCount": 14,
+          "historyAcceptedDayCount": 14,
+          "historyFloor": 63.243,
+          "ratchetFloor": 63.868,
+          "effectiveNetFloor": 63.868,
+          "makerPrice": null,
+          "makerNetPrice": null,
+          "bestDirectNetPrice": null,
+          "rejectedReason": "direct_no_protected_surplus"
+        }
+      ],
+      "canaryLock": {
+        "roomName": "E6N59",
+        "resourceType": "X",
+        "lockedAt": 72580140,
+        "configRevision": "x-shadow-2026-07-26-r1"
+      },
+      "recentActions": [
+        "73972872:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972877:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972882:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972887:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972892:market-base-v3-prepare-blocked:quota_or_global_cooldown",
+        "73972897:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972902:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972907:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972912:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972917:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972922:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972927:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972932:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972937:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972942:market-base-v3-prepare-blocked:quota_or_global_cooldown",
+        "73972947:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972952:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972957:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972962:market-base-v3-prepare-deferred-cpu-headroom",
+        "73972967:market-base-v3-prepare-deferred-cpu-headroom"
+      ],
+      "safetyViolationCount": 0,
+      "direct": {
+        "available": true,
+        "strategyActive": true,
+        "capability": "market-direct-continuous",
+        "schemaVersion": 2,
+        "migrationStatus": "active",
+        "migrationBlockedReason": null,
+        "permit": {
+          "epoch": 1,
+          "permitId": "mdc-permit-v2:csh1:8dc8f144c73ec7b4f82a9b08c83ec5d4",
+          "permitHead": "csh1:4129f416e6d9f96ffe2fd7a78f30cba7",
+          "grants": [
+            {
+              "entryId": "base-h-e3n59-v1",
+              "stage": "shadow",
+              "newDealGrant": "suspended"
+            },
+            {
+              "entryId": "base-x-e6n59-v1",
+              "stage": "continuous",
+              "newDealGrant": "enabled"
+            },
+            {
+              "entryId": "base-z-e7n57-v1",
+              "stage": "shadow",
+              "newDealGrant": "suspended"
+            }
+          ]
+        },
+        "proposedPermitId": null,
+        "entries": [
+          {
+            "entryId": "base-h-e3n59-v1",
+            "resourceType": "H",
+            "lane": {
+              "allowedRoomNames": [
+                "E3N59"
+              ],
+              "requireNativeMineral": null,
+              "reserve": 100000
+            },
+            "floor": {
+              "hard": 428,
+              "economic": 451
+            },
+            "rollingWindowTicks": 30000,
+            "rollingMaxAmount": 8000,
+            "lifecycle": {
+              "stage": "shadow",
+              "resourceFingerprint": null,
+              "sharedFingerprint": null,
+              "shadowConsecutiveCycles": 0,
+              "lastCycleTick": 73160972,
+              "lastShadowResult": "incomplete",
+              "qualifiedAt": null,
+              "canaryConfirmedAt": null,
+              "canaryConfirmedCount": 0,
+              "sharedReviewRequired": false
+            },
+            "quota": {
+              "tick": 73974032,
+              "windowStartTick": 73944033,
+              "resource": {
+                "resourceType": "H",
+                "limit": 8000,
+                "confirmed": 0,
+                "reserved": 0,
+                "used": 0,
+                "remaining": 8000,
+                "lastConfirmedAt": null
+              },
+              "global": {
+                "limit": 12000,
+                "confirmed": 0,
+                "reserved": 0,
+                "used": 0,
+                "remaining": 12000,
+                "lastConfirmedAt": null
+              },
+              "confirmedCooldownNotBefore": 0,
+              "retryNotBefore": 0,
+              "nextEligibleTick": 0
+            },
+            "opportunity": {
+              "reserveAmount": 1000,
+              "safe": false,
+              "required": false,
+              "unmetAmount": 0,
+              "satisfied": null,
+              "admitted": false,
+              "admission": "not_safe"
+            }
+          },
+          {
+            "entryId": "base-x-e6n59-v1",
+            "resourceType": "X",
+            "lane": {
+              "allowedRoomNames": [
+                "E6N59"
+              ],
+              "requireNativeMineral": null,
+              "reserve": 100000
+            },
+            "floor": {
+              "hard": 600,
+              "economic": 600
+            },
+            "rollingWindowTicks": 30000,
+            "rollingMaxAmount": 8000,
+            "lifecycle": {
+              "stage": "continuous",
+              "resourceFingerprint": null,
+              "sharedFingerprint": null,
+              "shadowConsecutiveCycles": 0,
+              "lastCycleTick": null,
+              "lastShadowResult": null,
+              "qualifiedAt": null,
+              "canaryConfirmedAt": 72585530,
+              "canaryConfirmedCount": 1,
+              "sharedReviewRequired": false
+            },
+            "quota": {
+              "tick": 73974032,
+              "windowStartTick": 73944033,
+              "resource": {
+                "resourceType": "X",
+                "limit": 8000,
+                "confirmed": 0,
+                "reserved": 0,
+                "used": 0,
+                "remaining": 8000,
+                "lastConfirmedAt": null
+              },
+              "global": {
+                "limit": 12000,
+                "confirmed": 0,
+                "reserved": 0,
+                "used": 0,
+                "remaining": 12000,
+                "lastConfirmedAt": null
+              },
+              "confirmedCooldownNotBefore": 0,
+              "retryNotBefore": 0,
+              "nextEligibleTick": 0
+            },
+            "opportunity": {
+              "reserveAmount": 1000,
+              "safe": false,
+              "required": false,
+              "unmetAmount": 0,
+              "satisfied": null,
+              "admitted": false,
+              "admission": "not_safe"
+            }
+          },
+          {
+            "entryId": "base-z-e7n57-v1",
+            "resourceType": "Z",
+            "lane": {
+              "allowedRoomNames": [
+                "E7N57"
+              ],
+              "requireNativeMineral": null,
+              "reserve": 100000
+            },
+            "floor": {
+              "hard": 43,
+              "economic": 45
+            },
+            "rollingWindowTicks": 30000,
+            "rollingMaxAmount": 5000,
+            "lifecycle": {
+              "stage": "shadow",
+              "resourceFingerprint": null,
+              "sharedFingerprint": null,
+              "shadowConsecutiveCycles": 0,
+              "lastCycleTick": 73160972,
+              "lastShadowResult": "incomplete",
+              "qualifiedAt": null,
+              "canaryConfirmedAt": null,
+              "canaryConfirmedCount": 0,
+              "sharedReviewRequired": false
+            },
+            "quota": {
+              "tick": 73974032,
+              "windowStartTick": 73944033,
+              "resource": {
+                "resourceType": "Z",
+                "limit": 5000,
+                "confirmed": 0,
+                "reserved": 0,
+                "used": 0,
+                "remaining": 5000,
+                "lastConfirmedAt": null
+              },
+              "global": {
+                "limit": 12000,
+                "confirmed": 0,
+                "reserved": 0,
+                "used": 0,
+                "remaining": 12000,
+                "lastConfirmedAt": null
+              },
+              "confirmedCooldownNotBefore": 0,
+              "retryNotBefore": 0,
+              "nextEligibleTick": 0
+            },
+            "opportunity": {
+              "reserveAmount": 1000,
+              "safe": false,
+              "required": false,
+              "unmetAmount": 0,
+              "satisfied": null,
+              "admitted": false,
+              "admission": "not_safe"
+            }
+          }
+        ],
+        "globalQuota": {
+          "tick": 73974032,
+          "windowStartTick": 73944033,
+          "limit": 12000,
+          "confirmed": 0,
+          "reserved": 0,
+          "used": 0,
+          "remaining": 12000,
+          "lastConfirmedAt": null,
+          "confirmedCooldownNotBefore": 0,
+          "retryNotBefore": 0,
+          "nextEligibleTick": 0,
+          "consistent": true
+        },
+        "opportunityAdmission": {
+          "safeResourceTypes": [],
+          "requiredResourceTypes": [],
+          "admittedResourceTypes": [],
+          "unmetByResource": {},
+          "totalUnmetAmount": 0
+        },
+        "bestTuple": null,
+        "planning": {
+          "observedAt": 73160972,
+          "age": 813060,
+          "complete": false,
+          "planningFingerprint": "csh1:b295daeb3c95ad52f8f8ab6b7d0e1bbb",
+          "blocker": "continuous_pricing_incomplete:base-x-e6n59-v1",
+          "safeResourceTypes": [],
+          "admittedResourceTypes": [],
+          "rejectedByReason": {
+            "continuous_pricing_incomplete:base-x-e6n59-v1": 1,
+            "continuous_shadow:continuous_pricing_incomplete:base-x-e6n59-v1:base-h-e3n59-v1": 1,
+            "continuous_shadow:continuous_pricing_incomplete:base-x-e6n59-v1:base-z-e7n57-v1": 1
+          }
+        },
+        "coverage": {
+          "startTick": 72558771,
+          "receiptHead": "csh1:37a84f860991c5d15b225b506f4938b6"
+        },
+        "highWater": {
+          "finalizedAttemptSeq": 6,
+          "nextAttemptSeq": 7,
+          "permitEpoch": 1,
+          "permitChainHead": "csh1:4129f416e6d9f96ffe2fd7a78f30cba7"
+        },
+        "ledger": {
+          "pending": null,
+          "quarantinedCount": 0,
+          "lifetimeConfirmed": {
+            "global": {
+              "count": 6,
+              "amount": 6000
+            },
+            "resources": {
+              "X": {
+                "count": 6,
+                "amount": 6000
+              }
+            }
+          },
+          "blocker": null
+        },
+        "blocker": {
+          "source": "planning",
+          "code": "continuous_pricing_incomplete:base-x-e6n59-v1",
+          "detectedAt": 73160972,
+          "detailHash": "csh1:b295daeb3c95ad52f8f8ab6b7d0e1bbb"
+        },
+        "baseResourceV3": {
+          "schemaVersion": 3,
+          "catalog": {
+            "revision": "base-mineral-v1",
+            "configRevision": "market-base-resource-v3-r2",
+            "resources": {
+              "total": 7,
+              "values": [
+                "H",
+                "K",
+                "L",
+                "O",
+                "U",
+                "X",
+                "Z"
+              ],
+              "truncated": false
+            }
+          },
+          "roster": {
+            "updatedAt": 73974032,
+            "accountIdentity": "forster",
+            "sharedPolicyFingerprint": "csh1:073fde7ae9f1ab2bee19f879a1ea9601",
+            "rosterFingerprint": "csh1:84d8a40ed2a4af2341e4ab3424b88084",
+            "laneSetFingerprint": "csh1:82bb9e3615a16f9bca5dba2f5787d246",
+            "shadowCursor": "mbr-shadow-cursor-v2|H|mbr-lane:csh1:d5694ef8da73923a05688e7d82b21b71",
+            "knownRoomNames": {
+              "total": 8,
+              "values": [
+                "E1N57",
+                "E3N59",
+                "E4N58",
+                "E5N59",
+                "E6N59",
+                "E7N57",
+                "E7N58",
+                "W1N57"
+              ],
+              "truncated": false
+            },
+            "roomCount": 8,
+            "rooms": [
+              {
+                "roomName": "E1N57",
+                "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                "incarnation": 1,
+                "roomClass": "normal",
+                "terminalId": "69fe4e87e810942b688bb6f1",
+                "status": "admitted"
+              },
+              {
+                "roomName": "E3N59",
+                "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                "incarnation": 1,
+                "roomClass": "normal",
+                "terminalId": "69fcff2ed22e9226307ce4fe",
+                "status": "admitted"
+              },
+              {
+                "roomName": "E4N58",
+                "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                "incarnation": 1,
+                "roomClass": "hub",
+                "terminalId": "69fc583c60d86221e8bdf547",
+                "status": "admitted"
+              },
+              {
+                "roomName": "E5N59",
+                "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                "incarnation": 1,
+                "roomClass": "normal",
+                "terminalId": "6a0152c38f6bc74885722036",
+                "status": "admitted"
+              },
+              {
+                "roomName": "E6N59",
+                "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                "incarnation": 1,
+                "roomClass": "normal",
+                "terminalId": "69ff7ca684056e1ec0219abd",
+                "status": "admitted"
+              },
+              {
+                "roomName": "E7N57",
+                "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                "incarnation": 1,
+                "roomClass": "normal",
+                "terminalId": "6a2f7bb6c6bdc56da9833aed",
+                "status": "admitted"
+              },
+              {
+                "roomName": "E7N58",
+                "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                "incarnation": 1,
+                "roomClass": "normal",
+                "terminalId": "6a013443469482a312a12828",
+                "status": "admitted"
+              },
+              {
+                "roomName": "W1N57",
+                "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                "incarnation": 1,
+                "roomClass": "normal",
+                "terminalId": "69feb11e40403c73d452551b",
+                "status": "admitted"
+              }
+            ],
+            "truncated": false
+          },
+          "lifecycle": {
+            "total": 56,
+            "samples": [
+              {
+                "laneId": "mbr-lane:csh1:0131c8d1c3880cb9a30ffa64feda248b",
+                "resource": "X",
+                "sellerRoomName": "E3N59",
+                "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943512,
+                "stableFingerprint": "csh1:717b7eae9795dc9c5a83bdc2384a3e29"
+              },
+              {
+                "laneId": "mbr-lane:csh1:01b1d71b296a6044efd7363a40053ef0",
+                "resource": "O",
+                "sellerRoomName": "E7N58",
+                "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73934099,
+                "stableFingerprint": "csh1:343be58c262ea83d19df404eb1df31d1"
+              },
+              {
+                "laneId": "mbr-lane:csh1:07b01ffe4db40bc5f87604801947b95e",
+                "resource": "X",
+                "sellerRoomName": "E4N58",
+                "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                "stage": "continuous",
+                "status": "writable",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943512,
+                "stableFingerprint": "csh1:629ce26ee070821fff835799722d4a1c"
+              },
+              {
+                "laneId": "mbr-lane:csh1:09fb4c035dd9cabe061140b72d976ab5",
+                "resource": "L",
+                "sellerRoomName": "W1N57",
+                "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943492,
+                "stableFingerprint": "csh1:6aa2c2f56a295ad888b726302e1660df"
+              },
+              {
+                "laneId": "mbr-lane:csh1:0b8c8a79907c6d1b8427ab39a9016eeb",
+                "resource": "U",
+                "sellerRoomName": "E5N59",
+                "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943502,
+                "stableFingerprint": "csh1:24f1c6da16bdeece2f9cb1a4748ee70a"
+              },
+              {
+                "laneId": "mbr-lane:csh1:1056dd207f43ee5c51fba2bce8a6b7d6",
+                "resource": "H",
+                "sellerRoomName": "E1N57",
+                "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943532,
+                "stableFingerprint": "csh1:81cfd0bc613c24708dbffd0648a24068"
+              },
+              {
+                "laneId": "mbr-lane:csh1:110ea4a30f769724715cfd183523d627",
+                "resource": "L",
+                "sellerRoomName": "E5N59",
+                "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943492,
+                "stableFingerprint": "csh1:3d9bb2f39954bdabecf44f934e895329"
+              },
+              {
+                "laneId": "mbr-lane:csh1:156a557e6789a998a6bb7a138ce4a9e6",
+                "resource": "K",
+                "sellerRoomName": "W1N57",
+                "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943487,
+                "stableFingerprint": "csh1:01d3b9376139b240e26673765c4d2f34"
+              },
+              {
+                "laneId": "mbr-lane:csh1:173142c924fdb12bb04bdbb2356a1095",
+                "resource": "U",
+                "sellerRoomName": "E1N57",
+                "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943502,
+                "stableFingerprint": "csh1:6b772c0ca5310c832b80bc8dce4e5c75"
+              },
+              {
+                "laneId": "mbr-lane:csh1:1ab62186c022069450311be66af376fb",
+                "resource": "O",
+                "sellerRoomName": "E1N57",
+                "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73933499,
+                "stableFingerprint": "csh1:b13286a4b8c1941587500de78574debc"
+              },
+              {
+                "laneId": "mbr-lane:csh1:1adc5cf38f5e0f1e7aeebd2d8ee4a9b4",
+                "resource": "H",
+                "sellerRoomName": "E6N59",
+                "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943532,
+                "stableFingerprint": "csh1:d41276811b83d7757bb1a56290fab980"
+              },
+              {
+                "laneId": "mbr-lane:csh1:29a70fdeb1aeeeb288e1b55dc7f504e5",
+                "resource": "K",
+                "sellerRoomName": "E7N58",
+                "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943487,
+                "stableFingerprint": "csh1:9ab8c520507cac3b1ac9d9e31f0c8c59"
+              },
+              {
+                "laneId": "mbr-lane:csh1:2affef65971da2ff9144cf190812cc1c",
+                "resource": "K",
+                "sellerRoomName": "E1N57",
+                "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943487,
+                "stableFingerprint": "csh1:12d14b0a44ec51f3382b0fdcc7af4652"
+              },
+              {
+                "laneId": "mbr-lane:csh1:2f9b9c1676621c897566495657984c96",
+                "resource": "Z",
+                "sellerRoomName": "E4N58",
+                "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943522,
+                "stableFingerprint": "csh1:c0f5696aa8d92b89f39deab027613743"
+              },
+              {
+                "laneId": "mbr-lane:csh1:3564daa31bfdc75e2395ab396ea00a72",
+                "resource": "K",
+                "sellerRoomName": "E4N58",
+                "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943487,
+                "stableFingerprint": "csh1:2abd7cdfb4cb96e414a1c66cb4708c77"
+              },
+              {
+                "laneId": "mbr-lane:csh1:3a3dce8869a7e5e093052f7c89cb325b",
+                "resource": "L",
+                "sellerRoomName": "E4N58",
+                "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                "stage": "canary",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943492,
+                "stableFingerprint": "csh1:c5eb97e2629edc304da49cbb4c7d4b33"
+              },
+              {
+                "laneId": "mbr-lane:csh1:3e87f565b66ea3322ac397b847569a67",
+                "resource": "H",
+                "sellerRoomName": "E7N57",
+                "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943532,
+                "stableFingerprint": "csh1:bd23b4a716dbbfaede46991252b809b7"
+              },
+              {
+                "laneId": "mbr-lane:csh1:44074673aa0992172c57e3b6129c2986",
+                "resource": "O",
+                "sellerRoomName": "E6N59",
+                "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73933499,
+                "stableFingerprint": "csh1:c5916006806d1747c837f645501edb6c"
+              },
+              {
+                "laneId": "mbr-lane:csh1:4535d815bf76ec19345296a04628355e",
+                "resource": "K",
+                "sellerRoomName": "E5N59",
+                "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943487,
+                "stableFingerprint": "csh1:1ab79ee1c2a25cf5ad67ecbf10eb4445"
+              },
+              {
+                "laneId": "mbr-lane:csh1:4e8671ef77f2750ac1f4ead46b2113f1",
+                "resource": "O",
+                "sellerRoomName": "W1N57",
+                "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73934939,
+                "stableFingerprint": "csh1:185988b3b970b3a5a12f34287992aa87"
+              },
+              {
+                "laneId": "mbr-lane:csh1:53d194bdc73639dc38b0ff8ab5d71fc6",
+                "resource": "O",
+                "sellerRoomName": "E7N57",
+                "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73933979,
+                "stableFingerprint": "csh1:03322c3403bfd85ede5d4d465d56ce66"
+              },
+              {
+                "laneId": "mbr-lane:csh1:59ec5d7c9415ada2b0a75b32d0153c45",
+                "resource": "X",
+                "sellerRoomName": "E6N59",
+                "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                "stage": "canary",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73177770,
+                "stableFingerprint": "csh1:17b14718f953d6dcc2ecf49994d12911"
+              },
+              {
+                "laneId": "mbr-lane:csh1:65f2b435ea544bd1f37f0f069869951b",
+                "resource": "U",
+                "sellerRoomName": "E7N58",
+                "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943502,
+                "stableFingerprint": "csh1:35bfff081bc2742ec7ebed001855872e"
+              },
+              {
+                "laneId": "mbr-lane:csh1:69bf8960dc5010c26a6f02a6760ae331",
+                "resource": "Z",
+                "sellerRoomName": "E3N59",
+                "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943522,
+                "stableFingerprint": "csh1:5326490b428e351569c85ca0989aa127"
+              },
+              {
+                "laneId": "mbr-lane:csh1:79d03fb2ec8f34985ee9a2f5b6a9a979",
+                "resource": "X",
+                "sellerRoomName": "E7N58",
+                "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943512,
+                "stableFingerprint": "csh1:e29abd7a6b53ab13ed9fef10fb317456"
+              },
+              {
+                "laneId": "mbr-lane:csh1:79d3213d33312c4187a7d99c9da9fb7f",
+                "resource": "H",
+                "sellerRoomName": "W1N57",
+                "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943532,
+                "stableFingerprint": "csh1:efce698cae2d0b5557824a5973230b4d"
+              },
+              {
+                "laneId": "mbr-lane:csh1:7dd09fcea88d62e84cb4f7827c97e2d4",
+                "resource": "L",
+                "sellerRoomName": "E7N57",
+                "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943492,
+                "stableFingerprint": "csh1:13b6adede868dc1d8dacc79cabcf59c7"
+              },
+              {
+                "laneId": "mbr-lane:csh1:7f53f1d10501d39cc103d28aa68028fc",
+                "resource": "U",
+                "sellerRoomName": "E7N57",
+                "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943502,
+                "stableFingerprint": "csh1:c5bcf76adfee88fd87311d9ef4ed9008"
+              },
+              {
+                "laneId": "mbr-lane:csh1:810292cf6a2b35890e859a61b282d4d8",
+                "resource": "O",
+                "sellerRoomName": "E5N59",
+                "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73933499,
+                "stableFingerprint": "csh1:8fe8052697fc54c96e4857e5b1033e94"
+              },
+              {
+                "laneId": "mbr-lane:csh1:83ac08725e04cfde9fe7dcf91d3b4d3f",
+                "resource": "H",
+                "sellerRoomName": "E3N59",
+                "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                "stage": "canary",
+                "status": "writable",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943532,
+                "stableFingerprint": "csh1:62ff1089740bb63d1914e63f1cfbc8c2"
+              },
+              {
+                "laneId": "mbr-lane:csh1:842f64fd7222b3114de4957e42311f4e",
+                "resource": "L",
+                "sellerRoomName": "E1N57",
+                "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                "stage": "continuous",
+                "status": "writable",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943492,
+                "stableFingerprint": "csh1:727011fbacb686ea41a6d9ec20575010"
+              },
+              {
+                "laneId": "mbr-lane:csh1:8bc8bc454be964a1b5431d602f50b248",
+                "resource": "Z",
+                "sellerRoomName": "E5N59",
+                "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943522,
+                "stableFingerprint": "csh1:79286b5a30e8d74d846774249dc23f44"
+              },
+              {
+                "laneId": "mbr-lane:csh1:8bcb82e990bdafce26467d2159a4bf60",
+                "resource": "H",
+                "sellerRoomName": "E4N58",
+                "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943532,
+                "stableFingerprint": "csh1:09021b84b0e207f2f00b8b4154738795"
+              },
+              {
+                "laneId": "mbr-lane:csh1:914f91de205c840e7be55b83b9e48b17",
+                "resource": "K",
+                "sellerRoomName": "E7N57",
+                "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943487,
+                "stableFingerprint": "csh1:a3e024f4c78811e565237b0ca07db20a"
+              },
+              {
+                "laneId": "mbr-lane:csh1:99f63289075506d1dbbd5b9a292bd9a7",
+                "resource": "H",
+                "sellerRoomName": "E7N58",
+                "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943532,
+                "stableFingerprint": "csh1:995a8b031a36ca71487684f076d69fff"
+              },
+              {
+                "laneId": "mbr-lane:csh1:9afc7d8a125f24920014d77a11ec8b90",
+                "resource": "L",
+                "sellerRoomName": "E6N59",
+                "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943492,
+                "stableFingerprint": "csh1:f795d6a793929d7be5b1e5854e9ef5a0"
+              },
+              {
+                "laneId": "mbr-lane:csh1:9c0f1a44d866b36faa7e76511c9ad132",
+                "resource": "U",
+                "sellerRoomName": "E4N58",
+                "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943502,
+                "stableFingerprint": "csh1:c4cc6929d1e7a767ede03aa2be8eea9d"
+              },
+              {
+                "laneId": "mbr-lane:csh1:9f13b3dd0ae0123ea2edf82256dcd857",
+                "resource": "K",
+                "sellerRoomName": "E3N59",
+                "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943487,
+                "stableFingerprint": "csh1:ef3d39ffa59d66f2a23968243ad2fb64"
+              },
+              {
+                "laneId": "mbr-lane:csh1:a89a652c02d924c5c1d32dee8d41b6e0",
+                "resource": "X",
+                "sellerRoomName": "E5N59",
+                "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943512,
+                "stableFingerprint": "csh1:38e87724245fd2c988a9e5f9e8a5fbf4"
+              },
+              {
+                "laneId": "mbr-lane:csh1:aae398ba105ba596d62fe6d61f569d12",
+                "resource": "L",
+                "sellerRoomName": "E7N58",
+                "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943492,
+                "stableFingerprint": "csh1:5675999bfd2d5cf9780294f135860d1c"
+              },
+              {
+                "laneId": "mbr-lane:csh1:b054ed3826cdb9ca3ae639214fa45be7",
+                "resource": "K",
+                "sellerRoomName": "E6N59",
+                "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943487,
+                "stableFingerprint": "csh1:8fbaf3f09cf0be836ceb746d51f6cf45"
+              },
+              {
+                "laneId": "mbr-lane:csh1:b3f3fec8a4cb9ed0d06703ece2ffcf46",
+                "resource": "Z",
+                "sellerRoomName": "E1N57",
+                "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943522,
+                "stableFingerprint": "csh1:4d7ad06fd91ceba74a49de2e4c85773a"
+              },
+              {
+                "laneId": "mbr-lane:csh1:b8ca26b762e90619e853839285632f64",
+                "resource": "U",
+                "sellerRoomName": "W1N57",
+                "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943502,
+                "stableFingerprint": "csh1:870f0861d5109eee0b480de7f3bcaf61"
+              },
+              {
+                "laneId": "mbr-lane:csh1:cbb45cc2d0cb1d9a7dec1be4c2d958fb",
+                "resource": "O",
+                "sellerRoomName": "E4N58",
+                "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73933499,
+                "stableFingerprint": "csh1:2d1375b440698fa39b3e3e3b6b98b383"
+              },
+              {
+                "laneId": "mbr-lane:csh1:cf941a229e73e42d0be15a3ea18bfd5a",
+                "resource": "Z",
+                "sellerRoomName": "E7N57",
+                "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943522,
+                "stableFingerprint": "csh1:6701c3ed28acd18cd0cc522194a6c1e6"
+              },
+              {
+                "laneId": "mbr-lane:csh1:d5694ef8da73923a05688e7d82b21b71",
+                "resource": "H",
+                "sellerRoomName": "E5N59",
+                "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943532,
+                "stableFingerprint": "csh1:12789c606c39cafb4d63acb876695dd1"
+              },
+              {
+                "laneId": "mbr-lane:csh1:d9f93926380e9c94e3079db8cdcf792d",
+                "resource": "Z",
+                "sellerRoomName": "E7N58",
+                "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943522,
+                "stableFingerprint": "csh1:b14b2df3c991e518304d11d6766c8b4a"
+              },
+              {
+                "laneId": "mbr-lane:csh1:da779aed597adfdce4df340fed09c0da",
+                "resource": "X",
+                "sellerRoomName": "E1N57",
+                "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                "stage": "canary",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73942712,
+                "stableFingerprint": "csh1:90a941e98a5b2b09a7ed2b2a7d397c10"
+              },
+              {
+                "laneId": "mbr-lane:csh1:df48679e4e652f11f0212a39bd2fcad0",
+                "resource": "U",
+                "sellerRoomName": "E3N59",
+                "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943502,
+                "stableFingerprint": "csh1:1e3b410ac0a11b5042c5ee5f4103a5c0"
+              },
+              {
+                "laneId": "mbr-lane:csh1:e0130327eaf397e2eccfe7ddda58fc5d",
+                "resource": "X",
+                "sellerRoomName": "W1N57",
+                "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943512,
+                "stableFingerprint": "csh1:ab19d7bc57f91dbaf1e953b08695e920"
+              },
+              {
+                "laneId": "mbr-lane:csh1:e5276456c80a2fddc414e506857ba04a",
+                "resource": "Z",
+                "sellerRoomName": "E6N59",
+                "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943522,
+                "stableFingerprint": "csh1:3e3caae10b2191f0a7bfef0a175d73c2"
+              },
+              {
+                "laneId": "mbr-lane:csh1:ea1dd1e49cabba351a5b71b3dbdc3c92",
+                "resource": "L",
+                "sellerRoomName": "E3N59",
+                "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943492,
+                "stableFingerprint": "csh1:8ca2a0c66b043ad0ccb162388e4d5a50"
+              },
+              {
+                "laneId": "mbr-lane:csh1:ea27286a496438bde0847e5701315d3d",
+                "resource": "U",
+                "sellerRoomName": "E6N59",
+                "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943502,
+                "stableFingerprint": "csh1:b749f9a4d2fc251529c584bd28b0a9d8"
+              },
+              {
+                "laneId": "mbr-lane:csh1:f810e3ee6977018d24bd2272b2e6f108",
+                "resource": "O",
+                "sellerRoomName": "E3N59",
+                "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73933499,
+                "stableFingerprint": "csh1:fb53dfe117337feb502a443bf23f030b"
+              },
+              {
+                "laneId": "mbr-lane:csh1:fbff834c91ece068bed86220c4bbd573",
+                "resource": "Z",
+                "sellerRoomName": "W1N57",
+                "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943522,
+                "stableFingerprint": "csh1:ea9619698783ee0b9c98a8a65d7e99b3"
+              },
+              {
+                "laneId": "mbr-lane:csh1:fe63d4c7fcdabab23e12af6e2ec35e59",
+                "resource": "X",
+                "sellerRoomName": "E7N57",
+                "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                "stage": "qualified",
+                "status": "suspended",
+                "completeShadowCycles": 100,
+                "lastCompleteShadowTick": 73943512,
+                "stableFingerprint": "csh1:3c1bee1df6ca60936de445aa945e573b"
+              }
+            ],
+            "truncated": false
+          },
+          "permit": {
+            "schemaVersion": 3,
+            "hashRevision": "market-base-resource-permit-hash-v1",
+            "currentPermitEpoch": 17,
+            "currentPermitId": "mbr-permit-v3:17:csh1:eed4ece99b5b6668b20a61c210ec050b",
+            "permitChainHead": "csh1:2a862c71b87b644e5057dd720b9ef705",
+            "permitEpochHighWater": 17,
+            "totalChainLength": 17,
+            "retainedPermitCount": 17,
+            "prefix": {
+              "prunedThroughEpoch": 0,
+              "referencedPermitBindingCount": 0,
+              "prefixCommitment": "csh1:70d5e19361ca62640c2d99e956fdb732"
+            },
+            "legacyV2GrantSuspended": true,
+            "grants": {
+              "total": 56,
+              "samples": [
+                {
+                  "laneId": "mbr-lane:csh1:0131c8d1c3880cb9a30ffa64feda248b",
+                  "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                  "resource": "X",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:01b1d71b296a6044efd7363a40053ef0",
+                  "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                  "resource": "O",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:07b01ffe4db40bc5f87604801947b95e",
+                  "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                  "resource": "X",
+                  "stage": "continuous",
+                  "status": "active",
+                  "newDealGrant": "enabled"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:09fb4c035dd9cabe061140b72d976ab5",
+                  "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                  "resource": "L",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:0b8c8a79907c6d1b8427ab39a9016eeb",
+                  "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                  "resource": "U",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:1056dd207f43ee5c51fba2bce8a6b7d6",
+                  "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                  "resource": "H",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:110ea4a30f769724715cfd183523d627",
+                  "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                  "resource": "L",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:156a557e6789a998a6bb7a138ce4a9e6",
+                  "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                  "resource": "K",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:173142c924fdb12bb04bdbb2356a1095",
+                  "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                  "resource": "U",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:1ab62186c022069450311be66af376fb",
+                  "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                  "resource": "O",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:1adc5cf38f5e0f1e7aeebd2d8ee4a9b4",
+                  "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                  "resource": "H",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:29a70fdeb1aeeeb288e1b55dc7f504e5",
+                  "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                  "resource": "K",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:2affef65971da2ff9144cf190812cc1c",
+                  "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                  "resource": "K",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:2f9b9c1676621c897566495657984c96",
+                  "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                  "resource": "Z",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:3564daa31bfdc75e2395ab396ea00a72",
+                  "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                  "resource": "K",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:3a3dce8869a7e5e093052f7c89cb325b",
+                  "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                  "resource": "L",
+                  "stage": "canary",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:3e87f565b66ea3322ac397b847569a67",
+                  "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                  "resource": "H",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:44074673aa0992172c57e3b6129c2986",
+                  "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                  "resource": "O",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:4535d815bf76ec19345296a04628355e",
+                  "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                  "resource": "K",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:4e8671ef77f2750ac1f4ead46b2113f1",
+                  "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                  "resource": "O",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:53d194bdc73639dc38b0ff8ab5d71fc6",
+                  "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                  "resource": "O",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:59ec5d7c9415ada2b0a75b32d0153c45",
+                  "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                  "resource": "X",
+                  "stage": "canary",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:65f2b435ea544bd1f37f0f069869951b",
+                  "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                  "resource": "U",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:69bf8960dc5010c26a6f02a6760ae331",
+                  "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                  "resource": "Z",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:79d03fb2ec8f34985ee9a2f5b6a9a979",
+                  "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                  "resource": "X",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:79d3213d33312c4187a7d99c9da9fb7f",
+                  "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                  "resource": "H",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:7dd09fcea88d62e84cb4f7827c97e2d4",
+                  "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                  "resource": "L",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:7f53f1d10501d39cc103d28aa68028fc",
+                  "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                  "resource": "U",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:810292cf6a2b35890e859a61b282d4d8",
+                  "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                  "resource": "O",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:83ac08725e04cfde9fe7dcf91d3b4d3f",
+                  "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                  "resource": "H",
+                  "stage": "canary",
+                  "status": "active",
+                  "newDealGrant": "enabled"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:842f64fd7222b3114de4957e42311f4e",
+                  "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                  "resource": "L",
+                  "stage": "continuous",
+                  "status": "active",
+                  "newDealGrant": "enabled"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:8bc8bc454be964a1b5431d602f50b248",
+                  "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                  "resource": "Z",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:8bcb82e990bdafce26467d2159a4bf60",
+                  "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                  "resource": "H",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:914f91de205c840e7be55b83b9e48b17",
+                  "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                  "resource": "K",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:99f63289075506d1dbbd5b9a292bd9a7",
+                  "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                  "resource": "H",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:9afc7d8a125f24920014d77a11ec8b90",
+                  "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                  "resource": "L",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:9c0f1a44d866b36faa7e76511c9ad132",
+                  "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                  "resource": "U",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:9f13b3dd0ae0123ea2edf82256dcd857",
+                  "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                  "resource": "K",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:a89a652c02d924c5c1d32dee8d41b6e0",
+                  "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                  "resource": "X",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:aae398ba105ba596d62fe6d61f569d12",
+                  "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                  "resource": "L",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:b054ed3826cdb9ca3ae639214fa45be7",
+                  "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                  "resource": "K",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:b3f3fec8a4cb9ed0d06703ece2ffcf46",
+                  "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                  "resource": "Z",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:b8ca26b762e90619e853839285632f64",
+                  "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                  "resource": "U",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:cbb45cc2d0cb1d9a7dec1be4c2d958fb",
+                  "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                  "resource": "O",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:cf941a229e73e42d0be15a3ea18bfd5a",
+                  "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                  "resource": "Z",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:d5694ef8da73923a05688e7d82b21b71",
+                  "roomInstanceId": "mbr-room:csh1:b0c428c7dfeeaba5a61a3944d38a241c",
+                  "resource": "H",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:d9f93926380e9c94e3079db8cdcf792d",
+                  "roomInstanceId": "mbr-room:csh1:839503d8b24ff27a2e6d4b5b1c5d1153",
+                  "resource": "Z",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:da779aed597adfdce4df340fed09c0da",
+                  "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                  "resource": "X",
+                  "stage": "canary",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:df48679e4e652f11f0212a39bd2fcad0",
+                  "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                  "resource": "U",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:e0130327eaf397e2eccfe7ddda58fc5d",
+                  "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                  "resource": "X",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:e5276456c80a2fddc414e506857ba04a",
+                  "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                  "resource": "Z",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:ea1dd1e49cabba351a5b71b3dbdc3c92",
+                  "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                  "resource": "L",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:ea27286a496438bde0847e5701315d3d",
+                  "roomInstanceId": "mbr-room:csh1:0453c59187f39f225c33583c1be8f517",
+                  "resource": "U",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:f810e3ee6977018d24bd2272b2e6f108",
+                  "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                  "resource": "O",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:fbff834c91ece068bed86220c4bbd573",
+                  "roomInstanceId": "mbr-room:csh1:bf8bda74747d03f17143f8c61b8e0f58",
+                  "resource": "Z",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                },
+                {
+                  "laneId": "mbr-lane:csh1:fe63d4c7fcdabab23e12af6e2ec35e59",
+                  "roomInstanceId": "mbr-room:csh1:dc8b1e0bc7ab9c0d8cfe474731a9ca30",
+                  "resource": "X",
+                  "stage": "qualified",
+                  "status": "active",
+                  "newDealGrant": "suspended"
+                }
+              ],
+              "truncated": false
+            },
+            "blocker": null
+          },
+          "quota": {
+            "observedAt": 73972942,
+            "revision": null,
+            "global": {
+              "limit": 1000000000,
+              "confirmed": 19000,
+              "reserved": 0,
+              "used": 19000,
+              "remaining": 999981000
+            },
+            "resources": {
+              "total": 7,
+              "samples": {
+                "H": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "K": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "L": {
+                  "limit": 1000000000,
+                  "confirmed": 7000,
+                  "reserved": 0,
+                  "used": 7000,
+                  "remaining": 999993000
+                },
+                "O": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "U": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "X": {
+                  "limit": 1000000000,
+                  "confirmed": 12000,
+                  "reserved": 0,
+                  "used": 12000,
+                  "remaining": 999988000
+                },
+                "Z": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                }
+              },
+              "truncated": false
+            },
+            "rooms": {
+              "total": 8,
+              "samples": {
+                "E1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 7000,
+                  "reserved": 0,
+                  "used": 7000,
+                  "remaining": 999993000
+                },
+                "E3N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "E4N58": {
+                  "limit": 1000000000,
+                  "confirmed": 12000,
+                  "reserved": 0,
+                  "used": 12000,
+                  "remaining": 999988000
+                },
+                "E5N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "E6N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "E7N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "E7N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "W1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                }
+              },
+              "truncated": false
+            },
+            "lanes": {
+              "total": 56,
+              "samples": {
+                "H:E1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "H:E3N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "H:E4N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "H:E5N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "H:E6N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "H:E7N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "H:E7N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "H:W1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "K:E1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "K:E3N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "K:E4N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "K:E5N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "K:E6N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "K:E7N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "K:E7N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "K:W1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "L:E1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 7000,
+                  "reserved": 0,
+                  "used": 7000,
+                  "remaining": 999993000
+                },
+                "L:E3N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "L:E4N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "L:E5N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "L:E6N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "L:E7N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "L:E7N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "L:W1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "O:E1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "O:E3N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "O:E4N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "O:E5N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "O:E6N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "O:E7N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "O:E7N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "O:W1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "U:E1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "U:E3N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "U:E4N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "U:E5N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "U:E6N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "U:E7N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "U:E7N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "U:W1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "X:E1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "X:E3N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "X:E4N58": {
+                  "limit": 1000000000,
+                  "confirmed": 12000,
+                  "reserved": 0,
+                  "used": 12000,
+                  "remaining": 999988000
+                },
+                "X:E5N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "X:E6N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "X:E7N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "X:E7N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "X:W1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "Z:E1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "Z:E3N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "Z:E4N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "Z:E5N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "Z:E6N59": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "Z:E7N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "Z:E7N58": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                },
+                "Z:W1N57": {
+                  "limit": 1000000000,
+                  "confirmed": 0,
+                  "reserved": 0,
+                  "used": 0,
+                  "remaining": 1000000000
+                }
+              },
+              "truncated": false
+            },
+            "confirmedCooldownNotBefore": 73972992,
+            "retryNotBefore": 73943362
+          },
+          "readinessAuthorization": {
+            "schemaVersion": 3,
+            "validated": true,
+            "status": "authorized",
+            "revision": "csh1:5519584c9b37041807f576298e845f33",
+            "updatedAt": 73974032,
+            "expiresAt": 73974033,
+            "maxTransactionEnergy": 1000,
+            "sourcePermitVersion": null,
+            "roomCount": 3,
+            "rooms": [
+              {
+                "roomName": "E1N57",
+                "roomInstanceId": "mbr-room:csh1:d41b4689460eec57b378d95420321d49",
+                "terminalId": "69fe4e87e810942b688bb6f1",
+                "status": "authorized"
+              },
+              {
+                "roomName": "E3N59",
+                "roomInstanceId": "mbr-room:csh1:ca7a5d5355187d077d8115db18903e4b",
+                "terminalId": "69fcff2ed22e9226307ce4fe",
+                "status": "authorized"
+              },
+              {
+                "roomName": "E4N58",
+                "roomInstanceId": "mbr-room:csh1:cc039a97c5b3666113d35c29544554cd",
+                "terminalId": "69fc583c60d86221e8bdf547",
+                "status": "authorized"
+              }
+            ],
+            "truncated": false
+          },
+          "planning": {
+            "observedAt": 73974032,
+            "complete": true,
+            "blocker": null,
+            "cpuUsed": 11.2917688,
+            "rawOrderCount": 44,
+            "eligibleOrderCount": 20,
+            "distinctOrderRoomCount": 20,
+            "transactionCostEvaluationBudget": 120,
+            "shadowPlannerMode": "none",
+            "shadowPlannerInvocationCount": 0,
+            "actualTransactionEnergyEvaluations": 0,
+            "evaluatedShadowResourceCount": 0,
+            "candidateIdentityOrderChecks": 0,
+            "cpuTrace": {
+              "observedAt": 73974032,
+              "cpuAfterOuterSession": 3.2183904999999413,
+              "cpuAfterScopeCore": 7.43753270000002,
+              "cpuAfterMarketFacts": 8.694699000000128,
+              "cpuAfterShadowBatch": 11.016632899999877,
+              "cpuAfterInnerApply": 11.2917688,
+              "cpuCutPhase": null,
+              "marketFactsDisposition": "read"
+            },
+            "sampledShadowLaneIds": {
+              "total": 0,
+              "values": [],
+              "truncated": false
+            },
+            "selected": null
+          },
+          "cpuTrace": {
+            "observedAt": 73974032,
+            "cpuAfterOuterSession": 3.2183904999999413,
+            "cpuAfterScopeCore": 7.43753270000002,
+            "cpuAfterMarketFacts": 8.694699000000128,
+            "cpuAfterShadowBatch": 11.016632899999877,
+            "cpuAfterInnerApply": 11.2917688,
+            "cpuCutPhase": null,
+            "marketFactsDisposition": "read"
+          },
+          "blocker": null
+        }
+      }
+    },
+    "selectedShard": "shard1",
+    "shardCandidates": [
+      {
+        "shard": "(default)",
+        "ok": true,
+        "hubTime": -1,
+        "deployTime": -1,
+        "lastDeployTag": null,
+        "tick": -1
+      },
+      {
+        "shard": "shard0",
+        "ok": true,
+        "hubTime": -1,
+        "deployTime": -1,
+        "lastDeployTag": null,
+        "tick": -1
+      },
+      {
+        "shard": "shard1",
+        "ok": true,
+        "hubTime": 73974030,
+        "deployTime": 1790490384112,
+        "lastDeployTag": "2026.8.29-6+16c2ca4@2026-09-27T06:26:24.112Z",
+        "tick": 73974030
+      },
+      {
+        "shard": "shard2",
+        "ok": true,
+        "hubTime": -1,
+        "deployTime": 1776401886288,
+        "lastDeployTag": "2026.3.9-1+dd66515@2026-04-17T04:58:06.288Z",
+        "tick": 73967635
+      },
+      {
+        "shard": "shard3",
+        "ok": true,
+        "hubTime": -1,
+        "deployTime": 1773745426000,
+        "lastDeployTag": "2026.3.9-1+46010db@2026-03-17T11:03:46.000Z",
+        "tick": -1
+      }
+    ]
+  },
+  "segment": null
+}

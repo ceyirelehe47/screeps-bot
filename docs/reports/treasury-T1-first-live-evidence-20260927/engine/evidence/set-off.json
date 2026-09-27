@@ -1,0 +1,9 @@
+{
+  "schema": "screeps-t1-first-live-lab-off/v1",
+  "tick": 555,
+  "quotaStatus": "dispatching",
+  "taskId": "lab-r4b-100H",
+  "terminalPhase": "committed",
+  "beforeMemorySha256": "e814a26e455d5d2335b970b758131e5195d9b66f7af0b495549acc5a19b8b1d2",
+  "afterMemorySha256": "adec6129760be8f77d2bde5707959588bc14a1927e0cdbc8abc9faf26407d230"
+}

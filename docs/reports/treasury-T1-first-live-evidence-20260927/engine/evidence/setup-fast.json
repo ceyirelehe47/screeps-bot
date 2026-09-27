@@ -1,0 +1,8 @@
+{
+  "schema": "screeps-t1-first-live-lab-fast-setup/v1",
+  "tick": 538,
+  "taskId": "lab-r4b-100H",
+  "resetExpiredControlOnlyInIsolatedLab": true,
+  "beforeMemorySha256": "4422eb6918b19919d51ee641dcf0720a07c455e84ef13964f31c6960d2e1148c",
+  "afterMemorySha256": "c47e6956226dfc4a295f4b2558611ac0d7a887a6ed3fc048e8981bb8ac4a5a09"
+}

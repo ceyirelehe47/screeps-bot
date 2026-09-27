@@ -1,0 +1,8 @@
+{
+  "schema": "screeps-t1-first-live-lab-pre-stop/v1",
+  "scenario": "pre-source",
+  "isolatedWorldOnly": true,
+  "tick": 566,
+  "beforeMemorySha256": "e584c46e8918f08d7c3df28dafd0a8fcf55227c7c164e78c21b906d26bfb63b1",
+  "afterMemorySha256": "98b432b0a0d60c3c36e16dde1972a0befa5303bd265aa0aa67b4add12b5dddd8"
+}

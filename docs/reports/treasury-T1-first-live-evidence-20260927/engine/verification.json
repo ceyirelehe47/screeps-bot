@@ -1,0 +1,13 @@
+{
+  "schema": "screeps-t1-first-live-engine-verification/v1",
+  "status": "passed",
+  "sourceCommit": "16c2ca4b70b21b05f3c9bedddba3836cdce389ad",
+  "codeSha256": "bdfde69f6b79f3b3bd1a3e51d184d58ec4d0c6f25b94ebdc18233c61248d55a2",
+  "mainBytes": 3275477,
+  "firstNativeTick": 540,
+  "firstNativeH": 100,
+  "firstNativeFeeEnergy": 4,
+  "noResendAfterRestart": true,
+  "thirdRoomPreSourceAndTargetBlockedT1": true,
+  "thirdRoomPostSourceAndTargetHeldThenResumed": true
+}

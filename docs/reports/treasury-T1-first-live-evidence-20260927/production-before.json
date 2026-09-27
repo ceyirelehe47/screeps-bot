@@ -1,0 +1,478 @@
+{
+  "schema": "screeps-t1-first-live-production-preflight/v1",
+  "capturedAtUtc": "2026-09-27T07:12:57.205Z",
+  "account": {
+    "id": "634fe406347a7b69b28aeccb",
+    "username": "forster"
+  },
+  "target": "screeps.com/default/shard1",
+  "gameTick": 73974008,
+  "code": {
+    "branch": "default",
+    "modules": [
+      "main"
+    ],
+    "mainBytes": 4558659,
+    "mainSha256": "0f13b0c4814686567e7ed3c72a3c22376a6b22ae304e02b3c17858763cfe0a4f"
+  },
+  "memory": {
+    "bytes": 1448935,
+    "deployTag": "2026.8.29-6+f69f799@2026-09-26T12:48:09.938Z",
+    "deployBundleHash": "4bab22f3611830ae869297176d585db72e407d727488a5f437cbd854efe0dbc4",
+    "reservationOwnerVersion": null,
+    "reservationCount": 0,
+    "t1Mode": "off(default)",
+    "t1ControlPresent": false,
+    "t1Quota": null,
+    "t1Kernel": {
+      "present": false,
+      "activeCount": 0,
+      "ringCount": null
+    },
+    "t1TaskLeaseCount": 0,
+    "canonicalTaskCount": 5,
+    "matchingTasks": [],
+    "marketTrial": {
+      "status": "closed",
+      "reason": "capacity_recovered"
+    },
+    "marketV3": {
+      "configRevision": "market-base-resource-v3-r7",
+      "permitEpoch": 17,
+      "ledgerFinalizedAttemptSeq": 26,
+      "ledgerPending": null,
+      "ledgerReceiptHead": "csh1:c2dd1b7daf50eaa5cfb99c2b6208dd15"
+    },
+    "cpuLatest": {
+      "tick": 73974005,
+      "shard": "shard1",
+      "totalUsed": 63.505546499742195,
+      "bucket": 10000,
+      "limit": 120,
+      "tickLimit": 500,
+      "phases": {
+        "announceDeploy": 0.012374699814245105,
+        "marketSalePreflight": 11.500522800255567,
+        "pixelGenerator": 0.0010140000376850367,
+        "productionMonitor": 2.313876499887556,
+        "nukerControl": 1.4231580996420234,
+        "hubPlanner": 0.10693280003033578,
+        "hubUpgradeControl": 0.41937480005435646,
+        "synthesisControl": 0.5048926998861134,
+        "factoryControl": 0.27160510001704097,
+        "mineralExtraction": 0.007958599831908941,
+        "resourceControl": 3.0234152001794428,
+        "marketSaleAutomation": 1.0127870999276638,
+        "hubProgressAnalytics": 0.739239800022915,
+        "hubProgressOverlay": 0.17862779996357858,
+        "externalTelemetryExport": 5.741877699969336,
+        "memoryCleanup": 0.001012700144201517,
+        "portalDiscovery": 0.0028496000450104475,
+        "flagControl": 0.3633967998903245,
+        "crossShardSignals": 0.24442860018461943,
+        "interShardControl": 0.08105110004544258,
+        "warControl": 0.04069000016897917,
+        "powerBankObserver": 1.8906553001143038,
+        "powerBankHarvest": 0.2238300999160856,
+        "powerCreepControl": 1.5313610001467168,
+        "powerSpawnControl": 0.24565970012918115,
+        "roomPlannerConstruction": 0.10637120017781854,
+        "linkControl": 0.44050129991956055,
+        "coreDefense": 0.991957199992612,
+        "defenseMode": 3.732778400182724,
+        "homeDefense": 0.22771190013736486,
+        "towerControl": 0.939192800084129,
+        "refreshWorkerTasks": 0.0013142996467649937,
+        "bootstrapRooms": 0.93981680017896,
+        "remoteMining": 2.1067657000385225,
+        "scheduleSpawnTasks": 2.0809684998821467,
+        "spawnWork": 0.3982305000536144,
+        "creepWork:decision": 3.699931300012395,
+        "creepWork:intent": 10.702813799260184,
+        "creepWork:pathing": 1.2732108999043703,
+        "creepWork": 19.40478520002216,
+        "empireInventoryShadow": 0.005922800162807107
+      },
+      "fixedActionCounts": {
+        "linkControl": 1,
+        "spawnWork": 1,
+        "creepWork": 50
+      },
+      "untracked": 0,
+      "emaTotalUsed": 62.71455896733436,
+      "rooms": {
+        "E1N57": {
+          "totalUsed": 2.5106651997193694,
+          "roles": {
+            "spawn": {
+              "count": 3,
+              "used": 0.006438900250941515
+            },
+            "carrier": {
+              "count": 2,
+              "used": 1.0417980998754501
+            },
+            "worker": {
+              "count": 1,
+              "used": 0.2742234996985644
+            },
+            "remoteMiningCarrier": {
+              "count": 2,
+              "used": 0.7024489003233612
+            },
+            "miner": {
+              "count": 2,
+              "used": 0.4857557995710522
+            }
+          }
+        },
+        "E3N59": {
+          "totalUsed": 1.2525893996935338,
+          "roles": {
+            "spawn": {
+              "count": 3,
+              "used": 0.003753099823370576
+            },
+            "worker": {
+              "count": 1,
+              "used": 0.2882920999545604
+            },
+            "miner": {
+              "count": 3,
+              "used": 0.3529644999653101
+            },
+            "carrier": {
+              "count": 1,
+              "used": 0.6075796999502927
+            }
+          }
+        },
+        "E4N58": {
+          "totalUsed": 1.8847149994689971,
+          "roles": {
+            "spawn": {
+              "count": 3,
+              "used": 0.003470999887213111
+            },
+            "miner": {
+              "count": 2,
+              "used": 0.4994720995891839
+            },
+            "worker": {
+              "count": 1,
+              "used": 0.2723125000484288
+            },
+            "carrier": {
+              "count": 1,
+              "used": 0.4348226999863982
+            },
+            "remoteMiningCarrier": {
+              "count": 1,
+              "used": 0.6746366999577731
+            }
+          }
+        },
+        "E5N59": {
+          "totalUsed": 1.9648236001376063,
+          "roles": {
+            "spawn": {
+              "count": 3,
+              "used": 0.0033865002915263176
+            },
+            "miner": {
+              "count": 2,
+              "used": 0.8157049003057182
+            },
+            "worker": {
+              "count": 1,
+              "used": 0.2766206997912377
+            },
+            "carrier": {
+              "count": 1,
+              "used": 0.3486820999532938
+            },
+            "remoteMiningCarrier": {
+              "count": 2,
+              "used": 0.5204293997958302
+            }
+          }
+        },
+        "E6N59": {
+          "totalUsed": 1.2359053997788578,
+          "roles": {
+            "spawn": {
+              "count": 3,
+              "used": 0.0036582001484930515
+            },
+            "remoteMiningCarrier": {
+              "count": 1,
+              "used": 0.2840033997781575
+            },
+            "mineralHarvester": {
+              "count": 1,
+              "used": 0.08212750009261072
+            },
+            "miner": {
+              "count": 2,
+              "used": 0.043468100018799305
+            },
+            "worker": {
+              "count": 1,
+              "used": 0.24801680003292859
+            },
+            "carrier": {
+              "count": 1,
+              "used": 0.5746313997078687
+            }
+          }
+        },
+        "E7N57": {
+          "totalUsed": 2.0553913994226605,
+          "roles": {
+            "spawn": {
+              "count": 3,
+              "used": 0.002718299627304077
+            },
+            "worker": {
+              "count": 1,
+              "used": 0.25039580021984875
+            },
+            "miner": {
+              "count": 2,
+              "used": 0.07966399961151183
+            },
+            "remoteMiningCarrier": {
+              "count": 1,
+              "used": 0.25589220016263425
+            },
+            "carrier": {
+              "count": 1,
+              "used": 0.4011695997323841
+            },
+            "remoteWorker": {
+              "count": 1,
+              "used": 1.0655515000689775
+            }
+          }
+        },
+        "E7N58": {
+          "totalUsed": 1.1464955003466457,
+          "roles": {
+            "spawn": {
+              "count": 3,
+              "used": 0.3328691003844142
+            },
+            "remoteMiningCarrier": {
+              "count": 1,
+              "used": 0.2945542000234127
+            },
+            "miner": {
+              "count": 2,
+              "used": 0.2579149997327477
+            },
+            "carrier": {
+              "count": 1,
+              "used": 0.26115720020607114
+            }
+          }
+        },
+        "W1N57": {
+          "totalUsed": 1.9050481007434428,
+          "roles": {
+            "spawn": {
+              "count": 3,
+              "used": 0.004631899995729327
+            },
+            "worker": {
+              "count": 1,
+              "used": 0.2592436003033072
+            },
+            "homeDefender": {
+              "count": 2,
+              "used": 0.03636100050061941
+            },
+            "miner": {
+              "count": 2,
+              "used": 0.46782619995065033
+            },
+            "carrier": {
+              "count": 2,
+              "used": 1.1369853999931365
+            }
+          }
+        },
+        "E1N56": {
+          "totalUsed": 0.5798250997904688,
+          "roles": {
+            "colonizerHarvester": {
+              "count": 2,
+              "used": 0.5798250997904688
+            }
+          }
+        },
+        "E1N58": {
+          "totalUsed": 1.3453866003546864,
+          "roles": {
+            "remoteMiningCarrier": {
+              "count": 2,
+              "used": 0.6009995001368225
+            },
+            "colonizerHarvester": {
+              "count": 2,
+              "used": 0.4982891003601253
+            },
+            "remoteMiningReserver": {
+              "count": 1,
+              "used": 0.24609799985773861
+            }
+          }
+        },
+        "E4N59": {
+          "totalUsed": 0.769978899974376,
+          "roles": {
+            "remoteMiningCarrier": {
+              "count": 1,
+              "used": 0.28300109994597733
+            },
+            "colonizerHarvester": {
+              "count": 2,
+              "used": 0.25674239988438785
+            },
+            "remoteMiningReserver": {
+              "count": 1,
+              "used": 0.23023540014401078
+            }
+          }
+        },
+        "E5N58": {
+          "totalUsed": 0.6818050998263061,
+          "roles": {
+            "colonizerHarvester": {
+              "count": 2,
+              "used": 0.4594853997696191
+            },
+            "remoteMiningReserver": {
+              "count": 1,
+              "used": 0.222319700056687
+            }
+          }
+        },
+        "E6N57": {
+          "totalUsed": 0.7693211000878364,
+          "roles": {
+            "remoteMiningCarrier": {
+              "count": 1,
+              "used": 0.29810579982586205
+            },
+            "colonizerHarvester": {
+              "count": 2,
+              "used": 0.47121530026197433
+            }
+          }
+        },
+        "E7N59": {
+          "totalUsed": 0.8269500997848809,
+          "roles": {
+            "colonizerHarvester": {
+              "count": 2,
+              "used": 0.5010814997367561
+            },
+            "remoteMiningCarrier": {
+              "count": 1,
+              "used": 0.3258686000481248
+            }
+          }
+        },
+        "E8N58": {
+          "totalUsed": 0.5175875995773822,
+          "roles": {
+            "colonizerHarvester": {
+              "count": 2,
+              "used": 0.25152159947901964
+            },
+            "remoteMiningCarrier": {
+              "count": 1,
+              "used": 0.26606600009836257
+            }
+          }
+        }
+      },
+      "heap": {
+        "total_heap_size": 299704320,
+        "total_heap_size_executable": 17825792,
+        "total_physical_size": 283025408,
+        "total_available_size": 557854936,
+        "used_heap_size": 195448616,
+        "heap_size_limit": 775946240,
+        "malloced_memory": 10611248,
+        "peak_malloced_memory": 30516680,
+        "does_zap_garbage": 0,
+        "externally_allocated_size": 48141632
+      }
+    }
+  },
+  "rooms": [
+    {
+      "name": "E3N59",
+      "objects": [
+        {
+          "type": "controller",
+          "id": "59bbc4a22052a716c3ce8456",
+          "ownerUserId": "634fe406347a7b69b28aeccb",
+          "level": 8,
+          "H": 0,
+          "energy": 0
+        },
+        {
+          "type": "storage",
+          "id": "69eeae0db590d0089d87b487",
+          "ownerUserId": "634fe406347a7b69b28aeccb",
+          "H": 94428,
+          "energy": 233506,
+          "storeCapacity": 1000000
+        },
+        {
+          "type": "terminal",
+          "id": "69fcff2ed22e9226307ce4fe",
+          "ownerUserId": "634fe406347a7b69b28aeccb",
+          "cooldownTime": 73973490,
+          "cooldownAtCapture": 0,
+          "H": 0,
+          "energy": 240000,
+          "storeCapacity": 300000
+        }
+      ]
+    },
+    {
+      "name": "E4N58",
+      "objects": [
+        {
+          "type": "controller",
+          "id": "59bbc4a52052a716c3ce849d",
+          "ownerUserId": "634fe406347a7b69b28aeccb",
+          "level": 8,
+          "H": 0,
+          "energy": 0
+        },
+        {
+          "type": "storage",
+          "id": "69eedb6224f1bd9c6041e6ab",
+          "ownerUserId": "634fe406347a7b69b28aeccb",
+          "H": 1802,
+          "energy": 1277985,
+          "storeCapacity": 8000000
+        },
+        {
+          "type": "terminal",
+          "id": "69fc583c60d86221e8bdf547",
+          "ownerUserId": "634fe406347a7b69b28aeccb",
+          "cooldownTime": 73973790,
+          "cooldownAtCapture": 0,
+          "H": 1921,
+          "energy": 133707,
+          "storeCapacity": 300000
+        }
+      ]
+    }
+  ]
+}

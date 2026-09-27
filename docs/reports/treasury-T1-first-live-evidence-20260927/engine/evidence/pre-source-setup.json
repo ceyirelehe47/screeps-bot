@@ -1,0 +1,9 @@
+{
+  "schema": "screeps-t1-first-live-competition-setup/v1",
+  "scenario": "pre-source",
+  "isolatedWorldOnly": true,
+  "tick": 560,
+  "taskId": "lab-r4-pre-source-H",
+  "beforeMemorySha256": "e14bbd88a93225f94620d527e941776eb6f48935a5e3a8618fb10edc5dc75182",
+  "afterMemorySha256": "d504b7512d7aaa90a4b0f84a9b3d311656af62dfbeac2e8c7e15ad21e352db78"
+}

@@ -1,0 +1,8 @@
+{
+  "schema": "screeps-t1-first-live-lab-late-source/v1",
+  "tick": 606,
+  "isolatedWorldOnly": true,
+  "taskId": "lab-r4-post-both-ordinary-source-late",
+  "beforeMemorySha256": "5347e1e706c81876fd264148bdf6e64cfbab315f5faa067c1ff0e7ed771d2770",
+  "afterMemorySha256": "a31e2dc267087e1676ed8c6e8729d14fc858cff4d18ea204287b7e0eed5f9a67"
+}

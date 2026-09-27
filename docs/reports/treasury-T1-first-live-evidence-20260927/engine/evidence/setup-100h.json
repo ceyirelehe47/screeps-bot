@@ -1,0 +1,9 @@
+{
+  "schema": "screeps-t1-first-live-lab-setup/v1",
+  "tick": 536,
+  "taskId": "lab-r4-100H",
+  "codeSha256": "bdfde69f6b79f3b3bd1a3e51d184d58ec4d0c6f25b94ebdc18233c61248d55a2",
+  "beforeMemorySha256": "427c6a4743ff43f57b476f19b7fa1097dc6a7ea0491f0676ece81a8a5a010e3f",
+  "afterMemorySha256": "59780799020815067dc78a92a641efb0ea58f0cc2c43dda280c489893451b382",
+  "isolatedWorldOnly": true
+}

@@ -1,0 +1,11 @@
+{
+  "schema": "screeps-t1-first-live-ordinary-setup/v1",
+  "scenario": "pre-target-ready",
+  "isolatedWorldOnly": true,
+  "tick": 582,
+  "taskIds": [
+    "lab-r4-pre-target-ready-ordinary-0"
+  ],
+  "beforeMemorySha256": "0e3c8e8a4b1608e067b3d097e6f730f728576d413663cd81639afd529e5c2956",
+  "afterMemorySha256": "44be82d4053139df7c3c85330c04794295cce1a1ef5049478102d807e359ad4b"
+}

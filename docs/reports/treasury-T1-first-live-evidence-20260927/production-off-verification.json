@@ -1,0 +1,15 @@
+{
+  "schema": "screeps-t1-first-live-production-off-verification/v1",
+  "status": "passed",
+  "sourceCommit": "16c2ca4b70b21b05f3c9bedddba3836cdce389ad",
+  "deployedSha256": "bdfde69f6b79f3b3bd1a3e51d184d58ec4d0c6f25b94ebdc18233c61248d55a2",
+  "deployedBytes": 3275477,
+  "buildTag": "2026.8.29-6+16c2ca4@2026-09-27T06:26:24.112Z",
+  "offDeployedAndRunning": true,
+  "marketIdentityPreserved": true,
+  "matchingTaskAtReadback": false,
+  "treasuryQuotaOrWorkCreated": false,
+  "writerNativeAttempted": false,
+  "writerReason": "no_existing_E3N59_to_E4N58_H_task_and_source_terminal_H_zero",
+  "notes": "The OFF state and absence of quota/work are read back; no production transaction-feed assertion is made."
+}

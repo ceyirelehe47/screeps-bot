@@ -1,0 +1,9 @@
+{
+  "status": "loaded",
+  "lab": "lab_treasury_t1",
+  "tick": 532,
+  "sourceCommit": "16c2ca4b70b21b05f3c9bedddba3836cdce389ad",
+  "oldSha256": "62b83ecf6b3b330c6f54febbe37cc858c1bcbda5e83dc82c97570dddcb7b0966",
+  "newSha256": "bdfde69f6b79f3b3bd1a3e51d184d58ec4d0c6f25b94ebdc18233c61248d55a2",
+  "bytes": 3275477
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "screeps-t1-first-live-lab-generic-off/v1",
+  "label": "post-both",
+  "taskId": "lab-r4-post-both-H",
+  "tick": 615,
+  "terminalPhase": "committed",
+  "keepResourceControl": true,
+  "beforeMemorySha256": "f04c9565d836bc53c212e38ac83da4d6ed9863d8148fb550cd0b7f47cd19952d",
+  "afterMemorySha256": "478c1c8405ab8bf74a7d8d5c63364e3b5d733c97fa82472dc81bf633ca4433bc"
+}

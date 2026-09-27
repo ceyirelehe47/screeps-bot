@@ -1,0 +1,9 @@
+{
+  "schema": "screeps-t1-first-live-lab-generic-off/v1",
+  "label": "pre-target",
+  "taskId": "lab-r4-pre-target-H",
+  "tick": 576,
+  "terminalPhase": "committed",
+  "beforeMemorySha256": "60878f6b0122b79b37d5762dae6e7aa81840c100f198761f07211565b944e3bc",
+  "afterMemorySha256": "fa1fd39711d1ebf9db7e7238b92e0467331c17a91609c5373fa428a525b19adc"
+}
