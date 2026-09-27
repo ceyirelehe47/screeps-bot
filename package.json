@@ -25,6 +25,7 @@
     "@rollup/plugin-commonjs": "^29.0.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-replace": "^6.0.3",
+    "@rollup/plugin-terser": "^1.0.0",
     "@screeps/common": "^2.15.5",
     "@types/jest": "^29.5.14",
     "@types/lodash": "^3.10.1",

@@ -93,6 +93,7 @@ function blockedByTreasuryT1(roomName: string, actor: string, destinationRoomNam
   if (actor === `treasury:${TREASURY_T1_RUN_ID}`) return false;
   return hasTreasuryT1TerminalFence() && (
     roomName === TREASURY_T1_SOURCE_ROOM || roomName === TREASURY_T1_TARGET_ROOM ||
+    destinationRoomName === TREASURY_T1_SOURCE_ROOM ||
     destinationRoomName === TREASURY_T1_TARGET_ROOM
   );
 }
@@ -101,6 +102,9 @@ let claimTick: number | undefined;
 let claimGame: Game | undefined;
 const terminalClaims = new Map<string, TerminalActionClaim>();
 const terminalActionsInFlight = new Set<string>();
+// A prior send can change either endpoint when the engine applies arrivals.
+// Native calls from other rooms only claim their source in terminalClaims.
+const terminalSendAffectedRooms = new Set<string>();
 let marketAccountClaim: MarketAccountClaim | undefined;
 let corruptPersistentMarketAccountClaim = false;
 
@@ -244,6 +248,7 @@ function syncClaimTick(): void {
   claimGame = Game;
   terminalClaims.clear();
   terminalActionsInFlight.clear();
+  terminalSendAffectedRooms.clear();
   marketAccountClaim = undefined;
   corruptPersistentMarketAccountClaim = false;
 
@@ -292,6 +297,11 @@ export function getTerminalActionClaims(): TerminalActionClaim[] {
 export function hasTerminalActionClaim(roomName: string): boolean {
   syncClaimTick();
   return terminalClaims.has(roomName);
+}
+
+export function hasTerminalSendEffectThisTick(roomName: string): boolean {
+  syncClaimTick();
+  return terminalSendAffectedRooms.has(roomName);
 }
 
 export function getMarketAccountClaim(): MarketAccountClaim | undefined {
@@ -730,11 +740,19 @@ export function executeTerminalSend(
           request.description,
         ),
     );
+    // Unknown native returns are also treated as possibly executed. A later
+    // T1 admission in this tick must not assume either endpoint is untouched.
+    if (code === OK || !Number.isSafeInteger(code) || code > 0) {
+      terminalSendAffectedRooms.add(request.terminal.room.name);
+      terminalSendAffectedRooms.add(request.destinationRoomName);
+    }
     if (code !== OK) {
       exposureClaim.release();
     }
     return code;
   } catch (error) {
+    terminalSendAffectedRooms.add(request.terminal.room.name);
+    terminalSendAffectedRooms.add(request.destinationRoomName);
     exposureClaim.release();
     throw error;
   }
@@ -833,6 +851,7 @@ export function clearMarketActionArbiterForTest(
   claimGame = undefined;
   terminalClaims.clear();
   terminalActionsInFlight.clear();
+  terminalSendAffectedRooms.clear();
   marketAccountClaim = undefined;
   corruptPersistentMarketAccountClaim = false;
   if (!preservePersistent) {

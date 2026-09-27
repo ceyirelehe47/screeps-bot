@@ -4,6 +4,7 @@ import copy from "rollup-plugin-copy";
 import typescript from "rollup-plugin-typescript2";
 import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
+import terser from "@rollup/plugin-terser";
 import replace from "@rollup/plugin-replace";
 import { createRequire } from "node:module";
 import { execSync } from "node:child_process";
@@ -215,6 +216,9 @@ export default {
       },
     }),
     commonjs(),
+    // Whitespace/comment formatting only. Keep identifiers and statements as
+    // emitted by Rollup while staying below the production code-size ceiling.
+    terser({ compress: false, mangle: false, format: { comments: "some" } }),
     deployPlugin,
   ],
 };

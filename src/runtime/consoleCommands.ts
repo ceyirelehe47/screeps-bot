@@ -76,6 +76,12 @@ import { clearHubSynthesisReactions } from "@/runtime/hubPlanner";
 import { collectHubProgressSnapshot } from "@/runtime/hubProgress";
 import { buildMemoryAuditSnapshot, MemoryAuditSnapshot } from "@/runtime/memoryAudit";
 import { powerBankStatusCommand, powerBankStatusRaw } from "@/runtime/powerBankStatus";
+import {
+  armTreasuryT1FirstLive,
+  heartbeatTreasuryT1FirstLive,
+  closeTreasuryT1FirstLive,
+  treasuryT1FirstLiveStatus,
+} from "@/runtime/treasuryT1FirstLiveControl";
 
 interface SynthesisControlStatusResult {
   ok: true;
@@ -179,6 +185,10 @@ export function registerConsoleCommands(): void {
   global.hubProgressRaw = hubProgressRaw;
   global.memoryAudit = memoryAudit;
   global.memoryAuditRaw = memoryAuditRaw;
+  global.armTreasuryT1FirstLive = armTreasuryT1FirstLive;
+  global.heartbeatTreasuryT1FirstLive = heartbeatTreasuryT1FirstLive;
+  global.closeTreasuryT1FirstLive = closeTreasuryT1FirstLive;
+  global.treasuryT1FirstLiveStatus = treasuryT1FirstLiveStatus;
   global.powerBankStatus = powerBankStatusCommand;
   global.powerBankStatusRaw = powerBankStatusRaw;
   registerResourceTransferConsoleCommands();

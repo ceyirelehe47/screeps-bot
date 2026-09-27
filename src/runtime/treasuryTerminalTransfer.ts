@@ -17,7 +17,11 @@ import {
 } from "@/runtime/resourceReservation";
 import { getTreasuryService } from "@/runtime/runtimeServices";
 import type { TreasuryService } from "@/runtime/treasury/facade";
-import { executeTerminalSend } from "@/runtime/marketActionArbiter";
+import {
+  executeTerminalSend,
+  hasTerminalActionClaim,
+  hasTerminalSendEffectThisTick,
+} from "@/runtime/marketActionArbiter";
 import { formatTreasuryTransactionId } from "@/runtime/treasury/transactionId";
 import { bumpTreasuryWorldSequence, readTreasuryWorldSequence } from "@/runtime/treasury/observation";
 import { bumpTreasuryCommitmentRevision } from "@/runtime/treasury/commitmentRevision";
@@ -40,6 +44,10 @@ import {
   type DurableT1Facts,
   type TreasuryT1EndpointFacts as EndpointSnapshot,
 } from "@/runtime/treasuryT1Facts";
+import {
+  closeTreasuryT1FirstLive,
+  treasuryT1FirstLiveAllows,
+} from "@/runtime/treasuryT1FirstLiveControl";
 
 export { TREASURY_T1_SOURCE_ROOM, TREASURY_T1_TARGET_ROOM } from "@/runtime/treasuryT1Facts";
 const TREASURY_T1_MAX_HYDROGEN = 100;
@@ -366,6 +374,11 @@ function liveQuote(amount: number): number | null {
   }
 }
 
+function hasConflictingTerminalActionThisTick(): boolean {
+  return [TREASURY_T1_SOURCE_ROOM, TREASURY_T1_TARGET_ROOM].some((roomName) =>
+    hasTerminalActionClaim(roomName) || hasTerminalSendEffectThisTick(roomName));
+}
+
 function validateLiveArgs(value: unknown, requireLease: boolean): value is TreasuryT1TransferArgs {
   if (!isPlainObject(value)) return false;
   const args = value as unknown as TreasuryT1TransferArgs;
@@ -535,15 +548,21 @@ function reconcileT1(factsValue: TreasuryActionReconcilerFacts, observationValue
 
 function executeT1(args: TreasuryT1TransferArgs): { ok: boolean; code: number } {
   const context = dispatchContext;
+  const task = taskStore()?.[args.taskId];
   if (
     !context || context.taskId !== args.taskId || context.workKey !== args.workKey ||
     context.attemptId.length === 0 || context.amount !== args.amount || context.nativeCalls !== 0 ||
+    hasConflictingTerminalActionThisTick() ||
+    !task || !treasuryT1FirstLiveAllows(task, args.amount) ||
     !validateLiveArgs(args, true) ||
     context.ledger.getAvailableAmount(TREASURY_T1_TARGET_ROOM, RESOURCE_HYDROGEN, args.taskId) < args.amount
   ) {
     return { ok: false, code: ERR_BUSY };
   }
   if (!beginNativeAttempt(args, context.attemptId)) return { ok: false, code: ERR_BUSY };
+  // Persist the one-shot stop before crossing the native boundary. The quota
+  // is already dispatching, so a failed stop is consumed and never retried.
+  if (!closeTreasuryT1FirstLive("native_attempt").ok) return { ok: false, code: ERR_BUSY };
   context.nativeCalls += 1;
   const source = Game.rooms[TREASURY_T1_SOURCE_ROOM]?.terminal;
   if (!source) return { ok: false, code: ERR_INVALID_TARGET };
@@ -992,11 +1011,15 @@ export function runTreasuryTerminalTransferTask(
   const quota = readQuota();
   if (quota.status !== "absent") return { handled: true, status: quota.status === "invalid" ? "quota_invalid" : "quota_consumed" };
   if (!nativeBudgetAvailable) return { handled: true, status: "native_budget_or_terminal_busy" };
+  if (hasConflictingTerminalActionThisTick()) return { handled: true, status: "terminal_action_already_claimed" };
 
   const args = buildTransferArgs(task, capacityLedger);
   if (!args) {
     logDecision(task.id, "candidate_rejected", "live facts, fee, or shared receiver capacity outside policy");
     return { handled: true, status: "candidate_rejected" };
+  }
+  if (!treasuryT1FirstLiveAllows(task, args.amount)) {
+    return { handled: true, status: "first_live_control_unavailable" };
   }
   if (!reserveTaskLease(task, args)) return { handled: true, status: "task_lease_write_failed" };
 
